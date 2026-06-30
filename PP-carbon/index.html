@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="../shared/epso-g.css" />
 <!-- Taršos faktorių biblioteka -> window.GP_CARBON_FACTORS -->
 <script src="carbon-factors.js"></script>
+<!-- Pasiūlymų vertinimo logika -> window.GP_CARBON_EVAL -->
+<script src="evaluation.js"></script>
 <style>
 :root{
   /* Spalvos ir --font-base iškelti į ../shared/epso-g.css (GP dizaino žetonai). */
@@ -157,6 +159,28 @@ table.calc tfoot td{padding:11px 14px;border-top:2px solid var(--color-graphite-
 .sum-grand .t{font-size:16px;font-weight:700;color:var(--color-graphite-50)}
 .intensity{margin-top:var(--space-2);font-size:13.5px;color:var(--color-graphite)}
 .intensity b{font-weight:800}
+
+/* ---------- Pasiūlymų vertinimas ---------- */
+.seg{display:inline-flex;background:var(--color-graphite-5);border:1px solid var(--color-graphite-15);border-radius:999px;padding:3px;gap:2px}
+.seg-btn{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:700;color:var(--color-graphite-50);white-space:nowrap;transition:var(--transition-fast)}
+.seg-btn.active{background:var(--color-emerald);color:#fff}
+.eval-toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-end}
+.eval-toolbar .field{min-width:150px}
+input[type=range]{width:220px;accent-color:var(--color-emerald);cursor:pointer}
+.slider-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.slider-val{font-weight:800;color:var(--color-emerald);font-variant-numeric:tabular-nums;min-width:90px}
+.bid-input{width:100%;min-width:120px}
+.bid-name{min-width:180px}
+table.calc tbody tr.winner{background:var(--color-green-5)}
+table.calc tbody tr.winner td{font-weight:800}
+.win-tag{display:inline-block;margin-left:8px;font-size:11px;font-weight:800;color:#fff;background:var(--color-emerald);padding:2px 8px;border-radius:999px;vertical-align:middle}
+.miss-tag{display:inline-flex;align-items:center;gap:6px;background:var(--color-warning-5);color:#9A6512;border:1px solid var(--color-warning);padding:2px 9px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;margin-left:8px}
+.miss-tag .d{width:7px;height:7px;border-radius:50%;background:var(--color-warning)}
+.note-box{background:var(--color-cyan-5);border:1px solid var(--color-graphite-15);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--color-graphite);line-height:1.5;margin-top:var(--space-2)}
+.disclaimer{font-size:12.5px;color:var(--color-graphite-50);line-height:1.6;margin-top:var(--space-3);border-top:1px solid var(--color-graphite-15);padding-top:var(--space-2)}
+.btn-danger-ghost{display:inline-flex;align-items:center;gap:6px;color:var(--color-error);border:1px solid var(--color-graphite-30);background:#fff;padding:6px 10px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;transition:var(--transition-fast)}
+.btn-danger-ghost:hover{border-color:var(--color-error);background:var(--color-error-5)}
+.toolbar-actions{display:flex;justify-content:flex-start;margin-top:var(--space-2)}
 
 /* ---------- Footer ---------- */
 footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-4) var(--space-3) var(--space-6);color:var(--color-graphite-50);font-size:12.5px;line-height:1.6}
@@ -313,14 +337,8 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-4) var(-
         <p class="page-sub" data-i18n="bids.sub">Tiekėjų pasiūlymų anglies pėdsako palyginimas pirkimo etape.</p>
       </div>
     </div>
-    <div class="card">
-      <div class="placeholder">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>
-        <h3 data-i18n="ph.title">Bus kitame žingsnyje</h3>
-        <p data-i18n="bids.ph">Čia atsiras pasiūlymų anglies vertinimas ir palyginimas (MEAT kontekste).</p>
-        <span class="soon" data-i18n="ph.badge">Ruošiama</span>
-      </div>
-    </div>
+    <!-- nustatymai + pasiūlymai + rezultatai (generuojama JS) -->
+    <div id="bidsBody"></div>
   </section>
 
   <!-- ============ ATASKAITOS (placeholder) ============ -->
@@ -737,6 +755,37 @@ const Store = {
   getCalc() { return this._ensureCalc(this._data()); },
   updateCalc(fn) { const d = this._data(); const c = this._ensureCalc(d); fn(c); d.calc = c; this._writeAll(d); return c; },
 
+  /* ---- Pasiūlymų vertinimas (sekcijos evalOffers + evalSettings tame pačiame rakte) ---- */
+  _demoOffers() {
+    return [
+      { id: this.newId("OF"), name: "Tiekėjas A - žalesnė gamyba", bidPrice: "1000000", embodiedCarbon: "800", annualOperational: "", lifetimeYears: "" },
+      { id: this.newId("OF"), name: "Tiekėjas B - pigiausias",     bidPrice: "950000",  embodiedCarbon: "1500", annualOperational: "", lifetimeYears: "" },
+      { id: this.newId("OF"), name: "Tiekėjas C - be PCF",          bidPrice: "980000",  embodiedCarbon: "",     annualOperational: "", lifetimeYears: "" }
+    ];
+  },
+  _ensureEvalSettings(d) {
+    if (!d.evalSettings || typeof d.evalSettings !== "object") d.evalSettings = {};
+    const s = d.evalSettings;
+    if (s.model !== "A" && s.model !== "B") s.model = "A";
+    if (typeof s.shadowPrice !== "number") s.shadowPrice = 100;
+    if (typeof s.lifetimeYears !== "number") s.lifetimeYears = 30;
+    if (typeof s.priceWeight !== "number") s.priceWeight = 80;
+    if (typeof s.carbonWeight !== "number") s.carbonWeight = 20;
+    return s;
+  },
+  getEvalOffers() {
+    const d = this._data();
+    if (!Array.isArray(d.evalOffers)) { d.evalOffers = this._demoOffers(); this._writeAll(d); }
+    return d.evalOffers;
+  },
+  updateEvalOffers(fn) {
+    const d = this._data();
+    if (!Array.isArray(d.evalOffers)) d.evalOffers = this._demoOffers();
+    fn(d.evalOffers); this._writeAll(d); return d.evalOffers;
+  },
+  getEvalSettings() { const d = this._data(); const s = this._ensureEvalSettings(d); return s; },
+  updateEvalSettings(fn) { const d = this._data(); const s = this._ensureEvalSettings(d); fn(s); d.evalSettings = s; this._writeAll(d); return s; },
+
   /* ---- Faktorių biblioteka (skaitymas iš carbon-factors.js) ---- */
   getFactors() { return (typeof window !== "undefined" && window.GP_CARBON_FACTORS) || null; }
 };
@@ -778,7 +827,23 @@ const I18N = {
     "calc.epd": "Laukia EPD", "calc.epd.ph": "Įvesti iš EPD", "calc.review.tip": "Faktorius dar tikslinamas",
     "calc.subtotal": "Etapo suma",
     "sum.title": "Suvestinė", "sum.stage": "Etapas", "sum.total": "Bendras projekto ŠESD",
-    "sum.intensity": "Anglies intensyvumas", "sum.perKm": "t CO₂e / km", "sum.perMva": "t CO₂e / MVA"
+    "sum.intensity": "Anglies intensyvumas", "sum.perKm": "t CO₂e / km", "sum.perMva": "t CO₂e / MVA",
+    "ev.settings": "Vertinimo nustatymai",
+    "ev.model": "Modelis", "ev.modelA": "A - anglimi pakoreguota kaina", "ev.modelB": "B - svoriai",
+    "ev.shadow": "Šešėlinė CO₂ kaina (EUR/t CO₂e)", "ev.lifetime": "Gyvavimo ciklas (metai)",
+    "ev.priceW": "Kainos svoris", "ev.carbonW": "Anglies svoris",
+    "ev.offers": "Pasiūlymai", "ev.add": "Pridėti pasiūlymą", "ev.remove": "Šalinti",
+    "ev.f.name": "Tiekėjas", "ev.f.price": "Pasiūlymo kaina, EUR",
+    "ev.f.embodied": "Įterptoji anglis A1-A3, t CO₂e", "ev.f.operational": "Eksploat. nuostoliai, t CO₂e/m.", "ev.f.life": "Ciklas, m.",
+    "ev.results": "Rezultatai", "ev.empty": "Nėra pasiūlymų. Pridėkite bent vieną.",
+    "ev.col.rank": "Vieta", "ev.col.supplier": "Tiekėjas", "ev.col.price": "Kaina, EUR", "ev.col.carbon": "Anglis, t CO₂e",
+    "ev.col.carbonCost": "Anglies kaina, EUR", "ev.col.adjusted": "Pakoreguota kaina, EUR",
+    "ev.col.priceScore": "Kainos balas", "ev.col.carbonScore": "Anglies balas", "ev.col.total": "Viso balų",
+    "ev.winner": "Laimėtojas", "ev.missing": "Trūksta PCF - taikoma worst-case",
+    "ev.crossover": "Reitingas tarp {a} ir {b} keičiasi ties ~{x} EUR/t CO₂e.",
+    "ev.sliderHint": "Pastaba: keisdami šešėlinę CO₂ kainą matote, kaip realiu laiku kinta reitingas.",
+    "ev.unavailable": "Vertinimo logika neužkrauta (patikrink evaluation.js).",
+    "ev.disclaimer": "Anglies vertinimas - pagalbinė priemonė, ne galutinis verdiktas. Šešėlinė CO₂ kaina - pradinė reikšmė, patvirtinti su metodikos savininku. Anglies kriterijus pirkime turi būti paskelbtas dokumentuose, objektyvus ir nediskriminuojantis."
   },
   en: {
     "brand.group": "G-Procure ecosystem · EPSO-G group",
@@ -812,7 +877,23 @@ const I18N = {
     "calc.epd": "Awaiting EPD", "calc.epd.ph": "Enter from EPD", "calc.review.tip": "Factor still being refined",
     "calc.subtotal": "Stage subtotal",
     "sum.title": "Summary", "sum.stage": "Stage", "sum.total": "Total project GHG",
-    "sum.intensity": "Carbon intensity", "sum.perKm": "t CO₂e / km", "sum.perMva": "t CO₂e / MVA"
+    "sum.intensity": "Carbon intensity", "sum.perKm": "t CO₂e / km", "sum.perMva": "t CO₂e / MVA",
+    "ev.settings": "Evaluation settings",
+    "ev.model": "Model", "ev.modelA": "A - carbon-adjusted price", "ev.modelB": "B - weights",
+    "ev.shadow": "Shadow CO₂ price (EUR/t CO₂e)", "ev.lifetime": "Lifetime (years)",
+    "ev.priceW": "Price weight", "ev.carbonW": "Carbon weight",
+    "ev.offers": "Offers", "ev.add": "Add offer", "ev.remove": "Remove",
+    "ev.f.name": "Supplier", "ev.f.price": "Bid price, EUR",
+    "ev.f.embodied": "Embodied carbon A1-A3, t CO₂e", "ev.f.operational": "Operational losses, t CO₂e/yr", "ev.f.life": "Lifetime, yr",
+    "ev.results": "Results", "ev.empty": "No offers. Add at least one.",
+    "ev.col.rank": "Rank", "ev.col.supplier": "Supplier", "ev.col.price": "Price, EUR", "ev.col.carbon": "Carbon, t CO₂e",
+    "ev.col.carbonCost": "Carbon cost, EUR", "ev.col.adjusted": "Adjusted price, EUR",
+    "ev.col.priceScore": "Price score", "ev.col.carbonScore": "Carbon score", "ev.col.total": "Total score",
+    "ev.winner": "Winner", "ev.missing": "PCF missing - worst-case applied",
+    "ev.crossover": "Ranking between {a} and {b} changes at ~{x} EUR/t CO₂e.",
+    "ev.sliderHint": "Note: changing the shadow CO₂ price shows how the ranking shifts in real time.",
+    "ev.unavailable": "Evaluation logic not loaded (check evaluation.js).",
+    "ev.disclaimer": "Carbon evaluation is a supporting tool, not a final verdict. The shadow CO₂ price is an initial value, to be confirmed with the methodology owner. A carbon criterion in procurement must be published in the documents, objective and non-discriminatory."
   }
 };
 function t(key) { return (I18N[LANG] && I18N[LANG][key]) || I18N.lt[key] || key; }
@@ -851,6 +932,7 @@ function setView(v) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (v === "overview") renderOverview();
   else if (v === "calc") renderCalc();
+  else if (v === "bids") renderBids();
 }
 
 /* ============================================================
@@ -1179,12 +1261,208 @@ function onManual(input) {
 }
 
 /* ============================================================
+   6.7. PASIŪLYMŲ VERTINIMAS (anglies pėdsakas pirkimo sprendime)
+   ============================================================ */
+function fmtInt(v) { return Number(v || 0).toLocaleString(_loc(), { maximumFractionDigits: 0 }); }
+function fmtMoney(v) { return fmtInt(v) + " EUR"; }
+function fmtTons(v) { return Number(v || 0).toLocaleString(_loc(), { maximumFractionDigits: 2 }); }
+function fmtScore(v) { return Number(v || 0).toLocaleString(_loc(), { maximumFractionDigits: 2 }); }
+
+// UI laukai - t CO2e; evaluate() tikisi kg. Konvertuojam t -> kg (x1000).
+// Tuščias įterptosios laukas -> embodiedCarbon: null (suveikia "trūkstamas PCF").
+function buildEvalOffers() {
+  return Store.getEvalOffers().map(function (o) {
+    var emb = parseNum(o.embodiedCarbon);
+    var op = parseNum(o.annualOperational);
+    var life = parseNum(o.lifetimeYears);
+    return {
+      id: o.id,
+      name: o.name || "",
+      bidPrice: parseNum(o.bidPrice) || 0,
+      embodiedCarbon: emb == null ? null : emb * 1000,
+      annualOperational: op == null ? 0 : op * 1000,
+      lifetimeYears: life == null ? undefined : life
+    };
+  });
+}
+
+function renderBids() {
+  const box = $("#bidsBody");
+  if (!box) return;
+  if (!window.GP_CARBON_EVAL) { box.innerHTML = '<div class="card card-pad">' + esc(t("ev.unavailable")) + '</div>'; return; }
+  const s = Store.getEvalSettings();
+  const offers = Store.getEvalOffers();
+  const isB = s.model === "B";
+
+  // A) Nustatymų juosta
+  let weightsHtml = "";
+  if (isB) {
+    weightsHtml =
+      '<div class="field"><label>' + esc(t("ev.priceW")) + '</label>' +
+        '<input class="input" inputmode="numeric" value="' + esc(String(s.priceWeight)) + '" oninput="onEvalSetting(\'priceWeight\',this.value)" /></div>' +
+      '<div class="field"><label>' + esc(t("ev.carbonW")) + '</label>' +
+        '<input class="input" inputmode="numeric" value="' + esc(String(s.carbonWeight)) + '" oninput="onEvalSetting(\'carbonWeight\',this.value)" /></div>';
+  }
+  const settings =
+    '<div class="card card-pad" style="margin-bottom:var(--space-3)">' +
+      '<div class="card-title"><span>' + esc(t("ev.settings")) + '</span></div>' +
+      '<div class="eval-toolbar">' +
+        '<div class="field"><label>' + esc(t("ev.model")) + '</label>' +
+          '<div class="seg">' +
+            '<button type="button" class="seg-btn' + (isB ? "" : " active") + '" onclick="onEvalSetting(\'model\',\'A\')">' + esc(t("ev.modelA")) + '</button>' +
+            '<button type="button" class="seg-btn' + (isB ? " active" : "") + '" onclick="onEvalSetting(\'model\',\'B\')">' + esc(t("ev.modelB")) + '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field"><label>' + esc(t("ev.shadow")) + '</label>' +
+          '<div class="slider-row">' +
+            '<input type="range" min="0" max="300" step="5" value="' + esc(String(s.shadowPrice)) + '" oninput="onEvalSetting(\'shadowPrice\',this.value)" />' +
+            '<span class="slider-val"><span id="shadowVal">' + fmtInt(s.shadowPrice) + '</span> EUR/t</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field"><label>' + esc(t("ev.lifetime")) + '</label>' +
+          '<input class="input" inputmode="numeric" style="max-width:120px" value="' + esc(String(s.lifetimeYears)) + '" oninput="onEvalSetting(\'lifetimeYears\',this.value)" /></div>' +
+        weightsHtml +
+      '</div>' +
+    '</div>';
+
+  // B) Pasiūlymų lentelė
+  const offerRows = offers.map(function (o) {
+    const v = function (x) { return esc(x == null ? "" : String(x)); };
+    return '<tr>' +
+      '<td><input class="input bid-name" value="' + v(o.name) + '" oninput="onOfferField(\'' + o.id + '\',\'name\',this.value)" /></td>' +
+      '<td><input class="input bid-input" inputmode="decimal" value="' + v(o.bidPrice) + '" oninput="onOfferField(\'' + o.id + '\',\'bidPrice\',this.value)" /></td>' +
+      '<td><input class="input bid-input" inputmode="decimal" placeholder="-" value="' + v(o.embodiedCarbon) + '" oninput="onOfferField(\'' + o.id + '\',\'embodiedCarbon\',this.value)" /></td>' +
+      '<td><input class="input bid-input" inputmode="decimal" placeholder="-" value="' + v(o.annualOperational) + '" oninput="onOfferField(\'' + o.id + '\',\'annualOperational\',this.value)" /></td>' +
+      '<td><input class="input bid-input" inputmode="decimal" placeholder="' + esc(String(s.lifetimeYears)) + '" value="' + v(o.lifetimeYears) + '" oninput="onOfferField(\'' + o.id + '\',\'lifetimeYears\',this.value)" /></td>' +
+      '<td><button type="button" class="btn-danger-ghost" onclick="removeOffer(\'' + o.id + '\')">' + esc(t("ev.remove")) + '</button></td>' +
+    '</tr>';
+  }).join("");
+  const offersCard =
+    '<div class="card card-pad" style="margin-bottom:var(--space-3)">' +
+      '<div class="card-title"><span>' + esc(t("ev.offers")) + '</span></div>' +
+      '<div class="table-wrap"><table class="calc"><thead><tr>' +
+        '<th>' + esc(t("ev.f.name")) + '</th>' +
+        '<th>' + esc(t("ev.f.price")) + '</th>' +
+        '<th>' + esc(t("ev.f.embodied")) + '</th>' +
+        '<th>' + esc(t("ev.f.operational")) + '</th>' +
+        '<th>' + esc(t("ev.f.life")) + '</th>' +
+        '<th></th>' +
+      '</tr></thead><tbody>' + offerRows + '</tbody></table></div>' +
+      '<div class="toolbar-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="addOffer()">+ ' + esc(t("ev.add")) + '</button></div>' +
+    '</div>';
+
+  // D+E) Rezultatai + crossover + disclaimer (užpildoma recomputeEval)
+  const results =
+    '<div class="card card-pad" style="margin-bottom:var(--space-3)">' +
+      '<div class="card-title"><span>' + esc(t("ev.results")) + '</span></div>' +
+      '<div id="evalResults"></div>' +
+      '<div id="evalCross"></div>' +
+      '<div class="disclaimer">' + esc(t("ev.disclaimer")) + '</div>' +
+    '</div>';
+
+  box.innerHTML = settings + offersCard + results;
+  recomputeEval();
+}
+
+function recomputeEval() {
+  if (!window.GP_CARBON_EVAL) return;
+  const s = Store.getEvalSettings();
+  const opts = { model: s.model, shadowPrice: s.shadowPrice, lifetimeYears: s.lifetimeYears, priceWeight: s.priceWeight, carbonWeight: s.carbonWeight };
+  const res = GP_CARBON_EVAL.evaluate(buildEvalOffers(), opts);
+  const box = $("#evalResults");
+  const cross = $("#evalCross");
+  if (!box) return;
+  if (!res.rows.length) { box.innerHTML = '<div class="empty" style="color:var(--color-graphite-50)">' + esc(t("ev.empty")) + '</div>'; if (cross) cross.innerHTML = ""; return; }
+
+  const isB = s.model === "B";
+  const tags = function (r) {
+    let h = (r.rank === 1) ? '<span class="win-tag">' + esc(t("ev.winner")) + '</span>' : "";
+    if (r.missingData) h += '<span class="miss-tag"><span class="d"></span>' + esc(t("ev.missing")) + '</span>';
+    return h;
+  };
+
+  let head, rows;
+  if (isB) {
+    head = '<th class="num">' + esc(t("ev.col.rank")) + '</th><th>' + esc(t("ev.col.supplier")) + '</th>' +
+      '<th class="num">' + esc(t("ev.col.priceScore")) + '</th><th class="num">' + esc(t("ev.col.carbonScore")) + '</th><th class="num">' + esc(t("ev.col.total")) + '</th>';
+    rows = res.rows.map(function (r) {
+      return '<tr class="' + (r.rank === 1 ? "winner" : "") + '">' +
+        '<td class="num">' + r.rank + '</td>' +
+        '<td><span class="t-name">' + esc(r.name || "-") + '</span>' + tags(r) + '</td>' +
+        '<td class="num">' + fmtScore(r.priceScore) + '</td>' +
+        '<td class="num">' + fmtScore(r.carbonScore) + '</td>' +
+        '<td class="num">' + fmtScore(r.score) + '</td>' +
+      '</tr>';
+    }).join("");
+  } else {
+    head = '<th class="num">' + esc(t("ev.col.rank")) + '</th><th>' + esc(t("ev.col.supplier")) + '</th>' +
+      '<th class="num">' + esc(t("ev.col.price")) + '</th><th class="num">' + esc(t("ev.col.carbon")) + '</th>' +
+      '<th class="num">' + esc(t("ev.col.carbonCost")) + '</th><th class="num">' + esc(t("ev.col.adjusted")) + '</th>';
+    rows = res.rows.map(function (r) {
+      return '<tr class="' + (r.rank === 1 ? "winner" : "") + '">' +
+        '<td class="num">' + r.rank + '</td>' +
+        '<td><span class="t-name">' + esc(r.name || "-") + '</span>' + tags(r) + '</td>' +
+        '<td class="num">' + fmtMoney(r.bidPrice) + '</td>' +
+        '<td class="num">' + fmtTons(r.carbonT) + '</td>' +
+        '<td class="num">' + fmtMoney(r.carbonCost) + '</td>' +
+        '<td class="num">' + fmtMoney(r.adjustedPrice) + '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  box.innerHTML =
+    '<div class="table-wrap"><table class="calc"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+
+  // E) Crossover užuomina (tik modelis A, >= 2 pasiūlymai)
+  if (cross) {
+    let html = "";
+    if (!isB && res.rows.length >= 2) {
+      const a = res.rows[0], b = res.rows[1];
+      const p = GP_CARBON_EVAL.crossoverPrice(a, b);
+      if (typeof p === "number" && isFinite(p)) {
+        const msg = t("ev.crossover").replace("{a}", a.name || "-").replace("{b}", b.name || "-").replace("{x}", fmtInt(p));
+        html = '<div class="note-box">' + esc(msg) + '</div>';
+      }
+      html += '<div class="note-box" style="margin-top:8px;background:var(--color-green-5)">' + esc(t("ev.sliderHint")) + '</div>';
+    }
+    cross.innerHTML = html;
+  }
+}
+
+/* ---- įvesties tvarkymas (realiu laiku) ---- */
+const _EV_FALLBACK = { shadowPrice: 100, lifetimeYears: 30, priceWeight: 80, carbonWeight: 20 };
+function onEvalSetting(field, val) {
+  Store.updateEvalSettings(function (s) {
+    if (field === "model") { s.model = (val === "B" ? "B" : "A"); }
+    else { const n = parseNum(val); s[field] = (n == null ? _EV_FALLBACK[field] : n); }
+  });
+  if (field === "model") { renderBids(); return; }
+  if (field === "shadowPrice") { const el = $("#shadowVal"); if (el) el.textContent = fmtInt(Store.getEvalSettings().shadowPrice); }
+  recomputeEval();
+}
+function onOfferField(id, field, val) {
+  Store.updateEvalOffers(function (list) { const o = list.find(function (x) { return x.id === id; }); if (o) o[field] = val; });
+  recomputeEval();
+}
+function addOffer() {
+  Store.updateEvalOffers(function (list) {
+    list.push({ id: Store.newId("OF"), name: "", bidPrice: "", embodiedCarbon: "", annualOperational: "", lifetimeYears: "" });
+  });
+  renderBids();
+}
+function removeOffer(id) {
+  Store.updateEvalOffers(function (list) { const i = list.findIndex(function (x) { return x.id === id; }); if (i > -1) list.splice(i, 1); });
+  renderBids();
+}
+
+/* ============================================================
    7. PALEIDIMAS
    ============================================================ */
 function renderAll() {
   applyI18n();
   renderOverview();
   renderCalc();
+  renderBids();
 }
 function boot() {
   applyI18n();
