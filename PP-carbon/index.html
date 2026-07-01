@@ -146,7 +146,11 @@ table.calc tfoot td{padding:11px 14px;border-top:2px solid var(--color-graphite-
 .manual-input{width:130px;text-align:right;padding:6px 9px;font-size:13px}
 .sesd-cell{font-weight:800;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .muted{color:var(--color-graphite-30)}
-.epd-wrap{display:flex;flex-direction:column;gap:5px}
+.epd-wrap{display:flex;flex-direction:column;gap:4px}
+.epd-src{font-size:11px;color:var(--color-graphite-50)}
+.sesd-cell .badge-epd{font-size:11px}
+.epd-inline{font-size:11.5px;font-weight:700;color:#9A6512;margin-left:8px;white-space:nowrap}
+.epd-warn{margin-top:var(--space-2);font-size:13px;color:#9A6512;background:var(--color-warning-5);border:1px solid var(--color-warning);border-radius:var(--radius-sm);padding:8px 12px}
 
 /* ---------- Žymos: Laukia EPD / review ---------- */
 .badge-epd{display:inline-flex;align-items:center;gap:6px;background:var(--color-warning-5);color:#9A6512;border:1px solid var(--color-warning);padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:800;white-space:nowrap}
@@ -824,7 +828,7 @@ const I18N = {
     "calc.f.line": "Linijos ilgis (km, nebūtina)", "calc.f.power": "Galia (MVA, nebūtina)",
     "calc.type.choose": "- pasirinkite -", "calc.type.line": "Oro linija", "calc.type.cable": "Kabelinė linija", "calc.type.substation": "Pastotė", "calc.type.other": "Kita",
     "th.activity": "Veikla / įranga", "th.qty": "Kiekis", "th.unit": "Vienetas", "th.factor": "Taršos faktorius", "th.sesd": "ŠESD (kg CO₂e)",
-    "calc.epd": "Laukia EPD", "calc.epd.ph": "Įvesti iš EPD", "calc.review.tip": "Faktorius dar tikslinamas",
+    "calc.epd": "Laukia EPD", "calc.epd.ph": "įveskite iš EPD", "calc.epd.src": "faktorius iš EPD", "calc.review.tip": "Faktorius dar tikslinamas",
     "calc.subtotal": "Etapo suma",
     "sum.title": "Suvestinė", "sum.stage": "Etapas", "sum.total": "Bendras projekto ŠESD",
     "sum.intensity": "Anglies intensyvumas", "sum.perKm": "t CO₂e / km", "sum.perMva": "t CO₂e / MVA",
@@ -874,7 +878,7 @@ const I18N = {
     "calc.f.line": "Line length (km, optional)", "calc.f.power": "Power (MVA, optional)",
     "calc.type.choose": "- select -", "calc.type.line": "Overhead line", "calc.type.cable": "Cable line", "calc.type.substation": "Substation", "calc.type.other": "Other",
     "th.activity": "Activity / equipment", "th.qty": "Quantity", "th.unit": "Unit", "th.factor": "Emission factor", "th.sesd": "GHG (kg CO₂e)",
-    "calc.epd": "Awaiting EPD", "calc.epd.ph": "Enter from EPD", "calc.review.tip": "Factor still being refined",
+    "calc.epd": "Awaiting EPD", "calc.epd.ph": "enter from EPD", "calc.epd.src": "factor from EPD", "calc.review.tip": "Factor still being refined",
     "calc.subtotal": "Stage subtotal",
     "sum.title": "Summary", "sum.stage": "Stage", "sum.total": "Total project GHG",
     "sum.intensity": "Carbon intensity", "sum.perKm": "t CO₂e / km", "sum.perMva": "t CO₂e / MVA",
@@ -1107,10 +1111,26 @@ function qtyUnit(u) {
 function keyOf(group, id) { return group + "." + id; }
 function domId(prefix, key) { return prefix + "_" + key.replace(/[^A-Za-z0-9]/g, "_"); }
 
-// Efektyvus faktorius: supplierProvided (null) -> tik rankinis (iš EPD); kitaip - bibliotekos reikšmė.
+// Efektyvus faktorius: supplierProvided (null) -> tik rankinis iš EPD, ir tik jei > 0.
+// null/tuščia/<=0 = nežinoma (laukia EPD) -> negrąžinam skaičiaus (konservatyvu, kaip evaluation.js).
 function effectiveFactor(item, calc) {
-  if (item.supplierProvided === true) return parseNum(calc.manual[keyOf(item._group, item.id)]);
+  if (item.supplierProvided === true) {
+    const m = parseNum(calc.manual[keyOf(item._group, item.id)]);
+    return (m != null && m > 0) ? m : null;
+  }
   return (typeof item.value === "number") ? item.value : null;
+}
+// LR gramatika: kiek pozicijų laukia EPD (pastabos tekstas).
+function epdWaitText(n) {
+  if (LANG === "lt") {
+    const a = n % 10, b = n % 100;
+    let noun, excl;
+    if (a === 1 && b !== 11) { noun = "pozicija"; excl = "neįtraukta"; }
+    else if (a >= 2 && a <= 9 && !(b >= 11 && b <= 19)) { noun = "pozicijos"; excl = "neįtrauktos"; }
+    else { noun = "pozicijų"; excl = "neįtraukta"; }
+    return n + " " + noun + " laukia EPD - " + excl + " į sumą.";
+  }
+  return n + (n === 1 ? " item" : " items") + " awaiting EPD - excluded from the total.";
 }
 
 function renderCalc() {
@@ -1141,12 +1161,13 @@ function renderCalc() {
         : "";
       let factorCell;
       if (isEpd) {
+        // Rankinis EPD faktoriaus laukas: numatytai TUŠČIAS (be 0/1). Būsena rodoma ŠESD stulpelyje.
         const mv = calc.manual[key] != null ? esc(String(calc.manual[key])) : "";
         factorCell =
           '<div class="epd-wrap">' +
-            '<span class="badge-epd"><span class="d"></span>' + esc(t("calc.epd")) + reviewFlag + '</span>' +
             '<input class="input manual-input" inputmode="decimal" placeholder="' + esc(t("calc.epd.ph")) + '" data-key="' + key + '" value="' + mv + '" oninput="onManual(this)" />' +
-          '</div>';
+            '<span class="epd-src">' + esc(t("calc.epd.src")) + '</span>' +
+          '</div>' + reviewFlag;
       } else {
         factorCell = '<span class="factor-cell">' + fmtFactor(item.value) + " " + esc(prettyUnit(item.unit)) + '</span>' + reviewFlag;
       }
@@ -1191,6 +1212,7 @@ function renderCalc() {
         '<div class="kpi-label">' + esc(t("sum.total")) + '</div>' +
         '<div class="sum-grand"><span class="big" id="grandKg">-</span><span class="t" id="grandT"></span></div>' +
         '<div class="intensity" id="intensity"></div>' +
+        '<div id="epdNote"></div>' +
       '</div>';
   }
 
@@ -1200,42 +1222,55 @@ function renderCalc() {
 function recompute() {
   const F = Store.getFactors(); if (!F) return;
   const calc = Store.getCalc();
-  let grand = 0;
+  let grand = 0, epdWaitTotal = 0;
   const sumRows = [];
+  const epdBadge = '<span class="muted">-</span> <span class="badge-epd"><span class="d"></span>' + esc(t("calc.epd")) + '</span>';
   CALC_SECTIONS.forEach(sec => {
     const arr = (F[sec.group] || []); if (!arr.length) return;
-    let sub = 0, any = false;
+    let sub = 0, any = false, epdWait = 0;
     arr.forEach(item => {
       item._group = sec.group;
       const key = keyOf(sec.group, item.id);
+      const isEpd = item.supplierProvided === true;
       const qty = parseNum(calc.qty[key]);
       const factor = effectiveFactor(item, calc);
       const cell = document.getElementById(domId("sesd", key));
       if (qty != null && factor != null) {
+        // Įvestas kiekis ir galiojantis faktorius -> skaičiuojam ir įtraukiam.
         const v = qty * factor; sub += v; any = true;
-        if (cell) { cell.textContent = fmtKg(v); cell.classList.remove("muted"); }
+        if (cell) { cell.classList.remove("muted"); cell.textContent = fmtKg(v); }
+      } else if (isEpd && qty != null) {
+        // EPD įranga su įvestu kiekiu, bet be faktoriaus -> "-" + gintaro žymė, NEįtraukiam.
+        epdWait++;
+        if (cell) { cell.classList.remove("muted"); cell.innerHTML = epdBadge; }
       } else if (cell) {
-        cell.textContent = "-"; cell.classList.add("muted");
+        // Nėra kiekio arba nėra faktoriaus -> tuščia.
+        cell.classList.add("muted"); cell.textContent = "-";
       }
     });
     const subEl = document.getElementById(domId("sub", sec.group));
     if (subEl) subEl.textContent = any ? fmtKg(sub) : "-";
     grand += sub;
-    sumRows.push({ num: sec.num, label: LANG === "lt" ? sec.lt : sec.en, kg: sub });
+    epdWaitTotal += epdWait;
+    sumRows.push({ num: sec.num, label: LANG === "lt" ? sec.lt : sec.en, kg: sub, any: any, epdWait: epdWait });
   });
 
   const body = document.getElementById("sumBody");
   if (body) {
     body.innerHTML = sumRows.map(r =>
-      '<tr><td><span class="t-name">' + esc(r.num + " " + r.label) + '</span></td>' +
-      '<td class="num">' + fmtKg(r.kg) + '</td>' +
-      '<td class="num">' + fmtT(r.kg / 1000) + '</td></tr>'
+      '<tr><td><span class="t-name">' + esc(r.num + " " + r.label) + '</span>' +
+      (r.epdWait > 0 ? '<span class="epd-inline">(' + r.epdWait + ' ' + esc(t("calc.epd")) + ')</span>' : "") + '</td>' +
+      '<td class="num">' + (r.any ? fmtKg(r.kg) : "-") + '</td>' +
+      '<td class="num">' + (r.any ? fmtT(r.kg / 1000) : "-") + '</td></tr>'
     ).join("");
   }
   const gk = document.getElementById("grandKg");
   const gt = document.getElementById("grandT");
   if (gk) gk.textContent = fmtKg(grand) + " kg";
   if (gt) gt.textContent = "(" + fmtT(grand / 1000) + " t CO₂e)";
+
+  const epdNote = document.getElementById("epdNote");
+  if (epdNote) epdNote.innerHTML = epdWaitTotal > 0 ? '<div class="epd-warn">' + esc(epdWaitText(epdWaitTotal)) + '</div>' : "";
 
   const inten = document.getElementById("intensity");
   if (inten) {
@@ -1256,7 +1291,8 @@ function onQty(input) {
 }
 function onManual(input) {
   const key = input.dataset.key, val = input.value;
-  Store.updateCalc(c => { if (parseNum(val) == null) delete c.manual[key]; else c.manual[key] = val; });
+  // Tuščias laukas saugomas kaip null (nežinoma), NE kaip 0 ar 1. Kitaip - saugom raw įvestį.
+  Store.updateCalc(c => { c.manual[key] = (String(val).trim() === "" ? null : val); });
   recompute();
 }
 
