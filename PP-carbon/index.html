@@ -13,6 +13,8 @@
 <script src="carbon-factors.js"></script>
 <!-- Pasiūlymų vertinimo logika -> window.GP_CARBON_EVAL -->
 <script src="evaluation.js"></script>
+<!-- EPD dokumentų AI ištraukimo logika -> window.GP_EPD_EXTRACT -->
+<script src="epd-extract.js"></script>
 <style>
 :root{
   /* Spalvos ir --font-base iškelti į ../shared/epso-g.css (GP dizaino žetonai). */
@@ -151,6 +153,28 @@ table.calc tfoot td{padding:11px 14px;border-top:2px solid var(--color-graphite-
 .sesd-cell .badge-epd{font-size:11px}
 .epd-inline{font-size:11.5px;font-weight:700;color:#9A6512;margin-left:8px;white-space:nowrap}
 .epd-warn{margin-top:var(--space-2);font-size:13px;color:#9A6512;background:var(--color-warning-5);border:1px solid var(--color-warning);border-radius:var(--radius-sm);padding:8px 12px}
+.epd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn-epd{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--color-emerald);background:var(--color-green-5);border:1px solid var(--color-green-15);padding:4px 10px;border-radius:999px;cursor:pointer;transition:var(--transition-fast)}
+.btn-epd:hover{background:var(--color-emerald);color:#fff;border-color:var(--color-emerald)}
+.epd-from{display:inline-flex;align-items:center;font-size:11px;font-weight:800;color:var(--color-green);background:var(--color-green-15);padding:2px 8px;border-radius:999px;cursor:help}
+/* EPD modalas */
+.epd-disclaimer{font-size:12.5px;line-height:1.5;color:#9A6512;background:var(--color-warning-5);border:1px solid var(--color-warning);border-radius:var(--radius-sm);padding:10px 12px}
+.epd-target{margin-top:var(--space-2);font-size:13.5px;color:var(--color-graphite)}
+.epd-target .k{color:var(--color-graphite-50)}
+.epd-status{margin-top:var(--space-2);font-size:13px}
+.epd-file-ok{color:var(--color-green);font-weight:700}
+.epd-analyzing{display:flex;align-items:center;gap:8px;color:var(--color-graphite-50);font-weight:700}
+.spin{width:15px;height:15px;border:2px solid var(--color-graphite-15);border-top-color:var(--color-emerald);border-radius:50%;display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.epd-card{margin-top:var(--space-2);border:1px solid var(--color-graphite-15);border-radius:var(--radius-md);padding:var(--space-2);background:var(--color-graphite-5)}
+.epd-val{font-size:20px;font-weight:800;color:var(--color-graphite);letter-spacing:-.3px}
+.epd-meta{font-size:12px;color:var(--color-graphite-50);margin-top:4px}
+.epd-quote{margin:10px 0;padding:8px 12px;border-left:3px solid var(--color-emerald);background:#fff;font-style:italic;color:var(--color-graphite);font-size:13px;line-height:1.5;border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+.epd-conv{margin-top:8px;font-size:14px;color:var(--color-graphite)}
+.epd-notfound{font-weight:700;color:var(--color-graphite)}
+.epd-error{font-weight:700;color:var(--color-error);background:var(--color-error-5);border:1px solid var(--color-error);border-radius:var(--radius-sm);padding:8px 12px}
+.epd-cand{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--color-graphite-15);font-size:13.5px;cursor:pointer}
+.epd-btns{display:flex;gap:8px;margin-top:var(--space-2);flex-wrap:wrap}
 
 /* ---------- Žymos: Laukia EPD / review ---------- */
 .badge-epd{display:inline-flex;align-items:center;gap:6px;background:var(--color-warning-5);color:#9A6512;border:1px solid var(--color-warning);padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:800;white-space:nowrap}
@@ -754,10 +778,23 @@ const Store = {
     if (typeof c.powerMva !== "string") c.powerMva = "";
     if (!c.qty || typeof c.qty !== "object") c.qty = {};
     if (!c.manual || typeof c.manual !== "object") c.manual = {};
+    if (!c.epdSource || typeof c.epdSource !== "object") c.epdSource = {};
     return c;
   },
   getCalc() { return this._ensureCalc(this._data()); },
   updateCalc(fn) { const d = this._data(); const c = this._ensureCalc(d); fn(c); d.calc = c; this._writeAll(d); return c; },
+
+  /* ---- Modulio nustatymai (AI: režimas, API raktas, proxy URL) ---- */
+  _ensureSettings(d) {
+    if (!d.settings || typeof d.settings !== "object") d.settings = {};
+    const s = d.settings;
+    if (s.aiMode !== "proxy" && s.aiMode !== "direct") s.aiMode = "direct";
+    if (typeof s.apiKey !== "string") s.apiKey = "";
+    if (typeof s.proxyUrl !== "string") s.proxyUrl = "https://api.g-procure.com/api/analyze";
+    return s;
+  },
+  getSettings() { return this._ensureSettings(this._data()); },
+  updateSettings(fn) { const d = this._data(); const s = this._ensureSettings(d); fn(s); d.settings = s; this._writeAll(d); return s; },
 
   /* ---- Pasiūlymų vertinimas (sekcijos evalOffers + evalSettings tame pačiame rakte) ---- */
   _demoOffers() {
@@ -820,6 +857,21 @@ const I18N = {
     "reports.ph": "Čia atsiras ŠESD ataskaitų generavimas ir eksportas (PDF / Excel).",
     "ph.title": "Bus kitame žingsnyje", "ph.badge": "Ruošiama",
     "set.title": "Nustatymai", "set.body": "Modulio nustatymai bus pridėti vėliau (kalba, numatytieji vienetai, faktorių versija).", "set.close": "Uždaryti",
+    "set.ai": "AI (EPD dokumentų analizė)",
+    "set.mode": "Režimas", "set.mode.direct": "Tiesioginis (su API raktu)", "set.mode.proxy": "Per proxy",
+    "set.apiKey": "Anthropic API raktas", "set.apiKey.note": "Raktas saugomas tik šioje naršyklėje (localStorage).",
+    "set.proxyUrl": "Proxy URL",
+    "epd.upload": "Įkelti EPD", "epd.title": "Įkelti EPD dokumentą", "epd.target": "Ieškoma", "epd.file": "EPD dokumentas (PDF, iki 10 MB)",
+    "epd.analyze": "Analizuoti", "epd.analyzing": "Analizuojama...", "epd.close": "Uždaryti",
+    "epd.disclaimer": "AI ištraukta reikšmė - tik pasiūlymas. Patikrinkite citatą prieš tvirtindami. Galutinė atsakomybė - vertintojo.",
+    "epd.page": "p.", "epd.converted": "Konvertuota į faktoriaus vienetą",
+    "epd.confirm": "Patvirtinti ir įrašyti", "epd.reject": "Atmesti", "epd.confirmSel": "Patvirtinti pasirinktą",
+    "epd.notfound": "Dokumente A1-A3 reikšmė nerasta.", "epd.ambiguous": "Rasti keli galimi variantai - pasirinkite tinkamą:",
+    "epd.error": "Klaida", "epd.fromBadge": "iš EPD",
+    "epd.err.type": "Netinkamas failo tipas - reikia PDF.", "epd.err.size": "Failas per didelis (riba 10 MB).",
+    "epd.err.read": "Nepavyko perskaityti failo.", "epd.err.lib": "EPD analizės logika neužkrauta (patikrink epd-extract.js).",
+    "epd.err.http": "Nepavyko pasiekti AI (klaida {code}) - patikrinkite raktą ir ryšį.",
+    "epd.err.network": "Nepavyko pasiekti AI - patikrinkite raktą ir ryšį.", "epd.err.convert": "Nepavyko konvertuoti vienetų.",
     "foot.text": "PP-carbon · anglies pėdsako (ŠESD) variklis pirkimams · EPSO-G G-Procure ekosistema",
     "foot.legal": "Metodinis pagrindas: 2025 m. Projektų ŠESD metodika · GHG Protocol · EN 15804 (A1-A3). Faktoriai dar tikslinami - nenaudoti galutiniams sprendimams be patvirtinimo.",
     "lib.unavailable": "Faktorių biblioteka neužkrauta (patikrink carbon-factors.js).",
@@ -870,6 +922,21 @@ const I18N = {
     "reports.ph": "GHG report generation and export (PDF / Excel) will appear here.",
     "ph.title": "Coming in the next step", "ph.badge": "In progress",
     "set.title": "Settings", "set.body": "Module settings will be added later (language, default units, factor version).", "set.close": "Close",
+    "set.ai": "AI (EPD document analysis)",
+    "set.mode": "Mode", "set.mode.direct": "Direct (with API key)", "set.mode.proxy": "Via proxy",
+    "set.apiKey": "Anthropic API key", "set.apiKey.note": "The key is stored only in this browser (localStorage).",
+    "set.proxyUrl": "Proxy URL",
+    "epd.upload": "Upload EPD", "epd.title": "Upload EPD document", "epd.target": "Looking for", "epd.file": "EPD document (PDF, up to 10 MB)",
+    "epd.analyze": "Analyze", "epd.analyzing": "Analyzing...", "epd.close": "Close",
+    "epd.disclaimer": "The AI-extracted value is only a suggestion. Check the citation before confirming. Final responsibility lies with the evaluator.",
+    "epd.page": "p.", "epd.converted": "Converted to the factor unit",
+    "epd.confirm": "Confirm and save", "epd.reject": "Reject", "epd.confirmSel": "Confirm selected",
+    "epd.notfound": "No A1-A3 value found in the document.", "epd.ambiguous": "Several possible values found - select the right one:",
+    "epd.error": "Error", "epd.fromBadge": "from EPD",
+    "epd.err.type": "Invalid file type - PDF required.", "epd.err.size": "File too large (limit 10 MB).",
+    "epd.err.read": "Could not read the file.", "epd.err.lib": "EPD analysis logic not loaded (check epd-extract.js).",
+    "epd.err.http": "Could not reach AI (error {code}) - check the key and connection.",
+    "epd.err.network": "Could not reach AI - check the key and connection.", "epd.err.convert": "Could not convert units.",
     "foot.text": "PP-carbon · carbon (GHG) engine for procurement · EPSO-G G-Procure ecosystem",
     "foot.legal": "Methodological basis: 2025 Project GHG methodology · GHG Protocol · EN 15804 (A1-A3). Factors are still being refined - do not use for final decisions without confirmation.",
     "lib.unavailable": "Factor library not loaded (check carbon-factors.js).",
@@ -917,13 +984,35 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<"
 function openModal(html, wide) { const sh = $("#modalShell"); sh.className = "modal" + (wide ? " wide" : ""); sh.innerHTML = html; $("#overlay").classList.add("open"); }
 function closeModal() { $("#overlay").classList.remove("open"); $("#modalShell").innerHTML = ""; }
 function openSettings() {
+  const s = Store.getSettings();
+  const isProxy = s.aiMode === "proxy";
+  const xBtn = '<button class="x-btn" onclick="closeModal()" aria-label="' + esc(t("set.close")) + '">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
+  const proxyField = isProxy
+    ? '<div class="field" style="margin-top:var(--space-2)"><label>' + esc(t("set.proxyUrl")) + '</label>' +
+        '<input class="input" id="setProxyUrl" value="' + esc(s.proxyUrl) + '" oninput="onSetting(\'proxyUrl\',this.value)" /></div>'
+    : "";
   openModal(
-    '<div class="modal-head"><div class="modal-title">' + esc(t("set.title")) + '</div>' +
-    '<button class="x-btn" onclick="closeModal()" aria-label="' + esc(t("set.close")) + '">' +
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>' +
-    '<div class="modal-body"><p style="color:var(--color-graphite-50)">' + esc(t("set.body")) + '</p></div>' +
+    '<div class="modal-head"><div class="modal-title">' + esc(t("set.title")) + '</div>' + xBtn + '</div>' +
+    '<div class="modal-body">' +
+      '<div class="card-title" style="font-size:14px">' + esc(t("set.ai")) + '</div>' +
+      '<div class="field"><label>' + esc(t("set.mode")) + '</label>' +
+        '<div class="seg">' +
+          '<button type="button" class="seg-btn' + (isProxy ? "" : " active") + '" onclick="onSetting(\'aiMode\',\'direct\')">' + esc(t("set.mode.direct")) + '</button>' +
+          '<button type="button" class="seg-btn' + (isProxy ? " active" : "") + '" onclick="onSetting(\'aiMode\',\'proxy\')">' + esc(t("set.mode.proxy")) + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="field" style="margin-top:var(--space-2)"><label>' + esc(t("set.apiKey")) + '</label>' +
+        '<input class="input" type="password" id="setApiKey" autocomplete="off" value="' + esc(s.apiKey) + '" oninput="onSetting(\'apiKey\',this.value)" />' +
+        '<span class="epd-src">' + esc(t("set.apiKey.note")) + '</span></div>' +
+      proxyField +
+    '</div>' +
     '<div class="modal-foot"><button class="btn btn-primary" onclick="closeModal()">' + esc(t("set.close")) + '</button></div>'
   );
+}
+function onSetting(field, val) {
+  Store.updateSettings(s => { if (field === "aiMode") s.aiMode = (val === "proxy" ? "proxy" : "direct"); else s[field] = val; });
+  if (field === "aiMode") openSettings(); // perpiešiam, kad pasirodytų/dingtų proxy laukas
 }
 
 /* ============================================================
@@ -1163,9 +1252,17 @@ function renderCalc() {
       if (isEpd) {
         // Rankinis EPD faktoriaus laukas: numatytai TUŠČIAS (be 0/1). Būsena rodoma ŠESD stulpelyje.
         const mv = calc.manual[key] != null ? esc(String(calc.manual[key])) : "";
+        const src = calc.epdSource && calc.epdSource[key];
+        const srcBadge = src
+          ? '<span class="epd-from" title="' + esc((src.quote || "") + (src.page != null ? (" (" + t("epd.page") + " " + src.page + ")") : "") + (src.fileName ? (" - " + src.fileName) : "")) + '">' + esc(t("epd.fromBadge")) + '</span>'
+          : "";
         factorCell =
           '<div class="epd-wrap">' +
             '<input class="input manual-input" inputmode="decimal" placeholder="' + esc(t("calc.epd.ph")) + '" data-key="' + key + '" value="' + mv + '" oninput="onManual(this)" />' +
+            '<div class="epd-actions">' +
+              '<button type="button" class="btn-epd" onclick="openEpdModal(\'' + key + '\')">' + esc(t("epd.upload")) + '</button>' +
+              srcBadge +
+            '</div>' +
             '<span class="epd-src">' + esc(t("calc.epd.src")) + '</span>' +
           '</div>' + reviewFlag;
       } else {
@@ -1490,6 +1587,183 @@ function removeOffer(id) {
   Store.updateEvalOffers(function (list) { const i = list.findIndex(function (x) { return x.id === id; }); if (i > -1) list.splice(i, 1); });
   renderBids();
 }
+
+/* ============================================================
+   6.8. EPD DOKUMENTŲ ĮKĖLIMAS IR AI IŠTRAUKIMAS (Fazė 3)
+   AI tik SIŪLO reikšmę; įrašoma TIK vartotojui patvirtinus. Faktorius rašomas
+   į tos eilutės rankinį lauką (toliau veikia esama EPD logika).
+   ============================================================ */
+let _epdCtx = null;
+
+function findFactorByKey(key) {
+  const F = Store.getFactors(); if (!F) return null;
+  const dot = key.indexOf("."); if (dot < 0) return null;
+  const group = key.slice(0, dot), id = key.slice(dot + 1);
+  return (F[group] || []).find(x => x.id === id) || null;
+}
+function fmtBytes(n) {
+  if (n >= 1048576) return (n / 1048576).toLocaleString(_loc(), { maximumFractionDigits: 1 }) + " MB";
+  return Math.round(n / 1024) + " KB";
+}
+function epdErr(msg) { return '<div class="epd-error">' + esc(msg) + '</div>'; }
+
+function openEpdModal(key) {
+  const item = findFactorByKey(key);
+  if (!item) return;
+  _epdCtx = { key: key, label: item.label, unit: item.unit, fileName: "", pdfBase64: "", busy: false };
+  renderEpdModal();
+}
+function renderEpdModal() {
+  const c = _epdCtx; if (!c) return;
+  const xBtn = '<button class="x-btn" onclick="closeModal()" aria-label="' + esc(t("epd.close")) + '">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
+  openModal(
+    '<div class="modal-head"><div class="modal-title">' + esc(t("epd.title")) + '</div>' + xBtn + '</div>' +
+    '<div class="modal-body">' +
+      '<div class="epd-disclaimer">' + esc(t("epd.disclaimer")) + '</div>' +
+      '<div class="epd-target"><span class="k">' + esc(t("epd.target")) + ':</span> <b>' + esc(c.label) + '</b> · ' + esc(prettyUnit(c.unit)) + '</div>' +
+      '<div class="field" style="margin-top:var(--space-2)"><label>' + esc(t("epd.file")) + '</label>' +
+        '<input type="file" accept="application/pdf" id="epdFile" onchange="onEpdFile(this)" /></div>' +
+      '<div id="epdStatus" class="epd-status"></div>' +
+      '<div id="epdResult"></div>' +
+    '</div>' +
+    '<div class="modal-foot">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">' + esc(t("epd.close")) + '</button>' +
+      '<button class="btn btn-primary" id="epdAnalyzeBtn" onclick="analyzeEpd()" disabled>' + esc(t("epd.analyze")) + '</button>' +
+    '</div>',
+    true
+  );
+}
+function setEpdAnalyzeEnabled(b) { const btn = $("#epdAnalyzeBtn"); if (btn) btn.disabled = !b; }
+
+function onEpdFile(input) {
+  const c = _epdCtx; if (!c) return;
+  const st = $("#epdStatus");
+  const f = input.files && input.files[0];
+  c.pdfBase64 = ""; c.fileName = ""; setEpdAnalyzeEnabled(false);
+  if (st) st.innerHTML = "";
+  if (!f) return;
+  if (f.type !== "application/pdf") { if (st) st.innerHTML = epdErr(t("epd.err.type")); input.value = ""; return; }
+  if (f.size > 10 * 1024 * 1024) { if (st) st.innerHTML = epdErr(t("epd.err.size")); input.value = ""; return; }
+  const reader = new FileReader();
+  reader.onload = function () {
+    const res = String(reader.result || "");
+    const comma = res.indexOf(",");
+    c.pdfBase64 = comma > -1 ? res.slice(comma + 1) : res; // nuimam "data:...;base64," prefiksą
+    c.fileName = f.name;
+    if (st) st.innerHTML = '<div class="epd-file-ok">' + esc(f.name) + ' (' + esc(fmtBytes(f.size)) + ')</div>';
+    setEpdAnalyzeEnabled(true);
+  };
+  reader.onerror = function () { if (st) st.innerHTML = epdErr(t("epd.err.read")); };
+  reader.readAsDataURL(f);
+}
+
+function analyzeEpd() {
+  const c = _epdCtx; if (!c || !c.pdfBase64 || c.busy) return;
+  const result = $("#epdResult"), status = $("#epdStatus");
+  if (!window.GP_EPD_EXTRACT) { if (result) result.innerHTML = epdErr(t("epd.err.lib")); return; }
+  const s = Store.getSettings();
+  c.busy = true; setEpdAnalyzeEnabled(false);
+  if (result) result.innerHTML = "";
+  if (status) status.innerHTML = '<div class="epd-analyzing"><span class="spin"></span>' + esc(t("epd.analyzing")) + '</div>';
+
+  let req;
+  try {
+    req = GP_EPD_EXTRACT.buildRequest(c.pdfBase64, c.label, c.unit, { mode: s.aiMode, apiKey: s.apiKey, proxyUrl: s.proxyUrl });
+  } catch (e) {
+    if (status) status.innerHTML = ""; if (result) result.innerHTML = epdErr(t("epd.err.network"));
+    c.busy = false; setEpdAnalyzeEnabled(true); return;
+  }
+
+  fetch(req.url, { method: "POST", headers: req.headers, body: JSON.stringify(req.body) })
+    .then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      return resp.json();
+    })
+    .then(function (data) {
+      if (status) status.innerHTML = "";
+      renderEpdResult(GP_EPD_EXTRACT.parseResponse(data));
+    })
+    .catch(function (err) {
+      if (status) status.innerHTML = "";
+      const code = String(err && err.message || "");
+      const msg = /^HTTP\s/.test(code) ? t("epd.err.http").replace("{code}", code.replace("HTTP ", "")) : t("epd.err.network");
+      if (result) result.innerHTML = epdErr(msg);
+    })
+    .then(function () { c.busy = false; setEpdAnalyzeEnabled(true); });
+}
+
+function renderEpdResult(res) {
+  const box = $("#epdResult"), c = _epdCtx;
+  if (!box || !c) return;
+  if (!res || res.status === "error") {
+    box.innerHTML = '<div class="epd-card">' + epdErr(t("epd.error") + (res && res.error ? (": " + res.error) : "")) + '</div>';
+    return;
+  }
+  if (res.status === "not_found") {
+    box.innerHTML = '<div class="epd-card"><div class="epd-notfound">' + esc(t("epd.notfound")) + '</div>' +
+      (res.notes ? '<div class="epd-meta">' + esc(res.notes) + '</div>' : "") + '</div>';
+    return;
+  }
+  if (res.status === "ambiguous") {
+    _epdCtx.lastCandidates = res.candidates;
+    let h = '<div class="epd-card"><div class="epd-meta">' + esc(t("epd.ambiguous")) + '</div>';
+    h += res.candidates.map(function (cd, i) {
+      return '<label class="epd-cand"><input type="radio" name="epdCand" value="' + i + '"' + (i === 0 ? " checked" : "") + ' /> ' +
+        '<b>' + esc(fmtFactor(cd.value)) + ' ' + esc(cd.unit || "") + '</b>' + (cd.label ? ' - ' + esc(cd.label) : "") + '</label>';
+    }).join("");
+    if (res.notes) h += '<div class="epd-meta">' + esc(res.notes) + '</div>';
+    h += '<div class="epd-btns"><button class="btn btn-primary" onclick="confirmEpdCandidate()">' + esc(t("epd.confirmSel")) + '</button>' +
+      '<button class="btn btn-secondary" onclick="rejectEpd()">' + esc(t("epd.reject")) + '</button></div></div>';
+    box.innerHTML = h;
+    return;
+  }
+  // found
+  _epdCtx.lastFound = res;
+  const conv = GP_EPD_EXTRACT.convertValue(res, c.unit);
+  _epdCtx.lastConv = conv;
+  const convOk = conv && conv.value != null && isFinite(conv.value);
+  let h = '<div class="epd-card">';
+  h += '<div class="epd-val">' + esc(fmtFactor(res.value)) + ' ' + esc(res.unit || "") +
+    (res.page != null ? ' · ' + esc(t("epd.page")) + ' ' + esc(res.page) : "") + '</div>';
+  if (res.standard) h += '<div class="epd-meta">' + esc(res.standard) + '</div>';
+  h += '<blockquote class="epd-quote">"' + esc(res.quote) + '"</blockquote>';
+  if (convOk) h += '<div class="epd-conv">' + esc(t("epd.converted")) + ': <b>' + esc(fmtFactor(conv.value)) + ' ' + esc(prettyUnit(c.unit)) + '</b></div>';
+  if (conv && conv.warning) h += '<div class="epd-warn">' + esc(conv.warning) + '</div>';
+  if (res.notes) h += '<div class="epd-meta">' + esc(res.notes) + '</div>';
+  h += '<div class="epd-btns">';
+  if (convOk) h += '<button class="btn btn-primary" onclick="confirmEpdFound()">' + esc(t("epd.confirm")) + '</button>';
+  h += '<button class="btn btn-secondary" onclick="rejectEpd()">' + esc(t("epd.reject")) + '</button>';
+  h += '</div></div>';
+  box.innerHTML = h;
+}
+
+function writeEpd(val, meta) {
+  const c = _epdCtx; if (!c) return;
+  Store.updateCalc(cc => {
+    cc.manual[c.key] = String(val);
+    cc.epdSource[c.key] = { fileName: c.fileName, page: (meta && meta.page != null) ? meta.page : null, quote: (meta && meta.quote) || "", confirmedAt: new Date().toISOString() };
+  });
+  closeModal();
+  renderCalc(); // atnaujina rankinį lauką, ŠESD ir "iš EPD" žymę
+}
+function confirmEpdFound() {
+  const c = _epdCtx; if (!c || !c.lastConv || c.lastConv.value == null) return;
+  writeEpd(c.lastConv.value, { page: c.lastFound.page, quote: c.lastFound.quote });
+}
+function confirmEpdCandidate() {
+  const c = _epdCtx; if (!c || !c.lastCandidates) return;
+  const sel = document.querySelector('input[name="epdCand"]:checked');
+  const idx = sel ? Number(sel.value) : 0;
+  const cand = c.lastCandidates[idx]; if (!cand) return;
+  const conv = GP_EPD_EXTRACT.convertValue({ value: cand.value, unit: cand.unit, declaredUnit: "" }, c.unit);
+  if (!conv || conv.value == null) {
+    const box = $("#epdResult"); if (box) box.innerHTML += '<div class="epd-warn">' + esc(conv && conv.warning ? conv.warning : t("epd.err.convert")) + '</div>';
+    return;
+  }
+  writeEpd(conv.value, { page: null, quote: cand.label || "" });
+}
+function rejectEpd() { const box = $("#epdResult"); if (box) box.innerHTML = ""; } // atmeta pasiūlymą, faktorius nekeičiamas
 
 /* ============================================================
    7. PALEIDIMAS
