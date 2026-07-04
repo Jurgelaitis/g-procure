@@ -15,6 +15,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- DOCX skaitymas -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<!-- Bendras AI proxy transportas (shared) - GP_AI_PROXY. Turi buti pries modulio inline scripta. -->
+<script src="../shared/ai-proxy.js"></script>
 <style>
 :root{
   /* Spalvos ir --font-base iškelti į ../shared/epso-g.css (GP dizaino žetonai). */
@@ -451,11 +453,6 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
     <div class="modal-body">
       <div class="info-block">AI raktas <strong>nereikalingas</strong> - g-procure proxy turi raktą serverio pusėje. Galite pradėti darbą iš karto.</div>
       <div class="field">
-        <label>AI proxy adresas</label>
-        <input type="text" id="set-endpoint" value="https://api.g-procure.com/api/analyze">
-        <div class="hint">Numatytasis g-procure proxy (Claude Sonnet 4.6). Keiskite tik jei reikia.</div>
-      </div>
-      <div class="field">
         <label>Pirkimo kontekstas</label>
         <select id="set-context">
           <option value="sektorinis" selected>Sektorinis (PĮ) - Litgrid</option>
@@ -470,15 +467,6 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
         <input type="checkbox" id="set-it" checked>
         <label>Taikyti VPT IT pirkimų gaires (specialistų reikalavimai)</label>
       </div>
-      <div class="divider"></div>
-      <details>
-        <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--color-graphite-50)">Papildoma: tiesioginis API raktas (atsarginis)</summary>
-        <div class="field" style="margin-top:12px">
-          <label>Anthropic API raktas (neprivaloma)</label>
-          <input type="text" id="set-apikey" placeholder="sk-ant-... (paliekama tuščia)">
-          <div class="hint">Naudojamas tik jei proxy nepasiekiamas. Saugomas tik šios sesijos atmintyje.</div>
-        </div>
-      </details>
     </div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeSettings()">Uždaryti</button>
@@ -499,11 +487,9 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
 /* ---------------- Global state ---------------- */
 const PPQ = {
   settings:{
-    endpoint:'https://api.g-procure.com/api/analyze',
     context:'sektorinis',
     green:true,
-    it:true,
-    apikey:''
+    it:true
   },
   procurement:{ name:'', objectType:'', value:null, valueCat:'0.5', duration:'', desc:'', extra:'' },
   questions:[],      // AI clarifying questions
@@ -564,12 +550,9 @@ function switchView(v){
 function openSettings(){ $('settings-modal').classList.add('open'); }
 function closeSettings(){ $('settings-modal').classList.remove('open'); }
 function saveSettings(){
-  PPQ.settings.endpoint = $('set-endpoint').value.trim() || PPQ.settings.endpoint;
   PPQ.settings.context  = $('set-context').value;
   PPQ.settings.green    = $('set-green').checked;
   PPQ.settings.it       = $('set-it').checked;
-  PPQ.settings.apikey   = $('set-apikey').value.trim();
-  $('footer-api-status').textContent = PPQ.settings.apikey ? 'AI: tiesioginis raktas' : 'AI: g-procure proxy';
   closeSettings();
   toast('Nustatymai išsaugoti');
 }
@@ -670,40 +653,19 @@ function extractRetryDelay(msg){
 }
 
 async function rawCall(sys, userPrompt, maxTokens){
-  const s = PPQ.settings;
-  // Direct Anthropic fallback if user provided a key
-  if(s.apikey){
-    const r = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-api-key':s.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,system:sys,messages:[{role:'user',content:userPrompt}]})
-    });
-    if(!r.ok){ throw new Error('Anthropic API '+r.status+': '+(await r.text()).slice(0,300)); }
-    const j = await r.json();
-    return extractText(j);
-  }
-  // g-procure proxy
-  const body = {
-    model:'claude-sonnet-4-6',
-    max_tokens:maxTokens,
-    system:sys,
-    messages:[{role:'user',content:userPrompt}]
-  };
-  const r = await fetch(s.endpoint,{
-    method:'POST',
-    headers:{'content-type':'application/json'},
-    body:JSON.stringify(body)
+  // Transportas iskeltas i shared/ai-proxy.js (GP_AI_PROXY). Raktas gyvena TIK
+  // serverio puseje - klientas kreipiasi tik i g-procure proxy, jokio rakto cia.
+  const res = await GP_AI_PROXY.call({
+    module: 'pp-qual',
+    system: sys,
+    userMessage: userPrompt,
+    maxTokens: maxTokens
   });
-  if(!r.ok){
-    const txt = await r.text().catch(()=> '');
-    throw new Error('Proxy '+r.status+': '+txt.slice(0,300));
-  }
-  const ct = r.headers.get('content-type')||'';
-  if(ct.includes('application/json')){
-    const j = await r.json();
-    return extractText(j);
-  }
-  return await r.text();
+  // SAUGIKLIS 1: klaidas metam (ne grazinam objekta), kad callAI retry logika
+  // (429 / rate limit / overloaded) veiktu kaip anksciau.
+  if(!res.ok){ throw new Error(res.error || ('HTTP ' + res.status)); }
+  // SAUGIKLIS 2: grazinam STRING - to tikisi callAI ir smartParseJson.
+  return res.text;
 }
 
 /* extract assistant text from many possible response shapes */
@@ -1861,8 +1823,6 @@ async function exportDocx(){
   });
   // settings modal close on overlay click
   $('settings-modal').addEventListener('click',e=>{ if(e.target.id==='settings-modal') closeSettings(); });
-  // sync settings inputs from state
-  $('set-endpoint').value=PPQ.settings.endpoint;
   console.log('PP-QUAL inicializuotas.');
 })();
 </script>
