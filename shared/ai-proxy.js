@@ -82,6 +82,23 @@
     return "";
   }
 
+  // --- 429 / rate-limit auto-retry -----------------------------------------
+  // Kartojama TIK kai: status 429 ARBA atsakymo klaidoje matomas "overloaded"
+  // ar "rate". Backend gali wrap'inti Anthropic 429 i kita statusa, todel
+  // tikrinamas ir tekstas. Kitos klaidos (400, 500, tinklo) - nekartojamos.
+  var MAX_RETRIES = 3;   // max 3 pakartojimai (is viso 4 bandymai)
+
+  function isRetryable(result) {
+    if (!result || result.ok) return false;
+    if (result.status === 429) return true;
+    return /overloaded|rate/i.test(result.error || "");
+  }
+
+  // Pauze tarp bandymu (backoff). setTimeout - narsykles aplinka.
+  function delay(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
   // --- Pagrindine funkcija -------------------------------------------------
   // opts: {
   //   module, path, system, model, maxTokens, userMessage, pdfBase64, signal
@@ -119,33 +136,52 @@
     };
     if (opts.signal) fetchOpts.signal = opts.signal;
 
-    return fetch(url, fetchOpts).then(function (response) {
-      var status = response.status;
-      return response.text().then(function (rawText) {
-        var raw = null;
-        try { raw = rawText ? JSON.parse(rawText) : null; } catch (e) { raw = rawText; }
+    // Vienas bandymas: grazina normalizuota { ok, text, raw, status, error }.
+    // opts / body / fetchOpts NEKEICIAMI tarp bandymu - kartojama identiska uzklausa.
+    function attempt() {
+      return fetch(url, fetchOpts).then(function (response) {
+        var status = response.status;
+        return response.text().then(function (rawText) {
+          var raw = null;
+          try { raw = rawText ? JSON.parse(rawText) : null; } catch (e) { raw = rawText; }
 
-        if (!response.ok) {
-          var errMsg = "API klaida " + status;
-          if (raw && raw.error) {
-            errMsg += ": " + (typeof raw.error === "string" ? raw.error : JSON.stringify(raw.error));
-          } else if (typeof rawText === "string" && rawText) {
-            errMsg += ": " + rawText.slice(0, 300);
+          if (!response.ok) {
+            var errMsg = "API klaida " + status;
+            if (raw && raw.error) {
+              errMsg += ": " + (typeof raw.error === "string" ? raw.error : JSON.stringify(raw.error));
+            } else if (typeof rawText === "string" && rawText) {
+              errMsg += ": " + rawText.slice(0, 300);
+            }
+            return { ok: false, text: "", raw: raw, status: status, error: errMsg };
           }
-          return { ok: false, text: "", raw: raw, status: status, error: errMsg };
-        }
 
-        return { ok: true, text: extractText(raw), raw: raw, status: status, error: null };
+          return { ok: true, text: extractText(raw), raw: raw, status: status, error: null };
+        });
+      }).catch(function (err) {
+        return {
+          ok: false,
+          text: "",
+          raw: null,
+          status: 0,
+          error: (err && err.message) ? err.message : "Tinklo klaida"
+        };
       });
-    }).catch(function (err) {
-      return {
-        ok: false,
-        text: "",
-        raw: null,
-        status: 0,
-        error: (err && err.message) ? err.message : "Tinklo klaida"
-      };
-    });
+    }
+
+    // Retry ciklas: backoff 1s / 2s / 4s. Po visu bandymu grazina normalia
+    // forma { ok:false, ... } - NIEKADA nemeta del retry.
+    function run(attemptIndex) {
+      return attempt().then(function (result) {
+        if (attemptIndex < MAX_RETRIES && isRetryable(result)) {
+          return delay(1000 * Math.pow(2, attemptIndex)).then(function () {
+            return run(attemptIndex + 1);
+          });
+        }
+        return result;
+      });
+    }
+
+    return run(0);
   }
 
   global.GP_AI_PROXY = {
