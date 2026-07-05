@@ -15,6 +15,8 @@
 <script src="evaluation.js"></script>
 <!-- EPD dokumentų AI ištraukimo logika -> window.GP_EPD_EXTRACT -->
 <script src="epd-extract.js"></script>
+<!-- Bendras AI proxy transportas (shared) -> window.GP_AI_PROXY -->
+<script src="../shared/ai-proxy.js"></script>
 <!-- Ataskaitų modelio kūrimas -> window.GP_REPORTS -->
 <script src="reports.js"></script>
 <!-- PP-carbon -> PP-ESG (ESRS E1-6 / Scope 3) -> window.GP_ESG_EXPORT -->
@@ -877,9 +879,8 @@ const Store = {
   _ensureSettings(d) {
     if (!d.settings || typeof d.settings !== "object") d.settings = {};
     const s = d.settings;
-    if (s.aiMode !== "proxy" && s.aiMode !== "direct") s.aiMode = "direct";
-    if (typeof s.apiKey !== "string") s.apiKey = "";
-    if (typeof s.proxyUrl !== "string") s.proxyUrl = "https://api.g-procure.com/api/analyze";
+    // Transportas visada per serverio proxy (GP_AI_PROXY). "direct" rezimo nebera.
+    s.aiMode = "proxy";
     return s;
   },
   getSettings() { return this._ensureSettings(this._data()); },
@@ -964,6 +965,7 @@ const I18N = {
     "ph.title": "Bus kitame žingsnyje", "ph.badge": "Ruošiama",
     "set.title": "Nustatymai", "set.body": "Modulio nustatymai bus pridėti vėliau (kalba, numatytieji vienetai, faktorių versija).", "set.close": "Uždaryti",
     "set.ai": "AI (EPD dokumentų analizė)",
+    "set.proxyInfo": "AI raktas nereikalingas - g-procure proxy saugo raktą serverio pusėje. Visos AI užklausos eina tik per proxy.",
     "set.mode": "Režimas", "set.mode.direct": "Tiesioginis (su API raktu)", "set.mode.proxy": "Per proxy",
     "set.apiKey": "Anthropic API raktas", "set.apiKey.note": "Raktas saugomas tik šioje naršyklėje (localStorage).",
     "set.proxyUrl": "Proxy URL",
@@ -1046,6 +1048,7 @@ const I18N = {
     "ph.title": "Coming in the next step", "ph.badge": "In progress",
     "set.title": "Settings", "set.body": "Module settings will be added later (language, default units, factor version).", "set.close": "Close",
     "set.ai": "AI (EPD document analysis)",
+    "set.proxyInfo": "No AI key needed - the g-procure proxy holds the key server-side. All AI requests go only through the proxy.",
     "set.mode": "Mode", "set.mode.direct": "Direct (with API key)", "set.mode.proxy": "Via proxy",
     "set.apiKey": "Anthropic API key", "set.apiKey.note": "The key is stored only in this browser (localStorage).",
     "set.proxyUrl": "Proxy URL",
@@ -1124,28 +1127,13 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<"
 function openModal(html, wide) { const sh = $("#modalShell"); sh.className = "modal" + (wide ? " wide" : ""); sh.innerHTML = html; $("#overlay").classList.add("open"); }
 function closeModal() { $("#overlay").classList.remove("open"); $("#modalShell").innerHTML = ""; }
 function openSettings() {
-  const s = Store.getSettings();
-  const isProxy = s.aiMode === "proxy";
   const xBtn = '<button class="x-btn" onclick="closeModal()" aria-label="' + esc(t("set.close")) + '">' +
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
-  const proxyField = isProxy
-    ? '<div class="field" style="margin-top:var(--space-2)"><label>' + esc(t("set.proxyUrl")) + '</label>' +
-        '<input class="input" id="setProxyUrl" value="' + esc(s.proxyUrl) + '" oninput="onSetting(\'proxyUrl\',this.value)" /></div>'
-    : "";
   openModal(
     '<div class="modal-head"><div class="modal-title">' + esc(t("set.title")) + '</div>' + xBtn + '</div>' +
     '<div class="modal-body">' +
       '<div class="card-title" style="font-size:14px">' + esc(t("set.ai")) + '</div>' +
-      '<div class="field"><label>' + esc(t("set.mode")) + '</label>' +
-        '<div class="seg">' +
-          '<button type="button" class="seg-btn' + (isProxy ? "" : " active") + '" onclick="onSetting(\'aiMode\',\'direct\')">' + esc(t("set.mode.direct")) + '</button>' +
-          '<button type="button" class="seg-btn' + (isProxy ? " active" : "") + '" onclick="onSetting(\'aiMode\',\'proxy\')">' + esc(t("set.mode.proxy")) + '</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="field" style="margin-top:var(--space-2)"><label>' + esc(t("set.apiKey")) + '</label>' +
-        '<input class="input" type="password" id="setApiKey" autocomplete="off" value="' + esc(s.apiKey) + '" oninput="onSetting(\'apiKey\',this.value)" />' +
-        '<span class="epd-src">' + esc(t("set.apiKey.note")) + '</span></div>' +
-      proxyField +
+      '<div class="field"><span class="epd-src">' + esc(t("set.proxyInfo")) + '</span></div>' +
     '</div>' +
     '<div class="modal-foot"><button class="btn btn-primary" onclick="closeModal()">' + esc(t("set.close")) + '</button></div>'
   );
@@ -1841,33 +1829,31 @@ function analyzeEpd() {
   const c = _epdCtx; if (!c || !c.pdfBase64 || c.busy) return;
   const result = $("#epdResult"), status = $("#epdStatus");
   if (!window.GP_EPD_EXTRACT) { if (result) result.innerHTML = epdErr(t("epd.err.lib")); return; }
-  const s = Store.getSettings();
+  if (!window.GP_AI_PROXY) { if (result) result.innerHTML = epdErr(t("epd.err.lib")); return; }
   c.busy = true; setEpdAnalyzeEnabled(false);
   if (result) result.innerHTML = "";
   if (status) status.innerHTML = '<div class="epd-analyzing"><span class="spin"></span>' + esc(t("epd.analyzing")) + '</div>';
 
-  let req;
-  try {
-    req = GP_EPD_EXTRACT.buildRequest(c.pdfBase64, c.label, c.unit, { mode: s.aiMode, apiKey: s.apiKey, proxyUrl: s.proxyUrl });
-  } catch (e) {
-    if (status) status.innerHTML = ""; if (result) result.innerHTML = epdErr(t("epd.err.network"));
-    c.busy = false; setEpdAnalyzeEnabled(true); return;
-  }
-
-  fetch(req.url, { method: "POST", headers: req.headers, body: JSON.stringify(req.body) })
-    .then(function (resp) {
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      return resp.json();
-    })
-    .then(function (data) {
+  // Transportas per shared/ai-proxy.js (GP_AI_PROXY). Raktas tik serverio puseje.
+  // maxTokens BUTINAI 1500 (EPD istraukimui), ne GP_AI_PROXY default.
+  GP_AI_PROXY.call({
+    system: GP_EPD_EXTRACT.systemPrompt(),
+    userMessage: GP_EPD_EXTRACT.userText(c.label, c.unit),
+    pdfBase64: c.pdfBase64,
+    maxTokens: 1500
+  })
+    .then(function (res) {
       if (status) status.innerHTML = "";
-      renderEpdResult(GP_EPD_EXTRACT.parseResponse(data));
+      if (!res.ok) {
+        const msg = res.status ? t("epd.err.http").replace("{code}", res.status) : t("epd.err.network");
+        if (result) result.innerHTML = epdErr(msg);
+        return;
+      }
+      renderEpdResult(GP_EPD_EXTRACT.parseResponse(res.raw));
     })
-    .catch(function (err) {
+    .catch(function () {
       if (status) status.innerHTML = "";
-      const code = String(err && err.message || "");
-      const msg = /^HTTP\s/.test(code) ? t("epd.err.http").replace("{code}", code.replace("HTTP ", "")) : t("epd.err.network");
-      if (result) result.innerHTML = epdErr(msg);
+      if (result) result.innerHTML = epdErr(t("epd.err.network"));
     })
     .then(function () { c.busy = false; setEpdAnalyzeEnabled(true); });
 }
@@ -2260,7 +2246,24 @@ function renderAll() {
   renderBids();
   renderReports();
 }
+// Vienkartine migracija: perjungia AI rezima i proxy ir istrina rakto pedsaka.
+// Skaito VISA blob'a, keicia TIK settings.aiMode ir settings.apiKey, iraso atgal.
+// Kiti laukai (projects, calc, taxonomyStatuses, evalOffers ir kt.) nepaliesti.
+function migrateCarbonAiToProxy() {
+  try {
+    var raw = localStorage.getItem(Store.KEY);
+    if (!raw) return;
+    var d = JSON.parse(raw);
+    if (!d || typeof d !== "object" || !d.settings) return;
+    var changed = false;
+    if (d.settings.aiMode !== "proxy") { d.settings.aiMode = "proxy"; changed = true; }
+    if (d.settings.apiKey) { d.settings.apiKey = ""; changed = true; }
+    if (changed) localStorage.setItem(Store.KEY, JSON.stringify(d));
+  } catch (e) { /* tyliai - migracija neprivalo luzti */ }
+}
+
 function boot() {
+  migrateCarbonAiToProxy();
   applyI18n();
   mountInfoPanel();
   renderAll();
