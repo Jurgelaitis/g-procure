@@ -1670,18 +1670,29 @@ async function exportDocx(){
     toast('Generuojamas DOCX...');
   }
   const D=window.docx;
-  const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,AlignmentType,BorderStyle,ShadingType,PageBreak}=D;
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,AlignmentType,BorderStyle,ShadingType,PageBreak,TableLayoutType}=D;
   const p=PPQ.procurement;
   const coef=parseFloat(p.valueCat)||0.5;
   const calc=computeProportional(p.value,coef);
   const EM='00A072';
+
+  // --- Lenteliu stulpeliu plociai realiais DXA (Pages gerbia tblGrid pazodziui) ---
+  // usable skaiciuojamas is realiu puslapio konstantu, ne uzkoduotas.
+  const PAGE_W=11906, PAGE_H=16838, MARGIN=1440;
+  const usable=PAGE_W-MARGIN-MARGIN;
+  // Is proporciju -> DXA; paskutini stulpeli pakoreguoja, kad suma tiksliai === usable.
+  const dxaCols=(fr)=>{ const c=fr.map(f=>Math.round(f/fr.reduce((a,b)=>a+b,0)*usable)); c[c.length-1]+=usable-c.reduce((a,b)=>a+b,0); return c; };
+  const infoCols=dxaCols([38,62]);
+  const reqColsW=bilingual?dxaCols([6,24,24,23,23]):dxaCols([8,46,46]);
+  const propCols=dxaCols([38,20,42]);
+  const compCols=dxaCols([5,40,12,23,12,8]);
 
   const bi=(lt,en)=>bilingual?(lt+' / '+en):lt;
   // Lentelės tekstas: Arial 10 (size = 20 pusinių punktų)
   const TR=(t,o={})=>new TextRun({text:String(t==null?'':t),bold:!!o.bold,italics:!!o.italics,size:o.size||20,color:o.color,break:o.break,font:'Arial'});
   const para=(t,o={})=>new Paragraph({alignment:o.align,spacing:o.spacing,children:[TR(t,o)]});
   const cell=(content,o={})=>new TableCell({
-    width:o.width?{size:o.width,type:WidthType.PERCENTAGE}:undefined,
+    width:o.width?{size:o.width,type:WidthType.DXA}:undefined,
     columnSpan:o.span||undefined,
     verticalAlign:o.valign,
     shading:(o.head||o.catHead)?{fill:o.catHead?'EFF9F1':'D7EEDB',type:ShadingType.CLEAR,color:'auto'}:undefined,
@@ -1703,7 +1714,7 @@ async function exportDocx(){
   const children=[];
   // Pirkimo informacija (dokumentas pradedamas iškart nuo lentelės su kval. informacija)
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun({text:bi('1. Pirkimo informacija','Procurement information'),color:EM,bold:true})]}));
-  children.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},rows:infoRows.map(r=>new TableRow({children:[cell(bi(r[0],r[1]),{width:38,head:true}),cell(r[2],{width:62})]}))}));
+  children.push(new Table({columnWidths:infoCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:infoRows.map(r=>new TableRow({children:[cell(bi(r[0],r[1]),{width:infoCols[0],head:true}),cell(r[2],{width:infoCols[1]})]}))}));
 
   // Bendros nuostatos
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('2. Bendros nuostatos','General provisions'),color:EM,bold:true})]}));
@@ -1723,29 +1734,29 @@ async function exportDocx(){
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('3. Kvalifikaciniai reikalavimai','Qualification requirements'),color:EM,bold:true})]}));
   const reqCols=bilingual?5:3;
   const reqHead=bilingual
-    ? [cell('Eil. Nr. / No.',{head:true,width:6,align:AlignmentType.CENTER}),
-       cell('Kvalifikacijos reikalavimas',{head:true,width:24}),
-       cell('Qualification requirement',{head:true,width:24}),
-       cell('Pateikiami dokumentai',{head:true,width:23}),
-       cell('Documents submitted',{head:true,width:23})]
-    : [cell('Eil. Nr.',{head:true,width:8,align:AlignmentType.CENTER}),
-       cell('Kvalifikacijos reikalavimas',{head:true,width:46}),
-       cell('Pateikiami dokumentai',{head:true,width:46})];
+    ? [cell('Eil. Nr. / No.',{head:true,width:reqColsW[0],align:AlignmentType.CENTER}),
+       cell('Kvalifikacijos reikalavimas',{head:true,width:reqColsW[1]}),
+       cell('Qualification requirement',{head:true,width:reqColsW[2]}),
+       cell('Pateikiami dokumentai',{head:true,width:reqColsW[3]}),
+       cell('Documents submitted',{head:true,width:reqColsW[4]})]
+    : [cell('Eil. Nr.',{head:true,width:reqColsW[0],align:AlignmentType.CENTER}),
+       cell('Kvalifikacijos reikalavimas',{head:true,width:reqColsW[1]}),
+       cell('Pateikiami dokumentai',{head:true,width:reqColsW[2]})];
   const reqRows=[new TableRow({tableHeader:true,children:reqHead})];
   let rn=0;
   for(const k of ['A','B','C','D','E']){
     const items=PPQ.requirements.filter(r=>r.category===k);
     if(!items.length) continue;
-    reqRows.push(new TableRow({children:[cell(bi(CATS[k],CATS_EN[k]),{catHead:true,bold:true,span:reqCols})]}));
+    reqRows.push(new TableRow({children:[cell(bi(CATS[k],CATS_EN[k]),{catHead:true,bold:true,span:reqCols,width:usable})]}));
     items.forEach(r=>{
       rn++;
       const cells=bilingual
-        ? [cell(rn+'.',{align:AlignmentType.CENTER}),cell(r.text),cell(r.text_en||''),cell(r.evidence||''),cell(r.evidence_en||'')]
-        : [cell(rn+'.',{align:AlignmentType.CENTER}),cell(r.text),cell(r.evidence||'')];
+        ? [cell(rn+'.',{align:AlignmentType.CENTER,width:reqColsW[0]}),cell(r.text,{width:reqColsW[1]}),cell(r.text_en||'',{width:reqColsW[2]}),cell(r.evidence||'',{width:reqColsW[3]}),cell(r.evidence_en||'',{width:reqColsW[4]})]
+        : [cell(rn+'.',{align:AlignmentType.CENTER,width:reqColsW[0]}),cell(r.text,{width:reqColsW[1]}),cell(r.evidence||'',{width:reqColsW[2]})];
       reqRows.push(new TableRow({children:cells}));
     });
   }
-  children.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},rows:reqRows}));
+  children.push(new Table({columnWidths:reqColsW,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:reqRows}));
 
   // 4. Proporcingumo pagrindimas
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('4. Proporcingumo pagrindimas','Proportionality justification'),color:EM,bold:true})]}));
@@ -1758,7 +1769,7 @@ async function exportDocx(){
       [bi('Profesinės atsakomybės draudimas','Professional liability insurance'),fmtEur(calc.insMin)+' - '+fmtEur(calc.insMax),bi('25-50% pirkimo vertės','25-50% of procurement value')],
       [bi('Maksimalūs patirties metai','Maximum experience years'),(coef===0.3?'3-5':'3'),bi('Proporcingai objekto sudėtingumui','Proportionate to object complexity')]
     ];
-    children.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},rows:propRows.map((r,i)=>new TableRow({children:r.map(c=>cell(c,{head:i===0}))}))}));
+    children.push(new Table({columnWidths:propCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:propRows.map((r,i)=>new TableRow({children:r.map((c,ci)=>cell(c,{head:i===0,width:propCols[ci]}))}))}));
   }else{
     children.push(new Paragraph({children:[new TextRun({text:bi('Pirkimo vertė nenurodyta - proporcingumo reikšmės neapskaičiuotos.','Procurement value not provided - proportionality values not calculated.'),italics:true,color:'737483',size:20})]}));
   }
@@ -1768,9 +1779,9 @@ async function exportDocx(){
   children.push(new Paragraph({alignment:AlignmentType.RIGHT,children:[new TextRun({text:bi('Priedas Nr. 2','Annex No. 2'),bold:true,size:22,color:'737483'})]}));
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun({text:bi('Kvalifikacinių reikalavimų atitikties lentelė','Qualification requirements compliance table'),color:EM,bold:true})]}));
   const headRow=new TableRow({tableHeader:true,children:[
-    cell('Nr.',{head:true,width:5}),cell(bi('Kvalifikacijos reikalavimas','Qualification requirement'),{head:true,width:40}),
-    cell(bi('Kategorija','Category'),{head:true,width:12}),cell(bi('Tiekėjo pateikiami įrodymai','Evidence submitted by supplier'),{head:true,width:23}),
-    cell(bi('Pateikti dokumentai','Documents provided'),{head:true,width:12}),cell(bi('Atitinka (Taip/Ne)','Complies (Yes/No)'),{head:true,width:8})
+    cell('Nr.',{head:true,width:compCols[0]}),cell(bi('Kvalifikacijos reikalavimas','Qualification requirement'),{head:true,width:compCols[1]}),
+    cell(bi('Kategorija','Category'),{head:true,width:compCols[2]}),cell(bi('Tiekėjo pateikiami įrodymai','Evidence submitted by supplier'),{head:true,width:compCols[3]}),
+    cell(bi('Pateikti dokumentai','Documents provided'),{head:true,width:compCols[4]}),cell(bi('Atitinka (Taip/Ne)','Complies (Yes/No)'),{head:true,width:compCols[5]})
   ]});
   const dataRows=[];
   let n=0;
@@ -1778,12 +1789,12 @@ async function exportDocx(){
     PPQ.requirements.filter(r=>r.category===k).forEach(r=>{
       n++;
       const reqCell=bilingual
-        ? cell([para(r.text),para(r.text_en||'',{italics:true,color:'737483'})])
-        : cell(r.text);
-      dataRows.push(new TableRow({children:[cell(n),reqCell,cell(k),cell(r.evidence||''),cell(''),cell('')]}));
+        ? cell([para(r.text),para(r.text_en||'',{italics:true,color:'737483'})],{width:compCols[1]})
+        : cell(r.text,{width:compCols[1]});
+      dataRows.push(new TableRow({children:[cell(n,{width:compCols[0]}),reqCell,cell(k,{width:compCols[2]}),cell(r.evidence||'',{width:compCols[3]}),cell('',{width:compCols[4]}),cell('',{width:compCols[5]})]}));
     });
   }
-  children.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},rows:[headRow,...dataRows]}));
+  children.push(new Table({columnWidths:compCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:[headRow,...dataRows]}));
 
   // Footer / disclaimer
   const disLt='Dokumentas parengtas naudojant G-Procure kvalifikacinių reikalavimų modulį (LITGRID AB). Rezultatai rekomendacinio pobūdžio; galutinį sprendimą dėl kvalifikacinių reikalavimų priima pirkimo komisija. Parengta '+today()+'.';
@@ -1798,7 +1809,7 @@ async function exportDocx(){
         {id:'Heading1',name:'Heading 1',basedOn:'Normal',next:'Normal',run:{size:28,bold:true,color:EM,font:'Nunito Sans'},paragraph:{spacing:{before:240,after:120}}},
         {id:'Heading2',name:'Heading 2',basedOn:'Normal',next:'Normal',run:{size:24,bold:true,color:'2E3641',font:'Nunito Sans'},paragraph:{spacing:{before:160,after:80}}}
       ]},
-    sections:[{properties:{},children}]
+    sections:[{properties:{page:{size:{width:PAGE_W,height:PAGE_H},margin:{top:MARGIN,right:MARGIN,bottom:MARGIN,left:MARGIN}}},children}]
   });
   const blob=await Packer.toBlob(doc);
   download(blob,safeName()+'_kvalifikacija_'+today()+'.docx');
