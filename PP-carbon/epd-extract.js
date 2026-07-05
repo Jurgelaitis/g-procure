@@ -9,12 +9,10 @@
  *    vartotojui PATVIRTINTI. AI niekada neuzpildo faktoriaus pats - tik
  *    pasiulo; galutinis sprendimas ZMOGAUS (spaudzia "Patvirtinti").
  *
- * DVIGUBAS REZIMAS (isProxy, kaip PP-ts):
- *  - direct: tiesioginis Anthropic API iskvietimas su vartotojo raktu
- *    (anthropic-dangerous-direct-browser-access). Raktas is Nustatymu,
- *    saugomas per Store. Tinka vidiniam MVP.
- *  - proxy: serverio puses proxy (kai atsiras). Raktas serveryje.
- *  buildRequest() grazina {url, headers, body} pagal rezima - UI tik fetch'ina.
+ * TRANSPORTAS:
+ *  - Transportas iskeltas i shared/ai-proxy.js (GP_AI_PROXY). Sis modulis
+ *    tik konstruoja prompta (systemPrompt / userText) ir parsina atsakyma.
+ *    Raktas gyvena TIK serverio puseje - jokio narsykles rakto cia.
  *
  * SAUGIKLIAI:
  *  - AI atsakymas grieztai JSON; parseResponse() atmeta viska, kas neatitinka
@@ -76,10 +74,17 @@
     ].join("\n");
   }
 
-  // Vartotojo zinute su PDF priedu.
-  // pdfBase64 - base64 uzkoduotas PDF (be data: prefikso).
+  // Vartotojo zinutes TEKSTO dalis (be PDF). Promptas apibreztas cia vienoje vietoje.
   // factorLabel - kurio faktoriaus EPD ieskome (pvz. "Jungtuvai 110-400 kV").
   // expectedUnit - musu faktoriaus vienetas (pvz. "kg CO2e/vnt").
+  function userText(factorLabel, expectedUnit) {
+    return "Produktas/iranga: " + factorLabel +
+           ". Musu faktoriaus vienetas: " + expectedUnit +
+           ". Rask A1-A3 GWP reiksme ir grazink JSON pagal schema.";
+  }
+
+  // Vartotojo zinute su PDF priedu (document + text). Teksta ima is userText().
+  // pdfBase64 - base64 uzkoduotas PDF (be data: prefikso).
   function userMessage(pdfBase64, factorLabel, expectedUnit) {
     return {
       role: "user",
@@ -90,49 +95,15 @@
         },
         {
           type: "text",
-          text: "Produktas/iranga: " + factorLabel +
-                ". Musu faktoriaus vienetas: " + expectedUnit +
-                ". Rask A1-A3 GWP reiksme ir grazink JSON pagal schema."
+          text: userText(factorLabel, expectedUnit)
         }
       ]
     };
   }
 
-  // Sukonstruoja pilna uzklausa pagal rezima.
-  // opts: { mode: "direct"|"proxy", apiKey: "..."(direct), proxyUrl: "..."(proxy) }
-  function buildRequest(pdfBase64, factorLabel, expectedUnit, opts) {
-    opts = opts || {};
-    var mode = opts.mode === "proxy" ? "proxy" : "direct";
-
-    var body = {
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt(),
-      messages: [userMessage(pdfBase64, factorLabel, expectedUnit)]
-    };
-
-    if (mode === "proxy") {
-      return {
-        mode: "proxy",
-        url: opts.proxyUrl || "https://api.g-procure.com/api/analyze",
-        headers: { "Content-Type": "application/json" },
-        body: body
-      };
-    }
-
-    // direct
-    return {
-      mode: "direct",
-      url: "https://api.anthropic.com/v1/messages",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": opts.apiKey || "",
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: body
-    };
-  }
+  // Pastaba: transportas (fetch) iskeltas i shared/ai-proxy.js (GP_AI_PROXY).
+  // Sis modulis tik konstruoja prompta ir parsina atsakyma; PDF siunciamas
+  // per GP_AI_PROXY.call({ pdfBase64, system, userMessage, maxTokens }).
 
   // --- 2. ATSAKYMO PARSINIMAS IR VALIDACIJA --------------------------------
 
@@ -275,7 +246,7 @@
     version: VERSION,
     MODEL: MODEL,
     systemPrompt: systemPrompt,
-    buildRequest: buildRequest,
+    userText: userText,
     extractText: extractText,
     parseResponse: parseResponse,
     checkUnitCompatibility: checkUnitCompatibility,
