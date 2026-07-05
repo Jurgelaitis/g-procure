@@ -2476,18 +2476,7 @@ details[open] summary {
     <div class="modal-body">
       <div class="alert alert-success">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        <div><strong>Naudojamas korporatyvinis g-procure backend'as</strong> — API raktas saugomas serverio pusėje, todėl jums nereikia įvesti savo Anthropic API rakto. Jei norite naudoti tiesioginį Anthropic API (pvz., dėl atsiskaitymo), pakeiskite „API galinį tašką" žemiau ir įveskite savo raktą.</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="apiKey">Anthropic API raktas <span class="help">(neprivaloma kai naudojamas g-procure)</span></label>
-        <input type="password" id="apiKey" class="form-input" placeholder="(palikite tuščia naudojant g-procure)" />
-        <div class="form-help">Tik tiesioginiam Anthropic API. Gauti raktą: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a></div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="apiEndpoint">API galinis taškas <span class="help">(jei naudojamas korporatyvinis proxy)</span></label>
-        <input type="url" id="apiEndpoint" class="form-input" placeholder="https://api.g-procure.com/api/analyze" />
+        <div><strong>Naudojamas korporatyvinis g-procure backend'as.</strong> API raktas saugomas serverio pusėje, todėl jums nereikia įvesti jokio Anthropic API rakto. Visos AI užklausos eina tik per g-procure proxy.</div>
       </div>
 
       <div class="form-group">
@@ -2554,6 +2543,8 @@ details[open] summary {
 <!-- External libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- Bendras AI proxy transportas (shared) - GP_AI_PROXY. Turi buti pries modulio inline scripta. -->
+<script src="../shared/ai-proxy.js"></script>
 <!-- docx.js: tikras .docx generavimas. Saugiai įkraunama su 2 CDN ir aiškia diagnoze. -->
 <script>
   window._docxLoadStatus = 'pending';
@@ -2608,8 +2599,6 @@ const App = (() => {
     try {
       const saved = JSON.parse(localStorage.getItem('ts_asistentas_settings') || '{}');
       return Object.assign({
-        apiKey: '',
-        apiEndpoint: 'https://api.g-procure.com/api/analyze',
         cvpisEndpoint: 'https://api.g-procure.com',
         model: 'claude-sonnet-4-6',
         depth: 'standard',
@@ -2627,8 +2616,6 @@ const App = (() => {
   }
 
   function saveSettings() {
-    state.settings.apiKey = $('#apiKey').value.trim();
-    state.settings.apiEndpoint = $('#apiEndpoint').value.trim() || 'https://api.g-procure.com/api/analyze';
     state.settings.cvpisEndpoint = $('#cvpisEndpoint').value.trim() || 'https://api.g-procure.com';
     state.settings.model = $('#modelSelect').value;
     state.settings.depth = $('#depthSelect').value;
@@ -2674,15 +2661,14 @@ const App = (() => {
   function showProgress() { $('#analysisProgress').classList.remove('hidden'); }
   function hideProgress() { setTimeout(() => $('#analysisProgress').classList.add('hidden'), 600); }
 
-  // Ar reikia įvesti API raktą? Jei naudojamas g-procure proxy backend'as - jis turi savo raktą serverio pusėje
+  // Transportas visada eina per serverio proxy (GP_AI_PROXY). Raktas tik serverio puseje.
   function usesProxyBackend() {
-    return (state.settings.apiEndpoint || '').includes('g-procure.com');
+    return true;
   }
 
-  // Ar API yra paruoštas naudojimui? Tinka ir proxy režimas (be vartotojo rakto), ir tiesioginis Anthropic API su raktu
+  // API prieiga visada yra - naudojamas g-procure proxy be vartotojo rakto.
   function hasApiAccess() {
-    if (usesProxyBackend()) return true;
-    return !!state.settings.apiKey;
+    return true;
   }
 
   function updateApiStatus() {
@@ -2713,8 +2699,6 @@ const App = (() => {
     $$('.tab-btn').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
     // Apply settings to UI
-    $('#apiKey').value = state.settings.apiKey || '';
-    $('#apiEndpoint').value = state.settings.apiEndpoint || '';
     $('#cvpisEndpoint').value = state.settings.cvpisEndpoint || 'https://api.g-procure.com';
     $('#modelSelect').value = state.settings.model || 'claude-sonnet-4-6';
     $('#depthSelect').value = state.settings.depth || 'standard';
@@ -5262,37 +5246,16 @@ Atlik specifikacijos analizę pagal sistemos prompt'e nurodytas kryptis ir grą�
   }
 
   async function callClaude(userMessage, settings) {
-    const endpoint = settings.apiEndpoint || 'https://api.g-procure.com/api/analyze';
-    const body = {
-      model: settings.model || 'claude-sonnet-4-6',
-      max_tokens: 8000,
+    // Transportas per shared/ai-proxy.js (GP_AI_PROXY). Raktas tik serverio puseje.
+    // Sistemos promptas ir max_tokens - sios (audito) vietos, modelis is pasirinkiklio.
+    const res = await GP_AI_PROXY.call({
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }]
-    };
-
-    const response = await fetchWithRetry(endpoint, {
-      method: 'POST',
-      headers: (() => {
-        const h = { 'Content-Type': 'application/json' };
-        const isProxy = (settings.apiEndpoint || '').includes('g-procure.com');
-        if (!isProxy) {
-          h['x-api-key'] = settings.apiKey;
-          h['anthropic-version'] = '2023-06-01';
-          h['anthropic-dangerous-direct-browser-access'] = 'true';
-        }
-        return h;
-      })(),
-      body: JSON.stringify(body)
+      userMessage: userMessage,
+      model: settings.model || 'claude-sonnet-4-6',
+      maxTokens: 8000
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`API klaida ${response.status}: ${errText.slice(0, 200)}`);
-    }
-
-    const data = await response.json();
-    const content = data.content?.[0]?.text || '';
-    return content;
+    if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
+    return res.text;
   }
 
   function parseResponse(content) {
@@ -5612,35 +5575,16 @@ Kategorijos: technical, quality, delivery, warranty, qualification, security, ot
   }
 
   async function callClaude(userMessage, settings, maxTokens = 8000) {
-    const endpoint = settings.apiEndpoint || 'https://api.g-procure.com/api/analyze';
-    const body = {
-      model: settings.model || 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
+    // Transportas per shared/ai-proxy.js (GP_AI_PROXY). Raktas tik serverio puseje.
+    // Sistemos promptas ir max_tokens - sios (generavimo) vietos, modelis is pasirinkiklio.
+    const res = await GP_AI_PROXY.call({
       system: GENERATION_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }]
-    };
-
-    const response = await fetchWithRetry(endpoint, {
-      method: 'POST',
-      headers: (() => {
-        const h = { 'Content-Type': 'application/json' };
-        const isProxy = (settings.apiEndpoint || '').includes('g-procure.com');
-        if (!isProxy) {
-          h['x-api-key'] = settings.apiKey;
-          h['anthropic-version'] = '2023-06-01';
-          h['anthropic-dangerous-direct-browser-access'] = 'true';
-        }
-        return h;
-      })(),
-      body: JSON.stringify(body)
+      userMessage: userMessage,
+      model: settings.model || 'claude-sonnet-4-6',
+      maxTokens: maxTokens
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`API klaida ${response.status}: ${errText.slice(0, 200)}`);
-    }
-    const data = await response.json();
-    return data.content?.[0]?.text || '';
+    if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
+    return res.text;
   }
 
   function parseJson(content) {
@@ -6048,35 +5992,16 @@ SVARBU: Visos kainos turi būti realistiškos. Energetikos sektoriaus pirkimams 
   }
 
   async function callClaude(userMessage, settings, maxTokens = 4000) {
-    const endpoint = settings.apiEndpoint || 'https://api.g-procure.com/api/analyze';
-    const body = {
-      model: settings.model || 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
+    // Transportas per shared/ai-proxy.js (GP_AI_PROXY). Raktas tik serverio puseje.
+    // Sistemos promptas ir max_tokens - sios (kainos) vietos, modelis is pasirinkiklio.
+    const res = await GP_AI_PROXY.call({
       system: PRICE_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }]
-    };
-
-    const response = await fetchWithRetry(endpoint, {
-      method: 'POST',
-      headers: (() => {
-        const h = { 'Content-Type': 'application/json' };
-        const isProxy = (settings.apiEndpoint || '').includes('g-procure.com');
-        if (!isProxy) {
-          h['x-api-key'] = settings.apiKey;
-          h['anthropic-version'] = '2023-06-01';
-          h['anthropic-dangerous-direct-browser-access'] = 'true';
-        }
-        return h;
-      })(),
-      body: JSON.stringify(body)
+      userMessage: userMessage,
+      model: settings.model || 'claude-sonnet-4-6',
+      maxTokens: maxTokens
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`API klaida ${response.status}: ${errText.slice(0, 200)}`);
-    }
-    const data = await response.json();
-    return data.content?.[0]?.text || '';
+    if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
+    return res.text;
   }
 
   function parseJson(content) {
