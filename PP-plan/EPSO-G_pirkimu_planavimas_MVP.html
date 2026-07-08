@@ -104,6 +104,19 @@ textarea{min-height:60px;resize:vertical}
 .modal h3{margin-top:0}
 .split{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 .split-end{margin-left:auto}
+/* Segmentuotas jungiklis (Apzvalgos rodikliu perjungimui) */
+.seg{display:inline-flex;border:1px solid var(--grafitas-15);border-radius:8px;overflow:hidden;background:#fff}
+.seg-btn{border:0;background:#fff;color:var(--grafitas-50);font-family:inherit;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;white-space:nowrap;transition:.15s}
+.seg-btn:hover{background:var(--smaragdas-5,#eafaf3)}
+.seg-btn.active{background:var(--smaragdas);color:#fff}
+.seg-btn+.seg-btn{border-left:1px solid var(--grafitas-15)}
+/* Vertes kategoriju juostos ir Pareto pagalbiniai */
+.catbar-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.catbar-lbl{width:150px;flex-shrink:0;font-size:12.5px;font-weight:600}
+.catbar-track{flex:1;background:var(--grafitas-5,#eff1f1);border-radius:6px;height:22px;overflow:hidden}
+.catbar-fill{height:100%;border-radius:6px;transition:width .3s}
+.catbar-val{width:180px;flex-shrink:0;text-align:right;font-size:12px;color:var(--grafitas-50)}
+.catbar-val b{color:var(--grafitas)}
 .muted{color:var(--grafitas-50);font-size:12px}
 .divider{height:1px;background:var(--grafitas-15);margin:18px 0}
 .hint{background:var(--smaragdas-5);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--grafitas);border-left:3px solid var(--smaragdas)}
@@ -250,16 +263,57 @@ body.gph-noscroll{overflow:hidden}
 <section class="section active" id="sec-dashboard">
   <h2>Apžvalga<span class="h2-sub">Bendras grupės metinio pirkimų plano vaizdas</span></h2>
   <div class="grid grid-4" id="kpiRow">
-    <div class="kpi"><span class="kpi-label">Pirkimų iš viso</span><span class="kpi-value" id="kpiCount">0</span><span class="kpi-sub">aktyvių pozicijų plane</span></div>
-    <div class="kpi cool"><span class="kpi-label">Bendra vertė</span><span class="kpi-value" id="kpiValue">0 €</span><span class="kpi-sub">be PVM</span></div>
-    <div class="kpi warn"><span class="kpi-label">Reikia pataisyti</span><span class="kpi-value" id="kpiFlags">0</span><span class="kpi-sub">duomenų neatitikimų</span></div>
-    <div class="kpi"><span class="kpi-label">Centralizavimo potencialas</span><span class="kpi-value" id="kpiCentral">0</span><span class="kpi-sub">galimų grupinių pirkimų</span></div>
+    <div class="kpi"><span class="kpi-label">Pirkimų iš viso</span><span class="kpi-value" id="kpiCount">0</span><span class="kpi-sub" id="kpiCountSub">aktyvių pozicijų plane</span></div>
+    <div class="kpi cool"><span class="kpi-label">Bendra vertė</span><span class="kpi-value" id="kpiValue">0 €</span><span class="kpi-sub" id="kpiValueSub">be PVM</span></div>
+    <div class="kpi warn"><span class="kpi-label">Reikia pataisyti</span><span class="kpi-value" id="kpiFlags">0</span><span class="kpi-sub" id="kpiFlagsSub">duomenų neatitikimų</span></div>
+    <div class="kpi"><span class="kpi-label">Centralizavimo potencialas</span><span class="kpi-value" id="kpiCentral">0</span><span class="kpi-sub" id="kpiCentralSub">galimų grupinių pirkimų</span></div>
   </div>
-  <div class="grid grid-2" style="margin-top:16px">
-    <div class="card"><h3>Pasiskirstymas pagal įmonę</h3><canvas id="chartByCompany" height="180"></canvas></div>
+
+  <div class="split" style="margin-top:16px">
+    <span class="muted" style="font-size:12px;font-weight:600">Rodiklis grafikuose:</span>
+    <div class="seg" id="metricToggle">
+      <button type="button" class="seg-btn active" data-metric="value" onclick="setDashMetric('value')">💶 Vertė (€)</button>
+      <button type="button" class="seg-btn" data-metric="count" onclick="setDashMetric('count')">🔢 Kiekis (vnt.)</button>
+    </div>
+    <span class="muted split-end" style="font-size:11px" id="dashScope"></span>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="split">
+      <h3 style="margin:0">Pasiskirstymas laike</h3>
+      <div class="seg split-end" id="timeDimToggle">
+        <button type="button" class="seg-btn active" data-dim="imone" onclick="setTimeDim('imone')">Pagal įmonę</button>
+        <button type="button" class="seg-btn" data-dim="cat" onclick="setTimeDim('cat')">Vertės kategorija</button>
+        <button type="button" class="seg-btn" data-dim="rusis" onclick="setTimeDim('rusis')">Rūšis</button>
+      </div>
+    </div>
+    <p class="muted" style="margin:4px 0 8px">Pagal ketvirčius (numatoma sutarties data). Pirkimai be datos rodomi atskirai.</p>
+    <canvas id="chartTime" height="110"></canvas>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:12px">
+    <div class="card"><h3>Pasiskirstymas pagal įmonę</h3><canvas id="chartByCompany" height="200"></canvas></div>
+    <div class="card"><h3>Vertės kategorijos</h3>
+      <p class="muted" style="margin:2px 0 10px">Mažos vertės · Supaprastintas · Tarptautinis (pagal VPT ribas)</p>
+      <div id="catBars"></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:12px">
+    <div class="card"><h3>TOP 10 pirkimų pagal vertę</h3>
+      <p class="muted" style="margin:2px 0 10px">Pareto: keli stambūs pirkimai dažnai lemia didžiąją plano vertės dalį</p>
+      <canvas id="chartPareto" height="220"></canvas>
+    </div>
+    <div class="card"><h3>CAPEX / OPEX</h3>
+      <p class="muted" style="margin:2px 0 10px">Investicijų ir sąnaudų santykis plane</p>
+      <canvas id="chartCapex" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:12px">
     <div class="card"><h3>Pirkimo objekto rūšys</h3><canvas id="chartByType" height="180"></canvas></div>
+    <div class="card"><h3>Pirkimo būdų pasiskirstymas</h3><canvas id="chartByMethod" height="180"></canvas></div>
   </div>
-  <div class="card"><h3>Pirkimo būdų pasiskirstymas</h3><canvas id="chartByMethod" height="120"></canvas></div>
   <div id="emptyHint"></div>
 
   <div class="card">
@@ -2049,7 +2103,7 @@ function renderWarningCenter(){
 }
 
 /* ==================== DASHBOARD ==================== */
-let chartCo, chartTy, chartMe;
+/* Apzvalgos grafikai valdomi per dashCharts registra (zr. dashChart) */
 function renderEmptyHint(){
   const wrap = document.getElementById("emptyHint");
   if(!wrap) return;
@@ -2062,30 +2116,181 @@ function renderEmptyHint(){
     wrap.innerHTML = "";
   }
 }
+/* ---- Apzvalgos rodiklio (verte/kiekis) ir laiko dimensijos busena ---- */
+let DASH_METRIC = "value";   // "value" | "count"
+let DASH_TIMEDIM = "imone";  // "imone" | "cat" | "rusis"
+try{ const m=localStorage.getItem("epsog_dash_metric"); if(m==="value"||m==="count") DASH_METRIC=m; }catch(e){}
+function setDashMetric(m){
+  DASH_METRIC = m;
+  try{ localStorage.setItem("epsog_dash_metric", m); }catch(e){}
+  document.querySelectorAll("#metricToggle .seg-btn").forEach(b=>b.classList.toggle("active", b.dataset.metric===m));
+  renderDashboard();
+}
+function setTimeDim(d){
+  DASH_TIMEDIM = d;
+  document.querySelectorAll("#timeDimToggle .seg-btn").forEach(b=>b.classList.toggle("active", b.dataset.dim===d));
+  renderDashboard();
+}
+
+/* ---- Isvestines reiksmes pjuviams (is JAU importuojamu lauku) ---- */
+function procCategory(p){
+  if(!p.verte || !p.rusis) return "Nenurodyta";
+  const co = COMPANIES[p.imone] || COMPANIES["EPSO-G"];
+  return recommendMethod(p.verte, p.rusis, co.law, false).category;  // Mazos vertes | Supaprastintas | Tarptautinis
+}
+function procQuarter(p){
+  const d = parseDate(p.sutarciesData) || parseDate(p.pirkimoData) || parseDate(p.inicData);
+  if(!d) return "Be datos";
+  return d.getFullYear() + " K" + (Math.floor(d.getMonth()/3)+1);
+}
+function quarterSort(a,b){ if(a==="Be datos") return 1; if(b==="Be datos") return -1; return a<b?-1:1; }
+const CAT_COLORS = {"Mažos vertės":"#85BC28","Supaprastintas":"#00a5c4","Tarptautinis":"#00667d","Nenurodyta":"#c7cdd3"};
+const PALETTE = ["#00a072","#00667d","#fab03b","#00a5c4","#85BC28","#737483","#128a76","#db354a"];
+function metricVal(p){ return DASH_METRIC==="value" ? (p.verte||0) : 1; }
+function fmtMetric(v){ return DASH_METRIC==="value" ? fmtMoney(v) : (v + " vnt."); }
+function axisTick(v){ return DASH_METRIC==="value" ? fmtMoney(v) : v; }
+
+/* ---- Centralizavimo santrauka (auto, KPI - nebereikia rankinio paleidimo) ---- */
+function centralizationSummary(){
+  try{
+    const clusters = buildCentralizationClusters();
+    const cands = clusters.filter(g=>{ const c=new Set(g.items.map(p=>p.imone||"?")); return c.size>=2 || g.items.length>=2; }).map(computeSynergy);
+    return { count: cands.length, savings: cands.reduce((s,c)=>s+c.savings,0) };
+  }catch(e){ return { count:0, savings:0 }; }
+}
+
+let dashCharts = {};
+function dashChart(id, cfg){
+  const el = document.getElementById(id); if(!el) return;
+  if(dashCharts[id]) dashCharts[id].destroy();
+  dashCharts[id] = new Chart(el, cfg);
+}
+
 function renderDashboard(){
   renderEmptyHint();
   renderWarningCenter();
-  const procs=getFilteredProcs();
-  document.getElementById("kpiCount").textContent=procs.length;
-  document.getElementById("kpiValue").textContent=fmtMoney(procs.reduce((s,p)=>s+(p.verte||0),0));
-  let flagCount=0; procs.forEach(p=>{ if(validateProc(p).length) flagCount++; });
-  document.getElementById("kpiFlags").textContent=flagCount;
-  const byCompany={}; DATA.procurements.forEach(p=>{ byCompany[p.imone||"?"]=(byCompany[p.imone||"?"]||0)+(p.verte||0); });
-  const byType={}; procs.forEach(p=>{ byType[p.rusis||"?"]=(byType[p.rusis||"?"]||0)+1; });
-  const byMethod={}; procs.forEach(p=>{ const k=mapMethodNameToCode(p.budas)||"?"; byMethod[k]=(byMethod[k]||0)+(p.verte||0); });
-  const opts={responsive:true, plugins:{legend:{position:"bottom",labels:{font:{family:"Nunito Sans"}}}}};
-  if(chartCo) chartCo.destroy();
-  chartCo=new Chart(document.getElementById("chartByCompany"),{type:"doughnut",
-    data:{labels:Object.keys(byCompany).map(k=>COMPANIES[k]?.name||k),datasets:[{data:Object.values(byCompany),backgroundColor:Object.keys(byCompany).map(k=>COMPANIES[k]?.color||"#999")}]},
-    options:opts});
-  if(chartTy) chartTy.destroy();
-  chartTy=new Chart(document.getElementById("chartByType"),{type:"pie",
-    data:{labels:Object.keys(byType),datasets:[{data:Object.values(byType),backgroundColor:["#00a072","#00667d","#fab03b","#737483"]}]},
-    options:opts});
-  if(chartMe) chartMe.destroy();
-  chartMe=new Chart(document.getElementById("chartByMethod"),{type:"bar",
-    data:{labels:Object.keys(byMethod),datasets:[{label:"Vertė €",data:Object.values(byMethod),backgroundColor:"#00a072",borderRadius:6}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmtMoney(v)}}}}});
+  const procs = getFilteredProcs();
+  const company = document.getElementById("companyFilter").value;
+  const scopeEl = document.getElementById("dashScope");
+  if(scopeEl) scopeEl.textContent = (company==="ALL") ? "Rodoma: visa grupė" : ("Filtruota: " + (COMPANIES[company]?.name||company));
+
+  // KPI
+  document.getElementById("kpiCount").textContent = procs.length;
+  document.getElementById("kpiValue").textContent = fmtMoney(procs.reduce((s,p)=>s+(p.verte||0),0));
+  let errN=0, warnN=0, riskVal=0;
+  procs.forEach(p=>{ const iss=validateProc(p); if(iss.length){ riskVal+=(p.verte||0); if(iss.some(i=>i.sev==="err")) errN++; else warnN++; } });
+  document.getElementById("kpiFlags").textContent = errN+warnN;
+  document.getElementById("kpiFlagsSub").innerHTML = `${errN} su klaidom · ${warnN} su įspėjimais<br><strong>${fmtMoney(riskVal)}</strong> vertės su problemomis`;
+  const cs = centralizationSummary();
+  document.getElementById("kpiCentral").textContent = cs.count;
+  document.getElementById("kpiCentralSub").innerHTML = cs.count ? `galimų grupinių pirkimų<br>~<strong>${fmtMoney(cs.savings)}</strong> galimų santaupų` : "galimų grupinių pirkimų";
+
+  const legendOpts = {responsive:true, maintainAspectRatio:false, plugins:{legend:{position:"bottom",labels:{font:{family:"Nunito Sans"}}}}};
+
+  // 1) Laiko asis (stacked bar pagal ketvircius)
+  renderTimeChart(procs);
+
+  // 2) Pagal imone (metric-aware, FILTRUOTI duomenys - buvo bug'as, ede visus)
+  const byCompany={}; procs.forEach(p=>{ const k=p.imone||"?"; byCompany[k]=(byCompany[k]||0)+metricVal(p); });
+  const coKeys=Object.keys(byCompany);
+  dashChart("chartByCompany",{type:"doughnut",
+    data:{labels:coKeys.map(k=>COMPANIES[k]?.name||k),datasets:[{data:coKeys.map(k=>byCompany[k]),backgroundColor:coKeys.map(k=>COMPANIES[k]?.color||"#999")}]},
+    options:{...legendOpts, plugins:{...legendOpts.plugins, tooltip:{callbacks:{label:c=>c.label+": "+fmtMetric(c.parsed)}}}}});
+
+  // 3) Vertes kategoriju juostos (verte IR kiekis)
+  renderCategoryBars(procs);
+
+  // 4) TOP 10 Pareto
+  renderPareto(procs);
+
+  // 5) CAPEX/OPEX
+  const byCapex={}; procs.forEach(p=>{ const k=(p.capex||"Nenurodyta").toUpperCase().includes("CAPEX")?"CAPEX":(p.capex||"").toUpperCase().includes("OPEX")?"OPEX":"Nenurodyta"; byCapex[k]=(byCapex[k]||0)+metricVal(p); });
+  const cxKeys=Object.keys(byCapex);
+  dashChart("chartCapex",{type:"doughnut",
+    data:{labels:cxKeys,datasets:[{data:cxKeys.map(k=>byCapex[k]),backgroundColor:cxKeys.map(k=>({"CAPEX":"#00667d","OPEX":"#fab03b","Nenurodyta":"#c7cdd3"}[k]||"#999"))}]},
+    options:{...legendOpts, plugins:{...legendOpts.plugins, tooltip:{callbacks:{label:c=>c.label+": "+fmtMetric(c.parsed)}}}}});
+
+  // 6) Rusys (metric-aware)
+  const byType={}; procs.forEach(p=>{ byType[p.rusis||"?"]=(byType[p.rusis||"?"]||0)+metricVal(p); });
+  const tyKeys=Object.keys(byType);
+  dashChart("chartByType",{type:"pie",
+    data:{labels:tyKeys,datasets:[{data:tyKeys.map(k=>byType[k]),backgroundColor:tyKeys.map((_,i)=>PALETTE[i%PALETTE.length])}]},
+    options:{...legendOpts, plugins:{...legendOpts.plugins, tooltip:{callbacks:{label:c=>c.label+": "+fmtMetric(c.parsed)}}}}});
+
+  // 7) Budai (metric-aware)
+  const byMethod={}; procs.forEach(p=>{ const k=mapMethodNameToCode(p.budas)||"?"; byMethod[k]=(byMethod[k]||0)+metricVal(p); });
+  const meKeys=Object.keys(byMethod);
+  dashChart("chartByMethod",{type:"bar",
+    data:{labels:meKeys,datasets:[{label:DASH_METRIC==="value"?"Vertė €":"Kiekis",data:meKeys.map(k=>byMethod[k]),backgroundColor:"#00a072",borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtMetric(c.parsed.y)}}},scales:{y:{ticks:{callback:axisTick}}}}});
+}
+
+function renderTimeChart(procs){
+  const quarters = [...new Set(procs.map(procQuarter))].sort(quarterSort);
+  const dimFn = DASH_TIMEDIM==="imone" ? (p=>COMPANIES[p.imone]?.name||p.imone||"?")
+              : DASH_TIMEDIM==="cat" ? procCategory
+              : (p=>p.rusis||"?");
+  const dims = [...new Set(procs.map(dimFn))];
+  const colorFor = (dim,i)=>{
+    if(DASH_TIMEDIM==="imone"){ const key=Object.keys(COMPANIES).find(k=>COMPANIES[k].name===dim||k===dim); return COMPANIES[key]?.color||PALETTE[i%PALETTE.length]; }
+    if(DASH_TIMEDIM==="cat") return CAT_COLORS[dim]||PALETTE[i%PALETTE.length];
+    return PALETTE[i%PALETTE.length];
+  };
+  const datasets = dims.map((dim,i)=>({
+    label: dim,
+    data: quarters.map(q=> procs.filter(p=>procQuarter(p)===q && dimFn(p)===dim).reduce((s,p)=>s+metricVal(p),0)),
+    backgroundColor: colorFor(dim,i), borderRadius:4
+  }));
+  dashChart("chartTime",{type:"bar",
+    data:{labels:quarters, datasets},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:"bottom",labels:{font:{family:"Nunito Sans"}}}, tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmtMetric(c.parsed.y)}}},
+      scales:{x:{stacked:true}, y:{stacked:true, ticks:{callback:axisTick}}}}});
+}
+
+function renderCategoryBars(procs){
+  const order = ["Mažos vertės","Supaprastintas","Tarptautinis","Nenurodyta"];
+  const agg={}; procs.forEach(p=>{ const c=procCategory(p); if(!agg[c]) agg[c]={val:0,cnt:0}; agg[c].val+=(p.verte||0); agg[c].cnt++; });
+  const totalVal = procs.reduce((s,p)=>s+(p.verte||0),0) || 1;
+  const totalCnt = procs.length || 1;
+  const wrap = document.getElementById("catBars");
+  if(!wrap) return;
+  const rows = order.filter(c=>agg[c]).map(c=>{
+    const a=agg[c];
+    const pctVal = Math.round(a.val/totalVal*100), pctCnt = Math.round(a.cnt/totalCnt*100);
+    const width = DASH_METRIC==="value" ? (a.val/totalVal*100) : (a.cnt/totalCnt*100);
+    return `<div class="catbar-row">
+      <div class="catbar-lbl">${escapeHtml(c)}</div>
+      <div class="catbar-track"><div class="catbar-fill" style="width:${width}%;background:${CAT_COLORS[c]}"></div></div>
+      <div class="catbar-val"><b>${fmtMoney(a.val)}</b> (${pctVal}%) · ${a.cnt} vnt. (${pctCnt}%)</div>
+    </div>`;
+  }).join("");
+  wrap.innerHTML = rows || `<div class="muted">Nėra duomenų.</div>`;
+}
+
+function renderPareto(procs){
+  const top = [...procs].filter(p=>(p.verte||0)>0).sort((a,b)=>(b.verte||0)-(a.verte||0)).slice(0,10);
+  const total = procs.reduce((s,p)=>s+(p.verte||0),0) || 1;
+  const fullNames = top.map(p=>p.objektas||p.nr||"?");
+  let cum=0; const cumPct = top.map(p=>{ cum+=(p.verte||0); return Math.round(cum/total*1000)/10; });
+  const topShare = top.length ? cumPct[cumPct.length-1] : 0;
+  dashChart("chartPareto",{
+    data:{labels: top.map(p=>(p.nr||p.objektas||"?").slice(0,16)),
+      datasets:[
+        {type:"bar", label:"Vertė €", data:top.map(p=>p.verte||0), backgroundColor:"#00a072", borderRadius:4, yAxisID:"y", order:2},
+        {type:"line", label:"Kaupiamasis %", data:cumPct, borderColor:"#db354a", backgroundColor:"#db354a", yAxisID:"y1", tension:.25, pointRadius:3, order:1}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:"bottom"},
+        title:{display:top.length>0, text:`TOP ${top.length} sudaro ${topShare}% plano vertės`, font:{size:12}},
+        tooltip:{callbacks:{
+          title:items=>fullNames[items[0].dataIndex]||"",
+          label:c=>c.dataset.type==="line"?("Kaupiamasis: "+c.parsed.y+"%"):("Vertė: "+fmtMoney(c.parsed.y))}}},
+      scales:{
+        x:{ticks:{font:{size:9},maxRotation:60,minRotation:45}},
+        y:{position:"left",ticks:{callback:v=>fmtMoney(v)}},
+        y1:{position:"right",min:0,max:100,grid:{drawOnChartArea:false},ticks:{callback:v=>v+"%"}}
+      }}});
 }
 
 /* ==================== EXPORTS ==================== */
@@ -2215,9 +2420,18 @@ function loadDemo(){
 }
 
 /* ==================== FILTERS ==================== */
+let _filterT=null;
+function onFilterChange(){
+  clearTimeout(_filterT);
+  _filterT = setTimeout(()=>{ renderRegister(); renderDashboard(); renderValidation(); renderMethodAudit(); }, 200);
+}
 ["companyFilter","searchBox","filterMethod","filterType"].forEach(id=>{
   const el=document.getElementById(id);
-  if(el) el.addEventListener("input", ()=>{ renderRegister(); renderDashboard(); renderValidation(); renderMethodAudit(); });
+  if(el){
+    el.addEventListener("input", onFilterChange);
+    // <select> ne visose narsyklese kelia "input" - todel ir "change" (taiso filtro bug'a)
+    if(el.tagName==="SELECT") el.addEventListener("change", onFilterChange);
+  }
 });
 document.getElementById("modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
 
