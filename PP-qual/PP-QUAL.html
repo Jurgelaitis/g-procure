@@ -888,6 +888,7 @@ function collectStep1(){
 async function submitStep1(){
   collectStep1();
   if(!PPQ.procurement.name){ toast('Įveskite pirkimo pavadinimą',true); return; }
+  if(!PPQ.procurement.value || PPQ.procurement.value<=0){ toast('Įveskite pirkimo vertę.',true); return; }
   const btn=$('step1-next');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Generuojama...';
   try{
@@ -1030,6 +1031,9 @@ async function submitStep2(){
 /* ---------- Step 3/4: requirement set ---------- */
 async function generateRequirements(){
   const p=PPQ.procurement;
+  // Uzkarda PRIES AI iskvietima: be pirkimo vertes proporcingumas neapskaiciuojamas,
+  // o AI issigalvotu nepagristas ribas (PI 47 str. disproporcingumo rizika). Netesiam.
+  if(!p.value || p.value<=0){ throw new Error('Pirkimo vertė nenurodyta - reikalavimai negeneruojami. Įveskite pirkimo vertę.'); }
   const qa=PPQ.questions.map(q=>`- ${q.question} => ${PPQ.answers[q.id]||'(neatsakyta)'}`).join('\n');
   const calc=computeProportional(p.value, parseFloat(p.valueCat));
   const prompt=`Sugeneruok PROPORCINGĄ kvalifikacinių reikalavimų rinkinį šiam pirkimui. Laikykis VPT metodikos, PĮ 47 str., LAT praktikos ir venk 5 dažniausių klaidų. Naudok apskaičiuotas proporcingumo reikšmes.
@@ -1661,6 +1665,9 @@ INPUT:
 /* ---------- DOCX ---------- */
 async function exportDocx(){
   if(!window.docx){ toast('DOCX biblioteka neįsikėlė',true); return; }
+  // Fail-safe: be pirkimo vertes dokumentas NEgeneruojamas (dengia ir audito kelia,
+  // kuris apeina submitStep1/generateRequirements). Ne tyliai tuscias skyrius.
+  if(!PPQ.procurement.value || PPQ.procurement.value<=0){ toast('Pirkimo vertė nenurodyta - dokumentas negeneruojamas. Įveskite pirkimo vertę (vediklyje arba audito lange) ir bandykite dar kartą.',true); return; }
   const bilingual = (PPQ.exportLang==='lten');
   if(bilingual){
     toast('Verčiama į EN ir generuojamas DOCX...');
@@ -1760,8 +1767,9 @@ async function exportDocx(){
 
   // 4. Proporcingumo pagrindimas
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('4. Proporcingumo pagrindimas','Proportionality justification'),color:EM,bold:true})]}));
-  children.push(new Paragraph({children:[new TextRun({text:bi('Reikalavimų reikšmės apskaičiuotos pagal VPT metodikos koeficientus ir pirkimo vertę.','The requirement values are calculated using the coefficients of the PPO methodology and the procurement value.'),size:20})]}));
   if(p.value){
+    // Sis teiginys ("apskaiciuotos pagal ... verte") tvirtinamas TIK kai verte yra - kad dokumentas neteigtu netiesos.
+    children.push(new Paragraph({children:[new TextRun({text:bi('Reikalavimų reikšmės apskaičiuotos pagal VPT metodikos koeficientus ir pirkimo vertę.','The requirement values are calculated using the coefficients of the PPO methodology and the procurement value.'),size:20})]}));
     const propRows=[
       [bi('Rodiklis','Indicator'),bi('Reikšmė','Value'),bi('Pagrindimas','Basis')],
       [bi('Reikalaujama įvykdytos sutarties vertė','Required value of performed contract'),fmtEur(calc.contract),fmtEur(p.value)+' x '+String(coef).replace('.',',')],
