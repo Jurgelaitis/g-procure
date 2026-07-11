@@ -205,6 +205,23 @@
   .cat-spend{font-size:11px;color:var(--muted);margin-top:2px}
   .cat-meter{margin:14px 0 4px;height:8px;border-radius:5px;background:var(--bg-2);overflow:hidden;position:relative}
   .cat-meter i{position:absolute;top:0;bottom:0;left:0;border-radius:5px;transition:width .5s}
+
+  /* ---------- Pirkimo fokusas ---------- */
+  #focusSec .focus-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+  .focus-input{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .focus-input #focusName{flex:1;min-width:240px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;font-size:14px;font-family:var(--font)}
+  .focus-input select{background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;font-size:13px;font-family:var(--font);max-width:240px}
+  .focus-out{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)}
+  @media(max-width:820px){ .focus-out{grid-template-columns:1fr} }
+  .focus-cat-head{display:flex;align-items:center;gap:10px}
+  .focus-cat-head .cat-ic{font-size:22px}
+  .focus-cat-name{font-size:15px;font-weight:750}
+  .focus-col h5{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:16px 0 7px}
+  .focus-list{list-style:none;display:flex;flex-direction:column;gap:7px;font-size:13px}
+  .focus-list li{line-height:1.4}
+  .focus-vda-head{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .focus-vda-head .sq{width:10px;height:10px;border-radius:3px;flex:none}
+  .muted-note{color:var(--muted);font-size:12px}
   .cat-scale{display:flex;justify-content:space-between;font-size:9px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
   .cat-drivers{margin-top:12px;font-size:11px;color:var(--muted)}
   .cat-drivers b{color:#cdd6e2}
@@ -320,6 +337,7 @@
 
   <nav class="secnav">
     <a href="#summarySec">Santrauka</a>
+    <a href="#focusSec">Pirkimo fokusas</a>
     <a href="#groupA">Kainos</a>
     <a href="#groupB">Lead time</a>
     <a href="#groupC">Tiekimo rizika</a>
@@ -342,6 +360,23 @@
           <div id="watchList"><!-- generated --></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- PIRKIMO FOKUSAS -->
+  <section id="focusSec">
+    <div class="sec-head">
+      <span class="tag">Asistentas</span>
+      <h2>Pirkimo fokusas</h2>
+      <p>Įveskite pirkimo pavadinimą - gausite tik tam pirkimui aktualią rinkos situaciją, sutartinius veiksmus ir VDA indeksavimo gaires.</p>
+    </div>
+    <div class="focus-card">
+      <div class="focus-input">
+        <input type="text" id="focusName" placeholder="Pirkimo pavadinimas, pvz. 110 kV kabelio pirkimas" oninput="onFocusName()">
+        <select id="focusCat" onchange="onFocusCatChange()"><option value="">Pasirinkite kategoriją</option></select>
+        <button class="btn primary" onclick="runFocus()">Vertinti</button>
+      </div>
+      <div id="focusResult"></div>
     </div>
   </section>
 
@@ -1254,6 +1289,138 @@ function renderSources(){
 /* =========================================================================
    PILNAS PERPIEŠIMAS
    ========================================================================= */
+/* =========================================================================
+   PIRKIMO FOKUSAS (deterministinis - be AI, veikia offline)
+   Naudoja TIK esamas funkcijas (categoryStatus/categorySeverity/topDrivers/
+   severity/m.act) - fokuso statusas visada sutampa su rizikos zemelapiu.
+   ========================================================================= */
+const CAT_KEYWORDS = {
+  cables:["kabel","laid","gysl","oro linij"],
+  transformers:["transformator","pastot","skirstykl","rele","relė","komutav","atsargin"],
+  construction:["rang","statyb","tiesim","rekonstr","montav","pamat","bokst","bokšt","atram","gelzbeton","gelžbeton"],
+  it_software:["programin","licencij","serveri","kibernet","scada","sistem","informacin","duomenu baz","duomenų baz"],
+  services:["projektav","prieziur","priežiūr","konsultac","ekspert","audit","mokym","tyrim"],
+  insurance:["draud"]
+};
+const CAT_VDA = {
+  construction:["sski","sski_med","sski_mas","sski_du"],
+  cables:["gki","vki"],
+  transformers:["gki","vki"],
+  it_software:["vmdu","vki"],
+  services:["vmdu","vki"],
+  insurance:["vki"]
+};
+const FOCUS = { userPicked:false, last:null };
+function classifyProcurement(name){
+  const t = (name||"").toLowerCase();
+  if(!t.trim()) return "";
+  let best="", bestScore=0;
+  for(const id in CAT_KEYWORDS){
+    const score = CAT_KEYWORDS[id].reduce((s,kw)=> s + (t.includes(kw)?1:0), 0);
+    if(score>bestScore){ bestScore=score; best=id; }
+  }
+  return best; // "" jei nera atitikmenu -> naudotojas renkasi pats
+}
+function initFocus(){
+  const sel = document.getElementById("focusCat");
+  if(!sel || sel.options.length>1) return;
+  sel.innerHTML = '<option value="">Pasirinkite kategoriją</option>' +
+    DATA.categories.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+}
+function onFocusName(){
+  if(FOCUS.userPicked) return; // negriauname rankinio pasirinkimo
+  const sug = classifyProcurement(document.getElementById("focusName").value);
+  if(sug) document.getElementById("focusCat").value = sug;
+}
+function onFocusCatChange(){ FOCUS.userPicked = true; }
+function pillL(sev){ return sev===2?"r":sev===1?"y":"g"; }
+function focusChg(m){
+  if(m.type==="level") return `lygis ${latest(m)} ${esc(m.unit.split("/")[0])}`;
+  const pc = pctChange(m);
+  return `${pc>0?"augimas":"kritimas"} ${fmtSigned(pc,1)}% ${esc(m.periodLabel||"per 4 sav.")}`;
+}
+function runFocus(){
+  const name = document.getElementById("focusName").value.trim();
+  const catId = document.getElementById("focusCat").value;
+  if(!catId){ showToast("Pasirinkite pirkimo objekto kategoriją"); return; }
+  renderFocusCard(name, catId);
+}
+function renderFocusCard(name, catId){
+  const cat = DATA.categories.find(c=>c.id===catId);
+  const host = document.getElementById("focusResult");
+  if(!cat){ host.innerHTML=""; return; }
+  const sev = categoryStatus(cat), sk = statusKey(sev), sv = categorySeverity(cat);
+  const pctFill = Math.round(sv/2*100), sqColor = COLORS[sk];
+  const drivers = topDrivers(cat).map(d=>{
+    const sy = severity(d.m)===2?"🔴":severity(d.m)===1?"🟡":"🟢";
+    return `<li>${sy} <b>${esc(d.m.name)}</b> - ${focusChg(d.m)}</li>`;
+  }).join("");
+  const acts = (cat.act[sk]||[]).map(a=>`<li>${esc(a)}</li>`).join("");
+  const vda = (CAT_VDA[catId]||[]).map(id=>metricById(id)).filter(Boolean);
+  const vw = vda.reduce((mx,m)=>Math.max(mx,severity(m)),0);
+  const vHead = vw>=2 ? "indeksavimo sąlyga sutartyse - PRIVALOMA"
+             : vw>=1 ? "indeksavimo sąlyga - REKOMENDUOJAMA"
+             : "pakanka standartinės kainų peržiūros ribos";
+  const vRows = vda.map(m=>{
+    const s = severity(m);
+    return `<li><span class="pill ${pillL(s)}">${statusWord(s)}</span> <b>${esc(m.name)}</b> (${focusChg(m)})<br><span class="muted-note">${esc(m.act[statusKey(s)])}</span></li>`;
+  }).join("");
+  host.innerHTML = `
+    <div class="focus-out">
+      <div class="focus-col">
+        <div class="focus-cat-head">
+          <span class="cat-ic">${esc(cat.icon)}</span>
+          <div>
+            <div class="focus-cat-name">${esc(name||cat.name)}</div>
+            <div class="muted-note">${esc(cat.name)}</div>
+          </div>
+          <span class="badge ${sk}" style="margin-left:auto">${statusWord(sev)}</span>
+        </div>
+        <div class="cat-meter"><i style="width:${pctFill}%;background:${sqColor}"></i></div>
+        <h5>Pagrindiniai draiveriai</h5>
+        <ul class="focus-list">${drivers}</ul>
+        <h5>Sutartiniai veiksmai (${statusWord(sev).toLowerCase()} režimas)</h5>
+        <ul class="focus-list">${acts}</ul>
+      </div>
+      <div class="focus-col">
+        <div class="focus-vda-head"><span class="sq" style="background:${vw>=2?COLORS.red:vw>=1?COLORS.yellow:COLORS.green}"></span> Indeksavimo gairės (VDA): ${vHead}</div>
+        <ul class="focus-list">${vRows || '<li class="muted-note">Šiai kategorijai VDA indeksų nepriskirta.</li>'}</ul>
+        <button class="btn" style="margin-top:12px" onclick="copyFocus()">⧉ Kopijuoti tekstą</button>
+      </div>
+    </div>`;
+  FOCUS.last = { name, catId };
+}
+function copyFocus(){
+  const f = FOCUS.last; if(!f) return;
+  const cat = DATA.categories.find(c=>c.id===f.catId); if(!cat) return;
+  const sev = categoryStatus(cat), sk = statusKey(sev);
+  const strip = s => String(s).replace(/<[^>]+>/g,"");
+  const drivers = topDrivers(cat).map(d=>`${d.m.name} (${strip(focusChg(d.m))})`).join("; ");
+  const acts = (cat.act[sk]||[]).map(a=>"- "+a).join("\n");
+  const vda = (CAT_VDA[f.catId]||[]).map(id=>metricById(id)).filter(Boolean)
+    .map(m=>`- ${m.name} (${strip(focusChg(m))}): ${m.act[statusKey(severity(m))]}`).join("\n");
+  const txt =
+`PIRKIMO RINKOS FOKUSAS
+Pirkimas: ${f.name||"-"}
+Kategorija: ${cat.name} - ${statusWord(sev).toLowerCase()} režimas
+Pagrindiniai draiveriai: ${drivers}
+Sutartiniai veiksmai:
+${acts}
+Indeksavimo gairės (VDA):
+${vda}
+Parengta: ${fmtDate(DATA.meta.updated)} - EPSO-G rinkos KPI skydelis (duomenys tikslinami rankiniu būdu).`;
+  const done = ()=>showToast("Nukopijuota į iškarpinę");
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done).catch(()=>fallbackCopy(txt,done));
+  } else { fallbackCopy(txt,done); }
+}
+function fallbackCopy(txt,done){
+  const ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); done(); }catch(e){ showToast("Kopijuoti nepavyko"); }
+  ta.remove();
+}
+
 function renderBanner(){
   // Rodom iliustraciniu duomenu ispejima, kol duomenys nepakeisti (meta.demo). Esami vartotoju
   // irasai neturi 'demo' lauko -> undefined -> banner slepiamas (jokio localStorage suderinamumo lauzimo).
@@ -1361,6 +1528,7 @@ document.getElementById("btnReset").addEventListener("click", ()=>{
 document.getElementById("btnPrint").addEventListener("click", ()=> window.print());
 
 /* startas */
+initFocus();
 renderAll();
 </script>
 </body>
