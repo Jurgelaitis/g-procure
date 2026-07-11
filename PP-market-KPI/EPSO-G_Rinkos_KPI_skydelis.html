@@ -828,7 +828,13 @@ function climateScore(){
   let sum=0;
   ms.forEach(m=> sum += severity(m));
   const avg = sum / ms.length; // 0..2
-  return Math.round((1 - avg/2) * 100);
+  let score = Math.round((1 - avg/2) * 100);
+  // Apsauga: kritiniai raudoni rodikliai neturi istirpti daugumos zaliu fone.
+  // Bet koks raudonas A/B/C rodiklis -> verdiktas ne aukstesnis nei "Itemptai" (ne "Stabilu").
+  // Cap taikomas paciam score, todel skaicius, lankas, spalva ir verdiktas lieka suderinti.
+  const reds = ms.filter(m=>severity(m)===2).length;
+  if(reds >= 1) score = Math.min(score, 66);
+  return score;
 }
 
 /* =========================================================================
@@ -849,12 +855,14 @@ function fmtDate(iso){
 
 /* sparkline SVG */
 function sparkline(m, color){
-  const s = m.series, w=240, h=46, pad=4;
+  const s = (m.series)||[], w=240, h=46, pad=4;
+  // Apsauga: tuscia serija -> tuscias SVG (jokio luzio); vienas taskas -> centruotas taskas (jokiu NaN koordinaciu)
+  if(!s.length) return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"></svg>`;
   const min=Math.min(...s), max=Math.max(...s);
   const rng = (max-min)||1;
   const pts = s.map((v,i)=>{
-    const x = pad + i*(w-2*pad)/(s.length-1);
-    const y = h-pad - (v-min)/rng*(h-2*pad);
+    const x = s.length>1 ? (pad + i*(w-2*pad)/(s.length-1)) : w/2;
+    const y = s.length>1 ? (h-pad - (v-min)/rng*(h-2*pad)) : h/2;
     return [x,y];
   });
   const line = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
@@ -877,17 +885,19 @@ const COLORS={green:"#3fb950",yellow:"#e3b341",red:"#f85149"};
    ATVAIZDAVIMAS - KPI KORTELĖS
    ========================================================================= */
 function trigLabels(m){
+  // Geltona zona pagal severity() yra pusiau atvira [yellow, red): raudonos riba priklauso RAUDONAI.
+  // Todel geltonos etikete rodo "yellow-<red" (ne "yellow-red" ir ne "red-1", kuris klaidingas trupmeninems riboms).
   if(m.type==="level"){
     return {
       g:`&lt; ${m.thr.yellow}`,
-      y:`${m.thr.yellow}-${m.thr.red-1}`,
+      y:`${m.thr.yellow}-&lt;${m.thr.red}`,
       r:`≥ ${m.thr.red}`
     };
   }
   const dir = m.invert ? "kritimas" : "augimas";
   return {
     g:`${dir} &lt; ${m.thr.yellow}%`,
-    y:`${m.thr.yellow}-${m.thr.red}%`,
+    y:`${m.thr.yellow}-&lt;${m.thr.red}%`,
     r:`≥ ${m.thr.red}%`
   };
 }
