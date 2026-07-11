@@ -734,6 +734,15 @@ const STORE_KEY = "epsog_rinkos_kpi_v" + SCHEMA_VERSION;
 
 let DATA = loadData();
 
+// Schemos patikra - naudojama IR localStorage krovimui, IR JSON importui, kad importas
+// negaletu issaugoti nesuderinamo/sugadinto irašo (D lygmuo + 6 kategorijos su naujais id).
+function isValidData(d){
+  return !!(d && d.metrics && d.categories
+    && d.schemaVersion === SCHEMA_VERSION
+    && d.metrics.some(m=>m.group==="D")
+    && d.categories.length === 6
+    && d.categories.some(c=>c.id==="insurance"));
+}
 function loadData(){
   try{
     // Išvalom senus įrašus iš ankstesnių versijų, kad jie neužimtų vietos
@@ -741,14 +750,7 @@ function loadData(){
     const raw = localStorage.getItem(STORE_KEY);
     if(raw){
       const parsed = JSON.parse(raw);
-      // Sanity check: turi būti dabartinė struktūra (D lygmuo + 6 kategorijos su naujais id)
-      if(parsed && parsed.metrics && parsed.categories
-         && parsed.schemaVersion === SCHEMA_VERSION
-         && parsed.metrics.some(m=>m.group==="D")
-         && parsed.categories.length === 6
-         && parsed.categories.some(c=>c.id==="insurance")){
-        return parsed;
-      }
+      if(isValidData(parsed)) return parsed;
     }
   }catch(e){}
   const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA));
@@ -792,6 +794,7 @@ function adverseValue(m){
 
 // 0 žalia, 1 geltona, 2 raudona
 function severity(m){
+  if(!m) return 0; // trukstamas rodiklis (pvz. importuotas JSON be jo) - traktuojam kaip neutralu, ne luziam
   const a = adverseValue(m);
   if(a >= m.thr.red) return 2;
   if(a >= m.thr.yellow) return 1;
@@ -1277,12 +1280,12 @@ fileInput.addEventListener("change", e=>{
   r.onload = ()=>{
     try{
       const parsed = JSON.parse(r.result);
-      if(parsed && parsed.metrics){
+      if(isValidData(parsed)){
         DATA = parsed;
         saveData();
         renderAll();
         showToast("Duomenys įkelti");
-      } else { showToast("Netinkamas failas"); }
+      } else { showToast("Netinkamas failas: neatitinka schemos (v"+SCHEMA_VERSION+", D lygmuo, 6 kategorijos)."); }
     }catch(err){ showToast("Klaida skaitant failą"); }
   };
   r.readAsText(f);
