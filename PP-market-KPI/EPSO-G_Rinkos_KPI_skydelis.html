@@ -132,6 +132,14 @@
   .watch-item .ic{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none}
   .watch-item b{color:#fff}
   .watch-item span{color:var(--muted)}
+  .watch-item.clickable{cursor:pointer;border-radius:8px;padding:4px 6px;margin:0 -6px 6px;transition:background .15s}
+  .watch-item.clickable:hover{background:var(--bg-2)}
+  .drv-link{cursor:pointer}
+  .drv-link:hover{color:var(--text);text-decoration:underline}
+  .focus-list li.drv-li{cursor:pointer}
+  .focus-list li.drv-li:hover b{text-decoration:underline}
+  .kpi.kpi-jump{animation:kpiJump 1.4s ease-out}
+  @keyframes kpiJump{from{box-shadow:0 0 0 3px var(--accent)}to{box-shadow:0 0 0 0 transparent}}
 
   /* ---------- KPI cards ---------- */
   .grid{display:grid;gap:16px}
@@ -921,6 +929,11 @@ function fmtSigned(v, dec){
   const s = v>0?"+":"";
   return s + Number(v).toLocaleString("lt-LT",{minimumFractionDigits:dec,maximumFractionDigits:dec});
 }
+function todayLocal(){
+  // Vietine data YYYY-MM-DD (ne UTC) - kad redaguojant po vidurnakcio nebutu uzfiksuota praeita diena
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 function fmtDate(iso){
   const d = new Date(iso+"T00:00:00");
   if(isNaN(d)) return iso;
@@ -1069,7 +1082,7 @@ function catCard(cat){
   const driverTxt = drivers.map(d=>{
     const dsk = statusKey(severity(d.m));
     const symb = dsk==="red"?"🔴":dsk==="yellow"?"🟡":"🟢";
-    return `${symb} ${esc(d.m.name)}`;
+    return `<span class="drv-link" onclick="jumpToMetric('${esc(d.m.id)}')">${symb} ${esc(d.m.name)}</span>`;
   }).join(" · ");
   const acts = cat.act[sk].map(a=>`<li>${esc(a)}</li>`).join("");
   const sqColor = COLORS[sk];
@@ -1264,7 +1277,7 @@ function generateSummary(){
   ].sort((a,b)=>b.s-a.s).slice(0,6);
   const wl = watch.length ? watch.map(x=>{
     const c = COLORS[statusKey(x.s)];
-    return `<div class="watch-item">
+    return `<div class="watch-item clickable" onclick="jumpToMetric('${esc(x.m.id)}')" title="Rodyti rodiklio kortelę">
       <span class="ic" style="background:${c}"></span>
       <span><b>${esc(x.m.name)}</b> - ${esc(x.m.impact)}</span>
     </div>`;
@@ -1362,7 +1375,7 @@ function renderFocusCard(name, catId, auto){
   const pctFill = Math.round(sv/2*100), sqColor = COLORS[sk];
   const drivers = topDrivers(cat).map(d=>{
     const sy = severity(d.m)===2?"🔴":severity(d.m)===1?"🟡":"🟢";
-    return `<li>${sy} <b>${esc(d.m.name)}</b> - ${focusChg(d.m)}</li>`;
+    return `<li class="drv-li" onclick="jumpToMetric('${esc(d.m.id)}')">${sy} <b>${esc(d.m.name)}</b> - ${focusChg(d.m)}</li>`;
   }).join("");
   const acts = (cat.act[sk]||[]).map(a=>`<li>${esc(a)}</li>`).join("");
   const vda = (CAT_VDA[catId]||[]).map(id=>metricById(id)).filter(Boolean);
@@ -1454,6 +1467,15 @@ function renderAll(){
    SĄVEIKA
    ========================================================================= */
 const toast = document.getElementById("toast");
+function jumpToMetric(id){
+  // Nuveda i atitinkama KPI kortele (pagal data-id) ir trumpai ja pasviecia
+  const sel = (window.CSS && CSS.escape) ? CSS.escape(id) : id;
+  const el = document.querySelector('.kpi[data-id="'+sel+'"]');
+  if(!el) return;
+  el.scrollIntoView({block:"center"}); // instant - patikimai veikia visose aplinkose; demesį atkreipia pasvietimas
+  el.classList.remove("kpi-jump"); void el.offsetWidth; el.classList.add("kpi-jump");
+  setTimeout(()=>el.classList.remove("kpi-jump"), 1500);
+}
 function showToast(msg){
   toast.textContent = msg;
   toast.classList.add("show");
@@ -1485,7 +1507,7 @@ btnEdit.addEventListener("click", ()=>{
         m.series[m.series.length-1] = v;
       }
     });
-    DATA.meta.updated = new Date().toISOString().slice(0,10);
+    DATA.meta.updated = todayLocal(); // vietinis laikas, ne UTC
     DATA.meta.demo = false; // duomenys atnaujinti - iliustraciniu ispejima nuimam
     saveData();
     renderAll();
