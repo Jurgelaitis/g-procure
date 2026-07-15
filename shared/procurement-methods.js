@@ -75,7 +75,7 @@
 
     // --- PAGRINDINIAI. Mazos vertes apklausos (rezimas = mazos_vertes) ---
     { id:'MV-NZ',  label:'Mažos vertės pirkimas - neskelbiama apklausa žodžiu',     labelTrumpas:'Neskelbiama apklausa žodžiu',     procedura:'mv_apklausa', rezimas:'mazos_vertes', derybos:false, skelbiama:false, salygos_seima:null, grupe:'mazos_vertes', statusas:'pagrindinis' },
-    { id:'MV-NR',  label:'Mažos vertės pirkimas - neskelbiama apklausa raštu',      labelTrumpas:'Neskelbiama apklausa raštu',      procedura:'mv_apklausa', rezimas:'mazos_vertes', derybos:false, skelbiama:false, salygos_seima:null, grupe:'mazos_vertes', statusas:'pagrindinis', tikslinti:['Ar pp-salygos rengia salygas, ar uztenka pp-report pazymos'] },
+    { id:'MV-NR',  label:'Mažos vertės pirkimas - neskelbiama apklausa raštu',      labelTrumpas:'Neskelbiama apklausa raštu',      procedura:'mv_apklausa', rezimas:'mazos_vertes', derybos:false, skelbiama:false, salygos_seima:'MVP', grupe:'mazos_vertes', statusas:'pagrindinis' },
     { id:'MV-SAB', label:'Mažos vertės pirkimas - skelbiama apklausa be derybų',    labelTrumpas:'Skelbiama apklausa be derybų',    procedura:'mv_apklausa', rezimas:'mazos_vertes', derybos:false, skelbiama:true,  salygos_seima:'MVP', grupe:'mazos_vertes', statusas:'pagrindinis' },
     { id:'MV-SAD', label:'Mažos vertės pirkimas - skelbiama apklausa su derybomis', labelTrumpas:'Skelbiama apklausa su derybomis', procedura:'mv_apklausa', rezimas:'mazos_vertes', derybos:true,  skelbiama:true,  salygos_seima:'MVP', grupe:'mazos_vertes', statusas:'pagrindinis' },
 
@@ -235,7 +235,10 @@
   function fromSalygos(budas, opts) {
     opts = opts || {};
     if (budas === 'AK' || budas === 'ND') return taikytiRezima(budas, opts);
-    if (budas === 'MVP') return opts.derybos ? 'MV-SAD' : 'MV-SAB';
+    if (budas === 'MVP') {
+      if (opts.apklausa === 'neskelbiama') return 'MV-NR';   // neskelbiama apklausa rastu
+      return opts.derybos ? 'MV-SAD' : 'MV-SAB';             // skelbiama apklausa su/be derybu
+    }
     if (budas === 'DPSK') return 'DPS';
     if (budas === 'DPSP') return 'DPS-K';
     return LEGACY['pp-salygos'][budas] || null;    // TSD/SSD
@@ -307,7 +310,9 @@
     toSalygos: function (id) {
       var m = BY_ID[id];
       if (!m || !m.salygos_seima) return null;
-      return { seima: m.salygos_seima, rezimas: m.rezimas, derybos: m.derybos, skelbiama: m.skelbiama };
+      var out = { seima: m.salygos_seima, rezimas: m.rezimas, derybos: m.derybos, skelbiama: m.skelbiama };
+      if (m.salygos_seima === 'MVP') out.apklausa = m.skelbiama ? 'skelbiama' : 'neskelbiama';
+      return out;
     },
   };
 
