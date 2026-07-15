@@ -86,14 +86,15 @@
     <div class="hint">Šie atsakymai parenka šablonus ir automatiškai išsprendžia dalį jų sąlygų.</div>
 
     <div class="q"><div class="t">Perkantysis subjektas</div>
-      <div class="infoline"><b>LITGRID AB</b> &middot; į. k. 302564383 &middot; incidentai@litgrid.eu</div>
-      <div class="cite">Rekvizitai į dokumentus įrašomi automatiškai. Kitoms grupės įmonėms modulis kol kas neskirtas.</div>
+      <div class="infoline"><b>LITGRID AB</b></div>
+      <div class="cite">Įmonės rekvizitai (į. k. 302564383, incidentai@litgrid.eu) į dokumentus įrašomi automatiškai.
+        Kitoms grupės įmonėms modulis kol kas neskirtas.</div>
     </div>
 
     <div class="q"><div class="t">Pirkimo pavadinimas</div>
-      <input type="text" id="pavadinimas" placeholder="pvz. Autotransformatorių 400/110 kV">
-      <div class="cite">Rašykite kilmininko linksniu (dokumentuose taps „... pirkimas"). Įrašomas visur automatiškai -
-        antraštėse, 2.1 punkte, prieduose.</div>
+      <input type="text" id="pavadinimas" placeholder="pvz. Autotransformatorių 400/110 kV" oninput="pavPreview()">
+      <div class="cite" id="pavPreviewEl">Rašykite <b>kilmininko linksniu</b> (dokumentuose taps „... pirkimas").
+        Įrašomas visur automatiškai - antraštėse, 2.1 punkte, prieduose.</div>
     </div>
     <div class="q hid" id="pavEN"><div class="t">Procurement title (EN)</div>
       <input type="text" id="pavadinimasEN" placeholder="e.g. Autotransformers 400/110 kV">
@@ -112,11 +113,12 @@
       </select>
     </div>
 
-    <div class="q"><div class="t">Ar Pirkimo metu bus vykdomos derybos?</div>
-      <div class="opts">
+    <div class="q" id="derybosQ"><div class="t">Ar Pirkimo metu bus vykdomos derybos?</div>
+      <div class="opts" id="derybosOpts">
         <label class="opt"><input type="radio" name="derybos" value="taip" checked onchange="derybosUI()"> Taip</label>
         <label class="opt"><input type="radio" name="derybos" value="ne" onchange="derybosUI()"> Ne</label>
       </div>
+      <div class="cite" id="derybosAuto" style="display:none"></div>
       <div class="subq" id="apimtisQ">
         <div class="t" style="font-size:13px">Dėl ko bus deramasi?</div>
         <div class="opts">
@@ -127,7 +129,6 @@
         <div class="cite">Atsakymas automatiškai parenka derybų formuluotes SPS 2.8-2.9 punktuose ir sprendžia,
           ar reikalinga Tiekėjo pasiūlymų dėl derėtinų sąlygų forma.</div>
       </div>
-      <div class="cite">Derybų būduose (TSD, SSD, ND) derybos vykdomos pagal BPS 13 skyrių.</div>
     </div>
 
     <div class="q"><div class="t">Kokia kalba rengiamos sąlygos?</div>
@@ -160,11 +161,8 @@
         nacionalinio saugumo punktus, deklaracijos reikalavimą ir priedą.</div>
     </div>
 
-    <div class="q"><div class="t">Ar Pirkime nustatytas paraiškų etapas?</div>
-      <div class="opts">
-        <label class="opt"><input type="radio" name="paraiskos" value="taip" checked> Taip</label>
-        <label class="opt"><input type="radio" name="paraiskos" value="ne"> Ne</label>
-      </div>
+    <div class="q hid" id="paraiskosQ"><div class="t">Paraiškų etapas</div>
+      <div class="infoline" id="paraiskosInfo"></div>
       <div class="cite">Nuo to priklauso, ar rengiama paraiškos forma (SPS 1 priedas).</div>
     </div>
 
@@ -234,8 +232,18 @@ const SEIMOS = {
           LT_EN: ['DPSP_LTEN_SALYGOS','DPSP_LTEN_PASIULYMAS',
                   'DPSP_LTEN_SUBTIEKEJAS','DPSP_LTEN_IDARBINTAS'] },
 };
-const PARAISKA_VISADA = new Set(['DPSK']);   // DPS sukurime paraiska - procedūros esme
 const TIK_SU_PARAISKA = /PARAISKA/;
+
+/* --- Derybos ir paraisku etapas PAGAL PĮ (pastabos Nr. 2-3). Modulis pats
+       supranta, kada derybos vykdomos, ir neklausia ten, kur atsakymas fiksuotas.
+   - Atviras konkursas: atviro procedūra, derybos NEvykdomos.
+   - Skelbiamos (TSD, SSD) ir neskelbiamos (ND) derybos: derybos vykdomos VISADA.
+   - Mazos vertes / DPS: rengejo pasirinkimas (klausiama).
+   Paraisku etapas: tarptautinese skelbiamose derybose PRIVALOMAS (dvipakope
+   procedūra); DPS sukurime paraiskos - procedūros esme; kituose budose siame
+   sablonu rinkinyje paraiskos formos nera.                                   */
+const DERYBOS_FIKSUOTA  = { AK:'ne', TSD:'taip', SSD:'taip', ND:'taip' };
+const PARAISKA_FIKSUOTA = { TSD:true, DPSK:true };
 
 /* --- LITGRID rekvizitai. Modulis skirtas tik LITGRID, tad ju neklausiame
        (pastabos Nr. 1 ir 2) - jie irasomi automatiskai. ------------------- */
@@ -292,6 +300,57 @@ const derybosTaip = () => $('input[name=derybos]:checked')?.value === 'taip';
 const apimtis = () => derybosTaip() ? ($('input[name=apimtis]:checked')?.value || 'kaina') : null;
 const nacsaugTaip = () => $('input[name=nacsaug]:checked')?.value === 'taip';
 function derybosUI(){ $('#apimtisQ').classList.toggle('hid', !derybosTaip()); kraukPriedus(); }
+
+/* Pirkimo pavadinimo gyva perziura (pastaba Nr. 4): vartotojas iskart mato, kaip
+   atrodys dokumente, ir supranta, kad reikia kilmininko linksnio. Automatinio
+   linksniavimo NEdarome - teisiniame dokumente tai butu rizikinga. */
+function pavPreview(){
+  const v = ($('#pavadinimas').value||'').trim();
+  const el = $('#pavPreviewEl');
+  if (v){
+    const nom = /(iai|ai|as|ys|is|us|a|ė)$/.test(v) && !/(ių|ų|os|ės|io|aus)$/.test(v);
+    el.innerHTML = `Dokumentuose: <b>„${esc(v)} pirkimas"</b>.`
+      + (nom ? ` <span style="color:var(--o)">Patikrinkite linksnį - turi būti kilmininkas (pvz. „Autotransformatorių", ne „Autotransformatoriai").</span>`
+             : ` Rašoma visur automatiškai.`);
+  } else {
+    el.innerHTML = 'Rašykite <b>kilmininko linksniu</b> (dokumentuose taps „... pirkimas"). Įrašomas visur automatiškai.';
+  }
+}
+
+/* Derybu ir paraisku klausimu pritaikymas pagal pirkimo buda (PĮ). */
+function budasPagalPI(){
+  const b = $('#budas').value;
+  // Derybos
+  const fiks = DERYBOS_FIKSUOTA[b];
+  const auto = $('#derybosAuto');
+  if (fiks){
+    document.querySelector(`input[name=derybos][value=${fiks}]`).checked = true;
+    $('#derybosOpts').style.display = 'none';
+    auto.style.display = '';
+    auto.innerHTML = fiks === 'ne'
+      ? 'Atvirame konkurse derybos <b>nevykdomos</b> (PĮ) - nustatyta automatiškai.'
+      : 'Skelbiamų / neskelbiamų derybų būde derybos vykdomos <b>visada</b> (PĮ) - nustatyta automatiškai.';
+  } else {
+    $('#derybosOpts').style.display = '';
+    auto.style.display = 'none';
+    auto.innerHTML = '';
+  }
+  // Paraisku etapas
+  const pq = $('#paraiskosQ'), pi = $('#paraiskosInfo');
+  if (b === 'TSD'){
+    pq.classList.remove('hid');
+    pi.innerHTML = 'Tarptautinės vertės pirkime paraiškų etapas <b>privalomas</b> (PĮ) - paraiškos forma rengiama automatiškai.';
+  } else if (b === 'DPSK'){
+    pq.classList.remove('hid');
+    pi.innerHTML = 'DPS sukūrime paraiškos - procedūros esmė. Įtraukiama automatiškai.';
+  } else if (b === 'SSD'){
+    pq.classList.remove('hid');
+    pi.innerHTML = 'Supaprastintose skelbiamose derybose pasirenkama <b>be paraiškų etapo</b> (PĮ) - paraiškos forma nerengiama.';
+  } else {
+    pq.classList.add('hid');
+  }
+  derybosUI();
+}
 
 const MENESIAI = ['sausio','vasario','kovo','balandžio','gegužės','birželio','liepos','rugpjūčio','rugsėjo','spalio','lapkričio','gruodžio'];
 function dataLT(){
@@ -1196,7 +1255,7 @@ $('#toStep2').onclick = async () => {
     $('#tplInfo').innerHTML = `<span style="color:var(--o)">Ši šeima (${budas} / ${kalba}) dar nekartografuota.</span>`;
     return;
   }
-  const suParaiska = $('input[name=paraiskos]:checked').value === 'taip' || PARAISKA_VISADA.has(budas);
+  const suParaiska = !!PARAISKA_FIKSUOTA[budas];
   const failai = rink.filter(f => suParaiska || !TIK_SU_PARAISKA.test(f));
   PRIEDAI.filter(p => (p.seimos.includes('*') || p.seimos.includes(budas)) && PRIEDU_PASIRINKIMAS[p.id])
          .forEach(p => { const f = p.failai[kalba] || p.failai.LT; if (f) failai.push(f); });
@@ -1217,14 +1276,14 @@ $('#toStep2').onclick = async () => {
   }
   rodyk(2);
 };
-$('#budas').addEventListener('change', kraukPriedus);
+$('#budas').addEventListener('change', budasPagalPI);
 
 /* Numatyta salygu data - siandien. */
 (() => {
   const d = new Date();
   $('#sdata').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 })();
-derybosUI();
+budasPagalPI();
 kraukPriedus();
 
 $('#back1').onclick = () => rodyk(1);
