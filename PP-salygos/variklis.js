@@ -209,6 +209,68 @@ const GPDocx = (() => {
     return rasta;
   }
 
+  /* ---------- 3c. LOGOTIPO INJEKCIJA (OOXML, ne docx.js) -------------------
+     PP-salygos transformuoja ESAMUS sablonus (JSZip + XML), tad logotipas
+     dedamas ne per docx.js ImageRun, o tiesiai i pakuote: PNG baitai -> media
+     dalis, png -> Content_Types, rysys -> document.xml.rels, centruotas
+     piesinio paragrafas -> kuno virsus.
+     Matmenys - EMU (1 pt = 12700 EMU). Numatyta 150x55 pt (islaiko 2,72:1).   */
+  const NS_WP  = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+  const NS_A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const NS_PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+  const NS_R   = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+  function logoParaXml(rId, cx, cy){
+    return `<w:p xmlns:w="${NS_W}" xmlns:wp="${NS_WP}" xmlns:a="${NS_A}" xmlns:pic="${NS_PIC}" xmlns:r="${NS_R}">`
+      + `<w:pPr><w:jc w:val="center"/><w:spacing w:after="120"/></w:pPr>`
+      + `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">`
+      + `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>`
+      + `<wp:docPr id="1" name="LITGRID logo"/>`
+      + `<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>`
+      + `<a:graphic><a:graphicData uri="${NS_PIC}"><pic:pic>`
+      + `<pic:nvPicPr><pic:cNvPr id="1" name="litgrid-logo.png"/><pic:cNvPicPr/></pic:nvPicPr>`
+      + `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
+      + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>`
+      + `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>`
+      + `</pic:pic></a:graphicData></a:graphic>`
+      + `</wp:inline></w:drawing></w:r></w:p>`;
+  }
+
+  async function insertLogo(doc, opts){
+    const fname = opts.fname || 'litgrid-logo.png';
+    const cx = opts.cxEmu, cy = opts.cyEmu;
+    // 1. media dalis
+    doc.zip.file('word/media/' + fname, opts.bytes, { createFolders:false });
+    // 2. png Content_Types (jei dar nera)
+    const ct = await part(doc, '[Content_Types].xml');
+    const hasPng = Array.from(ct.getElementsByTagNameNS(NS_CT,'Default'))
+      .some(d => (d.getAttribute('Extension')||'').toLowerCase() === 'png');
+    if (!hasPng){
+      const def = ct.createElementNS(NS_CT, 'Default');
+      def.setAttribute('Extension', 'png');
+      def.setAttribute('ContentType', 'image/png');
+      ct.documentElement.insertBefore(def, ct.documentElement.firstChild);
+    }
+    // 3. rysys su unikaliu rId
+    const rels = await part(doc, 'word/_rels/document.xml.rels');
+    const used = new Set(Array.from(rels.getElementsByTagNameNS(NS_REL,'Relationship')).map(r => r.getAttribute('Id')));
+    let k = 1; while (used.has('rId' + k)) k++;
+    const rId = 'rId' + k;
+    const rel = rels.createElementNS(NS_REL, 'Relationship');
+    rel.setAttribute('Id', rId);
+    rel.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image');
+    rel.setAttribute('Target', 'media/' + fname);
+    rels.documentElement.appendChild(rel);
+    // 4. piesinio paragrafas kuno virsuje
+    const d = doc.parts['word/document.xml'];
+    const body = d.getElementsByTagNameNS(NS_W,'body')[0];
+    const parsed = parseXml(logoParaXml(rId, cx, cy));
+    const imported = d.importNode(parsed.documentElement, true);
+    body.insertBefore(imported, body.firstChild);
+    note(doc, `Logotipas: iterptas (${fname}, ${cx}x${cy} EMU, ${rId}).`);
+    return rId;
+  }
+
   /* ---------- 4. PAPRASTAS TEKSTO KEITIMAS (pvz. /ĮMONĖS PAVADINIMAS/) ----- */
   function replaceText(doc, find, repl){
     const d = doc.parts['word/document.xml'];
@@ -281,7 +343,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, paraText, els, NS_W };
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, paraText, els, NS_W };
 })();
 
 /* ==========================================================================
