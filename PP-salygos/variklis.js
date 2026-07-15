@@ -789,7 +789,7 @@ const GPAudit = (() => {
   const W = GPDocx.NS_W;
   /* Baigtumo kriterijus: raudonos = 0, tuscios vietos = 0, komentarai = 0.
      Kas lieka - parodoma zmogui pastraipu tikslumu. Nieko nenutylima.       */
-  function check(doc, imone){
+  function check(doc, imone, forma){
     const d = doc.parts['word/document.xml'];
     const body = d.getElementsByTagNameNS(W,'body')[0];
     const paras = GPDocx.els(body,'p');
@@ -809,7 +809,9 @@ const GPAudit = (() => {
         }
       }
       if (red) raudonos.push({ i, text: txt.slice(0,110) });
-      if (/_+|\[[^\]]{4,}\]/.test(txt)) tuscios.push({ i, text: txt.slice(0,110) });
+      // Betekste bruksniu linija - dokumento pabaigos skirtukas, ne pildomas laukas.
+      const vienBruksniai = txt.replace(/[_\s]/g,'') === '';
+      if (!vienBruksniai && /_+|\[[^\]]{4,}\]/.test(txt)) tuscios.push({ i, text: txt.slice(0,110) });
     });
     // Svelnus ispejimas. Gaudom tris dalykus, kuriu "raudona / bruksneliai"
     // kriterijus nepagauna:
@@ -830,6 +832,18 @@ const GPAudit = (() => {
         patikrinti.push({ i, text: t.slice(0,110), svetimas: true });
     });
     const komentarai = GPDocx.els(d,'commentReference').length;
+    // TIEKEJO FORMOS: tuscios vietos ir raudonos pastabos jose yra pasiulymu
+    // pateikimo etapo dalykas - tiekejas jas pildys pats. Tai ne klaidos, o
+    // informacija; formos svara lemia tik komentarai ir imones zymos.
+    if (forma){
+      const tiekejo = [...raudonos.map(x => ({...x, rusis:'raudona'})),
+                       ...tuscios.map(x => ({...x, rusis:'tuscia'}))];
+      const zymos = patikrinti.filter(x => /ĮMONĖS PAVADINIMAS/.test(x.text));
+      return {
+        raudonos: [], tuscios: [], komentarai, patikrinti: zymos, tiekejo,
+        svarus: komentarai === 0 && zymos.length === 0
+      };
+    }
     return {
       raudonos, tuscios, komentarai, patikrinti,
       svarus: raudonos.length === 0 && tuscios.length === 0 && komentarai === 0
