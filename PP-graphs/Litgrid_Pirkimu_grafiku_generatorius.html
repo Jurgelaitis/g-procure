@@ -915,27 +915,9 @@
 
       <div class="form-field">
         <label>Pirkimo būdas <span class="req">*</span></label>
+        <!-- Būdų sąrašas užpildomas iš bendros taksonomijos (shared/procurement-methods.js). -->
         <select id="f-budas">
-          <option value="">— Pasirinkite pirkimo būdą —</option>
-          <optgroup label="Mažos vertės pirkimai">
-            <option value="MV-NR">MV-NR — Neskelbiama apklausa raštu (30 d.d.)</option>
-            <option value="MV-SAB">MV-SAB — Skelbiama apklausa be derybų (45 d.d.)</option>
-            <option value="MV-SAD">MV-SAD — Skelbiama apklausa su derybomis (60 d.d.)</option>
-          </optgroup>
-          <optgroup label="Supaprastinti pirkimai">
-            <option value="S-ND">S-ND — Neskelbiamos derybos (50 d.d.)</option>
-            <option value="S-AK">S-AK — Atviras konkursas (75 d.d.)</option>
-            <option value="S-SD">S-SD — Skelbiamos derybos (95 d.d.)</option>
-          </optgroup>
-          <optgroup label="Tarptautiniai pirkimai">
-            <option value="T-ND">T-ND — Neskelbiamos derybos (75 d.d.)</option>
-            <option value="T-AK">T-AK — Atviras konkursas (90 d.d.)</option>
-            <option value="T-SD">T-SD — Skelbiamos derybos (135 d.d.)</option>
-          </optgroup>
-          <optgroup label="Dinaminė pirkimų sistema">
-            <option value="DPS">DPS — DPS pagrindinis (60 d.d.)</option>
-            <option value="DPS-K">DPS-K — DPS konkretus pirkimas (52 d.d.)</option>
-          </optgroup>
+          <option value="">- Pasirinkite pirkimo būdą -</option>
         </select>
         <span class="hint">Žodiniams (MV-NZ) ir CPO pirkimams grafikai nerengiami.</span>
       </div>
@@ -1285,6 +1267,7 @@
 
 <!-- Darbo dienų / LR švenčių logika - bendras failas (Velykos per computus, kalendorius nepasensta) -->
 <script src="../shared/workdays.js"></script>
+<script src="../shared/procurement-methods.js"></script>
 <script>
 /* ============================================================
    LITGRID PIRKIMŲ GRAFIKŲ GENERATORIUS — JS LOGIKA
@@ -1897,6 +1880,38 @@ els.pradzia.addEventListener('change', refreshAll);
 els.pavadinimas.addEventListener('input', refreshPreview);
 els.iniciatorius.addEventListener('input', refreshPreview);
 els.organizatorius.addEventListener('input', refreshPreview);
+
+/* ---------- Bendra pirkimo budu taksonomija (shared/procurement-methods.js) ----------
+   Sarasa, etiketes ir grupavima imam is vieno tiesos saltinio; trukmes/PĮ terminai
+   lieka cia (METHODS / CALC_METHODS), rakinami tuo paciu kanoniniu kodu. */
+function mLabel(code, trumpas){
+  return (window.GP_METHODS && GP_METHODS.isValid(code))
+    ? GP_METHODS.label(code, { forma: trumpas ? 'trumpas' : 'ilgas' })
+    : code;
+}
+function fillBudasSelect(){
+  if(!window.GP_METHODS) return;                       // fallback: lieka statinis placeholder
+  let html = '<option value="">- Pasirinkite pirkimo būdą -</option>';
+  GP_METHODS.listByGroup().forEach(g => {
+    const budai = g.budai.filter(m => METHODS[m.id]);  // generatoriuje - tik budai su grafiku
+    if(!budai.length) return;
+    html += `<optgroup label="${g.label}">`;
+    budai.forEach(m => {
+      html += `<option value="${m.id}">${m.id} - ${mLabel(m.id, true)} (${METHODS[m.id].totalStd} d.d.)</option>`;
+    });
+    html += '</optgroup>';
+  });
+  els.budas.innerHTML = html;
+}
+fillBudasSelect();
+/* Darnos patikra: visi pp-graphs kodai turi egzistuoti taksonomijoje.
+   CALC_METHODS deklaruojamas veliau (const), tad sita kvieciam is initCalc. */
+function tikrintiBudus(){
+  if(!window.GP_METHODS){ console.warn('GP_METHODS neįkelta - pp-graphs naudoja statinį sąrašą'); return; }
+  Object.keys(METHODS).concat(CALC_METHODS.map(m => m.code)).forEach(code => {
+    if(!GP_METHODS.isValid(code)) console.warn('pp-graphs būdo kodas nerastas taksonomijoje:', code);
+  });
+}
 // Įmonės pasirinkimo handler — atnaujina grafiko logotipą peržiūroje
 function onCompanyChange(){
   const sel = document.getElementById('f-company');
@@ -2978,7 +2993,7 @@ function calcFillSelect(id){
       html += `<optgroup label="${m.grp}">`;
       lastGrp = m.grp;
     }
-    html += `<option value="${m.code}">${m.code} — ${m.name} (${m.prep}+${m.exec} d.d.)</option>`;
+    html += `<option value="${m.code}">${m.code} - ${mLabel(m.code)} (${m.prep}+${m.exec} d.d.)</option>`;
   });
   html += '</optgroup>';
   sel.innerHTML = html;
@@ -2988,7 +3003,7 @@ function calcFillTable(){
   tb.innerHTML = CALC_METHODS.map(m => `
     <tr>
       <td class="code">${m.code}</td>
-      <td>${m.name}</td>
+      <td>${mLabel(m.code)}</td>
       <td class="num">${m.prep}</td>
       <td class="num">${m.exec}</td>
       <td class="num"><b>${m.prep + m.exec}</b></td>
@@ -3126,6 +3141,7 @@ function switchView(v){
 
 /* Skaičiuoklės inicializacija */
 (function initCalc(){
+  tikrintiBudus();                                     // darnos su taksonomija patikra
   ['c1-method','c2-method','c3-method'].forEach(calcFillSelect);
   calcFillTable();
   ['c1-init','c1-method'].forEach(id => document.getElementById(id).addEventListener('change', calc1));
