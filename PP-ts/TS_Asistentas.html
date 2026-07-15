@@ -2203,7 +2203,7 @@ details[open] summary {
                   <option value="innovation_partnership">Inovacijų partnerystė</option>
                   <option value="qualification_system">Kvalifikacijos sistema</option>
                   <option value="small_value">Mažos vertės pirkimas</option>
-                  <option value="framework">Preliminari sutartis</option>
+                  <option value="framework">Preliminarioji sutartis</option>
                 </select>
               </div>
               <div class="form-group">
@@ -2545,6 +2545,7 @@ details[open] summary {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- Bendras AI proxy transportas (shared) - GP_AI_PROXY. Turi buti pries modulio inline scripta. -->
 <script src="../shared/ai-proxy.js"></script>
+<script src="../shared/procurement-methods.js"></script>
 <!-- docx.js: tikras .docx generavimas. Saugiai įkraunama su 2 CDN ir aiškia diagnoze. -->
 <script>
   window._docxLoadStatus = 'pending';
@@ -2876,16 +2877,24 @@ const App = (() => {
 
   // --- METADATA ---
   function gatherMetadata() {
+    const procKodas = $('#metaProcedure').value;
+    const tarpt = $('#metaInternational').checked;
+    // Kanoninis pirkimo budas is bendros taksonomijos (shared/procurement-methods.js):
+    // procedura (EN kodas) + tarptautine verte -> vienas kanoninis id, kuriuo sistema
+    // (pp-graphs, pp-plan ir kt.) identifikuoja ta pati buda. Etikete - AI prompt'ui/rodymui.
+    const kanon = window.GP_METHODS ? GP_METHODS.fromLegacy('pp-ts', procKodas, { international: tarpt }) : null;
     return {
       title: $('#metaTitle').value.trim(),
       type: $('#metaType').value,
       cpv: $('#metaCpv').value.trim(),
       description: $('#metaDescription').value.trim(),
-      procedure: $('#metaProcedure').value,
+      procedure: procKodas,
+      procedureId: kanon ? kanon.id : null,
+      procedureLabel: kanon ? kanon.label : '',
       value: parseFloat($('#metaValue').value) || null,
       criteria: $('#metaCriteria').value,
       flags: {
-        international: $('#metaInternational').checked,
+        international: tarpt,
         green: $('#metaGreen').checked,
         innovation: $('#metaInnovation').checked,
         critical: $('#metaCritical').checked,
@@ -2893,6 +2902,18 @@ const App = (() => {
       }
     };
   }
+
+  /* Darnos su taksonomija patikra: visi #metaProcedure kodai turi atsivaizduoti
+     i kanonini buda (shared/procurement-methods.js). */
+  (function tikrintiTsBudus(){
+    if(!window.GP_METHODS){ console.warn('GP_METHODS neįkelta - pp-ts būdai netikrinami'); return; }
+    const sel = document.getElementById('metaProcedure');
+    if(!sel) return;
+    [...sel.options].forEach(o => {
+      if(o.value && !GP_METHODS.fromLegacy('pp-ts', o.value, {}))
+        console.warn('pp-ts procedūros kodas nerastas taksonomijoje:', o.value);
+    });
+  })();
 
   // --- SETTINGS MODAL ---
   function openSettings() { $('#settingsModal').classList.add('active'); }
@@ -3233,7 +3254,7 @@ const App = (() => {
             <tr><td><strong>Pirkimo pavadinimas</strong></td><td>${escapeHtml(m.title || '-')}</td></tr>
             <tr><td><strong>Objekto tipas</strong></td><td>${escapeHtml({goods:'Prekės',services:'Paslaugos',works:'Darbai',mixed:'Mišrios'}[m.type] || m.type || '-')}</td></tr>
             <tr><td><strong>CPV kodas</strong></td><td>${escapeHtml(m.cpv || '-')}</td></tr>
-            <tr><td><strong>Pirkimo būdas</strong></td><td>${escapeHtml(m.procedure || '-')}</td></tr>
+            <tr><td><strong>Pirkimo būdas</strong></td><td>${escapeHtml(m.procedureLabel || m.procedure || '-')}</td></tr>
             <tr><td><strong>Numatoma vertė (be PVM)</strong></td><td>${m.value ? m.value.toLocaleString('lt-LT') + ' EUR' : '-'}</td></tr>
             <tr><td><strong>Vertinimo kriterijus</strong></td><td>${escapeHtml({price:'Mažiausia kaina',cost:'Sąnaudos',best_price_quality:'Ekonomiškai naudingiausias'}[m.criteria] || m.criteria || '-')}</td></tr>
           </tbody>
@@ -5222,7 +5243,7 @@ PIRKIMO KONTEKSTAS:
 - Pavadinimas: ${meta.title || '(nenurodyta)'}
 - Objekto tipas: ${meta.type || '(nenurodyta)'}
 - CPV: ${meta.cpv || '(nenurodyta)'}
-- Procedūra: ${meta.procedure || '(nenurodyta)'}
+- Procedūra: ${meta.procedureLabel || meta.procedure || '(nenurodyta)'}
 - Numatoma vertė: ${meta.value ? meta.value.toLocaleString('lt-LT') + ' EUR be PVM' : '(nenurodyta)'}
 - Vertinimo kriterijus: ${meta.criteria || '(nenurodyta)'}
 - Specialūs aspektai: ${Object.entries(meta.flags || {}).filter(([_, v]) => v).map(([k]) => k).join(', ') || 'nėra'}
