@@ -152,6 +152,14 @@
         (PĮ ribos iš shared/thresholds.js). Tai atsako dalį šablono sąlygų automatiškai, jų neklausiant.</div>
     </div>
 
+    <div class="q hid" id="rezimasQ"><div class="t">Pirkimo vertės režimas</div>
+      <div class="opts">
+        <label class="opt"><input type="radio" name="rezimas" value="tarptautinis" onchange="rezimasTouched()"> Tarptautinės vertės pirkimas</label>
+        <label class="opt"><input type="radio" name="rezimas" value="supaprastintas" onchange="rezimasTouched()"> Supaprastintas pirkimas</label>
+      </div>
+      <div class="cite" id="rezimasInfo"></div>
+    </div>
+
     <div class="q"><div class="t">Ar pirkimo objektas susijęs su nacionaliniu saugumu?</div>
       <div class="opts">
         <label class="opt"><input type="radio" name="nacsaug" value="ne" checked onchange="kraukPriedus()"> Ne</label>
@@ -245,6 +253,19 @@ const TIK_SU_PARAISKA = /PARAISKA/;
 const DERYBOS_FIKSUOTA  = { AK:'ne', TSD:'taip', SSD:'taip', ND:'taip' };
 const PARAISKA_FIKSUOTA = { TSD:true, DPSK:true };
 
+/* Pirkimo vertes rezimas (tarptautinis / supaprastintas / mazos vertes). Kai kuriuos
+   budus rezimas lemia PATS BUDAS (fiksuota), tad vertes tam nenaudojam:
+     TSD = tarptautines skelbiamos derybos -> visada tarptautinis
+     SSD = supaprastintos skelbiamos derybos -> visada supaprastintas
+     MVP = mazos vertes pirkimas -> visada mazos vertes
+     DPSK/DPSP = DPS -> visada tarptautinis (vartotojo sprendimas 2026-07)
+   AK, ND - rezimas KINTAMAS, todel jo klausiam RENGEJO (aiskus pozymis).
+   PRIEZASTIS (pastaba): pagal PĮ vertes skaiciavimo taisykles (agregavimas,
+   preliminarioji sutartis ir kt.) tarptautines vertes pirkimas gali buti ir
+   maza suma (pvz. 90 000 EUR), tad viena PIRKIMO suma rezimo patikimai nelemia. */
+const REZIMAS_FIKSUOTAS = { TSD:'tarptautinis', SSD:'supaprastintas', MVP:'mazos vertes', DPSK:'tarptautinis', DPSP:'tarptautinis' };
+const REZIMO_VARDAS = { tarptautinis:'tarptautinis', supaprastintas:'supaprastintas', 'mazos vertes':'mažos vertės' };
+
 /* --- LITGRID rekvizitai. Modulis skirtas tik LITGRID, tad ju neklausiame
        (pastabos Nr. 1 ir 2) - jie irasomi automatiskai. ------------------- */
 const IMONE = 'LITGRID AB';
@@ -301,19 +322,28 @@ const apimtis = () => derybosTaip() ? ($('input[name=apimtis]:checked')?.value |
 const nacsaugTaip = () => $('input[name=nacsaug]:checked')?.value === 'taip';
 function derybosUI(){ $('#apimtisQ').classList.toggle('hid', !derybosTaip()); kraukPriedus(); }
 
+/* Pirkimo objekto pavadinimas be pertekliniu galuniu. Laukas prasi tik OBJEKTO
+   (kilmininku), o sablonas prideda savo " pirkimas" / "PIRKIMUI". Jei rengejas
+   vis tiek iraso "... pirkimas", nukerpame ji - kitaip gautusi "pirkimas pirkimas". */
+function pavClean(v){
+  return String(v||'').trim().replace(/[\s„"]+pirkim(as|o|ui|ą|us|ai|u)\.?["“”]*\s*$/i, '').trim();
+}
+
 /* Pirkimo pavadinimo gyva perziura (pastaba Nr. 4): vartotojas iskart mato, kaip
    atrodys dokumente, ir supranta, kad reikia kilmininko linksnio. Automatinio
    linksniavimo NEdarome - teisiniame dokumente tai butu rizikinga. */
 function pavPreview(){
-  const v = ($('#pavadinimas').value||'').trim();
+  const raw = ($('#pavadinimas').value||'').trim();
+  const v = pavClean(raw);
   const el = $('#pavPreviewEl');
   if (v){
     const nom = /(iai|ai|as|ys|is|us|a|ė)$/.test(v) && !/(ių|ų|os|ės|io|aus)$/.test(v);
-    el.innerHTML = `Dokumentuose: <b>„${esc(v)} pirkimas"</b>.`
+    const nukirpta = raw !== v ? ` <span class="cite">(perteklinį „pirkimas" nukirpome - šablonas jį prideda pats)</span>` : '';
+    el.innerHTML = `Dokumentuose: <b>„${esc(v)} pirkimas"</b>.${nukirpta}`
       + (nom ? ` <span style="color:var(--o)">Patikrinkite linksnį - turi būti kilmininkas (pvz. „Autotransformatorių", ne „Autotransformatoriai").</span>`
              : ` Rašoma visur automatiškai.`);
   } else {
-    el.innerHTML = 'Rašykite <b>kilmininko linksniu</b> (dokumentuose taps „... pirkimas"). Įrašomas visur automatiškai.';
+    el.innerHTML = 'Rašykite <b>kilmininko linksniu</b> vien objekto pavadinimą (be žodžio „pirkimas" - jį prideda šablonas).';
   }
 }
 
@@ -349,6 +379,7 @@ function budasPagalPI(){
   } else {
     pq.classList.add('hid');
   }
+  rezimas();          // atnaujina rezimo pozymio matomuma (fiksuotas budu ar kintamas)
   derybosUI();
 }
 
@@ -364,19 +395,56 @@ function verteEUR(){
   const v = ($('#verte')?.value||'').replace(/[^\d,.]/g,'').replace(/\.(?=\d{3}\b)/g,'').replace(',','.');
   return parseFloat(v) || 0;
 }
+/* Rezimo SIULYMAS pagal verte - tik numatytoji reiksme, kai budas kintamas.
+   Kintamiems budams (AK/ND/DPS) minimumas yra supaprastintas (mazos vertes = atskiras
+   budas MVP), tad grazinam binari: tarptautinis, jei suma >= PĮ tarpt. ribos; kitaip
+   supaprastintas. Grazinam null, jei vertes dar nera.                           */
+function verteSiulo(){
+  const T = window.GP_THRESHOLDS?.PI, v = verteEUR();
+  if (!T || !v) return null;
+  const tipas = $('input[name=tipas]:checked')?.value || 'prekes';
+  const intl = tipas === 'darbai' ? T.intl_works : T.intl_goods;
+  return v >= intl ? 'tarptautinis' : 'supaprastintas';
+}
+let REZIMAS_TOUCHED = false;
+function rezimasTouched(){ REZIMAS_TOUCHED = true; rezimas(); }
+
+/* Pirkimo vertes rezimas. Fiksuotiems budams (TSD/SSD/MVP) - is budo; kintamiems
+   (AK/ND/DPS) - is aiskaus rengejo pozymio (verte tik siulo numatytaji).        */
 function rezimas(){
+  const b = $('#budas')?.value;
+  const q = $('#rezimasQ');
+  const fiks = REZIMAS_FIKSUOTAS[b];
+  if (fiks){
+    if (q) q.classList.add('hid');
+    $('#rezInfo').innerHTML = `Režimą lemia pirkimo <b>būdas</b>: <b>${REZIMO_VARDAS[fiks]}</b> pirkimas. `
+      + 'Vertė šio pirkimo režimo nekeičia.';
+    return fiks;
+  }
+  // Kintamas rezimas (AK / ND / DPS) - rengejo pozymis.
+  if (q) q.classList.remove('hid');
   const T = window.GP_THRESHOLDS?.PI, v = verteEUR();
   const tipas = $('input[name=tipas]:checked')?.value || 'prekes';
-  if (!T || !v){
-    $('#rezInfo').innerHTML = 'Pagal vertę nustatoma, ar pirkimas tarptautinis, ar supaprastintas (PĮ ribos iš shared/thresholds.js).';
-    return null;
+  const intl = T ? (tipas === 'darbai' ? T.intl_works : T.intl_goods) : null;
+  const siulo = verteSiulo();                          // 'tarptautinis'|'supaprastintas'|null
+  if (siulo && !REZIMAS_TOUCHED){
+    const el = document.querySelector(`input[name=rezimas][value=${siulo}]`);
+    if (el) el.checked = true;
   }
-  const intl = tipas === 'darbai' ? T.intl_works : T.intl_goods;
-  const mv   = tipas === 'darbai' ? T.mv_works   : T.mv_goods;
-  const r = v >= intl ? 'tarptautinis' : (v >= mv ? 'supaprastintas' : 'mazos vertes');
-  $('#rezInfo').innerHTML = `Nustatyta: <b>${r}</b> pirkimas. Vertė ${v.toLocaleString('lt-LT')} EUR; `
-    + `PĮ tarptautinė riba - ${intl.toLocaleString('lt-LT')} EUR, mažos vertės riba - ${mv.toLocaleString('lt-LT')} EUR.`;
-  return r;
+  const chosen = $('input[name=rezimas]:checked')?.value || null;
+  $('#rezInfo').innerHTML = intl
+    ? `PĮ tarptautinė riba (${tipas === 'darbai' ? 'darbai' : 'prekės/paslaugos'}) - <b>${intl.toLocaleString('lt-LT')} EUR</b> be PVM. Įvedus vertę, pasiūlome numatytąjį režimą, bet sprendžia požymis žemiau.`
+    : 'Įveskite vertę - pasiūlysime numatytąjį režimą. Galutinį režimą nurodo požymis žemiau.';
+  const rezimasInfo = $('#rezimasInfo');
+  if (rezimasInfo){
+    rezimasInfo.innerHTML = siulo
+      ? `Pagal įvestą vertę siūloma: <b>${REZIMO_VARDAS[siulo]}</b>. Bet pagal PĮ vertės skaičiavimo `
+        + 'taisykles (agregavimas, preliminarioji sutartis ir kt.) tarptautinės vertės pirkimas gali būti '
+        + 'ir mažesnės sumos - patikslinkite, jei reikia.'
+      : 'Nurodykite pirkimo vertės režimą. Nuo jo priklauso režimo eilutė („Vykdomas ...") ir '
+        + 'punktų redakcijos tarptautiniam / supaprastintam pirkimui.';
+  }
+  return chosen;
 }
 
 /* Salygos, atsakomos is kontroliniu klausimu - ju neklausiame antra karta. */
@@ -441,12 +509,36 @@ const APIMTIS_FORMULES = [
 ];
 
 /* Rezimo eilute "Vykdomas [Pasirinkite]." (AK ir kt. seimos) - formuluotes
-   PAZODZIUI is TSD/SSD sablonu 1.2 punktu, parenkama pagal verte.            */
+   PAZODZIUI is TSD/SSD sablonu 1.2 punktu, parenkama pagal REZIMO POZYMI.     */
 const REZIMO_TEKSTAI = {
   tarptautinis: 'Tarptautinis pirkimas.',
   supaprastintas: 'Supaprastintas pirkimas, kurio vertė viršija mažos vertės pirkimų ribą.',
 };
-const REZIMO_PASIRINKITE = /^vykdomas pasirinkite/;
+/* EN antrininkas: sablonuose "Pasirinkti is being carried out." - keiciamas TIK
+   subjektas, likusi dalis ("... is being carried out.") lieka is sablono.
+   Subjektai PAZODZIUI is TSD_LTEN / SSD_LTEN sablonu.                           */
+const REZIMO_EN_SUBJ = {
+  tarptautinis: 'International Procurement',
+  supaprastintas: 'Simplified Procurement with a value above the low value procurement threshold',
+};
+/* "Vykdomas [Pasirinkite]." (AK) IR "Vykdomas Pasirinkti" (ND) - abu yra rezimo
+   eilute. EN antrininkas ("Pasirinkti/Choose ... carried out") tvarkomas atskirai. */
+const REZIMO_PASIRINKITE = /^vykdomas (pasirinkite|pasirinkti)\b/;
+const REZIMO_EN_TWIN     = /^(pasirinkti|choose)\b.*carried out/;
+
+/* PUNKTO REDAKCIJOS pagal rezima (AK, ND seimos). Sablone punktas turi DVI
+   redakcijas: raudonas zymuo "Punkto redakcija tarptautiniam/supaprastintam
+   pirkimui:" + 1 juoda redakcijos pastraipa. Rengejas palieka atitinkanti rezima,
+   istrina kita (ir abu zymenis). Rezimas - is rezimo pozymio (kaip "Vykdomas [Pasirinkite]").
+   Visuose 4 sablonuose redakcija = tiksliai 1 pastraipa po zymens.             */
+const REDAKCIJA_INTL = /^punkto redakcija tarptautiniam pirkimui/;
+const REDAKCIJA_SIMP = /^punkto redakcija supaprastintam pirkimui/;
+function kitasTuriniysPo(paras, i){
+  for (let j = i + 1; j < paras.length; j++){
+    if (GPDocx.paraText(paras[j]).trim()) return j;
+  }
+  return null;
+}
 
 /* Komunikacijos kanalas MVP: sablonas nurodo parinktis
    "[by means of CPP IS / by e-mail]"; LT pirmoji formuluote - is TSD 1.3 p.   */
@@ -651,7 +743,7 @@ function surinktiKlausimus(){
       }
       const raktas = tusciaRaktas(n, d.trumpas);
       if (PAV_RE.test(n.text)){                               // pavadinimas (Nr. 4-5)
-        const pav = ($('#pavadinimas').value||'').trim();
+        const pav = pavClean($('#pavadinimas').value);
         const vals = new Array(GPGen.vietos(n.text).length).fill('');
         if (pav) vals[0] = pav;
         ATS['B_' + raktas] = vals;
@@ -664,7 +756,7 @@ function surinktiKlausimus(){
         pridek('formuluotes', 'B|' + raktas, trumpas,
           { tekstas:n.text, tipas:'blank', raktas, vietos:GPGen.vietos(n.text).length,
             variantai:Object.values(REZIMO_TEKSTAI).map(t => ({ tekstas:t, kodel:'formuluotė iš TSD/SSD šablonų 1.2 p.' })),
-            pastaba:rTekstas ? 'Parinkta automatiškai pagal pirkimo vertę.' : 'Įveskite vertę 1 žingsnyje - parinksime automatiškai.' });
+            pastaba:rTekstas ? 'Parinkta automatiškai pagal pirkimo režimą (1 žingsnis).' : 'Nurodykite pirkimo režimą 1 žingsnyje - parinksime automatiškai.' });
         return;
       }
       const formule = BLANKU_FORMULES.find(f => f.re.test(norm(n.text)));
@@ -705,13 +797,23 @@ function surinktiKlausimus(){
             komentarai:komentaraiTies(Z, n.i) });
         return;
       }
-      if (REZIMO_PASIRINKITE.test(nr)){                     // "Vykdomas [Pasirinkite]."
+      if (REZIMO_PASIRINKITE.test(nr)){                     // "Vykdomas [Pasirinkite]." / "Vykdomas Pasirinkti"
         const rTekstas = REZ && REZIMO_TEKSTAI[REZ];
         if (rTekstas) dflt('I_' + raktas, rTekstas);
         pridek('formuluotes', 'I|' + raktas, trumpas,
           { tekstas:n.text, tipas:'intarpas', raktas,
             variantai:Object.values(REZIMO_TEKSTAI).map(t => ({ tekstas:t, kodel:'formuluotė iš TSD/SSD šablonų 1.2 p.' })),
-            pastaba:rTekstas ? 'Parinkta automatiškai pagal pirkimo vertę.' : 'Įveskite vertę 1 žingsnyje - parinksime automatiškai.',
+            pastaba:rTekstas ? 'Parinkta automatiškai pagal pirkimo režimą (1 žingsnis).' : 'Nurodykite pirkimo režimą 1 žingsnyje - parinksime automatiškai.',
+            komentarai:komentaraiTies(Z, n.i) });
+        return;
+      }
+      if (REZIMO_EN_TWIN.test(nr)){                         // EN antrininkas "Pasirinkti is being carried out."
+        const subj = REZ && REZIMO_EN_SUBJ[REZ];
+        if (subj) dflt('I_' + raktas, subj);
+        pridek('formuluotes', 'I|' + raktas, trumpas,
+          { tekstas:n.text, tipas:'intarpas', raktas,
+            variantai:Object.values(REZIMO_EN_SUBJ).map(t => ({ tekstas:t, kodel:'formuluotė iš TSD/SSD (EN) šablonų' })),
+            pastaba:subj ? 'Parinkta automatiškai pagal pirkimo režimą (1 žingsnis).' : 'Nurodykite pirkimo režimą 1 žingsnyje - parinksime automatiškai.',
             komentarai:komentaraiTies(Z, n.i) });
         return;
       }
@@ -746,6 +848,13 @@ function surinktiKlausimus(){
       if ((Z.blokai||[]).some(b => (b.pasirenkami||[]).includes(n.i))) return;
       if (isjungta.has(n.i)) return;
       const r = norm(n.text);
+      if (REDAKCIJA_INTL.test(r) || REDAKCIJA_SIMP.test(r)){   // punkto redakcija pagal rezima
+        const intl = REDAKCIJA_INTL.test(r);
+        const laikom = intl ? (REZ !== 'supaprastintas') : (REZ === 'supaprastintas');
+        auto(trumpas, n.text.slice(0,55), laikom ? 'redakcija paliekama, žymuo trinamas' : 'redakcija ir žymuo trinami',
+             `punkto redakcija ${intl?'tarptautiniam':'supaprastintam'} pirkimui - pirkimo režimas: ${REZ||'nenurodyta'}`);
+        return;
+      }
       if (/^\d+\s*priedas/i.test(n.text)){                    // SPS priedu sarasas
         const q = pridek('priedai', r, trumpas, { tekstas:n.text });
         dflt('A_' + r, priedoEilutesNumatyta(n.text));
@@ -820,7 +929,7 @@ function surinktiKlausimus(){
       delete K.pavieniai[raktas];
     } else if (rez !== null){
       ATS[raktas] = rez;
-      K.autoSakos.push({ ...q, raktas, v:rez, kodel:`pirkimas yra ${REZ} (pagal vertę ir PĮ ribą)` });
+      K.autoSakos.push({ ...q, raktas, v:rez, kodel:`pirkimo režimas: ${REZ} (pagal 1 žingsnio pasirinkimą)` });
       delete K.pavieniai[raktas];
     } else if (!grupiuRaktaiPre.has(raktas)) ATS[raktas] ??= true;
   });
@@ -1031,7 +1140,7 @@ async function generuotiViena(d, REZ){
   const doc = await GPDocx.open(d.buf.slice(0));
   const paras = GPGen.snapshot(doc);
   const trinti = new Set(), juodinti = new Set(), lenteles = [];
-  const pav = ($('#pavadinimas').value||'').trim();
+  const pav = pavClean($('#pavadinimas').value);
 
   // 1. Salygu antrastes - visada salinamos (isskyrus sulietas).
   const sulietos = [];
@@ -1063,6 +1172,16 @@ async function generuotiViena(d, REZ){
     (Z.raudonosPastabos||[]).forEach(n => {
       const r = norm(n.text);
       if (trinti.has(n.i)) return;
+      if (REDAKCIJA_INTL.test(r) || REDAKCIJA_SIMP.test(r)){   // punkto redakcija pagal rezima
+        trinti.add(n.i);                                       // zymuo visada trinamas
+        const edIdx = kitasTuriniysPo(paras, n.i);             // redakcija = kita turinio pastraipa
+        if (edIdx != null){
+          const intl = REDAKCIJA_INTL.test(r);
+          const laikom = intl ? (REZ !== 'supaprastintas') : (REZ === 'supaprastintas');
+          if (!laikom) trinti.add(edIdx);
+        }
+        return;
+      }
       if (/^\d+\s*priedas/i.test(n.text)) { ATS['A_'+r] ? juodinti.add(n.i) : trinti.add(n.i); }
       else if (ATS['N_'+r] === 'trinti')  trinti.add(n.i);
       else if (ATS['N_'+r] === 'palikti') juodinti.add(n.i);
@@ -1077,9 +1196,11 @@ async function generuotiViena(d, REZ){
   // 5. Tuscios vietos. Formose pildome TIK pirkimo pavadinima antrasteje -
   //    kitos vietos priklauso tiekejui.
   let pildyta = 0;
+  const titulIdx = new Set();                        // titulo pastraipos - tarpui po pildymo
   const tekstoIdx = new Set((Z.intarpai||[]).filter(x => intarpoKat(x) === 'teksto').map(x => x.i));
   (Z.tuscios||[]).forEach(n => {
     if (trinti.has(n.i)) return;
+    if (PAV_RE.test(n.text)) titulIdx.add(n.i);
     if (forma){
       if (PAV_RE.test(n.text) && pav) pildyta += GPGen.pildyti(paras, n.i, [pav]);
       return;
@@ -1119,6 +1240,22 @@ async function generuotiViena(d, REZ){
       else if (v && GPGen.keistiRaudonaTeksta(paras, n.i, v)) intTeksto++;
     } else juodinti.add(n.i);
   });
+
+  // 6a. Titulo tarpas: istrynus raudona "(irasomas ... pavadinimas) " nurodyma
+  //     kai kur dingsta tarpas pries "pirkimas" ("...kVpirkimas"). Uztikrinam.
+  titulIdx.forEach(i => { if (!trinti.has(i)) GPGen.taisytiTitulTarpa(paras, i); });
+
+  // 6b. Rezimo eilute BE zymos (ND_LT: juoda "Vykdomas Pasirinkti" - zemelapyje jos
+  //     nera). Uzpildom tiesiogiai is rezimo pozymio. AK "[Pasirinkite]" ir ND_LTEN
+  //     raudonos eilutes jau uztvarkytos auksciau (tuscios / intarpai), tad cia jos
+  //     nebeatitiks sablono ("Vykdomas Pasirinkti").
+  if (!forma && REZ && REZIMO_TEKSTAI[REZ]){
+    paras.forEach((p, idx) => {
+      if (trinti.has(idx)) return;
+      if (/^vykdomas\s+pasirinkti\.?\s*$/i.test(GPDocx.paraText(p).trim()))
+        GPGen.keistiRezimoEilute(paras, idx, REZIMO_TEKSTAI[REZ]);
+    });
+  }
 
   // 7. Vykdom
   sulietos.forEach(i => { if (!trinti.has(i)) intTrinta += GPGen.trintiRaudonusRunus(paras, i); });
@@ -1289,6 +1426,14 @@ kraukPriedus();
 $('#back1').onclick = () => rodyk(1);
 $('#back2').onclick = () => rodyk(2);
 $('#gen').onclick = async () => {
+  // Kintamo rezimo budams (AK/ND/DPS) rezimo pozymis PRIVALOMAS - kitaip liktu
+  // neuzpildyta rezimo eilute ir neaiski punktu redakcija.
+  if (!REZIMAS_FIKSUOTAS[$('#budas').value] && !rezimas()){
+    alert('Nurodykite pirkimo vertės režimą (tarptautinės vertės ar supaprastintas) 1 žingsnyje. '
+        + 'Nuo jo priklauso režimo eilutė ir punktų redakcijos - be jo dokumentas liktų nebaigtas.');
+    rodyk(1);
+    return;
+  }
   const neats = Object.entries(window.__K?.grupes||{}).filter(([,g]) => !g.nariai.some(n => ATS[n.raktas] === true));
   if (neats.length){
     alert('Neatsakyta ' + neats.length + ' alternatyvų grupė(-s). Įtraukus dvi viena kitą paneigiančias sąlygas, '

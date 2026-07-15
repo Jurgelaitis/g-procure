@@ -843,8 +843,42 @@ const GPGen = (() => {
     return n;
   }
 
+  /* Titulo tarpas. Kai kuriuose sablonuose (AK_LT) titulo raudonas nurodymas
+     "(irasomas ... pavadinimas) " turi tarpa GALE ir istrynus ji tas tarpas dingsta,
+     tad gaunasi "...kVpirkimas". Uztikrinam VIENA tarpa pries "pirkimas"/"PIRKIMUI",
+     jei pries ji nera tarpo. Prependinam tarpa PRIE esamo runo (formatas islieka).
+     ND ir kt., kur tarpas jau yra, NEliecia.                                    */
+  function taisytiTitulTarpa(paras, i){
+    const p = paras[i]; if (!p) return false;
+    const ts = GPDocx.els(p,'t');
+    let prev = '';
+    for (const t of ts){
+      const s = t.textContent;
+      if (!s) continue;
+      if (/^(pirkimas|PIRKIMUI)\b/.test(s) && prev && !/\s$/.test(prev)){
+        t.textContent = ' ' + s; t.setAttribute('xml:space','preserve');
+        return true;
+      }
+      prev = s;
+    }
+    return false;
+  }
+
+  /* Rezimo eilute BE zymos (ND_LT: "Vykdomas    Pasirinkti" - juoda, be skliaustu,
+     zemelapyje jos nera). Ivedam visa eilute is naujo: pirmas runas laiko
+     "Vykdomas " + rezimo tekstas, likusieji istustinami. Formatas islaikomas
+     (visi runai juodi normalus).                                               */
+  function keistiRezimoEilute(paras, i, value){
+    const p = paras[i]; if (!p) return false;
+    const ts = GPDocx.els(p,'t');
+    if (!ts.length) return false;
+    ts[0].textContent = 'Vykdomas ' + value; ts[0].setAttribute('xml:space','preserve');
+    for (let k=1;k<ts.length;k++) ts[k].textContent = '';
+    return true;
+  }
+
   return { snapshot, juodinti, trinti, pildyti, vietos, raudoniRunai, trintiRaudonusRunus,
-           keistiRaudonaTeksta, valytiPastraipuZenklus, taisytiSkliaustus };
+           keistiRaudonaTeksta, keistiRezimoEilute, taisytiTitulTarpa, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
 
 const GPAudit = (() => {
