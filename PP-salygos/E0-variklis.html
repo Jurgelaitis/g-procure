@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<title>PP-salygos - E0 variklio prototipas</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:24px;max-width:1000px;color:#1a2330}
+  h1{font-size:20px} h2{font-size:15px;margin-top:24px}
+  pre{background:#0f1720;color:#d6e2ef;padding:12px;border-radius:8px;overflow:auto;font-size:12px;line-height:1.5}
+  .ok{color:#00a072} .bad{color:#d64545} .warn{color:#c98a00}
+  button{background:#00a072;color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>PP-salygos - E0: .docx variklio prototipas</h1>
+<p>Tikslas: irodyti, kad galima chirurgiskai keisti realu Word sablona (uzpildyti zymas,
+istrinti punktus, isvalyti komentarus) ir Word atidarys faila be klaidu.</p>
+<button id="run">Paleisti E0 testa</button>
+<pre id="log">Laukiama...</pre>
+
+<script src="vendor/jszip.min.js"></script>
+<script>
+/* ==========================================================================
+   GP-DOCX variklis - deterministinis .docx transformavimas narsykleje.
+   Jokio AI. Jokio teksto generavimo. Tik operacijos su originaliu sablonu.
+   ========================================================================== */
+const GPDocx = (() => {
+  const NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const NS_CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  const NS_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+  // Rysio tipai, kuriuos laikome "komentaru seima" - visi salinami kartu.
+  const COMMENT_REL_TYPES = ['/comments','/commentsExtended','/commentsIds','/people'];
+
+  const ser = new XMLSerializer();
+  const parseXml = (s) => {
+    const d = new DOMParser().parseFromString(s, 'application/xml');
+    const err = d.getElementsByTagName('parsererror')[0];
+    if (err) throw new Error('XML parse: ' + err.textContent.slice(0,200));
+    return d;
+  };
+
+  async function open(arrayBuffer){
+    // createFolders:false - JSZip kitu atveju iterptu kataloginius irasus ("word/"),
+    // kuriu originaliame Word faile nera ir kuriems nera Content_Types irašo.
+    const zip = await JSZip.loadAsync(arrayBuffer, { createFolders:false });
+    const doc = { zip, parts:{}, log:[] };
+    doc.parts['word/document.xml'] = parseXml(await zip.file('word/document.xml').async('string'));
+    return doc;
+  }
+  async function part(doc, path){
+    if (doc.parts[path]) return doc.parts[path];
+    const f = doc.zip.file(path);
+    if (!f) return null;
+    doc.parts[path] = parseXml(await f.async('string'));
+    return doc.parts[path];
+  }
+  const els = (root, name) => Array.from(root.getElementsByTagNameNS(NS_W, name));
+  const paraText = (p) => els(p,'t').map(t => t.textContent).join('');
+  const note = (doc, msg) => doc.log.push(msg);
+
+  /* ---------- 1. KOMENTARU SALINIMAS -------------------------------------
+     Word komentaras gyvena 5 vietose: comments.xml (+Extended/Ids/people),
+     document.xml inkarai, comments.xml.rels, document.xml.rels, [Content_Types].
+     Palikus bent viena - Word skelbia faila sugadintu. Salinam visas.        */
+  async function stripComments(doc){
+    const d = doc.parts['word/document.xml'];
+    let n = 0;
+    for (const tag of ['commentRangeStart','commentRangeEnd']){
+      for (const el of els(d, tag)){ el.parentNode.removeChild(el); n++; }
+    }
+    // commentReference visada gyvena run'e, kuriame nera teksto -> trinam visa run'a
+    for (const ref of els(d,'commentReference')){
+      const run = ref.parentNode;
+      const isBareRun = run.localName === 'r' && els(run,'t').length === 0;
+      (isBareRun ? run : ref).parentNode.removeChild(isBareRun ? run : ref);
+      n++;
+    }
+    // rysiai
+    const relsPath = 'word/_rels/document.xml.rels';
+    const rels = await part(doc, relsPath);
+    if (rels){
+      for (const r of Array.from(rels.getElementsByTagNameNS(NS_REL,'Relationship'))){
+        if (COMMENT_REL_TYPES.some(t => r.getAttribute('Type').endsWith(t)))
+          r.parentNode.removeChild(r);
+      }
+    }
+    // content types
+    const ct = await part(doc, '[Content_Types].xml');
+    const dead = [];
+    if (ct){
+      for (const o of Array.from(ct.getElementsByTagNameNS(NS_CT,'Override'))){
+        const pn = o.getAttribute('PartName') || '';
+        if (/\/word\/(comments|commentsExtended|commentsIds|people)\.xml$/.test(pn)){
+          dead.push(pn.replace(/^\//,''));
+          o.parentNode.removeChild(o);
+        }
+      }
+    }
+    // pacios dalys
+    for (const p of ['word/comments.xml','word/commentsExtended.xml','word/commentsIds.xml',
+                     'word/people.xml','word/_rels/comments.xml.rels', ...dead]){
+      if (doc.zip.file(p)) doc.zip.remove(p);
+    }
+    note(doc, `Komentarai: pasalinta ${n} inkaru + dalys/rysiai/content-types.`);
+    return n;
+  }
+
+  /* ---------- 2. ZYMU UZPILDYMAS ------------------------------------------
+     Word skaido zyma per kelis run'us: "{REFERENCE_" + "3_LT" + ")".
+     Tad dirbam su SUJUNGTU pastraipos tekstu ir tik po to rasom atgal:
+     pakaitalas ideda i pirma persidengianti <w:t> (issaugo jo formatavima),
+     likusios atitikmens raides istrinamos.                                   */
+  const TAG_RE = /\{([A-Z0-9_]+)[\}\)]/g;   // priima ir "}" ir sablono defekta ")"
+
+  function fillTags(doc, values){
+    const d = doc.parts['word/document.xml'];
+    const filled = {}, missing = new Set();
+    for (const p of els(d,'p')){
+      const ts = els(p,'t');
+      if (!ts.length) continue;
+      const s = ts.map(t => t.textContent).join('');
+      if (s.indexOf('{') < 0) continue;
+
+      // char -> jo <w:t> mazgas
+      const owner = [];
+      ts.forEach(t => { for (let i=0;i<t.textContent.length;i++) owner.push(t); });
+
+      const matches = [];
+      TAG_RE.lastIndex = 0;
+      let m;
+      while ((m = TAG_RE.exec(s))){
+        if (!(m[1] in values)) { missing.add(m[1]); continue; }
+        matches.push({ start:m.index, end:m.index+m[0].length, name:m[1] });
+      }
+      if (!matches.length) continue;
+
+      const out = new Map(ts.map(t => [t, '']));
+      let i = 0, mi = 0;
+      while (i < s.length){
+        if (mi < matches.length && i === matches[mi].start){
+          const mt = matches[mi];
+          out.set(owner[i], out.get(owner[i]) + String(values[mt.name]));
+          filled[mt.name] = (filled[mt.name]||0) + 1;
+          i = mt.end; mi++;
+        } else {
+          out.set(owner[i], out.get(owner[i]) + s[i]); i++;
+        }
+      }
+      for (const t of ts){
+        t.textContent = out.get(t);
+        t.setAttribute('xml:space','preserve');
+      }
+    }
+    note(doc, `Zymos: uzpildyta ${Object.keys(filled).length} unikaliu (${Object.values(filled).reduce((a,b)=>a+b,0)} vietu).`
+              + (missing.size ? ` NEPADENGTA: ${[...missing].join(', ')}` : ''));
+    return { filled, missing:[...missing] };
+  }
+
+  /* ---------- 3. PASTRAIPU TRYNIMAS ---------------------------------------
+     Saugikliai:
+     - pastraipa su sectPr (sekcijos formatavimas) NEtrinama - luztu maketas;
+     - paskutine pastraipa lenteles langelyje keiciama tuscia (Word reikalauja
+       bent vienos <w:p> kiekviename <w:tc>);
+     - po trynimo valomi likę be poros bookmark'ai.                            */
+  function deleteParagraphs(doc, predicate){
+    const d = doc.parts['word/document.xml'];
+    const all = els(d,'p');
+    const deleted = [], refused = [];
+    all.forEach((p, idx) => {
+      const txt = paraText(p);
+      if (!predicate(txt, idx, p)) return;
+      if (p.getElementsByTagNameNS(NS_W,'sectPr').length){
+        refused.push({idx, txt: txt.slice(0,50), why:'turi sectPr (sekcijos maketas)'});
+        return;
+      }
+      const tc = p.parentNode;
+      if (tc && tc.localName === 'tc'){
+        const siblings = Array.from(tc.children).filter(c => c.localName === 'p');
+        if (siblings.length === 1){
+          while (p.firstChild) p.removeChild(p.firstChild);   // paliekam tuscia <w:p>
+          deleted.push({idx, txt: txt.slice(0,50), how:'istustinta (vienintele lentelės langelyje)'});
+          return;
+        }
+      }
+      p.parentNode.removeChild(p);
+      deleted.push({idx, txt: txt.slice(0,50), how:'istrinta'});
+    });
+    cleanOrphanBookmarks(d);
+    note(doc, `Pastraipos: istrinta ${deleted.length}` + (refused.length ? `, ATMESTA ${refused.length} (saugiklis)` : ''));
+    return { deleted, refused };
+  }
+
+  function cleanOrphanBookmarks(d){
+    const starts = els(d,'bookmarkStart'), ends = els(d,'bookmarkEnd');
+    const sIds = new Set(starts.map(e => e.getAttributeNS(NS_W,'id')));
+    const eIds = new Set(ends.map(e => e.getAttributeNS(NS_W,'id')));
+    let n = 0;
+    starts.forEach(e => { if (!eIds.has(e.getAttributeNS(NS_W,'id'))) { e.parentNode.removeChild(e); n++; } });
+    ends.forEach(e => { if (!sIds.has(e.getAttributeNS(NS_W,'id'))) { e.parentNode.removeChild(e); n++; } });
+    return n;
+  }
+
+  /* ---------- 4. PAPRASTAS TEKSTO KEITIMAS (pvz. /ĮMONĖS PAVADINIMAS/) ----- */
+  function replaceText(doc, find, repl){
+    const d = doc.parts['word/document.xml'];
+    let n = 0;
+    for (const p of els(d,'p')){
+      const ts = els(p,'t');
+      if (!ts.length) continue;
+      const s = ts.map(t => t.textContent).join('');
+      if (s.indexOf(find) < 0) continue;
+      const owner = [];
+      ts.forEach(t => { for (let i=0;i<t.textContent.length;i++) owner.push(t); });
+      const out = new Map(ts.map(t => [t, '']));
+      let i = 0;
+      while (i < s.length){
+        if (s.startsWith(find, i)){
+          out.set(owner[i], out.get(owner[i]) + repl); i += find.length; n++;
+        } else { out.set(owner[i], out.get(owner[i]) + s[i]); i++; }
+      }
+      for (const t of ts){ t.textContent = out.get(t); t.setAttribute('xml:space','preserve'); }
+    }
+    note(doc, `Tekstas "${find}": pakeista ${n} vietose.`);
+    return n;
+  }
+
+  /* ---------- 5. TURINIO (TOC) ATNAUJINIMAS ------------------------------
+     Istrynus punktus, TOC puslapiai/irasai pasensta. updateFields priverčia
+     Word atnaujinti laukus atidarant faila.                                  */
+  async function setUpdateFields(doc){
+    const s = await part(doc, 'word/settings.xml');
+    if (!s) return false;
+    const root = s.documentElement;
+    if (!els(root,'updateFields').length){
+      const el = s.createElementNS(NS_W, 'w:updateFields');
+      el.setAttributeNS(NS_W, 'w:val', 'true');
+      root.insertBefore(el, root.firstChild);
+    }
+    note(doc, 'settings.xml: ijungtas updateFields (Word atnaujins turini atidarant).');
+    return true;
+  }
+
+  /* ---------- 6. IRASYMAS ------------------------------------------------- */
+  async function save(doc, type='blob'){
+    for (const [path, xml] of Object.entries(doc.parts)){
+      // createFolders:false - kitaip JSZip prideda kataloginius irasus ("word/"),
+      // kuriu Word'o pakuoteje nera ir kuriems nera Content_Types irašo.
+      doc.zip.file(path, ser.serializeToString(xml), { createFolders:false });
+    }
+    return doc.zip.generateAsync({ type, compression:'DEFLATE' });
+  }
+
+  return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText,
+           setUpdateFields, paraText, els, NS_W };
+})();
+
+/* ==========================================================================
+   E0 TESTAS ant realaus sablono
+   ========================================================================== */
+const log = (msg, cls='') => {
+  const el = document.getElementById('log');
+  el.innerHTML += `\n<span class="${cls}">${msg}</span>`;
+};
+
+async function runE0(){
+  document.getElementById('log').textContent = 'E0 startas...';
+  try {
+    // --- A. TPS forma: zymu pildymas (50/60 zymu suskaldytos per run'us) ---
+    log('\n=== A. TPS forma - zymu uzpildymas ===');
+    const buf = await (await fetch('templates/TPS_forma.docx')).arrayBuffer();
+    const doc = await GPDocx.open(buf);
+
+    const before = GPDocx.els(doc.parts['word/document.xml'],'p')
+      .map(p => GPDocx.paraText(p)).join('\n');
+    const tagsBefore = (before.match(/\{REFERENCE_\d+_(LT|EN)[\}\)]/g)||[]).length;
+    log(`Sablone rasta ${tagsBefore} REFERENCE zymu.`);
+
+    const values = {};
+    for (let i=1;i<=23;i++){ values['REFERENCE_'+i+'_LT'] = `[LT-${i}]`; values['REFERENCE_'+i+'_EN'] = `[EN-${i}]`; }
+    const r = GPDocx.fillTags(doc, values);
+
+    const after = GPDocx.els(doc.parts['word/document.xml'],'p')
+      .map(p => GPDocx.paraText(p)).join('\n');
+    const tagsAfter = (after.match(/\{REFERENCE_\d+_(LT|EN)[\}\)]/g)||[]).length;
+    log(`Po pildymo likę neuzpildytu zymu: ${tagsAfter}`, tagsAfter===0?'ok':'bad');
+    log(`Nezinomos zymos sablone: ${r.missing.length? r.missing.join(', '):'nera'}`, r.missing.length?'warn':'ok');
+    window.__E0_TPS = await GPDocx.save(doc, 'base64');
+
+    // --- B. SPS: komentaru valymas + punkto trynimas + imones vardas -------
+    log('\n=== B. SPS (Tarptautines SD LT) - pilna chirurgija ===');
+    const buf2 = await (await fetch('templates/TSD_LT_SPS.docx')).arrayBuffer();
+    const doc2 = await GPDocx.open(buf2);
+    const d2 = doc2.parts['word/document.xml'];
+
+    const numBefore = GPDocx.els(d2,'numPr').length;
+    const pBefore = GPDocx.els(d2,'p').length;
+    log(`Pries: pastraipu ${pBefore}, auto-numeruotu ${numBefore}, komentaru inkaru ${GPDocx.els(d2,'commentRangeStart').length}`);
+
+    await GPDocx.stripComments(doc2);
+
+    // Realus scenarijus: pirkimas NE per centralizuotu pirkimu kataloga ->
+    // atitinkamas pagrindimo punktas dokumente nereikalingas.
+    const del = GPDocx.deleteParagraphs(doc2, (txt) =>
+      txt.includes('centralizuotų pirkimų katalogu pagrindimas'));
+    log(`Istrinta pastraipu: ${del.deleted.length} ${del.deleted.map(x=>'"'+x.txt+'..."').join(' ')}`, del.deleted.length?'ok':'bad');
+    if (del.refused.length) log(`Saugiklis atmete: ${JSON.stringify(del.refused)}`, 'warn');
+
+    GPDocx.replaceText(doc2, '/ĮMONĖS PAVADINIMAS/', 'LITGRID AB');
+    await GPDocx.setUpdateFields(doc2);
+
+    const numAfter = GPDocx.els(d2,'numPr').length;
+    log(`Po: pastraipu ${GPDocx.els(d2,'p').length}, auto-numeruotu ${numAfter} (nepaliesta: ${numAfter===numBefore-del.deleted.filter(x=>x.how==='istrinta').length || numAfter<=numBefore})`);
+    log(`Likę komentaru inkaru: ${GPDocx.els(d2,'commentRangeStart').length + GPDocx.els(d2,'commentReference').length}`,
+        (GPDocx.els(d2,'commentRangeStart').length + GPDocx.els(d2,'commentReference').length)===0?'ok':'bad');
+
+    doc2.log.forEach(l => log('  - ' + l));
+    window.__E0_SPS = await GPDocx.save(doc2, 'base64');
+
+    log('\n=== E0 BAIGTA - failai paruosti validacijai ===', 'ok');
+    window.__E0_DONE = true;
+  } catch(e){
+    log('\nKLAIDA: ' + e.message, 'bad');
+    window.__E0_ERR = e.message;
+  }
+}
+document.getElementById('run').onclick = runE0;
+</script>
+</body>
+</html>
