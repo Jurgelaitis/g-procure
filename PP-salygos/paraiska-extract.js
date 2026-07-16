@@ -210,8 +210,8 @@
     var atsarga = pirmasTelpantis(img, null, KANDIDATAI, biudzetas);
     if (atsarga) return [atsarga];
     throw new Error(
-      "Nuotrauka per detali - netelpa į serverio ribą (" + Math.round(biudzetas / 1024) +
-      " KB) net suspausta ir suskaidyta. Iškirpkite tik kortelės dalį su duomenimis.");
+      "Nuotrauka per didelė analizei net suspausta ir padalinta. " +
+      "Iškirpkite tik tą kortelės dalį, kurioje yra pirkimo duomenys.");
   }
 
   // Bet koks palaikomas failas -> dalys[] (proxy kontraktas - tik PDF).
@@ -230,10 +230,8 @@
         var b64 = bytesToBase64(new Uint8Array(ab));
         if (b64.length > biudzetas)
           throw new Error(
-            "PDF per didelis: " + Math.round(b64.length / 1024) + " KB (serverio riba " +
-            Math.round(biudzetas / 1024) + " KB). PDF naršyklėje suspausti negalima - " +
-            "padarykite kortelės ekrano nuotrauką (PNG/JPG): ji automatiškai suspaudžiama " +
-            "ir, jei reikia, siunčiama dalimis.");
+            "Šis PDF per didelis analizei (" + Math.round(b64.length / 1024) + " KB). " +
+            "Padarykite kortelės ekrano nuotrauką (PNG arba JPG) - ji paruošiama automatiškai.");
         return [{ base64: b64, kb: Math.round(b64.length / 1024), pdf: true, suspausta: false }];
       });
     }
@@ -415,9 +413,11 @@
         reiksme: tinkamas ? kanonas.id : null,
         rodoma: tinkamas ? (kanonas.label + " · " + kanonas.id) : null,
         ok: !!tinkamas,
-        pastaba: tinkamas ? "kanonizuota deterministiškai (GP_METHODS)"
-          : (kanonas ? "būdas „" + kanonas.id + "“ šiame modulyje neturi šablonų"
-                     : "neatpažintas būdo tekstas - pasirinkite rankiniu būdu")
+        // Vartotojui rodoma pastaba - be vidiniu terminu. Kai budas atpazintas,
+        // pastabos isvis nereikia: eilute jau rodo "Korteleje: X -> Bus irasyta: Y".
+        pastaba: tinkamas ? null
+          : (kanonas ? "šiam būdui modulis dar neturi šablonų - pasirinkite kitą arba pildykite ranka"
+                     : "būdo atpažinti nepavyko - pasirinkite jį rankiniu būdu")
       });
     }
 
@@ -498,12 +498,14 @@
       // bet apie nepavykusia PRANESAM (nieko nenutylim).
       if (!laukai.length) throw new Error(klaidos.join("; ") || "AI klaida");
       var s = suliejaLaukus(laukai);
+      // Vartotojui rodomos pastabos - be vidiniu terminu ("fragmentai"): jam
+      // svarbu TIK ka patikrinti ir ar kas nors galejo likti nepasiulyta.
       if (s.konfliktai.length)
-        pastabos.push("Fragmentai nesutaria dėl laukų: " + s.konfliktai.join(", ") +
-                      " - patikrinkite juos ypač atidžiai.");
+        pastabos.push("Šiuos laukus kortelėje pavyko perskaityti nevienareikšmiškai: " +
+                      s.konfliktai.join(", ") + " - patikrinkite juos ypač atidžiai.");
       if (klaidos.length)
-        pastabos.push("Nepavyko " + klaidos.length + " fragment. (" + klaidos.join("; ") +
-                      ") - dalis laukų gali būti nepasiūlyta.");
+        pastabos.push("Dalies kortelės perskaityti nepavyko - kai kurie laukai gali būti nepasiūlyti; " +
+                      "užpildykite juos rankiniu būdu.");
       return { laukai: s.laukai, pastabos: pastabos.join(" "), map: mapFields(s.laukai), failas: dalys };
     });
   }
