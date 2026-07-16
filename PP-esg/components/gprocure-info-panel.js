@@ -3,10 +3,10 @@
  * ----------------------------------------------------------------------------
  * STANDARTINIS, PERKELIAMAS komponentas visiems G-Procure moduliams.
  *
- *  1 lygis — trumpas sutraukiamas blokas modulio viršuje
+ *  1 lygis - trumpas sutraukiamas blokas modulio viršuje
  *            ("Kas tai ir kaip naudotis"): paskirtis, žingsniai, pastaba.
  *            Būsena (atidaryta/suskleista) išsaugoma naršyklėje.
- *  2 lygis — detali instrukcija MODALINIAME lange (tame pačiame faile):
+ *  2 lygis - detali instrukcija MODALINIAME lange (tame pačiame faile):
  *            išsamus paaiškinimas su kontekstu (CSRD/CSDDD), vizuali proceso
  *            schema, sąvokų paaiškinimai su pavyzdžiais ir DUK.
  *
@@ -174,7 +174,7 @@
   var ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
   /* ---------------------------------------------------------------- *
-   *  1 LYGIS — trumpas blokas
+   *  1 LYGIS - trumpas blokas
    * ---------------------------------------------------------------- */
   function render(cfg) {
     injectStyles();
@@ -237,7 +237,7 @@
   }
 
   /* ---------------------------------------------------------------- *
-   *  2 LYGIS — detalus modalinis langas
+   *  2 LYGIS - detalus modalinis langas
    * ---------------------------------------------------------------- */
   function buildModalHtml(c, ui) {
     var d = c.details || {};

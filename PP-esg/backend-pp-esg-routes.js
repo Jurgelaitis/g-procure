@@ -1,5 +1,5 @@
 /* ============================================================================
- * PP-ESG — Backend Express route additions
+ * PP-ESG - Backend Express route additions
  * ----------------------------------------------------------------------------
  * Įterpimo instrukcija / Insertion guide:
  *   1. Šis failas yra Express Router modulis. Įdėk jį šalia esamo serverio,
@@ -14,8 +14,8 @@
  *      Kaip ir kituose moduliuose, raktas lieka tik serveryje.
  *
  * Saugumas / Security (žr. komentarus prie kiekvieno endpoint):
- *   - Įvesties validacija (ribojamas ilgis, tipai) — žemiau `validateBody`.
- *   - Rate limiting — `assessmentLimiter` (express-rate-limit).
+ *   - Įvesties validacija (ribojamas ilgis, tipai) - žemiau `validateBody`.
+ *   - Rate limiting - `assessmentLimiter` (express-rate-limit).
  *   - Jokių vartotojo duomenų nepersiunčiame į logus.
  *   - CORS: leisk tik savo modulių domenus (pritaikyk allowlist žemiau).
  * ==========================================================================*/
@@ -181,12 +181,12 @@ router.get('/supplier/:id/sanctions-status', (req, res) => {
 });
 
 /* ============================================================================
- * 4) GET /api/esg/cvpis-suppliers — automatinis tiekėjų APTIKIMAS iš data.gov.lt
+ * 4) GET /api/esg/cvpis-suppliers - automatinis tiekėjų APTIKIMAS iš data.gov.lt
  *    TIKRI LAUKAI patvirtinti iš gyvų duomenų (Arūnas, 2026-06):
  *      Rinkinys:  gov/vpt/new  ("Pirkimų, vykdytų po 2017-07-01 duomenys")
  *      Atn1 (ataskaitos antraštė):
  *         _id, authority_org_nr (perkančiosios kodas), published_date, title ...
- *      Atn1ContractList (sutartys — turi ir tiekėją, ir vertę!):
+ *      Atn1ContractList (sutartys - turi ir tiekėją, ir vertę!):
  *         atn1._id (nuoroda į ataskaitą), selected_tenderer ("kodas;pavadinimas"),
  *         total_value_of_part, conclusion_date, expiry_date, part_number ...
  *    Spinta sintaksė suderinta su jūsų /api/price: _limit=N, _sort=, select(), filtras laukas="val".
@@ -259,7 +259,7 @@ router.get('/cvpis-suppliers', cvpisLimiter, async (req, res) => {
     try {
       rows = await spinta('Atn1ContractList', { filters: primaryFilters, sort: '-conclusion_date', limit: 5000 });
     } catch (e1) {
-      // jei rūšiavimas pagal šį lauką nepalaikomas — bandom be rūšiavimo
+      // jei rūšiavimas pagal šį lauką nepalaikomas - bandom be rūšiavimo
       try { rows = await spinta('Atn1ContractList', { filters: primaryFilters, limit: 5000 }); }
       catch (e2) { rows = null; }
     }
