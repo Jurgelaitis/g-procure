@@ -31,11 +31,32 @@
   .card .hint{color:var(--color-graphite-50);font-size:13px;margin-bottom:16px}
   h3{font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--color-graphite-50);margin:24px 0 10px}
   .subh{font-size:12.5px;font-weight:700;color:var(--color-graphite);margin:16px 0 7px}
-  /* DocLogix paraiskos ikelimo zona ir siulymu perziura */
-  .pz{border:2px dashed var(--color-graphite-30);border-radius:9px;padding:16px;text-align:center;
+  /* DocLogix paraiskos SPARTINTUVAS - lengva juosta VIRS formos, ne jos kortele.
+     Vizualine gylio logika: kortele = forma, juosta = neprivalomas priedas.     */
+  .pz-juosta{max-width:88%;margin:0 auto;background:var(--color-graphite-5);
+      border:1px dashed var(--color-graphite-30);border-radius:9px;padding:11px 16px 9px}
+  .pz-juosta .cite{font-size:11px}
+  .pz-juosta-t{font-size:12.5px;font-weight:700;color:var(--color-graphite)}
+  .pz-nepriv{font-weight:600;font-size:11px;color:var(--color-graphite-50);margin-left:4px}
+  .pz-arba{display:flex;align-items:center;gap:12px;text-align:center;font-size:12px;
+      color:var(--color-graphite-50);margin:12px 0 18px}
+  .pz-arba::before,.pz-arba::after{content:"";flex:1;border-top:1px solid var(--color-graphite-15)}
+  .pz{border:1.5px dashed var(--color-graphite-30);border-radius:8px;padding:11px 14px;text-align:center;
+      margin-top:8px;font-size:13px;background:var(--color-white);
       cursor:pointer;transition:border-color 180ms ease,background 180ms ease}
   .pz:hover,.pz.drag{border-color:var(--color-emerald);background:var(--color-green-5)}
   .pz b{color:var(--color-emerald-120)}
+  /* AI uzpildyto lauko zyme: nutyla TIK po zmogaus veiksmo (redagavimo arba ✓) */
+  .pz-zyme{display:inline-flex;align-items:center;gap:5px;background:var(--color-green-5);
+      color:var(--color-emerald-120);border:1px solid var(--color-green-15);border-radius:999px;
+      font-size:11px;font-weight:600;padding:1px 4px 1px 9px;margin-left:8px;vertical-align:middle}
+  .pz-zyme button{border:0;background:var(--color-emerald);color:var(--color-white);border-radius:999px;
+      width:17px;height:17px;line-height:17px;font-size:11px;cursor:pointer;padding:0}
+  .pz-zyme button:hover{background:var(--color-emerald-120)}
+  /* Perrasymo ispejimas siulymu sarase: tekstas grafitas, tonas - warning zetonai
+     (pats --color-warning tekstui per silpnas ant balto - zr. brandbook spragos pastaba) */
+  .pz-dabar{background:var(--color-warning-5);border-left:3px solid var(--color-warning);
+      color:var(--color-graphite);font-size:12px;padding:4px 8px;border-radius:4px;margin:4px 0}
   .pz-eile{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--color-graphite-15)}
   .pz-eile:first-child{border-top:none}
   .pz-eile input[type=checkbox]{margin-top:3px}
@@ -104,7 +125,12 @@
     <h2>Kontroliniai klausimai</h2>
     <div class="hint">Šie atsakymai parenka šablonus ir automatiškai išsprendžia dalį jų sąlygų.</div>
 
-    <div class="q"><div class="t">Užpildyti iš DocLogix pirkimo paraiškos <span class="docs"><span class="doc">AI</span></span></div>
+    <!-- Spartintuvas: NE formos dalis, o neprivalomas priedas VIRS jos.
+         Todel ne .q kortele, o lengvesne siauresne juosta (1-V1). -->
+    <div class="pz-juosta">
+      <div class="pz-juosta-t">Spartintuvas: užpildyti iš DocLogix pirkimo paraiškos
+        <span class="docs"><span class="doc">AI</span></span>
+        <span class="pz-nepriv">neprivaloma</span></div>
       <div class="pz" id="pzZona" onclick="document.getElementById('pzFailas').click()">
         Įtempkite arba <b>pasirinkite</b> paraiškos kortelę (PDF, JPG, PNG) - laukai žemiau bus
         užpildyti automatiškai, o jūs juos peržiūrėsite ir patvirtinsite.
@@ -117,6 +143,7 @@
       <div id="pzBusena" class="cite" style="display:none"></div>
       <div id="pzRez" style="display:none"></div>
     </div>
+    <div class="pz-arba">arba pildykite laukus ranka žemiau</div>
 
     <div class="q"><div class="t">Perkantysis subjektas</div>
       <div class="infoline"><b>LITGRID AB</b></div>
@@ -1578,6 +1605,73 @@ $('#budas').addEventListener('change', budasPagalPI);
    siulymu perziura -> pritaikymas i laukus. AI nieko neuzpildo pats.          */
 let PZ_MAP = null;
 let PZ_ABORT = null;
+let PZ_TAIKOMA = false;        // true, kol pzPritaikyti programiskai keicia laukus
+const PZ_RANKA = new Set();    // laukai, kuriuos naudotojas paliete RANKA (select/radio
+                               // visada turi numatytaja reiksme, tad "uzpildyta" = paliesta)
+const PZ_ZYMES = new Map();    // laukas -> nuimti(): zymes "is paraiskos" registras
+
+/* Zymes PRINCIPAS: nutyla TIK po zmogaus veiksmo - lauka pakeitus (input/change)
+   arba paspaudus ✓ (patvirtinu nekeisdamas). Niekada savaime, niekada amzinai.
+   Pries dedant nauja zyme, sena to lauko zyme nuimama (taiso radio grupiu
+   zymiu kaupimosi klaida importuojant kelis kartus).                          */
+function pzUzdekZyme(id){
+  const sena = PZ_ZYMES.get(id);
+  if (sena) sena();
+  let elementai, taikiniai, ev, q;
+  if (id === 'tipas' || id === 'nacsaug'){
+    const radios = [...document.querySelectorAll(`input[name=${id}]`)];
+    const pazymetas = radios.find(r => r.checked);
+    if (!pazymetas) return;
+    radios.forEach(r => r.closest('.opt')?.classList.remove('is-paraiskos'));  // grupes valymas
+    elementai = [pazymetas.closest('.opt')];
+    taikiniai = radios;
+    ev = 'change';
+    q = pazymetas.closest('.q');
+  } else {
+    const el = $('#' + id);
+    if (!el) return;
+    elementai = [el];
+    taikiniai = [el];
+    ev = id === 'budas' ? 'change' : 'input';
+    q = el.closest('.q');
+  }
+  elementai.forEach(e => e && e.classList.add('is-paraiskos'));
+  const chip = document.createElement('span');
+  chip.className = 'pz-zyme';
+  chip.innerHTML = `iš paraiškos <button type="button" title="Patvirtinti reikšmę - žymė nuimama">✓</button>`;
+  q.querySelector('.t').appendChild(chip);
+  const nuimti = () => {
+    elementai.forEach(e => e && e.classList.remove('is-paraiskos'));
+    chip.remove();
+    taikiniai.forEach(t => t.removeEventListener(ev, nuimti));
+    PZ_ZYMES.delete(id);
+  };
+  chip.querySelector('button').onclick = nuimti;
+  taikiniai.forEach(t => t.addEventListener(ev, nuimti));
+  PZ_ZYMES.set(id, nuimti);
+}
+
+/* Dabartine lauko reiksme (palyginimui su siulymu) ir jos rodomas pavidalas. */
+function pzDabartine(id){
+  if (id === 'pavadinimas') return $('#pavadinimas').value.trim();
+  if (id === 'verte')       return $('#verte').value.trim();
+  if (id === 'budas')       return $('#budas').value;
+  return document.querySelector(`input[name=${id}]:checked`)?.value || '';
+}
+function pzDabartineRodoma(id){
+  if (id === 'budas'){ const s = $('#budas'); return s.options[s.selectedIndex]?.text || s.value; }
+  return pzDabartine(id);
+}
+/* Ar siulymas PERRASYTU ranka ivesta/pakeista reiksme? Tekstiniams laukams
+   "uzpildyta" = netuscia; select/radio - tik jei naudotojas juos paliete
+   (numatytoji reiksme nera "uzpildyta ranka").                               */
+function pzPerraso(s){
+  if (!s.ok) return false;
+  const dabar = pzDabartine(s.id);
+  if (s.id === 'pavadinimas') return dabar !== '' && dabar !== s.reiksme;
+  if (s.id === 'verte')       return dabar !== '' && GP_PARAISKA.verteIsTeksto(dabar) !== s.reiksme;
+  return PZ_RANKA.has(s.id) && dabar !== s.reiksme;
+}
 
 function pzBusena(html, rodyti){
   const el = $('#pzBusena');
@@ -1621,11 +1715,15 @@ function pzRodyk(map, pastabos){
     h = '<div class="pz-ne">Kortelėje neatpažinta nė vieno pildomo lauko. Užpildykite rankiniu būdu.</div>';
   } else {
     map.siulymai.forEach((s, i) => {
+      // Perrasymo apsauga (3-V1): jei laukas jau uzpildytas ir reiksme skiriasi,
+      // rodome dabartine ir zymimojo NEpazymime - perrasymas tampa samoningu opt-in.
+      const perraso = pzPerraso(s);
       h += `<div class="pz-eile">
-        <input type="checkbox" id="pz_${i}" ${s.ok ? 'checked' : 'disabled'}>
+        <input type="checkbox" id="pz_${i}" ${s.ok ? (perraso ? '' : 'checked') : 'disabled'}>
         <div style="flex:1">
           <div class="pz-l">${esc(s.laukas)}</div>
           <div class="pz-k">Kortelėje: ${esc(s.kortele)}${s.citata ? ` <span title="${esc(s.citata)}">&#9432;</span>` : ''}</div>
+          ${perraso ? `<div class="pz-dabar">Dabar įrašyta: <b>${esc(pzDabartineRodoma(s.id))}</b> - pažymėję perrašysite</div>` : ''}
           ${s.ok
             ? `<div class="pz-v">Bus įrašyta: <b>${esc(s.rodoma || s.reiksme)}</b>${s.pastaba ? ` <span class="pz-k">(${esc(s.pastaba)})</span>` : ''}</div>`
             : `<div class="pz-ne">${esc(s.pastaba || 'nepavyko atvaizduoti')}</div>`}
@@ -1647,28 +1745,30 @@ function pzRodyk(map, pastabos){
 function pzPritaikyti(){
   if (!PZ_MAP) return;
   const fire = el => { el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };
-  const zymek = el => el && el.classList.add('is-paraiskos');
   let n = 0;
-  PZ_MAP.siulymai.forEach((s, i) => {
-    const cb = $('#pz_' + i);
-    if (!cb || !cb.checked || !s.ok) return;
-    n++;
-    if (s.id === 'budas'){
-      $('#budas').value = s.reiksme; budasPagalPI(); zymek($('#budas'));
-    } else if (s.id === 'pavadinimas'){
-      $('#pavadinimas').value = s.reiksme; pavPreview(); zymek($('#pavadinimas'));
-    } else if (s.id === 'verte'){
-      $('#verte').value = s.reiksme; rezimas(); zymek($('#verte'));
-    } else if (s.id === 'tipas'){
-      const r = document.querySelector(`input[name=tipas][value=${s.reiksme}]`);
-      if (r){ r.checked = true; fire(r); zymek(r.closest('.opt')); }
-    } else if (s.id === 'nacsaug'){
-      const r = document.querySelector(`input[name=nacsaug][value=${s.reiksme}]`);
-      if (r){ r.checked = true; fire(r); zymek(r.closest('.opt')); }
-    }
-  });
-  pzBusena(`<span style="color:var(--color-emerald-120)"><b>Pritaikyta ${n} lauk.</b> Peržiūrėkite žaliai
-    pažymėtus laukus (ypač vertės ir būdo suderinamumo įspėjimą, jei rodomas) ir užpildykite likusius.</span>`);
+  PZ_TAIKOMA = true;   // programiniai ivykiai zemiau nezymi lauku kaip paliestu ranka
+  try {
+    PZ_MAP.siulymai.forEach((s, i) => {
+      const cb = $('#pz_' + i);
+      if (!cb || !cb.checked || !s.ok) return;
+      n++;
+      if (s.id === 'budas'){
+        $('#budas').value = s.reiksme; budasPagalPI();
+      } else if (s.id === 'pavadinimas'){
+        $('#pavadinimas').value = s.reiksme; pavPreview();
+      } else if (s.id === 'verte'){
+        $('#verte').value = s.reiksme; rezimas();
+      } else {
+        const r = document.querySelector(`input[name=${s.id}][value=${s.reiksme}]`);
+        if (!r) return;
+        r.checked = true; fire(r);
+      }
+      pzUzdekZyme(s.id);     // PO reiksmes/ivykiu - kad zymes klausytojai negautu musu pacu ivykio
+    });
+  } finally { PZ_TAIKOMA = false; }
+  pzBusena(`<span style="color:var(--color-emerald-120)"><b>Pritaikyta ${n} lauk.</b> Kiekvienas pažymėtas
+    žyme „iš paraiškos" - ji dings, kai lauką pakeisite arba patvirtinsite ✓. Peržiūrėkite juos
+    (ypač vertės ir būdo suderinamumo įspėjimą, jei rodomas) ir užpildykite likusius.</span>`);
   $('#pzRez').style.display = 'none';
 }
 
@@ -1678,6 +1778,13 @@ function pzPritaikyti(){
   ['dragover','dragenter'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.add('drag'); }));
   ['dragleave','drop'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove('drag'); }));
   zona.addEventListener('drop', e => pzAnalizuoti(e.dataTransfer.files[0]));
+  // Rankos sekimas perrasymo apsaugai: select/radio visada turi numatytaja
+  // reiksme, tad "uzpildyta ranka" = naudotojo PALIESTA. Programinius ivykius
+  // (pzPritaikyti fire) atskiria PZ_TAIKOMA veliava.
+  $('#budas').addEventListener('change', () => { if (!PZ_TAIKOMA) PZ_RANKA.add('budas'); });
+  ['tipas','nacsaug'].forEach(name =>
+    document.querySelectorAll(`input[name=${name}]`).forEach(r =>
+      r.addEventListener('change', () => { if (!PZ_TAIKOMA) PZ_RANKA.add(name); })));
 })();
 
 /* Numatyta salygu data - siandien. */
