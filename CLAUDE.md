@@ -49,12 +49,14 @@ Naudok mažąsias raides su brūkšneliu. Jei rasi senų variantų (PP-Planing,
 | `pp-market-kpi` | Rinkos rodiklių stebėjimo skydelis (kainos, lead time, rizika, indeksavimas) |
 | `pp-ts` | Techninių specifikacijų asistentas (AI generavimas + auditas) |
 | `pp-qual` | Tiekėjų kvalifikacijos reikalavimų modulis (AI, proporcingumas) |
+| `pp-salygos` | Pirkimo sąlygų generatorius (BPS/SPS/formos iš LITGRID šablonų, deterministinis) |
 | `pp-cost-benefit` | Kaštų ir naudos analizė (didelės vertės pirkimai >= 20 mln. EUR) |
 | `pp-graphs` | Pirkimų grafikų generatorius ir trukmių skaičiuoklė |
 | `pp-protocols` | Pirkimų komisijos sprendimų centras (protokolai, pranešimai, auditas) |
 | `pp-negotiation` | Derybų pasirengimo įrankis (BATNA/ZOPA, MEAT) |
 | `pp-report` | Mažos vertės pirkimo pažymos (Aprašo 1 ir 2 priedai) |
 | `pp-esg` | Centrinis ESG ir atitikties variklis (rizikos registras, sankcijos, ESRS) |
+| `pp-carbon` | Anglies pėdsako skaičiuoklė ir tiekėjo EPD įrankis (viešas) |
 
 Senus / testinius repo (PP-Test, PP-Test-NT, PP-Durations, qskigali) NEįtraukti -
 jie skirti archyvavimui, ne plėtrai.
