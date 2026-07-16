@@ -31,6 +31,19 @@
   .card .hint{color:var(--color-graphite-50);font-size:13px;margin-bottom:16px}
   h3{font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--color-graphite-50);margin:24px 0 10px}
   .subh{font-size:12.5px;font-weight:700;color:var(--color-graphite);margin:16px 0 7px}
+  /* DocLogix paraiskos ikelimo zona ir siulymu perziura */
+  .pz{border:2px dashed var(--color-graphite-30);border-radius:9px;padding:16px;text-align:center;
+      cursor:pointer;transition:border-color 180ms ease,background 180ms ease}
+  .pz:hover,.pz.drag{border-color:var(--color-emerald);background:var(--color-green-5)}
+  .pz b{color:var(--color-emerald-120)}
+  .pz-eile{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--color-graphite-15)}
+  .pz-eile:first-child{border-top:none}
+  .pz-eile input[type=checkbox]{margin-top:3px}
+  .pz-l{font-weight:600;font-size:12.5px}
+  .pz-k{font-size:12px;color:var(--color-graphite-50)}
+  .pz-v{font-size:13px}
+  .pz-ne{color:var(--color-error);font-size:12px}
+  .is-paraiskos{outline:2px solid var(--color-emerald-50);outline-offset:1px;border-radius:4px}
 
   .q{border:1px solid var(--color-graphite-15);border-radius:9px;padding:13px 15px;margin-bottom:9px;background:#fff}
   .q.warn{border-left:4px solid var(--color-warning)}
@@ -90,6 +103,20 @@
   <section class="card" id="step1">
     <h2>Kontroliniai klausimai</h2>
     <div class="hint">Šie atsakymai parenka šablonus ir automatiškai išsprendžia dalį jų sąlygų.</div>
+
+    <div class="q"><div class="t">Užpildyti iš DocLogix pirkimo paraiškos <span class="docs"><span class="doc">AI</span></span></div>
+      <div class="pz" id="pzZona" onclick="document.getElementById('pzFailas').click()">
+        Įtempkite arba <b>pasirinkite</b> paraiškos kortelę (PDF, JPG, PNG) - laukai žemiau bus
+        užpildyti automatiškai, o jūs juos peržiūrėsite ir patvirtinsite.
+        <input type="file" id="pzFailas" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" style="display:none">
+      </div>
+      <div class="cite">Failas analizei siunčiamas per G-Procure serverį (api.g-procure.com, Claude API) -
+        naršyklėje ir serveryje jis nesaugomas. Nesiųskite įslaptintos informacijos. AI tik <b>siūlo</b> -
+        kiekvieną reikšmę patvirtinate jūs, o pirkimo būdas kanonizuojamas deterministiškai
+        (shared/procurement-methods.js), ne AI.</div>
+      <div id="pzBusena" class="cite" style="display:none"></div>
+      <div id="pzRez" style="display:none"></div>
+    </div>
 
     <div class="q"><div class="t">Perkantysis subjektas</div>
       <div class="infoline"><b>LITGRID AB</b></div>
@@ -200,9 +227,11 @@
 
 <script src="../shared/thresholds.js"></script>
 <script src="../shared/procurement-methods.js"></script>
+<script src="../shared/ai-proxy.js"></script>
 <script src="../shared/img/logo-data.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="variklis.js"></script>
+<script src="paraiska-extract.js"></script>
 <script>
 /* ==========================================================================
    Sablonu rinkiniai pagal pirkimo buda ir kalba.
@@ -1543,6 +1572,101 @@ $('#toStep2').onclick = async () => {
   rodyk(2);
 };
 $('#budas').addEventListener('change', budasPagalPI);
+
+/* --- DocLogix paraiskos ikelimas (AI istraukimas + zmogaus patvirtinimas) --
+   Logika: paraiska-extract.js (GP_PARAISKA). Cia tik UI: failas -> analize ->
+   siulymu perziura -> pritaikymas i laukus. AI nieko neuzpildo pats.          */
+let PZ_MAP = null;
+let PZ_ABORT = null;
+
+function pzBusena(html, rodyti){
+  const el = $('#pzBusena');
+  el.style.display = rodyti === false ? 'none' : '';
+  el.innerHTML = html || '';
+}
+
+async function pzAnalizuoti(file){
+  if (!file) return;
+  if (PZ_ABORT) PZ_ABORT.abort();
+  PZ_ABORT = new AbortController();
+  $('#pzRez').style.display = 'none';
+  pzBusena(`Analizuojama <b>${esc(file.name)}</b> (${Math.round(file.size/1024)} KB)...
+    <button class="sec" style="margin-left:8px;padding:2px 10px" onclick="PZ_ABORT.abort()">Atšaukti</button>`);
+  try {
+    const r = await GP_PARAISKA.analizuoti(file, { signal: PZ_ABORT.signal });
+    PZ_MAP = r.map;
+    pzBusena('', false);
+    pzRodyk(r.map, r.pastabos);
+  } catch (e) {
+    const zin = /abort/i.test(String(e && e.name)) ? 'Analizė atšaukta.' : 'Klaida: ' + esc(e.message);
+    pzBusena(`<span style="color:var(--color-error)">${zin}</span>`);
+  }
+}
+
+function pzRodyk(map, pastabos){
+  let h = '';
+  if (!map.siulymai.length){
+    h = '<div class="pz-ne">Kortelėje neatpažinta nė vieno pildomo lauko. Užpildykite rankiniu būdu.</div>';
+  } else {
+    map.siulymai.forEach((s, i) => {
+      h += `<div class="pz-eile">
+        <input type="checkbox" id="pz_${i}" ${s.ok ? 'checked' : 'disabled'}>
+        <div style="flex:1">
+          <div class="pz-l">${esc(s.laukas)}</div>
+          <div class="pz-k">Kortelėje: ${esc(s.kortele)}${s.citata ? ` <span title="${esc(s.citata)}">&#9432;</span>` : ''}</div>
+          ${s.ok
+            ? `<div class="pz-v">Bus įrašyta: <b>${esc(s.rodoma || s.reiksme)}</b>${s.pastaba ? ` <span class="pz-k">(${esc(s.pastaba)})</span>` : ''}</div>`
+            : `<div class="pz-ne">${esc(s.pastaba || 'nepavyko atvaizduoti')}</div>`}
+        </div></div>`;
+    });
+    h += `<div class="actions" style="margin-top:10px">
+      <button onclick="pzPritaikyti()">Pritaikyti pažymėtus</button>
+      <button class="sec" onclick="$('#pzRez').style.display='none';PZ_MAP=null">Atmesti</button></div>`;
+  }
+  if (map.info.length)
+    h += `<div class="cite" style="margin-top:8px"><b>Kiti kortelės duomenys</b> (modulis jų neklausia, bet pravers rengiant):
+      ${map.info.map(x => `${esc(x.laukas)}: <b>${esc(x.reiksme)}</b>`).join(' · ')}</div>`;
+  if (pastabos) h += `<div class="cite">AI pastaba: ${esc(pastabos)}</div>`;
+  const rez = $('#pzRez');
+  rez.innerHTML = h;
+  rez.style.display = '';
+}
+
+function pzPritaikyti(){
+  if (!PZ_MAP) return;
+  const fire = el => { el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };
+  const zymek = el => el && el.classList.add('is-paraiskos');
+  let n = 0;
+  PZ_MAP.siulymai.forEach((s, i) => {
+    const cb = $('#pz_' + i);
+    if (!cb || !cb.checked || !s.ok) return;
+    n++;
+    if (s.id === 'budas'){
+      $('#budas').value = s.reiksme; budasPagalPI(); zymek($('#budas'));
+    } else if (s.id === 'pavadinimas'){
+      $('#pavadinimas').value = s.reiksme; pavPreview(); zymek($('#pavadinimas'));
+    } else if (s.id === 'verte'){
+      $('#verte').value = s.reiksme; rezimas(); zymek($('#verte'));
+    } else if (s.id === 'tipas'){
+      const r = document.querySelector(`input[name=tipas][value=${s.reiksme}]`);
+      if (r){ r.checked = true; fire(r); zymek(r.closest('.opt')); }
+    } else if (s.id === 'nacsaug'){
+      const r = document.querySelector(`input[name=nacsaug][value=${s.reiksme}]`);
+      if (r){ r.checked = true; fire(r); zymek(r.closest('.opt')); }
+    }
+  });
+  pzBusena(`<span style="color:var(--color-emerald-120)"><b>Pritaikyta ${n} lauk.</b> Peržiūrėkite žaliai
+    pažymėtus laukus (ypač vertės ir būdo suderinamumo įspėjimą, jei rodomas) ir užpildykite likusius.</span>`);
+  $('#pzRez').style.display = 'none';
+}
+
+(() => {
+  const zona = $('#pzZona');
+  $('#pzFailas').addEventListener('change', e => { pzAnalizuoti(e.target.files[0]); e.target.value = ''; });
+  ['dragover','dragenter'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove('drag'); }));
+  zona.addEventListener('drop', e => pzAnalizuoti(e.dataTransfer.files[0]));
+})();
 
 /* Numatyta salygu data - siandien. */
 (() => {
