@@ -44,19 +44,19 @@ Naudok mažąsias raides su brūkšneliu. Jei rasi senų variantų (PP-Planing,
 
 | Folder | Paskirtis |
 |---|---|
-| `pp-home` | Portalas / paleidyklė visiems moduliams |
-| `pp-plan` | Metinio pirkimų plano (MPP) analizė ir grupės centralizavimas |
-| `pp-market-kpi` | Rinkos rodiklių stebėjimo skydelis (kainos, lead time, rizika, indeksavimas) |
-| `pp-ts` | Techninių specifikacijų asistentas (AI generavimas + auditas) |
-| `pp-qual` | Tiekėjų kvalifikacijos reikalavimų modulis (AI, proporcingumas) |
-| `pp-salygos` | Pirkimo sąlygų generatorius (BPS/SPS/formos iš LITGRID šablonų, deterministinis) |
-| `pp-cost-benefit` | Kaštų ir naudos analizė (didelės vertės pirkimai >= 20 mln. EUR) |
-| `pp-graphs` | Pirkimų grafikų generatorius ir trukmių skaičiuoklė |
-| `pp-protocols` | Pirkimų komisijos sprendimų centras (protokolai, pranešimai, auditas) |
-| `pp-negotiation` | Derybų pasirengimo įrankis (BATNA/ZOPA, MEAT) |
-| `pp-report` | Mažos vertės pirkimo pažymos (Aprašo 1 ir 2 priedai) |
-| `pp-esg` | Centrinis ESG ir atitikties variklis (rizikos registras, sankcijos, ESRS) |
-| `pp-carbon` | Anglies pėdsako skaičiuoklė ir tiekėjo EPD įrankis (viešas) |
+| `PP-home` | Portalas / paleidyklė visiems moduliams |
+| `PP-plan` | Metinio pirkimų plano (MPP) analizė ir grupės centralizavimas |
+| `PP-market-KPI` | Rinkos rodiklių stebėjimo skydelis (kainos, lead time, rizika, indeksavimas) |
+| `PP-ts` | Techninių specifikacijų asistentas (AI generavimas + auditas) |
+| `PP-qual` | Tiekėjų kvalifikacijos reikalavimų modulis (AI, proporcingumas) |
+| `PP-salygos` | Pirkimo sąlygų generatorius (BPS/SPS/formos iš LITGRID šablonų, deterministinis) |
+| `PP-cost-benefit` | Kaštų ir naudos analizė (didelės vertės pirkimai >= 20 mln. EUR) |
+| `PP-graphs` | Pirkimų grafikų generatorius ir trukmių skaičiuoklė |
+| `PP-protocol` | Pirkimų komisijos sprendimų centras (protokolai, pranešimai, auditas) |
+| `PP-negotiation` | Derybų pasirengimo įrankis (BATNA/ZOPA, MEAT) |
+| `PP-report` | Mažos vertės pirkimo pažymos (Aprašo 1 ir 2 priedai) |
+| `PP-esg` | Centrinis ESG ir atitikties variklis (rizikos registras, sankcijos, ESRS) |
+| `PP-carbon` | Anglies pėdsako skaičiuoklė ir tiekėjo EPD įrankis (viešas) |
 
 Senus / testinius repo (PP-Test, PP-Test-NT, PP-Durations, qskigali) NEįtraukti -
 jie skirti archyvavimui, ne plėtrai.
@@ -109,7 +109,7 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   nuostata (valstybės kritinė infrastruktūra). Nieko nesiųsk į serverį be aiškaus pagrindo.
 - NIEKADA nelaužk localStorage suderinamumo - esami vartotojų duomenys turi išlikti
   po atnaujinimų (jei keiti duomenų struktūrą, pridėk migraciją).
-- ŽINOMA RIZIKA (ne galutinis sprendimas): `pp-protocols` audito žurnalas saugomas
+- ŽINOMA RIZIKA (ne galutinis sprendimas): `PP-protocol` audito žurnalas saugomas
   localStorage, nors PSĮ 103 str. reikalauja 4 metų saugojimo. Tai pažymėta kaip
   būsima migracija į backend'ą - neplėsk priklausomybės nuo localStorage šiam žurnalui.
 
