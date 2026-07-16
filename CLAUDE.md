@@ -8,9 +8,9 @@ Skaitomas automatiškai kiekvienos sesijos pradžioje. Laikyk jį `g-procure/` r
 ## 1. Apie projektą
 
 G-Procure - EPSO-G grupės viešųjų pirkimų skaitmeninių įrankių sistema.
-Kiekvienas modulis yra savarankiškas, vieno failo įrankis (HTML/JS/CSS), padedantis
+Kiekvienas modulis yra savarankiškas įrankis (HTML/JS/CSS, be build žingsnio), padedantis
 pirkimų komandai per visą pirkimo ciklą: planavimas -> techninė specifikacija ->
-kvalifikacija -> grafikai -> komisijos sprendimai -> derybos -> ataskaitos.
+kvalifikacija -> pirkimo sąlygos -> grafikai -> komisijos sprendimai -> derybos -> ataskaitos.
 
 Moduliai kol kas vystomi ir testuojami atskirai, bet gyvena viename repozitoriume
 (monorepo). Bendra logika iškeliama į `shared/`, kad būtų taisoma vieną kartą.
@@ -72,8 +72,10 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 |---|---|
 | `shared/thresholds.js` | VPT vertės ribos (galioja nuo 2026-01-01). Peržiūrimos kas 2 metus - atnaujink TIK čia |
 | `shared/workdays.js` | Darbo dienų skaičiavimas + LR šventės. Pratęsk metus laiku (sena lentelė baigiasi 2030) |
-| `shared/ai-proxy.js` | g-procure backend iškvietimas (Claude API) |
-| `shared/epso-g.css` | Bendri EPSO-G stiliai ir vizualinis identitetas |
+| `shared/procurement-methods.js` | Kanoninis pirkimo būdų klasifikatorius (`GP_METHODS`): 11 pagrindinių būdų, kodai (T-AK, MV-NR...), etiketės ir migracijos adapteriai seniems moduliams. Naudoja 7 moduliai - būdą ar pavadinimą keisk TIK čia |
+| `shared/ai-proxy.js` | g-procure backend iškvietimas (Claude API) + numatytasis AI modelis (`DEFAULT_MODEL`) |
+| `shared/epso-g.css` | EPSO-G prekės ženklo dizaino žetonai (spalvos, `--font-base`, maketas). Prijungtas VISUOSE moduliuose |
+| `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
 
 `shared/` kuriamas palaipsniui. Kai pirmą kartą iškeli bendrą logiką iš modulio -
 sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą logiką naudoja.
@@ -89,7 +91,10 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).
 - **Datos:** skaičiuok darbo dienomis per `shared/workdays.js`, ne kalendorinėmis.
-- **Architektūra:** kol kas vienas `.html` failas per modulį, be build žingsnio.
+- **Architektūra:** be build žingsnio - `.html` atidaromas tiesiai naršyklėje.
+  Paprastas modulis = vienas `.html` (pvz. `PP-qual`, `PP-graphs`). Sudėtingesni turi
+  savo `.js` šalia (`PP-salygos/variklis.js`, `PP-carbon/epd-extract.js`), vendor
+  bibliotekas `vendor/`, duomenis `zemelapiai/` ar `templates/`.
   Nepridėk build įrankių ar framework'ų be aiškaus poreikio ir sutarimo.
 
 ---
@@ -99,7 +104,13 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - AI iškvietimai eina per g-procure backend proxy. API raktas - serverio pusėje.
 - NIEKADA nehardcodink API rakto į HTML.
 - NIEKADA nesiųsk konfidencialių pirkimų duomenų į išorinį / vartotojišką AI.
-- Numatytasis modelis: Claude Sonnet 4.6 (jei keisi - keisk vienoje vietoje, `shared/ai-proxy.js`).
+- Numatytasis modelis naršyklės moduliams - `shared/ai-proxy.js` (`DEFAULT_MODEL`).
+  Keisk TIK ten: moduliai modelio neperduoda, o `PP-ts` (turi vartotojo pasirinkiklį)
+  ima jį kaip atsarginę reikšmę. Pakeitus patikrink ir `PP-ts` pasirinkiklio sąrašą.
+- SERVERIO pusė yra atskira ir `shared/` importuoti negali (kita vykdymo aplinka):
+  `worker/epd-proxy.js` (Cloudflare Worker - viešas PP-carbon EPD proxy) ir
+  `PP-esg/backend-pp-esg-routes.js` turi savo modelio konstantas. Keičiant modelį
+  visai sistemai - nepamiršk ir jų.
 
 ---
 
@@ -147,8 +158,8 @@ Jei nežinai dabartinės normos, pažymėk ir paklausk, neišgalvok.
 
 ## 10. Ko NIEKADA nedaryti
 
-- NIEKADA nehardcodink VPT ribų, straipsnių numerių ar koeficientų į kiekvieną modulį -
-  jie gyvena `shared/` (ar `data/`), kad keistum vieną kartą.
+- NIEKADA nehardcodink VPT ribų, straipsnių numerių, pirkimo būdų ar koeficientų į kiekvieną
+  modulį - jie gyvena `shared/`, kad keistum vieną kartą.
 - NIEKADA nenaudok ilgo brūkšnio „—".
 - NIEKADA neteik teisinio tikslumo iš atminties - tikrink arba klausk.
 - NIEKADA nelaužk localStorage suderinamumo.
