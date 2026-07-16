@@ -4,7 +4,7 @@
 **Pagrindinis failas:** `PP-report.html` (vienas savarankiškas HTML failas)
 **Versija:** 2026-06-11
 **Autorius / užsakovas:** Arūnas (Pirkimų vadovas, LITGRID AB)
-**Platforma:** Bet kuri moderni naršyklė (Chrome, Edge, Firefox, Safari) — be jokio backend ar instaliacijos
+**Platforma:** Bet kuri moderni naršyklė (Chrome, Edge, Firefox, Safari) - be jokio backend ar instaliacijos
 
 ---
 
@@ -12,7 +12,7 @@
 
 Sukurti vieną savarankišką, lengvai platinamą HTML įrankį, kuris radikaliai sumažintų laiką, reikalingą paruošti tinkamai suformatuotas LITGRID AB mažos vertės pirkimų pažymas ir su jomis susijusius pranešimus tiekėjams. Įrankis turi būti naudojamas LITGRID Pirkimų organizatorių ir iniciatorių, jį turi galėti pildyti darbuotojas be techninių žinių, o sugeneruoti dokumentai turi atitikti vidaus tvarkos aprašą ir Lietuvos Respublikos pirkimų įstatymo (PSĮ) reikalavimus.
 
-Įrankis skirtas pakeisti šiuo metu naudojamą procesą, kai pažymos pildomos Word šablonuose ranka — su rizika, kad bus padaryta klaidų formatavime, citavimuose, sumų skaičiavime ar trūks privalomų pranešimų tiekėjams.
+Įrankis skirtas pakeisti šiuo metu naudojamą procesą, kai pažymos pildomos Word šablonuose ranka - su rizika, kad bus padaryta klaidų formatavime, citavimuose, sumų skaičiavime ar trūks privalomų pranešimų tiekėjams.
 
 ---
 
@@ -25,7 +25,7 @@ LITGRID kasdienėje pirkimų veikloje per metus yra parengiama šimtai mažos ve
 3. Atskirai paruošti pranešimus laimėtojui ir nelaimėjusiems tiekėjams.
 4. Užtikrinti, kad tarp pažymos ir pranešimų sumos, citavimas (LITGRID MV aprašo punktas, ne PSĮ 68 str.) ir tiekėjų pavadinimai sutaptų.
 
-Klaidų rizika didelė: nesutampa sumos, klaidingai cituojamas teisės aktas, pamirštama išsiųsti pranešimą, sumos formatuojamos skirtingai (pvz., 34000.25 vs 34 000,25 Eur). Įrankio tikslas — automatizuoti šį procesą, vienu paspaudimu sugeneruoti pažymą + visus pranešimus su garantija, kad duomenys sutampa.
+Klaidų rizika didelė: nesutampa sumos, klaidingai cituojamas teisės aktas, pamirštama išsiųsti pranešimą, sumos formatuojamos skirtingai (pvz., 34000.25 vs 34 000,25 Eur). Įrankio tikslas - automatizuoti šį procesą, vienu paspaudimu sugeneruoti pažymą + visus pranešimus su garantija, kad duomenys sutampa.
 
 ---
 
@@ -38,7 +38,7 @@ Konkrečios procesinės problemos, kurios buvo identifikuotos rengiant įrankį,
 - **Teisinis pagrindas.** Pranešimuose buvo neteisingai cituojamas PSĮ 68 str. (taikomas formaliems pirkimams, ne MV). Įrankis automatiškai įstato LITGRID Mažos vertės pirkimų vykdymo tvarkos aprašo 30.20 p. (skelbiama apklausa) arba 31.9 p. (neskelbiama apklausa).
 - **Pasirašantis asmuo.** Pranešimuose ankščiau buvo nurodomas Grupės vadovas; teisingai turi būti Pirkimo organizatorius. Įrankis tai daro automatiškai.
 - **Tiekėjų suderinimas.** Pirminių ir galutinių pasiūlymų lentelėse tiekėjų sąrašai turi sutapti. Įrankis automatiškai sinchronizuoja galutinius su pirminiais per `data-linked-id` mechanizmą.
-- **Pirkimo skaidymas į dalis.** Sudėtingiausias atvejis — kai pirkimas skaidomas į kelias objekto dalis. Anksčiau visi pasiūlymai būdavo vienoje lentelėje ir reikėjo žodžiais paaiškinti, kuri eilutė kuriai daliai priklauso. Įrankis automatiškai grupuoja UI ir Word dokumentą į atskirus sub-blokus kiekvienai daliai (pirminiai, galutiniai, kvalifikacija, sutarties kaina, sprendimai, pranešimai).
+- **Pirkimo skaidymas į dalis.** Sudėtingiausias atvejis - kai pirkimas skaidomas į kelias objekto dalis. Anksčiau visi pasiūlymai būdavo vienoje lentelėje ir reikėjo žodžiais paaiškinti, kuri eilutė kuriai daliai priklauso. Įrankis automatiškai grupuoja UI ir Word dokumentą į atskirus sub-blokus kiekvienai daliai (pirminiai, galutiniai, kvalifikacija, sutarties kaina, sprendimai, pranešimai).
 - **Sutarties kaina.** Buvo įprasta įvesti rankiniu būdu, dažnai netiksliai. Įrankis automatiškai paima pigiausio „Atitinka" pasiūlymą.
 - **Sprendimai (6 sekcija).** Buvo tipinis šabloninis tekstas. Įrankis generuoja sprendimus pagal scenarijų (Sudaroma sutartis / Vienas tiekėjas / Atmesta / Negauta / Nutraukta) ir įstato konkrečius tiekėjų pavadinimus.
 - **Pranešimai tiekėjams.** Buvo rengiami atskirai. Įrankis generuoja juos kartu su pažyma vienu ZIP archyvu, automatiškai parinkdamas pranešimo tipą (winner / lost_atitinka / rejected / all_rejected / terminated) pagal tiekėjo vertinimą.
@@ -48,16 +48,16 @@ Konkrečios procesinės problemos, kurios buvo identifikuotos rengiant įrankį,
 ## 4. Kokios funkcijos jau veikia
 
 ### 4.1 Formos
-- **1 priedas (Iniciatoriaus forma)** — pirkimams 5 000–15 000 Eur be PVM.
-- **2 priedas (Organizatoriaus forma)** — pirkimams virš 15 000 Eur be PVM.
+- **1 priedas (Iniciatoriaus forma)** - pirkimams 5 000–15 000 Eur be PVM.
+- **2 priedas (Organizatoriaus forma)** - pirkimams virš 15 000 Eur be PVM.
 - Automatinis priminimas, jei pasirinkta neteisinga forma pagal įvestą vertę.
-- Iki 5 000 Eur — pažymos nerengiamos (pranešama naudotojui).
+- Iki 5 000 Eur - pažymos nerengiamos (pranešama naudotojui).
 
 ### 4.2 Sekcijos (visiems pirkimams)
 1. Pirkimo objekto informacija (pavadinimas, vertė, dalys, CPO).
 2. Iniciatorius / Organizatorius (kontaktiniai duomenys).
 3. Pirkimo procedūrų reglamentavimas (pirkimo būdas, kriterijus, derybos, kvalifikacija).
-4. Pirkimo procedūrų eiga (pirminiai pasiūlymai, derybos, galutiniai pasiūlymai, nacionalinis saugumas — tik 1 priedas, galimo laimėtojo kvalifikacija — tik 2 priedas).
+4. Pirkimo procedūrų eiga (pirminiai pasiūlymai, derybos, galutiniai pasiūlymai, nacionalinis saugumas - tik 1 priedas, galimo laimėtojo kvalifikacija - tik 2 priedas).
 5. Kita informacija.
 6. Sprendimai (5 scenarijai).
 7. Sutarties nuostatos (kaina, sudarymo būdas, apmokėjimas).
@@ -76,28 +76,28 @@ Kai pasirenkamas `Skaidomas į dalis`, atsiranda dinaminė dalių lentelė. Po j
 ### 4.4 Auto-fill
 - PVM (21%) automatinis skaičiavimas tarp `be PVM` ↔ `su PVM` laukų (top-level, lentelių eilutės, dalių lentelės).
 - Pirkimo būdo → Aprašo punktas mapping.
-- Galutinių pasiūlymų tiekėjai automatiškai perimami iš pirminių (per `data-linked-id`). Kai keičiasi pirminis tiekėjas — atnaujinamas ir galutinis. Kai keičiasi dalys — galutiniai perkeliami į teisingą sub-lentelę.
+- Galutinių pasiūlymų tiekėjai automatiškai perimami iš pirminių (per `data-linked-id`). Kai keičiasi pirminis tiekėjas - atnaujinamas ir galutinis. Kai keičiasi dalys - galutiniai perkeliami į teisingą sub-lentelę.
 - `Nepateikė galutinio pasiūlymo` žymėjimas → pirminio kainos + vertinimas automatiškai perimami į galutinę eilutę.
 - `Galimas laimėtojas` + kvalifikacijos tiekėjas automatiškai užpildomi pigiausio „Atitinka" tiekėjo vardu (per dalis, kai skaidoma).
-- Pasiūlymų eilė generuojama iš „Atitinka" pasiūlymų pagal kainą didėjančia tvarka. Skaidymo atveju — grupuojama pagal dalis.
+- Pasiūlymų eilė generuojama iš „Atitinka" pasiūlymų pagal kainą didėjančia tvarka. Skaidymo atveju - grupuojama pagal dalis.
 - `Sutarties kaina` (be / su PVM) auto-fill iš pigiausio „Atitinka" pasiūlymo, kai pažymėtas radio „Lygi laimėjusio pasiūlymo kainai".
 
 ### 4.5 Eur formatas
 Visi išvedimai (Word, spausdinimo peržiūra, sprendimai, pasiūlymų eilė, pranešimai) naudoja oficialų LT formatą: `34 000,25 Eur` (per `lt-LT` lokalę).
 
 ### 4.6 Word dokumento generavimas
-- Vienas mygtukas — sugeneruoja pilną pažymą + visus pranešimus tiekėjams vienu ZIP archyvu.
+- Vienas mygtukas - sugeneruoja pilną pažymą + visus pranešimus tiekėjams vienu ZIP archyvu.
 - LITGRID logotipas Word dokumento header'yje (base64-embedded PNG, teisingos proporcijos 70×104 px).
 - Antraštė: „TIEKĖJŲ APKLAUSOS PAŽYMA" + data + Nr. + miestas.
 - Pilna lentelė su 8 sekcijomis ir visomis sub-lentelėmis.
-- Skaidymo atveju — atskiros lentelių grupės kiekvienai daliai su antrašte „1 dalis. [pavadinimas]".
+- Skaidymo atveju - atskiros lentelių grupės kiekvienai daliai su antrašte „1 dalis. [pavadinimas]".
 
 ### 4.7 Pranešimai tiekėjams (ZIP)
 - 5 pranešimo tipai: `winner`, `lost_atitinka`, `rejected`, `all_rejected`, `terminated`.
 - Failo pavadinimas: `Pranesimas_[tiekejas]_[type].docx` arba `Pranesimas_[tiekejas]_[dalis]_[type].docx` skaidymo atveju.
 - Teisinis pagrindas: Aprašo 30.20 arba 31.9 p. (priklausomai nuo pirkimo būdo).
 - Parašas: Pirkimo organizatorius (2 priedas) arba Iniciatorius (1 priedas).
-- Skaidymo atveju — pranešime aiškiai įvardijama, kuriai pirkimo objekto daliai pasiūlymas yra pateiktas; pasiūlymų eilė pranešime apima tik tos dalies tiekėjus; sutarties kaina pranešime — tos dalies kaina.
+- Skaidymo atveju - pranešime aiškiai įvardijama, kuriai pirkimo objekto daliai pasiūlymas yra pateiktas; pasiūlymų eilė pranešime apima tik tos dalies tiekėjus; sutarties kaina pranešime - tos dalies kaina.
 
 ### 4.8 Juodraščiai (localStorage)
 - Pildomi duomenys automatiškai išsaugomi naršyklėje per `localStorage`.
@@ -110,8 +110,8 @@ Visi išvedimai (Word, spausdinimo peržiūra, sprendimai, pasiūlymų eilė, pr
 
 ### 4.10 EPSO-G dizainas
 - Nunito Sans šriftas (Google Fonts).
-- Smaragdas (#00A072) — pagrindinė akcento spalva.
-- Grafitas (#2E3641) — pagrindinis tekstas.
+- Smaragdas (#00A072) - pagrindinė akcento spalva.
+- Grafitas (#2E3641) - pagrindinis tekstas.
 - Subtilūs šviesūs žalsvi fonai dalims.
 - 8 px tarpų sistema.
 - Apvalūs kampai (8–12 px).
@@ -130,18 +130,18 @@ Toliau išvardytos funkcijos, kurios buvo identifikuotos kaip naudingos, bet ši
 
 ### 5.2 Vidutinio prioriteto
 - **Pranešimų el. paštu siuntimas tiesiogiai iš naršyklės** (per `mailto:` arba per integraciją su Outlook / M365).
-- **CPO katalogas** — automatinis pirkimo objekto pažymėjimas pagal pasirinktą produktą.
-- **CVP IS integracija** — automatinis CVP IS pirkimo numerio užpildymas iš LITGRID centrinės sistemos.
+- **CPO katalogas** - automatinis pirkimo objekto pažymėjimas pagal pasirinktą produktą.
+- **CVP IS integracija** - automatinis CVP IS pirkimo numerio užpildymas iš LITGRID centrinės sistemos.
 - **Pagal naudotojo profilį užpildyti iniciatoriaus / organizatoriaus laukus**. Šiuo metu jie pildomi rankomis kiekvienam pirkimui.
-- **Šablonų valdymas** — galimybė išsaugoti dažnai naudojamą pirkimo struktūrą kaip šabloną (pvz., „Programinė įranga", „Konsultacijos") ir paleisti naują pažymą iš jo.
+- **Šablonų valdymas** - galimybė išsaugoti dažnai naudojamą pirkimo struktūrą kaip šabloną (pvz., „Programinė įranga", „Konsultacijos") ir paleisti naują pažymą iš jo.
 - **Eksportas / importas JSON**. Šiuo metu juodraščiai gyvena tik viename naršyklės profilyje. JSON eksportas / importas leistų perkelti pažymą tarp kompiuterių arba dalintis su kolegomis.
 
 ### 5.3 Žemo prioriteto / būsimas atnaujinimas
 - **Daugiakalbis interfeisas** (EN / LT). Šiuo metu tik LT.
-- **Mobile / planšetė** — nors įrankis veikia ir mažuose ekranuose, sub-lentelės skaidymo atveju gali būti per platos.
-- **Audit log** — kas, kada, kokius duomenis pakeitė. Šiuo metu tik `timestamp` juodraštyje.
-- **Backend** — šiuo metu viskas client-side. Backend leistų matyti komandos darbą realiu laiku, statistiką, archyvavimą serveryje. Bet tai radikalus pakeitimas.
-- **Aprašo punktų atnaujinimas** — jei LITGRID tvarkos aprašas pasikeičia, dabar reikia rankomis pataisyti `APRASO_29_PUNKTAI` masyvą.
+- **Mobile / planšetė** - nors įrankis veikia ir mažuose ekranuose, sub-lentelės skaidymo atveju gali būti per platos.
+- **Audit log** - kas, kada, kokius duomenis pakeitė. Šiuo metu tik `timestamp` juodraštyje.
+- **Backend** - šiuo metu viskas client-side. Backend leistų matyti komandos darbą realiu laiku, statistiką, archyvavimą serveryje. Bet tai radikalus pakeitimas.
+- **Aprašo punktų atnaujinimas** - jei LITGRID tvarkos aprašas pasikeičia, dabar reikia rankomis pataisyti `APRASO_29_PUNKTAI` masyvą.
 - **Integracija su LITGRID dokumentų valdymo sistema** (jei tokia yra).
 
 ---
@@ -152,10 +152,10 @@ Toliau išvardytos funkcijos, kurios buvo identifikuotos kaip naudingos, bet ši
 **Sprendimas:** visi HTML, CSS ir JavaScript yra viename `.html` faile.
 
 **Priežastys:**
-- Lengva platinti — vienas failas, kurį galima išsiųsti el. paštu, įdėti į SharePoint, atsidaryti naršyklėje be jokios instaliacijos.
+- Lengva platinti - vienas failas, kurį galima išsiųsti el. paštu, įdėti į SharePoint, atsidaryti naršyklėje be jokios instaliacijos.
 - Nereikia backend infrastruktūros.
 - Vartotojas (Pirkimų darbuotojas) gauna „prie rankos" įrankį be IT departamento įsikišimo.
-- Lengva versijuoti — pakeitus failą, naujesnė versija paskirstoma kaip atnaujintas failas.
+- Lengva versijuoti - pakeitus failą, naujesnė versija paskirstoma kaip atnaujintas failas.
 
 **Trūkumai:** failas ~210 KB (su embedded logo), bet tai vis tiek mažiau už dauguma šiuolaikinių SPA aplikacijų.
 
@@ -167,7 +167,7 @@ Toliau išvardytos funkcijos, kurios buvo identifikuotos kaip naudingos, bet ši
 - Nereikia serverio.
 - UMD build veikia tiesiogiai naršyklėje be webpack/bundler.
 
-**Trūkumai:** biblioteka ~700 KB, atsisiunčiama iš CDN — reikalingas interneto ryšys pirmą kartą.
+**Trūkumai:** biblioteka ~700 KB, atsisiunčiama iš CDN - reikalingas interneto ryšys pirmą kartą.
 
 ### 6.3 JSZip v3.10.1
 **Sprendimas:** ZIP archyvavimas (pažyma + N pranešimų) client-side.
@@ -184,7 +184,7 @@ Toliau išvardytos funkcijos, kurios buvo identifikuotos kaip naudingos, bet ši
 
 **Priežastys:** įmonės užkardos kartais blokuoja vieną iš CDN. Trys variantai padidina patikimumą.
 
-**Apribojimas:** be interneto biblioteka nepasikraus. Galimas patobulinimas — embed visas bibliotekas tiesiai į HTML failą (failas tampa ~2 MB, bet veikia offline).
+**Apribojimas:** be interneto biblioteka nepasikraus. Galimas patobulinimas - embed visas bibliotekas tiesiai į HTML failą (failas tampa ~2 MB, bet veikia offline).
 
 ### 6.6 localStorage juodraščiams
 **Sprendimas:** Juodraščiai saugomi naršyklėje per `localStorage`.
@@ -197,10 +197,10 @@ Toliau išvardytos funkcijos, kurios buvo identifikuotos kaip naudingos, bet ši
 **Apribojimai:**
 - Juodraščiai gyvena tik konkrečioje naršyklėje, konkrečiame profilyje. Negalima sinchronizuoti tarp įrenginių.
 - Naršyklės valymas (cache) gali ištrinti juodraščius.
-- Limitas ~5–10 MB priklausomai nuo naršyklės — to daugiau nei pakanka pažymoms.
+- Limitas ~5–10 MB priklausomai nuo naršyklės - to daugiau nei pakanka pažymoms.
 
 ### 6.7 EPSO-G dizaino sistema
-**Sprendimas:** Stilius paremtas EPSO-G grupės brandbook'u — Smaragdas (#00A072), Grafitas (#2E3641), Nunito Sans, 8 px tarpų sistema, apvalūs kampai.
+**Sprendimas:** Stilius paremtas EPSO-G grupės brandbook'u - Smaragdas (#00A072), Grafitas (#2E3641), Nunito Sans, 8 px tarpų sistema, apvalūs kampai.
 
 **Priežastys:** įrankis turi atrodyti kaip natūrali LITGRID darbo aplinkos dalis, ne kaip atskira aplikacija. Visi sub-blokai naudoja šviesų žalsvą foną (`--color-green-5`), kad vizualiai išskirtų dalių grupes.
 
@@ -212,17 +212,17 @@ Toliau išvardytos funkcijos, kurios buvo identifikuotos kaip naudingos, bet ši
 ### 6.9 `data-linked-id` mechanizmas
 **Sprendimas:** Kiekviena pirminio pasiūlymo eilutė turi unikalų `data-id`. Galutinio pasiūlymo eilutė turi `data-linked-id`, kuris nurodo, su kuria pirmine eilute ji susijusi.
 
-**Priežastys:** Anksčiau galutiniai pasiūlymai būdavo siejami pagal tiekėjo pavadinimą — tai sukeldavo dublikatus, kai naudotojas pakeisdavo tiekėjo pavadinimą. ID-based susiejimas garantuoja, kad redagavimas neduplikuoja eilučių, ir „Nepateikė galutinio" žymėjimas teisingai surenda susijusią pirminę eilutę net sub-lentelių režime.
+**Priežastys:** Anksčiau galutiniai pasiūlymai būdavo siejami pagal tiekėjo pavadinimą - tai sukeldavo dublikatus, kai naudotojas pakeisdavo tiekėjo pavadinimą. ID-based susiejimas garantuoja, kad redagavimas neduplikuoja eilučių, ir „Nepateikė galutinio" žymėjimas teisingai surenda susijusią pirminę eilutę net sub-lentelių režime.
 
 ### 6.10 Class-based selektoriai sub-lentelėms
-**Sprendimas:** Visos pirminių pasiūlymų lentelės turi klasę `.pasiulymu-tbody`, visos galutinių — `.galutiniai-tbody`. Vienetinė lentelė (kai neskaidoma) turi tą pačią klasę PLUS `id`.
+**Sprendimas:** Visos pirminių pasiūlymų lentelės turi klasę `.pasiulymu-tbody`, visos galutinių - `.galutiniai-tbody`. Vienetinė lentelė (kai neskaidoma) turi tą pačią klasę PLUS `id`.
 
-**Priežastys:** `gatherFormData` ir auto-fill funkcijos veikia tiek vienetinėje, tiek sub-lentelių režime per `document.querySelectorAll('.pasiulymu-tbody')`. Tai supaprastina kodą — nereikia rašyti dviejų versijų.
+**Priežastys:** `gatherFormData` ir auto-fill funkcijos veikia tiek vienetinėje, tiek sub-lentelių režime per `document.querySelectorAll('.pasiulymu-tbody')`. Tai supaprastina kodą - nereikia rašyti dviejų versijų.
 
 ### 6.11 `perDalis` duomenų struktūra
 **Sprendimas:** Be `fields`, `radios` ir `rows`, įrankis turi `perDalis` objektą: `{ "Bandymo paslaugos LT": { galimasLaimetojas, kvalifTiekejas, kvalifVertinimas, kitiVertinimas, kvalifPastabos, sutartiesBePvm, sutartiesSuPvm }, ... }`.
 
-**Priežastys:** Per-dalis laukų (kvalifikacija, sutarties kaina) data-field pavadinimai naudoja suffiksą `__dalisKey` (pvz., `sutartiesBePvm__Bandymo_paslaugos_LT`). `gatherFormData` automatiškai juos suskelia ir sukelia į `perDalis` objektą pagal `data-dalis` atributą. Tai padaro Word generavimą ir pranešimų generavimą paprastesnį — žinome, kur ieškoti per-dalis duomenų.
+**Priežastys:** Per-dalis laukų (kvalifikacija, sutarties kaina) data-field pavadinimai naudoja suffiksą `__dalisKey` (pvz., `sutartiesBePvm__Bandymo_paslaugos_LT`). `gatherFormData` automatiškai juos suskelia ir sukelia į `perDalis` objektą pagal `data-dalis` atributą. Tai padaro Word generavimą ir pranešimų generavimą paprastesnį - žinome, kur ieškoti per-dalis duomenų.
 
 ---
 
@@ -244,11 +244,11 @@ Toliau išvardytos funkcijos, kurios buvo identifikuotos kaip naudingos, bet ši
 
 8. **Pirkimo skaidymas tik 2 priedo formoje.** 1 priedo forma (5 000–15 000 Eur) skaidymo nepalaiko, nes Iniciatorių pažymos paprastai apima nedidelius nesudėtingus pirkimus.
 
-9. **Nepilnas Word stilių palaikymas.** docx.js nepalaiko absoliučiai visų MS Word formatavimo galimybių (pvz., kai kurių tab stop, sudėtingų shading, vertical text). Žinomos lentelių sub-table nuance reikalauja, kad TableCell baigtųsi paragraph'u — tai jau išspręsta `cell()` helper'yje.
+9. **Nepilnas Word stilių palaikymas.** docx.js nepalaiko absoliučiai visų MS Word formatavimo galimybių (pvz., kai kurių tab stop, sudėtingų shading, vertical text). Žinomos lentelių sub-table nuance reikalauja, kad TableCell baigtųsi paragraph'u - tai jau išspręsta `cell()` helper'yje.
 
 10. **Pasiūlymų eilė skaičiuoja tik pagal kainą.** Jei ateityje LITGRID įvestų vertinimo formulę (kaina + kokybė), reikės pertvarkyti `_collectOffersForAuto` ir `autoFillSprendimai`.
 
-11. **Datų formatas.** Įvedimas — HTML date input (priklauso nuo naršyklės kalbos), išvedimas Word'e — „YYYY m. mėnesio_pavadinimas D d." formatu per `formatDocDate` funkciją. Jei reikalingas kitas formatas, pataisyti `formatDocDate`.
+11. **Datų formatas.** Įvedimas - HTML date input (priklauso nuo naršyklės kalbos), išvedimas Word'e - „YYYY m. mėnesio_pavadinimas D d." formatu per `formatDocDate` funkciją. Jei reikalingas kitas formatas, pataisyti `formatDocDate`.
 
 12. **Dalių pavadinimų pakeitimas.** Jei naudotojas pervadina dalį po to, kai jau įvedė pasiūlymus, sub-lentelės gali atsidurti netinkamame kontekste. Sprendžiama tuo, kad restruktūrizavimo metu pirminiai/galutiniai pasiūlymai su nežinoma dalimi nukreipiami į pirmą egzistuojančią dalį (kaip fallback).
 
@@ -265,7 +265,7 @@ Tai pagrindinė informacija reikalinga sklandžiai tęsti darbus.
 </head>
 <body>
   Formos pasirinkimas (1 priedas / 2 priedas)
-  <main id="form-container"> — dinamiškai užpildoma per renderForm()
+  <main id="form-container"> - dinamiškai užpildoma per renderForm()
   Modaliniai langai (juodraščiai, peržiūra)
   <script>
     Visa logika
@@ -335,10 +335,10 @@ Tai pagrindinė informacija reikalinga sklandžiai tęsti darbus.
 - `Nunito Sans` (Google Fonts, weights 300/400/600/700/800)
 
 ### Konstantos
-- `LITGRID_LOGO_BASE64` — embedded PNG logotipas
-- `APRASO_29_PUNKTAI` — pirkimo būdo → Aprašo punkto mapping
-- `PVM_TARIFAS = 0.21` — LT VAT
-- `DRAFTS_KEY = 'litgrid_pirkimo_drafts'` — localStorage raktas
+- `LITGRID_LOGO_BASE64` - embedded PNG logotipas
+- `APRASO_29_PUNKTAI` - pirkimo būdo → Aprašo punkto mapping
+- `PVM_TARIFAS = 0.21` - LT VAT
+- `DRAFTS_KEY = 'litgrid_pirkimo_drafts'` - localStorage raktas
 
 ---
 
@@ -346,28 +346,28 @@ Tai pagrindinė informacija reikalinga sklandžiai tęsti darbus.
 
 Tai mūsų rekomenduojama eilė tolesniems darbams. Eiliškumas grindžiamas naudos / sudėtingumo santykiu ir LITGRID realiomis darbinėmis problemomis.
 
-### P0 — Būtini prieš naudojimą platesnėje grupėje
+### P0 - Būtini prieš naudojimą platesnėje grupėje
 1. **Pilnas End-to-End testas su realiomis LITGRID pažymomis** (3–5 skirtingi atvejai: nedidelis nesudėtingas pirkimas, derybinis, skaidomas, atmesti visi, nutrauktas).
 2. **Naudotojo dokumentacija** (trumpa naudojimo instrukcija LITGRID Pirkimų skyriui).
-3. **Suderinimas su LITGRID Pirkimų tvarkos aprašo eigos punktais** — patikrinti, ar `APRASO_29_PUNKTAI` masyvas pilnas ir teisingas.
+3. **Suderinimas su LITGRID Pirkimų tvarkos aprašo eigos punktais** - patikrinti, ar `APRASO_29_PUNKTAI` masyvas pilnas ir teisingas.
 4. **Patikrinimas su LITGRID juristu**, ar pranešimų formuluotės atitinka įstatymo reikalavimus visiems 5 scenarijams.
 
-### P1 — Pirmieji funkciniai patobulinimai
+### P1 - Pirmieji funkciniai patobulinimai
 5. **JSON eksportas / importas** juodraščiams (perkėlimas tarp kompiuterių, dalijimasis su kolega).
-6. **Pranešimų peržiūra prieš generavimą** — naudotojas mato sąrašą su galimybe pažymėti, kuriuos generuoti.
+6. **Pranešimų peržiūra prieš generavimą** - naudotojas mato sąrašą su galimybe pažymėti, kuriuos generuoti.
 7. **Pakartotinis pranešimų peržiūrinis Word** (tiems atvejams, kai pažyma jau sugeneruota, bet reikia pakeisti tik pranešimą).
 8. **PDF generavimas** (papildomai prie .docx, naudoti `pdf-lib` ar panašų).
-9. **Naudotojo profilio užpildymas** — leisti įvesti savo iniciatoriaus / organizatoriaus duomenis vieną kartą ir juos automatiškai pildyti.
+9. **Naudotojo profilio užpildymas** - leisti įvesti savo iniciatoriaus / organizatoriaus duomenis vieną kartą ir juos automatiškai pildyti.
 
-### P2 — Pajėgumai
+### P2 - Pajėgumai
 10. **Pažymų archyvo importas atgal** (.docx → formos laukai).
-11. **Šablonų valdymas** — išsaugoti dažnai naudojamą pirkimo struktūrą kaip šabloną.
-12. **Spausdinimo peržiūra skaidymo atveju** — patobulinti vizualinį atvaizdavimą.
-13. **Patobulinta dalių pervadinimo logika** — kai naudotojas pervadina dalį, automatiškai atnaujinti susijusių sub-lentelių antraštes ir `perDalis` raktus.
-14. **Klavišų trumpiniai** (Ctrl+S — išsaugoti juodraštį, Ctrl+G — generuoti Word).
+11. **Šablonų valdymas** - išsaugoti dažnai naudojamą pirkimo struktūrą kaip šabloną.
+12. **Spausdinimo peržiūra skaidymo atveju** - patobulinti vizualinį atvaizdavimą.
+13. **Patobulinta dalių pervadinimo logika** - kai naudotojas pervadina dalį, automatiškai atnaujinti susijusių sub-lentelių antraštes ir `perDalis` raktus.
+14. **Klavišų trumpiniai** (Ctrl+S - išsaugoti juodraštį, Ctrl+G - generuoti Word).
 15. **Pataisymai pagal LITGRID darbuotojų feedback'ą** po pirmų realaus naudojimo savaičių.
 
-### P3 — Tolesni žingsniai
+### P3 - Tolesni žingsniai
 16. **Backend integracija** (jei reikia komandinio bendradarbiavimo realiu laiku).
 17. **Integracija su CVP IS** (automatinis CVP IS pirkimo numerio užpildymas, automatinis pranešimo CVP IS sistemoje publikavimas).
 18. **Integracija su el. paštu / Outlook** (pranešimų išsiuntimas tiekėjams iš įrankio).
@@ -385,7 +385,7 @@ Jei naujoje paskyroje norite greitai pradėti dirbti:
 2. Atidarykite PP-report.html naršyklėje (rekomenduojama Chrome arba Edge).
 3. Pasirinkite 1 arba 2 priedo formą.
 4. Užpildykite laukus, pažymėkite skaidymą jei reikia.
-5. Spauskite `Generuoti Word` — gausite ZIP archyvą su pažyma + pranešimais.
+5. Spauskite `Generuoti Word` - gausite ZIP archyvą su pažyma + pranešimais.
 
 Norėdami modifikuoti įrankį:
 - Visa logika viename `<script>` bloke faile.
@@ -393,4 +393,4 @@ Norėdami modifikuoti įrankį:
 - Pakeitimai gali būti testuojami atidarius failą naršyklėje + naudojant DevTools console.
 - Yra parašyti jsdom testai (pvz., `test-subtables.js`, `test-nepateike.js`) kurie demonstruoja key naudotojo srautus. Šie testai gali būti naudojami kaip atspirties taškas regresijos testavimui.
 
-Jei reikia paaiškinti įrankio architektūrą Claude'ui naujoje paskyroje — perskaitykite jam šį `PROJECT_CONTEXT.md` ir nurodykite, kuriame skyriuje (4 / 5 / 7 / 9) yra konkretus klausimas.
+Jei reikia paaiškinti įrankio architektūrą Claude'ui naujoje paskyroje - perskaitykite jam šį `PROJECT_CONTEXT.md` ir nurodykite, kuriame skyriuje (4 / 5 / 7 / 9) yra konkretus klausimas.
