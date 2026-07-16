@@ -1,12 +1,12 @@
 # PP-ESG · CVP IS importo įdiegimas serveryje (žingsnis po žingsnio)
 
-Šios instrukcijos tikslas — kad PP-ESG modulio mygtukas **„Importuoti iš CVP IS"** rodytų realius duomenis, o ne demonstracinį rinkinį. Tam reikia įdiegti naują maršrutą (failą `backend-pp-esg-routes.js`) į jūsų esamą `api.g-procure.com` serverį.
+Šios instrukcijos tikslas - kad PP-ESG modulio mygtukas **„Importuoti iš CVP IS"** rodytų realius duomenis, o ne demonstracinį rinkinį. Tam reikia įdiegti naują maršrutą (failą `backend-pp-esg-routes.js`) į jūsų esamą `api.g-procure.com` serverį.
 
 > **Kodėl to reikia:** GitHub Pages (kur veikia HTML) neturi backend. O `get.data.gov.lt` neleidžia kreiptis tiesiai iš naršyklės (CORS), todėl duomenys turi eiti per jūsų serverį. Kol naujasis maršrutas neįdiegtas, modulis rodo demonstracinius duomenis.
 
 **Prieš pradedant jums reikės:**
 - „Mac" kompiuterio programos **Terminal** (rasite per Spotlight: `Cmd + tarpas`, įrašykite „Terminal").
-- Prisijungimo prie serverio (taip pat, kaip jungėtės/jungiasi diegiant kitus modulius). Serverio adresas: **178.105.219.33**. Naudotojas dažniausiai **root** (jei naudojate kitą — pakeiskite komandose).
+- Prisijungimo prie serverio (taip pat, kaip jungėtės/jungiasi diegiant kitus modulius). Serverio adresas: **178.105.219.33**. Naudotojas dažniausiai **root** (jei naudojate kitą - pakeiskite komandose).
 - Failo `backend-pp-esg-routes.js`, kuris yra jūsų aplanke `Documents/Projects/PP-esg/`.
 
 Visos komandos rašomos Terminale ir patvirtinamos klavišu **Enter**.
@@ -25,8 +25,8 @@ Terminale įrašykite **vieną** komandą (jei naudotojas ne `root`, pakeiskite 
 scp "/Users/aj/Documents/Projects/PP-esg/backend-pp-esg-routes.js" root@178.105.219.33:/var/www/g-procure/
 ```
 
-- Jei paklaus „Are you sure you want to continue connecting" — įrašykite `yes` ir Enter.
-- Jei paklaus slaptažodžio — įveskite serverio slaptažodį (rašant jis nematomas — tai normalu) ir Enter.
+- Jei paklaus „Are you sure you want to continue connecting" - įrašykite `yes` ir Enter.
+- Jei paklaus slaptažodžio - įveskite serverio slaptažodį (rašant jis nematomas - tai normalu) ir Enter.
 - Sėkmės atveju pamatysite eilutę su `100%` (failas nukopijuotas).
 
 ---
@@ -35,7 +35,7 @@ scp "/Users/aj/Documents/Projects/PP-esg/backend-pp-esg-routes.js" root@178.105.
 ```bash
 ssh root@178.105.219.33
 ```
-Įveskite slaptažodį. Prisijungus eilutės pradžia pasikeis (pvz. `root@g-procure-server:~#`) — vadinasi, dabar dirbate serveryje.
+Įveskite slaptažodį. Prisijungus eilutės pradžia pasikeis (pvz. `root@g-procure-server:~#`) - vadinasi, dabar dirbate serveryje.
 
 ---
 
@@ -50,7 +50,7 @@ cd /var/www/g-procure
 ```bash
 npm install express-rate-limit
 ```
-Palaukite, kol baigs (kelios sekundės). *(Šis komponentas riboja užklausų dažnį. Jei diegimas nepavyktų — nieko tragiško, maršrutas veiks ir be jo.)*
+Palaukite, kol baigs (kelios sekundės). *(Šis komponentas riboja užklausų dažnį. Jei diegimas nepavyktų - nieko tragiško, maršrutas veiks ir be jo.)*
 
 ---
 
@@ -89,7 +89,7 @@ Pamatysite lentelę su procesu `g-procure` ir būsena `online`.
 ```bash
 pm2 logs g-procure --lines 30
 ```
-Jei matote `Server running` ir nėra raudonų `Error` eilučių — viskas gerai. Peržiūrėję spauskite `Ctrl + C` (išeisite iš žurnalo, procesas liks veikti).
+Jei matote `Server running` ir nėra raudonų `Error` eilučių - viskas gerai. Peržiūrėję spauskite `Ctrl + C` (išeisite iš žurnalo, procesas liks veikti).
 
 ---
 
