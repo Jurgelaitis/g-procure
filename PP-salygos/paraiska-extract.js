@@ -26,7 +26,8 @@
   "use strict";
 
   var VERSION = "0.2";
-  var MODEL = "claude-sonnet-4-6";
+  // Modelio cia NEnurodom: numatytasis gyvena VIENOJE vietoje -
+  // shared/ai-proxy.js (DEFAULT_MODEL). Zr. CLAUDE.md 6 sk.
   var MAX_TOKENS = 2000;
   var MAX_FAILO_MB = 15;
 
@@ -477,7 +478,6 @@
       return Promise.all(d.map(function (p, i) {
         return root.GP_AI_PROXY.call({
           module: "pp-salygos",
-          model: MODEL,
           maxTokens: MAX_TOKENS,
           system: systemPrompt(),
           userMessage: userText(i + 1, d.length),
