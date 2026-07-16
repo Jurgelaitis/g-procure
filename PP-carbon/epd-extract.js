@@ -32,8 +32,8 @@
 
   var VERSION = "0.1";
 
-  // Modelis AI iskvietimui (pigus ir pakankamas dokumentu istraukimui)
-  var MODEL = "claude-sonnet-4-6";
+  // Modelio cia NEnurodom: numatytasis gyvena VIENOJE vietoje -
+  // shared/ai-proxy.js (DEFAULT_MODEL). Zr. CLAUDE.md 6 sk.
   var MAX_TOKENS = 1500;
 
   // --- 1. UZKLAUSOS KONSTRAVIMAS -------------------------------------------
@@ -244,7 +244,6 @@
 
   root.GP_EPD_EXTRACT = {
     version: VERSION,
-    MODEL: MODEL,
     systemPrompt: systemPrompt,
     userText: userText,
     extractText: extractText,
