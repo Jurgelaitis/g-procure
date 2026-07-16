@@ -4,7 +4,7 @@
 // Standalone naudojimui pakanka tik TS_Asistentas.html failo.
 // Šis failas paliktas tik kaip vaizdinė nuoroda ir gali būti ištrintas.
 //
-// TS Asistentas v2.0 — Litgrid AB
+// TS Asistentas v2.0 - Litgrid AB
 // - Įvestis / Tikrinimas (DOCX, PDF, URL, paste)
 // - Pirkimo konteksto laukai
 // - Hibridinė analizė (taisyklės + Claude AI)
