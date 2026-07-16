@@ -30,6 +30,7 @@
   .card h2{margin:0 0 4px;font-size:16px}
   .card .hint{color:var(--color-graphite-50);font-size:13px;margin-bottom:16px}
   h3{font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--color-graphite-50);margin:24px 0 10px}
+  .subh{font-size:12.5px;font-weight:700;color:var(--color-graphite);margin:16px 0 7px}
 
   .q{border:1px solid var(--color-graphite-15);border-radius:9px;padding:13px 15px;margin-bottom:9px;background:#fff}
   .q.warn{border-left:4px solid var(--color-warning)}
@@ -191,11 +192,6 @@
     <div class="q"><div class="t">Pirkimo sąlygų data</div>
       <input type="date" id="sdata">
       <div class="cite">Įrašoma dokumentų antraštėje (šablono „Pasirinkti datą" vieta). Numatyta - šiandien.</div>
-    </div>
-
-    <div class="q" id="priedaiQ">
-      <div class="t">Bendri priedai</div>
-      <div id="priedaiSar" class="cite">kraunama...</div>
     </div>
 
     <div class="actions">
@@ -608,6 +604,22 @@ const BLANKU_FORMULES = [
     variantai:['Atitinkamos prekės (paslaugos, darbai) CPO LT kataloge nesiūlomos.'],
     pastaba:'PĮ 81 str.: pagrindimas privalomas perkant ne per CPO. Prieš pasirinkdami patikrinkite CPO LT '
       + 'katalogą (žr. šablono autorių pastabą).' },
+  /* Zaliuju reikalavimu atitikimo taisykle (vartotojo pastaba Nr. 2, 2026-07).
+     Variantai - PROJEKTAI pagal sablono autoriu nuoroda i VPT gaires "Aplinkos
+     apsaugos vadybos sistemos": taisykle atsako, KAS turi atitikti reikalavima,
+     kai jis keliamas visai pirkimo sutarciai. Teisine formuluote - ivertinkite
+     pagal konkretu pirkima.                                                  */
+  { re:/^suformuluoti atitikimo taisykle$/,
+    variantai:[
+      'Reikalavimą turi atitikti Tiekėjas. Jei pasiūlymą teikia ūkio subjektų grupė - kiekvienas grupės narys pagal jam tenkančią Sutarties dalį.',
+      'Reikalavimą turi atitikti Tiekėjas ir visi Sutarčiai vykdyti pasitelkiami ūkio subjektai (subtiekėjai) pagal jiems tenkančią Sutarties dalį.' ],
+    pastaba:'Formuluočių PROJEKTAI pagal VPT gaires dėl aplinkos apsaugos vadybos sistemų (ISO 14001, EMAS - '
+      + 'žr. šablono autorių pastabą). Prieš naudodami įvertinkite pirkimo kontekstą.' },
+  { re:/^suformuluoti atitikimo taisykle angliskai$/,
+    variantai:[
+      'The requirement must be met by the Supplier. Where the tender is submitted by a group of economic operators - by each member of the group in respect of its part of the Contract.',
+      'The requirement must be met by the Supplier and all economic entities (subcontractors) engaged in the performance of the Contract, in respect of their part of the Contract.' ],
+    pastaba:'DRAFT (angliškas lietuviškos taisyklės atitikmuo) - suderinkite su pasirinkta lietuviška formuluote.' },
 ];
 
 /* Kvalifikacijos priedu numeriai (pastaba Nr. 9): siulomi pagal iprasta
@@ -765,6 +777,10 @@ function surinktiKlausimus(){
 
     /* --- Rengejo dokumentai: tuscios vietos -------------------------------- */
     const tekstoIdx = new Set((Z.intarpai||[]).filter(n => intarpoKat(n) === 'teksto').map(n => n.i));
+    // Pastraipos, kuriu tuscia vieta turi SAVO UI kanala (formuluote / ivestis).
+    // Ju raudonos pastabos zemiau NEgauna auto-'trinti': kitaip vartotojo irasyta
+    // reiksme dingtu kartu su istrinta pastraipa (vartotojo pastaba Nr. 2).
+    const pildomuIdx = new Set();
     (Z.tuscios||[]).forEach(n => {
       if (isjungta.has(n.i)){ return; }                       // isjungtos sakos laukas (Nr. 7)
       if (tekstoIdx.has(n.i)) return;                         // tvarko formuluotes UI
@@ -792,7 +808,8 @@ function surinktiKlausimus(){
         return;
       }
       const formule = BLANKU_FORMULES.find(f => f.re.test(norm(n.text)));
-      if (formule){                                           // CPO ir pan. (Nr. 6)
+      if (formule){                                           // CPO, atitikimo taisykle ir pan. (Nr. 6)
+        pildomuIdx.add(n.i);
         pridek('formuluotes', 'B|' + raktas, trumpas,
           { tekstas:n.text, tipas:'blank', raktas, variantai:formule.variantai.map(t => ({ tekstas:t })),
             pastaba:formule.pastaba, komentarai:komentaraiTies(Z, n.i), vietos:GPGen.vietos(n.text).length });
@@ -800,12 +817,14 @@ function surinktiKlausimus(){
       }
       const siulymai = priedoNrSiulymai(n);
       if (siulymai){                                          // priedu Nr. (Nr. 9)
+        pildomuIdx.add(n.i);
         dflt('B_' + raktas, siulymai);
         pridek('patikrinti', raktas, trumpas,
           { tekstas:n.text, vietos:siulymai.length,
             pastaba:'Siūloma pagal įprastą LITGRID numeraciją (SPS 1 - paraiškos forma, SPS 2 - EBVPD). Patikrinkite.' });
         return;
       }
+      pildomuIdx.add(n.i);
       pridek('tuscios', raktas, trumpas,
         { tekstas:n.text, vietos:GPGen.vietos(n.text).length, komentarai:komentaraiTies(Z, n.i) });
     });
@@ -879,6 +898,10 @@ function surinktiKlausimus(){
     (Z.raudonosPastabos||[]).forEach(n => {
       if ((Z.blokai||[]).some(b => (b.pasirenkami||[]).includes(n.i))) return;
       if (isjungta.has(n.i)) return;
+      // Tuscia vieta sioje pastraipoje jau turi UI kanala (formuluote / ivestis) -
+      // raudonos pastabos automatikos netaikom, kad neistrintume irasytos reiksmes.
+      // Uzpildyta vieta generuojant pajuodinama, tuscia lieka raudona (auditas pranes).
+      if (pildomuIdx.has(n.i)) return;
       const r = norm(n.text);
       if (REDAKCIJA_INTL.test(r) || REDAKCIJA_SIMP.test(r)){   // punkto redakcija pagal rezima
         const intl = REDAKCIJA_INTL.test(r);
@@ -927,9 +950,17 @@ function surinktiKlausimus(){
         auto(trumpas, n.text.slice(0,60), 'trinama', 'nurodymas rengėjui - dokumente likti negali');
         return;
       }
-      // liko tikros neaiskios vietos - jas klausiame "pastabos" stiliumi
+      // liko tikros neaiskios vietos - jas klausiame "pastabos" stiliumi.
+      // Kontekstas is zemelapio paras (vartotojo pastaba Nr. 3): parodome, kas
+      // dokumente eina PO sios vietos, kad butu aisku, apie kuria dali kalbama.
+      const ktx = [];
+      const PT = Z.paras || {};
+      for (let k = n.i + 1; k <= n.i + 6 && ktx.length < 2; k++){
+        const t = PT[String(k)];
+        if (t && String(t).trim()) ktx.push(String(t));
+      }
       dflt('N_' + r, 'palikti');
-      pridek('tuscios', 'N|' + r, trumpas, { tekstas:n.text, pastabaTipas:true, raktas:r });
+      pridek('tuscios', 'N|' + r, trumpas, { tekstas:n.text, pastabaTipas:true, raktas:r, kontekstas:ktx });
     });
   });
 
@@ -1043,24 +1074,56 @@ function klausimynas(){
     });
   }
 
-  /* 4. SPS priedu sarasas */
+  /* 4. Priedai - failai IR SPS pabaigos sarasas vienoje vietoje (vartotojo
+        pastaba Nr. 1). Registro priedas susiejamas su savo saraso eilute:
+        vienas zymejimas prideda faila ir palieka eilute; atzymejus - failas
+        nededamas, eilute istrinama. Eilutes be failo lieka atskirais zymejimais. */
   const pr = Object.entries(K.priedai);
-  if (pr.length){
-    h += `<h3>Priedų sąrašas dokumento pabaigoje (${pr.length})</h3>
-      <div class="cite" style="margin-bottom:8px">Numatytos reikšmės parinktos pagal 1 žingsnio atsakymus
-      (nacionalinis saugumas, derybų apimtis) - pakeiskite, jei reikia.</div>`;
+  const registras = prieduTinka($('#budas').value);
+  if (pr.length || registras.length){
+    const poros = {};                                  // registro id -> [raktas, q]
+    const laisvosEil = [];
     pr.forEach(([raktas, q]) => {
-      h += `<div class="q"><div class="opts">
-        <label class="opt" style="align-items:flex-start"><input type="checkbox" ${ATS['A_'+raktas]?'checked':''}
-          onchange="uAts('A_${esc(raktas)}',this.checked,false)"><span>${esc(q.tekstas)}</span></label></div>
-        ${zymos(q.dokumentai)}</div>`;
+      const m = PRIEDO_ATITIKMUO.find(a => a.re.test(raktas));
+      if (m && registras.some(p => p.id === m.id) && !poros[m.id]) poros[m.id] = [raktas, q];
+      else laisvosEil.push([raktas, q]);
     });
+    h += `<h3>Priedai (${registras.length + laisvosEil.length})</h3>
+      <div class="cite" style="margin-bottom:8px">Visi priedai vienoje vietoje. Pažymėjus - pridedamas priedo
+      failas ir (kur yra) paliekama jo eilutė SPS pabaigos priedų sąraše; atžymėjus - failas nepridedamas,
+      eilutė ištrinama. Numatytos reikšmės seka 1 žingsnio atsakymus (nacionalinis saugumas, derybų apimtis).</div>`;
+    registras.forEach(p => {
+      const pora = poros[p.id];
+      const checked = !!PRIEDU_PASIRINKIMAS[p.id];
+      if (pora) ATS['A_' + pora[0]] = checked;         // pora visada sinchronizuota
+      h += `<div class="q"><div class="opts">
+        <label class="opt" style="align-items:flex-start"><input type="checkbox" ${checked?'checked':''}
+          onchange="perjunkPrieda('${esc(p.id)}','${esc(pora?pora[0]:'')}',this.checked)">
+          <span><b>${esc(p.pavadinimas)}</b>${p.pastaba?`<div class="cite">${esc(p.pastaba)}</div>`:''}
+          ${pora?`<div class="cite">SPS sąrašo eilutė: ${esc(pora[1].tekstas.slice(0,100))}</div>`:''}</span></label></div>
+        ${pora?zymos(pora[1].dokumentai):''}</div>`;
+    });
+    if (laisvosEil.length){
+      h += `<div class="cite" style="margin:8px 0 6px">Sąrašo eilutės be atskiro failo šiame rinkinyje
+        (dokumentas rengiamas atskirai arba pridedamas jūsų):</div>`;
+      laisvosEil.forEach(([raktas, q]) => {
+        h += `<div class="q"><div class="opts">
+          <label class="opt" style="align-items:flex-start"><input type="checkbox" ${ATS['A_'+raktas]?'checked':''}
+            onchange="uAts('A_${esc(raktas)}',this.checked,false)"><span>${esc(q.tekstas)}</span></label></div>
+          ${zymos(q.dokumentai)}</div>`;
+      });
+    }
   }
 
-  /* 5. Formuluotes (parinktys is sablonu + savo tekstas) */
+  /* 5-7. Irasomos reiksmes: formuluotes, siulomos reiksmes ir pildomos vietos
+        vienoje dalyje (vartotojo pastaba Nr. 1 - giminingi sprendimai greta). */
   const fm = Object.entries(K.formuluotes);
+  const ptN = Object.keys(K.patikrinti).length, tuN = Object.keys(K.tuscios).length;
+  if (fm.length + ptN + tuN){
+    h += `<h3>Įrašomos reikšmės (${fm.length + ptN + tuN})</h3>`;
+  }
   if (fm.length){
-    h += `<h3>Formuluotės (${fm.length})</h3>
+    h += `<div class="subh">Formuluotės (${fm.length})</div>
       <div class="cite" style="margin-bottom:8px">Siūlomos formuluotės paimtos iš pačių LITGRID šablonų nurodymų.
       Galite pasirinkti, įrašyti savo arba palikti sprendimą Word'e.</div>`;
     fm.forEach(([fid, q]) => {
@@ -1092,7 +1155,7 @@ function klausimynas(){
   /* 6. Patikrinkite siulomas reiksmes */
   const pt = Object.entries(K.patikrinti);
   if (pt.length){
-    h += `<h3>Patikrinkite siūlomas reikšmes (${pt.length})</h3>`;
+    h += `<div class="subh">Patikrinkite siūlomas reikšmes (${pt.length})</div>`;
     pt.forEach(([raktas, q]) => {
       h += `<div class="q"><div class="t" style="font-weight:500">${esc(q.tekstas.slice(0,200))}${zymos(q.dokumentai)}</div>`;
       for (let k = 0; k < q.vietos; k++){
@@ -1106,11 +1169,15 @@ function klausimynas(){
   /* 7. Like pildomi laukai ir neaiskios vietos */
   const tu = Object.entries(K.tuscios);
   if (tu.length){
-    h += `<h3>Pildomos vietos (${tu.length})</h3>
-      <div class="cite" style="margin-bottom:8px">Palikus tuščią, žyma lieka dokumente ir apie tai praneša auditas.</div>`;
+    h += `<div class="subh">Pildomos vietos (${tu.length})</div>
+      <div class="cite" style="margin-bottom:8px">Palikus tuščią, žyma lieka dokumente (raudona / su žyma) ir apie tai praneša auditas.</div>`;
     tu.forEach(([raktas, q]) => {
       if (q.pastabaTipas){
+        const ktxH = (q.kontekstas && q.kontekstas.length)
+          ? `<div class="cite">Dokumente toliau: ${q.kontekstas.map(t =>
+              esc(t.length > 140 ? t.slice(0,140) + '...' : t)).join('<br>')}</div>` : '';
         h += `<div class="q"><div class="t" style="font-weight:500">${esc(q.tekstas.slice(0,160))}${zymos(q.dokumentai)}</div>
+          ${ktxH}
           <div class="opts">
             <label class="opt"><input type="radio" name="N_${esc(q.raktas)}" ${ATS['N_'+q.raktas]==='palikti'?'checked':''}
               onchange="uAts('N_${esc(q.raktas)}','palikti',false)"> Palikti (juodai)</label>
@@ -1238,6 +1305,7 @@ async function generuotiViena(d, REZ){
   let pildyta = 0;
   const titulIdx = new Set();                        // titulo pastraipos - tarpui po pildymo
   const tekstoIdx = new Set((Z.intarpai||[]).filter(x => intarpoKat(x) === 'teksto').map(x => x.i));
+  const raudonuIdx = new Set((Z.raudonosPastabos||[]).map(x => x.i));
   (Z.tuscios||[]).forEach(n => {
     if (trinti.has(n.i)) return;
     if (PAV_RE.test(n.text)) titulIdx.add(n.i);
@@ -1248,7 +1316,14 @@ async function generuotiViena(d, REZ){
     if (tekstoIdx.has(n.i)) return;                 // tvarko intarpu logika
     const v = ATS['B_' + tusciaRaktas(n, d.trumpas)];
     if (!v) return;                                  // null = skirtukas, paliekamas
-    if (v.some(x => (x||'').trim())) pildyta += GPGen.pildyti(paras, n.i, v);
+    if (v.some(x => (x||'').trim())){
+      const uzpildyta = GPGen.pildyti(paras, n.i, v);
+      pildyta += uzpildyta;
+      // Uzpildyta vieta raudonoje pastraipoje = isspresta, tekstas juodinamas
+      // (pvz. zaliuju atitikimo taisykle - vartotojo pastaba Nr. 2). Neuzpildyta
+      // lieka raudona, kad butu matoma Word'e ir auditui.
+      if (uzpildyta && raudonuIdx.has(n.i)) juodinti.add(n.i);
+    }
   });
 
   // 6. Raudoni intarpai. Formose - tik konfidencialumo priedo pirkimo aprasas.
@@ -1350,7 +1425,8 @@ function rodykRezultata(rez){
     const a = r.audit;
     const zenklas = a.svarus
       ? `<span style="color:var(--color-emerald);font-weight:600">parengta${r.forma?' (forma)':''}</span>`
-      : `<span style="color:var(--color-warning);font-weight:600">liko ${a.raudonos.length + a.tuscios.length}</span>`;
+      : `<a href="#baigtumas" style="text-decoration:none" title="Neišspręstos vietos, kurias reikės užbaigti Word'e - dokumente jos paliktos raudonai, sąrašas žemiau">
+           <span style="color:var(--color-warning);font-weight:600">spręsti Word'e: ${a.raudonos.length + a.tuscios.length} ↓</span></a>`;
     h += `<tr><td><b>${esc(r.d.pavadinimas)}</b>
         <div class="cite">${r.forma
           ? `tiekėjo pildomos vietos paliktos (${(a.tiekejo||[]).length}) &middot; ištrinta ${r.stats.trinta} &middot; užpildyta ${r.stats.pildyta}`
@@ -1360,7 +1436,7 @@ function rodykRezultata(rez){
   });
   h += `</table><div class="actions"><button id="zip">Atsisiųsti visus (ZIP)</button></div>`;
 
-  h += `<h3>Baigtumo patikra</h3>`;
+  h += `<h3 id="baigtumas">Baigtumo patikra</h3>`;
   const blogi = rez.filter(r => !r.audit.svarus);
   if (!blogi.length){
     h += `<div class="audit ok"><b>Visi dokumentai parengti.</b> Rengėjo dokumentuose neliko raudonų vietų,
@@ -1369,7 +1445,9 @@ function rodykRezultata(rez){
     blogi.forEach(r => {
       const a = r.audit;
       h += `<div class="audit no"><b>${esc(r.d.pavadinimas)}</b> - liko ${a.raudonos.length + a.tuscios.length}
-        neišspręstų vietų. Užbaikite Word'e; nieko nenutylėta:
+        neišspręstų vietų (žr. sąrašą žemiau). Dokumente jos paliktos <b>raudonu tekstu</b>, o neužpildytos - su žyma,
+        todėl Word'e jas rasite pagal raudoną spalvą arba paieška. Kai dokumente nelieka raudono teksto - jis parengtas.
+        Nieko nenutylėta:
         <div class="lst">
           ${a.raudonos.map(x=>`<div><span class="n">raudona</span>${esc(x.text)}</div>`).join('')}
           ${a.tuscios.map(x=>`<div><span class="n">tuščia</span>${esc(x.text)}</div>`).join('')}
@@ -1402,48 +1480,90 @@ function rodyk(n){
   window.scrollTo(0,0);
 }
 
-/* Bendri priedai: registras - duomenys (zemelapiai/priedai.json). Numatytos
-   reiksmes seka kontrolinius klausimus (nac. saugumas, derybu apimtis).      */
+/* Priedu registras (zemelapiai/priedai.json) - TIK duomenys. UI perkelta i
+   2 zingsnio dali "Priedai" (konsoliduota su SPS pabaigos sarasu - vartotojo
+   pastaba Nr. 1).                                                            */
 async function kraukPriedus(){
-  if (!PRIEDAI.length){
-    try { PRIEDAI = (await (await fetch('zemelapiai/priedai.json')).json()).priedai || []; }
-    catch(e){ PRIEDAI = []; }
-  }
-  const budas = $('#budas').value;
-  const tinka = PRIEDAI.filter(p => p.seimos.includes('*') || p.seimos.includes(budas));
-  if (!tinka.length){ $('#priedaiSar').innerHTML = 'Šiam pirkimo būdui bendrų priedų nėra.'; return; }
-  $('#priedaiSar').innerHTML = tinka.map(p => {
-    let numatyta = !!p.numatytas;
-    if (p.id === 'NACSAUGUMAS') numatyta = nacsaugTaip();
-    if (p.id === 'DERYBOS')     numatyta = derybosTaip() && apimtis() !== 'kaina';
-    if (!PRIEDU_TOUCHED.has(p.id)) PRIEDU_PASIRINKIMAS[p.id] = numatyta;
-    return `<label class="opt" style="display:flex;align-items:flex-start;margin-bottom:5px">
-      <input type="checkbox" ${PRIEDU_PASIRINKIMAS[p.id]?'checked':''}
-        onchange="PRIEDU_TOUCHED.add('${esc(p.id)}');PRIEDU_PASIRINKIMAS['${esc(p.id)}']=this.checked">
-      <span><b>${esc(p.pavadinimas)}</b>${p.pastaba?`<div class="cite">${esc(p.pastaba)}</div>`:''}</span></label>`;
-  }).join('');
+  if (PRIEDAI.length) return;
+  try { PRIEDAI = (await (await fetch('zemelapiai/priedai.json')).json()).priedai || []; }
+  catch(e){ PRIEDAI = []; }
 }
+const prieduTinka = budas => PRIEDAI.filter(p => p.seimos.includes('*') || p.seimos.includes(budas));
+function prieduNumatyta(p){
+  if (p.id === 'NACSAUGUMAS') return nacsaugTaip();
+  if (p.id === 'DERYBOS')     return derybosTaip() && apimtis() !== 'kaina';
+  return !!p.numatytas;
+}
+/* Registro priedo atitikmuo SPS pabaigos saraso eiluteje (pagal raktinius
+   zodzius, ne numerius - numeriai skiriasi tarp seimu).                      */
+const PRIEDO_ATITIKMUO = [
+  { id:'NACSAUGUMAS',  re:/nacionalinio saugumo/ },
+  { id:'SUTARTYS',     re:/sutarciu saras/ },
+  { id:'SPECIALISTAI', re:/specialistu saras/ },
+  { id:'SANDORIS',     re:/sandorio salies/ },
+  { id:'DERYBOS',      re:/deretinu salygu/ },
+];
+
+/* Dokumentu rinkinio (pa)krovimas pagal buda, kalba ir priedu pasirinkima.
+   Naudojamas ir pereinant i 2 zingsni, ir perjungiant prieda jame.           */
+async function kraukDokumentus(){
+  const budas = $('#budas').value, kalba = $('input[name=kalba]:checked').value;
+  const rink = SEIMOS[budas]?.[kalba];
+  if (!rink) return { ok:false, budas, kalba };
+  await kraukPriedus();
+  const suParaiska = !!PARAISKA_FIKSUOTA[budas];
+  const baze = rink.filter(f => suParaiska || !TIK_SU_PARAISKA.test(f));
+  // 1 faze: baziniai dokumentai.
+  DOK = [];
+  for (const f of baze){
+    const Z = await (await fetch(`zemelapiai/${f}.json`)).json();
+    const buf = await (await fetch(Z.sablonas)).arrayBuffer();
+    DOK.push({ trumpas:f, pavadinimas:Z.pavadinimas, zemelapis:Z, buf });
+  }
+  // 2 faze: priedu failu numatytosios. Suporuoto priedo failas PAVELDI savo
+  // SPS saraso eilutes numatytaja (dokumentas zada prieda -> failas dedamas
+  // i paketa; tai istaiso ansktesni nenuosekluma, kai eilute likdavo, o failo
+  // pakete nebudavo). Be poros - registro numatytoji.
+  const eiluciuTekstai = DOK.flatMap(d => (d.zemelapis.raudonosPastabos||[])
+    .filter(n => /^\d+\s*priedas/i.test(n.text)).map(n => n.text));
+  prieduTinka(budas).forEach(p => {
+    if (!PRIEDU_TOUCHED.has(p.id)){
+      const m = PRIEDO_ATITIKMUO.find(a => a.id === p.id);
+      const eilute = m && eiluciuTekstai.find(t => m.re.test(norm(t)));
+      PRIEDU_PASIRINKIMAS[p.id] = eilute ? priedoEilutesNumatyta(eilute) : prieduNumatyta(p);
+    }
+    if (PRIEDU_PASIRINKIMAS[p.id]){ const f = p.failai[kalba] || p.failai.LT; if (f) baze.push(f); }
+  });
+  for (const f of baze.slice(DOK.length)){
+    const Z = await (await fetch(`zemelapiai/${f}.json`)).json();
+    const buf = await (await fetch(Z.sablonas)).arrayBuffer();
+    DOK.push({ trumpas:f, pavadinimas:Z.pavadinimas, zemelapis:Z, buf });
+  }
+  return { ok:true };
+}
+
+/* Priedo perjungimas 2 zingsnyje: failas + susieta SPS saraso eilute kartu. */
+let PRIEDU_KRAUNAMA = false;
+window.perjunkPrieda = async (id, eilRaktas, checked) => {
+  if (PRIEDU_KRAUNAMA) return;
+  PRIEDU_KRAUNAMA = true;
+  PRIEDU_TOUCHED.add(id);
+  PRIEDU_PASIRINKIMAS[id] = checked;
+  if (eilRaktas){ TOUCHED.add('A_' + eilRaktas); ATS['A_' + eilRaktas] = checked; }
+  try { await kraukDokumentus(); } finally { PRIEDU_KRAUNAMA = false; }
+  klausimynas();
+};
 
 document.querySelectorAll('input[name=kalba]').forEach(r => r.onchange = () =>
   $('#pavEN').classList.toggle('hid', $('input[name=kalba]:checked').value !== 'LT_EN'));
 
 $('#toStep2').onclick = async () => {
   const budas = $('#budas').value, kalba = $('input[name=kalba]:checked').value;
-  const rink = SEIMOS[budas]?.[kalba];
-  if (!rink){
-    $('#tplInfo').innerHTML = `<span style="color:var(--color-warning)">Ši šeima (${budas} / ${kalba}) dar nekartografuota.</span>`;
-    return;
-  }
-  const suParaiska = !!PARAISKA_FIKSUOTA[budas];
-  const failai = rink.filter(f => suParaiska || !TIK_SU_PARAISKA.test(f));
-  PRIEDAI.filter(p => (p.seimos.includes('*') || p.seimos.includes(budas)) && PRIEDU_PASIRINKIMAS[p.id])
-         .forEach(p => { const f = p.failai[kalba] || p.failai.LT; if (f) failai.push(f); });
   $('#tplInfo').textContent = 'kraunami šablonai...';
-  DOK = [];
-  for (const f of failai){
-    const Z = await (await fetch(`zemelapiai/${f}.json`)).json();
-    const buf = await (await fetch(Z.sablonas)).arrayBuffer();
-    DOK.push({ trumpas:f, pavadinimas:Z.pavadinimas, zemelapis:Z, buf });
+  const kr = await kraukDokumentus();
+  if (!kr.ok){
+    $('#tplInfo').innerHTML = `<span style="color:var(--color-warning)">Ši šeima (${kr.budas} / ${kr.kalba}) dar nekartografuota.</span>`;
+    return;
   }
   $('#tplInfo').textContent = '';
   klausimynas();
