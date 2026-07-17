@@ -972,7 +972,7 @@ const I18N = {
     "epd.confirm": "Patvirtinti ir įrašyti", "epd.reject": "Atmesti", "epd.confirmSel": "Patvirtinti pasirinktą",
     "epd.notfound": "Dokumente A1-A3 reikšmė nerasta.", "epd.ambiguous": "Rasti keli galimi variantai - pasirinkite tinkamą:",
     "epd.error": "Klaida", "epd.fromBadge": "iš EPD",
-    "epd.err.type": "Netinkamas failo tipas - reikia PDF.", "epd.err.size": "Failas per didelis (riba 10 MB).",
+    "epd.err.type": "Netinkamas failo tipas - reikia PDF.", "epd.err.size": "Failas per didelis (riba {mb} MB).",
     "epd.err.read": "Nepavyko perskaityti failo.", "epd.err.lib": "EPD analizės logika neužkrauta (patikrink epd-extract.js).",
     "epd.err.http": "Nepavyko pasiekti AI (klaida {code}) - patikrinkite raktą ir ryšį.",
     "epd.err.network": "Nepavyko pasiekti AI - patikrinkite raktą ir ryšį.", "epd.err.convert": "Nepavyko konvertuoti vienetų.",
@@ -1055,7 +1055,7 @@ const I18N = {
     "epd.confirm": "Confirm and save", "epd.reject": "Reject", "epd.confirmSel": "Confirm selected",
     "epd.notfound": "No A1-A3 value found in the document.", "epd.ambiguous": "Several possible values found - select the right one:",
     "epd.error": "Error", "epd.fromBadge": "from EPD",
-    "epd.err.type": "Invalid file type - PDF required.", "epd.err.size": "File too large (limit 10 MB).",
+    "epd.err.type": "Invalid file type - PDF required.", "epd.err.size": "File too large (limit {mb} MB).",
     "epd.err.read": "Could not read the file.", "epd.err.lib": "EPD analysis logic not loaded (check epd-extract.js).",
     "epd.err.http": "Could not reach AI (error {code}) - check the key and connection.",
     "epd.err.network": "Could not reach AI - check the key and connection.", "epd.err.convert": "Could not convert units.",
@@ -1807,7 +1807,15 @@ function onEpdFile(input) {
   if (st) st.innerHTML = "";
   if (!f) return;
   if (f.type !== "application/pdf") { if (st) st.innerHTML = epdErr(t("epd.err.type")); input.value = ""; return; }
-  if (f.size > 10 * 1024 * 1024) { if (st) st.innerHTML = epdErr(t("epd.err.size")); input.value = ""; return; }
+  // Riba imama is shared/ai-proxy.js: PDF siunciamas base64, o base64 pripucia
+  // 4/3, tad tikrinti reikia NE neapdoroto failo dydzio pries backend'o riba -
+  // kitaip 7,5-10 MB PDF praeitu cia ir zlugtu su nesuprantamu 413.
+  const epdMaxPdf = (window.GP_AI_PROXY && window.GP_AI_PROXY.MAX_PDF_BAITU) || 6 * 1024 * 1024;
+  if (f.size > epdMaxPdf) {
+    if (st) st.innerHTML = epdErr(t("epd.err.size").replace("{mb}", Math.floor(epdMaxPdf / (1024 * 1024))));
+    input.value = "";
+    return;
+  }
   const reader = new FileReader();
   reader.onload = function () {
     const res = String(reader.result || "");
