@@ -39,7 +39,12 @@ lemia, koks įstatymas ir kokios vertės ribos taikomos. Niekada nemaišyk VPĮ 
 
 ## 3. Moduliai (kanoniniai pavadinimai)
 
-Naudok mažąsias raides su brūkšneliu. Jei rasi senų variantų (PP-Planing,
+Lentelėje - katalogų vardai, tokie kaip diske, raidė į raidę. Katalogo vardas kartu yra
+ir gyvas URL (`g-procure.com/PP-protocol/...`), tad pervadinti negalima nesulaužius
+portalo kortelių, „Apie projektą" nuorodų ir išorinių žymių.
+
+Tekste ir commit'uose modulį rašyk mažosiomis su brūkšneliu (`pp-protocol: ...`) -
+tai rašybos konvencija, ne katalogo vardas. Jei rasi senų variantų (PP-Planing,
 "PP-market KPI", PP-negotation), traktuok juos kaip tą patį modulį.
 
 | Folder | Paskirtis |
@@ -116,8 +121,13 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 
 ## 7. Duomenys ir privatumas
 
-- Duomenys saugomi TIK naršyklėje (localStorage). Tai sąmoninga duomenų suverenumo
-  nuostata (valstybės kritinė infrastruktūra). Nieko nesiųsk į serverį be aiškaus pagrindo.
+- Vartotojo duomenys saugomi TIK naršyklėje (localStorage) - jokios serverio duomenų bazės.
+  Tai sąmoninga duomenų suverenumo nuostata (valstybės kritinė infrastruktūra).
+- Dalis modulių nesaugo nieko (`PP-qual`, `PP-salygos`, `PP-graphs`) - rezultatas atsiduria
+  tik atsisiųstame dokumente. Tai irgi tinkama: nesukurk saugojimo be poreikio.
+- Nieko nesiųsk į serverį be aiškaus pagrindo. Šiandien vienintelis toks pagrindas - AI
+  analizė: `PP-carbon`, `PP-qual`, `PP-salygos` ir `PP-ts` siunčia analizuojamą turinį per
+  proxy. Modulio sąsajoje apie tai pasakyk naudotojui aiškiai (žr. `PP-salygos` įkėlimo juostą).
 - NIEKADA nelaužk localStorage suderinamumo - esami vartotojų duomenys turi išlikti
   po atnaujinimų (jei keiti duomenų struktūrą, pridėk migraciją).
 - ŽINOMA RIZIKA (ne galutinis sprendimas): `PP-protocol` audito žurnalas saugomas
