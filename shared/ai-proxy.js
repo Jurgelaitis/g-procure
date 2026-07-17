@@ -24,6 +24,26 @@
   var DEFAULT_MODEL     = "claude-sonnet-4-6";
   var DEFAULT_MAX_TOKENS = 4000;
 
+  /* Backend'o UZKLAUSOS KUNO riba (patikrinta gyvai 2026-07-17).
+     Serveryje veikia express.json({ limit: "10mb" }), o pries ji - nginx su
+     client_max_body_size 10m (/etc/nginx/conf.d/upload-limit.conf). Abu
+     sluoksnius reikejo kelti KARTU: nginx numatytieji 1 MB kitaip butu tape
+     naujomis lubomis. Patikrinta: 2 MB uzklausa grazina 200, ne 413.
+
+     MAX_BASE64 laikomas ZEMIAU serverio ribos - i ta pati JSON kuna dar telpa
+     promptas, sistemos zinute ir apvalkalas.
+
+     Skaicius gyvena CIA, o ne moduliuose (CLAUDE.md 4 ir 10 sk.): jis kyla is
+     VIENOS serverio konfiguracijos, tad pasikeitus serveriui taisoma viena
+     vieta. Naudoja pp-salygos (paraiskos kortele) ir pp-carbon (EPD).
+
+     DEMESIO - tai NEGALIOJA serverio pusei ir Cloudflare Worker'iui:
+     worker/epd-proxy.js turi SAVO, nesusijusia riba (jis kreipiasi tiesiai i
+     Anthropic, per nginx/express neina isvis). Zr. CLAUDE.md 6 sk.          */
+  var MAX_BASE64    = 9 * 1024 * 1024;
+  // base64 pripucia 4/3, tad neapdorotas PDF negali virsyti ~3/4 biudzeto.
+  var MAX_PDF_BAITU = Math.floor(MAX_BASE64 * 3 / 4);
+
   // Normalizuoja path: leidziam TIK santykini kelia savo proxy viduje.
   // Jei kas paduoda pilna URL ar host'a - ignoruojam ir imam tik kelio dali,
   // taip klientas negali nurodyti kito host'o.
@@ -188,6 +208,8 @@
     call: call,
     extractText: extractText,
     BASE: PROXY_BASE,
-    MODEL: DEFAULT_MODEL
+    MODEL: DEFAULT_MODEL,
+    MAX_BASE64: MAX_BASE64,
+    MAX_PDF_BAITU: MAX_PDF_BAITU
   };
 })(typeof window !== "undefined" ? window : this);
