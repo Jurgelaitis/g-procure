@@ -78,7 +78,7 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | `shared/thresholds.js` | VPT vertės ribos (galioja nuo 2026-01-01). Peržiūrimos kas 2 metus - atnaujink TIK čia |
 | `shared/workdays.js` | Darbo dienų skaičiavimas + LR šventės. Pratęsk metus laiku (sena lentelė baigiasi 2030) |
 | `shared/procurement-methods.js` | Kanoninis pirkimo būdų klasifikatorius (`GP_METHODS`): 11 pagrindinių būdų, kodai (T-AK, MV-NR...), etiketės ir migracijos adapteriai seniems moduliams. Naudoja 7 moduliai - būdą ar pavadinimą keisk TIK čia |
-| `shared/ai-proxy.js` | g-procure backend iškvietimas (Claude API) + numatytasis AI modelis (`DEFAULT_MODEL`) |
+| `shared/ai-proxy.js` | g-procure backend iškvietimas (Claude API), numatytasis AI modelis (`DEFAULT_MODEL`) ir užklausos kūno riba (`MAX_BASE64`, `MAX_PDF_BAITU`). Ribą naudoja `PP-salygos` ir `PP-carbon` - moduliuose jos NEdubliuok |
 | `shared/epso-g.css` | EPSO-G prekės ženklo dizaino žetonai (spalvos, `--font-base`, maketas). Prijungtas VISUOSE moduliuose |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
 
@@ -112,10 +112,26 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - Numatytasis modelis naršyklės moduliams - `shared/ai-proxy.js` (`DEFAULT_MODEL`).
   Keisk TIK ten: moduliai modelio neperduoda, o `PP-ts` (turi vartotojo pasirinkiklį)
   ima jį kaip atsarginę reikšmę. Pakeitus patikrink ir `PP-ts` pasirinkiklio sąrašą.
+- Užklausos kūno riba naršyklės moduliams - `shared/ai-proxy.js`: `MAX_BASE64` (9 MB)
+  ir `MAX_PDF_BAITU` (3/4 nuo jos, nes base64 pripučia 4/3). Ji atspindi SERVERIO
+  nustatymą, todėl viena be kito nekeičiama.
+- Backend'o kūno riba (nuo 2026-07-17) - 10 MB. Backend'as gyvena NE repozitorijoje
+  (Hetzner, `/var/www/g-procure/index.js`), tad keičiant ribą reikia TRIJŲ vietų:
+  1. `index.js` - `express.json({ limit: '10mb' })`. Be argumento Express tyliai
+     riboja iki 100 KB, ir būtent tai ilgai laužė `PP-carbon` EPD analizę.
+  2. nginx - `/etc/nginx/conf.d/upload-limit.conf`, `client_max_body_size 10m`.
+     BŪTINA kartu su 1 punktu: nginx numatytieji 1 MB kitaip tampa naujomis lubomis.
+  3. `shared/ai-proxy.js` - `MAX_BASE64`, laikoma žemiau serverio ribos (kūne dar
+     telpa promptas ir apvalkalas).
 - SERVERIO pusė yra atskira ir `shared/` importuoti negali (kita vykdymo aplinka):
   `worker/epd-proxy.js` (Cloudflare Worker - viešas PP-carbon EPD proxy) ir
   `PP-esg/backend-pp-esg-routes.js` turi savo modelio konstantas. Keičiant modelį
   visai sistemai - nepamiršk ir jų.
+- Tas pats galioja RIBOMS. `worker/epd-proxy.js` turi savo `MAX_PDF_CHARS`, visiškai
+  nesusijusią su `shared/`: jis kreipiasi tiesiai į Anthropic, per nginx/Express neina.
+  `PP-carbon/epd.html` eina į tą Worker'į, tad ir jo riba imama iš Worker'io, o NE iš
+  `shared/` - net jei skaičius šiandien sutampa. Sujungus juos, backend'o pakeitimas
+  tyliai pakeistų viešo įrankio ribą prieš nepakeistą Worker'į.
 
 ---
 
@@ -168,8 +184,11 @@ Jei nežinai dabartinės normos, pažymėk ir paklausk, neišgalvok.
 
 ## 10. Ko NIEKADA nedaryti
 
-- NIEKADA nehardcodink VPT ribų, straipsnių numerių, pirkimo būdų ar koeficientų į kiekvieną
-  modulį - jie gyvena `shared/`, kad keistum vieną kartą.
+- NIEKADA nehardcodink VPT ribų, straipsnių numerių, pirkimo būdų, koeficientų ar užklausos
+  kūno ribos į kiekvieną modulį - jie gyvena `shared/`, kad keistum vieną kartą.
+- NIEKADA neapeik serverio ribos kliento gudrybėmis (suspaudimu, dokumento skaidymu į dalis).
+  Toks apėjimas jau buvo `PP-salygos` ir kainavo AI tikslumą bei 3 kartus daugiau užklausų -
+  pašalintas 2026-07-17. Riba per maža - kelk ją serveryje, ne slėpk modulyje.
 - NIEKADA nenaudok ilgo brūkšnio „—".
 - NIEKADA neteik teisinio tikslumo iš atminties - tikrink arba klausk.
 - NIEKADA nelaužk localStorage suderinamumo.
