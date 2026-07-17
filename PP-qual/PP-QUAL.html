@@ -611,6 +611,49 @@ PRINCIPAI: reikalavimai turi būti proporcingi, susiję su pirkimo objektu, nedi
 /* ============================================================
    API SLUOKSNIS
    ============================================================ */
+/* ---------- Teksto riba analizei ----------
+   Kiek dokumento teksto keliauja i AI. Tai NE transporto riba: uzklausos kuno
+   riba yra 10 MB (zr. shared/ai-proxy.js MAX_BASE64), tad transportas cia
+   netrukdo. Riba kyla is modelio konteksto lango ir kainos: 120 000 simb.
+   lietuviskai yra ~40-60k zetonu, o Sonnet kontekstas - 200k. Didysis tekstas
+   siunciamas VIENA uzklausa (runFullAudit dirba jau su israiskytais
+   reikalavimais, ne su zaliavu), tad kaina ribota.
+   Issematuota: 120 000 simb. i textarea sudedami per ~0,5 s - vienkartine
+   ikelimo kaina, priimtina.
+
+   KERTINE TAISYKLE: kirpimas NIEKADA nebuna tylus. Textarea rodo TIKSLIAI ta
+   teksta, kuris bus analizuojamas - paslepto antro kirpimo nera. Kai tekstas
+   vis delto nukerpamas, zmogui parodomas ISLIEKANTIS ispejimas (ne toast - jis
+   dingsta, o zmogus turi tai matyti priimdamas sprendima).
+   Kodel tai svarbu: nukirptas dokumento galas reiskia NEPATIKRINTUS
+   kvalifikacinius reikalavimus, o butent ju disproporcinguma (PI 47 str.) sis
+   modulis ir turi pagauti. Tylus kirpimas cia yra teisine rizika, ne
+   patogumo klausimas.                                                        */
+const AI_TEKSTO_RIBA = 120000;
+
+// Grazina { tekstas, nukirpta, viso }. Iskvietejas PRIVALO parodyti ispejima,
+// kai nukirpta === true - tam skirtas rodykKirpima().
+function ribotiTeksta(text){
+  const t = String(text||''), viso = t.length;
+  return viso <= AI_TEKSTO_RIBA
+    ? { tekstas: t, nukirpta: false, viso }
+    : { tekstas: t.slice(0, AI_TEKSTO_RIBA), nukirpta: true, viso };
+}
+
+function rodykKirpima(id, r){
+  const el = $(id);
+  if(!el) return;
+  el.innerHTML = r.nukirpta
+    ? `<div class="warn-block" style="margin-top:12px">
+         <strong>Dokumentas per ilgas - analizuojama tik jo dalis.</strong><br>
+         Įkelta ${r.viso.toLocaleString('lt-LT')} simb., analizei paimti pirmieji
+         ${AI_TEKSTO_RIBA.toLocaleString('lt-LT')}. Likusi dalis <b>nebus patikrinta</b>.
+         Jei joje yra kvalifikacinių reikalavimų, įkelkite tą dokumento dalį atskirai -
+         kitaip jų proporcingumas liks neįvertintas.
+       </div>`
+    : '';
+}
+
 async function callAI(userPrompt, opts={}){
   const sys = opts.system || systemPrompt();
   const maxTokens = opts.maxTokens || 4096;
@@ -804,6 +847,7 @@ function renderStep1(){
     <div class="field" style="margin-top:16px">
       <label>arba įklijuokite TS tekstą</label>
       <textarea id="ts-paste" placeholder="Įklijuokite techninės specifikacijos tekstą..."></textarea>
+      <div id="ts-kirpimas"></div>
     </div>
     <div class="btn-row" style="margin-bottom:var(--space-3)">
       <button class="btn btn-secondary" id="extract-btn" onclick="extractContextFromTs()">Ekstraktuoti kontekstą su AI</button>
@@ -900,9 +944,15 @@ async function handleTsFile(file){
   $('extract-status').textContent='Skaitomas failas...';
   try{
     const text = await extractFileText(file);
-    PPQ.sourceText=text;
-    $('ts-paste').value = text.slice(0,20000);
-    $('extract-status').textContent='Failas perskaitytas ('+text.length+' simb.). Spauskite "Ekstraktuoti kontekstą".';
+    // Textarea gauna TIKSLIAI ta teksta, kuris bus analizuojamas. Anksciau cia
+    // buvo slice(0,20000), o promptas kirpo dar karta iki 14000 - t. y. is
+    // 50 000 simb. dokumento i AI keliaudavo 14 000, ir niekas apie tai
+    // nepranesdavo.
+    const r = ribotiTeksta(text);
+    PPQ.sourceText = r.tekstas;
+    $('ts-paste').value = r.tekstas;
+    $('extract-status').textContent='Failas perskaitytas ('+r.viso.toLocaleString('lt-LT')+' simb.). Spauskite "Ekstraktuoti kontekstą".';
+    rodykKirpima('ts-kirpimas', r);
   }catch(e){
     $('extract-status').textContent='';
     toast('Nepavyko perskaityti failo: '+e.message,true);
@@ -910,8 +960,12 @@ async function handleTsFile(file){
 }
 
 async function extractContextFromTs(){
-  const txt = ($('ts-paste').value||PPQ.sourceText||'').trim();
-  if(!txt){ toast('Įkelkite arba įklijuokite TS tekstą',true); return; }
+  const raw = ($('ts-paste').value||PPQ.sourceText||'').trim();
+  if(!raw){ toast('Įkelkite arba įklijuokite TS tekstą',true); return; }
+  // Ribojam ir cia: tekstas galejo bute ne is failo, o iklijuotas ranka.
+  const r = ribotiTeksta(raw);
+  const txt = r.tekstas;
+  rodykKirpima('ts-kirpimas', r);
   PPQ.sourceText=txt;
   const btn=$('extract-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner-dark spinner"></span> Analizuojama...';
@@ -930,7 +984,7 @@ async function extractContextFromTs(){
 }
 
 TS TEKSTAS:
-"""${txt.slice(0,14000)}"""`;
+"""${ribotiTeksta(txt).tekstas}"""`;
     const resp = await callAI(prompt,{maxTokens:1500});
     const data = smartParseJson(resp);
     if(!data) throw new Error('Nepavyko nuskaityti AI atsakymo.');
@@ -1250,6 +1304,7 @@ function renderAuditInput(){
     <div class="field" style="margin-top:16px">
       <label>arba įklijuokite reikalavimų tekstą</label>
       <textarea id="a-paste" style="min-height:160px" placeholder="Įklijuokite kvalifikacinius reikalavimus (po vieną eilutėje arba ištisinį tekstą)...">${esc(PPQ.sourceText)}</textarea>
+      <div id="aud-kirpimas"></div>
     </div>
     <div class="btn-row">
       <button class="btn btn-secondary" onclick="switchView('home')">Atgal</button>
@@ -1262,14 +1317,23 @@ async function handleAuditFile(file){
   if(!file) return;
   try{
     const text=await extractFileText(file);
-    $('a-paste').value=text.slice(0,20000);
-    toast('Failas perskaitytas');
+    // Anksciau cia buvo slice(0,20000) ir PPQ.sourceText nebuvo nustatomas
+    // ISVIS - nukirpta dalis dingdavo negriztamai, o zmogui parodydavo tik
+    // "Failas perskaitytas", be jokio uzuominos apie prarasta teksta.
+    const r = ribotiTeksta(text);
+    $('a-paste').value = r.tekstas;
+    PPQ.sourceText = r.tekstas;
+    toast('Failas perskaitytas ('+r.viso.toLocaleString('lt-LT')+' simb.)');
+    rodykKirpima('aud-kirpimas', r);
   }catch(e){ toast('Nepavyko: '+e.message,true); }
 }
 
 async function startAudit(){
-  const txt=($('a-paste').value||'').trim();
-  if(!txt){ toast('Įklijuokite reikalavimus',true); return; }
+  const raw=($('a-paste').value||'').trim();
+  if(!raw){ toast('Įklijuokite reikalavimus',true); return; }
+  const r = ribotiTeksta(raw);
+  const txt = r.tekstas;
+  rodykKirpima('aud-kirpimas', r);
   PPQ.procurement.name=$('a-name').value.trim()||PPQ.procurement.name;
   PPQ.procurement.value=parseFloat($('a-value').value)||PPQ.procurement.value;
   PPQ.procurement.valueCat=$('a-valuecat').value;
@@ -1292,7 +1356,7 @@ Grąžink TIK JSON masyvą:
 [{"category":"A|B|C|D|E","text":"reikalavimo tekstas","evidence":"įrodymai jei nurodyta, kitaip tuščia"}]
 
 TEKSTAS:
-"""${txt.slice(0,14000)}"""`;
+"""${ribotiTeksta(txt).tekstas}"""`;
   const resp=await callAI(prompt,{maxTokens:4000});
   let data=smartParseJson(resp);
   if(!data) throw new Error('Nepavyko išskirti reikalavimų.');
