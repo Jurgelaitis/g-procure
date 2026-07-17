@@ -144,6 +144,17 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - Nieko nesiųsk į serverį be aiškaus pagrindo. Šiandien vienintelis toks pagrindas - AI
   analizė: `PP-carbon`, `PP-qual`, `PP-salygos` ir `PP-ts` siunčia analizuojamą turinį per
   proxy. Modulio sąsajoje apie tai pasakyk naudotojui aiškiai (žr. `PP-salygos` įkėlimo juostą).
+- Backend'as to turinio NESAUGO. Patikrinta prie šaltinio 2026-07-17
+  (`/var/www/g-procure/index.js`, 91 eilutė): jokio `writeFile` / `appendFile` /
+  `createWriteStream`, jokios duomenų bazės, o vienintelis `console.log` yra paleidimo
+  pranešimas - užklausos kūnas nelogginamas. Tuo ir remiasi naudotojui rodomas tekstas
+  `PP-SALYGOS.html:139`. Turinys VIS TIEK keliauja į Claude API - tos grandies nuo
+  naudotojo neslėpk.
+- DĖMESIO dėl ankstesnio punkto: backend'as gyvena NE šioje repozitorijoje (Hetzner), tad
+  repo negali pastebėti, jei jis pasikeis - įrašas gali tyliai pasenti. Prieš STIPRINDAMAS
+  bet kokį privatumo teiginį naudotojui, patikrink serveryje iš naujo, o ne remkis šiuo
+  įrašu. Jei patikrinti negali - rašyk tik tai, kas tikrai žinoma (taip `PP-salygos` tekstas
+  kurį laiką sakė tik „naršyklėje nesaugomas", kol serveris nebuvo patikrintas).
 - NIEKADA nelaužk localStorage suderinamumo - esami vartotojų duomenys turi išlikti
   po atnaujinimų (jei keiti duomenų struktūrą, pridėk migraciją).
 - ŽINOMA RIZIKA (ne galutinis sprendimas): `PP-protocol` audito žurnalas saugomas
