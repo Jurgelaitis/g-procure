@@ -25,47 +25,38 @@
 (function (root) {
   "use strict";
 
-  var VERSION = "0.2";
+  var VERSION = "0.3";
   // Modelio cia NEnurodom: numatytasis gyvena VIENOJE vietoje -
   // shared/ai-proxy.js (DEFAULT_MODEL). Zr. CLAUDE.md 6 sk.
   var MAX_TOKENS = 2000;
-  var MAX_FAILO_MB = 15;
+  var MAX_FAILO_MB = 15;         // sveiko proto saugiklis narsykles atminciai
 
-  /* Backend'o kuno riba: /api/analyze naudoja Express numatytaji
-     express.json() limita = 100 KB (nustatyta empiriskai 2026-07-16: 90 KB
-     praeina, 100 KB -> 413 PayloadTooLargeError). Visas JSON kunas (base64 PDF
-     + promptas + apvalkalas) privalo tilpti. Paliekam atsarga apvalkalui.
-     Kai backend'o limitas bus pakeltas (express.json({limit:'10mb'})) -
-     uztenka padidinti BASE64_BIUDZETAS cia.                                  */
-  var BASE64_BIUDZETAS = 88 * 1024;
+  /* Backend'o kuno riba gyvena VIENOJE vietoje - shared/ai-proxy.js
+     (MAX_BASE64, MAX_PDF_BAITU). Cia jos NEDUBLIUOJAM: skaicius kyla is
+     serverio konfiguracijos, o ne is sio modulio. Zr. CLAUDE.md 4 sk.
+     Atsargines reiksmes - tik tam atvejui, jei ai-proxy.js nebutu prijungtas
+     (tada analizuoti() vis tiek suklups anksciau su aiskia klaida).
+
+     ISTORIJA (kad nebutu bandoma "optimizuoti" atgal): iki 2026-07-17 riba
+     buvo 100 KB - express.json() be argumento. Del jos cia gyveno 10 pakopu
+     suspaudimo kopecia ir korteles skaidymas i fragmentus, siunciamus
+     atskiromis uzklausomis, su ju rezultatu suliejimu. Abu apejimai pasalinti:
+     jie kainavo AI tiksluma ir iki 3 kartu daugiau apmokamu uzklausu.        */
+  var BASE64_BIUDZETAS = (root.GP_AI_PROXY && root.GP_AI_PROXY.MAX_BASE64) || 9 * 1024 * 1024;
+  var PDF_MAX_BAITU    = (root.GP_AI_PROXY && root.GP_AI_PROXY.MAX_PDF_BAITU) ||
+                         Math.floor(BASE64_BIUDZETAS * 3 / 4);
 
   /* Suspaudimo kandidatai nuo GERIAUSIO iki blogiausio. Renkamas PIRMAS, kuris
      telpa - dydis MATUOJAMAS tikras, ne spejamas.
-     KOKYBE PIRMA, ne raiska: issematavus tikra DocLogix kortele (1850x972)
-     paaiskejo, kad 1200px/q=0.70 (59 KB) tekstas RYSKESNIS uz 1400px/q=0.50
-     (63 KB) - t. y. ir svaresnis, ir mazesnis. Zemiau q=0.6 JPEG blokiniai
-     artefaktai sulieja smulku sriftą ir AI klysta (patikrinta: q=0.5 duoda
-     "PL5L24126" vietoj "PLSL24126"). Todel pirma mazinam PLOTI islaikydami
-     q>=0.7, ir tik krastutiniu atveju leidziamės iki q=0.6.
-     Pilkinimas duoda tik 1-2 KB - nenaudojam.                                */
+     Prie 9 MB biudzeto pirmas kandidatas telpa VISADA (iprasta DocLogix
+     kortele 1850x972 ties q=0.92 uzima ~200 KB), tad likusieji yra tik atsarga
+     milziniskiems ekranams. Zemiau q=0.6 JPEG artefaktai sulieja smulku srifta
+     ir AI klysta (issematuota: q=0.5 duoda "PL5L24126" vietoj "PLSL24126") -
+     todel tokiu pakopu cia SAMONINGAI nebera. Geriau aiski klaida nei tyliai
+     blogai perskaityta kortele.                                              */
   var KANDIDATAI = [
-    { plotis: 1850, q: 0.75 }, { plotis: 1600, q: 0.72 }, { plotis: 1400, q: 0.70 },
-    { plotis: 1300, q: 0.70 }, { plotis: 1200, q: 0.70 }, { plotis: 1100, q: 0.70 },
-    { plotis: 1000, q: 0.70 }, { plotis: 900,  q: 0.70 }, { plotis: 900,  q: 0.60 },
-    { plotis: 800,  q: 0.60 }
+    { plotis: 1850, q: 0.92 }, { plotis: 1850, q: 0.75 }, { plotis: 1400, q: 0.70 }
   ];
-
-  /* Kai VISA kortele netelpa gera kokybe - skaidom i dalis ir siunciam
-     ATSKIROMIS uzklausomis (kiekviena telpa i 100 KB), o rezultatus suliejam.
-     Taip islaikoma beveik originali raiska nekeiciant backend'o.
-     PERSIDENGIMAS butinas: be jo eilute ties riba butu perkirsta pusiau.      */
-  var VISOS_KOKYBE  = [{ plotis: 1850, q: 0.75 }, { plotis: 1600, q: 0.72 }];  // 1 uzklausa - tik gera kokybe
-  var DALIU_KANDIDATAI = [
-    { plotis: 1850, q: 0.75 }, { plotis: 1850, q: 0.68 }, { plotis: 1600, q: 0.72 },
-    { plotis: 1600, q: 0.65 }, { plotis: 1400, q: 0.70 }, { plotis: 1200, q: 0.70 }
-  ];
-  var PERSIDENGIMAS = 0.06;      // 6 % aukscio - saugu eilutei ties riba
-  var MAX_DALIU = 3;
 
   /* ==== 1. FAILO PARUOSIMAS =============================================== */
 
@@ -152,70 +143,39 @@
     });
   }
 
-  // Vienas variantas: iskerpam srities (sy..sy+sh) juosta, mazinam iki plocio,
-  // koduojam JPEG->PDF. Grazina base64 ir tikra dydi.
-  function variantas(img, sritis, k) {
+  // Vienas variantas: mazinam iki plocio, koduojam JPEG->PDF.
+  // Grazina base64 ir TIKRA dydi.
+  function variantas(img, k) {
     var nat = { w: img.naturalWidth, h: img.naturalHeight };
-    var sy = sritis ? sritis.sy : 0;
-    var sh = sritis ? sritis.sh : nat.h;
     var sk = Math.min(1, k.plotis / nat.w);
     var c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(nat.w * sk));
-    c.height = Math.max(1, Math.round(sh * sk));
+    c.height = Math.max(1, Math.round(nat.h * sk));
     var ctx = c.getContext("2d");
     ctx.fillStyle = "white";                         // permatomumas -> baltas fonas (JPEG be alfa)
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";              // svaresnis tekstas mazinant
-    ctx.drawImage(img, 0, sy, nat.w, sh, 0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, nat.w, nat.h, 0, 0, c.width, c.height);
     var b64 = bytesToBase64(jpegToPdf(dataUrlToBytes(c.toDataURL("image/jpeg", k.q))));
     return { base64: b64, plotis: c.width, aukstis: c.height, q: k.q,
              kb: Math.round(b64.length / 1024), suspausta: sk < 1 };
   }
 
-  // Renkam PIRMA kandidata, kurio TIKRAS (ne spejamas) dydis telpa. null - netelpa.
-  function pirmasTelpantis(img, sritis, kandidatai, biudzetas) {
-    for (var i = 0; i < kandidatai.length; i++) {
-      var v = variantas(img, sritis, kandidatai[i]);
+  // Paveikslelis -> VISA kortele viena uzklausa. Renkam PIRMA kandidata, kurio
+  // TIKRAS (ne spejamas) dydis telpa i biudzeta.
+  function paruostiPaveiksleli(img, biudzetas) {
+    if (!img.naturalWidth || !img.naturalHeight) throw new Error("Paveikslelis be matmenu");
+    for (var i = 0; i < KANDIDATAI.length; i++) {
+      var v = variantas(img, KANDIDATAI[i]);
       if (v.base64.length <= biudzetas) return v;
     }
-    return null;
-  }
-
-  // Paveikslelis -> viena ar kelios dalys, kiekviena telpanti i biudzeta.
-  // Pirma bandom VISA gera kokybe; jei netelpa - skaidom (su persidengimu).
-  function paruostiDalis(img, biudzetas) {
-    var nat = { w: img.naturalWidth, h: img.naturalHeight };
-    if (!nat.w || !nat.h) throw new Error("Paveikslelis be matmenu");
-
-    var visa = pirmasTelpantis(img, null, VISOS_KOKYBE, biudzetas);
-    if (visa) return [visa];                          // maza kortele - 1 uzklausa
-
-    for (var n = 2; n <= MAX_DALIU; n++) {
-      var dalys = [];
-      var ok = true;
-      var zingsnis = nat.h / n;
-      var pers = nat.h * PERSIDENGIMAS;
-      for (var i = 0; i < n; i++) {
-        var sy = Math.max(0, Math.round(i * zingsnis - (i > 0 ? pers : 0)));
-        var iki = Math.min(nat.h, Math.round((i + 1) * zingsnis + (i < n - 1 ? pers : 0)));
-        var v = pirmasTelpantis(img, { sy: sy, sh: iki - sy }, DALIU_KANDIDATAI, biudzetas);
-        if (!v) { ok = false; break; }
-        v.dalis = i + 1; v.viso = n;
-        dalys.push(v);
-      }
-      if (ok) return dalys;
-    }
-    // Krastutinis atvejis: net MAX_DALIU dalimis netelpa - kritam i bendra
-    // (zemesnes kokybes) kopėčią visai nuotraukai, kad NEliktume be rezultato.
-    var atsarga = pirmasTelpantis(img, null, KANDIDATAI, biudzetas);
-    if (atsarga) return [atsarga];
     throw new Error(
-      "Nuotrauka per didelė analizei net suspausta ir padalinta. " +
+      "Nuotraukos nepavyko paruošti analizei - ji per didelė net suspausta. " +
       "Iškirpkite tik tą kortelės dalį, kurioje yra pirkimo duomenys.");
   }
 
-  // Bet koks palaikomas failas -> dalys[] (proxy kontraktas - tik PDF).
+  // Bet koks palaikomas failas -> viena paruosta dalis (proxy priima tik PDF).
   function paruostiFaila(file, biudzetas) {
     biudzetas = biudzetas || BASE64_BIUDZETAS;
     if (file.size > MAX_FAILO_MB * 1024 * 1024)
@@ -224,30 +184,35 @@
     var vardas = (file.name || "").toLowerCase();
 
     if (tipas === "application/pdf" || /\.pdf$/.test(vardas)) {
-      // PDF persiunciamas kaip yra - narsykleje jo perspausti ar suskaidyti
-      // negalim be papildomos bibliotekos, todel per didelis PDF atmetamas
-      // AISKIAI (o ne kaip nesuprantama 413 klaida is serverio).
+      // PDF persiunciamas kaip yra - narsykleje jo perspausti negalim be
+      // papildomos bibliotekos, todel per didelis PDF atmetamas AISKIAI
+      // (o ne kaip nesuprantama 413 klaida is serverio).
+      if (file.size > PDF_MAX_BAITU)
+        return Promise.reject(new Error(
+          "Šis PDF per didelis analizei (" + (file.size / (1024 * 1024)).toFixed(1) + " MB, riba " +
+          Math.floor(PDF_MAX_BAITU / (1024 * 1024)) + " MB). Išsaugokite tik tą puslapį, " +
+          "kuriame yra pirkimo duomenys, ir įkelkite jį."));
       return file.arrayBuffer().then(function (ab) {
         var b64 = bytesToBase64(new Uint8Array(ab));
+        // Tikslus patikrinimas: file.size buvo tik greitas filtras, o i kuna
+        // keliauja butent base64.
         if (b64.length > biudzetas)
-          throw new Error(
-            "Šis PDF per didelis analizei (" + Math.round(b64.length / 1024) + " KB). " +
-            "Padarykite kortelės ekrano nuotrauką (PNG arba JPG) - ji paruošiama automatiškai.");
-        return [{ base64: b64, kb: Math.round(b64.length / 1024), pdf: true, suspausta: false }];
+          throw new Error("Šis PDF per didelis analizei (" + Math.round(b64.length / 1024) + " KB).");
+        return { base64: b64, kb: Math.round(b64.length / 1024), pdf: true, suspausta: false };
       });
     }
     if (/^image\//.test(tipas) || /\.(jpe?g|png|webp|bmp)$/.test(vardas)) {
-      // JPEG irgi pertraukiam per canvas: originalas daznai virsija riba.
+      // Paveiksleli pertraukiam per canvas: proxy priima tik PDF.
       return ikeltiPaveiksleli(file).then(function (img) {
-        return paruostiDalis(img, biudzetas);
+        return paruostiPaveiksleli(img, biudzetas);
       });
     }
     return Promise.reject(new Error("Nepalaikomas failo tipas (PDF, JPG, PNG)"));
   }
 
-  // Suderinamumas su v0.1 API (grazina pirmos dalies base64).
+  // Suderinamumas su v0.1 API.
   function fileToPdfBase64(file) {
-    return paruostiFaila(file).then(function (d) { return d[0].base64; });
+    return paruostiFaila(file).then(function (d) { return d.base64; });
   }
 
   /* ==== 2. PROMPTAI ======================================================= */
@@ -300,50 +265,9 @@
     ].join("\n");
   }
 
-  function userText(dalis, viso) {
-    var t = "Istrauk pirkimo duomenis is pridetos DocLogix pirkimo paraiskos korteles. " +
-            "Atsakyk grieztai pagal sistemos zinuteje aprasyta JSON schema.";
-    if (viso > 1) {
-      t += "\n\nSVARBU: tai korteles FRAGMENTAS (" + dalis + " dalis is " + viso +
-           ", skaitant is virsaus i apacia; dalys siek tiek persidengia). Uzpildyk TIK tuos " +
-           "laukus, kuriuos MATAI siame fragmente. Ko fragmente nera - grazink null arba " +
-           "\"nenustatyta\". NIEKADA nespek trukstamu lauku is konteksto - juos pateiks kitas " +
-           "fragmentas.";
-    }
-    return t;
-  }
-
-  /* Fragmentu rezultatu suliejimas. Kiekvienas laukas imamas is tos dalies,
-     kuri ji MATE. Jei abi dalys mato ta pati lauka (persidengimo zonoje) ir
-     reiksmes skiriasi - imam ilgesne (pilnesnis tekstas) ir zymim konflikta,
-     kad UI galetu perspeti zmogu.                                            */
-  function suliejaLaukus(dalys) {
-    var geros = dalys.filter(Boolean);
-    if (geros.length === 1) return { laukai: geros[0], konfliktai: [] };
-    var out = {}, konfliktai = [];
-    var raktai = {};
-    geros.forEach(function (d) { Object.keys(d).forEach(function (k) { raktai[k] = 1; }); });
-    Object.keys(raktai).forEach(function (k) {
-      if (k === "tipo_kandidatai") {
-        var visi = [];
-        geros.forEach(function (d) { (d[k] || []).forEach(function (x) { if (visi.indexOf(x) < 0) visi.push(x); }); });
-        out[k] = visi;
-        return;
-      }
-      var kand = geros.map(function (d) { return d[k]; })
-                      .filter(function (v) { return v && v.reiksme && v.reiksme !== "nenustatyta"; });
-      if (!kand.length) {
-        var betkas = geros.map(function (d) { return d[k]; }).filter(Boolean)[0];
-        out[k] = betkas || null;
-        return;
-      }
-      if (kand.length === 1) { out[k] = kand[0]; return; }
-      var a = kand[0], b = kand[1];
-      if (String(a.reiksme) === String(b.reiksme)) { out[k] = a; return; }
-      out[k] = String(b.reiksme).length > String(a.reiksme).length ? b : a;
-      konfliktai.push(k);
-    });
-    return { laukai: out, konfliktai: konfliktai };
+  function userText() {
+    return "Istrauk pirkimo duomenis is pridetos DocLogix pirkimo paraiskos korteles. " +
+           "Atsakyk grieztai pagal sistemos zinuteje aprasyta JSON schema.";
   }
 
   /* ==== 3. ATSAKYMO PARSINIMAS IR VALIDACIJA ============================== */
@@ -469,44 +393,25 @@
   function analizuoti(file, opts) {
     opts = opts || {};
     if (!root.GP_AI_PROXY) return Promise.reject(new Error("GP_AI_PROXY neprijungtas"));
-    var dalys = null;
-    return paruostiFaila(file, opts.biudzetas).then(function (d) {
-      dalys = d;
-      if (opts.onParuosta) opts.onParuosta(d);        // UI parodo dydi / daliu skaiciu
-      // Dalys siunciamos LYGIAGRECIAI - kiekviena atskira uzklausa telpa i
-      // backend'o kuno riba, o kartu jos islaiko beveik originalia raiska.
-      return Promise.all(d.map(function (p, i) {
-        return root.GP_AI_PROXY.call({
-          module: "pp-salygos",
-          maxTokens: MAX_TOKENS,
-          system: systemPrompt(),
-          userMessage: userText(i + 1, d.length),
-          pdfBase64: p.base64,
-          signal: opts.signal
-        });
-      }));
-    }).then(function (atsakymai) {
-      var laukai = [], pastabos = [], klaidos = [];
-      atsakymai.forEach(function (r, i) {
-        if (!r.ok) { klaidos.push((i + 1) + " dalis: " + (r.error || "AI klaida")); return; }
-        var p = parseResponse(r.text);
-        if (!p.ok) { klaidos.push((i + 1) + " dalis: " + p.error); return; }
-        laukai.push(p.laukai);
-        if (p.pastabos) pastabos.push(p.pastabos);
+    var paruosta = null;
+    return paruostiFaila(file, opts.biudzetas).then(function (p) {
+      paruosta = p;
+      if (opts.onParuosta) opts.onParuosta(p);        // UI: paruosta, siunciam
+      // VISA kortele - viena uzklausa. Skaidymo nebera: backend priima 10 MB.
+      return root.GP_AI_PROXY.call({
+        module: "pp-salygos",
+        maxTokens: MAX_TOKENS,
+        system: systemPrompt(),
+        userMessage: userText(),
+        pdfBase64: p.base64,
+        signal: opts.signal
       });
-      // Jei nepavyko NE VIENA dalis - klaida. Jei dalis pavyko - dirbam su ja,
-      // bet apie nepavykusia PRANESAM (nieko nenutylim).
-      if (!laukai.length) throw new Error(klaidos.join("; ") || "AI klaida");
-      var s = suliejaLaukus(laukai);
-      // Vartotojui rodomos pastabos - be vidiniu terminu ("fragmentai"): jam
-      // svarbu TIK ka patikrinti ir ar kas nors galejo likti nepasiulyta.
-      if (s.konfliktai.length)
-        pastabos.push("Šiuos laukus kortelėje pavyko perskaityti nevienareikšmiškai: " +
-                      s.konfliktai.join(", ") + " - patikrinkite juos ypač atidžiai.");
-      if (klaidos.length)
-        pastabos.push("Dalies kortelės perskaityti nepavyko - kai kurie laukai gali būti nepasiūlyti; " +
-                      "užpildykite juos rankiniu būdu.");
-      return { laukai: s.laukai, pastabos: pastabos.join(" "), map: mapFields(s.laukai), failas: dalys };
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.error || "AI klaida");
+      var p = parseResponse(r.text);
+      if (!p.ok) throw new Error(p.error);
+      return { laukai: p.laukai, pastabos: p.pastabos || "",
+               map: mapFields(p.laukai), failas: paruosta };
     });
   }
 
@@ -518,7 +423,6 @@
     fileToPdfBase64: fileToPdfBase64,
     jpegToPdf: jpegToPdf,
     parseResponse: parseResponse,
-    suliejaLaukus: suliejaLaukus,
     mapFields: mapFields,
     verteIsTeksto: verteIsTeksto,
     systemPrompt: systemPrompt,
