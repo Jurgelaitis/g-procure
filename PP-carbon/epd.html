@@ -116,7 +116,7 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-3) var(-
     </div>
 
     <div class="field">
-      <label data-i18n="f.file">EPD dokumentas (PDF, iki 10 MB)</label>
+      <label data-i18n="f.file">EPD dokumentas (PDF, iki 6 MB)</label>
       <input class="input" type="file" id="pdf" accept="application/pdf" onchange="onFile()" />
       <span class="hint" id="fileHint"></span>
     </div>
@@ -156,13 +156,13 @@ var I18N = {
     "form.title": "Produkto EPD analizė",
     "f.name": "Produkto / įrangos pavadinimas", "f.name.ph": "pvz. 110 kV galios transformatorius",
     "f.unit": "Deklaruotas vienetas",
-    "f.file": "EPD dokumentas (PDF, iki 10 MB)",
+    "f.file": "EPD dokumentas (PDF, iki {mb} MB)",
     "f.verify": "Patvirtinkite, kad nesate robotas",
     "f.analyze": "Analizuoti",
     "st.analyzing": "Analizuojama... (gali trukti kelias sekundes)",
     "err.noPdf": "Įkelkite EPD dokumentą (PDF).",
     "err.notPdf": "Netinkamas failo tipas - reikia PDF.",
-    "err.size": "Failas per didelis (riba 10 MB). Pateikite mažesnį PDF.",
+    "err.size": "Failas per didelis (riba {mb} MB). Pateikite mažesnį PDF.",
     "err.turnstile": "Pažymėkite patikrą „nesu robotas“.",
     "err.read": "Nepavyko perskaityti failo. Bandykite dar kartą.",
     "err.network": "Nepavyko pasiekti serverio. Patikrinkite ryšį ir bandykite dar kartą.",
@@ -185,13 +185,13 @@ var I18N = {
     "form.title": "Product EPD analysis",
     "f.name": "Product / equipment name", "f.name.ph": "e.g. 110 kV power transformer",
     "f.unit": "Declared unit",
-    "f.file": "EPD document (PDF, up to 10 MB)",
+    "f.file": "EPD document (PDF, up to {mb} MB)",
     "f.verify": "Confirm you are not a robot",
     "f.analyze": "Analyze",
     "st.analyzing": "Analyzing... (this can take a few seconds)",
     "err.noPdf": "Please upload an EPD document (PDF).",
     "err.notPdf": "Invalid file type - PDF required.",
-    "err.size": "File too large (limit 10 MB). Please provide a smaller PDF.",
+    "err.size": "File too large (limit {mb} MB). Please provide a smaller PDF.",
     "err.turnstile": "Please complete the 'I am not a robot' check.",
     "err.read": "Could not read the file. Please try again.",
     "err.network": "Could not reach the server. Check your connection and try again.",
@@ -209,7 +209,29 @@ var I18N = {
     "foot": "PP-carbon · Supplier EPD tool · EPSO-G G-Procure ecosystem. No API key is stored on this page."
   }
 };
-function t(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.lt[k] || k; }
+// {mb} pakeiciamas cia, VIENOJE vietoje: taip ir data-i18n uzrasai, ir klaidu
+// pranesimai rodo ta pati tikra skaiciu, ir jo nereikia kartoti prie kiekvieno
+// iskvietimo (kitaip vel atsirastu tekstas, kuris meluoja apie riba).
+function t(k){
+  var s = (I18N[LANG] && I18N[LANG][k]) || I18N.lt[k] || k;
+  return String(s).replace("{mb}", ribaMb());
+}
+
+/* PDF dydzio riba.
+   DEMESIO: si riba ateina is CLOUDFLARE WORKER'IO, o NE is g-procure
+   backend'o. Sis puslapis kreipiasi i epd-api.g-procure.com (Worker), per
+   nginx/express jis neina ISVIS, todel shared/ai-proxy.js MAX_PDF_BAITU cia
+   NEGALIOJA ir jo naudoti NEGALIMA - net jei skaicius atsitiktinai sutampa.
+   Skaiciai siandien sutampa (abu 9 MB base64), bet tai sutapimas: pakeitus
+   backend'o riba viesojo irankio riba pasikeistu tyliai, o Worker'is liktu
+   nepakeistas. Zr. CLAUDE.md 6 sk. (serverio puse yra kita vykdymo aplinka).
+   Be to, epd.html yra savarankiskas viesas puslapis ir shared/ neikelia.
+
+   SALTINIS: worker/epd-proxy.js -> MAX_PDF_CHARS = 9 MB base64.
+   base64 pripucia 4/3, tad neapdorotas PDF negali virsyti ~3/4 tos ribos.
+   Keiciant Worker'io riba - butina pakeisti ir cia.                        */
+var MAX_PDF_BAITU = Math.floor(9 * 1024 * 1024 * 3 / 4);   // ~6,75 MB PDF
+function ribaMb(){ return Math.floor(MAX_PDF_BAITU / (1024 * 1024)); }
 function applyI18n(){
   document.documentElement.lang = LANG;
   var els = document.querySelectorAll("[data-i18n]");
@@ -239,7 +261,14 @@ function onFile(){
   var f = input.files && input.files[0];
   if (!f) { hint.textContent = ""; return; }
   if (f.type !== "application/pdf") { hint.textContent = ""; input.value = ""; setStatus(msgErr(t("err.notPdf"))); return; }
-  if (f.size > 10 * 1024 * 1024) { hint.textContent = ""; input.value = ""; setStatus(msgErr(t("err.size"))); return; }
+  // Tikrinam pries Worker'io riba, ne pries 10 MB: PDF siunciamas base64, o
+  // base64 pripucia 4/3. Anksciau 6,75-10 MB PDF praeidavo cia ir gaudavo 413
+  // is Worker'io - viesam tiekejo irankiui tai buvo tiesiog neveikianti forma.
+  if (f.size > MAX_PDF_BAITU) {
+    hint.textContent = ""; input.value = "";
+    setStatus(msgErr(t("err.size")));
+    return;
+  }
   var reader = new FileReader();
   reader.onload = function(){
     var res = String(reader.result || "");
