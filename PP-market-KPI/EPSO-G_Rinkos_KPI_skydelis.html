@@ -887,6 +887,9 @@ function severity(m){
 function statusKey(s){ return s===2?"red":s===1?"yellow":"green"; }
 function statusWord(s){ return s===2?"Raudona":s===1?"Geltona":"Žalia"; }
 
+// cat.weights naudojami TIK rizikos agregacijai (šiai funkcijai) - į indeksavimo
+// rekomendaciją (INDEKSAVIMO_MODELIAI) jie NEimami. Indeksavimo svorius lemia
+// konkretaus pirkimo sąnaudų struktūra, ne kategorija.
 function categorySeverity(cat){
   let sum=0, wsum=0;
   for(const id in cat.weights){
@@ -1332,6 +1335,98 @@ const CAT_VDA = {
   services:["vmdu","vki"],
   insurance:["vki"]
 };
+
+/* =========================================================================
+   ORIENTACINIS INDEKSAVIMO MODELIS (deterministinis, be AI)
+
+   KRITINIS PRINCIPAS: modelis siūlo KURIE indeksai yra kandidatai, bet
+   NIEKADA nesiūlo jų svorių. Svoriai priklauso nuo konkretaus pirkimo
+   sąnaudų struktūros ir pagal VPT metodiką ateina iš tiekėjų per pasiūlymo
+   formą, ne iš kategorijos. cat.weights čia NEnaudojami - jie skirti tik
+   rinkos rizikos agregacijai (categorySeverity).
+
+   OSP kodų patikros būsena (2026-07-18, osp-rs.stat.gov.lt SDMX registras):
+   - S7R260 "Vartotojų kainų indeksai" - kodas IR mėnesinis dažnis
+     patvirtinti iš duomenų (2024M01..M12).
+   - S3R0050 "Darbo užmokestis (mėnesinis)" - kodas IR KETVIRTINIS skelbimo
+     dažnis patvirtinti iš duomenų (2024K1..K4). Pats rodiklis yra mėnesio
+     suma, bet skelbiamas kas ketvirtį - todėl įspėjimas galioja.
+   - S7R259 "Gamintojų parduotos pramonės produkcijos kainų indeksai" ir
+     S7R271 "Ūkio subjektams suteiktų paslaugų kainų indeksai" - kodai
+     patvirtinti registre; dažnis (S7R259 mėnesinis, S7R271 ketvirtinis) -
+     pagal OSP skelbimo praktiką, iš duomenų API nepatikrinta (grąžino
+     tuščią). S7R271 ketvirtiškumą nurodė ir užsakovas.
+   - S7R095 "Statybos sąnaudų elementų kainų indeksai (2005 m. - 100)" -
+     kodas patvirtintas registre (alternatyva su 2000 m. baze - S7R094).
+   ========================================================================= */
+const OSP_NUORODA = "https://osp.stat.gov.lt/statistiniu-rodikliu-analize";
+const INDEKS_DISCLAIMER = "Orientacinis pasiūlymas. Modelis nurodo tik indeksų " +
+  "kandidatus - svorius lemia konkretaus pirkimo sąnaudų struktūra, juos pagal " +
+  "VPT metodiką pateikia tiekėjai pasiūlymo formoje, o galutinės indeksavimo " +
+  "taisyklės privalo būti pirkimo dokumentuose.";
+
+const INDEKSAVIMO_MODELIAI = {
+  construction: {
+    formulesTipas: "Statybos indeksai (SSKI dedamosios)",
+    aprasas: "Dedamųjų indeksavimas pagal SSKI: bendrą arba atskiras dedamąsias (medžiagų, mašinų, darbo užmokesčio) - pagal tai, kuri sutarties kainos dalis indeksuojama.",
+    kandidatai: [
+      { metricId:"sski",     osp:{ kodas:"S7R095", daznis:"mėnesinis" } },
+      { metricId:"sski_med", osp:{ kodas:"S7R095", daznis:"mėnesinis" } },
+      { metricId:"sski_mas", osp:{ kodas:"S7R095", daznis:"mėnesinis" } },
+      { metricId:"sski_du",  osp:{ kodas:"S7R095", daznis:"mėnesinis" } }
+    ]
+  },
+  cables: {
+    formulesTipas: "Dominuojančios medžiagos kiekio perdavimas",
+    aprasas: "Vario / aliuminio kainos pokytis perduodamas pagal deklaruotą kiekį (biržos nuoroda sutartyje); GKI arba VKI tinka tik likusiai kainos daliai.",
+    kandidatai: [
+      { metricId:"lme_cu", osp:null },
+      { metricId:"lme_al", osp:null },
+      { metricId:"gki", osp:{ kodas:"S7R259", daznis:"mėnesinis" } },
+      { metricId:"vki", osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
+    ]
+  },
+  transformers: {
+    formulesTipas: "Dominuojančios medžiagos kiekio perdavimas",
+    aprasas: "Vario kainos pokytis perduodamas pagal kiekį (biržos nuoroda sutartyje); pramoninės įrangos likusiai daliai GKI atspindi gamybos kaštus geriau nei VKI.",
+    kandidatai: [
+      { metricId:"lme_cu", osp:null },
+      { metricId:"gki", osp:{ kodas:"S7R259", daznis:"mėnesinis" } },
+      { metricId:"vki", osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
+    ]
+  },
+  it_software: {
+    formulesTipas: "Vienas indeksas su slenksčiu",
+    aprasas: "Darbo imlioms sutartims (kūrimas, priežiūra) - sektoriaus VMDU; standartinėms paslaugoms ir licencijoms - VKI su peržiūros slenksčiu.",
+    kandidatai: [
+      { metricId:"vmdu", osp:{ kodas:"S3R0050", daznis:"ketvirtinis" } },
+      { metricId:"vki",  osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
+    ]
+  },
+  services: {
+    formulesTipas: "Vienas indeksas su slenksčiu",
+    aprasas: "Paslaugų sutartims - paslaugų kainų indeksas arba VKI su peržiūros slenksčiu; darbo imlioms paslaugoms svarstytinas VMDU.",
+    kandidatai: [
+      { metricId:null, pavadinimas:"Paslaugų kainų indeksas (ūkio subjektams suteiktų paslaugų)",
+        osp:{ kodas:"S7R271", daznis:"ketvirtinis" } },
+      { metricId:"vmdu", osp:{ kodas:"S3R0050", daznis:"ketvirtinis" } },
+      { metricId:"vki",  osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
+    ]
+  },
+  insurance: {
+    formulesTipas: "Vienas indeksas su slenksčiu",
+    aprasas: "Draudimo įmokas lemia rinkos ciklas ir žalų istorija, ne kainų indeksai; VKI slenkstis tinka tik kaip bendra kainų peržiūros riba.",
+    kandidatai: [
+      { metricId:"vki", osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
+    ]
+  }
+};
+
+// Kandidato rodomas vardas: skydelio rodiklio vardas arba savas pavadinimas.
+function kandVardas(k){
+  const m = k.metricId ? metricById(k.metricId) : null;
+  return m ? m.name : (k.pavadinimas || "");
+}
 const FOCUS = { name:"", last:null };
 function classifyProcurement(name){
   const t = (name||"").toLowerCase();
@@ -1392,6 +1487,37 @@ function renderFocusCard(name, catId, auto){
     const s = severity(m);
     return `<li><span class="pill ${pillL(s)}">${statusWord(s)}</span> <b>${esc(m.name)}</b> (${focusChg(m)})<br><span class="muted-note">${esc(m.act[statusKey(s)])}</span></li>`;
   }).join("");
+
+  // Orientacinis indeksavimo modelis - rodomas TIK kai VDA būsena rodo, kad
+  // indeksavimas aktualus (vw>=1, t. y. geltona arba raudona). Deterministinis:
+  // fiksuoti tekstai + lentelės peržvalgos, jokio AI, jokių svorių.
+  const modelis = INDEKSAVIMO_MODELIAI[catId];
+  let modHtml = "";
+  if(vw >= 1 && modelis){
+    const kRows = modelis.kandidatai.map(k=>{
+      const m = k.metricId ? metricById(k.metricId) : null;
+      const vardas = kandVardas(k);
+      // Skydelio rodikliams rodom būseną ir pokytį; svetimiems (metricId:null) -
+      // JOKIOS netikros reikšmės, tik nuoroda į šaltinį.
+      const busena = m ? `<span class="pill ${pillL(severity(m))}">${statusWord(severity(m))}</span> ` : "";
+      const pokytis = m ? ` (${focusChg(m)})` : "";
+      const saltinis = k.osp
+        ? ` · <a href="${OSP_NUORODA}" target="_blank" rel="noopener">OSP ${esc(k.osp.kodas)}</a>, ${esc(k.osp.daznis)}`
+        : (m && m.src ? ` · ${esc(m.src.name)}` : "");
+      const pastaba = m ? "" : `<br><span class="muted-note">skydelyje nestebimas - reikšmę žr. šaltinyje</span>`;
+      return `<li>${busena}<b>${esc(vardas)}</b>${pokytis}${saltinis}${pastaba}</li>`;
+    }).join("");
+    const ketvirtiniai = modelis.kandidatai.filter(k=>k.osp && k.osp.daznis === "ketvirtinis");
+    const ketvIspejimas = ketvirtiniai.length
+      ? `<div class="muted-note" style="color:${COLORS.yellow};margin-top:6px">&#9888; ${esc(ketvirtiniai.map(k=>kandVardas(k)+" ("+k.osp.kodas+")").join(", "))} ${ketvirtiniai.length>1?"skelbiami kas ketvirtį - mėnesinė peržiūra pagal juos neveiks":"skelbiamas kas ketvirtį - mėnesinė peržiūra pagal jį neveiks"}; peržiūros periodiškumą derinkite prie indekso skelbimo dažnio.</div>`
+      : "";
+    modHtml = `
+      <div class="focus-vda-head" style="margin-top:16px"><span class="sq" style="background:${sqColor}"></span> Orientacinis indeksavimo modelis: ${esc(modelis.formulesTipas)}</div>
+      <div class="muted-note">${esc(modelis.aprasas)}</div>
+      <ul class="focus-list">${kRows}</ul>
+      ${ketvIspejimas}
+      <div class="muted-note" style="margin-top:8px">${esc(INDEKS_DISCLAIMER)}</div>`;
+  }
   host.innerHTML = `
     <div class="focus-assign">
       <span>Kategorija:</span> ${catSelectHtml(catId)}
@@ -1416,6 +1542,7 @@ function renderFocusCard(name, catId, auto){
       <div class="focus-col">
         <div class="focus-vda-head"><span class="sq" style="background:${vw>=2?COLORS.red:vw>=1?COLORS.yellow:COLORS.green}"></span> Indeksavimo gairės (VDA): ${vHead}</div>
         <ul class="focus-list">${vRows || '<li class="muted-note">Šiai kategorijai VDA indeksų nepriskirta.</li>'}</ul>
+        ${modHtml}
         <button class="btn" style="margin-top:12px" onclick="copyFocus()">⧉ Kopijuoti tekstą</button>
       </div>
     </div>`;
@@ -1428,8 +1555,33 @@ function copyFocus(){
   const strip = s => String(s).replace(/<[^>]+>/g,"");
   const drivers = topDrivers(cat).map(d=>`${d.m.name} (${strip(focusChg(d.m))})`).join("; ");
   const acts = (cat.act[sk]||[]).map(a=>"- "+a).join("\n");
-  const vda = (CAT_VDA[f.catId]||[]).map(id=>metricById(id)).filter(Boolean)
+  const vdaMs = (CAT_VDA[f.catId]||[]).map(id=>metricById(id)).filter(Boolean);
+  const vda = vdaMs
     .map(m=>`- ${m.name} (${strip(focusChg(m))}): ${m.act[statusKey(severity(m))]}`).join("\n");
+
+  // Orientacinis modelis tekste - ta pati vw>=1 salyga kaip renderFocusCard.
+  const vw = vdaMs.reduce((mx,m)=>Math.max(mx,severity(m)),0);
+  const modelis = INDEKSAVIMO_MODELIAI[f.catId];
+  let modText = "";
+  if(vw >= 1 && modelis){
+    const kand = modelis.kandidatai.map(k=>{
+      const m = k.metricId ? metricById(k.metricId) : null;
+      const saltinis = k.osp ? `OSP ${k.osp.kodas}, ${k.osp.daznis}` : (m && m.src ? m.src.name : "");
+      const reiksme = m ? ` (${strip(focusChg(m))})` : " (skydelyje nestebimas - reikšmę žr. šaltinyje)";
+      return `- ${kandVardas(k)}${reiksme}${saltinis?" · "+saltinis:""}`;
+    }).join("\n");
+    const ketv = modelis.kandidatai.filter(k=>k.osp && k.osp.daznis === "ketvirtinis");
+    const ketvT = ketv.length
+      ? `\nDĖMESIO: ${ketv.map(k=>kandVardas(k)+" ("+k.osp.kodas+")").join(", ")} ${ketv.length>1?"skelbiami kas ketvirtį - mėnesinė peržiūra pagal juos neveiks":"skelbiamas kas ketvirtį - mėnesinė peržiūra pagal jį neveiks"}; peržiūros periodiškumą derinkite prie indekso skelbimo dažnio.`
+      : "";
+    modText = `
+Orientacinis indeksavimo modelis: ${modelis.formulesTipas}
+${modelis.aprasas}
+Kandidatai (tik indeksai, be svorių):
+${kand}${ketvT}
+${INDEKS_DISCLAIMER}
+`;
+  }
   const txt =
 `PIRKIMO RINKOS APŽVALGA
 Pirkimas: ${f.name||"-"}
@@ -1439,7 +1591,7 @@ Sutartiniai veiksmai:
 ${acts}
 Indeksavimo gairės (VDA):
 ${vda}
-Parengta: ${fmtDate(DATA.meta.updated)} - EPSO-G rinkos KPI skydelis (duomenys tikslinami rankiniu būdu).`;
+${modText}Parengta: ${fmtDate(DATA.meta.updated)} - EPSO-G rinkos KPI skydelis (duomenys tikslinami rankiniu būdu).`;
   const done = ()=>showToast("Nukopijuota į iškarpinę");
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(txt).then(done).catch(()=>fallbackCopy(txt,done));
