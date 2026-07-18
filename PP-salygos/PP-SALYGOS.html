@@ -1441,10 +1441,21 @@ function rodykRezultata(rez){
   rez.forEach(r => {
     const url = URL.createObjectURL(r.blob);
     const a = r.audit;
-    const zenklas = a.svarus
-      ? `<span style="color:var(--color-emerald);font-weight:600">parengta${r.forma?' (forma)':''}</span>`
-      : `<a href="#baigtumas" style="text-decoration:none" title="Neišspręstos vietos, kurias reikės užbaigti Word'e - dokumente jos paliktos raudonai, sąrašas žemiau">
+    // Trys busenos. "svaru" NEreiskia "parengta skelbti" - tik kad automatine
+    // patikra neliko raudonu vietu, tusciu lauku ir komentaru. "patikrinti"
+    // radiniai (pvz. "SPS X priedas") anksciau nebuvo susieti su zyma, tad
+    // dokumentas atrode parengtas - dabar jie duoda atskira geltona busena.
+    const svelnios = (a.patikrinti||[]).length;
+    let zenklas;
+    if (!a.svarus){
+      zenklas = `<a href="#baigtumas" style="text-decoration:none" title="Neišspręstos vietos, kurias reikės užbaigti Word'e - dokumente jos paliktos raudonai, sąrašas žemiau">
            <span style="color:var(--color-warning);font-weight:600">spręsti Word'e: ${a.raudonos.length + a.tuscios.length} ↓</span></a>`;
+    } else if (svelnios && !r.forma){
+      zenklas = `<a href="#baigtumas" style="text-decoration:none" title="Automatinė patikra rado vietų, kurias reikia peržiūrėti (pvz. „X“ vietoj skaičiaus arba likęs vietos rezervas). Sąrašas žemiau">
+           <span style="color:var(--color-warning);font-weight:600">peržiūrėkite: ${svelnios} ↓</span></a>`;
+    } else {
+      zenklas = `<span style="color:var(--color-emerald);font-weight:600" title="Automatinė patikra: neliko raudonų vietų, tuščių laukų ir komentarų. Tai NĖRA leidimas skelbti - prieš skelbiant dokumentą peržiūrėkite Word'e.">švaru${r.forma?' (forma)':''}</span>`;
+    }
     h += `<tr><td><b>${esc(r.d.pavadinimas)}</b>
         <div class="cite">${r.forma
           ? `tiekėjo pildomos vietos paliktos (${(a.tiekejo||[]).length}) &middot; ištrinta ${r.stats.trinta} &middot; užpildyta ${r.stats.pildyta}`
@@ -1456,23 +1467,25 @@ function rodykRezultata(rez){
 
   h += `<h3 id="baigtumas">Baigtumo patikra</h3>`;
   const blogi = rez.filter(r => !r.audit.svarus);
+  const X = rez.flatMap(r => (r.audit.patikrinti||[]).map(x => ({...x, d:r.d.trumpas})));
   if (!blogi.length){
-    h += `<div class="audit ok"><b>Visi dokumentai parengti.</b> Rengėjo dokumentuose neliko raudonų vietų,
-      neužpildytų vietų ar komentarų. Tiekėjo formose pildomos vietos sąmoningai paliktos - jas pildys tiekėjai.</div>`;
+    h += `<div class="audit ok"><b>Automatinė patikra: raudonų vietų, tuščių laukų ir komentarų neliko.</b>
+      ${X.length ? ' Tačiau žemiau yra vietų, kurias reikia peržiūrėti (žr. „Papildomai patikrinkite“).' : ''}
+      Tiekėjo formose pildomos vietos sąmoningai paliktos - jas pildys tiekėjai.
+      <b>Tai nėra leidimas skelbti - prieš skelbiant kiekvieną dokumentą peržiūrėkite Word'e.</b></div>`;
   } else {
     blogi.forEach(r => {
       const a = r.audit;
       h += `<div class="audit no"><b>${esc(r.d.pavadinimas)}</b> - liko ${a.raudonos.length + a.tuscios.length}
         neišspręstų vietų (žr. sąrašą žemiau). Dokumente jos paliktos <b>raudonu tekstu</b>, o neužpildytos - su žyma,
-        todėl Word'e jas rasite pagal raudoną spalvą arba paieška. Kai dokumente nelieka raudono teksto - jis parengtas.
-        Nieko nenutylėta:
+        todėl Word'e jas rasite pagal raudoną spalvą arba paieška. Kai dokumente nelieka raudono teksto, automatinė
+        patikra jį praleidžia - bet prieš skelbiant vis tiek peržiūrėkite. Nieko nenutylėta:
         <div class="lst">
           ${a.raudonos.map(x=>`<div><span class="n">raudona</span>${esc(x.text)}</div>`).join('')}
           ${a.tuscios.map(x=>`<div><span class="n">tuščia</span>${esc(x.text)}</div>`).join('')}
         </div></div>`;
     });
   }
-  const X = rez.flatMap(r => (r.audit.patikrinti||[]).map(x => ({...x, d:r.d.trumpas})));
   if (X.length){
     h += `<div class="audit no" style="margin-top:10px"><b>Papildomai patikrinkite (${X.length}):</b>
       liko „X" vietoj skaičiaus arba neužpildytas vietos rezervas:
