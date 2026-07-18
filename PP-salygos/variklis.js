@@ -730,6 +730,29 @@ const GPGen = (() => {
     return n;
   }
 
+  /* Salygiskai istrina LENTELES EILUTES (w:tr), kuriu VISOS pastraipos yra
+     [nuo, iki] ribose. Skirta salyginiam turinio blokui LENTELEJE (pvz.
+     nacionalinio saugumo "5 punktui"): pastraipu trynimas (trinti) tokioje
+     vietoje paliktu tuscias eilutes su remeliais, o cia salinama visa eilute.
+     SAUGIKLIS: eilute, kuri KERTA riba (turi bent viena pastraipa uz [nuo,iki]),
+     NEsalinama - kad neprarastume gretimo, ne salyginio turinio.               */
+  function trintiEilutese(paras, nuo, iki){
+    const eilutes = new Set();
+    for (let i = nuo; i <= iki; i++){
+      let cur = paras[i] ? paras[i].parentNode : null;
+      while (cur && cur.localName !== 'tr') cur = cur.parentNode;
+      if (cur) eilutes.add(cur);
+    }
+    let n = 0;
+    for (const tr of eilutes){
+      const idxs = GPDocx.els(tr, 'p').map(p => paras.indexOf(p)).filter(x => x >= 0);
+      const visosViduje = idxs.length > 0 && idxs.every(x => x >= nuo && x <= iki);
+      if (!visosViduje) continue;                       // eilute kerta riba - saugiai praleidziam
+      if (tr.parentNode){ tr.parentNode.removeChild(tr); n++; }
+    }
+    return n;
+  }
+
   /* Tuscios vietos: "____" arba "[nurodymas]" pakeiciami vartotojo tekstu.  */
   /* Pastraipoje gali buti KELIOS tuscios vietos ("pripazinti __ (_____)").
      Priimam reiksmiu masyva ir uzpildom eiles tvarka; tuscia reiksme palieka
@@ -883,7 +906,7 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, pildyti, vietos, raudoniRunai, trintiRaudonusRunus,
+  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, raudoniRunai, trintiRaudonusRunus,
            keistiRaudonaTeksta, keistiRezimoEilute, taisytiTitulTarpa, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
 
