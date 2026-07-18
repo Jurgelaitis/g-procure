@@ -757,7 +757,13 @@ const GPGen = (() => {
       const v = vs[vi];
       if (v && k === v.start){
         const val = (arr[vi]||'').trim();
-        out.set(owner[k], out.get(owner[k]) + (val || v.zyma));   // tuscia -> paliekam zyma
+        // Tarpo apsauga: jei tuscia vieta sablone prilipusi prie zodzio (pries
+        // ja - raide ar skaitmuo, pvz. "teise_____"), iterpiam tarpa, kad
+        // "teise" + "susipazinti" netaptu "teisesusipazinti". Skliaustai, tarpai
+        // ar pastraipos pradzia - be tarpo.
+        let ins = val;
+        if (val && k > 0 && /[\p{L}\p{N}]/u.test(s[k-1])) ins = ' ' + val;
+        out.set(owner[k], out.get(owner[k]) + (ins || v.zyma));   // tuscia -> paliekam zyma
         if (val) n++;
         k = v.end - 1; vi++;
         continue;
@@ -927,6 +933,27 @@ const GPAudit = (() => {
       if (imone && !/litgrid/i.test(imone) && /litgrid/i.test(t))
         patikrinti.push({ i, text: t.slice(0,110), svetimas: true });
     });
+    // TUSTI KVALIFIKACIJOS LANGELIAI: kvalifikacijos lenteleje (antraste turi
+    // "Kvalifikacijos reikalavimas") duomenu eilute (>=3 langeliai), kurios
+    // reikalavimo stulpelio langelis VISAI tuscias. Baigtumo kriterijus
+    // "raudona/bruksneliai" tokio langelio nepagauna. NEblokuojam (i patikrinti,
+    // ne i tuscios): tuscias langelis gali buti samoningas (kvalifikuojama tik
+    // per EBVPD), tad zmogus turi ivertinti - ar ideti reikalavima, ar palikti.
+    const kids = (el, ln) => Array.from(el.children).filter(c => c.localName === ln);
+    const cellTxt = c => GPDocx.els(c,'t').map(t => t.textContent).join('').trim();
+    for (const tbl of GPDocx.els(d,'tbl')){
+      const eil = kids(tbl,'tr');
+      if (eil.length < 2) continue;
+      const antr = kids(eil[0],'tc').map(cellTxt);
+      let stulp = antr.findIndex(x => /kvalifikacijos reikalavim/i.test(x));
+      if (stulp < 0) continue;                          // ne kvalifikacijos lentele
+      for (let ri = 1; ri < eil.length; ri++){
+        const c = kids(eil[ri],'tc');
+        if (c.length < 3) continue;                     // kategorijos antraste (1 langelis)
+        if (!cellTxt(c[stulp] || c[1]))
+          patikrinti.push({ i:-1, text:'(tuščias kvalifikacijos reikalavimo langelis - įrašykite reikalavimą arba pagrįskite, kad taikoma tik EBVPD)' });
+      }
+    }
     const komentarai = GPDocx.els(d,'commentReference').length;
     // TIEKEJO FORMOS: tuscios vietos ir raudonos pastabos jose yra pasiulymu
     // pateikimo etapo dalykas - tiekejas jas pildys pats. Tai ne klaidos, o
