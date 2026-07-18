@@ -97,11 +97,63 @@ def taisymas_2(taisyk):
     return len(pak)
 
 
+def taisymas_url(taisyk):
+    """URL taisymai. Chirurginis RAW baitu pakeitimas zip viduje (be XML
+    reserializacijos) - keiciamas tik tikslus URL substringas, viskas kita
+    (runai, formatavimas, rels) lieka nepaliesta.
+
+    1) DPSK_LT_SALYGOS: VPT „melaginga informacija" nuoroda grazina 404
+       (truksta bruksnio: „pateikusiutiekeju"). Aktuali nuoroda patikrinta
+       (200) ir imama is AUTENTISKO saltinio - AK_LT_SPS, kur ji teisinga.
+    2) DPSK_LT_SALYGOS ir DPSK_LTEN_SALYGOS: EBVPD nuoroda http -> https
+       (http persikelia i https; saugom galutini adresa). LT versijoje ji
+       yra ir tekste, ir hipernuorodos rels Target - keiciam abu."""
+    VPT_BLOGAS = b'https://vpt.lrv.lt/melaginga-informacija-pateikusiutiekeju-sarasas-3'
+    VPT_GERAS  = b'https://vpt.lrv.lt/lt/nuorodos/kiti-duomenys/powerbi/melaginga-informacija-pateikusiu-tiekeju-sarasas-3/'
+    EBVPD_BLOGAS = b'http://ebvpd.eviesiejipirkimai.lt/espd-web/'
+    EBVPD_GERAS  = b'https://ebvpd.eviesiejipirkimai.lt/espd-web/'
+    TAISYMAI = [
+        ('DPSK_LT_SALYGOS.docx',   [(VPT_BLOGAS, VPT_GERAS), (EBVPD_BLOGAS, EBVPD_GERAS)]),
+        ('DPSK_LTEN_SALYGOS.docx', [(EBVPD_BLOGAS, EBVPD_GERAS)]),
+    ]
+    ENTRYS = ('word/document.xml', 'word/_rels/document.xml.rels')
+    print("\nTAISYMAS URL - VPT 404 ir EBVPD http->https:")
+    total = 0
+    for fname, poros in TAISYMAI:
+        path = TPL / fname
+        with zipfile.ZipFile(path, 'r') as zin:
+            infos = zin.infolist()
+            items = {n: zin.read(n) for n in zin.namelist()}
+        pak = 0
+        for entry in ENTRYS:
+            if entry not in items:
+                continue
+            data = items[entry]
+            for senas, naujas in poros:
+                c = data.count(senas)
+                if c:
+                    data = data.replace(senas, naujas)
+                    pak += c
+                    print(f"  {fname} [{entry.split('/')[-1]}]: {c}x")
+                    print(f"    - {senas.decode()}")
+                    print(f"    + {naujas.decode()}")
+            items[entry] = data
+        if pak and taisyk:
+            with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                for info in infos:
+                    zout.writestr(info, items[info.filename])
+            print(f"  -> irasyta i {fname}")
+        total += pak
+    print(f"  (saltinis: AK_LT_SPS teisinga VPT nuoroda; abi nuorodos patikrintos 200)")
+    return total
+
+
 if __name__ == '__main__':
     taisyk = '--taisyk' in sys.argv
     print("=" * 74)
     print("LITGRID sablonu QA taisymai" + ("" if taisyk else "  [PERZIURA - nieko nerasoma]"))
     print("=" * 74)
     n = taisymas_2(taisyk)
+    n += taisymas_url(taisyk)
     print("\n" + "=" * 74)
     print(f"Is viso: {n} pakeitimai" + ("  IRASYTA" if taisyk else "  (paleiskite su --taisyk)"))
