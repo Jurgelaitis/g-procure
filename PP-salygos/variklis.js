@@ -925,7 +925,10 @@ const GPAudit = (() => {
     paras.forEach((p, i) => {
       const t = GPDocx.paraText(p).trim();
       if (!t) return;
-      if (/(^|[\s(])X([\s.,)]|$)/.test(t) || REZERVAS.test(t))
+      // Ir didzioji, ir mazoji "x" (SPS X priedas / SPS x priedą) - abi yra
+      // vietos rezervas vietoj skaiciaus. Atskiras "x" tekste teisiniuose
+      // sablonuose praktiskai visada yra rezervas, tad geltona zyma saugi.
+      if (/(^|[\s(])[Xx]([\s.,)]|$)/.test(t) || REZERVAS.test(t))
         patikrinti.push({ i, text: t.slice(0,110) });
       // Dalis sablonu (pvz. konfidencialumo priedas) LITGRID rekvizitus rašo
       // TIESIOGIAI, ne per zyma: pavadinima, el. pasta. Perkant kitai imonei
