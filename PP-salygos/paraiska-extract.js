@@ -299,18 +299,13 @@
   /* ==== 4. DETERMINISTINIS ZEMELAPIS I MODULIO LAUKUS ===================== */
 
   // Vertes tekstas -> modulio formato eilute ("743 490" arba "743 490,50").
-  // Priima JAV ir EU formatus (CLAUDE.md pinigu konvencija).
+  // Parsinima ir formatavima ima is shared/money.js (vienas tiesos saltinis -
+  // JAV ir EU formatai). Cia NEdubliuojam. Zr. CLAUDE.md 4 ir 5 sk.
   function verteIsTeksto(s) {
-    if (!s) return null;
-    var v = String(s).replace(/[^\d,.\s]/g, "").trim().replace(/\s+/g, "");
-    if (/,\d{1,2}$/.test(v)) v = v.replace(/\./g, "").replace(",", ".");   // EU: 743.490,00
-    else v = v.replace(/,/g, "");                                          // JAV: 743,490.00
-    var n = parseFloat(v);
-    if (!isFinite(n) || n <= 0) return null;
-    var sveika = Math.floor(n);
-    var cnt = Math.round((n - sveika) * 100);
-    var txt = sveika.toLocaleString("lt-LT").replace(/[  ]/g, " ");
-    return cnt ? txt + "," + String(cnt).padStart(2, "0") : txt;
+    var GM = root.GP_MONEY;
+    if (!GM) return null;                       // money.js visada prijungtas PP-SALYGOS.html
+    var n = GM.parseEUR(s);
+    return (n == null) ? null : GM.formatEUR(n);
   }
 
   // Istraukti laukai -> siulymu sarasas UI perziurai. Kiekvienas siulymas:
