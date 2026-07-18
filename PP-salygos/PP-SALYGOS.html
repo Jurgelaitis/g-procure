@@ -205,11 +205,20 @@
 
     <div class="q"><div class="t">Ar pirkimo objektas susijęs su nacionaliniu saugumu?</div>
       <div class="opts">
-        <label class="opt"><input type="radio" name="nacsaug" value="ne" checked onchange="kraukPriedus()"> Ne</label>
-        <label class="opt"><input type="radio" name="nacsaug" value="taip" onchange="kraukPriedus()"> Taip</label>
+        <label class="opt"><input type="radio" name="nacsaug" value="ne" checked onchange="komisijaUI();kraukPriedus()"> Ne</label>
+        <label class="opt"><input type="radio" name="nacsaug" value="taip" onchange="komisijaUI();kraukPriedus()"> Taip</label>
       </div>
       <div class="cite">Kai objektas patenka į VPĮ 92 str. 13 d. sąrašą (BVPŽ kodai). Atsakymas automatiškai sprendžia
         nacionalinio saugumo punktus, deklaracijos reikalavimą ir priedą.</div>
+    </div>
+
+    <div class="q hid" id="komisijaQ"><div class="t">Ar pirkime kreipsimės į Koordinavimo komisiją?</div>
+      <div class="opts">
+        <label class="opt"><input type="radio" name="komisija" value="ne" checked onchange="kraukPriedus()"> Ne</label>
+        <label class="opt"><input type="radio" name="komisija" value="taip" onchange="kraukPriedus()"> Taip</label>
+      </div>
+      <div class="cite">Aktualu tik nacionalinio saugumo pirkimuose. Kai kreipiamasi į komisiją, lieka komisijos
+        informavimo punktas ir su tuo susijęs registracijos ES/NATO reikalavimas.</div>
     </div>
 
     <div class="q hid" id="paraiskosQ"><div class="t">Paraiškų etapas</div>
@@ -366,6 +375,14 @@ function dflt(key, val){ if (!TOUCHED.has(key)) ATS[key] = val; }
 const derybosTaip = () => $('input[name=derybos]:checked')?.value === 'taip';
 const apimtis = () => derybosTaip() ? ($('input[name=apimtis]:checked')?.value || 'kaina') : null;
 const nacsaugTaip = () => $('input[name=nacsaug]:checked')?.value === 'taip';
+// Koordinavimo komisija - aktualu TIK nac. saugumo pirkimuose. Kai nacsaug=ne,
+// komisija visada 'ne' (turinys trinamas). Klausimas rodomas tik kai nacsaug=taip.
+const komisijaTaip = () => nacsaugTaip() && $('input[name=komisija]:checked')?.value === 'taip';
+function komisijaUI(){
+  const rodyti = nacsaugTaip();
+  $('#komisijaQ').classList.toggle('hid', !rodyti);
+  if (!rodyti){ const ne = $('input[name=komisija][value=ne]'); if (ne) ne.checked = true; }
+}
 function derybosUI(){ $('#apimtisQ').classList.toggle('hid', !derybosTaip()); kraukPriedus(); }
 
 /* Mazos vertes apklausos tipas. MVP sablonas generinis - budo eilute [6]
@@ -500,6 +517,7 @@ function kontrolinisAtsakymas(k){
   if (/^jei vykdomos derybos/.test(t) || /^if negotiations are taking place/.test(t))       return { v:derybosTaip(), kodel:'derybų klausimas' };
   if (/^jei nevykdomos derybos/.test(t) || /^if negotiations are not taking place/.test(t)) return { v:!derybosTaip(), kodel:'derybų klausimas' };
   if (/^jeigu pirkimas susijes su nacionaliniu saugumu/.test(t))                            return { v:nacsaugTaip(), kodel:'nacionalinio saugumo klausimas' };
+  if (/^jei pirkime kreipiamasi i koordinavimo komisij/.test(t))                            return { v:komisijaTaip(), kodel:'koordinavimo komisijos klausimas' };
   return null;
 }
 function rezimoAtsakymas(k, rez){
@@ -662,6 +680,8 @@ const SEKIMO = [
     kodel:'dokumentas prašomas tik kai žalieji reikalavimai nustatomi pirkimo sąlygose' },
   { re:/^tinkamai uzpildyta ir pasirasyta nacionalinio saugumo/, seka:'nacsaug',
     kodel:'seka atsakymą apie nacionalinį saugumą (VPĮ 92 str. 13 d.)' },
+  { re:/koordinavimo komisij/, seka:'komisija',
+    kodel:'punktas taikomas tik kai pirkime kreipiamasi į Koordinavimo komisiją' },
   { re:/^uzpildyta tiekejo pasiulymu del deretinu salygu forma/, seka:'derybos-placiau',
     kodel:'forma reikalinga tik kai derybų apimtis platesnė nei kaina' },
   { re:/^sioje dalyje pateikiama visa informacija kuri pagal pi 95/, seka:'be-projekto',
@@ -672,6 +692,7 @@ const SEKIMO = [
 function sekaAtsakymas(kodas){
   if (kodas === 'zalieji')  return ATS[norm('Jei žalieji reikalavimai nurodomi pirkimo sąlygose')] === true;
   if (kodas === 'nacsaug')  return nacsaugTaip();
+  if (kodas === 'komisija') return komisijaTaip();
   if (kodas === 'derybos-placiau') return derybosTaip() && apimtis() !== 'kaina';
   if (kodas === 'be-projekto') return ATS[norm('Jei Pirkimo metu nėra rengiamas Sutarties projektas')] === true;
   return null;
@@ -1261,13 +1282,14 @@ async function generuotiViena(d, REZ){
   const forma = yraForma(d);
   const doc = await GPDocx.open(d.buf.slice(0));
   const paras = GPGen.snapshot(doc);
-  const trinti = new Set(), juodinti = new Set(), lenteles = [];
+  const trinti = new Set(), juodinti = new Set(), lenteles = [], trintiEiluciu = [];
   let prieduIstrinta = 0;                             // priedu saraso eilutes, istrintos isjungus prieda (numeracija NEperskaiciuojama)
   const pav = pavClean($('#pavadinimas').value);
 
-  // 1. Salygu antrastes - visada salinamos (isskyrus sulietas).
+  // 1. Salygu antrastes - visada salinamos (isskyrus sulietas). salygaEilutes
+  //    neturi trinamo anchor'io - ju i yra tik nuoroda, NE salinama.
   const sulietos = [];
-  (Z.blokai||[]).forEach(b => { if (!b.sulieta) trinti.add(b.i); });
+  (Z.blokai||[]).forEach(b => { if (!b.sulieta && b.tipas !== 'salygaEilutes') trinti.add(b.i); });
 
   // 2. Sakos. Formose iSLAIKOMAS sablono vaizdas: itraukto bloko nespalvinam
   //    (jame - tiekejui skirti nurodymai), isjungtas - trinamas.
@@ -1281,6 +1303,15 @@ async function generuotiViena(d, REZ){
     for (let i = b.blokas.nuo; i <= b.blokas.iki; i++){
       if (laikom){ if (!forma) juodinti.add(i); } else trinti.add(i);
     }
+  });
+
+  // 2a. Salyginis turinys LENTELEJE (salygaEilutes): kai NEitraukiamas -
+  //     salinamos visos jo eilutes (w:tr), ne pastraipos (kitaip liktu tuscios
+  //     eilutes). Kai itraukiamas - NIEKO nedarom: turinys juodas, o intarpai
+  //     jame patys tvarko savo raudonus runus. Zr. GPGen.trintiEilutese.
+  (Z.blokai||[]).filter(b => b.tipas === 'salygaEilutes').forEach(b => {
+    if (!b.blokas) return;
+    if (!sakaItraukiama(Z, b, REZ)) trintiEiluciu.push(b.blokas);
   });
 
   // 3. Lenteles
@@ -1395,6 +1426,8 @@ async function generuotiViena(d, REZ){
   sulietos.forEach(i => { if (!trinti.has(i)) intTrinta += GPGen.trintiRaudonusRunus(paras, i); });
   const nj = GPGen.juodinti(paras, [...juodinti].filter(i => !trinti.has(i)));
   lenteles.forEach(l => GPDocx.deleteTableAfter(doc, l.i, l.kiek));
+  let ntEil = 0;
+  trintiEiluciu.forEach(r => ntEil += GPGen.trintiEilutese(paras, r.nuo, r.iki));   // salyginiai lenteles blokai
   const nt = GPGen.trinti(paras, [...trinti]);
   GPDocx.cleanOrphanBookmarks(doc.parts['word/document.xml']);
 
@@ -1422,7 +1455,7 @@ async function generuotiViena(d, REZ){
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
   return { d, blob, audit, forma,
-           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta } };
+           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil } };
 }
 
 async function generuoti(){
