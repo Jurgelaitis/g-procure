@@ -461,6 +461,34 @@ const SK_ZODZIAI_EN = { 1:'one',2:'two',3:'three',4:'four',5:'five',6:'six',7:'s
    lauko reiksmes (ne dokumentas), per g-procure tarpine. Rezultatas dedamas
    i MATOMA EN lauka (per uAts/uAtsArr - vartotojas mato ir gali taisyti);
    i dokumenta patenka tik lauko reiksme.                                    */
+/* AI vertimas papildomos dalies (III+) pavadinimui. Tas pats modelis kaip
+   enPoraAI: siunciamas TIK laukelio tekstas, pasiulymas irasomas i MATOMA
+   lauka, kuri zmogus gali pataisyti; i dokumenta patenka tik lauko reiksme. */
+async function dalisEnAI(btn, idx){
+  const lt = String(((ATS['DALYS']||[])[idx]||{}).lt || '').trim();
+  const buvo = btn.textContent;
+  if (!lt){ btn.textContent = 'Pirma įrašykite LT pavadinimą'; setTimeout(()=>{btn.textContent=buvo;},2500); return; }
+  if (!window.GP_AI_PROXY){ btn.textContent = 'AI neprijungtas'; setTimeout(()=>{btn.textContent=buvo;},2500); return; }
+  btn.disabled = true; btn.textContent = 'Siūloma...';
+  try {
+    const r = await GP_AI_PROXY.call({
+      module: 'pp-salygos',
+      maxTokens: 200,
+      system: 'Tu verti pirkimo objekto dalies pavadinima is lietuviu i anglu kalba. '
+        + 'Grazink TIK vertima viena eilute, be kabuciu ir be jokio kito teksto. '
+        + 'Techninius zymenis (pvz. 400/110 kV) palik nepakeistus.',
+      userMessage: lt
+    });
+    if (!r.ok) throw new Error(r.error || 'AI klaida');
+    const siulymas = pavENclean(String(r.text||'').split('\n')[0]);
+    if (siulymas) uDalis(idx, 'en', siulymas);
+    klausimynas();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'AI nepasiekiamas - įrašykite ranka';
+    setTimeout(()=>{ btn.textContent = buvo; }, 3000);
+  }
+}
+
 async function enPoraAI(btn, ltKey, enKey, masyvas){
   if (!window.GP_AI_PROXY){ const b0 = btn.textContent; btn.textContent = 'AI neprijungtas'; setTimeout(() => { btn.textContent = b0; }, 2500); return; }
   const src = masyvas ? (ATS[ltKey] || []) : [ATS[ltKey] || ''];
@@ -655,6 +683,18 @@ const TIPAI_EN = { prekes:'GOODS', paslaugos:'SERVICES', darbai:'WORKS' };
    o variklis naujo turinio nekuria. Jei rengejas nurodo daugiau daliu, apie tai
    privalu ispeti: kitaip dokumentas ("skaidomas i 4 dalis", isvardytos 2) gauna
    svaru audita, nes bruksniu jame nebelieka. */
+/* Daliu skaicius is 2 zingsnio lauko - sistemos parametras, is kurio isvedami
+   papildomu daliu laukai ir generavimo dauginimas. Nustatomas klausimyne. */
+let DALIU_SK = 0;
+const daliuSkaicius = () => DALIU_SK;
+/* Papildomu daliu (III+) reiksmes: ATS['DALYS'] = [{lt, en}, ...]. */
+window.uDalis = (idx, laukas, val) => {
+  TOUCHED.add('DALYS');
+  const a = (ATS['DALYS'] ??= []);
+  (a[idx] ??= { lt:'', en:'' })[laukas] = val;
+};
+
+const DALIU_MAX = 12;                     // romeniski numeriai iki XII; apsauga nuo klaidingo ivedimo
 const DALIU_SK_RE = /skaidomas i .*dali/;                 // "skaidomas i __ Pirkimo objekto dalis:"
 const DALIES_EIL_RE = /^(i{1,3}|iv|v|vi) pirkimo objekto dalis/;  // "I Pirkimo objekto dalis - ___" (LT; EN dvyniai nesutampa)
 
@@ -862,11 +902,12 @@ function isjungtosPastraipos(Z, REZ){
 
 function surinktiKlausimus(){
   const REZ = rezimas();
+  DALIU_SK = 0;                      // perskaiciuojam kiekviena karta is naujo
   const K = { grupes:{}, pavieniai:{}, autoSakos:[], lenteles:{}, priedai:{}, formuluotes:{},
               patikrinti:{}, tuscios:{}, automatika:[], formos:[],
               /* LT->EN poru nuorodos (dvikalbiai dokumentai): tuscios - EN laukas
                  prie LT klausimo; formuluotes - EN versija seka LT pasirinkima. */
-              enPoros:{ tuscios:{}, formuluotes:{} } };
+              enPoros:{ tuscios:{}, formuluotes:{} }, dalys:null };
   const pridek = (kat, raktas, dok, extra) => {
     const x = K[kat][raktas] ??= { ...extra, dokumentai:[] };
     if (!x.dokumentai.includes(dok)) x.dokumentai.push(dok);
@@ -1049,19 +1090,42 @@ function surinktiKlausimus(){
         const irasyta = String((ATS['B_' + raktas] || [])[0] || '').trim();
         const ivesta = parseInt(irasyta, 10);
         const zodziu = irasyta && !Number.isFinite(ivesta);      // "keturias" - skaiciaus neatpazistam
+        const perRibos = Number.isFinite(ivesta) && ivesta > DALIU_MAX;
+        if (Number.isFinite(ivesta) && !perRibos) DALIU_SK = ivesta;   // sistemos parametras
+        if (eiluciu && Number.isFinite(ivesta) && ivesta > eiluciu && !perRibos){
+          K.dalys = { nuo: eiluciu + 1, iki: ivesta, sablone: eiluciu, dokumentas: trumpas };
+        }
+        // Kiek papildomu daliu pavadinimu dar neirasyta - apie tai butina ispeti:
+        // neirasyta dalis dokumente lieka su tuscia vieta.
+        const truksta = K.dalys
+          ? Array.from({ length: K.dalys.iki - K.dalys.sablone },
+                       (_, k) => ((ATS['DALYS'] || [])[k] || {}).lt).filter(v => !String(v||'').trim()).length
+          : 0;
         pildomuIdx.add(n.i);
         pridek('tuscios', raktas, trumpas,
           { tekstas:n.text, vietos:GPGen.vietos(n.text).length, komentarai:komentaraiTies(Z, n.i),
             perpiesti: true,
             pastaba: !eiluciu ? undefined
-              : (ivesta > eiluciu
-                  ? `DĖMESIO: šablone yra tik ${eiluciu} dalių eilutės, o nurodėte ${ivesta}. `
-                    + `Trūkstamų dalių sistema NEsukuria - jas reikės įrašyti Word'e.`
-                  : zodziu
-                    ? `Įrašykite dalių skaičių skaitmeniu - tik tada galėsime patikrinti, ar šablone `
-                      + `pakanka eilučių (jų yra ${eiluciu}).`
-                    : `Šablone yra ${eiluciu} dalių eilutės. Jei dalių daugiau, sistema jų nesukuria - įspėsime.`),
-            ispejimas: !!(eiluciu && (ivesta > eiluciu || zodziu)) });
+              : perRibos
+                ? `DĖMESIO: didžiausias palaikomas dalių skaičius yra ${DALIU_MAX}. Nurodėte ${ivesta} - `
+                  + `patikrinkite, ar tai ne apsirikimas.`
+                : (ivesta > eiluciu
+                    ? ((ivesta - eiluciu === 1
+                          ? `Dalis Nr. ${ivesta} sukuriama automatiškai (šablone jų yra ${eiluciu}). `
+                          : `Dalys nuo ${eiluciu + 1} iki ${ivesta} sukuriamos automatiškai (šablone jų yra ${eiluciu}). `))
+                      + (truksta
+                           ? (truksta === 1
+                               ? `DĖMESIO: dar neįrašytas 1 pavadinimas - jo vietoje liks tuščia vieta.`
+                               : `DĖMESIO: dar neįrašyti ${truksta} pavadinimai - jų vietoje liks tuščia vieta.`)
+                           : `Visi pavadinimai įrašyti.`)
+                    : zodziu
+                      ? `Įrašykite dalių skaičių skaitmeniu - tik tada galėsime patikrinti, ar šablone `
+                        + `pakanka eilučių (jų yra ${eiluciu}).`
+                      : (ivesta && ivesta < eiluciu
+                          ? `DĖMESIO: šablone yra ${eiluciu} dalių eilutės, o nurodėte ${ivesta}. `
+                            + `Perteklinę eilutę reikės pašalinti Word'e - sistema jos netrina.`
+                          : `Šablone yra ${eiluciu} dalių eilutės.`)),
+            ispejimas: !!(eiluciu && (zodziu || perRibos || truksta || (ivesta && ivesta < eiluciu))) });
         return;
       }
       pildomuIdx.add(n.i);
@@ -1482,6 +1546,32 @@ function klausimynas(){
   }
 
   /* 7. Like pildomi laukai ir neaiskios vietos */
+  /* Papildomos Pirkimo objekto dalys (III+). Sablone fiziskai yra tik dvi daliu
+     eilutes; likusias sukuria variklis, tad ju pavadinimu klausiam cia. */
+  if (K.dalys){
+    const dv = $('input[name=kalba]:checked').value === 'LT_EN';
+    const kiek = K.dalys.iki - K.dalys.sablone;
+    const kuriamos = kiek === 1
+      ? `Dalį Nr. ${K.dalys.nuo} sukursime automatiškai - įrašykite jos pavadinimą.`
+      : `Dalis nuo ${K.dalys.nuo} iki ${K.dalys.iki} sukursime automatiškai - įrašykite jų pavadinimus.`;
+    h += `<div class="subh">Papildomos Pirkimo objekto dalys (${kiek})</div>
+      <div class="cite" style="margin-bottom:8px">Šablone yra ${K.dalys.sablone} dalių eilutės. ${kuriamos}
+      ${dv ? 'Anglišką pavadinimą galite įrašyti ranka arba pasiūlyti mygtuku (pavadinimas siunčiamas per g-procure tarpinę į Claude API; pasiūlymą patikrinkite). Palikus tuščią, angliškoje eilutėje liks tuščia vieta ir apie tai praneš auditas.' : ''}</div>`;
+    for (let k = 0; k < kiek; k++){
+      const d = (ATS['DALYS'] || [])[k] || {};
+      const nr = GPGen.romeniskas(K.dalys.sablone + k + 1);
+      h += `<div class="q${d.lt?'':' warn'}"><div class="t" style="font-weight:500">${esc(nr)} Pirkimo objekto dalis</div>
+        <input type="text" placeholder="dalies pavadinimas" value="${esc(d.lt||'')}"
+          oninput="uDalis(${k},'lt',this.value)" onchange="klausimynas()">`;
+      if (dv){
+        h += `<input type="text" style="margin-top:5px" placeholder="part title (EN)"
+          value="${esc(d.en||'')}" oninput="uDalis(${k},'en',this.value)">
+          <button type="button" class="sec" style="margin-top:5px" onclick="dalisEnAI(this,${k})">Pasiūlyti vertimą (AI)</button>`;
+      }
+      h += `</div>`;
+    }
+  }
+
   const tu = Object.entries(K.tuscios);
   if (tu.length){
     h += `<div class="subh">Pildomos vietos (${tu.length})</div>
@@ -1699,6 +1789,30 @@ async function generuotiViena(d, REZ){
     }
   });
 
+  // 5a. DALIU DAUGINIMAS. Sablone fiziskai yra tik dvi daliu eilutes; kai
+  //     pirkimas skaidomas i daugiau, paskutine klonuojama. Daroma PO snapshot
+  //     ir PO pildymo, kad klonas paveldetu jau tvarkinga pavyzdi, o zemelapio
+  //     indeksai liktu galioti (klonai i paras masyva nepatenka).
+  //     SVARBU: klonuojam tik kai daliu saka ITRAUKTA - kitaip klonai liktu
+  //     dokumente net pasirinkus "neskaidomas" (ju nepasiekia trinti aibe).
+  let dautaDaliu = 0;
+  if (!forma){
+    const dalIdx = (Z.tuscios||[]).filter(n => DALIES_EIL_RE.test(norm(n.text))).map(n => n.i);
+    const paskutine = dalIdx.length ? dalIdx[dalIdx.length - 1] : -1;
+    if (paskutine >= 0 && !trinti.has(paskutine)){
+      // Kuriam VISAS trukstamas dalis, net jei pavadinimas dar neirasytas -
+      // kitaip liktu numeracijos skyle (I, II, IV) arba dokumentas tyliai
+      // prasilenktu su nurodytu daliu skaiciumi. Neirasytos lieka su tuscia
+      // vieta, ir ja pagauna auditas.
+      const kiekTruksta = Math.max(0, daliuSkaicius() - dalIdx.length);
+      const naujos = Array.from({ length: kiekTruksta }, (_, k) => {
+        const d = (ATS['DALYS'] || [])[k] || {};
+        return { nr: dalIdx.length + k + 1, lt: String(d.lt||'').trim(), en: String(d.en||'').trim() };
+      });
+      if (naujos.length) dautaDaliu = GPGen.dautiDalis(paras, paskutine, naujos);
+    }
+  }
+
   // 6. Raudoni intarpai. Formose - tik konfidencialumo priedo pirkimo aprasas.
   let intTrinta = 0, intTeksto = 0;
   const sulietuIdx = new Set((Z.blokai||[]).filter(b => b.sulieta).map(b => b.i));
@@ -1792,7 +1906,7 @@ async function generuotiViena(d, REZ){
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
   return { d, blob, audit, forma,
-           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil } };
+           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu } };
 }
 
 async function generuoti(){

@@ -823,6 +823,119 @@ const GPGen = (() => {
     return n;
   }
 
+  /* ---------- DAUGINIMAS: vienintelis veiksmas, KURIANTIS turini ------------
+     Sablonuose fiziskai yra tik DVI daliu eilutes (I ir II). Kai pirkimas
+     skaidomas i daugiau daliu, paskutine eilute klonuojama tiek kartu, kiek
+     truksta, perrasant romeniska numeri ir uzpildant pavadinima.
+
+     INDEKSAVIMAS. Klonuojama TIK PO snapshot(), tad klonai i paras masyva
+     nepatenka ir zemelapio i-indeksai lieka teisingi (paras[i] yra MAZGO
+     nuoroda, ne pozicija). Klono NEPASIEKIA indeksu valdomi zingsniai (juodinti,
+     trinti, pildyti, intarpai) - VISA ju darba klonui atlieka si funkcija. Visa
+     dokumenta apeinantys zingsniai (replaceText, valytiPastraipuZenklus,
+     stripComments, auditas) klonus pasiekia, ir taip ir turi buti.
+     PRIELAIDA: 'lentele' bloku inkarai visuose 10 SPS sablonu yra UZ paskutines
+     daliu eilutes, tad klonai nepatenka tarp inkaro ir jo lenteles (butu
+     sugadinta deleteTableAfter antrastes paieska).
+
+     DVI ATMAINOS. LT sablonuose daliu eilute yra body lygio w:p; dvikalbiuose
+     ji sedi w:tr, kurioje LT ir EN dvyniai yra gretimuose w:tc - todel ten
+     klonuojama EILUTE ir LT+EN pora nusineša kartu.                          */
+  const ROMENISKI = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+  const romeniskas = (n) => ROMENISKI[n-1] || String(n);
+
+  function eilutesProtevis(p){
+    let n = p && p.parentNode;
+    while (n && n.localName && n.localName !== 'tr'){
+      if (n.localName === 'body') return null;
+      n = n.parentNode;
+    }
+    return (n && n.localName === 'tr') ? n : null;
+  }
+
+  /* Perrašo pastraipos teksta per sujungta eilute (kaip pildyti). Visas tekstas
+     dedamas i pirma w:t - siose eilutese visi runai turi vienoda formatavima. */
+  function keistiPastraiposTeksta(p, fn){
+    const ts = GPDocx.els(p,'t');
+    if (!ts.length) return false;
+    const s = ts.map(t => t.textContent).join('');
+    if (!s.trim()) return false;
+    const naujas = fn(s);
+    if (naujas == null || naujas === s) return false;
+    ts[0].textContent = naujas;
+    ts[0].setAttribute('xml:space','preserve');
+    for (let k = 1; k < ts.length; k++) ts[k].textContent = '';
+    return true;
+  }
+
+  /* Ar pastraipa yra ANGLISKAS dalies dvynys. */
+  const angliskaDalis = (s) => /object of procurement|procurement object part/i.test(s);
+
+  /* Daliu eilutes PRIESDELIS iki pavadinimo (su bruksniu ir jo tarpais). Pagal ji
+     keiciam pavadinima nepriklausomai nuo to, ar vietoje dar "____", ar jau
+     irasytas ankstesnes dalies tekstas. Inkaruota i zinoma sablono formuluote,
+     kad pavadinime esantis bruksnys nesuklaidintu.                            */
+  const DALIES_PRIESDELIS = /^(\s*(?:[IVX]+\s+Pirkimo objekto dalis|Part\s+[IVX]+\s+of the object of Procurement|[IVX]+\s+Procurement object part)\s*[\u2013\u2014-])\s*/i;
+  const TUSCIA_ZYMA = '________________________';
+
+  /* Vienos daliu eilutes (klono ar originalo) sutvarkymas: numeris, pavadinimas,
+     skyrybos zenklas gale (";" viduryje, "." paskutinei daliai).              */
+  function tvarkytiDali(mazgas, senasNr, naujasNr, d, paskutine){
+    // LT atveju klonas PATS yra w:p (els grazina tik palikuonis), dvikalbiuose -
+    // w:tr su pastraipomis langeliuose.
+    const ps = (mazgas.localName === 'p') ? [mazgas] : GPDocx.els(mazgas,'p');
+    for (const p of ps){
+      keistiPastraiposTeksta(p, (t) => {
+        const en = angliskaDalis(t);
+        // EN puseje LT teksto NEDEDAM (produkto savininko sprendimas: laisvam
+        // tekstui - AI juodrastis matomame lauke, ne lietuviskas tekstas
+        // angliskame dokumente). Tuscias EN -> lieka "____", ir tai pagauna auditas.
+        const val = String((en ? d.en : d.lt) || '').trim();
+        let x = t;
+        if (naujasNr && senasNr && senasNr !== naujasNr){
+          x = x.replace(new RegExp('(^|\\s)' + senasNr + '(?=\\s)'), '$1' + naujasNr);
+        }
+        // Klonuojama PO pildymo, tad pavyzdys jau turi ANKSTESNES dalies
+        // pavadinima (ne "____"). Todel keiciam visa teksta po bruksnio, o
+        // atsargine iseitis (nepazintas sablonas) - pirma tuscia vieta.
+        // Klonas paveldi UZPILDYTA pavyzdi, tad tuscia reiksme NEGALI reiksti
+        // "palik kaip yra" - kitaip nauja dalis tyliai gautu ankstesnes dalies
+        // pavadinima su nauju numeriu, ir auditas nieko nerastu. Tuscia -> zyma.
+        const m = x.match(DALIES_PRIESDELIS);
+        if (val)      x = m ? (m[1] + ' ' + val) : x.replace(/_+/, val);
+        else if (m)   x = m[1] + ' ' + TUSCIA_ZYMA;
+        x = x.replace(/[;.\s]+$/, '') + (paskutine ? '.' : ';');
+        return x;
+      });
+    }
+  }
+
+  /* i - PASKUTINES esamos dalies pastraipos indeksas paras masyve.
+     naujos - [{ nr:3, lt:'pavadinimas', en:'name' }, ...] eiles tvarka.
+     Grazina sukurtu daliu skaiciu.                                           */
+  function dautiDalis(paras, i, naujos){
+    const p = paras[i];
+    if (!p || !Array.isArray(naujos) || !naujos.length) return 0;
+    const tr = eilutesProtevis(p);
+    const sablonas = tr || p;
+    const tevas = sablonas.parentNode;
+    if (!tevas) return 0;
+    const senasNr = (GPDocx.paraText(p).trim().match(/^([IVX]+)\s/) || [])[1] || '';
+    let po = sablonas, n = 0;
+    for (let k = 0; k < naujos.length; k++){
+      const klonas = sablonas.cloneNode(true);
+      tevas.insertBefore(klonas, po.nextSibling);
+      tvarkytiDali(klonas, senasNr, romeniskas(naujos[k].nr), naujos[k], k === naujos.length - 1);
+      po = klonas; n++;
+    }
+    // Pavyzdine eilute nustojo buti paskutine - jos gale reikia ";", ne ".".
+    if (n){
+      for (const sp of (tr ? GPDocx.els(tr,'p') : [p])){
+        keistiPastraiposTeksta(sp, (t) => t.replace(/[;.\s]+$/, '') + ';');
+      }
+    }
+    return n;
+  }
 
   /* Raudoni INTARPAI juodo teksto viduje. Trys skirtingi veiksmai:
        juodinti - tekstas yra tikras dokumento turinys, raudona tik "patikrink"
@@ -932,7 +1045,8 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, raudoniRunai, trintiRaudonusRunus,
+  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, dautiDalis, romeniskas,
+           raudoniRunai, trintiRaudonusRunus,
            keistiRaudonaTeksta, keistiRezimoEilute, taisytiTitulTarpa, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
 
