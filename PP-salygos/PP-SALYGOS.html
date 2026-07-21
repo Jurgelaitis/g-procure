@@ -155,7 +155,10 @@
     </div>
     <div class="q hid" id="pavEN"><div class="t">Procurement title (EN)</div>
       <input type="text" id="pavadinimasEN" placeholder="e.g. Autotransformers 400/110 kV">
-      <div class="cite">Dvikalbiuose dokumentuose angliškas pavadinimas rašomas atskirai - automatiškai neverčiamas.</div>
+      <button type="button" class="sec" id="pavENbtn" style="margin-top:6px" onclick="pavENsiulyk()">Pasiūlyti vertimą (AI)</button>
+      <div class="cite" id="pavENcite">Pildyti nebūtina: neįvedus nieko, angliškose eilutėse įrašomas lietuviškas
+        pavadinimas. Mygtukas paprašo AI pasiūlyti vertimą - pavadinimas išsiunčiamas per g-procure tarpinę
+        (Claude API). Pasiūlymą patikrinkite ir, jei reikia, pataisykite.</div>
     </div>
 
     <div class="q"><div class="t">Pirkimo būdas</div>
@@ -399,6 +402,52 @@ function pavClean(v){
   return String(v||'').trim().replace(/[\s„"]+pirkim(as|o|ui|ą|us|ai|u)\.?["“”]*\s*$/i, '').trim();
 }
 
+/* Angliskas pavadinimas be pertekliniu "Procurement of ..." - sablonas si
+   karkasa prideda pats ("Procurement of X", "FOR PROCUREMENT OF X").        */
+function pavENclean(v){
+  return String(v||'').trim()
+    .replace(/\u2014/g, '-')            // ilgas bruksnys (em dash) dokumentuose draudziamas
+    .replace(/^procurement\s+of\s+/i, '')
+    .replace(/\s+procurement\.?\s*$/i, '').trim();
+}
+/* Angliskoms eilutems naudojama reiksme: EN laukas, o jei tuscias -
+   lietuviskas pavadinimas (be pakartotines ivesties; ta pati logika kaip
+   PROCUREMENT TITLE zymos pakeitime). Zmogus pildo TIK lietuviskai - EN
+   pateikia irankis (AI pasiulymas 1 zingsnyje arba LT tekstas).             */
+function pavENval(){
+  return pavENclean($('#pavadinimasEN').value) || pavClean($('#pavadinimas').value);
+}
+
+/* AI pasiulymas EN pavadinimui: siunciamas TIK pavadinimas (ne dokumentas),
+   per g-procure tarpine. Rezultatas irasomas i lauka, kur zmogus ji mato ir
+   gali pataisyti - i dokumenta patenka tik lauko reiksme.                   */
+async function pavENsiulyk(){
+  const cite = $('#pavENcite'), btn = $('#pavENbtn');
+  const lt = pavClean($('#pavadinimas').value);
+  if (!lt){ cite.textContent = 'Įveskite lietuvišką pavadinimą aukščiau - iš jo pasiūlysime anglišką.'; return; }
+  if (!window.GP_AI_PROXY){ cite.textContent = 'AI tarpinė neprijungta - įrašykite angliškai ranka arba palikite tuščią.'; return; }
+  btn.disabled = true; const buvo = btn.textContent; btn.textContent = 'Siūloma...';
+  try {
+    const r = await GP_AI_PROXY.call({
+      module: 'pp-salygos',
+      maxTokens: 200,
+      system: 'Tu verti elektros perdavimo operatoriaus pirkimo objekto pavadinima is lietuviu i anglu kalba. '
+        + 'Grazink TIK vertima viena eilute, be kabuciu ir be jokio kito teksto. '
+        + 'Techninius zymenis (pvz. 400/110 kV) palik nepakeistus. Zodzio "procurement" nepridedik.',
+      userMessage: 'Pirkimo objekto pavadinimas (lietuviskai, kilmininko linksniu): ' + lt
+        + '\nPateik anglisko atitikmens forma, tinkancia sakiniui "Procurement of X".'
+    });
+    if (!r.ok) throw new Error(r.error || 'AI klaida');
+    const siulymas = pavENclean(String(r.text||'').split('\n')[0]);
+    if (!siulymas) throw new Error('tuščias atsakymas');
+    $('#pavadinimasEN').value = siulymas;
+    cite.textContent = 'AI pasiūlymas įrašytas - patikrinkite ir, jei reikia, pataisykite. Į dokumentą pateks lauko reikšmė.';
+  } catch (e) {
+    cite.textContent = 'AI nepasiekiamas (' + (e && e.message || e) + '). Įrašykite angliškai ranka arba palikite tuščią - tada liks lietuviškas.';
+  }
+  btn.disabled = false; btn.textContent = buvo;
+}
+
 /* Pirkimo pavadinimo gyva perziura (pastaba Nr. 4): vartotojas iskart mato, kaip
    atrodys dokumente, ir supranta, kad reikia kilmininko linksnio. Automatinio
    linksniavimo NEdarome - teisiniame dokumente tai butu rizikinga. */
@@ -530,7 +579,7 @@ function rezimoAtsakymas(k, rez){
 }
 
 /* --- Raudono intarpo kategorija ------------------------------------------ */
-const INSTR_RE = /(įrašom|įrašyt|nurodyt|pasirink|koreguojam|šis punktas|dalis reikalinga|suformuluot|pavadinimas|jei taikoma|pagal poreikį|palikti tik|fill in|leave only|part is required|to be completed|title of procurement)/i;
+const INSTR_RE = /(įrašom|įrašyt|nurodyt|pasirink|koreguojam|šis punktas|dalis reikalinga|suformuluot|pavadinimas|jei taikoma|pagal poreikį|palikti tik|fill in|leave only|part is required|to be completed|title of procurement|title of the object)/i;
 const SALYGOS_RE = /^[\s.,;]*(jei|jeigu|kai|if|where|when|in case)\b/i;
 function intarpoKat(n){
   const t = n.text || '';
@@ -553,6 +602,14 @@ function intarpoKat(n){
 
 /* Pavadinimo vietos: pildomos automatiskai is kontrolinio klausimo (Nr. 4-5). */
 const PAV_RE = /\(įrašomas pirkimo objekto pavadinim|Pirkimo objektas\s*[–-]\s*_+|\(Pirkimo objektas\)/i;
+
+/* Angliski tu paciu vietu dvyniai dvikalbiuose sablonuose. Pildomi is TU
+   PACIU kontroliniu klausimu - zmogus nieko neveda dukart (EN reiksme duoda
+   pavENval(): EN laukas arba lietuviskas pavadinimas).                       */
+const PAV_EN_RE = /^The object of procurement\s*[–-]\s*_+/i;         // kuno eilute "The object of Procurement - ____" (inkaruota: "Part I of the object..." daliu eilutes NEliecia)
+const TITULO_EN_RE = /fill in the title of procurement/i;            // titulinio "Procurement of (fill in ...)"
+const OBJEKTAS_EN_RE = /^\(object of procurement\)/i;                // formu antrastes "(object of procurement) GOODS/..."
+const TIPAI_EN = { prekes:'GOODS', paslaugos:'SERVICES', darbai:'WORKS' };
 
 /* Betekste bruksniu linija = dokumento pabaigos skirtukas, ne pildomas laukas. */
 const SKIRTUKAS_RE = /^[\s_]+$/;
@@ -808,6 +865,8 @@ function surinktiKlausimus(){
       const pavCnt = (Z.tuscios||[]).filter(n => PAV_RE.test(n.text)).length
         + (Z.intarpai||[]).filter(n => /^\(pirkimo objektas\)/i.test((n.raudonas||'').trim())).length;
       if (pavCnt) auto(trumpas, 'pirkimo pavadinimas ir objekto tipas formos antraštėje', 'įrašomi automatiškai', 'iš 1 žingsnio');
+      if ((Z.intarpai||[]).some(n => OBJEKTAS_EN_RE.test((n.raudonas||'').trim())))
+        auto(trumpas, 'angliška antraštė (object of procurement)', 'įrašoma automatiškai', 'iš 1 žingsnio - be pakartotinės įvesties');
       if ((Z.intarpai||[]).some(n => /nurodyti pirkimo būdą ir pirkimo pavadinimą/i.test(n.raudonas||n.text)))
         auto(trumpas, 'pirkimo būdas ir pavadinimas konfidencialumo tekste', 'įrašomas automatiškai', 'iš 1 žingsnio');
       auto(trumpas, 'tiekėjo pildomos vietos ir formos nurodymai', 'paliekama kaip šablone',
@@ -836,6 +895,14 @@ function surinktiKlausimus(){
         if (pav) vals[0] = pav;
         ATS['B_' + raktas] = vals;
         auto(trumpas, n.text.slice(0,70), pav ? `įrašoma „${pav}"` : 'laukiama pavadinimo 1 žingsnyje', 'pirkimo pavadinimas');
+        return;
+      }
+      if (PAV_EN_RE.test(n.text)){                            // angliskas dvynys - is tu paciu duomenu
+        const pEN = pavENval();
+        const vals = new Array(GPGen.vietos(n.text).length).fill('');
+        if (pEN) vals[0] = pEN;
+        ATS['B_' + raktas] = vals;
+        auto(trumpas, n.text.slice(0,70), pEN ? `įrašoma „${pEN}"` : 'laukiama pavadinimo 1 žingsnyje', 'pirkimo pavadinimas (EN, be pakartotinės įvesties)');
         return;
       }
       if (REZIMO_PASIRINKITE.test(norm(n.text))){           // "Vykdomas [Pasirinkite]." (juoda eilute)
@@ -1395,7 +1462,22 @@ async function generuotiViena(d, REZ){
         // prasideda be tarpo
         if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, `${pav} ${tip} `)) intTeksto++;
       }
+      // Angliskas antrastes dvynys: "(object of procurement) GOODS / SERVICES /
+      // WORKS". Pildomas is TU PACIU kontroliniu klausimu - zmogus nieko neveda
+      // dukart; pavadinima duoda pavENval() (EN laukas arba lietuviskas).
+      if (OBJEKTAS_EN_RE.test((n.raudonas||'').trim())){
+        const tipEN = TIPAI_EN[$('input[name=tipas]:checked').value] || '';
+        const pEN = pavENval();
+        if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, `${pEN} ${tipEN} `)) intTeksto++;
+      }
       return;                                        // kiti formos intarpai - tiekejo
+    }
+    // Titulinio angliska eilute "Procurement of (fill in the title of Procurement)":
+    // vietoj nurodymo trynimo (kuris palikdavo "Procurement of ") irasomas
+    // pavadinimas is 1 zingsnio - kaip lietuviskoje eiluteje virsuje.
+    if (TITULO_EN_RE.test(n.raudonas || n.text)){
+      const pEN = pavENval();
+      if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, pEN)){ intTeksto++; return; }
     }
     const kat = intarpoKat(n);
     if (kat === 'trinti') intTrinta += GPGen.trintiRaudonusRunus(paras, n.i);
@@ -1435,8 +1517,7 @@ async function generuotiViena(d, REZ){
   GPDocx.replaceText(doc, '/ĮMONĖS PAVADINIMAS/', IMONE);
   if (pav){
     GPDocx.replaceText(doc, 'PIRKIMO PAVADINIMAS', pav);
-    const pavEN = ($('#pavadinimasEN').value||'').trim() || pav;
-    GPDocx.replaceText(doc, 'PROCUREMENT TITLE', pavEN);
+    GPDocx.replaceText(doc, 'PROCUREMENT TITLE', pavENval());
   }
   GPDocx.replaceRegex(doc, /incidentai@(?:_+|\/[^/]*\/)\.eu/g, INC_PASTAS);
   if (!forma) GPGen.valytiPastraipuZenklus(doc);
