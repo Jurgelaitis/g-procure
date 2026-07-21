@@ -651,6 +651,13 @@ const TITULO_EN_RE = /fill in the title of procurement/i;            // titulini
 const OBJEKTAS_EN_RE = /^\(object of procurement\)/i;                // formu antrastes "(object of procurement) GOODS/..."
 const TIPAI_EN = { prekes:'GOODS', paslaugos:'SERVICES', darbai:'WORKS' };
 
+/* Skaidymas i dalis. Sablonuose FIZISKAI yra tik dvi daliu eilutes (I ir II),
+   o variklis naujo turinio nekuria. Jei rengejas nurodo daugiau daliu, apie tai
+   privalu ispeti: kitaip dokumentas ("skaidomas i 4 dalis", isvardytos 2) gauna
+   svaru audita, nes bruksniu jame nebelieka. */
+const DALIU_SK_RE = /skaidomas i .*dali/;                 // "skaidomas i __ Pirkimo objekto dalis:"
+const DALIES_EIL_RE = /^(i{1,3}|iv|v|vi) pirkimo objekto dalis/;  // "I Pirkimo objekto dalis - ___" (LT; EN dvyniai nesutampa)
+
 /* Betekste bruksniu linija = dokumento pabaigos skirtukas, ne pildomas laukas. */
 const SKIRTUKAS_RE = /^[\s_]+$/;
 
@@ -818,9 +825,17 @@ function komentarai(Z, b){
 function komentaraiTies(Z, i){
   return (Z.komentaruTaisykles||[]).filter(k => k.pastraipos.includes(i)).map(k => k.text);
 }
+/* Salygos raktas: nukerpam pabaigos skliaustus su NUORODA i punktus ar straipsni
+   ("... (taikomi 2.4.-2.7. punktai)", "... (pagal PĮ 50 str. 8 d.)"). Tai ne
+   salygos dalis, o rengejo nuoroda, taciau del jos ta pati salyga skirtinguose
+   dokumentuose gaudavo SKIRTINGUS raktus: AK_LT SPS sprendimas "skaidomas i
+   dalis" nepasiekdavo pasiulymo formos, ir ji visada likdavo su visomis dalimis.
+   Patikrinta prie saltinio: nukirpimas sulieja tik dvi poras, ir abi yra ta pati
+   salyga (dalys ir nacionalinis saugumas) - skirtingu salygu nesulieja.        */
+const salygosRaktas = (t) => norm(String(t || '').replace(/\s*\([^)]*\)\s*$/, ''));
 const blokoRaktas = (Z, b) => {
   const vTekstas = (Z.vienetai||[]).find(v => v.id === b.vienetas)?.tekstas;
-  return norm(vTekstas || b.klausimasLT || b.klausimas);
+  return salygosRaktas(vTekstas || b.klausimasLT || b.klausimas);
 };
 
 /* Ar saka itraukiama pagal dabartinius atsakymus (bendra klausimynui ir generavimui). */
@@ -866,11 +881,11 @@ function surinktiKlausimus(){
   // grupes atsakymas privalo likti neatsakytas, kol pasirinks rengejas).
   const grupiuRaktaiPre = new Set();
   DOK.forEach(d => (d.zemelapis.vienetai||[]).forEach(v => {
-    if (v.grupe) grupiuRaktaiPre.add(norm(v.tekstas));
+    if (v.grupe) grupiuRaktaiPre.add(salygosRaktas(v.tekstas));
   }));
   DOK.forEach(d => (d.zemelapis.vienetai||[]).forEach(v => {
     if (v.grupe) return;
-    const raktas = norm(v.tekstas);
+    const raktas = salygosRaktas(v.tekstas);
     if (grupiuRaktaiPre.has(raktas)) return;
     if (kontrolinisAtsakymas(raktas) === null && rezimoAtsakymas(raktas, REZ) === null)
       ATS[raktas] ??= true;
@@ -884,7 +899,7 @@ function surinktiKlausimus(){
 
     /* --- Sakos (galioja ir formoms - pvz. skaidymas i dalis) -------------- */
     (Z.vienetai||[]).forEach(v => {
-      const raktas = norm(v.tekstas);
+      const raktas = salygosRaktas(v.tekstas);
       const blokai = (Z.blokai||[]).filter(b => b.vienetas === v.id);
       if (!blokai.length) return;
       const kom = blokai.flatMap(b => komentarai(Z, b));
@@ -1027,6 +1042,26 @@ function surinktiKlausimus(){
         pridek('patikrinti', raktas, trumpas,
           { tekstas:n.text, vietos:siulymai.length,
             pastaba:'Siūloma pagal įprastą LITGRID numeraciją (SPS 1 - paraiškos forma, SPS 2 - EBVPD). Patikrinkite.' });
+        return;
+      }
+      if (DALIU_SK_RE.test(norm(n.text))){                    // daliu skaicius - su ispejimu
+        const eiluciu = (Z.tuscios||[]).filter(x => DALIES_EIL_RE.test(norm(x.text))).length;
+        const irasyta = String((ATS['B_' + raktas] || [])[0] || '').trim();
+        const ivesta = parseInt(irasyta, 10);
+        const zodziu = irasyta && !Number.isFinite(ivesta);      // "keturias" - skaiciaus neatpazistam
+        pildomuIdx.add(n.i);
+        pridek('tuscios', raktas, trumpas,
+          { tekstas:n.text, vietos:GPGen.vietos(n.text).length, komentarai:komentaraiTies(Z, n.i),
+            perpiesti: true,
+            pastaba: !eiluciu ? undefined
+              : (ivesta > eiluciu
+                  ? `DĖMESIO: šablone yra tik ${eiluciu} dalių eilutės, o nurodėte ${ivesta}. `
+                    + `Trūkstamų dalių sistema NEsukuria - jas reikės įrašyti Word'e.`
+                  : zodziu
+                    ? `Įrašykite dalių skaičių skaitmeniu - tik tada galėsime patikrinti, ar šablone `
+                      + `pakanka eilučių (jų yra ${eiluciu}).`
+                    : `Šablone yra ${eiluciu} dalių eilutės. Jei dalių daugiau, sistema jų nesukuria - įspėsime.`),
+            ispejimas: !!(eiluciu && (ivesta > eiluciu || zodziu)) });
         return;
       }
       pildomuIdx.add(n.i);
@@ -1471,8 +1506,12 @@ function klausimynas(){
       if (!Array.isArray(ATS['B_'+raktas])) ATS['B_'+raktas] = new Array(q.vietos).fill('');
       h += `<div class="q"><div class="t" style="font-weight:500">${esc(q.tekstas.slice(0,180))}${zymos(q.dokumentai)}</div>`;
       for (let k = 0; k < q.vietos; k++){
+        // Laukams, kuriu reiksme keicia ispejima (daliu skaicius), po ivedimo
+        // butinas perpiesimas - kitaip DEMESIO niekada nepasirodytu: uAtsArr
+        // klausimyno neperpiesia, o generuojant 2 zingsnis is karto paslepiamas.
         h += `<input type="text" style="margin-bottom:5px" placeholder="reikšmė ${k+1}"
-          value="${esc(ATS['B_'+raktas][k]||'')}" oninput="uAtsArr('B_${esc(raktas)}',${k},this.value)">`;
+          value="${esc(ATS['B_'+raktas][k]||'')}" oninput="uAtsArr('B_${esc(raktas)}',${k},this.value)"${
+            q.perpiesti ? ` onchange="klausimynas()"` : ''}>`;
       }
       /* LT->EN pora: matomas EN laukas prie to paties klausimo (laisvas tekstas).
          AI mygtukas siuncia TIK lauko reiksme per g-procure tarpine; i dokumenta
@@ -1488,6 +1527,7 @@ function klausimynas(){
         }
         h += `<button type="button" class="sec" onclick="enPoraAI(this,'B_${esc(raktas)}','B_${esc(enL.enRaktas)}',true)">Pasiūlyti vertimą (AI)</button>`;
       }
+      if (q.pastaba) h += `<div class="cite"${q.ispejimas?' style="color:var(--color-warning);font-weight:600"':''}>${esc(q.pastaba)}</div>`;
       h += `${why(q.komentarai)}</div>`;
     });
   }
@@ -1551,8 +1591,30 @@ async function generuotiViena(d, REZ){
   (Z.blokai||[]).filter(b => b.tipas === 'saka').forEach(b => {
     const laikom = sakaItraukiama(Z, b, REZ);
     if (!b.blokas) return;
+    // Isjungto bloko turinys LENTELEJE: vien pastraipu trynimas paliktu tuscias
+    // eilutes su remeliais (dvikalbiuose sablonuose beveik visas dokumentas yra
+    // viena didele LT/EN lentele). trintiEilutese salina TIK tas w:tr, kurios
+    // visos telpa bloko ribose - bendra eilute su liekanciu turiniu nenukencia.
+    // Jei pastraipos ne lenteleje, funkcija nieko neranda ir nieko nedaro.
+    if (!laikom){
+      // Eilute prasideda NUMERACIJOS langeliu, kurio pastraipa yra PRIES bloko
+      // pradzia ir be teksto. Neatsukus liktu tuscia numeruota eilute. Atsukam
+      // tik per betekstes pastraipas; visosViduje saugiklis trintiEilutese ir
+      // toliau neleidzia paliesti eilutes su liekanciu turiniu.
+      let nuoEil = Math.min(b.i, b.blokas.nuo);
+      while (nuoEil > 0 && paras[nuoEil - 1] && !GPDocx.paraText(paras[nuoEil - 1]).trim()) nuoEil--;
+      trintiEiluciu.push({ nuo: nuoEil, iki: b.blokas.iki });
+    }
     if (b.sulieta){
       if (laikom){ sulietos.push(b.i); if (!forma) juodinti.add(b.i); } else trinti.add(b.i);
+      // Sulieta salyga gali tureti TESINI - atskiras pastraipas uz inkaro
+      // (MVP_LTEN daliu eilutes 58-71). Be sio ciklo jos likdavo dokumente net
+      // pasirinkus "neskaidomas". Inkara jau apdorojom auksciau.
+      if (b.blokas.iki > b.i){
+        for (let i = b.i + 1; i <= b.blokas.iki; i++){
+          if (laikom){ if (!forma) juodinti.add(i); } else trinti.add(i);
+        }
+      }
       return;
     }
     for (let i = b.blokas.nuo; i <= b.blokas.iki; i++){
@@ -1571,8 +1633,14 @@ async function generuotiViena(d, REZ){
 
   // 3. Lenteles
   (Z.blokai||[]).filter(b => b.tipas === 'lentele').forEach(b => {
-    if (ATS['T_' + norm(b.klausimasLT || b.klausimas)] === false)
-      lenteles.push({ i:b.i, kiek:b.lenteliu || 1 });
+    if (ATS['T_' + norm(b.klausimasLT || b.klausimas)] !== false) return;
+    // Is taisykles teksto issitraukiam, KURIU NUMERIU lenteles ji valdo
+    // ("3 lentele paliekama", "1 ir 2 lenteles"). Variklis pagal tai patikrina
+    // lenteles antraste ir netrina svetimos - sablonu tvarka nevienoda.
+    const tekstas = b.klausimasLT || b.klausimas || '';
+    const numeriai = [...tekstas.matchAll(/(\d+)\s*(?:ir\s*(\d+)\s*)?lentel/gi)]
+      .flatMap(m => [m[1], m[2]]).filter(Boolean);
+    lenteles.push({ i:b.i, kiek:b.lenteliu || 1, numeriai });
   });
 
   // 4. Raudonos pastabos - tik rengejo dokumentuose. Formose jos yra tiekejo
@@ -1695,7 +1763,7 @@ async function generuotiViena(d, REZ){
   // 7. Vykdom
   sulietos.forEach(i => { if (!trinti.has(i)) intTrinta += GPGen.trintiRaudonusRunus(paras, i); });
   const nj = GPGen.juodinti(paras, [...juodinti].filter(i => !trinti.has(i)));
-  lenteles.forEach(l => GPDocx.deleteTableAfter(doc, l.i, l.kiek));
+  lenteles.forEach(l => GPDocx.deleteTableAfter(doc, paras[l.i], l.kiek, l.numeriai));
   let ntEil = 0;
   trintiEiluciu.forEach(r => ntEil += GPGen.trintiEilutese(paras, r.nuo, r.iki));   // salyginiai lenteles blokai
   const nt = GPGen.trinti(paras, [...trinti]);
