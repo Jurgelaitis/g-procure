@@ -193,19 +193,45 @@ const GPDocx = (() => {
     const body = d.getElementsByTagNameNS(NS_W,'body')[0];
     return Array.from(body.getElementsByTagNameNS(NS_W,'tbl'));
   }
-  function deleteTableAfter(doc, paraIndex, kiek = 1){
+  /* Salina lenteles PO nurodytos pastraipos. Priimam pastraipos MAZGA (is
+     GPGen.snapshot), o ne numeri: zemelapio i skaiciuoja VISAS w:p (ir esancias
+     lentelese), o body lygyje ju daug maziau - skaiciuojant poziciju abu
+     indeksavimai nesutapdavo ir lenteles budavo salinamos ne tos arba visai
+     nesalinamos (dvikalbiuose - nei viena, nes ten beveik viskas lenteleje).
+     Dalis taisykliu valdo KELIAS lenteles ("3 ir 4 lenteles paliekamos").     */
+  function deleteTableAfter(doc, paraNode, kiek = 1, numeriai = null){
     const d = doc.parts['word/document.xml'];
     const body = d.getElementsByTagNameNS(NS_W,'body')[0];
-    // Dalis taisykliu valdo KELIAS lenteles ("3 ir 4 lenteles paliekamos").
-    let n = -1, rasta = 0;
+    if (!paraNode) return 0;
+    // Pakylam iki BODY lygio protevio: valdomos lenteles yra body lygyje, o
+    // pati pastraipa dvikalbiuose sablonuose gali sedeti lenteles langelyje.
+    let vir = paraNode;
+    while (vir && vir.parentNode && vir.parentNode !== body) vir = vir.parentNode;
+    if (!vir || vir.parentNode !== body) return 0;
+    // SAUGIKLIS. Taisykle sako, KURIA lentele valdo ("3 lentele paliekama"),
+    // o sablonuose lenteles antraste ("3 lentele / Table 3") eina PRIES pacia
+    // lentele. Sablonu tvarka nevienoda: AK taisykle yra PRIES lentele, o
+    // TSD_LTEN - PO jos, tad aklas "trink kita lentele" ten pasalintu
+    // SOCIALINIU reikalavimu lentele. Todel trinam TIK tada, kai antraste
+    // patvirtina numeri; nepatvirtinus - nedarom nieko (kaip ir iki siol).
+    const laukiam = Array.isArray(numeriai) && numeriai.length ? numeriai : null;
+    let rasta = 0, po = false, antraste = '', praleista = 0;
     for (const node of Array.from(body.children)){
-      if (node.localName === 'p') n++;
-      if (node.localName === 'tbl' && n >= paraIndex && rasta < kiek){
-        node.parentNode.removeChild(node);
-        rasta++;
+      if (node === vir){ po = true; continue; }
+      if (!po) continue;
+      if (node.localName === 'p'){ const t = paraText(node).trim(); if (t) antraste = t; continue; }
+      if (node.localName !== 'tbl') continue;
+      if (rasta >= kiek) break;
+      if (laukiam){
+        const m = antraste.match(/(\d+)\s*lentel/i);
+        if (!m || !laukiam.includes(m[1])){ praleista++; break; }   // ne ta lentele - stojam
       }
+      node.parentNode.removeChild(node);
+      rasta++;
+      antraste = '';
     }
-    note(doc, `Lenteles po pastraipos ${paraIndex}: istrinta ${rasta} is ${kiek}.`);
+    note(doc, `Lenteles po pastraipos: istrinta ${rasta} is ${kiek}`
+      + (praleista ? ` (sustota: antraste nepatvirtino numerio ${(laukiam||[]).join('/')})` : '') + '.');
     return rasta;
   }
 
