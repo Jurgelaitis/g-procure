@@ -448,6 +448,46 @@ async function pavENsiulyk(){
   btn.disabled = false; btn.textContent = buvo;
 }
 
+/* Skaicius zodziais abiem kalbom (1-20) - "3 (trys)" / "3 (three)" tipo
+   laukams. Deterministinis, jokio AI. Uz ribos - pildoma ranka.             */
+const SK_ZODZIAI_LT = { 1:'vienas',2:'du',3:'trys',4:'keturi',5:'penki',6:'šeši',7:'septyni',
+  8:'aštuoni',9:'devyni',10:'dešimt',11:'vienuolika',12:'dvylika',13:'trylika',14:'keturiolika',
+  15:'penkiolika',16:'šešiolika',17:'septyniolika',18:'aštuoniolika',19:'devyniolika',20:'dvidešimt' };
+const SK_ZODZIAI_EN = { 1:'one',2:'two',3:'three',4:'four',5:'five',6:'six',7:'seven',
+  8:'eight',9:'nine',10:'ten',11:'eleven',12:'twelve',13:'thirteen',14:'fourteen',
+  15:'fifteen',16:'sixteen',17:'seventeen',18:'eighteen',19:'nineteen',20:'twenty' };
+
+/* AI vertimo pasiulymas LT->EN porai klausimyne: siunciamos TIK lietuviskos
+   lauko reiksmes (ne dokumentas), per g-procure tarpine. Rezultatas dedamas
+   i MATOMA EN lauka (per uAts/uAtsArr - vartotojas mato ir gali taisyti);
+   i dokumenta patenka tik lauko reiksme.                                    */
+async function enPoraAI(btn, ltKey, enKey, masyvas){
+  if (!window.GP_AI_PROXY){ const b0 = btn.textContent; btn.textContent = 'AI neprijungtas'; setTimeout(() => { btn.textContent = b0; }, 2500); return; }
+  const src = masyvas ? (ATS[ltKey] || []) : [ATS[ltKey] || ''];
+  const pilnos = src.map(v => String(v||'').trim());
+  if (!pilnos.some(v => v)){ btn.textContent = 'Pirma įrašykite LT reikšmę'; setTimeout(() => { btn.textContent = 'Pasiūlyti vertimą (AI)'; }, 2500); return; }
+  btn.disabled = true; const buvo = btn.textContent; btn.textContent = 'Siūloma...';
+  try {
+    const vertimai = await Promise.all(pilnos.map(v => {
+      if (!v) return Promise.resolve('');
+      return GP_AI_PROXY.call({
+        module: 'pp-salygos',
+        maxTokens: 400,
+        system: 'Tu verti pirkimo dokumento lauko reiksme is lietuviu i anglu kalba. '
+          + 'Grazink TIK vertima viena eilute, be kabuciu ir be jokio kito teksto. '
+          + 'Skaicius, datas ir techninius zymenis palik nepakeistus.',
+        userMessage: v
+      }).then(r => { if (!r.ok) throw new Error(r.error || 'AI klaida'); return pavENclean(String(r.text||'').split('\n')[0]); });
+    }));
+    if (masyvas) vertimai.forEach((v, k) => { if (v) uAtsArr(enKey, k, v); });
+    else if (vertimai[0]) { TOUCHED.add(enKey); ATS[enKey] = vertimai[0]; }
+    klausimynas();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'AI nepasiekiamas - įrašykite ranka';
+    setTimeout(() => { btn.textContent = buvo; btn.disabled = false; }, 3000);
+  }
+}
+
 /* Pirkimo pavadinimo gyva perziura (pastaba Nr. 4): vartotojas iskart mato, kaip
    atrodys dokumente, ir supranta, kad reikia kilmininko linksnio. Automatinio
    linksniavimo NEdarome - teisiniame dokumente tai butu rizikinga. */
@@ -698,6 +738,11 @@ const BLANKU_FORMULES = [
     variantai:['Atitinkamos prekės (paslaugos, darbai) CPO LT kataloge nesiūlomos.'],
     pastaba:'PĮ 81 str.: pagrindimas privalomas perkant ne per CPO. Prieš pasirinkdami patikrinkite CPO LT '
       + 'katalogą (žr. šablono autorių pastabą).' },
+  /* Angliskas CPO pagrindimo dvynys dvikalbiuose SPS. Variantu tvarka
+     LYGIAGRETI lietuviskam irasui auksciau - poravimas eina indeksu.        */
+  { re:/justification for the decision not to carry out the procurement using the centralized procurement/,
+    variantai:['The relevant goods (services, works) are not offered in the CPO LT catalogue.'],
+    pastaba:'DRAFT (angliškas lietuviško pagrindimo atitikmuo) - suderinkite su pasirinkta lietuviška formuluote.' },
   /* Zaliuju reikalavimu atitikimo taisykle (vartotojo pastaba Nr. 2, 2026-07).
      Variantai - PROJEKTAI pagal sablono autoriu nuoroda i VPT gaires "Aplinkos
      apsaugos vadybos sistemos": taisykle atsako, KAS turi atitikti reikalavima,
@@ -803,7 +848,10 @@ function isjungtosPastraipos(Z, REZ){
 function surinktiKlausimus(){
   const REZ = rezimas();
   const K = { grupes:{}, pavieniai:{}, autoSakos:[], lenteles:{}, priedai:{}, formuluotes:{},
-              patikrinti:{}, tuscios:{}, automatika:[], formos:[] };
+              patikrinti:{}, tuscios:{}, automatika:[], formos:[],
+              /* LT->EN poru nuorodos (dvikalbiai dokumentai): tuscios - EN laukas
+                 prie LT klausimo; formuluotes - EN versija seka LT pasirinkima. */
+              enPoros:{ tuscios:{}, formuluotes:{} } };
   const pridek = (kat, raktas, dok, extra) => {
     const x = K[kat][raktas] ??= { ...extra, dokumentai:[] };
     if (!x.dokumentai.includes(dok)) x.dokumentai.push(dok);
@@ -889,6 +937,56 @@ function surinktiKlausimus(){
         return;
       }
       const raktas = tusciaRaktas(n, d.trumpas);
+      /* LT->EN pora (dvikalbiai dokumentai): EN dvynys atskirai neklausiamas -
+         reiksme ateina is lietuvisko atsakymo (zemelapio pora/poraTipas).
+         Saugiklis: LT ir EN vietu skaicius turi sutapti - kitaip krentama
+         atgal i iprasta atskira klausima (jokio tylaus issislinkimo).        */
+      if (Z.kalba === 'LTEN' && n.pora !== undefined){
+        const lt = (Z.tuscios||[]).find(x => x.i === n.pora);
+        const ltRaktas = lt ? tusciaRaktas(lt, d.trumpas) : null;
+        const enVietos = GPGen.vietos(n.text).length;
+        const vietosOk = lt && GPGen.vietos(lt.text).length === enVietos;
+        if (lt && n.poraTipas === 'kopija' && vietosOk){      // skaiciai, priedu Nr., datos
+          const ltVals = ATS['B_' + ltRaktas];
+          ATS['B_' + raktas] = Array.isArray(ltVals) ? ltVals.slice(0, enVietos) : new Array(enVietos).fill('');
+          const rodoma = ATS['B_' + raktas].filter(v => String(v||'').trim()).join(', ');
+          auto(trumpas, n.text.slice(0,70), rodoma ? `užpildoma iš lietuviško atsakymo: ${rodoma}` : 'užsipildys iš lietuviško atsakymo',
+               'ta pati reikšmė abiem kalbom - be pakartotinės įvesties');
+          pildomuIdx.add(n.i);
+          return;
+        }
+        if (lt && n.poraTipas === 'zodziai' && vietosOk){     // "3 (trys)" / "3 (three)"
+          const ltVals = (ATS['B_' + ltRaktas] ??= new Array(enVietos).fill(''));
+          const sk = parseInt(String(ltVals[0]||'').trim(), 10);
+          // LT zodzio langelis: pildomas/ATNAUJINAMAS tik kai tuscias arba laiko
+          // MUSU anksciau irasyta auto-zodi (vartotojo ranka irasyto neliesti).
+          // Taip pakeitus skaiciu 3->5 nelieka pasenusio "(trys)".
+          const autoZodis = !String(ltVals[1]||'').trim() ||
+                            Object.values(SK_ZODZIAI_LT).includes(String(ltVals[1]||'').trim());
+          if (autoZodis) ltVals[1] = SK_ZODZIAI_LT[sk] || '';
+          ATS['B_' + raktas] = [ltVals[0]||'', SK_ZODZIAI_EN[sk] || ''];
+          auto(trumpas, n.text.slice(0,70),
+               SK_ZODZIAI_EN[sk] ? `užpildoma: ${ltVals[0]} (${SK_ZODZIAI_EN[sk]})`
+                 : (ltVals[0] ? 'skaičius perkeliamas; žodžiams virš 20 - įrašykite LT ranka, EN dalį Word\'e'
+                              : 'užsipildys iš lietuviško skaičiaus, žodžiai - automatiškai'),
+               'skaičius iš lietuviško atsakymo, žodžiai abiem kalbom parenkami automatiškai (1-20)');
+          pildomuIdx.add(n.i);
+          return;
+        }
+        if (lt && n.poraTipas === 'ai'){                      // laisvas tekstas - EN laukas prie LT klausimo
+          if (!Array.isArray(ATS['B_' + raktas])) ATS['B_' + raktas] = new Array(enVietos).fill('');
+          K.enPoros.tuscios[ltRaktas] = { enRaktas: raktas, vietos: enVietos, tekstas: n.text };
+          pildomuIdx.add(n.i);
+          return;
+        }
+        if (lt && n.poraTipas === 'formule'){                 // formuluote - EN seka LT pasirinkima indeksu
+          K.enPoros.formuluotes['B|' + ltRaktas] = { enRaktas: raktas, vietos: enVietos,
+            ltTekstas: lt.text, enTekstas: n.text, kanalas: 'B', tipas: 'formule', dok: trumpas };
+          pildomuIdx.add(n.i);
+          return;
+        }
+        // saugiklis nepraejo (nera LT poros ar nesutampa vietos) - EN lieka atskiru klausimu
+      }
       if (PAV_RE.test(n.text)){                               // pavadinimas (Nr. 4-5)
         const pav = pavClean($('#pavadinimas').value);
         const vals = new Array(GPGen.vietos(n.text).length).fill('');
@@ -942,6 +1040,28 @@ function surinktiKlausimus(){
       if (isjungta.has(n.i)) return;
       const raktas = norm(n.text);
       const nr = norm(n.text);
+      /* LT->EN pora I_ kanale (DPSK: lauztiniu skliaustu vietos eina per
+         intarpu 'teksto' kanala). EN dvynys neklausiamas atskirai.           */
+      if (Z.kalba === 'LTEN'){
+        const tusEn = (Z.tuscios||[]).find(x => x.i === n.i && x.pora !== undefined);
+        const ltInt = tusEn && (Z.intarpai||[]).find(x => x.i === tusEn.pora && intarpoKat(x) === 'teksto');
+        if (tusEn && ltInt){
+          const ltKey = 'I_' + norm(ltInt.text);
+          if (tusEn.poraTipas === 'kopija'){                  // skaicius / verte / data
+            ATS['I_' + raktas] = ATS[ltKey] || '';
+            auto(trumpas, n.text.slice(0,70),
+                 String(ATS[ltKey]||'').trim() ? `užpildoma iš lietuviško atsakymo: ${ATS[ltKey]}` : 'užsipildys iš lietuviško atsakymo',
+                 'ta pati reikšmė abiem kalbom - be pakartotinės įvesties');
+            return;
+          }
+          if (tusEn.poraTipas === 'ai'){                      // laisvas tekstas - EN laukas prie LT klausimo
+            ATS['I_' + raktas] ??= '';
+            K.enPoros.formuluotes['I|' + norm(ltInt.text)] = { enRaktas: raktas,
+              ltTekstas: ltInt.text, enTekstas: n.text, kanalas: 'I', tipas: 'ai', dok: trumpas };
+            return;
+          }
+        }
+      }
       const apF = APIMTIS_FORMULES.find(f => f.re.test(nr));
       if (apF){                                               // derybu formuluotes (Nr. 3, 8)
         const ap = apimtis();
@@ -1109,6 +1229,37 @@ function surinktiKlausimus(){
     } else if (!grupiuRaktaiPre.has(raktas)) ATS[raktas] ??= true;
   });
 
+  /* LT->EN formuluociu sekimas: parinkus LT preseta, EN gauna LYGIAGRETU
+     EN varianta (tuo paciu indeksu; abu sarasai kode surasyti zmogaus).
+     Sava formuluote ("Kita formuluote") - deterministinio EN nera, todel
+     prie klausimo rodomas EN laukas su AI pasiulymu (zr. atvaizdavima).      */
+  Object.entries(K.enPoros.formuluotes).forEach(([fid, link]) => {
+    if (link.tipas !== 'formule') return;
+    const ltKey = 'B_' + fid.slice(2);
+    const enKey = 'B_' + link.enRaktas;
+    const ltVal = String(((ATS[ltKey]||[])[0]) || '').trim();
+    const ltF = BLANKU_FORMULES.find(f => f.re.test(norm(link.ltTekstas)));
+    const enF = BLANKU_FORMULES.find(f => f.re.test(norm(link.enTekstas)));
+    const idx = (ltVal && ltF) ? ltF.variantai.indexOf(ltVal) : -1;
+    if (idx >= 0 && enF && enF.variantai[idx]){
+      const vals = new Array(link.vietos).fill(''); vals[0] = enF.variantai[idx];
+      ATS[enKey] = vals;                                     // EN seka LT preseta besalygiskai
+      link.parinkta = enF.variantai[idx];
+      auto(link.dok, link.enTekstas.slice(0,60), 'angliškas variantas parenkamas pagal lietuvišką pasirinkimą',
+           'suderinti variantų sąrašai (DRAFT) - be pakartotinės įvesties');
+    } else if (!ltVal){
+      if (!TOUCHED.has(enKey)) ATS[enKey] = new Array(link.vietos).fill('');
+    } else {
+      link.custom = true;                                    // sava LT formuluote - EN pildomas lauke
+      // Jei EN lauke liko MUSU anksciau parinktas presetas (perjungta is preseto
+      // i sava formuluote) - isvalom, kad senas vertimas tyliai nekeliautu prie
+      // jau kitokios lietuviskos formuluotes. Vartotojo ranka irasyto neliesti.
+      if (!TOUCHED.has(enKey) && enF && enF.variantai.includes(String((ATS[enKey]||[])[0]||'')))
+        ATS[enKey] = new Array(link.vietos).fill('');
+      if (!Array.isArray(ATS[enKey])) ATS[enKey] = new Array(link.vietos).fill('');
+    }
+  });
+
   return K;
 }
 
@@ -1248,11 +1399,34 @@ function klausimynas(){
         h += `<label class="opt"><input type="radio" name="F_${esc(fid)}" ${cur==='__NETAIKYTI__'?'checked':''}
           onchange="nustatykFormuluote('${esc(fid)}','__NETAIKYTI__')"> Netaikyti - punktas išbraukiamas</label>`;
       }
+      /* LT->EN pora: EN versijos elgsena priklauso nuo pasirinkimo tipo.
+         Presetas - EN parenkamas automatiskai (suderinti sarasai); sava
+         formuluote ar I kanalo laisvas tekstas - matomas EN laukas su AI.    */
+      let enBlok = '';
+      const enF = K.enPoros.formuluotes[fid];
+      if (enF && enF.tipas === 'ai'){
+        ATS['I_'+enF.enRaktas] ??= '';
+        enBlok = `<div class="cite" style="margin-top:4px">Angliška to paties punkto reikšmė (EN) - įrašykite arba
+            paprašykite AI pasiūlymo (per g-procure tarpinę į Claude API išsiunčiama tik lauko reikšmė).</div>
+          <input type="text" style="margin-bottom:5px" placeholder="EN reikšmė" value="${esc(ATS['I_'+enF.enRaktas]||'')}"
+            oninput="uAts('I_${esc(enF.enRaktas)}', this.value, false)">
+          <button type="button" class="sec" onclick="enPoraAI(this,'I_${esc(q.raktas)}','I_${esc(enF.enRaktas)}',false)">Pasiūlyti vertimą (AI)</button>`;
+      } else if (enF && enF.tipas === 'formule'){
+        enBlok = enF.custom
+          ? `<div class="cite" style="margin-top:4px">Savai formuluotei suderinto angliško varianto nėra - įrašykite EN
+               arba paprašykite AI pasiūlymo (per g-procure tarpinę į Claude API išsiunčiama tik lauko reikšmė).</div>
+             <input type="text" style="margin-bottom:5px" placeholder="EN formuluotė" value="${esc((ATS['B_'+enF.enRaktas]||[])[0]||'')}"
+               oninput="uAtsArr('B_${esc(enF.enRaktas)}',0,this.value)">
+             <button type="button" class="sec" onclick="enPoraAI(this,'B_${esc(q.raktas)}','B_${esc(enF.enRaktas)}',true)">Pasiūlyti vertimą (AI)</button>`
+          : `<div class="cite" style="margin-top:4px">EN versija parenkama automatiškai pagal jūsų pasirinkimą${enF.parinkta
+               ? `: „${esc(enF.parinkta.length>90 ? enF.parinkta.slice(0,90)+'...' : enF.parinkta)}"` : ''} (DRAFT - patikrinkite dokumente).</div>`;
+      }
       h += `<label class="opt" style="align-items:stretch;flex-direction:column">
           <span style="font-weight:500">${(q.variantai||[]).length?'Kita formuluotė:':'Įrašykite tekstą:'}</span>
           <input type="text" placeholder="jūsų tekstas (tuščia = spręsiu Word'e)" value="${esc(custom?cur:'')}"
             oninput="nustatykFormuluote('${esc(fid)}', this.value, false)"></label>
       </div>
+      ${enBlok}
       ${q.pastaba?`<div class="cite">${esc(q.pastaba)}</div>`:''}
       ${why(q.komentarai)}</div>`;
     });
@@ -1299,6 +1473,20 @@ function klausimynas(){
       for (let k = 0; k < q.vietos; k++){
         h += `<input type="text" style="margin-bottom:5px" placeholder="reikšmė ${k+1}"
           value="${esc(ATS['B_'+raktas][k]||'')}" oninput="uAtsArr('B_${esc(raktas)}',${k},this.value)">`;
+      }
+      /* LT->EN pora: matomas EN laukas prie to paties klausimo (laisvas tekstas).
+         AI mygtukas siuncia TIK lauko reiksme per g-procure tarpine; i dokumenta
+         patenka tik tai, kas matoma lauke.                                    */
+      const enL = K.enPoros.tuscios[raktas];
+      if (enL){
+        if (!Array.isArray(ATS['B_'+enL.enRaktas])) ATS['B_'+enL.enRaktas] = new Array(enL.vietos).fill('');
+        h += `<div class="cite" style="margin-top:2px">Angliška to paties punkto reikšmė (EN) - įrašykite arba paprašykite AI
+          pasiūlymo (per g-procure tarpinę į Claude API išsiunčiama tik lauko reikšmė). Palikus tuščią, apie tai praneš auditas.</div>`;
+        for (let k = 0; k < enL.vietos; k++){
+          h += `<input type="text" style="margin-bottom:5px" placeholder="EN reikšmė ${k+1}"
+            value="${esc(ATS['B_'+enL.enRaktas][k]||'')}" oninput="uAtsArr('B_${esc(enL.enRaktas)}',${k},this.value)">`;
+        }
+        h += `<button type="button" class="sec" onclick="enPoraAI(this,'B_${esc(raktas)}','B_${esc(enL.enRaktas)}',true)">Pasiūlyti vertimą (AI)</button>`;
       }
       h += `${why(q.komentarai)}</div>`;
     });
