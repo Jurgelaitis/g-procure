@@ -1028,6 +1028,111 @@ const GPGen = (() => {
     return n;
   }
 
+  /* PER-DALI KAINU LENTELES pasiulymo formoje (realaus LITGRID pirkimo pavyzdys:
+     kainos lentele kiekvienai daliai, pries kiekviena - antraste
+     "I Pirkimo objekto dalis - <pavadinimas>:"). Sablone yra VIENA kainu lentele
+     (antrastes eiluteje "Matavimo vienetai"); pries ja - raudona pastaba
+     "Koreguojama pagal poreiki:", po jos - zvaigzdiniu pastabu pastraipos.
+     Originalas tampa I dalimi; kitoms dalims klonuojama {lentele + uodega}.
+     ISNASU nuorodos (w:footnoteReference) klonuose PALIEKAMOS: kelios nuorodos
+     i ta pati isnasos apibrezima yra teisetas OOXML ir reiskia ta pati teksta
+     (isnasu apibrezimai footnotes.xml nedubliuojami). Bookmark/komentaru zymes
+     nuvalomos kaip ir kvalifikacijos lentelese.
+     dalys - PILNAS sarasas [{roman:'I', lt:'...', en:'...'}, ...].
+     Grazina sukurtu papildomu lenteliu skaiciu.                               */
+  function dautiKainuLenteles(doc, dalys){
+    if (!Array.isArray(dalys) || dalys.length < 2) return 0;
+    const d = doc.parts['word/document.xml'];
+    const body = d.getElementsByTagNameNS(W,'body')[0];
+    if (!body) return 0;
+    const vaikai = Array.from(body.children);
+    let tbl = null, tblIdx = -1;
+    for (let i = 0; i < vaikai.length; i++){
+      if (vaikai[i].localName !== 'tbl') continue;
+      const eil = Array.from(vaikai[i].getElementsByTagNameNS(W,'tr'));
+      const antr = eil.length ? GPDocx.els(eil[0],'t').map(t => t.textContent).join(' ') : '';
+      if (/matavimo vienetai/i.test(antr)){ tbl = vaikai[i]; tblIdx = i; break; }
+    }
+    if (!tbl) return 0;                              // formoje kainu lenteles nera (PARAISKA)
+    // Uodega: zvaigzdines pastabos, bruksniu eilute, tuscia tarpo pastraipa.
+    const uodega = [];
+    for (let j = tblIdx + 1; j < vaikai.length; j++){
+      if (vaikai[j].localName !== 'p') break;
+      const t = GPDocx.paraText(vaikai[j]).trim();
+      if (t && !/^\*/.test(t) && !/^_+\s*\.?$/.test(t)) break;
+      uodega.push(vaikai[j]);
+      if (/^_+\s*\.?$/.test(t)) break;               // bruksniu eilute - uodegos galas
+    }
+    // Antrastes pagrindas - artimiausia teksto pastraipa pries lentele
+    // ("Koreguojama pagal poreiki:"): paveldimas sriftas/tarpai, tekstas,
+    // spalva ir kursyvas perrasomi.
+    let bazine = null;
+    for (let j = tblIdx - 1; j >= 0; j--){
+      if (vaikai[j].localName === 'tbl') break;
+      if (vaikai[j].localName === 'p' && GPDocx.paraText(vaikai[j]).trim()){ bazine = vaikai[j]; break; }
+    }
+    if (!bazine) return 0;
+    const dvi = /object of the procurement/i.test(
+      Array.from(tbl.getElementsByTagNameNS(W,'tr'))[0]
+        ? GPDocx.els(Array.from(tbl.getElementsByTagNameNS(W,'tr'))[0],'t').map(t => t.textContent).join(' ') : '');
+    const antraste = (dal) => {
+      const lt = `${dal.roman} Pirkimo objekto dalis – ${dal.lt || TUSCIA_ZYMA}:`;
+      return dvi ? `${lt} / Part ${dal.roman} of the Procurement object – ${dal.en || TUSCIA_ZYMA}:` : lt;
+    };
+    const darytiAntraste = (dal) => {
+      const p = bazine.cloneNode(true);
+      nuvalytiKlonoZymes(p);
+      const runai = GPDocx.els(p,'r');
+      let pirmas = null;
+      for (const r of runai){
+        const ts = GPDocx.els(r,'t');
+        if (!ts.length) continue;
+        if (!pirmas){
+          pirmas = r;
+          ts[0].textContent = antraste(dal);
+          ts[0].setAttribute('xml:space','preserve');
+          for (let k = 1; k < ts.length; k++) ts[k].textContent = '';
+        } else ts.forEach(t => t.textContent = '');
+      }
+      if (pirmas){
+        for (const c of GPDocx.els(pirmas,'color')) c.setAttributeNS(W,'w:val','auto');
+        const rpr = pirmas.getElementsByTagNameNS(W,'rPr')[0];
+        if (rpr){
+          for (const tag of ['i','iCs','u'])
+            for (const e of Array.from(rpr.getElementsByTagNameNS(W, tag))) rpr.removeChild(e);
+          if (!rpr.getElementsByTagNameNS(W,'b').length){
+            const b = pirmas.ownerDocument.createElementNS(W,'w:b');
+            const rf = rpr.getElementsByTagNameNS(W,'rFonts')[0];
+            rpr.insertBefore(b, rf ? rf.nextSibling : rpr.firstChild);
+          }
+        }
+      }
+      return p;
+    };
+    const tevas = tbl.parentNode;
+    // I dalis - antraste pries ORIGINALIA lentele (po raudonos "Koreguojama..." pastabos).
+    tevas.insertBefore(darytiAntraste(dalys[0]), tbl);
+    // Kitos dalys - {antraste + lenteles klonas + uodegos klonai} po uodegos galo.
+    let po = uodega.length ? uodega[uodega.length - 1] : tbl;
+    let n = 0;
+    for (let k = 1; k < dalys.length; k++){
+      const antr = darytiAntraste(dalys[k]);
+      tevas.insertBefore(antr, po.nextSibling);
+      const tblK = tbl.cloneNode(true);
+      nuvalytiKlonoZymes(tblK);                      // isnasu nuorodos SAMONINGAI paliekamos
+      tevas.insertBefore(tblK, antr.nextSibling);
+      let paskutinis = tblK;
+      for (const u of uodega){
+        const uk = u.cloneNode(true);
+        nuvalytiKlonoZymes(uk);
+        tevas.insertBefore(uk, paskutinis.nextSibling);
+        paskutinis = uk;
+      }
+      po = paskutinis; n++;
+    }
+    return n;
+  }
+
   /* Raudoni INTARPAI juodo teksto viduje. Trys skirtingi veiksmai:
        juodinti - tekstas yra tikras dokumento turinys, raudona tik "patikrink"
        trinti   - nurodymas rengejui skliaustuose, dokumente likti negali
@@ -1074,7 +1179,7 @@ const GPGen = (() => {
     }
     for (const t of ts){ t.textContent = out.get(t).replace(/\s{2,}/g,' '); t.setAttribute('xml:space','preserve'); }
   }
-  function keistiRaudonaTeksta(paras, i, value){
+  function keistiRaudonaTeksta(paras, i, value, stilius){
     const p = paras[i]; if (!p) return false;
     const rs = raudoniRunai(p);
     if (!rs.length) return false;
@@ -1084,7 +1189,45 @@ const GPGen = (() => {
     for (let k=1;k<ts.length;k++) ts[k].textContent = '';
     rs.slice(1).forEach(r => r.parentNode && r.parentNode.removeChild(r));
     for (const c of GPDocx.els(first,'color')) c.setAttributeNS(W,'w:val','auto');
+    // Formu antrastems: sablono "(Pirkimo objektas)" runas kursyvinis ne-bold,
+    // o kaimynai ("LITGRID AB", "PIRKIMUI") - bold DIDZIOSIOMIS. Be suvienodinimo
+    // irasytas fragmentas issiskiria (pastaba Nr. 3). Kitiems keliams (data,
+    // apklausa, redakcija) stilius nekeiciamas - parametras neperduodamas.
+    if (stilius && stilius.kaipAntraste){
+      const rpr = first.getElementsByTagNameNS(W,'rPr')[0];
+      if (rpr){
+        for (const tag of ['i','iCs'])
+          for (const e of Array.from(rpr.getElementsByTagNameNS(W, tag))) rpr.removeChild(e);
+        if (!rpr.getElementsByTagNameNS(W,'b').length){
+          const b = first.ownerDocument.createElementNS(W, 'w:b');
+          const rf = rpr.getElementsByTagNameNS(W,'rFonts')[0];
+          rpr.insertBefore(b, rf ? rf.nextSibling : rpr.firstChild);
+        }
+      }
+    }
     return true;
+  }
+
+  /* Formos daliu eilute "I/ II/ III/ IV PIRKIMO OBJEKTO DALIAI (palikti tik ta
+     dali...)": romeniskas sarasas - statinis sablono tekstas, neatspindintis
+     tikro daliu skaiciaus (pastaba Nr. 4). Perrasomas TIK sarasas jo raudoname
+     rune, spalva ISLIEKA raudona (tiekejo instrukcija), kiti raudoni runai
+     (pvz. "(palikti tik ta dali...)") nelieciami - todel ne keistiRaudonaTeksta. */
+  function keistiDaliuSarasa(paras, i, kiek){
+    const p = paras[i]; if (!p || !(kiek >= 2)) return false;
+    const sarasas = Array.from({ length: kiek }, (_, k) => romeniskas(k + 1)).join('/ ');
+    for (const r of raudoniRunai(p)){
+      const ts = GPDocx.els(r,'t');
+      const s = ts.map(t => t.textContent).join('');
+      if (!/\b[IVX]+\s*\/\s*[IVX]+\b/.test(s)) continue;   // sio runo sarasas ne cia
+      const naujas = s.replace(/\b[IVX]+(\s*\/\s*[IVX]+)+\b/, sarasas);
+      if (naujas === s) return false;
+      ts[0].textContent = naujas;
+      ts[0].setAttribute('xml:space','preserve');
+      for (let k = 1; k < ts.length; k++) ts[k].textContent = '';
+      return true;
+    }
+    return false;
   }
 
   /* Pastraipos zenklas (¶) gali tureti raudona spalva, nors tekstas juodas.
@@ -1123,6 +1266,45 @@ const GPGen = (() => {
     return false;
   }
 
+  /* Sakinio galo tvarkymas po raudonu runu trynimo (2.1 "Pirkimo objektas - X").
+     Sablone tarp pildomos vietos ir tasko yra literalus tarpas (jis dengia raudona
+     nurodyma, kuris istrinamas) - lieka "X ." Dalyje sablonu (MVP) raudonas runas
+     prarija ir taska - lieka "X" be tasko. Cia: nuimam tarpa pries galini taska,
+     o jei tasko nera - pridedam. Redaguojami tik konkretus w:t mazgai, rPr
+     neliecCiamas.                                                              */
+  function taisytiSakinioGala(paras, i){
+    const p = paras[i]; if (!p) return false;
+    const ts = GPDocx.els(p,'t');
+    if (!ts.length) return false;
+    let pakeista = false;
+    // paskutinis netuscias (ne vien tarpu) mazgas; vien tarpu mazgus gale valom
+    let pask = -1;
+    for (let k = ts.length - 1; k >= 0; k--){
+      if (ts[k].textContent.trim()){ pask = k; break; }
+      if (ts[k].textContent){ ts[k].textContent = ''; pakeista = true; }
+    }
+    if (pask < 0) return pakeista;
+    let galas = ts[pask].textContent.replace(/\s+$/, '');
+    if (galas === '.'){
+      // taskas atskirame rune - tarpas gyvena ANKSTESNIU mazgu gale
+      for (let k = pask - 1; k >= 0; k--){
+        const s = ts[k].textContent;
+        if (!s) continue;
+        const be = s.replace(/\s+$/, '');
+        if (be !== s){ ts[k].textContent = be; ts[k].setAttribute('xml:space','preserve'); pakeista = true; }
+        if (be) break;                               // pasiektas tekstas - stojam
+      }
+    } else if (galas && !/[.;:]$/.test(galas)){
+      galas += '.'; pakeista = true;                 // prarytas taskas (MVP) - grazinam
+    }
+    if (galas !== ts[pask].textContent){
+      ts[pask].textContent = galas;
+      ts[pask].setAttribute('xml:space','preserve');
+      pakeista = true;
+    }
+    return pakeista;
+  }
+
   /* Rezimo eilute BE zymos (ND_LT: "Vykdomas    Pasirinkti" - juoda, be skliaustu,
      zemelapyje jos nera). Ivedam visa eilute is naujo: pirmas runas laiko
      "Vykdomas " + rezimo tekstas, likusieji istustinami. Formatas islaikomas
@@ -1136,9 +1318,9 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, romeniskas,
+  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
-           keistiRaudonaTeksta, keistiRezimoEilute, taisytiTitulTarpa, valytiPastraipuZenklus, taisytiSkliaustus };
+           keistiRaudonaTeksta, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
 
 const GPAudit = (() => {
