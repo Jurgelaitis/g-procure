@@ -670,6 +670,8 @@ function intarpoKat(n){
 
 /* Pavadinimo vietos: pildomos automatiskai is kontrolinio klausimo (Nr. 4-5). */
 const PAV_RE = /\(įrašomas pirkimo objekto pavadinim|Pirkimo objektas\s*[–-]\s*_+|\(Pirkimo objektas\)/i;
+// 2.1 sakinys "Pirkimo objektas – ___" (be ^: MVP zemelapyje numeracija priklijuota prie teksto)
+const OBJ_SAKINYS_RE = /Pirkimo objektas\s*[–-]\s*_+/i;
 
 /* Angliski tu paciu vietu dvyniai dvikalbiuose sablonuose. Pildomi is TU
    PACIU kontroliniu klausimu - zmogus nieko neveda dukart (EN reiksme duoda
@@ -687,6 +689,27 @@ const TIPAI_EN = { prekes:'GOODS', paslaugos:'SERVICES', darbai:'WORKS' };
    papildomu daliu laukai ir generavimo dauginimas. Nustatomas klausimyne. */
 let DALIU_SK = 0;
 const daliuSkaicius = () => DALIU_SK;
+/* Pilnas daliu sarasas su pavadinimais formu generavimui (kainu lenteles per dali).
+   I-II daliu pavadinimai gyvena po SPS daliu eiluciu tuscios raktais (bendri 'T:'
+   raktai - ATS globalus), III+ - ATS['DALYS']. Trukstamas pavadinimas -> tuscia
+   (variklis irasys zyma).                                                      */
+function daliuVardai(){
+  const kiek = daliuSkaicius();
+  if (kiek < 2) return [];
+  const ROM_ZODIS = ['i','ii'];
+  const v = [];
+  for (let k = 1; k <= kiek; k++){
+    if (k <= 2){
+      const lt = String((ATS['B_T:' + ROM_ZODIS[k-1] + ' pirkimo objekto dalis'] || [])[0] || '').trim();
+      const en = String((ATS['B_T:part ' + ROM_ZODIS[k-1] + ' of the object of procurement'] || [])[0] || '').trim();
+      v.push({ roman: GPGen.romeniskas(k), lt, en });
+    } else {
+      const d = (ATS['DALYS'] || [])[k - 3] || {};
+      v.push({ roman: GPGen.romeniskas(k), lt: String(d.lt || '').trim(), en: String(d.en || '').trim() });
+    }
+  }
+  return v;
+}
 /* Papildomu daliu (III+) reiksmes: ATS['DALYS'] = [{lt, en}, ...]. */
 window.uDalis = (idx, laukas, val) => {
   TOUCHED.add('DALYS');
@@ -1045,10 +1068,15 @@ function surinktiKlausimus(){
       }
       if (PAV_RE.test(n.text)){                               // pavadinimas (Nr. 4-5)
         const pav = pavClean($('#pavadinimas').value);
+        // 2.1 sakinyje "Pirkimo objektas – X." vienas kilmininkas negramatiskas
+        // (pavadinimas renkamas kilmininku - antrastems "X pirkimas", "X PREKIŲ
+        // PIRKIMUI"). Cia rasome "X pirkimas"; dubliavimosi nera - pavClean
+        // galini "pirkim*" nukerpa dar 1 zingsnyje.
+        const reiksme = pav && OBJ_SAKINYS_RE.test(n.text) ? pav + ' pirkimas' : pav;
         const vals = new Array(GPGen.vietos(n.text).length).fill('');
-        if (pav) vals[0] = pav;
+        if (reiksme) vals[0] = reiksme;
         ATS['B_' + raktas] = vals;
-        auto(trumpas, n.text.slice(0,70), pav ? `įrašoma „${pav}"` : 'laukiama pavadinimo 1 žingsnyje', 'pirkimo pavadinimas');
+        auto(trumpas, n.text.slice(0,70), reiksme ? `įrašoma „${reiksme}"` : 'laukiama pavadinimo 1 žingsnyje', 'pirkimo pavadinimas');
         return;
       }
       if (PAV_EN_RE.test(n.text)){                            // angliskas dvynys - is tu paciu duomenu
@@ -1767,11 +1795,13 @@ async function generuotiViena(d, REZ){
   //    kitos vietos priklauso tiekejui.
   let pildyta = 0;
   const titulIdx = new Set();                        // titulo pastraipos - tarpui po pildymo
+  const objIdx = new Set();                          // 2.1 "Pirkimo objektas – X" - sakinio galui
   const tekstoIdx = new Set((Z.intarpai||[]).filter(x => intarpoKat(x) === 'teksto').map(x => x.i));
   const raudonuIdx = new Set((Z.raudonosPastabos||[]).map(x => x.i));
   (Z.tuscios||[]).forEach(n => {
     if (trinti.has(n.i)) return;
     if (PAV_RE.test(n.text)) titulIdx.add(n.i);
+    if (OBJ_SAKINYS_RE.test(n.text) || PAV_EN_RE.test(n.text)) objIdx.add(n.i);
     if (forma){
       if (PAV_RE.test(n.text) && pav) pildyta += GPGen.pildyti(paras, n.i, [pav]);
       return;
@@ -1826,11 +1856,13 @@ async function generuotiViena(d, REZ){
       }
       // Formos antraste: raudonas rezervas "(Pirkimo objektas) PREKIŲ / PASLAUGŲ /
       // DARBŲ" - abu zinomi is kontroliniu klausimu (pavadinimas + objekto tipas).
+      // Antrastes kontekstas - bold DIDZIOSIOMIS ("LITGRID AB ... PIRKIMUI"), tad
+      // irasoma didziosiomis ir stilius suvienodinamas (pastaba Nr. 3).
       if (/^\(pirkimo objektas\)/i.test((n.raudonas||'').trim())){
         const tip = { prekes:'PREKIŲ', paslaugos:'PASLAUGŲ', darbai:'DARBŲ' }[$('input[name=tipas]:checked').value] || '';
         // gale paliekamas tarpas - uz raudono fragmento juodas tekstas ("PIRKIMUI")
         // prasideda be tarpo
-        if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, `${pav} ${tip} `)) intTeksto++;
+        if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, `${pav} ${tip} `.toLocaleUpperCase('lt'), { kaipAntraste:true })) intTeksto++;
       }
       // Angliskas antrastes dvynys: "(object of procurement) GOODS / SERVICES /
       // WORKS". Pildomas is TU PACIU kontroliniu klausimu - zmogus nieko neveda
@@ -1838,7 +1870,14 @@ async function generuotiViena(d, REZ){
       if (OBJEKTAS_EN_RE.test((n.raudonas||'').trim())){
         const tipEN = TIPAI_EN[$('input[name=tipas]:checked').value] || '';
         const pEN = pavENval();
-        if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, `${pEN} ${tipEN} `)) intTeksto++;
+        if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, `${pEN} ${tipEN} `.toLocaleUpperCase('lt'), { kaipAntraste:true })) intTeksto++;
+      }
+      // Daliu eilute "I/ II/ III/ IV PIRKIMO OBJEKTO DALIAI": romeniskas sarasas
+      // pritaikomas prie tikro daliu skaiciaus (pastaba Nr. 4). Lieka raudonas -
+      // instrukcija "palikti tik ta dali" skirta tiekejui. Kai neskaidoma, visa
+      // eilute jau pasalinta sakos (trinti.has virsuje).
+      if (/\b[IVX]+\/\s*[IVX]+\b/.test(n.raudonas || '') && daliuSkaicius() >= 2){
+        if (GPGen.keistiDaliuSarasa(paras, n.i, daliuSkaicius())) intTeksto++;
       }
       return;                                        // kiti formos intarpai - tiekejo
     }
@@ -1861,6 +1900,10 @@ async function generuotiViena(d, REZ){
   // 6a. Titulo tarpas: istrynus raudona "(irasomas ... pavadinimas) " nurodyma
   //     kai kur dingsta tarpas pries "pirkimas" ("...kVpirkimas"). Uztikrinam.
   titulIdx.forEach(i => { if (!trinti.has(i)) GPGen.taisytiTitulTarpa(paras, i); });
+  // 2.1 sakinio galas: sablone tarp pildomos vietos ir tasko - literalus tarpas
+  // (dengias raudonu nurodymu, kuris ka tik istrintas), o MVP raudonas runas
+  // prarija ir taska. Lieka "X ." arba "X" - sutvarkome galuni.
+  objIdx.forEach(i => { if (!trinti.has(i)) GPGen.taisytiSakinioGala(paras, i); });
 
   // 6b. Rezimo eilute BE zymos (ND_LT: juoda "Vykdomas Pasirinkti" - zemelapyje jos
   //     nera). Uzpildom tiesiogiai is rezimo pozymio. AK "[Pasirinkite]" ir ND_LTEN
@@ -1903,6 +1946,21 @@ async function generuotiViena(d, REZ){
   let sukurtaKvalif = 0;
   if (!forma) sukurtaKvalif = GPGen.dautiKvalifLenteles(doc);
 
+  // 8c. PER-DALI KAINU LENTELES pasiulymo formose (pagal realu LITGRID pavyzdi:
+  //     kainos lentele kiekvienai daliai su antraste "I Pirkimo objekto dalis - X:").
+  //     Tik formoms su kainu lentele (PARAISKA jos neturi - funkcija pati grazina 0)
+  //     ir tik kai pirkimas skaidomas. Po klonavimo 3.2 sakinys - i daugiskaita.
+  let sukurtaKainu = 0;
+  if (forma && daliuSkaicius() >= 2){
+    sukurtaKainu = GPGen.dautiKainuLenteles(doc, daliuVardai());
+    if (sukurtaKainu){
+      GPDocx.replaceText(doc, 'užpildant pateiktą lentelę:',
+        'kiekvienai Pirkimo objekto daliai atskirai užpildant pateiktas lenteles:');
+      GPDocx.replaceText(doc, 'by completing the below provided table:',
+        'separately for each part of the object of Procurement by completing the below provided tables:');
+    }
+  }
+
   // 9. LITGRID logotipas pirmojo puslapio virsuje (pastaba Nr. 5). Dedamas
   //    PASKUTINIS - jis pridedamas naujas paragrafas, o visos teksto operacijos
   //    jau ivykdytos pries tai. 150x55 pt (islaiko 2,72:1) -> EMU.
@@ -1915,7 +1973,7 @@ async function generuotiViena(d, REZ){
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
   return { d, blob, audit, forma,
-           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif } };
+           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu } };
 }
 
 async function generuoti(){
