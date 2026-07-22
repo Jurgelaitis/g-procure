@@ -937,6 +937,97 @@ const GPGen = (() => {
     return n;
   }
 
+  /* PER-DALI KVALIFIKACIJOS LENTELE. Sablonas PATS nurodo (raudona redakcine
+     pastaba pries 2 lentele, visose 5 SPS seimose): "Jeigu Pirkimo objektas
+     skaidomas i dalis, 2 lenteleje nurodyti reikalavimai nustatomi kiekvienai
+     Pirkimo objekto daliai atskirai (nurodomos atskiros lenteles kiekvienai
+     daliai)". Fiziskai sablone yra VIENA kvalifikacijos lentele; kai pirkimas
+     skaidomas i N daliu, reikia N (originala pazymim I dalimi, klonuojame
+     likusias, kiekviena su savo antrastes zyma "2 lentele (II Pirkimo objekto
+     dalis)"). Lentele lieka TUSCIAS karkasas - reikalavimus rengejas pildo pats
+     kiekvienai daliai atskirai (proporcingumas, PI 47 str.); tuscius langelius
+     pagauna GPAudit.
+
+     Numeracija: numerio NEKEICIAM (lieka "2 lentele"), tik pridedam dalies zyma.
+     Taip nesugadinamos 3/4/5 lenteliu antrastes, deleteTableAfter numerio
+     saugiklis (/(\d+)\s*lentel/) nei 28 kryzmines "N lentele" nuorodos (dalis ju
+     kituose dokumentuose - PRIEDAI/PASIULYMAS - kur variklis nepernumeruotu).
+
+     Vykdoma VELAI: PO deleteTableAfter (jei rengejas kvalifikacijos netikrina,
+     2 lentele istrinta - klonu tada nekuriam) ir PO stripComments/
+     cleanOrphanBookmarks (klonai paveldi jau isvalyta originala). Klonuose zymes
+     vis tiek nuvalom - dubliuoti bookmark/komentaru ID sugadintu docx.        */
+  function nuvalytiKlonoZymes(node){
+    for (const tag of ['bookmarkStart','bookmarkEnd','commentReference',
+                       'commentRangeStart','commentRangeEnd']){
+      for (const e of Array.from(node.getElementsByTagNameNS(W, tag)))
+        if (e.parentNode) e.parentNode.removeChild(e);
+    }
+  }
+
+  function dautiKvalifLenteles(doc){
+    const d = doc.parts['word/document.xml'];
+    const body = d.getElementsByTagNameNS(W,'body')[0];
+    if (!body) return 0;
+    // 1. Daliu tapatybes is GYVO dokumento (originalios + dautiDalis klonai).
+    //    Skaiciuojam LT eilute; EN dvynys ("Part I of...") sios formuluotes
+    //    neatitinka, tad be dvigubo skaiciavimo. Renkam PRIES antrasciu zymejima.
+    const dalys = [];
+    for (const p of GPDocx.els(body,'p')){
+      const m = GPDocx.paraText(p).trim().match(/^([IVX]+)\s+Pirkimo objekto dalis\b/i);
+      if (m) dalys.push(m[1].toUpperCase());
+    }
+    if (dalys.length < 2) return 0;                    // neskaidoma - nieko nedarom
+    // 2. Kvalifikacijos lentele: pirma body-lygio w:tbl, kurios ANTRASTES eiluteje
+    //    yra "Kvalifikacijos reikalavimas" IR pries kuria stovi "N lentele" antraste.
+    //    Antrasciu reikalaujam, nes dvikalbiuose sablonuose yra ir naratyviniu
+    //    lenteliu (pvz. "3.2." bendro pasiulymo), kuriu tekste ta pati formuluote
+    //    pasitaiko - be antrastes reikalavimo aklas atitikmuo pagautu ne ta lentele.
+    const vaikai = Array.from(body.children);
+    const antrastePries = (idx) => {
+      for (let j = idx - 1; j >= 0; j--){
+        if (vaikai[j].localName === 'tbl') return null;
+        if (vaikai[j].localName !== 'p') continue;
+        const t = GPDocx.paraText(vaikai[j]).trim();
+        if (!t) continue;                              // betekste - siekiam gilyn
+        return /\d+\s*lentel/i.test(t) ? vaikai[j] : null;   // pirma teksto pastraipa
+      }
+      return null;
+    };
+    let tbl = null, caption = null;
+    for (let i = 0; i < vaikai.length; i++){
+      if (vaikai[i].localName !== 'tbl') continue;
+      const eil = Array.from(vaikai[i].getElementsByTagNameNS(W,'tr'));
+      const antr = eil.length ? GPDocx.els(eil[0],'t').map(t => t.textContent).join(' ') : '';
+      if (!/kvalifikacijos reikalavim/i.test(antr)) continue;
+      const cap = antrastePries(i);
+      if (cap){ tbl = vaikai[i]; caption = cap; break; }
+    }
+    if (!tbl || !caption) return 0;                    // istrinta, nera arba be antrastes
+    const capText0 = GPDocx.paraText(caption);
+    const dvi = capText0.includes('/');                // dvikalbe antraste "2 lentele/Table 2"
+    const num = (capText0.match(/(\d+)\s*lentel/i) || [])[1] || '2';
+    const etikete = (roman) => {
+      const lt = `${num} lentelė (${roman} Pirkimo objekto dalis)`;
+      const en = `Table ${num} (Part ${roman} of the object of Procurement)`;
+      return dvi ? `${lt}/${en}` : lt;
+    };
+    const tevas = tbl.parentNode;
+    // 3. Originala pazymim pirma dalimi.
+    keistiPastraiposTeksta(caption, () => etikete(dalys[0]));
+    // 4. Klonuojam {antraste + lentele} kiekvienai kitai daliai.
+    let po = tbl, n = 0;
+    for (let k = 1; k < dalys.length; k++){
+      const capK = caption.cloneNode(true), tblK = tbl.cloneNode(true);
+      nuvalytiKlonoZymes(capK); nuvalytiKlonoZymes(tblK);
+      keistiPastraiposTeksta(capK, () => etikete(dalys[k]));
+      tevas.insertBefore(capK, po.nextSibling);
+      tevas.insertBefore(tblK, capK.nextSibling);
+      po = tblK; n++;
+    }
+    return n;
+  }
+
   /* Raudoni INTARPAI juodo teksto viduje. Trys skirtingi veiksmai:
        juodinti - tekstas yra tikras dokumento turinys, raudona tik "patikrink"
        trinti   - nurodymas rengejui skliaustuose, dokumente likti negali
@@ -1045,7 +1136,7 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, dautiDalis, romeniskas,
+  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
            keistiRaudonaTeksta, keistiRezimoEilute, taisytiTitulTarpa, valytiPastraipuZenklus, taisytiSkliaustus };
 })();

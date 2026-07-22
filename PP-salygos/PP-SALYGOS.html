@@ -1894,6 +1894,15 @@ async function generuotiViena(d, REZ){
   await GPDocx.stripComments(doc);
   await GPDocx.setUpdateFields(doc);
 
+  // 8b. PER-DALI KVALIFIKACIJOS LENTELE. Kai pirkimas skaidomas i dalis, sablonas
+  //     reikalauja atskiros 2 lenteles kiekvienai daliai (redakcine pastaba pries
+  //     lentele). Vykdom PO deleteTableAfter (jei kvalifikacija netikrinama, lentele
+  //     istrinta - klonu nekuriam) ir PO stripComments (klonai paveldi isvalyta
+  //     originala). Pati funkcija saugosi: veikia tik jei doke yra >=2 daliu eilutes
+  //     IR kvalifikacijos lentele; formoms nevykdom (tiekejo pildomos).
+  let sukurtaKvalif = 0;
+  if (!forma) sukurtaKvalif = GPGen.dautiKvalifLenteles(doc);
+
   // 9. LITGRID logotipas pirmojo puslapio virsuje (pastaba Nr. 5). Dedamas
   //    PASKUTINIS - jis pridedamas naujas paragrafas, o visos teksto operacijos
   //    jau ivykdytos pries tai. 150x55 pt (islaiko 2,72:1) -> EMU.
@@ -1906,7 +1915,7 @@ async function generuotiViena(d, REZ){
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
   return { d, blob, audit, forma,
-           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu } };
+           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif } };
 }
 
 async function generuoti(){
@@ -1941,10 +1950,16 @@ function rodykRezultata(rez){
     } else {
       zenklas = `<span style="color:var(--color-emerald);font-weight:600" title="Automatinė patikra: neliko raudonų vietų, tuščių laukų ir komentarų. Tai NĖRA leidimas skelbti - prieš skelbiant dokumentą peržiūrėkite Word'e.">švaru${r.forma?' (forma)':''}</span>`;
     }
+    // Turini KURIANTys veiksmai (dalys / per-dali kvalifikacijos lenteles) -
+    //  parodom atskirai, kad rengejas zinotu, kas dokumente pridurta.
+    const sukurta = [
+      r.stats.sukurtaDaliu ? `dalių eilučių +${r.stats.sukurtaDaliu}` : '',
+      r.stats.sukurtaKvalif ? `kvalifikacijos lentelių dalims +${r.stats.sukurtaKvalif}` : '',
+    ].filter(Boolean).join(' &middot; ');
     h += `<tr><td><b>${esc(r.d.pavadinimas)}</b>
         <div class="cite">${r.forma
           ? `tiekėjo pildomos vietos paliktos (${(a.tiekejo||[]).length}) &middot; ištrinta ${r.stats.trinta} &middot; užpildyta ${r.stats.pildyta}`
-          : `ištrinta ${r.stats.trinta} &middot; juodinta ${r.stats.juodinta} &middot; užpildyta ${r.stats.pildyta} &middot; nurodymų pašalinta ${r.stats.intTrinta}`}</div></td>
+          : `ištrinta ${r.stats.trinta} &middot; juodinta ${r.stats.juodinta} &middot; užpildyta ${r.stats.pildyta} &middot; nurodymų pašalinta ${r.stats.intTrinta}`}${sukurta ? ' &middot; ' + sukurta : ''}</div></td>
       <td>${zenklas}</td>
       <td><a href="${url}" download="${esc(r.d.trumpas)}.docx"><button class="sec">Atsisiųsti</button></a></td></tr>`;
   });
