@@ -1067,6 +1067,7 @@ function renderSection3(formNum) {
       <label><input type="radio" name="atliekamas" value="CVP IS" onchange="toggleCvpIs(this)"> CVP IS priemonėmis</label>
       <label><input type="radio" name="atliekamas" value="El. paštu" onchange="toggleCvpIs(this)"> El. paštu</label>
     </div>
+    <div id="atliekamas-hint" class="hint" style="display:none; margin-top:4px;"></div>
     <div id="cvpis-nr-container" class="conditional" style="margin-top:8px;">
       <input type="text" id="cvpis-nr" data-field="cvpisNr" placeholder="CVP IS Nr.">
     </div>
@@ -1107,11 +1108,12 @@ function renderSection3(formNum) {
           <div class="field full-row">
             <label>Pašalinimo pagrindų ir kvalifikacijos reikalavimai</label>
             <div class="checkbox-group">
-              <label><input type="checkbox" data-field="pasalKvalNetikrinama"> Tiekėjų pašalinimo pagrindų nebuvimas ir kvalifikacija nėra tikrinama</label>
-              <label><input type="checkbox" data-field="pasalTikrinamas"> Tiekėjų pašalinimo pagrindų nebuvimas yra tikrinamas</label>
-              <label><input type="checkbox" data-field="kvalTikrinama"> Tiekėjų kvalifikacija yra tikrinama</label>
-              <label><input type="checkbox" data-field="kvalNetikrinama"> Tiekėjų kvalifikacija nėra tikrinama</label>
+              <label><input type="checkbox" data-field="pasalKvalNetikrinama" onchange="onReikalavimuZymejimas(this)"> Tiekėjų pašalinimo pagrindų nebuvimas ir kvalifikacija nėra tikrinama</label>
+              <label><input type="checkbox" data-field="pasalTikrinamas" onchange="onReikalavimuZymejimas(this)"> Tiekėjų pašalinimo pagrindų nebuvimas yra tikrinamas</label>
+              <label><input type="checkbox" data-field="kvalTikrinama" onchange="onReikalavimuZymejimas(this)"> Tiekėjų kvalifikacija yra tikrinama</label>
+              <label><input type="checkbox" data-field="kvalNetikrinama" onchange="onReikalavimuZymejimas(this)"> Tiekėjų kvalifikacija nėra tikrinama</label>
             </div>
+            <div id="reikalavimu-hint" class="hint" style="display:none; margin-top:6px;"></div>
           </div>
         </div>
       </div>
@@ -1545,6 +1547,53 @@ function toggleSkaidymas(radio) {
   onDalisChange();
 }
 
+/* PAŠALINIMO PAGRINDŲ IR KVALIFIKACIJOS ŽYMĖJIMAI.
+   Keturios pažymos formos eilutės išreiškia du nepriklausomus klausimus:
+     A. ar tikrinami pašalinimo pagrindai (taip / ne),
+     B. ar tikrinama kvalifikacija (taip / ne),
+   o pirmoji eilutė yra jų bendras atvejis "netikrinama nei viena".
+   Anksčiau tai buvo keturi nepriklausomi checkbox be jokios logikos, tad į
+   pasirašomą pažymą patekdavo prieštaringi deriniai (pvz. kvalifikacija
+   „yra tikrinama" IR „nėra tikrinama" vienu metu). Perdaryti į radio negalima -
+   sulaužytų senuosius juodraščius, todėl žymėjimai palikti checkbox, o
+   prieštaravimai šalinami pažymint (Aprašo 30.3.5, 30.3.6, 31.1 p. leidžia
+   kvalifikacijos nereikalauti, tad derinys „pašalinimo taip + kvalifikacija ne"
+   yra teisėtas ir NEblokuojamas).                                            */
+const REIK_ZYMES = ['pasalKvalNetikrinama', 'pasalTikrinamas', 'kvalTikrinama', 'kvalNetikrinama'];
+const reikEl = (f) => document.querySelector(`[data-field="${f}"]`);
+
+function onReikalavimuZymejimas(el) {
+  const f = el.dataset.field;
+  const nuimk = (kiti) => kiti.forEach(k => { const e = reikEl(k); if (e && e.checked) e.checked = false; });
+  if (el.checked) {
+    // Tiesioginiai prieštaravimai
+    if (f === 'pasalKvalNetikrinama') nuimk(['pasalTikrinamas', 'kvalTikrinama']);
+    if (f === 'pasalTikrinamas')      nuimk(['pasalKvalNetikrinama']);
+    if (f === 'kvalTikrinama')        nuimk(['kvalNetikrinama', 'pasalKvalNetikrinama']);
+    if (f === 'kvalNetikrinama')      nuimk(['kvalTikrinama']);
+  }
+  tikrinkReikalavimuZymes();
+}
+
+/* Įspėjimas, jei žymėjimai vis dar prieštaringi (pvz. atėję iš seno juodraščio,
+   kur logikos dar nebuvo). Tylus taisymas čia netinka - tai pažymos turinys. */
+function tikrinkReikalavimuZymes() {
+  const hint = document.getElementById('reikalavimu-hint');
+  if (!hint) return;
+  const v = {}; REIK_ZYMES.forEach(k => { const e = reikEl(k); v[k] = !!(e && e.checked); });
+  const klaidos = [];
+  if (v.kvalTikrinama && v.kvalNetikrinama) klaidos.push('kvalifikacija pažymėta ir kaip tikrinama, ir kaip netikrinama');
+  if (v.pasalKvalNetikrinama && (v.pasalTikrinamas || v.kvalTikrinama))
+    klaidos.push('pažymėta, kad niekas netikrinama, nors kartu pažymėtas ir tikrinimas');
+  if (klaidos.length) {
+    hint.style.display = 'block';
+    hint.style.color = 'var(--color-orange, #b06000)';
+    hint.innerHTML = '<strong>Prieštaringi žymėjimai:</strong> ' + klaidos.join('; ') + '. Patikslinkite prieš generuodami pažymą.';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
 function toggleCvpIs(radio) {
   document.getElementById('cvpis-nr-container').classList.toggle('show', radio.value === 'CVP IS');
 }
@@ -1587,7 +1636,44 @@ function toggleSutartisRastu(radio) {
 // ============================================================
 // AUTO-FILL APRAŠO 29 PUNKTAS based on pirkimo būdas
 // ============================================================
+/* Pirkimo būdas nulemia, kokiomis priemonėmis pirkimas gali būti atliekamas:
+   Aprašo 27.1.1 p. - Skelbiama apklausa atliekama CVP IS priemonėmis (tik);
+   Aprašo 27.2.1 p. - Neskelbiama apklausa raštu - CVP IS ARBA elektroniniu paštu.
+   Todėl pasirinkus skelbiamą apklausą CVP IS nustatoma automatiškai, o "El. paštu"
+   užrakinama; kitiems būdams pasirinkimas lieka laisvas.                      */
+function syncAtliekamasSuBudu() {
+  const budasEl = document.getElementById('pirkimo-budas');
+  const hint = document.getElementById('atliekamas-hint');
+  if (!budasEl) return;
+  const budas = (budasEl.value || '').toLowerCase();
+  const tikCvpIs = budas.includes('skelbiama') && !budas.includes('neskelbiama');
+  const cvpRadio = document.querySelector('input[name="atliekamas"][value="CVP IS"]');
+  const eplRadio = document.querySelector('input[name="atliekamas"][value="El. paštu"]');
+  if (!cvpRadio || !eplRadio) return;   // 1 priedo forma - kitos parinktys
+  if (tikCvpIs) {
+    // Jei anksčiau (ar juodraštyje) buvo pažymėta "El. paštu", pataisymas turi
+    // būti MATOMAS - tylus teisinės reikšmės keitimas nepriimtinas.
+    const buvoElPastu = eplRadio.checked;
+    if (!cvpRadio.checked) { cvpRadio.checked = true; toggleCvpIs(cvpRadio); }
+    eplRadio.checked = false;
+    eplRadio.disabled = true;
+    eplRadio.closest('label').style.opacity = '0.5';
+    if (hint) {
+      hint.style.display = 'block';
+      hint.innerHTML = buvoElPastu
+        ? '<strong>Pataisyta:</strong> buvo pažymėta „El. paštu", tačiau skelbiama apklausa atliekama tik CVP IS priemonėmis (Aprašo 27.1.1 p.). Nustatyta „CVP IS priemonėmis".'
+        : 'Nustatyta automatiškai: skelbiama apklausa atliekama tik CVP IS priemonėmis (Aprašo 27.1.1 p.).';
+      hint.style.color = buvoElPastu ? 'var(--color-orange, #b06000)' : '';
+    }
+  } else {
+    eplRadio.disabled = false;
+    eplRadio.closest('label').style.opacity = '';
+    if (hint) hint.style.display = 'none';
+  }
+}
+
 function onBudasChange() {
+  syncAtliekamasSuBudu();
   const budas = document.getElementById('pirkimo-budas').value;
   const neskelbContainer = document.getElementById('neskelbiama-fields');
   if (neskelbContainer) {
@@ -3115,6 +3201,9 @@ function loadFormData(data) {
   });
   const scen = document.getElementById('sprendimo-scenarijus');
   if (scen && scen.value) onScenarijusChange();
+  // Iš juodraščio galėjo ateiti prieštaringi reikalavimų žymėjimai (senuose
+  // juodraščiuose logikos nebuvo) - parodom įspėjimą, bet tylomis nekeičiam.
+  tikrinkReikalavimuZymes();
 }
 
 function getDrafts() {
