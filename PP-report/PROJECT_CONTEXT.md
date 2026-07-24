@@ -391,6 +391,8 @@ Norėdami modifikuoti įrankį:
 - Visa logika viename `<script>` bloke faile.
 - HTML šablonai generuojami per `renderSection*` funkcijas, ne statiški.
 - Pakeitimai gali būti testuojami atidarius failą naršyklėje + naudojant DevTools console.
-- Yra parašyti jsdom testai (pvz., `test-subtables.js`, `test-nepateike.js`) kurie demonstruoja key naudotojo srautus. Šie testai gali būti naudojami kaip atspirties taškas regresijos testavimui.
+- **Regresijos testai: `testai.html`** (48 testai). Paleidžiama naršyklėje - repo šaknyje `python3 -m http.server`, tada atidaryti `PP-report/testai.html`. Puslapis įkelia `PP-report.html` į rėmelį, atlieka realius scenarijus ir tikrina rezultatus; viršuje matosi praėjusių/kritusių skaičius, kritusiam testui rodoma, ko tikėtasi ir kas gauta. Jokių įrankių ar Node nereikia.
+- Keičiant logiką testus leiskite PO KIEKVIENO žingsnio, ne pabaigoje. Pridėję naują testą, patikrinkite jį MUTACIJA (laikinai grąžinkite senąjį elgesį ir įsitikinkite, kad testas krinta) - kitaip testas gali būti visada žalias ir bevertis.
+- Ankstesni jsdom skriptai (`test-dalys.js`, `test-subtables.js`, `test-nepateike.js`) pašalinti: jie tik spausdindavo būseną be jokių `assert`, tad regresijos pro juos praeidavo, o paleisti reikėjo Node, kurio darbo kompiuteryje nėra.
 
 Jei reikia paaiškinti įrankio architektūrą Claude'ui naujoje paskyroje - perskaitykite jam šį `PROJECT_CONTEXT.md` ir nurodykite, kuriame skyriuje (4 / 5 / 7 / 9) yra konkretus klausimas.
