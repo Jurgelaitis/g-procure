@@ -326,7 +326,8 @@ async function paleisk() {
     const d = W.gatherFormData();
     const spr = W.generateSprendimai(d).join('\n');
     neturi(spr, 'nėra laimėtojo', 'sprendimai');
-    turi(spr, 'Visi šiai pirkimo objekto daliai pateikti pasiūlymai atmesti', 'sprendimai');
+    turi(spr, 'Neatitinkantys reikalavimų tiekėjai: Blogas', 'sprendimai');
+    turi(spr, 'sutartis nesudaroma', 'sprendimai');
   });
 
   await testas('Neskaidomas: visi atmesti - nerašoma "Pripažinti ... laimėjusiu"', () => {
@@ -515,6 +516,176 @@ async function paleisk() {
     grandinesScena();
     nustatykKvalif('A', 0, 'kiti', 'Neatitinka');
     lygu(grandine('A').map(r => r.tiekejas), ['Pigus', 'Brangus'], 'grandinė');
+  });
+
+  /* ---------------- 3 PAKETAS ---------------- */
+  grupe('3 paketas - scenarijus per dalį, laimėtojas, lėšos');
+
+  const misriScena = () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 10000, su: 12100 }],
+                 { 'A': [['Geras', 5000, 'Atitinka']],
+                   'B': [['Blogas', 3000, 'Neatitinka', 'Netinka techniškai']] });
+    scenarijus('sutartis');
+  };
+  const daliesScenSel = (dalis) => Array.from(D.querySelectorAll('[data-field^="dalisScenarijus__"]'))
+    .find(e => e.dataset.dalis === dalis);
+
+  await testas('P6: kiekviena dalis gauna savo scenarijų, siūlomą iš duomenų', () => {
+    misriScena();
+    lygu(daliesScenSel('A').value, 'sutartis', 'A dalies scenarijus');
+    lygu(daliesScenSel('B').value, 'atmesta', 'B dalies scenarijus');
+  }, 'mišri baigtis: vienoje sutartis, kitoje visi atmesti');
+
+  await testas('P6: mišri baigtis atsispindi sprendimuose ir pranešimuose', () => {
+    misriScena();
+    const d = W.gatherFormData();
+    const spr = W.generateSprendimai(d).join('\n');
+    turi(spr, 'Pripažinti Geras pasiūlymą laimėjusiu', 'sprendimai');
+    turi(spr, 'Atmesti visus šiai pirkimo objekto daliai pateiktus pasiūlymus', 'sprendimai');
+    lygu(W.generateNotificationList(d).map(n => `${n.recipient}|${n.type}`),
+         ['Geras|winner', 'Blogas|all_rejected'], 'pranešimai');
+  });
+
+  await testas('P6: rankinis pasirinkimas nustelbia automatinį ir išlieka', () => {
+    misriScena();
+    const sel = daliesScenSel('A');
+    sel.value = 'nutraukta';
+    sel.dataset.vartotojo = '1';
+    sel.dispatchEvent(new W.Event('change', { bubbles: true }));
+    lygu(daliesScenSel('A').value, 'nutraukta', 'A dalies scenarijus po pasirinkimo');
+    // ir nedingsta po perskaičiavimo
+    W.autoFillSprendimai();
+    lygu(daliesScenSel('A').value, 'nutraukta', 'A dalies scenarijus po perskaičiavimo');
+  }, 'automatinis pasiūlymas neturi įstrigti ir neturi trinti rankinio');
+
+  await testas('P6: nutraukta dalis - sprendimuose ir pranešime atskirai', () => {
+    misriScena();
+    ivesk('nutraukimoPriezastis', 'Pasikeitė poreikis');
+    const sel = daliesScenSel('A');
+    sel.value = 'nutraukta'; sel.dataset.vartotojo = '1';
+    sel.dispatchEvent(new W.Event('change', { bubbles: true }));
+    const d = W.gatherFormData();
+    const spr = W.generateSprendimai(d).join('\n');
+    turi(spr, 'Nutraukti šios pirkimo objekto dalies procedūras', 'sprendimai');
+    turi(spr, 'Pasikeitė poreikis', 'sprendimai (nutraukimo priežastis)');
+    lygu(laiskas(d, 'Geras', 'A').notif.type, 'terminated', 'A dalies pranešimo tipas');
+    lygu(laiskas(d, 'Blogas', 'B').notif.type, 'all_rejected', 'B dalies pranešimo tipas');
+  }, 'anksčiau nutraukimas buvo įmanomas tik visam pirkimui');
+
+  await testas('P7: skaidymo atveju globalus laimėtojo laukas paslepiamas', () => {
+    misriScena();
+    const laukas = D.getElementById('laimetojas');
+    const hint = D.getElementById('laimetojo-hint');
+    lygu(laukas.style.display, 'none', 'laimėtojo lauko rodymas');
+    tiesa(hint && hint.style.display !== 'none', 'santrauka turi būti rodoma');
+    turi(hint.textContent, 'Geras', 'santrauka');
+    turi(hint.textContent, 'laimėtojo nėra', 'santrauka (B daliai)');
+  }, 'jis rodydavo bendrai pigiausią - klaidino');
+
+  await testas('P7: neskaidomame pirkime laukas rodomas kaip anksčiau', () => {
+    svariForma();
+    paruoskBeDaliu([['Vienas', 5000, 'Atitinka']]);
+    scenarijus('sutartis');
+    const laukas = D.getElementById('laimetojas');
+    lygu(laukas.style.display, '', 'laimėtojo lauko rodymas');
+    lygu(laukas.value, 'Vienas', 'laimėtojas');
+  });
+
+  await testas('P10: kaina viršija lėšas - įspėjimas ir siūloma reikšmė', () => {
+    svariForma();
+    paruoskBeDaliu([['Brangus', 9000, 'Atitinka']]);
+    scenarijus('sutartis');
+    ivesk('lesosBePvm', '5000');
+    const isp = D.getElementById('lesu-ispejimas');
+    tiesa(isp && isp.style.display !== 'none', 'įspėjimas turi būti rodomas');
+    turi(isp.textContent, 'viršija pirkimui skirtas lėšas', 'įspėjimas');
+    lygu(laukas('lesuAtitiktis').value, 'viršija-didinta', 'siūloma atitiktis');
+  }, 'Aprašo 30.15 p.');
+
+  await testas('P10: kaina telpa į lėšas - patvirtinimas', () => {
+    svariForma();
+    paruoskBeDaliu([['Pigus', 3000, 'Atitinka']]);
+    scenarijus('sutartis');
+    ivesk('lesosBePvm', '5000');
+    const isp = D.getElementById('lesu-ispejimas');
+    turi(isp.textContent, 'neviršija pirkimui skirtų lėšų', 'įspėjimas');
+    lygu(laukas('lesuAtitiktis').value, 'neviršija', 'siūloma atitiktis');
+  });
+
+  await testas('P10: lėšų sakinys patenka į pažymą', () => {
+    svariForma();
+    paruoskBeDaliu([['Pigus', 3000, 'Atitinka']]);
+    scenarijus('sutartis');
+    ivesk('lesosBePvm', '5000');
+    const d = W.gatherFormData();
+    const sak = W.lesuSakinys(d.fields);
+    turi(sak, 'Pirkimui skirtos lėšos: 5 000,00 Eur be PVM', 'lėšų sakinys');
+    turi(sak, 'Aprašo 10 p.', 'lėšų sakinys');
+    turi(sak, 'neviršija pirkimui skirtų lėšų', 'lėšų sakinys');
+  });
+
+  await testas('P10: nenurodžius lėšų, sakinio nėra (nieko neprimetama)', () => {
+    svariForma();
+    paruoskBeDaliu([['Pigus', 3000, 'Atitinka']]);
+    scenarijus('sutartis');
+    lygu(W.lesuSakinys(W.gatherFormData().fields), '', 'lėšų sakinys');
+  });
+
+  await testas('P8: sprendimų tekstas atnaujinamas automatiškai', () => {
+    misriScena();
+    const ta = D.getElementById('sprendimu-tekstas');
+    tiesa(ta && ta.value.trim().length > 0, 'tekstas turi būti užpildytas');
+    turi(ta.value, 'Pripažinti Geras pasiūlymą laimėjusiu', 'automatinis tekstas');
+  });
+
+  await testas('P8: įjungus rankinį režimą į pažymą patenka rengėjo tekstas', () => {
+    misriScena();
+    checkbox('sprendimuRankinis', true);
+    const ta = D.getElementById('sprendimu-tekstas');
+    ta.value = 'Mano sprendimas Nr. 1.\n\nMano sprendimas Nr. 2 pagal SPS 5.3 p.';
+    ta.dispatchEvent(new W.Event('change', { bubbles: true }));
+    const isv = W.sprendimaiIsvedimui(W.gatherFormData());
+    lygu(isv, ['Mano sprendimas Nr. 1.', 'Mano sprendimas Nr. 2 pagal SPS 5.3 p.'], 'sprendimai išvedimui');
+  });
+
+  await testas('P8: rankinio teksto automatika nebeperrašo', () => {
+    misriScena();
+    checkbox('sprendimuRankinis', true);
+    const ta = D.getElementById('sprendimu-tekstas');
+    ta.value = 'NELIESTI';
+    ta.dispatchEvent(new W.Event('change', { bubbles: true }));
+    W.autoFillSprendimai();               // perskaičiavimas
+    lygu(D.getElementById('sprendimu-tekstas').value, 'NELIESTI', 'rankinis tekstas');
+  });
+
+  await testas('P8: išjungus rankinį režimą grįžta automatinis tekstas', () => {
+    misriScena();
+    checkbox('sprendimuRankinis', true);
+    const ta = D.getElementById('sprendimu-tekstas');
+    ta.value = 'LAIKINAI';
+    ta.dispatchEvent(new W.Event('change', { bubbles: true }));
+    checkbox('sprendimuRankinis', false);
+    W.autoFillSprendimai();
+    turi(D.getElementById('sprendimu-tekstas').value, 'Pripažinti Geras pasiūlymą laimėjusiu', 'atkurtas tekstas');
+  });
+
+  await testas('P8: atmetimo teisinis pagrindas įrašomas į sprendimus', () => {
+    svariForma();
+    paruoskBeDaliu([['Geras', 5000, 'Atitinka'], ['Blogas', 3000, 'Neatitinka', 'Netinka']]);
+    scenarijus('sutartis');
+    ivesk('atmetimoPagrindas', 'Pirkimo sąlygų 5.3 p.');
+    const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'vadovaujantis Pirkimo sąlygų 5.3 p., atmesti', 'sprendimai');
+    neturi(spr, 'vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti', 'sprendimai (bendra formuluotė turi dingti)');
+  }, 'kolegė prašė nurodyti konkrečius punktus');
+
+  await testas('P8: nenurodžius pagrindo lieka bendra formuluotė', () => {
+    svariForma();
+    paruoskBeDaliu([['Geras', 5000, 'Atitinka'], ['Blogas', 3000, 'Neatitinka', 'Netinka']]);
+    scenarijus('sutartis');
+    const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti', 'sprendimai');
   });
 
   /* ---------------- JUODRAŠČIAI ---------------- */
