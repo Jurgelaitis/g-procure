@@ -1161,6 +1161,13 @@ function renderSection4(formNum) {
     </div>` + (formNum === 2 ? `
 
     <h4 style="font-size:13px; margin:20px 0 8px; color:var(--color-blue);">Galimo laimėtojo kvalifikacijos vertinimas</h4>
+    <div class="helper-box info">
+      Pildoma tik apie <strong>galimą laimėtoją</strong> - atitiktį patvirtinančius dokumentus teikia tik tas
+      tiekėjas, kurio pasiūlymas gali būti pripažintas laimėjusiu (Aprašo 30.14, 31.6 p.).
+      <strong>Kvalifikacija</strong> - pašalinimo pagrindų nebuvimas ir kvalifikacijos reikalavimai;
+      <strong>Kiti reikalavimai</strong> - kokybės / aplinkos apsaugos vadybos standartai ir kiti pirkimo
+      dokumentuose nustatyti reikalavimai.
+    </div>
     <div id="kvalif-block">
       <div class="kvalif-single">
         <div class="field full-row">
@@ -1233,7 +1240,11 @@ function renderSection4(formNum) {
 
         <h4 id="pasiulymu-heading" style="font-size:13px; margin:16px 0 8px; color:var(--color-blue);">1 lentelė. Gauti pasiūlymai</h4>
         <div class="helper-box info">
-          Surašyti ekonominio naudingumo mažėjimo (kainos didėjimo) tvarka.
+          Surašyti ekonominio naudingumo mažėjimo (kainos didėjimo) tvarka.<br>
+          <strong>Pasiūlymo vertinimas</strong> - ar pasiūlymas atitinka pirkimo dokumentų reikalavimus
+          (techninę specifikaciją, pasiūlymo formą) ir ar <strong>kaina neviršija pirkimui skirtų lėšų</strong>
+          (Aprašo 30.15 p.). Pažymėjus „Neatitinka", tiekėjas nepatenka nei į pasiūlymų eilę, nei į laimėtojus.
+          Dėmesio: kaina, viršijanti skirtas lėšas, negali būti atmetimo pagrindas Aprašo 30.16 p. nurodytu atveju.
         </div>
         <div id="pasiulymai-block">
           <table class="data-table" id="pasiulymu-table">
@@ -1321,7 +1332,7 @@ function renderSection6(formNum) {
       <div class="section-body">
         <div class="helper-box info">
           <strong>Pasirinkite scenarijų:</strong>
-          Pagal pasirinkimą sprendimų tekstas bus automatiškai įtrauktas į pažymą. Jei pirkimas atliekamas raštu (el. paštu / CVP IS), kartu su pažyma automatiškai bus sugeneruoti ir <strong>individualūs pranešimai kiekvienam tiekėjui</strong> pagal LR pirkimų įstatymo 68 str. ir VPT pasiūlymų vertinimo gaires.
+          Pagal pasirinkimą sprendimų tekstas bus automatiškai įtrauktas į pažymą. Jei pirkimas atliekamas raštu (el. paštu / CVP IS), kartu su pažyma automatiškai bus sugeneruoti ir <strong>individualūs pranešimai kiekvienam tiekėjui</strong> pagal Aprašo 30.20 p. (skelbiama apklausa) arba 31.9 p. (neskelbiama apklausa) - dalyviai informuojami ne vėliau kaip per 3 darbo dienas nuo sprendimo priėmimo (Įstatymo 68 str. 1 d.).
         </div>
         <div class="field full-row">
           <label>Pirkimo eigos scenarijus <span class="req">*</span></label>
@@ -2104,8 +2115,11 @@ function autoFillGalimasLaimetojas() {
       const items = _collectOffersForAuto(d.name)
         .filter(it => it.name && it.vert === 'Atitinka' && !isNaN(it.price))
         .sort((a, b) => a.price - b.price);
-      if (items.length === 0) return;
-      const winner = items[0].name;
+      // Kai dalyje nebelieka nė vieno "Atitinka" pasiūlymo, laukus BŪTINA
+      // išvalyti. Anksčiau čia buvo `return` be valymo, tad pažymėjus vienintelį
+      // tiekėją "Neatitinka" jo vardas likdavo "Galimas laimėtojas" laukelyje ir
+      // patekdavo į pranešimą kaip laimėtojas (tam pačiam atmestam tiekėjui).
+      const winner = items.length ? items[0].name : '';
       const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
       const laimEl = document.querySelector(`[data-field="galimasLaimetojas__${dataKey}"]`);
       if (laimEl) laimEl.value = winner;
@@ -2117,8 +2131,7 @@ function autoFillGalimasLaimetojas() {
     const items = _collectOffersForAuto()
       .filter(it => it.name && it.vert === 'Atitinka' && !isNaN(it.price))
       .sort((a, b) => a.price - b.price);
-    if (items.length === 0) return;
-    const winner = items[0].name;
+    const winner = items.length ? items[0].name : '';
     const laimEl = document.getElementById('galimas-laimetojas');
     if (laimEl) laimEl.value = winner;
     const tiekEl = document.getElementById('kvalif-tiekejas');
@@ -2772,9 +2785,17 @@ function gatherFormData() {
     perDalis: {} // per-dalis info: { dalisName: { kvalifTiekejas, kvalifVertinimas, kitiVertinimas, kvalifPastabos, galimasLaimetojas, sutartiesBePvm, sutartiesSuPvm } }
   };
 
-  // Įprasti įvedimo laukai (data-field) - ne lentelėse ir ne sub-blokuose
+  // Įprasti įvedimo laukai (data-field) - ne pasikartojančių eilučių lentelėse.
+  // SVARBU: praleidžiam TIK tas lenteles, kurių eilutės renkamos atskirai žemiau
+  // (dalys, nacionalinis saugumas, pirminiai/galutiniai pasiūlymai). Anksčiau čia
+  // buvo bendras `el.closest('tbody')`, dėl kurio kvalifikacijos lentelės laukai
+  // (kvalifTiekejas, kvalifVertinimas, kitiVertinimas, kvalifPastabos - ir jų
+  // per-dalis __ variantai) NIEKADA nepatekdavo į duomenis: pažymoje spausdinosi
+  // tušti "____/__", juodraščiai jų neišsaugodavo, o sprendimų kvalifikacijos
+  // sakinys buvo neveikiantis kodas.
+  const KARTOJAMOS_EILUTES = '#dalys-tbody, #natsaug-tbody, .pasiulymu-tbody, .galutiniai-tbody';
   document.querySelectorAll('[data-field]').forEach(el => {
-    if (el.closest('tbody')) return; // Lentelės eilutes apdorosim atskirai
+    if (el.closest(KARTOJAMOS_EILUTES)) return; // Lentelės eilutes apdorosim atskirai
     const key = el.dataset.field;
     // Per-dalis laukai (su __dataKey suffiksu) saugomi atskirai
     if (key.includes('__')) {
@@ -2849,7 +2870,9 @@ function loadFormData(data) {
   // Set fields
   Object.keys(data.fields || {}).forEach(key => {
     const el = document.querySelector(`[data-field="${key}"]`);
-    if (el && !el.closest('tbody')) {
+    // Ta pati taisyklė kaip gatherFormData: praleidžiam tik pasikartojančių
+    // eilučių lenteles, kad kvalifikacijos laukai grįžtų iš juodraščio.
+    if (el && !el.closest('#dalys-tbody, #natsaug-tbody, .pasiulymu-tbody, .galutiniai-tbody')) {
       if (el.type === 'checkbox') el.checked = !!data.fields[key];
       else el.value = data.fields[key] || '';
     }
@@ -3295,7 +3318,6 @@ function generateSprendimai(data) {
         .filter(p => p[vertField] === 'Atitinka' && (p.tiekejas || '').trim() && !isNaN(parseFloat(p[beField])))
         .map(p => ({ name: p.tiekejas.trim(), price: parseFloat(p[beField]) }))
         .sort((a, b) => a.price - b.price);
-      const partLaimet = winners.length > 0 ? winners[0].name : '<nėra laimėtojo>';
       let block = `${idx+1} dalis. ${dName}:`;
       if (partAtit.length > 0) {
         block += `\n  • Atitinkantys reikalavimus tiekėjai: ${partAtit.join(', ')}.`;
@@ -3305,7 +3327,16 @@ function generateSprendimai(data) {
       if (partNeatit.length > 0) {
         block += `\n  • Neatitinkantys reikalavimų tiekėjai: ${partNeatit.join(', ')}.`;
       }
-      block += `\n  • Pripažinti ${partLaimet} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`;
+      // Dalyje, kurioje nėra nė vieno atitinkančio pasiūlymo, sutartis
+      // nesudaroma. Anksčiau čia besąlygiškai atsirasdavo eilutė
+      // "Pripažinti <nėra laimėtojo> pasiūlymą laimėjusiu ir sudaryti su juo sutartį."
+      if (winners.length > 0) {
+        block += `\n  • Pripažinti ${winners[0].name} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`;
+      } else if (partRows.length > 0) {
+        block += `\n  • Visi šiai pirkimo objekto daliai pateikti pasiūlymai atmesti, sutartis nesudaroma.`;
+      } else {
+        block += `\n  • Pasiūlymų šiai pirkimo objekto daliai negauta, sutartis nesudaroma.`;
+      }
       list.push(block);
     });
     list.push('Sutarties sudarymo atidėjimo terminas nėra taikomas.');
@@ -3323,10 +3354,12 @@ function generateSprendimai(data) {
     .map(p => p.tiekejas.trim());
 
   if (scen === 'sutartis') {
-    // 1 punktas: tiekėjai, atitinkantys reikalavimus
+    // 1 punktas: tiekėjai, atitinkantys reikalavimus. Bendrinė formuluotė
+    // rašoma tik tada, kai pasiūlymų dar neįvertinta - jei VISI įvertinti
+    // "Neatitinka", teigti, kad kažkas atitinka, būtų klaidinga.
     if (atitinkantys.length > 0) {
       list.push(`Pripažinti, kad toliau nurodyto (-ų) tiekėjo (-ų) pateikti pasiūlymai atitinka nustatytus reikalavimus (pažymėti varnele "Atitinka" šios pažymos 4 dalies ${lentNr} lentelės stulpelyje "Pasiūlymo įvertinimas"): ${atitinkantys.join(', ')}.`);
-    } else {
+    } else if (neatitinkantys.length === 0) {
       list.push(`Pripažinti tiekėjo (-ų) pasiūlymą (-us) atitinkančiu (-ais) nustatytus reikalavimus, kurio (-ų) pasiūlymas (-ai) šios pažymos 4 dalies ${lentNr} lentelės stulpelyje "Pasiūlymo įvertinimas" pažymėtas varnele "Atitinka".`);
     }
 
@@ -3348,8 +3381,15 @@ function generateSprendimai(data) {
       list.push('Vadovaujantis Aprašu, nustatyti šią pasiūlymų eilę ekonominio naudingumo mažėjimo tvarka:\n' + f.pasiulymuEile);
     }
 
-    list.push(`Pripažinti ${laimet} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`);
-    list.push('Sutarties sudarymo atidėjimo terminas nėra taikomas.');
+    // Laimėtojo eilutė rašoma tik kai laimėtojas tikrai yra. Kai visi pasiūlymai
+    // atmesti, anksčiau atsirasdavo "Pripažinti <Tiekėjo pavadinimas> pasiūlymą
+    // laimėjusiu" - tokiu atveju derėtų rinktis scenarijų "Atmetami visi".
+    if (atitinkantys.length > 0) {
+      list.push(`Pripažinti ${laimet} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`);
+      list.push('Sutarties sudarymo atidėjimo terminas nėra taikomas.');
+    } else {
+      list.push('Atsižvelgiant į tai, kad visi pateikti pasiūlymai atmesti, sutartis nesudaroma. Pasirinkite scenarijų "Atmetami visi pasiūlymai".');
+    }
     list.push('Informuoti dalyvius apie priimtus sprendimus.');
   } else if (scen === 'vienas-tiekejas') {
     if (atitinkantys.length > 0) {
@@ -3779,10 +3819,19 @@ async function buildDocx(data) {
       (data.rows.dalys || []).forEach((d, idx) => {
         const dn = d.dalisPav || `${idx+1} dalis`;
         const perD = data.perDalis[dn] || {};
-        s7Children.push(par([
-          txt(`${idx+1} dalis. ${dn} - Sutarties kaina: `, { bold: true }),
-          txt(`${formatEurNum(perD.sutartiesBePvm)} Eur be PVM, t. y. ${formatEurNum(perD.sutartiesSuPvm)} Eur su PVM.`)
-        ]));
+        // Dalis, kurioje sutartis nesudaroma (visi pasiūlymai atmesti arba
+        // negauta), anksčiau būdavo spausdinama su tuščia "____ Eur" kaina.
+        // Dabar aiškiai pažymima, kad sutarties nėra.
+        const beKainos = !String(perD.sutartiesBePvm || '').trim();
+        s7Children.push(par(beKainos
+          ? [
+              txt(`${idx+1} dalis. ${dn} - `, { bold: true }),
+              txt('sutartis nesudaroma (nėra reikalavimus atitinkančių pasiūlymų).')
+            ]
+          : [
+              txt(`${idx+1} dalis. ${dn} - Sutarties kaina: `, { bold: true }),
+              txt(`${formatEurNum(perD.sutartiesBePvm)} Eur be PVM, t. y. ${formatEurNum(perD.sutartiesSuPvm)} Eur su PVM.`)
+            ]));
       });
     } else {
       s7Children.push(par([
@@ -3970,7 +4019,12 @@ function generateNotificationList(data) {
         const w = winnerMap[dalisName] || '';
         type = (name.toLowerCase() === w) ? 'winner' : 'lost_atitinka';
       } else if (vert === 'Neatitinka') {
-        type = 'rejected';
+        // Jei ŠIOJE dalyje (ar visame pirkime, kai neskaidoma) neliko nė vieno
+        // atitinkančio pasiūlymo - tai ne "atmestas, o laimėjo kitas", o
+        // "atmesti visi". Anksčiau visada buvo 'rejected', tad vienintelio
+        // dalies tiekėjo atmetimo rašte atsirasdavo ir atmetimo priežastis, ir
+        // eilutė "Laimėjusiu pripažintas <tas pats tiekėjas>".
+        type = winnerMap[dalisName] ? 'rejected' : 'all_rejected';
       } else {
         return;
       }
@@ -4093,12 +4147,20 @@ function buildNotificationParagraphs(data, notif) {
     paragraphs.push(par([txt(`1. Jūsų pateiktas pasiūlymas${dalisName ? ' ' + dalisFrazaPrep : ''} pripažintas neatitinkančiu Pirkimo sąlygų reikalavimų. Pasiūlymo atmetimo priežastys:`)]));
     paragraphs.push(par([txt('\t' + (notif.neatitikimas || '[neatitikimo aprašymas]'))]));
     paragraphs.push(par([txt('2. Vadovaujantis Aprašu / Pirkimo sąlygomis, Jūsų pateiktas pasiūlymas atmestas.')]));
-    paragraphs.push(par([txt(`3. Laimėjusiu pripažintas ${winnerName} pasiūlymas. Su laimėjusiu tiekėju bus sudaroma pirkimo sutartis${dalisName ? ' ' + dalisFrazaPrep : ''}.`)]));
+    // Saugiklis: laimėtojo eilutė rašoma TIK kai laimėtojas tikrai žinomas.
+    // Be jo atmestas tiekėjas galėdavo būti paskelbtas laimėtoju tame pačiame rašte.
+    if (winnerName && winnerName !== '____') {
+      paragraphs.push(par([txt(`3. Laimėjusiu pripažintas ${winnerName} pasiūlymas. Su laimėjusiu tiekėju bus sudaroma pirkimo sutartis${dalisName ? ' ' + dalisFrazaPrep : ''}.`)]));
+    }
   } else if (notif.type === 'all_rejected') {
     paragraphs.push(par([txt(`1. Jūsų pateiktas pasiūlymas${dalisName ? ' ' + dalisFrazaPrep : ''} pripažintas neatitinkančiu Pirkimo sąlygų reikalavimų. Pasiūlymo atmetimo priežastys:`)]));
     paragraphs.push(par([txt('\t' + (notif.neatitikimas || '[neatitikimo aprašymas]'))]));
     paragraphs.push(par([txt('2. Vadovaujantis Aprašu / Pirkimo sąlygomis, Jūsų pateiktas pasiūlymas atmestas.')]));
-    paragraphs.push(par([txt(`3. Atsižvelgiant į tai, kad visi pateikti pasiūlymai${dalisName ? ' ' + dalisFrazaPrep : ''} buvo atmesti, Pirkimas baigtas nesudarant sutarties (vadovaujantis Įstatymo 41 str. 2 d. 2 p.).`)]));
+    // Skaidyme atmetamos gali būti tik ATSKIROS dalys, tad "Pirkimas baigtas"
+    // tokiu atveju būtų netikslu - procedūros baigtos tik dėl tos dalies.
+    paragraphs.push(par([txt(dalisName
+      ? `3. Atsižvelgiant į tai, kad visi ${dalisFrazaPrep} pateikti pasiūlymai buvo atmesti, Pirkimo procedūros dėl šios pirkimo objekto dalies baigtos nesudarius sutarties (vadovaujantis Įstatymo 41 str. 2 d. 2 p.).`
+      : `3. Atsižvelgiant į tai, kad visi pateikti pasiūlymai buvo atmesti, Pirkimas baigtas nesudarant sutarties (vadovaujantis Įstatymo 41 str. 2 d. 2 p.).`)]));
   } else if (notif.type === 'terminated') {
     paragraphs.push(par([txt(`1. Pirkimo${dalisName ? ' ' + dalisFrazaPrep : ''} procedūros nutrauktos. Nutraukimo priežastys: ${f.nutraukimoPriezastis || '____'}.`)]));
     paragraphs.push(par([txt('2. Vadovaujantis Įstatymo 41 str. 2 d. 3 p., Pirkimas laikomas pasibaigusiu.')]));
