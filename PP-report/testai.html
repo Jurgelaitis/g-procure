@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PP-report regresijos testai</title>
+<style>
+  :root{
+    --emerald:#00A072; --emerald-120:#008a62; --graphite:#2E3641;
+    --red:#c0392b; --amber:#b06000; --line:#e3e7ea; --bg:#f6f8f9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;font-family:"Nunito Sans",-apple-system,Segoe UI,Roboto,sans-serif;
+       color:var(--graphite);background:var(--bg);line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#67727d;font-size:13px;margin-bottom:20px}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--line);
+             border-radius:10px;padding:14px 16px;margin-bottom:18px;display:flex;
+             align-items:center;gap:16px;flex-wrap:wrap}
+  .skaicius{font-size:26px;font-weight:800;line-height:1}
+  .zalia{color:var(--emerald)} .raudona{color:var(--red)}
+  .grupe{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .grupe > h2{font-size:14px;margin:0;padding:11px 16px;background:#eef4f2;
+              color:var(--emerald-120);border-bottom:1px solid var(--line)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #f0f3f5;font-size:13px;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:800;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .ok .zyma{background:#e6f6f0;color:var(--emerald-120)}
+  .blogai .zyma{background:#fdecea;color:var(--red)}
+  .blogai{background:#fffafa}
+  .det{color:var(--red);font-size:12px;margin-top:3px;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .pastaba{color:#67727d;font-size:12px;margin-top:2px}
+  button{background:var(--emerald);color:#fff;border:0;border-radius:8px;padding:9px 18px;
+         font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+  button:disabled{opacity:.5;cursor:default}
+  iframe{width:1200px;height:800px;border:0;position:absolute;left:-9999px;top:0}
+  .info{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;
+        font-size:12px;color:#67727d;margin-top:16px}
+  code{background:#eef1f3;padding:1px 5px;border-radius:4px;font-size:11px}
+</style>
+</head>
+<body>
+
+<h1>PP-report regresijos testai</h1>
+<div class="sub">Tikrina, ar 0, 1 ir 2 paketų taisymai tebeveikia. Atidaroma naršyklėje, jokių įrankių nereikia.</div>
+
+<div id="santrauka">
+  <div><span class="skaicius" id="n-ok">0</span> <span class="pastaba">praėjo</span></div>
+  <div><span class="skaicius raudona" id="n-blogai">0</span> <span class="pastaba">krito</span></div>
+  <div id="busena" class="pastaba">Kraunama...</div>
+  <button id="paleisti" disabled>Paleisti iš naujo</button>
+</div>
+
+<div id="rezultatai"></div>
+
+<div class="info">
+  <strong>Kaip naudoti:</strong> atidarykite šį failą per tą patį serverį kaip <code>PP-report.html</code>
+  (pvz. <code>python3 -m http.server</code>) - failas kraunamas į rėmelį, tad <code>file://</code> režimu naršyklė gali blokuoti.
+  Kritus testui, po jo pavadinimu matysite, kas buvo tikimasi ir kas gauta.
+</div>
+
+<iframe id="ramas" src="PP-report.html"></iframe>
+
+<script>
+/* ==========================================================================
+   Mažas testų karkasas (be bibliotekų)
+   ========================================================================== */
+const R = { ok: 0, blogai: 0 };
+let grupesEl = null;
+
+function grupe(pavadinimas) {
+  const d = document.createElement('div');
+  d.className = 'grupe';
+  d.innerHTML = `<h2>${pavadinimas}</h2>`;
+  document.getElementById('rezultatai').appendChild(d);
+  grupesEl = d;
+}
+
+const ekranuok = (t) => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function uzrasyk(pavadinimas, klaida, pastaba) {
+  const el = document.createElement('div');
+  el.className = 't ' + (klaida ? 'blogai' : 'ok');
+  el.innerHTML = `<span class="zyma">${klaida ? 'KRITO' : 'OK'}</span>
+    <div><div>${ekranuok(pavadinimas)}</div>
+    ${pastaba ? `<div class="pastaba">${ekranuok(pastaba)}</div>` : ''}
+    ${klaida ? `<div class="det">${ekranuok(klaida)}</div>` : ''}</div>`;
+  grupesEl.appendChild(el);
+  if (klaida) R.blogai++; else R.ok++;
+  document.getElementById('n-ok').textContent = R.ok;
+  document.getElementById('n-blogai').textContent = R.blogai;
+}
+
+/* Testas: fn meta klaidą - testas krito. */
+async function testas(pavadinimas, fn, pastaba) {
+  try { await fn(); uzrasyk(pavadinimas, null, pastaba); }
+  catch (e) { uzrasyk(pavadinimas, e && e.message || e, pastaba); }
+}
+
+function lygu(gauta, tiketasi, ka) {
+  const a = JSON.stringify(gauta), b = JSON.stringify(tiketasi);
+  if (a !== b) throw new Error(`${ka || 'reikšmė'}\n  tikėtasi: ${b}\n  gauta:    ${a}`);
+}
+function tiesa(salyga, ka) { if (!salyga) throw new Error(ka || 'sąlyga netenkinama'); }
+function turi(tekstas, dalis, ka) {
+  if (!String(tekstas).includes(dalis)) throw new Error(`${ka || 'tekstas'} neturi "${dalis}"\n  gauta: ${String(tekstas).slice(0,300)}`);
+}
+function neturi(tekstas, dalis, ka) {
+  if (String(tekstas).includes(dalis)) throw new Error(`${ka || 'tekstas'} NETURĖTŲ turėti "${dalis}"\n  gauta: ${String(tekstas).slice(0,300)}`);
+}
+
+/* ==========================================================================
+   Pagalbinės: darbas su PP-report rėmelyje
+   ========================================================================== */
+let W, D;
+const laukti = (ms) => new Promise(r => setTimeout(r, ms));
+
+const laukas = (f, root) => (root || D).querySelector(`[data-field="${f}"]`);
+function ivesk(f, v, root) {
+  const el = laukas(f, root);
+  if (!el) throw new Error(`nėra lauko [data-field="${f}"]`);
+  el.value = v;
+  el.dispatchEvent(new W.Event('input', { bubbles: true }));
+  el.dispatchEvent(new W.Event('change', { bubbles: true }));
+  return el;
+}
+function zymek(vardas, verte) {
+  const r = D.querySelector(`input[name="${vardas}"][value="${verte}"]`);
+  if (!r) throw new Error(`nėra radio ${vardas}=${verte}`);
+  r.checked = true;
+  r.dispatchEvent(new W.Event('change', { bubbles: true }));
+  return r;
+}
+function checkbox(f, verte) {
+  const el = laukas(f);
+  if (!el) throw new Error(`nėra checkbox ${f}`);
+  el.checked = verte;
+  el.dispatchEvent(new W.Event('change', { bubbles: true }));
+  return el;
+}
+
+/* Švari 2 priedo forma. */
+function svariForma(nr) {
+  W.selectForm(nr || 2);
+  ivesk('pirkimoPavadinimas', 'TESTAS');
+  ivesk('verteBePvm', '20000');
+}
+
+/* Pasiūlymų sub-lentelė pagal dalies pavadinimą (arba vienintelė). */
+function pasiulymuLentele(dalis) {
+  const visos = Array.from(D.querySelectorAll('.pasiulymu-tbody'));
+  return dalis ? visos.find(t => t.dataset.dalis === dalis) : visos[0];
+}
+/* Kvalifikacijos grandinės lentelė. */
+function kvalifLentele(dalis) {
+  return Array.from(D.querySelectorAll('.kvalif-tbody')).find(t => (t.dataset.dalis || '') === (dalis || ''));
+}
+function grandine(dalis) {
+  const tb = kvalifLentele(dalis);
+  if (!tb) return [];
+  return Array.from(tb.children).map(tr => ({
+    tiekejas: tr.querySelector('[data-kv="tiekejas"]').value,
+    vertinimas: tr.querySelector('[data-kv="vertinimas"]').value,
+    kiti: tr.querySelector('[data-kv="kiti"]').value
+  }));
+}
+function nustatykKvalif(dalis, eilNr, stulpelis, verte) {
+  const tb = kvalifLentele(dalis);
+  if (!tb || !tb.children[eilNr]) throw new Error(`nėra kvalifikacijos eilutės ${eilNr} (${dalis || 'be dalies'})`);
+  const el = tb.children[eilNr].querySelector(`[data-kv="${stulpelis}"]`);
+  el.value = verte;
+  el.dispatchEvent(new W.Event('change', { bubbles: true }));
+}
+
+/* Dalys + pasiūlymai vienu žingsniu.
+   dalys: [{pav, be, su}], pasiulymai: { dalisPav: [[tiekejas, kaina, vertinimas, neatitikimas?]] } */
+function paruoskDalis(dalys, pasiulymai) {
+  zymek('skaidoma', 'taip');
+  const tb = D.getElementById('dalys-tbody');
+  tb.innerHTML = '';
+  dalys.forEach(() => W.addDalis());
+  Array.from(tb.children).forEach((tr, i) => {
+    ivesk('dalisPav', dalys[i].pav, tr);
+    ivesk('dalisBePvm', String(dalys[i].be), tr);
+    ivesk('dalisSuPvm', String(dalys[i].su), tr);
+  });
+  Object.keys(pasiulymai).forEach(dalisPav => {
+    const eilutes = pasiulymai[dalisPav];
+    const lent = pasiulymuLentele(dalisPav);
+    if (!lent) throw new Error(`nėra pasiūlymų lentelės daliai "${dalisPav}"`);
+    while (lent.children.length < eilutes.length) W.addPasiulymasRow(dalisPav);
+    Array.from(lent.children).forEach((tr, j) => {
+      if (!eilutes[j]) return;
+      const [t, k, v, neat] = eilutes[j];
+      ivesk('tiekejas', t, tr);
+      ivesk('kainaBePvm', String(k), tr);
+      ivesk('pasiulVert', v, tr);
+      if (neat) ivesk('neatitikimas', neat, tr);
+    });
+  });
+}
+function paruoskBeDaliu(eilutes) {
+  // 1 priedo formoje skaidymo radio nėra - dalys palaikomos tik 2 priede.
+  if (D.querySelector('input[name="skaidoma"]')) zymek('skaidoma', 'ne');
+  const lent = pasiulymuLentele();
+  while (lent.children.length < eilutes.length) W.addPasiulymasRow();
+  Array.from(lent.children).forEach((tr, j) => {
+    if (!eilutes[j]) return;
+    const [t, k, v, neat] = eilutes[j];
+    ivesk('tiekejas', t, tr);
+    ivesk('kainaBePvm', String(k), tr);
+    ivesk('pasiulVert', v, tr);
+    if (neat) ivesk('neatitikimas', neat, tr);
+  });
+}
+function scenarijus(v) {
+  const s = D.getElementById('sprendimo-scenarijus');
+  s.value = v;
+  s.dispatchEvent(new W.Event('change', { bubbles: true }));
+}
+
+/* Pranešimo matomas tekstas (docx Paragraph objektai -> eilutės). */
+function laiskoEilutes(data, notif) {
+  const paras = W.buildNotificationParagraphs(data, notif);
+  const out = [];
+  const eik = (o) => {
+    if (o == null) return;
+    if (typeof o === 'string') { if (o.length > 8 && !/^w:|^xml:|preserve/.test(o)) out.push(o); return; }
+    if (Array.isArray(o)) { o.forEach(eik); return; }
+    if (typeof o === 'object' && o.root !== undefined) eik(o.root);
+  };
+  paras.forEach(eik);
+  return out;
+}
+const laiskas = (data, gavejas, dalis) => {
+  const n = W.generateNotificationList(data).find(x =>
+    x.recipient === gavejas && (dalis === undefined || x.dalis === dalis));
+  if (!n) throw new Error(`nerastas pranešimas: ${gavejas}${dalis !== undefined ? ' / ' + dalis : ''}`);
+  return { notif: n, eilutes: laiskoEilutes(data, n) };
+};
+
+/* ==========================================================================
+   TESTAI
+   ========================================================================== */
+async function paleisk() {
+  document.getElementById('rezultatai').innerHTML = '';
+  R.ok = 0; R.blogai = 0;
+  document.getElementById('busena').textContent = 'Vykdoma...';
+
+  /* ---------------- 0 PAKETAS ---------------- */
+  grupe('0 paketas - mechaninės klaidos');
+
+  await testas('Kvalifikacijos reikšmės patenka į surinktus duomenis', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }],
+                 { 'A': [['Tiekėjas X', 5000, 'Atitinka']] });
+    scenarijus('sutartis');
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    const d = W.gatherFormData();
+    lygu((d.perDalis['A'] || {}).kvalifVertinimas, 'Neatitinka', 'perDalis.kvalifVertinimas');
+  }, 'anksčiau gatherFormData praleisdavo visus laukus lentelėse');
+
+  await testas('Nelikus atitinkančių, "Galimas laimėtojas" išvalomas', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }],
+                 { 'A': [['Vienintelis', 5000, 'Atitinka']] });
+    scenarijus('sutartis');
+    const lent = pasiulymuLentele('A');
+    ivesk('pasiulVert', 'Neatitinka', lent.children[0]);
+    const d = W.gatherFormData();
+    lygu((d.perDalis['A'] || {}).galimasLaimetojas, '', 'galimasLaimetojas');
+  }, 'pasenusi reikšmė buvo P11 šaknis');
+
+  await testas('Dalis, kurioje visi atmesti: pranešimo tipas all_rejected', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
+                 { 'A': [['Geras', 5000, 'Atitinka']],
+                   'B': [['Blogas', 3000, 'Neatitinka', 'Neatitinka specifikacijos']] });
+    scenarijus('sutartis');
+    const d = W.gatherFormData();
+    lygu(laiskas(d, 'Blogas', 'B').notif.type, 'all_rejected', 'pranešimo tipas');
+  });
+
+  await testas('Atmestam vieninteliam tiekėjui laiške NĖRA laimėtojo eilutės', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
+                 { 'A': [['Geras', 5000, 'Atitinka']],
+                   'B': [['Blogas', 3000, 'Neatitinka', 'Neatitinka specifikacijos']] });
+    scenarijus('sutartis');
+    const d = W.gatherFormData();
+    const l = laiskas(d, 'Blogas', 'B').eilutes.join('\n');
+    neturi(l, 'Laimėjusiu pripažintas', 'atmetimo laiškas');
+    turi(l, 'dėl šios pirkimo objekto dalies baigtos nesudarius sutarties', 'atmetimo laiškas');
+    neturi(l, 'Pirkimas baigtas nesudarant', 'atmetimo laiškas (dalies atveju)');
+  }, 'P11: anksčiau atmestasis buvo skelbiamas laimėtoju');
+
+  await testas('Atmestas tiekėjas dalyje SU laimėtoju: rejected + teisingas laimėtojas', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 20000, su: 24200 }],
+                 { 'A': [['Laimi', 5000, 'Atitinka'], ['Atmestas', 4000, 'Neatitinka', 'Netinka techniškai']] });
+    scenarijus('sutartis');
+    const d = W.gatherFormData();
+    const l = laiskas(d, 'Atmestas', 'A');
+    lygu(l.notif.type, 'rejected', 'pranešimo tipas');
+    const t = l.eilutes.join('\n');
+    turi(t, 'Laimėjusiu pripažintas Laimi', 'atmetimo laiškas');
+    neturi(t, '____', 'atmetimo laiškas (laimėtojas turi būti įvardytas)');
+  }, 'dengia rejected šaką - joje laimėtojas privalo būti tikras');
+
+  await testas('7 skyriuje dalis be laimėtojo: "sutartis nesudaroma"', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
+                 { 'A': [['Geras', 5000, 'Atitinka']],
+                   'B': [['Blogas', 3000, 'Neatitinka']] });
+    scenarijus('sutartis');
+    const d = W.gatherFormData();
+    lygu((d.perDalis['B'] || {}).sutartiesBePvm, '', 'B dalies sutarties kaina');
+  }, 'tuščia kaina -> pažymoje rašoma "sutartis nesudaroma"');
+
+  await testas('Sprendimuose nėra "<nėra laimėtojo>" absurdo', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
+                 { 'A': [['Geras', 5000, 'Atitinka']],
+                   'B': [['Blogas', 3000, 'Neatitinka']] });
+    scenarijus('sutartis');
+    const d = W.gatherFormData();
+    const spr = W.generateSprendimai(d).join('\n');
+    neturi(spr, 'nėra laimėtojo', 'sprendimai');
+    turi(spr, 'Visi šiai pirkimo objekto daliai pateikti pasiūlymai atmesti', 'sprendimai');
+  });
+
+  await testas('Neskaidomas: visi atmesti - nerašoma "Pripažinti ... laimėjusiu"', () => {
+    svariForma();
+    paruoskBeDaliu([['Vienintelis', 5000, 'Neatitinka', 'Netinka']]);
+    scenarijus('sutartis');
+    const d = W.gatherFormData();
+    const spr = W.generateSprendimai(d).join('\n');
+    neturi(spr, 'pasiūlymą laimėjusiu', 'sprendimai');
+    turi(spr, 'sutartis nesudaroma', 'sprendimai');
+  });
+
+  /* ---------------- 1 PAKETAS ---------------- */
+  grupe('1 paketas - pirkimo būdo ir žymėjimų apsaugos');
+
+  await testas('Skelbiama apklausa nustato CVP IS ir užrakina "El. paštu"', () => {
+    svariForma();
+    zymek('atliekamas', 'El. paštu');
+    ivesk('pirkimoBudas', 'Skelbiama apklausa');
+    const cvp = D.querySelector('input[name="atliekamas"][value="CVP IS"]');
+    const epl = D.querySelector('input[name="atliekamas"][value="El. paštu"]');
+    tiesa(cvp.checked, 'CVP IS turi būti pažymėtas');
+    tiesa(!epl.checked, '"El. paštu" turi būti nuimtas');
+    tiesa(epl.disabled, '"El. paštu" turi būti užrakintas');
+  }, 'Aprašo 27.1.1 p.');
+
+  await testas('Pataisymas rodomas matomai (ne tyliai)', () => {
+    svariForma();
+    zymek('atliekamas', 'El. paštu');
+    ivesk('pirkimoBudas', 'Skelbiama apklausa');
+    const h = D.getElementById('atliekamas-hint');
+    tiesa(h && h.style.display !== 'none', 'pranešimas turi būti matomas');
+    turi(h.textContent, 'Pataisyta', 'pranešimas');
+    turi(h.textContent, '27.1.1', 'pranešimas');
+  });
+
+  await testas('Neskelbiama apklausa raštu: "El. paštu" vėl leidžiamas', () => {
+    svariForma();
+    ivesk('pirkimoBudas', 'Skelbiama apklausa');
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa raštu');
+    const epl = D.querySelector('input[name="atliekamas"][value="El. paštu"]');
+    tiesa(!epl.disabled, '"El. paštu" neturi būti užrakintas');
+  }, 'Aprašo 27.2.1 p. leidžia abu kanalus');
+
+  await testas('Kvalifikacija negali būti kartu "tikrinama" ir "netikrinama"', () => {
+    svariForma();
+    checkbox('kvalTikrinama', true);
+    checkbox('kvalNetikrinama', true);
+    tiesa(!laukas('kvalTikrinama').checked, '"yra tikrinama" turėjo būti nuimta');
+    tiesa(laukas('kvalNetikrinama').checked, '"nėra tikrinama" turi likti');
+  });
+
+  await testas('"Niekas netikrinama" nuima tikrinimo žymes', () => {
+    svariForma();
+    checkbox('pasalTikrinamas', true);
+    checkbox('kvalTikrinama', true);
+    checkbox('pasalKvalNetikrinama', true);
+    tiesa(!laukas('pasalTikrinamas').checked, 'pašalinimo tikrinimas turėjo būti nuimtas');
+    tiesa(!laukas('kvalTikrinama').checked, 'kvalifikacijos tikrinimas turėjo būti nuimtas');
+  });
+
+  await testas('Teisėtas derinys leidžiamas: pašalinimo TAIP + kvalifikacija NE', () => {
+    svariForma();
+    checkbox('pasalTikrinamas', true);
+    checkbox('kvalNetikrinama', true);
+    tiesa(laukas('pasalTikrinamas').checked, 'pašalinimo tikrinimas turi likti');
+    tiesa(laukas('kvalNetikrinama').checked, 'kvalifikacija netikrinama turi likti');
+    const h = D.getElementById('reikalavimu-hint');
+    tiesa(!h || h.style.display === 'none', 'įspėjimo neturi būti');
+  }, 'Aprašo 31.1 p. leidžia kvalifikacijos nereikalauti');
+
+  await testas('Senas prieštaringas juodraštis parodo įspėjimą', () => {
+    svariForma();
+    // tiesiogiai, apeinant logiką - taip atrodo senas juodraštis
+    laukas('kvalTikrinama').checked = true;
+    laukas('kvalNetikrinama').checked = true;
+    W.tikrinkReikalavimuZymes();
+    const h = D.getElementById('reikalavimu-hint');
+    tiesa(h && h.style.display !== 'none', 'įspėjimas turi būti rodomas');
+    turi(h.textContent, 'Prieštaringi žymėjimai', 'įspėjimas');
+  }, 'tyliai netaisoma - tai pažymos turinys');
+
+  /* ---------------- 2 PAKETAS ---------------- */
+  grupe('2 paketas - kvalifikacijos grandinė (Aprašo 30.18 p.)');
+
+  const grandinesScena = () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 20000, su: 24200 }],
+                 { 'A': [['Pigus', 4700, 'Atitinka'], ['Brangus', 5200, 'Atitinka']] });
+    scenarijus('sutartis');
+  };
+
+  await testas('Pradžioje grandinėje - vienas kandidatas (pigiausias)', () => {
+    grandinesScena();
+    lygu(grandine('A').map(r => r.tiekejas), ['Pigus'], 'grandinė');
+  });
+
+  await testas('Kritus kandidatui atsiranda kito eilėje esančio eilutė', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    lygu(grandine('A').map(r => r.tiekejas), ['Pigus', 'Brangus'], 'grandinė');
+  }, 'Aprašo 30.18 p.: kreipiamasi į kitą eilėje');
+
+  await testas('Laimėtoju tampa kitas eilėje', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    const d = W.gatherFormData();
+    lygu((d.perDalis['A'] || {}).galimasLaimetojas, 'Brangus', 'galimasLaimetojas');
+  });
+
+  await testas('Sutarties kaina imama iš kvalifikuoto laimėtojo, ne pigiausio', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    nustatykKvalif('A', 1, 'vertinimas', 'Atitinka');
+    const d = W.gatherFormData();
+    lygu((d.perDalis['A'] || {}).sutartiesBePvm, '5200', 'sutarties kaina');
+  }, 'anksčiau būtų likę 4700');
+
+  await testas('Kritęs kandidatas IŠBRAUKIAMAS iš pasiūlymų eilės', () => {
+    grandinesScena();
+    const pries = D.getElementById('pasiulymu-eile').value;
+    turi(pries, 'Pigus', 'eilė prieš');
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    const po = D.getElementById('pasiulymu-eile').value;
+    neturi(po, 'Pigus', 'eilė po kritimo');
+    turi(po, 'Brangus', 'eilė po kritimo');
+  }, 'į eilę traukiami tik pilnai visus reikalavimus atitinkantys');
+
+  await testas('Kritęs kandidatas gauna rejected_kvalif pranešimą', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    nustatykKvalif('A', 0, 'pastabos', 'Nepateikė dokumentų');
+    nustatykKvalif('A', 1, 'vertinimas', 'Atitinka');
+    const d = W.gatherFormData();
+    const l = laiskas(d, 'Pigus', 'A');
+    lygu(l.notif.type, 'rejected_kvalif', 'pranešimo tipas');
+    const t = l.eilutes.join('\n');
+    turi(t, 'Aprašo 30.18 punktu', 'laiškas');
+    turi(t, 'Nepateikė dokumentų', 'laiškas (priežastis iš kvalifikacijos pastabų)');
+    turi(t, 'Laimėjusiu pripažintas Brangus', 'laiškas');
+  });
+
+  await testas('Kritus visiems - laimėtojo nėra, sutarties kaina išvaloma', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    nustatykKvalif('A', 1, 'vertinimas', 'Neatitinka');
+    const d = W.gatherFormData();
+    lygu((d.perDalis['A'] || {}).galimasLaimetojas, '', 'galimasLaimetojas');
+    lygu((d.perDalis['A'] || {}).sutartiesBePvm, '', 'sutarties kaina');
+  });
+
+  await testas('Sprendimuose fiksuojamas kvalifikacijos neatitikimas ir atmetimas', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    nustatykKvalif('A', 1, 'vertinimas', 'Atitinka');
+    const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'neatitinka pašalinimo pagrindų nebuvimo ir (ar) kvalifikacijos reikalavimų', 'sprendimai');
+    turi(spr, 'Aprašo 30.18 p.): Pigus', 'sprendimai');
+    turi(spr, 'Pripažinti Brangus pasiūlymą laimėjusiu', 'sprendimai');
+    neturi(spr, 'Atitinkantys reikalavimus tiekėjai: Pigus', 'sprendimai (kritęs neturi būti tarp atitinkančių)');
+  });
+
+  await testas('Išbraukimas galioja PER DALĮ, ne globaliai', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 10000, su: 12100 }],
+                 { 'A': [['Bendras', 4000, 'Atitinka'], ['Kitas', 5000, 'Atitinka']],
+                   'B': [['Bendras', 6000, 'Atitinka'], ['Trecias', 7000, 'Atitinka']] });
+    scenarijus('sutartis');
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    const eile = D.getElementById('pasiulymu-eile').value;
+    const bDalis = eile.split('2 dalis')[1] || '';
+    turi(bDalis, 'Bendras', 'B dalies eilė (ten jis nekrito)');
+  });
+
+  await testas('Neskaidomas pirkimas: grandinė veikia taip pat', () => {
+    svariForma();
+    paruoskBeDaliu([['Pigus', 5000, 'Atitinka'], ['Brangus', 6000, 'Atitinka']]);
+    scenarijus('sutartis');
+    lygu(grandine('').map(r => r.tiekejas), ['Pigus'], 'grandinė prieš');
+    nustatykKvalif('', 0, 'vertinimas', 'Neatitinka');
+    lygu(grandine('').map(r => r.tiekejas), ['Pigus', 'Brangus'], 'grandinė po');
+    lygu(D.getElementById('galimas-laimetojas').value, 'Brangus', 'galimas laimėtojas');
+  });
+
+  await testas('"Kiti reikalavimai: Neatitinka" taip pat pratęsia grandinę', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'kiti', 'Neatitinka');
+    lygu(grandine('A').map(r => r.tiekejas), ['Pigus', 'Brangus'], 'grandinė');
+  });
+
+  /* ---------------- JUODRAŠČIAI ---------------- */
+  grupe('Juodraščiai (localStorage suderinamumas)');
+
+  await testas('Grandinė išsaugoma ir grąžinama identiškai', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    nustatykKvalif('A', 1, 'vertinimas', 'Atitinka');
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    W.selectForm(2);
+    W.loadFormData(snap);
+    const po = W.gatherFormData();
+    lygu(po.rows.kvalif, snap.rows.kvalif, 'rows.kvalif');
+    lygu(po.fields.pasiulymuEile, snap.fields.pasiulymuEile, 'pasiūlymų eilė');
+  });
+
+  await testas('Senas juodraštis (be rows.kvalif) migruoja į grandinę', () => {
+    grandinesScena();
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    delete snap.rows.kvalif;                       // taip atrodo senas juodraštis
+    W.selectForm(2);
+    W.loadFormData(snap);
+    const g = grandine('A');
+    lygu(g[0] && g[0].tiekejas, 'Pigus', 'pirmas grandinės kandidatas');
+    lygu(g[0] && g[0].vertinimas, 'Neatitinka', 'jo vertinimas iš plokščių laukų');
+  }, 'plokšti laukai -> grandinės 1 eilutė');
+
+  await testas('Įkėlus juodraštį neatsiranda tuščios dalies eilutės', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
+                 { 'A': [['X', 5000, 'Atitinka']], 'B': [['Y', 3000, 'Atitinka']] });
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    W.selectForm(2);
+    W.loadFormData(snap);
+    lygu(D.querySelectorAll('#dalys-tbody tr').length, 2, 'dalių eilučių');
+  }, 'anksčiau atsirasdavo fantominė 3-ia dalis');
+
+  /* ---------------- 1 PRIEDO FORMA ---------------- */
+  grupe('1 priedo forma (regresija)');
+
+  await testas('1 priedas neturi kvalifikacijos bloko ir nesulūžta', () => {
+    svariForma(1);
+    tiesa(!D.getElementById('kvalif-block'), '1 priede kvalifikacijos bloko neturi būti');
+    const budEl = laukas('pirkimoBudas');
+    const budai = Array.from(budEl.options).map(o => o.value).filter(Boolean);
+    ivesk('pirkimoBudas', budai[0]);
+    zymek('atliekamas', 'El. paštu');
+    paruoskBeDaliu([['Mažas UAB', 4000, 'Atitinka']]);
+    scenarijus('sutartis');
+    const d = W.gatherFormData();
+    lygu(W.generateNotificationList(d).map(n => n.type), ['winner'], 'pranešimų tipai');
+  });
+
+  await testas('1 priede "El. paštu" neužrakinamas', () => {
+    svariForma(1);
+    const budai = Array.from(laukas('pirkimoBudas').options).map(o => o.value).filter(Boolean);
+    ivesk('pirkimoBudas', budai[0]);
+    const epl = D.querySelector('input[name="atliekamas"][value="El. paštu"]');
+    tiesa(epl && !epl.disabled, '"El. paštu" turi likti prieinamas');
+  });
+
+  /* ---------------- WORD DOKUMENTAS ---------------- */
+  grupe('Word dokumentas');
+
+  await testas('Pažyma sugeneruojama, XML validus, grandinė matoma', async () => {
+    if (!W.docx || !W.JSZip) throw new Error('docx/JSZip biblioteka nepasikrovė (reikia interneto)');
+    grandinesScena();
+    ivesk('pirkimoBudas', 'Skelbiama apklausa');   // kad būtų generuojami ir pranešimai
+    nustatykKvalif('A', 0, 'vertinimas', 'Neatitinka');
+    nustatykKvalif('A', 1, 'vertinimas', 'Atitinka');
+    const orig = W.saveAs; const pagauta = [];
+    W.saveAs = (b, n) => pagauta.push({ b, n });
+    try { await W.buildDocx(W.gatherFormData()); } finally { W.saveAs = orig; }
+    tiesa(pagauta.length > 0, 'dokumentas nesugeneruotas');
+    // Rezultatas gali būti ZIP paketas (pažyma + pranešimai) arba vienas .docx
+    const isore = await W.JSZip.loadAsync(pagauta[0].b);
+    const vidinis = Object.keys(isore.files).find(n => /\.docx$/.test(n) && !/^Pranesimas/i.test(n));
+    const pazyma = vidinis ? await W.JSZip.loadAsync(await isore.file(vidinis).async('blob')) : isore;
+    const xmlFailas = pazyma.file('word/document.xml');
+    tiesa(!!xmlFailas, 'pažymoje nerastas word/document.xml');
+    const xml = await xmlFailas.async('string');
+    const dp = new DOMParser().parseFromString(xml, 'application/xml');
+    lygu(dp.getElementsByTagName('parsererror').length, 0, 'XML klaidų');
+    const NSW = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const tekstas = Array.from(dp.getElementsByTagNameNS(NSW, 'p'))
+      .map(p => Array.from(p.getElementsByTagNameNS(NSW, 't')).map(t => t.textContent).join(''))
+      .join('\n');
+    turi(tekstas, '1 eilėje: Pigus', 'pažyma (grandinė)');
+    turi(tekstas, '2 eilėje: Brangus', 'pažyma (grandinė)');
+    turi(tekstas, 'Sutarties kaina: 5 200,00 Eur be PVM', 'pažyma (kaina iš kvalifikuoto)');
+  }, 'reikalauja interneto (docx.js iš CDN)');
+
+  /* ---------------- pabaiga ---------------- */
+  document.getElementById('busena').textContent =
+    R.blogai === 0 ? 'Visi testai praėjo.' : `${R.blogai} test(-ai) krito - žr. žemiau.`;
+  document.getElementById('busena').style.color = R.blogai === 0 ? 'var(--emerald)' : 'var(--red)';
+  document.getElementById('paleisti').disabled = false;
+}
+
+/* Startas: laukiam, kol rėmelyje susikurs PP-report. */
+const ramas = document.getElementById('ramas');
+ramas.addEventListener('load', async () => {
+  W = ramas.contentWindow;
+  D = W.document;
+  let bandymai = 0;
+  while (typeof W.selectForm !== 'function' && bandymai++ < 60) await laukti(100);
+  if (typeof W.selectForm !== 'function') {
+    document.getElementById('busena').textContent =
+      'Nepavyko pasiekti PP-report.html rėmelyje. Paleiskite per http serverį (ne file://).';
+    document.getElementById('busena').style.color = 'var(--red)';
+    return;
+  }
+  document.getElementById('paleisti').onclick = () => paleisk();
+  await paleisk();
+});
+</script>
+</body>
+</html>
