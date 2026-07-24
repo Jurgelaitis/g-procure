@@ -2068,14 +2068,25 @@ function autoFillSprendimai() {
   const scenSel = document.getElementById('sprendimo-scenarijus');
   if (!scenSel || scenSel.value !== 'sutartis') return;
 
-  // Pasiūlymų eilė ir laimėtojas (vienas, jei nesusiskaido į dalis)
+  // Pasiūlymų eilė ir laimėtojas (vienas, jei nesusiskaido į dalis).
+  // Į eilę traukiami TIK visus reikalavimus atitinkantys tiekėjai: pasiūlymas
+  // turi atitikti pirkimo dokumentų reikalavimus IR tiekėjas turi būti praėjęs
+  // pašalinimo pagrindų / kvalifikacijos patikrą. Neatitikęs kvalifikacijos
+  // tiekėjas į eilę neįtraukiamas (jo pasiūlymas atmestas, Aprašo 30.18 p.).
   const dalys = getCurrentDalys();
   const allItems = _collectOffersForAuto();
   const atitinkantysItems = allItems
     .filter(it => it.name && it.vert === 'Atitinka' && !isNaN(it.price))
+    .filter(it => !_kvalifKritoVardai(it.dalis || '').includes(it.name))
     .sort((a, b) => a.price - b.price);
 
-  if (atitinkantysItems.length === 0) return;
+  if (atitinkantysItems.length === 0) {
+    const tuscia = document.getElementById('pasiulymu-eile');
+    if (tuscia) tuscia.value = '';
+    const lf = document.getElementById('laimetojas');
+    if (lf) lf.value = '';
+    return;
+  }
 
   // Pasiūlymų eilė
   let eile;
@@ -2097,8 +2108,8 @@ function autoFillSprendimai() {
   const eileField = document.getElementById('pasiulymu-eile');
   if (eileField) eileField.value = eile;
 
-  // Laimėtojas (pirmasis pigiausias bendrai arba per dalis)
-  const winnerName = atitinkantysItems[0].name;
+  // Laimėtojas - pirmas eilėje likęs (kvalifikaciją praėjęs) tiekėjas
+  const winnerName = kvalifikuotasLaimetojas('') || atitinkantysItems[0].name;
   const laimetojasField = document.getElementById('laimetojas');
   if (laimetojasField) laimetojasField.value = winnerName;
 
@@ -2107,35 +2118,38 @@ function autoFillSprendimai() {
 
 // AUTO-FILL: Galimas laimėtojas + kvalifikacijos lentelė
 // Veikia visada, kai galima identifikuoti laimėtoją (-us)
-function autoFillGalimasLaimetojas() {
+/* Grandinė priklauso nuo pasiūlymų eilės, tad pasikeitus pasiūlymams ją reikia
+   persinchronizuoti. Perpiešiam TIK kai grandinė iš tikrųjų pasikeitė (kitoks
+   kandidatų skaičius ar vardai) - kitaip kiekvienas paspaudimas klaviatūroje
+   perpieštų bloką be reikalo.                                                */
+function syncKvalifGrandine() {
+  if (!document.getElementById('kvalif-block')) return;
   const dalys = getCurrentDalys();
+  const sarasai = dalys ? dalys.map(d => d.name) : [''];
+  const reikia = sarasai.some(dn => {
+    const nori = _kvalifGrandine(dn, _kvalifIssaugotaPagalVarda(dn)).map(r => r.tiekejas).join('|');
+    const yra = _kvalifEilutesIsDom(dn).map(r => r.tiekejas).join('|');
+    return nori !== yra;
+  });
+  if (reikia) restructureKvalifBlock();
+}
+
+function autoFillGalimasLaimetojas() {
+  syncKvalifGrandine();
+  const dalys = getCurrentDalys();
+  // Laimėtojas - pirmas eilėje kandidatas, PRAĖJĘS kvalifikacijos patikrą
+  // (Aprašo 30.18 p.: kritus kandidatui, kreipiamasi į kitą eilėje esantį).
+  // Kvalifikacijos lentelės "Pavadinimas" laukų čia neliečiam - juos pagal
+  // pasiūlymų eilę valdo pati grandinė (restructureKvalifBlock).
   if (dalys) {
-    // Per kiekvieną dalį
     dalys.forEach(d => {
-      const items = _collectOffersForAuto(d.name)
-        .filter(it => it.name && it.vert === 'Atitinka' && !isNaN(it.price))
-        .sort((a, b) => a.price - b.price);
-      // Kai dalyje nebelieka nė vieno "Atitinka" pasiūlymo, laukus BŪTINA
-      // išvalyti. Anksčiau čia buvo `return` be valymo, tad pažymėjus vienintelį
-      // tiekėją "Neatitinka" jo vardas likdavo "Galimas laimėtojas" laukelyje ir
-      // patekdavo į pranešimą kaip laimėtojas (tam pačiam atmestam tiekėjui).
-      const winner = items.length ? items[0].name : '';
       const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
       const laimEl = document.querySelector(`[data-field="galimasLaimetojas__${dataKey}"]`);
-      if (laimEl) laimEl.value = winner;
-      const tiekEl = document.querySelector(`[data-field="kvalifTiekejas__${dataKey}"]`);
-      if (tiekEl) tiekEl.value = winner;
+      if (laimEl) laimEl.value = kvalifikuotasLaimetojas(d.name);
     });
   } else {
-    // Single mode
-    const items = _collectOffersForAuto()
-      .filter(it => it.name && it.vert === 'Atitinka' && !isNaN(it.price))
-      .sort((a, b) => a.price - b.price);
-    const winner = items.length ? items[0].name : '';
     const laimEl = document.getElementById('galimas-laimetojas');
-    if (laimEl) laimEl.value = winner;
-    const tiekEl = document.getElementById('kvalif-tiekejas');
-    if (tiekEl) tiekEl.value = winner;
+    if (laimEl) laimEl.value = kvalifikuotasLaimetojas('');
   }
 }
 
@@ -2152,25 +2166,27 @@ function autoFillSutartiesKaina() {
   const dalys = getCurrentDalys();
   if (dalys) {
     dalys.forEach(d => {
-      const items = _collectOffersForAuto(d.name)
-        .filter(it => it.vert === 'Atitinka' && !isNaN(it.price))
-        .sort((a, b) => a.price - b.price);
-      if (items.length === 0) return;
-      const best = items[0];
+      // Kaina imama is KVALIFIKACIJA PRAEJUSIO laimetojo pasiulymo, ne tiesiog
+      // pigiausio: kritus kandidatui sutartis sudaroma su kitu eileje (30.18 p.).
+      const laim = kvalifikuotasLaimetojas(d.name);
+      const best = laim
+        ? _collectOffersForAuto(d.name).find(it => it.name === laim && it.vert === 'Atitinka')
+        : null;
       const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
       const beEl = document.querySelector(`[data-field="sutartiesBePvm__${dataKey}"]`);
       const suEl = document.querySelector(`[data-field="sutartiesSuPvm__${dataKey}"]`);
-      if (beEl) beEl.value = best.beStr;
-      if (suEl) suEl.value = best.suStr;
+      // Nelikus laimetojo - laukai isvalomi (7 skyriuje pazymima "sutartis nesudaroma").
+      if (beEl) beEl.value = best ? best.beStr : '';
+      if (suEl) suEl.value = best ? best.suStr : '';
     });
   } else {
-    const items = _collectOffersForAuto()
-      .filter(it => it.vert === 'Atitinka' && !isNaN(it.price))
-      .sort((a, b) => a.price - b.price);
-    if (items.length === 0) return;
-    const best = items[0];
+    const laim = kvalifikuotasLaimetojas('');
+    const best = laim
+      ? _collectOffersForAuto().find(it => it.name === laim && it.vert === 'Atitinka')
+      : null;
     const sutartBe = document.getElementById('sutarties-be-pvm');
     const sutartSu = document.getElementById('sutarties-su-pvm');
+    if (!best) { if (sutartBe) sutartBe.value=''; if (sutartSu) sutartSu.value=''; return; }
     if (sutartBe) sutartBe.value = best.beStr;
     if (sutartSu) sutartSu.value = best.suStr;
   }
@@ -2455,125 +2471,221 @@ function populateGalutiniaiFromData(d, forDalis) {
 }
 
 // Pertvarko kvalifikacijos vertinimo bloką pagal dalis
+/* ===== KVALIFIKACIJOS GRANDINĖ (Aprašo 30.14, 30.17, 30.18, 31.6, 31.8 p.) =====
+   Aprašo 30.18 p.: dokumentų prašoma iš Tiekėjo, kurio pasiūlymas GALI būti
+   pripažintas laimėjusiu; jei jis jų nepateikia (neatitinka reikalavimų), jo
+   pasiūlymas atmetamas, o kreipiamasi į Tiekėją, kurio pasiūlymas yra KITAS
+   EILĖJE. Todėl kvalifikacija vertinama ne vienam tiekėjui, o grandine: kritus
+   kandidatui, atsiranda kita eilutė kitam eilėje esančiam tiekėjui.           */
+
+// Kandidatų eilė (Aprašo 30.17 p.): "Atitinka" pasiūlymai kainos didėjimo tvarka.
+function _kandidatuEile(dalisName) {
+  return _collectOffersForAuto(dalisName)
+    .filter(it => it.name && it.vert === 'Atitinka' && !isNaN(it.price))
+    .sort((a, b) => a.price - b.price)
+    .map(it => it.name);
+}
+
+// Kandidatas laikomas kritusiu, kai neatitinka kvalifikacijos ARBA kitų reikalavimų.
+function _kvalifKrito(row) {
+  return !!row && (row.vertinimas === 'Neatitinka' || row.kiti === 'Neatitinka');
+}
+
+// Kritusių kandidatų vardai (iš gyvo DOM) - jie NEtraukiami į pasiūlymų eilę.
+function _kvalifKritoVardai(dalisName) {
+  return _kvalifEilutesIsDom(dalisName).filter(_kvalifKrito).map(r => r.tiekejas).filter(Boolean);
+}
+
+/* Kvalifikacijos eilutės iš gyvo DOM. dalisName === null - neskaidomas režimas. */
+function _kvalifEilutesIsDom(dalisName) {
+  const out = [];
+  document.querySelectorAll('.kvalif-tbody').forEach(tb => {
+    const tbDalis = tb.dataset.dalis || '';
+    if ((dalisName || '') !== tbDalis) return;
+    Array.from(tb.children).forEach(tr => {
+      out.push({
+        tiekejas: (tr.querySelector('[data-kv="tiekejas"]')?.value || '').trim(),
+        vertinimas: tr.querySelector('[data-kv="vertinimas"]')?.value || '',
+        kiti: tr.querySelector('[data-kv="kiti"]')?.value || '',
+        pastabos: tr.querySelector('[data-kv="pastabos"]')?.value || ''
+      });
+    });
+  });
+  return out;
+}
+
+/* Kiek kandidatų eilučių rodyti: pirmasis visada, o kiekvienam kritusiam -
+   dar viena, kol baigiasi eilė. Vertinimai saugomi pagal TIEKĖJO VARDĄ, tad
+   pasikeitus eilės tvarkai jie keliauja kartu su tiekėju.                     */
+function _kvalifGrandine(dalisName, issaugotaPagalVarda) {
+  const eile = _kandidatuEile(dalisName);
+  const grandine = [];
+  for (let i = 0; i < Math.max(eile.length, 1); i++) {
+    const vardas = eile[i] || '';
+    const s = (issaugotaPagalVarda && issaugotaPagalVarda[vardas]) || {};
+    const row = { tiekejas: vardas, vertinimas: s.vertinimas || '', kiti: s.kiti || '', pastabos: s.pastabos || '' };
+    grandine.push(row);
+    if (!_kvalifKrito(row)) break;      // kandidatas nekrito - grandinė baigta
+  }
+  return grandine;
+}
+
+/* Laimėtojas po kvalifikacijos patikros: pirmas eilėje kandidatas, kuris NEkrito
+   (Aprašo 30.18 p. "toks Tiekėjas skelbiamas laimėtoju"). Grąžina '' jei visi krito. */
+function kvalifikuotasLaimetojas(dalisName) {
+  const grandine = _kvalifGrandine(dalisName, _kvalifIssaugotaPagalVarda(dalisName));
+  const pask = grandine[grandine.length - 1];
+  return (pask && !_kvalifKrito(pask)) ? pask.tiekejas : '';
+}
+
+/* ---- Grandinės skaitymas iš SURINKTŲ duomenų (pažymos / pranešimų generavimui) ---- */
+
+// Dalies (arba viso pirkimo, kai dalis '') kvalifikacijos grandinė iš data.
+function kvalifGrandineIsData(data, dalisName) {
+  return ((data.rows && data.rows.kvalif) || []).filter(r => (r.dalis || '') === (dalisName || ''));
+}
+
+// Kandidatai, kritę per kvalifikacijos patikrą - jų pasiūlymai atmetami (30.18 p.).
+function kvalifKritusieji(data, dalisName) {
+  return kvalifGrandineIsData(data, dalisName).filter(r => _kvalifKrito(r) && r.tiekejas).map(r => r.tiekejas);
+}
+
+// Laimėtojas iš duomenų: paskutinis grandinės kandidatas, jei jis nekrito.
+function kvalifLaimetojasIsData(data, dalisName) {
+  const ch = kvalifGrandineIsData(data, dalisName);
+  const pask = ch[ch.length - 1];
+  return (pask && !_kvalifKrito(pask)) ? pask.tiekejas : '';
+}
+
+/* Iš juodraščio įkelti vertinimai, laukiantys pirmo perpiešimo:
+   { dalis: { tiekėjas: {vertinimas, kiti, pastabos} } }. Po panaudojimo valoma. */
+let KVALIF_SEED = null;
+
+/* Esamų vertinimų žemėlapis {tiekėjas: {vertinimas, kiti, pastabos}}.
+   Pagrindas - juodraščio sėkla, o gyvo DOM reikšmės ją perrašo.              */
+function _kvalifIssaugotaPagalVarda(dalisName) {
+  const map = {};
+  const seed = KVALIF_SEED && KVALIF_SEED[dalisName || ''];
+  if (seed) Object.keys(seed).forEach(k => { map[k] = Object.assign({}, seed[k]); });
+  _kvalifEilutesIsDom(dalisName).forEach(r => {
+    if (!r.tiekejas) return;
+    const cur = map[r.tiekejas] || {};
+    map[r.tiekejas] = {
+      vertinimas: r.vertinimas || cur.vertinimas || '',
+      kiti: r.kiti || cur.kiti || '',
+      pastabos: r.pastabos || cur.pastabos || ''
+    };
+  });
+  return map;
+}
+
+/* Vienos kvalifikacijos lentelės (grandinės) HTML. dalisName '' - neskaidoma. */
+function _kvalifLentelesHtml(dalisName, dataKey, grandine) {
+  const safe = escapeAttr(dalisName || '');
+  const sel = (kv, val, fld, id) => {
+    const opts = ['', 'Atitinka', 'Neatitinka', 'Netaikomi']
+      .map(o => `<option value="${o}"${val === o ? ' selected' : ''}>${o || '--'}</option>`).join('');
+    return `<select data-kv="${kv}" data-field="${fld}" data-dalis="${safe}"${id ? ` id="${id}"` : ''}
+              onchange="onKvalifChange()">${opts}</select>`;
+  };
+  const eiluciuHtml = grandine.map((r, i) => {
+    const sfx = i === 0 ? '' : `__k${i}`;
+    const f = (base) => base + (dataKey ? `__${dataKey}` : '') + sfx;
+    const krito = _kvalifKrito(r);
+    const zyma = i === 0
+      ? '<span class="kvalif-zyma">1 eilėje</span>'
+      : `<span class="kvalif-zyma">${i + 1} eilėje</span>`;
+    return `
+      <tr${krito ? ' class="kvalif-krito"' : ''}>
+        <td>${zyma} <input type="text" data-kv="tiekejas" data-field="${f('kvalifTiekejas')}" data-dalis="${safe}"
+              ${i === 0 && !dataKey ? 'id="kvalif-tiekejas"' : ''} readonly
+              style="background:var(--color-graphite-5);" value="${escapeAttr(r.tiekejas)}"></td>
+        <td>${sel('vertinimas', r.vertinimas, f('kvalifVertinimas'), i === 0 && !dataKey ? 'kvalif-vertinimas' : '')}</td>
+        <td>${sel('kiti', r.kiti, f('kitiVertinimas'), i === 0 && !dataKey ? 'kiti-vertinimas' : '')}</td>
+        <td><textarea data-kv="pastabos" data-field="${f('kvalifPastabos')}" data-dalis="${safe}"
+              ${i === 0 && !dataKey ? 'id="kvalif-pastabos"' : ''}
+              placeholder="${krito ? 'Nurodykite, kodėl neatitinka' : ''}">${escapeHtml(r.pastabos)}</textarea></td>
+      </tr>`;
+  }).join('');
+
+  const eile = _kandidatuEile(dalisName || undefined);
+  const paskutinis = grandine[grandine.length - 1];
+  let info = '';
+  if (grandine.length > 1) {
+    info = `<div class="hint" style="margin-top:6px;">Ankstesnis kandidatas neatitiko reikalavimų, todėl jo pasiūlymas atmetamas
+            ir kreipiamasi į kitą eilėje esantį tiekėją (Aprašo 30.18 p.).</div>`;
+  }
+  if (paskutinis && _kvalifKrito(paskutinis) && grandine.length >= eile.length) {
+    info += `<div class="hint" style="margin-top:6px; color:var(--color-red, #b00);">Daugiau eilėje esančių tiekėjų nėra -
+             reikalavimus atitinkančio pasiūlymo nelieka.</div>`;
+  }
+  if (!eile.length) {
+    info += `<div class="hint" style="margin-top:6px;">Kandidatų nėra: nė vienas pasiūlymas nepažymėtas „Atitinka".</div>`;
+  }
+
+  return `
+    <table class="data-table"${dataKey ? ' style="background:#fff;"' : ''}>
+      <thead>
+        <tr>
+          <th>Pavadinimas</th>
+          <th style="width:120px;">Kvalifikacija</th>
+          <th style="width:120px;">Kiti reikalavimai</th>
+          <th>Pastabos</th>
+        </tr>
+      </thead>
+      <tbody class="kvalif-tbody" data-dalis="${safe}">${eiluciuHtml}</tbody>
+    </table>${info}`;
+}
+
+/* Kvalifikacijos vertinimo pakeitimas: grandinė gali pailgėti (kritus kandidatui)
+   arba sutrumpėti (pataisius vertinimą), tad blokas perpiešiamas, o po to
+   perskaičiuojami laimėtojai, sutarties kainos ir sprendimai.                  */
+function onKvalifChange() {
+  restructureKvalifBlock();
+  autoFillGalimasLaimetojas();
+  autoFillSutartiesKaina();
+  autoFillSprendimai();
+}
+
 function restructureKvalifBlock() {
   const block = document.getElementById('kvalif-block');
   if (!block) return; // tik form 2
   const dalys = getCurrentDalys();
 
-  // Išsaugom esamus kvalif duomenis
-  const saved = {};
-  if (dalys) {
-    // Jei jau buvo sub-blokai - perimame iš jų pagal dalis
-    block.querySelectorAll('.kvalif-subblock').forEach(sub => {
-      const dn = sub.dataset.dalis;
-      saved[dn] = {
-        laimet: sub.querySelector('[data-field^="galimasLaimetojas__"]')?.value || '',
-        tiek: sub.querySelector('[data-field^="kvalifTiekejas__"]')?.value || '',
-        vert: sub.querySelector('[data-field^="kvalifVertinimas__"]')?.value || '',
-        kiti: sub.querySelector('[data-field^="kitiVertinimas__"]')?.value || '',
-        pas: sub.querySelector('[data-field^="kvalifPastabos__"]')?.value || ''
-      };
-    });
-  }
-  // Standartinio bloko (single) duomenys
-  const singleData = {
-    laimet: document.getElementById('galimas-laimetojas')?.value || '',
-    tiek: document.getElementById('kvalif-tiekejas')?.value || '',
-    vert: document.getElementById('kvalif-vertinimas')?.value || '',
-    kiti: document.getElementById('kiti-vertinimas')?.value || '',
-    pas: document.getElementById('kvalif-pastabos')?.value || ''
-  };
-
   if (!dalys) {
-    // Single mode
+    // Neskaidomas pirkimas - viena grandinė
+    const laimet = document.getElementById('galimas-laimetojas')?.value || '';
+    const grandine = _kvalifGrandine('', _kvalifIssaugotaPagalVarda(''));
     block.innerHTML = `
       <div class="kvalif-single">
         <div class="field full-row">
           <label>Galimas laimėtojas</label>
-          <input type="text" id="galimas-laimetojas" data-field="galimasLaimetojas" placeholder="Tiekėjo pavadinimas" value="${escapeAttr(singleData.laimet)}">
+          <input type="text" id="galimas-laimetojas" data-field="galimasLaimetojas" placeholder="Tiekėjo pavadinimas" value="${escapeAttr(laimet)}">
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Pavadinimas</th>
-              <th style="width:120px;">Kvalifikacija</th>
-              <th style="width:120px;">Kiti reikalavimai</th>
-              <th>Pastabos</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><input type="text" id="kvalif-tiekejas" data-field="kvalifTiekejas" placeholder="Tiekėjas" value="${escapeAttr(singleData.tiek)}"></td>
-              <td>
-                <select id="kvalif-vertinimas" data-field="kvalifVertinimas">
-                  <option value="">--</option>
-                  <option value="Atitinka"${singleData.vert==='Atitinka'?' selected':''}>Atitinka</option>
-                  <option value="Neatitinka"${singleData.vert==='Neatitinka'?' selected':''}>Neatitinka</option>
-                  <option value="Netaikomi"${singleData.vert==='Netaikomi'?' selected':''}>Netaikomi</option>
-                </select>
-              </td>
-              <td>
-                <select id="kiti-vertinimas" data-field="kitiVertinimas">
-                  <option value="">--</option>
-                  <option value="Atitinka"${singleData.kiti==='Atitinka'?' selected':''}>Atitinka</option>
-                  <option value="Neatitinka"${singleData.kiti==='Neatitinka'?' selected':''}>Neatitinka</option>
-                  <option value="Netaikomi"${singleData.kiti==='Netaikomi'?' selected':''}>Netaikomi</option>
-                </select>
-              </td>
-              <td><textarea id="kvalif-pastabos" data-field="kvalifPastabos">${escapeHtml(singleData.pas)}</textarea></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    `;
+        ${_kvalifLentelesHtml('', '', grandine)}
+      </div>`;
   } else {
     // Sub-blokai pagal dalis
+    const issaugota = {};
+    dalys.forEach(d => { issaugota[d.name] = _kvalifIssaugotaPagalVarda(d.name); });
+    const laimetojai = {};
+    block.querySelectorAll('.kvalif-subblock').forEach(sub => {
+      laimetojai[sub.dataset.dalis] = sub.querySelector('[data-field^="galimasLaimetojas__"]')?.value || '';
+    });
     block.innerHTML = dalys.map(d => {
       const dn = d.name;
-      const s = saved[dn] || { laimet: '', tiek: '', vert: '', kiti: '', pas: '' };
       const safe = escapeAttr(dn);
       const dataKey = dn.replace(/[^a-zA-Z0-9_]/g, '_');
+      const grandine = _kvalifGrandine(dn, issaugota[dn]);
       return `
         <div class="kvalif-subblock" data-dalis="${safe}" style="margin-top:16px; padding:14px 16px; background:var(--color-green-5); border:1px solid var(--color-green-15); border-radius:8px;">
           <h5 style="font-size:13px; margin:0 0 10px; color:var(--color-emerald-120); font-weight:700;">${d.idx} dalis. ${escapeHtml(dn)} - Galimas laimėtojas</h5>
           <div class="field full-row" style="margin-bottom:10px;">
             <label>Galimas laimėtojas</label>
-            <input type="text" class="kvalif-laimet" data-field="galimasLaimetojas__${dataKey}" data-dalis="${safe}" placeholder="Tiekėjo pavadinimas (auto)" value="${escapeAttr(s.laimet)}">
+            <input type="text" class="kvalif-laimet" data-field="galimasLaimetojas__${dataKey}" data-dalis="${safe}" placeholder="Tiekėjo pavadinimas (auto)" value="${escapeAttr(laimetojai[dn] || '')}">
           </div>
-          <table class="data-table" style="background:#fff;">
-            <thead>
-              <tr>
-                <th>Pavadinimas</th>
-                <th style="width:120px;">Kvalifikacija</th>
-                <th style="width:120px;">Kiti reikalavimai</th>
-                <th>Pastabos</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><input type="text" class="kvalif-tiek" data-field="kvalifTiekejas__${dataKey}" data-dalis="${safe}" placeholder="Tiekėjas (auto)" value="${escapeAttr(s.tiek)}"></td>
-                <td>
-                  <select data-field="kvalifVertinimas__${dataKey}" data-dalis="${safe}">
-                    <option value="">--</option>
-                    <option value="Atitinka"${s.vert==='Atitinka'?' selected':''}>Atitinka</option>
-                    <option value="Neatitinka"${s.vert==='Neatitinka'?' selected':''}>Neatitinka</option>
-                    <option value="Netaikomi"${s.vert==='Netaikomi'?' selected':''}>Netaikomi</option>
-                  </select>
-                </td>
-                <td>
-                  <select data-field="kitiVertinimas__${dataKey}" data-dalis="${safe}">
-                    <option value="">--</option>
-                    <option value="Atitinka"${s.kiti==='Atitinka'?' selected':''}>Atitinka</option>
-                    <option value="Neatitinka"${s.kiti==='Neatitinka'?' selected':''}>Neatitinka</option>
-                    <option value="Netaikomi"${s.kiti==='Netaikomi'?' selected':''}>Netaikomi</option>
-                  </select>
-                </td>
-                <td><textarea data-field="kvalifPastabos__${dataKey}" data-dalis="${safe}">${escapeHtml(s.pas)}</textarea></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      `;
+          ${_kvalifLentelesHtml(dn, dataKey, grandine)}
+        </div>`;
     }).join('');
   }
 }
@@ -2781,7 +2893,7 @@ function gatherFormData() {
     timestamp: new Date().toISOString(),
     fields: {},
     radios: {},
-    rows: { pasiulymai: [], galutiniai: [], natSaug: [], dalys: [] },
+    rows: { pasiulymai: [], galutiniai: [], natSaug: [], dalys: [], kvalif: [] },
     perDalis: {} // per-dalis info: { dalisName: { kvalifTiekejas, kvalifVertinimas, kitiVertinimas, kvalifPastabos, galimasLaimetojas, sutartiesBePvm, sutartiesSuPvm } }
   };
 
@@ -2793,7 +2905,7 @@ function gatherFormData() {
   // per-dalis __ variantai) NIEKADA nepatekdavo į duomenis: pažymoje spausdinosi
   // tušti "____/__", juodraščiai jų neišsaugodavo, o sprendimų kvalifikacijos
   // sakinys buvo neveikiantis kodas.
-  const KARTOJAMOS_EILUTES = '#dalys-tbody, #natsaug-tbody, .pasiulymu-tbody, .galutiniai-tbody';
+  const KARTOJAMOS_EILUTES = '#dalys-tbody, #natsaug-tbody, .pasiulymu-tbody, .galutiniai-tbody, .kvalif-tbody';
   document.querySelectorAll('[data-field]').forEach(el => {
     if (el.closest(KARTOJAMOS_EILUTES)) return; // Lentelės eilutes apdorosim atskirai
     const key = el.dataset.field;
@@ -2814,6 +2926,31 @@ function gatherFormData() {
   // Radios
   document.querySelectorAll('input[type="radio"]:checked').forEach(r => {
     data.radios[r.name] = r.value;
+  });
+
+  // Kvalifikacijos grandinė (Aprašo 30.18 p.): visos kandidatų eilutės.
+  // Pirmoji eilutė TAIP PAT rašoma į senuosius "plokščius" laukus
+  // (perDalis[dalis].kvalifVertinimas / data.fields.kvalifVertinimas), kad
+  // veiktų senieji juodraščiai ir esamos pažymos generavimo vietos.
+  document.querySelectorAll('.kvalif-tbody').forEach(tb => {
+    const dalis = tb.dataset.dalis || '';
+    Array.from(tb.children).forEach((tr, idx) => {
+      const eil = {
+        dalis,
+        tiekejas: (tr.querySelector('[data-kv="tiekejas"]')?.value || '').trim(),
+        vertinimas: tr.querySelector('[data-kv="vertinimas"]')?.value || '',
+        kiti: tr.querySelector('[data-kv="kiti"]')?.value || '',
+        pastabos: tr.querySelector('[data-kv="pastabos"]')?.value || ''
+      };
+      data.rows.kvalif.push(eil);
+      if (idx === 0) {
+        const target = dalis ? (data.perDalis[dalis] = data.perDalis[dalis] || {}) : data.fields;
+        target.kvalifTiekejas = eil.tiekejas;
+        target.kvalifVertinimas = eil.vertinimas;
+        target.kitiVertinimas = eil.kiti;
+        target.kvalifPastabos = eil.pastabos;
+      }
+    });
   });
 
   // Rows - dalys lieka senu būdu (ID-based)
@@ -2872,7 +3009,7 @@ function loadFormData(data) {
     const el = document.querySelector(`[data-field="${key}"]`);
     // Ta pati taisyklė kaip gatherFormData: praleidžiam tik pasikartojančių
     // eilučių lenteles, kad kvalifikacijos laukai grįžtų iš juodraščio.
-    if (el && !el.closest('#dalys-tbody, #natsaug-tbody, .pasiulymu-tbody, .galutiniai-tbody')) {
+    if (el && !el.closest('#dalys-tbody, #natsaug-tbody, .pasiulymu-tbody, .galutiniai-tbody, .kvalif-tbody')) {
       if (el.type === 'checkbox') el.checked = !!data.fields[key];
       else el.value = data.fields[key] || '';
     }
@@ -2889,6 +3026,12 @@ function loadFormData(data) {
   // Rows - dalys reikia užkrauti pirma, kad sub-blokai būtų sukurti
   if (data.rows) {
     if (data.rows.dalys) {
+      // Prieš įkeliant IŠVALOM esamas dalių eilutes. toggleSkaidymas prideda
+      // numatytąją tuščią eilutę, o įkėlimas anksčiau prie jos PRIDĖDAVO
+      // išsaugotas - juodraštyje su 2 dalimis atsirasdavo 3 (pirma tuščia),
+      // dėl to dubliuodavosi ir kvalifikacijos bei sutarties sub-blokai.
+      const dalysTb = document.getElementById('dalys-tbody');
+      if (dalysTb) dalysTb.innerHTML = '';
       data.rows.dalys.forEach(rowData => {
         addDalis();
         const tbody = document.getElementById('dalys-tbody');
@@ -2941,6 +3084,28 @@ function loadFormData(data) {
       });
     });
   }
+  // Kvalifikacijos grandinė iš juodraščio. Naujuose juodraščiuose ji yra
+  // data.rows.kvalif; senuose - tik pirmoji eilutė "plokščiuose" laukuose
+  // (perDalis[dalis].kvalifVertinimas arba fields.kvalifVertinimas), tad juos
+  // paverčiam grandinės pirmąja eilute. Sėkla panaudojama perpiešiant ir valoma.
+  KVALIF_SEED = {};
+  const seedEil = (dalis, tiek, vert, kiti, pas) => {
+    if (!tiek) return;
+    (KVALIF_SEED[dalis || ''] = KVALIF_SEED[dalis || ''] || {})[tiek] =
+      { vertinimas: vert || '', kiti: kiti || '', pastabos: pas || '' };
+  };
+  if (Array.isArray(data.rows && data.rows.kvalif) && data.rows.kvalif.length) {
+    data.rows.kvalif.forEach(r => seedEil(r.dalis, r.tiekejas, r.vertinimas, r.kiti, r.pastabos));
+  } else {
+    if (data.fields) seedEil('', data.fields.kvalifTiekejas, data.fields.kvalifVertinimas, data.fields.kitiVertinimas, data.fields.kvalifPastabos);
+    Object.keys(data.perDalis || {}).forEach(dn => {
+      const pd = data.perDalis[dn] || {};
+      seedEil(dn, pd.kvalifTiekejas, pd.kvalifVertinimas, pd.kitiVertinimas, pd.kvalifPastabos);
+    });
+  }
+  restructureKvalifBlock();
+  KVALIF_SEED = null;
+
   // Galutinis perskaičiavimas po įkėlimo
   validateDalysVerte();
   // Trigger conditional toggles
@@ -3310,12 +3475,17 @@ function generateSprendimai(data) {
     (data.rows.dalys || []).forEach((d, idx) => {
       const dName = d.dalisPav || `${idx+1} dalis`;
       const partRows = allSourceRows.filter(p => (p.dalis || '').trim() === dName);
-      const partAtit = partRows.filter(p => p[vertField] === 'Atitinka' && (p.tiekejas || '').trim()).map(p => p.tiekejas.trim());
+      // Kvalifikacijos neatitikę tiekėjai NEtraukiami į atitinkančių sąrašą -
+      // jie fiksuojami kaip neatitinkantys (žr. atskirą sakinį žemiau).
+      const kritoDalVardai = kvalifKritusieji(data, dName);
+      const partAtit = partRows.filter(p => p[vertField] === 'Atitinka' && (p.tiekejas || '').trim())
+        .map(p => p.tiekejas.trim()).filter(n => !kritoDalVardai.includes(n));
       const partNeatit = partRows.filter(p => p[vertField] === 'Neatitinka' && (p.tiekejas || '').trim()).map(p => p.tiekejas.trim());
       // Surandam laimėtoją šioje dalyje (pigiausias Atitinka)
       const beField = isDeryb ? 'galKainaBePvm' : 'kainaBePvm';
       const winners = partRows
         .filter(p => p[vertField] === 'Atitinka' && (p.tiekejas || '').trim() && !isNaN(parseFloat(p[beField])))
+        .filter(p => !kritoDalVardai.includes(p.tiekejas.trim()))
         .map(p => ({ name: p.tiekejas.trim(), price: parseFloat(p[beField]) }))
         .sort((a, b) => a.price - b.price);
       let block = `${idx+1} dalis. ${dName}:`;
@@ -3327,11 +3497,23 @@ function generateSprendimai(data) {
       if (partNeatit.length > 0) {
         block += `\n  • Neatitinkantys reikalavimų tiekėjai: ${partNeatit.join(', ')}.`;
       }
+      // Kvalifikacijos grandinė (Aprašo 30.18 p.): kandidatai, neatitikę
+      // kvalifikacijos ar kitų reikalavimų, ir jų pasiūlymų atmetimas.
+      const kritoDal = kritoDalVardai;
+      if (kritoDal.length > 0) {
+        block += `\n  • Pripažinti, kad toliau nurodyti tiekėjai neatitinka pašalinimo pagrindų nebuvimo ir (ar) kvalifikacijos reikalavimų, todėl jų pasiūlymai atmetami (Aprašo 30.18 p.): ${kritoDal.join(', ')}.`;
+      }
+      const kvalLaim = kvalifLaimetojasIsData(data, dName);
       // Dalyje, kurioje nėra nė vieno atitinkančio pasiūlymo, sutartis
       // nesudaroma. Anksčiau čia besąlygiškai atsirasdavo eilutė
       // "Pripažinti <nėra laimėtojo> pasiūlymą laimėjusiu ir sudaryti su juo sutartį."
-      if (winners.length > 0) {
+      if (kvalLaim) {
+        block += `\n  • Pripažinti, kad ${kvalLaim} neturi pašalinimo pagrindų ir atitinka Pirkimo sąlygose nustatytus kvalifikacijos ir (ar) kitus reikalavimus.`;
+        block += `\n  • Pripažinti ${kvalLaim} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`;
+      } else if (winners.length > 0 && kritoDal.length === 0) {
         block += `\n  • Pripažinti ${winners[0].name} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`;
+      } else if (winners.length > 0) {
+        block += `\n  • Reikalavimus atitinkančio tiekėjo neliko, sutartis nesudaroma.`;
       } else if (partRows.length > 0) {
         block += `\n  • Visi šiai pirkimo objekto daliai pateikti pasiūlymai atmesti, sutartis nesudaroma.`;
       } else {
@@ -3346,9 +3528,11 @@ function generateSprendimai(data) {
 
   // Tiekėjai pagal vertinimo statusą - visam pirkimui
   const sourceRows = allSourceRows;
+  const kritoVisi = kvalifKritusieji(data, '');
   const atitinkantys = sourceRows
     .filter(p => p[vertField] === 'Atitinka' && (p.tiekejas || '').trim())
-    .map(p => p.tiekejas.trim());
+    .map(p => p.tiekejas.trim())
+    .filter(n => !kritoVisi.includes(n));
   const neatitinkantys = sourceRows
     .filter(p => p[vertField] === 'Neatitinka' && (p.tiekejas || '').trim())
     .map(p => p.tiekejas.trim());
@@ -3371,9 +3555,16 @@ function generateSprendimai(data) {
       list.push(`Remiantis šioje pažymoje nurodytu neatitikimo aprašymu, vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti toliau nurodyto (-ų) tiekėjo (-ų) pasiūlymą (-us): ${neatitinkantys.join(', ')}.`);
     }
 
-    // Forma 2: kvalifikacijos vertinimas
-    if (formNum === 2 && f.kvalifTiekejas) {
-      list.push(`Pripažinti, kad ${f.kvalifTiekejas} neturi pašalinimo pagrindų, atitinka Pirkimo sąlygose nustatytus kvalifikacijos ir/ar kitus reikalavimus.`);
+    // Forma 2: kvalifikacijos grandinė (Aprašo 30.18 p.)
+    if (formNum === 2) {
+      const krito = kvalifKritusieji(data, '');
+      if (krito.length > 0) {
+        list.push(`Pripažinti, kad toliau nurodyti tiekėjai neatitinka pašalinimo pagrindų nebuvimo ir (ar) kvalifikacijos reikalavimų, todėl jų pasiūlymai atmetami (Aprašo 30.18 p.): ${krito.join(', ')}.`);
+      }
+      const kvalLaim = kvalifLaimetojasIsData(data, '');
+      if (kvalLaim) {
+        list.push(`Pripažinti, kad ${kvalLaim} neturi pašalinimo pagrindų, atitinka Pirkimo sąlygose nustatytus kvalifikacijos ir/ar kitus reikalavimus.`);
+      }
     }
 
     // 4 punktas (ar tolesnis): pasiūlymų eilė - su NL, kurios pavirs atskiromis paragrafais Word'e
@@ -3384,8 +3575,12 @@ function generateSprendimai(data) {
     // Laimėtojo eilutė rašoma tik kai laimėtojas tikrai yra. Kai visi pasiūlymai
     // atmesti, anksčiau atsirasdavo "Pripažinti <Tiekėjo pavadinimas> pasiūlymą
     // laimėjusiu" - tokiu atveju derėtų rinktis scenarijų "Atmetami visi".
-    if (atitinkantys.length > 0) {
-      list.push(`Pripažinti ${laimet} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`);
+    const kvalLaimSpr = formNum === 2 ? kvalifLaimetojasIsData(data, '') : '';
+    const visiKrito = formNum === 2 && kvalifKritusieji(data, '').length > 0 && !kvalLaimSpr;
+    if (visiKrito) {
+      list.push('Reikalavimus atitinkančio tiekėjo neliko - visi kandidatai neatitiko kvalifikacijos ar kitų reikalavimų, sutartis nesudaroma.');
+    } else if (atitinkantys.length > 0) {
+      list.push(`Pripažinti ${kvalLaimSpr || laimet} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`);
       list.push('Sutarties sudarymo atidėjimo terminas nėra taikomas.');
     } else {
       list.push('Atsižvelgiant į tai, kad visi pateikti pasiūlymai atmesti, sutartis nesudaroma. Pasirinkite scenarijų "Atmetami visi pasiūlymai".');
@@ -3760,26 +3955,31 @@ async function buildDocx(data) {
         (data.rows.dalys || []).forEach((d, idx) => {
           const dn = d.dalisPav || `${idx+1} dalis`;
           const perD = data.perDalis[dn] || {};
-          if (!perD.galimasLaimetojas && !perD.kvalifTiekejas) return;
+          const grand = kvalifGrandineIsData(data, dn);
+          if (!perD.galimasLaimetojas && !grand.length) return;
+          // Grandinė: kiekvienas vertintas kandidatas atskira eilute (30.18 p.)
+          const grandPar = (grand.length ? grand : [{ tiekejas: perD.kvalifTiekejas, vertinimas: perD.kvalifVertinimas, kiti: perD.kitiVertinimas, pastabos: perD.kvalifPastabos }])
+            .map((r, i) => par([txt(`${i+1} eilėje: ${r.tiekejas || '____'} | Kvalifikacija: ${r.vertinimas || '__'} | Kiti reikalavimai: ${r.kiti || '__'} | Pastabos: ${r.pastabos || '-'}`)]));
           rows.push(new TableRow({
             children: [cell([
               par([txt(`${idx+1} dalis. ${dn}`, { bold: true, italics: true })]),
-              par([txt('Galimu laimėtoju pripažintinas: ', { bold: true }), txt(perD.galimasLaimetojas || perD.kvalifTiekejas || '____')]),
+              par([txt('Galimu laimėtoju pripažintinas: ', { bold: true }), txt(perD.galimasLaimetojas || '____')]),
               par([txt('Informacija apie galimo laimėtojo pašalinimo pagrindų nebuvimo, kvalifikacijos ir kitų dokumentų vertinimo rezultatus:',
                 { bold: true })]),
-              par([txt(`Tiekėjas: ${perD.kvalifTiekejas || '____'} | Kvalifikacija: ${perD.kvalifVertinimas || '__'} | Kiti reikalavimai: ${perD.kitiVertinimas || '__'} | Pastabos: ${perD.kvalifPastabos || '-'}`)])
+              ...grandPar
             ], { colSpan: 4 })]
           }));
         });
       } else if (f.kvalifTiekejas || f.galimasLaimetojas) {
-        const kv = f.kvalifVertinimas;
-        const ki = f.kitiVertinimas;
+        const grandS = kvalifGrandineIsData(data, '');
+        const grandParS = (grandS.length ? grandS : [{ tiekejas: f.kvalifTiekejas, vertinimas: f.kvalifVertinimas, kiti: f.kitiVertinimas, pastabos: f.kvalifPastabos }])
+          .map((r, i) => par([txt(`${i+1} eilėje: ${r.tiekejas || '____'} | Kvalifikacija: ${r.vertinimas || '__'} | Kiti reikalavimai: ${r.kiti || '__'} | Pastabos: ${r.pastabos || '-'}`)]));
         rows.push(new TableRow({
           children: [cell([
-            par([txt('Galimu laimėtoju pripažintinas:', { bold: true }), txt(' ' + (f.galimasLaimetojas || f.kvalifTiekejas || '____'))]),
+            par([txt('Galimu laimėtoju pripažintinas:', { bold: true }), txt(' ' + (f.galimasLaimetojas || '____'))]),
             par([txt('Informacija apie galimo laimėtojo pašalinimo pagrindų nebuvimo, kvalifikacijos ir kitų dokumentų vertinimo rezultatus:',
               { bold: true })]),
-            par([txt(`Tiekėjas: ${f.kvalifTiekejas || '____'} | Kvalifikacija: ${kv || '__'} | Kiti reikalavimai: ${ki || '__'} | Pastabos: ${f.kvalifPastabos || '-'}`)])
+            ...grandParS
           ], { colSpan: 4 })]
         }));
       }
@@ -3978,19 +4178,28 @@ function generateNotificationList(data) {
   // Pagalbinė: surenka laimėtojų vardus per dalis (arba bendrą laimėtoją jei neskaidoma)
   function winnersByDalis() {
     if (!isSkaidoma) {
-      return { '': (f.laimetojas || '').trim().toLowerCase() };
+      const kv = kvalifLaimetojasIsData(data, '');
+      return { '': (kv || f.laimetojas || '').trim().toLowerCase() };
     }
     const result = {};
     (data.rows.dalys || []).forEach((d, idx) => {
       const dn = d.dalisPav || `${idx+1} dalis`;
-      // Surandam pigiausią Atitinka šios dalies tiekėją
+      // Pigiausias šios dalies tiekėjas, LIKĘS eilėje (kvalifikacijos neatitikę
+      // į eilę netraukiami).
+      const kritoW = kvalifKritusieji(data, dn);
       const items = sourceRows
         .filter(rw => (rw.dalis || '').trim() === dn && rw[vertField] === 'Atitinka' && !isNaN(parseFloat(rw[beField])))
+        .filter(rw => !kritoW.includes((rw.tiekejas || '').trim()))
         .map(rw => ({ name: (rw.tiekejas || '').trim(), price: parseFloat(rw[beField]) }))
         .sort((a, b) => a.price - b.price);
-      const perDalisWinner = (data.perDalis && data.perDalis[dn] && data.perDalis[dn].galimasLaimetojas)
-        ? data.perDalis[dn].galimasLaimetojas.toLowerCase()
-        : (items[0]?.name || '').toLowerCase();
+      // Laimėtojas - kvalifikaciją praėjęs kandidatas (Aprašo 30.18 p.).
+      // Jei grandinė dar nepildyta, imamas laukelio arba pigiausio "Atitinka" vardas.
+      const isGrandines = kvalifLaimetojasIsData(data, dn);
+      const perDalisWinner = isGrandines
+        ? isGrandines.toLowerCase()
+        : ((data.perDalis && data.perDalis[dn] && data.perDalis[dn].galimasLaimetojas)
+            ? data.perDalis[dn].galimasLaimetojas.toLowerCase()
+            : (items[0]?.name || '').toLowerCase());
       result[dn] = perDalisWinner;
     });
     return result;
@@ -3999,11 +4208,18 @@ function generateNotificationList(data) {
 
   function pushNotif(name, type, dalisName, row) {
     const dalisLabel = dalisName ? `_${sanitizeFilename(dalisName)}` : '';
+    // Kvalifikacijos atmetimo priežastis imama iš kvalifikacijos lentelės
+    // pastabų, o pasiūlymo atmetimo - iš neatitikimo aprašymo stulpelio.
+    let priezastis = (row && (row.neatitikimas || row.galNeatitikimas)) || '';
+    if (type === 'rejected_kvalif') {
+      const eil = kvalifGrandineIsData(data, dalisName).find(r => (r.tiekejas || '').toLowerCase() === name.toLowerCase());
+      priezastis = (eil && eil.pastabos) || '';
+    }
     notifications.push({
       recipient: name,
       type,
       dalis: dalisName || '',
-      neatitikimas: (row && (row.neatitikimas || row.galNeatitikimas)) || '',
+      neatitikimas: priezastis,
       filename: `Pranesimas_${sanitizeFilename(name)}${dalisLabel}_${type}.docx`
     });
   }
@@ -4017,7 +4233,11 @@ function generateNotificationList(data) {
       let type;
       if (vert === 'Atitinka') {
         const w = winnerMap[dalisName] || '';
-        type = (name.toLowerCase() === w) ? 'winner' : 'lost_atitinka';
+        // Kandidatas, kritęs per kvalifikacijos patikrą: jo PASIŪLYMAS atmetamas
+        // (Aprašo 30.18 p.), nors pats pasiūlymas atitiko reikalavimus.
+        const kritoVardai = kvalifKritusieji(data, dalisName).map(x => x.toLowerCase());
+        if (kritoVardai.includes(name.toLowerCase())) type = 'rejected_kvalif';
+        else type = (name.toLowerCase() === w) ? 'winner' : 'lost_atitinka';
       } else if (vert === 'Neatitinka') {
         // Jei ŠIOJE dalyje (ar visame pirkime, kai neskaidoma) neliko nė vieno
         // atitinkančio pasiūlymo - tai ne "atmestas, o laimėjo kitas", o
@@ -4079,8 +4299,10 @@ function buildNotificationParagraphs(data, notif) {
     const sourceRows = isDeryb ? (data.rows.galutiniai || []) : (data.rows.pasiulymai || []);
     const vertField = isDeryb ? 'galVert' : 'pasiulVert';
     const beField = isDeryb ? 'galKainaBePvm' : 'kainaBePvm';
+    const kritoLaisk = kvalifKritusieji(data, dalisName);
     const partItems = sourceRows
       .filter(rw => (rw.dalis || '').trim() === dalisName && rw[vertField] === 'Atitinka' && !isNaN(parseFloat(rw[beField])))
+      .filter(rw => !kritoLaisk.includes((rw.tiekejas || '').trim()))
       .map(rw => ({ name: (rw.tiekejas || '').trim(), price: parseFloat(rw[beField]) }))
       .sort((a, b) => a.price - b.price);
     if (partItems.length > 1) {
@@ -4151,6 +4373,16 @@ function buildNotificationParagraphs(data, notif) {
     // Be jo atmestas tiekėjas galėdavo būti paskelbtas laimėtoju tame pačiame rašte.
     if (winnerName && winnerName !== '____') {
       paragraphs.push(par([txt(`3. Laimėjusiu pripažintas ${winnerName} pasiūlymas. Su laimėjusiu tiekėju bus sudaroma pirkimo sutartis${dalisName ? ' ' + dalisFrazaPrep : ''}.`)]));
+    }
+  } else if (notif.type === 'rejected_kvalif') {
+    // Pasiūlymas atitiko reikalavimus, bet tiekėjas neįrodė pašalinimo pagrindų
+    // nebuvimo / kvalifikacijos, todėl pasiūlymas atmetamas (Aprašo 30.18 p.).
+    paragraphs.push(par([txt(`1. Jūsų pateiktas pasiūlymas${dalisName ? ' ' + dalisFrazaPrep : ''} pripažintas atitinkančiu Pirkimo sąlygų reikalavimus.`)]));
+    paragraphs.push(par([txt('2. Įvertinus pateiktus pašalinimo pagrindų nebuvimą ir (ar) atitiktį kvalifikacijos bei kitiems reikalavimams patvirtinančius dokumentus, nustatyta, kad nustatytų reikalavimų neatitinkate. Neatitikimo priežastys:')]));
+    paragraphs.push(par([txt('\t' + (notif.neatitikimas || '[neatitikimo aprašymas]'))]));
+    paragraphs.push(par([txt('3. Vadovaujantis Aprašo 30.18 punktu, Jūsų pateiktas pasiūlymas atmestas.')]));
+    if (winnerName && winnerName !== '____') {
+      paragraphs.push(par([txt(`4. Laimėjusiu pripažintas ${winnerName} pasiūlymas. Su laimėjusiu tiekėju bus sudaroma pirkimo sutartis${dalisName ? ' ' + dalisFrazaPrep : ''}.`)]));
     }
   } else if (notif.type === 'all_rejected') {
     paragraphs.push(par([txt(`1. Jūsų pateiktas pasiūlymas${dalisName ? ' ' + dalisFrazaPrep : ''} pripažintas neatitinkančiu Pirkimo sąlygų reikalavimų. Pasiūlymo atmetimo priežastys:`)]));
