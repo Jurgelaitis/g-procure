@@ -970,6 +970,24 @@ function renderSection1(formNum) {
             <input type="number" id="verte-su-pvm" data-field="verteSuPvm" step="0.01" placeholder="0.00" oninput="calcPvm(this); validateDalysVerte();">
             <div class="hint">Auto: ×1.21 (21% PVM)</div>
           </div>
+          <div class="field">
+            <label>Pirkimui skirtos lėšos be PVM (Eur)</label>
+            <input type="number" id="lesos-be-pvm" data-field="lesosBePvm" step="0.01" placeholder="0.00" oninput="tikrinkLesas()">
+            <div class="hint">Suma, užfiksuota Pirkimo paraiškoje prieš pradedant procedūras (Aprašo 10 p.). Palikus tuščią, kainų atitiktis lėšoms nevertinama.</div>
+          </div>
+          <div class="field">
+            <label>Ar kaina neviršija skirtų lėšų</label>
+            <select id="lesu-atitiktis" data-field="lesuAtitiktis" onchange="tikrinkLesas()">
+              <option value="">-- Nustatoma automatiškai --</option>
+              <option value="neviršija">Neviršija skirtų lėšų</option>
+              <option value="viršija-didinta">Viršija, lėšos padidintos</option>
+              <option value="viršija-nedidinta">Viršija, lėšos nedidintos</option>
+            </select>
+            <div class="hint">Aprašo 30.15 p. Perkantysis subjektas vertina, ar pasiūlyta kaina neviršija pirkimui skirtų lėšų.</div>
+          </div>
+          <div class="field full-row">
+            <div id="lesu-ispejimas" class="hint" style="display:none;"></div>
+          </div>
           ${splitOption}
           <div class="field full-row">
             <div class="small-note">Pirkimo objektas nėra įtrauktas į CPO katalogą (jei netinka, pakeiskite Kitoje informacijoje).</div>
@@ -1348,6 +1366,8 @@ function renderSection6(formNum) {
           </select>
         </div>
 
+        <div id="daliu-scenarijai" style="margin-top:12px;"></div>
+
         <div id="sprendimo-detales" class="conditional" style="margin-top:16px;">
           <div id="laimet-fields" class="conditional">
             <div class="helper-box info" style="margin-bottom:12px;">
@@ -1356,7 +1376,8 @@ function renderSection6(formNum) {
             </div>
             <div class="field full-row">
               <label>Laimėjusio tiekėjo pavadinimas</label>
-              <input type="text" id="laimetojas" data-field="laimetojas" placeholder="(automatiškai - pigiausias 'Atitinka' tiekėjas)">
+              <input type="text" id="laimetojas" data-field="laimetojas" placeholder="(automatiškai - pirmas eilėje kvalifikaciją praėjęs tiekėjas)">
+              <div id="laimetojo-hint" class="hint" style="display:none;"></div>
             </div>
             <div class="field full-row">
               <label>Pasiūlymų eilė (jei daugiau nei vienas tiekėjas)</label>
@@ -1369,6 +1390,27 @@ function renderSection6(formNum) {
             <div class="field full-row">
               <label>Nutraukimo priežastis</label>
               <textarea id="nutraukimo-priezastis" data-field="nutraukimoPriezastis" rows="3" placeholder="Pvz., dėl pasikeitusių aplinkybių..."></textarea>
+            </div>
+          </div>
+
+          <div class="field full-row" style="margin-top:12px;">
+            <label>Pasiūlymų atmetimo teisinis pagrindas (neprivaloma)</label>
+            <input type="text" id="atmetimo-pagrindas" data-field="atmetimoPagrindas"
+                   placeholder="Pvz., Pirkimo sąlygų 5.3 p., Aprašo 30.16 p." oninput="autoFillSprendimai()">
+            <div class="hint">Įrašius, sprendimuose prie atmetimo bus nurodytas konkretus punktas vietoj bendro „vadovaujantis Aprašu / Pirkimo sąlygomis".</div>
+          </div>
+
+          <div class="field full-row" style="margin-top:12px;">
+            <label>
+              <input type="checkbox" id="sprendimu-rankinis" data-field="sprendimuRankinis" onchange="perjunkSprendimuRedagavima(this)">
+              Sprendimų tekstą rašau pats
+            </label>
+            <div class="hint">Neįjungus - tekstas generuojamas automatiškai pagal įvestus duomenis. Įjungus - į pažymą patenka tiksliai tai, kas įrašyta žemiau.</div>
+            <textarea id="sprendimu-tekstas" data-field="sprendimuTekstas" rows="10"
+                      style="margin-top:8px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;"></textarea>
+            <div style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+              <button type="button" class="btn-small" onclick="atkurkAutomatiniSprendimuTeksta()">Atkurti automatinį tekstą</button>
+              <span id="sprendimu-busena" class="hint" style="margin:0;"></span>
             </div>
           </div>
         </div>
@@ -2147,12 +2189,103 @@ function _collectOffersForAuto(optionalDalis) {
 }
 
 // AUTO-FILL: užpildo Sprendimų skyriaus laukus pagal galutinius (arba pirminius, jei nėra derybų) "Atitinka" pasiūlymus
+/* ===== SCENARIJUS PER DALĮ (P6) =====
+   Skaidomame pirkime sprendimai priimami atskirai kiekvienai daliai, tad ir
+   baigtis gali skirtis: vienoje dalyje sudaroma sutartis, kitoje atmetami visi
+   pasiūlymai, trečioje procedūros nutraukiamos. Vienas globalus scenarijus to
+   išreikšti negali. Per-dalis reikšmė saugoma perDalis[dalis].dalisScenarijus;
+   jos nesant (seni juodraščiai) grįžtama prie globalaus scenarijaus.         */
+const SCENARIJU_PARINKTYS = [
+  ['sutartis', 'Sudaroma sutartis (yra laimėtojas)'],
+  ['vienas-tiekejas', 'Sudaroma sutartis (vienas tiekėjas / liko vienas)'],
+  ['atmesta', 'Atmetami visi pasiūlymai'],
+  ['negauta', 'Negauta pasiūlymų'],
+  ['nutraukta', 'Nutraukiamos pirkimo procedūros']
+];
+
+/* Siūlomas dalies scenarijus pagal duomenis (rengėjas gali pakeisti). */
+function siulomasDaliesScenarijus(dalisName) {
+  const visi = _collectOffersForAuto(dalisName).filter(it => it.name);
+  if (!visi.length) return 'negauta';
+  if (kvalifikuotasLaimetojas(dalisName)) return 'sutartis';
+  return 'atmesta';
+}
+
+/* Efektyvus dalies scenarijus iš SURINKTŲ duomenų. */
+function daliesScenarijus(data, dalisName) {
+  const pd = (data.perDalis && data.perDalis[dalisName]) || {};
+  if (pd.dalisScenarijus) return pd.dalisScenarijus;
+  return data.fields.sprendimoScenarijus || '';
+}
+
+/* Per-dalis scenarijų blokas. Rodomas tik skaidymo atveju. */
+function restructureDaliuScenarijus() {
+  const blokas = document.getElementById('daliu-scenarijai');
+  if (!blokas) return;
+  const dalys = getCurrentDalys();
+  if (!dalys) { blokas.innerHTML = ''; return; }
+  // Išsaugom TIK rengėjo pasirinktas reikšmes. Automatiškai pasiūlytos
+  // perskaičiuojamos kaskart iš naujo - kitaip pasiūlymas, padarytas dar
+  // neįvedus pasiūlymų (tada siūloma "negauta"), įstrigtų visam laikui.
+  const vartotojo = {};
+  blokas.querySelectorAll('[data-field^="dalisScenarijus__"]').forEach(el => {
+    if (el.dataset.vartotojo === '1') vartotojo[el.dataset.dalis] = el.value;
+  });
+  const eilutes = dalys.map(d => {
+    const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
+    const safe = escapeAttr(d.name);
+    const rankinis = vartotojo[d.name] !== undefined;
+    const dabartinis = rankinis ? vartotojo[d.name] : siulomasDaliesScenarijus(d.name);
+    const opts = SCENARIJU_PARINKTYS
+      .map(([v, t]) => `<option value="${v}"${dabartinis === v ? ' selected' : ''}>${t}</option>`).join('');
+    return `<div class="field full-row" style="margin-bottom:8px;">
+        <label>${d.idx} dalis. ${escapeHtml(d.name)}</label>
+        <select data-field="dalisScenarijus__${dataKey}" data-dalis="${safe}"
+                ${rankinis ? 'data-vartotojo="1"' : ''}
+                onchange="this.dataset.vartotojo='1'; autoFillSprendimai();">${opts}</select>
+        ${rankinis ? '<div class="hint">Pasirinkta rankiniu būdu.</div>' : ''}
+      </div>`;
+  }).join('');
+  blokas.innerHTML = `
+    <div class="helper-box info" style="margin-bottom:10px;">
+      Pirkimas skaidomas į dalis, tad <strong>sprendimai priimami atskirai kiekvienai daliai</strong> ir baigtis gali skirtis.
+      Scenarijai pasiūlyti pagal įvestus duomenis - patikslinkite, jei reikia.
+    </div>${eilutes}`;
+}
+
+/* Skaidomame pirkime laimėtojas yra KIEKVIENAI daliai atskiras, tad vienas
+   globalus "Laimėjusio tiekėjo pavadinimas" laukas klaidina: jis rodydavo
+   bendrai pigiausią tiekėją, nors pažymos sprendimuose skaidymo atveju net
+   nenaudojamas. Skaidymo atveju laukas paslepiamas, o vietoje jo rodoma
+   laimėtojų per dalis santrauka.                                            */
+function sinchronizuokLaimetojoLauka() {
+  const laukas = document.getElementById('laimetojas');
+  const hint = document.getElementById('laimetojo-hint');
+  if (!laukas || !hint) return;
+  const dalys = getCurrentDalys();
+  if (!dalys) {
+    laukas.style.display = '';
+    hint.style.display = 'none';
+    return;
+  }
+  laukas.style.display = 'none';
+  const eilutes = dalys.map(d => {
+    const w = kvalifikuotasLaimetojas(d.name);
+    return `${d.idx} dalis. ${escapeHtml(d.name)} - ${w ? escapeHtml(w) : '<em>laimėtojo nėra</em>'}`;
+  });
+  hint.style.display = 'block';
+  hint.innerHTML = 'Pirkimas skaidomas į dalis, tad laimėtojas nustatomas kiekvienai daliai atskirai:<br>'
+    + eilutes.map(e => '&nbsp;&nbsp;' + e).join('<br>');
+}
+
 function autoFillSprendimai() {
   // Galimo laimėtojo užpildymas dirba visada (nepriklausomai nuo scenarijaus)
   autoFillGalimasLaimetojas();
 
+  restructureDaliuScenarijus();
+  sinchronizuokLaimetojoLauka();
   const scenSel = document.getElementById('sprendimo-scenarijus');
-  if (!scenSel || scenSel.value !== 'sutartis') return;
+  if (!scenSel || scenSel.value !== 'sutartis') { sinchronizuokSprendimuTeksta(); return; }
 
   // Pasiūlymų eilė ir laimėtojas (vienas, jei nesusiskaido į dalis).
   // Į eilę traukiami TIK visus reikalavimus atitinkantys tiekėjai: pasiūlymas
@@ -2200,6 +2333,8 @@ function autoFillSprendimai() {
   if (laimetojasField) laimetojasField.value = winnerName;
 
   autoFillSutartiesKaina();
+  sinchronizuokLaimetojoLauka();
+  sinchronizuokSprendimuTeksta();
 }
 
 // AUTO-FILL: Galimas laimėtojas + kvalifikacijos lentelė
@@ -2241,6 +2376,8 @@ function autoFillGalimasLaimetojas() {
 
 // AUTO-FILL Sutarties kainos pagal laimėtojo pasiūlymą - per dalis arba single
 function autoFillSutartiesKaina() {
+  // Po perskaičiavimo atnaujinam ir lėšų vertinimą (funkcija saugi, jei laukų nėra).
+  setTimeout(() => { try { tikrinkLesas(); } catch (e) {} }, 0);
   // Patikrinam ar pažymėta "lygi laimėjusio pasiūlymo kainai"
   let useWinnerPrice = false;
   const cb = document.querySelector('[data-field="kainaLygiLaimejusio"]');
@@ -2328,6 +2465,7 @@ function onDalisChange() {
   restructureOfferTables();
   restructureKvalifBlock();
   restructureSutartiesBlock();
+  restructureDaliuScenarijus();
 }
 
 // Grąžina einamųjų dalių sąrašą [{idx, name}, ...] arba null jei pirkimas neskaidomas
@@ -2841,6 +2979,69 @@ function restructureSutartiesBlock() {
 }
 
 // Patikrina, ar atskirų objekto dalių verčių suma atitinka bendrą pirkimo vertę
+/* ===== PIRKIMUI SKIRTOS LĖŠOS (Aprašo 10 ir 30.15 p.) =====
+   10 p.: lėšų suma nustatoma ir užfiksuojama Pirkimo paraiškoje PRIEŠ pradedant
+   procedūras. 30.15 p.: nagrinėjant pasiūlymus vertinama, ar pasiūlyta kaina
+   neviršija tų lėšų. 30.16 p. išlyga: kaina negali būti atmetimo pagrindas, jei
+   ekonomiškai naudingiausias pasiūlymas renkamas pagal sąnaudų arba kainos ir
+   kokybės santykį IR lėšų suma pirkimo dokumentuose nebuvo nurodyta (išskyrus
+   atvejį, kai atmetami visi pasiūlymai). Todėl čia tik VERTINAMA ir fiksuojama,
+   pasiūlymai automatiškai neatmetami.                                        */
+
+// Didžiausia laimėjusio (ar galimo laimėtojo) pasiūlymo kaina - per dalis sudedama.
+function laimejusiuKainuSuma() {
+  const dalys = getCurrentDalys();
+  if (dalys) {
+    let suma = 0, yra = false;
+    dalys.forEach(d => {
+      const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const el = document.querySelector(`[data-field="sutartiesBePvm__${dataKey}"]`);
+      const v = parseFloat(el && el.value);
+      if (!isNaN(v)) { suma += v; yra = true; }
+    });
+    return yra ? suma : null;
+  }
+  const v = parseFloat((document.getElementById('sutarties-be-pvm') || {}).value);
+  return isNaN(v) ? null : v;
+}
+
+/* Lėšų sakinys pažymai (Aprašo 10 ir 30.15 p.). Tuščias, jei lėšos nenurodytos. */
+function lesuSakinys(f) {
+  const lesos = String(f.lesosBePvm || '').trim();
+  if (!lesos) return '';
+  const kiek = `Pirkimui skirtos lėšos: ${formatEurNum(lesos)} Eur be PVM (Aprašo 10 p.).`;
+  const a = f.lesuAtitiktis;
+  if (a === 'neviršija')        return `${kiek} Pasiūlymo kaina neviršija pirkimui skirtų lėšų.`;
+  if (a === 'viršija-didinta')  return `${kiek} Pasiūlymo kaina viršija pirkimui skirtas lėšas, lėšos padidintos.`;
+  if (a === 'viršija-nedidinta')return `${kiek} Pasiūlymo kaina viršija pirkimui skirtas lėšas, lėšos nedidinamos.`;
+  return kiek;
+}
+
+function tikrinkLesas() {
+  const isp = document.getElementById('lesu-ispejimas');
+  const lesosEl = document.getElementById('lesos-be-pvm');
+  const atitiktisEl = document.getElementById('lesu-atitiktis');
+  if (!isp || !lesosEl) return;
+  const lesos = parseFloat(lesosEl.value);
+  const kaina = laimejusiuKainuSuma();
+  if (isNaN(lesos) || kaina === null) { isp.style.display = 'none'; return; }
+  const virsija = kaina > lesos + 0.005;
+  // Automatinis siūlymas, kol rengėjas nepasirinko pats
+  if (atitiktisEl && !atitiktisEl.value) {
+    atitiktisEl.value = virsija ? 'viršija-didinta' : 'neviršija';
+  }
+  isp.style.display = 'block';
+  if (virsija) {
+    isp.style.color = 'var(--color-orange, #b06000)';
+    isp.innerHTML = `<strong>Kaina viršija pirkimui skirtas lėšas:</strong> `
+      + `${formatEurNum(kaina)} Eur be PVM prieš skirtas ${formatEurNum(lesos)} Eur be PVM `
+      + `(skirtumas ${formatEurNum(kaina - lesos)} Eur). Nurodykite, ar lėšos didinamos (Aprašo 30.15 p.).`;
+  } else {
+    isp.style.color = 'var(--color-emerald, #00A072)';
+    isp.innerHTML = `Kaina neviršija pirkimui skirtų lėšų: ${formatEurNum(kaina)} iš ${formatEurNum(lesos)} Eur be PVM.`;
+  }
+}
+
 function validateDalysVerte() {
   const sumBeEl = document.getElementById('dalys-suma-be');
   const sumSuEl = document.getElementById('dalys-suma-su');
@@ -3345,6 +3546,8 @@ function buildPreviewHtml(data) {
     html += `<strong>Pirkimo kortelės registravimo data ir Nr.:</strong> ${formatDocDate(f.korteleData)}, Nr. ${escapeHtml(f.korteleNr)}<br>`;
   }
   html += `<strong>Numatoma vertė:</strong> ${escapeHtml(formatEurNum(f.verteBePvm))} Eur be PVM; ${escapeHtml(formatEurNum(f.verteSuPvm))} Eur su PVM.<br>`;
+  const lesTxt = lesuSakinys(f);
+  if (lesTxt) html += `${escapeHtml(lesTxt)}<br>`;
 
   if (formNum === 2 && r.skaidoma === 'taip') {
     html += `☒ Pirkimo objektas skaidomas į dalis:<br>`;
@@ -3528,7 +3731,7 @@ function buildSprendimaiHtml(data) {
   const scen = f.sprendimoScenarijus;
   if (!scen) return '<em>Pasirinkite scenarijų sprendimų skyriuje.</em>';
 
-  const sprendimai = generateSprendimai(data);
+  const sprendimai = sprendimaiIsvedimui(data);
   return sprendimai.map((s, i) => {
     const lines = String(s).split('\n');
     const escFirst = escapeHtml(lines[0]);
@@ -3538,6 +3741,57 @@ function buildSprendimaiHtml(data) {
       .map(l => `<span style="margin-left:24px; display:block;">${escapeHtml(l)}</span>`).join('');
     return `${i+1}. ${escFirst}${sub}`;
   }).join('<br>');
+}
+
+/* ===== SPRENDIMŲ TEKSTAS: AUTOMATINIS ARBA RENGĖJO (P8) =====
+   Iki šiol sprendimų formuluotės buvo kietai užkoduotos ir jų nebuvo galima
+   pataisyti prieš generuojant - rengėjas galėjo redaguoti tik jau atsisiųstą
+   Word failą. Dabar tekstas rodomas redaguojamame lauke: pagal nutylėjimą jis
+   automatiškai atnaujinamas iš duomenų, o įjungus "rašau pats" į pažymą patenka
+   tiksliai tai, kas įrašyta.                                                 */
+
+// Vienas sprendimas = vienas blokas; blokai skiriami tuščia eilute.
+const SPRENDIMU_SKIRTUKAS = '\n\n';
+
+function sprendimaiIsvedimui(data) {
+  const f = data.fields || {};
+  if (f.sprendimuRankinis && String(f.sprendimuTekstas || '').trim()) {
+    return String(f.sprendimuTekstas).split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  }
+  return generateSprendimai(data);
+}
+
+function perjunkSprendimuRedagavima(cb) {
+  const ta = document.getElementById('sprendimu-tekstas');
+  if (!ta) return;
+  if (cb.checked && !ta.value.trim()) atkurkAutomatiniSprendimuTeksta();
+  atnaujinkSprendimuBusena();
+}
+
+function atkurkAutomatiniSprendimuTeksta() {
+  const ta = document.getElementById('sprendimu-tekstas');
+  if (!ta) return;
+  ta.value = generateSprendimai(gatherFormData()).join(SPRENDIMU_SKIRTUKAS);
+  atnaujinkSprendimuBusena();
+}
+
+function atnaujinkSprendimuBusena() {
+  const b = document.getElementById('sprendimu-busena');
+  const cb = document.getElementById('sprendimu-rankinis');
+  if (!b || !cb) return;
+  b.textContent = cb.checked
+    ? 'Į pažymą pateks šis tekstas.'
+    : 'Tekstas atnaujinamas automatiškai pagal duomenis.';
+  b.style.color = cb.checked ? 'var(--color-orange, #b06000)' : '';
+}
+
+/* Automatinį tekstą laikom sinchronizuotą, kol rengėjas neperėmė redagavimo. */
+function sinchronizuokSprendimuTeksta() {
+  const ta = document.getElementById('sprendimu-tekstas');
+  const cb = document.getElementById('sprendimu-rankinis');
+  if (!ta || !cb || cb.checked) return;   // rankiniame režime neliečiam
+  ta.value = generateSprendimai(gatherFormData()).join(SPRENDIMU_SKIRTUKAS);
+  atnaujinkSprendimuBusena();
 }
 
 function generateSprendimai(data) {
@@ -3559,7 +3813,7 @@ function generateSprendimai(data) {
   const isSkaidoma = formNum === 2 && r.skaidoma === 'taip' && (data.rows.dalys || []).length > 0;
 
   // Jei skaidoma - generuojam pranešimus per dalis
-  if (isSkaidoma && scen === 'sutartis') {
+  if (isSkaidoma) {
     list.push('Atsižvelgiant į tai, kad pirkimas yra skaidomas į pirkimo objekto dalis, sprendimai priimami atskirai kiekvienai daliai:');
     (data.rows.dalys || []).forEach((d, idx) => {
       const dName = d.dalisPav || `${idx+1} dalis`;
@@ -3577,7 +3831,20 @@ function generateSprendimai(data) {
         .filter(p => !kritoDalVardai.includes(p.tiekejas.trim()))
         .map(p => ({ name: p.tiekejas.trim(), price: parseFloat(p[beField]) }))
         .sort((a, b) => a.price - b.price);
+      const dScen = daliesScenarijus(data, dName) || 'sutartis';
       let block = `${idx+1} dalis. ${dName}:`;
+      // Dalis, kurios procedūros nutrauktos arba kurioje negauta pasiūlymų,
+      // aprašoma trumpai - atitikties sąrašai jai neaktualūs.
+      if (dScen === 'nutraukta') {
+        block += `\n  • Nutraukti šios pirkimo objekto dalies procedūras. Nutraukimo priežastys: ${f.nutraukimoPriezastis || '____'}.`;
+        list.push(block);
+        return;
+      }
+      if (dScen === 'negauta' || partRows.length === 0) {
+        block += `\n  • Pasiūlymų šiai pirkimo objekto daliai negauta, sutartis nesudaroma.`;
+        list.push(block);
+        return;
+      }
       if (partAtit.length > 0) {
         block += `\n  • Atitinkantys reikalavimus tiekėjai: ${partAtit.join(', ')}.`;
       } else {
@@ -3596,7 +3863,9 @@ function generateSprendimai(data) {
       // Dalyje, kurioje nėra nė vieno atitinkančio pasiūlymo, sutartis
       // nesudaroma. Anksčiau čia besąlygiškai atsirasdavo eilutė
       // "Pripažinti <nėra laimėtojo> pasiūlymą laimėjusiu ir sudaryti su juo sutartį."
-      if (kvalLaim) {
+      if (dScen === 'atmesta') {
+        block += `\n  • Atmesti visus šiai pirkimo objekto daliai pateiktus pasiūlymus, sutartis nesudaroma.`;
+      } else if (kvalLaim) {
         block += `\n  • Pripažinti, kad ${kvalLaim} neturi pašalinimo pagrindų ir atitinka Pirkimo sąlygose nustatytus kvalifikacijos ir (ar) kitus reikalavimus.`;
         block += `\n  • Pripažinti ${kvalLaim} pasiūlymą laimėjusiu ir sudaryti su juo sutartį.`;
       } else if (winners.length > 0 && kritoDal.length === 0) {
@@ -3641,7 +3910,7 @@ function generateSprendimai(data) {
       list.push(`Pripažinti, kad toliau nurodyto (-ų) tiekėjo (-ų) pateikti pasiūlymai neatitinka nustatytų reikalavimų (dėl priežasčių, nurodytų šios pažymos 4 dalies ${lentNr} lentelės stulpelyje "Neatitikimo aprašymas"): ${neatitinkantys.join(', ')}.`);
 
       // 3 punktas: atmestini pasiūlymai
-      list.push(`Remiantis šioje pažymoje nurodytu neatitikimo aprašymu, vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti toliau nurodyto (-ų) tiekėjo (-ų) pasiūlymą (-us): ${neatitinkantys.join(', ')}.`);
+      list.push(`Remiantis šioje pažymoje nurodytu neatitikimo aprašymu, vadovaujantis ${f.atmetimoPagrindas ? f.atmetimoPagrindas : 'Aprašu / Pirkimo sąlygomis'}, atmesti toliau nurodyto (-ų) tiekėjo (-ų) pasiūlymą (-us): ${neatitinkantys.join(', ')}.`);
     }
 
     // Forma 2: kvalifikacijos grandinė (Aprašo 30.18 p.)
@@ -3691,7 +3960,7 @@ function generateSprendimai(data) {
   } else if (scen === 'atmesta') {
     if (neatitinkantys.length > 0) {
       list.push(`Pripažinti, kad toliau nurodyto (-ų) tiekėjo (-ų) pasiūlymai neatitinka Pirkimo sąlygų reikalavimų (kaip aprašyta šios pažymos 4 dalies ${lentNr} lentelės stulpelyje "Neatitikimo aprašymas"): ${neatitinkantys.join(', ')}.`);
-      list.push(`Remiantis šioje pažymoje nurodytu neatitikimo aprašymu, vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti toliau nurodyto (-ų) tiekėjo (-ų) pasiūlymą (-us): ${neatitinkantys.join(', ')}.`);
+      list.push(`Remiantis šioje pažymoje nurodytu neatitikimo aprašymu, vadovaujantis ${f.atmetimoPagrindas ? f.atmetimoPagrindas : 'Aprašu / Pirkimo sąlygomis'}, atmesti toliau nurodyto (-ų) tiekėjo (-ų) pasiūlymą (-us): ${neatitinkantys.join(', ')}.`);
     } else {
       list.push(`Pripažinti, kad tiekėjų pateikti pasiūlymai neatitinka Pirkimo sąlygų reikalavimų, kaip aprašyta šios pažymos 4 dalies ${lentNr} lentelės stulpelyje "Neatitikimo aprašymas".`);
       list.push('Remiantis šioje pažymoje nurodytu neatitikimo aprašymu, vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti visų tiekėjų pasiūlymus.');
@@ -3889,6 +4158,8 @@ async function buildDocx(data) {
     } else {
       s1Children.push(par([txt('☒ Pirkimo objektas neskaidomas į dalis.')]));
     }
+    const lesDocx = lesuSakinys(f);
+    if (lesDocx) s1Children.push(par([txt(lesDocx)]));
     s1Children.push(par([txt('Pirkimo objektas nėra įtrauktas į CPO katalogą.')]));
 
     const s2Children = [];
@@ -4083,7 +4354,7 @@ async function buildDocx(data) {
 
     // ===== Section 6: SPRENDIMAI =====
     rows.push(sectionTitleRow('6. SPRENDIMAI'));
-    const sprendimai = generateSprendimai(data);
+    const sprendimai = sprendimaiIsvedimui(data);
     const sprendChildren = sprendimai.length > 0
       ? sprendimai.map((s, i) => {
           const lines = String(s).split('\n');
@@ -4313,7 +4584,32 @@ function generateNotificationList(data) {
     });
   }
 
-  if (scen === 'sutartis' || scen === 'vienas-tiekejas') {
+  /* Skaidymo atveju kiekviena dalis turi savo scenarijų, tad ir pranešimo tipas
+     parenkamas pagal TOS DALIES baigtį (P6). Neskaidomame pirkime naudojamas
+     globalus scenarijus - elgsena nepakitusi.                                */
+  if (isSkaidoma) {
+    sourceRows.forEach(row => {
+      const name = (row.tiekejas || '').trim();
+      if (!name) return;
+      const dalisName = (row.dalis || '').trim();
+      const dScen = daliesScenarijus(data, dalisName) || scen;
+      const vert = row[vertField] || '';
+      if (dScen === 'nutraukta') { pushNotif(name, 'terminated', dalisName, row); return; }
+      if (dScen === 'negauta') return;                 // nėra kam siųsti
+      if (dScen === 'atmesta') { pushNotif(name, 'all_rejected', dalisName, row); return; }
+      // sutartis / vienas-tiekejas
+      let type;
+      if (vert === 'Atitinka') {
+        const w = winnerMap[dalisName] || '';
+        const kritoVardai = kvalifKritusieji(data, dalisName).map(x => x.toLowerCase());
+        if (kritoVardai.includes(name.toLowerCase())) type = 'rejected_kvalif';
+        else type = (name.toLowerCase() === w) ? 'winner' : 'lost_atitinka';
+      } else if (vert === 'Neatitinka') {
+        type = winnerMap[dalisName] ? 'rejected' : 'all_rejected';
+      } else return;
+      pushNotif(name, type, dalisName, row);
+    });
+  } else if (scen === 'sutartis' || scen === 'vienas-tiekejas') {
     sourceRows.forEach(row => {
       const name = (row.tiekejas || '').trim();
       if (!name) return;
