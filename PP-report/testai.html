@@ -688,6 +688,196 @@ async function paleisk() {
     turi(spr, 'vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti', 'sprendimai');
   });
 
+  /* ---------------- NAUJA PARTIJA (3 dokumentai) ---------------- */
+  grupe('Nauja partija - derybos, kvalifikacijos adaptacija, lėšos, balai');
+
+  await testas('N7: pirminiame etape atmestas tiekėjas paveldi atmetimą galutiniuose', () => {
+    svariForma();
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['DPD', 1.95, 'Atitinka'], ['Omniva', 2.60, 'Neatitinka', 'Nepateikė EBVPD']]);
+    scenarijus('sutartis');
+    const galTb = D.querySelector('.galutiniai-tbody');
+    const omnivaGal = Array.from(galTb.children).find(tr =>
+      tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    tiesa(!!omnivaGal, 'Omniva galutinė eilutė turi būti');
+    lygu(omnivaGal.querySelector('[data-field="galVert"]').value, 'Neatitinka', 'galutinis vertinimas');
+    tiesa(omnivaGal.querySelector('[data-field="galVert"]').disabled, 'vertinimas užrakintas');
+    turi(omnivaGal.querySelector('[data-field="galNeatitikimas"]').value, 'pirminių pasiūlymų vertinimo etape', 'pastaba');
+  }, 'anksčiau tiekėjas dingdavo iš sprendimų, jei ranka nepažymėdavai');
+
+  await testas('N7: Omniva NEdingsta iš sprendimų su derybomis', () => {
+    svariForma();
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['DPD', 1.95, 'Atitinka'], ['Omniva', 2.60, 'Neatitinka', 'Nepateikė EBVPD']]);
+    scenarijus('sutartis');
+    const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'Omniva', 'sprendimai');
+    turi(spr, 'pirminių pasiūlymų vertinimo etape (priežastys nurodytos šios pažymos 4 dalies 1 lentelėje)', 'sprendimai (N9: cituojama 1 lentelė)');
+  });
+
+  await testas('N7: pirminį grąžinus į Atitinka, galutinis atrakinamas', () => {
+    svariForma();
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['DPD', 1.95, 'Atitinka'], ['Omniva', 2.60, 'Neatitinka']]);
+    const pasTb = D.querySelector('.pasiulymu-tbody');
+    const omnivaPas = Array.from(pasTb.children).find(tr =>
+      tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    ivesk('pasiulVert', 'Atitinka', omnivaPas);
+    const galTb = D.querySelector('.galutiniai-tbody');
+    const omnivaGal = Array.from(galTb.children).find(tr =>
+      tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    tiesa(!omnivaGal.querySelector('[data-field="galVert"]').disabled, 'vertinimas atrakintas');
+    lygu(omnivaGal.querySelector('[data-field="galVert"]').value, '', 'vertinimas išvalytas');
+  });
+
+  await testas('N2: aiškiai pažymėjus "netikrinama", lentelė paslepiama, o vertinimai išlieka', () => {
+    svariForma();
+    paruoskBeDaliu([['X', 5000, 'Atitinka']]);
+    scenarijus('sutartis');
+    const tb0 = kvalifLentele('');
+    tiesa(!!tb0, 'iš pradžių lentelė yra');
+    // Įrašom vertinimą PRIEŠ slepiant - jis privalo išgyventi paslėpimą (1.2)
+    const vert0 = tb0.querySelector('[data-kv="vertinimas"]');
+    if (vert0) { vert0.value = 'Atitinka'; vert0.dispatchEvent(new W.Event('change', { bubbles: true })); }
+    checkbox('pasalKvalNetikrinama', true);
+    const tb = kvalifLentele('');
+    tiesa(!!tb, 'tbody neišmestas iš DOM (be table apvalkalo parseris jį išmesdavo)');
+    const wrap = tb.closest('table');
+    tiesa(tb.style.display === 'none' || (wrap && wrap.style.display === 'none'), 'lentelė paslėpta');
+    tiesa(tb.children.length > 0, 'eilutės išliko paslėptoje lentelėje');
+    // Atžymėjus - lentelė grįžta su išsaugotu vertinimu
+    checkbox('pasalKvalNetikrinama', false);
+    const tb2 = kvalifLentele('');
+    tiesa(!!tb2 && tb2.closest('table') && tb2.closest('table').style.display !== 'none', 'lentelė vėl matoma');
+    const vert2 = tb2.querySelector('[data-kv="vertinimas"]');
+    lygu(vert2 ? vert2.value : '', 'Atitinka', 'vertinimas neprarastas');
+  }, 'kolegei pasirinkus netikrinimą blokas vis tiek rodydavosi; 1.2 - eilutės nebedingsta');
+
+  await testas('N12: tik pašalinimo pagrindai tikrinami - sakinys be kvalifikacijos', () => {
+    svariForma();
+    paruoskBeDaliu([['X', 5000, 'Atitinka']]);
+    checkbox('pasalTikrinamas', true);
+    checkbox('kvalNetikrinama', true);
+    scenarijus('sutartis');
+    const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'Pripažinti, kad X neturi pašalinimo pagrindų.', 'sprendimai');
+    neturi(spr, 'atitinka Pirkimo sąlygose nustatytus kvalifikacijos', 'sprendimai');
+  });
+
+  await testas('N13: neįprastai mažos kainos vertinimas patenka į sprendimus', () => {
+    svariForma();
+    paruoskBeDaliu([['X', 5000, 'Atitinka']]);
+    scenarijus('sutartis');
+    ivesk('nimKaina', 'nera');
+    let spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'kaina nėra neįprastai maža (Aprašo 30.15 p.)', 'sprendimai');
+    ivesk('nimKaina', 'pagrista');
+    ivesk('nimPastabos', 'pagrindimas gautas 07-25');
+    spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'Įstatymo 66 str.', 'sprendimai');
+    turi(spr, 'pagrindimas gautas 07-25', 'sprendimai');
+  }, 'Aprašo 30.15/31.3 p. reikalauja vertinti');
+
+  await testas('N17: CPO netinkamumas su pagrindimu patenka į pažymą', () => {
+    svariForma();
+    ivesk('cpoBusena', 'netinka');
+    ivesk('cpoPagrindimas', 'CPO prekės neatitinka techninių reikalavimų');
+    const sak = W.cpoSakinys(W.gatherFormData().fields);
+    turi(sak, 'yra CPO kataloge', 'CPO sakinys');
+    turi(sak, 'neatitinka techninių reikalavimų', 'CPO sakinys');
+    turi(sak, 'Aprašo 9 p.', 'CPO sakinys');
+    ivesk('cpoBusena', 'nera');
+    lygu(W.cpoSakinys(W.gatherFormData().fields), 'Pirkimo objektas nėra įtrauktas į CPO katalogą.', 'numatytasis');
+  }, 'Aprašo 9 p. reikalauja motyvuoti sprendimą nepirkti per CPO');
+
+  await testas('N16: BVPŽ kodas patenka į duomenis', () => {
+    svariForma();
+    ivesk('bvpzKodas', '30192000-1');
+    lygu(W.gatherFormData().fields.bvpzKodas, '30192000-1', 'BVPŽ kodas');
+  });
+
+  await testas('N5: perjungus kainos pobūdį, automatinės sumos išvalomos', () => {
+    svariForma();
+    paruoskBeDaliu([['X', 5000, 'Atitinka']]);
+    scenarijus('sutartis');
+    tiesa(D.getElementById('sutarties-be-pvm').value !== '', 'suma užpildyta automatiškai');
+    const radio = D.querySelector('input[name="kainosTipas"][value="specialios"]');
+    radio.checked = true;
+    W.onKainosTipasChange(radio);
+    lygu(D.getElementById('sutarties-be-pvm').value, '', 'suma išvalyta');
+    const hint = D.getElementById('kainos-tipo-hint');
+    tiesa(hint && hint.style.display !== 'none', 'rodomas paaiškinimas');
+  }, 'pasiūlymo kaina nebepaliekama, kai sutartis sudaroma kitai sumai');
+
+  await testas('N4: kai kriterijus ne "Kaina", eilė rikiuojama pagal balus', () => {
+    svariForma();
+    ivesk('vertinimoKriterijus', 'Kainos ar sąnaudų ir kokybės santykis');
+    paruoskBeDaliu([['Pigus', 1000, 'Atitinka'], ['Geresnis', 2000, 'Atitinka']]);
+    scenarijus('sutartis');
+    const tb = D.querySelector('.pasiulymu-tbody');
+    Array.from(tb.children).forEach(tr => {
+      const vardas = tr.querySelector('[data-field="tiekejas"]').value;
+      ivesk('balai', vardas === 'Geresnis' ? '95' : '80', tr);
+    });
+    const eile = D.getElementById('pasiulymu-eile').value;
+    tiesa(eile.indexOf('Geresnis') < eile.indexOf('Pigus'), 'Geresnis (95 balai) turi būti pirmas');
+    turi(eile, 'įvertinimas 95', 'eilė');
+    lygu(W.gatherFormData().fields.laimetojas, 'Geresnis', 'laimėtojas pagal balus');
+  }, 'anksčiau nebuvo kur įrašyti balų, eilė buvo tik pagal kainą');
+
+  await testas('N4: balų stulpelis matomas tik su ne-kainos kriterijumi', () => {
+    svariForma();
+    ivesk('vertinimoKriterijus', 'Kaina');
+    W.onKriterijusChange();
+    tiesa(!D.body.classList.contains('su-balais'), 'su "Kaina" balų stulpelio nėra');
+    ivesk('vertinimoKriterijus', 'Kainos ar sąnaudų ir kokybės santykis');
+    W.onKriterijusChange();
+    tiesa(D.body.classList.contains('su-balais'), 'su kitu kriterijumi - yra');
+  });
+
+  await testas('N4: peržiūros lentelių antraštės ir eilutės - vienodas stulpelių skaičius (su balais)', () => {
+    svariForma();
+    ivesk('vertinimoKriterijus', 'Kainos ar sąnaudų ir kokybės santykis');
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['Pigus', 1000, 'Atitinka'], ['Geresnis', 2000, 'Atitinka']]);
+    scenarijus('sutartis');
+    const tb = D.querySelector('.pasiulymu-tbody');
+    Array.from(tb.children).forEach(tr => {
+      ivesk('balai', tr.querySelector('[data-field="tiekejas"]').value === 'Geresnis' ? '95' : '80', tr);
+    });
+    const html = W.buildPreviewHtml(W.gatherFormData());
+    const tmp = D.createElement('div'); tmp.innerHTML = html;
+    const plotis = r => Array.from(r.cells).reduce((a, c) => a + (c.colSpan || 1), 0);
+    let balaiLent = 0;
+    Array.from(tmp.querySelectorAll('table')).forEach((t, i) => {
+      if (!t.rows.length) return;
+      const w0 = plotis(t.rows[0]);
+      Array.from(t.rows).forEach((r, j) =>
+        lygu(plotis(r), w0, `lentelės ${i} eilutės ${j} plotis`));
+      if (/Balai/.test(t.rows[0].textContent)) balaiLent++;
+    });
+    tiesa(balaiLent >= 2, 'Balai stulpelis ir pirminių, ir galutinių peržiūroje');
+  }, '1.1: antraštė turėjo Balai, o eilutės - ne, stulpeliai pasislinkdavo');
+
+  await testas('N6: tvirtintojas siūlomas pagal vertę (Aprašo 12 p.)', () => {
+    svariForma();
+    ivesk('verteBePvm', '45000');
+    lygu(laukas('tvirtintojas').value, 'Pirkimų skyriaus vadovas', 'virš 30 000 - skyriaus vadovas');
+    const hint = D.getElementById('tvirtintojo-hint');
+    turi(hint.textContent, '30 000', 'užuomina');
+  });
+
+  await testas('D2.1: dalies kaina viršija dalies numatomą vertę - įspėjimas', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 3000, su: 3630 }],
+                 { 'A': [['Brangus', 4000, 'Atitinka']] });
+    scenarijus('sutartis');
+    ivesk('lesosBePvm', '10000');
+    const isp = D.getElementById('lesu-ispejimas');
+    turi(isp.innerHTML, 'Viršijimas pagal dalis', 'įspėjimas');
+    turi(isp.innerHTML, 'viršija dalies numatomą vertę', 'įspėjimas');
+  }, 'bendra suma telpa, bet dalis viršija savo biudžetą');
+
   /* ---------------- JUODRAŠČIAI ---------------- */
   grupe('Juodraščiai (localStorage suderinamumas)');
 
@@ -715,6 +905,39 @@ async function paleisk() {
     lygu(g[0] && g[0].vertinimas, 'Neatitinka', 'jo vertinimas iš plokščių laukų');
   }, 'plokšti laukai -> grandinės 1 eilutė');
 
+  await testas('Juodraštis su "specialios" kaina: sumos NEišvalomos įkeliant', () => {
+    svariForma();
+    paruoskBeDaliu([['X', 5000, 'Atitinka']]);
+    scenarijus('sutartis');
+    // rengėjas pasirinko "specialios" ir įrašė savo sumą
+    const radio = D.querySelector('input[name="kainosTipas"][value="specialios"]');
+    radio.checked = true; W.onKainosTipasChange(radio);
+    ivesk('sutartiesBePvm', '7777');
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    W.selectForm(2);
+    W.loadFormData(snap);
+    lygu(laukas('sutartiesBePvm').value, '7777', 'sutarties suma po įkėlimo');
+  }, 'valymo logika neturi suveikti juodraščio atkūrimo metu');
+
+  await testas('Derybų juodraštis: galutinės eilutės nedubliuojamos, užraktas atkuriamas', () => {
+    svariForma();
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['DPD', 1.95, 'Atitinka'], ['Omniva', 2.60, 'Neatitinka', 'Nepateikė EBVPD']]);
+    scenarijus('sutartis');
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    W.selectForm(2);
+    W.loadFormData(snap);
+    const galTb = D.querySelector('.galutiniai-tbody');
+    lygu(galTb.children.length, 2, 'galutinių eilučių po įkėlimo (buvo dubliuojama į 4)');
+    tiesa(Array.from(galTb.children).every(tr =>
+      (tr.querySelector('[data-field="tiekejas"]').value || '').trim() !== ''), 'nėra bevardžių eilučių');
+    const omnivaGal = Array.from(galTb.children).find(tr =>
+      tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    tiesa(!!omnivaGal, 'Omniva eilutė yra');
+    lygu(omnivaGal.querySelector('[data-field="galVert"]').value, 'Neatitinka', 'vertinimas po įkėlimo');
+    tiesa(omnivaGal.querySelector('[data-field="galVert"]').disabled, 'auto-atmetimo užraktas atkurtas');
+  }, '1.5: išsaugoti eilučių ryšiai (_id/_linkedId) + sync po įkėlimo');
+
   await testas('Įkėlus juodraštį neatsiranda tuščios dalies eilutės', () => {
     svariForma();
     paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
@@ -741,12 +964,31 @@ async function paleisk() {
     lygu(W.generateNotificationList(d).map(n => n.type), ['winner'], 'pranešimų tipai');
   });
 
-  await testas('1 priede "El. paštu" neužrakinamas', () => {
+  await testas('1 priede būdas parenka priemonę: žodžiu -> Žodžiu, raštu -> El. paštu', () => {
     svariForma(1);
-    const budai = Array.from(laukas('pirkimoBudas').options).map(o => o.value).filter(Boolean);
-    ivesk('pirkimoBudas', budai[0]);
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa žodžiu');
+    const zod = D.querySelector('input[name="atliekamas"][value="Žodžiu"]');
     const epl = D.querySelector('input[name="atliekamas"][value="El. paštu"]');
-    tiesa(epl && !epl.disabled, '"El. paštu" turi likti prieinamas');
+    tiesa(zod.checked, 'Žodžiu turi būti parinkta');
+    tiesa(epl.disabled, 'El. paštu turi būti užrakinta');
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa raštu');
+    tiesa(epl.checked, 'El. paštu turi būti parinkta');
+    tiesa(zod.disabled, 'Žodžiu turi būti užrakinta');
+  }, 'klausimai dubliavosi - dabar priemonė parenkama pagal būdą (Aprašo 27.2.1/27.2.2 p.)');
+
+  await testas('1 priede vertinimo kriterijus - tik Kaina', () => {
+    svariForma(1);
+    const opcijos = Array.from(laukas('vertinimoKriterijus').options).map(o => o.value).filter(Boolean);
+    lygu(opcijos, ['Kaina'], 'kriterijų parinktys');
+  }, 'iniciatoriai sąnaudų/kokybės vertinimų savarankiškai nevykdo');
+
+  await testas('1 priede derybos ir žymėjimai - po "Papildomos parinktys"', () => {
+    svariForma(1);
+    const det = D.getElementById('papildomos-parinktys');
+    tiesa(!!det, 'papildomų parinkčių blokas turi būti');
+    tiesa(det.querySelector('input[name="derybos"]'), 'derybos turi būti bloke');
+    tiesa(det.querySelector('[data-field="kvalTikrinama"]'), 'žymėjimai turi būti bloke');
+    tiesa(!det.open, 'blokas pagal nutylėjimą suskleistas');
   });
 
   /* ---------------- WORD DOKUMENTAS ---------------- */
