@@ -854,9 +854,18 @@ function tvirtintojoUzuomina() {
   if (isNaN(verte)) { hint.style.display = 'none'; return; }
   hint.style.display = 'block';
   if (verte > 30000) {
-    if (!sel.value || !/skyriaus vadovas/i.test(sel.value)) sel.value = 'Pirkimų skyriaus vadovas';
+    if (!sel.value || !/skyriaus vadovas/i.test(sel.value)) {
+      sel.value = 'Pirkimų skyriaus vadovas';
+      sel.dataset.auto = '1';          // parinkta automatiškai, ne rengėjo
+    }
     hint.textContent = 'Vertė viršija 30 000 Eur be PVM - pažymą tvirtina Pirkimų skyriaus vadovas (Aprašo 12 p.).';
   } else {
+    // Vertė nukrito žemiau ribos: automatiškai parinktą skyriaus vadovą
+    // atšaukiame, o rengėjo pasirinkimo NELIEČIAME.
+    if (sel.dataset.auto === '1' && /skyriaus vadovas/i.test(sel.value)) {
+      sel.value = '';
+      delete sel.dataset.auto;
+    }
     hint.textContent = 'Vertė iki 30 000 Eur be PVM - pažymą tvirtina Pirkimų vadovas pagal kuruojamą sritį (Aprašo 12 p.).';
   }
 }
@@ -1174,11 +1183,12 @@ function renderSection3(formNum) {
           </div>
           <div class="field">
             <label>Vertinimo kriterijus <span class="req">*</span></label>
-            <select id="vertinimo-kriterijus" data-field="vertinimoKriterijus" onchange="onKriterijusChange()">
+            <select id="vertinimo-kriterijus" data-field="vertinimoKriterijus" onchange="this.dataset.vartotojo='1'; delete (document.getElementById('kriterijaus-ispejimas')||{dataset:{}}).dataset.rodyti; onKriterijusChange()">
               ${kriterijaiOptions}
             </select>
             <div id="kriterijaus-hint" class="hint" style="display:none;">Pasiūlymų lentelėse atsirado stulpelis
             "Balai" - įrašykite ekonominio naudingumo įvertinimą; eilė ir laimėtojas nustatomi pagal balus.</div>
+            <div id="kriterijaus-ispejimas" class="hint" style="display:none;"></div>
             ${formNum === 1 ? '<div class="hint">1 priede pagal nutylėjimą - kaina</div>' : ''}
           </div>
           <div class="field">
@@ -1403,6 +1413,10 @@ function renderNationalSecurity(formNum) {
         <label><input type="radio" name="natSaug" value="Taip" onchange="toggleNatSaug(this)"> Taip</label>
         <label><input type="radio" name="natSaug" value="Ne" checked onchange="toggleNatSaug(this)"> Ne</label>
       </div>
+      <div class="hint">Numatytoji reikšmė - "Ne". Pažymėkite "Taip", jei pirkimas patenka į
+      Aprašo 30.3.8-30.3.10 p. sritį (nacionaliniam saugumui užtikrinti svarbių objektų apsauga);
+      tokiu atveju užpildoma tiekėjų patikros lentelė.
+      </div>
     </div>
     <div id="nat-saug-container" class="conditional">
       <h5 id="ns-heading-2" style="font-size:12px; margin:12px 0 6px;">3 lentelė. Atitikimas nacionalinio saugumo reikalavimams</h5>
@@ -1485,6 +1499,7 @@ function renderSection6(formNum) {
               <label>Pasiūlymų eilė (jei daugiau nei vienas tiekėjas)</label>
               <textarea id="pasiulymu-eile" data-field="pasiulymuEile" rows="3" placeholder="(automatiškai sudaroma pagal kainą didėjančia tvarka)"></textarea>
               <div class="hint">Ekonominio naudingumo mažėjimo tvarka (mažiausia kaina pirma)</div>
+              <div id="balu-ispejimas" class="hint" style="display:none;"></div>
             </div>
           </div>
 
@@ -1636,7 +1651,7 @@ function renderSection8(formNum) {
           </div>
           <div class="field full-row">
             <label>Tvirtina</label>
-            <select id="tvirtintojas" data-field="tvirtintojas">
+            <select id="tvirtintojas" data-field="tvirtintojas" onchange="delete this.dataset.auto;">
               ${tvirtintojaiOptions}
             </select>
             <div id="tvirtintojo-hint" class="hint" style="display:none;"></div>
@@ -1709,21 +1724,44 @@ function toggleSkaidymas(radio) {
    yra teisėtas ir NEblokuojamas).                                            */
 const REIK_ZYMES = ['pasalKvalNetikrinama', 'pasalTikrinamas', 'kvalTikrinama', 'kvalNetikrinama'];
 
-/* Kas TIKRINAMA pagal 3 skyriaus žymėjimus. Grąžina {pasal, kvalif, kas} -
-   kas = žmogui skirta etiketė kvalifikacijos bloko antraštėms.               */
+/* VIENA vieta, kur 3 skyriaus žymėjimai verčiami tuo, kas IŠ TIKRŲJŲ tikrinama.
+   Taisyklės:
+   - "niekas netikrinama" (pasalKvalNetikrinama) - netikrinama nieko;
+   - "kvalifikacija netikrinama" reiškia TIK kvalifikaciją: pašalinimo pagrindai
+     lieka tikrinami (PĮ 31 str. 1 d. juos taiko visada, jei nenurodyta kitaip);
+   - nepaliesti žymėjimai = tikrinama abu (dažnas atvejis, kai 4 skyrius
+     pildomas pirmiau nei 3).
+   Naudoja ir sąsaja (reikTikrinimoBusena), ir pažymos generavimas iš duomenų
+   (kvalifPripazinimoSakinys, Word). Anksčiau kiekviena vieta spręsdavo savaip
+   ir pažymėjus vien kvalifikaciją iš pažymos dingdavo VISKAS apie pašalinimo
+   pagrindus.                                                                */
+function reikEfektyvus(f) {
+  const nieko = !!(f && f.pasalKvalNetikrinama), kvalNe = !!(f && f.kvalNetikrinama);
+  let pasal = !!(f && f.pasalTikrinamas), kvalif = !!(f && f.kvalTikrinama);
+  if (nieko) return { pasal: false, kvalif: false, nieko: true, kvalNe };
+  if (!pasal && !kvalif) { pasal = true; kvalif = !kvalNe; }
+  else if (kvalNe) kvalif = false;
+  return { pasal, kvalif, nieko: false, kvalNe };
+}
+
+/* 3 skyriaus žymėjimai kaip paprastas objektas (tam pačiam sakinių kūrimui,
+   kurį naudoja ir pažymos generavimas iš duomenų).                          */
+function zymFlags() {
+  const g = k => !!(reikEl(k) && reikEl(k).checked);
+  return { pasalTikrinamas: g('pasalTikrinamas'), kvalTikrinama: g('kvalTikrinama'),
+           pasalKvalNetikrinama: g('pasalKvalNetikrinama'), kvalNetikrinama: g('kvalNetikrinama') };
+}
+
 function reikTikrinimoBusena() {
-  const pasal = !!(reikEl('pasalTikrinamas') && reikEl('pasalTikrinamas').checked);
-  const kvalif = !!(reikEl('kvalTikrinama') && reikEl('kvalTikrinama').checked);
-  const nieko = !!(reikEl('pasalKvalNetikrinama') && reikEl('pasalKvalNetikrinama').checked);
-  const kvalNe = !!(reikEl('kvalNetikrinama') && reikEl('kvalNetikrinama').checked);
+  const ef = reikEfektyvus(zymFlags());
   let kas = 'Pašalinimo pagrindai ir kvalifikacija';
-  if (pasal && !kvalif) kas = 'Pašalinimo pagrindų nebuvimas';
-  else if (!pasal && kvalif) kas = 'Kvalifikacija';
-  // Lentelė slepiama TIK kai rengėjas AIŠKIAI pažymėjo, kad netikrinama.
-  // Kol žymėjimai nepaliesti (dažnas atvejis - 4 skyrius pildomas pirmiau),
-  // blokas rodomas kaip įprasta.
-  const aiskiaiNetikrinama = !pasal && !kvalif && (nieko || kvalNe);
-  return { pasal, kvalif, tikrinama: pasal || kvalif, aiskiaiNetikrinama, kas };
+  if (ef.pasal && !ef.kvalif) kas = 'Pašalinimo pagrindų nebuvimas';
+  else if (!ef.pasal && ef.kvalif) kas = 'Kvalifikacija';
+  // Lentelė slepiama TIK kai pažymėta, kad netikrinama NIEKAS. Pažymėjus vien
+  // "kvalifikacija netikrinama" lentelė lieka - joje fiksuojami pašalinimo
+  // pagrindai, kurių kitaip pažymoje neliktų kur užrašyti.
+  return { pasal: ef.pasal, kvalif: ef.kvalif, tikrinama: ef.pasal || ef.kvalif,
+           aiskiaiNetikrinama: ef.nieko, kvalNetikrinama: ef.kvalNe, kas };
 }
 const reikEl = (f) => document.querySelector(`[data-field="${f}"]`);
 
@@ -1758,6 +1796,9 @@ function tikrinkReikalavimuZymes() {
     hint.style.display = 'block';
     hint.style.color = 'var(--color-orange, #b06000)';
     hint.innerHTML = '<strong>Prieštaringi žymėjimai:</strong> ' + klaidos.join('; ') + '. Patikslinkite prieš generuodami pažymą.';
+    // 1 priede žymėjimai gyvena suskleistame bloke - įspėjimas be to liktų nematomas
+    const det = hint.closest('details');
+    if (det) det.open = true;
   } else {
     hint.style.display = 'none';
   }
@@ -2068,7 +2109,7 @@ function addPasiulymasRow(forDalis) {
       </select>
     </td>
     ${kitiCol}
-    <td><textarea data-field="neatitikimas" placeholder="Jei netitinka - paaiškinti"></textarea></td>
+    <td><textarea data-field="neatitikimas" placeholder="Jei neatitinka - paaiškinti" oninput="syncGalutiniaiFromPasiulymai()"></textarea></td>
     <td style="text-align:center;"><button type="button" class="btn-small btn-remove" onclick="removeRow(this); syncGalutiniaiFromPasiulymai();">✕</button></td>
   `;
   tbody.appendChild(tr);
@@ -2136,7 +2177,7 @@ function addGalutinisRow(forDalis) {
         <option value="Neatitinka">Neatitinka</option>
       </select>
     </td>
-    <td><textarea data-field="galNeatitikimas"></textarea></td>
+    <td><textarea data-field="galNeatitikimas" oninput="autoFillSprendimai()"></textarea></td>
     <td style="text-align:center;"><button type="button" class="btn-small btn-remove" onclick="removeRow(this); autoFillSprendimai();">✕</button></td>
   `;
   tbody.appendChild(tr);
@@ -2235,6 +2276,22 @@ function onPasiulymasPriceChange(input) {
   autoFillSprendimai();
 }
 
+/* Automatinė galutinių pasiūlymų pastaba (kai tiekėjas atmestas pirminiame etape).
+   Ar laukas vis dar AUTOMATINIS, sprendžiama pagal TURINĮ, o ne pagal DOM žymę:
+   žymė neišgyvena juodraščio įkėlimo, tad rengėjo prirašytas tekstas po įkėlimo
+   būdavo tyliai perrašomas arba ištrinamas.                                  */
+const AUTO_PASTABOS_PRADZIA = 'Pasiūlymas atmestas pirminių pasiūlymų vertinimo etape';
+function autoPastabosTekstas(priezastis) {
+  return AUTO_PASTABOS_PRADZIA + (priezastis ? ` (${priezastis})` : '');
+}
+function arAutoPastaba(el, priezastis) {
+  const v = (el.value || '').trim();
+  if (!v) return true;
+  if (v === autoPastabosTekstas(priezastis)) return true;   // sutampa su dabartine priežastimi
+  if (v === AUTO_PASTABOS_PRADZIA) return true;             // be priežasties
+  return v === (el.dataset.autoTekstas || '').trim() && !!el.dataset.autoTekstas; // ką patys rašėm šioje sesijoje
+}
+
 // SYNC: užtikrinti, kad galutiniai pasiūlymai turi tas pačias eilutes kaip pirminiai
 // Susiejimas vyksta pagal eilutės ID (data-pas-id), todėl pavadinimo redagavimas neduplikuoja eilučių
 // Veikia tik jei derybos=Vykdomos
@@ -2317,17 +2374,33 @@ function syncGalutiniaiFromPasiulymai() {
         galVertSel.value = 'Neatitinka';
         galVertSel.disabled = true;
         galTr.dataset.autoAtmestas = '1';
-        if (galPastaba && !galPastaba.value.trim()) {
-          galPastaba.value = 'Pasiūlymas atmestas pirminių pasiūlymų vertinimo etape'
-            + (pas.neatitikimas ? ` (${pas.neatitikimas})` : '');
+        // Automatinę pastabą atnaujinam, kol rengėjas jos nepakeitė ranka -
+        // kitaip vėliau įrašyta atmetimo priežastis į ją nebepatektų.
+        const autoPastaba = autoPastabosTekstas(pas.neatitikimas);
+        if (galPastaba && arAutoPastaba(galPastaba, pas.neatitikimas)) {
+          galPastaba.value = autoPastaba;
+          galPastaba.dataset.autoTekstas = autoPastaba;
+        }
+        // Pirminiame etape atmestas tiekėjas derybose nebedalyvavo, tad
+        // žyma "nepateikė galutinio pasiūlymo" jam neturi prasmės.
+        const cbAtm = galTr.querySelector('[data-field="nepateikGalutinio"]');
+        if (cbAtm) {
+          if (cbAtm.checked) { cbAtm.checked = false; toggleNepateikGalutinio(cbAtm); }
+          cbAtm.disabled = true;
+          cbAtm.title = 'Netaikoma - pasiūlymas atmestas pirminių pasiūlymų vertinimo etape';
         }
       } else if (galTr.dataset.autoAtmestas === '1') {
         // Pirminis nebe atmestas - atrakiname ir išvalome automatinį įrašą
         galVertSel.disabled = false;
         galVertSel.value = '';
         delete galTr.dataset.autoAtmestas;
-        if (galPastaba && /^Pasiūlymas atmestas pirminių pasiūlymų vertinimo etape/.test(galPastaba.value)) {
+        const cbAtr = galTr.querySelector('[data-field="nepateikGalutinio"]');
+        if (cbAtr) { cbAtr.disabled = false; cbAtr.title = 'Nepateikė galutinio - pirminis laikomas galutiniu'; }
+        // Valom TIK automatinį tekstą. Rengėjo papildymas (pvz. nuoroda į
+        // komisijos protokolą) anksčiau dingdavo kartu su juo.
+        if (galPastaba && arAutoPastaba(galPastaba, pas.neatitikimas) && galPastaba.value.trim()) {
           galPastaba.value = '';
+          delete galPastaba.dataset.autoTekstas;
         }
       }
     }
@@ -2358,6 +2431,9 @@ function onKriterijusChange() {
   document.body.classList.toggle('su-balais', su);
   const hint = document.getElementById('kriterijaus-hint');
   if (hint) hint.style.display = su ? 'block' : 'none';
+  // Rengėjui pačiam pasirinkus kriterijų, juodraščio įspėjimas nebeaktualus
+  const kisp = document.getElementById('kriterijaus-ispejimas');
+  if (kisp && kisp.dataset.rodyti !== '1') kisp.style.display = 'none';
   autoFillSprendimai();
 }
 /* Rikiuoklis: balai mažėjančia tvarka (jei naudojami ir bent vienas įrašytas),
@@ -2454,7 +2530,7 @@ function restructureDaliuScenarijus() {
     if (el.dataset.vartotojo === '1') vartotojo[el.dataset.dalis] = el.value;
   });
   const eilutes = dalys.map(d => {
-    const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
+    const dataKey = dalisRaktas(d.name);
     const safe = escapeAttr(d.name);
     const rankinis = vartotojo[d.name] !== undefined;
     const dabartinis = rankinis ? vartotojo[d.name] : siulomasDaliesScenarijus(d.name);
@@ -2500,6 +2576,33 @@ function sinchronizuokLaimetojoLauka() {
     + eilutes.map(e => '&nbsp;&nbsp;' + e).join('<br>');
 }
 
+/* Rikiuojant pagal balus, be balų likę pasiūlymai tyliai nugrimzta į eilės galą.
+   Apie tai pasakoma aiškiai, kad eilė nebūtų palaikyta teisinga.            */
+function atnaujinkBaluIspejima(items, suBalais) {
+  const balIsp = document.getElementById('balu-ispejimas');
+  if (!balIsp) return;
+  const visi = (suBalais && items) ? items : [];
+  const beBalu = visi.filter(it => isNaN(it.balas));
+  if (!beBalu.length) { balIsp.style.display = 'none'; return; }
+
+  const dalys = getCurrentDalys();
+  const vardas = (it) => {
+    if (!dalys) return it.name;
+    const d = dalys.find(x => x.name === it.dalis);
+    return d ? `${d.idx} dalis. ${d.name}: ${it.name}` : it.name;
+  };
+  balIsp.style.display = 'block';
+  balIsp.style.color = 'var(--color-orange, #b06000)';
+  if (beBalu.length === visi.length) {
+    // Balų neturi NIEKAS - eilė de facto sudaryta pagal kainą, nors kriterijus kitas
+    balIsp.textContent = 'Vertinimo kriterijus - ekonominis naudingumas, bet balų neįrašyta nė '
+      + 'vienam pasiūlymui, todėl eilė ir laimėtojas nustatyti tik pagal kainą. Įrašykite balus.';
+  } else {
+    balIsp.textContent = 'Balų neįrašyta: ' + beBalu.map(vardas).join('; ')
+      + '. Šie pasiūlymai atsiduria savo eilės gale, nors pagal kainą būtų aukščiau.';
+  }
+}
+
 function autoFillSprendimai() {
   // Galimo laimėtojo užpildymas dirba visada (nepriklausomai nuo scenarijaus)
   autoFillGalimasLaimetojas();
@@ -2507,7 +2610,7 @@ function autoFillSprendimai() {
   restructureDaliuScenarijus();
   sinchronizuokLaimetojoLauka();
   const scenSel = document.getElementById('sprendimo-scenarijus');
-  if (!scenSel || scenSel.value !== 'sutartis') { sinchronizuokSprendimuTeksta(); return; }
+  if (!scenSel || scenSel.value !== 'sutartis') { atnaujinkBaluIspejima(null, false); sinchronizuokSprendimuTeksta(); return; }
 
   // Pasiūlymų eilė ir laimėtojas (vienas, jei nesusiskaido į dalis).
   // Į eilę traukiami TIK visus reikalavimus atitinkantys tiekėjai: pasiūlymas
@@ -2523,6 +2626,7 @@ function autoFillSprendimai() {
     .sort(ekonominisRikiuoklis(suBalais));
 
   if (atitinkantysItems.length === 0) {
+    atnaujinkBaluIspejima(null, false);
     const tuscia = document.getElementById('pasiulymu-eile');
     if (tuscia) tuscia.value = '';
     const lf = document.getElementById('laimetojas');
@@ -2549,6 +2653,8 @@ function autoFillSprendimai() {
   }
   const eileField = document.getElementById('pasiulymu-eile');
   if (eileField) eileField.value = eile;
+
+  atnaujinkBaluIspejima(atitinkantysItems, suBalais);
 
   // Laimėtojas - pirmas eilėje likęs (kvalifikaciją praėjęs) tiekėjas
   const winnerName = kvalifikuotasLaimetojas('') || atitinkantysItems[0].name;
@@ -2587,7 +2693,7 @@ function autoFillGalimasLaimetojas() {
   // pasiūlymų eilę valdo pati grandinė (restructureKvalifBlock).
   if (dalys) {
     dalys.forEach(d => {
-      const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const dataKey = dalisRaktas(d.name);
       const laimEl = document.querySelector(`[data-field="galimasLaimetojas__${dataKey}"]`);
       if (laimEl) laimEl.value = kvalifikuotasLaimetojas(d.name);
     });
@@ -2639,7 +2745,7 @@ function autoFillSutartiesKaina() {
       const best = laim
         ? _collectOffersForAuto(d.name).find(it => it.name === laim && it.vert === 'Atitinka')
         : null;
-      const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const dataKey = dalisRaktas(d.name);
       const beEl = document.querySelector(`[data-field="sutartiesBePvm__${dataKey}"]`);
       const suEl = document.querySelector(`[data-field="sutartiesSuPvm__${dataKey}"]`);
       // Nelikus laimetojo - laukai isvalomi (7 skyriuje pazymima "sutartis nesudaroma").
@@ -2713,6 +2819,21 @@ function onDalisChange() {
 }
 
 // Grąžina einamųjų dalių sąrašą [{idx, name}, ...] arba null jei pirkimas neskaidomas
+/* Dalies pavadinimą paverčia SAUGIU ir UNIKALIU DOM lauko raktu.
+   Senoji versija visus neleistinus simbolius keitė į "_", tad "Elektros dalis"
+   ir "Elektros-dalis" gaudavo TĄ PATĮ raktą - dvi dalys dalindavosi tais
+   pačiais kvalifikacijos ir sutarties kainos laukais. Dabar kiekvienas
+   neleistinas simbolis koduojamas atskirai, tad skirtingi pavadinimai visada
+   duoda skirtingus raktus. Raktas gyvena TIK DOM'e (juodraščiai per-dalis
+   duomenis saugo pagal PAVADINIMĄ), tad senų juodraščių tai nekeičia.      */
+function dalisRaktas(name) {
+  let out = '';
+  for (const ch of String(name || '')) {
+    out += /[a-zA-Z0-9]/.test(ch) ? ch : '_' + ch.charCodeAt(0).toString(36) + '_';
+  }
+  return out;
+}
+
 function getCurrentDalys() {
   const radio = document.querySelector('input[name="skaidoma"]:checked');
   if (!radio || radio.value !== 'taip') return null;
@@ -3016,15 +3137,22 @@ function kvalifikuotasLaimetojas(dalisName) {
   return (pask && !_kvalifKrito(pask)) ? pask.tiekejas : '';
 }
 
+/* Ką tiksliai pažymėta NEtikrinti. Anksčiau abiem atvejais (ir "niekas
+   netikrinama", ir "kvalifikacija netikrinama") buvo rašomas tas pats sakinys
+   apie abu dalykus - pažymėjus tik kvalifikaciją, tekstas teigė daugiau, negu
+   rengėjas nurodė.                                                          */
+function netikrinimoSakinys(f) {
+  const nieko = !!(f.pasalKvalNetikrinama), kvalNe = !!(f.kvalNetikrinama);
+  if (nieko) return 'Pašalinimo pagrindai ir tiekėjų kvalifikacija šiame pirkime netikrinami';
+  if (kvalNe) return 'Tiekėjų kvalifikacija šiame pirkime netikrinama';
+  return 'Pašalinimo pagrindai ir tiekėjų kvalifikacija šiame pirkime netikrinami';
+}
+
 /* Kvalifikacijos pripažinimo sakinys pagal 3 skyriaus žymėjimus (N12).
    Grąžina '' kai niekas netikrinama - tada sakinio pažymoje neturi būti.     */
 function kvalifPripazinimoSakinys(f, vardas) {
-  let pasal = !!f.pasalTikrinamas, kvalif = !!f.kvalTikrinama;
-  // Nepaliesti žymėjimai traktuojami kaip "tikrinama" - lygiai kaip bloko
-  // rodymo logikoje (reikTikrinimoBusena): sakinys dingsta tik AIŠKIAI
-  // pažymėjus, kad netikrinama.
-  const nieko = !!f.pasalKvalNetikrinama, kvalNe = !!f.kvalNetikrinama;
-  if (!pasal && !kvalif && !nieko && !kvalNe) { pasal = true; kvalif = true; }
+  const ef = reikEfektyvus(f);
+  const pasal = ef.pasal, kvalif = ef.kvalif;
   if (!vardas || (!pasal && !kvalif)) return '';
   if (pasal && kvalif) return `Pripažinti, kad ${vardas} neturi pašalinimo pagrindų ir atitinka Pirkimo sąlygose nustatytus kvalifikacijos ir (ar) kitus reikalavimus.`;
   if (pasal) return `Pripažinti, kad ${vardas} neturi pašalinimo pagrindų.`;
@@ -3117,14 +3245,20 @@ function _kvalifLentelesHtml(dalisName, dataKey, grandine) {
   }
 
   const busena = reikTikrinimoBusena();
+  // Kvalifikacija aiškiai netikrinama, bet pašalinimo pagrindai - taip: lentelė
+  // rodoma su siauresne antrašte, o pažymoje lieka aiškus įrašas apie tai.
+  const kvalNeInfo = (!busena.aiskiaiNetikrinama && busena.kvalNetikrinama)
+    ? `<div class="hint" style="margin-top:4px;">Tiekėjų kvalifikacija šiame pirkime netikrinama (žr. 3 skyrių) -
+       vertinamas tik pašalinimo pagrindų nebuvimas.</div>`
+    : '';
   if (busena.aiskiaiNetikrinama) {
     // Niekas netikrinama (3 skyriaus žymėjimai) - vertinimo lentelė nerodoma.
     // SVARBU: tbody be <table> HTML parseris IŠMESTŲ, tad eilutės saugomos
     // paslėptoje lentelėje - atžymėjus žymėjimą, įvesti vertinimai neprarandami,
     // o juodraščiai juos toliau saugo.
     return `<table style="display:none;"><tbody class="kvalif-tbody" data-dalis="${safe}">${eiluciuHtml}</tbody></table>
-      <div class="hint">Pagal 3 skyriaus žymėjimus pašalinimo pagrindai ir kvalifikacija šiame pirkime
-      netikrinami, todėl galimo laimėtojo vertinimo lentelė nepildoma. Jei vis dėlto tikrinate -
+      <div class="hint">Pagal 3 skyriaus žymėjimus ${escapeHtml(netikrinimoSakinys(zymFlags()).toLowerCase())},
+      todėl galimo laimėtojo vertinimo lentelė nepildoma. Jei vis dėlto tikrinate -
       pažymėkite tai 3 skyriuje.</div>`;
   }
   return `
@@ -3138,7 +3272,7 @@ function _kvalifLentelesHtml(dalisName, dataKey, grandine) {
         </tr>
       </thead>
       <tbody class="kvalif-tbody" data-dalis="${safe}">${eiluciuHtml}</tbody>
-    </table>
+    </table>${kvalNeInfo}
     <div class="hint" style="margin-top:4px;">Kiti reikalavimai - kokybės vadybos / aplinkos apsaugos
     vadybos standartai ir kiti pirkimo dokumentuose nustatyti reikalavimai (Aprašo 30.3.6 p.).</div>${info}`;
 }
@@ -3181,7 +3315,7 @@ function restructureKvalifBlock() {
     block.innerHTML = dalys.map(d => {
       const dn = d.name;
       const safe = escapeAttr(dn);
-      const dataKey = dn.replace(/[^a-zA-Z0-9_]/g, '_');
+      const dataKey = dalisRaktas(dn);
       const grandine = _kvalifGrandine(dn, issaugota[dn]);
       return `
         <div class="kvalif-subblock" data-dalis="${safe}" style="margin-top:16px; padding:14px 16px; background:var(--color-green-5); border:1px solid var(--color-green-15); border-radius:8px;">
@@ -3239,7 +3373,7 @@ function restructureSutartiesBlock() {
       const dn = d.name;
       const s = saved[dn] || { be: '', su: '' };
       const safe = escapeAttr(dn);
-      const dataKey = dn.replace(/[^a-zA-Z0-9_]/g, '_');
+      const dataKey = dalisRaktas(dn);
       return `
         <div class="sut-subblock" data-dalis="${safe}" style="margin-top:16px; padding:14px 16px; background:var(--color-green-5); border:1px solid var(--color-green-15); border-radius:8px;">
           <h5 style="font-size:13px; margin:0 0 10px; color:var(--color-emerald-120); font-weight:700;">${d.idx} dalis. ${escapeHtml(dn)} - Sutarties kaina</h5>
@@ -3276,7 +3410,7 @@ function laimejusiuKainuSuma() {
   if (dalys) {
     let suma = 0, yra = false;
     dalys.forEach(d => {
-      const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const dataKey = dalisRaktas(d.name);
       const el = document.querySelector(`[data-field="sutartiesBePvm__${dataKey}"]`);
       const v = parseFloat(el && el.value);
       if (!isNaN(v)) { suma += v; yra = true; }
@@ -3334,7 +3468,7 @@ function tikrinkLesas() {
   const dalys = getCurrentDalys();
   if (dalys) {
     dalys.forEach(d => {
-      const dataKey = d.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const dataKey = dalisRaktas(d.name);
       const kainaEl = document.querySelector(`[data-field="sutartiesBePvm__${dataKey}"]`);
       const dalisTr = Array.from(document.querySelectorAll('#dalys-tbody tr'))
         .find(tr => (tr.querySelector('[data-field="dalisPav"]')?.value || '').trim() === d.name);
@@ -3697,7 +3831,7 @@ function loadFormData(data) {
   // Per-dalis duomenys (kvalif, sutarties kaina)
   if (data.perDalis) {
     Object.keys(data.perDalis).forEach(dalisName => {
-      const dataKey = dalisName.replace(/[^a-zA-Z0-9_]/g, '_');
+      const dataKey = dalisRaktas(dalisName);
       const perDalisData = data.perDalis[dalisName];
       Object.keys(perDalisData).forEach(baseField => {
         const el = document.querySelector(`[data-field="${baseField}__${dataKey}"]`);
@@ -3739,6 +3873,28 @@ function loadFormData(data) {
     const el = document.getElementById(id);
     if (el && el.onchange) el.onchange();
   });
+  // 1 priede kriterijų sąrašas apribotas iki "Kaina" - senas juodraštis su
+  // ekonominio naudingumo kriterijumi tyliai atkurtų TUŠČIĄ reikšmę. Rodom tai
+  // aiškiai ir pasiūlom, ką daryti (2 priedas turi visus kriterijus).
+  const kritSel = document.getElementById('vertinimo-kriterijus');
+  const kritIsJuodrascio = (data.fields || {}).vertinimoKriterijus || '';
+  if (kritSel && kritIsJuodrascio &&
+      !Array.from(kritSel.options).some(o => o.value === kritIsJuodrascio)) {
+    kritSel.value = 'Kaina';
+    const kisp = document.getElementById('kriterijaus-ispejimas');
+    if (kisp) {
+      kisp.dataset.rodyti = '1';
+      kisp.style.display = 'block';
+      kisp.style.color = 'var(--color-orange, #b06000)';
+      kisp.textContent = `Juodraštyje buvo kriterijus "${kritIsJuodrascio}", kurio šioje formoje nėra `
+        + '- parinkta "Kaina". '
+        + (currentForm === 1
+            ? 'Jei pirkimas iš tiesų vertintas pagal ekonominį naudingumą, pažymą rengkite 2 priede.'
+            : 'Pasirinkite tinkamą kriterijų iš sąrašo.');
+    }
+    if (typeof onKriterijusChange === 'function') onKriterijusChange();
+  }
+
   // Derybų atveju atkurtos galutinių eilutės susiejamos su pirminėmis pagal
   // išsaugotus _id/_linkedId - be šio kvietimo pirmas syncas po įkėlimo
   // dubliuotų eilutes ir prarastų auto-atmetimo užraktą (1.5).
@@ -4689,11 +4845,18 @@ async function buildDocx(data) {
 
     // ===== Form 2: Galimo laimėtojo kvalifikacija =====
     if (formNum === 2) {
-      const reikBusenaDocx = { pasal: !!f.pasalTikrinamas, kvalif: !!f.kvalTikrinama,
-        aiskiaiNe: (!!f.pasalKvalNetikrinama || !!f.kvalNetikrinama) && !f.pasalTikrinamas && !f.kvalTikrinama };
+      const efDocx = reikEfektyvus(f);
+      if (efDocx.kvalNe && !efDocx.nieko) {
+        // Pašalinimo pagrindai tikrinami, kvalifikacija - ne: tai pasakoma aiškiai,
+        // o lentelė lieka (joje fiksuojami pašalinimo pagrindai).
+        rows.push(new TableRow({
+          children: [cell(par([txt(netikrinimoSakinys(f) + ' (žr. 3 skyrių).')]), { colSpan: 4 })]
+        }));
+      }
+      const reikBusenaDocx = { pasal: efDocx.pasal, kvalif: efDocx.kvalif, aiskiaiNe: efDocx.nieko };
       if (reikBusenaDocx.aiskiaiNe) {
         rows.push(new TableRow({
-          children: [cell(par([txt('Pašalinimo pagrindai ir tiekėjų kvalifikacija šiame pirkime netikrinami (žr. 3 skyrių).')]), { colSpan: 4 })]
+          children: [cell(par([txt(netikrinimoSakinys(f) + ' (žr. 3 skyrių).')]), { colSpan: 4 })]
         }));
       } else if (isSkaidoma && data.perDalis) {
         // Per-dalis kvalifikacijos vertinimas
@@ -5169,7 +5332,9 @@ function buildNotificationParagraphs(data, notif) {
       : `3. Atsižvelgiant į tai, kad visi pateikti pasiūlymai buvo atmesti, Pirkimas baigtas nesudarant sutarties (vadovaujantis Įstatymo 41 str. 2 d. 2 p.).`)]));
   } else if (notif.type === 'terminated') {
     paragraphs.push(par([txt(`1. Pirkimo${dalisName ? ' ' + dalisFrazaPrep : ''} procedūros nutrauktos. Nutraukimo priežastys: ${f.nutraukimoPriezastis || '____'}.`)]));
-    paragraphs.push(par([txt('2. Vadovaujantis Įstatymo 41 str. 2 d. 3 p., Pirkimas laikomas pasibaigusiu.')]));
+    paragraphs.push(par([txt(dalisName
+      ? '2. Vadovaujantis Įstatymo 41 str. 2 d. 3 p., Pirkimo procedūros dėl šios pirkimo objekto dalies laikomos pasibaigusiomis.'
+      : '2. Vadovaujantis Įstatymo 41 str. 2 d. 3 p., Pirkimas laikomas pasibaigusiu.')]));
     paragraphs.push(par([txt('Dėkojame už dalyvavimą Pirkime.')]));
   }
 

@@ -1022,6 +1022,266 @@ async function paleisk() {
     turi(tekstas, 'Sutarties kaina: 5 200,00 Eur be PVM', 'pažyma (kaina iš kvalifikuoto)');
   }, 'reikalauja interneto (docx.js iš CDN)');
 
+  /* ---------------- SMULKŪS LIKUČIAI (peržiūros pastabos) ---------------- */
+  grupe('Smulkūs likučiai');
+
+  await testas('Dalių raktai nesusiduria, kai pavadinimai skiriasi tik skyrikliais', () => {
+    svariForma();
+    lygu(W.dalisRaktas('Elektros dalis') === W.dalisRaktas('Elektros-dalis'), false,
+      'skirtingi pavadinimai turi duoti skirtingus raktus');
+    paruoskDalis([{ pav: 'Elektros dalis', be: 1000, su: 1210 }, { pav: 'Elektros-dalis', be: 2000, su: 2420 }],
+                 { 'Elektros dalis': [['X', 500, 'Atitinka']], 'Elektros-dalis': [['Y', 800, 'Atitinka']] });
+    const laukai = Array.from(D.querySelectorAll('[data-field^="sutartiesBePvm__"]'));
+    lygu(laukai.length, 2, 'kiekviena dalis turi savo sutarties kainos lauką');
+    lygu(new Set(laukai.map(e => e.dataset.field)).size, 2, 'laukų vardai skirtingi');
+    laukai[0].value = '111'; laukai[1].value = '222';
+    const pd = W.gatherFormData().perDalis;
+    lygu(pd['Elektros dalis'].sutartiesBePvm, '111', '1 dalies suma');
+    lygu(pd['Elektros-dalis'].sutartiesBePvm, '222', '2 dalies suma');
+  }, 'anksčiau abi dalys gaudavo raktą "Elektros_dalis" ir dalindavosi laukais');
+
+  await testas('Tvirtintojas grąžinamas, kai vertė nukrenta žemiau 30 000', () => {
+    svariForma();
+    ivesk('verteBePvm', '45000');
+    lygu(laukas('tvirtintojas').value, 'Pirkimų skyriaus vadovas', 'virš ribos');
+    ivesk('verteBePvm', '12000');
+    lygu(laukas('tvirtintojas').value, '', 'automatinis pasirinkimas atšaukiamas');
+    // rankinis pasirinkimas neliečiamas
+    ivesk('tvirtintojas', 'Pirkimų skyriaus vadovas');
+    ivesk('verteBePvm', '9000');
+    lygu(laukas('tvirtintojas').value, 'Pirkimų skyriaus vadovas', 'rankinis pasirinkimas išlieka');
+  }, 'anksčiau veikė tik viena kryptimi');
+
+  await testas('Automatiškai atmestoje eilutėje "nepateikė galutinio" užrakinama', () => {
+    svariForma();
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['DPD', 1.95, 'Atitinka'], ['Omniva', 2.60, 'Neatitinka']]);
+    const gal = () => Array.from(D.querySelector('.galutiniai-tbody').children)
+      .find(tr => tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    tiesa(gal().querySelector('[data-field="nepateikGalutinio"]').disabled, 'užrakinta');
+    const pasTr = Array.from(D.querySelector('.pasiulymu-tbody').children)
+      .find(tr => tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    ivesk('pasiulVert', 'Atitinka', pasTr);
+    tiesa(!gal().querySelector('[data-field="nepateikGalutinio"]').disabled, 'atrakinta grąžinus');
+  });
+
+  await testas('Vėliau įrašyta atmetimo priežastis patenka į galutinių pastabą', () => {
+    svariForma();
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['DPD', 1.95, 'Atitinka'], ['Omniva', 2.60, 'Neatitinka']]);
+    const pasTr = Array.from(D.querySelector('.pasiulymu-tbody').children)
+      .find(tr => tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    ivesk('neatitikimas', 'Nepateikė EBVPD', pasTr);
+    const galTr = Array.from(D.querySelector('.galutiniai-tbody').children)
+      .find(tr => tr.querySelector('[data-field="tiekejas"]').value === 'Omniva');
+    turi(galTr.querySelector('[data-field="galNeatitikimas"]').value, 'Nepateikė EBVPD', 'galutinių pastaba');
+    // rankinis tekstas nebeperrašomas
+    const gp = galTr.querySelector('[data-field="galNeatitikimas"]');
+    gp.value = 'Mano tekstas'; gp.dispatchEvent(new W.Event('input', { bubbles: true }));
+    ivesk('neatitikimas', 'Kita priežastis', pasTr);
+    lygu(galTr.querySelector('[data-field="galNeatitikimas"]').value, 'Mano tekstas', 'rankinis tekstas išlieka');
+  });
+
+  await testas('Netikrinimo sakinys atitinka tai, kas pažymėta', () => {
+    lygu(W.netikrinimoSakinys({ kvalNetikrinama: true }),
+      'Tiekėjų kvalifikacija šiame pirkime netikrinama', 'tik kvalifikacija');
+    lygu(W.netikrinimoSakinys({ pasalKvalNetikrinama: true }),
+      'Pašalinimo pagrindai ir tiekėjų kvalifikacija šiame pirkime netikrinami', 'abu');
+  }, 'anksčiau abiem atvejais buvo teigiama, kad netikrinami abu');
+
+  await testas('Rikiuojant pagal balus, be balų likę pasiūlymai pažymimi įspėjimu', () => {
+    svariForma();
+    ivesk('vertinimoKriterijus', 'Kainos ar sąnaudų ir kokybės santykis');
+    paruoskBeDaliu([['Su balais', 1000, 'Atitinka'], ['Be balų', 2000, 'Atitinka']]);
+    scenarijus('sutartis');
+    const tb = D.querySelector('.pasiulymu-tbody');
+    const trSu = Array.from(tb.children).find(tr => tr.querySelector('[data-field="tiekejas"]').value === 'Su balais');
+    ivesk('balai', '90', trSu);
+    const isp = D.getElementById('balu-ispejimas');
+    tiesa(isp && isp.style.display !== 'none', 'įspėjimas rodomas');
+    turi(isp.textContent, 'Be balų', 'įspėjimas įvardija tiekėją');
+    const trBe = Array.from(tb.children).find(tr => tr.querySelector('[data-field="tiekejas"]').value === 'Be balų');
+    ivesk('balai', '95', trBe);
+    tiesa(D.getElementById('balu-ispejimas').style.display === 'none', 'įrašius balus - dingsta');
+  });
+
+  await testas('1 priede juodraštis su nebeegzistuojančiu kriterijumi taisomas matomai', () => {
+    svariForma();
+    ivesk('vertinimoKriterijus', 'Kainos ar sąnaudų ir kokybės santykis');
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    snap.formNum = 1;
+    W.selectForm(1);
+    W.loadFormData(snap);
+    lygu(laukas('vertinimoKriterijus').value, 'Kaina', 'parinkta Kaina');
+    const isp = D.getElementById('kriterijaus-ispejimas');
+    tiesa(isp && isp.style.display !== 'none', 'įspėjimas matomas');
+    turi(isp.textContent, '2 priede', 'įspėjimas nurodo, ką daryti');
+  }, 'anksčiau reikšmė tyliai virsdavo tuščia');
+
+  await testas('Senas prieštaringas juodraštis 1 priede atveria suskleistą bloką', () => {
+    svariForma(1);
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    // Taip atrodo juodraštis iš laikų, kai išskirtinumo logikos dar nebuvo
+    snap.fields.pasalKvalNetikrinama = true;
+    snap.fields.pasalTikrinamas = true;
+    W.selectForm(1);
+    const det0 = D.getElementById('papildomos-parinktys');
+    tiesa(!!det0 && !det0.open, 'blokas iš pradžių suskleistas');
+    W.loadFormData(snap);
+    const det = D.getElementById('papildomos-parinktys');
+    const hint = D.getElementById('reikalavimu-hint');
+    tiesa(hint && hint.style.display !== 'none', 'įspėjimas rodomas');
+    tiesa(det.open, 'blokas atvertas, kad įspėjimas būtų matomas');
+  }, 'anksčiau įspėjimas likdavo suskleistas ir nematomas');
+
+  await testas('Nutraukus vieną dalį, laiške neskelbiama viso pirkimo pabaiga', () => {
+    svariForma();
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
+                 { 'A': [['X', 5000, 'Atitinka']], 'B': [['Y', 3000, 'Atitinka']] });
+    ivesk('pirkimoBudas', 'Skelbiama apklausa');
+    const sel = D.querySelector('.dalies-scenarijus[data-dalis="A"]') ||
+                D.querySelector('[data-field="dalisScenarijus__' + W.dalisRaktas('A') + '"]');
+    if (!sel) throw new Error('nerastas dalies scenarijaus laukas');
+    sel.value = 'nutraukta';
+    sel.dispatchEvent(new W.Event('change', { bubbles: true }));
+    const l = laiskas(W.gatherFormData(), 'X', 'A');
+    lygu(l.notif.type, 'terminated', 'pranešimo tipas');
+    const t = l.eilutes.join('\n');
+    turi(t, 'dėl šios pirkimo objekto dalies', 'laiške kalbama apie dalį');
+    neturi(t, 'Pirkimas laikomas pasibaigusiu', 'viso pirkimo pabaiga neskelbiama');
+  }, 'senas defektas: nutraukus vieną dalį laiškas skelbė visą pirkimą pasibaigusiu');
+
+  /* --------- Peržiūros radiniai (patikrinti naršyklėje) --------- */
+  grupe('Peržiūros radiniai');
+
+  /* Pagalbinė: derybų scena su vienu atmestu tiekėju. */
+  function derybuScena() {
+    svariForma();
+    zymek('derybos', 'Vykdomos');
+    paruoskBeDaliu([['Alfa', 100, 'Atitinka'], ['Beta', 200, 'Neatitinka', 'Trūksta CE']]);
+    const gal = Array.from(D.querySelectorAll('.galutiniai-tbody tr'))
+      .find(t => t.querySelector('[data-field="tiekejas"]').value === 'Beta');
+    return { gal, pas: Array.from(D.querySelector('.pasiulymu-tbody').children)
+      .find(t => t.querySelector('[data-field="tiekejas"]').value === 'Beta') };
+  }
+  const galBetos = () => Array.from(D.querySelectorAll('.galutiniai-tbody tr'))
+    .find(t => t.querySelector('[data-field="tiekejas"]').value === 'Beta')
+    .querySelector('[data-field="galNeatitikimas"]');
+
+  await testas('R1: rengėjo papildyta pastaba išlieka po juodraščio įkėlimo', () => {
+    derybuScena();
+    const gp = galBetos();
+    gp.value = gp.value + ' Komisijos protokolas Nr. 5.';
+    gp.dispatchEvent(new W.Event('input', { bubbles: true }));
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    W.selectForm(2);
+    W.loadFormData(snap);
+    turi(galBetos().value, 'protokolas Nr. 5', 'pastaba po įkėlimo');
+    // ir vėliau pakeitus priežastį rankinis tekstas nebeperrašomas
+    const betaPas = Array.from(D.querySelector('.pasiulymu-tbody').children)
+      .find(t => t.querySelector('[data-field="tiekejas"]').value === 'Beta');
+    ivesk('neatitikimas', 'Kita priežastis', betaPas);
+    turi(galBetos().value, 'protokolas Nr. 5', 'pastaba po priežasties keitimo');
+  }, 'žymė dataset.vartotojo neišgyvendavo įkėlimo - tekstas dingdavo');
+
+  await testas('R1: NEliesta automatinė pastaba po įkėlimo vis dar išvaloma', () => {
+    derybuScena();
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    W.selectForm(2);
+    W.loadFormData(snap);
+    const betaPas = Array.from(D.querySelector('.pasiulymu-tbody').children)
+      .find(t => t.querySelector('[data-field="tiekejas"]').value === 'Beta');
+    ivesk('pasiulVert', 'Atitinka', betaPas);
+    lygu(galBetos().value, '', 'automatinė pastaba išvaloma');
+  }, 'apsauga neturi palikti pasenusio automatinio teksto');
+
+  await testas('R5: grąžinus pirminį į "Atitinka", rankinis tekstas neištrinamas', () => {
+    derybuScena();
+    const gp = galBetos();
+    gp.value = 'Pasiūlymas atmestas pirminių pasiūlymų vertinimo etape (Trūksta CE). Protokolas Nr. 5.';
+    gp.dispatchEvent(new W.Event('input', { bubbles: true }));
+    const betaPas = Array.from(D.querySelector('.pasiulymu-tbody').children)
+      .find(t => t.querySelector('[data-field="tiekejas"]').value === 'Beta');
+    ivesk('pasiulVert', 'Atitinka', betaPas);
+    turi(galBetos().value, 'Protokolas Nr. 5', 'rankinis tekstas išliko');
+  }, 'atrakinimo šaka valydavo viską, kas prasideda automatiniu sakiniu');
+
+  await testas('R2: rankinis tvirtintojo pasirinkimas nebeištrinamas', () => {
+    svariForma();
+    ivesk('verteBePvm', '45000');
+    const sel = D.getElementById('tvirtintojas');
+    sel.value = 'Pirkimų skyriaus vadovas';
+    sel.dispatchEvent(new W.Event('change', { bubbles: true }));
+    ivesk('verteBePvm', '25000');
+    lygu(sel.value, 'Pirkimų skyriaus vadovas', 'rengėjo pasirinkimas išliko');
+    // automatinis vis tiek atšaukiamas
+    svariForma();
+    ivesk('verteBePvm', '45000');
+    ivesk('verteBePvm', '25000');
+    lygu(laukas('tvirtintojas').value, '', 'automatinis atšaukiamas');
+  }, 'pasirinkus tą pačią reikšmę ranka, ji buvo laikoma automatine');
+
+  await testas('R3: balų įspėjimas sako tiesą, kai balų neturi niekas', () => {
+    svariForma();
+    ivesk('vertinimoKriterijus', 'Kainos ar sąnaudų ir kokybės santykis');
+    paruoskBeDaliu([['Alfa', 900, 'Atitinka'], ['Beta', 800, 'Atitinka']]);
+    scenarijus('sutartis');
+    const isp = D.getElementById('balu-ispejimas');
+    turi(isp.textContent, 'tik pagal kainą', 'kai balų neturi niekas');
+    neturi(isp.textContent, 'rikiuojami paskutiniai', 'melagingas teiginys pašalintas');
+    // vienam įrašius - kitas jau tikrai atsiduria gale
+    const tb = D.querySelector('.pasiulymu-tbody');
+    ivesk('balai', '80', Array.from(tb.children).find(t => t.querySelector('[data-field="tiekejas"]').value === 'Alfa'));
+    turi(D.getElementById('balu-ispejimas').textContent, 'Beta', 'įvardija be balų likusį');
+  }, 'anksčiau abiem atvejais buvo rašoma "rikiuojami paskutiniai"');
+
+  await testas('R3: skaidyme įspėjimas nurodo, kurios dalies tiekėjas', () => {
+    svariForma();
+    ivesk('vertinimoKriterijus', 'Kainos ar sąnaudų ir kokybės santykis');
+    paruoskDalis([{ pav: 'A', be: 10000, su: 12100 }, { pav: 'B', be: 5000, su: 6050 }],
+                 { 'A': [['Alfa', 5000, 'Atitinka']], 'B': [['Gama', 3000, 'Atitinka']] });
+    scenarijus('sutartis');
+    const alfa = Array.from(pasiulymuLentele('A').children)[0];
+    ivesk('balai', '80', alfa);
+    turi(D.getElementById('balu-ispejimas').textContent, '2 dalis. B: Gama', 'dalis įvardyta');
+  });
+
+  await testas('R4: pažymėjus tik "kvalifikacija netikrinama", pašalinimo pagrindai lieka pažymoje', () => {
+    svariForma();
+    paruoskBeDaliu([['Alfa', 100, 'Atitinka']]);
+    checkbox('kvalNetikrinama', true);
+    const tb = kvalifLentele('');
+    const wrap = tb && tb.closest('table');
+    tiesa(!!wrap && wrap.style.display !== 'none', 'lentelė lieka matoma');
+    lygu(wrap.querySelector('th:nth-child(2)').textContent.trim(), 'Pašalinimo pagrindų nebuvimas', 'stulpelio antraštė');
+    turi(D.getElementById('kvalif-block').innerHTML, 'kvalifikacija šiame pirkime netikrinama', 'paaiškinimas rodomas');
+    scenarijus('sutartis');
+    nustatykKvalif('', 0, 'vertinimas', 'Atitinka');
+    const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'neturi pašalinimo pagrindų', 'sprendimuose lieka pašalinimo pagrindai');
+    neturi(spr, 'atitinka Pirkimo sąlygose nustatytus kvalifikacijos', 'apie kvalifikaciją nerašoma');
+  }, 'anksčiau slėpėsi VISA lentelė ir pažymoje nelikdavo nieko apie pašalinimo pagrindus');
+
+  await testas('R4: "niekas netikrinama" toliau slepia lentelę', () => {
+    svariForma();
+    paruoskBeDaliu([['Alfa', 100, 'Atitinka']]);
+    checkbox('pasalKvalNetikrinama', true);
+    const tb = kvalifLentele('');
+    const wrap = tb && tb.closest('table');
+    tiesa(!!wrap && wrap.style.display === 'none', 'lentelė paslėpta');
+  });
+
+  await testas('R7: 2 priede kriterijaus įspėjimas nesiunčia į 2 priedą', () => {
+    svariForma();
+    const snap = JSON.parse(JSON.stringify(W.gatherFormData()));
+    snap.fields.vertinimoKriterijus = 'Mažiausia kaina';   // kitos versijos reikšmė
+    W.selectForm(2);
+    W.loadFormData(snap);
+    const isp = D.getElementById('kriterijaus-ispejimas');
+    tiesa(isp && isp.style.display !== 'none', 'įspėjimas rodomas');
+    neturi(isp.textContent, 'rengkite 2 priede', 'nuoroda į 2 priedą 2 priede beprasmė');
+  });
+
   /* ---------------- pabaiga ---------------- */
   document.getElementById('busena').textContent =
     R.blogai === 0 ? 'Visi testai praėjo.' : `${R.blogai} test(-ai) krito - žr. žemiau.`;
