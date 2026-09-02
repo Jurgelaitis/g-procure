@@ -62,6 +62,7 @@ tai rašybos konvencija, ne katalogo vardas. Jei rasi senų variantų (PP-Planin
 | `PP-report` | Mažos vertės pirkimo pažymos (Aprašo 1 ir 2 priedai) |
 | `PP-esg` | Centrinis ESG ir atitikties variklis (rizikos registras, sankcijos, ESRS) |
 | `PP-carbon` | Anglies pėdsako skaičiuoklė ir tiekėjo EPD įrankis (viešas) |
+| `PP-tiekejams` | G-Procure Tiekėjams - viešas informacinis asistentas tiekėjams apie LITGRID pirkimus (CVP IS dokumentų paketas naršyklėje, Q&A su citatomis, kontrolinis sąrašas, klausimo projektas; gyvos CVP IS jungties nėra - žr. `docs/tiekejams/`) |
 
 Senus / testinius repo (PP-Test, PP-Test-NT, PP-Durations, qskigali) NEįtraukti -
 jie skirti archyvavimui, ne plėtrai.
