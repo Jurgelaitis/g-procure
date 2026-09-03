@@ -20,7 +20,7 @@ Gyvai: `https://g-procure.com/PP-tiekejams/` (GitHub Pages, deploy = push į `ma
 
 | Failas | Paskirtis |
 |---|---|
-| `index.html` | Sąsaja (LT/EN): pradžia, konkretus pirkimas (3 zonos), bendri klausimai, „kaip tikrinami atsakymai" |
+| `index.html` | Sąsaja (LT/EN; pradinė kalba pagal lankytoją per `shared/lang-detect.js`: iš Lietuvos - LT, kiti - EN, rankinis jungiklis įsimenamas): pradžia, konkretus pirkimas (3 zonos), bendri klausimai, „kaip tikrinami atsakymai" |
 | `dokumentai.js` | Dokumentų paketo apdorojimas naršyklėje: ZIP (su saugumo ribomis), PDF, DOCX, XLSX, XML, HTML, TXT -> fragmentai su vieta ir SHA-256 |
 | `paieska.js` | Tiksli terminų / numerių paieška + BM25 su LT kamienais; citatų patikra |
 | `asistentas.js` | Promptai, atsakymo schema ir VALIDAVIMAS (citatos tikrinamos), kontrolinis sąrašas, klausimo projektas, redakcijų palyginimas |
