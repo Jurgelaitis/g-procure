@@ -29,6 +29,14 @@ iframe{width:1px;height:1px;opacity:0;position:absolute}
 <script>
 let W, D;
 const R = { ok: 0, blogai: 0 };
+/* Nuo 2026-09 pradinę kalbą lemia lankytojas (shared/lang-detect.js), tad rėmelyje
+   įkeltas index.html vokiečio kompiuteryje startuotų angliškai ir lietuviškų tekstų
+   tikrinantys testai kristų. Testams kalba fiksuojama, o vartotojo pasirinkimas
+   (testai.html yra viešu adresu) grąžinamas pabaigoje. */
+const KALBOS_RAKTAS = "pptiekejams.lang";
+let vartotojoKalba;
+function fiksuokKalba() { try { vartotojoKalba = W.localStorage.getItem(KALBOS_RAKTAS); } catch (e) { vartotojoKalba = undefined; } W.setLang("lt"); }
+function grazinkKalba() { try { if (vartotojoKalba === null) W.localStorage.removeItem(KALBOS_RAKTAS); else if (vartotojoKalba !== undefined) W.localStorage.setItem(KALBOS_RAKTAS, vartotojoKalba); } catch (e) {} }
 let grupesEl = null;
 const laukti = ms => new Promise(r => setTimeout(r, ms));
 function ekranuok(s) { return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
@@ -540,11 +548,40 @@ async function paleisk() {
     lygu(W.GP_DOK.pdfTekstas([]), "");
   });
 
-  grupe("Dokumentų zona");
+  grupe("Dokumentų zona ir pradinė kalba");
   await testas("Įkėlimo zona (label) yra blokinis elementas - brūkšninis rėmelis neskyla per eilutes", () => {
     lygu(W.getComputedStyle(D.getElementById("drop")).display, "block");
   });
+  await testas("GP_LANG: iš Lietuvos = LT (laiko juosta arba naršyklės kalba), kiti = EN", () => {
+    const L = W.GP_LANG; const st = { getItem: () => null, setItem: () => {} };
+    lygu(L.detect({ storageKey: "k", storage: st, env: { timeZone: "Europe/Vilnius", languages: ["en-US"] } }), "lt");
+    lygu(L.detect({ storageKey: "k", storage: st, env: { timeZone: "Europe/London", languages: ["en-GB", "lt"] } }), "lt");
+    lygu(L.detect({ storageKey: "k", storage: st, env: { timeZone: "America/New_York", languages: ["lt-LT"] } }), "lt");
+    lygu(L.detect({ storageKey: "k", storage: st, env: { timeZone: "Europe/Berlin", languages: ["de-DE", "en"] } }), "en");
+    lygu(L.detect({ storageKey: "k", storage: st, env: { timeZone: "", languages: [] } }), "en");
+    lygu(L.detect({ storageKey: "k", storage: st, env: { timeZone: "Europe/Riga", languages: ["lv", "ltg"] } }), "en", "ltg (latgalių) nėra lt");
+  });
+  await testas("GP_LANG: rankinis pasirinkimas nustelbia aptikimą ir išlieka; netinkama reikšmė ar uždarytas localStorage nekenkia", () => {
+    const L = W.GP_LANG; const mem = {}; const st = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; } };
+    const env = { timeZone: "Europe/Vilnius", languages: ["lt-LT"] };
+    lygu(L.detect({ storageKey: "k", storage: st, env }), "lt");
+    tiesa(L.remember("k", "en", st)); lygu(L.detect({ storageKey: "k", storage: st, env }), "en");
+    mem.k = "xx"; lygu(L.detect({ storageKey: "k", storage: st, env }), "lt");
+    tiesa(!L.remember("k", "fr", st)); lygu(mem.k, "xx");
+    const blogas = { getItem: () => { throw new Error("SecurityError"); }, setItem: () => { throw new Error("SecurityError"); } };
+    lygu(L.detect({ storageKey: "k", storage: blogas, env: { timeZone: "Europe/Berlin", languages: ["de"] } }), "en"); tiesa(!L.remember("k", "lt", blogas));
+  });
+  await testas("Testų rinkinys fiksuoja lietuvių kalbą, kad rezultatas nepriklausytų nuo mašinos", () => {
+    lygu(W.__PPT.LANG, "lt", "prieš kalbos testus rėmelis turi būti lietuviškas");
+    tiesa(typeof vartotojoKalba !== "undefined", "vartotojo pasirinkimas turi būti įsimintas grąžinimui");
+  });
+  await testas("Modulis naudoja GP_LANG, o jungiklis įrašo pasirinkimą raktu pptiekejams.lang", () => {
+    tiesa(W.GP_LANG && typeof W.GP_LANG.detect === "function", "GP_LANG neįkeltas");
+    W.setLang("en"); lygu(W.localStorage.getItem("pptiekejams.lang"), "en"); lygu(W.__PPT.LANG, "en"); lygu(D.documentElement.lang, "en");
+    W.setLang("lt"); lygu(W.localStorage.getItem("pptiekejams.lang"), "lt");
+  });
 
+  grazinkKalba();
   document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   document.getElementById("busena").className = R.blogai === 0 ? "ok" : "blogai";
   document.getElementById("paleisti").disabled = false;
@@ -555,6 +592,7 @@ ramas.addEventListener("load", async () => {
   W = ramas.contentWindow; D = W.document;
   let n = 0; while ((typeof W.__PPT === "undefined" || !W.JSZip || !W.pdfjsLib) && n++ < 80) await laukti(100);
   if (typeof W.__PPT === "undefined") { document.getElementById("busena").textContent = "Nepavyko pasiekti index.html rėmelyje (paleiskite per http)."; return; }
+  fiksuokKalba();
   await paleisk();
 });
 </script>
