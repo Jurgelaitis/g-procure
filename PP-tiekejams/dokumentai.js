@@ -169,6 +169,47 @@
   // Teksto ištraukimas pagal formatą. Kiekviena funkcija grąžina
   // { blocks: [{loc:{...}, text}], warnings: [] } - blokai su vieta.
   // ---------------------------------------------------------------------------
+  // pdf.js grąžina tekstą gabalais (TJ pozicionavimas, kerningas): tas pats žodis dažnai
+  // ateina kaip "nurod" + "yto", "dien" + "ų", "1" + "3". Sena versija visus gabalus
+  // jungė tarpu, tad tekste (paieškoje, citatų patikroje, rodomose citatose) atsirasdavo
+  // klaidingi tarpai žodžių viduje (patikrinta 2026-09-02 su tikru CVP IS SPS PDF).
+  // Dabar tarpas dedamas tik kai geometrinis tarpas tarp gabalų viršija ~0,15 šrifto
+  // dydžio (arba gabalas pats baigiasi / prasideda tarpu; be pločio - kaip anksčiau).
+  // Eilutės grupuojamos pagal y su tolerancija (indeksai, nuorodos, nedideli poslinkiai).
+  function sujunkEilute(items) {
+    items.sort(function (a, b) { return a.x - b.x; });
+    var s = "";
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (i > 0) {
+        var pr = items[i - 1];
+        var gap = it.x - (pr.x + pr.w);
+        var riba = Math.max(0.15 * (it.fs || pr.fs || 10), 0.8);
+        var jauTarpas = /\s$/.test(s) || /^\s/.test(it.s);
+        if (!jauTarpas && (!pr.w || gap > riba)) s += " ";
+      }
+      s += it.s;
+    }
+    return s;
+  }
+  function pdfTekstas(items) {
+    var lines = [];
+    (items || []).forEach(function (it) {
+      if (!it || !it.str) return;
+      var tr = it.transform || [1, 0, 0, 1, 0, 0];
+      var fs = Math.sqrt(tr[0] * tr[0] + tr[1] * tr[1]) || Math.abs(tr[3]) || 10;
+      var y = tr[5], x = tr[4], line = null;
+      // Ta pati eilutė - y skiriasi ne daugiau kaip ~1/3 šrifto (tikrinamos paskutinės 60 eil.)
+      for (var i = lines.length - 1, k = 0; i >= 0 && k < 60; i--, k++) {
+        if (Math.abs(lines[i].y - y) <= Math.max(2, 0.35 * fs)) { line = lines[i]; break; }
+      }
+      if (!line) { line = { y: y, items: [] }; lines.push(line); }
+      line.items.push({ x: x, w: it.width || 0, fs: fs, s: it.str });
+    });
+    lines.sort(function (a, b) { return b.y - a.y; });
+    return lines.map(function (l) { return sujunkEilute(l.items); }).join("\n");
+  }
+
   async function isPdf(buf, lang) {
     if (!global.pdfjsLib) throw new Error("pdf.js neužkrauta");
     // isEvalSupported:false - gynyba gilyn (CVE-2024-4367 kelias per šriftus čia
@@ -178,15 +219,7 @@
     for (var pn = 1; pn <= pdf.numPages; pn++) {
       var page = await pdf.getPage(pn);
       var tc = await page.getTextContent();
-      var lines = {};
-      tc.items.forEach(function (it) {
-        if (!it.str) return;
-        var y = Math.round(it.transform[5]); var x = it.transform[4];
-        (lines[y] = lines[y] || []).push({ x: x, s: it.str });
-      });
-      var ys = Object.keys(lines).map(Number).sort(function (a, b) { return b - a; });
-      var txt = ys.map(function (y) { return lines[y].sort(function (a, b) { return a.x - b.x; }).map(function (o) { return o.s; }).join(" "); }).join("\n");
-      txt = norm(txt);
+      var txt = norm(pdfTekstas(tc.items));
       if (!txt) tuscių++;
       blocks.push({ loc: { page: pn }, text: txt });
     }
@@ -441,6 +474,7 @@
     vieta: vieta,
     versijosPozymiai: versijosPozymiai,
     rusis: rusis,
+    pdfTekstas: pdfTekstas,
     punktas: punktas,
     limits: { MAX_FAILO_B: MAX_FAILO_B, MAX_ISSKLEISTA_B: MAX_ISSKLEISTA_B, MAX_FAILU: MAX_FAILU, GYLIS: GYLIS, CHUNK_ZODZIU: CHUNK_ZODZIU },
     _internal: { isDocx: isDocx, isXml: isXml, isHtml: isHtml, isTxt: isTxt, isXlsx: isXlsx, saugusKelias: saugusKelias, decodeFileName: decodeFileName, kalba: kalba, issklekRibotai: issklekRibotai, konteinerioDydis: konteinerioDydis, pran: pran }
