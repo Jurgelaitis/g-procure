@@ -97,7 +97,7 @@
       ".gpi-overlay.open{display:flex}",
       ".gpi-modal{background:var(--color-white,#fff);width:100%;max-width:880px;border-radius:var(--radius-lg,16px);box-shadow:0 24px 60px rgba(11,18,32,.35);margin:auto;overflow:hidden;animation:gpiPop .22s ease;font-family:var(--font-base,'Nunito Sans',Arial,sans-serif)}",
       "@keyframes gpiPop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}",
-      ".gpi-hero{position:relative;background:linear-gradient(120deg,#0B3B33 0%,#0E5247 45%,#00667D 100%);color:#fff;padding:var(--space-4,32px) var(--space-4,32px) var(--space-3,24px)}",
+      ".gpi-hero{position:relative;background:var(--gradient-dark, linear-gradient(120deg,#0B3B33 0%,#0E5247 45%,#00667D 100%));color:#fff;padding:var(--space-4,32px) var(--space-4,32px) var(--space-3,24px)}",
       ".gpi-hero-tag{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--color-emerald-50,#16C492)}",
       ".gpi-hero-tag svg{width:15px;height:15px}",
       ".gpi-hero h2{font-size:24px;font-weight:800;margin:8px 0 0;line-height:1.2}",

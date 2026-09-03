@@ -80,7 +80,7 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | `shared/workdays.js` | Darbo dienų skaičiavimas + LR šventės. Pratęsk metus laiku (sena lentelė baigiasi 2030) |
 | `shared/procurement-methods.js` | Kanoninis pirkimo būdų klasifikatorius (`GP_METHODS`): 11 pagrindinių būdų, kodai (T-AK, MV-NR...), etiketės ir migracijos adapteriai seniems moduliams. Naudoja 7 moduliai - būdą ar pavadinimą keisk TIK čia |
 | `shared/ai-proxy.js` | g-procure backend iškvietimas (Claude API), numatytasis AI modelis (`DEFAULT_MODEL`) ir užklausos kūno riba (`MAX_BASE64`, `MAX_PDF_BAITU`). Ribą naudoja `PP-salygos` ir `PP-carbon` - moduliuose jos NEdubliuok |
-| `shared/epso-g.css` | EPSO-G prekės ženklo dizaino žetonai (spalvos, `--font-base`, maketas). Prijungtas VISUOSE moduliuose |
+| `shared/epso-g.css` | EPSO-G prekės ženklo dizaino žetonai (spalvos, `--font-base`, maketas) ir tamsus prekės ženklo gradientas `--gradient-dark` (hero/header blokams; naudoja 6 vietos, tarp jų `gprocure-info-panel.js`). Prijungtas VISUOSE moduliuose |
 | `shared/lang-detect.js` | Pradinė sąsajos kalba dvikalbiams puslapiams (`GP_LANG.detect(raktas)` / `remember`): rankinis pasirinkimas -> lankytojas iš Lietuvos (laiko juosta Europe/Vilnius arba naršyklės kalba lt) = LT, kiti = EN. Naudoja PP-tiekejams, PP-carbon (abu puslapiai), PP-esg ir VISI trys PP-home puslapiai (portalas, „Apie projektą", „Apie"). PP-home puslapiai dalijasi raktu `gprocure-lang`, tad kalba tarp jų nešokinėja - taisyklę keisk TIK čia |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
 
