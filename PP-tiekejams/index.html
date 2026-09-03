@@ -153,7 +153,7 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .meta-list .k{color:var(--color-graphite-50);font-weight:600;flex-shrink:0}
 .meta-list .v{font-weight:700;text-align:right;word-break:break-word}
 .meta-list .src{display:block;font-size:11px;font-weight:600;color:var(--color-graphite-50)}
-.drop{border:2px dashed var(--color-graphite-30);border-radius:var(--radius-md);padding:var(--space-3);text-align:center;background:var(--color-graphite-5);transition:var(--transition-fast);cursor:pointer}
+.drop{display:block;border:2px dashed var(--color-graphite-30);border-radius:var(--radius-md);padding:var(--space-3);text-align:center;background:var(--color-graphite-5);transition:var(--transition-fast);cursor:pointer}
 .drop.over,.drop:hover{border-color:var(--color-emerald);background:var(--color-green-5)}
 .drop b{display:block;margin-bottom:4px}
 .drop input{display:none}
@@ -506,7 +506,7 @@ const I18N = {
     "docs.stamp": "Įkelta", "docs.parsed": "perskaityta", "docs.partial": "iš dalies", "docs.failed": "nepavyko", "docs.unsupported": "nepalaikoma",
     "docs.chunks": "fragm.", "docs.pages": "psl.", "docs.aktuali": "AKTUALI REDAKCIJA", "docs.paaisk": "paaiškinimas", "docs.inj": "Rasta nurodymų modeliui - ignoruojami",
     "ask.nodocs": "Pirmiausia įkelkite dokumentus - be jų atsakymo apie konkretų pirkimą nustatyti negalima.", "ask.hint.ready": "Atsakoma tik iš įkeltų dokumentų.",
-    "ask.busy": "Ieškoma fragmentų ir formuluojamas atsakymas...", "ask.err": "Nepavyko gauti atsakymo", "ask.nofrag": "Įkeltuose dokumentuose nerasta su klausimu susijusių fragmentų. Patikslinkite klausimą arba pateikite jį CVP IS.",
+    "ask.busy": "Ieškoma fragmentų ir formuluojamas atsakymas...", "ask.err": "Nepavyko gauti atsakymo", "ask.cut": "Atsakymas nutrūko - jis per ilgas. Patikslinkite klausimą (pvz. nurodykite pirkimo dalį) arba užduokite jį dalimis.", "ask.nofrag": "Įkeltuose dokumentuose nerasta su klausimu susijusių fragmentų. Patikslinkite klausimą arba pateikite jį CVP IS.",
     "ans.short": "Trumpas atsakymas", "ans.mean": "Ką tai reiškia tiekėjui", "ans.do": "Ką atlikti", "ans.cond": "Svarbios sąlygos ir išimtys", "ans.src": "Šaltiniai", "ans.conf": "Patikimumas", "ans.chk": "Patikrinta", "ans.warn": "Įspėjimai", "ans.conflict": "Šaltiniai nesutampa",
     "ans.nosrc": "Atsakymo iš įkeltų dokumentų nustatyti negalima.", "ans.nosrc.sub": "Šaltiniuose nerasta aiškaus pagrindo. Pateikite oficialų klausimą pirkimo vykdytojui CVP IS - parengėme projektą.",
     "ans.rejected": "nepatvirtintų citatų atmesta", "conf.aukstas": "aukštas", "conf.vidutinis": "vidutinis", "conf.nepakanka": "nepakanka duomenų",
@@ -562,7 +562,7 @@ const I18N = {
     "docs.stamp": "Uploaded", "docs.parsed": "read", "docs.partial": "partial", "docs.failed": "failed", "docs.unsupported": "unsupported",
     "docs.chunks": "fragments", "docs.pages": "pages", "docs.aktuali": "CURRENT VERSION", "docs.paaisk": "clarification", "docs.inj": "Instructions to the model found - ignored",
     "ask.nodocs": "Upload the documents first - without them an answer about a specific procurement cannot be determined.", "ask.hint.ready": "Answered only from the uploaded documents.",
-    "ask.busy": "Searching fragments and drafting the answer...", "ask.err": "Could not get an answer", "ask.nofrag": "No fragments related to the question were found in the uploaded documents. Refine the question or submit it in CVP IS.",
+    "ask.busy": "Searching fragments and drafting the answer...", "ask.err": "Could not get an answer", "ask.cut": "The answer was cut off - it is too long. Narrow the question (e.g. specify the lot) or split it into parts.", "ask.nofrag": "No fragments related to the question were found in the uploaded documents. Refine the question or submit it in CVP IS.",
     "ans.short": "Short answer", "ans.mean": "What it means for the supplier", "ans.do": "What to do", "ans.cond": "Important conditions and exceptions", "ans.src": "Sources", "ans.conf": "Confidence", "ans.chk": "Verified", "ans.warn": "Warnings", "ans.conflict": "Sources conflict",
     "ans.nosrc": "The answer cannot be determined from the uploaded documents.", "ans.nosrc.sub": "No clear basis found in the sources. Submit an official question to the contracting entity in CVP IS - we prepared a draft.",
     "ans.rejected": "unverified quotes rejected", "conf.aukstas": "high", "conf.vidutinis": "medium", "conf.nepakanka": "insufficient data",
@@ -872,12 +872,14 @@ async function kviestiAI(mode, prompt, chunks, question) {
     try { if (window.turnstile && turnstileWidget !== null) window.turnstile.reset(turnstileWidget); } catch (e) {}
     const data = await r.json().catch(() => null);
     if (!r.ok) return { ok: false, error: (data && data.error) || ("HTTP " + r.status) };
-    return { ok: true, text: GP_AI_PROXY.extractText(data) };
+    return { ok: true, text: GP_AI_PROXY.extractText(data), raw: data };
   }
   return GP_AI_PROXY.call({ module: "pp-tiekejams", system: prompt.system, userMessage: prompt.user, maxTokens: prompt.maxTokens });
 }
 
 /* ---------------- Klausimas apie pirkimą ---------------- */
+// Modelis nutrūko ties žetonų riba (Anthropic stop_reason) - JSON tada neuždarytas.
+function nutruko(res) { return !!(res && res.raw && res.raw.stop_reason === "max_tokens"); }
 async function klausk() {
   const q = $("#askInput").value.trim(); if (!q || !S.idx) return;
   const lot = $("#lotInput").value.trim();
@@ -895,6 +897,8 @@ async function klausk() {
     if (!res.ok) { aEl.innerHTML = '<div class="note err">' + esc(t("ask.err")) + ": " + esc(res.error || "") + '</div>'; return; }
     S.lastRaw = res.text;
     const parsed = GP_ASIST.parse(res.text);
+    // Neperskaitytas atsakymas: jei modelis nutrūko ties žetonų riba - sakoma būtent tai
+    if (!parsed) { aEl.innerHTML = '<div class="note err">' + esc(nutruko(res) ? t("ask.cut") : t("ask.err")) + '</div>'; return; }
     const ans = GP_ASIST.validuokQA(parsed, S.chunksById, LANG);
     if (ans.status === "klaida") { aEl.innerHTML = '<div class="note err">' + esc(t("ask.err")) + '</div>'; return; }
     ans.q = q; ans.lot = lot; ans.at = new Date().toISOString(); S.chat.push(ans);
@@ -955,7 +959,7 @@ async function kontrolinis() {
     // tai būtų klaidinga išvada, kad reikalavimų nėra.
     const chk = GP_ASIST.validuokChecklist(parsed, S.chunksById, LANG);
     // null = neperskaitytas / tuščias atsakymas: rodoma klaida, NE "15 x nerasta" (F10)
-    if (!chk) { box.innerHTML = '<div class="note err">' + esc(t("ask.err")) + ": " + esc(t("chk.parseErr")) + '</div>'; return; }
+    if (!chk) { box.innerHTML = '<div class="note err">' + esc(nutruko(res) ? t("ask.cut") : t("ask.err") + ": " + t("chk.parseErr")) + '</div>'; return; }
     S.checklist = chk;
     box.innerHTML = renderChecklist(chk);
   } catch (e) { box.innerHTML = '<div class="note err">' + esc(t("ask.err")) + ": " + esc(e.message) + '</div>'; }
