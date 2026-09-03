@@ -462,6 +462,89 @@ async function paleisk() {
     lygu(D.getElementById("docsStamp").textContent, ""); lygu(W.__PPT.S.checklist, null);
   });
 
+  grupe("Atsakymo skaitymas iš tikro modelio teksto (2026-09-02 defektai)");
+  const ASIST = W.GP_ASIST;
+  await testas("Kabutė „...\" JSON eilutės viduje (tikras Sonnet atsakymas) - perskaitoma, ne klaida", () => {
+    const txt = '```json\n{\n  "status": "atsakyta",\n  "trumpas": "Taip.",\n  "veiksmai": [\n    "Ant voko užrašyti užrašą „Neatplėšti iki Pasiūlymų pateikimo termino pabaigos", Tiekėjo pavadinimą ir adresą.",\n    "Patikrinti garantiją."\n  ],\n  "saltiniai": [ { "id": "D1#1", "citata": "besąlyginę ir neatšaukiamą garantiją", "teiginys": "x" } ],\n  "patikimumas": "aukstas"\n}\n```';
+    const p = ASIST.parse(txt);
+    tiesa(p && p.status === "atsakyta", "neperskaityta");
+    lygu(p.veiksmai.length, 2); turi(p.veiksmai[0], 'pabaigos", Tiekėjo'); lygu(p.saltiniai[0].id, "D1#1"); lygu(p.patikimumas, "aukstas");
+  });
+  await testas("Kabutė objekto reikšmėje ir eilutės lūžis tekste - pataisoma; tvarkingas JSON nekeičiamas", () => {
+    const p = ASIST.parse('{"trumpas": "Ne - užrašas „nereikalaujamas" yra 6.3 punkte.", "reiksme": "eilutė\nsu lūžiu", "x": 1}');
+    lygu(p.trumpas, 'Ne - užrašas „nereikalaujamas" yra 6.3 punkte.'); tiesa(p.reiksme.indexOf("\n") !== -1, "lūžis"); lygu(p.x, 1);
+    lygu(ASIST.parse('{"a": "b", "c": [1, "d", true, null], "e": {"f": "g"}}'), { a: "b", c: [1, "d", true, null], e: { f: "g" } });
+    lygu(ASIST.taisykJson('{"a": "b"}'), '{"a": "b"}', "tvarkingas JSON nekeičiamas");
+    lygu(ASIST.parse("Atsiprašau, negaliu."), null);
+  });
+  await testas("Nutrauktas atsakymas (max_tokens) - null, NE dalinis atsakymas", () => {
+    lygu(ASIST.parse('```json\n{\n  "status": "atsakyta",\n  "trumpas": "Taip, reikalaujamas.",\n  "saltiniai": [ { "id": "D1#1", "citata": "besąlyginę ir neatšaukiamą ga'), null);
+    lygu(ASIST.parse('{"a": "b"'), null);
+    lygu(ASIST.parse('{"a": "b", "c": [1, 2'), null);
+  });
+  await testas("Atsakymo biudžetas: QA >= 4000, kontrolinis >= 6000 žetonų; prompte - kabučių ir glaustumo taisyklė", () => {
+    const p = ASIST.promptasQA({ lang: "lt", question: "?", chunks: [], docsById: {} });
+    tiesa(p.maxTokens >= 4000, "QA " + p.maxTokens);
+    const c = ASIST.promptasChecklist({ lang: "lt", chunks: [], docsById: {} });
+    tiesa(c.maxTokens >= 6000, "checklist " + c.maxTokens);
+    turi(p.system, "„ ir “"); turi(p.system, "iki 200 simbolių");
+    const e = ASIST.promptasQA({ lang: "en", question: "?", chunks: [], docsById: {} });
+    turi(e.system, "„ and “"); turi(e.system, "up to 200 characters");
+  }, "1800 žetonų nutraukdavo tikrą atsakymą (stop_reason max_tokens), 1683 žetonų atsakymas su 4 citatomis - realus dydis");
+  await testas("Sąsaja: nutrūkęs atsakymas rodo aiškų pranešimą, o kabutė tekste netrukdo pateikti atsakymo", async () => {
+    const S = await ikelk({ "dok/SPS.txt": SPS_SENAS });
+    const orig = W.kviestiAI;
+    try {
+      W.kviestiAI = async () => ({ ok: true, text: '{"status":"atsakyta","trumpas":"Taip, reik', raw: { stop_reason: "max_tokens" } });
+      D.getElementById("askInput").value = "Ar reikalaujamas pasiūlymo užtikrinimas?";
+      await W.klausk();
+      turi(D.getElementById("chat").textContent, "Atsakymas nutrūko");
+      neturi(D.getElementById("chat").textContent, "Nepavyko gauti atsakymo");
+      const cid = S.docs[0].chunks.find(c => c.text.indexOf("nereikalaujamas") !== -1).id;
+      W.kviestiAI = async () => ({ ok: true, text: '{"status":"atsakyta","trumpas":"Ne - užrašas „nereikalaujamas" yra SPS 6.3 punkte.","saltiniai":[{"id":"' + cid + '","citata":"Pasiūlymo galiojimo užtikrinimas šiame pirkime nereikalaujamas","teiginys":"x"}],"patikimumas":"aukstas"}', raw: { stop_reason: "end_turn" } });
+      await W.klausk();
+      const last = S.chat[S.chat.length - 1];
+      lygu(last.status, "atsakyta"); lygu(last.saltiniai.length, 1); turi(last.trumpas, 'užrašas „nereikalaujamas" yra');
+      turi(D.getElementById("chat").textContent, "SPS 6.3 punkte");
+    } finally { W.kviestiAI = orig; D.getElementById("chat").innerHTML = ""; S.chat = []; }
+  });
+
+  await testas("Citata patvirtinama nepaisant pdf.js tarpų žodžių viduje (tikras SPS PDF), bet ne per žodžio ribą", () => {
+    const P = W.GP_PAIESKA;
+    const t = "Pasiūlymo galiojimo užtikrinimo dydi s – 100\n000 Eur . Banko garantija turi galioti ne trumpiau kaip 150 dien ų po Galutinių p asiūlymų pateikimo term ino\npabaigos ir joje turi būti nurodytas garantijos galiojimo terminas. nurod yto SPS 1 3 priede, be sąlyginę ir neatšaukiamą garantiją.";
+    lygu(P.citataAtitikimas("Pasiūlymo galiojimo užtikrinimo dydis – 100 000 Eur. Banko garantija turi galioti ne trumpiau kaip 150 dienų po Galutinių pasiūlymų pateikimo termino pabaigos.", t), { ok: true, tikslus: false }, "tarpų nepaisantis kelias - apytikslė");
+    lygu(P.citataAtitikimas("nurodyto SPS 13 priede, besąlyginę ir neatšaukiamą garantiją", t), { ok: true, tikslus: false }, "tarpų nepaisantis kelias - apytikslė");
+    lygu(P.citataAtitikimas("garantijos nurodyto SPS 13 priede, besąlyginę ir neatšaukiamą garantiją", t), { ok: true, tikslus: false }, "kraštinis žodis nukirptas - apytikslė");
+    lygu(P.citataAtitikimas("joje turi būti nurodytas garantijos galiojimo terminas", t), { ok: true, tikslus: true }, "pažodinis sutapimas lieka tikslus");
+    tiesa(!P.citataYra("reikalaujamas šiame pirkime", "Užtikrinimas nereikalaujamas šiame pirkime."), "žodžio viduje - ne");
+    tiesa(P.citataYra("reikalaujamas šiame pirkime", "Užtikrinimas ne reikalaujamas šiame pirkime."), "pažodinė ištrauka randama, kaip ir anksčiau (kontekstą už citatos ribų vertina skaitytojas)");
+    tiesa(!P.citataYra("garantija turi galioti 150 dienų", t), "praleisti žodžiai - ne");
+    tiesa(!P.citataYra("dydis 100", t), "per trumpa tarpų nepaisančiam keliui - ne");
+  });
+  await testas("Tarpų nepaisymas nekeičia skaičiaus ir neprilipdo neigimo", () => {
+    const P = W.GP_PAIESKA;
+    // skaitmenų seka išlieka: keičiasi tik grupavimas, o kitas skaičius atmetamas
+    lygu(P.citataAtitikimas("dydis 100 000 Eur", "Užtikrinimo dydis 1 000 00 Eur mokamas."), { ok: true, tikslus: false });
+    tiesa(!P.citataYra("galioti 15 dienų", "garantija turi galioti 150 dienų nuo"), "kitas skaičius - atmesta");
+    tiesa(!P.citataYra("galioti 1500 dienų", "garantija turi galioti 150 dienų nuo"), "prirašytas skaitmuo - atmesta");
+    // neigimas nesulimpa: „ne" iš teksto negali dingti iš citatos
+    tiesa(!P.citataYra("užtikrinimas reikalaujamas", "Užtikrinimas ne reikalaujamas šiame pirkime."), "praleistas ne - atmesta");
+    tiesa(!P.citataYra("reikalaujamas", "Užtikrinimas nereikalaujamas."), "žodžio viduje - atmesta");
+    lygu(P.citataAtitikimas("užtikrinimas nereikalaujamas", "Užtikrinimas ne reikalaujamas šiame pirkime.").ok, true, "ta pati prasmė, tik pdf.js atskyrė");
+  });
+  await testas("PDF eilutė: pdf.js gabalai jungiami pagal geometrinį tarpą, ne visada tarpu", () => {
+    const it = (s, x, w, y) => ({ str: s, transform: [10, 0, 0, 10, x, y || 700], width: w });
+    const txt = W.GP_DOK.pdfTekstas([it("nurod", 100, 25), it("yto", 125.3, 15), it("SPS", 145, 18), it("1", 167, 5), it("3", 172.2, 5), it("priede,", 181, 30), it("Pasiūlymo ", 100, 45, 688), it("galiojimo", 145.5, 40, 688), it("2", 300, 4, 691.5), it("Kita", 100, 20, 676)]);
+    lygu(txt, "nurodyto SPS 13 priede,\nPasiūlymo galiojimo 2\nKita");
+    lygu(W.GP_DOK.pdfTekstas([{ str: "be", transform: [10, 0, 0, 10, 100, 700] }, { str: "pločio", transform: [10, 0, 0, 10, 110, 700] }]), "be pločio", "be width - tarpas kaip anksčiau");
+    lygu(W.GP_DOK.pdfTekstas([]), "");
+  });
+
+  grupe("Dokumentų zona");
+  await testas("Įkėlimo zona (label) yra blokinis elementas - brūkšninis rėmelis neskyla per eilutes", () => {
+    lygu(W.getComputedStyle(D.getElementById("drop")).display, "block");
+  });
+
   document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   document.getElementById("busena").className = R.blogai === 0 ? "ok" : "blogai";
   document.getElementById("paleisti").disabled = false;

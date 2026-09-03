@@ -100,15 +100,44 @@
   // žodį iš pradžios ir/ar pabaigos - toks atitikimas grąžinamas kaip APYTIKSLIS
   // (tikslus:false), kad sąsaja jį pažymėtų.
   function normCit(s) { return fold(String(s)).replace(/[^a-z0-9%]+/g, " ").trim(); }
+  // Ištisinė paieška su žodžių ribomis (t turi tarpus kraštuose)
+  function rask(q, t) { return !!q && t.indexOf(" " + q + " ") !== -1; }
+  // Tas pats NEPAISANT tarpų tekste. Priežastis (patikrinta 2026-09-02 su tikru CVP IS
+  // SPS PDF): pdf.js tekste tarpai atsiranda žodžių viduje ("nurod yto", "dien ų",
+  // "1 3 priede", "dydi s"), o modelis cituoja švarų tekstą - 3 iš 4 teisingų citatų
+  // buvo atmestos. Žodžio riba vis tiek tikrinama ORIGINALIAME normalizuotame tekste:
+  // prieš pirmą ir po paskutinio citatos simbolio turi būti tarpas ar teksto kraštas,
+  // kad "reikalaujamas" nerastų savęs "nereikalaujamas" viduje.
+  function raskBeTarpu(q, t) {
+    var qs = q.replace(/ /g, "");
+    if (qs.length < 12) return false;
+    var ts = "", map = [];
+    for (var i = 0; i < t.length; i++) if (t.charAt(i) !== " ") { ts += t.charAt(i); map.push(i); }
+    var p = ts.indexOf(qs);
+    while (p !== -1) {
+      var a = map[p], b = map[p + qs.length - 1];
+      if (t.charAt(a - 1) === " " && t.charAt(b + 1) === " ") return true;
+      p = ts.indexOf(qs, p + 1);
+    }
+    return false;
+  }
   function citataAtitikimas(quote, text) {
     if (typeof text !== "string" || typeof quote !== "string") return { ok: false, tikslus: false };
     var q = normCit(quote), t = " " + normCit(text) + " ";
     if (!q || q.length < 3) return { ok: false, tikslus: false };
-    if (t.indexOf(" " + q + " ") !== -1) return { ok: true, tikslus: true };
+    if (rask(q, t)) return { ok: true, tikslus: true };
+    // Tarpų nepaisantis kelias yra ATLAIDESNIS už pažodinį, tad jo rezultatas žymimas
+    // apytiksliu (sąsaja rodo žymą). Praktikoje jis beveik nereikalingas: patikrinta su
+    // tikru CVP IS paketu - 234 pažodinės ištraukos iš 46 dokumentų visos sutapo tiksliuoju
+    // keliu. Jis lieka atsargai tiems PDF, kurių pdf.js vis tiek suskaido, ir būtent todėl
+    // neturi atrodyti taip pat patikimai kaip pažodinis sutapimas (pvz. skaičių grupavimas
+    // „100 000" ir „1 000 00" nepaisant tarpų sutampa - skaitmenų seka ta pati, bet tai jau
+    // ne pažodinė citata).
+    if (raskBeTarpu(q, t)) return { ok: true, tikslus: false };
     var w = q.split(" ");
     if (w.length >= 6) {
       var variantai = [w.slice(1).join(" "), w.slice(0, -1).join(" "), w.slice(1, -1).join(" ")];
-      for (var i = 0; i < variantai.length; i++) if (t.indexOf(" " + variantai[i] + " ") !== -1) return { ok: true, tikslus: false };
+      for (var i = 0; i < variantai.length; i++) if (rask(variantai[i], t) || raskBeTarpu(variantai[i], t)) return { ok: true, tikslus: false };
     }
     return { ok: false, tikslus: false };
   }
