@@ -411,7 +411,80 @@ testas("Sąžiningumas", "Demonstracinių duomenų juosta rodoma, kol duomenys n
 });
 
 /* =========================================================================
-   7. MIGRACIJA IR IMPORTAS
+   7. DUOMENŲ BŪSENA: ILIUSTRACINIAI IR PASENĘ
+   Anksčiau iliustracinių duomenų žyma buvo VIENA bendra, tad atnaujinus 1 rodiklį
+   iš 17 juosta dingdavo visiems.
+   ========================================================================= */
+testas("Duomenų būsena", "Pradžioje visi 17 rodiklių pažymėti kaip iliustraciniai", ()=>{
+  paruosk();
+  lygu(M("DATA.metrics.filter(m=>m.demo).length"), 17);
+  lygu(M("document.querySelectorAll('.kpi-zyma.demo').length"), 17, "žymos kortelėse");
+});
+
+testas("Duomenų būsena", "Atnaujinus vieną rodiklį juosta NEDINGSTA, o parodo tikslų skaičių", ()=>{
+  paruosk();
+  M(`document.getElementById('btnEdit').click();
+     document.querySelector('input[data-edit="sski"]').value = "130";
+     document.getElementById('btnEdit').click();`);
+  lygu(M("DATA.metrics.filter(m=>m.demo).length"), 16, "likę iliustraciniai");
+  lygu(M('metricById("sski").demo'), false, "atnaujintas rodiklis");
+  lygu(M('metricById("brent").demo'), true, "neliestas rodiklis");
+  lygu(M("getComputedStyle(document.getElementById('demoBanner')).display"), "flex", "juosta turi likti");
+  const t = M("document.getElementById('demoTekstas').textContent");
+  tiesa(t.indexOf("1 rodiklis iš 17") >= 0, "juostoje turi būti tikslus skaičius, gauta: " + t.slice(0, 90));
+});
+
+testas("Duomenų būsena", "Juosta dingsta tik atnaujinus visus rodiklius", ()=>{
+  paruosk();
+  M(`document.getElementById('btnEdit').click();
+     document.querySelectorAll('input[data-edit]').forEach((inp, i)=>{ inp.value = String(50 + i); });
+     document.getElementById('btnEdit').click();`);
+  lygu(M("DATA.metrics.filter(m=>m.demo).length"), 0);
+  lygu(M("DATA.meta.demo"), false, "bendra žyma išvedama iš rodiklių");
+  lygu(M("getComputedStyle(document.getElementById('demoBanner')).display"), "none");
+});
+
+testas("Duomenų būsena", "Lietuviškas skaitvardžių derinimas", ()=>{
+  paruosk();
+  lygu(M(`[1,2,5,11,17,21,101,111].map(n=>n + " " + daugiskaita(n,"rodiklis","rodikliai","rodiklių"))`),
+       ["1 rodiklis","2 rodikliai","5 rodikliai","11 rodiklių","17 rodiklių","21 rodiklis",
+        "101 rodiklis","111 rodiklių"]);
+});
+
+testas("Duomenų būsena", "Duomenų amžius skaičiuojamas žingsniais, ne dienomis", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const dabar = new Date();
+    const men = metricById("sski"), sav = metricById("brent");
+    men.laikotarpis = (dabar.getFullYear()) + "-" + String(dabar.getMonth()+1).padStart(2,"0") + "-01";
+    // dataIIso naudoja VIETINIUS komponentus; toISOString cia netiktu, nes verstu i UTC
+    // ir birzelio 1 d. vietos laiku taptu geguzes 31 d. (testas rodytu 4 men. vietoj 3).
+    const pries3 = dataIIso(new Date(dabar.getFullYear(), dabar.getMonth()-3, 1));
+    const pries6sav = dataIIso(new Date(dabar.getFullYear(), dabar.getMonth(), dabar.getDate()-42));
+    return {
+      siandien: laikotarpioAmzius(men),
+      pries3men: laikotarpioAmzius({ laikotarpis: pries3, zingsnis: "mėn." }),
+      pries6sav: laikotarpioAmzius({ laikotarpis: pries6sav, zingsnis: "sav." })
+    };
+  })()`);
+  lygu(r.siandien, 0, "šio mėnesio duomenys");
+  lygu(r.pries3men, 3, "prieš tris mėnesius");
+  lygu(r.pries6sav, 6, "prieš šešias savaites");
+});
+
+testas("Duomenų būsena", "Iliustraciniam rodikliui amžiaus žyma nerodoma", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("brent");
+    return { demo: m.demo, pasenes: arPasenes(m), zyma: zymaHtml(m).indexOf("iliustracinė") >= 0 };
+  })()`);
+  lygu(r.demo, true);
+  lygu(r.pasenes, false, "iliustracinis rodiklis nežymimas kaip pasenęs");
+  lygu(r.zyma, true, "rodoma iliustracinės žyma");
+});
+
+/* =========================================================================
+   8. MIGRACIJA IR IMPORTAS
    ========================================================================= */
 testas("Migracija", "v4 įrašas: reikšmės išlieka, laikotarpiai priskiriami", ()=>{
   const w = paruosk();
@@ -463,6 +536,25 @@ testas("Migracija", "v3 įrašas su senomis kategorijomis pertvarkomas į aštuo
   lygu(r.pirmas, "pastociu_iranga");
   lygu(r.demo, true, "nekeisti duomenys lieka demonstraciniai");
   lygu(r.turiLaikotarpi, true);
+  paruosk();
+});
+
+testas("Migracija", "v5 įrašas be rodiklių žymų: žyma imama iš bendros meta.demo", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const senas = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    senas.schemaVersion = 5;
+    senas.metrics.forEach(m=>{ delete m.demo; });
+    senas.meta = { updated: "2026-08-14", demo: false };
+    localStorage.removeItem("epsog_rinkos_kpi_v" + SCHEMA_VERSION);
+    localStorage.setItem("epsog_rinkos_kpi_v5", JSON.stringify(senas));
+    const po = loadData();
+    return { schema: po.schemaVersion, demoKiek: po.metrics.filter(m=>m.demo).length,
+             laikotarpisIslikes: po.metrics.find(m=>m.id === "sski").laikotarpis };
+  })()`);
+  lygu(r.schema, M("SCHEMA_VERSION"));
+  lygu(r.demoKiek, 0, "naudotojas buvo atnaujinęs, tad žyma nuimama visiems");
+  lygu(r.laikotarpisIslikes, "2026-05-01", "v5 laikotarpiai turi išlikti");
   paruosk();
 });
 
