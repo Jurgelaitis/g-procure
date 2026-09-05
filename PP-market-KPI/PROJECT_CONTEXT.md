@@ -329,7 +329,42 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v4 (esama, 2026-09-05): **šešios pirkimų kategorijos pakeistos aštuoniais tiekėjų rinkos
+- v5 (esama, 2026-09-05): **rodiklių reikšmės susietos su laikotarpiais; įvedimas prideda naują
+  stebėjimą, o ne perrašo paskutinį.**
+
+  KOKIA BUVO KLAIDA. Serijos buvo tik skaičių masyvai be datų, o „Atnaujinti duomenis"
+  perrašydavo paskutinę reikšmę. Todėl bazinis palyginimo taškas niekada nepajudėdavo:
+  patikrinta gyvai su SSKI - įvedus naują reikšmę serija liko 13 taškų, bazė liko 124,0, o
+  pokytis pasikeitė 4,19 -> 5,40 proc. Vedant reikšmes kas mėnesį, užrašas „per 12 mėn." po
+  metų reikštų 24 mėnesius, ir modulis apie tai nieko nesakytų. Visi ankstesni etapai
+  (profiliai, rūšis, indeksavimas) remiasi būtent šiais skaičiais.
+
+  KAS PADARYTA
+  - Kiekvienas rodiklis turi `zingsnis` („sav." arba „mėn.") ir `laikotarpis` (naujausio
+    stebėjimo data). Mėnesiniams laikoma mėnesio pirma diena, savaitiniams - stebėjimo diena.
+  - Laikotarpių aritmetika: `slinktiLaikotarpi`, `baziniLaikotarpis`, `kitasLaikotarpis`,
+    `laikotarpioTekstas`. Patikrinti metų ir mėnesių lūžiai.
+  - Įvedime kiekvienam rodikliui yra pasirinkimas: **naujas laikotarpis** (pridedamas taškas,
+    seniausias iškrenta - slenkantis langas) arba **taisyti dabartinį**. Laukas TUŠČIAS:
+    tuščias = šiam rodikliui duomenų neįvesta, tad išsaugojimas nieko nekeičia.
+  - Etiketė „per 12 mėn." nebeįrašyta ranka - išvedama iš `lookback` ir `zingsnis`
+    (`palyginimoEtikete`), tad negali išsiskirti su tikru langu. `periodLabel` pašalintas.
+  - Kortelėje rodoma, kuriam laikotarpiui priklauso reikšmė („Duomenys: 2026 m. gegužės mėn.").
+    Pirkimo kortelėje pokytis nurodo tikrą bazę („per 4 sav. (nuo 2026 m. balandžio 17 d.)").
+
+  KODĖL SIŪLOMI TIK GRETIMI LAIKOTARPIAI, o ne laisva data: `baseVal()` ima reikšmę pagal
+  POZICIJĄ masyve, tad serija privalo likti be tarpų ir vienodo žingsnio. Leidus laisvą datą
+  atsirastų tarpai ir palyginimo langas vėl imtų meluoti. Tai sąmoningas apribojimas.
+
+  PATIKRINTA: 20 naujų mėnesinių įvedimų iš eilės - serija lieka 13 taškų, laikotarpis
+  pasiekia 2028-01, bazė lieka lygiai 12 mėn. atgal (2027-01). Migracija iš v3 ir v4 perkelia
+  reikšmes; laikotarpiai senuose įrašuose neegzistavo, tad imami numatytieji (demo) arba
+  `meta.updated` (jei naudotojas buvo keitęs) - tai PRIELAIDA, užrašyta kode.
+
+  KARTU: JSON importas nebeatmeta senesnės schemos failo - naudotojo paties eksportas yra jo
+  atsarginė kopija, todėl bandoma migruoti. Klaidos pranešimas nebemini „6 kategorijų".
+
+- v4 (2026-09-05): **šešios pirkimų kategorijos pakeistos aštuoniais tiekėjų rinkos
   profiliais** (1 etapas iš keturių; naudotojo sprendimas). Profilis atsako į klausimą, KOKIOJE
   tiekėjų rinkoje perkama, ir yra atskira ašis nuo pirkimo rūšies (darbai / prekės / paslaugos).
 
