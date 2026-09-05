@@ -329,7 +329,33 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v5.1 (esama, 2026-09-05): **atkurtas regresijos testų rinkinys** `PP-market-KPI/testai.html`
+- v6 (esama, 2026-09-05): **iliustracinių duomenų žyma - prie kiekvieno rodiklio atskirai;
+  rodomas duomenų amžius.** Dvi sąžiningumo spragos, kurios abi kūrė patikrintumo įspūdį.
+
+  1. **Juosta dingdavo atnaujinus 1 rodiklį iš 17.** Žyma buvo viena bendra (`meta.demo`),
+     todėl vienas įvedimas nuimdavo įspėjimą visam skydeliui, nors 16 rodiklių liko
+     demonstraciniai. Dabar `demo` yra prie kiekvieno rodiklio; įvedimas nuima žymą TIK tam
+     rodikliui, o juosta sako tiksliai: „Atnaujinta 1 rodiklis iš 17. Iliustracinių lieka 16".
+     `meta.demo` liko suderinamumui, bet dabar išvedamas iš rodiklių.
+  2. **Modulis tylėjo apie duomenų senumą.** Rodė gegužės 15 d. reikšmes rugsėjo 5 d. ir
+     nieko nesakė. Dabar `laikotarpioAmzius()` skaičiuoja amžių ŽINGSNIAIS (savaitėmis arba
+     mėnesiais, pagal rodiklį), o kortelėje rodoma žyma („prieš 15 savaičių").
+
+  Kortelės žyma viena: arba **iliustracinė** (gintarinė), arba **amžius** (neutrali pilka).
+  Kartu jos nerodomos - iliustraciniam rodikliui jo amžius nėra informacija. Riba: praleisti
+  bent du stebėjimai (`PASENIMO_RIBA`). Sakoma tik tai, kas žinoma - kiek duomenims laiko;
+  ar tai per sena konkrečiam pirkimui, sprendžia naudotojas.
+
+  Pridėtas `daugiskaita()` - lietuviškas skaitvardžių derinimas (1 rodiklis, 2 rodikliai,
+  11 rodiklių, 21 rodiklis). Be jo juostoje buvo „1 rodikliai iš 17".
+
+  MIGRACIJA v5 -> v6: senuose įrašuose nežinoma, KURIE rodikliai buvo atnaujinti, tad imama
+  bendra `meta.demo` reikšmė visiems. Elgesys nepablogėja (anksčiau ta pati žyma galiojo
+  visam skydeliui), o nuo dabar kaupiasi tiksliai.
+
+  Testų: 66 (buvo 59). Nauja grupė „Duomenų būsena" (6) ir v5 -> v6 migracijos testas.
+
+- v5.1 (2026-09-05): **atkurtas regresijos testų rinkinys** `PP-market-KPI/testai.html`
   (59 testai). Atidaromas naršyklėje kaip ir modulis, Node nereikia.
 
   KĄ SAUGO. Dvi nekintamas taisykles (kandidatai be svorių; VMDU ne šalia SSKI - tikrinama
