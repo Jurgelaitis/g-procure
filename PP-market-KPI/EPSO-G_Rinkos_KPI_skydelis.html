@@ -134,6 +134,20 @@ summary:focus-visible{outline:2px solid var(--color-emerald);outline-offset:-2px
 
 /* Lentelė slenka savo dėžėje, o ne plečia puslapio (320 px ekrane tai buvo
    vienintelė horizontalaus perpildymo priežastis). */
+/* Rankinio įvedimo forma - atsiveria po rodikliu */
+.iv{margin-top:10px;padding:14px;border:1px solid var(--color-graphite-30);border-radius:var(--radius);background:var(--color-graphite-5)}
+.iv__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.iv label{display:block;font-size:12.5px;font-weight:700;margin-bottom:4px}
+.iv input{width:100%;max-width:100%;min-height:40px;padding:0 10px;font-family:var(--font-base);font-size:14px;
+  color:var(--color-graphite);background:var(--color-white);border:1px solid var(--color-graphite-30);border-radius:var(--radius-sm)}
+.iv input:focus{outline:2px solid var(--color-emerald);outline-offset:1px}
+.iv__err{color:var(--bad);font-size:12.5px;margin-top:8px;font-weight:700}
+.iv__btn{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.obsl{list-style:none;margin-top:10px;display:grid;gap:4px}
+.obsl li{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;
+  padding:6px 10px;border:1px solid var(--color-graphite-15);border-radius:var(--radius-sm);background:var(--color-white)}
+.obsl .x{border:0;background:none;color:var(--bad);font-weight:800;cursor:pointer;font-size:13px;min-height:32px;padding:0 6px}
+.obsl .x:focus-visible{outline:2px solid var(--color-emerald);outline-offset:2px}
 .table-wrap{overflow-x:auto;max-width:100%}
 .det{min-width:0}
 table{width:100%;min-width:460px;border-collapse:collapse;font-size:13.5px}
@@ -158,6 +172,9 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--colo
      nowrap reikšme kitaip išplėsdavo visą puslapį (320 px ekrane - iki 334 px). */
   /* Antraštė su žyme („Globalūs rodikliai · demonstracinės reikšmės“) į vieną eilutę
      netelpa - leidžiam jai persilaužti, kitaip ji plečia visą puslapį. */
+  /* Paspaudimo zonos siaurame ekrane - ne mažiau 44 px */
+  .iv input{min-height:44px}
+  .iv .btn,.obsl .x{min-height:44px}
   summary{flex-wrap:wrap;row-gap:6px}
   summary::after{margin-left:auto}
   .mrow{grid-template-columns:1fr;gap:4px}
@@ -660,6 +677,28 @@ function pokytis(m){
   if(!isFinite(baz.v) || !isFinite(pask.v) || baz.v === 0) return null;
   return (pask.v - baz.v)/Math.abs(baz.v)*100;
 }
+/* Palyginimo lango tekstas. VDA rodikliams jis fiksuotas (publikavimo dažnis žinomas),
+   o rankiniu būdu vedamiems - rodomas TIKRAS bazinis laikotarpis. Antraip etiketė
+   „per 4 sav." meluotų, jei reikšmės vedamos kas mėnesį. */
+function langoTekstas(m){
+  if(m.grupe === "vda") return m.langoPav;
+  if(!m.obs || m.obs.length < 2) return m.langoPav;
+  const bazIdx = Math.max(0, m.obs.length-1-(m.langas||4));
+  if(bazIdx === m.obs.length-1) return m.langoPav;
+  return "nuo " + m.obs[bazIdx].p;
+}
+/* Duomenų senumas vertinamas ATSKIRAI nuo rinkos rizikos: pasenusi reikšmė nekeičia
+   rodiklio būsenos, bet matoma kaip atskira žyma ir mažina duomenų kokybę. */
+const SENUMO_RIBA_D = 45;
+function pasene(m){
+  if(!m || m.demo) return false;
+  const d = m.tikrinta || m.gauta;
+  if(!d) return false;
+  const t = new Date(d+"T00:00:00");
+  if(isNaN(t)) return false;
+  return (Date.now() - t.getTime())/86400000 > SENUMO_RIBA_D;
+}
+
 /* Būsena: 'ok' | 'warn' | 'bad' | 'unk'.
    Demonstracinis ar be duomenų rodiklis NIEKADA negrąžina „ok“ - jis grąžina
    „nepatikrinta“. Duomenų trūkumas nėra įrodymas, kad viskas gerai. */
@@ -689,7 +728,7 @@ function vertinkKaina(p){
       past:"Nė vienas šio profilio kainos rodiklis dar nepatikrintas. Paspauskite „Gauti iš VDA“ arba įveskite reikšmes ranka." };
   const pc = kalt ? pokytis(kalt) : null;
   const past = kalt && pc!==null
-    ? `Labiausiai keičiasi: ${kalt.pav} ${pc>=0?"+":""}${pc.toFixed(1)} proc. ${kalt.langoPav}.`
+    ? `Labiausiai keičiasi: ${kalt.pav} ${pc>=0?"+":""}${pc.toFixed(1)} proc. ${langoTekstas(kalt)}.`
     : "Patikrinti rodikliai reikšmingai nesikeitė.";
   return { b, past, kaltininkas:kalt };
 }
@@ -735,7 +774,9 @@ function duomenuKokybe(p){
   const ms = (p.kainosRodikliai||[]).map(rod).filter(Boolean);
   const pat = ms.filter(m=>!m.demo && m.obs.length>=2).length;
   if(!ms.length) return { b:"unk", txt:"Rodiklių nenustatyta" };
-  if(pat === ms.length) return { b:"ok", txt:`Patikrinta: ${pat} iš ${ms.length}` };
+  const sen = ms.filter(pasene).length;
+  if(pat === ms.length && !sen) return { b:"ok", txt:`Patikrinta: ${pat} iš ${ms.length}` };
+  if(pat === ms.length && sen) return { b:"warn", txt:`Patikrinta ${pat} iš ${ms.length}, bet ${sen} pasenę` };
   if(pat === 0) return { b:"unk", txt:`Demonstracinė: 0 iš ${ms.length} patikrinta` };
   return { b:"warn", txt:`Iš dalies: ${pat} iš ${ms.length} patikrinta` };
 }
@@ -988,29 +1029,136 @@ function indeksaiHtml(p){
                         : (x.saltinis ? ` · <a href="${saugusUrl(x.saltinis.url)}" target="_blank" rel="noopener">${esc(x.saltinis.pav)}</a>` : "");
       return `<div class="mrow"><div><div class="mrow__n">${esc(x.pav)}</div>
         <div class="mrow__m"><span class="pill ${pillKl(b)}">${esc(zodis(b))}</span>${src}</div></div>
-        <div class="mrow__v">${pc===null?'<span class="muted">nėra duomenų</span>':`<b>${pc>=0?"+":""}${sk(pc,1)} proc.</b><div class="mrow__m">${esc(x.langoPav)}</div>`}</div></div>`;
+        <div class="mrow__v">${pc===null?'<span class="muted">nėra duomenų</span>':`<b>${pc>=0?"+":""}${sk(pc,1)} proc.</b><div class="mrow__m">${esc(langoTekstas(x))}</div>`}</div></div>`;
     }).join("")}
     ${ketv.length ? `<p class="tiny" style="margin-top:8px"><b>Dėmesio:</b> ${esc(ketv.map(x=>x.pav).join(", "))} skelbiami kas ketvirtį - lyginama su tuo pačiu praėjusių metų ketvirčiu, ne su mėnesiu.</p>` : ""}
     <p class="tiny" style="margin-top:8px">${esc(INDEKS_ISLYGA)}</p>`;
 }
 
-function mrow(m){
+function mrow(m, suIvedimu){
   if(!m) return "";
   const b = busena(m), pc = pokytis(m);
   const per = m.obs.length ? m.obs[m.obs.length-1].p : "";
+  const sen = pasene(m);
   return `<div class="mrow">
     <div><div class="mrow__n">${esc(m.pav)}</div>
       <div class="mrow__m">${esc(m.paaisk)}</div>
       <div class="mrow__m" style="margin-top:4px">
         <span class="pill ${pillKl(b)}">${esc(zodis(b))}</span>
         ${m.demo ? '<span class="pill pill--demo" style="margin-left:6px">demonstracinė</span>' : ""}
+        ${sen ? '<span class="pill pill--warn" style="margin-left:6px">pasenę</span>' : ""}
         ${per ? " · laikotarpis " + esc(per) : ""}
         ${m.gauta ? " · gauta " + esc(m.gauta) : ""}
-        ${m.saltinis ? ` · <a href="${saugusUrl(m.saltinis.url)}" target="_blank" rel="noopener">${esc(m.saltinis.pav)}</a>` : ""}
-      </div></div>
+        ${m.tikrinta ? " · tikrinta " + esc(m.tikrinta) + (m.tikrintojas ? " (" + esc(m.tikrintojas) + ")" : "") : ""}
+        ${m.saltinisUrl ? ` · <a href="${saugusUrl(m.saltinisUrl)}" target="_blank" rel="noopener">įvesties šaltinis</a>`
+          : (m.saltinis ? ` · <a href="${saugusUrl(m.saltinis.url)}" target="_blank" rel="noopener">${esc(m.saltinis.pav)}</a>` : "")}
+      </div>
+      ${suIvedimu ? `<div class="noprint" style="margin-top:8px">
+        <button type="button" class="btn btn--sm" onclick="rodykForma('${esc(m.id)}')">Įvesti reikšmę</button>
+        ${m.obs.length ? `<button type="button" class="btn btn--sm" onclick="rodykIstorija('${esc(m.id)}')">Istorija (${m.obs.length})</button>` : ""}
+      </div><div id="iv-${esc(m.id)}"></div><div id="ist-${esc(m.id)}"></div>` : ""}
+      </div>
     <div class="mrow__v">${m.obs.length?`<b>${sk(m.obs[m.obs.length-1].v, m.zenkl)}</b> <span class="muted">${esc(m.vnt)}</span>`:'<span class="muted">nėra</span>'}
-      ${pc===null?'<div class="mrow__m">pokytis neskaičiuojamas</div>':`<div class="mrow__m">${pc>=0?"+":""}${sk(pc,1)} proc. ${esc(m.langoPav)}</div>`}</div>
+      ${pc===null?'<div class="mrow__m">pokytis neskaičiuojamas</div>':`<div class="mrow__m">${pc>=0?"+":""}${sk(pc,1)} proc. ${esc(langoTekstas(m))}</div>`}</div>
   </div>`;
+}
+
+
+/* =========================================================================
+   9b. RANKINIS REIKŠMIŲ ĮVEDIMAS (globalūs rodikliai)
+   Rodiklis tampa PATIKRINTU tik tada, kai nurodytas laikotarpis, reikšmė,
+   šaltinio nuoroda ir tikrintojas. Vien mygtuko paspaudimas duomenų
+   nepatikrina - būtent ta klaida buvo senajame modulyje: „Išsaugoti“ be
+   pakeitimų nuimdavo demonstracinę žymą ir įrašydavo šiandienos datą.
+   ========================================================================= */
+function rodykForma(id){
+  const m = rod(id); if(!m) return;
+  const host = document.getElementById("iv-"+id);
+  if(!host) return;
+  if(host.innerHTML){ host.innerHTML = ""; return; }   // antras paspaudimas - uždaro
+  const sindien = todayISO();
+  host.innerHTML = `
+  <div class="iv">
+    <div class="iv__grid">
+      <div><label for="iv-p-${esc(id)}">Laikotarpis (data)</label>
+        <input type="date" id="iv-p-${esc(id)}" value="${esc(sindien)}"></div>
+      <div><label for="iv-v-${esc(id)}">Reikšmė, ${esc(m.vnt)}</label>
+        <input type="text" inputmode="decimal" id="iv-v-${esc(id)}" placeholder="pvz. 9850"></div>
+      <div><label for="iv-s-${esc(id)}">Šaltinio nuoroda</label>
+        <input type="url" id="iv-s-${esc(id)}" placeholder="https://..." value="${esc(m.saltinis ? m.saltinis.url : "")}"></div>
+      <div><label for="iv-t-${esc(id)}">Kas tikrino</label>
+        <input type="text" id="iv-t-${esc(id)}" placeholder="vardas, pavardė" value="${esc(DUOM.tikrintojas||"")}"></div>
+    </div>
+    <div class="iv__err" id="iv-e-${esc(id)}" hidden></div>
+    <div class="iv__btn">
+      <button type="button" class="btn btn--main btn--sm" onclick="irasykReiksme('${esc(id)}')">Įrašyti reikšmę</button>
+      <button type="button" class="btn btn--sm" onclick="document.getElementById('iv-${esc(id)}').innerHTML=''">Atsisakyti</button>
+    </div>
+    <p class="tiny" style="margin-top:8px">Reikšmė taps patikrinta tik užpildžius visus laukus.
+    Įrašius kelias skirtingų laikotarpių reikšmes, bus skaičiuojamas pokytis.</p>
+  </div>`;
+  const el = document.getElementById("iv-v-"+id); if(el) el.focus();
+}
+
+function klaida(id, tekstas){
+  const e = document.getElementById("iv-e-"+id);
+  if(!e) return;
+  e.textContent = tekstas; e.hidden = !tekstas;
+}
+
+function irasykReiksme(id){
+  const m = rod(id); if(!m) return;
+  const p = (document.getElementById("iv-p-"+id).value || "").trim();
+  const vRaw = (document.getElementById("iv-v-"+id).value || "").trim().replace(",", ".");
+  const src = (document.getElementById("iv-s-"+id).value || "").trim();
+  const kas = (document.getElementById("iv-t-"+id).value || "").trim();
+
+  if(!p) return klaida(id, "Nurodykite laikotarpį - be jo pokyčio nebūtų su kuo lyginti.");
+  if(!vRaw) return klaida(id, "Įrašykite reikšmę.");
+  const v = Number(vRaw);
+  if(!isFinite(v)) return klaida(id, "Reikšmė turi būti skaičius.");
+  if(!/^https?:\/\//i.test(src)) return klaida(id, "Nurodykite šaltinio nuorodą (http arba https) - iš kur reikšmė paimta.");
+  if(!kas) return klaida(id, "Nurodykite, kas tikrino. Be to reikšmė lieka nepatikrinta.");
+  klaida(id, "");
+
+  const obs = (m.obs || []).slice().filter(o => o.p !== p);
+  obs.push({ p, v });
+  obs.sort((a,b)=> a.p < b.p ? -1 : a.p > b.p ? 1 : 0);
+  m.obs = obs;
+  m.demo = false;
+  m.saltinisUrl = src;
+  m.tikrinta = todayISO();
+  m.tikrintojas = kas;
+  DUOM.tikrintojas = kas;          // kitą kartą nereikės rašyti iš naujo
+  DUOM.atnaujinta = todayISO();
+  issaugok();
+
+  document.getElementById("iv-"+id).innerHTML = "";
+  pieskGlob();
+  if(PASK.profilis) vertink(true);
+  rodykToast(m.obs.length >= 2 ? "Reikšmė įrašyta, pokytis perskaičiuotas" : "Reikšmė įrašyta - pokyčiui reikia dar vienos");
+}
+
+function rodykIstorija(id){
+  const m = rod(id); if(!m) return;
+  const host = document.getElementById("ist-"+id); if(!host) return;
+  if(host.innerHTML){ host.innerHTML = ""; return; }
+  host.innerHTML = `<ul class="obsl">${m.obs.map(o=>`
+    <li><span>${esc(o.p)} · <b>${sk(o.v, m.zenkl)}</b> ${esc(m.vnt)}</span>
+      <button type="button" class="x" onclick="trinkStebejima('${esc(id)}','${esc(o.p)}')"
+        aria-label="Šalinti ${esc(o.p)} reikšmę">Šalinti</button></li>`).join("")}</ul>`;
+}
+
+function trinkStebejima(id, p){
+  const m = rod(id); if(!m) return;
+  m.obs = (m.obs||[]).filter(o=>o.p !== p);
+  // Nebeliko duomenų - rodiklis grįžta į „nepatikrintą“, o ne lieka tuščias „žalias“.
+  if(!m.obs.length){ m.demo = true; m.tikrinta = null; m.saltinisUrl = null; }
+  issaugok();
+  pieskGlob();
+  const h = document.getElementById("ist-"+id); if(h) h.innerHTML = "";
+  if(PASK.profilis) vertink(true);
+  rodykToast("Reikšmė pašalinta");
 }
 
 function pieskVda(){
@@ -1024,7 +1172,7 @@ function pieskVda(){
 }
 function pieskGlob(){
   document.getElementById("globSarasas").innerHTML =
-    DUOM.rodikliai.filter(m=>m.grupe==="glob").map(mrow).join("");
+    DUOM.rodikliai.filter(m=>m.grupe==="glob").map(m=>mrow(m,true)).join("");
 }
 function pieskSplit(){
   document.getElementById("splitBox").innerHTML = VERTES_DALIS.map(d=>`
@@ -1093,7 +1241,8 @@ pieskMetodika();
 
 /* Testams: vidinės funkcijos */
 window.__RA = { klasifikuok, PROFILIAI, RAKTAI, TAISYKLES, busena, pokytis, vertinkKaina, vertinkTermina,
-                vertinkTiekejus, duomenuKokybe, veiksmai, istraukSerija, INDEKSAI, DUOM, rod, profilisPagalId, zodziai };
+                vertinkTiekejus, duomenuKokybe, veiksmai, istraukSerija, INDEKSAI, DUOM, rod, profilisPagalId, zodziai,
+                irasykReiksme, trinkStebejima, rodykForma, langoTekstas, pasene, SENUMO_RIBA_D };
 </script>
 </body>
 </html>
