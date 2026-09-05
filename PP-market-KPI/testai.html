@@ -545,7 +545,135 @@ testas("Inkarai", "Poslinkis prisitaiko prie antraštės lipnumo", ()=>{
 });
 
 /* =========================================================================
-   9. MIGRACIJA IR IMPORTAS
+   9. ANTRAŠTĖ, SKALĖ IR ĮRANKIŲ JUOSTA
+   ========================================================================= */
+testas("Antraštė", "Data sako, kada duomenys išsaugoti, o ne „sugeneruota automatiškai“", ()=>{
+  paruosk();
+  const demo = M("document.getElementById('updatedWhen').textContent");
+  tiesa(demo.indexOf("Demonstraciniai duomenys") === 0, "demo režimu, gauta: " + demo);
+  tiesa(demo.indexOf("Sugeneruota") < 0, "neturi likti žodžio „Sugeneruota“");
+  M(`document.getElementById('btnEdit').click();
+     document.querySelector('input[data-edit="sski"]').value = "130";
+     document.getElementById('btnEdit').click();`);
+  const po = M("document.getElementById('updatedWhen').textContent");
+  tiesa(po.indexOf("Duomenys išsaugoti:") === 0, "po išsaugojimo, gauta: " + po);
+  tiesa(/\d{2}:\d{2}/.test(po), "turi būti ir laikas, gauta: " + po);
+});
+
+testas("Antraštė", "Nepakeitus duomenų šiandienos data NERODOMA", ()=>{
+  paruosk();
+  const t = M("document.getElementById('updatedWhen').textContent");
+  const siandien = M("fmtDate(todayLocal())");
+  tiesa(t.indexOf(siandien) < 0, "rodoma šiandienos data, nors niekas nekeista: " + t);
+  tiesa(t.indexOf(M("fmtDate(DATA.meta.updated)")) > 0, "turi rodyti demonstracinio rinkinio datą");
+});
+
+testas("Antraštė", "Demonstracinių duomenų ženklas matomas prie skalės ir dingsta išsaugojus visus", ()=>{
+  paruosk();
+  lygu(M("document.getElementById('demoZenklas').hidden"), false, "demo režimu");
+  M(`document.getElementById('btnEdit').click();
+     document.querySelector('input[data-edit="sski"]').value = "130";
+     document.getElementById('btnEdit').click();`);
+  lygu(M("document.getElementById('demoZenklas').hidden"), false, "dalis dar demonstracinių");
+  lygu(M("document.getElementById('demoZenklas').textContent"), "Dalis demonstracinių");
+  M(`document.getElementById('btnEdit').click();
+     document.querySelectorAll('input[data-edit]').forEach((i, n)=>{ i.value = String(60 + n); });
+     document.getElementById('btnEdit').click();`);
+  lygu(M("document.getElementById('demoZenklas').hidden"), true, "atnaujinus visus ženklas turi dingti");
+});
+
+testas("Skalė", "Būsenų vardai - būdvardžiai, sutampa su santraukos forma", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const buvo = DATA.metrics.map(m=>m.series.slice());
+    const out = {};
+    // žalia: pastovios reikšmės, „level" - žemiau geltonos ribos
+    DATA.metrics.forEach(m=>{ m.series = m.series.map(()=> m.type === "level" ? Math.max(0, m.thr.yellow - 1) : 100); });
+    renderAll(); out.zalia = document.getElementById("climateWord").textContent;
+    // raudona: visi stipriai virš raudonos ribos
+    DATA.metrics.forEach(m=>{ m.series = m.series.map((v, i, a)=> i === a.length - 1 ? 1000 : 1); });
+    renderAll(); out.raudona = document.getElementById("climateWord").textContent;
+    DATA.metrics.forEach((m, i)=>{ m.series = buvo[i]; }); renderAll();
+    return out;
+  })()`);
+  lygu(r.zalia, "Stabilus", "žalia būsena");
+  lygu(r.raudona, "Rizikingas", "raudona būsena");
+  const ribos = M("document.getElementById('klimatoRibos').textContent");
+  tiesa(/0-39/.test(ribos) && /40-66/.test(ribos) && /67-100/.test(ribos),
+        "ribos turi sutapti su kodo skaičiais, gauta: " + ribos);
+});
+
+testas("Skalė", "Rekomendacijose nėra pirmojo asmens formų", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const tekstas = document.body.textContent;
+    const formos = /\b(ruošiame|rengiame|stebime|veikiame|aktyvuojame|numatome|darome|vertiname|didiname|ilginame)\b/gi;
+    return (tekstas.match(formos) || []);
+  })()`);
+  lygu(r, [], "rastos mes-formos");
+});
+
+testas("Skalė", "Skaičius ir spalva dera: „3 raudoni“, ne „3 raudona“", ()=>{
+  paruosk();
+  lygu(M(`[1,2,11].map(n=>spalvuSarasas(n,"raudonas","raudoni","raudonų"))`),
+       ["1 raudonas", "2 raudoni", "11 raudonų"]);
+  const d = M("document.getElementById('climateDesc').textContent");
+  tiesa(/raudona\b|geltona\b/.test(d) === false, "liko moteriškoji vienaskaita: " + d);
+});
+
+testas("Įrankiai", "Pagrindinėje juostoje tik redagavimas ir spausdinimas", ()=>{
+  paruosk();
+  const r = M(`[...document.querySelectorAll(".toolbar > .btn")]
+    .filter(b=>getComputedStyle(b).display !== "none").map(b=>b.textContent.trim())`);
+  lygu(r, ["Redaguoti reikšmes", "🖶 Spausdinti / PDF"]);
+});
+
+testas("Įrankiai", "Mygtukas sako, ką daro: redaguoti / išsaugoti", ()=>{
+  paruosk();
+  lygu(M("document.getElementById('btnEdit').textContent"), "Redaguoti reikšmes");
+  M("document.getElementById('btnEdit').click()");
+  lygu(M("document.getElementById('btnEdit').textContent"), "Išsaugoti");
+  M("document.getElementById('btnCancel').click()");
+  lygu(M("document.getElementById('btnEdit').textContent"), "Redaguoti reikšmes");
+});
+
+testas("Įrankiai", "„Duomenys“ meniu užvertas, atsidaro ir užsiveria per Escape", ()=>{
+  paruosk();
+  lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display"), "none", "pradžioje");
+  M("document.getElementById('btnDuomenys').click()");
+  lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display") !== "none", true, "atidarius");
+  lygu(M("document.getElementById('btnDuomenys').getAttribute('aria-expanded')"), "true");
+  lygu(M(`[...document.querySelectorAll("#duomenuMeniu .meniu-el")].map(x=>x.textContent)`),
+       ["Atsarginė kopija (JSON)", "Atkurti iš kopijos", "Atstatyti pradinius duomenis"]);
+  M(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`);
+  lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display"), "none", "po Escape");
+});
+
+testas("Įrankiai", "Atstatymas prašo patvirtinimo ir jį atmetus nieko nekeičia", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const orig = window.confirm; let klausta = null;
+    window.confirm = t => { klausta = t; return false; };
+    const pries = JSON.stringify(DATA.metrics.map(m=>m.series));
+    document.getElementById("btnReset").click();
+    window.confirm = orig;
+    return { klausta, nepakito: JSON.stringify(DATA.metrics.map(m=>m.series)) === pries };
+  })()`);
+  tiesa(r.klausta && r.klausta.indexOf("Ištrins visas jūsų įvestas reikšmes") === 0,
+        "patvirtinimo tekstas, gauta: " + r.klausta);
+  lygu(r.nepakito, true, "atmetus patvirtinimą duomenys neturi keistis");
+});
+
+testas("Antraštė", "Ženklas perimtas iš portalo (EPSO-G lockup), ne nauja monograma", ()=>{
+  paruosk();
+  lygu(M("!!document.querySelector('.brand__logo')"), true, "EPSO-G ženklas");
+  lygu(M("document.querySelector('.brand__logo').getAttribute('aria-label')"), "EPSO-G");
+  lygu(M("!!document.querySelector('.brand-skirtukas')"), true, "skirtukas kaip portale");
+  lygu(M("!!document.querySelector('.logo')"), false, "senos „EG“ plytelės neturi likti");
+});
+
+/* =========================================================================
+   10. MIGRACIJA IR IMPORTAS
    ========================================================================= */
 testas("Migracija", "v4 įrašas: reikšmės išlieka, laikotarpiai priskiriami", ()=>{
   const w = paruosk();
