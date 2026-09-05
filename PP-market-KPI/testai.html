@@ -220,6 +220,113 @@ function paleisk(){
     lygu(R.istraukSerija(d,{X:"B"}), [{p:"2026M01",v:5}]);
   });
 
+
+  gr("Rankinis reikšmių įvedimas");
+  function svarusRod(id){ const m=R.rod(id); return {id, obs:m.obs, demo:m.demo, tikrinta:m.tikrinta, saltinisUrl:m.saltinisUrl, tikrintojas:m.tikrintojas}; }
+  function grazink(sn){ const m=R.rod(sn.id); m.obs=sn.obs; m.demo=sn.demo; m.tikrinta=sn.tikrinta; m.saltinisUrl=sn.saltinisUrl; m.tikrintojas=sn.tikrintojas; }
+  function ivesk(id, p, v, src, kas){
+    W.rodykForma(id);
+    const D=W.document;
+    if(p!==undefined) D.getElementById("iv-p-"+id).value=p;
+    if(v!==undefined) D.getElementById("iv-v-"+id).value=v;
+    D.getElementById("iv-s-"+id).value = src===undefined ? "https://www.lme.com/" : src;
+    D.getElementById("iv-t-"+id).value = kas===undefined ? "A. Testuotojas" : kas;
+    W.irasykReiksme(id);
+    const e=D.getElementById("iv-e-"+id);
+    return e && !e.hidden ? e.textContent : null;   // grąžina klaidą arba null
+  }
+  t("Be šaltinio nuorodos reikšmė NEįrašoma", ()=>{
+    const sn=svarusRod("lme_cu");
+    try{
+      const kl=ivesk("lme_cu","2026-09-01","9800","","A. Testuotojas");
+      tiesa(!!kl, "turėjo būti klaida");
+      tiesa(R.rod("lme_cu").demo===true, "rodiklis neturi tapti patikrintu");
+    } finally { grazink(sn); W.document.getElementById("iv-lme_cu").innerHTML=""; }
+  }, "senajame modulyje pakakdavo paspausti „Išsaugoti“, kad duomenys atrodytų patikrinti");
+  t("Be tikrintojo reikšmė NEįrašoma", ()=>{
+    const sn=svarusRod("lme_cu");
+    try{
+      const kl=ivesk("lme_cu","2026-09-01","9800","https://www.lme.com/","");
+      tiesa(!!kl, "turėjo būti klaida"); tiesa(R.rod("lme_cu").demo===true);
+    } finally { grazink(sn); W.document.getElementById("iv-lme_cu").innerHTML=""; }
+  });
+  t("Ne skaičius atmetamas", ()=>{
+    const sn=svarusRod("lme_cu");
+    try{
+      const kl=ivesk("lme_cu","2026-09-01","apie devyni tūkstančiai");
+      tiesa(!!kl, "turėjo būti klaida"); tiesa(R.rod("lme_cu").demo===true);
+    } finally { grazink(sn); W.document.getElementById("iv-lme_cu").innerHTML=""; }
+  });
+  t("Pilnai užpildyta reikšmė įrašoma, rodiklis tampa patikrintu", ()=>{
+    const sn=svarusRod("lme_cu");
+    try{
+      const kl=ivesk("lme_cu","2026-08-01","9500");
+      lygu(kl, null, "klaidos neturėjo būti");
+      const m=R.rod("lme_cu");
+      lygu(m.demo, false); lygu(m.obs[m.obs.length-1], {p:"2026-08-01", v:9500});
+      lygu(m.tikrintojas, "A. Testuotojas");
+      tiesa(!!m.tikrinta, "turi būti įrašyta tikrinimo data");
+    } finally { grazink(sn); W.document.getElementById("iv-lme_cu").innerHTML=""; }
+  });
+  t("Dvi reikšmės duoda pokytį; kablelis priimamas kaip skirtukas", ()=>{
+    const sn=svarusRod("brent");
+    try{
+      ivesk("brent","2026-07-01","80,0");
+      ivesk("brent","2026-08-01","88,0");
+      const m=R.rod("brent");
+      m.langas=1;
+      lygu(m.obs.length, 2);
+      lygu(Math.round(R.pokytis(m)), 10);
+    } finally { grazink(sn); W.document.getElementById("iv-brent").innerHTML=""; }
+  });
+  t("Tas pats laikotarpis pakeičiamas, ne dubliuojamas; eilutė lieka surikiuota", ()=>{
+    const sn=svarusRod("brent");
+    try{
+      ivesk("brent","2026-08-01","80");
+      ivesk("brent","2026-07-01","70");
+      ivesk("brent","2026-08-01","85");
+      const m=R.rod("brent");
+      lygu(m.obs, [{p:"2026-07-01",v:70},{p:"2026-08-01",v:85}]);
+    } finally { grazink(sn); W.document.getElementById("iv-brent").innerHTML=""; }
+  });
+  t("Pašalinus paskutinę reikšmę rodiklis grįžta į „nepatikrintą“", ()=>{
+    const sn=svarusRod("lme_al");
+    try{
+      ivesk("lme_al","2026-08-01","2600");
+      lygu(R.rod("lme_al").demo, false);
+      W.trinkStebejima("lme_al","2026-08-01");
+      lygu(R.rod("lme_al").demo, true, "be duomenų rodiklis negali likti patikrintas");
+      lygu(R.busena(R.rod("lme_al")), "unk");
+    } finally { grazink(sn); }
+  });
+
+  gr("Duomenų senumas ir palyginimo langas");
+  t("Pasenusi reikšmė pažymima atskirai, bet rinkos būsenos nekeičia", ()=>{
+    const m=R.rod("lme_cu"); const sn=svarusRod("lme_cu");
+    try{
+      m.demo=false; m.langas=1;
+      m.obs=[{p:"2026-01-01",v:100},{p:"2026-02-01",v:101}];
+      m.tikrinta="2020-01-01";
+      tiesa(R.pasene(m), "sena data turi būti pažymėta");
+      lygu(R.busena(m), "ok", "senumas neturi keisti rinkos vertinimo");
+    } finally { grazink(sn); }
+  }, "auditas prašė atskirti duomenų amžių nuo rinkos rizikos");
+  t("Šviežia reikšmė nelaikoma pasenusia", ()=>{
+    const m=R.rod("lme_cu"); const sn=svarusRod("lme_cu");
+    try{ m.demo=false; m.tikrinta=new Date().toISOString().slice(0,10); tiesa(!R.pasene(m)); }
+    finally { grazink(sn); }
+  });
+  t("Rankiniam rodikliui rodomas TIKRAS bazinis laikotarpis, ne fiksuota etiketė", ()=>{
+    const m=R.rod("brent"); const sn=svarusRod("brent");
+    try{
+      m.obs=[{p:"2026-01-01",v:70},{p:"2026-06-01",v:80}]; m.langas=1; m.demo=false;
+      lygu(R.langoTekstas(m), "nuo 2026-01-01", "etiketė „per 4 sav.“ meluotų");
+    } finally { grazink(sn); }
+  });
+  t("VDA rodikliui lieka publikavimo dažnio etiketė", ()=>{
+    lygu(R.langoTekstas(R.rod("sski_inz")), "per 12 mėn.");
+  });
+
   document.getElementById("busena").textContent = S.bl===0 ? "Visi testai praėjo." : S.bl+" test(-ai) krito.";
   document.getElementById("busena").className = S.bl===0 ? "ok" : "blogai";
 }
