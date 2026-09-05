@@ -51,7 +51,7 @@ tai rašybos konvencija, ne katalogo vardas. Jei rasi senų variantų (PP-Planin
 |---|---|
 | `PP-home` | Portalo puslapiai gyvena SVETAINĖS ŠAKNYJE (`index.html`, `G-Procure_About.html`, `G-Procure_Project.html`), nes `g-procure.com/` turi būti tikras pradžios puslapis. `PP-home/` liko tik trys nukreipimo failai seniems adresams - naujo turinio ten nedėk |
 | `PP-plan` | Metinio pirkimų plano (MPP) analizė ir grupės centralizavimas |
-| `PP-market-KPI` | Rinkos rodiklių stebėjimo skydelis (kainos, lead time, rizika, indeksavimas) |
+| `PP-market-KPI` | Rinkos rodiklių stebėsena (kainos, lead time, rizika, indeksavimas) |
 | `PP-ts` | Techninių specifikacijų asistentas (AI generavimas + auditas) |
 | `PP-qual` | Tiekėjų kvalifikacijos reikalavimų modulis (AI, proporcingumas) |
 | `PP-salygos` | Pirkimo sąlygų generatorius (BPS/SPS/formos iš LITGRID šablonų, deterministinis) |

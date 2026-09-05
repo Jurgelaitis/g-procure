@@ -329,7 +329,27 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.1 (esama, 2026-09-05): **spausdinimas ir mobilioji antraštė.**
+- v6.2 (esama, 2026-09-05): **modulis pervadintas į „Rinkos rodiklių stebėsena"** (naudotojo
+  sprendimas). „Skydelis" yra mažybinė forma ir tokio lygio moduliui skambėjo nesvariai, o
+  „stebėsena" yra oficialaus registro žodis (kaip „aplinkos stebėsena").
+
+  Paaiškėjo, kad portalas šį modulį JAU vadino „Rinkos rodiklių stebėsena" - ir kortelėje
+  (`index.html`), ir kataloge (`G-Procure_Project.html`), abiem kalbomis. Vadinasi, pervadinimas
+  ne tik pakėlė registrą, bet ir panaikino jau egzistavusį nesuderinamumą.
+
+  Pakeista: modulio `<title>` ir `<h1>`, kopijuojamo teksto poraštė, `testai.html` antraštė,
+  CLAUDE.md modulių lentelė, portalo kortelės tipo etiketė („Stebėsenos skydelis" ->
+  „Analitinis įrankis", kad neatkartotų pavadinimo ir nepaliktų „skydelio").
+
+  Matomame tekste dar keturios vietos vadino jį skydeliu - suderinta: „Kaip skaityti šį skydelį"
+  -> „Kaip skaityti rodiklius"; „skydelyje nestebimas" -> „į stebėseną neįtrauktas";
+  „neatitinka skydelio duomenų schemos" -> „neatitinka duomenų schemos".
+
+  KATALOGAS `PP-market-KPI` IR FAILO VARDAS NEKEISTI - tai gyvas URL ir portalo nuoroda.
+  Kodo komentaruose žodis „skydelis" paliktas: jie ne naudotojui, o keisti juos būtų tuščias
+  diff'as.
+
+- v6.1 (2026-09-05): **spausdinimas ir mobilioji antraštė.**
 
   SPAUSDINIMAS. Naudotojas modulį vertina ir iš atspausdinto PDF, o popieriuje likdavo
   tuščias pirkimo įvedimo laukas, profilio bei rūšies išskleidžiami sąrašai ir inkarinė
