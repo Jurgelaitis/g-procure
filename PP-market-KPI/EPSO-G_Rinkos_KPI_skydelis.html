@@ -768,7 +768,8 @@ const DEFAULT_DATA = {
      Pakeicia ankstesnes sesias kategorijas. „Draudimas" panaikintas: jo imokas lemia
      rinkos ciklas ir zalu istorija, ne kainu indeksai, tad siame modulyje jam vietos nera.
      weights naudojami TIK rizikos agregacijai (categorySeverity) ir remiasi A/B/C
-     lygmens rodikliais; suma kiekviename profilyje = 1,00. LT indeksai - CAT_VDA. */
+     lygmens rodikliais; suma kiekviename profilyje = 1,00. LT indeksai priklauso ir
+     nuo pirkimo rusies - zr. indeksavimoModelis(). */
   categories:[
     {
       id:"pastociu_iranga", name:"Transformatoriai, jungtuvai ir kita pastočių įranga", icon:"⚡",
@@ -971,9 +972,11 @@ function severity(m){
 }
 function statusKey(s){ return s===2?"red":s===1?"yellow":"green"; }
 function statusWord(s){ return s===2?"Raudona":s===1?"Geltona":"Žalia"; }
+// Vyriskoji gimine - vartojama tik su zodziu „rezimas" („geltonas rezimas", ne „geltona rezimas").
+function statusWordVyr(s){ return s===2?"raudonas":s===1?"geltonas":"žalias"; }
 
 // cat.weights naudojami TIK rizikos agregacijai (šiai funkcijai) - į indeksavimo
-// rekomendaciją (INDEKSAVIMO_MODELIAI) jie NEimami. Indeksavimo svorius lemia
+// rekomendaciją (indeksavimoModelis) jie NEimami. Indeksavimo svorius lemia
 // konkretaus pirkimo sąnaudų struktūra, ne kategorija.
 function categorySeverity(cat){
   let sum=0, wsum=0;
@@ -1204,7 +1207,7 @@ function catCard(cat){
     <div class="cat-scale"><span>žalia</span><span>geltona</span><span>raudona</span></div>
     <div class="cat-drivers">${driverHtml}</div>
     <div class="cat-act">
-      <div class="lab"><span class="sq" style="background:${sqColor}"></span> Sutartiniai veiksmai - ${statusWord(sev).toLowerCase()} režimas</div>
+      <div class="lab"><span class="sq" style="background:${sqColor}"></span> Sutartiniai veiksmai - ${statusWordVyr(sev)} režimas</div>
       <ul>${acts}</ul>
     </div>
   </div>`;
@@ -1330,7 +1333,7 @@ function generateSummary(){
   let p5 = `<p><b>Poveikis EPSO-G / Litgrid pirkimams.</b> `;
   if(worst.st>=1){
     const drv = topDrivers(worst.c).map(d=>esc(d.m.name)).slice(0,2).join(" ir ");
-    p5 += `Labiausiai paveiktas profilis - <b>${esc(worst.c.name)}</b> (${statusWord(worst.st).toLowerCase()} režimas), pagrindiniai veiksniai: ${drv}. `;
+    p5 += `Labiausiai paveiktas profilis - <b>${esc(worst.c.name)}</b> (${statusWordVyr(worst.st)} režimas), pagrindiniai veiksniai: ${drv}. `;
   } else {
     p5 += `Visi aštuoni rinkos profiliai kol kas žaliojoje zonoje. `;
   }
@@ -1430,18 +1433,138 @@ const CAT_KEYWORDS = {
   it_iranga:["serveri","komutator","ugniasien","duomenų centr","duomenu centr","tarnybin stot","kompiuter","nešiojam","nesiojam","maršrutizator","marsrutizator","duomenų saugykl","duomenu saugykl","orgtechnik","spausdintuv"],
   programine:["programin","licencij","aplikacij","informacinių sistem","informaciniu sistem","it sistem","prenumerat","platform","skaitmenizav","dirbtinio intelekt"]
 };
-/* Kurie LT (VDA) indeksai aktualus profiliui. Nekintama taisykle: VMDU niekada
-   nera salia SSKI - darbo uzmokestis jau yra SSKI dedamoji (VPT metodika 53.2 p.). */
-const CAT_VDA = {
-  statyba:["sski","sski_med","sski_mas","sski_du"],
-  projektavimas:["vmdu","vki"],
-  eksploatacija:["sski","gki","vki"],
-  pastociu_iranga:["gki","vki"],
-  kabeliai_ol:["gki","vki"],
-  raa_scada:["gki","vki"],
-  it_iranga:["gki","vki"],
-  programine:["vmdu","vki"]
+/* ---------- INDEKSAVIMO MODELIS: RUSIS + PROFILIS --------------------------
+   Anksciau modelis priklause TIK nuo profilio, todel „RAA komplektu keitimo DARBAI"
+   ir „RAA komplektai" (prekes) gaudavo ta pati atsakyma. Bet tai skirtingi indeksai:
+   pirmuoju atveju indeksuojami statybos sanaudu elementai, antruoju - gamintoju kainos.
+
+   Modelis sudaromas is dvieju daliu:
+     1. INDEKSU_SEIMA[rusis] - pagrindine asis. Darbams SSKI dedamosios, prekems GKI,
+        paslaugoms paslaugu kainu indeksas ir VMDU.
+     2. PROFILIO_YPATUMAI[catId] - dominuojancios zaliavos (perduodamos pagal kieki),
+        seimos pakeitimai ir profilio pastaba.
+   Taip kandidatu sarasas ir „Indeksavimo gaires (VDA)" sarasas gaunami is TO PATIES
+   saltinio ir negali issiskirti. */
+const INDEKSU_SEIMA = {
+  darbai: {
+    tipas: "Statybos sąnaudų indeksai (SSKI dedamosios)",
+    tekstas: "Darbų sutartyse indeksuojamos SSKI dedamosios: bendras indeksas arba atskirai medžiagos, mašinų eksploatacija ir darbo užmokestis - pagal tai, kuri kainos dalis indeksuojama.",
+    indeksai: ["sski","sski_med","sski_mas","sski_du"]
+  },
+  prekes: {
+    tipas: "Gamintojų kainų indeksas su peržiūros slenksčiu",
+    tekstas: "Prekių sutartyse gamintojų kainų indeksas atspindi gamybos kaštus geriau nei vartotojų kainų indeksas; VKI tinka kaip bendra kainų peržiūros riba.",
+    indeksai: ["gki","vki"]
+  },
+  paslaugos: {
+    tipas: "Paslaugų kainų arba darbo užmokesčio indeksas",
+    tekstas: "Paslaugų sutartyse kainą lemia darbo užmokestis, todėl tinka paslaugų kainų indeksas arba sektoriaus VMDU; VKI - kaip bendra peržiūros riba.",
+    indeksai: ["paslaugu_ki","vmdu","vki"]
+  }
 };
+/* Nekintama taisykle (VPT metodika 53.2 p. - draudziamas dedamuju persidengimas):
+   VMDU niekada nesiulomas salia SSKI, nes darbo uzmokestis JAU yra SSKI dedamoji.
+   Todel darbu seimoje VMDU nera ir negali atsirasti per PROFILIO_YPATUMAI. */
+const VMDU_SSKI_ISPEJIMAS = "Darbo užmokesčio indeksas (VMDU) šalia SSKI nesiūlomas: darbo užmokestis jau yra SSKI dedamoji, tad kartu jie skaičiuotų tą patį du kartus (VPT metodika 53.2 p.).";
+
+const PROFILIO_YPATUMAI = {
+  pastociu_iranga: {
+    zaliavos:["lme_cu"],
+    papildomi:{ darbai:["gki"] },   // keiciamos irangos dalis darbu sutartyje
+    pastaba:"Varis yra didžiausia apvijų ir srovinių dalių sąnaudų dalis, todėl jo pokytis perduodamas pagal deklaruotą kiekį su biržos nuoroda sutartyje, o ne per bendrą indeksą."
+  },
+  kabeliai_ol: {
+    zaliavos:["lme_cu","lme_al"],
+    pastaba:"Vario ir aliuminio kaina tiesiogiai lemia kabelių, laidų ir trosų kainą; ji perduodama pagal deklaruotą kiekį, o bendras indeksas tinka tik likusiai kainos daliai."
+  },
+  statyba: {
+    zaliavos:[],
+    pastaba:"Žaliavų atskirai neindeksuokite: medžiagos, mašinų eksploatacija ir darbo užmokestis jau yra SSKI dedamosios."
+  },
+  projektavimas: { zaliavos:[], pastaba:"" },
+  raa_scada: {
+    zaliavos:[],
+    papildomi:{ darbai:["gki"] },   // keiciamos irangos dalis darbu sutartyje
+    pastaba:"Programinės dalies (licencijų, palaikymo) neindeksuokite tuo pačiu indeksu kaip aparatinės - tai skirtingos sąnaudų struktūros."
+  },
+  it_iranga: {
+    zaliavos:[],
+    papildomi:{ darbai:["gki"] },   // diegiamos irangos dalis darbu sutartyje
+    pastaba:"Trumpo gyvavimo ciklo įrangai indeksavimas dažnai neaktualus - svarbesnis pristatymo terminas ir kainos galiojimo laikas pasiūlyme."
+  },
+  programine: {
+    zaliavos:[],
+    // Nei GKI, nei SSKI programinei irangai netinka, tad keiciam ne tik indeksus,
+    // bet ir modelio antraste su tekstu - kitaip antraste prestatytu kandidatus.
+    seima:{
+      prekes:{ indeksai:["vki"],
+               tipas:"Vartotojų kainų indeksas su peržiūros slenksčiu",
+               tekstas:"Licencijų ir prenumeratų kainą lemia tiekėjo kainodaros politika, ne žaliavos ar gamybos kaštai, todėl gamintojų kainų indeksas netinka. VKI lieka kaip bendra kainų peržiūros riba." },
+      darbai:{ indeksai:["vmdu","vki"],
+               tipas:"Darbo užmokesčio indeksas su peržiūros slenksčiu",
+               tekstas:"Net jei pirkimas įvardytas darbais, programinės įrangos diegimo turinys yra darbo jėga, o ne statybos sąnaudų elementai, todėl SSKI čia netinka." }
+    },
+    pastaba:""
+  },
+  eksploatacija: {
+    zaliavos:[],
+    papildomi:{ darbai:["gki"] },   // keiciamu daliu dalis
+    pastaba:"Darbų dalis ir keičiamų dalių dalis indeksuojamos ATSKIRAI: vienas bendras indeksas neatspindi nei vienos, nei kitos."
+  }
+};
+/* OSP saltiniai. Kodai patvirtinti prie saltinio 2026-09-05 (zr. auksciau). */
+const INDEKSO_SALTINIS = {
+  sski:    { kodas:"S7R287",  daznis:"mėnesinis" },
+  sski_med:{ kodas:"S7R287",  daznis:"mėnesinis" },
+  sski_mas:{ kodas:"S7R287",  daznis:"mėnesinis" },
+  sski_du: { kodas:"S7R287",  daznis:"mėnesinis" },
+  gki:     { kodas:"S7R130",  daznis:"mėnesinis" },
+  vki:     { kodas:"S7R260",  daznis:"mėnesinis" },
+  vmdu:    { kodas:"S3R0050", daznis:"ketvirtinis" }
+};
+// Paslaugu kainu indeksas skydelyje NEstebimas - rodom tik nuoroda i saltini, be reiksmes.
+const PASLAUGU_KI_KAND = { metricId:null, pavadinimas:"Paslaugų kainų indeksai (2021 m. = 100)",
+  osp:{ kodas:"S7R290", daznis:"ketvirtinis" } };
+
+function kandidatasIs(id){
+  if(id === "paslaugu_ki") return PASLAUGU_KI_KAND;
+  if(!metricById(id)) return null;
+  return { metricId:id, osp: INDEKSO_SALTINIS[id] || null };
+}
+function indeksavimoModelis(catId, rusis){
+  const seima = INDEKSU_SEIMA[rusis];
+  if(!seima) return null;
+  const yp = PROFILIO_YPATUMAI[catId] || {};
+  // Profilis gali pakeisti visa seima: arba tik indeksu sarasa (masyvas), arba kartu
+  // ir modelio antraste bei teksta (objektas su indeksai/tipas/tekstas).
+  const pakeit = yp.seima && yp.seima[rusis];
+  const baze = !pakeit ? seima.indeksai : (Array.isArray(pakeit) ? pakeit : pakeit.indeksai);
+  const tipas = (pakeit && !Array.isArray(pakeit) && pakeit.tipas) ? pakeit.tipas : seima.tipas;
+  const tekstas = (pakeit && !Array.isArray(pakeit) && pakeit.tekstas) ? pakeit.tekstas : seima.tekstas;
+  const papild = (yp.papildomi && yp.papildomi[rusis]) ? yp.papildomi[rusis] : [];
+  // Zaliavos perduodamos pagal KIEKI, tad jos aktualios tik ten, kur tas kiekis yra -
+  // prekiu ir darbu sutartyse. Paslaugu sutartyje vario kiekio nera.
+  const zaliavos = (rusis === "paslaugos") ? [] : (yp.zaliavos||[]);
+  const matyti = {};
+  const kandidatai = zaliavos.concat(baze, papild)
+    .filter(id=>{ if(matyti[id]) return false; matyti[id]=1; return true; })
+    .map(kandidatasIs).filter(Boolean);
+  return {
+    formulesTipas: tipas,
+    aprasas: tekstas + (yp.pastaba ? " " + yp.pastaba : ""),
+    kandidatai,
+    ispejimas: rusis === "darbai" ? VMDU_SSKI_ISPEJIMAS : ""
+  };
+}
+// LT (VDA) indeksai, aktualus BUTENT siam pirkimui - imami is to paties modelio,
+// tad „Indeksavimo gaires" ir kandidatu sarasas visada sutampa.
+function vdaIndeksai(catId, rusis){
+  const mod = indeksavimoModelis(catId, rusis);
+  if(!mod) return [];
+  return mod.kandidatai
+    .map(k=>k.metricId ? metricById(k.metricId) : null)
+    .filter(m=>m && m.group === "D");
+}
 
 /* =========================================================================
    ORIENTACINIS INDEKSAVIMO MODELIS (deterministinis, be AI)
@@ -1489,80 +1612,9 @@ const INDEKS_DISCLAIMER = "Orientacinis pasiūlymas. Modelis nurodo tik indeksų
   "VPT metodiką pateikia tiekėjai pasiūlymo formoje, o galutinės indeksavimo " +
   "taisyklės privalo būti pirkimo dokumentuose.";
 
-const INDEKSAVIMO_MODELIAI = {
-  statyba: {
-    formulesTipas: "Statybos indeksai (SSKI dedamosios)",
-    aprasas: "Dedamųjų indeksavimas pagal SSKI: bendrą arba atskiras dedamąsias (medžiagų, mašinų, darbo užmokesčio) - pagal tai, kuri sutarties kainos dalis indeksuojama.",
-    kandidatai: [
-      { metricId:"sski",     osp:{ kodas:"S7R287", daznis:"mėnesinis" } },
-      { metricId:"sski_med", osp:{ kodas:"S7R287", daznis:"mėnesinis" } },
-      { metricId:"sski_mas", osp:{ kodas:"S7R287", daznis:"mėnesinis" } },
-      { metricId:"sski_du",  osp:{ kodas:"S7R287", daznis:"mėnesinis" } }
-    ]
-  },
-  kabeliai_ol: {
-    formulesTipas: "Dominuojančios medžiagos kiekio perdavimas",
-    aprasas: "Vario / aliuminio kainos pokytis perduodamas pagal deklaruotą kiekį (biržos nuoroda sutartyje); GKI arba VKI tinka tik likusiai kainos daliai.",
-    kandidatai: [
-      { metricId:"lme_cu", osp:null },
-      { metricId:"lme_al", osp:null },
-      { metricId:"gki", osp:{ kodas:"S7R130", daznis:"mėnesinis" } },
-      { metricId:"vki", osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
-    ]
-  },
-  pastociu_iranga: {
-    formulesTipas: "Dominuojančios medžiagos kiekio perdavimas",
-    aprasas: "Vario kainos pokytis perduodamas pagal kiekį (biržos nuoroda sutartyje); pramoninės įrangos likusiai daliai GKI atspindi gamybos kaštus geriau nei VKI.",
-    kandidatai: [
-      { metricId:"lme_cu", osp:null },
-      { metricId:"gki", osp:{ kodas:"S7R130", daznis:"mėnesinis" } },
-      { metricId:"vki", osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
-    ]
-  },
-  raa_scada: {
-    formulesTipas: "Vienas indeksas su slenksčiu",
-    aprasas: "Elektronikos ir automatikos įrangai GKI atspindi gamybos kaštus geriau nei VKI; VKI tinka kaip bendra kainų peržiūros riba. Programinės dalies (licencijų, palaikymo) neindeksuokite tuo pačiu indeksu kaip aparatinės.",
-    kandidatai: [
-      { metricId:"gki", osp:{ kodas:"S7R130", daznis:"mėnesinis" } },
-      { metricId:"vki", osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
-    ]
-  },
-  it_iranga: {
-    formulesTipas: "Vienas indeksas su slenksčiu",
-    aprasas: "Aparatinei įrangai GKI atspindi gamybos kaštus geriau nei VKI. Trumpo gyvavimo ciklo įrangai indeksavimas dažnai neaktualus - svarbesnis pristatymo terminas ir kainos galiojimo laikas pasiūlyme.",
-    kandidatai: [
-      { metricId:"gki", osp:{ kodas:"S7R130", daznis:"mėnesinis" } },
-      { metricId:"vki", osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
-    ]
-  },
-  programine: {
-    formulesTipas: "Vienas indeksas su slenksčiu",
-    aprasas: "Licencijoms ir prenumeratoms - VKI su peržiūros slenksčiu. Jei perkama ne licencija, o kūrimo ar priežiūros paslauga, tinkamesnis sektoriaus VMDU (žr. projektavimo profilį).",
-    kandidatai: [
-      { metricId:"vki",  osp:{ kodas:"S7R260", daznis:"mėnesinis" } },
-      { metricId:"vmdu", osp:{ kodas:"S3R0050", daznis:"ketvirtinis" } }
-    ]
-  },
-  projektavimas: {
-    formulesTipas: "Vienas indeksas su slenksčiu",
-    aprasas: "Paslaugų sutartims - paslaugų kainų indeksas arba VKI su peržiūros slenksčiu; darbo imlioms paslaugoms svarstytinas VMDU.",
-    kandidatai: [
-      { metricId:null, pavadinimas:"Paslaugų kainų indeksai (2021 m. = 100)",
-        osp:{ kodas:"S7R290", daznis:"ketvirtinis" } },
-      { metricId:"vmdu", osp:{ kodas:"S3R0050", daznis:"ketvirtinis" } },
-      { metricId:"vki",  osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
-    ]
-  },
-  eksploatacija: {
-    formulesTipas: "Mišrus: darbų dalis ir dalių dalis atskirai",
-    aprasas: "Eksploatavimo ir remonto sutartyse darbų daliai tinka SSKI, o keičiamoms dalims - GKI. Indeksuokite jas ATSKIRAI: vienas bendras indeksas neatspindi nei vienos, nei kitos dalies. VMDU čia nesiūlomas, nes darbo užmokestis jau yra SSKI dedamoji.",
-    kandidatai: [
-      { metricId:"sski", osp:{ kodas:"S7R287", daznis:"mėnesinis" } },
-      { metricId:"gki",  osp:{ kodas:"S7R130", daznis:"mėnesinis" } },
-      { metricId:"vki",  osp:{ kodas:"S7R260", daznis:"mėnesinis" } }
-    ]
-  }
-};
+// (INDEKSAVIMO_MODELIAI pakeistas: modelis dabar sudaromas is INDEKSU_SEIMA[rusis]
+//  ir PROFILIO_YPATUMAI[profilis] - zr. indeksavimoModelis())
+
 
 // Kandidato rodomas vardas: skydelio rodiklio vardas arba savas pavadinimas.
 function kandVardas(k){
@@ -1702,7 +1754,7 @@ function renderFocusCard(name, catId, auto){
     return `<li class="drv-li" onclick="jumpToMetric('${esc(d.m.id)}')">${sy} <b>${esc(d.m.name)}</b> - ${focusChg(d.m)}</li>`;
   }).join("");
   const acts = (cat.act[sk]||[]).map(a=>`<li>${esc(a)}</li>`).join("");
-  const vda = (CAT_VDA[catId]||[]).map(id=>metricById(id)).filter(Boolean);
+  const vda = vdaIndeksai(catId, rusis);
   const vw = vda.reduce((mx,m)=>Math.max(mx,severity(m)),0);
   const vHead = vw>=2 ? "rinkos spaudimas didelis - indeksavimo sąlyga stipriai rekomenduojama"
              : vw>=1 ? "spaudimas artėja prie ribos - indeksavimo sąlyga svarstytina"
@@ -1715,7 +1767,7 @@ function renderFocusCard(name, catId, auto){
   // Orientacinis indeksavimo modelis - rodomas TIK kai VDA būsena rodo, kad
   // indeksavimas aktualus (vw>=1, t. y. geltona arba raudona). Deterministinis:
   // fiksuoti tekstai + lentelės peržvalgos, jokio AI, jokių svorių.
-  const modelis = INDEKSAVIMO_MODELIAI[catId];
+  const modelis = indeksavimoModelis(catId, rusis);
   let modHtml = "";
   if(vw >= 1 && modelis){
     const kRows = modelis.kandidatai.map(k=>{
@@ -1740,6 +1792,7 @@ function renderFocusCard(name, catId, auto){
       <div class="muted-note">${esc(modelis.aprasas)}</div>
       <ul class="focus-list">${kRows}</ul>
       ${ketvIspejimas}
+      ${modelis.ispejimas ? `<div class="muted-note" style="margin-top:6px">${esc(modelis.ispejimas)}</div>` : ""}
       <div class="muted-note" style="margin-top:8px">${esc(INDEKS_DISCLAIMER)}</div>`;
   }
   host.innerHTML = `
@@ -1761,7 +1814,7 @@ function renderFocusCard(name, catId, auto){
         <div class="cat-meter"><i style="width:${pctFill}%;background:${sqColor}"></i></div>
         <h5>Pagrindiniai veiksniai</h5>
         <ul class="focus-list">${drivers}</ul>
-        <h5>Sutartiniai veiksmai (${statusWord(sev).toLowerCase()} režimas)</h5>
+        <h5>Sutartiniai veiksmai (${statusWordVyr(sev)} režimas)</h5>
         <ul class="focus-list">${acts}</ul>
       </div>
       <div class="focus-col">
@@ -1780,13 +1833,14 @@ function copyFocus(){
   const strip = s => String(s).replace(/<[^>]+>/g,"");
   const drivers = topDrivers(cat).map(d=>`${d.m.name} (${strip(focusChg(d.m))})`).join("; ");
   const acts = (cat.act[sk]||[]).map(a=>"- "+a).join("\n");
-  const vdaMs = (CAT_VDA[f.catId]||[]).map(id=>metricById(id)).filter(Boolean);
+  const fRusis = (f.rusis && RUSYS[f.rusis]) ? f.rusis : nustatykRusi(f.name, f.catId);
+  const vdaMs = vdaIndeksai(f.catId, fRusis);
   const vda = vdaMs
     .map(m=>`- ${m.name} (${strip(focusChg(m))}): ${m.act[statusKey(severity(m))]}`).join("\n");
 
   // Orientacinis modelis tekste - ta pati vw>=1 salyga kaip renderFocusCard.
   const vw = vdaMs.reduce((mx,m)=>Math.max(mx,severity(m)),0);
-  const modelis = INDEKSAVIMO_MODELIAI[f.catId];
+  const modelis = indeksavimoModelis(f.catId, fRusis);
   let modText = "";
   if(vw >= 1 && modelis){
     const kand = modelis.kandidatai.map(k=>{
@@ -1810,7 +1864,7 @@ ${INDEKS_DISCLAIMER}
   const txt =
 `PIRKIMO RINKOS APŽVALGA
 Pirkimas: ${f.name||"-"}
-Rinkos profilis: ${cat.name} - ${statusWord(sev).toLowerCase()} režimas\nPirkimo rūšis: ${RUSYS[(f.rusis||nustatykRusi(f.name,f.catId))]||"-"}
+Rinkos profilis: ${cat.name} - ${statusWordVyr(sev)} režimas\nPirkimo rūšis: ${RUSYS[(f.rusis||nustatykRusi(f.name,f.catId))]||"-"}
 Pagrindiniai veiksniai: ${drivers}
 Sutartiniai veiksmai:
 ${acts}
