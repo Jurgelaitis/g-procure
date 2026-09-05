@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rinkos rodiklių skydelis · regresijos testai</title>
+<link rel="stylesheet" href="../shared/epso-g.css">
+<style>
+  /* Testų puslapis naudoja tuos pačius bendrus žetonus kaip ir modulis. */
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--color-white); color:var(--color-graphite);
+    font-family:var(--font-base); line-height:1.5; padding:28px 20px 60px;
+  }
+  .wrap{max-width:1000px;margin:0 auto}
+  h1{font-size:21px;font-weight:750;letter-spacing:.2px}
+  .sub{font-size:13px;color:var(--color-graphite-50);margin-top:4px}
+  .santrauka{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+    margin:20px 0 6px;padding:14px 16px;border-radius:12px;
+    border:1px solid var(--color-graphite-15);background:var(--color-graphite-5);font-size:14px
+  }
+  .santrauka b{font-size:17px}
+  .zenklas{
+    display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;
+    text-transform:uppercase;letter-spacing:.6px
+  }
+  .z-ok{background:var(--color-green-5);color:#276749;border:1px solid var(--color-green-15)}
+  .z-blogai{background:var(--color-error-5);color:#7F1722;border:1px solid var(--color-error)}
+  .z-laukia{background:var(--color-graphite-5);color:var(--color-graphite-50);border:1px solid var(--color-graphite-15)}
+  h2{font-size:14px;font-weight:750;margin:22px 0 8px;text-transform:uppercase;letter-spacing:.7px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:8px 10px;border-bottom:1px solid var(--color-graphite-15);vertical-align:top}
+  td.b{width:96px}
+  td.klaida{color:#7F1722;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .laikas{font-size:11.5px;color:var(--color-graphite-50);white-space:nowrap;text-align:right}
+  iframe{position:absolute;left:-9999px;width:1280px;height:900px;border:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Rinkos rodiklių skydelis · regresijos testai</h1>
+  <p class="sub">
+    Testai kviečia TIKRAS modulio funkcijas per rėmelį, o ne jų kopijas. Kiekvienas testas
+    pats grąžina modulį į žinomą būseną, tad rezultatas nepriklauso nuo to, kas liko naršyklėje
+    po rankinio testavimo.
+  </p>
+  <div class="santrauka" id="santrauka"><span class="zenklas z-laukia">Kraunama</span> Ruošiamas modulis…</div>
+  <div id="rezultatai"></div>
+</div>
+
+<iframe id="modulis" title="testuojamas modulis"></iframe>
+
+<script>
+/* =========================================================================
+   TESTŲ VARIKLIS
+
+   Dvi taisyklės, kurių laikomasi ir kurios abi kainavo klaidingą „raudoną" gyvai:
+   1. Rėmelio src nustatomas IŠ JS su kešo skirtuku - kitaip naršyklė pakrauna
+      kešuotą modulio versiją ir tikrinamas ne tas kodas.
+   2. Testai NIEKADA nesiremia tuo, kas liko localStorage - kiekvienas pradeda
+      nuo paruosk(), kuris išvalo įrašus ir atkuria pradinę būseną.
+
+   DATA ir kitos konstantos modulyje paskelbtos su const/let, todėl jos NĖRA
+   window savybės. Prie jų einame per M() - eval rėmelio globalioje srityje.
+   Funkcijos (function ...) yra window savybės, tad jas galima kviesti tiesiai.
+   ========================================================================= */
+const ramas = document.getElementById("modulis");
+const TESTAI = [];
+function testas(grupe, pav, fn){ TESTAI.push({grupe, pav, fn}); }
+
+function M(israiska){ return ramas.contentWindow.eval(israiska); }
+
+function paruosk(){
+  const w = ramas.contentWindow;
+  try{
+    Object.keys(w.localStorage)
+      .filter(k => k.indexOf("epsog_rinkos_kpi") === 0)
+      .forEach(k => w.localStorage.removeItem(k));
+  }catch(e){}
+  M("DATA = loadData(); renderAll();");
+  return w;
+}
+
+function lygu(gauta, laukta, ka){
+  const a = JSON.stringify(gauta), b = JSON.stringify(laukta);
+  if(a !== b) throw new Error((ka ? ka + ": " : "") + "gauta " + a + ", laukta " + b);
+}
+function tiesa(salyga, ka){ if(!salyga) throw new Error(ka || "sąlyga neteisinga"); }
+
+/* =========================================================================
+   1. NEKINTAMOS TAISYKLĖS
+   Jos yra naudotojo sprendimai ir VPT metodikos reikalavimai, ne stiliaus
+   klausimas. Jei testas krinta - taisyk kodą, o ne testą.
+   ========================================================================= */
+testas("Nekintamos taisyklės", "VMDU niekada nesiūlomas šalia SSKI (visos 24 kombinacijos)", ()=>{
+  paruosk();
+  const blogos = M(`(function(){
+    const bl = [];
+    DATA.categories.map(c=>c.id).forEach(p=>["darbai","prekes","paslaugos"].forEach(r=>{
+      const mod = indeksavimoModelis(p, r);
+      if(!mod){ bl.push("nėra modelio: " + p + "/" + r); return; }
+      const ids = mod.kandidatai.map(k => k.metricId || "paslaugu_ki");
+      if(ids.some(x => String(x).indexOf("sski") === 0) && ids.indexOf("vmdu") >= 0) bl.push(p + "/" + r);
+    }));
+    return bl;
+  })()`);
+  lygu(blogos, [], "kombinacijos su VMDU šalia SSKI");
+});
+
+testas("Nekintamos taisyklės", "Indeksavimo kandidatai neturi svorių", ()=>{
+  paruosk();
+  const blogi = M(`(function(){
+    const bl = [];
+    DATA.categories.map(c=>c.id).forEach(p=>["darbai","prekes","paslaugos"].forEach(r=>{
+      ((indeksavimoModelis(p, r) || {}).kandidatai || []).forEach(k=>{
+        Object.keys(k).forEach(f=>{ if(/svor|weight|proc|dalis/i.test(f)) bl.push(p + "/" + r + "/" + f); });
+      });
+    }));
+    return bl;
+  })()`);
+  lygu(blogi, [], "kandidatų laukai, kurie atrodo kaip svoriai");
+});
+
+testas("Nekintamos taisyklės", "Kiekvienas profilis turi raktažodžius, modelį ir svorius, kurių suma 1,00", ()=>{
+  paruosk();
+  const bl = M(`(function(){
+    const bl = [], ids = DATA.categories.map(c=>c.id);
+    DATA.categories.forEach(c=>{
+      if(!CAT_KEYWORDS[c.id]) bl.push("be raktažodžių: " + c.id);
+      if(!indeksavimoModelis(c.id, "prekes")) bl.push("be modelio: " + c.id);
+      const suma = Object.values(c.weights).reduce((a,b)=>a+b, 0);
+      if(Math.abs(suma - 1) > 0.005) bl.push(c.id + " svorių suma " + suma.toFixed(3));
+      Object.keys(c.weights).forEach(k=>{ if(!metricById(k)) bl.push(c.id + " nežinomas rodiklis " + k); });
+    });
+    Object.keys(CAT_KEYWORDS).forEach(k=>{ if(ids.indexOf(k) < 0) bl.push("perteklinis raktažodžių rinkinys: " + k); });
+    return bl;
+  })()`);
+  lygu(bl, []);
+});
+
+/* =========================================================================
+   2. RINKOS PROFILIO PRISKYRIMAS
+   ========================================================================= */
+[
+  ["Autotransformatoriai", "pastociu_iranga"],
+  ["Kontroliniai kabeliai", "kabeliai_ol"],
+  ["Metalinės atramos ir gelžbetonio traversos", "kabeliai_ol"],
+  ["330 kV OL Alytus-Gardinas demontavimo darbai", "statyba"],
+  ["Transformatorių saugojimo aikštelių įrengimo darbai", "statyba"],
+  ["Rekonstravimo ir RAA keitimo darbai", "statyba"],
+  ["Projekto priežiūra", "projektavimas"],
+  ["110/10 kV Nemenčinės TP skirstyklos rekonstravimo projekto parengimas", "projektavimas"],
+  ["RAA komplektai", "raa_scada"],
+  ["Šviesolaidžio priežiūros paslaugos", "raa_scada"],
+  ["Duomenų centrų ugniasienės", "it_iranga"],
+  ["Tarnybinės stotys ir SAN komutatoriai", "it_iranga"],
+  ["Matlab ir Simulink programinės įrangos palaikymo paslaugos", "programine"],
+  ["IT sistemų priežiūra", "programine"],
+  ["Kėlimo įrenginių priežiūros ir remonto paslaugos", "eksploatacija"]
+].forEach(([pav, laukta])=>{
+  testas("Rinkos profilis", pav.slice(0, 46) + (pav.length > 46 ? "…" : "") + " → " + laukta, ()=>{
+    paruosk();
+    lygu(M("classifyProcurement(" + JSON.stringify(pav) + ")"), laukta);
+  });
+});
+
+testas("Rinkos profilis", "Raktažodžio nebeieškoma žodžio viduryje (įrangos nėra ranga)", ()=>{
+  paruosk();
+  lygu(M('classifyProcurement("Programinės įrangos licencijos")'), "programine");
+});
+
+[
+  "Profesinės kompetencijos stiprinimo mokymai",
+  "Reprezentacinės maitinimo paslaugos",
+  "Turto ir civilinės atsakomybės draudimas",
+  "Automobilių remonto ir priežiūros paslaugos",
+  "Projektorius"
+].forEach(pav=>{
+  testas("Rinkos profilis", pav.slice(0, 44) + " → profilio negauna", ()=>{
+    paruosk();
+    lygu(M("classifyProcurement(" + JSON.stringify(pav) + ")"), "");
+  });
+});
+
+testas("Rinkos profilis", "Atpažinta ne rinkos tema įvardijama žmonių kalba", ()=>{
+  paruosk();
+  lygu(M('neStebimosRinkosTema("Turto ir civilinės atsakomybės draudimas")'), "draudimas");
+  lygu(M('neStebimosRinkosTema("Kabeliai ir laidai")'), "");
+});
+
+/* =========================================================================
+   3. PIRKIMO RŪŠIS
+   Taisyklių EILĖ yra esmė: sukeitus 1 ir 4 punktus tikslumas krinta nuo 90
+   iki 67 proc., o 3 punktas turi būti prieš 4.
+   ========================================================================= */
+[
+  ["330 kV OL Alytus-Gardinas demontavimo darbai", "statyba", "darbai"],
+  ["Rekonstravimo ir RAA keitimo darbai", "statyba", "darbai"],
+  ["Priekulės TP RAA komplektų keitimas", "raa_scada", "darbai"],
+  ["RAA komplektai", "raa_scada", "prekes"],
+  ["Autotransformatoriai", "pastociu_iranga", "prekes"],
+  ["Kabeliai ir laidai", "kabeliai_ol", "prekes"],
+  ["Projekto priežiūra", "projektavimas", "paslaugos"],
+  ["Programinės įrangos kūrimo paslaugos", "programine", "paslaugos"],
+  ["IT sistemų priežiūra", "programine", "paslaugos"]
+].forEach(([pav, prof, laukta])=>{
+  testas("Pirkimo rūšis", pav.slice(0, 42) + " → " + laukta, ()=>{
+    paruosk();
+    lygu(M("classifyProcurement(" + JSON.stringify(pav) + ")"), prof, "profilis");
+    lygu(M("nustatykRusi(" + JSON.stringify(pav) + ", " + JSON.stringify(prof) + ")"), laukta, "rūšis");
+  });
+});
+
+testas("Pirkimo rūšis", "Projektavimas tikrinamas PRIEŠ montavimo žodžius", ()=>{
+  paruosk();
+  const pav = "Skirstyklos rekonstravimo projekto parengimas";
+  lygu(M("nustatykRusi(" + JSON.stringify(pav) + ', "projektavimas")'), "paslaugos",
+       "„rekonstr“ neturi paversti projekto darbais");
+});
+
+testas("Pirkimo rūšis", "Darbai laimi prieš paslaugas, kai pavadinime yra ir viena, ir kita", ()=>{
+  paruosk();
+  const pav = "Pastotės rekonstrukcijos projektavimo, priežiūros ir rangos darbai";
+  lygu(M("nustatykRusi(" + JSON.stringify(pav) + ', "statyba")'), "darbai");
+});
+
+/* =========================================================================
+   4. INDEKSAVIMO MODELIS PAGAL PROFILĮ IR RŪŠĮ
+   ========================================================================= */
+testas("Indeksavimo modelis", "Visos 24 kombinacijos duoda kandidatų ir tekstą", ()=>{
+  paruosk();
+  const bl = M(`(function(){
+    const bl = [];
+    DATA.categories.map(c=>c.id).forEach(p=>["darbai","prekes","paslaugos"].forEach(r=>{
+      const mod = indeksavimoModelis(p, r);
+      if(!mod){ bl.push("nėra: " + p + "/" + r); return; }
+      if(!mod.kandidatai.length) bl.push("tuščias sąrašas: " + p + "/" + r);
+      if(!mod.formulesTipas || !mod.aprasas) bl.push("be teksto: " + p + "/" + r);
+    }));
+    return bl;
+  })()`);
+  lygu(bl, []);
+});
+
+testas("Indeksavimo modelis", "Tas pats profilis darbams ir prekėms duoda skirtingus indeksus", ()=>{
+  paruosk();
+  const d = M('indeksavimoModelis("raa_scada","darbai").kandidatai.map(k=>k.metricId||"paslaugu_ki")');
+  const p = M('indeksavimoModelis("raa_scada","prekes").kandidatai.map(k=>k.metricId||"paslaugu_ki")');
+  tiesa(d.some(x=>String(x).indexOf("sski") === 0), "darbams turi būti SSKI");
+  tiesa(d.indexOf("gki") >= 0, "keičiamos įrangos daliai turi būti GKI");
+  lygu(p, ["gki", "vki"], "prekėms");
+});
+
+testas("Indeksavimo modelis", "Žaliavos siūlomos tik prekėms ir darbams, ne paslaugoms", ()=>{
+  paruosk();
+  const bl = M(`(function(){
+    const bl = [];
+    DATA.categories.map(c=>c.id).forEach(p=>{
+      const ids = indeksavimoModelis(p, "paslaugos").kandidatai.map(k=>k.metricId || "");
+      if(ids.some(x=>String(x).indexOf("lme_") === 0)) bl.push(p);
+    });
+    return bl;
+  })()`);
+  lygu(bl, [], "profiliai su LME paslaugų sutartyse");
+});
+
+testas("Indeksavimo modelis", "Programinei įrangai netinka nei GKI, nei SSKI", ()=>{
+  paruosk();
+  const bl = M(`(function(){
+    const bl = [];
+    ["darbai","prekes","paslaugos"].forEach(r=>{
+      const ids = indeksavimoModelis("programine", r).kandidatai.map(k=>k.metricId || "");
+      if(ids.indexOf("gki") >= 0 || ids.some(x=>String(x).indexOf("sski") === 0)) bl.push(r + ": " + ids.join(","));
+    });
+    return bl;
+  })()`);
+  lygu(bl, []);
+});
+
+testas("Indeksavimo modelis", "VDA gairės imamos iš to paties modelio kaip kandidatai", ()=>{
+  paruosk();
+  const bl = M(`(function(){
+    const bl = [];
+    DATA.categories.map(c=>c.id).forEach(p=>["darbai","prekes","paslaugos"].forEach(r=>{
+      const vda = vdaIndeksai(p, r).map(m=>m.id);
+      const kand = indeksavimoModelis(p, r).kandidatai
+        .map(k=>k.metricId).filter(id=>id && metricById(id) && metricById(id).group === "D");
+      if(JSON.stringify(vda) !== JSON.stringify(kand)) bl.push(p + "/" + r);
+    }));
+    return bl;
+  })()`);
+  lygu(bl, [], "profiliai, kur gairės ir kandidatai išsiskiria");
+});
+
+/* =========================================================================
+   5. LAIKOTARPIAI IR ĮVEDIMAS
+   Čia buvo esminė klaida: įvedimas perrašydavo paskutinę reikšmę, tad bazinis
+   taškas niekada nepajudėdavo ir „per 12 mėn." po metų reikšdavo 24 mėnesius.
+   ========================================================================= */
+[
+  ["2026-05-15", "sav.", -4, "2026-04-17"],
+  ["2026-05-15", "sav.", 1, "2026-05-22"],
+  ["2026-01-05", "sav.", -1, "2025-12-29"],
+  ["2026-05-01", "mėn.", -12, "2025-05-01"],
+  ["2026-01-01", "mėn.", -1, "2025-12-01"],
+  ["2026-03-01", "mėn.", 1, "2026-04-01"]
+].forEach(([iso, z, k, laukta])=>{
+  testas("Laikotarpiai", iso + " " + z + " " + (k > 0 ? "+" : "") + k + " → " + laukta, ()=>{
+    paruosk();
+    lygu(M("slinktiLaikotarpi(" + JSON.stringify(iso) + "," + JSON.stringify(z) + "," + k + ")"), laukta);
+  });
+});
+
+testas("Laikotarpiai", "Visi rodikliai turi žingsnį ir laikotarpį", ()=>{
+  paruosk();
+  lygu(M("DATA.metrics.filter(m=>!m.laikotarpis||!m.zingsnis).map(m=>m.id)"), []);
+});
+
+testas("Laikotarpiai", "Etiketė išvedama iš lango, o ne rašoma ranka", ()=>{
+  paruosk();
+  lygu(M('palyginimoEtikete(metricById("sski"))'), "per 12 mėn.");
+  lygu(M('palyginimoEtikete(metricById("brent"))'), "per 4 sav.");
+  lygu(M("DATA.metrics.filter(m=>m.periodLabel).length"), 0, "periodLabel neturi likti");
+});
+
+testas("Įvedimas", "Išsaugojus nieko neįvedus duomenys ir data nekeičiami", ()=>{
+  paruosk();
+  const pries = M("JSON.stringify({d:DATA.meta.demo, u:DATA.meta.updated, s:metricById('sski').series})");
+  M("document.getElementById('btnEdit').click(); document.getElementById('btnEdit').click();");
+  const po = M("JSON.stringify({d:DATA.meta.demo, u:DATA.meta.updated, s:metricById('sski').series})");
+  lygu(po, pries, "būsena po tuščio išsaugojimo");
+});
+
+testas("Įvedimas", "Naujas laikotarpis pastumia bazinį tašką", ()=>{
+  paruosk();
+  const pries = M("({baz: baseVal(metricById('sski')), lt: metricById('sski').laikotarpis, n: metricById('sski').series.length})");
+  M(`document.getElementById('btnEdit').click();
+     document.querySelector('input[data-edit="sski"]').value = "130";
+     document.getElementById('btnEdit').click();`);
+  const po = M("({baz: baseVal(metricById('sski')), lt: metricById('sski').laikotarpis, n: metricById('sski').series.length})");
+  tiesa(po.baz !== pries.baz, "bazinė reikšmė turi pajudėti (buvo " + pries.baz + ")");
+  lygu(po.n, pries.n, "serijos ilgis (slenkantis langas)");
+  lygu(po.lt, "2026-06-01", "naujas laikotarpis");
+});
+
+testas("Įvedimas", "Dabartinio laikotarpio taisymas jo nepastumia", ()=>{
+  paruosk();
+  M(`document.getElementById('btnEdit').click();
+     document.querySelector('select[data-edit-per="sski"]').value = "dabartinis";
+     document.querySelector('input[data-edit="sski"]').value = "131";
+     document.getElementById('btnEdit').click();`);
+  const po = M("({v: latest(metricById('sski')), lt: metricById('sski').laikotarpis, n: metricById('sski').series.length})");
+  lygu(po.v, 131, "reikšmė");
+  lygu(po.lt, "2026-05-01", "laikotarpis neturi pasikeisti");
+  lygu(po.n, 13, "serijos ilgis");
+});
+
+testas("Įvedimas", "Po 20 mėnesių įvedimų palyginimo langas vis dar 12 mėn.", ()=>{
+  paruosk();
+  M(`(function(){
+    for(let i = 0; i < 20; i++){
+      document.getElementById('btnEdit').click();
+      document.querySelector('input[data-edit="sski"]').value = String(130 + i);
+      document.getElementById('btnEdit').click();
+    }
+  })()`);
+  const m = M("({lt: metricById('sski').laikotarpis, n: metricById('sski').series.length, baz: baziniLaikotarpis(metricById('sski'))})");
+  lygu(m.n, 13, "serijos ilgis");
+  lygu(m.lt, "2028-01-01", "naujausias laikotarpis");
+  lygu(m.baz, "2027-01-01", "bazinis laikotarpis - lygiai 12 mėn. atgal");
+});
+
+/* =========================================================================
+   6. DUOMENŲ SĄŽININGUMAS
+   ========================================================================= */
+testas("Sąžiningumas", "Nulinė bazė duoda brūkšnelį, o ne žalią nulinį pokytį", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("brent");
+    m.series = m.series.map((v, i, a) => i === a.length - 1 ? 8 : 0);
+    return { pct: isFinite(pctChange(m)), sev: severity(m), tekstas: fmtSigned(pctChange(m), 1) };
+  })()`);
+  lygu(r.pct, false, "pokytis neturi būti skaičiuojamas");
+  lygu(r.sev, 1, "būsena turi būti geltona, ne žalia");
+  lygu(r.tekstas, "–");
+});
+
+testas("Sąžiningumas", "Kai visi profilio rodikliai žali, veiksnių nevardijama", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const cat = DATA.categories[0];
+    Object.keys(cat.weights).forEach(id=>{
+      const m = metricById(id); if(!m) return;
+      // „change" rodikliams pastovi serija = 0 proc. pokytis; „level" rodikliams
+      // reikia reiksmes ZEMIAU geltonos ribos, kitaip pats testas pasidaro raudonas.
+      const v = (m.type === "level") ? Math.max(0, m.thr.yellow - 1) : 100;
+      m.series = m.series.map(()=>v);
+    });
+    return { nezali: Object.keys(cat.weights).filter(id=>severity(metricById(id)) !== 0),
+             veiksniu: topDrivers(cat).length };
+  })()`);
+  lygu(r.nezali, [], "visi profilio rodikliai turi būti žali");
+  lygu(r.veiksniu, 0, "veiksnių skaičius");
+});
+
+testas("Sąžiningumas", "Demonstracinių duomenų juosta rodoma, kol duomenys nekeisti", ()=>{
+  paruosk();
+  lygu(M("DATA.meta.demo"), true);
+  lygu(M("getComputedStyle(document.getElementById('demoBanner')).display"), "flex");
+});
+
+/* =========================================================================
+   7. MIGRACIJA IR IMPORTAS
+   ========================================================================= */
+testas("Migracija", "v4 įrašas: reikšmės išlieka, laikotarpiai priskiriami", ()=>{
+  const w = paruosk();
+  const r = M(`(function(){
+    const senas = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    senas.schemaVersion = 4;
+    senas.metrics.forEach(m=>{ delete m.laikotarpis; delete m.zingsnis; });
+    senas.meta = { updated: "2026-08-14", demo: false };
+    senas.metrics.find(m=>m.id === "sski").series = [1,2,3,4,5,6,7,8,9,10,11,12,555];
+    localStorage.removeItem("epsog_rinkos_kpi_v" + SCHEMA_VERSION);
+    localStorage.setItem("epsog_rinkos_kpi_v4", JSON.stringify(senas));
+    const po = loadData();
+    return {
+      schema: po.schemaVersion,
+      sski: po.metrics.find(m=>m.id === "sski").series.slice(-1)[0],
+      sskiLt: po.metrics.find(m=>m.id === "sski").laikotarpis,
+      brentLt: po.metrics.find(m=>m.id === "brent").laikotarpis,
+      demo: po.meta.demo,
+      profiliu: po.categories.length,
+      senasLiko: !!localStorage.getItem("epsog_rinkos_kpi_v4")
+    };
+  })()`);
+  lygu(r.schema, M("SCHEMA_VERSION"), "schema");
+  lygu(r.sski, 555, "naudotojo reikšmė turi išlikti");
+  lygu(r.sskiLt, "2026-08-01", "mėnesinio rodiklio laikotarpis");
+  lygu(r.brentLt, "2026-08-14", "savaitinio rodiklio laikotarpis");
+  lygu(r.demo, false, "žyma „duomenys atnaujinti“ turi išlikti");
+  lygu(r.profiliu, 8, "profilių skaičius");
+  lygu(r.senasLiko, false, "senas įrašas turi būti pašalintas");
+  paruosk();
+});
+
+testas("Migracija", "v3 įrašas su senomis kategorijomis pertvarkomas į aštuonis profilius", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const senas = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    senas.schemaVersion = 3;
+    senas.metrics.forEach(m=>{ delete m.laikotarpis; delete m.zingsnis; });
+    senas.categories = [{id:"cables"},{id:"transformers"},{id:"construction"},
+                        {id:"it_software"},{id:"services"},{id:"insurance"}];
+    senas.meta = { updated: "2026-05-15", demo: true };
+    localStorage.removeItem("epsog_rinkos_kpi_v" + SCHEMA_VERSION);
+    localStorage.setItem("epsog_rinkos_kpi_v3", JSON.stringify(senas));
+    const po = loadData();
+    return { profiliu: po.categories.length, pirmas: po.categories[0].id, demo: po.meta.demo,
+             turiLaikotarpi: po.metrics.every(m=>!!m.laikotarpis) };
+  })()`);
+  lygu(r.profiliu, 8);
+  lygu(r.pirmas, "pastociu_iranga");
+  lygu(r.demo, true, "nekeisti duomenys lieka demonstraciniai");
+  lygu(r.turiLaikotarpi, true);
+  paruosk();
+});
+
+testas("Migracija", "Savas eksportas atitinka schemą, senesnis - migruojamas", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const savas = JSON.parse(JSON.stringify(DATA));
+    const senas = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    senas.schemaVersion = 4;
+    senas.metrics.forEach(m=>{ delete m.laikotarpis; delete m.zingsnis; });
+    senas.meta = { updated: "2026-07-10", demo: false };
+    return { savasTinka: isValidData(savas), senasTinka: isValidData(senas),
+             senasMigruojamas: !!migruotiIsSeno(senas) };
+  })()`);
+  lygu(r.savasTinka, true, "savo eksportas turi būti priimamas");
+  lygu(r.senasTinka, false, "senesnė schema neturi praeiti tiesiogiai");
+  lygu(r.senasMigruojamas, true, "bet turi būti migruojama");
+});
+
+/* =========================================================================
+   PALEIDIMAS
+   ========================================================================= */
+function paleisk(){
+  const host = document.getElementById("rezultatai");
+  const grupes = [];
+  TESTAI.forEach(t=>{ if(grupes.indexOf(t.grupe) < 0) grupes.push(t.grupe); });
+
+  let ok = 0, krito = 0;
+  host.innerHTML = "";
+  grupes.forEach(g=>{
+    const h = document.createElement("h2");
+    h.textContent = g;
+    host.appendChild(h);
+    const lentele = document.createElement("table");
+    host.appendChild(lentele);
+    TESTAI.filter(t=>t.grupe === g).forEach(t=>{
+      const t0 = performance.now();
+      let klaida = null;
+      try{ t.fn(); }catch(e){ klaida = e && e.message ? e.message : String(e); }
+      const ms = Math.round(performance.now() - t0);
+      if(klaida) krito++; else ok++;
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td class="b"><span class="zenklas ' + (klaida ? "z-blogai" : "z-ok") + '">' +
+        (klaida ? "krito" : "gerai") + "</span></td>" +
+        "<td>" + t.pav.replace(/&/g, "&amp;").replace(/</g, "&lt;") +
+        (klaida ? '<div class="klaida">' + klaida.replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</div>" : "") +
+        '</td><td class="laikas">' + ms + " ms</td>";
+      lentele.appendChild(tr);
+    });
+  });
+
+  const s = document.getElementById("santrauka");
+  s.innerHTML =
+    '<span class="zenklas ' + (krito ? "z-blogai" : "z-ok") + '">' + (krito ? "yra kritusių" : "viskas gerai") + "</span> " +
+    "<b>" + ok + " / " + (ok + krito) + "</b> testų praėjo" +
+    (krito ? " · <b>" + krito + "</b> krito" : "");
+  document.title = (krito ? "KRITO " + krito + " · " : "OK · ") + "Rinkos rodiklių skydelio testai";
+}
+
+/* Kešo skirtukas BŪTINAS: be jo naršyklė pakrauna kešuotą modulį ir testai
+   tikrina ne tą kodą (ši klaida jau kartą davė 11 klaidingų „raudonų"). */
+ramas.addEventListener("load", ()=> setTimeout(paleisk, 300));
+ramas.src = "./EPSO-G_Rinkos_KPI_skydelis.html?testas=" + Date.now();
+</script>
+</body>
+</html>
