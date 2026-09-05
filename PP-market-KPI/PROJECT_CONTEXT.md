@@ -399,8 +399,40 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
   Rankinis rūšies pasirinkimas (`FOCUS.rusis`) galioja iki naujo pirkimo pavadinimo ir išlieka
   perpiešiant skydelį. Rūšis kol kas NEKEIČIA rekomendacijos - ji tam skirta 3 etape.
 
-  **LIKĘ ETAPAI:** 3 - indeksavimo kandidatai pagal profilį IR rūšį; 4 - „nepatenka į stebimas
-  rinkas" būsena tiems ~25 proc. vertės, kurie lieka už profilių.
+  **3 ETAPAS - INDEKSAVIMO MODELIS PAGAL PROFILĮ IR RŪŠĮ** (`indeksavimoModelis`). Anksčiau
+  modelis priklausė TIK nuo profilio, todėl „RAA komplektų keitimo DARBAI" ir „RAA komplektai"
+  (prekės) gaudavo tą patį atsakymą. Tai neteisinga: pirmuoju atveju indeksuojami statybos
+  sąnaudų elementai, antruoju - gamintojų kainos.
+
+  Modelis sudaromas iš dviejų dalių, ne rašomas 24 kartus ranka:
+  1. `INDEKSU_SEIMA[rūšis]` - pagrindinė ašis. Darbai -> SSKI dedamosios; prekės -> GKI + VKI;
+     paslaugos -> paslaugų KI + VMDU + VKI.
+  2. `PROFILIO_YPATUMAI[profilis]` - dominuojančios žaliavos, šeimos pakeitimai, papildomi
+     indeksai ir profilio pastaba.
+
+  `CAT_VDA` PANAIKINTAS. „Indeksavimo gairės (VDA)" sąrašas dabar imamas iš to paties modelio
+  (`vdaIndeksai`), tad gairės ir kandidatų sąrašas negali išsiskirti - anksčiau tai buvo dvi
+  atskiros lentelės, kurias reikėjo prižiūrėti rankomis.
+
+  Sprendimai, priimti peržiūrėjus visas 24 kombinacijas (rasti tik testuojant):
+  - **Žaliavos tik prekėms ir darbams.** LME varis buvo priskiriamas ir paslaugų sutartims,
+    nors paslaugoje vario kiekio nėra, o žaliava perduodama būtent pagal kiekį.
+  - **Įrangos keitimo darbuose šalia SSKI reikia ir GKI** (`pastociu_iranga`, `raa_scada`,
+    `it_iranga`, `eksploatacija`): keičiama įranga yra atskira kainos dalis. Būtent toks yra
+    naudotojo pavyzdys „RAA komplektų keitimo darbai".
+  - **Programinei įrangai netinka nei GKI, nei SSKI.** Prekėms lieka VKI, darbais įvardytam
+    pirkimui - VMDU, nes diegimo turinys yra darbo jėga. Kartu su indeksais keičiama ir modelio
+    antraštė su tekstu, kitaip antraštė prieštarautų kandidatams.
+
+  **Nekintama taisyklė patikrinta programiškai visoms 24 kombinacijoms:** VMDU niekada nėra
+  šalia SSKI (VPT metodika 53.2 p. - darbo užmokestis jau yra SSKI dedamoji). Darbų sutartyse
+  apie tai rodomas atskiras paaiškinimas.
+
+  Kartu ištaisyta lietuvių kalbos klaida: buvo „geltona režimas", dabar „geltonas režimas"
+  (`statusWordVyr`) - „režimas" yra vyriškosios giminės.
+
+  **LIKĘS ETAPAS:** 4 - „nepatenka į stebimas rinkas" būsena tiems ~25 proc. vertės, kurie
+  lieka už profilių.
 
 - v3.1 (2026-09-05): modulis grąžintas į rytinę versiją (rugsėjo 5 d. perrašymas atšauktas
   naudotojo sprendimu - žr. žemiau), po to sutvarkyta šviesi tema ir ištaisytos anksčiau
