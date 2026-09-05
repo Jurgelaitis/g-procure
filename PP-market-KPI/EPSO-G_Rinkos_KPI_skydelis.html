@@ -261,6 +261,11 @@
   .focus-catsel{background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px 10px;font-size:13px;font-family:var(--font);max-width:100%}
   .focus-nomatch{display:flex;gap:12px;align-items:flex-start;margin-top:18px;padding:14px 16px;border-radius:12px;background:var(--bg-2);border:1px solid var(--border);font-size:13px;line-height:1.5}
   .focus-nomatch .ico{font-size:18px}
+  /* min-width:0 butinas: flex vaikas kitaip nesitraukia zemiau turinio pločio, o
+     <select> vidinis plotis (ilgiausias profilio pavadinimas) 320 px ekrane
+     isptesdavo visa puslapi iki 475 px. */
+  .focus-nomatch > div{min-width:0}
+  .focus-nomatch select{max-width:100%}
   .focus-nomatch select{margin-top:8px}
   .cat-scale{display:flex;justify-content:space-between;font-size:9px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
   .cat-drivers{margin-top:12px;font-size:11px;color:var(--muted)}
@@ -1637,10 +1642,28 @@ function turiRaktazodi(t, kw){
 }
 /* Temos, kurios NEBUVO ir nebus modulio stebimos tiekeju rinkos. Be sio filtro
    „kompetencijos stiprinimo mokymai" patekdavo i statyba, o „griztamojo rysio
-   metodas" - i RAA. Jei salia yra rangos darbai, filtras netaikomas. */
-const NE_RINKA = ["mokym","seminar","konferencij","reprezentac","maitinim","dovan",
-  "narystė","naryste","kanceliarin","biuro bald","higienos","medikament","skiepij",
-  "draudim","automobili","transporto park","vairuotoj","grįžtamojo ryšio","griztamojo rysio"];
+   metodas" - i RAA. Jei salia yra rangos darbai, filtras netaikomas.
+   Sugrupuota pagal tema, kad naudotojui galetume pasakyti PRIEZASTI zmoniu kalba,
+   o ne rodyti raktazodzio kamiena („maitinim"). */
+const NE_RINKA_TEMOS = [
+  { tema:"mokymai ir renginiai",          zodziai:["mokym","seminar","konferencij"] },
+  { tema:"reprezentacija ir maitinimas",  zodziai:["reprezentac","maitinim","dovan"] },
+  { tema:"biuro ir ūkio reikmenys",       zodziai:["kanceliarin","biuro bald","higienos"] },
+  { tema:"darbuotojų sveikata",           zodziai:["medikament","skiepij"] },
+  { tema:"draudimas",                     zodziai:["draudim"] },
+  { tema:"transporto parkas",             zodziai:["automobili","transporto park","vairuotoj"] },
+  { tema:"narystės asociacijose",         zodziai:["narystė","naryste"] },
+  { tema:"personalo vertinimas",          zodziai:["grįžtamojo ryšio","griztamojo rysio"] }
+];
+const NE_RINKA = NE_RINKA_TEMOS.reduce((a,t)=>a.concat(t.zodziai), []);
+/* Grazina temos pavadinima, jei pirkimas aiskiai NE i stebimas rinkas; kitaip "". */
+function neStebimosRinkosTema(name){
+  const t = (name||"").toLowerCase();
+  if(!t.trim()) return "";
+  if(turiBentViena(t, RANGOS_ZODZIAI)) return "";
+  const rasta = NE_RINKA_TEMOS.find(x=>turiBentViena(t, x.zodziai));
+  return rasta ? rasta.tema : "";
+}
 /* Perkamas PROJEKTAS, ne iranga. „Skirstyklos rekonstravimo projekto parengimas"
    yra projektavimo paslauga, nors pavadinime minima skirstykla (naudotojo taisykle).
    Jei pavadinime yra rangos darbai - laimi darbai, ne projektas. */
@@ -1721,9 +1744,30 @@ function changeFocusCat(catId){
   if(!catId) return;
   renderFocusCard(FOCUS.name||"", catId, false); // rankinis override
 }
+/* DVI SKIRTINGOS BUSENOS, kai profilio nera. Skirtumas principinis:
+   - „nepatenka i stebimas rinkas" sakoma TIK tada, kai pavadinime yra aiski tema
+     (mokymai, draudimas, transporto parkas). Tada tikrai zinom;
+   - kitu atveju sakom tik tai, ka is tikruju zinom: neatpazinom. Teigti „nepatenka",
+     kai tiesiog neatpazinom, reikstu pagristi verdikta, kurio neturim.
+   Abiem atvejais JOKIU rekomendaciju nerodom - rinkos rodikliai tokiam pirkimui
+   naudingo signalo neduoda, o tuscios busenos vietoj rekomendaciju nekuriam. */
+function renderNeRinka(name, tema){
+  document.getElementById("focusResult").innerHTML =
+    `<div class="focus-nomatch"><span class="ico">🚫</span><div>` +
+    `<b>Nepatenka į modulio stebimas rinkas.</b> „${esc(name)}" priskirtinas temai ` +
+    `„${esc(tema)}", o modulis stebi aštuonias su elektros perdavimo tinklu susijusias ` +
+    `tiekėjų rinkas. Rinkos rodikliai ir indeksavimo gairės šiam pirkimui netaikomos, ` +
+    `todėl rekomendacijų nerodome.` +
+    `<br>Jei vis dėlto tai viena iš stebimų rinkų, pasirinkite ją:<br>` +
+    `${catSelectHtml("")}</div></div>`;
+}
 function renderNoMatch(name){
   document.getElementById("focusResult").innerHTML =
-    `<div class="focus-nomatch"><span class="ico">🔎</span><div><b>Nepavyko automatiškai priskirti rinkos profilio</b> pagal pavadinimą „${esc(name)}". Pasirinkite rankiniu būdu:<br>${catSelectHtml("")}</div></div>`;
+    `<div class="focus-nomatch"><span class="ico">🔎</span><div>` +
+    `<b>Rinkos profilio pagal pavadinimą nustatyti nepavyko.</b> „${esc(name)}" neatitiko ` +
+    `nė vienos iš aštuonių stebimų tiekėjų rinkų. Jei pirkimas priklauso vienai iš jų, ` +
+    `pasirinkite ją; jei ne - rinkos rodikliai šiam pirkimui naudingo signalo neduoda.` +
+    `<br>${catSelectHtml("")}</div></div>`;
 }
 function pillL(sev){ return sev===2?"r":sev===1?"y":"g"; }
 function focusChg(m){
@@ -1738,8 +1782,10 @@ function runFocus(){
   FOCUS.name = name;
   FOCUS.rusis = null; // naujas pirkimas - rusis vel nustatoma automatiskai
   const catId = classifyProcurement(name); // pavadinimas AUTO-priskiria kategorija
-  if(catId){ renderFocusCard(name, catId, true); }
-  else { renderNoMatch(name); }
+  if(catId){ renderFocusCard(name, catId, true); return; }
+  const tema = neStebimosRinkosTema(name);
+  if(tema) renderNeRinka(name, tema);
+  else renderNoMatch(name);
 }
 function renderFocusCard(name, catId, auto){
   const cat = DATA.categories.find(c=>c.id===catId);
