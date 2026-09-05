@@ -431,8 +431,33 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
   Kartu ištaisyta lietuvių kalbos klaida: buvo „geltona režimas", dabar „geltonas režimas"
   (`statusWordVyr`) - „režimas" yra vyriškosios giminės.
 
-  **LIKĘS ETAPAS:** 4 - „nepatenka į stebimas rinkas" būsena tiems ~25 proc. vertės, kurie
-  lieka už profilių.
+  **4 ETAPAS - BŪSENOS, KAI PROFILIO NĖRA.** Matavimas parodė, kad už profilių likusi vertė
+  pasiskirsto labai nevienodai, todėl viena būsena netiko:
+
+  | Būsena | Įrašų | Vertės |
+  |---|---|---|
+  | Priskirtas profilis | 652 | 75 proc. |
+  | Atpažinta kaip NE stebima rinka (`NE_RINKA_TEMOS`) | 159 | 3 proc. |
+  | Neatpažinta (neatitiko nė vieno raktažodžio) | 840 | 23 proc. |
+
+  Todėl padarytos DVI būsenos, ir skirtumas tarp jų principinis:
+  - **„Nepatenka į modulio stebimas rinkas"** rodoma TIK kai pavadinime yra aiški tema
+    (mokymai, draudimas, transporto parkas...). Tada tikrai žinome, ir sakome kodėl:
+    tema įvardijama žmonių kalba, ne raktažodžio kamienu.
+  - **„Rinkos profilio nustatyti nepavyko"** visais kitais atvejais. Sakome tik tai, ką iš
+    tikrųjų žinome - neatpažinome. Teigti „nepatenka", kai tiesiog neatpažinome, reikštų
+    pagrįsti verdiktą, kurio neturime.
+
+  Abiem atvejais JOKIŲ rekomendacijų nerodoma, bet paliekamas rankinis profilio pasirinkimas:
+  jei naudotojas nesutinka, jis pasirenka profilį ir gauna pilną kortelę.
+
+  `NE_RINKA` pertvarkyta į `NE_RINKA_TEMOS` - raktažodžiai sugrupuoti pagal temą, kad
+  naudotojui būtų galima pasakyti priežastį („draudimas", ne „draudim").
+
+  KLAIDA, RASTA TESTUOJANT (buvo ir anksčiau): 320 px plotyje puslapis slinkdavo į šoną iki
+  475 px. Kaltas `<select>` `.focus-nomatch` viduje - flex vaikas be `min-width:0` nesitraukia
+  žemiau turinio pločio, tad `max-width:100%` neveikė. Ankstesni 320 px testai to nerado, nes
+  tikrino kortelės būseną, o ne šią. Dabar visos trys būsenos telpa į 320 px.
 
 - v3.1 (2026-09-05): modulis grąžintas į rytinę versiją (rugsėjo 5 d. perrašymas atšauktas
   naudotojo sprendimu - žr. žemiau), po to sutvarkyta šviesi tema ir ištaisytos anksčiau
