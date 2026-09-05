@@ -329,7 +329,34 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6 (esama, 2026-09-05): **iliustracinių duomenų žyma - prie kiekvieno rodiklio atskirai;
+- v6.1 (esama, 2026-09-05): **spausdinimas ir mobilioji antraštė.**
+
+  SPAUSDINIMAS. Naudotojas modulį vertina ir iš atspausdinto PDF, o popieriuje likdavo
+  tuščias pirkimo įvedimo laukas, profilio bei rūšies išskleidžiami sąrašai ir inkarinė
+  navigacija - skaitytojui tai atrodė kaip nebaigta forma. Dabar spausdinant slepiami
+  `.btn`, `.toolbar`, `.editrow`, `.secnav`, `#focusName`, `.focus-catsel`, `.focus-input`,
+  o jei pirkimo kortelė neatidaryta - ir visa apžvalgos sekcija. LIEKA visas turinys ir
+  sąžiningumo žymos: rodiklių kortelės, profiliai, lentelė, iliustracinių duomenų juosta
+  ir kortelių žymos. Patikrinta paverčiant `@media print` taisykles ekrano taisyklėmis
+  ir pamatuojant `getComputedStyle`, o ne spėjant.
+
+  PDF ilgis lieka 14 puslapių - tai turinio apimtis (17 rodiklių kortelių, 8 profiliai,
+  17 eilučių lentelė), ne tarpai. Trumpinti reikštų mažinti turinį, tad palikta.
+
+  MOBILIOJI ANTRAŠTĖ NEBELIPNI (≤720 px). 375 px ekrane ji užima 220 px - beveik trečdalį
+  ekrano, ir tai visą laiką. Ilgame skydelyje ta vieta naudingesnė turiniui; antraštė lieka
+  puslapio viršuje. `syncAnchorOffset()` dabar tikrina, ar antraštė lipni: jei ne - inkaro
+  poslinkis 12 px vietoj 232 px.
+
+  Patikrinta: kompiuteryje (1280 px) antraštė lipni, poslinkis 178 px, sekcijos antraštė
+  atsiduria žemiau antraštės; telefone (375 px) antraštė nelipni, poslinkis 12 px, sekcijos
+  antraštė pačiame viršuje. Abiem atvejais be horizontalaus slinkimo.
+
+  Testų: 69 (buvo 66). Naujos grupės „Spausdinimas" (2) ir „Inkarai" (1); abi patikrintos
+  mutacijomis - pašalinus `.secnav` iš spausdinimo taisyklės krinta vienas testas, o
+  pavertus inkaro poslinkį fiksuotu - kitas.
+
+- v6 (2026-09-05): **iliustracinių duomenų žyma - prie kiekvieno rodiklio atskirai;
   rodomas duomenų amžius.** Dvi sąžiningumo spragos, kurios abi kūrė patikrintumo įspūdį.
 
   1. **Juosta dingdavo atnaujinus 1 rodiklį iš 17.** Žyma buvo viena bendra (`meta.demo`),
