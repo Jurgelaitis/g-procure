@@ -329,7 +329,32 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v5 (esama, 2026-09-05): **rodiklių reikšmės susietos su laikotarpiais; įvedimas prideda naują
+- v5.1 (esama, 2026-09-05): **atkurtas regresijos testų rinkinys** `PP-market-KPI/testai.html`
+  (59 testai). Atidaromas naršyklėje kaip ir modulis, Node nereikia.
+
+  KĄ SAUGO. Dvi nekintamas taisykles (kandidatai be svorių; VMDU ne šalia SSKI - tikrinama
+  visose 24 profilio ir rūšies kombinacijose), profilio priskyrimą (22 testai, tarp jų
+  „įrangos" nėra „ranga" ir penki pavadinimai, kurie profilio gauti NETURI), rūšies taisyklių
+  eilę (11 testų), indeksavimo modelį (5), laikotarpių aritmetiką ir įvedimą (12), duomenų
+  sąžiningumą (3) ir migraciją iš v3 bei v4 (3).
+
+  DVI VARIKLIO TAISYKLĖS (abi kadaise kainavo klaidingą „raudoną" gyvai):
+  1. Rėmelio `src` nustatomas iš JS su kešo skirtuku, kitaip tikrinamas kešuotas modulis.
+  2. Kiekvienas testas pradeda nuo `paruosk()` - išvalo `localStorage` ir atkuria būseną.
+     Testai NIEKADA nesiremia tuo, kas liko po rankinio testavimo.
+
+  TECHNINĖ PASTABA. Modulio `DATA` ir konstantos paskelbtos su `const`/`let`, tad jos NĖRA
+  `window` savybės ir iš tėvinio lango tiesiogiai nepasiekiamos. Todėl testai naudoja
+  `M(išraiška)` - `eval` rėmelio globalioje srityje. Funkcijos (`function ...`) yra `window`
+  savybės ir kviečiamos tiesiai.
+
+  PATIKRINTA, KAD TESTAI TIKRAI GAUDO (mutacijos patikra, ne vien žalias sąrašas):
+  - įdėjus VMDU į darbų šeimą krinta 1 testas;
+  - grąžinus fragmentinę raktažodžių paiešką krinta 3 (tarp jų „Matlab programinė įranga");
+  - grąžinus įvedimo perrašymą vietoj pridėjimo krinta 2.
+  Atstačius kodą - vėl 59/59.
+
+- v5 (2026-09-05): **rodiklių reikšmės susietos su laikotarpiais; įvedimas prideda naują
   stebėjimą, o ne perrašo paskutinį.**
 
   KOKIA BUVO KLAIDA. Serijos buvo tik skaičių masyvai be datų, o „Atnaujinti duomenis"
