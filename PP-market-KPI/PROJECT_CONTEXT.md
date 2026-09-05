@@ -329,7 +329,43 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v3 (esama): pertvarkyta kategorijų struktūra į 6 (TSO atsarginės dalys sujungtos su transformatoriais, atskirta paslaugų kategorija, pridėta draudimo kategorija, CAPEX įvardyti strateginiai projektai). Pridėti Cache-Control meta tag-ai ir schema versionavimo migracijos mechanizmas.
+- v3.1 (esama, 2026-09-05): modulis grąžintas į rytinę versiją (rugsėjo 5 d. perrašymas atšauktas
+  naudotojo sprendimu - žr. žemiau), po to sutvarkyta šviesi tema ir ištaisytos anksčiau
+  pastebėtos klaidos:
+  - **Šviesi tema.** Tamsios temos `:root` reikšmės pakeistos į `shared/epso-g.css` žetonus.
+    Būsenų spalvos išskirtos į dvi grupes: `--*-solid` (grafikai, juostos, matuoklis) ir
+    `--green` / `--yellow` / `--red` (tekstas, tamsesni tonai). Teksto tonai `#276749` ir
+    `#7F1722` yra tie patys, kuriuos jau naudoja `PP-protocol` (`--epso-success-text`) ir
+    `PP-report` (`--color-error-text`) - naujų hex nekurta. Nuorodos - `--color-blue`.
+    Patikrinta naršyklėje: 0 elementų, neatitinkančių WCAG 2.1 AA (buvo 110).
+  - **OSP kodai.** `S7R259` (GKI) ir `S7R271` (paslaugų KI) buvo 2015 m. bazės serijos;
+    patikrinus prie šaltinio 2026-09-05 jos grąžina 0 stebėjimų. Pakeista į `S7R130`
+    (mėnesinis) ir `S7R290` (ketvirtinis), 2021 m. bazė.
+  - **Klasifikatorius.** Raktažodis tikrinamas kaip žodžio pradžia (`turiRaktazodi`), ne
+    fragmentas: „rang" buvo randamas žodyje „įrangos", tad programinės įrangos licencija
+    tapdavo statyba. Papildyta priešdelinėmis formomis (`demontav`, `sumontav`, `nutiesim`,
+    `įrengim`). Patikrinta su 1634 tikrų LITGRID pirkimų pavadinimų rinkiniu: 93 pasikeitimai,
+    visi tikslesni arba palikti naudotojo pasirinkimui.
+  - **Išsaugojimas be pakeitimų** nebenuima „iliustracinių duomenų" žymos ir nebeįrašo
+    šiandienos datos (anksčiau skydelis atrodydavo patikrintas nieko nepakeitus).
+  - **`pctChange()`** prie nulinės bazės grąžina `NaN`, o ne 0; toks rodiklis rodomas kaip
+    geltonas su „–", o ne kaip žalias „be pokyčio".
+  - **`topDrivers()`** nebegrąžina rodiklių, kurių indėlis į riziką lygus nuliui.
+  - **`renderAll()`** perpiešia atidarytą pirkimo kortelę (anksčiau ji likdavo su senomis
+    būsenomis šalia atnaujinto skydelio).
+  - **Inkaro poslinkis** imamas iš tikro antraštės aukščio (`syncAnchorOffset`); 375 px
+    plotyje antraštė yra ~220 px, o buvo fiksuota 172 px. Antraštė mobiliajame kompaktiškesnė,
+    kategorijų `<select>` nebeišplečia puslapio į šonus.
+  - **„PRIVALOMA"** formuluotė pakeista: skydelis rodo rinkos spaudimą, o ar indeksavimo
+    sąlyga privaloma, lemia pirkimo dokumentai, ne rodiklio spalva.
+
+  ATŠAUKTAS PERRAŠYMAS (2026-09-05, commit a33bc96 -> a8761c6). Modulis buvo perrašytas pagal
+  išorinį auditą kaip „Pirkimo rinkos apžvalga" su gyva OSP jungtimi ir „Kur yra pinigai"
+  (70/20/10) bloku. Naudotojas jį atmetė: modulis tapo anketa, kuri prieš duodama naudą
+  reikalauja įvesties, tuščios būsenos užėmė didžiąją dalį produkto, o 70/20/10 nepadėjo
+  suprasti konkretaus rinkos pokyčio. Prieš grįžtant prie tų idėjų reikia atskiro sutarimo.
+
+- v3: pertvarkyta kategorijų struktūra į 6 (TSO atsarginės dalys sujungtos su transformatoriais, atskirta paslaugų kategorija, pridėta draudimo kategorija, CAPEX įvardyti strateginiai projektai). Pridėti Cache-Control meta tag-ai ir schema versionavimo migracijos mechanizmas.
 
 ---
 
