@@ -329,7 +329,26 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.2 (esama, 2026-09-05): **modulis pervadintas į „Rinkos rodiklių stebėsena"** (naudotojo
+- v6.3 (esama, 2026-09-05): **EPSO-G ženklas iškeltas į `shared/img/epso-g-logo.svg`.**
+  Tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose (ne dviejose, kaip maniau iš pradžių):
+  `index.html`, `G-Procure_About.html` ir `G-Procure_Project.html` antraštėse IR poraštėse,
+  plius šis modulis. Visos pakeistos į `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`.
+
+  Spalva faile įrašyta tiesiogiai (`#00A072`): išorinis SVG puslapio CSS kintamųjų nemato,
+  tad `var(--color-emerald)` ten neveiktų. Tai ta pati brandbook'o reikšmė; komentaras faile
+  nurodo keisti abi vietas kartu.
+
+  ŠALUTINIS POVEIKIS, kurį verta žinoti: portalo poraštėse jau buvo taisyklė
+  `.footer__brand img{height:22px;opacity:.85}`, kuri NIEKADA neveikė, nes elementas buvo
+  `<svg>`, ne `<img>`. Dabar ji pradėjo veikti, tad poraštės ženklas sumažėjo nuo 28 iki 22 px
+  ir tapo šiek tiek blankesnis - toks, koks ir buvo suprojektuotas.
+
+  KLAIDA, RASTA TIKRINANT: XML komentare įrašiau `--color-emerald`, o du brūkšneliai iš eilės
+  XML komentaruose draudžiami - failas tapo nevalidus ir NĖ VIENAS ženklas nepasikrovė
+  (`naturalWidth === 0` visose vietose). Pastebėta tik todėl, kad tikrinau `img.complete &&
+  img.naturalWidth > 0`, o ne vien tai, kad failas grąžina 200.
+
+- v6.2 (2026-09-05): **modulis pervadintas į „Rinkos rodiklių stebėsena"** (naudotojo
   sprendimas). „Skydelis" yra mažybinė forma ir tokio lygio moduliui skambėjo nesvariai, o
   „stebėsena" yra oficialaus registro žodis (kaip „aplinkos stebėsena").
 
