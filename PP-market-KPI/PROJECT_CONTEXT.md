@@ -329,7 +329,80 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v3.1 (esama, 2026-09-05): modulis grąžintas į rytinę versiją (rugsėjo 5 d. perrašymas atšauktas
+- v4 (esama, 2026-09-05): **šešios pirkimų kategorijos pakeistos aštuoniais tiekėjų rinkos
+  profiliais** (1 etapas iš keturių; naudotojo sprendimas). Profilis atsako į klausimą, KOKIOJE
+  tiekėjų rinkoje perkama, ir yra atskira ašis nuo pirkimo rūšies (darbai / prekės / paslaugos).
+
+  | Profilis (`id`) | LT indeksai (CAT_VDA) |
+  |---|---|
+  | Transformatoriai, jungtuvai ir kita pastočių įranga (`pastociu_iranga`) | GKI, VKI |
+  | Kabeliai, laidai ir oro linijų medžiagos (`kabeliai_ol`) | GKI, VKI |
+  | Pastočių ir linijų statyba, rekonstrukcija (`statyba`) | SSKI ir jo dedamosios |
+  | Projektavimas, ekspertizė ir inžinerinės studijos (`projektavimas`) | VMDU, VKI |
+  | RAA, SCADA ir technologinio ryšio įranga (`raa_scada`) | GKI, VKI |
+  | IT infrastruktūros ir kibernetinio saugumo įranga (`it_iranga`) | GKI, VKI |
+  | Programinė įranga ir licencijos (`programine`) | VMDU, VKI |
+  | Tinklo eksploatavimas, remontas ir kritinės atsarginės dalys (`eksploatacija`) | SSKI, GKI, VKI |
+
+  **Draudimas panaikintas.** Jo įmokas lemia rinkos ciklas ir žalų istorija, ne kainų indeksai.
+
+  **Klasifikatoriaus pirmenybės taisyklės** (`classifyProcurement`), abi patikrintos su 1651
+  tikru LITGRID pirkimo pavadinimu:
+  1. `NE_RINKA` - mokymai, reprezentacija, maitinimas, draudimas, automobilių parkas ir pan.
+     negauna jokio profilio. Be šio filtro „kompetencijos stiprinimo mokymai" patekdavo į statybą.
+  2. Yra „projektas / projektavimas / parengimas" ir NĖRA rangos darbų -> visada `projektavimas`.
+     „Skirstyklos rekonstravimo projekto parengimas" yra projektavimo paslauga, ne įrangos pirkimas.
+  3. Lygiųjų atveju laimi pirmesnis `CAT_KEYWORDS` raktas, todėl darbų profiliai eina pirmi:
+     „Rekonstravimo ir RAA keitimo darbai" yra rangos darbai, ne RAA įrangos pirkimas.
+
+  **Aprėptis:** aštuoni profiliai apima ~39 proc. pirkimų įrašų, bet ~75 proc. VERTĖS
+  (įrašų dalis maža sąmoningai: `NE_RINKA` filtras atmeta administracinius pirkimus).
+  Nepataikoma beveik vien į smulkius administracinius pirkimus. Tai sąmoningas pasirinkimas.
+
+  **SVORIAI.** `cat.weights` remiasi TIK A/B/C lygmens rodikliais ir kiekviename profilyje
+  sumuojasi į 1,00. Taisyklė: į svorius įtraukiami tik tie rodikliai, kurie TIKRAI veikia tos
+  rinkos kainą ar riziką. Todėl `programine` turi vienintelį rodiklį (sankcijos): nei žaliavos,
+  nei frachtas licencijos kainos neveikia, o pirmame variante Hormūzo sąsiauris nepagrįstai
+  kėlė šį profilį į raudoną. `projektavimas` dėl tos pačios priežasties neteko oro krovinių
+  ir konteinerių. Šių profilių kainų augimas ateina per VDA sluoksnį (VMDU, VKI), ne per A/B/C.
+
+  **MIGRACIJA v3 -> v4** (`migruotiIsV3`). Kategorijos yra konfigūracija, tad imamos naujos iš
+  `DEFAULT_DATA`, o rodiklių reikšmės ir atnaujinimo data yra naudotojo duomenys ir perkeliamos.
+  Seni `localStorage` įrašai trinami TIK po perkėlimo. Patikrinta naršyklėje.
+
+  **2 ETAPAS - PIRKIMO RŪŠIS** (`nustatykRusi`). Rūšis (darbai / prekės / paslaugos) yra ATSKIRA
+  ašis nuo profilio: ta pati RAA įranga perkama ir kaip prekės (komplektai), ir kaip darbai
+  (keitimas pastotėje). Rodoma apžvalgos kortelėje šalia profilio, su rankiniu pataisymu.
+
+  Taisyklių eilė (naudotojo nurodyta). **Eilė yra esmė, ne dekoracija:**
+  1. Pavadinime „darbai" arba „rangos" -> DARBAI. Jei perkami darbai kartu su projektavimu
+     ir priežiūra, visas pirkimas laikomas darbais.
+  2. Pavadinime „paslaugos", „priežiūra", „kūrimas" ir pan. -> PASLAUGOS. Programinės įrangos
+     KŪRIMAS ir IT sistemų PRIEŽIŪRA yra paslaugos, ne prekės.
+  3. Profilis yra `projektavimas` -> PASLAUGOS.
+  4. Pavadinime „keitimas", „montavimas", „atnaujinimas" -> DARBAI (išvestinis atvejis:
+     RAA, SCADA ir TSPĮ įrangos keitimas pastotėje yra rangos darbai).
+  5. Tik tada spėjama pagal profilį: `statyba` -> darbai, visa kita -> prekės.
+
+  **Kodėl būtent tokia eilė.** Sukeitus 1 ir 4 punktus tikslumas krenta nuo 90 iki 67 proc.,
+  nes „rekonstravimo projekto parengimo PASLAUGOS" tampa darbais. 3 punktas turi būti PRIEŠ 4:
+  be jo „skirstyklos rekonstravimo projekto parengimas" gaudavo rūšį „darbai", nes suveikdavo
+  „rekonstr". Tai buvo rasta testuojant, ne suprojektuota.
+
+  **Tikslumas: 90 proc.** (588 iš 652), matuota su tikru modulio kodu prieš LITGRID pačios
+  priskirtą rūšį. Likę 10 proc. yra arba tikrai dviprasmiški („Mobilių telefonų remontas"),
+  arba pačios LITGRID nenuoseklumai (programinės įrangos palaikymas kartais Prekės).
+  Tikrintos ir atmestos dvi papildomos taisyklės: „medžiagos / dalys = prekės" davė +2 iš 651,
+  o „programų" ir „sistemų priežiūr" raktažodžiai būtų klaidingai traukę pastatų ir apsaugos
+  sistemų priežiūrą į programinę įrangą.
+
+  Rankinis rūšies pasirinkimas (`FOCUS.rusis`) galioja iki naujo pirkimo pavadinimo ir išlieka
+  perpiešiant skydelį. Rūšis kol kas NEKEIČIA rekomendacijos - ji tam skirta 3 etape.
+
+  **LIKĘ ETAPAI:** 3 - indeksavimo kandidatai pagal profilį IR rūšį; 4 - „nepatenka į stebimas
+  rinkas" būsena tiems ~25 proc. vertės, kurie lieka už profilių.
+
+- v3.1 (2026-09-05): modulis grąžintas į rytinę versiją (rugsėjo 5 d. perrašymas atšauktas
   naudotojo sprendimu - žr. žemiau), po to sutvarkyta šviesi tema ir ištaisytos anksčiau
   pastebėtos klaidos:
   - **Šviesi tema.** Tamsios temos `:root` reikšmės pakeistos į `shared/epso-g.css` žetonus.
