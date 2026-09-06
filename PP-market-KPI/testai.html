@@ -75,10 +75,15 @@ function paruosk(){
   const w = ramas.contentWindow;
   try{
     Object.keys(w.localStorage)
-      .filter(k => k.indexOf("epsog_rinkos_kpi") === 0)
+      .filter(k => k.indexOf("epsog_rinkos_kpi") === 0 || k === "ppmarket.lang")
       .forEach(k => w.localStorage.removeItem(k));
   }catch(e){}
-  M("DATA = loadData(); renderAll();");
+  // Kalba TAIP PAT gyvena localStorage, tad ji reikia grąžinti kaip ir duomenis -
+  // kitaip testai priklausytų nuo to, kurią kalbą paskutinį kartą buvai pasirinkęs.
+  M('LANG = "lt"; applyI18n(); DATA = loadData(); renderAll();');
+  // Pirkimo kortele gyvena uz renderAll ribu (FOCUS + #focusResult), o pavadinimas
+  // atsikartoja ir profiliu tinklelyje - be sito jis persikeltu i kita testa.
+  M('FOCUS.name = ""; FOCUS.last = null; FOCUS.rusis = null; document.getElementById("focusName").value = ""; document.getElementById("focusResult").innerHTML = ""; renderAll();');
   return w;
 }
 
@@ -676,7 +681,297 @@ testas("Antraštė", "Ženklas perimtas iš portalo (EPSO-G lockup), ne nauja mo
 });
 
 /* =========================================================================
-   10. MIGRACIJA IR IMPORTAS
+   10. KALBA (LT / EN)
+   ========================================================================= */
+testas("Kalba", "Numatytoji kalba imama iš shared/lang-detect.js", ()=>{
+  paruosk();
+  lygu(M("typeof window.GP_LANG"), "object", "shared/lang-detect.js turi būti prijungtas");
+  lygu(M("LANG"), "lt");
+  lygu(M("document.documentElement.lang"), "lt");
+});
+
+testas("Kalba", "Perjungus į EN pasikeičia sąsaja, pavadinimas ir html lang", ()=>{
+  paruosk();
+  M('setLang("en")');
+  lygu(M("document.documentElement.lang"), "en");
+  lygu(M("document.title"), "Market indicators monitoring · EPSO-G Group");
+  lygu(M("document.querySelector('.gauge-cap').textContent"), "Market climate");
+  lygu(M("document.getElementById('btnEdit').textContent"), "Edit values");
+  lygu(M("document.getElementById('btnDuomenys').textContent"), "Data ▾");
+  paruosk();
+  lygu(M("document.querySelector('.gauge-cap').textContent"), "Rinkos klimatas", "grįžus į LT");
+});
+
+testas("Kalba", "Pasirinkimas įsimenamas ir laimi prieš aptikimą", ()=>{
+  paruosk();
+  M('setLang("en")');
+  lygu(M('localStorage.getItem("ppmarket.lang")'), "en");
+  lygu(M('GP_LANG.detect("ppmarket.lang")'), "en", "įrašytas pasirinkimas turi nustelbti aptikimą");
+  paruosk();
+  lygu(M('localStorage.getItem("ppmarket.lang")'), null, "paruosk() turi išvalyti ir kalbą");
+});
+
+testas("Kalba", "Jungiklis rodo aktyvią kalbą per aria-pressed", ()=>{
+  paruosk();
+  lygu(M(`[...document.querySelectorAll(".lang-switch__btn")].map(b=>b.dataset.lang+"="+b.getAttribute("aria-pressed")).join(" ")`),
+       "lt=true en=false");
+  M('setLang("en")');
+  lygu(M(`[...document.querySelectorAll(".lang-switch__btn")].map(b=>b.dataset.lang+"="+b.getAttribute("aria-pressed")).join(" ")`),
+       "lt=false en=true");
+  paruosk();
+});
+
+testas("Kalba", "Datos ir skaičiai formatuojami pagal kalbą", ()=>{
+  paruosk();
+  lygu(M('fmtDate("2026-05-15")'), "2026 m. gegužės 15 d.");
+  lygu(M('laikotarpioTekstas("2026-05-01","mėn.")'), "2026 m. gegužės mėn.");
+  M('setLang("en")');
+  lygu(M('fmtDate("2026-05-15")'), "15 May 2026");
+  lygu(M('laikotarpioTekstas("2026-05-01","mėn.")'), "May 2026");
+  lygu(M('amziausTekstas({laikotarpis:"2026-05-01", zingsnis:"mėn.", demo:false})').indexOf("ago") > 0, true);
+  paruosk();
+});
+
+testas("Kalba", "Kiekvienam LT raktui yra EN atitikmuo ir atvirkščiai", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const lt = Object.keys(I18N.lt), en = Object.keys(I18N.en);
+    return { truksta_en: lt.filter(k=>en.indexOf(k) < 0), truksta_lt: en.filter(k=>lt.indexOf(k) < 0),
+             tusti: lt.filter(k=>!I18N.lt[k] || !I18N.en[k]) };
+  })()`);
+  lygu(r.truksta_en, [], "raktai be EN vertimo");
+  lygu(r.truksta_lt, [], "raktai be LT teksto");
+  lygu(r.tusti, [], "tušti tekstai");
+});
+
+testas("Kalba", "Visi HTML raktai egzistuoja žodyne", ()=>{
+  paruosk();
+  const nezinomi = M(`(function(){
+    const bl = [];
+    ["i18n","i18nHtml","i18nPh","i18nAria"].forEach(a=>{
+      document.querySelectorAll("[data-" + a.replace(/[A-Z]/g, c=>"-"+c.toLowerCase()) + "]").forEach(el=>{
+        const k = el.dataset[a];
+        if(k && !(k in I18N.lt)) bl.push(k);
+      });
+    });
+    return bl;
+  })()`);
+  lygu(nezinomi, [], "HTML rodo į neegzistuojančius raktus");
+});
+
+testas("Kalba", "Kiekvienas rodiklis ir profilis turi EN vertimą", ()=>{
+  paruosk();
+  const bl = M(`(function(){
+    const bl = [];
+    DATA.metrics.forEach(m=>{
+      const v = DUOMENU_EN.metrics[m.id];
+      if(!v){ bl.push("nėra rodiklio: " + m.id); return; }
+      ["name","plain","unit","impact","src"].forEach(f=>{ if(!v[f]) bl.push(m.id + "." + f); });
+      ["green","yellow","red"].forEach(sk=>{ if(!v.act || !v.act[sk]) bl.push(m.id + ".act." + sk); });
+    });
+    DATA.categories.forEach(c=>{
+      const v = DUOMENU_EN.categories[c.id];
+      if(!v){ bl.push("nėra profilio: " + c.id); return; }
+      ["name","spend"].forEach(f=>{ if(!v[f]) bl.push(c.id + "." + f); });
+      ["green","yellow","red"].forEach(sk=>{
+        if(!v.act || !v.act[sk]) { bl.push(c.id + ".act." + sk); return; }
+        if(v.act[sk].length !== c.act[sk].length) bl.push(c.id + ".act." + sk + " kiekis " + v.act[sk].length + " vs " + c.act[sk].length);
+      });
+    });
+    return bl;
+  })()`);
+  lygu(bl, [], "trūkstami arba nesutampantys vertimai");
+});
+
+testas("Kalba", "Perjungus kalbą keičiasi rodiklių ir profilių tekstai", ()=>{
+  paruosk();
+  const lt = M(`({r: dt(metricById("lme_cu"),"name","metrics"),
+                  v: dtAkt(metricById("lme_cu"),"yellow","metrics"),
+                  p: dt(DATA.categories[0],"name","categories")})`);
+  M('setLang("en")');
+  const en = M(`({r: dt(metricById("lme_cu"),"name","metrics"),
+                  v: dtAkt(metricById("lme_cu"),"yellow","metrics"),
+                  p: dt(DATA.categories[0],"name","categories")})`);
+  lygu(lt.r, "LME varis"); lygu(en.r, "LME copper");
+  tiesa(lt.v !== en.v, "sutartinis veiksmas turi skirtis");
+  lygu(en.p, "Transformers, circuit breakers and other substation equipment");
+  paruosk();
+});
+
+testas("Kalba", "Trūkstant vertimo rodomas lietuviškas tekstas, ne tuščia vieta", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("brent"), saugoti = DUOMENU_EN.metrics.brent.name;
+    setLang("en");
+    delete DUOMENU_EN.metrics.brent.name;
+    const be = dt(m, "name", "metrics");
+    DUOMENU_EN.metrics.brent.name = saugoti;
+    const su = dt(m, "name", "metrics");
+    return { be, su };
+  })()`);
+  lygu(r.be, "Brent nafta", "be vertimo turi likti lietuviškas tekstas");
+  lygu(r.su, "Brent crude");
+  paruosk();
+});
+
+testas("Kalba", "EN režimu rodiklių kortelėse ir lentelėje nelieka lietuviško teksto", ()=>{
+  paruosk();
+  M('setLang("en")');
+  const r = M(`(function(){
+    const lt = el => ((el ? el.textContent : "").match(/[ąčęėįšųūž]/gi) || []).length;
+    return {
+      korteles: [...document.querySelectorAll(".kpi")].reduce((a,e)=>a+lt(e), 0),
+      lentele: lt(document.querySelector("#trigSec table")),
+      poraste: lt(document.querySelector("footer"))
+    };
+  })()`);
+  lygu(r.korteles, 0, "rodiklių kortelės");
+  lygu(r.lentele, 0, "ribų lentelė");
+  lygu(r.poraste, 0, "poraštė");
+  paruosk();
+});
+
+testas("Kalba", "EN režimu visame puslapyje nelieka lietuviško teksto", ()=>{
+  paruosk();
+  M('setLang("en")');
+  const likutis = M(`(function(){
+    const out = [];
+    document.querySelectorAll("body *").forEach(el=>{
+      if(el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
+      [...el.childNodes].filter(n=>n.nodeType === 3).forEach(n=>{
+        const v = n.textContent.trim();
+        // „Gižai TS" yra tikrinis vardas ir lieka toks pat abiem kalbomis.
+        if(/[ąčęėįšųūž]/i.test(v) && v.indexOf("Gižai") < 0) out.push(v.slice(0, 60));
+      });
+    });
+    return [...new Set(out)];
+  })()`);
+  lygu(likutis, [], "neišversti tekstai");
+  paruosk();
+});
+
+testas("Kalba", "Pirkimo kortelė ir indeksavimo modelis verčiami", ()=>{
+  paruosk();
+  M('setLang("en"); document.getElementById("focusName").value = "Pastočių rekonstrukcijos darbai"; runFocus();');
+  const r = M(`(function(){
+    const h = [...document.querySelectorAll("#focusResult .focus-vda-head")].map(x=>x.textContent.replace(/\\s+/g," ").trim());
+    return { gaires: h[0] || "", modelis: h[1] || "",
+             etiketes: [...document.querySelectorAll("#focusResult .focus-assign span")].map(x=>x.textContent.trim()).slice(0,2) };
+  })()`);
+  tiesa(r.gaires.indexOf("Indexation guidance") === 0, "VDA gairės, gauta: " + r.gaires.slice(0, 60));
+  tiesa(r.modelis.indexOf("Indicative indexation model") === 0, "modelis, gauta: " + r.modelis.slice(0, 60));
+  lygu(r.etiketes, ["Market profile:", "Type of procurement:"]);
+  paruosk();
+});
+
+testas("Kalba", "Būsenos be profilio verčiamos, tema įvardijama angliškai", ()=>{
+  paruosk();
+  M('setLang("en"); document.getElementById("focusName").value = "Reprezentacinės maitinimo paslaugos"; runFocus();');
+  const neRinka = M('document.getElementById("focusResult").textContent.replace(/\\s+/g," ").trim()');
+  tiesa(neRinka.indexOf("Outside the markets this tool tracks") >= 0, "antraštė, gauta: " + neRinka.slice(0, 70));
+  tiesa(neRinka.indexOf("hospitality and catering") >= 0, "tema turi būti angliškai");
+  M('document.getElementById("focusName").value = "Zzz qqq"; runFocus();');
+  const neaisku = M('document.getElementById("focusResult").textContent.replace(/\\s+/g," ").trim()');
+  tiesa(neaisku.indexOf("could not be determined") >= 0, "neatpažinta, gauta: " + neaisku.slice(0, 70));
+  tiesa(neaisku.indexOf("matched in Lithuanian") >= 0, "EN režimu turi būti pasakyta, kad pavadinimai atpažįstami lietuviškai");
+  paruosk();
+});
+
+/* Diakritikos patikra nepagauna lietuvisku zodziu be jos („augimas", „nuo") -
+   butent taip pirkimo kortele liko pusiau lietuviska. Cia tikrinami zodziai. */
+const LT_BE_DIAKRITIKU = ["augimas","kritimas","lygis","pokytis","nuo","iki","prie","apie",
+  "arba","kaina","kainos","rinka","rinkos","pirkimas","pirkimo","duomenys","duomenu",
+  "atnaujinta","atsauktas","eksportuoti","ikelti","reiksme","reiksmes","laikotarpiai",
+  "veiksmas","laikotarpis","dabar","naujas","taisyti","spalva","busena"];
+
+// Grazina lietuviskus likucius: ir diakritikas, ir zodzius be jos.
+function ltLikutis(w, ignoruoti){
+  const zodziai = JSON.stringify(LT_BE_DIAKRITIKU);
+  const ign = JSON.stringify(ignoruoti || []);
+  return w.eval(`(function(){
+    const zod = ${zodziai}, ign = ${ign}, out = [];
+    document.querySelectorAll("body *").forEach(el=>{
+      if(el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
+      const st = getComputedStyle(el);
+      if(st.display === "none" || st.visibility === "hidden") return;
+      [...el.childNodes].filter(n=>n.nodeType === 3).forEach(n=>{
+        let v = n.textContent.trim();
+        if(!v) return;
+        ign.forEach(x=>{ v = v.split(x).join(" "); });
+        if(/[\u0105\u010D\u0119\u0117\u012F\u0161\u0173\u016B\u017E]/i.test(v)){ out.push(v.slice(0, 60)); return; }
+        const rasta = v.toLowerCase().split(/[^a-z0-9]+/).filter(x=>zod.indexOf(x) >= 0);
+        if(rasta.length) out.push(rasta[0] + " -> " + v.slice(0, 60));
+      });
+    });
+    return [...new Set(out)];
+  })()`);
+}
+
+testas("Kalba", "EN režimu pirkimo kortelėje nelieka lietuviškų žodžių be diakritikų", ()=>{
+  const w = paruosk();
+  M('setLang("en"); document.getElementById("focusName").value = "Pastočių rekonstrukcijos darbai"; runFocus();');
+  // Naudotojo ivestas pavadinimas ir tikriniai vardai lieka lietuviski - juos praleidziam.
+  lygu(ltLikutis(w, ["Pastočių rekonstrukcijos darbai", "Gižai"]), [], "neišversti tekstai kortelėje");
+  paruosk();
+});
+
+testas("Kalba", "EN režimu redagavimo eilutė verčiama", ()=>{
+  const w = paruosk();
+  M('setLang("en"); document.getElementById("btnEdit").click();');
+  const r = M(`(function(){
+    const k = document.querySelector(".kpi");
+    return { per: k.querySelector(".editrow label").textContent.trim(),
+             opt: [...k.querySelectorAll("[data-edit-per] option")].map(o=>o.textContent.trim().split(" ").pop()),
+             ph: k.querySelector("[data-edit]").placeholder,
+             dabar: k.querySelector(".dabar").textContent.trim().split(" ")[0],
+             veiksmas: k.querySelector(".action .lab").textContent.trim() };
+  })()`);
+  lygu(r.per, "Period", "laikotarpio etiketė");
+  lygu(r.opt, ["(new)", "(edit)"], "laikotarpio pasirinkimai");
+  lygu(r.ph, "value", "reikšmės vietaženklis");
+  lygu(r.dabar, "now", "dabartinės reikšmės etiketė");
+  lygu(r.veiksmas, "Action", "veiksmo etiketė");
+  lygu(ltLikutis(w, ["Gižai"]), [], "neišversti tekstai redaguojant");
+  M('document.getElementById("btnCancel").click();');
+  paruosk();
+});
+
+testas("Kalba", "EN režimu pranešimai (toast) verčiami", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    setLang("en");
+    document.getElementById("btnEdit").click();
+    document.getElementById("btnCancel").click();
+    const atsauktas = document.getElementById("toast").textContent;
+    document.getElementById("focusName").value = ""; runFocus();
+    return { atsauktas: atsauktas, beVardo: document.getElementById("toast").textContent };
+  })()`);
+  lygu(r.atsauktas, "Editing cancelled", "redagavimo atšaukimas");
+  tiesa(!/[ąčęėįšųūž]/i.test(r.beVardo), "pranešimas be pavadinimo, gauta: " + r.beVardo);
+  paruosk();
+});
+
+testas("Kalba", "Kopijuojamas tekstas verčiamas", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    setLang("en");
+    document.getElementById("focusName").value = "Pastočių rekonstrukcijos darbai"; runFocus();
+    let tekstas = "";
+    const orig = navigator.clipboard && navigator.clipboard.writeText;
+    if(navigator.clipboard) navigator.clipboard.writeText = v => { tekstas = v; return Promise.resolve(); };
+    copyFocus();
+    if(navigator.clipboard && orig) navigator.clipboard.writeText = orig;
+    return tekstas;
+  })()`);
+  tiesa(r.indexOf("PROCUREMENT MARKET OVERVIEW") === 0, "antraštė, gauta: " + String(r).slice(0, 60));
+  tiesa(r.indexOf("Market profile:") > 0 && r.indexOf("Main drivers:") > 0, "laukų vardai");
+  tiesa(!/[ąčęėįšųūž]/i.test(r.replace(/Pastočių rekonstrukcijos darbai/g, "").replace(/Gižai/g, "")),
+        "kopijuojamame tekste neturi likti lietuviško teksto");
+  paruosk();
+});
+
+/* =========================================================================
+   11. MIGRACIJA IR IMPORTAS
    ========================================================================= */
 testas("Migracija", "v4 įrašas: reikšmės išlieka, laikotarpiai priskiriami", ()=>{
   const w = paruosk();

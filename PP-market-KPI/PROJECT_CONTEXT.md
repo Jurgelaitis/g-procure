@@ -12,7 +12,7 @@ Projekto kontekstas tęstinumui: rinkos rodiklių stebėjimo skydelis EPSO-G gru
 - Versija: SCHEMA_VERSION = 3 (žiūrėti failo JS pradžioje)
 - Publikuojama per GitHub Pages (Jurgelaitis/PP-Market-KPI repozitorija)
 - Naršyklės talpyklos raktas: `epsog_rinkos_kpi_v3` (localStorage)
-- Kalba: lietuvių (visas UI, AI santrauka, sutartiniai veiksmai)
+- Kalba: lietuvių ir anglų (visa sąsaja, santrauka, sutartiniai veiksmai; pradinė kalba - `shared/lang-detect.js`, rankinis pasirinkimas įsimenamas)
 - Apipavidalinimas: tamsi „valdymo skydelio" tema, žaliai akcentuojama (Litgrid spalva)
 
 ---
@@ -125,7 +125,7 @@ Pilna lentelė visiems 17 rodiklių su žaliomis/geltonomis/raudonomis ribomis i
 
 ### 6.2 Vidutinės trukmės (P2)
 
-- LT/EN kalbų perjungimas (UI ir AI santrauka).
+- ~~LT/EN kalbų perjungimas (UI ir AI santrauka).~~ PADARYTA 2026-09-05/06 (v6.4-v6.5).
 - Mobilus išdėstymas (šiuo metu yra responsive, bet kortelių dydis nepritaikytas telefonams).
 - Branded PDF eksportas su EPSO-G/Litgrid antrašte ir spalvomis.
 - Vartotojo personalizacija: kurie rodikliai pinami į „mano kortelės" rinkinį.
@@ -215,6 +215,7 @@ Pagrindimas: vartotojo pageidavimas (estetinis sprendimas).
 - Nėra audito žurnalo. Redagavimai perrašo praeitas reikšmes be istorijos.
 - Triggerių ribos yra rekomendacinio pobūdžio. Jos neatspindi konkrečių Litgrid vidaus dokumentų ar PSĮ teisinių reikalavimų ir prieš naudojant sprendimams jas reikia derinti su rizikos valdymo ir teisės skyriais.
 - D lygmuo modeliuoja tik 7 VDA rodiklius. Realiai VDA skelbia daugiau (pvz., konkrečios SSKI sub-dedamosios, regioniniai VKI, sektoriniai VMDU).
+- Pirkimo pavadinimas atpažįstamas TIK lietuviškai: klasifikatoriaus raktažodžiai (`KATEGORIJU_RAKTAZODZIAI`, rūšies žodynai, `NE_RINKA_TEMOS`) yra lietuviški. EN režimu tai pasakoma tiesiai, bet angliškas pavadinimas profilio negaus.
 - Redagavimas perrašo paskutinę reikšmę, bet neprideda naujo taško į istoriją (sparkline grafikas išlieka su tomis pačiomis 12 ar 13 reikšmių). Naujo taško pridėjimas yra P1 prioriteto darbas.
 - AI santrauka yra šabloninių taisyklių variklis, ne tikras LLM iškvietimas. Tai prasižengia su „AI" pavadinimu, bet veikia 100% offline.
 - „Specializuotos paslaugos" kategorijos sudėtinis rizikos rodiklis remiasi globaliais signalais, kurie nėra tiesioginis tikrasis kainų variklis. Tikrasis variklis yra VMDU (D lygmuo), kuris šiuo metu į kategorijų logiką neįtrauktas.
@@ -241,7 +242,7 @@ Pagrindimas: vartotojo pageidavimas (estetinis sprendimas).
 
 ### P2 (vidutinės trukmės)
 
-11. LT/EN kalbų perjungimas.
+11. ~~LT/EN kalbų perjungimas.~~ PADARYTA (v6.4-v6.5).
 12. Mobilus išdėstymas telefonui.
 13. Branded PDF eksportas.
 14. Detalesni CAPEX projektų puslapiai (Harmony Link, LitPol Link, Gižai TS, RSVDC).
@@ -329,7 +330,90 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.3 (esama, 2026-09-05): **EPSO-G ženklas iškeltas į `shared/img/epso-g-logo.svg`.**
+- v6.5 (esama, 2026-09-06): **EN kalba - 3 etapas iš trijų: generuojamas tekstas.**
+
+  Baigtas paskutinis ir didžiausias sluoksnis - tekstas, kurio nėra HTML'e ir kuris gimsta
+  vykdymo metu. Išversta: automatinė santrauka (klimato frazės, P1-P6 pastraipos, stebimų
+  rodiklių sąrašas), pirkimo kortelė su visomis etiketėmis, indeksavimo modelio sluoksnis
+  (`INDEKSU_SEIMA` + `PROFILIO_YPATUMAI` paversti raktais), dvi būsenos be profilio, ne rinkos
+  temų vardai, kopijuojamo teksto eksportas, OSP dažnio žymos, redagavimo eilutė ir visi
+  pranešimai (toast). Skaitmenų skyriklis eina paskui kalbą (`skaiciuLokale()`): lietuviškai
+  „+13,7 %", angliškai „+13.7%" - keičiamas TIK rodymas, skaičiavimai lieka tie patys.
+
+  KETURIOS KLAIDOS, KURIAS RADO TESTAI (visos - to paties tipo: automatinis pakeitimas
+  pataikė ne ten, kur atrodė):
+  - `const t = (name||"").toLowerCase()` trijose klasifikatoriaus funkcijose UŽDENGĖ vertimo
+    funkciją `t()` - vietiniai kintamieji pervadinti į `pav`.
+  - `vHead` buvo naudojamas `copyFocus()`, o paskelbtas `renderFocusCard()` viduje.
+  - Dvigubai ekranuota kabutė `\\"` sugriovė EN žodyno įrašą `sum.p6.legal`.
+  - Bendras pakeitimas `„Nukopijuota į iškarpinę"` pataikė ir į patį žodyno įrašą, gavosi
+    `"focus.copied":t("focus.copied")`.
+
+  KODĖL DIAKRITIKŲ PATIKROS NEPAKAKO (svarbiausia šio etapo pamoka). Testas „EN režimu visame
+  puslapyje nelieka lietuviško teksto" ieškojo `[ąčęėįšųūž]` - ir rodė žalią, nors pirkimo
+  kortelė sakė „rise +13,7% over 4 weeks (**nuo** 17 April 2026)". Lietuviški žodžiai be
+  diakritikų (`augimas`, `kritimas`, `nuo`, `lygis`, `Veiksmas`, `Laikotarpis`, `dabar`,
+  `(naujas)`, `(taisyti)`) patikrai buvo nematomi. Rasta tik akimis žiūrint į ekrano nuotrauką.
+  Po to parašytas ATSKIRAS šaltinio skenavimas (visi šabloniniai literalai `>tekstas<`, o ne
+  tik `t()` iškvietimai) - jis iškart parodė likusius penkis. Testuose dabar tikrinami ir
+  žodžiai be diakritikų (`LT_BE_DIAKRITIKU`), ir konkrečios EN etiketės.
+
+  SVARBU TESTAMS: `paruosk()` dabar išvalo ir `FOCUS` (`name`, `last`, `rusis`) bei
+  `#focusResult`. Pirkimo kortelė gyvena už `renderAll()` ribų, o pavadinimas atsikartoja
+  profilių tinklelyje, tad vieno testo įvestas pirkimas persikeldavo į kitą testą.
+
+  TESTAI: 98 (buvo 91). Grupė „Kalba" (18). Mutacijos patikra atlikta visiems naujiems
+  testams: grąžinus lietuvišką tekstą krinta būtent jie ir tik jie.
+
+  ŽINOMAS APRIBOJIMAS, KURĮ SPRENDŽIA NAUDOTOJAS: klasifikatoriaus raktažodžiai yra TIK
+  lietuviški, tad EN naudotojas, įvedęs anglišką pirkimo pavadinimą, gaus „profilio nustatyti
+  nepavyko". Tai pasakoma tiesiai (`focus.ltonly`, rodoma tik EN režimu), bet ar norima
+  angliškų raktažodžių - atskiras sprendimas, čia nedarytas.
+
+- v6.4 (2026-09-05): **EN kalba - 1 etapas iš trijų: mechanizmas ir sąsaja.**
+
+  Ta pati taisyklė kaip visoje svetainėje (`shared/lang-detect.js`): lankytojas iš Lietuvos ->
+  LT, visi kiti -> EN; rankinis pasirinkimas įsimenamas raktu `ppmarket.lang` ir nuo tada
+  nustelbia aptikimą. Jungiklis perimtas iš portalo (`.lang-switch`, tas pats kontrasto
+  sprendimas: aktyvi kalba - grafitas ant žalsvo, nes baltas ant smaragdo duotų 3,35:1).
+
+  APIMTIS. Šiame etape išversta SĄSAJA: antraštė, skalės būsenos ir ribos, mygtukai, meniu,
+  navigacija, sekcijų antraštės, pagalbos blokas, poraštė, juostos ir pranešimai. Datos ir
+  amžiaus tekstai formatuojami pagal kalbą (`fmtDate`, `laikotarpioTekstas`, `amziausTekstas`),
+  o `rodikliuSarasas()` anglų kalbai nenaudoja lietuviško linksniavimo.
+
+  **2 ETAPAS PADARYTAS: duomenų sluoksnis.** Išversti 17 rodiklių (pavadinimai, paaiškinimai,
+  vienetai, poveikio tekstai, šaltiniai ir sutartiniai veiksmai) ir 8 profiliai (pavadinimai,
+  apimtis, veiksmai), taip pat ribų lentelė ir smulkios etiketės (būsenų vardai, „iliustracinė",
+  „Duomenys / šaltinis", zonų užrašai, palyginimo langas „over 4 weeks").
+
+  SPRENDIMAS DĖL STRUKTŪROS. Vertimai laikomi ATSKIRAI (`DUOMENU_EN`), o ne kaip `{lt,en}`
+  poros pačioje `DEFAULT_DATA`. Priežastis: `DEFAULT_DATA` saugoma į `localStorage`, tad poros
+  keistų schemą, reikalautų migracijos ir pripūstų naudotojo įrašą vertimais. Vertimai yra
+  konfigūracija, ne naudotojo duomenys. Trūkstant vertimo, `dt()` grąžina lietuvišką tekstą -
+  geriau nei tuščia vieta; tai patikrinta testu.
+
+  KAS DAR NEIŠVERSTA (3 etapas): automatinė santrauka (`generateSummary`), pirkimo kortelės
+  etiketės ir indeksavimo modelio tekstai. EN režimu matomame tekste liko 74 lietuviški
+  diakritiniai ženklai, iš jų 73 - santraukoje. Buvo ~750 po 1 etapo.
+
+  DVI KLAIDOS, RASTOS TESTUOJANT: `\bm\.name\b` regex sutapo ir `d.m.name` viduje (gavosi
+  `d.dt(m,...)`), o `m.src.name` pakeitimas pataikė į patį `dtSrc()` vidų ir sukėlė begalinę
+  rekursiją - visi 87 testai krito su „Maximum call stack size exceeded".
+
+  APIMTIES MATAVIMAS (kodėl trys etapai): duomenys ~11 800 sp., statinė sąsaja ~3 800 sp.,
+  generuojamas tekstas ~19 300 sp. Generuojamas tekstas yra ne žodynas, o sakinių šablonai
+  su interpoliacija ir lietuvišku derinimu - jam reikia atskirų šablonų kiekvienai kalbai.
+
+  TESTAI: 91 (buvo 80). Grupė „Kalba" (11): numatytoji kalba, perjungimas, įsiminimas,
+  `aria-pressed`, datų formatai, žodyno pilnumas abiem kalbomis ir patikra, kad kiekvienas
+  HTML raktas egzistuoja žodyne. Paskutinis testas iškart pagavo tikrą klaidą - anotavimo
+  skriptas buvo pažymėjęs pastraipą neegzistuojančiu raktu `sec.help.p`.
+
+  SVARBU TESTAMS: kalba gyvena `localStorage`, tad `paruosk()` dabar išvalo ir `ppmarket.lang`.
+  Be to testai priklausytų nuo to, kurią kalbą paskutinį kartą pasirinkai naršyklėje.
+
+- v6.3 (2026-09-05): **EPSO-G ženklas iškeltas į `shared/img/epso-g-logo.svg`.**
   Tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose (ne dviejose, kaip maniau iš pradžių):
   `index.html`, `G-Procure_About.html` ir `G-Procure_Project.html` antraštėse IR poraštėse,
   plius šis modulis. Visos pakeistos į `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`.
