@@ -215,7 +215,7 @@ Pagrindimas: vartotojo pageidavimas (estetinis sprendimas).
 - Nėra audito žurnalo. Redagavimai perrašo praeitas reikšmes be istorijos.
 - Triggerių ribos yra rekomendacinio pobūdžio. Jos neatspindi konkrečių Litgrid vidaus dokumentų ar PSĮ teisinių reikalavimų ir prieš naudojant sprendimams jas reikia derinti su rizikos valdymo ir teisės skyriais.
 - D lygmuo modeliuoja tik 7 VDA rodiklius. Realiai VDA skelbia daugiau (pvz., konkrečios SSKI sub-dedamosios, regioniniai VKI, sektoriniai VMDU).
-- Pirkimo pavadinimas atpažįstamas TIK lietuviškai: klasifikatoriaus raktažodžiai (`KATEGORIJU_RAKTAZODZIAI`, rūšies žodynai, `NE_RINKA_TEMOS`) yra lietuviški. EN režimu tai pasakoma tiesiai, bet angliškas pavadinimas profilio negaus.
+- Pirkimo pavadinimas atpažįstamas lietuviškai IR angliškai, bet raktažodžiai yra LITGRID srities terminai. Kitos srities ar labai bendras pavadinimas profilio negaus - tada naudotojas renkasi iš sąrašo.
 - Redagavimas perrašo paskutinę reikšmę, bet neprideda naujo taško į istoriją (sparkline grafikas išlieka su tomis pačiomis 12 ar 13 reikšmių). Naujo taško pridėjimas yra P1 prioriteto darbas.
 - AI santrauka yra šabloninių taisyklių variklis, ne tikras LLM iškvietimas. Tai prasižengia su „AI" pavadinimu, bet veikia 100% offline.
 - „Specializuotos paslaugos" kategorijos sudėtinis rizikos rodiklis remiasi globaliais signalais, kurie nėra tiesioginis tikrasis kainų variklis. Tikrasis variklis yra VMDU (D lygmuo), kuris šiuo metu į kategorijų logiką neįtrauktas.
@@ -330,7 +330,46 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.5 (esama, 2026-09-06): **EN kalba - 3 etapas iš trijų: generuojamas tekstas.**
+- v6.6 (esama, 2026-09-06): **klasifikatorius atpažįsta ir angliškus pavadinimus.**
+
+  Angliški raktažodžiai pridėti visur, kur buvo lietuviški: aštuoni profiliai
+  (`CAT_KEYWORDS_EN`, sujungiama į `CAT_KEYWORDS`), pirkimo rūšis (darbai / paslaugos /
+  montavimas), projektavimo pirmenybė, ne stebimų rinkų temos. Laikomi ATSKIRAI, kad
+  matytųsi, kas iš kurios kalbos, bet į paiešką sujungiami: pavadinimas gali būti bet kuria
+  kalba, o LITGRID sąraše pasitaiko ir angliškų pavadinimų.
+
+  TRYS MECHANIZMAI, kurių reikėjo, kad angliški žodžiai nesugriautų lietuviško atsakymo:
+  - **`normPav()`** - skyrybos ženklai virsta tarpais ir pridedamas tarpas eilutės gale.
+    Žodžio pradžios patikrai tai nieko nekeičia, bet leidžia rašyti raktažodį su tarpu gale.
+  - **Raktažodis su tarpu gale reikalauja VISO žodžio.** Reikalinga angliškiems žodžiams,
+    kurie yra kitų žodžių pradžia: be to „workshop equipment" taptų rangos darbais („works").
+  - **Skaičiuojamos atskiros pavadinimo VIETOS, o ne raktažodžiai.** Vienas žodis profiliui
+    duoda vieną tašką, net jei atitinka kelis kamienus („licencijos" atitinka ir „licencij",
+    ir „licen"). Be to lietuviškas žodis, turintis abu kamienus, tyliai nusverdavo profilį,
+    kurio sąrašo vertimas ilgesnis - taip „Ugniasienių licencijos" iš IT įrangos peršoko į
+    programinę įrangą.
+
+  MATAVIMAS (be jo dvi žodžių grupės būtų likusios blogos):
+  - **Lietuviški 1651 tikri pavadinimai: pasikeitė 6, visi į tikslesnę pusę.** Keturi - dėl
+    `normPav()` (kablelis po „projekto", skliaustai ties „(mobiliojo) ryšio"), du - tikri
+    ANGLIŠKI pavadinimai LITGRID sąraše (`Training "PowerOne Reliance"`), kurie dabar
+    atpažįstami kaip mokymai, t. y. ne stebima rinka.
+  - **52 tikri pavadinimai išversti į anglų kalbą ir paleisti per tą patį kodą: sutapo 52 iš
+    52.** Pirmas bandymas davė 51 - „Optical fibre maintenance services" nukeliaudavo į
+    eksploataciją. Priežastis: angliškas „maintenance" dengia ir „aptarnavimą", ir
+    „priežiūrą", o lietuviškame sąraše yra tik „aptarnav" ir „techninė priežiūr". Todėl
+    sąraše paliktas „technical maintenance", o ne „maintenance". Dėl tos pačios priežasties
+    išmestas ir „testing" (per platus, nusverdavo programinę įrangą) bei vienišas
+    „automation" (nusverdavo „artificial intelligence and robotic process automation").
+
+  PAŠALINTA: `focus.ltonly` užuomina („Names are matched in Lithuanian"). Ji tapo netiesa,
+  o klaidinantis tikslus sakinys yra blogiau nei jokio sakinio.
+
+  TESTAI: 111 (buvo 98). Nauja grupė „Rinkos profilis (EN)" - aštuoni profiliai, rūšis, ne
+  rinkos temos ir `workshop`; prie lietuviškų pridėti `normPav` ir dvigubo skaičiavimo testai.
+  Mutacijos patikra atlikta visiems keturiems mechanizmams atskirai.
+
+- v6.5 (2026-09-06): **EN kalba - 3 etapas iš trijų: generuojamas tekstas.**
 
   Baigtas paskutinis ir didžiausias sluoksnis - tekstas, kurio nėra HTML'e ir kuris gimsta
   vykdymo metu. Išversta: automatinė santrauka (klimato frazės, P1-P6 pastraipos, stebimų
