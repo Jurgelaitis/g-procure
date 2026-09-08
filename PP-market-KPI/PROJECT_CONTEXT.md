@@ -330,7 +330,53 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.6 (esama, 2026-09-06): **klasifikatorius atpažįsta ir angliškus pavadinimus.**
+- v6.7 (esama, 2026-09-08): **pasenusių duomenų atnaujinimas vienu išsaugojimu.**
+
+  NAUDOTOJO PRANEŠIMAS: „Duomenys išsaugoti: 2026 m. liepos 11 d. Iš esmės neatnaujinu
+  duomenų, tačiau nieko nevyksta." Atkartota pasodinus liepos 11 d. įrašą - eilutė sutapo
+  raidė į raidę.
+
+  KAS BUVO NE TAIP. Mygtukas ir išsaugojimas veikė. Bloga buvo tai, KURIAM laikotarpiui
+  priskiriama įvesta reikšmė: rugsėjo 8 d. modulis siūlė tik „2026 m. liepos 18 d. (naujas)",
+  nes rugsėjį buvo sąmoningai apribota siūlyti tik GRETIMĄ laikotarpį (serija privalo likti
+  be tarpų - tuo remiasi `baseVal()`, imantis reikšmę pagal poziciją). Todėl šiandien įvesta
+  reikšmė atsidurdavo liepoje, rodiklių eilutės toliau rodė liepą, ir iš šalies atrodė, kad
+  nieko neįvyko. Pasivyti reikėjo AŠTUONIŲ išsaugojimų iš eilės kiekvienam savaitiniam
+  rodikliui (po 2 mėnesiniams), padauginus iš 17 rodiklių.
+
+  SPRENDIMAS (naudotojo pasirinkimas iš trijų): kai duomenys pasenę, laikotarpių sąraše
+  atsiranda TREČIAS variantas - dabartinis laikotarpis, ir jis yra numatytasis. Praleisti
+  stebėjimai įrašomi kaip `null` („nežinoma"), o NE pakartojant paskutinę reikšmę: modulis
+  neišgalvoja duomenų, kurių neturi. Dėl to tokio rodiklio pokytis rodomas „–" ir būsena
+  geltona, kol serija vėl prisipildo - tai teisinga, nes bazinė reikšmė tikrai nežinoma.
+
+  KĄ TEKO PATAISYTI KARTU, nes `null` serijoje anksčiau buvo neįmanomas:
+  - `fmt()` grąžindavo „0,0" (`Number(null) === 0`) - praleista savaitė būtų atrodžiusi kaip
+    tikra nulinė reikšmė.
+  - `severity()` naudojo tik `isFinite(a)`, o **`isFinite(null) === true`** - nežinomas
+    „level" tipo stebėjimas būtų praėjęs kaip ŽALIAS. Ta pati JS spąstų šaknis, kaip
+    `pctChange()` nulinės bazės klaidoje.
+  - `sparkline()` skaičiavo `Math.min(...)` su `null` (virsta 0) ir būtų nubraižęs kreivę,
+    nusmukusią į apačią; dabar praleisti stebėjimai palieka TARPĄ, o užpildo su tarpais
+    nebraižom - jis apsimestų, kad kreivė vientisa.
+
+  ANTRA KLAIDA, RASTA TIKRINANT (ta pati klasė, kaip meniu): `.zenklas-demo{display:inline-block}`
+  nugalėdavo naršyklės `[hidden]{display:none}`, tad **demonstracinių duomenų žyma prie
+  matuoklio NIEKADA nedingdavo** - net kai naudotojas pakeisdavo visas 17 reikšmių tikromis.
+  Tai tiesiogiai stiprino įspūdį „nieko nevyksta". Vietoj trečio lokalaus lopinio įrašyta
+  viena bendra taisyklė `[hidden]{display:none !important}`.
+
+  SCHEMA NEKEISTA sąmoningai. `null` serijoje yra nauja reikšmė esamame lauke, o ne nauja
+  struktūra; `isValidData()` serijos turinio netikrina. Pakėlus `SCHEMA_VERSION`, senas
+  kešuotas modulis nerastų savo rakto ir parodytų demonstracinius duomenis - tai atrodytų
+  kaip duomenų praradimas ir būtų blogiau nei laikinai kampuotas grafikas.
+
+  TESTAI: 116 (buvo 111). Penki nauji; mutacijos patikra atlikta kiekvienam mechanizmui
+  atskirai. Keturi seni testai patikslinti: jie rėmėsi tuo, kad „naujas" yra numatytasis
+  pasirinkimas, o dabar pasenusiems duomenims numatytasis yra „dabartinis" - dabar kelias
+  nurodomas aiškiai, o ne paveldimas.
+
+- v6.6 (2026-09-06): **klasifikatorius atpažįsta ir angliškus pavadinimus.**
 
   Angliški raktažodžiai pridėti visur, kur buvo lietuviški: aštuoni profiliai
   (`CAT_KEYWORDS_EN`, sujungiama į `CAT_KEYWORDS`), pirkimo rūšis (darbai / paslaugos /
