@@ -372,6 +372,15 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
   „FRED_API_KEY nenustatytas". Taisymas: `dotenv` į pirmą eilutę. Bendra taisyklė užrašyta
   `CLAUDE.md` (6 sk.), nes kartosis su kiekvienu nauju maršrutu.
 
+  ŠALTINIŲ ATRIBUCIJA (2026-09-08). Kortelėse statiškai stovėjo „LME Official Prices" ir
+  „ICE Brent", o reikšmės dabar ateina iš FRED. Aliuminio atveju tai ne formalumas: IMF
+  pasaulinė kaina NĖRA LME oficiali kaina, tad kortelė kredituotų ne tą šaltinį. Sprendimas:
+  automatiškai gautas rodiklis įgyja `srcAuto` (pavadinimas iš serverio atsakymo + nuoroda į
+  tikslią FRED seriją), ir `dtSrc()` / `srcUrl()` jį rodo vietoj statinio. Įvedus reikšmę ranka
+  `srcAuto` nuimamas - tada vėl teisingas statinis šaltinis, nes ranka žmogus žiūri būtent į
+  LME ar ICE. VDA rodiklių šaltinis nekeistas: „Valstybės duomenų agentūra (VDA)" ir taip
+  teisingas.
+
   PATIKRINTA GYVAI 2026-09-08: `GET https://api.g-procure.com/api/rinka` grąžina HTTP 200,
   `klaidos: []`, `Access-Control-Allow-Origin: https://g-procure.com`, `Cache-Control: max-age=1800`.
   Brent 96,02 $/bbl ir WTI 91,48 $/bbl (2026-09-01, po ~500 dienos taškų nuo 2024-09-09),
