@@ -388,6 +388,93 @@ testas("Laikotarpiai", "Etiketė išvedama iš lango, o ne rašoma ranka", ()=>{
   lygu(M("DATA.metrics.filter(m=>m.periodLabel).length"), 0, "periodLabel neturi likti");
 });
 
+/* Kai duomenys pasene, gretimas laikotarpis nebera siandiena. Realus atvejis: liepos 11 d.
+   irasas rugsejo 8 d. siulydavo tik liepos 18 d., tad ivesta reiksme atsidurdavo liepoje ir
+   skydelis atrodydavo nepasikeites; pasivyti reikejo astuoniu issaugojimu is eiles. */
+function pasenkRodikli(id, zingsniu){
+  M(`(function(){
+    const m = metricById(${JSON.stringify(id)});
+    m.laikotarpis = slinktiLaikotarpi(dabartinisLaikotarpis(m), m.zingsnis, -${zingsniu});
+    renderAll();
+  })()`);
+}
+
+testas("Laikotarpiai", "Pasenusiems duomenims siūlomas dabartinis laikotarpis", ()=>{
+  paruosk();
+  pasenkRodikli("brent", 8);
+  lygu(M('praleistuLaikotarpiu(metricById("brent"))'), 7, "praleistų stebėjimų");
+  M('document.getElementById("btnEdit").click()');
+  const o = M(`[...document.querySelectorAll('select[data-edit-per="brent"] option')].map(x=>x.value)`);
+  lygu(o, ["naujas", "siandien", "dabartinis"], "pasirinkimai");
+  lygu(M(`document.querySelector('select[data-edit-per="brent"]').value`), "siandien",
+       "pasenusiems duomenims dabartinis laikotarpis turi būti numatytasis");
+  M('document.getElementById("btnCancel").click()');
+  paruosk();
+});
+
+testas("Laikotarpiai", "Šviežiems duomenims dabartinio laikotarpio pasirinkimo nėra", ()=>{
+  paruosk();
+  M('metricById("brent").laikotarpis = dabartinisLaikotarpis(metricById("brent")); renderAll();');
+  lygu(M('praleistuLaikotarpiu(metricById("brent"))'), 0);
+  M('document.getElementById("btnEdit").click()');
+  lygu(M(`[...document.querySelectorAll('select[data-edit-per="brent"] option')].map(x=>x.value)`),
+       ["naujas", "dabartinis"], "be pasenimo trečio varianto neturi būti");
+  M('document.getElementById("btnCancel").click()');
+  paruosk();
+});
+
+testas("Įvedimas", "Peršokus į dabartinį laikotarpį praleisti stebėjimai lieka NEŽINOMI", ()=>{
+  paruosk();
+  pasenkRodikli("brent", 8);
+  const r = M(`(function(){
+    document.getElementById("btnEdit").click();
+    document.querySelector('input[data-edit="brent"]').value = "92.5";
+    document.querySelector('select[data-edit-per="brent"]').value = "siandien";
+    document.getElementById("btnEdit").click();
+    const m = metricById("brent");
+    return { serija: m.series, amzius: laikotarpioAmzius(m), dabar: latest(m),
+             tuscios: m.series.filter(v=>v === null).length };
+  })()`);
+  lygu(r.amzius, 0, "vienas išsaugojimas turi pasivyti šią dieną");
+  lygu(r.dabar, 92.5, "įvesta reikšmė");
+  lygu(r.tuscios, 7, "praleisti stebėjimai lieka null, o ne pakartota reikšmė");
+  tiesa(r.serija.indexOf(0) < 0, "nežinomas stebėjimas NIEKADA neturi virsti nuliu");
+  paruosk();
+});
+
+testas("Įvedimas", "Nežinomas stebėjimas nėra nulis: pokytis „–“, būsena geltona, grafikas su tarpu", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("brent");
+    m.series = [80, null, null, null, null, 92.5];
+    const svg = sparkline(m, "#000");
+    return { fmt: fmt(null, 1), pc: String(pctChange(m)), sev: severity(m),
+             nan: /NaN|Infinity/.test(svg), tarpu: (svg.match(/M/g) || []).length };
+  })()`);
+  lygu(r.fmt, "–", "null neturi virsti nuliu");
+  lygu(r.pc, "NaN", "pokytis nežinomas");
+  lygu(r.sev, 1, "nežinoma = geltona (peržiūrėti), ne žalia");
+  tiesa(!r.nan, "grafike neturi būti NaN koordinačių");
+  tiesa(r.tarpu >= 2, "linija turi nutrūkti ties praleistais stebėjimais, gauta M: " + r.tarpu);
+  paruosk();
+});
+
+/* Klasiu display: nugali narsykles [hidden]{display:none}. Del to demonstraciniu duomenu
+   zyma prie matuoklio nedingdavo net atnaujinus visas reiksmes. */
+testas("Sąžiningumo žymos", "Atnaujinus visus rodiklius demonstracinių duomenų žyma dingsta", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const z = document.getElementById("demoZenklas");
+    const pries = getComputedStyle(z).display;
+    DATA.metrics.forEach(m=>m.demo = false);
+    renderAll();
+    return { pries: pries, po: getComputedStyle(z).display, hidden: z.hidden };
+  })()`);
+  tiesa(r.pries !== "none", "su demonstraciniais duomenimis žyma turi matytis");
+  lygu(r.po, "none", "atnaujinus visus rodiklius žyma turi dingti");
+  paruosk();
+});
+
 testas("Įvedimas", "Išsaugojus nieko neįvedus duomenys ir data nekeičiami", ()=>{
   paruosk();
   const pries = M("JSON.stringify({d:DATA.meta.demo, u:DATA.meta.updated, s:metricById('sski').series})");
@@ -400,6 +487,7 @@ testas("Įvedimas", "Naujas laikotarpis pastumia bazinį tašką", ()=>{
   paruosk();
   const pries = M("({baz: baseVal(metricById('sski')), lt: metricById('sski').laikotarpis, n: metricById('sski').series.length})");
   M(`document.getElementById('btnEdit').click();
+     document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
      document.getElementById('btnEdit').click();`);
   const po = M("({baz: baseVal(metricById('sski')), lt: metricById('sski').laikotarpis, n: metricById('sski').series.length})");
@@ -425,6 +513,7 @@ testas("Įvedimas", "Po 20 mėnesių įvedimų palyginimo langas vis dar 12 mėn
   M(`(function(){
     for(let i = 0; i < 20; i++){
       document.getElementById('btnEdit').click();
+      document.querySelector('select[data-edit-per="sski"]').value = "naujas";
       document.querySelector('input[data-edit="sski"]').value = String(130 + i);
       document.getElementById('btnEdit').click();
     }
@@ -488,6 +577,7 @@ testas("Duomenų būsena", "Pradžioje visi 17 rodiklių pažymėti kaip iliustr
 testas("Duomenų būsena", "Atnaujinus vieną rodiklį juosta NEDINGSTA, o parodo tikslų skaičių", ()=>{
   paruosk();
   M(`document.getElementById('btnEdit').click();
+     document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
      document.getElementById('btnEdit').click();`);
   lygu(M("DATA.metrics.filter(m=>m.demo).length"), 16, "likę iliustraciniai");
@@ -617,6 +707,7 @@ testas("Antraštė", "Data sako, kada duomenys išsaugoti, o ne „sugeneruota a
   tiesa(demo.indexOf("Demonstraciniai duomenys") === 0, "demo režimu, gauta: " + demo);
   tiesa(demo.indexOf("Sugeneruota") < 0, "neturi likti žodžio „Sugeneruota“");
   M(`document.getElementById('btnEdit').click();
+     document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
      document.getElementById('btnEdit').click();`);
   const po = M("document.getElementById('updatedWhen').textContent");
@@ -636,6 +727,7 @@ testas("Antraštė", "Demonstracinių duomenų ženklas matomas prie skalės ir 
   paruosk();
   lygu(M("document.getElementById('demoZenklas').hidden"), false, "demo režimu");
   M(`document.getElementById('btnEdit').click();
+     document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
      document.getElementById('btnEdit').click();`);
   lygu(M("document.getElementById('demoZenklas').hidden"), false, "dalis dar demonstracinių");
@@ -980,13 +1072,14 @@ testas("Kalba", "EN režimu redagavimo eilutė verčiama", ()=>{
   const r = M(`(function(){
     const k = document.querySelector(".kpi");
     return { per: k.querySelector(".editrow label").textContent.trim(),
-             opt: [...k.querySelectorAll("[data-edit-per] option")].map(o=>o.textContent.trim().split(" ").pop()),
+             opt: [...k.querySelectorAll("[data-edit-per] option")].map(o=>{ const x = o.textContent.trim(); const i = x.indexOf("("); return i < 0 ? x : x.slice(i); }),
              ph: k.querySelector("[data-edit]").placeholder,
              dabar: k.querySelector(".dabar").textContent.trim().split(" ")[0],
              veiksmas: k.querySelector(".action .lab").textContent.trim() };
   })()`);
   lygu(r.per, "Period", "laikotarpio etiketė");
-  lygu(r.opt, ["(new)", "(edit)"], "laikotarpio pasirinkimai");
+  tiesa(r.opt[0] === "(new)" && r.opt[r.opt.length-1] === "(edit)", "kraštiniai pasirinkimai, gauta: " + JSON.stringify(r.opt));
+  tiesa(r.opt.some(x=>x.indexOf("(current;") === 0), "pasenusiems duomenims turi būti ir dabartinis laikotarpis");
   lygu(r.ph, "value", "reikšmės vietaženklis");
   lygu(r.dabar, "now", "dabartinės reikšmės etiketė");
   lygu(r.veiksmas, "Action", "veiksmo etiketė");
