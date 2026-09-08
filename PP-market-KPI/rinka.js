@@ -23,6 +23,18 @@
   var BAZE = "https://api.g-procure.com/api/rinka";
   var RODIKLIAI = { brent: 1, wti: 1, lme_al: 1, lme_cu: 1 };
 
+  /* TIK NUORODAI kortelėje, kad naudotojas galėtų pats pasitikrinti reikšmę prie šaltinio.
+     Autoritetinga serijų lentelė (pagal kurią klausiama FRED) gyvena `backend-rinka-routes.js` -
+     ten ji ir turi būti, nes raktas serveryje. Šios dvi vietos privalo sutapti; nesutapus
+     sugestų tik nuoroda, ne duomenys, todėl toks dubliavimas priimtinas. Serverio atsakymas
+     serijos ID neatiduoda, o pridėti jį reikštų iš naujo diegti serverio dalį. */
+  var SERIJU_NUORODOS = {
+    brent:  "https://fred.stlouisfed.org/series/DCOILBRENTEU",
+    wti:    "https://fred.stlouisfed.org/series/DCOILWTICO",
+    lme_al: "https://fred.stlouisfed.org/series/PALUMUSDM",
+    lme_cu: "https://fred.stlouisfed.org/series/PCOPPUSDM"
+  };
+
   /* Is kasdienes serijos atrenka reiksmes rodiklio SAVAITINIAM tinkleliui: kiekvienam
      savaites taskui imama tos dienos arba artimiausio ANKSTESNIO prekybos dienos reiksme.
      Nera tinkamos reiksmes -> null („nezinoma"), o ne artimiausia velesne: velesne butu
@@ -58,9 +70,14 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     }).then(function (d) {
-      return { ok: (d && d.rodikliai) || [], klaidos: (d && d.klaidos) || [] };
+      var ok = ((d && d.rodikliai) || []).map(function (r) {
+        r.saltinioUrl = SERIJU_NUORODOS[r.id] || "https://fred.stlouisfed.org/";
+        return r;
+      });
+      return { ok: ok, klaidos: (d && d.klaidos) || [] };
     });
   }
 
-  global.GP_RINKA = { atnaujink: atnaujink, iSavaitini: iSavaitini, RODIKLIAI: RODIKLIAI, BAZE: BAZE };
+  global.GP_RINKA = { atnaujink: atnaujink, iSavaitini: iSavaitini, RODIKLIAI: RODIKLIAI,
+                      SERIJU_NUORODOS: SERIJU_NUORODOS, BAZE: BAZE };
 })(typeof window !== "undefined" ? window : this);
