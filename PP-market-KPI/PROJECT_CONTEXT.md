@@ -361,9 +361,21 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
   - Savaitiniam taškui imama tos dienos arba ANKSTESNĖ biržos reikšmė, niekada vėlesnė:
     vėlesnė būtų žvilgsnis iš ateities į praeitį. Nėra ankstesnės - lieka nežinoma.
 
-  NEĮDIEGTA: maršrutas serveryje. Reikia nemokamo FRED rakto (registruoja naudotojas - aš
-  paskyrų nekuriu) ir prieigos prie Hetzner (šioje mašinoje jos nėra). Iki tol modulis
-  pasako, kad maršrutas neįdiegtas, o VDA dalis veikia kaip veikusi.
+  ĮDIEGTA SERVERYJE 2026-09-08 (naudotojas, rankiniu būdu): failas nukopijuotas į
+  `/var/www/g-procure/routes/rinka.js`, `FRED_API_KEY` įrašytas į serverio `.env` (į repo
+  NEDEDAMAS), `index.js` pridėtas `app.use('/api/rinka', rinka)`.
+
+  DIEGIANT RASTA IR IŠTAISYTA KLAIDA - `dotenv` EILIŠKUMAS. `require('./routes/rinka')` stovėjo
+  2 eilutėje, o `require('dotenv').config()` - 5. Maršruto modulis `process.env.FRED_API_KEY`
+  nuskaito FAILO ĮKĖLIMO metu, tad raktas tuo momentu dar neegzistavo ir konstanta liko tuščia.
+  Simptomas klaidinantis: pm2 logai rodė „injected env (4)", o maršrutas atsakinėjo
+  „FRED_API_KEY nenustatytas". Taisymas: `dotenv` į pirmą eilutę. Bendra taisyklė užrašyta
+  `CLAUDE.md` (6 sk.), nes kartosis su kiekvienu nauju maršrutu.
+
+  PATIKRINTA GYVAI 2026-09-08: `GET https://api.g-procure.com/api/rinka` grąžina HTTP 200,
+  `klaidos: []`, `Access-Control-Allow-Origin: https://g-procure.com`, `Cache-Control: max-age=1800`.
+  Brent 96,02 $/bbl ir WTI 91,48 $/bbl (2026-09-01, po ~500 dienos taškų nuo 2024-09-09),
+  aliuminis 3158 $/t ir varis 13543 $/t (2026-07-01, mėnesiniai).
 
   TESTAI: 128 (buvo 125). Trys nauji su mutacijos patikra.
 

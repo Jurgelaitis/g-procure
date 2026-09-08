@@ -126,6 +126,13 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
      BŪTINA kartu su 1 punktu: nginx numatytieji 1 MB kitaip tampa naujomis lubomis.
   3. `shared/ai-proxy.js` - `MAX_BASE64`, laikoma žemiau serverio ribos (kūne dar
      telpa promptas ir apvalkalas).
+- **DOTENV EILIŠKUMAS - patikrintas spąstas (2026-09-08).** `index.js` maršrutų moduliai
+  (`routes/*.js`) `process.env` skaito **failo įkėlimo metu**, tad `require('dotenv').config()`
+  PRIVALO stovėti PIRMAS, prieš bet kurį `require('./routes/...')`. Diegiant `/api/rinka`
+  `require('./routes/rinka')` buvo 2 eilutėje, o `dotenv` - 5: raktas tuo momentu dar
+  neegzistavo, konstanta liko tuščia, ir maršrutas grąžino „FRED_API_KEY nenustatytas", nors
+  pm2 logai rodė „injected env (4)". Klaida atrodo kaip trūkstamas raktas, nors raktas yra.
+  Pridedant BET KOKĮ naują maršrutą - pirmiausia patikrink šią eilę.
 - SERVERIO pusė yra atskira ir `shared/` importuoti negali (kita vykdymo aplinka):
   `worker/epd-proxy.js` (Cloudflare Worker - viešas PP-carbon EPD proxy) ir
   `PP-esg/backend-pp-esg-routes.js` turi savo modelio konstantas. Keičiant modelį
