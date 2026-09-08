@@ -372,6 +372,19 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
   „FRED_API_KEY nenustatytas". Taisymas: `dotenv` į pirmą eilutę. Bendra taisyklė užrašyta
   `CLAUDE.md` (6 sk.), nes kartosis su kiekvienu nauju maršrutu.
 
+  GYVA PATIKRA PASPAUDUS MYGTUKĄ (2026-09-08, tikras g-procure.com, švari naršyklė):
+  vienas paspaudimas atnaujino **11 rodiklių iš 17** (7 VDA + 4 globalūs), JS klaidų nėra,
+  įrašyta į localStorage, pasenusių liko 0. Brent 96,0 $/bbl ir WTI 91,5 $/bbl (2026-09-04),
+  aliuminis 3158 $/t ir varis 13543 $/t (2026-07-01), SSKI 127,0 ir GKI 131,0 (2026-07-01),
+  VKI 105,9 (2026-08-01), VMDU 2616 EUR (2026-06-01). Demonstracinių lieka 6 - tie, kuriems
+  nemokamo šaltinio nėra (polimerai, BDI, konteineriai, oro krovinai, Hormūzas, sankcijos).
+
+  TA PATI PATIKRA RADO SPRAGĄ: naujam naudotojui atnaujinimo mygtukas juostoje NESIMATYDAVO.
+  Sąlyga rėmėsi tik `arPasenes()`, o ji demonstracinių rodiklių netikrina (`!m.demo && ...`) -
+  tad žmogui, kuriam visos 17 reikšmių iliustracinės, mygtukas būdavo paslėptas, nors būtent
+  jam jo labiausiai reikia. Dabar rodomas, kai rodiklis yra iliustracinis ARBA pasenęs. Kartu
+  būsena nustatoma PRIEŠ ankstyvą `return`, kitaip likdavo iš praėjusio piešimo.
+
   ŠALTINIŲ ATRIBUCIJA (2026-09-08). Kortelėse statiškai stovėjo „LME Official Prices" ir
   „ICE Brent", o reikšmės dabar ateina iš FRED. Aliuminio atveju tai ne formalumas: IMF
   pasaulinė kaina NĖRA LME oficiali kaina, tad kortelė kredituotų ne tą šaltinį. Sprendimas:
