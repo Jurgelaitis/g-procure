@@ -864,9 +864,87 @@ testas("Įrankiai", "„Duomenys“ meniu užvertas, atsidaro ir užsiveria per 
   lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display") !== "none", true, "atidarius");
   lygu(M("document.getElementById('btnDuomenys').getAttribute('aria-expanded')"), "true");
   lygu(M(`[...document.querySelectorAll("#duomenuMeniu .meniu-el")].map(x=>x.textContent)`),
-       ["Atsarginė kopija (JSON)", "Atkurti iš kopijos", "Atstatyti pradinius duomenis"]);
+       ["Atnaujinti VDA rodiklius iš OSP", "Atsarginė kopija (JSON)", "Atkurti iš kopijos", "Atstatyti pradinius duomenis"]);
   M(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`);
   lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display"), "none", "po Escape");
+});
+
+/* OSP jungtis (osp.js). Tinklo cia neliečiam - tikrinam tai, kur gimsta klaidos:
+   SDMX atsakymo isskaidyma, laikotarpiu vertima ir reiksmiu prirasyma prie rodikliu.
+   Tikras kreipimasis veikia TIK is g-procure.com (OSP CORS leidzia tik ta kilme). */
+
+testas("OSP jungtis", "Laikotarpiai verčiami: mėnuo tiesiogiai, ketvirtis - į paskutinį jo mėnesį", ()=>{
+  paruosk();
+  lygu(M('GP_OSP.periodasIIso("2026M07")'), "2026-07-01");
+  lygu(M('GP_OSP.periodasIIso("2026M12")'), "2026-12-01");
+  lygu(M('GP_OSP.periodasIIso("2026K2")'), "2026-06-01", "ketvirtis rišamas prie paskutinio mėnesio");
+  lygu(M('GP_OSP.periodasIIso("2026K4")'), "2026-12-01");
+  lygu(M('String(GP_OSP.periodasIIso("kažkas"))'), "null", "nesuprantamas laikotarpis neturi virsti data");
+});
+
+testas("OSP jungtis", "Pjūvis randamas pagal VARDĄ, o nerastas - pasakomas garsiai", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const pvz = {"dataSets": [{"observations": {"0:0:0": [100.5], "0:0:1": [101.5], "1:0:0": [200.0], "1:0:1": [202.0]}}], "structure": {"dimensions": {"observation": [{"name": "Pagrindinė statybos sąnaudų grupė", "values": [{"name": "Medžiagos ir gaminiai"}, {"name": "Kita"}]}, {"name": "Matavimo vienetai", "values": [{"name": "-"}]}, {"name": "Laikotarpis", "values": [{"name": "2026M06"}, {"name": "2026M07"}]}]}}};
+    const eil = GP_OSP.istraukEilute(pvz, ["Medžiagos ir gaminiai"]);
+    let klaida = "";
+    try { GP_OSP.istraukEilute(pvz, ["Tokio pjūvio nėra"]); } catch(e){ klaida = e.message; }
+    return { eil: eil, klaida: klaida };
+  })()`);
+  lygu(r.eil.length, 2, "rasti abu stebėjimai");
+  lygu(r.eil[r.eil.length-1].laikotarpis, "2026M07", "rikiuojama pagal laikotarpį");
+  lygu(r.eil[r.eil.length-1].reiksme, 101.5);
+  tiesa(r.klaida.indexOf("pjūvis nerastas") >= 0, "nerastas pjūvis turi mesti klaidą, o ne imti pirmą: " + r.klaida);
+});
+
+testas("OSP jungtis", "Reikšmė rašoma į departamento paskelbtą laikotarpį, ne į šiandieną", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("sski");
+    m.laikotarpis = "2026-05-01"; m.demo = true;
+    const b = taikykOSP(m, { id:"sski", laikotarpis:"2026-07-01", reiksme: 126.9, eilute:[1,2,3,4,5,6,7,8,9,10,11,12,126.9] });
+    return { busena: b, lt: m.laikotarpis, pask: latest(m), ilgis: m.series.length, demo: m.demo, tikrinta: !!m.tikrintaOsp };
+  })()`);
+  lygu(r.busena, "atnaujinta");
+  lygu(r.lt, "2026-07-01", "laikotarpis - departamento, ne šiandienos");
+  lygu(r.pask, 126.9);
+  lygu(r.ilgis, 13, "slenkantis langas");
+  lygu(r.demo, false, "reikšmė nebe iliustracinė");
+  tiesa(r.tikrinta, "turi likti žyma, kad šaltinis patikrintas");
+});
+
+testas("OSP jungtis", "Senesnė OSP reikšmė NEPERRAŠO naujesnės turimos", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("vmdu");
+    m.laikotarpis = "2026-07-01"; m.series = m.series.slice(); m.series[m.series.length-1] = 2902;
+    const b = taikykOSP(m, { id:"vmdu", laikotarpis:"2026-06-01", reiksme: 2616, eilute: null });
+    return { busena: b, lt: m.laikotarpis, pask: latest(m), tikrinta: !!m.tikrintaOsp };
+  })()`);
+  lygu(r.busena, "senesnis");
+  lygu(r.lt, "2026-07-01", "laikotarpis neturi atsitraukti");
+  lygu(r.pask, 2902, "reikšmė neturi būti perrašyta senesne");
+  tiesa(r.tikrinta, "šaltinis vis tiek patikrintas");
+});
+
+/* Oficiali statistika velina 1-2 menesius. Jei to nepaisytume, ka tik parsisiustas
+   naujausias paskelbtas skaicius iskart butu pazymetas kaip pasenes, ir ispejimas degtu
+   amzinai - t. y. nustotu ka nors reiksti. */
+testas("OSP jungtis", "Ką tik patikrintas VDA rodiklis nelaikomas pasenusiu", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("sski");
+    m.demo = false; m.laikotarpis = slinktiLaikotarpi(dabartinisLaikotarpis(m), "mėn.", -2);
+    const priesTikrinima = arPasenes(m);
+    m.tikrintaOsp = new Date().toISOString();
+    const poTikrinimo = arPasenes(m);
+    m.tikrintaOsp = new Date(Date.now() - 60*86400000).toISOString();
+    const senaZyma = arPasenes(m);
+    return { priesTikrinima, poTikrinimo, senaZyma };
+  })()`);
+  lygu(r.priesTikrinima, true, "be patikros dviejų mėnesių senumo duomenys yra pasenę");
+  lygu(r.poTikrinimo, false, "ką tik patikrinus - ne");
+  lygu(r.senaZyma, true, "sena patikros žyma nebegalioja");
 });
 
 testas("Įrankiai", "Atstatymas prašo patvirtinimo ir jį atmetus nieko nekeičia", ()=>{

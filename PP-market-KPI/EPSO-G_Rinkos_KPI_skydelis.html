@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="../shared/epso-g.css">
 <!-- Pradine kalba: lankytojas is Lietuvos -> LT, kiti -> EN; rankinis pasirinkimas laimi. -->
 <script src="../shared/lang-detect.js"></script>
+<script src="osp.js"></script>
 <style>
   /* Šviesi tema - tos pačios spalvos kaip visoje G-Procure svetainėje.
      Būsenų tonai sutampa su portalo kortelių ženkliukais (card__badge--*),
@@ -63,6 +64,7 @@
   .demo-banner{display:flex;align-items:center;gap:12px;margin:16px 0 0;padding:11px 16px;border-radius:12px;
     background:var(--yellow-bg);border:1px solid var(--yellow-br);color:var(--yellow);font-size:13px;line-height:1.45}
   .demo-banner .ico{font-size:18px;flex-shrink:0}
+  .demo-banner .juostos-btn{order:3;flex-shrink:0;margin-left:auto;white-space:nowrap}
   .demo-banner b{color:var(--text)}
   .mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
 
@@ -453,6 +455,7 @@
       <div class="meniu">
         <button class="btn" id="btnDuomenys" aria-haspopup="true" aria-expanded="false" aria-controls="duomenuMeniu" data-i18n="btn.data">Duomenys ▾</button>
         <div class="meniu-sarasas" id="duomenuMeniu" role="menu" hidden>
+          <button class="meniu-el" role="menuitem" id="btnOsp" data-i18n="menu.osp">Atnaujinti VDA rodiklius iš OSP</button>
           <button class="meniu-el" role="menuitem" id="btnExport" data-i18n="menu.export">Atsarginė kopija (JSON)</button>
           <button class="meniu-el" role="menuitem" id="btnImport" data-i18n="menu.import">Atkurti iš kopijos</button>
           <button class="meniu-el" role="menuitem" id="btnReset" data-i18n="menu.reset">Atstatyti pradinius duomenis</button>
@@ -467,6 +470,7 @@
 
   <div id="demoBanner" class="demo-banner" style="display:none">
     <span class="ico">⚠️</span>
+    <button class="btn juostos-btn" id="btnOspJuosta" data-i18n="btn.osp" hidden>Atnaujinti VDA iš OSP</button>
     <span id="demoTekstas"><b>Rodomos iliustracinės (demonstracinės) reikšmės.</b> Prieš priimant sprendimus jas pakeiskite realiais rinkos duomenimis (mygtukas „Redaguoti reikšmes" arba „Duomenys → Atkurti iš kopijos"). Šis pranešimas dings, kai bus atnaujinti visi rodikliai.</span>
   </div>
 
@@ -1270,6 +1274,14 @@ const I18N = {
     "btn.cancel":"Atšaukti",
     "btn.print":"🖶 Spausdinti / PDF",
     "btn.data":"Duomenys ▾",
+    "menu.osp":"Atnaujinti VDA rodiklius iš OSP",
+    "btn.osp":"Atnaujinti VDA iš OSP",
+    "osp.working":"Kreipiamasi į Lietuvos statistikos departamentą...",
+    "osp.done":"Atnaujinta iš OSP: {n} VDA rodikliai. Reikšmės priskirtos tam laikotarpiui, kurį paskelbė departamentas.",
+    "osp.fresh":"OSP naujesnių reikšmių neturi - jūsų duomenys jau naujausi.",
+    "osp.partial":"Atnaujinta {n}, nepavyko {klaidu}. Priežastis: {kodel}",
+    "osp.fail":"Nepavyko pasiekti OSP. Patikrinkite ryšį; jei modulis atidarytas iš failo, jungtis neveiks - atsidarykite per g-procure.com.",
+    "osp.nolib":"Nepavyko įkelti osp.js - jungtis neveikia.",
     "menu.export":"Atsarginė kopija (JSON)",
     "menu.import":"Atkurti iš kopijos",
     "menu.reset":"Atstatyti pradinius duomenis",
@@ -1494,6 +1506,14 @@ const I18N = {
     "btn.cancel":"Cancel",
     "btn.print":"🖶 Print / PDF",
     "btn.data":"Data ▾",
+    "menu.osp":"Update VDA indicators from OSP",
+    "btn.osp":"Update VDA from OSP",
+    "osp.working":"Contacting Statistics Lithuania...",
+    "osp.done":"Updated from OSP: {n} VDA indicators. Values are dated to the period published by the statistics office.",
+    "osp.fresh":"OSP has nothing newer - your data is already up to date.",
+    "osp.partial":"{n} updated, {klaidu} failed. Reason: {kodel}",
+    "osp.fail":"Could not reach OSP. Check your connection; if the module was opened from a file, the connection will not work - open it via g-procure.com.",
+    "osp.nolib":"osp.js could not be loaded - the connection is unavailable.",
     "menu.export":"Backup copy (JSON)",
     "menu.import":"Restore from backup",
     "menu.reset":"Reset to initial data",
@@ -1820,7 +1840,17 @@ function laikotarpioAmzius(m){
 /* Riba: praleisti bent du stebejimai. Sakom tik tai, ka zinom - kiek duomenims laiko;
    sprendima, ar tai per sena konkreciam pirkimui, palieka naudotojui. */
 const PASENIMO_RIBA = 2;
-function arPasenes(m){ return !m.demo && laikotarpioAmzius(m) >= PASENIMO_RIBA; }
+/* Oficiali statistika velina 1-2 menesius: liepos SSKI rugsėjį yra NAUJAUSIAS paskelbtas
+   skaicius, o ne apsileidimas. Todel rodiklis, kurio saltini ka tik patikrinom pačioje VDA,
+   nera „pasenes" - kitaip ispejimas degtu amzinai ir nustotu ka nors reiksti.
+   Riba 35 dienos: mėnesinė statistika skelbiama kas mėnesį, tad po to verta pasitikrinti. */
+const OSP_GALIOJA_DIENAS = 35;
+function tikrintaNeseniai(m){
+  if(!m.tikrintaOsp) return false;
+  const d = new Date(m.tikrintaOsp);
+  return !isNaN(d) && (Date.now() - d.getTime()) / 86400000 <= OSP_GALIOJA_DIENAS;
+}
+function arPasenes(m){ return !m.demo && !tikrintaNeseniai(m) && laikotarpioAmzius(m) >= PASENIMO_RIBA; }
 function amziausTekstas(m){
   const n = laikotarpioAmzius(m);
   if(n <= 0) return "";
@@ -1832,6 +1862,9 @@ function amziausTekstas(m){
     : daugiskaita(n, "savaitę", "savaites", "savaičių"));
 }
 // Kitas laikotarpis - jam ir vedama nauja reiksme.
+/* Slenkancio lango ilgis pagal zingsni. Modulio taisykle, tad gyvena modulio srityje -
+   anksciau buvo paslepta „Issaugoti" klausytojo viduje ir OSP jungčiai nematoma. */
+const MAX_TASKU = { "sav.": 12, "mėn.": 13 };
 function kitasLaikotarpis(m){
   return m.laikotarpis ? slinktiLaikotarpi(m.laikotarpis, m.zingsnis, 1) : "";
 }
@@ -3000,6 +3033,11 @@ function renderBanner(){
   const senuSakinys = seni ? t("banner.stale", {n: seni}) : "";
   const kiek = (LANG === "en") ? String(viso - demo)
              : (viso - demo) + " " + daugiskaita(viso - demo, "rodiklis", "rodikliai", "rodiklių");
+  const ospBtn = document.getElementById("btnOspJuosta");
+  if(ospBtn){
+    // Rodom tik tada, kai jungtis is tikruju gali padeti: bent vienas VDA rodiklis pasenes.
+    ospBtn.hidden = !(window.GP_OSP && DATA.metrics.some(m=>GP_OSP.RODIKLIAI[m.id] && arPasenes(m)));
+  }
   if(demo === viso)      el.innerHTML = t("banner.all");
   else if(demo)          el.innerHTML = t("banner.partial", {n: kiek, viso: viso, demo: demo}) + senuSakinys;
   else                   el.innerHTML = t("banner.old", {n: seni, viso: viso, amzius: seniausioAmziausTekstas()});
@@ -3086,7 +3124,6 @@ btnEdit.addEventListener("click", ()=>{
          „taisyti"    - keiciama tik dabartinio laikotarpio reiksme.
        Serija privalo likti BE TARPU ir vienodo zingsnio - tuo remiasi baseVal() ir
        „per N" etikete. Todel siulom tik gretima laikotarpi, ne laisva data. */
-    const MAX_TASKU = { "sav.": 12, "mėn.": 13 };
     let pakeista = 0, naujuTasku = 0;
     document.querySelectorAll("input[data-edit]").forEach(inp=>{
       const m = metricById(inp.dataset.edit);
@@ -3135,6 +3172,82 @@ btnEdit.addEventListener("click", ()=>{
       : t(DATA.metrics.some(arPasenes) ? "toast.nochange.stale" : "toast.nochange"));
   }
 });
+/* ---------- GYVA VDA JUNGTIS (osp.js) --------------------------------------
+   Vienintele vieta modulyje, kur duomenys ateina NE is naudotojo pirstu. Septyni D
+   lygmens rodikliai pasiimami tiesiai is statistikos departamento; likusieji desimt
+   (Brent, LME, BDI ir kt.) nemokamo saltinio, i kuri butu galima kreiptis is
+   narsykles, neturi, tad lieka rankiniai.
+
+   Reiksme rasoma i TA laikotarpi, kuriuo ja paskelbe departamentas, o ne i siandiena:
+   oficiali statistika velina 1-2 menesius, ir apsimesti, kad liepos skaicius yra
+   rugsejo, butu tas pats melas, kaip ir uzpildyti tarpus prasimanymais. */
+function taikykOSP(m, r){
+  if(!m || !r) return "praleista";
+  const senas = m.laikotarpis || "";
+  if(senas && r.laikotarpis < senas){
+    m.tikrintaOsp = new Date().toISOString();  // turim sviezesni uz OSP, bet saltini patikrinom
+    return "senesnis";
+  }
+  if(Array.isArray(r.eilute) && r.eilute.length){
+    /* Menesiniams rodikliams perrasom VISA langa tikromis reiksmemis - taip „per 12 men."
+       palyginimas tampa tikras, be tarpu. Jei istorijos gauta maziau, priekyje paliekam
+       nezinoma, o ne dubliuojam turimas reiksmes. */
+    const ilgis = MAX_TASKU[m.zingsnis] || m.series.length || r.eilute.length;
+    const nauja = r.eilute.slice(-ilgis);
+    while(nauja.length < ilgis) nauja.unshift(null);
+    m.series = nauja;
+  } else {
+    // Ketvirtinis (VMDU): tik naujausia reiksme, praleisti menesiai lieka nezinomi.
+    const zingsniai = senas ? laikotarpiuSkirtumas(senas, r.laikotarpis, m.zingsnis) : 0;
+    if(zingsniai <= 0){ m.series = m.series.slice(); m.series[m.series.length-1] = r.reiksme; }
+    else {
+      const ilgis = MAX_TASKU[m.zingsnis] || m.series.length;
+      m.series = m.series.concat(new Array(Math.max(0, zingsniai-1)).fill(null)).concat([r.reiksme]);
+      while(m.series.length > ilgis) m.series.shift();
+    }
+  }
+  m.laikotarpis = r.laikotarpis;
+  m.demo = false;
+  m.tikrintaOsp = new Date().toISOString();  // saltinis patikrintas, nors pats stebejimas senesnis
+  return "atnaujinta";
+}
+/* Kiek zingsniu nuo vieno laikotarpio iki kito (>=0). Naudojam TIK ketvirtiniam atvejui. */
+function laikotarpiuSkirtumas(nuo, iki, zingsnis){
+  const a = isoIData(nuo), b = isoIData(iki);
+  if(zingsnis === "mėn.") return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
+  return Math.round((b - a) / (7*24*3600*1000));
+}
+let ospDirba = false;
+function atnaujinkIsOSP(){
+  if(ospDirba) return;
+  if(!window.GP_OSP){ showToast(t("osp.nolib")); return; }
+  ospDirba = true;
+  showToast(t("osp.working"));
+  GP_OSP.atnaujink(Object.keys(GP_OSP.RODIKLIAI)).then(res=>{
+    let n = 0;
+    res.ok.forEach(r=>{ if(taikykOSP(metricById(r.id), r) === "atnaujinta") n++; });
+    if(n){
+      DATA.meta.updated = todayLocal();
+      DATA.meta.issaugota = new Date().toISOString();
+      DATA.meta.demo = demoRodikliai().length > 0;
+      saveData();
+    }
+    renderAll();
+    if(res.klaidos.length){
+      // Sakom, KURIE nepavyko ir kodel - tyliai praleisti butu blogiau nei nieko nedaryti.
+      console.warn("OSP:", res.klaidos);
+      showToast(t("osp.partial", {n: n, klaidu: res.klaidos.length, kodel: res.klaidos[0].priezastis.slice(0,80)}));
+    } else {
+      showToast(n ? t("osp.done", {n: n}) : t("osp.fresh"));
+    }
+  }).catch(e=>{
+    console.warn("OSP:", e);
+    showToast(t("osp.fail"));
+  }).then(()=>{ ospDirba = false; });
+}
+document.getElementById("btnOsp").addEventListener("click", atnaujinkIsOSP);
+document.getElementById("btnOspJuosta").addEventListener("click", atnaujinkIsOSP);
+
 btnCancel.addEventListener("click", ()=>{
   exitEditUI();
   renderAll(); // atmeta neišsaugotas įvestis - perpiešia is DATA
