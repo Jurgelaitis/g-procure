@@ -20,6 +20,7 @@
 <!-- Pradine kalba: lankytojas is Lietuvos -> LT, kiti -> EN; rankinis pasirinkimas laimi. -->
 <script src="../shared/lang-detect.js"></script>
 <script src="osp.js"></script>
+<script src="rinka.js"></script>
 <style>
   /* Šviesi tema - tos pačios spalvos kaip visoje G-Procure svetainėje.
      Būsenų tonai sutampa su portalo kortelių ženkliukais (card__badge--*),
@@ -1274,14 +1275,14 @@ const I18N = {
     "btn.cancel":"Atšaukti",
     "btn.print":"🖶 Spausdinti / PDF",
     "btn.data":"Duomenys ▾",
-    "menu.osp":"Atnaujinti VDA rodiklius iš OSP",
-    "btn.osp":"Atnaujinti VDA iš OSP",
-    "osp.working":"Kreipiamasi į Lietuvos statistikos departamentą...",
-    "osp.done":"Atnaujinta iš OSP: {n} VDA rodikliai. Reikšmės priskirtos tam laikotarpiui, kurį paskelbė departamentas.",
-    "osp.fresh":"OSP naujesnių reikšmių neturi - jūsų duomenys jau naujausi.",
+    "menu.osp":"Atnaujinti duomenis iš šaltinių",
+    "btn.osp":"Atnaujinti iš šaltinių",
+    "osp.working":"Kreipiamasi į duomenų šaltinius...",
+    "osp.done":"Atnaujinta rodiklių: {n}. Reikšmės priskirtos tiems laikotarpiams, kuriuos paskelbė šaltiniai, o ne šiandienai.",
+    "osp.fresh":"Šaltiniai naujesnių reikšmių neturi - jūsų duomenys jau naujausi.",
     "osp.partial":"Atnaujinta {n}, nepavyko {klaidu}. Priežastis: {kodel}",
-    "osp.fail":"Nepavyko pasiekti OSP. Patikrinkite ryšį; jei modulis atidarytas iš failo, jungtis neveiks - atsidarykite per g-procure.com.",
-    "osp.nolib":"Nepavyko įkelti osp.js - jungtis neveikia.",
+    "osp.fail":"Nepavyko pasiekti šaltinių. Patikrinkite ryšį; jei modulis atidarytas iš failo, jungtis neveiks - atsidarykite per g-procure.com.",
+    "osp.nolib":"Nepavyko įkelti jungties failų (osp.js / rinka.js).",
     "menu.export":"Atsarginė kopija (JSON)",
     "menu.import":"Atkurti iš kopijos",
     "menu.reset":"Atstatyti pradinius duomenis",
@@ -1506,14 +1507,14 @@ const I18N = {
     "btn.cancel":"Cancel",
     "btn.print":"🖶 Print / PDF",
     "btn.data":"Data ▾",
-    "menu.osp":"Update VDA indicators from OSP",
-    "btn.osp":"Update VDA from OSP",
-    "osp.working":"Contacting Statistics Lithuania...",
-    "osp.done":"Updated from OSP: {n} VDA indicators. Values are dated to the period published by the statistics office.",
-    "osp.fresh":"OSP has nothing newer - your data is already up to date.",
+    "menu.osp":"Update data from sources",
+    "btn.osp":"Update from sources",
+    "osp.working":"Contacting the data sources...",
+    "osp.done":"Indicators updated: {n}. Values are dated to the periods published by the sources, not to today.",
+    "osp.fresh":"The sources have nothing newer - your data is already up to date.",
     "osp.partial":"{n} updated, {klaidu} failed. Reason: {kodel}",
-    "osp.fail":"Could not reach OSP. Check your connection; if the module was opened from a file, the connection will not work - open it via g-procure.com.",
-    "osp.nolib":"osp.js could not be loaded - the connection is unavailable.",
+    "osp.fail":"Could not reach the sources. Check your connection; if the module was opened from a file, the connection will not work - open it via g-procure.com.",
+    "osp.nolib":"The connector files (osp.js / rinka.js) could not be loaded.",
     "menu.export":"Backup copy (JSON)",
     "menu.import":"Restore from backup",
     "menu.reset":"Reset to initial data",
@@ -3036,7 +3037,9 @@ function renderBanner(){
   const ospBtn = document.getElementById("btnOspJuosta");
   if(ospBtn){
     // Rodom tik tada, kai jungtis is tikruju gali padeti: bent vienas VDA rodiklis pasenes.
-    ospBtn.hidden = !(window.GP_OSP && DATA.metrics.some(m=>GP_OSP.RODIKLIAI[m.id] && arPasenes(m)));
+    // Rodom, kai bent vienas automatiskai gaunamas rodiklis pasenes (VDA arba globalus).
+    ospBtn.hidden = !DATA.metrics.some(m=>arPasenes(m) &&
+      ((window.GP_OSP && GP_OSP.RODIKLIAI[m.id]) || (window.GP_RINKA && GP_RINKA.RODIKLIAI[m.id])));
   }
   if(demo === viso)      el.innerHTML = t("banner.all");
   else if(demo)          el.innerHTML = t("banner.partial", {n: kiek, viso: viso, demo: demo}) + senuSakinys;
@@ -3217,15 +3220,46 @@ function laikotarpiuSkirtumas(nuo, iki, zingsnis){
   if(zingsnis === "mėn.") return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
   return Math.round((b - a) / (7*24*3600*1000));
 }
+/* Globalus rodikliai (nafta, metalai) per proxy. Kasdienei serijai atkuriam VISA savaitini
+   langa; menesinei (aliuminis, varis - nemokamai kitaip nera) rasom tik naujausia taska i ta
+   savaite, kuriai jis priklauso, ir tarpu neprasimanom. */
+function taikykRinka(m, r){
+  if(!m || !r || typeof r.reiksme !== "number") return "praleista";
+  const ilgis = MAX_TASKU[m.zingsnis] || m.series.length;
+  if(r.daznis === "d." && Array.isArray(r.eilute) && r.eilute.length){
+    const pabaiga = dabartinisLaikotarpis(m) || m.laikotarpis || r.laikotarpis;
+    m.series = GP_RINKA.iSavaitini(r.eilute, pabaiga, ilgis);
+    m.laikotarpis = pabaiga;
+  } else {
+    // Menesine reiksme: laikotarpis - tas, kuri paskelbe saltinis, ne siandiena.
+    const zingsniai = m.laikotarpis ? laikotarpiuSkirtumas(m.laikotarpis, r.laikotarpis, m.zingsnis) : 0;
+    if(zingsniai <= 0){ m.series = m.series.slice(); m.series[m.series.length-1] = r.reiksme; }
+    else {
+      m.series = m.series.concat(new Array(Math.max(0, zingsniai-1)).fill(null)).concat([r.reiksme]);
+      while(m.series.length > ilgis) m.series.shift();
+      /* Data - saltinio, ne savaitinio tinklelio: menesine reiksme priklauso rugpjuciui,
+         tad rodyti „liepos 31 d." butu netikslu vienu menesio riba. */
+      m.laikotarpis = r.laikotarpis;
+    }
+  }
+  m.demo = false;
+  m.tikrintaOsp = new Date().toISOString();
+  return "atnaujinta";
+}
 let ospDirba = false;
 function atnaujinkIsOSP(){
   if(ospDirba) return;
-  if(!window.GP_OSP){ showToast(t("osp.nolib")); return; }
+  if(!window.GP_OSP && !window.GP_RINKA){ showToast(t("osp.nolib")); return; }
   ospDirba = true;
   showToast(t("osp.working"));
-  GP_OSP.atnaujink(Object.keys(GP_OSP.RODIKLIAI)).then(res=>{
+  const globalus = window.GP_RINKA
+    ? GP_RINKA.atnaujink().catch(e=>({ ok:[], klaidos:[{id:"globalūs", priezastis:(e&&e.message)||String(e)}] }))
+    : Promise.resolve({ ok:[], klaidos:[] });
+  Promise.all([GP_OSP.atnaujink(Object.keys(GP_OSP.RODIKLIAI)), globalus]).then(([vda, glob])=>{
+    const res = { ok: vda.ok.concat(glob.ok), klaidos: vda.klaidos.concat(glob.klaidos) };
     let n = 0;
-    res.ok.forEach(r=>{ if(taikykOSP(metricById(r.id), r) === "atnaujinta") n++; });
+    vda.ok.forEach(r=>{ if(taikykOSP(metricById(r.id), r) === "atnaujinta") n++; });
+    glob.ok.forEach(r=>{ if(taikykRinka(metricById(r.id), r) === "atnaujinta") n++; });
     if(n){
       DATA.meta.updated = todayLocal();
       DATA.meta.issaugota = new Date().toISOString();
