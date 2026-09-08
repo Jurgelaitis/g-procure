@@ -330,7 +330,35 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.7 (esama, 2026-09-08): **pasenusių duomenų atnaujinimas vienu išsaugojimu.**
+- v6.8 (esama, 2026-09-08): **duomenų amžius pasakomas garsiai, o ne išnašoje.**
+
+  NAUDOTOJO PRANEŠIMAS (tas pats naudotojas, tą pačią dieną): „Skiltyje Automatinė tendencijų
+  santrauka nurodoma, kad Duomenys išsaugoti: 2026 m. liepos 11 d. Nėra teisinga vertinti
+  tokio senumo duomenis." Jis teisus, ir tai buvo atskira klaida nuo v6.7.
+
+  KLAIDA. `renderBanner()` grąžindavo `return` iškart, jei nė vienas rodiklis nebėra
+  iliustracinis (`demo === 0`). Įspėjimas apie pasenimą (`banner.stale`) gyveno TIK toje
+  juostoje, todėl naudotojas, kuris VISAS reikšmes įvedė pats, bet prieš du mėnesius, jokio
+  perspėjimo nematydavo. Skydelis ramiai skelbė „Bendras rinkos klimatas - 40/100, įtemptas;
+  rekomenduojama įtraukti sutartines apsaugas", nors visi 17 rodiklių buvo 8 savaičių senumo.
+  Vienintelė užuomina buvo neutrali eilutė „Duomenys išsaugoti: 2026 m. liepos 11 d.", kuri
+  skamba kaip patikinimas, o ne kaip įspėjimas.
+
+  PATAISYTA:
+  - Juosta turi TRIS atvejus, ne du: viskas iliustracinu, dalis iliustracinių, ir naujas -
+    viskas tikra, bet pasenę (`banner.old`, sako amžių ir kiek rodiklių).
+  - Santrauka PRADEDAMA nuo įspėjimo (`ai-warn` blokas), o ne baigiama data: „Išvados remiasi
+    pasenusiais duomenimis. Naujausi stebėjimai įvesti prieš 8 savaites... Pasenę 17 iš 17."
+    Amžius imamas iš SENIAUSIO rodiklio - išvados tokios senos, kaip seniausias jas maitinantis
+    rodiklis.
+  - Pranešimas „Reikšmių neįvesta" pasenusiems duomenims paaiškina veiksmą, o ne tik konstatuoja.
+
+  KO SĄMONINGAI NEDARIAU: neišjungiau klimato balo ir neišėmiau pasenusių rodiklių iš
+  skaičiavimo. Tai pakeistų rodiklių prasmę, o ne tik jų pateikimą - atskiras sprendimas.
+
+  TESTAI: 120 (buvo 116). Keturi nauji, kiekvienas su mutacijos patikra.
+
+- v6.7 (2026-09-08): **pasenusių duomenų atnaujinimas vienu išsaugojimu.**
 
   NAUDOTOJO PRANEŠIMAS: „Duomenys išsaugoti: 2026 m. liepos 11 d. Iš esmės neatnaujinu
   duomenų, tačiau nieko nevyksta." Atkartota pasodinus liepos 11 d. įrašą - eilutė sutapo
