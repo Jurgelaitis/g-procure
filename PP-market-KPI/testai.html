@@ -864,7 +864,7 @@ testas("Įrankiai", "„Duomenys“ meniu užvertas, atsidaro ir užsiveria per 
   lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display") !== "none", true, "atidarius");
   lygu(M("document.getElementById('btnDuomenys').getAttribute('aria-expanded')"), "true");
   lygu(M(`[...document.querySelectorAll("#duomenuMeniu .meniu-el")].map(x=>x.textContent)`),
-       ["Atnaujinti VDA rodiklius iš OSP", "Atsarginė kopija (JSON)", "Atkurti iš kopijos", "Atstatyti pradinius duomenis"]);
+       ["Atnaujinti duomenis iš šaltinių", "Atsarginė kopija (JSON)", "Atkurti iš kopijos", "Atstatyti pradinius duomenis"]);
   M(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`);
   lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display"), "none", "po Escape");
 });
@@ -945,6 +945,52 @@ testas("OSP jungtis", "Ką tik patikrintas VDA rodiklis nelaikomas pasenusiu", (
   lygu(r.priesTikrinima, true, "be patikros dviejų mėnesių senumo duomenys yra pasenę");
   lygu(r.poTikrinimo, false, "ką tik patikrinus - ne");
   lygu(r.senaZyma, true, "sena patikros žyma nebegalioja");
+});
+
+/* Globalus rodikliai eina per proxy (rinka.js), nes FRED reikalauja rakto. Tinklo cia
+   neliečiam - tikrinam kasdienes serijos pavertima savaitine ir menesines reiksmes elgesį. */
+testas("Rinkos jungtis", "Kasdienė serija paverčiama savaitine, imant tos dienos arba ankstesnę reikšmę", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const eil = [
+      { laikotarpis: "2026-08-10", reiksme: 10 },
+      { laikotarpis: "2026-08-14", reiksme: 14 },
+      { laikotarpis: "2026-08-21", reiksme: 21 },
+      { laikotarpis: "2026-09-04", reiksme: 40 }
+    ];
+    return GP_RINKA.iSavaitini(eil, "2026-09-04", 4);   // 08-14, 08-21, 08-28, 09-04
+  })()`);
+  lygu(r, [14, 21, 21, 40], "08-28 stebėjimo nėra, tad imama ankstesnė (08-21), o ne vėlesnė");
+});
+
+testas("Rinkos jungtis", "Kai ankstesnės reikšmės nėra, lieka nežinoma, o ne nulis", ()=>{
+  paruosk();
+  const r = M(`GP_RINKA.iSavaitini([{ laikotarpis: "2026-09-04", reiksme: 40 }], "2026-09-04", 3)`);
+  lygu(r, [null, null, 40], "prieš pirmą stebėjimą reikšmių nėra");
+});
+
+testas("Rinkos jungtis", "Kasdienis rodiklis atkuria visą savaitinį langą, mėnesinis - tik naujausią tašką", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const dienos = [];
+    for(let i = 120; i >= 0; i--){
+      const d = new Date(); d.setDate(d.getDate() - i);
+      dienos.push({ laikotarpis: d.toISOString().slice(0,10), reiksme: 70 + (i % 5) });
+    }
+    const b = metricById("brent");
+    taikykRinka(b, { id:"brent", laikotarpis: dienos[dienos.length-1].laikotarpis, reiksme: 70, daznis:"d.", eilute: dienos });
+    const al = metricById("lme_al");
+    al.laikotarpis = "2026-05-15";
+    taikykRinka(al, { id:"lme_al", laikotarpis:"2026-08-01", reiksme: 2611.4, daznis:"mėn.", eilute: null });
+    return { brentTuscios: b.series.filter(v=>v===null).length, brentIlgis: b.series.length,
+             alLt: al.laikotarpis, alPask: latest(al), brentDemo: b.demo, tikrinta: !!b.tikrintaOsp };
+  })()`);
+  lygu(r.brentTuscios, 0, "kasdienei serijai spragų būti neturi");
+  lygu(r.brentIlgis, 12, "savaitinis langas");
+  lygu(r.alLt, "2026-08-01", "mėnesinė reikšmė datuojama šaltinio, ne savaitinio tinklelio data");
+  lygu(r.alPask, 2611.4);
+  lygu(r.brentDemo, false);
+  tiesa(r.tikrinta, "žyma, kad šaltinis patikrintas");
 });
 
 testas("Įrankiai", "Atstatymas prašo patvirtinimo ir jį atmetus nieko nekeičia", ()=>{

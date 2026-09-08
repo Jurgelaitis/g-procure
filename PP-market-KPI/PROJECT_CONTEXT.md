@@ -330,7 +330,44 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.9 (esama, 2026-09-08): **gyva VDA jungtis - septyni rodikliai atsinaujina patys.**
+- v6.10 (esama, 2026-09-08): **globalūs rodikliai per proxy - nafta ir metalai.**
+
+  Po VDA jungties liko dešimt rankinių rodiklių. Naudotojo sprendimu automatizuoti keturi,
+  kuriems yra NEMOKAMAS šaltinis: Brent, WTI, aliuminis, varis (FRED).
+
+  KODĖL PER SERVERĮ, o VDA - tiesiai. OSP rakto nereikalauja. FRED reikalauja, o raktas
+  kliento JavaScript'e matomas visiems - `CLAUDE.md` tai draudžia. Todėl `rinka.js` kviečia
+  `https://api.g-procure.com/api/rinka`, o raktas lieka serveryje.
+
+  DVI NAUJOS DALYS:
+  - `PP-market-KPI/backend-rinka-routes.js` - Express maršrutas Hetzner serveriui. Repozitorijoje
+    laikomas kaip ir `PP-esg/backend-pp-esg-routes.js`: serveris gyvena NE čia, tad failas yra
+    šaltinis ir įdiegimo instrukcija, ne veikiantis kodas.
+  - `PP-market-KPI/rinka.js` - naršyklės pusė. Mygtukas tas pats, dabar vadinasi „Atnaujinti iš
+    šaltinių" ir kviečia abu: VDA tiesiai, globalius per proxy. Vienas šaltinis neveikia -
+    kitas vis tiek atnaujina, o pranešime pasakoma, kas nepavyko.
+
+  DAŽNIS - ŠALTINIO, NE MŪSŲ PASIRINKIMAS (svarbu suprasti):
+  - Brent ir WTI FRED skelbia KASDIEN, tad savaitinis 12 taškų langas atkuriamas PILNAI, be
+    spragų, ir „per 4 sav." pokytis tampa tikras.
+  - Aliuminio ir vario NEMOKAMAI skelbiamos tik MĖNESINĖS kainos (LME dienos kainos mokamos).
+    Įrašoma tik naujausia reikšmė, savaitės tarp jų lieka nežinomos, tad tų dviejų rodiklių
+    „per 4 sav." pokytis rodomas „–". Tai teisinga: iš mėnesinės serijos savaitinio pokyčio
+    nežinom. Jei to signalo reikia kas savaitę, tuos du rodiklius geriau vesti ranka.
+
+  DVI SMULKMENOS, KURIOS BŪTŲ TYLIAI MELAVUSIOS:
+  - FRED trūkstamą stebėjimą žymi tašku („."). `Number(".")` yra NaN, bet neatsargus kodas jį
+    paverstų nuliu - grafike atsirastų netikras kritimas. Serveryje išmetama.
+  - Savaitiniam taškui imama tos dienos arba ANKSTESNĖ biržos reikšmė, niekada vėlesnė:
+    vėlesnė būtų žvilgsnis iš ateities į praeitį. Nėra ankstesnės - lieka nežinoma.
+
+  NEĮDIEGTA: maršrutas serveryje. Reikia nemokamo FRED rakto (registruoja naudotojas - aš
+  paskyrų nekuriu) ir prieigos prie Hetzner (šioje mašinoje jos nėra). Iki tol modulis
+  pasako, kad maršrutas neįdiegtas, o VDA dalis veikia kaip veikusi.
+
+  TESTAI: 128 (buvo 125). Trys nauji su mutacijos patikra.
+
+- v6.9 (2026-09-08): **gyva VDA jungtis - septyni rodikliai atsinaujina patys.**
 
   NAUDOTOJO KLAUSIMAS: „Kaip padaryti, kad pagaliau veiktų ir duomenys atsinaujintų?" Atsakymas
   buvo nemalonus, bet teisingas: modulis NIEKUR nesijungė - visos 17 reikšmių įvedamos ranka,
