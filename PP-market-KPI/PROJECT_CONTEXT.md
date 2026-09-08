@@ -330,7 +330,52 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.8 (esama, 2026-09-08): **duomenų amžius pasakomas garsiai, o ne išnašoje.**
+- v6.9 (esama, 2026-09-08): **gyva VDA jungtis - septyni rodikliai atsinaujina patys.**
+
+  NAUDOTOJO KLAUSIMAS: „Kaip padaryti, kad pagaliau veiktų ir duomenys atsinaujintų?" Atsakymas
+  buvo nemalonus, bet teisingas: modulis NIEKUR nesijungė - visos 17 reikšmių įvedamos ranka,
+  todėl spaudžiant bet ką niekas ir negalėjo atsinaujinti.
+
+  KAS PADARYTA. Naujas `osp.js`: septyni D lygmens rodikliai (SSKI ir trys dedamosios, GKI,
+  VKI, VMDU) pasiimami TIESIAI iš Lietuvos statistikos departamento, be serverio - OSP atsakyme
+  yra `Access-Control-Allow-Origin: https://g-procure.com`. Mygtukas yra dviejose vietose:
+  „Duomenys ▾" meniu ir pačioje pasenusių duomenų juostoje, t. y. ten, kur naudotojui apie
+  problemą ir pranešama.
+
+  MATAVIMAS PRIEŠ RAŠANT KODĄ (be jo trys iš septynių būtų buvę tylūs nuliai):
+  - `S7R260_M2020121` (VKI, buvęs modulio šaltinis) **MIRĘS**: atsakinėja HTTP 200, bet serija
+    baigiasi 2025M12. Pakeistas į `S7R330_M2020121_2` (iki 2026M08, atnaujintas tą pačią dieną).
+    `S7R330_M2020121_3` irgi tuščias. Tai TREČIAS kartas, kai OSP serija miršta tyliai.
+  - SSKI medžiagų pjūvis yra „Medžiagos ir gaminiai", ne „Medžiagos".
+  - VMDU pjūviui reikia keturių sąlygų, tarp jų „Šalies ūkis su individualiosiomis įmonėmis".
+
+  PJŪVIAI APRAŠOMI VARDAIS, ne indeksais: SDMX raktas „0:2:0:15" yra dimensijų POZICIJOS, o jos
+  keičiasi, kai departamentas prideda pjūvių. Neradus pjūvio metama klaida - pirmas pasitaikęs
+  NEIMAMAS.
+
+  DVI SĄŽININGUMO TAISYKLĖS:
+  - Reikšmė rašoma į TĄ laikotarpį, kurį paskelbė departamentas, o ne į šiandieną. Oficiali
+    statistika vėluoja 1-2 mėn.; apsimesti, kad liepos skaičius yra rugsėjo, būtų toks pat
+    melas, kaip užpildyti tarpus prasimanymais.
+  - Todėl atsirado `tikrintaOsp` ir `OSP_GALIOJA_DIENAS = 35`: ką tik patikrintas rodiklis
+    nelaikomas pasenusiu, nors pats stebėjimas 2 mėn. senumo. Be to įspėjimas degtų amžinai ir
+    nustotų ką nors reikšti. Po 35 dienų žyma nustoja galioti.
+
+  MĖNESINIAMS rodikliams perrašomas VISAS 13 taškų langas tikromis OSP reikšmėmis, tad „per
+  12 mėn." palyginimas tampa tikras, be tarpų. VMDU (ketvirtinis) gauna tik naujausią reikšmę.
+
+  RASTA KELIU: `MAX_TASKU` gyveno „Išsaugoti" klausytojo VIDUJE, tad OSP jungčiai buvo
+  nematomas (ReferenceError, kurį pagavo tik gyvas bandymas). Iškeltas į modulio sritį.
+
+  KAS LIEKA RANKINIS: dešimt globalių rodiklių (Brent, WTI, LME Al ir Cu, BDI, TAC, konteinerių
+  frachtas, polimerai, Hormūzas, sankcijos). Nemokamo šaltinio, į kurį galima kreiptis iš
+  naršyklės, jiems nėra - naudotojo pageidavimu žvalgyba dėl NEMOKAMŲ šaltinių atskirai.
+
+  TESTAI: 125 (buvo 120). Penki nauji su mutacijos patikra. Tinklo testuose neliečiam: tikras
+  kreipimasis veikia TIK iš g-procure.com, nes OSP CORS leidžia tik tą kilmę - iš localhost ir
+  iš failo jungtis neveikia (modulis tai pasako tiesiai).
+
+- v6.8 (2026-09-08): **duomenų amžius pasakomas garsiai, o ne išnašoje.**
 
   NAUDOTOJO PRANEŠIMAS (tas pats naudotojas, tą pačią dieną): „Skiltyje Automatinė tendencijų
   santrauka nurodoma, kad Duomenys išsaugoti: 2026 m. liepos 11 d. Nėra teisinga vertinti
