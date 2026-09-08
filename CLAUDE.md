@@ -126,6 +126,13 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
      BŪTINA kartu su 1 punktu: nginx numatytieji 1 MB kitaip tampa naujomis lubomis.
   3. `shared/ai-proxy.js` - `MAX_BASE64`, laikoma žemiau serverio ribos (kūne dar
      telpa promptas ir apvalkalas).
+- **KLAIDŲ ŽINUTĖS ŽMOGUI - `shared/ai-proxy.js` (2026-09-08).** Viršijus kūno ribą nginx
+  grąžina savo HTML puslapį („413 Request Entity Too Large ... nginx/1.28.3"), o Express -
+  `PayloadTooLargeError`. Anksčiau visa tai keliaudavo tiesiai į naudotojo ekraną. Dabar
+  `klaidosZinute()` verčia statusą į sakinį (413 sako tikrą failo ribą iš `MAX_PDF_BAITU`,
+  429, 5xx), o HTML kūnas į ekraną nebededamas. Visi moduliai rodo `res.error`, tad taisyti
+  reikia TIK čia. Kartojimo sprendimas (`isRetryable`) remiasi STATUSU, ne žinutės tekstu -
+  kitaip pagražinus žinutę 529 „overloaded" nustotų kartotis.
 - **DOTENV EILIŠKUMAS - patikrintas spąstas (2026-09-08).** `index.js` maršrutų moduliai
   (`routes/*.js`) `process.env` skaito **failo įkėlimo metu**, tad `require('dotenv').config()`
   PRIVALO stovėti PIRMAS, prieš bet kurį `require('./routes/...')`. Diegiant `/api/rinka`

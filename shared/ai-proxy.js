@@ -44,6 +44,35 @@
   // base64 pripucia 4/3, tad neapdorotas PDF negali virsyti ~3/4 biudzeto.
   var MAX_PDF_BAITU = Math.floor(MAX_BASE64 * 3 / 4);
 
+  /* Klaidos zinute ZMOGUI, ne zurnalui.
+     Kodel to prireike: virsijus kuno riba nginx grazina savo HTML puslapi
+     („413 Request Entity Too Large ... nginx/1.28.3 (Ubuntu)"), o Express -
+     PayloadTooLargeError. Anksciau visa tai keliaudavo tiesiai i naudotojo ekrana,
+     tad zmogus, ikeles per dideli PDF, matydavo HTML su nginx versija ir jokio
+     paaiskinimo, ka daryti. Patikrinta prie saltinio 2026-09-08.
+     PASTABA: apie failo skaidyma ar suspaudima cia NERASOM - CLAUDE.md tai draudzia;
+     riba kelama serveryje, o ne apeinama kliente. */
+  function mbTekstas(baitai) { return Math.floor(baitai / (1024 * 1024)) + " MB"; }
+  function arHtml(t) { return typeof t === "string" && /^\s*<(?:!doctype|html|head|body)/i.test(t); }
+
+  function klaidosZinute(status, raw, rawText) {
+    if (status === 413) {
+      return "Failas per didelis - serveris jo nepriėmė. Didžiausias dokumento dydis apie " +
+             mbTekstas(MAX_PDF_BAITU) + ". Pateikite mažesnės apimties failą.";
+    }
+    if (status === 429) return "Per daug užklausų iš eilės. Palaukite kelias sekundes ir bandykite dar kartą.";
+    if (status === 401 || status === 403) return "Serveris atmetė užklausą (" + status + "). Kreipkitės į sistemos prižiūrėtoją.";
+    if (status >= 500) return "Serverio klaida (" + status + "). Pabandykite po kelių minučių.";
+    var zinute = "API klaida " + status;
+    if (raw && raw.error) {
+      zinute += ": " + (typeof raw.error === "string" ? raw.error : JSON.stringify(raw.error));
+    } else if (typeof rawText === "string" && rawText && !arHtml(rawText)) {
+      // HTML puslapio i ekrana nededam - is jo naudotojui jokios naudos.
+      zinute += ": " + rawText.slice(0, 300);
+    }
+    return zinute;
+  }
+
   // Normalizuoja path: leidziam TIK santykini kelia savo proxy viduje.
   // Jei kas paduoda pilna URL ar host'a - ignoruojam ir imam tik kelio dali,
   // taip klientas negali nurodyti kito host'o.
@@ -108,9 +137,16 @@
   // tikrinamas ir tekstas. Kitos klaidos (400, 500, tinklo) - nekartojamos.
   var MAX_RETRIES = 3;   // max 3 pakartojimai (is viso 4 bandymai)
 
+  /* Kartojimo sprendimas remiasi STATUSU, ne zinutes tekstu.
+     Anksciau cia buvo tikrinamas `result.error` tekstas („overloaded"), o jame guledavo
+     neapdorotas atsakymo kunas. Nuo tada, kai zinutes rasomos zmogui, to teksto ten nebera -
+     tad Anthropic 529 „overloaded_error" butu nustojes kartotis. Statusas patikimesnis:
+     jis nepriklauso nuo to, kaip suformuluota zinute. */
   function isRetryable(result) {
     if (!result || result.ok) return false;
-    if (result.status === 429) return true;
+    if (result.status === 429) return true;      // per daug uzklausu
+    if (result.status >= 500) return true;       // 529 overloaded ir kitos laikinos serverio klaidos
+    // 413 (per didelis failas) NEKARTOJAMAS - kartojimas duotu ta pati atsakyma.
     return /overloaded|rate/i.test(result.error || "");
   }
 
@@ -166,13 +202,8 @@
           try { raw = rawText ? JSON.parse(rawText) : null; } catch (e) { raw = rawText; }
 
           if (!response.ok) {
-            var errMsg = "API klaida " + status;
-            if (raw && raw.error) {
-              errMsg += ": " + (typeof raw.error === "string" ? raw.error : JSON.stringify(raw.error));
-            } else if (typeof rawText === "string" && rawText) {
-              errMsg += ": " + rawText.slice(0, 300);
-            }
-            return { ok: false, text: "", raw: raw, status: status, error: errMsg };
+            return { ok: false, text: "", raw: raw, status: status,
+                     error: klaidosZinute(status, raw, rawText) };
           }
 
           return { ok: true, text: extractText(raw), raw: raw, status: status, error: null };
