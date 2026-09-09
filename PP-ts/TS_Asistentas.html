@@ -2071,7 +2071,7 @@ details[open] summary {
                   <svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </div>
                 <p>Vilkite failą čia arba spustelėkite</p>
-                <small>DOCX, DOC, PDF · iki 25 MB</small>
+                <small>DOCX, DOC, PDF · analizei imama iki 120 000 simbolių</small>
               </div>
               <input type="file" id="fileInput" class="file-input" accept=".docx,.doc,.pdf" />
               <div class="file-list" id="fileList"></div>
@@ -2102,6 +2102,7 @@ details[open] summary {
               <textarea id="specText" class="form-textarea" placeholder="Įklijuokite techninės specifikacijos tekstą čia arba įkelkite DOCX/PDF failą..." oninput="App.updateStats()"></textarea>
               <div class="flex flex-between mt-1">
                 <div class="form-help" id="textStats">0 simbolių · 0 žodžių · 0 eil.</div>
+                <div id="specKirpimas"></div>
                 <button class="btn btn-ghost btn-sm" onclick="App.clearText()">
                   <svg class="ico" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                   Išvalyti
@@ -2747,10 +2748,13 @@ const App = (() => {
       } else {
         text = await file.text();
       }
-      $('#specText').value = text;
+      // Kerpam IS KARTO: laukelyje turi guleti tas pats tekstas, kuris keliaus i analize.
+      const rib = ribotiSpec(text);
+      $('#specText').value = rib.tekstas;
       state.fileName = file.name;
-      state.spec = text;
+      state.spec = rib.tekstas;
       updateStats();
+      rodykKirpima(rib);
       showFileItem(file.name, file.size, false);
       toast(`Įkelta: ${file.name} (${formatBytes(file.size)})`, 'success');
     } catch (err) {
@@ -2853,6 +2857,59 @@ const App = (() => {
   }
 
   // --- TEXT STATS ---
+  /* ---------- Teksto riba analizei ----------
+     Riba kyla NE is transporto: uzklausos kuno riba yra 10 MB, o net 1000 puslapiu
+     specifikacija duoda ~3,8 MB - transportas netrukdo. Riba kyla is MODELIO KONTEKSTO
+     LANGO: 200 puslapiu lietuviskai jau yra ~167 tuks. zetonu, o kontekstas ~200 tuks.,
+     ir i ji dar turi tilpti sistemos promptas bei atsakymas. Skaicius toks pat, kaip
+     PP-qual (`AI_TEKSTO_RIBA`) - tas pats klausimas, tas pats atsakymas.
+
+     KERTINE TAISYKLE (perimta is PP-qual): kirpimas NIEKADA nebuna tylus, ir textarea
+     rodo TIKSLIAI ta teksta, kuris bus analizuojamas. Nukirptas specifikacijos galas
+     reiskia NEAUDITUOTUS skyrius - butent juos sis modulis ir turi tikrinti, tad tylus
+     kirpimas cia yra rizika, ne patogumo klausimas.
+
+     Iki 2026-09-09 jokios ribos nebuvo, o po ikelimo lauku buvo pazadeta „iki 25 MB" -
+     skaicius, neatitikes nei transporto ribos, nei konteksto lango. */
+  const AI_TEKSTO_RIBA = 120000;
+
+  // Grazina { tekstas, nukirpta, viso }. Iskvietejas PRIVALO parodyti ispejima.
+  function ribotiSpec(text) {
+    const t = String(text || ''), viso = t.length;
+    return viso <= AI_TEKSTO_RIBA
+      ? { tekstas: t, nukirpta: false, viso }
+      : { tekstas: t.slice(0, AI_TEKSTO_RIBA), nukirpta: true, viso };
+  }
+
+  function rodykKirpima(r) {
+    const el = $('#specKirpimas');
+    if (!el) return;
+    el.innerHTML = r.nukirpta
+      ? `<div class="alert alert-warning" style="margin-top:10px">
+           <div><strong>Dokumentas per ilgas - analizuojama tik jo dalis.</strong><br>
+           Įkelta ${r.viso.toLocaleString('lt-LT')} simb., analizei paimti pirmieji
+           ${AI_TEKSTO_RIBA.toLocaleString('lt-LT')}. Likusi dalis <b>nebus patikrinta</b>.
+           Jei joje yra reikalavimų, įkelkite tą dokumento dalį atskirai - kitaip ji liks
+           neaudituota.</div>
+         </div>`
+      : '';
+  }
+
+  /* Paruosia teksta analizei: nukerpa, PARODO ta pati teksta laukelyje (kad zmogus matytu,
+     kas is tikruju bus tikrinama) ir palieka ispejima. Kviesti PRIES kiekviena analize. */
+  function paruoskSpecAnalizei() {
+    const r = ribotiSpec($('#specText').value);
+    if (r.nukirpta) {
+      $('#specText').value = r.tekstas;
+      state.spec = r.tekstas;
+      updateStats();   // perskaiciuoja statistika ir NUIMA ispejima (tekstas jau sutrumpetas)
+    }
+    // Butinai PO updateStats: cia grazinam ispejima su PRADINIU ilgiu, kad zmogus matytu,
+    // kiek buvo ir kiek liko. Sukeitus eiles vietomis ispejimas dingtu.
+    rodykKirpima(r);
+    return r.tekstas;
+  }
+
   function updateStats() {
     const txt = $('#specText').value;
     state.spec = txt;
@@ -2860,6 +2917,11 @@ const App = (() => {
     const words = (txt.trim().match(/\S+/g) || []).length;
     const lines = txt.split('\n').length;
     $('#textStats').textContent = `${chars.toLocaleString('lt-LT')} simb. · ${words.toLocaleString('lt-LT')} žodž. · ${lines.toLocaleString('lt-LT')} eil.`;
+    /* Ispejam IS KARTO, o ne tik paspaudus analize: zmogus turi zinoti dar rinkdamasis,
+       ka daryti su per ilgu dokumentu. Teksto cia NEkerpam - kirpsim analizes pradzioje.
+       Nepjaustom ir del greicio: 300 tuks. simboliu slice per kiekviena klavisa butu tuscias
+       darbas, tad perduodam tik ilgi. */
+    rodykKirpima({ viso: chars, nukirpta: chars > AI_TEKSTO_RIBA });
   }
 
   function clearText() {
@@ -2915,9 +2977,10 @@ const App = (() => {
   // --- ANALYSIS ENTRY POINTS ---
   async function runRulesOnly() {
     if (!ensureSpec()) return;
+    const specas = paruoskSpecAnalizei();   // tekstas galejo buti ne is failo, o iklijuotas
     showProgress();
     setProgress(20, 'Vykdomos taisyklės...');
-    const rules = RuleEngine.run(state.spec, gatherMetadata());
+    const rules = RuleEngine.run(specas, gatherMetadata());
     setProgress(100, 'Atlikta');
     state.rulesResult = rules;
     state.analysis = composeAnalysis(rules.issues, [], 'rules-only');
@@ -2936,12 +2999,13 @@ const App = (() => {
     }
     showProgress();
     try {
+      const specas = paruoskSpecAnalizei();  // tekstas galejo buti ne is failo, o iklijuotas
       setProgress(10, 'Vykdomos taisyklės...');
-      const rules = RuleEngine.run(state.spec, gatherMetadata());
+      const rules = RuleEngine.run(specas, gatherMetadata());
       state.rulesResult = rules;
 
       setProgress(30, 'Siunčiama Claude API...');
-      const aiResult = await AIAnalyzer.analyze(state.spec, gatherMetadata(), rules, state.settings, (label, pct) => {
+      const aiResult = await AIAnalyzer.analyze(specas, gatherMetadata(), rules, state.settings, (label, pct) => {
         setProgress(30 + pct * 0.6, label);
       });
 
