@@ -403,4 +403,40 @@ Inicializuoja PDF.js worker'į iš cdnjs CDN.
 
 ---
 
+## 12. Teksto riba analizei (2026-09-09)
+
+Iki šiol modulis neturėjo JOKIOS teksto ribos: `state.spec` keliaudavo į API visas, o po
+įkėlimo lauku buvo pažadėta „iki 25 MB" - skaičius, neatitikęs nei transporto ribos (10 MB
+užklausos kūno), nei PDF ribos (~6 MB), nei tikrojo apribojimo.
+
+**Tikrasis apribojimas yra modelio konteksto langas, ne failo dydis.** Modulis dokumentą
+skaito NARŠYKLĖJE (`mammoth` DOCX, `pdf.js` PDF) ir siunčia tik ištrauktą tekstą - failas
+serverio nepasiekia niekada, tad `PayloadTooLargeError` logai ateina ne iš čia (jie iš
+modulių, kurie siunčia base64: `PP-salygos`, `PP-carbon`). Matavimas:
+
+| TS apimtis | Užklausos kūnas | Žetonai |
+|---|---|---|
+| 50 psl. | 0,19 MB | ~42 tūkst. |
+| 200 psl. | 0,76 MB | ~167 tūkst. |
+| 1000 psl. | 3,81 MB | ~833 tūkst. |
+
+Transporto riba nepasiekiama net su 1000 puslapių, o kontekstą (~200 tūkst. žetonų) 200 psl.
+dokumentas jau bado.
+
+**Sprendimas perimtas iš `PP-qual`** (ta pati riba, ta pati taisyklė): `AI_TEKSTO_RIBA = 120000`,
+`ribotiSpec()`, `rodykKirpima()`, `paruoskSpecAnalizei()`.
+
+KERTINĖ TAISYKLĖ: kirpimas NIEKADA nebūna tylus, ir laukelis rodo TIKSLIAI tą tekstą, kuris
+bus analizuojamas. Įspėjimas yra IŠLIEKANTIS (ne toast) ir rodomas iškart įklijavus, dar prieš
+paspaudžiant analizę. Nukirptas specifikacijos galas reiškia NEAUDITUOTUS skyrius - būtent
+juos šis modulis ir turi tikrinti.
+
+DĖMESIO tvarkai `paruoskSpecAnalizei()` viduje: `rodykKirpima(r)` privalo eiti PO
+`updateStats()`, nes pastaroji perskaičiuoja jau sutrumpintą tekstą ir įspėjimą nuimtų.
+
+Patikrinta naršyklėje: 306 000 simb. įklijavus - įspėjimas atsiranda iš karto; po analizės
+laukelyje lieka lygiai 120 000, statistika sutampa, JS klaidų nėra.
+
+---
+
 **Šis dokumentas atspindi projekto būseną 2026 m. birželio mėn. Tolimesnės iteracijos turėtų atnaujinti šį failą su naujomis funkcijomis, pakeitimais ir žinomais apribojimais.**
