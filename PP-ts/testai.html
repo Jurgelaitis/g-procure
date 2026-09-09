@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PP-ts regresijos testai</title>
+<style>
+  :root{--emerald:#00A072;--emerald-120:#008a62;--graphite:#2E3641;
+        --red:#c0392b;--line:#e3e7ea;--bg:#f6f8f9}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;font-family:"Nunito Sans",-apple-system,Segoe UI,Roboto,sans-serif;
+       color:var(--graphite);background:var(--bg);line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#67727d;font-size:13px;margin-bottom:20px;max-width:80ch}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--line);
+             border-radius:10px;padding:14px 16px;margin-bottom:18px;display:flex;
+             align-items:center;gap:16px;flex-wrap:wrap}
+  .skaicius{font-size:26px;font-weight:800;line-height:1}
+  .raudona{color:var(--red)}
+  .grupe{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .grupe > h2{font-size:14px;margin:0;padding:11px 16px;background:#eef4f2;
+              color:var(--emerald-120);border-bottom:1px solid var(--line)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #f0f3f5;font-size:13px;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:800;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .ok .zyma{background:#e6f6f0;color:var(--emerald-120)}
+  .blogai .zyma{background:#fdecea;color:var(--red)}
+  .blogai{background:#fffafa}
+  .det{color:var(--red);font-size:12px;margin-top:3px;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+  .pastaba{color:#67727d;font-size:12px;margin-top:2px}
+  button{background:var(--emerald);color:#fff;border:0;border-radius:8px;padding:9px 18px;
+         font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+  button:disabled{opacity:.5;cursor:default}
+  iframe{width:1280px;height:900px;border:0;position:absolute;left:-9999px;top:0}
+  .info{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;
+        font-size:12px;color:#67727d;margin-top:16px;max-width:100ch}
+  code{background:#eef1f3;padding:1px 5px;border-radius:4px;font-size:11px}
+</style>
+</head>
+<body>
+
+<h1>PP-ts regresijos testai</h1>
+<div class="sub">
+  Testai kviečia TIKRAS modulio funkcijas per rėmelį, o ne jų kopijas. Kiekvienas testas pats
+  grąžina modulį į žinomą būseną, tad rezultatas nepriklauso nuo to, kas liko po rankinio bandymo.
+</div>
+
+<div id="santrauka">
+  <div><span class="skaicius" id="n-ok">0</span> <span class="pastaba">praėjo</span></div>
+  <div><span class="skaicius raudona" id="n-blogai">0</span> <span class="pastaba">krito</span></div>
+  <div id="busena" class="pastaba">Kraunama...</div>
+  <button id="paleisti" disabled>Paleisti iš naujo</button>
+</div>
+
+<div id="rezultatai"></div>
+<iframe id="ramas" title="PP-ts modulis"></iframe>
+
+<div class="info">
+  <strong>Kaip naudoti:</strong> atidarykite per tą patį serverį kaip <code>TS_Asistentas.html</code>
+  (pvz. <code>python3 -m http.server</code>) - modulis kraunamas į rėmelį, tad <code>file://</code>
+  režimu naršyklė jį blokuotų.<br>
+  <strong>Ko šie testai NEtikrina:</strong> tikrų AI atsakymų ir CVP IS duomenų - tam reikėtų tinklo
+  ir pinigų, o rezultatas priklausytų nuo modelio. Tikrinama tai, kas turi veikti vienodai visada:
+  deterministinės taisyklės, teksto riba, JSON atkūrimas ir taksonomijos darna.
+</div>
+
+<script>
+/* ==========================================================================
+   Mažas testų karkasas (be bibliotekų)
+
+   TAISYKLĖS, kurios šioje byloje jau kartą kainavo klaidingą „žalią":
+   1. Rėmelio `src` nustatomas iš JS su kešo skirtuku - kitaip naršyklė paduoda
+      kešuotą seną modulį ir testai tikrina ne tą kodą, kurį ką tik pakeitei.
+   2. Modulio `App` paskelbtas su `const`, tad NĖRA `window` savybė ir iš tėvinio
+      lango nepasiekiamas. Naudojam `M("App...")` = `ramas.contentWindow.eval(...)`.
+      Funkcijos (`function ...`) ir `window.X = ...` pasiekiamos tiesiai.
+   ========================================================================== */
+const R = { ok: 0, blogai: 0 };
+let grupesEl = null;
+const ramas = document.getElementById('ramas');
+
+function grupe(pavadinimas) {
+  const d = document.createElement('div');
+  d.className = 'grupe';
+  d.innerHTML = `<h2>${pavadinimas}</h2>`;
+  document.getElementById('rezultatai').appendChild(d);
+  grupesEl = d;
+}
+const ekranuok = (t) => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function uzrasyk(pavadinimas, klaida, pastaba) {
+  const el = document.createElement('div');
+  el.className = 't ' + (klaida ? 'blogai' : 'ok');
+  el.innerHTML = `<span class="zyma">${klaida ? 'KRITO' : 'OK'}</span>
+    <div><div>${ekranuok(pavadinimas)}</div>
+    ${pastaba ? `<div class="pastaba">${ekranuok(pastaba)}</div>` : ''}
+    ${klaida ? `<div class="det">${ekranuok(klaida)}</div>` : ''}</div>`;
+  grupesEl.appendChild(el);
+  if (klaida) R.blogai++; else R.ok++;
+  document.getElementById('n-ok').textContent = R.ok;
+  document.getElementById('n-blogai').textContent = R.blogai;
+}
+async function testas(pavadinimas, fn, pastaba) {
+  try { await fn(); uzrasyk(pavadinimas, null, pastaba); }
+  catch (e) { uzrasyk(pavadinimas, (e && e.message) || String(e), pastaba); }
+}
+function lygu(gauta, tiketasi, ka) {
+  const a = JSON.stringify(gauta), b = JSON.stringify(tiketasi);
+  if (a !== b) throw new Error(`${ka || 'reikšmė'}\n  tikėtasi: ${b}\n  gauta:    ${a}`);
+}
+function tiesa(salyga, ka) { if (!salyga) throw new Error(ka || 'sąlyga netenkinama'); }
+function turi(tekstas, dalis, ka) {
+  if (!String(tekstas).includes(dalis)) throw new Error(`${ka || 'tekstas'} neturi "${dalis}"\n  gauta: ${String(tekstas).slice(0,300)}`);
+}
+
+/* Modulio vidus - per eval, nes App yra `const`. */
+const M = (israiska) => ramas.contentWindow.eval(israiska);
+const W = () => ramas.contentWindow;
+const D = () => ramas.contentDocument;
+
+/* Grąžina modulį į žinomą būseną: tuščias specifikacijos laukas, be įspėjimų. */
+function paruosk() {
+  M('App.clearText()');
+  return W();
+}
+
+/* Taisyklių variklis kviečiamas TIESIAI - jis grynas (tekstas -> pastabos). */
+function taisykles(tekstas, meta) {
+  return M('RuleEngine.run(' + JSON.stringify(tekstas) + ', ' + JSON.stringify(meta || {}) + ')');
+}
+const pastabuTekstas = (r) => JSON.stringify(r.issues);
+
+/* ==========================================================================
+   1. TEKSTO RIBA ANALIZEI
+   Nauja 2026-09-09. Iki tol ribos nebuvo, o po įkėlimo lauku buvo pažadėta
+   „iki 25 MB" - skaičius, neatitikęs nei transporto ribos, nei konteksto lango.
+   ========================================================================== */
+async function testaiRiba() {
+  grupe('Teksto riba analizei');
+
+  await testas('Trumpas tekstas - jokio įspėjimo, nieko nekerpama', () => {
+    paruosk();
+    D().getElementById('specText').value = 'Trumpa specifikacija. '.repeat(100);
+    M('App.updateStats()');
+    lygu(D().getElementById('specKirpimas').textContent.trim(), '', 'įspėjimas');
+  });
+
+  await testas('Per ilgas tekstas - įspėjimas rodomas IŠ KARTO, dar prieš analizę', () => {
+    paruosk();
+    const ilgas = 'Specifikacijos punktas. '.repeat(9000);   // ~216 000 simb.
+    D().getElementById('specText').value = ilgas;
+    M('App.updateStats()');
+    const t = D().getElementById('specKirpimas').textContent;
+    turi(t, 'Dokumentas per ilgas', 'įspėjimas');
+    turi(t, 'nebus patikrinta', 'turi pasakyti, kad likusi dalis netikrinama');
+    tiesa(D().getElementById('specText').value.length === ilgas.length,
+          'rašant teksto kirpti NEGALIMA - kerpama tik analizės pradžioje');
+    paruosk();
+  });
+
+  await testas('Po analizės laukelyje lieka TIKSLIAI tas tekstas, kuris buvo analizuotas', async () => {
+    paruosk();
+    const ilgas = 'Specifikacijos punktas. '.repeat(9000);
+    D().getElementById('specText').value = ilgas;
+    M('App.updateStats()');
+    M('App.runRulesOnly()');
+    await new Promise(r => setTimeout(r, 400));
+    const liko = D().getElementById('specText').value.length;
+    lygu(liko, 120000, 'laukelio ilgis po analizės');
+    turi(D().getElementById('specKirpimas').textContent, 'Dokumentas per ilgas',
+         'įspėjimas privalo LIKTI po analizės (rodykKirpima eina PO updateStats)');
+    // toLocaleString deda NEDALOMĄ tarpą (U+00A0), tad prieš lyginant suvienodinam.
+    turi(D().getElementById('textStats').textContent.replace(/\u00a0/g, ' '), '120 000', 'statistika turi sutapti su laukeliu');
+    paruosk();
+  });
+
+  await testas('Įspėjime nurodomi TIKRI skaičiai: kiek buvo ir kiek paimta', () => {
+    paruosk();
+    D().getElementById('specText').value = 'x'.repeat(200000);
+    M('App.updateStats()');
+    const t = D().getElementById('specKirpimas').textContent.replace(/\s+/g, ' ');
+    turi(t, '200 000', 'įkeltas kiekis');
+    turi(t, '120 000', 'analizei paimtas kiekis');
+    paruosk();
+  });
+
+  await testas('Sutrumpinus tekstą įspėjimas dingsta', () => {
+    paruosk();
+    D().getElementById('specText').value = 'x'.repeat(200000);
+    M('App.updateStats()');
+    tiesa(D().getElementById('specKirpimas').textContent.trim() !== '', 'prieš');
+    D().getElementById('specText').value = 'x'.repeat(1000);
+    M('App.updateStats()');
+    lygu(D().getElementById('specKirpimas').textContent.trim(), '', 'po sutrumpinimo');
+    paruosk();
+  });
+
+  await testas('Po įkėlimo lauku nurodytas TIKRAS apribojimas, ne failo dydis', () => {
+    const t = D().querySelector('#fileDrop small').textContent;
+    turi(t, '120 000', 'turi sakyti simbolių ribą');
+    tiesa(!/\bMB\b/.test(t), 'failo dydžio žadėti negalima - riba kyla iš konteksto lango, gauta: ' + t);
+  });
+}
+
+/* ==========================================================================
+   2. TAISYKLIŲ VARIKLIS
+   Deterministinė modulio dalis: ta pati specifikacija visada duoda tas pačias
+   pastabas. Būtent ji lieka veikti be AI ir be interneto.
+   ========================================================================== */
+async function testaiTaisykles() {
+  grupe('Taisyklių variklis (be AI)');
+
+  await testas('Prekės ženklas be „lygiavertis" pagaunamas', () => {
+    const r = taisykles('Perkami Siemens kontroleriai pagal pridedamą sąrašą.');
+    tiesa(r.issues.length > 0, 'turėjo rasti bent vieną pastabą');
+    turi(pastabuTekstas(r), 'Siemens', 'pastaboje turi būti minimas ženklas');
+  }, 'PĮ: prekės ženklą galima minėti tik su nuoroda „arba lygiavertis"');
+
+  await testas('Prekės ženklas SU „lygiavertis" nebekliūva', () => {
+    const su = taisykles('Perkami Siemens arba lygiaverčiai kontroleriai.');
+    const be = taisykles('Perkami Siemens kontroleriai.');
+    tiesa(su.issues.length < be.issues.length,
+          'su „lygiavertis" pastabų turi būti mažiau (be: ' + be.issues.length + ', su: ' + su.issues.length + ')');
+  });
+
+  await testas('„lygiavertis" atpažįstamas visomis lietuviškomis formomis', () => {
+    const be = taisykles('Perkami Siemens kontroleriai.').issues.length;
+    /* Tikrinam BE zodzio „arba": kitaip suveiktu atskira taisyklės saka
+       (/arba\s+(lygiaver|...)/) ir kamieno klaida liktu nepastebeta. */
+    ['lygiavertis', 'lygiaverčiai', 'lygiavertė', 'lygiaverčius'].forEach(forma => {
+      const su = taisykles('Perkami Siemens kontroleriai; ' + forma + ' gaminiai priimtini.').issues.length;
+      tiesa(su < be, 'forma „' + forma + '" turi būti atpažinta ir be žodžio „arba" (be: ' + be + ', su: ' + su + ')');
+    });
+  }, 'Lietuviškai t virsta č: lygiaverTis -> lygiaverČiai');
+
+  await testas('Subjektyvus terminas pagaunamas', () => {
+    const r = taisykles('Įranga turi būti kokybiška ir patikima.');
+    tiesa(r.issues.length > 0, 'turėjo rasti pastabų dėl subjektyvių terminų');
+  });
+
+  await testas('Neapibrėžtas kiekis pagaunamas', () => {
+    const r = taisykles('Tiekėjas pristato pakankamas kiekis medžiagų esant poreikiui.');
+    tiesa(r.issues.length > 0, 'turėjo rasti pastabą dėl neapibrėžto kiekio');
+  });
+
+  await testas('Kiekviena pastaba turi sunkumo lygį iš žinomo sąrašo', () => {
+    const r = taisykles('Perkami Siemens kontroleriai. Įranga turi būti kokybiška. Kiekis - pagal poreikį.');
+    const lygiai = [...new Set(r.issues.map(i => i.severity))];
+    tiesa(lygiai.length > 0, 'pastabų nerasta - testas neturi ko tikrinti');
+    lygiai.forEach(l => tiesa(['critical', 'major', 'minor', 'suggestion'].includes(l),
+                              'nežinomas sunkumo lygis: ' + l));
+  });
+
+  await testas('Tas pats tekstas visada duoda tą patį rezultatą', () => {
+    const t = 'Perkami ABB skirstikliai. Medžiagos - kokybiškos.';
+    lygu(pastabuTekstas(taisykles(t)), pastabuTekstas(taisykles(t)), 'variklis turi būti deterministinis');
+  });
+
+  await testas('Tuščias tekstas nelaužia variklio', () => {
+    const r = taisykles('');
+    tiesa(Array.isArray(r.issues), 'turi grąžinti masyvą, gauta: ' + JSON.stringify(r).slice(0, 120));
+  });
+}
+
+/* ==========================================================================
+   3. NUTRŪKUSIO JSON ATKŪRIMAS
+   AI atsakymas gali nutrūkti ties max_tokens. Be atkūrimo prarandama VISA
+   analizė, nors 90 proc. jos jau atėję.
+   ========================================================================== */
+async function testaiJson() {
+  grupe('Nutrūkusio JSON atkūrimas');
+
+  await testas('Sveikas JSON nekeičiamas', () => {
+    const iv = '{"issues":[{"id":"a"}]}';
+    lygu(JSON.parse(W().repairTruncatedJson(iv)), JSON.parse(iv));
+  });
+
+  await testas('Nutrūkęs masyvas uždaromas ir lieka skaitomas', () => {
+    const r = W().repairTruncatedJson('{"issues":[{"id":"a"},{"id":"b"}');
+    const o = JSON.parse(r);
+    tiesa(Array.isArray(o.issues) && o.issues.length >= 1, 'turi likti bent viena pastaba, gauta: ' + r);
+  });
+
+  await testas('Nutrūkęs eilutės viduryje neišverčia į klaidą', () => {
+    const r = W().repairTruncatedJson('{"issues":[{"id":"a","message":"nebaigtas tekst');
+    JSON.parse(r);   // meta, jei neatkurta
+  });
+}
+
+/* ==========================================================================
+   4. PIRKIMO BŪDŲ TAKSONOMIJA
+   Būdų sąrašas yra bendras visai sistemai (shared/procurement-methods.js).
+   Modulyje likęs savas kodas, kurio taksonomija nepažįsta, reiškia tylų
+   neatitikimą tarp modulių.
+   ========================================================================== */
+async function testaiTaksonomija() {
+  grupe('Pirkimo būdų taksonomija');
+
+  await testas('shared/procurement-methods.js prijungtas', () => {
+    tiesa(typeof W().GP_METHODS === 'object', 'GP_METHODS neįkelta');
+  });
+
+  await testas('KIEKVIENAS pasirinkiklio kodas atpažįstamas taksonomijoje', () => {
+    const nerasti = M(`[...document.getElementById('metaProcedure').options]
+      .map(o => o.value).filter(v => v && !GP_METHODS.fromLegacy('pp-ts', v, {}))`);
+    lygu(nerasti, [], 'taksonomijai nepažįstami kodai');
+  });
+}
+
+/* ==========================================================================
+   5. TRANSPORTAS
+   Modulis AI kviečia per shared/ai-proxy.js. Klaidos NEGALI būti nuryjamos -
+   naudotojas turi matyti priežastį, o ne tuščią ekraną.
+   ========================================================================== */
+async function testaiTransportas() {
+  grupe('Transportas (shared/ai-proxy.js)');
+
+  await testas('GP_AI_PROXY prijungtas ir raktas modulyje NELAIKOMAS', () => {
+    tiesa(typeof W().GP_AI_PROXY === 'object', 'GP_AI_PROXY neįkelta');
+    tiesa(!/api[-_ ]?key["'\s:=]+sk-/i.test(D().documentElement.innerHTML),
+          'modulyje neturi būti jokio API rakto');
+  });
+
+  await testas('Per didelio failo klaida verčiama į žmogišką žinutę', async () => {
+    const tikras = W().fetch;
+    W().fetch = () => Promise.resolve(new Response('<html>413</html>', { status: 413 }));
+    const r = await W().GP_AI_PROXY.call({ system: 'x', userMessage: 'y', maxTokens: 10 });
+    W().fetch = tikras;
+    tiesa(!r.ok, 'turi būti nesėkmė');
+    turi(r.error, 'per didelis', 'žinutė žmogui');
+    tiesa(!/<html|nginx/i.test(r.error), 'HTML ar serverio versija į ekraną nepatenka: ' + r.error);
+  });
+}
+
+/* ========================================================================== */
+async function viskas() {
+  document.getElementById('paleisti').disabled = true;
+  document.getElementById('rezultatai').innerHTML = '';
+  R.ok = 0; R.blogai = 0;
+  document.getElementById('busena').textContent = 'Ruošiamas modulis...';
+
+  await new Promise(res => { ramas.onload = res; ramas.src = './TS_Asistentas.html?cb=' + Date.now(); });
+  await new Promise(r => setTimeout(r, 1200));   // modulio init
+
+  await testaiRiba();
+  await testaiTaisykles();
+  await testaiJson();
+  await testaiTaksonomija();
+  await testaiTransportas();
+
+  document.getElementById('busena').textContent =
+    R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';
+  document.getElementById('paleisti').disabled = false;
+}
+document.getElementById('paleisti').addEventListener('click', viskas);
+viskas();
+</script>
+</body>
+</html>
