@@ -437,6 +437,33 @@ DĖMESIO tvarkai `paruoskSpecAnalizei()` viduje: `rodykKirpima(r)` privalo eiti 
 Patikrinta naršyklėje: 306 000 simb. įklijavus - įspėjimas atsiranda iš karto; po analizės
 laukelyje lieka lygiai 120 000, statistika sutampa, JS klaidų nėra.
 
+## 13. Regresijos testai - `PP-ts/testai.html` (2026-09-09)
+
+21 testas penkiose grupėse. Atidaroma naršyklėje per tą patį serverį kaip modulis
+(`file://` režimu rėmelis blokuojamas). Testai kviečia TIKRAS modulio funkcijas, ne kopijas.
+
+| Grupė | Ką saugo |
+|---|---|
+| Teksto riba analizei | 120 000 simb. riba, išliekantis įspėjimas, laukelis = analizuotas tekstas |
+| Taisyklių variklis | prekės ženklai, subjektyvūs terminai, neapibrėžti kiekiai, determinizmas |
+| Nutrūkusio JSON atkūrimas | `repairTruncatedJson` - AI atsakymas, nutrūkęs ties `max_tokens` |
+| Pirkimo būdų taksonomija | kiekvienas `#metaProcedure` kodas atpažįstamas `shared/procurement-methods.js` |
+| Transportas | `GP_AI_PROXY` prijungtas, rakto modulyje nėra, 413 verčiamas į žmogišką žinutę |
+
+**SVARBU RAŠANT NAUJUS TESTUS:** `App` paskelbtas su `const`, tad NĖRA `window` savybė -
+naudok `M("App...")` = `ramas.contentWindow.eval(...)`. Funkcijos (`function ...`) ir
+`window.X = ...` pasiekiamos tiesiai. Rėmelio `src` nustatomas iš JS su kešo skirtuku.
+
+**TESTAI IŠ KARTO RADO TIKRĄ KLAIDĄ.** Prekės ženklo taisyklė ieškojo kamieno `lygiaverti`,
+o lietuviškai `t` virsta `č`: **lygiaverTis -> lygiaverČiai**. Todėl taisyklingai parašyta
+„Siemens arba lygiaverčiai" buvo žymima kaip PĮ 33 str. pažeidimas - klaidingas kaltinimas
+būtent toje taisyklėje, kuriai tikslumas svarbiausias. Ištaisyta į `lygiaver[tč]`. Testas
+tikrina BE žodžio „arba" - kitaip suveiktų atskira taisyklės šaka ir kamieno klaida liktų
+nepastebėta (tai paaiškėjo per mutacijos patikrą).
+
+**Ko testai NEtikrina sąmoningai:** tikrų AI atsakymų ir CVP IS duomenų - reikėtų tinklo ir
+pinigų, o rezultatas priklausytų nuo modelio.
+
 ---
 
 **Šis dokumentas atspindi projekto būseną 2026 m. birželio mėn. Tolimesnės iteracijos turėtų atnaujinti šį failą su naujomis funkcijomis, pakeitimais ir žinomais apribojimais.**
