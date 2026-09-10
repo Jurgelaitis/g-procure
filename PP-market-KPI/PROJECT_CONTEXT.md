@@ -48,11 +48,11 @@ Trečia priežastis: Litgrid mėnesinis rizikų valdymas reikalauja struktūruot
 
 ## 5. Kas jau veikia (esamas funkcionalumas)
 
-### 5.1 KPI struktūra (3 lygmenys, 15 rodiklių; C lygmuo pašalintas 2026-09-10, žr. v6.12)
+### 5.1 KPI struktūra (3 lygmenys A/B/C, 15 rodiklių; tiekimo rizikos lygmuo pašalintas 2026-09-10, VDA nuo tada C - žr. v6.12 ir v6.13)
 
 - A lygmuo „Kainos": Brent nafta, WTI nafta, LME aliuminis, LME varis, polimerai HDPE/PP/PET.
 - B lygmuo „Lead time / pajėgumai": Baltic Dry Index, konteinerių frachtas (Drewry WCI), oro krovinių indeksas (TAC).
-- D lygmuo „LT indeksavimo rodikliai (VDA)": SSKI bendras, SSKI medžiagos, SSKI mašinos, SSKI statybininkų DU, VKI, GKI, VMDU (IRT sektorius).
+- C lygmuo „LT indeksavimo rodikliai (VDA)" (iki 2026-09-10 - D): SSKI bendras, SSKI medžiagos, SSKI mašinos, SSKI statybininkų DU, VKI, GKI, VMDU (IRT sektorius).
 
 ### 5.2 KPI kortelės savybės
 
@@ -86,7 +86,7 @@ Trečia priežastis: Litgrid mėnesinis rizikų valdymas reikalauja struktūruot
 5. Specializuotos paslaugos (projektavimas, techninė priežiūra).
 6. Draudimas.
 
-Kiekviena kategorija: svertinis sudėtinis rizikos rodiklis iš A/B rodiklių (D įeina tik į dviejų darbo imlių profilių svorius - žr. 7.9), pagrindiniai draiveriai, vaizdinė skalė, ir sutartinių veiksmų sąrašas pagal esamą režimą.
+Kiekviena kategorija: svertinis sudėtinis rizikos rodiklis iš A/B rodiklių (C lygmuo, VDA, įeina tik į dviejų darbo imlių profilių svorius - žr. 7.9), pagrindiniai draiveriai, vaizdinė skalė, ir sutartinių veiksmų sąrašas pagal esamą režimą.
 
 ### 5.6 Triggerių ir sutartinių veiksmų lentelė
 
@@ -106,7 +106,7 @@ Pilna lentelė visiems 15 rodiklių su žaliomis/geltonomis/raudonomis ribomis i
 - `SCHEMA_VERSION` konstanta JS faile.
 - Keičiant struktūrą (nauji rodikliai, kategorijos, laukai) reikia padidinti `SCHEMA_VERSION`.
 - Krovimo metu automatiškai išvalomi visi senesnių versijų `localStorage` įrašai.
-- Sanity check: jei išsaugota struktūra neatitinka schemos (nėra D lygmens arba kategorijų skaičius ne 6), įrašas atmetamas.
+- Sanity check: jei išsaugota struktūra neatitinka schemos (nėra VDA lygmens arba profilių skaičius ne 8), įrašas atmetamas.
 - HTML antraštėje yra `Cache-Control: no-cache` meta tag-ai HTTP talpyklai mažinti.
 
 ---
@@ -117,7 +117,7 @@ Pilna lentelė visiems 15 rodiklių su žaliomis/geltonomis/raudonomis ribomis i
 
 - Realių duomenų pakeitimas vietoje iliustracinių (rankiniu būdu suvedant einamąsias reikšmes).
 - Naujo savaitinio/mėnesinio taško pridėjimas (šiuo metu redagavimas perrašo paskutinę reikšmę, neprideda naujo taško).
-- D lygmens rodiklių pasirinktinis įtraukimas į kategorijų sudėtinį rizikos rodiklį (pvz., SSKI-DU svorinė įtaka statybos-rangos kategorijai).
+- VDA (C) lygmens rodiklių pasirinktinis įtraukimas į kategorijų sudėtinį rizikos rodiklį (pvz., SSKI-DU svorinė įtaka statybos-rangos kategorijai).
 - Sutarties indeksavimo skaičiuoklė: įvedus pradinę kainą, indeksavimo formulę ir laikotarpį, parodyti perskaičiuotą sumą pagal naujausius VDA rodiklius.
 - Tooltips su metodikos paaiškinimu prie kiekvieno rodiklio (skirta pirkimo iniciatoriams, kurie nesusiduria su tais terminais kasdien).
 - PRR snapshot eksportas (mėnesinis Word/PDF failas tiesiogiai įkėlimui į „Rizikų registrą").
@@ -193,7 +193,7 @@ Pagrindimas: kiekvienąsyk redaguojant duomenis santrauka pati persirašo, nieka
 Pasirinkimas: visi rodikliai, kategorijos ir bendras klimatas redukuojami į žalia/geltona/raudona.
 Pagrindimas: pirkimo iniciatoriai nėra rinkos analitikai. Trijų lygmenų vaizdas yra pakankamai konkretus veiksmui ir pakankamai paprastas sprendimui.
 
-### 7.9 D lygmuo (VDA) ir profilių logika
+### 7.9 C lygmuo (VDA) ir profilių logika
 
 Pasirinkimas: profilių sudėtinis rizikos rodiklis skaičiuojamas iš A/B; VDA yra atskiras indeksavimo sluoksnis. Išimtis nuo 2026-09-10 (v6.12): projektavimo ir programinės įrangos profiliams žaliavos ir frachtas kainos neveikia, tad jų spaudimą matuoja VMDU ir VKI - anksčiau tą vietą užėmė rankinis sankcijų signalų skaičius.
 Pagrindimas: globalūs rodikliai pasako „reaguok", VDA indeksai pasako „prie ko indeksuoji". Skirtinga prigimtis ir laikotarpiai (savaitė vs metai), todėl konceptiniai sluoksniai laikomi atskirai. Reikalui esant juos sujungti yra P1 prioriteto darbas.
@@ -213,7 +213,7 @@ Pagrindimas: vartotojo pageidavimas (estetinis sprendimas).
 - Nėra multi-user sinchronizacijos. Du žmonės negali vienu metu redaguoti tos pačios kopijos.
 - Nėra audito žurnalo. Redagavimai perrašo praeitas reikšmes be istorijos.
 - Triggerių ribos yra rekomendacinio pobūdžio. Jos neatspindi konkrečių Litgrid vidaus dokumentų ar PSĮ teisinių reikalavimų ir prieš naudojant sprendimams jas reikia derinti su rizikos valdymo ir teisės skyriais.
-- D lygmuo modeliuoja tik 7 VDA rodiklius. Realiai VDA skelbia daugiau (pvz., konkrečios SSKI sub-dedamosios, regioniniai VKI, sektoriniai VMDU).
+- C lygmuo (VDA) modeliuoja tik 7 rodiklius. Realiai VDA skelbia daugiau (pvz., konkrečios SSKI sub-dedamosios, regioniniai VKI, sektoriniai VMDU).
 - Pirkimo pavadinimas atpažįstamas lietuviškai IR angliškai, bet raktažodžiai yra LITGRID srities terminai. Kitos srities ar labai bendras pavadinimas profilio negaus - tada naudotojas renkasi iš sąrašo.
 - Redagavimas perrašo paskutinę reikšmę, bet neprideda naujo taško į istoriją (sparkline grafikas išlieka su tomis pačiomis 12 ar 13 reikšmių). Naujo taško pridėjimas yra P1 prioriteto darbas.
 - AI santrauka yra šabloninių taisyklių variklis, ne tikras LLM iškvietimas. Tai prasižengia su „AI" pavadinimu, bet veikia 100% offline.
@@ -233,7 +233,7 @@ Pagrindimas: vartotojo pageidavimas (estetinis sprendimas).
 ### P1 (artimiausi vystymo darbai)
 
 5. Naujo savaitės/mėnesio taško pridėjimo režimas (vietoj perrašymo).
-6. D lygmens įtraukimas į kategorijų sudėtinį rizikos rodiklį pasirinktiniu būdu.
+6. VDA (C) lygmens įtraukimas į kategorijų sudėtinį rizikos rodiklį pasirinktiniu būdu.
 7. Sutarties indeksavimo skaičiuoklė (pagal pradinę kainą, formulę ir laikotarpį).
 8. PRR snapshot eksportas Word/PDF formatu mėnesiniam rizikų pildymui.
 9. Tooltips su metodikos paaiškinimais.
@@ -300,7 +300,7 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 ### 10.5 Pagrindiniai kodo orientyrai (kur ką ieškoti faile)
 
 - `DEFAULT_DATA` objektas: visi rodikliai, kategorijos, jų svoriai ir veiksmai. Pakeitimai paprastai pradedami čia.
-- `metrics` masyvas (DEFAULT_DATA.metrics): kiekvienas rodiklis su `id`, `group` (A/B/D), `series`, `thr`, `act`.
+- `metrics` masyvas (DEFAULT_DATA.metrics): kiekvienas rodiklis su `id`, `group` (A/B/C; iki 2026-09-10 VDA buvo D), `series`, `thr`, `act`.
 - `categories` masyvas: kategorijų sąrašas su `weights` ir `act`.
 - `SCHEMA_VERSION`: didinama keičiant struktūrą.
 - `severity()`, `categorySeverity()`, `climateScore()`: pagrindinės skaičiavimo funkcijos.
@@ -327,7 +327,17 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.12 (esama, 2026-09-10): **C lygmuo („Tiekimo nutrūkimo rizika") pašalintas iš skaičiavimų.**
+- v6.13 (esama, 2026-09-10): **VDA lygmuo pervadintas iš D į C.**
+
+  Pašalinus tiekimo rizikos lygmenį liko „A, B, D" - naudotojas pastebėjo spragą. Pervadinta
+  PILNAI, ne tik užrašas: rodiklių `group`, sekcijos ir žodyno raktai (`sec.c.*`, `nav.c`),
+  `vdaMetrics()`, indeksavimo modelio filtras, testai. Išsaugoti duomenys nelaužomi:
+  `suderinkGrupes()` įkeliant įrašą ar importuojant JSON kopiją raidę D tyliai keičia į C PRIEŠ
+  schemos patikrą, tad schemos versija lieka v7 (ryte įdiegtą v7 su raide D turi realūs
+  naudotojai). Skaitant senesnius šios istorijos įrašus: „D lygmuo" juose reiškia tą patį VDA
+  sluoksnį, o „C lygmuo" iki v6.12 - pašalintą tiekimo riziką.
+
+- v6.12 (2026-09-10): **C lygmuo („Tiekimo nutrūkimo rizika") pašalintas iš skaičiavimų.**
 
   NAUDOTOJO KLAUSIMAS: ar C lygmuo tikrai svarbus vertinant aštuonis LITGRID profilius?
   VERTINIMAS (pateiktas prieš sprendimą): pati rizika tikra, bet lygmuo jos nematavo:
