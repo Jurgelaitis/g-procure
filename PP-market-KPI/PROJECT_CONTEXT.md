@@ -330,7 +330,37 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.10 (esama, 2026-09-08): **globalūs rodikliai per proxy - nafta ir metalai.**
+- v6.11 (esama, 2026-09-10): **„Duomenys pasenę" pakeista neutralia formuluote.**
+
+  NAUDOTOJO PASTABA: „Duomenys pasenę" skamba kaip priekaištas, ne kaip faktas. Pasiūlyta
+  ieškoti neutralesnės formuluotės („ankstesniais duomenimis" ar panašiai).
+
+  PASIRINKTA „ankstesnio laikotarpio reikšmės / duomenys", o ne šiaip „ankstesni":
+  - pasakoma, KODĖL jie ankstesni: kiekviena reikšmė modulyje priklauso laikotarpiui (savaitei
+    ar mėnesiui), o naujausia turima yra ankstesnio laikotarpio nei dabartinis. Tai ta pati
+    sąvoka, kurią naudotojas mato redaguodamas („Laikotarpis: ... (dabartinis; praleidžiama 7)");
+  - juostos sakinys „Rodomos ankstesnio laikotarpio reikšmės" sudarytas taip pat, kaip
+    iliustracinių duomenų juosta „Rodomos iliustracinės reikšmės" - vienas registras abiem.
+  Pakeisti šeši tekstai abiem kalbomis: juosta (`banner.old`, `banner.stale`), kortelės žymos
+  paaiškinimas (`lbl.stale.title`), santraukos pirmasis blokas (`sum.stale.h` / `sum.stale.p`)
+  ir pranešimas išsaugojus nieko neįvedus (`toast.nochange.stale`). EN: „out of date" ->
+  „values from an earlier period". Iš juostos dingo ir „Skydelio išvados" - modulis nuo v6.2
+  skydeliu nebevadinamas. Kodo vidus (`arPasenes`, komentarai) nekeistas - jis nematomas.
+
+  KARTU: juostos patarimas įvardija TĄ mygtuką, kuris šiuo atveju padeda. Anksčiau visada
+  siūlė „Redaguoti reikšmes", nors 11 iš 17 rodiklių atnaujina jungtis vienu paspaudimu.
+  Trys atvejai (`banner.how.src` / `.both` / `.manual`): ankstesnio laikotarpio tik
+  automatiniai - „Atnaujinti iš šaltinių"; tik rankiniai (polimerai, BDI, konteineriai, oro
+  kroviniai, Hormūzas, sankcijos) - „Redaguoti reikšmes"; abu - abu. Sąlyga ta pati, kuria
+  rodomas pats jungties mygtukas (`galiPadeti`), tad tekstas niekada nesiūlo mygtuko, kurio
+  juostoje nėra.
+
+  TESTAI (133): trys esami pritaikyti, du nauji - sargas, kad „pasen" (LT) ir „out of date"
+  (EN) negrįžtų į naudotojui rodomus tekstus, ir trijų atvejų patarimo patikra. Mutacijos
+  patikra: grąžinus seną antraštę krinta sargas ir juostos testas; užfiksavus patarimą į
+  „Redaguoti reikšmes" krinta trijų atvejų testas.
+
+- v6.10 (2026-09-08): **globalūs rodikliai per proxy - nafta ir metalai.**
 
   Po VDA jungties liko dešimt rankinių rodiklių. Naudotojo sprendimu automatizuoti keturi,
   kuriems yra NEMOKAMAS šaltinis: Brent, WTI, aliuminis, varis (FRED).
