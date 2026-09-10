@@ -620,7 +620,7 @@ testas("Duomenų būsena", "Pasenę duomenys turi savo įspėjimą, net kai iliu
   tiesa(M("getComputedStyle(document.getElementById('demoBanner')).display") !== "none",
         "juosta turi matytis ir be iliustracinių reikšmių");
   const t = M("document.getElementById('demoTekstas').textContent");
-  tiesa(t.indexOf("pasen") >= 0, "juosta turi pasakyti, kad duomenys pasenę, gauta: " + t.slice(0, 70));
+  tiesa(t.indexOf("ankstesnio laikotarpio") >= 0, "juosta turi pasakyti, kad reikšmės ankstesnio laikotarpio, gauta: " + t.slice(0, 70));
   tiesa(t.indexOf("prieš 8 savaites") >= 0, "juosta turi pasakyti KIEK duomenims laiko, gauta: " + t.slice(0, 90));
   paruosk();
 });
@@ -634,7 +634,7 @@ testas("Duomenų būsena", "Santrauka pradedama nuo duomenų amžiaus, o ne nuo 
     return { klase: el.className, tekstas: el.textContent.trim() };
   })()`);
   lygu(r.klase, "ai-warn", "pirmas santraukos blokas turi būti įspėjimas");
-  tiesa(r.tekstas.indexOf("pasenusiais duomenimis") >= 0, "gauta: " + r.tekstas.slice(0, 80));
+  tiesa(r.tekstas.indexOf("ankstesnio laikotarpio duomenimis") >= 0, "gauta: " + r.tekstas.slice(0, 80));
   tiesa(r.tekstas.indexOf("prieš 8 savaites") >= 0, "turi pasakyti amžių, gauta: " + r.tekstas.slice(0, 110));
   paruosk();
 });
@@ -657,8 +657,60 @@ testas("Duomenų būsena", "Nieko neįvedus prie pasenusių duomenų pasakoma, k
   pasenkVisus(8);
   M(`document.getElementById('btnEdit').click(); document.getElementById('btnEdit').click();`);
   const t = M('document.getElementById("toast").textContent');
-  tiesa(t.indexOf("pasen") >= 0 && t.indexOf("Išsaugoti") >= 0,
+  tiesa(t.indexOf("ankstesnio laikotarpio") >= 0 && t.indexOf("Išsaugoti") >= 0,
         "pranešimas turi paaiškinti veiksmą, gauta: " + t);
+  paruosk();
+});
+
+/* Naudotojo pastaba (2026-09-10): „Duomenys pasenę" skamba kaip priekaištas. Naudotojui
+   rodomuose tekstuose sakoma „ankstesnio laikotarpio" - sargas, kad senas žodis negrįžtų.
+   Kodo vidus (arPasenes, komentarai) čia netikrinamas - jis naudotojui nematomas. */
+testas("Duomenų būsena", "Naudotojui rodomuose tekstuose nėra žodžio pasenę (LT) ar out of date (EN)", ()=>{
+  paruosk();
+  const lt = M(`Object.keys(I18N.lt).filter(k=>/pasen/i.test(I18N.lt[k]))`);
+  const en = M(`Object.keys(I18N.en).filter(k=>/out of date|outdated|stale|no longer fresh/i.test(I18N.en[k]))`);
+  lygu(lt, [], "LT raktai su senu žodžiu");
+  lygu(en, [], "EN raktai su senu žodžiu");
+});
+
+/* Sendinam tik dalį rodiklių: „auto" - tuos, kuriuos atnaujina jungtis (OSP + proxy),
+   „rankiniai" - likusius šešis, kuriems nemokamo šaltinio nėra. */
+function pasenkDali(kuriuos, zingsniu){
+  M(`(function(){
+    const auto = m => !!((window.GP_OSP && GP_OSP.RODIKLIAI[m.id]) || (window.GP_RINKA && GP_RINKA.RODIKLIAI[m.id]));
+    DATA.metrics.forEach(m=>{
+      m.demo = false;
+      const sen = ("${kuriuos}" === "auto") === auto(m);
+      m.laikotarpis = sen ? slinktiLaikotarpi(dabartinisLaikotarpis(m), m.zingsnis, -${zingsniu}) : dabartinisLaikotarpis(m);
+    });
+    DATA.meta.demo = false;
+    renderAll();
+  })()`);
+}
+
+/* Juosta anksčiau visada siūlė „Redaguoti reikšmes", nors 11 iš 17 rodiklių atnaujina
+   jungtis vienu paspaudimu. Patarimas turi sutapti su tuo, kuris mygtukas juostoje yra. */
+testas("Duomenų būsena", "Juosta įvardija tą mygtuką, kuris šiuo atveju padeda", ()=>{
+  paruosk();
+  const tekstas = ()=> M("document.getElementById('demoTekstas').textContent");
+  const paslėptas = ()=> M("document.getElementById('btnOspJuosta').hidden");
+  pasenkVisus(8);
+  let t = tekstas();
+  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Redaguoti reikšmes") >= 0,
+        "visi ankstesni - abu keliai, gauta: " + t.slice(-130));
+  lygu(paslėptas(), false, "visi ankstesni - jungties mygtukas rodomas");
+  pasenkDali("rankiniai", 8);
+  t = tekstas();
+  tiesa(t.indexOf("Redaguoti reikšmes") >= 0 && t.indexOf("Atnaujinti iš šaltinių") < 0,
+        "tik rankiniai - tik redagavimas, gauta: " + t.slice(-130));
+  lygu(paslėptas(), true, "tik rankiniai - jungties mygtuko nėra, tad jo ir nesiūlom");
+  lygu(M("DATA.metrics.filter(arPasenes).length"), 6, "rankinių rodiklių yra šeši");
+  pasenkDali("auto", 8);
+  t = tekstas();
+  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Redaguoti reikšmes") < 0,
+        "tik automatiniai - tik jungtis, gauta: " + t.slice(-130));
+  lygu(paslėptas(), false, "tik automatiniai - jungties mygtukas rodomas");
+  lygu(M("DATA.metrics.filter(arPasenes).length"), 11, "automatinių rodiklių yra vienuolika");
   paruosk();
 });
 
