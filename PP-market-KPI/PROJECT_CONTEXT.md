@@ -27,7 +27,7 @@ Tikslas ne tik stebėti, bet ir versti rinkos signalą į konkrečius sutartiniu
 
 ## 3. Kodėl projektas buvo sukurtas
 
-Pirkimų komandai trūksta vieno aiškaus rinkos paveikslo: globalūs rinkos rodikliai (Brent, LME, BDI, Hormūzas) yra ankstyvojo perspėjimo sistema, o Lietuvos VDA indeksai (SSKI, VKI, GKI, VMDU) yra teisinis pagrindas sutarčių indeksavimui. Šie du sluoksniai nebuvo sujungti jokiame įrankyje. Be jų sujungimo, sutarčių indeksavimo sąlygos rašomos „pagal jausmą", o ne pagal sistemingai stebimą signalą.
+Pirkimų komandai trūksta vieno aiškaus rinkos paveikslo: globalūs rinkos rodikliai (Brent, LME, BDI) yra ankstyvojo perspėjimo sistema, o Lietuvos VDA indeksai (SSKI, VKI, GKI, VMDU) yra teisinis pagrindas sutarčių indeksavimui. Šie du sluoksniai nebuvo sujungti jokiame įrankyje. Be jų sujungimo, sutarčių indeksavimo sąlygos rašomos „pagal jausmą", o ne pagal sistemingai stebimą signalą.
 
 Antra priežastis: pirkimo iniciatoriai ir dalyviai dažnai nėra rinkos analizės profesionalai. Jiems reikia, kad sudėtinga informacija būtų pateikta paprastais šviesoforo principais ir konkrečiais veiksmais („ką daryti, kai geltona"), o ne grafikų masyvais.
 
@@ -48,11 +48,10 @@ Trečia priežastis: Litgrid mėnesinis rizikų valdymas reikalauja struktūruot
 
 ## 5. Kas jau veikia (esamas funkcionalumas)
 
-### 5.1 KPI struktūra (4 lygmenys, 17 rodiklių)
+### 5.1 KPI struktūra (3 lygmenys, 15 rodiklių; C lygmuo pašalintas 2026-09-10, žr. v6.12)
 
 - A lygmuo „Kainos": Brent nafta, WTI nafta, LME aliuminis, LME varis, polimerai HDPE/PP/PET.
 - B lygmuo „Lead time / pajėgumai": Baltic Dry Index, konteinerių frachtas (Drewry WCI), oro krovinių indeksas (TAC).
-- C lygmuo „Tiekimo nutrūkimo rizika": Hormūzo tranzito indeksas, sankcijų/atitikties signalai (lygis per mėn.).
 - D lygmuo „LT indeksavimo rodikliai (VDA)": SSKI bendras, SSKI medžiagos, SSKI mašinos, SSKI statybininkų DU, VKI, GKI, VMDU (IRT sektorius).
 
 ### 5.2 KPI kortelės savybės
@@ -62,12 +61,12 @@ Trečia priežastis: Litgrid mėnesinis rizikų valdymas reikalauja struktūruot
 - Triggerių juosta (žalia/geltona/raudona ribos su aktyvia zona).
 - Šviesoforo ženklas ir vaizdinė statuso juosta kortelės kairėje.
 - Bazinis sutartinis veiksmas pagal esamą režimą.
-- Šaltinio nuoroda (ICE, LME, Drewry, TAC, WTO Hormuz Tracker, VDA, ES sankcijų sąrašas).
+- Šaltinio nuoroda (ICE, LME, Drewry, TAC, VDA; automatiškai atnaujintiems - FRED / IMF ir OSP).
 
 ### 5.3 Rinkos klimato matuoklis
 
 - Pusiau apvalus SVG matuoklis (0-100, žalia/geltona/raudona).
-- Skaičiuojamas tik iš A/B/C rodiklių (D yra atskiras indeksavimo sluoksnis).
+- Skaičiuojamas tik iš A/B rodiklių (D yra atskiras indeksavimo sluoksnis).
 - Pateikiamas trumpas tekstinis verdikto įvertinimas (Stabilu / Įtemptai / Rizikinga).
 
 ### 5.4 AI tendencijų santrauka
@@ -76,7 +75,7 @@ Trečia priežastis: Litgrid mėnesinis rizikų valdymas reikalauja struktūruot
 - Penkios pastraipos: bendra padėtis, didžiausi spaudimo taškai, ką stebėti, palanku pirkimams, poveikis EPSO-G/Litgrid pirkimams.
 - Šešta pastraipa specialiai LT/VDA indeksavimo rodikliams.
 - Šoninis „Ką stebėti šią savaitę" sąrašas (raudonai/geltonai).
-- TSO-specifinė interpretacija: energija+logistika kartu → CAPEX rizika; oro kroviniai → OPEX/atsarginės dalys; Hormūzas → antrinė banga.
+- TSO-specifinė interpretacija: energija+logistika kartu → CAPEX rizika; oro kroviniai → OPEX/atsarginės dalys.
 
 ### 5.5 Pirkimų kategorijų rizikos žemėlapis (6 kategorijos)
 
@@ -87,11 +86,11 @@ Trečia priežastis: Litgrid mėnesinis rizikų valdymas reikalauja struktūruot
 5. Specializuotos paslaugos (projektavimas, techninė priežiūra).
 6. Draudimas.
 
-Kiekviena kategorija: svertinis sudėtinis rizikos rodiklis iš A/B/C rodiklių (D į kategorijų logiką neįjungtas pagal projektinį sprendimą), pagrindiniai draiveriai, vaizdinė skalė, ir sutartinių veiksmų sąrašas pagal esamą režimą.
+Kiekviena kategorija: svertinis sudėtinis rizikos rodiklis iš A/B rodiklių (D įeina tik į dviejų darbo imlių profilių svorius - žr. 7.9), pagrindiniai draiveriai, vaizdinė skalė, ir sutartinių veiksmų sąrašas pagal esamą režimą.
 
 ### 5.6 Triggerių ir sutartinių veiksmų lentelė
 
-Pilna lentelė visiems 17 rodiklių su žaliomis/geltonomis/raudonomis ribomis ir baziniais veiksmais. Skirta kaip metodinė nuoroda.
+Pilna lentelė visiems 15 rodiklių su žaliomis/geltonomis/raudonomis ribomis ir baziniais veiksmais. Skirta kaip metodinė nuoroda.
 
 ### 5.7 Redagavimo režimas ir duomenų valdymas
 
@@ -194,9 +193,9 @@ Pagrindimas: kiekvienąsyk redaguojant duomenis santrauka pati persirašo, nieka
 Pasirinkimas: visi rodikliai, kategorijos ir bendras klimatas redukuojami į žalia/geltona/raudona.
 Pagrindimas: pirkimo iniciatoriai nėra rinkos analitikai. Trijų lygmenų vaizdas yra pakankamai konkretus veiksmui ir pakankamai paprastas sprendimui.
 
-### 7.9 D lygmuo (VDA) nesumaišytas su A/B/C kategorijų logikoje
+### 7.9 D lygmuo (VDA) ir profilių logika
 
-Pasirinkimas: kategorijų sudėtinis rizikos rodiklis skaičiuojamas tik iš A/B/C; VDA yra atskira informacinė sekcija.
+Pasirinkimas: profilių sudėtinis rizikos rodiklis skaičiuojamas iš A/B; VDA yra atskiras indeksavimo sluoksnis. Išimtis nuo 2026-09-10 (v6.12): projektavimo ir programinės įrangos profiliams žaliavos ir frachtas kainos neveikia, tad jų spaudimą matuoja VMDU ir VKI - anksčiau tą vietą užėmė rankinis sankcijų signalų skaičius.
 Pagrindimas: globalūs rodikliai pasako „reaguok", VDA indeksai pasako „prie ko indeksuoji". Skirtinga prigimtis ir laikotarpiai (savaitė vs metai), todėl konceptiniai sluoksniai laikomi atskirai. Reikalui esant juos sujungti yra P1 prioriteto darbas.
 
 ### 7.10 Brūkšnių (em dash) politika
@@ -226,7 +225,7 @@ Pagrindimas: vartotojo pageidavimas (estetinis sprendimas).
 
 ### P0 (turi būti padaryta prieš naudojant produkciškai)
 
-1. Iliustracines reikšmes pakeisti realiomis einamosiomis vertėmis visiems 17 rodiklių. Atsakingas asmuo: pirkimų komanda.
+1. Iliustracines reikšmes pakeisti realiomis einamosiomis vertėmis visiems 15 rodiklių. Atsakingas asmuo: pirkimų komanda.
 2. Suderinti triggerių ribas su Litgrid rizikos valdymo skyriumi.
 3. Suderinti sutartinius veiksmus su teisės skyriumi (kad rekomendacijos atitiktų PSĮ ir vidaus tvarką).
 4. Apsispręsti dėl atnaujinimo dažnio (savaitė globaliems, mėnuo VDA) ir paskirti atsakingą asmenį.
@@ -301,7 +300,7 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 ### 10.5 Pagrindiniai kodo orientyrai (kur ką ieškoti faile)
 
 - `DEFAULT_DATA` objektas: visi rodikliai, kategorijos, jų svoriai ir veiksmai. Pakeitimai paprastai pradedami čia.
-- `metrics` masyvas (DEFAULT_DATA.metrics): kiekvienas rodiklis su `id`, `group` (A/B/C/D), `series`, `thr`, `act`.
+- `metrics` masyvas (DEFAULT_DATA.metrics): kiekvienas rodiklis su `id`, `group` (A/B/D), `series`, `thr`, `act`.
 - `categories` masyvas: kategorijų sąrašas su `weights` ir `act`.
 - `SCHEMA_VERSION`: didinama keičiant struktūrą.
 - `severity()`, `categorySeverity()`, `climateScore()`: pagrindinės skaičiavimo funkcijos.
@@ -320,8 +319,6 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 - ICE Brent: https://www.ice.com/brent-crude
 - Drewry WCI: https://www.drewry.co.uk/supply-chain-advisors/supply-chain-expertise/world-container-index-assessed-by-drewry
 - TAC oro krovinių indeksas: https://www.tacindex.com/
-- WTO Hormūzo tracker: https://datalab.wto.org/Strait-of-Hormuz-Trade-Tracker
-- ES sankcijų sąrašas: https://www.sanctionsmap.eu/
 - GitHub repozitorija: https://github.com/Jurgelaitis/PP-Market-KPI
 
 ---
@@ -330,7 +327,51 @@ try{eval(js);}catch(e){console.error('ERR',e.message);}
 
 - v1: pradinė versija, 3 KPI lygmenys (A/B/C), 5 pirkimų kategorijos, AI santrauka, redagavimo režimas.
 - v2: pridėtas D lygmuo (LT/VDA indeksai), 7 nauji rodikliai įskaitant SSKI dedamųjų išskaidymą; SSKI „pagrindas" o ne „inkaras" formuluotė.
-- v6.11 (esama, 2026-09-10): **„Duomenys pasenę" pakeista neutralia formuluote.**
+- v6.12 (esama, 2026-09-10): **C lygmuo („Tiekimo nutrūkimo rizika") pašalintas iš skaičiavimų.**
+
+  NAUDOTOJO KLAUSIMAS: ar C lygmuo tikrai svarbus vertinant aštuonis LITGRID profilius?
+  VERTINIMAS (pateiktas prieš sprendimą): pati rizika tikra, bet lygmuo jos nematavo:
+  - abu rodikliai (Hormūzo tranzito indeksas, sankcijų signalų skaičius per mėnesį) buvo
+    rankiniai be nemokamo šaltinio; Hormūzas - ekspertinis įvertis, signalų skaičius - be
+    apibrėžimo, kas yra signalas; abu taip ir liko iliustraciniai;
+  - profilių verdikte C sudarė 100 proc. (programinė įranga), 60 proc. (projektavimas),
+    46 proc. (IT įranga), 40 proc. (RAA/SCADA) - keturių profilių spalvą lėmė ranka įrašytas,
+    niekieno neatnaujinamas skaičius; klimato bale iliustracinis raudonas Hormūzas vienas
+    ribojo verdiktą iki „įtemptas";
+  - sankcijos yra patikra konkrečiam tiekėjui ir komponentui (PP-esg, kvalifikacija), ne
+    rinkos „klimatas"; antrinį Hormūzo poveikį kainoms modulis jau matuoja A ir B lygmenyse.
+  SPRENDIMAS (naudotojo, 2026-09-10): išimti. Negrąžinti savo iniciatyva.
+
+  KAS PADARYTA:
+  - `hormuz` ir `sanctions` pašalinti iš `DEFAULT_DATA` ir `DUOMENU_EN`; sekcija, navigacijos
+    punktas ir santraukos sakinys apie Hormūzą - taip pat. Liko 15 rodiklių: A (5), B (3), D (7).
+    Rankinių be šaltinio liko keturi: polimerai, BDI, konteineriai, oro kroviniai.
+  - Klimato balas ir santrauka - iš 8 A/B rodiklių (`globalMetrics()` dabar aiškiai A/B, ne
+    „viskas, kas ne D", kad į skaičiavimą negalėtų įlįsti nežinoma grupė iš importuoto failo).
+  - Profilių svoriai perskaičiuoti be C (suma 1,00). Šeši profiliai - proporcingai iš likusių
+    žaliavų ir logistikos rodiklių. Dviem darbo imliems profiliams, kuriems žaliavos ir frachtas
+    kainos neveikia, spaudimą matuoja D lygmuo: projektavimas `vmdu .70 / vki .30`, programinė
+    įranga `vki .50 / vmdu .50`. Tai pirmas kartas, kai D įeina į profilio svorius (žr. 7.9).
+  - Profilių veiksmų sąrašuose atitikties patarimai (sankcijų sąlyga, due diligence, teisė
+    nutraukti) PALIKTI: jie geri sutartiniai patarimai, tik jų nebeįjungia išgalvotas skaičius.
+  - Schema v6 -> v7 su migracija: nežinomi rodikliai iškrenta, naudotojo reikšmės, laikotarpiai,
+    `tikrintaOsp` ir `srcAuto` perkeliami. Ankstesnė migracija šių dviejų NEperkeldavo - ką tik
+    atnaujinti rodikliai po atnaujinimo vėl būtų atrodę ankstesnio laikotarpio, o kortelės vėl
+    kredituotų LME už FRED reikšmę. Senas JSON kopijos failas importuojamas per tą pačią migraciją.
+  - Aprašai už modulio ribų (portalo kortelė, „Apie projektą", CLAUDE.md lentelė) nebemini
+    tiekimo nutrūkimo rizikos - atskiras commit'as.
+
+  TESTAI (138): keturi nauji (nebėra C nei duomenyse, nei tekstuose; svoriai be C ir D dviem
+  profiliams; klimatas tik iš A/B; migracija v6 -> v7), esami perskaičiuoti 17 -> 15 rodiklių,
+  rankinių 6 -> 4. Mutacijos patikra: migracija be `tikrintaOsp`/`srcAuto` - krinta 1, klimatas
+  iš visų rodiklių - krinta 2, grąžintas `nav.c` raktas - krinta 2.
+
+  KARTU RASTA IR IŠTAISYTA (sena klaida, matyta EN nuotraukoje): santraukoje du profilio
+  veiksnius jungė kode įrašytas „ir" („LME aluminium ir LME copper"). Jungtukas dabar eina per
+  žodyną (`sum.and`), pridėtas testas. Diakritikų patikra tokių žodžių nemato - žr.
+  `vietine-patikros-aplinka` atmintyje.
+
+- v6.11 (2026-09-10): **„Duomenys pasenę" pakeista neutralia formuluote.**
 
   NAUDOTOJO PASTABA: „Duomenys pasenę" skamba kaip priekaištas, ne kaip faktas. Pasiūlyta
   ieškoti neutralesnės formuluotės („ankstesniais duomenimis" ar panašiai).
