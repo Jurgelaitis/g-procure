@@ -434,6 +434,57 @@ tad tuščia „didžiausia priimtina kaina“ virsdavo nuliu ir atmesdavo visus
 apvalinimas išjungtas, lygiosios apverstos, didžiausios kainos patikra išimta, Telgen apversta,
 importas nevalomas, tiekėjo požymių patikra išjungta) - kiekvieną pagavo būtent jam skirtas testas.
 
+**2 žingsnio pertvarka pagal naudotojo pastabas (2026-09-19, antra iteracija).**
+Naudotojas paprašė: (1) išanalizuoti LITGRID CVP IS pirkimus su ekonominio naudingumo
+kriterijais ir 2 žingsnyje siūlyti kriterijus iš sąrašo (su galimybe įrašyti savo); (2) iš
+sudėliotų kriterijų generuoti Word priedą LITGRID naudojama forma.
+
+ANALIZĖ (viešųjų pirkimų duomenų jungtis, LITGRID JAR 302564383; imtis - indeksuoti CVP IS ir
+CVPP dokumentai, ne visi pirkimai): naujoje CVP IS LITGRID SPS su „kainos ir kokybės santykį“ -
+10 dokumentų, su „kainą“ - 18 (dokumentai, ne pirkimai; yra versijų). Senoje CVPP - apie 100
+LITGRID SPS ir priedų, minintys „Ekonomiškai naudingiausio Pasiūlymo vertinimo metodika“.
+Perskaityta 8 LITGRID priedai (renginiai, komunikacija, studijos, projektavimas, teritorijų
+planavimas, patalpų nuoma, IT). Išvados:
+- FORMA visur ta pati: „SPS N priedas“, antraštė „EKONOMIŠKAI NAUDINGIAUSIO PASIŪLYMO VERTINIMO
+  METODIKA“, įvado sakinys apie kriterijus ir formules, lentelė „Nr. | Vertinimo kriterijai |
+  Vertinami dokumentai | Kriterijaus lyginamasis svoris“ (X = kainai, Y_i = kriterijams), tada
+  metodika: S = C + T, C = C_min / C_p × X, kiekvieno kriterijaus aprašas, ekspertų (ne mažiau
+  3, vertina atskirai) balų vidurkis R_p lyginamas su geriausiu R_max, balai dviejų skaičių po
+  kablelio tikslumu, lygiosios - anksčiau pateiktas, „ekonomiškai naudingiausiu pripažįstamas
+  daugiausia balų surinkęs“. Formulės visur santykinės.
+- KRITERIJAI: kainos svoris 30-94 (dažniausiai 60-70); kokybė - ekspertinis užduoties ar
+  aprašymo vertinimas pagal aprašytus 10 balų lygius (su parametrais ir jų svoriais L_s);
+  paskirto specialisto papildoma patirtis pakopomis (1 m. - 0, 2 - 2, 3 - 4, 4+ - 6; arba
+  objektų skaičius 1 - 0, 2 - 5, 3+ - 15; arba po 4 balus iki 5); projektų vadovo patirtis
+  (renginių skaičius 0-10 → 0-10 balų); patalpų nuomai - energetinė klasė ir atstumai.
+- NERASTA: garantinio termino, pristatymo termino, energijos nuostolių kriterijų LITGRID
+  prieduose - prekes ir darbus LITGRID perka pagal kainą. Todėl sąraše dvi grupės: „LITGRID
+  praktika (paslaugos)“ ir „VPT gairių pavyzdžiai (prekės, darbai)“, o naudotojo minėti
+  garantijos ir pristatymo kriterijai lieka VPT grupėje.
+
+KAS PADARYTA:
+- Kiekvienoje kriterijaus eilutėje - sąrašas su dviem grupėmis (LITGRID praktika, VPT
+  pavyzdžiai); pasirinkus užpildoma taisyklė, parametrai, svoris, vertinami dokumentai, lygiai
+  ir pastaba, bet viskas lieka redaguojama; „kita“ - tiesiog įrašyti pavadinimą. Atskiras
+  „Pridėti iš pavyzdžių“ mygtukas pašalintas.
+- Dvi naujos taisyklės iš LITGRID praktikos: „pakopos“ („2=2; 3=4; 4=6“ - pasiekus reikšmę
+  skiriami nurodyti balai, dalis nuo didžiausios pakopos; įspėjimas, jei pakopų viršus
+  nesutampa su svoriu) ir „ekspertinis lyginant su geriausiu“ (R_p / R_max × Y, kaip LITGRID
+  prieduose; žymima kaip santykinė).
+- Naujas kriterijaus laukas „Vertinami dokumentai“ - priedo lentelei.
+- Word priedas: `priedoTurinys()` sudaro turinį grynai (testuojama be bibliotekos),
+  `sukurkPrieda()` verčia į docx (docx.js 8.5 iš CDN tik paspaudus, kaip PP-report; be
+  FileSaver - Blob ir nuoroda). Forma - LITGRID: dešinėje „SPS N priedas“, antraštė, pirkimo
+  pavadinimas, įvadas su įstatymo nuoroda pagal subjektą, lentelė, metodika 3.1-3.n
+  (S = C + T arba EN = C − ΣV, kainos formulė pagal pasirinktą, kiekvieno kriterijaus aprašas,
+  ekspertų sakinys, didžiausia priimtina kaina, apvalinimas, laimėtojas, lygiosios su 8 d.).
+  Priedo numeris - laukas 2 žingsnyje.
+- Testai: 43 (5 nauji: pakopos, ekspertinis lyginant su geriausiu, pakopų patikros, priedo
+  turinys LITGRID forma, „kokybė į kainą“ ir fiksuota kaina priede; sąrašo testas perrašytas).
+  Mutacijos: pakopa pasiekiama tik viršijus - krenta 3, R_max pakeista skale - 1, priede dingsta
+  lygiųjų taisyklė - 1. Word failas sugeneruotas visu keliu naršyklėje (docx.js iš CDN) ir
+  perskaitytas atgal: antraštė, lentelė, metodika - kaip LITGRID prieduose.
+
 **Neįgyvendinta (naudotojo sprendimui):** gyvavimo ciklo sąnaudų kriterijus; minimalus
 pereinamasis balas (VPT gairės jį rekomenduoja tik pagrįstais atvejais); DOCX ataskaita
 (spausdinama per naršyklę, kaip 2 dalyje); EN kalba; perkėlimas į PP-protocol komisijos
