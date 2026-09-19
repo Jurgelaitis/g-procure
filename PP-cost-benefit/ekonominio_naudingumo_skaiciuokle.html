@@ -956,11 +956,20 @@ function uzkraukDocx(){
 /* Turinys -> docx Blob. Atskira funkcija, kad būtų galima patikrinti be paspaudimo. */
 function sudarykDocx(t){
     const D = window.docx;
+    // --- Lentelės stulpelių pločiai realiais DXA (Pages gerbia tblGrid pažodžiui) ---
+    // Tas pats taisymas kaip PP-qual exportDocx (699ba8c): anksčiau tcW buvo procentais
+    // („43%"), o tblGrid gridCol w="100", tad Pages stulpelius suspausdavo iki vienos raidės.
+    // usable skaičiuojamas iš tų pačių konstantų, kurios įrašomos į pgSz ir pgMar.
+    const PAGE_W = 11906, PAGE_H = 16838;
+    const MARGIN = { top: 1134, bottom: 1134, left: 1418, right: 1134 };
+    const usable = PAGE_W - MARGIN.left - MARGIN.right;
+    // Iš proporcijų -> DXA; paskutinį stulpelį pakoreguoja, kad suma tiksliai === usable.
+    const dxaCols = (fr)=>{ const c = fr.map(f=>Math.round(f / fr.reduce((a, b)=>a + b, 0) * usable)); c[c.length - 1] += usable - c.reduce((a, b)=>a + b, 0); return c; };
     const run = (text, o) => new D.TextRun(Object.assign({ text: String(text), font: "Times New Roman", size: 22 }, o || {}));
     const par = (text, o) => new D.Paragraph(Object.assign({ children: [run(text, o && o.run)], spacing: { after: 120 } }, (o && o.p) || {}));
     const cell = (text, o) => new D.TableCell({
       children: [new D.Paragraph({ children: [run(text, Object.assign({ size: 20 }, (o && o.run) || {}))] })],
-      width: { size: o.w, type: D.WidthType.PERCENTAGE }, shading: o.fill ? { fill: o.fill } : undefined,
+      width: { size: o.w, type: D.WidthType.DXA }, shading: o.fill ? { fill: o.fill } : undefined,
       margins: { top: 60, bottom: 60, left: 100, right: 100 } });
     const ch = [];
     ch.push(par(t.priedas, { p: { alignment: D.AlignmentType.RIGHT } }));
@@ -968,16 +977,16 @@ function sudarykDocx(t){
     if(t.pirkimas) ch.push(par(t.pirkimas, { run: { italics: true }, p: { alignment: D.AlignmentType.CENTER, spacing: { after: 200 } } }));
     t.ivadas.forEach(x=> ch.push(par(x, { p: { alignment: D.AlignmentType.BOTH } })));
     if(t.lentele.antrastes.length){
-      const w = [7, 43, 32, 18];
+      const w = dxaCols([7, 43, 32, 18]);   // Nr. / kriterijai / dokumentai / svoris - proporcijos nepakeistos
       const rows = [new D.TableRow({ tableHeader: true, children: t.lentele.antrastes.map((h, i)=>cell(h, { w: w[i], fill: "E1E2E4", run: { bold: true } })) })];
       t.lentele.eilutes.forEach(r=> rows.push(new D.TableRow({ children: r.map((c, i)=>cell(c, { w: w[i] })) })));
-      ch.push(new D.Table({ width: { size: 100, type: D.WidthType.PERCENTAGE }, rows }));
+      ch.push(new D.Table({ columnWidths: w, width: { size: usable, type: D.WidthType.DXA }, layout: D.TableLayoutType.FIXED, rows }));
       ch.push(par("", {}));
     }
     t.metodika.forEach(x=> ch.push(par(x, { p: { alignment: D.AlignmentType.BOTH } })));
     ch.push(par("", {}));
     ch.push(par("Parengta G-Procure ekonominio naudingumo skaičiuokle " + new Date().toLocaleDateString("lt-LT") + ". Prieš skelbiant pirkimą priedą peržiūri pirkimų komisija.", { run: { italics: true, size: 18, color: "737483" } }));
-    const doc = new D.Document({ creator: "G-Procure", title: t.pavadinimas, sections: [{ properties: { page: { margin: { top: 1134, bottom: 1134, left: 1418, right: 1134 } } }, children: ch }] });
+    const doc = new D.Document({ creator: "G-Procure", title: t.pavadinimas, sections: [{ properties: { page: { size: { width: PAGE_W, height: PAGE_H }, margin: MARGIN } }, children: ch }] });
     return D.Packer.toBlob(doc);
 }
 function sukurkPrieda(){

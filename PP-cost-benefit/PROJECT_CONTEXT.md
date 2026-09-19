@@ -496,6 +496,22 @@ alternatyvos: dvi atskiros portalo kortelės (skaido vieną modulį, portalas ir
 kortelė tiesiai į 1 dalį su jungikliu (buvo iki tol - pasirinkimas per mažai matomas). Puslapis
 tik LT, kaip ir abi dalys; kanoninis adresas - katalogo URL.
 
+**Word priedo lentelės pločiai (2026-09-19, ketvirta iteracija).** Naudotojas pranešė, kad
+sugeneruoto .docx lentelės stulpeliai suspausti iki vienos raidės. Ištirta prieš taisant:
+tas pats defektas, kaip PP-qual 2026-07 (commit 699ba8c) - `tblGrid` gridCol w="100" (docx.js
+numatytoji reikšmė, kai nėra `columnWidths`), `tcW` ir `tblW` procentais („43%"), nėra
+`tblLayout`. Pages gerbia tblGrid pažodžiui, todėl 2 puslapių priedas tapdavo 6 puslapių su
+vertikaliu tekstu. Taisymas perimtas iš PP-qual: `usable = PAGE_W - MARGIN.left - MARGIN.right`
+(11906 - 1418 - 1134 = 9354, iš tų pačių konstantų, kurios įrašomos į pgSz/pgMar),
+`dxaCols([7, 43, 32, 18])` - proporcijos tos pačios, kaip buvo kode -> 655 / 4022 / 2993 /
+1684, `columnWidths`, `width` DXA, `layout: FIXED`, kiekviena celė DXA. Patikrinta sugeneravus
+visus 5 variantus (kainos ir kokybės santykis su mažiausios kainos ir Telgen formulėmis,
+„kokybė į kainą", fiksuota kaina, tik kaina) ir atidarius Pages (eksportas į PDF): gridCol
+suma 9354, tblLayout fixed, tcW dxa, priedas telpa 1 puslapyje. Kita neliesta.
+PASTEBĖTA, NETAISYTA: Pages nerodo pastraipų lygiavimo ir tarpų (XML turi `w:jc` right/center/both
+ir `w:spacing`) - buvo ir prieš taisymą; fiksuotos kainos priede 3.5 p. mini „Kainos (C) ...
+balai", nors kaina nevertinama.
+
 **Neįgyvendinta (naudotojo sprendimui):** gyvavimo ciklo sąnaudų kriterijus; minimalus
 pereinamasis balas (VPT gairės jį rekomenduoja tik pagrįstais atvejais); DOCX ataskaita
 (spausdinama per naršyklę, kaip 2 dalyje); EN kalba; perkėlimas į PP-protocol komisijos
