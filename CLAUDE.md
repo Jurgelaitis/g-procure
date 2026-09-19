@@ -55,7 +55,7 @@ tai rašybos konvencija, ne katalogo vardas. Jei rasi senų variantų (PP-Planin
 | `PP-ts` | Techninių specifikacijų asistentas (AI generavimas + auditas) |
 | `PP-qual` | Tiekėjų kvalifikacijos reikalavimų modulis (AI, proporcingumas) |
 | `PP-salygos` | Pirkimo sąlygų generatorius (BPS/SPS/formos iš LITGRID šablonų, deterministinis) |
-| `PP-cost-benefit` | Kaštų ir naudos analizė (didelės vertės pirkimai >= 20 mln. EUR) |
+| `PP-cost-benefit` | Dvi dalys (nuo 2026-09-19): `ekonominio_naudingumo_skaiciuokle.html` - ekonominio naudingumo skaičiuoklė kasdieniam pasiūlymų vertinimui (kriterijai, svoriai, VPT gairių formulės, balai; VPĮ 55 str. / PĮ 64 str.); `kastu_naudos_analize.html` - kaštų ir naudos analizė (didelės vertės pirkimai >= 20 mln. EUR). Portalo kortelė veda į 1 dalį, puslapiai turi tarpusavio jungiklį |
 | `PP-graphs` | Pirkimų grafikų generatorius ir trukmių skaičiuoklė |
 | `PP-protocol` | Pirkimų komisijos sprendimų centras (protokolai, pranešimai, auditas) |
 | `PP-negotiation` | Derybų pasirengimo įrankis (BATNA/ZOPA, MEAT) |
