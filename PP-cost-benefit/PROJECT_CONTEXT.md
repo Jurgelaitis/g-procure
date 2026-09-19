@@ -485,6 +485,17 @@ KAS PADARYTA:
   lygiųjų taisyklė - 1. Word failas sugeneruotas visu keliu naršyklėje (docx.js iš CDN) ir
   perskaitytas atgal: antraštė, lentelė, metodika - kaip LITGRID prieduose.
 
+**Modulio pradžios puslapis `index.html` (2026-09-19, trečia iteracija).** Naudotojas pastebėjo,
+kad iš portalo patenkama tiesiai į vieną dalį, ir pasiūlė aiškų pasirinkimą. Sprendimas: portalo
+kortelė ir „Apie projektą“ veda į `PP-cost-benefit/` - vieno ekrano puslapį su tamsia juosta
+„Kurią dalį atidaryti?“ ir dviem kortelėmis („kam / kada / rezultatas / trukmė“ + mygtukas; visa
+kortelė paspaudžiama), žemiau - trys klausimai eilės tvarka, kurių pirmas „taip“ nurodo dalį
+(gauti pasiūlymai ar kriterijai → 1; alternatyvos ir ≥ 20 mln. EUR → 2; abu → 2, paskui 1).
+Abiejose dalyse antraštėje liko jungiklis ir atsirado „← Dalių pasirinkimas“. Svarstytos
+alternatyvos: dvi atskiros portalo kortelės (skaido vieną modulį, portalas ir taip pilnas) ir
+kortelė tiesiai į 1 dalį su jungikliu (buvo iki tol - pasirinkimas per mažai matomas). Puslapis
+tik LT, kaip ir abi dalys; kanoninis adresas - katalogo URL.
+
 **Neįgyvendinta (naudotojo sprendimui):** gyvavimo ciklo sąnaudų kriterijus; minimalus
 pereinamasis balas (VPT gairės jį rekomenduoja tik pagrįstais atvejais); DOCX ataskaita
 (spausdinama per naršyklę, kaip 2 dalyje); EN kalba; perkėlimas į PP-protocol komisijos
