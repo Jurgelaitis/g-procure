@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ekonominio naudingumo skaičiuoklė · regresijos testai</title>
+<link rel="stylesheet" href="../shared/epso-g.css">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--color-white);color:var(--color-graphite);font-family:var(--font-base);line-height:1.5;padding:28px 20px 60px}
+  .wrap{max-width:1000px;margin:0 auto}
+  h1{font-size:21px;font-weight:750}
+  .sub{font-size:13px;color:var(--color-graphite-50);margin-top:4px}
+  .santrauka{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:20px 0 6px;padding:14px 16px;border-radius:12px;border:1px solid var(--color-graphite-15);background:var(--color-graphite-5);font-size:14px}
+  .santrauka b{font-size:17px}
+  .zenklas{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;text-transform:uppercase;letter-spacing:.6px}
+  .z-ok{background:var(--color-green-5);color:#276749;border:1px solid var(--color-green-15)}
+  .z-blogai{background:var(--color-error-5);color:#7F1722;border:1px solid var(--color-error)}
+  .z-laukia{background:var(--color-graphite-5);color:var(--color-graphite-50);border:1px solid var(--color-graphite-15)}
+  h2{font-size:14px;font-weight:750;margin:22px 0 8px;text-transform:uppercase;letter-spacing:.7px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:8px 10px;border-bottom:1px solid var(--color-graphite-15);vertical-align:top}
+  td.b{width:96px}
+  td.klaida{color:#7F1722;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .laikas{font-size:11.5px;color:var(--color-graphite-50);white-space:nowrap;text-align:right}
+  iframe{position:absolute;left:-9999px;width:1280px;height:900px;border:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ekonominio naudingumo skaičiuoklė · regresijos testai</h1>
+  <p class="sub">Testai kviečia TIKRAS modulio funkcijas per rėmelį. Kiekvienas testas pats grąžina modulį į žinomą būseną, tad rezultatas nepriklauso nuo to, kas liko naršyklėje po rankinio bandymo.</p>
+  <div class="santrauka" id="santrauka"><span class="zenklas z-laukia">Kraunama</span> Ruošiamas modulis…</div>
+  <div id="rezultatai"></div>
+</div>
+<iframe id="modulis" title="testuojamas modulis"></iframe>
+<script>
+/* Variklis - kaip PP-market-KPI/testai.html: rėmelio src su kešo skirtuku, būsena per eval
+   (state yra let, ne window savybė), kiekvienas testas pradeda nuo paruosk(). */
+const ramas = document.getElementById("modulis");
+const TESTAI = [];
+function testas(grupe, pav, fn){ TESTAI.push({grupe, pav, fn}); }
+function M(israiska){ return ramas.contentWindow.eval(israiska); }
+function paruosk(){
+  M('try{ localStorage.removeItem(STORE_KEY); }catch(e){} atstatyk();');
+}
+function lygu(gauta, laukta, ka){
+  const a = JSON.stringify(gauta), b = JSON.stringify(laukta);
+  if(a !== b) throw new Error((ka ? ka + ": " : "") + "gauta " + a + ", laukta " + b);
+}
+function tiesa(salyga, ka){ if(!salyga) throw new Error(ka || "sąlyga neteisinga"); }
+function arti(gauta, laukta, eps, ka){ if(typeof gauta !== "number" || Math.abs(gauta - laukta) > (eps || 1e-9)) throw new Error((ka ? ka + ": " : "") + "gauta " + gauta + ", laukta ~" + laukta); }
+
+/* Sukuria būseną iš aprašo ir grąžina skaičiavimo rezultatą. reiksmes - masyvas pagal kriterijų eilę. */
+function busena(cfg){
+  return M(`(function(){
+    const cfg = ${JSON.stringify(cfg)};
+    const s = tusciaBusena(); Object.assign(s.pirkimas, cfg.pirkimas || {});
+    const ks = (cfg.kriterijai || []).map(k=>naujasKriterijus(k));
+    s.kriterijai = ks;
+    s.pasiulymai = (cfg.pasiulymai || []).map(p=>{ const n = naujasPasiulymas(p.tiekejas); n.kaina = (p.kaina === undefined) ? null : p.kaina; (p.reiksmes || []).forEach((v, j)=>{ if(ks[j]) n.reiksmes[ks[j].id] = v; }); return n; });
+    state = s; renderAll();
+    const r = skaiciuok(state);
+    return { eile: r.rikiuoti.map(e=>({ t:e.tiekejas, en:e.en, kb:e.kainosBalai, q:e.kokybesBalai, vieta:e.vieta })),
+             atmesti: r.eilutes.filter(e=>e.atmestas).map(e=>e.tiekejas + ": " + e.atmestas),
+             klaidos: r.klaidos.map(x=>x.tekstas + " | " + x.saltinis),
+             patikros: r.patikros.map(x=>x.tipas + ": " + x.tekstas + " | " + x.saltinis),
+             tinkamas: r.tinkamas, laimetojas: r.laimetojas ? r.laimetojas.tiekejas : null, kryptis: r.kryptis };
+  })()`);
+}
+const TAIPNE = { pavadinimas:"Papildoma funkcija", taisykle:"taipne", svoris:40 };
+
+/* =========================================================================
+   1. FORMULĖS (VPT formulių aprašymai, 2021)
+   ========================================================================= */
+testas("Formulės", "Mažiausios kainos formulė: C = C_min / C_p × Y", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[TAIPNE],
+    pasiulymai:[{ tiekejas:"A", kaina:120, reiksmes:[true] }, { tiekejas:"B", kaina:100, reiksmes:[false] }] });
+  lygu(r.klaidos, [], "klaidų neturi būti");
+  lygu(r.eile.map(e=>[e.t, e.kb, e.q, e.en]), [["A", 50, 40, 90], ["B", 60, 0, 60]]);
+  lygu(r.laimetojas, "A");
+});
+
+testas("Formulės", "Brangiausio ir pigiausio formulė: pigiausias - visi kainos balai, brangiausias - 0", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"maxmin", kainosSvoris:70 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:30 }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[false] }, { tiekejas:"B", kaina:150, reiksmes:[false] }, { tiekejas:"C", kaina:200, reiksmes:[false] }] });
+  lygu(r.eile.map(e=>[e.t, e.kb]), [["A", 70], ["B", 35], ["C", 0]]);
+});
+
+testas("Formulės", "Telgen (absoliutinė): P_SetMax - 0 balų, P_SetMin - visi, už ribų - neigiami / daugiau", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:50, pSetMin:100, pSetMax:200 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:50 }],
+    pasiulymai:[{ tiekejas:"Max", kaina:200, reiksmes:[false] }, { tiekejas:"Min", kaina:100, reiksmes:[false] }, { tiekejas:"Virs", kaina:250, reiksmes:[false] }, { tiekejas:"Po", kaina:50, reiksmes:[false] }] });
+  const kb = {}; r.eile.forEach(e=>{ kb[e.t] = e.kb; });
+  lygu(kb, { Po:75, Min:50, Max:0, Virs:-25 });
+  // absoliutinė: balai nepriklauso nuo kitų pasiūlymų - pašalinus Virs, Min balai lieka tie patys
+  const r2 = busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:50, pSetMin:100, pSetMax:200 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:50 }],
+    pasiulymai:[{ tiekejas:"Min", kaina:100, reiksmes:[false] }] });
+  lygu(r2.eile[0].kb, 50, "balai be kitų pasiūlymų");
+});
+
+testas("Formulės", "„Kokybė į kainą“: VPT darbų gairių pavyzdys (statybos vadovo patirtis, 1000 Eur už objektą, lubos 3)", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"kok_kaina", kainosSvoris:60 },
+    kriterijai:[{ pavadinimas:"Statinio statybos vadovo patirtis (objektai)", taisykle:"daugiau", nuo:0, iki:3, verte:3000, svoris:0 }],
+    pasiulymai:[{ tiekejas:"A", kaina:100000, reiksmes:[0] }, { tiekejas:"B", kaina:100000, reiksmes:[4] }] });
+  lygu(r.klaidos, []);
+  lygu(r.kryptis, "min");
+  lygu(r.eile.map(e=>[e.t, e.en]), [["B", 97000], ["A", 100000]], "mažiausias EN laimi, lubos 3 objektai");
+});
+
+testas("Formulės", "Tik kaina: eilė kainos didėjimo tvarka, kokybės kriterijai nevertinami", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kaina" }, kriterijai:[TAIPNE],
+    pasiulymai:[{ tiekejas:"A", kaina:300 }, { tiekejas:"B", kaina:100 }, { tiekejas:"C", kaina:200 }] });
+  lygu(r.klaidos, []);
+  lygu(r.eile.map(e=>e.t), ["B", "C", "A"]);
+  tiesa(r.patikros.some(p=>p.indexOf("70 proc.") >= 0 && p.indexOf("2 d.") >= 0), "turi priminti 70 proc. ribą su 2 d., gauta: " + r.patikros.join(" || "));
+});
+
+testas("Formulės", "Fiksuota kaina: konkuruojama tik kokybe, svorių suma 100, kaina nereikalinga", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"fiksuota", fiksuotaKaina:5 }, kriterijai:[{ pavadinimas:"Skonis", taisykle:"ekspertinis", skale:3, vertintojai:1, svoris:60, lygiai:"3 skanu" }, { pavadinimas:"Ekologiška", taisykle:"taipne", svoris:40 }],
+    pasiulymai:[{ tiekejas:"A", reiksmes:[[3], false] }, { tiekejas:"B", reiksmes:[[1.5], true] }] });
+  lygu(r.klaidos, []);
+  lygu(r.eile.map(e=>[e.t, e.en]), [["B", 70], ["A", 60]]);
+});
+
+/* =========================================================================
+   2. KOKYBĖS TAISYKLĖS (VPT skaičiuoklės 4 variantai + santykinės)
+   ========================================================================= */
+testas("Kokybės taisyklės", "Taip / ne", ()=>{
+  paruosk();
+  lygu(M('kokybesDalis({taisykle:"taipne"}, true).dalis'), 1);
+  lygu(M('kokybesDalis({taisykle:"taipne"}, false).dalis'), 0);
+  lygu(M('kokybesDalis({taisykle:"taipne"}, null).truksta'), true);
+});
+
+testas("Kokybės taisyklės", "Daugiau geriau: riba 0 balų, lubos - visi, tarpinės proporcingai, už lubų - ne daugiau", ()=>{
+  paruosk();
+  const k = '{taisykle:"daugiau", nuo:0, iki:24}';
+  lygu(M('kokybesDalis(' + k + ', 12).dalis'), 0.5);
+  lygu(M('kokybesDalis(' + k + ', 30).dalis'), 1);
+  lygu(M('kokybesDalis(' + k + ', -5).dalis'), 0);
+  lygu(M('kokybesDalis(' + k + ', null).truksta'), true);
+  lygu(M('kokybesDalis({taisykle:"daugiau", nuo:10, iki:5}, 7).klaida'), "ribos", "lubos žemiau ribos - klaida");
+});
+
+testas("Kokybės taisyklės", "Mažiau geriau: riba (0 balų) didesnė už geriausią reikšmę", ()=>{
+  paruosk();
+  const k = '{taisykle:"maziau", nuo:180, iki:90}';
+  lygu(M('kokybesDalis(' + k + ', 135).dalis'), 0.5);
+  lygu(M('kokybesDalis(' + k + ', 60).dalis'), 1);
+  lygu(M('kokybesDalis(' + k + ', 200).dalis'), 0);
+  lygu(M('kokybesDalis({taisykle:"maziau", nuo:5, iki:10}, 7).klaida'), "ribos");
+});
+
+testas("Kokybės taisyklės", "Ekspertinis: vertintojų vidurkis dalijamas iš skalės", ()=>{
+  paruosk();
+  arti(M('kokybesDalis({taisykle:"ekspertinis", skale:5}, [4, 4, 5]).dalis'), 13 / 15, 1e-9);
+  arti(M('kokybesDalis({taisykle:"ekspertinis", skale:5}, [4, 4, 5]).vidurkis'), 13 / 3, 1e-9);
+  lygu(M('kokybesDalis({taisykle:"ekspertinis", skale:5}, []).truksta'), true);
+  lygu(M('kokybesDalis({taisykle:"ekspertinis", skale:5}, [null, 3]).dalis'), 0.6, "tušti vertintojai neskaičiuojami");
+  lygu(M('kokybesDalis({taisykle:"ekspertinis", skale:0}, [3]).klaida'), "skalė");
+  lygu(M('kokybesDalis({taisykle:"ekspertinis", skale:5}, [9]).dalis'), 1, "viršijus skalę - ne daugiau kaip 100 %");
+});
+
+testas("Kokybės taisyklės", "Santykinės: geriausias pasiūlymas gauna visus balus", ()=>{
+  paruosk();
+  lygu(M('kokybesDalis({taisykle:"sant_daugiau"}, 40, [10, 20, 40]).dalis'), 1);
+  lygu(M('kokybesDalis({taisykle:"sant_daugiau"}, 10, [10, 20, 40]).dalis'), 0.25);
+  lygu(M('kokybesDalis({taisykle:"sant_maziau"}, 10, [10, 20, 40]).dalis'), 1);
+  lygu(M('kokybesDalis({taisykle:"sant_maziau"}, 40, [10, 20, 40]).dalis'), 0.25);
+});
+
+/* =========================================================================
+   3. TEISINĖS IR METODINĖS PATIKROS (VPĮ 55 str. / PĮ 64 str., VPT gairės)
+   ========================================================================= */
+testas("Patikros", "Svorių suma ne 100 - blokuojanti klaida su 6 d. nuoroda, laimėtojas nerodomas", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:30 }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }, { tiekejas:"B", kaina:90, reiksmes:[false] }] });
+  tiesa(r.klaidos.some(k=>k.indexOf("100") >= 0 && k.indexOf("6 d.") >= 0), "gauta: " + r.klaidos.join(" || "));
+  lygu(r.tinkamas, false); lygu(r.laimetojas, null, "su klaidomis laimėtojo nėra");
+});
+
+testas("Patikros", "Kainos svoris 0 be fiksuotos kainos - klaida su 3 d. nuoroda", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:0 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:100 }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }] });
+  tiesa(r.klaidos.some(k=>k.indexOf("fiksuot") >= 0 && k.indexOf("3 d.") >= 0), "gauta: " + r.klaidos.join(" || "));
+});
+
+testas("Patikros", "Telgen be parametrų arba su apverstomis ribomis - klaida", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:60 }, kriterijai:[TAIPNE], pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }] });
+  tiesa(r.klaidos.some(k=>k.indexOf("P_SetMin") >= 0), "be parametrų: " + r.klaidos.join(" || "));
+  const r2 = busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:60, pSetMin:200, pSetMax:100 }, kriterijai:[TAIPNE], pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }] });
+  tiesa(r2.klaidos.some(k=>k.indexOf("mažesnė už P_SetMax") >= 0), "apverstos: " + r2.klaidos.join(" || "));
+});
+
+testas("Patikros", "Su tiekėju (ne objektu) susijęs kriterijus - įspėjimas su 4 d. nuoroda", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 },
+    kriterijai:[{ pavadinimas:"Tiekėjo patirtis metais", taisykle:"daugiau", nuo:0, iki:10, svoris:20 }, { pavadinimas:"ISO 9001 sertifikatas", taisykle:"taipne", svoris:20 }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[5, true] }] });
+  const d = r.patikros.filter(p=>p.indexOf("demesio: Patikrinkite kriterijų") === 0);
+  lygu(d.length, 2, "du įspėjimai, gauta: " + r.patikros.join(" || "));
+  tiesa(d.every(p=>p.indexOf("4 d.") >= 0), "nuoroda į 4 d.");
+  // specialisto (paskirto darbuotojo) patirtis - LEIDŽIAMA, įspėjimo neturi būti
+  const r2 = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 },
+    kriterijai:[{ pavadinimas:"Paskirto specialisto patirtis (metai)", taisykle:"daugiau", nuo:0, iki:5, svoris:40 }], pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[3] }] });
+  lygu(r2.patikros.filter(p=>p.indexOf("demesio: Patikrinkite kriterijų") === 0).length, 0, "specialisto patirtis leidžiama");
+});
+
+testas("Patikros", "Ekspertinis kriterijus: du vokai (7 d.), bent 3 vertintojai, aprašyti lygiai", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 },
+    kriterijai:[{ pavadinimas:"Planas", taisykle:"ekspertinis", skale:5, vertintojai:1, svoris:40, lygiai:"" }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[[4]] }] });
+  tiesa(r.patikros.some(p=>p.indexOf("dviem vokais") >= 0 && p.indexOf("7 d.") >= 0), "du vokai: " + r.patikros.join(" || "));
+  tiesa(r.patikros.some(p=>p.indexOf("bent tris") >= 0), "3 ekspertai");
+  tiesa(r.patikros.some(p=>p.indexOf("neaprašyti balų lygiai") >= 0), "lygiai");
+  const r2 = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 },
+    kriterijai:[{ pavadinimas:"Planas", taisykle:"ekspertinis", skale:5, vertintojai:3, svoris:40, lygiai:"5 - ..., 0 - ..." }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[[4, 4, 4]] }] });
+  lygu(r2.patikros.filter(p=>p.indexOf("bent tris") >= 0 || p.indexOf("neaprašyti") >= 0).length, 0, "su 3 vertintojais ir lygiais įspėjimų nėra");
+});
+
+testas("Patikros", "Įstatymas pagal subjektą: LITGRID - PĮ 64 str., EPSO-G - VPĮ 55 str.", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kaina", subjektas:"LITGRID" }, pasiulymai:[{ tiekejas:"A", kaina:1 }] });
+  tiesa(r.patikros.some(p=>p.indexOf("PĮ 64 str. 2 d.") >= 0), "LITGRID: " + r.patikros.join(" || "));
+  const r2 = busena({ pirkimas:{ budas:"kaina", subjektas:"EPSOG" }, pasiulymai:[{ tiekejas:"A", kaina:1 }] });
+  tiesa(r2.patikros.some(p=>p.indexOf("VPĮ 55 str. 2 d.") >= 0), "EPSO-G: " + r2.patikros.join(" || "));
+  tiesa(M('document.getElementById("istatymoPastaba").textContent').indexOf("VPĮ 55 str.") >= 0, "pastaba prie lauko");
+  M('state.pirkimas.subjektas = "AMBER"; renderAll();');
+  tiesa(M('document.getElementById("istatymoPastaba").textContent').indexOf("PĮ 64 str.") >= 0, "Amber Grid - PĮ");
+});
+
+testas("Patikros", "Kaina virš didžiausios priimtinos - pasiūlymas ne eilėje, kiti vertinami be jo", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60, maxKaina:150 }, kriterijai:[TAIPNE],
+    pasiulymai:[{ tiekejas:"Brangus", kaina:200, reiksmes:[true] }, { tiekejas:"A", kaina:120, reiksmes:[false] }, { tiekejas:"B", kaina:100, reiksmes:[false] }] });
+  lygu(r.atmesti, ["Brangus: kaina viršija didžiausią priimtiną (150 EUR)"]);
+  lygu(r.eile.map(e=>e.t), ["B", "A"]);
+  lygu(r.eile[1].kb, 50, "C_min imama iš vertinamų pasiūlymų");
+});
+
+testas("Patikros", "Vienodas naudingumas: pirmesnis anksčiau pateiktas (8 d.); pakeitus eilę keičiasi ir vieta", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kaina" }, pasiulymai:[{ tiekejas:"A", kaina:100 }, { tiekejas:"B", kaina:100 }] });
+  lygu(r.eile.map(e=>e.t), ["A", "B"]);
+  tiesa(r.patikros.some(p=>p.indexOf("anksčiau pateiktas") >= 0 && p.indexOf("8 d.") >= 0), "pastaba su 8 d.");
+  M('document.querySelector("button[data-eile][data-kryptis=\'1\']").click();');
+  const po = M('(function(){ const r = skaiciuok(state); return r.rikiuoti.map(e=>e.tiekejas); })()');
+  lygu(po, ["B", "A"], "po perkėlimo žemyn");
+});
+
+testas("Patikros", "Apvalinimas lemia eilę: šimtųjų tikslumu lygiosios, keturių skaitmenų - ne", ()=>{
+  paruosk();
+  const cfg = { pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60, apvalinimas:2 }, kriterijai:[TAIPNE],
+    pasiulymai:[{ tiekejas:"A", kaina:100.001, reiksmes:[true] }, { tiekejas:"B", kaina:100, reiksmes:[true] }] };
+  lygu(busena(cfg).eile.map(e=>e.t), ["A", "B"], "šimtųjų tikslumu abu 100,00 - pirmesnis anksčiau pateiktas");
+  cfg.pirkimas.apvalinimas = 4;
+  lygu(busena(cfg).eile.map(e=>e.t), ["B", "A"], "keturių skaitmenų tikslumu B pigesnis");
+});
+
+testas("Patikros", "Vienas pasiūlymas - pastaba, kad eilė nesudaroma (8 d.)", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[TAIPNE], pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }] });
+  tiesa(r.patikros.some(p=>p.indexOf("vienas tiekėjas") >= 0 && p.indexOf("8 d.") >= 0), r.patikros.join(" || "));
+});
+
+testas("Patikros", "Trūkstamos reikšmės vertinamos 0 ir apie tai pasakoma", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[{ pavadinimas:"Garantija", taisykle:"daugiau", nuo:0, iki:24, svoris:40 }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[] }, { tiekejas:"B", kaina:100, reiksmes:[24] }] });
+  lygu(r.eile.map(e=>[e.t, e.q]), [["B", 40], ["A", 0]]);
+  tiesa(r.patikros.some(p=>p.indexOf("Ne visos kriterijų reikšmės") >= 0 && p.indexOf("A: Garantija") >= 0), r.patikros.join(" || "));
+});
+
+/* =========================================================================
+   4. VPT APRAŠYTOS FORMULIŲ SAVYBĖS
+   ========================================================================= */
+testas("VPT savybės", "Mažiausios kainos formulė su kainos svoriu ≤ 50: 0 kokybės pasiūlymas nelaimi prieš maksimalią kokybę", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:40 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:60 }],
+    pasiulymai:[{ tiekejas:"Pigus0", kaina:1, reiksmes:[false] }, { tiekejas:"Brangus100", kaina:1000000, reiksmes:[true] }] });
+  lygu(r.laimetojas, "Brangus100");
+  tiesa(r.patikros.some(p=>p.indexOf("≤ 50") >= 0), "savybė paaiškinta");
+});
+
+testas("VPT savybės", "Brangiausio-pigiausio formulė su kainos svoriu ≥ 50: brangiausias nelaimi net su maksimalia kokybe", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"maxmin", kainosSvoris:60 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:40 }],
+    pasiulymai:[{ tiekejas:"Pigus0", kaina:100, reiksmes:[false] }, { tiekejas:"Vid", kaina:101, reiksmes:[false] }, { tiekejas:"Brangus100", kaina:102, reiksmes:[true] }] });
+  tiesa(r.laimetojas !== "Brangus100", "laimėjo " + r.laimetojas);
+  tiesa(r.patikros.some(p=>p.indexOf("≥ 50") >= 0), "savybė paaiškinta");
+});
+
+testas("VPT savybės", "Santykinė formulė: pašalinus pasiūlymą kitų balai keičiasi, absoliutinė - ne", ()=>{
+  paruosk();
+  const trys = [{ tiekejas:"A", kaina:100, reiksmes:[false] }, { tiekejas:"B", kaina:120, reiksmes:[false] }, { tiekejas:"C", kaina:80, reiksmes:[false] }];
+  const s1 = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[TAIPNE], pasiulymai:trys });
+  const s2 = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[TAIPNE], pasiulymai:trys.slice(0, 2) });
+  tiesa(s1.eile.find(e=>e.t === "A").kb !== s2.eile.find(e=>e.t === "A").kb, "santykinėje A balai priklauso nuo C");
+  const t1 = busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:60, pSetMin:50, pSetMax:150 }, kriterijai:[TAIPNE], pasiulymai:trys });
+  const t2 = busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:60, pSetMin:50, pSetMax:150 }, kriterijai:[TAIPNE], pasiulymai:trys.slice(0, 2) });
+  lygu(t1.eile.find(e=>e.t === "A").kb, t2.eile.find(e=>e.t === "A").kb, "absoliutinėje A balai nuo C nepriklauso");
+});
+
+/* =========================================================================
+   5. BŪSENA IR SAUGUMAS
+   ========================================================================= */
+testas("Būsena", "Išsaugojimas ir įkėlimas iš localStorage grąžina tą pačią būseną", ()=>{
+  paruosk();
+  busena({ pirkimas:{ pavadinimas:"Testas", budas:"kks", formule:"telgen", kainosSvoris:55, pSetMin:10, pSetMax:20 }, kriterijai:[{ pavadinimas:"G", taisykle:"daugiau", nuo:0, iki:24, svoris:45 }],
+    pasiulymai:[{ tiekejas:"A", kaina:15, reiksmes:[12] }] });
+  M('issaugok(true); state = tusciaBusena();');
+  lygu(M('ikelk()'), true);
+  const s = M('(function(){ return { pav: state.pirkimas.pavadinimas, f: state.pirkimas.formule, w: state.pirkimas.kainosSvoris, pmin: state.pirkimas.pSetMin, k: state.kriterijai.length, sv: state.kriterijai[0].svoris, kaina: state.pasiulymai[0].kaina, v: state.pasiulymai[0].reiksmes[state.kriterijai[0].id] }; })()');
+  lygu(s, { pav:"Testas", f:"telgen", w:55, pmin:10, k:1, sv:45, kaina:15, v:12 });
+});
+
+testas("Būsena", "Importas išvalomas: nežinomos reikšmės keičiamos numatytosiomis, tekstiniai skaičiai verčiami", ()=>{
+  paruosk();
+  lygu(M('sanitizeBusena(null)'), null);
+  lygu(M('sanitizeBusena({})'), null);
+  lygu(M('sanitizeBusena({pirkimas:{}, kriterijai:"ne", pasiulymai:[]})'), null);
+  const s = M('(function(){ const s = sanitizeBusena({pirkimas:{formule:"zzz", subjektas:"X", budas:"kks", kainosSvoris:"70", apvalinimas:9}, kriterijai:[{id:"k_1", pavadinimas:"a", taisykle:"nope", svoris:"30", nuo:"0", iki:"5", kazkas:1}], pasiulymai:[{tiekejas:"T", kaina:"100", reiksmes:{k_1:"4", nezinomas:1}}]}); return { f:s.pirkimas.formule, sub:s.pirkimas.subjektas, w:s.pirkimas.kainosSvoris, apv:s.pirkimas.apvalinimas, t:s.kriterijai[0].taisykle, sv:s.kriterijai[0].svoris, kazkas:s.kriterijai[0].kazkas, kaina:s.pasiulymai[0].kaina, v:s.pasiulymai[0].reiksmes.k_1, nez:s.pasiulymai[0].reiksmes.nezinomas }; })()');
+  lygu(s, { f:"pmin", sub:"LITGRID", w:70, apv:2, t:"daugiau", sv:30, kaina:100, v:4 });
+});
+
+testas("Būsena", "Tiekėjo pavadinimas su HTML rodomas kaip tekstas, ne vykdomas", ()=>{
+  paruosk();
+  busena({ pirkimas:{ budas:"kaina" }, pasiulymai:[{ tiekejas:"<img src=x onerror=window.__xss=1>", kaina:100 }] });
+  lygu(M('window.__xss'), undefined, "kodas neįvykdytas");
+  tiesa(M('document.getElementById("rezultatai").innerHTML').indexOf("&lt;img") >= 0, "escape'inta");
+  lygu(M('document.querySelectorAll("#rezultatai img").length'), 0);
+});
+
+testas("Būsena", "Pavyzdys pažymimas juosta, o pradėjus redaguoti juosta dingsta", ()=>{
+  paruosk();
+  M('ikelkPavyzdi();');
+  lygu(M('state.pavyzdys'), true);
+  tiesa(M('document.getElementById("pavyzdzioJuosta").classList.contains("rodoma")'), "juosta rodoma");
+  tiesa(M('skaiciuok(state).laimetojas') !== null, "pavyzdys turi laimėtoją");
+  lygu(M('skaiciuok(state).klaidos.length'), 0, "pavyzdys be klaidų");
+  M('(function(){ const i = document.querySelector("input[data-laukas=kaina]"); i.value = "1 100 000"; i.dispatchEvent(new Event("input", {bubbles:true})); })()');
+  lygu(M('state.pavyzdys'), false);
+  tiesa(!M('document.getElementById("pavyzdzioJuosta").classList.contains("rodoma")'), "juosta dingo");
+  lygu(M('state.pasiulymai[0].kaina'), 1100000, "kaina perskaityta iš teksto su tarpais");
+});
+
+testas("Būsena", "Pavyzdys spausdinamoje ataskaitoje pažymėtas kaip mokomasis", ()=>{
+  paruosk();
+  M('ikelkPavyzdi();');
+  tiesa(M('document.getElementById("spausdinimas").textContent').indexOf("MOKOMASIS PAVYZDYS") >= 0);
+});
+
+/* =========================================================================
+   6. SĄSAJA IR TEKSTAI
+   ========================================================================= */
+testas("Sąsaja", "Visi pavyzdiniai kriterijai turi pavadinimą, taisyklę, pagrindą ir teisingas ribas", ()=>{
+  paruosk();
+  const bl = M(`(function(){ const bl = []; BIBLIOTEKA.forEach(b=>{
+    if(!b.pav) bl.push("be pavadinimo"); if(!TAISYKLES[b.taisykle]) bl.push(b.pav + ": taisyklė"); if(!b.pagrindas) bl.push(b.pav + ": pagrindas"); if(!b.pastaba) bl.push(b.pav + ": pastaba");
+    if(b.taisykle === "daugiau" && !(b.iki > b.nuo)) bl.push(b.pav + ": ribos"); if(b.taisykle === "maziau" && !(b.iki < b.nuo)) bl.push(b.pav + ": ribos");
+    if(!(b.svoris > 0) || !(b.verte > 0)) bl.push(b.pav + ": svoris/vertė");
+    const k = naujasKriterijus(b); const t = kokybesDalis(k, b.taisykle === "taipne" ? true : (b.taisykle === "ekspertinis" ? [k.skale] : k.iki), [k.iki]); if(t.dalis !== 1) bl.push(b.pav + ": geriausia reikšmė neduoda 100 %");
+  }); return bl; })()`);
+  lygu(bl, []);
+  tiesa(M('BIBLIOTEKA.length') >= 8, "bent 8 pavyzdžiai");
+});
+
+testas("Sąsaja", "Pridėjus kriterijų iš pavyzdžių, pasiūlymų lentelėje atsiranda jo stulpelis", ()=>{
+  paruosk();
+  M('state.pasiulymai.push(naujasPasiulymas("A")); renderAll();');
+  M('document.getElementById("bibliotekaSel").value = "0"; document.getElementById("btnIsBibliotekos").click();');
+  lygu(M('state.kriterijai.length'), 1);
+  tiesa(M('document.getElementById("pasiulymaiGalva").textContent').indexOf("garantinis") >= 0, "stulpelio antraštė");
+  lygu(M('document.querySelectorAll("#pasiulymaiKunas input[data-tipas=skaicius]").length'), 1);
+});
+
+testas("Sąsaja", "Pašalinus kriterijų, jo reikšmės dingsta ir iš pasiūlymų", ()=>{
+  paruosk();
+  busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[TAIPNE], pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }] });
+  M('window.confirm = ()=>true; document.querySelector("button[data-salinti-krit]").click();');
+  lygu(M('state.kriterijai.length'), 0);
+  lygu(M('Object.keys(state.pasiulymai[0].reiksmes).length'), 0);
+});
+
+testas("Sąsaja", "Svorių juosta: rodo sumą ir pažymi, kai ne 100", ()=>{
+  paruosk();
+  busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:40 }], pasiulymai:[] });
+  tiesa(M('document.getElementById("svoriuJuosta").textContent').indexOf("✓") >= 0, "100 - varnelė");
+  tiesa(!M('document.getElementById("svoriuJuosta").classList.contains("klaida")'));
+  busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:30 }], pasiulymai:[] });
+  tiesa(M('document.getElementById("svoriuJuosta").classList.contains("klaida")'), "90 - klaida");
+});
+
+testas("Sąsaja", "Vertinimo tvarka žodžiais atkartoja svorius, kriterijus ir parametrus", ()=>{
+  paruosk();
+  busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:55, pSetMin:900000, pSetMax:1300000 }, kriterijai:[{ pavadinimas:"Garantija", taisykle:"daugiau", nuo:0, iki:24, vienetas:"mėn.", svoris:45 }], pasiulymai:[] });
+  const t = M('formuleZodziais(state).join(" ")');
+  ["P_SetMin = 900 000", "P_SetMax = 1 300 000", "× 55", "„Garantija“", "24 mėn. ir daugiau - 45 bal.", "8 d."].forEach(x=> tiesa(t.indexOf(x) >= 0, "trūksta: " + x + " || " + t));
+  busena({ pirkimas:{ budas:"kks", formule:"kok_kaina" }, kriterijai:[{ pavadinimas:"BIM", taisykle:"taipne", verte:5000, svoris:0 }], pasiulymai:[] });
+  const t2 = M('formuleZodziais(state).join(" ")');
+  tiesa(t2.indexOf("mažiausią EN") >= 0 && t2.indexOf("5 000 EUR") >= 0, t2);
+});
+
+testas("Sąsaja", "Rezultatų sekcija: tuščia būsena, eilė ir simuliacijos lentelė su visomis formulėmis", ()=>{
+  paruosk();
+  tiesa(M('document.getElementById("rezultatai").textContent').indexOf("Įveskite pasiūlymus") >= 0, "tuščia būsena");
+  busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60, pSetMin:50, pSetMax:150 }, kriterijai:[{ pavadinimas:"X", taisykle:"taipne", svoris:40, verte:20 }],
+    pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }, { tiekejas:"B", kaina:80, reiksmes:[false] }] });
+  const t = M('document.getElementById("rezultatai").textContent');
+  tiesa(t.indexOf("patikros praėjo") >= 0, "būsena");
+  tiesa(t.indexOf("Ekonomiškai naudingiausias") >= 0);
+  lygu(M('document.querySelectorAll("#simuliacija tbody tr").length'), 5, "4 formulės + svorių eilutė");
+  lygu(M('document.querySelectorAll("#rezultatai tbody tr").length'), 2);
+  tiesa(M('document.getElementById("spausdinimas").textContent').indexOf("Pasiūlymų eilė") >= 0, "spausdinama ataskaita");
+});
+
+testas("Sąsaja", "Formulės pakeitimas perpiešia laukus: Telgen rodo P_Set, „kokybė į kainą“ - piniginę vertę", ()=>{
+  paruosk();
+  busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[TAIPNE], pasiulymai:[] });
+  tiesa(M('document.getElementById("l_pSetMin").classList.contains("paslepta")'), "pmin - P_Set paslėpti");
+  M('(function(){ const s = document.getElementById("f_formule"); s.value = "telgen"; s.dispatchEvent(new Event("input", {bubbles:true})); })()');
+  tiesa(!M('document.getElementById("l_pSetMin").classList.contains("paslepta")'), "telgen - P_Set rodomi");
+  M('(function(){ const s = document.getElementById("f_formule"); s.value = "kok_kaina"; s.dispatchEvent(new Event("input", {bubbles:true})); })()');
+  lygu(M('document.getElementById("thSvoris").textContent'), "Piniginė vertė, EUR");
+  tiesa(M('document.getElementById("l_kainosSvoris").classList.contains("paslepta")'), "kokybė į kainą - svorio nėra");
+});
+
+testas("Sąsaja", "Tekstuose nėra ilgojo brūkšnio ir svetimų kabučių", ()=>{
+  paruosk();
+  const t = M('document.body.innerText');
+  tiesa(t.indexOf("—") < 0, "rastas ilgasis brūkšnys");
+  tiesa(M('document.documentElement.lang') === "lt");
+});
+
+/* =========================================================================
+   PALEIDIMAS
+   ========================================================================= */
+function paleisk(){
+  const grupes = {};
+  TESTAI.forEach(t=>{ (grupes[t.grupe] = grupes[t.grupe] || []).push(t); });
+  const rez = document.getElementById("rezultatai");
+  let ok = 0, krito = 0;
+  Object.keys(grupes).forEach(g=>{
+    const h = document.createElement("h2"); h.textContent = g; rez.appendChild(h);
+    const lentele = document.createElement("table"); rez.appendChild(lentele);
+    grupes[g].forEach(t=>{
+      const t0 = performance.now();
+      let klaida = null;
+      try{ t.fn(); }catch(e){ klaida = e && e.message ? e.message : String(e); }
+      const ms = Math.round(performance.now() - t0);
+      if(klaida) krito++; else ok++;
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td class="b"><span class="zenklas ' + (klaida ? "z-blogai" : "z-ok") + '">' + (klaida ? "krito" : "gerai") + "</span></td>" +
+        "<td>" + t.pav.replace(/&/g, "&amp;").replace(/</g, "&lt;") + (klaida ? '<div class="klaida">' + klaida.replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</div>" : "") + '</td><td class="laikas">' + ms + " ms</td>";
+      lentele.appendChild(tr);
+    });
+  });
+  const s = document.getElementById("santrauka");
+  s.innerHTML = '<span class="zenklas ' + (krito ? "z-blogai" : "z-ok") + '">' + (krito ? "yra kritusių" : "viskas gerai") + "</span> <b>" + ok + " / " + (ok + krito) + "</b> testų praėjo" + (krito ? " · <b>" + krito + "</b> krito" : "");
+  document.title = (krito ? "KRITO " + krito + " · " : "OK · ") + "Ekonominio naudingumo skaičiuoklės testai";
+}
+ramas.addEventListener("load", ()=> setTimeout(paleisk, 300));
+ramas.src = "./ekonominio_naudingumo_skaiciuokle.html?testas=" + Date.now();
+</script>
+</body>
+</html>

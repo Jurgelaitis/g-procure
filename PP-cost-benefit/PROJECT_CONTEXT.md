@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md
 
 **Projekto pavadinimas:** Kaštų ir naudos analizės bei alternatyvų palyginimo įrankis
-**Pagrindinis failas:** `kastu_naudos_analize.html`
+**Pagrindiniai failai:** `ekonominio_naudingumo_skaiciuokle.html` (1 dalis, nuo 2026-09-19) ir `kastu_naudos_analize.html` (2 dalis; šio dokumento 1-10 skyriai aprašo būtent ją)
 **Organizacija:** LITGRID AB
 **Autorius:** Arūnas Jurgelaitis, Head of Procurement
 **Dokumento data:** 2026-06-11
@@ -368,6 +368,79 @@ Sukurti **savarankišką, vienam rinkmenoje veikiantį (single-file HTML)** spre
 
 ---
 
+## 11. 1 dalis: Ekonominio naudingumo skaičiuoklė (2026-09-19)
+
+**Kodėl atsirado.** Naudotojo vertinimu, kaštų ir naudos analizė (2 dalis) yra išsami, bet
+kasdieniam pirkimų projektų vadovų darbui per sudėtinga - ji skirta strateginiams projektams.
+Kasdienis poreikis kitas: viename lape nustatyti ekonominio naudingumo kriterijus, suvesti
+tiekėjų pasiūlymus ir apskaičiuoti balus. Modulis padalytas į dvi dalis; 2 dalis liko, kokia
+buvo, tik antraštėje atsirado dalių jungiklis. Portalo kortelė dabar veda į 1 dalį.
+
+**Teisinis ir metodinis pagrindas - patikrintas prie šaltinio 2026-09-19:**
+- PĮ 64 str. (LITGRID, Amber Grid, Energy cells - perkantieji subjektai) - pilnas tekstas gautas
+  per VPT pagalbos centro API (`klausk.vpt.lt/api/v2/help_center/lt/articles/360016430659.json`;
+  pati svetainė naršyklei be JS ir įrankiams atsako 403). VPĮ 55 str. (EPSO-G) - iš
+  `lrvalstybe.lt`. Straipsniai sutampa 1-10 d.; PĮ turi papildomą 11 d. (socialinis darbo
+  užmokesčio medianos kriterijus). Skaičiuoklė straipsnio dalis cituoja pagal pasirinktą subjektą.
+- VPT „Ekonomiškai naudingiausio pasiūlymo vertinimo gairės“ v.3 (2021-12-31) ir „Ekonominio
+  naudingumo skaičiuoklėje pateiktų formulių aprašymai“ (2021-02-19) - PDF tekstas išskaitytas
+  macOS PDFKit (WebFetch PDF turinio nemato). Iš jų paimta: absoliutinių formulių rekomendacija,
+  4 kokybės balų skyrimo taisyklės, formulių savybės (≤ 50 / ≥ 50), du vokai, bent 3 ekspertai,
+  lubos kiekybiniams kriterijams, „tiekėjo, ne objekto“ požymių sąrašas, reitingavimo paradoksas.
+- VPT „Statybos darbų pirkimų gairių 1 priedas“ - „kokybė į kainą“ formulė ir pavyzdiniai
+  kriterijai (garantija, vadovo patirtis, BIM, socialinis, medžiagos).
+
+**Kas įgyvendinta (viename lape, keturi žingsniai):**
+1. Pirkimas: subjektas (lemia įstatymą), objektas, vertinimo būdas (kainos ir kokybės santykis /
+   tik kaina / fiksuota kaina - tik kokybė), formulė, kainos svoris, P_SetMin/P_SetMax (Telgen),
+   didžiausia priimtina kaina, apvalinimas. Formulės aprašas su VPT pastaba.
+2. Kriterijai: taisyklės „daugiau geriau“ ir „mažiau geriau“ (absoliutinės, su riba 0 balų ir
+   lubomis), „taip / ne“, ekspertinis (skalė, aprašyti lygiai, N vertintojų, vidurkis) ir dvi
+   santykinės (pagal geriausią pasiūlymą, su įspėjimu). Dešimt pavyzdinių kriterijų su teisiniu
+   pagrindu ir VPT pastaba. Svorių juosta (kaina + kokybė = 100). „Vertinimo tvarka žodžiais“ -
+   tekstas pirkimo dokumentams, generuojamas iš tų pačių nustatymų.
+3. Pasiūlymai: eilė (pateikimo tvarka lemia lygiąsias), kaina (JAV ir EU formatai per
+   `shared/money.js`), reikšmės pagal kriterijaus taisyklę (skaičius, taip/ne, po langelį
+   kiekvienam vertintojui su vidurkiu).
+4. Rezultatai: būsena, laimėtojas, atotrūkis, eilė su balų išskaidymu, grafikas, patikros trimis
+   lygiais (klaida blokuoja laimėtoją; dėmesio; info), simuliacija - laimėtojas pagal visas
+   keturias formules ir pagal kitus kainos svorius (VPT gairių rekomendacija prieš pirkimą),
+   spausdinama ataskaita su vertinimo tvarka ir parašų eilutėmis.
+
+**Formulės (VPT pavadinimais):** mažiausios kainos pasiūlymo (santykinė, C_min/C_p);
+brangiausio ir pigiausio (santykinė); Telgen (absoliutinė, P_SetMin/P_SetMax); „kokybė į kainą“
+(absoliutinė, EN = kaina − Σ piniginė vertė, mažiausias laimi). Kiekviena balų dalis ir suma
+apvalinama iki pasirinkto tikslumo PRIEŠ rikiuojant - taip eilė sutampa su dokumentuose
+rodomais skaičiais; lygiosios sprendžiamos pagal pateikimo eilę (8 d.).
+
+**Sąmoningi sprendimai:**
+- Kriterijų patikros - įspėjimai, ne draudimai: „tiekėjo patirtis“, „ISO“, „subrangovai“,
+  „socialinė įmonė“, kilmės šalis pažymimi su 4 d. nuoroda, bet komisija sprendžia pati.
+- Ekspertinis kriterijus visada primena du vokus (7 d.) ir bent 3 vertintojus (VPT).
+- Gyvavimo ciklo sąnaudos (VPĮ 56 str. / PĮ 65 str.) NEskaičiuojamos - tai atskira metodika.
+- Žalia būsena reiškia „apibrėžtos patikros praėjo“, ne teisinį patvirtinimą - tai parašyta
+  sekcijos antraštėje ir ataskaitoje.
+- Duomenys tik naršyklėje (`epsog_en_skaiciuokle_v1`), kopija JSON; importas išvalomas
+  (`sanitizeBusena`), tekstas visur escape'inamas.
+- Mokomasis pavyzdys įkeliamas tik mygtuku, žymimas juosta ir ataskaitoje; juosta dingsta
+  pradėjus redaguoti.
+- Kalba - tik LT, kaip ir 2 dalis.
+
+**Testai:** `PP-cost-benefit/testai.html` (naršyklėje, be Node) - formulės skaičiais, kokybės
+taisyklės, teisinės patikros su straipsnių dalimis, VPT aprašytos formulių savybės, būsena ir
+saugumas, sąsaja - 38 testai (2026-09-19). Pirmasis paleidimas rado tikrą klaidą: `+null` yra 0,
+tad tuščia „didžiausia priimtina kaina“ virsdavo nuliu ir atmesdavo visus pasiūlymus - įvestas
+`sk()` skaitytojas, grąžinantis null tuščiam laukui. Mutacijos patikra (6 sąmoningi gedimai:
+apvalinimas išjungtas, lygiosios apverstos, didžiausios kainos patikra išimta, Telgen apversta,
+importas nevalomas, tiekėjo požymių patikra išjungta) - kiekvieną pagavo būtent jam skirtas testas.
+
+**Neįgyvendinta (naudotojo sprendimui):** gyvavimo ciklo sąnaudų kriterijus; minimalus
+pereinamasis balas (VPT gairės jį rekomenduoja tik pagrįstais atvejais); DOCX ataskaita
+(spausdinama per naršyklę, kaip 2 dalyje); EN kalba; perkėlimas į PP-protocol komisijos
+protokolą (natūrali kita stotelė - eilė ir balai jau yra struktūroje).
+
+---
+
 *Šis dokumentas yra gyvas - atnaujinkite jį kiekvieną kartą, kai pasikeičia projekto kryptis arba prioritetai.*
 
-**Paskutinis atnaujinimas:** 2026-06-11 (v1.0 MVP perdavimas)
+**Paskutinis atnaujinimas:** 2026-09-19 (1 dalis - ekonominio naudingumo skaičiuoklė)
