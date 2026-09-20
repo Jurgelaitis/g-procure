@@ -4559,6 +4559,25 @@ function emptyPar() {
   return new docx.Paragraph({ children: [new docx.TextRun('')] });
 }
 
+/* ---------- Word lentelių stulpelių pločiai realiais DXA (Pages taisymas) ----------
+   Tas pats taisymas kaip PP-qual exportDocx (699ba8c) ir PP-cost-benefit (2cd3874). Anksčiau
+   vidinės pasiūlymų lentelės neturėjo columnWidths, todėl docx.js įrašydavo gridCol w="100", o
+   pločiai buvo procentais - Pages stulpelius suspausdavo iki vienos raidės. Dabar kiekviena
+   lentelė: columnWidths + plotis DXA + layout FIXED, kiekviena celė - plotis DXA.
+   usable skaičiuojamas iš tų pačių konstantų, kurios įrašomos į pažymos pgSz ir pgMar. */
+const DOCX_PAGE = { w: 11906, h: 16838, margin: { top: 1400, right: 1000, bottom: 1000, left: 1000 } };
+const DOCX_USABLE = DOCX_PAGE.w - DOCX_PAGE.margin.left - DOCX_PAGE.margin.right;
+const DOCX_CELL_MAR = 100;                                  // cell() paraštė kairėje ir dešinėje
+const DOCX_INNER = DOCX_USABLE - 2 * DOCX_CELL_MAR;         // vidinė lentelė telpa per visą plotį einančioje celėje
+// Iš proporcijų -> DXA; paskutinį stulpelį pakoreguoja, kad suma tiksliai === total.
+function dxaCols(fr, total) {
+  const c = fr.map(f => Math.round(f / fr.reduce((a, b) => a + b, 0) * total));
+  c[c.length - 1] += total - c.reduce((a, b) => a + b, 0);
+  return c;
+}
+const DOCX_MAIN_COLS = dxaCols([1, 1, 1, 1], DOCX_USABLE);  // buvo 4 × 2400 - proporcijos tos pačios
+function docxSpan(span) { return DOCX_MAIN_COLS.slice(0, span || 1).reduce((a, b) => a + b, 0); }
+
 function cell(content, opts = {}) {
   let children;
   const isBlock = c => c instanceof docx.Paragraph || c instanceof docx.Table;
@@ -4582,12 +4601,13 @@ function cell(content, opts = {}) {
   }
   return new docx.TableCell({
     children,
-    width: opts.width,
+    // Vidinės lentelės perduoda opts.w; pagrindinės lentelės celės - pagal colSpan.
+    width: opts.width || { size: opts.w || docxSpan(opts.colSpan), type: docx.WidthType.DXA },
     columnSpan: opts.colSpan,
     rowSpan: opts.rowSpan,
     shading: opts.shading,
     verticalAlign: opts.verticalAlign || docx.VerticalAlign.TOP,
-    margins: { top: 60, bottom: 60, left: 100, right: 100 }
+    margins: { top: 60, bottom: 60, left: DOCX_CELL_MAR, right: DOCX_CELL_MAR }
   });
 }
 
@@ -4993,8 +5013,9 @@ async function buildDocx(data) {
 
     const mainTable = new Table({
       rows,
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      columnWidths: [2400, 2400, 2400, 2400]
+      width: { size: DOCX_USABLE, type: WidthType.DXA },
+      columnWidths: DOCX_MAIN_COLS,
+      layout: docx.TableLayoutType.FIXED
     });
 
     // ---- Document ----
@@ -5009,7 +5030,8 @@ async function buildDocx(data) {
       sections: [{
         properties: {
           page: {
-            margin: { top: 1400, right: 1000, bottom: 1000, left: 1000 }
+            size: { width: DOCX_PAGE.w, height: DOCX_PAGE.h },
+            margin: DOCX_PAGE.margin
           }
         },
         headers: { default: pageHeader },
@@ -5478,20 +5500,29 @@ function makeFilename(f) {
   return name + '.docx';
 }
 
+/* Vidinių lentelių stulpelių proporcijos (kode anksčiau jų nebuvo - pasiūlyta 2026-09-19).
+   Stulpelių rinkinys kinta pagal formą ir vertinimo būdą, todėl proporcijos laikomos pagal
+   stulpelio raktą, o dxaCols jas normalizuoja įtrauktiems stulpeliams. */
+const PAS_PROP = { nr: 6, tiekejas: 21, kaina: 17, balai: 13, vertinimas: 15, kiti: 15, neatitikimas: 23 };
+const GAL_PROP = { nr: 6, tiekejas: 23, kaina: 18, balai: 13, vertinimas: 16, pastaba: 24 };
+const NS_PROP  = [6, 30, 20, 20, 24];
+function vidineLentele(rows, cols) {
+  return new docx.Table({ rows, columnWidths: cols, width: { size: DOCX_INNER, type: docx.WidthType.DXA }, layout: docx.TableLayoutType.FIXED });
+}
+
 function buildPasiulymaiLentele(data, totalCols) {
   const formNum = data.formNum;
-  const headerCells = [
-    cell(par([txt('Eil. Nr.', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Tiekėjo pavadinimas', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Pasiūlymo kaina Eur (be PVM / su PVM)', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-  ];
   const suBalaisT = !!(data.fields.vertinimoKriterijus && data.fields.vertinimoKriterijus !== 'Kaina');
-  if (suBalaisT) headerCells.push(cell(par([txt('Ekonominio naudingumo balai', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }));
-  headerCells.push(cell(par([txt('Pasiūlymo vertinimas', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }));
+  const raktai = ['nr', 'tiekejas', 'kaina'].concat(suBalaisT ? ['balai'] : [], ['vertinimas'], formNum === 1 ? ['kiti'] : [], ['neatitikimas']);
+  const cols = dxaCols(raktai.map(k => PAS_PROP[k]), DOCX_INNER);
+  const hc = (t, i) => cell(par([txt(t, { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' }, w: cols[i] });
+  const headerCells = [hc('Eil. Nr.', 0), hc('Tiekėjo pavadinimas', 1), hc('Pasiūlymo kaina Eur (be PVM / su PVM)', 2)];
+  if (suBalaisT) headerCells.push(hc('Ekonominio naudingumo balai', headerCells.length));
+  headerCells.push(hc('Pasiūlymo vertinimas', headerCells.length));
   if (formNum === 1) {
-    headerCells.push(cell(par([txt('Kiti reikalavimai', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }));
+    headerCells.push(hc('Kiti reikalavimai', headerCells.length));
   }
-  headerCells.push(cell(par([txt('Neatitikimas / atmetimo priežastys', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }));
+  headerCells.push(hc('Neatitikimas / atmetimo priežastys', headerCells.length));
 
   const rows = [new docx.TableRow({ children: headerCells, tableHeader: true })];
 
@@ -5499,46 +5530,42 @@ function buildPasiulymaiLentele(data, totalCols) {
   if (items.length === 0) {
     const colSpan = (formNum === 1 ? 6 : 5) + (suBalaisT ? 1 : 0);
     rows.push(new docx.TableRow({
-      children: [cell(par([txt('(nepateikti pasiūlymai)', { italics: true })]), { colSpan })]
+      children: [cell(par([txt('(nepateikti pasiūlymai)', { italics: true })]), { colSpan, w: DOCX_INNER })]
     }));
   } else {
     items.forEach((p, i) => {
       const kainaStr = (p.kainaBePvm || p.kainaSuPvm)
         ? `${formatEurNum(p.kainaBePvm, '')} / ${formatEurNum(p.kainaSuPvm, '')}`
         : '';
-      const cells = [
-        cell(par([txt(String(i+1))])),
-        cell(par([txt(p.tiekejas || '')])),
-        cell(par([txt(kainaStr)])),
-      ];
-      if (suBalaisT) cells.push(cell(par([txt(p.balai || '')])));
-      cells.push(cell(par([txt(p.pasiulVert ? `${p.pasiulVert === 'Atitinka' ? '☒' : '☐'} Atitinka  ${p.pasiulVert === 'Neatitinka' ? '☒' : '☐'} Neatitinka` : '☐ Atitinka  ☐ Neatitinka')])));
+      const dc = (content) => cell(content, { w: cols[cells.length] });
+      const cells = [];
+      cells.push(dc(par([txt(String(i+1))])));
+      cells.push(dc(par([txt(p.tiekejas || '')])));
+      cells.push(dc(par([txt(kainaStr)])));
+      if (suBalaisT) cells.push(dc(par([txt(p.balai || '')])));
+      cells.push(dc(par([txt(p.pasiulVert ? `${p.pasiulVert === 'Atitinka' ? '☒' : '☐'} Atitinka  ${p.pasiulVert === 'Neatitinka' ? '☒' : '☐'} Neatitinka` : '☐ Atitinka  ☐ Neatitinka')])));
       if (formNum === 1) {
-        cells.push(cell(par([txt(p.kitiVert ? `${p.kitiVert === 'Atitinka' ? '☒' : '☐'} Atitinka  ${p.kitiVert === 'Neatitinka' ? '☒' : '☐'} Neatitinka` : '☐ Atitinka  ☐ Neatitinka')])));
+        cells.push(dc(par([txt(p.kitiVert ? `${p.kitiVert === 'Atitinka' ? '☒' : '☐'} Atitinka  ${p.kitiVert === 'Neatitinka' ? '☒' : '☐'} Neatitinka` : '☐ Atitinka  ☐ Neatitinka')])));
       }
-      cells.push(cell(par([txt(p.neatitikimas || '')])));
+      cells.push(dc(par([txt(p.neatitikimas || '')])));
       rows.push(new docx.TableRow({ children: cells }));
     });
   }
 
   // Wrap table inside parent cell spanning all columns
-  const innerTable = new docx.Table({
-    rows,
-    width: { size: 100, type: docx.WidthType.PERCENTAGE }
-  });
+  const innerTable = vidineLentele(rows, cols);
   return new docx.TableRow({ children: [cell([innerTable], { colSpan: totalCols })] });
 }
 
 function buildGalutiniaiLentele(data, totalCols) {
   const suBalaisG = !!(data.fields.vertinimoKriterijus && data.fields.vertinimoKriterijus !== 'Kaina');
-  const headerCells = [
-    cell(par([txt('Eil. Nr.', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Tiekėjo pavadinimas', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Galutinio pasiūlymo kaina Eur (be / su PVM)', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-  ];
-  if (suBalaisG) headerCells.push(cell(par([txt('Ekonominio naudingumo balai', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }));
-  headerCells.push(cell(par([txt('Vertinimas', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }));
-  headerCells.push(cell(par([txt('Pastaba', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }));
+  const raktai = ['nr', 'tiekejas', 'kaina'].concat(suBalaisG ? ['balai'] : [], ['vertinimas', 'pastaba']);
+  const cols = dxaCols(raktai.map(k => GAL_PROP[k]), DOCX_INNER);
+  const hc = (t, i) => cell(par([txt(t, { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' }, w: cols[i] });
+  const headerCells = [hc('Eil. Nr.', 0), hc('Tiekėjo pavadinimas', 1), hc('Galutinio pasiūlymo kaina Eur (be / su PVM)', 2)];
+  if (suBalaisG) headerCells.push(hc('Ekonominio naudingumo balai', headerCells.length));
+  headerCells.push(hc('Vertinimas', headerCells.length));
+  headerCells.push(hc('Pastaba', headerCells.length));
   const rows = [new docx.TableRow({ children: headerCells, tableHeader: true })];
   (data.rows.galutiniai || []).forEach((p, i) => {
     const pastaba = p.nepateikGalutinio
@@ -5547,39 +5574,41 @@ function buildGalutiniaiLentele(data, totalCols) {
     const galKainaStr = (p.galKainaBePvm || p.galKainaSuPvm)
       ? `${formatEurNum(p.galKainaBePvm, '')} / ${formatEurNum(p.galKainaSuPvm, '')}`
       : '';
-    const cells = [
-      cell(par([txt(String(i+1))])),
-      cell(par([txt(p.tiekejas || '')])),
-      cell(par([txt(galKainaStr)])),
-    ];
-    if (suBalaisG) cells.push(cell(par([txt(p.galBalai || '')])));
-    cells.push(cell(par([txt(p.galVert ? `${p.galVert === 'Atitinka' ? '☒' : '☐'} Atitinka  ${p.galVert === 'Neatitinka' ? '☒' : '☐'} Neatitinka` : '☐ Atitinka  ☐ Neatitinka')])));
-    cells.push(cell(par([txt(pastaba)])));
+    const cells = [];
+    const dc = (content) => cell(content, { w: cols[cells.length] });
+    cells.push(dc(par([txt(String(i+1))])));
+    cells.push(dc(par([txt(p.tiekejas || '')])));
+    cells.push(dc(par([txt(galKainaStr)])));
+    if (suBalaisG) cells.push(dc(par([txt(p.galBalai || '')])));
+    cells.push(dc(par([txt(p.galVert ? `${p.galVert === 'Atitinka' ? '☒' : '☐'} Atitinka  ${p.galVert === 'Neatitinka' ? '☒' : '☐'} Neatitinka` : '☐ Atitinka  ☐ Neatitinka')])));
+    cells.push(dc(par([txt(pastaba)])));
     rows.push(new docx.TableRow({ children: cells }));
   });
-  const innerTable = new docx.Table({ rows, width: { size: 100, type: docx.WidthType.PERCENTAGE } });
+  const innerTable = vidineLentele(rows, cols);
   return new docx.TableRow({ children: [cell([innerTable], { colSpan: totalCols })] });
 }
 
 function buildNatSaugLentele(data, totalCols) {
+  const cols = dxaCols(NS_PROP, DOCX_INNER);
+  const hc = (t, i) => cell(par([txt(t, { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' }, w: cols[i] });
   const headerCells = [
-    cell(par([txt('Eil. Nr.', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Tiekėjo pavadinimas', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Pateikė dokumentus (52 str. 3d. / 51 str. 12d.)', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Neregistruoti rizikinguose sąrašuose', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
-    cell(par([txt('Pastabos', { bold: true, size: 18 })]), { shading: { fill: 'D7EEDB' } }),
+    hc('Eil. Nr.', 0),
+    hc('Tiekėjo pavadinimas', 1),
+    hc('Pateikė dokumentus (52 str. 3d. / 51 str. 12d.)', 2),
+    hc('Neregistruoti rizikinguose sąrašuose', 3),
+    hc('Pastabos', 4),
   ];
   const rows = [new docx.TableRow({ children: headerCells, tableHeader: true })];
   (data.rows.natSaug || []).forEach((n, i) => {
     rows.push(new docx.TableRow({ children: [
-      cell(par([txt(String(i+1))])),
-      cell(par([txt(n.natTiekejas || '')])),
-      cell(par([txt(n.natDok ? `${n.natDok === 'Taip' ? '☒' : '☐'} Taip  ${n.natDok === 'Ne' ? '☒' : '☐'} Ne` : '☐ Taip  ☐ Ne')])),
-      cell(par([txt(n.natRiziking ? `${n.natRiziking === 'Taip' ? '☒' : '☐'} Taip  ${n.natRiziking === 'Ne' ? '☒' : '☐'} Ne` : '☐ Taip  ☐ Ne')])),
-      cell(par([txt(n.natPastabos || '')])),
+      cell(par([txt(String(i+1))]), { w: cols[0] }),
+      cell(par([txt(n.natTiekejas || '')]), { w: cols[1] }),
+      cell(par([txt(n.natDok ? `${n.natDok === 'Taip' ? '☒' : '☐'} Taip  ${n.natDok === 'Ne' ? '☒' : '☐'} Ne` : '☐ Taip  ☐ Ne')]), { w: cols[2] }),
+      cell(par([txt(n.natRiziking ? `${n.natRiziking === 'Taip' ? '☒' : '☐'} Taip  ${n.natRiziking === 'Ne' ? '☒' : '☐'} Ne` : '☐ Taip  ☐ Ne')]), { w: cols[3] }),
+      cell(par([txt(n.natPastabos || '')]), { w: cols[4] }),
     ]}));
   });
-  const innerTable = new docx.Table({ rows, width: { size: 100, type: docx.WidthType.PERCENTAGE } });
+  const innerTable = vidineLentele(rows, cols);
   return new docx.TableRow({ children: [cell([innerTable], { colSpan: totalCols })] });
 }
 
