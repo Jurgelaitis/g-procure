@@ -413,8 +413,8 @@ lentelė gauna `columnWidths`, `width` DXA, `layout: FIXED`, kiekviena celė - D
 `dxaCols()` paskutinį stulpelį pakoreguoja, kad suma sutaptų su naudingu pločiu.
 
 **Proporcijos.** Pagrindinė 4 stulpelių lentelė - lygios dalys (buvo 4 × 2400, dabar
-2477/2477/2477/2475). Įdėtinėms lentelėms proporcijų kode nebuvo, todėl pasiūlytos (laukia
-naudotojo patvirtinimo): pasiūlymų lentelė `nr 6 / tiekėjas 21 / kaina 17 / balai 13 /
+2477/2477/2477/2475). Įdėtinėms lentelėms proporcijų kode nebuvo, todėl pasiūlytos ir naudotojo
+patvirtintos 2026-09-20: pasiūlymų lentelė `nr 6 / tiekėjas 21 / kaina 17 / balai 13 /
 vertinimas 15 / kiti 15 / neatitikimas 23`, galutinė `nr 6 / tiekėjas 23 / kaina 18 / balai 13 /
 vertinimas 16 / pastaba 24`, nacionalinio saugumo `6 / 30 / 20 / 20 / 24`. Pirmas variantas
 (balai 10) buvo pataisytas pažiūrėjus atvaizdą: antraštė „Ekonominio naudingumo balai“ lūžo per
