@@ -479,7 +479,8 @@ paraštės) duoda `DOCX_USABLE` = 9026, tie patys skaičiai eina į `pgSz` / `pg
 gauna DXA plotį (ir antraštinės, kurios anksčiau jo neturėjo).
 
 Proporcijos: raktas ir reikšmė `35 / 65`, atitikties lentelė `8 / 42 / 25 / 17 / 8` - abi jau buvo
-kode. Vertinimo lentelės proporcijų nebuvo, pasiūlyta `30 / 10 / 25 / 35` (laukia patvirtinimo).
+kode. Vertinimo lentelės proporcijų nebuvo, pasiūlyta `30 / 10 / 25 / 35` (naudotojo patvirtinta
+2026-09-20).
 
 Patikra: dokumentas sugeneruotas naršyklėje ir išarchyvuotas - keturios lentelės, `gridCol` suma
 9026 kiekvienoje, `tblLayout fixed`, `tcW dxa`, procentų nėra. Testai: 21 praėjo, 0 krito.
