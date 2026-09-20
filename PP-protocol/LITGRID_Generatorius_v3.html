@@ -4981,14 +4981,15 @@ function buildPnDocxSection(n, lang, D){
   const noneBorder = {style:D.BorderStyle.NONE,size:0,color:'FFFFFF'};
   const noBorders = {top:noneBorder,bottom:noneBorder,left:noneBorder,right:noneBorder};
 
+  const hdrCols = [6500, PN_USABLE - 6500];
   const headerTable = new D.Table({
-    width:{size:9638,type:D.WidthType.DXA}, columnWidths:[6500,3138],
+    width:{size:PN_USABLE,type:D.WidthType.DXA}, columnWidths:hdrCols, layout:D.TableLayoutType.FIXED,
     rows:[new D.TableRow({children:[
-      new D.TableCell({borders:noBorders, children:[
+      new D.TableCell({borders:noBorders, width:{size:hdrCols[0],type:D.WidthType.DXA}, children:[
         new D.Paragraph({children:[new D.TextRun({text:addr,bold:true,size:24})],spacing:{after:60}}),
         new D.Paragraph({children:[new D.TextRun({text:sentVia,italics:true,size:24})]})
       ]}),
-      new D.TableCell({borders:noBorders, children:[
+      new D.TableCell({borders:noBorders, width:{size:hdrCols[1],type:D.WidthType.DXA}, children:[
         new D.Paragraph({alignment:D.AlignmentType.RIGHT, children:[new D.TextRun({text:date,bold:true,size:24})]})
       ]})
     ]})]
@@ -5019,19 +5020,31 @@ function buildPnDocxSection(n, lang, D){
     children:[new D.TextRun({text:`Dokumentas saugomas iki ${archiveYr} m. (PSĮ 103 str.) · Šablonas v${n.templateVersion||TEMPLATE_VERSION}`,size:16,color:'737483',italics:true})]}));
 
   return {
-    properties:{page:{size:{width:11906,height:16838},margin:{top:1134,right:1134,bottom:1134,left:1134}}},
+    properties:{page:{size:{width:PN_PAGE.w,height:PN_PAGE.h},margin:PN_PAGE.margin}},
     headers:{default:new D.Header({children:[new D.Paragraph({alignment:D.AlignmentType.RIGHT,
       children:[new D.TextRun({text:'LITGRID AB',size:18,color:'737483'})]})]})},
     children: elements
   };
 }
 
+/* Pranešimo puslapis ir lentelės pločiai realiais DXA (Pages taisymas, kaip PP-qual 699ba8c).
+   Anksčiau lentelė neturėjo columnWidths, todėl docx.js įrašydavo gridCol w="100" ir Pages
+   stulpelius suspausdavo. usable skaičiuojamas iš tų pačių konstantų, kurios įrašomos į pgSz/pgMar. */
+const PN_PAGE = { w: 11906, h: 16838, margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } };
+const PN_USABLE = PN_PAGE.w - PN_PAGE.margin.left - PN_PAGE.margin.right; // 9638, naudoja ir antraštės lentelė
 function buildPnTable(txt, D){
   if(!txt) return null;
   const rows = txt.split('\n').map(r=>r.split('|').map(c=>c.trim()));
   if(rows.length<2) return null;
-  return new D.Table({width:{size:9638,type:D.WidthType.DXA},
-    rows: rows.map((r,i)=>new D.TableRow({children: r.map(c=>new D.TableCell({
+  const usable = PN_USABLE;
+  // Stulpelių skaičius priklauso nuo įvesto teksto; kode proporcijų nebuvo - pasiūlyta 2026-09-19:
+  // pirmas stulpelis (tiekėjas) dvigubai platesnis už kitus.
+  const n = Math.max(...rows.map(r=>r.length));
+  const fr = Array.from({length:n}, (_, i)=> i===0 ? 2 : 1);
+  const cols = fr.map(f=>Math.round(f/fr.reduce((a,b)=>a+b,0)*usable)); cols[cols.length-1] += usable - cols.reduce((a,b)=>a+b,0);
+  return new D.Table({columnWidths:cols, width:{size:usable,type:D.WidthType.DXA}, layout:D.TableLayoutType.FIXED,
+    rows: rows.map((r,i)=>new D.TableRow({children: r.map((c,j)=>new D.TableCell({
+      width:{size:cols[j],type:D.WidthType.DXA},
       children:[new D.Paragraph({children:[new D.TextRun({text:c,bold:i===0,size:22})]})],
       shading: i===0?{fill:'D7EEDB'}:undefined
     }))}))});
