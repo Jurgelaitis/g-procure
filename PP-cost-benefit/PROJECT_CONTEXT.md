@@ -516,6 +516,18 @@ balai", nors kaina nevertinama.
 pereinamasis balas (VPT gairės jį rekomenduoja tik pagrįstais atvejais); DOCX ataskaita
 (spausdinama per naršyklę, kaip 2 dalyje); EN kalba; perkėlimas į PP-protocol komisijos
 protokolą (natūrali kita stotelė - eilė ir balai jau yra struktūroje).
+**Pastebėtų defektų taisymas (2026-09-19, penkta iteracija).** Po ketvirtos iteracijos liko trys
+užrašyti, bet netaisyti dalykai. Padaryta:
+- Fiksuotos kainos priede 3.5 p. nebemini kainos balų: „Kriterijų balai apskaičiuojami paliekant
+  N skaitmenis po kablelio.“ „Kokybė į kainą“ atveju - „Piniginės vertės ir EN reikšmės
+  apskaičiuojamos dviejų skaitmenų po kablelio tikslumu.“ Kituose būduose sakinys nepakito.
+- docx.js CDN sąrašas: cdnjs 8.5.0 adresas grąžina 404 (patikrinta), todėl pirmas jsdelivr,
+  atsarginis unpkg.
+- Testai: 43 iš 43 (į priedo testą pridėti du tikrinimai). Mutacijos patikra: pašalinus fiksuotos
+  kainos sakinį krenta 1 testas, pašalinus „kokybė į kainą“ sakinį - 1.
+- Pages pastraipų lygiavimas: žr. `PP-report/PROJECT_CONTEXT.md` 11 sk. pabaigą. Trumpai -
+  priežastis ne mūsų kode, taisymas laukia patikros Pages programoje.
+
 
 ---
 
