@@ -467,3 +467,28 @@ pinigų, o rezultatas priklausytų nuo modelio.
 ---
 
 **Šis dokumentas atspindi projekto būseną 2026 m. birželio mėn. Tolimesnės iteracijos turėtų atnaujinti šį failą su naujomis funkcijomis, pakeitimais ir žinomais apribojimais.**
+
+---
+
+## 14. Word lentelių pločiai (2026-09-19)
+
+Tas pats defektas, kaip PP-qual ir PP-report: be `columnWidths` `docx.js` įrašo `gridCol w="100"`,
+ir Pages lenteles suspaudžia. Sutvarkyta `DocxBuilder` viduje: `DOCX_PAGE` konstantos (A4, 1440
+paraštės) duoda `DOCX_USABLE` = 9026, tie patys skaičiai eina į `pgSz` / `pgMar`; `dxaCols()` ir
+`dxaTable()` kiekvienai lentelei uždeda `columnWidths`, `width` DXA ir `layout: FIXED`, o celės
+gauna DXA plotį (ir antraštinės, kurios anksčiau jo neturėjo).
+
+Proporcijos: raktas ir reikšmė `35 / 65`, atitikties lentelė `8 / 42 / 25 / 17 / 8` - abi jau buvo
+kode. Vertinimo lentelės proporcijų nebuvo, pasiūlyta `30 / 10 / 25 / 35` (laukia patvirtinimo).
+
+Patikra: dokumentas sugeneruotas naršyklėje ir išarchyvuotas - keturios lentelės, `gridCol` suma
+9026 kiekvienoje, `tblLayout fixed`, `tcW dxa`, procentų nėra. Testai: 21 praėjo, 0 krito.
+
+**Papildomai pastebėta ir ištaisyta (2026-09-19).** Sugeneruotame .docx skyriaus antraštė buvo
+„undefined. 1. Bendrieji reikalavimai“. Priežastis: skyrių numeriai ateina iš AI atsakymo
+(`sectionTitles`), o keturios vietos numerį spausdino be patikros - ekrano peržiūra,
+`tsToMarkdown`, senasis HTML -> .doc kelias ir tikrasis `buildAndDownloadRealDocx` (šis rado ne
+iš karto, nes jungia sudėtimi `section.number + '. '`, o ne šablonu). Dabar be numerio rodomas
+tik pavadinimas. Trys nauji testai (24 iš viso); mutacijos patikra: grąžinus senąjį elgesį krinta
+2 (trečias iš pradžių buvo bevertis - visada žalias, nes `escapeHtml(undefined)` grąžina tuščią
+eilutę, tad tikrinamas ne „undefined“, o kabantis taškas).
