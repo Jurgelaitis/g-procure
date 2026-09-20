@@ -99,6 +99,13 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).
 - **Datos:** skaičiuok darbo dienomis per `shared/workdays.js`, ne kalendorinėmis.
+- **Word (.docx) lentelės:** VISADA duok `columnWidths` realiais DXA, `width` DXA,
+  `layout: FIXED` ir kiekvienai celei DXA plotį. Be `columnWidths` docx.js įrašo
+  `gridCol w="100"`, ir Pages stulpelius suspaudžia iki vienos raidės (Word tai paslepia
+  persiskaičiuodamas pats, todėl defektas pastebimas tik Pages). Naudingą plotį skaičiuok
+  iš tų pačių konstantų, kurios įrašomos į `pgSz` / `pgMar`, o paskutinį stulpelį pakoreguok,
+  kad suma sutaptų. Įdėtinei lentelei atimk celės vidines paraštes (2 × cell margin).
+  Pavyzdžiai: `PP-qual` (699ba8c), `PP-cost-benefit`, `PP-report`, `PP-ts`, `PP-protocol`.
 - **Architektūra:** be build žingsnio - `.html` atidaromas tiesiai naršyklėje.
   Paprastas modulis = vienas `.html` (pvz. `PP-qual`, `PP-graphs`). Sudėtingesni turi
   savo `.js` šalia (`PP-salygos/variklis.js`, `PP-carbon/epd-extract.js`), vendor
