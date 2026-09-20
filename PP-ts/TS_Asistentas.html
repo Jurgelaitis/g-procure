@@ -3845,10 +3845,12 @@ const App = (() => {
     const sectionsHtml = validSections.map(s => {
       const contentHtml = DocxBuilder.mdToHtml(s.content || '');
       const badge = statusBadgeHtml(s._status, s.number);
+      // Numeris ateina iš AI atsakymo: jei jo nėra, antraštėje nerodom „undefined."
+      const nr = (s.number || s.number === 0) ? escapeHtml(s.number) + '. ' : '';
       return `
-        <div class="ts-section-wrap" data-section-num="${escapeHtml(s.number)}">
+        <div class="ts-section-wrap" data-section-num="${escapeHtml(s.number || '')}">
           <div class="ts-section-header">
-            <h2>${escapeHtml(s.number)}. ${escapeHtml(s.title)}</h2>
+            <h2>${nr}${escapeHtml(s.title || '')}</h2>
             ${badge}
           </div>
           ${contentHtml}
@@ -5699,7 +5701,8 @@ Kategorijos: technical, quality, delivery, warranty, qualification, security, ot
 
     // Filtruoti tik sėkmingai sugeneruotus skyrius - nepavyksinę nerodomi
     (ts.sections || []).filter(s => !s._failed && (s.content || '').trim()).forEach(s => {
-      md += `## ${s.number}. ${s.title}\n\n${s.content}\n\n`;
+      const nr = (s.number || s.number === 0) ? `${s.number}. ` : '';   // be numerio - be „undefined."
+      md += `## ${nr}${s.title || ''}\n\n${s.content}\n\n`;
     });
 
     if (ts.evaluationCriteria && ts.evaluationCriteria.length) {
@@ -6200,7 +6203,8 @@ const DocxBuilder = (() => {
     const validSections = (ts.sections || []).filter(s => !s._failed && (s.content || '').trim());
     const sections = validSections.map(s => {
       const content = mdToHtml(s.content);
-      return `<h2 style="color:#00A072; font-size:16pt; margin-top:24pt; margin-bottom:12pt; border-bottom: 1pt solid #00A072; padding-bottom: 4pt;">${escapeHtml(s.number)}. ${escapeHtml(s.title)}</h2>${content}`;
+      const nr = (s.number || s.number === 0) ? escapeHtml(s.number) + '. ' : '';   // be numerio - be „undefined."
+      return `<h2 style="color:#00A072; font-size:16pt; margin-top:24pt; margin-bottom:12pt; border-bottom: 1pt solid #00A072; padding-bottom: 4pt;">${nr}${escapeHtml(s.title || '')}</h2>${content}`;
     }).join('\n');
 
     // Atitikties lentelė: tik jei yra duomenų - kitu atveju neįtraukiame Priedo Nr. 1
@@ -6505,7 +6509,8 @@ ${rows}
         heading: D.HeadingLevel.HEADING_1,
         spacing: { before: 360, after: 180 },
         border: { bottom: { style: D.BorderStyle.SINGLE, size: 8, color: '00A072' } },
-        children: [new D.TextRun({ text: section.number + '. ' + section.title, color: '00A072', bold: true })]
+        // Numeris ateina iš AI atsakymo: be jo antraštė anksčiau tapdavo „undefined. Pavadinimas"
+        children: [new D.TextRun({ text: ((section.number || section.number === 0) ? section.number + '. ' : '') + (section.title || ''), color: '00A072', bold: true })]
       }));
       const contentElements = mdToDocxElements(D, section.content || '');
       children.push(...contentElements);
@@ -6613,7 +6618,8 @@ ${rows}
       sections: [{
         properties: {
           page: {
-            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }
+            size: { width: DOCX_PAGE.w, height: DOCX_PAGE.h },
+            margin: DOCX_PAGE.margin
           }
         },
         children
@@ -6715,55 +6721,67 @@ ${rows}
     return runs.length ? runs : [new D.TextRun(text)];
   }
 
+  // -------- Word lentelių stulpelių pločiai realiais DXA (Pages taisymas) --------
+  // Tas pats taisymas kaip PP-qual exportDocx (699ba8c): anksčiau lentelės neturėjo columnWidths
+  // (docx.js įrašydavo gridCol w="100"), o pločiai buvo procentais - Pages stulpelius suspausdavo
+  // iki vienos raidės. usable skaičiuojamas iš tų pačių konstantų, kurios įrašomos į pgSz ir pgMar.
+  const DOCX_PAGE = { w: 11906, h: 16838, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } };
+  const DOCX_USABLE = DOCX_PAGE.w - DOCX_PAGE.margin.left - DOCX_PAGE.margin.right;
+  // Iš proporcijų -> DXA; paskutinį stulpelį pakoreguoja, kad suma tiksliai === usable.
+  const dxaCols = (fr) => { const c = fr.map(f => Math.round(f / fr.reduce((a, b) => a + b, 0) * DOCX_USABLE)); c[c.length - 1] += DOCX_USABLE - c.reduce((a, b) => a + b, 0); return c; };
+  const dxaTable = (D, cols, rows) => new D.Table({ columnWidths: cols, width: { size: DOCX_USABLE, type: D.WidthType.DXA }, layout: D.TableLayoutType.FIXED, rows });
+
   // -------- HELPER: pavadinimas-reikšmė lentelė (info, kaina) --------
   function buildDocxKvTable(D, rows) {
-    return new D.Table({
-      width: { size: 100, type: D.WidthType.PERCENTAGE },
-      rows: rows.map(([k, v]) => new D.TableRow({
+    const cols = dxaCols([35, 65]);   // proporcijos tos pačios, kaip buvo kode
+    return dxaTable(D, cols, rows.map(([k, v]) => new D.TableRow({
         children: [
           new D.TableCell({
-            width: { size: 35, type: D.WidthType.PERCENTAGE },
+            width: { size: cols[0], type: D.WidthType.DXA },
             shading: { type: D.ShadingType.SOLID, color: 'EFF1F1' },
             children: [new D.Paragraph({ children: [new D.TextRun({ text: k, bold: true })] })]
           }),
           new D.TableCell({
-            width: { size: 65, type: D.WidthType.PERCENTAGE },
+            width: { size: cols[1], type: D.WidthType.DXA },
             children: [new D.Paragraph({ children: [new D.TextRun({ text: v })] })]
           })
         ]
-      }))
-    });
+      })));
   }
 
   // -------- HELPER: vertinimo kriterijų lentelė --------
   function buildDocxEvalTable(D, criteria) {
+    // Kode proporcijų nebuvo - pasiūlyta 2026-09-19: kriterijus / svoris / formulė / aprašymas.
+    const cols = dxaCols([30, 10, 25, 35]);
+    const w = (i) => ({ size: cols[i], type: D.WidthType.DXA });
     const headerRow = new D.TableRow({
       tableHeader: true,
-      children: ['Kriterijus', 'Svoris', 'Formulė', 'Aprašymas'].map(t => new D.TableCell({
+      children: ['Kriterijus', 'Svoris', 'Formulė', 'Aprašymas'].map((t, i) => new D.TableCell({
+        width: w(i),
         shading: { type: D.ShadingType.SOLID, color: 'D7EEDB' },
         children: [new D.Paragraph({ children: [new D.TextRun({ text: t, bold: true })] })]
       }))
     });
     const dataRows = criteria.map(c => new D.TableRow({
       children: [
-        new D.TableCell({ children: [new D.Paragraph(c.name || '')] }),
-        new D.TableCell({ children: [new D.Paragraph(String(c.weight || ''))] }),
-        new D.TableCell({ children: [new D.Paragraph({ children: [new D.TextRun({ text: c.formula || '', font: 'Courier New' })] })] }),
-        new D.TableCell({ children: [new D.Paragraph(c.description || '')] })
+        new D.TableCell({ width: w(0), children: [new D.Paragraph(c.name || '')] }),
+        new D.TableCell({ width: w(1), children: [new D.Paragraph(String(c.weight || ''))] }),
+        new D.TableCell({ width: w(2), children: [new D.Paragraph({ children: [new D.TextRun({ text: c.formula || '', font: 'Courier New' })] })] }),
+        new D.TableCell({ width: w(3), children: [new D.Paragraph(c.description || '')] })
       ]
     }));
-    return new D.Table({
-      width: { size: 100, type: D.WidthType.PERCENTAGE },
-      rows: [headerRow, ...dataRows]
-    });
+    return dxaTable(D, cols, [headerRow, ...dataRows]);
   }
 
   // -------- HELPER: atitikties lentelė (Priedas Nr. 1) --------
   function buildDocxComplianceTable(D, items) {
     const headers = ['TS p.', 'Reikalavimas', 'Tiekėjo siūlomas sprendimas', 'Atitikimo įrodymas', 'Atitinka (Taip/Ne)'];
+    const cols = dxaCols([8, 42, 25, 17, 8]);   // proporcijos tos pačios, kaip buvo kode
+    const w = (i) => ({ size: cols[i], type: D.WidthType.DXA });
     const headerRow = new D.TableRow({
       tableHeader: true,
-      children: headers.map(t => new D.TableCell({
+      children: headers.map((t, i) => new D.TableCell({
+        width: w(i),
         shading: { type: D.ShadingType.SOLID, color: '2E3641' },
         children: [new D.Paragraph({
           children: [new D.TextRun({ text: t, bold: true, color: 'FFFFFF', size: 18 })]
@@ -6772,17 +6790,14 @@ ${rows}
     });
     const dataRows = items.map(it => new D.TableRow({
       children: [
-        new D.TableCell({ width: { size: 8, type: D.WidthType.PERCENTAGE }, children: [new D.Paragraph(it.ref || '')] }),
-        new D.TableCell({ width: { size: 42, type: D.WidthType.PERCENTAGE }, children: [new D.Paragraph(it.requirement || '')] }),
-        new D.TableCell({ width: { size: 25, type: D.WidthType.PERCENTAGE }, children: [new D.Paragraph('')] }),
-        new D.TableCell({ width: { size: 17, type: D.WidthType.PERCENTAGE }, children: [new D.Paragraph('')] }),
-        new D.TableCell({ width: { size: 8, type: D.WidthType.PERCENTAGE }, children: [new D.Paragraph('')] })
+        new D.TableCell({ width: w(0), children: [new D.Paragraph(it.ref || '')] }),
+        new D.TableCell({ width: w(1), children: [new D.Paragraph(it.requirement || '')] }),
+        new D.TableCell({ width: w(2), children: [new D.Paragraph('')] }),
+        new D.TableCell({ width: w(3), children: [new D.Paragraph('')] }),
+        new D.TableCell({ width: w(4), children: [new D.Paragraph('')] })
       ]
     }));
-    return new D.Table({
-      width: { size: 100, type: D.WidthType.PERCENTAGE },
-      rows: [headerRow, ...dataRows]
-    });
+    return dxaTable(D, cols, [headerRow, ...dataRows]);
   }
 
   return {
