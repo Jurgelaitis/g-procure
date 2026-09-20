@@ -391,8 +391,49 @@ Norėdami modifikuoti įrankį:
 - Visa logika viename `<script>` bloke faile.
 - HTML šablonai generuojami per `renderSection*` funkcijas, ne statiški.
 - Pakeitimai gali būti testuojami atidarius failą naršyklėje + naudojant DevTools console.
-- **Regresijos testai: `testai.html`** (48 testai). Paleidžiama naršyklėje - repo šaknyje `python3 -m http.server`, tada atidaryti `PP-report/testai.html`. Puslapis įkelia `PP-report.html` į rėmelį, atlieka realius scenarijus ir tikrina rezultatus; viršuje matosi praėjusių/kritusių skaičius, kritusiam testui rodoma, ko tikėtasi ir kas gauta. Jokių įrankių ar Node nereikia.
+- **Regresijos testai: `testai.html`** (84 testai). Paleidžiama naršyklėje - repo šaknyje `python3 -m http.server`, tada atidaryti `PP-report/testai.html`. Puslapis įkelia `PP-report.html` į rėmelį, atlieka realius scenarijus ir tikrina rezultatus; viršuje matosi praėjusių/kritusių skaičius, kritusiam testui rodoma, ko tikėtasi ir kas gauta. Jokių įrankių ar Node nereikia.
 - Keičiant logiką testus leiskite PO KIEKVIENO žingsnio, ne pabaigoje. Pridėję naują testą, patikrinkite jį MUTACIJA (laikinai grąžinkite senąjį elgesį ir įsitikinkite, kad testas krinta) - kitaip testas gali būti visada žalias ir bevertis.
 - Ankstesni jsdom skriptai (`test-dalys.js`, `test-subtables.js`, `test-nepateike.js`) pašalinti: jie tik spausdindavo būseną be jokių `assert`, tad regresijos pro juos praeidavo, o paleisti reikėjo Node, kurio darbo kompiuteryje nėra.
 
 Jei reikia paaiškinti įrankio architektūrą Claude'ui naujoje paskyroje - perskaitykite jam šį `PROJECT_CONTEXT.md` ir nurodykite, kuriame skyriuje (4 / 5 / 7 / 9) yra konkretus klausimas.
+
+---
+
+## 11. Word lentelių pločiai ir Pages (2026-09-19)
+
+**Defektas.** Pažymos .docx lentelės Pages programoje buvo suspaustos iki vienos raidės pločio.
+Priežastis ta pati, kaip PP-qual (commit 699ba8c) ir PP-cost-benefit (2cd3874): kai `docx.js`
+lentelei neduodamas `columnWidths`, ji įrašo `<w:gridCol w:w="100"/>`, o celių plotis eina
+procentais. Word plotį persiskaičiuoja pats, Pages gerbia `tblGrid` pažodžiui.
+
+**Taisymas.** Puslapio konstantos surašytos vienoje vietoje (`DOCX_PAGE`), iš jų skaičiuojamas
+`DOCX_USABLE` = 11906 - 1000 - 1000 = 9906, o įdėtinėms lentelėms `DOCX_INNER` = 9906 - 2 × 100
+(celės vidinės paraštės) = 9706. Tie patys skaičiai keliauja ir į `pgSz` / `pgMar`. Kiekviena
+lentelė gauna `columnWidths`, `width` DXA, `layout: FIXED`, kiekviena celė - DXA plotį;
+`dxaCols()` paskutinį stulpelį pakoreguoja, kad suma sutaptų su naudingu pločiu.
+
+**Proporcijos.** Pagrindinė 4 stulpelių lentelė - lygios dalys (buvo 4 × 2400, dabar
+2477/2477/2477/2475). Įdėtinėms lentelėms proporcijų kode nebuvo, todėl pasiūlytos (laukia
+naudotojo patvirtinimo): pasiūlymų lentelė `nr 6 / tiekėjas 21 / kaina 17 / balai 13 /
+vertinimas 15 / kiti 15 / neatitikimas 23`, galutinė `nr 6 / tiekėjas 23 / kaina 18 / balai 13 /
+vertinimas 16 / pastaba 24`, nacionalinio saugumo `6 / 30 / 20 / 20 / 24`. Pirmas variantas
+(balai 10) buvo pataisytas pažiūrėjus atvaizdą: antraštė „Ekonominio naudingumo balai“ lūžo per
+keturias eilutes, o susiaurinus „Eil. Nr.“ lūžo ir jis. Stulpelių rinkinys
+priklauso nuo scenarijaus, todėl plotis skaičiuojamas iš tų raktų, kurie tą kartą rodomi.
+
+**Patikra.** Sugeneruoti keturi variantai (be skaidymo, su dalimis, su nacionalinio saugumo
+lentele, su nepateiktais pasiūlymais), išarchyvuoti ir patikrinti: `gridCol` suma 9906 (įdėtinių
+9706), `tblLayout fixed`, `tcW dxa`, procentų nebėra. Regresijos testai: 84 praėjo, 0 krito.
+Pranešimų dokumentas neliestas.
+
+**Pages nerodo pastraipų lygiavimo ir tarpų.** Atskiras, senesnis defektas, nesusijęs su
+lentelėmis. Failuose `w:jc` (right/center/both) ir `w:spacing` yra, tvarka atitinka standartą,
+sistemos peržiūros variklis (Quick Look) tą patį failą atvaizduoja teisingai, o Pages eksportas
+į PDF rodo viską kairėje ir be tarpų. Rastas struktūrinis skirtumas: `docx.js` `styles.xml`
+neturi numatytojo stiliaus (`Normal` su `w:default="1"`) ir palieka tuščią `docDefaults`, o tikri
+Word šablonai (`PP-salygos/templates/*.docx`) turi ir viena, ir kita. `docx.js` 8.5.0 pažymėti
+stiliaus numatytuoju per API negali (`StyleForParagraph` perduoda tik `type` ir `styleId`).
+Paruošti keturi bandomieji failai (A - kaip dabar, B - užpildyti `docDefaults`, C - lygiavimas per
+vardinį stilių, D - A su į `styles.xml` įdėtu `Normal` iš tikro šablono; A ir D `document.xml`
+identiški). Kuris variantas Pages atvaizduoja teisingai, dar nepatikrinta: Pages šiuo metu
+neatidaro dokumentų. Netaisyta sąmoningai - kol priežastis nepatvirtinta, taisymas būtų aklas.
