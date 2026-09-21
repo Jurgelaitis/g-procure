@@ -49,7 +49,7 @@ tai rašybos konvencija, ne katalogo vardas. Jei rasi senų variantų (PP-Planin
 
 | Folder | Paskirtis |
 |---|---|
-| `PP-home` | Portalo puslapiai gyvena SVETAINĖS ŠAKNYJE (`index.html`, `G-Procure_About.html`, `G-Procure_Project.html`), nes `g-procure.com/` turi būti tikras pradžios puslapis. `PP-home/` liko tik trys nukreipimo failai seniems adresams - naujo turinio ten nedėk |
+| `PP-home` | Portalo puslapiai gyvena SVETAINĖS ŠAKNYJE (`index.html`, `G-Procure_About.html`, `G-Procure_Project.html`, `atsargine-kopija.html`), nes `g-procure.com/` turi būti tikras pradžios puslapis. `PP-home/` liko tik trys nukreipimo failai seniems adresams - naujo turinio ten nedėk |
 | `PP-plan` | Metinio pirkimų plano (MPP) analizė ir grupės centralizavimas |
 | `PP-market-KPI` | Rinkos rodiklių stebėsena (kainos, lead time, indeksavimas; C lygmuo „tiekimo nutrūkimo rizika" pašalintas 2026-09-10 naudotojo sprendimu - negrąžinti) |
 | `PP-ts` | Techninių specifikacijų asistentas (AI generavimas + auditas) |
@@ -77,12 +77,13 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | Failas | Ką laiko |
 |---|---|
 | `shared/thresholds.js` | VPT vertės ribos (galioja nuo 2026-01-01). Peržiūrimos kas 2 metus - atnaujink TIK čia |
-| `shared/workdays.js` | Darbo dienų skaičiavimas + LR šventės. Pratęsk metus laiku (sena lentelė baigiasi 2030) |
+| `shared/workdays.js` | Darbo dienų skaičiavimas + LR šventės. Lentelės NĖRA ir pratęsti nereikia: fiksuotos šventės iš sąrašo, Velykos - computus algoritmu, Motinos ir Tėvo diena - pirmas gegužės / birželio sekmadienis, tad kalendorius galioja bet kuriems metams. Keičiantis LR švenčių sąrašui - taisyk TIK čia |
 | `shared/procurement-methods.js` | Kanoninis pirkimo būdų klasifikatorius (`GP_METHODS`): 11 pagrindinių būdų, kodai (T-AK, MV-NR...), etiketės ir migracijos adapteriai seniems moduliams. Naudoja 7 moduliai - būdą ar pavadinimą keisk TIK čia |
 | `shared/ai-proxy.js` | g-procure backend iškvietimas (Claude API), numatytasis AI modelis (`DEFAULT_MODEL`) ir užklausos kūno riba (`MAX_BASE64`, `MAX_PDF_BAITU`). Ribą naudoja `PP-salygos` ir `PP-carbon` - moduliuose jos NEdubliuok |
 | `shared/epso-g.css` | EPSO-G prekės ženklo dizaino žetonai (spalvos, `--font-base`, maketas) ir tamsus prekės ženklo gradientas `--gradient-dark` (hero/header blokams; naudoja 6 vietos, tarp jų `gprocure-info-panel.js`). Prijungtas VISUOSE moduliuose |
 | `shared/lang-detect.js` | Pradinė sąsajos kalba dvikalbiams puslapiams (`GP_LANG.detect(raktas)` / `remember`): adreso parametras `?lang=lt\|en` -> rankinis pasirinkimas -> lankytojas iš Lietuvos (laiko juosta Europe/Vilnius arba naršyklės kalba lt) = LT, kiti = EN. `?lang=` į localStorage NEįrašomas (vienkartinė peržiūra) ir yra hreflang pagrindas: be atskiro URL kiekvienai kalbai hreflang būtų melagingas. `GP_LANG.markCanonical()` vykdymo metu pataiso `<link rel="canonical">` į tą patį adresą - kitaip visi puslapio adresai kanonizuotųsi į vieną ir hreflang būtų ignoruojamas. Naudoja PP-tiekejams, PP-carbon (abu puslapiai), PP-esg, PP-market-KPI ir VISI trys PP-home puslapiai (portalas, „Apie projektą", „Apie"). PP-home puslapiai dalijasi raktu `gprocure-lang`, tad kalba tarp jų nešokinėja - taisyklę keisk TIK čia |
 | `shared/portal-link.js` | Grįžimo į portalą juosta modulio viršuje (`← G-Procure · Visi įrankiai`). Prijungiama VIENA eilute iškart po `<body>`: `<script src="../shared/portal-link.js"></script>`. Iki 2026-09-20 šešiolika modulio puslapių neturėjo jokio kelio atgal. Kalbą ima iš `<html lang>`, tad dvikalbiuose moduliuose persijungia kartu; spausdinant nerodoma. Testai - `shared/testai.html` |
+| `shared/backup.js` | Atsarginės duomenų kopijos branduolys (`GP_BACKUP`): saugyklos surinkimas, failo tikrinimas, perrašomų raktų skaičius, atkūrimas ir raktų vardai žmogui. Saugykla PADUODAMA iš išorės, todėl testai naudoja netikrą saugyklą ir tikrų duomenų neliečia. Sąsaja - `atsargine-kopija.html` šaknyje. Pridėjus modulį su nauju localStorage raktu, įrašyk jį į `ZENKLAI` sąrašą (be to kopija veiks, bet raktas bus rodomas kaip „kiti duomenys") |
 | `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`). Šiandien dengia `portal-link.js` (11 testų) |
 | `shared/img/epso-g-logo.svg` | EPSO-G prekės ženklas puslapių antraštėms ir poraštėms. Naudok per `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`, dydį nustatyk puslapio CSS. Iki 2026-09-05 tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose. Spalva faile įrašyta tiesiogiai - išorinis SVG puslapio CSS kintamųjų nemato |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
@@ -186,6 +187,10 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   kurį laiką sakė tik „naršyklėje nesaugomas", kol serveris nebuvo patikrintas).
 - NIEKADA nelaužk localStorage suderinamumo - esami vartotojų duomenys turi išlikti
   po atnaujinimų (jei keiti duomenų struktūrą, pridėk migraciją).
+- Kadangi duomenys gyvena tik naršyklėje, išvalyta naršyklė ar naujas kompiuteris reiškia
+  prarastą darbą. Tam yra `atsargine-kopija.html` (šaknyje, nuoroda portalo poraštėje):
+  visi moduliai vienoje kilmėje dalijasi ta pačia localStorage, tad puslapis išsaugo VISKĄ į
+  vieną JSON failą ir atkuria atgal. Logika - `shared/backup.js`.
 - ŽINOMA RIZIKA (ne galutinis sprendimas): `PP-protocol` audito žurnalas saugomas
   localStorage, nors PSĮ 103 str. reikalauja 4 metų saugojimo. Tai pažymėta kaip
   būsima migracija į backend'ą - neplėsk priklausomybės nuo localStorage šiam žurnalui.
