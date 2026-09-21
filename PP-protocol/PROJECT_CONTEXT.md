@@ -3,10 +3,17 @@
 **Projekto kontekstinis dokumentas naujam darbo tęsimui**
 
 **Versija:** v3.0
-**Failo dydis:** ~716 KB / 733 575 chars (HTML/CSS/JS)
-**Pagrindinis failas:** `LITGRID_Generatorius_v3.html`
-**Paskutinis atnaujinimas:** 2026-06-11
-**Repozitorija:** [github.com/Jurgelaitis/PP-Protocols](https://github.com/Jurgelaitis/PP-Protocols)
+**Pagrindinis failas:** `LITGRID_Generatorius_v3.html` (šalia šio dokumento)
+**Dokumento turinys atnaujintas:** 2026-06-11
+**Repozitorija:** `g-procure` monorepo ([g-procure.com](https://g-procure.com));
+senasis `PP-Protocols` repo nebenaudojamas ir commit'ų negauna.
+
+> **2026-09-21.** Šis failas perkeltas iš `PP-protocol/Other/` į modulio šaknį, o likęs
+> `Other/` katalogas pašalintas. Jame buvo trys archyvai su 78 LITGRID protokolų ir pranešimų
+> PDF failais bei sena modulio kopija (2026-06). Repozitorija vieša, tad GitHub Pages juos
+> atiduodavo bet kam, nors svetainėje nuorodų į juos nebuvo. Darbinė medžiaga nusikopijuota už
+> repozitorijos ribų; senos git versijos dar saugo tuos failus, kol nebus perrašyta istorija arba
+> repozitorija paversta privačia.
 
 ---
 
