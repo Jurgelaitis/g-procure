@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>shared/ regresijos testai</title>
 <link rel="stylesheet" href="epso-g.css">
+<script src="backup.js"></script>
 <style>
   body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
        background:var(--color-graphite-5);font-size:14px;line-height:1.5}
@@ -32,7 +33,7 @@
 <body>
 
 <h1>shared/ regresijos testai</h1>
-<div class="sub">Bendrų komponentų patikra. Šiandien - <code>portal-link.js</code> (grįžimo į portalą juosta).
+<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta) ir <code>backup.js</code> (atsarginės kopijos branduolys).
 Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
 
@@ -164,8 +165,87 @@ async function testaiJuosta(){
   });
 }
 
+/* ==========================================================================
+   ATSARGINĖS KOPIJOS BRANDUOLYS (backup.js)
+   Visos funkcijos priima saugyklą iš išorės, tad testai naudoja NETIKRĄ
+   saugyklą ir tikrų naudotojo duomenų neliečia. Būtent dėl to logika iškelta
+   iš puslapio: kitaip testas būtų trynęs gyvus duomenis toje pačioje kilmėje.
+   ========================================================================== */
+function netikraSaugykla(pradine, luzta){
+  const d = Object.assign({}, pradine || {});
+  return {
+    get length(){ return Object.keys(d).length; },
+    key(i){ return Object.keys(d)[i]; },
+    getItem(k){ return Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null; },
+    setItem(k, v){ if(luzta) throw new Error("saugykla pilna"); d[k] = String(v); },
+    _d: d
+  };
+}
+
+async function testaiKopija(){
+  dabartine = grupe("Atsarginės kopijos branduolys (backup.js)");
+
+  await testas("Surenka visus raktus ir prideda antraštę", async ()=>{
+    const st = netikraSaugykla({ a: "1", b: "2" });
+    const f = GP_BACKUP.surinkti(st, new Date("2026-09-21T10:00:00Z"));
+    lygu(f.app, "G-Procure", "app");
+    lygu(f.version, 1, "formato versija");
+    lygu(f.createdAt.slice(0, 10), "2026-09-21", "data");
+    lygu(Object.keys(f.items).sort(), ["a", "b"], "raktai");
+  });
+
+  await testas("Įrašai rikiuojami nuo didžiausio", async ()=>{
+    const st = netikraSaugykla({ maza: "x", didele: "xxxxxxxxxxxxxxxxxxxx" });
+    lygu(GP_BACKUP.irasai(st).map(i => i.raktas), ["didele", "maza"], "eilė");
+  });
+
+  await testas("Dydis skaičiuojamas UTF-8 baitais", async ()=>{
+    lygu(GP_BACKUP.baitai("abc"), 3, "lotyniškos raidės");
+    lygu(GP_BACKUP.baitai("ąčę"), 6, "lietuviškos raidės po 2 baitus");
+  });
+
+  await testas("Raktas atpažįstamas pagal prefiksą, nežinomas nedingsta", async ()=>{
+    lygu(GP_BACKUP.zenklas("litgrid_procurements_v2", "lt").modulis, "PP-protocol", "modulis");
+    lygu(GP_BACKUP.zenklas("epsog_rinkos_kpi_v7", "lt").modulis, "PP-market-KPI", "modulis");
+    lygu(GP_BACKUP.zenklas("visai_kitas", "lt").pav, "Kiti duomenys", "nežinomas LT");
+    lygu(GP_BACKUP.zenklas("visai_kitas", "en").pav, "Other data", "nežinomas EN");
+  });
+
+  await testas("Svetimas ar sugadintas failas atmetamas", async ()=>{
+    lygu(GP_BACKUP.patikrinti("ne json").priezastis, "json", "sugadintas JSON");
+    lygu(GP_BACKUP.patikrinti('{"app":"Kita","items":{}}').priezastis, "formatas", "svetimas failas");
+    lygu(GP_BACKUP.patikrinti('{"app":"G-Procure","items":[]}').priezastis, "formatas", "items turi būti objektas");
+    tiesa(GP_BACKUP.patikrinti('{"app":"G-Procure","items":{"a":"1"}}').ok, "savas failas turi būti priimtas");
+  });
+
+  await testas("Perrašomų skaičius - tik tie raktai, kurie jau yra", async ()=>{
+    const st = netikraSaugykla({ a: "sena", c: "sena" });
+    lygu(GP_BACKUP.perrasomi({ app: "G-Procure", items: { a: "nauja", b: "nauja" } }, st), 1, "perrašomų");
+  });
+
+  await testas("Atkuriama failo reikšmė, kiti raktai nepaliečiami", async ()=>{
+    const st = netikraSaugykla({ a: "sena", c: "nesusijes" });
+    const r = GP_BACKUP.atkurti({ app: "G-Procure", items: { a: "nauja", b: "nauja" } }, st);
+    lygu([r.ok, r.blogai], [2, 0], "rezultatas");
+    lygu(st.getItem("a"), "nauja", "perrašyta");
+    lygu(st.getItem("b"), "nauja", "pridėta");
+    lygu(st.getItem("c"), "nesusijes", "kitas raktas nepaliestas");
+  });
+
+  await testas("Pilna saugykla praneša apie nepavykusius įrašus", async ()=>{
+    const st = netikraSaugykla({}, true);
+    const r = GP_BACKUP.atkurti({ app: "G-Procure", items: { a: "1", b: "2" } }, st);
+    lygu([r.ok, r.blogai], [0, 2], "rezultatas");
+  });
+
+  await testas("Failo vardas su data", async ()=>{
+    lygu(GP_BACKUP.failoVardas(new Date("2026-09-21T10:00:00Z")), "g-procure-kopija-2026-09-21.json", "vardas");
+  });
+}
+
 (async function(){
   await testaiJuosta();
+  await testaiKopija();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
