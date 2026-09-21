@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>shared/ regresijos testai</title>
+<link rel="stylesheet" href="epso-g.css">
+<style>
+  body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
+       background:var(--color-graphite-5);font-size:14px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--color-graphite-50);margin-bottom:18px;max-width:82ch}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--color-graphite-15);
+             border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .n{font-size:24px;font-weight:800}
+  .ok{color:var(--color-emerald-120)} .blogai{color:var(--color-error)}
+  .grupe{background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .grupe h2{font-size:14px;margin:0;padding:11px 16px;background:var(--color-green-5);
+            color:var(--color-emerald-120);border-bottom:1px solid var(--color-graphite-15)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #F0F3F5;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:800;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .t.geras .zyma{background:var(--color-green-5);color:var(--color-emerald-120)}
+  .t.krito .zyma{background:var(--color-error-5);color:#7F1722}
+  .t.krito{background:#FFFAFA}
+  .det{color:#7F1722;font-size:12px;margin-top:3px;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+  iframe{position:absolute;left:-9999px;width:900px;height:600px;border:0}
+  .info{background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;padding:12px 16px;
+        font-size:12px;color:var(--color-graphite-50);max-width:100ch}
+</style>
+</head>
+<body>
+
+<h1>shared/ regresijos testai</h1>
+<div class="sub">Bendrų komponentų patikra. Šiandien - <code>portal-link.js</code> (grįžimo į portalą juosta).
+Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
+Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
+
+<div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
+  <span class="n blogai" id="n-blogai">0</span> krito
+  <span id="busena" style="color:var(--color-graphite-50)">Vykdoma...</span></div>
+
+<div id="rezultatai"></div>
+
+<div class="info">Kodėl juosta netikrinama modulių rinkiniuose: ji yra bendra sistemos dalis, o ne modulio turinys.
+PP-market-KPI dvikalbystės testai ją sąmoningai praleidžia (žr. komentarą ten), nes juostos tekstas
+atsinaujina mikroužduotimi po <code>&lt;html lang&gt;</code> pakeitimo.</div>
+
+<script>
+const R = { ok: 0, blogai: 0 };
+function grupe(pav){
+  const d = document.createElement("div");
+  d.className = "grupe"; d.innerHTML = `<h2>${pav}</h2>`;
+  document.getElementById("rezultatai").appendChild(d);
+  return d;
+}
+let dabartine = null;
+async function testas(pav, fn){
+  const eil = document.createElement("div");
+  try { await fn(); eil.className = "t geras"; eil.innerHTML = `<span class="zyma">GERAI</span><span>${pav}</span>`; R.ok++; }
+  catch (e) { eil.className = "t krito";
+    eil.innerHTML = `<span class="zyma">KRITO</span><span>${pav}<div class="det">${(e && e.message) || e}</div></span>`; R.blogai++; }
+  dabartine.appendChild(eil);
+  document.getElementById("n-ok").textContent = R.ok;
+  document.getElementById("n-blogai").textContent = R.blogai;
+}
+function tiesa(salyga, ka){ if(!salyga) throw new Error(ka || "sąlyga netenkinama"); }
+function lygu(gauta, tiketasi, ka){
+  if(JSON.stringify(gauta) !== JSON.stringify(tiketasi))
+    throw new Error(`${ka || "reikšmė"}\n  tikėtasi: ${JSON.stringify(tiketasi)}\n  gauta:    ${JSON.stringify(gauta)}`);
+}
+const tiksas = () => new Promise(r => setTimeout(r, 30));
+
+/* Bandomasis dokumentas kuriamas srcdoc rėmelyje: adresai sprendžiami pagal ŠIO
+   puslapio vietą (shared/), tad <script src="portal-link.js"> randa komponentą,
+   o numatytasis portalo adresas "../index.html" rodo į svetainės šaknį. */
+function ramas(vidus, lang){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.addEventListener("load", () => res({ f: f, d: f.contentDocument, w: f.contentWindow }));
+    f.srcdoc = `<!doctype html><html lang="${lang || "lt"}"><head><meta charset="utf-8"></head>`
+             + `<body><h1 id="turinys">Modulio turinys</h1>${vidus}</body></html>`;
+    document.body.appendChild(f);
+  });
+}
+const SKRIPTAS = '<script src="portal-link.js"><\/script>';
+const juosta = (d) => d.getElementById("gp-portalas");
+const etikete = (d) => juosta(d).querySelector(".gp-portalas__etikete").textContent.trim();
+const tagas = (d) => juosta(d).querySelector(".gp-portalas__tag").textContent.trim();
+
+async function testaiJuosta(){
+  dabartine = grupe("Grįžimo į portalą juosta (portal-link.js)");
+
+  await testas("Juosta įdedama kaip pirmas body elementas", async ()=>{
+    const { d } = await ramas(SKRIPTAS);
+    tiesa(juosta(d), "juostos nėra");
+    lygu(d.body.children[0].id, "gp-portalas", "pirmas body elementas");
+  });
+
+  await testas("Nuoroda veda į portalą (../index.html)", async ()=>{
+    const { d } = await ramas(SKRIPTAS);
+    const a = juosta(d).querySelector("a");
+    lygu(a.getAttribute("href"), "../index.html", "href atributas");
+    tiesa(/\/index\.html$/.test(a.href), "išspręstas adresas turi baigtis /index.html, gauta: " + a.href);
+  });
+
+  await testas("Numatyta kalba - lietuvių", async ()=>{
+    const { d } = await ramas(SKRIPTAS, "lt");
+    lygu(etikete(d), "Visi įrankiai", "etiketė");
+    lygu(tagas(d), "EPSO-G grupės pirkimų platforma", "prierašas");
+    tiesa(/Grįžti/.test(juosta(d).getAttribute("aria-label")), "aria-label turi būti lietuviškas");
+  });
+
+  await testas("Puslapis su lang=\"en\" gauna angliškus tekstus", async ()=>{
+    const { d } = await ramas(SKRIPTAS, "en");
+    lygu(etikete(d), "All tools", "etiketė");
+    lygu(tagas(d), "EPSO-G Group procurement platform", "prierašas");
+  });
+
+  await testas("Perjungus <html lang>, juosta persijungia kartu", async ()=>{
+    const { d } = await ramas(SKRIPTAS, "lt");
+    d.documentElement.lang = "en";
+    await tiksas();
+    lygu([etikete(d), tagas(d)], ["All tools", "EPSO-G Group procurement platform"], "po perjungimo į EN");
+    d.documentElement.lang = "lt";
+    await tiksas();
+    lygu(etikete(d), "Visi įrankiai", "grąžinus LT");
+  });
+
+  await testas("Zenklas „G-Procure“ neverčiamas", async ()=>{
+    const { d } = await ramas(SKRIPTAS, "en");
+    lygu(juosta(d).querySelector(".gp-portalas__zenklas").textContent.trim(), "G-Procure", "prekės ženklas");
+  });
+
+  await testas("data-portalas nurodo kitą adresą", async ()=>{
+    const { d } = await ramas('<script src="portal-link.js" data-portalas="../../index.html"><\/script>');
+    lygu(juosta(d).querySelector("a").getAttribute("href"), "../../index.html", "href iš data-portalas");
+  });
+
+  await testas("Pakartotinis įkėlimas juostos nedubliuoja", async ()=>{
+    const { d, w } = await ramas(SKRIPTAS);
+    w.GP_PORTALAS.ikelk(); w.GP_PORTALAS.ikelk();
+    lygu(d.querySelectorAll("#gp-portalas").length, 1, "juostų skaičius");
+    lygu(d.querySelectorAll("#gp-portalas-stilius").length, 1, "stiliaus blokų skaičius");
+  });
+
+  await testas("Modulio turinys lieka nepaliestas", async ()=>{
+    const { d } = await ramas(SKRIPTAS);
+    lygu(d.getElementById("turinys").textContent, "Modulio turinys", "modulio antraštė");
+    lygu(d.body.children.length, 3, "body vaikai: juosta + h1 + script");
+  });
+
+  await testas("Spausdinant juosta slepiama", async ()=>{
+    const { d } = await ramas(SKRIPTAS);
+    const css = d.getElementById("gp-portalas-stilius").textContent.replace(/\s+/g, "");
+    tiesa(css.indexOf("@mediaprint{#gp-portalas{display:none!important}}") >= 0,
+          "stiliuose nerasta @media print taisyklė, gauta: " + css.slice(-120));
+  });
+
+  await testas("Juosta nėra lipni (modulių sticky antraštės nenukenčia)", async ()=>{
+    const { d, w } = await ramas(SKRIPTAS);
+    const poz = w.getComputedStyle(juosta(d)).position;
+    tiesa(poz !== "sticky" && poz !== "fixed", "juostos position turi būti relative/static, gauta: " + poz);
+  });
+}
+
+(async function(){
+  await testaiJuosta();
+  document.getElementById("busena").textContent =
+    R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
+})();
+</script>
+</body>
+</html>
