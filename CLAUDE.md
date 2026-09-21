@@ -82,6 +82,8 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | `shared/ai-proxy.js` | g-procure backend iškvietimas (Claude API), numatytasis AI modelis (`DEFAULT_MODEL`) ir užklausos kūno riba (`MAX_BASE64`, `MAX_PDF_BAITU`). Ribą naudoja `PP-salygos` ir `PP-carbon` - moduliuose jos NEdubliuok |
 | `shared/epso-g.css` | EPSO-G prekės ženklo dizaino žetonai (spalvos, `--font-base`, maketas) ir tamsus prekės ženklo gradientas `--gradient-dark` (hero/header blokams; naudoja 6 vietos, tarp jų `gprocure-info-panel.js`). Prijungtas VISUOSE moduliuose |
 | `shared/lang-detect.js` | Pradinė sąsajos kalba dvikalbiams puslapiams (`GP_LANG.detect(raktas)` / `remember`): adreso parametras `?lang=lt\|en` -> rankinis pasirinkimas -> lankytojas iš Lietuvos (laiko juosta Europe/Vilnius arba naršyklės kalba lt) = LT, kiti = EN. `?lang=` į localStorage NEįrašomas (vienkartinė peržiūra) ir yra hreflang pagrindas: be atskiro URL kiekvienai kalbai hreflang būtų melagingas. `GP_LANG.markCanonical()` vykdymo metu pataiso `<link rel="canonical">` į tą patį adresą - kitaip visi puslapio adresai kanonizuotųsi į vieną ir hreflang būtų ignoruojamas. Naudoja PP-tiekejams, PP-carbon (abu puslapiai), PP-esg, PP-market-KPI ir VISI trys PP-home puslapiai (portalas, „Apie projektą", „Apie"). PP-home puslapiai dalijasi raktu `gprocure-lang`, tad kalba tarp jų nešokinėja - taisyklę keisk TIK čia |
+| `shared/portal-link.js` | Grįžimo į portalą juosta modulio viršuje (`← G-Procure · Visi įrankiai`). Prijungiama VIENA eilute iškart po `<body>`: `<script src="../shared/portal-link.js"></script>`. Iki 2026-09-20 šešiolika modulio puslapių neturėjo jokio kelio atgal. Kalbą ima iš `<html lang>`, tad dvikalbiuose moduliuose persijungia kartu; spausdinant nerodoma. Testai - `shared/testai.html` |
+| `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`). Šiandien dengia `portal-link.js` (11 testų) |
 | `shared/img/epso-g-logo.svg` | EPSO-G prekės ženklas puslapių antraštėms ir poraštėms. Naudok per `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`, dydį nustatyk puslapio CSS. Iki 2026-09-05 tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose. Spalva faile įrašyta tiesiogiai - išorinis SVG puslapio CSS kintamųjų nemato |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
 
@@ -106,6 +108,9 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   iš tų pačių konstantų, kurios įrašomos į `pgSz` / `pgMar`, o paskutinį stulpelį pakoreguok,
   kad suma sutaptų. Įdėtinei lentelei atimk celės vidines paraštes (2 × cell margin).
   Pavyzdžiai: `PP-qual` (699ba8c), `PP-cost-benefit`, `PP-report`, `PP-ts`, `PP-protocol`.
+- **Kelias atgal:** KIEKVIENAS modulio puslapis prijungia `shared/portal-link.js` (viena eilutė po
+  `<body>`). Be jo žmogus, atėjęs iš paieškos ar kolegos nuorodos, lieka viename įrankyje ir nemato,
+  kad tai sistema. Savo „į portalą" mygtuko moduliui nereikia - būtų dvi tos pačios nuorodos.
 - **Architektūra:** be build žingsnio - `.html` atidaromas tiesiai naršyklėje.
   Paprastas modulis = vienas `.html` (pvz. `PP-qual`, `PP-graphs`). Sudėtingesni turi
   savo `.js` šalia (`PP-salygos/variklis.js`, `PP-carbon/epd-extract.js`), vendor
