@@ -6,6 +6,7 @@
 <title>shared/ regresijos testai</title>
 <link rel="stylesheet" href="epso-g.css">
 <script src="backup.js"></script>
+<script src="docx-stiliai.js"></script>
 <style>
   body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
        background:var(--color-graphite-5);font-size:14px;line-height:1.5}
@@ -33,7 +34,7 @@
 <body>
 
 <h1>shared/ regresijos testai</h1>
-<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta) ir <code>backup.js</code> (atsarginės kopijos branduolys).
+<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta) , <code>backup.js</code> (atsarginės kopijos branduolys) ir <code>docx-stiliai.js</code> (Word stilių failas).
 Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
 
@@ -243,9 +244,80 @@ async function testaiKopija(){
   });
 }
 
+/* ==========================================================================
+   WORD STILIŲ FAILAS (docx-stiliai.js)
+   Pages ignoruoja tiesioginį pastraipų formatavimą, jei styles.xml neturi
+   numatytojo stiliaus. Patikrinta 2026-09-22 aštuoniais bandomaisiais
+   dokumentais: be `Normal` su w:default="1" dingsta lygiuotė, tarpai ir įtrauka.
+   Todėl šie testai saugo būtent tą atributą ir stilių sandarą.
+   ========================================================================== */
+async function testaiDocxStiliai(){
+  dabartine = grupe("Word stilių failas (docx-stiliai.js)");
+
+  await testas("Yra numatytasis Normal stilius su w:default=\"1\"", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({ font: "Times New Roman", size: 22 });
+    tiesa(/<w:style w:type="paragraph" w:default="1" w:styleId="Normal">/.test(x),
+      "be šito Pages meta tiesioginį formatavimą");
+  });
+
+  await testas("Numatytieji stiliai: pastraipos, ženklo, lentelės ir numeravimo", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({});
+    lygu((x.match(/w:default="1"/g) || []).length, 4, "numatytųjų stilių skaičius");
+    for (const id of ["Normal", "DefaultParagraphFont", "TableNormal", "NoList"])
+      tiesa(x.indexOf('w:styleId="' + id + '"') > 0, "trūksta " + id);
+  });
+
+  await testas("Šriftas ir dydis įrašomi tik tada, kai paduodami", async ()=>{
+    const su = GP_DOCX_STILIAI.xml({ font: "Nunito Sans", size: 21 });
+    tiesa(/w:ascii="Nunito Sans"/.test(su), "šriftas");
+    tiesa(/<w:sz w:val="21"\/>/.test(su), "dydis");
+    const be = GP_DOCX_STILIAI.xml({});
+    tiesa(!/<w:rFonts/.test(be.slice(0, be.indexOf("</w:docDefaults>"))), "be šrifto docDefaults neturi rFonts");
+    tiesa(!/<w:sz /.test(be.slice(0, be.indexOf("</w:docDefaults>"))), "be dydžio docDefaults neturi sz");
+  });
+
+  await testas("Bibliotekos stiliai perimti (Heading1-6, Title, Hyperlink)", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({});
+    for (const id of ["Title", "Heading1", "Heading3", "Heading6", "Strong", "Hyperlink", "ListParagraph"])
+      tiesa(x.indexOf('w:styleId="' + id + '"') > 0, "trūksta " + id);
+  });
+
+  await testas("Savas stilius PAKEIČIA to paties id bazinį, ne dubliuoja", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({ stiliai: [
+      { id: "Heading1", name: "Heading 1", run: { size: 28, bold: true, color: "00A072" } }
+    ]});
+    lygu((x.match(/w:styleId="Heading1"/g) || []).length, 1, "Heading1 kartų");
+    tiesa(/w:val="00A072"/.test(x), "savo spalva");
+  });
+
+  await testas("Pastraipos savybių tvarka: spacing prieš jc (ECMA-376)", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({ stiliai: [
+      { id: "GpCentras", name: "GP centras", paragraph: { spacing: { before: 120, after: 160 }, alignment: "center" } }
+    ]});
+    const pPr = x.match(/<w:style [^>]*w:styleId="GpCentras">[\s\S]*?<\/w:style>/)[0];
+    tiesa(pPr.indexOf("<w:spacing") < pPr.indexOf("<w:jc"), "spacing turi būti prieš jc, kitaip griežti skaitytuvai ignoruoja");
+  });
+
+  await testas("Kabutės ir & šrifto varde ekranuojami", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({ font: 'A&B "C"' });
+    tiesa(x.indexOf('A&amp;B &quot;C&quot;') > 0, "ekranavimas");
+    tiesa(x.indexOf('A&B "C"') < 0, "neekranuoto teksto likti negali");
+  });
+
+  await testas("Rezultatas - taisyklingas XML su w:styles šaknimi", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({ font: "Times New Roman", size: 22 });
+    tiesa(x.indexOf('<?xml version="1.0"') === 0, "XML deklaracija");
+    tiesa(/<w:styles [^>]*xmlns:w="http:\/\/schemas\.openxmlformats\.org\/wordprocessingml\/2006\/main"/.test(x), "vardų sritis");
+    tiesa(x.slice(-11) === "</w:styles>", "uždaryta šaknis");
+    const doc = new DOMParser().parseFromString(x, "application/xml");
+    tiesa(!doc.querySelector("parsererror"), "XML turi būti parsinamas");
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
+  await testaiDocxStiliai();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
