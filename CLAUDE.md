@@ -84,6 +84,7 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | `shared/lang-detect.js` | Pradinė sąsajos kalba dvikalbiams puslapiams (`GP_LANG.detect(raktas)` / `remember`): adreso parametras `?lang=lt\|en` -> rankinis pasirinkimas -> lankytojas iš Lietuvos (laiko juosta Europe/Vilnius arba naršyklės kalba lt) = LT, kiti = EN. `?lang=` į localStorage NEįrašomas (vienkartinė peržiūra) ir yra hreflang pagrindas: be atskiro URL kiekvienai kalbai hreflang būtų melagingas. `GP_LANG.markCanonical()` vykdymo metu pataiso `<link rel="canonical">` į tą patį adresą - kitaip visi puslapio adresai kanonizuotųsi į vieną ir hreflang būtų ignoruojamas. Naudoja PP-tiekejams, PP-carbon (abu puslapiai), PP-esg, PP-market-KPI ir VISI trys PP-home puslapiai (portalas, „Apie projektą", „Apie"). PP-home puslapiai dalijasi raktu `gprocure-lang`, tad kalba tarp jų nešokinėja - taisyklę keisk TIK čia |
 | `shared/portal-link.js` | Grįžimo į portalą juosta modulio viršuje (`← G-Procure · Visi įrankiai`). Prijungiama VIENA eilute iškart po `<body>`: `<script src="../shared/portal-link.js"></script>`. Iki 2026-09-20 šešiolika modulio puslapių neturėjo jokio kelio atgal. Kalbą ima iš `<html lang>`, tad dvikalbiuose moduliuose persijungia kartu; spausdinant nerodoma. Testai - `shared/testai.html` |
 | `shared/backup.js` | Atsarginės duomenų kopijos branduolys (`GP_BACKUP`): saugyklos surinkimas, failo tikrinimas, perrašomų raktų skaičius, atkūrimas ir raktų vardai žmogui. Saugykla PADUODAMA iš išorės, todėl testai naudoja netikrą saugyklą ir tikrų duomenų neliečia. Sąsaja - `atsargine-kopija.html` šaknyje. Pridėjus modulį su nauju localStorage raktu, įrašyk jį į `ZENKLAI` sąrašą (be to kopija veiks, bet raktas bus rodomas kaip „kiti duomenys") |
+| `shared/docx-stiliai.js` | Word dokumentų `styles.xml` VISIEMS moduliams (`GP_DOCX_STILIAI.xml({font, size, stiliai})`). Paduodamas per `externalStyles`. Jame yra `Normal` su `w:default="1"` - BE JO Pages ignoruoja tiesioginį pastraipų formatavimą (`w:jc`, `w:spacing`, `w:ind`), o docx.js tokio stiliaus per API išrašyti negali. Patikrinta 2026-09-22 aštuoniais bandomaisiais dokumentais ir tikrais modulių dokumentais Pages programoje |
 | `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`). Šiandien dengia `portal-link.js` (11 testų) |
 | `shared/img/epso-g-logo.svg` | EPSO-G prekės ženklas puslapių antraštėms ir poraštėms. Naudok per `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`, dydį nustatyk puslapio CSS. Iki 2026-09-05 tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose. Spalva faile įrašyta tiesiogiai - išorinis SVG puslapio CSS kintamųjų nemato |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
@@ -102,6 +103,12 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).
 - **Datos:** skaičiuok darbo dienomis per `shared/workdays.js`, ne kalendorinėmis.
+- **Word (.docx) stiliai:** kiekvienas `new Document({...})` PRIVALO gauti
+  `externalStyles: GP_DOCX_STILIAI.xml({ font, size, stiliai })` ir NETURI naudoti `styles`
+  parinkties - biblioteka jas ignoruoja kartu (laimi `externalStyles`). Savus pastraipų stilius
+  (Heading1 ir pan.) paduok per `stiliai` sąrašą. Be šito Pages praranda lygiuotę ir tarpus, o
+  Word ir sistemos peržiūra to nerodo, todėl defektas pastebimas tik naudotojo ekrane.
+  Naudoja: `PP-qual`, `PP-report`, `PP-carbon`, `PP-cost-benefit`, `PP-protocol`, `PP-ts`.
 - **Word (.docx) lentelės:** VISADA duok `columnWidths` realiais DXA, `width` DXA,
   `layout: FIXED` ir kiekvienai celei DXA plotį. Be `columnWidths` docx.js įrašo
   `gridCol w="100"`, ir Pages stulpelius suspaudžia iki vienos raidės (Word tai paslepia
