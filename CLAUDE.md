@@ -53,7 +53,7 @@ tai rašybos konvencija, ne katalogo vardas. Jei rasi senų variantų (PP-Planin
 | `PP-plan` | Metinio pirkimų plano (MPP) analizė ir grupės centralizavimas |
 | `PP-market-KPI` | Rinkos rodiklių stebėsena (kainos, lead time, indeksavimas; C lygmuo „tiekimo nutrūkimo rizika" pašalintas 2026-09-10 naudotojo sprendimu - negrąžinti) |
 | `PP-ts` | Techninių specifikacijų asistentas (AI generavimas + auditas) |
-| `PP-qual` | Tiekėjų kvalifikacijos reikalavimų modulis (AI, proporcingumas) |
+| `PP-qual` | Tiekėjų kvalifikacijos reikalavimų modulis (AI, proporcingumas). Nuo 2026-09-23 skaičiuoklė ir taisyklės remiasi VPT Metodika pagal e-tar (`proporcingumas()`: vertės kategorija, pajamų riba, patirties laikotarpis); testai - `PP-qual/testai.html` |
 | `PP-salygos` | Pirkimo sąlygų generatorius (BPS/SPS/formos iš LITGRID šablonų, deterministinis) |
 | `PP-cost-benefit` | Dvi dalys (nuo 2026-09-19): `ekonominio_naudingumo_skaiciuokle.html` - ekonominio naudingumo skaičiuoklė kasdieniam pasiūlymų vertinimui (kriterijai, svoriai, VPT gairių formulės, balai; VPĮ 55 str. / PĮ 64 str.); `kastu_naudos_analize.html` - kaštų ir naudos analizė (didelės vertės pirkimai >= 20 mln. EUR). Portalo kortelė veda į `index.html` - dalių pasirinkimo puslapį (dvi kortelės su „kam / kada / rezultatas“ ir trys klausimai); abi dalys turi tarpusavio jungiklį ir nuorodą atgal |
 | `PP-graphs` | Pirkimų grafikų generatorius ir trukmių skaičiuoklė |
@@ -86,8 +86,8 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | `shared/gprocure-info-panel.js` | Informacinė skiltis modulio viršuje (`GProcureInfoPanel.mount({ target, moduleId, getLang, content })`): trumpas sutraukiamas blokas ir „Plačiau“ langas. VIENAS failas visiems moduliams - jungia PP-tiekejams, PP-carbon ir PP-esg. Iki 2026-09-23 buvo trys kopijos (`PP-esg/components/` ir dvi įterptos į puslapius), tad taisymai pasiekdavo tik vieną vietą: knygutės ikona buvo nematoma lietuviškai, „Learn more“ lūždavo, o telefone PP-carbon ir PP-esg tekstas susispausdavo į stulpelį. Kopijų nedaryk ir savų `.gpi-*` stilių moduliuose nerašyk (testai tikrina). Būsena - localStorage raktas `gprocure.infoPanel.<moduleId>`, jo nekeisk |
 | `shared/backup.js` | Atsarginės duomenų kopijos branduolys (`GP_BACKUP`): saugyklos surinkimas, failo tikrinimas, perrašomų raktų skaičius, atkūrimas ir raktų vardai žmogui. Saugykla PADUODAMA iš išorės, todėl testai naudoja netikrą saugyklą ir tikrų duomenų neliečia. Sąsaja - `atsargine-kopija.html` šaknyje. Pridėjus modulį su nauju localStorage raktu, įrašyk jį į `ZENKLAI` sąrašą (be to kopija veiks, bet raktas bus rodomas kaip „kiti duomenys") |
 | `shared/docx-stiliai.js` | Word dokumentų `styles.xml` VISIEMS moduliams (`GP_DOCX_STILIAI.xml({font, size, stiliai})`). Paduodamas per `externalStyles`. Jame yra `Normal` su `w:default="1"` - BE JO Pages ignoruoja tiesioginį pastraipų formatavimą (`w:jc`, `w:spacing`, `w:ind`), o docx.js tokio stiliaus per API išrašyti negali. Patikrinta 2026-09-22 aštuoniais bandomaisiais dokumentais ir tikrais modulių dokumentais Pages programoje |
-| `shared/teises-nuorodos.js` | Teisės aktų nuorodos VISIEMS moduliams (`GP_TEISE`): PĮ, VPĮ, VPT Metodika, žaliųjų pirkimų tvarkos aprašas - kiekviena perskaityta e-tar (2026-09-23). `GP_TEISE.cit(raktas, "PI"|"VPI", kalba)` -> „PĮ 59 str. 1 d. (taikant VPĮ 47 str. 1 d.)“: PĮ subjektams VPĮ norma nurodoma per PĮ 59 str. 1 d. Sąvokai be prašomo režimo meta klaidą - taip PĮ ir VPĮ nesusimaišo. Statiniam tekstui - `<span data-teise="raktas">` ir `GP_TEISE.uzpildyk()`. Jungia PP-qual, PP-ts, PP-negotiation, PP-salygos. Straipsnio numerį taisyk TIK čia; sargas `shared/testai.html` neleidžia šiuose moduliuose ir CLAUDE.md atsirasti numeriui, kurio registre nėra |
-| `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`): `portal-link.js` (11), `backup.js` (9), `docx-stiliai.js` (8), `gprocure-info-panel.js` (6) ir `teises-nuorodos.js` su sargu moduliuose (12) - iš viso 46. Skydelio išdėstymas matuojamas 1280 ir 375 px pločio rėmeliuose |
+| `shared/teises-nuorodos.js` | Teisės aktų nuorodos VISIEMS moduliams (`GP_TEISE`): PĮ, VPĮ, VPT Metodika, žaliųjų pirkimų tvarkos aprašas - kiekviena perskaityta e-tar (2026-09-23). `GP_TEISE.cit(raktas, "PI"|"VPI", kalba)` -> „PĮ 59 str. 1 d. (taikant VPĮ 47 str. 1 d.)“: PĮ subjektams VPĮ norma nurodoma per PĮ 59 str. 1 d. Sąvokai be prašomo režimo meta klaidą - taip PĮ ir VPĮ nesusimaišo. Statiniam tekstui - `<span data-teise="raktas">` ir `GP_TEISE.uzpildyk()`. Metodikos SKAIČIAI (0,7, 2 kartai vertės, 12 mėn., santykių intervalai) - `GP_TEISE.normos`, vertės kategorija - `GP_TEISE.vertesKategorija(vertė, ribos)` su ribomis iš `thresholds.js`. Jungia PP-qual, PP-ts, PP-negotiation, PP-salygos. Straipsnio numerį taisyk TIK čia; sargas `shared/testai.html` neleidžia šiuose moduliuose ir CLAUDE.md atsirasti numeriui, kurio registre nėra |
+| `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`): `portal-link.js` (11), `backup.js` (9), `docx-stiliai.js` (8), `gprocure-info-panel.js` (6) ir `teises-nuorodos.js` su sargu moduliuose (15) - iš viso 49. Skydelio išdėstymas matuojamas 1280 ir 375 px pločio rėmeliuose |
 | `shared/img/epso-g-logo.svg` | EPSO-G prekės ženklas puslapių antraštėms ir poraštėms. Naudok per `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`, dydį nustatyk puslapio CSS. Iki 2026-09-05 tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose. Spalva faile įrašyta tiesiogiai - išorinis SVG puslapio CSS kintamųjų nemato |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
 
@@ -253,10 +253,16 @@ PĮ (LITGRID, Amber Grid, Energy cells):
 
 Kiti šaltiniai:
 - **VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodika** (2017-06-29 Nr. 1S-105; 2026-06-11
-  Nr. 1S-82 redakcija, galioja nuo 2026-07-01): 8.6 p. - kiekvienas ūkio subjektas (išskyrus
-  kvazisubtiekėjus, 8.3 p.) pildo ATSKIRĄ EBVPD; 8.8 p. - atitikties VPĮ 47 str. 9 d. deklaracija;
-  12 p. - apyvarta; 16 p. - patirtis paprastai iki 0,7 numatomos vertės; 16.1-16.3 p. - darbai 5 m.,
-  prekės ir paslaugos 3 m., savo jėgomis. Koeficientų 0,3 ir 0,5 Metodikoje NĖRA - tai PP-qual
+  Nr. 1S-82 redakcija, galioja nuo 2026-07-01): 2 p. - sąvokos (maža / vidutinė / didelė vertė pagal
+  mažos vertės ir tarptautinio pirkimo ribas, ilgalaikė - ilgesnė kaip 12 mėn., kvazisubtiekėjas -
+  SPECIALISTAS, kurį tiekėjas ketina įdarbinti, 2.4 p.); 8.3 p. - priemones (patalpas, įrangą) tik
+  suteikiantys tretieji asmenys EBVPD neteikia; 8.6 p. - kiekvienas ūkio subjektas, išskyrus
+  kvazisubtiekėjus, pildo ATSKIRĄ EBVPD; 8.8 p. - atitikties VPĮ 47 str. 9 d. deklaracija; 12 p. - pajamos
+  iki 2 kartų vertės, ilgalaikei - pagal didžiausią metinę vertę (12.1 p.); 13 p. - finansiniai
+  santykiai didelės vertės sutartims; 14 p. - draudimas kvalifikacijai tik kai privalomas pagal teisės
+  aktus; 16 p. - patirtis paprastai iki 0,7 numatomos vertės; 16.1-16.3 p. - darbai 5 m., prekės ir
+  paslaugos 3 m., savo jėgomis; 21 p. - kompetencijos, ne specialistų skaičius. Šių punktų skaičiai
+  gyvena registre (`GP_TEISE.normos`). Koeficientų 0,3 ir 0,5 Metodikoje NĖRA - tai PP-qual
   rekomendacija, ir moduliuose ji taip ir vadinama
 - **Žaliųjų pirkimų tvarkos aprašas** - aplinkos ministro 2011-06-28 įsakymas Nr. D1-508 (taiko ir
   VPĮ, ir PĮ subjektai)
