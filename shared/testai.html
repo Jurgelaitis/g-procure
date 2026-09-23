@@ -521,6 +521,28 @@ async function testaiTeise(){
     lygu([...d.children].map(e => e.textContent), ["VPĮ 17 str. 1 d.", "PĮ 29 str. 1 d.", "VPĮ 47 str. 1 d."], "tekstai");
   });
 
+  await testas("Metodikos skaičiai (normos): kiekvienas su šaltiniu registre ir nekeičiamas", async ()=>{
+    const N = GP_TEISE.normos, raktai = new Set(GP_TEISE.raktai());
+    Object.keys(N).forEach(k => tiesa(raktai.has(N[k].saltinis), k + ": šaltinio „" + N[k].saltinis + "“ registre nėra"));
+    lygu([N.patirtiesRiba.reiksme, N.pajamuKartai.reiksme, N.ilgalaikeNuoMen.reiksme, N.patirtiesMetaiDarbai.reiksme, N.patirtiesMetaiPrekesPaslaugos.reiksme],
+         [0.7, 2, 12, 5, 3], "0,7 / 2 kartai / 12 mėn. / 5 m. / 3 m.");
+    tiesa(Object.isFrozen(N) && Object.isFrozen(N.patirtiesRiba), "normos turi būti užšaldytos - modulis jų pakeisti negali");
+  });
+
+  await testas("Vertės kategorija ir trukmė pagal Metodikos 2 p. ribas (imtinai)", async ()=>{
+    const r = { maza: 70000, tarptautine: 432000 }, k = v => (GP_TEISE.vertesKategorija(v, r) || {}).kodas;
+    lygu([k(70000), k(70001), k(431999), k(432000)], ["maza", "vidutine", "vidutine", "didele"], "ribos");
+    lygu(GP_TEISE.vertesKategorija(0, r), null, "be vertės");
+    lygu(GP_TEISE.vertesKategorija(100000, null), null, "be ribų");
+    lygu([GP_TEISE.sutartiesTrukme(12).kodas, GP_TEISE.sutartiesTrukme(12.5).kodas, GP_TEISE.sutartiesTrukme(null)], ["trumpalaike", "ilgalaike", null], "12 mėn. riba");
+  });
+
+  await testas("Kvazisubtiekėjas - Metodikos 2.4 p. specialistas; priemones suteikiantys tretieji asmenys - 8.3 p.", async ()=>{
+    lygu(GP_TEISE.cit("met_kvazisubtiekejai"), "Metodikos 2.4 p.", "kvazisubtiekėjas");
+    tiesa(/specialistas/.test(GP_TEISE.apie("met_kvazisubtiekejai")), "kvazisubtiekėjas turi būti apibrėžtas kaip specialistas");
+    lygu(GP_TEISE.cit("met_treciuju_priemones"), "Metodikos 8.3 p.", "priemones suteikiantys");
+  });
+
   await testas("SARGAS: modulių failuose ir CLAUDE.md nėra straipsnio numerio, kurio registre nėra", async ()=>{
     const L = leidziamos(), blogi = [];
     for (const f of TEISE_FAILAI) {
@@ -589,14 +611,18 @@ async function testaiTeise(){
     const f = await modulioRemas("../PP-qual/PP-QUAL.html");
     const w = f.contentWindow;
     try {
-      w.eval("PPQ.procurement.value = 100000; PPQ.procurement.valueCat = '0.5';");
-      const tekstas = "Tiekėjas per paskutinius 3 metus turi būti įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 90 000 EUR be PVM. Patirtis turi būti įgyta tik Lietuvos rinkoje.";
-      const rasti = (kontekstas) => { w.eval("PPQ.settings.context = " + JSON.stringify(kontekstas)); return w.eval("rulesEngine(" + JSON.stringify({ text: tekstas, category: "C" }) + ")"); };
-      const pi = rasti("sektorinis"), R1 = pi.find(x => x.rule === "R1"), R4 = pi.find(x => x.rule === "R4");
+      w.eval("PPQ.procurement.value = 100000; PPQ.procurement.valueCat = '0.5'; PPQ.procurement.objectType = 'Prekės';");
+      const tekstas = s => "Tiekėjas per paskutinius 3 metus turi būti įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip " + s + " EUR be PVM. Patirtis turi būti įgyta tik Lietuvos rinkoje.";
+      const rasti = (kontekstas, s) => { w.eval("PPQ.settings.context = " + JSON.stringify(kontekstas)); return w.eval("rulesEngine(" + JSON.stringify({ text: tekstas(s), category: "C" }) + ")"); };
+      // 60 000 - virš modulio rekomendacijos (50 000), bet iki Metodikos ribos (70 000): tik pastaba
+      const pi = rasti("sektorinis", "60 000"), R1 = pi.find(x => x.rule === "R1"), R4 = pi.find(x => x.rule === "R4");
       tiesa(R1 && R4, "R1 ir R4 turi suveikti");
-      lygu(R1.ref, "Metodikos 16 p. (paprastai iki 0,7); koef. 0,5 - modulio rekomendacija", "R1 nuoroda");
+      lygu([R1.sev, R1.ref], ["low", "Metodikos 16 p. (riba 0,7); koef. 0,5 - modulio rekomendacija"], "R1 tarp rekomendacijos ir ribos");
+      // 90 000 - virš Metodikos ribos: aukšta rizika, nuoroda į Metodiką ir kvalifikacijos straipsnį
+      const R1h = rasti("sektorinis", "90 000").find(x => x.rule === "R1");
+      lygu([R1h.sev, R1h.ref], ["high", "Metodikos 16 p.; PĮ 59 str. 1 d. (taikant VPĮ 47 str. 1 d.)"], "R1 virš ribos");
       lygu(R4.ref, "PĮ 29 str. 1 d.; Direktyva 2014/25/ES", "R4 nuoroda PĮ");
-      lygu(rasti("bendrasis").find(x => x.rule === "R4").ref, "VPĮ 17 str. 1 d.; Direktyva 2014/24/ES", "R4 nuoroda VPĮ");
+      lygu(rasti("bendrasis", "60 000").find(x => x.rule === "R4").ref, "VPĮ 17 str. 1 d.; Direktyva 2014/24/ES", "R4 nuoroda VPĮ");
     } finally { f.remove(); }
   });
 
