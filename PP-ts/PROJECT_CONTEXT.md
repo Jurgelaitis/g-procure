@@ -148,10 +148,10 @@ Plus auto-retry API kvietimo jei parsavimas nepavyksta (2 papildomi bandymai su 
 - **Atskiras PP-QUAL modulis** (kvalifikaciniai reikalavimai)
   - 3 įėjimo taškai: nuo pradžios / iš TS dokumento / esamų reikalavimų patikra
   - 5 reikalavimų kategorijos
-  - Proporcingumo skaičiuoklė (VPT Metodikos koeficientai 0.3/0.5/0.7)
+  - Proporcingumo skaičiuoklė (Metodikos 16 p. riba - 0,7; 0,5 ir 0,3 - G-Procure rekomendacija, ne teisės norma)
   - Atskira atitikties lentelė (Priedas Nr. 2)
 
-- **Atskiras PP-MARKET-CONSULT modulis** (preliminari rinkos konsultacija pagal PĮ 26 str.)
+- **Atskiras PP-MARKET-CONSULT modulis** (preliminari rinkos konsultacija pagal PĮ 39 str. 1 d. 1 p.)
   - Auto-generuoja: kvietimą tiekėjams + klausimyną + atsakymų vertinimo lentelę
   - Atsakymų konsolidacija
   - Eksportas į TS pirminę informaciją
@@ -456,7 +456,7 @@ naudok `M("App...")` = `ramas.contentWindow.eval(...)`. Funkcijos (`function ...
 
 **TESTAI IŠ KARTO RADO TIKRĄ KLAIDĄ.** Prekės ženklo taisyklė ieškojo kamieno `lygiaverti`,
 o lietuviškai `t` virsta `č`: **lygiaverTis -> lygiaverČiai**. Todėl taisyklingai parašyta
-„Siemens arba lygiaverčiai" buvo žymima kaip PĮ 33 str. pažeidimas - klaidingas kaltinimas
+„Siemens arba lygiaverčiai" buvo žymima kaip PĮ 50 str. 5 d. pažeidimas (tada modulis rodė klaidingą straipsnį) - klaidingas kaltinimas
 būtent toje taisyklėje, kuriai tikslumas svarbiausias. Ištaisyta į `lygiaver[tč]`. Testas
 tikrina BE žodžio „arba" - kitaip suveiktų atskira taisyklės šaka ir kamieno klaida liktų
 nepastebėta (tai paaiškėjo per mutacijos patikrą).
