@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PP-carbon regresijos testai</title>
+<link rel="stylesheet" href="../shared/epso-g.css">
+<style>
+  body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
+       background:var(--color-graphite-5);font-size:14px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--color-graphite-50);margin-bottom:18px;max-width:82ch}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--color-graphite-15);
+             border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .n{font-size:24px;font-weight:800}
+  .ok{color:var(--color-emerald-120)} .blogai{color:var(--color-error)}
+  .grupe{background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .grupe h2{font-size:14px;margin:0;padding:11px 16px;background:var(--color-green-5);
+            color:var(--color-emerald-120);border-bottom:1px solid var(--color-graphite-15)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #F0F3F5;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:800;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .t.geras .zyma{background:var(--color-green-5);color:var(--color-emerald-120)}
+  .t.krito .zyma{background:var(--color-error-5);color:#7F1722}
+  .t.krito{background:#FFFAFA}
+  .det{color:#7F1722;font-size:12px;margin-top:3px;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+  iframe{position:absolute;left:-9999px;top:0;height:900px;border:0}
+</style>
+</head>
+<body>
+
+<h1>PP-carbon regresijos testai</h1>
+<div class="sub">Pirmas PP-carbon rinkinys (2026-09-23): puslapių išdėstymas siaurame ekrane. Iki tol telefone
+modulio pavadinimas antraštėje buvo nelūžtantis, todėl puslapis slinko į šoną iki 574-625 px, planšetėje
+pavadinimas lįsdavo po mygtukais, o EPD įrankyje 320 px ekrane už krašto išlįsdavo patikros langelis.
+Modulis kraunamas rėmelyje, o rėmelio plotis keičiamas - media užklausos jame veikia tuo pločiu.
+Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
+
+<div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
+  <span class="n blogai" id="n-blogai">0</span> krito
+  <span id="busena" style="color:var(--color-graphite-50)">Vykdoma...</span></div>
+
+<div id="rezultatai"></div>
+
+<script>
+const R = { ok: 0, blogai: 0 };
+function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
+function grupe(pav){
+  const d = document.createElement("div");
+  d.className = "grupe"; d.innerHTML = "<h2>" + ekranuok(pav) + "</h2>";
+  document.getElementById("rezultatai").appendChild(d);
+  return d;
+}
+let dabartine = null;
+async function testas(pav, fn){
+  const eil = document.createElement("div");
+  try { await fn(); eil.className = "t geras"; eil.innerHTML = '<span class="zyma">GERAI</span><span>' + ekranuok(pav) + '</span>'; R.ok++; }
+  catch (e) { eil.className = "t krito";
+    eil.innerHTML = '<span class="zyma">KRITO</span><span>' + ekranuok(pav) + '<div class="det">' + ekranuok((e && e.message) || e) + '</div></span>'; R.blogai++; }
+  dabartine.appendChild(eil);
+  document.getElementById("n-ok").textContent = R.ok;
+  document.getElementById("n-blogai").textContent = R.blogai;
+}
+function tiesa(salyga, ka){ if(!salyga) throw new Error(ka || "sąlyga netenkinama"); }
+function lygu(gauta, tiketasi, ka){
+  if(JSON.stringify(gauta) !== JSON.stringify(tiketasi))
+    throw new Error((ka || "reikšmė") + "\n  tikėtasi: " + JSON.stringify(tiketasi) + "\n  gauta:    " + JSON.stringify(gauta));
+}
+const laukti = ms => new Promise(r => setTimeout(r, ms));
+
+/* Puslapis rėmelyje. Kalba - per ?lang= (į naršyklės atmintį neįrašoma, tad naudotojo
+   pasirinkimas nepakinta). */
+function puslapis(kelias, plotis){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.style.width = plotis + "px";
+    f.addEventListener("load", async () => {
+      const d = f.contentDocument;
+      if (d.fonts) await d.fonts.ready;
+      await laukti(150);
+      res({ f: f, d: d });
+    }, { once: true });
+    f.src = kelias + (kelias.indexOf("?") === -1 ? "?" : "&") + "b=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+async function plotis(f, px){
+  f.style.width = px + "px";
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await laukti(40);
+}
+const rect = e => e.getBoundingClientRect();
+const slenka = d => d.documentElement.scrollWidth > d.documentElement.clientWidth;
+const PLOCIAI = [320, 360, 375, 390, 414, 768, 1024, 1280];
+
+async function testaiAntraste(){
+  dabartine = grupe("Antraštė ir puslapio plotis (index.html)");
+  const rem = {};
+  for (const lang of ["lt", "en"]) rem[lang] = await puslapis("index.html?lang=" + lang, 1280);
+
+  await testas("Puslapis neslenka į šoną nė vienu pločiu (320-1280 px, LT ir EN)", async ()=>{
+    const blogi = [];
+    for (const lang of ["lt", "en"]) for (const px of PLOCIAI) {
+      const { f, d } = rem[lang]; await plotis(f, px);
+      if (slenka(d)) blogi.push(lang + " " + px + " px: " + d.documentElement.scrollWidth + " px pločio");
+    }
+    tiesa(!blogi.length, "slenka į šoną (buvo 574-625 px): " + blogi.join("; "));
+  });
+
+  await testas("Iki 900 px pavadinimas matomas visas: nenukerpamas ir nelenda po mygtukais", async ()=>{
+    for (const lang of ["lt", "en"]) for (const px of [320, 375, 390, 414, 768]) {
+      const { f, d } = rem[lang]; await plotis(f, px);
+      const b = d.querySelector(".brand-module"), hr = d.querySelector(".header-right");
+      tiesa(b.scrollWidth <= b.clientWidth + 1, lang + " " + px + " px: pavadinimas platesnis už savo vietą (" + b.scrollWidth + " > " + b.clientWidth + ")");
+      tiesa(rect(hr).top >= rect(d.querySelector(".brand")).bottom - 1, lang + " " + px + " px: mygtukai turi būti po pavadinimu");
+    }
+  });
+
+  await testas("Kompiuteryje (1280 px) antraštė lieka vienoje eilutėje, kaip anksčiau", async ()=>{
+    for (const lang of ["lt", "en"]) {
+      const { f, d } = rem[lang]; await plotis(f, 1280);
+      const hr = rect(d.querySelector(".header-right")), br = rect(d.querySelector(".brand"));
+      tiesa(hr.top < br.bottom && hr.left > br.left, lang + ": mygtukai turi būti dešinėje, toje pačioje eilutėje");
+      tiesa(rect(d.querySelector(".app-header")).height < 100, lang + ": antraštė per aukšta");
+    }
+  });
+
+  await testas("Iki 380 px mygtukai - vien ikonos, bet jų pavadinimai lieka ekrano skaitytuvams; nuo 390 px - su tekstu", async ()=>{
+    for (const lang of ["lt", "en"]) {
+      const { f, d } = rem[lang];
+      await plotis(f, 375);
+      d.querySelectorAll(".header-right .btn-header span").forEach(s => {
+        tiesa(rect(s).width <= 1, lang + " 375 px: „" + s.textContent.trim() + "“ turi būti paslėptas akims");
+        tiesa(s.textContent.trim().length > 2 && getComputedStyle(s).display !== "none", lang + " 375 px: pavadinimas turi likti DOM ir būti skaitomas (ne display:none)");
+      });
+      await plotis(f, 390);
+      d.querySelectorAll(".header-right .btn-header span").forEach(s => tiesa(rect(s).width > 20, lang + " 390 px: „" + s.textContent.trim() + "“ turi matytis"));
+    }
+  });
+
+  await testas("901-1280 px (viena eilutė) pavadinimas nelenda po mygtukais - netelpantis nukerpamas daugtaškiu", async ()=>{
+    for (const lang of ["lt", "en"]) for (const px of [901, 1024, 1280]) {
+      const { f, d } = rem[lang]; await plotis(f, px);
+      const b = d.querySelector(".brand-module"), cs = getComputedStyle(b), hr = rect(d.querySelector(".header-right"));
+      tiesa(rect(b).right <= hr.left + 1, lang + " " + px + " px: pavadinimo dėžutė užeina ant mygtukų");
+      tiesa(b.scrollWidth <= b.clientWidth + 1 || (cs.overflowX === "hidden" && cs.textOverflow === "ellipsis"),
+        lang + " " + px + " px: tekstas išlenda iš dėžutės (" + b.scrollWidth + " > " + b.clientWidth + ") be daugtaškio");
+    }
+  });
+
+  await testas("Mygtukų tekstas nelūžta į dvi eilutes (901 ir 1024 px, „Supplier EPD“)", async ()=>{
+    for (const px of [901, 1024]) {
+      const { f, d } = rem.en; await plotis(f, px);
+      d.querySelectorAll(".header-right .btn-header").forEach(b => tiesa(rect(b).height <= 40, px + " px: „" + b.textContent.trim() + "“ " + Math.round(rect(b).height) + " px aukščio"));
+    }
+  });
+
+  for (const lang in rem) rem[lang].f.remove();
+}
+
+async function testaiEpd(){
+  dabartine = grupe("EPD įrankis (epd.html)");
+
+  await testas("320 px ekrane patikros langelis kompaktiškas, puslapis neslenka į šoną", async ()=>{
+    const { f, d } = await puslapis("epd.html?lang=lt", 320);
+    lygu(d.querySelector(".cf-turnstile").getAttribute("data-size"), "compact", "Turnstile dydis");
+    for (let i = 0; i < 20 && d.querySelector(".cf-turnstile").children.length === 0; i++) await laukti(250);   // langelis piešiamas iš tinklo
+    tiesa(!slenka(d), "slenka į šoną (" + d.documentElement.scrollWidth + " > " + d.documentElement.clientWidth + ")");
+    f.remove();
+  });
+
+  await testas("Plačiame ekrane langelis įprasto dydžio (dydis nenustatomas)", async ()=>{
+    const { f, d } = await puslapis("epd.html?lang=lt", 1280);
+    lygu(d.querySelector(".cf-turnstile").getAttribute("data-size"), null, "Turnstile dydis");
+    f.remove();
+  });
+}
+
+(async function(){
+  await testaiAntraste();
+  await testaiEpd();
+  document.getElementById("busena").textContent =
+    R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
+})();
+</script>
+</body>
+</html>
