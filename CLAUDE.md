@@ -86,7 +86,8 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | `shared/gprocure-info-panel.js` | Informacinė skiltis modulio viršuje (`GProcureInfoPanel.mount({ target, moduleId, getLang, content })`): trumpas sutraukiamas blokas ir „Plačiau“ langas. VIENAS failas visiems moduliams - jungia PP-tiekejams, PP-carbon ir PP-esg. Iki 2026-09-23 buvo trys kopijos (`PP-esg/components/` ir dvi įterptos į puslapius), tad taisymai pasiekdavo tik vieną vietą: knygutės ikona buvo nematoma lietuviškai, „Learn more“ lūždavo, o telefone PP-carbon ir PP-esg tekstas susispausdavo į stulpelį. Kopijų nedaryk ir savų `.gpi-*` stilių moduliuose nerašyk (testai tikrina). Būsena - localStorage raktas `gprocure.infoPanel.<moduleId>`, jo nekeisk |
 | `shared/backup.js` | Atsarginės duomenų kopijos branduolys (`GP_BACKUP`): saugyklos surinkimas, failo tikrinimas, perrašomų raktų skaičius, atkūrimas ir raktų vardai žmogui. Saugykla PADUODAMA iš išorės, todėl testai naudoja netikrą saugyklą ir tikrų duomenų neliečia. Sąsaja - `atsargine-kopija.html` šaknyje. Pridėjus modulį su nauju localStorage raktu, įrašyk jį į `ZENKLAI` sąrašą (be to kopija veiks, bet raktas bus rodomas kaip „kiti duomenys") |
 | `shared/docx-stiliai.js` | Word dokumentų `styles.xml` VISIEMS moduliams (`GP_DOCX_STILIAI.xml({font, size, stiliai})`). Paduodamas per `externalStyles`. Jame yra `Normal` su `w:default="1"` - BE JO Pages ignoruoja tiesioginį pastraipų formatavimą (`w:jc`, `w:spacing`, `w:ind`), o docx.js tokio stiliaus per API išrašyti negali. Patikrinta 2026-09-22 aštuoniais bandomaisiais dokumentais ir tikrais modulių dokumentais Pages programoje |
-| `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`): `portal-link.js` (11), `backup.js` (9), `docx-stiliai.js` (8) ir `gprocure-info-panel.js` (6) - iš viso 34. Skydelio išdėstymas matuojamas 1280 ir 375 px pločio rėmeliuose |
+| `shared/teises-nuorodos.js` | Teisės aktų nuorodos VISIEMS moduliams (`GP_TEISE`): PĮ, VPĮ, VPT Metodika, žaliųjų pirkimų tvarkos aprašas - kiekviena perskaityta e-tar (2026-09-23). `GP_TEISE.cit(raktas, "PI"|"VPI", kalba)` -> „PĮ 59 str. 1 d. (taikant VPĮ 47 str. 1 d.)“: PĮ subjektams VPĮ norma nurodoma per PĮ 59 str. 1 d. Sąvokai be prašomo režimo meta klaidą - taip PĮ ir VPĮ nesusimaišo. Statiniam tekstui - `<span data-teise="raktas">` ir `GP_TEISE.uzpildyk()`. Jungia PP-qual, PP-ts, PP-negotiation, PP-salygos. Straipsnio numerį taisyk TIK čia; sargas `shared/testai.html` neleidžia šiuose moduliuose ir CLAUDE.md atsirasti numeriui, kurio registre nėra |
+| `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`): `portal-link.js` (11), `backup.js` (9), `docx-stiliai.js` (8), `gprocure-info-panel.js` (6) ir `teises-nuorodos.js` su sargu moduliuose (12) - iš viso 46. Skydelio išdėstymas matuojamas 1280 ir 375 px pločio rėmeliuose |
 | `shared/img/epso-g-logo.svg` | EPSO-G prekės ženklas puslapių antraštėms ir poraštėms. Naudok per `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`, dydį nustatyk puslapio CSS. Iki 2026-09-05 tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose. Spalva faile įrašyta tiesiogiai - išorinis SVG puslapio CSS kintamųjų nemato |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
 
@@ -218,27 +219,56 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 
 ## 9. Teisiniai šaltiniai (kontekstas moduliams)
 
-Naudok kaip kontekstą, BET tikrink su aktualiais šaltiniais - įstatymai keičiasi.
-Jei nežinai dabartinės normos, pažymėk ir paklausk, neišgalvok.
+Straipsnių numeriai gyvena `shared/teises-nuorodos.js` (`GP_TEISE`): kiekviena nuoroda ten
+perskaityta e-tar aktualioje redakcijoje (tikrinta 2026-09-23), PĮ ir VPĮ atskirai. Modulis numerio
+pats nerašo - kviečia `GP_TEISE.cit("kvalifikacija", "PI")`. Naują nuorodą dėk į registrą tik
+perskaitęs tą straipsnio dalį e-tar (Lietuvos viešųjų duomenų jungtis, `get_teises_akto_istrauka`).
+Jei dabartinės normos nežinai - pažymėk ir paklausk, neišgalvok.
 
-- **PĮ 47 str.** - kvalifikacijos proporcingumas (tik su pirkimo objektu susiję reikalavimai)
-- **PĮ 47 str. 7 d.** - VPT kvalifikacijos nustatymo metodika
-- **PĮ 30 str.** - skaidrumas, lygiateisiškumas, nediskriminavimas
-- **PĮ 28 str.** - neskaidymo į dalis pagrindimas
-- **PĮ 66 str.** - neįprastai mažos kainos pagrindimas
-- **PĮ 81 str.** - pagrindimas dėl nepirkimo per CPO
-- **PĮ 97 str.** - pirkimų organizavimas ir vidaus kontrolė
-- **PSĮ 103 str.** - audito sekos saugojimas (min. 4 metai)
-- **VPT metodika** 2017-06-29 Nr. 1S-105, 21.1.4 p. - kvalifikacijos koeficientai (0,3 / 0,5 / 0,7)
+KODĖL TAIP GRIEŽTAI. Iki 2026-09-23 šiame sąraše buvo klaidingi PĮ numeriai (kvalifikacijai,
+principams, skaidymui į dalis, CPO ir vidaus kontrolei - straipsniai, kurie reguliuoja visai ką
+kita) ir neegzistuojantis Metodikos punktas su koeficientais. Iš čia jie pateko į PP-qual, PP-ts,
+PP-negotiation ir PP-salygos, o per juos - į AI užklausas ir Word dokumentus. Todėl žemiau - tik
+santrauka žmogui; tiesos šaltinis yra registras, o `shared/testai.html` sargas neleidžia šiame faile
+ir prijungtuose moduliuose atsirasti numeriui, kurio registre nėra.
+
+PĮ (LITGRID, Amber Grid, Energy cells):
+- **PĮ 29 str. 1 d.** - lygiateisiškumo, nediskriminavimo, abipusio pripažinimo, proporcingumo,
+  skaidrumo principai (EPSO-G: **VPĮ 17 str. 1 d.**); **PĮ 29 str. 3 d.** - negalima dirbtinai
+  mažinti konkurencijos ar vengti įstatymo tvarkos
+- **PĮ 59 str. 1 d.** - pašalinimo pagrindai ir kvalifikacija nustatomi mutatis mutandis taikant
+  VPĮ 46, 47, 50 ir 51 straipsnius. Todėl LITGRID kvalifikacijos proporcingumas rašomas
+  **PĮ 59 str. 1 d. (taikant VPĮ 47 str. 1 d.)**, Metodikos taikymas - per **VPĮ 47 str. 7 d.**,
+  apyvartos riba (iki 2 kartų vertės) - **VPĮ 47 str. 3 d. 1 p.**, reikalavimai kiekvienai daliai - **VPĮ 47 str. 4 d.**
+- **PĮ 40 str.** - pirkimo objekto skaidymas į dalis; **PĮ 13 str.** - numatomos vertės skaičiavimas
+- **PĮ 48 str. 4 d.** - pirkimo dokumentai tikslūs, aiškūs, be dviprasmybių
+- **PĮ 50 str.** - techninė specifikacija: 3 d. - konkurencija ir nediskriminavimas; 4 d. 2 p. -
+  standartas su „arba lygiavertis“; 5 d. - modelis, prekės ženklas ar kilmė tik išimtimi, su „arba lygiavertis“
+- **PĮ 64 str.** - pasiūlymų vertinimas (EPSO-G: **VPĮ 55 str.**); **PĮ 66 str.** - neįprastai maža
+  kaina (EPSO-G: **VPĮ 57 str.**)
+- **PĮ 90 str. 2 d. 1 p.** ir **PĮ 48 str. 2 d. 34 p.** - sprendimo nepirkti per CPO katalogą
+  motyvai pirkimo dokumentuose
+- **PĮ 94 str. 8 d.** - atidėjimo terminas; **PĮ 97 str.** - sutarties keitimas (peržiūros sąlygos - 1 d. 1 p.)
+- **PĮ 103 str. 3 d.** - pirkimų vidaus kontrolė; **PĮ 103 str. 6 d.** - dokumentų saugojimas (min. 4 metai)
+
+Kiti šaltiniai:
+- **VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodika** (2017-06-29 Nr. 1S-105; 2026-06-11
+  Nr. 1S-82 redakcija, galioja nuo 2026-07-01): 8.6 p. - kiekvienas ūkio subjektas (išskyrus
+  kvazisubtiekėjus, 8.3 p.) pildo ATSKIRĄ EBVPD; 8.8 p. - atitikties VPĮ 47 str. 9 d. deklaracija;
+  12 p. - apyvarta; 16 p. - patirtis paprastai iki 0,7 numatomos vertės; 16.1-16.3 p. - darbai 5 m.,
+  prekės ir paslaugos 3 m., savo jėgomis. Koeficientų 0,3 ir 0,5 Metodikoje NĖRA - tai PP-qual
+  rekomendacija, ir moduliuose ji taip ir vadinama
+- **Žaliųjų pirkimų tvarkos aprašas** - aplinkos ministro 2011-06-28 įsakymas Nr. D1-508 (taiko ir
+  VPĮ, ir PĮ subjektai)
 - **VPT IT gairės** 2023-01-18 - specialistų reikalavimai
-- **LAT** 3K-3-126/2010, 3K-3-222/2008 - proporcingumo praktika
+- **LAT** 3K-3-126/2010, 3K-3-222/2008 - proporcingumo praktika (2026-09-23 e-tar patikra bylų neapėmė)
 
 ---
 
 ## 10. Ko NIEKADA nedaryti
 
-- NIEKADA nehardcodink VPT ribų, straipsnių numerių, pirkimo būdų, koeficientų ar užklausos
-  kūno ribos į kiekvieną modulį - jie gyvena `shared/`, kad keistum vieną kartą.
+- NIEKADA nehardcodink VPT ribų, straipsnių numerių (`shared/teises-nuorodos.js`), pirkimo būdų,
+  koeficientų ar užklausos kūno ribos į kiekvieną modulį - jie gyvena `shared/`, kad keistum vieną kartą.
 - NIEKADA neapeik serverio ribos kliento gudrybėmis (suspaudimu, dokumento skaidymu į dalis).
   Toks apėjimas jau buvo `PP-salygos` ir kainavo AI tikslumą bei 3 kartus daugiau užklausų -
   pašalintas 2026-07-17. Riba per maža - kelk ją serveryje, ne slėpk modulyje.
