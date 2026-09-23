@@ -39,7 +39,7 @@ Bendrieji klausimai eina be AI: `zinios.js` žinių bazė (šaltinių registras 
 ## Frontend
 
 - Be build žingsnio; `index.html` + 5 `.js` sluoksniai (kiekvienas - IIFE su `window.GP_*`), CSS pagal `shared/epso-g.css` žetonus ir `docs/EPSO-G_HTML_stiliaus_gaires.md`.
-- Bibliotekos iš CDN (jau naudojamos repo): pdf.js 3.11.174, mammoth 1.8.0, xlsx 0.20.3 (cdn.sheetjs.com), jszip 3.10.1. Informacinis skydelis - `../PP-esg/components/gprocure-info-panel.js` (vienas failas, ne inline kopija).
+- Bibliotekos iš CDN (jau naudojamos repo): pdf.js 3.11.174, mammoth 1.8.0, xlsx 0.20.3 (cdn.sheetjs.com), jszip 3.10.1. Informacinis skydelis - bendras `../shared/gprocure-info-panel.js` (vienas failas visiems moduliams, ne įterpta kopija).
 - LT/EN per `data-i18n` žodyną (PP-carbon konvencija), `pptiekejams.lang` localStorage.
 - Trys darbo lango zonos: santrauka ir būsena, klausimas, dokumentai/šaltiniai; mobiliame vaizde stulpeliai suguldomi, šaltiniai lieka po atsakymu.
 - Prieinamumas: skip-link, fokusai, `aria-live` atsakymams, modalas su Esc, įkėlimo zona valdoma klaviatūra, be horizontalaus slinkimo (testas).
