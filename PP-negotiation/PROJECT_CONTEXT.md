@@ -111,7 +111,7 @@ Iki šio įrankio pasirengimas deryboms vyko fragmentiškai:
 - Automatiniai dėmesio punktai:
   - Didelis/mažas kainų išsibarstymas (CV > 30 ar < 5).
   - Pasiūlymai virš PV +10% (galimas pirkimo nutraukimas).
-  - Pasiūlymai žemiau PV -30% (nepagrįstai maža kaina, VPĮ 57 str. / PĮ 65 str.).
+  - Pasiūlymai žemiau PV -30% (nepagrįstai maža kaina, VPĮ 57 str. / PĮ 66 str.; rodoma tik taikomo įstatymo nuoroda iš shared/teises-nuorodos.js).
   - Statistinės išskirtys.
 
 ### 4.6. MEAT vertinimas
