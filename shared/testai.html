@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="epso-g.css">
 <script src="backup.js"></script>
 <script src="docx-stiliai.js"></script>
+<script src="teises-nuorodos.js"></script>
 <style>
   body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
        background:var(--color-graphite-5);font-size:14px;line-height:1.5}
@@ -399,11 +400,223 @@ async function testaiSkydelis(){
   });
 }
 
+/* ---------- Teisės nuorodos (teises-nuorodos.js) ----------
+   Iki 2026-09-23 moduliuose buvo klaidingų PĮ numerių (PĮ 47 str. kvalifikacijai, PĮ 30 str.
+   principams, PĮ 33 str. techninei specifikacijai...), o Metodikos 8.6 p. PP-qual laikė
+   panaikintu. Sargas skaito modulių failus ir neleidžia grįžti numeriui, kurio registre nėra. */
+const TEISE_FAILAI = [
+  "../PP-qual/PP-QUAL.html",
+  "../PP-ts/TS_Asistentas.html", "../PP-ts/PROJECT_CONTEXT.md",
+  "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-negotiation/PROJECT_CONTEXT.md",
+  "../PP-salygos/PP-SALYGOS.html", "../PP-salygos/variklis.js",
+  "../CLAUDE.md"
+];
+// Moduliai, kurie kviečia registrą, ir režimai, kuriais kviečia.
+const TEISE_MODULIAI = {
+  "../PP-qual/PP-QUAL.html": ["PI", "VPI"],
+  "../PP-ts/TS_Asistentas.html": ["PI"],
+  "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html": ["PI", "VPI"],
+  "../PP-salygos/PP-SALYGOS.html": ["PI"]
+};
+async function saltinis(kelias){
+  const r = await fetch(kelias + "?b=" + Date.now());
+  if (!r.ok) throw new Error(kelias + ": HTTP " + r.status);
+  return r.text();
+}
+// „PĮ 50 str. 4 d. 2 p.“, o komentaruose be diakritikų - „PI 59 str. 1 d.“
+const STR_RE = /\b(VPĮ|PĮ|PSĮ|VPI|PI|PSI)\s+(\d+)\s+str\.(?:\s+(\d+)\s+d\.)?(?:\s+(\d+)\s+p\.)?/g;
+function nuorodosTekste(t){
+  const out = []; let m;
+  STR_RE.lastIndex = 0;
+  while ((m = STR_RE.exec(t))) {
+    const a = /^V/.test(m[1]) ? "VPI" : "PI";
+    out.push({ raktas: [a, m[2], m[3], m[4]].filter(Boolean).join(" "), tekstas: m[0], eil: t.slice(0, m.index).split("\n").length });
+  }
+  return out;
+}
+// Leidžiama: registro nuoroda ir jos „tėvai“ (straipsnis, straipsnio dalis) - ne giliau.
+function leidziamos(){
+  const L = new Set();
+  GP_TEISE.visos().forEach(n => {
+    if (n.a !== "PI" && n.a !== "VPI") return;
+    L.add(n.a + " " + n.s);
+    if (n.d) L.add(n.a + " " + n.s + " " + n.d);
+    if (n.d && n.p) L.add(n.a + " " + n.s + " " + n.d + " " + n.p);
+  });
+  return L;
+}
+// Registro raktai, kuriuos modulis naudoja: teise('x'), GP_TEISE.cit('x'), data-teise="x",
+// GP_TEISE.sarasas(['x','y']) ir ['x','y'].map(k => ... teise(k) ...).
+function naudojamiRaktai(src){
+  const R = new Set(); let m;
+  const vienas = /(?:\bteise|GP_TEISE\.(?:cit|apie|url))\(\s*'([a-z_]+)'/g;
+  while ((m = vienas.exec(src))) R.add(m[1]);
+  const attr = /data-teise="([a-z_]+)"/g;
+  while ((m = attr.exec(src))) R.add(m[1]);
+  const masyvas = /\[((?:\s*'[a-z_]+'\s*,?)+)\]\s*(?:,\s*'(?:PI|VPI)'\s*\)|\s*\.map\(k => [^\n]{0,60}teise\(k)/g;
+  while ((m = masyvas.exec(src))) m[1].match(/'[a-z_]+'/g).forEach(k => R.add(k.slice(1, -1)));
+  return [...R];
+}
+function modulioRemas(kelias){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.addEventListener("load", () => res(f), { once: true });
+    f.src = kelias + "?b=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+
+async function testaiTeise(){
+  dabartine = grupe("Teisės nuorodos (teises-nuorodos.js) ir sargas moduliuose");
+
+  await testas("Formatas: PĮ ir VPĮ atskirai, LT ir EN, Metodikos punktai", async ()=>{
+    lygu(GP_TEISE.cit("principai", "PI"), "PĮ 29 str. 1 d.", "principai PĮ");
+    lygu(GP_TEISE.cit("principai", "VPI"), "VPĮ 17 str. 1 d.", "principai VPĮ");
+    lygu(GP_TEISE.cit("ts_standartai", "PI"), "PĮ 50 str. 4 d. 2 p.", "punktas");
+    lygu(GP_TEISE.cit("ts_standartai", "PI", "en"), "PĮ Art. 50(4)(2)", "EN");
+    lygu(GP_TEISE.cit("dalys", "PI"), "PĮ 40 str.", "tik straipsnis");
+    lygu(GP_TEISE.cit("met_ebvpd"), "Metodikos 8.6 p.", "Metodika be režimo");
+    lygu(GP_TEISE.cit("met_ebvpd", "VPI", "en"), "Methodology, point 8.6", "Metodika EN");
+  });
+
+  await testas("PĮ subjektams VPĮ 47 str. nurodomas per PĮ 59 str. 1 d. (pagrindas PĮ, turinys VPĮ)", async ()=>{
+    lygu(GP_TEISE.cit("kvalifikacija", "PI"), "PĮ 59 str. 1 d. (taikant VPĮ 47 str. 1 d.)", "PĮ");
+    lygu(GP_TEISE.cit("kvalifikacija", "PI", "lt", { trumpai: true }), "PĮ 59 str. 1 d.", "trumpai");
+    lygu(GP_TEISE.cit("kvalifikacija", "PI", "en"), "PĮ Art. 59(1) (applying VPĮ Art. 47(1))", "EN");
+    lygu(GP_TEISE.cit("kvalifikacija", "VPI"), "VPĮ 47 str. 1 d.", "VPĮ - be tarpininko");
+    lygu(GP_TEISE.cit("metodika", "PI"), "PĮ 59 str. 1 d. (taikant VPĮ 47 str. 7 d.)", "Metodikos pagrindas");
+  });
+
+  await testas("Nežinomas raktas ir trūkstamas režimas meta klaidą - PĮ ir VPĮ nemaišomi", async ()=>{
+    const meta = f => { try { f(); return false; } catch (e) { return /GP_TEISE/.test(e.message); } };
+    tiesa(meta(() => GP_TEISE.cit("tokio_nera", "PI")), "nežinomas raktas turi mesti klaidą, ne grąžinti „undefined“");
+    tiesa(meta(() => GP_TEISE.cit("ts_zenklas", "VPI")), "PĮ techninės specifikacijos straipsnis VPĮ režime turi mesti klaidą");
+    tiesa(meta(() => GP_TEISE.cit("principai")), "be režimo režiminė nuoroda turi mesti klaidą");
+    tiesa(meta(() => GP_TEISE.cit("principai", "XX")), "nežinomas režimas turi mesti klaidą");
+  });
+
+  await testas("Kiekviena nuoroda turi aprašymą, o jos aktas - e-tar adresą (aktuali redakcija)", async ()=>{
+    GP_TEISE.raktai().forEach(k => {
+      const r = ["PI", "VPI"].find(x => { try { GP_TEISE.cit(k, x); return true; } catch (e) { return false; } });
+      tiesa(r, k + ": neišsprendžiama nė vienu režimu");
+      tiesa(GP_TEISE.apie(k, r).length > 10, k + ": trūksta aprašymo");
+      tiesa(/^https:\/\/www\.e-tar\.lt\/portal\/lt\/legalAct\/[\w.]+\/asr$/.test(GP_TEISE.url(k, r)), k + ": ne e-tar aktualios redakcijos adresas");
+    });
+    tiesa(/^\d{4}-\d{2}-\d{2}$/.test(GP_TEISE.TIKRINTA), "trūksta patikros datos");
+  });
+
+  await testas("Senos klaidingos nuorodos registre neatsiranda (PĮ 47, 30, 33, 35, 28, 9, 55, 65, 81, 89, 97 str., Metodikos 21.1.4 p.)", async ()=>{
+    // Tik PĮ numeris - „VPĮ 47 str.“ (per PĮ 59 str. 1 d.) yra teisingas ir čia netikrinamas.
+    const ne = { kvalifikacija: 47, metodika: 47, principai: 30, ts_zenklas: 33, dokumentu_aiskumas: 35,
+                 dalys: 28, verte: 9, vertinimas: 55, nmk: 65, cpo: 81, sutarties_keitimas: 89, vidaus_kontrole: 97 };
+    Object.keys(ne).forEach(k => tiesa(!new RegExp("(^|[^V])PĮ " + ne[k] + " str").test(GP_TEISE.cit(k, "PI")),
+      k + ": vėl klaidinga nuoroda " + GP_TEISE.cit(k, "PI")));
+    tiesa(!GP_TEISE.visos().some(n => n.p === "21.1.4"), "Metodikos 21.1.4 p. nėra - koeficientų 0,3 / 0,5 Metodikoje nėra");
+  });
+
+  await testas("uzpildyk() užpildo <span data-teise> pagal režimą (data-rezimas ir data-trumpai viršesni)", async ()=>{
+    const d = document.createElement("div");
+    d.innerHTML = '<b data-teise="principai"></b><i data-teise="principai" data-rezimas="PI"></i><u data-teise="kvalifikacija" data-trumpai></u>';
+    lygu(GP_TEISE.uzpildyk(d, "VPI"), 3, "užpildytų skaičius");
+    lygu([...d.children].map(e => e.textContent), ["VPĮ 17 str. 1 d.", "PĮ 29 str. 1 d.", "VPĮ 47 str. 1 d."], "tekstai");
+  });
+
+  await testas("SARGAS: modulių failuose ir CLAUDE.md nėra straipsnio numerio, kurio registre nėra", async ()=>{
+    const L = leidziamos(), blogi = [];
+    for (const f of TEISE_FAILAI) {
+      nuorodosTekste(await saltinis(f)).forEach(n => { if (!L.has(n.raktas)) blogi.push(f + ":" + n.eil + " „" + n.tekstas + "“"); });
+    }
+    tiesa(!blogi.length, "nepatikrinti numeriai (patikrink e-tar ir įrašyk į registrą arba kviesk GP_TEISE):\n  " + blogi.join("\n  "));
+  });
+
+  await testas("SARGAS: nėra Metodikos 21.1.4 p., straipsnių sąrašų skaičiais ir teiginio, kad 8.6 p. panaikintas", async ()=>{
+    const blogi = [];
+    for (const f of TEISE_FAILAI) {
+      const t = await saltinis(f);
+      const eil = i => t.slice(0, i).split("\n").length;
+      [[/21\.1\.4/g, "Metodikos 21.1.4 p."],
+       [/\b\d+\s*,\s*\d+(?:\s*[,–-]\s*\d+)*\s+straipsn/g, "straipsnių sąrašas skaičiais"],
+       [/straipsn\w*\s*\((?:pvz\.,?\s*)?\d+\s*,/g, "straipsnių sąrašas skaičiais"],
+       [/[Pp]anaikint\w*\s+8\.6/g, "8.6 p. „panaikintas“"]].forEach(([re, ka]) => {
+        let m; while ((m = re.exec(t))) blogi.push(f + ":" + eil(m.index) + " " + ka + ": „" + m[0] + "“");
+      });
+      const met = /[Mm]etodik\w*\s+(\d+(?:\.\d+)*)\s*p\./g; let m;
+      const punktai = new Set(GP_TEISE.visos().filter(n => n.a === "MET").map(n => n.p));
+      while ((m = met.exec(t))) if (!punktai.has(m[1])) blogi.push(f + ":" + eil(m.index) + " Metodikos punktas ne iš registro: „" + m[0] + "“");
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("Moduliai prijungia registrą, o jų naudojami raktai jame yra ir išsprendžiami jų režimais", async ()=>{
+    const visi = new Set(GP_TEISE.raktai()), blogi = [];
+    for (const [f, rezimai] of Object.entries(TEISE_MODULIAI)) {
+      const src = await saltinis(f);
+      if (src.indexOf('<script src="../shared/teises-nuorodos.js"><\/script>') === -1) blogi.push(f + ": nejungia shared/teises-nuorodos.js");
+      const raktai = naudojamiRaktai(src);
+      if (!raktai.length) blogi.push(f + ": neranda nė vieno rakto - pasikeitė kvietimo forma?");
+      raktai.forEach(k => {
+        if (!visi.has(k)) { blogi.push(f + ": nežinomas raktas „" + k + "“"); return; }
+        if (!rezimai.some(r => { try { GP_TEISE.cit(k, r); return true; } catch (e) { return false; } }))
+          blogi.push(f + ": raktas „" + k + "“ neišsprendžiamas režimais " + rezimai.join("/"));
+      });
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("PP-qual: AI instrukcija abiem režimais - 8.6 p. atskiras EBVPD, VPĮ režime nėra PĮ straipsnių", async ()=>{
+    const f = await modulioRemas("../PP-qual/PP-QUAL.html");
+    const w = f.contentWindow, d = f.contentDocument;
+    try {
+      // Puslapis nuorodas užpildo pats, įkeliamas - dar prieš bet kokį nustatymų keitimą.
+      const pradzioje = [...d.querySelectorAll("[data-teise]")];
+      tiesa(pradzioje.length >= 6 && pradzioje.every(e => e.textContent.trim()), "įkėlus puslapį nuorodos neužpildytos (init nekviečia rodykTeisinesNuorodas?)");
+      for (const kontekstas of ["sektorinis", "bendrasis"]) {
+        w.eval("PPQ.settings.context = " + JSON.stringify(kontekstas) + "; rodykTeisinesNuorodas();");
+        const sp = w.eval("systemPrompt()");
+        tiesa(!/undefined|\bnull\b|NaN/.test(sp), kontekstas + ": instrukcijoje neužpildyta vieta");
+        tiesa(/Kiekvienas ūkio subjektas \(išskyrus kvazisubtiekėjus\) užpildo ATSKIRĄ EBVPD/.test(sp), kontekstas + ": nėra 8.6 p. taisyklės");
+        tiesa(!/Panaikintas 8\.6|Nereikalauk atskiro EBVPD/.test(sp), kontekstas + ": liko senas klaidingas 8.6 p. teiginys");
+        const pi = nuorodosTekste(sp).filter(n => /^PI /.test(n.raktas)).map(n => n.tekstas);
+        if (kontekstas === "bendrasis") tiesa(!pi.length, "VPĮ režime PĮ straipsniai: " + pi.join(", "));
+        else tiesa(pi.indexOf("PĮ 59 str. 1 d.") !== -1, "PĮ režime turi būti PĮ 59 str. 1 d.");
+        const tusti = [...d.querySelectorAll("[data-teise]")].filter(e => !e.textContent.trim());
+        tiesa(!tusti.length, kontekstas + ": puslapyje neužpildytos nuorodos (" + tusti.length + ")");
+      }
+    } finally { f.remove(); }
+  });
+
+  await testas("PP-qual: taisyklių nuorodos - Metodikos 16 p. riba ir modulio koeficientas atskirti, direktyva pagal režimą", async ()=>{
+    const f = await modulioRemas("../PP-qual/PP-QUAL.html");
+    const w = f.contentWindow;
+    try {
+      w.eval("PPQ.procurement.value = 100000; PPQ.procurement.valueCat = '0.5';");
+      const tekstas = "Tiekėjas per paskutinius 3 metus turi būti įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 90 000 EUR be PVM. Patirtis turi būti įgyta tik Lietuvos rinkoje.";
+      const rasti = (kontekstas) => { w.eval("PPQ.settings.context = " + JSON.stringify(kontekstas)); return w.eval("rulesEngine(" + JSON.stringify({ text: tekstas, category: "C" }) + ")"); };
+      const pi = rasti("sektorinis"), R1 = pi.find(x => x.rule === "R1"), R4 = pi.find(x => x.rule === "R4");
+      tiesa(R1 && R4, "R1 ir R4 turi suveikti");
+      lygu(R1.ref, "Metodikos 16 p. (paprastai iki 0,7); koef. 0,5 - modulio rekomendacija", "R1 nuoroda");
+      lygu(R4.ref, "PĮ 29 str. 1 d.; Direktyva 2014/25/ES", "R4 nuoroda PĮ");
+      lygu(rasti("bendrasis").find(x => x.rule === "R4").ref, "VPĮ 17 str. 1 d.; Direktyva 2014/24/ES", "R4 nuoroda VPĮ");
+    } finally { f.remove(); }
+  });
+
+  await testas("PP-salygos: CPO pastaba ir nacionalinio saugumo sąrašas - iš registro", async ()=>{
+    const f = await modulioRemas("../PP-salygos/PP-SALYGOS.html");
+    try {
+      const d = f.contentDocument, w = f.contentWindow;
+      lygu(d.querySelector('[data-teise="nacsaugumo_sarasas"]').textContent, "VPĮ 92 str. 13 d.", "BVPŽ sąrašas");
+      const p = w.eval("BLANKU_FORMULES.find(x => /centralizuotu pirkimu katalogu/.test(x.re.source)).pastaba");
+      tiesa(/^PĮ 90 str\. 2 d\. 1 p\.:/.test(p) && /PĮ 48 str\. 2 d\. 34 p\./.test(p), "CPO pastaba: " + p);
+    } finally { f.remove(); }
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
   await testaiDocxStiliai();
   await testaiSkydelis();
+  await testaiTeise();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
