@@ -29,8 +29,10 @@
   var GYLIS             = 2;                  // įdėtinių ZIP lygiai
   var CHUNK_ZODZIU      = 180;                // fragmento dydis žodžiais
   var CHUNK_PERDANGA    = 30;                 // persidengimas žodžiais
+  var CHUNK_SIMBOLIU    = 1400;               // fragmento riba simboliais = kiek fragmento mato AI (žr. fragmentai())
+  var PERDANGA_SIMBOLIU = 200;                // persidengimo riba simboliais
 
-  var LEIDZIAMI = { pdf:1, docx:1, xlsx:1, xlsm:1, xml:1, html:1, htm:1, txt:1, zip:1, csv:1, md:1 };
+  var LEIDZIAMI = { pdf:1, docx:1, odt:1, xlsx:1, xlsm:1, xml:1, html:1, htm:1, txt:1, zip:1, csv:1, md:1 };
   var DRAUDZIAMI = { exe:1, bat:1, cmd:1, com:1, scr:1, msi:1, js:1, vbs:1, ps1:1, sh:1, jar:1, dll:1, app:1 };
 
   // ---------------------------------------------------------------------------
@@ -39,13 +41,13 @@
   var PRAN = {
     lt: { skenuotas: "PDF be teksto sluoksnio (skenuotas) - reikalingas OCR; tekstas neišgautas.", beTeksto: "{n} psl. be teksto sluoksnio.",
           docxStrukt: "DOCX struktūra neperskaityta ({e}), naudojamas grynas tekstas.", xml: "XML neišanalizuotas, imamas kaip tekstas.",
-          vykdomasis: "Vykdomasis / scenarijaus failas neatidaromas saugumo sumetimais.", formatas: "Formatas .{e} nepalaikomas MVP (palaikoma: PDF, DOCX, XLSX, XML, HTML, TXT, ZIP).",
+          vykdomasis: "Vykdomasis / scenarijaus failas neatidaromas saugumo sumetimais.", formatas: "Formatas .{e} nepalaikomas (palaikoma: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP). Atidarykite jį atskira programa.",
           neperskaityta: "Neperskaityta: {e}", kelias: "Nesaugus kelias archyve - praleista.", failuLimitas: "Viršytas failų limitas ({n}) - praleista.",
           dydis: "Viršytas dydžio limitas - praleista (apsauga nuo ZIP bombų).", gilus: "Per gilus įdėtinis archyvas - neišskleistas.", perDidelis: "Failas per didelis (riba {mb} MB).",
           bendrasLimitas: "Viršyta bendra paketo riba - praleista." },
     en: { skenuotas: "PDF without a text layer (scanned) - OCR required; text not extracted.", beTeksto: "{n} page(s) without a text layer.",
           docxStrukt: "DOCX structure not read ({e}), plain text used.", xml: "XML not parsed, taken as text.",
-          vykdomasis: "Executable / script file is not opened for security reasons.", formatas: "Format .{e} is not supported in the MVP (supported: PDF, DOCX, XLSX, XML, HTML, TXT, ZIP).",
+          vykdomasis: "Executable / script file is not opened for security reasons.", formatas: "Format .{e} is not supported (supported: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP). Open it with a separate application.",
           neperskaityta: "Not read: {e}", kelias: "Unsafe path in archive - skipped.", failuLimitas: "File limit exceeded ({n}) - skipped.",
           dydis: "Size limit exceeded - skipped (ZIP bomb protection).", gilus: "Nested archive too deep - not extracted.", perDidelis: "File too large (limit {mb} MB).",
           bendrasLimitas: "Total package limit exceeded - skipped." }
@@ -150,17 +152,26 @@
     if (d) out.data = d[1] + "-" + d[2] + "-" + d[3];
     return out;
   }
-  // Dokumento rūšis pagal pavadinimą (tik pagalbinė žyma, ne teisinis faktas)
+  // Dokumento rūšis pagal pavadinimą (tik pagalbinė žyma, ne teisinis faktas).
+  // Tikrinamas TIK failo vardas: LITGRID paketuose aplankas vadinasi „Pirkimo dokumentai
+  // paskelbimui", ir kai buvo tikrinamas visas kelias, beveik kiekvienas priedas tapdavo
+  // „Skelbimu" (rangas 3 metaduomenyse) - patikrinta 2026-09-22 su keturiais tikrais
+  // CVP IS paketais. Sutarties sąlygos (BSS/SSS) atskiriamos nuo pirkimo sąlygų (BPS/SPS):
+  // tiekėjui tai skirtingi dalykai, o metaduomenims - skirtingi šaltiniai.
   function rusis(name) {
-    var n = String(name || "").toLowerCase();
+    var n = String(name || "").split(" \u203a ").pop().split("/").pop().toLowerCase();
     if (/ebvpd|espd/.test(n)) return "EBVPD";
+    if (/sutarties\s*(specialiosios|bendrosios)?\s*s[aą]lyg|(specialiosios|bendrosios)\s+sutarties\s+s[aą]lyg|\b(bss|sss)\b/.test(n)) return "Sutartis";
     if (/special|sps\b|sps[ _.]/.test(n)) return "SPS";
     if (/bendr|bps\b|bps[ _.]/.test(n)) return "BPS";
-    if (/technin|specifik|\bts\b/.test(n)) return "TS";
+    if (/technin|specifik|\bts\b|u[žz]duot/.test(n)) return "TS";
     if (/sutart/.test(n)) return "Sutartis";
-    if (/pasi[uū]lym.*form|forma/.test(n)) return "Forma";
-    if (/skelbim|notice/.test(n)) return "Skelbimas";
+    if (/klausimyn/.test(n)) return "Forma";   // rinkos konsultacijos klausimynas pildomas
     if (/atsakym|paaiškin|paaiskin|klausim/.test(n)) return "Paaiškinimas";
+    // „forma" tik kaip atskiras žodis: anksčiau ji rasdavosi „transformatorių" ir
+    // „informacijos" viduje, ir techniniai priedai tapdavo formomis
+    if (/(^|[^a-z\u0105\u010d\u0119\u0117\u012f\u0161\u0173\u016b\u017e])form(a|os|\u0105)?([^a-z\u0105\u010d\u0119\u0117\u012f\u0161\u0173\u016b\u017e]|$)|[iį]kaini|[iį]sipareigojim|deklaracij/.test(n)) return "Forma";
+    if (/skelbim|notice/.test(n)) return "Skelbimas";
     if (/pried/.test(n)) return "Priedas";
     return "Kita";
   }
@@ -275,6 +286,55 @@
     return { blocks: blocks, warnings: warnings };
   }
 
+  // ODT (OpenDocument tekstas): LITGRID paketuose pasitaiko techninių užduočių priedų
+  // .odt formatu (2026-09-22: 9566057 „Priedas Nr. 01" - iki tol tiekėjas jo turinio
+  // įrankyje nematė). Struktūra - content.xml: text:p / text:h pastraipos, table:table
+  // eilutės. Ribos tos pačios kaip DOCX.
+  async function isOdt(buf, lang) {
+    var kont = await konteinerioDydis(buf);
+    if (kont.suma > MAX_FAILO_B) throw new Error(pran(lang, "dydis"));
+    var zip = kont.zip || await global.JSZip.loadAsync(buf);
+    var f = zip.file("content.xml");
+    if (!f) throw new Error("nėra content.xml");
+    var xmlBuf = await issklekRibotai(f, MAX_FAILO_B);
+    if (!xmlBuf) throw new Error(pran(lang, "dydis"));
+    var doc = new DOMParser().parseFromString(new TextDecoder("utf-8").decode(xmlBuf), "application/xml");
+    if (doc.getElementsByTagName("parsererror").length) throw new Error("XML klaida");
+    var TXT = "urn:oasis:names:tc:opendocument:xmlns:text:1.0", TBL = "urn:oasis:names:tc:opendocument:xmlns:table:1.0";
+    // Tekstas su tarpais vietoj text:s / text:tab / text:line-break (kitaip žodžiai suliptų)
+    function tekstas(n) {
+      var out = "";
+      (function eik(x) {
+        Array.from(x.childNodes).forEach(function (c) {
+          if (c.nodeType === 3) out += c.nodeValue;
+          else if (c.nodeType === 1) {
+            if (c.namespaceURI === TXT && (c.localName === "s" || c.localName === "tab" || c.localName === "line-break")) out += " ";
+            else if (c.namespaceURI === TXT && c.localName === "note") return;   // išnašos turinys - atskiras
+            else eik(c);
+          }
+        });
+      })(n);
+      return norm(out);
+    }
+    var blocks = [], pi = 0, ti = 0;
+    var body = doc.getElementsByTagNameNS("urn:oasis:names:tc:opendocument:xmlns:office:1.0", "text")[0];
+    if (!body) throw new Error("nėra office:text");
+    (function eik(n) {
+      Array.from(n.children).forEach(function (c) {
+        if (c.namespaceURI === TXT && (c.localName === "p" || c.localName === "h")) {
+          pi++; var t = tekstas(c); if (t) blocks.push({ loc: { para: pi }, text: t });
+        } else if (c.namespaceURI === TBL && c.localName === "table") {
+          ti++;
+          Array.from(c.getElementsByTagNameNS(TBL, "table-row")).forEach(function (tr, ri) {
+            var cells = Array.from(tr.getElementsByTagNameNS(TBL, "table-cell")).map(tekstas).filter(Boolean);
+            if (cells.length) blocks.push({ loc: { table: ti, row: ri + 1 }, text: cells.join(" | ") });
+          });
+        } else eik(c);   // sąrašai, sekcijos - pastraipos jų viduje
+      });
+    })(body);
+    return { blocks: blocks, warnings: [] };
+  }
+
   async function isXlsx(buf, lang) {
     if (!global.XLSX) throw new Error("XLSX neužkrauta");
     // Antraščių suma prieš SheetJS (jis turi savą inflate): suklastotos antraštės
@@ -300,6 +360,10 @@
       warnings.push(pran(lang, "xml"));
       return isTxt(text);
     }
+    // CVP IS pasiūlymo struktūra (2_c4t_<id>_<n>.xml): visa prasmė ATRIBUTUOSE
+    // (būdas, vertinimo tipas, dalių skaičius, vokai), tekstiniai mazgai - tik „File".
+    // Anksčiau iš jo likdavo 4 žodžiai; dabar sudaromas vienas skaitomas blokas.
+    if (doc.documentElement && doc.documentElement.localName === "c4t") return isC4t(doc, lang);
     // EBVPD (espd-request.xml) ir kiti: elementų tekstai su keliu
     var i = 0;
     (function walk(node, path) {
@@ -312,6 +376,35 @@
       });
     })(doc.documentElement, "");
     return { blocks: blocks, warnings: warnings };
+  }
+
+  var C4T_VERTINIMAS = {
+    lt: { lowest: "mažiausia kaina", quality: "kainos ir kokybės santykis", cost: "mažiausios sąnaudos", meat: "ekonominis naudingumas (ne vien kaina)" },
+    en: { lowest: "lowest price", quality: "best price-quality ratio", cost: "lowest cost", meat: "most economically advantageous tender (not price only)" }
+  };
+  function isC4t(doc, lang) {
+    var r = doc.documentElement, L = lang === "en" ? "en" : "lt", V = C4T_VERTINIMAS[L];
+    var ev = r.getAttribute("eval-type") || "";
+    // Žinomi tik šie šablonai; nežinoma reikšmė rodoma kaip yra, ne spėjama
+    // 2026-09-22 tikruose paketuose: „prompt.lowest.price" ir „prompt.meat"
+    var evTxt = /lowest\.price/.test(ev) ? V.lowest : /meat/.test(ev) ? V.meat : /quality/.test(ev) ? V.quality : /cost/.test(ev) ? V.cost : ev;
+    var dalys = r.getAttribute("num-of-lots");
+    var failai = Array.from(doc.getElementsByTagName("section")).map(function (sec) {
+      var lab = sec.getElementsByTagName("label")[0];
+      var krit = Array.from(sec.getElementsByTagName("criterion")).map(function (c) {
+        var cl = c.getElementsByTagName("label")[0];
+        return (cl ? norm(cl.textContent) : "") + (c.getAttribute("mandatory") === "1" ? (L === "en" ? " (mandatory)" : " (privaloma)") : "");
+      }).filter(Boolean);
+      return (lab ? norm(lab.textContent) : "") + (krit.length ? ": " + krit.join(", ") : "");
+    }).filter(Boolean);
+    var eil = L === "en"
+      ? ["CVP IS tender structure", "Procedure: " + (r.getAttribute("procedure") || "-"), "Evaluation type: " + (evTxt || "-"),
+         "Number of lots: " + (dalys == null ? "-" : dalys), "Round: " + (r.getAttribute("round") || "-"),
+         "Envelopes: " + doc.getElementsByTagName("envelope").length, "Files to submit: " + (failai.join("; ") || "-")]
+      : ["CVP IS pasiūlymo struktūra", "Pirkimo būdas: " + (r.getAttribute("procedure") || "-"), "Vertinimo tipas: " + (evTxt || "-"),
+         "Dalių skaičius: " + (dalys == null ? "-" : dalys), "Etapas: " + (r.getAttribute("round") || "-"),
+         "Vokų skaičius: " + doc.getElementsByTagName("envelope").length, "Teikiami failai: " + (failai.join("; ") || "-")];
+    return { blocks: [{ loc: { xpath: "/c4t", n: 1 }, text: eil.join("\n") }], warnings: [] };
   }
 
   function isHtml(text) {
@@ -340,32 +433,58 @@
     var m = /^\s*(\d{1,3}(?:\.\d{1,3}){0,4})\.?\s/.exec(text);
     return m ? m[1] : null;
   }
+  // Fragmento ribos - žodžiais (paieškos tikslumui) IR simboliais. AI iš kiekvieno
+  // fragmento mato tik pirmus CHUNK_SIMBOLIU simbolių (asistentas.js ima šią ribą, o
+  // worker/tiekejams-proxy.js MAX_CHUNK_CHARS turi būti ne mažesnė - tikrina testai).
+  // 2026-09-22 tikruose LITGRID paketuose 37 % fragmentų buvo ilgesni: jų pabaigos AI
+  // nematė, nors paieška fragmentą parinko būtent dėl jos (TED skelbimo pateikimo
+  // terminas stovėjo 1640-ame 2182 simbolių fragmento simbolyje).
+  function zodziuSk(t) { var m = String(t).match(/\S+/g); return m ? m.length : 0; }
+  // Ilgas blokas -> gabalai, kurių kiekvienas telpa į fragmentą kartu su persidengimu.
+  // Kerpama sakinio riboje, per ilgas sakinys - žodžio riboje, per ilgas „žodis" (pvz.
+  // nuoroda be tarpų) - pagal simbolius. Tarpai ir eilučių lūžiai gabalų viduje išlieka.
+  function gabalai(text, maxZ, maxS) {
+    if (zodziuSk(text) <= maxZ && text.length <= maxS) return [text];
+    var out = [], cur = "", cz = 0;
+    function dek(vnt) {
+      var z = zodziuSk(vnt);
+      if (cur && (cz + z > maxZ || (cur + vnt).trimEnd().length > maxS)) { out.push(cur.trimEnd()); cur = ""; cz = 0; }
+      cur += vnt; cz += z;
+    }
+    text.split(/(?<=[.;:!?]\s+)(?=\S)/).forEach(function (sak) {
+      if (zodziuSk(sak) <= maxZ && sak.trimEnd().length <= maxS) { dek(sak); return; }
+      sak.split(/(?<=\s)(?=\S)/).forEach(function (zod) {
+        while (zod.trimEnd().length > maxS) { dek(zod.slice(0, maxS)); zod = zod.slice(maxS); }
+        dek(zod);
+      });
+    });
+    if (cur.trim()) out.push(cur.trimEnd());
+    return out;
+  }
   function fragmentai(doc) {
     var out = [], id = 0;
-    var buf = [], bufLoc = null, bufPunktas = null, words = 0;
+    var buf = [], bufLoc = null, bufPunktas = null, zod = 0, simb = 0, naujo = false;
+    // Gabalas turi tilpti ir po persidengimo, todėl jo ribos mažesnės už fragmento
+    var maxZ = CHUNK_ZODZIU - CHUNK_PERDANGA, maxS = CHUNK_SIMBOLIU - PERDANGA_SIMBOLIU - 1;
     function flush() {
-      if (!buf.length) return;
+      if (!naujo) return;   // vien persidengimas naujo fragmento nesudaro
       id++;
-      out.push({ id: doc.id + "#" + id, docId: doc.id, loc: bufLoc, punktas: bufPunktas, text: buf.join("\n") });
-      // perdanga: paliekam paskutinius žodžius
-      var tail = buf.join(" ").split(/\s+/).slice(-CHUNK_PERDANGA).join(" ");
-      buf = tail ? [tail] : []; words = tail ? CHUNK_PERDANGA : 0; bufPunktas = null;
+      var text = buf.join("\n");
+      out.push({ id: doc.id + "#" + id, docId: doc.id, loc: bufLoc, punktas: bufPunktas, text: text });
+      // perdanga: paliekam paskutinius žodžius (ne daugiau CHUNK_PERDANGA ir PERDANGA_SIMBOLIU)
+      var z = text.split(/\s+/).filter(Boolean).slice(-CHUNK_PERDANGA);
+      while (z.length && z.join(" ").length > PERDANGA_SIMBOLIU) z.shift();
+      var tail = z.join(" ");
+      buf = tail ? [tail] : []; zod = z.length; simb = tail.length; naujo = false; bufPunktas = null;
     }
     doc.blocks.forEach(function (b) {
-      var w = b.text.split(/\s+/).length;
-      if (!buf.length) { bufLoc = b.loc; bufPunktas = punktas(b.text); }
-      if (words + w > CHUNK_ZODZIU && buf.length) { flush(); bufLoc = b.loc; bufPunktas = punktas(b.text); }
-      // labai ilgas blokas (pvz. visas PDF puslapis) - skaidom sakiniais
-      if (w > CHUNK_ZODZIU * 1.5) {
-        var sak = b.text.split(/(?<=[.;:!?])\s+/);
-        var cur = [], cw = 0;
-        sak.forEach(function (s) {
-          var sw = s.split(/\s+/).length;
-          if (cw + sw > CHUNK_ZODZIU && cur.length) { buf.push(cur.join(" ")); words += cw; flush(); bufLoc = b.loc; cur = []; cw = 0; }
-          cur.push(s); cw += sw;
-        });
-        if (cur.length) { buf.push(cur.join(" ")); words += cw; }
-      } else { buf.push(b.text); words += w; }
+      // labai ilgas blokas (pvz. visas PDF puslapis) skaidomas į gabalus
+      gabalai(b.text, maxZ, maxS).forEach(function (g, j) {
+        var w = zodziuSk(g);
+        if (naujo && (zod + w > CHUNK_ZODZIU || simb + 1 + g.length > CHUNK_SIMBOLIU)) flush();
+        if (!naujo) { bufLoc = b.loc; bufPunktas = j === 0 ? punktas(b.text) : null; }
+        buf.push(g); zod += w; simb += (buf.length > 1 ? 1 : 0) + g.length; naujo = true;
+      });
     });
     flush();
     return out;
@@ -385,6 +504,7 @@
       var r;
       if (e === "pdf") { r = await isPdf(buf, lang); doc.pages = r.pages; }
       else if (e === "docx") r = await isDocx(buf, lang);
+      else if (e === "odt") r = await isOdt(buf, lang);
       else if (e === "xlsx" || e === "xlsm") r = await isXlsx(buf, lang);
       else if (e === "xml") r = isXml(new TextDecoder("utf-8").decode(buf), lang);
       else if (e === "html" || e === "htm") r = isHtml(new TextDecoder("utf-8").decode(buf));
@@ -476,7 +596,7 @@
     rusis: rusis,
     pdfTekstas: pdfTekstas,
     punktas: punktas,
-    limits: { MAX_FAILO_B: MAX_FAILO_B, MAX_ISSKLEISTA_B: MAX_ISSKLEISTA_B, MAX_FAILU: MAX_FAILU, GYLIS: GYLIS, CHUNK_ZODZIU: CHUNK_ZODZIU },
+    limits: { MAX_FAILO_B: MAX_FAILO_B, MAX_ISSKLEISTA_B: MAX_ISSKLEISTA_B, MAX_FAILU: MAX_FAILU, GYLIS: GYLIS, CHUNK_ZODZIU: CHUNK_ZODZIU, CHUNK_SIMBOLIU: CHUNK_SIMBOLIU },
     _internal: { isDocx: isDocx, isXml: isXml, isHtml: isHtml, isTxt: isTxt, isXlsx: isXlsx, saugusKelias: saugusKelias, decodeFileName: decodeFileName, kalba: kalba, issklekRibotai: issklekRibotai, konteinerioDydis: konteinerioDydis, pran: pran }
   };
 })(typeof window !== "undefined" ? window : this);

@@ -63,11 +63,20 @@
     return { chunks: chunks, docs: docs, df: df, N: N, avgLen: N ? totalLen / N : 0 };
   }
 
+  // Pirkimo objekto žodžiai (iš pavadinimo, opts.silpni) yra beveik kiekviename to pirkimo
+  // fragmente, todėl nerodo, APIE KĄ klausiama. 2026-09-22 (9495168): klausimas „What is the
+  // delivery time for the mobile switchyard?" iškeldavo 14 techninės specifikacijos fragmentų
+  // su „mobile switchyard", o sutarties 4.1 p. („deliver ... no later than 36 months") nebūdavo
+  // net tarp 40 geriausių. Tokie žodžiai sveria SILPNO_SVORIS dalį.
+  var SILPNO_SVORIS = 0.25;
   function search(idx, query, opts) {
     opts = opts || {};
     var limit = opts.limit || 12;
     var k1 = 1.4, b = 0.75;
     var qt = tokens(query);
+    var silpni = Object.create(null);
+    (opts.silpni || []).forEach(function (t) { silpni[t] = 1; });
+    var svoris = typeof opts.silpnoSvoris === "number" ? opts.silpnoSvoris : SILPNO_SVORIS;
     var exact = tikslusRaktai(query).map(fold);
     var results = [];
     idx.docs.forEach(function (d) {
@@ -79,7 +88,8 @@
         var f = d.tf[t]; if (!f) return;
         var n = idx.df[t] || 0;
         var idf = Math.log(1 + (idx.N - n + 0.5) / (n + 0.5));
-        score += idf * (f * (k1 + 1)) / (f + k1 * (1 - b + b * d.len / (idx.avgLen || 1)));
+        var sk = idf * (f * (k1 + 1)) / (f + k1 * (1 - b + b * d.len / (idx.avgLen || 1)));
+        score += silpni[t] ? sk * svoris : sk;
       });
       exact.forEach(function (e) {
         if (e && d.folded.indexOf(e) !== -1) { score += 2.5; why.push(e); }
@@ -139,9 +149,22 @@
       var variantai = [w.slice(1).join(" "), w.slice(0, -1).join(" "), w.slice(1, -1).join(" ")];
       for (var i = 0; i < variantai.length; i++) if (rask(variantai[i], t) || raskBeTarpu(variantai[i], t)) return { ok: true, tikslus: false };
     }
+    // Daugtaškis citatos viduje („X ... Y"): modelis praleidžia vidurį. 2026-09-22 su tikrais
+    // LITGRID paketais tai buvo dažniausia atmetimo priežastis, nors abi dalys - pažodinės.
+    // Priimama TIK kai KIEKVIENA dalis (>= 3 žodžiai) randama pažodžiui tame pačiame
+    // fragmente ir ta pačia tvarka; rezultatas žymimas APYTIKSLIU.
+    var dalys = String(quote).split(/\s*(?:\.{3,}|\u2026)\s*/).map(normCit).filter(Boolean);
+    if (dalys.length >= 2 && dalys.every(function (d) { return d.split(" ").length >= 3; })) {
+      var poz = 0, visos = true;
+      for (var j = 0; j < dalys.length && visos; j++) {
+        var rasta = t.indexOf(" " + dalys[j] + " ", poz);
+        if (rasta === -1) visos = false; else poz = rasta + dalys[j].length;
+      }
+      if (visos) return { ok: true, tikslus: false };
+    }
     return { ok: false, tikslus: false };
   }
   function citataYra(quote, text) { return citataAtitikimas(quote, text).ok; }
 
-  global.GP_PAIESKA = { version: "0.2.0", index: index, search: search, tokens: tokens, fold: fold, stem: stem, tikslusRaktai: tikslusRaktai, citataYra: citataYra, citataAtitikimas: citataAtitikimas, normCit: normCit };
+  global.GP_PAIESKA = { version: "0.2.0", index: index, search: search, tokens: tokens, fold: fold, stem: stem, tikslusRaktai: tikslusRaktai, citataYra: citataYra, citataAtitikimas: citataAtitikimas, normCit: normCit, normCit: normCit };
 })(typeof window !== "undefined" ? window : this);
