@@ -104,7 +104,6 @@ UI papildomai rodo įspėjimą (disclaimer) prie kiekvieno AI bloko.
 | Failas | Turinys |
 |---|---|
 | `index.html` | Pilnas, savarankiškas frontend MVP (CSS + JS įdiegti viename faile). Veikia atidarius naršyklėje; demonstraciniai duomenys įkeliami automatiškai. Viršuje - informacinė (help) skiltis. |
-| `components/gprocure-info-panel.js` | **Standartinis, perkeliamas** informacinės skilties komponentas visiems G-Procure moduliams (žr. žemiau). |
 | `backend-pp-esg-routes.js` | Express maršrutų papildymai su įterpimo instrukcija ir saugumo gairėmis. |
 | `PP-ESG_architektura.md` | Šis dokumentas. |
 
@@ -112,7 +111,7 @@ UI papildomai rodo įspėjimą (disclaimer) prie kiekvieno AI bloko.
 
 ## 7. Dviejų lygių pagalbos sistema (bendras komponentas visiems moduliams)
 
-Modulio viršuje yra savaime suprantama pagalbos sistema su **dviem lygiais**, įgyvendinta kaip vienas standartinis, perkeliamas komponentas (`components/gprocure-info-panel.js`). Į PP-ESG jis įdiegtas **inline viename `index.html`** (jokio antro failo), tačiau identiškas šaltinio failas tinka bet kuriam moduliui. Komponentas pats įsideda savo CSS, naudodamas bendrus G-Procure spalvų/tarpų kintamuosius, todėl atrodo kaip natūrali modulio dalis.
+Modulio viršuje yra savaime suprantama pagalbos sistema su **dviem lygiais**, įgyvendinta kaip vienas bendras komponentas (`shared/gprocure-info-panel.js`). Nuo 2026-09-23 PP-ESG, PP-carbon ir PP-tiekejams jungia tą patį failą; iki tol PP-ESG ir PP-carbon turėjo įterptas jo kopijas, todėl taisymai pasiekdavo tik vieną vietą. Komponentas pats įsideda savo CSS, naudodamas bendrus G-Procure spalvų/tarpų kintamuosius, todėl atrodo kaip natūrali modulio dalis.
 
 **1 lygis - trumpas sutraukiamas blokas.** „Kas tai ir kaip naudotis": paskirtis, naudojimo žingsniai, pastaba apie duomenis ir taisykles (PSĮ, CSRD/ESRS, AI ribas). Sutraukiamas, pagal nutylėjimą atidarytas; būsena išsaugoma naršyklėje atskirai kiekvienam moduliui. Greta „Suskleisti" yra mygtukas **„Plačiau"**.
 
@@ -122,7 +121,7 @@ Modulio viršuje yra savaime suprantama pagalbos sistema su **dviem lygiais**, �
 
 ```html
 <div id="infoPanelMount"></div>
-<script src="components/gprocure-info-panel.js"></script>
+<script src="../shared/gprocure-info-panel.js"></script>
 <script>
   GProcureInfoPanel.mount({
     target: "#infoPanelMount",

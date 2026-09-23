@@ -1,7 +1,10 @@
 /* ============================================================================
  * G-Procure · Bendras DVIEJŲ LYGIŲ pagalbos komponentas (Info Panel + Details)
  * ----------------------------------------------------------------------------
- * STANDARTINIS, PERKELIAMAS komponentas visiems G-Procure moduliams.
+ * STANDARTINIS komponentas visiems G-Procure moduliams - VIENAS failas shared/.
+ * Iki 2026-09-23 jis gyveno PP-esg/components/, o PP-carbon ir PP-esg turėjo po
+ * įterptą jo kopiją, tad taisymai pasiekdavo tik vieną vietą (pvz. siauro ekrano
+ * taisyklė buvo tik PP-tiekejams). Kopijų nedaryti - jungti šį failą.
  *
  *  1 lygis - trumpas sutraukiamas blokas modulio viršuje
  *            ("Kas tai ir kaip naudotis"): paskirtis, žingsniai, pastaba.
@@ -15,6 +18,7 @@
  *
  * Naudojimas:
  * --------------------------------------------------------------------------
+ *   <script src="../shared/gprocure-info-panel.js"></script>
  *   <div id="infoPanelMount"></div>
  *
  *   GProcureInfoPanel.mount({
@@ -77,6 +81,12 @@
       ".gpi-btn.gpi-more{background:var(--color-emerald,#00A072);border-color:var(--color-emerald,#00A072);color:#fff}",
       ".gpi-btn.gpi-more:hover{background:var(--color-emerald-120,#128A76);border-color:var(--color-emerald-120,#128A76);color:#fff}",
       ".gpi-btn:focus-visible,.gpi-x:focus-visible,.gpi-faq summary:focus-visible{outline:2px solid var(--color-emerald,#00A072);outline-offset:2px}",
+      /* Mygtuko ikona be dydžio flex eilutėje gaudavo atsitiktinį dydį: lietuviškai 0 x 0 px
+         (nematoma), angliškai 34 x 34 px, ir „Learn more" lūždavo į dvi eilutes (2026-09-23) */
+      ".gpi-btn{white-space:nowrap}.gpi-btn svg{width:15px;height:15px;flex-shrink:0}",
+      /* Siaurame ekrane mygtukai - į naują eilutę; kitaip pavadinimas ir aprašas suspaudžiami
+         į 16-35 px stulpelį po vieną žodį (PP-esg ir PP-carbon telefone) */
+      "@media(max-width:640px){.gpi-head{flex-wrap:wrap}.gpi-titles{flex:1 1 calc(100% - 50px)}.gpi-actions{flex-basis:100%;justify-content:flex-end}}",
       ".gpi-chev{width:15px;height:15px;transition:transform 200ms ease}",
       ".gpi.collapsed .gpi-chev{transform:rotate(-90deg)}",
       ".gpi-body{max-height:1400px;overflow:hidden;transition:max-height 260ms ease,opacity 200ms ease,padding 200ms ease;opacity:1}",

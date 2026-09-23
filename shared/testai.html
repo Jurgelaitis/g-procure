@@ -34,7 +34,7 @@
 <body>
 
 <h1>shared/ regresijos testai</h1>
-<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta) , <code>backup.js</code> (atsarginės kopijos branduolys) ir <code>docx-stiliai.js</code> (Word stilių failas).
+<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) ir <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose).
 Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
 
@@ -314,10 +314,96 @@ async function testaiDocxStiliai(){
   });
 }
 
+/* ==========================================================================
+   INFORMACINĖ SKILTIS (gprocure-info-panel.js)
+   Iki 2026-09-23 komponentas turėjo tris kopijas (PP-esg/components/ ir įterptas
+   PP-carbon bei PP-esg). Mygtuko ikona be dydžio: LT 0 x 0 px, EN 34 x 34 px ir
+   „Learn more" dviem eilutėmis; telefone pavadinimas suspaudžiamas į 16-35 px.
+   Matuojama tikro pločio rėmelyje - media užklausos jame veikia tuo pločiu.
+   Skydelis įkeliant saugyklą tik skaito, tad tikrų duomenų testai neliečia.
+   ========================================================================== */
+const SKYDELIO_TURINYS = {
+  lt: { title: "G-Procure Tiekėjams", purpose: "Aiškūs, šaltiniais pagrįsti atsakymai ir pasirengimas dalyvauti LITGRID pirkimuose. Oficialios informacijos šaltiniu visada išlieka CVP IS.", steps: ["Įkelkite paketą", "Klauskite"], details: { title: "Detaliau" } },
+  en: { title: "G-Procure for Suppliers", purpose: "Clear, source-grounded answers and readiness for LITGRID procurements. CVP IS always remains the official source.", steps: ["Upload the package", "Ask"], details: { title: "Details" } }
+};
+function skydelis(lang, plotis){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.style.width = plotis + "px"; f.style.height = "900px";
+    f.addEventListener("load", async () => {
+      const d = f.contentDocument;
+      for (let i = 0; i < 40 && !d.querySelector(".gpi-head"); i++) await new Promise(r => setTimeout(r, 25));
+      if (d.fonts) await d.fonts.ready;
+      res({ f: f, d: d });
+    });
+    f.srcdoc = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css">`
+             + `<style>body{margin:0;padding:16px}</style></head><body><div id="m"></div>`
+             + `<script src="gprocure-info-panel.js"><\/script><script>GProcureInfoPanel.mount({ target: "#m", moduleId: "gpi-testas", defaultOpen: true, `
+             + `getLang: function(){ return "${lang}"; }, content: ${JSON.stringify(SKYDELIO_TURINYS)} });<\/script></body></html>`;
+    document.body.appendChild(f);
+  });
+}
+const staciakampis = e => e.getBoundingClientRect();
+
+async function testaiSkydelis(){
+  dabartine = grupe("Informacinė skiltis (gprocure-info-panel.js)");
+
+  await testas("Mygtuko „Plačiau / Learn more“ ikona - 15 × 15 px abiem kalbomis", async ()=>{
+    for (const lang of ["lt", "en"]) {
+      const { f, d } = await skydelis(lang, 1280);
+      const r = staciakampis(d.querySelector(".gpi-more svg"));
+      lygu([Math.round(r.width), Math.round(r.height)], [15, 15], lang + " ikona (buvo LT 0 × 0, EN 34 × 34)");
+      f.remove();
+    }
+  });
+
+  await testas("„Plačiau“ ir „Learn more“ telpa vienoje eilutėje - mygtukai vienodo aukščio (1280 ir 375 px)", async ()=>{
+    for (const lang of ["lt", "en"]) for (const plotis of [1280, 375]) {
+      const { f, d } = await skydelis(lang, plotis);
+      const a = staciakampis(d.querySelector(".gpi-more")).height, b = staciakampis(d.querySelector(".gpi-btn[aria-expanded]")).height;
+      tiesa(Math.abs(a - b) <= 1, lang + " " + plotis + " px: „" + d.querySelector(".gpi-more").textContent + "“ " + Math.round(a) + " px, šalia esantis " + Math.round(b) + " px");
+      f.remove();
+    }
+  });
+
+  await testas("Telefone (375 px) pavadinimas nesuspaudžiamas, mygtukai - po juo, puslapis neslenka į šoną", async ()=>{
+    for (const lang of ["lt", "en"]) {
+      const { f, d } = await skydelis(lang, 375);
+      const t = staciakampis(d.querySelector(".gpi-titles")), m = staciakampis(d.querySelector(".gpi-actions"));
+      tiesa(t.width >= 200, lang + ": pavadinimo plotis " + Math.round(t.width) + " px (buvo 16-35 px)");
+      tiesa(m.top >= t.bottom - 1, lang + ": mygtukai turi būti po pavadinimu");
+      tiesa(d.documentElement.scrollWidth <= d.documentElement.clientWidth, lang + ": slenka į šoną (" + d.documentElement.scrollWidth + " > " + d.documentElement.clientWidth + ")");
+      f.remove();
+    }
+  });
+
+  await testas("Plačiame ekrane (1280 px) mygtukai lieka toje pačioje eilutėje, dešinėje", async ()=>{
+    const { f, d } = await skydelis("en", 1280);
+    const t = staciakampis(d.querySelector(".gpi-titles")), m = staciakampis(d.querySelector(".gpi-actions"));
+    tiesa(m.top < t.bottom && m.left >= t.right - 1, "mygtukai turi būti dešinėje nuo pavadinimo");
+    f.remove();
+  });
+
+  await testas("Moduliai jungia bendrą failą - įterptų kopijų ir savų skydelio stilių nebėra", async ()=>{
+    for (const m of ["../PP-tiekejams/index.html", "../PP-carbon/index.html", "../PP-esg/index.html"]) {
+      const src = await (await fetch(m + "?b=" + Date.now())).text();
+      tiesa(src.indexOf('<script src="../shared/gprocure-info-panel.js"><\/script>') !== -1, m + ": nejungia shared/gprocure-info-panel.js");
+      tiesa(src.indexOf('var LS_PREFIX = "gprocure.infoPanel."') === -1, m + ": vėl įterpta komponento kopija");
+      tiesa(!/\.gpi-[a-z-]+\{/.test(src), m + ": modulyje yra skydelio stilių - jie turi gyventi komponente");
+    }
+  });
+
+  await testas("Būsenos raktas nepakito (gprocure.infoPanel.[modulis]) - išsaugota būsena išlieka", async ()=>{
+    const src = await (await fetch("gprocure-info-panel.js?b=" + Date.now())).text();
+    tiesa(src.indexOf('var LS_PREFIX = "gprocure.infoPanel.";') !== -1, "pakeitus prefiksą naudotojų išsaugota skydelio būsena dingtų");
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
   await testaiDocxStiliai();
+  await testaiSkydelis();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();

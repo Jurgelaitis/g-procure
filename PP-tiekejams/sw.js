@@ -23,7 +23,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppt-2026-09-22-1";
+var VERSIJA = "ppt-2026-09-23-1";
 
 var SAVI = [
   "./",
@@ -38,7 +38,7 @@ var SAVI = [
   "../shared/lang-detect.js",
   "../shared/portal-link.js",
   "../shared/procurement-methods.js",
-  "../PP-esg/components/gprocure-info-panel.js"
+  "../shared/gprocure-info-panel.js"
 ];
 
 /* Tie patys adresai kaip index.html (ir pdf.js darbinis failas, kurį pdf.js
@@ -112,7 +112,7 @@ self.addEventListener("fetch", function (e) {
   var url = new URL(req.url);
   if (url.origin === self.location.origin) {
     // Tik savi statiniai failai; testų puslapio ir kitų modulių nesaugom
-    if (/\/PP-tiekejams\/|\/shared\/|\/PP-esg\/components\//.test(url.pathname) && !/testai\.html$/.test(url.pathname)) {
+    if (/\/PP-tiekejams\/|\/shared\//.test(url.pathname) && !/testai\.html$/.test(url.pathname)) {
       e.respondWith(tinklasPirma(req));
     }
     return;
