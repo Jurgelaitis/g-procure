@@ -945,7 +945,7 @@ const GPGen = (() => {
      skaidomas i N daliu, reikia N (originala pazymim I dalimi, klonuojame
      likusias, kiekviena su savo antrastes zyma "2 lentele (II Pirkimo objekto
      dalis)"). Lentele lieka TUSCIAS karkasas - reikalavimus rengejas pildo pats
-     kiekvienai daliai atskirai (proporcingumas, PI 47 str.); tuscius langelius
+     kiekvienai daliai atskirai (PI 59 str. 1 d. -> VPI 47 str. 4 d.); tuscius langelius
      pagauna GPAudit.
 
      Numeracija: numerio NEKEICIAM (lieka "2 lentele"), tik pridedam dalies zyma.
