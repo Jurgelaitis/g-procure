@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PP-qual regresijos testai</title>
+<link rel="stylesheet" href="../shared/epso-g.css">
+<style>
+  body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
+       background:var(--color-graphite-5);font-size:14px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--color-graphite-50);margin-bottom:18px;max-width:82ch}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--color-graphite-15);
+             border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .n{font-size:24px;font-weight:800}
+  .ok{color:var(--color-emerald-120)} .blogai{color:var(--color-error)}
+  .grupe{background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .grupe h2{font-size:14px;margin:0;padding:11px 16px;background:var(--color-green-5);
+            color:var(--color-emerald-120);border-bottom:1px solid var(--color-graphite-15)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #F0F3F5;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:800;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .t.geras .zyma{background:var(--color-green-5);color:var(--color-emerald-120)}
+  .t.krito .zyma{background:var(--color-error-5);color:#7F1722}
+  .t.krito{background:#FFFAFA}
+  .det{color:#7F1722;font-size:12px;margin-top:3px;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+  iframe{position:absolute;left:-9999px;top:0;width:1280px;height:900px;border:0}
+</style>
+</head>
+<body>
+
+<h1>PP-qual regresijos testai</h1>
+<div class="sub">Pirmas PP-qual rinkinys (2026-09-23): VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodikos
+logika, patikrinta e-tar. Iki tol skaičiuoklė darbams siūlė „3 metai“ (Metodikos 16.1 p. - 5), taisyklė R1
+„aukšta rizika“ žymėjo patirtį iki 0,7 vertės, nors Metodikos 16 p. tiek leidžia, o apyvartai taikė patirties ribą.
+Draudimas buvo siūlomas 25-50 % vertės, nors Metodikos 14 p. jį leidžia tik kai privalomas pagal teisės aktus.
+Modulis nieko nesaugo, tad kraunamas rėmelyje ir tikrinamas tiesiai. AI užklausos perimamos - į serverį nieko nesiunčiama.
+Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
+
+<div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
+  <span class="n blogai" id="n-blogai">0</span> krito
+  <span id="busena" style="color:var(--color-graphite-50)">Vykdoma...</span></div>
+
+<div id="rezultatai"></div>
+
+<script>
+const R = { ok: 0, blogai: 0 };
+function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
+function grupe(pav){
+  const d = document.createElement("div");
+  d.className = "grupe"; d.innerHTML = "<h2>" + ekranuok(pav) + "</h2>";
+  document.getElementById("rezultatai").appendChild(d);
+  return d;
+}
+let dabartine = null;
+async function testas(pav, fn){
+  const eil = document.createElement("div");
+  try { await fn(); eil.className = "t geras"; eil.innerHTML = '<span class="zyma">GERAI</span><span>' + ekranuok(pav) + '</span>'; R.ok++; }
+  catch (e) { eil.className = "t krito";
+    eil.innerHTML = '<span class="zyma">KRITO</span><span>' + ekranuok(pav) + '<div class="det">' + ekranuok((e && e.message) || e) + '</div></span>'; R.blogai++; }
+  dabartine.appendChild(eil);
+  document.getElementById("n-ok").textContent = R.ok;
+  document.getElementById("n-blogai").textContent = R.blogai;
+}
+function tiesa(salyga, ka){ if(!salyga) throw new Error(ka || "sąlyga netenkinama"); }
+function lygu(gauta, tiketasi, ka){
+  if(JSON.stringify(gauta) !== JSON.stringify(tiketasi))
+    throw new Error((ka || "reikšmė") + "\n  tikėtasi: " + JSON.stringify(tiketasi) + "\n  gauta:    " + JSON.stringify(gauta));
+}
+
+/* Modulis rėmelyje. `const`/`let` kintamieji nėra window savybės - jiems w.eval(). */
+let W = null;
+function modulis(){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.addEventListener("load", () => { W = f.contentWindow; res(f); }, { once: true });
+    f.src = "PP-QUAL.html?cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+// Žinoma pradinė būsena kiekvienam testui: režimas, pirkimas, reikalavimai.
+function pirkimas(duom, kontekstas){
+  W.eval("PPQ.settings.context = " + JSON.stringify(kontekstas || "sektorinis") + "; PPQ.settings.it = true;"
+    + "Object.assign(PPQ.procurement, { name:'Bandymas', value:null, objectType:'', duration:'', valueCat:'', koefRankinis:false, desc:'', extra:'' }, "
+    + JSON.stringify(duom || {}) + "); PPQ.requirements = []; PPQ.questions = []; PPQ.answers = {};");
+}
+const P = (d, k) => { pirkimas(d, k); return W.eval("proporcingumas(PPQ.procurement)"); };
+const taisykles = (tekstas, kat) => W.eval("rulesEngine(" + JSON.stringify({ text: tekstas, category: kat || "C" }) + ")");
+const rasti = (issues, r) => issues.filter(i => i.rule === r);
+
+/* Word dokumento tekstas be bibliotekų: ZIP centrinis katalogas -> word/document.xml -> DecompressionStream. */
+async function docxTekstas(blob){
+  const b = new Uint8Array(await blob.arrayBuffer()), dv = new DataView(b.buffer);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  tiesa(eocd >= 0, "ne ZIP failas");
+  let p = dv.getUint32(eocd + 16, true);
+  const n = dv.getUint16(eocd + 10, true);
+  for (let k = 0; k < n; k++) {
+    const metodas = dv.getUint16(p + 10, true), dydis = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+    const vardas = new TextDecoder().decode(b.subarray(p + 46, p + 46 + nl));
+    if (vardas === "word/document.xml") {
+      const pr = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+      const d = b.subarray(pr, pr + dydis);
+      const xml = metodas === 0 ? new TextDecoder().decode(d)
+        : await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+      return xml.split(/<\/w:p>/).map(x => x.replace(/<[^>]+>/g, "")).join("\n");
+    }
+    p += 46 + nl + el + cl;
+  }
+  throw new Error("word/document.xml nerastas");
+}
+async function wordas(kalba){
+  let blob = null;
+  W.download = b => { blob = b; };
+  W.eval("PPQ.exportLang = " + JSON.stringify(kalba || "lt"));
+  await W.exportDocx();
+  for (let i = 0; i < 50 && !blob; i++) await new Promise(r => setTimeout(r, 100));
+  tiesa(blob, "Word failas nesugeneruotas");
+  return docxTekstas(blob);
+}
+
+async function testaiKategorija(){
+  dabartine = grupe("Vertės kategorija ir sutarties trukmė (Metodikos 2 p.)");
+
+  await testas("Trukmė iš laisvo teksto: mėnesiai, metai, pratęsimai; datos - ne trukmė", async ()=>{
+    const atv = [["24 mėn. + 12 mėn. opcija", 36], ["3 metai", 36], ["1,5 metų", 18], ["12 mėn.", 12], ["36 mėnesių", 36],
+                 ["90 dienų", 3], ["iki 2027 m. gruodžio 31 d.", null], ["", null]];
+    atv.forEach(([t, men]) => lygu(W.trukmeMen(t), men, "„" + t + "“"));
+  });
+
+  await testas("Kategorija pagal ribas: maža - iki MVP ribos imtinai, didelė - nuo tarptautinės imtinai (PĮ prekės)", async ()=>{
+    const k = v => (P({ value: v, objectType: "Prekės" }).kategorija || {}).kodas;
+    lygu([k(70000), k(70001), k(431999), k(432000)], ["maza", "vidutine", "vidutine", "didele"], "70 000 / 70 001 / 431 999 / 432 000");
+  });
+
+  await testas("Darbams - darbų ribos (174 000 / 5 404 000), VPĮ - savo (prekėms 216 000), mišriam - prekių ir paslaugų", async ()=>{
+    const k = (d, r) => (P(d, r).kategorija || {}).kodas;
+    lygu(k({ value: 174000, objectType: "Darbai (statyba)" }), "maza", "darbai 174 000");
+    lygu(k({ value: 200000, objectType: "Darbai (statyba)" }), "vidutine", "darbai 200 000");
+    lygu(k({ value: 5404000, objectType: "Darbai (statyba)" }), "didele", "darbai 5 404 000");
+    lygu(k({ value: 216000, objectType: "Prekės" }, "bendrasis"), "didele", "VPĮ prekės 216 000");
+    lygu(k({ value: 216000, objectType: "Prekės" }, "sektorinis"), "vidutine", "PĮ prekės 216 000");
+    tiesa(P({ value: 100000, objectType: "Mišrus" }).misrus, "mišrus turi būti pažymėtas");
+  });
+
+  await testas("Trumpalaikė - iki 12 mėn. imtinai, ilgalaikė - ilgesnė (Metodikos 2.8 ir 2.2 p.)", async ()=>{
+    lygu(P({ value: 100000, objectType: "Prekės", duration: "12 mėn." }).ilgalaike, false, "12 mėn.");
+    lygu(P({ value: 100000, objectType: "Prekės", duration: "13 mėn." }).ilgalaike, true, "13 mėn.");
+    lygu(P({ value: 100000, objectType: "Prekės", duration: "" }).trukme, null, "nenurodyta");
+  });
+}
+
+async function testaiSkaiciuokle(){
+  dabartine = grupe("Skaičiuoklė (Metodikos 12, 14, 16 p.)");
+
+  await testas("Patirtis: rekomendacija = vertė x modulio koeficientas pagal kategoriją, riba = 0,7 vertės", async ()=>{
+    const c = P({ value: 200000, objectType: "Prekės" });
+    lygu([c.patirtis.koef, c.patirtis.rekomenduojama, c.patirtis.riba], [0.5, 100000, 140000], "vidutinė 200 000");
+    const d = P({ value: 1000000, objectType: "Prekės" });
+    lygu([d.patirtis.koef, d.patirtis.riba], [0.3, 700000], "didelė 1 000 000");
+    const r = P({ value: 1000000, objectType: "Prekės", valueCat: "0.7" });
+    lygu(r.patirtis.koef, 0.7, "žmogaus pasirinktas koeficientas turi likti");
+  });
+
+  await testas("Pajamos: trumpalaikei - iki 2 kartų vertės; ilgalaikei - iki 2 kartų didžiausios metinės; mažai - paprastai nenustatomos", async ()=>{
+    const t = P({ value: 300000, objectType: "Paslaugos (kita)", duration: "12 mėn." });
+    lygu(t.pajamos.metodikosRiba, 600000, "trumpalaikė 300 000");
+    const i = P({ value: 300000, objectType: "Paslaugos (kita)", duration: "36 mėn." });
+    lygu([Math.round(i.pajamos.metodikosRiba), i.pajamos.istatymoRiba, i.pajamos.pavyzdys36], [200000, 600000, [60000, 210000]], "ilgalaikė 36 mėn.");
+    tiesa(P({ value: 60000, objectType: "Paslaugos (kita)" }).pajamos.nenustatomos, "maža vertė - pajamos paprastai nenustatomos");
+  });
+
+  await testas("Patirties laikotarpis: darbams 5 m., prekėms ir paslaugoms 3 m., mišriam - atskirai (Metodikos 16.1-16.3 p.)", async ()=>{
+    lygu(P({ value: 500000, objectType: "Darbai (statyba)" }).laikotarpis.metai, 5, "darbai (buvo „3 metai“)");
+    lygu(P({ value: 500000, objectType: "Prekės" }).laikotarpis.metai, 3, "prekės");
+    lygu(P({ value: 500000, objectType: "Paslaugos (IT/IS)" }).laikotarpis.metai, 3, "paslaugos");
+    const m = P({ value: 500000, objectType: "Mišrus" }).laikotarpis;
+    lygu([m.metai, m.raktas], [null, "met_patirtis_misrus"], "mišrus");
+  });
+
+  await testas("Skaičiuoklės langas: draudimas - tik jei privalomas (ne 25-50 % vertės), darbams - 5 metai", async ()=>{
+    pirkimas({});
+    const d = W.document;
+    W.switchView("calc");
+    d.getElementById("calc-value").value = 400000;
+    d.getElementById("calc-type").value = "Darbai (statyba)";
+    d.getElementById("calc-men").value = "36";
+    W.kategorijaNumatyta("calc"); W.runCalc();
+    const t = d.getElementById("calc-results").textContent;
+    tiesa(/Tik jei privalomas pagal teisės aktus/.test(t), "draudimo eilutė");
+    tiesa(!/25-50|25–50/.test(t), "liko draudimo procentai");
+    tiesa(/Patirties vertinimo laikotarpis\s*5 metai/.test(t.replace(/\s+/g, " ")), "darbams turi būti 5 metai");
+    tiesa(!/Maksimal/.test(t), "liko „Maksimalūs patirties metai“");
+  });
+
+  await testas("Vediklis: koeficientas parenkamas pagal kategoriją, bet ranka pasirinktas nebeperrašomas", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės", duration: "36 mėn." });
+    W.eval("PPQ.entry = 'info'; PPQ.step = 1;"); W.switchView("wizard"); W.renderWizard();
+    const d = W.document, sel = d.getElementById("p-valuecat"), v = d.getElementById("p-value");
+    lygu(sel.value, "0.5", "vidutinė vertė - 0,5");
+    tiesa(/vidutinė vertė - Metodikos 2\.10 p\./.test(d.getElementById("p-kat-info").textContent), "kategorijos paaiškinimas: " + d.getElementById("p-kat-info").textContent);
+    v.value = 50000; v.dispatchEvent(new W.Event("input"));
+    lygu(sel.value, "0.7", "maža vertė - 0,7");
+    sel.value = "0.5"; sel.dispatchEvent(new W.Event("change"));
+    v.value = 900000; v.dispatchEvent(new W.Event("input"));
+    lygu(sel.value, "0.5", "žmogaus pasirinkimas turi likti ir pakeitus vertę");
+    W.collectStep1();
+    lygu(W.eval("PPQ.procurement.koefRankinis"), true, "pasirinkimas įsimenamas");
+  });
+
+  await testas("Eilutės LT ir EN sutampa, EN - su dešimtainiu tašku", async ()=>{
+    const c = P({ value: 200000, objectType: "Prekės", duration: "36 mėn." });
+    const lt = W.proporcingumoEilutes(c, "lt"), en = W.proporcingumoEilutes(c, "en");
+    lygu(lt.map(e => e.id), en.map(e => e.id), "eilučių id");
+    tiesa(en.every(e => !/\b0,\d/.test(e.pagrindimas)), "EN tekste liko „0,7“: " + en.map(e => e.pagrindimas).join(" | "));
+  });
+}
+
+async function testaiTaisykles(){
+  dabartine = grupe("Taisyklių variklis (patikra)");
+
+  await testas("R1: iki modulio rekomendacijos - nieko; iki 0,7 - tik „low“; virš 0,7 - „high“ (anksčiau „high“ nuo rekomendacijos)", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    lygu(rasti(taisykles("Tiekėjas per paskutinius 3 metus yra patiekęs prekių už 100 000 EUR."), "R1").length, 0, "100 000");
+    lygu(rasti(taisykles("Tiekėjas per paskutinius 3 metus yra įvykdęs sutartį už 130 000 EUR."), "R1").map(i => i.sev), ["low"], "130 000");
+    lygu(rasti(taisykles("Tiekėjas per paskutinius 3 metus yra įvykdęs sutartį už 150 000 EUR."), "R1").map(i => i.sev), ["high"], "150 000");
+  });
+
+  await testas("R9: pajamų suma nelaikoma patirties suma; riba - 2 kartai vertės, ilgalaikei - 2 kartai metinės", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės", duration: "12 mėn." });
+    let is = taisykles("Tiekėjo metinės pajamos ne mažesnės kaip 380 000 EUR.", "B");
+    lygu([rasti(is, "R1").length, rasti(is, "R9").length], [0, 0], "380 000 trumpalaikei - teisėta (anksčiau R1 „high“)");
+    lygu(rasti(taisykles("Tiekėjo metinės pajamos ne mažesnės kaip 450 000 EUR.", "B"), "R9").map(i => i.sev), ["high"], "450 000 > 2 x 200 000");
+    pirkimas({ value: 200000, objectType: "Prekės", duration: "36 mėn." });
+    lygu(rasti(taisykles("Tiekėjo metinės pajamos ne mažesnės kaip 180 000 EUR.", "B"), "R9").map(i => i.sev), ["med"], "ilgalaikė: 180 000 > 2 x 66 667");
+  });
+
+  await testas("R9: mažos vertės sutarčiai - „low“; daugiau kaip 3 finansiniai metai - „med“", async ()=>{
+    pirkimas({ value: 60000, objectType: "Paslaugos (kita)" });
+    lygu(rasti(taisykles("Metinės pajamos ne mažesnės kaip 50 000 EUR.", "B"), "R9").map(i => i.sev), ["low"], "maža vertė");
+    pirkimas({ value: 300000, objectType: "Prekės" });
+    lygu(rasti(taisykles("Vidutinės metinės pajamos per paskutiniųjų 5 finansinių metų laikotarpį ne mažesnės kaip 100 000 EUR.", "B"), "R9").map(i => i.title), ["Per ilgas finansinių metų laikotarpis"], "5 finansiniai metai");
+  });
+
+  await testas("R12: darbų patirties laikotarpis trumpesnis nei 5 m. - „med“; 5 m. ir prekėms 3 m. - be pastabų", async ()=>{
+    pirkimas({ value: 6000000, objectType: "Darbai (statyba)" });
+    lygu(rasti(taisykles("Tiekėjas per paskutinius 3 metus yra atlikęs panašius darbus."), "R12").length, 1, "darbai 3 m.");
+    lygu(rasti(taisykles("Tiekėjas per paskutinius 5 metus yra atlikęs panašius darbus."), "R12").length, 0, "darbai 5 m.");
+    pirkimas({ value: 300000, objectType: "Prekės" });
+    lygu(rasti(taisykles("Tiekėjas per paskutinius 3 metus yra patiekęs panašių prekių."), "R12").length, 0, "prekės 3 m.");
+  });
+
+  await testas("R5 remiasi Metodikos 21 p. ir nebeteigia „standartas - 3 metai“", async ()=>{
+    pirkimas({ value: 300000, objectType: "Paslaugos (kita)" });
+    const r5 = rasti(taisykles("Projekto vadovas turi turėti 5 (penkerių) metų darbo patirtį."), "R5");
+    lygu(r5.length, 1, "R5 turi suveikti");
+    tiesa(/Metodikos 21 p\./.test(r5[0].ref) && !/Standartas dažniausiai 3 metai/.test(r5[0].body), "R5: " + r5[0].ref + " | " + r5[0].body);
+  });
+
+  await testas("R10 finansiniai santykiai, R11 draudimas, R13 nemokumas - su lietuviškomis galūnėmis", async ()=>{
+    pirkimas({ value: 600000, objectType: "Prekės" });
+    lygu(rasti(taisykles("Einamojo likvidumo koeficientas ne mažesnė kaip 2.", "B"), "R10").map(i => i.sev), ["med"], "likvidumas 2 > 1,5");
+    lygu(rasti(taisykles("Tiekėjas turi būti apsidraudęs profesinės civilinės atsakomybės draudimu.", "B"), "R11").length, 1, "draudimas („profesinės“)");
+    lygu(rasti(taisykles("Tiekėjas neturi būti nemokus, jam neturi būti iškelta bankroto byla.", "B"), "R13").length, 1, "nemokumas");
+    lygu(rasti(taisykles("Tiekėjas nemokamai apmokys darbuotojus."), "R13").length, 0, "„nemokamai“ - ne nemokumas");
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    lygu(rasti(taisykles("Bendrojo mokumo koeficientas ne mažesnis kaip 1.", "B"), "R10").map(i => i.sev), ["low"], "ne didelės vertės sutartis");
+  });
+
+  await testas("Sumos skaitomos per shared/money.js: 1 000 000,00 / 1,000,000.00 / 1.000.000 EUR", async ()=>{
+    lygu(W.parseEur("vertė ne mažesnė kaip 1 000 000,00 EUR"), [1000000], "ES su centais");
+    lygu(W.parseEur("value of at least 1,000,000.00 EUR"), [1000000], "JAV");
+    lygu(W.parseEur("ne mažiau kaip 1.000.000 EUR"), [1000000], "ES taškais");
+    lygu(W.parseEur("100 tūkst. EUR"), [100000], "tūkst.");
+  });
+}
+
+async function testaiInstrukcijaIrWordas(){
+  dabartine = grupe("AI instrukcija, AI užklausa ir Word priedas");
+
+  await testas("Kvazisubtiekėjas - Metodikos 2.4 p. specialistas, atskirai nuo 8.3 p. priemones suteikiančių asmenų", async ()=>{
+    pirkimas({});
+    const sp = W.systemPrompt();
+    tiesa(/Sąvoka \(Metodikos 2\.4 p\.\): kvazisubtiekėjas - specialistas/.test(sp), "nėra 2.4 p. sąvokos");
+    tiesa(/Tai NE tas pats, kas tretieji asmenys, tik suteikiantys priemones \(Metodikos 8\.3 p\.\)/.test(sp), "nėra 8.3 p. atskyrimo");
+    tiesa(!/Kvazisubtiekėjai \(Metodikos 8\.3 p\.\)/.test(sp), "liko klaidingas sutapatinimas su 8.3 p.");
+  });
+
+  await testas("AI instrukcija: PĮ - perkantysis subjektas LITGRID AB, VPĮ - perkančioji organizacija UAB EPSO-G", async ()=>{
+    pirkimas({}, "sektorinis");
+    tiesa(/Perkantysis subjektas LITGRID AB/.test(W.systemPrompt()), "PĮ režime turi būti „Perkantysis subjektas LITGRID AB“");
+    pirkimas({}, "bendrasis");
+    const sp = W.systemPrompt();
+    tiesa(/Perkančioji organizacija UAB EPSO-G\. Taikomas Viešųjų pirkimų įstatymas/.test(sp) && !/LITGRID/.test(sp), "VPĮ režime turi būti „Perkančioji organizacija UAB EPSO-G“ ir jokio LITGRID");
+  });
+
+  await testas("Kategorijos: B be „nemokumo nebuvimas“, D - vadybos sistemos, ne IEC", async ()=>{
+    const sp = W.systemPrompt();
+    const B = (sp.match(/^B\)[^\n]*/m) || [""])[0], D = (sp.match(/^D\)[^\n]*/m) || [""])[0];
+    tiesa(!/nemokumo nebuvimas/.test(B) && /pašalinimo pagrindas/.test(B), "B: " + B);
+    tiesa(/vadybos/.test(D) && !/ISO 9001\/14001\/45001\/27001, IEC/.test(D), "D: " + D);
+  });
+
+  await testas("AI generavimo užklausa gauna Metodikos reikšmes (perimta, nesiųsta)", async ()=>{
+    pirkimas({ value: 200000, objectType: "Darbai (statyba)", duration: "24 mėn. + 12 mėn. opcija" });
+    let uzkl = null;
+    W.callAI = async p => { uzkl = p; throw new Error("sustabdyta testui"); };
+    try { await W.generateRequirements(); } catch (e) {}
+    tiesa(uzkl, "užklausa nepagauta");
+    tiesa(/Patirties vertinimo laikotarpis: 5 metai/.test(uzkl), "darbams turi būti 5 metai");
+    tiesa(/Metinės pajamos: iki/.test(uzkl) && /Metodikos 12\.1 p\./.test(uzkl), "pajamos pagal 12.1 p.");
+    tiesa(!/Maksimalūs patirties metai|25-50|Minimali vidutinė metinė apyvarta/.test(uzkl), "liko senos reikšmės");
+  });
+
+  await testas("Word priedas: PĮ - perkantysis subjektas LITGRID, VPĮ - perkančioji organizacija EPSO-G; lentelėje Metodikos riba", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės", duration: "36 mėn." });
+    W.eval("PPQ.requirements = [{ id:'r1', category:'C', text:'Tiekėjas per paskutinius 3 metus yra patiekęs prekių už 100 000 EUR.', evidence:'Sąrašas', status:'human' }]");
+    const pi = await wordas("lt");
+    tiesa(/Perkantysis subjektas\s*LITGRID AB/.test(pi), "PĮ: nėra „Perkantysis subjektas LITGRID AB“");
+    // fmtEur tūkstančius skiria nekertamuoju tarpu (NBSP) - todėl \s, ne paprastas tarpas
+    tiesa(/riba 0,7 = 140\s000 EUR/.test(pi) && !/25-50/.test(pi), "PĮ lentelė be Metodikos ribos arba su draudimo procentais");
+    W.eval("PPQ.settings.context = 'bendrasis'");
+    const vpi = await wordas("lt");
+    tiesa(/Perkančioji organizacija\s*UAB EPSO-G/.test(vpi) && !/LITGRID AB\s*\n/.test(vpi.split("Pirkimo pavadinimas")[0]), "VPĮ: turi būti „Perkančioji organizacija UAB EPSO-G“");
+    tiesa(/216\s000 EUR/.test(vpi), "VPĮ: kategorija pagal VPĮ ribas (216 000)");
+    tiesa(/modulį \(UAB EPSO-G\)/.test(vpi) && !/LITGRID/.test(vpi), "VPĮ dokumente neturi likti LITGRID (ir pabaigos pastaboje)");
+    tiesa(/modulį \(LITGRID AB\)/.test(pi), "PĮ dokumento pabaigos pastaba - LITGRID AB");
+  });
+}
+
+(async function(){
+  try {
+    await modulis();
+    await testaiKategorija();
+    await testaiSkaiciuokle();
+    await testaiTaisykles();
+    await testaiInstrukcijaIrWordas();
+    document.getElementById("busena").textContent =
+      R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
+  } catch (e) {
+    document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
+  }
+})();
+</script>
+</body>
+</html>
