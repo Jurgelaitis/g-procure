@@ -1,11 +1,11 @@
 # Žinomi apribojimai ir 2-3 etapų planas - G-Procure Tiekėjams
 
-Būsena: 2026-09-02 (MVP).
+Būsena: 2026-09-02 (MVP), papildyta 2026-09-22 (tikri LITGRID paketai, veikimas be interneto).
 
 ## Žinomi apribojimai (MVP)
 
 1. **Nėra gyvos CVP IS jungties.** Pirkimo metaduomenys ir dokumentai neatsisiunčiami automatiškai; naudotojas įkelia oficialų ZIP pats. Priežastys ir sąlygos - `cvpis-feasibility.md`. Įrankis to neimituoja: būsena „Gyva CVP IS jungtis neįjungta" rodoma visada.
-2. **Metaduomenys iš dokumentų - euristiniai.** Terminas, BVPŽ, būdas, galiojimas, dalys atpažįstami regex'ais iš SPS / skelbimo teksto su šaltiniu; jei formuluotė kitokia - laukas nerodomas (ne išgalvojamas). Nesutapimai rodomi kaip konfliktas.
+2. **Metaduomenys iš dokumentų - euristiniai.** Terminas, BVPŽ, vertė, trukmė, būdas, galiojimas, dalys, kalba atpažįstami regex'ais iš TED skelbimo ir SPS teksto su šaltiniu; jei formuluotė kitokia - laukas nerodomas (ne išgalvojamas). Nesutapimai rodomi kaip konfliktas. Pasiūlymo kalba lyginama tik pagal pasiūlymo (paraiškos) FORMOS sakinį - „kiti dokumentai ir anglų kalba" neatitikimu nelaikoma.
 3. **Skenuoti PDF be OCR.** Pažymimi „be teksto sluoksnio"; tekstas neišgaunamas. OCR (pvz. tesseract.js iš CDN) - 2 etapas, nes lėtas ir netikslus LT diakritikoms be papildomo derinimo.
 4. **Paieška leksinė (BM25 + tikslūs raktai), ne semantinė.** Sinonimų (pvz. „laidavimas" vs „garantija") gali nerasti; kompensuojama plačiu kandidatų rinkiniu (14) ir AI perklausimu. Vektorinė paieška - 2 etapas su serveriu.
 5. **AI kelias per bendrą proxy.** Numatyta `api.g-procure.com/api/analyze` priima kliento promptą (30 r/min per IP). Rekomenduojamas produkcijai `worker/tiekejams-proxy.js` (serveris konstruoja promptą, Turnstile privalomas, kliente `TURNSTILE_SITE_KEY`) - parašytas, bet NEĮDIEGTAS (reikia Cloudflare dashboard'o ir Rate Limiting taisyklės, nes kode dažnio ribos nėra). Kol neįdiegtas - ta pati rizika kaip viešame PP-carbon.
@@ -16,7 +16,10 @@ Būsena: 2026-09-02 (MVP).
 9. **PĮ redakcija galioja iki 2026-12-31.** Nuo 2027-01-01 numatyta nauja - `zinios.js` registrą (S2) ir straipsnių citatas reikia pertikrinti; sąsaja rodo „galioja iki".
 10. **VPT DUK (klausk.vpt.lt) serveriui nepasiekiamas (Cloudflare 403)** - žinių bazė yra rankinė kopija su datomis; atnaujinti kas ketvirtį rankiniu būdu.
 11. **Analitika minimali.** Tik anoniminiai „padėjo / nepadėjo" skaitikliai localStorage; administracinio kokybės skydelio nėra (reikalautų serverio).
-12. **Testai be gyvo AI.** Automatiniai testai imituoja modelio atsakymus; gyva AI grandinė tikrinta rankiniu būdu 2026-09-02 (konfliktas, citatos, injekcija). Realių CVP IS ZIP paketų (ADOC, skenuoti PDF, xlsx) rinkinys kaip fikstūros - 2 etapo užduotis (į repo dėti tik viešus dokumentus).
+12. **Testai be gyvo AI.** Automatiniai testai imituoja modelio atsakymus; gyva AI grandinė tikrinta rankiniu būdu 2026-09-02 (konfliktas, citatos, injekcija) ir 2026-09-22 (keturi tikri LITGRID paketai, 2 x 13 tiekėjo klausimų). Realūs paketai į repo nededami - testuose atkartota jų sandara.
+13. **Veikimas be interneto - tik po pirmo apsilankymo su internetu** ir tik per `https:` / `localhost` (ne `file://`). Be ryšio AI atsakymų nėra - rodomos tikėtinos vietos dokumentuose, kontrolinis sąrašas neįvertinamas.
+14. **pdf.js minkštieji brūkšneliai.** TED skelbimo PDF brūkšneliai užrašyti kaip U+00AD; pdf.js 3.11.174 juos vienur išmeta („LOT0001"), kitur paverčia tarpu (pavadinime „330 110 10 kV" vietoj „330-110-10 kV"). SPS ir formose tekstas teisingas. Tai bibliotekos elgsena - taisyti būtų spėjimas.
+15. **Nepasirinktos šablono alternatyvos neaptinkamos.** Paskelbtame dokumente gali likti abu šablono variantai (2026-09-22 tikro paketo SPS: „... turi būti pateikiami lietuvių kalba. / ... kiti dokumentai gali būti pateikiami lietuvių arba anglų kalbomis"). Įrankis jų atskirai nežymi; tiekėjui tai - klausimas perkančiajam subjektui.
 
 ## 2 etapas - patikima gyva jungtis ir tiekėjo darbo erdvė
 
