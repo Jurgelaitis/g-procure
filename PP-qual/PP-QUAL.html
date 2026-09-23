@@ -20,8 +20,12 @@
 <!-- Bendras AI proxy transportas (shared) - GP_AI_PROXY. Turi buti pries modulio inline scripta. -->
 <script src="../shared/ai-proxy.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
-<!-- Teisės aktų nuorodos (PĮ / VPĮ / Metodika) - GP_TEISE. Straipsnių numerių modulyje nerašome. -->
+<!-- Teisės aktų nuorodos ir Metodikos skaičiai (PĮ / VPĮ / Metodika) - GP_TEISE. Numerių ir koeficientų modulyje nerašome. -->
 <script src="../shared/teises-nuorodos.js"></script>
+<!-- VPT vertės ribos - Metodikos vertės kategorijai (2.1, 2.5, 2.10 p.) -->
+<script src="../shared/thresholds.js"></script>
+<!-- Pinigų sumų skaitymas (JAV ir ES formatai) - GP_MONEY -->
+<script src="../shared/money.js"></script>
 <style>
 :root{
   /* Spalvos ir --font-base iškelti į ../shared/epso-g.css (GP dizaino žetonai). */
@@ -375,7 +379,7 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
         <ul style="padding-left:18px;font-size:14px;line-height:1.8;">
           <li>Per aukšti išsilavinimo reikalavimai (magistras/daktaras be pagrindimo)</li>
           <li>Reikalavimai, nesusiję su pirkimo objektu</li>
-          <li>Per didelė reikalaujama įvykdytos sutarties vertė (ignoruojant koeficientus)</li>
+          <li>Per didelė reikalaujama įvykdytos sutarties vertė (viršijanti Metodikos ribą)</li>
           <li>Nepagrįstas konkretus specialistų skaičius</li>
           <li>Per dideli reikalavimai jaunoms įmonėms (5+ metų patirtis)</li>
         </ul>
@@ -393,22 +397,31 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
   <section id="view-calc" class="view">
     <div class="card card-pad-lg">
       <h2>Proporcingumo skaičiuoklė</h2>
-      <p class="muted" style="margin-bottom:var(--space-3)">Pagal pirkimo vertę ir vertės kategoriją automatiškai apskaičiuojamos rekomenduojamos kvalifikacijos reikšmės. <span data-teise="met_patirtis"></span>: patirties reikšmė paprastai ne daugiau kaip 0,7 numatomos vertės. Kategorijos „didelės“ ir „vidutinės vertės“ bei koeficientai 0,3 ir 0,5 - šio modulio rekomendacija, ne teisės norma.</p>
+      <p class="muted" style="margin-bottom:var(--space-3)">Pagal pirkimo vertę, objekto tipą ir sutarties trukmę apskaičiuojamos rekomenduojamos kvalifikacijos reikšmės. Vertės kategorija ir trukmė nustatomos pagal <span data-teise="met_savokos"></span> ir VPT vertės ribas. <span data-teise="met_patirtis"></span>: patirties reikšmė paprastai ne daugiau kaip 0,7 numatomos vertės; mažesni koeficientai didesnės vertės sutartims - šio modulio rekomendacija, ne teisės norma.</p>
       <div class="row-2">
         <div class="field">
           <label>Numatoma pirkimo vertė (EUR be PVM)</label>
-          <input type="number" id="calc-value" placeholder="pvz. 730000" oninput="runCalc()">
+          <input type="number" id="calc-value" placeholder="pvz. 730000" oninput="kategorijaNumatyta('calc');runCalc()">
         </div>
         <div class="field">
-          <label>Vertės kategorija</label>
-          <select id="calc-cat" onchange="runCalc()">
-            <option value="0.3">Didelės vertės pirkimas (koef. 0,3)</option>
-            <option value="0.5" selected>Vidutinės vertės pirkimas (koef. 0,5)</option>
-            <option value="0.7">Mažos vertės pirkimas (koef. 0,7)</option>
-          </select>
-          <div class="hint">Koeficientas taikomas reikalaujamai įvykdytos sutarties vertei.</div>
+          <label>Pirkimo objekto tipas</label>
+          <!-- Parinktys - iš OBJECT_TYPES (init) -->
+          <select id="calc-type" onchange="kategorijaNumatyta('calc');runCalc()"></select>
         </div>
       </div>
+      <div class="row-2">
+        <div class="field">
+          <label>Sutarties trukmė, mėn. (su pratęsimais)</label>
+          <input type="number" id="calc-men" placeholder="pvz. 36" oninput="kategorijaNumatyta('calc');runCalc()">
+        </div>
+        <div class="field">
+          <label>Patirties koeficientas (modulio rekomendacija)</label>
+          <!-- Parinktys - koefParinktys() (init): modulio rekomendacija ir Metodikos riba iš registro -->
+          <select id="calc-valuecat" onchange="this.dataset.rankinis='1';runCalc()"></select>
+          <div class="hint">Parenkamas pagal vertės kategoriją; galite pakeisti.</div>
+        </div>
+      </div>
+      <div class="hint" id="calc-kat-info"></div>
       <div id="calc-results"></div>
     </div>
   </section>
@@ -452,7 +465,7 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
         <label>Pirkimo kontekstas</label>
         <select id="set-context">
           <option value="sektorinis" selected>Sektorinis (PĮ) - Litgrid</option>
-          <option value="bendrasis">Bendrasis (VPĮ)</option>
+          <option value="bendrasis">Bendrasis (VPĮ) - EPSO-G</option>
         </select>
       </div>
       <div class="check-row">
@@ -512,7 +525,7 @@ const CATS = {
   A:'Teisė užsiimti veikla',
   B:'Ekonominė ir finansinė padėtis',
   C:'Profesinė ir techninė kompetencija',
-  D:'Kokybės valdymo standartai',
+  D:'Kokybės ir aplinkos apsaugos vadybos standartai',
   E:'Aplinkosauga ir socialinė atsakomybė'
 };
 /* EN kategorijų pavadinimai (dvikalbiam eksportui) */
@@ -520,7 +533,7 @@ const CATS_EN = {
   A:'Right to pursue the professional activity',
   B:'Economic and financial standing',
   C:'Technical and professional capacity',
-  D:'Quality management standards',
+  D:'Quality and environmental management standards',
   E:'Environmental and social responsibility'
 };
 
@@ -563,6 +576,13 @@ function saveSettings(){
    VPĮ ir PĮ nuorodų nemaišome: GP_TEISE meta klaidą, jei sąvokai režimo nėra. */
 function rezimas(){ return PPQ.settings.context==='sektorinis' ? 'PI' : 'VPI'; }
 function istatymas(){ return rezimas()==='PI' ? 'PĮ' : 'VPĮ'; }
+/* Pirkimo vykdytojas pagal režimą (CLAUDE.md 2 sk.): LITGRID AB - perkantysis subjektas pagal PĮ,
+   UAB EPSO-G - perkančioji organizacija pagal VPĮ. Naudoja AI instrukcija ir Word priedas. */
+function vykdytojas(){
+  return rezimas()==='PI'
+    ? { statusas:'Perkantysis subjektas', statusasEn:'Contracting entity', pavadinimas:'LITGRID AB' }
+    : { statusas:'Perkančioji organizacija', statusasEn:'Contracting authority', pavadinimas:'UAB EPSO-G' };
+}
 function teise(raktas, kalba, trumpai){ return GP_TEISE.cit(raktas, rezimas(), kalba, {trumpai:!!trumpai}); }
 function rodykTeisinesNuorodas(){
   GP_TEISE.uzpildyk(document, rezimas());
@@ -578,9 +598,9 @@ function systemPrompt(){
   const R = rezimas(), PI = R==='PI';
   const ctx = PI
     ? 'Perkantysis subjektas LITGRID AB (Lietuvos elektros perdavimo sistemos operatorius, TSO). Taikomas Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų įstatymas (PĮ) - sektorinis įstatymas, atskiras nuo bendrojo VPĮ. Taikoma ES Direktyva '+GP_TEISE.aktas('PI').direktyva+'. Priežiūros institucija - Viešųjų pirkimų tarnyba (VPT).'
-    : 'Perkančioji organizacija. Taikomas Viešųjų pirkimų įstatymas (VPĮ). Taikoma ES Direktyva '+GP_TEISE.aktas('VPI').direktyva+'. Priežiūros institucija - VPT.';
+    : vykdytojas().statusas+' '+vykdytojas().pavadinimas+'. Taikomas Viešųjų pirkimų įstatymas (VPĮ). Taikoma ES Direktyva '+GP_TEISE.aktas('VPI').direktyva+'. Priežiūros institucija - VPT.';
   const met = GP_TEISE.aktas('MET');
-  const c = k => GP_TEISE.cit(k, R), apie = k => GP_TEISE.apie(k, R);
+  const c = k => GP_TEISE.cit(k, R), apie = k => GP_TEISE.apie(k, R), N = GP_TEISE.normos;
   // Metodikos teiginiai čia perrašyti iš e-tar teksto (8.3, 8.6, 8.7, 8.8, 16-16.3 p.,
   // tikrinta GP_TEISE.TIKRINTA). Keičiant - vėl skaityk e-tar, ne šį tekstą.
   return `Tu esi G-Procure kvalifikacinių reikalavimų modulis - ekspertinis AI asistentas tiekėjų kvalifikacinių reikalavimų nustatymui ir tikrinimui Lietuvos viešuosiuose pirkimuose. Atsakai TIK lietuvių kalba, profesiniu, dalykišku tonu.
@@ -603,14 +623,22 @@ ${PI ? '6' : '5'}. LAT praktika:
 
 VPT METODIKOS PAKEITIMAI (${met.redakcija}; iki 2026-07-01 pradėtos pirkimo procedūros tęsiamos pagal ankstesnę redakciją). PRIVALOMA taikyti:
 1. ${c('met_ebvpd')} (nauja redakcija): tiekėjas, teikdamas paraišką ar pasiūlymą, kaip pirminį įrodymą pateikia EBVPD (ebvpd.eviesiejipirkimai.lt/espd-web/) - aktualią deklaraciją, preliminariai patvirtinančią, kad jis ir subjektai, kurių pajėgumais jis remiasi, atitinka kvalifikacijos reikalavimus. Kiekvienas ūkio subjektas (išskyrus kvazisubtiekėjus) užpildo ATSKIRĄ EBVPD: reikalauk atskiro EBVPD iš tiekėjo ir iš kiekvieno subjekto, kurio pajėgumais jis remiasi. Pirkimo vykdytojas taip pat gali reikalauti, kad EBVPD pateiktų pasiūlymo pateikimo metu žinomi subtiekėjai, kurių pajėgumais tiekėjas nesiremia - kad patikrintų, ar nėra jų pašalinimo pagrindų, ir užtikrintų ${c('isipareigojimai')} įgyvendinimą.
-   Kvazisubtiekėjai (${c('met_kvazisubtiekejai')}) - tretieji asmenys, kurie patys sutarties nevykdo, o tik suteikia priemones (pvz., išnuomoja patalpas ar įrangą). Jų EBVPD ir pašalinimo pagrindų nebuvimą įrodančių dokumentų nereikalauk, bet tiekėjas su pasiūlymu turi įrodyti, kad tomis priemonėmis galės naudotis sutarties vykdymo metu.
+   Sąvoka (${c('met_kvazisubtiekejai')}): ${apie('met_kvazisubtiekejai')}; atskiro EBVPD jis nepildo.
+   Tai NE tas pats, kas tretieji asmenys, tik suteikiantys priemones (${c('met_treciuju_priemones')}): ${apie('met_treciuju_priemones')}.
 2. ${c('met_nacsaugumas')} (nauja redakcija): kai tikrinama atitiktis nacionalinio saugumo reikalavimui, nustatytam ${c('nacsaugumas')}, tiekėjas pateikia VPT nustatytos formos atitikties deklaraciją, o ekonomiškai naudingiausią pasiūlymą pateikęs tiekėjas - vieną ar kelis dokumentus (juridinio asmens steigimo dokumentų kopiją, Juridinių asmenų registro išplėstinį išrašą su istorija, JADIS išrašą ir kt.). Dokumentai, kuriuose nenurodytas galiojimo terminas, turi būti ne senesni kaip 3 mėnesių; jų galima neprašyti, jei atitiktį galima nustatyti iš kitų šaltinių.
    Nurodyk, KADA ir KOKIE dokumentai teikiami: su paraiška ar pasiūlymu - EBVPD (ir, kai taikoma, atitikties deklaracija); kvalifikaciją patvirtinantys dokumentai - iš ekonomiškai naudingiausią pasiūlymą pateikusio tiekėjo (${c('met_dokumentai')}). Nereikalauk visų dokumentų kartu su pasiūlymu.
 3. ${c('met_patirtis_darbai')}, ${c('met_patirtis_prekes_paslaugos')} ir ${c('met_patirtis_misrus')} (naujos redakcijos) - tiekėjo patirtis:
    a) patirtis įgyta SAVO JĖGOMIS: vertinama tai, ką atliko pats tiekėjas, tiekėjų grupės narys ar subjektas, kurio pajėgumais remiamasi, be subtiekėjų dalies; tiekėjų grupės narių patirtis sumuojama; kitų ūkio subjektų pajėgumais remtis galima tik tada, kai jie patys vykdys tą sutarties dalį; subtiekėjams šis reikalavimas nenustatomas;
    b) darbams reikalaujama, kad svarbiausių darbų atlikimas ir galutiniai rezultatai būtų tinkami (įrodoma užsakovų pažymomis); prekėms ir paslaugoms reikalauti „tinkamai“ galima, bet neprivaloma - tada paaiškink, kas laikoma tinkamu, ir prašyk užsakovų pažymų;
-   c) laikotarpis skaičiuojamas iki pasiūlymų pateikimo termino pabaigos: darbams - paskutiniai 5 metai, prekėms ir paslaugoms - paskutiniai 3 metai. Metodika numato galimybę laikotarpį ILGINTI, kai to reikia konkurencijai užtikrinti (objektas išskirtinis, panašūs darbai atliekami retai). Perkant skirtingų rūšių objektus, reikalavimai formuluojami atskirai kiekvienam;
+   c) laikotarpis skaičiuojamas iki pasiūlymų pateikimo termino pabaigos: darbams - paskutiniai ${N.patirtiesMetaiDarbai.reiksme} metai, prekėms ir paslaugoms - paskutiniai ${N.patirtiesMetaiPrekesPaslaugos.reiksme} metai. Metodika numato galimybę laikotarpį ILGINTI, kai to reikia konkurencijai užtikrinti (objektas išskirtinis, panašūs darbai atliekami retai). Perkant skirtingų rūšių objektus, reikalavimai formuluojami atskirai kiekvienam;
    d) nedalus objektas - galima reikalauti užbaigto galutinio rezultato, pasiekto pagal vieną ar kelias sutartis dėl to paties objekto; dalus ar tęstinis - patirtį galima įrodyti ir baigtomis sutartimis, ir nebaigtų sutarčių jau įvykdytomis dalimis (${c('met_patirtis')}).
+
+KITOS METODIKOS TAISYKLĖS (taikyk ir generuodamas, ir tikrindamas):
+${['met_mvp','met_didele_verte','met_vidutine_verte','met_maza_verte','met_ilgalaike','met_trumpalaike','met_finansiniai_veiksniai','met_apyvarta','met_apyvarta_bendros','met_mokumas','met_einamasis_likvidumas','met_kritinis_likvidumas','met_draudimas','met_personalas','met_technikos_specialistai','met_iranga','met_irankiai','met_darbuotoju_skaicius','met_prekiu_kokybe']
+  .map(k=>'- '+c(k)+' - '+apie(k)+'.').join('\n')}
+- ${c('pasalinimas_nemokumas')} - ${apie('pasalinimas_nemokumas')}.
+- ${c('vadybos_standartai')} - ${apie('vadybos_standartai')}.
+Konkretaus pirkimo vertės kategoriją, trukmę ir apskaičiuotas ribas gausi užklausoje - naudok jas, o draudimo sumos pagal pirkimo vertę nesiūlyk.
 
 DAŽNIAUSIOS KLAIDOS, KURIŲ PRIVALAI VENGTI (ESFA leidinys):
 1. Per aukšti išsilavinimo reikalavimai - magistro/daktaro reikalavimas dažnai nepagrįstas; praktinė patirtis svarbiau už akademinį laipsnį.
@@ -630,9 +658,9 @@ VPT IT PIRKIMŲ GAIRĖS (jei aktualu IT/IS pirkimui):
 
 KVALIFIKACIJOS KATEGORIJOS (kiekvienam reikalavimui priskirk vieną raidę):
 A) Teisė užsiimti veikla (licencijos, leidimai, registrų narystės).
-B) Ekonominė ir finansinė padėtis (apyvarta, profesinės atsakomybės draudimas, nemokumo nebuvimas).
-C) Profesinė ir techninė kompetencija (įvykdytos sutartys su koef. verte, specialistų kompetencijos BE skaičiaus, įranga).
-D) Kokybės valdymo standartai (ISO 9001/14001/45001/27001, IEC).
+B) Ekonominė ir finansinė padėtis (metinės pajamos, finansiniai santykiai; profesinės civilinės atsakomybės draudimas - tik kai privalomas pagal teisės aktus). Nemokumas čia nepriskiriamas - tai pašalinimo pagrindas.
+C) Profesinė ir techninė kompetencija (įvykdytos sutartys, specialistų kompetencijos BE skaičiaus, įranga ir priemonės).
+D) Kokybės ir aplinkos apsaugos vadybos standartai (kokybės vadybos sistema, pvz., ISO 9001; aplinkos apsaugos vadybos sistema, pvz., EMAS ar ISO 14001 - visada su lygiaverčiais sertifikatais). Gaminių atitiktis standartams (pvz., IEC) paprastai tikrinama techninėje specifikacijoje, kvalifikacijoje - tik ${c('met_prekiu_kokybe')} atveju.
 E) Aplinkosauga ir socialinė atsakomybė (žalieji pirkimai, socialiniai aspektai, tvarumas).
 
 PRINCIPAI: reikalavimai turi būti proporcingi, susiję su pirkimo objektu, nediskriminuojantys, ekonomiškai pagrįsti. Kai siūlai galimai per griežtą reikalavimą - aiškiai pažymėk įspėjimą su nuoroda į VPT/LAT.`;
@@ -899,30 +927,27 @@ function renderStep1(){
     <div class="row-2">
       <div class="field">
         <label>Pirkimo objekto tipas</label>
-        <select id="p-type">
+        <select id="p-type" onchange="kategorijaNumatyta('p')">
           <option value="" disabled ${p.objectType===''?'selected':''}>Pasirinkite pirkimo objekto tipą</option>
           ${OBJECT_TYPES.map(t=>`<option ${p.objectType===t?'selected':''}>${t}</option>`).join('')}
         </select>
       </div>
       <div class="field">
         <label>Numatoma vertė (EUR be PVM)</label>
-        <input type="number" id="p-value" value="${p.value||''}" placeholder="pvz. 730000">
+        <input type="number" id="p-value" value="${p.value||''}" placeholder="pvz. 730000" oninput="kategorijaNumatyta('p')">
       </div>
     </div>
     <div class="row-2">
       <div class="field">
-        <label>Vertės kategorija (modulio koef.)</label>
-        <select id="p-valuecat">
-          <option value="0.3" ${p.valueCat==='0.3'?'selected':''}>Didelės vertės (0,3)</option>
-          <option value="0.5" ${p.valueCat==='0.5'?'selected':''}>Vidutinės vertės (0,5)</option>
-          <option value="0.7" ${p.valueCat==='0.7'?'selected':''}>Mažos vertės (0,7)</option>
-        </select>
+        <label>Patirties koeficientas (modulio rekomendacija)</label>
+        <select id="p-valuecat" ${p.koefRankinis?'data-rankinis="1"':''} onchange="this.dataset.rankinis='1'">${koefParinktys(p.valueCat)}</select>
       </div>
       <div class="field">
-        <label>Sutarties trukmė</label>
-        <input type="text" id="p-duration" value="${esc(p.duration)}" placeholder="pvz. 24 mėn. + 12 mėn. opcija">
+        <label>Sutarties trukmė (su pratęsimais)</label>
+        <input type="text" id="p-duration" value="${esc(p.duration)}" placeholder="pvz. 24 mėn. + 12 mėn. opcija" oninput="kategorijaNumatyta('p')">
       </div>
     </div>
+    <div class="hint" id="p-kat-info" style="margin:-6px 0 12px"></div>
     <div class="field">
       <label>Trumpas pirkimo objekto aprašymas</label>
       <textarea id="p-desc" placeholder="Ką perka, koks sudėtingumas, specialūs reikalavimai...">${esc(p.desc)}</textarea>
@@ -938,6 +963,7 @@ function renderStep1(){
       </button>
     </div>
   </div>`;
+  kategorijaNumatyta('p');
 }
 
 function collectStep1(){
@@ -946,6 +972,7 @@ function collectStep1(){
   p.objectType=$('p-type').value;
   p.value=parseFloat($('p-value').value)||null;
   p.valueCat=$('p-valuecat').value;
+  p.koefRankinis=!!$('p-valuecat').dataset.rankinis;
   p.duration=$('p-duration').value.trim();
   p.desc=$('p-desc').value.trim();
   PPQ.settings.green=$('p-green').checked;
@@ -1006,7 +1033,6 @@ async function extractContextFromTs(){
   "name": "pirkimo pavadinimas (jei randamas, kitaip trumpas apibūdinimas)",
   "objectType": "vienas iš: Paslaugos (IT/IS) | Paslaugos (kita) | Prekės | Darbai (statyba) | Mišrus",
   "value": skaičius arba null (numatoma vertė EUR be PVM, jei randama),
-  "valueCat": "0.3 | 0.5 | 0.7 (spėk pagal vertę: didelė>=0.3, vidutinė=0.5, maža=0.7)",
   "duration": "sutarties trukmė jei randama, kitaip tuščia",
   "desc": "2-4 sakinių pirkimo objekto santrauka",
   "technologies": ["paminėtos technologijos/standartai/platformos"],
@@ -1022,7 +1048,7 @@ TS TEKSTAS:
     p.name=noDash(data.name||p.name);
     if(OBJECT_TYPES.includes(data.objectType)) p.objectType=data.objectType; // validuojam - AI gali grazinti ne sarase esancia reiksme; kitaip lieka '' -> placeholder
     p.value=data.value||p.value;
-    p.valueCat=data.valueCat||p.valueCat;
+    p.koefRankinis=false;   // koeficientas - pagal Metodikos vertės kategoriją (kategorijaNumatyta)
     p.duration=noDash(data.duration||'');
     p.desc=noDash(data.desc||'');
     p.extra='Technologijos: '+((data.technologies||[]).join(', ')||'-')+'\nSpecialūs reikalavimai: '+((data.specialRequirements||[]).join(', ')||'-');
@@ -1048,7 +1074,7 @@ Grąžink TIK JSON masyvą be papildomo teksto:
 PIRKIMO INFORMACIJA:
 Pavadinimas: ${p.name}
 Objekto tipas: ${p.objectType}
-Vertė: ${p.value?fmtEur(p.value):'nenurodyta'} (kategorija koef. ${p.valueCat})
+Vertė: ${p.value?fmtEur(p.value):'nenurodyta'}${(()=>{ const c=proporcingumas(p); return c.kategorija ? ' (Metodikos vertės kategorija: '+KATEGORIJA_LT[c.kategorija.kodas]+'; modulio koef. '+kbl(c.patirtis.koef)+')' : ''; })()}
 Trukmė: ${p.duration||'-'}
 Aprašymas: ${p.desc||'-'}
 ${p.extra?('Papildoma: '+p.extra):''}
@@ -1112,10 +1138,10 @@ async function generateRequirements(){
   // o AI issigalvotu nepagristas ribas (PI 59 str. 1 d. -> VPI 47 str. 1 d. disproporcingumo rizika). Netesiam.
   if(!p.value || p.value<=0){ throw new Error('Pirkimo vertė nenurodyta - reikalavimai negeneruojami. Įveskite pirkimo vertę.'); }
   const qa=PPQ.questions.map(q=>`- ${q.question} => ${PPQ.answers[q.id]||'(neatsakyta)'}`).join('\n');
-  const calc=computeProportional(p.value, parseFloat(p.valueCat));
+  const calc=proporcingumas(p);
   const prompt=`Sugeneruok PROPORCINGĄ kvalifikacinių reikalavimų rinkinį šiam pirkimui. Laikykis Metodikos, ${teise('kvalifikacija')}, LAT praktikos ir venk 5 dažniausių klaidų. Naudok apskaičiuotas proporcingumo reikšmes.
 
-Kiekvieną reikalavimą priskirk kategorijai A-E. NEreikalauk konkretaus specialistų skaičiaus. Patirtį sieki su specialistais, ne su įmone (išskyrus įvykdytos sutarties vertę). NEreikalauk magistro/daktaro be pagrindimo. Jei kuris nors reikalavimas galimai per griežtas - pažymėk "warning" su nuoroda.
+Kiekvieną reikalavimą priskirk kategorijai A-E. NEreikalauk konkretaus specialistų skaičiaus. IT/IS pirkimuose patirtį siek su specialistais (VPT IT gairės); kitur - su tiekėju pagal Metodiką, o tos pačios patirties nereikalauk ir iš tiekėjo, ir iš specialistų (${GP_TEISE.cit('met_patirtis')}). NEreikalauk magistro/daktaro be pagrindimo. Jei kuris nors reikalavimas galimai per griežtas - pažymėk "warning" su nuoroda.
 
 Grąžink TIK JSON masyvą be papildomo teksto:
 [
@@ -1128,11 +1154,8 @@ Grąžink TIK JSON masyvą be papildomo teksto:
   }
 ]
 
-Apskaičiuotos rekomenduojamos reikšmės (naudok jas):
-- Reikalaujama įvykdytos sutarties vertė: ${fmtEur(calc.contract)} (koef. ${p.valueCat})
-- Minimali vidutinė metinė apyvarta: ${fmtEur(calc.turnoverMin)} - ${fmtEur(calc.turnoverMax)}
-- Profesinės atsakomybės draudimas: ${fmtEur(calc.insMin)} - ${fmtEur(calc.insMax)}
-- Maksimalūs patirties metai: ${calc.years}
+Apskaičiuotos reikšmės pagal Metodiką (naudok jas; nuorodas rašyk tik taip, kaip čia):
+${proporcingumoEilutes(calc,'lt').map(e=>`- ${e.rodiklis}: ${e.reiksme} (${e.pagrindimas})`).join('\n')}
 
 PIRKIMAS:
 Pavadinimas: ${p.name}
@@ -1242,48 +1265,169 @@ function renderStep5(){
 }
 
 /* ============================================================
-   PROPORCINGUMO SKAIČIUOKLĖ
+   PROPORCINGUMO SKAIČIUOKLĖ - VPT METODIKOS LOGIKA
+   Tikrinta e-tar (GP_TEISE.TIKRINTA). Metodikos skaičiai (0,7, 2 kartai, 12 mėn.,
+   santykių intervalai) - GP_TEISE.normos, vertės ribos - shared/thresholds.js.
+   Čia - tik tai, kas yra MODULIO rekomendacija (MODULIO_KOEF), ir skaičiavimas.
    ============================================================ */
-function computeProportional(value, coef){
-  value = value||0; coef = coef||0.5;
-  const years = coef===0.3 ? 5 : 3; // didelės vertės/sudėtingiems iki 5
+/* Modulio rekomendacija patirties koeficientui (NE teisės norma): Metodikos 16 p. leidžia
+   iki 0,7, o didesnės vertės sutartims modulis siūlo mažiau. Kategorija - Metodikos 2.1, 2.5, 2.10 p. */
+const MODULIO_KOEF = { didele:'0.3', vidutine:'0.5', maza:'0.7' };
+const KATEGORIJA_LT = { didele:'didelė', vidutine:'vidutinė', maza:'maža' };
+const KATEGORIJA_EN = { didele:'high', vidutine:'medium', maza:'low' };
+const KATEGORIJA_KILM = { didele:'didelės', vidutine:'vidutinės', maza:'mažos' };   // „didelės vertės sutarčiai"
+function kbl(x){ return String(x).replace('.',','); }
+/* Koeficiento pasirinkimo parinktys (vediklis, auditas, skaičiuoklė) - iš MODULIO_KOEF ir registro. */
+function koefParinktys(pasirinkta){
+  const riba=GP_TEISE.normos.patirtiesRiba.reiksme;
+  return ['didele','vidutine','maza'].map(k=>{
+    const v=MODULIO_KOEF[k];
+    const pr=parseFloat(v)>=riba ? ' ('+GP_TEISE.cit('met_patirtis')+' riba)' : '';
+    return `<option value="${v}" ${pasirinkta===v?'selected':''}>${kbl(v)} - ${KATEGORIJA_KILM[k]} vertės sutarčiai${pr}</option>`;
+  }).join('');
+}
+
+/* Sutarties trukmė mėnesiais iš laisvo teksto: „24 mėn. + 12 mėn. opcija" -> 36, „3 metai" -> 36,
+   „1,5 metų" -> 18. Pratęsimai sudedami - trukmė skaičiuojama su jais. Datos („2027 m.")
+   praleidžiamos. null - neatpažinta (tada pajamų riba skaičiuojama kaip trumpalaikei).      */
+function trukmeMen(tekstas){
+  const t=String(tekstas||'').toLowerCase().replace(/(\d),(\d)/g,'$1.$2');
+  const re=/(\d+(?:\.\d+)?)\s*(mėn|men\b|metai|metų|metus|metams|m\.|dien)/g;
+  let men=0, rasta=false, m;
+  while((m=re.exec(t))){
+    const n=parseFloat(m[1]), vnt=m[2];
+    if(vnt==='m.' && n>=1900) continue;            // „2027 m." - data, ne trukmė
+    if(/^m(ė|e)n/.test(vnt)) men+=n;
+    else if(vnt==='dien') men+=n/30;
+    else men+=n*12;
+    rasta=true;
+  }
+  return rasta && men>0 ? Math.round(men*10)/10 : null;
+}
+
+/* Vertės ribos Metodikos kategorijai: darbams - darbų, prekėms, paslaugoms ir mišriam - prekių ir paslaugų. */
+function vertesRibos(objectType, rez){
+  const T=(window.GP_THRESHOLDS||{})[rez||rezimas()];
+  if(!T) return null;
+  const darbai=objectType==='Darbai (statyba)';
+  return { maza: darbai?T.mv_works:T.mv_goods, tarptautine: darbai?T.intl_works:T.intl_goods,
+           darbai, misrus: objectType==='Mišrus' };
+}
+
+/* Viskas apie proporcingumą vienoje vietoje - skaičiuoklė, AI užklausa, taisyklės ir Word
+   priedas naudoja tą patį. p = { value, valueCat, objectType, duration }.                   */
+function proporcingumas(p, rez){
+  const N=GP_TEISE.normos, v=p.value||0;
+  const ribos=vertesRibos(p.objectType, rez);
+  const kategorija=GP_TEISE.vertesKategorija(v, ribos);
+  const men=trukmeMen(p.duration);
+  const trukme=GP_TEISE.sutartiesTrukme(men);
+  const ilgalaike=!!(trukme && trukme.kodas==='ilgalaike');
+  const koef=parseFloat(p.valueCat) || parseFloat(MODULIO_KOEF[kategorija?kategorija.kodas:'vidutine']);
+  const metine = ilgalaike ? v*12/men : v;        // didžiausia metinė vertė, kai vykdoma tolygiai
+  const tipas=p.objectType||'';
+  const laikotarpis = tipas==='Darbai (statyba)' ? { metai:N.patirtiesMetaiDarbai.reiksme, raktas:'met_patirtis_darbai' }
+    : tipas==='Mišrus' ? { metai:null, raktas:'met_patirtis_misrus' }
+    : tipas ? { metai:N.patirtiesMetaiPrekesPaslaugos.reiksme, raktas:'met_patirtis_prekes_paslaugos' }
+    : { metai:null, raktas:null };
   return {
-    contract: value*coef,
-    turnoverMin: value*1,
-    turnoverMax: value*2,
-    insMin: value*0.25,
-    insMax: value*0.50,
-    years: years===5 ? '3 metai (iki 5 sudėtingiems/pagrįstiems)' : '3 metai'
+    verte:v, kategorija, ribos, misrus:!!(ribos&&ribos.misrus), men, trukme, ilgalaike,
+    patirtis:{ koef, rekomenduojama:v*koef, riba:v*N.patirtiesRiba.reiksme },
+    pajamos:{
+      nenustatomos: !!(kategorija && kategorija.kodas==='maza'),
+      istatymoRiba: v*N.pajamuKartai.reiksme,
+      metodikosRiba: metine*N.pajamuKartai.reiksme,
+      metine,
+      pavyzdys36: (ilgalaike && Math.abs(men-36)<0.5) ? [v*N.pajamu36men.nuo, v*N.pajamu36men.iki] : null
+    },
+    laikotarpis,
+    santykiai: !!(kategorija && kategorija.kodas==='didele')
   };
+}
+
+/* Proporcingumo eilutės (LT arba EN) - tas pats turinys skaičiuoklėje, AI užklausoje ir Word priede. */
+function proporcingumoEilutes(c, kalba){
+  const en=kalba==='en', N=GP_TEISE.normos;
+  const T=k=>GP_TEISE.cit(k, rezimas(), en?'en':'lt');
+  const L=(lt,e)=>en?e:lt;
+  const K=x=>en?String(x):kbl(x);   // dešimtainis skyriklis: LT kablelis, EN taškas
+  const rows=[];
+  if(c.kategorija) rows.push({ id:'kategorija', rodiklis:L('Vertės kategorija','Contract value category'),
+    reiksme:(en?KATEGORIJA_EN:KATEGORIJA_LT)[c.kategorija.kodas],
+    pagrindimas:`${T(c.kategorija.raktas)} (${L('ribos','thresholds')} ${fmtEur(c.ribos.maza)} / ${fmtEur(c.ribos.tarptautine)})`
+      + (c.misrus?L('; mišriam pirkimui - pagal prekių ir paslaugų ribas, patikslinkite pagal pagrindinį objektą','; mixed procurement - goods and services thresholds, check the main object'):'') });
+  if(c.kategorija && c.kategorija.kodas==='maza') rows.push({ id:'mvp', rodiklis:L('Metodikos taikymas','Methodology application'),
+    reiksme:L('Neprivaloma','Not mandatory'), pagrindimas:`${T('met_mvp')}: ${L('rekomenduojama laikytis jos principų','its principles are recommended')}` });
+  rows.push({ id:'trukme', rodiklis:L('Sutarties trukmė','Contract duration'),
+    reiksme:c.men ? `${K(c.men)} ${L('mėn.','months')}` : L('neatpažinta','not recognised'),
+    pagrindimas:c.trukme ? `${T(c.trukme.raktas)}: ${c.ilgalaike?L('ilgalaikė sutartis','long-term contract'):L('trumpalaikė sutartis','short-term contract')}`
+      : L('įrašykite, pvz., „36 mėn.“ - kol trukmė nežinoma, pajamų riba skaičiuojama kaip trumpalaikei','enter e.g. "36 months" - until then the turnover limit is calculated as for a short-term contract') });
+  const riba=`${T('met_patirtis')}: ${L('riba','limit')} ${K(N.patirtiesRiba.reiksme)} = ${fmtEur(c.patirtis.riba)}`;
+  rows.push({ id:'patirtis', rodiklis:L('Reikalaujama įvykdytų sutarčių vertė','Required value of performed contracts'),
+    reiksme:fmtEur(c.patirtis.rekomenduojama),
+    pagrindimas:`${fmtEur(c.verte)} x ${K(c.patirtis.koef)}`
+      + (c.patirtis.koef<N.patirtiesRiba.reiksme ? ` (${L('modulio rekomendacija','module recommendation')}); ${riba}` : ` (${riba})`) });
+  const kartai=N.pajamuKartai.reiksme, metai=N.pajamuMetai;
+  const metuTxt=L(`vertinami paprastai ${metai.paprastai===1?'paskutiniai finansiniai metai':'paskutiniai '+metai.paprastai+' finansiniai metai'} (pagrįstais atvejais - iki ${metai.daugiausia} paskutinių)`,
+                  `normally the last ${metai.paprastai===1?'financial year':metai.paprastai+' financial years'} (up to ${metai.daugiausia} where justified)`);
+  if(c.pajamos.nenustatomos) rows.push({ id:'pajamos', rodiklis:L('Metinės pajamos','Annual turnover'),
+    reiksme:L('Paprastai nenustatomos','Normally not set'), pagrindimas:`${T('met_apyvarta_bendros')}: ${L('mažos vertės sutartis','low-value contract')}` });
+  else if(c.ilgalaike) rows.push({ id:'pajamos', rodiklis:L('Metinės pajamos','Annual turnover'),
+    reiksme:`${L('iki','up to')} ${fmtEur(c.pajamos.metodikosRiba)}`,
+    pagrindimas:L(`ilgalaikė: ne daugiau kaip ${kartai} kartus didžiausios metinės vertės (apie ${fmtEur(c.pajamos.metine)} per metus, kai vykdoma tolygiai; ${T('met_apyvarta_bendros')})`,
+                  `long-term: not more than ${kartai} times the highest annual value (about ${fmtEur(c.pajamos.metine)} a year if performed evenly; ${T('met_apyvarta_bendros')})`)
+      + (c.pajamos.pavyzdys36 ? L(`; 36 mėn. pavyzdys - apie ${fmtEur(c.pajamos.pavyzdys36[0])} - ${fmtEur(c.pajamos.pavyzdys36[1])}`,`; 36-month example - about ${fmtEur(c.pajamos.pavyzdys36[0])} - ${fmtEur(c.pajamos.pavyzdys36[1])}`) : '')
+      + `; ${L('įstatymo riba','statutory limit')} ${fmtEur(c.pajamos.istatymoRiba)} - ${T('apyvarta')}; ${metuTxt}` });
+  else rows.push({ id:'pajamos', rodiklis:L('Metinės pajamos','Annual turnover'),
+    reiksme:`${L('iki','up to')} ${fmtEur(c.pajamos.istatymoRiba)}`,
+    pagrindimas:L(`ne daugiau kaip ${kartai} kartus numatomos vertės`,`not more than ${kartai} times the estimated value`)
+      + ` - ${T('met_apyvarta')}, ${T('apyvarta')}; ${metuTxt}` });
+  const lk=c.laikotarpis;
+  rows.push({ id:'laikotarpis', rodiklis:L('Patirties vertinimo laikotarpis','Experience reference period'),
+    reiksme: lk.metai ? `${lk.metai} ${L('metai','years')}` : lk.raktas ? L(`atskirai: prekės ir paslaugos - ${N.patirtiesMetaiPrekesPaslaugos.reiksme} m., darbai - ${N.patirtiesMetaiDarbai.reiksme} m.`,`separately: goods and services - ${N.patirtiesMetaiPrekesPaslaugos.reiksme} years, works - ${N.patirtiesMetaiDarbai.reiksme} years`) : L('pasirinkite objekto tipą','select the object type'),
+    pagrindimas: lk.raktas ? `${T(lk.raktas)}; ${L('laikotarpį galima ilginti, jei to reikia konkurencijai užtikrinti','the period may be extended if needed to ensure competition')}` : '-' });
+  rows.push({ id:'draudimas', rodiklis:L('Profesinės civilinės atsakomybės draudimas','Professional civil liability insurance'),
+    reiksme:L('Tik jei privalomas pagal teisės aktus','Only if required by law'),
+    pagrindimas:`${T('met_draudimas')}; ${L('kai draudimas privalomas pagal konkrečią sutartį - tai sutarties vykdymo sąlyga','insurance required for the specific contract is a contract performance condition')}` });
+  const sant=`${K(N.mokumas.nuo)}-${K(N.mokumas.iki)} (${T('met_mokumas')}), ${K(N.einamasisLikvidumas.nuo)}-${K(N.einamasisLikvidumas.iki)} (${T('met_einamasis_likvidumas')}), ${K(N.kritinisLikvidumas.nuo)}-${K(N.kritinisLikvidumas.iki)} (${T('met_kritinis_likvidumas')})`;
+  rows.push({ id:'santykiai', rodiklis:L('Finansiniai santykiai','Financial ratios'),
+    reiksme: c.santykiai ? L('Galimi, jei būtini','Possible if necessary') : L('Paprastai nenustatomi','Normally not set'),
+    pagrindimas: c.santykiai ? L(`bendrasis mokumas, einamasis ir kritinis likvidumas: ${sant}`,`solvency, current and quick ratio: ${sant}`)
+      : L(`Metodika juos rekomenduoja didelės vertės sutartims (${T('met_mokumas')}, ${T('met_einamasis_likvidumas')}, ${T('met_kritinis_likvidumas')})`,`the Methodology recommends them for high-value contracts (${T('met_mokumas')}, ${T('met_einamasis_likvidumas')}, ${T('met_kritinis_likvidumas')})`) });
+  return rows;
+}
+
+/* Įvedimo formos: vediklis ('p'), auditas ('a'), skaičiuoklė ('calc'). Pagal vertę ir objekto tipą
+   parenkamas numatytasis modulio koeficientas (jei žmogus jo nekeitė ranka) ir parodoma, kaip
+   modulis suprato vertės kategoriją ir trukmę.                                                  */
+function formosPirkimas(pr){
+  const f=id=>$(pr+'-'+id);
+  return { value:parseFloat((f('value')||{}).value)||0, objectType:(f('type')||{}).value||'',
+    duration: pr==='calc' ? (($('calc-men')||{}).value ? $('calc-men').value+' mėn.' : '') : ((f('duration')||{}).value||''),
+    valueCat: (f('valuecat')||{}).value||'' };
+}
+function kategorijaNumatyta(pr){
+  const sel=$(pr+'-valuecat'), info=$(pr+'-kat-info');
+  const c=proporcingumas(Object.assign(formosPirkimas(pr),{valueCat:''}));
+  if(sel && !sel.dataset.rankinis && c.kategorija) sel.value=MODULIO_KOEF[c.kategorija.kodas];
+  if(!info) return;
+  if(!c.kategorija){ info.textContent=''; return; }
+  const e=proporcingumoEilutes(c,'lt'), rasti=id=>e.find(x=>x.id===id);
+  info.textContent='Pagal Metodiką: '+rasti('kategorija').reiksme+' vertė - '+rasti('kategorija').pagrindimas
+    +'. Trukmė: '+rasti('trukme').reiksme+(c.trukme?' ('+(c.ilgalaike?'ilgalaikė':'trumpalaikė')+')':'')+'.';
 }
 
 function runCalc(){
   const val=parseFloat($('calc-value').value)||0;
-  const coef=parseFloat($('calc-cat').value);
   if(!val){ $('calc-results').innerHTML='<p class="muted" style="margin-top:var(--space-2)">Įveskite pirkimo vertę.</p>'; return; }
-  const c=computeProportional(val,coef);
+  const c=proporcingumas(formosPirkimas('calc'));
   $('calc-results').innerHTML=`
     <div class="calc-out">
-      <div class="calc-card">
-        <div class="lbl">Reikalaujama įvykdytos sutarties vertė</div>
-        <div class="val">${fmtEur(c.contract)}</div>
-        <div class="sub">${fmtEur(val)} &times; ${String(coef).replace('.',',')} (${coef>=0.7 ? GP_TEISE.cit('met_patirtis')+' riba' : 'modulio rekomendacija; '+GP_TEISE.cit('met_patirtis')+' riba - 0,7'})</div>
-      </div>
-      <div class="calc-card">
-        <div class="lbl">Minimali vidutinė metinė apyvarta</div>
-        <div class="val">${fmtEur(c.turnoverMin)}</div>
-        <div class="sub">Rekomendacija: ${fmtEur(c.turnoverMin)} - ${fmtEur(c.turnoverMax)} (1-2 kartai vertės)</div>
-      </div>
-      <div class="calc-card">
-        <div class="lbl">Profesinės atsakomybės draudimas</div>
-        <div class="val">${fmtEur(c.insMin)}</div>
-        <div class="sub">Rekomendacija: ${fmtEur(c.insMin)} - ${fmtEur(c.insMax)} (25-50% vertės)</div>
-      </div>
-      <div class="calc-card">
-        <div class="lbl">Maksimalūs praeities patirties metai</div>
-        <div class="val">${coef===0.3?'3-5':'3'}</div>
-        <div class="sub">${c.years}</div>
-      </div>
+      ${proporcingumoEilutes(c,'lt').map(e=>`<div class="calc-card">
+        <div class="lbl">${esc(e.rodiklis)}</div>
+        <div class="val">${esc(e.reiksme)}</div>
+        <div class="sub">${esc(e.pagrindimas)}</div>
+      </div>`).join('')}
     </div>
     <div class="info-block" style="margin-top:var(--space-2)">Šios reikšmės yra rekomendacinės viršutinės ribos. Aukštesni reikalavimai galimi tik su patikimu pagrindimu (LAT 3K-3-126/2010).</div>`;
 }
@@ -1316,15 +1460,25 @@ function renderAuditInput(){
     <p class="muted" style="margin-bottom:var(--space-3)">Įkelkite arba įklijuokite turimus kvalifikacinius reikalavimus. Patikrinsime jų proporcingumą, sąsają su pirkimo objektu ir atitiktį VPT metodikai bei LAT praktikai. Patikra dvisluoksnė: deterministinis taisyklių variklis + AI kontekstinis vertinimas.</p>
     <div class="row-2">
       <div class="field"><label>Pirkimo pavadinimas (konteksto patikslinimui)</label><input type="text" id="a-name" value="${esc(p.name)}" placeholder="neprivaloma"></div>
-      <div class="field"><label>Numatoma vertė (EUR be PVM)</label><input type="number" id="a-value" value="${p.value||''}" placeholder="padeda tikrinti proporcingumą"></div>
+      <div class="field"><label>Numatoma vertė (EUR be PVM)</label><input type="number" id="a-value" value="${p.value||''}" placeholder="padeda tikrinti proporcingumą" oninput="kategorijaNumatyta('a')"></div>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <label>Pirkimo objekto tipas</label>
+        <select id="a-type" onchange="kategorijaNumatyta('a')">
+          <option value="" ${p.objectType===''?'selected':''}>Nenurodytas</option>
+          ${OBJECT_TYPES.map(t=>`<option ${p.objectType===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Sutarties trukmė (su pratęsimais)</label>
+        <input type="text" id="a-duration" value="${esc(p.duration)}" placeholder="pvz. 36 mėn." oninput="kategorijaNumatyta('a')">
+      </div>
     </div>
     <div class="field">
-      <label>Vertės kategorija</label>
-      <select id="a-valuecat">
-        <option value="0.3" ${p.valueCat==='0.3'?'selected':''}>Didelės vertės (0,3)</option>
-        <option value="0.5" ${p.valueCat==='0.5'?'selected':''}>Vidutinės vertės (0,5)</option>
-        <option value="0.7" ${p.valueCat==='0.7'?'selected':''}>Mažos vertės (0,7)</option>
-      </select>
+      <label>Patirties koeficientas (modulio rekomendacija)</label>
+      <select id="a-valuecat" ${p.koefRankinis?'data-rankinis="1"':''} onchange="this.dataset.rankinis='1'">${koefParinktys(p.valueCat)}</select>
+      <div class="hint" id="a-kat-info"></div>
     </div>
     <div class="dropzone" id="aud-drop" onclick="$('aud-file').click()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -1341,6 +1495,7 @@ function renderAuditInput(){
       <button class="btn btn-primary" id="aud-start" onclick="startAudit()"><span>Patikrinti reikalavimus</span></button>
     </div>
   </div>`;
+  kategorijaNumatyta('a');
 }
 
 async function handleAuditFile(file){
@@ -1366,7 +1521,10 @@ async function startAudit(){
   rodykKirpima('aud-kirpimas', r);
   PPQ.procurement.name=$('a-name').value.trim()||PPQ.procurement.name;
   PPQ.procurement.value=parseFloat($('a-value').value)||PPQ.procurement.value;
+  PPQ.procurement.objectType=$('a-type').value||PPQ.procurement.objectType;
+  PPQ.procurement.duration=$('a-duration').value.trim();
   PPQ.procurement.valueCat=$('a-valuecat').value;
+  PPQ.procurement.koefRankinis=!!$('a-valuecat').dataset.rankinis;
   PPQ.sourceText=txt;
   const btn=$('aud-start');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Skaidoma į reikalavimus...';
@@ -1400,49 +1558,118 @@ TEKSTAS:
 
 /* ---------- TAISYKLIŲ VARIKLIS (deterministinis) ---------- */
 function parseEur(text){
-  // randa EUR sumas tekste
+  // randa EUR sumas tekste; skaičių skaito shared/money.js (1 000 000,00 / 1,000,000.00 / 1.000.000)
   const out=[];
-  const re=/(\d[\d  \.]*\d|\d)\s*(?:tūkst\.?|tūkstanči[ųiai]*)?\s*(?:Eur|EUR|€)/gi;
+  const re=/(\d[\d \u00a0\u202f.,]*\d|\d)\s*(?:tūkst\.?|tūkstanči[ųiai]*)?\s*(?:Eur|EUR|€)/gi;
   let m;
   while((m=re.exec(text))){
-    let num=m[1].replace(/[  \.]/g,'');
-    let v=parseInt(num,10);
-    if(/tūkst/i.test(m[0])) v*=1000;
-    if(!isNaN(v)&&v>0) out.push(v);
+    let v=GP_MONEY.parseEUR(m[1]);
+    if(v!=null && /tūkst/i.test(m[0])) v*=1000;
+    if(v!=null && v>0) out.push(v);
   }
   return out;
 }
+/* Reikalavimo tekstas sakiniais: sumos priskiriamos tam sakiniui, kuriame jos parašytos
+   (pajamų suma nebelaikoma patirties suma ir atvirkščiai). */
+function sakiniai(t){ return String(t||'').split(/(?<=[.;!?])\s+|\n+/).filter(x=>x.trim()); }
+
 function rulesEngine(r){
   const issues=[];
   const t=r.text.toLowerCase();
   const p=PPQ.procurement;
-  const coef=parseFloat(p.valueCat)||0.5;
+  const N=GP_TEISE.normos, M=k=>GP_TEISE.cit(k);
+  const c=proporcingumas(p);
+  const koef=c.patirtis.koef;
+  const PAJAMOS=/pajam|apyvart/i, PATIRTIS=/sutart|įvykd|patiek|suteik|atlik|patirt/i;
 
-  // R1: įvykdytos sutarties vertė vs koeficientas
-  if(p.value && /sutart|vert|apyvart|įvykd/i.test(t)){
-    const sums=parseEur(r.text);
-    const recommended=p.value*coef;
-    const tooHigh=sums.find(s=> s>recommended*1.1 && s<=p.value*3);
-    if(tooHigh){
-      issues.push({sev:'high',rule:'R1',title:'Per didelė reikalaujama vertė',
-        body:`Reikalaujama vertė ${fmtEur(tooHigh)} viršija rekomenduojamą ${fmtEur(recommended)} (pirkimo vertė ${fmtEur(p.value)} x koef. ${String(coef).replace('.',',')}).`,
-        ref: GP_TEISE.cit('met_patirtis')+' (paprastai iki 0,7)'+(coef<0.7 ? '; koef. '+String(coef).replace('.',',')+' - modulio rekomendacija' : ''),
-        fix:`Sumažinti iki ne daugiau kaip ${fmtEur(recommended)}.`});
+  for(const sak of sakiniai(r.text)){
+    const sums=p.value ? parseEur(sak) : [];
+    if(PAJAMOS.test(sak)){
+      // R9: metinės pajamos (Metodikos 12, 12.1 p.; VPĮ 47 str. 3 d. 1 p.)
+      if(c.pajamos.nenustatomos)
+        issues.push({sev:'low',rule:'R9',title:'Pajamų reikalavimas mažos vertės sutarčiai',
+          body:`Numatoma sutarties vertė maža (${M('met_maza_verte')}). ${M('met_apyvarta_bendros')}: tokiai sutarčiai pajamų reikalavimas paprastai nenustatomas.`,
+          ref:M('met_apyvarta_bendros'), fix:'Įvertinti, ar reikalavimas būtinas; jei ne - pašalinti.'});
+      const virsIst=sums.find(x=>x>c.pajamos.istatymoRiba);
+      const virsMet=c.ilgalaike ? sums.find(x=>x>c.pajamos.metodikosRiba) : null;
+      if(virsIst)
+        issues.push({sev:'high',rule:'R9',title:'Pajamų reikalavimas viršija dvigubą pirkimo vertę',
+          body:`Reikalaujama ${fmtEur(virsIst)} - daugiau nei ${N.pajamuKartai.reiksme} kartus numatomos pirkimo vertės (${fmtEur(c.pajamos.istatymoRiba)}). Tai galima tik pagrįstais atvejais, o pagrindinės priežastys nurodomos pirkimo dokumentuose ar pirkimo procedūrų ataskaitoje.`,
+          ref:`${teise('apyvarta')}; ${M('met_apyvarta')}`,
+          fix:`Sumažinti iki ne daugiau kaip ${fmtEur(c.pajamos.istatymoRiba)} arba pirkimo dokumentuose nurodyti priežastis.`});
+      else if(virsMet)
+        issues.push({sev:'med',rule:'R9',title:'Ilgalaikei sutarčiai - pagal metinę vertę',
+          body:`Sutartis ilgalaikė (${kbl(c.men)} mėn., ${M('met_ilgalaike')}). ${M('met_apyvarta_bendros')}: pajamų reikalavimas - ne daugiau kaip ${N.pajamuKartai.reiksme} kartus didžiausios metinės vertės (${fmtEur(c.pajamos.metodikosRiba)}, kai kasmet vykdoma tolygiai)`
+            + (c.pajamos.pavyzdys36 ? `; 36 mėn. pavyzdys - apie ${fmtEur(c.pajamos.pavyzdys36[0])}-${fmtEur(c.pajamos.pavyzdys36[1])}.` : '.') + ` Reikalaujama ${fmtEur(virsMet)}.`,
+          ref:M('met_apyvarta_bendros'),
+          fix:`Sumažinti iki ne daugiau kaip ${fmtEur(c.pajamos.metodikosRiba)} arba pagrįsti netolygiu vykdymu.`});
+      const metuM=sak.match(/(?:paskutini[a-ząčęėįšųūž]*|pastar[a-ząčęėįšųūž]*)\s+(\d+)\s*(?:\([^)]*\)\s*)?finansin/i) || sak.match(/(\d+)\s*(?:\([^)]*\)\s*)?(?:paskutini[a-ząčęėįšųūž]*|pastar[a-ząčęėįšųūž]*)\s+finansin/i);
+      if(metuM && parseInt(metuM[1],10)>N.pajamuMetai.daugiausia)
+        issues.push({sev:'med',rule:'R9',title:'Per ilgas finansinių metų laikotarpis',
+          body:`Vertinami ${metuM[1]} finansiniai metai. ${M('met_apyvarta')}: daugiausia ${N.pajamuMetai.daugiausia} paskutiniai finansiniai metai (paprastai ${N.pajamuMetai.paprastai}).`,
+          ref:M('met_apyvarta'), fix:`Sutrumpinti iki ${N.pajamuMetai.paprastai} (pagrįstais atvejais - iki ${N.pajamuMetai.daugiausia}) finansinių metų.`});
+    }else if(PATIRTIS.test(sak)){
+      // R1: patirties (įvykdytų sutarčių) vertė (Metodikos 16 p.)
+      const virsRibos=sums.find(x=>x>c.patirtis.riba);
+      const virsRek=sums.find(x=>x>c.patirtis.rekomenduojama*1.1);
+      if(virsRibos)
+        issues.push({sev:'high',rule:'R1',title:'Patirties vertė viršija Metodikos ribą',
+          body:`Reikalaujama ${fmtEur(virsRibos)} - daugiau nei ${kbl(N.patirtiesRiba.reiksme)} numatomos vertės (${fmtEur(c.patirtis.riba)}). ${M('met_patirtis')}: reikalaujama patirties reikšmė paprastai ne didesnė kaip ${kbl(N.patirtiesRiba.reiksme)} numatomos vertės, kiekio ar apimties; daugiau - tik su pagrindimu.`,
+          ref:`${M('met_patirtis')}; ${teise('kvalifikacija')}`,
+          fix:`Sumažinti iki ne daugiau kaip ${fmtEur(c.patirtis.riba)} (modulio rekomendacija - ${fmtEur(c.patirtis.rekomenduojama)}) arba pagrįsti.`});
+      else if(virsRek && koef<N.patirtiesRiba.reiksme)
+        issues.push({sev:'low',rule:'R1',title:'Patirties vertė didesnė už modulio rekomendaciją',
+          body:`Reikalaujama ${fmtEur(virsRek)}: Metodikos ribos (${fmtEur(c.patirtis.riba)}) tai neviršija, bet didesnė už modulio rekomendaciją ${fmtEur(c.patirtis.rekomenduojama)} (koef. ${kbl(koef)}).`,
+          ref:`${M('met_patirtis')} (riba ${kbl(N.patirtiesRiba.reiksme)}); koef. ${kbl(koef)} - modulio rekomendacija`,
+          fix:`Apsvarstyti ${fmtEur(c.patirtis.rekomenduojama)} - mažesnis reikalavimas didina konkurenciją.`});
+      // R12: patirties vertinimo laikotarpis (Metodikos 16.1, 16.2 p.)
+      const laikM=sak.match(/per\s+(?:paskutinius|pastaruosius)\s+(\d+)\s*(?:\([^)]*\)\s*)?met/i);
+      if(laikM && c.laikotarpis.metai && !/finansin/i.test(sak) && parseInt(laikM[1],10)<c.laikotarpis.metai)
+        issues.push({sev:'med',rule:'R12',title:'Patirties laikotarpis trumpesnis nei Metodikoje',
+          body:`Nustatyta ${laikM[1]} m., o ${M(c.laikotarpis.raktas)} - ${c.laikotarpis.metai} m. Trumpesnis laikotarpis mažina tiekėjų, galinčių įrodyti patirtį, skaičių; Metodika numato tik galimybę laikotarpį ilginti, kai to reikia konkurencijai užtikrinti.`,
+          ref:M(c.laikotarpis.raktas), fix:`Nustatyti ${c.laikotarpis.metai} m. laikotarpį (ar ilgesnį, jei reikia konkurencijai).`});
     }
   }
-  // R2: konkretus specialistų skaičius
+  // R10: finansiniai santykiai (Metodikos 13.1-13.3 p.)
+  const santM=[['mokumas',/bendrojo\s+(?:\(pastovaus\)\s+)?mokumo/i],['kritinisLikvidumas',/kritinio\s+likvidumo/i],['einamasisLikvidumas',/einamojo\s+likvidumo/i]]
+    .find(([,re])=>re.test(r.text));
+  if(santM){
+    const n=N[santM[0]];
+    const sak=sakiniai(r.text).find(x=>santM[1].test(x))||'';
+    const x=(sak.match(/(?:ne\s+mažesn[a-ząčęėįšųūž]*\s+(?:kaip|nei|už)|≥|>=)\s*(\d+(?:[.,]\d+)?)/i)||[])[1];
+    if(x && parseFloat(x.replace(',','.'))>n.iki)
+      issues.push({sev:'med',rule:'R10',title:'Finansinio santykio reikalavimas virš Metodikos intervalo',
+        body:`Reikalaujama ne mažiau kaip ${x}, o ${M(n.saltinis)} nurodo reikšmę nuo ${kbl(n.nuo)} iki ${kbl(n.iki)} (atsižvelgiant į sektoriaus statistiką).`,
+        ref:`${M(n.saltinis)}; ${teise('finansinis_santykis')}`, fix:`Nustatyti reikšmę ne didesnę kaip ${kbl(n.iki)}.`});
+    if(!c.santykiai)
+      issues.push({sev:'low',rule:'R10',title:'Finansinis santykis ne didelės vertės sutarčiai',
+        body:`${M(n.saltinis)}: šį rodiklį rekomenduojama taikyti didelės vertės sutartims; ši sutartis ${c.kategorija ? KATEGORIJA_KILM[c.kategorija.kodas]+' vertės' : 'nėra didelės vertės arba vertė nenurodyta'}.`,
+        ref:M(n.saltinis), fix:'Įvertinti, ar rodiklis būtinas; jei ne - pašalinti.'});
+  }
+  // R11: profesinės civilinės atsakomybės draudimas (Metodikos 14 p.)
+  // Lietuviškos raidės: JS \w jų neatpažįsta („profesinės"), todėl raidžių klasė nurodyta atskirai.
+  if(/(?:civilin|profesin)[a-ząčęėįšųūž]*\s+(?:civilin[a-ząčęėįšųūž]*\s+)?atsakomyb[a-ząčęėįšųūž]*\s+draudim/i.test(t))
+    issues.push({sev:'low',rule:'R11',title:'Draudimas kaip kvalifikacijos reikalavimas',
+      body:`${M('met_draudimas')}: profesinės civilinės atsakomybės draudimas kvalifikacijos reikalavimu nustatomas tik kai teisės aktai įpareigoja tokia veikla užsiimančius asmenis draustis (pvz., advokatus, auditorius, notarus). Kai privaloma apdrausti pagal konkrečią sutartį teikiamas paslaugas ar darbus - tai sutarties vykdymo sąlyga.`,
+      ref:`${M('met_draudimas')}; ${teise('draudimas')}`, fix:'Palikti tik jei draudimas šiai veiklai privalomas pagal teisės aktus; kitaip perkelti į sutarties sąlygas.'});
+  // R13: nemokumas - pašalinimo pagrindas, ne kvalifikacija
+  if(/nemokum|nemok(?:us|i)\b|bankrot|likvidavim|restruktūrizavim/i.test(t))
+    issues.push({sev:'med',rule:'R13',title:'Pašalinimo pagrindas tarp kvalifikacijos reikalavimų',
+      body:`Nemokumas, bankrotas, likvidavimas ar restruktūrizavimas - tiekėjo pašalinimo pagrindas (${teise('pasalinimas_nemokumas')}), ne kvalifikacijos reikalavimas. Finansinį pajėgumą vertina pajamos ir finansiniai santykiai.`,
+      ref:teise('pasalinimas_nemokumas'), fix:'Perkelti į tiekėjų pašalinimo pagrindus; kvalifikacijoje palikti tik finansinio pajėgumo reikalavimus.'});
+  // R2: konkretus specialistų skaičius (Metodikos 21 p.)
   const specNum=r.text.match(/ne mažiau kaip\s+(\d+)\s+(?:specialist|darbuotoj|ekspert|asmen)/i) || r.text.match(/(\d+)\s+(?:specialist[ųaią]+|darbuotoj[ųai]+)/i);
   if(specNum && parseInt(specNum[1])>1){
     issues.push({sev:'med',rule:'R2',title:'Nurodytas konkretus specialistų skaičius',
-      body:`Reikalaujama konkretaus specialistų skaičiaus (${specNum[1]}). VPT rekomenduoja apibūdinti kompetencijas, o ne reikalauti tikslaus skaičiaus - išteklių derinį parenka pats tiekėjas.`,
-      ref:'ESFA / VPT rekomendacija',
+      body:`Reikalaujama konkretaus specialistų skaičiaus (${specNum[1]}). ${M('met_personalas')}: nurodomos reikalaujamos kompetencijos, o siūlomą asmenų skaičių nurodo tiekėjas; tas pats asmuo gali atlikti kelias funkcijas, o skaičius nustatomas tik išimtiniais atvejais (pvz., kai mokymai vienu metu vyksta kelioms grupėms).`,
+      ref:`${M('met_personalas')}; ESFA`,
       fix:'Pakeisti į kompetencijų apibūdinimą be konkretaus skaičiaus.'});
   }
-  // R3: magistro/daktaro laipsnis
+  // R3: magistro/daktaro laipsnis (Metodikos 21 p., VPT IT gairės)
   if(/magistr|daktar|aukštasis universitetinis|magistro laipsn/i.test(t)){
     issues.push({sev:'med',rule:'R3',title:'Reikalaujamas akademinis laipsnis',
-      body:'Reikalaujamas magistro/daktaro laipsnis dažnai nepagrįstas. IT ir kt. srityse praktinė patirtis ir kompetencijos svarbiau už akademinį laipsnį.',
-      ref:'VPT IT gairės; ESFA',
+      body:`Reikalaujamas magistro/daktaro laipsnis dažnai nepagrįstas. ${M('met_personalas')}: išsilavinimo reikalavimas nustatomas atsižvelgiant į pirkimo objekto specifiką (pvz., moksliniai tyrimai), o kai kvalifikaciją patvirtina atestatas - atskirai nekeliamas. IT ir kt. srityse praktinė patirtis dažnai svarbiau.`,
+      ref:`${M('met_personalas')}; VPT IT gairės`,
       fix:'Keisti į praktinės patirties / kompetencijų reikalavimą arba pagrįsti būtinybę.'});
   }
   // R4: geografinis apribojimas
@@ -1452,16 +1679,16 @@ function rulesEngine(r){
       ref: teise('principai')+'; Direktyva '+GP_TEISE.aktas(rezimas()).direktyva,
       fix:'Pašalinti geografinį apribojimą arba leisti lygiavertę patirtį ES mastu.'});
   }
-  // R5: per ilga patirtis / jaunoms įmonėms
-  const yrs=r.text.match(/(\d+)\s*(?:\(?\s*\w*\s*\)?\s*)?met[ųaiuose]+\s+(?:patirt|darbo)/i);
+  // R5: ilgas stažas (patirtis metais) - Metodikos 21 p.; ESFA (jaunos įmonės)
+  const yrs=r.text.match(/(\d+)\s*(?:\(?\s*[a-ząčęėįšųūž]*\s*\)?\s*)?met[ųaiuose]+\s+(?:patirt|darbo)/i);
   if(yrs && parseInt(yrs[1])>=5){
-    issues.push({sev:'med',rule:'R5',title:'Ilgas patirties reikalavimas',
-      body:`Reikalaujama ${yrs[1]} metų patirties. Tai gali nepagrįstai apriboti jaunesnes pajėgias įmones. Standartas dažniausiai 3 metai.`,
-      ref:'ESFA; VPT metodika',
-      fix:'Mažinti iki 3 metų, nebent ilgesnė patirtis pagrįsta objekto sudėtingumu.'});
+    issues.push({sev:'med',rule:'R5',title:'Ilgas patirties (stažo) reikalavimas',
+      body:`Reikalaujama ${yrs[1]} metų patirties. ${M('met_personalas')}: kai patirtis matuojama trukme, nurodykite, kaip ji skaičiuojama (vertinama tik faktiškai turima patirtis), ir įvertinkite, ar tokia trukmė būtina - ilgas stažas gali nepagrįstai riboti jaunesnes pajėgias įmones ir specialistus. Tai ne tas pats, kas tiekėjo patirties vertinimo laikotarpis (${M('met_patirtis_darbai')}, ${M('met_patirtis_prekes_paslaugos')}).`,
+      ref:`${M('met_personalas')}; ESFA`,
+      fix:'Sumažinti arba pagrįsti objekto sudėtingumu; patirtį apibrėžti projektais ar darbais, ne vien metais.'});
   }
   // R6: sistemos paskirties / konkrečios sistemos minėjimas (IT)
-  if(PPQ.settings.it && /(analogišk|panaš)\w*\s+pirkimo objektui|sveikatos priežiūros|finansinių instrument|microsoft dynamics|sharepoint|saperion|konkrečios sistemos/i.test(t)){
+  if(PPQ.settings.it && /(analogišk|panaš)[a-ząčęėįšųūž]*\s+pirkimo objektui|sveikatos priežiūros|finansinių instrument|microsoft dynamics|sharepoint|saperion|konkrečios sistemos/i.test(t)){
     issues.push({sev:'high',rule:'R6',title:'Reikalavimas susietas su sistemos paskirtimi/pavadinimu',
       body:'IT pirkimuose specialisto/tiekėjo patirties nereikėtų sieti su konkrečios sistemos paskirtimi ar pavadinimu (pvz. "finansinių instrumentų valdymui", "analogiškos pirkimo objektui"). Svarbu technologijos/kompetencijos.',
       ref:'VPT IT gairės (2023-01-18)',
@@ -1507,7 +1734,8 @@ async function runFullAudit(){
 Grąžink TIK JSON masyvą:
 [{"reqId":"id iš sąrašo","sev":"high|med|low|ok","title":"trumpas pavadinimas","body":"problemos paaiškinimas","ref":"${istatymas()} / Metodikos / LAT nuoroda","fix":"pataisytas reikalavimo tekstas arba rekomendacija"}]
 
-PIRKIMAS: ${p.name||'-'} | vertė ${p.value?fmtEur(p.value):'nenurodyta'} | koef. ${p.valueCat}
+PIRKIMAS: ${p.name||'-'} | vertė ${p.value?fmtEur(p.value):'nenurodyta'} | objekto tipas ${p.objectType||'-'} | trukmė ${p.duration||'-'}
+${p.value ? 'Reikšmės pagal Metodiką (tikrink pagal jas; nuorodas rašyk tik taip, kaip čia):\n'+proporcingumoEilutes(proporcingumas(p),'lt').map(e=>'- '+e.rodiklis+': '+e.reiksme+' ('+e.pagrindimas+')').join('\n') : ''}
 
 REIKALAVIMAI:
 ${list}`;
@@ -1766,8 +1994,8 @@ async function exportDocx(){
   const D=window.docx;
   const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,AlignmentType,BorderStyle,ShadingType,PageBreak,TableLayoutType}=D;
   const p=PPQ.procurement;
-  const coef=parseFloat(p.valueCat)||0.5;
-  const calc=computeProportional(p.value,coef);
+  const calc=proporcingumas(p);
+  const coef=calc.patirtis.koef;
   const EM='00A072';
 
   // --- Lenteliu stulpeliu plociai realiais DXA (Pages gerbia tblGrid pazodziui) ---
@@ -1781,7 +2009,7 @@ async function exportDocx(){
   const propCols=dxaCols([38,20,42]);
   const compCols=dxaCols([5,40,12,23,12,8]);
 
-  const bi=(lt,en)=>bilingual?(lt+' / '+en):lt;
+  const bi=(lt,en)=>(bilingual && en && en!==lt)?(lt+' / '+en):lt;   // sumos abiem kalbom vienodos - nedubliuojam
   // Lentelės tekstas: Arial 10 (size = 20 pusinių punktų)
   const TR=(t,o={})=>new TextRun({text:String(t==null?'':t),bold:!!o.bold,italics:!!o.italics,size:o.size||20,color:o.color,break:o.break,font:'Arial'});
   const para=(t,o={})=>new Paragraph({alignment:o.align,spacing:o.spacing,children:[TR(t,o)]});
@@ -1794,11 +2022,12 @@ async function exportDocx(){
   });
 
   const infoRows=[
-    ['Perkantysis subjektas','Contracting entity','LITGRID AB'],
+    // Režimas lemia ir statusą: PĮ - perkantysis subjektas (LITGRID), VPĮ - perkančioji organizacija (EPSO-G).
+    [vykdytojas().statusas, vykdytojas().statusasEn, vykdytojas().pavadinimas],
     ['Pirkimo pavadinimas','Procurement title',p.name||'-'],
     ['Pirkimo objekto tipas','Type of procurement object',p.objectType||'-'],
     ['Numatoma vertė (be PVM)','Estimated value (excl. VAT)',p.value?fmtEur(p.value):'-'],
-    ['Vertės kategorija (koef.)','Value category (coef.)',String(coef).replace('.',',')],
+    [`Vertės kategorija (${GP_TEISE.cit('met_savokos')}) / koef.`,`Value category (${GP_TEISE.cit('met_savokos',null,'en')}) / coef.`,(calc.kategorija?bi(KATEGORIJA_LT[calc.kategorija.kodas],KATEGORIJA_EN[calc.kategorija.kodas]):'-')+' / '+kbl(coef)],
     ['Sutarties trukmė','Contract duration',p.duration||'-'],
     ['Pirkimo kontekstas','Procurement regime',PPQ.settings.context==='sektorinis'?bi('Sektorinis (PĮ)','Utilities (PĮ)'):bi('Bendrasis (VPĮ)','Classic (VPĮ)')],
     ['Žaliasis pirkimas','Green procurement',PPQ.settings.green?bi('Taip','Yes'):bi('Ne','No')],
@@ -1858,14 +2087,11 @@ async function exportDocx(){
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('4. Proporcingumo pagrindimas','Proportionality justification'),color:EM,bold:true})]}));
   if(p.value){
     // Sis teiginys ("apskaiciuotos pagal ... verte") tvirtinamas TIK kai verte yra - kad dokumentas neteigtu netiesos.
-    children.push(new Paragraph({children:[new TextRun({text:bi(`Reikalavimų reikšmės apskaičiuotos pagal pirkimo vertę ir modulio koeficientą (${GP_TEISE.cit('met_patirtis')}: patirties reikšmė paprastai ne daugiau kaip 0,7 numatomos vertės; 0,5 ir 0,3 - modulio rekomendacija).`,`The requirement values are calculated from the procurement value using the module's coefficient (${GP_TEISE.cit('met_patirtis',null,'en')}: required experience is normally not more than 0.7 of the estimated value; 0.5 and 0.3 are the module's recommendation).`),size:20})]}));
-    const propRows=[
-      [bi('Rodiklis','Indicator'),bi('Reikšmė','Value'),bi('Pagrindimas','Basis')],
-      [bi('Reikalaujama įvykdytos sutarties vertė','Required value of performed contract'),fmtEur(calc.contract),fmtEur(p.value)+' x '+String(coef).replace('.',',')],
-      [bi('Minimali vidutinė metinė apyvarta','Minimum average annual turnover'),fmtEur(calc.turnoverMin)+' - '+fmtEur(calc.turnoverMax),bi('1-2 kartai pirkimo vertės','1-2x procurement value')],
-      [bi('Profesinės atsakomybės draudimas','Professional liability insurance'),fmtEur(calc.insMin)+' - '+fmtEur(calc.insMax),bi('25-50% pirkimo vertės','25-50% of procurement value')],
-      [bi('Maksimalūs patirties metai','Maximum experience years'),(coef===0.3?'3-5':'3'),bi('Proporcingai objekto sudėtingumui','Proportionate to object complexity')]
-    ];
+    children.push(new Paragraph({children:[new TextRun({text:bi(`Reikalavimų reikšmės apskaičiuotos pagal pirkimo vertę, objekto tipą ir sutarties trukmę taikant VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodiką; patirties koeficientas ${kbl(coef)}${coef<GP_TEISE.normos.patirtiesRiba.reiksme?' - modulio rekomendacija, Metodikos riba - '+kbl(GP_TEISE.normos.patirtiesRiba.reiksme):' - Metodikos riba'}.`,`The requirement values are calculated from the procurement value, object type and contract duration under the PPO Supplier Qualification Requirements Methodology; experience coefficient ${coef}${coef<GP_TEISE.normos.patirtiesRiba.reiksme?' - module recommendation, the Methodology limit is '+GP_TEISE.normos.patirtiesRiba.reiksme:' - the Methodology limit'}.`),size:20})]}));
+    // Tos pačios eilutės kaip skaičiuoklėje ir AI užklausoje (proporcingumoEilutes).
+    const eLT=proporcingumoEilutes(calc,'lt'), eEN=proporcingumoEilutes(calc,'en');
+    const propRows=[[bi('Rodiklis','Indicator'),bi('Reikšmė','Value'),bi('Pagrindimas','Basis')]]
+      .concat(eLT.map((e,i)=>[bi(e.rodiklis,eEN[i].rodiklis),bi(e.reiksme,eEN[i].reiksme),bi(e.pagrindimas,eEN[i].pagrindimas)]));
     children.push(new Table({columnWidths:propCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:propRows.map((r,i)=>new TableRow({children:r.map((c,ci)=>cell(c,{head:i===0,width:propCols[ci]}))}))}));
   }else{
     children.push(new Paragraph({children:[new TextRun({text:bi('Pirkimo vertė nenurodyta - proporcingumo reikšmės neapskaičiuotos.','Procurement value not provided - proportionality values not calculated.'),italics:true,color:'737483',size:20})]}));
@@ -1894,8 +2120,8 @@ async function exportDocx(){
   children.push(new Table({columnWidths:compCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:[headRow,...dataRows]}));
 
   // Footer / disclaimer
-  const disLt='Dokumentas parengtas naudojant G-Procure kvalifikacinių reikalavimų modulį (LITGRID AB). Rezultatai rekomendacinio pobūdžio; galutinį sprendimą dėl kvalifikacinių reikalavimų priima pirkimo komisija. Parengta '+today()+'.';
-  const disEn='This document was prepared using the G-Procure qualification requirements module (LITGRID AB). The results are advisory; the final decision on qualification requirements is taken by the procurement commission. Prepared on '+today()+'.';
+  const disLt='Dokumentas parengtas naudojant G-Procure kvalifikacinių reikalavimų modulį ('+vykdytojas().pavadinimas+'). Rezultatai rekomendacinio pobūdžio; galutinį sprendimą dėl kvalifikacinių reikalavimų priima pirkimo komisija. Parengta '+today()+'.';
+  const disEn='This document was prepared using the G-Procure qualification requirements module ('+vykdytojas().pavadinimas+'). The results are advisory; the final decision on qualification requirements is taken by the procurement commission. Prepared on '+today()+'.';
   const disRuns=[new TextRun({text:disLt,size:16,italics:true,color:'737483'})];
   if(bilingual) disRuns.push(new TextRun({text:disEn,size:16,italics:true,color:'737483',break:1}));
   children.push(new Paragraph({spacing:{before:400},border:{top:{style:BorderStyle.SINGLE,size:6,color:'E1E2E4'}},children:disRuns}));
@@ -1932,6 +2158,9 @@ async function exportDocx(){
   $('settings-modal').addEventListener('click',e=>{ if(e.target.id==='settings-modal') closeSettings(); });
   // teisės nuorodos puslapyje (pradžios kortelė, ženkleliai, skaičiuoklė)
   rodykTeisinesNuorodas();
+  // skaičiuoklės parinktys: objekto tipai ir koeficientai - iš tų pačių šaltinių kaip vediklyje
+  $('calc-type').innerHTML='<option value="">Pasirinkite objekto tipą</option>'+OBJECT_TYPES.map(t=>`<option>${t}</option>`).join('');
+  $('calc-valuecat').innerHTML=koefParinktys(MODULIO_KOEF.vidutine);
   console.log('PP-QUAL inicializuotas.');
 })();
 </script>
