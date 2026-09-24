@@ -161,6 +161,10 @@
   function rusis(name) {
     var n = String(name || "").split(" \u203a ").pop().split("/").pop().toLowerCase();
     if (/ebvpd|espd/.test(n)) return "EBVPD";
+    // CVP IS skelbimo failas pirmiau u\u017e kitas taisykles: perkan\u010di\u0173j\u0173 organizacij\u0173 skelbimai vadinasi
+    // \u201e... skelbimas apie pirkim\u0105 ... - bendroji direktyva ...\u201c (2026-09-24, EPSO-G 9281765, Energy cells
+    // 9614756), ir \u017eodis \u201ebendroji\u201c juos paversdavo BPS - tada pirk\u0117jas ir re\u017eimas i\u0161 skelbimo neatpa\u017e\u012fstami
+    if (/skelbimas\s+apie|contract\s+notice|contest\s+notice/.test(n)) return "Skelbimas";
     if (/sutarties\s*(specialiosios|bendrosios)?\s*s[aą]lyg|(specialiosios|bendrosios)\s+sutarties\s+s[aą]lyg|\b(bss|sss)\b/.test(n)) return "Sutartis";
     if (/special|sps\b|sps[ _.]/.test(n)) return "SPS";
     if (/bendr|bps\b|bps[ _.]/.test(n)) return "BPS";

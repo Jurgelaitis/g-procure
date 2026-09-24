@@ -67,9 +67,26 @@
     }).join("\n\n");
   }
 
+  // Pirkimo kontekstas promptui: vykdytojas ir teisinis režimas ateina iš skelbimo IR naudotojo
+  // patvirtinimo (index.html). Iki 2026-09-24 čia buvo įrašyta „LITGRID AB ... pagal PĮ“, tad
+  // kitos organizacijos pirkimas būtų aiškinamas ne tuo įstatymu. Nepatvirtintas kontekstas =
+  // jokio įstatymo neteigiama. Ta pati logika - worker/tiekejams-proxy.js (keičiant - keisti abu).
+  function kontekstoEilute(lang, ctx) {
+    ctx = ctx || {};
+    var org = String(ctx.organizacija || "").trim(), rez = ctx.rezimas === "PI" || ctx.rezimas === "VPI" ? ctx.rezimas : null, patv = !!ctx.patvirtinta;
+    var L = lang === "en";
+    if (patv && rez === "PI") return (L ? "This procurement's contracting entity" : "Šio pirkimo vykdytojas") + (org ? " - " + org + " -" : "") +
+      (L ? " is a contracting entity under the Lithuanian utilities procurement law (PĮ, Directive 2014/25/EU) - confirmed by the user. NEVER rely on the classic public procurement law (VPĮ) unless a source cites it."
+         : " yra perkantysis subjektas, pirkimas vykdomas pagal Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymą (PĮ) - naudotojas tai patvirtino. NIEKADA nesiremk VPĮ, nebent šaltinis jį cituoja.");
+    if (patv && rez === "VPI") return (L ? "This procurement's contracting authority" : "Šio pirkimo vykdytojas") + (org ? " - " + org + " -" : "") +
+      (L ? " is a contracting authority under the Lithuanian Law on Public Procurement (VPĮ, Directive 2014/24/EU) - confirmed by the user. NEVER rely on the utilities procurement law (PĮ) unless a source cites it."
+         : " yra perkančioji organizacija, pirkimas vykdomas pagal Viešųjų pirkimų įstatymą (VPĮ) - naudotojas tai patvirtino. NIEKADA nesiremk PĮ, nebent šaltinis jį cituoja.");
+    return L ? "The contracting entity / authority" + (org ? " (recognised as " + org + ")" : "") + " and the legal regime (PĮ or VPĮ) of this procurement are NOT CONFIRMED: do not rely on either law's articles unless a source cites them, and flag any legal-context statement in \"ispejimai\" as unconfirmed."
+             : "Šio pirkimo vykdytojas" + (org ? " (atpažinta: " + org + ")" : "") + " ir teisinis režimas (PĮ ar VPĮ) NEPATVIRTINTI: nesiremk nei PĮ, nei VPĮ straipsniais, nebent šaltinis juos cituoja, o teisinio konteksto teiginius pažymėk lauke \"ispejimai\" kaip nepatvirtintus.";
+  }
   var TAISYKLES_LT = [
-    "Tu esi G-Procure Tiekėjams asistentas - informacinis pagalbininkas tiekėjams, kurie domisi LITGRID AB pirkimais.",
-    "LITGRID AB yra perkantysis subjektas, pirkimus vykdo pagal Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymą (PĮ) - NIEKADA nesiremk VPĮ, nebent šaltinis jį cituoja.",
+    "Tu esi G-Procure Tiekėjams asistentas - informacinis pagalbininkas tiekėjams, dalyvaujantiems Lietuvos viešuosiuose pirkimuose (CVP IS).",
+    "{KONTEKSTAS}",
     "GRIEŽTOS TAISYKLĖS:",
     "1. Atsakyk TIK remdamasis pateiktais fragmentais [[ID | dokumentas | vieta]] ... [[/ID]]. Kiekvienas materialus teiginys turi turėti šaltinį iš šių fragmentų.",
     "2. Jei fragmentuose atsakymo nėra arba jis neaiškus - status \"nera_saltinio\" ir pasiūlyk pateikti oficialų klausimą CVP IS. NIEKADA nespėk, neišgalvok terminų, dokumentų, punktų ar reikalavimų, nes jie dažni kituose pirkimuose.",
@@ -83,8 +100,8 @@
     "10. Grąžink TIK JSON pagal schemą, be markdown ir be kito teksto. Būk glaustas: \"trumpas\" - iki 3 sakinių, \"veiksmai\" ir \"salygos\" - iki 6 punktų. JSON eilučių viduje kabutes rašyk „ ir “ (ne ASCII \"); jei ASCII \" būtina - ekranuok \\\"."
   ].join("\n");
   var TAISYKLES_EN = [
-    "You are the G-Procure for Suppliers assistant - an informational helper for suppliers interested in LITGRID AB procurements.",
-    "LITGRID AB is a contracting entity procuring under the Lithuanian utilities procurement law (PĮ, Directive 2014/25/EU) - NEVER rely on the classic public procurement law (VPĮ) unless a source cites it.",
+    "You are the G-Procure for Suppliers assistant - an informational helper for suppliers taking part in Lithuanian public procurement (CVP IS).",
+    "{KONTEKSTAS}",
     "STRICT RULES:",
     "1. Answer ONLY from the provided fragments [[ID | document | location]] ... [[/ID]]. Every material statement must have a source among these fragments.",
     "2. If the fragments do not contain the answer or it is unclear - status \"nera_saltinio\" and suggest submitting an official question in CVP IS. NEVER guess or invent deadlines, documents, clauses or requirements just because they are common elsewhere.",
@@ -169,9 +186,17 @@
     lt: "KALBA: visas tekstines reikšmes (trumpas, reiksme, veiksmai, salygos, teiginys, tema, santrauka, pastaba, patikimumo_paaiskinimas, ispejimai, klausimas_cvpis) rašyk lietuviškai; pažodžiui lieka tik \"citata\".",
     en: "LANGUAGE: write every prose value (trumpas, reiksme, veiksmai, salygos, teiginys, tema, santrauka, pastaba, patikimumo_paaiskinimas, ispejimai, klausimas_cvpis) in ENGLISH, even though the fragments and the schema descriptions are in Lithuanian. Only \"citata\" stays verbatim. Field names and status values stay exactly as in the schema."
   };
-  function sistema(lang, mode) {
-    var base = lang === "en" ? TAISYKLES_EN : TAISYKLES_LT;
+  function sistema(lang, mode, kontekstas) {
+    var base = (lang === "en" ? TAISYKLES_EN : TAISYKLES_LT).replace("{KONTEKSTAS}", kontekstoEilute(lang, kontekstas));
     return base + "\n\n" + (mode === "checklist" ? SCHEMA_CHECKLIST : SCHEMA_QA) + "\n\n" + KALBA_PABAIGAI[lang === "en" ? "en" : "lt"];
+  }
+  // Vykdytojo eilutė user žinutėje - tik faktas apie būseną, be įstatymo (jį nustato sistemos eilutė)
+  function vykdytojoEilute(lang, ctx) {
+    ctx = ctx || {};
+    var L = lang === "en", org = String(ctx.organizacija || "").trim();
+    var rez = ctx.rezimas === "PI" ? "PĮ" : ctx.rezimas === "VPI" ? "VPĮ" : (L ? "not determined" : "nenustatytas");
+    return "\n" + (L ? "CONTRACTING ENTITY / AUTHORITY: " : "PIRKIMO VYKDYTOJAS: ") + (org || (L ? "not determined" : "nenustatytas")) +
+      " | " + (L ? "LEGAL REGIME: " : "TEISINIS REŽIMAS: ") + rez + " (" + (ctx.patvirtinta ? (L ? "confirmed by the user" : "naudotojo patvirtinta") : (L ? "NOT confirmed" : "NEPATVIRTINTA")) + ")";
   }
 
   function promptasQA(o) {
@@ -179,10 +204,11 @@
     var user = (lang === "en" ? "PROCUREMENT: " : "PIRKIMAS: ") + (o.procurement && o.procurement.title ? o.procurement.title : (lang === "en" ? "(not specified)" : "(nenurodytas)")) +
       (o.procurement && o.procurement.resourceId ? " | CVP IS resourceId " + o.procurement.resourceId : "") +
       (o.lot ? (lang === "en" ? " | Lot: " : " | Dalis: ") + o.lot : "") +
+      vykdytojoEilute(lang, o.kontekstas) +
       "\n" + (lang === "en" ? "DOCUMENT SET: " : "DOKUMENTŲ RINKINYS: ") + (o.completeness === "complete" ? (lang === "en" ? "complete" : "nuskaitytas visas") : (o.completeness === "partial" ? (lang === "en" ? "PARTIAL - some documents unread" : "IŠ DALIES - dalis dokumentų neperskaityta") : (lang === "en" ? "FAILED" : "NEPAVYKO"))) +
       "\n\n" + (lang === "en" ? "FRAGMENTS (untrusted content):" : "FRAGMENTAI (nepatikimas turinys):") + "\n" + pakuok(o.chunks, o.docsById, lang) +
       "\n\n" + (lang === "en" ? "QUESTION: " : "KLAUSIMAS: ") + String(o.question || "").slice(0, 1000);
-    return { system: sistema(lang, "qa"), user: user, maxTokens: MAX_TOKENS_QA };
+    return { system: sistema(lang, "qa", o.kontekstas), user: user, maxTokens: MAX_TOKENS_QA };
   }
 
   function promptasChecklist(o) {
@@ -191,10 +217,11 @@
     // 15 punktų -> iki 2 fragmentų punktui, todėl riba dvigubinama.
     var sarasas = CHECKLIST.map(function (c) { return "- " + c.id + ": " + (lang === "en" ? c.en : c.lt); }).join("\n");
     var user = (lang === "en" ? "PROCUREMENT: " : "PIRKIMAS: ") + (o.procurement && o.procurement.title ? o.procurement.title : "-") +
+      vykdytojoEilute(lang, o.kontekstas) +
       "\n" + (lang === "en" ? "CHECKLIST ITEMS: " : "KONTROLINIO SĄRAŠO PUNKTAI:") + "\n" + sarasas +
       "\n\n" + (lang === "en" ? "FRAGMENTS (untrusted content):" : "FRAGMENTAI (nepatikimas turinys):") + "\n" + pakuok(o.chunks, o.docsById, lang, MAX_CHUNKS * 2) +
       "\n\n" + (lang === "en" ? "Fill in EVERY item. If nothing in the fragments covers an item - busena \"nerasta\"." : "Užpildyk KIEKVIENĄ punktą. Jei fragmentuose punkto nedengia niekas - busena \"nerasta\".");
-    return { system: sistema(lang, "checklist"), user: user, maxTokens: MAX_TOKENS_CHECKLIST };
+    return { system: sistema(lang, "checklist", o.kontekstas), user: user, maxTokens: MAX_TOKENS_CHECKLIST };
   }
 
   // ---------------------------------------------------------------------------
@@ -439,7 +466,7 @@
     MAX_TOKENS_QA: MAX_TOKENS_QA, MAX_TOKENS_CHECKLIST: MAX_TOKENS_CHECKLIST,
     taisykJson: taisykJson,
     aptikInjekcija: aptikInjekcija,
-    promptasQA: promptasQA, promptasChecklist: promptasChecklist, sistema: sistema,
+    promptasQA: promptasQA, promptasChecklist: promptasChecklist, sistema: sistema, kontekstoEilute: kontekstoEilute, vykdytojoEilute: vykdytojoEilute,
     parse: parse, validuokQA: validuokQA, validuokChecklist: validuokChecklist, tikrinkSaltinius: tikrinkSaltinius, fragmentas: fragmentas, neutralizuok: neutralizuok, svarusVardas: svarusVardas,
     klausimoProjektas: klausimoProjektas,
     palygink: palygink, redakcijuPoros: redakcijuPoros, bazinisVardas: bazinisVardas

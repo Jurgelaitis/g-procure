@@ -13,7 +13,10 @@ Naudotojas
    |  CVP IS nuoroda / ID           oficialus ZIP (atsisiųstas iš CVP IS)
    v                                 v
 cvpis.js (nuorodos, resolve,      dokumentai.js (ZIP/PDF/DOCX/XLSX/XML/HTML/TXT
- terminai Europe/Vilnius)           -> blokai su vieta -> fragmentai + SHA-256)
+ terminai Europe/Vilnius,           -> blokai su vieta -> fragmentai + SHA-256)
+ pirkėjas ir režimas iš skelbimo)    |
+organizacijos.js (vykdytojų           | metaIsDokumentu: pirkėjas + režimas -> S.kontekstas,
+ registras, nuorodos)                 | naudotojas PATVIRTINA (index.html renderKontekstas)
                                      |
                                      v
                                 paieska.js (tikslūs raktai + BM25, tik šio pirkimo fragmentai)
@@ -66,7 +69,7 @@ Bendrieji klausimai eina be AI: `zinios.js` žinių bazė (šaltinių registras 
 
 ## AI sluoksnis (`asistentas.js`, `worker/tiekejams-proxy.js`)
 
-- Sisteminės taisyklės: PĮ (ne VPĮ), tik pateikti fragmentai, „nera_saltinio" be pagrindo, konfliktai rodomi abu (aiškus pakeitimas, pvz. „terminas pratęsiamas iki ...", konfliktu nelaikomas; viename punkte likusios šablono alternatyvos - laikomos), citata - viena ištisinė ištrauka be daugtaškių, visos tekstinės reikšmės naudotojo kalba (taisyklė kartojama prompto pabaigoje), fragmentų turinys nepatikimas, jokių garantijų / prognozių / apėjimų, faktas-išvada-rekomendacija, trumpos pažodinės citatos, atsakymas naudotojo kalba, tik JSON.
+- Sisteminės taisyklės: pirkimo kontekstas iš `kontekstoEilute` (patvirtintas PĮ - „perkantysis subjektas, nesiremk VPĮ“; patvirtintas VPĮ - „perkančioji organizacija, nesiremk PĮ“; nepatvirtintas - „NEPATVIRTINTI, nesiremk nei vienu, nebent šaltinis cituoja“; iki 2026-09-24 čia buvo LITGRID ir PĮ konstanta), tik pateikti fragmentai, „nera_saltinio" be pagrindo, konfliktai rodomi abu (aiškus pakeitimas, pvz. „terminas pratęsiamas iki ...", konfliktu nelaikomas; viename punkte likusios šablono alternatyvos - laikomos), citata - viena ištisinė ištrauka be daugtaškių, visos tekstinės reikšmės naudotojo kalba (taisyklė kartojama prompto pabaigoje), fragmentų turinys nepatikimas, jokių garantijų / prognozių / apėjimų, faktas-išvada-rekomendacija, trumpos pažodinės citatos, atsakymas naudotojo kalba, tik JSON.
 - Schema QA: status, trumpas, reiksme, veiksmai, salygos, saltiniai[{id, citata, teiginys}], konfliktai, patikimumas, ispejimai, klausimas_cvpis.
 - Validavimas (`validuokQA`): kiekvienas šaltinio ID turi būti SAVA fragmentų žemėlapio savybė (ne `Object.prototype` raktas) su tekstu; citata patvirtinama tik kai normalizuota VISA citata randama fragmento tekste kaip ištisinė eilutė su žodžių ribomis (ne žodžių maišas - jis praleisdavo „reikalaujamas" dokumente su „nereikalaujamas"); leidžiama tik nukirpti kraštinius žodžius ilgose citatose arba sutapti nepaisant tarpų (pdf.js palieka tarpus žodžių viduje), o abu atlaidesni keliai žymimi kaip APYTIKSLĖ citata - patikrinta, kad su tikru CVP IS paketu 234 pažodinės ištraukos visos sutampa tiksliuoju keliu, tad žyma nėra triukšmas; atmesti šaltiniai mažina patikimumą; be patvirtintų šaltinių statusas keičiamas į `nera_saltinio`; konfliktas rodomas tik kai patvirtinti bent du variantai.
 - Kontrolinis sąrašas: 15 punktų su būsenomis privaloma / su_salyga / netaikoma / nerasta / patikslinti (penktoji „netaikoma" pridėta prie master prompto keturių, kad aiškus „nereikalaujama" su citata nebūtų rodomas kaip „nerasta"); be patvirtintų šaltinių „privaloma", „su_salyga", „netaikoma" negalimos, o „nerasta" šalia patvirtinto šaltinio virsta „patikslinti"; modelio neįvertintas punktas - „patikslinti" su pastaba; neperskaitytas ar tuščias AI atsakymas rodomas kaip klaida, o ne kaip „nerasta".
@@ -94,6 +97,6 @@ Bendrieji klausimai eina be AI: `zinios.js` žinių bazė (šaltinių registras 
 
 ## Testai
 
-Nuo 2026-09-22 rinkinys (111 testų) turi grupę „Tikri CVP IS paketai": TED skelbimo, pakeitimo skelbimo ir LITGRID rašto sandara (be asmens duomenų), fragmentų riba, parinkimas, kalbos taisyklė, citatos su daugtaškiu, brūkšniai, veikimas be interneto. Kiekvieno pataisymo atšaukimas (19 mutacijų) numuša bent vieną testą. Service worker tikrintas tikru Chrome atskirai (vidinė Claude naršyklė jo nepalaiko).
+Nuo 2026-09-22 rinkinys (nuo 2026-09-24 - 126 testai) turi grupę „Tikri CVP IS paketai": TED skelbimo, pakeitimo skelbimo ir LITGRID rašto sandara (be asmens duomenų), fragmentų riba, parinkimas, kalbos taisyklė, citatos su daugtaškiu, brūkšniai, veikimas be interneto. Kiekvieno pataisymo atšaukimas (19 mutacijų) numuša bent vieną testą. Service worker tikrintas tikru Chrome atskirai (vidinė Claude naršyklė jo nepalaiko). 2026-09-24 grupė „Pirkimo vykdytojas ir teisinis režimas iš skelbimo“ (15 testų): fikstūros pagal 4 tikrus skelbimus, skelbimo failo rūšis, prompto kontekstas PĮ / VPĮ / nepatvirtinta, Worker'io kopijos sinchronizacija, patvirtinimo eiga sąsajoje, rankinis nurodymas, organizacijų registras.
 
 `PP-tiekejams/testai.html` - naršyklinis rinkinys be AI (fikstūros generuojamos vietoje: ZIP, DOCX, XML). Dengia: formatus, saugumo ribas, įdėtinius ZIP, LT vardų dekodavimą, versijų požymius, BM25 ir tikslius raktus, citatų validavimą (netikros atmetamos, be šaltinio -> nera_saltinio, konfliktai), injekcijų aptikimą, promptų struktūrą, kontrolinio sąrašo taisykles, klausimo projektą, redakcijų palyginimą, metaduomenų konfliktus, terminus su laiko zona, resolve, žinių bazę (PĮ, ne VPĮ), sąsajos būsenas, EN, klaviatūrą, mobilų vaizdą, grįžtamąjį ryšį. Gyvas AI kelias tikrintas rankiniu būdu 2026-09-02 (konflikto tarp redakcijų atpažinimas, citatos, injekcijos pažymėjimas).

@@ -8,7 +8,7 @@ Sprendimas nekeičia oficialios CVP IS informacijos, teisinės konsultacijos ir 
 
 ## Naudotojai
 
-- Tiekėjas, pirmą kartą dalyvaujantis LITGRID pirkime (LT arba EN).
+- Tiekėjas, pirmą kartą dalyvaujantis viešajame pirkime CVP IS (LT arba EN); nuo 2026-09-24 - bet kurio pirkimo vykdytojo, ne tik LITGRID.
 - Patyręs tiekėjas, kuriam reikia greitai rasti konkrečią sąlygą dideliame dokumentų pakete.
 - Kiti suinteresuoti asmenys (konsultantai, žurnalistai, tyrėjai) - tik vieši duomenys.
 
@@ -21,7 +21,7 @@ Public-by-design; vienodos sąlygos; source-first; no source, no answer; versij�
 ### A. Konkretus pirkimas
 
 1. Naudotojas įklijuoja CVP IS nuorodą arba resourceId (arba TED numerį, arba pavadinimą - tada nukreipiama į CVP IS paiešką).
-2. Rodoma: CVP IS ID, vykdytojas LITGRID AB, laiko zona, oficialios nuorodos (detalės, dokumentų sąrašas, skelbimai, skelbimo PDF, visų dokumentų ZIP), aiški žyma „Gyva CVP IS jungtis neįjungta" ir 2 žingsniai.
+2. Rodoma: CVP IS ID, laiko zona, oficialios nuorodos (detalės, dokumentų sąrašas, skelbimai, skelbimo PDF, visų dokumentų ZIP), aiški žyma „Gyva CVP IS jungtis neįjungta" ir 2 žingsniai. Pirkimo vykdytojas ir teisinis režimas (PĮ / VPĮ) iš ID nespėjami: jie atpažįstami iš įkelto skelbimo (2026-09-24) ir rodomi atskirame bloke su šaltiniu, būsena „atpažinta, nepatvirtinta“ ir mygtukais „Patvirtinti“ / „Keisti“; kol nepatvirtinta, AI promptas neteigia jokio įstatymo.
 3. Naudotojas atsisiunčia ZIP iš CVP IS ir įkelia. Rodomas kiekvieno dokumento statusas (perskaityta / iš dalies / nepavyko / nepalaikoma), rūšis, kalba, versijos žymos, įspėjimai (skenuotas PDF, injekcija), komplektiškumo indikatorius ir įkėlimo laikas.
 4. Iš dokumentų automatiškai atpažįstami (su šaltiniu): terminas (Europe/Vilnius, likęs laikas / praėjęs), BVPŽ, būdas, galiojimas, dalys, pavadinimas. Nesutapimai tarp dokumentų rodomi kaip konfliktas.
 5. Klausimas (su nebūtina dalimi): atsakymas 7 dalių formatu - trumpas atsakymas, reikšmė tiekėjui, ką atlikti, sąlygos ir išimtys, šaltiniai (dokumentas, vieta, punktas, versija, citata, nuoroda į CVP IS), patikimumas (aukštas / vidutinis / nepakanka) su paaiškinimu, patikrinta (laikas). Konfliktai rodomi abu. Be šaltinio - „nustatyti negalima" ir klausimo projektas.
@@ -40,7 +40,7 @@ Principai, techninė būsena (jungtis, AI kelias, saugojimas, versija), šaltini
 
 ## Ne MVP (sąmoningai)
 
-Pasiūlymų pateikimas į CVP IS, susirašinėjimas su LITGRID, paskyros, konkurentų / kainų / laimėjimo prognozės, konfidencialių dokumentų įkėlimas, automatinis kvalifikacijos sprendimas, el. pašto prenumeratos, gyva CVP IS jungtis, OCR, vektorinė paieška, administracinis kokybės skydelis (žr. `limitations-and-phase-2.md`).
+Pasiūlymų pateikimas į CVP IS, susirašinėjimas su pirkimo vykdytoju, paskyros, konkurentų / kainų / laimėjimo prognozės, konfidencialių dokumentų įkėlimas, automatinis kvalifikacijos sprendimas, el. pašto prenumeratos, gyva CVP IS jungtis, OCR, vektorinė paieška, administracinis kokybės skydelis (žr. `limitations-and-phase-2.md`).
 
 ## Sėkmės kriterijai (kokybė)
 
@@ -57,9 +57,10 @@ Pasiūlymų pateikimas į CVP IS, susirašinėjimas su LITGRID, paskyros, konkur
 
 | # | Atvejis | Būsena |
 |---|---|---|
-| 1 | galiojantis LITGRID CVP IS URL | testas (resolve) |
+| 1 | galiojantis CVP IS URL | testas (resolve) |
 | 2 | tik resourceId | testas |
-| 3 | neegzistuojantis / ne LITGRID pirkimas | testas: rodomos tik nuorodos, niekas neišgalvojama (gyvos patikros nėra - 2 etapas) |
+| 3 | neegzistuojantis pirkimas | testas: rodomos tik nuorodos, vykdytojas nespėjamas, niekas neišgalvojama (gyvos patikros nėra - 2 etapas) |
+| 3a | pirkėjas ir režimas iš skelbimo (PĮ / VPĮ / neaišku), patvirtinimas, rankinis nurodymas | testai (grupė „Pirkimo vykdytojas ir teisinis režimas iš skelbimo“, fikstūros pagal 4 tikrus skelbimus) |
 | 4 | vieno etapo pirkimas | žinių bazė + dokumentų kelias (rankinis) |
 | 5 | kelių etapų derybos | žinių bazė („paraiška vs pasiūlymai") |
 | 6 | kelių dalių pirkimas | dalies filtras klausime + metaduomenų „dalys"; per dalį taikomas reikalavimas - AI su citata (rankinė patikra) |

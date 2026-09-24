@@ -234,11 +234,14 @@ async function paleisk() {
     lygu(C.resolve("511550-2026").kind, "ted"); lygu(C.resolve("Transformatorių projektavimas").kind, "text");
     lygu(C.resolve("https://viesiejipirkimai.lt/epps/home.do").ok, false);
   });
-  await testas("Neegzistuojantis / ne LITGRID pirkimas: įrankis rodo tik nuorodas, jokių duomenų neišgalvoja", () => {
+  await testas("Neegzistuojantis pirkimas: įrankis rodo tik nuorodas, vykdytojo nespėja (iki 2026-09-24 kiekvienam ID rašė „LITGRID AB“)", async () => {
+    await svarus();
     D.getElementById("refInput").value = "99999999"; W.nustatykRef();
     const txt = D.getElementById("refBox").textContent;
-    turi(txt, "99999999"); turi(txt, "LITGRID AB"); tiesa(D.querySelectorAll("#refBox a").length === 5, "5 oficialios nuorodos");
+    turi(txt, "99999999"); neturi(txt, "LITGRID", "vykdytojas iš ID nežinomas"); tiesa(D.querySelectorAll("#refBox a").length === 5, "5 oficialios nuorodos");
     neturi(txt, "Pavadinimas:", "pavadinimas neišgalvojamas");
+    lygu(C.resolve("99999999").buyer, null, "buyer null");
+    turi(D.getElementById("kontekstasBox").textContent, "Nenustatyta", "kontekstas nenustatytas");
   });
   await testas("CVP IS jungties būsena aiškiai 'neįjungta' (neimituojama)", () => {
     lygu(C.status().live, false); turi(D.getElementById("liveTag").textContent, "neįjungta");
@@ -990,6 +993,160 @@ async function paleisk() {
     const src = await (await W.fetch("index.html?b=" + Date.now())).text();
     turi(src, 'navigator.serviceWorker.register("sw.js")');
     turi(src, 'location.protocol === "https:"');
+  });
+
+  /* ==========================================================================
+     PIRKIMO VYKDYTOJAS IR TEISINIS REŽIMAS IŠ SKELBIMO (B1, 2026-09-24). Fikstūros
+     atkartoja keturių tikrų CVP IS skelbimų PDF sandarą (LITGRID 9683631, Amber Grid
+     9742096, EPSO-G 9281765, Energy cells 9614756), perskaitytą 2026-09-24: „1.1 Pirkėjas“,
+     „Oficialus pavadinimas: X (PV)“, „Perkančiojo subjekto veiklos sritis“ (PĮ) arba
+     „Perkančiosios organizacijos veiklos sritis“ (VPĮ), „Teisinis pagrindas: Direktyva
+     2014/25/ES“ arba „Kitas“, minkštasis brūkšnelis U+00AD pavadinime („EPSO­G“), 8 skyriuje
+     pasikartojantis „Oficialus pavadinimas“ (teismas, e. sistemos tiekėjas). Asmens duomenų nėra.
+     ========================================================================== */
+  grupe("Pirkimo vykdytojas ir teisinis režimas iš skelbimo (2026-09-24)");
+  const ORG = W.GP_ORG;
+  const skelbimas = (org, veikla, pagrindas, ekstra) => ["Lietuva: Įrankiai", "Elektriniai, akumuliatoriniai ir rankiniai įrankiai", "Skelbimas apie pirkimą arba koncesiją. Įprasta tvarka",
+    "1 Pirkėjas", "1.1 Pirkėjas", "Oficialus pavadinimas: " + org, "Pirkėjo teisinė forma: Valstybinė įmonė, kontroliuojama centrinės valdžios institucijos", veikla,
+    "2 Procedūra", "2.1 Procedūra", "Pavadinimas: Elektriniai, akumuliatoriniai ir rankiniai įrankiai, matavimo prietaisai bei pagalbinė įranga", "2.1.1 Tikslas",
+    "Pagrindinis klasifikacijos kodas (cpv): 44510000 Įrankiai", "2.1.3 Vertė", "Numatoma vertė be PVM: 100 000 Euro", "2.1.4 Bendra informacija", "Teisinis pagrindas:", pagrindas].concat(ekstra || [],
+    ["5 Pirkimo dalis", "5.1 Pirkimo dalis: LOT­0001", "Dalyvavimo prašymų priėmimo terminas: 24/09/2026 13:00 +03:00",
+     "8 Organizacijos", "8.1 ORG-0001", "Oficialus pavadinimas: " + org, "8.1 ORG-0002", "Oficialus pavadinimas: Vilniaus apygardos teismas", "8.1 ORG-0003", "Oficialus pavadinimas: European Dynamics S.A."]).join("\n");
+  const SK_LITGRID = skelbimas("LITGRID AB (PV)", "Perkančiojo subjekto veiklos sritis: Su elektros energija susijusi veikla", "Direktyva 2014/25/ES");
+  const SK_AMBER = skelbimas('AB "Amber Grid"', "Perkančiojo subjekto veiklos sritis: Dujų arba šilumos gamyba, transportavimas ar paskirstymas", "Direktyva 2014/25/ES");
+  const SK_EPSOG = skelbimas('UAB "EPSO­G" (PV)', "Perkančiosios organizacijos veiklos sritis: Ekonomikos ir finansų reikalai", "Kitas");
+  const SK_ECELLS = skelbimas("Energy cells UAB (PV)", "Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos", "Kitas");
+  const SK_NEAISKUS = skelbimas("UAB Testas (PV)", "Perkančiojo subjekto veiklos sritis: Su elektros energija susijusi veikla", "Kitas", ["Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos"]);
+  const V_PI = "9683631_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą – komunalinio sektoriaus direktyva, įprasta tvarka_0.txt";
+  const V_VPI = "9281765_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą - bendroji direktyva, įprasta tvarka_0.txt";
+
+  await testas("atpazinkPirkeja: pirmas „Oficialus pavadinimas“ po „1.1 Pirkėjas“, (PV) nuimama, minkštasis brūkšnelis tampa „-“, be 1.1 - null", () => {
+    lygu(C.atpazinkPirkeja(SK_LITGRID), { value: "LITGRID AB", pv: true, snippet: "Oficialus pavadinimas: LITGRID AB (PV)" });
+    lygu(C.atpazinkPirkeja(SK_AMBER).value, 'AB "Amber Grid"'); lygu(C.atpazinkPirkeja(SK_AMBER).pv, false);
+    lygu(C.atpazinkPirkeja(SK_EPSOG).value, 'UAB "EPSO-G"', "U+00AD -> -");
+    lygu(C.atpazinkPirkeja(SK_ECELLS).value, "Energy cells UAB");
+    lygu(C.atpazinkPirkeja("2.1 Procedūra\nPavadinimas: X\n8 Organizacijos\nOficialus pavadinimas: Vilniaus apygardos teismas"), null, "be 1.1 Pirkėjas - nespėjama");
+    lygu(C.atpazinkPirkeja("1 Pirkėjas 1.1 Pirkėjas Oficialus pavadinimas: UAB Testas (PV) Pirkėjo teisinė forma: X").value, "UAB Testas", "viena eilutė be \\n (DOCX / TXT blokas)");
+    lygu(C.atpazinkPirkeja(""), null);
+  });
+  await testas("atpazinkRezima: PĮ iš „Perkančiojo subjekto“ ir direktyvos 2014/25, VPĮ iš „Perkančiosios organizacijos“ (Teisinis pagrindas „Kitas“ - be signalo), failo vardas, abu požymiai - neaišku", () => {
+    const pi = C.atpazinkRezima(SK_LITGRID, V_PI); lygu(pi.value, "PI"); lygu(pi.neaiskus, false);
+    tiesa(pi.pozymiai.some(p => /Perkančiojo subjekto veiklos sritis/.test(p.tekstas)) && pi.pozymiai.some(p => /2014\/25/.test(p.tekstas)) && pi.pozymiai.some(p => p.kur === "vardas"), JSON.stringify(pi.pozymiai));
+    const vpi = C.atpazinkRezima(SK_EPSOG, V_VPI); lygu(vpi.value, "VPI"); tiesa(vpi.pozymiai.some(p => /Perkančiosios organizacijos/.test(p.tekstas)) && vpi.pozymiai.some(p => /bendroji direktyv/i.test(p.tekstas)), JSON.stringify(vpi.pozymiai));
+    lygu(C.atpazinkRezima(SK_ECELLS, "x.pdf").value, "VPI", "Energy cells skelbimas - perkančiosios organizacijos formos");
+    lygu(C.atpazinkRezima("Teisinis pagrindas:\nKitas\nPavadinimas: X", "9281765_x_0.pdf").value, null, "„Kitas“ be veiklos srities - nenustatyta");
+    lygu(C.atpazinkRezima("nieko", "Contract notice - classic directive, standard regime_0.pdf").value, "VPI", "EN failo vardas");
+    const n = C.atpazinkRezima(SK_NEAISKUS, "x.pdf"); lygu(n.value, null); lygu(n.neaiskus, true); tiesa(n.pozymiai.some(p => p.rezimas === "PI") && n.pozymiai.some(p => p.rezimas === "VPI"));
+  });
+  await testas("Perkančiosios organizacijos skelbimo failas („... - bendroji direktyva ...“) yra Skelbimas, ne BPS; SPS / BPS vardai nepakito", () => {
+    lygu(K.rusis(V_VPI), "Skelbimas", "žodis „bendroji“ skelbimo varde"); lygu(K.rusis(V_PI), "Skelbimas");
+    lygu(K.rusis("9742096_Skelbimas apie pirkimą - komunalinio sektoriaus direktyva, įprasta tvarka_0.pdf"), "Skelbimas");
+    lygu(K.rusis("9683631_National Contract notice or Design Contest notice - sectoral directive, standard regime_0.pdf"), "Skelbimas");
+    lygu(K.rusis("Bendrosios pirkimo sąlygos.docx"), "BPS"); lygu(K.rusis("0.5 Skelbiamos derybos SPS be paraiškų supaprastintos.docx"), "SPS"); lygu(K.rusis("4 priedo 3 priedas_Bendrosios sutarties sąlygos.docx"), "Sutartis");
+  }, "iki 2026-09-24 EPSO-G ir Energy cells skelbimai tapdavo BPS ir pirkėjas iš jų nebuvo skaitomas");
+  await testas("Organizacijų registras: LITGRID, Amber Grid, EPSO-G (su minkštuoju brūkšneliu), Energy cells atpažįstamos; nežinoma - null; sąrašo adresas su organizacijos filtru; taisyklės tik LITGRID", () => {
+    lygu(ORG.rask("LITGRID AB (PV)").id, "litgrid"); lygu(ORG.rask('UAB "EPSO­G"').id, "epso-g"); lygu(ORG.rask('AB "Amber Grid"').id, "amber-grid"); lygu(ORG.rask("Energy cells UAB").id, "energy-cells");
+    lygu(ORG.rask('UAB "EPSOG"').id, "epso-g", "pdf.js tikrame skelbime 9281765 minkštąjį brūkšnelį išmeta - „EPSOG“");
+    lygu(ORG.rask("Vilniaus miesto savivaldybės administracija"), null); lygu(ORG.rask(""), null);
+    turi(ORG.sarasoUrl(ORG.pagalId("amber-grid")), "contractAuthority=Amber+Grid"); turi(C.URL.organizacijosSarasas("LITGRID AB", "2026-01-01"), "contractAuthority=LITGRID+AB&publicationFromDate=01%2F01%2F2026");
+    lygu(ORG.ORGANIZACIJOS.filter(o => o.taisykles).map(o => o.id), ["litgrid"], "taisyklių šaltinis patikrintas tik LITGRID");
+    ORG.ORGANIZACIJOS.forEach(o => { tiesa(o.patikrinta && o.cvpisPaieska && (o.rezimasTiketinas === "PI" || o.rezimasTiketinas === "VPI"), o.id); Object.keys(o.nuorodos).forEach(k => tiesa(/^https:\/\//.test(o.nuorodos[k]), o.id + " " + k)); });
+    tiesa(!!Z.saltinis("S3") && Z.saltinis("S3").organizacija === "litgrid", "S3 susietas su LITGRID");
+  });
+  await testas("Prompto kontekstas: patvirtintas PĮ / VPĮ įrašo įstatymą, nepatvirtintas ar tuščias - NEPATVIRTINTI ir jokio įstatymo; sistemos prompte nebėra „LITGRID“", () => {
+    const pi = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: true } });
+    turi(pi.system, "LITGRID AB - yra perkantysis subjektas"); turi(pi.system, "naudotojas tai patvirtino"); turi(pi.system, "NIEKADA nesiremk VPĮ"); neturi(pi.system, "NEPATVIRTINTI");
+    turi(pi.user, "PIRKIMO VYKDYTOJAS: LITGRID AB | TEISINIS REŽIMAS: PĮ (naudotojo patvirtinta)");
+    const vpi = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: 'UAB "EPSO-G"', rezimas: "VPI", patvirtinta: true } });
+    turi(vpi.system, "yra perkančioji organizacija"); turi(vpi.system, "Viešųjų pirkimų įstatymą (VPĮ)"); turi(vpi.system, "NIEKADA nesiremk PĮ"); neturi(vpi.system, "nesiremk VPĮ");
+    const ne = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: false } });
+    turi(ne.system, "NEPATVIRTINTI"); turi(ne.system, "(atpažinta: LITGRID AB)"); neturi(ne.system, "NIEKADA nesiremk VPĮ"); turi(ne.user, "TEISINIS REŽIMAS: PĮ (NEPATVIRTINTA)");
+    const tuscias = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {} });
+    turi(tuscias.system, "NEPATVIRTINTI"); neturi(tuscias.system, "LITGRID"); turi(tuscias.user, "PIRKIMO VYKDYTOJAS: nenustatytas | TEISINIS REŽIMAS: nenustatytas (NEPATVIRTINTA)");
+    const en = A.promptasQA({ lang: "en", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: true } });
+    turi(en.system, "contracting entity under the Lithuanian utilities procurement law"); turi(en.system, "confirmed by the user"); turi(en.user, "LEGAL REGIME: PĮ (confirmed by the user)");
+    turi(A.promptasQA({ lang: "en", question: "x", chunks: [], docsById: {}, procurement: {} }).system, "NOT CONFIRMED");
+    const chk = A.promptasChecklist({ lang: "lt", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "X", rezimas: "VPI", patvirtinta: true } });
+    turi(chk.system, "perkančioji organizacija"); turi(chk.user, "TEISINIS REŽIMAS: VPĮ (naudotojo patvirtinta)");
+  }, "iki 2026-09-24 sistemos prompte buvo įrašyta „LITGRID AB yra perkantysis subjektas ... NIEKADA nesiremk VPĮ“ kiekvienam pirkimui");
+  await testas("Worker'io kanoninė kopija sinchronizuota: tas pats konteksto sakinys, be LITGRID konstantos, kontekstas iš užklausos kūno", async () => {
+    const wk = await (await W.fetch("../worker/tiekejams-proxy.js?b=" + Date.now())).text();
+    const as = await (await W.fetch("asistentas.js?b=" + Date.now())).text();
+    [wk, as].forEach(src => { turi(src, "{KONTEKSTAS}"); turi(src, "naudotojas tai patvirtino. NIEKADA nesiremk VPĮ"); turi(src, "NEPATVIRTINTI: nesiremk nei PĮ, nei VPĮ"); neturi(src, "LITGRID AB yra perkantysis subjektas"); neturi(src, "domisi LITGRID AB pirkimais"); });
+    turi(wk, "body.kontekstas"); turi(wk, 'kt.rezimas === "PI" || kt.rezimas === "VPI"');
+  });
+  await testas("Sąsaja: įkėlus paketą su PĮ skelbimu - vykdytojas ir režimas atpažinti su šaltiniu, NEpatvirtinti; klausimo užuomina prašo patvirtinti; promptas - NEPATVIRTINTA", async () => {
+    const S = await ikelk({ [V_PI]: SK_LITGRID, "dok/SPS.txt": SPS_SENAS });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta, S.kontekstas.neaiskus], ["LITGRID AB", "PI", false, false]);
+    lygu(S.meta.buyer && S.meta.buyer.value, "LITGRID AB"); lygu(S.meta.regime && S.meta.regime.value, "PI");
+    neturi(D.getElementById("metaList").textContent, "LITGRID AB", "pirkėjas rodomas kontekste, ne metaduomenų sąraše");
+    const box = D.getElementById("kontekstasBox").textContent;
+    turi(box, "LITGRID AB"); turi(box, "PĮ (perkantysis subjektas)"); turi(box, "atpažinta, nepatvirtinta"); turi(box, "iš skelbimo"); turi(box, "Perkančiojo subjekto veiklos sritis"); turi(box, "Organizacija registre: LITGRID AB"); turi(box, "taisyklės (patikrinta 2026-09-02)");
+    tiesa(!!D.getElementById("ctxConfirm"), "mygtukas Patvirtinti");
+    tiesa(D.getElementById("ctxForm").offsetParent === null, "rankinė forma paslėpta, kol nespausta „Keisti“ (.stack klasė nustato display)");
+    D.getElementById("ctxEdit").click(); tiesa(D.getElementById("ctxForm").offsetParent !== null, "„Keisti“ atveria formą"); lygu(D.activeElement.id, "ctxOrg", "fokusas į vykdytojo lauką");
+    D.querySelector("#ctxForm button[type=button]").click(); tiesa(D.getElementById("ctxForm").offsetParent === null, "„Atšaukti“ paslepia");
+    turi(D.getElementById("askHint").textContent, "dar nepatvirtinti");
+    lygu(W.__PPT.promptoKontekstas(), { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: false });
+  });
+  await testas("Patvirtinimas: mygtukas įrašo patvirtinimą, užuomina grįžta į „tik iš dokumentų“, promptas gauna PĮ; kitas paketas su kitu vykdytoju patvirtinimą panaikina", async () => {
+    D.getElementById("ctxConfirm").click();
+    const S = W.__PPT.S;
+    lygu(S.kontekstas.patvirtinta, true); turi(D.getElementById("kontekstasBox").textContent, "Patvirtinta naudotojo"); tiesa(!D.getElementById("ctxConfirm"), "mygtuko nebėra");
+    lygu(D.getElementById("askHint").textContent, "Atsakoma tik iš įkeltų dokumentų.");
+    const pr = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }); turi(pr.system, "LITGRID AB - yra perkantysis subjektas"); turi(pr.system, "naudotojas tai patvirtino");
+    await ikelk({ [V_VPI]: SK_EPSOG });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], ['UAB "EPSO-G"', "VPI", false], "naujas skelbimas - naujas, nepatvirtintas kontekstas");
+  });
+  await testas("VPĮ skelbimas (EPSO-G): rodoma perkančioji organizacija, įspėjimas, kad VPĮ atitikmenų dar nėra, ir tas pats įspėjimas bendruose klausimuose; registro režimas sutampa", async () => {
+    const box = D.getElementById("kontekstasBox").textContent;
+    turi(box, 'UAB "EPSO-G"'); turi(box, "VPĮ (perkančioji organizacija)"); turi(box, "Perkančiosios organizacijos veiklos sritis"); turi(box, "VPĮ atitikmenų dar nėra"); neturi(box, "galioja skelbimas");
+    turi(box, "Organizacija registre: UAB EPSO-G"); turi(box, "taisyklių registre nėra");
+    W.setView("bendri"); turi(D.getElementById("bendriPriminimas").textContent, "VPĮ atitikmenų dar nėra");
+    D.getElementById("ctxConfirm").click(); turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NIEKADA nesiremk PĮ");
+  });
+  await testas("Energy cells skelbimas perkančiosios organizacijos formos, o registre - PĮ subjektas: nesutapimas parodomas ir galioja skelbimas", async () => {
+    const S = await ikelk({ "9614756_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą - bendroji direktyva, įprasta tvarka_1.txt": SK_ECELLS });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas], ["Energy cells UAB", "VPI"]);
+    const box = D.getElementById("kontekstasBox").textContent; turi(box, "galioja skelbimas"); turi(box, "Registre ši organizacija žymima kaip PĮ (perkantysis subjektas)");
+  }, "2026-09-24 tikras skelbimas 9614756: „Perkančiosios organizacijos veiklos sritis“, nors CLAUDE.md 2 sk. Energy cells - PĮ subjektas");
+  await testas("Abiejų režimų požymiai viename skelbime: režimas nenustatytas, sąsaja prašo pasirinkti, mygtuko „Patvirtinti“ nėra, prompte - NEPATVIRTINTI", async () => {
+    const S = await ikelk({ "x_Skelbimas_0.txt": SK_NEAISKUS });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.neaiskus], ["UAB Testas", null, true]);
+    const box = D.getElementById("kontekstasBox").textContent; turi(box, "ir PĮ, ir VPĮ požymių"); turi(box, "Kitame dokumente kitaip"); tiesa(!D.getElementById("ctxConfirm"), "be patvirtinimo mygtuko");
+    turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NEPATVIRTINTI");
+  });
+  await testas("Rankinis nurodymas turi pirmenybę prieš skelbimą ir atšaukiamas mygtuku „Grąžinti iš skelbimo“", async () => {
+    W.__PPT.issaugokKonteksta("UAB Testas", "VPI");
+    const S = W.__PPT.S;
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.rankinis, S.kontekstas.patvirtinta], ["UAB Testas", "VPI", true, true]);
+    turi(D.getElementById("kontekstasBox").textContent, "Nurodyta rankiniu būdu"); tiesa(!!D.getElementById("ctxReset"), "grąžinimo mygtukas");
+    lygu(W.__PPT.promptoKontekstas(), { organizacija: "UAB Testas", rezimas: "VPI", patvirtinta: true });
+    await ikelk({ "x_Skelbimas_0.txt": SK_LITGRID }); lygu(S.kontekstas.organizacija, "UAB Testas", "skelbimas rankinio nekeičia");
+    W.__PPT.atstatykKonteksta(); lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.rankinis, S.kontekstas.patvirtinta], ["LITGRID AB", "PI", false, false], "grąžinta iš skelbimo");
+    W.__PPT.issaugokKonteksta("", ""); lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], [null, null, false], "tuščias rankinis - nenustatyta");
+    W.__PPT.atstatykKonteksta();
+  });
+  await testas("Paketas be skelbimo: kontekstas nenustatytas, promptas neteigia įstatymo; pirkėjo vardas iš SPS teksto neimamas", async () => {
+    const S = await ikelk({ "dok/SPS.txt": SPS_SENAS + "\n\nOficialus pavadinimas: UAB Kita" });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], [null, null, false]);
+    turi(D.getElementById("kontekstasBox").textContent, "Nenustatyta"); turi(D.getElementById("askHint").textContent, "dar nepatvirtinti");
+    turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NEPATVIRTINTI");
+  });
+  await testas("Bendri klausimai: kiekviena tema pažymėta režimu (PĮ arba CVP IS tvarka), klausimuose nebėra LITGRID, tema „rasti“ rodo žinomų organizacijų nuorodas", () => {
+    W.setView("bendri");
+    Z.TEMOS.forEach(tm => { tiesa(Array.isArray(tm.rezimas) && tm.rezimas.length && tm.rezimas.every(r => r === "PI" || r === "VPI"), tm.id + ": rezimas"); neturi(tm.q.lt, "LITGRID", tm.id); neturi(tm.q.en, "LITGRID", tm.id); });
+    lygu(D.querySelectorAll("#bendriList summary .tag").length, Z.TEMOS.length, "žyma prie kiekvienos temos");
+    lygu(D.querySelectorAll("#bendriList summary .tag.amber").length, Z.TEMOS.filter(t => t.rezimas.length === 1).length, "PĮ žymos");
+    const rasti = D.getElementById("tema-rasti").textContent; turi(rasti, "Žinomų organizacijų nuorodos"); turi(rasti, "LITGRID AB"); turi(rasti, "AB Amber Grid"); turi(rasti, "taisyklės (patikrinta 2026-09-02)");
+    turi(D.getElementById("bendriPriminimas").textContent, "VPĮ atitikmenų dar nėra");
+  });
+  await testas("Pradžia ir tekstai: paieškos ir naujausių pirkimų nuorodos, organizacijų sąrašai, antraštėse nebėra „LITGRID pirkimai“", () => {
+    turi(D.getElementById("lnkSearch").href, "prepareAdvancedSearch.do"); turi(D.getElementById("lnkLatest").href, "latest=true");
+    lygu(D.querySelectorAll("#homeOrgs a").length, ORG.ORGANIZACIJOS.length); tiesa(!D.getElementById("lnkLitgridList"), "seno mygtuko nėra");
+    lygu(D.title, "G-Procure Tiekėjams | Pirkimai CVP IS"); neturi(D.querySelector('meta[name="description"]').getAttribute("content"), "LITGRID");
+    turi(D.querySelector("[data-i18n='hero.title']").textContent, "viešuosiuose pirkimuose"); neturi(D.querySelector("[data-i18n='brand.group']").textContent, "LITGRID");
+    W.setLang("en"); turi(D.querySelector("[data-i18n='hero.title']").textContent, "public procurement with clarity"); turi(D.getElementById("kontekstasBox").textContent, "Contracting entity"); W.setLang("lt");
   });
 
   grazinkKalba();

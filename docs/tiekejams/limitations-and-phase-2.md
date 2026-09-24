@@ -1,6 +1,6 @@
 # Žinomi apribojimai ir 2-3 etapų planas - G-Procure Tiekėjams
 
-Būsena: 2026-09-02 (MVP), papildyta 2026-09-22 (tikri LITGRID paketai, veikimas be interneto).
+Būsena: 2026-09-02 (MVP), papildyta 2026-09-22 (tikri LITGRID paketai, veikimas be interneto) ir 2026-09-24 (B1: pirkimo vykdytojas ir režimas iš skelbimo, ne LITGRID konstanta).
 
 ## Žinomi apribojimai (MVP)
 
@@ -19,6 +19,8 @@ Būsena: 2026-09-02 (MVP), papildyta 2026-09-22 (tikri LITGRID paketai, veikimas
 12. **Testai be gyvo AI.** Automatiniai testai imituoja modelio atsakymus; gyva AI grandinė tikrinta rankiniu būdu 2026-09-02 (konfliktas, citatos, injekcija) ir 2026-09-22 (keturi tikri LITGRID paketai, 2 x 13 tiekėjo klausimų). Realūs paketai į repo nededami - testuose atkartota jų sandara.
 13. **Veikimas be interneto - tik po pirmo apsilankymo su internetu** ir tik per `https:` / `localhost` (ne `file://`). Be ryšio AI atsakymų nėra - rodomos tikėtinos vietos dokumentuose, kontrolinis sąrašas neįvertinamas.
 14. **pdf.js minkštieji brūkšneliai.** TED skelbimo PDF brūkšneliai užrašyti kaip U+00AD; pdf.js 3.11.174 juos vienur išmeta („LOT0001"), kitur paverčia tarpu (pavadinime „330 110 10 kV" vietoj „330-110-10 kV"). SPS ir formose tekstas teisingas. Tai bibliotekos elgsena - taisyti būtų spėjimas.
+16. **Bendrieji atsakymai - tik PĮ.** 12 temų cituoja 19 PĮ straipsnių; VPĮ atitikmenų (perkančiosioms organizacijoms) nėra - kiekviena tema pažymėta režimu, o VPĮ pirkimui rodomas įspėjimas. B2: VPĮ sluoksnis iš e-tar su teisės specialisto peržiūra, kartu su PĮ 2027 m. redakcijos pertikrinimu (žr. 9 p.). Organizacijų taisyklių šaltinis patikrintas tik LITGRID; Amber Grid, EPSO-G ir Energy cells registre turi tik CVP IS sąrašo nuorodas (B3).
+17. **Režimo atpažinimas remiasi keturiais lietuviškais skelbimais** (LITGRID, Amber Grid, EPSO-G, Energy cells, 2026-09-24). Nacionaliniuose skelbimuose „Teisinis pagrindas: Kitas“ signalo neduoda - režimą lemia eilutė „Perkančiojo subjekto / Perkančiosios organizacijos veiklos sritis“ ir failo vardas. Angliškų skelbimų formos numanomos pagal TED eForms etiketes, tikru EN skelbimu nepatikrintos. Todėl atpažinta reikšmė visada laukia naudotojo patvirtinimo, o be patvirtinimo promptas įstatymo neteigia. Vilniaus miesto savivaldybės pirkimų skelbimo PDF per `downloadNoticeForAdvSearch.do` grąžino HTML - ne visų pirkimų skelbimai šiuo keliu pasiekiami (ZIP paketo tai neliečia). Keturi tikri skelbimų PDF per modulio kelią (pdf.js) atpažinti teisingai, bet pdf.js išmeta minkštąjį brūkšnelį (žr. 14 p.), tad vykdytojas rodomas „UAB "EPSOG"“; registras tokį vardą atpažįsta, brūkšnelio vieta nespėjama.
 15. **Nepasirinktos šablono alternatyvos neaptinkamos.** Paskelbtame dokumente gali likti abu šablono variantai (2026-09-22 tikro paketo SPS: „... turi būti pateikiami lietuvių kalba. / ... kiti dokumentai gali būti pateikiami lietuvių arba anglų kalbomis"). Įrankis jų atskirai nežymi; tiekėjui tai - klausimas perkančiajam subjektui.
 
 ## 2 etapas - patikima gyva jungtis ir tiekėjo darbo erdvė

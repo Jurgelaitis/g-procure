@@ -1,6 +1,6 @@
 # G-Procure Tiekėjams
 
-Vieša G-Procure sekcija tiekėjams ir visiems, kurie domisi LITGRID AB pirkimais. Aiškiai atskirta nuo 12 vidinių, perkančiojo subjekto perspektyvai skirtų modulių.
+Vieša G-Procure sekcija tiekėjams ir visiems, kurie domisi viešaisiais pirkimais CVP IS. Aiškiai atskirta nuo 12 vidinių, perkančiojo subjekto perspektyvai skirtų modulių. Nuo 2026-09-24 (B1) įrankis skirtas bet kurio pirkimo vykdytojo pirkimams: vykdytojas ir teisinis režimas (PĮ / VPĮ) atpažįstami iš skelbimo ir patvirtinami naudotojo (žr. skyrių žemiau); bendrieji atsakymai ir organizacijų taisyklės kol kas tik pagal PĮ ir LITGRID.
 
 > G-Procure Tiekėjams yra informacinis pagalbinis įrankis. Oficialūs pirkimo dokumentai ir pranešimai skelbiami CVP IS. Atsakymai nėra individuali teisinė konsultacija ir nepakeičia tiekėjo pareigos patikrinti aktualią dokumentų redakciją bei laiku atlikti veiksmus CVP IS.
 
@@ -35,10 +35,11 @@ Po pirmo apsilankymo su internetu modulis veikia ir be ryšio (`sw.js`, service 
 | `dokumentai.js` | Dokumentų paketo apdorojimas naršyklėje: ZIP (su saugumo ribomis), PDF, DOCX, ODT, XLSX, XML (taip pat CVP IS pasiūlymo struktūra `c4t`), HTML, TXT -> fragmentai su vieta ir SHA-256. Fragmentas - iki 180 žodžių IR iki 1 400 simbolių: tiek jo mato AI (`CHUNK_SIMBOLIU`; Worker'io `MAX_CHUNK_CHARS` negali būti mažesnė - tikrina testai) |
 | `paieska.js` | Tiksli terminų / numerių paieška + BM25 su LT kamienais; citatų patikra |
 | `asistentas.js` | Promptai, atsakymo schema ir VALIDAVIMAS (citatos tikrinamos), kontrolinis sąrašas, klausimo projektas, redakcijų palyginimas |
-| `zinios.js` | Šaltinių registras (versijuojamas) ir bendrųjų klausimų bazė (PĮ 2026-07-01 redakcija, VPT 2026 m. instrukcijos, LITGRID) |
-| `cvpis.js` | CVP IS viešų nuorodų šablonai (patikrinti 2026-09-02), resolve, terminai Europe/Vilnius, jungties būsena |
+| `zinios.js` | Šaltinių registras (versijuojamas) ir bendrųjų klausimų bazė (PĮ 2026-07-01 redakcija, VPT 2026 m. instrukcijos, LITGRID taisyklės); kiekviena tema turi `rezimas` (PĮ arba CVP IS tvarka abiem režimams) - VPĮ atitikmenų dar nėra |
+| `cvpis.js` | CVP IS viešų nuorodų šablonai (patikrinti 2026-09-02), resolve, terminai Europe/Vilnius, jungties būsena; pirkėjo ir teisinio režimo atpažinimas iš skelbimo (`atpazinkPirkeja`, `atpazinkRezima`, 2026-09-24) |
+| `organizacijos.js` | Pirkimo vykdytojų registras (`GP_ORG`): LITGRID (patikrintos taisyklės, planas), Amber Grid, EPSO-G, Energy cells (tik CVP IS sąrašo nuorodos, taisyklių registre nėra); atpažinimas pagal skelbimo pavadinimą, tikėtinas režimas (galioja skelbimas, ne registras) |
 | `sw.js` | Veikimas be interneto (service worker) - žr. aukščiau |
-| `testai.html` | Naršyklinis regresijos rinkinys, 111 testų (dokumentai ir saugumo ribos, paieška, citatų validavimas, kontrolinis sąrašas, versijos, metaduomenys, nuorodos ir terminai, žinių bazė, sąsaja, prieinamumas, mobilus vaizdas; nuo 2026-09-22 - tikrų CVP IS paketų sandara, fragmentų parinkimas, kalbos taisyklė ir veikimas be interneto). Po kiekvieno pakeitimo paleisti NAUJAME porte - naršyklė kešuoja modulio .js |
+| `testai.html` | Naršyklinis regresijos rinkinys, 126 testai (dokumentai ir saugumo ribos, paieška, citatų validavimas, kontrolinis sąrašas, versijos, metaduomenys, nuorodos ir terminai, žinių bazė, sąsaja, prieinamumas, mobilus vaizdas; nuo 2026-09-22 - tikrų CVP IS paketų sandara, fragmentų parinkimas, kalbos taisyklė ir veikimas be interneto; nuo 2026-09-24 - pirkėjas ir režimas iš skelbimo, patvirtinimas, rankinis nurodymas, organizacijų registras). Po kiekvieno pakeitimo paleisti NAUJAME porte - naršyklė kešuoja modulio .js |
 | `../worker/tiekejams-proxy.js` | Cloudflare Worker: saugus AI kelias (serveris konstruoja promptą, Turnstile) |
 
 Dokumentacija: `../docs/tiekejams/` (product-spec, cvpis-feasibility, architecture, limitations-and-phase-2).
@@ -52,6 +53,18 @@ Išbandyta su keturiais naujausiais LITGRID pirkimais (9683631, 9744290, 9495168
 - **Neatitikimai rodomi, ne slepiami:** pvz. skelbime pasiūlymo kalba „lietuvių", o SPS - „lietuvių arba anglų".
 - **Fragmentai klausimui:** (1) santraukos fakto vieta, jei klausimas apie tą temą (terminas, vertė, kalba...), kartu su tą pačią reikšmę patvirtinančiais dokumentais (pvz. „10 Pakeitimas"); (2) paaiškinimai ir pratęsimai, jei tikrai susiję (>= 40 % geriausio paieškos balo); (3) BM25, kuriame pirkimo pavadinimo žodžiai sveria 1/4 - jie yra beveik kiekviename fragmente ir nerodo, apie ką klausiama. Be (1) klausimas „Iki kada pateikti?" gaudavo tik 14 bendrų BPS frazių; be (3) „What is the delivery time for the mobile switchyard?" negaudavo sutarties 4.1 p.
 - **AI taisyklė dėl nesutapimų:** aiškus pakeitimas („terminas pratęsiamas iki ...") nėra konfliktas - atsakoma pagal pakeistą reikšmę; o viename punkte likusios šablono alternatyvos („... lietuvių kalba. / ... lietuvių arba anglų kalbomis") - konfliktas, rodomos abi.
+
+## Pirkimo vykdytojas ir teisinis režimas (B1, 2026-09-24)
+
+Iki 2026-09-24 kiekvienam įvestam CVP IS ID įrankis rašė „Pirkimo vykdytojas: LITGRID AB“, o AI sisteminis promptas kiekvieną pirkimą įrėmindavo kaip LITGRID ir PĮ („NIEKADA nesiremk VPĮ“). Kitos organizacijos pirkimui tai buvo klaidingas rėmas, nors citatos ir tada ateidavo tik iš įkeltų dokumentų.
+
+Dabar:
+
+- **Atpažinimas iš skelbimo.** Įkėlus paketą, iš skelbimo PDF (rūšis „Skelbimas“) `cvpis.js` ima pirkėją („1.1 Pirkėjas“ -> pirmas „Oficialus pavadinimas: X (PV)“; minkštasis brūkšnelis U+00AD verčiamas „-“) ir režimą: „Perkančiojo subjekto veiklos sritis“, „Direktyva 2014/25/ES“, failo varde „komunalinio sektoriaus direktyva“ = PĮ; „Perkančiosios organizacijos veiklos sritis“, „Direktyva 2014/24/ES“, „bendroji direktyva“ = VPĮ. Sandara perskaityta iš keturių tikrų skelbimų 2026-09-24 (LITGRID 9683631, Amber Grid 9742096, EPSO-G 9281765, Energy cells 9614756). Nacionaliniuose skelbimuose „Teisinis pagrindas“ būna „Kitas“ - signalo neduoda. Abiejų režimų požymiai viename skelbime = „nenustatyta“, naudotojas renkasi pats.
+- **Patvirtinimas.** Santraukos bloke „Pirkimo vykdytojas ir teisinis režimas“ rodoma atpažinta reikšmė su šaltiniu (failas, vieta, pažodinis požymis) ir mygtukai „Patvirtinti“ / „Keisti“ (rankinis nurodymas turi pirmenybę, „Grąžinti iš skelbimo“ jį atšaukia). Būsena tik naršyklės atmintyje kartu su dokumentais.
+- **AI promptas.** `asistentas.js` (`kontekstoEilute`) ir kanoninė kopija `worker/tiekejams-proxy.js`: patvirtintas PĮ - „perkantysis subjektas ... NIEKADA nesiremk VPĮ“; patvirtintas VPĮ - „perkančioji organizacija ... NIEKADA nesiremk PĮ“; nepatvirtinta ar nenustatyta - „NEPATVIRTINTI: nesiremk nei PĮ, nei VPĮ, nebent šaltinis cituoja“. User žinutėje - eilutė „PIRKIMO VYKDYTOJAS: ... | TEISINIS REŽIMAS: ... (naudotojo patvirtinta / NEPATVIRTINTA)“. Worker'is kontekstą priima iš kūno lauko `kontekstas` (režimas iš baltojo sąrašo, sakinį sudaro serveris).
+- **Organizacijų registras** (`organizacijos.js`) tik papildo: LITGRID turi patikrintas taisyklių ir plano nuorodas (žinių bazės S3), Amber Grid, EPSO-G ir Energy cells - tik CVP IS sąrašo nuorodas (vykdytojo laukas priima dalinį pavadinimą, patikrinta curl 2026-09-24). Nežinomai organizacijai sąsaja sako, kad taisyklių registre nėra. Kai skelbimo režimas nesutampa su registro tikėtinu (Energy cells 9614756 - perkančiosios organizacijos formos), rodoma, kad galioja skelbimas.
+- **Kas liko (B2, B3).** Bendrieji atsakymai - tik PĮ (12 temų su `rezimas`), VPĮ atitikmenų nėra ir sąsaja tai sako prie kiekvienos temos ir VPĮ pirkimui; kitų organizacijų taisyklių šaltiniai nepatikrinti; angliškų skelbimų formos („Activity of the contracting entity / authority“) numanomos, tikru EN skelbimu nepatikrintos; Vilniaus miesto savivaldybės pirkimų skelbimų PDF per `downloadNoticeForAdvSearch.do` 2026-09-24 grąžino HTML, ne PDF - ne visų pirkimų skelbimai šiuo keliu pasiekiami.
 
 ## Konfigūracija
 
