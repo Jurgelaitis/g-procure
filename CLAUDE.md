@@ -90,6 +90,7 @@ kiekviename modulyje. Jei modulyje randi dubliuotą logiką - pasiūlyk ją perk
 | `shared/testai.html` | Bendrų komponentų regresijos testai (naršyklėje, kaip modulių `testai.html`): `portal-link.js` (11), `backup.js` (9), `docx-stiliai.js` (8), `gprocure-info-panel.js` (6) ir `teises-nuorodos.js` su sargu moduliuose (18) - iš viso 52. Skydelio išdėstymas matuojamas 1280 ir 375 px pločio rėmeliuose |
 | `shared/img/epso-g-logo.svg` | EPSO-G prekės ženklas puslapių antraštėms ir poraštėms. Naudok per `<img src="[../]shared/img/epso-g-logo.svg" alt="EPSO-G">`, dydį nustatyk puslapio CSS. Iki 2026-09-05 tas pats SVG buvo nukopijuotas SEPTYNIOSE vietose. Spalva faile įrašyta tiesiogiai - išorinis SVG puslapio CSS kintamųjų nemato |
 | `shared/img/logo-data.js` | LITGRID logotipas base64 (`GP_LOGO`) dokumentų generavimui. Šaltinis - `shared/img/litgrid-logo-rgb.png` |
+| `shared/img/og-card.png` | Socialinių tinklų kortelė (1200x630, ~32 KB) portalo `og:image` ir `twitter:image` žymoms `index.html`. Tai ekrano nuotrauka laikino puslapio su `epso-g.css` žetonais (`--color-emerald` fonas, Nunito Sans): keičiant tekstą, perpiešk iš naujo, ne redaguok PNG. Adresas žymose absoliutus (`https://g-procure.com/...`) - santykinį dalijimosi robotai ignoruoja |
 
 `shared/` kuriamas palaipsniui. Kai pirmą kartą iškeli bendrą logiką iš modulio -
 sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą logiką naudoja.
