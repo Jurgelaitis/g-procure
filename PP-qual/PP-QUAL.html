@@ -303,6 +303,8 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
 .skirtumas ins{background:var(--color-green-15);text-decoration:none;}
 .pagrindimas textarea{min-height:70px;margin-top:4px;}
 .err-block ul,.warn-block ul{margin:6px 0 0 18px;}
+.pastabu-grupe{border:1px solid var(--color-graphite-15);border-radius:var(--radius-sm);padding:10px 12px 2px;margin-bottom:14px;background:#fff;}
+.grupe-galva{font-weight:700;font-size:13.5px;margin-bottom:8px;color:var(--color-graphite);}
 </style>
 </head>
 <body>
@@ -530,7 +532,8 @@ const PPQ = {
     green:true,
     it:true
   },
-  procurement:{ name:'', objectType:'', value:null, valueCat:'0.5', duration:'', desc:'', extra:'' },
+  procurement:{ name:'', objectType:'', value:null, valueCat:'0.5', duration:'', desc:'', extra:'',
+                mokejimai:'', avansas:false, priklausomybe:'', dalys:'' },   // pirkimoKontekstas()
   questions:[],      // AI clarifying questions
   answers:{},        // answers to clarifying questions
   requirements:[],   // generated/edited requirements
@@ -733,6 +736,81 @@ Kai siūlai galimai per griežtą reikalavimą - aiškiai pažymėk įspėjimą 
 }
 
 /* ============================================================
+   PIRKIMO KONTEKSTAS - VIENAS VISIEMS ETAPAMS (klausimai, generavimas, patikra)
+   Iki 2026-09-24 AI patikra gaudavo tik pavadinimą, vertę ir reikalavimų tekstus (be aprašymo,
+   atsakymų, įrodymų, pagrindimų) ir žinomą trukmę spėliodavo pati. Kokių duomenų reikia - e-tar:
+   Metodikos 7.6 p. (objekto specifika, apimtis, trukmė, apmokėjimo sąlygos, vertė), 11 p.
+   (finansiniams reikalavimams - dar avansas ir priklausomybė), 7.2 p. (dalys - atskirai).
+   ============================================================ */
+const MOKEJIMAI={ periodiskai:'periodiškai (pvz., kas mėnesį ar ketvirtį)', etapais:'etapais (pagal įvykdytas dalis)', po_ivykdymo:'po visos sutarties įvykdymo' };
+const MOKEJIMAI_EN={ periodiskai:'periodically (e.g. monthly or quarterly)', etapais:'in stages (per completed part)', po_ivykdymo:'after full performance of the contract' };
+function pirkimoKontekstas(){
+  const p=PPQ.procurement, c=proporcingumas(p), V=vykdytojas();
+  return {
+    vykdytojas:V.pavadinimas+' - '+V.kas+' ('+istatymas()+')',
+    pavadinimas:p.name||'', objektas:p.objectType||'',
+    verte:p.value>0 ? p.value : null, kategorija:c.kategorija ? c.kategorija.kodas : null,
+    trukme:p.duration||'', men:c.men, ilgalaike:c.ilgalaike, metine:(c.ilgalaike && c.verte) ? Math.round(c.pajamos.metine) : null,
+    mokejimai:p.mokejimai||'', avansas:!!p.avansas, priklausomybe:p.priklausomybe||'', dalys:p.dalys||'',
+    aprasymas:p.desc||'', papildoma:p.extra||'',
+    zaliasis:!!PPQ.settings.green, it:itPirkimas(),
+    atsakymai:PPQ.questions.filter(q=>PPQ.answers[q.id]!=null && PPQ.answers[q.id]!=='')
+      .map(q=>({ klausimas:q.question, atsakymas:PPQ.answers[q.id]==='__na' ? 'Neaktualu' : PPQ.answers[q.id] }))
+  };
+}
+function kontekstoTekstas(k, suAtsakymais){
+  const M=x=>GP_TEISE.cit(x);
+  const eil=[
+    'Pirkimo vykdytojas: '+k.vykdytojas,
+    'Pavadinimas: '+(k.pavadinimas||'nenurodytas'),
+    'Objekto tipas: '+(k.objektas||'nenurodytas'),
+    'Numatoma vertė: '+(k.verte ? fmtEur(k.verte)+' be PVM'+(k.kategorija?' (Metodikos vertės kategorija: '+KATEGORIJA_LT[k.kategorija]+')':'') : 'nenurodyta'),
+    'Sutarties trukmė: '+(k.trukme ? k.trukme+(k.men ? ' - '+kbl(k.men)+' mėn., '+(k.ilgalaike?'ilgalaikė':'trumpalaikė')+(k.metine?'; didžiausia metinė vertė, kai vykdoma tolygiai, - apie '+fmtEur(k.metine):'') : '') : 'nenurodyta'),
+    'Apmokėjimo sąlygos: '+(MOKEJIMAI[k.mokejimai]||'nenurodytos')+'; avansas: '+(k.avansas?'numatomas':'nenurodytas')+' ('+M('met_fin_apmokejimas')+': '+GP_TEISE.apie('met_fin_apmokejimas')+')',
+    'Ar nuo sutarties priklauso kitų sutarčių ar pirkimo vykdytojo veiklos vykdymas: '+({ taip:'taip', ne:'ne' }[k.priklausomybe]||'nenurodyta')+' ('+M('met_fin_priklausomybe')+': '+GP_TEISE.apie('met_fin_priklausomybe')+')',
+    'Pirkimo dalys: '+(k.dalys ? k.dalys+' ('+M('met_dalims')+': '+GP_TEISE.apie('met_dalims')+')' : 'neskaidoma arba nenurodyta'),
+    'Aprašymas: '+(k.aprasymas||'-'),
+    k.papildoma ? 'Iš techninės specifikacijos: '+k.papildoma : null,
+    'Žaliasis pirkimas: '+(k.zaliasis?'taip':'ne'),
+    'VPT IT gairės: '+(k.it?'taikomos (IT/IS pirkimas)':'netaikomos')
+  ].filter(Boolean);
+  if(suAtsakymais) eil.push('Patikslinimo atsakymai: '+(k.atsakymai.length ? k.atsakymai.map(a=>a.klausimas+' => '+a.atsakymas).join('; ') : 'nepateikta'));
+  return 'PIRKIMO KONTEKSTAS ('+M('met_aplinkybes')+': '+GP_TEISE.apie('met_aplinkybes')+'. Nežinomų duomenų nespėliok - jei jų trūksta vertinimui, taip ir parašyk):\n- '+eil.join('\n- ');
+}
+/* Tie patys laukai vediklyje (p-) ir audito lange (a-). */
+function kontekstoLaukai(pr){
+  const p=PPQ.procurement, M=x=>esc(GP_TEISE.cit(x));
+  const op=(reiksmes,v)=>reiksmes.map(([k,t])=>`<option value="${k}"${(v||'')===k?' selected':''}>${esc(t)}</option>`).join('');
+  return `<div class="row-2">
+      <div class="field">
+        <label for="${pr}-mokejimai">Apmokėjimo sąlygos</label>
+        <select id="${pr}-mokejimai">${op([['','Nenurodyta']].concat(Object.keys(MOKEJIMAI).map(k=>[k,MOKEJIMAI[k].charAt(0).toUpperCase()+MOKEJIMAI[k].slice(1)])), p.mokejimai)}</select>
+      </div>
+      <div class="field">
+        <label for="${pr}-priklausomybe">Ar nuo sutarties priklauso kitų sutarčių ar pirkimo vykdytojo veiklos vykdymas?</label>
+        <select id="${pr}-priklausomybe">${op([['','Nenurodyta'],['taip','Taip'],['ne','Ne']], p.priklausomybe)}</select>
+      </div>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="${pr}-avansas" ${p.avansas?'checked':''}>
+      <label for="${pr}-avansas">Numatomas avansas</label>
+    </div>
+    <div class="field">
+      <label for="${pr}-dalys">Pirkimo dalys (jei objektas skaidomas)</label>
+      <input type="text" id="${pr}-dalys" value="${esc(p.dalys||'')}" placeholder="pvz. 1 dalis - transformatoriai; 2 dalis - jungtuvai">
+      <div class="hint">Apmokėjimas, avansas ir priklausomybė lemia finansinių reikalavimų lygį (${M('met_fin_apmokejimas')}, ${M('met_fin_priklausomybe')}); kiekvienai daliai reikalavimai nustatomi atskirai (${M('met_dalims')}). Šie duomenys naudojami ir generuojant, ir tikrinant.</div>
+    </div>`;
+}
+function surinkKonteksta(pr){
+  const p=PPQ.procurement, v=id=>$(pr+'-'+id);
+  if(!v('mokejimai')) return;
+  p.mokejimai=MOKEJIMAI[v('mokejimai').value] ? v('mokejimai').value : '';
+  p.priklausomybe=['taip','ne'].includes(v('priklausomybe').value) ? v('priklausomybe').value : '';
+  p.avansas=!!v('avansas').checked;
+  p.dalys=noDash(v('dalys').value.trim());
+}
+
+/* ============================================================
    API SLUOKSNIS
    ============================================================ */
 /* ---------- Teksto riba analizei ----------
@@ -931,7 +1009,8 @@ function pradetasDarbas(){
   return !!(PPQ.requirements.length || p.name || p.value || p.desc || p.duration || PPQ.sourceText || Object.keys(PPQ.answers).length);
 }
 function naujasPirkimas(){
-  Object.assign(PPQ.procurement,{ name:'', objectType:'', value:null, valueCat:MODULIO_KOEF.vidutine, koefRankinis:false, duration:'', desc:'', extra:'' });
+  Object.assign(PPQ.procurement,{ name:'', objectType:'', value:null, valueCat:MODULIO_KOEF.vidutine, koefRankinis:false, duration:'', desc:'', extra:'',
+    mokejimai:'', avansas:false, priklausomybe:'', dalys:'' });
   PPQ.questions=[]; PPQ.answers={}; PPQ.requirements=[]; PPQ.sourceText='';
   PPQ.audit=naujasAuditas(); PPQ.generavimas={ nutruko:false }; PPQ.vertimoKlaida='';
   PPQ.ui.pagrindimasId=null; PPQ.ui.zaliasPatvirtintas=false;
@@ -1045,6 +1124,7 @@ function renderStep1(){
       </div>
     </div>
     <div class="hint" id="p-kat-info" style="margin:-6px 0 12px"></div>
+    ${kontekstoLaukai('p')}
     <div class="field">
       <label>Trumpas pirkimo objekto aprašymas</label>
       <textarea id="p-desc" placeholder="Ką perka, koks sudėtingumas, specialūs reikalavimai...">${esc(p.desc)}</textarea>
@@ -1074,6 +1154,7 @@ function collectStep1(){
   p.koefRankinis=!!$('p-valuecat').dataset.rankinis;
   p.duration=$('p-duration').value.trim();
   p.desc=$('p-desc').value.trim();
+  surinkKonteksta('p');
   PPQ.settings.green=$('p-green').checked;
 }
 
@@ -1135,7 +1216,10 @@ async function extractContextFromTs(){
   "duration": "sutarties trukmė jei randama, kitaip tuščia",
   "desc": "2-4 sakinių pirkimo objekto santrauka",
   "technologies": ["paminėtos technologijos/standartai/platformos"],
-  "specialRequirements": ["pastebėti specialūs reikalavimai, pvz. saugumas, integracijos, licencijos"]
+  "specialRequirements": ["pastebėti specialūs reikalavimai, pvz. saugumas, integracijos, licencijos"],
+  "mokejimai": "periodiskai | etapais | po_ivykdymo - kaip apmokama, jei nurodyta; kitaip tuščia",
+  "avansas": true arba false (ar numatomas avansas; false, jei nenurodyta),
+  "dalys": "pirkimo dalys su vertėmis, jei objektas skaidomas į dalis; kitaip tuščia"
 }
 
 TS TEKSTAS:
@@ -1146,10 +1230,14 @@ TS TEKSTAS:
     const p=PPQ.procurement;
     p.name=noDash(data.name||p.name);
     if(OBJECT_TYPES.includes(data.objectType)) p.objectType=data.objectType; // validuojam - AI gali grazinti ne sarase esancia reiksme; kitaip lieka '' -> placeholder
-    p.value=data.value||p.value;
+    const v=parseFloat(data.value); if(v>0) p.value=v;   // neigiama ar ne skaičius - nekeičiama
     p.koefRankinis=false;   // koeficientas - pagal Metodikos vertės kategoriją (kategorijaNumatyta)
     p.duration=noDash(data.duration||'');
     p.desc=noDash(data.desc||'');
+    // Metodikos 7.2, 11.2 p. duomenys - struktūriškai, ne tik laisvame tekste
+    if(MOKEJIMAI[data.mokejimai]) p.mokejimai=data.mokejimai;
+    p.avansas=data.avansas===true;
+    p.dalys=noDash(String(data.dalys||'').trim());
     p.extra='Technologijos: '+((data.technologies||[]).join(', ')||'-')+'\nSpecialūs reikalavimai: '+((data.specialRequirements||[]).join(', ')||'-');
     renderStep1();
     $('extract-status').textContent='Kontekstas ekstraktuotas. Patikrinkite laukus ir spauskite "Toliau".';
@@ -1170,14 +1258,10 @@ Grąžink TIK JSON masyvą be papildomo teksto:
   {"id":"q1","question":"klausimo tekstas","type":"choice|text","options":["variantas A","variantas B"](tik jei type=choice),"hint":"trumpas paaiškinimas"}
 ]
 
-PIRKIMO INFORMACIJA:
-Pavadinimas: ${p.name}
-Objekto tipas: ${p.objectType}
-Vertė: ${p.value?fmtEur(p.value):'nenurodyta'}${(()=>{ const c=proporcingumas(p); return c.kategorija ? ' (Metodikos vertės kategorija: '+KATEGORIJA_LT[c.kategorija.kodas]+'; modulio koef. '+kbl(c.patirtis.koef)+')' : ''; })()}
-Trukmė: ${p.duration||'-'}
-Aprašymas: ${p.desc||'-'}
-${p.extra?('Papildoma: '+p.extra):''}
-Žaliasis pirkimas: ${PPQ.settings.green?'taip':'ne'}`;
+Jei apmokėjimo sąlygos, avansas, priklausomybė nuo sutarties ar pirkimo dalys nenurodytos, o finansiniams reikalavimams jos svarbios, - gali apie jas paklausti.
+
+${kontekstoTekstas(pirkimoKontekstas(), false)}
+Modulio patirties koeficientas: ${kbl(proporcingumas(p).patirtis.koef)}`;
   const resp=await callAI(prompt,{maxTokens:2000});
   let data=smartParseJson(resp);
   if(!data) throw new Error('Nepavyko nuskaityti klausimų.');
@@ -1262,7 +1346,6 @@ async function generateRequirements(){
   // Uzkarda PRIES AI iskvietima: be pirkimo vertes proporcingumas neapskaiciuojamas,
   // o AI issigalvotu nepagristas ribas (PI 59 str. 1 d. -> VPI 47 str. 1 d. disproporcingumo rizika). Netesiam.
   if(!p.value || p.value<=0){ throw new Error('Pirkimo vertė nenurodyta - reikalavimai negeneruojami. Įveskite pirkimo vertę.'); }
-  const qa=PPQ.questions.map(q=>`- ${q.question} => ${PPQ.answers[q.id]||'(neatsakyta)'}`).join('\n');
   const calc=proporcingumas(p);
   const prompt=`Sugeneruok PROPORCINGĄ kvalifikacinių reikalavimų rinkinį šiam pirkimui. Laikykis Metodikos, ${teise('kvalifikacija')}, LAT praktikos ir venk 5 dažniausių klaidų. Naudok apskaičiuotas proporcingumo reikšmes.
 
@@ -1282,18 +1365,9 @@ Grąžink TIK JSON masyvą be papildomo teksto:
 Apskaičiuotos reikšmės pagal Metodiką (naudok jas; nuorodas rašyk tik taip, kaip čia):
 ${proporcingumoEilutes(calc,'lt').map(e=>`- ${e.rodiklis}: ${e.reiksme} (${e.pagrindimas})`).join('\n')}
 
-PIRKIMAS:
-Pavadinimas: ${p.name}
-Tipas: ${p.objectType}
-Vertė: ${p.value?fmtEur(p.value):'nenurodyta'}
-Trukmė: ${p.duration||'-'}
-Aprašymas: ${p.desc||'-'}
-${p.extra?('Papildoma: '+p.extra):''}
+${kontekstoTekstas(pirkimoKontekstas(), true)}
 Žaliasis pirkimas: ${PPQ.settings.green ? 'TAIP. '+zaliojoInstrukcija() : 'ne'}
-${itPirkimas()?'Taikomos VPT IT pirkimų gairės.':''}
-
-Patikslinimo atsakymai:
-${qa||'(nepateikta)'}`;
+${itPirkimas()?'Taikomos VPT IT pirkimų gairės.':''}`;
   const info={};
   const resp=await callAI(prompt,{maxTokens:6000, info});
   const data=smartParseJson(resp);
@@ -1731,9 +1805,10 @@ function proportionalityVerdict(actual, recommended){
    dabar yra, ir net tada ji nėra teisinė išvada. „Pasenusi“ nesaugoma - ji apskaičiuojama:
    patikra vertino kitas reikalavimų redakcijas ar kitus pirkimo duomenis (auditoParasas). */
 function naujasAuditas(){ return { findings:[], summary:null, busena:'neatlikta', parasas:null, klaida:'', laikas:null }; }
+// Tas pats pirkimo kontekstas, kurį gauna AI (pirkimoKontekstas), - pasikeitus apmokėjimui, dalims,
+// aprašymui ar atsakymams patikra tampa pasenusi, kaip ir pakeitus vertę ar reikalavimą.
 function auditoParasas(){
-  const p=PPQ.procurement;
-  return JSON.stringify([rezimas(), p.value, p.objectType, p.duration, p.valueCat, PPQ.settings.it,
+  return JSON.stringify([rezimas(), PPQ.procurement.valueCat, pirkimoKontekstas(),
     PPQ.requirements.map(r=>[r.id, r.rev||1, r.category])]);
 }
 function auditoBusena(){
@@ -1742,12 +1817,12 @@ function auditoBusena(){
   return A.busena;
 }
 const AUDITO_BUSENOS={
-  neatlikta:{ zyma:'neatlikta', juodr:'Audito patikra neatlikta.', juodrEn:'The audit check has not been run.' },
-  vykdoma:{ zyma:'vykdoma', juodr:'Audito patikra dar vykdoma.', juodrEn:'The audit check is still running.' },
-  atlikta:{ zyma:'atlikta (taisyklės ir AI vertinimas)', juodr:'', juodrEn:'' },
-  daline:{ zyma:'dalinė - AI vertinimas neatliktas arba nepilnas', juodr:'Audito patikra dalinė: AI vertinimas neatliktas arba nepilnas.', juodrEn:'The audit check is partial: the AI assessment was not completed.' },
-  pasenusi:{ zyma:'pasenusi - po jos pakeisti reikalavimai ar pirkimo duomenys', juodr:'Po audito patikros pakeisti reikalavimai ar pirkimo duomenys - patikra pasenusi.', juodrEn:'Requirements or procurement data changed after the audit check - the check is out of date.' },
-  nepavyko:{ zyma:'nepavyko', juodr:'Audito patikra nepavyko.', juodrEn:'The audit check failed.' }
+  neatlikta:{ zyma:'neatlikta', zymaEn:'not run', juodr:'Audito patikra neatlikta.', juodrEn:'The audit check has not been run.' },
+  vykdoma:{ zyma:'vykdoma', zymaEn:'running', juodr:'Audito patikra dar vykdoma.', juodrEn:'The audit check is still running.' },
+  atlikta:{ zyma:'atlikta (taisyklės ir AI vertinimas)', zymaEn:'completed (rules and AI assessment)', juodr:'', juodrEn:'' },
+  daline:{ zyma:'dalinė - AI vertinimas neatliktas arba nepilnas', zymaEn:'partial - AI assessment not completed', juodr:'Audito patikra dalinė: AI vertinimas neatliktas arba nepilnas.', juodrEn:'The audit check is partial: the AI assessment was not completed.' },
+  pasenusi:{ zyma:'pasenusi - po jos pakeisti reikalavimai ar pirkimo duomenys', zymaEn:'out of date - requirements or procurement data changed afterwards', juodr:'Po audito patikros pakeisti reikalavimai ar pirkimo duomenys - patikra pasenusi.', juodrEn:'Requirements or procurement data changed after the audit check - the check is out of date.' },
+  nepavyko:{ zyma:'nepavyko', zymaEn:'failed', juodr:'Audito patikra nepavyko.', juodrEn:'The audit check failed.' }
 };
 
 function renderAuditInput(){
@@ -1778,6 +1853,7 @@ function renderAuditInput(){
       <select id="a-valuecat" ${p.koefRankinis?'data-rankinis="1"':''} onchange="this.dataset.rankinis='1'">${koefParinktys(p.valueCat)}</select>
       <div class="hint" id="a-kat-info"></div>
     </div>
+    ${kontekstoLaukai('a')}
     <div class="dropzone" id="aud-drop" onclick="$('aud-file').click()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <div style="font-weight:700">Įkelti dokumentą su reikalavimais (DOCX/PDF)</div>
@@ -1825,6 +1901,7 @@ async function startAudit(){
   PPQ.procurement.duration=$('a-duration').value.trim();
   PPQ.procurement.valueCat=$('a-valuecat').value;
   PPQ.procurement.koefRankinis=!!$('a-valuecat').dataset.rankinis;
+  surinkKonteksta('a');
   PPQ.sourceText=txt;
   const btn=$('aud-start');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Skaidoma į reikalavimus...';
@@ -2005,6 +2082,13 @@ function rulesEngine(r){
         body:`${M(n.saltinis)}: šį rodiklį rekomenduojama taikyti didelės vertės sutartims; ši sutartis ${c.kategorija ? KATEGORIJA_KILM[c.kategorija.kodas]+' vertės' : 'nėra didelės vertės arba vertė nenurodyta'}.`,
         ref:M(n.saltinis), fix:'Įvertinti, ar rodiklis būtinas; jei ne - pašalinti.'});
   }
+  // R15: finansinis reikalavimas, kai apmokama periodiškai ar su avansu (Metodikos 11.2 p.) - tik pastaba.
+  if((PAJAMOS.test(r.text) || santM) && (p.mokejimai==='periodiskai' || p.avansas)){
+    const kaip=[p.mokejimai==='periodiskai'?'apmokama periodiškai':'', p.avansas?'numatomas avansas':''].filter(Boolean).join(' ir ');
+    issues.push({sev:'low',rule:'R15',title:'Finansinis reikalavimas, kai apmokama dažnai ar su avansu',
+      body:`${M('met_fin_apmokejimas')}: ${GP_TEISE.apie('met_fin_apmokejimas')}. Šiame pirkime ${kaip} - įvertinkite, ar reikalavimą galima sumažinti.`,
+      ref:M('met_fin_apmokejimas'), fix:'Įvertinti, ar finansinį reikalavimą galima sumažinti ar jo atsisakyti.'});
+  }
   // R11: profesinės civilinės atsakomybės draudimas (Metodikos 14 p.)
   // Lietuviškos raidės: JS \w jų neatpažįsta („profesinės"), todėl raidžių klasė nurodyta atskirai.
   if(/(?:civilin|profesin)[a-ząčęėįšųūž]*\s+(?:civilin[a-ząčęėįšųūž]*\s+)?atsakomyb[a-ząčęėįšųūž]*\s+draudim/i.test(t))
@@ -2160,14 +2244,22 @@ async function vykdykAudita(A){
   let aiFindings=[], aiKlaida='';
   try{
     const p=PPQ.procurement;
-    const list=PPQ.requirements.map(r=>`[${r.id}] (${r.category}) ${r.text}`).join('\n');
-    const prompt=`Atlik kvalifikacinių reikalavimų teisinį auditą. Kiekvienam probleminiam reikalavimui pateik vertinimą pagal ${teise('kvalifikacija')}, Metodiką, VPT IT gaires, LAT praktiką ir 5 dažniausias klaidas. Įvertink ir reikalavimų visumą (${GP_TEISE.cit('met_pagrindimas')}): ar kartu jie dirbtinai neriboja konkurencijos. Nuorodas imk tik iš sistemos instrukcijos. Jei reikalavimas tinkamas - jo neįtrauk arba pažymėk sev "ok".
+    // Tas pats pirkimo kontekstas kaip generuojant, o prie reikalavimų - ir įrodymai, rengimo ir
+    // pirkimo vykdytojo pagrindimai (anksčiau AI matė tik tekstą ir žinomus duomenis spėliodavo).
+    const list=PPQ.requirements.map(r=>{
+      const d=[`[${r.id}] (${r.category}) ${r.text}`];
+      if(r.evidence) d.push('   Įrodymai: '+r.evidence);
+      if(r.rationale) d.push('   Pagrindimas rengiant: '+r.rationale);
+      if(patvirtintas(r) && r.patvirtinta.pagrindimas) d.push('   Pirkimo vykdytojo pagrindimas: '+r.patvirtinta.pagrindimas);
+      return d.join('\n');
+    }).join('\n');
+    const prompt=`Atlik kvalifikacinių reikalavimų teisinį auditą. Kiekvienam probleminiam reikalavimui pateik vertinimą pagal ${teise('kvalifikacija')}, Metodiką${itPirkimas()?', VPT IT gaires':''}, LAT praktiką ir 5 dažniausias klaidas. Įvertink ir reikalavimų visumą (${GP_TEISE.cit('met_pagrindimas')}): ar kartu jie dirbtinai neriboja konkurencijos. Vertink pagal žemiau pateiktą pirkimo kontekstą ir reikalavimų pagrindimus; nežinomų duomenų nespėliok - jei vertinimui jų trūksta, pažymėk action "review" ir body nurodyk, ko trūksta. Nuorodas imk tik iš sistemos instrukcijos. Jei reikalavimas tinkamas - jo neįtrauk arba pažymėk sev "ok".
 
 Grąžink TIK JSON masyvą:
 [{"reqId":"id iš sąrašo arba visuma","sev":"high|med|low|ok","title":"trumpas pavadinimas","body":"problemos paaiškinimas ir rekomendacija","ref":"${istatymas()} / Metodikos / LAT nuoroda","action":"replace|delete|keep|review","proposedText":"tik kai action = replace: VISAS naujas reikalavimo tekstas, kaip jis būtų pirkimo dokumente; kitaip tuščia"}]
 action: replace - siūlai konkretų naują reikalavimo tekstą; delete - siūlai reikalavimą pašalinti; keep - palikti; review - reikia žmogaus sprendimo ar daugiau informacijos. Paaiškinimų ir rekomendacijų į proposedText nerašyk - jie rašomi į body. reqId "visuma" - pastaba apie reikalavimų visumą, ne apie vieną reikalavimą.
 
-PIRKIMAS: ${p.name||'-'} | vertė ${p.value?fmtEur(p.value):'nenurodyta'} | objekto tipas ${p.objectType||'-'} | trukmė ${p.duration||'-'}
+${kontekstoTekstas(pirkimoKontekstas(), true)}
 ${p.value ? 'Reikšmės pagal Metodiką (tikrink pagal jas; nuorodas rašyk tik taip, kaip čia):\n'+proporcingumoEilutes(proporcingumas(p),'lt').map(e=>'- '+e.rodiklis+': '+e.reiksme+' ('+e.pagrindimas+')').join('\n') : ''}
 
 REIKALAVIMAI:
@@ -2205,13 +2297,16 @@ ${list}`;
   buildAuditSummary();
 }
 
+/* Suvestinė skaičiuoja REIKALAVIMUS pagal rimčiausią jų pastabą, ne pastabas: iki 2026-09-24 taisyklės
+   ir AI pastaba apie tą patį reikalavimą buvo rodomos kaip du „rimti“. */
+function blogiausiaPastaba(fs){ const s=fs.map(f=>f.sev); return s.includes('high')?'high':s.includes('med')?'med':s.includes('low')?'low':null; }
 function buildAuditSummary(){
   const f=PPQ.audit.findings.filter(x=>x.sev!=='ok');
   const ids=new Set(PPQ.requirements.map(r=>r.id));
+  const b=PPQ.requirements.map(r=>blogiausiaPastaba(f.filter(x=>x.reqId===r.id)));
   PPQ.audit.summary={ total:PPQ.requirements.length,
-    high:f.filter(x=>x.sev==='high').length, med:f.filter(x=>x.sev==='med').length, low:f.filter(x=>x.sev==='low').length,
-    clean:PPQ.requirements.filter(r=>!f.some(x=>x.reqId===r.id)).length,
-    bendros:f.filter(x=>!ids.has(x.reqId)).length };
+    high:b.filter(x=>x==='high').length, med:b.filter(x=>x==='med').length, low:b.filter(x=>x==='low').length,
+    clean:b.filter(x=>!x).length, pastabu:f.length, bendros:f.filter(x=>!ids.has(x.reqId)).length };
 }
 
 function auditMiniSummary(){
@@ -2242,12 +2337,15 @@ function pasiulymasGalioja(f){
   const r=rast(f.reqId);
   return !!(r && (r.rev||1)===f.reqRev && f.proposedText!==r.text);
 }
-function pastabosHtml(f, kiek){
+function pastabosHtml(f, kiek, grupeje){
   const sevLabel={high:'🔴 Rimta',med:'🟡 Svarstytina',low:'🔵 Pastaba'};
   const sevCls={high:'sev-high',med:'sev-med',low:'sev-low'};
   const r=rast(f.reqId);
   const senas=r && f.reqRev!=null && (r.rev||1)!==f.reqRev;
-  const kam = r
+  // Grupėje reikalavimo tekstas jau parašytas grupės antraštėje - kartojama tik žyma apie redakciją.
+  const kam = grupeje
+    ? (senas ? `<div class="finding-body" style="color:var(--color-graphite-50);font-size:12px">Pastaba ankstesnei redakcijai</div>` : '')
+    : r
     ? `<div class="finding-body" style="color:var(--color-graphite-50);font-size:12px">Reikalavimas${senas?' (pastaba ankstesnei redakcijai)':''}: ${esc(r.text.slice(0,160))}${r.text.length>160?'...':''}</div>`
     : `<div class="finding-body" style="color:var(--color-graphite-50);font-size:12px">${f.reqId==='visuma'?'Reikalavimų visuma':'Reikalavimas neatpažintas arba pašalintas'}</div>`;
   let veiksmas='';
@@ -2272,6 +2370,17 @@ function pastabosHtml(f, kiek){
   </div>`;
 }
 
+/* Pastabos, sugrupuotos pagal reikalavimą (rimčiausi - pirmi); pastabos apie visumą ir neatpažintus - gale. */
+function pastabuGrupesHtml(findings, kiek){
+  const eile={high:0,med:1,low:2,null:3}, nr={}; let n=0;
+  ['A','B','C','D','E'].forEach(k=>PPQ.requirements.filter(r=>r.category===k).forEach(r=>{ nr[r.id]=++n; }));
+  const grupes=PPQ.requirements.map(r=>({ r, fs:findings.filter(f=>f.reqId===r.id) })).filter(g=>g.fs.length)
+    .map(g=>Object.assign(g,{ blog:blogiausiaPastaba(g.fs) }))
+    .sort((a,b)=>(eile[a.blog]-eile[b.blog]) || (nr[a.r.id]-nr[b.r.id]));
+  const kitos=findings.filter(f=>!rast(f.reqId));
+  return grupes.map(g=>`<div class="pastabu-grupe"><div class="grupe-galva">${nr[g.r.id]}. ${esc(g.r.category)} - ${esc(g.r.text.slice(0,180))}${g.r.text.length>180?'...':''}</div>${g.fs.map(f=>pastabosHtml(f,kiek,true)).join('')}</div>`).join('')
+    + (kitos.length ? `<div class="pastabu-grupe"><div class="grupe-galva">Reikalavimų visuma ir kitos pastabos</div>${kitos.map(f=>pastabosHtml(f,kiek)).join('')}</div>` : '');
+}
 function renderAuditResults(){
   if(!PPQ.requirements.length){ renderAuditInput(); return; }
   const A=PPQ.audit, ab=auditoBusena(), R=PPQ.requirements;
@@ -2297,16 +2406,17 @@ function renderAuditResults(){
     <div class="gyva" data-f="auditoBusenosHtml">${auditoBusenosHtml()}</div>
     ${yra?`<div class="audit-summary" style="margin-top:var(--space-2)">
       <div class="stat neutral"><div class="num">${s.total||R.length}</div><div class="lbl">Iš viso reikalavimų</div></div>
-      <div class="stat err"><div class="num">${s.high||0}</div><div class="lbl">🔴 Rimti</div></div>
-      <div class="stat warn"><div class="num">${s.med||0}</div><div class="lbl">🟡 Svarstytini</div></div>
+      <div class="stat err"><div class="num">${s.high||0}</div><div class="lbl">🔴 Su rimtomis pastabomis</div></div>
+      <div class="stat warn"><div class="num">${s.med||0}</div><div class="lbl">🟡 Su svarstytinomis</div></div>
       <div class="stat ok"><div class="num">${s.clean||0}</div><div class="lbl">${svarus}</div></div>
-    </div>`:''}
+    </div>
+    <p class="muted" style="margin-top:8px;font-size:13px">Skaičiuojami reikalavimai pagal rimčiausią jų pastabą; to paties reikalavimo taisyklių ir AI pastabos sugrupuotos (pastabų iš viso: ${s.pastabu||0}${s.bendros?', iš jų apie reikalavimų visumą ar neatpažintus: '+s.bendros:''}).</p>`:''}
     <p class="muted" style="margin-top:var(--space-2);font-size:13px">Sprendimų kilmė: 🤖 AI parengė ${R.filter(r=>r.status==='ai').length} &middot; 👤 žmogus tvirtino ${R.filter(patvirtintas).length} &middot; ✏️ redaguota ${R.filter(r=>r.status==='edited').length} &middot; ⚠️ reikia peržiūros ${R.filter(r=>r.status==='review').length}</p>
   </div>
   ${yra?`<div class="card card-pad-lg">
     <div class="toolbar" style="margin-bottom:var(--space-2)"><h3 style="color:var(--color-graphite);margin:0">Pastabos (${findings.length})</h3>${taikyti}</div>
     <p class="muted" style="margin-bottom:var(--space-2);font-size:13px">Dvisluoksnė analizė: deterministinis taisyklių variklis + AI kontekstinis vertinimas. AI pasiūlymai tekstą keičia tik jums pažymėjus ir paspaudus „Pritaikyti“; ankstesnė redakcija lieka istorijoje.</p>
-    ${findings.map(f=>pastabosHtml(f,kiek)).join('') || (ab==='atlikta' ? '<div class="info-block">Automatinė patikra pastabų nerado.</div>' : '<p class="muted">Taisyklių variklis pastabų nerado.</p>')}
+    ${pastabuGrupesHtml(findings,kiek) || (ab==='atlikta' ? '<div class="info-block">Automatinė patikra pastabų nerado.</div>' : '<p class="muted">Taisyklių variklis pastabų nerado.</p>')}
     ${taikyti?'<div class="btn-row" style="margin-top:var(--space-2)">'+taikyti+'</div>':''}
   </div>`:''}
   <div class="card card-pad-lg">
@@ -2591,6 +2701,10 @@ async function exportDocx(){
     ['Numatoma vertė (be PVM)','Estimated value (excl. VAT)',p.value?fmtEur(p.value):'-','vidinis'],
     [`Vertės kategorija (${GP_TEISE.cit('met_savokos')}) / koef.`,`Value category (${GP_TEISE.cit('met_savokos',null,'en')}) / coef.`,(calc.kategorija?bi(KATEGORIJA_LT[calc.kategorija.kodas],KATEGORIJA_EN[calc.kategorija.kodas]):'-')+' / '+kbl(coef),'vidinis'],
     ['Sutarties trukmė','Contract duration',p.duration||'-'],
+    // Metodikos 11.2 ir 7.2 p. duomenys - vidiniame dokumente, kaip proporcingumo kontekstas.
+    ...((p.mokejimai||p.avansas) ? [['Apmokėjimo sąlygos','Payment terms',
+      bi([MOKEJIMAI[p.mokejimai],p.avansas?'numatomas avansas':''].filter(Boolean).join('; '), [MOKEJIMAI_EN[p.mokejimai],p.avansas?'advance payment':''].filter(Boolean).join('; ')),'vidinis']] : []),
+    ...(p.dalys ? [['Pirkimo dalys','Lots',p.dalys,'vidinis']] : []),
     ['Pirkimo kontekstas','Procurement regime',PPQ.settings.context==='sektorinis'?bi('Sektorinis (PĮ)','Utilities (PĮ)'):bi('Bendrasis (VPĮ)','Classic (VPĮ)')],
     ['Žaliasis pirkimas','Green procurement',PPQ.settings.green?bi('Taip','Yes'):bi('Ne','No')],
     ['Data','Date',today()]
@@ -2658,6 +2772,9 @@ async function exportDocx(){
   // 4. Proporcingumo pagrindimas - vidinis: tiekėjams skirtame dokumente jo nėra.
   if(!tiekejams){
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('4. Proporcingumo pagrindimas','Proportionality justification'),color:EM,bold:true})]}));
+  // Kurią redakciją vertino patikra - kad dokumentas ir patikra būtų tos pačios pirkimo redakcijos.
+  const ab=auditoBusena(), AB=AUDITO_BUSENOS[ab], at=PPQ.audit.laikas&&ab!=='neatlikta' ? ' ('+laikoZyma(PPQ.audit.laikas)+')' : '';
+  children.push(new Paragraph({spacing:{after:80},children:[new TextRun({text:bi('Audito patikra: '+AB.zyma+at+'.','Audit check: '+AB.zymaEn+at+'.'),italics:true,size:20})]}));
   if(p.value){
     // Sis teiginys ("apskaiciuotos pagal ... verte") tvirtinamas TIK kai verte yra - kad dokumentas neteigtu netiesos.
     children.push(new Paragraph({children:[new TextRun({text:bi(`Metodikos atskaitos reikšmės, apskaičiuotos pagal pirkimo vertę, objekto tipą ir sutarties trukmę. Tai ne nustatyti reikalavimai - jie pateikti 3 skyriuje. Patirties koeficientas ${kbl(coef)}${coef<GP_TEISE.normos.patirtiesRiba.reiksme?' - modulio rekomendacija, Metodikos riba - '+kbl(GP_TEISE.normos.patirtiesRiba.reiksme):' - Metodikos riba'}.`,`Reference values under the Methodology, calculated from the procurement value, object type and contract duration. They are not the requirements themselves, which are set out in Section 3. Experience coefficient ${coef}${coef<GP_TEISE.normos.patirtiesRiba.reiksme?' - module recommendation, the Methodology limit is '+GP_TEISE.normos.patirtiesRiba.reiksme:' - the Methodology limit'}.`),size:20})]}));

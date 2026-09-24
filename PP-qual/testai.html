@@ -39,7 +39,9 @@ nebevadinama „be pastabų“, patvirtinimas ir vertimas galioja teksto redakci
 o Word generuojamas tik per vieną eksporto patikrą (juodraštis, kol ne viskas patvirtinta ir patikrinta).
 5 punkto grupė: naujas pirkimas išvalo visą būseną, neigiamos vertės nepriimamos, sumos su „mln.“, R3 neiginys,
 R14 (tiekėjo veiklos trukmė), IT taisyklės tik IT/IS pirkimui, žaliasis pirkimas pagal Žaliųjų pirkimų tvarkos
-aprašo 4 p. ir Metodikos 22 p., Word tiekėjams be vidinės informacijos.
+aprašo 4 p. ir Metodikos 22 p., Word tiekėjams be vidinės informacijos. P1-12 grupė: klausimai, generavimas ir
+patikra gauna vieną pirkimo kontekstą (Metodikos 7.2, 7.6, 11 p.), jo pokytis patikrą daro pasenusia, pastabos
+grupuojamos pagal reikalavimą.
 Modulis nieko nesaugo, tad kraunamas rėmelyje ir tikrinamas tiesiai. AI užklausos perimamos - į serverį nieko nesiunčiama.
 Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
 
@@ -87,7 +89,7 @@ function modulis(){
 // Žinoma pradinė būsena kiekvienam testui: režimas, pirkimas, reikalavimai.
 function pirkimas(duom, kontekstas){
   W.eval("PPQ.settings.context = " + JSON.stringify(kontekstas || "sektorinis") + "; PPQ.settings.it = true;"
-    + "Object.assign(PPQ.procurement, { name:'Bandymas', value:null, objectType:'', duration:'', valueCat:'', koefRankinis:false, desc:'', extra:'' }, "
+    + "Object.assign(PPQ.procurement, { name:'Bandymas', value:null, objectType:'', duration:'', valueCat:'', koefRankinis:false, desc:'', extra:'', mokejimai:'', avansas:false, priklausomybe:'', dalys:'' }, "
     + JSON.stringify(duom || {}) + "); PPQ.requirements = []; PPQ.questions = []; PPQ.answers = {};");
 }
 const P = (d, k) => { pirkimas(d, k); return W.eval("proporcingumas(PPQ.procurement)"); };
@@ -806,6 +808,111 @@ async function testaiPenktas(){
   });
 }
 
+/* P1-12 (2026-09-24): vienas pirkimo kontekstas visiems etapams (Metodikos 7.2, 7.6, 11 p.),
+   patikra vertina tą pačią redakciją, pastabos grupuojamos pagal reikalavimą. */
+async function testaiKontekstas(){
+  dabartine = grupe("Vienas pirkimo kontekstas visiems etapams ir pastabų grupavimas (audito P1-12)");
+  const KONTEKSTAS = { value: 730000, objectType: "Paslaugos (kita)", duration: "36 mėn.", desc: "Pastotės įrangos techninė priežiūra",
+                       mokejimai: "periodiskai", avansas: true, priklausomybe: "taip", dalys: "1 dalis - Vilniaus pastotės; 2 dalis - Kauno pastotės" };
+  const turi = (t, ka) => [/36 mėn\., ilgalaikė/, /didžiausia metinė vertė/, /periodiškai/, /avansas: numatomas/, /veiklos vykdymas: taip/,
+    /1 dalis - Vilniaus pastotės/, /Metodikos 7\.2 p\./, /Metodikos 11\.2 p\./, /Metodikos 7\.6 p\./, /Pastotės įrangos techninė priežiūra/]
+    .forEach(re => tiesa(re.test(t), ka + ": nėra " + re));
+
+  await testas("Klausimai, generavimas ir patikra gauna TĄ PATĮ kontekstą: trukmę, apmokėjimą, avansą, priklausomybę, dalis, aprašymą (anksčiau patikra - tik pavadinimą ir vertę)", async ()=>{
+    pirkimas(KONTEKSTAS);
+    W.eval("PPQ.questions = [{ id:'q1', question:'Ar sistema kritinė?', type:'text', options:[], hint:'' }]; PPQ.answers = { q1: 'Taip, 24/7' };");
+    let uzkl = null;
+    W.callAI = async p => { uzkl = p; throw new Error("sustabdyta testui"); };
+    try { await W.generateRequirements(); } catch (e) {}
+    turi(uzkl, "generavimas");
+    tiesa(/Ar sistema kritinė\? => Taip, 24\/7/.test(uzkl), "generavime nėra atsakymų");
+    const [id] = rinkinys([{ category: "B", text: "Tiekėjo metinės pajamos ne mažesnės kaip 300 000 EUR.", evidence: "Finansinės ataskaitos", rationale: "Sutartis ilgalaikė" }]);
+    W.eval("PPQ.questions = [{ id:'q1', question:'Ar sistema kritinė?', type:'text', options:[], hint:'' }]; PPQ.answers = { q1: 'Taip, 24/7' };");
+    W.eval("rast(" + JSON.stringify(id) + ").patvirtinta = { rev:1, laikas:'', pagrindimas:'Objektas kritinis tinklo darbui' }; rast(" + JSON.stringify(id) + ").status = 'human';");
+    W.callAI = async p => { uzkl = p; return "[]"; };
+    await W.runFullAudit();
+    turi(uzkl, "patikra");
+    tiesa(/Ar sistema kritinė\? => Taip, 24\/7/.test(uzkl), "patikroje nėra atsakymų");
+    tiesa(/Įrodymai: Finansinės ataskaitos/.test(uzkl) && /Pagrindimas rengiant: Sutartis ilgalaikė/.test(uzkl) && /Pirkimo vykdytojo pagrindimas: Objektas kritinis tinklo darbui/.test(uzkl), "patikroje nėra įrodymų ar pagrindimų");
+    tiesa(/nežinomų duomenų nespėliok/i.test(uzkl), "patikra neįspėta nespėlioti");
+    W.callAI = async p => { uzkl = p; return "[]"; };
+    await W.generateQuestions();
+    turi(uzkl, "klausimai");
+  });
+
+  await testas("Patikra pasensta pakeitus apmokėjimą, dalis, aprašymą ar atsakymus - ne tik vertę ar reikalavimą", async ()=>{
+    pirkimas(KONTEKSTAS);
+    rinkinys(RINKINYS_100);
+    W.callAI = async () => "[]";
+    await W.runFullAudit();
+    lygu(W.auditoBusena(), "atlikta", "po patikros");
+    const keisk = (js, ka) => { W.eval(js); lygu(W.auditoBusena(), "pasenusi", ka); };
+    keisk("PPQ.procurement.mokejimai = 'po_ivykdymo'", "apmokėjimas");
+    W.eval("PPQ.procurement.mokejimai = 'periodiskai'"); lygu(W.auditoBusena(), "atlikta", "grąžinus apmokėjimą");
+    keisk("PPQ.procurement.dalys = 'viena dalis'", "dalys");
+    W.eval("PPQ.procurement.dalys = " + JSON.stringify(KONTEKSTAS.dalys));
+    keisk("PPQ.procurement.desc = 'Kitas aprašymas'", "aprašymas");
+    W.eval("PPQ.procurement.desc = " + JSON.stringify(KONTEKSTAS.desc));
+    keisk("PPQ.questions = [{ id:'q9', question:'Ar kritinė?', type:'text', options:[], hint:'' }]; PPQ.answers = { q9: 'Ne' };", "atsakymai");
+  });
+
+  await testas("Suvestinė skaičiuoja REIKALAVIMUS, ne pastabas; to paties reikalavimo taisyklių ir AI pastabos - vienoje grupėje", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės", duration: "12 mėn." });
+    const [a, b] = rinkinys([{ category: "C", text: "Tiekėjas per paskutinius 3 metus yra įvykdęs sutartį už 150 000 EUR." }, { category: "C", text: "Tiekėjas turi patirties tiekiant prekes." }]);
+    W.callAI = async () => JSON.stringify([{ reqId: a, sev: "high", title: "Per didelė patirties vertė", body: "Viršija 0,7 vertės.", action: "review" }]);
+    await W.runFullAudit();
+    const s = W.eval("PPQ.audit.summary");
+    lygu([s.high, s.med, s.clean, s.pastabu], [1, 0, 1, 2], "1 reikalavimas su rimtomis (2 pastabos), 1 be pastabų");
+    const grupes = [...W.document.querySelectorAll("#audit-body .pastabu-grupe")];
+    lygu(grupes.length, 1, "viena grupė");
+    tiesa(/Tiekėjas per paskutinius 3 metus/.test(grupes[0].querySelector(".grupe-galva").textContent) && grupes[0].querySelectorAll(".finding").length === 2, "grupėje turi būti abi pastabos: taisyklė R1 ir AI");
+    tiesa(/Su rimtomis pastabomis/.test(auditoTekstas()) && /pastabų iš viso: 2/.test(auditoTekstas()), "suvestinės etiketės");
+  });
+
+  await testas("R15: finansinis reikalavimas, kai apmokama periodiškai ar su avansu - pastaba (Metodikos 11.2 p.)", async ()=>{
+    pirkimas({ value: 300000, objectType: "Paslaugos (kita)", mokejimai: "periodiskai" });
+    const is = rasti(taisykles("Tiekėjo metinės pajamos ne mažesnės kaip 100 000 EUR.", "B"), "R15");
+    lygu([is.length, is[0] && is[0].sev, is[0] && is[0].ref], [1, "low", "Metodikos 11.2 p."], "periodiškai");
+    pirkimas({ value: 300000, objectType: "Paslaugos (kita)", avansas: true });
+    tiesa(/numatomas avansas/.test((rasti(taisykles("Bendrojo mokumo koeficientas ne mažesnis kaip 1.", "B"), "R15")[0] || {}).body || ""), "avansas ir finansinis santykis");
+    pirkimas({ value: 300000, objectType: "Paslaugos (kita)" });
+    lygu(rasti(taisykles("Tiekėjo metinės pajamos ne mažesnės kaip 100 000 EUR.", "B"), "R15").length, 0, "be apmokėjimo duomenų");
+    pirkimas({ value: 300000, objectType: "Paslaugos (kita)", mokejimai: "periodiskai" });
+    lygu(rasti(taisykles("Tiekėjas turi patirties teikiant panašias paslaugas."), "R15").length, 0, "ne finansinis reikalavimas");
+  });
+
+  await testas("Laukai vediklyje ir audito lange tie patys; TS ištraukimas juos užpildo (neteisingas apmokėjimo kodas atmetamas)", async ()=>{
+    pirkimas({});
+    W.eval("PPQ.entry = 'upload'; PPQ.step = 1;"); W.switchView("wizard"); W.renderWizard();
+    const d = W.document;
+    d.getElementById("ts-paste").value = "Techninė specifikacija: paslaugos apmokamos etapais, numatomas 10 % avansas; pirkimas skaidomas į dvi dalis.";
+    W.callAI = async () => JSON.stringify({ name: "Priežiūra", objectType: "Paslaugos (kita)", value: 100000, duration: "12 mėn.", desc: "Priežiūros paslaugos", mokejimai: "etapais", avansas: true, dalys: "1 dalis - Vilnius; 2 dalis - Kaunas" });
+    await W.extractContextFromTs();
+    const p = W.eval("PPQ.procurement");
+    lygu([p.mokejimai, p.avansas, p.dalys], ["etapais", true, "1 dalis - Vilnius; 2 dalis - Kaunas"], "ištraukta");
+    lygu([d.getElementById("p-mokejimai").value, d.getElementById("p-avansas").checked, d.getElementById("p-dalys").value], ["etapais", true, "1 dalis - Vilnius; 2 dalis - Kaunas"], "laukai vediklyje");
+    W.callAI = async () => JSON.stringify({ name: "X", objectType: "Prekės", value: 100, mokejimai: "kas savaitę", avansas: "gal" });
+    await W.extractContextFromTs();
+    lygu([W.eval("PPQ.procurement.mokejimai"), W.eval("PPQ.procurement.avansas")], ["etapais", false], "nežinomas kodas - nekeičiama, ne true - ne avansas");
+    d.getElementById("p-priklausomybe").value = "ne"; W.collectStep1();
+    lygu(W.eval("PPQ.procurement.priklausomybe"), "ne", "surinkta iš vediklio");
+    W.switchView("audit"); W.renderAuditInput();
+    tiesa(d.getElementById("a-mokejimai") && d.getElementById("a-dalys") && d.getElementById("a-avansas") && d.getElementById("a-priklausomybe"), "audito lange nėra tų pačių laukų");
+    lygu(d.getElementById("a-priklausomybe").value, "ne", "audito langas rodo tą patį kontekstą");
+  });
+
+  await testas("Word: vidiniame - apmokėjimo sąlygos, dalys ir patikros būsena; tiekėjams skirtame - ne", async ()=>{
+    pirkimas(KONTEKSTAS);
+    rinkinys(RINKINYS_100);
+    let t = await wordas("lt");
+    tiesa(/Apmokėjimo sąlygos\s*periodiškai[^\n]*numatomas avansas/.test(t) && /Pirkimo dalys\s*1 dalis - Vilniaus pastotės/.test(t) && /Audito patikra: neatlikta\./.test(t), "vidiniame dokumente trūksta konteksto ar patikros būsenos");
+    W.eval("PPQ.exportPaskirtis = 'tiekejams'");
+    t = await wordas("lt");
+    tiesa(!/Apmokėjimo sąlygos/.test(t) && !/Pirkimo dalys/.test(t) && !/Audito patikra:/.test(t), "tiekėjų dokumente liko vidinis kontekstas");
+    W.eval("PPQ.exportPaskirtis = 'vidinis'");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -816,6 +923,7 @@ async function testaiPenktas(){
     await testaiInstrukcijaIrWordas();
     await testaiAuditasIrEksportas();
     await testaiPenktas();
+    await testaiKontekstas();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
