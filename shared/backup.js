@@ -40,6 +40,7 @@
     ["pp_tiekejams",             "PP-tiekejams",    { lt: "Tiekėjų asistento duomenys", en: "Supplier assistant data" }],
     ["pptiekejams.lang",         "PP-tiekejams",    { lt: "Pasirinkta kalba", en: "Chosen language" }],
     ["ts_asistentas",            "PP-ts",           { lt: "TS asistento nustatymai", en: "Spec assistant settings" }],
+    ["ppteise.",                 "PP-teise",        { lt: "Teisės stebėsenos peržiūros ir nustatymai", en: "Law monitoring reviews and settings" }],
     ["gprocure_help_collapsed",  "—",               { lt: "Pagalbos bloko būsena", en: "Help panel state" }],
     ["gprocure-lang",            "—",               { lt: "Pasirinkta kalba", en: "Chosen language" }]
   ];
