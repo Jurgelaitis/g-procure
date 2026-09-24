@@ -247,6 +247,22 @@
       };
     }
 
+    /* Pažodinė ištrauka iš šaltinio su tiksliu punktu - tik kai administratorius ją įrašė. */
+    var IS = (o.istrauka && typeof o.istrauka === "object") ? o.istrauka : null;
+    r.istrauka = IS && typeof IS.tekstas === "string" && IS.tekstas.trim() ? { tekstas: IS.tekstas.trim(), vieta: typeof IS.vieta === "string" ? IS.vieta.trim() : "" } : null;
+    /* „Buvo / tapo / praktinė reikšmė“ - TIK su tikromis palyginamomis redakcijomis. Nepilnas
+       palyginimas pažymimas klaida ir nerodomas, kad nuoroda į dokumentą nebūtų vadinama palyginimu. */
+    var PL = (o.palyginimas && typeof o.palyginimas === "object") ? o.palyginimas : null;
+    r.palyginimas = null;
+    if (PL) {
+      var buvo = typeof PL.buvo === "string" ? PL.buvo.trim() : "", tapo = typeof PL.tapo === "string" ? PL.tapo.trim() : "";
+      if (buvo && tapo) {
+        r.palyginimas = { buvo: buvo, tapo: tapo, reiksme: typeof PL.reiksme === "string" ? PL.reiksme.trim() : "",
+                          buvoData: yraData(PL.buvoData) ? PL.buvoData : null, tapoData: yraData(PL.tapoData) ? PL.tapoData : null,
+                          saltinis: saugusAdresas(PL.saltinis) };
+        if (!r.palyginimas.saltinis) k.push("palyginimas be šaltinio nuorodos");
+      } else k.push("palyginimas nepilnas (reikia ir „buvo“, ir „tapo“) - nerodomas");
+    }
     /* Redakcinis prioritetas portalui - žmogaus sprendimas, ne skaičiavimas. Be `prioritetas`
        įrašas portalo bloke nerodomas; trumpas pavadinimas ir „kodėl aktualu“ neprivalomi. */
     var P = (o.portalas && typeof o.portalas === "object") ? o.portalas : null;
@@ -396,6 +412,16 @@
              reiksme: kita ? t("įsigaliojimo data šaltinyje nenurodyta", "entry into force not specified in the source") : t("nenurodyta", "not specified"), ateitis: false };
   }
 
+  /* Dokumento istorija registre: kiti įrašai apie TĄ PATĮ keičiamą aktą (pagal keiciamasAktas.eTarId),
+     naujausi pirmi. Dokumentas, jo redakcija ir konkretus pokytis - susiję, bet skirtingi objektai:
+     grąžinami pokyčių įrašai, ne sujungta kortelė. */
+  function dokumentoIstorija(r, irasai, dabar) {
+    var e = r.keiciamasAktas && r.keiciamasAktas.eTarId;
+    if (!e) return [];
+    return rikiuok(irasai.filter(function (x) { return x.id !== r.id && x.keiciamasAktas && x.keiciamasAktas.eTarId === e; }), "naujausi")
+      .map(function (x) { return { id: x.id, pavadinimas: x.pavadinimas, data: svarbiausiaData(x, dabar, "lt"), busena: x.busena, rusis: x.rusis }; });
+  }
+
   /* ---------- Aktualumas pagal pirkimo kontekstą ---------- */
 
   /* ctx: { rezimas: "PI"|"VPI", procedura, objektas, etapas, skelbimoData (YYYY-MM-DD) }
@@ -449,7 +475,7 @@
 
   function tekstasPaieskai(r) {
     var dalys = [r.pavadinimas, r.santrauka, r.kasPasikeite, r.kamAktualu, r.veiksmas, r.pereinamosios,
-                 r.saltinis.pavadinimas, r.saltinis.vieta, r.temos.join(" "),
+                 r.saltinis.pavadinimas, r.saltinis.vieta, r.temos.join(" "), r.istrauka ? r.istrauka.tekstas : "",
                  r.moduliai.map(function (m) { return m.modulis + " " + m.kas; }).join(" "),
                  r.portalas ? r.portalas.pavadinimas + " " + r.portalas.kodel : ""];
     var I = r.identifikatoriai || {};
@@ -764,7 +790,7 @@
     esc: esc, saugusAdresas: saugusAdresas, normalizuokTeksta: normalizuokTeksta,
     yraData: yraData, dienaISO: dienaISO, dienuSkirtumas: dienuSkirtumas, datosTekstas: datosTekstas,
     normalizuok: normalizuok, tikrink: tikrink, dublikatoRaktai: dublikatoRaktai,
-    skiltis: skiltis, reikiaPerziureti: reikiaPerziureti, svarbiData: svarbiData, rikiuok: rikiuok, svarbiausiaData: svarbiausiaData,
+    skiltis: skiltis, reikiaPerziureti: reikiaPerziureti, svarbiData: svarbiData, rikiuok: rikiuok, svarbiausiaData: svarbiausiaData, dokumentoIstorija: dokumentoIstorija,
     aktualumas: aktualumas, filtruok: filtruok, tekstasPaieskai: tekstasPaieskai,
     rinkinioBusena: rinkinioBusena, patikimumas: patikimumas, portaloIrasai: portaloIrasai,
     perziuros: perziuros, pazymekPerziureta: pazymekPerziureta, atsaukPerziura: atsaukPerziura,

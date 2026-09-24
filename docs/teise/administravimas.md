@@ -47,6 +47,18 @@ Taisyklės, kurias vykdo kodas:
    NEspėti - palikti tuščias. Nurodyti tikslią vietą šaltinyje, identifikatorius, režimą (PĮ / VPĮ),
    temas, susijusius modulius su šablono versija, aktualumo požymius (arba pažymėti „nenustatytas“).
    Jei poveikis neaiškus - „Reikalingas specialisto vertinimas“ su priežastimi.
+   **Pažodinė ištrauka** (formos skiltis „Pagrindimas: pažodinė ištrauka“): trumpa citata iš perskaityto
+   šaltinio teksto raidė į raidę ir jos tiksli vieta (straipsnis, dalis, punktas). Tai vienintelis
+   „pagrindimo“ tekstas, kurį puslapis rodo kaip citatą; be jo puslapis sako, kad ištrauka nepateikta.
+   Perfrazuoti ar sutrumpinti citatos negalima - santraukai skirtas laukas „Santrauka“.
+   **Buvo / tapo / praktinė reikšmė** (formos skiltis „Buvo / tapo“) pildoma TIK turint abi tikras
+   redakcijas: ankstesnės redakcijos tekstą, naujos redakcijos tekstą, jų datas ir šaltinio nuorodą
+   (e-tar redakcijų sąrašą). Nepilnas palyginimas (tik „buvo“ arba tik „tapo“) neįrašomas ir formoje
+   įspėjamas; puslapis tada sako „palyginimas neatliktas“, o nuorodą į e-tar redakcijų sąrašą vadina
+   išoriniu sąrašu, ne palyginimu. 2026-09-24 registre palyginimų nėra nė vieno.
+   **Dokumento istorija** susidaro savaime: visi įrašai su tuo pačiu `keiciamasAktas.eTarId` rodomi
+   vienas kito detalėse kaip atskiri to paties dokumento pokyčiai (dokumentas, redakcija ir pokytis -
+   skirtingi objektai; vienos „bendros kortelės“ dokumentui nėra).
    **Portalo blokas** rodo iki trijų įrašų TIK pagal redakcinį prioritetą (formos skiltis
    „Portalo blokas“: prioritetas 1 - svarbiausias, trumpas pavadinimas, „kodėl aktualu LITGRID“,
    kas parinko). Sistema aktualumo neskaičiuoja ir naujausių nerodo - be prioriteto blokas sako,
@@ -77,4 +89,6 @@ Taisyklės, kurias vykdo kodas:
 - neperrašo PP-qual ar PP-salygos šablonų ir dokumentų - tik rodo, kurį šabloną peržiūrėti;
 - nerenka „teisingo“ paaiškinimo iš prieštaraujančių - tik pažymi;
 - nespėja trūkstamų datų ir nerodo nepatvirtinto įrašo kaip išvados;
+- nerodo „buvo / tapo“ be tikrų palyginamų redakcijų ir neskaičiuoja rizikos ar aktualumo balo -
+  vietoj jo įvardija, kokių pirkimo konteksto duomenų trūksta;
 - nesaugo peržiūrų ir vidinių pastabų serveryje.
