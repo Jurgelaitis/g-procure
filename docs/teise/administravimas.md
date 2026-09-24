@@ -47,6 +47,11 @@ Taisyklės, kurias vykdo kodas:
    NEspėti - palikti tuščias. Nurodyti tikslią vietą šaltinyje, identifikatorius, režimą (PĮ / VPĮ),
    temas, susijusius modulius su šablono versija, aktualumo požymius (arba pažymėti „nenustatytas“).
    Jei poveikis neaiškus - „Reikalingas specialisto vertinimas“ su priežastimi.
+   **Portalo blokas** rodo iki trijų įrašų TIK pagal redakcinį prioritetą (formos skiltis
+   „Portalo blokas“: prioritetas 1 - svarbiausias, trumpas pavadinimas, „kodėl aktualu LITGRID“,
+   kas parinko). Sistema aktualumo neskaičiuoja ir naujausių nerodo - be prioriteto blokas sako,
+   kad įrašai dar neparinkti. Trumpas pavadinimas negali keisti teisinės prasmės ar nukirsti
+   išlygos (pvz. „ar taikoma LITGRID, vertina teisės specialistas“ lieka paaiškinime).
 3. **AI juodraštis (neprivaloma).** Įklijavus ištrauką, AI pasiūlo santrauką, „kas pasikeitė“ ir
    veiksmą; laukai pažymimi „AI juodraštis - nepatvirtinta“. Ištrauka laikoma duomenimis (instrukcijos
    joje nevykdomos), siunčiama per G-Procure serverį į Claude API; vidinės informacijos nesiųsti.
@@ -60,9 +65,12 @@ Taisyklės, kurias vykdo kodas:
    `PP-teise/duomenys/registras.json`, pakelti `meta.versija` (pvz. `2026-10-01.1`) ir `meta.patikrinta`;
    „Eksportuoti šaltinių registrą su patikromis“ → `saltiniai.json`; padidinti `PP-teise/sw.js`
    `VERSIJA`; paleisti `PP-teise/testai.html`; commit `pp-teise: registras 2026-10-01.1`.
-7. **Naudotojo peržiūros.** Stebėsenos puslapyje projektų vadovas pažymi „peržiūrėta“ su
-   pagrindimu - tai jo asmeninis žurnalas (localStorage, atsarginė kopija per
-   `atsargine-kopija.html`), ne registro būsena.
+7. **Naudotojo peržiūros.** Stebėsenos puslapyje projektų vadovas pažymi „peržiūrėjau“ su
+   pagrindimu - tai jo asmeninis susipažinimo žurnalas (localStorage, atsarginė kopija per
+   `atsargine-kopija.html`), ne registro būsena ir ne specialisto patvirtinimas; puslapis tai
+   sako prie pat veiksmo. Keturi dalykai rodomi atskirai: dokumento teisinis statusas (priimta /
+   projektas / teismo išaiškinimas), paaiškinimo patvirtinimas, šaltinių patikros rezultatas ir
+   darbuotojo peržiūra.
 
 ## 4. Ko modulis NEDARO
 

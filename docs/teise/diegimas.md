@@ -9,14 +9,14 @@ Modulis - statiniai failai, be build žingsnio, diegiami kartu su visa svetaine 
 
 | Failas | Paskirtis |
 |---|---|
-| `PP-teise/index.html` | Stebėsenos puslapis (trys skiltys, paieška, filtrai, aktualumas, peržiūrų žurnalas) |
+| `PP-teise/index.html` | Stebėsenos puslapis (vienas aktyvus vaizdas: kas pasikeitė / kas įsigalios / ką peržiūrėti / kita; paieška, filtrai, aktualumas, peržiūrų žurnalas, išskleidžiama diagnostika) |
 | `PP-teise/admin.html` | Administravimas (vietinis režimas, be serverio autorizacijos) |
 | `PP-teise/sw.js` | Veikimas be interneto: modulis, bendri failai ir abu duomenų failai talpykloje; iš talpyklos atsakymai žymimi `X-GP-Offline` |
 | `PP-teise/duomenys/registras.json` | Bendras įrašų registras (žinių rinkinys su versija, aprėptimi, patikros data) |
 | `PP-teise/duomenys/saltiniai.json` | Šaltinių registras ir patikrų žurnalas |
 | `PP-teise/testai.html`, `PP-teise/testai-registras.json` | Priėmimo ir regresijos testai su testiniu registru (pažymėtas demonstraciniu, į talpyklą nesaugomas) |
 | `shared/teise-stebesena.js` | Branduolys: schema, tikrinimas, skiltys, aktualumas, paieška, žurnalas, įkėlimas, portalo ir modulių blokai |
-| `index.html` (portalas) | Kortelė „Pirkimų teisės stebėsena“ ir kompaktiškas blokas virš įrankių tinklelio |
+| `index.html` (portalas) | Vienas viso pločio blokas „Pirkimų teisės stebėsena“ PO 12 įrankių katalogo, prieš tiekėjų dalį (iki trijų įrašų pagal redakcinį prioritetą, mygtukas „Atverti stebėseną“); atskiros katalogo kortelės modulis neturi |
 | `PP-qual/PP-QUAL.html`, `PP-salygos/PP-SALYGOS.html` | Kontekstiniai blokai su to modulio įrašais |
 
 Diegimo žingsniai: commit → push į `main` → GitHub Pages išdeda per ~1 min → atidaryti
@@ -68,7 +68,7 @@ maršrutą), o iki tol tvirtinimo įrodymas yra commit'as į repozitoriją.
 
 ## 4. Priėmimo testai (užduoties 11 punktas) - kur tikrinama
 
-Visi - `PP-teise/testai.html` (84 testai), testinis registras `testai-registras.json`.
+Visi - `PP-teise/testai.html` (93 testai), testinis registras `testai-registras.json`.
 
 | Scenarijus | Testas |
 |---|---|
@@ -84,6 +84,6 @@ Visi - `PP-teise/testai.html` (84 testai), testinis registras `testai-registras.
 | Pasenęs rinkinys be interneto | „Rinkinys senas po 45 d.“, „Senas rinkinys: įspėjimas...“, „Atsakymas iš talpyklos (X-GP-Offline) pažymimas offline“ |
 | Neteisinga modulio nuoroda | „Neteisinga modulio nuoroda atmetama ir pažymima“, „Susiję moduliai rodo į egzistuojančius puslapius (HTTP 200)“ |
 | Neteisėta prieiga prie vidinių įrašų | „Rodo įspėjimą, kad serverio autorizacijos nėra“, „Eksportas: be peržiūrų žurnalo... be vidinių laukų“, žurnalo testas su netikra saugykla |
-| Prieinamumas ir telefonas | grupė „Prieinamumas, klaviatūra, telefonas“ (etiketės, žymos ne vien spalva, kontrastas >= 4,5:1, details klaviatūra, 375 px be horizontalaus slinkimo) |
+| Prieinamumas ir telefonas | grupė „Prieinamumas, klaviatūra, pločiai“ (etiketės, būsenos ne vien spalva, kontrastas >= 4,5:1 įskaitant pilką foną, tab'ai rodyklėmis su roving tabindex, 1440 / 1024 / 768 / 390 px be horizontalaus slinkimo; portalo katalogas 3 / 3 / 2 / 1 stulpeliai) |
 | Nesėkminga patikra ne „pokyčių nėra“ | „Įkeliamas: ... patikrų būsena rodo neįdiegta ir nepavykusią“, portalo bloko klaidos testas |
 | Demonstraciniai duomenys ne kaip tikros naujienos | „Demonstracinis įrašas pažymėtas DEMONSTRACINIS“, portalo blokas demo nerodo, tikrame registre demo = 0 |
