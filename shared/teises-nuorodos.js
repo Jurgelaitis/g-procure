@@ -73,7 +73,7 @@
     ZALIEJI: {
       trumpai: "Žaliųjų pirkimų tvarkos aprašas",
       pavadinimas: "Aplinkos apsaugos kriterijų taikymo, vykdant žaliuosius pirkimus, tvarkos aprašas",
-      patvirtinta: "aplinkos ministro 2011-06-28 įsakymas Nr. D1-508 (2022-12-13 įsakymo Nr. D1-401 redakcija)",
+      patvirtinta: "aplinkos ministro 2011-06-28 įsakymas Nr. D1-508 (2022-12-13 įsakymo Nr. D1-401 redakcija, su 2024-01-16 Nr. D1-17 ir 2026-02-12 Nr. D1-20 pakeitimais)",
       // Aprašo 1 p.: taiko ir VPĮ perkančiosios organizacijos, ir PĮ perkantieji subjektai.
       url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.4B60A8C9678B/asr"
     }
@@ -264,7 +264,30 @@
 
     // ---- Žalieji pirkimai
     zalieji: { apie: "aplinkos apsaugos kriterijų taikymas žaliuosiuose pirkimuose",
-      bendra: { a: "ZALIEJI" } }
+      bendra: { a: "ZALIEJI" } },
+    // Aprašo 4 p.: pirkimas žaliasis, kai rengiant TS, kvalifikacijos reikalavimus, vertinimo kriterijus
+    // ar sutarties sąlygas produktas tenkina BENT VIENĄ 4.1-4.4 papunktį. Žaliojo pirkimo požymis
+    // savaime NEREIŠKIA, kad tiekėjui keliamas ISO 14001 ar kitas kvalifikacijos reikalavimas.
+    zal_zaliasis: { apie: "pirkimas laikomas žaliuoju, kai rengiant techninę specifikaciją, kvalifikacijos reikalavimus, vertinimo kriterijus ar sutarties sąlygas produktas tenkina bent vieną Aprašo 4.1-4.4 papunktį",
+      bendra: { a: "ZALIEJI", p: "4" } },
+    zal_produktu_sarasas: { apie: "produktas yra Aprašo 1 priedo sąraše ir atitinka visus jam nustatytus minimalius aplinkos apsaugos kriterijus (2 priedas)",
+      bendra: { a: "ZALIEJI", p: "4.1" } },
+    zal_zenklas: { apie: "produktas atitinka I tipo ekologinio ženklo reikalavimus (LST EN ISO 14024) ir paženklintas tokiu ženklu arba kitu lygiaverčiu įrodymu",
+      bendra: { a: "ZALIEJI", p: "4.2" } },
+    zal_vadyba: { apie: "paslaugai ar darbui, kurio nėra produktų sąraše, tiekėjas taiko aplinkos apsaugos vadybos sistemą (LST EN ISO 14001, EMAS ar kitą pagal Europos ar tarptautinius standartus); kiti lygiaverčiai įrodymai priimami supaprastintuose ir socialinių bei kitų specialiųjų paslaugų pirkimuose, kitais atvejais - tik jei tiekėjas dėl nuo jo nepriklausančių objektyvių priežasčių negali laiku pateikti sertifikatų",
+      bendra: { a: "ZALIEJI", p: "4.3" } },
+    zal_nematerialios: { apie: "žaliuoju laikomas ir tik nematerialaus pobūdžio paslaugų pirkimas be reikšmingo neigiamo poveikio aplinkai (pvz., programavimo ir informacinių sistemų priežiūros, audito, teisinės, konsultavimo, mokymų paslaugos) ir programinės įrangos, licencijų pirkimas",
+      bendra: { a: "ZALIEJI", p: "4.4.3" } },
+    zal_savi_kriterijai: { apie: "pirkimo vykdytojas gali pats nustatyti su pirkimo objektu susijusius aplinkos apsaugos kriterijus pagal Aprašo aplinkosauginius principus (mažiau išteklių, energijos, pavojingų medžiagų; ilgaamžiškumas; perdirbimas)",
+      bendra: { a: "ZALIEJI", p: "4.4.4" } },
+    zal_lygiaverciai: { apie: "lygiaverčiai aplinkos apsaugos vadybos įrodymai - tiekėjo taikomų priemonių aprašymas, atitinkantis Aprašo 10.1-10.6 papunkčius (politika, reikšmingi aspektai, tikslai, stebėsena, avarijų planas, kontrolė)",
+      bendra: { a: "ZALIEJI", p: "10" } },
+    // Metodikos 22 p. - aplinkos apsaugos vadybos priemonės kaip TECHNINIO pajėgumo reikalavimas.
+    met_aplinkos_vadyba: { apie: "aplinkos apsaugos vadybos priemonės, kurias tiekėjas galės taikyti vykdydamas sutartį: nurodomos konkrečios priemonės, ne reikalaujama sistema ar standartas; detalaus priemonių plano su pasiūlymu nereikalaujama",
+      bendra: { a: "MET", p: "22" } },
+    // Techninė specifikacija pagal sąvoką apima ir produkto poveikio aplinkai ir klimatui rodiklius.
+    ts_savoka: { apie: "techninė specifikacija - produktui ar paslaugai apibūdinti reikalingi duomenys, tarp jų poveikio aplinkai ir klimatui rodikliai",
+      PI: { a: "PI", s: 2, d: 27 }, VPI: { a: "VPI", s: 2, d: 34 } }
   };
 
   /* Metodikos SKAIČIAI - čia, ne moduliuose (CLAUDE.md 10 sk.: koeficientai gyvena shared/).
@@ -308,7 +331,9 @@
   function formatas(n, kalba) {
     var en = kalba === "en";
     if (n.a === "MET") return en ? "Methodology, point " + n.p : "Metodikos " + n.p + " p.";
-    if (n.a === "ZALIEJI") return en ? "Green Procurement Rules (Order No D1-508)" : "Žaliųjų pirkimų tvarkos aprašas (įsakymas Nr. D1-508)";
+    if (n.a === "ZALIEJI") return n.p
+      ? (en ? "Green Procurement Rules, point " + n.p : "Žaliųjų pirkimų tvarkos aprašo " + n.p + " p.")
+      : (en ? "Green Procurement Rules (Order No D1-508)" : "Žaliųjų pirkimų tvarkos aprašas (įsakymas Nr. D1-508)");
     var akt = AKTAI[n.a];
     if (!akt || !n.s) klaida("netinkama nuoroda " + JSON.stringify(n));
     if (en) return akt.trumpai + " Art. " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "");
