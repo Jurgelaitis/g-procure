@@ -913,6 +913,33 @@ async function testaiKontekstas(){
   });
 }
 
+/* Įspėjimas uždarant (shared/neissaugotas-darbas.js): modulis nieko nesaugo, tad naršyklė klausia, jei po
+   paskutinio Word atsisiuntimo ar naujo pirkimo pradžios pasikeitė darbo duomenys. Sintetinis beforeunload
+   įvykis parodo, ar puslapis prašytų klausimo (defaultPrevented). */
+function klausia(){ const e = new W.Event("beforeunload", { cancelable: true }); W.dispatchEvent(e); return e.defaultPrevented; }
+async function testaiIsejimas(){
+  dabartine = grupe("Įspėjimas uždarant su neatsisiųstu darbu");
+
+  await testas("Naujas pirkimas ir naršymas po vediklį klausimo nesukelia; įvedus duomenis - klausiama", async ()=>{
+    W.startEntry("info", "naujas");
+    tiesa(!W.GP_DARBAS.pakeista() && !klausia(), "pradėjus naują pirkimą ir atvėrus vediklį");
+    W.eval("PPQ.procurement.name = 'Pastotės remontas'");
+    tiesa(W.GP_DARBAS.pakeista() && klausia(), "įvedus pirkimo pavadinimą turi būti klausiama");
+    W.naujasPirkimas();
+    tiesa(!W.GP_DARBAS.pakeista() && !klausia(), "pradėjus naują pirkimą (išvalyta) neklausiama");
+  });
+
+  await testas("Atsisiuntus Word - neklausiama; patvirtinus reikalavimą mygtuku - vėl klausiama", async ()=>{
+    pirkimas({ value: 100000, objectType: "Prekės" });
+    rinkinys(RINKINYS_100);
+    tiesa(W.GP_DARBAS.pakeista(), "gavus reikalavimų rinkinį turi būti klausiama");
+    await wordas("lt");
+    tiesa(!W.GP_DARBAS.pakeista() && !klausia(), "atsisiuntus Word neklausiama");
+    W.patvirtinti(W.eval("PPQ.requirements[0].id"));
+    tiesa(W.GP_DARBAS.pakeista() && klausia(), "patvirtinus reikalavimą po atsisiuntimo turi būti klausiama");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -924,6 +951,7 @@ async function testaiKontekstas(){
     await testaiAuditasIrEksportas();
     await testaiPenktas();
     await testaiKontekstas();
+    await testaiIsejimas();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
