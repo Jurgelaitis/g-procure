@@ -35,7 +35,7 @@
 <body>
 
 <h1>shared/ regresijos testai</h1>
-<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose) ir <code>modulio-antraste.css</code> (modulio antraštė: jungimas, grupės eilutės kontrastas, prilipimas telefone).
+<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose) <code>modulio-antraste.css</code> (modulio antraštė: jungimas, grupės eilutės kontrastas, prilipimas telefone) ir <code>neissaugotas-darbas.js</code> (naršyklės klausimas uždarant su neatsisiųstais pakeitimais).
 Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
 
@@ -717,12 +717,156 @@ async function testaiAntraste(){
   });
 }
 
+/* ---------- Įspėjimas uždarant (neissaugotas-darbas.js) ---------- */
+/* PP-qual, PP-salygos ir PP-graphs nieko nesaugo, tad iki 2026-09-25 uždarius kortelę darbas dingdavo be klausimo.
+   Sintetinis beforeunload įvykis parodo, ar puslapis prašytų naršyklės klausimo (defaultPrevented). Naudotojo
+   rašymas imituojamas execCommand("insertText") - jo įvykiai tikri (isTrusted), kaip klaviatūros. */
+const DARBO_MODULIAI = ["../PP-qual/PP-QUAL.html", "../PP-salygos/PP-SALYGOS.html", "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html"];
+const DARBAS = '<input id="l"><script src="neissaugotas-darbas.js"><\/script>';
+function klausia(w){ const e = new w.Event("beforeunload", { cancelable: true }); w.dispatchEvent(e); return e.defaultPrevented; }
+function rasyk(d, el, tekstas){ el.focus(); d.execCommand("insertText", false, tekstas); }
+async function testaiDarbas(){
+  dabartine = grupe("Įspėjimas uždarant su neišsaugotu darbu (neissaugotas-darbas.js)");
+
+  await testas("Kol modulis nepasakė, ką stebėti (stebek), uždarant neklausiama - net parašius", async ()=>{
+    const { f, d, w } = await ramas(DARBAS);
+    try {
+      rasyk(d, d.getElementById("l"), "abc");
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "be stebek() klausimas nereikalingas");
+    } finally { f.remove(); }
+  });
+
+  await testas("Nepakeista būsena - neklausiama; pakeista mygtuku - klausiama; atskaita() po atsisiuntimo - vėl neklausiama", async ()=>{
+    const { f, w } = await ramas(DARBAS);
+    try {
+      w.S = { reikalavimai: [] };
+      w.GP_DARBAS.stebek(() => w.S);
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "ką tik pradėjus stebėti");
+      w.S.reikalavimai.push({ tekstas: "Patirtis", patvirtinta: true });
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "pakeitus būseną (be jokio įvykio) turi būti klausiama");
+      w.GP_DARBAS.atskaita();
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "po atskaitos (atsisiuntus) neklausiama");
+      w.S.reikalavimai[0].patvirtinta = false;
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "vėlesnis pakeitimas vėl turi būti klausiamas");
+    } finally { f.remove(); }
+  });
+
+  await testas("Programiniai įvykiai (dispatchEvent) darbo nekuria, naudotojo rašymas - kuria", async ()=>{
+    const { f, d, w } = await ramas(DARBAS);
+    try {
+      w.GP_DARBAS.stebek();
+      const l = d.getElementById("l");
+      ["input", "change", "drop"].forEach(t => l.dispatchEvent(new w.Event(t, { bubbles: true })));
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "programiniai input / change / drop įvykiai");
+      rasyk(d, l, "Transformatorių pirkimas");
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "parašius tekstą turi būti klausiama");
+    } finally { f.remove(); }
+  });
+
+  await testas("Po generavimo įvestas pakeitimas lieka naujas, net atsisiuntus tai, kas sugeneruota (momentas)", async ()=>{
+    const { f, d, w } = await ramas(DARBAS);
+    try {
+      w.GP_DARBAS.stebek();
+      const l = d.getElementById("l");
+      rasyk(d, l, "a");
+      const m = w.GP_DARBAS.momentas();
+      rasyk(d, l, "b");
+      w.GP_DARBAS.atskaita(m);
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "pakeitimas po generavimo į failą nepateko - turi būti klausiama");
+      w.GP_DARBAS.atskaita(w.GP_DARBAS.momentas());
+      tiesa(!w.GP_DARBAS.pakeista(), "sugeneravus ir atsisiuntus iš naujo - neklausiama");
+    } finally { f.remove(); }
+  });
+
+  await testas("Būsenos klaida niekada nereiškia „nėra ką prarasti“ - tada klausiama", async ()=>{
+    const { f, w } = await ramas(DARBAS);
+    try {
+      w.GP_DARBAS.stebek(() => { throw new Error("sugedo"); });
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "klaida skaičiuojant būseną");
+      const ciklas = {}; ciklas.as = ciklas;
+      w.GP_DARBAS.stebek(() => ciklas);
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "būsena, kurios neįmanoma užrašyti (ciklas)");
+      w.GP_DARBAS.atskaita();
+      tiesa(w.GP_DARBAS.pakeista(), "atskaita iš klaidingos būsenos klausimo nenuima");
+      let sugedo = false;
+      w.GP_DARBAS.stebek(() => { if (sugedo) throw new Error("sugedo vėliau"); return "gera"; });
+      tiesa(!w.GP_DARBAS.pakeista(), "gera būsena - neklausiama");
+      sugedo = true;
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "būsena sugedo po atskaitos - turi būti klausiama");
+    } finally { f.remove(); }
+  });
+
+  await testas("PP-qual, PP-salygos ir PP-graphs jungia bendrą failą, kviečia stebek() ir savo beforeunload neturi", async ()=>{
+    const blogi = [];
+    for (const m of DARBO_MODULIAI) {
+      const src = await saltinis(m);
+      if (src.indexOf('<script src="../shared/neissaugotas-darbas.js"><\/script>') === -1) blogi.push(m + ": nejungia shared/neissaugotas-darbas.js");
+      if (!/GP_DARBAS\.stebek\(/.test(src)) blogi.push(m + ": nekviečia GP_DARBAS.stebek()");
+      if (/beforeunload/.test(src)) blogi.push(m + ": savas beforeunload - jis gyvena shared/neissaugotas-darbas.js");
+    }
+    for (const m of DARBO_MODULIAI.slice(0, 2))
+      if (!/GP_DARBAS\.atskaita\(/.test(await saltinis(m))) blogi.push(m + ": atsisiuntus nekviečia GP_DARBAS.atskaita()");
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("PP-graphs: gavus etapus - klausiama, spausdinimas to nepakeičia (PDF neredaguojamas), išvalius - neklausiama", async ()=>{
+    const f = await modulioRemas("../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html");
+    const w = f.contentWindow;
+    try {
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "ką tik atvertas puslapis (su numatyta pradžios data)");
+      w.eval("document.getElementById('f-company').value = 'litgrid'; onCompanyChange();"
+        + "els.budas.value = [...els.budas.options].find(o => o.value && METHODS[o.value]).value; onMethodChange();");
+      tiesa(w.eval("state.groups.length") > 0, "pasirinkus būdą etapų nėra");
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "pasirinkus įmonę ir būdą turi būti klausiama");
+      let spausdinta = 0;
+      w.confirm = () => true; w.alert = () => {}; w.print = () => { spausdinta++; };
+      w.printSchedule();
+      lygu(spausdinta, 1, "spausdinimo kvietimai");
+      tiesa(w.GP_DARBAS.pakeista(), "po spausdinimo vis tiek turi būti klausiama");
+      w.resetForm();
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "išvalius formą neklausiama");
+    } finally { f.remove(); }
+  });
+
+  await testas("PP-salygos: klausiama, kol neatsisiųsti VISI dokumentai; ZIP - iš karto; po generavimo pakeisti atsakymai lieka nauji", async ()=>{
+    const f = await modulioRemas("../PP-salygos/PP-SALYGOS.html");
+    const w = f.contentWindow, d = f.contentDocument;
+    try {
+      tiesa(!w.GP_DARBAS.pakeista(), "ką tik atvertas puslapis");
+      d.getElementById("budas").dispatchEvent(new w.Event("change", { bubbles: true }));
+      tiesa(!w.GP_DARBAS.pakeista(), "programinis change įvykis darbo nekuria");
+      const l = d.querySelector("#step1 input[type=text]");
+      tiesa(l, "1 žingsnyje nėra teksto lauko");
+      rasyk(d, l, "Transformatorių pirkimas");
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "įrašius tekstą turi būti klausiama");
+      const rez = w.eval("[1, 2].map(i => ({ d: { trumpas: 'DOK' + i, pavadinimas: 'Dokumentas ' + i }, blob: new Blob(['x']), forma: false,"
+        + " audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [] }, stats: { trinta: 0, juodinta: 0, pildyta: 0, intTrinta: 0 } }))");
+      w.rodykRezultata(rez);
+      w.addEventListener("click", e => e.preventDefault());           // nuorodos failų neatsisiunčia
+      const nuor = [...d.querySelectorAll("#rezultatas a[download]")];
+      lygu(nuor.length, 2, "atsisiuntimo nuorodų");
+      nuor[0].click();
+      tiesa(w.GP_DARBAS.pakeista(), "atsisiuntus 1 iš 2 dokumentų vis dar turi būti klausiama");
+      nuor[1].click();
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "atsisiuntus visus dokumentus neklausiama");
+      rasyk(d, l, " (II dalis)");
+      w.HTMLAnchorElement.prototype.click = function(){};              // ZIP failas neatsisiunčiamas
+      await d.getElementById("zip").onclick();
+      tiesa(w.GP_DARBAS.pakeista(), "po generavimo įvestas pakeitimas į ZIP nepateko - turi būti klausiama");
+      w.rodykRezultata(rez);
+      await d.getElementById("zip").onclick();
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "sugeneravus iš naujo ir atsisiuntus ZIP neklausiama");
+    } finally { f.remove(); }
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
   await testaiDocxStiliai();
   await testaiSkydelis();
   await testaiAntraste();
+  await testaiDarbas();
   await testaiTeise();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
