@@ -23,7 +23,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppt-2026-09-24-1";
+var VERSIJA = "ppt-2026-09-25-1";
 
 var SAVI = [
   "./",
@@ -35,6 +35,7 @@ var SAVI = [
   "./paieska.js",
   "./zinios.js",
   "../shared/epso-g.css",
+  "../shared/modulio-antraste.css",
   "../shared/ai-proxy.js",
   "../shared/lang-detect.js",
   "../shared/portal-link.js",
