@@ -12,7 +12,7 @@ Viskas, ką galima padaryti naršyklėje, daroma naršyklėje; serveris naudojam
 Naudotojas
    |  CVP IS nuoroda / ID           oficialus ZIP (atsisiųstas iš CVP IS)
    v                                 v
-cvpis.js (nuorodos, resolve,      dokumentai.js (ZIP/PDF/DOCX/XLSX/XML/HTML/TXT
+cvpis.js (nuorodos, resolve,      shared/dokumentai.js (ZIP/PDF/DOCX/XLSX/XML/HTML/TXT
  terminai Europe/Vilnius,           -> blokai su vieta -> fragmentai + SHA-256)
  pirkėjas ir režimas iš skelbimo)    |
 organizacijos.js (vykdytojų           | metaIsDokumentu: pirkėjas + režimas -> S.kontekstas,
@@ -48,7 +48,9 @@ Bendrieji klausimai eina be AI: `zinios.js` žinių bazė (šaltinių registras 
 - Prieinamumas: skip-link, fokusai, `aria-live` atsakymams, modalas su Esc, įkėlimo zona valdoma klaviatūra, be horizontalaus slinkimo (testas).
 - Veikimas be interneto (`sw.js`, nuo 2026-09-22): savi failai - tinklas pirma, talpykla be ryšio; CDN bibliotekos - talpykla pirma (versija adrese, CORS atsakymas, tad SRI lieka); šriftai - talpykla, jei jau buvo; AI ir visa kita - tik tinklas. Be ryšio (`navigator.onLine === false`) arba nepavykus pasiekti AI (būsena 0) klausimui rodomos tikėtinos vietos (iki 5, ištrauka ties faktu), kontroliniam sąrašui - kiekvieno punkto vieta su būsena „neįvertinta"; viršuje - ryšio pranešimas (`aria-live`). Registruojamas tik per `https:` / `localhost`.
 
-## Dokumentų apdorojimas (`dokumentai.js`)
+## Dokumentų apdorojimas (`shared/dokumentai.js`)
+
+Nuo 2026-09-25 failas gyvena `shared/`: tą patį teksto skaitymą naudoja ir PP-salygos (atsakymų pasiūlymų šaltiniai). Keičiant jį, paleisk abiejų modulių testus.
 
 - Formatai: PDF (tekstas pagal Y/X koordinates puslapiais; skenuoti PDF pažymimi „be teksto sluoksnio, reikia OCR" - OCR MVP nėra), DOCX (word/document.xml: pastraipos ir lentelių eilutės kaip atskiri blokai; mammoth atsarginis), ODT (content.xml: pastraipos, antraštės, sąrašai, lentelių eilutės), XLSX (lapas + eilutė), XML (elementų tekstai su keliu, tinka EBVPD; CVP IS pasiūlymo struktūra `c4t` - vienas blokas su pirkimo būdu, vertinimo tipu, dalimis ir vokais), HTML, TXT/CSV/MD, ZIP (įdėtiniai iki 2 lygių). MS Project (.mpp) nepalaikomas.
 - Rūšis nustatoma pagal FAILO vardą, ne visą kelią: aplankas „Pirkimo dokumentai paskelbimui" anksčiau visus priedus paversdavo „Skelbimu"; „forma" - tik atskiras žodis („transformatorių", „Informacijos" nėra formos); sutarties sąlygos - „Sutartis", ne SPS / BPS.
@@ -75,7 +77,7 @@ Bendrieji klausimai eina be AI: `zinios.js` žinių bazė (šaltinių registras 
 - Kontrolinis sąrašas: 15 punktų su būsenomis privaloma / su_salyga / netaikoma / nerasta / patikslinti (penktoji „netaikoma" pridėta prie master prompto keturių, kad aiškus „nereikalaujama" su citata nebūtų rodomas kaip „nerasta"); be patvirtintų šaltinių „privaloma", „su_salyga", „netaikoma" negalimos, o „nerasta" šalia patvirtinto šaltinio virsta „patikslinti"; modelio neįvertintas punktas - „patikslinti" su pastaba; neperskaitytas ar tuščias AI atsakymas rodomas kaip klaida, o ne kaip „nerasta".
 - Fragmentų žymekliai `[[...]]` prompto kopijoje neutralizuojami (dokumentas negali suklastoti fragmentų ribų ar žymos AKTUALI REDAKCIJA); vardai valomi nuo eilučių lūžių.
 - Injekcijos: `aptikInjekcija` pažymi nurodymus modeliui dokumentuose; sąsaja rodo įspėjimą, promptas liepia nevykdyti; modelis pats pažymi lauke `ispejimai` (patikrinta gyvai).
-- Atsakymo skaitymas (`parse`): pirmiausia griežtas `JSON.parse`; jei jis lūžta - struktūrinis taisymas `taisykJson` (neekranuota ASCII kabutė eilutės viduje, pvz. lietuviška „citata", ir tiesioginis eilutės lūžis), po kurio dar kartą `JSON.parse`. Neuždarytas JSON netaisomas - nutrauktas (`stop_reason: max_tokens`) atsakymas lieka `null`, o sąsaja rodo atskirą pranešimą „atsakymas nutrūko", ne bendrą klaidą. Biudžetas: QA 4000, kontrolinis 6000 išvesties žetonų (išmatuota 2026-09-02 su tikru CVP IS paketu: lietuviškas QA atsakymas su 4 citatomis = ~1700 žetonų, sena 1800 riba jį nutraukdavo); ta pati riba Worker'yje.
+- Atsakymo skaitymas (`parse`): pirmiausia griežtas `JSON.parse`; jei jis lūžta - struktūrinis taisymas `taisykJson` (nuo 2026-09-25 - `shared/ai-proxy.js`, bendras su PP-salygos) (neekranuota ASCII kabutė eilutės viduje, pvz. lietuviška „citata", ir tiesioginis eilutės lūžis), po kurio dar kartą `JSON.parse`. Neuždarytas JSON netaisomas - nutrauktas (`stop_reason: max_tokens`) atsakymas lieka `null`, o sąsaja rodo atskirą pranešimą „atsakymas nutrūko", ne bendrą klaidą. Biudžetas: QA 4000, kontrolinis 6000 išvesties žetonų (išmatuota 2026-09-02 su tikru CVP IS paketu: lietuviškas QA atsakymas su 4 citatomis = ~1700 žetonų, sena 1800 riba jį nutraukdavo); ta pati riba Worker'yje.
 - Transportas: numatyta `shared/ai-proxy.js` (viena user žinutė, system, maxTokens). Saugesnis kelias - Worker'is, kuriam klientas siunčia tik `{mode, lang, question, procurement, completeness, chunks[], turnstileToken}`, o promptą konstruoja serveris. Sisteminių promptų kanoninė kopija - Worker'yje; klientas laiko tą patį tekstą atsarginiam keliui.
 
 ## CVP IS adapterio kontraktas (2 etapas)

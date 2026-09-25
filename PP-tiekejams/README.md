@@ -32,7 +32,7 @@ Po pirmo apsilankymo su internetu modulis veikia ir be ryšio (`sw.js`, service 
 | Failas | Paskirtis |
 |---|---|
 | `index.html` | Sąsaja (LT/EN; pradinė kalba pagal lankytoją per `shared/lang-detect.js`: iš Lietuvos - LT, kiti - EN, rankinis jungiklis įsimenamas): pradžia, konkretus pirkimas (3 zonos), bendri klausimai, „kaip tikrinami atsakymai" |
-| `dokumentai.js` | Dokumentų paketo apdorojimas naršyklėje: ZIP (su saugumo ribomis), PDF, DOCX, ODT, XLSX, XML (taip pat CVP IS pasiūlymo struktūra `c4t`), HTML, TXT -> fragmentai su vieta ir SHA-256. Fragmentas - iki 180 žodžių IR iki 1 400 simbolių: tiek jo mato AI (`CHUNK_SIMBOLIU`; Worker'io `MAX_CHUNK_CHARS` negali būti mažesnė - tikrina testai) |
+| `../shared/dokumentai.js` | (nuo 2026-09-25 bendras - jį naudoja ir PP-salygos) Dokumentų paketo apdorojimas naršyklėje: ZIP (su saugumo ribomis), PDF, DOCX, ODT, XLSX, XML (taip pat CVP IS pasiūlymo struktūra `c4t`), HTML, TXT -> fragmentai su vieta ir SHA-256. Fragmentas - iki 180 žodžių IR iki 1 400 simbolių: tiek jo mato AI (`CHUNK_SIMBOLIU`; Worker'io `MAX_CHUNK_CHARS` negali būti mažesnė - tikrina testai) |
 | `paieska.js` | Tiksli terminų / numerių paieška + BM25 su LT kamienais; citatų patikra |
 | `asistentas.js` | Promptai, atsakymo schema ir VALIDAVIMAS (citatos tikrinamos), kontrolinis sąrašas, klausimo projektas, redakcijų palyginimas |
 | `zinios.js` | Šaltinių registras (versijuojamas) ir bendrųjų klausimų bazė (PĮ 2026-07-01 redakcija, VPT 2026 m. instrukcijos, LITGRID taisyklės); kiekviena tema turi `rezimas` (PĮ arba CVP IS tvarka abiem režimams) - VPĮ atitikmenų dar nėra |

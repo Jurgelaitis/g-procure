@@ -24,7 +24,7 @@
   "use strict";
 
   var MAX_CHUNKS = 14;          // fragmentų skaičius į vieną užklausą
-  // vieno fragmento riba simboliais - ta pati, pagal kurią dokumentai.js skaido tekstą,
+  // vieno fragmento riba simboliais - ta pati, pagal kurią shared/dokumentai.js skaido tekstą,
   // todėl nukirpimas čia tik apsauga (fragmentas ilgesnis nebūna)
   var MAX_CHUNK_CHARS = (global.GP_DOK && global.GP_DOK.limits && global.GP_DOK.limits.CHUNK_SIMBOLIU) || 1400;
   // Atsakymo biudžetas žetonais. Išmatuota 2026-09-02 su tikru CVP IS paketu (46 dok.):
@@ -227,53 +227,10 @@
   // ---------------------------------------------------------------------------
   // Atsakymo skaitymas ir VALIDAVIMAS
   // ---------------------------------------------------------------------------
-  // Modelio JSON su pažeidimais, kuriuos matėme TIKRUOSE atsakymuose (2026-09-02,
-  // CVP IS paketas 1159_9187214): neekranuota ASCII kabutė eilutės viduje (lietuviška
-  // citata atidaroma „, o uždaroma ") ir tiesioginis eilutės lūžis eilutės viduje.
-  // Griežtas JSON.parse tokį tekstą atmeta, ir naudotojas matydavo "Nepavyko gauti
-  // atsakymo", nors atsakymas buvo pilnas ir teisingas. Taisymas STRUKTŪRINIS: kabutė
-  // laikoma eilutės pabaiga TIK jei po jos eina tai, ko JSON gramatika tikisi
-  // (dvitaškis po rakto; kablelis, po kurio prasideda raktas ar reikšmė; uždarantis
-  // skliaustas; teksto pabaiga). Neuždaryta eilutė ar neuždarytas JSON NEtaisomi -
-  // nutrauktas (max_tokens) atsakymas lieka null, kad dalis nebūtų rodoma kaip visuma.
-  function taisykJson(s) {
-    var out = "", i = 0, n = s.length, stack = [], expect = "value";
-    function top() { return stack[stack.length - 1]; }
-    function praleisk(k) { while (k < n && /\s/.test(s.charAt(k))) k++; return k; }
-    while (i < n) {
-      var ch = s.charAt(i);
-      if (ch === '"') {
-        var j = i + 1, str = '"', uzdaryta = false;
-        while (j < n) {
-          var c = s.charAt(j);
-          if (c === "\\") { str += c + s.charAt(j + 1); j += 2; continue; }
-          if (c === "\n") { str += "\\n"; j++; continue; }
-          if (c === "\r") { str += "\\r"; j++; continue; }
-          if (c === "\t") { str += "\\t"; j++; continue; }
-          if (c !== '"') { str += c; j++; continue; }
-          var k = praleisk(j + 1), nx = s.charAt(k), closes;
-          if (expect === "key") closes = nx === ":";
-          else if (nx === ",") { var nn = s.charAt(praleisk(k + 1)); closes = top() === "o" ? nn === '"' : /["\d\-{\[tfn]/.test(nn); }
-          else if (nx === "}") closes = top() === "o";
-          else if (nx === "]") closes = top() === "a";
-          else closes = k >= n;
-          if (closes) { str += '"'; j++; uzdaryta = true; break; }
-          str += '\\"'; j++;
-        }
-        out += str; i = j;
-        if (!uzdaryta) return out;
-        expect = expect === "key" ? "colon" : "end";
-        continue;
-      }
-      if (ch === "{") { stack.push("o"); expect = "key"; }
-      else if (ch === "[") { stack.push("a"); expect = "value"; }
-      else if (ch === "}" || ch === "]") { stack.pop(); expect = "end"; }
-      else if (ch === ":") expect = "value";
-      else if (ch === ",") expect = top() === "o" ? "key" : "value";
-      out += ch; i++;
-    }
-    return out;
-  }
+  // Struktūrinis JSON taisymas (neekranuota ASCII kabutė, eilutės lūžis eilutės viduje) nuo
+  // 2026-09-25 gyvena shared/ai-proxy.js (GP_AI_PROXY.taisykJson) - tą patį naudoja PP-salygos.
+  // Istorija ir taisyklės - ten. Nutrauktas (max_tokens) atsakymas vis tiek lieka null.
+  function taisykJson(s) { return global.GP_AI_PROXY.taisykJson(s); }
   function parse(text) {
     var s = String(text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
     var a = s.indexOf("{"), b = s.lastIndexOf("}");

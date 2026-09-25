@@ -1,7 +1,11 @@
 /* ============================================================================
- * G-Procure Tiekėjams  dokumentai.js
+ * G-Procure  shared/dokumentai.js
  * ----------------------------------------------------------------------------
- * Oficialaus CVP IS dokumentų paketo apdorojimas NARŠYKLĖJE (window.GP_DOK).
+ * Dokumentų teksto skaitymas NARŠYKLĖJE (window.GP_DOK). Vienas failas
+ * visiems moduliams: PP-tiekejams (oficialus CVP IS dokumentų paketas) ir
+ * PP-salygos (atsakymų pasiūlymų šaltiniai). Iki 2026-09-25 gyveno
+ * PP-tiekejams/ - perkeltas, kad antras modulis neturėtų savos kopijos.
+ * Keičiant šį failą - paleisk PP-tiekejams/testai.html IR PP-salygos/testai.html.
  *
  * Įėjimas: File objektai (ZIP / PDF / DOCX / XLSX / XML / HTML / TXT).
  * Išėjimas: dokumentų sąrašas su tekstu, struktūra ir FRAGMENTAIS (chunk'ais),
