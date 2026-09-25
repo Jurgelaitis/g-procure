@@ -35,7 +35,7 @@
 <body>
 
 <h1>shared/ regresijos testai</h1>
-<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) ir <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose).
+<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose) ir <code>modulio-antraste.css</code> (modulio antraštė: jungimas, grupės eilutės kontrastas, prilipimas telefone).
 Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
 
@@ -661,11 +661,68 @@ async function testaiTeise(){
   });
 }
 
+/* ---------- Modulio antraštė (modulio-antraste.css) ---------- */
+/* Iki 2026-09-25 antraštės, kalbos jungiklio ir skirtukų taisyklės buvo nukopijuotos keturiuose puslapiuose,
+   o grupės eilutė smaragdu-50 ant gradiento telefone turėjo 3,2-4,1:1. Sargai: moduliai jungia bendrą failą
+   PRIEŠ savo stilius ir patys .brand-group nerašo; spalva atlaiko 4,5:1 ŠVIESIAUSIAME gradiento taške;
+   telefone antraštė slenka, o skirtukai limpa prie viršaus (anksčiau PP-esg juos uždengdavo, PP-carbon - 71 px tarpas). */
+const ANTRASTES_PUSLAPIAI = ["../PP-tiekejams/index.html", "../PP-esg/index.html", "../PP-carbon/index.html", "../PP-carbon/epd.html"];
+function antraste(plotis){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.style.width = plotis + "px"; f.style.height = "600px";
+    f.addEventListener("load", async () => { const d = f.contentDocument; if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 50)); res({ f: f, d: d, w: f.contentWindow }); });
+    f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"><link rel="stylesheet" href="modulio-antraste.css">'
+             + '<style>body{margin:0;font-family:var(--font-base)}</style></head><body>'
+             + '<header class="app-header"><div class="header-inner"><div class="brand"><div class="brand-logo"></div><div class="brand-text">'
+             + '<span class="brand-group">G-Procure ekosistema · EPSO-G grupė</span><span class="brand-module">Modulis</span></div></div></div></header>'
+             + '<nav class="tabbar"><div class="tabbar-inner"><button class="tab active">Apžvalga</button><button class="tab">Kita</button></div></nav>'
+             + '<main style="height:3000px"></main></body></html>';
+    document.body.appendChild(f);
+  });
+}
+async function testaiAntraste(){
+  dabartine = grupe("Modulio antraštė (modulio-antraste.css)");
+  await testas("Moduliai jungia bendrą antraštės failą PRIEŠ savo stilius ir patys grupės eilutės (.brand-group) nerašo", async ()=>{
+    for (const m of ANTRASTES_PUSLAPIAI) {
+      const src = await (await fetch(m + "?b=" + Date.now())).text();
+      const i = src.indexOf('<link rel="stylesheet" href="../shared/modulio-antraste.css" />'), st = src.indexOf("<style");
+      tiesa(i !== -1, m + ": nejungia shared/modulio-antraste.css");
+      tiesa(i < st, m + ": bendras failas turi būti prieš modulio <style>, kitaip modulio papildymai jo neperrašo");
+      tiesa(!/\.brand-group\s*\{/.test(src), m + ": modulyje vėl yra .brand-group stilius - jis gyvena shared/modulio-antraste.css");
+    }
+  });
+  await testas("Grupės eilutė ant gradiento >= 4,5:1 ir šviesiausiame gradiento taške", async ()=>{
+    const P = await antraste(1280);
+    try {
+      const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      const L = c => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+      const spalva = P.w.getComputedStyle(P.d.querySelector(".brand-group")).color.match(/\d+/g).map(Number);
+      const stoteles = [...P.w.getComputedStyle(P.d.querySelector(".app-header")).backgroundImage.matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map(m => [+m[1], +m[2], +m[3]]);
+      tiesa(stoteles.length >= 2, "gradiento stotelės: " + stoteles.length);
+      const blogiausias = Math.min(...stoteles.map(c => (Math.max(L(spalva), L(c)) + 0.05) / (Math.min(L(spalva), L(c)) + 0.05)));
+      tiesa(blogiausias >= 4.5, "grupės eilutė " + spalva + " blogiausiai " + blogiausias.toFixed(2) + ":1");
+    } finally { P.f.remove(); }
+  });
+  await testas("Kompiuteryje antraštė ir skirtukai limpa; telefone (375 px) antraštė slenka, o skirtukai lieka prie pat viršaus", async ()=>{
+    for (const [plotis, antrLimpa] of [[1280, true], [375, false]]) {
+      const P = await antraste(plotis);
+      try {
+        P.w.scrollTo(0, 400); await new Promise(r => setTimeout(r, 60));
+        const a = P.d.querySelector(".app-header").getBoundingClientRect(), t = P.d.querySelector(".tabbar").getBoundingClientRect();
+        if (antrLimpa) { tiesa(Math.round(a.top) === 0 && Math.round(t.top) === 71, plotis + " px: antraštė " + Math.round(a.top) + ", skirtukai " + Math.round(t.top)); }
+        else { tiesa(a.bottom <= 0 && Math.round(t.top) === 0, plotis + " px: antraštė " + Math.round(a.top) + "-" + Math.round(a.bottom) + ", skirtukai " + Math.round(t.top)); }
+      } finally { P.f.remove(); }
+    }
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
   await testaiDocxStiliai();
   await testaiSkydelis();
+  await testaiAntraste();
   await testaiTeise();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
