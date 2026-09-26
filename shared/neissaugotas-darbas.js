@@ -15,6 +15,9 @@
  *    pasirinkimai, įkelti failai. Programiniai įvykiai (dispatchEvent) darbo
  *    nekuria, todėl modulio pradinis užpildymas ir testai įspėjimo nesukelia;
  *  - modulio būsena, jei modulis ją paduoda: GP_DARBAS.stebek(() => [...]).
+ *  Nesiskaito įvykiai elementuose su atributu data-darbas-ne (ar jų viduje): paieška,
+ *  filtrai ir pirkimo kortelės pasirinkimas (shared/pirkimo-kortele.js) nėra darbas,
+ *  kurį galima prarasti (nuo 2026-09-26).
  *    Taip pagaunami ir mygtukais atlikti pakeitimai (patvirtinimas, AI
  *    rezultatas, pridėtas etapas), kurių input / change įvykiai nerodo.
  *
@@ -41,7 +44,12 @@
   var ijungta = false;   // modulis pasakė, ką stebėti
 
   ["input", "change", "drop"].forEach(function (tipas) {
-    doc.addEventListener(tipas, function (e) { if (e.isTrusted) ivykiai++; }, true);
+    doc.addEventListener(tipas, function (e) {
+      if (!e.isTrusted) return;
+      var t = e.target;
+      if (t && t.closest && t.closest("[data-darbas-ne]")) return;
+      ivykiai++;
+    }, true);
   });
 
   /* Parašas = įvykių skaičius + modulio būsena. Būsenos klaida išmetama toliau. */

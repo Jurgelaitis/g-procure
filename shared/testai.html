@@ -37,7 +37,8 @@
 <body>
 
 <h1>shared/ regresijos testai</h1>
-<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose) <code>modulio-antraste.css</code> (modulio antraštė visuose moduliuose: jungimas, vienos eilutės aukštis, grupės eilutės kontrastas, prilipimas telefone) ir <code>neissaugotas-darbas.js</code> (naršyklės klausimas uždarant su neatsisiųstais pakeitimais).
+<div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose) <code>modulio-antraste.css</code> (modulio antraštė visuose moduliuose: jungimas, vienos eilutės aukštis, grupės eilutės kontrastas, prilipimas telefone) ir <code>neissaugotas-darbas.js</code> (naršyklės klausimas uždarant su neatsisiųstais pakeitimais) ir <code>pirkimo-kortele.js</code> su <code>pirkimu-korteles.html</code>
+(bendra pirkimo kortelė: schema, saugykla, tikrinimas, juosta modulyje ir kortelių puslapis - netikra saugykla arba <code>?saugykla=testine</code>).
 Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
 
@@ -405,11 +406,11 @@ async function testaiSkydelis(){
       "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-salygos/PP-SALYGOS.html",
       "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html", "../PP-cost-benefit/kastu_naudos_analize.html",
       "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "../PP-protocol/LITGRID_Generatorius_v3.html",
-      "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-report/PP-report.html"];
+      "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-report/PP-report.html", "../pirkimu-korteles.html"];
     const blogi = [], idai = {};
     for (const m of PUSLAPIAI) {
       const src = await (await fetch(m + "?b=" + Date.now())).text();
-      if (src.indexOf('<script src="../shared/gprocure-info-panel.js"><\/script>') === -1) blogi.push(m + ": nejungia komponento");
+      if (!/<script src="(\.\.\/)?shared\/gprocure-info-panel\.js"><\/script>/.test(src)) blogi.push(m + ": nejungia komponento");
       if (src.indexOf('id="infoPanelMount"') === -1) blogi.push(m + ": nėra #infoPanelMount");
       const id = (src.match(/moduleId:\s*"([^"]+)"/) || [])[1];
       if (!id) blogi.push(m + ": nėra moduleId"); else if (idai[id]) blogi.push(m + ": moduleId „" + id + "“ jau naudoja " + idai[id]); else idai[id] = m;
@@ -746,7 +747,7 @@ const ANTRASTES_PUSLAPIAI = ["../PP-tiekejams/index.html", "../PP-esg/index.html
   "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-salygos/PP-SALYGOS.html", "../PP-cost-benefit/index.html",
   "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html", "../PP-cost-benefit/kastu_naudos_analize.html",
   "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "../PP-protocol/LITGRID_Generatorius_v3.html",
-  "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-report/PP-report.html", "../PP-teise/admin.html"];
+  "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-report/PP-report.html", "../PP-teise/admin.html", "../pirkimu-korteles.html"];
 function antraste(plotis){
   return new Promise(res => {
     const f = document.createElement("iframe");
@@ -767,7 +768,7 @@ async function testaiAntraste(){
     const blogi = [];
     for (const m of ANTRASTES_PUSLAPIAI) {
       const src = await (await fetch(m + "?b=" + Date.now())).text();
-      const i = src.indexOf('<link rel="stylesheet" href="../shared/modulio-antraste.css" />'), st = src.indexOf("<style");
+      const i = src.search(/<link rel="stylesheet" href="(\.\.\/)?shared\/modulio-antraste\.css" ?\/?>/), st = src.indexOf("<style");
       if (i === -1) { blogi.push(m + ": nejungia shared/modulio-antraste.css"); continue; }
       if (i > st) blogi.push(m + ": bendras failas turi būti prieš modulio <style>, kitaip modulio papildymai jo neperrašo");
       if (!/<header class="app-header"/.test(src)) blogi.push(m + ": nėra <header class=\"app-header\">");
@@ -1291,6 +1292,221 @@ async function testaiSaugykla(){
   });
 }
 
+/* ==========================================================================
+   Bendra pirkimo kortelė (pirkimo-kortele.js ir pirkimu-korteles.html, A1 2026-09-26).
+   Saugykla - netikra (netikraSaugykla) arba puslapio ?saugykla=testine: tikros naudotojo
+   kortelės neliečiamos. Juosta tikrinama bandomajame puslapyje su savo laukais.
+   ========================================================================== */
+const KORTELES_FAILAI = '<script src="saugykla.js"><\/script><script src="money.js"><\/script><script src="procurement-methods.js"><\/script>'
+  + '<script src="organizacijos.js"><\/script><script src="pirkimo-kortele.js"><\/script>';
+async function korteleRemas(html){
+  const r = await ramas('<link rel="stylesheet" href="epso-g.css">' + (html || "") + KORTELES_FAILAI);
+  r.K = r.w.GP_KORTELE;
+  return r;
+}
+async function testaiKortele(){
+  dabartine = grupe("Bendra pirkimo kortelė (pirkimo-kortele.js, pirkimu-korteles.html)");
+
+  await testas("Schema: nauja kortelė turi visus laukus; normalizuok suvienodina tipus, reikšmių neišgalvoja ir palieka nežinomus laukus", async ()=>{
+    const { f, K } = await korteleRemas();
+    try {
+      lygu(Object.keys(K.tuscia()).sort(), ["archyvuota","atnaujinta","budas","busena","bvpz","cvpisNr","dalys","id","iniciatorius","numeris","objektas",
+        "organizatorius","paskelbimas","pavadinimas","pradzia","rezimas","sukurta","trukmeMen","verte","vykdytojas"], "laukai");
+      const x = K.normalizuok({ id: "k-1", pavadinimas: "  Transformatoriai  ", verte: "1.250.000,00", trukmeMen: "24", dalys: "ne", busena: "", komisija: [{ vardas: "X" }], ateitis: { a: 1 } });
+      lygu([x.pavadinimas, x.verte, x.trukmeMen, x.dalys, x.busena, x.archyvuota, x.rezimas], ["Transformatoriai", 1250000, 24, null, "rengiamas", false, ""]);
+      lygu([x.ateitis, x.komisija], [{ a: 1 }, [{ vardas: "X" }]], "nežinomi laukai lieka");
+      lygu(K.normalizuok({ id: "k-2", verte: "1,250,000.00", dalys: [] }).verte, 1250000, "JAV formatas");
+      lygu(K.normalizuok({ id: "k-3", dalys: [] }).dalys, [], "neskaidomas - tuščias sąrašas, ne „nenurodyta“");
+    } finally { f.remove(); }
+  });
+
+  await testas("Įrašoma viena kortelė pagal id: kitame lange įrašyta kortelė ir nežinomos formos įrašas nedingsta", async ()=>{
+    const { f, K } = await korteleRemas();
+    try {
+      const st = netikraSaugykla({}), o = { saugykla: st };
+      let r = K.issaugok(K.tuscia({ pavadinimas: "A" }), o);
+      tiesa(r.ok && r.nauja, "pirmas įrašas");
+      const idA = r.kortele.id;
+      const zalia = JSON.parse(st._d["gprocure.korteles"]);
+      zalia.korteles.push({ id: "k-B", pavadinimas: "B", ateitis: 1 }, "nežinomas");
+      st.setItem("gprocure.korteles", JSON.stringify(zalia));
+      const A = K.gauk(idA, o); A.pavadinimas = "A2";
+      r = K.issaugok(A, o);
+      tiesa(r.ok && !r.nauja, "atnaujinimas");
+      const po = JSON.parse(st._d["gprocure.korteles"]);
+      lygu([po.schema, po.korteles.length, po.korteles[0].pavadinimas, po.korteles[1], po.korteles[2]], [1, 3, "A2", { id: "k-B", pavadinimas: "B", ateitis: 1 }, "nežinomas"]);
+      lygu(K.skaityk(o).korteles.map(k => k.pavadinimas), ["A2", "B"], "skaitant nežinomas praleidžiamas");
+      tiesa(K.gauk(idA, o).atnaujinta >= K.gauk(idA, o).sukurta, "atnaujinimo laikas");
+    } finally { f.remove(); }
+  });
+
+  await testas("Neperskaitoma saugykla niekada nevirsta „kortelių nėra“ ir neperrašoma; pilna ar neprieinama - sakoma", async ()=>{
+    const { f, K } = await korteleRemas();
+    try {
+      const st = netikraSaugykla({ "gprocure.korteles": "{sugadinta" });
+      const s = K.skaityk({ saugykla: st });
+      lygu([s.busena, s.korteles.length], ["sugadinta", 0]);
+      tiesa(Object.keys(st._d).some(k => k.indexOf("gprocure.korteles.sugadinta-") === 0), "sugadintos reikšmės kopija");
+      const r = K.issaugok(K.tuscia({ pavadinimas: "X" }), { saugykla: st });
+      tiesa(!r.ok, "įrašyti neturi");
+      lygu(st._d["gprocure.korteles"], "{sugadinta", "sugadinta reikšmė nepaliesta");
+      lygu(K.skaityk({ saugykla: netikraSaugykla({ "gprocure.korteles": '{"schema":1,"korteles":"ne"}' }) }).busena, "sugadinta", "ne ta sandara");
+      const uzdaryta = { get length(){ return 0; }, key(){ return null; }, getItem(){ throw new Error("SecurityError"); }, setItem(){ throw new Error("SecurityError"); } };
+      lygu(K.skaityk({ saugykla: uzdaryta }).busena, "neprieinama");
+      const pilna = netikraSaugykla({});
+      pilna.setItem = () => { const e = new Error("The quota has been exceeded."); e.name = "QuotaExceededError"; throw e; };   // kaip naršyklė
+      const r4 = K.issaugok(K.tuscia({ pavadinimas: "X" }), { saugykla: pilna });
+      lygu([r4.ok, r4.r.kodas], [false, "pilna"]);
+    } finally { f.remove(); }
+  });
+
+  await testas("Tikrinimas žmogui: privalomas tik pavadinimas; BVPŽ, suma, data (ir 2026-02-30), būdas, režimas, vykdytojas, trukmė, dalys", async ()=>{
+    const { f, K } = await korteleRemas();
+    try {
+      const kl = k => K.tikrink(K.tuscia(k), "lt").map(x => x.laukas);
+      lygu(kl({}), ["pavadinimas"]);
+      lygu(kl({ pavadinimas: "A", bvpz: "3117000", verte: -5, budas: "XX", rezimas: "PX", vykdytojas: "nera", objektas: "kita", trukmeMen: 700,
+                pradzia: "2026-02-30", paskelbimas: "2026-10-15", dalys: [{ pavadinimas: "", verte: 10 }] }),
+        ["verte", "bvpz", "budas", "rezimas", "vykdytojas", "objektas", "trukmeMen", "pradzia", "dalys"]);
+      lygu(kl({ pavadinimas: "A", bvpz: "31170000-8", verte: 1250000, budas: "T-AK", rezimas: "PI", vykdytojas: "litgrid", objektas: "paslaugos_it",
+                trukmeMen: 24, pradzia: "2026-10-01", dalys: [] }), []);
+      lygu(K.vykdytojai().map(v => v.id + ":" + v.rezimas), ["litgrid:PI", "amber-grid:PI", "epso-g:VPI", "energy-cells:PI"], "vykdytojai iš shared/organizacijos.js");
+    } finally { f.remove(); }
+  });
+
+  await testas("Pastabos (režimas ne toks, kaip organizacijai įprasta; dalių suma) ir santrauka; archyvuota nesiūloma, bet nedingsta", async ()=>{
+    const { f, K } = await korteleRemas();
+    try {
+      const p = K.pastabos(K.tuscia({ pavadinimas: "A", vykdytojas: "epso-g", rezimas: "PI", verte: 100000,
+        dalys: [{ pavadinimas: "1", verte: 40000 }, { pavadinimas: "2", verte: 50000 }] }), "lt");
+      tiesa(p.length === 2 && /UAB EPSO-G paprastai perka pagal VPĮ/.test(p[0]) && /90 000 EUR/.test(p[1]), p.join(" | "));
+      lygu(K.pastabos(K.tuscia({ pavadinimas: "A", vykdytojas: "litgrid", rezimas: "PI" }), "lt"), [], "įprastas režimas");
+      lygu(K.santrauka(K.tuscia({ pavadinimas: "A", verte: 1250000, budas: "T-AK", rezimas: "PI", vykdytojas: "litgrid" }), "lt"),
+        "1 250 000 EUR · Atviras konkursas (tarptautinis pirkimas) · PĮ · LITGRID AB");
+      const st = netikraSaugykla({}), o = { saugykla: st };
+      const id = K.issaugok(K.tuscia({ pavadinimas: "Senas" }), o).kortele.id;
+      K.issaugok(K.tuscia({ pavadinimas: "Naujas" }), o);
+      tiesa(K.archyvuok(id, true, o).ok, "archyvavimas");
+      lygu([K.aktyvios(o).korteles.map(k => k.pavadinimas), K.skaityk(o).korteles.length], [["Naujas"], 2]);
+      K.archyvuok(id, false, o);
+      lygu(K.aktyvios(o).korteles.length, 2, "grąžinta iš archyvo");
+      lygu(GP_BACKUP.zenklas("gprocure.korteles", "lt").pav, "Pirkimų kortelės", "atsarginė kopija");
+      lygu(GP_BACKUP.zenklas("gprocure.korteles.sugadinta-20260926-120000", "lt").pav, "Pirkimų kortelės (neperskaitoma kopija)");
+    } finally { f.remove(); }
+  });
+
+  await testas("Juosta modulyje: prieš informacinę skiltį; be kortelių - kviečia sukurti; neperskaitoma - sako, kad nepavyko, pasirinkimas išjungtas", async ()=>{
+    const { f, w, d, K } = await korteleRemas('<div class="container"><div id="infoPanelMount"></div><input id="f-pav"></div>');
+    try {
+      K.naudokSaugykla(netikraSaugykla({}));
+      const api = K.mount({ modulis: "Testas", laukai: [{ kortele: "pavadinimas", el: "#f-pav" }] });
+      lygu(d.getElementById("gpk").nextElementSibling.id, "infoPanelMount", "vieta");
+      tiesa(d.getElementById("gpk").hasAttribute("data-darbas-ne"), "pasirinkimas - ne darbas (neissaugotas-darbas.js)");
+      tiesa(/Kortelių dar nėra/.test(d.getElementById("gpk-zin").textContent), "tuščia");
+      tiesa([...d.querySelectorAll("#gpk button")].some(b => /Sukurti kortelę iš šių duomenų/.test(b.textContent)), "kūrimo mygtukas");
+      K.naudokSaugykla(netikraSaugykla({ "gprocure.korteles": "{" }));
+      api.atnaujink();
+      const z = d.getElementById("gpk-zin").textContent;
+      tiesa(d.getElementById("gpk-sel").disabled && /perskaityti nepavyko/.test(z) && !/Kortelių dar nėra/.test(z), z);
+      tiesa(!d.querySelector("#gpk .gpk-btn"), "neperskaitomai saugyklai kurti ar keisti nesiūloma");
+    } finally { f.remove(); }
+  });
+
+  await testas("Pasirinkus kortelę: tušti ir numatytieji laukai užpildomi, kitaip įvesti - tik parodomi; „Taikyti“ pakeičia; neįmanoma reikšmė įvardijama", async ()=>{
+    const { f, w, d, K } = await korteleRemas('<div id="infoPanelMount"></div><input id="f-pav" value="Mano pavadinimas">'
+      + '<select id="f-org"><option value=""></option><option value="litgrid">L</option><option value="ambergrid">A</option></select>'
+      + '<select id="f-budas"><option value=""></option><option value="T-AK">T-AK</option></select><input type="date" id="f-data" value="2026-09-28">');
+    try {
+      const st = netikraSaugykla({}); K.naudokSaugykla(st);
+      const k = K.issaugok(K.tuscia({ pavadinimas: "Kortelės pavadinimas", vykdytojas: "amber-grid", budas: "MV-NZ", pradzia: "2026-10-01" })).kortele;
+      let pokyciai = 0; d.getElementById("f-org").addEventListener("change", () => pokyciai++);
+      const ORG = { "litgrid": "litgrid", "amber-grid": "ambergrid" };
+      const api = K.mount({ modulis: "Testas", laukai: [
+        { kortele: "pavadinimas", el: "#f-pav" },
+        { kortele: "vykdytojas", el: "#f-org", i: v => ORG[v] || null },
+        { kortele: "budas", el: "#f-budas", i: v => v === "T-AK" ? v : null },
+        { kortele: "pradzia", el: "#f-data", numatyta: () => d.getElementById("f-data").value === "2026-09-28" } ] });
+      tiesa(await api.pasirink(k.id), "pasirinkta");
+      lygu([d.getElementById("f-pav").value, d.getElementById("f-org").value, d.getElementById("f-budas").value, d.getElementById("f-data").value, pokyciai],
+           ["Mano pavadinimas", "ambergrid", "", "2026-10-01", 1]);
+      const z = d.getElementById("gpk-zin").textContent;
+      tiesa(/užpildyta: vykdytojas, pradžios data/.test(z) && /Pavadinimas:.*„Mano pavadinimas“.*„Kortelės pavadinimas“/.test(z) && /neįrašoma: būdas/.test(z), z);
+      d.querySelector('#gpk button[aria-label="Taikyti: Pavadinimas"]').click();
+      lygu(d.getElementById("f-pav").value, "Kortelės pavadinimas", "pritaikyta");
+      tiesa(!/Skiriasi/.test(d.getElementById("gpk-zin").textContent), "skirtumų nebeliko");
+      lygu(d.activeElement.id, "gpk-sel", "fokusas liko juostoje");
+      d.getElementById("f-pav").value = "Vėl kitaip";
+      d.getElementById("f-pav").dispatchEvent(new w.Event("input", { bubbles: true }));
+      await lauk(350);
+      tiesa(/Skiriasi/.test(d.getElementById("gpk-zin").textContent), "ranka pakeitus - skirtumas vėl rodomas");
+    } finally { f.remove(); }
+  });
+
+  await testas("Modulis gali atsisakyti kortelės; atsiejus laukai nevalomi; kitame lange pakeista kortelė tik parodoma", async ()=>{
+    const { f, w, d, K } = await korteleRemas('<div id="infoPanelMount"></div><input id="f-pav">');
+    try {
+      const st = netikraSaugykla({}); K.naudokSaugykla(st);
+      const A = K.issaugok(K.tuscia({ pavadinimas: "A" })).kortele, B = K.issaugok(K.tuscia({ pavadinimas: "B" })).kortele;
+      let leisti = true;
+      const api = K.mount({ modulis: "Testas", pries: () => leisti, laukai: [{ kortele: "pavadinimas", el: "#f-pav" }] });
+      await api.pasirink(A.id);
+      leisti = false;
+      const sel = d.getElementById("gpk-sel");
+      sel.value = B.id; sel.dispatchEvent(new w.Event("change", { bubbles: true }));
+      await lauk(30);
+      lygu([sel.value, api.pasirinkta().id, d.getElementById("f-pav").value], [A.id, A.id, "A"], "atsisakyta - liko A");
+      sel.value = ""; sel.dispatchEvent(new w.Event("change", { bubbles: true }));
+      lygu([api.pasirinkta(), d.getElementById("f-pav").value], [null, "A"], "atsieta, laukas nevalomas");
+      leisti = true;
+      await api.pasirink(A.id);
+      const x = K.gauk(A.id); x.pavadinimas = "A pakeista"; K.issaugok(x);
+      api.atnaujink();
+      lygu(d.getElementById("f-pav").value, "A", "modulio laukas neperrašytas");
+      tiesa(/„A“.*„A pakeista“/.test(d.getElementById("gpk-zin").textContent), d.getElementById("gpk-zin").textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas("Kortelių puslapis: tuščias sąrašas, klaidos su nuorodomis, sumos ir režimo pasiūlymas, archyvas; neperskaitoma nuoroda sakoma", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id);
+      tiesa(/Kortelių dar nėra/.test($("sarasas").textContent), "tuščias sąrašas");
+      $("naujaHeader").click();
+      tiesa($("forma").open, "forma atidaryta");
+      $("formaForm").requestSubmit();
+      tiesa($("forma").open && /Įrašykite pirkimo pavadinimą/.test($("klaidos").textContent), "be pavadinimo neišsaugoma");
+      lygu([$("k-pavadinimas").getAttribute("aria-invalid"), d.activeElement.id], ["true", "klaidos"], "klaidos pažymėtos, fokusas - santraukoje");
+      $("k-pavadinimas").value = "Serverių pirkimas";
+      $("k-verte").value = "apie milijoną";
+      $("formaForm").requestSubmit();
+      tiesa(/Vertės „apie milijoną“ perskaityti nepavyko/.test($("klaidos").textContent), "neperskaitoma suma");
+      $("k-verte").value = "1.250.000,00";
+      $("k-vykdytojas").value = "epso-g"; $("k-vykdytojas").dispatchEvent(new w.Event("change", { bubbles: true }));
+      lygu(d.querySelector('input[name="rezimas"]:checked').value, "VPI", "pasiūlytas įprastas režimas");
+      $("formaForm").requestSubmit();
+      tiesa(!$("forma").open, "išsaugota");
+      const eil = d.querySelectorAll("table.lentele tbody tr");
+      tiesa(eil.length === 1 && /1 250 000 EUR/.test(eil[0].textContent) && /UAB EPSO-G · VPĮ/.test(eil[0].textContent), eil[0] && eil[0].textContent);
+      tiesa(/Kortelė „Serverių pirkimas“ išsaugota/.test($("busena").textContent), $("busena").textContent);
+      eil[0].querySelector("button").click();
+      $("archyvuoti").click();
+      tiesa(!d.querySelector("table.lentele") && /archyvuotos nerodomos/.test($("sarasas").textContent), "archyvuota nerodoma");
+      lygu($("rodytiArchTekstas").textContent, "Rodyti archyvuotas (1)");
+      $("rodytiArch").click();
+      tiesa(/archyvuota/.test(d.querySelector("table.lentele tbody tr").textContent), "rodoma pažymėta");
+      lygu(w.GP_KORTELE.skaityk().korteles.length, 1, "kortelė nedingo");
+    } finally { fr.remove(); }
+    const fr2 = document.createElement("iframe");
+    const w2 = await new Promise(res => { fr2.addEventListener("load", () => res(fr2.contentWindow), { once: true }); fr2.src = "../pirkimu-korteles.html?saugykla=testine#kortele=k-nera"; document.body.appendChild(fr2); });
+    try {
+      tiesa(/Kortelės, kurią norėjote keisti, šioje naršyklėje nėra/.test(w2.document.getElementById("busena").textContent), "nerasta kortelė");
+      tiesa(!w2.document.getElementById("forma").open, "forma neatidaryta");
+    } finally { fr2.remove(); }
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
@@ -1301,6 +1517,7 @@ async function testaiSaugykla(){
   await testaiTeise();
   await testaiBusena();
   await testaiSaugykla();
+  await testaiKortele();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
