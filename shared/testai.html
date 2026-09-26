@@ -1469,7 +1469,7 @@ async function testaiKortele(){
   await testas("Kortelių puslapis: tuščias sąrašas, klaidos su nuorodomis, sumos ir režimo pasiūlymas, archyvas; neperskaitoma nuoroda sakoma", async ()=>{
     const fr = document.createElement("iframe");
     fr.style.width = "1280px"; fr.style.height = "900px";
-    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine"; document.body.appendChild(fr); });
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
     try {
       const d = w.document, $ = id => d.getElementById(id);
       tiesa(/Kortelių dar nėra/.test($("sarasas").textContent), "tuščias sąrašas");
@@ -1499,7 +1499,7 @@ async function testaiKortele(){
       lygu(w.GP_KORTELE.skaityk().korteles.length, 1, "kortelė nedingo");
     } finally { fr.remove(); }
     const fr2 = document.createElement("iframe");
-    const w2 = await new Promise(res => { fr2.addEventListener("load", () => res(fr2.contentWindow), { once: true }); fr2.src = "../pirkimu-korteles.html?saugykla=testine#kortele=k-nera"; document.body.appendChild(fr2); });
+    const w2 = await new Promise(res => { fr2.addEventListener("load", () => res(fr2.contentWindow), { once: true }); fr2.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt#kortele=k-nera"; document.body.appendChild(fr2); });
     try {
       tiesa(/Kortelės, kurią norėjote keisti, šioje naršyklėje nėra/.test(w2.document.getElementById("busena").textContent), "nerasta kortelė");
       tiesa(!w2.document.getElementById("forma").open, "forma neatidaryta");
@@ -1590,7 +1590,7 @@ async function testaiSkelbimasDarbastalis(){
   await testas("Kortelių puslapis: skelbimo PDF -> pasiūlymai su citatomis, įvesta kitokia reikšmė nepažymėta, „Perkelti pažymėtus“ užpildo formą", async ()=>{
     const fr = document.createElement("iframe");
     fr.style.width = "1280px"; fr.style.height = "900px";
-    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine"; document.body.appendChild(fr); });
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
     try {
       const d = w.document, $ = id => d.getElementById(id);
       $("naujaHeader").click();
@@ -1708,6 +1708,38 @@ const PROTOKOLAS = {
 };
 async function testaiKortele2(){
   dabartine = grupe("Pirkimo kortelė kituose moduliuose ir perkėlimas iš PP-protocol (A1 2 etapas)");
+
+  await testas("Kortelių puslapis angliškai: antraštė, sąrašas, forma, būdai, klaidos ir skiltis EN; jungiklis į LT perpiešia ir įsimena kalbą (bendras su portalu raktas)", async ()=>{
+    const AP = GP_TESTU_APSAUGA.pradek(k => k === "gprocure-lang");
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=en"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id), K = w.GP_KORTELE;
+      lygu([d.documentElement.lang, d.title, d.querySelector(".brand-module").textContent, $("sarasoH").textContent, $("paieska").placeholder],
+           ["en", "Procurement cards · G-Procure", "Procurement cards", "Cards in this browser", "Search by title or number"]);
+      tiesa(/There are no cards yet/.test($("sarasas").textContent), $("sarasas").textContent);
+      tiesa(/What it is and how to use it/.test($("infoPanelMount").textContent), "skiltis EN");
+      K.issaugok(K.tuscia({ pavadinimas: "Autotransformatorių pirkimas", vykdytojas: "litgrid", rezimas: "PI", verte: 1250000, budas: "T-SD", busena: "vertinamas" }));
+      w.dispatchEvent(new w.StorageEvent("storage", { key: "gprocure.korteles" }));
+      const eil = d.querySelector("table.lentele tbody tr").textContent;
+      tiesa(/Negotiated procedure with publication \(international procurement\)/.test(eil) && /Tenders under evaluation/.test(eil) && /Edit/.test(eil), eil);
+      $("naujaHeader").click();
+      $("formaForm").requestSubmit();
+      tiesa(/The card was not saved - please correct:/.test($("klaidos").textContent) && /Enter the procurement title\./.test($("klaidos").textContent), $("klaidos").textContent);
+      lygu([$("formaH").textContent, d.querySelector('label[for="k-verte"]').textContent, d.querySelector("#k-budas optgroup").label], ["New procurement card", "Estimated value, EUR excl. VAT", "Low-value procurement"]);
+      d.querySelector('#kalbos button[data-lang="lt"]').click();
+      lygu([d.documentElement.lang, $("formaH").textContent, d.querySelector('label[for="k-verte"]').textContent, d.querySelector("#k-budas optgroup").label, w.localStorage.getItem("gprocure-lang")],
+           ["lt", "Nauja pirkimo kortelė", "Numatoma vertė, EUR be PVM", "Mažos vertės pirkimai", "lt"], "perjungta į LT ir įsiminta");
+      $("atsaukti").click();
+      tiesa(/Skelbiamos derybos \(tarptautinis pirkimas\)/.test(d.querySelector("table.lentele tbody tr").textContent), "sąrašas perpieštas LT");
+      const M = w.GP_METHODS;
+      tiesa(M.LIST.every(m => M.label(m.id, { kalba: "en" }) && M.label(m.id, { kalba: "en" }) !== m.label), "kiekvienas būdas turi EN pavadinimą");
+      const sk = w.GP_SKELBIMAS.atpazink(skelbimoTekstas({ lotai: [{ id: "LOT-0001", pav: "Irankiai" }] }), V_NAC, "en");
+      tiesa(sk.laukai.some(x => x.laukas === "dalys" && x.pastaba === "One lot in the notice - the procurement is not divided into lots.")
+        && sk.laukai.some(x => x.laukas === "budas" && /^Variant \(simplified\)/.test(x.pastaba)), JSON.stringify(sk.laukai.map(x => x.pastaba)));
+    } finally { fr.remove(); AP.atkurk(); }
+  });
 
   await testas("Juosta: kol modulio laukų nėra - sakoma, kur jie bus (ne „sutampa“); pritaikyk() pildo atsiradusius, skirtumai(true) - „užpildyta“ nebesakoma", async ()=>{
     const { f, w, d, K } = await korteleRemas('<div id="infoPanelMount"></div><div id="forma"></div>');
@@ -1855,7 +1887,7 @@ async function testaiKortele2(){
   await testas("Kortelių puslapis: „Perkelti iš PP-protocol“ - tik su naujais; peržiūra, archyvuoti nepažymėti, būsena keičiama, antrą kartą nekuriama, PP-protocol nepakeistas", async ()=>{
     const fr = document.createElement("iframe");
     fr.style.width = "1280px"; fr.style.height = "900px";
-    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine"; document.body.appendChild(fr); });
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
     try {
       const d = w.document, $ = id => d.getElementById(id), K = w.GP_KORTELE;
       tiesa($("isProtokolo").hidden, "be PP-protocol duomenų mygtuko nėra");

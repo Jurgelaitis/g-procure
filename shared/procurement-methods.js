@@ -64,6 +64,28 @@
     { key:'kanalai',       label:'Kiti pirkimų būdai' },
   ];
 
+  /* Angliski pavadinimai dvikalbiams puslapiams (korteliu puslapis, „Mano pirkimai“, 2026-09-26). Terminai - kaip
+     ES pirkimu direktyvose ir PP-ts sarase; teisine formuluote lieka lietuviska label. */
+  var EN = {
+    'AK':'Open procedure', 'SD':'Negotiated procedure with publication', 'ND':'Negotiated procedure without publication',
+    'MV':'Low-value procurement',
+    'MV-NZ':'Low-value procurement - oral survey without publication',
+    'MV-NR':'Low-value procurement - written survey without publication',
+    'MV-SAB':'Low-value procurement - published survey without negotiation',
+    'MV-SAD':'Low-value procurement - published survey with negotiation',
+    'S-AK':'Open procedure (simplified procurement)', 'S-SD':'Negotiated procedure with publication (simplified procurement)',
+    'S-ND':'Negotiated procedure without publication (simplified procurement)',
+    'T-AK':'Open procedure (international procurement)', 'T-SD':'Negotiated procedure with publication (international procurement)',
+    'T-ND':'Negotiated procedure without publication (international procurement)',
+    'DPS':'Dynamic purchasing system', 'DPS-K':'Specific contract under a dynamic purchasing system',
+    'RK':'Restricted procedure', 'KD':'Competitive dialogue', 'IP':'Innovation partnership', 'KS':'Qualification system',
+    'PS':'Framework agreement', 'CPO':'Purchase from the CPO catalogue', 'VS':'In-house transaction', 'KONC':'Concession',
+  };
+  var GRUPES_EN = {
+    mazos_vertes:'Low-value procurement', supaprastinti:'Simplified procurement', tarptautiniai:'International procurement',
+    dps:'Dynamic purchasing system', kitos_proc:'Other procedures', kanalai:'Other ways to purchase',
+  };
+
   /* label = pilna (teisine) formuluote; labelTrumpas = UI (procedura be rezimo). */
   var LIST = [
     // --- BAZINIAI (procedura be rezimo; rezimas:null) - migracijos taikiniai
@@ -264,10 +286,16 @@
     byId: function (id) { return BY_ID[id] || null; },
     isValid: function (id) { return Object.prototype.hasOwnProperty.call(BY_ID, id); },
 
-    /* label(id, {forma:'ilgas'|'trumpas'}) - numatytai ilgas (teisinis). */
+    /* label(id, {forma:'ilgas'|'trumpas', kalba:'lt'|'en'}) - numatytai ilgas (teisinis), lietuviskai. */
     label: function (id, o) {
       var m = BY_ID[id]; if (!m) return null;
+      if (o && o.kalba === 'en' && EN[id]) return EN[id];
       return (o && o.forma === 'trumpas') ? m.labelTrumpas : m.label;
+    },
+    grupesPav: function (key, kalba) {
+      var g = GRUPES.filter(function (x) { return x.key === key; })[0];
+      if (!g) return null;
+      return kalba === 'en' && GRUPES_EN[key] ? GRUPES_EN[key] : g.label;
     },
 
     /* filtras: { grupe, statusas, rezimas, procedura, derybos, skelbiama, salygos_seima }.

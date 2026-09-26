@@ -170,8 +170,33 @@
     return null;
   }
 
+  /* Pastabos žmogui - LT arba EN (kalba - trečias atpažinimo argumentas); citatos - visada iš skelbimo. */
+  var PASTABOS = {
+    lt: { neregistre: "Pirkėjas „{p}“ organizacijų registre nerastas - vykdytojo nesiūlome.",
+          abuRezimai: "Skelbime yra ir PĮ, ir VPĮ požymių - režimo nesiūlome, patikrinkite skelbimo formą.",
+          failoVardas: "failo vardas: ", numeris: "Patikrinkite numerį skliaustuose: iš PDF brūkšneliai (pvz. „VPP-268“) dingsta.",
+          failas: " · failas: ", nacionalinis: "nacionalinis skelbimas", tarptautinis: "skelbimas apie pirkimą",
+          variantas: "Variantas ({r}) - pagal skelbimo rūšį failo varde.", rusis: { supaprastintas: "supaprastintas", tarptautinis: "tarptautinis" },
+          budas: "Pirkimo būdas skelbime: „{b}“", budasVariantas: " - pasirinkite supaprastinto ar tarptautinio pirkimo variantą (failo vardas to nerodo).",
+          budasPatys: " - kortelėje pasirinkite patys.",
+          bvpz: "BVPŽ kodas skelbime - {k}, be kontrolinio skaitmens; žodyno įkelti nepavyko - įrašykite kodą patys.",
+          vienaDalis: " (viena dalis)", neskaidomas: "Viena dalis skelbime - pirkimas neskaidomas.",
+          dalyvavimo: "Tai dalyvavimo prašymų terminas.", issiuntimo: "Skelbimo išsiuntimo data." },
+    en: { neregistre: "Buyer “{p}” is not in the organisation register - no contracting body is suggested.",
+          abuRezimai: "The notice has signs of both PĮ and VPĮ - no regime is suggested; check the notice form.",
+          failoVardas: "file name: ", numeris: "Check the number in brackets: hyphens (e.g. “VPP-268”) are lost in the PDF text.",
+          failas: " · file: ", nacionalinis: "national notice", tarptautinis: "contract notice",
+          variantas: "Variant ({r}) - from the notice type in the file name.", rusis: { supaprastintas: "simplified", tarptautinis: "international" },
+          budas: "Procedure in the notice: “{b}”", budasVariantas: " - choose the simplified or international variant (the file name does not show it).",
+          budasPatys: " - choose it on the card yourself.",
+          bvpz: "CPV code in the notice - {k}, without the check digit; the dictionary could not be loaded - enter the code yourself.",
+          vienaDalis: " (one lot)", neskaidomas: "One lot in the notice - the procurement is not divided into lots.",
+          dalyvavimo: "This is the deadline for requests to participate.", issiuntimo: "Date the notice was dispatched." }
+  };
+
   /* Grąžina { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [], pirkejas } */
-  function atpazink(tekstas, failoVardas) {
+  function atpazink(tekstas, failoVardas, kalba) {
+    var P = PASTABOS[kalba === "en" ? "en" : "lt"];
     var t = String(tekstas || ""), eil = eilutes(t);
     var laukai = [], pastabos = [];
     var prideti = function (laukas_, reiksme, citata, pastaba) {
@@ -185,19 +210,19 @@
     if (p) {
       var org = global.GP_ORG && global.GP_ORG.rask(p.value);
       if (org) prideti("vykdytojas", org.id, p.snippet);
-      else pastabos.push("Pirkėjas „" + p.value + "“ organizacijų registre nerastas - vykdytojo nesiūlome.");
+      else pastabos.push(P.neregistre.replace("{p}", p.value));
     }
     var r = rezimas(t, failoVardas);
     if (r.value) {
       // Citata - visa skelbimo eilutė su požymiu (ne tik rastas kamienas) arba failo vardas
       var cit = r.pozymiai.map(function (x) {
-        if (x.kur === "vardas") return "failo vardas: " + minkstas(String(failoVardas || "").split(" › ").pop()).slice(0, 110);
+        if (x.kur === "vardas") return P.failoVardas + minkstas(String(failoVardas || "").split(" › ").pop()).slice(0, 110);
         for (var q = 0; q < eil.length; q++) if (eil[q].toLowerCase().indexOf(x.tekstas.toLowerCase()) >= 0) return eil[q];
         return x.tekstas;
       }).filter(function (x, i, a) { return a.indexOf(x) === i; });
       prideti("rezimas", r.value, cit.join("; "));
     }
-    else if (r.neaiskus) pastabos.push("Skelbime yra ir PĮ, ir VPĮ požymių - režimo nesiūlome, patikrinkite skelbimo formą.");
+    else if (r.neaiskus) pastabos.push(P.abuRezimai);
 
     // 2.1 Procedūra: pavadinimas ir būdas; 2.1.1 - objektas ir BVPŽ; 2.1.3 - vertė
     var pr = ruozas(eil, /^2\.1\s+Proced/i, /^(?:2\.1\.1\s|5\s+Pirkimo\s+dalis|5\.1\s)/i);
@@ -206,7 +231,7 @@
        „(VPP-268)“ tampa „(VPP268)“ (patikrinta su Amber Grid 9742096 ir EPSO-G 9281765 PDF). Kur jis
        buvo - atkurti neįmanoma, todėl tik įspėjama, kai skliaustuose - suklijuotas raidžių ir skaičių numeris. */
     if (pav) prideti("pavadinimas", pav.reiksme, pav.citata,
-      /\((?:[A-ZĄČĘĖĮŠŲŪŽ]{2,}\d+|\d{4}[A-ZĄČĘĖĮŠŲŪŽ]{2,}\d+)[^)]*\)/.test(pav.reiksme) ? "Patikrinkite numerį skliaustuose: iš PDF brūkšneliai (pvz. „VPP-268“) dingsta." : null);
+      /\((?:[A-ZĄČĘĖĮŠŲŪŽ]{2,}\d+|\d{4}[A-ZĄČĘĖĮŠŲŪŽ]{2,}\d+)[^)]*\)/.test(pav.reiksme) ? P.numeris : null);
     var bud = laukas(pr, "Pirkimo b[ūu]das");
     if (bud) {
       var b = null;
@@ -217,9 +242,9 @@
         var m = b[2] && rusis ? global.GP_METHODS.fromLegacy("skelbimas", b[1], { rezimas: rusis }) : global.GP_METHODS.fromText(b[1]);
         if (m && (m.statusas === "pagrindinis" || m.statusas === "papildomas")) id = m.id;
       }
-      if (id) prideti("budas", id, bud.citata + (rusis ? " · failas: " + (rusis === "supaprastintas" ? "nacionalinis skelbimas" : "skelbimas apie pirkimą") : ""),
-                      rusis ? "Variantas (" + rusis + ") - pagal skelbimo rūšį failo varde." : null);
-      else pastabos.push("Pirkimo būdas skelbime: „" + bud.reiksme + "“" + (b && b[2] ? " - pasirinkite supaprastinto ar tarptautinio pirkimo variantą (failo vardas to nerodo)." : " - kortelėje pasirinkite patys."));
+      if (id) prideti("budas", id, bud.citata + (rusis ? P.failas + (rusis === "supaprastintas" ? P.nacionalinis : P.tarptautinis) : ""),
+                      rusis ? P.variantas.replace("{r}", P.rusis[rusis] || rusis) : null);
+      else pastabos.push(P.budas.replace("{b}", bud.reiksme) + (b && b[2] ? P.budasVariantas : P.budasPatys));
     }
     var tikslas = ruozas(eil, /^2\.1\.1\s/i, /^2\.1\.[2-9]\s|^5\s+Pirkimo\s+dalis/i);
     var obj = laukas(tikslas, "Sutarties objektas");
@@ -229,7 +254,7 @@
     if (km) {
       var pilnas = bvpzPilnas(km[1]);
       if (pilnas) prideti("bvpz", pilnas.kodas, cpv.citata);
-      else pastabos.push("BVPŽ kodas skelbime - " + km[1] + (km[2] ? " (" + km[2] + ")" : "") + ", be kontrolinio skaitmens; žodyno įkelti nepavyko - įrašykite kodą patys.");
+      else pastabos.push(P.bvpz.replace("{k}", km[1] + (km[2] ? " (" + km[2] + ")" : "")));
     }
     var vert = laukas(ruozas(eil, /^2\.1\.3\s/i, /^2\.1\.[4-9]\s|^5\s+Pirkimo\s+dalis/i), "Numatoma vert[ėe] be PVM");
     var v = vert && global.GP_MONEY ? global.GP_MONEY.parseEUR(vert.reiksme) : null;
@@ -243,7 +268,7 @@
       if (dab && /^(?:8\s+Organizacijos|Skelbimo\s+informacija|[6-9]\s+\S)/i.test(eil[k])) dab = null;
       if (dab) dab.eil.push(eil[k]);
     }
-    if (lotai.length === 1) prideti("dalys", [], "5.1 Pirkimo dalis: " + lotai[0].id + " (viena dalis)", "Viena dalis skelbime - pirkimas neskaidomas.");
+    if (lotai.length === 1) prideti("dalys", [], "5.1 Pirkimo dalis: " + lotai[0].id + P.vienaDalis, P.neskaidomas);
     else if (lotai.length > 1) {
       prideti("dalys", lotai.map(function (l) {
         var lp = laukas(l.eil, "Pavadinimas"), lv = laukas(ruozas(l.eil, /^5\.1\.5\s/i, /^5\.1\.[6-9]\s|^5\.1\.1\d\s/i), "Numatoma vert[ėe] be PVM");
@@ -259,10 +284,10 @@
     var term = laukas(eil, "Pasi[ūu]lym[ųu] pri[ėe]mimo terminas") || laukas(eil, "Dalyvavimo pra[šs]ym[ųu] pri[ėe]mimo terminas");
     var tm = term && /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(term.reiksme);
     if (tm) prideti("pasiulymuTerminas", tm[3] + "-" + tm[2] + "-" + tm[1] + "T" + tm[4] + ":" + tm[5], term.citata,
-                    /Dalyvavimo/i.test(term.citata) ? "Tai dalyvavimo prašymų terminas." : null);
+                    /Dalyvavimo/i.test(term.citata) ? P.dalyvavimo : null);
     var isi = laukas(eil, "Skelbimo i[šs]siuntimo data");
     if (isi && data(isi.reiksme)) {
-      prideti("paskelbimas", data(isi.reiksme), isi.citata, "Skelbimo išsiuntimo data.");
+      prideti("paskelbimas", data(isi.reiksme), isi.citata, P.issiuntimo);
       prideti("busena", "paskelbtas", isi.citata);
     }
     var nr = /resourceId=(\d{5,9})/.exec(t) || /^(\d{5,9})_/.exec(String(failoVardas || "").split(" › ").pop());
