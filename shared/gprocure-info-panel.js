@@ -44,6 +44,10 @@
  *
  *   GProcureInfoPanel.refresh();     // perjungus kalbą
  *
+ *   onMore: function () { ... }     // nebūtina: modulis jau turi išsamią pagalbą (PP-protocol,
+ *                                   // PP-negotiation, PP-market-KPI) - „Plačiau“ veda į ją,
+ *                                   // o ne į dubliuojantį 2 lygio langą (Q4, 2026-09-26)
+ *
  * Naudoja bendrus G-Procure CSS kintamuosius -> automatiškai dera prie modulio.
  * ==========================================================================*/
 (function (global) {
@@ -87,6 +91,8 @@
       /* Siaurame ekrane mygtukai - į naują eilutę; kitaip pavadinimas ir aprašas suspaudžiami
          į 16-35 px stulpelį po vieną žodį (PP-esg ir PP-carbon telefone) */
       "@media(max-width:640px){.gpi-head{flex-wrap:wrap}.gpi-titles{flex:1 1 calc(100% - 50px)}.gpi-actions{flex-basis:100%;justify-content:flex-end}}",
+      /* Telefone žingsniai be 66 px įtraukos po ikona - kitaip tekstui liko ~230 px (Q4, 2026-09-26) */
+      "@media(max-width:640px){.gpi .gpi-head{padding:12px 16px}.gpi .gpi-inner{padding:0 16px 16px}}",
       ".gpi-chev{width:15px;height:15px;transition:transform 200ms ease}",
       ".gpi.collapsed .gpi-chev{transform:rotate(-90deg)}",
       ".gpi-body{max-height:1400px;overflow:hidden;transition:max-height 260ms ease,opacity 200ms ease,padding 200ms ease;opacity:1}",
@@ -108,7 +114,8 @@
       ".gpi-modal{background:var(--color-white,#fff);width:100%;max-width:880px;border-radius:var(--radius-lg,16px);box-shadow:0 24px 60px rgba(11,18,32,.35);margin:auto;overflow:hidden;animation:gpiPop .22s ease;font-family:var(--font-base,'Nunito Sans',Arial,sans-serif)}",
       "@keyframes gpiPop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}",
       ".gpi-hero{position:relative;background:var(--gradient-dark, linear-gradient(120deg,#0B3B33 0%,#0E5247 45%,#00667D 100%));color:#fff;padding:var(--space-4,32px) var(--space-4,32px) var(--space-3,24px)}",
-      ".gpi-hero-tag{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--color-emerald-50,#16C492)}",
+      /* Ant tamsaus gradiento tekstui - tik baltas ir green-15 (smaragdas-50 - 3,7:1, 2026-09-26) */
+      ".gpi-hero-tag{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--color-green-15,#D7EEDB)}",
       ".gpi-hero-tag svg{width:15px;height:15px}",
       ".gpi-hero h2{font-size:24px;font-weight:800;margin:8px 0 0;line-height:1.2}",
       ".gpi-hero-intro{font-size:14px;line-height:1.6;color:rgba(255,255,255,.88);margin-top:12px;max-width:62ch}",
@@ -134,9 +141,10 @@
       "@media(min-width:680px){.gpi-concepts{grid-template-columns:1fr 1fr}}",
       ".gpi-concept{border:1px solid var(--color-graphite-15,#E1E2E4);border-radius:var(--radius-md,12px);padding:14px 16px;background:var(--color-graphite-5,#EFF1F1)}",
       ".gpi-term{font-size:14px;font-weight:800;color:var(--color-graphite,#2E3641);display:flex;align-items:center;gap:8px;flex-wrap:wrap}",
-      ".gpi-term .gpi-code{font-size:11px;font-weight:800;background:var(--color-green-15,#D7EEDB);color:var(--color-green,#459D54);padding:2px 8px;border-radius:6px}",
+      ".gpi-term .gpi-code{font-size:11px;font-weight:800;background:var(--color-green-15,#D7EEDB);color:var(--color-emerald-strong,#007554);padding:2px 8px;border-radius:6px}",
       ".gpi-def{font-size:12.5px;color:var(--color-graphite,#2E3641);margin-top:6px;line-height:1.5}",
-      ".gpi-ex{font-size:12px;color:var(--color-graphite-50,#737483);margin-top:6px;line-height:1.5;border-left:2px solid var(--color-emerald-50,#16C492);padding-left:10px}",
+      /* Pilkame sąvokos fone graphite-50 - 4,1:1, todėl tamsesnis vietinis tonas (6,1:1) */
+      ".gpi-ex{font-size:12px;color:#5B6470;margin-top:6px;line-height:1.5;border-left:2px solid var(--color-emerald-50,#16C492);padding-left:10px}",
       ".gpi-ex b{color:var(--color-graphite,#2E3641)}",
       /* DUK */
       ".gpi-faq{display:flex;flex-direction:column;gap:8px}",
@@ -148,8 +156,10 @@
       ".gpi-faq .gpi-a{padding:0 16px 14px;font-size:12.5px;color:var(--color-graphite,#2E3641);line-height:1.55}",
       ".gpi-mfoot{display:flex;justify-content:flex-end;gap:8px;padding:var(--space-2,16px) var(--space-4,32px);border-top:1px solid var(--color-graphite-15,#E1E2E4);background:var(--color-graphite-5,#EFF1F1)}",
       ".gpi-close-btn{display:inline-flex;align-items:center;gap:8px;background:var(--color-emerald-strong);color:#fff;border:none;font-family:inherit;font-size:14px;font-weight:700;padding:10px 18px;border-radius:var(--radius-sm,8px);cursor:pointer;transition:background 180ms ease}",
-      ".gpi-close-btn:hover{background:var(--color-emerald-120,#128A76)}",
-      "body.gpi-noscroll{overflow:hidden}"
+      ".gpi-close-btn:hover{background:var(--color-emerald-strong-hover,#006649)}",
+      "body.gpi-noscroll{overflow:hidden}",
+      /* Spausdinant skiltis nereikalinga - ji ne dokumento dalis (Q4, 2026-09-26) */
+      "@media print{.gpi,.gpi-overlay{display:none!important}}"
     ].join("");
     var el = document.createElement("style");
     el.id = STYLE_ID; el.textContent = css;
@@ -192,7 +202,8 @@
     var c = cfg.content[lang] || cfg.content.lt || {};
     var ui = UI[lang] || UI.lt;
     var open = isOpen(cfg);
-    var hasDetails = !!c.details;
+    var savaPagalba = typeof cfg.onMore === "function";
+    var hasDetails = !!c.details || savaPagalba;
 
     var steps = (c.steps || []).map(function (s, i) {
       return '<div class="gpi-step"><div class="gpi-num">' + (i + 1) + '</div><div class="gpi-step-tx">' + s + '</div></div>';
@@ -203,7 +214,7 @@
       : "";
 
     var moreBtn = hasDetails
-      ? '<button type="button" class="gpi-btn gpi-more" data-gpi-more aria-haspopup="dialog">' + ICON_BOOK + '<span>' + esc(c.moreLabel || ui.more) + '</span></button>'
+      ? '<button type="button" class="gpi-btn gpi-more" data-gpi-more' + (savaPagalba ? "" : ' aria-haspopup="dialog"') + '>' + ICON_BOOK + '<span>' + esc(c.moreLabel || ui.more) + '</span></button>'
       : "";
 
     var html =
@@ -243,7 +254,10 @@
       el.addEventListener("click", function (e) { e.stopPropagation(); toggle(); });
     });
     var moreEl = mount.querySelector("[data-gpi-more]");
-    if (moreEl) moreEl.addEventListener("click", function (e) { e.stopPropagation(); openDetails(cfg, moreEl); });
+    if (moreEl) moreEl.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (savaPagalba) cfg.onMore(); else openDetails(cfg, moreEl);
+    });
   }
 
   /* ---------------------------------------------------------------- *
