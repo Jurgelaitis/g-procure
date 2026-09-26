@@ -361,6 +361,241 @@ async function testaiAntrastes() {
   });
 }
 
+/* ==========================================================================
+   7. VEIKSMŲ BŪSENOS (Q3, 2026-09-26)
+   AI veiksmai rodo būseną vietoje (shared/busena.js): klaida su priežastimi ir
+   „Bandyti dar kartą“, „Atšaukti“ tikrai nutraukia užklausas. Tylios klaidos
+   pašalintos: CVP IS be ryšio rodė „Rasta 0 sutarčių“, nepavykusi atitikties
+   lentelė ir kainos įvertinimas dingdavo, visada rašyta „rate limit“, o naujas
+   pirkimas paveldėdavo ankstesnio pirkimo CVP IS analogus. Serveris ir CVP IS
+   imituojami - į tinklą nieko nesiunčiama.
+   ========================================================================== */
+const SPEC = 'Tiekėjas turi pateikti 10 vnt. 110 kV galios transformatorių, atitinkančių IEC 60076 standartą, su 5 metų garantija.';
+const miegok = ms => new Promise(r => setTimeout(r, ms));
+async function laukTol(salyga) { for (let i = 0; i < 160 && !salyga(); i++) await miegok(25); return salyga(); }
+const atsakymas = tekstas => ({ ok: true, status: 200, raw: {}, error: null, text: tekstas });
+const klaida500 = () => ({ ok: false, status: 500, text: '', raw: null, error: 'Serverio klaida (500). Bandykite vėliau.' });
+const siandien = () => new Date().toISOString().slice(0, 10);   // testai nepriklauso nuo datos
+function cvpisAtsakymas(w, q) {
+  return Promise.resolve(new w.Response(JSON.stringify({ count: 1, data: [{ dok_sut_obj_pav: 'Analogas: ' + q, dok_sut_verte: '1000', dok_sudarymo_data: siandien() }] }), { status: 200 }));
+}
+/* Naujas pirkimas iki 2 žingsnio (klausimai imituojami). */
+async function pirkimasIkiKlausimu(pav) {
+  const w = W(), d = D();
+  const origP = w.GP_AI_PROXY.call, origC = w.confirm;
+  w.confirm = () => true;
+  w.GP_AI_PROXY.call = async () => atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek vienetų?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] }));
+  try {
+    M('App.startNewGeneration()');
+    d.getElementById('genTitle').value = pav;
+    await M('App.startGeneration()');
+  } finally { w.GP_AI_PROXY.call = origP; w.confirm = origC; }
+}
+
+async function testaiBusenos() {
+  grupe('Veiksmų būsenos (Q3): klaida, atšaukimas, tylios klaidos');
+
+  await testas('Pilnoji analizė: serverio klaida - priežastis vietoje ir „Bandyti dar kartą“ (anksčiau „Klaida 0 %“ ir pranešimas kampe)', async () => {
+    const w = paruosk();
+    D().getElementById('specText').value = SPEC;
+    const orig = w.GP_AI_PROXY.call;
+    w.GP_AI_PROXY.call = async () => klaida500();
+    try {
+      await M('App.runAnalysis()');
+      const b = D().getElementById('anBusena');
+      tiesa(!b.hidden && b.classList.contains('gpb--klaida'), 'nėra klaidos būsenos: ' + b.className);
+      turi(b.textContent, 'Pilnoji analizė nepavyko: Serverio klaida (500)', 'būsena');
+      tiesa(b.querySelector('[data-gpb-kartoti]'), 'nėra „Bandyti dar kartą“');
+      tiesa(!D().getElementById('btnAnalyze').disabled, 'mygtukas liko išjungtas');
+    } finally { w.GP_AI_PROXY.call = orig; }
+  });
+
+  await testas('„Atšaukti“ nutraukia pilnąją analizę: signalas pasiekia serverio kvietimą, eiga su juosta, rezultatai nepakeisti', async () => {
+    const w = paruosk();
+    D().getElementById('specText').value = SPEC;
+    let signalas = null;
+    const orig = w.GP_AI_PROXY.call;
+    w.GP_AI_PROXY.call = o => new Promise(res => {
+      signalas = o.signal;
+      if (o.signal) o.signal.addEventListener('abort', () => res({ ok: false, status: 0, text: '', raw: null, error: 'signal is aborted without reason' }));
+    });
+    try {
+      const vyksta = M('App.runAnalysis()');
+      tiesa(await laukTol(() => signalas), 'serverio kvietimas negavo signalo');
+      const b = D().getElementById('anBusena');
+      tiesa(b.classList.contains('gpb--ai') && b.querySelector('[role="progressbar"]'), 'eigos būsena: ' + b.className);
+      tiesa(D().getElementById('btnAnalyze').disabled, 'kol AI dirba, mygtukas turi būti išjungtas');
+      b.querySelector('[data-gpb-atsaukti]').click();
+      await vyksta;
+      tiesa(signalas.aborted, 'užklausa nenutraukta');
+      turi(b.textContent, 'Atšaukta - ankstesni analizės rezultatai nepakeisti.', 'būsena');
+    } finally { w.GP_AI_PROXY.call = orig; }
+  });
+
+  await testas('CVP IS: visos paieškos nepavyko - klaida, ne „Rasta 0 sutarčių“; dalinai - pasakoma, kiek nepavyko', async () => {
+    const w = W(), orig = w.fetch;
+    try {
+      w.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
+      let k = null;
+      try { await w.CVPISClient.searchMultiple(['a', 'b'], 5, {}); } catch (e) { k = e; }
+      tiesa(k && /nė viena CVP IS paieška nepavyko/.test(k.message), 'be ryšio turi būti klaida, gauta: ' + (k ? k.message : 'sąrašas'));
+      w.fetch = url => /search=a&/.test(url) ? cvpisAtsakymas(w, 'a') : Promise.resolve(new w.Response('{}', { status: 503 }));
+      const r = await w.CVPISClient.searchMultiple(['a', 'b'], 5, {});
+      lygu([r.length, r.nepavyko.length, r.nepavyko[0].kw], [1, 1, 'b'], 'dalinis rezultatas');
+    } finally { w.fetch = orig; }
+  });
+
+  await testas('CVP IS be ryšio 3 žingsnyje: ženklelis „Nepavyko“ ir „Nėra ryšio su serveriu“, ne „Rasta 0 sutarčių“', async () => {
+    const w = W(), d = D(), orig = w.fetch;
+    await pirkimasIkiKlausimu('Kabelių pirkimas C');
+    w.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
+    try {
+      M('App.goToStep(3)');
+      tiesa(await laukTol(() => /Nepavyko/.test(d.getElementById('genFetchStatus').textContent)), 'ženklelis: ' + d.getElementById('genFetchStatus').textContent);
+      turi(d.getElementById('genAnaloguesList').textContent, 'Nėra ryšio su serveriu', 'sąrašo pranešimas');
+      tiesa(!/Rasta 0/.test(d.getElementById('genFetchStatus').textContent), 'liko „Rasta 0 sutarčių“');
+    } finally { w.fetch = orig; M('App.goToStep(1)'); }
+  });
+
+  await testas('Naujas ar pakeistas pirkimas: 3 žingsnis parsiunčia NAUJUS analogus (anksčiau liko ankstesnio pirkimo ir keliavo į AI)', async () => {
+    const w = W(), d = D(), orig = w.fetch;
+    const uzklausos = [];
+    w.fetch = url => { const q = decodeURIComponent((String(url).match(/search=([^&]*)/) || [])[1] || ''); uzklausos.push(q); return cvpisAtsakymas(w, q); };
+    try {
+      await pirkimasIkiKlausimu('Pastotės remontas A');
+      M('App.goToStep(3)');
+      tiesa(await laukTol(() => /Pastotės remontas A/.test(d.getElementById('genAnaloguesList').textContent)), 'pirmo pirkimo analogai nerodomi');
+      await pirkimasIkiKlausimu('Transformatorių pirkimas B');
+      M('App.goToStep(3)');
+      tiesa(await laukTol(() => /Transformatorių pirkimas B/.test(d.getElementById('genAnaloguesList').textContent)), 'naujo pirkimo analogai neparsiųsti; užklausos: ' + uzklausos.join(' | '));
+      tiesa(!/Pastotės remontas A/.test(d.getElementById('genAnaloguesList').textContent), 'liko ankstesnio pirkimo analogai');
+      // Be „Pradėti naują“: grįžus į 1 žingsnį ir pakeitus pavadinimą
+      const origP = w.GP_AI_PROXY.call;
+      w.GP_AI_PROXY.call = async () => atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] }));
+      try {
+        M('App.goToStep(1)');
+        d.getElementById('genTitle').value = 'Skirstyklų pirkimas C2';
+        await M('App.startGeneration()');
+      } finally { w.GP_AI_PROXY.call = origP; }
+      M('App.goToStep(3)');
+      tiesa(await laukTol(() => /Skirstyklų pirkimas C2/.test(d.getElementById('genAnaloguesList').textContent)), 'pakeitus pavadinimą analogai neparsiųsti; užklausos: ' + uzklausos.join(' | '));
+    } finally { w.fetch = orig; M('App.goToStep(1)'); }
+  });
+
+  await testas('Generavimas: nepavykę skyrius, atitikties lentelė, kaina ir rinka - pasakyta būsenoje ir kortelėse (anksčiau dingdavo tyliai, „rate limit“)', async () => {
+    const w = W(), d = D(), G = w.TSGenerator, P = w.PriceEstimator;
+    const orig = { full: G.generateFullTs, market: G.analyzeMarket, price: P.estimate };
+    await pirkimasIkiKlausimu('Garantinė priežiūra D');
+    G.generateFullTs = async () => ({ title: 'TS', sections: [
+        { number: '1', title: 'Bendrosios nuostatos', content: 'Tekstas.', _failed: false },
+        { number: '2', title: 'Garantija', content: '', _failed: true, _error: 'Serverio klaida (500). Bandykite vėliau.' }],
+      complianceTable: [], complianceKlaida: 'Failed to fetch', evaluationCriteria: [], keyElements: {}, recommendations: [] });
+    P.estimate = async () => { throw new Error('Serverio klaida (503)'); };
+    G.analyzeMarket = async () => { throw new Error('AI atsakymas nėra validus JSON'); };
+    try {
+      await M('App.runFullGeneration()');
+      const b = d.getElementById('genFullBusena');
+      tiesa(b.classList.contains('gpb--nezinoma'), 'būsena: ' + b.className + ' ' + b.textContent);
+      ['1 iš 2 skyrių nesugeneruota', 'atitikties lentelės sugeneruoti nepavyko', 'kainos įvertinti nepavyko', 'rinkos analizės atlikti nepavyko']
+        .forEach(t => turi(b.textContent, t, 'būsena'));
+      turi(d.getElementById('genPriceCard').textContent, 'Kainos įvertinti nepavyko: Serverio klaida (503).', 'kainos kortelė');
+      const lent = d.getElementById('genCompliancePreview');
+      tiesa(!lent.closest('.card').classList.contains('hidden'), 'atitikties lentelės kortelė paslėpta');
+      turi(lent.textContent, 'Nėra ryšio su serveriu', 'lentelės priežastis');
+      turi(d.getElementById('genTsPreview').textContent, 'Nesugeneruota 1 iš 2 skyrių: 2. Garantija. Priežastis: Serverio klaida (500).', 'skyrių pastaba');
+      tiesa(!/rate limit/.test(d.getElementById('genTsPreview').textContent), 'liko „rate limit“');
+      turi(d.getElementById('genMarketCardWrap').textContent, 'Rinkos analizės atlikti nepavyko', 'rinkos kortelė');
+    } finally { G.generateFullTs = orig.full; G.analyzeMarket = orig.market; P.estimate = orig.price; }
+  });
+
+  await testas('Generavimas: nė vieno skyriaus - klaida su priežastimi, ne „TS sugeneruota!“ su tuščia TS', async () => {
+    const w = W(), d = D();
+    const origP = w.GP_AI_PROXY.call, origT = w.setTimeout;
+    await pirkimasIkiKlausimu('Relinės apsaugos atnaujinimas E');
+    w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);   // pauzės tarp pakartojimų - be laukimo
+    w.GP_AI_PROXY.call = async o => /"sectionTitles"/.test(o.userMessage) && /^Pirkimas:/.test(o.userMessage)
+      ? atsakymas(JSON.stringify({ title: 'TS', sectionTitles: [{ number: '1', title: 'Apimtis' }, { number: '2', title: 'Garantija' }], evaluationCriteria: [], keyElements: {}, recommendations: [] }))
+      : klaida500();
+    try {
+      await M('App.runFullGeneration()');
+      const b = d.getElementById('genFullBusena');
+      tiesa(b.classList.contains('gpb--klaida'), 'būsena: ' + b.className + ' ' + b.textContent);
+      turi(b.textContent, 'TS sugeneruoti nepavyko: nesugeneruotas nė vienas iš 2 skyrių', 'būsena');
+      tiesa(d.getElementById('genResultPanel').classList.contains('hidden'), 'tuščia TS parodyta kaip rezultatas');
+    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+  });
+
+  await testas('„Atšaukti“ generuojant: be ankstesnės TS - „TS negeneruota“; su ankstesne - ji lieka matoma ir nepakeista', async () => {
+    const w = W(), d = D(), G = w.TSGenerator, P = w.PriceEstimator;
+    const orig = { full: G.generateFullTs, market: G.analyzeMarket, price: P.estimate };
+    await pirkimasIkiKlausimu('Skaitiklių pirkimas F');
+    const laukiaAtsaukimo = () => new Promise((res, rej) => w.aiSignalas().addEventListener('abort',
+      () => rej(Object.assign(new Error('Aborted'), { name: 'AbortError' }))));
+    P.estimate = async () => null;
+    G.analyzeMarket = async () => null;
+    try {
+      G.generateFullTs = laukiaAtsaukimo;
+      let vyksta = M('App.runFullGeneration()');
+      const b = d.getElementById('genFullBusena');
+      tiesa(await laukTol(() => b.querySelector('[data-gpb-atsaukti]')), 'nėra „Atšaukti“');
+      b.querySelector('[data-gpb-atsaukti]').click();
+      await vyksta;
+      turi(b.textContent, 'Atšaukta - TS negeneruota.', 'be ankstesnės TS');
+      tiesa(d.getElementById('genResultPanel').classList.contains('hidden'), 'rezultatų skydelis parodytas');
+
+      G.generateFullTs = async () => ({ title: 'TS', sections: [{ number: '1', title: 'Senas skyrius', content: 'Senas turinys.', _failed: false }],
+        complianceTable: [], evaluationCriteria: [], keyElements: {}, recommendations: [] });
+      await M('App.runFullGeneration()');
+      turi(d.getElementById('genTsPreview').textContent, 'Senas turinys.', 'pirma versija');
+      G.generateFullTs = laukiaAtsaukimo;
+      vyksta = M('App.runFullGeneration()');
+      tiesa(await laukTol(() => b.querySelector('[data-gpb-atsaukti]')), 'nėra „Atšaukti“ (antras kartas)');
+      b.querySelector('[data-gpb-atsaukti]').click();
+      await vyksta;
+      turi(b.textContent, 'Atšaukta - ankstesnė TS versija nepakeista.', 'su ankstesne TS');
+      tiesa(!d.getElementById('genResultPanel').classList.contains('hidden'), 'ankstesnė TS paslėpta');
+      turi(d.getElementById('genTsPreview').textContent, 'Senas turinys.', 'ankstesnė TS pakeista');
+    } finally { G.generateFullTs = orig.full; G.analyzeMarket = orig.market; P.estimate = orig.price; }
+  });
+
+  await testas('Kas siunčiama į AI - pasakyta prie „Pilnoji analizė“ ir 1 generavimo žingsnyje, tekstas >= 4,5:1', async () => {
+    const t = [...D().querySelectorAll('.cite-ai')].map(e => e.textContent);
+    tiesa(t.some(x => /Pilnajai analizei specifikacijos tekstas/.test(x) && /Claude API/.test(x) && /Nesiųskite įslaptintos/.test(x)), 'analizė: ' + t.join(' | '));
+    tiesa(t.some(x => /Generuojant pirkimo informacija/.test(x) && /CVP IS/.test(x)), 'generavimas: ' + t.join(' | '));
+    const rgb = W().getComputedStyle(D().querySelector('.cite-ai')).color.match(/\d+/g).map(Number);
+    const L = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const l = 0.2126 * L(rgb[0]) + 0.7152 * L(rgb[1]) + 0.0722 * L(rgb[2]);
+    tiesa(1.05 / (l + 0.05) >= 4.5, 'kontrastas ant balto ' + (1.05 / (l + 0.05)).toFixed(2));
+  });
+
+  await testas('Neperskaitomi nustatymai: numatytieji ir juosta su kopija (anksčiau - tuščias objektas be modelio); tikri nustatymai atkuriami', async () => {
+    const RAKTAS = 'ts_asistentas_settings';
+    const buvo = localStorage.getItem(RAKTAS);
+    const kopijosPries = new Set(Object.keys(localStorage).filter(k => k.startsWith(RAKTAS + '.sugadinta-')));
+    try {
+      localStorage.setItem(RAKTAS, '{sugadinta');
+      await new Promise(res => { ramas.onload = res; ramas.src = './TS_Asistentas.html?cb=' + Date.now(); });
+      tiesa(await laukTol(() => D().getElementById('gpb-juostos')), 'nėra pranešimo juostos');
+      const j = D().getElementById('gpb-juostos').textContent;
+      turi(j, 'TS asistento nustatymai', 'juosta');
+      turi(j, 'Kol kas naudojami numatytieji nustatymai.', 'juosta');
+      lygu(D().getElementById('modelSelect').value, W().GP_AI_PROXY.MODEL, 'modelis - numatytasis');
+      tiesa(Object.keys(localStorage).some(k => k.startsWith(RAKTAS + '.sugadinta-') && !kopijosPries.has(k)), 'sugadintos reikšmės kopija nesukurta');
+      // Analizė vyksta pagal numatytąsias kryptis, ne „be nustatymų“
+      let uzklausa = '';
+      W().GP_AI_PROXY.call = async o => { uzklausa = o.userMessage; return klaida500(); };
+      D().getElementById('specText').value = SPEC;
+      await M('App.runAnalysis()');
+      turi(uzklausa, 'PRIORITETINĖS ANALIZĖS KRYPTYS: gramatika ir rašyba', 'analizės užklausa');
+    } finally {
+      if (buvo === null) localStorage.removeItem(RAKTAS); else localStorage.setItem(RAKTAS, buvo);
+      Object.keys(localStorage).filter(k => k.startsWith(RAKTAS + '.sugadinta-') && !kopijosPries.has(k)).forEach(k => localStorage.removeItem(k));
+      await new Promise(res => { ramas.onload = res; ramas.src = './TS_Asistentas.html?cb=' + Date.now(); });
+      await miegok(800);
+    }
+  });
+}
+
 /* ========================================================================== */
 async function viskas() {
   document.getElementById('paleisti').disabled = true;
@@ -377,6 +612,7 @@ async function viskas() {
   await testaiTaksonomija();
   await testaiTransportas();
   await testaiAntrastes();
+  await testaiBusenos();
 
   document.getElementById('busena').textContent =
     R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';

@@ -1488,6 +1488,9 @@ details[open] summary {
 
 .compliance-preview tr:nth-child(even) td { background: var(--color-graphite-5); }
 
+/* Q3: kas siunčiama į AI - pasakoma prie mygtuko (CLAUDE.md 7 sk.); #5B6470 - 6,3:1 ant balto */
+.cite-ai { font-size: 12px; line-height: 1.45; color: #5B6470; margin: 8px 0 0; max-width: 760px; }
+
 </style>
 </head>
 <body>
@@ -1554,6 +1557,7 @@ details[open] summary {
   <!-- MAIN -->
   <main class="app-main">
     <div class="app-main-inner">
+      <div id="infoPanelMount"></div>
 
       <!-- INPUT TAB -->
       <!-- GENERATE TAB (lead feature) -->
@@ -1717,6 +1721,7 @@ details[open] summary {
             </div>
           </div>
 
+          <p class="cite-ai">Generuojant pirkimo informacija, jūsų atsakymai ir įklijuoti analogai siunčiami per G-Procure serverį į Claude API; analogiški pirkimai ieškomi viešuose CVP IS duomenyse per tą patį serverį. Nesiųskite įslaptintos informacijos.</p>
           <div class="wizard-footer">
             <span class="card-subtitle">Žingsnis 1 iš 5</span>
             <button class="btn btn-primary btn-lg" onclick="App.startGeneration()">
@@ -1733,13 +1738,7 @@ details[open] summary {
             <p>Pagal jūsų pateiktą informaciją AI nustatė, kurios detalės yra reikalingos kokybiškos TS sukūrimui. Atsakykite į svarbiausius klausimus - atsakymas „nežinau" arba „nesvarbu" taip pat priimtinas.</p>
           </div>
 
-          <div id="genQuestionsLoading" class="card">
-            <div class="empty-state">
-              <div class="spinner spinner-lg"></div>
-              <h3 class="mt-2">Generuojami klausimai...</h3>
-              <p>AI analizuoja jūsų pirkimo pavadinimą ir nustato, kokios papildomos informacijos reikia tobulai TS.</p>
-            </div>
-          </div>
+          <div id="genQBusena" hidden></div>
 
           <div id="genQuestionsList" class="hidden"></div>
 
@@ -1823,15 +1822,7 @@ details[open] summary {
             <p>AI sintezavo TS pagal jūsų atsakymus, žinių bazę ir PĮ reikalavimus. Galite redaguoti ir paleisti analizę.</p>
           </div>
 
-          <div id="genFullLoading" class="card">
-            <div class="empty-state">
-              <div class="spinner spinner-lg"></div>
-              <h3 class="mt-2">Generuojama TS...</h3>
-              <p>AI rengia struktūrizuotą TS su techniniais reikalavimais, vertinimo kriterijais, garantijos sąlygomis ir atitikties lentele. Tai gali užtrukti 30-60 sek.</p>
-              <div class="progress-track mt-2"><div class="progress-fill" id="genProgressBar"></div></div>
-              <div id="genProgressLabel" class="form-help">Ruošiamasi...</div>
-            </div>
-          </div>
+          <div id="genFullBusena" hidden></div>
 
           <div id="genResultPanel" class="hidden">
             <div class="grid grid-sidebar">
@@ -2070,13 +2061,8 @@ details[open] summary {
               </button>
             </div>
           </div>
-          <div id="analysisProgress" class="hidden mt-2">
-            <div class="progress-track"><div class="progress-fill" id="progressBar"></div></div>
-            <div class="progress-status">
-              <span id="progressLabel">Ruošiamasi…</span>
-              <span id="progressPct">0%</span>
-            </div>
-          </div>
+          <p class="cite-ai">„Greitas patikrinimas“ vyksta tik naršyklėje. Pilnajai analizei specifikacijos tekstas ir pirkimo metaduomenys siunčiami per G-Procure serverį į Claude API. Nesiųskite įslaptintos informacijos.</p>
+          <div id="anBusena" hidden></div>
         </div>
       </section>
 
@@ -2478,6 +2464,8 @@ details[open] summary {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- Bendras AI proxy transportas (shared) - GP_AI_PROXY. Turi buti pries modulio inline scripta. -->
 <script src="../shared/ai-proxy.js"></script>
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 <script src="../shared/procurement-methods.js"></script>
 <!-- Teisės aktų nuorodos (GP_TEISE). PP-ts dirba pagal PĮ - straipsnių numerių modulyje nerašome. -->
 <script src="../shared/teises-nuorodos.js"></script>
@@ -2532,8 +2520,15 @@ const App = (() => {
   };
 
   function loadSettings() {
+    // Q3: neperskaitomi nustatymai nebevirsta tuščiu objektu be numatytųjų (modelio, parinkčių):
+    // naudojami numatytieji, žalia reikšmė nukopijuojama (shared/saugykla.js), naudotojui pasakoma.
+    const r = GP_SAUGYKLA.skaityk('ts_asistentas_settings', { tikrink: v => (v && typeof v === 'object' && !Array.isArray(v)) || 'netinkama nustatymų sandara' });
+    if (r.busena === 'sugadinta' || r.busena === 'neprieinama') {
+      setTimeout(() => GP_BUSENA.juosta({ raktas: 'nustatymai', tipas: 'nezinoma',
+        tekstas: GP_SAUGYKLA.pranesimas(r, 'TS asistento nustatymai') + ' Kol kas naudojami numatytieji nustatymai.' }), 0);
+    }
     try {
-      const saved = JSON.parse(localStorage.getItem('ts_asistentas_settings') || '{}');
+      const saved = r.busena === 'yra' ? r.reiksme : {};
       return Object.assign({
         cvpisEndpoint: 'https://api.g-procure.com',
         // Numatytasis modelis - is shared/ai-proxy.js (vienas tiesos saltinis).
@@ -2566,10 +2561,11 @@ const App = (() => {
       green: $('#optGreen').checked,
       accessibility: $('#optAccessibility').checked,
     };
-    localStorage.setItem('ts_asistentas_settings', JSON.stringify(state.settings));
+    const irasas = GP_SAUGYKLA.rasyk('ts_asistentas_settings', state.settings);
     updateApiStatus();
     closeSettings();
-    toast('Nustatymai išsaugoti.', 'success');
+    if (irasas.ok) { GP_BUSENA.juostaSlepk('nustatymai'); toast('Nustatymai išsaugoti.', 'success'); }
+    else GP_BUSENA.juosta({ raktas: 'nustatymai', tipas: 'klaida', tekstas: GP_SAUGYKLA.pranesimas(irasas, 'TS asistento nustatymai') });
   }
 
   // --- HELPERS ---
@@ -2584,20 +2580,26 @@ const App = (() => {
     // Lightweight toast
     const div = document.createElement('div');
     div.style.cssText = `position:fixed;top:80px;right:24px;z-index:200;padding:12px 20px;border-radius:8px;font-weight:600;font-size:14px;color:white;box-shadow:0 8px 24px rgba(0,0,0,0.2);transition:opacity 200ms;`;
-    div.style.background = type === 'success' ? 'var(--color-emerald)' : type === 'error' ? 'var(--color-error)' : 'var(--color-graphite)';
+    div.style.background = type === 'success' ? 'var(--color-emerald-strong)' : type === 'error' ? 'var(--color-error)' : 'var(--color-graphite)';
     div.textContent = msg;
     document.body.appendChild(div);
     setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 200); }, 2800);
   }
 
-  function setProgress(pct, label) {
-    $('#progressBar').style.width = pct + '%';
-    $('#progressPct').textContent = Math.round(pct) + '%';
-    if (label) $('#progressLabel').textContent = label;
+  // Q3 (2026-09-26): vienas aktyvus AI veiksmas su bendra būsena (shared/busena.js). „Atšaukti“
+  // nutraukia VISAS to veiksmo užklausas (callClaude signalą ima per aiSignalas()), naujas veiksmas
+  // nutraukia seną. Rezultatą modulis taiko tik gavęs { ok: true } - atšaukus niekas nepakeičiama.
+  // Klaidos priežastis sakiniu: žmogiškas tekstas (shared/busena.js) su tašku gale.
+  function kodel(klaida) {
+    const t = GP_BUSENA.klaidosTekstas(klaida).trim();
+    return /[.!?]$/.test(t) ? t : t + '.';
   }
-
-  function showProgress() { $('#analysisProgress').classList.remove('hidden'); }
-  function hideProgress() { setTimeout(() => $('#analysisProgress').classList.add('hidden'), 600); }
+  function aiVeiksmas(vieta, o) {
+    if (window.PPTS_VALDIKLIS) window.PPTS_VALDIKLIS.abort();
+    const v = window.PPTS_VALDIKLIS = new AbortController();
+    return GP_BUSENA.vykdyk(vieta, Object.assign({ tipas: 'ai', valdiklis: v }, o))
+      .finally(() => { if (window.PPTS_VALDIKLIS === v) window.PPTS_VALDIKLIS = null; });
+  }
 
   // Transportas visada eina per serverio proxy (GP_AI_PROXY). Raktas tik serverio puseje.
   function usesProxyBackend() {
@@ -2921,15 +2923,12 @@ const App = (() => {
   async function runRulesOnly() {
     if (!ensureSpec()) return;
     const specas = paruoskSpecAnalizei();   // tekstas galejo buti ne is failo, o iklijuotas
-    showProgress();
-    setProgress(20, 'Vykdomos taisyklės...');
+    GP_BUSENA.slepk('#anBusena');
     const rules = RuleEngine.run(specas, gatherMetadata());
-    setProgress(100, 'Atlikta');
     state.rulesResult = rules;
     state.analysis = composeAnalysis(rules.issues, [], 'rules-only');
     renderAnalysis();
     switchTab('analysis');
-    hideProgress();
     toast(`Taisyklės: rasta ${rules.issues.length} pastabų.`, 'success');
   }
 
@@ -2940,31 +2939,28 @@ const App = (() => {
       openSettings();
       return;
     }
-    showProgress();
-    try {
-      const specas = paruoskSpecAnalizei();  // tekstas galejo buti ne is failo, o iklijuotas
-      setProgress(10, 'Vykdomos taisyklės...');
-      const rules = RuleEngine.run(specas, gatherMetadata());
-      state.rulesResult = rules;
-
-      setProgress(30, 'Siunčiama Claude API...');
-      const aiResult = await AIAnalyzer.analyze(specas, gatherMetadata(), rules, state.settings, (label, pct) => {
-        setProgress(30 + pct * 0.6, label);
-      });
-
-      setProgress(95, 'Sudaroma ataskaita...');
-      state.analysis = composeAnalysis(rules.issues, aiResult.issues, 'hybrid', aiResult);
-      setProgress(100, 'Atlikta');
-      renderAnalysis();
-      renderReport();
-      switchTab('analysis');
-      toast(`Analizė baigta. Rasta ${state.analysis.issues.length} pastabų.`, 'success');
-    } catch (err) {
-      console.error(err);
-      toast('Klaida: ' + err.message, 'error');
-      setProgress(0, 'Klaida');
-    }
-    hideProgress();
+    const specas = paruoskSpecAnalizei();  // tekstas galejo buti ne is failo, o iklijuotas
+    const meta = gatherMetadata();
+    const rules = RuleEngine.run(specas, meta);
+    state.rulesResult = rules;
+    const btn = $('#btnAnalyze');
+    if (btn) btn.disabled = true;
+    // Anksčiau klaida buvo tik pranešimas kampe, o eigos juosta likdavo „Klaida 0 %“.
+    const rez = await aiVeiksmas('#anBusena', {
+      tekstas: 'AI analizuoja specifikaciją (taisyklės jau patikrintos)',
+      procentai: 30,
+      klaidosPriesdelis: 'Pilnoji analizė nepavyko',
+      atsauktaTekstas: 'Atšaukta - ankstesni analizės rezultatai nepakeisti.',
+      kartoti: runAnalysis,
+      veiksmas: (signal, h) => AIAnalyzer.analyze(specas, meta, rules, state.settings, (label, pct) => h.eiga(30 + pct * 0.6))
+    });
+    if (btn) btn.disabled = false;
+    if (!rez.ok) return;
+    state.analysis = composeAnalysis(rules.issues, rez.reiksme.issues, 'hybrid', rez.reiksme);
+    renderAnalysis();
+    renderReport();
+    switchTab('analysis');
+    toast(`Analizė baigta. Rasta ${state.analysis.issues.length} pastabų.`, 'success');
   }
 
   function ensureSpec() {
@@ -3410,8 +3406,9 @@ const App = (() => {
       s.classList.toggle('active', stepNum === n);
       s.classList.toggle('completed', stepNum < n);
     });
-    // Auto-fetch analogues when entering step 3 (only first time)
-    if (n === 3 && prev !== 3 && gen.cvpisAnalogues.length === 0 && gen.meta.title) {
+    // Analogai parsiunčiami įėjus į 3 žingsnį, kai jų dar nėra ARBA pasikeitė paieškos žodžiai
+    // (anksčiau naujam ar pakeistam pirkimui likdavo ankstesnio pirkimo analogai ir keliaudavo į AI).
+    if (n === 3 && prev !== 3 && gen.meta.title && (gen.cvpisAnalogues.length === 0 || gen.cvpisRaktas !== analoguZodziai().join('|'))) {
       fetchAnalogues();
     }
   }
@@ -3429,24 +3426,25 @@ const App = (() => {
     }
     gen.meta = meta;
     goToStep(2);
-    $('#genQuestionsLoading').classList.remove('hidden');
     $('#genQuestionsList').classList.add('hidden');
-    try {
-      const result = await TSGenerator.generateQuestions(meta, state.settings, () => {});
-      gen.questions = result.questions || [];
-      gen.cvpisKeywords = result.cvpisSearchKeywords || [meta.title];
-      gen.cvpisLinks = TSGenerator.buildCvpisSearchUrls(gen.cvpisKeywords);
-      gen.extraContext = { cpvSuggestions: result.cpvSuggestions, marketContext: result.marketContext };
-      renderQuestions();
-      renderCvpisLinks();
-      $('#genQuestionsLoading').classList.add('hidden');
-      $('#genQuestionsList').classList.remove('hidden');
-      $('#btnQuestionsNext').disabled = false;
-    } catch (err) {
-      console.error(err);
-      toast('Klaida generuojant klausimus: ' + err.message, 'error');
-      $('#genQuestionsLoading').classList.add('hidden');
-    }
+    $('#btnQuestionsNext').disabled = true;
+    const rez = await aiVeiksmas('#genQBusena', {
+      tekstas: 'AI rengia patikslinimo klausimus pagal pirkimo informaciją',
+      klaidosPriesdelis: 'Klausimų sugeneruoti nepavyko',
+      atsauktaTekstas: 'Atšaukta - klausimai negeneruoti.',
+      kartoti: startGeneration,
+      veiksmas: () => TSGenerator.generateQuestions(meta, state.settings, () => {})
+    });
+    if (!rez.ok) return;
+    const result = rez.reiksme;
+    gen.questions = result.questions || [];
+    gen.cvpisKeywords = result.cvpisSearchKeywords || [meta.title];
+    gen.cvpisLinks = TSGenerator.buildCvpisSearchUrls(gen.cvpisKeywords);
+    gen.extraContext = { cpvSuggestions: result.cpvSuggestions, marketContext: result.marketContext };
+    renderQuestions();
+    renderCvpisLinks();
+    $('#genQuestionsList').classList.remove('hidden');
+    $('#btnQuestionsNext').disabled = false;
   }
 
   function renderQuestions() {
@@ -3513,12 +3511,21 @@ const App = (() => {
   }
 
   // === REALŪS CVP IS ANALOGAI ===
-  async function fetchAnalogues() {
-    const keywords = uniqueKeywords([
+  function analoguZodziai() {
+    return uniqueKeywords([
       ...(gen.cvpisKeywords || []),
       gen.meta.title,
       gen.meta.cpv ? 'CPV ' + gen.meta.cpv : null,
-    ].filter(Boolean));
+    ].filter(Boolean)).slice(0, 6);
+  }
+
+  async function fetchAnalogues() {
+    const keywords = analoguZodziai();
+    const raktas = keywords.join('|');
+    gen.cvpisRaktas = raktas;
+    gen.cvpisAnalogues = [];          // kol laukiama - jokių ankstesnio pirkimo analogų
+    gen.cvpisSelected = new Set();
+    gen.cvpisStats = null;
 
     const statusEl = $('#genFetchStatus');
     if (statusEl) {
@@ -3528,25 +3535,30 @@ const App = (() => {
     $('#genAnaloguesList').innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div><h3 class="mt-2">Gaunami CVP IS duomenys...</h3><p>Tikriname analogiškus pirkimus per g-procure API.</p></div>';
 
     try {
-      const items = await CVPISClient.searchMultiple(keywords.slice(0, 6), 15, state.settings);
+      const items = await CVPISClient.searchMultiple(keywords, 15, state.settings);
+      if (gen.cvpisRaktas !== raktas) return;   // kol laukta, pradėta kita paieška
       gen.cvpisAnalogues = items;
       // Pre-select top 10 most recent
       gen.cvpisSelected = new Set();
       items.slice(0, 10).forEach((_, i) => gen.cvpisSelected.add(i));
       refilterAnalogues();
+      // Anksčiau nepavykusios paieškos buvo nuryjamos: be ryšio rodė „Rasta 0 sutarčių“.
+      const nepavyko = (items.nepavyko || []).length;
       if (statusEl) {
-        statusEl.className = 'badge badge-success';
-        statusEl.textContent = `Rasta ${items.length} sutarčių`;
+        statusEl.className = 'badge ' + (nepavyko ? 'badge-warning' : items.length ? 'badge-success' : 'badge-neutral');
+        statusEl.textContent = (items.length ? `Rasta ${items.length} sutarčių` : 'Analogų nerasta')
+          + (nepavyko ? ` (${nepavyko} iš ${keywords.length} paieškų nepavyko)` : '');
       }
     } catch (err) {
       console.error(err);
+      if (gen.cvpisRaktas !== raktas) return;
       if (statusEl) {
         statusEl.className = 'badge badge-error';
-        statusEl.textContent = 'Klaida';
+        statusEl.textContent = 'Nepavyko';
       }
       $('#genAnaloguesList').innerHTML = `<div class="alert alert-error">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <div>Nepavyko gauti CVP IS duomenų: ${escapeHtml(err.message)}. Galite tęsti su rankiniu įklijavimu žemiau.</div>
+        <div>Nepavyko gauti CVP IS duomenų: ${escapeHtml(kodel(err))} Analogų būsena nežinoma - spauskite „Pakartoti“ arba tęskite su rankiniu įklijavimu žemiau.</div>
       </div>`;
     }
   }
@@ -3594,9 +3606,13 @@ const App = (() => {
 
   function renderAnaloguesList(items) {
     if (!items.length) {
+      // Paieška pavyko, bet rezultatų nėra - skiriama, ar jų nėra išvis, ar juos atsijojo laikotarpis.
+      const priezastis = gen.cvpisAnalogues.length
+        ? 'Atsijojus pagal pasirinktą laikotarpį - nerasta. Pakeiskite laikotarpį arba tęskite su AI generuojama TS be CVP IS konteksto.'
+        : 'CVP IS analogiškų sutarčių pagal paieškos žodžius nerasta. Tęskite be CVP IS konteksto arba įklijuokite analogus žemiau.';
       $('#genAnaloguesList').innerHTML = `<div class="alert alert-warning">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <div>Atsijuos pagal pasirinktą laikotarpį - nerasta. Pakeiskite laikotarpį arba tęskite su AI generuojama TS be CVP IS konteksto.</div>
+        <div>${priezastis}</div>
       </div>`;
       return;
     }
@@ -3695,51 +3711,66 @@ const App = (() => {
     if (!hasApiAccess()) { toast('Nenustatytas API raktas.', 'error'); openSettings(); return; }
     goToStep(4);
     gen.answers = gatherAnswers();
-    $('#genFullLoading').classList.remove('hidden');
     $('#genResultPanel').classList.add('hidden');
-
-    const setGenProgress = (label, pct) => {
-      $('#genProgressBar').style.width = pct + '%';
-      $('#genProgressLabel').textContent = label;
-    };
-
-    setGenProgress('Generuojama TS turinio struktūra...', 10);
-    try {
-      const selectedAnalogues = getSelectedAnalogues();
-      const cvpisStats = gen.cvpisStats;
-
-      // Generate TS and Price in parallel for speed
-      const [ts, priceData, marketData] = await Promise.all([
-        TSGenerator.generateFullTs(gen.meta, gen.answers, gen.references, state.settings, setGenProgress, selectedAnalogues)
-          .catch(err => { console.error('TS gen err:', err); throw err; }),
-        PriceEstimator.estimate(gen.meta, gen.answers, state.settings, () => {}, selectedAnalogues, cvpisStats)
-          .catch(err => { console.warn('Price err:', err); return null; }),
-        TSGenerator.analyzeMarket(gen.meta, selectedAnalogues, cvpisStats, state.settings, () => {})
-          .catch(err => { console.warn('Market err:', err); return null; })
-      ]);
-      gen.ts = ts;
-      gen.priceData = priceData;
-      gen.marketData = marketData;
-
-      setGenProgress('Ruošiama peržiūra...', 95);
-      renderGeneratedTs();
-      renderCompliance();
-      renderPriceCard();
-      renderMarketCard();
-      renderKeyElements();
-      renderGenRecommendations();
-
-      $('#genFullLoading').classList.add('hidden');
-      $('#genResultPanel').classList.remove('hidden');
-      $('#btnGoToExport').disabled = false;
-      $('#btnSendToAnalysis').disabled = false;
-      renderFinalPreview();
-      toast('TS sugeneruota!', 'success');
-    } catch (err) {
-      console.error(err);
-      toast('Klaida generuojant TS: ' + err.message, 'error');
-      $('#genFullLoading').classList.add('hidden');
+    const selectedAnalogues = getSelectedAnalogues();
+    const cvpisStats = gen.cvpisStats;
+    const atskirai = pr => pr.then(r => ({ r }), klaida => ({ klaida }));
+    // TS, kaina ir rinka - lygiagrečiai. Kainos ir rinkos klaida TS nestabdo, bet nebėra nuryjama:
+    // kortelės sako, kad įvertinti nepavyko ir kodėl (anksčiau - „nesugeneruotas“ arba kortelė dingdavo).
+    const rez = await aiVeiksmas('#genFullBusena', {
+      tekstas: '1/3: Generuojama TS struktūra...',
+      procentai: 5,
+      klaidosPriesdelis: 'TS sugeneruoti nepavyko',
+      atsauktaTekstas: gen.ts ? 'Atšaukta - ankstesnė TS versija nepakeista.' : 'Atšaukta - TS negeneruota.',
+      kartoti: runFullGeneration,
+      veiksmas: async (signal, h) => {
+        const [ts, kaina, rinka] = await Promise.all([
+          TSGenerator.generateFullTs(gen.meta, gen.answers, gen.references, state.settings, (label, pct) => h.eiga(pct, label), selectedAnalogues),
+          atskirai(PriceEstimator.estimate(gen.meta, gen.answers, state.settings, () => {}, selectedAnalogues, cvpisStats)),
+          atskirai(TSGenerator.analyzeMarket(gen.meta, selectedAnalogues, cvpisStats, state.settings, () => {}))
+        ]);
+        return { ts, kaina, rinka };
+      }
+    });
+    if (!rez.ok) {
+      if (gen.ts) $('#genResultPanel').classList.remove('hidden');   // ankstesnė versija lieka matoma
+      return;
     }
+    const { ts, kaina, rinka } = rez.reiksme;
+    gen.ts = ts;
+    gen.priceData = kaina.r || null;
+    gen.priceKlaida = kaina.klaida ? kodel(kaina.klaida) : '';
+    gen.marketData = rinka.r || null;
+    gen.marketKlaida = rinka.klaida ? kodel(rinka.klaida) : '';
+
+    renderGeneratedTs();
+    renderCompliance();
+    renderPriceCard();
+    renderMarketCard();
+    renderKeyElements();
+    renderGenRecommendations();
+
+    $('#genResultPanel').classList.remove('hidden');
+    $('#btnGoToExport').disabled = false;
+    $('#btnSendToAnalysis').disabled = false;
+    renderFinalPreview();
+    const trukumai = generavimoTrukumai();
+    if (trukumai.length) {
+      GP_BUSENA.rodyk('#genFullBusena', { tipas: 'nezinoma', tekstas: 'TS sugeneruota ne visa: ' + trukumai.join('; ') + '. Vietos pažymėtos žemiau.' });
+    }
+    toast('TS sugeneruota!', 'success');
+  }
+
+  // Kas sugeneruota ne iki galo - vienas sąrašas būsenai ir eksportui.
+  function generavimoTrukumai() {
+    const t = [];
+    const skyriai = (gen.ts && gen.ts.sections) || [];
+    const nepavyko = skyriai.filter(s => s._failed).length;
+    if (nepavyko) t.push(`${nepavyko} iš ${skyriai.length} skyrių nesugeneruota`);
+    if (gen.ts && gen.ts.complianceKlaida) t.push('atitikties lentelės sugeneruoti nepavyko');
+    if (gen.priceKlaida) t.push('kainos įvertinti nepavyko');
+    if (gen.marketKlaida) t.push('rinkos analizės atlikti nepavyko');
+    return t;
   }
 
   // Nustato pradinį skyriaus statusą jei jo dar nėra
@@ -3801,9 +3832,11 @@ const App = (() => {
       `;
     }).join('');
 
-    const failedCount = (gen.ts.sections || []).filter(s => s._failed).length;
+    const failed = (gen.ts.sections || []).filter(s => s._failed);
+    const failedCount = failed.length;
+    // Priežastis - tikra (anksčiau visada rašyta „rate limit“), pavadinimai - kad būtų aišku, ko trūksta.
     const failedNote = failedCount > 0
-      ? `<div class="alert alert-warning mt-2" style="font-size: 13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>${failedCount} skyrius nesugeneravo (rate limit). Spauskite „Pergeneruoti" arba pridėkite rankiniu būdu.</div></div>`
+      ? `<div class="alert alert-warning mt-2" style="font-size: 13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>Nesugeneruota ${failedCount} iš ${(gen.ts.sections || []).length} skyrių: ${escapeHtml(failed.map(s => ((s.number || s.number === 0) ? s.number + '. ' : '') + (s.title || '')).join('; '))}.${failed[0]._error ? ' Priežastis: ' + escapeHtml(kodel(failed[0]._error)) : ''} Word dokumente jų nebus - spauskite „Pergeneruoti“ arba pridėkite rankiniu būdu.</div></div>`
       : '';
 
     $('#genTsPreview').innerHTML = `<h1>${escapeHtml(gen.ts.title || gen.meta.title)}</h1>` + auditHtml + sectionsHtml + failedNote;
@@ -3832,6 +3865,12 @@ const App = (() => {
     const items = gen.ts.complianceTable || [];
     // Surasti kortelę kuri apgaubia priedo lentelę - jei tuščia, slėpsime kortelę visą
     const card = $('#genCompliancePreview')?.closest('.card');
+    if (!items.length && gen.ts.complianceKlaida) {
+      // Anksčiau nepavykusi lentelė tyliai dingdavo - lyg jos ir neturėtų būti.
+      if (card) card.classList.remove('hidden');
+      $('#genCompliancePreview').innerHTML = `<div class="alert alert-warning" style="font-size:13px"><div>Atitikties lentelės sugeneruoti nepavyko: ${escapeHtml(kodel(gen.ts.complianceKlaida))} Word dokumente jos nebus - spauskite „Pergeneruoti“ arba pridėkite ją rankiniu būdu.</div></div>`;
+      return;
+    }
     if (!items.length) {
       if (card) card.classList.add('hidden');
       return;
@@ -3868,7 +3907,9 @@ const App = (() => {
 
   function renderPriceCard() {
     if (!gen.priceData) {
-      $('#genPriceCard').innerHTML = '<p class="card-subtitle"><em>Kainos vertinimas nesugeneruotas.</em></p>';
+      $('#genPriceCard').innerHTML = gen.priceKlaida
+        ? `<div class="alert alert-warning" style="font-size:13px"><div>Kainos įvertinti nepavyko: ${escapeHtml(gen.priceKlaida)} TS sugeneruota be kainos įvertinimo.</div></div>`
+        : '<p class="card-subtitle"><em>Kainos vertinimas nesugeneruotas.</em></p>';
       return;
     }
     const p = gen.priceData;
@@ -3920,6 +3961,11 @@ const App = (() => {
     const card = $('#genMarketCard');
     if (!card) return;
     if (!gen.marketData) {
+      if (gen.marketKlaida) {
+        if (wrap) wrap.classList.remove('hidden');
+        card.innerHTML = `<div class="alert alert-warning" style="font-size:13px"><div>Rinkos analizės atlikti nepavyko: ${escapeHtml(gen.marketKlaida)}</div></div>`;
+        return;
+      }
       if (wrap) wrap.classList.add('hidden');
       return;
     }
@@ -4195,7 +4241,18 @@ const App = (() => {
   function startNewGeneration() {
     if (!confirm('Pradėti naują generavimą? Esami duomenys bus išvalyti.')) return;
     ['genTitle', 'genCpv', 'genPurpose', 'genQuantity', 'genUnit', 'genDuration', 'genDeadline', 'genLocation', 'genBudget', 'genSpecial'].forEach(id => $('#' + id).value = '');
-    gen.meta = {}; gen.questions = []; gen.answers = []; gen.references = []; gen.ts = null; gen.priceData = null; gen.cvpisLinks = [];
+    if (window.PPTS_VALDIKLIS) window.PPTS_VALDIKLIS.abort();
+    // Anksčiau liko ankstesnio pirkimo CVP IS analogai, rinkos duomenys ir klausimų kontekstas -
+    // 3 žingsnis jų iš naujo neparsiųsdavo, ir jie keliaudavo į naujo pirkimo AI užklausas.
+    Object.assign(gen, { meta: {}, questions: [], answers: [], references: [], ts: null, priceData: null, marketData: null,
+      priceKlaida: '', marketKlaida: '', cvpisLinks: [], cvpisAnalogues: [], cvpisSelected: new Set(), cvpisKeywords: [],
+      cvpisStats: null, cvpisRaktas: '', extraContext: null });
+    ['#genQuestionsList', '#genAnaloguesList', '#genAnalogueStats', '#genCvpisLinks'].forEach(id => { const el = $(id); if (el) el.innerHTML = ''; });
+    const fs = $('#genFetchStatus'); if (fs) { fs.className = 'badge badge-neutral'; fs.textContent = 'Laukiama…'; }
+    renderReferences();
+    GP_BUSENA.slepk('#genQBusena'); GP_BUSENA.slepk('#genFullBusena');
+    $('#genResultPanel').classList.add('hidden');
+    $('#btnQuestionsNext').disabled = true;
     goToStep(1);
     toast('Pradedamas naujas pirkimas.', 'info');
   }
@@ -4209,7 +4266,6 @@ const App = (() => {
     switchTab('generate');
     goToStep(4);
     // Užtikrinti, kad rezultatų panelė matoma
-    $('#genFullLoading').classList.add('hidden');
     $('#genResultPanel').classList.remove('hidden');
     toast('Grįžtama į sugeneruotą TS.', 'info');
   }
@@ -4237,55 +4293,37 @@ const App = (() => {
     );
     if (!confirmed) return;
 
-    // Naudoti tą patį progress UI kaip generavime - pereiname į generavimo skirtuką
+    // Ta pati būsenos vieta kaip generavime - pereiname į generavimo skirtuką
     switchTab('generate');
     goToStep(4);
-    $('#genFullLoading').classList.remove('hidden');
     $('#genResultPanel').classList.add('hidden');
     $('#btnGoToExport').disabled = true;
     $('#btnSendToAnalysis').disabled = true;
+    const rez = await aiVeiksmas('#genFullBusena', {
+      tekstas: 'Pradedamas automatinis pritaikymas...',
+      procentai: 5,
+      klaidosPriesdelis: 'Rekomendacijų pritaikyti nepavyko',
+      atsauktaTekstas: 'Atšaukta - TS nepakeista.',
+      veiksmas: (signal, h) => TSGenerator.applyRecommendations(gen.ts, state.analysis.issues, gen.meta, state.settings, (label, pct) => h.eiga(pct, label))
+    });
+    $('#genResultPanel').classList.remove('hidden');
+    $('#btnGoToExport').disabled = false;
+    $('#btnSendToAnalysis').disabled = false;
+    if (!rez.ok) return;
+    const updatedTs = rez.reiksme;
+    gen.ts = updatedTs;
+    renderGeneratedTs();
+    renderCompliance();
+    renderKeyElements();
+    renderGenRecommendations();
+    renderFinalPreview();
 
-    const setProg = (label, pct) => {
-      $('#genProgressBar').style.width = pct + '%';
-      $('#genProgressLabel').textContent = label;
-    };
-    setProg('Pradedamas automatinis pritaikymas...', 5);
-
-    try {
-      const updatedTs = await TSGenerator.applyRecommendations(
-        gen.ts,
-        state.analysis.issues,
-        gen.meta,
-        state.settings,
-        setProg
-      );
-      gen.ts = updatedTs;
-
-      setProg('Atnaujinama TS peržiūra...', 95);
-      renderGeneratedTs();
-      renderCompliance();
-      renderKeyElements();
-      renderGenRecommendations();
-      renderFinalPreview();
-
-      $('#genFullLoading').classList.add('hidden');
-      $('#genResultPanel').classList.remove('hidden');
-      $('#btnGoToExport').disabled = false;
-      $('#btnSendToAnalysis').disabled = false;
-
-      const applied = updatedTs._appliedRecommendations || {};
-      toast(
-        `✓ Pritaikyta ${applied.totalIssuesApplied || criticalAndMajor.length} rekomendacijų ` +
-        `${applied.sectionsUpdated || '?'} skyriuose. Pakartokite analizę patikrinimui.`,
-        'success'
-      );
-    } catch (err) {
-      console.error(err);
-      toast('Klaida pritaikant rekomendacijas: ' + err.message, 'error');
-      $('#genFullLoading').classList.add('hidden');
-      $('#genResultPanel').classList.remove('hidden');
-      $('#btnGoToExport').disabled = false;
-      $('#btnSendToAnalysis').disabled = false;
+    // Anksčiau „Pritaikyta N rekomendacijų“ buvo rašoma ir tada, kai skyrių pataisyti nepavyko.
+    const applied = updatedTs._appliedRecommendations || {};
+    if (applied.nepavyko) {
+      GP_BUSENA.rodyk('#genFullBusena', { tipas: 'nezinoma', tekstas: `Pritaikyta ${applied.sectionsUpdated} skyriuose; ${applied.nepavyko} skyrių pataisyti nepavyko - jie liko nepakeisti. Priežastis: ${kodel(applied.priezastis)} Pakartokite analizę patikrinimui.` });
+    } else {
+      GP_BUSENA.rodyk('#genFullBusena', { tipas: 'gerai', tekstas: `Pritaikyta ${applied.totalIssuesApplied} pastabų ${applied.sectionsUpdated} skyriuose. Pakartokite analizę patikrinimui.` });
     }
   }
 
@@ -5134,6 +5172,20 @@ async function fetchWithRetry(endpoint, options, maxRetries = 5) {
 
 window.fetchWithRetry = fetchWithRetry;
 
+// ---------- ATŠAUKIMAS (Q3, 2026-09-26) ----------
+// Aktyvaus AI veiksmo signalas: valdiklį nustato App.aiVeiksmas, čia jis tik skaitomas.
+// „Atšaukti“ nutraukia užklausas ir pauzes tarp pakartojimų - ne tik paskutinę užklausą.
+function aiSignalas() { return window.PPTS_VALDIKLIS ? window.PPTS_VALDIKLIS.signal : undefined; }
+function tikrinkAtsaukima(signal) {
+  if (signal && signal.aborted) throw Object.assign(new Error('Atšaukta'), { name: 'AbortError' });
+}
+function pauze(ms, signal) {
+  return new Promise(res => {
+    const t = setTimeout(res, ms);
+    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); res(); }, { once: true });
+  }).then(() => tikrinkAtsaukima(signal));
+}
+
 // ---------- AI ANALIZĖ (Claude API) ----------
 const AIAnalyzer = (() => {
 
@@ -5278,7 +5330,8 @@ Atlik specifikacijos analizę pagal sistemos prompt'e nurodytas kryptis ir grą�
       system: SYSTEM_PROMPT,
       userMessage: userMessage,
       model: settings.model || GP_AI_PROXY.MODEL,
-      maxTokens: 8000
+      maxTokens: 8000,
+      signal: aiSignalas()
     });
     if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
     return res.text;
@@ -5432,13 +5485,17 @@ KIEKVIENAS klausimas - trumpas, hint - max 1 sakinys. Bendras atsakymas < 4000 �
     }).join('\n')}` : '';
 
     const ctx = { meta, answersBlock, refsBlock, cvpisBlock };
+    const signal = aiSignalas();
 
     // ŽINGSNIS 1: Sugeneruoti TS karkasą (antraštės + metaduomenys), 30-60 sek
     onProgress?.('1/3: Generuojama TS struktūra...', 10);
     const skeleton = await generateSkeleton(ctx, settings);
+    tikrinkAtsaukima(signal);
 
     // ŽINGSNIS 2: Generuoti kiekvieną skyrių LYGIAGREČIAI, 30-60 sek visiems iš karto
     const sectionTitles = skeleton.sectionTitles || [];
+    // Be struktūros TS nėra - anksčiau tuščia TS buvo parodoma kaip „TS sugeneruota!“.
+    if (!sectionTitles.length) throw new Error('AI negrąžino TS struktūros (skyrių sąrašo). Bandykite dar kartą.');
     onProgress?.(`2/3: Generuojami ${sectionTitles.length} skyriai (lygiagreciai)...`, 30);
 
     const sectionPromises = sectionTitles.map((section, idx) =>
@@ -5457,7 +5514,7 @@ KIEKVIENAS klausimas - trumpas, hint - max 1 sakinys. Bendras atsakymas < 4000 �
       onProgress?.(`Pakartojami ${failedSections.length} nepavykę skyriai...`, 65);
       for (let i = 0; i < failedSections.length; i++) {
         const s = failedSections[i];
-        await new Promise(r => setTimeout(r, 3000 + i * 2000)); // delay tarp bandymų
+        await pauze(3000 + i * 2000, signal); // delay tarp bandymų; atšaukus - iškart
         try {
           const content = await generateSectionContent(s, 0, ctx, settings);
           const idx = sections.findIndex(x => x.number === s.number);
@@ -5465,24 +5522,36 @@ KIEKVIENAS klausimas - trumpas, hint - max 1 sakinys. Bendras atsakymas < 4000 �
         } catch (err) {
           console.warn(`Skyrius ${s.number} ir antrame bandyme nepavyko:`, err.message);
           // paliekame _failed: true - bus filtruojamas iš output
+          const idx = sections.findIndex(x => x.number === s.number);
+          if (idx >= 0) sections[idx]._error = err.message;
         }
       }
+    }
+    tikrinkAtsaukima(signal);
+    // Nė vieno skyriaus - ne „sugeneruota“, o klaida su priežastimi.
+    if (!sections.some(s => !s._failed)) {
+      throw new Error('nesugeneruotas nė vienas iš ' + sections.length + ' skyrių (' + (sections[0]._error || 'nežinoma priežastis') + ')');
     }
 
     // ŽINGSNIS 3: Atitikties lentelė (su pakartotinu bandymu)
     onProgress?.('3/3: Generuojama atitikties lentelė...', 80);
     let complianceTable = [];
+    let complianceKlaida = '';
     try {
       complianceTable = await generateCompliance(sections.filter(s => !s._failed), ctx, settings);
     } catch (err) {
+      tikrinkAtsaukima(signal);
       console.warn('Atitikties lentelė pirmame bandyme nepavyko:', err.message);
       // Antras bandymas su delay
-      await new Promise(r => setTimeout(r, 5000));
+      await pauze(5000, signal);
       try {
         complianceTable = await generateCompliance(sections.filter(s => !s._failed), ctx, settings);
       } catch (err2) {
+        tikrinkAtsaukima(signal);
         console.warn('Atitikties lentelė nepavyko:', err2.message);
         complianceTable = [];
+        // Nebe tyliai: lentelės kortelė ir būsena sako, kad jos nėra ir kodėl.
+        complianceKlaida = err2.message || 'nežinoma priežastis';
       }
     }
 
@@ -5491,6 +5560,7 @@ KIEKVIENAS klausimas - trumpas, hint - max 1 sakinys. Bendras atsakymas < 4000 �
       title: skeleton.title || ctx.meta.title,
       sections,
       complianceTable,
+      complianceKlaida,
       evaluationCriteria: skeleton.evaluationCriteria || [],
       keyElements: skeleton.keyElements || {},
       recommendations: skeleton.recommendations || []
@@ -5607,7 +5677,8 @@ Kategorijos: technical, quality, delivery, warranty, qualification, security, ot
       system: GENERATION_SYSTEM_PROMPT,
       userMessage: userMessage,
       model: settings.model || GP_AI_PROXY.MODEL,
-      maxTokens: maxTokens
+      maxTokens: maxTokens,
+      signal: aiSignalas()
     });
     if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
     return res.text;
@@ -5819,6 +5890,12 @@ SVARBU:
     const updatedSections = await Promise.all(updatePromises);
 
     onProgress?.('Sukomponuojama TS...', 85);
+    const pavyko = updatedSections.filter(u => !u._updateError);
+    const nepavykoSk = updatedSections.filter(u => u._updateError);
+    // Anksčiau net visiškai nepavykęs pritaikymas buvo skelbiamas „Pritaikyta N rekomendacijų“.
+    if (!pavyko.length) {
+      throw new Error('nė vieno skyriaus pataisyti nepavyko (' + (nepavykoSk[0] && nepavykoSk[0]._updateError || 'nežinoma priežastis') + ')');
+    }
 
     // Sukomponuoti pataisytus + nepakeistus skyrius pagal original tvarką
     const allSections = generatedTs.sections.map(orig => {
@@ -5832,8 +5909,10 @@ SVARBU:
       ...generatedTs,
       sections: allSections,
       _appliedRecommendations: {
-        totalIssuesApplied: criticalAndMajor.length,
-        sectionsUpdated: sectionsToUpdate.length,
+        totalIssuesApplied: pavyko.reduce((n, u) => n + (u._appliedIssues || 0), 0),
+        sectionsUpdated: pavyko.length,
+        nepavyko: nepavykoSk.length,
+        priezastis: nepavykoSk.length ? nepavykoSk[0]._updateError : '',
         timestamp: new Date().toISOString()
       }
     };
@@ -6025,7 +6104,8 @@ SVARBU: Visos kainos turi būti realistiškos. Energetikos sektoriaus pirkimams 
       system: PRICE_SYSTEM_PROMPT,
       userMessage: userMessage,
       model: settings.model || GP_AI_PROXY.MODEL,
-      maxTokens: maxTokens
+      maxTokens: maxTokens,
+      signal: aiSignalas()
     });
     if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
     return res.text;
@@ -6083,6 +6163,7 @@ const CVPISClient = (() => {
   async function searchMultiple(keywords, perKeyword = 10, settings = {}) {
     const all = [];
     const seen = new Set();
+    const nepavyko = [];
     for (const kw of keywords) {
       try {
         const res = await search(kw, perKeyword, settings);
@@ -6095,10 +6176,16 @@ const CVPISClient = (() => {
         });
       } catch (err) {
         console.warn('CVPIS search failed for "' + kw + '":', err.message);
+        nepavyko.push({ kw, klaida: err.message });
       }
+    }
+    // Visos paieškos nepavyko - tai klaida, ne „0 sutarčių“ (anksčiau be ryšio rodyta „Rasta 0 sutarčių“).
+    if (keywords.length && nepavyko.length === keywords.length) {
+      throw new Error('nė viena CVP IS paieška nepavyko (' + nepavyko[0].klaida + ')');
     }
     // Sort by date desc
     all.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
+    all.nepavyko = nepavyko;   // dalinis rezultatas: kiek paieškų nepavyko, sąsaja tai pasako
     return all;
   }
 
@@ -6762,5 +6849,60 @@ window.CVPISClient = CVPISClient;
 
 </script>
 
+<!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
+     shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
+<script src="../shared/gprocure-info-panel.js"></script>
+<script>
+(function () {
+  if (!window.GProcureInfoPanel || !document.getElementById("infoPanelMount")) return;
+  var INFO = { lt: {
+    title: "Kas tai ir kaip naudotis",
+    purpose: "Techninės specifikacijos (TS) rengimas su AI ir esamos TS patikra: aiškumas, konkurencija, „arba lygiavertis“, teisinės rizikos.",
+    stepsTitle: "Kaip naudotis",
+    steps: [
+      "<b>Sukurti TS:</b> įveskite pirkimo informaciją, atsakykite į AI klausimus, peržiūrėkite analogiškus CVP IS pirkimus - AI parengs TS projektą, kainos ir rinkos įvertinimą.",
+      "<b>Tikrinti TS:</b> įkelkite ar įklijuokite savo TS. „Greitas patikrinimas“ - taisyklės naršyklėje; „Pilnoji analizė“ - taisyklės ir AI.",
+      "<b>Pirkimo kontekstas:</b> užpildykite objektą, būdą ir vertę - pastabos taps tikslesnės.",
+      "<b>Peržiūrėkite ir eksportuokite:</b> „Analizė“ rodo pastabas su citatomis, „Ataskaita“ - santrauką; TS - Word formatu."
+    ],
+    noteTitle: "Kas siunčiama į AI",
+    note: "AI analizei ir generavimui tekstas bei pirkimo duomenys siunčiami per G-Procure serverį į Claude API; analogai ieškomi viešuose CVP IS duomenyse per tą patį serverį. Nesiųskite įslaptintos informacijos. Naršyklėje išsaugomi tik nustatymai (modelis, analizės gylis). AI pastabos ir TS projektas - pasiūlymas: kiekvieną sprendimą tikrina ir tvirtina žmogus.",
+    moreLabel: "Plačiau",
+    details: {
+      title: "TS asistentas - išsami instrukcija",
+      intro: "Gera TS apibrėžia poreikį, o ne konkretų gaminį: ji aiški, patikrinama ir neriboja konkurencijos. Modulis padeda abiem kryptimis - parengti naują TS nuo nulio ir patikrinti jau parašytą.",
+      processTitle: "Du keliai",
+      process: [
+        { title: "Pirminė informacija", text: "Pavadinimas, objektas, kiekiai, terminai, papildomi aspektai." },
+        { title: "AI klausimai", text: "Patikslinimo klausimai - atsakykite į svarbiausius." },
+        { title: "Analogai", text: "Panašios CVP IS sutartys ir jūsų įklijuoti pavyzdžiai." },
+        { title: "TS projektas", text: "Skyriai, atitikties lentelė, kainos ir rinkos įvertinimas." },
+        { title: "Patikra ir eksportas", text: "Taisyklės ir AI analizė, rekomendacijų taikymas, Word." }
+      ],
+      conceptsTitle: "Pagrindinės sąvokos",
+      concepts: [
+        { term: "„Arba lygiavertis“", def: "Nurodžius standartą, modelį ar prekės ženklą, būtina leisti lygiavertį sprendimą - kitaip ribojama konkurencija.", example: "„IEC 60076 arba lygiavertis standartas“." },
+        { term: "Taisyklės ir AI", def: "Taisyklės (naršyklėje) randa tipines klaidas akimirksniu; AI analizė vertina kontekstą, aiškumą ir teisines rizikas." },
+        { term: "Atitikties lentelė", def: "TS reikalavimai lentele, kurią tiekėjas pildo nurodydamas, kaip atitinka kiekvieną reikalavimą." },
+        { term: "Skyriaus būsena", def: "„AI parengė“, „Žmogus tvirtino“, „Žmogus redagavo“, „Reikia peržiūros“ - matyti, kas patikrinta." }
+      ],
+      faqTitle: "Dažniausi klausimai",
+      faq: [
+        { q: "Ar AI parengtą TS galima skelbti iš karto?", a: "Ne. Tai projektas: kiekvieną skyrių peržiūrėkite ir patvirtinkite, ypač techninius parametrus ir kiekius. Nesugeneruoti skyriai ir nepavykusios dalys (atitikties lentelė, kainos įvertinimas) pažymimi atvirai." },
+        { q: "Kodėl „Pilnoji analizė“ trunka ilgiau?", a: "Ji siunčia tekstą AI analizei per G-Procure serverį. Eigą matote juostoje, o „Atšaukti“ nutraukia užklausą - rezultatai lieka nepakeisti." },
+        { q: "Iš kur imami analogiški pirkimai?", a: "Iš viešų CVP IS sutarčių duomenų per G-Procure serverį. Jei paieška nepavyksta, modulis tai pasako - „0 sutarčių“ rodoma tik tada, kai paieška tikrai nieko nerado." }
+      ],
+      closeLabel: "Uždaryti ir grįžti"
+    }
+  } };
+  GProcureInfoPanel.mount({
+    target: "#infoPanelMount",
+    moduleId: "pp-ts",
+    defaultOpen: true,
+    getLang: function () { return "lt"; },
+    content: INFO
+  });
+})();
+</script>
 </body>
 </html>
