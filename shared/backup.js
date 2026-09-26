@@ -41,18 +41,21 @@
     ["pptiekejams.lang",         "PP-tiekejams",    { lt: "Pasirinkta kalba", en: "Chosen language" }],
     ["ts_asistentas",            "PP-ts",           { lt: "TS asistento nustatymai", en: "Spec assistant settings" }],
     ["ppteise.",                 "PP-teise",        { lt: "Teisės stebėsenos peržiūros ir nustatymai", en: "Law monitoring reviews and settings" }],
-    ["gprocure_help_collapsed",  "—",               { lt: "Pagalbos bloko būsena", en: "Help panel state" }],
-    ["gprocure-lang",            "—",               { lt: "Pasirinkta kalba", en: "Chosen language" }]
+    ["gprocure_help_collapsed",  "-",               { lt: "Pagalbos bloko būsena", en: "Help panel state" }],
+    ["gprocure.infoPanel.",      "-",               { lt: "Informacinės skilties būsena", en: "Information panel state" }],
+    ["gprocure-lang",            "-",               { lt: "Pasirinkta kalba", en: "Chosen language" }]
   ];
 
   function zenklas(raktas, lang) {
     var l = lang === "en" ? "en" : "lt";
+    /* Neperskaitomo įrašo kopija (shared/saugykla.js): „<raktas>.sugadinta-<data>“. */
+    var sug = String(raktas).indexOf(".sugadinta-") > 0;
     for (var i = 0; i < ZENKLAI.length; i++) {
       if (String(raktas).indexOf(ZENKLAI[i][0]) === 0) {
-        return { modulis: ZENKLAI[i][1], pav: ZENKLAI[i][2][l] };
+        return { modulis: ZENKLAI[i][1], pav: ZENKLAI[i][2][l] + (sug ? (l === "en" ? " (unreadable copy)" : " (neperskaitoma kopija)") : "") };
       }
     }
-    return { modulis: "—", pav: l === "en" ? "Other data" : "Kiti duomenys" };
+    return { modulis: "-", pav: l === "en" ? "Other data" : "Kiti duomenys" };
   }
 
   /* Visi saugyklos įrašai, didžiausi viršuje. Grąžina null, jei saugykla neprieinama
