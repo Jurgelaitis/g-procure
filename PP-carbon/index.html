@@ -25,6 +25,9 @@
 <script src="../shared/ai-proxy.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
 <script src="../shared/lang-detect.js"></script>
+<!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 <!-- Ataskaitų modelio kūrimas -> window.GP_REPORTS -->
 <script src="reports.js"></script>
 <!-- PP-carbon -> PP-ESG (ESRS E1-6 / Scope 3) -> window.GP_ESG_EXPORT -->
@@ -443,6 +446,7 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-4) var(-
         </div>
       </div>
     </div>
+    <div id="repDocxBusena" hidden></div>
     <div id="reportPreview"></div>
 
     <!-- ŠESD istorija: gamintojų vienetų pėdsako palyginimas laike -->
@@ -489,6 +493,7 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-4) var(-
         </div>
       </div>
       <div id="taxNote" class="esg-note"></div>
+      <div id="taxDocxBusena" hidden></div>
       <div id="taxPreview"></div>
     </div>
   </section>
@@ -524,12 +529,21 @@ const API_BASE = "https://api.g-procure.com";
 const Store = {
   KEY: "pp_carbon_data",
 
+  /* Q3 (shared/saugykla.js): neperskaitomi duomenys anksčiau tapdavo tuščiais projektais, o kitas
+     išsaugojimas juos perrašydavo; nepavykęs įrašymas buvo praryjamas. Dabar kopija išsaugoma
+     atskirai, viršuje - „būsena nežinoma“ arba įrašymo klaida. */
+  _pav() { return (typeof LANG !== "undefined" && LANG === "en") ? "Carbon footprint data" : "Anglies pėdsako duomenys"; },
   _readAll() {
-    try { const v = localStorage.getItem(this.KEY); return v ? JSON.parse(v) : null; }
-    catch (e) { return null; }
+    const r = GP_SAUGYKLA.skaityk(this.KEY, { tikrink: v => (v && typeof v === "object" && !Array.isArray(v)) || "netinkama duomenų sandara" });
+    if (r.busena === "yra") return r.reiksme;
+    if (r.busena !== "nera") GP_BUSENA.juosta({ raktas: "skaitymas", tipas: "nezinoma", tekstas: () => GP_SAUGYKLA.pranesimas(r, this._pav()) });
+    return null;
   },
   _writeAll(data) {
-    try { localStorage.setItem(this.KEY, JSON.stringify(data)); } catch (e) {}
+    const r = GP_SAUGYKLA.rasyk(this.KEY, data);
+    if (r.ok) GP_BUSENA.juostaSlepk("irasymas");
+    else GP_BUSENA.juosta({ raktas: "irasymas", tipas: "klaida", tekstas: () => GP_SAUGYKLA.pranesimas(r, this._pav()) });
+    return r.ok;
   },
   _data() {
     let d = this._readAll();
@@ -710,11 +724,11 @@ const I18N = {
     "epd.error": "Klaida", "epd.fromBadge": "iš EPD",
     "epd.err.type": "Netinkamas failo tipas - reikia PDF.", "epd.err.size": "Failas per didelis (riba {mb} MB).",
     "epd.err.read": "Nepavyko perskaityti failo.", "epd.err.lib": "EPD analizės logika neužkrauta (patikrink epd-extract.js).",
-    "epd.err.http": "Nepavyko pasiekti AI (klaida {code}) - patikrinkite raktą ir ryšį.",
-    "epd.err.network": "Nepavyko pasiekti AI - patikrinkite raktą ir ryšį.", "epd.err.convert": "Nepavyko konvertuoti vienetų.",
+    "epd.err.http": "AI paslauga atsakė klaida {code}. Bandykite dar kartą vėliau.", "epd.err.prefix": "EPD analizė nepavyko",
+    "epd.err.network": "Nėra ryšio su AI paslauga - patikrinkite interneto ryšį ir bandykite dar kartą.", "epd.err.convert": "Nepavyko konvertuoti vienetų.",
     "rep.audience": "Auditorija", "rep.internal": "Vidaus vertinimas", "rep.public": "Viešas pjūvis",
     "rep.preview": "Peržiūrėti", "rep.download": "Atsisiųsti .docx",
-    "rep.err.lib": "Ataskaitų logika neužkrauta (patikrink reports.js).", "rep.err.docx": "docx biblioteka neįsikrovė - nepavyko sukurti .docx.",
+    "rep.err.lib": "Ataskaitų logika neužkrauta (patikrink reports.js).", "rep.err.docx": "docx biblioteka neįsikrovė - nepavyko sukurti .docx.", "rep.gen": "Kuriamas Word dokumentas...", "rep.err.gen": "Nepavyko sukurti Word dokumento", "rep.done": "Word dokumentas parengtas: {f}",
     "hist.title": "ŠESD istorija (gamintojų palyginimas laike)",
     "hist.desc": "Kiekvienas patvirtintas EPD įrašomas į žurnalą. Taip matosi, kiek to paties gaminio vieneto pėdsakas pasikeitė tarp pirkimų ir kaip tobulėja gamintojai (strategijos siekis - mažinti ŠESD tiekimo grandinėje).",
     "hist.empty": "Žurnalas tuščias - jis pildosi automatiškai, kai skaičiuoklėje patvirtinamas gamintojo EPD.",
@@ -805,11 +819,11 @@ const I18N = {
     "epd.error": "Error", "epd.fromBadge": "from EPD",
     "epd.err.type": "Invalid file type - PDF required.", "epd.err.size": "File too large (limit {mb} MB).",
     "epd.err.read": "Could not read the file.", "epd.err.lib": "EPD analysis logic not loaded (check epd-extract.js).",
-    "epd.err.http": "Could not reach AI (error {code}) - check the key and connection.",
-    "epd.err.network": "Could not reach AI - check the key and connection.", "epd.err.convert": "Could not convert units.",
+    "epd.err.http": "The AI service returned error {code}. Please try again later.", "epd.err.prefix": "EPD analysis failed",
+    "epd.err.network": "No connection to the AI service - check your internet connection and try again.", "epd.err.convert": "Could not convert units.",
     "rep.audience": "Audience", "rep.internal": "Internal evaluation", "rep.public": "Public summary",
     "rep.preview": "Preview", "rep.download": "Download .docx",
-    "rep.err.lib": "Reports logic not loaded (check reports.js).", "rep.err.docx": "docx library not loaded - could not create .docx.",
+    "rep.err.lib": "Reports logic not loaded (check reports.js).", "rep.err.docx": "docx library not loaded - could not create .docx.", "rep.gen": "Creating the Word document...", "rep.err.gen": "Could not create the Word document", "rep.done": "Word document ready: {f}",
     "hist.title": "GHG history (manufacturer comparison over time)",
     "hist.desc": "Every confirmed EPD is logged. This shows how the same product's unit footprint changed between procurements and how manufacturers improve (the strategy aims to reduce supply-chain GHG).",
     "hist.empty": "The log is empty - it fills in automatically when a manufacturer EPD is confirmed in the calculator.",
@@ -883,7 +897,11 @@ function setLang(l) { LANG = l; if (window.GP_LANG) GP_LANG.remember("ppcarbon.l
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 function openModal(html, wide) { const sh = $("#modalShell"); sh.className = "modal" + (wide ? " wide" : ""); sh.innerHTML = html; $("#overlay").classList.add("open"); }
-function closeModal() { $("#overlay").classList.remove("open"); $("#modalShell").innerHTML = ""; }
+function closeModal() {
+  // Uždarius EPD langą vykstanti AI analizė nutraukiama - jos rezultato niekas nebelaukia.
+  if (typeof _epdCtx !== "undefined" && _epdCtx && _epdCtx.valdiklis) _epdCtx.valdiklis.abort();
+  $("#overlay").classList.remove("open"); $("#modalShell").innerHTML = "";
+}
 function openSettings() {
   const xBtn = '<button class="x-btn" onclick="closeModal()" aria-label="' + esc(t("set.close")) + '">' +
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
@@ -1565,6 +1583,7 @@ function renderEpdModal() {
       '<div class="field" style="margin-top:var(--space-2)"><label>' + esc(t("epd.manufacturer")) + '</label>' +
         '<input class="input" type="text" id="epdManufacturer" placeholder="' + esc(t("epd.manufacturer.ph")) + '" /></div>' +
       '<div id="epdStatus" class="epd-status"></div>' +
+      '<div id="epdBusena" hidden></div>' +
       '<div id="epdResult"></div>' +
     '</div>' +
     '<div class="modal-foot">' +
@@ -1580,6 +1599,8 @@ function onEpdFile(input) {
   const c = _epdCtx; if (!c) return;
   const st = $("#epdStatus");
   const f = input.files && input.files[0];
+  if (c.valdiklis) c.valdiklis.abort();   // naujas failas - ankstesnio failo analizė nutraukiama
+  GP_BUSENA.slepk("#epdBusena");
   c.pdfBase64 = ""; c.fileName = ""; setEpdAnalyzeEnabled(false);
   if (st) st.innerHTML = "";
   if (!f) return;
@@ -1608,35 +1629,44 @@ function onEpdFile(input) {
 
 function analyzeEpd() {
   const c = _epdCtx; if (!c || !c.pdfBase64 || c.busy) return;
-  const result = $("#epdResult"), status = $("#epdStatus");
+  const result = $("#epdResult");
   if (!window.GP_EPD_EXTRACT) { if (result) result.innerHTML = epdErr(t("epd.err.lib")); return; }
   if (!window.GP_AI_PROXY) { if (result) result.innerHTML = epdErr(t("epd.err.lib")); return; }
   c.busy = true; setEpdAnalyzeEnabled(false);
   if (result) result.innerHTML = "";
-  if (status) status.innerHTML = '<div class="epd-analyzing"><span class="spin"></span>' + esc(t("epd.analyzing")) + '</div>';
-
-  // Transportas per shared/ai-proxy.js (GP_AI_PROXY). Raktas tik serverio puseje.
-  // maxTokens BUTINAI 1500 (EPD istraukimui), ne GP_AI_PROXY default.
-  GP_AI_PROXY.call({
-    system: GP_EPD_EXTRACT.systemPrompt(),
-    userMessage: GP_EPD_EXTRACT.userText(c.label, c.unit),
-    pdfBase64: c.pdfBase64,
-    maxTokens: 1500
-  })
-    .then(function (res) {
-      if (status) status.innerHTML = "";
-      if (!res.ok) {
-        const msg = res.status ? t("epd.err.http").replace("{code}", res.status) : t("epd.err.network");
-        if (result) result.innerHTML = epdErr(msg);
-        return;
-      }
-      renderEpdResult(GP_EPD_EXTRACT.parseResponse(res.raw));
-    })
-    .catch(function () {
-      if (status) status.innerHTML = "";
-      if (result) result.innerHTML = epdErr(t("epd.err.network"));
-    })
-    .then(function () { c.busy = false; setEpdAnalyzeEnabled(true); });
+  const valdiklis = c.valdiklis = new AbortController();
+  // Q3: bendra būsena (shared/busena.js) - laikmatis, „Atšaukti“, klaida su priežastimi ir
+  // „Bandyti dar kartą“. Anksčiau klaida siūlė „patikrinkite raktą“, nors rakto naudotojas
+  // neturi (jis - serveryje), o analizės atšaukti nebuvo kaip.
+  GP_BUSENA.vykdyk("#epdBusena", {
+    tipas: "ai", tekstas: t("epd.analyzing"), valdiklis: valdiklis,
+    klaidosPriesdelis: t("epd.err.prefix"),
+    kartoti: analyzeEpd,
+    veiksmas: function (signal) {
+      // Transportas per shared/ai-proxy.js (GP_AI_PROXY). Raktas tik serverio puseje.
+      // maxTokens BUTINAI 1500 (EPD istraukimui), ne GP_AI_PROXY default.
+      return GP_AI_PROXY.call({
+        system: GP_EPD_EXTRACT.systemPrompt(),
+        userMessage: GP_EPD_EXTRACT.userText(c.label, c.unit),
+        pdfBase64: c.pdfBase64,
+        maxTokens: 1500,
+        signal: signal
+      }).then(function (res) {
+        if (!res.ok) throw new Error(epdKlaida(res));
+        return res;
+      });
+    }
+  }).then(function (r) {
+    if (c.valdiklis === valdiklis) c.valdiklis = null;
+    c.busy = false; setEpdAnalyzeEnabled(!!c.pdfBase64);
+    if (r.ok && _epdCtx === c) renderEpdResult(GP_EPD_EXTRACT.parseResponse(r.reiksme.raw));
+  });
+}
+// Žmogui suprantama priežastis: LT sąsajoje - tiksli shared/ai-proxy.js žinutė (pvz. 413 su tikra
+// failo riba), EN - išversta; be atsakymo (status 0) - ryšys.
+function epdKlaida(res) {
+  if (!res.status) return /abort/i.test(res.error || "") ? "Aborted" : t("epd.err.network");
+  return LANG === "lt" && res.error ? res.error : t("epd.err.http").replace("{code}", res.status);
 }
 
 function renderEpdResult(res) {
@@ -1949,22 +1979,34 @@ function buildReportDoc(model) {
   });
 }
 
+/* Q3: Word dokumentas su bendra būsena (shared/busena.js). Anksčiau BET KOKIA klaida buvo vadinama
+   „docx biblioteka neįsikrovė“ (biblioteka įterpta į puslapį), pranešimas užklodavo peržiūrą,
+   o sinchroninė dokumento kūrimo klaida likdavo nematoma. */
+function atsisiuskDocx(vieta, kurkDokumenta, fname, kartoti) {
+  return GP_BUSENA.vykdyk(vieta, {
+    tipas: "eiga", tekstas: t("rep.gen"),
+    klaidosPriesdelis: t("rep.err.gen"),
+    kartoti: kartoti,
+    sekme: t("rep.done").replace("{f}", fname),
+    veiksmas: function () {
+      if (!window.docx) throw new Error(t("rep.err.docx"));
+      return window.docx.Packer.toBlob(kurkDokumenta()).then(function (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = fname;
+        document.body.appendChild(a); a.click();
+        setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 0);
+      });
+    }
+  });
+}
 function downloadReportDocx() {
   const box = $("#reportPreview");
   if (!window.GP_REPORTS) { if (box) box.innerHTML = '<div class="card card-pad">' + esc(t("rep.err.lib")) + '</div>'; return; }
-  if (!window.docx) { if (box) box.innerHTML = '<div class="card card-pad">' + esc(t("rep.err.docx")) + '</div>'; return; }
-  const model = GP_REPORTS.build(_repAudience, buildReportData()); // viešą filtruoja GP_REPORTS
-  const doc = buildReportDoc(model);
-  window.docx.Packer.toBlob(doc).then(function (blob) {
-    const fname = "PP-carbon_ataskaita_" + (_repAudience === "public" ? "viesas" : "vidaus") + ".docx";
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = fname;
-    document.body.appendChild(a); a.click();
-    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 0);
-  }).catch(function () {
-    if (box) box.innerHTML = '<div class="card card-pad">' + esc(t("rep.err.docx")) + '</div>';
-  });
+  const fname = "PP-carbon_ataskaita_" + (_repAudience === "public" ? "viesas" : "vidaus") + ".docx";
+  return atsisiuskDocx("#repDocxBusena", function () {
+    return buildReportDoc(GP_REPORTS.build(_repAudience, buildReportData())); // viešą filtruoja GP_REPORTS
+  }, fname, downloadReportDocx);
 }
 
 /* ============================================================
@@ -2060,21 +2102,14 @@ function onTaxStatus(select) {
   renderTaxonomy(code);
 }
 function downloadTaxonomyDocx() {
-  const box = $("#taxPreview");
   const code = ($("#taxActivity") || {}).value;
   if (!window.GP_TAXONOMY || !code || activityIsPlaceholder(code)) return;
-  if (!window.docx) { if (box) box.innerHTML += '<div class="esg-err">' + esc(t("rep.err.docx")) + '</div>'; return; }
   const model = GP_TAXONOMY.buildTaxonomyReport(code, buildReportData(), Store.getTaxonomyStatuses(code));
-  if (model.error) return;
-  const doc = buildReportDoc(model); // ta pati PP-protocol docx biblioteka/konfigūracija
-  window.docx.Packer.toBlob(doc).then(function (blob) {
-    const fname = "PP-carbon_taksonomija_" + String(code).replace(/\./g, "-") + ".docx";
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = fname;
-    document.body.appendChild(a); a.click();
-    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 0);
-  }).catch(function () { if (box) box.innerHTML += '<div class="esg-err">' + esc(t("rep.err.docx")) + '</div>'; });
+  // Anksčiau - tyli grįžtis: mygtukas tiesiog nieko nedarydavo.
+  if (model.error) { GP_BUSENA.rodyk("#taxDocxBusena", { tipas: "klaida", tekstas: t("rep.err.gen") + ": " + model.error }); return; }
+  const fname = "PP-carbon_taksonomija_" + String(code).replace(/\./g, "-") + ".docx";
+  // ta pati PP-protocol docx biblioteka/konfigūracija
+  return atsisiuskDocx("#taxDocxBusena", function () { return buildReportDoc(model); }, fname, downloadTaxonomyDocx);
 }
 
 /* ============================================================

@@ -34,6 +34,9 @@
 modulio pavadinimas antraštėje buvo nelūžtantis, todėl puslapis slinko į šoną iki 574-625 px, planšetėje
 pavadinimas lįsdavo po mygtukais, o EPD įrankyje 320 px ekrane už krašto išlįsdavo patikros langelis.
 Modulis kraunamas rėmelyje, o rėmelio plotis keičiamas - media užklausos jame veikia tuo pločiu.
+Q3 grupė (2026-09-26): EPD analizė ir Word dokumentai rodo būseną vietoje (shared/busena.js) - tikra
+priežastis vietoj „patikrinkite raktą“ (rakto naudotojas neturi), „Atšaukti“ ir uždarymas nutraukia užklausą,
+Word klaida nebevadinama „biblioteka neįsikrovė“ ir nebeištrina peržiūros. Serveris imituojamas.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
@@ -176,9 +179,89 @@ async function testaiEpd(){
   });
 }
 
+/* Q3: EPD analizė ir Word. Išsaugoti duomenys neliečiami: EPD langas ir peržiūra tik skaito. */
+async function laukTol(salyga){ for (let i = 0; i < 160 && !salyga(); i++) await laukti(25); return salyga(); }
+function epdLangas(W){
+  const key = W.eval("(() => { const F = Store.getFactors(); const g = Object.keys(F).find(k => Array.isArray(F[k]) && F[k].length); return g + '.' + F[g][0].id; })()");
+  W.openEpdModal(key);
+  W.eval("_epdCtx.pdfBase64 = 'JVBERi0xLjQ='; _epdCtx.fileName = 'epd.pdf';");
+}
+async function testaiBusenos(){
+  dabartine = grupe("Veiksmų būsenos (Q3): EPD analizė ir Word dokumentai");
+  const lt = await puslapis("index.html?lang=lt", 1280), en = await puslapis("index.html?lang=en", 1280);
+  const LW = lt.f.contentWindow, EW = en.f.contentWindow;
+  const ORIG = { lt: LW.GP_AI_PROXY.call, en: EW.GP_AI_PROXY.call };
+
+  await testas("EPD klaida: tikra priežastis ir „Bandyti dar kartą“, ne „patikrinkite raktą“ (LT - serverio žinutė, EN - išversta, be ryšio - ryšys)", async ()=>{
+    try {
+      epdLangas(LW);
+      LW.GP_AI_PROXY.call = async () => ({ ok: false, status: 413, text: "", raw: null, error: "Failas per didelis: riba 6 MB." });
+      LW.analyzeEpd();
+      const b = lt.d.getElementById("epdBusena");
+      tiesa(await laukTol(() => b.classList.contains("gpb--klaida")), "LT: nėra klaidos būsenos: " + b.textContent);
+      tiesa(/EPD analizė nepavyko: Failas per didelis: riba 6 MB\./.test(b.textContent) && !/rakt/i.test(b.textContent), "LT: " + b.textContent);
+      tiesa(b.querySelector("[data-gpb-kartoti]"), "LT: nėra „Bandyti dar kartą“");
+      tiesa(!lt.d.getElementById("epdAnalyzeBtn").disabled, "LT: mygtukas liko išjungtas");
+      LW.GP_AI_PROXY.call = async () => ({ ok: false, status: 0, text: "", raw: null, error: "Failed to fetch" });
+      b.querySelector("[data-gpb-kartoti]").click();
+      tiesa(await laukTol(() => /Nėra ryšio su AI paslauga/.test(lt.d.getElementById("epdBusena").textContent)), "LT be ryšio: " + lt.d.getElementById("epdBusena").textContent);
+      epdLangas(EW);
+      EW.GP_AI_PROXY.call = async () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Bandykite vėliau." });
+      EW.analyzeEpd();
+      const e = en.d.getElementById("epdBusena");
+      tiesa(await laukTol(() => e.classList.contains("gpb--klaida")), "EN: nėra klaidos būsenos");
+      tiesa(/EPD analysis failed: The AI service returned error 500\./.test(e.textContent) && /Try again/.test(e.textContent) && !/key/i.test(e.textContent), "EN: " + e.textContent);
+    } finally { LW.GP_AI_PROXY.call = ORIG.lt; EW.GP_AI_PROXY.call = ORIG.en; LW.closeModal(); EW.closeModal(); }
+  });
+
+  await testas("EPD: „Atšaukti“ nutraukia užklausą (niekas nepakeista), uždarius langą - irgi", async ()=>{
+    let signalas = null;
+    LW.GP_AI_PROXY.call = o => new Promise(res => { signalas = o.signal;
+      o.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })); });
+    try {
+      epdLangas(LW);
+      LW.analyzeEpd();
+      const b = lt.d.getElementById("epdBusena");
+      tiesa(await laukTol(() => signalas && b.querySelector("[data-gpb-atsaukti]")), "nėra „Atšaukti“ arba signalo");
+      tiesa(lt.d.getElementById("epdAnalyzeBtn").disabled, "kol analizuojama, mygtukas turi būti išjungtas");
+      b.querySelector("[data-gpb-atsaukti]").click();
+      tiesa(await laukTol(() => /Atšaukta - niekas nepakeista/.test(b.textContent)), "po atšaukimo: " + b.textContent);
+      tiesa(signalas.aborted && !lt.d.getElementById("epdAnalyzeBtn").disabled && !lt.d.getElementById("epdResult").textContent.trim(), "užklausa nenutraukta arba rezultatas parodytas");
+      signalas = null;
+      LW.analyzeEpd();
+      tiesa(await laukTol(() => signalas), "antra užklausa nepradėta");
+      LW.closeModal();
+      tiesa(signalas.aborted, "uždarius langą užklausa nenutraukta");
+    } finally { LW.GP_AI_PROXY.call = ORIG.lt; LW.closeModal(); }
+  });
+
+  await testas("Word: kūrimo klaida - tikra priežastis, peržiūra lieka (anksčiau „docx biblioteka neįsikrovė“ ir peržiūra dingdavo); pavykus - „parengtas“", async ()=>{
+    const P = LW.docx.Packer, origBlob = P.toBlob, origClick = LW.HTMLAnchorElement.prototype.click;
+    let atsisiusta = null;
+    LW.HTMLAnchorElement.prototype.click = function(){ atsisiusta = this.download; };
+    try {
+      LW.previewReport();
+      const perziura = lt.d.getElementById("reportPreview").innerHTML;
+      tiesa(perziura.length > 100, "peržiūra neparodyta");
+      P.toBlob = () => Promise.reject(new Error("Bandomoji klaida"));
+      await LW.downloadReportDocx();
+      const b = lt.d.getElementById("repDocxBusena");
+      tiesa(b.classList.contains("gpb--klaida") && /Nepavyko sukurti Word dokumento: Bandomoji klaida/.test(b.textContent) && !/neįsikrovė/.test(b.textContent), "klaida: " + b.textContent);
+      lygu(lt.d.getElementById("reportPreview").innerHTML, perziura, "peržiūra pakeista");
+      tiesa(atsisiusta === null, "nepavykus - atsisiųsta");
+      P.toBlob = origBlob;
+      b.querySelector("[data-gpb-kartoti]").click();
+      tiesa(await laukTol(() => b.classList.contains("gpb--gerai")), "pakartojus: " + b.textContent);
+      tiesa(/Word dokumentas parengtas: PP-carbon_ataskaita_(vidaus|viesas)\.docx/.test(b.textContent) && atsisiusta && /\.docx$/.test(atsisiusta), "sėkmė: " + b.textContent + " / " + atsisiusta);
+    } finally { P.toBlob = origBlob; LW.HTMLAnchorElement.prototype.click = origClick; }
+  });
+  lt.f.remove(); en.f.remove();
+}
+
 (async function(){
   await testaiAntraste();
   await testaiEpd();
+  await testaiBusenos();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
