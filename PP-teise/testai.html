@@ -578,6 +578,33 @@ async function testaiAdmin(){
     const r = await A.automatinePatikra(); lygu(r.ok, false); tiesa(/neįdiegta/.test(tekstas(d.getElementById("patikrosKlaida")))); tiesa(JSON.parse(A.eksportoSaltiniai()).patikros.some(p => p.pastaba === "RSS 404"), "vietinė patikra eksporte");
     const i = A.istorija(); tiesa(i.length >= 5 && i.every(x => x.data === DABAR && x.veiksmas), "istorija: " + i.length); tiesa(!Object.keys(localStorage).some(k => k.startsWith("ppteise.admin")), "tikri admin raktai neatsirado");
   });
+  /* Q3 (2026-09-26): AI juodraštis per bendrą būseną. Serveris imituojamas - nieko nesiunčiama. */
+  await testas("AI juodraštis: kol AI dirba - mygtukas išjungtas ir „Atšaukti“ (laukai nepakeisti); klaida - priežastis ir „Bandyti dar kartą“; JSON su ASCII kabute pataisomas", async () => {
+    const w = P.w, orig = w.GP_AI_PROXY.call, b = d.getElementById("aiBusena"), mygt = d.getElementById("aiJuodrastis");
+    try {
+      A.iForma(null);
+      d.getElementById("f_istrauka").value = "1 straipsnis. Įstatymo 5 straipsnio 2 dalį pakeisti taip.";
+      d.getElementById("f_santrauka").value = "Sena santrauka";
+      let signalas = null;
+      w.GP_AI_PROXY.call = o => new Promise(res => { signalas = o.signal;
+        o.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })); });
+      mygt.click();
+      await kol(() => signalas && b.querySelector("[data-gpb-atsaukti]"), "AI eiga su „Atšaukti“");
+      tiesa(mygt.disabled, "kol AI dirba, mygtukas turi būti išjungtas");
+      b.querySelector("[data-gpb-atsaukti]").click();
+      await kol(() => /Atšaukta - niekas nepakeista/.test(b.textContent), "atšaukta");
+      tiesa(signalas.aborted && !mygt.disabled, "užklausa nenutraukta arba mygtukas išjungtas"); lygu(d.getElementById("f_santrauka").value, "Sena santrauka", "laukai po atšaukimo");
+      w.GP_AI_PROXY.call = async () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Bandykite vėliau." });
+      mygt.click();
+      await kol(() => b.classList.contains("gpb--klaida"), "klaidos būsena");
+      tiesa(/Juodraščio parengti nepavyko: Serverio klaida \(500\)/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "klaida: " + b.textContent);
+      lygu(d.getElementById("f_santrauka").value, "Sena santrauka", "laukai po klaidos");
+      w.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null, text: '{"santrauka": "Keičiama „vidaus sandorio" sąvoka.", "kasPasikeite": "5 str. 2 d.", "veiksmas": "Peržiūrėti sutarčių projektus."}' });
+      b.querySelector("[data-gpb-kartoti]").click();
+      await kol(() => b.classList.contains("gpb--gerai"), "sėkmė");
+      lygu([d.getElementById("f_santrauka").value, d.getElementById("f_aiJuodrastis").checked], ["Keičiama „vidaus sandorio\" sąvoka.", true], "juodraštis įkeltas");
+    } finally { w.GP_AI_PROXY.call = orig; }
+  });
   P.f.remove();
 }
 
