@@ -28,6 +28,9 @@
 <script src="../shared/procurement-methods.js"></script>
 <!-- Teisės aktų nuorodos (GP_TEISE): straipsnis parenkamas pagal taikomą įstatymą (PĮ arba VPĮ). -->
 <script src="../shared/teises-nuorodos.js"></script>
+<!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadintas projektas nevirsta nauju -->
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 
 <style>
 /* ==========================================================================
@@ -717,6 +720,7 @@ a:hover { text-decoration: underline; }
 
     <!-- =============== VIEW: DASHBOARD =============== -->
     <section class="view active" data-view="dashboard">
+      <div id="infoPanelMount"></div>
       <div class="hero">
         <p style="opacity: 0.85; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 6px;">EPSO-G grupės derybinė platforma</p>
         <h2>Strategiškai pasiruošę deryboms, duomenų pagrindu, pagal VPĮ ir PĮ praktiką.</h2>
@@ -973,25 +977,22 @@ function defaultState() {
 // =================================================================
 // 3. STORAGE
 // =================================================================
+/* Q3 (shared/saugykla.js): iki 2026-09-26 neperskaitomas projektas tapdavo nauju tuščiu, o
+   kitas automatinis išsaugojimas jį negrįžtamai perrašydavo. Dabar sugadinto įrašo kopija
+   išsaugoma atskirai, viršuje - „būsena nežinoma“; nepavykęs įrašymas - nuolatinė juosta. */
 const storage = {
   save() {
-    try {
-      APP.state.project.updatedAt = new Date().toISOString();
-      localStorage.setItem(APP.storageKey, JSON.stringify(APP.state));
-      return true;
-    } catch (e) {
-      toast('Nepavyko išsaugoti: ' + e.message, 'error');
-      return false;
-    }
+    APP.state.project.updatedAt = new Date().toISOString();
+    const r = GP_SAUGYKLA.rasyk(APP.storageKey, APP.state);
+    if (r.ok) { GP_BUSENA.juostaSlepk('irasymas'); return true; }
+    GP_BUSENA.juosta({ raktas: 'irasymas', tipas: 'klaida', tekstas: GP_SAUGYKLA.pranesimas(r, 'Derybų projektas') });
+    return false;
   },
   load() {
-    try {
-      const raw = localStorage.getItem(APP.storageKey);
-      if (raw) APP.state = Object.assign(defaultState(), JSON.parse(raw));
-      else APP.state = defaultState();
-    } catch (e) {
-      console.error(e); APP.state = defaultState();
-    }
+    const r = GP_SAUGYKLA.skaityk(APP.storageKey, { tikrink: v => (v && typeof v === 'object' && !Array.isArray(v)) || 'netinkama projekto sandara' });
+    APP.state = r.busena === 'yra' ? Object.assign(defaultState(), r.reiksme) : defaultState();
+    if (r.busena === 'sugadinta' || r.busena === 'neprieinama')
+      GP_BUSENA.juosta({ raktas: 'skaitymas', tipas: 'nezinoma', tekstas: GP_SAUGYKLA.pranesimas(r, 'Derybų projektas') });
   },
   exportJSON() {
     const blob = new Blob([JSON.stringify(APP.state, null, 2)], { type: 'application/json' });
@@ -3169,5 +3170,35 @@ function init() {
 document.addEventListener('DOMContentLoaded', init);
 </script>
 
+<!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
+     shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
+<script src="../shared/gprocure-info-panel.js"></script>
+<script>
+(function () {
+  if (!window.GProcureInfoPanel || !document.getElementById("infoPanelMount")) return;
+  var INFO = { lt: {
+    title: "Kas tai ir kaip naudotis",
+    purpose: "Pasirengimas deryboms duomenų pagrindu: pasiūlymų palyginimas, ekonominio naudingumo vertinimas ir derybų strategija.",
+    stepsTitle: "Kaip naudotis",
+    steps: [
+      "<b>Pasirengimas:</b> pirkimo informacija, tiekėjai ir jų pasiūlymų importas.",
+      "<b>Analizė:</b> lyginamoji analizė ir ekonominio naudingumo (MEAT) vertinimas parodo, kur verta derėtis.",
+      "<b>Derybos:</b> strategija (alternatyva ir derybų zona), derybų sesijos eiga ir sprendimai.",
+      "<b>Eksportas:</b> Excel analizė ir spausdinama ataskaita (PDF)."
+    ],
+    noteTitle: "Duomenys",
+    note: "Pirkimo ir derybų duomenys saugomi <b>tik šioje naršyklėje</b> ir niekur nesiunčiami. Išvalius naršyklę jie dingsta - darykite atsarginę kopiją (portalo poraštėje - „Atsarginė kopija“).",
+    moreLabel: "Pagalba ir teisės"
+  } };
+  GProcureInfoPanel.mount({
+    target: "#infoPanelMount",
+    moduleId: "pp-negotiation",
+    defaultOpen: true,
+    getLang: function () { return "lt"; },
+    content: INFO,
+    onMore: function () { if (typeof go === 'function') go('help'); }
+  });
+})();
+</script>
 </body>
 </html>
