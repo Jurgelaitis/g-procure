@@ -36,7 +36,9 @@
 Tikrinama, kad AI teksto nekuria (tik šablono variantai arba reikšmės pažodžiui iš rengėjo dokumento), kiekvienas
 pasiūlymas turi pažodžiui rastą citatą ir šaltinį, niekas nepritaikoma be žmogaus, siunčiama tik paspaudus mygtuką
 ir tik per G-Procure tarpinę, numatoma vertė nesiunčiama. Modulis kraunamas rėmelyje, AI užklausos perimamos -
-į serverį nieko nesiunčiama. Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
+į serverį nieko nesiunčiama. Bendros pirkimo kortelės grupė (A1): kortelė užpildo tuščius laukus (pavadinimas - kilmininku
+be „pirkimas“), kitaip įvestų neperrašo, neįmanomas reikšmes įvardija, o kitą pirkimą modulyje radusi - klausia; kortelės
+laikomos tik atmintyje (?saugykla=testine). Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
   <span class="n blogai" id="n-blogai">0</span> krito
@@ -637,6 +639,78 @@ async function testaiBusenos(){
   });
 }
 
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26): modulis kortelę tik skaito. Atskiras rėmelis su ?saugykla=testine -
+   kortelės laikomos tik atmintyje, tikros naudotojo kortelės neliečiamos. */
+function modulisSuKortele(){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.addEventListener("load", () => res({ f: f, W: f.contentWindow, D: f.contentDocument }), { once: true });
+    f.src = "PP-SALYGOS.html?saugykla=testine&cb=" + Date.now() + Math.random();
+    document.body.appendChild(f);
+  });
+}
+const KORTELE = { pavadinimas: "Autotransformatorių 400/110 kV pirkimas", budas: "S-AK", verte: 1250000, objektas: "darbai", vykdytojas: "litgrid", rezimas: "PI" };
+const miegok = ms => new Promise(r => setTimeout(r, ms));
+async function testaiKortele(){
+  dabartine = grupe("Bendra pirkimo kortelė (A1)");
+
+  await testas("Pasirinkus kortelę: pavadinimas kilmininku be „pirkimas“, būdas, vertė ir objektas; būdas ir objektas nepažymimi „paliestais ranka“", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      tiesa(D.getElementById("gpk") && D.getElementById("gpk").nextElementSibling.id === "infoPanelMount", "juosta prieš informacinę skiltį");
+      const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(KORTELE)).kortele;
+      const api = W.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(k.id), "pasirinkta");
+      lygu([D.getElementById("pavadinimas").value, D.getElementById("budas").value, W.GP_MONEY.parseEUR(D.getElementById("verte").value),
+            D.querySelector("input[name=tipas]:checked").value], ["Autotransformatorių 400/110 kV", "S-AK", 1250000, "darbai"]);
+      lygu(W.eval("[PZ_RANKA.has('budas'), PZ_RANKA.has('tipas')]"), [false, false], "kortelės įrašyti - ne žmogaus pakeitimai");
+      const z = D.getElementById("gpk-zin").textContent;
+      tiesa(/Iš kortelės užpildyta: pavadinimas, būdas, vertė, objektas\./.test(z) && !/neįrašoma/.test(z) && !/Skiriasi/.test(z), z);
+    } finally { f.remove(); }
+  });
+
+  await testas("Neįmanomos reikšmės neįrašomos ir įvardijamos su priežastimi: pavadinimas be „pirkimas“, būdas be šablonų, mišrus objektas, kitas vykdytojas, VPĮ", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia({ pavadinimas: "Dujų apskaitos prietaisai", budas: "MV-NZ", objektas: "misrus",
+        vykdytojas: "epso-g", rezimas: "VPI" })).kortele;
+      const budas = D.getElementById("budas").value;
+      const api = W.eval("KORTELE"); api.atnaujink();
+      await api.pasirink(k.id);
+      lygu([D.getElementById("pavadinimas").value, D.getElementById("budas").value], ["", budas], "neįrašyta");
+      const z = D.getElementById("gpk-zin").textContent;
+      ["pavadinimas („Dujų apskaitos prietaisai“ - čia rašoma kilmininku be „pirkimas“",
+       "būdas („Mažos vertės pirkimas - neskelbiama apklausa žodžiu“ - šiam būdui sąlygų šablonų nėra)",
+       "objektas („Mišrus pirkimas“ - šablonuose - prekės, paslaugos arba darbai)",
+       "vykdytojas („UAB EPSO-G“ - sąlygų šablonai - tik LITGRID AB)", "režimas („VPĮ“ - šablonai - pagal PĮ)"]
+        .forEach(x => tiesa(z.indexOf(x) >= 0, "nėra: " + x + "\n" + z));
+    } finally { f.remove(); }
+  });
+
+  await testas("Modulyje jau įvestas kitas pirkimas: klausiama juostoje; „Ne“ - kortelė nepasirenkama ir niekas nekeičiama, „Taip“ - pildomi tik tušti laukai", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(KORTELE)).kortele;
+      const api = W.eval("KORTELE"); api.atnaujink();
+      const el = D.getElementById("pavadinimas");
+      el.value = "Kabelių"; el.dispatchEvent(new W.Event("input", { bubbles: true }));
+      const p = api.pasirink(k.id);
+      await miegok(30);
+      const z = D.getElementById("gpk-zin").textContent;
+      tiesa(/Modulyje jau įvestas kitas pirkimas „Kabelių“\. Pildyti tuščius laukus iš kortelės „Autotransformatorių 400\/110 kV pirkimas“\?/.test(z), z);
+      [...D.querySelectorAll("#gpk-zin button")].find(b => /^Ne,/.test(b.textContent)).click();
+      lygu(await p, false, "nepasirinkta");
+      lygu([el.value, D.getElementById("verte").value, D.getElementById("gpk-sel").value], ["Kabelių", "", ""], "niekas nepakeista");
+      const p2 = api.pasirink(k.id);
+      await miegok(30);
+      [...D.querySelectorAll("#gpk-zin button")].find(b => /^Taip,/.test(b.textContent)).click();
+      lygu(await p2, true, "pasirinkta");
+      lygu([el.value, W.GP_MONEY.parseEUR(D.getElementById("verte").value)], ["Kabelių", 1250000], "pavadinimas paliktas, tuščia vertė užpildyta");
+      tiesa(/Pavadinimas: modulyje „Kabelių pirkimas“, kortelėje „Autotransformatorių 400\/110 kV pirkimas“/.test(D.getElementById("gpk-zin").textContent), D.getElementById("gpk-zin").textContent);
+    } finally { f.remove(); }
+  });
+}
+
 /* Bendras dokumentų skaitymas - vienas failas (shared/), abu moduliai jį jungia. */
 async function testaiBendras(){
   dabartine = grupe("Bendras kodas");
@@ -656,6 +730,7 @@ async function testaiBendras(){
     await testaiEiga();
     await testaiBusenos();
     await testaiBendras();
+    await testaiKortele();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
