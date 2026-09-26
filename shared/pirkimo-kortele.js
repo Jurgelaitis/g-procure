@@ -412,7 +412,8 @@
 
   /* ================================================================ KORTELĖ MODULYJE
    * Naudotojo sprendimas (2026-09-26): kortelė kuriama tiesiai modulyje, be naujo skirtuko. Langas rodo, kas bus
-   * perimta iš modulio; pavadinimas redaguojamas (privalomas), netinkamos reikšmės neperkeliamos ir įvardijamos.
+   * perimta iš modulio; pavadinimas redaguojamas (privalomas), netinkamos reikšmės neperkeliamos ir įvardijamos; be
+   * modulio režimo žinomam vykdytojui siūlomas jo įprastas režimas (pažymėta, kad galioja skelbimo forma).
    * Įrašoma TIK paspaudus „Išsaugoti kortelę“ - ir tik kortelė: modulio darbas toliau nesaugomas. Daugiau laukų
    * (datos, BVPŽ, skelbimo PDF) - „Pildyti kortelių puslapyje“ (naujas skirtukas, kaip iki šiol).
    * GP_KORTELE.kurkLange(laukai, { modulis, onIssaugota }) -> Promise: kortelė | { atverta } | { blokuota } | null
@@ -433,6 +434,13 @@
     });
     var bazine = tuscia();
     neperkelta.forEach(function (n) { k[n.laukas] = bazine[n.laukas]; });
+    /* Režimo modulis neduoda, o vykdytojas žinomas - siūlomas jam įprastas režimas (kaip kortelių puslapyje, naudotojo
+       sprendimas 2026-09-26). Lange pažymima, kad tai pasiūlymas, ne modulio duomuo, ir kad galioja skelbimo forma. */
+    var siulomasRezimas = null;
+    if (!k.rezimas && k.vykdytojas) {
+      var vk = vykdytojas(k.vykdytojas);
+      if (vk && REZIMAI[vk.rezimas]) { k.rezimas = vk.rezimas; siulomasRezimas = vk; }
+    }
 
     var d = document.createElement("dialog");
     d.className = "gpk-dlg";
@@ -467,6 +475,14 @@
         dl.appendChild(dt); dl.appendChild(dd);
       });
       sar.appendChild(dl);
+    }
+    if (siulomasRezimas) {
+      var sr = document.createElement("p");
+      sr.className = "gpk-past";
+      sr.id = "gpk-dlg-rezimas";
+      sr.style.fontWeight = "400";
+      sr.textContent = t("dlgRezimas").replace("{r}", REZIMAI[k.rezimas][l]).replace("{v}", siulomasRezimas.pavadinimas);
+      sar.appendChild(sr);
     }
     if (neperkelta.length) {
       var np = document.createElement("p");
@@ -604,7 +620,8 @@
       dlgH: "Nauja pirkimo kortelė",
       dlgApie: "Kortelė bus išsaugota šioje naršyklėje (ji patenka į atsarginę kopiją), ir ją galės skaityti kiti įrankiai. Pats modulio darbas nesaugomas.",
       dlgPav: "Pirkimo pavadinimas", dlgIs: "Iš modulio perimama:", dlgIsM: "Iš modulio „{m}“ perimama:", dlgNieko: "Kitų duomenų modulyje dar nėra - juos galėsite įrašyti vėliau.",
-      dlgNeperkeliama: "Neperkeliama:", dlgDaugiau: "Pildyti kortelių puslapyje", dlgAtsaukti: "Atšaukti", dlgSaugoti: "Išsaugoti kortelę"
+      dlgNeperkeliama: "Neperkeliama:", dlgDaugiau: "Pildyti kortelių puslapyje", dlgAtsaukti: "Atšaukti", dlgSaugoti: "Išsaugoti kortelę",
+      dlgRezimas: "Siūlomas režimas: {r} - įprastas {v}. Galioja skelbimo forma: jei ji kitokia, pakeiskite kortelėje."
     },
     en: {
       zyme: "Procurement card", pirkimas: "Procurement card", be: "- none selected -",
@@ -624,7 +641,8 @@
       dlgH: "New procurement card",
       dlgApie: "The card will be saved in this browser (it is included in the backup) and other tools will be able to read it. The module's own work is not saved.",
       dlgPav: "Procurement title", dlgIs: "Taken from the module:", dlgIsM: "Taken from “{m}”:", dlgNieko: "There is no other data in the module yet - you can add it later.",
-      dlgNeperkeliama: "Not transferred:", dlgDaugiau: "Fill in on the cards page", dlgAtsaukti: "Cancel", dlgSaugoti: "Save card"
+      dlgNeperkeliama: "Not transferred:", dlgDaugiau: "Fill in on the cards page", dlgAtsaukti: "Cancel", dlgSaugoti: "Save card",
+      dlgRezimas: "Suggested regime: {r} - usual for {v}. The notice form prevails: if it differs, change it on the card."
     }
   };
   function t(k) { var l = kalba(); return (T[l] && T[l][k]) || T.lt[k] || k; }
