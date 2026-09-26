@@ -42,6 +42,8 @@ R14 (tiekėjo veiklos trukmė), IT taisyklės tik IT/IS pirkimui, žaliasis pirk
 aprašo 4 p. ir Metodikos 22 p., Word tiekėjams be vidinės informacijos. P1-12 grupė: klausimai, generavimas ir
 patikra gauna vieną pirkimo kontekstą (Metodikos 7.2, 7.6, 11 p.), jo pokytis patikrą daro pasenusia, pastabos
 grupuojamos pagal reikalavimą.
+Q3 grupė (2026-09-26): AI veiksmai rodo būseną vietoje (shared/busena.js) - klaida su priežastimi ir „Bandyti dar kartą“,
+„Atšaukti“ tikrai nutraukia užklausą, o prie mygtukų pasakyta, kas siunčiama į AI.
 Modulis nieko nesaugo, tad kraunamas rėmelyje ir tikrinamas tiesiai. AI užklausos perimamos - į serverį nieko nesiunčiama.
 Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
 
@@ -913,6 +915,117 @@ async function testaiKontekstas(){
   });
 }
 
+/* Q3 (2026-09-26): AI veiksmų būsenos per shared/busena.js. Anksčiau klaida buvo tik trumpas pranešimas
+   kampe (toast), o nutrūkus TS analizei būsena likdavo „AI analizuoja...“ visam laikui; atšaukti nebuvo kaip.
+   Serverio kvietimas imituojamas (W.GP_AI_PROXY.call) - į serverį nieko nesiunčiama. */
+const miegok = ms => new Promise(r => setTimeout(r, ms));
+async function laukTol(salyga){ for (let i = 0; i < 120 && !salyga(); i++) await miegok(25); return salyga(); }
+function pirmasZingsnis(entry){
+  W.eval("PPQ.entry = " + JSON.stringify(entry || "info") + "; PPQ.step = 1;");
+  W.switchView("wizard"); W.renderWizard();
+}
+async function testaiBusenos(){
+  dabartine = grupe("Veiksmų būsenos (Q3): klaida, atšaukimas, kas siunčiama į AI");
+
+  await testas("AI klaida 1 žingsnyje: priežastis vietoje ir „Bandyti dar kartą“, mygtukas vėl veikia (anksčiau - tik pranešimas kampe)", async ()=>{
+    W.callAI = ORIG.callAI;
+    pirkimas({ value: 100000, objectType: "Prekės" });
+    pirmasZingsnis("info");
+    const d = W.document;
+    W.GP_AI_PROXY.call = async () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Bandykite vėliau." });
+    try {
+      await W.submitStep1();
+      const b = d.getElementById("wizBusena");
+      tiesa(!b.hidden && b.classList.contains("gpb--klaida") && b.getAttribute("role") === "alert", "nėra klaidos būsenos: " + b.className);
+      tiesa(/Klausimų sugeneruoti nepavyko: Serverio klaida \(500\)/.test(b.textContent), "tekstas: " + b.textContent);
+      lygu(W.eval("PPQ.step"), 1, "žingsnis");
+      tiesa(!d.getElementById("step1-next").disabled, "mygtukas liko išjungtas");
+      const k = b.querySelector("[data-gpb-kartoti]");
+      tiesa(k, "nėra „Bandyti dar kartą“");
+      W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null,
+        text: '[{"id":"q1","question":"Ar įranga kritinė?","type":"text","hint":""}]' });
+      k.click();
+      tiesa(await laukTol(() => W.eval("PPQ.step") === 2), "po „Bandyti dar kartą“ nepereita į 2 žingsnį");
+      tiesa(d.getElementById("wizBusena").hidden, "pavykus klaidos būsena turi dingti");
+    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+  });
+
+  await testas("„Atšaukti“ nutraukia AI užklausą: signalas pasiekia serverio kvietimą, „Atšaukta - niekas nepakeista.“, duomenys nepakeisti", async ()=>{
+    W.callAI = ORIG.callAI;
+    pirkimas({ value: 100000, objectType: "Prekės" });
+    pirmasZingsnis("info");
+    const d = W.document;
+    let signalas = null;
+    W.GP_AI_PROXY.call = o => new Promise(res => {
+      signalas = o.signal;
+      if (o.signal) o.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" }));
+    });
+    try {
+      const vyksta = W.submitStep1();
+      tiesa(await laukTol(() => signalas), "serverio kvietimas negavo signalo");
+      const b = d.getElementById("wizBusena");
+      tiesa(b.classList.contains("gpb--ai") && /AI rengia patikslinimo klausimus/.test(b.textContent), "eigos būsena: " + b.textContent);
+      tiesa(d.getElementById("step1-next").disabled, "kol AI dirba, mygtukas turi būti išjungtas");
+      b.querySelector("[data-gpb-atsaukti]").click();
+      await vyksta;
+      tiesa(signalas.aborted, "užklausa nenutraukta");
+      tiesa(/Atšaukta - niekas nepakeista\./.test(b.textContent) && !b.classList.contains("gpb--klaida"), "po atšaukimo: " + b.textContent);
+      lygu([W.eval("PPQ.step"), W.eval("PPQ.questions.length"), d.getElementById("step1-next").disabled], [1, 0, false], "po atšaukimo");
+    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+  });
+
+  await testas("TS konteksto ištraukimas: nepavykus - priežastis vietoje, laukai nepakeisti; pakartojus - „Kontekstas ištrauktas“ (anksčiau „AI analizuoja...“ likdavo)", async ()=>{
+    W.callAI = ORIG.callAI;
+    pirkimas({ name: "Senas pavadinimas" });
+    pirmasZingsnis("upload");
+    const d = W.document;
+    d.getElementById("ts-paste").value = "Techninė specifikacija: pastotės įrangos priežiūra 24 mėn.";
+    W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null, text: "Atsiprašau, šio dokumento neanalizuosiu." });
+    try {
+      await W.extractContextFromTs();
+      const b = d.getElementById("extract-status");
+      tiesa(b.classList.contains("gpb--klaida") && /Konteksto ištraukti nepavyko: nepavyko nuskaityti AI atsakymo/.test(b.textContent), "klaida: " + b.textContent);
+      lygu(W.eval("PPQ.procurement.name"), "Senas pavadinimas", "laukai pakeisti nepavykus");
+      tiesa(!d.getElementById("extract-btn").disabled, "mygtukas liko išjungtas");
+      W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null,
+        text: JSON.stringify({ name: "Pastotės įrangos priežiūra", objectType: "Paslaugos (kita)", value: 50000, duration: "24 mėn.", desc: "Priežiūra." }) });
+      b.querySelector("[data-gpb-kartoti]").click();
+      tiesa(await laukTol(() => W.eval("PPQ.procurement.name") === "Pastotės įrangos priežiūra"), "pakartojus laukai neužpildyti");
+      const b2 = d.getElementById("extract-status");
+      tiesa(b2 && b2.classList.contains("gpb--gerai") && /Kontekstas ištrauktas/.test(b2.textContent), "po pakartojimo: " + (b2 && b2.textContent));
+    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+  });
+
+  await testas("Patikra: nepavykus išskaidyti reikalavimų - „Nėra ryšio su serveriu“ audito lange, mygtukas vėl veikia", async ()=>{
+    W.callAI = ORIG.callAI;
+    W.startEntry("check", "naujas");
+    const d = W.document;
+    d.getElementById("a-paste").value = "Tiekėjas per paskutinius 3 metus turi būti patiekęs panašių prekių.";
+    W.GP_AI_PROXY.call = async () => ({ ok: false, status: 0, text: "", raw: null, error: "Failed to fetch" });
+    try {
+      await W.startAudit();
+      const b = d.getElementById("audBusena");
+      tiesa(b.classList.contains("gpb--klaida") && /Reikalavimų išskaidyti nepavyko: Nėra ryšio su serveriu/.test(b.textContent), "klaida: " + b.textContent);
+      tiesa(!d.getElementById("aud-start").disabled, "mygtukas liko išjungtas");
+      lygu(W.eval("PPQ.requirements.length"), 0, "reikalavimai");
+    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+  });
+
+  await testas("Kas siunčiama į AI - pasakyta prie mygtuko: 1 žingsnyje ir audito lange, tekstas >= 4,5:1", async ()=>{
+    pirmasZingsnis("info");
+    const t1 = W.document.querySelector("#wizard-body .cite-ai");
+    tiesa(t1 && /numatoma verte/.test(t1.textContent) && /per G-Procure serverį į Claude API/.test(t1.textContent) && /Nesiųskite įslaptintos informacijos/.test(t1.textContent), "1 žingsnis: " + (t1 && t1.textContent));
+    W.startEntry("check", "naujas");
+    const t2 = W.document.querySelector("#view-audit .cite-ai");
+    tiesa(t2 && /numatoma verte/.test(t2.textContent) && /Claude API/.test(t2.textContent), "audito langas: " + (t2 && t2.textContent));
+    const rgb = W.getComputedStyle(t2).color.match(/\d+/g).map(Number);
+    const L = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const l = 0.2126 * L(rgb[0]) + 0.7152 * L(rgb[1]) + 0.0722 * L(rgb[2]);
+    tiesa(1.05 / (l + 0.05) >= 4.5, "kontrastas ant balto " + (1.05 / (l + 0.05)).toFixed(2));
+    W.startEntry("info", "naujas");
+  });
+}
+
 /* Įspėjimas uždarant (shared/neissaugotas-darbas.js): modulis nieko nesaugo, tad naršyklė klausia, jei po
    paskutinio Word atsisiuntimo ar naujo pirkimo pradžios pasikeitė darbo duomenys. Sintetinis beforeunload
    įvykis parodo, ar puslapis prašytų klausimo (defaultPrevented). */
@@ -951,6 +1064,7 @@ async function testaiIsejimas(){
     await testaiAuditasIrEksportas();
     await testaiPenktas();
     await testaiKontekstas();
+    await testaiBusenos();
     await testaiIsejimas();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
