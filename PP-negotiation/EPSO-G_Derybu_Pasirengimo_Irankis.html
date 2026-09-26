@@ -31,6 +31,10 @@
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadintas projektas nevirsta nauju -->
 <script src="../shared/busena.js"></script>
 <script src="../shared/saugykla.js"></script>
+<!-- Bendra pirkimo kortelė (A1): projekto duomenys pildomi iš kortelės -->
+<script src="../shared/money.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 
 <style>
 /* ==========================================================================
@@ -717,6 +721,8 @@ a:hover { text-decoration: underline; }
 
   <!-- MAIN CONTENT ====================================================== -->
   <main class="content">
+    <!-- Bendra pirkimo kortelė (A1) - virš visų vaizdų, kad matytųsi ir projekto vaizde -->
+    <div id="kortelesVieta"></div>
 
     <!-- =============== VIEW: DASHBOARD =============== -->
     <section class="view active" data-view="dashboard">
@@ -1010,6 +1016,7 @@ const storage = {
         const data = JSON.parse(r.result);
         APP.state = Object.assign(defaultState(), data);
         storage.save();
+        if (window.KORTELE) KORTELE.skirtumai(true);   // atvertas projektas - žmogaus darbas: kortelė tik palyginama
         cb && cb(true);
       } catch (e) {
         toast('Klaida atidarant failą: ' + e.message, 'error');
@@ -1021,6 +1028,7 @@ const storage = {
   reset() {
     APP.state = defaultState();
     localStorage.removeItem(APP.storageKey);
+    if (window.KORTELE) KORTELE.atsiek();          // naujas projektas - be pirkimo kortelės
   }
 };
 
@@ -3181,7 +3189,7 @@ document.addEventListener('DOMContentLoaded', init);
     purpose: "Pasirengimas deryboms duomenų pagrindu: pasiūlymų palyginimas, ekonominio naudingumo vertinimas ir derybų strategija.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Pasirengimas:</b> pirkimo informacija, tiekėjai ir jų pasiūlymų importas.",
+      "<b>Pasirengimas:</b> pirkimo informacija, tiekėjai ir jų pasiūlymų importas. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - pavadinimas, vykdytojas, režimas, vertė, būdas ir trukmė bus perimti į projektą.",
       "<b>Analizė:</b> lyginamoji analizė ir ekonominio naudingumo (MEAT) vertinimas parodo, kur verta derėtis.",
       "<b>Derybos:</b> strategija (alternatyva ir derybų zona), derybų sesijos eiga ir sprendimai.",
       "<b>Eksportas:</b> Excel analizė ir spausdinama ataskaita (PDF)."
@@ -3197,6 +3205,46 @@ document.addEventListener('DOMContentLoaded', init);
     getLang: function () { return "lt"; },
     content: INFO,
     onMore: function () { if (typeof go === 'function') go('help'); }
+  });
+})();
+</script>
+<script>
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). Projekto laukai (APP.state.project) pildomi iš kortelės: tušti
+   užpildomi, kitokie tik parodomi. Naujo, dar nepavadinto projekto numatytosios reikšmės (LITGRID, PĮ, 12 mėn.,
+   skelbiamos derybos) laikomos tuščiomis. Vertė kortelėje - be PVM: jei projekte vertė su PVM, ji neįrašoma. */
+(function () {
+  if (!window.GP_KORTELE || typeof APP === 'undefined') return;   // APP - const, ne window savybė
+  var ORG = { 'litgrid': 'AB „Litgrid"', 'amber-grid': 'AB „Amber Grid"', 'epso-g': 'UAB „EPSO-G"', 'energy-cells': 'UAB „Energy cells"' };
+  var P = function () { return APP.state.project; };
+  /* Dar nepavadintas projektas - jo numatytosios reikšmės laikomos tuščiomis. Pavadinimas pildomas paskutinis,
+     tad vėliau (jau su pavadinimu) žmogaus pakeistos reikšmės rodomos kaip skirtumai. */
+  function sviezias() { return !String(P().name || '').trim(); }
+  function dek(f, v) { P()[f] = v; P().updatedAt = new Date().toISOString(); storage.save(); render.all(); }
+  function orgId(tekstas) { for (var k in ORG) if (ORG[k] === tekstas) return k; return ''; }
+  window.KORTELE = GP_KORTELE.mount({
+    modulis: 'PP-negotiation',
+    vieta: '#kortelesVieta',
+    klaustiKitoPirkimo: true,
+    laukai: [
+      { kortele: 'vykdytojas', gauk: function () { return orgId(P().contractingEntity) || P().contractingEntity; },
+        i: function (v) { return ORG[v] ? v : null; }, is: function (s) { return ORG[s] ? s : undefined; },
+        numatyta: sviezias, dek: function (v) { dek('contractingEntity', ORG[v]); } },
+      { kortele: 'rezimas', gauk: function () { return P().law === 'VPI' ? 'VPI' : 'PI'; },
+        numatyta: sviezias, dek: function (v) { dek('law', v === 'VPI' ? 'VPI' : 'PSI'); } },
+      { kortele: 'verte', gauk: function () { return P().plannedValue > 0 ? String(P().plannedValue) : ''; },
+        i: function (v) { return P().vatIncluded ? null : String(v); }, is: function (s) { return parseFloat(s) > 0 ? parseFloat(s) : undefined; },
+        dek: function (v) { dek('plannedValue', Number(v)); }, neimanoma: 'projekte vertė nurodyta su PVM' },
+      { kortele: 'budas', gauk: function () { return P().procedureType || ''; },
+        i: function (v) { return GP_METHODS.toModule('pp-negotiation', v) || null; },
+        lygu: function (s, v) { return GP_METHODS.toModule('pp-negotiation', v) === s; },
+        is: function (s) { var m = GP_METHODS.fromLegacy('pp-negotiation', s); return m && m.statusas !== 'bazinis' ? m.id : undefined; },
+        numatyta: sviezias, dek: function (v) { dek('procedureType', v); },     // v - jau modulio kodas (i())
+        neimanoma: 'derybų įrankyje tokio būdo nėra' },
+      { kortele: 'trukmeMen', gauk: function () { return P().contractTermMonths > 0 ? String(P().contractTermMonths) : ''; },
+        i: function (v) { return String(v); }, is: function (s) { return parseInt(s, 10) > 0 ? parseInt(s, 10) : undefined; },
+        numatyta: sviezias, dek: function (v) { dek('contractTermMonths', Number(v)); } },
+      { kortele: 'pavadinimas', gauk: function () { return P().name || ''; }, dek: function (v) { dek('name', v); } }
+    ]
   });
 })();
 </script>
