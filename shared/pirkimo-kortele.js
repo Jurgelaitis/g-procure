@@ -293,6 +293,79 @@
     return out;
   }
 
+  /* ---------------------------------------------------------------- esami duomenys (A1 2 etapas)
+     PP-protocol pirkimai -> kortelės. PP-protocol saugo { "<pirkimo kortelės numeris>": pirkimas } (raktas
+     litgrid_procurements_v2); skaitoma per tą pačią saugyklą kaip kortelės (testuose - atmintinė). Perkeliama tik tai,
+     ką pirkimas turi, PP-protocol duomenys nekeičiami. Komisijai ir DocLogix kortelės datai kortelėje laukų nėra. */
+  var PROTOKOLO_RAKTAS = "litgrid_procurements_v2";
+  /* Būsena pagal parengtus protokolus - mažiausia, kurią jie įrodo. Visose PP-protocol sekose 1 protokolas -
+     organizavimas (sąlygų tvirtinimas), 2 - klausimai ir atsakymai (pirkimas paskelbtas), kiti - jau gauti
+     pasiūlymai ar paraiškos. Sutarties sudarymo protokolų sekose nėra - „Sudaryta sutartis“ pasirenka žmogus. */
+  function busenaIsProtokolu(pk) {
+    var p = pk && pk.protocols && typeof pk.protocols === "object" ? pk.protocols : {};
+    var atlikti = Object.keys(p).filter(function (id) { return p[id] && p[id].done; });
+    if (atlikti.some(function (id) { return !/^[A-Z]+[12]$/.test(id); })) return "vertinamas";
+    if (atlikti.some(function (id) { return /^[A-Z]+2$/.test(id); })) return "paskelbtas";
+    return "rengiamas";
+  }
+  function isProtokolo(pk, raktas) {
+    pk = pk && typeof pk === "object" ? pk : {};
+    var m = global.GP_METHODS && pk.type ? global.GP_METHODS.fromLegacy("pp-protocol", pk.type) : null;
+    var dalys = null;                            // nenurodyta (senuose įrašuose žymos nėra)
+    if (pk.parts_enabled === true) {
+      dalys = (Array.isArray(pk.parts) ? pk.parts : []).map(function (d) {
+        d = d || {};
+        var v = skaicius(d.ex);
+        return { pavadinimas: tekstas(d.name), verte: v > 0 ? v : null };
+      }).filter(function (d) { return d.pavadinimas || d.verte; });
+      if (!dalys.length) dalys = null;           // pažymėta „skaidomas“, bet dalių neįrašyta - nežinoma
+    } else if (pk.parts_enabled === false) dalys = [];
+    var v = skaicius(pk.val_ex), tr = sveikas(pk.terminas);
+    return {
+      pavadinimas: tekstas(pk.name), numeris: tekstas(pk.id || raktas), cvpisNr: tekstas(pk.cvp_nr),
+      vykdytojas: "litgrid", rezimas: "PI",      // PP-protocol - LITGRID AB komisijos protokolai pagal PĮ
+      objektas: ["prekes", "paslaugos", "darbai"].indexOf(pk.obj_type) >= 0 ? pk.obj_type : "",
+      budas: m ? m.id : "", verte: v > 0 ? v : null, trukmeMen: tr >= 1 && tr <= 600 ? tr : null,
+      dalys: dalys, busena: busenaIsProtokolu(pk), archyvuota: pk.archived === true
+    };
+  }
+  function vienodasNr(v) { return tekstas(v).toUpperCase().replace(/\s+/g, ""); }
+  function vienodasPav(v) { return tekstas(v).toLowerCase().replace(/\s+/g, " "); }
+  /* Perkėlimo peržiūra: { busena: yra|nera|sugadinta|neprieinama|korteles, r, eilutes: [{ raktas, kortele,
+     busena: naujas|yra|panasus|netinkamas, kita, priezastis }] }. „yra“ - kortelė tuo pačiu numeriu jau yra (antrą
+     kartą neperkeliama), „panasus“ - tas pats pavadinimas be numerio sutapimo (sprendžia žmogus). */
+  function protokoloPerkelimas(o) {
+    o = o || {};
+    if (!global.GP_SAUGYKLA) return { busena: "neprieinama", eilutes: [], r: { busena: "neprieinama", kodas: "neprieinama", klaida: "shared/saugykla.js neprijungtas" } };
+    var r = global.GP_SAUGYKLA.skaityk(PROTOKOLO_RAKTAS, { saugykla: saug(o),
+      tikrink: function (x) { return (x && typeof x === "object" && !Array.isArray(x)) || "netinkama įrašo sandara"; } });
+    if (r.busena !== "yra") return { busena: r.busena, eilutes: [], r: r };
+    var ks = skaityk(o);
+    if (ks.busena === "sugadinta" || ks.busena === "neprieinama") return { busena: "korteles", eilutes: [], r: ks.r };
+    var eilutes = [];
+    Object.keys(r.reiksme).forEach(function (raktas) {
+      var pk = r.reiksme[raktas];
+      if (!pk || typeof pk !== "object" || Array.isArray(pk)) return;
+      var k = isProtokolo(pk, raktas);
+      var e = { raktas: raktas, kortele: k, busena: "naujas", kita: null, priezastis: "", sukurta: tekstas(pk.createdAt) };
+      var nr = vienodasNr(k.numeris), pv = vienodasPav(k.pavadinimas);
+      ks.korteles.forEach(function (x) {
+        if (e.busena === "yra") return;
+        if (nr && vienodasNr(x.numeris) === nr) { e.busena = "yra"; e.kita = x; }
+        else if (e.busena === "naujas" && pv && vienodasPav(x.pavadinimas) === pv) { e.busena = "panasus"; e.kita = x; }
+      });
+      if (e.busena !== "yra") {
+        var kl = tikrink(k, "lt");
+        if (kl.length) { e.busena = "netinkamas"; e.priezastis = kl.map(function (x) { return x.zinute; }).join(" "); }
+      }
+      eilutes.push(e);
+    });
+    eilutes.sort(function (a, b) {
+      return a.sukurta !== b.sukurta ? (a.sukurta < b.sukurta ? 1 : -1) : (a.kortele.numeris < b.kortele.numeris ? -1 : 1);
+    });
+    return { busena: "yra", eilutes: eilutes, r: r };
+  }
+
   /* ---------------------------------------------------------------- pateikimas */
   function formatas(n) {
     if (!(n > 0)) return "";
@@ -309,7 +382,7 @@
     l = l || kalba();
     var d = [];
     if (k.verte > 0) d.push(formatas(k.verte) + " EUR");
-    if (k.budas) d.push(budoPav(k.budas, l));
+    if (k.budas && budoPav(k.budas, l)) d.push(budoPav(k.budas, l));   // be GP_METHODS - praleidžiama, ne tuščia vieta
     if (k.rezimas && REZIMAI[k.rezimas]) d.push(REZIMAI[k.rezimas][l]);
     var v = vykdytojas(k.vykdytojas);
     if (v) d.push(v.pavadinimas);
@@ -345,11 +418,17 @@
    *              is: s => s,                  // modulio reikšmė -> kortelės (kortelei kurti ir palyginti)
    *              numatyta: kortele => bool,   // dabartinė reikšmė - tik numatytoji (ne žmogaus)
    *              lygu: (modulio, korteles) => bool, // savas lyginimas, kai lauko forma kita
+   *              neimanoma: "..." | kv => "...", // kodėl reikšmė šiame modulyje neįrašoma (kai i() grąžina null)
    *              pastaba: "..." }],           // rodoma prie skirtumo (pvz. kas bus perskaičiuota)
    *   poTaikymo: laukai => {},                // modulis persipiešia (pvz. PP-qual vediklis)
    *   pries: kortele => true|false|Promise,   // modulis gali atsisakyti (pvz. pradėtas kitas pirkimas)
+   *   klaustiKitoPirkimo: true,               // modulyje kitas pavadinimas - klausti juostoje (be savo lango)
+   *   nerodoma: kortele => "..." | null,      // modulio vaizde laukų dar nėra (pvz. neatverta forma) - ką sakyti
    *   onPasirinkta: (kortele, rezultatas) => {}
    * })
+   * Grąžina { pasirinkta, pasirink, atsiek, atnaujink, skirtumai, pritaikyk } - pritaikyk() įrašo pasirinktą
+   * kortelę į ką tik atsiradusius laukus (pvz. atvėrus formą), skirtumai() tik perskaičiuoja (skirtumai(true) -
+   * laukai pakeisti ne iš kortelės, pvz. įkeltas juodraštis: „užpildyta iš kortelės“ nebesakoma).
    * Kortelės kuriamos ir keičiamos puslapyje pirkimu-korteles.html (atveriama naujame skirtuke,
    * tad modulio darbas nedingsta). Modulis, kuris nieko nesaugo, per šią juostą nieko ir neįrašo.
    * ==========================================================================================*/
@@ -407,7 +486,9 @@
       nepritaikoma: "Šiame modulyje neįrašoma:", pavKorteles: "Pirkimų kortelės",
       atnaujinta: "Kortelė pakeista kitame lange.", nerasta: "Pasirinktos kortelės nebėra (ji ištrinta ar pakeista kitame lange).",
       blokuota: "Naršyklė neleido atverti naujo skirtuko. Leiskite iššokančius langus šiai svetainei arba atverkite „Visos kortelės“.",
-      sukurta: "Kortelė sukurta ir pasirinkta.", archyvuota: "archyvuota"
+      sukurta: "Kortelė sukurta ir pasirinkta.", archyvuota: "archyvuota",
+      kitas1: "Modulyje jau įvestas kitas pirkimas", kitas2: "Pildyti tuščius laukus iš kortelės",
+      kitasTaip: "Taip, pildyti tuščius", kitasNe: "Ne, palikti kaip yra"
     },
     en: {
       zyme: "Procurement card", pirkimas: "Procurement card", be: "- none selected -",
@@ -421,7 +502,9 @@
       nepritaikoma: "Not used in this module:", pavKorteles: "Procurement cards",
       atnaujinta: "The card was changed in another window.", nerasta: "The selected card no longer exists (deleted or changed in another window).",
       blokuota: "The browser did not allow a new tab. Allow pop-ups for this site or open “All cards”.",
-      sukurta: "Card created and selected.", archyvuota: "archived"
+      sukurta: "Card created and selected.", archyvuota: "archived",
+      kitas1: "Another procurement is already entered here", kitas2: "Fill the empty fields from the card",
+      kitasTaip: "Yes, fill empty fields", kitasNe: "No, keep as is"
     }
   };
   function t(k) { var l = kalba(); return (T[l] && T[l][k]) || T.lt[k] || k; }
@@ -607,6 +690,9 @@
         x.appendChild(nuoroda(t("naudoti"), function () { pasirink(n.id, { pildyti: true }); }));
         return;
       }
+      /* Laukų šiame vaizde dar nėra - nei „sutampa“, nei skirtumų: nėra su kuo lyginti. */
+      var nr = o.nerodoma ? o.nerodoma(ctx.kortele) : null;
+      if (nr) { p(nr); return; }
       var pr = ctx.pr;
       if (!pr) return;
       if (pr.uzpildyta.length) {
@@ -639,8 +725,11 @@
         p(t("sutampa"));
       }
       if (pr.nepritaikoma.length) {
-        p(t("nepritaikoma") + " " + pr.nepritaikoma.map(function (b) { return mazaja(laukoPav(b.kortele)) + " („" + reiksmesTekstas(b.kortele, ctx.kortele[b.kortele]) + "“)"; }).join(", ") + ".")
-          .className = "gpk-past";
+        p(t("nepritaikoma") + " " + pr.nepritaikoma.map(function (b) {
+          var kv = ctx.kortele[b.kortele];
+          var pst = typeof b.neimanoma === "function" ? b.neimanoma(kv, ctx.kortele) : b.neimanoma;
+          return mazaja(laukoPav(b.kortele)) + " („" + reiksmesTekstas(b.kortele, kv) + "“" + (pst ? " - " + pst : "") + ")";
+        }).join(", ") + ".").className = "gpk-past";
       }
     }
 
@@ -691,13 +780,38 @@
       (kitas || sel).focus();
     }
 
+    /* Modulyje jau įvestas KITAS pirkimas (pavadinimas skiriasi)? Klausiama pačioje juostoje - be
+       confirm(), kuris stabdo puslapį. „Ne“ - kortelė nepasirenkama, niekas nekeičiama. */
+    function kitasPirkimas(k) {
+      if (!o.klaustiKitoPirkimo || (ctx.kortele && ctx.kortele.id === k.id) || !k.pavadinimas) return Promise.resolve(true);
+      var b = null;
+      laukai.forEach(function (x) { if (x.kortele === "pavadinimas") b = x; });
+      var dab = b ? modulioReiksme(b) : "";
+      if (!b || dab === undefined || dab === null || String(dab).trim() === "" || sutampa(b, dab, k.pavadinimas, k)) return Promise.resolve(true);
+      return new Promise(function (ats) {
+        var z = el.querySelector("#gpk-zin");
+        z.className = "gpk-zin gpk-zin--isp";
+        z.innerHTML = "";
+        var pp = document.createElement("p");
+        pp.textContent = t("kitas1") + " „" + String(dab).trim() + "“. " + t("kitas2") + " „" + k.pavadinimas + "“?";
+        z.appendChild(pp);
+        var pildyti = nuoroda(t("kitasTaip"), function () { ats(true); }, true);
+        var ne = nuoroda(t("kitasNe"), function () { ats(false); });
+        var e = document.createElement("p"); e.appendChild(pildyti); e.appendChild(document.createTextNode(" ")); e.appendChild(ne);
+        z.appendChild(e);
+        pildyti.focus();
+      });
+    }
+
     function pasirink(id, x) {
       x = x || {};
       var k = null;
       ctx.sar.korteles.forEach(function (y) { if (y.id === id) k = y; });
       if (!k) k = gauk(id);
       if (!k) { ctx.kortele = null; ctx.pr = null; ctx.info = t("nerasta"); piesk(); return Promise.resolve(false); }
-      return Promise.resolve(o.pries ? o.pries(k, ctx.kortele) : true).then(function (gerai) {
+      return kitasPirkimas(k).then(function (toliau) {
+        return toliau === false ? false : (o.pries ? o.pries(k, ctx.kortele) : true);
+      }).then(function (gerai) {
         if (gerai === false) { piesk(); return false; }
         ctx.kortele = k;
         ctx.info = x.info || "";
@@ -771,7 +885,12 @@
     piesk();
     var is = null;
     try { is = new URLSearchParams(global.location.search).get("kortele"); } catch (e) { is = null; }
-    if (is) pasirink(is, { pildyti: true });
+    /* Nuoroda „?kortele=“ (pvz. iš „Mano pirkimai“): dalis modulių savo būseną sukuria per DOMContentLoaded
+       (PP-negotiation, PP-ts, kaštų ir naudos analizė), o juosta jungiama anksčiau - tada kortelė parenkama po jų. */
+    if (is) {
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { pasirink(is, { pildyti: true }); });
+      else pasirink(is, { pildyti: true });
+    }
 
     /* Kalba: dvikalbiuose moduliuose juosta persijungia kartu su <html lang>. */
     if (typeof MutationObserver !== "undefined") {
@@ -784,7 +903,18 @@
       pasirink: pasirink,
       atsiek: atsiek,
       atnaujink: function () { atnaujink(false); },
-      skirtumai: function () { skirtumai(); zinute(); return ctx.pr; }
+      /* naujiDuomenys: modulio laukai pakeisti ne iš kortelės (pvz. įkeltas juodraštis) - „užpildyta“ nebegalioja. */
+      skirtumai: function (naujiDuomenys) {
+        if (naujiDuomenys && ctx.pr) { ctx.pr.uzpildyta = []; ctx.info = ""; }
+        skirtumai(); zinute(); return ctx.pr;
+      },
+      pritaikyk: function () {
+        if (!ctx.kortele) return null;
+        ctx.info = "";
+        ctx.pr = taikyk(ctx.kortele, false);
+        piesk();
+        return ctx.pr;
+      }
     };
   }
 
@@ -800,6 +930,7 @@
     objektoPav: function (id, l) { return pav(OBJEKTAI, id, l); },
     busenosPav: function (id, l) { return pav(BUSENOS, id, l); },
     puslapioAdresas: puslapioAdresas, atverkPuslapi: atverkPuslapi,
+    PROTOKOLO_RAKTAS: PROTOKOLO_RAKTAS, isProtokolo: isProtokolo, protokoloPerkelimas: protokoloPerkelimas,
     mount: mount
   };
 })(typeof window !== "undefined" ? window : this);

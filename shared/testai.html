@@ -1652,6 +1652,156 @@ async function testaiSkelbimasDarbastalis(){
   });
 }
 
+/* ==========================================================================
+   A1 2 etapas (2026-09-26): kortelę skaito ir kiti moduliai - juostos papildymai (laukai atsiranda vėliau,
+   neįmanomų reikšmių priežastys, kitas pirkimas modulyje), būdų adapteriai ir perkėlimas iš PP-protocol.
+   PP-protocol įrašai - netikroje saugykloje; kortelių puslapis - su ?saugykla=testine.
+   ========================================================================== */
+const PROTOKOLAS = {
+  "26PK-042": { id: "26PK-042", name: "Elektros tinklo apsaugos sistemos modernizavimas", val_ex: 1200000, obj_type: "darbai", terminas: "36",
+    parts_enabled: true, parts: [{ name: "Vakarai", ex: 700000, inc: 847000 }, { name: "Rytai", ex: 500000, inc: 605000 }], type: "atviras_tarptautinis",
+    cvp_nr: "712001", protocols: { A1: { done: true }, A2: { done: true }, A3a: { done: true } }, komisija: { chair: "P. P." }, createdAt: "2026-05-10" },
+  "26PK-050": { id: "26PK-050", name: "Transformatorių alyvos tyrimai", val_ex: 90000, obj_type: "paslaugos", terminas: "24", parts_enabled: false, parts: [],
+    type: "derybos_supaprastintas", protocols: { D1: { done: true } }, createdAt: "2026-06-01" },
+  "26PK-051": { id: "26PK-051", name: "Jau perkeltas", val_ex: 50000, type: "neskelbiamos_supaprastintas", protocols: {}, createdAt: "2026-06-02" },
+  "26PK-060": { id: "26PK-060", name: "Senas archyvuotas", val_ex: 30000, type: "atviras_supaprastintas", archived: true, parts_enabled: true, parts: [],
+    protocols: { A2: { done: true } }, createdAt: "2025-01-02" },
+  "26PK-070": { id: "26PK-070", name: "Pastočių valymas", val_ex: -5, type: "nezinomas", protocols: {}, createdAt: "2026-07-01" },
+  "26PK-080": { id: "26PK-080", name: "", val_ex: 1000, type: "atviras_supaprastintas", createdAt: "2026-07-02" },
+  "blogas": "ne pirkimas"
+};
+async function testaiKortele2(){
+  dabartine = grupe("Pirkimo kortelė kituose moduliuose ir perkėlimas iš PP-protocol (A1 2 etapas)");
+
+  await testas("Juosta: kol modulio laukų nėra - sakoma, kur jie bus (ne „sutampa“); pritaikyk() pildo atsiradusius, skirtumai(true) - „užpildyta“ nebesakoma", async ()=>{
+    const { f, w, d, K } = await korteleRemas('<div id="infoPanelMount"></div><div id="forma"></div>');
+    try {
+      K.naudokSaugykla(netikraSaugykla({}));
+      const k = K.issaugok(K.tuscia({ pavadinimas: "Transformatoriai", verte: 1000 })).kortele;
+      let yra = false;
+      const api = K.mount({ modulis: "Testas", nerodoma: () => yra ? null : "Pasirinkite formą.",
+        laukai: [{ kortele: "pavadinimas", el: "#f-pav" }, { kortele: "verte", el: "#f-v", i: v => String(v), is: s => parseFloat(s) || undefined }] });
+      await api.pasirink(k.id);
+      lygu(d.getElementById("gpk-zin").textContent, "Pasirinkite formą.", "be laukų");
+      d.getElementById("forma").innerHTML = '<input id="f-pav"><input id="f-v">';
+      yra = true;
+      const r = api.pritaikyk();
+      lygu([d.getElementById("f-pav").value, d.getElementById("f-v").value, r.uzpildyta.length], ["Transformatoriai", "1000", 2], "atsiradę laukai užpildyti");
+      tiesa(/Iš kortelės užpildyta: pavadinimas, vertė/.test(d.getElementById("gpk-zin").textContent), d.getElementById("gpk-zin").textContent);
+      d.getElementById("f-v").value = "2000";                        // pvz. įkeltas juodraštis
+      api.skirtumai(true);
+      const z = d.getElementById("gpk-zin").textContent;
+      tiesa(/Skiriasi nuo kortelės/.test(z) && /Vertė: modulyje „2 000 EUR“, kortelėje „1 000 EUR“/.test(z) && !/užpildyta/.test(z), z);
+      yra = false; api.skirtumai();
+      lygu(d.getElementById("gpk-zin").textContent, "Pasirinkite formą.", "laukai vėl dingo");
+      K.naudokSaugykla(null);
+    } finally { f.remove(); }
+  });
+
+  await testas("Neįmanomos reikšmės priežastis (tekstas ar funkcija); kitas pirkimas modulyje - klausiama juostoje, „Ne“ - nepasirenkama ir nekeičiama", async ()=>{
+    const { f, w, d, K } = await korteleRemas('<div id="infoPanelMount"></div><input id="f-pav" value="Mano pirkimas"><input id="f-v">');
+    try {
+      K.naudokSaugykla(netikraSaugykla({}));
+      const k = K.issaugok(K.tuscia({ pavadinimas: "Kortelės pirkimas", verte: 5000, vykdytojas: "epso-g", budas: "MV-NZ" })).kortele;
+      const api = K.mount({ modulis: "Testas", klaustiKitoPirkimo: true, laukai: [
+        { kortele: "pavadinimas", el: "#f-pav" }, { kortele: "verte", el: "#f-v", i: v => String(v), is: s => parseFloat(s) || undefined },
+        { kortele: "vykdytojas", gauk: () => "litgrid", i: v => v === "litgrid" ? v : null, dek: () => {}, neimanoma: "tik LITGRID" },
+        { kortele: "budas", gauk: () => "", i: () => null, dek: () => {}, neimanoma: v => "būdo " + v + " nėra" } ] });
+      const p1 = api.pasirink(k.id); await lauk(20);
+      tiesa(/Modulyje jau įvestas kitas pirkimas „Mano pirkimas“\. Pildyti tuščius laukus iš kortelės „Kortelės pirkimas“\?/.test(d.getElementById("gpk-zin").textContent), d.getElementById("gpk-zin").textContent);
+      lygu(d.activeElement.textContent, "Taip, pildyti tuščius", "fokusas - atsakyme");
+      [...d.querySelectorAll("#gpk-zin button")].find(b => /^Ne,/.test(b.textContent)).click();
+      lygu([await p1, api.pasirinkta(), d.getElementById("f-v").value, d.getElementById("gpk-sel").value], [false, null, "", ""], "nepasirinkta, nekeista");
+      const p2 = api.pasirink(k.id); await lauk(20);
+      [...d.querySelectorAll("#gpk-zin button")].find(b => /^Taip,/.test(b.textContent)).click();
+      lygu([await p2, d.getElementById("f-pav").value, d.getElementById("f-v").value], [true, "Mano pirkimas", "5000"], "tik tušti");
+      const z = d.getElementById("gpk-zin").textContent;
+      tiesa(z.indexOf("vykdytojas („UAB EPSO-G“ - tik LITGRID)") >= 0 && z.indexOf("būdas („Mažos vertės pirkimas - neskelbiama apklausa žodžiu“ - būdo MV-NZ nėra)") >= 0, z);
+      const p3 = api.pasirink(k.id);                                   // ta pati kortelė - neklausiama
+      lygu(await p3, true, "ta pati kortelė");
+      K.naudokSaugykla(null);
+    } finally { f.remove(); }
+  });
+
+  await testas("Būdų adapteriai: PP-report (mažos vertės apklausos) ir PP-cost-benefit (procedūros be režimo) - kortelės kodas į modulio reikšmę ir atgal", async ()=>{
+    const { f, w } = await korteleRemas();
+    try {
+      const M = w.GP_METHODS;
+      lygu(["MV-NZ", "MV-NR", "MV-SAB", "MV-SAD", "T-AK", "MV"].map(x => M.toModule("pp-report", x)),
+           ["Neskelbiama apklausa žodžiu", "Neskelbiama apklausa raštu", "Skelbiama apklausa", "Skelbiama apklausa", null, null]);
+      lygu(["Neskelbiama apklausa žodžiu", "Neskelbiama apklausa raštu", "Skelbiama apklausa"].map(x => M.fromLegacy("pp-report", x).id), ["MV-NZ", "MV-NR", "MV-SAB"]);
+      lygu(["T-AK", "S-SD", "ND", "RK", "KD", "IP", "MV-NR", "DPS"].map(x => M.toModule("pp-cost-benefit", x)),
+           ["Atviras konkursas", "Skelbiamos derybos", "Neskelbiamos derybos", "Ribotas konkursas", "Konkurencinis dialogas", "Inovacijų partnerystė", null, null]);
+      ["Atviras konkursas", "Ribotas konkursas", "Skelbiamos derybos", "Konkurencinis dialogas", "Inovacijų partnerystė", "Neskelbiamos derybos"]
+        .forEach(x => lygu(M.toModule("pp-cost-benefit", M.fromLegacy("pp-cost-benefit", x).id), x, "atgal: " + x));
+    } finally { f.remove(); }
+  });
+
+  await testas("PP-protocol pirkimai -> kortelės: laukai, būsena pagal protokolus, dalys, dublikatai pagal numerį ir pavadinimą, netinkami; neperskaitomi - ne „nėra“", async ()=>{
+    const { f, K } = await korteleRemas();
+    try {
+      const st = netikraSaugykla({ "litgrid_procurements_v2": JSON.stringify(PROTOKOLAS) }), o = { saugykla: st };
+      K.issaugok(K.tuscia({ pavadinimas: "Jau perkeltas (kortelė)", numeris: " 26pk-051 " }), o);
+      K.issaugok(K.tuscia({ pavadinimas: "Transformatorių  alyvos tyrimai" }), o);
+      const p = K.protokoloPerkelimas(o);
+      lygu([p.busena, p.eilutes.map(e => e.raktas + ":" + e.busena)],
+        ["yra", ["26PK-080:netinkamas", "26PK-070:naujas", "26PK-051:yra", "26PK-050:panasus", "26PK-042:naujas", "26PK-060:naujas"]], "eilutės (naujausios pirmos)");
+      const e = p.eilutes.find(x => x.raktas === "26PK-042").kortele;
+      lygu([e.pavadinimas, e.numeris, e.vykdytojas, e.rezimas, e.verte, e.objektas, e.budas, e.trukmeMen, e.cvpisNr, e.dalys, e.busena, e.archyvuota],
+        ["Elektros tinklo apsaugos sistemos modernizavimas", "26PK-042", "litgrid", "PI", 1200000, "darbai", "T-AK", 36, "712001",
+         [{ pavadinimas: "Vakarai", verte: 700000 }, { pavadinimas: "Rytai", verte: 500000 }], "vertinamas", false]);
+      tiesa(!("komisija" in e), "komisija neperkeliama");
+      const b = x => p.eilutes.find(y => y.raktas === x).kortele;
+      lygu([b("26PK-050").dalys, b("26PK-050").busena, b("26PK-060").dalys, b("26PK-060").busena, b("26PK-060").archyvuota, b("26PK-051").dalys],
+           [[], "rengiamas", null, "paskelbtas", true, null], "neskaidomas / pažymėta be dalių / nenurodyta; būsena");
+      lygu([b("26PK-070").verte, b("26PK-070").budas], [null, ""], "neigiama vertė ir nežinomas būdas - neišgalvojami, kortelė vis tiek tinkama");
+      tiesa(/Įrašykite pirkimo pavadinimą/.test(p.eilutes.find(y => y.raktas === "26PK-080").priezastis), "be pavadinimo - netinkamas");
+      lygu(p.eilutes.find(y => y.raktas === "26PK-051").kita.pavadinimas, "Jau perkeltas (kortelė)", "numeris sutampa nepaisant raidžių dydžio ir tarpų");
+      lygu(K.protokoloPerkelimas({ saugykla: netikraSaugykla({}) }).busena, "nera");
+      const sug = K.protokoloPerkelimas({ saugykla: netikraSaugykla({ "litgrid_procurements_v2": "{sugadinta" }) });
+      lygu([sug.busena, sug.eilutes.length], ["sugadinta", 0], "neperskaitoma - ne „nėra“");
+      lygu(K.protokoloPerkelimas({ saugykla: netikraSaugykla({ "litgrid_procurements_v2": "{}", "gprocure.korteles": "{" }) }).busena, "korteles", "neperskaitomos kortelės");
+      lygu(st._d["litgrid_procurements_v2"], JSON.stringify(PROTOKOLAS), "PP-protocol įrašas nepakeistas");
+    } finally { f.remove(); }
+  });
+
+  await testas("Kortelių puslapis: „Perkelti iš PP-protocol“ - tik su naujais; peržiūra, archyvuoti nepažymėti, būsena keičiama, antrą kartą nekuriama, PP-protocol nepakeistas", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id), K = w.GP_KORTELE;
+      tiesa($("isProtokolo").hidden, "be PP-protocol duomenų mygtuko nėra");
+      const st = netikraSaugykla({ "litgrid_procurements_v2": JSON.stringify(PROTOKOLAS) });
+      K.naudokSaugykla(st);
+      K.issaugok(K.tuscia({ pavadinimas: "Jau perkeltas (kortelė)", numeris: "26PK-051" }));
+      w.dispatchEvent(new w.StorageEvent("storage", { key: "litgrid_procurements_v2" }));
+      lygu([$("isProtokolo").hidden, $("isProtokolo").textContent], [false, "Perkelti iš PP-protocol (4)"], "skaičiuojami tik perkeliami");
+      $("isProtokolo").click();
+      tiesa($("perkelimas").open && $("perkelimas").hasAttribute("data-darbas-ne"), "peržiūra atverta");
+      const eil = () => [...d.querySelectorAll("#perkelimasSarasas tbody tr")];
+      const pagal = t => eil().find(tr => tr.textContent.indexOf(t) >= 0);
+      lygu(eil().map(tr => { const c = tr.querySelector("input"); return (c.checked ? "x" : "-") + (c.disabled ? "!" : ""); }), ["-!", "x", "-!", "x", "x", "-"],
+           "pažymėti tik nauji, neperkeliami išjungti, archyvuotas nepažymėtas");
+      tiesa(/tuo pačiu numeriu - neperkeliama/.test(pagal("26PK-051").textContent) && /bus archyvuota/.test(pagal("26PK-060").textContent), "pastabos");
+      lygu($("perkVykdyti").textContent, "Perkelti pažymėtus (3)");
+      const sel = pagal("26PK-042").querySelector("select");
+      lygu(sel.value, "vertinamas", "būsena pagal protokolus");
+      sel.value = "sutartis"; sel.dispatchEvent(new w.Event("change", { bubbles: true }));
+      $("perkelimasForm").requestSubmit();
+      tiesa(!$("perkelimas").open && /Iš PP-protocol perkelta kortelių: 3\. PP-protocol duomenys nepakeisti\./.test($("busena").textContent), $("busena").textContent);
+      const k = K.skaityk().korteles.find(x => x.numeris === "26PK-042");
+      lygu([k.busena, k.verte, k.dalys.length, k.vykdytojas], ["sutartis", 1200000, 2, "litgrid"], "kortelė");
+      lygu($("isProtokolo").textContent, "Perkelti iš PP-protocol (1)", "liko neperkeltas archyvuotas");
+      $("isProtokolo").click();
+      lygu(eil().filter(tr => /tuo pačiu numeriu/.test(tr.textContent)).length, 4, "antrą kartą - jau yra");
+      $("perkAtsaukti").click();
+      lygu([K.skaityk().korteles.length, st._d["litgrid_procurements_v2"]], [4, JSON.stringify(PROTOKOLAS)], "kortelių 4, PP-protocol nepakeistas");
+      K.naudokSaugykla(null);
+    } finally { fr.remove(); }
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
@@ -1664,6 +1814,7 @@ async function testaiSkelbimasDarbastalis(){
   await testaiSaugykla();
   await testaiKortele();
   await testaiSkelbimasDarbastalis();
+  await testaiKortele2();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();

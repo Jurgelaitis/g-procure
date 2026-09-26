@@ -199,6 +199,19 @@
       'MV':'small_value','MV-NZ':'small_value','MV-NR':'small_value','MV-SAB':'small_value','MV-SAD':'small_value',
       'PS':'framework',
     },
+    /* pp-report (LITGRID mazos vertes pazymos): pasirinkimo reiksme - tekstas. Skelbiama apklausa
+       viena abiem variantams; ar derybos vyko - atskiras pazymos klausimas. */
+    /* pp-cost-benefit (kastu ir naudos analize): procedura - pasirinkimo tekstas be rezimo. */
+    'pp-cost-benefit': {
+      'AK':'Atviras konkursas','S-AK':'Atviras konkursas','T-AK':'Atviras konkursas','RK':'Ribotas konkursas',
+      'SD':'Skelbiamos derybos','S-SD':'Skelbiamos derybos','T-SD':'Skelbiamos derybos',
+      'ND':'Neskelbiamos derybos','S-ND':'Neskelbiamos derybos','T-ND':'Neskelbiamos derybos',
+      'KD':'Konkurencinis dialogas','IP':'Inovacijų partnerystė',
+    },
+    'pp-report': {
+      'MV-NZ':'Neskelbiama apklausa žodžiu','MV-NR':'Neskelbiama apklausa raštu',
+      'MV-SAB':'Skelbiama apklausa','MV-SAD':'Skelbiama apklausa',
+    },
   };
 
   /* Laisvo teksto atpazinimas (pp-plan p.budas, pp-report pirkimoBudas). */
