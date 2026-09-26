@@ -30,7 +30,8 @@
 protokolų seką, protokolo Word failas susigeneruoja su bendru stiliumi (iki 2026-09-26 pagrindinis protokolas vienintelis
 naudojo „styles“, tad Pages prarasdavo lygiuotę), nepavykus protokolui pranešimai nebekuriami ir nerodoma „Sukurta“,
 audito žurnalas pildomas, o neperskaitomi pirkimų duomenys nevirsta „dar nėra pirkimų“. Tikri naudotojo duomenys
-įsimenami prieš testus ir atkuriami po jų (shared/testu-apsauga.js).</div>
+įsimenami prieš testus ir atkuriami po jų (shared/testu-apsauga.js). Bendros pirkimo kortelės grupė (A1): kortelė pildo tik
+naujo pirkimo vedlį (esami pirkimai nekeičiami), juosta rodoma sąraše ir vedlyje; kortelės - tik atmintyje (?saugykla=testine).</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
   <span class="n blogai" id="n-blogai">0</span> krito
@@ -172,6 +173,64 @@ async function testaiBusenos(){
   });
 }
 
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). Rėmelis su ?saugykla=testine - kortelės tik atmintyje. */
+function modulisSuKortele(){
+  if (remas) remas.remove();
+  if (!localStorage.getItem("litgrid_user_profile_v1")) localStorage.setItem("litgrid_user_profile_v1", JSON.stringify({ name: "Testo Naudotojas", email: "" }));
+  return new Promise(res => {
+    const f = remas = document.createElement("iframe");
+    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(300); res(); }, { once: true });
+    f.src = "LITGRID_Generatorius_v3.html?saugykla=testine&cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+async function testaiKortele(){
+  grupe("Bendra pirkimo kortelė (A1)");
+  const KORT = { pavadinimas: "Relinės apsaugos įrangos pirkimas", numeris: "26PK-077", cvpisNr: "712999", vykdytojas: "litgrid", rezimas: "PI", verte: 800000,
+    objektas: "prekes", budas: "T-SD", trukmeMen: 24, dalys: [{ pavadinimas: "Vilniaus TP", verte: 500000 }, { pavadinimas: "Kauno TP", verte: 300000 }] };
+
+  await testas("Juosta - sąraše ir naujo pirkimo vedlyje; sąraše kortelė laukia; atvėrus vedlį - numeris, pavadinimas, vertė, objektas, trukmė, dalys, būdas, CVP IS Nr.", async () => {
+    await modulisSuKortele();
+    const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(KORT)).kortele;
+    W.KORTELE.atnaujink();
+    tiesa(!D.getElementById("kortelesVieta").hidden && D.getElementById("kortelesVieta").contains(D.getElementById("gpk")), "juosta sąraše");
+    await W.KORTELE.pasirink(k.id);
+    lygu([D.getElementById("gpk-zin").textContent, D.getElementById("new-pk-name").value],
+         ["Kortelės duomenys įrašomi kuriant naują pirkimą („+ Naujas pirkimas“); esami pirkimai iš kortelės nekeičiami.", ""], "sąraše - tik laukia");
+    W.showPage("page-new-pk");
+    const v = id => D.getElementById(id).value;
+    lygu([v("new-pk-nr"), v("new-pk-name"), v("new-pk-val-ex"), v("new-pk-val-inc"), D.querySelector('input[name="new-obj-type"]:checked').value, v("new-pk-terminas"),
+          D.getElementById("new-pk-parts").checked, D.querySelector(".type-card.selected").dataset.type, v("new-cvp-nr")],
+         ["26PK-077", KORT.pavadinimas, "800000", "968000.00", "prekes", "24", true, "derybos_tarptautinis", "712999"]);
+    lygu([...D.querySelectorAll("#new-parts-list > div")].map(r => [r.querySelector(".part-name").value, r.querySelector(".part-ex").value, r.querySelector(".part-inc").value]),
+         [["Vilniaus TP", "500000", "605000.00"], ["Kauno TP", "300000", "363000.00"]], "dalys su PVM");
+    tiesa(/Iš kortelės užpildyta: numeris, vertė, objektas, sutarties trukmė, dalys, būdas, CVP IS numeris, pavadinimas\./.test(D.getElementById("gpk-zin").textContent), D.getElementById("gpk-zin").textContent);
+    W.showPage("page-detail");
+    tiesa(D.getElementById("kortelesVieta").hidden, "pirkimo lape juostos nėra");
+  });
+
+  await testas("Vedlyje jau įvestas kitas pirkimas: klausiama; „Taip“ - pildomi tik tušti; būdas be protokolų sekos ir bazinis būdas įvardijami", async () => {
+    await modulisSuKortele();
+    W.showPage("page-new-pk");
+    const nm = D.getElementById("new-pk-name"); nm.value = "Kitas pirkimas"; nm.dispatchEvent(new W.Event("input", { bubbles: true }));
+    const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORT, { budas: "MV-NR" }))).kortele;
+    W.KORTELE.atnaujink();
+    const pr = W.KORTELE.pasirink(k.id); await lauk(30);
+    tiesa(/Modulyje jau įvestas kitas pirkimas „Kitas pirkimas“/.test(D.getElementById("gpk-zin").textContent), D.getElementById("gpk-zin").textContent);
+    [...D.querySelectorAll("#gpk-zin button")].find(b => /^Taip,/.test(b.textContent)).click();
+    await pr;
+    lygu([nm.value, D.getElementById("new-pk-nr").value, D.querySelector('input[name="new-obj-type"]:checked').value], ["Kitas pirkimas", "26PK-077", "paslaugos"],
+         "pavadinimas ir (jau nebe numatytasis) objektas palikti, tuščias numeris užpildytas");
+    let z = D.getElementById("gpk-zin").textContent;
+    tiesa(/Objektas: modulyje „Paslaugos“, kortelėje „Prekės“/.test(z) && z.indexOf("būdas („Mažos vertės pirkimas - neskelbiama apklausa raštu“ - mažos vertės pirkimams protokolų sekų nėra)") >= 0, z);
+    const k2 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia({ pavadinimas: "Kitas pirkimas", budas: "AK" })).kortele;
+    W.KORTELE.atnaujink();
+    await W.KORTELE.pasirink(k2.id);
+    z = D.getElementById("gpk-zin").textContent;
+    tiesa(z.indexOf("būdas („Atviras konkursas“ - kortelėje nenurodyta, tarptautinis ar supaprastintas)") >= 0, z);
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -179,6 +238,7 @@ async function testaiBusenos(){
     await testaiPuslapis();
     await testaiKelias();
     await testaiBusenos();
+    await testaiKortele();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

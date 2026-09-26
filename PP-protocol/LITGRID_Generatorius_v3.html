@@ -62,6 +62,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--epso-graphite-5);c
 }
 /* ─── LAYOUT ─── */
 .page{max-width:960px;margin:24px auto;padding:0 16px;display:none}
+/* Pirkimo kortelės juosta (A1) - puslapių plotyje, virš sąrašo ir naujo pirkimo vedlio */
+.korteles-vieta{max-width:960px;margin:24px auto -8px;padding:0 16px}
+.korteles-vieta .gpk{margin-bottom:0}
 .page.active{display:block}
 /* ─── CARDS ─── */
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden}
@@ -340,6 +343,10 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
 <script src="../shared/saugykla.js"></script>
 <!-- Pirkimo būdų taksonomija - vienas tiesos šaltinis (režimo derivacija, darnos patikra) -->
 <script src="../shared/procurement-methods.js"></script>
+<!-- Bendra pirkimo kortelė (A1): naujo pirkimo vedlys pildomas iš kortelės -->
+<script src="../shared/money.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 </head>
 <body>
 <script src="../shared/portal-link.js"></script>
@@ -378,6 +385,9 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
   </div>
   <nav class="kelias" id="breadcrumb" aria-label="Kelias"></nav>
 </header>
+
+<!-- Bendra pirkimo kortelė (A1): juosta rodoma pirkimų sąraše ir naujo pirkimo vedlyje (showPage) -->
+<div id="kortelesVieta" class="korteles-vieta"></div>
 
 <!-- ══════════════════════════ PAGE: DASHBOARD ══════════════════════════ -->
 <div class="page active" id="page-dashboard">
@@ -1431,6 +1441,10 @@ function showPage(id) {
   updateBreadcrumb(id);
   if (id === 'page-dashboard') renderDashboard();
   if (id === 'page-detail') renderDetail(currentPkId);
+  // Pirkimo kortelės juosta (A1): matoma sąraše ir naujo pirkimo vedlyje; vedlį kortelė pildo jį atvėrus
+  const kv = document.getElementById('kortelesVieta');
+  if (kv) kv.hidden = !(id === 'page-dashboard' || id === 'page-new-pk');
+  if (window.KORTELE) { if (id === 'page-new-pk') KORTELE.pritaikyk(); else KORTELE.skirtumai(); }
 }
 
 function updateBreadcrumb(page) {
@@ -5874,7 +5888,7 @@ ensureUserProfile();   // pirmo paleidimo metu paprasyti vardo/el. pasto (auditu
     purpose: "Pirkimų komisijos sprendimų centras: protokolai, pranešimai tiekėjams ir audito žurnalas kiekvienam pirkimui.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Sukurkite pirkimą</b> („+ Naujas pirkimas“) arba nukopijuokite esamą pagal šabloną.",
+      "<b>Sukurkite pirkimą</b> („+ Naujas pirkimas“) arba nukopijuokite esamą pagal šabloną. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - naujo pirkimo vedlio tušti laukai (numeris, pavadinimas, vertė, objektas, trukmė, dalys, būdas, CVP IS Nr.) bus užpildyti iš jos; esami pirkimai iš kortelės nekeičiami.",
       "<b>Atverkite pirkimą</b> - matysite jo tipui būdingą protokolų seką.",
       "<b>Užpildykite protokolą</b> ir sugeneruokite Word; kartu galima sukurti ir pranešimus tiekėjams.",
       "<b>Sekite eigą:</b> antraštėje - terminų skaičiuoklė, audito žurnalas, Excel suvestinė ir atsarginė kopija."
@@ -5890,6 +5904,102 @@ ensureUserProfile();   // pirmo paleidimo metu paprasyti vardo/el. pasto (auditu
     getLang: function () { return "lt"; },
     content: INFO,
     onMore: function () { if (typeof openHelp === 'function') openHelp(); }
+  });
+})();
+</script>
+<script>
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). Kortelė pildo NAUJO pirkimo vedlį - atvėrus „+ Naujas pirkimas“
+   (showPage -> KORTELE.pritaikyk()): tušti ir numatytieji laukai (objektas „Paslaugos“, būdas „Tarptautinis - Atviras
+   konkursas“, neskaidomas) - kol pavadinimas tuščias ir žmogus jų nekeitė; kitokie tik parodomi su „Taikyti“.
+   Esami pirkimai ir jų protokolai iš kortelės nekeičiami. Modulis kortelės nekeičia. */
+(function () {
+  if (!window.GP_KORTELE) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var RANKA = new Set();
+  document.addEventListener('change', function (e) { if (e.isTrusted && e.target) RANKA.add(e.target.name || e.target.id); }, true);
+  document.addEventListener('click', function (e) { if (e.isTrusted && e.target.closest && e.target.closest('.type-card')) RANKA.add('tipas'); }, true);
+  function naujas() { var p = $('page-new-pk'); return !!(p && p.classList.contains('active')); }
+  function reiksme(id) { return naujas() ? ($(id) || {}).value : undefined; }
+  function sviezia() { return !String(($('new-pk-name') || {}).value || '').trim(); }
+  function irasyk(id, v) {
+    var e = $(id); if (!e) return;
+    e.value = v;
+    e.dispatchEvent(new Event('input', { bubbles: true }));
+    e.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function objektas() { var r = document.querySelector('input[name="new-obj-type"]:checked'); return r ? r.value : ''; }
+  function tipas() { var c = document.querySelector('.type-card.selected'); return c ? c.dataset.type : ''; }
+  function tipoKortele(t) { return t ? document.querySelector('.type-card[data-type="' + t + '"]') : null; }
+  function dalys() {
+    return Array.from(document.querySelectorAll('#new-parts-list > div')).map(function (r) {
+      var pav = ((r.querySelector('.part-name') || {}).value || '').trim(), v = parseFloat((r.querySelector('.part-ex') || {}).value);
+      return v > 0 ? { pavadinimas: pav, verte: v } : { pavadinimas: pav };
+    }).filter(function (d) { return d.pavadinimas || d.verte; });
+  }
+  function dalysRaktu(d) {
+    return JSON.stringify((d || []).map(function (x) {
+      return [String(x.pavadinimas || '').trim().toLowerCase(), x.verte > 0 ? Math.round(x.verte * 100) : 0];
+    }));
+  }
+  function suma(v) { return String(Math.round(v * 100) / 100); }
+  var OBJ = { prekes: 'prekes', paslaugos: 'paslaugos', paslaugos_it: 'paslaugos', darbai: 'darbai' };
+
+  window.KORTELE = GP_KORTELE.mount({
+    modulis: 'PP-protocol',
+    vieta: '#kortelesVieta',
+    klaustiKitoPirkimo: true,
+    nerodoma: function () {
+      return naujas() ? null : 'Kortelės duomenys įrašomi kuriant naują pirkimą („+ Naujas pirkimas“); esami pirkimai iš kortelės nekeičiami.';
+    },
+    laukai: [
+      { kortele: 'numeris', gauk: function () { return reiksme('new-pk-nr'); }, dek: function (v) { irasyk('new-pk-nr', v); } },
+      { kortele: 'verte', gauk: function () { return reiksme('new-pk-val-ex'); },
+        i: suma, is: function (s) { var v = parseFloat(s); return v > 0 ? v : undefined; },
+        dek: function (v) { irasyk('new-pk-val-ex', v); } },
+      { kortele: 'objektas', gauk: function () { return naujas() ? objektas() : undefined; },
+        i: function (v) { return OBJ[v] || null; }, is: function (s) { return s; },
+        lygu: function (s, v) { return s === OBJ[v]; },
+        numatyta: function () { return sviezia() && !RANKA.has('new-obj-type') && objektas() === 'paslaugos'; },
+        dek: function (v) { var r = document.querySelector('input[name="new-obj-type"][value="' + v + '"]'); if (r) r.checked = true; },
+        neimanoma: 'mišriam objektui pasirinkite pagrindinę rūšį' },
+      { kortele: 'trukmeMen', gauk: function () { return reiksme('new-pk-terminas'); },
+        i: function (v) { return String(v); }, is: function (s) { var n = parseInt(s, 10); return n > 0 ? n : undefined; },
+        dek: function (v) { irasyk('new-pk-terminas', v); } },
+      { kortele: 'dalys', gauk: function () { return naujas() ? ($('new-pk-parts').checked ? dalys() : []) : undefined; },
+        numatyta: function () { return sviezia() && !RANKA.has('new-pk-parts') && !$('new-pk-parts').checked; },
+        is: function (d) { return d; }, lygu: function (s, d) { return dalysRaktu(s) === dalysRaktu(d); },
+        dek: function (d) {
+          $('new-pk-parts').checked = d.length > 0;
+          $('new-parts-list').innerHTML = '';
+          d.forEach(function (x) {
+            addNewPart();
+            var r = $('new-parts-list').lastElementChild;
+            r.querySelector('.part-name').value = x.pavadinimas || '';
+            if (x.verte > 0) { var ex = r.querySelector('.part-ex'); ex.value = suma(x.verte); autoCalcPartVat(ex); }
+          });
+          toggleNewParts(); toggleNotSplitWarning();
+        } },
+      { kortele: 'budas', gauk: function () { return naujas() ? tipas() : undefined; },
+        i: function (v) { var t = GP_METHODS.toModule('pp-protocol', v); return tipoKortele(t) ? t : null; },
+        is: function (s) { var m = s ? GP_METHODS.fromLegacy('pp-protocol', s) : null; return m ? m.id : undefined; },
+        lygu: function (s, v) { return !!s && s === GP_METHODS.toModule('pp-protocol', v); },
+        numatyta: function () { return sviezia() && !RANKA.has('tipas') && tipas() === 'atviras_tarptautinis'; },
+        dek: function (v) { var c = tipoKortele(v); if (c) selectType(c); },
+        neimanoma: function (v) {
+          var m = GP_METHODS.byId(v);
+          if (m && m.statusas === 'bazinis') return 'kortelėje nenurodyta, tarptautinis ar supaprastintas';
+          if (m && m.grupe === 'mazos_vertes') return 'mažos vertės pirkimams protokolų sekų nėra';
+          return 'šiam būdui protokolų sekos nėra';
+        } },
+      { kortele: 'cvpisNr', gauk: function () { return reiksme('new-cvp-nr'); }, dek: function (v) { irasyk('new-cvp-nr', v); } },
+      { kortele: 'vykdytojas', gauk: function () { return naujas() ? 'litgrid' : undefined; },
+        i: function (v) { return v === 'litgrid' ? v : null; }, dek: function () {},
+        neimanoma: 'protokolų šablonai - LITGRID AB' },
+      { kortele: 'rezimas', gauk: function () { return naujas() ? 'PI' : undefined; },
+        i: function (v) { return v === 'PI' ? v : null; }, dek: function () {},
+        neimanoma: 'protokolai rengiami pagal PĮ' },
+      { kortele: 'pavadinimas', gauk: function () { return reiksme('new-pk-name'); }, dek: function (v) { irasyk('new-pk-name', v); } }
+    ]
   });
 })();
 </script>
