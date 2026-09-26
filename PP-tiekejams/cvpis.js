@@ -63,69 +63,16 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Pirkimo vykdytojas ir teisinis režimas iš SKELBIMO. Sandara perskaityta iš
-  // keturių tikrų CVP IS skelbimų PDF 2026-09-24 (LITGRID 9683631, Amber Grid
-  // 9742096, EPSO-G 9281765, Energy cells 9614756), lietuviško eForms formato:
-  //   „1.1 Pirkėjas“ -> „Oficialus pavadinimas: LITGRID AB (PV)“
-  //   „Perkančiojo subjekto veiklos sritis: ...“   - PĮ (LITGRID, Amber Grid)
-  //   „Perkančiosios organizacijos veiklos sritis: ...“ - VPĮ (EPSO-G, Energy cells)
-  //   „Teisinis pagrindas:“ + „Direktyva 2014/25/ES“ (PĮ) arba „Kitas“ (nacionalinis, be signalo)
-  //   failo vardas: „... komunalinio sektoriaus direktyva ...“ (PĮ) / „... bendroji direktyva ...“ (VPĮ)
-  // Angliškos formos (EN skelbimo tekstas) - tik numanomos pagal TED eForms
-  // etiketes, tikru EN skelbimu NEPATIKRINTOS; jos duoda tą patį rezultatą, bet
-  // sąsaja vis tiek prašo patvirtinti. „Oficialus pavadinimas“ vėliau kartojasi
-  // 8 skyriuje (pirkėjas, peržiūros institucija, e. sistemos tiekėjas), todėl
-  // imamas TIK pirmas po „1.1 Pirkėjas“.
+  // Pirkimo vykdytojas ir teisinis režimas iš SKELBIMO - nuo 2026-09-26 gyvena
+  // shared/skelbimas.js (GP_SKELBIMAS.pirkejas / rezimas), nes tuo pačiu atpažinimu
+  // pildoma ir bendra pirkimo kortelė (tobulinimo planas A2). Čia - tik nuorodos,
+  // kad modulio kodas ir testai liktų tokie patys. Sandara - iš keturių tikrų
+  // CVP IS skelbimų PDF 2026-09-24 (LITGRID 9683631, Amber Grid 9742096, EPSO-G
+  // 9281765, Energy cells 9614756); aprašas - shared/skelbimas.js.
   // ---------------------------------------------------------------------------
-  function minkstas(s) { return String(s == null ? "" : s).replace(/[­‐‑]/g, "-").replace(/\s+/g, " ").trim(); }
-  function atpazinkPirkeja(tekstas) {
-    var t = String(tekstas || "");
-    // Prieš „1.1 Pirkėjas“ - eilutės pradžia arba tarpas (pdf.js tekste eilutės skiriamos \n, bet
-    // TXT / DOCX blokuose skyrius gali būti toje pačioje eilutėje)
-    var a = /(?:^|\s)1\.1\s+(?:Pirk[eė]jas|Buyer)\b/i.exec(t);
-    if (!a) return null;
-    var po = t.slice(a.index, a.index + 600);
-    var m = /(?:Oficialus\s+pavadinimas|Official\s+name)\s*:\s*([^\n]{2,160})/i.exec(po);
-    if (!m) return null;
-    var zyma = minkstas(m[0]).replace(/:.*$/, ":");
-    var v = minkstas(m[1]);
-    // Į vieną eilutę sulietame bloke po pavadinimo eina kitas skelbimo laukas (tikruose PDF - nauja
-    // eilutė „Pirkėjo teisinė forma: ...“) - pavadinimas nukerpamas ties juo
-    var kitas = /\s+(?:Pirk[eė]jo\s+teisin|Perkan[čc]io(?:jo|sios)\s|Legal\s+type|Activity\s+of|Registracijos\s+numeris|Registration\s+number|Pa[šs]to\s+adresas|Postal\s+address)/i.exec(v);
-    if (kitas && kitas.index > 0) v = v.slice(0, kitas.index).trim();
-    var snippet = (zyma + " " + v).slice(0, 120);
-    var pv = /\(PV\)\s*$/i.test(v);
-    v = v.replace(/\s*\(PV\)\s*$/i, "").trim();
-    // Kabutės nuimamos tik kai visas pavadinimas jose („"UAB X"“); „AB "Amber Grid"“ lieka kaip skelbime
-    if (/^["„“]/.test(v) && /["“”]$/.test(v)) v = v.slice(1, -1).trim();
-    if (!v) return null;
-    return { value: v, pv: pv, snippet: snippet };
-  }
-  var SEKTORIUS = [
-    [/perkan[čc]iojo\s+subjekto\s+veiklos\s+sritis/i, "tekstas"], [/direktyva\s*2014\/25/i, "tekstas"], [/directive\s*2014\/25/i, "tekstas"],
-    [/activity\s+of\s+the\s+contracting\s+entity/i, "tekstas"], [/komunalinio\s+sektoriaus\s+direktyv/i, "vardas"], [/sectoral\s+directive/i, "vardas"]
-  ];
-  var KLASIKA = [
-    [/perkan[čc]iosios\s+organizacijos\s+veiklos\s+sritis/i, "tekstas"], [/direktyva\s*2014\/24/i, "tekstas"], [/directive\s*2014\/24/i, "tekstas"],
-    [/activity\s+of\s+the\s+contracting\s+authority/i, "tekstas"], [/bendroji\s+direktyv/i, "vardas"], [/classic\s+directive/i, "vardas"]
-  ];
-  function pozymiai(sarasas, tekstas, vardas, rezimas) {
-    var out = [];
-    sarasas.forEach(function (p) {
-      var kur = p[1] === "vardas" ? vardas : tekstas;
-      var m = p[0].exec(String(kur || ""));
-      if (m) out.push({ rezimas: rezimas, kur: p[1], tekstas: minkstas(m[0]) });
-    });
-    return out;
-  }
-  // Grąžina { value: "PI" | "VPI" | null, neaiskus, pozymiai } - neaiškus, kai yra abiejų režimų požymių
+  function atpazinkPirkeja(tekstas) { return global.GP_SKELBIMAS ? global.GP_SKELBIMAS.pirkejas(tekstas) : null; }
   function atpazinkRezima(tekstas, failoVardas) {
-    var vardas = String(failoVardas || "").split(" › ").pop();
-    var pi = pozymiai(SEKTORIUS, tekstas, vardas, "PI"), vpi = pozymiai(KLASIKA, tekstas, vardas, "VPI");
-    var visi = pi.concat(vpi);
-    if (!visi.length) return { value: null, neaiskus: false, pozymiai: [] };
-    if (pi.length && vpi.length) return { value: null, neaiskus: true, pozymiai: visi };
-    return { value: pi.length ? "PI" : "VPI", neaiskus: false, pozymiai: visi };
+    return global.GP_SKELBIMAS ? global.GP_SKELBIMAS.rezimas(tekstas, failoVardas) : { value: null, neaiskus: false, pozymiai: [] };
   }
 
   // Terminas su Europe/Vilnius laiko zona ir likusiu laiku (tik rodymui; šaltinis - dokumentas)
