@@ -83,6 +83,19 @@
   .pasiulymas .cit{grid-column:2;font-size:12.5px;color:#5B6470;overflow-wrap:anywhere}
   .pasiulymas .perraso{grid-column:2;font-size:12.5px;color:#8A4B00;font-weight:700}
   .pasiulymai .pastabos{font-size:13px;color:#5B6470;margin:0;padding-left:18px}
+  /* Perkėlimas iš PP-protocol (A1 2 etapas) */
+  dialog.forma.forma--plati{width:min(980px,calc(100vw - 24px))}
+  .perk-lent{max-height:min(52vh,560px);overflow:auto;border:1px solid var(--color-graphite-15);border-radius:10px}
+  .perk-lent:empty{display:none}
+  .perk-lent table.lentele th:first-child,.perk-lent table.lentele td:first-child{padding-left:12px}
+  .perk-lent td.cb{width:36px}
+  .perk-lent td.cb input{width:18px;height:18px;margin:2px 0 0}
+  .perk-lent select{font:inherit;font-size:13.5px;padding:4px 6px;border:1px solid var(--color-graphite-30);border-radius:6px;background:var(--color-white);color:inherit;max-width:100%}
+  .perk-lent select:focus-visible,.perk-lent input:focus-visible{outline:2px solid var(--color-emerald-strong);outline-offset:1px}
+  .perk-lent .ps{display:block;font-size:12.5px;color:#5B6470;margin-top:2px}
+  .perk-lent .ps--isp{color:#8A4B00;font-weight:700}
+  .perk-lent tr.negalima .pav{font-weight:700;color:#5B6470}
+  .mygtukai .pag{font-size:13px;color:#5B6470}
   .mygtukai{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
   .mygtukai .desine{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
   .klaidos:focus{outline:2px solid var(--color-error);outline-offset:2px}
@@ -95,6 +108,9 @@
     .dalis .dal-verte{grid-column:2}
     .dalis .dal-salinti{grid-column:2;justify-self:start}
     .forma form{padding:18px 16px}
+    .perk-lent{max-height:none;overflow:visible;border:0;border-radius:0}   /* telefone slenka visas langas, ne lentelė jame */
+    .perk-lent table.lentele th:first-child,.perk-lent table.lentele td:first-child{padding-left:0}
+    .perk-lent td.cb{float:left;width:auto;margin:3px 10px 0 0}
     table.lentele thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
     table.lentele,table.lentele tbody,table.lentele tr,table.lentele td{display:block;width:100%}
     table.lentele tr{border-bottom:1px solid var(--color-graphite-15);padding:10px 0}
@@ -136,6 +152,7 @@
       <input type="search" class="paieska" id="paieska" placeholder="Ieškoti pagal pavadinimą ar numerį" data-darbas-ne>
       <label class="zymimas"><input type="checkbox" id="rodytiArch" data-darbas-ne> <span id="rodytiArchTekstas">Rodyti archyvuotas</span></label>
       <button type="button" class="btn" id="naujaIsSkelbimo">Nauja iš CVP IS skelbimo</button>
+      <button type="button" class="btn" id="isProtokolo" hidden>Perkelti iš PP-protocol</button>
     </div>
     <div id="sarasas" aria-live="polite"></div>
     <div id="busena"></div>
@@ -292,6 +309,24 @@
       <span class="desine">
         <button type="button" class="btn" id="atsaukti">Atšaukti</button>
         <button type="submit" class="btn btn--pagr" id="issaugoti">Išsaugoti kortelę</button>
+      </span>
+    </div>
+  </form>
+</dialog>
+
+<!-- Perkėlimas iš PP-protocol (A1 2 etapas): pasirinkimai čia - ne darbas, kurį galima prarasti -->
+<dialog class="forma forma--plati" id="perkelimas" aria-labelledby="perkelimasH" data-darbas-ne>
+  <form id="perkelimasForm" novalidate>
+    <h2 id="perkelimasH">Perkelti pirkimus iš PP-protocol</h2>
+    <p class="pastaba" id="perkelimasApie"></p>
+    <p class="pastaba" id="perkelimasKas"></p>
+    <div class="perk-lent" id="perkelimasSarasas"></div>
+    <div class="klaidos" id="perkelimasKlaidos" role="alert" tabindex="-1"></div>
+    <div class="mygtukai">
+      <span class="pag" id="perkelimasSk" aria-live="polite"></span>
+      <span class="desine">
+        <button type="button" class="btn" id="perkAtsaukti">Atšaukti</button>
+        <button type="submit" class="btn btn--pagr" id="perkVykdyti">Perkelti pažymėtus</button>
       </span>
     </div>
   </form>
@@ -770,7 +805,129 @@
   $("paieska").addEventListener("input", sarasas);
   $("rodytiArch").addEventListener("change", sarasas);
 
-  window.addEventListener("storage", function (e) { if (e.key === K.RAKTAS) sarasas(); });
+  /* ---------- perkėlimas iš PP-protocol (A1 2 etapas) ----------
+     PP-protocol (ta pati naršyklė) pirkimai -> kortelės: peržiūra, žmogus pažymi, ką perkelti, ir gali pakeisti
+     būseną; kortelė tuo pačiu numeriu antrą kartą nekuriama. PP-protocol duomenys nekeičiami. */
+  var perkelimas = $("perkelimas"), perk = null;
+  function perkelimoMygtukas() {
+    var p = K.protokoloPerkelimas(), b = $("isProtokolo");
+    var nauju = p.eilutes.filter(function (e) { return e.busena === "naujas" || e.busena === "panasus"; }).length;
+    b.hidden = !(nauju || p.busena === "sugadinta" || p.busena === "neprieinama");
+    b.textContent = "Perkelti iš PP-protocol" + (nauju ? " (" + nauju + ")" : "");
+    return p;
+  }
+  function perkPastaba(e) {
+    var k = e.kortele, out = [];
+    if (e.busena === "yra") out.push("Jau yra kortelė „" + (e.kita.pavadinimas || e.kita.numeris) + "“ tuo pačiu numeriu - neperkeliama.");
+    if (e.busena === "panasus") out.push("Yra kortelė tokiu pačiu pavadinimu, bet kitu ar nenurodytu numeriu - pažymėkite, jei tai kitas pirkimas.");
+    if (e.busena === "netinkamas") out.push("Neperkeliama: " + e.priezastis);
+    if (k.archyvuota && e.busena !== "yra") out.push("PP-protocol archyvuotas - kortelė bus archyvuota.");
+    return out.join(" ");
+  }
+  function perkSkaicius() {
+    var n = perkelimas.querySelectorAll('#perkelimasSarasas input[type=checkbox]:checked:not(:disabled)').length;
+    $("perkVykdyti").textContent = "Perkelti pažymėtus (" + n + ")";
+    $("perkVykdyti").disabled = !n;
+    $("perkelimasSk").textContent = perk && perk.busena === "yra" ? "Pažymėta: " + n + " iš " + perk.eilutes.length : "";
+  }
+  function piesiPerkelima() {
+    perk = K.protokoloPerkelimas();
+    var sar = $("perkelimasSarasas");
+    sar.innerHTML = "";
+    $("perkelimasKas").textContent = "";
+    $("perkVykdyti").hidden = perk.busena !== "yra";
+    if (perk.busena !== "yra") {
+      $("perkelimasApie").textContent = perk.busena === "nera" ? "Protokolų generatorius (PP-protocol) šioje naršyklėje pirkimų neturi."
+        : GP_SAUGYKLA.pranesimas(perk.r, perk.busena === "korteles" ? "Pirkimų kortelės" : "PP-protocol pirkimai") + " Niekas neperkeliama.";
+      perkSkaicius();
+      return;
+    }
+    $("perkelimasApie").textContent = "Protokolų generatorius (PP-protocol) šioje naršyklėje turi pirkimų: " + perk.eilutes.length +
+      ". Pažymėti taps pirkimų kortelėmis; PP-protocol duomenys nekeičiami.";
+    $("perkelimasKas").textContent = "Perkeliama: pavadinimas, numeris, vertė, objektas, būdas, sutarties trukmė, dalys ir CVP IS Nr.; " +
+      "vykdytojas - LITGRID AB, režimas - PĮ. Komisijai ir kortelės datai kortelėje laukų nėra. Būsena parinkta pagal parengtus " +
+      "protokolus (mažiausia, kurią jie rodo) - jei sutartis jau sudaryta ar pirkimas nutrauktas, pakeiskite.";
+    var t = document.createElement("table"); t.className = "lentele";
+    t.innerHTML = '<caption class="sr-only">PP-protocol pirkimai</caption><thead><tr><th scope="col"><span class="sr-only">Perkelti</span></th>' +
+      '<th scope="col">Pirkimas</th><th scope="col">Vertė be PVM</th><th scope="col">Būdas</th><th scope="col">Būsena</th></tr></thead><tbody></tbody>';
+    var tb = t.querySelector("tbody");
+    perk.eilutes.forEach(function (e, i) {
+      var k = e.kortele, galima = e.busena === "naujas" || e.busena === "panasus", pav = k.pavadinimas || k.numeris || "(be pavadinimo)";
+      var tr = document.createElement("tr");
+      if (!galima) tr.className = "negalima";
+      var td = document.createElement("td"); td.className = "cb";
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "perk-" + i;
+      cb.checked = e.busena === "naujas" && !k.archyvuota; cb.disabled = !galima;
+      cb.setAttribute("aria-label", "Perkelti „" + pav + "“");
+      td.appendChild(cb); tr.appendChild(td);
+      td = document.createElement("td");
+      var p = document.createElement("span"); p.className = "pav"; p.textContent = k.pavadinimas || "(be pavadinimo)"; td.appendChild(p);
+      var n = document.createElement("span"); n.className = "nr"; n.textContent = [k.numeris, k.cvpisNr ? "CVP IS " + k.cvpisNr : ""].filter(Boolean).join(" · "); td.appendChild(n);
+      var ps = perkPastaba(e);
+      if (ps) { var x = document.createElement("span"); x.className = "ps" + (e.busena === "naujas" ? "" : " ps--isp"); x.textContent = ps; td.appendChild(x); }
+      tr.appendChild(td);
+      td = document.createElement("td"); td.className = "suma"; td.setAttribute("data-et", "Vertė be PVM"); td.textContent = k.verte > 0 ? K.formatas(k.verte) + " EUR" : "-"; tr.appendChild(td);
+      td = document.createElement("td"); td.setAttribute("data-et", "Būdas"); td.textContent = K.budoPav(k.budas) || "-"; tr.appendChild(td);
+      td = document.createElement("td"); td.setAttribute("data-et", "Būsena");
+      if (galima) {
+        var sel = document.createElement("select"); sel.id = "perk-b-" + i; sel.setAttribute("aria-label", "Būsena: " + pav);
+        K.BUSENOS.forEach(function (b) { var o = document.createElement("option"); o.value = b.id; o.textContent = b.lt; sel.appendChild(o); });
+        sel.value = k.busena;
+        td.appendChild(sel);
+      } else td.textContent = "-";
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+    sar.appendChild(t);
+    perkSkaicius();
+  }
+  function atverkPerkelima() {
+    $("perkelimasKlaidos").textContent = "";
+    piesiPerkelima();
+    perkelimas.showModal();
+    var pirmas = perkelimas.querySelector("#perkelimasSarasas input:not(:disabled)") || $("perkAtsaukti");
+    pirmas.focus();
+  }
+  $("perkelimasSarasas").addEventListener("change", perkSkaicius);
+  $("perkAtsaukti").addEventListener("click", function () { perkelimas.close(); });
+  $("isProtokolo").addEventListener("click", atverkPerkelima);
+  $("perkelimasForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    if (!perk || perk.busena !== "yra") return;
+    var pas = [];
+    perk.eilutes.forEach(function (e, i) {
+      var cb = $("perk-" + i);
+      if (cb && cb.checked && !cb.disabled) pas.push({ raktas: e.raktas, busena: ($("perk-b-" + i) || {}).value || e.kortele.busena });
+    });
+    /* Peržiūra galėjo pasenti (kitame skirtuke jau perkelta) - tikrinama iš naujo, tuo pačiu numeriu antrą kartą nekuriama. */
+    var dabar = K.protokoloPerkelimas(), pagal = {};
+    dabar.eilutes.forEach(function (e) { pagal[e.raktas] = e; });
+    var n = 0, praleista = 0, klaida = null;
+    for (var j = 0; j < pas.length; j++) {
+      var e = pagal[pas[j].raktas];
+      if (!e || !(e.busena === "naujas" || e.busena === "panasus")) { praleista++; continue; }
+      var r = K.issaugok(Object.assign({}, e.kortele, { busena: pas[j].busena }));
+      if (!r.ok) { klaida = r.r; break; }
+      n++;
+    }
+    sarasas();
+    perkelimoMygtukas();
+    if (klaida) {
+      piesiPerkelima();
+      $("perkelimasKlaidos").textContent = "Perkelta kortelių: " + n + " iš " + pas.length + ". " + GP_SAUGYKLA.pranesimas(klaida, "Pirkimų kortelės");
+      $("perkelimasKlaidos").focus();
+      return;
+    }
+    perkelimas.close();
+    GP_BUSENA.rodyk("#busena", { tipas: "gerai", tekstas: "Iš PP-protocol perkelta kortelių: " + n +
+      (praleista ? " (" + praleista + " praleista - tokios kortelės jau buvo)" : "") + ". PP-protocol duomenys nepakeisti." });
+  });
+
+  window.addEventListener("storage", function (e) {
+    if (e.key === K.RAKTAS) sarasas();
+    if (e.key === K.RAKTAS || e.key === K.PROTOKOLO_RAKTAS) perkelimoMygtukas();
+  });
+  perkelimoMygtukas();
 
   GP_DARBAS.stebek(function () { return forma.open ? parasas() : ""; });
 
@@ -812,13 +969,13 @@
     purpose: "Pirkimo kortelė - vienas pirkimo įrašas: pavadinimas, vertė, būdas, vykdytojas ir režimas, dalys, terminai ir atsakingi asmenys. Įrankiai ją skaito, todėl šių duomenų nereikia vesti kiekviename iš naujo.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Sukurkite kortelę:</b> „Nauja kortelė“ čia, įrankyje - „Sukurti kortelę iš šių duomenų“, metiniame plane (PP-plan) - „Kortelė“ prie pirkimo, arba iš paskelbto CVP IS skelbimo PDF (atpažintas reikšmes patvirtinate patys).",
+      "<b>Sukurkite kortelę:</b> „Nauja kortelė“ čia, įrankyje - „Sukurti kortelę iš šių duomenų“, metiniame plane (PP-plan) - „Kortelė“ prie pirkimo, arba iš paskelbto CVP IS skelbimo PDF (atpažintas reikšmes patvirtinate patys). Pirkimus, jau įvestus Protokolų generatoriuje, perkelsite mygtuku „Perkelti iš PP-protocol“.",
       "<b>Pasirinkite kortelę įrankyje:</b> viršuje esančiame lauke „Pirkimo kortelė“. Tušti laukai užpildomi, o jau įvestos kitokios reikšmės tik parodomos - jas pakeisite paspaudę „Taikyti“.",
       "<b>Pirkimas pasikeitė:</b> pakeiskite kortelę čia - įrankis parodys, kurie jo laukai nuo jos skiriasi.",
       "<b>Kortelės nebereikia:</b> archyvuokite. Ji nebesiūloma įrankiuose, bet nedingsta."
     ],
     noteTitle: "Kur saugoma ir kas skaito",
-    note: "Kortelės saugomos <b>tik šioje naršyklėje</b> ir patenka į atsarginę kopiją (nuoroda portalo poraštėje). Į serverį niekas nesiunčiama. Bandomoji versija: kortelę skaito <b>Pirkimų grafikų generatorius</b> ir <b>Kvalifikaciniai reikalavimai</b>. Įrankiai, kurie savo darbo nesaugo, kortelės ir nekeičia - jie ją tik skaito."
+    note: "Kortelės saugomos <b>tik šioje naršyklėje</b> ir patenka į atsarginę kopiją (nuoroda portalo poraštėje). Į serverį niekas nesiunčiama. Kortelę skaito: <b>Pirkimų grafikų generatorius</b>, <b>Kvalifikaciniai reikalavimai</b>, <b>TS asistentas</b>, <b>Pirkimo sąlygų generatorius</b>, <b>Protokolų generatorius</b>, <b>Derybų pasirengimo įrankis</b>, <b>Tiekėjų apklausos pažyma</b> ir abi <b>Kaštų-naudos analizės</b> dalys. Įrankiai kortelės nekeičia - jie ją tik skaito, o skirtumus parodo."
   } };
   GProcureInfoPanel.mount({
     target: "#infoPanelMount",
