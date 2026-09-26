@@ -92,6 +92,7 @@
     trukmeMen: { lt: "Sutarties trukmė", en: "Contract duration" },
     pradzia: { lt: "Pradžios data", en: "Start date" },
     paskelbimas: { lt: "Paskelbimo data", en: "Publication date" },
+    pasiulymuTerminas: { lt: "Pasiūlymų terminas", en: "Tender deadline" },
     iniciatorius: { lt: "Iniciatorius", en: "Initiator" },
     organizatorius: { lt: "Organizatorius", en: "Organiser" },
     busena: { lt: "Būsena", en: "Status" }
@@ -125,7 +126,7 @@
   }
   /* Tekstiniai laukai (visada eilutė, "" - nenurodyta). */
   var TEKSTAI = ["pavadinimas", "numeris", "cvpisNr", "vykdytojas", "rezimas", "objektas", "bvpz", "budas",
-                 "pradzia", "paskelbimas", "iniciatorius", "organizatorius", "busena"];
+                 "pradzia", "paskelbimas", "pasiulymuTerminas", "iniciatorius", "organizatorius", "busena"];
 
   function tuscia(laukai) {
     var dabar = new Date().toISOString();
@@ -137,6 +138,7 @@
       verte: null, budas: "",
       dalys: null,                        // null - nenurodyta, [] - neskaidomas, [{ pavadinimas, verte }] - dalys
       trukmeMen: null, pradzia: "", paskelbimas: "",
+      pasiulymuTerminas: "",               // pasiūlymų ar paraiškų terminas „2026-10-02T15:00“ (Vilniaus laikas)
       iniciatorius: "", organizatorius: "",
       busena: "rengiamas", archyvuota: false
     };
@@ -262,6 +264,8 @@
     ["pradzia", "paskelbimas"].forEach(function (f) {
       if (tekstas(k[f]) && !arData(k[f])) p(f, "Data rašoma taip: 2026-10-15.", "Write the date like 2026-10-15.");
     });
+    if (tekstas(k.pasiulymuTerminas) && !(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(k.pasiulymuTerminas) && arData(k.pasiulymuTerminas.slice(0, 10))))
+      p("pasiulymuTerminas", "Terminas rašomas taip: 2026-10-02 15:00.", "Write the deadline like 2026-10-02 15:00.");
     if (Array.isArray(k.dalys)) k.dalys.forEach(function (d, i) {
       if (!tekstas(d.pavadinimas)) p("dalys", "Įrašykite " + (i + 1) + " dalies pavadinimą.", "Enter the title of lot " + (i + 1) + ".");
       if (d.verte != null && !(d.verte > 0)) p("dalys", (i + 1) + " dalies vertė turi būti teigiama.", "The value of lot " + (i + 1) + " must be positive.");
@@ -323,6 +327,7 @@
     if (laukas === "rezimas") return REZIMAI[v] ? REZIMAI[v][l] : String(v);
     if (laukas === "vykdytojas") { var x = vykdytojas(v); return x ? x.pavadinimas : String(v); }
     if (laukas === "trukmeMen") return v + (l === "en" ? " mo." : " mėn.");
+    if (laukas === "pasiulymuTerminas") return String(v).replace("T", " ");
     if (laukas === "dalys") {
       if (!Array.isArray(v)) return "";
       if (!v.length) return l === "en" ? "not divided into lots" : "neskaidomas į dalis";
@@ -352,6 +357,41 @@
   function puslapioAdresas() {
     try { return new URL("../pirkimu-korteles.html", SKRIPTAS || global.location.href).href; }
     catch (e) { return "../pirkimu-korteles.html"; }
+  }
+
+  /* Kortelių puslapis naujame skirtuke - bendras juostai ir moduliams be juostos (PP-plan).
+     Modulio duomenys perduodami tik tam skirtukui (postMessage, ta pati kilmė): niekur neįrašomi
+     ir į adresą nededami. „issaugota“ priimamas tik iš mūsų atvertų langų. */
+  var laukiami = [], klausytojai = [], klausomasi = false;
+  function klausyk() {
+    if (klausomasi) return;
+    klausomasi = true;
+    global.addEventListener("message", function (e) {
+      if (e.origin !== global.location.origin || !e.data || e.data.gpk !== 1) return;
+      if (e.data.tipas === "pasiruoses") {
+        laukiami = laukiami.filter(function (l) {
+          if (l.w !== e.source) return true;
+          l.w.postMessage({ gpk: 1, tipas: "pildyk", laukai: l.laukai, modulis: l.modulis }, global.location.origin);
+          return false;
+        });
+      } else if (e.data.tipas === "issaugota" && typeof e.data.id === "string") {
+        klausytojai.forEach(function (k) { if (k.w === e.source) k.fn(e.data.id); });
+      }
+    });
+  }
+  /* x: { id } - atverti kortelę keisti; { laukai, modulis } - nauja kortelė su modulio duomenimis;
+     onIssaugota(id) - kviečiama, kai atvertame skirtuke kortelė išsaugoma. Grąžina langą arba null. */
+  function atverkPuslapi(x) {
+    x = x || {};
+    klausyk();
+    var url = puslapioAdresas() + (x.id ? "#kortele=" + encodeURIComponent(x.id) : "#nauja");
+    var w = null;
+    try { w = global.open(url, "_blank"); } catch (e) { w = null; }
+    if (!w) return null;
+    if (!x.id && x.laukai && Object.keys(x.laukai).length && global.location.origin !== "null")
+      laukiami.push({ w: w, laukai: x.laukai, modulis: x.modulis || "" });
+    if (x.onIssaugota) klausytojai.push({ w: w, fn: x.onIssaugota });
+    return w;
   }
 
   var T = {
@@ -484,7 +524,7 @@
     o = o || {};
     stilius();
     var laukai = o.laukai || [];
-    var ctx = { sar: { busena: "nera", korteles: [] }, kortele: null, pr: null, atverti: [] };
+    var ctx = { sar: { busena: "nera", korteles: [] }, kortele: null, pr: null };
 
     var el = document.createElement("section");
     el.className = "gpk";
@@ -688,16 +728,16 @@
     document.addEventListener("change", function (e) { if (!el.contains(e.target)) perskaiciuok(); }, true);
     document.addEventListener("input", function (e) { if (!el.contains(e.target)) perskaiciuok(); }, true);
 
-    /* Kortelės puslapis naujame skirtuke. Kuriant iš modulio duomenų, jie perduodami tiesiai tam
-       skirtukui (postMessage, ta pati kilmė) - niekur neįrašomi ir į adresą nededami. */
-    var laukiamas = null;
+    /* Kortelės puslapis naujame skirtuke (atverkPuslapi): išsaugojus ten - kortelė pasirenkama čia. */
+    function issaugotaKitur(id) {
+      skaitykSarasa();
+      var buvo = ctx.kortele && ctx.kortele.id;
+      if (buvo === id) { ctx.kortele = gauk(buvo); ctx.info = ""; skirtumai(); piesk(); }
+      else pasirink(id, { pildyti: true, info: t("sukurta") });
+    }
     function atverk(x) {
-      var url = puslapioAdresas() + (x.id ? "#kortele=" + encodeURIComponent(x.id) : "#nauja");
-      var w = null;
-      try { w = global.open(url, "_blank"); } catch (e) { w = null; }
-      if (!w) { ctx.info = t("blokuota"); zinute(); return; }
-      ctx.atverti.push(w);
-      if (x.laukai && Object.keys(x.laukai).length && global.location.origin !== "null") laukiamas = { w: w, laukai: x.laukai };
+      var w = atverkPuslapi({ id: x.id, laukai: x.laukai, modulis: o.modulis || "", onIssaugota: issaugotaKitur });
+      if (!w) { ctx.info = t("blokuota"); zinute(); }
     }
     function kurtiIsModulio() {
       var duom = {};
@@ -709,19 +749,6 @@
       });
       atverk({ laukai: duom });
     }
-    global.addEventListener("message", function (e) {
-      if (e.origin !== global.location.origin || !e.data || e.data.gpk !== 1) return;
-      if (e.data.tipas === "pasiruoses" && laukiamas && e.source === laukiamas.w) {
-        laukiamas.w.postMessage({ gpk: 1, tipas: "pildyk", laukai: laukiamas.laukai, modulis: o.modulis || "" }, global.location.origin);
-        laukiamas = null;
-      } else if (e.data.tipas === "issaugota" && ctx.atverti.indexOf(e.source) >= 0 && typeof e.data.id === "string") {
-        skaitykSarasa();
-        var buvo = ctx.kortele && ctx.kortele.id;
-        if (buvo === e.data.id) { ctx.kortele = gauk(buvo); ctx.info = ""; skirtumai(); piesk(); }
-        else pasirink(e.data.id, { pildyti: true, info: t("sukurta") });
-      }
-    });
-
     /* Kitame lange pakeistos kortelės: sąrašas atnaujinamas, pasirinkta - neperrašoma. */
     global.addEventListener("storage", function (e) {
       if (e.key !== RAKTAS) return;
@@ -772,7 +799,7 @@
     santrauka: santrauka, formatas: formatas, budoPav: budoPav, laukoPav: laukoPav, mazaja: mazaja, reiksmesTekstas: reiksmesTekstas,
     objektoPav: function (id, l) { return pav(OBJEKTAI, id, l); },
     busenosPav: function (id, l) { return pav(BUSENOS, id, l); },
-    puslapioAdresas: puslapioAdresas,
+    puslapioAdresas: puslapioAdresas, atverkPuslapi: atverkPuslapi,
     mount: mount
   };
 })(typeof window !== "undefined" ? window : this);
