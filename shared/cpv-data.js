@@ -1,5 +1,7 @@
 /* ============================================================================
- * G-Procure  PP-plan/cpv-data.js
+ * G-Procure  shared/cpv-data.js   (window.GP_CPV_DATA)
+ * Iki 2026-09-26 gyveno PP-plan/ (BVPŽ paieška bvpz-kodai.html); dabar jį įkelia ir kortelių puslapis
+ * (pirkimu-korteles.html), kad skelbimo BVPŽ kodas gautų kontrolinį skaitmenį.
  * BVPZ (CPV 2008) zodynas LT+EN, sugeneruotas is oficialaus cpv_2008.xml
  * Saltinis: ted.europa.eu (cpv_2008_xml.zip, failo data 2008-08-14).
  * Reglamentas (EB) Nr. 213/2008. Irasai: [kodas, LT aprasas, EN aprasas].
