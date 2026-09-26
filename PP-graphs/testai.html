@@ -30,7 +30,10 @@
 įmonė, pirkimo būdas ir pradžios data duoda etapų grafiką, kurio kiekviena data yra darbo diena, etapai nepersidengia,
 o trukmės sutampa su darbo dienų skaičiumi; trukmių skaičiuoklė skaičiuoja pirmyn ir atgal nuo sutarties datos ir perkelia
 rezultatą į generatorių. Datos fiksuotos, tad testai nepriklauso nuo šiandienos. Modulis nieko nesaugo - naršyklės
-saugykla neliečiama. Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
+saugykla neliečiama. Bendros pirkimo kortelės grupė (A1): kortelė užpildo tuščius laukus (numatytoji data - tuščia),
+kitaip įvestų neperrašo, būdo be grafiko neįrašo, o „Sukurti kortelę iš šių duomenų“ perduoda tik įvestus laukus
+naujam skirtukui ir nieko neįrašo; kortelės laikomos tik atmintyje (?saugykla=testine).
+Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
   <span class="n blogai" id="n-blogai">0</span> krito
@@ -157,6 +160,80 @@ async function testaiSkaiciuokle(){
   });
 }
 
+/* Bendra pirkimo kortelė (A1, 2026-09-26): modulis kortelę tik skaito. Atskiras rėmelis su ?saugykla=testine -
+   kortelės laikomos tik atmintyje, tikros naudotojo kortelės neliečiamos. */
+function modulisSuKortele(){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.addEventListener("load", () => res({ f: f, W: f.contentWindow, D: f.contentDocument }), { once: true });
+    f.src = "Litgrid_Pirkimu_grafiku_generatorius.html?saugykla=testine&cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+async function testaiKortele(){
+  grupe("Bendra pirkimo kortelė");
+  const KORTELE = { pavadinimas: "Autotransformatorių 400/110 kV pirkimas", vykdytojas: "amber-grid", rezimas: "PI", budas: "T-AK", verte: 1250000,
+                    pradzia: "2026-10-05", iniciatorius: "Jonas Jonaitis, Perdavimo tinklo departamentas", organizatorius: "Ona Onaitė, Pirkimų skyrius" };
+
+  await testas("Pasirinkus kortelę: įmonė, pavadinimas, iniciatorius, organizatorius, būdas ir pradžios data iš kortelės (numatytoji data - tuščia); grafikas sudaromas", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      tiesa(D.getElementById("gpk") && D.getElementById("gpk").nextElementSibling.id === "infoPanelMount", "juosta prieš informacinę skiltį");
+      const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(KORTELE)).kortele;
+      const api = W.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(k.id), "pasirinkta");
+      lygu(["f-company", "f-pavadinimas", "f-iniciatorius", "f-organizatorius", "f-budas", "f-pradzia"].map(id => D.getElementById(id).value),
+           ["ambergrid", KORTELE.pavadinimas, KORTELE.iniciatorius, KORTELE.organizatorius, "T-AK", "2026-10-05"]);
+      lygu([W.eval("state.company"), W.eval("state.methodCode"), W.eval("state.groups.length") > 0], ["ambergrid", "T-AK", true], "modulio būsena");
+      tiesa(/Iš kortelės užpildyta/.test(D.getElementById("gpk-zin").textContent) && !/Skiriasi/.test(D.getElementById("gpk-zin").textContent), D.getElementById("gpk-zin").textContent);
+      tiesa(/1 250 000 EUR · Atviras konkursas \(tarptautinis pirkimas\) · PĮ · AB Amber Grid/.test(D.getElementById("gpk-sant").textContent), D.getElementById("gpk-sant").textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas("Būdas be grafiko (MV-NZ) neįrašomas ir įvardijamas; ranka įvestas pavadinimas neperrašomas, „Taikyti“ jį pakeičia", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORTELE, { budas: "MV-NZ" }))).kortele;
+      const el = D.getElementById("f-pavadinimas"); el.value = "Mano pavadinimas"; el.dispatchEvent(new W.Event("input", { bubbles: true }));
+      const api = W.eval("KORTELE"); api.atnaujink();
+      await api.pasirink(k.id);
+      lygu([el.value, D.getElementById("f-budas").value], ["Mano pavadinimas", ""], "neperrašyta, būdas neįrašytas");
+      const z = D.getElementById("gpk-zin").textContent;
+      tiesa(/Skiriasi nuo kortelės/.test(z) && /neįrašoma: būdas \(„Mažos vertės pirkimas - neskelbiama apklausa žodžiu“\)/.test(z), z);
+      D.querySelector('#gpk button[aria-label="Taikyti: Pavadinimas"]').click();
+      lygu(el.value, KORTELE.pavadinimas, "pritaikyta paspaudus");
+    } finally { f.remove(); }
+  });
+
+  await testas("„Sukurti kortelę iš šių duomenų“: naujam skirtukui perduodami tik įvesti laukai (be numatytosios datos), niekas neįrašoma; išsaugotą kortelę modulis pasirenka", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    const pop = document.createElement("iframe");
+    await new Promise(r => { pop.addEventListener("load", r, { once: true }); pop.srcdoc = "<!doctype html><body></body>"; document.body.appendChild(pop); });
+    try {
+      const set = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("change", { bubbles: true })); };
+      set("f-company", "ambergrid"); set("f-pavadinimas", "Dujų apskaitos prietaisų pirkimas"); set("f-iniciatorius", "Petras Petraitis"); set("f-budas", "S-SD");
+      let adresas = "", gauta = null;
+      W.open = url => { adresas = url; return pop.contentWindow; };
+      pop.contentWindow.addEventListener("message", e => { gauta = e.data; });
+      [...D.querySelectorAll("#gpk button")].find(b => /Sukurti kortelę iš šių duomenų/.test(b.textContent)).click();
+      tiesa(/pirkimu-korteles\.html#nauja$/.test(adresas), "adresas be duomenų: " + adresas);
+      W.dispatchEvent(new W.MessageEvent("message", { data: { gpk: 1, tipas: "pasiruoses" }, origin: W.location.origin, source: pop.contentWindow }));
+      await new Promise(r => setTimeout(r, 60));
+      tiesa(gauta && gauta.tipas === "pildyk" && gauta.modulis === "PP-graphs", "perduota: " + JSON.stringify(gauta));
+      lygu(gauta.laukai, { vykdytojas: "amber-grid", pavadinimas: "Dujų apskaitos prietaisų pirkimas", iniciatorius: "Petras Petraitis", budas: "S-SD" }, "perduoti laukai");
+      lygu(W.GP_KORTELE.skaityk().korteles.length, 0, "modulis nieko neįrašė");
+      const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(gauta.laukai)).kortele;     // kortelių puslapis išsaugojo
+      W.dispatchEvent(new W.MessageEvent("message", { data: { gpk: 1, tipas: "issaugota", id: k.id }, origin: W.location.origin, source: pop.contentWindow }));
+      await new Promise(r => setTimeout(r, 60));
+      lygu(D.getElementById("gpk-sel").value, k.id, "pasirinkta");
+      tiesa(/Kortelė sukurta ir pasirinkta/.test(D.getElementById("gpk-zin").textContent), D.getElementById("gpk-zin").textContent);
+      W.dispatchEvent(new W.MessageEvent("message", { data: { gpk: 1, tipas: "issaugota", id: "k-svetimas" }, origin: W.location.origin, source: W }));
+      await new Promise(r => setTimeout(r, 30));
+      lygu(D.getElementById("gpk-sel").value, k.id, "neatidaryto lango pranešimas ignoruojamas");
+    } finally { f.remove(); pop.remove(); }
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -164,6 +241,7 @@ async function testaiSkaiciuokle(){
     await testaiPuslapis();
     await testaiGeneratorius();
     await testaiSkaiciuokle();
+    await testaiKortele();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
