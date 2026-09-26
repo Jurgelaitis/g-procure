@@ -355,7 +355,7 @@
         else if (e.busena === "naujas" && pv && vienodasPav(x.pavadinimas) === pv) { e.busena = "panasus"; e.kita = x; }
       });
       if (e.busena !== "yra") {
-        var kl = tikrink(k, "lt");
+        var kl = tikrink(k);                        // puslapio kalba (LT / EN)
         if (kl.length) { e.busena = "netinkamas"; e.priezastis = kl.map(function (x) { return x.zinute; }).join(" "); }
       }
       eilutes.push(e);
@@ -374,7 +374,8 @@
   function budoPav(id, l) {
     if (!id || !global.GP_METHODS) return "";
     var m = global.GP_METHODS.byId(id);
-    return m ? m.label : "";
+    if (!m) return "";
+    return (l || kalba()) === "en" ? (global.GP_METHODS.label(id, { kalba: "en" }) || m.label) : m.label;
   }
   /* Viena eilutė: vertė · būdas · režimas · vykdytojas (tik žinomos dalys). */
   function santrauka(k, l) {
@@ -407,6 +408,117 @@
       return v.map(function (d, i) { return (i + 1) + ". " + d.pavadinimas + (d.verte > 0 ? " (" + formatas(d.verte) + " EUR)" : ""); }).join("; ");
     }
     return String(v);
+  }
+
+  /* ================================================================ KORTELĖ MODULYJE
+   * Naudotojo sprendimas (2026-09-26): kortelė kuriama tiesiai modulyje, be naujo skirtuko. Langas rodo, kas bus
+   * perimta iš modulio; pavadinimas redaguojamas (privalomas), netinkamos reikšmės neperkeliamos ir įvardijamos.
+   * Įrašoma TIK paspaudus „Išsaugoti kortelę“ - ir tik kortelė: modulio darbas toliau nesaugomas. Daugiau laukų
+   * (datos, BVPŽ, skelbimo PDF) - „Pildyti kortelių puslapyje“ (naujas skirtukas, kaip iki šiol).
+   * GP_KORTELE.kurkLange(laukai, { modulis, onIssaugota }) -> Promise: kortelė | { atverta } | { blokuota } | null
+   * ==========================================================================================*/
+  function kurkLange(duom, o) {
+    o = o || {};
+    stilius();
+    var l = kalba();
+    var pries = document.activeElement;
+    duom = duom || {};
+    var k = tuscia(Object.assign({}, duom));
+    /* Modulio reikšmė, kurios kortelė nepriimtų (pvz. netinkama trukmė), neperkeliama - ir tai pasakoma. */
+    var neperkelta = [];
+    tikrink(k, l).forEach(function (x) {
+      if (x.laukas === "pavadinimas" || !(x.laukas in duom)) return;
+      if (neperkelta.some(function (n) { return n.laukas === x.laukas; })) return;
+      neperkelta.push({ laukas: x.laukas, zinute: x.zinute });
+    });
+    var bazine = tuscia();
+    neperkelta.forEach(function (n) { k[n.laukas] = bazine[n.laukas]; });
+
+    var d = document.createElement("dialog");
+    d.className = "gpk-dlg";
+    d.setAttribute("data-darbas-ne", "");                // pasirinkimai lange - ne modulio darbas
+    d.setAttribute("aria-labelledby", "gpk-dlg-h");
+    d.innerHTML = '<form novalidate><h2 id="gpk-dlg-h"></h2><p class="gpk-dlg-p" id="gpk-dlg-apie"></p>' +
+      '<div class="gpk-dlg-l"><label for="gpk-dlg-pav"></label><input type="text" id="gpk-dlg-pav" autocomplete="off" aria-describedby="gpk-dlg-kl">' +
+      '<span class="gpk-dlg-kl" id="gpk-dlg-kl" role="alert"></span></div>' +
+      '<div class="gpk-dlg-sar" id="gpk-dlg-sar"></div>' +
+      '<div class="gpk-dlg-myg"><button type="button" class="gpk-btn" id="gpk-dlg-daugiau"></button>' +
+      '<span><button type="button" class="gpk-btn" id="gpk-dlg-ne"></button><button type="submit" class="gpk-btn gpk-btn--pagr" id="gpk-dlg-taip"></button></span></div></form>';
+    var $ = function (id) { return d.querySelector("#" + id); };
+    $("gpk-dlg-h").textContent = t("dlgH");
+    $("gpk-dlg-apie").textContent = t("dlgApie");
+    d.querySelector("label").textContent = t("dlgPav");
+    $("gpk-dlg-pav").value = k.pavadinimas || "";
+    $("gpk-dlg-daugiau").textContent = t("dlgDaugiau");
+    $("gpk-dlg-daugiau").setAttribute("aria-label", t("dlgDaugiau") + " " + t("naujasSkirtukas"));
+    $("gpk-dlg-ne").textContent = t("dlgAtsaukti");
+    $("gpk-dlg-taip").textContent = t("dlgSaugoti");
+    var sar = $("gpk-dlg-sar");
+    var rodomi = Object.keys(LAUKAI).filter(function (f) { return f !== "pavadinimas" && (f in duom) && !tusciaReiksme(k[f]) && !neperkelta.some(function (n) { return n.laukas === f; }); });
+    var antr = document.createElement("p");
+    antr.textContent = rodomi.length ? (o.modulis ? t("dlgIsM").replace("{m}", o.modulis) : t("dlgIs")) : t("dlgNieko");
+    sar.appendChild(antr);
+    if (rodomi.length) {
+      var dl = document.createElement("dl");
+      rodomi.forEach(function (f) {
+        var dt = document.createElement("dt"), dd = document.createElement("dd");
+        dt.textContent = laukoPav(f, l);
+        dd.textContent = reiksmesTekstas(f, k[f], l);
+        dl.appendChild(dt); dl.appendChild(dd);
+      });
+      sar.appendChild(dl);
+    }
+    if (neperkelta.length) {
+      var np = document.createElement("p");
+      np.className = "gpk-past";
+      np.style.fontWeight = "400";
+      np.textContent = t("dlgNeperkeliama") + " " + neperkelta.map(function (n) { return mazaja(laukoPav(n.laukas, l)) + " („" + reiksmesTekstas(n.laukas, duom[n.laukas], l) + "“ - " + n.zinute.replace(/\.$/, "") + ")"; }).join(", ") + ".";
+      sar.appendChild(np);
+    }
+    document.body.appendChild(d);
+
+    return new Promise(function (ats) {
+      var baigta = false;
+      function baik(r) {
+        if (baigta) return;
+        baigta = true;
+        if (d.open) d.close();
+        d.remove();
+        if (pries && pries.focus && document.contains(pries)) pries.focus();
+        ats(r);
+      }
+      function klaida(tekstas) {
+        $("gpk-dlg-kl").textContent = tekstas || "";
+        if (tekstas) { $("gpk-dlg-pav").setAttribute("aria-invalid", "true"); } else $("gpk-dlg-pav").removeAttribute("aria-invalid");
+      }
+      d.querySelector("form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        k.pavadinimas = $("gpk-dlg-pav").value.trim();
+        var kl = tikrink(k, l).filter(function (x) { return x.laukas === "pavadinimas"; });
+        if (kl.length) { klaida(kl[0].zinute); $("gpk-dlg-pav").focus(); return; }
+        var r = issaugok(k);
+        if (!r.ok) {
+          klaida(global.GP_SAUGYKLA ? global.GP_SAUGYKLA.pranesimas(r.r, t("pavKorteles")) : t("nerasta"));
+          $("gpk-dlg-pav").removeAttribute("aria-invalid");
+          return;
+        }
+        baik(r.kortele);
+      });
+      $("gpk-dlg-ne").addEventListener("click", function () { baik(null); });
+      d.addEventListener("cancel", function (e) { e.preventDefault(); baik(null); });
+      $("gpk-dlg-daugiau").addEventListener("click", function () {
+        var laukai = Object.assign({}, duom);
+        neperkelta.forEach(function (n) { delete laukai[n.laukas]; });
+        var pav = $("gpk-dlg-pav").value.trim();
+        if (pav) laukai.pavadinimas = pav;
+        var w = atverkPuslapi({ laukai: laukai, modulis: o.modulis || "", onIssaugota: o.onIssaugota });
+        baik(w ? { atverta: true } : { blokuota: true });
+      });
+      $("gpk-dlg-pav").addEventListener("input", function () { klaida(""); });
+      if (d.showModal) d.showModal(); else d.setAttribute("open", "");
+      $("gpk-dlg-pav").focus();
+      if ($("gpk-dlg-pav").value) $("gpk-dlg-pav").select();
+    });
   }
 
   /* ================================================================ SĄSAJA MODULIUI
@@ -488,7 +600,11 @@
       blokuota: "Naršyklė neleido atverti naujo skirtuko. Leiskite iššokančius langus šiai svetainei arba atverkite „Visos kortelės“.",
       sukurta: "Kortelė sukurta ir pasirinkta.", archyvuota: "archyvuota",
       kitas1: "Modulyje jau įvestas kitas pirkimas", kitas2: "Pildyti tuščius laukus iš kortelės",
-      kitasTaip: "Taip, pildyti tuščius", kitasNe: "Ne, palikti kaip yra"
+      kitasTaip: "Taip, pildyti tuščius", kitasNe: "Ne, palikti kaip yra",
+      dlgH: "Nauja pirkimo kortelė",
+      dlgApie: "Kortelė bus išsaugota šioje naršyklėje (ji patenka į atsarginę kopiją), ir ją galės skaityti kiti įrankiai. Pats modulio darbas nesaugomas.",
+      dlgPav: "Pirkimo pavadinimas", dlgIs: "Iš modulio perimama:", dlgIsM: "Iš modulio „{m}“ perimama:", dlgNieko: "Kitų duomenų modulyje dar nėra - juos galėsite įrašyti vėliau.",
+      dlgNeperkeliama: "Neperkeliama:", dlgDaugiau: "Pildyti kortelių puslapyje", dlgAtsaukti: "Atšaukti", dlgSaugoti: "Išsaugoti kortelę"
     },
     en: {
       zyme: "Procurement card", pirkimas: "Procurement card", be: "- none selected -",
@@ -504,7 +620,11 @@
       blokuota: "The browser did not allow a new tab. Allow pop-ups for this site or open “All cards”.",
       sukurta: "Card created and selected.", archyvuota: "archived",
       kitas1: "Another procurement is already entered here", kitas2: "Fill the empty fields from the card",
-      kitasTaip: "Yes, fill empty fields", kitasNe: "No, keep as is"
+      kitasTaip: "Yes, fill empty fields", kitasNe: "No, keep as is",
+      dlgH: "New procurement card",
+      dlgApie: "The card will be saved in this browser (it is included in the backup) and other tools will be able to read it. The module's own work is not saved.",
+      dlgPav: "Procurement title", dlgIs: "Taken from the module:", dlgIsM: "Taken from “{m}”:", dlgNieko: "There is no other data in the module yet - you can add it later.",
+      dlgNeperkeliama: "Not transferred:", dlgDaugiau: "Fill in on the cards page", dlgAtsaukti: "Cancel", dlgSaugoti: "Save card"
     }
   };
   function t(k) { var l = kalba(); return (T[l] && T[l][k]) || T.lt[k] || k; }
@@ -541,7 +661,30 @@
       ".gpk-sk b{font-weight:800}",
       ".gpk-past{color:#5B6470}",
       "@media (max-width:640px){.gpk-sel{flex:1 1 100%}.gpk-sant{flex-basis:100%}}",
-      "@media print{.gpk{display:none!important}}"
+      "@media print{.gpk{display:none!important}}",
+      /* Kortelės kūrimo langas modulyje */
+      ".gpk-dlg{width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px);border:0;border-radius:14px;padding:0;color:var(--color-graphite,#2E3641);",
+      "background:var(--color-white,#fff);box-shadow:0 20px 60px rgba(0,0,0,.25);font-family:var(--font-base,inherit);box-sizing:border-box}",
+      ".gpk-dlg *{box-sizing:border-box}",
+      ".gpk-dlg::backdrop{background:rgba(20,28,36,.45)}",
+      ".gpk-dlg form{display:grid;gap:12px;padding:20px 22px;margin:0}",
+      ".gpk-dlg h2{margin:0;font-size:19px;line-height:1.3}",
+      ".gpk-dlg-p{margin:0;font-size:13.5px;line-height:1.5;color:#5B6470}",
+      ".gpk-dlg-l{display:grid;gap:4px}",
+      ".gpk-dlg label{font-size:13.5px;font-weight:700}",
+      ".gpk-dlg input{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--color-graphite-30,#C7CDD3);border-radius:8px;width:100%;color:inherit;background:#fff}",
+      ".gpk-dlg input:focus-visible,.gpk-dlg .gpk-btn:focus-visible{outline:2px solid var(--color-emerald-strong,#007554);outline-offset:2px}",
+      ".gpk-dlg input[aria-invalid=true]{border-color:#A3192C;box-shadow:0 0 0 1px #A3192C}",
+      ".gpk-dlg-kl{font-size:12.5px;color:#A3192C;font-weight:700}",
+      ".gpk-dlg-kl:empty{display:none}",
+      ".gpk-dlg-sar{border:1px solid var(--color-graphite-15,#E1E2E4);border-radius:10px;padding:10px 12px;font-size:13.5px}",
+      ".gpk-dlg-sar p{margin:0 0 6px;font-weight:700}",
+      ".gpk-dlg dl{margin:0;display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:4px 12px}",
+      ".gpk-dlg dt{color:#5B6470}",
+      ".gpk-dlg dd{margin:0;overflow-wrap:anywhere}",
+      ".gpk-dlg-myg{display:flex;flex-wrap:wrap;gap:8px 10px;justify-content:space-between;align-items:center}",
+      ".gpk-dlg-myg span{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}",
+      "@media (max-width:480px){.gpk-dlg form{padding:16px}.gpk-dlg dl{grid-template-columns:1fr;gap:0 12px}.gpk-dlg dd{margin-bottom:4px}}"
     ].join("");
     var el = document.createElement("style");
     el.id = STILIUS_ID; el.textContent = css;
@@ -809,7 +952,7 @@
       ctx.sar.korteles.forEach(function (y) { if (y.id === id) k = y; });
       if (!k) k = gauk(id);
       if (!k) { ctx.kortele = null; ctx.pr = null; ctx.info = t("nerasta"); piesk(); return Promise.resolve(false); }
-      return kitasPirkimas(k).then(function (toliau) {
+      return (x.savas ? Promise.resolve(true) : kitasPirkimas(k)).then(function (toliau) {
         return toliau === false ? false : (o.pries ? o.pries(k, ctx.kortele) : true);
       }).then(function (gerai) {
         if (gerai === false) { piesk(); return false; }
@@ -861,7 +1004,15 @@
         var v = b.is ? b.is(dab) : dab;
         if (v !== undefined && v !== null && v !== "") duom[b.kortele] = v;
       });
-      atverk({ laukai: duom });
+      /* Kortelė kuriama čia pat (langas modulyje); „Pildyti kortelių puslapyje“ - naujame skirtuke, kaip iki šiol. */
+      kurkLange(duom, { modulis: o.modulis || "", onIssaugota: issaugotaKitur }).then(function (r) {
+        if (r && r.id) {
+          skaitykSarasa();
+          /* Mygtukas „Sukurti ...“ virto „Keisti kortelę“ - fokusas grąžinamas į juostos pasirinkimą. */
+          pasirink(r.id, { pildyti: true, info: t("sukurta"), savas: true }).then(function () { sel.focus(); });
+        }
+        else if (r && r.blokuota) { ctx.info = t("blokuota"); zinute(); }
+      });
     }
     /* Kitame lange pakeistos kortelės: sąrašas atnaujinamas, pasirinkta - neperrašoma. */
     global.addEventListener("storage", function (e) {
@@ -931,6 +1082,7 @@
     busenosPav: function (id, l) { return pav(BUSENOS, id, l); },
     puslapioAdresas: puslapioAdresas, atverkPuslapi: atverkPuslapi,
     PROTOKOLO_RAKTAS: PROTOKOLO_RAKTAS, isProtokolo: isProtokolo, protokoloPerkelimas: protokoloPerkelimas,
+    kurkLange: kurkLange,
     mount: mount
   };
 })(typeof window !== "undefined" ? window : this);
