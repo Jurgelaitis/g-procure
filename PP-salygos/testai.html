@@ -504,16 +504,21 @@ async function testaiEiga(){
     await W.aiPridek([await docx(TS[0], TS[1])]);
     AI.atsakymas = opts => new Promise(res => opts.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })));
     D.getElementById("aiGauti").click();
-    await kol(() => D.querySelector("[data-ai-atsaukti]"), "atšaukimo mygtukas");
-    D.querySelector("[data-ai-atsaukti]").click();
-    await kol(() => /atšaukta - niekas nepakeista/.test(D.getElementById("aiBusena").textContent), "atšaukimo pranešimas");
+    await kol(() => D.querySelector("#aiBusena [data-gpb-atsaukti]"), "atšaukimo mygtukas");
+    tiesa(/AI analizuoja/.test(D.getElementById("aiBusena").textContent) && D.querySelector("#aiBusena [data-gpb-laikas]"), "AI eiga be laikmačio");
+    D.querySelector("#aiBusena [data-gpb-atsaukti]").click();
+    await kol(() => /Atšaukta - niekas nepakeista/.test(D.getElementById("aiBusena").textContent), "atšaukimo pranešimas");
     tiesa(!D.getElementById("aiGauti").disabled && !W.eval("AI.analize"), "po atšaukimo");
   });
   await testas("Serverio klaida - aiškus pranešimas, pasiūlymų nėra", async () => {
     AI.atsakymas = () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Pabandykite po kelių minučių." });
     D.getElementById("aiGauti").click();
-    await kol(() => /Klaida: Serverio klaida \(500\)/.test(D.getElementById("aiBusena").textContent), "klaidos pranešimas");
+    await kol(() => /Pasiūlymų gauti nepavyko: Serverio klaida \(500\)/.test(D.getElementById("aiBusena").textContent), "klaidos pranešimas");
     tiesa(!D.querySelector("[data-ai-laukia]") && !W.eval("AI.analize"), "po klaidos atsirado pasiūlymų");
+    lygu(D.getElementById("aiBusena").getAttribute("role"), "alert", "klaida pranešama ekrano skaitytuvui");
+    AI.atsakymas = aiOk({ atsakymai: [] });
+    D.querySelector("#aiBusena [data-gpb-kartoti]").click();
+    await kol(() => W.eval("AI.analize"), "„Bandyti dar kartą“ paleido visą analizę su rezultato taikymu");
   });
   await testas("Telefone (375 px): juosta ir pasiūlymai neplatina puslapio", async () => {
     await modulis("siauras"); await zingsnis2("T-SD", "LT");
@@ -529,13 +534,116 @@ async function testaiEiga(){
   });
 }
 
+/* ======================================================================== */
+async function testaiBusenos(){
+  dabartine = grupe("Vienodos būsenos (Q3, shared/busena.js)");
+
+  await testas("Šablonų įkėlimo klaida - aiški priežastis ir „Bandyti dar kartą“, ne amžinas „kraunami šablonai“", async () => {
+    await modulis();
+    const tikras = W.fetch;
+    let blokuoti = true;
+    W.fetch = (u, o) => (blokuoti && /zemelapiai\/.*\.json/.test(String(u))) ? Promise.reject(new TypeError("Failed to fetch")) : tikras.call(W, u, o);
+    const sel = D.getElementById("budas"); sel.value = "T-SD"; sel.dispatchEvent(new W.Event("change"));
+    D.getElementById("toStep2").click();
+    await kol(() => /Nepavyko įkelti šablonų: Nėra ryšio su serveriu/.test(D.getElementById("tplBusena").textContent), "klaidos pranešimas", 8000);
+    tiesa(D.getElementById("step2").classList.contains("hid") && !D.getElementById("toStep2").disabled, "po klaidos turi likti 1 žingsnis ir veikiantis mygtukas");
+    blokuoti = false;
+    D.querySelector("#tplBusena [data-gpb-kartoti]").click();
+    await kol(() => !D.getElementById("step2").classList.contains("hid"), "po „Bandyti dar kartą“ - 2 žingsnis", 15000);
+    tiesa(D.getElementById("tplBusena").hidden, "pavykus būsena turi dingti");
+  });
+
+  await testas("Priedų registras neįkeltas: „būsena nežinoma“, ne tuščias sąrašas; generuoti neleidžiama; „Bandyti dar kartą“ atkuria", async () => {
+    await modulis();
+    // Pradinis puslapio įkėlimas turi pasibaigti - kitaip jis vėliau „atstatytų“ registrą ir klaidą.
+    await kol(() => W.eval("PRIEDAI.length") > 0, "pradinis priedų registras");
+    const tikras = W.fetch;
+    let blokuoti = true;
+    W.fetch = (u, o) => (blokuoti && /priedai\.json/.test(String(u))) ? Promise.resolve(new W.Response("nėra", { status: 404 })) : tikras.call(W, u, o);
+    W.eval("PRIEDAI = []");
+    await W.kraukPriedus();
+    tiesa(W.eval("PRIEDU_KLAIDA"), "klaida neįsiminta");
+    await zingsnis2("T-SD", "LT");
+    const pb = D.getElementById("prieduBusena");
+    tiesa(pb && /Nepavyko įkelti priedų registro - priedų sąrašas nežinomas/.test(pb.textContent) && /404/.test(pb.textContent), "nežinomos būsenos nėra: " + (pb && pb.textContent));
+    lygu([...D.querySelectorAll("#klausimai h3")].filter(h => /^Priedai/.test(h.textContent)).map(h => h.textContent), ["Priedai"], "viena „Priedai“ antraštė, be skaičiaus (jis nežinomas)");
+    lygu(W.prieduPoros(W.__K).registras.length, 0, "registras tuščias");
+    const alertai = []; W.alert = m => alertai.push(m);
+    Object.entries(W.__K.grupes).forEach(([gid, g]) => W.pasirinkGrupe(gid, g.nariai[0].raktas));
+    D.getElementById("gen").click();
+    await kol(() => /Priedų registras neįkeltas/.test(D.getElementById("genBusena").textContent), "generavimas turi būti sustabdytas");
+    tiesa(D.getElementById("step3").classList.contains("hid") && !alertai.length, "generuota su nepilnu paketu arba alert()");
+    blokuoti = false;
+    D.querySelector("#prieduBusena [data-gpb-kartoti]").click();
+    await kol(() => !D.getElementById("prieduBusena") && W.prieduPoros(W.__K).registras.length > 0, "po „Bandyti dar kartą“ priedai turi atsirasti", 15000);
+  });
+
+  await testas("Neatsakytos alternatyvos ir generavimo klaida - pranešimas prie mygtuko (ne alert), fokusas, „Bandyti dar kartą“", async () => {
+    await modulis(); await zingsnis2("T-SD", "LT");
+    const alertai = []; W.alert = m => alertai.push(m);
+    D.getElementById("gen").click();
+    await kol(() => /Neatsakytų alternatyvų grupių: \d+/.test(D.getElementById("genBusena").textContent), "neatsakytų grupių pranešimas");
+    tiesa(D.activeElement && D.activeElement.closest(".q.warn"), "fokusas ne ties neatsakyta grupe");
+    Object.entries(W.__K.grupes).forEach(([gid, g]) => W.pasirinkGrupe(gid, g.nariai[0].raktas));
+    const tikras = W.generuoti;
+    let kiek = 0;
+    W.generuoti = () => { kiek++; return Promise.reject(new Error("šablonas sugadintas")); };
+    D.getElementById("gen").click();
+    await kol(() => /Nepavyko sugeneruoti dokumentų: šablonas sugadintas/.test(D.getElementById("genBusena").textContent), "generavimo klaida");
+    lygu([alertai.length, D.getElementById("gen").disabled], [0, false], "alert() ar užstrigęs mygtukas");
+    W.generuoti = tikras;
+    D.querySelector("#genBusena [data-gpb-kartoti]").click();
+    await kol(() => !D.getElementById("step3").classList.contains("hid"), "po „Bandyti dar kartą“ - 3 žingsnis", 60000);
+    lygu(kiek, 1, "klaidingas generavimas kviestas");
+  });
+
+  await testas("Paraiškos analizė: eiga su „Atšaukti“; naujas failas nutraukia seną, o senasis neperrašo naujojo", async () => {
+    await modulis();
+    const senas = new W.File(["a"], "senas.pdf", { type: "application/pdf" }), naujas = new W.File(["b"], "naujas.pdf", { type: "application/pdf" });
+    let baigti;
+    W.GP_PARAISKA.analizuoti = (f, o) => f.name === "senas.pdf"
+      ? new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))))
+      : new Promise(ok => { o.onParuosta && o.onParuosta(); baigti = () => ok({ map: { siulymai: [], info: [] }, pastabos: "" }); });
+    const p1 = W.pzAnalizuoti(senas);
+    await kol(() => D.querySelector("#pzBusena [data-gpb-atsaukti]") && /senas\.pdf/.test(D.getElementById("pzBusena").textContent), "seno failo eiga");
+    const p2 = W.pzAnalizuoti(naujas);
+    await p1;
+    tiesa(/AI analizuoja naujas\.pdf/.test(D.getElementById("pzBusena").textContent), "senasis perrašė naujojo eigą: " + D.getElementById("pzBusena").textContent);
+    baigti(); await p2;
+    tiesa(D.getElementById("pzBusena").hidden && D.getElementById("pzRez").style.display !== "none", "po analizės - rezultatai, eiga paslėpta");
+  });
+
+  await testas("ZIP: kol ruošiamas - mygtukas išjungtas (dvigubas paspaudimas neruošia dviejų); klaida - priežastis ir „Bandyti dar kartą“; pavykus - failo vardas", async () => {
+    await modulis();
+    const rez = W.eval("[1, 2].map(i => ({ d: { trumpas: 'DOK' + i, pavadinimas: 'Dokumentas ' + i }, blob: new Blob(['x']), forma: false,"
+      + " audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [] }, stats: { trinta: 0, juodinta: 0, pildyta: 0, intTrinta: 0 } }))");
+    W.rodykRezultata(rez);
+    const origGen = W.JSZip.prototype.generateAsync, origClick = W.HTMLAnchorElement.prototype.click;
+    const atsisiusta = [];
+    W.HTMLAnchorElement.prototype.click = function(){ atsisiusta.push(this.download); };
+    try {
+      let kiek = 0;
+      W.JSZip.prototype.generateAsync = function(){ kiek++; return Promise.reject(new Error("Bandomoji ZIP klaida")); };
+      const b = D.getElementById("zipBusena"), z = D.getElementById("zip");
+      const p1 = z.onclick(); const p2 = z.onclick();
+      await p1; await p2;
+      lygu(kiek, 1, "dvigubas paspaudimas ruošė du archyvus");
+      tiesa(b.classList.contains("gpb--klaida") && /ZIP archyvo paruošti nepavyko: Bandomoji ZIP klaida/.test(b.textContent) && !z.disabled, "klaida: " + b.textContent);
+      W.JSZip.prototype.generateAsync = origGen;
+      b.querySelector("[data-gpb-kartoti]").click();
+      await kol(() => b.classList.contains("gpb--gerai"), "pakartojus - sėkmė");
+      tiesa(/ZIP archyvas atsisiųstas: Pirkimo_salygos_.*\.zip/.test(b.textContent) && atsisiusta.length === 1 && /\.zip$/.test(atsisiusta[0]), "sėkmė: " + b.textContent + " / " + atsisiusta.join(","));
+    } finally { W.JSZip.prototype.generateAsync = origGen; W.HTMLAnchorElement.prototype.click = origClick; }
+  });
+}
+
 /* Bendras dokumentų skaitymas - vienas failas (shared/), abu moduliai jį jungia. */
 async function testaiBendras(){
   dabartine = grupe("Bendras kodas");
   await testas("GP_DOK įkeltas iš ../shared/dokumentai.js; AI logika - atskiras ai-patarejas.js", async () => {
     await modulis();
     const src = [...D.querySelectorAll("script[src]")].map(s => s.getAttribute("src"));
-    tiesa(src.includes("../shared/dokumentai.js") && src.includes("ai-patarejas.js") && src.includes("../shared/ai-proxy.js"), "skriptai: " + src.join(", "));
+    tiesa(src.includes("../shared/dokumentai.js") && src.includes("ai-patarejas.js") && src.includes("../shared/ai-proxy.js") && src.includes("../shared/busena.js"), "skriptai: " + src.join(", "));
     tiesa(!src.some(s => /PP-tiekejams/.test(s)), "tiesioginė priklausomybė nuo kito modulio");
   });
 }
@@ -546,6 +654,7 @@ async function testaiBendras(){
     await testaiLogika();
     await testaiKlausimai();
     await testaiEiga();
+    await testaiBusenos();
     await testaiBendras();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
