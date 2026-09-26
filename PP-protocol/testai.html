@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>PP-protocol regresijos testai</title>
+<link rel="stylesheet" href="../shared/epso-g.css">
+<style>
+  body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);background:var(--color-graphite-5);font-size:14px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#5B6470;margin-bottom:18px;max-width:82ch}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .n{font-size:24px;font-weight:800} .ok{color:var(--color-emerald-strong)} .blogai{color:var(--color-error)}
+  .grupe{background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .grupe h2{font-size:14px;margin:0;padding:11px 16px;background:var(--color-green-5);color:var(--color-emerald-strong);border-bottom:1px solid var(--color-graphite-15)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #F0F3F5;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:800;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .t.geras .zyma{background:var(--color-green-5);color:var(--color-emerald-strong)}
+  .t.krito .zyma{background:var(--color-error-5);color:#7F1722} .t.krito{background:#FFFAFA}
+  .det{color:#7F1722;font-size:12px;margin-top:3px;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+  iframe{position:absolute;left:-9999px;top:0;width:1280px;height:900px;border:0}
+</style>
+</head>
+<body>
+
+<h1>PP-protocol regresijos testai</h1>
+<div class="sub">Pirmas PP-protocol rinkinys (2026-09-26, tobulinimo planas Q7): puslapis įsikelia, pirkimo tipas lemia
+protokolų seką, protokolo Word failas susigeneruoja su bendru stiliumi (iki 2026-09-26 pagrindinis protokolas vienintelis
+naudojo „styles“, tad Pages prarasdavo lygiuotę), nepavykus protokolui pranešimai nebekuriami ir nerodoma „Sukurta“,
+audito žurnalas pildomas, o neperskaitomi pirkimų duomenys nevirsta „dar nėra pirkimų“. Tikri naudotojo duomenys
+įsimenami prieš testus ir atkuriami po jų (shared/testu-apsauga.js).</div>
+
+<div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
+  <span class="n blogai" id="n-blogai">0</span> krito
+  <span id="busena" style="color:#5B6470">Vykdoma...</span></div>
+<div id="rezultatai"></div>
+
+<script src="../shared/testu-apsauga.js"></script>
+<script>
+const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("litgrid_") === 0 || k === "gprocure.infoPanel.pp-protocol");
+const RAKTAS = "litgrid_procurements_v2";
+
+const R = { ok: 0, blogai: 0 };
+function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
+let dabartine = null;
+function grupe(pav){ const d = document.createElement("div"); d.className = "grupe"; d.innerHTML = "<h2>" + ekranuok(pav) + "</h2>"; document.getElementById("rezultatai").appendChild(d); dabartine = d; }
+async function testas(pav, fn){
+  const eil = document.createElement("div");
+  try { await fn(); eil.className = "t geras"; eil.innerHTML = '<span class="zyma">GERAI</span><span>' + ekranuok(pav) + '</span>'; R.ok++; }
+  catch (e) { eil.className = "t krito"; eil.innerHTML = '<span class="zyma">KRITO</span><span>' + ekranuok(pav) + '<div class="det">' + ekranuok((e && e.message) || e) + '</div></span>'; R.blogai++; }
+  dabartine.appendChild(eil);
+  document.getElementById("n-ok").textContent = R.ok; document.getElementById("n-blogai").textContent = R.blogai;
+}
+function tiesa(s, ka){ if (!s) throw new Error(ka || "sąlyga netenkinama"); }
+function lygu(g, t, ka){ if (JSON.stringify(g) !== JSON.stringify(t)) throw new Error((ka || "reikšmė") + "\n  tikėtasi: " + JSON.stringify(t) + "\n  gauta:    " + JSON.stringify(g)); }
+const lauk = ms => new Promise(r => setTimeout(r, ms));
+
+/* Word dokumento dalis be bibliotekų: ZIP centrinis katalogas -> failas -> DecompressionStream (kaip PP-qual testuose). */
+async function docxDalis(blob, vardasRe){
+  const b = new Uint8Array(await blob.arrayBuffer()), dv = new DataView(b.buffer);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  tiesa(eocd >= 0, "ne ZIP failas");
+  let p = dv.getUint32(eocd + 16, true);
+  const n = dv.getUint16(eocd + 10, true);
+  for (let k = 0; k < n; k++) {
+    const metodas = dv.getUint16(p + 10, true), dydis = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+    const vardas = new TextDecoder().decode(b.subarray(p + 46, p + 46 + nl));
+    if (vardasRe.test(vardas)) {
+      const pr = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true), d = b.subarray(pr, pr + dydis);
+      return metodas === 0 ? new TextDecoder().decode(d) : await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+    }
+    p += 46 + nl + el + cl;
+  }
+  throw new Error("dalis nerasta: " + vardasRe);
+}
+
+/* Modulis rėmelyje (kaskart naujas). Naudotojo profilis įrašomas iš anksto (APSAUGA jį atkurs), kad profilio langas neuždengtų. */
+let W = null, D = null, remas = null;
+function modulis(){
+  if (remas) remas.remove();
+  if (!localStorage.getItem("litgrid_user_profile_v1")) localStorage.setItem("litgrid_user_profile_v1", JSON.stringify({ name: "Testo Naudotojas", email: "" }));
+  return new Promise(res => {
+    const f = remas = document.createElement("iframe");
+    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(300); res(); }, { once: true });
+    f.src = "LITGRID_Generatorius_v3.html?cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+const PK = "TEST-2026-001";
+function pirkimas(tipas){
+  return { id: PK, name: "Galios transformatorių pirkimas", korteles_data: "2026-09-01", val_ex: 500000, val_inc: 605000, obj_type: "prekes",
+    terminas: "", parts_enabled: false, confidential_appendix: false, cpo_applicable: false, priority: "normal", parts: [], type: tipas,
+    eval_criteria: "kaina", val_cat: W.deriveValCat(tipas),
+    komisija: { tipas: "nuolatine", date: "2026-01-10", nr: "K-1", name: "Nuolatinė pirkimų komisija", chair: "Pirmininkas P.", secretary: "Sekretorius S.",
+      members: ["Narys A.", "Narys B."], nesaliskumas: true, nesaliskumasData: "2026-09-01" },
+    channel: "cvpis", cvp_nr: "123456", kval: "ne", protocols: {}, createdAt: "2026-09-01" };
+}
+
+async function testaiPuslapis(){
+  grupe("Puslapis įsikelia");
+  await testas("Antraštės veiksmai, būsena „Duomenys šioje naršyklėje“, informacinė skiltis veda į modulio pagalbą", async () => {
+    const h = D.querySelector(".app-header").textContent;
+    ["Excel", "Kopija", "Auditas", "Terminai"].forEach(x => tiesa(h.indexOf(x) >= 0, "antraštėje nėra „" + x + "“"));
+    tiesa(/Duomenys šioje naršyklėje/.test(h), "būsena: " + h.slice(0, 120));
+    tiesa(D.querySelector("#page-dashboard #infoPanelMount .gpi"), "informacinė skiltis");
+    D.querySelector("#infoPanelMount .gpi-more").click();
+    tiesa(D.getElementById("help-modal").classList.contains("show"), "„Išsami pagalba“ turi atverti modulio pagalbos langą");
+    W.closeHelp();
+    tiesa(W.GP_DOCX_STILIAI && W.GP_SAUGYKLA && W.GP_BUSENA && W.docx, "bendri failai ir Word biblioteka");
+  });
+}
+
+async function testaiKelias(){
+  grupe("Pagrindinis kelias: pirkimas, protokolų seka, Word");
+  await testas("Pirkimo tipas lemia protokolų seką: atviras konkursas A1-A5, derybos prasideda D1", async () => {
+    lygu(W.getSequence("atviras_tarptautinis").map(p => p.id).slice(0, 5), ["A1", "A2", "A3", "A4", "A5"], "atviras konkursas");
+    tiesa(W.getSequence("derybos_supaprastintas")[0].id === "D1", "derybos");
+  });
+
+  await testas("Protokolo Word failas: su bendru stiliumi (numatytasis Normal), antrašte, pirkimo pavadinimu ir komisijos nariais", async () => {
+    W.saveProcurementData(PK, pirkimas("atviras_tarptautinis"));
+    W.openProtocol(PK, "A1");
+    const pk = W.getProcurement(PK), proto = W.getSequence(pk.type).find(p => p.id === "A1");
+    const blob = await W.buildDocx(pk, proto, "2026-09-26", "P-7", true);
+    const stiliai = await docxDalis(blob, /^word\/styles\.xml$/), dok = await docxDalis(blob, /^word\/document\.xml$/);
+    tiesa(/w:type="paragraph"[^>]*w:default="1"[^>]*w:styleId="Normal"|w:default="1"[^>]*w:styleId="Normal"|w:styleId="Normal"[^>]*w:default="1"/.test(stiliai), "styles.xml be numatytojo Normal - Pages ignoruos lygiuotę");
+    const tekstas = dok.split(/<\/w:p>/).map(x => x.replace(/<[^>]+>/g, "")).join("\n");
+    ["PIRKIMŲ KOMISIJOS POSĖDŽIO PROTOKOLAS", "Nr. P-7", "Pirmininkas P.", "Narys A."].forEach(x => tiesa(tekstas.indexOf(x) >= 0, "dokumente nėra „" + x + "“"));
+  });
+
+  await testas("„Generuoti“: failas atsisiunčiamas, protokolas pažymimas atliktu, veiksmas įrašomas į audito žurnalą", async () => {
+    W.openProtocol(PK, "A1");
+    D.getElementById("pf-date").value = "2026-09-26"; D.getElementById("pf-nr").value = "P-8";
+    const tikras = W.saveAs; let vardas = null;
+    W.saveAs = (b, v) => { vardas = v; };
+    try { lygu(await W.generateCurrentProtocol(), true, "grąžinta"); } finally { W.saveAs = tikras; }
+    tiesa(vardas && /^TEST-2026-001_Protokolas_1_.*_2026-09-26\.docx$/.test(vardas), "failo vardas: " + vardas);
+    const pk = W.getProcurement(PK);
+    tiesa(pk.protocols.A1 && pk.protocols.A1.done && pk.protocols.A1.filename === vardas, "protokolas nepažymėtas atliktu");
+    W.logAudit("TESTAS", PK, { pastaba: "q7" });
+    tiesa(W.getAuditLog(PK).some(a => a.action === "TESTAS"), "audito žurnale nėra įrašo");
+  });
+
+  await testas("Nepavykus protokolui - pranešimai nekuriami ir nerodoma „Sukurta: protokolas“ (anksčiau - rodyta)", async () => {
+    W.openProtocol(PK, "A4");
+    const tikras = W.buildDocx; const pranesimai = [];
+    const tikrasToast = W.toast;
+    W.buildDocx = async () => { throw new Error("Bandomoji protokolo klaida"); };
+    W.toast = (t, tipas) => { pranesimai.push(tipas + ": " + t); };
+    const pries = JSON.stringify(W.loadNotifStore()[PK] || []);
+    try { await W.generateAllDocuments("A4"); } finally { W.buildDocx = tikras; W.toast = tikrasToast; }
+    tiesa(pranesimai.some(p => /Bandomoji protokolo klaida/.test(p)) && !pranesimai.some(p => /Sukurta: protokolas/.test(p)), "pranešimai: " + pranesimai.join(" | "));
+    lygu(JSON.stringify(W.loadNotifStore()[PK] || []), pries, "pranešimai sukurti nors protokolas nepavyko");
+  });
+}
+
+async function testaiBusenos(){
+  grupe("Sąžiningos būsenos (Q3)");
+  await testas("Neperskaitomi pirkimai: juosta „būsena nežinoma“, sąrašas nesako „Dar nėra pirkimų“, įrašas neperrašomas", async () => {
+    const kopijosPries = new Set(Object.keys(localStorage).filter(k => k.indexOf(RAKTAS + ".sugadinta-") === 0));
+    localStorage.setItem(RAKTAS, '{"TEST": sugadinta');
+    await modulis();
+    const j = D.getElementById("gpb-juostos");
+    tiesa(j && /Pirkimai ir protokolai/.test(j.textContent) && /būsena nežinoma/.test(j.textContent), "juosta: " + (j && j.textContent));
+    tiesa(!/Dar nėra pirkimų/.test(D.getElementById("pk-list").textContent), "sąrašas: " + D.getElementById("pk-list").textContent.trim().slice(0, 120));
+    lygu(localStorage.getItem(RAKTAS), '{"TEST": sugadinta', "sugadintas įrašas perrašytas vien atidarius");
+    tiesa(Object.keys(localStorage).some(k => k.indexOf(RAKTAS + ".sugadinta-") === 0 && !kopijosPries.has(k)), "kopija nesukurta");
+  });
+}
+
+(async function(){
+  try {
+    localStorage.removeItem(RAKTAS);
+    await modulis();
+    await testaiPuslapis();
+    await testaiKelias();
+    await testaiBusenos();
+    document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
+  } catch (e) {
+    document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
+  } finally {
+    if (remas) remas.remove();
+    APSAUGA.atkurk();
+  }
+})();
+</script>
+</body>
+</html>
