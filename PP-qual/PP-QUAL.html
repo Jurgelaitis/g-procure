@@ -21,6 +21,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <!-- Bendras AI proxy transportas (shared) - GP_AI_PROXY. Turi buti pries modulio inline scripta. -->
 <script src="../shared/ai-proxy.js"></script>
+<!-- Vienodos būsenos (Q3): AI eiga su „Atšaukti“, klaida su „Bandyti dar kartą“ -->
+<script src="../shared/busena.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
 <!-- Teisės aktų nuorodos ir Metodikos skaičiai (PĮ / VPĮ / Metodika) - GP_TEISE. Numerių ir koeficientų modulyje nerašome. -->
 <script src="../shared/teises-nuorodos.js"></script>
@@ -250,6 +252,8 @@ table.data tr:nth-child(even) td{background:var(--color-graphite-5);}
 .divider{height:1px;background:var(--color-graphite-15);margin:var(--space-3) 0;}
 .toolbar{display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-3);}
 .muted{color:var(--color-graphite-50);}
+/* Q3: kas siunčiama į AI - pasakoma prie mygtuko (CLAUDE.md 7 sk.); #5B6470 - 6,3:1 ant balto */
+.cite-ai{font-size:12px;line-height:1.45;color:#5B6470;margin-top:8px;max-width:760px}
 .dropzone{border:2px dashed var(--color-graphite-30);border-radius:var(--radius-md);padding:var(--space-4);text-align:center;cursor:pointer;transition:var(--transition-fast);background:#fff;}
 .dropzone:hover,.dropzone.drag{border-color:var(--color-emerald);background:var(--color-green-5);}
 .dropzone svg{width:40px;height:40px;color:var(--color-emerald-strong);margin-bottom:var(--space-1);}
@@ -310,6 +314,7 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
 
 <main>
   <div class="container">
+  <div id="infoPanelMount"></div>
 
   <!-- ============ HOME ============ -->
   <section id="view-home" class="view active">
@@ -380,6 +385,7 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
   <section id="view-wizard" class="view">
     <div class="stepper" id="stepper"></div>
     <div id="wizard-body"></div>
+    <div id="wizBusena" hidden></div>
   </section>
 
   <!-- ============ CALCULATOR ============ -->
@@ -833,6 +839,14 @@ function rodykKirpima(id, r){
     : '';
 }
 
+/* Q3: aktyvaus AI veiksmo valdiklis - „Atšaukti“ nutraukia užklausą (signalas į GP_AI_PROXY). */
+let PPQ_VALDIKLIS = null;
+function aiVeiksmas(vieta, tekstas, klaidosPriesdelis, kartoti, veiksmas){
+  if(PPQ_VALDIKLIS) PPQ_VALDIKLIS.abort();
+  const v = PPQ_VALDIKLIS = new AbortController();
+  return GP_BUSENA.vykdyk(vieta, { tipas:'ai', tekstas, valdiklis:v, klaidosPriesdelis, kartoti, veiksmas:() => veiksmas() })
+    .finally(() => { if(PPQ_VALDIKLIS === v) PPQ_VALDIKLIS = null; });
+}
 async function callAI(userPrompt, opts={}){
   const sys = opts.system || systemPrompt();
   const maxTokens = opts.maxTokens || 4096;
@@ -840,7 +854,7 @@ async function callAI(userPrompt, opts={}){
   let attempt=0, lastErr=null;
   while(attempt<=maxRetries){
     try{
-      const raw = await rawCall(sys, userPrompt, maxTokens, opts.info);
+      const raw = await rawCall(sys, userPrompt, maxTokens, opts.info, opts.signal || (PPQ_VALDIKLIS && PPQ_VALDIKLIS.signal));
       return raw;
     }catch(e){
       lastErr=e;
@@ -865,14 +879,15 @@ function extractRetryDelay(msg){
   return 0;
 }
 
-async function rawCall(sys, userPrompt, maxTokens, info){
+async function rawCall(sys, userPrompt, maxTokens, info, signal){
   // Transportas iskeltas i shared/ai-proxy.js (GP_AI_PROXY). Raktas gyvena TIK
   // serverio puseje - klientas kreipiasi tik i g-procure proxy, jokio rakto cia.
   const res = await GP_AI_PROXY.call({
     module: 'pp-qual',
     system: sys,
     userMessage: userPrompt,
-    maxTokens: maxTokens
+    maxTokens: maxTokens,
+    signal: signal
   });
   // SAUGIKLIS 1: klaidas metam (ne grazinam objekta), kad callAI retry logika
   // (429 / rate limit / overloaded) veiktu kaip anksciau.
@@ -1063,8 +1078,8 @@ function renderStep1(){
     </div>
     <div class="btn-row" style="margin-bottom:var(--space-3)">
       <button class="btn btn-secondary" id="extract-btn" onclick="extractContextFromTs()">Ekstraktuoti kontekstą su AI</button>
-      <span id="extract-status" class="muted" style="align-self:center"></span>
     </div>
+    <div id="extract-status" hidden></div>
     <div class="divider"></div>
   ` : `
     <div class="info-block">1 įėjimas: įveskite turimą pirkimo informaciją. Modulis sugeneruos patikslinimo klausimus ir kvalifikacijos rinkinį.</div>
@@ -1118,6 +1133,7 @@ function renderStep1(){
         <span>Toliau - generuoti klausimus</span>
       </button>
     </div>
+    <div class="cite-ai">Paspaudus „Toliau“, pirkimo informacija (su numatoma verte ir įkeltu TS tekstu) siunčiama per G-Procure serverį į Claude API. Nesiųskite įslaptintos informacijos.</div>
   </div>`;
   kategorijaNumatyta('p');
 }
@@ -1142,21 +1158,16 @@ async function submitStep1(){
   if(!PPQ.procurement.objectType){ toast('Pasirinkite pirkimo objekto tipą.',true); return; }
   if(!PPQ.procurement.value || PPQ.procurement.value<=0){ toast(parseFloat($('p-value').value)<0 ? 'Pirkimo vertė negali būti neigiama.' : 'Įveskite pirkimo vertę.',true); return; }
   const btn=$('step1-next');
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Generuojama...';
-  try{
-    await generateQuestions();
-    PPQ.step=2;
-    renderWizard();
-  }catch(e){
-    toast('Klaida: '+e.message,true);
-    btn.disabled=false; btn.innerHTML='<span>Toliau - generuoti klausimus</span>';
-  }
+  btn.disabled=true;
+  const r = await aiVeiksmas('#wizBusena', 'AI rengia patikslinimo klausimus', 'Klausimų sugeneruoti nepavyko', submitStep1, () => generateQuestions());
+  if(r.ok){ PPQ.step=2; renderWizard(); }
+  else if($('step1-next')) $('step1-next').disabled=false;
 }
 
 /* ---------- TS file import (entry 2) ---------- */
 async function handleTsFile(file){
   if(!file) return;
-  $('extract-status').textContent='Skaitomas failas...';
+  GP_BUSENA.rodyk('#extract-status', { tipas:'eiga', tekstas:'Skaitomas failas...' });
   try{
     const text = await extractFileText(file);
     // Textarea gauna TIKSLIAI ta teksta, kuris bus analizuojamas. Anksciau cia
@@ -1166,11 +1177,10 @@ async function handleTsFile(file){
     const r = ribotiTeksta(text);
     PPQ.sourceText = r.tekstas;
     $('ts-paste').value = r.tekstas;
-    $('extract-status').textContent='Failas perskaitytas ('+r.viso.toLocaleString('lt-LT')+' simb.). Spauskite "Ekstraktuoti kontekstą".';
+    GP_BUSENA.rodyk('#extract-status', { tipas:'gerai', tekstas:'Failas perskaitytas ('+r.viso.toLocaleString('lt-LT')+' simb.). Spauskite „Ekstraktuoti kontekstą su AI“.' });
     rodykKirpima('ts-kirpimas', r);
   }catch(e){
-    $('extract-status').textContent='';
-    toast('Nepavyko perskaityti failo: '+e.message,true);
+    GP_BUSENA.rodyk('#extract-status', { tipas:'klaida', tekstas:'Nepavyko perskaityti failo: '+GP_BUSENA.klaidosTekstas(e) });
   }
 }
 
@@ -1183,9 +1193,10 @@ async function extractContextFromTs(){
   rodykKirpima('ts-kirpimas', r);
   PPQ.sourceText=txt;
   const btn=$('extract-btn');
-  btn.disabled=true; btn.innerHTML='<span class="spinner-dark spinner"></span> Analizuojama...';
-  $('extract-status').textContent='AI analizuoja TS...';
-  try{
+  btn.disabled=true;
+  // Q3: anksčiau po klaidos būsena likdavo „AI analizuoja TS...“ - dabar klaida su priežastimi ir kartojimu.
+  let resp = null;
+  {
     const prompt=`Iš pateikto techninės specifikacijos (TS) teksto ekstraktuok pirkimo kontekstą. Grąžink TIK JSON objektą be jokio papildomo teksto:
 {
   "name": "pirkimo pavadinimas (jei randamas, kitaip trumpas apibūdinimas)",
@@ -1202,9 +1213,17 @@ async function extractContextFromTs(){
 
 TS TEKSTAS:
 """${ribotiTeksta(txt).tekstas}"""`;
-    const resp = await callAI(prompt,{maxTokens:1500});
+    const v = await aiVeiksmas('#extract-status', 'AI analizuoja TS tekstą', 'Konteksto ištraukti nepavyko', extractContextFromTs, async () => {
+      const atsakymas = await callAI(prompt,{maxTokens:1500});
+      if(!smartParseJson(atsakymas)) throw new Error('nepavyko nuskaityti AI atsakymo');
+      return atsakymas;
+    });
+    if($('extract-btn')){ $('extract-btn').disabled=false; $('extract-btn').textContent='Ekstraktuoti kontekstą su AI'; }
+    if(!v.ok) return;
+    resp = v.reiksme;
+  }
+  {
     const data = smartParseJson(resp);
-    if(!data) throw new Error('Nepavyko nuskaityti AI atsakymo.');
     const p=PPQ.procurement;
     p.name=noDash(data.name||p.name);
     if(OBJECT_TYPES.includes(data.objectType)) p.objectType=data.objectType; // validuojam - AI gali grazinti ne sarase esancia reiksme; kitaip lieka '' -> placeholder
@@ -1218,11 +1237,7 @@ TS TEKSTAS:
     p.dalys=noDash(String(data.dalys||'').trim());
     p.extra='Technologijos: '+((data.technologies||[]).join(', ')||'-')+'\nSpecialūs reikalavimai: '+((data.specialRequirements||[]).join(', ')||'-');
     renderStep1();
-    $('extract-status').textContent='Kontekstas ekstraktuotas. Patikrinkite laukus ir spauskite "Toliau".';
-    toast('Kontekstas sėkmingai ekstraktuotas');
-  }catch(e){
-    toast('Klaida: '+e.message,true);
-    if($('extract-btn')){ $('extract-btn').disabled=false; $('extract-btn').textContent='Ekstraktuoti kontekstą su AI'; }
+    GP_BUSENA.rodyk('#extract-status', { tipas:'gerai', tekstas:'Kontekstas ištrauktas. Patikrinkite laukus ir spauskite „Toliau“.' });
   }
 }
 
@@ -1307,15 +1322,10 @@ async function submitStep2(){
   if(zq && !PPQ.ui.zaliasPatvirtintas){ rodykZaliaKonflikta(zq); return; }
   $('zalias-konfliktas').innerHTML='';
   const btn=$('step2-next');
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Generuojami reikalavimai...';
-  try{
-    await generateRequirements();
-    PPQ.step=3;
-    renderWizard();
-  }catch(e){
-    toast('Klaida: '+e.message,true);
-    btn.disabled=false; btn.innerHTML='<span>Toliau - generuoti reikalavimus</span>';
-  }
+  btn.disabled=true;
+  const r = await aiVeiksmas('#wizBusena', 'AI rengia kvalifikacijos reikalavimų rinkinį', 'Reikalavimų sugeneruoti nepavyko', submitStep2, () => generateRequirements());
+  if(r.ok){ PPQ.step=3; renderWizard(); }
+  else if($('step2-next')) $('step2-next').disabled=false;
 }
 
 /* ---------- Step 3/4: requirement set ---------- */
@@ -1846,6 +1856,8 @@ function renderAuditInput(){
       <button class="btn btn-secondary" onclick="switchView('home')">Atgal</button>
       <button class="btn btn-primary" id="aud-start" onclick="startAudit()"><span>Patikrinti reikalavimus</span></button>
     </div>
+    <div id="audBusena" hidden></div>
+    <div class="cite-ai">Patikrinant reikalavimų tekstas ir pirkimo kontekstas (su numatoma verte) siunčiami per G-Procure serverį į Claude API. Nesiųskite įslaptintos informacijos.</div>
   </div>`;
   kategorijaNumatyta('a');
 }
@@ -1882,14 +1894,11 @@ async function startAudit(){
   surinkKonteksta('a');
   PPQ.sourceText=txt;
   const btn=$('aud-start');
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Skaidoma į reikalavimus...';
-  try{
-    await parseRequirementsFromText(txt);
-    await runFullAudit();
-  }catch(e){
-    toast('Klaida: '+e.message,true);
-    btn.disabled=false; btn.innerHTML='<span>Patikrinti reikalavimus</span>';
-  }
+  btn.disabled=true;
+  const rez = await aiVeiksmas('#audBusena', 'AI skaido tekstą į atskirus reikalavimus', 'Reikalavimų išskaidyti nepavyko', startAudit, () => parseRequirementsFromText(txt));
+  if($('aud-start')) $('aud-start').disabled=false;
+  if(!rez.ok) return;
+  await runFullAudit();
 }
 
 /* ---------- AI rinkinio vartai (generavimas ir importas) ----------
@@ -2855,6 +2864,63 @@ async function exportDocx(){
   GP_DARBAS.stebek(()=>[PPQ.settings,PPQ.procurement,PPQ.questions,PPQ.answers,PPQ.requirements,PPQ.audit,
     PPQ.sourceText,PPQ.exportLang,PPQ.exportPaskirtis,PPQ.priedoNr]);
   console.log('PP-QUAL inicializuotas.');
+})();
+</script>
+<!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
+     shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
+<script src="../shared/gprocure-info-panel.js"></script>
+<script>
+(function () {
+  if (!window.GProcureInfoPanel || !document.getElementById("infoPanelMount")) return;
+  var INFO = { lt: {
+    title: "Kas tai ir kaip naudotis",
+    purpose: "Proporcingi tiekėjų kvalifikacijos reikalavimai pagal VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodiką - parengimas, patikra ir Word priedas.",
+    stepsTitle: "Kaip naudotis",
+    steps: [
+      "<b>Pasirinkite pradžią:</b> turima pirkimo informacija, parengta TS arba jau parašyti reikalavimai patikrai.",
+      "<b>Vediklis:</b> pirkimo duomenys, AI patikslinimo klausimai, reikalavimų rinkinys - kiekvieną reikalavimą peržiūrite, taisote ir patvirtinate.",
+      "<b>Proporcingumo skaičiuoklė</b> parodo Metodikos ribas: vertės kategoriją, pajamų ir patirties apimtis, patirties laikotarpį.",
+      "<b>Audito patikra</b> tikrina reikalavimus taisyklėmis ir AI; pataisas taikote tik jūs, pažymėję.",
+      "<b>Eksportas:</b> Word priedas vidiniam naudojimui arba tiekėjams (be numatomos vertės ir vidinių pastabų)."
+    ],
+    noteTitle: "Kas siunčiama ir kas saugoma",
+    note: "Klausimams, generavimui ir patikrai pirkimo informacija (su numatoma verte) siunčiama per G-Procure serverį į Claude API. Nesiųskite įslaptintos informacijos. Darbas naršyklėje neišsaugomas - rezultatas yra atsisiųstas Word dokumentas; uždarant puslapį su neatsisiųstais pakeitimais naršyklė paklaus. Išsaugoma tik šios skilties būsena (atverta ar suskleista).",
+    moreLabel: "Plačiau",
+    details: {
+      title: "Kvalifikaciniai reikalavimai - išsami instrukcija",
+      intro: "Metodikos tikslas - ne aukščiausia kvalifikacija, o kad dalyvauti galėtų visi, pajėgūs sutartį įvykdyti. Kiekvieną reikalavimą ir jo reikšmę pirkimo vykdytojas turi galėti motyvuotai pagrįsti. Modulis padeda tai padaryti nuosekliai ir palieka pėdsaką, kas ką patvirtino.",
+      processTitle: "Darbo eiga",
+      process: [
+        { title: "Pirkimo kontekstas", text: "Objektas, vertė, trukmė, apmokėjimas, avansas, dalys." },
+        { title: "Klausimai", text: "AI patikslina tai, kas lemia proporcingumą." },
+        { title: "Rinkinys", text: "Reikalavimai su įrodymais; kiekvieną tvirtina žmogus." },
+        { title: "Patikra", text: "Taisyklės ir AI; pastabos grupuojamos pagal reikalavimą." },
+        { title: "Word", text: "Juodraštis, kol ne viskas patvirtinta ir patikrinta." }
+      ],
+      conceptsTitle: "Pagrindinės sąvokos",
+      concepts: [
+        { term: "Proporcingumas", def: "Reikalavimas atitinka pirkimo vertę, trukmę ir sudėtingumą ir nėra griežtesnis, nei būtina sutarčiai įvykdyti." },
+        { term: "Vertės kategorija", def: "Maža, vidutinė ar didelė vertė pagal mažos vertės ir tarptautinio pirkimo ribas - nuo jos priklauso rekomenduojamos apimtys." },
+        { term: "Redakcija", def: "Pakeitus patvirtinto reikalavimo tekstą, sukuriama nauja redakcija: patvirtinimas ir patikra galioja tik tai redakcijai, istorija lieka." },
+        { term: "Juodraštis", def: "Word dokumentas pažymimas JUODRAŠČIU, kol ne visi reikalavimai patvirtinti ir patikrinti." }
+      ],
+      faqTitle: "Dažniausi klausimai",
+      faq: [
+        { q: "Ar AI pataisos pritaikomos automatiškai?", a: "Ne. AI pasiūlymai rodomi prie pastabų; taikomi tik tie, kuriuos pažymite patys, ir su istorija." },
+        { q: "Kodėl patikra tapo „pasenusi“?", a: "Pasikeitė reikalavimas ar pirkimo kontekstas (vertė, apmokėjimas, dalys, atsakymai). Ankstesnės patikros rezultatai nebeatspindi dabartinio rinkinio - paleiskite patikrą iš naujo." },
+        { q: "Kuo skiriasi Word vidiniam naudojimui ir tiekėjams?", a: "Tiekėjams skirtame nėra numatomos vertės, vertės kategorijos, patikros skyriaus ir modulio pastabų." },
+        { q: "Ar galiu pradėti naują pirkimą nepraradęs darbo?", a: "Jei darbas pradėtas, modulis paklaus: „Tęsti“ ar „Pradėti naują“. Naujas pirkimas išvalo visą ankstesnio būseną." }
+      ],
+      closeLabel: "Uždaryti ir grįžti"
+    }
+  } };
+  GProcureInfoPanel.mount({
+    target: "#infoPanelMount",
+    moduleId: "pp-qual",
+    defaultOpen: true,
+    getLang: function () { return "lt"; },
+    content: INFO
+  });
 })();
 </script>
 </body>
