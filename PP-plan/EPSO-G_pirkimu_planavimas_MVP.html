@@ -580,7 +580,7 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--grafitas-50)}
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadintas planas nevirsta tuščiu -->
 <script src="../shared/busena.js"></script>
 <script src="../shared/saugykla.js"></script>
-<!-- Bendra pirkimo kortelė (A1, A2): plano eilutė -> kortelė kortelių puslapyje (naujame skirtuke) -->
+<!-- Bendra pirkimo kortelė (A1, A2): plano eilutė -> kortelė (kuriama čia pat, esama atveriama kortelių puslapyje) -->
 <script src="../shared/money.js"></script>
 <script src="../shared/organizacijos.js"></script>
 <script src="../shared/pirkimo-kortele.js"></script>
@@ -1259,10 +1259,11 @@ function saveProcModal(id, isNew){
 function closeModal(){ document.getElementById("modal").classList.remove("show"); }
 
 /* ==================== PIRKIMO KORTELĖ (A1, A2) ====================
-   Plano eilutė -> bendra pirkimo kortelė (shared/pirkimo-kortele.js). Kortelė kuriama ir keičiama
-   kortelių puslapyje naujame skirtuke: plano duomenys perduodami tik tam skirtukui (postMessage),
-   o išsaugotos kortelės id įsimenamas plano įraše (laukas `kortele`), kad antras paspaudimas
-   atvertų tą pačią kortelę, o ne kurtų dublikatą. */
+   Plano eilutė -> bendra pirkimo kortelė (shared/pirkimo-kortele.js). Nuo 2026-09-26 nauja kortelė kuriama
+   čia pat (GP_KORTELE.kurkLange: žmogus mato perimamus laukus ir paspaudžia „Išsaugoti kortelę“; „Pildyti
+   kortelių puslapyje“ - naujame skirtuke, duomenys tik tam skirtukui per postMessage), o esama keičiama
+   kortelių puslapyje. Išsaugotos kortelės id įsimenamas plano įraše (laukas `kortele`), kad antras
+   paspaudimas atvertų tą pačią kortelę, o ne kurtų dublikatą. */
 const KORTELES_IMONES = { "EPSO-G": "epso-g", "LITGRID": "litgrid", "AMBER": "amber-grid", "ECELLS": "energy-cells" };
 const KORTELES_RUSYS = { "Prekės": "prekes", "Paslaugos": "paslaugos", "Darbai": "darbai" };
 function kortelesIds(){
@@ -1292,22 +1293,33 @@ function kortelesLaukaiIsPlano(p){
 function korteliuMygtukas(p, ids, didelis){
   if(!window.GP_KORTELE) return "";
   const yra = p.kortele && ids.has(p.kortele);
-  const pav = yra ? "Atverti pirkimo kortelę" : "Sukurti pirkimo kortelę";
-  return `<button class="btn ${didelis ? "secondary" : "sm secondary"}" onclick="planoKortele('${p.id}')" title="${pav} (naujame skirtuke)" aria-label="${pav} (naujame skirtuke)">${yra ? "🗂 Kortelė" : "+ Kortelė"}</button>`;
+  const pav = yra ? "Atverti pirkimo kortelę (naujame skirtuke)" : "Sukurti pirkimo kortelę";
+  return `<button class="btn ${didelis ? "secondary" : "sm secondary"}" onclick="planoKortele('${p.id}')" title="${pav}" aria-label="${pav}">${yra ? "🗂 Kortelė" : "+ Kortelė"}</button>`;
 }
+/* Nauja kortelė kuriama čia pat (bendras langas GP_KORTELE.kurkLange, 2026-09-26); esama atveriama kortelių puslapyje. */
 function planoKortele(id){
   const p = DATA.procurements.find(x => x.id === id);
   if(!p || !window.GP_KORTELE) return;
-  const w = p.kortele && kortelesIds().has(p.kortele)
-    ? GP_KORTELE.atverkPuslapi({ id: p.kortele })
-    : GP_KORTELE.atverkPuslapi({ laukai: kortelesLaukaiIsPlano(p), modulis: "PP-plan", onIssaugota: kid => {
-        const rec = DATA.procurements.find(x => x.id === id);
-        if(!rec) return;
-        rec.kortele = kid;
-        save(); renderRegister();
-      } });
-  if(!w) GP_BUSENA.juosta({ raktas: "kortele", tipas: "klaida",
+  const isimink = kid => {
+    const rec = DATA.procurements.find(x => x.id === id);
+    if(!rec) return;
+    rec.kortele = kid;
+    save(); renderRegister();
+  };
+  const blokuota = () => GP_BUSENA.juosta({ raktas: "kortele", tipas: "klaida",
     tekstas: "Naršyklė neleido atverti naujo skirtuko su pirkimo kortele. Leiskite iššokančius langus šiai svetainei arba atverkite kortelių puslapį iš portalo." });
+  if(p.kortele && kortelesIds().has(p.kortele)){
+    if(!GP_KORTELE.atverkPuslapi({ id: p.kortele })) blokuota();
+    return;
+  }
+  GP_KORTELE.kurkLange(kortelesLaukaiIsPlano(p), { modulis: "PP-plan", onIssaugota: isimink }).then(r => {
+    if(r && r.id){
+      isimink(r.id);
+      const btn = document.querySelector(`button[onclick="planoKortele('${id}')"]`);   // perpiešta eilutė - fokusas į jos mygtuką
+      if(btn) btn.focus();
+    }
+    else if(r && r.blokuota) blokuota();
+  });
 }
 
 function recalcAll(){
@@ -2690,7 +2702,7 @@ renderDashboard();
       "<b>Suskaičiuokite terminus.</b> „Terminų skaičiuoklė“ skaičiuoja atgal nuo sutarties datos darbo dienomis su LR šventėmis (A arba B grafikas).",
       "<b>Centralizuokite.</b> Skirtukai „AI centralizavimas“ ir „Pajėgumai“ rodo, kuriuos kelių įmonių pirkimus verta jungti ir kaip pasiskirsto komandos krūvis.",
       "<b>Eksportuokite.</b> Excel arba PDF ataskaita - skirtukas „Eksportas“.",
-      "<b>Pradėkite pirkimą.</b> „Pirkimų registre“ prie pirkimo - „+ Kortelė“: plano duomenys perkeliami į bendrą pirkimo kortelę (naujame skirtuke), kurią perima kiti įrankiai."
+      "<b>Pradėkite pirkimą.</b> „Pirkimų registre“ prie pirkimo - „+ Kortelė“: plano duomenys perkeliami į bendrą pirkimo kortelę (patikrinate ir išsaugote čia pat), kurią perima kiti įrankiai."
     ],
     noteTitle: "Duomenys ir ribos",
     note: "Planas saugomas <b>tik šioje naršyklėje</b> ir niekur nesiunčiamas - ir „AI centralizavimas“ yra algoritmas naršyklėje, ne dirbtinis intelektas. Išvalius naršyklę planas dingsta, todėl darykite atsarginę kopiją (portalo poraštėje - „Atsarginė kopija“) arba eksportuokite į Excel. Vertės ribos imamos iš bendro G-Procure ribų failo; LR šventės skaičiuojamos kiekvieniems metams automatiškai.",

@@ -230,31 +230,33 @@ async function testaiKortele(){
     const be = W.eval("kortelesLaukaiIsPlano({ id:'p2', objektas:'X', imone:'NEZINOMA', bvpz:'45231400', verte:0 })");
     lygu(be, { pavadinimas: "X", busena: "planuojamas" }, "nežinoma įmonė, BVPŽ be kontrolinio skaitmens ir nulinė vertė neperkeliami");
   });
-  await testas("„+ Kortelė“: plano duomenys - tik naujam skirtukui, išsaugota kortelė įsimenama įraše, antras paspaudimas atveria tą pačią", async () => {
+  await testas("„+ Kortelė“: langas čia pat rodo plano duomenis; „Atšaukti“ - nieko neįrašo; išsaugojus kortelės id įsimenamas įraše, antras paspaudimas atveria tą pačią", async () => {
     W.eval("DATA = { procurements: [" + JSON.stringify(PLANO_IRASAS) + "] }; PLANO_SKAITYMAS = 'yra'; save(); goTab('register');");
-    const pop = document.createElement("iframe");
-    await new Promise(r => { pop.addEventListener("load", r, { once: true }); pop.srcdoc = "<!doctype html><body></body>"; document.body.appendChild(pop); });
-    try {
-      let adresai = [], gauta = null;
-      W.open = url => { adresai.push(url); return pop.contentWindow; };
-      pop.contentWindow.addEventListener("message", e => { gauta = e.data; });
-      const mygtukas = () => [...D.querySelectorAll("#registerWrap button")].find(b => /Kortelė/.test(b.textContent));
-      tiesa(/\+ Kortelė/.test(mygtukas().textContent), "mygtukas: " + mygtukas().textContent);
-      mygtukas().click();
-      tiesa(/pirkimu-korteles\.html#nauja$/.test(adresai[0]), "adresas be duomenų: " + adresai[0]);
-      W.dispatchEvent(new W.MessageEvent("message", { data: { gpk: 1, tipas: "pasiruoses" }, origin: W.location.origin, source: pop.contentWindow }));
-      await lauk(60);
-      tiesa(gauta && gauta.modulis === "PP-plan" && gauta.laukai.vykdytojas === "amber-grid" && gauta.laukai.budas === "T-AK", "perduota: " + JSON.stringify(gauta));
-      lygu(W.GP_KORTELE.skaityk().korteles.length, 0, "PP-plan kortelės neįrašė");
-      const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(gauta.laukai)).kortele;          // kortelių puslapis išsaugojo
-      W.dispatchEvent(new W.MessageEvent("message", { data: { gpk: 1, tipas: "issaugota", id: k.id }, origin: W.location.origin, source: pop.contentWindow }));
-      await lauk(60);
-      lygu(W.eval("DATA.procurements[0].kortele"), k.id, "kortelės id plano įraše");
-      tiesa(/🗂 Kortelė/.test(mygtukas().textContent), "mygtukas po išsaugojimo: " + mygtukas().textContent);
-      lygu(JSON.parse(localStorage.getItem(PLANAS)).procurements[0].kortele, k.id, "išsaugota plane");
-      mygtukas().click();
-      tiesa(adresai[1] && adresai[1].endsWith("pirkimu-korteles.html#kortele=" + encodeURIComponent(k.id)), "antras paspaudimas: " + adresai[1]);
-    } finally { pop.remove(); }
+    let adresai = [];
+    W.open = url => { adresai.push(url); return null; };
+    const mygtukas = () => [...D.querySelectorAll("#registerWrap button")].find(b => /Kortelė/.test(b.textContent));
+    tiesa(/\+ Kortelė/.test(mygtukas().textContent), "mygtukas: " + mygtukas().textContent);
+    mygtukas().click();
+    const dlg = () => D.querySelector("dialog.gpk-dlg");
+    tiesa(dlg() && dlg().open && adresai.length === 0, "langas modulyje, ne naujas skirtukas");
+    const t = dlg().textContent;
+    lygu(D.getElementById("gpk-dlg-pav").value, "330 kV skirstyklos rekonstrukcija", "pavadinimas");
+    ["Iš modulio „PP-plan“ perimama:", "AB Amber Grid", "Atviras konkursas (tarptautinis pirkimas)", "2 400 000 EUR", "Jonas Jonaitis, Perdavimo tinklo departamentas"]
+      .forEach(x => tiesa(t.indexOf(x) >= 0, "lange nėra „" + x + "“: " + t));
+    D.getElementById("gpk-dlg-ne").click();
+    lygu([!!dlg(), W.GP_KORTELE.skaityk().korteles.length, W.eval("DATA.procurements[0].kortele || null")], [false, 0, null], "atšaukta - nieko neįrašyta");
+    mygtukas().click();
+    D.getElementById("gpk-dlg-taip").click();
+    await lauk(60);
+    const k = W.GP_KORTELE.skaityk().korteles[0];
+    tiesa(k && k.vykdytojas === "amber-grid" && k.budas === "T-AK" && k.verte === 2400000, "kortelė: " + JSON.stringify(k));
+    lygu(W.eval("DATA.procurements[0].kortele"), k.id, "kortelės id plano įraše");
+    tiesa(/🗂 Kortelė/.test(mygtukas().textContent), "mygtukas po išsaugojimo: " + mygtukas().textContent);
+    tiesa(D.activeElement === mygtukas(), "fokusas - perpieštos eilutės mygtuke, o ne: " + D.activeElement.tagName);
+    lygu(JSON.parse(localStorage.getItem(PLANAS)).procurements[0].kortele, k.id, "išsaugota plane");
+    mygtukas().click();
+    tiesa(adresai[0] && adresai[0].endsWith("pirkimu-korteles.html#kortele=" + encodeURIComponent(k.id)), "antras paspaudimas: " + adresai[0]);
+    lygu(W.GP_KORTELE.skaityk().korteles.length, 1, "dublikato nėra");
   });
 }
 
