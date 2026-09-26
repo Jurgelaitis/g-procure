@@ -30,7 +30,9 @@
 veikia - tiekėjų pasiūlymai, reitingas ir nuokrypis nuo planuojamos vertės, ekonominio naudingumo (MEAT) balas, derybų ribos
 (atidarymas, tikslas, rezervinė riba), pasiūlymų importas iš lentelės ir Excel eksportas; neperskaitomas projektas nevirsta
 „nauju tuščiu“. Tikri naudotojo duomenys įsimenami prieš testus ir atkuriami po jų (shared/testu-apsauga.js). Excel
-eksportui reikia interneto (biblioteka iš CDN).</div>
+eksportui reikia interneto (biblioteka iš CDN). Bendros pirkimo kortelės grupė (A1): naujo projekto numatytosios reikšmės
+pildomos iš kortelės, pavadintame projekte kitos reikšmės tik parodomos; vertė su PVM neperrašoma; kortelės - tik atmintyje
+(?saugykla=testine).</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
   <span class="n blogai" id="n-blogai">0</span> krito
@@ -171,12 +173,83 @@ async function testaiBusenos(){
   });
 }
 
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). Rėmelis su ?saugykla=testine - kortelės tik atmintyje;
+   projektas saugomas modulio raktu, kurį APSAUGA atkuria po testų. */
+function modulisSuKortele(){
+  if (remas) remas.remove();
+  return new Promise(res => {
+    const f = remas = document.createElement("iframe");
+    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(250); res(); }, { once: true });
+    f.src = "EPSO-G_Derybu_Pasirengimo_Irankis.html?saugykla=testine&cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+async function testaiKortele(){
+  grupe("Bendra pirkimo kortelė (A1)");
+  const KORTELE = { pavadinimas: "Dujų apskaitos prietaisų pirkimas", vykdytojas: "amber-grid", rezimas: "PI", verte: 240000, budas: "S-ND", trukmeMen: 24 };
+
+  await testas("Naujas projektas: pavadinimas, vykdytojas, režimas, vertė, būdas ir trukmė iš kortelės (numatytosios reikšmės - tuščios); juosta matoma projekto vaizde", async () => {
+    await modulisSuKortele();
+    W.eval("APP.state = defaultState(); render.all();");
+    const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(KORTELE)).kortele;
+    W.KORTELE.atnaujink();
+    tiesa(D.getElementById("gpk") && D.getElementById("kortelesVieta").contains(D.getElementById("gpk")), "juosta savo vietoje");
+    tiesa(await W.KORTELE.pasirink(k.id), "pasirinkta");
+    const p = W.eval("APP.state.project");
+    lygu([p.name, p.contractingEntity, p.law, p.plannedValue, p.procedureType, p.contractTermMonths],
+         [KORTELE.pavadinimas, 'AB „Amber Grid"', "PSI", 240000, "derybos_neskelb", 24]);
+    const z = D.getElementById("gpk-zin").textContent;
+    tiesa(/Iš kortelės užpildyta:/.test(z) && /vykdytojas/.test(z) && /būdas/.test(z) && /pavadinimas/.test(z) && !/Skiriasi/.test(z), z);
+  });
+
+  await testas("Pavadintas projektas: kitos reikšmės tik parodomos (su „Taikyti“); vertė su PVM neperrašoma ir tai pasakoma", async () => {
+    await modulisSuKortele();
+    W.eval("APP.state = defaultState(); APP.state.project.name = 'Mano derybos'; APP.state.project.plannedValue = 300000; APP.state.project.vatIncluded = true; render.all();");
+    const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(KORTELE)).kortele;
+    W.KORTELE.atnaujink();
+    const pr = W.KORTELE.pasirink(k.id);
+    await lauk(30);
+    tiesa(/Modulyje jau įvestas kitas pirkimas „Mano derybos“/.test(D.getElementById("gpk-zin").textContent), D.getElementById("gpk-zin").textContent);
+    [...D.querySelectorAll("#gpk-zin button")].find(b => /^Taip,/.test(b.textContent)).click();
+    await pr;
+    const p = W.eval("APP.state.project");
+    lygu([p.name, p.contractingEntity, p.plannedValue], ["Mano derybos", W.eval("defaultState().project.contractingEntity"), 300000], "neperrašyta");
+    const z = D.getElementById("gpk-zin").textContent;
+    tiesa(/Skiriasi nuo kortelės/.test(z) && /Vykdytojas:/.test(z) && /Pavadinimas: modulyje „Mano derybos“/.test(z), z);
+    tiesa(/neįrašoma: vertė \(„240 000 EUR“ - projekte vertė nurodyta su PVM\)/.test(z), z);
+    D.querySelector('#gpk button[aria-label="Taikyti: Vykdytojas"]').click();
+    lygu(W.eval("APP.state.project.contractingEntity"), 'AB „Amber Grid"', "pritaikyta paspaudus");
+  });
+
+  await testas("Nuoroda „?kortele=“ (iš „Mano pirkimai“): kortelė parenkama po modulio paleidimo; „Naujas“ projektas - be kortelės", async () => {
+    /* Kortelė turi būti saugykloje prieš atveriant modulį, tad čia - tikra saugykla su apsauga (atkuriama po testo). */
+    const AP = GP_TESTU_APSAUGA.pradek(k => k === "gprocure.korteles");
+    try {
+      localStorage.removeItem(RAKTAS);
+      localStorage.setItem("gprocure.korteles", JSON.stringify({ schema: 1, korteles: [Object.assign({ id: "k-testas-nuoroda", sukurta: "2026-09-26T10:00:00.000Z",
+        atnaujinta: "2026-09-26T10:00:00.000Z", busena: "rengiamas" }, KORTELE)] }));
+      if (remas) remas.remove();
+      await new Promise(res => {
+        const f = remas = document.createElement("iframe");
+        f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(300); res(); }, { once: true });
+        f.src = "EPSO-G_Derybu_Pasirengimo_Irankis.html?kortele=k-testas-nuoroda&cb=" + Date.now();
+        document.body.appendChild(f);
+      });
+      lygu([D.getElementById("gpk-sel").value, W.eval("APP.state.project.name"), W.eval("APP.state.project.procedureType")],
+           ["k-testas-nuoroda", KORTELE.pavadinimas, "derybos_neskelb"], "parinkta ir užpildyta");
+      W.eval("storage.reset(); render.all();");
+      lygu([D.getElementById("gpk-sel").value, W.KORTELE.pasirinkta()], ["", null], "naujas projektas - be kortelės");
+    } finally { if (remas) remas.remove(); remas = null; AP.atkurk(); }
+  });
+}
+
 (async function(){
   try {
     await modulis();
     await testaiPuslapis();
     await testaiLogika();
     await testaiBusenos();
+    await testaiKortele();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
