@@ -335,6 +335,10 @@
 <script src="../shared/thresholds.js"></script>
 <script src="../shared/money.js"></script>
 <script src="../shared/procurement-methods.js"></script>
+<!-- Bendra pirkimo kortelė (A1): modulis ją tik SKAITO - pats nieko nesaugo -->
+<script src="../shared/saugykla.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 <!-- Teisės aktų nuorodos (GP_TEISE). PP-salygos - LITGRID, PĮ: straipsnių numerių modulyje nerašome. -->
 <script src="../shared/teises-nuorodos.js"></script>
 <script src="../shared/teise-stebesena.js"></script>
@@ -2848,6 +2852,38 @@ async function generuotiDokumentus(){
 }
 $('#gen').onclick = generuotiDokumentus;
 
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26): modulis ją tik SKAITO. Tušti laukai užpildomi, kitokie tik
+   parodomi. Pavadinimas čia - kilmininku be „pirkimas“: kortelės „X pirkimas“ virsta „X“, kitaip parašytas -
+   neįrašomas (automatiškai linksniuoti neišeina). Šablonai - LITGRID ir PĮ, tad kitas vykdytojas ar VPĮ tik
+   įvardijami. Būdas ir objekto tipas turi numatytąsias reikšmes - kol žmogus jų nepalietė, jos laikomos tuščiomis;
+   kortelės užpildytos jų „paliestomis“ nežymi (PZ_TAIKOMA). Jungiama PRIEŠ GP_DARBAS. */
+const KORTELES_TIPAI = { prekes:'prekes', paslaugos:'paslaugos', paslaugos_it:'paslaugos', darbai:'darbai' };
+function kortelesTaikoma(f){ PZ_TAIKOMA = true; try { f(); } finally { PZ_TAIKOMA = false; } }
+const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
+  modulis: 'PP-salygos',
+  klaustiKitoPirkimo: true,
+  laukai: [
+    { kortele:'pavadinimas', el:'#pavadinimas',
+      i: v => /\s+pirkimas\s*$/i.test(v) ? v.replace(/\s+pirkimas\s*$/i, '').trim() : null,
+      is: s => s && s.trim() ? s.trim() + ' pirkimas' : undefined,
+      neimanoma: 'čia rašoma kilmininku be „pirkimas“ - įrašykite ranka' },
+    { kortele:'budas', el:'#budas', i: v => GP_METHODS.toSalygos(v) ? v : null,
+      numatyta: () => !PZ_RANKA.has('budas'),
+      dek: v => kortelesTaikoma(() => { $('#budas').value = v; budasPagalPI(); }),
+      neimanoma: 'šiam būdui sąlygų šablonų nėra' },
+    { kortele:'verte', el:'#verte', i: v => GP_MONEY.formatEUR(v), is: s => GP_MONEY.parseEUR(s) || undefined,
+      dek: v => { $('#verte').value = v; rezimas(); } },
+    { kortele:'objektas', gauk: () => (document.querySelector('input[name=tipas]:checked') || {}).value || '',
+      i: v => KORTELES_TIPAI[v] || null, lygu: (s, v) => s === KORTELES_TIPAI[v], numatyta: () => !PZ_RANKA.has('tipas'),
+      dek: v => kortelesTaikoma(() => { const r = document.querySelector('input[name=tipas][value="' + v + '"]'); if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles:true })); } }),
+      neimanoma: 'šablonuose - prekės, paslaugos arba darbai' },
+    { kortele:'vykdytojas', gauk: () => 'litgrid', i: v => v === 'litgrid' ? v : null, dek: () => {},
+      neimanoma: 'sąlygų šablonai - tik LITGRID AB' },
+    { kortele:'rezimas', gauk: () => 'PI', i: v => v === 'PI' ? v : null, dek: () => {},
+      neimanoma: 'šablonai - pagal PĮ' }
+  ]
+}) : null;
+
 /* Modulis nieko nesaugo: uzdarant su neatsisiustais atsakymais narsykle paklausia.
    Stebimi tik naudotojo ivykiai - automatines numatytosios (dflt) klausimo nesukelia.
    Priimtas AI pasiulymas - mygtukas, ne input/change, tad jis skaiciuojamas atskirai. */
@@ -2864,7 +2900,7 @@ GP_DARBAS.stebek(() => [AI.priimta]);
     purpose: "Pirkimo sąlygų (BPS, SPS ir formų) paketas iš LITGRID šablonų: jūs atsakote į klausimus, algoritmas sutvarko dokumentus.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Kontroliniai klausimai:</b> pirkimo būdas, pavadinimas, vertė, kalba. Galite įkelti DocLogix pirkimo paraiškos kortelę - AI pasiūlys laukų reikšmes, jas patvirtinate jūs.",
+      "<b>Kontroliniai klausimai:</b> pirkimo būdas, pavadinimas, vertė, kalba. Galite įkelti DocLogix pirkimo paraiškos kortelę - AI pasiūlys laukų reikšmes, jas patvirtinate jūs. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato. Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu.",
       "<b>Prieš skelbdami</b> kiekvieną dokumentą peržiūrėkite Word programoje - automatinė patikra nėra leidimas skelbti."
