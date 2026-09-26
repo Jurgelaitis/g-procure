@@ -72,6 +72,17 @@
   .klaidos:empty{display:none}
   .klaidos ul{margin:4px 0 0;padding-left:18px}
   .klaidos a{color:#A3192C;font-weight:700}
+  .is-skelbimo{border:1px dashed var(--color-graphite-30);border-radius:10px;padding:10px 14px;display:grid;gap:8px}
+  .is-skelbimo.tempiama{border-color:var(--color-emerald);background:var(--color-green-5)}
+  .is-skelbimo__eil{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+  .is-skelbimo .pag{font-size:12.5px;color:#5B6470}
+  .pasiulymai{display:grid;gap:6px}
+  .pasiulymai p{margin:0;font-size:13.5px}
+  .pasiulymas{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:start;font-size:14px;padding:6px 0;border-top:1px solid var(--color-graphite-15)}
+  .pasiulymas input{margin-top:3px}
+  .pasiulymas .cit{grid-column:2;font-size:12.5px;color:#5B6470;overflow-wrap:anywhere}
+  .pasiulymas .perraso{grid-column:2;font-size:12.5px;color:#8A4B00;font-weight:700}
+  .pasiulymai .pastabos{font-size:13px;color:#5B6470;margin:0;padding-left:18px}
   .mygtukai{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
   .mygtukai .desine{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
   .klaidos:focus{outline:2px solid var(--color-error);outline-offset:2px}
@@ -124,6 +135,7 @@
       <label class="sr-only" for="paieska">Ieškoti kortelės</label>
       <input type="search" class="paieska" id="paieska" placeholder="Ieškoti pagal pavadinimą ar numerį" data-darbas-ne>
       <label class="zymimas"><input type="checkbox" id="rodytiArch" data-darbas-ne> <span id="rodytiArchTekstas">Rodyti archyvuotas</span></label>
+      <button type="button" class="btn" id="naujaIsSkelbimo">Nauja iš CVP IS skelbimo</button>
     </div>
     <div id="sarasas" aria-live="polite"></div>
     <div id="busena"></div>
@@ -135,6 +147,15 @@
     <h2 id="formaH">Nauja pirkimo kortelė</h2>
     <p class="pastaba">Kortelė saugoma tik šioje naršyklėje ir patenka į atsarginę kopiją. Į serverį nesiunčiama. Privalomas tik pavadinimas - kitus laukus galite užpildyti vėliau.</p>
     <div class="isp" id="isModulio" role="status"></div>
+    <div class="is-skelbimo" id="isSkelbimo">
+      <div class="is-skelbimo__eil">
+        <button type="button" class="btn" id="skelbimoMygtukas">Užpildyti iš CVP IS skelbimo (PDF)</button>
+        <span class="pag">Skelbimas skaitomas šioje naršyklėje ir niekur nesiunčiamas. Kiekvieną reikšmę patvirtinate patys.</span>
+        <input type="file" id="skelbimoFailas" accept=".pdf,application/pdf" hidden>
+      </div>
+      <div id="skelbimoBusena"></div>
+      <div class="pasiulymai" id="skelbimoPasiulymai" hidden></div>
+    </div>
     <div class="klaidos" id="klaidos" role="alert" tabindex="-1"></div>
 
     <fieldset>
@@ -239,9 +260,17 @@
           <span class="klaida" id="k-pradzia-kl"></span>
         </div>
         <div class="laukas">
-          <label for="k-paskelbimas">Planuojama paskelbimo data</label>
-          <input type="date" id="k-paskelbimas" name="paskelbimas" aria-describedby="k-paskelbimas-kl">
+          <label for="k-paskelbimas">Paskelbimo data</label>
+          <input type="date" id="k-paskelbimas" name="paskelbimas" aria-describedby="k-paskelbimas-pag k-paskelbimas-kl">
+          <span class="pag" id="k-paskelbimas-pag">Planuojama, o paskelbus - skelbimo išsiuntimo data.</span>
           <span class="klaida" id="k-paskelbimas-kl"></span>
+        </div>
+      </div>
+      <div class="eil">
+        <div class="laukas">
+          <label for="k-pasiulymuTerminas">Pasiūlymų ar paraiškų terminas</label>
+          <input type="datetime-local" id="k-pasiulymuTerminas" name="pasiulymuTerminas" aria-describedby="k-pasiulymuTerminas-kl">
+          <span class="klaida" id="k-pasiulymuTerminas-kl"></span>
         </div>
       </div>
       <div class="eil">
@@ -275,6 +304,10 @@
 <script src="shared/organizacijos.js"></script>
 <script src="shared/pirkimo-kortele.js"></script>
 <script src="shared/neissaugotas-darbas.js"></script>
+<!-- Užpildymas iš CVP IS skelbimo (A2): PDF tekstas - shared/dokumentai.js (pdf.js įkeliamas tik prireikus),
+     atpažinimas - shared/skelbimas.js, BVPŽ kontrolinis skaitmuo - shared/cpv-data.js (įkeliamas tik prireikus). -->
+<script src="shared/dokumentai.js"></script>
+<script src="shared/skelbimas.js"></script>
 <script>
 (function () {
   "use strict";
@@ -386,6 +419,8 @@
   }
 
   /* ---------- forma ---------- */
+  var LAUKAI_TEKSTAI = ["pavadinimas", "numeris", "cvpisNr", "objektas", "bvpz", "vykdytojas", "budas", "busena", "pradzia", "paskelbimas",
+                        "pasiulymuTerminas", "iniciatorius", "organizatorius"];
   function rezimas() { var r = f.querySelector('input[name="rezimas"]:checked'); return r ? r.value : ""; }
   function skaidymas() { var r = f.querySelector('input[name="skaidymas"]:checked'); return r ? r.value : ""; }
 
@@ -416,8 +451,7 @@
 
   function surink() {
     var k = redaguojama ? Object.assign({}, redaguojama) : K.tuscia();
-    ["pavadinimas", "numeris", "cvpisNr", "objektas", "bvpz", "vykdytojas", "budas", "busena", "pradzia", "paskelbimas", "iniciatorius", "organizatorius"]
-      .forEach(function (x) { k[x] = f.elements[x].value.trim(); });
+    LAUKAI_TEKSTAI.forEach(function (x) { k[x] = f.elements[x].value.trim(); });
     k.rezimas = rezimas();
     var vt = $("k-verte").value.trim();
     k.verte = vt ? GP_MONEY.parseEUR(vt) : null;
@@ -436,8 +470,7 @@
   function parasas() { try { var k = surink(); delete k.id; delete k.sukurta; delete k.atnaujinta; return JSON.stringify(k); } catch (e) { return String(Math.random()); } }
 
   function uzpildyk(k) {
-    ["pavadinimas", "numeris", "cvpisNr", "objektas", "bvpz", "vykdytojas", "budas", "busena", "pradzia", "paskelbimas", "iniciatorius", "organizatorius"]
-      .forEach(function (x) {
+    LAUKAI_TEKSTAI.forEach(function (x) {
         var el = f.elements[x], v = k[x] || "";
         if (el.tagName === "SELECT" && v && !el.querySelector('option[value="' + CSS.escape(v) + '"]')) v = "";   // nežinoma reikšmė nerodoma kaip pasirinkta
         el.value = v;
@@ -499,6 +532,7 @@
   function atidaryk(k, duom) {
     redaguojama = k ? K.gauk(k.id) || k : null;
     valykKlaidas();
+    valykSkelbima();
     $("formaH").textContent = redaguojama ? "Pirkimo kortelė" : "Nauja pirkimo kortelė";
     $("isModulio").textContent = "";
     $("archyvuoti").hidden = !redaguojama;
@@ -522,6 +556,140 @@
     redaguojama = null; isModulio = "";
     GP_DARBAS.atskaita();
   }
+
+  /* ---------- užpildymas iš CVP IS skelbimo (A2) ----------
+     Skelbimo PDF skaitomas naršyklėje (niekur nesiunčiamas), atpažintos reikšmės - tik PASIŪLYMAI su
+     citata: žmogus pažymi, ką perkelti į formą, o išsaugo - kaip visada, „Išsaugoti kortelę“. Jau įvesta
+     kitokia reikšmė pagal nutylėjimą nepažymėta ir parodoma, ką ji perrašytų. */
+  var PDFJS = { src: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+                sri: "sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==",
+                worker: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js" };
+  function krauk(src, sri) {
+    return new Promise(function (ok, blogai) {
+      var s = document.createElement("script");
+      s.src = src;
+      if (sri) { s.integrity = sri; s.crossOrigin = "anonymous"; }
+      s.onload = function () { ok(true); };
+      s.onerror = function () { blogai(new Error("nepavyko įkelti " + src.split("/").pop())); };
+      document.head.appendChild(s);
+    });
+  }
+  var siulymai = [];
+  function valykSkelbima() {
+    siulymai = [];
+    $("skelbimoPasiulymai").hidden = true; $("skelbimoPasiulymai").innerHTML = "";
+    GP_BUSENA.slepk("#skelbimoBusena");
+  }
+  async function skaitykSkelbima(failas) {
+    if (!failas) return;
+    valykSkelbima();
+    var rez = await GP_BUSENA.vykdyk("#skelbimoBusena", {
+      tipas: "eiga", tekstas: "Skaitomas skelbimas „" + failas.name + "“",
+      klaidosPriesdelis: "Skelbimo perskaityti nepavyko",
+      veiksmas: async function () {
+        if (!/\.pdf$/i.test(failas.name)) throw new Error("tikėtasi PDF failo - CVP IS skelbimo");
+        if (!window.pdfjsLib) { await krauk(PDFJS.src, PDFJS.sri); window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS.worker; }
+        if (!window.GP_CPV_DATA) { try { await krauk("shared/cpv-data.js"); } catch (e) { /* be žodyno BVPŽ lieka pastaba */ } }
+        var r = await GP_DOK.apdorok([failas], null, "lt");
+        var d = r.docs[0];
+        if (!d || d.parseStatus !== "parsed") throw new Error((d && d.warnings && d.warnings[0]) || "failas neperskaitytas");
+        var tekstas = d.blocks.map(function (b) { return b.text; }).join("\n");
+        if (!tekstas.trim()) throw new Error("PDF be teksto (galbūt skenuotas) - pildykite ranka");
+        return GP_SKELBIMAS.atpazink(tekstas, failas.name);
+      }
+    });
+    if (rez.ok) rodykPasiulymus(rez.reiksme, failas.name);
+  }
+  function tuscias(laukas, v) {
+    if (laukas === "busena") return !v || v === "rengiamas";           // naujos kortelės numatytoji būsena
+    if (laukas === "dalys") return v === null || v === undefined;
+    return v === null || v === undefined || v === "";
+  }
+  function vienodas(laukas, a, b) {
+    if (laukas === "verte") return a > 0 && b > 0 && Math.abs(a - b) < 0.005;
+    if (Array.isArray(a) || Array.isArray(b)) return JSON.stringify(a) === JSON.stringify(b);
+    return String(a == null ? "" : a).trim().toLowerCase() === String(b == null ? "" : b).trim().toLowerCase();
+  }
+  function rodykPasiulymus(r, vardas) {
+    siulymai = r.laukai;
+    var box = $("skelbimoPasiulymai"), dab = surink();
+    box.innerHTML = "";
+    var p = document.createElement("p");
+    p.textContent = r.laukai.length
+      ? "Iš skelbimo „" + vardas + "“ atpažinta laukų: " + r.laukai.length + ". Pažymėkite, ką perkelti į kortelę."
+      : "Iš skelbimo „" + vardas + "“ kortelės laukų atpažinti nepavyko - pildykite ranka.";
+    box.appendChild(p);
+    r.laukai.forEach(function (x, i) {
+      var cur = dab[x.laukas], perraso = !tuscias(x.laukas, cur) && !vienodas(x.laukas, cur, x.reiksme);
+      var lab = document.createElement("label");
+      lab.className = "pasiulymas";
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.id = "sk-" + i; cb.checked = !perraso;
+      var sp = document.createElement("span"), b = document.createElement("b");
+      b.textContent = K.laukoPav(x.laukas, "lt") + ": ";
+      sp.appendChild(b);
+      sp.appendChild(document.createTextNode(K.reiksmesTekstas(x.laukas, x.reiksme, "lt") + (x.pastaba ? " (" + x.pastaba + ")" : "")));
+      lab.appendChild(cb); lab.appendChild(sp);
+      var cit = document.createElement("span"); cit.className = "cit";
+      cit.textContent = "Skelbime: „" + x.citata + "“";
+      lab.appendChild(cit);
+      if (perraso) {
+        var pr = document.createElement("span"); pr.className = "perraso";
+        pr.textContent = "Perrašytų įvestą reikšmę „" + K.reiksmesTekstas(x.laukas, cur, "lt") + "“";
+        lab.appendChild(pr);
+      }
+      box.appendChild(lab);
+    });
+    if (r.pastabos.length) {
+      var ul = document.createElement("ul"); ul.className = "pastabos";
+      r.pastabos.forEach(function (x) { var li = document.createElement("li"); li.textContent = x; ul.appendChild(li); });
+      box.appendChild(ul);
+    }
+    var myg = document.createElement("div"); myg.className = "is-skelbimo__eil";
+    if (r.laukai.length) {
+      var taikyti = document.createElement("button"); taikyti.type = "button"; taikyti.className = "btn btn--pagr"; taikyti.textContent = "Perkelti pažymėtus";
+      taikyti.addEventListener("click", taikykPasiulymus);
+      myg.appendChild(taikyti);
+    }
+    var atmesti = document.createElement("button"); atmesti.type = "button"; atmesti.className = "btn"; atmesti.textContent = r.laukai.length ? "Atmesti" : "Uždaryti";
+    atmesti.addEventListener("click", valykSkelbima);
+    myg.appendChild(atmesti);
+    box.appendChild(myg);
+    box.hidden = false;
+    var pirmas = box.querySelector("input"); if (pirmas) pirmas.focus();
+  }
+  function irasykLauka(laukas, v) {
+    if (laukas === "rezimas") { f.querySelectorAll('input[name="rezimas"]').forEach(function (r) { r.checked = r.value === v; }); return; }
+    if (laukas === "verte") { $("k-verte").value = K.formatas(v); return; }
+    if (laukas === "trukmeMen") { $("k-trukmeMen").value = String(v); return; }
+    if (laukas === "dalys") {
+      f.querySelectorAll('input[name="skaidymas"]').forEach(function (r) { r.checked = r.value === (v.length ? "taip" : "ne"); });
+      $("dalysSar").innerHTML = "";
+      v.forEach(dalisEil);
+      rodykDalis();
+      return;
+    }
+    var el = f.elements[laukas];
+    if (!el) return;
+    if (el.tagName === "SELECT" && !el.querySelector('option[value="' + CSS.escape(v) + '"]')) return;
+    el.value = v;
+  }
+  function taikykPasiulymus() {
+    var n = 0;
+    siulymai.forEach(function (x, i) { var cb = $("sk-" + i); if (cb && cb.checked) { irasykLauka(x.laukas, x.reiksme); n++; } });
+    $("skelbimoPasiulymai").hidden = true;
+    rodykPastabas();
+    GP_BUSENA.rodyk("#skelbimoBusena", { tipas: "gerai", tekstas: "Iš skelbimo perkelta laukų: " + n + ". Patikrinkite ir išsaugokite kortelę." });
+    $("k-pavadinimas").focus();
+  }
+  $("skelbimoMygtukas").addEventListener("click", function () { $("skelbimoFailas").click(); });
+  $("skelbimoFailas").addEventListener("change", function () { var fl = this.files && this.files[0]; this.value = ""; skaitykSkelbima(fl); });
+  (function () {
+    var zona = $("isSkelbimo");
+    zona.addEventListener("dragover", function (e) { e.preventDefault(); zona.classList.add("tempiama"); });
+    zona.addEventListener("dragleave", function () { zona.classList.remove("tempiama"); });
+    zona.addEventListener("drop", function (e) { e.preventDefault(); zona.classList.remove("tempiama"); var fl = e.dataTransfer.files && e.dataTransfer.files[0]; skaitykSkelbima(fl); });
+  })();
 
   /* Pranešimas atidariusiam moduliui: kortelė išsaugota - jis ją pasirenka. Tik ta pati kilmė. */
   function pranesk(id) {
@@ -598,6 +766,7 @@
   });
   $("pridetiDali").addEventListener("click", function () { dalisEil({}).querySelector(".dal-pav").focus(); });
   $("naujaHeader").addEventListener("click", function () { atidaryk(null); });
+  $("naujaIsSkelbimo").addEventListener("click", function () { atidaryk(null); $("skelbimoFailas").click(); });
   $("paieska").addEventListener("input", sarasas);
   $("rodytiArch").addEventListener("change", sarasas);
 
@@ -643,7 +812,7 @@
     purpose: "Pirkimo kortelė - vienas pirkimo įrašas: pavadinimas, vertė, būdas, vykdytojas ir režimas, dalys, terminai ir atsakingi asmenys. Įrankiai ją skaito, todėl šių duomenų nereikia vesti kiekviename iš naujo.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Sukurkite kortelę:</b> „Nauja kortelė“ čia arba įrankyje - „Sukurti kortelę iš šių duomenų“ (tada įvesti duomenys perkeliami į formą).",
+      "<b>Sukurkite kortelę:</b> „Nauja kortelė“ čia, įrankyje - „Sukurti kortelę iš šių duomenų“, metiniame plane (PP-plan) - „Kortelė“ prie pirkimo, arba iš paskelbto CVP IS skelbimo PDF (atpažintas reikšmes patvirtinate patys).",
       "<b>Pasirinkite kortelę įrankyje:</b> viršuje esančiame lauke „Pirkimo kortelė“. Tušti laukai užpildomi, o jau įvestos kitokios reikšmės tik parodomos - jas pakeisite paspaudę „Taikyti“.",
       "<b>Pirkimas pasikeitė:</b> pakeiskite kortelę čia - įrankis parodys, kurie jo laukai nuo jos skiriasi.",
       "<b>Kortelės nebereikia:</b> archyvuokite. Ji nebesiūloma įrankiuose, bet nedingsta."
