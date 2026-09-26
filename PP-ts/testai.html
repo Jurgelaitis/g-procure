@@ -596,6 +596,57 @@ async function testaiBusenos() {
   });
 }
 
+/* ==========================================================================
+   Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26): modulis kortelę tik skaito.
+   Atskiras rėmelis su ?saugykla=testine - kortelės tik atmintyje, tikros neliečiamos.
+   ========================================================================== */
+function modulisSuKortele() {
+  return new Promise(res => {
+    const f = document.createElement('iframe');
+    f.addEventListener('load', () => setTimeout(() => res({ f: f, KW: f.contentWindow, KD: f.contentDocument }), 300), { once: true });
+    f.src = './TS_Asistentas.html?saugykla=testine&cb=' + Date.now();
+    document.body.appendChild(f);
+  });
+}
+async function testaiKortele() {
+  grupe('Bendra pirkimo kortelė (A1)');
+
+  await testas('Pasirinkus kortelę: pavadinimas, objektas, BVPŽ, vertė, trukmė, būdas ir dalys - ir TS kūrimo vediklyje, ir pirkimo kontekste', async () => {
+    const { f, KW, KD } = await modulisSuKortele();
+    try {
+      const K = KW.GP_KORTELE;
+      const k = K.issaugok(K.tuscia({ pavadinimas: 'IT infrastruktūros priežiūros paslaugų pirkimas', objektas: 'paslaugos_it', bvpz: '72000000-5',
+        verte: 250000, trukmeMen: 36, budas: 'T-SD', dalys: [], vykdytojas: 'litgrid', rezimas: 'PI' })).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta');
+      const v = id => KD.getElementById(id).value;
+      lygu([v('genTitle'), v('metaTitle'), v('genType'), v('metaType'), v('genCpv'), v('metaCpv'), v('genBudget'), v('metaValue'), v('genDuration')],
+        ['IT infrastruktūros priežiūros paslaugų pirkimas', 'IT infrastruktūros priežiūros paslaugų pirkimas', 'services', 'services',
+         '72000000-5', '72000000-5', '250000', '250000', '36']);
+      lygu([v('metaProcedure'), KD.getElementById('metaInternational').checked, KD.getElementById('genFlagParts').checked], ['negotiated_with_publication', true, false], 'būdas ir dalys');
+      const z = KD.getElementById('gpk-zin').textContent;
+      tiesa(/Iš kortelės užpildyta: pavadinimas, objektas, BVPŽ kodas, vertė, sutarties trukmė, būdas, dalys\./.test(z) && !/neįrašoma/.test(z), z);
+    } finally { f.remove(); }
+  });
+
+  await testas('Kitas vykdytojas, VPĮ ir būdas, kurio pirkimo kontekste nėra, neįrašomi ir įvardijami; įvestas kitas BVPŽ kodas neperrašomas', async () => {
+    const { f, KW, KD } = await modulisSuKortele();
+    try {
+      const K = KW.GP_KORTELE;
+      const k = K.issaugok(K.tuscia({ pavadinimas: 'Dujų kompresorių pirkimas', bvpz: '42123000-7', budas: 'DPS', vykdytojas: 'amber-grid', rezimas: 'VPI' })).kortele;
+      const cpv = KD.getElementById('genCpv'); cpv.value = '50532000'; cpv.dispatchEvent(new KW.Event('input', { bubbles: true }));
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      lygu([cpv.value, KD.getElementById('metaProcedure').value], ['50532000', ''], 'neperrašyta, būdas neįrašytas');
+      const z = KD.getElementById('gpk-zin').textContent;
+      ['BVPŽ kodas: modulyje „50532000“, kortelėje „42123000-7“',
+       'būdas („' + KW.GP_METHODS.label('DPS') + '“ - šio būdo pirkimo kontekste nėra)',
+       'vykdytojas („AB Amber Grid“ - TS asistentas rengia LITGRID AB dokumentus)', 'režimas („VPĮ“ - TS asistentas remiasi PĮ)']
+        .forEach(x => tiesa(z.indexOf(x) >= 0, 'nėra: ' + x + '\n' + z));
+    } finally { f.remove(); }
+  });
+}
+
 /* ========================================================================== */
 async function viskas() {
   document.getElementById('paleisti').disabled = true;
@@ -613,6 +664,7 @@ async function viskas() {
   await testaiTransportas();
   await testaiAntrastes();
   await testaiBusenos();
+  await testaiKortele();
 
   document.getElementById('busena').textContent =
     R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';
