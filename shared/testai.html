@@ -1507,6 +1507,151 @@ async function testaiKortele(){
   });
 }
 
+/* ==========================================================================
+   A2 ir U1 (2026-09-26): skelbimo atpažinimas (skelbimas.js), importas kortelių puslapyje ir
+   darbo stalas „Mano pirkimai“ (mano-pirkimai.js). Skelbimo tekstas - pagal 4 tikrų CVP IS
+   skelbimų sandarą (eForms, lietuviškai); PDF testui sugeneruojamas čia pat (Helvetica, ASCII).
+   ========================================================================== */
+function skelbimoTekstas(o){
+  o = o || {};
+  const lotai = o.lotai || [{ id: "LOT-0001", pav: "Irankiai", verte: o.verte, gal: "36 Mėnuo" }];
+  return ["Lietuva: Įrankiai", "Skelbimas apie pirkimą arba koncesiją. Įprasta tvarka", "1 Pirkėjas", "1.1 Pirkėjas",
+    "Oficialus pavadinimas: " + (o.pirkejas || "LITGRID AB (PV)"), "Pirkėjo teisinė forma: Valstybinė įmonė",
+    o.veikla || "Perkančiojo subjekto veiklos sritis: Su elektros energija susijusi veikla",
+    "2 Procedūra", "2.1 Procedūra", "Pavadinimas: " + (o.pav || "Elektriniai įrankiai ir matavimo"),
+    o.pavTesinys || "prietaisai bei pagalbinė įranga", "Aprašymas: Informacija pateikiama dokumentuose",
+    "Pirkimo būdas: " + (o.budas || "Derybos su išankstiniu kvietimu dalyvauti konkurse ir (arba) konkursas su derybomis"),
+    "2.1.1 Tikslas", "Sutarties objektas: " + (o.objektas || "Prekės"), "Pagrindinis klasifikacijos kodas (cpv): 44510000 Įrankiai",
+    "https://ted.europa.eu/TED Page 1/4"]
+    .concat(o.verte ? ["2.1.3 Vertė", "Numatoma vertė be PVM: " + o.verte + " Euro"] : [])
+    .concat(["2.1.4 Bendra informacija", "Teisinis pagrindas:", o.pagrindas || "Direktyva 2014/25/ES", "5 Pirkimo dalis"])
+    .concat(...lotai.map(l => ["5.1 Pirkimo dalis: " + l.id, "Pavadinimas: " + l.pav, "5.1.3 Numatomas galiojimas", "Galiojimas: " + (l.gal || "36 Mėnuo")]
+      .concat(l.verte ? ["5.1.5 Vertė", "Numatoma vertė be PVM: " + l.verte + " Euro"] : [])))
+    .concat(["Pirkimo dokumentų adresas: https://viesiejipirkimai.lt/epps/cft/listContractDocuments.do?resourceId=9683631",
+      (o.terminas || "Dalyvavimo prašymų priėmimo terminas") + ": 02/10/2026 15:00 +03:00", "8 Organizacijos", "8.1 ORG-0002",
+      "Oficialus pavadinimas: Vilniaus apygardos teismas", "Skelbimo informacija", "Skelbimo išsiuntimo data: 17/09/2026 13:24 +03:00"]).join("\n");
+}
+const V_NAC = "9683631_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą – komunalinio sektoriaus direktyva, įprasta tvarka.pdf";
+const V_TARPT = "9742096_Skelbimas apie pirkimą - komunalinio sektoriaus direktyva, įprasta tvarka.pdf";
+/* Mažiausias PDF su tekstu (Helvetica, tik ASCII): kiekviena eilutė - atskira teksto eilutė. */
+function pdfIsEiluciu(eilutes){
+  const esc = s => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const turinys = "BT /F1 8 Tf 30 820 Td 11 TL " + eilutes.map(e => "(" + esc(e) + ") Tj T*").join(" ") + " ET";
+  const obj = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    "<< /Length " + turinys.length + " >>\nstream\n" + turinys + "\nendstream", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
+  let s = "%PDF-1.4\n", pos = [];
+  obj.forEach((o, i) => { pos.push(s.length); s += (i + 1) + " 0 obj\n" + o + "\nendobj\n"; });
+  const xref = s.length;
+  s += "xref\n0 " + (obj.length + 1) + "\n0000000000 65535 f \n" + pos.map(p => String(p).padStart(10, "0") + " 00000 n \n").join("");
+  s += "trailer\n<< /Size " + (obj.length + 1) + " /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n";
+  return new Uint8Array([...s].map(c => c.charCodeAt(0)));
+}
+async function testaiSkelbimasDarbastalis(){
+  dabartine = grupe("Skelbimo atpažinimas, importas ir darbo stalas (skelbimas.js, mano-pirkimai.js)");
+  const SK = '<script src="organizacijos.js"><\/script><script src="procurement-methods.js"><\/script><script src="money.js"><\/script><script src="skelbimas.js"><\/script>';
+
+  await testas("Skelbimas: vykdytojas, režimas, pavadinimas per dvi eilutes, būdo variantas pagal failo vardą, objektas, vertė, terminas, išsiuntimo data, CVP IS", async ()=>{
+    const { f, w } = await ramas(SK);
+    try {
+      const S = w.GP_SKELBIMAS, pagal = r => Object.fromEntries(r.laukai.map(x => [x.laukas, x.reiksme]));
+      const r = S.atpazink(skelbimoTekstas({ verte: "100 000" }), V_NAC), l = pagal(r);
+      lygu([l.vykdytojas, l.rezimas, l.pavadinimas, l.budas, l.objektas, l.verte, l.trukmeMen, l.pasiulymuTerminas, l.paskelbimas, l.busena, l.cvpisNr],
+           ["litgrid", "PI", "Elektriniai įrankiai ir matavimo prietaisai bei pagalbinė įranga", "S-SD", "prekes", 100000, 36, "2026-10-02T15:00", "2026-09-17", "paskelbtas", "9683631"]);
+      tiesa(r.laukai.every(x => x.citata), "kiekvienas pasiūlymas turi citatą");
+      lygu(pagal(S.atpazink(skelbimoTekstas(), V_TARPT)).budas, "T-SD", "tarptautinis skelbimas");
+      const be = S.atpazink(skelbimoTekstas(), "skelbimas.pdf");
+      tiesa(!pagal(be).budas && be.pastabos.some(x => /supaprastinto ar tarptautinio/.test(x)), "be failo vardo - tik pastaba");
+      tiesa(!("verte" in pagal(be)), "vertės skelbime nėra - nesiūloma");
+      lygu(pagal(S.atpazink(skelbimoTekstas({ budas: "Atviras" }), V_NAC)).budas, "S-AK");
+    } finally { f.remove(); }
+  });
+
+  await testas("Skelbimas: kelios dalys su vertėmis, viena dalis - neskaidomas; abiejų režimų požymiai - nesiūloma; BVPŽ be žodyno - pastaba; suklijuotas numeris - įspėjimas", async ()=>{
+    const { f, w } = await ramas(SK);
+    try {
+      const S = w.GP_SKELBIMAS, pagal = r => Object.fromEntries(r.laukai.map(x => [x.laukas, x]));
+      const dvi = pagal(S.atpazink(skelbimoTekstas({ lotai: [{ id: "LOT-0001", pav: "Transformatoriai", verte: "900 000", gal: "24 Mėnuo" }, { id: "LOT-0002", pav: "Priežiūra", verte: "300 000", gal: "24 Mėnuo" }] }), V_NAC));
+      lygu(dvi.dalys.reiksme, [{ pavadinimas: "Transformatoriai", verte: 900000 }, { pavadinimas: "Priežiūra", verte: 300000 }]);
+      lygu(dvi.trukmeMen.reiksme, 24, "vienoda visų dalių trukmė");
+      lygu(pagal(S.atpazink(skelbimoTekstas(), V_NAC)).dalys.reiksme, [], "viena dalis");
+      const abu = S.atpazink(skelbimoTekstas({ veikla: "Perkančiosios organizacijos veiklos sritis: Bendrosios paslaugos" }), "x.pdf");
+      tiesa(!pagal(abu).rezimas && abu.pastabos.some(x => /ir PĮ, ir VPĮ/.test(x)), "neaiškus režimas");
+      const bv = S.atpazink(skelbimoTekstas(), V_NAC);
+      tiesa(!pagal(bv).bvpz && bv.pastabos.some(x => /44510000.*be kontrolinio skaitmens/.test(x)), "BVPŽ be žodyno");
+      w.GP_CPV_DATA = { codes: [["44510000-8", "Įrankiai", "Tools"]] };
+      lygu(pagal(S.atpazink(skelbimoTekstas(), V_NAC)).bvpz.reiksme, "44510000-8", "su žodynu");
+      const sk = pagal(S.atpazink(skelbimoTekstas({ pav: "(VPP268) Programinės įrangos", pavTesinys: "licencijos" }), V_NAC)).pavadinimas;
+      tiesa(/brūkšneliai/.test(sk.pastaba || ""), "įspėjimas dėl numerio: " + sk.pastaba);
+      lygu(w.GP_SKELBIMAS.pirkejas("1.1 Pirkėjas\nOficialus pavadinimas: UAB \"EPSO­G\" (PV)").value, 'UAB "EPSO-G"', "pirkėjas (perkelta iš PP-tiekejams)");
+    } finally { f.remove(); }
+  });
+
+  await testas("Kortelių puslapis: skelbimo PDF -> pasiūlymai su citatomis, įvesta kitokia reikšmė nepažymėta, „Perkelti pažymėtus“ užpildo formą", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id);
+      $("naujaHeader").click();
+      $("k-verte").value = "90 000";
+      const eil = skelbimoTekstas({ verte: "100 000" }).normalize("NFD").replace(/[̀-ͯ]/g, "").split("\n");   // Helvetica - be diakritikų
+      const dt = new w.DataTransfer();
+      dt.items.add(new w.File([pdfIsEiluciu(eil)], V_NAC.normalize("NFD").replace(/[̀-ͯ]/g, ""), { type: "application/pdf" }));
+      $("skelbimoFailas").files = dt.files;
+      $("skelbimoFailas").dispatchEvent(new w.Event("change", { bubbles: true }));
+      for (let i = 0; i < 120 && $("skelbimoPasiulymai").hidden && !/nepavyko/i.test($("skelbimoBusena").textContent); i++) await lauk(100);
+      tiesa(!$("skelbimoPasiulymai").hidden, "pasiūlymai neparodyti: " + $("skelbimoBusena").textContent);
+      const eilutes = [...d.querySelectorAll("#skelbimoPasiulymai .pasiulymas")];
+      const verte = eilutes.find(x => /Vertė:/.test(x.textContent));
+      tiesa(verte && !verte.querySelector("input").checked && /Perrašytų įvestą reikšmę „90 000 EUR“/.test(verte.textContent), "įvesta vertė: " + (verte && verte.textContent));
+      tiesa(eilutes.every(x => /Skelbime: „/.test(x.textContent)), "citatos");
+      [...d.querySelectorAll("#skelbimoPasiulymai button")].find(b => /Perkelti/.test(b.textContent)).click();
+      const F = $("formaForm").elements;
+      lygu([F.vykdytojas.value, d.querySelector('input[name="rezimas"]:checked').value, F.budas.value, $("k-verte").value, F.pasiulymuTerminas.value, F.cvpisNr.value, F.busena.value],
+           ["litgrid", "PI", "S-SD", "90 000", "2026-10-02T15:00", "9683631", "paskelbtas"]);
+      tiesa(/perkelta laukų: \d+/.test($("skelbimoBusena").textContent), $("skelbimoBusena").textContent);
+      lygu(w.GP_KORTELE.skaityk().korteles.length, 0, "neišsaugota, kol žmogus nepaspaudė „Išsaugoti kortelę“");
+    } finally { fr.remove(); }
+  });
+
+  await testas("Darbo stalas: be kortelių nerodomas; neperskaitoma saugykla - sakoma; terminai darbo dienomis (su šventėmis), užbaigti - tik skaičius, trūkstami laukai kilmininku", async ()=>{
+    const { f, w, d } = await ramas('<link rel="stylesheet" href="epso-g.css"><section id="sek" hidden><div id="mp"></div></section>' + KORTELES_FAILAI
+      + '<script src="workdays.js"><\/script><script src="mano-pirkimai.js"><\/script>');
+    try {
+      const K = w.GP_KORTELE, st = netikraSaugykla({}); K.naudokSaugykla(st);
+      const api = w.GP_MANO_PIRKIMAI.mount({ target: "#mp", sekcija: "#sek", saknis: "../", dabar: "2026-09-25T10:00:00" });
+      tiesa(d.getElementById("sek").hidden, "be kortelių - paslėptas");
+      K.issaugok(K.tuscia({ pavadinimas: "Vėlesnis", vykdytojas: "litgrid", rezimas: "PI", verte: 1000, budas: "T-AK", pradzia: "2026-10-01", busena: "planuojamas" }));
+      K.issaugok(K.tuscia({ pavadinimas: "Artimesnis", vykdytojas: "litgrid", rezimas: "PI", verte: 1000, budas: "S-SD", pasiulymuTerminas: "2026-09-29T15:00", busena: "paskelbtas" }));
+      K.issaugok(K.tuscia({ pavadinimas: "Be vertės", vykdytojas: "epso-g", rezimas: "VPI", budas: "S-AK" }));
+      K.issaugok(K.tuscia({ pavadinimas: "Baigtas", busena: "sutartis" }));
+      api.atnaujink();
+      tiesa(!d.getElementById("sek").hidden, "su kortelėmis - rodomas");
+      const eil = [...d.querySelectorAll(".gpmp-eil")];
+      lygu(eil.map(x => x.querySelector(".gpmp-pav").textContent), ["Artimesnis", "Vėlesnis", "Be vertės"], "tvarka pagal artimiausią terminą");
+      tiesa(/po 2 d\. d\./.test(eil[0].textContent) && /po 4 d\. d\./.test(eil[1].textContent), "darbo dienos: " + eil[0].textContent + " | " + eil[1].textContent);
+      tiesa(/Papildykite kortelę: trūksta vertės\./.test(eil[2].textContent), "trūksta: " + eil[2].textContent);
+      tiesa(/Užbaigti ar archyvuoti: 1/.test(d.getElementById("mp").textContent) && !/Baigtas/.test(d.getElementById("mp").textContent), "užbaigtas - tik skaičius");
+      const nuorodos = [...eil[0].querySelectorAll("a")].map(a => a.getAttribute("href"));
+      tiesa(nuorodos.some(h => /^\.\.\/PP-graphs\/Litgrid_Pirkimu_grafiku_generatorius\.html\?kortele=k-/.test(h)) && nuorodos.some(h => /^\.\.\/PP-qual\/PP-QUAL\.html\?kortele=k-/.test(h)), nuorodos.join(" "));
+      lygu(w.GP_MANO_PIRKIMAI.darboDienos(new Date(2026, 11, 23), new Date(2026, 11, 28)), 1, "gruodžio 24-26 - šventės");
+      d.documentElement.lang = "en"; await lauk(30);
+      tiesa(/Complete the card: missing value\./.test(d.getElementById("mp").textContent), "EN: " + d.getElementById("mp").textContent.slice(0, 200));
+      K.naudokSaugykla(netikraSaugykla({ "gprocure.korteles": "{" })); d.documentElement.lang = "lt"; await lauk(30);
+      tiesa(!d.getElementById("sek").hidden && /perskaityti nepavyko/.test(d.getElementById("mp").textContent), "neperskaitoma: " + d.getElementById("mp").textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas("Portalas: „Mano pirkimai“ tarp įžangos ir katalogo, pradžioje paslėptas, poraštėje - „Pirkimų kortelės“", async ()=>{
+    const src = await (await fetch("../index.html?b=" + Date.now())).text();
+    const i = src.indexOf('id="mano-pirkimai"'), j = src.indexOf('id="irankiai"'), h = src.indexOf('class="hero"');
+    tiesa(h > 0 && i > h && j > i, "vieta");
+    tiesa(/<section class="section mano-pirkimai" id="mano-pirkimai"[^>]*hidden>/.test(src), "paslėptas be kortelių");
+    tiesa(/<a href="pirkimu-korteles\.html" data-lt="Pirkimų kortelės" data-en="Procurement cards"><\/a>/.test(src), "poraštės nuoroda");
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
@@ -1518,6 +1663,7 @@ async function testaiKortele(){
   await testaiBusena();
   await testaiSaugykla();
   await testaiKortele();
+  await testaiSkelbimasDarbastalis();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
