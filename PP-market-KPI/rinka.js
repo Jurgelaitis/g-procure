@@ -69,15 +69,25 @@
       if (r.status === 404) throw new Error("maršrutas neįdiegtas serveryje");
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
-    }).then(function (d) {
-      var ok = ((d && d.rodikliai) || []).map(function (r) {
-        r.saltinioUrl = SERIJU_NUORODOS[r.id] || "https://fred.stlouisfed.org/";
-        return r;
-      });
-      return { ok: ok, klaidos: (d && d.klaidos) || [] };
-    });
+    }).then(function (d) { return uzbaik(ids, d); });
   }
 
-  global.GP_RINKA = { atnaujink: atnaujink, iSavaitini: iSavaitini, RODIKLIAI: RODIKLIAI,
+  /* Serverio atsakymas -> { ok, klaidos }. Kiekvienas prašytas rodiklis - arba reikšmė, arba
+     priežastis. Anksčiau tuščias atsakymas (200 be rodiklių ir be klaidų) sąsajoje virsdavo
+     „jūsų duomenys jau naujausi“ (Q3, 2026-09-26). */
+  function uzbaik(ids, d) {
+    var ok = ((d && d.rodikliai) || []).map(function (r) {
+      r.saltinioUrl = SERIJU_NUORODOS[r.id] || "https://fred.stlouisfed.org/";
+      return r;
+    });
+    var klaidos = ((d && d.klaidos) || []).slice();
+    ids.forEach(function (id) {
+      var yra = ok.some(function (r) { return r.id === id; }) || klaidos.some(function (k) { return k.id === id; });
+      if (!yra) klaidos.push({ id: id, priezastis: "serveris šio rodiklio reikšmės negrąžino" });
+    });
+    return { ok: ok, klaidos: klaidos };
+  }
+
+  global.GP_RINKA = { atnaujink: atnaujink, uzbaik: uzbaik, iSavaitini: iSavaitini, RODIKLIAI: RODIKLIAI,
                       SERIJU_NUORODOS: SERIJU_NUORODOS, BAZE: BAZE };
 })(typeof window !== "undefined" ? window : this);

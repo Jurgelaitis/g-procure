@@ -107,6 +107,8 @@
       return kesas[r.flow].then(function (d) {
         var eil = istraukEilute(d, r.pjuvis);
         var pask = eil[eil.length - 1];
+        // Tuščias pjūvis - aiški priežastis, ne techninė „Cannot read properties of undefined“.
+        if (!pask) throw new Error("šaltinis šio rodiklio reikšmių negrąžino");
         var iso = periodasIIso(pask.laikotarpis);
         if (!iso) throw new Error("nesuprantamas laikotarpis: " + pask.laikotarpis);
         ok.push({
