@@ -22,6 +22,10 @@
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
 <script src="../shared/busena.js"></script>
 <script src="../shared/saugykla.js"></script>
+<!-- Bendra pirkimo kortelė (A1): pirkimo aprašymo tušti laukai pildomi iš kortelės -->
+<script src="../shared/money.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 <style>
 :root{
   /* EPSO-G identitetas per shared/epso-g.css zetonus (su atsarga, jei shared nepasiekiamas) */
@@ -1403,6 +1407,7 @@ function applyData(data){
   renderAlternatives(); renderCostTable(); renderBenefitTable(); renderQualitative(); renderRisks(); renderWeights();
   _userTouched = true;   // ikelti/importuoti duomenys gali buti autosave'inami
   recalcAll(); checkThreshold();
+  if (window.KORTELE) KORTELE.skirtumai(true);   // atverta analize - zmogaus darbas: kortele tik parodo skirtumus
   return true;
 }
 
@@ -1417,13 +1422,17 @@ window.addEventListener('DOMContentLoaded',()=>{
   else if (r.busena !== 'nera') GP_BUSENA.juosta({ raktas:'skaitymas', tipas:'nezinoma', tekstas: GP_SAUGYKLA.pranesimas(r, 'Kaštų ir naudos analizė') });
 });
 // Reali vartotojo saveika ijungia autosave (input + select/checkbox change)
+// Pirkimo kortelės juosta ([data-darbas-ne]) - ne analizės darbas: jos pasirinkimas autosave neįjungia,
+// kitaip vien kortelės pasirinkimas perrašytų dar neatvertą išsaugotą analizę.
 window.addEventListener('input',e=>{
+  if(e.target && e.target.closest && e.target.closest('[data-darbas-ne]')) return;
   if(['proc_name','proc_value','decision_rationale'].includes(e.target.id))updateCompleteness();
   _userTouched = true;
   scheduleAutosave();
 });
 window.addEventListener('change',e=>{
   if(e.target && e.target.id==='import_file') return; // importa tvarko importJSON
+  if(e.target && e.target.closest && e.target.closest('[data-darbas-ne]')) return;
   _userTouched = true;
   scheduleAutosave();
 });
@@ -1443,7 +1452,7 @@ window.addEventListener('change',e=>{
     purpose: "Kaštų ir naudos analizė bei alternatyvų palyginimas didelės vertės pirkimams - " + RIBA + ".",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Aprašykite pirkimą</b> ir pagrįskite poreikį; „Analizės parengtumas“ rodo, ko dar trūksta.",
+      "<b>Aprašykite pirkimą</b> ir pagrįskite poreikį; „Analizės parengtumas“ rodo, ko dar trūksta. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - pavadinimas, numeris, vertė, tipas, procedūra, trukmė ir teisinis pagrindas bus užpildyti iš jos (modulis kortelės nekeičia).",
       "<b>Apibrėžkite alternatyvas</b> ir suskaičiuokite jų gyvavimo ciklo kaštus (LCC).",
       "<b>Įvertinkite naudą ir rizikas</b>, palyginkite alternatyvas daugiakrite matrica (MCDA).",
       "<b>Patikrinkite jautrumą</b> ir parenkite apibendrinimą sprendimų priėmėjui - spausdinkite ar išsaugokite PDF."
@@ -1482,6 +1491,69 @@ window.addEventListener('change',e=>{
     defaultOpen: true,
     getLang: function () { return "lt"; },
     content: INFO
+  });
+})();
+</script>
+<script>
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). 1 žingsnio laukai pildomi iš kortelės: tušti ir numatytieji
+   (tipas „Darbai“, procedūra „Atviras konkursas“, 20 metų, PSĮ) - kol pavadinimas tuščias ir žmogus jų nekeitė;
+   kitokie tik parodomi su „Taikyti“. Reikšmės įrašomos BE įvykių: kortelės duomenys analizės darbu netampa ir
+   automatinio saugojimo neįjungia, tad išsaugota, bet dar neatverta analizė neperrašoma. Modulis kortelės nekeičia. */
+(function () {
+  if (!window.GP_KORTELE) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var RANKA = new Set();
+  ['input', 'change'].forEach(function (t) {
+    document.addEventListener(t, function (e) { if (e.isTrusted && e.target && e.target.id) RANKA.add(e.target.id); }, true);
+  });
+  function reiksme(id) { var e = $(id); return e ? e.value : undefined; }
+  function sviezia() { return !String(reiksme('proc_name') || '').trim(); }
+  function numatyta(id, v) { return function () { return sviezia() && !RANKA.has(id) && reiksme(id) === v; }; }
+  function irasyk(id, v) {                     // be įvykių - žr. aukščiau
+    var e = $(id); if (!e) return;
+    e.value = v;
+    if (id === 'proc_value' && typeof checkThreshold === 'function') checkThreshold();
+    if (typeof updateCompleteness === 'function') updateCompleteness();
+  }
+  var TIPAI = { prekes: 'Prekės', paslaugos: 'Paslaugos', paslaugos_it: 'Paslaugos', darbai: 'Darbai', misrus: 'Mišrus pirkimas' };
+  var TIPAI_ATGAL = { 'Prekės': 'prekes', 'Paslaugos': 'paslaugos', 'Darbai': 'darbai', 'Mišrus pirkimas': 'misrus' };
+  var TEISE = { PI: 'PSĮ įstatymas (utilities)', VPI: 'VPĮ įstatymas (klasikinis)' };
+  var TEISE_ATGAL = { 'PSĮ įstatymas (utilities)': 'PI', 'VPĮ įstatymas (klasikinis)': 'VPI' };
+
+  window.KORTELE = GP_KORTELE.mount({
+    modulis: 'PP-cost-benefit',
+    klaustiKitoPirkimo: true,
+    laukai: [
+      { kortele: 'numeris', gauk: function () { return reiksme('proc_code'); }, dek: function (v) { irasyk('proc_code', v); } },
+      { kortele: 'verte', gauk: function () { return reiksme('proc_value'); },
+        i: function (v) { return String(Math.round(v * 100) / 100); },
+        is: function (s) { var v = parseFloat(s); return v > 0 ? v : undefined; },
+        dek: function (v) { irasyk('proc_value', v); } },
+      { kortele: 'objektas', gauk: function () { return reiksme('proc_type'); },
+        i: function (v) { return TIPAI[v] || null; }, is: function (s) { return TIPAI_ATGAL[s]; },
+        lygu: function (s, v) { return s === TIPAI[v]; },
+        numatyta: numatyta('proc_type', 'Darbai'), dek: function (v) { irasyk('proc_type', v); } },
+      { kortele: 'budas', gauk: function () { return reiksme('proc_procedure'); },
+        i: function (v) { return GP_METHODS.toModule('pp-cost-benefit', v); },
+        is: function (s) { var m = s ? GP_METHODS.fromLegacy('pp-cost-benefit', s) : null; return m ? m.id : undefined; },
+        lygu: function (s, v) { return s === GP_METHODS.toModule('pp-cost-benefit', v); },
+        numatyta: numatyta('proc_procedure', 'Atviras konkursas'), dek: function (v) { irasyk('proc_procedure', v); },
+        neimanoma: 'analizės procedūrų sąraše jo nėra' },
+      { kortele: 'trukmeMen', gauk: function () { return reiksme('proc_duration'); },
+        i: function (v) { return v % 12 === 0 ? String(v / 12) : null; },
+        is: function (s) { var n = parseInt(s, 10); return n > 0 ? n * 12 : undefined; },
+        lygu: function (s, v) { return parseInt(s, 10) * 12 === v; },
+        numatyta: numatyta('proc_duration', '20'), dek: function (v) { irasyk('proc_duration', v); },
+        neimanoma: 'trukmė čia - sveikais metais' },
+      { kortele: 'rezimas', gauk: function () { return reiksme('proc_legal'); },
+        i: function (v) { return TEISE[v] || null; }, is: function (s) { return TEISE_ATGAL[s]; },
+        lygu: function (s, v) { return s === TEISE[v]; },
+        numatyta: numatyta('proc_legal', TEISE.PI), dek: function (v) { irasyk('proc_legal', v); } },
+      { kortele: 'vykdytojas', gauk: function () { return 'litgrid'; },
+        i: function (v) { return v === 'litgrid' ? v : null; }, dek: function () {},
+        neimanoma: 'analizės forma - LITGRID AB' },
+      { kortele: 'pavadinimas', gauk: function () { return reiksme('proc_name'); }, dek: function (v) { irasyk('proc_name', v); } }
+    ]
   });
 })();
 </script>
