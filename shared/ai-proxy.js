@@ -151,8 +151,16 @@
   }
 
   // Pauze tarp bandymu (backoff). setTimeout - narsykles aplinka.
-  function delay(ms) {
-    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  // Atšaukus (signal) pauzė baigiasi iškart: kitas bandymas su nutrauktu signalu
+  // grįžta tuoj pat (status 0, nekartojamas), tad „Atšaukti“ nelaukia iki 4 s (Q3, 2026-09-26).
+  function delay(ms, signal) {
+    return new Promise(function (resolve) {
+      if (signal && signal.aborted) { resolve(); return; }
+      var t = setTimeout(resolve, ms);
+      if (signal && signal.addEventListener) {
+        signal.addEventListener("abort", function () { clearTimeout(t); resolve(); }, { once: true });
+      }
+    });
   }
 
   // --- Pagrindine funkcija -------------------------------------------------
@@ -224,7 +232,7 @@
     function run(attemptIndex) {
       return attempt().then(function (result) {
         if (attemptIndex < MAX_RETRIES && isRetryable(result)) {
-          return delay(1000 * Math.pow(2, attemptIndex)).then(function () {
+          return delay(1000 * Math.pow(2, attemptIndex), opts.signal).then(function () {
             return run(attemptIndex + 1);
           });
         }
