@@ -1633,13 +1633,49 @@ async function testaiSkelbimasDarbastalis(){
       tiesa(/po 2 d\. d\./.test(eil[0].textContent) && /po 4 d\. d\./.test(eil[1].textContent), "darbo dienos: " + eil[0].textContent + " | " + eil[1].textContent);
       tiesa(/Papildykite kortelę: trūksta vertės\./.test(eil[2].textContent), "trūksta: " + eil[2].textContent);
       tiesa(/Užbaigti ar archyvuoti: 1/.test(d.getElementById("mp").textContent) && !/Baigtas/.test(d.getElementById("mp").textContent), "užbaigtas - tik skaičius");
-      const nuorodos = [...eil[0].querySelectorAll("a")].map(a => a.getAttribute("href"));
-      tiesa(nuorodos.some(h => /^\.\.\/PP-graphs\/Litgrid_Pirkimu_grafiku_generatorius\.html\?kortele=k-/.test(h)) && nuorodos.some(h => /^\.\.\/PP-qual\/PP-QUAL\.html\?kortele=k-/.test(h)), nuorodos.join(" "));
+      const nuorodos = [...eil[1].querySelectorAll("a")].map(a => a.getAttribute("href"));
+      tiesa(nuorodos.some(h => /^\.\.\/PP-graphs\/Litgrid_Pirkimu_grafiku_generatorius\.html\?kortele=k-/.test(h)), "planuojamas - grafikas: " + nuorodos.join(" "));
       lygu(w.GP_MANO_PIRKIMAI.darboDienos(new Date(2026, 11, 23), new Date(2026, 11, 28)), 1, "gruodžio 24-26 - šventės");
       d.documentElement.lang = "en"; await lauk(30);
       tiesa(/Complete the card: missing value\./.test(d.getElementById("mp").textContent), "EN: " + d.getElementById("mp").textContent.slice(0, 200));
       K.naudokSaugykla(netikraSaugykla({ "gprocure.korteles": "{" })); d.documentElement.lang = "lt"; await lauk(30);
       tiesa(!d.getElementById("sek").hidden && /perskaityti nepavyko/.test(d.getElementById("mp").textContent), "neperskaitoma: " + d.getElementById("mp").textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas("Darbo stalas: įrankiai pagal būseną - pirmas pagrindinis; LITGRID ir PĮ įrankiai kitai organizacijai nesiūlomi; mažos vertės - pažyma, derybos - tik būdui su derybomis", async ()=>{
+    const { f, w, d } = await ramas('<link rel="stylesheet" href="epso-g.css"><section id="sek" hidden><div id="mp"></div></section>' + KORTELES_FAILAI
+      + '<script src="thresholds.js"><\/script><script src="workdays.js"><\/script><script src="mano-pirkimai.js"><\/script>');
+    try {
+      const K = w.GP_KORTELE; K.naudokSaugykla(netikraSaugykla({}));
+      const C = w.GP_THRESHOLDS.CBA;
+      const kort = [
+        ["Planuojamas didelis", { vykdytojas: "litgrid", rezimas: "PI", verte: C.rekomenduojama, budas: "T-AK", busena: "planuojamas", pradzia: "2026-10-01" }],
+        ["Planuojamas mažas", { vykdytojas: "litgrid", rezimas: "PI", verte: 50000, budas: "S-AK", busena: "planuojamas", pradzia: "2026-10-02" }],
+        ["Rengiamas LITGRID", { vykdytojas: "litgrid", rezimas: "PI", verte: 900000, budas: "T-SD", busena: "rengiamas", pradzia: "2026-10-05" }],
+        ["Rengiamas EPSO-G", { vykdytojas: "epso-g", rezimas: "VPI", verte: 900000, budas: "S-AK", busena: "rengiamas", pradzia: "2026-10-06" }],
+        ["Rengiamas be šablono", { vykdytojas: "litgrid", rezimas: "PI", verte: 900000, budas: "KD", busena: "rengiamas", pradzia: "2026-10-07" }],
+        ["Paskelbtas", { vykdytojas: "litgrid", rezimas: "PI", verte: 900000, budas: "S-AK", busena: "paskelbtas", pasiulymuTerminas: "2026-10-08T15:00" }],
+        ["Vertinamas derybos", { vykdytojas: "litgrid", rezimas: "PI", verte: 900000, budas: "S-SD", busena: "vertinamas", pradzia: "2026-10-09" }],
+        ["Vertinamas MV", { vykdytojas: "litgrid", rezimas: "PI", verte: 12000, budas: "MV-NR", busena: "vertinamas", pradzia: "2026-10-12" }],
+        ["Vertinamas Amber", { vykdytojas: "amber-grid", rezimas: "PI", verte: 900000, budas: "S-AK", busena: "vertinamas", pradzia: "2026-10-13" }]
+      ];
+      kort.forEach(x => K.issaugok(K.tuscia(Object.assign({ pavadinimas: x[0] }, x[1]))));
+      w.GP_MANO_PIRKIMAI.mount({ target: "#mp", sekcija: "#sek", saknis: "../", dabar: "2026-09-25T10:00:00", max: 20 });
+      const mygt = pav => { const e = [...d.querySelectorAll(".gpmp-eil")].find(x => x.querySelector(".gpmp-pav").textContent === pav);
+        return [...e.querySelectorAll(".gpmp-veiksmai a")].map(a => (a.classList.contains("gpmp-btn--pagr") ? "*" : "") + a.textContent); };
+      lygu(mygt("Planuojamas didelis"), ["*Grafikas", "Kaštų ir naudos analizė", "Kortelė"], "didelės vertės - ir KNA (riba iš thresholds.js)");
+      lygu(mygt("Planuojamas mažas"), ["*Grafikas", "Kortelė"]);
+      lygu(mygt("Rengiamas LITGRID"), ["*TS", "Kvalifikacija", "Sąlygos", "Grafikas", "Kortelė"]);
+      lygu(mygt("Rengiamas EPSO-G"), ["*Kvalifikacija", "Grafikas", "Kortelė"], "TS ir sąlygos - tik LITGRID ir PĮ");
+      lygu(mygt("Rengiamas be šablono"), ["*TS", "Kvalifikacija", "Grafikas", "Kortelė"], "būdui be sąlygų šablono - be sąlygų");
+      lygu(mygt("Paskelbtas"), ["*Protokolai", "Kortelė"]);
+      lygu(mygt("Vertinamas derybos"), ["*Protokolai", "Vertinimas", "Derybos", "Kortelė"]);
+      lygu(mygt("Vertinamas MV"), ["*Pažyma", "Vertinimas", "Kortelė"], "mažos vertės - pažyma, ne protokolai; be derybų");
+      lygu(mygt("Vertinamas Amber"), ["*Vertinimas", "Kortelė"], "protokolai - tik LITGRID");
+      const mv = [...d.querySelectorAll(".gpmp-eil")].find(x => x.querySelector(".gpmp-pav").textContent === "Vertinamas MV");
+      tiesa(/Kitas žingsnis: pasiūlymų vertinimas ir pažyma\./.test(mv.textContent), mv.textContent);
+      tiesa(/^\.\.\/PP-report\/PP-report\.html\?kortele=k-/.test(mv.querySelector(".gpmp-veiksmai a").getAttribute("href")), "nuoroda su kortele");
     } finally { f.remove(); }
   });
 

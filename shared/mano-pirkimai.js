@@ -28,6 +28,8 @@
       planuojamas: "pirkimo grafikas", rengiamas: "pirkimo dokumentai (kvalifikacija, sąlygos, TS)",
       paskelbtas: "laukiama pasiūlymų", vertinamas: "pasiūlymų vertinimas ir komisijos sprendimai",
       grafikas: "Grafikas", kvalifikacija: "Kvalifikacija", kortele: "Kortelė",
+      ts: "TS", salygos: "Sąlygos", protokolai: "Protokolai", pazyma: "Pažyma", derybos: "Derybos", vertinimas: "Vertinimas",
+      kna: "Kaštų ir naudos analizė", vertinamasMV: "pasiūlymų vertinimas ir pažyma",
       naujasSkirtukas: "atsidaro naujame skirtuke", daugiau: "Rodyti visus", baigti: "Užbaigti ar archyvuoti: ",
       visosKorteles: "visos kortelės", aktyviuNera: "Aktyvių pirkimų nėra.", CVP: "CVP IS "
     },
@@ -38,15 +40,55 @@
       planuojamas: "procurement schedule", rengiamas: "procurement documents (qualification, conditions, specification)",
       paskelbtas: "waiting for tenders", vertinamas: "tender evaluation and committee decisions",
       grafikas: "Schedule", kvalifikacija: "Qualification", kortele: "Card",
+      ts: "Specification", salygos: "Conditions", protokolai: "Protocols", pazyma: "Report", derybos: "Negotiation", vertinimas: "Evaluation",
+      kna: "Cost-benefit analysis", vertinamasMV: "tender evaluation and the report",
       naujasSkirtukas: "opens in a new tab", daugiau: "Show all", baigti: "Completed or archived: ",
       visosKorteles: "all cards", aktyviuNera: "No active procurements.", CVP: "CVP IS "
     }
   };
-  /* Įrankiai, kurie skaito kortelę (A1). Kelias - nuo svetainės šaknies. */
-  var IRANKIAI = [
-    { raktas: "grafikas", kelias: "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", busenos: ["planuojamas", "rengiamas"] },
-    { raktas: "kvalifikacija", kelias: "PP-qual/PP-QUAL.html", busenos: ["rengiamas"] }
-  ];
+  /* Įrankiai, kurie skaito kortelę (A1). Kelias - nuo svetainės šaknies. Rodomi pagal pirkimo būseną (naudotojo
+     sprendimas 2026-09-26): planuojant - grafikas (ir kaštų ir naudos analizė didelės vertės pirkimui), rengiant -
+     TS, kvalifikacija, sąlygos, grafikas, paskelbus - protokolai, vertinant - protokolai arba mažos vertės pažyma,
+     vertinimas ir derybos (tik būdui su derybomis). Pirmas - pagrindinis. Įrankiai, kurie rengia tik LITGRID AB
+     dokumentus pagal PĮ (litgrid), kitos organizacijos ar VPĮ pirkimui nesiūlomi; nežinomas vykdytojas - siūlomi
+     (numatytasis kontekstas - LITGRID). Kas padaryta, įrankiai nežino - tai tik pagal kortelės būseną. */
+  var IRANKIAI = {
+    grafikas: { kelias: "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html" },
+    kna: { kelias: "PP-cost-benefit/kastu_naudos_analize.html", litgrid: true, salyga: function (k) {
+      var C = global.GP_THRESHOLDS && global.GP_THRESHOLDS.CBA;               // riba - iš shared/thresholds.js
+      return !!(C && C.rekomenduojama && k.verte >= C.rekomenduojama);
+    } },
+    ts: { kelias: "PP-ts/TS_Asistentas.html", litgrid: true },
+    kvalifikacija: { kelias: "PP-qual/PP-QUAL.html" },
+    salygos: { kelias: "PP-salygos/PP-SALYGOS.html", litgrid: true, salyga: function (k) {
+      return !k.budas || !global.GP_METHODS || !!global.GP_METHODS.toSalygos(k.budas);   // būdas, kuriam šablonų nėra - nesiūloma
+    } },
+    protokolai: { kelias: "PP-protocol/LITGRID_Generatorius_v3.html", litgrid: true, salyga: function (k) { return !mazosVertes(k); } },
+    pazyma: { kelias: "PP-report/PP-report.html", litgrid: true, salyga: mazosVertes },
+    vertinimas: { kelias: "PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html" },
+    derybos: { kelias: "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", salyga: function (k) {
+      var m = k.budas && global.GP_METHODS ? global.GP_METHODS.byId(k.budas) : null;
+      return !!(m && m.derybos);
+    } }
+  };
+  var PAGAL_BUSENA = {
+    planuojamas: ["grafikas", "kna"],
+    rengiamas: ["ts", "kvalifikacija", "salygos", "grafikas"],
+    paskelbtas: ["protokolai"],
+    vertinamas: ["protokolai", "pazyma", "vertinimas", "derybos"]
+  };
+  function mazosVertes(k) {
+    var m = k.budas && global.GP_METHODS ? global.GP_METHODS.byId(k.budas) : null;
+    return !!(m && m.grupe === "mazos_vertes");
+  }
+  /* Kortelės pirkimui tinkami įrankiai pagal būseną (tvarka - svarba). */
+  function irankiai(k) {
+    return (PAGAL_BUSENA[k.busena] || []).filter(function (r) {
+      var x = IRANKIAI[r];
+      if (x.litgrid && ((k.vykdytojas && k.vykdytojas !== "litgrid") || (k.rezimas && k.rezimas !== "PI"))) return false;
+      return !x.salyga || x.salyga(k);
+    });
+  }
   var BAIGTOS = { sutartis: 1, nutrauktas: 1 };
   /* „Trūksta ...“ - kilmininkas (LT), be jo „trūksta vertė“. */
   var TRUKSTA = { lt: { verte: "vertės", budas: "būdo", vykdytojas: "vykdytojo", rezimas: "režimo" },
@@ -202,16 +244,16 @@
       c.appendChild(el("span", "gpmp-busena", K.busenosPav(k.busena, l) || k.busena));
       var truksta = ["verte", "budas", "vykdytojas", "rezimas"].filter(function (f) { return k[f] === null || k[f] === undefined || k[f] === ""; });
       var zingsnis = truksta.length ? t.trukstaPrad + truksta.map(function (f) { return TRUKSTA[l][f]; }).join(", ") + "."
-        : (t[k.busena] ? t.zingsnis + t[k.busena] + "." : "");
+        : (t[k.busena] ? t.zingsnis + (k.busena === "vertinamas" && mazosVertes(k) ? t.vertinamasMV : t[k.busena]) + "." : "");
       if (zingsnis) c.appendChild(el("div", "gpmp-zingsnis", zingsnis));
       r.appendChild(c);
-      // 4. Įrankiai su pasirinktu pirkimu
+      // 4. Įrankiai su pasirinktu pirkimu - pagal būseną; pirmas pagrindinis (jei kortelėje netrūksta duomenų)
       var d = el("div", "gpmp-veiksmai");
-      IRANKIAI.forEach(function (x) {
-        var btn = el("a", "gpmp-btn" + (!truksta.length && x.busenos.indexOf(k.busena) === 0 ? " gpmp-btn--pagr" : ""), t[x.raktas]);
-        btn.href = saknis + x.kelias + "?kortele=" + id;
+      irankiai(k).forEach(function (raktas, i) {
+        var btn = el("a", "gpmp-btn" + (!truksta.length && i === 0 ? " gpmp-btn--pagr" : ""), t[raktas]);
+        btn.href = saknis + IRANKIAI[raktas].kelias + "?kortele=" + id;
         btn.target = "_blank"; btn.rel = "noopener";
-        btn.setAttribute("aria-label", t[x.raktas] + ": " + (k.pavadinimas || "?") + " (" + t.naujasSkirtukas + ")");
+        btn.setAttribute("aria-label", t[raktas] + ": " + (k.pavadinimas || "?") + " (" + t.naujasSkirtukas + ")");
         d.appendChild(btn);
       });
       var kort = el("a", "gpmp-btn" + (truksta.length ? " gpmp-btn--pagr" : ""), t.kortele);
