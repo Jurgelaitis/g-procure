@@ -19,6 +19,9 @@
 <script src="../shared/thresholds.js"></script>
 <!-- Pirkimo būdų taksonomija - vienas tiesos šaltinis (darnos patikra) -->
 <script src="../shared/procurement-methods.js"></script>
+<!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 <style>
 :root{
   /* EPSO-G identitetas per shared/epso-g.css zetonus (su atsarga, jei shared nepasiekiamas) */
@@ -207,6 +210,8 @@ footer{text-align:center;padding:20px;color:var(--muted);font-size:11px;border-t
 </nav>
 
 <div class="container">
+
+  <div id="infoPanelMount"></div>
 
   <div class="tabs no-print">
     <div class="tab active" data-panel="p1"><span class="num">1</span> Pirkimo aprašymas</div>
@@ -1294,10 +1299,17 @@ function scheduleAutosave(){
   _pendingSave = true;
   clearTimeout(_autosaveT);
   _autosaveT = setTimeout(()=>{
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(collectData())); }catch(e){}
-    _pendingSave = false;
+    // Q3: „✓ Išsaugota“ - tik pavykus. Anksčiau klaida buvo praryjama, o ženklas vis tiek rodomas.
+    const r = GP_SAUGYKLA.rasyk(STORAGE_KEY, collectData());
     const el = document.getElementById('autosave_hint');
-    if(el) el.textContent = '✓ Išsaugota ' + new Date().toLocaleTimeString('lt-LT',{hour:'2-digit',minute:'2-digit'});
+    if (r.ok){
+      _pendingSave = false;
+      GP_BUSENA.juostaSlepk('irasymas');
+      if(el) el.textContent = '✓ Išsaugota ' + new Date().toLocaleTimeString('lt-LT',{hour:'2-digit',minute:'2-digit'});
+    } else {
+      if(el) el.textContent = 'Neišsaugota';
+      GP_BUSENA.juosta({ raktas:'irasymas', tipas:'klaida', tekstas: GP_SAUGYKLA.pranesimas(r, 'Kaštų ir naudos analizė') });
+    }
   }, 800);
 }
 window.addEventListener('beforeunload', e=>{
@@ -1305,11 +1317,12 @@ window.addEventListener('beforeunload', e=>{
 });
 
 function saveData(){
-  try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(collectData()));
+  const r = GP_SAUGYKLA.rasyk(STORAGE_KEY, collectData());
+  if (r.ok){
     _pendingSave = false; _userTouched = true;
+    GP_BUSENA.juostaSlepk('irasymas');
     toast('Duomenys išsaugoti naršyklėje. Naudokite "Atverti" kitą kartą.');
-  }catch(e){ toast('Nepavyko išsaugoti: '+e.message,'error'); }
+  } else toast(GP_SAUGYKLA.pranesimas(r, 'Kaštų ir naudos analizė'),'error');
 }
 function loadData(){
   const d = localStorage.getItem(STORAGE_KEY);
@@ -1396,8 +1409,12 @@ function applyData(data){
 // Init
 window.addEventListener('DOMContentLoaded',()=>{
   init();
-  // jei yra ankstesne issaugota analize - pasiulom atverti (netaikome automatiskai)
-  try{ if(localStorage.getItem(STORAGE_KEY)) toast('Rasta išsaugota analizė - spauskite "Atverti", jei norite tęsti.','info'); }catch(e){}
+  // jei yra ankstesne issaugota analize - pasiulom atverti (netaikome automatiskai).
+  // Q3: neperskaitoma analize is karto nukopijuojama atskirai (saugykla.js) - kitaip pirmas
+  // automatinis issaugojimas ja negriztamai perrasytu; virsuje - „būsena nežinoma“.
+  const r = GP_SAUGYKLA.skaityk(STORAGE_KEY);
+  if (r.busena === 'yra') toast('Rasta išsaugota analizė - spauskite "Atverti", jei norite tęsti.','info');
+  else if (r.busena !== 'nera') GP_BUSENA.juosta({ raktas:'skaitymas', tipas:'nezinoma', tekstas: GP_SAUGYKLA.pranesimas(r, 'Kaštų ir naudos analizė') });
 });
 // Reali vartotojo saveika ijungia autosave (input + select/checkbox change)
 window.addEventListener('input',e=>{
@@ -1412,5 +1429,61 @@ window.addEventListener('change',e=>{
 });
 </script>
 
+<!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
+     shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
+<script src="../shared/gprocure-info-panel.js"></script>
+<script>
+(function () {
+  if (!window.GProcureInfoPanel || !document.getElementById("infoPanelMount")) return;
+  var C = window.GP_THRESHOLDS && GP_THRESHOLDS.CBA;
+  var mln = function (n) { return (n / 1e6).toLocaleString("lt-LT") + " mln. EUR"; };
+  var RIBA = C ? "nuo " + mln(C.privaloma) + " (rekomenduojama nuo " + mln(C.rekomenduojama) + ")" : "didelės vertės pirkimams";
+  var INFO = { lt: {
+    title: "Kas tai ir kaip naudotis",
+    purpose: "Kaštų ir naudos analizė bei alternatyvų palyginimas didelės vertės pirkimams - " + RIBA + ".",
+    stepsTitle: "Kaip naudotis",
+    steps: [
+      "<b>Aprašykite pirkimą</b> ir pagrįskite poreikį; „Analizės parengtumas“ rodo, ko dar trūksta.",
+      "<b>Apibrėžkite alternatyvas</b> ir suskaičiuokite jų gyvavimo ciklo kaštus (LCC).",
+      "<b>Įvertinkite naudą ir rizikas</b>, palyginkite alternatyvas daugiakrite matrica (MCDA).",
+      "<b>Patikrinkite jautrumą</b> ir parenkite apibendrinimą sprendimų priėmėjui - spausdinkite ar išsaugokite PDF."
+    ],
+    noteTitle: "Duomenys ir riba",
+    note: "Analizė saugoma <b>tik šioje naršyklėje</b> (automatiškai) ir niekur nesiunčiama. Riba - EPSO-G politikos, ne įstatymo nuostata (diskusinės stadijos, tikslinama patvirtinus).",
+    moreLabel: "Plačiau",
+    details: {
+      title: "Kaštų ir naudos analizė - išsami instrukcija",
+      intro: "Didelės vertės pirkimo sprendimas turi remtis ne tik kaina: palyginamos realios alternatyvos per visą gyvavimo ciklą, jų nauda, rizikos ir jautrumas prielaidoms. Rezultatas - apibendrinimas, kurį sprendimų priėmėjas gali perskaityti per kelias minutes.",
+      processTitle: "Aštuoni žingsniai",
+      process: [
+        { title: "Aprašymas", text: "Objektas ir poreikio pagrindimas." },
+        { title: "Alternatyvos", text: "Realios galimybės, įskaitant „nieko nedaryti“." },
+        { title: "LCC ir nauda", text: "Kaštai per gyvavimo ciklą ir nauda." },
+        { title: "Rizikos ir MCDA", text: "Rizikos vertinimas ir daugiakriterė matrica." },
+        { title: "Jautrumas ir išvada", text: "Kaip keičiasi rezultatas; apibendrinimas." }
+      ],
+      conceptsTitle: "Pagrindinės sąvokos",
+      concepts: [
+        { code: "LCC", term: "Gyvavimo ciklo kaštai", def: "Visos išlaidos nuo įsigijimo iki eksploatacijos pabaigos: kaina, eksploatacija, priežiūra, utilizavimas." },
+        { code: "MCDA", term: "Daugiakriterė analizė", def: "Alternatyvų palyginimas pagal kelis svertinius kriterijus, ne vien pinigais." },
+        { term: "Jautrumo analizė", def: "Kaip pasikeičia išvada, pakeitus svarbiausias prielaidas (kainas, apimtis, svorius)." }
+      ],
+      faqTitle: "Dažniausi klausimai",
+      faq: [
+        { q: "Ar analizė privaloma pagal įstatymą?", a: "Ne. Riba nustatyta EPSO-G politika (diskusinės stadijos) ir tikslinama patvirtinus." },
+        { q: "Kaip pateikti analizę vadovybei?", a: "Užpildę žingsnius, naudokite spausdinimą: išsaugotame PDF lieka apibendrinimas ir lentelės, be redagavimo mygtukų." }
+      ],
+      closeLabel: "Uždaryti ir grįžti"
+    }
+  } };
+  GProcureInfoPanel.mount({
+    target: "#infoPanelMount",
+    moduleId: "pp-cost-benefit-kna",
+    defaultOpen: true,
+    getLang: function () { return "lt"; },
+    content: INFO
+  });
+})();
+</script>
 </body>
 </html>
