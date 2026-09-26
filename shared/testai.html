@@ -8,6 +8,8 @@
 <script src="backup.js"></script>
 <script src="docx-stiliai.js"></script>
 <script src="teises-nuorodos.js"></script>
+<script src="saugykla.js"></script>
+<script src="testu-apsauga.js"></script>
 <style>
   body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
        background:var(--color-graphite-5);font-size:14px;line-height:1.5}
@@ -392,6 +394,77 @@ async function testaiSkydelis(){
       tiesa(src.indexOf('var LS_PREFIX = "gprocure.infoPanel."') === -1, m + ": vėl įterpta komponento kopija");
       tiesa(!/\.gpi-[a-z-]+\{/.test(src), m + ": modulyje yra skydelio stilių - jie turi gyventi komponente");
     }
+  });
+
+  /* Q4 (2026-09-26): skiltis „Kas tai ir kaip naudotis“ visuose modulių puslapiuose. Išimtys sąmoningos:
+     PP-teise turi savą sąžiningumo skydelį, admin.html - administravimo įrankis, PP-cost-benefit/index.html -
+     dalių pasirinkimo puslapis su savo paaiškinimu. */
+  await testas("Skiltis visuose modulių puslapiuose: bendras failas, vieta ir unikalus modulio ID; PP-plan vietinės kopijos nebėra", async ()=>{
+    const PUSLAPIAI = ["../PP-tiekejams/index.html", "../PP-carbon/index.html", "../PP-carbon/epd.html", "../PP-esg/index.html",
+      "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-plan/bvpz-kodai.html", "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
+      "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-salygos/PP-SALYGOS.html",
+      "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html", "../PP-cost-benefit/kastu_naudos_analize.html",
+      "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "../PP-protocol/LITGRID_Generatorius_v3.html",
+      "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-report/PP-report.html"];
+    const blogi = [], idai = {};
+    for (const m of PUSLAPIAI) {
+      const src = await (await fetch(m + "?b=" + Date.now())).text();
+      if (src.indexOf('<script src="../shared/gprocure-info-panel.js"><\/script>') === -1) blogi.push(m + ": nejungia komponento");
+      if (src.indexOf('id="infoPanelMount"') === -1) blogi.push(m + ": nėra #infoPanelMount");
+      const id = (src.match(/moduleId:\s*"([^"]+)"/) || [])[1];
+      if (!id) blogi.push(m + ": nėra moduleId"); else if (idai[id]) blogi.push(m + ": moduleId „" + id + "“ jau naudoja " + idai[id]); else idai[id] = m;
+      if (/\.gpi-[a-z-]+\{/.test(src) || /class="gph-/.test(src)) blogi.push(m + ": savi skilties stiliai ar vietinė pagalbos kopija");
+    }
+    lygu(blogi, [], "puslapiai");
+  });
+
+  await testas("Skilties tekstai >= 4,5:1 abiejuose lygiuose (paskirtis, žingsniai, pastaba, sąvokų kodai ir pavyzdžiai, lango žyma ant gradiento)", async ()=>{
+    const TURINYS = { lt: { title: "T", purpose: "Paskirtis", stepsTitle: "Kaip naudotis", steps: ["<b>Vienas</b> du"], noteTitle: "Pastaba", note: "Tekstas",
+      details: { title: "D", intro: "Įžanga", process: [{ title: "P", text: "Aprašas" }], concepts: [{ code: "LCC", term: "Terminas", def: "Apibrėžimas", example: "Pavyzdys" }],
+                 faq: [{ q: "K", a: "A" }] } } };
+    const f = document.createElement("iframe");
+    f.style.width = "1280px"; f.style.height = "900px";
+    const d = await new Promise(res => {
+      f.addEventListener("load", () => res(f.contentDocument), { once: true });
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"></head><body><div id="m"></div>'
+        + '<script src="gprocure-info-panel.js"><\/script><script>GProcureInfoPanel.mount({ target: "#m", moduleId: "gpi-kontrastas", defaultOpen: true, content: ' + JSON.stringify(TURINYS) + ' });<\/script></body></html>';
+      document.body.appendChild(f);
+    });
+    try {
+      for (let i = 0; i < 40 && !d.querySelector(".gpi-more"); i++) await lauk(25);
+      d.querySelector(".gpi-more").click();
+      const w = f.contentWindow, fonas = el => { for (let e = el; e; e = e.parentElement) { const b = w.getComputedStyle(e).backgroundColor; if (b && !/rgba\(0, 0, 0, 0\)|transparent/.test(b)) return b; } return "rgb(255, 255, 255)"; };
+      const blogi = [];
+      for (const sel of [".gpi-title", ".gpi-purpose", ".gpi-steps-title", ".gpi-step-tx", ".gpi-note", ".gpi-flow-title", ".gpi-flow-text", ".gpi-term", ".gpi-term .gpi-code", ".gpi-def", ".gpi-ex", ".gpi-faq summary", ".gpi-btn"]) {
+        const el = d.querySelector(sel); if (!el) { blogi.push(sel + ": nerasta"); continue; }
+        const k = kontrastas(w.getComputedStyle(el).color, fonas(el));
+        if (k < 4.5) blogi.push(sel + " " + k.toFixed(2) + ":1");
+      }
+      // Lango žyma ant tamsaus gradiento: tamsiausia gradiento spalva #0B3B33, šviesiausia #00667D
+      const zyma = w.getComputedStyle(d.querySelector(".gpi-hero-tag")).color;
+      for (const g of ["rgb(11, 59, 51)", "rgb(0, 102, 125)"]) { const k = kontrastas(zyma, g); if (k < 4.5) blogi.push(".gpi-hero-tag ant " + g + " " + k.toFixed(2) + ":1"); }
+      lygu(blogi, [], "kontrastas");
+    } finally { f.remove(); }
+  });
+
+  await testas("„Plačiau“ su onMore veda į modulio pagalbą (ne dubliuojantį langą); spausdinant skiltis nerodoma", async ()=>{
+    const f = document.createElement("iframe");
+    const { w, d } = await new Promise(res => {
+      f.addEventListener("load", () => res({ w: f.contentWindow, d: f.contentDocument }), { once: true });
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"></head><body><div id="m"></div><script src="gprocure-info-panel.js"><\/script>'
+        + '<script>window.kviesta = 0; GProcureInfoPanel.mount({ target: "#m", moduleId: "gpi-onmore", defaultOpen: true, onMore: function(){ window.kviesta++; }, '
+        + 'content: { lt: { title: "T", purpose: "P", steps: ["S"], moreLabel: "Išsami pagalba" } } });<\/script></body></html>';
+      document.body.appendChild(f);
+    });
+    try {
+      for (let i = 0; i < 40 && !d.querySelector(".gpi-more"); i++) await lauk(25);
+      const b = d.querySelector(".gpi-more");
+      tiesa(b && b.textContent.trim() === "Išsami pagalba" && !b.hasAttribute("aria-haspopup"), "mygtukas: " + (b && b.outerHTML));
+      b.click();
+      tiesa(w.kviesta === 1 && !d.querySelector(".gpi-overlay.open"), "onMore neiškviestas arba atvertas dubliuojantis langas");
+      const spausdinimas = [...d.styleSheets].some(ss => { try { return [...ss.cssRules].some(r => r.media && /print/.test(r.media.mediaText) && /\.gpi\b/.test(r.cssText) && /display:\s*none/.test(r.cssText)); } catch (e) { return false; } });
+      tiesa(spausdinimas, "nėra @media print taisyklės skilčiai slėpti");
+    } finally { f.remove(); }
   });
 
   await testas("Būsenos raktas nepakito (gprocure.infoPanel.[modulis]) - išsaugota būsena išlieka", async ()=>{
@@ -923,6 +996,301 @@ async function testaiDarbas(){
   });
 }
 
+/* ==========================================================================
+   VIENODOS BŪSENOS (busena.js) - Q3, 2026-09-26. Rėmelis su srcdoc: komponentas
+   pats įdeda stilių, tad tikrinamas tikras vaizdas, kaip modulyje.
+   ========================================================================== */
+function busenosRemelis(lang){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.style.width = "640px"; f.style.height = "300px";
+    f.addEventListener("load", () => res({ f: f, w: f.contentWindow, d: f.contentDocument }), { once: true });
+    f.srcdoc = `<!doctype html><html lang="${lang || "lt"}"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"></head>`
+             + `<body style="margin:0;padding:12px"><div id="v"></div><script src="busena.js"><\/script></body></html>`;
+    document.body.appendChild(f);
+  });
+}
+const lauk = ms => new Promise(r => setTimeout(r, ms));
+function sviesumas(rgb){
+  const [r, g, b] = rgb.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const kontrastas = (a, b) => { const x = sviesumas(a), y = sviesumas(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+
+async function testaiBusena(){
+  dabartine = grupe("Vienodos būsenos (busena.js)");
+
+  await testas("Klaida - role=alert, kitos būsenos - role=status; tekstas ekranuojamas", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      for (const t of ["eiga", "ai", "gerai", "tuscia", "nezinoma"]) {
+        w.GP_BUSENA.rodyk("#v", { tipas: t, tekstas: "<b>x</b>" });
+        lygu([d.getElementById("v").getAttribute("role"), d.querySelector("#v b")], ["status", null], t);
+      }
+      w.GP_BUSENA.rodyk("#v", { tipas: "klaida", tekstas: "Nepavyko" });
+      lygu(d.getElementById("v").getAttribute("role"), "alert", "klaida");
+    } finally { f.remove(); }
+  });
+
+  await testas("Nepavykęs įkėlimas (nezinoma) niekada neatrodo kaip „duomenų nėra“ (tuscia)", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      w.GP_BUSENA.rodyk("#v", { tipas: "nezinoma" });
+      const a = d.getElementById("v"), tekstas = a.textContent, fonas = w.getComputedStyle(a).backgroundColor;
+      tiesa(/Nepavyko įkelti - duomenų būsena nežinoma/.test(tekstas), "numatytasis tekstas: " + tekstas);
+      w.GP_BUSENA.rodyk("#v", { tipas: "tuscia", tekstas: "Įrašų nėra." });
+      tiesa(w.getComputedStyle(a).backgroundColor !== fonas, "tuščia ir nežinoma atrodo vienodai");
+    } finally { f.remove(); }
+  });
+
+  await testas("AI eiga: laikmatis ir „Atšaukti“; pavykus - sėkmės tekstas ir rezultatas", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      let baigti; const p = new Promise(r => { baigti = r; });
+      const rez = w.GP_BUSENA.vykdyk("#v", { tipas: "ai", tekstas: "AI analizuoja", atsaukiama: true, sekme: "Paruošta.", veiksmas: () => p });
+      await lauk(30);
+      tiesa(d.querySelector("#v .gpb-sukas") && /\d+ s/.test(d.querySelector("#v [data-gpb-laikas]").textContent), "nėra sukutės ar laikmačio");
+      tiesa(d.querySelector("#v [data-gpb-atsaukti]"), "nėra „Atšaukti“");
+      baigti({ ok: true, text: "x" });
+      const r = await rez;
+      lygu([r.ok, r.reiksme.text, d.getElementById("v").textContent.trim()], [true, "x", "Paruošta."]);
+    } finally { f.remove(); }
+  });
+
+  await testas("„Atšaukti“ nutraukia signalą: „Atšaukta - niekas nepakeista.“, rezultatas atsaukta", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      let gautasSignalas = null;
+      const rez = w.GP_BUSENA.vykdyk("#v", { tipas: "ai", tekstas: "AI analizuoja", atsaukiama: true,
+        veiksmas: s => { gautasSignalas = s; return new Promise(r => s.addEventListener("abort", () => r({ ok: false, status: 0, error: "signal is aborted without reason" }))); } });
+      await lauk(20);
+      d.querySelector("#v [data-gpb-atsaukti]").click();
+      const r = await rez;
+      tiesa(gautasSignalas && gautasSignalas.aborted, "signalas nenutrauktas");
+      lygu([r.ok, r.atsaukta, d.getElementById("v").textContent.trim()], [false, true, "Atšaukta - niekas nepakeista."]);
+    } finally { f.remove(); }
+  });
+
+  await testas("Naujas veiksmas toje pačioje vietoje: nutrauktas senasis neperrašo naujojo eigos", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      const senas = new AbortController();
+      const r1 = w.GP_BUSENA.vykdyk("#v", { tipas: "ai", tekstas: "Senas", valdiklis: senas,
+        veiksmas: s => new Promise((ok, ne) => s.addEventListener("abort", () => ne(Object.assign(new Error("Aborted"), { name: "AbortError" })))) });
+      await lauk(10);
+      senas.abort();
+      let baigti; const p2 = new Promise(r => { baigti = r; });
+      const r2 = w.GP_BUSENA.vykdyk("#v", { tipas: "ai", tekstas: "Naujas", veiksmas: () => p2 });
+      lygu((await r1).atsaukta, true, "senas atšauktas");
+      tiesa(/Naujas/.test(d.getElementById("v").textContent), "senasis perrašė naujojo eigą: " + d.getElementById("v").textContent);
+      baigti("x"); await r2;
+    } finally { f.remove(); }
+  });
+
+  await testas("Klaida (GP_AI_PROXY forma) - priežastis ir „Bandyti dar kartą“ tik su kartoti; mygtukas kartoja", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      let kartu = 0;
+      const be = await w.GP_BUSENA.vykdyk("#v", { veiksmas: () => { throw new Error("x"); } });
+      tiesa(!be.ok && !d.querySelector("#v [data-gpb-kartoti]"), "be kartoti - mygtuko neturi būti (rezultatas niekur nepatektų)");
+      const o = { tipas: "ai", tekstas: "AI analizuoja", kartoti: true, veiksmas: () => { kartu++; return { ok: false, status: 500, error: "Serverio klaida (500). Pabandykite po kelių minučių." }; } };
+      const r = await w.GP_BUSENA.vykdyk("#v", o);
+      tiesa(!r.ok && r.klaida, "klaida negrąžinta");
+      tiesa(/Nepavyko: Serverio klaida \(500\)/.test(d.getElementById("v").textContent), "tekstas: " + d.getElementById("v").textContent);
+      d.querySelector("#v [data-gpb-kartoti]").click();
+      await lauk(30);
+      lygu(kartu, 2, "kartojimas");
+    } finally { f.remove(); }
+  });
+
+  await testas("Tinklo klaida žmogui - „Nėra ryšio su serveriu“, ne „Failed to fetch“", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      await w.GP_BUSENA.vykdyk("#v", { veiksmas: () => { throw new TypeError("Failed to fetch"); } });
+      tiesa(/Nėra ryšio su serveriu/.test(d.getElementById("v").textContent) && !/Failed to fetch/.test(d.getElementById("v").textContent), d.getElementById("v").textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas("Kontrastas: tekstas >= 4,5:1 visose būsenose; anglų kalba - EN mygtukai", async ()=>{
+    const { f, w, d } = await busenosRemelis("en");
+    try {
+      for (const t of ["eiga", "ai", "gerai", "klaida", "tuscia", "nezinoma"]) {
+        w.GP_BUSENA.rodyk("#v", { tipas: t, tekstas: "Tekstas", atsaukti: () => {}, kartoti: () => {} });
+        const a = d.querySelector("#v .gpb-tx"), cs = w.getComputedStyle(a), fonas = w.getComputedStyle(d.getElementById("v")).backgroundColor;
+        const k = kontrastas(cs.color, fonas);
+        tiesa(k >= 4.5, t + ": " + k.toFixed(2) + ":1");
+      }
+      lygu([...d.querySelectorAll("#v .gpb-btn")].map(b => b.textContent), ["Cancel", "Try again"], "EN mygtukai");
+    } finally { f.remove(); }
+  });
+
+  await testas("Eiga procentais: progressbar, h.eiga(60, tekstas) stumia juostą; pavėlavęs senojo veiksmo etapas neperrašo „Atšaukta“", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      let h = null;
+      const vyksta = w.GP_BUSENA.vykdyk("#v", { tipas: "ai", tekstas: "1/3: struktūra", procentai: 10, atsaukiama: true,
+        veiksmas: (signal, hh) => { h = hh; return new Promise((res, rej) => {
+          signal.addEventListener("abort", () => rej(Object.assign(new Error("Aborted"), { name: "AbortError" }))); }); } });
+      await lauk(10);
+      const pb = d.querySelector('#v [role="progressbar"]');
+      tiesa(pb && pb.getAttribute("aria-valuenow") === "10", "pradinė eiga");
+      h.eiga(60, "2/3: skyriai");
+      lygu([pb.getAttribute("aria-valuenow"), d.querySelector("#v .gpb-tx").textContent, pb.firstChild.style.width], ["60", "2/3: skyriai", "60%"], "po h.eiga");
+      d.querySelector("#v [data-gpb-atsaukti]").click();
+      await vyksta;
+      h.eiga(95, "3/3: lentelė");
+      h.atnaujink("vėlus tekstas");
+      const t = d.getElementById("v").textContent;
+      tiesa(/Atšaukta/.test(t) && !/lentelė|vėlus/.test(t) && !d.querySelector('#v [role="progressbar"]'), "senas etapas perrašė: " + t);
+    } finally { f.remove(); }
+  });
+
+  await testas("ai-proxy.js: atšaukus pauzės tarp pakartojimų metu, kvietimas grįžta iškart (anksčiau laukdavo pauzės pabaigos, iki 4 s)", async ()=>{
+    const f = document.createElement("iframe");
+    const w = await new Promise(res => {
+      f.addEventListener("load", () => res(f.contentWindow), { once: true });
+      f.srcdoc = '<!doctype html><html><body><script src="ai-proxy.js"><\/script></body></html>';
+      document.body.appendChild(f);
+    });
+    try {
+      let kviesta = 0;
+      // Netikras serveris: 503 (kartojama po 1 s pauzės); nutrauktas signalas - AbortError kaip naršyklėje.
+      w.fetch = (url, o) => {
+        kviesta++;
+        if (o.signal && o.signal.aborted) return Promise.reject(new w.DOMException("The operation was aborted.", "AbortError"));
+        return Promise.resolve(new w.Response("{}", { status: 503 }));
+      };
+      const v = new w.AbortController(), t0 = performance.now();
+      const vyksta = w.GP_AI_PROXY.call({ module: "testai", system: "s", userMessage: "u", signal: v.signal });
+      await lauk(100);
+      v.abort();
+      const r = await vyksta, trukme = performance.now() - t0;
+      tiesa(!r.ok && r.status === 0, "rezultatas: " + JSON.stringify(r));
+      tiesa(trukme < 600, "grįžo tik po " + Math.round(trukme) + " ms");
+      lygu(kviesta, 2, "bandymai: 503, tada nutrauktas");
+    } finally { f.remove(); }
+  });
+}
+
+/* ==========================================================================
+   SAUGI SAUGYKLA (saugykla.js) - Q3, 2026-09-26. Netikra saugykla: tikrų duomenų
+   testai neliečia. Esmė: sugadintas įrašas niekada netampa „duomenų nėra“ ir
+   neperrašomas be kopijos; „išsaugota“ - tik kai įrašymas pavyko.
+   ========================================================================== */
+async function testaiSaugykla(){
+  dabartine = grupe("Saugi saugykla (saugykla.js) ir puslapio juosta");
+  const G = window.GP_SAUGYKLA;
+
+  await testas("Keturios būsenos: yra, nera, sugadinta, neprieinama - sugadinta niekada netampa „nera“", async ()=>{
+    const st = netikraSaugykla({ gera: '{"a":1}', bloga: '{"a":1' });
+    lygu(G.skaityk("gera", { saugykla: st }), { busena: "yra", reiksme: { a: 1 } });
+    lygu(G.skaityk("nebuvo", { saugykla: st }).busena, "nera");
+    const r = G.skaityk("bloga", { saugykla: st });
+    lygu([r.busena, r.zalia], ["sugadinta", '{"a":1'], "sugadinta");
+    const luzta = { getItem(){ throw new Error("SecurityError: access denied"); } };
+    lygu(G.skaityk("x", { saugykla: luzta }).busena, "neprieinama");
+  });
+
+  await testas("Sugadinta reikšmė nukopijuojama į atskirą raktą vieną kartą; originalas nepaliestas", async ()=>{
+    const st = netikraSaugykla({ "epsog_mpp_v1": "[{sugadinta" });
+    const a = G.skaityk("epsog_mpp_v1", { saugykla: st }), b = G.skaityk("epsog_mpp_v1", { saugykla: st });
+    tiesa(a.kopija && /^epsog_mpp_v1\.sugadinta-\d{8}-\d{6}$/.test(a.kopija), "kopijos raktas: " + a.kopija);
+    lygu(b.kopija, a.kopija, "antras skaitymas neturi kurti antros kopijos");
+    lygu([st._d["epsog_mpp_v1"], st._d[a.kopija], Object.keys(st._d).length], ["[{sugadinta", "[{sugadinta", 2]);
+  });
+
+  await testas("tikrink(): ne tos sandaros įrašas - sugadintas, ne tuščias", async ()=>{
+    const st = netikraSaugykla({ planas: '{"ne":"masyvas"}' });
+    const r = G.skaityk("planas", { saugykla: st, tikrink: v => Array.isArray(v) || "tikėtasi pirkimų sąrašo" });
+    lygu([r.busena, r.klaida], ["sugadinta", "tikėtasi pirkimų sąrašo"]);
+  });
+
+  await testas("rasyk(): pavyko - ok; pilna saugykla - ok:false su priežastimi (ne „Išsaugota“)", async ()=>{
+    const st = netikraSaugykla({});
+    lygu(G.rasyk("k", { a: 1 }, { saugykla: st }), { ok: true });
+    lygu(st._d.k, '{"a":1}');
+    const pilna = { setItem(){ const e = new Error("exceeded the quota"); e.name = "QuotaExceededError"; throw e; } };
+    lygu(G.rasyk("k", { a: 1 }, { saugykla: pilna }), { ok: false, kodas: "pilna", klaida: "naršyklės saugykla pilna" });
+  });
+
+  await testas("Pranešimai žmogui: sugadinta - „nedingo“ su kopijos raktu ir „būsena nežinoma“; nepavykęs rašymas", async ()=>{
+    const st = netikraSaugykla({ k: "{" });
+    const t = G.pranesimas(G.skaityk("k", { saugykla: st }), "Metinis pirkimų planas");
+    // Techninio rakto vardo naudotojui nerodome - atsarginės kopijos puslapis kopiją vadina žmogišku vardu.
+    tiesa(/„Metinis pirkimų planas“/.test(t) && /Jie nedingo/.test(t) && /kopija išsaugota atskirai/.test(t) && !/sugadinta-/.test(t) && /būsena nežinoma/.test(t), t);
+    tiesa(/Nepavyko išsaugoti „X“: naršyklės saugykla pilna/.test(G.pranesimas({ ok: false, klaida: "naršyklės saugykla pilna" }, "X")), "rašymo klaida");
+  });
+
+  await testas("Atsarginė kopija neperskaitomą kopiją vadina „neperskaitoma kopija“, informacinės skilties būseną - savo vardu", async ()=>{
+    lygu(GP_BACKUP.zenklas("epsog_mpp_v1.sugadinta-20260926-061500", "lt").pav, "Metinis pirkimų planas (neperskaitoma kopija)");
+    lygu(GP_BACKUP.zenklas("gprocure.infoPanel.pp-qual", "lt").pav, "Informacinės skilties būsena");
+  });
+
+  await testas("Puslapio juosta - po antrašte ir skirtukais; tas pats raktas pakeičia, kitas prideda, slepk pašalina", async ()=>{
+    const { f, w, d } = await busenosRemelis();
+    try {
+      d.body.insertAdjacentHTML("afterbegin", '<header class="app-header">A</header><nav class="tabbar">T</nav><main id="m">M</main>');
+      w.GP_BUSENA.juosta({ raktas: "a", tipas: "nezinoma", tekstas: "Pirmas" });
+      w.GP_BUSENA.juosta({ raktas: "a", tipas: "nezinoma", tekstas: "Pakeistas" });
+      w.GP_BUSENA.juosta({ raktas: "b", tipas: "klaida", tekstas: "Antras" });
+      const dez = d.getElementById("gpb-juostos");
+      lygu([dez.previousElementSibling.className, [...dez.children].map(c => c.textContent.trim())], ["tabbar", ["Pakeistas", "Antras"]]);
+      w.GP_BUSENA.juostaSlepk("a");
+      lygu(dez.children.length, 1, "po slepk");
+    } finally { f.remove(); }
+  });
+
+  await testas("Testų apsauga (testu-apsauga.js): po testų tikri modulio įrašai atkuriami tiksliai - pakeisti, ištrinti ir naujai sukurti; kiti neliečiami", async ()=>{
+    const d = { "epsog_rinkos_kpi_v7": '{"tikra":1}', "epsog_rinkos_kpi_v6": '{"sena":1}', "ppmarket.lang": "en", "kitas": "x" };
+    const st = {
+      get length(){ return Object.keys(d).length; }, key(i){ return Object.keys(d)[i]; },
+      getItem(k){ return k in d ? d[k] : null; }, setItem(k, v){ d[k] = String(v); }, removeItem(k){ delete d[k]; }
+    };
+    const A = GP_TESTU_APSAUGA.pradek(k => k.indexOf("epsog_rinkos_kpi") === 0 || k === "ppmarket.lang", st);
+    lygu(A.kiek, 3, "įsiminta");
+    st.setItem("epsog_rinkos_kpi_v7", '{"testas":1}'); st.removeItem("epsog_rinkos_kpi_v6"); st.removeItem("ppmarket.lang");
+    st.setItem("epsog_rinkos_kpi_v7.sugadinta-20260926-120000", "{"); st.setItem("kitas", "pakeistas kito modulio");
+    tiesa(A.atkurk(), "atkūrimas nepavyko");
+    const rikiuok = o => Object.keys(o).sort().map(k => [k, o[k]]);
+    lygu(rikiuok(d), rikiuok({ "epsog_rinkos_kpi_v7": '{"tikra":1}', "epsog_rinkos_kpi_v6": '{"sena":1}', "ppmarket.lang": "en", "kitas": "pakeistas kito modulio" }), "po atkūrimo");
+    st.setItem("epsog_rinkos_kpi_v7", "vėl"); A.atkurk();
+    lygu(d["epsog_rinkos_kpi_v7"], '{"tikra":1}', "antras atkūrimas");
+  });
+
+  await testas("Testų puslapiai, kurie liečia modulio saugyklą, jungia testu-apsauga.js ir atkuria duomenis", async ()=>{
+    const blogi = [];
+    for (const [f, zenklas] of [["../PP-market-KPI/testai.html", "epsog_rinkos_kpi"], ["../PP-cost-benefit/testai.html", "epsog_en_skaiciuokle"], ["../PP-tiekejams/testai.html", "pp_tiekejams"]]) {
+      const src = await (await fetch(f + "?cb=" + Date.now())).text();
+      if (!/<script src="\.\.\/shared\/testu-apsauga\.js"><\/script>/.test(src) || src.indexOf("GP_TESTU_APSAUGA.pradek(") < 0 || src.indexOf(zenklas) < 0 || src.indexOf("APSAUGA.atkurk()") < 0) blogi.push(f);
+    }
+    lygu(blogi, [], "be apsaugos");
+  });
+
+  await testas("EN: priežastis pagal kodą, ne modulio lietuvišku tekstu; juosta su tekstu-funkcija persiverčia pakeitus <html lang>", async ()=>{
+    const f = document.createElement("iframe");
+    const { w, d } = await new Promise(res => {
+      f.addEventListener("load", () => res({ w: f.contentWindow, d: f.contentDocument }), { once: true });
+      f.srcdoc = '<!doctype html><html lang="en"><head><meta charset="utf-8"></head><body><header class="app-header">A</header><main>M</main>'
+               + '<script src="busena.js"><\/script><script src="saugykla.js"><\/script></body></html>';
+      document.body.appendChild(f);
+    });
+    try {
+      const st = netikraSaugykla({ planas: '{"ne":"masyvas"}' });
+      const r = w.GP_SAUGYKLA.skaityk("planas", { saugykla: st, tikrink: v => Array.isArray(v) || "tikėtasi pirkimų sąrašo" });
+      const en = w.GP_SAUGYKLA.pranesimas(r, "Plan");
+      tiesa(/unexpected structure/.test(en) && !/[ąčęėįšųūž]/i.test(en), "EN: " + en);
+      tiesa(/browser storage is full/.test(w.GP_SAUGYKLA.pranesimas({ ok: false, kodas: "pilna", klaida: "naršyklės saugykla pilna" }, "Plan")), "EN rašymas");
+      let kalba = "en";
+      w.GP_BUSENA.juosta({ raktas: "s", tipas: "nezinoma", tekstas: () => w.GP_SAUGYKLA.pranesimas(r, kalba === "en" ? "Plan" : "Planas") });
+      const el = () => d.querySelector('#gpb-juostos [data-gpb-raktas="s"]');
+      tiesa(/^Saved data/.test(el().textContent.trim()), "EN juosta: " + el().textContent);
+      kalba = "lt"; d.documentElement.lang = "lt";
+      await lauk(30);
+      tiesa(/perskaityti nepavyko/.test(el().textContent) && /„Planas“/.test(el().textContent), "po kalbos keitimo: " + el().textContent);
+    } finally { f.remove(); }
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
@@ -931,6 +1299,8 @@ async function testaiDarbas(){
   await testaiAntraste();
   await testaiDarbas();
   await testaiTeise();
+  await testaiBusena();
+  await testaiSaugykla();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
