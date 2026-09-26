@@ -44,6 +44,9 @@ patikra gauna vieną pirkimo kontekstą (Metodikos 7.2, 7.6, 11 p.), jo pokytis 
 grupuojamos pagal reikalavimą.
 Q3 grupė (2026-09-26): AI veiksmai rodo būseną vietoje (shared/busena.js) - klaida su priežastimi ir „Bandyti dar kartą“,
 „Atšaukti“ tikrai nutraukia užklausą, o prie mygtukų pasakyta, kas siunčiama į AI.
+Pirkimo kortelės grupė (A1, 2026-09-26): modulis kortelę tik skaito; Amber Grid kortelė keičia vykdytoją antraštėje,
+poraštėje, AI instrukcijoje ir Word (be LITGRID), trukmė „24 mėn. + 12 mėn. opcija“ sutampa su 36 mėn., pradėtas kito
+pirkimo darbas neperrašomas be klausimo, o žmogaus pasirinktas režimas - tik su „Taikyti“. Kortelės - tik atmintyje.
 Modulis nieko nesaugo, tad kraunamas rėmelyje ir tikrinamas tiesiai. AI užklausos perimamos - į serverį nieko nesiunčiama.
 Paleidžiama per vietinį serverį repozitorijos šaknyje arba gyvai.</div>
 
@@ -1053,6 +1056,133 @@ async function testaiIsejimas(){
   });
 }
 
+/* Bendra pirkimo kortelė (A1, 2026-09-26). Atskiras rėmelis su ?saugykla=testine: kortelės tik atmintyje,
+   tikros naudotojo kortelės neliečiamos, pagrindinio rėmelio būsena nekeičiama. */
+function modulisSuKortele(){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.addEventListener("load", () => res({ f: f, V: f.contentWindow }), { once: true });
+    f.src = "PP-QUAL.html?saugykla=testine&cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+async function wordasIs(V){
+  let blob = null;
+  V.download = b => { blob = b; };
+  await V.exportDocx();
+  for (let i = 0; i < 50 && !blob; i++) await new Promise(r => setTimeout(r, 100));
+  tiesa(blob, "Word failas nesugeneruotas");
+  return docxTekstas(blob);
+}
+const K_AMBER = { pavadinimas: "Dujų apskaitos prietaisų pirkimas", vykdytojas: "amber-grid", rezimas: "PI", objektas: "prekes", verte: 240000, trukmeMen: 12, dalys: [] };
+const K_IT = { pavadinimas: "IT sistemos priežiūros paslaugos", vykdytojas: "epso-g", rezimas: "VPI", objektas: "paslaugos_it", verte: 180000, trukmeMen: 36 };
+const K_LG = { pavadinimas: "Autotransformatorių pirkimas", vykdytojas: "litgrid", rezimas: "PI", objektas: "prekes", verte: 1250000, trukmeMen: 36,
+               dalys: [{ pavadinimas: "Autotransformatoriai", verte: 950000 }, { pavadinimas: "Montavimo priežiūra", verte: 300000 }] };
+function korteles(V){ const K = V.GP_KORTELE; return [K_AMBER, K_IT, K_LG].map(x => K.issaugok(K.tuscia(x)).kortele.id); }
+const juostosZinute = V => V.document.getElementById("gpk-zin").textContent;
+
+async function testaiKortele(){
+  dabartine = grupe("Bendra pirkimo kortelė (A1): modulis kortelę tik skaito");
+
+  await testas("Be kortelės - kaip iki šiol (LITGRID AB); Amber Grid kortelė: laukai, antraštė, poraštė, AI instrukcija ir Word be LITGRID", async ()=>{
+    const { f, V } = await modulisSuKortele();
+    try {
+      lygu([V.vykdytojas().pavadinimas, V.document.getElementById("antraste-vykdytojas").textContent], ["LITGRID AB", "LITGRID"], "be kortelės");
+      const juosta = V.document.getElementById("gpk");
+      tiesa(juosta && juosta.nextElementSibling.id === "infoPanelMount", "juosta prieš informacinę skiltį");
+      const [amber] = korteles(V);
+      const api = V.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(amber), "pasirinkta");
+      const p = V.eval("PPQ.procurement");
+      lygu([p.name, p.objectType, p.value, p.duration, p.dalys, p.vykdytojas, V.eval("PPQ.settings.rezimasIs"), V.eval("PPQ.kortele")],
+           [K_AMBER.pavadinimas, "Prekės", 240000, "12 mėn.", "", "amber-grid", "kortele", amber]);
+      lygu([V.vykdytojas().pavadinimas, V.vykdytojas().statusas, V.document.getElementById("antraste-vykdytojas").textContent, V.document.getElementById("poraste-vykdytojas").textContent],
+           ["AB Amber Grid", "Perkantysis subjektas", "Amber Grid", "AB Amber Grid"]);
+      const sp = V.systemPrompt();
+      tiesa(/Perkantysis subjektas AB Amber Grid\. Taikomas Pirkimų, atliekamų/.test(sp) && !/LITGRID/.test(sp), "AI instrukcija: " + (sp.match(/KONTEKSTAS:\s*\n[^\n]*/) || [""])[0]);
+      V.eval("PPQ.requirements = [{ id:'r1', category:'C', text:'Tiekėjas per paskutinius 3 metus yra patiekęs prekių už 100 000 EUR.', evidence:'Sąrašas', status:'human' }]");
+      const w = await wordasIs(V);
+      tiesa(/Perkantysis subjektas\s*AB Amber Grid/.test(w) && /modulį \(AB Amber Grid\)/.test(w) && !/LITGRID/.test(w), "Word: " + w.slice(0, 300));
+    } finally { f.remove(); }
+  });
+
+  await testas("Trukmė „24 mėn. + 12 mėn. opcija“ sutampa su kortelės 36 mėn.; dalys - tekstu; kortelę pakeitus be kito darbo - be klausimo, IT paslaugos ir VPĮ", async ()=>{
+    const { f, V } = await modulisSuKortele();
+    try {
+      const [, it, lg] = korteles(V);
+      const api = V.eval("KORTELE"); api.atnaujink();
+      V.eval("PPQ.procurement.duration = '24 mėn. + 12 mėn. opcija'");
+      await api.pasirink(lg);
+      lygu([V.eval("PPQ.procurement.duration"), V.eval("PPQ.procurement.dalys")],
+           ["24 mėn. + 12 mėn. opcija", "1 dalis - Autotransformatoriai (950 000 EUR); 2 dalis - Montavimo priežiūra (300 000 EUR)"]);
+      tiesa(!/Skiriasi/.test(juostosZinute(V)) && !V.document.getElementById("naujas-modal").classList.contains("open"), juostosZinute(V));
+      // Klausimo lango čia būti neturi: jei jis atsirastų, pasirinkimas lauktų atsakymo - testas neturi užstrigti
+      const atsakymas = await Promise.race([api.pasirink(it), new Promise(r => setTimeout(() => r("laukia atsakymo"), 1500))]);
+      tiesa(atsakymas === true && !V.document.getElementById("naujas-modal").classList.contains("open"), "tik kortelės duomenys - klausti nereikia, o gauta: " + atsakymas);
+      lygu([V.eval("PPQ.procurement.name"), V.eval("PPQ.procurement.objectType"), V.eval("itPirkimas()"), V.rezimas(), V.vykdytojas().pavadinimas, V.vykdytojas().statusas],
+           [K_IT.pavadinimas, "Paslaugos (IT/IS)", true, "VPI", "UAB EPSO-G", "Perkančioji organizacija"]);
+    } finally { f.remove(); }
+  });
+
+  await testas("Pradėtas kito pirkimo darbas: klausiama; „Tęsti“ palieka darbą ir kortelę, „Pradėti naują“ išvalo ir užpildo iš naujos", async ()=>{
+    const { f, V } = await modulisSuKortele();
+    try {
+      const [amber, it] = korteles(V);
+      const api = V.eval("KORTELE"); api.atnaujink();
+      await api.pasirink(amber);
+      V.eval("PPQ.requirements = [{ id:'r1', category:'C', text:'Reikalavimas', status:'human' }]");
+      let p = api.pasirink(it);
+      await new Promise(r => setTimeout(r, 20));
+      const modalas = V.document.getElementById("naujas-modal");
+      tiesa(modalas.classList.contains("open") && /„Dujų apskaitos prietaisų pirkimas“ \(1 reikalavimas\).*„IT sistemos priežiūros paslaugos“ - kitas pirkimas/.test(V.document.getElementById("naujas-tekstas").textContent),
+        V.document.getElementById("naujas-tekstas").textContent);
+      modalas.querySelector(".modal-foot .btn-secondary").click();
+      lygu([await p, V.eval("PPQ.kortele"), V.eval("PPQ.requirements.length"), V.document.getElementById("gpk-sel").value, modalas.classList.contains("open")],
+           [false, amber, 1, amber, false], "Tęsti");
+      tiesa(/testiPirkima/.test(String(modalas.querySelector(".modal-foot .btn-secondary").onclick)), "mygtuko elgsena grąžinta");
+      p = api.pasirink(it);
+      await new Promise(r => setTimeout(r, 20));
+      V.document.getElementById("naujas-pradeti").click();
+      lygu([await p, V.eval("PPQ.kortele"), V.eval("PPQ.requirements.length"), V.eval("PPQ.procurement.name"), V.rezimas()],
+           [true, it, 0, K_IT.pavadinimas, "VPI"], "Pradėti naują");
+    } finally { f.remove(); }
+  });
+
+  await testas("Režimas pasirinktas ranka: kortelės kitas režimas ir vykdytojas - skirtumai, taikomi kartu; naujas pirkimas grąžina numatytąjį tik kortelės režimą", async ()=>{
+    const { f, V } = await modulisSuKortele();
+    try {
+      const [amber, it] = korteles(V);
+      const api = V.eval("KORTELE"); api.atnaujink();
+      V.openSettings(); V.document.getElementById("set-context").value = "sektorinis"; V.saveSettings();
+      await api.pasirink(it);
+      const z = juostosZinute(V);
+      tiesa(/Režimas: modulyje „PĮ“, kortelėje „VPĮ“/.test(z) && /Vykdytojas: modulyje „LITGRID AB“, kortelėje „UAB EPSO-G“/.test(z), z);
+      lygu([V.rezimas(), V.vykdytojas().pavadinimas], ["PI", "LITGRID AB"], "neperrašyta");
+      [...V.document.querySelectorAll("#gpk button")].find(b => /Taikyti visas/.test(b.textContent)).click();
+      lygu([V.rezimas(), V.vykdytojas().pavadinimas, V.vykdytojas().statusas, V.eval("PPQ.settings.rezimasIs")], ["VPI", "UAB EPSO-G", "Perkančioji organizacija", "kortele"]);
+      V.naujasPirkimas();
+      lygu([V.rezimas(), V.eval("PPQ.settings.rezimasIs"), V.vykdytojas().pavadinimas], ["PI", "", "LITGRID AB"], "kortelės režimas priklausė pirkimui");
+    } finally { f.remove(); }
+  });
+
+  await testas("„Sukurti kortelę iš šių duomenų“: perduodami pavadinimas, objektas, vertė ir trukmė mėnesiais; numatytasis režimas ir vykdytojas - ne; niekas neįrašoma", async ()=>{
+    const { f, V } = await modulisSuKortele();
+    const pop = document.createElement("iframe");
+    await new Promise(r => { pop.addEventListener("load", r, { once: true }); pop.srcdoc = "<!doctype html><body></body>"; document.body.appendChild(pop); });
+    try {
+      V.eval("Object.assign(PPQ.procurement, { name:'Pastotės remontas', objectType:'Darbai (statyba)', value:520000, duration:'18 mėn.', dalys:'1 dalis - A' })");
+      let gauta = null;
+      V.open = () => pop.contentWindow;
+      pop.contentWindow.addEventListener("message", e => { gauta = e.data; });
+      [...V.document.querySelectorAll("#gpk button")].find(b => /Sukurti kortelę iš šių duomenų/.test(b.textContent)).click();
+      V.dispatchEvent(new V.MessageEvent("message", { data: { gpk: 1, tipas: "pasiruoses" }, origin: V.location.origin, source: pop.contentWindow }));
+      await new Promise(r => setTimeout(r, 60));
+      lygu(gauta && gauta.laukai, { pavadinimas: "Pastotės remontas", objektas: "darbai", verte: 520000, trukmeMen: 18 }, "perduota");
+      lygu(V.GP_KORTELE.skaityk().korteles.length, 0, "modulis nieko neįrašė");
+    } finally { f.remove(); pop.remove(); }
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1066,6 +1196,7 @@ async function testaiIsejimas(){
     await testaiKontekstas();
     await testaiBusenos();
     await testaiIsejimas();
+    await testaiKortele();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
