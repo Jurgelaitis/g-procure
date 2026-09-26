@@ -68,7 +68,7 @@ maršrutą), o iki tol tvirtinimo įrodymas yra commit'as į repozitoriją.
 
 ## 4. Priėmimo testai (užduoties 11 punktas) - kur tikrinama
 
-Visi - `PP-teise/testai.html` (74 testai), testinis registras `testai-registras.json`. Puslapio testai laukia
+Visi - `PP-teise/testai.html` (75 testai), testinis registras `testai-registras.json`. Puslapio testai laukia
 `<html data-busena="ikelta|klaida">` (ne teksto), o kiekvienas pradeda nuo žinomos būsenos (vaizdas „Kas pasikeitė?“,
 be filtrų, be `#irasas`).
 
