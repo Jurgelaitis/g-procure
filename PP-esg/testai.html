@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>PP-esg regresijos testai</title>
+<link rel="stylesheet" href="../shared/epso-g.css">
+<style>
+  body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);background:var(--color-graphite-5);font-size:14px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#5B6470;margin-bottom:18px;max-width:82ch}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .n{font-size:24px;font-weight:800} .ok{color:var(--color-emerald-strong)} .blogai{color:var(--color-error)}
+  .grupe{background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .grupe h2{font-size:14px;margin:0;padding:11px 16px;background:var(--color-green-5);color:var(--color-emerald-strong);border-bottom:1px solid var(--color-graphite-15)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #F0F3F5;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:800;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .t.geras .zyma{background:var(--color-green-5);color:var(--color-emerald-strong)}
+  .t.krito .zyma{background:var(--color-error-5);color:#7F1722} .t.krito{background:#FFFAFA}
+  .det{color:#7F1722;font-size:12px;margin-top:3px;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+  iframe{position:absolute;left:-9999px;top:0;width:1280px;height:900px;border:0}
+</style>
+</head>
+<body>
+
+<h1>PP-esg regresijos testai</h1>
+<div class="sub">Pirmas PP-esg rinkinys (2026-09-26, tobulinimo planas Q7): puslapis įsikelia, tuščioje naršyklėje įrašomi
+demonstraciniai duomenys, o neperskaitytuose - ne; rizikos variklis (šalis, sektorius, kritiškumas), sankcijų patikrų žurnalas
+tik pildomas ir atitikimas blokuoja tiekėją, CVP IS importas dedubliuoja pagal įmonės kodą, o nepavykus paieškai rodoma klaida -
+pavyzdys tik paspaudus ir jo importuoti negalima; AI vertinimo klaida ir atšaukimas, CSRD eksportas. Serveris imituojamas.
+Tikri naudotojo duomenys įsimenami prieš testus ir atkuriami po jų (shared/testu-apsauga.js).</div>
+
+<div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
+  <span class="n blogai" id="n-blogai">0</span> krito
+  <span id="busena" style="color:#5B6470">Vykdoma...</span></div>
+<div id="rezultatai"></div>
+
+<script src="../shared/testu-apsauga.js"></script>
+<script>
+const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("ppesg.") === 0 || k === "gprocure.infoPanel.pp-esg");
+const KEYS = ["ppesg.suppliers", "ppesg.checks", "ppesg.esrs", "ppesg.meta"];
+
+const R = { ok: 0, blogai: 0 };
+function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
+let dabartine = null;
+function grupe(pav){ const d = document.createElement("div"); d.className = "grupe"; d.innerHTML = "<h2>" + ekranuok(pav) + "</h2>"; document.getElementById("rezultatai").appendChild(d); dabartine = d; }
+async function testas(pav, fn){
+  const eil = document.createElement("div");
+  try { await fn(); eil.className = "t geras"; eil.innerHTML = '<span class="zyma">GERAI</span><span>' + ekranuok(pav) + '</span>'; R.ok++; }
+  catch (e) { eil.className = "t krito"; eil.innerHTML = '<span class="zyma">KRITO</span><span>' + ekranuok(pav) + '<div class="det">' + ekranuok((e && e.message) || e) + '</div></span>'; R.blogai++; }
+  dabartine.appendChild(eil);
+  document.getElementById("n-ok").textContent = R.ok; document.getElementById("n-blogai").textContent = R.blogai;
+}
+function tiesa(s, ka){ if (!s) throw new Error(ka || "sąlyga netenkinama"); }
+function lygu(g, t, ka){ if (JSON.stringify(g) !== JSON.stringify(t)) throw new Error((ka || "reikšmė") + "\n  tikėtasi: " + JSON.stringify(t) + "\n  gauta:    " + JSON.stringify(g)); }
+const lauk = ms => new Promise(r => setTimeout(r, ms));
+async function laukTol(f, iki = 6000){ const t0 = Date.now(); while (Date.now() - t0 < iki) { try { if (f()) return true; } catch (e) {} await lauk(40); } return false; }
+
+/* Modulis rėmelyje (kaskart naujas), kalba fiksuota ?lang=lt (į naršyklės atmintį neįrašoma). Store - `const`. */
+let W = null, D = null, remas = null;
+function modulis(){
+  if (remas) remas.remove();
+  return new Promise(res => {
+    const f = remas = document.createElement("iframe");
+    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(300); res(); }, { once: true });
+    f.src = "index.html?lang=lt&cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+const valyk = () => KEYS.forEach(k => localStorage.removeItem(k));
+const St = () => W.eval("Store");
+/* Serverio kvietimai imituojami: kelias -> atsakymas */
+function serveris(atsakymai){
+  const tikras = W.fetch;
+  W.fetch = (url, o) => {
+    for (const [k, f] of Object.entries(atsakymai)) if (String(url).indexOf(k) >= 0) return f(url, o);
+    return tikras.call(W, url, o);
+  };
+  return () => { W.fetch = tikras; };
+}
+
+async function testaiPuslapis(){
+  grupe("Puslapis ir duomenys");
+  await testas("Tuščioje naršyklėje: įrašomi demonstraciniai duomenys, rodinys, informacinė skiltis ir bendri failai", async () => {
+    valyk();
+    await modulis();
+    tiesa(St().getSuppliers().length > 0 && JSON.parse(localStorage.getItem("ppesg.meta")).seeded === true, "demonstraciniai duomenys neįrašyti");
+    tiesa(D.querySelector("#infoPanelMount .gpi"), "informacinė skiltis");
+    tiesa(W.GP_SAUGYKLA && W.GP_BUSENA && W.GP_LANG, "bendri failai");
+    lygu(D.documentElement.lang, "lt", "kalba");
+  });
+
+  await testas("Neperskaitomas tiekėjų registras: „būsena nežinoma“, demonstraciniai NEįrašomi, įrašas neperrašomas, kopija išsaugoma", async () => {
+    valyk();
+    const kopijosPries = new Set(Object.keys(localStorage).filter(k => k.indexOf("ppesg.suppliers.sugadinta-") === 0));
+    localStorage.setItem("ppesg.suppliers", "[{sugadinta");
+    await modulis();
+    const j = D.getElementById("gpb-juostos");
+    tiesa(j && /Tiekėjų rizikos registras/.test(j.textContent) && /būsena nežinoma/.test(j.textContent), "juosta: " + (j && j.textContent));
+    lygu([localStorage.getItem("ppesg.suppliers"), localStorage.getItem("ppesg.meta")], ["[{sugadinta", null], "įrašai po atidarymo");
+    tiesa(Object.keys(localStorage).some(k => k.indexOf("ppesg.suppliers.sugadinta-") === 0 && !kopijosPries.has(k)), "kopija nesukurta");
+    valyk();
+    await modulis();
+  });
+}
+
+async function testaiLogika(){
+  grupe("Rizika, sankcijų patikros, CVP IS importas");
+  await testas("Rizikos variklis: šalis 30 %, sektorius 30 %, kritiškumas tinklui 40 % - žemas, vidutinis, aukštas", async () => {
+    const r = (country, sector, criticality) => { const x = W.computeRisk({ country, sector, criticality }); return [x.score, x.level]; };
+    lygu(r("Lietuva", 1, 1), [33, "low"], "Lietuva 1/1/1");
+    lygu(r("Turkija", 1, 2), [57, "medium"], "Turkija 2/1/2");
+    lygu(r("Lietuva", 2, 3), [70, "high"], "Lietuva 1/2/3");
+    lygu(r("Kinija", 3, 3), [100, "high"], "Kinija 3/3/3");
+    lygu(r("Nežinoma šalis", 1, 1), [43, "medium"], "nežinoma šalis laikoma vidutinės rizikos (2/3), ne žemos");
+  });
+
+  await testas("Sankcijų patikros: žurnalas tik pildomas; atitikimas blokuoja tiekėją, vėlesnė švari patikra jo neatblokuoja", async () => {
+    const s = St().saveSupplier({ name: "Testo tiekėjas", code: "LT-TEST-1", country: "Lietuva", sanctions: "review", risk: "low" });
+    const pries = St().getChecks().length;
+    St().addCheck({ supplierId: s.id, result: "clean", by: "Testas", lists: ["ES"] });
+    lygu([St().getSupplier(s.id).sanctions, !!St().getSupplier(s.id).lastCheck], ["clean", true], "po švarios");
+    St().addCheck({ supplierId: s.id, result: "match", by: "Testas", lists: ["OFAC"] });
+    St().addCheck({ supplierId: s.id, result: "clean", by: "Testas", lists: ["ES"] });
+    lygu(St().getSupplier(s.id).sanctions, "blocked", "atitikimas turi likti blokuotas");
+    lygu(St().getChecks().length, pries + 3, "patikrų įrašai tik pridedami");
+    lygu(St().getChecksFor(s.id).length, 3, "tiekėjo patikrų istorija");
+  });
+
+  await testas("CVP IS importas: dedubliuojama pagal įmonės kodą (tarpai ir brūkšniai nesvarbūs), nauji - „reikia vertinimo“", async () => {
+    const r = St().importSuppliers([{ name: "Naujas UAB", code: "123 456 789" }, { name: "Tas pats kitaip", code: "123-456-789" }, { name: "Testo tiekėjas", code: "lt test 1" }], { category: "Kita" });
+    lygu([r.added, r.skipped], [1, 2], "pridėta / praleista");
+    const n = St().getSupplierByCode("123456789");
+    lygu([n.assessment, n.risk, n.source], ["pending", "unassessed", "cvpis"], "naujas tiekėjas");
+  });
+
+  await testas("CVP IS paieška nepavyko: klaida su priežastimi ir „Bandyti dar kartą“; pavyzdys - tik paspaudus ir jo importuoti negalima", async () => {
+    const atstatyk = serveris({ "/api/esg/cvpis-suppliers": () => Promise.reject(new TypeError("Failed to fetch")) });
+    try {
+      W.openImportModal();
+      await W.runCvpisSearch();
+      const b = D.getElementById("im-busena");
+      tiesa(b.classList.contains("gpb--klaida") && /Nėra ryšio su serveriu/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "klaida: " + b.textContent);
+      lygu(D.getElementById("im-results").textContent.trim(), "", "be paspaudimo pavyzdys neturi būti rodomas");
+      [...b.querySelectorAll(".gpb-btn")].find(x => /pavyzd/i.test(x.textContent)).click();
+      tiesa(D.querySelectorAll(".im-row").length > 0, "pavyzdys neparodytas");
+      const pries = St().getSuppliers().length;
+      W.doCvpisImport();
+      lygu(St().getSuppliers().length, pries, "pavyzdžio tiekėjai importuoti į registrą");
+    } finally { atstatyk(); W.closeModal(); }
+  });
+
+  await testas("AI vertinimas: serverio klaida - priežastis, „Bandyti dar kartą“ ir aiškiai pažymėtas taisyklių įvertis; „Atšaukti“ - be rezultato", async () => {
+    const id = St().getSuppliers()[0].id;
+    let atstatyk = serveris({ "/api/esg/sanctions-assessment": () => Promise.resolve(new W.Response("{}", { status: 500 })) });
+    try {
+      W.openCheckModal(id);
+      await W.runAiAssessment();
+      const b = D.getElementById("aiBusena");
+      tiesa(b.classList.contains("gpb--klaida") && /HTTP 500/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "klaida: " + b.textContent);
+      tiesa(/taisykl/i.test(D.getElementById("aiResult").textContent), "taisyklių įvertis nepažymėtas: " + D.getElementById("aiResult").textContent.slice(0, 160));
+      tiesa(!D.getElementById("aiBtn").disabled, "mygtukas liko išjungtas");
+    } finally { atstatyk(); }
+    atstatyk = serveris({ "/api/esg/sanctions-assessment": (u, o) => new Promise((res, rej) =>
+      o.signal.addEventListener("abort", () => rej(new W.DOMException("The operation was aborted.", "AbortError")))) });
+    try {
+      const vyksta = W.runAiAssessment();
+      tiesa(await laukTol(() => D.querySelector("#aiBusena [data-gpb-atsaukti]")), "nėra „Atšaukti“");
+      D.querySelector("#aiBusena [data-gpb-atsaukti]").click();
+      await vyksta;
+      tiesa(/Atšaukta/.test(D.getElementById("aiBusena").textContent) && !D.getElementById("aiResult").textContent.trim(), "po atšaukimo: " + D.getElementById("aiBusena").textContent);
+    } finally { atstatyk(); W.closeModal(); }
+  });
+
+  await testas("CSRD eksportas: JSON su tiekėjų ir ESRS duomenų taškų skaičiumi, be tiekėjų pavadinimų suvestinėje", async () => {
+    const p = W.buildExportPayload();
+    lygu([p.meta.supplierCount, p.meta.dataPointCount, p.meta.framework], [St().getSuppliers().length, St().getEsrs().length, "CSRD/ESRS"], "meta");
+    tiesa(p.suppliersSummary.every(s => !("name" in s) && s.id), "suvestinėje - be pavadinimų");
+    const tikras = W.HTMLAnchorElement.prototype.click; let vardas = null;
+    W.HTMLAnchorElement.prototype.click = function(){ vardas = this.download; };
+    try { W.downloadExport("json"); W.downloadExport("csv"); } finally { W.HTMLAnchorElement.prototype.click = tikras; }
+    lygu(vardas, "PP-ESG_CSRD_export.csv", "paskutinio failo vardas");
+  });
+}
+
+(async function(){
+  try {
+    await testaiPuslapis();
+    await testaiLogika();
+    document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
+  } catch (e) {
+    document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
+  } finally {
+    if (remas) remas.remove();
+    APSAUGA.atkurk();
+  }
+})();
+</script>
+</body>
+</html>

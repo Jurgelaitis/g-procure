@@ -17,6 +17,9 @@
 <link rel="stylesheet" href="../shared/epso-g.css" />
 <link rel="stylesheet" href="../shared/modulio-antraste.css" />
 <script src="../shared/lang-detect.js"></script>
+<!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 <style>
 :root{
   /* Spalvos ir --font-base iškelti į ../shared/epso-g.css (GP dizaino žetonai). */
@@ -438,10 +441,33 @@ const API_BASE = "https://api.g-procure.com";
 /* ============================================================
    1. DATA LAYER  (the only place that touches persistence)
    ============================================================ */
+/* Q3 (shared/saugykla.js): neperskaitomas įrašas anksčiau tapdavo tuščiu - tiekėjų registras
+   atrodydavo tuščias, sankcijų patikrų istorija (tik papildoma) prasidėdavo iš naujo, o
+   seedIfEmpty galėjo užrašyti demonstracinius duomenis ant tikrųjų. Dabar sugadinto įrašo
+   kopija išsaugoma atskirai, viršuje - „būsena nežinoma“, demonstraciniai neįrašomi. */
+const STORE_PAV = { "ppesg.suppliers": { lt: "Tiekėjų rizikos registras", en: "Supplier risk register" },
+  "ppesg.checks": { lt: "Sankcijų patikrų istorija", en: "Sanctions check history" },
+  "ppesg.esrs": { lt: "ESRS duomenys", en: "ESRS data" }, "ppesg.meta": { lt: "PP-ESG nustatymai", en: "PP-ESG settings" } };
 const Store = {
   KEYS: { sup: "ppesg.suppliers", chk: "ppesg.checks", esrs: "ppesg.esrs", meta: "ppesg.meta" },
-  _read(k, fb) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } },
-  _write(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+  _busenos: {},
+  _pav(k) { return (STORE_PAV[k] || {})[typeof LANG !== "undefined" && LANG === "en" ? "en" : "lt"] || k; },
+  _read(k, fb) {
+    const r = GP_SAUGYKLA.skaityk(k, { tikrink: v => Array.isArray(fb) ? (Array.isArray(v) || "netinkama sandara") : true });
+    this._busenos[k] = r.busena;
+    if (r.busena === "yra") return r.reiksme;
+    if (r.busena !== "nera") GP_BUSENA.juosta({ raktas: "skaitymas-" + k, tipas: "nezinoma", tekstas: () => GP_SAUGYKLA.pranesimas(r, this._pav(k)) });
+    return fb;
+  },
+  _write(k, v) {
+    const r = GP_SAUGYKLA.rasyk(k, v);
+    if (!r.ok) {
+      GP_BUSENA.juosta({ raktas: "irasymas-" + k, tipas: "klaida", tekstas: () => GP_SAUGYKLA.pranesimas(r, this._pav(k)) });
+      throw new Error(r.klaida);            // kaip anksčiau: veiksmas nutraukiamas, „Išsaugota“ nerodoma
+    }
+    GP_BUSENA.juostaSlepk("irasymas-" + k);
+  },
+  nezinoma() { return Object.values(this.KEYS).some(k => this._busenos[k] === "sugadinta" || this._busenos[k] === "neprieinama"); },
 
   getSuppliers() { return this._read(this.KEYS.sup, []); },
   saveSupplier(s) {
@@ -508,7 +534,10 @@ const Store = {
 
   newId(prefix) { return prefix + "-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 5).toUpperCase(); },
   seedIfEmpty() {
-    if (this.getSuppliers().length || this._read(this.KEYS.meta, null)) return;
+    const tiekejai = this.getSuppliers(), meta = this._read(this.KEYS.meta, null);
+    this.getChecks(); this.getEsrs();
+    if (this.nezinoma()) return;              // neperskaitomi duomenys - ne „tušti“; demonstracinių neįrašom
+    if (tiekejai.length || meta) return;
     this._write(this.KEYS.sup, SEED.suppliers);
     this._write(this.KEYS.chk, SEED.checks);
     this._write(this.KEYS.esrs, SEED.esrs);
@@ -570,7 +599,7 @@ const I18N = {
     "imp.search": "Ieškoti CVP IS", "imp.searching": "Ieškoma CVP IS…", "imp.found": "Rasta tiekėjų", "imp.selectAll": "Žymėti visus naujus",
     "imp.col.supplier": "Tiekėjas", "imp.col.code": "Įmonės kodas", "imp.col.contracts": "Sutartys", "imp.col.value": "Bendra vertė", "imp.col.last": "Pask. sutartis", "imp.col.status": "Būsena",
     "imp.new": "Nauja", "imp.exists": "Jau registre", "imp.importSel": "Importuoti pažymėtus", "imp.none": "Nieko nepažymėta",
-    "imp.result": "Importuota: {a} nauji · praleista (jau registre): {s}", "imp.fail": "Nepavyko pasiekti CVP IS paslaugos. Rodomi demonstraciniai duomenys.", "imp.demoNote": "DEMONSTRACINIAI duomenys (backend neprieinamas).",
+    "imp.result": "Importuota: {a} nauji · praleista (jau registre): {s}", "imp.fail": "Nepavyko pasiekti CVP IS paslaugos. Rodomi demonstraciniai duomenys.", "imp.demoNote": "DEMONSTRACINIAI duomenys (backend neprieinamas).", "imp.failState": "Nepavyko pasiekti CVP IS paslaugos - tiekėjų sąrašas nežinomas", "imp.showDemo": "Rodyti demonstracinį pavyzdį", "imp.demoNoImport": "Demonstracinių duomenų importuoti negalima - tai ne tikri tiekėjai.",
     // stebėjimas
     "mon.title": "Pakartotinio tikrinimo periodika", "mon.desc": "Rizika grįsta logika: aukšta rizika tikrinama kas 90 d., vidutinė kas 180 d., žema kas 365 d. Žemiau - tiekėjai, kuriems patikra pavėluota.",
     "mon.due": "Laukia pakartotinės patikros", "mon.none": "Šiuo metu visi įvertinti tiekėjai patikrinti laiku.", "mon.cadence": "Periodika", "mon.lastCheck": "Pask. patikra", "mon.schedule": "Įjungti automatinį priminimą",
@@ -604,6 +633,7 @@ const I18N = {
     "m.ai.disc": "AI teikia tik PRELIMINARŲ vertinimą orientavimuisi. Galutinį sprendimą priima atsakingas asmuo, remdamasis oficialiais ES, OFAC, JT ir nacionaliniais sankcijų sąrašais. AI nepateikia galutinio „švarus/blokuotas“ verdikto.",
     "m.ai.level": "Preliminarus rizikos lygis", "m.ai.factors": "Rizikos veiksniai", "m.ai.actions": "Rekomenduojami tolesni veiksmai", "m.ai.thinking": "Vertinama…", "m.ai.context": "Tiekėjo kontekstas vertinimui (šalis, savininkai, veiklos sritis)",
     "m.ai.fail": "Nepavyko pasiekti AI vertinimo paslaugos. Patikrinkite, ar veikia backend proxy (/api/esg/sanctions-assessment).",
+    "m.ai.failState": "AI vertinimo gauti nepavyko", "m.ai.rules": "taisyklėmis pagal šalies riziką, ne AI", "m.ai.rulesNote": "Žemiau - ne AI vertinimas, o taisyklėmis paremtas preliminarus įvertis pagal šalies rizikos lentelę.",
     // export
     "m.exp.title": "Eksportuoti CSRD ataskaitai", "m.exp.desc": "Sugeneruojamas struktūrizuotas duomenų paketas su visais ESRS taškais, padengimo rodikliais ir metaduomenimis grupės CSRD ataskaitai.", "m.exp.json": "Atsisiųsti JSON", "m.exp.csv": "Atsisiųsti CSV", "m.exp.preview": "Peržiūra",
     // misc
@@ -641,7 +671,7 @@ const I18N = {
     "imp.search": "Search CVP IS", "imp.searching": "Searching CVP IS…", "imp.found": "Suppliers found", "imp.selectAll": "Select all new",
     "imp.col.supplier": "Supplier", "imp.col.code": "Company code", "imp.col.contracts": "Contracts", "imp.col.value": "Total value", "imp.col.last": "Last contract", "imp.col.status": "Status",
     "imp.new": "New", "imp.exists": "In register", "imp.importSel": "Import selected", "imp.none": "Nothing selected",
-    "imp.result": "Imported: {a} new · skipped (already in register): {s}", "imp.fail": "Could not reach the CVP IS service. Showing demo data.", "imp.demoNote": "DEMO data (backend unavailable).",
+    "imp.result": "Imported: {a} new · skipped (already in register): {s}", "imp.fail": "Could not reach the CVP IS service. Showing demo data.", "imp.demoNote": "DEMO data (backend unavailable).", "imp.failState": "Could not reach the CVP IS service - the supplier list is unknown", "imp.showDemo": "Show a demo example", "imp.demoNoImport": "Demo data cannot be imported - these are not real suppliers.",
     "mon.title": "Re-screening cadence", "mon.desc": "Risk-based logic: high risk every 90 days, medium every 180 days, low every 365 days. Below - suppliers overdue for screening.",
     "mon.due": "Due for re-screening", "mon.none": "All assessed suppliers are currently screened on time.", "mon.cadence": "Cadence", "mon.lastCheck": "Last check", "mon.schedule": "Enable automatic reminder",
     "sanct.clean": "Clean", "sanct.review": "Review", "sanct.blocked": "Blocked",
@@ -672,6 +702,7 @@ const I18N = {
     "m.ai.disc": "AI provides a PRELIMINARY assessment for orientation only. The final decision is made by the responsible person based on official EU, OFAC, UN and national sanctions lists. AI never issues a final “clean/blocked” verdict.",
     "m.ai.level": "Preliminary risk level", "m.ai.factors": "Risk factors", "m.ai.actions": "Recommended next steps", "m.ai.thinking": "Assessing…", "m.ai.context": "Supplier context for the assessment (country, owners, activity)",
     "m.ai.fail": "Could not reach the AI assessment service. Check that the backend proxy is running (/api/esg/sanctions-assessment).",
+    "m.ai.failState": "Could not get the AI assessment", "m.ai.rules": "rule-based on country risk, not AI", "m.ai.rulesNote": "Below is not an AI assessment but a rule-based preliminary estimate from the country risk table.",
     "m.exp.title": "Export for CSRD report", "m.exp.desc": "Generates a structured data package with all ESRS points, coverage metrics and metadata for the group CSRD report.", "m.exp.json": "Download JSON", "m.exp.csv": "Download CSV", "m.exp.preview": "Preview",
     "act.view": "View", "act.edit": "Edit", "act.check": "Check", "none": "-", "never": "Never checked",
     "drawer.title": "Supplier card", "drawer.id": "Unique ID", "drawer.history": "Sanctions check history", "drawer.noHistory": "No checks yet.", "drawer.addCheck": "Log a check",
@@ -872,6 +903,7 @@ function openImportModal() {
         <button class="btn btn-primary" id="im-search" onclick="runCvpisSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>${t("imp.search")}</span></button>
         <span id="im-meta" class="note"></span>
       </div>
+      <div id="im-busena" hidden></div>
       <div id="im-results" style="margin-top:14px"></div>
     </div>
     <div class="modal-foot">
@@ -887,21 +919,31 @@ async function runCvpisSearch() {
   if (months === "0") { fromStr = "2017-07-01"; }       // „Visos" - nuo rinkinio pradžios
   else { const from = new Date(); from.setMonth(from.getMonth() - (parseInt(months, 10) || 60)); fromStr = from.toISOString().slice(0, 10); }
   btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> ${t("imp.searching")}`;
-  results.innerHTML = ""; meta.textContent = "";
-  let data, isDemo = false;
+  results.innerHTML = ""; meta.textContent = ""; GP_BUSENA.slepk("#im-busena");
+  let data;
+  /* Q3: nepavykus CVP IS paieškai anksčiau iškart rodyti demonstraciniai tiekėjai (ir juos buvo galima
+     importuoti į registrą!). Dabar - klaida su priežastimi ir „Bandyti dar kartą“; pavyzdys - tik paspaudus. */
   try {
     const url = `${API_BASE}/api/esg/cvpis-suppliers?from=${fromStr}&minValue=${encodeURIComponent(minValue)}&buyer=${encodeURIComponent(buyer)}&limit=300`;
     const res = await fetch(url); if (!res.ok) throw new Error("HTTP " + res.status);
     data = await res.json();
+    if (!data || !Array.isArray(data.suppliers)) throw new Error(LANG === "en" ? "unexpected server reply" : "netikėtas serverio atsakymas");
   } catch (e) {
-    data = { suppliers: cvpisDemo({ minValue: Number(minValue) || 0 }) }; isDemo = true;
+    data = null;
+    GP_BUSENA.rodyk("#im-busena", { tipas: "klaida", tekstas: t("imp.failState") + ": " + GP_BUSENA.klaidosTekstas(e), kartoti: runCvpisSearch,
+      mygtukai: [{ tekstas: t("imp.showDemo"), veiksmas: () => {
+        _cvpisResults = cvpisDemo({ minValue: Number(minValue) || 0 }).map(r => ({ ...r, exists: !!Store.getSupplierByCode(r.code) }));
+        renderCvpisResults(true); } }] });
   } finally {
     btn.disabled = false; btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>${t("imp.search")}</span>`;
   }
+  if (!data) { _cvpisResults = []; _cvpisDemo = false; return; }
   _cvpisResults = (data.suppliers || []).map(r => ({ ...r, exists: !!Store.getSupplierByCode(r.code) }));
-  renderCvpisResults(isDemo);
+  renderCvpisResults(false);
 }
+let _cvpisDemo = false;
 function renderCvpisResults(isDemo) {
+  _cvpisDemo = !!isDemo;
   const results = $("#im-results"), meta = $("#im-meta");
   meta.innerHTML = `${t("imp.found")}: <b>${_cvpisResults.length}</b>${isDemo ? ` · <span style="color:var(--color-warning)">${t("imp.demoNote")}</span>` : ""}`;
   if (!_cvpisResults.length) { results.innerHTML = `<div class="empty">${LANG === "lt" ? "Nieko nerasta pagal filtrus" : "Nothing found for these filters"}<div class="note" style="margin-top:8px;max-width:520px">${t("imp.emptyHint")}</div></div>`; $("#im-import").disabled = true; return; }
@@ -930,6 +972,7 @@ function updateImportBtn() {
   btn.textContent = n ? `${t("imp.importSel")} (${n})` : t("imp.importSel");
 }
 function doCvpisImport() {
+  if (_cvpisDemo) { toast(t("imp.demoNoImport"), "err"); return; }      // Q3: pavyzdžio tiekėjai - ne tikri
   const idx = [...document.querySelectorAll(".im-row:checked")].map(c => Number(c.dataset.i));
   if (!idx.length) { toast(t("imp.none"), "err"); return; }
   const cat = $("#im-cat").value;
@@ -1045,6 +1088,7 @@ function openCheckModal(supplierId) {
           <div class="ai-disclaimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>${t("m.ai.disc")}</div>
           <div class="field"><label>${t("m.ai.context")}</label><textarea class="input" id="cf-aictx" rows="2" placeholder="${LANG === "lt" ? "pvz. Gamintojas iš Turkijos, savininkai – ES rezidentai, tiekia transformatorius…" : "e.g. Manufacturer from Turkey, EU-resident owners, supplies transformers…"}"></textarea></div>
           <button class="btn btn-secondary btn-sm" style="margin-top:8px" id="aiBtn" onclick="runAiAssessment()">${t("m.ai.btn")}</button>
+          <div id="aiBusena" hidden></div>
           <div id="aiResult"></div>
         </div>
       </div>
@@ -1067,30 +1111,30 @@ async function runAiAssessment() {
   const btn = $("#aiBtn"), out = $("#aiResult");
   const supId = $("#cf-sup").value; const sup = Store.getSupplier(supId);
   const ctx = $("#cf-aictx").value.trim();
-  btn.disabled = true; btn.innerHTML = `<span class="spinner dark"></span> ${t("m.ai.thinking")}`;
+  btn.disabled = true;
   out.innerHTML = "";
-  try {
-    const res = await fetch(`${API_BASE}/api/esg/sanctions-assessment`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lang: LANG, supplier: { name: sup?.name, country: sup?.country, category: sup?.category }, context: ctx })
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    renderAiResult(data);
-  } catch (e) {
-    // graceful demo fallback so the MVP is usable without the backend running
-    const demo = demoAssessment(sup, ctx);
-    out.innerHTML = `<div class="note" style="color:var(--color-warning);margin:8px 0">${t("m.ai.fail")}</div>`;
-    renderAiResult(demo, true);
-  } finally {
-    btn.disabled = false; btn.textContent = t("m.ai.btn");
-  }
+  /* Q3: vienoda eiga su „Atšaukti“; nepavykus - klaida su priežastimi ir „Bandyti dar kartą“, o žemiau
+     aiškiai pažymėtas TAISYKLĖMIS paremtas įvertis (anksčiau jis rodytas kaip vertinimas su žyme „demo“). */
+  const r = await GP_BUSENA.vykdyk("#aiBusena", { tipas: "ai", tekstas: t("m.ai.thinking"), atsaukiama: true,
+    klaidosPriesdelis: t("m.ai.failState"), kartoti: runAiAssessment,
+    veiksmas: async signal => {
+      const res = await fetch(`${API_BASE}/api/esg/sanctions-assessment`, { signal,
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang: LANG, supplier: { name: sup?.name, country: sup?.country, category: sup?.category }, context: ctx })
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    } });
+  btn.disabled = false; btn.textContent = t("m.ai.btn");
+  if (r.ok) renderAiResult(r.reiksme);
+  else if (!r.atsaukta) renderAiResult(demoAssessment(sup, ctx), true);
 }
 function renderAiResult(d, isDemo) {
   const lvlMap = { low: "b-low", medium: "b-med", high: "b-high" };
   $("#aiResult").innerHTML = `
     <div class="ai-result">
-      <h4>${t("m.ai.level")} ${isDemo ? "· (demo)" : ""}</h4>
+      ${isDemo ? `<div class="note" style="margin:0 0 6px">${t("m.ai.rulesNote")}</div>` : ""}
+      <h4>${t("m.ai.level")} ${isDemo ? "· " + t("m.ai.rules") : ""}</h4>
       <span class="badge ${lvlMap[d.level] || "b-neutral"}"><span class="d"></span>${t(RISK_LABEL[d.level] || "none")}</span>
       <h4>${t("m.ai.factors")}</h4><ul>${(d.factors || []).map(f => `<li>${esc(f)}</li>`).join("")}</ul>
       <h4>${t("m.ai.actions")}</h4><ul>${(d.actions || []).map(f => `<li>${esc(f)}</li>`).join("")}</ul>
