@@ -42,7 +42,9 @@
 <body>
 
 <h1>PP-report regresijos testai</h1>
-<div class="sub">Tikrina, ar 0, 1 ir 2 paketų taisymai tebeveikia. Atidaroma naršyklėje, jokių įrankių nereikia.</div>
+<div class="sub">Tikrina, ar 0, 1 ir 2 paketų taisymai tebeveikia. Atidaroma naršyklėje, jokių įrankių nereikia.
+Bendros pirkimo kortelės grupė (A1): kortelė laukia, kol bus pasirinkta forma, tada pildo tuščius laukus; įkeltas juodraštis
+tik palyginamas; kortelės - tik atmintyje (?saugykla=testine), juodraščių saugykla atkuriama po testo (shared/testu-apsauga.js).</div>
 
 <div id="santrauka">
   <div><span class="skaicius" id="n-ok">0</span> <span class="pastaba">praėjo</span></div>
@@ -60,6 +62,7 @@
 </div>
 
 <iframe id="ramas" src="PP-report.html"></iframe>
+<script src="../shared/testu-apsauga.js"></script>
 
 <script>
 /* ==========================================================================
@@ -1299,6 +1302,89 @@ async function paleisk() {
     const isp = D.getElementById('kriterijaus-ispejimas');
     tiesa(isp && isp.style.display !== 'none', 'įspėjimas rodomas');
     neturi(isp.textContent, 'rengkite 2 priede', 'nuoroda į 2 priedą 2 priede beprasmė');
+  });
+
+  /* ---------------- BENDRA PIRKIMO KORTELĖ (A1 2 etapas, 2026-09-26) ----------------
+     Atskiras rėmelis su ?saugykla=testine - kortelės tik atmintyje, tikros neliečiamos. */
+  grupe('Bendra pirkimo kortelė (A1)');
+  const suKortele = () => new Promise(res => {
+    const f = document.createElement('iframe');
+    f.addEventListener('load', async () => {
+      const KW = f.contentWindow;
+      for (let i = 0; i < 60 && !KW.KORTELE; i++) await laukti(50);
+      res({ f, KW, KD: KW.document });
+    }, { once: true });
+    f.src = 'PP-report.html?saugykla=testine&cb=' + Date.now();
+    document.body.appendChild(f);
+  });
+  const KORT = { pavadinimas: 'Serverių priežiūros paslaugų pirkimas', numeris: 'PR-2026-077', cvpisNr: '712345', vykdytojas: 'litgrid', rezimas: 'PI',
+    verte: 42000, bvpz: '50324100-3', budas: 'MV-SAD', dalys: [{ pavadinimas: 'Vilniaus serveriai', verte: 30000 }, { pavadinimas: 'Kauno serveriai', verte: 12000 }],
+    iniciatorius: 'Jonas Jonaitis, IT skyrius', organizatorius: 'Petras Petraitis, Pirkimų skyrius' };
+
+  await testas('Kortelė laukia formos; atvėrus 2 priedą - pavadinimas, numeriai, vertė, BVPŽ, būdas, CVP IS, dalys, iniciatorius ir organizatorius', async () => {
+    const { f, KW, KD } = await suKortele();
+    try {
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia(KORT)).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(KD.getElementById('gpk').nextElementSibling.id === 'infoPanelMount', 'juosta prieš informacinę skiltį');
+      await KW.KORTELE.pasirink(k.id);
+      lygu(KD.getElementById('gpk-zin').textContent, 'Pasirinkite pažymos formą - tušti jos laukai bus užpildyti iš kortelės.', 'be formos');
+      KW.selectForm(2);
+      const v = id => KD.getElementById(id).value;
+      lygu([v('pirkimo-pavadinimas'), v('kortele-nr'), v('verte-be-pvm'), v('verte-su-pvm'), v('bvpz-kodas'), v('pirkimo-budas'), v('cvpis-nr'),
+            KD.querySelector('input[name="atliekamas"]:checked').value, KD.querySelector('input[name="skaidoma"]:checked').value],
+           [KORT.pavadinimas, 'PR-2026-077', '42000', '50820.00', '50324100-3', 'Skelbiama apklausa', '712345', 'CVP IS', 'taip']);
+      lygu([...KD.querySelectorAll('#dalys-tbody tr')].map(tr => [tr.querySelector('[data-field="dalisPav"]').value, tr.querySelector('[data-field="dalisBePvm"]').value]),
+           [['Vilniaus serveriai', '30000'], ['Kauno serveriai', '12000']], 'dalys');
+      lygu([v('ini-vardas'), v('ini-padalinys'), v('org-vardas')], ['Jonas Jonaitis', 'IT skyrius', 'Petras Petraitis'], 'asmenys');
+      turi(KD.getElementById('gpk-zin').textContent, 'Iš kortelės užpildyta: pavadinimas, numeris, vertė, BVPŽ kodas, būdas, CVP IS numeris, dalys, iniciatorius, organizatorius.');
+      neturi(KD.getElementById('gpk-zin').textContent, 'neįrašoma');
+    } finally { f.remove(); }
+  });
+
+  await testas('1 priedas: dalys, numeris, CVP IS, organizatorius, kitas vykdytojas ir ne mažos vertės būdas neįrašomi ir įvardijami', async () => {
+    const { f, KW, KD } = await suKortele();
+    try {
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia(Object.assign({}, KORT, { vykdytojas: 'amber-grid', budas: 'T-AK' }))).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      KW.selectForm(1);
+      lygu([KD.getElementById('pirkimo-pavadinimas').value, KD.getElementById('pirkimo-budas').value, KD.getElementById('ini-vardas').value],
+           [KORT.pavadinimas, '', 'Jonas Jonaitis']);
+      const z = KD.getElementById('gpk-zin').textContent;
+      ['numeris („PR-2026-077“ - 1 priede šio lauko nėra)', 'būdas („Atviras konkursas (tarptautinis pirkimas)“ - pažymos rengiamos mažos vertės pirkimams)',
+       'CVP IS numeris („712345“ - 1 priede pirkimas atliekamas el. paštu arba žodžiu)', 'dalys („1. Vilniaus serveriai (30 000 EUR); 2. Kauno serveriai (12 000 EUR)“ - 1 priede pirkimas į dalis neskaidomas)',
+       'organizatorius („Petras Petraitis, Pirkimų skyrius“ - 1 priede pirkimą vykdo iniciatorius)', 'vykdytojas („AB Amber Grid“ - pažymų formos - LITGRID AB)']
+        .forEach(x => turi(z, x));
+    } finally { f.remove(); }
+  });
+
+  await testas('Įkeltas juodraštis tik palyginamas („užpildyta“ nebesakoma); grįžus į formų pasirinkimą - vėl laukia; išvalius formą kortelė atsiejama', async () => {
+    const APS = GP_TESTU_APSAUGA.pradek(k => k === 'litgrid_pirkimo_drafts');
+    const { f, KW, KD } = await suKortele();
+    try {
+      KW.confirm = () => true;
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia({ pavadinimas: 'Serverių priežiūros paslaugų pirkimas', vykdytojas: 'litgrid', rezimas: 'PI', verte: 42000, budas: 'MV-NR' })).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      KW.selectForm(2);
+      const verte = KD.getElementById('verte-be-pvm');
+      verte.value = '50000'; verte.dispatchEvent(new KW.Event('input', { bubbles: true }));
+      KW.saveDraft();
+      const id = KW.eval('currentDraftId');
+      KW.selectForm(2);                                              // tuščia forma - kortelė vėl pildo
+      lygu(KD.getElementById('verte-be-pvm').value, '42000', 'nauja forma - iš kortelės');
+      KW.loadDraft(id);
+      await laukti(200);
+      lygu(KD.getElementById('verte-be-pvm').value, '50000', 'juodraščio vertė');
+      const z = KD.getElementById('gpk-zin').textContent;
+      tiesa(/Skiriasi nuo kortelės/.test(z) && /Vertė: modulyje „50 000 EUR“, kortelėje „42 000 EUR“/.test(z) && !/užpildyta/.test(z), z);
+      KW.goBackToSelector();
+      lygu(KD.getElementById('gpk-zin').textContent, 'Pasirinkite pažymos formą - tušti jos laukai bus užpildyti iš kortelės.', 'vėl laukia formos');
+      KW.selectForm(2);
+      KW.resetForm();
+      lygu([KD.getElementById('verte-be-pvm').value, KD.getElementById('gpk-sel').value, KW.KORTELE.pasirinkta()], ['', '', null], 'išvalyta forma - be kortelės');
+    } finally { f.remove(); APS.atkurk(); }
   });
 
   /* ---------------- pabaiga ---------------- */

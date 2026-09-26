@@ -617,6 +617,11 @@
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadinti juodraščiai nevirsta „juodraščių nėra“ -->
 <script src="../shared/busena.js"></script>
 <script src="../shared/saugykla.js"></script>
+<!-- Bendra pirkimo kortelė (A1): atvertos formos tušti laukai pildomi iš kortelės -->
+<script src="../shared/money.js"></script>
+<script src="../shared/procurement-methods.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 
 <header class="app-header">
   <div class="header-inner">
@@ -877,6 +882,8 @@ function selectForm(formNum) {
     const dabar = new Date();
     dd.value = `${dabar.getFullYear()}-${String(dabar.getMonth()+1).padStart(2,'0')}-${String(dabar.getDate()).padStart(2,'0')}`;
   }
+  // Pasirinkta pirkimo kortelė įrašoma į ką tik atsiradusius tuščius formos laukus (A1)
+  if (window.KORTELE) KORTELE.pritaikyk();
   // Scroll to top
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -891,6 +898,7 @@ function goBackToSelector() {
   document.getElementById('form-container').style.display = 'none';
   document.getElementById('form-container').innerHTML = '';
   document.getElementById('draft-info').textContent = '';
+  if (window.KORTELE) KORTELE.skirtumai();
 }
 
 // ============================================================
@@ -3969,6 +3977,8 @@ function loadDraft(id) {
   setTimeout(() => {
     loadFormData(d.data);
     currentDraftId = id;
+    // Juodraštis - žmogaus darbas: kortelė jo nepildo, tik parodo skirtumus
+    if (window.KORTELE) KORTELE.skirtumai(true);
     document.getElementById('draft-info').textContent = `Juodraštis: "${d.name}"`;
     closeModal('drafts-modal');
     showToast('Juodraštis įkeltas', 'success');
@@ -3987,6 +3997,8 @@ function resetForm() {
   if (!confirm('Ar tikrai išvalyti formą? Neišsaugoti pakeitimai bus prarasti.')) return;
   currentDraftId = null;
   renderForm(currentForm);
+  // Išvalyta forma - ir be pirkimo kortelės (kitaip juosta rodytų kortelę, o laukai būtų tušti)
+  if (window.KORTELE) KORTELE.atsiek();
   document.getElementById('draft-info').textContent = '';
   showToast('Forma išvalyta', 'success');
 }
@@ -5641,7 +5653,7 @@ function showToast(message, type = '') {
     purpose: "Mažos vertės pirkimo tiekėjų apklausos pažyma (Aprašo 1 arba 2 priedas) ir, pirkimą atliekant raštu, pranešimai tiekėjams.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Pasirinkite formą</b> pagal numatomą pirkimo vertę - ribos nurodytos formų kortelėse.",
+      "<b>Pasirinkite formą</b> pagal numatomą pirkimo vertę - ribos nurodytos formų kortelėse. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - atvertos formos tušti laukai (pavadinimas, kortelės ir CVP IS numeriai, vertė, BVPŽ kodas, būdas, dalys, iniciatorius ir organizatorius) bus užpildyti iš jos.",
       "<b>Užpildykite pažymą:</b> pirkimo duomenys, tiekėjai, pasiūlymai ir kvalifikacijos patikra.",
       "<b>Peržiūrėkite</b> („Peržiūrėti“) ir sugeneruokite Word; atliekant raštu - ZIP paketas su pranešimais tiekėjams.",
       "<b>Išsaugokite juodraštį</b>, jei baigsite vėliau."
@@ -5655,6 +5667,143 @@ function showToast(message, type = '') {
     defaultOpen: true,
     getLang: function () { return "lt"; },
     content: INFO
+  });
+})();
+</script>
+<script>
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). Formos laukai atsiranda tik pasirinkus 1 ar 2 priedą, todėl
+   kortelė įrašoma atvėrus formą (selectForm -> KORTELE.pritaikyk()); išvalius formą ji atsiejama; įkeltas juodraštis -
+   žmogaus darbas, jo kortelė nepildo, tik parodo skirtumus. Tušti laukai užpildomi, kitokie - tik parodomi su „Taikyti“.
+   Modulis kortelės nekeičia. Pažymos - LITGRID AB mažos vertės pirkimams, todėl kitas vykdytojas, režimas ar ne
+   mažos vertės būdas neįrašomi ir tai pasakoma. */
+(function () {
+  if (!window.GP_KORTELE) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var RANKA = new Set();                     // žmogaus pasirinkta skaidymo parinktis - ne numatytoji
+  document.addEventListener('change', function (e) {
+    if (e.isTrusted && e.target && e.target.name === 'skaidoma') RANKA.add('skaidoma');
+  }, true);
+  function forma() { return typeof currentForm === 'undefined' ? null : currentForm; }   // let - ne window savybė
+  function skaidoma() { var r = document.querySelector('input[name="skaidoma"]:checked'); return r ? r.value : null; }
+  function derybos() { var r = document.querySelector('input[name="derybos"]:checked'); return r ? r.value : ''; }
+  function atliekamas() { var r = document.querySelector('input[name="atliekamas"]:checked'); return r ? r.value : ''; }
+  function norm(v) { return String(v == null ? '' : v).trim().replace(/\s+/g, ' ').toLowerCase(); }
+  /* „Vardas Pavardė, padalinys“ (kaip kortelėje ir PP-graphs) -> vardas ir padalinys. */
+  function asmuo(v) {
+    var s = String(v || ''), i = s.indexOf(',');
+    return i < 0 ? { vardas: s.trim(), padalinys: '' } : { vardas: s.slice(0, i).trim(), padalinys: s.slice(i + 1).trim() };
+  }
+  function lauko(id) { var e = $(id); return e ? e.value : undefined; }
+  function irasyk(id, v) {
+    var e = $(id); if (!e) return;
+    e.value = v;
+    e.dispatchEvent(new Event('input', { bubbles: true }));
+    e.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function dalysFormoje() {
+    return Array.from(document.querySelectorAll('#dalys-tbody tr')).map(function (tr) {
+      var pav = ((tr.querySelector('[data-field="dalisPav"]') || {}).value || '').trim();
+      var v = parseFloat((tr.querySelector('[data-field="dalisBePvm"]') || {}).value);
+      return v > 0 ? { pavadinimas: pav, verte: v } : { pavadinimas: pav };
+    }).filter(function (d) { return d.pavadinimas || d.verte; });
+  }
+  function dalysRaktu(d) {
+    return JSON.stringify((d || []).map(function (x) { return [norm(x.pavadinimas), x.verte > 0 ? Math.round(x.verte * 100) : 0]; }));
+  }
+  function bvpz8(v) { var m = String(v || '').match(/\d{8}/); return m ? m[0] : ''; }
+
+  window.KORTELE = GP_KORTELE.mount({
+    modulis: 'PP-report',
+    klaustiKitoPirkimo: true,
+    nerodoma: function () {
+      return forma() ? null : 'Pasirinkite pažymos formą - tušti jos laukai bus užpildyti iš kortelės.';
+    },
+    laukai: [
+      { kortele: 'pavadinimas', el: '#pirkimo-pavadinimas' },
+      { kortele: 'numeris', el: '#kortele-nr',
+        i: function (v) { return forma() === 1 ? null : v; }, neimanoma: '1 priede šio lauko nėra' },
+      { kortele: 'verte', el: '#verte-be-pvm',
+        i: function (v) { return String(Math.round(v * 100) / 100); },
+        is: function (s) { var v = parseFloat(s); return v > 0 ? v : undefined; } },
+      { kortele: 'bvpz', el: '#bvpz-kodas',
+        is: function (s) { var m = String(s || '').match(/\d{8}(-\d)?/); return m ? m[0] : undefined; },
+        lygu: function (s, v) { return !!bvpz8(s) && bvpz8(s) === bvpz8(v); } },
+      { kortele: 'budas',
+        gauk: function () { return lauko('pirkimo-budas'); },
+        i: function (v) {
+          var s = GP_METHODS.toModule('pp-report', v), sel = $('pirkimo-budas');
+          if (!s) return null;
+          return !sel || Array.from(sel.options).some(function (o) { return o.value === s; }) ? s : null;
+        },
+        is: function (s) {
+          var m = s ? GP_METHODS.fromLegacy('pp-report', s) : null;
+          if (!m) return undefined;
+          return m.id === 'MV-SAB' && derybos() === 'Vykdomos' ? 'MV-SAD' : m.id;
+        },
+        lygu: function (s, v) { return !!s && s === GP_METHODS.toModule('pp-report', v); },
+        dek: function (v) { irasyk('pirkimo-budas', v); },
+        neimanoma: function (v) {
+          if (!GP_METHODS.toModule('pp-report', v)) return v === 'MV' ? 'nenurodyta, kokia apklausa' : 'pažymos rengiamos mažos vertės pirkimams';
+          return 'šios formos būdų sąraše jo nėra';
+        } },
+      { kortele: 'cvpisNr', el: '#cvpis-nr',
+        i: function (v) { return forma() === 1 || atliekamas() === 'El. paštu' ? null : v; },
+        neimanoma: function () { return forma() === 1 ? '1 priede pirkimas atliekamas el. paštu arba žodžiu' : 'pažymoje pasirinkta „El. paštu“'; },
+        dek: function (v) {
+          var r = document.querySelector('input[name="atliekamas"][value="CVP IS"]');
+          if (r && !document.querySelector('input[name="atliekamas"]:checked')) { r.checked = true; toggleCvpIs(r); }
+          irasyk('cvpis-nr', v);
+        } },
+      { kortele: 'dalys',
+        gauk: function () { var s = skaidoma(); return s === null ? undefined : (s === 'taip' ? dalysFormoje() : []); },
+        numatyta: function () { return skaidoma() === 'ne' && !RANKA.has('skaidoma') && !currentDraftId; },
+        i: function (d) { return forma() === 1 && d.length ? null : d; },
+        is: function (d) { return d; },
+        lygu: function (s, d) { return dalysRaktu(s) === dalysRaktu(d); },
+        neimanoma: '1 priede pirkimas į dalis neskaidomas',
+        dek: function (d) {
+          var r = document.querySelector('input[name="skaidoma"][value="' + (d.length ? 'taip' : 'ne') + '"]');
+          if (!r) return;
+          r.checked = true;
+          $('dalys-tbody').innerHTML = '';
+          toggleSkaidymas(r);                          // „taip“ prideda vieną tuščią eilutę
+          if (!d.length) return;
+          $('dalys-tbody').innerHTML = '';
+          d.forEach(function (x) {
+            addDalis();
+            var tr = $('dalys-tbody').lastElementChild;
+            tr.querySelector('[data-field="dalisPav"]').value = x.pavadinimas || '';
+            var be = tr.querySelector('[data-field="dalisBePvm"]');
+            if (x.verte > 0) { be.value = String(Math.round(x.verte * 100) / 100); calcPvm(be); }
+          });
+          onDalisChange();
+        } },
+      { kortele: 'iniciatorius',
+        gauk: function () {                          // be vardo - tuščias (padalinys vienas pirkimo neįvardija)
+          var v = lauko('ini-vardas'); if (v === undefined) return undefined;
+          var p = (lauko('ini-padalinys') || '').trim();
+          return v.trim() ? [v.trim(), p].filter(Boolean).join(', ') : '';
+        },
+        lygu: function (s, v) {
+          var a = asmuo(v);
+          return norm(lauko('ini-vardas')) === norm(a.vardas) && (!a.padalinys || norm(lauko('ini-padalinys')) === norm(a.padalinys));
+        },
+        dek: function (v) {
+          var a = asmuo(v);
+          irasyk('ini-vardas', a.vardas);
+          if (a.padalinys && !String(lauko('ini-padalinys') || '').trim()) irasyk('ini-padalinys', a.padalinys);
+        } },
+      { kortele: 'organizatorius', el: '#org-vardas',
+        i: function (v) { return forma() === 1 ? null : asmuo(v).vardas; },
+        lygu: function (s, v) { return norm(s) === norm(asmuo(v).vardas); },
+        neimanoma: '1 priede pirkimą vykdo iniciatorius' },
+      { kortele: 'vykdytojas', gauk: function () { return forma() ? 'litgrid' : undefined; },
+        i: function (v) { return v === 'litgrid' ? v : null; }, dek: function () {},
+        neimanoma: 'pažymų formos - LITGRID AB' },
+      { kortele: 'rezimas', gauk: function () { return forma() ? 'PI' : undefined; },
+        i: function (v) { return v === 'PI' ? v : null; }, dek: function () {},
+        neimanoma: 'pažymos rengiamos pagal PĮ' }
+    ]
   });
 })();
 </script>
