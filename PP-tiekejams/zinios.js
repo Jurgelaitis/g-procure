@@ -17,7 +17,7 @@
  * tik CVP IS / VPT tvarka, galioja abiem. VPĮ atitikmenų (perkančiosioms
  * organizacijoms) šioje bazėje DAR NĖRA - sąsaja tai sako, o ne nutyli.
  * Organizacijos taisyklių šaltinis (tipas „perkanciojo_taisykles“) turi
- * `organizacija` (id iš organizacijos.js); šiandien - tik LITGRID.
+ * `organizacija` (id iš shared/organizacijos.js); šiandien - tik LITGRID.
  * ==========================================================================*/
 ;(function (global) {
   "use strict";

@@ -15,7 +15,7 @@ Naudotojas
 cvpis.js (nuorodos, resolve,      shared/dokumentai.js (ZIP/PDF/DOCX/XLSX/XML/HTML/TXT
  terminai Europe/Vilnius,           -> blokai su vieta -> fragmentai + SHA-256)
  pirkėjas ir režimas iš skelbimo)    |
-organizacijos.js (vykdytojų           | metaIsDokumentu: pirkėjas + režimas -> S.kontekstas,
+shared/organizacijos.js (vykdytojų    | metaIsDokumentu: pirkėjas + režimas -> S.kontekstas,
  registras, nuorodos)                 | naudotojas PATVIRTINA (index.html renderKontekstas)
                                      |
                                      v

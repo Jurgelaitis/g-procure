@@ -1,5 +1,5 @@
 /* ============================================================================
- * G-Procure Tiekėjams  organizacijos.js
+ * G-Procure  shared/organizacijos.js   (window.GP_ORG)
  * ----------------------------------------------------------------------------
  * PIRKIMO VYKDYTOJŲ REGISTRAS (window.GP_ORG). Įrankis nuo 2026-09-24 skirtas
  * bet kurio CVP IS pirkimo dokumentams: pirkimo vykdytojas ir teisinis režimas
@@ -7,6 +7,11 @@
  * Šis registras tik PAPILDO: žinomai organizacijai duoda patikrintas viešas
  * nuorodas (pirkimų sąrašas CVP IS, taisyklės, planas) ir sieja ją su žinių
  * bazės šaltiniu (zinios.js, tipas „perkanciojo_taisykles“).
+ *
+ * Iki 2026-09-26 gyveno PP-tiekejams/. Dabar jį naudoja ir bendra pirkimo kortelė
+ * (shared/pirkimo-kortele.js): vykdytojo sąrašas ir tikėtinas režimas imami iš ČIA,
+ * tad organizacija ar jos režimas keičiami vienoje vietoje. PP-tiekejams sw.js jį
+ * turi sąraše SAVI.
  *
  * TAISYKLĖS:
  *   - Organizacijos taisyklių šaltinis įrašomas TIK perskaitytas ir patikrintas
