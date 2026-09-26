@@ -21,6 +21,9 @@
 <link rel="stylesheet" href="../shared/modulio-antraste.css" />
 <!-- Pradine kalba: lankytojas is Lietuvos -> LT, kiti -> EN; rankinis pasirinkimas laimi. -->
 <script src="../shared/lang-detect.js"></script>
+<!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 <script src="osp.js"></script>
 <script src="rinka.js"></script>
 <style>
@@ -428,6 +431,8 @@
 </header>
 
 <div class="wrap">
+
+  <div id="infoPanelMount" style="margin-top:var(--space-2,16px)"></div>
 
   <!-- Rinkos klimato skalė: iki 2026-09-25 stovėjo lipnioje antraštėje -->
   <section class="klimatas" aria-label="Rinkos klimatas">
@@ -915,6 +920,9 @@ const DEFAULT_DATA = {
 const SCHEMA_VERSION = 7;   // v7: tiekimo rizikos lygmuo (Hormuzas, sankcijos) pasalintas; VDA raide D -> C derinama suderinkGrupes()
 const STORE_KEY = "epsog_rinkos_kpi_v" + SCHEMA_VERSION;
 
+// Q3: paskelbti PRIEŠ pirmą loadData() kvietimą (let prieš paskelbimą - ReferenceError)
+let KPI_SKAITYMAS = null;             // neperskaitomo įrašo rezultatas juostai
+let KPI_IRASYMAS_NEPAVYKO = false;
 let DATA = loadData();
 
 // Schemos patikra - naudojama IR localStorage krovimui, IR JSON importui, kad importas
@@ -989,35 +997,39 @@ function migruotiIsSeno(senas){
   }
   return naujas;
 }
+/* Q3 (shared/saugykla.js): iki 2026-09-26 neperskaitomas įrašas tyliai virsdavo demonstraciniais
+   duomenimis (atrodė kaip pirmas paleidimas), o senesnių versijų įrašai buvo ištrinami. Dabar
+   neperskaitomo įrašo kopija išsaugoma atskirai, senų versijų netrinam, viršuje - „būsena nežinoma“
+   (juosta rodoma po sąsajos vertimo, žr. startą). Nepavykęs įrašymas - juosta, ne tylus catch. */
 function loadData(){
-  try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw){
-      const parsed = suderinkGrupes(JSON.parse(raw));
-      if(isValidData(parsed)){ valykSenusIrasus(); return parsed; }
+  let parsed = null;
+  const r = GP_SAUGYKLA.skaityk(STORE_KEY, { tikrink: v => {
+    try { parsed = suderinkGrupes(v); } catch(e) { return "netinkama duomenų sandara"; }
+    return isValidData(parsed) || "netinkama duomenų sandara"; } });
+  const fresh = () => { const f = JSON.parse(JSON.stringify(DEFAULT_DATA)); f.schemaVersion = SCHEMA_VERSION; return f; };
+  if(r.busena === "yra"){ valykSenusIrasus(); return parsed; }
+  if(r.busena !== "nera"){ KPI_SKAITYMAS = r; return fresh(); }      // senų versijų netrinam
+  // Ieskom naujausio senesnes versijos iraso ir migruojam is jo.
+  for(let v = SCHEMA_VERSION - 1; v >= 1; v--){
+    const rs = GP_SAUGYKLA.skaityk("epsog_rinkos_kpi_v" + v);
+    if(rs.busena === "nera") continue;
+    if(rs.busena !== "yra"){ KPI_SKAITYMAS = rs; return fresh(); }
+    const migruotas = migruotiIsSeno(rs.reiksme);
+    if(migruotas){
+      if(GP_SAUGYKLA.rasyk(STORE_KEY, migruotas).ok) valykSenusIrasus();   // trinam tik išsaugoję naują
+      return migruotas;
     }
-    // Ieskom naujausio senesnes versijos iraso ir migruojam is jo.
-    for(let v = SCHEMA_VERSION - 1; v >= 1; v--){
-      const senas = localStorage.getItem("epsog_rinkos_kpi_v" + v);
-      if(!senas) continue;
-      const migruotas = migruotiIsSeno(JSON.parse(senas));
-      if(migruotas){
-        try{ localStorage.setItem(STORE_KEY, JSON.stringify(migruotas)); }catch(e){}
-        valykSenusIrasus();
-        return migruotas;
-      }
-    }
-  }catch(e){}
+  }
   valykSenusIrasus();
-  const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA));
-  fresh.schemaVersion = SCHEMA_VERSION;
-  return fresh;
+  return fresh();
 }
 function saveData(){
-  try{
-    DATA.schemaVersion = SCHEMA_VERSION;
-    localStorage.setItem(STORE_KEY, JSON.stringify(DATA));
-  }catch(e){}
+  DATA.schemaVersion = SCHEMA_VERSION;
+  const r = GP_SAUGYKLA.rasyk(STORE_KEY, DATA);
+  KPI_IRASYMAS_NEPAVYKO = !r.ok;
+  if(r.ok) GP_BUSENA.juostaSlepk("irasymas");
+  else GP_BUSENA.juosta({ raktas:"irasymas", tipas:"klaida", tekstas: () => GP_SAUGYKLA.pranesimas(r, LANG === "en" ? "Market indicators" : "Rinkos rodikliai") });
+  return r.ok;
 }
 
 /* =========================================================================
@@ -1682,6 +1694,7 @@ function t(raktas, kint){
 }
 function applyI18n(){
   document.documentElement.lang = LANG;
+  if(window.GProcureInfoPanel) GProcureInfoPanel.refresh();   // informacinė skiltis - ta pačia kalba
   document.title = t("title");
   // Aprašas turi keistis kartu su antrašte: ?lang=en adresas Google akyse privalo būti angliškas.
   const mdesc = document.querySelector('meta[name="description"]');
@@ -1961,6 +1974,8 @@ function todayLocal(){
    t. y. diena, kurią kažkas paspaudė „Išsaugoti" (arba demonstracinio rinkinio data).
    Užrašas tvirtino šviežumą, kurio nebuvo - tyli klaida. Dabar sakoma tik tai, kas žinoma. */
 function duomenuZyma(){
+  // Q3: jei paskutinis įrašymas nepavyko, laikas „Duomenys išsaugoti“ būtų netiesa.
+  if(KPI_IRASYMAS_NEPAVYKO) return LANG === "en" ? "Changes not saved - see the notice above" : "Pakeitimai neišsaugoti - žr. pranešimą viršuje";
   const m = DATA.meta || {};
   if(m.issaugota){
     const d = new Date(m.issaugota);
@@ -3338,6 +3353,62 @@ document.getElementById("btnPrint").addEventListener("click", ()=> window.print(
 /* startas */
 applyI18n();   // sasajos tekstai pries pirma piesima
 renderAll();
+// Neperskaitomas įrašas - juosta sąsajos kalba (html lang jau nustatytas)
+// Tekstas - funkcija: perjungus kalbą juosta persiverčia kartu su puslapiu (shared/busena.js).
+if(KPI_SKAITYMAS) GP_BUSENA.juosta({ raktas:"skaitymas", tipas:"nezinoma",
+  tekstas: () => GP_SAUGYKLA.pranesimas(KPI_SKAITYMAS, LANG === "en" ? "Market indicators" : "Rinkos rodikliai") });
+</script>
+<!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
+     shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
+<script src="../shared/gprocure-info-panel.js"></script>
+<script>
+(function () {
+  if (!window.GProcureInfoPanel || !document.getElementById("infoPanelMount")) return;
+  var INFO = {
+    lt: {
+      title: "Kas tai ir kaip naudotis",
+      purpose: "Rinkos rodikliai, veikiantys pirkimų kainas ir pristatymo terminus, ir ką dėl jų daryti sutartyse (indeksavimas, rezervai).",
+      stepsTitle: "Kaip naudotis",
+      steps: [
+        "<b>Įveskite pirkimo pavadinimą</b> skiltyje „Pirkimo rinkos apžvalga“ - gausite tik tam pirkimui aktualius rodiklius, sutartinius veiksmus ir indeksavimo gaires.",
+        "<b>Peržiūrėkite lygmenis:</b> A - kainos (žaliavos, energija), B - pristatymo terminai ir pajėgumai, C - Lietuvos indeksavimo rodikliai (VDA).",
+        "<b>Atnaujinkite duomenis</b> mygtuku „Atnaujinti iš šaltinių“ (veikia atidarius per g-procure.com); kitus rodiklius įveskite ranka - „Redaguoti reikšmes“.",
+        "<b>Taikykite sutartyje:</b> rizikos žemėlapis ir ribų lentelė sako, kada svarstyti indeksavimą, kainų peržiūrą ar terminų rezervą."
+      ],
+      noteTitle: "Duomenys",
+      note: "Įvestos reikšmės saugomos <b>tik šioje naršyklėje</b>. Atnaujinant iš šaltinių užklausos eina į viešus statistikos šaltinius ir per G-Procure serverį - jūsų pirkimų duomenys nesiunčiami. Kiekviena kortelė rodo reikšmės datą ir šaltinį; ankstesnio laikotarpio reikšmės pažymimos.",
+      moreLabel: "Kaip skaityti rodiklius"
+    },
+    en: {
+      title: "What it is and how to use it",
+      purpose: "Market indicators that affect procurement prices and delivery times, and what to do about them in contracts (indexation, buffers).",
+      stepsTitle: "How to use",
+      steps: [
+        "<b>Enter a procurement name</b> in “Procurement market overview” to get only the indicators, contractual actions and indexation guidance relevant to that procurement.",
+        "<b>Review the levels:</b> A - prices (commodities, energy), B - delivery times and capacity, C - Lithuanian indexation indicators (State Data Agency).",
+        "<b>Update the data</b> with “Update from sources” (works when opened via g-procure.com); enter other indicators manually with “Edit values”.",
+        "<b>Apply it in the contract:</b> the risk map and the threshold table show when to consider indexation, price review or a schedule buffer."
+      ],
+      noteTitle: "Data",
+      note: "Entered values are stored <b>only in this browser</b>. Updating from sources queries public statistics sources and the G-Procure server - your procurement data is not sent. Each card shows the date and source of its value; values from an earlier period are marked.",
+      moreLabel: "How to read the indicators"
+    }
+  };
+  GProcureInfoPanel.mount({
+    target: "#infoPanelMount",
+    moduleId: "pp-market-kpi",
+    defaultOpen: true,
+    getLang: function () { return (typeof LANG !== "undefined" && LANG === "en") ? "en" : "lt"; },
+    content: INFO,
+    onMore: function () {
+      var h = document.getElementById("helpSec");
+      if (!h) return;
+      var ramiai = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      h.scrollIntoView({ behavior: ramiai ? "auto" : "smooth", block: "start" });
+      var an = h.querySelector("h2"); if (an) { an.setAttribute("tabindex", "-1"); an.focus({ preventScroll: true }); }
+    }
+  });
+})();
 </script>
 </body>
 </html>
