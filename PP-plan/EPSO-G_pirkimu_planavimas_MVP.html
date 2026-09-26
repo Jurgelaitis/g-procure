@@ -580,6 +580,10 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--grafitas-50)}
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadintas planas nevirsta tuščiu -->
 <script src="../shared/busena.js"></script>
 <script src="../shared/saugykla.js"></script>
+<!-- Bendra pirkimo kortelė (A1, A2): plano eilutė -> kortelė kortelių puslapyje (naujame skirtuke) -->
+<script src="../shared/money.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 
 <script>
 const STORAGE_KEY = "epsog_mpp_v1";
@@ -1066,6 +1070,7 @@ function renderRegister(){
   if(fm.options.length <= 1){
     methods.forEach(m=>{ const o=document.createElement("option"); o.value=m; o.textContent=m; fm.appendChild(o); });
   }
+  const korteles = kortelesIds();
   let html = `<div class="table-wrap"><table>
     <thead><tr>
       <th>Nr.</th><th>Įmonė</th><th>Pirkimo objektas</th><th>Vertė €</th><th>Rūšis</th>
@@ -1095,6 +1100,7 @@ function renderRegister(){
       <td>
         <button class="btn sm secondary" onclick="editProc('${p.id}')">✎</button>
         <button class="btn sm danger" onclick="delProc('${p.id}')">🗑</button>
+        ${korteliuMygtukas(p, korteles)}
       </td>
     </tr>`;
   });
@@ -1185,6 +1191,7 @@ function openProcModal(p){
       <button class="btn" onclick="saveProcModal('${p.id}', ${isNew})">💾 Išsaugoti</button>
       <button class="btn secondary" onclick="closeModal()">Atšaukti</button>
       <div class="split-end">
+        ${!isNew ? korteliuMygtukas(p, kortelesIds(), true) : ""}
         ${!isNew ? `<button class="btn danger" onclick="closeModal();delProc('${p.id}')">🗑 Šalinti</button>` : ""}
       </div>
     </div>`;
@@ -1250,6 +1257,58 @@ function saveProcModal(id, isNew){
 }
 
 function closeModal(){ document.getElementById("modal").classList.remove("show"); }
+
+/* ==================== PIRKIMO KORTELĖ (A1, A2) ====================
+   Plano eilutė -> bendra pirkimo kortelė (shared/pirkimo-kortele.js). Kortelė kuriama ir keičiama
+   kortelių puslapyje naujame skirtuke: plano duomenys perduodami tik tam skirtukui (postMessage),
+   o išsaugotos kortelės id įsimenamas plano įraše (laukas `kortele`), kad antras paspaudimas
+   atvertų tą pačią kortelę, o ne kurtų dublikatą. */
+const KORTELES_IMONES = { "EPSO-G": "epso-g", "LITGRID": "litgrid", "AMBER": "amber-grid", "ECELLS": "energy-cells" };
+const KORTELES_RUSYS = { "Prekės": "prekes", "Paslaugos": "paslaugos", "Darbai": "darbai" };
+function kortelesIds(){
+  if(!window.GP_KORTELE) return new Set();
+  const s = GP_KORTELE.skaityk();
+  return new Set(s.busena === "yra" ? s.korteles.map(k => k.id) : []);
+}
+function kortelesLaukaiIsPlano(p){
+  const l = {};
+  if(p.objektas) l.pavadinimas = String(p.objektas).trim();
+  if(p.nr) l.numeris = String(p.nr).trim();
+  if(KORTELES_IMONES[p.imone]) l.vykdytojas = KORTELES_IMONES[p.imone];
+  if(KORTELES_RUSYS[p.rusis]) l.objektas = KORTELES_RUSYS[p.rusis];
+  if(p.verte > 0) l.verte = p.verte;
+  const kodas = mapMethodNameToCode(p.budas);
+  if(kodas && window.GP_METHODS && GP_METHODS.isValid(kodas)) l.budas = kodas;
+  if(/^\d{8}-\d$/.test(String(p.bvpz || "").trim())) l.bvpz = String(p.bvpz).trim();
+  const ini = [p.iniciatorius, p.padalinys].filter(Boolean).join(", ");
+  if(ini) l.iniciatorius = ini;
+  if(parseInt(p.trukme) > 0) l.trukmeMen = parseInt(p.trukme);
+  const inic = fmtIfDateRaw(p.inicData), pirk = fmtIfDateRaw(p.pirkimoData);
+  if(inic) l.pradzia = inic;        // inicijavimas - pirkimo pradžia (grafikas skaičiuojamas nuo jos)
+  if(pirk) l.paskelbimas = pirk;    // planuojama pirkimo data - paskelbimas
+  l.busena = "planuojamas";
+  return l;
+}
+function korteliuMygtukas(p, ids, didelis){
+  if(!window.GP_KORTELE) return "";
+  const yra = p.kortele && ids.has(p.kortele);
+  const pav = yra ? "Atverti pirkimo kortelę" : "Sukurti pirkimo kortelę";
+  return `<button class="btn ${didelis ? "secondary" : "sm secondary"}" onclick="planoKortele('${p.id}')" title="${pav} (naujame skirtuke)" aria-label="${pav} (naujame skirtuke)">${yra ? "🗂 Kortelė" : "+ Kortelė"}</button>`;
+}
+function planoKortele(id){
+  const p = DATA.procurements.find(x => x.id === id);
+  if(!p || !window.GP_KORTELE) return;
+  const w = p.kortele && kortelesIds().has(p.kortele)
+    ? GP_KORTELE.atverkPuslapi({ id: p.kortele })
+    : GP_KORTELE.atverkPuslapi({ laukai: kortelesLaukaiIsPlano(p), modulis: "PP-plan", onIssaugota: kid => {
+        const rec = DATA.procurements.find(x => x.id === id);
+        if(!rec) return;
+        rec.kortele = kid;
+        save(); renderRegister();
+      } });
+  if(!w) GP_BUSENA.juosta({ raktas: "kortele", tipas: "klaida",
+    tekstas: "Naršyklė neleido atverti naujo skirtuko su pirkimo kortele. Leiskite iššokančius langus šiai svetainei arba atverkite kortelių puslapį iš portalo." });
+}
 
 function recalcAll(){
   let updated=0;
@@ -2630,7 +2689,8 @@ renderDashboard();
       "<b>Parinkite būdą.</b> „Pirkimo būdo analizė“ siūlo būdą pagal galiojančias VPT vertės ribas ir 20 % taisyklę - sprendžiate jūs.",
       "<b>Suskaičiuokite terminus.</b> „Terminų skaičiuoklė“ skaičiuoja atgal nuo sutarties datos darbo dienomis su LR šventėmis (A arba B grafikas).",
       "<b>Centralizuokite.</b> Skirtukai „AI centralizavimas“ ir „Pajėgumai“ rodo, kuriuos kelių įmonių pirkimus verta jungti ir kaip pasiskirsto komandos krūvis.",
-      "<b>Eksportuokite.</b> Excel arba PDF ataskaita - skirtukas „Eksportas“."
+      "<b>Eksportuokite.</b> Excel arba PDF ataskaita - skirtukas „Eksportas“.",
+      "<b>Pradėkite pirkimą.</b> „Pirkimų registre“ prie pirkimo - „+ Kortelė“: plano duomenys perkeliami į bendrą pirkimo kortelę (naujame skirtuke), kurią perima kiti įrankiai."
     ],
     noteTitle: "Duomenys ir ribos",
     note: "Planas saugomas <b>tik šioje naršyklėje</b> ir niekur nesiunčiamas - ir „AI centralizavimas“ yra algoritmas naršyklėje, ne dirbtinis intelektas. Išvalius naršyklę planas dingsta, todėl darykite atsarginę kopiją (portalo poraštėje - „Atsarginė kopija“) arba eksportuokite į Excel. Vertės ribos imamos iš bendro G-Procure ribų failo; LR šventės skaičiuojamos kiekvieniems metams automatiškai.",
