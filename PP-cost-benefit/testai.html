@@ -29,7 +29,7 @@
 <body>
 <div class="wrap">
   <h1>Ekonominio naudingumo skaičiuoklė · regresijos testai</h1>
-  <p class="sub">Testai kviečia TIKRAS modulio funkcijas per rėmelį. Kiekvienas testas pats grąžina modulį į žinomą būseną, tad rezultatas nepriklauso nuo to, kas liko naršyklėje po rankinio bandymo.</p>
+  <p class="sub">Testai kviečia TIKRAS modulio funkcijas per rėmelį. Kiekvienas testas pats grąžina modulį į žinomą būseną, tad rezultatas nepriklauso nuo to, kas liko naršyklėje po rankinio bandymo. Bendros pirkimo kortelės grupė (A1) tikrina abi dalis: kortelė pildo tuščius laukus, o kaštų ir naudos analizėje jos pasirinkimas neperrašo išsaugotos analizės.</p>
   <div class="santrauka" id="santrauka"><span class="zenklas z-laukia">Kraunama</span> Ruošiamas modulis…</div>
   <div id="rezultatai"></div>
 </div>
@@ -556,6 +556,79 @@ testas("Word priedas", "Klaida - tikra priežastis prie mygtuko: biblioteka atsk
     tiesa(b.classList.contains("gpb--gerai") && /Word priedas parengtas: SPS_x_priedas_EN_vertinimo_metodika\.docx/.test(b.textContent), "sėkmė: " + b.textContent);
     lygu(atsisiusta, "SPS_x_priedas_EN_vertinimo_metodika.docx", "failo vardas");
   } finally { w.uzkraukDocx = orig.k; w.sudarykDocx = orig.s; w.HTMLAnchorElement.prototype.click = orig.c; }
+});
+
+/* =========================================================================
+   BENDRA PIRKIMO KORTELĖ (A1 2 etapas, 2026-09-26) - abi dalys kortelę tik skaito.
+   Atskiri rėmeliai su ?saugykla=testine - kortelės tik atmintyje; skaičiuoklės įrašą saugo APSAUGA,
+   kaštų ir naudos analizės (litgrid_cba) - testo apsauga.
+   ========================================================================= */
+function remelisSuKortele(failas){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.addEventListener("load", () => setTimeout(() => res({ f, w: f.contentWindow, d: f.contentDocument }), 300), { once: true });
+    f.src = "./" + failas + "?saugykla=testine&cb=" + Date.now();
+    document.body.appendChild(f);
+  });
+}
+const lauk = ms => new Promise(r => setTimeout(r, ms));
+const KORTELE_A1 = { pavadinimas: "Energijos kaupimo sistemos priežiūros pirkimas", vykdytojas: "energy-cells", rezimas: "VPI", objektas: "paslaugos_it",
+                     numeris: "EC-2026-007", verte: 25000000, budas: "T-SD", trukmeMen: 36 };
+
+testas("Bendra pirkimo kortelė (A1)", "Skaičiuoklė: nauja - subjektas, objektas ir pavadinimas iš kortelės; režimo, kurio subjektui skaičiuoklė netaiko, neįrašo ir sako kodėl", async ()=>{
+  const { f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html");
+  try {
+    w.eval("atstatyk()");
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(KORTELE_A1)).kortele;
+    w.KORTELE.atnaujink();
+    tiesa(d.getElementById("gpk").nextElementSibling.id === "infoPanelMount", "juosta prieš informacinę skiltį");
+    tiesa(await w.KORTELE.pasirink(k.id), "pasirinkta");
+    lygu(w.eval("[state.pirkimas.subjektas, state.pirkimas.objektas, state.pirkimas.pavadinimas, state.pirkimas.budas]"),
+         ["ECELLS", "paslaugos", KORTELE_A1.pavadinimas, "kks"], "pirkimo duomenys (vertinimo būdas nekeičiamas)");
+    lygu(d.getElementById("f_subjektas").value, "ECELLS", "sąsaja perpiešta");
+    const z = d.getElementById("gpk-zin").textContent;
+    tiesa(/Iš kortelės užpildyta: vykdytojas, objektas, pavadinimas\./.test(z), z);
+    tiesa(z.indexOf("režimas („VPĮ“ - režimą čia lemia perkantysis subjektas (UAB Energy cells - PĮ))") >= 0, z);
+  } finally { f.remove(); }
+});
+
+testas("Bendra pirkimo kortelė (A1)", "Skaičiuoklė su kriterijais: numatytasis subjektas laikomas pasirinktu - skirtumas tik parodomas; tuščias pavadinimas užpildomas", async ()=>{
+  const { f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html");
+  try {
+    w.eval("atstatyk(); state.kriterijai = [naujasKriterijus({ pav: 'Kokybė', svoris: 40 })]; renderAll();");
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KORTELE_A1, { rezimas: "PI" }))).kortele;
+    w.KORTELE.atnaujink();
+    await w.KORTELE.pasirink(k.id);
+    lygu(w.eval("[state.pirkimas.subjektas, state.pirkimas.pavadinimas]"), ["LITGRID", KORTELE_A1.pavadinimas]);
+    const z = d.getElementById("gpk-zin").textContent;
+    tiesa(/Vykdytojas: modulyje „LITGRID AB“, kortelėje „UAB Energy cells“/.test(z), z);
+  } finally { f.remove(); }
+});
+
+testas("Bendra pirkimo kortelė (A1)", "Kaštų ir naudos analizė: laukai pildomi iš kortelės BE įvykių - išsaugota, dar neatverta analizė neperrašoma; trukmė ne metais įvardijama", async ()=>{
+  const APS = GP_TESTU_APSAUGA.pradek(k => k === "litgrid_cba");
+  const zyme = JSON.stringify({ schemaVersion: 2, savedAt: "2026-09-01T10:00:00.000Z", state: { alternatives: [{ id: "a1", name: "Testo alternatyva" }], weights: {} }, formData: { proc_name: "Išsaugota analizė" } });
+  localStorage.setItem("litgrid_cba", zyme);
+  const { f, w, d } = await remelisSuKortele("kastu_naudos_analize.html");
+  try {
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KORTELE_A1, { vykdytojas: "litgrid", rezimas: "PI", objektas: "darbai" }))).kortele;
+    w.KORTELE.atnaujink();
+    const sel = d.getElementById("gpk-sel");
+    sel.value = k.id; sel.dispatchEvent(new w.Event("change", { bubbles: true }));
+    await lauk(1200);                                            // ilgiau nei automatinio saugojimo 800 ms
+    const v = id => d.getElementById(id).value;
+    lygu([v("proc_name"), v("proc_code"), v("proc_value"), v("proc_type"), v("proc_procedure"), v("proc_duration"), v("proc_legal")],
+         [KORTELE_A1.pavadinimas, "EC-2026-007", "25000000", "Darbai", "Skelbiamos derybos", "3", "PSĮ įstatymas (utilities)"]);
+    lygu([w.eval("_userTouched"), localStorage.getItem("litgrid_cba") === zyme], [false, true], "autosave neįjungtas, išsaugota analizė nepaliesta");
+    tiesa(/VERTĖ ≥ 20 MLN\. EUR/i.test(d.getElementById("threshold_hint").textContent), "ribos užuomina perskaičiuota: " + d.getElementById("threshold_hint").textContent);
+    const k2 = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia({ pavadinimas: "Kitas", trukmeMen: 30, budas: "MV-NR" })).kortele;
+    w.KORTELE.atnaujink();
+    const pr = w.KORTELE.pasirink(k2.id); await lauk(30);
+    [...d.querySelectorAll("#gpk-zin button")].find(b => /^Taip,/.test(b.textContent)).click();
+    await pr;
+    const z = d.getElementById("gpk-zin").textContent;
+    tiesa(z.indexOf("sutarties trukmė („30 mėn.“ - trukmė čia - sveikais metais)") >= 0 && z.indexOf("analizės procedūrų sąraše jo nėra") >= 0, z);
+  } finally { f.remove(); APS.atkurk(); }
 });
 
 /* =========================================================================

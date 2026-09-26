@@ -19,6 +19,10 @@
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
 <script src="../shared/busena.js"></script>
 <script src="../shared/saugykla.js"></script>
+<!-- Bendra pirkimo kortelė (A1): pavadinimas, subjektas ir objektas pildomi iš kortelės; būdų klasifikatorius - kortelės santraukai -->
+<script src="../shared/procurement-methods.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 <!-- Chart.js lokaliai - tas pats failas, kurį naudoja 2 dalis -->
 <script src="chart.umd.min.js"></script>
 <style>
@@ -43,6 +47,7 @@ body{font-family:var(--font-base);color:var(--text);background:var(--bg);font-si
 a{color:var(--link)}
 h1,h2,h3{line-height:1.25}
 .wrap{max-width:1280px;margin:0 auto;padding:0 24px}
+main.wrap{padding-top:16px}   /* pirmas blokas (kortelės juosta, informacinė skiltis) neprilimpa prie skirtukų */
 
 /* Antraštė */
 /* Antraštė ir dalių skirtukai - shared/modulio-antraste.css (bendri visiems moduliams nuo 2026-09-25).
@@ -1452,6 +1457,7 @@ function atstatyk(){
   try{ localStorage.removeItem(STORE_KEY); }catch(e){}
   document.getElementById("busena").textContent = "";
   renderAll();
+  if(window.KORTELE) KORTELE.atsiek();   // išvalyta - ir be pirkimo kortelės (kitaip juosta rodytų kortelę, o laukai tušti)
 }
 function ikelkPavyzdi(){
   const s = tusciaBusena();
@@ -1470,6 +1476,7 @@ function ikelkPavyzdi(){
   s.pasiulymai = [a, b, c];
   state = s; _liesta = true;
   renderAll(); planuokIssaugojima();
+  if(window.KORTELE) KORTELE.skirtumai(true);
 }
 
 /* ---------- Įvykiai ---------- */
@@ -1518,7 +1525,7 @@ document.getElementById("importoFailas").addEventListener("change", e=>{
   const f = e.target.files && e.target.files[0]; e.target.value = ""; if(!f) return;
   const r = new FileReader();
   r.onload = ()=>{
-    try{ const s = sanitizeBusena(JSON.parse(r.result)); if(!s){ showToast("Failas nėra šios skaičiuoklės kopija"); return; } state = s; _liesta = true; renderAll(); issaugok(true); showToast("Atkurta iš kopijos"); }
+    try{ const s = sanitizeBusena(JSON.parse(r.result)); if(!s){ showToast("Failas nėra šios skaičiuoklės kopija"); return; } state = s; _liesta = true; renderAll(); issaugok(true); if(window.KORTELE) KORTELE.skirtumai(true); showToast("Atkurta iš kopijos"); }
     catch(err){ showToast("Failo nepavyko perskaityti"); }
   };
   r.readAsText(f);
@@ -1539,7 +1546,7 @@ renderAll();
     purpose: "Ekonomiškai naudingiausio pasiūlymo vertinimas: kriterijai, lyginamieji svoriai, VPT gairių formulės, balai ir pasiūlymų eilė.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Pirkimas ir formulė:</b> pasirinkite, pagal ką išrenkamas pasiūlymas (kainos ir kokybės santykis, tik kaina arba tik kokybė su fiksuota kaina), ir formulę.",
+      "<b>Pirkimas ir formulė:</b> pasirinkite, pagal ką išrenkamas pasiūlymas (kainos ir kokybės santykis, tik kaina arba tik kokybė su fiksuota kaina), ir formulę. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - pavadinimas, perkantysis subjektas ir objektas bus užpildyti iš jos (modulis kortelės nekeičia).",
       "<b>Kriterijai ir svoriai:</b> pasirinkite kriterijus iš sąrašo arba įrašykite savo; kainos ir kokybės svorių suma - 100.",
       "<b>Pasiūlymai:</b> įveskite tiekėjų kainas ir kokybės įverčius.",
       "<b>Rezultatai:</b> balai, eilė ir simuliacija; Word priedas pirkimo dokumentams - LITGRID forma."
@@ -1578,6 +1585,47 @@ renderAll();
     defaultOpen: true,
     getLang: function () { return "lt"; },
     content: INFO
+  });
+})();
+</script>
+<script>
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). Pirkimo duomenys (state.pirkimas) pildomi iš kortelės: tušti ir
+   numatytieji (subjektas LITGRID, objektas „Prekės“) - kol pavadinimas tuščias, kriterijų ir pasiūlymų nėra, o žmogus
+   jų nekeitė; kitokie tik parodomi su „Taikyti“. Kortelės pirkimo būdas čia netaikomas: skaičiuoklės „būdas“ - kaip
+   išrenkamas pasiūlymas, ne pirkimo būdas. Režimą lemia subjektas (SUBJEKTAI); nesutampantis kortelės režimas
+   neįrašomas ir tai pasakoma. Modulis kortelės nekeičia. */
+(function () {
+  if (!window.GP_KORTELE || typeof state === 'undefined') return;   // state - let, ne window savybė
+  var RANKA = new Set();
+  document.addEventListener('change', function (e) { if (e.isTrusted && e.target && e.target.id) RANKA.add(e.target.id); }, true);
+  var ORG = { LITGRID: 'litgrid', AMBER: 'amber-grid', ECELLS: 'energy-cells', EPSOG: 'epso-g' };
+  var SUBJ = { 'litgrid': 'LITGRID', 'amber-grid': 'AMBER', 'energy-cells': 'ECELLS', 'epso-g': 'EPSOG' };
+  var OBJ = { prekes: 'prekes', paslaugos: 'paslaugos', paslaugos_it: 'paslaugos', darbai: 'darbai' };
+  var P = function () { return state.pirkimas; };
+  function sviezia() { return !String(P().pavadinimas || '').trim() && !state.kriterijai.length && !state.pasiulymai.length; }
+  function dek(laukas, v) { P()[laukas] = v; poPakeitimo('struktura'); }
+  function subjektas() { return SUBJEKTAI[P().subjektas] || SUBJEKTAI.LITGRID; }
+
+  window.KORTELE = GP_KORTELE.mount({
+    modulis: 'PP-cost-benefit',
+    klaustiKitoPirkimo: true,
+    laukai: [
+      { kortele: 'vykdytojas', gauk: function () { return ORG[P().subjektas] || ''; },
+        i: function (v) { return SUBJ[v] ? v : null; },
+        numatyta: function () { return sviezia() && !RANKA.has('f_subjektas') && P().subjektas === 'LITGRID'; },
+        dek: function (v) { dek('subjektas', SUBJ[v]); },
+        neimanoma: 'skaičiuoklėje - tik EPSO-G grupės įmonės' },
+      { kortele: 'rezimas', gauk: function () { return subjektas().istatymas === 'VPĮ' ? 'VPI' : 'PI'; },
+        i: function (v) { return (subjektas().istatymas === 'VPĮ' ? 'VPI' : 'PI') === v ? v : null; }, dek: function () {},
+        neimanoma: function () { var s = subjektas(); return 'režimą čia lemia perkantysis subjektas (' + s.pav + ' - ' + s.istatymas + ')'; } },
+      { kortele: 'objektas', gauk: function () { return P().objektas; },
+        i: function (v) { return OBJ[v] || null; }, is: function (s) { return s; },
+        lygu: function (s, v) { return s === OBJ[v]; },
+        numatyta: function () { return sviezia() && !RANKA.has('f_objektas') && P().objektas === 'prekes'; },
+        dek: function (v) { dek('objektas', v); },
+        neimanoma: 'mišriam objektui pasirinkite pagrindinę rūšį' },
+      { kortele: 'pavadinimas', gauk: function () { return P().pavadinimas || ''; }, dek: function (v) { dek('pavadinimas', v); } }
+    ]
   });
 })();
 </script>
