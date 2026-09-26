@@ -41,7 +41,6 @@
     font-size: 15px;
   }
   /* Antraštė - shared/modulio-antraste.css (bendra visiems moduliams nuo 2026-09-25) */
-  .ivadas { margin: 0 0 var(--space-2); color: #5B6470; font-size: 13.5px; }   /* ant pilko fono: graphite-50 duotų 4,07:1 */
   .container {
     max-width: var(--container-max);
     margin: 0 auto;
@@ -615,6 +614,9 @@
 <body>
 <script src="../shared/portal-link.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
+<!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadinti juodraščiai nevirsta „juodraščių nėra“ -->
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 
 <header class="app-header">
   <div class="header-inner">
@@ -631,7 +633,7 @@
 </header>
 
 <div class="container">
-  <p class="ivadas">Mažos vertės pirkimų tiekėjų apklausos pažymos generavimas (Aprašo 1 ir 2 priedai).</p>
+  <div id="infoPanelMount"></div>
 
   <!-- FORM SELECTOR -->
   <div id="form-selector" class="selector">
@@ -3883,14 +3885,22 @@ function loadFormData(data) {
   tikrinkReikalavimuZymes();
 }
 
+/* Q3 (shared/saugykla.js): neperskaitomi juodraščiai anksčiau tapdavo „Nėra išsaugotų juodraščių“,
+   o kitas išsaugojimas juos perrašydavo. Dabar kopija išsaugoma atskirai, viršuje - „būsena nežinoma“;
+   nepavykęs įrašymas - klaida, ne „Juodraštis išsaugotas“. */
+let JUODRASCIAI_NEZINOMI = false;
 function getDrafts() {
-  try {
-    return JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}');
-  } catch { return {}; }
+  const r = GP_SAUGYKLA.skaityk(DRAFTS_KEY, { tikrink: v => (v && typeof v === 'object' && !Array.isArray(v)) || 'netinkama juodraščių sandara' });
+  JUODRASCIAI_NEZINOMI = r.busena === 'sugadinta' || r.busena === 'neprieinama';
+  if (JUODRASCIAI_NEZINOMI) GP_BUSENA.juosta({ raktas: 'skaitymas', tipas: 'nezinoma', tekstas: GP_SAUGYKLA.pranesimas(r, 'Pažymų juodraščiai') });
+  return r.busena === 'yra' ? r.reiksme : {};
 }
 
 function saveDrafts(drafts) {
-  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  const r = GP_SAUGYKLA.rasyk(DRAFTS_KEY, drafts);
+  if (!r.ok) GP_BUSENA.juosta({ raktas: 'irasymas', tipas: 'klaida', tekstas: GP_SAUGYKLA.pranesimas(r, 'Pažymų juodraščiai') });
+  else GP_BUSENA.juostaSlepk('irasymas');
+  return r.ok;
 }
 
 function saveDraft() {
@@ -3901,7 +3911,7 @@ function saveDraft() {
 
   const drafts = getDrafts();
   drafts[id] = { name, data, savedAt: new Date().toISOString() };
-  saveDrafts(drafts);
+  if (!saveDrafts(drafts)) { showToast('Juodraštis neišsaugotas - žr. pranešimą viršuje', 'error'); return; }
   currentDraftId = id;
   document.getElementById('draft-info').textContent = `Juodraštis: "${name}" (išsaugotas ${new Date().toLocaleTimeString('lt-LT')})`;
   showToast('Juodraštis išsaugotas', 'success');
@@ -3916,6 +3926,8 @@ function openDraftsList() {
     new Date(drafts[b].savedAt) - new Date(drafts[a].savedAt)
   );
   if (ids.length === 0) {
+    // Nepavykęs skaitymas NĖRA „juodraščių nėra“ (Q3)
+    empty.textContent = JUODRASCIAI_NEZINOMI ? 'Išsaugotų juodraščių perskaityti nepavyko - sąrašas nežinomas (žr. pranešimą viršuje).' : 'Nėra išsaugotų juodraščių';
     empty.style.display = 'block';
     list.style.display = 'none';
   } else {
@@ -5022,21 +5034,43 @@ async function buildDocx(data) {
       showToast('Generuojami pranešimai tiekėjams...', 'info');
       const zip = new JSZip();
       zip.file(filename, blob);
+      const nepavyko = [];
       for (const notif of notifList) {
         try {
           const notifBlob = await buildNotificationDocx(data, notif);
           zip.file(notif.filename, notifBlob);
         } catch (e) {
           console.error('Pranešimo klaida (' + notif.recipient + '):', e);
+          nepavyko.push({ kam: notif.recipient || notif.filename, kodel: (e && e.message) || String(e) });
         }
       }
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       const zipName = makeZipFilename(f);
       saveAs(zipBlob, zipName);
-      showToast(`Paketas sugeneruotas: ${zipName} (${notifList.length + 1} dokumentai)`, 'success');
+      if (nepavyko.length) {
+        // Q3 (2026-09-26): anksčiau nepavykęs pranešimas buvo tiesiog praleidžiamas, o žinutė
+        // skelbė visą dokumentų skaičių - lyg paketas būtų pilnas.
+        GP_BUSENA.juosta({ raktas: 'paketas', tipas: 'nezinoma',
+          tekstas: `Paketas ${zipName} NEPILNAS: ${notifList.length + 1 - nepavyko.length} iš ${notifList.length + 1} dokumentų. `
+            + `Nesugeneruoti pranešimai: ${nepavyko.map(x => x.kam).join(', ')} (${nepavyko[0].kodel}). Parenkite juos atskirai arba generuokite dar kartą.`,
+          kartoti: generateDocx, kartotiTekstas: 'Generuoti dar kartą' });
+        showToast(`Paketas nepilnas - nepavyko ${nepavyko.length} pranešimai, žr. pranešimą viršuje`, 'error');
+      } else {
+        GP_BUSENA.juostaSlepk('paketas');
+        showToast(`Paketas sugeneruotas: ${zipName} (${notifList.length + 1} dokumentai)`, 'success');
+      }
     } else {
       saveAs(blob, filename);
-      showToast('Word dokumentas sugeneruotas: ' + filename, 'success');
+      if (notifList.length > 0) {
+        // Be ZIP bibliotekos pranešimai anksčiau tyliai dingdavo - atsisiųsdavosi tik pažyma.
+        GP_BUSENA.juosta({ raktas: 'paketas', tipas: 'nezinoma',
+          tekstas: `Atsisiųsta tik pažyma (${filename}). Pranešimų tiekėjams (${notifList.length}) paketas nesukurtas: ZIP biblioteka neįsikėlė - patikrinkite interneto ryšį ir generuokite dar kartą.`,
+          kartoti: generateDocx, kartotiTekstas: 'Generuoti dar kartą' });
+        showToast('Pažyma sugeneruota be pranešimų tiekėjams - žr. pranešimą viršuje', 'error');
+      } else {
+        GP_BUSENA.juostaSlepk('paketas');
+        showToast('Word dokumentas sugeneruotas: ' + filename, 'success');
+      }
     }
   } catch (e) {
     console.error(e);
@@ -5595,6 +5629,34 @@ function showToast(message, type = '') {
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
+</script>
+<!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
+     shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
+<script src="../shared/gprocure-info-panel.js"></script>
+<script>
+(function () {
+  if (!window.GProcureInfoPanel || !document.getElementById("infoPanelMount")) return;
+  var INFO = { lt: {
+    title: "Kas tai ir kaip naudotis",
+    purpose: "Mažos vertės pirkimo tiekėjų apklausos pažyma (Aprašo 1 arba 2 priedas) ir, pirkimą atliekant raštu, pranešimai tiekėjams.",
+    stepsTitle: "Kaip naudotis",
+    steps: [
+      "<b>Pasirinkite formą</b> pagal numatomą pirkimo vertę - ribos nurodytos formų kortelėse.",
+      "<b>Užpildykite pažymą:</b> pirkimo duomenys, tiekėjai, pasiūlymai ir kvalifikacijos patikra.",
+      "<b>Peržiūrėkite</b> („Peržiūrėti“) ir sugeneruokite Word; atliekant raštu - ZIP paketas su pranešimais tiekėjams.",
+      "<b>Išsaugokite juodraštį</b>, jei baigsite vėliau."
+    ],
+    noteTitle: "Duomenys",
+    note: "Juodraščiai saugomi <b>tik šioje naršyklėje</b> ir niekur nesiunčiami. Word bibliotekai įkelti reikia interneto. Jei dalis paketo nesukuriama, modulis tai pasako ir nurodo, kurių dokumentų trūksta."
+  } };
+  GProcureInfoPanel.mount({
+    target: "#infoPanelMount",
+    moduleId: "pp-report",
+    defaultOpen: true,
+    getLang: function () { return "lt"; },
+    content: INFO
+  });
+})();
 </script>
 </body>
 </html>
