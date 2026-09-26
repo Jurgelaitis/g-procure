@@ -32,6 +32,11 @@
 <script src="../shared/thresholds.js"></script>
 <!-- Pinigų sumų skaitymas (JAV ir ES formatai) - GP_MONEY -->
 <script src="../shared/money.js"></script>
+<!-- Bendra pirkimo kortelė (A1): modulis ją tik SKAITO - pats nieko nesaugo -->
+<script src="../shared/saugykla.js"></script>
+<script src="../shared/procurement-methods.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 <!-- Modulis nieko nesaugo: uždarant su neatsisiųstais pakeitimais naršyklė paklausia - GP_DARBAS -->
 <script src="../shared/neissaugotas-darbas.js"></script>
 <style>
@@ -459,9 +464,10 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
       <div class="field">
         <label>Pirkimo kontekstas</label>
         <select id="set-context">
-          <option value="sektorinis" selected>Sektorinis (PĮ) - Litgrid</option>
-          <option value="bendrasis">Bendrasis (VPĮ) - EPSO-G</option>
+          <option value="sektorinis" selected>Sektorinis (PĮ)</option>
+          <option value="bendrasis">Bendrasis (VPĮ)</option>
         </select>
+        <div class="hint" id="set-vykdytojas"></div>
       </div>
       <div class="check-row">
         <input type="checkbox" id="set-green" checked>
@@ -511,10 +517,13 @@ const PPQ = {
   settings:{
     context:'sektorinis',
     green:true,
-    it:true
+    it:true,
+    rezimasIs:''    // kas nustatė režimą: '' - numatytasis, 'nustatymai' - žmogus, 'kortele' - pirkimo kortelė
   },
   procurement:{ name:'', objectType:'', value:null, valueCat:'0.5', duration:'', desc:'', extra:'',
-                mokejimai:'', avansas:false, priklausomybe:'', dalys:'' },   // pirkimoKontekstas()
+                mokejimai:'', avansas:false, priklausomybe:'', dalys:'',
+                vykdytojas:'' },  // pirkimoKontekstas(); vykdytojas - GP_ORG id iš pirkimo kortelės ('' - pagal režimą)
+  kortele:null,      // susietos bendros pirkimo kortelės id (shared/pirkimo-kortele.js); modulis jos nekeičia
   questions:[],      // AI clarifying questions
   answers:{},        // answers to clarifying questions
   requirements:[],   // generated/edited requirements
@@ -595,10 +604,15 @@ function switchView(v){
 }
 
 /* ---------------- Settings ---------------- */
-function openSettings(){ $('settings-modal').classList.add('open'); }
+function openSettings(){
+  const V=vykdytojas();
+  $('set-vykdytojas').textContent='Pirkimo vykdytojas: '+V.pavadinimas+(PPQ.procurement.vykdytojas ? ' (iš pirkimo kortelės).' : ' (numatytasis šiam kontekstui; kitą vykdytoją nurodo pirkimo kortelė).');
+  $('settings-modal').classList.add('open');
+}
 function closeSettings(){ $('settings-modal').classList.remove('open'); }
 function saveSettings(){
   PPQ.settings.context  = $('set-context').value;
+  PPQ.settings.rezimasIs = 'nustatymai';
   PPQ.settings.green    = $('set-green').checked;
   PPQ.settings.it       = $('set-it').checked;
   rodykTeisinesNuorodas();
@@ -613,14 +627,20 @@ function saveSettings(){
 function rezimas(){ return PPQ.settings.context==='sektorinis' ? 'PI' : 'VPI'; }
 function istatymas(){ return rezimas()==='PI' ? 'PĮ' : 'VPĮ'; }
 /* Pirkimo vykdytojas pagal režimą (CLAUDE.md 2 sk.): LITGRID AB - perkantysis subjektas pagal PĮ,
-   UAB EPSO-G - perkančioji organizacija pagal VPĮ. Naudoja AI instrukcija ir Word priedas. */
+   UAB EPSO-G - perkančioji organizacija pagal VPĮ. Naudoja AI instrukcija ir Word priedas.
+   Nuo 2026-09-26 (A1) pavadinimas gali ateiti iš pirkimo kortelės (AB Amber Grid, UAB Energy cells):
+   statusą ir toliau lemia režimas, organizacijos pavadinimas imamas iš shared/organizacijos.js. */
+function kortelesOrg(){ return (PPQ.procurement.vykdytojas && window.GP_ORG) ? GP_ORG.pagalId(PPQ.procurement.vykdytojas) : null; }
 function vykdytojas(){
+  const org=kortelesOrg();
   return rezimas()==='PI'
-    ? { statusas:'Perkantysis subjektas', statusasEn:'Contracting entity', pavadinimas:'LITGRID AB',
+    ? { statusas:'Perkantysis subjektas', statusasEn:'Contracting entity', pavadinimas:org ? org.pavadinimas : 'LITGRID AB',
         kas:'perkantysis subjektas', kieno:'perkančiojo subjekto', kasEn:'the contracting entity' }
-    : { statusas:'Perkančioji organizacija', statusasEn:'Contracting authority', pavadinimas:'UAB EPSO-G',
+    : { statusas:'Perkančioji organizacija', statusasEn:'Contracting authority', pavadinimas:org ? org.pavadinimas : 'UAB EPSO-G',
         kas:'perkančioji organizacija', kieno:'perkančiosios organizacijos', kasEn:'the contracting authority' };
 }
+/* Trumpas vardas antraštei: „LITGRID“, „Amber Grid“, „EPSO-G“, „Energy cells“. */
+function vykdytojoTrumpas(){ return vykdytojas().pavadinimas.replace(/^(AB|UAB)\s+/,'').replace(/\s+(AB|UAB)$/,''); }
 function teise(raktas, kalba, trumpai){ return GP_TEISE.cit(raktas, rezimas(), kalba, {trumpai:!!trumpai}); }
 /* VPT IT gairių taisyklės ir instrukcija - TIK IT/IS pirkimui (objekto tipas) ir kai įjungtos nustatymuose.
    Iki 2026-09-23 R7 veikė bet kuriame pirkime, o R8 IT pirkimą atpažindavo pagal raides „it“, kurios
@@ -633,7 +653,7 @@ function rodykTeisinesNuorodas(){
   $('badge-rezimas').textContent=rezimas()==='PI' ? 'Sektorinis pirkimas (PĮ)' : 'Bendrasis pirkimas (VPĮ)';
   // Antraštė ir poraštė pagal režimą: iki 2026-09-23 VPĮ (EPSO-G) režime liko „LITGRID“ ir „PĮ“.
   const PI=rezimas()==='PI';
-  $('antraste-vykdytojas').textContent=PI ? 'LITGRID' : 'EPSO-G';
+  $('antraste-vykdytojas').textContent=vykdytojoTrumpas();
   $('antraste-istatymas').textContent=PI ? 'Pirkimų įstatymą (PĮ)' : 'Viešųjų pirkimų įstatymą (VPĮ)';
   $('poraste-vykdytojas').textContent=vykdytojas().pavadinimas;
   // Teisės stebėsenos įrašai šiam moduliui pagal režimą; nepavykus įkelti blokas rodo klaidą, ne „pokyčių nėra“.
@@ -645,8 +665,9 @@ function rodykTeisinesNuorodas(){
    ============================================================ */
 function systemPrompt(){
   const R = rezimas(), PI = R==='PI';
+  const org = kortelesOrg();
   const ctx = PI
-    ? 'Perkantysis subjektas LITGRID AB (Lietuvos elektros perdavimo sistemos operatorius, TSO). Taikomas Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų įstatymas (PĮ) - sektorinis įstatymas, atskiras nuo bendrojo VPĮ. Taikoma ES Direktyva '+GP_TEISE.aktas('PI').direktyva+'. Priežiūros institucija - Viešųjų pirkimų tarnyba (VPT).'
+    ? ((!org || org.id==='litgrid') ? 'Perkantysis subjektas LITGRID AB (Lietuvos elektros perdavimo sistemos operatorius, TSO).' : 'Perkantysis subjektas '+org.pavadinimas+'.')+' Taikomas Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų įstatymas (PĮ) - sektorinis įstatymas, atskiras nuo bendrojo VPĮ. Taikoma ES Direktyva '+GP_TEISE.aktas('PI').direktyva+'. Priežiūros institucija - Viešųjų pirkimų tarnyba (VPT).'
     : vykdytojas().statusas+' '+vykdytojas().pavadinimas+'. Taikomas Viešųjų pirkimų įstatymas (VPĮ). Taikoma ES Direktyva '+GP_TEISE.aktas('VPI').direktyva+'. Priežiūros institucija - VPT.';
   const met = GP_TEISE.aktas('MET');
   const c = k => GP_TEISE.cit(k, R), apie = k => GP_TEISE.apie(k, R), N = GP_TEISE.normos;
@@ -1002,7 +1023,11 @@ function pradetasDarbas(){
 }
 function naujasPirkimas(){
   Object.assign(PPQ.procurement,{ name:'', objectType:'', value:null, valueCat:MODULIO_KOEF.vidutine, koefRankinis:false, duration:'', desc:'', extra:'',
-    mokejimai:'', avansas:false, priklausomybe:'', dalys:'' });
+    mokejimai:'', avansas:false, priklausomybe:'', dalys:'', vykdytojas:'' });
+  PPQ.kortele=null;
+  if(PPQ.settings.rezimasIs==='kortele'){   // kortelės režimas priklausė ankstesniam pirkimui - grįžta numatytasis
+    PPQ.settings.context='sektorinis'; PPQ.settings.rezimasIs=''; $('set-context').value='sektorinis'; rodykTeisinesNuorodas();
+  }
   PPQ.questions=[]; PPQ.answers={}; PPQ.requirements=[]; PPQ.sourceText='';
   PPQ.audit=naujasAuditas(); PPQ.generavimas={ nutruko:false }; PPQ.vertimoKlaida='';
   PPQ.ui.pagrindimasId=null; PPQ.ui.zaliasPatvirtintas=false;
@@ -1018,7 +1043,11 @@ function rodykPasirinkima(mode){
   $('naujas-pradeti').onclick=()=>{ uzdarykPasirinkima(); startEntry(mode,'naujas'); };
   $('naujas-modal').classList.add('open');
 }
-function uzdarykPasirinkima(){ $('naujas-modal').classList.remove('open'); }
+let kortelesAtsakymas=null;   // laukiamas atsakymas, ar kortelė - naujas pirkimas (klauskDelKorteles)
+function uzdarykPasirinkima(){
+  $('naujas-modal').classList.remove('open');
+  if(kortelesAtsakymas){ const f=kortelesAtsakymas; kortelesAtsakymas=null; f(false); }   // uždaryta - kortelė nepasirenkama
+}
 function testiPirkima(){
   if(PPQ.entry==='check'){ switchView('audit'); return; }
   switchView('wizard'); renderWizard();
@@ -1035,6 +1064,119 @@ function startEntry(mode, kaip){
   }
   switchView('wizard');
   renderWizard();
+}
+
+/* ============================================================
+   BENDRA PIRKIMO KORTELĖ (A1, 2026-09-26; shared/pirkimo-kortele.js)
+   ============================================================
+   Modulis kortelę tik SKAITO ir jos nekeičia. Pasirinkus kortelę, tušti pirkimo laukai užpildomi,
+   kitaip įvesti - tik parodomi (pakeičiami paspaudus „Taikyti“). Laukai gyvena PPQ.procurement ir,
+   jei jau nupiešti, vediklio (p-) ir audito (a-) formose - keičiama visur, o skaitoma pirmiausia
+   iš formos, kad dar nesurinkta įvestis nedingtų. Jei darbas su kitu pirkimu pradėtas, klausiama
+   tuo pačiu langu kaip „Pradėti naują“. */
+const KORTELES_OBJEKTAI={ prekes:'Prekės', paslaugos:'Paslaugos (kita)', paslaugos_it:'Paslaugos (IT/IS)', darbai:'Darbai (statyba)', misrus:'Mišrus' };
+function aktyviForma(){ const v=document.querySelector('.view.active'); return v && v.id==='view-audit' ? 'a' : (v && v.id==='view-wizard' ? 'p' : null); }
+function formosReiksme(id, busena){
+  const pr=aktyviForma();
+  for(const e of [pr ? $(pr+'-'+id) : null, $('p-'+id), $('a-'+id)]) if(e && String(e.value).trim()!=='') return e.value;
+  return busena==null ? '' : String(busena);
+}
+function irasykIFormas(id, tekstas, ivykis){
+  ['p','a'].forEach(pr=>{ const e=$(pr+'-'+id); if(!e) return; e.value=tekstas; e.dispatchEvent(new Event(ivykis||'input',{bubbles:true})); });
+}
+function dalysTekstu(d){
+  if(!Array.isArray(d) || !d.length) return '';
+  return d.map((x,i)=>(i+1)+' dalis - '+x.pavadinimas+(x.verte>0 ? ' ('+GP_KORTELE.formatas(x.verte)+' EUR)' : '')).join('; ');
+}
+const lyginti=s=>String(s||'').trim().replace(/\s+/g,' ').toLowerCase();
+const KORTELES_LAUKAI=[
+  { kortele:'pavadinimas', gauk:()=>formosReiksme('name', PPQ.procurement.name),
+    dek:v=>{ PPQ.procurement.name=v; irasykIFormas('name', v); } },
+  { kortele:'objektas', i:v=>KORTELES_OBJEKTAI[v]||null,
+    is:s=>Object.keys(KORTELES_OBJEKTAI).find(k=>KORTELES_OBJEKTAI[k]===s)||'',
+    gauk:()=>formosReiksme('type', PPQ.procurement.objectType),
+    dek:v=>{ PPQ.procurement.objectType=v; irasykIFormas('type', v, 'change'); } },
+  { kortele:'verte', i:v=>String(v), is:s=>parseFloat(s)>0 ? parseFloat(s) : undefined,
+    gauk:()=>formosReiksme('value', PPQ.procurement.value),
+    dek:v=>{ PPQ.procurement.value=parseFloat(v)||null; irasykIFormas('value', v); } },
+  { kortele:'trukmeMen', i:v=>v+' mėn.', is:s=>{ const m=trukmeMen(s); return m ? Math.round(m) : undefined; },
+    lygu:(s,v)=>trukmeMen(s)===v,
+    gauk:()=>formosReiksme('duration', PPQ.procurement.duration),
+    dek:v=>{ PPQ.procurement.duration=v; irasykIFormas('duration', v); } },
+  { kortele:'dalys', i:d=>dalysTekstu(d), is:()=>undefined,   // laisvo teksto į sąrašą neverčiame
+    lygu:(s,d)=>lyginti(s)===lyginti(dalysTekstu(d)),
+    gauk:()=>formosReiksme('dalys', PPQ.procurement.dalys),
+    dek:v=>{ PPQ.procurement.dalys=v; irasykIFormas('dalys', v); } },
+  { kortele:'rezimas', i:v=>(v==='PI'||v==='VPI') ? v : null,
+    gauk:()=>PPQ.settings.rezimasIs ? rezimas() : '',
+    dek:v=>{ PPQ.settings.context=v==='VPI' ? 'bendrasis' : 'sektorinis'; PPQ.settings.rezimasIs='kortele';
+             $('set-context').value=PPQ.settings.context; rodykTeisinesNuorodas(); } },
+  /* Vykdytojas be kortelės - numatytasis pagal režimą (LITGRID / EPSO-G). Jei režimą pasirinko žmogus,
+     numatytasis vykdytojas laikomas jo pasirinkimu: kortelės kita organizacija rodoma kaip skirtumas,
+     kad nesusidarytų pora „perkantysis subjektas UAB EPSO-G“. */
+  { kortele:'vykdytojas', i:v=>(window.GP_ORG && GP_ORG.pagalId(v)) ? v : null,
+    gauk:()=>PPQ.procurement.vykdytojas || (rezimas()==='PI' ? 'litgrid' : 'epso-g'),
+    numatyta:()=>!PPQ.procurement.vykdytojas && PPQ.settings.rezimasIs!=='nustatymai',
+    dek:v=>{ PPQ.procurement.vykdytojas=v; rodykTeisinesNuorodas(); } }
+];
+/* Formoje - tik tai, kas atėjo iš susietos kortelės (be reikalavimų, atsakymų ir kitų įvestų duomenų)?
+   Tada kitą kortelę galima pasirinkti be klausimo - prarasti nėra ko. */
+function tikKortelesDuomenys(){
+  if(!PPQ.kortele || !window.GP_KORTELE) return false;
+  const A=GP_KORTELE.gauk(PPQ.kortele), p=PPQ.procurement;
+  if(!A) return false;
+  if(PPQ.requirements.length || PPQ.questions.length || Object.keys(PPQ.answers).length || PPQ.sourceText ||
+     p.desc || p.extra || p.mokejimai || p.avansas || p.priklausomybe) return false;
+  for(const id of ['desc','mokejimai','priklausomybe']) if(formosReiksme(id,'')) return false;
+  return KORTELES_LAUKAI.every(b=>{
+    const dab=b.gauk(), kv=A[b.kortele];
+    if(dab==='' || dab==null || (b.numatyta && b.numatyta(A))) return true;
+    if(kv==null || kv==='') return false;                         // įvesta, bet kortelėje nėra - žmogaus darbas
+    if(b.lygu) return b.lygu(dab, kv);
+    return lyginti(dab)===lyginti(b.i ? b.i(kv, A) : kv);
+  });
+}
+/* Kortelė - kitas pirkimas, nei pradėtas darbas? Ne, jei: darbo nėra; susieta ta pati kortelė; pavadinimo dar
+   nėra ir nėra reikalavimų, klausimų ar įkelto teksto (įvesti tik keli laukai - kortelė juos papildo, skirtumai
+   parodomi); pavadinimas tas pats. */
+function korteleKitamPirkimui(k){
+  if(!pradetasDarbas()) return false;
+  if(PPQ.kortele && PPQ.kortele===k.id) return false;
+  const vardas=formosReiksme('name', PPQ.procurement.name);
+  if(!vardas && !PPQ.requirements.length && !PPQ.questions.length && !Object.keys(PPQ.answers).length && !PPQ.sourceText) return false;
+  return !(vardas && k.pavadinimas && lyginti(vardas)===lyginti(k.pavadinimas));
+}
+function klauskDelKorteles(k){
+  return new Promise(res=>{
+    const p=PPQ.procurement, n=PPQ.requirements.length, vardas=formosReiksme('name', p.name);
+    const testi=document.querySelector('#naujas-modal .modal-foot .btn-secondary'), senas=testi.onclick;
+    const pabaiga=ats=>{ testi.onclick=senas; res(ats); };
+    kortelesAtsakymas=pabaiga;
+    $('naujas-tekstas').textContent='Jau dirbate su pirkimu'+(vardas?' „'+vardas+'“':'')+(n?' ('+n+' '+reikalavimuVard(n)+')':'')+
+      '. Pasirinkta kortelė „'+k.pavadinimas+'“ - kitas pirkimas. Tęsti dabartinį ar pradėti naują pagal kortelę?';
+    testi.onclick=()=>uzdarykPasirinkima();
+    $('naujas-pradeti').onclick=()=>{ kortelesAtsakymas=null; $('naujas-modal').classList.remove('open'); naujasPirkimas(); pabaiga(true); };
+    $('naujas-modal').classList.add('open');
+  });
+}
+let KORTELE=null;   // juostos valdymas (pasirinkta(), pasirink(id), atnaujink()) - ir testams
+function jungiKortele(){
+  if(!window.GP_KORTELE) return null;
+  return GP_KORTELE.mount({
+    modulis:'PP-qual',
+    laukai:KORTELES_LAUKAI,
+    pries:k=>{
+      if(!korteleKitamPirkimui(k)) return true;
+      if(tikKortelesDuomenys()){ naujasPirkimas(); return true; }   // tik ankstesnės kortelės duomenys - keičiama be klausimo
+      return klauskDelKorteles(k);
+    },
+    onPasirinkta:k=>{ PPQ.kortele=k ? k.id : null; },
+    poTaikymo:()=>{   // po „Pradėti naują“ formos tuščios - nupiešiamos iš būsenos
+      const v=aktyviForma();
+      if(v==='p' && !$('wizard-body').innerHTML.trim()) renderWizard();
+      if(v==='a' && !$('audit-body').innerHTML.trim()) renderAuditInput();
+    }
+  });
 }
 
 /* ============================================================
@@ -2859,6 +3001,8 @@ async function exportDocx(){
   // skaičiuoklės parinktys: objekto tipai ir koeficientai - iš tų pačių šaltinių kaip vediklyje
   $('calc-type').innerHTML='<option value="">Pasirinkite objekto tipą</option>'+OBJECT_TYPES.map(t=>`<option>${t}</option>`).join('');
   $('calc-valuecat').innerHTML=koefParinktys(MODULIO_KOEF.vidutine);
+  // Bendra pirkimo kortelė - prieš GP_DARBAS: iš adreso (?kortele=) užpildyti laukai nėra naudotojo darbas.
+  KORTELE=jungiKortele();
   // Įspėjimas uždarant: darbo duomenys be vaizdo būsenos (ui, step, entry), kad vien naršymas po
   // vediklį klausimo nesukeltų. Mygtukais atlikti pakeitimai (patvirtinimas, AI) matomi per PPQ.
   GP_DARBAS.stebek(()=>[PPQ.settings,PPQ.procurement,PPQ.questions,PPQ.answers,PPQ.requirements,PPQ.audit,
@@ -2877,7 +3021,7 @@ async function exportDocx(){
     purpose: "Proporcingi tiekėjų kvalifikacijos reikalavimai pagal VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodiką - parengimas, patikra ir Word priedas.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Pasirinkite pradžią:</b> turima pirkimo informacija, parengta TS arba jau parašyti reikalavimai patikrai.",
+      "<b>Pasirinkite pradžią:</b> turima pirkimo informacija, parengta TS arba jau parašyti reikalavimai patikrai. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - pavadinimas, objektas, vertė, trukmė, dalys, režimas ir vykdytojas bus perimti (modulis kortelės nekeičia).",
       "<b>Vediklis:</b> pirkimo duomenys, AI patikslinimo klausimai, reikalavimų rinkinys - kiekvieną reikalavimą peržiūrite, taisote ir patvirtinate.",
       "<b>Proporcingumo skaičiuoklė</b> parodo Metodikos ribas: vertės kategoriją, pajamų ir patirties apimtis, patirties laikotarpį.",
       "<b>Audito patikra</b> tikrina reikalavimus taisyklėmis ir AI; pataisas taikote tik jūs, pažymėję.",
