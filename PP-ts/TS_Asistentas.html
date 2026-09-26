@@ -2467,6 +2467,10 @@ details[open] summary {
 <script src="../shared/busena.js"></script>
 <script src="../shared/saugykla.js"></script>
 <script src="../shared/procurement-methods.js"></script>
+<!-- Bendra pirkimo kortelė (A1): modulis ją tik SKAITO (pirkimo duomenų nesaugo) -->
+<script src="../shared/money.js"></script>
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
 <!-- Teisės aktų nuorodos (GP_TEISE). PP-ts dirba pagal PĮ - straipsnių numerių modulyje nerašome. -->
 <script src="../shared/teises-nuorodos.js"></script>
 <!-- docx.js: tikras .docx generavimas. Saugiai įkraunama su 2 CDN ir aiškia diagnoze. -->
@@ -6862,7 +6866,7 @@ window.CVPISClient = CVPISClient;
     steps: [
       "<b>Sukurti TS:</b> įveskite pirkimo informaciją, atsakykite į AI klausimus, peržiūrėkite analogiškus CVP IS pirkimus - AI parengs TS projektą, kainos ir rinkos įvertinimą.",
       "<b>Tikrinti TS:</b> įkelkite ar įklijuokite savo TS. „Greitas patikrinimas“ - taisyklės naršyklėje; „Pilnoji analizė“ - taisyklės ir AI.",
-      "<b>Pirkimo kontekstas:</b> užpildykite objektą, būdą ir vertę - pastabos taps tikslesnės.",
+      "<b>Pirkimo kontekstas:</b> užpildykite objektą, būdą ir vertę - pastabos taps tikslesnės. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - pavadinimas, objektas, BVPŽ kodas, vertė, trukmė, būdas ir dalys bus perimti (modulis kortelės nekeičia).",
       "<b>Peržiūrėkite ir eksportuokite:</b> „Analizė“ rodo pastabas su citatomis, „Ataskaita“ - santrauką; TS - Word formatu."
     ],
     noteTitle: "Kas siunčiama į AI",
@@ -6901,6 +6905,65 @@ window.CVPISClient = CVPISClient;
     defaultOpen: true,
     getLang: function () { return "lt"; },
     content: INFO
+  });
+})();
+</script>
+<script>
+/* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26): modulis ją tik SKAITO. Tie patys pirkimo laukai yra ir TS
+   kūrimo vediklyje (gen*), ir pirkimo kontekste (meta*) - kortelė pildo abu, skaitoma pirmiausia užpildyta. Tušti
+   laukai užpildomi, kitokie tik parodomi. Pasirinkimai su numatytąja reikšme (objekto tipas, dalys) laikomi tuščiais,
+   kol jų nepalietė žmogus. Modulis - LITGRID ir PĮ, tad kitas vykdytojas ar VPĮ tik įvardijami. */
+(function () {
+  if (!window.GP_KORTELE) return;
+  var $i = function (id) { return document.getElementById(id); };
+  var RANKA = new Set();
+  ['genType', 'metaType', 'genFlagParts', 'metaParts', 'metaProcedure', 'metaInternational'].forEach(function (id) {
+    var e = $i(id); if (e) e.addEventListener('change', function (ev) { if (ev.isTrusted) RANKA.add(id.replace(/^(gen|meta)(Flag)?/, '').toLowerCase()); });
+  });
+  var TIPAI = { prekes: 'goods', paslaugos: 'services', paslaugos_it: 'services', darbai: 'works', misrus: 'mixed' };
+  var ATGAL = { goods: 'prekes', services: 'paslaugos', works: 'darbai', mixed: 'misrus' };
+  function skaityk(ids) { for (var k = 0; k < ids.length; k++) { var e = $i(ids[k]); if (e && String(e.value).trim() !== '') return e.value; } return ''; }
+  function rasyk(ids, v) { ids.forEach(function (id) { var e = $i(id); if (!e) return; e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }); }
+  function budas() {
+    var kodas = ($i('metaProcedure') || {}).value || '';
+    if (!kodas) return '';
+    var m = GP_METHODS.fromLegacy('pp-ts', kodas, { international: !!($i('metaInternational') || {}).checked });
+    return m ? m.id : kodas;
+  }
+  window.KORTELE = GP_KORTELE.mount({
+    modulis: 'PP-ts',
+    klaustiKitoPirkimo: true,
+    laukai: [
+      { kortele: 'pavadinimas', gauk: function () { return skaityk(['genTitle', 'metaTitle']); }, dek: function (v) { rasyk(['genTitle', 'metaTitle'], v); } },
+      { kortele: 'objektas', gauk: function () { return ($i('genType') || {}).value || ''; },
+        i: function (v) { return TIPAI[v] || null; }, is: function (s) { return ATGAL[s] || undefined; },
+        lygu: function (s, v) { return s === TIPAI[v]; }, numatyta: function () { return !RANKA.has('type'); },
+        dek: function (v) { rasyk(['genType', 'metaType'], v); } },
+      { kortele: 'bvpz', gauk: function () { return skaityk(['genCpv', 'metaCpv']); },
+        is: function (s) { return /^\d{8}-\d$/.test(String(s).trim()) ? String(s).trim() : undefined; },
+        lygu: function (s, v) { return String(s).replace(/\s/g, '').slice(0, 8) === String(v).slice(0, 8); },
+        dek: function (v) { rasyk(['genCpv', 'metaCpv'], v); } },
+      { kortele: 'verte', gauk: function () { return skaityk(['genBudget', 'metaValue']); },
+        i: function (v) { return String(v); }, is: function (s) { return parseFloat(s) > 0 ? parseFloat(s) : undefined; },
+        dek: function (v) { rasyk(['genBudget', 'metaValue'], v); } },
+      { kortele: 'trukmeMen', gauk: function () { return skaityk(['genDuration']); },
+        i: function (v) { return String(v); }, is: function (s) { return parseInt(s, 10) > 0 ? parseInt(s, 10) : undefined; },
+        dek: function (v) { rasyk(['genDuration'], v); } },
+      { kortele: 'budas', gauk: budas, i: function (v) { return GP_METHODS.toModule('pp-ts', v) ? v : null; },
+        dek: function (v) {
+          rasyk(['metaProcedure'], GP_METHODS.toModule('pp-ts', v));
+          var e = $i('metaInternational'); if (e) { e.checked = /^T-/.test(v); e.dispatchEvent(new Event('change', { bubbles: true })); }
+        },
+        neimanoma: 'šio būdo pirkimo kontekste nėra' },
+      { kortele: 'dalys', gauk: function () { return RANKA.has('parts') ? (($i('genFlagParts') || {}).checked ? 'taip' : 'ne') : ''; },
+        i: function (d) { return d.length ? 'taip' : 'ne'; }, lygu: function (s, d) { return s === (d.length ? 'taip' : 'ne'); },
+        is: function () { return undefined; },
+        dek: function (v) { ['genFlagParts', 'metaParts'].forEach(function (id) { var e = $i(id); if (e) { e.checked = v === 'taip'; e.dispatchEvent(new Event('change', { bubbles: true })); } }); } },
+      { kortele: 'vykdytojas', gauk: function () { return 'litgrid'; }, i: function (v) { return v === 'litgrid' ? v : null; }, dek: function () {},
+        neimanoma: 'TS asistentas rengia LITGRID AB dokumentus' },
+      { kortele: 'rezimas', gauk: function () { return 'PI'; }, i: function (v) { return v === 'PI' ? v : null; }, dek: function () {},
+        neimanoma: 'TS asistentas remiasi PĮ' }
+    ]
   });
 })();
 </script>
