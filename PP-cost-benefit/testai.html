@@ -34,7 +34,11 @@
   <div id="rezultatai"></div>
 </div>
 <iframe id="modulis" title="testuojamas modulis"></iframe>
+<script src="../shared/testu-apsauga.js"></script>
 <script>
+/* Tikri skaičiuoklės duomenys įsimenami prieš įkeliant modulį ir atkuriami pabaigoje bei uždarant
+   puslapį (testai viešu adresu - ta pati naršyklės saugykla). Iki 2026-09-26 paruosk() juos ištrindavo. */
+const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("epsog_en_skaiciuokle") === 0);
 /* Variklis - kaip PP-market-KPI/testai.html: rėmelio src su kešo skirtuku, būsena per eval
    (state yra let, ne window savybė), kiekvienas testas pradeda nuo paruosk(). */
 const ramas = document.getElementById("modulis");
@@ -528,32 +532,60 @@ testas("Sąsaja", "Tekstuose nėra ilgojo brūkšnio ir svetimų kabučių", ()=
   tiesa(M('document.documentElement.lang') === "lt");
 });
 
+/* Q3 (2026-09-26): Word priedo būsena prie mygtuko. Anksčiau bet kokia klaida vadinta „Nepavyko įkelti
+   Word bibliotekos“, o pranešimas dingdavo po 2 s. Biblioteka ir atsisiuntimas imituojami. */
+testas("Word priedas", "Klaida - tikra priežastis prie mygtuko: biblioteka atskirai nuo dokumento sudarymo; pavykus - „parengtas“ su failo vardu", async ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document;
+  const orig = { k: w.uzkraukDocx, s: w.sudarykDocx, c: w.HTMLAnchorElement.prototype.click };
+  let atsisiusta = null;
+  w.HTMLAnchorElement.prototype.click = function(){ atsisiusta = this.download; };
+  try {
+    M('state.pirkimas.budas = "kaina"');
+    const b = d.getElementById("priedoBusena");
+    w.uzkraukDocx = () => Promise.reject(new Error("CDN nepasiekiamas"));
+    await w.sukurkPrieda();
+    tiesa(b.classList.contains("gpb--klaida") && /Word priedo parengti nepavyko: Word biblioteka neįsikėlė/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "bibliotekos klaida: " + b.textContent);
+    w.uzkraukDocx = () => Promise.resolve();
+    w.sudarykDocx = () => { throw new Error("Bandomoji dokumento klaida"); };
+    await w.sukurkPrieda();
+    tiesa(/Word priedo parengti nepavyko: Bandomoji dokumento klaida/.test(b.textContent) && !/biblioteka/i.test(b.textContent), "sudarymo klaida: " + b.textContent);
+    lygu(atsisiusta, null, "nepavykus atsisiųsta");
+    w.sudarykDocx = () => Promise.resolve(new w.Blob(["x"]));
+    await w.sukurkPrieda();
+    tiesa(b.classList.contains("gpb--gerai") && /Word priedas parengtas: SPS_x_priedas_EN_vertinimo_metodika\.docx/.test(b.textContent), "sėkmė: " + b.textContent);
+    lygu(atsisiusta, "SPS_x_priedas_EN_vertinimo_metodika.docx", "failo vardas");
+  } finally { w.uzkraukDocx = orig.k; w.sudarykDocx = orig.s; w.HTMLAnchorElement.prototype.click = orig.c; }
+});
+
 /* =========================================================================
    PALEIDIMAS
    ========================================================================= */
-function paleisk(){
+/* Testas gali būti ir asinchroninis (grąžina Promise) - tada jo laukiama (Q3: Word priedo būsenos). */
+async function paleisk(){
   const grupes = {};
   TESTAI.forEach(t=>{ (grupes[t.grupe] = grupes[t.grupe] || []).push(t); });
   const rez = document.getElementById("rezultatai");
   let ok = 0, krito = 0;
-  Object.keys(grupes).forEach(g=>{
+  for (const g of Object.keys(grupes)){
     const h = document.createElement("h2"); h.textContent = g; rez.appendChild(h);
     const lentele = document.createElement("table"); rez.appendChild(lentele);
-    grupes[g].forEach(t=>{
+    for (const t of grupes[g]){
       const t0 = performance.now();
       let klaida = null;
-      try{ t.fn(); }catch(e){ klaida = e && e.message ? e.message : String(e); }
+      try{ const p = t.fn(); if(p && typeof p.then === "function") await p; }catch(e){ klaida = e && e.message ? e.message : String(e); }
       const ms = Math.round(performance.now() - t0);
       if(klaida) krito++; else ok++;
       const tr = document.createElement("tr");
       tr.innerHTML = '<td class="b"><span class="zenklas ' + (klaida ? "z-blogai" : "z-ok") + '">' + (klaida ? "krito" : "gerai") + "</span></td>" +
         "<td>" + t.pav.replace(/&/g, "&amp;").replace(/</g, "&lt;") + (klaida ? '<div class="klaida">' + klaida.replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</div>" : "") + '</td><td class="laikas">' + ms + " ms</td>";
       lentele.appendChild(tr);
-    });
-  });
+    }
+  }
   const s = document.getElementById("santrauka");
   s.innerHTML = '<span class="zenklas ' + (krito ? "z-blogai" : "z-ok") + '">' + (krito ? "yra kritusių" : "viskas gerai") + "</span> <b>" + ok + " / " + (ok + krito) + "</b> testų praėjo" + (krito ? " · <b>" + krito + "</b> krito" : "");
   document.title = (krito ? "KRITO " + krito + " · " : "OK · ") + "Ekonominio naudingumo skaičiuoklės testai";
+  APSAUGA.atkurk();
 }
 ramas.addEventListener("load", ()=> setTimeout(paleisk, 300));
 ramas.src = "./ekonominio_naudingumo_skaiciuokle.html?testas=" + Date.now();

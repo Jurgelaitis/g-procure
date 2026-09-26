@@ -16,6 +16,9 @@
 <!-- Pinigų sumų skaitymas (JAV ir EU formatai) - bendras failas -->
 <script src="../shared/money.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
+<!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
+<script src="../shared/busena.js"></script>
+<script src="../shared/saugykla.js"></script>
 <!-- Chart.js lokaliai - tas pats failas, kurį naudoja 2 dalis -->
 <script src="chart.umd.min.js"></script>
 <style>
@@ -221,6 +224,7 @@ footer{padding:24px 0 40px;font-size:12px;color:var(--muted)}
 </nav>
 
 <main class="wrap">
+  <div id="infoPanelMount"></div>
   <nav class="zingsniai" aria-label="Žingsniai">
     <a href="#s1"><span class="n">1</span>Pirkimas ir formulė</a>
     <a href="#s2"><span class="n">2</span>Kriterijai ir svoriai</a>
@@ -344,6 +348,7 @@ footer{padding:24px 0 40px;font-size:12px;color:var(--muted)}
       <button class="btn" id="btnPriedas" type="button">Word priedas: ekonomiškai naudingiausio pasiūlymo vertinimo metodika</button>
       <span class="pastaba">Sudaromas LITGRID CVP IS naudojama priedo forma: kriterijų lentelė su vertinamais dokumentais ir svoriais, formulės, kiekvieno kriterijaus vertinimo aprašymas, apvalinimo ir lygiųjų taisyklės. Word biblioteka kraunama iš interneto tik paspaudus.</span>
     </div>
+    <div id="priedoBusena" hidden></div>
     <details id="formuleZodziaisBlokas">
       <summary>Vertinimo tvarka žodžiais - tekstas pirkimo dokumentams</summary>
       <div class="formule-box" id="formuleZodziais"></div>
@@ -997,16 +1002,26 @@ function sudarykDocx(t){
     const doc = new D.Document({ creator: "G-Procure", title: t.pavadinimas, externalStyles: GP_DOCX_STILIAI.xml({ font: "Times New Roman", size: 22 }), sections: [{ properties: { page: { size: { width: PAGE_W, height: PAGE_H }, margin: MARGIN } }, children: ch }] });
     return D.Packer.toBlob(doc);
 }
+/* Q3 (2026-09-26): būsena prie mygtuko (shared/busena.js). Anksčiau BET KOKIA klaida - ir dokumento
+   sudarymo - buvo vadinama „Nepavyko įkelti Word bibliotekos“, o pranešimas dingdavo po 2 s. */
 function sukurkPrieda(){
   if(state.pirkimas.budas !== "kaina" && !state.kriterijai.length){ showToast("Pirmiausia pridėkite bent vieną kriterijų"); return; }
   const t = priedoTurinys(state);
-  showToast("Rengiamas Word priedas...");
-  uzkraukDocx().then(()=> sudarykDocx(t)).then(blob=>{
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = "SPS_" + (String(state.pirkimas.priedoNr || "").trim() || "x") + "_priedas_EN_vertinimo_metodika.docx"; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 8000);
-    showToast("Word priedas parengtas");
-  }).catch(e=>{ console.warn(e); showToast("Nepavyko įkelti Word bibliotekos - reikia interneto ir prieigos prie cdnjs / jsdelivr / unpkg"); });
+  const vardas = "SPS_" + (String(state.pirkimas.priedoNr || "").trim() || "x") + "_priedas_EN_vertinimo_metodika.docx";
+  return GP_BUSENA.vykdyk("#priedoBusena", {
+    tipas: "eiga", tekstas: "Rengiamas Word priedas...",
+    klaidosPriesdelis: "Word priedo parengti nepavyko",
+    kartoti: sukurkPrieda,
+    sekme: "Word priedas parengtas: " + vardas,
+    veiksmas: ()=> uzkraukDocx()
+      .catch(()=>{ throw new Error("Word biblioteka neįsikėlė - reikia interneto ir prieigos prie cdnjs / jsdelivr / unpkg"); })
+      .then(()=> sudarykDocx(t))
+      .then(blob=>{
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = vardas; a.click();
+        setTimeout(()=>URL.revokeObjectURL(a.href), 8000);
+      })
+  });
 }
 
 /* ---------- Formatavimas ---------- */
@@ -1363,13 +1378,19 @@ function planuokIssaugojima(){
   clearTimeout(_autosaveT);
   _autosaveT = setTimeout(()=>{ if(_liesta) issaugok(true); }, 600);
 }
+/* Q3: „Išsaugota“ - tik pavykus; nepavykus (ir automatiškai) - antraštėje „Neišsaugota“ ir juosta,
+   o ne senas laikas (anksčiau nepavykęs automatinis išsaugojimas palikdavo seną „Išsaugota 14:32“). */
 function issaugok(tyliai){
-  try{
-    state.schemaVersion = SCHEMA_VERSION;
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  state.schemaVersion = SCHEMA_VERSION;
+  const r = GP_SAUGYKLA.rasyk(STORE_KEY, state);
+  if (r.ok){
     document.getElementById("busena").textContent = "Išsaugota naršyklėje " + new Date().toLocaleTimeString("lt-LT", { hour:"2-digit", minute:"2-digit" });
+    GP_BUSENA.juostaSlepk("irasymas");
     if(!tyliai) showToast("Išsaugota naršyklėje");
-  }catch(e){ if(!tyliai) showToast("Nepavyko išsaugoti: " + e.message); }
+  } else {
+    document.getElementById("busena").textContent = "Neišsaugota";
+    GP_BUSENA.juosta({ raktas:"irasymas", tipas:"klaida", tekstas: GP_SAUGYKLA.pranesimas(r, "Ekonominio naudingumo skaičiuoklė") });
+  }
 }
 function sanitizeBusena(d){
   if(!d || typeof d !== "object" || !d.pirkimas || !Array.isArray(d.kriterijai) || !Array.isArray(d.pasiulymai)) return null;
@@ -1414,14 +1435,17 @@ function sanitizeBusena(d){
   });
   return s;
 }
+/* Q3: neperskaitomi duomenys NEVIRSTA tuščia forma - jų kopija išsaugoma atskirai, juosta sako
+   „būsena nežinoma“ (anksčiau kitas automatinis išsaugojimas juos tyliai perrašydavo). */
 function ikelk(){
-  try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(!raw) return false;
-    const s = sanitizeBusena(JSON.parse(raw));
-    if(!s) return false;
-    state = s; return true;
-  }catch(e){ return false; }
+  let s = null;
+  const r = GP_SAUGYKLA.skaityk(STORE_KEY, { tikrink: d => !!(s = sanitizeBusena(d)) || "netinkama duomenų sandara" });
+  if (r.busena === "yra"){ state = s; return true; }
+  if (r.busena !== "nera"){
+    document.getElementById("busena").textContent = "Išsaugotų duomenų būsena nežinoma";
+    GP_BUSENA.juosta({ raktas:"skaitymas", tipas:"nezinoma", tekstas: GP_SAUGYKLA.pranesimas(r, "Ekonominio naudingumo skaičiuoklė") });
+  }
+  return false;
 }
 function atstatyk(){
   state = tusciaBusena(); _liesta = false;
@@ -1503,6 +1527,59 @@ document.getElementById("importoFailas").addEventListener("change", e=>{
 /* startas */
 if(ikelk()) document.getElementById("busena").textContent = "Įkelti išsaugoti duomenys";
 renderAll();
+</script>
+<!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
+     shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
+<script src="../shared/gprocure-info-panel.js"></script>
+<script>
+(function () {
+  if (!window.GProcureInfoPanel || !document.getElementById("infoPanelMount")) return;
+  var INFO = { lt: {
+    title: "Kas tai ir kaip naudotis",
+    purpose: "Ekonomiškai naudingiausio pasiūlymo vertinimas: kriterijai, lyginamieji svoriai, VPT gairių formulės, balai ir pasiūlymų eilė.",
+    stepsTitle: "Kaip naudotis",
+    steps: [
+      "<b>Pirkimas ir formulė:</b> pasirinkite, pagal ką išrenkamas pasiūlymas (kainos ir kokybės santykis, tik kaina arba tik kokybė su fiksuota kaina), ir formulę.",
+      "<b>Kriterijai ir svoriai:</b> pasirinkite kriterijus iš sąrašo arba įrašykite savo; kainos ir kokybės svorių suma - 100.",
+      "<b>Pasiūlymai:</b> įveskite tiekėjų kainas ir kokybės įverčius.",
+      "<b>Rezultatai:</b> balai, eilė ir simuliacija; Word priedas pirkimo dokumentams - LITGRID forma."
+    ],
+    noteTitle: "Duomenys",
+    note: "Skaičiuoklės duomenys saugomi <b>tik šioje naršyklėje</b> (antraštėje matote, ar išsaugota) ir niekur nesiunčiami. Word bibliotekai įkelti reikia interneto. Mokomasis pavyzdys pažymimas juosta - prieš naudodami tikrame pirkime pakeiskite duomenis.",
+    moreLabel: "Plačiau",
+    details: {
+      title: "Ekonominio naudingumo skaičiuoklė - išsami instrukcija",
+      intro: "Vertinimo kriterijai, jų svoriai ir formulės turi būti paskelbti pirkimo dokumentuose, susiję su pirkimo objektu ir leidžiantys objektyviai palyginti pasiūlymus. Skaičiuoklė padeda juos parinkti, išbandyti su pavyzdiniais pasiūlymais ir aprašyti priedo tekstu.",
+      processTitle: "Darbo eiga",
+      process: [
+        { title: "Būdas", text: "Kainos ir kokybės santykis, tik kaina arba tik kokybė." },
+        { title: "Kriterijai", text: "Sąrašas iš praktikos arba savi; kaina ir kokybė sumoje 100." },
+        { title: "Pasiūlymai", text: "Kainos ir kokybės įverčiai." },
+        { title: "Balai ir eilė", text: "Formulės pagal VPT gaires, simuliacija." },
+        { title: "Word priedas", text: "Kriterijų lentelė, formulės, apvalinimas ir lygiųjų taisyklės." }
+      ],
+      conceptsTitle: "Pagrindinės sąvokos",
+      concepts: [
+        { term: "Ekonomiškai naudingiausias pasiūlymas", def: "Pasiūlymas, geriausias pagal paskelbtus kriterijus: kainos ir kokybės santykį, tik kainą arba tik kokybę (kai kaina fiksuota)." },
+        { term: "Lyginamasis svoris", def: "Kiek kriterijus lemia bendrą balą; kainos ir visų kokybės kriterijų svorių suma - 100." },
+        { term: "Formulė", def: "Kaip pasiūlymo reikšmė paverčiama balais (pvz. santykinė pagal geriausią pasiūlymą)." }
+      ],
+      faqTitle: "Dažniausi klausimai",
+      faq: [
+        { q: "Ar Word priedą galima dėti į pirkimo dokumentus be peržiūros?", a: "Ne. Priedą prieš skelbiant peržiūri pirkimų komisija - tai nurodyta ir pačiame dokumente." },
+        { q: "Kur saugomi duomenys?", a: "Tik šioje naršyklėje. Jei įrašyti nepavyksta (pvz. pilna naršyklės saugykla), antraštėje matysite „Neišsaugota“ ir pranešimą viršuje." }
+      ],
+      closeLabel: "Uždaryti ir grįžti"
+    }
+  } };
+  GProcureInfoPanel.mount({
+    target: "#infoPanelMount",
+    moduleId: "pp-cost-benefit-ens",
+    defaultOpen: true,
+    getLang: function () { return "lt"; },
+    content: INFO
+  });
+})();
 </script>
 </body>
 </html>
