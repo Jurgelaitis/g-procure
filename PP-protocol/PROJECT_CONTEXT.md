@@ -62,7 +62,7 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 
 ### 3.3 BPS punktų ir PSĮ straipsnių nuorodos
 **Anksčiau:** Reikia atminti, kuris BPS punktas (9.24 atviram konkursui vs 14.24 skelbiamoms deryboms)
-**Dabar:** Auto-parinkimas pagal pirkimo būdą per `pnBpsType()` funkciją. PĮ straipsnių numeriai - tik iš `shared/teises-nuorodos.js` (`teise(raktas)`, `<span data-teise>`, šablonų `psi` - registro raktai); iki 2026-09-27 jie buvo įrašyti modulyje, ir šeši buvo klaidingi (PĮ 23, 28, 71, 81, 86, 97 str. reguliuoja kitus dalykus). Laiškų šablonų ilgoji forma („58 straipsnio 1 dalies 1 punktu“) lieka tekste, bet `shared/testai.html` sargas tikrina, kad tokia nuoroda yra registre
+**Dabar:** BPS punktai - vienas šaltinis `PROTOKOLU_BPS` protokolams ir pranešimams (naudotojo sprendimas 2026-09-27: pranešimuose nuorodos - griežtai pagal protokolus; ko protokolas necituoja, necituoja ir pranešimas; ateityje - automatinė patikra pagal pirkimo BPS ir SPS). Atmetimo punktas konkrečiam tiekėjui - iš protokolo eilutės („Pirkimo sąlygų N p.“). Iki tol šablonai turėjo savus numerius (`pnBpsType()`: 9.24 / 14.24, 7.7 / 10.9, 10.2 / 15.2 ir kt.), nesutampančius su protokolais (A4 - 9.26), skelbiamoms deryboms imdavo atviro konkurso numerius, o SPS priedą vadino 6-u. PĮ straipsnių numeriai - tik iš `shared/teises-nuorodos.js` (`teise(raktas)`, `<span data-teise>`, šablonų `psi` - registro raktai); iki 2026-09-27 jie buvo įrašyti modulyje, ir šeši buvo klaidingi (PĮ 23, 28, 71, 81, 86, 97 str. reguliuoja kitus dalykus). Laiškų šablonų ilgoji forma („58 straipsnio 1 dalies 1 punktu“) lieka tekste, bet `shared/testai.html` sargas tikrina, kad tokia nuoroda yra registre
 
 ### 3.4 Atitiktis VPT gairėms
 **Anksčiau:** Reikia rankiniu būdu peržiūrėti gaires (komisijos veiklos, vidaus kontrolės, pasiūlymų vertinimo)
@@ -107,18 +107,37 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 ### 4.3 Protokolų generavimas (DOCX)
 **13+ protokolų tipų su pilnu SVARSTYTA + SPRENDIMAS turiniu:**
 - **A1/D1/N1** - Pirkimo organizavimas (su konfidencialių priedų, CPO, skaidymo logika)
-- **A2/D2/N2** - Klausimai, prašymai, atsakymai (su BPS 19.3 termino pratęsimu, 4/6 dienų pasirinkimu)
+- **A2/D2/N2** - Klausimai, prašymai, atsakymai (su BPS 19.3 termino pratęsimu, 4/6 dienų pasirinkimu; N2 - be punkto)
 - **A3** - Susipažinimas su pasiūlymais
 - **A4** - Pasiūlymų vertinimas (lentelė, eilės)
-- **A5/D9** - Kvalifikacijos + NMK + laimėtojo nustatymas
-- **D3, D3.1** - Susipažinimas su paraiškomis
+- **A5/D9/N9** - Kvalifikacijos + NMK + laimėtojo nustatymas (N9 - pasirenkamas: kai kvalifikacija netikrinta su pirminiais pasiūlymais ar reikia įvertinti neįprastai mažą kainą)
+- **D3, D3.1** - Vokų su paraiškomis atplėšimas (tiekėjai, ar gauta, pastabos, gautų paraiškų skaičius) ir susipažinimas su paraiškų turiniu (atitiktis minimaliems reikalavimams, techninės charakteristikos, pastabos)
 - **D4** - Paraiškų vertinimas (kortelės formatas su veiksmais)
-- **D5a, D5a1, D5a2** - Susipažinimas su pirminiais pasiūlymais
-- **D6** - P.p. vertinimas + kvietimas į derybas (pilna kortelių sistema su derybų duomenimis)
-- **D6.1** - Derybų protokolas (su tiekėjo parašu pagal §29)
-- **D7** - Kvietimas teikti galutinius pasiūlymus
-- **D7.2** - Susipažinimas su g.p.
-- **D8** - Galutinių pasiūlymų vertinimas (kortelės su pasiūlymo eile)
+- **D5a/N5a** - Susipažinimas su pirminiais pasiūlymais (kainos, techninės charakteristikos, pastabos)
+- **D6/N6** - P.p. vertinimas + kvietimas į derybas (pilna kortelių sistema su derybų duomenimis; N6 - ir tiekėjų pašalinimo pagrindų bei kvalifikacijos patikra su pirminiais pasiūlymais)
+- **D6.1/N6.1** - Derybų protokolas (su tiekėjo parašu pagal §29)
+- **D7** - Kvietimas teikti galutinius pasiūlymus (kviečiami tiekėjai)
+- **D7.2** - Susipažinimas su galutiniais pasiūlymais (kainos, techninės charakteristikos, pastabos)
+- **D8/N8** - Galutinių pasiūlymų vertinimas (kortelės su pasiūlymo eile)
+
+**2026-09-27 - protokolų spragos.** D3 ir D3.1 Word skaitė neegzistuojančias lenteles (`#pf-d3-tbody`), todėl protokole visada
+buvo „(paraiškos nepateiktos)“; D7 ieškojo `.klausimas-row` / `.gp-name` (forma turi `.gp-inv-name`) - sąrašas visada „(tiekėjai
+nenurodyti)“; D7.2 lentelės neskaitė; derybų protokolų darbotvarkė buvo tuščia. Neskelbiamų derybų (N) seka: formos ir Word šakos
+buvo priskirtos sekoje nesantiems N4, N5, N7, todėl N5a, N6.1, N8, N9 rodė „forma dar kuriama“ ir tuščią Word, o N6 („Pasiūlymų
+vertinimas, derybos“) - galutinių pasiūlymų formą. Dabar N naudoja derybų formas (N5a - D5.1, N6 - D6, N6.1 - D6.1, N8 - D8,
+N9 - D9); N1 vietoj skelbimo laukų turi kviečiamus tiekėjus ir taikymo pagrindą (PĮ 80 str. 1 d. - pasirinkti tiekėjai kviečiami
+raštu; PĮ 79 str. - sąlygos), sprendimas - „Raštu pakviesti ... pateikti pasiūlymus“, ne „Paskelbti apie Pirkimą“; N antraštėje
+„Derybos: ☑ Vykdomos“ (pagal `GP_METHODS`); N6.1 siūlo pranešimą „Kvietimas teikti galutinį pasiūlymą“ (atskiro D7 sekoje nėra);
+N protokoluose skelbiamų derybų BPS punktai (13.2.1, 14.5) nenurodomi, nes LITGRID neskelbiamų derybų sąlygų (ND šablonas)
+numeracija kita (`PROTOKOLU_BPS`). Terminai - kaip LITGRID ND sąlygose: „pirminiai“ ir „galutiniai“ pasiūlymai.
+
+**2026-09-27 - naudotojo atsakymai.** (1) Neskelbiamose derybose kvalifikacija įprastai tikrinama su pirminiu pasiūlymu: N6
+turi jungiklį „Tiekėjų pašalinimo pagrindai ir kvalifikacija tikrinami su pirminiais pasiūlymais“ (numatytasis - pagal pirkimo
+nustatymą `kval`; „netikrinama“ - išjungtas; laukai - tik tai, kas tikrinama), Word įrašo kiekvieno tiekėjo patikros rezultatą,
+sprendimą dėl kvalifikacijos ir darbotvarkę su patikra; N9 - pasirenkamas. (2) Pranešimuose nuorodos - griežtai pagal
+protokolus: `PROTOKOLU_BPS` (atviras konkursas ir DPS - eilė 9.26, pratęsimas 19.3; skelbiamos derybos - pratęsimas 19.3,
+tikslinimas 14.5, kvietimas į derybas 13.2.1; neskelbiamos derybos - jokių), `pnBpsDuomenys()` pranešimams, atmetimo punktas -
+`atmetimoPunktas()` iš D4, D6, D8 eilučių. Šablonuose nebėra savų numerių, SPS priedas - be numerio.
 
 **DOCX struktūra:** A4 (11906×16838 DXA), 2 cm paraštės, Times New Roman 11pt/10pt/12pt, LITGRID AB header'iu, puslapio numeracija footer'yje, saugojimo metaduomenys (`PĮ 103 str. 6 d.`).
 
@@ -159,7 +178,7 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 **Pranešimų funkcionalumas:**
 - LT arba dvikalbis LT/EN
 - Auto-pildymas iš protokolo formos (klausimai/atsakymai, derybų duomenys, tiekėjai, kainos, eilė)
-- Auto-parenkamas BPS punktas pagal pirkimo būdą (9.x vs 14.x)
+- BPS punktai - tik tie, kuriuos cituoja to pirkimo būdo protokolai (`PROTOKOLU_BPS`), atmetimo punktas - iš protokolo eilutės
 - DOCX su A4, Times New Roman, header'iu „LITGRID AB", saugojimo žyma
 - Inline modalas (be persikrovimo į kitą puslapį)
 
