@@ -27,6 +27,7 @@
 <script src="../shared/lang-detect.js"></script>
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3) -->
 <script src="../shared/busena.js"></script>
+<script src="../shared/money.js"></script>
 <script src="../shared/saugykla.js"></script>
 <!-- Ataskaitų modelio kūrimas -> window.GP_REPORTS -->
 <script src="reports.js"></script>
@@ -1125,11 +1126,17 @@ const CALC_SECTIONS = [
   { num: "4.",  group: "constructionWorks",   lt: "Statybos darbai",            en: "Construction works" }
 ];
 
+// Skaičius iš lauko: priimami ir LT, ir EN formatai (CLAUDE.md 5 sk.). Yra abu skyrikliai - dešinysis dešimtainis
+// (1.234,5 ir 1,234.5); tas pats skyriklis kartojasi - tūkstančių (1.500.000); vienas - dešimtainis (0,125 = 0,125).
+// Iki 2026-09-28 buvo keičiamas tik pirmas kablelis: „1.500.000“ virsdavo 1,5, „1,200.5“ - 1,2.
 function parseNum(v) {
   if (v === null || v === undefined) return null;
   if (typeof v === "number") return isFinite(v) ? v : null;
-  let s = String(v).trim(); if (!s) return null;
-  s = s.replace(/[\s ]/g, "").replace(",", ".");
+  let s = String(v).trim().replace(/[\s\u00a0\u202f]/g, ""); if (!s) return null;
+  const t = s.lastIndexOf("."), k = s.lastIndexOf(",");
+  if (t >= 0 && k >= 0) s = t > k ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
+  else if (k >= 0) s = s.indexOf(",") === k ? s.replace(",", ".") : s.replace(/,/g, "");
+  else if (t >= 0 && s.indexOf(".") !== t) s = s.replace(/\./g, "");
   const n = parseFloat(s);
   return isFinite(n) ? n : null;
 }
@@ -1357,7 +1364,7 @@ function buildEvalOffers() {
     return {
       id: o.id,
       name: o.name || "",
-      bidPrice: parseNum(o.bidPrice) || 0,
+      bidPrice: (window.GP_MONEY ? GP_MONEY.parseEUR(o.bidPrice) : parseNum(o.bidPrice)) || 0,   // pinigai - shared/money.js
       embodiedCarbon: emb == null ? null : emb * 1000,
       annualOperational: op == null ? 0 : op * 1000,
       lifetimeYears: life == null ? undefined : life
