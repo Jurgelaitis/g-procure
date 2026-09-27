@@ -39,6 +39,7 @@
 <h1>shared/ regresijos testai</h1>
 <div class="sub">Bendrų komponentų patikra: <code>portal-link.js</code> (grįžimo į portalą juosta), <code>backup.js</code> (atsarginės kopijos branduolys), <code>docx-stiliai.js</code> (Word stilių failas) <code>gprocure-info-panel.js</code> (informacinė skiltis, matuojama 1280 ir 375 px pločio rėmeliuose) <code>modulio-antraste.css</code> (modulio antraštė visuose moduliuose: jungimas, vienos eilutės aukštis, grupės eilutės kontrastas, prilipimas telefone) ir <code>neissaugotas-darbas.js</code> (naršyklės klausimas uždarant su neatsisiųstais pakeitimais) ir <code>pirkimo-kortele.js</code> su <code>pirkimu-korteles.html</code>
 (bendra pirkimo kortelė: schema, saugykla, tikrinimas, juosta modulyje ir kortelių puslapis - netikra saugykla arba <code>?saugykla=testine</code>).
+<code>prieinamumas.js</code> ir U4 prieinamumas visuose puslapiuose (kontrastas, pavadinimai ekrano skaitytuvui, klaviatūra, radijo grupės, fokusas).
 Puslapis pats susikuria bandomuosius dokumentus rėmelyje, tad modulių įkelti nereikia.
 Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje.</div>
 
@@ -2512,6 +2513,419 @@ async function testaiTelefonas(){
   });
 }
 
+/* ==========================================================================
+   Prieinamumas (U4, 2026-09-27): kontrastas 4,5:1 (dideliam tekstui 3:1), valdiklių pavadinimai ekrano skaitytuvui,
+   valdymas klaviatūra, radijo grupių klausimai ir matoma fokuso žymė. Iki tol (matuota 25 puslapiuose ir jų būsenose):
+   267 teksto vietos žemiau ribos (prekės ženklo grafitas-50, žalia, raudona, geltona tekstui ant šviesaus fono), 354 laukai
+   be pavadinimo (etiketė be „for“, laukai lentelėse, tik užuomina), 116 spaudžiamų elementų, kurių nepasiekia klaviatūra.
+   Pavadinimus ir klaviatūrą bendrai tvarko shared/prieinamumas.js, spalvas - epso-g.css *-strong žetonai.
+   ========================================================================== */
+// Būsenos su duomenimis (be jų dalis sąsajos nepiešiama): pavyzdiniai duomenys, PP-protocol pirkimai ir formos
+const PRIEINAMUMO_BUSENOS = {
+  "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html": [["pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ".tabbar .tab:not(a)"]],
+  "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html": [["mokomasis pavyzdys", w => w.ikelkPavyzdi()]],
+  "../PP-report/PP-report.html": [["2 priedas", w => w.selectForm(2)]],
+  "../PP-protocol/LITGRID_Generatorius_v3.html": [
+    ["pirkimų sąrašas", w => w.showPage("page-dashboard")],
+    ["pirkimo kortelė", w => { w.renderDetail("SD-1"); w.showPage("page-detail"); }],
+    ["D6 forma", w => w.openProtocol("SD-1", "D6")], ["D8 forma", w => w.openProtocol("SD-1", "D8")],
+    ["N1 forma", w => w.openProtocol("ND-1", "N1")], ["N6 forma", w => w.openProtocol("ND-1", "N6")],
+    ["A4 forma", w => w.openProtocol("AK-1", "A4")],
+    ["protokolo peržiūra", async w => { w.openProtocol("SD-1", "D6"); await w.previewProtocol(); }]]
+};
+// PP-protocol pirkimai įrašomi PRIEŠ įkeliant puslapį (jis juos skaito įsikeldamas); saugykla atkuriama testo pabaigoje
+const PRIEINAMUMO_PRIES = {
+  "../PP-protocol/LITGRID_Generatorius_v3.html": () => {
+    const kom = { tipas: "nuolatine", date: "2026-01-10", nr: "K-1", name: "Komisija", chair: "Jonas Jonaitis", secretary: "Rasa Rasaitė",
+      members: ["Petras Petraitis", "Asta Astaitė"], nesaliskumas: true, nesaliskumasData: "2026-09-01" };
+    const p = (id, type, val_cat) => ({ id, name: "Bandomasis pirkimas", korteles_data: "2026-09-01", val_ex: 500000, val_inc: 605000, obj_type: "prekes",
+      terminas: "24", parts_enabled: false, parts: [], type, eval_criteria: "kainą", val_cat, komisija: kom, channel: "cvp", cvp_nr: "712345", kval: "abu",
+      protocols: {}, createdAt: "2026-09-01" });
+    localStorage.setItem("litgrid_procurements_v2", JSON.stringify({ "SD-1": p("SD-1", "derybos_tarptautinis", "Tarptautinės vertės pirkimas"),
+      "ND-1": p("ND-1", "neskelbiamos_supaprastintas", "Supaprastintas pirkimas"), "AK-1": p("AK-1", "atviras_tarptautinis", "Tarptautinės vertės pirkimas") }));
+    localStorage.setItem("litgrid_user_profile_v1", JSON.stringify({ name: "Testo Naudotojas", email: "" }));
+  }
+};
+function prieinamumoRemas(m){
+  return new Promise(res => {
+    const f = document.createElement("iframe");
+    f.style.width = "1280px"; f.style.height = "900px";
+    f.addEventListener("load", async () => {
+      const w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
+      const d = f.contentDocument; if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 300)); res(f);
+    }, { once: true });
+    f.src = m + (m.indexOf("?") < 0 ? "?" : "&") + "b=" + Date.now(); document.body.appendChild(f);
+  });
+}
+/* Gradiento spalva taške (U4 kontrasto matui): CSS background-image sluoksniai (pirmas - viršutinis), linear-gradient (kampas
+   deg / turn / rad arba „to ...“) ir radial-gradient (circle / ellipse, farthest-corner, „at X Y“), stotelės % ar px, spalvos
+   interpoliuojamos su iš anksto padaugintu alfa kanalu (kaip naršyklė). Ko neatpažįsta - grąžina null (tada matuojama pagal
+   blogiausią stotelę). Iki šio skaičiavimo gradientas buvo arba nematuojamas, arba matuojamas blogiausiame taške - ir taip
+   „Apie“ autoriaus pareigos (tikras kontrastas 5,9:1) būtų laikytos klaida. */
+function gradSkaidyk(s){
+  const out = []; let d = 0, pr = 0;
+  for (let i = 0; i < s.length; i++) { const c = s[i]; if (c === "(") d++; else if (c === ")") d--; else if (c === "," && d === 0) { out.push(s.slice(pr, i).trim()); pr = i + 1; } }
+  out.push(s.slice(pr).trim()); return out.filter(Boolean);
+}
+function gradSpalva(t){
+  const m = /^rgba?\(([^)]+)\)/.exec(t); if (!m) return null;
+  const p = m[1].split(/[,\s/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+}
+// Stotelės: [{ c, p }] su p dalimis (0..1); ilgis - px skaičiavimui
+function gradStoteles(args, ilgis){
+  const st = [];
+  for (const a of args) {
+    const m = /^(rgba?\([^)]+\))\s*(.*)$/.exec(a); if (!m) return null;
+    const c = gradSpalva(m[1]), poz = m[2].trim() ? m[2].trim().split(/\s+/) : [];
+    const verte = v => /%$/.test(v) ? parseFloat(v) / 100 : /px$/.test(v) ? parseFloat(v) / ilgis : NaN;
+    if (!poz.length) st.push({ c, p: null });
+    for (const v of poz) { const x = verte(v); if (isNaN(x)) return null; st.push({ c, p: x }); }
+  }
+  if (st.length < 2) return null;
+  if (st[0].p === null) st[0].p = 0;
+  if (st[st.length - 1].p === null) st[st.length - 1].p = 1;
+  for (let i = 1; i < st.length; i++) if (st[i].p !== null && st[i].p < st[i - 1].p) st[i].p = st[i - 1].p;
+  for (let i = 1; i < st.length - 1; i++) if (st[i].p === null) {
+    let j = i; while (st[j].p === null) j++;
+    const a = st[i - 1].p, b = st[j].p, n = j - i + 1; for (let k = i; k < j; k++) st[k].p = a + (b - a) * (k - i + 1) / n;
+  }
+  return st;
+}
+function gradTaske(st, t){
+  if (t <= st[0].p) return st[0].c;
+  if (t >= st[st.length - 1].p) return st[st.length - 1].c;
+  for (let i = 1; i < st.length; i++) if (t <= st[i].p) {
+    const a = st[i - 1], b = st[i], u = b.p === a.p ? 1 : (t - a.p) / (b.p - a.p), al = a.c.a + (b.c.a - a.c.a) * u;
+    if (al <= 0) return { r: 0, g: 0, b: 0, a: 0 };
+    const k = x => (a.c[x] * a.c.a + (b.c[x] * b.c.a - a.c[x] * a.c.a) * u) / al;
+    return { r: k("r"), g: k("g"), b: k("b"), a: al };
+  }
+  return st[st.length - 1].c;
+}
+// Vieno sluoksnio spalva taške P (dėžutės koordinatėmis) arba null
+function gradSluoksnis(s, W, H, P){
+  const m = /^(linear|radial)-gradient\((.*)\)$/.exec(s); if (!m) return null;
+  const args = gradSkaidyk(m[2]); let konf = /^rgba?\(/.test(args[0]) ? "" : args.shift();
+  if (m[1] === "linear") {
+    let kampas = 180; const k = konf.trim();
+    const kampai = { "to top": 0, "to right": 90, "to bottom": 180, "to left": 270, "to top right": 45, "to right top": 45, "to bottom right": 135, "to right bottom": 135,
+                     "to bottom left": 225, "to left bottom": 225, "to top left": 315, "to left top": 315 };
+    if (k) { let x;
+      if ((x = /^(-?[\d.]+)deg$/.exec(k))) kampas = +x[1]; else if ((x = /^(-?[\d.]+)turn$/.exec(k))) kampas = x[1] * 360;
+      else if ((x = /^(-?[\d.]+)rad$/.exec(k))) kampas = x[1] * 180 / Math.PI; else if (k in kampai) kampas = kampai[k]; else return null; }
+    const r = kampas * Math.PI / 180, sn = Math.sin(r), cs = Math.cos(r), ilgis = Math.abs(W * sn) + Math.abs(H * cs);
+    const st = gradStoteles(args, ilgis); if (!st) return null;
+    return gradTaske(st, ((P.x - W / 2) * sn - (P.y - H / 2) * cs) / ilgis + 0.5);
+  }
+  // radial: [circle|ellipse] [farthest-corner] [at X Y]
+  let forma = "ellipse", x = W / 2, y = H / 2;
+  if (konf) {
+    const dalys = konf.split(/\s+at\s+|^at\s+/), pries = (konf.indexOf("at ") === 0 ? "" : dalys[0]).trim(), vieta = konf.indexOf("at ") === 0 ? konf.slice(3) : dalys[1];
+    for (const z of pries.split(/\s+/).filter(Boolean)) { if (z === "circle" || z === "ellipse") forma = z; else if (z !== "farthest-corner") return null; }
+    if (vieta) {
+      const v = vieta.trim().split(/\s+/), kw = { left: 0, center: 0.5, right: 1, top: 0, bottom: 1 };
+      const koord = (z, D) => z in kw ? kw[z] * D : /%$/.test(z) ? parseFloat(z) / 100 * D : /px$/.test(z) ? parseFloat(z) : NaN;
+      if (v.length !== 2) return null; x = koord(v[0], W); y = koord(v[1], H); if (isNaN(x) || isNaN(y)) return null;
+    }
+  }
+  let t;
+  if (forma === "circle") { const R = Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([a, b]) => Math.hypot(a - x, b - y))) || 1; t = Math.hypot(P.x - x, P.y - y) / R; }
+  else { const rx = Math.max(x, W - x) * Math.SQRT2 || 1, ry = Math.max(y, H - y) * Math.SQRT2 || 1; t = Math.hypot((P.x - x) / rx, (P.y - y) / ry); }
+  const st = gradStoteles(args, forma === "circle" ? Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([a, b]) => Math.hypot(a - x, b - y))) : Math.max(x, W - x) * Math.SQRT2);
+  return st ? gradTaske(st, t) : null;
+}
+// Visų sluoksnių spalva taške virš apačios arba null (neatpažintas sluoksnis)
+function gradFonas(bi, W, H, P, apacia){
+  const sl = gradSkaidyk(bi); let c = apacia;
+  for (let i = sl.length - 1; i >= 0; i--) {
+    const v = gradSluoksnis(sl[i], W, H, P); if (!v) return null;
+    c = { r: v.r * v.a + c.r * (1 - v.a), g: v.g * v.a + c.g * (1 - v.a), b: v.b * v.a + c.b * (1 - v.a), a: 1 };
+  }
+  return c;
+}
+// Tas pats matas kaip U4 patikros: kontrastas (su permatomumu ir fonų sluoksniais; gradientai nematuojami), pavadinimai,
+// klaviatūra, radijo grupės ir CSS taisyklės, nuimančios fokuso kontūrą be pakaitalo
+function prieinamumoMatas(w, d){
+  const R = { kontrastas: [], vardai: [], klaviatura: [], grupes: [], fokusas: [] };
+  const gcs = (el, ps) => w.getComputedStyle(el, ps);
+  const spalva = s => { const m = /rgba?\(([^)]+)\)/.exec(s || ""); if (!m) return null; const p = m[1].split(/[,\s/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+  const L = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+  const mix = (t, b) => ({ r: t.r * t.a + b.r * (1 - t.a), g: t.g * t.a + b.g * (1 - t.a), b: t.b * t.a + b.b * (1 - t.a), a: 1 });
+  const kelias = el => { const x = []; for (let e = el; e && e !== d.body && x.length < 3; e = e.parentElement) x.unshift(e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/).slice(0, 2).join(".") : "")); return x.join(" > "); };
+  const matomas = el => el.getClientRects().length > 0 && gcs(el).visibility !== "hidden";
+  // Fonas: spalvų sluoksniai iki nepermatomo; gradientas - jo spalva taškuose po tekstu (gradFonas), paveikslėlis - nematuojama.
+  // Iki 2026-09-27 gradientai nebuvo matuojami - taip liko nepastebėtas patamsintas tekstas ant tamsaus gradiento („Apie“).
+  const BALTA = { r: 255, g: 255, b: 255, a: 1 };
+  const fonas = el => { const sl = []; let op = 1;
+    for (let e = el; e; e = e.parentElement) { const cs = gcs(e); op *= +cs.opacity;
+      if (cs.backgroundImage && cs.backgroundImage !== "none") {
+        if (/url\(/.test(cs.backgroundImage) || !/gradient/.test(cs.backgroundImage)) return { neaisku: true };
+        const po = []; let a = e, ca = cs;
+        while (a) { const c = spalva(ca.backgroundColor); if (c && c.a > 0) { po.push(c); if (c.a >= 1) break; }
+          a = a.parentElement; if (!a) break; ca = gcs(a); if (ca.backgroundImage && ca.backgroundImage !== "none") return { neaisku: true }; }
+        let apacia = BALTA; for (let i = po.length - 1; i >= 0; i--) apacia = mix(po[i], apacia);
+        return { op, grad: { e, bi: cs.backgroundImage, virs: sl.slice(), apacia } };
+      }
+      const c = spalva(cs.backgroundColor); if (c && c.a > 0) { sl.push(c); if (c.a >= 1) break; } }
+    let apacia = BALTA; for (let i = sl.length - 1; i >= 0; i--) apacia = mix(sl[i], apacia);
+    return { op, visi: [apacia] }; };
+  // Taškai po tekstu: kiekvienos teksto eilutės galai, vidurys, viršus ir apačia (lauko - jo dėžutė)
+  const taskai = el => { const deze = [];
+    if (el.matches("input,select,textarea")) deze.push(el.getBoundingClientRect());
+    else for (const n of el.childNodes) if (n.nodeType === 3 && n.nodeValue.trim()) { const g = d.createRange(); g.selectNodeContents(n); deze.push(...g.getClientRects()); }
+    const P = []; deze.forEach(b => { if (!b.width || !b.height) return; const cy = b.top + b.height / 2, cx = b.left + b.width / 2;
+      P.push({ x: b.left + 1, y: cy }, { x: b.right - 1, y: cy }, { x: cx, y: cy }, { x: cx, y: b.top + 1 }, { x: cx, y: b.bottom - 1 }); });
+    return P; };
+  const fonai = (el, f) => { if (!f.grad) return f.visi;
+    const g = f.grad, B = g.e.getBoundingClientRect(), v = [];
+    for (const P of taskai(el)) { let c = gradFonas(g.bi, B.width, B.height, { x: P.x - B.left, y: P.y - B.top }, g.apacia); if (!c) return null;
+      for (let i = g.virs.length - 1; i >= 0; i--) c = mix(g.virs[i], c); v.push(c); }
+    return v.length ? v : null; };
+  const santykis = (a, b) => { const x = L(a), y = L(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  // 1. Kontrastas
+  const tikrinti = new Set();
+  const tw = d.createTreeWalker(d.body, 4);
+  for (let t; (t = tw.nextNode());) { if (!t.nodeValue.trim()) continue; const el = t.parentElement;
+    if (!el || el.closest("script,style,noscript,svg,option,select,textarea,[aria-hidden=\"true\"]")) continue; tikrinti.add(el); }
+  d.querySelectorAll("input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]), select, textarea").forEach(e => tikrinti.add(e));
+  tikrinti.forEach(el => {
+    if (!matomas(el) || el.closest("[disabled], [aria-disabled=\"true\"]") || el.closest(".gp-portalas__zenklas")) return;   // neaktyvūs ir logotipas - WCAG 1.4.3 išimtys
+    const savas = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue).join("");
+    if (!el.matches("input,select,textarea") && !/[\p{L}\p{N}\p{S}\p{P}]/u.test(savas.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{20E3}]/gu, ""))) return;   // tik jaustukai
+    const cs = gcs(el), f = fonas(el); if (f.neaisku || f.op < 0.1) return;
+    const dydis = parseFloat(cs.fontSize), storis = parseInt(cs.fontWeight) || 400, riba = (dydis >= 24 || (dydis >= 18.66 && storis >= 700)) ? 3 : 4.5;
+    const visi = fonai(el, f); if (!visi) return;
+    const tikrink = (sp, zyma) => { const c = spalva(sp); if (!c) return; const k = Math.min(...visi.map(v => santykis(mix({ ...c, a: c.a * f.op }, v), v)));
+      if (k + 0.005 < riba) R.kontrastas.push(kelias(el) + " „" + (zyma || (el.matches("input,select,textarea") ? (el.value || el.placeholder || "") : savas.trim())).replace(/\s+/g, " ").slice(0, 40) + "“ " + k.toFixed(2) + ":1 < " + riba); };
+    tikrink(cs.color, "");
+    if (el.matches("input,textarea") && el.placeholder && !el.value) { try { tikrink(gcs(el, "::placeholder").color, "užuomina: " + el.placeholder); } catch (e) {} }
+  });
+  // 2. Pavadinimai
+  const raide = /[\p{L}\p{N}]/u;
+  const vardas = el => {
+    const lb = el.getAttribute("aria-labelledby"); if (lb) { const t = lb.split(/\s+/).map(id => (d.getElementById(id) || {}).textContent || "").join(" ").trim(); if (t) return t; }
+    const al = (el.getAttribute("aria-label") || "").trim(); if (al) return al;
+    if (/^(radiogroup|group)$/.test(el.getAttribute("role") || "")) return "";
+    if (el.matches("input,select,textarea")) {
+      if (el.id) { const l = d.querySelector("label[for=\"" + w.CSS.escape(el.id) + "\"]"); if (l && l.textContent.trim()) return l.textContent.trim(); }
+      const apg = el.closest("label"); if (apg && apg.textContent.trim()) return apg.textContent.trim();
+      if (/^(button|submit|reset)$/.test(el.type)) return el.value || "";
+    } else { const t = (el.innerText || el.textContent || "").trim(); if (t) return t; const img = el.querySelector("img[alt]"); if (img && img.alt.trim()) return img.alt.trim(); }
+    return (el.getAttribute("title") || "").trim();
+  };
+  d.querySelectorAll("a[href], button, input:not([type=hidden]), select, textarea, summary, [role=button], [role=link], [role=tab], [role=checkbox], [role=switch], [tabindex]:not([tabindex=\"-1\"])").forEach(el => {
+    if (!matomas(el)) return; const v = vardas(el);
+    if (!v || !raide.test(v)) R.vardai.push(kelias(el) + (v ? " „" + v + "“" : "") + (el.placeholder ? " (tik užuomina „" + el.placeholder.slice(0, 30) + "“)" : ""));
+  });
+  // 3. Klaviatūra (išimtys kaip prieinamumas.js: modalo fonas - fiksuotas uždengimas, uždaromas mygtuku; onclick, kuris tik stabdo įvykį)
+  d.querySelectorAll("[onclick]").forEach(el => { if (!matomas(el) || el === d.body || gcs(el).position === "fixed" || /^\s*(?:event|e)\.stopPropagation\(\)\s*;?\s*$/.test(el.getAttribute("onclick"))) return;
+    if (!el.matches("a[href], button, input, select, textarea, summary, label, [tabindex]:not([tabindex=\"-1\"]), [contenteditable=\"\"], [contenteditable=true]")) R.klaviatura.push(kelias(el)); });
+  // 4. Radijo grupės be klausimo
+  const gr = new Map();
+  d.querySelectorAll("input[type=radio]").forEach(el => { if (!matomas(el)) return; const k = el.name || kelias(el); if (!gr.has(k)) gr.set(k, []); gr.get(k).push(el); });
+  gr.forEach((els, k) => { if (els.length < 2) return;
+    const turi = els.every(el => { const fs = el.closest("fieldset"), lg = fs && fs.querySelector("legend"); if (lg && lg.textContent.trim()) return true;
+      const g = el.closest("[role=radiogroup],[role=group]"); if (!g) return false;
+      const lb = g.getAttribute("aria-labelledby"), al = (g.getAttribute("aria-label") || "").trim();
+      return !!al || !!(lb && lb.split(/\s+/).some(id => ((d.getElementById(id) || {}).textContent || "").trim())); });
+    if (!turi) R.grupes.push(kelias(els[0].parentElement) + " (name=" + k + ")"); });
+  // 5. Fokusas: taisyklė nuima kontūrą ir nieko nepateikia vietoj jo
+  for (const ss of d.styleSheets) { let rs; try { rs = ss.cssRules; } catch (e) { continue; }
+    const eik = rr => { for (const r of rr) { if (r.cssRules && !r.selectorText) { eik(r.cssRules); continue; } if (!r.style) continue;
+      const nuima = /^(none|0|0px)$/.test(r.style.outlineStyle || "") || /^(none|0|0px)(\s|$)/.test((r.style.outline || "").trim());
+      if (nuima && !(r.style.boxShadow || r.style.borderColor || r.style.outlineColor && r.style.outlineStyle !== "none")) R.fokusas.push(r.selectorText); } };
+    eik(rs); }
+  return R;
+}
+
+async function testaiPrieinamumas(){
+  dabartine = grupe("Prieinamumas (U4): kontrastas, pavadinimai ekrano skaitytuvui, klaviatūra (prieinamumas.js, epso-g.css)");
+
+  await testas("Visi puslapiai jungia shared/prieinamumas.js; PP-teise ir PP-tiekejams jį turi ir be interneto (sw.js SAVI)", async ()=>{
+    const blogi = [];
+    for (const m of Object.keys(TELEFONO_PUSLAPIAI)) {
+      const f = m.replace(/\?.*$/, ""), src = await saltinis(f);
+      if (!/<script src="(\.\.\/)?shared\/prieinamumas\.js"><\/script>/.test(src)) blogi.push(f + ": nejungia shared/prieinamumas.js");
+    }
+    for (const sw of ["../PP-teise/sw.js", "../PP-tiekejams/sw.js"]) if ((await saltinis(sw)).indexOf('"../shared/prieinamumas.js"') < 0) blogi.push(sw + ": SAVI neturi ../shared/prieinamumas.js");
+    tiesa(Object.keys(TELEFONO_PUSLAPIAI).length >= 25, "puslapių sąrašas sutrumpėjo");
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("prieinamumas.js: etiketė be „for“ susiejama su savo lauku (for arba aria-labelledby); esami pavadinimai ir dviprasmės vietos nekeičiami", async ()=>{
+    const { f, d, w } = await ramas(`<div class="fg"><label>Pavadinimas</label><input id="a"></div>
+      <div class="fg"><label>Vertė</label><input class="b"></div>
+      <div class="fg"><label>Jau turi</label><input class="c" aria-label="Savas"></div>
+      <label>Apgaubia <input class="d"></label>
+      <div class="fg"><label>Du laukai</label><div><input class="e1"><input class="e2"></div></div>
+      <div class="fg"><label>Po ja sąrašas</label><div class="apg"><select class="s"></select></div></div>
+      <script src="prieinamumas.js"><\/script>`);
+    try {
+      await tiksas();
+      const lb = [...d.querySelectorAll("label")];
+      lygu(lb[0].htmlFor, "a", "laukas su id - etiketės for");
+      const b = d.querySelector(".b"), idb = b.getAttribute("aria-labelledby");
+      tiesa(idb && d.getElementById(idb) === lb[1], "laukas be id - aria-labelledby į etiketę: " + idb);
+      tiesa(!d.querySelector(".c").hasAttribute("aria-labelledby"), "turintis aria-label laukas perrašytas");
+      tiesa(!d.querySelector(".d").hasAttribute("aria-labelledby"), "apgaubtas etiketės laukas pakeistas");
+      tiesa(!d.querySelector(".e1").hasAttribute("aria-labelledby") && !d.querySelector(".e2").hasAttribute("aria-labelledby"), "etiketė priskirta vienam iš dviejų laukų");
+      tiesa(d.querySelector(".s").getAttribute("aria-labelledby") === lb[5].id, "vienintelis laukas kitame elemente po etikete - nesusietas");
+      w.GP_PRIEINAMUMAS.tvarkyk(d.body);
+      lygu(b.getAttribute("aria-labelledby"), idb, "antras paleidimas pakeitė susiejimą");
+    } finally { f.remove(); }
+  });
+
+  await testas("prieinamumas.js: laukas lentelėje gauna stulpelio antraštės ir eilutės pavadinimą", async ()=>{
+    const { f, d } = await ramas(`<table><thead><tr><th>Tiekėjas</th><th>Kaina</th><th>Pastaba</th></tr></thead><tbody>
+      <tr><td>UAB Alfa</td><td><input class="k"></td><td><textarea class="p" aria-label="Sava"></textarea></td></tr></tbody></table>
+      <table><tr><th>Dalis</th><th>Vertė</th></tr><tr><td><input class="dl"></td><td><input class="v"></td></tr></table>
+      <script src="prieinamumas.js"><\/script>`);
+    try {
+      await tiksas();
+      lygu(d.querySelector(".k").getAttribute("aria-label"), "Kaina (UAB Alfa)", "kainos laukas");
+      lygu(d.querySelector(".p").getAttribute("aria-label"), "Sava", "esamas pavadinimas pakeistas");
+      lygu(d.querySelector(".dl").getAttribute("aria-label"), "Dalis", "pirmame langelyje - tik stulpelis");
+      lygu(d.querySelector(".v").getAttribute("aria-label"), "Vertė", "eilutės pirmas langelis su lauku - be eilutės pavadinimo");
+    } finally { f.remove(); }
+  });
+
+  await testas("prieinamumas.js: spaudžiami div / span / a be href pasiekiami klaviatūra (Enter ir tarpas); lango turinys, fiksuotas fonas ir tabindex=-1 - nekeičiami", async ()=>{
+    const { f, d, w } = await ramas(`<div class="s1" onclick="window.sk=(window.sk||0)+1">Spausti</div>
+      <a class="s2" onclick="window.sa=1">Nuoroda</a>
+      <table><tr class="s3" onclick="1"><td>eilutė</td></tr></table>
+      <div class="s4" onclick="event.stopPropagation()">Lango turinys</div>
+      <div class="s5" style="position:fixed;left:0;top:0;width:10px;height:10px" onclick="1"></div>
+      <div class="s6" tabindex="-1" onclick="1">x</div>
+      <div class="s7" role="tab" onclick="1">Skirtukas</div>
+      <script src="prieinamumas.js"><\/script>`);
+    try {
+      await tiksas();
+      const $ = s => d.querySelector(s), k = (el, key, x) => el.dispatchEvent(new w.KeyboardEvent("keydown", Object.assign({ key, bubbles: true, cancelable: true }, x || {})));
+      lygu([$(".s1").getAttribute("tabindex"), $(".s1").getAttribute("role")], ["0", "button"], "div su onclick");
+      k($(".s1"), "Enter"); k($(".s1"), " "); k($(".s1"), "Enter", { ctrlKey: true });
+      lygu(w.sk, 2, "Enter ir tarpas spaudžia (Ctrl+Enter - ne)");
+      lygu($(".s2").getAttribute("role"), "link", "a be href");
+      tiesa($(".s3").getAttribute("tabindex") === "0" && !$(".s3").hasAttribute("role"), "lentelės eilutė: tabindex be vaidmens (eilutė lieka eilute)");
+      tiesa(!$(".s4").hasAttribute("tabindex"), "onclick tik stabdo įvykį - ne veiksmas");
+      tiesa(!$(".s5").hasAttribute("tabindex"), "fiksuotas uždengimas (modalo fonas) tapo fokusuojamas");
+      tiesa($(".s6").getAttribute("tabindex") === "-1" && !$(".s6").hasAttribute("data-gp-klaviatura"), "tabindex=-1 perrašytas");
+      tiesa($(".s7").getAttribute("role") === "tab" && $(".s7").getAttribute("tabindex") === "0", "esamas vaidmuo pakeistas");
+    } finally { f.remove(); }
+  });
+
+  await testas("prieinamumas.js: klausimas (etiketė be „for“) prieš radijo ar žymimųjų langelių grupę tampa grupės pavadinimu; skirtingos grupės ir fieldset - ne", async ()=>{
+    const { f, d } = await ramas(`<div class="field"><label>Ar skaidoma į dalis?</label><div class="g1"><label><input type="radio" name="x"> Taip</label><label><input type="radio" name="x"> Ne</label></div></div>
+      <div class="field"><label>Mišri</label><div class="g2"><label><input type="radio" name="y"> A</label><label><input type="radio" name="z"> B</label></div></div>
+      <div class="field"><label>Priedai</label><div class="g3"><label><input type="checkbox"> 1</label><label><input type="checkbox"> 2</label></div></div>
+      <fieldset><legend>Klausimas</legend><label>Kita</label><div class="g4"><label><input type="radio" name="w"> A</label><label><input type="radio" name="w"> B</label></div></fieldset>
+      <script src="prieinamumas.js"><\/script>`);
+    try {
+      await tiksas();
+      const g1 = d.querySelector(".g1");
+      lygu(g1.getAttribute("role"), "radiogroup", "radijo grupė");
+      lygu(d.getElementById(g1.getAttribute("aria-labelledby")).textContent, "Ar skaidoma į dalis?", "grupės pavadinimas");
+      tiesa(!d.querySelector(".g2").hasAttribute("role"), "skirtingų name radijo mygtukai sujungti į grupę");
+      lygu(d.querySelector(".g3").getAttribute("role"), "group", "žymimųjų langelių grupė");
+      tiesa(!d.querySelector(".g4").hasAttribute("role"), "fieldset viduje sukurta antra grupė");
+    } finally { f.remove(); }
+  });
+
+  await testas("prieinamumas.js: vėliau įterptas turinys (innerHTML, insertAdjacentHTML) sutvarkomas", async ()=>{
+    const { f, d } = await ramas(`<div id="vieta"></div><script src="prieinamumas.js"><\/script>`);
+    try {
+      await tiksas();
+      d.getElementById("vieta").innerHTML = '<div class="fg"><label>Naujas laukas</label><input class="n"></div><span class="sp" onclick="1">Naujas mygtukas</span>';
+      d.body.insertAdjacentHTML("beforeend", '<table><thead><tr><th>Stulpelis</th></tr></thead><tbody><tr><td><input class="t"></td></tr></tbody></table>');
+      await tiksas();
+      tiesa(d.querySelector(".n").hasAttribute("aria-labelledby"), "įterptas laukas be pavadinimo");
+      lygu(d.querySelector(".sp").getAttribute("tabindex"), "0", "įterptas spaudžiamas elementas");
+      lygu(d.querySelector(".t").getAttribute("aria-label"), "Stulpelis", "įterptos lentelės laukas");
+    } finally { f.remove(); }
+  });
+
+  await testas("epso-g.css: teksto tonai pasiekia 4,5:1 ant savo šviesių fonų (ir baltas tekstas ant jų), error-light - ant grafito", async ()=>{
+    const css = await saltinis("epso-g.css"), v = n => { const m = new RegExp("--" + n + ":\\s*(#[0-9a-fA-F]{6})").exec(css); tiesa(m, "nėra --" + n); return m[1]; };
+    const lin = x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+    const L = h => 0.2126 * lin(parseInt(h.slice(1, 3), 16)) + 0.7152 * lin(parseInt(h.slice(3, 5), 16)) + 0.0722 * lin(parseInt(h.slice(5, 7), 16));
+    const k = (a, b) => (Math.max(L(a), L(b)) + 0.05) / (Math.min(L(a), L(b)) + 0.05);
+    const blogi = [];
+    for (const [t, fonai] of [["color-graphite-50-strong", ["color-white", "color-graphite-5", "color-graphite-15"]], ["color-green-strong", ["color-white", "color-green-5", "color-green-15"]],
+                              ["color-error-strong", ["color-white", "color-error-5"]], ["color-warning-strong", ["color-white", "color-warning-5"]], ["color-emerald-strong", ["color-white", "color-green-15"]],
+                              ["color-error-light", ["color-graphite"]]]) {
+      for (const fn of fonai) { const s = k(v(t), v(fn)); if (s < 4.5) blogi.push(t + " ant " + fn + ": " + s.toFixed(2)); }
+      if (t !== "color-error-light") { const s = k("#FFFFFF", v(t)); if (s < 4.5) blogi.push("baltas ant " + t + ": " + s.toFixed(2)); }
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("Kontrasto matas: gradientas matuojamas po tekstu (ne blogiausiame taške), patamsintas tekstas ant tamsaus gradiento pagaunamas", async ()=>{
+    const { f, d, w } = await ramas(`<div style="width:600px;height:80px;position:relative;background:radial-gradient(circle at 100% 100%, rgba(255,255,255,0.2), rgba(0,0,0,0) 30%), linear-gradient(90deg,#0B3B33 0%,#0B3B33 40%,#FFFFFF 100%)">
+      <span style="position:absolute;left:10px;top:10px;color:#fff;font-size:14px">Baltas kairėje</span>
+      <span style="position:absolute;right:10px;top:10px;color:#fff;font-size:14px">Baltas dešinėje</span>
+      <span style="position:absolute;left:10px;top:44px;color:#5B6470;font-size:14px">Tamsus kairėje</span></div>`);
+    try {
+      const r = prieinamumoMatas(w, d).kontrastas.join("\n");
+      tiesa(!/Baltas kairėje/.test(r), "baltas ant tamsios gradiento dalies laikomas klaida:\n" + r);
+      tiesa(/Baltas dešinėje/.test(r), "baltas ant šviesios gradiento dalies nepagautas");
+      tiesa(/Tamsus kairėje/.test(r), "tamsus tekstas ant tamsios gradiento dalies nepagautas");
+      lygu(["rgb", "none"].map(x => gradSluoksnis(x === "rgb" ? "conic-gradient(rgb(0, 0, 0), rgb(1, 1, 1))" : x, 10, 10, { x: 1, y: 1 })), [null, null], "neatpažinti gradientai");
+    } finally { f.remove(); }
+  });
+
+  /* Sargas šaltiniuose: brandbook tonai, kurie tekstui ant šviesaus fono nepasiekia 4,5:1, nėra teksto spalva nė viename puslapyje ir
+     bendrame komponente (tik CSS reikšmės; JS spalvų laukai - taškai ir grafikai). Išimtys pagal taisyklės selektorių: svg (ikonos -
+     ne tekstas), .hud__ (PP-negotiation derybų skydelis tamsus) ir .author__ („Apie“ autoriaus kortelė ant tamsaus gradiento). Taip pagaunamos ir retai piešiamos būsenos, kurių puslapių
+     patikra neatveria. */
+  await testas("Silpni brandbook tonai (grafitas-50 ir -30, žalia, raudona, geltona, žydra, citrininė) nėra teksto spalva; tekstui - *-strong žetonai", async ()=>{
+    const V = "color-graphite-50|epso-graphite-50|c-graphite-50|grafitas-50|color-graphite-30|epso-graphite-30|c-graphite-30|grafitas-30|color-green|epso-green|c-green|color-success"
+      + "|color-error|epso-error|c-error|raudona|red-solid|color-warning|epso-warning|c-warning|geltona|yellow-solid|color-cyan|epso-cyan|c-cyan|color-lime|c-lime|epso-lime";
+    const RX = new RegExp("(^|[^\\w-])color\\s*:\\s*(var\\(\\s*--(?:" + V + ")\\s*(?:,[^)]*)?\\)|#(?:737483|9aa1ab|c7cdd3|b9791c|b87317|b47a00|6b7a99|e53e3e|459d54|db354a|fab03b|00a5c4|85bc28)\\b)", "gi");
+    const selektorius = (src, i) => { const a = src.lastIndexOf("{", i); if (a < 0) return ""; const s = src.slice(src.lastIndexOf("}", a) + 1, a); return s.length < 300 && s.indexOf("<") < 0 ? s : ""; };
+    const failai = Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "")).concat(["gprocure-info-panel.js", "teise-stebesena.js", "portal-link.js", "pirkimo-kortele.js",
+      "mano-pirkimai.js", "busena.js", "modulio-antraste.css", "epso-g.css"]);
+    const blogi = [];
+    for (const m of failai) {
+      const src = await saltinis(m); let x; RX.lastIndex = 0;
+      while ((x = RX.exec(src))) { if (/svg|\.hud__|\.author__/.test(selektorius(src, x.index))) continue;
+        blogi.push(m + ":" + src.slice(0, x.index).split("\n").length + " „" + x[0].trim() + "“"); }
+    }
+    tiesa(!blogi.length, blogi.slice(0, 15).join("\n  "));
+  });
+
+  await testas("Visi puslapiai, jų skirtukai ir būsenos (su duomenimis): tekstas >= 4,5:1 (didelis 3:1), valdikliai turi pavadinimus, spaudžiami elementai pasiekiami klaviatūra, radijo grupės turi klausimą, fokuso kontūras nenuimtas be pakaitalo", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(() => true);   // pavyzdiniai duomenys ir PP-protocol pirkimai - tik testo metu
+    const blogi = []; let matuota = 0;
+    try {
+      for (const [m, sel] of Object.entries(TELEFONO_PUSLAPIAI)) {
+        if (PRIEINAMUMO_PRIES[m]) PRIEINAMUMO_PRIES[m]();
+        const f = await prieinamumoRemas(m);
+        try {
+          const w = f.contentWindow, d = f.contentDocument, fokusas = new Set();
+          const mat = async pav => {
+            await new Promise(r => setTimeout(r, 60));
+            if (d.getAnimations) d.getAnimations().forEach(a => { try { a.finish(); } catch (e) {} });   // animacijos - galutinė būsena
+            matuota++; const r = prieinamumoMatas(w, d), kur = m.replace("../", "") + (pav ? " · " + pav : "") + ": ";
+            r.kontrastas.forEach(x => blogi.push(kur + "kontrastas " + x));
+            r.vardai.forEach(x => blogi.push(kur + "be pavadinimo " + x));
+            r.klaviatura.forEach(x => blogi.push(kur + "nepasiekiamas klaviatūra " + x));
+            r.grupes.forEach(x => blogi.push(kur + "radijo grupė be klausimo " + x));
+            r.fokusas.forEach(x => { if (!fokusas.has(x)) { fokusas.add(x); blogi.push(kur + "fokuso kontūras nuimtas be pakaitalo: " + x); } });
+          };
+          const skirtukai = async s => { for (const t of [...d.querySelectorAll(s)]) { t.click(); await new Promise(r => setTimeout(r, 120)); await mat("„" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 30) + "“"); } };
+          await mat("");
+          if (sel) await skirtukai(sel);
+          for (const [pav, fn, sel2] of (TELEFONO_BUSENOS[m] || []).concat(PRIEINAMUMO_BUSENOS[m] || [])) {
+            await fn(w, d); await new Promise(r => setTimeout(r, 250)); await mat(pav);
+            if (sel2) await skirtukai(sel2);
+          }
+        } finally { f.remove(); }
+      }
+    } finally { A.atkurk(); }
+    tiesa(matuota >= 90, "išmatuota tik " + matuota + " būsenų - pasikeitė skirtukų selektoriai ar būsenų funkcijos?");
+    tiesa(!blogi.length, blogi.length + " radiniai:\n  " + blogi.slice(0, 25).join("\n  "));
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
@@ -2528,6 +2942,7 @@ async function testaiTelefonas(){
   await testaiTaisykles();
   await testaiParengtis();
   await testaiTelefonas();
+  await testaiPrieinamumas();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
