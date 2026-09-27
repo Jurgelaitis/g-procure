@@ -18,7 +18,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppteise-2026-09-26-1";
+var VERSIJA = "ppteise-2026-09-27-1";
 
 var SAVI = [
   "./",
@@ -27,6 +27,7 @@ var SAVI = [
   "./duomenys/saltiniai.json",
   "../shared/epso-g.css",
   "../shared/portal-link.js",
+  "../shared/prieinamumas.js",
   "../shared/teise-stebesena.js"
 ];
 
