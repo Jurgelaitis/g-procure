@@ -812,6 +812,10 @@ const GPGen = (() => {
         // ar pastraipos pradzia - be tarpo.
         let ins = val;
         if (val && k > 0 && /[\p{L}\p{N}]/u.test(s[k-1])) ins = ' ' + val;
+        // Tasko apsauga (2026-09-28): jei po tuscios vietos sablone jau yra taskas, o reiksme baigiasi tasku
+        // („Vykdomas [Pasirinkite].“ + „Tarptautinis pirkimas.“), antras taskas nerasomas - iki tol SPS buvo
+        // „Vykdomas Tarptautinis pirkimas..“ (daugtaskis „...“ neliečiamas).
+        if (ins && s[v.end] === '.' && /[^.]\.$/.test(ins)) ins = ins.slice(0, -1);
         out.set(owner[k], out.get(owner[k]) + (ins || v.zyma));   // tuscia -> paliekam zyma
         if (val) n++;
         k = v.end - 1; vi++;

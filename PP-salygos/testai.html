@@ -745,6 +745,60 @@ async function testaiBendras(){
   });
 }
 
+/* ======================================================================== */
+/* 2026-09-28 mutacijų auditas: generavimo variklis (variklis.js) iki tol tikrintas vienu SPS sakiniu - iš 10 mutacijų
+   (sąlyginės pastraipos netrinamos, raudonas tekstas nepajuodinamas, sakinio galas netaisomas, režimo eilutė...) pagauta 1.
+   Čia - visas generavimas be AI dviem būdais: žymės, režimo eilutė, vienas taškas, pastraipų ženklai, švarumo patikra ir
+   tikslūs variklio veiksmų skaičiai (pasikeitus šablonams - skaičiai atnaujinami sąmoningai). */
+const PAVADINIMAS = "Autotransformatorių 400/110 kV priežiūros paslaugos";
+async function generuok(budas){
+  await modulis();
+  const pv = D.getElementById("pavadinimas"); pv.value = PAVADINIMAS; pv.dispatchEvent(new W.Event("input"));
+  await zingsnis2(budas, "LT");
+  Object.entries(W.__K.grupes).forEach(([gid, g]) => { if (!g.nariai.some(n => ATS()[n.raktas] === true)) W.pasirinkGrupe(gid, g.nariai[g.nariai.length - 1].raktas); });
+  W.alert = () => {};
+  D.getElementById("gen").click();
+  await kol(() => !D.getElementById("step3").classList.contains("hid"), "3 žingsnis", 90000);
+  const docs = {};
+  for (const r of W.__R) {
+    const z = await W.JSZip.loadAsync(await r.blob.arrayBuffer()), xml = await z.file("word/document.xml").async("string");
+    docs[r.d.trumpas] = { r, xml, pars: xml.split("</w:p>").map(x => x.replace(/<[^>]+>/g, "").trim()).filter(Boolean) };
+  }
+  return docs;
+}
+const skaiciai = r => [r.stats.trinta, r.stats.juodinta, r.stats.pildyta, r.stats.intTrinta, r.stats.prieduIstrinta, r.stats.eiluciuIstrinta];
+const svarumas = r => [r.audit.raudonos.length, r.audit.tuscios.length, r.audit.patikrinti.length];
+function bendraPatikra(docs){
+  const blogi = [];
+  Object.entries(docs).forEach(([d, x]) => {
+    const t = x.pars.join("\n");
+    if (/\{[A-Z0-9_]+[}\)]/.test(t)) blogi.push(d + ": liko šablono žymė");
+    x.pars.filter(p => /[^.]\.\.\s*$/.test(p)).forEach(p => blogi.push(d + ": du taškai - „" + p.slice(-60) + "“"));
+    if (/Vykdomas\s+(Pasirinkti|\[Pasirinkite\])/i.test(t)) blogi.push(d + ": režimo eilutė nepakeista");
+  });
+  return blogi;
+}
+async function testaiGeneravimas(){
+  dabartine = grupe("Generavimas be AI (variklis.js)");
+  await testas("T-AK: režimo eilutė „Vykdomas Tarptautinis pirkimas.“ (iki 2026-09-28 - du taškai), pavadinimas, švarus BPS, SPS pastraipų ženklai nebe raudoni, veiksmų skaičiai", async () => {
+    const docs = await generuok("T-AK"), sps = docs.AK_LT_SPS, bps = docs.AK_LT_BPS;
+    tiesa(sps && bps, "nėra SPS ar BPS: " + Object.keys(docs).join(", "));
+    lygu(bendraPatikra(docs), [], "visi dokumentai");
+    tiesa(sps.pars.includes("Vykdomas Tarptautinis pirkimas."), "režimo eilutė: " + sps.pars.filter(p => /^Vykdomas/.test(p)).join(" / "));
+    tiesa(sps.pars.includes("Pirkimo objektas – " + PAVADINIMAS + " pirkimas."), "pirkimo objektas: " + sps.pars.filter(p => /Pirkimo objektas/.test(p)).join(" / "));
+    lygu((sps.xml.match(/<w:pPr>(?:(?!<\/w:pPr>).)*<w:color w:val="(FF0000|C00000|ED1C24)"/gi) || []).length, 0, "raudoni pastraipų ženklai SPS");
+    lygu([svarumas(bps.r), svarumas(sps.r), sps.r.audit.raudonos.map(x => x.text)], [[0, 0, 0], [1, 13, 9], ["[suformuluoti atitikimo taisyklę]"]], "švarumo patikra (liko tik žmogaus formuluotė ir pildomi laukai)");
+    lygu(skaiciai(sps.r), [60, 209, 3, 8, 1, 6], "SPS: ištrinta, pajuodinta, užpildyta, intarpų, priedų, eilučių");
+  });
+  await testas("S-ND: režimo eilutė be žymos („Vykdomas Pasirinkti“) - supaprastinto pirkimo formuluotė, vienas taškas, veiksmų skaičiai", async () => {
+    const docs = await generuok("S-ND"), sps = docs.ND_LT_SPS;
+    tiesa(sps, "nėra SPS: " + Object.keys(docs).join(", "));
+    lygu(bendraPatikra(docs), [], "visi dokumentai");
+    tiesa(sps.pars.includes("Vykdomas Supaprastintas pirkimas, kurio vertė viršija mažos vertės pirkimų ribą."), "režimo eilutė: " + sps.pars.filter(p => /^Vykdomas/.test(p)).join(" / "));
+    lygu([svarumas(sps.r), skaiciai(sps.r)], [[1, 8, 11], [51, 188, 2, 11, 2, 6]], "švarumo patikra ir veiksmų skaičiai");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -754,6 +808,7 @@ async function testaiBendras(){
     await testaiBusenos();
     await testaiBendras();
     await testaiKortele();
+    await testaiGeneravimas();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
