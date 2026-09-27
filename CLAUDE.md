@@ -300,6 +300,11 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - Commit'ai: aiškūs, su modulio prefiksu. Pvz.: `pp-qual: pridėta proporcingumo validacija`.
   Vienas modulis - vienas commit'as, kai įmanoma.
 - Prieš push patikrink, kad modulis veikia atskirai (atidarius `.html` naršyklėje).
+- Testai GitHub Actions (R4, nuo 2026-09-28; įsijungia push'inus į `main`): `.github/workflows/testai.yml` po kiekvieno push'o ir
+  pull request'o paleidžia VISUS `*/testai.html` tikru Chrome be ekrano (`.github/testai/paleisk.py` - tik Python standartinė
+  biblioteka, rinkinius randa pats, kiekvienam - švari naršyklė; aplinka kaip vietoje: `TZ=Europe/Vilnius`, kalba en-GB).
+  Rezultatas - Actions skirtuke ir santraukoje; svetainės diegimo nestabdo. Vietoje: `python3 .github/testai/paleisk.py [PP-qual ...]`.
+  Katalogas `.github` (su tašku) į svetainę nepatenka - Jekyll taško katalogų nepublikuoja.
 - Po darbo - commit ir push į vieną `g-procure` repo. Jokio rankinio failų kėlimo.
 
 ---
