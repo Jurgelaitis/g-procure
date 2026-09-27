@@ -333,6 +333,7 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Darbo dienų / LR švenčių logika - bendras failas (Velykos per computus, kalendorius nepasensta) -->
 <script src="../shared/workdays.js"></script>
+<script src="../shared/eksportas.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
 <!-- Teisės nuorodos (PĮ) - tik iš registro, perskaityto e-tar (iki 2026-09-27 numeriai buvo įrašyti modulyje, šeši - ne tie) -->
 <script src="../shared/teises-nuorodos.js"></script>
@@ -1246,7 +1247,7 @@ function deleteProc(pk) {
 function exportData() {
   const data = loadStore();
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-  saveAs(blob, 'LITGRID_Pirkimai_' + new Date().toISOString().split('T')[0] + '.json');
+  saveAs(blob, 'LITGRID_Pirkimai_' + GP_WORKDAYS.siandien() + '.json');
 }
 function importData(evt) {
   const f = evt.target.files[0];
@@ -1669,7 +1670,7 @@ function fmtRelativeTime(iso){
   if(diffHr < 24) return `prieš ${diffHr} val.`;
   if(diffDay === 1) return 'vakar';
   if(diffDay < 7) return `prieš ${diffDay} d.`;
-  return then.toISOString().split('T')[0];
+  return GP_WORKDAYS.fmtDate(then);
 }
 
 // ════════════════════════════════════════════════════════
@@ -2039,13 +2040,13 @@ function saveProcurement() {
       secretary: document.getElementById('new-kom-sec').value,
       members: [...document.querySelectorAll('#new-kom-members .narys')].map(i=>i.value).filter(v=>v),
       nesaliskumas: document.getElementById('new-kom-nesalisk')?.checked || false,
-      nesaliskumasData: new Date().toISOString().split('T')[0]
+      nesaliskumasData: GP_WORKDAYS.siandien()
     },
     channel: document.querySelector('input[name="new-channel"]:checked').value,
     cvp_nr: document.getElementById('new-cvp-nr').value,
     kval,
     protocols: {},
-    createdAt: new Date().toISOString().split('T')[0]
+    createdAt: GP_WORKDAYS.siandien()
   };
   saveProcurementData(id, pk);
   currentPkId = id;
@@ -2096,7 +2097,7 @@ function buildProtoForm(pk, proto) {
   // All protocols: show posedis date + nr
   let html = `<div class="card"><div class="card-header">Posėdžio duomenys</div><div class="card-body">
     <div class="form-grid">
-      <div class="fg"><label>Posėdžio data *</label><input type="date" id="pf-date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="fg"><label>Posėdžio data *</label><input type="date" id="pf-date" value="${GP_WORKDAYS.siandien()}"></div>
       <div class="fg"><label>Protokolo numeris</label><input type="text" id="pf-nr" placeholder="Palikite tuščią jei nereikia"></div>
     </div></div></div>`;
 
@@ -2726,7 +2727,7 @@ function buildForm_ProtoD6(pk){
 function buildForm_ProtoD6_1(pk){
   return `<div class="card"><div class="card-header" onclick="toggleCard(this)" aria-expanded="true">Derybų protokolas <span class="arrow" aria-hidden="true">▼</span></div>
   <div class="card-body">
-    <div class="form-grid"><div class="fg"><label>Derybų data</label><input type="date" id="pf-der-date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-grid"><div class="fg"><label>Derybų data</label><input type="date" id="pf-der-date" value="${GP_WORKDAYS.siandien()}"></div>
     <div class="fg"><label>Derybų vieta</label><input type="text" id="pf-der-vieta" placeholder="pvz.: Nuotoliniu būdu / LITGRID biuras"></div></div>
     <div id="pf-der-list">${buildDerRow(1)}</div>
     <button class="btn-add" onclick="addDerRow()">+ Pridėti tiekėją</button>
@@ -4160,7 +4161,7 @@ async function autoGenerateNotification(templateId, protoId, pk){
       const sections = [buildPnDocxSection(n, 'lt', D)];
       const doc = new D.Document({externalStyles: GP_DOCX_STILIAI.xml({ font: 'Times New Roman', size: 24 }), sections});
       const blob = await D.Packer.toBlob(doc);
-      const filename = `${n.templateId}_${(n.tiekejas||'group').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}_${pnFmtDate(new Date())}.docx`;
+      const filename = pnFailoVardas(n, currentPkId);
       saveAs(blob, filename);
       await new Promise(r => setTimeout(r, 300));
     } catch(e){
@@ -4534,7 +4535,7 @@ async function saveInlinePnAndExport(templateId, protoId){
       if(n.lang === 'lt-en') sections.push(buildPnDocxSection(n, 'en', D));
       const doc = new D.Document({externalStyles: GP_DOCX_STILIAI.xml({ font: 'Times New Roman', size: 24 }), sections});
       const blob = await D.Packer.toBlob(doc);
-      const filename = `${n.templateId}_${(n.tiekejas||'group').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}_${pnFmtDate(new Date())}.docx`;
+      const filename = pnFailoVardas(n, currentPnPkId);
       saveAs(blob, filename);
       await new Promise(r => setTimeout(r, 200));
     }
@@ -4587,7 +4588,8 @@ function viewProtocolNotifs(protoId, templateId){
 async function exportSingleNotif(notifId){
   const store = loadNotifStore();
   let target = null;
-  for(const pkId in store){ target = (store[pkId]||[]).find(n => n.id === notifId); if(target) break; }
+  let targetPkId = null;
+  for(const pkId in store){ target = (store[pkId]||[]).find(n => n.id === notifId); if(target){ targetPkId = pkId; break; } }
   if(!target){ toast('Pranešimas nerastas','error'); return; }
   try {
     const D = window.docx;
@@ -4595,7 +4597,7 @@ async function exportSingleNotif(notifId){
     if(target.lang === 'lt-en') sections.push(buildPnDocxSection(target, 'en', D));
     const doc = new D.Document({externalStyles: GP_DOCX_STILIAI.xml({ font: 'Times New Roman', size: 24 }), sections});
     const blob = await D.Packer.toBlob(doc);
-    const filename = `${target.templateId}_${(target.tiekejas||'group').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}_${pnFmtDate(new Date())}.docx`;
+    const filename = pnFailoVardas(target, targetPkId);
     saveAs(blob, filename);
     toast('DOCX atsisiųstas','success');
   } catch(e){ toast('Klaida: '+e.message,'error'); }
@@ -4637,6 +4639,10 @@ function getPretenzijosTerminas(valCat, kanalas){
 // ─────────────────────────────────────────────────────────
 // 3. PAGALBINĖS FUNKCIJOS
 // ─────────────────────────────────────────────────────────
+// Pranešimo failo vardas (Q5): pirkimo numeris, šablonas, tiekėjas (lietuviškos raidės lieka), vietinė data - shared/eksportas.js.
+// Iki 2026-09-28 vardas buvo be pirkimo numerio, o tiekėjo pavadinimo ą-ž virsdavo „_“.
+function pnFailoVardas(n, pkId){ return GP_EKSPORTAS.failoVardas({ numeris: pkId, dokumentas: n.templateId, pavadinimas: n.tiekejas || 'grupe', pletinys: 'docx' }); }
+
 function pnFmtDate(date){
   if(!date) return '';
   const d=(date instanceof Date)?date:new Date(date);
@@ -5142,7 +5148,7 @@ async function exportPnDocx(){
     if(n.lang==='lt-en') sections.push(buildPnDocxSection(n,'en',D));
     const doc = new D.Document({externalStyles: GP_DOCX_STILIAI.xml({ font: 'Times New Roman', size: 24 }), sections});
     const blob = await D.Packer.toBlob(doc);
-    const filename = `${n.templateId}_${(n.tiekejas||'group').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}_${pnFmtDate(new Date())}.docx`;
+    const filename = pnFailoVardas(n, currentPnPkId);
     saveAs(blob, filename);
     logAudit('EXPORT_DOCX', currentPnPkId, {notif:n.templateId, tiekejas:n.tiekejas});
     toast('DOCX failas atsisiųstas','success');
@@ -5276,7 +5282,7 @@ function termFmtDate(d){
 }
 function openTerminai(){
   const pk = (typeof currentPkId!=='undefined' && currentPkId) ? getProcurement(currentPkId) : null;
-  document.getElementById('term-start').value = new Date().toISOString().slice(0,10);
+  document.getElementById('term-start').value = GP_WORKDAYS.siandien();
   if(pk && pk.val_cat && /tarptaut/i.test(pk.val_cat)) document.getElementById('term-valcat').value='Tarptautinis';
   document.getElementById('terminai-modal').classList.add('show');
   renderTerminai();
@@ -5582,7 +5588,7 @@ function exportToExcel(){
     XLSX.utils.book_append_sheet(wb, ws4, 'Statistika');
 
     // Eksportuoti
-    const filename = `LITGRID_Pirkimai_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const filename = `LITGRID_Pirkimai_${GP_WORKDAYS.siandien()}.xlsx`;
     XLSX.writeFile(wb, filename);
     setSaveState('saved');
     logAudit('EXPORT_EXCEL', null, {filename, count: pks.length});
@@ -5635,7 +5641,7 @@ function downloadImportTemplate(){
   ws['!cols'] = IMPORT_COLUMNS.map(() => ({wch:24}));
   ws['!merges'] = [{s:{r:0,c:0}, e:{r:0,c:IMPORT_COLUMNS.length-1}}, {s:{r:1,c:0}, e:{r:1,c:IMPORT_COLUMNS.length-1}}];
   XLSX.utils.book_append_sheet(wb, ws, 'Pirkimai');
-  XLSX.writeFile(wb, `LITGRID_Pirkimu_Importo_Sablonas_${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb, `LITGRID_Pirkimu_Importo_Sablonas_${GP_WORKDAYS.siandien()}.xlsx`);
   logAudit('DOWNLOAD_TEMPLATE', null);
   toast('📄 Šablonas atsisiųstas','success');
 }
@@ -5793,7 +5799,7 @@ function confirmImport(){
     const pk = {
       id,
       name: String(r.name||'').trim(),
-      korteles_data: String(r.korteles_data||new Date().toISOString().split('T')[0]).trim(),
+      korteles_data: String(r.korteles_data||GP_WORKDAYS.siandien()).trim(),
       val_ex: valEx,
       val_inc: valInc,
       obj_type: String(r.obj_type||'paslaugos').trim(),
@@ -5816,7 +5822,7 @@ function confirmImport(){
       },
       channel: 'cvp', cvp_nr: String(r.cvp_nr||'').trim(),
       kval: 'abu', protocols: {},
-      createdAt: new Date().toISOString().split('T')[0],
+      createdAt: GP_WORKDAYS.siandien(),
       importedFromExcel: true
     };
     store[id] = pk;
@@ -5863,7 +5869,7 @@ function confirmCopy(){
   // Resetuojam laukus, kurie turi būti unikalūs
   newPk.id = newId;
   newPk.name = customName || (source.name + ' (kopija)');
-  newPk.korteles_data = new Date().toISOString().split('T')[0];
+  newPk.korteles_data = GP_WORKDAYS.siandien();
   newPk.createdAt = new Date().toISOString();
   newPk.protocols = {}; // švarūs protokolai
   newPk.archived = false;
