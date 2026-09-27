@@ -3324,11 +3324,83 @@ async function testaiPranesimai(){
   });
 }
 
+/* ==========================================================================
+   Datos ir failų vardai (Q5 / B4, 2026-09-28). new Date().toISOString() - UTC: Lietuvoje 00:00-03:00 tai VAKARYKŠTĖ
+   data. Iki tol taip buvo skaičiuojama PP-protocol posėdžio, derybų, nešališkumo deklaracijos ir kortelės numatytoji data,
+   PP-report pažymos data, PP-esg paieškos laikotarpis, 7 failų vardai; PP-ts VPT sutarčių datas („2026-01-20T00:00:00“
+   be laiko juostos) rodė diena anksčiau. Šiandien - GP_WORKDAYS.siandien(), failo vardas - GP_EKSPORTAS.failoVardas().
+   ========================================================================== */
+async function testaiDatos(){
+  dabartine = grupe("Datos ir failų vardai (workdays.js, eksportas.js)");
+  const DATU_FAILAI = Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "")).concat(["ai-proxy.js", "backup.js", "busena.js",
+    "docx-stiliai.js", "dokumentai.js", "eksportas.js", "gprocure-info-panel.js", "lang-detect.js", "mano-pirkimai.js", "money.js", "neissaugotas-darbas.js",
+    "organizacijos.js", "parengtis.js", "pirkimo-kortele.js", "portal-link.js", "pranesimas.js", "prieinamumas.js", "procurement-methods.js", "saugykla.js",
+    "skelbimas.js", "taisykles.js", "teise-stebesena.js", "teises-nuorodos.js", "testu-apsauga.js", "thresholds.js", "workdays.js",
+    "../PP-carbon/carbon-factors.js", "../PP-carbon/epd-extract.js", "../PP-carbon/esg-export.js", "../PP-carbon/evaluation.js", "../PP-carbon/reports.js",
+    "../PP-carbon/taxonomy.js", "../PP-market-KPI/osp.js", "../PP-market-KPI/rinka.js", "../PP-salygos/ai-patarejas.js", "../PP-salygos/paraiska-extract.js",
+    "../PP-salygos/variklis.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
+    "../PP-ts/ts_asistentas_modules.js"]);
+
+  await testas("GP_WORKDAYS.siandien() ir GP_EKSPORTAS - vietinė data: 00:30 Lietuvos laiku - ta pati diena (toISOString duotų vakarykštę)", async ()=>{
+    const { f, w } = await ramas(`<script src="workdays.js"><\/script><script src="eksportas.js"><\/script><script src="backup.js"><\/script>`);
+    const Tikra = w.Date;
+    try {
+      w.Date = class extends Tikra { constructor(...a){ super(...(a.length ? a : [2026, 8, 28, 0, 30])); } static now(){ return new Tikra(2026, 8, 28, 0, 30).getTime(); } };
+      lygu([w.GP_WORKDAYS.siandien(), w.GP_EKSPORTAS.siandien(), w.GP_EKSPORTAS.failoVardas({ dokumentas: "Kopija", pletinys: "json" }),
+        w.GP_BACKUP.failoVardas(new Tikra(2026, 8, 28, 0, 30))],
+        ["2026-09-28", "2026-09-28", "Kopija_2026-09-28.json", "g-procure-kopija-2026-09-28.json"], "00:30");
+    } finally { w.Date = Tikra; f.remove(); }
+  });
+
+  await testas("GP_EKSPORTAS.failoVardas: numeris_dokumentas_pavadinimas_data.plėtinys; lietuviškos raidės lieka, draudžiami ženklai - „_“, tuščios dalys praleidžiamos, ilgas pavadinimas kerpamas ties žodžiu", async ()=>{
+    const { f, w } = await ramas(`<script src="eksportas.js"><\/script>`);
+    try {
+      const V = w.GP_EKSPORTAS.failoVardas;
+      lygu([
+        V({ numeris: "VPP-268", dokumentas: "Protokolas-D6", pavadinimas: "Transformatorių pastočių priežiūra / 2027", data: "2026-09-28", pletinys: "docx" }),
+        V({ dokumentas: "TS_ataskaita", data: "2026-09-28", pletinys: ".doc" }),
+        V({ numeris: "  ", dokumentas: 'a:b*c?"d<e>f|g\\h', data: false }),
+        V({ dokumentas: "14_pretenzija", pavadinimas: "UAB „Šviesos tinklai“", data: "2026-09-28", pletinys: "docx" }),
+        V({ dokumentas: "X", pavadinimas: "Elektros perdavimo tinklo modernizavimo darbų techninės priežiūros paslaugos", data: false }),
+        V({})
+      ], ["VPP-268_Protokolas-D6_Transformatorių_pastočių_priežiūra_2027_2026-09-28.docx", "TS_ataskaita_2026-09-28.doc", "a_b_c_d_e_f_g_h",
+          "14_pretenzija_UAB_Šviesos_tinklai_2026-09-28.docx", "X_Elektros_perdavimo_tinklo_modernizavimo_darbų", "g-procure_" + w.GP_EKSPORTAS.siandien()], "vardai");
+    } finally { f.remove(); }
+  });
+
+  await testas("Sargas: niekur „šiandien“ neskaičiuojama iš toISOString() (UTC) - tik GP_WORKDAYS.siandien() / fmtDate()", async ()=>{
+    const RX = /toISOString\(\)\s*\.(?:slice|substring)\(\s*0\s*,\s*10\s*\)|toISOString\(\)\s*\.split\(\s*['"]T['"]\s*\)\s*\[\s*0\s*\]/g;
+    const blogi = [];
+    for (const m of DATU_FAILAI) {
+      const src = await saltinis(m); let x; RX.lastIndex = 0;
+      while ((x = RX.exec(src))) {
+        const eil = src.slice(src.lastIndexOf("\n", x.index) + 1, src.indexOf("\n", x.index));
+        if (m === "pirkimo-kortele.js" && /T00:00:00Z|=== s;/.test(eil)) continue;   // datos tikrinimas UTC ir sukonstruotai UTC datai - teisingas
+        blogi.push(m + ":" + src.slice(0, x.index).split("\n").length + " „" + eil.trim().slice(0, 90) + "“");
+      }
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("Moduliai failų vardus ir „šiandien“ ima iš bendrų failų: PP-protocol pranešimai su pirkimo numeriu, PP-ts ir PP-negotiation be laiko žymių ir su lietuviškomis raidėmis", async ()=>{
+    const reikia = { "../PP-protocol/LITGRID_Generatorius_v3.html": [/<script src="\.\.\/shared\/eksportas\.js">/, /function pnFailoVardas\(n, pkId\)\{ return GP_EKSPORTAS\.failoVardas\(\{ numeris: pkId/, /id="pf-date" value="\$\{GP_WORKDAYS\.siandien\(\)\}"/],
+      "../PP-ts/TS_Asistentas.html": [/GP_EKSPORTAS\.failoVardas\(\{ dokumentas: 'TS_ataskaita'/, /GP_WORKDAYS\.fmtDate\(a\.date\)/],
+      "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html": [/const todayISO = \(\) => GP_WORKDAYS\.siandien\(\)/, /GP_EKSPORTAS\.failoVardas\(\{ dokumentas: 'Derybu_projektas'/],
+      "../PP-report/PP-report.html": [/dateField\.value = GP_WORKDAYS\.siandien\(\)/], "../PP-qual/PP-QUAL.html": [/function today\(\)\{ return GP_EKSPORTAS\.siandien\(\); \}/] };
+    const blogi = [];
+    for (const [m, rx] of Object.entries(reikia)) { const src = await saltinis(m); rx.forEach(r => { if (!r.test(src)) blogi.push(m + ": nėra " + r); }); }
+    const dt = await saltinis("../PP-ts/TS_Asistentas.html");
+    if (/Date\.now\(\) \+ '\.doc'|\$\{Date\.now\(\)\}/.test(dt)) blogi.push("PP-ts: failo varde vis dar laiko žymė");
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
   await testaiPinigai();
   await testaiPranesimai();
+  await testaiDatos();
   await testaiDocxStiliai();
   await testaiSkydelis();
   await testaiAntraste();
