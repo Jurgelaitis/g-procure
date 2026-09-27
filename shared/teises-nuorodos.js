@@ -191,6 +191,8 @@
       PI: { a: "PI", s: 33, d: 2, p: 1 } },
     neskelbiamos_derybos: { apie: "neskelbiamų derybų sąlygos",
       PI: { a: "PI", s: 79 } },
+    neskelbiamos_etapai: { tikrinta: "2026-09-27", apie: "neskelbiamų derybų etapai: pasirinkti tiekėjai raštu kviečiami pateikti pasiūlymus; tikrinama, ar nėra pašalinimo pagrindų ir ar tiekėjai atitinka kvalifikacijos reikalavimus; deramasi su dalyviais ir prašoma galutinių pasiūlymų (kai dalyvauja vienas tiekėjas, galutinio pasiūlymo prašyti neprivaloma); įvertinami galutiniai pasiūlymai ir nustatomas laimėtojas",
+      PI: { a: "PI", s: 80, d: 1 } },
     vidaus_kontrole: { apie: "pirkimų vidaus kontrolė",
       PI: { a: "PI", s: 103, d: 3 } },
     saugojimas: { apie: "pirkimo dokumentų saugojimas (ne trumpiau kaip 4 metai)",
