@@ -1,7 +1,10 @@
 /* ============================================================================
- * G-Procure  shared/workdays.js   (v1.0)
+ * G-Procure  shared/workdays.js   (v1.1)
  * Vienas tiesos saltinis darbo dienu skaiciavimui ir LR svenciu dienoms.
  * Velykos skaiciuojamos computus algoritmu -> kalendorius niekada nepasensta.
+ * Nuo 2026-09-28 ir siandien() - VIETINE siandienos data „YYYY-MM-DD“. new Date().toISOString()
+ * duoda UTC data: Lietuvoje 00:00-03:00 tai VAKARYKSTE (protokolo posedzio data, dokumento data,
+ * failo vardas). Siandienai - tik siandien() arba fmtDate(new Date()).
  * ========================================================================== */
 (function (root) {
   "use strict";
@@ -52,8 +55,9 @@
     return d;
   }
   function fmtDate(d) { if (!(d instanceof Date)) d = new Date(d); if (isNaN(d)) return ""; return isoLocal(d); }
+  function siandien() { return isoLocal(new Date()); }
   root.GP_WORKDAYS = {
-    version: "1.0", isoLocal: isoLocal, fmtDate: fmtDate, easterSunday: easterSunday,
+    version: "1.1", isoLocal: isoLocal, fmtDate: fmtDate, siandien: siandien, easterSunday: easterSunday,
     holidaysForYear: holidaysForYear, isHoliday: isHoliday, isWorkday: isWorkday, addWorkdays: addWorkdays
   };
 })(typeof window !== "undefined" ? window : this);
