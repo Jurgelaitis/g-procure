@@ -14,7 +14,8 @@
  * subjektas (išskyrus kvazisubtiekėjus) pildo ATSKIRĄ EBVPD.
  *
  * TAISYKLĖS
- *   - Kiekviena nuoroda čia perskaityta e-tar AKTUALIOJE redakcijoje (data - TIKRINTA).
+ *   - Kiekviena nuoroda čia perskaityta e-tar AKTUALIOJE redakcijoje (data - TIKRINTA, o vėliau
+ *     įrašytų - jų laukas `tikrinta`; GP_TEISE.tikrinta(raktas)).
  *     Naują nuorodą dėk tik perskaitęs tą straipsnio dalį e-tar, ne iš atminties.
  *   - Moduliai straipsnių numerių patys NErašo: GP_TEISE.cit(raktas, rezimas).
  *     Pasikeitus įstatymui taisoma TIK čia.
@@ -300,8 +301,73 @@
       bendra: { a: "MET", p: "22" } },
     // Techninė specifikacija pagal sąvoką apima ir produkto poveikio aplinkai ir klimatui rodiklius.
     ts_savoka: { apie: "techninė specifikacija - produktui ar paslaugai apibūdinti reikalingi duomenys, tarp jų poveikio aplinkai ir klimatui rodikliai",
-      PI: { a: "PI", s: 2, d: 27 }, VPI: { a: "VPI", s: 2, d: 34 } }
+      PI: { a: "PI", s: 2, d: 27 }, VPI: { a: "VPI", s: 2, d: 34 } },
+
+    /* ---- Taisyklių variklis (shared/taisykles.js, A3) ir skelbimo parengties patikra (A4). Perskaityta e-tar
+       aktualioje redakcijoje 2026-09-26 (laukas `tikrinta`). Trumpiausių terminų SKAIČIAI - taisykles.js lentelėje,
+       kiekviena eilutė nurodo šiuos raktus. */
+    tarptautinis_pirkimas: { tikrinta: "2026-09-26", apie: "tarptautinis pirkimas - numatoma vertė be PVM lygi arba viršija direktyvos ribas (Europos Komisija jas peržiūri kas 2 metus); socialinėms ir kitoms specialiosioms paslaugoms - atskira riba",
+      PI: { a: "PI", s: 12, d: 1 }, VPI: { a: "VPI", s: 4, d: 1 } },
+    supaprastintas_pirkimas: { tikrinta: "2026-09-26", apie: "supaprastintas pirkimas - numatoma vertė mažesnė už tarptautinio pirkimo ribas, taip pat dalių išimties pirkimas",
+      PI: { a: "PI", s: 12, d: 2 }, VPI: { a: "VPI", s: 4, d: 2 } },
+    mazos_vertes_pirkimas: { tikrinta: "2026-09-26", apie: "mažos vertės pirkimas - supaprastintas pirkimas, kai prekių ar paslaugų numatoma vertė mažesnė kaip 70 000 Eur, darbų - mažesnė kaip 174 000 Eur (be PVM), taip pat dalių išimties pirkimas",
+      PI: { a: "PI", s: 12, d: 3 }, VPI: { a: "VPI", s: 4, d: 3 } },
+    centrines_valdzios: { tikrinta: "2026-09-26", apie: "centrinės valdžios institucija - perkančioji organizacija, įrašyta į Vyriausybės įgaliotos institucijos patvirtintą centrinių valstybinio administravimo subjektų sistemai priklausančių perkančiųjų organizacijų sąrašą",
+      VPI: { a: "VPI", s: 2, d: 6 } },
+    verte_dalims: { tikrinta: "2026-09-26", apie: "perkant dalimis, į numatomą vertę įskaičiuojamos visos dalys, o taikomos nuostatos parenkamos pagal bendrą visų dalių vertę",
+      PI: { a: "PI", s: 13, d: 7 }, VPI: { a: "VPI", s: 5, d: 7 } },
+    dalys_supaprastintai: { tikrinta: "2026-09-26", apie: "nors vertė lygi tarptautinio pirkimo ribai ar ją viršija, atskiroms dalims (prekių ir paslaugų - mažesnėms kaip 80 000 Eur, darbų - mažesnėms kaip 1 000 000 Eur) galima atlikti supaprastintą pirkimą, jei tokių dalių bendra vertė ne didesnė kaip 20 procentų visų dalių vertės",
+      PI: { a: "PI", s: 13, d: 8 }, VPI: { a: "VPI", s: 5, d: 8 } },
+    dalys_mazos_vertes: { tikrinta: "2026-09-26", apie: "nors vertė lygi mažos vertės pirkimo ribai ar ją viršija, atskiroms dalims, kurių bendra vertė mažesnė kaip 70 000 Eur (prekės, paslaugos) ar 174 000 Eur (darbai), galima atlikti mažos vertės pirkimą",
+      PI: { a: "PI", s: 13, d: 9 }, VPI: { a: "VPI", s: 5, d: 9 } },
+    terminas_pakankamas: { tikrinta: "2026-09-26", apie: "paraiškų ir pasiūlymų terminas turi būti pakankamas, ne trumpesnis už įstatyme nustatytus trumpiausius ir atsižvelgiantis į pirkimo sudėtingumą",
+      PI: { a: "PI", s: 53, d: 1 }, VPI: { a: "VPI", s: 40, d: 1 } },
+    terminas_nuo: { tikrinta: "2026-09-26", apie: "trumpiausi terminai skaičiuojami nuo skelbimo apie tarptautinį pirkimą išsiuntimo Europos Sąjungos leidinių biurui, nuo skelbimo apie supaprastintą pirkimą paskelbimo CVP IS arba nuo kvietimo išsiuntimo tiekėjams dienos",
+      PI: { a: "PI", s: 53, d: 2 }, VPI: { a: "VPI", s: 40, d: 2 } },
+    terminas_ak: { tikrinta: "2026-09-26", apie: "atviro konkurso pasiūlymų terminas - ne trumpesnis kaip 35 dienos (tarptautinis pirkimas) ar 12 dienų (supaprastintas pirkimas)",
+      PI: { a: "PI", s: 70, d: 1 }, VPI: { a: "VPI", s: 60, d: 1 } },
+    terminas_ak_orientacinis: { tikrinta: "2026-09-26", apie: "paskelbus reguliarų orientacinį skelbimą (PĮ) ar išankstinį informacinį skelbimą (VPĮ) atviro konkurso terminą galima sutrumpinti iki 15 dienų (tarptautinis) ar 7 dienų (supaprastintas)",
+      PI: { a: "PI", s: 70, d: 2 }, VPI: { a: "VPI", s: 60, d: 2 } },
+    terminas_ak_skuba: { tikrinta: "2026-09-26", apie: "skubos atveju pagreitinta atviro konkurso procedūra: ne trumpiau kaip 15 dienų (tarptautinis) ar 7 dienos (supaprastintas), priežastys nurodomos skelbime",
+      PI: { a: "PI", s: 70, d: 3 }, VPI: { a: "VPI", s: 60, d: 3 } },
+    terminas_ak_el: { tikrinta: "2026-09-26", apie: "kai skelbime nurodyta, kad pasiūlymai teikiami elektroninėmis priemonėmis, atviro konkurso terminą galima sutrumpinti 5 dienomis (tarptautinis) ar 3 dienomis (supaprastintas)",
+      PI: { a: "PI", s: 70, d: 4 }, VPI: { a: "VPI", s: 60, d: 4 } },
+    terminas_rk: { tikrinta: "2026-09-26", apie: "riboto konkurso paraiškų terminas - ne trumpesnis kaip 30 dienų (tarptautinis pirkimas) ar 10 dienų (supaprastintas pirkimas)",
+      PI: { a: "PI", s: 72, d: 2 }, VPI: { a: "VPI", s: 62, d: 2 } },
+    terminas_rk_trumpinimas: { tikrinta: "2026-09-26", apie: "riboto konkurso paraiškų terminą galima sutrumpinti iki 15 dienų (tarptautinis) ar 7 dienų (supaprastintas): PĮ - perkančiojo subjekto vertinimu pagrįstais atvejais, VPĮ - skubos atveju taikant pagreitintą procedūrą",
+      PI: { a: "PI", s: 72, d: 3 }, VPI: { a: "VPI", s: 62, d: 7 } },
+    terminas_sd: { tikrinta: "2026-09-26", apie: "skelbiamų derybų paraiškų terminas - ne trumpesnis kaip 30 dienų (tarptautinis pirkimas) ar 10 dienų (supaprastintas pirkimas)",
+      PI: { a: "PI", s: 74, d: 2 }, VPI: { a: "VPI", s: 65, d: 2 } },
+    terminas_sd_trumpinimas: { tikrinta: "2026-09-26", apie: "skelbiamų derybų paraiškų terminą galima sutrumpinti iki 15 dienų (tarptautinis) ar 7 dienų (supaprastintas): PĮ - pagrįstais atvejais, VPĮ - taikant riboto konkurso nuostatas (skubos atveju)",
+      PI: { a: "PI", s: 74, d: 3 }, VPI: { a: "VPI", s: 65, d: 4 } },
+    terminas_sd_pirminiai: { tikrinta: "2026-09-26", apie: "pirminių pasiūlymų terminas skaičiuojamas nuo kvietimo išsiuntimo: PĮ - susiderinus su kandidatais arba ne trumpiau kaip 10 dienų (tarptautinis) ar 7 dienos (supaprastintas); VPĮ - ne trumpiau kaip 30 ar 10 dienų",
+      PI: { a: "PI", s: 74, d: 4 }, VPI: { a: "VPI", s: 65, d: 3 } },
+    sd_be_paraisku: { tikrinta: "2026-09-26", apie: "atlikdamas supaprastintą pirkimą skelbiamų derybų būdu, perkantysis subjektas gali neprašyti paraiškų ir leisti visiems tiekėjams pateikti pirminius pasiūlymus",
+      PI: { a: "PI", s: 73, d: 2 } },
+    terminas_kd: { tikrinta: "2026-09-26", apie: "konkurencinio dialogo paraiškų terminas - ne trumpesnis kaip 30 dienų (tarptautinis pirkimas) ar 10 dienų (supaprastintas pirkimas)",
+      PI: { a: "PI", s: 77, d: 2 }, VPI: { a: "VPI", s: 69, d: 2 } },
+    terminas_kd_trumpinimas: { tikrinta: "2026-09-26", apie: "konkurencinio dialogo paraiškų terminą perkančiojo subjekto vertinimu pagrįstais atvejais galima sutrumpinti iki 15 dienų (tarptautinis) ar 7 dienų (supaprastintas)",
+      PI: { a: "PI", s: 77, d: 3 } },
+    terminas_ip: { tikrinta: "2026-09-26", apie: "inovacijų partnerystės paraiškų terminas - ne trumpesnis kaip 30 dienų (tarptautinis pirkimas) ar 10 dienų (supaprastintas pirkimas)",
+      PI: { a: "PI", s: 82, d: 2 }, VPI: { a: "VPI", s: 74, d: 2 } },
+    terminas_ip_trumpinimas: { tikrinta: "2026-09-26", apie: "inovacijų partnerystės paraiškų terminą perkančiojo subjekto vertinimu pagrįstais atvejais galima sutrumpinti iki 15 dienų (tarptautinis) ar 7 dienų (supaprastintas)",
+      PI: { a: "PI", s: 82, d: 3 } },
+    skelbimo_virsenybe: { tikrinta: "2026-09-26", apie: "skelbimas apie pirkimą yra pirkimo dokumentų dalis; jei jo informacija neatitinka kitų pirkimo dokumentų, teisinga laikoma skelbime nurodyta informacija",
+      PI: { a: "PI", s: 48, d: 3 }, VPI: { a: "VPI", s: 35, d: 3 } },
+    dokumentu_kalba: { tikrinta: "2026-09-26", apie: "pirkimo dokumentai rengiami vadovaujantis Valstybinės kalbos įstatymu",
+      PI: { a: "PI", s: 48, d: 5 }, VPI: { a: "VPI", s: 35, d: 5 } },
+    ebvpd_dokumentuose: { tikrinta: "2026-09-26", apie: "pirkimo dokumentuose nurodomas pašalinimo pagrindų nebuvimą ir kvalifikaciją patvirtinančių dokumentų sąrašas ir informacija, kad tiekėjas turi pateikti EBVPD",
+      PI: { a: "PI", s: 48, d: 2, p: 5 }, VPI: { a: "VPI", s: 35, d: 2, p: 5 } },
+    ts_dokumentuose: { tikrinta: "2026-09-26", apie: "pirkimo dokumentuose turi būti techninė specifikacija",
+      PI: { a: "PI", s: 48, d: 2, p: 9 }, VPI: { a: "VPI", s: 35, d: 2, p: 10 } },
+    sutartis_dokumentuose: { tikrinta: "2026-09-26", apie: "pirkimo dokumentuose nurodomos siūlomos pirkimo sutarties sąlygos ir (arba) sutarties projektas, jeigu jis parengtas",
+      PI: { a: "PI", s: 48, d: 2, p: 13 }, VPI: { a: "VPI", s: 35, d: 2, p: 14 } },
+    terminas_dokumentuose: { tikrinta: "2026-09-26", apie: "pirkimo dokumentuose nurodoma pasiūlymų pateikimo termino pabaiga, vieta ir būdas",
+      PI: { a: "PI", s: 48, d: 2, p: 19 }, VPI: { a: "VPI", s: 35, d: 2, p: 20 } }
   };
+  /* VPĮ atitikmenys (2026-09-26) esamiems PĮ raktams: aiškumas ir objekto kiekis - VPĮ 35 str. */
+  N.dokumentu_aiskumas.VPI = { a: "VPI", s: 35, d: 4 };
+  N.kiekis.VPI = { a: "VPI", s: 35, d: 2, p: 8 };
 
   /* Metodikos SKAIČIAI - čia, ne moduliuose (CLAUDE.md 10 sk.: koeficientai gyvena shared/).
      Kiekvienas perskaitytas e-tar kartu su nuorodomis; `saltinis` - registro raktas, kurio
@@ -381,6 +447,12 @@
     return N[raktas].apie;
   }
 
+  // Kada įrašas perskaitytas e-tar: savo data (įrašai nuo 2026-09-26) arba bendra TIKRINTA.
+  function tikrinta(raktas) {
+    if (!N[raktas]) klaida("nežinoma nuoroda „" + raktas + "“");
+    return N[raktas].tikrinta || TIKRINTA;
+  }
+
   // e-tar adresas: to akto, kuris nuorodos turinį iš tikrųjų sako.
   function url(raktas, rezimas) { return AKTAI[irasas(raktas, rezimas).a].url; }
 
@@ -423,6 +495,7 @@
     cit: cit,
     sarasas: sarasas,
     apie: apie,
+    tikrinta: tikrinta,
     url: url,
     aktas: aktas,
     uzpildyk: uzpildyk,
