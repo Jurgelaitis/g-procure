@@ -12,6 +12,11 @@
  *     kuris tik stabdo įvykį (lango turinys), ir fiksuoti uždengimai (modalo fonas - uždaromas mygtuku).
  *  4) Klausimas (<label> be „for“) prieš radijo mygtukų ar žymimųjų langelių grupę - grupės pavadinimas
  *     (role="radiogroup" / "group" + aria-labelledby). Be jo ekrano skaitytuvas sako tik „Taip“ / „Ne“.
+ *  5) Modaliniai langai (pažymėti data-gp-langas ant fono elemento): atsivėrus - role="dialog", aria-modal,
+ *     pavadinimas iš antraštės, fokusas į pirmą lauką arba patį langą; Tab lieka lange; Esc uždaro lango
+ *     mygtuku („✕“, „×“, „Uždaryti“, „Atšaukti“, [data-gp-uzdaryti]) arba fono paspaudimu; užvėrus fokusas
+ *     grįžta į elementą, iš kurio langas atvertas. Langai su savu valdymu (jau turi role="dialog") neliečiami,
+ *     naršyklės <dialog> - tik grąžinamas fokusas (Safari to nedaro).
  *
  * Esamų pavadinimų (aria-label, aria-labelledby, „for“, apgaubianti <label>) ir tabindex NEKEIČIA.
  * Taikoma įkėlus puslapį ir kiekvienam vėliau įterptam turiniui (MutationObserver). Nieko nesaugo ir nesiunčia.
@@ -108,6 +113,118 @@
     });
   }
 
+  /* 5. Modaliniai langai (U4, 2026-09-27). Moduliai langus rodo keisdami klasę ar stilių (.show, .open, display:flex) arba
+     įterpdami juos iš šablonų, todėl atsivėrus fokusas likdavo po langu, Tab išeidavo į puslapį, Esc neuždarydavo, o užvėrus
+     fokusas dingdavo. Stebima: LANGAI (fono elementai) ir [data-gp-langas]. Atsivėrus - role="dialog", aria-modal,
+     pavadinimas iš antraštės, fokusas į pirmą lauką arba patį langą; Tab lieka lange; Esc - lango uždarymo mygtukas
+     („✕“, „×“, „Uždaryti“, „Atšaukti“, [data-gp-uzdaryti]) arba fono paspaudimas; užvėrus fokusas grįžta į atvėrusį
+     elementą. Langai su savu valdymu (jau turintys role="dialog") neliečiami; <dialog> (naršyklės) - tik grąžinamas fokusas. */
+  var LANGAI = "[data-gp-langas]";   // papildoma žemiau pagal modulių langų inventorių
+  var LANGO_TURINYS = ".modal, .modal-content, .modal__content, .epso-modal__content, .preview-sheet, .modal-box, .modal-card, [class*='modal__'], [class*='dialog']";
+  var UZDARYMO_TEKSTAS = /^(?:[✕×✖]\s*)?(?:uždaryti|close|atšaukti|cancel)?$/i;
+  var atviri = [], paskutinis = null, tikrinimas = 0;
+
+  function rodomas(el) {
+    if (!el || !el.isConnected) return false;
+    var cs = global.getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && el.getClientRects().length > 0;
+  }
+  // Langas atvertas: rodomas, nepermatomas ir priima paspaudimus (paslėptas permatomumu langas lieka display:flex)
+  function atvertas(fonas) {
+    if (!rodomas(fonas)) return false;
+    if (fonas.tagName === "DIALOG") return fonas.open;
+    var cs = global.getComputedStyle(fonas);
+    return cs.pointerEvents !== "none" && parseFloat(cs.opacity) > 0.05;
+  }
+  function fokusuojami(saknis) {
+    return [].filter.call(saknis.querySelectorAll("a[href], area[href], button, input:not([type=hidden]), select, textarea, iframe, summary, [tabindex], [contenteditable=''], [contenteditable='true']"),
+      function (x) { return !x.disabled && x.getAttribute("tabindex") !== "-1" && rodomas(x); });
+  }
+  function langoTurinys(fonas) {
+    if (fonas.matches("[role=dialog], dialog")) return fonas;
+    var t = fonas.querySelector(LANGO_TURINYS);
+    return t && t.parentElement === fonas ? t : (fonas.firstElementChild && fonas.children.length === 1 ? fonas.firstElementChild : fonas);
+  }
+  function savasValdymas(fonas) {
+    // Modulis pats valdo langą (PP-tiekejams, informacinė skiltis): role="dialog" jau yra ir ne mūsų
+    var d = fonas.matches("[role=dialog]") ? fonas : fonas.querySelector("[role=dialog]");
+    return !!(d && !d.hasAttribute("data-gp-dialogas"));
+  }
+  function irasas(fonas) { for (var i = 0; i < atviri.length; i++) if (atviri[i].fonas === fonas) return atviri[i]; return null; }
+
+  function atverk(fonas) {
+    var natyvus = fonas.tagName === "DIALOG";
+    var lang = natyvus ? fonas : langoTurinys(fonas);
+    var akt = doc.activeElement;
+    var atidare = akt && akt !== doc.body && !fonas.contains(akt) ? akt : paskutinis;
+    var i = { fonas: fonas, langas: lang, atidare: atidare, atidareId: atidare && atidare.id, natyvus: natyvus };
+    atviri.push(i);
+    if (natyvus) return;
+    if (!lang.getAttribute("role")) { lang.setAttribute("role", "dialog"); lang.setAttribute("data-gp-dialogas", "1"); }
+    if (!lang.hasAttribute("aria-modal")) lang.setAttribute("aria-modal", "true");
+    if (!lang.getAttribute("aria-labelledby") && !lang.getAttribute("aria-label")) {
+      var h = lang.querySelector("h1, h2, h3, h4, [class*='title'], [class*='Title'], [class*='pavad'], [class*='antrast']");
+      if (h && h.textContent.trim()) { if (!h.id) h.id = "gp-lango-pav-" + (++seka); lang.setAttribute("aria-labelledby", h.id); }
+    }
+    // Modulis gali piešti turinį po klasės pakeitimo - fokusas perkeliamas kitame žingsnyje, jei modulis pats jo neperkėlė
+    global.setTimeout(function () {
+      if (atviri.indexOf(i) < 0 || lang.contains(doc.activeElement)) return;
+      var laukas = [].filter.call(lang.querySelectorAll("input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea"), function (x) { return !x.disabled && !x.readOnly && rodomas(x); })[0];
+      if (laukas) laukas.focus();
+      else { if (!lang.hasAttribute("tabindex")) lang.setAttribute("tabindex", "-1"); lang.focus(); }
+    }, 0);
+  }
+  function uzverk(i) {
+    atviri.splice(atviri.indexOf(i), 1);
+    var a = doc.activeElement;
+    if (a && a !== doc.body && a.isConnected && !i.fonas.contains(a) && rodomas(a)) return;   // fokusas jau kitur (modulis perkėlė)
+    var t = i.atidare && i.atidare.isConnected && rodomas(i.atidare) ? i.atidare : (i.atidareId ? doc.getElementById(i.atidareId) : null);
+    if (t && rodomas(t)) { try { t.focus(); } catch (e) {} }
+  }
+  function tikrinkLangus() {
+    tikrinimas = 0;
+    [].forEach.call(doc.querySelectorAll(LANGAI + ", dialog[open]"), function (f) {
+      if (!irasas(f) && atvertas(f) && (f.tagName === "DIALOG" || !savasValdymas(f))) atverk(f);
+    });
+    atviri.slice().forEach(function (i) { if (!atvertas(i.fonas)) uzverk(i); });
+  }
+  function planuok() { if (!tikrinimas) tikrinimas = global.setTimeout(tikrinkLangus, 0); }
+  function virsutinis() { for (var k = atviri.length - 1; k >= 0; k--) if (!atviri[k].natyvus && atvertas(atviri[k].fonas)) return atviri[k]; return null; }
+  // Lango uždarymo mygtukas: pažymėtas data-gp-uzdaryti, arba jo pavadinimas - tik „✕“ / „×“ / „Uždaryti“ / „Atšaukti“
+  // (su ženklu ar be); „Uždaryti pirkimą“ ir panašūs veiksmai netinka
+  function uzdarymoMygtukas(i) {
+    var v = [].filter.call(i.langas.querySelectorAll("[data-gp-uzdaryti], button, [role=button], a:not([href])"), rodomas);
+    return v.filter(function (b) { return b.hasAttribute("data-gp-uzdaryti"); })[0] || v.filter(function (b) {
+      var t = (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim();
+      return !!t && UZDARYMO_TEKSTAS.test(t);
+    })[0] || null;
+  }
+
+  doc.addEventListener("focusin", function (e) { if (!e.target.closest || !atviri.some(function (i) { return i.fonas.contains(e.target); })) paskutinis = e.target; }, true);
+  doc.addEventListener("mousedown", function (e) {
+    var b = e.target.closest && e.target.closest("button, a[href], [role=button], [tabindex], input, select, summary");
+    if (b && !atviri.some(function (i) { return i.fonas.contains(b); })) paskutinis = b;   // Safari mygtuko paspaudimu fokuso neduoda
+  }, true);
+  doc.addEventListener("keydown", function (e) {
+    var i = virsutinis(); if (!i) return;
+    if (e.key === "Tab") {
+      var f = fokusuojami(i.langas);
+      if (!f.length) { e.preventDefault(); i.langas.focus(); return; }
+      var a = doc.activeElement, pirm = f[0], pask = f[f.length - 1];
+      if (!i.langas.contains(a)) { e.preventDefault(); (e.shiftKey ? pask : pirm).focus(); }
+      else if (e.shiftKey && (a === pirm || a === i.langas)) { e.preventDefault(); pask.focus(); }
+      else if (!e.shiftKey && a === pask) { e.preventDefault(); pirm.focus(); }
+    } else if (e.key === "Escape" || e.key === "Esc") {
+      // Po modulio klausytojų: jei modulis langą uždarė pats ar sustabdė įvykį - nieko nedarom
+      global.setTimeout(function () {
+        if (e.defaultPrevented || atviri.indexOf(i) < 0 || !atvertas(i.fonas)) return;
+        var b = uzdarymoMygtukas(i);
+        if (b) b.click();
+        else if (i.fonas !== i.langas) i.fonas.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      }, 0);
+    }
+  });
+
   function tvarkyk(saknis) {
     if (!saknis || saknis.nodeType !== 1) return;
     try { etiketes(saknis); grupes(saknis); langeliai(saknis); spaudziami(saknis); } catch (e) { /* prieinamumo pagalba niekada netrukdo moduliui */ }
@@ -132,9 +249,14 @@
       });
       tevai.forEach(function (t) { if (t.isConnected) tvarkyk(t); });
     }).observe(doc.body, { childList: true, subtree: true });
+    // Langai: klasės, stiliaus, hidden ir open pokyčiai bei perėjimų pabaiga (permatomumo perėjimas pokyčio neduoda)
+    new MutationObserver(planuok).observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] });
+    doc.addEventListener("transitionend", planuok, true);
+    doc.addEventListener("animationend", planuok, true);
+    planuok();
   }
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", pradek);
   else pradek();
 
-  global.GP_PRIEINAMUMAS = { versija: "1.1", tvarkyk: tvarkyk };
+  global.GP_PRIEINAMUMAS = { versija: "1.2", tvarkyk: tvarkyk };
 })(window);
