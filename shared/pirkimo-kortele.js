@@ -678,7 +678,7 @@
       ".gpk-sk li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}",
       ".gpk-sk b{font-weight:800}",
       ".gpk-past{color:#5B6470}",
-      "@media (max-width:640px){.gpk-sel{flex:1 1 100%}.gpk-sant{flex-basis:100%}}",
+      "@media (max-width:640px){.gpk-sel{flex:1 1 100%;width:100%}.gpk-sant{flex-basis:100%}}",   // U4: procentinis plotis - sąrašo pločio neapsprendžia ilgiausias pavadinimas
       "@media print{.gpk{display:none!important}}",
       /* Kortelės kūrimo langas modulyje */
       ".gpk-dlg{width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px);border:0;border-radius:14px;padding:0;color:var(--color-graphite,#2E3641);",
