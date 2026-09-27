@@ -132,7 +132,9 @@
   }
 
   function failoVardas(data) {
-    return "g-procure-kopija-" + (data || new Date()).toISOString().slice(0, 10) + ".json";
+    // Vietinė data (toISOString - UTC: 00:00-03:00 Lietuvos laiku kopija gaudavo vakarykštę datą)
+    var d = data || new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; };
+    return "g-procure-kopija-" + d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + ".json";
   }
 
   global.GP_BACKUP = {
