@@ -159,13 +159,14 @@ async function testaiKelias(){
     const X = W.XLSX, aoa = [["Metinis pirkimų planas 2027"], [], ["Pirkimo poreikio Nr.", "Pirkimo objektas", "Planuojama pirkimo vertė be PVM", "Pirkimo objekto rūšis", "BVPŽ kodas - pagrindinis", "Numatoma sutarties sudarymo data", "Įmonė"],
       ["27PP-1", "Galios transformatorių priežiūra", "120 000,00", "Paslaugos", "50711000-2", "2027-03-31", "LITGRID AB"],
       ["27PP-2", "Kabelių pirkimas", "1,500,000.00", "Prekės", "31321000-3", "2027-05-31", "AB Amber Grid"],
-      ["27PP-3", "", "5 000", "Prekės", "", "", ""]];
+      ["27PP-3", "", "5 000", "Prekės", "", "", ""],
+      ["27PP-4", "Darbo drabužiai", "14.900", "Prekės", "18100000-0", "2027-06-30", "UAB EPSO-G"]];
     const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(aoa), "MPP");
     const failas = new W.File([X.write(wb, { type: "array", bookType: "xlsx" })], "planas.xlsx");
     W.handleFile(failas);
-    tiesa(await laukTol(() => W.eval("DATA.procurements.length") === 2), "įkelta: " + W.eval("DATA.procurements.length"));
+    tiesa(await laukTol(() => W.eval("DATA.procurements.length") === 3), "įkelta: " + W.eval("DATA.procurements.length"));
     const P = W.eval("DATA.procurements");
-    lygu(P.map(p => [p.nr, p.imone, p.verte]), [["27PP-1", "LITGRID", 120000], ["27PP-2", "AMBER", 1500000]], "įkelti pirkimai (EU ir JAV sumų formatai)");
+    lygu(P.map(p => [p.nr, p.imone, p.verte]), [["27PP-1", "LITGRID", 120000], ["27PP-2", "AMBER", 1500000], ["27PP-4", "EPSO-G", 14900]], "įkelti pirkimai (EU ir JAV sumų formatai; „14.900“ - tūkstančiai)");
     tiesa(/Sėkmingai importuota/.test(D.getElementById("importStatus").textContent) && /Praleista neužbaigtų: 1/.test(D.getElementById("importStatus").textContent), D.getElementById("importStatus").textContent.slice(0, 200));
   });
 
@@ -320,6 +321,13 @@ async function testaiAnalize(){
     const k = d => d.getFullYear() + " K" + (Math.floor(d.getMonth() / 3) + 1), data = s => W.eval("parseDate")(s);
     lygu(pr.map(p => W.procQuarter(p)), [k(data(pr[0].sutarciesData)), k(data(pr[1].pirkimoData)), k(data(pr[2].sutarciesData)), k(data(pr[3].sutarciesData))], "ketvirčiai");
     lygu([W.procQuarter({ inicData: pr[2].inicData }), W.procQuarter({})], [k(data(pr[2].inicData)), "Be datos"], "tik inicijavimo data; be datų");
+  });
+
+  await testas("Importo sumos - bendru GP_MONEY.parseEUR: EU ir JAV formatai, vienas skyriklis su 3 skaitmenimis - tūkstančiai, neigiama lieka neigiama", async () => {
+    const P = W.eval("parseNum");
+    const atvejai = [["14.900", 14900], ["1,500", 1500], ["1.234.567", 1234567], ["14,900.00 €", 14900], ["14.900,00 €", 14900], ["120 000,00", 120000],
+      ["1,5", 1.5], ["12.5", 12.5], ["-100", -100], [5000, 5000], ["", 0], ["nėra", 0], [null, 0]];
+    lygu(atvejai.map(([v]) => P(v)), atvejai.map(([, n]) => n), "sumos");
   });
 
   await testas("Kryžminis filtras: paspaudus reikšmę - filtruojama, antrą kartą - išjungiama; registro paieška ir būdo bei rūšies filtrai", async () => {
