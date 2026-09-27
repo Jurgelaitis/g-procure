@@ -64,5 +64,22 @@
     return cnt ? txt + "," + String(cnt).padStart(2, "0") : txt;
   }
 
-  global.GP_MONEY = { parseEUR: parseEUR, formatEUR: formatEUR };
+  // Skaičius, kuris NE pinigai (kiekis, faktorius, trukmė, anglis): priimami ir LT, ir EN formatai. Kaip parseEUR - jei yra abu
+  // skyrikliai, dešinysis dešimtainis; tas pats skyriklis kartojasi - tūkstančių. Skirtumas: VIENAS skyriklis visada dešimtainis
+  // (0,125 lieka 0,125 - kiekiai būna su trimis skaitmenimis po kablelio), neigiami leidžiami. Grąžina Number arba null.
+  // Iki 2026-09-28 PP-carbon ir PP-negotiation turėjo savus parserius, kurie „1.500.000“ skaitė kaip 1,5.
+  function parseSkaicius(input) {
+    if (input == null) return null;
+    if (typeof input === "number") return isFinite(input) ? input : null;
+    var s = String(input).replace(/[\s\u00a0\u202f]/g, "");
+    if (!s) return null;
+    var t = s.lastIndexOf("."), k = s.lastIndexOf(",");
+    if (t !== -1 && k !== -1) s = t > k ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
+    else if (k !== -1) s = s.indexOf(",") === k ? s.replace(",", ".") : s.replace(/,/g, "");
+    else if (t !== -1 && s.indexOf(".") !== t) s = s.replace(/\./g, "");
+    var n = parseFloat(s);
+    return isFinite(n) ? n : null;
+  }
+
+  global.GP_MONEY = { parseEUR: parseEUR, formatEUR: formatEUR, parseSkaicius: parseSkaicius };
 })(typeof window !== "undefined" ? window : this);
