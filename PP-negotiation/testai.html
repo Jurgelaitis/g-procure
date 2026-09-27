@@ -243,6 +243,42 @@ async function testaiKortele(){
   });
 }
 
+/* 2026-09-28 (mutacijų auditas): statistika, scenarijai ir importas su tekstiniais skaičiais - iki tol netikrinta.
+   Rasta ir ištaisyta: tekstinis langelis „1.500,50“ ar „1,500.50“ virsdavo 1,5 (kaina ir kiekis), „0,125“ - teisingai tik atsitiktinai. */
+async function testaiSkaiciai(){
+  grupe("Statistika, scenarijai ir skaičių formatai importe");
+  await testas("Statistika: mediana (lyginis ir nelyginis kiekis), standartinis nuokrypis (n - 1), kvartiliai ir išskirtys (1,5 × IQR)", async () => {
+    const st = W.eval("stats");
+    lygu([st.median([3, 1, 2]), st.median([4, 1, 3, 2]), st.median([])], [2, 2.5, null], "mediana");
+    arti(st.stdev([2, 4, 4, 4, 5, 5, 7, 9]), Math.sqrt(32 / 7), "standartinis nuokrypis");
+    const q = st.quartiles([1, 2, 3, 4, 5, 6, 7, 8]);
+    lygu([q.q1, q.q2, q.q3, q.iqr], [2.75, 4.5, 6.25, 3.5], "kvartiliai");
+    lygu(st.outliers([10, 11, 12, 13, 14, 15, 16, 24]), [7], "išskirtis (24 > Q3 + 1,5 × IQR = 20,5)");
+    lygu(st.outliers([10, 11, 12, 13, 14, 15, 16, 20]), [], "ne išskirtis (20 < Q3 + 1,5 × IQR = 20,5)");
+    arti(st.cv([10, 20, 30]), 50, "variacijos koeficientas %");
+  });
+
+  await testas("Scenarijai: agresyvus - 94 % tikslo ir 92 % pradinio siūlymo, realus - kaip pasiūlyta, atsargus - 104 % ir 105 %", async () => {
+    projektas();
+    const t = W.eval("strategy.suggestTargets('b')"), sc = W.eval("strategy.scenariosFor('b')");
+    lygu(sc.map(x => [x.type, x.target, x.opener]), [["aggressive", Math.round(t.target * 0.94), Math.round(t.opener * 0.92)], ["realistic", Math.round(t.target), Math.round(t.opener)],
+         ["safe", Math.round(t.target * 1.04), Math.round(t.opener * 1.05)]], "scenarijų ribos");
+  });
+
+  await testas("Importas: tekstiniai kiekiai ir įkainiai LT ir EN formatais (1.500,50; 1,500.50; 0,125), bendras pasiūlymas iš teksto (1.234.567,89 EUR)", async () => {
+    projektas();
+    W.eval("APP.state.positions = []; APP.state.offers = {}; APP.state.fixedOffers = {}");
+    const r = W.extractFromRows([["Pavadinimas", "Kiekis", "Kaina"], ["Transformatorius", "2", "1.500,50"], ["Kabelis", "1 000", "1,500.50"], ["Energija", "0,125", "4"]], "a", "alfa.xlsx");
+    tiesa(r.ok && r.rowsFound === 3, "rasta eilučių: " + JSON.stringify(r).slice(0, 200));
+    lygu(r.positions.map(p => [p.qty, p.price]), [[2, 1500.5], [1000, 1500.5], [0.125, 4]], "kiekiai ir įkainiai");
+    arti(r.total, 2 * 1500.5 + 1000 * 1500.5 + 0.125 * 4, "suma");
+    const b = W.extractFromRows([["Komercinis pasiūlymas"], ["Iš viso: 1.234.567,89 EUR be PVM"]], "b", "beta.pdf.xlsx");
+    tiesa(b.ok && b.total === 1234567.89, "bendras pasiūlymas: " + JSON.stringify(b).slice(0, 200));
+    const us = W.extractFromRows([["Commercial offer"], ["Total: 1,234,567.89 EUR excl. VAT"]], "c", "gama.xlsx");
+    tiesa(us.ok && us.total === 1234567.89, "bendras pasiūlymas EN formatu: " + JSON.stringify(us).slice(0, 200));
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -250,6 +286,7 @@ async function testaiKortele(){
     await testaiLogika();
     await testaiBusenos();
     await testaiKortele();
+    await testaiSkaiciai();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
