@@ -9,7 +9,10 @@
  *    (LITGRID 9683631, Amber Grid 9742096, EPSO-G 9281765, Energy cells 9614756);
  *  - atpazink() - pirkimo kortelės laukų PASIŪLYMAI (tobulinimo planas A2):
  *    pavadinimas, būdas, objektas, BVPŽ, vertė, dalys, galiojimas (mėn.),
- *    pasiūlymų ar paraiškų terminas, išsiuntimo data, CVP IS numeris, būsena.
+ *    pasiūlymų ar paraiškų terminas, išsiuntimo data, CVP IS numeris, būsena;
+ *  - kalbos() ir pakeitimas() - pasiūlymų kalbos ir skelbimo pakeitimas (A4, 2026-09-26).
+ *    Pakeitimo skelbimo kūne lieka senos reikšmės: terminas imamas iš 10 skyriaus
+ *    aprašymo, o paskelbimo data nesiūloma (PDF turi tik pakeitimo išsiuntimo datą).
  *
  * TAISYKLĖS:
  *  - Kiekvienas pasiūlymas turi CITATĄ - skelbimo eilutę, iš kurios paimtas.
@@ -144,10 +147,12 @@
     [/konkurencinis\s+dialogas/i, "Konkurencinis dialogas", false],
     [/inovacij\S*\s+partneryst/i, "Inovacijų partnerystė", false]
   ];
+  /* CVP IS paketo ZIP skelbimų failai vadinasi ir angliškai (2026-09-26, 4 LITGRID paketai): „National Contract notice ...“ -
+     nacionalinis (supaprastintas), „Contract notice - sectoral directive ...“ - ES leidinių biurui (tarptautinis). */
   function skelbimoRusis(failoVardas) {
     var v = String(failoVardas || "").split(" › ").pop();
-    if (/nacionalinis\s+skelbimas/i.test(v)) return "supaprastintas";
-    if (/(^|_)skelbimas\s+apie\s+pirkim/i.test(v)) return "tarptautinis";
+    if (/nacionalinis\s+skelbimas|(^|_)national\s+contract\s+notice/i.test(v)) return "supaprastintas";
+    if (/(^|_)skelbimas\s+apie\s+pirkim|(^|_)contract\s+notice\b/i.test(v)) return "tarptautinis";
     return null;
   }
 
@@ -181,7 +186,9 @@
           budasPatys: " - kortelėje pasirinkite patys.",
           bvpz: "BVPŽ kodas skelbime - {k}, be kontrolinio skaitmens; žodyno įkelti nepavyko - įrašykite kodą patys.",
           vienaDalis: " (viena dalis)", neskaidomas: "Viena dalis skelbime - pirkimas neskaidomas.",
-          dalyvavimo: "Tai dalyvavimo prašymų terminas.", issiuntimo: "Skelbimo išsiuntimo data." },
+          dalyvavimo: "Tai dalyvavimo prašymų terminas.", issiuntimo: "Skelbimo išsiuntimo data.",
+          pakeistasTerminas: "Terminas pakeistas skelbimo pakeitimu (10 skyrius).",
+          pakeitimas: "Tai skelbimo pakeitimas, išsiųstas {d}: paskelbimo datos nesiūlome - pirminio skelbimo datos šiame PDF nėra." },
     en: { neregistre: "Buyer “{p}” is not in the organisation register - no contracting body is suggested.",
           abuRezimai: "The notice has signs of both PĮ and VPĮ - no regime is suggested; check the notice form.",
           failoVardas: "file name: ", numeris: "Check the number in brackets: hyphens (e.g. “VPP-268”) are lost in the PDF text.",
@@ -191,8 +198,42 @@
           budasPatys: " - choose it on the card yourself.",
           bvpz: "CPV code in the notice - {k}, without the check digit; the dictionary could not be loaded - enter the code yourself.",
           vienaDalis: " (one lot)", neskaidomas: "One lot in the notice - the procurement is not divided into lots.",
-          dalyvavimo: "This is the deadline for requests to participate.", issiuntimo: "Date the notice was dispatched." }
+          dalyvavimo: "This is the deadline for requests to participate.", issiuntimo: "Date the notice was dispatched.",
+          pakeistasTerminas: "The deadline was changed by a change notice (section 10).",
+          pakeitimas: "This is a change notice dispatched on {d}: no publication date is suggested - the original notice date is not in this PDF." }
   };
+
+  /* Kalbos, kuriomis galima pateikti pasiūlymus ar dalyvavimo prašymus (5.1.12 kiekvienai daliai; A4 lygina su SPS).
+     Grąžina { kalbos: ["lt", "en"], citata } arba null. Kalbų pavadinimai - kaip eForms LT ir EN skelbimuose. */
+  var KALBOS = [["lt", /lietuvi[ųu]|lithuanian/i], ["en", /angl[ųu]|english/i], ["de", /vokie[čc]i[ųu]|german/i], ["pl", /lenk[ųu]|polish/i],
+                ["lv", /latvi[ųu]|latvian/i], ["et", /est[ųu]|estonian/i], ["fr", /pranc[ūu]z[ųu]|french/i], ["ru", /rus[ųu]\s|russian/i]];
+  function kalbos(tekstas) {
+    var eil = eilutes(tekstas), rasta = {}, citata = "";
+    for (var i = 0; i < eil.length; i++) {
+      if (!/^(?:Kalbos,\s+kuriomis\s+galima\s+pateikti\s+pasi[ūu]lymus|Languages\s+in\s+which\s+tenders)/i.test(eil[i])) continue;
+      var v = eil[i].replace(/^[^:]*:\s*/, "");
+      if (!v && eil[i + 1]) v = eil[i + 1];
+      KALBOS.forEach(function (k) { if (k[1].test(v + " ")) rasta[k[0]] = 1; });
+      if (!citata) citata = eil[i].slice(0, 240);
+    }
+    var sar = Object.keys(rasta);
+    return sar.length ? { kalbos: sar, citata: citata } : null;
+  }
+
+  /* Skelbimo pakeitimas (eForms 10 skyrius „Pakeitimas“). Pakeitimo PDF kūne lieka SENOS reikšmės (patikrinta
+     2026-09-26 su 9566057: kūne terminas 24/09, pakeitimo aprašyme - 28/09), todėl naujas terminas imamas iš aprašymo.
+     Grąžina { priezastis, aprasymas, terminas, citata } arba null. */
+  function pakeitimas(tekstas) {
+    var eil = eilutes(tekstas);
+    var sk = ruozas(eil, /^10\s+(?:Pakeitimas|Change)\b/i, /^Skelbimo\s+informacija|^Notice\s+information|^\d+\s+[A-ZĄČĘĖĮŠŲŪŽ]/i);
+    if (!sk.length) return null;
+    var pr = laukas(sk, "Pagrindin[ėe]\s+pakeitimo\s+prie[žz]astis") || laukas(sk, "Main\s+reason\s+for\s+change");
+    var ap = laukas(sk, "Apra[šs]ymas") || laukas(sk, "Description");
+    var tm = ap && /termin\S*\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/i.exec(ap.reiksme);
+    return { priezastis: pr ? pr.reiksme : "", aprasymas: ap ? ap.reiksme : "",
+             terminas: tm ? tm[3] + "-" + tm[2] + "-" + tm[1] + "T" + tm[4] + ":" + tm[5] : null,
+             citata: ap ? ap.citata : sk[0] };
+  }
 
   /* Grąžina { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [], pirkejas } */
   function atpazink(tekstas, failoVardas, kalba) {
@@ -280,14 +321,18 @@
       .filter(function (x) { return x && x.men; });
     if (trukmes.length && trukmes.every(function (x) { return x.men === trukmes[0].men; })) prideti("trukmeMen", trukmes[0].men, trukmes[0].citata);
 
-    // Terminas, išsiuntimo data, CVP IS numeris, būsena
+    // Terminas, išsiuntimo data, CVP IS numeris, būsena. Pakeitimo skelbime terminas - iš pakeitimo aprašymo,
+    // o išsiuntimo data yra PAKEITIMO data, ne paskelbimo (pirminio skelbimo datos PDF neturi).
+    var pk = pakeitimas(t);
     var term = laukas(eil, "Pasi[ūu]lym[ųu] pri[ėe]mimo terminas") || laukas(eil, "Dalyvavimo pra[šs]ym[ųu] pri[ėe]mimo terminas");
     var tm = term && /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(term.reiksme);
-    if (tm) prideti("pasiulymuTerminas", tm[3] + "-" + tm[2] + "-" + tm[1] + "T" + tm[4] + ":" + tm[5], term.citata,
+    if (pk && pk.terminas) prideti("pasiulymuTerminas", pk.terminas, pk.citata, P.pakeistasTerminas);
+    else if (tm) prideti("pasiulymuTerminas", tm[3] + "-" + tm[2] + "-" + tm[1] + "T" + tm[4] + ":" + tm[5], term.citata,
                     /Dalyvavimo/i.test(term.citata) ? P.dalyvavimo : null);
     var isi = laukas(eil, "Skelbimo i[šs]siuntimo data");
     if (isi && data(isi.reiksme)) {
-      prideti("paskelbimas", data(isi.reiksme), isi.citata, P.issiuntimo);
+      if (pk) pastabos.push(P.pakeitimas.replace("{d}", data(isi.reiksme)));
+      else prideti("paskelbimas", data(isi.reiksme), isi.citata, P.issiuntimo);
       prideti("busena", "paskelbtas", isi.citata);
     }
     var nr = /resourceId=(\d{5,9})/.exec(t) || /^(\d{5,9})_/.exec(String(failoVardas || "").split(" › ").pop());
@@ -296,6 +341,6 @@
     return { laukai: laukai, pastabos: pastabos, pirkejas: p ? p.value : null };
   }
 
-  global.GP_SKELBIMAS = { version: "1.0", pirkejas: pirkejas, rezimas: rezimas, atpazink: atpazink,
+  global.GP_SKELBIMAS = { version: "1.1", pirkejas: pirkejas, rezimas: rezimas, atpazink: atpazink, kalbos: kalbos, pakeitimas: pakeitimas,
                           _eilutes: eilutes, _laukas: laukas, _skelbimoRusis: skelbimoRusis };
 })(typeof window !== "undefined" ? window : this);
