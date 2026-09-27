@@ -231,6 +231,60 @@ async function testaiKortele(){
   });
 }
 
+/* 2026-09-27: straipsnių numeriai - tik iš shared/teises-nuorodos.js (perskaityta e-tar). Iki tol modulis juos rašė pats,
+   ir šeši buvo ne tie: „PSĮ 86 str.“ atidėjimo terminui (PĮ 86 str. - preliminarioji sutartis; teisingai - 94 str. 8 d.),
+   „PSĮ 97 str.“ vidaus kontrolei (97 - sutarties keitimas; 103 str. 3 d.), „PSĮ 71 str.“ neskelbiamoms deryboms (71 - ribotas
+   konkursas; 79 str.), „28 str.“ skaidymui (40 str. 1 d.), „PSĮ 23 str.“ nešališkumui (33 str. 2 d. 1 p.), „81 str.“ CPO
+   (90 str. 2 d. 1 p.). Šablonas 14 rėmėsi 2017 m. 109 str. 2 d. („nedelsdamas sustabdo“), pakeista 2022-12-13 Nr. XIV-1672. */
+async function testaiTeise(){
+  grupe("Teisės nuorodos (PĮ) - iš registro");
+  await testas("Statinis tekstas ir terminų skaičiuoklė - nuorodos iš registro; senų klaidingų numerių (23, 28, 71, 81, 86, 97 str.) nebėra", async () => {
+    await modulis();
+    const visi = [...D.querySelectorAll("[data-teise]")], tusti = visi.filter(e => !/^PĮ \d+ str\./.test(e.textContent.trim()));
+    tiesa(visi.length >= 12 && !tusti.length, visi.length + " nuorodų, neužpildyta: " + tusti.map(e => e.dataset.teise).join(", "));
+    const c = k => W.GP_TEISE.cit(k, "PI");
+    lygu([W.getAtidejimoTerminas("tarptautinis").PSI, W.getAtidejimoTerminas("supaprastintas").PSI, W.getPretenzijosTerminas("supaprastintas", "ne_el").PSI],
+         [c("atidejimo_terminas"), c("atidejimo_terminas"), c("pretenzijos_terminas")], "skaičiuoklė");
+    lygu([c("atidejimo_terminas"), c("pretenzijos_terminas")], ["PĮ 94 str. 8 d.", "PĮ 108 str. 1 d. 1 p."], "registras");
+    const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
+    const senos = src.match(/(PSĮ|PSI|PĮ|Pirkim[uų] [iį]statymo)\s+(23|28|71|81|86|97)\s+str/g);
+    tiesa(!senos, "liko: " + (senos || []).join(", "));
+    tiesa(src.indexOf('<script src="../shared/teises-nuorodos.js"><\/script>') >= 0, "registras nejungiamas");
+  });
+
+  await testas("Pranešimų šablonai: pagrindai - registro raktai; 13 - tikras įstatymo pavadinimas; 15 - 66 str. 1 d.; 14 - pretenzija nestabdo procedūrų", async () => {
+    const T = W.eval("PN_TEMPLATES"), blogi = [];
+    Object.entries(T).forEach(([id, t]) => t.psi.forEach(k => { try { W.GP_TEISE.cit(k, "PI"); } catch (e) { blogi.push(id + ": " + k); } }));
+    tiesa(!blogi.length, "ne registro raktai: " + blogi.join("; "));
+    lygu(T["9_laimetojui_kaina"].psi.map(k => W.GP_TEISE.cit(k, "PI")), ["PĮ 58 str.", "PĮ 68 str. 1 d.", "PĮ 94 str. 8 d."], "9 - rezultatai ir atidėjimo terminas");
+    const b13 = T["13_kvietimas_sutarti"].body({}).lt;
+    tiesa(b13.indexOf("Lietuvos Respublikos pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymo (toliau - Pirkimų įstatymas) 94 straipsnio 1 dalies") >= 0
+          && b13.indexOf("Lietuvos Respublikos pirkimų įstatymo") < 0, "13: " + b13.slice(0, 400));
+    const b15 = T["15_nmk"].body({ kaina_be: 1000, vidurkis: 2000, skirtumas: 50 });
+    tiesa(/66 straipsnio 1 dalimi, ji laikoma neįprastai maža/.test(b15.lt) && /Article 66\(1\)/.test(b15.en), "15: " + b15.lt.slice(0, 300));
+    const t14 = T["14_pretenzija_sustabdymas"], b14 = t14.body({ pretenzijos_data: "2026-10-01", pretenzijos_tiekejas: "UAB Tiekėjas" });
+    tiesa(!/sustabd/i.test(b14.lt) && !/suspend/i.test(b14.en), "14 vis dar sako, kad procedūros sustabdomos: " + b14.lt);
+    tiesa(/109 straipsnio 3 dalimi, pretenzija bus išnagrinėta/.test(b14.lt) && /ne vėliau kaip per 6 darbo dienas/.test(b14.lt)
+          && /109 straipsnio 2 dalimi, pirkimo sutartis nebus sudaroma anksčiau negu po 10 dienų \(supaprastinto pirkimo atveju - anksčiau negu po 5 darbo dienų\)/.test(b14.lt), "14: " + b14.lt);
+    tiesa(/Article 109\(3\)/.test(b14.en) && /Article 109\(2\)/.test(b14.en), "14 EN: " + b14.en);
+    lygu([t14.title, t14.titleEn, D.querySelector('option[value="14_pretenzija_sustabdymas"]').textContent.trim()],
+         ["DĖL GAUTOS PRETENZIJOS", "REGARDING THE CLAIM RECEIVED", "Nr. 14 - Gauta pretenzija"], "14 pavadinimai");
+  });
+
+  await testas("Rizikos: neįprastai maža kaina - PĮ 66 str. 1 d., neskelbiamos derybos - PĮ 79 str. (ne 71), matricoje ir komisija - PĮ 31 str. 2 d.", async () => {
+    W.saveProcurementData(PK, pirkimas("neskelbiamos_supaprastintas"));
+    const pk = W.getProcurement(PK);
+    const r = W.analyzeRisks(pk, [{ selected: true, kaina: 100 }, { selected: true, kaina: 300 }, { selected: true, kaina: 320 }], null, {});
+    const nmk = r.find(x => /NMK/.test(x.title)), nd = r.find(x => /Neskelbiamos/.test(x.title));
+    tiesa(nmk && nmk.detail.indexOf(W.GP_TEISE.cit("nmk_riba", "PI") + " - ") === 0, "NMK: " + (nmk && nmk.detail));
+    tiesa(nd && nd.detail.indexOf("PĮ 79 str. - ") === 0, "neskelbiamos derybos: " + (nd && nd.detail));
+    W.eval("currentPkId = " + JSON.stringify(PK)); W.openRiskPanel();
+    const m = D.getElementById("risk-modal-body").textContent;
+    ["PĮ 66 str. 1 d.", "PĮ 31 str. 2 d.", "PĮ 79 str."].forEach(x => tiesa(m.indexOf(x) >= 0, "matricoje nėra „" + x + "“"));
+    tiesa(!/PSĮ \d+ str/.test(m), "matricoje liko „PSĮ N str.“");
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -239,6 +293,7 @@ async function testaiKortele(){
     await testaiKelias();
     await testaiBusenos();
     await testaiKortele();
+    await testaiTeise();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

@@ -46,7 +46,7 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 - Sutaupyti 2-3 valandas per pirkimą (vienam protokolui + pranešimams)
 - Sumažinti klaidų riziką (auto-validacija, auto-pildymas)
 - Centralizuoti VPT gairių atitiktį
-- Sukurti audito seką (PSĮ 103 str. - 4+ metai saugojimas)
+- Sukurti audito seką (PĮ 103 str. 4 d. - eigos dokumentavimas, 6 d. - saugojimas ne trumpiau kaip 4 metus)
 
 ---
 
@@ -62,7 +62,7 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 
 ### 3.3 BPS punktų ir PSĮ straipsnių nuorodos
 **Anksčiau:** Reikia atminti, kuris BPS punktas (9.24 atviram konkursui vs 14.24 skelbiamoms deryboms)
-**Dabar:** Auto-parinkimas pagal pirkimo būdą per `pnBpsType()` funkciją
+**Dabar:** Auto-parinkimas pagal pirkimo būdą per `pnBpsType()` funkciją. PĮ straipsnių numeriai - tik iš `shared/teises-nuorodos.js` (`teise(raktas)`, `<span data-teise>`, šablonų `psi` - registro raktai); iki 2026-09-27 jie buvo įrašyti modulyje, ir šeši buvo klaidingi (PĮ 23, 28, 71, 81, 86, 97 str. reguliuoja kitus dalykus). Laiškų šablonų ilgoji forma („58 straipsnio 1 dalies 1 punktu“) lieka tekste, bet `shared/testai.html` sargas tikrina, kad tokia nuoroda yra registre
 
 ### 3.4 Atitiktis VPT gairėms
 **Anksčiau:** Reikia rankiniu būdu peržiūrėti gaires (komisijos veiklos, vidaus kontrolės, pasiūlymų vertinimo)
@@ -94,13 +94,13 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 - Pirkimo objektas: skaidymas į dalis su auto-PVM skaičiavimu (PVM = vertė × 1.21)
 - Konfidencialių priedų žyma + auto-tekstas Protokole 1
 - CPO katalogo žyma + įspėjimas dėl pagrindimo
-- Skaidymo įspėjimas (PĮ 28 str.)
+- Skaidymo įspėjimas (PĮ 40 str. 1 d. - sprendimą dėl skaidymo priima perkantysis subjektas; pagrindimo dėl neskaidymo PĮ nereikalauja, tai VPĮ nuostata)
 - Pirkimo vertės kategorija auto-derivuojama iš pirkimo tipo per `deriveValCat()`
 
 ### 4.2 Komisijos
 - Min. 4 nariai (Litgrid reglamento §10) - pirmininkas (specialistas), teisininkas, iniciatorius, sekretorius
 - Komisijos tipas: nuolatinė / ad hoc
-- Nešališkumo deklaracijos žyma (PSĮ 23 str.)
+- Nešališkumo deklaracijos žyma (PĮ 33 str. 2 d. 1 p.)
 - Balsavimo lentelė: tik UŽ/PRIEŠ (atviru vardiniu balsavimu pagal §28)
 - Atskirosios nuomonės sekcija
 
@@ -120,15 +120,15 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 - **D7.2** - Susipažinimas su g.p.
 - **D8** - Galutinių pasiūlymų vertinimas (kortelės su pasiūlymo eile)
 
-**DOCX struktūra:** A4 (11906×16838 DXA), 2 cm paraštės, Times New Roman 11pt/10pt/12pt, LITGRID AB header'iu, puslapio numeracija footer'yje, saugojimo metaduomenys (`PSĮ 103 str.`).
+**DOCX struktūra:** A4 (11906×16838 DXA), 2 cm paraštės, Times New Roman 11pt/10pt/12pt, LITGRID AB header'iu, puslapio numeracija footer'yje, saugojimo metaduomenys (`PĮ 103 str. 6 d.`).
 
 ### 4.4 Pranešimai tiekėjams (23 šablonai)
 **Vertinimo etapas:**
 - `3_aritm_klaidos` - Aritmetinių klaidų taisymas
 - `4_per_didele_kaina` - Atmetimas (per didelė kaina)
 - `5_pasiulymas_ok` - Pasiūlymas atitinka
-- `15_nmk` - NMK pagrindimas (PSĮ 66 str.)
-- `16_galiojimas` - Galiojimo pratęsimas (PSĮ 54 str.)
+- `15_nmk` - NMK pagrindimas (PĮ 66 str. 1 d.)
+- `16_galiojimas` - Galiojimo pratęsimas (PĮ 54 str. 2 d.)
 
 **Laimėtojo etapas:**
 - `8_galimas_laimetojas` - Kreipimasis į galimą laimėtoją
@@ -145,7 +145,7 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 - `12_2_kitiems_pabaiga` - Kitiems (pirkimo pabaiga)
 
 **Pretenzijos:**
-- `14_pretenzija_sustabdymas` - Procedūrų sustabdymas
+- `14_pretenzija_sustabdymas` - Gauta pretenzija (iki 2026-09-27 - „Procedūrų sustabdymas“ pagal 2017 m. PĮ 109 str. 2 d.; nuo 2022-12-13 įstatymo Nr. XIV-1672 procedūra nestabdoma: pretenzija nagrinėjama per 6 darbo dienas (109 str. 3 d.), atidedamas tik sutarties sudarymas (109 str. 2 d.). Rakto vardas nekeistas - juo remiasi protokolų sekos)
 - `14_1_pretenzija_atm_pabaiga` - Atmetimas (pirkimo pabaiga)
 - `14_2_pretenzija_atm_tesimas` - Atmetimas (tęsimas)
 - `14_3_pretenzija_tenkinta` - Tenkinimas
@@ -223,9 +223,9 @@ Vienu paspaudimu:
 ### 4.13 Rizikų analizė (`analyzeRisks()`)
 Pagal VPT gaires:
 - Vienintelis pasiūlymas (vidutinė rizika)
-- NMK riba pasiekta - ≥30% žemiau vidurkio (aukšta, PSĮ 66 str.)
+- NMK riba pasiekta - ≥30% žemiau vidurkio (aukšta, PĮ 66 str. 1 d.)
 - Komisija < 4 narių (aukšta, Litgrid reglamento §10)
-- Neskelbiamos derybos (aukšta, PSĮ 71 str.)
+- Neskelbiamos derybos (aukšta, PĮ 79 str.)
 - Trumpas atmetimo motyvas (vidutinė)
 - Konfidencialios info paviešinimas (info)
 
@@ -379,7 +379,7 @@ Pagal VPT gaires:
 
 ### 7.5 Šablonų versijavimas
 - `TEMPLATE_VERSION = 'v1.0'`, `TEMPLATE_VERIFIED = '2026-05-17'`
-- Jei keisis BPS punktai ar PSĮ straipsnių numeracija - reikės atnaujinti
+- Jei keisis BPS punktai - reikės atnaujinti; PĮ straipsnių numeracija taisoma tik `shared/teises-nuorodos.js`
 - Rekomenduotina periodiškai (kas 6 mėn.) teisininkų peržiūra
 
 ### 7.6 Pranešimai
