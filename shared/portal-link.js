@@ -69,10 +69,10 @@
       ".gp-portalas__rodykle{color:var(--color-emerald,#00A072);font-weight:800;font-size:15px}",
       ".gp-portalas__zenklas{font-weight:800;letter-spacing:-0.01em}",
       ".gp-portalas__zenklas em{color:var(--color-emerald,#00A072);font-style:normal}",
-      ".gp-portalas__skyriklis{color:var(--color-graphite-30,#B9BEC4)}",
+      ".gp-portalas__skyriklis{color:var(--color-graphite-50-strong,#5B6470)}",
       ".gp-portalas__etikete{font-weight:600}",
       ".gp-portalas__tag{font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;",
-      "  color:var(--color-graphite-50,#8D949C)}",
+      "  color:var(--color-graphite-50-strong,#5B6470)}",
       "@media (max-width:760px){.gp-portalas__tag{display:none}#gp-portalas{padding:4px 14px}",
       "  .gp-portalas__skyriklis,.gp-portalas__etikete{display:none}}",
       "@media print{#gp-portalas{display:none !important}}"
