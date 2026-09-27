@@ -483,6 +483,7 @@ const TEISE_FAILAI = [
   "../PP-ts/TS_Asistentas.html", "../PP-ts/PROJECT_CONTEXT.md",
   "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-negotiation/PROJECT_CONTEXT.md",
   "../PP-salygos/PP-SALYGOS.html", "../PP-salygos/variklis.js",
+  "taisykles.js", "skelbimas.js", "../pirkimu-korteles.html",
   "../CLAUDE.md"
 ];
 // Moduliai, kurie kviečia registrą, ir režimai, kuriais kviečia.
@@ -1939,6 +1940,149 @@ async function testaiKortele2(){
   });
 }
 
+/* ==========================================================================
+   Taisyklių variklis (taisykles.js, A3 2026-09-26) ir skelbimo parengties patikra (parengtis.js,
+   skelbimo-parengtis.html, A4). Skaičiai ir ribos - iš thresholds.js ir teises-nuorodos.js, ne iš testo:
+   pasikeitus riboms testai lieka teisingi. Datos - fiksuotos.
+   ========================================================================== */
+const TAISYKLIU_FAILAI = '<script src="thresholds.js"><\/script><script src="workdays.js"><\/script><script src="procurement-methods.js"><\/script>'
+  + '<script src="organizacijos.js"><\/script><script src="teises-nuorodos.js"><\/script><script src="taisykles.js"><\/script>';
+async function taisykliuRemas(papildomai){ const r = await ramas(TAISYKLIU_FAILAI + (papildomai || "")); r.T = r.w.GP_TAISYKLES; return r; }
+async function testaiTaisykles(){
+  dabartine = grupe("Taisyklių variklis (taisykles.js): pirkimo rūšis, būdas, terminai, dokumentai - su teisės nuorodomis");
+
+  await testas("Pirkimo rūšis pagal vertę: PĮ ir VPĮ ribos iš thresholds.js, lygi riba - tarptautinis, mažos vertės - tik mažiau; be režimo, vertės ar objekto - sakoma, ko trūksta", async ()=>{
+    const { f, w, T } = await taisykliuRemas();
+    try {
+      const R = w.GP_THRESHOLDS, kat = (rez, obj, v) => T.kategorija({ rezimas: rez, objektas: obj, verte: v }).kodas;
+      lygu([kat("PI", "prekes", R.PI.intl_goods), kat("PI", "prekes", R.PI.intl_goods - 1), kat("PI", "paslaugos_it", R.PI.mv_goods), kat("PI", "prekes", R.PI.mv_goods - 1)],
+           ["tarptautinis", "supaprastintas", "supaprastintas", "mazos_vertes"], "PĮ prekės ir paslaugos");
+      lygu([kat("PI", "darbai", R.PI.intl_works), kat("PI", "darbai", R.PI.intl_works - 1), kat("PI", "darbai", R.PI.mv_works - 1)],
+           ["tarptautinis", "supaprastintas", "mazos_vertes"], "PĮ darbai");
+      lygu(kat("VPI", "prekes", R.VPI.intl_goods), "tarptautinis", "VPĮ prekės");
+      lygu([T.kategorija({ rezimas: "PI", objektas: "misrus", verte: 1 }).truksta, T.kategorija({ objektas: "prekes", verte: 1 }).truksta, T.kategorija({ rezimas: "PI", objektas: "prekes" }).truksta],
+           [["objektas"], ["rezimas"], ["verte"]], "trūkstami laukai");
+      // Rūšis ir jos nuoroda - pagal kortelės režimą (PĮ ir VPĮ nesimaišo)
+      const pi = T.tikrink({ rezimas: "PI", objektas: "prekes", verte: 100000 }).radiniai.find(r => r.id === "kategorija");
+      const vpi = T.tikrink({ rezimas: "VPI", objektas: "darbai", verte: 100000 }).radiniai.find(r => r.id === "kategorija");
+      lygu([pi.lygis, pi.teise.map(t => t.cit), vpi.teise.map(t => t.cit)],
+           ["info", [w.GP_TEISE.cit("supaprastintas_pirkimas", "PI")], [w.GP_TEISE.cit("mazos_vertes_pirkimas", "VPI")]], "nuorodos pagal režimą");
+      tiesa(/e-tar\.lt/.test(pi.teise[0].url) && pi.teise[0].apie, "nuoroda veda į e-tar ir sako, ką ta vieta reiškia");
+      lygu(T.tikrink({ objektas: "prekes", verte: 100000, budas: "S-AK" }).patikros.find(p => p.id === "kategorija"), { id: "kategorija", busena: "truksta", truksta: ["rezimas"] }, "be režimo teisės išvadų nėra");
+    } finally { f.remove(); }
+  });
+
+  await testas("VPĮ prekės ir paslaugos tarp centrinės valdžios ir kitų organizacijų ribų - klausiama, o ne spėjama; PĮ tokios ribos nėra", async ()=>{
+    const { f, w, T } = await taisykliuRemas();
+    try {
+      const R = w.GP_THRESHOLDS.VPI, v = Math.round((R.intl_goods_cva + R.intl_goods) / 2);
+      const r = T.tikrink({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "paslaugos", verte: v, budas: "S-AK" });
+      const k = r.radiniai.find(x => x.id === "kategorija");
+      lygu([k.lygis, k.teise.map(t => t.cit)], ["tikrinti", [w.GP_TEISE.cit("centrines_valdzios", "VPI"), w.GP_TEISE.cit("tarptautinis_pirkimas", "VPI")]]);
+      tiesa(/UAB EPSO-G/.test(k.tekstas) && k.tekstas.indexOf("140") >= 0 && k.tekstas.indexOf("216") >= 0, k.tekstas);
+      tiesa(!r.radiniai.some(x => x.id === "budas_verte"), "tas pats klausimas nekartojamas būdo radinyje");
+      lygu(T.tikrink({ rezimas: "VPI", objektas: "paslaugos", verte: v, budas: "T-AK" }).radiniai.filter(x => x.lygis === "tikrinti").length, 1, "ir tarptautiniam būdui - vienas klausimas");
+      lygu(T.kategorija({ rezimas: "PI", objektas: "paslaugos", verte: v }).cva, false, "PĮ - be centrinės valdžios ribos");
+    } finally { f.remove(); }
+  });
+
+  await testas("Būdas ir vertė: mažos vertės virš ribos ir supaprastintas virš tarptautinės - kliūtis su dalių išimtimi; tarptautinis mažesnei vertei - patikrinti; tinkamas - atitinka", async ()=>{
+    const { f, w, T } = await taisykliuRemas();
+    try {
+      const R = w.GP_THRESHOLDS, D = R.DALYS, bv = (k) => T.budoVerte(Object.assign({ rezimas: "PI", objektas: "prekes" }, k), "lt");
+      const mv = bv({ verte: R.PI.mv_goods, budas: "MV-SAB" });
+      lygu([mv.lygis, mv.teise.map(t => t.raktas)], ["kliutis", ["mazos_vertes_pirkimas", "dalys_mazos_vertes"]], "mažos vertės būdas");
+      const s = bv({ verte: R.PI.intl_works, objektas: "darbai", budas: "S-SD" });
+      lygu([s.lygis, s.teise.map(t => t.raktas)], ["kliutis", ["tarptautinis_pirkimas", "dalys_supaprastintai"]], "supaprastintas būdas");
+      tiesa(s.pastaba.indexOf(String(D.dalisProc)) >= 0 && s.pastaba.replace(/\s/g, "").indexOf(String(D.darbai)) >= 0, "dalių išimtis iš thresholds.js: " + s.pastaba);
+      lygu([bv({ verte: R.PI.mv_goods, budas: "T-AK" }).lygis, bv({ verte: R.PI.intl_goods, budas: "T-AK" }).lygis, bv({ verte: R.PI.mv_goods - 1, budas: "MV-NR" }).lygis, bv({ verte: R.PI.mv_goods - 1, budas: "S-AK" }).lygis],
+           ["tikrinti", "gerai", "gerai", "gerai"], "tarptautinis mažai vertei, tinkami būdai; mažos vertės pirkimas - supaprastinto rūšis");
+      lygu([T.budoVerte({ rezimas: "PI", objektas: "prekes", verte: 1, budas: "RK" }), T.budoVerte({ rezimas: "PI", objektas: "prekes", verte: 1 })], [null, null], "būdas be vertės režimo ar be būdo - netikrinama");
+      lygu(T.budoVerte({ rezimas: "VPI", objektas: "prekes", verte: R.VPI.intl_goods, budas: "S-AK" }).teise.map(t => t.cit)[0], w.GP_TEISE.cit("tarptautinis_pirkimas", "VPI"), "VPĮ - VPĮ nuorodos");
+    } finally { f.remove(); }
+  });
+
+  await testas("Terminai: kalendorinės ir darbo dienos, PĮ skelbiamos derybos ir atviras konkursas su sutrumpinimais, VPĮ dialogas be sutrumpinimo, mažos vertės ir neskelbiami - netaikoma", async ()=>{
+    const { f, w, T } = await taisykliuRemas();
+    try {
+      const term = (k) => T.tikrink(Object.assign({ rezimas: "PI", objektas: "prekes", verte: 100000, paskelbimas: "2026-09-17" }, k)).radiniai.find(r => r.id === "terminas");
+      // 2026-09-17 (ketv.) -> 2026-10-02 (penkt.): 15 kalendorinių, 11 darbo dienų
+      let t = term({ budas: "S-SD", pasiulymuTerminas: "2026-10-02T15:00" });
+      lygu([t.lygis, /15 d\. \(11 darbo d\.\)/.test(t.tekstas), t.teise.map(x => x.raktas)], ["gerai", true, ["terminas_sd", "terminas_nuo", "terminas_pakankamas"]]);
+      t = term({ budas: "S-SD", pasiulymuTerminas: "2026-09-25T15:00" });                 // 8 d.: tarp 7 ir 10
+      lygu([t.lygis, t.teise.map(x => x.raktas).indexOf("terminas_sd_trumpinimas") >= 0, t.teise.map(x => x.raktas).indexOf("sd_be_paraisku") >= 0], ["tikrinti", true, true], "PĮ supaprastintos derybos");
+      lygu(term({ budas: "S-SD", pasiulymuTerminas: "2026-09-23T15:00" }).lygis, "kliutis", "6 d. - trumpiau už 7");
+      lygu(term({ budas: "T-SD", verte: 900000, pasiulymuTerminas: "2026-10-10T15:00" }).lygis, "tikrinti", "tarptautinėms - 30 d., 23 d. tik pagrįstais atvejais");
+      lygu([term({ budas: "S-AK", pasiulymuTerminas: "2026-09-29T10:00" }).lygis, term({ budas: "S-AK", pasiulymuTerminas: "2026-09-26T10:00" }).lygis, term({ budas: "S-AK", pasiulymuTerminas: "2026-09-24T10:00" }).lygis, term({ budas: "S-AK", pasiulymuTerminas: "2026-09-23T10:00" }).lygis],
+           ["gerai", "info", "tikrinti", "kliutis"], "atviras: 12 d., 9 d. su elektroninėmis priemonėmis, 7 d. tik ypatingai, mažiau - ne");
+      const kd = T.tikrink({ rezimas: "VPI", objektas: "paslaugos", verte: 250000, budas: "KD", paskelbimas: "2026-09-17", pasiulymuTerminas: "2026-10-10T10:00" }).radiniai.find(r => r.id === "terminas");
+      lygu([kd.lygis, kd.teise[0].cit], ["kliutis", w.GP_TEISE.cit("terminas_kd", "VPI")], "VPĮ dialogas: 30 d. tarptautiniam, sutrumpinti negalima");
+      lygu(term({ budas: "S-SD", pasiulymuTerminas: "2026-09-17T15:00" }).lygis, "kliutis", "terminas ne vėlesnis už paskelbimą");
+      const sav = T.tikrink({ rezimas: "PI", objektas: "prekes", verte: 100000, budas: "S-SD", paskelbimas: "2026-12-01", pasiulymuTerminas: "2026-12-24T10:00" }).radiniai.find(r => r.id === "terminas_diena");
+      tiesa(sav && /švenčių dieną/.test(sav.tekstas), "Kūčios - šventė");
+      tiesa(/šeštadienį/.test(T.tikrink({ rezimas: "PI", objektas: "prekes", verte: 100000, budas: "S-SD", paskelbimas: "2026-09-10", pasiulymuTerminas: "2026-09-26T10:00" }).radiniai.find(r => r.id === "terminas_diena").tekstas), "šeštadienis");
+      lygu([T.terminas({ budas: "MV-SAB", rezimas: "PI" }).busena, T.terminas({ budas: "S-ND", rezimas: "PI" }).busena, T.terminas({ budas: "S-SD" }).busena, T.terminas({ budas: "S-SD", rezimas: "PI" }).truksta],
+           ["netaikoma", "netaikoma", "truksta", ["paskelbimas", "pasiulymuTerminas"]], "netaikoma ir trūksta");
+    } finally { f.remove(); }
+  });
+
+  await testas("Terminų lentelė ir registras: kiekvienas raktas yra, išsprendžiamas savo režimu, o lentelės skaičiai parašyti registro įraše (perskaitytame e-tar)", async ()=>{
+    const { f, w, T } = await taisykliuRemas();
+    try {
+      const G = w.GP_TEISE, blogi = [];
+      Object.keys(T.TERMINAI).forEach(p => ["PI", "VPI"].forEach(r => {
+        const L = T.TERMINAI[p][r];
+        [L.raktas].concat(L.trump, L.el_raktas ? [L.el_raktas] : []).forEach(k => { try { G.cit(k, r); } catch (e) { blogi.push(p + "/" + r + ": " + k); } });
+        const apie = G.apie(L.raktas, r);
+        [L.bazinis.T, L.bazinis.S].forEach(n => { if (apie.indexOf(String(n)) < 0) blogi.push(p + "/" + r + ": " + n + " d. nėra įraše „" + L.raktas + "“"); });
+        if (L.maziausias) L.trump.forEach(k => { const a = G.apie(k, r); [L.maziausias.T, L.maziausias.S].forEach(n => { if (a.indexOf(String(n)) < 0) blogi.push(p + "/" + r + ": " + n + " d. nėra įraše „" + k + "“"); }); });
+        if (L.el) { const a = G.apie(L.el_raktas, r); [L.bazinis.T - L.el.T, L.bazinis.S - L.el.S].forEach(n => { if (a.indexOf(String(n)) < 0) blogi.push(p + "/" + r + ": -" + n + " d. nėra įraše „" + L.el_raktas + "“"); }); }
+      }));
+      T.raktai().forEach(k => { if (!["PI", "VPI"].some(r => { try { G.cit(k, r); return true; } catch (e) { return false; } })) blogi.push("raktas „" + k + "“ neišsprendžiamas"); });
+      // thresholds.js skaičiai, įrašyti pačiame įstatyme, turi sutapti su registro (e-tar) tekstu
+      const R = w.GP_THRESHOLDS, sk = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+      [["dalys_supaprastintai", [R.DALYS.prekes_paslaugos, R.DALYS.darbai, R.DALYS.dalisProc]], ["mazos_vertes_pirkimas", [R.PI.mv_goods, R.PI.mv_works, R.VPI.mv_goods, R.VPI.mv_works]],
+       ["dalys_mazos_vertes", [R.PI.mv_goods, R.PI.mv_works]]].forEach(([k, sar]) => ["PI", "VPI"].forEach(r => sar.forEach(n => {
+        if (G.apie(k, r).indexOf(sk(n)) < 0) blogi.push(k + "/" + r + ": " + sk(n) + " nėra registro tekste");
+      })));
+      lygu(blogi, [], "lentelė ir registras");
+      tiesa(T.raktai().every(k => G.tikrinta(k) >= "2026-09-23"), "kiekvienas raktas su patikros data");
+      lygu([G.tikrinta("terminas_ak"), G.tikrinta("kvalifikacija")], ["2026-09-26", G.TIKRINTA], "nauji įrašai - su sava data");
+    } finally { f.remove(); }
+  });
+
+  await testas("Dokumentai pagal būdą: skelbiamiems - skelbimas, tarptautinėms derybos - paraiškos forma, supaprastintoms - be jos, mažos vertės - be EBVPD; nuorodos į pirkimo dokumentų turinį", async ()=>{
+    const { f, w, T } = await taisykliuRemas();
+    try {
+      const ids = b => (T.dokumentai(b, "lt") || []).map(d => d.id);
+      lygu(ids("T-SD"), ["skelbimas", "bps", "sps", "paraiska", "pasiulymas", "ebvpd", "ts", "sutartis"]);
+      lygu(ids("S-SD"), ["skelbimas", "bps", "sps", "pasiulymas", "ebvpd", "ts", "sutartis"]);
+      lygu([ids("S-ND"), ids("MV-NR"), ids("MV-SAB")[0], ids("CPO")], [["bps", "sps", "ts", "sutartis"], ["bps", "sps", "pasiulymas", "ts", "sutartis"], "skelbimas", []]);
+      const r = T.tikrink({ rezimas: "PI", budas: "S-AK" }).radiniai.find(x => x.id === "dokumentai");
+      lygu(r.teise.map(t => t.cit), ["ebvpd_dokumentuose", "ts_dokumentuose", "sutartis_dokumentuose"].map(k => w.GP_TEISE.cit(k, "PI")));
+      tiesa(/Techninė specifikacija/.test(r.tekstas) && /EBVPD/.test(r.tekstas), r.tekstas);
+      lygu(T.dokumentai("S-AK", "en")[0].pav, "Contract notice", "angliškai");
+    } finally { f.remove(); }
+  });
+
+  await testas("Kita: ilgalaikė sutartis (Metodika) ir EPSO-G kaštų ir naudos analizės riba - informacija; tekstai EN be lietuviškų žodžių", async ()=>{
+    const { f, w, T } = await taisykliuRemas();
+    try {
+      const C = w.GP_THRESHOLDS.CBA;
+      const r = T.tikrink({ rezimas: "PI", objektas: "darbai", verte: C.privaloma, budas: "T-AK", trukmeMen: 24 }).radiniai;
+      const il = r.find(x => x.id === "ilgalaike"), kna = r.find(x => x.id === "kna");
+      lygu([il.lygis, il.teise.map(t => t.raktas), kna.lygis], ["info", ["met_ilgalaike", "met_apyvarta_bendros"], "info"]);
+      tiesa(/privaloma/.test(kna.tekstas) && /ne įstatymo/.test(kna.tekstas), kna.tekstas);
+      tiesa(!T.tikrink({ rezimas: "PI", objektas: "prekes", verte: 1000, trukmeMen: 12 }).radiniai.some(x => x.id === "ilgalaike"), "12 mėn. - ne ilgalaikė");
+      const en = T.tikrink({ rezimas: "PI", objektas: "prekes", verte: 500000, budas: "S-SD", paskelbimas: "2026-09-17", pasiulymuTerminas: "2026-09-25T10:00" }, "en").radiniai;
+      const lt = en.map(x => x.tekstas + " " + (x.pastaba || "")).join(" ");
+      tiesa(!/[ąčęėįšųūž]|pirkimas|būdas/i.test(lt.replace(/PĮ|VPĮ/g, "")), "EN tekste lietuviški žodžiai: " + lt);
+      tiesa(en.some(x => x.teise.some(t => / Art\. /.test(t.cit))), "EN nuorodos");
+    } finally { f.remove(); }
+  });
+
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
@@ -1952,6 +2096,7 @@ async function testaiKortele2(){
   await testaiKortele();
   await testaiSkelbimasDarbastalis();
   await testaiKortele2();
+  await testaiTaisykles();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
