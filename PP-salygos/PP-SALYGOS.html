@@ -341,6 +341,7 @@
 <script src="../shared/pirkimo-kortele.js"></script>
 <!-- Teisės aktų nuorodos (GP_TEISE). PP-salygos - LITGRID, PĮ: straipsnių numerių modulyje nerašome. -->
 <script src="../shared/teises-nuorodos.js"></script>
+<script src="../shared/taisykles.js"></script>
 <script src="../shared/teise-stebesena.js"></script>
 <script src="../shared/ai-proxy.js"></script>
 <!-- Modulis nieko nesaugo: uždarant su neatsisiųstais atsakymais naršyklė paklausia - GP_DARBAS -->
@@ -403,9 +404,9 @@ const PARAISKA_FIKSUOTA = { TSD:true, DPSK:true };
    (vartotojo pastaba 2026-07: budu sarasas nebuvo issamus, susieta su bendru
    klasifikatoriumi). Sablonu SEIMA (TSD/SSD/AK/ND/MVP/DPSK/DPSP) isvedama is
    kanono per toSalygos().
-   Verte rezimo NEBEnustato - ji naudojama TIK patikrai pagal PĮ ribas, nes pagal
-   PĮ vertes skaiciavimo taisykles (agregavimas, preliminarioji sutartis ir kt.)
-   tarptautines vertes pirkimas gali buti ir maza suma (pvz. 90 000 EUR).       */
+   Verte rezimo NEBEnustato - ji naudojama TIK patikrai (shared/taisykles.js): pvz.
+   didesnio pirkimo daliai nuostatos taikomos pagal visu daliu verte, tad maza suma
+   dar nereiskia, kad tarptautinis budas netinka.                                */
 const budasKanonas = () => (window.GP_METHODS && GP_METHODS.byId($('#budas').value)) || null;
 const budoSalygos  = () => (window.GP_METHODS && GP_METHODS.toSalygos($('#budas').value)) || null;
 const seima = () => (budoSalygos() || {}).seima || null;
@@ -679,37 +680,26 @@ function verteEUR(){
   // Vienas parseris shared/money.js (JAV ir EU formatai). Zr. CLAUDE.md 5 sk.
   return GP_MONEY.parseEUR($('#verte')?.value) || 0;
 }
-/* Rezimo SIULYMAS pagal verte - tik numatytoji reiksme, kai budas kintamas.
-   Kintamiems budams (AK/ND/DPS) minimumas yra supaprastintas (mazos vertes = atskiras
-   budas MVP), tad grazinam binari: tarptautinis, jei suma >= PĮ tarpt. ribos; kitaip
-   supaprastintas. Grazinam null, jei vertes dar nera.                           */
 /* Pirkimo vertes rezimas - VISADA is kanoninio budo (klasifikatorius rezima
-   fiksuoja visiems 11 budu). Verte rezimo nebekeicia - ji naudojama TIK
-   patikrai pagal PĮ ribas:
-     S-*  budai: verte >= tarptautines ribos -> supaprastintas negalimas (ispejimas);
-     MV-* budai: verte >= mazos vertes ribos -> mazos vertes negalimas (ispejimas);
-     T-*  budai: verte zemiau ribos - LEIDZIAMA (pagal PĮ vertes skaiciavimo
-                 taisykles tarptautinis pirkimas gali buti ir maza suma).        */
+   fiksuoja visiems 11 budu). Verte rezimo nebekeicia - ji naudojama TIK patikrai,
+   ar budas tinka vertei. Patikra - bendras taisykliu variklis shared/taisykles.js
+   (A3, 2026-09-26; iki tol ribas lygino pats modulis): PĮ, nes modulis rengia
+   LITGRID AB dokumentus. Tekstas ir teises nuoroda - is variklio.               */
 function rezimas(){
   const m = budasKanonas();
   const rez = m ? (m.rezimas === 'mazos_vertes' ? 'mazos vertes' : m.rezimas) : null;
-  const T = window.GP_THRESHOLDS?.PI, v = verteEUR();
+  const v = verteEUR();
   const tipas = $('input[name=tipas]:checked')?.value || 'prekes';
-  const intl = T ? (tipas === 'darbai' ? T.intl_works : T.intl_goods) : null;
-  const mvR  = T ? (tipas === 'darbai' ? T.mv_works : T.mv_goods) : null;
-  const eur = x => `${x.toLocaleString('lt-LT')} EUR`;
   let msg = rez
     ? `Režimą lemia pasirinktas pirkimo <b>būdas</b>: <b>${REZIMO_VARDAS[rez] || rez}</b> pirkimas.`
     : 'Pasirinkite pirkimo būdą.';
-  if (v && intl && rez === 'supaprastintas' && v >= intl){
-    msg += ` <span style="color:var(--color-error);font-weight:600">Dėmesio: vertė (${eur(v)}) siekia PĮ`
-      + ` tarptautinę ribą (${eur(intl)}) - supaprastintas pirkimas negalimas, rinkitės tarptautinį būdą.</span>`;
-  } else if (v && mvR && rez === 'mazos vertes' && v >= mvR){
-    msg += ` <span style="color:var(--color-error);font-weight:600">Dėmesio: vertė (${eur(v)}) siekia mažos`
-      + ` vertės ribą (${eur(mvR)}) - mažos vertės pirkimas negalimas, rinkitės supaprastintą ar tarptautinį būdą.</span>`;
-  } else if (v && intl && rez === 'tarptautinis' && v < intl){
-    msg += ` Vertė žemiau PĮ tarptautinės ribos (${eur(intl)}) - tarptautinis būdas vis tiek galimas pagal`
-      + ' PĮ vertės skaičiavimo taisykles (agregavimas, preliminarioji sutartis ir kt.).';
+  const bv = (m && v && window.GP_TAISYKLES) ? GP_TAISYKLES.budoVerte({ rezimas: 'PI', objektas: tipas, verte: v, budas: m.id }, 'lt') : null;
+  if (bv && bv.lygis && bv.lygis !== 'gerai'){
+    const cit = (bv.teise || []).map(t => t.cit).join('; ');
+    const tekstas = esc(bv.tekstas) + (bv.pastaba ? ' ' + esc(bv.pastaba) : '') + (cit ? ` <span class="cite">(${esc(cit)})</span>` : '');
+    msg += bv.lygis === 'kliutis'
+      ? ` <span style="color:var(--color-error);font-weight:600">Dėmesio: ${tekstas}</span>`
+      : ` ${tekstas}`;
   }
   const info = $('#rezInfo');
   if (info) info.innerHTML = msg;
