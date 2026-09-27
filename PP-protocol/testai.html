@@ -159,6 +159,207 @@ async function testaiKelias(){
   });
 }
 
+/* 2026-09-27: protokolo Word tekstas - lietuviškomis raidėmis ir be kalbos klaidų. Iki tol derybų protokolų (D3-D8) ir
+   numatytojo protokolo sakiniai buvo be diakritikų („Pripazinti, kad paraiskas pateike sie tiekejai“), D6 ir D8 sprendimai
+   praleisdavo numerius (1, 2, 3, 5, 6), sumos rašytos „495000.5 Eur“, taškai dvigubėdavo („24 mėn..“, „EBVPD..“), o A3
+   protokolas nesusikurdavo („Table is not defined“). Tikrinamas tikras Word failas (word/document.xml) kiekvienam protokolų
+   tipui su užpildyta ir su tuščia forma. Tiekėjų ir narių vardai - su lietuviškomis raidėmis, tad radiniai - tik modulio tekstas. */
+const LT_RAIDE = "A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž";
+const BE_DIAKRITIKU = [
+  // žodžių pradžios, kurių taisyklingame tekste nėra (trūkstama raidė - pačioje pradžioje)
+  new RegExp("(?<![" + LT_RAIDE + "])(tiekej|pasiulym|paraisk|salyg|pripazin|veliau|priemonem|istatym|procedur|isvad|uzfiks|uzpild|susipazin|pasiras|igaliot|ivertin|ivardin|ivykus|issiun|issius|isnagrin|zemiau|aukstos|islistyt|atidejim|laimej|pranest|kokybes|mazejim|ekonomisk|prasyt|siunciam|priemim|bendruju|privaciu|viesai)", "gi"),
+  // ištisi žodžiai be diakritikų
+  new RegExp("(?<![" + LT_RAIDE + "])(siuos|siu|sie|sio|del|zr|derybu|termina|kvietima|sprendima|neatitikima|pirmini|protokola|poreiki|dali|salis|rasto|parasai|pateike|viesu)(?![" + LT_RAIDE + "])", "gi")
+];
+function kalbosPirkimas(id, tipas, papild){
+  return Object.assign({ id, name: "Galios transformatorių pirkimas", korteles_data: "2026-09-01", val_ex: 500000, val_inc: 605000, obj_type: "prekes",
+    terminas: "24", parts_enabled: false, confidential_appendix: false, cpo_applicable: false, priority: "normal", parts: [], type: tipas,
+    eval_criteria: "kainos ir kokybės santykį", val_cat: W.deriveValCat(tipas),
+    komisija: { tipas: "nuolatine", date: "2026-01-10", nr: "K-1", name: "Nuolatinė pirkimų komisija", chair: "Jonas Jonaitis", secretary: "Rasa Rasaitė",
+      members: ["Petras Petraitis", "Asta Astaitė"], nesaliskumas: true, nesaliskumasData: "2026-09-01" },
+    channel: "cvp", cvp_nr: "712345", kval: "abu", protocols: {}, createdAt: "2026-09-01" }, papild || {});
+}
+async function dokTekstas(blob){
+  const ent = s => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+  return (await docxDalis(blob, /^word\/document\.xml$/)).split(/<\/w:p>/).map(x => ent(x.replace(/<[^>]+>/g, ""))).filter(x => x.trim()).join("\n");
+}
+const TA = "UAB „Tiekėjas A“", TB = "UAB „Tiekėjas B“", TC = "UAB „Tiekėjas C“", TD = "UAB „Tiekėjas D“", TE = "UAB „Tiekėjas E“", TF = "UAB „Tiekėjas F“";
+function pildyk(r, m){ Object.entries(m).forEach(([s, v]) => { const el = r.querySelector(s); if (el.type === "checkbox") el.checked = v; else el.value = v; }); }
+const eil = (s, i) => [...D.querySelectorAll(s)][i];
+const pridek = sarasas => D.querySelector(sarasas + " + button").click();
+const isvalyk = s => D.querySelectorAll(s).forEach(e => e.remove());
+// [raktas, pirkimas, protokolas, formos pildymas]; „(tuščias)“ - be tiekėjų eilučių (sakiniai „(... nėra)“)
+const KALBOS_ATVEJAI = [
+  ["A1", "A", "A1", () => {
+    D.getElementById("pf-max-kaina").checked = true; D.getElementById("pf-max-ex").value = "600000"; D.getElementById("pf-max-inc").value = "726000";
+    W.addPriedas("pf-priedai"); [...D.querySelectorAll("#pf-priedai > div")].pop().querySelectorAll("input")[1].value = "Techninė specifikacija.";
+  }],
+  ["A2", "A", "A2", () => {
+    pildyk(eil(".klausimas-row", 0), { ".k-tiekejas": TA, ".k-turinys": "Ar galima siūlyti lygiavertę įrangą?", ".k-atsakymas": "Taip, jei ji atitinka techninės specifikacijos reikalavimus." });
+    W.addKlaus(); eil(".klausimas-row", 1).querySelector(".k-tiekejas").value = TB; eil(".klausimas-row", 1).querySelector('input[value="prasymas"]').checked = true;
+    D.getElementById("pf-terminas-pratesas").checked = true; D.getElementById("pf-new-term").value = "2026-10-15"; D.getElementById("pf-term-reason").value = "atsakymai keičia pasiūlymo parengimą";
+    D.getElementById("pf-bps193").checked = true; D.getElementById("pf-bps193-days").value = "4";
+  }],
+  ["A2 (tuščias)", "A", "A2", () => { isvalyk(".klausimas-row"); D.getElementById("pf-bps193").checked = true; D.getElementById("pf-bps193-days").value = "6"; }],
+  ["A3", "A", "A3", () => {
+    pildyk(eil(".tiek-row", 0), { ".t-name": TA, ".t-ex": "480000", ".t-inc": "580800", ".t-tech": "Atitinka TS" });
+    pildyk(eil(".tiek-row", 1), { ".t-name": TB, ".t-ex": "495000.5", ".t-inc": "598950.61", ".t-note": "Pateikta su išlygomis" });
+  }],
+  ["A4", "A", "A4", () => {
+    pildyk(eil(".eval-row", 0), { ".e-name": TA, ".e-eval": "atitinka", ".e-ebvpd": "atitinka", ".e-action": "vertinti" });
+    pildyk(eil(".eval-row", 1), { ".e-name": TB, ".e-eval": "neatitinka", ".e-ebvpd": "netaikoma", ".e-action": "tikslinti" });
+    pildyk(eil(".rank-row", 0), { ".r-name": TA, ".r-ex": "480000", ".r-inc": "580800" });
+    pildyk(eil(".rank-row", 1), { ".r-name": TB, ".r-ex": "495000", ".r-inc": "598950" });
+  }],
+  ["A5", "A", "A5", () => {
+    W.addKvalRow(); eil(".kv-name", 0).value = TA; eil(".kv-name", 1).value = TB;
+    eil(".kv-pal", 1).value = "yra"; eil(".kv-kval", 1).value = "neatitinka"; eil(".kv-sp", 1).value = "atmesti";
+    D.getElementById("pf-winner").value = TA; D.getElementById("pf-winner-ex").value = "480000";
+  }],
+  ["D3", "D", "D3", () => {}],
+  ["D3_1", "D", "D3_1", () => {}],
+  ["D4", "D", "D4", () => {
+    pridek("#pf-d4-list");
+    pildyk(eil(".d4-row", 0), { ".d4-name": TA, ".d4-atit": "taip", ".d4-vk": "kviesti" });
+    pildyk(eil(".d4-row", 1), { ".d4-name": TB, ".d4-atit": "ne", ".d4-neat-aprasymas": "Nepateiktas EBVPD.", ".d4-vk": "patikslinti" });
+    pildyk(eil(".d4-row", 2), { ".d4-name": TC, ".d4-atit": "ne", ".d4-neat-aprasymas": "Paraiška pateikta pavėluotai", ".d4-vk": "atmesti", ".d4-atm-pp": "14.7.1" });
+  }],
+  ["D4 (tuščias)", "D", "D4", () => isvalyk(".d4-row")],
+  ["D5a", "D", "D5a", () => {
+    pildyk(eil("#pf-d5-tbody tr", 0), { ".d5-name": TA, ".d5-ex": "480000", ".d5-inc": "580800" });
+    pildyk(eil("#pf-d5-tbody tr", 1), { ".d5-name": TB, ".d5-ex": "495000.5", ".d5-inc": "598950.61" });
+  }],
+  ["D5a (tuščias)", "D", "D5a", () => isvalyk("#pf-d5-tbody tr")],
+  ["D6", "D", "D6", () => {
+    for (let k = 0; k < 4; k++) pridek("#pf-d6-list");
+    pildyk(eil(".d6-row", 0), { ".d6-name": TA, ".d6-atit": "taip", ".d6-vk": "derybos", ".d6-derderfor": "kaina_salygos", ".d6-der-data": "2026-10-05", ".d6-der-laikas": "10:00", ".d6-der-budas": "teams" });
+    pildyk(eil(".d6-row", 1), { ".d6-name": TB, ".d6-atit": "ne", ".d6-neat-aprasymas": "Nepateikta CE atitikties deklaracija.", ".d6-vk": "salinti" });
+    pildyk(eil(".d6-row", 2), { ".d6-name": TC, ".d6-atit": "ne", ".d6-neat-aprasymas": "Viršyta pirkimui skirta suma", ".d6-vk": "atmesti", ".d6-atmesti-pp": "9.7.1" });
+    pildyk(eil(".d6-row", 3), { ".d6-name": TD, ".d6-atit": "taip", ".d6-vk": "derybos", ".d6-derderfor": "kaina", ".d6-der-data": "2026-10-05", ".d6-der-laikas": "11:00", ".d6-der-budas": "gyvas" });
+    pildyk(eil(".d6-row", 4), { ".d6-name": TE, ".d6-atit": "taip", ".d6-vk": "derybos", ".d6-derderfor": "kita", ".d6-derderfor-kita": "techninių sprendinių.", ".d6-der-data": "2026-10-06", ".d6-der-laikas": "09:00", ".d6-der-budas": "cvpis" });
+    pildyk(eil(".d6-row", 5), { ".d6-name": TF, ".d6-atit": "taip", ".d6-vk": "derybos", ".d6-derderfor": "kita", ".d6-der-data": "2026-10-06", ".d6-der-laikas": "13:00", ".d6-der-budas": "skype" });
+  }],
+  ["D6 (tuščias)", "D", "D6", () => isvalyk(".d6-row")],
+  ["D6_1", "D", "D6_1", () => {
+    D.getElementById("pf-der-date").value = "2026-10-05"; D.getElementById("pf-der-vieta").value = "nuotoliniu būdu (MS Teams)";
+    W.addDerRow();
+    pildyk(eil("#pf-der-list .klausimas-row", 0), { ".der-name": TA, ".der-rez": "susitarta", ".der-note": "Kaina sumažinta 3 proc." });
+    pildyk(eil("#pf-der-list .klausimas-row", 1), { ".der-name": TB, ".der-rez": "nesusitarta" });
+  }],
+  ["D6_1 (tuščias)", "D", "D6_1", () => { isvalyk("#pf-der-list .klausimas-row"); D.getElementById("pf-der-date").value = ""; }],
+  ["D7", "D", "D7", () => { D.getElementById("pf-gp-days").value = "10"; }],
+  ["D7_2", "D", "D7_2", () => {}],
+  ["D8", "D", "D8", () => {
+    pridek("#pf-d8-list");
+    pildyk(eil(".d8-row", 0), { ".d8-name": TA, ".d8-atit": "taip", ".d8-ex": "470000", ".d8-inc": "568700", ".d8-vieta": "1", ".d8-vk": "laimetojas" });
+    pildyk(eil(".d8-row", 1), { ".d8-name": TB, ".d8-atit": "taip", ".d8-ex": "490000.5", ".d8-inc": "592900.61", ".d8-vieta": "2", ".d8-vk": "vertinti" });
+    pildyk(eil(".d8-row", 2), { ".d8-name": TC, ".d8-atit": "ne", ".d8-ex": "460000", ".d8-inc": "556600", ".d8-vieta": "3", ".d8-motyvas": "Pasiūlymas neatitinka TS 4.2 p.", ".d8-atm-pp": "9.7.1", ".d8-vk": "atmesti" });
+    D.getElementById("pf-winner-d8").value = TA; D.getElementById("pf-winner-d8-ex").value = "470000";
+  }],
+  ["D8 (tuščias)", "D", "D8", () => isvalyk(".d8-row")],
+  ["numatytasis (N5a)", "N", "N5a", () => {}]
+];
+let KALBOS_TEKSTAI = null;
+async function kalbosTekstai(){
+  if (KALBOS_TEKSTAI) return KALBOS_TEKSTAI;
+  await modulis();
+  const PKS = { A: "TEST-KALBA-A", D: "TEST-KALBA-D", N: "TEST-KALBA-N" };
+  W.saveProcurementData(PKS.A, kalbosPirkimas(PKS.A, "atviras_tarptautinis", { confidential_appendix: true, cpo_applicable: true }));
+  W.saveProcurementData(PKS.D, kalbosPirkimas(PKS.D, "derybos_tarptautinis", { eval_criteria: "kainą" }));
+  W.saveProcurementData(PKS.N, kalbosPirkimas(PKS.N, "neskelbiamos_supaprastintas", { eval_criteria: "kainą" }));
+  const out = {};
+  for (const [raktas, p, protoId, pildymas] of KALBOS_ATVEJAI) {
+    try {
+      W.openProtocol(PKS[p], protoId);
+      pildymas();
+      const pk = W.getProcurement(PKS[p]), proto = W.getSequence(pk.type).find(x => x.id === protoId);
+      out[raktas] = await dokTekstas(await W.buildDocx(pk, proto, "2026-09-28", "P-12", true));
+    } catch (e) { out[raktas] = "KLAIDA: " + ((e && e.message) || e); }
+  }
+  return (KALBOS_TEKSTAI = out);
+}
+// Sprendimų skilties pirmo lygio numeriai („N. ...“ eilutės pradžioje; papunkčiai - su įtrauka)
+function sprendimuNumeriai(t){
+  const e = t.split("\n"), i = e.indexOf("2. SPRENDIMAS (-AI)");
+  if (i < 0) return null;
+  const pab = e.findIndex((x, k) => k > i && /^3\. (PRIEDAS|PARAŠAI)/.test(x));
+  return e.slice(i + 1, pab < 0 ? undefined : pab).map(x => (x.match(/^(\d+)\. /) || [])[1]).filter(Boolean).map(Number);
+}
+
+async function testaiWordTekstas(){
+  grupe("Protokolo Word tekstas: lietuviškos raidės ir kalba (visi protokolų tipai)");
+  await testas("Visų tipų protokolai susikuria su užpildyta ir tuščia forma (A3 iki 2026-09-27 - „Table is not defined“)", async () => {
+    const T = await kalbosTekstai(), blogi = Object.entries(T).filter(([k, v]) => /^KLAIDA/.test(v)).map(([k, v]) => k + ": " + v);
+    tiesa(!blogi.length, blogi.join("\n"));
+    lygu(Object.keys(T).length, KALBOS_ATVEJAI.length, "atvejų");
+  });
+
+  await testas("Protokolo tekste nėra lietuviškų žodžių be diakritikų („Pripazinti“, „tiekeju“, „pasiulymus“, „veliau“, „Pirkimu istatymo“...)", async () => {
+    const T = await kalbosTekstai(), rasta = [];
+    Object.entries(T).forEach(([k, v]) => BE_DIAKRITIKU.forEach(re => { re.lastIndex = 0; let m;
+      while ((m = re.exec(v))) rasta.push(k + ": „" + v.slice(Math.max(0, m.index - 25), m.index + 25).replace(/\n/g, " ") + "“"); }));
+    tiesa(!rasta.length, rasta.length + " radiniai:\n" + rasta.slice(0, 25).join("\n"));
+  });
+
+  await testas("Sprendimai numeruojami iš eilės (D6 ir D8 su papunkčiais - buvo 1, 2, 3, 5, 6), sumos lietuvišku formatu, sakinio gale vienas taškas", async () => {
+    const T = await kalbosTekstai(), blogi = [];
+    Object.entries(T).forEach(([k, v]) => {
+      const nr = sprendimuNumeriai(v);
+      if (!nr) blogi.push(k + ": nėra skilties „2. SPRENDIMAS (-AI)“");
+      else if (nr.some((x, i) => x !== i + 1)) blogi.push(k + ": sprendimų numeriai " + nr.join(", "));
+      const suma = v.match(/\d{4,}(?:[.,]\d+)?\s*Eur|\d\.\d{1,2}\s*Eur/i);
+      if (suma) blogi.push(k + ": suma ne lietuvišku formatu „" + suma[0] + "“");
+      const taskai = v.match(/[^.\n]{0,20}[^.]\.\.(?!\.)/);
+      if (taskai) blogi.push(k + ": du taškai „" + taskai[0] + "“");
+    });
+    tiesa(!blogi.length, blogi.join("\n"));
+    lygu(sprendimuNumeriai(T.D6), [1, 2, 3, 4, 5], "D6");
+    lygu(sprendimuNumeriai(T.D8), [1, 2, 3, 4, 5, 6], "D8");
+    tiesa(T.D6.indexOf("\n    4) " + TF + ": 2026-10-06 13:00, telekonferencija (Skype); derybos dėl kitų sąlygų.\n4. Vadovaujantis") >= 0, "D6 papunkčiai: " + T.D6.slice(T.D6.indexOf("13.2.1"), T.D6.indexOf("13.2.1") + 600));
+    tiesa(/\n {4}1\. UAB „Tiekėjas A“ - 470\s000,00 Eur be PVM;\n {4}2\. UAB „Tiekėjas B“ - 490\s000,50 Eur be PVM\.\n3\. /.test(T.D8), "D8 eilė");
+  });
+
+  await testas("Kalbos taisymai ir nepakitusios teisės bei BPS nuorodos (58 ir 68 str., 13.2.1, 14.5, 19.3, 9.26 p.)", async () => {
+    const T = await kalbosTekstai();
+    const yra = (k, ...frazes) => frazes.forEach(f => tiesa(T[k].indexOf(f) >= 0, k + ": nėra „" + f + "“\n" + T[k].slice(T[k].indexOf("DARBOTVARK"))));
+    const nera = (k, ...frazes) => frazes.forEach(f => tiesa(T[k].indexOf(f) < 0, k + ": liko „" + f + "“"));
+    yra("A1", "terminas: 24 mėn.\n", "Įsakymo data: 2026-01-10.", "nebuvimas ir kvalifikacija tikrinami;", "nebuvimas ir kvalifikacija nėra tikrinami;",
+        "terminą pasiūlymams pateikti.", "Pagrindimas dėl nepirkimo per CPO pridedamas prie protokolo.", "☑ 2 priedas. Techninė specifikacija.\n");
+    tiesa(/viršijus 600\s000,00 Eur be PVM \(726\s000,00 Eur su PVM\)/.test(T.A1), "A1 maksimali kaina");
+    yra("A2", "(klausimo / prašymo turinys - žr. priedą)", "(atsakymo turinys - žr. priedą)", "Bendrųjų Pirkimo sąlygų 19.3 punkto");
+    yra("A2 (tuščias)", "mažiau nei 6 (šešios) dienos");
+    yra("A3", "1. Susipažinti su pasiūlymų kainų informacija.");
+    yra("A4", "☐ Neatitinka sąlygų. EBVPD: netaikoma. Veiksmas: tikslinti neatitikimus.", "(BPS 9.26 p.)", "3. Paprašyti potencialaus laimėtojo pateikti kvalifikacijos dokumentus.");
+    yra("A5", "pašalinimo pagrindų nėra; kvalifikacija atitinka reikalavimus. Sprendimas: priimti.", "1. Nustatyti, kad Pirkimą laimėjo " + TA);
+    nera("A5", "lai mėjo");
+    yra("D3", "1. Pripažinti, kad paraiškas pateikė šie tiekėjai (žr. SVARSTYTA dalį).", "2. Perduoti paraiškas vertinti pagal");
+    yra("D4", "neatitikimas: Nepateiktas EBVPD. Siūloma prašyti patikslinti / papildyti paraišką (BPS 14.5 p.).",
+        "Vadovaujantis Pirkimų įstatymo 58 str. ir Bendrųjų Pirkimo sąlygų nuostatomis, atmesti paraiškas: " + TC + " (Pirkimo sąlygų 14.7.1 p.).",
+        "5. Ne vėliau kaip per 1 darbo dieną CVP IS priemonėmis informuoti tiekėjus apie priimtus sprendimus.");
+    yra("D4 (tuščias)", "(paraiškų nėra)");
+    yra("D5a", "pateikė SVARSTYTA dalyje nurodyti tiekėjai.", "2. Perduoti pirminius pasiūlymus Komisijos nariams ir (ar) ekspertams vertinti.");
+    yra("D5a (tuščias)", "(pirminiai pasiūlymai nepateikti)");
+    yra("D6", "interneto svetainėje viešai skelbiamą informaciją, nenustatyta viešųjų ir privačių interesų kolizijos",
+        "(derybos dėl pasiūlymo kainos ir kitų pasiūlymo sąlygų)", "Vadovaujantis Bendrųjų Pirkimo sąlygų 13.2.1 punktu, kviesti į derybas šiuos tiekėjus:",
+        TD + ": 2026-10-05 11:00, tiesioginis susitikimas LITGRID biure; derybos dėl pasiūlymo kainos.",
+        TE + ": 2026-10-06 09:00, CVP IS priemonėmis; derybos dėl techninių sprendinių.",
+        "prašyti šių tiekėjų ne vėliau kaip per 3 darbo dienas", "Vadovaujantis Pirkimų įstatymo 58 str. ir Bendrųjų Pirkimo sąlygų nuostatomis, atmesti šių tiekėjų pirminius pasiūlymus");
+    nera("D6", "derybos dėl:", "lentelėje", "aukščiau", "žemiau");
+    yra("D6 (tuščias)", "(pirminių pasiūlymų nėra)");
+    yra("D6_1", "Derybos su tiekėjais vykdomos 2026 m. spalio 5 d. Derybų vieta: nuotoliniu būdu (MS Teams).", "Pastabos: Kaina sumažinta 3 proc.\n",
+        "3. PARAŠAI", "Komisijos pirmininkas (-ė) ___", "Tiekėjo įgaliotas atstovas ___", "(Reglamento §29 - derybų protokolą pasirašo");
+    yra("D6_1 (tuščias)", "Derybos su tiekėjais vykdomos ____. Derybų vieta: ___.", "(derybų duomenys nepateikti)");
+    yra("D7", "(tiekėjai nenurodyti)", "per 10 darbo dienų nuo kvietimo išsiuntimo dienos.", "2. Ne vėliau kaip per 1 darbo dieną CVP IS priemonėmis išsiųsti kvietimą tiekėjams.");
+    yra("D8", "ir kainą / kainos ir kokybės santykį:", "Sudaryti tokią pasiūlymų eilę ekonominio naudingumo mažėjimo tvarka:",
+        "Vadovaujantis Pirkimų įstatymo 58 str. nuostatomis, atmesti šių tiekėjų pasiūlymus: " + TC + " (Pirkimo sąlygų 9.7.1 p.), motyvas: Pasiūlymas neatitinka TS 4.2 p.\n",
+        "Vadovaujantis Pirkimų įstatymo 68 str. nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą.",
+        "Pakviesti laimėjusį tiekėją sudaryti sutartį pasibaigus atidėjimo terminui.");
+    tiesa(/Sutarties kaina - 470\s000,00 Eur be PVM\./.test(T.D8), "D8 sutarties kaina");
+    yra("D8 (tuščias)", "(galutinių pasiūlymų nėra)", "Sutarties kaina - ___ Eur be PVM.");
+    yra("numatytasis (N5a)", "(Protokolo turinys užpildomas pagal poreikį)", "(Sprendimai užpildomi pagal poreikį)");
+  });
+}
+
 async function testaiBusenos(){
   grupe("Sąžiningos būsenos (Q3)");
   await testas("Neperskaitomi pirkimai: juosta „būsena nežinoma“, sąrašas nesako „Dar nėra pirkimų“, įrašas neperrašomas", async () => {
@@ -349,6 +550,7 @@ async function testaiTurinys(){
     await modulis();
     await testaiPuslapis();
     await testaiKelias();
+    await testaiWordTekstas();
     await testaiBusenos();
     await testaiKortele();
     await testaiTeise();
