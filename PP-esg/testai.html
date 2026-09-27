@@ -185,10 +185,93 @@ async function testaiLogika(){
   });
 }
 
+/* 2026-09-28 (mutacijų auditas): pakartotinės patikros periodika, sąrašo paieška, filtrai ir rikiavimas, tiekėjo forma,
+   rodikliai, CSV eksportas ir vertimai - iki tol netikrinta (10 tyčinių klaidų testai nepastebėjo). */
+const dienuPries = n => new Date(Date.now() - n * 864e5).toISOString();
+function testoTiekejai(){
+  const t = (id, name, code, risk, extra) => Object.assign({ id, name, code, risk, country: "Lietuva", category: "Kita", sanctions: "clean",
+    assessment: "done", lastCheck: dienuPries(10), sectorRisk: 1, criticality: 1, createdAt: "2026-09-01T00:00:00.000Z" }, extra || {});
+  localStorage.setItem("ppesg.suppliers", JSON.stringify([
+    t("SUP-A", "Alfa UAB", "111 222", "low"),
+    t("SUP-B", "Beta UAB", "222 333", "high"),
+    t("SUP-C", "Gama UAB", "333 444", "unassessed", { assessment: "pending", lastCheck: null, source: "cvpis" }),
+    t("SUP-D", "Delta UAB", "444 555", "medium", { lastCheck: dienuPries(200) }),
+    t("SUP-E", "Epsilon UAB", "555 666", "high", { sanctions: "blocked", lastCheck: dienuPries(400) }),
+    t("SUP-Z", "Zeta UAB", "666 777", "low", { lastCheck: null })
+  ]));
+}
+const eilutes = () => [...D.querySelectorAll("#supBody tr .t-name")].map(x => x.textContent.trim().split(/\s+/)[0]);
+async function testaiStebejimas(){
+  grupe("Stebėjimas, sąrašas, forma, rodikliai, eksportas ir vertimai");
+  await testas("Pakartotinės patikros periodika: aukšta rizika 90 d., vidutinė 180, žema 365; neįvertinti ir blokuoti - ne „laukia patikros“, įvertintas be patikros - laukia", async () => {
+    const f = s => W.dueForRescreen(Object.assign({ assessment: "done", sanctions: "clean" }, s));
+    lygu([f({ risk: "high", lastCheck: dienuPries(89) }), f({ risk: "high", lastCheck: dienuPries(91) }), f({ risk: "medium", lastCheck: dienuPries(179) }),
+          f({ risk: "medium", lastCheck: dienuPries(181) }), f({ risk: "low", lastCheck: dienuPries(364) }), f({ risk: "low", lastCheck: dienuPries(366) })],
+         [false, true, false, true, false, true], "ribos");
+    lygu([f({ risk: "high", assessment: "pending", lastCheck: null }), f({ risk: "high", sanctions: "blocked", lastCheck: dienuPries(400) }), f({ risk: "low", lastCheck: null })],
+         [false, false, true], "neįvertintas / blokuotas / netikrintas");
+  });
+
+  await testas("Tiekėjų sąrašas: paieška pagal pavadinimą ir įmonės kodą, filtrai (rizika, sankcijos, reikia vertinimo, laukia patikros); neįvertinti ir aukštos rizikos - viršuje", async () => {
+    testoTiekejai(); await modulis(); W.setView("suppliers");
+    lygu(eilutes(), ["Gama", "Beta", "Epsilon", "Delta", "Alfa", "Zeta"], "rikiavimas (neįvertinti, aukšta, vidutinė, žema; tos pačios rizikos - pagal pavadinimą)");
+    const nustatyk = (id, v) => { D.getElementById(id).value = v; W.renderSuppliers(); };
+    nustatyk("supSearch", "222 333"); lygu(eilutes(), ["Beta"], "paieška pagal kodą");
+    nustatyk("supSearch", "delta"); lygu(eilutes(), ["Delta"], "paieška pagal pavadinimą (be didžiųjų)");
+    nustatyk("supSearch", "");
+    nustatyk("fRisk", "high"); lygu(eilutes(), ["Beta", "Epsilon"], "rizikos filtras"); nustatyk("fRisk", "");
+    nustatyk("fSanct", "blocked"); lygu(eilutes(), ["Epsilon"], "sankcijų filtras"); nustatyk("fSanct", "");
+    nustatyk("fFlag", "pending"); lygu(eilutes(), ["Gama"], "reikia vertinimo");
+    nustatyk("fFlag", "due"); lygu(eilutes(), ["Delta", "Zeta"], "laukia pakartotinės patikros (pasenusi ir niekada netikrintas; blokuotas ir neįvertintas - ne)");
+    W.resetSupFilters(); lygu(eilutes().length, 6, "išvalius filtrus");
+  });
+
+  await testas("Rodikliai skaičiuojami iš registro: tiekėjai, aukšta rizika, reikia vertinimo, laukia patikros, blokuoti", async () => {
+    W.setView("dashboard");
+    const v = [...D.querySelectorAll("#kpiRow .kpi-value")].map(x => x.textContent.trim());
+    lygu(v.slice(0, 5), ["6", "2", "1", "2", "1"], "rodiklių reikšmės (tiekėjai, aukšta rizika, reikia vertinimo, laukia patikros, blokuoti)");
+  });
+
+  await testas("Tiekėjo forma: be pavadinimo neišsaugoma; redaguojant sankcijų būsena ir paskutinė patikra išlieka, „reikia vertinimo“ nuimama; ESRS taškas be pavadinimo neišsaugomas", async () => {
+    const pries = St().getSuppliers().length;
+    W.openSupplierModal(); D.getElementById("sf-name").value = "   "; W.saveSupplierForm();
+    lygu(St().getSuppliers().length, pries, "tiekėjas be pavadinimo išsaugotas"); W.closeModal();
+    localStorage.setItem("ppesg.suppliers", JSON.stringify(St().getSuppliers().map(x => x.id === "SUP-E" ? Object.assign(x, { assessment: "pending" }) : x)));
+    const patikra = St().getSupplier("SUP-E").lastCheck;
+    W.openSupplierModal("SUP-E"); D.getElementById("sf-owner").value = "Jonas Jonaitis"; W.saveSupplierForm();
+    const e = St().getSupplier("SUP-E");
+    lygu([e.sanctions, e.lastCheck, e.assessment, e.owner], ["blocked", patikra, "done", "Jonas Jonaitis"], "po redagavimo");
+    const esrsPries = St().getEsrs().length;
+    W.addEsrsPoint(); D.getElementById("ef-name").value = ""; W.saveEsrsForm();
+    lygu(St().getEsrs().length, esrsPries, "ESRS taškas be pavadinimo išsaugotas"); W.closeModal();
+  });
+
+  await testas("CSV eksportas: kabutės ir kableliai ekranuojami, failas su UTF-8 žyme (Excel lietuviškoms raidėms)", async () => {
+    St().saveEsrs({ name: 'Taškas "su kabutėmis", ir kableliu', esrs: "E1", value: "1,5", unit: "t", coverage: 50, source: "manual", date: "2026-09-28" });
+    const tikras = W.URL.createObjectURL, tikrasSp = W.HTMLAnchorElement.prototype.click; let blob = null;
+    W.URL.createObjectURL = b => { blob = b; return "blob:testas"; }; W.HTMLAnchorElement.prototype.click = function(){};
+    try { W.downloadExport("csv"); } finally { W.URL.createObjectURL = tikras; W.HTMLAnchorElement.prototype.click = tikrasSp; }
+    const baitai = new Uint8Array(await blob.arrayBuffer()), txt = await blob.text();   // text() UTF-8 žymę nuima - tikrinami baitai
+    lygu([...baitai.slice(0, 3)], [0xEF, 0xBB, 0xBF], "nėra UTF-8 žymės (BOM)");
+    tiesa(txt.indexOf('"Taškas ""su kabutėmis"", ir kableliu"') > 0 && txt.indexOf('"1,5"') > 0, "ekranavimas: " + txt.split("\n").pop());
+  });
+
+  await testas("Vertimai: kiekvienas LT raktas turi EN atitikmenį; perjungus kalbą filtrų ir lango uždarymo pavadinimai angliški", async () => {
+    const I = W.eval("I18N"), truksta = Object.keys(I.lt).filter(k => !(k in I.en)), perdaug = Object.keys(I.en).filter(k => !(k in I.lt));
+    tiesa(!truksta.length && !perdaug.length, "EN trūksta: " + truksta.join(", ") + "; LT trūksta: " + perdaug.join(", "));
+    W.setLang("en");
+    try {
+      lygu([D.getElementById("fRisk").getAttribute("aria-label"), D.getElementById("supSearch").getAttribute("aria-label")], [I.en["th.risk"], I.en["a11y.supSearch"]], "filtrų pavadinimai");
+      W.openSupplierModal(); lygu(D.querySelector("#modalShell .x-btn").getAttribute("aria-label"), "Close", "uždarymo mygtukas"); W.closeModal();
+    } finally { W.setLang("lt"); }
+  });
+}
+
 (async function(){
   try {
     await testaiPuslapis();
     await testaiLogika();
+    await testaiStebejimas();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
