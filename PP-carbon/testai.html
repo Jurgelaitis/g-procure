@@ -45,7 +45,10 @@ Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje arba gyvai.<
 
 <div id="rezultatai"></div>
 
+<script src="../shared/testu-apsauga.js"></script>
 <script>
+// Skaičiuoklės testai rašo modulio saugyklą - tikri naudotojo duomenys įsimenami ir atkuriami
+const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k === "pp_carbon_data" || k === "ppcarbon.lang" || k === "gprocure.infoPanel.pp-carbon");
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
 function grupe(pav){
@@ -258,10 +261,66 @@ async function testaiBusenos(){
   lt.f.remove(); en.f.remove();
 }
 
+
+/* 2026-09-28 (mutacijų auditas): vertinimo variklis (evaluation.js), skaičių laukai ir skaičiuoklė - iki tol netikrinta.
+   Rasta ir ištaisyta: laukai „1.500.000“ skaitė kaip 1,5, „1,200.5“ - kaip 1,2 (taip pat ir pasiūlymo kainą). */
+async function testaiSkaiciavimai(){
+  dabartine = grupe("Vertinimo variklis, skaičiai ir skaičiuoklė");
+  const P = await puslapis("index.html?lang=lt", 1280), W = P.f.contentWindow, E = W.GP_CARBON_EVAL, St = W.eval("Store");
+  await testas("Gyvavimo ciklo anglis: įterptoji + metinė × metai (numatyta 30 m.); neatskleista - null", async ()=>{
+    lygu([E.lifecycleCarbonKg({ embodiedCarbon: 1000, annualOperational: 10, lifetimeYears: 20 }, E.DEFAULTS),
+          E.lifecycleCarbonKg({ embodiedCarbon: 1000, annualOperational: 10 }, E.DEFAULTS),
+          E.lifecycleCarbonKg({ embodiedCarbon: null }, E.DEFAULTS)], [1200, 1300, null]);
+  });
+  await testas("Modelis A: kaina + anglis (t) × šešėlinė kaina; laimi mažiausia pakoreguota kaina; neatskleidęs gauna blogiausią anglį ir žymą", async ()=>{
+    const r = E.evaluate([{ id: "a", bidPrice: 100000, embodiedCarbon: 200000 }, { id: "b", bidPrice: 110000, embodiedCarbon: 50000 },
+                          { id: "c", bidPrice: 90000, embodiedCarbon: null }], { shadowPrice: 100, lifetimeYears: 1 });
+    lygu(r.rows.map(x => [x.id, x.adjustedPrice, x.rank]), [["c", 110000, 1], ["b", 115000, 2], ["a", 120000, 3]], "reitingas (a: 100 000 + 200 t × 100; b: 110 000 + 50 t × 100; c: 90 000 + blogiausia 200 t × 100)");
+    const c = r.rows.find(x => x.id === "c");
+    lygu([c.carbonKgEff, c.assumedWorstCase, c.missingData, r.worstCaseKg], [200000, true, true, 200000], "neatskleista anglis");
+    const x = E.evaluate([{ id: "a", bidPrice: 100, embodiedCarbon: 1 }, { id: "c", bidPrice: 90, embodiedCarbon: null }], { missingDataPolicy: "exclude" });
+    lygu([x.rows.map(y => y.id), x.excluded.map(y => y.id)], [["a"], ["c"]], "politika „exclude“");
+  });
+  await testas("Modelis B: kainos balai = min / kaina × 80, anglies = min / anglis × 20; visi be anglies - pilnas anglies svoris; lūžio kaina", async ()=>{
+    const r = E.evaluate([{ id: "a", bidPrice: 100, embodiedCarbon: 1000 }, { id: "b", bidPrice: 200, embodiedCarbon: 500 }], { model: "B", lifetimeYears: 1 });
+    lygu(r.rows.map(x => [x.id, x.priceScore, x.carbonScore, x.score]), [["a", 80, 10, 90], ["b", 40, 20, 60]], "balai");
+    const z = E.evaluate([{ id: "a", bidPrice: 100, embodiedCarbon: 0 }], { model: "B" });
+    lygu(z.rows[0].carbonScore, 20, "be anglies");
+    lygu([E.crossoverPrice({ bidPrice: 100, carbonKgEff: 2000 }, { bidPrice: 200, carbonKgEff: 1000 }), E.crossoverPrice({ bidPrice: 1, carbonKgEff: 5 }, { bidPrice: 2, carbonKgEff: 5 }),
+          E.crossoverPrice({ bidPrice: 200, carbonKgEff: 2000 }, { bidPrice: 100, carbonKgEff: 1000 })], [100, null, null], "lūžio kaina (vienoda anglis ir pigesnis bei švaresnis - lūžio nėra)");
+  });
+  await testas("Skaičių laukai: 1 234,5 · 1.234,5 · 1,234.5 · 1.500.000 · 0,125 · -1,5; pasiūlymo kaina - kaip pinigai (1.500 = 1500)", async ()=>{
+    const p = W.parseNum;
+    lygu(["1 234,5", "1 234,5", "1.234,5", "1,234.5", "1.500.000", "1,500,000", "0,125", "0.125", "-1,5", "", "abc"].map(p),
+         [1234.5, 1234.5, 1234.5, 1234.5, 1500000, 1500000, 0.125, 0.125, -1.5, null, null], "parseNum");
+    St.updateEvalOffers(l => { l.length = 0; l.push({ id: "OF-T", name: "T", bidPrice: "1.500", embodiedCarbon: "0,5", annualOperational: "", lifetimeYears: "" }); });
+    const o = W.buildEvalOffers()[0];
+    lygu([o.bidPrice, o.embodiedCarbon], [1500, 500], "pasiūlymas (kaina EUR, anglis t -> kg)");
+  });
+  await testas("Skaičiuoklė: kiekis × faktorius sumuojamas; EPD įranga be gamintojo faktoriaus neįtraukiama, bet skaičiuojama kaip laukianti", async ()=>{
+    const F = W.GP_CARBON_FACTORS, sek = W.eval("CALC_SECTIONS");
+    let paprastas = null, epd = null;
+    sek.forEach(s => (F[s.group] || []).forEach(it => {
+      if (!paprastas && typeof it.value === "number" && !it.supplierProvided) paprastas = { g: s.group, it };
+      if (!epd && it.supplierProvided === true) epd = { g: s.group, it };
+    }));
+    tiesa(paprastas && epd, "faktorių bibliotekoje nėra reikiamų pozicijų");
+    St.updateCalc(c => { c.qty = {}; c.manual = {}; c.qty[paprastas.g + "." + paprastas.it.id] = "1.000,5"; c.qty[epd.g + "." + epd.it.id] = "2"; });
+    W.renderCalc(); W.recompute();
+    tiesa(/1/.test(P.d.getElementById("epdNote").textContent), "nepažymėta laukianti EPD pozicija: " + P.d.getElementById("epdNote").textContent);
+    const tekstas = P.d.getElementById("grandKg").textContent.replace(/\s/g, "").replace(",", ".");
+    const tikimasi = Math.round(1000.5 * paprastas.it.value * 10) / 10;
+    lygu(parseFloat(tekstas), tikimasi, "bendra suma (kg)");
+    St.updateCalc(c => { c.manual[epd.g + "." + epd.it.id] = "3"; }); W.recompute();
+    lygu(parseFloat(P.d.getElementById("grandKg").textContent.replace(/\s/g, "").replace(",", ".")), Math.round((1000.5 * paprastas.it.value + 6) * 10) / 10, "su gamintojo faktoriumi");
+  });
+  P.f.remove();
+}
 (async function(){
   await testaiAntraste();
   await testaiEpd();
   await testaiBusenos();
+  try { await testaiSkaiciavimai(); } finally { APSAUGA.atkurk(); }
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
 })();
