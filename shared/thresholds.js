@@ -11,6 +11,10 @@
 window.GP_THRESHOLDS = {
   VPI: { intl_goods: 216000, intl_goods_cva: 140000, intl_special: 750000, intl_works: 5404000, mv_goods: 70000, mv_works: 174000 },
   PI:  { intl_goods: 432000, intl_special: 1000000, intl_works: 5404000, mv_goods: 70000, mv_works: 174000 },
+  // Dalių išimtis (abu įstatymai, GP_TEISE "dalys_supaprastintai"; perskaityta e-tar 2026-09-26): tarptautinės vertės
+  // pirkimo dalims, kurių kiekviena mažesnė už šias sumas, galima supaprastinta tvarka, jei jų bendra vertė
+  // ne didesnė kaip dalisProc procentų visų dalių vertės. Skaičiai įrašyti pačiame įstatyme (ne VPT peržiūrimi).
+  DALYS: { prekes_paslaugos: 80000, darbai: 1000000, dalisProc: 20 },
   // EPSO-G politikos slenkstis kastu-naudos analizei (pp-cost-benefit).
   // PASTABA: politikos (ne istatymo) riba, diskusines stadijos - tikslinti patvirtinus.
   CBA: { privaloma: 20000000, rekomenduojama: 10000000 }
