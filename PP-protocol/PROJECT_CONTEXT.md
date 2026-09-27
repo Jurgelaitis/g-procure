@@ -139,6 +139,14 @@ protokolus: `PROTOKOLU_BPS` (atviras konkursas ir DPS - eilė 9.26, pratęsimas 
 tikslinimas 14.5, kvietimas į derybas 13.2.1; neskelbiamos derybos - jokių), `pnBpsDuomenys()` pranešimams, atmetimo punktas -
 `atmetimoPunktas()` iš D4, D6, D8 eilučių. Šablonuose nebėra savų numerių, SPS priedas - be numerio.
 
+**2026-09-27 - peržiūra ir DPS antraštė.** „Peržiūrėti“ turėjo savą, ranka surašytą protokolo kopiją: SVARSTYTA ir SPRENDIMAS
+skaitė formose neegzistuojančias eilutes (`.supp-row`, `.tiek-name`) ir rodė tik darbotvarkės pavadinimą, antraštėje nebuvo
+derybų eilutės, o DPS vietoje būdo - „dps_steigimas“. Dabar peržiūra - tas pats Word dokumentas (`buildDocx`), išskleistas į HTML
+be bibliotekų (`docxDalis`: ZIP centrinis katalogas ir `DecompressionStream`; `docxIHtml`: pastraipos, lentelės, sujungti
+stulpeliai, fonas), todėl nuo failo skirtis negali; nepavykus - priežastis ir nuoroda į „Generuoti .docx“. DPS protokolų antraštėje
+buvo „Pirkimo būdas: Atviras konkursas“ - dabar `pirkimoBudoPavadinimas()`: „Dinaminės pirkimo sistemos sukūrimas“ ir „Konkretus
+pirkimas pagal dinaminę pirkimo sistemą“ (PĮ terminai: dinaminė pirkimo sistema sukuriama, konkretūs pirkimai atliekami jos pagrindu).
+
 **DOCX struktūra:** A4 (11906×16838 DXA), 2 cm paraštės, Times New Roman 11pt/10pt/12pt, LITGRID AB header'iu, puslapio numeracija footer'yje, saugojimo metaduomenys (`PĮ 103 str. 6 d.`).
 
 ### 4.4 Pranešimai tiekėjams (23 šablonai)

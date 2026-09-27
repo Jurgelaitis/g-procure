@@ -861,6 +861,79 @@ async function testaiTurinys(){
   });
 }
 
+/* 2026-09-27: „Peržiūrėti“ turėjo savą, ranka surašytą protokolo kopiją: vietoje SVARSTYTA ir SPRENDIMAS rodė tik darbotvarkės pavadinimą
+   (skaitė formose neegzistuojančias eilutes), antraštėje nebuvo derybų eilutės, o DPS - „dps_steigimas“. Dabar peržiūra - tas pats Word
+   dokumentas (buildDocx), išskleistas į HTML. DPS protokolų antraštėje (ir Word, ir peržiūroje) buvo „Pirkimo būdas: Atviras konkursas“. */
+const be_tarpu = s => s.replace(/\s+/g, "");
+async function perziurosTekstas(pkId, protoId, pildymas){
+  W.openProtocol(pkId, protoId);
+  if (pildymas) pildymas();
+  D.getElementById("pf-date").value = "2026-09-28"; D.getElementById("pf-nr").value = "P-12";
+  await W.previewProtocol();
+  const perz = D.getElementById("preview-body-content").innerText;
+  const pk = W.getProcurement(pkId), proto = W.getSequence(pk.type).find(x => x.id === protoId);
+  const word = await dokTekstas(await W.buildDocx(pk, proto, "2026-09-28", "P-12", D.getElementById("pf-vienbalsiai")?.checked ?? true));
+  W.closePreview();
+  return { perz, word };
+}
+async function testaiPerziura(){
+  grupe("Peržiūra „Peržiūrėti“ ir pirkimo būdas antraštėje (DPS)");
+  // Tie patys bandomieji pirkimai ir formų pildymas kaip Word teksto testuose (ankstesni testai rėmelį perkrauna)
+  await modulis();
+  W.saveProcurementData("TEST-KALBA-A", kalbosPirkimas("TEST-KALBA-A", "atviras_tarptautinis", { confidential_appendix: true, cpo_applicable: true }));
+  W.saveProcurementData("TEST-KALBA-D", kalbosPirkimas("TEST-KALBA-D", "derybos_tarptautinis", { eval_criteria: "kainą" }));
+  W.saveProcurementData("TEST-KALBA-N", kalbosPirkimas("TEST-KALBA-N", "neskelbiamos_supaprastintas", { eval_criteria: "kainą" }));
+  await testas("Peržiūra rodo tą patį tekstą kaip Word: kiekviena Word pastraipa yra peržiūroje, SVARSTYTA ir SPRENDIMAS - su tiekėjais, ne tik darbotvarkės pavadinimas", async () => {
+    const PKS = { A: "TEST-KALBA-A", D: "TEST-KALBA-D", N: "TEST-KALBA-N" }, blogi = [];
+    for (const raktas of ["A1", "A4", "D6", "D8", "N6"]) {
+      const [, p, protoId, pildymas] = KALBOS_ATVEJAI.find(x => x[0] === raktas);
+      const { perz, word } = await perziurosTekstas(PKS[p], protoId, pildymas), P = be_tarpu(perz);
+      const truksta = word.split("\n").map(x => x.trim()).filter(x => x && P.indexOf(be_tarpu(x)) < 0);
+      if (truksta.length) blogi.push(raktas + ": peržiūroje nėra " + truksta.length + " Word pastraipų, pvz. „" + truksta.slice(0, 3).join("“, „") + "“");
+      if (!/SVARSTYTA/.test(perz) || !/SPRENDIMAS/.test(perz)) blogi.push(raktas + ": peržiūroje nėra SVARSTYTA / SPRENDIMAS");
+    }
+    tiesa(!blogi.length, blogi.join("\n"));
+    const d6 = await perziurosTekstas("TEST-KALBA-D", "D6", KALBOS_ATVEJAI.find(x => x[0] === "D6")[3]);
+    tiesa(d6.perz.indexOf("kviesti į derybas šiuos tiekėjus") >= 0 && d6.perz.indexOf(TD) >= 0, "D6 peržiūroje nėra sprendimo dėl derybų: " + d6.perz.slice(0, 400));
+    tiesa(/Derybos:\s*☑\s*Vykdomos/.test(d6.perz), "D6 peržiūroje nėra derybų eilutės antraštėje");
+  });
+
+  await testas("Peržiūros lange - LITGRID rekvizitai ir lentelės (sujungti stulpeliai), o nepavykus - priežastis ir kelias toliau, ne tuščias langas", async () => {
+    W.openProtocol("TEST-KALBA-D", "D6");
+    await W.previewProtocol();
+    const t = D.getElementById("preview-body-content");
+    tiesa(t.querySelector(".preview-logo-row img[alt=LITGRID]"), "nėra logotipo");
+    tiesa(t.querySelector("table td[colspan]"), "nėra sujungtų stulpelių (antraštės lentelė)");
+    tiesa(D.getElementById("preview-overlay").style.display === "flex", "langas neatsivėrė");
+    W.closePreview();
+    const buvo = W.buildDocx;
+    W.buildDocx = async () => { throw new Error("bandomoji klaida"); };
+    try {
+      await W.previewProtocol();
+      const x = t.textContent;
+      tiesa(/Peržiūros parodyti nepavyko \(bandomoji klaida\)/.test(x) && /Generuoti \.docx/.test(x), x.slice(0, 300));
+    } finally { W.buildDocx = buvo; W.closePreview(); }
+  });
+
+  await testas("Pirkimo būdas antraštėje: DPS sukūrimas ir konkretus pirkimas pagal DPS (iki 2026-09-27 - „Atviras konkursas“), kiti būdai - kaip buvo; peržiūroje - tas pats", async () => {
+    const blogi = [];
+    for (const [tipas, budas] of [["dps_steigimas", "Dinaminės pirkimo sistemos sukūrimas"], ["dps_konkretus", "Konkretus pirkimas pagal dinaminę pirkimo sistemą"],
+                                  ["atviras_tarptautinis", "Atviras konkursas"], ["derybos_supaprastintas", "Skelbiamos derybos"], ["neskelbiamos_tarptautinis", "Neskelbiamos derybos"]]) {
+      const id = "TEST-BUDAS-" + tipas;
+      W.saveProcurementData(id, kalbosPirkimas(id, tipas));
+      const pk = W.getProcurement(id), seka = W.getSequence(tipas);
+      for (const proto of [seka[0], seka[seka.length - 1]]) {
+        const t = await dokTekstas(await W.buildDocx(pk, proto, "2026-09-28", "P-12", true));
+        if (t.indexOf("Pirkimo būdas: " + budas + ".") < 0) blogi.push(tipas + " " + proto.id + ": „" + ((t.match(/Pirkimo būdas: [^\n]*/) || ["(nėra)"])[0]) + "“");
+        if (/^dps/.test(tipas) && /Atviras konkursas/.test(t)) blogi.push(tipas + " " + proto.id + ": liko „Atviras konkursas“");
+      }
+      const { perz } = await perziurosTekstas(id, seka[0].id);
+      if (perz.indexOf("Pirkimo būdas: " + budas + ".") < 0) blogi.push(tipas + " peržiūroje: " + ((perz.match(/Pirkimo būdas: [^\n]*/) || ["(nėra)"])[0]));
+    }
+    tiesa(!blogi.length, blogi.join("\n"));
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -875,6 +948,7 @@ async function testaiTurinys(){
     await testaiKortele();
     await testaiTeise();
     await testaiTurinys();
+    await testaiPerziura();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
