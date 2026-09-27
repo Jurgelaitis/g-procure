@@ -285,6 +285,64 @@ async function testaiTeise(){
   });
 }
 
+/* 2026-09-27, naudotojo atsakymai: LITGRID - perkantysis subjektas (PĮ 33 str. 2 d. nustato pareigą tik perkančiajam subjektui,
+   kuris yra perkančioji organizacija), ir penki turinio neatitikimai su PĮ (perskaityta e-tar). */
+async function testaiTurinys(){
+  grupe("Turinys pagal PĮ: atidėjimas, neįprastai maža kaina, saugojimas, galiojimo pratęsimas, komisija, nešališkumas");
+  await testas("Atidėjimo terminas: ne elektroninėmis priemonėmis - 15 dienų (PĮ 94 str. 8 d.), kitaip 10 dienų arba 5 darbo dienos; skaičiuoklė kanalą perduoda", async () => {
+    const a = (v, k) => { const t = W.getAtidejimoTerminas(v, k); return [t.dienos, t.tipas]; };
+    lygu([a("Tarptautinis", "ne_el"), a("Supaprastintas", "ne_el"), a("Tarptautinis", "el"), a("Supaprastintas", "el")],
+         [[15, "kalend"], [15, "kalend"], [10, "kalend"], [5, "darbo"]]);
+    const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
+    tiesa(src.indexOf(": getAtidejimoTerminas(valCat, kanalas);") >= 0, "skaičiuoklė neperduoda kanalo");
+  });
+
+  await testas("Neįprastai maža kaina: vidurkis be pirkimui skirtas lėšas viršijančių pasiūlymų (PĮ 66 str. 1 d.); šablone 15 - tokia formuluotė", async () => {
+    const pk = { komisija: { members: ["A", "B"] } }, t = [200, 300, 320, 2000].map(k => ({ selected: true, kaina: k }));
+    const nmk = r => r.find(x => /NMK/.test(x.title));
+    tiesa(nmk(W.analyzeRisks(pk, t, null, {})), "be lėšų sumos - visų pažymėtų vidurkis (705), 200 - 72 % mažiau");
+    tiesa(!nmk(W.analyzeRisks(pk, t, null, { biudzetas: 400 })), "su lėšomis 400 - vidurkis 273,33, 200 - tik 27 % mažiau");
+    const d = nmk(W.analyzeRisks(pk, t, null, {})).detail;
+    tiesa(/pirkimui skirtas lėšas viršijančių pasiūlymų nežymėkite/.test(d), d);
+    const b15 = W.eval("PN_TEMPLATES")["15_nmk"].body({ kaina_be: 1000, vidurkis: 2000, skirtumas: 50 });
+    tiesa(b15.lt.indexOf("mažesnė už pasiūlymų, kurie neatmesti dėl kitų priežasčių ir kurių kaina neviršija pirkimui skirtų lėšų, kainų aritmetinį vidurkį") >= 0, b15.lt);
+    tiesa(/not rejected on other grounds and do not exceed the funds allocated/.test(b15.en), b15.en);
+  });
+
+  await testas("Saugojimas - 4 metai nuo pirkimo pabaigos (PĮ 103 str. 6 d.), o ne nuo kortelės ar dokumento datos", async () => {
+    W.saveProcurementData(PK, pirkimas("atviras_tarptautinis"));
+    W.renderDetail(PK); await lauk(80);
+    const h = D.getElementById("detail-header").textContent;
+    tiesa(/Saugoti 4 m\. nuo pirkimo pabaigos/.test(h) && !/Saugoma iki \d{4}/.test(h), "kortelė: " + h.slice(0, 300));
+    const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
+    tiesa(src.indexOf("Saugoti ne trumpiau kaip 4 metus nuo pirkimo pabaigos (${teise('saugojimas')})") >= 0 && src.indexOf("Dokumentas saugomas iki") < 0, "pranešimo poraštė");
+  });
+
+  await testas("Galiojimo pratęsimas - iki konkrečios datos (PĮ 54 str. 2 d.); seni juodraščiai su dienų skaičiumi nesugriūva", async () => {
+    const t16 = W.eval("PN_TEMPLATES")["16_galiojimas"];
+    const b = t16.body({ prasomas_terminas: "2026-11-30", priezastis: "ilgesnio vertinimo" }), sen = t16.body({ prasomas_terminas: "30", priezastis: "x" });
+    tiesa(/prašo pratęsti pasiūlymo galiojimo terminą iki 2026-11-30\./.test(b.lt) && /until 2026-11-30\./.test(b.en), b.lt);
+    tiesa(/terminą 30 kalendorinių dienų\./.test(sen.lt), sen.lt);
+    const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
+    tiesa(src.indexOf('<input type="date" id="pn-f-prasomas_terminas">') >= 0 && src.indexOf('<input type="date" id="ipn-prasomas_terminas">') >= 0, "datos laukai");
+  });
+
+  await testas("Komisija: mažiau nei 3 - pagal PĮ 31 str. 2 d., 3 nariai - pagal reglamentą §10 su PĮ 31 str. 3 d. (visi posėdyje); matricoje abu", async () => {
+    const r = n => W.analyzeRisks({ komisija: { members: Array(n).fill("N") } }, [], null, {}).find(x => /Komisija/.test(x.title));
+    lygu([r(0).title, r(1).title, r(2)], ["Komisija turi mažiau nei 3 narius", "Komisija turi mažiau nei 4 narius", undefined]);
+    tiesa(r(0).detail.indexOf("PĮ 31 str. 2 d. - ") === 0 && r(1).detail.indexOf("PĮ 31 str. 3 d.") > 0, r(0).detail + " | " + r(1).detail);
+    W.eval("currentPkId = " + JSON.stringify(PK)); W.openRiskPanel();
+    const m = D.getElementById("risk-modal-body").textContent;
+    tiesa(/Komisija < 3 narių.*PĮ 31 str\. 2 d\./.test(m) && /Komisija < 4 narių.*Komisijos darbo reglamentas §10/.test(m), m.slice(-700));
+  });
+
+  await testas("Nešališkumas: LITGRID - perkantysis subjektas, todėl ne „pagal PĮ 33 str.“; PĮ 33 str. 2 d. įvardijama kaip perkančiosios organizacijos pareiga", async () => {
+    const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
+    tiesa(src.indexOf("ĮSPĖJIMAS pagal ' + teise('nesaliskumas')") < 0 && src.indexOf('data-teise="nusisalinimas"') < 0, "PĮ 33 str. vis dar nurodomas kaip LITGRID pareigos pagrindas");
+    tiesa(src.indexOf("PĮ 33 str. 2 d. 1 p. šią pareigą nustato perkančiajam subjektui, kuris yra perkančioji organizacija") >= 0, "užuomina");
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -294,6 +352,7 @@ async function testaiTeise(){
     await testaiBusenos();
     await testaiKortele();
     await testaiTeise();
+    await testaiTurinys();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

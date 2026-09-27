@@ -100,7 +100,7 @@ Tai sukėlė problemų: dubliuojantis duomenų įvedimas, nesinchronizacija, net
 ### 4.2 Komisijos
 - Min. 4 nariai (Litgrid reglamento §10) - pirmininkas (specialistas), teisininkas, iniciatorius, sekretorius
 - Komisijos tipas: nuolatinė / ad hoc
-- Nešališkumo deklaracijos žyma (PĮ 33 str. 2 d. 1 p.)
+- Nešališkumo deklaracijos žyma (VPT „Komisijos veiklos gairės“; PĮ 33 str. 2 d. 1 p. šią pareigą nustato tik perkančiajam subjektui, kuris yra perkančioji organizacija - LITGRID yra perkantysis subjektas, naudotojo atsakymas 2026-09-27)
 - Balsavimo lentelė: tik UŽ/PRIEŠ (atviru vardiniu balsavimu pagal §28)
 - Atskirosios nuomonės sekcija
 
