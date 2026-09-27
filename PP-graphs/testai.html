@@ -256,6 +256,78 @@ async function testaiKortele(){
   });
 }
 
+/* 2026-09-28 (mutacijų auditas): PĮ minimumo įspėjimas, etapų keitimas, standartinė trukmė su sub-etapais, skaičiuoklės
+   „tik vykdymas“ ir atgalinė pradžia, išvalymas - iki tol netikrinta (10 tyčinių klaidų testai nepastebėjo). */
+function budasSuMinimumu(){
+  return W.eval(`(() => { for (const [kodas, m] of Object.entries(METHODS)) { for (let gi = 0; gi < m.groups.length; gi++) { const g = m.groups[gi];
+    if (g.legalMinDD && !(g.subPhases && g.subPhases.length)) return { kodas, gi, si: null, code: g.code, min: g.legalMinDD };
+    for (let si = 0; si < (g.subPhases || []).length; si++) if (g.subPhases[si].legalMinDD) return { kodas, gi, si, code: g.subPhases[si].code, min: g.subPhases[si].legalMinDD }; } } return null; })()`);
+}
+function ivesk(sel, v, ivykis){ const el = D.querySelector(sel); tiesa(el, "nėra " + sel); el.value = v; el.dispatchEvent(new W.Event(ivykis || "input", { bubbles: true })); }
+async function testaiEtapai(){
+  grupe("Etapai, PĮ minimumas, skaičiuoklės ir išvalymas");
+  await testas("PĮ minimumas: sutrumpinus etapą žemiau minimumo - įspėjimas pastaboje; lygus minimumui - ne pažeidimas; pakėlus trukmę naudotojo pagrindimas lieka", async () => {
+    W.switchView("generator");
+    const b = budasSuMinimumu(); tiesa(b, "nėra būdo su PĮ minimumu");
+    nustatyk("f-company", "litgrid"); nustatyk("f-budas", b.kodas); W.onMethodChange(); nustatyk("f-pradzia", "2026-10-05"); W.refreshAll();
+    lygu([W.isLegalViolation(b.code, b.min - 1), W.isLegalViolation(b.code, b.min)], [true, false], "pažeidimo riba");
+    const trukme = '.duration-input[data-group="' + b.gi + '"]' + (b.si === null ? ':not([data-sub])' : '[data-sub="' + b.si + '"]');
+    ivesk(trukme, b.min - 1);
+    const pastaba = () => W.eval("state").notes[b.code] || "";
+    tiesa(/^⚠ PĮ NUKRYPIMAS/.test(pastaba()), "įspėjimas nepridėtas: " + pastaba().slice(0, 80));
+    ivesk('.notes-input[data-note="' + b.code + '"]', pastaba() + "Mano pagrindimas");
+    ivesk(trukme, b.min);
+    lygu(pastaba(), "Mano pagrindimas", "pakėlus iki minimumo - lieka tik naudotojo tekstas");
+  });
+
+  await testas("Etapai: naujas etapas „vykdymo pradžioje“ - po visų pasirengimo etapų; etapo ir sub-etapo šalinimas; standartinė trukmė su sub-etapais - jų suma", async () => {
+    const st = () => W.eval("state");
+    const suSub = st().groups.find(g => g.subPhases && g.subPhases.length > 1);
+    tiesa(suSub, "nėra etapo su sub-etapais");
+    const std = W.eval("METHODS[state.methodCode]").groups.find(g => g.code === suSub.code).subPhases.reduce((a, x) => a + (Number(x.duration) || 0), 0);
+    lygu(W.getStandardDuration(suSub.code), std, "standartinė trukmė su sub-etapais");
+    W.showAddPhaseForm();
+    ivesk("#add-phase-stage", "vykdymas", "change"); W.updatePositionDropdown();
+    const vardas = D.getElementById("add-phase-name");
+    vardas.value = "__custom__"; vardas.dispatchEvent(new W.Event("change", { bubbles: true }));
+    D.getElementById("add-phase-name-custom").value = "Papildomas etapas"; D.getElementById("add-phase-duration").value = "3";
+    D.getElementById("add-phase-position").value = "start";
+    W.confirmAddPhase();
+    const g = st().groups, i = g.findIndex(x => x.custom && x.name === "Papildomas etapas");
+    tiesa(i > 0, "naujas etapas nepridėtas");
+    tiesa(g.slice(0, i).every(x => x.stage === "pasirengimas") && g.slice(i + 1).every(x => x.stage === "vykdymas"), "vieta: " + g.map(x => x.stage[0]).join(""));
+    const tikras = W.confirm; W.confirm = () => true;
+    try {
+      W.deletePhase(g[i].code); tiesa(!st().groups.some(x => x.name === "Papildomas etapas"), "etapas nepašalintas");
+      const pries = suSub.subPhases.length, sub = suSub.subPhases[0].code;
+      W.deleteSubPhase(suSub.code, sub);
+      const po = st().groups.find(x => x.code === suSub.code).subPhases;
+      tiesa(po.length === pries - 1 && !po.some(x => x.code === sub), "sub-etapas nepašalintas");
+    } finally { W.confirm = tikras; }
+  });
+
+  await testas("Skaičiuoklės: „tik vykdymas“ - sutartis = pradžia + vykdymas darbo dienų; atgalinė - pirkimo pradžia = sutartis - vykdymas darbo dienų", async () => {
+    W.switchView("calculator");
+    const m = W.eval("CALC_METHODS.find(x => METHODS[x.code])"), data = sel => (D.getElementById(sel).textContent.match(/\d{4}-\d{2}-\d{2}/) || [])[0];
+    nustatyk("c3-method", m.code); nustatyk("c3-start", "2026-10-05");
+    const sut = data("c3-t-end"); tiesa(sut, "sutarties data neparodyta");
+    lygu(darboDienuImtinai(new Date(2026, 9, 6), new Date(sut + "T00:00:00")), m.exec, "vykdymo darbo dienos");
+    nustatyk("c2-method", m.code); nustatyk("c2-contract", "2026-12-15");
+    const pr = data("c2-t-mid"); tiesa(pr, "pirkimo pradžia neparodyta");
+    const nuo = new Date(pr + "T00:00:00"); nuo.setDate(nuo.getDate() + 1);
+    lygu(darboDienuImtinai(nuo, new Date(2026, 11, 15)), m.exec, "nuo pradžios iki sutarties darbo dienų");
+  });
+
+  await testas("„Išvalyti“: pavadinimas, iniciatorius, organizatorius, būdas ir įmonė tušti, grafikas paslėptas", async () => {
+    W.switchView("generator");
+    ["f-pavadinimas", "f-iniciatorius", "f-organizatorius"].forEach(id => { const el = D.getElementById(id); if (el) el.value = "Testas"; });
+    const tikras = W.confirm; W.confirm = () => true;
+    try { W.resetForm(); } finally { W.confirm = tikras; }
+    lygu(["f-pavadinimas", "f-iniciatorius", "f-organizatorius", "f-budas", "f-company"].map(id => (D.getElementById(id) || { value: "" }).value), ["", "", "", "", ""], "laukai");
+    tiesa(D.getElementById("phases-empty").style.display === "block", "grafikas neišvalytas");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -264,6 +336,7 @@ async function testaiKortele(){
     await testaiGeneratorius();
     await testaiSkaiciuokle();
     await testaiKortele();
+    await testaiEtapai();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
