@@ -2843,6 +2843,97 @@ async function testaiPrieinamumas(){
     } finally { f.remove(); }
   });
 
+  /* Modaliniai langai (U4 likutis, 2026-09-27): prieinamumas.js langų valdymas sintetiniuose puslapiuose. Laukiama du kartus po
+     nulinio laiko: stebėtojas planuoja patikrą setTimeout(0), o fokusas perkeliamas dar vienu žingsniu vėliau. */
+  const LANGO_CSS = '<style>.fonas{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4)}.fonas.show{display:flex}' +
+    '@keyframes ateiti{from{opacity:0}to{opacity:1}}.anim{display:none;position:fixed;inset:0}.anim.show{display:flex;animation:ateiti .05s}' +
+    '.blanka{position:fixed;inset:0;opacity:0;pointer-events:none;transition:opacity .05s}.blanka.show{opacity:1;pointer-events:auto}</style>';
+  const zingsnis = (ms) => new Promise(r => setTimeout(r, ms || 40));
+  const klavisas = (w, el, key, x) => el.dispatchEvent(new w.KeyboardEvent("keydown", Object.assign({ key, bubbles: true, cancelable: true }, x || {})));
+
+  await testas("Modalinis langas: atsivėrus - role=dialog, aria-modal, pavadinimas iš antraštės, fokusas į pirmą lauką; Tab lieka lange; Esc uždaro „✕“ mygtuku; fokusas grįžta į atvėrusį mygtuką", async ()=>{
+    const { f, d, w } = await ramas(LANGO_CSS + `<button id="atv" onclick="document.getElementById('m').classList.add('show')">Atverti</button>
+      <div id="m" class="fonas" data-gp-langas><div class="modal"><h2>Naujas tiekėjas</h2><input id="i1"><select id="s1"><option>A</option></select>
+      <button id="x" onclick="window.uzdaryta=(window.uzdaryta||0)+1;document.getElementById('m').classList.remove('show')">✕</button></div></div>
+      <button id="po">Po langu</button><script src="prieinamumas.js"><\/script>`);
+    try {
+      const $ = s => d.querySelector(s);
+      $("#atv").focus(); $("#atv").click(); await zingsnis();
+      const l = $("#m .modal");
+      lygu([l.getAttribute("role"), l.getAttribute("aria-modal")], ["dialog", "true"], "vaidmuo");
+      lygu(d.getElementById(l.getAttribute("aria-labelledby")).textContent, "Naujas tiekėjas", "pavadinimas");
+      lygu(d.activeElement.id, "i1", "fokusas į pirmą lauką");
+      $("#x").focus(); klavisas(w, $("#x"), "Tab"); lygu(d.activeElement.id, "i1", "Tab nuo paskutinio - į pirmą");
+      klavisas(w, $("#i1"), "Tab", { shiftKey: true }); lygu(d.activeElement.id, "x", "Shift+Tab nuo pirmo - į paskutinį");
+      $("#po").focus(); klavisas(w, $("#po"), "Tab"); lygu(d.activeElement.id, "i1", "fokusas už lango - Tab grąžina į langą");
+      klavisas(w, $("#i1"), "Escape"); await zingsnis();
+      tiesa(!$("#m").classList.contains("show"), "Esc neuždarė"); lygu(w.uzdaryta, 1, "uždarymo mygtukas paspaustas");
+      lygu(d.activeElement.id, "atv", "fokusas negrįžo į atvėrusį mygtuką");
+    } finally { f.remove(); }
+  });
+
+  await testas("Modalinis langas be laukų - fokusas į patį langą; be uždarymo mygtuko Esc uždaro fono paspaudimu; kitas mygtukas („Uždaryti pirkimą“) nespaudžiamas", async ()=>{
+    const { f, d, w } = await ramas(LANGO_CSS + `<button id="atv" onclick="document.getElementById('m').classList.add('show')">Atverti</button>
+      <div id="m" class="fonas" data-gp-langas onclick="if(event.target===this)this.classList.remove('show')"><div class="modal"><h3>Peržiūra</h3><p>Tekstas</p>
+      <button id="pirk" onclick="window.pirkimas=1">Uždaryti pirkimą</button></div></div><script src="prieinamumas.js"><\/script>`);
+    try {
+      const $ = s => d.querySelector(s);
+      $("#atv").focus(); $("#atv").click(); await zingsnis();
+      tiesa(d.activeElement === $("#m .modal") && $("#m .modal").getAttribute("tabindex") === "-1", "fokusas ne lange: " + d.activeElement.id);
+      klavisas(w, d.activeElement, "Escape"); await zingsnis();
+      tiesa(!$("#m").classList.contains("show"), "Esc neuždarė fono paspaudimu");
+      tiesa(!w.pirkimas, "paspaustas „Uždaryti pirkimą“ - veiksmas, ne lango uždarymas");
+      lygu(d.activeElement.id, "atv", "fokusas negrįžo");
+    } finally { f.remove(); }
+  });
+
+  await testas("Modalinis langas: modulio savas Esc neuždaromas antrą kartą; savą valdymą turintis langas (role=dialog) neliečiamas; šablonu įterptas ir pašalintas langas grąžina fokusą", async ()=>{
+    const { f, d, w } = await ramas(LANGO_CSS + `<button id="atv" onclick="document.getElementById('m').classList.add('show')">Atverti</button>
+      <div id="m" class="fonas" data-gp-langas><div class="modal"><h2>A</h2><button onclick="uzdaryk()">✕</button></div></div>
+      <div id="s" class="fonas show" data-gp-langas><div role="dialog" aria-label="Savas"><button id="sb">Gerai</button></div></div>
+      <button id="atv2" onclick="const x=document.createElement('div');x.id='t';x.className='fonas show';x.setAttribute('data-gp-langas','');x.innerHTML='<div class=modal><h2>Šablonas</h2><button onclick=&quot;document.getElementById(\\'t\\').remove()&quot;>Uždaryti</button></div>';document.body.appendChild(x)">Atverti 2</button>
+      <script>window.kartai=0;function uzdaryk(){window.kartai++;document.getElementById('m').classList.remove('show');}
+      document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('m').classList.contains('show'))uzdaryk();});<\/script>
+      <script src="prieinamumas.js"><\/script>`);
+    try {
+      const $ = s => d.querySelector(s);
+      await zingsnis();
+      tiesa(!$("#s [role=dialog]").hasAttribute("data-gp-dialogas") && !$("#s [role=dialog]").hasAttribute("tabindex") && d.activeElement === d.body, "savas langas pakeistas (fokusas: " + (d.activeElement.id || d.activeElement.tagName) + ")");
+      $("#s").classList.remove("show");
+      $("#atv").focus(); $("#atv").click(); await zingsnis();
+      klavisas(w, d.activeElement, "Escape"); await zingsnis();
+      lygu(w.kartai, 1, "uždaryta kartų"); lygu(d.activeElement.id, "atv", "fokusas po modulio Esc");
+      $("#atv2").focus(); $("#atv2").click(); await zingsnis();
+      tiesa($("#t .modal").getAttribute("role") === "dialog" && $("#t").contains(d.activeElement), "įterptas langas neatpažintas");
+      klavisas(w, d.activeElement, "Escape"); await zingsnis();
+      tiesa(!$("#t"), "įterptas langas nepašalintas"); lygu(d.activeElement.id, "atv2", "fokusas po pašalinimo");
+    } finally { f.remove(); }
+  });
+
+  await testas("Modalinis langas su permatomumo perėjimu ar animacija atpažįstamas; naršyklės <dialog> užvėrus fokusas grįžta", async ()=>{
+    const { f, d, w } = await ramas(LANGO_CSS + `<button id="atv" onclick="document.getElementById('b').classList.add('show')">Atverti</button>
+      <button id="atv4" onclick="document.getElementById('a').classList.add('show')">Animacija</button>
+      <div id="a" class="anim" data-gp-langas><div class="modal"><h2>Animacija</h2><button onclick="document.getElementById('a').classList.remove('show')">✕</button></div></div>
+      <div id="b" class="blanka" data-gp-langas><div class="modal"><h2>Blanka</h2><button onclick="document.getElementById('b').classList.remove('show')">Atšaukti</button></div></div>
+      <button id="atv3" onclick="document.getElementById('dl').showModal()">Dialogas</button>
+      <dialog id="dl"><button id="dlx" onclick="this.closest('dialog').close()">Gerai</button></dialog><script src="prieinamumas.js"><\/script>`);
+    try {
+      const $ = s => d.querySelector(s);
+      await zingsnis();
+      tiesa(!$("#b .modal").hasAttribute("role"), "nematomas (permatomas) langas laikytas atvertu");
+      $("#atv").focus(); $("#atv").click(); await zingsnis(150);
+      tiesa($("#b").contains(d.activeElement), "po perėjimo fokusas ne lange");
+      klavisas(w, d.activeElement, "Escape"); await zingsnis(150);
+      lygu(d.activeElement.id, "atv", "po „Atšaukti“ fokusas negrįžo");
+      $("#atv4").focus(); $("#atv4").click(); await zingsnis(150);
+      tiesa($("#a").contains(d.activeElement), "po animacijos fokusas ne lange");
+      klavisas(w, d.activeElement, "Escape"); await zingsnis(100); lygu(d.activeElement.id, "atv4", "po animacijos lango fokusas negrįžo");
+      $("#atv3").focus(); $("#atv3").click(); await zingsnis();
+      $("#dlx").click(); await zingsnis();
+      lygu(d.activeElement.id, "atv3", "po <dialog> uždarymo fokusas negrįžo");
+    } finally { f.remove(); }
+  });
+
   await testas("epso-g.css: teksto tonai pasiekia 4,5:1 ant savo šviesių fonų (ir baltas tekstas ant jų), error-light - ant grafito", async ()=>{
     const css = await saltinis("epso-g.css"), v = n => { const m = new RegExp("--" + n + ":\\s*(#[0-9a-fA-F]{6})").exec(css); tiesa(m, "nėra --" + n); return m[1]; };
     const lin = x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
@@ -2890,6 +2981,116 @@ async function testaiPrieinamumas(){
         blogi.push(m + ":" + src.slice(0, x.index).split("\n").length + " „" + x[0].trim() + "“"); }
     }
     tiesa(!blogi.length, blogi.slice(0, 15).join("\n  "));
+  });
+
+  /* Modaliniai langai tikruose puslapiuose: atveriama tikru mygtuku (fokusas ant jo, paspaudimas), tikrinama: langas pažymėtas
+     (data-gp-langas) ar valdomas modulio (role=dialog), vaidmuo, pavadinimas, fokusas lange, Tab nuo paskutinio elemento lieka
+     lange, Esc uždaro, fokusas grįžta į mygtuką. Langų inventorius 2026-09-27: 24 modulių langai; PP-tiekejams, informacinė
+     skiltis ir kortelės langas turi savą valdymą - tikrinama, kad jis veikia ir su bendruoju. */
+  // Mygtukas turi būti matomas: paslėpto fokusuoti negalima, ir fokuso grąžinimas būtų netikrinamas
+  const mygtukas = sel => (w, d) => { const b = d.querySelector(sel); if (!b || !b.getClientRects().length) throw new Error("nėra matomo mygtuko " + sel); b.focus(); b.click(); return b; };
+  const LANGU_ATVEJAI = [
+    ["../PP-carbon/index.html", "Nustatymai", mygtukas('[onclick="openSettings()"]')],
+    ["../PP-esg/index.html", "Pridėti tiekėją", (w, d) => { w.setView("suppliers"); return mygtukas('[onclick="openSupplierModal()"]')(w, d); }],
+    ["../PP-esg/index.html", "Importuoti iš CVP IS", (w, d) => { w.setView("suppliers"); return mygtukas('[onclick="openImportModal()"]')(w, d); }],
+    ["../PP-esg/index.html", "ESRS - pridėti tašką", (w, d) => { w.setView("esrs"); return mygtukas('[onclick="addEsrsPoint()"]')(w, d); }],
+    ["../PP-esg/index.html", "ESRS - eksportas", (w, d) => { w.setView("esrs"); return mygtukas('[onclick="openExportModal()"]')(w, d); }],
+    ["../PP-esg/index.html", "Informacinė skiltis „Plačiau“ (savas valdymas)", mygtukas("[data-gpi-more]")],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Naujas pirkimas", (w, d) => { d.querySelector('.tab[data-section=register]').click(); return mygtukas('[onclick="addNewProc()"]')(w, d); }],
+    ["../PP-ts/TS_Asistentas.html", "Nustatymai", mygtukas('.btn-header[onclick="App.openSettings()"]')],
+    ["../PP-qual/PP-QUAL.html", "Nustatymai", mygtukas('[onclick="openSettings()"]')],
+    ["../PP-qual/PP-QUAL.html", "Pradėtas pirkimas", (w, d) => { const b = d.querySelector('[onclick="openSettings()"]'); b.focus(); w.rodykPasirinkima("wizard"); return b; }],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Pagalba", mygtukas('[onclick="openHelp()"]')],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Terminų skaičiuoklė", mygtukas('[onclick="openTerminai()"]')],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Audito žurnalas", mygtukas('[onclick="openGlobalAudit()"]')],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Naudotojo profilis", mygtukas("#user-btn")],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Kopijuoti pagal šabloną", mygtukas('[onclick="openCopyModal()"]')],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Rizikų panelis", (w, d) => { w.openProcurement("SD-1"); return mygtukas('#page-detail [onclick="openRiskPanel()"]')(w, d); }],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Protokolo peržiūra", (w, d) => { w.openProtocol("SD-1", "D6"); return mygtukas("#proto-preview-btn")(w, d); }],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Pranešimo kūrimas (šablonu kuriamas langas)", (w, d) => { w.openProtocol("SD-1", "D6"); const b = d.querySelector("#proto-preview-btn"); b.focus();
+      w.openInlinePnGenerator(w.eval("PROTOCOL_NOTIFICATIONS").D6[0], "D6"); return b; }],
+    ["../PP-protocol/LITGRID_Generatorius_v3.html", "Importo peržiūra (šablonu kuriamas langas)", (w, d) => { const b = d.querySelector('[onclick="openCopyModal()"]'); b.focus(); w.showImportPreview([{ name: "" }]); return b; }],
+    ["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "Pridėti tiekėją", (w, d) => { d.querySelector('.sidenav__btn[data-view="suppliers"]').click(); return mygtukas("#btnAddSupplier")(w, d); }],
+    ["../PP-report/PP-report.html", "Juodraščiai", (w, d) => { w.selectForm(1); return mygtukas('[onclick="openDraftsList()"]')(w, d); }],
+    ["../PP-report/PP-report.html", "Pažymos peržiūra", (w, d) => { w.selectForm(1); return mygtukas('[onclick="showPreview()"]')(w, d); }],
+    ["../PP-tiekejams/index.html", "Modulio langas (savas valdymas)", (w, d) => { const b = d.querySelector(".tabbar .tab:not(a)"); b.focus();
+      w.openModal('<div class="modal-head"><h2 class="modal-title">Bandomasis langas</h2>' + w.xBtn() + '</div><p>Tekstas</p><button class="btn">Gerai</button>'); return b; }]
+  ];
+  const langoFonai = d => [...d.querySelectorAll("[data-gp-langas], .gpi-overlay, #overlay")].filter(x => {
+    const cs = d.defaultView.getComputedStyle(x); return cs.display !== "none" && cs.visibility !== "hidden" && x.getClientRects().length && cs.pointerEvents !== "none" && parseFloat(cs.opacity) > 0.05; });
+  const vardasIs = (d, el) => (el.getAttribute("aria-label") || (el.getAttribute("aria-labelledby") || "").split(/\s+/).map(id => (d.getElementById(id) || {}).textContent || "").join(" ")).trim();
+
+  await testas("Modaliniai langai puslapiuose (23): fokusas atsivėrus lange, vaidmuo ir pavadinimas, Tab lieka lange, Esc uždaro, fokusas grįžta į mygtuką; įdėtinis langas (BVPŽ paieška pirkimo lange)", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(() => true);
+    const blogi = []; let patikrinta = 0;
+    try {
+      for (const [m, pav, atverk] of LANGU_ATVEJAI) {
+        if (PRIEINAMUMO_PRIES[m]) PRIEINAMUMO_PRIES[m]();
+        const f = await prieinamumoRemas(m);
+        try {
+          const w = f.contentWindow, d = f.contentDocument, kur = m.replace("../", "") + " · " + pav + ": ";
+          w.confirm = () => true;
+          let myg; try { myg = atverk(w, d); } catch (e) { blogi.push(kur + "neatsivėrė: " + e.message); continue; }
+          await zingsnis(350);
+          const fonai = langoFonai(d);
+          if (!fonai.length) { blogi.push(kur + "langas neatsivėrė arba nepažymėtas data-gp-langas"); continue; }
+          const fonas = fonai[fonai.length - 1], langas = fonas.matches("[role=dialog]") ? fonas : fonas.querySelector("[role=dialog]");
+          if (!langas) { blogi.push(kur + "lange nėra role=dialog"); continue; }
+          if (langas.getAttribute("aria-modal") !== "true") blogi.push(kur + "nėra aria-modal");
+          if (!vardasIs(d, langas)) blogi.push(kur + "langas be pavadinimo");
+          if (!fonas.contains(d.activeElement)) blogi.push(kur + "fokusas ne lange (" + (d.activeElement.id || d.activeElement.tagName) + ")");
+          const fok = [...langas.querySelectorAll("a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex='-1'])")]
+            .filter(x => !x.disabled && x.getClientRects().length && w.getComputedStyle(x).visibility !== "hidden");
+          if (fok.length) {
+            fok[fok.length - 1].focus(); klavisas(w, fok[fok.length - 1], "Tab"); await zingsnis(20);
+            if (!langas.contains(d.activeElement)) blogi.push(kur + "Tab nuo paskutinio elemento išėjo iš lango");
+          }
+          klavisas(w, d.activeElement, "Escape"); await zingsnis(350);
+          if (langoFonai(d).indexOf(fonas) >= 0) blogi.push(kur + "Esc neuždarė");
+          else if (d.activeElement !== myg) blogi.push(kur + "fokusas negrįžo į mygtuką (" + (d.activeElement.id || d.activeElement.className || d.activeElement.tagName) + ")");
+          patikrinta++;
+        } finally { f.remove(); }
+      }
+      // Įdėtinis: BVPŽ paieška pirkimo lange - Esc uždaro tik paieškos langą, fokusas grįžta į jos mygtuką; antras Esc - pirkimo langą
+      const f = await prieinamumoRemas("../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html");
+      try {
+        const w = f.contentWindow, d = f.contentDocument, kur = "PP-plan · BVPŽ paieška pirkimo lange: ";
+        d.querySelector('.tab[data-section=register]').click();
+        const naujas = mygtukas('[onclick="addNewProc()"]')(w, d); await zingsnis(200);
+        const bv = mygtukas('[onclick="openBvpzPicker()"]')(w, d); await zingsnis(300);
+        const ov = d.getElementById("bvpzPickerOverlay");
+        if (!ov || !ov.contains(d.activeElement)) blogi.push(kur + "fokusas ne paieškos lange");
+        const lg = ov && ov.querySelector("[role=dialog]");
+        if (!lg || lg.getAttribute("aria-label") !== "BVPŽ kodų paieška") blogi.push(kur + "paieškos langas be vaidmens ar pavadinimo");
+        klavisas(w, d.activeElement, "Escape"); await zingsnis(300);
+        if (ov && ov.style.display !== "none") blogi.push(kur + "Esc neuždarė paieškos");
+        else if (d.activeElement !== bv) blogi.push(kur + "fokusas negrįžo į paieškos mygtuką");
+        if (!d.getElementById("modal").classList.contains("show")) blogi.push(kur + "Esc uždarė ir pirkimo langą");
+        // Esc paieškos iframe viduje - tėvinis langas gauna žinutę ir uždaro
+        bv.focus(); bv.click(); await zingsnis(300);
+        const fr = d.getElementById("bvpzPickerFrame");
+        await new Promise(r => { if (fr.contentDocument && fr.contentDocument.readyState === "complete" && fr.contentWindow.location.href.indexOf("embed=1") > 0) r(); else fr.addEventListener("load", r, { once: true }); });
+        fr.contentDocument.dispatchEvent(new fr.contentWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await zingsnis(300);
+        if (ov.style.display !== "none") blogi.push(kur + "Esc paieškos lango viduje (iframe) neuždarė");
+        klavisas(w, d.activeElement, "Escape"); await zingsnis(300);
+        if (d.getElementById("modal").classList.contains("show")) blogi.push(kur + "antras Esc neuždarė pirkimo lango");
+        else if (d.activeElement !== naujas) blogi.push(kur + "fokusas negrįžo į „Naujas pirkimas“");
+        patikrinta++;
+      } finally { f.remove(); }
+      // Naršyklės <dialog> (kortelių puslapis): uždarius „Atšaukti“ fokusas grįžta
+      const g = await prieinamumoRemas("../pirkimu-korteles.html?saugykla=testine");
+      try {
+        const w = g.contentWindow, d = g.contentDocument, kur = "pirkimu-korteles · kortelės forma: ";
+        const b = mygtukas("#naujaHeader")(w, d); await zingsnis(200);
+        const forma = d.getElementById("forma");
+        if (!forma.open || !forma.contains(d.activeElement)) blogi.push(kur + "forma neatsivėrė ar fokusas ne joje");
+        d.getElementById("atsaukti").click(); await zingsnis(200);
+        if (forma.open) blogi.push(kur + "neuždarė"); else if (d.activeElement !== b) blogi.push(kur + "fokusas negrįžo");
+        patikrinta++;
+      } finally { g.remove(); }
+    } finally { A.atkurk(); }
+    tiesa(!blogi.length, blogi.length + " radiniai:\n  " + blogi.join("\n  "));
+    lygu(patikrinta, LANGU_ATVEJAI.length + 2, "patikrinta langų");
   });
 
   await testas("Visi puslapiai, jų skirtukai ir būsenos (su duomenimis): tekstas >= 4,5:1 (didelis 3:1), valdikliai turi pavadinimus, spaudžiami elementai pasiekiami klaviatūra, radijo grupės turi klausimą, fokuso kontūras nenuimtas be pakaitalo", async ()=>{
