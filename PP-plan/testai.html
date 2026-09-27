@@ -289,6 +289,54 @@ async function testaiKortele(){
   });
 }
 
+/* 2026-09-28 (mutacijų auditas): apkrovos kalendorius, suvestinės agregavimas, ketvirčiai, kryžminis filtras ir registro
+   paieška - iki tol netikrinta. */
+async function testaiAnalize(){
+  grupe("Apkrova, suvestinė, ketvirčiai ir filtrai");
+  const pav = kodas => W.GP_METHODS.label(kodas);
+  const menPradzia = n => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + n); return W.eval("fmtDate")(d); };
+  function planas(){
+    svarus();
+    // m1 ir m4 visada skirtinguose ketvirčiuose - taip tikrinama, kuri data svarbesnė
+    const m1 = menPradzia(1), m2 = menPradzia(2), m4 = menPradzia(4);
+    W.eval(`DATA.procurements = [
+      { id:'p1', nr:'A-1', imone:'LITGRID', rusis:'Prekės', budas:${JSON.stringify(pav("T-AK"))}, verte:500000, bvpz:'31000000-6', pirkimoData:'${m1}', sutarciesData:'${m4}' },
+      { id:'p2', nr:'A-2', imone:'LITGRID', rusis:'Paslaugos', budas:${JSON.stringify(pav("MV-NR"))}, verte:5000, bvpz:'79000000-4', pirkimoData:'${m1}' },
+      { id:'p3', nr:'A-3', imone:'AMBER', rusis:'Prekės', budas:${JSON.stringify(pav("S-AK"))}, verte:100000, bvpz:'44000000-0', inicData:'${m1}', sutarciesData:'${m4}' },
+      { id:'p4', nr:'A-4', imone:'AMBER', rusis:'Darbai', budas:${JSON.stringify(pav("T-AK"))}, verte:9000000, bvpz:'45000000-7', sutarciesData:'${m2}' } ];
+      save(); renderRegister(); renderDashboard();`);
+  }
+  await testas("Apkrova: pirkimai pagal įmonę ir vykdymo mėnesį (pirkimo data, be jos - inicijavimo, tada sutarties), balai pagal būdo sudėtingumą", async () => {
+    planas();
+    W.renderCapacity();
+    const langeliai = [...D.querySelectorAll("#capacityResult tbody tr")].map(tr => [tr.cells[0].textContent.trim(), [...tr.querySelectorAll("td[title]")].map(td => td.getAttribute("title")).filter(x => !/^0 pirkimai/.test(x))]);
+    const C = W.eval("METHOD_COMPLEXITY");
+    lygu(langeliai, [["AMBER", ["1 pirkimai · " + C["S-AK"] + " balai", "1 pirkimai · " + C["T-AK"] + " balai"]], ["LITGRID", ["2 pirkimai · " + (C["T-AK"] + C["MV-NR"]) + " balai"]]], "apkrovos langeliai");
+  });
+
+  await testas("Suvestinė: kiekis, suma ir vidurkis; ketvirtis - pagal sutarties datą, be jos - pirkimo ar inicijavimo", async () => {
+    const pr = W.eval("DATA.procurements");
+    lygu([W.pivotAgg(pr, "count"), W.pivotAgg(pr, "value"), W.pivotAgg(pr, "avg"), W.pivotAgg([], "avg")], [4, 9605000, 9605000 / 4, 0], "agregavimas");
+    const k = d => d.getFullYear() + " K" + (Math.floor(d.getMonth() / 3) + 1), data = s => W.eval("parseDate")(s);
+    lygu(pr.map(p => W.procQuarter(p)), [k(data(pr[0].sutarciesData)), k(data(pr[1].pirkimoData)), k(data(pr[2].sutarciesData)), k(data(pr[3].sutarciesData))], "ketvirčiai");
+    lygu([W.procQuarter({ inicData: pr[2].inicData }), W.procQuarter({})], [k(data(pr[2].inicData)), "Be datos"], "tik inicijavimo data; be datų");
+  });
+
+  await testas("Kryžminis filtras: paspaudus reikšmę - filtruojama, antrą kartą - išjungiama; registro paieška ir būdo bei rūšies filtrai", async () => {
+    W.setCrossFilter("imone", "AB Amber Grid");
+    lygu(W.eval("dashFilteredProcs()").map(p => p.id), ["p3", "p4"], "kryžminis filtras");
+    W.setCrossFilter("imone", "AB Amber Grid");
+    lygu([W.eval("dashCross"), W.eval("dashFilteredProcs()").length], [null, 4], "antras paspaudimas išjungia");
+    const nustatyk = (id, v) => { D.getElementById(id).value = v; };
+    nustatyk("searchBox", "45000000"); lygu(W.getFilteredProcs().map(p => p.id), ["p4"], "paieška pagal BVPŽ");
+    nustatyk("searchBox", ""); nustatyk("filterType", "Prekės"); lygu(W.getFilteredProcs().map(p => p.id), ["p1", "p3"], "rūšies filtras");
+    nustatyk("filterType", ""); W.fillMethodFilter && W.fillMethodFilter();
+    const b = D.getElementById("filterMethod"); if (![...b.options].some(o => o.value === pav("T-AK"))) b.insertAdjacentHTML("beforeend", "<option>" + pav("T-AK") + "</option>");
+    nustatyk("filterMethod", pav("T-AK")); lygu(W.getFilteredProcs().map(p => p.id), ["p1", "p4"], "būdo filtras");
+    nustatyk("filterMethod", "");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -297,6 +345,7 @@ async function testaiKortele(){
     await testaiKelias();
     await testaiBusenos();
     await testaiKortele();
+    await testaiAnalize();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
