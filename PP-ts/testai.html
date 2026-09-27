@@ -238,6 +238,30 @@ async function testaiTaisykles() {
     tiesa(r.issues.length > 0, 'turėjo rasti pastabų dėl subjektyvių terminų');
   });
 
+  /* 2026-09-28 mutacijų auditas: pasikartojimų riba, matuojamas patikslinimas ir neaiškūs kiekiai iki tol netikrinti */
+  await testas('Subjektyvus terminas: iki 3 vietų tekste; su matuojamu patikslinimu („kokybiškas (atitinkantis ISO 9001)“) - pastabos nėra', () => {
+    const subj = t => taisykles(t).issues.filter(x => x.category === 'subjective').length;
+    lygu(subj('Kokybiškas kabelis. Kokybiškas jungiklis. Kokybiškas skydas. Kokybiškas laidas.'), 3, '4 vietos - 3 pastabos');
+    lygu(subj('Kabelis turi būti kokybiškas (atitinkantis ISO 9001).'), 0, 'su patikslinimu');
+  });
+  await testas('Neaiškus kiekis: frazės, besibaigiančios lietuviška raide („pagal poreikį“, „reikiamą kiekį“), atpažįstamos (iki 2026-09-28 - niekada); viena pastaba frazei', () => {
+    const vq = t => taisykles(t).issues.filter(x => x.category === 'measurement').map(x => x.title);
+    lygu(vq('Tiekti pagal poreikį. Montuoti pagal poreikį. Prižiūrėti pagal poreikį.').length, 1, '„pagal poreikį“ tris kartus - viena pastaba');
+    lygu(vq('Pristatyti reikiamą kiekį, o esant poreikiui - ir daugiau.').length, 2, '„reikiamą kiekį“ ir „esant poreikiui“');
+    lygu(vq('Poreikis vertinamas kas mėnesį; reikiamąjį kiekį nurodo užsakovas.').length, 0, 'kiti žodžiai (poreikis, reikiamąjį) - ne');
+    const itart = x => taisykles(x).issues.filter(i => /pakeitimą be jo/.test(i.title)).length;
+    lygu([itart('Įranga tiekiama be pakeitimų.'), itart('Įranga tiekiama be pakeitimo.'), itart('Pakeitimų registras pildomas.')], [1, 1, 0], '„be pakeitimų“ (su ų) ir „be pakeitimo“');
+  });
+  await testas('CVP IS analogų kainų statistika: mediana, apkarpytas (10 %) vidurkis, P25 ir P75; nulinės ir tuščios vertės neskaičiuojamos; analogai - 3 metų', () => {
+    const C = M('CVPISClient');
+    const v = [10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240, 20480];
+    const st = C.priceStats(v.concat([0, null, -5]).map(x => ({ value: x })));
+    lygu([st.count, st.min, st.max, st.median, st.trimmedMean, st.p25, st.p75], [12, 10, 20480, 480, 2046, 80, 5120], 'statistika');
+    lygu(C.priceStats([{ value: 0 }, { value: null }]), null, 'be tinkamų verčių - null, ne nuliai');
+    const pries = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d; };
+    lygu(C.filterByYearRange([{ date: pries(2) }, { date: pries(4) }, { date: null }]).length, 1, '3 metų laikotarpis');
+  });
+
   await testas('Neapibrėžtas kiekis pagaunamas', () => {
     const r = taisykles('Tiekėjas pristato pakankamas kiekis medžiagų esant poreikiui.');
     tiesa(r.issues.length > 0, 'turėjo rasti pastabą dėl neapibrėžto kiekio');
