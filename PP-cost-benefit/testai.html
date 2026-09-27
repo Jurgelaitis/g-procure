@@ -657,6 +657,48 @@ testas("Bendra pirkimo kortelė (A1)", "Kaštų ir naudos analizė: laukai pildo
 });
 
 /* =========================================================================
+   2026-09-28 mutacijų auditas: iš 11 mutacijų pagauta 1 - kraštiniai EN atvejai ir KNA skaičiavimai
+   (NPV, diskontavimas, daugiakriterė matrica) iki tol netikrinti nė vienu testu.
+   ========================================================================= */
+testas("Formulės", "Brangiausio ir pigiausio formulė: visų kainos lygios - visi gauna visus kainos balus; Telgen su P_SetMin = P_SetMax - klaida", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kks", formule:"maxmin", kainosSvoris:60 }, kriterijai:[TAIPNE], pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }, { tiekejas:"B", kaina:100, reiksmes:[false] }] });
+  lygu(r.eile.map(e=>[e.t, e.kb]), [["A", 60], ["B", 60]], "lygios kainos");
+  const r2 = busena({ pirkimas:{ budas:"kks", formule:"telgen", kainosSvoris:60, pSetMin:100, pSetMax:100 }, kriterijai:[TAIPNE], pasiulymai:[{ tiekejas:"A", kaina:100, reiksmes:[true] }] });
+  tiesa(r2.klaidos.some(k=>k.indexOf("mažesnė už P_SetMax") >= 0) && !r2.eile.some(e=>!isFinite(e.kb)), "lygios ribos: " + r2.klaidos.join(" || "));
+});
+
+testas("Formulės", "Apvalinimas pusė aukštyn ir su dvejetainėmis trupmenomis (1,005 -> 1,01; 2,675 -> 2,68); skaičius su kableliu skaitomas", ()=>{
+  lygu([M("apvalink(1.005, 2)"), M("apvalink(2.675, 2)"), M("apvalink(0.125, 2)")], [1.01, 2.68, 0.13], "apvalink");
+  lygu([M("sk('12,5')"), M("sk('7.25')"), M("sk('')"), M("sk(null)"), M("sk('abc')")], [12.5, 7.25, null, null, null], "sk");
+});
+
+testas("Kaštų ir naudos analizė", "NPV: pirmieji metai nediskontuojami, norma - procentais (100 + 110 / 1,1 + 121 / 1,21 = 300)", async ()=>{
+  const APS = GP_TESTU_APSAUGA.pradek(k => k === "litgrid_cba");
+  const { f, w } = await remelisSuKortele("kastu_naudos_analize.html");
+  try {
+    arti(w.npv([100, 110, 121], 10), 300, 1e-9, "10 %");
+    arti(w.npv([50, 50], 0), 100, 1e-9, "0 %");
+  } finally { f.remove(); APS.atkurk(); }
+});
+
+testas("Kaštų ir naudos analizė", "Daugiakriterė matrica: NPV ir kokybė - daugiau geriau, LCC ir rizika - mažiau geriau, lygios reikšmės - 50, strateginė reikšmė × 20; svorių suma turi būti 100 (± 0,1)", async ()=>{
+  const APS = GP_TESTU_APSAUGA.pradek(k => k === "litgrid_cba");
+  const { f, w } = await remelisSuKortele("kastu_naudos_analize.html");
+  try {
+    w.eval("state.weights = { npv:30, lcc:20, qual:20, risk:20, strat:10 }");
+    const alt = (id, strategic) => ({ id, name: id, costs:{ capex:1000 }, benefits:{}, qualitative:{ strategic } });
+    const calcs = [{ alt: alt("A", 4), c:{ npvNet:100, lcc:500, qualScore:3, riskScore:2 } }, { alt: alt("B", 2), c:{ npvNet:200, lcc:800, qualScore:3, riskScore:4 } },
+                   { alt: { id:"C", name:"C", costs:{}, benefits:{} }, c:{ npvNet:0, lcc:0, qualScore:0, riskScore:0 } }];
+    const m = w.mcdaScores(calcs);
+    lygu([m.weightsValid, m.ranked.map(x=>[x.alt.id, Math.round(x.score * 100) / 100]), m.skipped.map(x=>x.alt.id)], [true, [["A", 58], ["B", 44]], ["C"]], "balai");
+    lygu(m.ranked[0].breakdown, { npv:0, lcc:100, qual:50, risk:100, strat:80 }, "A išskaidymas");
+    w.eval("state.weights = { npv:30, lcc:20, qual:20, risk:20, strat:9 }");
+    lygu(w.mcdaScores(calcs).weightsValid, false, "suma 99 - netinkama");
+  } finally { f.remove(); APS.atkurk(); }
+});
+
+/* =========================================================================
    PALEIDIMAS
    ========================================================================= */
 /* Testas gali būti ir asinchroninis (grąžina Promise) - tada jo laukiama (Q3: Word priedo būsenos). */
