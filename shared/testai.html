@@ -2844,6 +2844,66 @@ async function testaiPrieinamumas(){
     } finally { f.remove(); }
   });
 
+  await testas("prieinamumas.js: dekoratyvi SVG ikona paslepiama nuo ekrano skaitytuvo (ir vėliau įterpta); ikona su pavadinimu, vaidmeniu ar diagrama su tekstu - ne (A3)", async ()=>{
+    const ikona = '<svg viewBox="0 0 24 24"><path d="M1 1h2"/></svg>';
+    const { f, d } = await ramas(`<button id="b1">${ikona} Išsaugoti</button><span id="s1">${ikona}</span>
+      <svg id="t1" viewBox="0 0 10 10"><title>Įspėjimas</title><path d="M1 1h2"/></svg><svg id="r1" role="img" aria-label="Logotipas"><path d="M1 1h2"/></svg>
+      <svg id="d1" viewBox="0 0 100 50"><rect width="10" height="40"/><text x="0" y="48">2026 K1</text></svg><svg id="n1" aria-hidden="false"><path d="M1 1h2"/></svg>
+      <svg id="v1"><svg id="v2"><path d="M1 1h2"/></svg></svg><div id="vieta"></div><script src="prieinamumas.js"><\/script>`);
+    try {
+      await tiksas();
+      const pasl = id => d.getElementById(id).getAttribute("aria-hidden");
+      lygu([pasl("b1") === null && d.querySelector("#b1 svg").getAttribute("aria-hidden"), d.querySelector("#s1 svg").getAttribute("aria-hidden")], ["true", "true"], "dekoratyvios ikonos");
+      lygu(d.querySelector("#b1 svg").getAttribute("focusable"), "false", "focusable");
+      lygu([pasl("t1"), pasl("r1"), pasl("d1"), pasl("n1")], [null, null, null, "false"], "su pavadinimu, vaidmeniu, diagrama su tekstu, aiškiai nurodyta");
+      lygu([pasl("v1"), pasl("v2")], ["true", null], "įdėtinis svg - tik išorinis");
+      d.getElementById("vieta").innerHTML = '<button id="b2">' + ikona + ' Naujas</button>';
+      await tiksas();
+      lygu(d.querySelector("#b2 svg").getAttribute("aria-hidden"), "true", "vėliau įterpta ikona");
+    } finally { f.remove(); }
+  });
+
+  await testas("prieinamumas.js: Chart.js diagrama - role=img ir pavadinimas su duomenimis; blanki spalva (< 3:1) gauna tamsesnį tos pačios spalvos kontūrą, linija - tamsesnę liniją; stipri nekeičiama (A3)", async ()=>{
+    const sant = (a, b) => { const L = h => { const v = [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16) / 255).map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+      const x = L(a.toLowerCase()), y = L(b.toLowerCase()); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const deze = id => `<div style="width:400px;height:200px"><canvas id="${id}"></canvas></div>`;
+    const { f, d, w } = await ramas(`<script src="../PP-cost-benefit/chart.umd.min.js"><\/script><script src="prieinamumas.js"><\/script>
+      <section style="background:#fff"><h3>Rizikos pasiskirstymas</h3>${deze("c1")}</section>
+      <section><h3>Pasiūlymai</h3><div style="width:400px;height:200px"><canvas id="c2" aria-label="Palyginimas"></canvas></div></section>
+      <section><h3>Stiprios spalvos</h3>${deze("c3")}</section>`);
+    try {
+      await tiksas();
+      const C = w.Chart, el = id => d.getElementById(id);
+      const c1 = new C(el("c1"), { type: "doughnut", data: { labels: ["Maža", "Vidutinė", "Didelė"], datasets: [{ data: [5, 3, 1], backgroundColor: ["#459D54", "#FAB03B", "#DB354A"], borderWidth: 0 }] }, options: { animation: false } });
+      lygu([el("c1").getAttribute("role"), el("c1").getAttribute("aria-label")], ["img", "Rizikos pasiskirstymas. Maža 5, Vidutinė 3, Didelė 1"], "sektorių diagrama");
+      const k1 = c1.data.datasets[0].borderColor;
+      tiesa(sant(k1[1], "#ffffff") >= 3 && k1[1].toLowerCase() !== "#fab03b", "geltonas sektorius be pakankamo kontūro: " + k1[1]);
+      lygu([k1[0].toLowerCase(), k1[2].toLowerCase(), c1.data.datasets[0].borderWidth], ["#459d54", "#db354a", 1.5], "stiprūs sektoriai - savo spalvos kontūras");
+      const c2 = new C(el("c2"), { type: "bar", data: { labels: ["A", "B"], datasets: [{ label: "Balai", data: [90, 70.5], backgroundColor: ["#00A072", "#C7CDD3"] },
+        { type: "line", label: "PV", data: [80, 80], borderColor: "#FAB03B" }] }, options: { animation: false } });
+      lygu(el("c2").getAttribute("aria-label"), "Palyginimas. Balai: A 90, B 70,5; PV: A 80, B 80", "modulio pavadinimas lieka, pridedami duomenys");
+      const b2 = c2.data.datasets[0].borderColor, l2 = c2.data.datasets[1].borderColor;
+      tiesa(sant(b2[1], "#ffffff") >= 3 && sant(l2, "#ffffff") >= 3 && l2.toLowerCase() !== "#fab03b", "pilkas stulpelis ar geltona linija be kontrasto: " + b2[1] + " / " + l2);
+      c2.update(); c2.update();
+      lygu([c2.data.datasets[0].borderColor[1], c2.data.datasets[1].borderColor], [b2[1], l2], "pakartotinis atnaujinimas nekeičia");
+      const c3 = new C(el("c3"), { type: "bar", data: { labels: ["X"], datasets: [{ data: [1], backgroundColor: "#00667D" }] }, options: { animation: false } });
+      lygu([c3.data.datasets[0].borderColor, el("c3").getAttribute("aria-label")], [undefined, "Stiprios spalvos. X 1"], "stipri spalva - be kontūro");
+    } finally { f.remove(); }
+    // Chart.js įkeliamas PO prieinamumas.js - papildinys užregistruojamas įkėlus puslapį; tuščia drobė paslėpta, nupiešus - grąžinama
+    // (modulis diagramą piešia DOMContentLoaded metu - dar prieš „load“: papildinys turi būti jau užregistruotas)
+    const g = await ramas(`<script src="prieinamumas.js"><\/script><script src="../PP-cost-benefit/chart.umd.min.js"><\/script><h3>Vėliau</h3>${deze("c4")}
+      <h3>Įkeliant</h3>${deze("c5")}<script>document.addEventListener("DOMContentLoaded", () => { new Chart(document.getElementById("c5"),
+        { type: "bar", data: { labels: ["K1"], datasets: [{ data: [3] }] }, options: { animation: false } }); });<\/script>`);
+    try {
+      await tiksas();
+      lygu(g.d.getElementById("c5").getAttribute("aria-label"), "Įkeliant. K1 3", "diagrama, nupiešta įkeliant puslapį");
+      const c4 = g.d.getElementById("c4");
+      lygu(c4.getAttribute("aria-hidden"), "true", "tuščia drobė");
+      new g.w.Chart(c4, { type: "bar", data: { labels: ["Q1"], datasets: [{ data: [2] }] }, options: { animation: false } });
+      lygu([c4.getAttribute("aria-label"), c4.getAttribute("aria-hidden")], ["Vėliau. Q1 2", null], "vėliau įkeltas Chart.js, drobė nebepaslėpta");
+    } finally { g.f.remove(); }
+  });
+
   /* Modaliniai langai (U4 likutis, 2026-09-27): prieinamumas.js langų valdymas sintetiniuose puslapiuose. Laukiama du kartus po
      nulinio laiko: stebėtojas planuoja patikrą setTimeout(0), o fokusas perkeliamas dar vienu žingsniu vėliau. */
   const LANGO_CSS = '<style>.fonas{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4)}.fonas.show{display:flex}' +
