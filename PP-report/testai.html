@@ -480,6 +480,10 @@ async function paleisk() {
     const d = W.gatherFormData();
     lygu((d.perDalis['A'] || {}).galimasLaimetojas, '', 'galimasLaimetojas');
     lygu((d.perDalis['A'] || {}).sutartiesBePvm, '', 'sutarties kaina');
+    // 2026-09-28 mutacijų auditas: ir sprendimuose (iš duomenų) kritęs kandidatas nepripažįstamas laimėjusiu
+    const spr = W.generateSprendimai(d).join('\n');
+    tiesa(!/Pripažinti, kad (Pigus|Brangus) (neturi pašalinimo|atitinka)/.test(spr) && !/laimėjusi/i.test(spr),
+      'sprendimuose kritęs kandidatas pripažintas atitinkančiu ar laimėjusiu: ' + spr.slice(0, 500));
   });
 
   await testas('Sprendimuose fiksuojamas kvalifikacijos neatitikimas ir atmetimas', () => {
@@ -880,6 +884,23 @@ async function paleisk() {
     turi(isp.innerHTML, 'Viršijimas pagal dalis', 'įspėjimas');
     turi(isp.innerHTML, 'viršija dalies numatomą vertę', 'įspėjimas');
   }, 'bendra suma telpa, bet dalis viršija savo biudžetą');
+
+  /* 2026-09-28 mutacijų auditas: formos vertės ribų ir atgalinio PVM iki tol netikrino nė vienas testas */
+  await testas('Vertės įspėjimai: 1 priedas - virš 15 000 Eur ir iki 5 000 Eur; 2 priedas - iki 15 000 Eur (ribos imtinai)', () => {
+    const isp = () => { const w = D.getElementById('value-warning'); return w.style.display === 'none' ? '' : w.textContent; };
+    const kai = (forma, v) => { W.selectForm(forma); ivesk('verteBePvm', String(v)); return isp(); };
+    const r = { f1_15000: kai(1, 15000), f1_15001: kai(1, 15001), f1_5000: kai(1, 5000), f1_4999: kai(1, 4999), f2_15000: kai(2, 15000), f2_15001: kai(2, 15001) };
+    lygu([r.f1_15000, r.f1_5000, r.f2_15001], ['', '', ''], 'be įspėjimo');
+    turi(r.f1_15001, 'virš 15 000 Eur', '1 priedas, 15 001'); turi(r.f1_4999, 'Iki 5 000 Eur', '1 priedas, 4 999'); turi(r.f2_15000, 'neviršija 15 000 Eur', '2 priedas, 15 000');
+  });
+
+  await testas('PVM: įvedus sumą su PVM, suma be PVM apskaičiuojama atgal (1 210 -> 1 000,00), ir atvirkščiai', () => {
+    svariForma();
+    ivesk('verteSuPvm', '1210');
+    lygu(laukas('verteBePvm').value, '1000.00', 'be PVM');
+    ivesk('verteBePvm', '2500');
+    lygu(laukas('verteSuPvm').value, '3025.00', 'su PVM');
+  });
 
   /* ---------------- JUODRAŠČIAI ---------------- */
   grupe('Juodraščiai (localStorage suderinamumas)');
