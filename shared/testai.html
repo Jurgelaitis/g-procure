@@ -809,7 +809,7 @@ async function testaiAntraste(){
     // Tik CSS reikšmės (be kabučių): JS objektų laukai kaip { color: 'var(--epso-emerald)' } - taškų ir grafikų spalvos, ne tekstas.
     const TEKSTAS = /(^|[^\w-])color\s*:\s*(var\(\s*--(?:color-emerald(?:-120)?|smaragdas(?:-120)?|c-emerald(?:-120)?|epso-emerald(?:-120)?|brand(?:-dark)?|litgrid-green|accent(?:-dim)?|green-solid)\s*(?:,[^)]*)?\)|#00a072\b|#128a76\b)/gi;
     const blogi = [];
-    for (const m of ANTRASTES_PUSLAPIAI.concat(["../PP-teise/index.html", "../index.html", "../G-Procure_About.html", "../G-Procure_Project.html", "../atsargine-kopija.html", "gprocure-info-panel.js", "teise-stebesena.js", "modulio-antraste.css"])) {
+    for (const m of ANTRASTES_PUSLAPIAI.concat(["../PP-teise/index.html", "../index.html", "../G-Procure_About.html", "../G-Procure_Project.html", "../atsargine-kopija.html", "gprocure-info-panel.js", "teise-stebesena.js", "modulio-antraste.css", "pranesimas.js"])) {
       const src = await saltinis(m); let x; TEKSTAS.lastIndex = 0;
       while ((x = TEKSTAS.exec(src))) blogi.push(m + ":" + src.slice(0, x.index).split("\n").length + " „" + x[0].trim() + "“");
     }
@@ -3034,7 +3034,7 @@ async function testaiPrieinamumas(){
     const RX = new RegExp("(^|[^\\w-])color\\s*:\\s*(var\\(\\s*--(?:" + V + ")\\s*(?:,[^)]*)?\\)|#(?:737483|9aa1ab|c7cdd3|b9791c|b87317|b47a00|6b7a99|e53e3e|459d54|db354a|fab03b|00a5c4|85bc28)\\b)", "gi");
     const selektorius = (src, i) => { const a = src.lastIndexOf("{", i); if (a < 0) return ""; const s = src.slice(src.lastIndexOf("}", a) + 1, a); return s.length < 300 && s.indexOf("<") < 0 ? s : ""; };
     const failai = Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "")).concat(["gprocure-info-panel.js", "teise-stebesena.js", "portal-link.js", "pirkimo-kortele.js",
-      "mano-pirkimai.js", "busena.js", "modulio-antraste.css", "epso-g.css"]);
+      "mano-pirkimai.js", "busena.js", "modulio-antraste.css", "epso-g.css", "pranesimas.js"]);
     const blogi = [];
     for (const m of failai) {
       const src = await saltinis(m); let x; RX.lastIndex = 0;
@@ -3203,10 +3203,132 @@ async function testaiPinigai(){
   });
 }
 
+/* ==========================================================================
+   Trumpi pranešimai (B5, 2026-09-28): shared/pranesimas.js vietoj 11 modulių kopijų. Iki tol: skirtinga vieta
+   (apačioje, viršuje, centre), trukmė (1,8-5 s) ir spalvos - baltas tekstas ant smaragdo ar raudonos 3,35-4,3:1;
+   ekrano skaitytuvas girdėjo tik 2 iš 11 (kiti įterpiami be gyvos srities).
+   ========================================================================== */
+async function testaiPranesimai(){
+  dabartine = grupe("Trumpi pranešimai (pranesimas.js)");
+  const skaityk = (d, rol) => d.querySelector('.gp-sr-pranesimai [role="' + rol + '"]').textContent;
+  const lauk = ms => new Promise(r => setTimeout(r, ms));
+
+  await testas("pranesimas.js: gyvos sritys yra iš anksto; gerai / info - role=status, klaida - role=alert; tipai iš modulių žodžių; tuščias tekstas nerodomas", async ()=>{
+    const { f, d, w } = await ramas(`<link rel="stylesheet" href="epso-g.css"><script src="pranesimas.js"><\/script>`);
+    try {
+      await tiksas();
+      const P = w.GP_PRANESIMAS;
+      tiesa(d.querySelector('.gp-sr-pranesimai [role="status"][aria-live="polite"]') && d.querySelector('.gp-sr-pranesimai [role="alert"][aria-live="assertive"]'), "gyvų sričių nėra prieš pirmą pranešimą");
+      lygu(["ok", "success", "gerai", "err", "error", "danger", "warn", "warning", "info", "", undefined].map(P.tipas),
+        ["gerai", "gerai", "gerai", "klaida", "klaida", "klaida", "ispejimas", "ispejimas", "info", "info", "info"], "tipai");
+      P.rodyk("Išsaugota", { tipas: "ok" }); await lauk(120);
+      const el = d.querySelector(".gp-pranesimas");
+      lygu([el.className, el.querySelector(".gp-pranesimas__tekstas").textContent, skaityk(d, "status"), skaityk(d, "alert")],
+        ["gp-pranesimas gp-pranesimas--gerai", "Išsaugota", "Išsaugota", ""], "sėkmė");
+      P.rodyk("Nepavyko įrašyti", { tipas: "error" }); await lauk(120);
+      lygu([skaityk(d, "alert"), d.querySelectorAll(".gp-pranesimas").length], ["Nepavyko įrašyti", 2], "klaida");
+      P.rodyk("   "); P.rodyk(null); await lauk(80);
+      lygu(d.querySelectorAll(".gp-pranesimas").length, 2, "tuščias nerodomas");
+      const x = d.querySelector(".gp-pranesimas__x");
+      lygu([x.getAttribute("aria-label"), x.tagName, x.type], ["Uždaryti pranešimą", "BUTTON", "button"], "uždarymo mygtukas");
+      x.click(); await lauk(320);
+      lygu(d.querySelectorAll(".gp-pranesimas").length, 1, "uždarytas mygtuku");
+    } finally { f.remove(); }
+  });
+
+  await testas("pranesimas.js: pranešimas dingsta pats, bet užvedus pelę ar fokusą laukia (WCAG 2.2.1); rodomi ne daugiau kaip 4; tas pats tekstas antrą kartą vėl perskaitomas", async ()=>{
+    const { f, d, w } = await ramas(`<script src="pranesimas.js"><\/script>`);
+    try {
+      await tiksas();
+      const P = w.GP_PRANESIMAS;
+      P.rodyk("Trumpas", { trukme: 150 }); await lauk(450);
+      lygu(d.querySelectorAll(".gp-pranesimas").length, 0, "nedingo pats");
+      const h = P.rodyk("Su pele", { trukme: 150 });
+      h.el.dispatchEvent(new w.MouseEvent("mouseenter")); await lauk(450);
+      lygu(d.querySelectorAll(".gp-pranesimas").length, 1, "dingo, nors pelė ant jo");
+      h.el.dispatchEvent(new w.MouseEvent("mouseleave")); await lauk(1400);
+      lygu(d.querySelectorAll(".gp-pranesimas").length, 0, "nedingo patraukus pelę");
+      for (let i = 1; i <= 6; i++) P.rodyk("Nr. " + i, { trukme: 0 });
+      await lauk(60);
+      lygu([...d.querySelectorAll(".gp-pranesimas__tekstas")].map(e => e.textContent), ["Nr. 3", "Nr. 4", "Nr. 5", "Nr. 6"], "ribojimas");
+      const st = d.querySelector('.gp-sr-pranesimai [role="status"]');
+      let pokyciai = 0; new w.MutationObserver(m => { pokyciai += m.length; }).observe(st, { childList: true, characterData: true, subtree: true });
+      P.rodyk("Nr. 6", { trukme: 0 }); await lauk(150);
+      tiesa(pokyciai >= 2 && st.textContent === "Nr. 6", "tas pats tekstas neperduotas antrą kartą (pokyčių " + pokyciai + ")");
+    } finally { f.remove(); }
+  });
+
+  await testas("pranesimas.js: angliškame puslapyje - „Close notification“; perjungus kalbą senos kalbos pranešimai nuimami; tekstas >= 4,5:1, ikona ir juosta >= 3:1 ant pranešimo fono; spausdinant nerodoma", async ()=>{
+    const { f, d, w } = await ramas(`<link rel="stylesheet" href="epso-g.css"><script src="pranesimas.js"><\/script>`, "en");
+    try {
+      await tiksas();
+      const P = w.GP_PRANESIMAS, blogi = [];
+      ["gerai", "klaida", "ispejimas", "info"].forEach(t => P.rodyk("Tekstas " + t, { tipas: t, trukme: 0 }));
+      await lauk(300);
+      lygu(d.querySelector(".gp-pranesimas__x").getAttribute("aria-label"), "Close notification", "EN");
+      // Ta pati kalba perrašyta - pranešimai lieka; kalba pakeista - senos kalbos pranešimai ir gyvų sričių tekstas nuimami
+      d.documentElement.lang = "en"; await lauk(30);
+      lygu(d.querySelectorAll(".gp-pranesimas").length, 4, "perrašius tą pačią kalbą");
+      d.documentElement.lang = "lt"; await lauk(30);
+      lygu([d.querySelectorAll(".gp-pranesimas").length, skaityk(d, "status"), skaityk(d, "alert")], [0, "", ""], "pakeitus kalbą");
+      ["gerai", "klaida", "ispejimas", "info"].forEach(t => P.rodyk("Tekstas " + t, { tipas: t, trukme: 0 }));
+      await lauk(300);
+      const rgb = s => s.match(/[\d.]+/g).slice(0, 3).map(Number);
+      const L = c => { const v = c.map(x => x / 255).map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+      const K = (a, b) => { const x = L(a), y = L(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+      d.querySelectorAll(".gp-pranesimas").forEach(el => {
+        const cs = w.getComputedStyle(el), fonas = rgb(cs.backgroundColor);
+        const t = K(rgb(w.getComputedStyle(el.querySelector(".gp-pranesimas__tekstas")).color), fonas);
+        const ik = K(rgb(w.getComputedStyle(el.querySelector(".gp-pranesimas__ikona")).stroke), fonas);
+        const j = K(rgb(cs.borderLeftColor), fonas);
+        if (t < 4.5 || ik < 3 || j < 3) blogi.push(el.className + ": tekstas " + t.toFixed(2) + ", ikona " + ik.toFixed(2) + ", juosta " + j.toFixed(2));
+      });
+      tiesa(!blogi.length, blogi.join("; "));
+      tiesa(/@media print\{\.gp-pranesimai,\.gp-sr-pranesimai\{display:none!important\}\}/.test(d.getElementById("gp-pranesimai-stilius").textContent), "spausdinimo taisyklė");
+    } finally { f.remove(); }
+  });
+
+  await testas("Moduliai neturi savų pranešimų kopijų: kas kviečia toast() ar showToast() - jungia pranesimas.js ir perduoda GP_PRANESIMAS; savo .toast stilių nėra; PP-tiekejams be interneto jį turi", async ()=>{
+    const blogi = []; let moduliu = 0;
+    for (const m of Object.keys(TELEFONO_PUSLAPIAI).map(x => x.replace(/\?.*$/, ""))) {
+      const src = await saltinis(m);
+      const fn = src.match(/function (toast|showToast)\s*\([^)]*\)\s*\{[^\n]*/g) || [];
+      if (!fn.length && !/\b(toast|showToast)\(/.test(src)) continue;
+      moduliu++;
+      if (!/<script src="(\.\.\/)?shared\/pranesimas\.js"><\/script>/.test(src)) blogi.push(m + ": nejungia shared/pranesimas.js");
+      fn.forEach(x => { if (!/GP_PRANESIMAS\.rodyk\(/.test(x)) blogi.push(m + ": sava pranešimo funkcija „" + x.slice(0, 60) + "“"); });
+      if (/(^|[}\s,])\.toast(-wrap|-stack)?\s*\{/m.test(src)) blogi.push(m + ": savas .toast stilius");
+      if (/id="(toast|toasts|toastStack)"/.test(src)) blogi.push(m + ": savas pranešimų elementas");
+    }
+    tiesa(moduliu >= 11, "rasta tik " + moduliu + " puslapių su pranešimais");
+    const sw = await saltinis("../PP-tiekejams/sw.js");
+    tiesa(/"\.\.\/shared\/pranesimas\.js"/.test(sw), "PP-tiekejams sw.js SAVI neturi pranesimas.js");
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("Moduliuose pranešimai rodomi bendru komponentu (PP-esg, PP-qual klaida, PP-protocol)", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(k => k.indexOf("ppesg.") === 0 || k === "gprocure.infoPanel.pp-esg");
+    const blogi = [];
+    try {
+      for (const [m, kviesk, tipas] of [["../PP-esg/index.html", w => w.toast("Išsaugota"), "gerai"], ["../PP-qual/PP-QUAL.html", w => w.toast("Įveskite pavadinimą", true), "klaida"],
+        ["../PP-protocol/LITGRID_Generatorius_v3.html", w => w.toast("Nepavyko", "err"), "klaida"]]) {
+        const f = await prieinamumoRemas(m);
+        try {
+          kviesk(f.contentWindow); await lauk(150);
+          const el = f.contentDocument.querySelector(".gp-pranesimas");
+          if (!el) blogi.push(m + ": pranešimas nerodomas"); else if (el.getAttribute("data-tipas") !== tipas) blogi.push(m + ": tipas " + el.getAttribute("data-tipas"));
+        } finally { f.remove(); }
+      }
+    } finally { A.atkurk(); }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
   await testaiPinigai();
+  await testaiPranesimai();
   await testaiDocxStiliai();
   await testaiSkydelis();
   await testaiAntraste();
