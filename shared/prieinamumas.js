@@ -1,5 +1,5 @@
 /* ============================================================================
- * G-Procure  shared/prieinamumas.js   (v1.0, U4, 2026-09-27)
+ * G-Procure  shared/prieinamumas.js   (v1.3, U4 2026-09-27; A3 2026-09-28 - ikonos ir diagramos)
  * Ekrano skaitytuvo pavadinimai ir valdymas klaviatūra VISIEMS puslapiams - vienoje vietoje, nes moduliai
  * formas kuria iš šablonų (innerHTML) ir tie patys trūkumai kartojosi šimtus kartų (matuota 2026-09-27,
  * 25 puslapiai): 354 laukai be pavadinimo, 116 spaudžiamų elementų, kurių nepasiekia klaviatūra.
@@ -17,6 +17,10 @@
  *     mygtuku („✕“, „×“, „Uždaryti“, „Atšaukti“, [data-gp-uzdaryti]) arba fono paspaudimu; užvėrus fokusas
  *     grįžta į elementą, iš kurio langas atvertas. Langai su savu valdymu (jau turi role="dialog") neliečiami,
  *     naršyklės <dialog> - tik grąžinamas fokusas (Safari to nedaro).
+ *  6) Dekoratyvios SVG ikonos (be jokio pavadinimo šaltinio ir be teksto) - aria-hidden: Chrome jas pateikdavo kaip
+ *     „paveikslą“ be pavadinimo (150 vietų 25 puslapiuose, matuota prieinamumo medžiu 2026-09-28).
+ *  7) Chart.js diagramos: role="img" ir pavadinimas su duomenų santrauka; per blankios spalvos (< 3:1 ant fono) gauna
+ *     tos pačios spalvos tamsesnį kontūrą ar liniją (WCAG 1.4.11).
  *
  * Esamų pavadinimų (aria-label, aria-labelledby, „for“, apgaubianti <label>) ir tabindex NEKEIČIA.
  * Taikoma įkėlus puslapį ir kiekvienam vėliau įterptam turiniui (MutationObserver). Nieko nesaugo ir nesiunčia.
@@ -225,10 +229,149 @@
     }
   });
 
+  /* 6. Dekoratyvios SVG ikonos (A3, 2026-09-28). Chrome kiekvieną <svg> be pavadinimo pateikia ekrano skaitytuvui kaip
+     „paveikslą“ be pavadinimo (matuota prieinamumo medžiu, 25 puslapiai): ikona mygtuke, antraštėje ar skiltyje nieko
+     nepasako. Paslepiama (aria-hidden="true") tik ikona be jokio pavadinimo šaltinio: be role, aria-label, aria-labelledby,
+     <title>, <desc> ir be <text> (diagrama su tekstu lieka skaitoma). Pavadinimo mygtukui ikona ir iki tol nedavė. */
+  function ikonos(saknis) {
+    sarasas(saknis, "svg:not([aria-hidden]):not([role]):not([aria-label]):not([aria-labelledby])").forEach(function (svg) {
+      if (svg.ownerSVGElement || svg.querySelector("title, desc, text")) return;
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+    });
+  }
+
+  // Tuščia drobė (diagrama dar nenupiešta - pvz. nėra duomenų) be pavadinimo: nieko nesako, paslepiama; nupiešus - grąžinama (7 p.)
+  function drobes(saknis) {
+    sarasas(saknis, "canvas:not([aria-hidden]):not([role]):not([aria-label]):not([aria-labelledby])").forEach(function (c) {
+      if (c.textContent.trim()) return;
+      var C = global.Chart;
+      if (C && C.getChart && C.getChart(c)) return;
+      c.setAttribute("aria-hidden", "true");
+      c.setAttribute("data-gp-tuscia", "1");
+    });
+  }
+
   function tvarkyk(saknis) {
     if (!saknis || saknis.nodeType !== 1) return;
-    try { etiketes(saknis); grupes(saknis); langeliai(saknis); spaudziami(saknis); } catch (e) { /* prieinamumo pagalba niekada netrukdo moduliui */ }
+    try { etiketes(saknis); grupes(saknis); langeliai(saknis); spaudziami(saknis); ikonos(saknis); drobes(saknis); } catch (e) { /* prieinamumo pagalba niekada netrukdo moduliui */ }
   }
+
+  /* 7. Diagramos (Chart.js, A3, 2026-09-28). Diagrama piešiama <canvas> - ekrano skaitytuvui tai tuščias „paveikslas“
+     (matuota: 17 iš 18 diagramų be pavadinimo), o dalis spalvų ant balto per blankios (WCAG 1.4.11 - 3:1): geltona
+     #FAB03B 1,9:1, šviesiai pilka #C7CDD3 1,6:1, žydra 2,9:1, šviesiai žalia 2,1:1. Vienas Chart.js papildinys visiems:
+     canvas gauna role="img" ir pavadinimą - antraštė (ar modulio aria-label) ir duomenų santrauka („Rizika: maža 5,
+     vidutinė 3“); silpnos spalvos stulpelis ar sektorius gauna tos pačios spalvos tamsesnį kontūrą (>= 3:1), silpna linija -
+     tamsesnę tos pačios spalvos liniją. Užpildo spalvos nekeičiamos; modulio kontūras, jei jau pakankamas, paliekamas. */
+  function rgb(spalva) {
+    var c = (rgb.ctx = rgb.ctx || doc.createElement("canvas").getContext("2d"));
+    if (!c || typeof spalva !== "string") return null;
+    c.fillStyle = "#000000"; c.fillStyle = spalva;
+    var s = c.fillStyle, m;
+    if (/^#[0-9a-f]{6}$/i.test(s)) return { r: parseInt(s.substr(1, 2), 16), g: parseInt(s.substr(3, 2), 16), b: parseInt(s.substr(5, 2), 16), a: 1 };
+    if ((m = /^rgba?\(([^)]+)\)$/.exec(s))) { var p = m[1].split(/\s*,\s*/).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; }
+    return null;
+  }
+  function sviesis(c) {
+    function f(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+  }
+  function santykis(a, b) { var x = sviesis(a), y = sviesis(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function ant(c, fonas) { return { r: c.r * c.a + fonas.r * (1 - c.a), g: c.g * c.a + fonas.g * (1 - c.a), b: c.b * c.a + fonas.b * (1 - c.a), a: 1 }; }
+  function hex(c) { return "#" + [c.r, c.g, c.b].map(function (v) { return ("0" + Math.round(v).toString(16)).slice(-2); }).join(""); }
+  // Ta pati spalva, tamsinama tol, kol pasiekia 3:1 ant fono
+  function tamsesne(c, fonas) {
+    var x = ant(c, fonas);
+    for (var t = 0; t <= 1.0001; t += 0.05) {
+      var d = { r: x.r * (1 - t), g: x.g * (1 - t), b: x.b * (1 - t), a: 1 };
+      if (santykis(d, fonas) >= 3.05) return hex(d);
+    }
+    return "#000000";
+  }
+  function diagramosFonas(canvas) {
+    for (var e = canvas; e && e.nodeType === 1; e = e.parentElement) {
+      var c = rgb(global.getComputedStyle(e).backgroundColor);
+      if (c && c.a > 0.5) return { r: c.r, g: c.g, b: c.b, a: 1 };
+    }
+    return { r: 255, g: 255, b: 255, a: 1 };
+  }
+  var UZPILDAS = /^(bar|doughnut|pie|polarArea)$/;
+  function kontrastas(ch) {
+    var fonas = diagramosFonas(ch.canvas), tipas = ch.config.type;
+    (ch.data.datasets || []).forEach(function (ds) {
+      var t = ds.type || tipas;
+      if (UZPILDAS.test(t)) {
+        var fonai = Array.isArray(ds.backgroundColor) ? ds.backgroundColor : [ds.backgroundColor];
+        var kiek = Math.max(fonai.length, (ds.data || []).length), silpna = false, krastai = [];
+        for (var i = 0; i < kiek; i++) {
+          var f = rgb(fonai[i % fonai.length]);
+          if (!f) { krastai.push(null); continue; }
+          if (santykis(ant(f, fonas), fonas) < 3) { silpna = true; krastai.push(tamsesne(f, fonas)); } else krastai.push(null);
+        }
+        if (!silpna) return;
+        // Modulio kontūras, jei jau pakankamas, paliekamas
+        var bc = rgb(Array.isArray(ds.borderColor) ? ds.borderColor[0] : ds.borderColor);
+        if (ds._gpKontrastas === undefined && bc && (+ds.borderWidth || 0) >= 1 && santykis(ant(bc, fonas), fonas) >= 3) return;
+        var senas = Array.isArray(ds.borderColor) ? ds.borderColor : null;
+        ds.borderColor = krastai.map(function (k, i) { return k || (senas && senas[i]) || (rgb(fonai[i % fonai.length]) ? hex(ant(rgb(fonai[i % fonai.length]), fonas)) : "#2E3641"); });
+        if (!((+ds.borderWidth || 0) >= 1)) ds.borderWidth = /^(doughnut|pie|polarArea)$/.test(t) ? 1.5 : 1;
+        ds._gpKontrastas = true;
+      } else if (t === "line" || t === "radar" || t === "scatter" || t === "bubble") {
+        var l = rgb(Array.isArray(ds.borderColor) ? ds.borderColor[0] : ds.borderColor);
+        if (l && santykis(ant(l, fonas), fonas) < 3) { ds.borderColor = tamsesne(l, fonas); ds._gpKontrastas = true;
+          if (ds.pointBackgroundColor === undefined) ds.pointBackgroundColor = ds.borderColor; }
+      }
+    });
+  }
+  function reiksme(v, lokale) {
+    if (v && typeof v === "object") v = v.y !== undefined ? v.y : v.r !== undefined ? v.r : v.x;
+    if (typeof v !== "number" || !isFinite(v)) return "–";
+    return v.toLocaleString(lokale, { maximumFractionDigits: 2 });
+  }
+  function diagramosPavadinimas(canvas, ch) {
+    var t = ch.options && ch.options.plugins && ch.options.plugins.title && ch.options.plugins.title.display && ch.options.plugins.title.text;
+    if (t) return [].concat(t).join(" ");
+    for (var a = canvas.parentElement, n = 0; a && n < 4; a = a.parentElement, n++) {
+      var h = [].filter.call(a.querySelectorAll("h1,h2,h3,h4,h5,h6,[class*='title'],[class*='pavad']"), function (x) {
+        return !x.contains(canvas) && (x.compareDocumentPosition(canvas) & 4) && x.textContent.trim();
+      });
+      if (h.length) return h[h.length - 1].textContent.replace(/\s+/g, " ").trim().slice(0, 120);
+    }
+    return "";
+  }
+  function santrauka(ch) {
+    var en = /^en/i.test(doc.documentElement.getAttribute("lang") || ""), lokale = en ? "en-GB" : "lt-LT";
+    var zyme = ch.data.labels || [], dss = (ch.data.datasets || []).filter(function (d) { return !d.hidden; });
+    var DAUG = 12, dalys = [];
+    dss.forEach(function (ds) {
+      var e = [], duom = ds.data || [];
+      for (var i = 0; i < duom.length && i < DAUG; i++) e.push((zyme[i] !== undefined ? [].concat(zyme[i]).join(" ") + " " : "") + reiksme(duom[i], lokale));
+      if (duom.length > DAUG) e.push((en ? "and " : "ir dar ") + (duom.length - DAUG) + (en ? " more" : ""));
+      dalys.push((dss.length > 1 && ds.label ? ds.label + ": " : "") + e.join(", "));
+    });
+    return dalys.join("; ");
+  }
+  var DIAGRAMOS_PAPILDINYS = {
+    id: "gpPrieinamumas",
+    beforeUpdate: function (ch) { try { kontrastas(ch); } catch (e) { /* diagrama piešiama bet kuriuo atveju */ } },
+    afterUpdate: function (ch) {
+      try {
+        var c = ch.canvas; if (!c) return;
+        if (c.getAttribute("data-gp-tuscia")) { c.removeAttribute("aria-hidden"); c.removeAttribute("data-gp-tuscia"); }
+        if (!c.hasAttribute("data-gp-pavadinimas")) c.setAttribute("data-gp-pavadinimas", c.getAttribute("aria-label") || "");
+        var pav = c.getAttribute("data-gp-pavadinimas") || diagramosPavadinimas(c, ch) || (/^en/i.test(doc.documentElement.getAttribute("lang") || "") ? "Chart" : "Diagrama");
+        var s = santrauka(ch);
+        c.setAttribute("role", "img");
+        c.setAttribute("aria-label", (pav + (s ? ". " + s : "")).slice(0, 900));
+      } catch (e) { /* pavadinimas - pagalba, ne sąlyga */ }
+    }
+  };
+  function registruokDiagramas() {
+    var C = global.Chart;
+    if (!C || typeof C.register !== "function" || C.__gpPrieinamumas) return;
+    try { C.register(DIAGRAMOS_PAPILDINYS); C.__gpPrieinamumas = true; } catch (e) { /* sena Chart.js versija */ }
+  }
+  registruokDiagramas();
 
   doc.addEventListener("keydown", function (e) {
     var el = e.target;
@@ -237,6 +380,8 @@
   });
 
   function pradek() {
+    registruokDiagramas();   // Chart.js įkeliamas <head> - iki šiol jau yra; kitaip bandoma dar kartą įkėlus puslapį
+    global.addEventListener("load", registruokDiagramas);
     tvarkyk(doc.body);
     if (!global.MutationObserver) return;
     new MutationObserver(function (pokyciai) {
@@ -258,5 +403,5 @@
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", pradek);
   else pradek();
 
-  global.GP_PRIEINAMUMAS = { versija: "1.2", tvarkyk: tvarkyk };
+  global.GP_PRIEINAMUMAS = { versija: "1.3", tvarkyk: tvarkyk, registruokDiagramas: registruokDiagramas };
 })(window);
