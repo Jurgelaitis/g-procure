@@ -103,14 +103,24 @@ async function testaiLogika(){
          ["Tarptautinis", "Supaprastintas", "Mažos vertės"], "PĮ prekės");
     lygu([rek(T.PI.intl_works, "Darbai", "PI"), rek(T.PI.intl_works - 1, "Darbai", "PI"), rek(T.PI.mv_works - 1, "Darbai", "PI")],
          ["Tarptautinis", "Supaprastintas", "Mažos vertės"], "PĮ darbai");
-    const vpiRiba = T.VPI.intl_goods_cva || T.VPI.intl_goods;
-    lygu([rek(vpiRiba, "Paslaugos", "VPI"), rek(vpiRiba - 1, "Paslaugos", "VPI")], ["Tarptautinis", "Supaprastintas"], "VPĮ paslaugos");
-    tiesa(vpiRiba < T.PI.intl_goods && rek(vpiRiba, "Prekės", "PI") !== "Tarptautinis", "VPĮ ir PĮ ribos susimaišė");
+    // EPSO-G nėra centrinės valdžios institucijų sąraše (shared/organizacijos.js, 2026-09-27) - ne mažesnioji riba
+    const CO = W.eval("COMPANIES"), rekO = (v, rusis, imone) => W.recommendMethod(v, rusis, CO[imone].law, false, CO[imone].org).category;
+    const vpiRiba = T.VPI.intl_goods;
+    lygu([rekO(vpiRiba, "Paslaugos", "EPSO-G"), rekO(vpiRiba - 1, "Paslaugos", "EPSO-G"), rekO(T.VPI.intl_goods_cva, "Prekės", "EPSO-G")],
+         ["Tarptautinis", "Supaprastintas", "Supaprastintas"], "VPĮ (EPSO-G) paslaugos ir prekės");
+    tiesa(vpiRiba < T.PI.intl_goods && rekO(vpiRiba, "Prekės", "LITGRID") !== "Tarptautinis", "VPĮ ir PĮ ribos susimaišė");
+    const budoIspejimai = budas => W.validateProc({ imone: "EPSO-G", objektas: "Serverių įranga", verte: T.VPI.intl_goods_cva, rusis: "Prekės", budas })
+      .filter(i => /neatitinka rekomenduojamos kategorijos/.test(i.msg)).length;
+    lygu([budoIspejimai("Supaprastintas atviras konkursas"), budoIspejimai("Tarptautinis atviras konkursas")], [0, 1], "EPSO-G tarp ribų: supaprastintas - be įspėjimo, tarptautinis - įspėjimas");
+    D.getElementById("qtType").value = "Prekės"; D.getElementById("qtLaw").value = "VPI"; D.getElementById("qtSpec").value = "0";
+    D.getElementById("qtValue").value = String(T.VPI.intl_goods_cva); W.runMethodTest();
+    tiesa(/Kategorija: Supaprastintas/.test(D.getElementById("methodResult").textContent) && D.getElementById("methodResult").textContent.indexOf(W.fmtMoney(T.VPI.intl_goods)) >= 0,
+          "greitas testas EPSO-G: " + D.getElementById("methodResult").textContent.replace(/\s+/g, " ").slice(0, 160));
   });
 
   /* A3 (2026-09-26): ribų lentelė ir dalių išimtis - iš shared/thresholds.js ir taisyklių variklio (iki tol skaičiai buvo įrašyti modulyje,
      o dalių išimtis klaidingai skaičiuota nuo „plano vertės“, ne nuo visų pirkimo dalių vertės). */
-  await testas("Ribų lentelė ir 20 % dalių išimtis - iš bendrų failų su nuorodomis; rekomendacijos pastaba - pagal įmonės įstatymą", async () => {
+  await testas("Ribų lentelė ir 20 % dalių išimtis - iš bendrų failų su nuorodomis; rekomendacijos pastaba - pagal įmonės įstatymą; EPSO-G riba - pagal sąrašą", async () => {
     const T = W.GP_THRESHOLDS, fm = v => W.fmtMoney(v);
     const lent = [...D.querySelectorAll("[data-riba]")].map(e => [e.getAttribute("data-riba"), e.textContent]);
     tiesa(lent.length === 11 && lent.every(([k, t]) => { const [r, l] = k.split("."); return t === fm(T[r][l]); }), "lentelė: " + JSON.stringify(lent));
@@ -120,6 +130,9 @@ async function testaiLogika(){
     const pi = W.recommendMethod(T.PI.intl_goods, "Prekės", "PI", false).rule20, vpi = W.recommendMethod(T.VPI.intl_works, "Darbai", "VPI", false).rule20;
     tiesa(pi.applies && pi.threshold === T.DALYS.prekes_paslaugos && pi.note.indexOf(W.GP_TEISE.cit("dalys_supaprastintai", "PI")) >= 0 && pi.note.indexOf("VPĮ") < 0, "PĮ: " + pi.note);
     tiesa(vpi.threshold === T.DALYS.darbai && vpi.note.indexOf(W.GP_TEISE.cit("dalys_supaprastintai", "VPI")) >= 0, "VPĮ: " + vpi.note);
+    const c = D.getElementById("cvaHint"), a = c.querySelector("a");
+    tiesa(!c.hidden && c.textContent.startsWith("UAB EPSO-G nėra centrinės valdžios institucijų sąraše (" + W.GP_TEISE.cit("centrines_valdzios_sarasas", "VPI") + ")")
+          && c.textContent.indexOf(fm(T.VPI.intl_goods)) >= 0 && a && a.href === W.GP_TEISE.url("centrines_valdzios_sarasas", "VPI"), "EPSO-G ribos paaiškinimas: " + c.textContent);
     const src = await (await fetch("EPSO-G_pirkimu_planavimas_MVP.html?b=" + Date.now())).text();
     tiesa(!/80 000|1 000 000|70 000 €|174 000 €|432 000|216 000|140 000|5 404 000|750 000|pirkimo plano vertės/.test(src), "modulyje nebėra įrašytų ribų");
   });

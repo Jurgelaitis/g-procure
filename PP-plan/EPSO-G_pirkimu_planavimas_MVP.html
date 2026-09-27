@@ -156,6 +156,7 @@ textarea{min-height:60px;resize:vertical}
 .muted{color:var(--grafitas-50);font-size:12px}
 .divider{height:1px;background:var(--grafitas-15);margin:18px 0}
 .hint{background:var(--zalia-5);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--grafitas);border-left:3px solid var(--smaragdas)}
+.hint a{color:var(--color-emerald-strong)}
 .empty{text-align:center;padding:60px 20px;color:var(--grafitas-50);background:#fff;border:2px dashed var(--grafitas-30);border-radius:14px}
 .empty .icon{font-size:48px;margin-bottom:8px;opacity:.4}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
@@ -419,13 +420,14 @@ footer{text-align:center;padding:20px;font-size:11px;color:var(--grafitas-50)}
       <div>
         <h4>VPĮ – Perkančiosios organizacijos (EPSO-G)</h4>
         <table style="min-width:auto">
-          <tr><td>Tarptautinis (CVA sąraše)</td><td><strong data-riba="VPI.intl_goods_cva"></strong></td></tr>
-          <tr><td>Tarptautinis (kitos)</td><td><strong data-riba="VPI.intl_goods"></strong></td></tr>
+          <tr><td>Tarptautinis (centrinės valdžios institucijoms)</td><td><strong data-riba="VPI.intl_goods_cva"></strong></td></tr>
+          <tr><td>Tarptautinis (kitoms)</td><td><strong data-riba="VPI.intl_goods"></strong></td></tr>
           <tr><td>Spec. paslaugos (2 priedas)</td><td><strong data-riba="VPI.intl_special"></strong></td></tr>
           <tr><td>Darbai</td><td><strong data-riba="VPI.intl_works"></strong></td></tr>
           <tr><td>Mažos vertės (prekės/paslaugos)</td><td><strong data-riba="VPI.mv_goods"></strong></td></tr>
           <tr><td>Mažos vertės (darbai)</td><td><strong data-riba="VPI.mv_works"></strong></td></tr>
         </table>
+        <p class="hint" id="cvaHint" style="margin-top:8px" hidden></p>
       </div>
       <div>
         <h4>PĮ – Perkantieji subjektai (LITGRID, Amber Grid, Energy cells)</h4>
@@ -593,10 +595,10 @@ const STORAGE_KEY = "epsog_mpp_v1";
 let DATA = {procurements: []};
 
 const COMPANIES = {
-  "EPSO-G":  {name:"UAB EPSO-G",        law:"VPI", color:"#00a072"},
-  "LITGRID": {name:"LITGRID AB",        law:"PI",  color:"#00667d"},
-  "AMBER":   {name:"AB Amber Grid",     law:"PI",  color:"#fab03b"},
-  "ECELLS":  {name:"UAB Energy cells",  law:"PI",  color:"#00a5c4"}
+  "EPSO-G":  {name:"UAB EPSO-G",        law:"VPI", org:"epso-g",       color:"#00a072"},
+  "LITGRID": {name:"LITGRID AB",        law:"PI",  org:"litgrid",      color:"#00667d"},
+  "AMBER":   {name:"AB Amber Grid",     law:"PI",  org:"amber-grid",   color:"#fab03b"},
+  "ECELLS":  {name:"UAB Energy cells",  law:"PI",  org:"energy-cells", color:"#00a5c4"}
 };
 
 const METHODS = {
@@ -689,9 +691,12 @@ function parseNum(v){
 }
 
 /* ==================== METHOD ANALYSIS ==================== */
-function recommendMethod(value, type, law, isSpecial){
+function recommendMethod(value, type, law, isSpecial, org){
   const T = THRESHOLDS[law]; const isWorks = type === "Darbai";
-  const intlThreshold = isWorks ? T.intl_works : (isSpecial ? T.intl_special : (T.intl_goods_cva || T.intl_goods));
+  // Prekių ir paslaugų tarptautinė riba - taisyklių variklis: VPĮ ji priklauso nuo to, ar įmonė centrinės valdžios
+  // institucijų sąraše (shared/organizacijos.js; EPSO-G - ne, todėl ne mažesnioji riba)
+  const rb = window.GP_TAISYKLES ? GP_TAISYKLES.ribos(law, "prekes", org) : null;
+  const intlThreshold = isWorks ? T.intl_works : (isSpecial ? T.intl_special : (rb ? rb.tarptautine : T.intl_goods));
   const mvThreshold = isWorks ? T.mv_works : T.mv_goods;
   let category, recommended, reason;
   if(value >= intlThreshold){
@@ -737,7 +742,7 @@ function validateProc(p){
   if(dProc && dContract && dProc > dContract) issues.push({sev:"err", msg:"Pirkimo data vėlesnė nei sutarties data"});
   if(p.budas && p.verte && p.rusis){
     const company = COMPANIES[p.imone] || COMPANIES["EPSO-G"];
-    const rec = recommendMethod(p.verte, p.rusis, company.law, false);
+    const rec = recommendMethod(p.verte, p.rusis, company.law, false, company.org);
     const mCode = mapMethodNameToCode(p.budas);
     if(mCode){
       const mCat = METHODS[mCode]?.cat;
@@ -1410,7 +1415,7 @@ function runMethodTest(){
   const t=document.getElementById("qtType").value;
   const law=document.getElementById("qtLaw").value;
   const sp=document.getElementById("qtSpec").value==="1";
-  const r=recommendMethod(v,t,law,sp);
+  const r=recommendMethod(v,t,law,sp,(law === "VPI" ? COMPANIES["EPSO-G"] : COMPANIES["LITGRID"]).org);
   const m=METHODS[r.recommended];
   document.getElementById("methodResult").innerHTML = `
     <div class="alert"><span class="alert-icon">⚖️</span>
@@ -1543,7 +1548,7 @@ function renderMethodAudit(){
     <thead><tr><th>Nr.</th><th>Objektas</th><th>Vertė</th><th>Rūšis</th><th>Pasirinkta</th><th>Rekomenduojama</th><th>Statusas</th></tr></thead><tbody>`;
   procs.forEach(p=>{
     const company=COMPANIES[p.imone]||COMPANIES["EPSO-G"];
-    const r=recommendMethod(p.verte||0, p.rusis||"Paslaugos", company.law, false);
+    const r=recommendMethod(p.verte||0, p.rusis||"Paslaugos", company.law, false, company.org);
     const chosen=mapMethodNameToCode(p.budas);
     const recCat=r.category==="Tarptautinis"?"t":r.category==="Supaprastintas"?"s":"mv";
     const chosenCat=chosen?METHODS[chosen]?.cat:null;
@@ -1939,7 +1944,7 @@ function computeWarnings(){
     // 2. Procedūros neatitikimas (iš validateProc)
     if(p.budas && p.verte && p.rusis){
       const company = COMPANIES[p.imone] || COMPANIES["EPSO-G"];
-      const rec = recommendMethod(p.verte, p.rusis, company.law, false);
+      const rec = recommendMethod(p.verte, p.rusis, company.law, false, company.org);
       const chosen = mapMethodNameToCode(p.budas);
       if(chosen){
         const chosenCat = METHODS[chosen]?.cat;
@@ -2140,7 +2145,7 @@ function setTimeDim(d){
 function procCategory(p){
   if(!p.verte || !p.rusis) return "Nenurodyta";
   const co = COMPANIES[p.imone] || COMPANIES["EPSO-G"];
-  return recommendMethod(p.verte, p.rusis, co.law, false).category;  // Mazos vertes | Supaprastintas | Tarptautinis
+  return recommendMethod(p.verte, p.rusis, co.law, false, co.org).category;  // Mazos vertes | Supaprastintas | Tarptautinis
 }
 function procQuarter(p){
   const d = parseDate(p.sutarciesData) || parseDate(p.pirkimoData) || parseDate(p.inicData);
@@ -2326,7 +2331,7 @@ function renderPivot(){
 function methodMismatch(p){
   if(!(p.budas && p.verte && p.rusis)) return false;
   const company = COMPANIES[p.imone] || COMPANIES["EPSO-G"];
-  const rec = recommendMethod(p.verte, p.rusis, company.law, false);
+  const rec = recommendMethod(p.verte, p.rusis, company.law, false, company.org);
   const mCode = mapMethodNameToCode(p.budas);
   if(!mCode) return false;
   const mCat = METHODS[mCode]?.cat;
@@ -2683,6 +2688,16 @@ document.getElementById("modal").addEventListener("click", e=>{ if(e.target.id==
   });
   const h = document.getElementById("dalysHint");
   const D = window.GP_TAISYKLES && GP_TAISYKLES.dalys("PI", "lt");
+  // Kuri VPĮ prekių ir paslaugų riba taikoma EPSO-G - pagal organizacijų registrą (sąrašas perskaitytas e-tar)
+  const c = document.getElementById("cvaHint"), o = window.GP_ORG && GP_ORG.pagalId(COMPANIES["EPSO-G"].org);
+  if (c && o && typeof o.centrinesValdzios === "boolean" && window.GP_TEISE) {
+    const a = document.createElement("a");
+    a.href = GP_TEISE.url('centrines_valdzios_sarasas', 'VPI'); a.target = "_blank"; a.rel = "noopener";
+    a.textContent = GP_TEISE.cit('centrines_valdzios_sarasas', 'VPI');
+    c.append(`${o.pavadinimas} ${o.centrinesValdzios ? "įrašyta į" : "nėra"} centrinės valdžios institucijų sąraše (`, a,
+      `), todėl jos prekių ir paslaugų pirkimams taikoma ${fmtMoney(o.centrinesValdzios ? THRESHOLDS.VPI.intl_goods_cva : THRESHOLDS.VPI.intl_goods)} riba.`);
+    c.hidden = false;
+  }
   if (h && D) h.textContent = `Net jei numatoma vertė pasiekia tarptautinio pirkimo ribą, atskiroms dalims, kurių kiekviena mažesnė kaip ${fmtMoney(D.prekes_paslaugos)} (prekės, paslaugos) ar ${fmtMoney(D.darbai)} (darbai), galima atlikti supaprastintus pirkimus, jei tokių dalių bendra vertė ne didesnė kaip ${D.dalisProc} % visų pirkimo dalių vertės (${GP_TEISE.cit('dalys_supaprastintai', 'PI')}; ${GP_TEISE.cit('dalys_supaprastintai', 'VPI')}).`;
 })();
 load();
