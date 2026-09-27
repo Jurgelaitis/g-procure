@@ -22,7 +22,7 @@
  *                                      patikros: [{ id, busena, truksta }] }
  *     lygis: "kliutis" (taisyti prieš skelbiant), "tikrinti" (priklauso nuo aplinkybių),
  *            "info", "gerai". busena: "gerai" | "radinys" | "truksta" | "netaikoma".
- *   GP_TAISYKLES.kategorija(k), ribos(rezimas, objektas), terminas(k), budoVerte(k, kalba),
+ *   GP_TAISYKLES.kategorija(k), ribos(rezimas, objektas, vykdytojas), terminas(k), budoVerte(k, kalba),
  *   dokumentai(budas, kalba), dalys(rezimas, kalba) - dalys naudoja moduliai tiesiogiai.
  *
  * Testai: shared/testai.html (grupė „Taisyklių variklis“).
@@ -93,6 +93,8 @@
       katSupr: "Pagal numatomą vertę {v} EUR be PVM tai supaprastintas pirkimas: mažiau už tarptautinio pirkimo ribą {r} EUR ir ne mažiau už mažos vertės ribą {m} EUR.",
       katMv: "Pagal numatomą vertę {v} EUR be PVM tai mažos vertės pirkimas (supaprastinto pirkimo rūšis): mažiau už {m} EUR.",
       katCva: "Tarptautinio pirkimo riba prekėms ir paslaugoms priklauso nuo to, ar {org} įrašyta į centrinės valdžios institucijų sąrašą: tada riba {c} EUR ir šis pirkimas tarptautinis, kitu atveju - {r} EUR ir pirkimas supaprastintas.",
+      katNeSarase: "{org} nėra centrinės valdžios institucijų sąraše, todėl taikoma {r} EUR, ne {c} EUR riba.",
+      katSarase: "{org} įrašyta į centrinės valdžios institucijų sąrašą, todėl taikoma {c} EUR, ne {r} EUR riba.",
       katSpec: "Jei perkamos socialinės ar kitos specialiosios paslaugos (įstatymo priedas), tarptautinio pirkimo riba - {s} EUR.",
       organizacija: "organizacija",
       budasMv: "Pasirinktas mažos vertės pirkimo būdas, bet numatoma vertė {v} EUR ne mažesnė už mažos vertės ribą {m} EUR. Rinkitės supaprastinto ar tarptautinio pirkimo būdą.",
@@ -131,6 +133,8 @@
       katSupr: "Based on the estimated value of EUR {v} excl. VAT this is a simplified procurement: below the international threshold of EUR {r} and not below the low-value threshold of EUR {m}.",
       katMv: "Based on the estimated value of EUR {v} excl. VAT this is a low-value procurement (a type of simplified procurement): below EUR {m}.",
       katCva: "The international threshold for supplies and services depends on whether {org} is on the list of central government authorities: then it is EUR {c} and this procurement is international, otherwise EUR {r} and it is simplified.",
+      katNeSarase: "{org} is not on the list of central government authorities, so the EUR {r} threshold applies, not EUR {c}.",
+      katSarase: "{org} is on the list of central government authorities, so the EUR {c} threshold applies, not EUR {r}.",
       katSpec: "If social or other specific services (annex to the law) are purchased, the international threshold is EUR {s}.",
       organizacija: "the organisation",
       budasMv: "A low-value procedure is selected, but the estimated value of EUR {v} is not below the low-value threshold of EUR {m}. Choose a simplified or international procedure.",
@@ -188,14 +192,24 @@
   }
 
   /* ---------------------------------------------------------------- vertė */
-  function ribos(rezimas, objektas) {
+  /* Ar vykdytojas įrašytas į centrinės valdžios institucijų sąrašą: true / false - iš shared/organizacijos.js
+     (sąrašas perskaitytas e-tar), null - nežinoma (vykdytojas nenurodytas arba registre statuso nėra). */
+  function sarase(vykdytojas) {
+    var o = global.GP_ORG && vykdytojas ? global.GP_ORG.pagalId(vykdytojas) : null;
+    return o && typeof o.centrinesValdzios === "boolean" ? o.centrinesValdzios : null;
+  }
+  function ribos(rezimas, objektas, vykdytojas) {
     var T = global.GP_THRESHOLDS, rusis = RUSIS[objektas];
     if (!T || !rezimasOk(rezimas) || !T[rezimas] || !rusis) return null;
     var R = T[rezimas];
     var out = { rezimas: rezimas, rusis: rusis, tarptautine: rusis === "darbai" ? R.intl_works : R.intl_goods,
                 maza: rusis === "darbai" ? R.mv_works : R.mv_goods, specialiosios: rusis === "pp" ? R.intl_special : null };
-    // VPĮ centrinės valdžios institucijoms prekių ir paslaugų riba mažesnė; ar organizacija sąraše - sistema nežino
+    // VPĮ centrinės valdžios institucijoms prekių ir paslaugų riba mažesnė. Statusas žinomas - taikoma jo riba
+    // (kitoms - out.kitoms); nežinomas - įprasta riba, o vertė tarp ribų klausiama (kategorija().cva).
     out.centrinesValdzios = rezimas === "VPI" && rusis === "pp" && R.intl_goods_cva ? R.intl_goods_cva : null;
+    out.sarase = out.centrinesValdzios ? sarase(vykdytojas) : null;
+    if (out.centrinesValdzios) out.kitoms = out.tarptautine;
+    if (out.sarase === true) out.tarptautine = out.centrinesValdzios;
     return out;
   }
   function truksta(k) {
@@ -205,17 +219,22 @@
     if (!RUSIS[k.objektas]) t.push("objektas");
     return t;
   }
-  /* Pirkimo rūšis pagal vertę: { kodas, ribos, cva } arba { kodas: null, truksta: [laukai] }.
-     cva: true - VPĮ prekių ar paslaugų vertė tarp centrinės valdžios ir kitų organizacijų ribų. */
+  /* Pirkimo rūšis pagal vertę: { kodas, ribos, cva, sarase } arba { kodas: null, truksta: [laukai] }.
+     VPĮ prekių ar paslaugų vertė tarp centrinės valdžios ir kitų organizacijų ribų: sarase - vykdytojo statusas
+     (true / false; išvada remiasi juo), cva: true - statusas nežinomas, todėl rūšis priklauso nuo sąrašo. */
   function kategorija(k) {
     k = k || {};
     var t = truksta(k);
     if (t.length) return { kodas: null, truksta: t };
-    var rb = ribos(k.rezimas, k.objektas);
+    var rb = ribos(k.rezimas, k.objektas, k.vykdytojas);
     if (!rb) return { kodas: null, truksta: ["verte"] };
-    if (k.verte >= rb.tarptautine) return { kodas: "tarptautinis", ribos: rb };
-    if (k.verte < rb.maza) return { kodas: "mazos_vertes", ribos: rb };
-    return { kodas: "supaprastintas", ribos: rb, cva: !!(rb.centrinesValdzios && k.verte >= rb.centrinesValdzios) };
+    var kodas = k.verte >= rb.tarptautine ? "tarptautinis" : k.verte < rb.maza ? "mazos_vertes" : "supaprastintas";
+    var out = { kodas: kodas, ribos: rb, cva: false };
+    if (rb.centrinesValdzios && k.verte >= rb.centrinesValdzios && k.verte < rb.kitoms) {
+      if (rb.sarase === null) out.cva = true;
+      else out.sarase = rb.sarase;
+    }
+    return out;
   }
   function orgPav(k, l) {
     var o = global.GP_ORG && k.vykdytojas ? global.GP_ORG.pagalId(k.vykdytojas) : null;
@@ -228,13 +247,16 @@
     var rb = kat.ribos, v = { v: eur(k.verte), r: eur(rb.tarptautine), m: eur(rb.maza), obj: X.obj[rb.rusis] };
     if (kat.cva) {
       out.push({ id: "kategorija", lygis: "tikrinti", laukai: ["verte", "vykdytojas"],
-        tekstas: sub(X.katCva, { org: orgPav(k, l), c: eur(rb.centrinesValdzios), r: v.r }),
-        teise: nuorodos(["centrines_valdzios", "tarptautinis_pirkimas"], k.rezimas, l) });
+        tekstas: sub(X.katCva, { org: orgPav(k, l), c: eur(rb.centrinesValdzios), r: eur(rb.kitoms) }),
+        teise: nuorodos(["centrines_valdzios", "centrines_valdzios_sarasas", "tarptautinis_pirkimas"], k.rezimas, l) });
     } else {
-      var kodas = kat.kodas;
-      out.push({ id: "kategorija", lygis: "info", laukai: ["verte", "objektas"],
-        tekstas: sub(kodas === "tarptautinis" ? X.katTarpt : kodas === "mazos_vertes" ? X.katMv : X.katSupr, v),
-        teise: nuorodos([kodas === "tarptautinis" ? "tarptautinis_pirkimas" : kodas === "mazos_vertes" ? "mazos_vertes_pirkimas" : "supaprastintas_pirkimas"], k.rezimas, l) });
+      var kodas = kat.kodas, sar = kat.sarase === true || kat.sarase === false;
+      var r = nuorodos([kodas === "tarptautinis" ? "tarptautinis_pirkimas" : kodas === "mazos_vertes" ? "mazos_vertes_pirkimas" : "supaprastintas_pirkimas"]
+        .concat(sar ? ["centrines_valdzios", "centrines_valdzios_sarasas"] : []), k.rezimas, l);
+      out.push({ id: "kategorija", lygis: "info", laukai: sar ? ["verte", "objektas", "vykdytojas"] : ["verte", "objektas"],
+        tekstas: sub(kodas === "tarptautinis" ? X.katTarpt : kodas === "mazos_vertes" ? X.katMv : X.katSupr, v)
+          + (sar ? " " + sub(kat.sarase ? X.katSarase : X.katNeSarase, { org: orgPav(k, l), c: eur(rb.centrinesValdzios), r: eur(rb.kitoms) }) : ""),
+        teise: r });
     }
     if (rb.specialiosios && k.verte >= rb.tarptautine && k.verte < rb.specialiosios && (k.objektas === "paslaugos" || k.objektas === "paslaugos_it"))
       out.push({ id: "kategorija_specialiosios", lygis: "info", laukai: ["objektas"], tekstas: sub(X.katSpec, { s: eur(rb.specialiosios) }),
@@ -261,8 +283,8 @@
     // VPĮ prekių ir paslaugų vertė tarp dviejų ribų: supaprastintas ar tarptautinis būdas teisingas priklauso nuo sąrašo
     if (kat.cva && (m.rezimas === "supaprastintas" || m.rezimas === "tarptautinis"))
       return { id: "budas_verte", lygis: "tikrinti", laukai: ["budas", "verte", "vykdytojas"],
-               tekstas: sub(X.katCva, { org: orgPav(k, l), c: eur(rb.centrinesValdzios), r: v.r }),
-               teise: nuorodos(["centrines_valdzios", "tarptautinis_pirkimas"], k.rezimas, l) };
+               tekstas: sub(X.katCva, { org: orgPav(k, l), c: eur(rb.centrinesValdzios), r: eur(rb.kitoms) }),
+               teise: nuorodos(["centrines_valdzios", "centrines_valdzios_sarasas", "tarptautinis_pirkimas"], k.rezimas, l) };
     if (m.rezimas === "tarptautinis" && kat.kodas !== "tarptautinis")
       return { id: "budas_verte", lygis: "tikrinti", laukai: ["budas", "verte"], tekstas: sub(X.budasTarpt, v),
                teise: nuorodos(["tarptautinis_pirkimas", "verte_dalims"], k.rezimas, l) };
@@ -406,7 +428,7 @@
   /* Visi registro raktai, kuriuos variklis gali cituoti (testams: kiekvienas turi būti registre). */
   function raktai() {
     var R = {};
-    ["tarptautinis_pirkimas", "supaprastintas_pirkimas", "mazos_vertes_pirkimas", "centrines_valdzios", "verte_dalims",
+    ["tarptautinis_pirkimas", "supaprastintas_pirkimas", "mazos_vertes_pirkimas", "centrines_valdzios", "centrines_valdzios_sarasas", "verte_dalims",
      "dalys_supaprastintai", "dalys_mazos_vertes", "terminas_nuo", "terminas_pakankamas", "met_ilgalaike", "met_apyvarta_bendros"]
       .forEach(function (k) { R[k] = 1; });
     Object.keys(TERMINAI).forEach(function (p) {
@@ -420,7 +442,7 @@
   }
 
   global.GP_TAISYKLES = {
-    version: "1.0",
+    version: "1.1",
     tikrink: tikrink,
     kategorija: kategorija,
     ribos: ribos,

@@ -23,6 +23,12 @@
  *     rodomas naudotojui, ne nutylimas.
  *   - `cvpisPaieska` - pirkimo vykdytojo lauko reikšmė CVP IS sąrašo adresui;
  *     patikrinta curl 2026-09-24 (sąrašas grąžino šios organizacijos pirkimus).
+ *   - `centrinesValdzios` - ar organizacija įrašyta į centrinės valdžios institucijų
+ *     sąrašą (GP_TEISE „centrines_valdzios_sarasas“). Nuo to priklauso VPĮ tarptautinio
+ *     pirkimo riba prekėms ir paslaugoms (shared/taisykles.js). Sąrašas perskaitytas e-tar
+ *     2026-09-27 (suvestinė redakcija nuo 2024-02-07): nė vienos iš keturių įmonių jame
+ *     nėra; EPSO-G tą pačią dieną patvirtino ir pirkimų komanda. Naujai organizacijai
+ *     laukas rašomas tik perskaičius sąrašą - be jo variklis tarpinei vertei klausia.
  * ==========================================================================*/
 ;(function (global) {
   "use strict";
@@ -30,15 +36,15 @@
   var PATIKRINTA = "2026-09-24";
 
   var ORGANIZACIJOS = [
-    { id: "litgrid", pavadinimas: "LITGRID AB", atpazinimas: /\blitgrid\b/i, cvpisPaieska: "LITGRID AB", rezimasTiketinas: "PI",
+    { id: "litgrid", pavadinimas: "LITGRID AB", atpazinimas: /\blitgrid\b/i, cvpisPaieska: "LITGRID AB", rezimasTiketinas: "PI", centrinesValdzios: false,
       nuorodos: { taisykles: "https://www.litgrid.eu/index.php/apie-litgrid/litgrid-pirkimai/pirkimu-taisykles/837", planas: "https://www.litgrid.eu/index.php/apie-litgrid/litgrid-pirkimai/pirkimai/829" },
       taisykles: { saltinis: "S3", patikrinta: "2026-09-02", pastaba: { lt: "Mažos vertės pirkimų aprašas ir informacija tiekėjams (LITGRID svetainė).", en: "Low-value procurement rules and supplier information (LITGRID website)." } },
       patikrinta: PATIKRINTA },
-    { id: "amber-grid", pavadinimas: "AB Amber Grid", atpazinimas: /\bamber\s*grid\b/i, cvpisPaieska: "Amber Grid", rezimasTiketinas: "PI",
+    { id: "amber-grid", pavadinimas: "AB Amber Grid", atpazinimas: /\bamber\s*grid\b/i, cvpisPaieska: "Amber Grid", rezimasTiketinas: "PI", centrinesValdzios: false,
       nuorodos: {}, taisykles: null, patikrinta: PATIKRINTA },
-    { id: "epso-g", pavadinimas: "UAB EPSO-G", atpazinimas: /\bepso[\s­‐‑-]*g\b/i, cvpisPaieska: "EPSO-G", rezimasTiketinas: "VPI",
+    { id: "epso-g", pavadinimas: "UAB EPSO-G", atpazinimas: /\bepso[\s­‐‑-]*g\b/i, cvpisPaieska: "EPSO-G", rezimasTiketinas: "VPI", centrinesValdzios: false,
       nuorodos: {}, taisykles: null, patikrinta: PATIKRINTA },
-    { id: "energy-cells", pavadinimas: "UAB Energy cells", atpazinimas: /\benergy[\s­‐‑-]*cells\b/i, cvpisPaieska: "Energy cells", rezimasTiketinas: "PI",
+    { id: "energy-cells", pavadinimas: "UAB Energy cells", atpazinimas: /\benergy[\s­‐‑-]*cells\b/i, cvpisPaieska: "Energy cells", rezimasTiketinas: "PI", centrinesValdzios: false,
       nuorodos: {}, taisykles: null, patikrinta: PATIKRINTA }
   ];
 
@@ -56,5 +62,5 @@
   function pagalId(id) { return ORGANIZACIJOS.filter(function (o) { return o.id === id; })[0] || null; }
   function sarasoUrl(o, nuo) { return global.GP_CVPIS ? global.GP_CVPIS.URL.organizacijosSarasas(o.cvpisPaieska, nuo) : null; }
 
-  global.GP_ORG = { version: "0.1.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl };
+  global.GP_ORG = { version: "0.2.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl };
 })(typeof window !== "undefined" ? window : this);
