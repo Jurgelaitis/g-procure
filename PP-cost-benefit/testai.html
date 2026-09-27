@@ -244,6 +244,31 @@ testas("Patikros", "Įstatymas pagal subjektą: LITGRID - PĮ 64 str., EPSO-G - 
   tiesa(M('document.getElementById("istatymoPastaba").textContent').indexOf("PĮ 64 str.") >= 0, "Amber Grid - PĮ");
 });
 
+/* 2026-09-27: įstatymą lemia skelbimas, ne vien subjektas - Energy cells skelbimas 9614756 buvo perkančiosios organizacijos
+   (VPĮ) formos, o skaičiuoklė Energy cells visada skaičiavo pagal PĮ. Numatytasis - pagal subjektą, pasirenkamas atskirai. */
+testas("Patikros", "Įstatymas pasirenkamas: Energy cells numatytasis PĮ, pasirinkus VPĮ - VPĮ 55 str. patikrose, priede ir pastaboje; kitas subjektas grąžina jo įprastą; senas įrašas - pagal subjektą", ()=>{
+  paruosk();
+  const r = busena({ pirkimas:{ budas:"kaina", subjektas:"ECELLS" }, pasiulymai:[{ tiekejas:"A", kaina:1 }] });
+  tiesa(r.patikros.some(p=>p.indexOf("| PĮ 64 str. 2 d.") >= 0), "numatytasis PĮ: " + r.patikros.join(" || "));
+  lygu(M('document.getElementById("f_rezimas").value'), "PI", "laukas rodo numatytąjį");
+  const v = busena({ pirkimas:{ budas:"kaina", subjektas:"ECELLS", rezimas:"VPI" }, pasiulymai:[{ tiekejas:"A", kaina:1 }] });
+  tiesa(v.patikros.some(p=>p.indexOf("VPĮ 55 str. 2 d.") >= 0) && !v.patikros.some(p=>/(^|[^V])PĮ 64 str/.test(p)), "VPĮ: " + v.patikros.join(" || "));
+  lygu(M('document.getElementById("f_rezimas").value'), "VPI", "laukas");
+  const pst = M('document.getElementById("istatymoPastaba").textContent');
+  lygu(pst, "perkančioji organizacija - taikomas VPĮ 55 str. UAB Energy cells paprastai taiko PĮ, šiam pirkimui pasirinktas VPĮ - režimą lemia pirkimo skelbimas.", "pastaba");
+  const pr = M('JSON.stringify(priedoTurinys(state))');
+  tiesa(pr.indexOf("Perkančioji organizacija") >= 0 && pr.indexOf("Perkantysis subjektas") < 0, "priedas: " + pr.slice(0, 300));
+  // subjekto keitimas sąsajoje - jo įprastas įstatymas
+  // kaip naršyklė: pasirinkimų sąrašas siunčia „input“, tada „change“
+  M('const s = document.getElementById("f_subjektas"); s.value = "LITGRID"; ["input", "change"].forEach(t => s.dispatchEvent(new Event(t, { bubbles: true })));');
+  lygu(M('[state.pirkimas.rezimas, document.getElementById("f_rezimas").value]'), ["", "PI"], "LITGRID - PĮ");
+  M('const r = document.getElementById("f_rezimas"); r.value = "VPI"; ["input", "change"].forEach(t => r.dispatchEvent(new Event(t, { bubbles: true })));');
+  lygu(M('[state.pirkimas.rezimas, istatymas(state).cit(2)]'), ["VPI", "VPĮ 55 str. 2 d."], "pasirinktas ranka");
+  // senas įrašas (be lauko) ir neteisinga reikšmė - pagal subjektą
+  lygu(M('[sanitizeBusena({ pirkimas:{ subjektas:"EPSOG" }, kriterijai:[], pasiulymai:[] }).pirkimas.rezimas, istatymas(sanitizeBusena({ pirkimas:{ subjektas:"EPSOG" }, kriterijai:[], pasiulymai:[] })).istatymas, sanitizeBusena({ pirkimas:{ subjektas:"AMBER", rezimas:"X" }, kriterijai:[], pasiulymai:[] }).pirkimas.rezimas, sanitizeBusena({ pirkimas:{ subjektas:"ECELLS", rezimas:"VPI" }, kriterijai:[], pasiulymai:[] }).pirkimas.rezimas]'),
+       ["", "VPĮ", "", "VPI"], "senas įrašas, neteisinga reikšmė ir išsaugotas pasirinkimas");
+});
+
 testas("Patikros", "Kaina virš didžiausios priimtinos - pasiūlymas ne eilėje, kiti vertinami be jo", ()=>{
   paruosk();
   const r = busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60, maxKaina:150 }, kriterijai:[TAIPNE],
@@ -575,7 +600,7 @@ const lauk = ms => new Promise(r => setTimeout(r, ms));
 const KORTELE_A1 = { pavadinimas: "Energijos kaupimo sistemos priežiūros pirkimas", vykdytojas: "energy-cells", rezimas: "VPI", objektas: "paslaugos_it",
                      numeris: "EC-2026-007", verte: 25000000, budas: "T-SD", trukmeMen: 36 };
 
-testas("Bendra pirkimo kortelė (A1)", "Skaičiuoklė: nauja - subjektas, objektas ir pavadinimas iš kortelės; režimo, kurio subjektui skaičiuoklė netaiko, neįrašo ir sako kodėl", async ()=>{
+testas("Bendra pirkimo kortelė (A1)", "Skaičiuoklė: nauja - subjektas, režimas, objektas ir pavadinimas iš kortelės; Energy cells VPĮ pirkimas skaičiuojamas pagal VPĮ", async ()=>{
   const { f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html");
   try {
     w.eval("atstatyk()");
@@ -583,12 +608,12 @@ testas("Bendra pirkimo kortelė (A1)", "Skaičiuoklė: nauja - subjektas, objekt
     w.KORTELE.atnaujink();
     tiesa(d.getElementById("gpk").nextElementSibling.id === "infoPanelMount", "juosta prieš informacinę skiltį");
     tiesa(await w.KORTELE.pasirink(k.id), "pasirinkta");
-    lygu(w.eval("[state.pirkimas.subjektas, state.pirkimas.objektas, state.pirkimas.pavadinimas, state.pirkimas.budas]"),
-         ["ECELLS", "paslaugos", KORTELE_A1.pavadinimas, "kks"], "pirkimo duomenys (vertinimo būdas nekeičiamas)");
-    lygu(d.getElementById("f_subjektas").value, "ECELLS", "sąsaja perpiešta");
+    lygu(w.eval("[state.pirkimas.subjektas, state.pirkimas.rezimas, state.pirkimas.objektas, state.pirkimas.pavadinimas, state.pirkimas.budas]"),
+         ["ECELLS", "VPI", "paslaugos", KORTELE_A1.pavadinimas, "kks"], "pirkimo duomenys (vertinimo būdas nekeičiamas)");
+    lygu([d.getElementById("f_subjektas").value, d.getElementById("f_rezimas").value, w.eval("istatymas(state).cit(2)")], ["ECELLS", "VPI", "VPĮ 55 str. 2 d."], "sąsaja perpiešta");
     const z = d.getElementById("gpk-zin").textContent;
-    tiesa(/Iš kortelės užpildyta: vykdytojas, objektas, pavadinimas\./.test(z), z);
-    tiesa(z.indexOf("režimas („VPĮ“ - režimą čia lemia perkantysis subjektas (UAB Energy cells - PĮ))") >= 0, z);
+    tiesa(/Iš kortelės užpildyta: vykdytojas, režimas, objektas, pavadinimas\./.test(z), z);
+    tiesa(z.indexOf("režimą čia lemia perkantysis subjektas") < 0, "režimas nebeatmetamas: " + z);
   } finally { f.remove(); }
 });
 

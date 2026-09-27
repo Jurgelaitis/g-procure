@@ -89,11 +89,11 @@ main.wrap{padding-top:16px}   /* pirmas blokas (kortelės juosta, informacinė s
 .tinklelis{display:grid;gap:14px 18px}
 .t2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .t3{grid-template-columns:repeat(3,minmax(0,1fr))}
-@media(max-width:900px){.t2,.t3{grid-template-columns:1fr}}
-.laukas{display:flex;flex-direction:column;gap:5px}
+@media(max-width:900px){.t2,.t3{grid-template-columns:minmax(0,1fr)}}
+.laukas{display:flex;flex-direction:column;gap:5px;min-width:0}
 .laukas label{font-size:12px;font-weight:700;color:var(--text)}
 .laukas .pastaba{font-size:11.5px;color:var(--muted)}
-.laukas input,.laukas select,.laukas textarea{font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text)}
+.laukas input,.laukas select,.laukas textarea{font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);max-width:100%;min-width:0}
 .laukas input:focus,.laukas select:focus,.laukas textarea:focus,td input:focus,td select:focus,td textarea:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
 .laukas textarea{min-height:64px;resize:vertical}
 .laukas.paslepta{display:none}
@@ -257,6 +257,11 @@ footer{padding:24px 0 40px;font-size:12px;color:var(--muted)}
       <div class="laukas">
         <label for="f_subjektas">Perkantysis subjektas / organizacija</label>
         <select id="f_subjektas" data-kelias="pirkimas.subjektas"></select>
+        <label for="f_rezimas">Taikomas įstatymas</label>
+        <select id="f_rezimas" data-kelias="pirkimas.rezimas">
+          <option value="PI">PĮ - perkantysis subjektas</option>
+          <option value="VPI">VPĮ - perkančioji organizacija</option>
+        </select>
         <span class="pastaba" id="istatymoPastaba"></span>
       </div>
       <div class="laukas">
@@ -418,14 +423,22 @@ footer{padding:24px 0 40px;font-size:12px;color:var(--muted)}
 const SCHEMA_VERSION = 1;
 const STORE_KEY = "epsog_en_skaiciuokle_v" + SCHEMA_VERSION;
 
-/* Perkančiojo subjekto statusas lemia įstatymą (CLAUDE.md 2 sk.): LITGRID, Amber Grid,
-   Energy cells - PĮ (64 str.), EPSO-G - VPĮ (55 str.). Straipsnių dalys sutampa 1-10 d. */
+/* Perkančiojo subjekto statusas lemia NUMATYTĄJĮ įstatymą (CLAUDE.md 2 sk.): LITGRID, Amber Grid,
+   Energy cells - PĮ (64 str.), EPSO-G - VPĮ (55 str.). Straipsnių dalys sutampa 1-10 d.
+   Konkretaus pirkimo įstatymą lemia skelbimas (2026-09-24: Energy cells skelbimas 9614756 buvo perkančiosios
+   organizacijos formos), todėl nuo 2026-09-27 jis pasirenkamas atskirai (state.pirkimas.rezimas; tuščias - pagal subjektą). */
 const SUBJEKTAI = {
   LITGRID: { pav:"LITGRID AB",        istatymas:"PĮ",  str:64, statusas:"perkantysis subjektas" },
   AMBER:   { pav:"AB Amber Grid",     istatymas:"PĮ",  str:64, statusas:"perkantysis subjektas" },
   ECELLS:  { pav:"UAB Energy cells",  istatymas:"PĮ",  str:64, statusas:"perkantysis subjektas" },
   EPSOG:   { pav:"UAB EPSO-G",        istatymas:"VPĮ", str:55, statusas:"perkančioji organizacija" }
 };
+const REZIMAI = {
+  PI:  { istatymas:"PĮ",  str:64, statusas:"perkantysis subjektas" },
+  VPI: { istatymas:"VPĮ", str:55, statusas:"perkančioji organizacija" }
+};
+function iprastasRezimas(subj){ return (SUBJEKTAI[subj] || SUBJEKTAI.LITGRID).istatymas === "VPĮ" ? "VPI" : "PI"; }
+function pirkimoRezimas(P){ return REZIMAI[P.rezimas] ? P.rezimas : iprastasRezimas(P.subjektas); }
 
 /* Formulės - iš VPT „Ekonominio naudingumo skaičiuoklėje pateiktų formulių aprašymų“ (2021).
    VPT rekomenduoja ABSOLIUTINES formules: pasiūlymo balai nepriklauso nuo kitų pasiūlymų. */
@@ -570,7 +583,7 @@ function tusciaBusena(){
   return {
     schemaVersion: SCHEMA_VERSION,
     pavyzdys: false,
-    pirkimas: { pavadinimas:"", subjektas:"LITGRID", objektas:"prekes", budas:"kks", formule:"pmin",
+    pirkimas: { pavadinimas:"", subjektas:"LITGRID", rezimas:"", objektas:"prekes", budas:"kks", formule:"pmin",
                 kainosSvoris:60, pSetMin:null, pSetMax:null, fiksuotaKaina:null, maxKaina:null, apvalinimas:2, priedoNr:"" },
     kriterijai: [],
     pasiulymai: []
@@ -710,8 +723,9 @@ function kainosBalai(P, kaina, ctx){
 }
 
 function istatymas(st){
-  const s = SUBJEKTAI[st.pirkimas.subjektas] || SUBJEKTAI.LITGRID;
-  return { ...s, cit: d => s.istatymas + " " + s.str + " str." + (d ? " " + d + " d." : "") };
+  const s = SUBJEKTAI[st.pirkimas.subjektas] || SUBJEKTAI.LITGRID, rz = pirkimoRezimas(st.pirkimas), r = REZIMAI[rz];
+  return { pav: s.pav, istatymas: r.istatymas, str: r.str, statusas: r.statusas, rezimas: rz, iprastas: rz === iprastasRezimas(st.pirkimas.subjektas),
+           cit: d => r.istatymas + " " + r.str + " str." + (d ? " " + d + " d." : "") };
 }
 
 /* Pagrindinė funkcija: būsena -> eilutės, eilė, patikros. Nieko nepiešia. */
@@ -1070,7 +1084,9 @@ function renderPirkimas(){
   document.getElementById("f_maxKaina").value = P.maxKaina === null ? "" : fmtEUR(P.maxKaina);
   document.getElementById("f_apvalinimas").value = String(P.apvalinimas);
   const ist = istatymas(state);
-  document.getElementById("istatymoPastaba").textContent = ist.statusas + " - taikomas " + ist.istatymas + " " + ist.str + " str.";
+  document.getElementById("f_rezimas").value = ist.rezimas;
+  document.getElementById("istatymoPastaba").textContent = ist.statusas + " - taikomas " + ist.istatymas + " " + ist.str + " str."
+    + (ist.iprastas ? "" : " " + ist.pav + " paprastai taiko " + REZIMAI[iprastasRezimas(P.subjektas)].istatymas + ", šiam pirkimui pasirinktas " + ist.istatymas + " - režimą lemia pirkimo skelbimas.");
   const kks = P.budas === "kks", balais = kks && P.formule !== "kok_kaina";
   document.getElementById("l_formule").classList.toggle("paslepta", !kks);
   document.getElementById("l_kainosSvoris").classList.toggle("paslepta", !balais);
@@ -1340,7 +1356,8 @@ function nuskaityk(el){
     else if(laukas === "kainosSvoris") v = v === "" ? 0 : (parseFloat(v) || 0);
     else if(laukas === "apvalinimas") v = parseInt(v, 10) || 2;
     state.pirkimas[laukas] = v;
-    return laukas === "budas" || laukas === "formule" ? "struktura" : "reiksme";
+    if(laukas === "subjektas") state.pirkimas.rezimas = "";         // kitas subjektas - jo įprastas įstatymas
+    return ["budas", "formule", "subjektas", "rezimas"].indexOf(laukas) >= 0 ? "struktura" : "reiksme";
   }
   if(el.dataset.krit && el.dataset.laukas){
     const k = kritPagalId(el.dataset.krit); if(!k) return null;
@@ -1405,6 +1422,7 @@ function sanitizeBusena(d){
   const P = d.pirkimas;
   s.pirkimas.pavadinimas = str(P.pavadinimas);
   s.pirkimas.subjektas = SUBJEKTAI[P.subjektas] ? P.subjektas : "LITGRID";
+  s.pirkimas.rezimas = REZIMAI[P.rezimas] ? P.rezimas : "";          // iki 2026-09-27 lauko nebuvo - įstatymas pagal subjektą
   s.pirkimas.objektas = ["prekes", "paslaugos", "darbai"].indexOf(P.objektas) >= 0 ? P.objektas : "prekes";
   s.pirkimas.budas = ["kks", "kaina", "fiksuota"].indexOf(P.budas) >= 0 ? P.budas : "kks";
   s.pirkimas.formule = FORMULES[P.formule] ? P.formule : "pmin";
@@ -1592,8 +1610,8 @@ renderAll();
 /* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26). Pirkimo duomenys (state.pirkimas) pildomi iš kortelės: tušti ir
    numatytieji (subjektas LITGRID, objektas „Prekės“) - kol pavadinimas tuščias, kriterijų ir pasiūlymų nėra, o žmogus
    jų nekeitė; kitokie tik parodomi su „Taikyti“. Kortelės pirkimo būdas čia netaikomas: skaičiuoklės „būdas“ - kaip
-   išrenkamas pasiūlymas, ne pirkimo būdas. Režimą lemia subjektas (SUBJEKTAI); nesutampantis kortelės režimas
-   neįrašomas ir tai pasakoma. Modulis kortelės nekeičia. */
+   išrenkamas pasiūlymas, ne pirkimo būdas. Režimas (įstatymas) įrašomas iš kortelės kaip ir subjektas: nuo 2026-09-27
+   jis pasirenkamas atskirai (Energy cells gali pirkti ir pagal VPĮ), o tuščias - pagal subjektą. Modulis kortelės nekeičia. */
 (function () {
   if (!window.GP_KORTELE || typeof state === 'undefined') return;   // state - let, ne window savybė
   var RANKA = new Set();
@@ -1604,7 +1622,6 @@ renderAll();
   var P = function () { return state.pirkimas; };
   function sviezia() { return !String(P().pavadinimas || '').trim() && !state.kriterijai.length && !state.pasiulymai.length; }
   function dek(laukas, v) { P()[laukas] = v; poPakeitimo('struktura'); }
-  function subjektas() { return SUBJEKTAI[P().subjektas] || SUBJEKTAI.LITGRID; }
 
   window.KORTELE = GP_KORTELE.mount({
     modulis: 'PP-cost-benefit',
@@ -1615,9 +1632,10 @@ renderAll();
         numatyta: function () { return sviezia() && !RANKA.has('f_subjektas') && P().subjektas === 'LITGRID'; },
         dek: function (v) { dek('subjektas', SUBJ[v]); },
         neimanoma: 'skaičiuoklėje - tik EPSO-G grupės įmonės' },
-      { kortele: 'rezimas', gauk: function () { return subjektas().istatymas === 'VPĮ' ? 'VPI' : 'PI'; },
-        i: function (v) { return (subjektas().istatymas === 'VPĮ' ? 'VPI' : 'PI') === v ? v : null; }, dek: function () {},
-        neimanoma: function () { var s = subjektas(); return 'režimą čia lemia perkantysis subjektas (' + s.pav + ' - ' + s.istatymas + ')'; } },
+      { kortele: 'rezimas', gauk: function () { return pirkimoRezimas(P()); },
+        i: function (v) { return REZIMAI[v] ? v : null; },
+        numatyta: function () { return !P().rezimas && sviezia() && !RANKA.has('f_rezimas'); },
+        dek: function (v) { dek('rezimas', v); } },
       { kortele: 'objektas', gauk: function () { return P().objektas; },
         i: function (v) { return OBJ[v] || null; }, is: function (s) { return s; },
         lygu: function (s, v) { return s === OBJ[v]; },
