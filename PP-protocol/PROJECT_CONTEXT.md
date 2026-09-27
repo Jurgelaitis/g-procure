@@ -150,7 +150,8 @@ pirkimas pagal dinaminę pirkimo sistemą“ (PĮ terminai: dinaminė pirkimo si
 **2026-09-27 - prieinamumas (U4).** Visi „✕“, „🗑“, „👁“ mygtukai turi pavadinimus („Uždaryti“, „Pašalinti tiekėją“, „Ištrinti
 pranešimą“...), pirkimų sąrašo paieška ir filtrai - taip pat, sutraukiamos kortelės praneša būseną (`aria-expanded`), teksto spalvos -
 `*-strong` žetonai (rizikos ženklelis, skubių pirkimų juosta, prioritetas, komentarų avatarai); laukai be `for` ir spaudžiamos kortelės -
-per `shared/prieinamumas.js`.
+per `shared/prieinamumas.js`. Visi 10 langų (7 `.epso-modal`, peržiūra, šablonu kuriami pranešimo ir importo langai) pažymėti
+`data-gp-langas`: atsivėrus fokusas lange, Tab lieka jame, Esc uždaro (iki tol - tik 6 langai, be fokuso), užvėrus fokusas grįžta.
 
 **DOCX struktūra:** A4 (11906×16838 DXA), 2 cm paraštės, Times New Roman 11pt/10pt/12pt, LITGRID AB header'iu, puslapio numeracija footer'yje, saugojimo metaduomenys (`PĮ 103 str. 6 d.`).
 
