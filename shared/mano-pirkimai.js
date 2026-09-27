@@ -28,7 +28,7 @@
       planuojamas: "pirkimo grafikas", rengiamas: "pirkimo dokumentai (kvalifikacija, sąlygos, TS)",
       paskelbtas: "laukiama pasiūlymų", vertinamas: "pasiūlymų vertinimas ir komisijos sprendimai",
       grafikas: "Grafikas", kvalifikacija: "Kvalifikacija", kortele: "Kortelė",
-      ts: "TS", salygos: "Sąlygos", protokolai: "Protokolai", pazyma: "Pažyma", derybos: "Derybos", vertinimas: "Vertinimas",
+      ts: "TS", salygos: "Sąlygos", protokolai: "Protokolai", pazyma: "Pažyma", derybos: "Derybos", vertinimas: "Vertinimas", parengtis: "Parengtis skelbti",
       kna: "Kaštų ir naudos analizė", vertinamasMV: "pasiūlymų vertinimas ir pažyma",
       naujasSkirtukas: "atsidaro naujame skirtuke", daugiau: "Rodyti visus", baigti: "Užbaigti ar archyvuoti: ",
       visosKorteles: "visos kortelės", aktyviuNera: "Aktyvių pirkimų nėra.", CVP: "CVP IS "
@@ -40,7 +40,7 @@
       planuojamas: "procurement schedule", rengiamas: "procurement documents (qualification, conditions, specification)",
       paskelbtas: "waiting for tenders", vertinamas: "tender evaluation and committee decisions",
       grafikas: "Schedule", kvalifikacija: "Qualification", kortele: "Card",
-      ts: "Specification", salygos: "Conditions", protokolai: "Protocols", pazyma: "Report", derybos: "Negotiation", vertinimas: "Evaluation",
+      ts: "Specification", salygos: "Conditions", protokolai: "Protocols", pazyma: "Report", derybos: "Negotiation", vertinimas: "Evaluation", parengtis: "Readiness check",
       kna: "Cost-benefit analysis", vertinamasMV: "tender evaluation and the report",
       naujasSkirtukas: "opens in a new tab", daugiau: "Show all", baigti: "Completed or archived: ",
       visosKorteles: "all cards", aktyviuNera: "No active procurements.", CVP: "CVP IS "
@@ -48,7 +48,7 @@
   };
   /* Įrankiai, kurie skaito kortelę (A1). Kelias - nuo svetainės šaknies. Rodomi pagal pirkimo būseną (naudotojo
      sprendimas 2026-09-26): planuojant - grafikas (ir kaštų ir naudos analizė didelės vertės pirkimui), rengiant -
-     TS, kvalifikacija, sąlygos, grafikas, paskelbus - protokolai, vertinant - protokolai arba mažos vertės pažyma,
+     TS, kvalifikacija, sąlygos, grafikas ir skelbimo parengties patikra, paskelbus - protokolai, vertinant - protokolai arba mažos vertės pažyma,
      vertinimas ir derybos (tik būdui su derybomis). Pirmas - pagrindinis. Įrankiai, kurie rengia tik LITGRID AB
      dokumentus pagal PĮ (litgrid), kitos organizacijos ar VPĮ pirkimui nesiūlomi; nežinomas vykdytojas - siūlomi
      (numatytasis kontekstas - LITGRID). Kas padaryta, įrankiai nežino - tai tik pagal kortelės būseną. */
@@ -69,11 +69,16 @@
     derybos: { kelias: "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", salyga: function (k) {
       var m = k.budas && global.GP_METHODS ? global.GP_METHODS.byId(k.budas) : null;
       return !!(m && m.derybos);
+    } },
+    // Skelbimo parengties patikra (A4) - paskutinis žingsnis prieš skelbiant; neskelbiamiems būdams nesiūloma
+    parengtis: { kelias: "skelbimo-parengtis.html", salyga: function (k) {
+      var m = k.budas && global.GP_METHODS ? global.GP_METHODS.byId(k.budas) : null;
+      return !m || m.skelbiama !== false;
     } }
   };
   var PAGAL_BUSENA = {
     planuojamas: ["grafikas", "kna"],
-    rengiamas: ["ts", "kvalifikacija", "salygos", "grafikas"],
+    rengiamas: ["ts", "kvalifikacija", "salygos", "grafikas", "parengtis"],
     paskelbtas: ["protokolai"],
     vertinamas: ["protokolai", "pazyma", "vertinimas", "derybos"]
   };
