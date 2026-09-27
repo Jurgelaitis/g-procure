@@ -147,6 +147,11 @@ stulpeliai, fonas), todėl nuo failo skirtis negali; nepavykus - priežastis ir 
 buvo „Pirkimo būdas: Atviras konkursas“ - dabar `pirkimoBudoPavadinimas()`: „Dinaminės pirkimo sistemos sukūrimas“ ir „Konkretus
 pirkimas pagal dinaminę pirkimo sistemą“ (PĮ terminai: dinaminė pirkimo sistema sukuriama, konkretūs pirkimai atliekami jos pagrindu).
 
+**2026-09-27 - prieinamumas (U4).** Visi „✕“, „🗑“, „👁“ mygtukai turi pavadinimus („Uždaryti“, „Pašalinti tiekėją“, „Ištrinti
+pranešimą“...), pirkimų sąrašo paieška ir filtrai - taip pat, sutraukiamos kortelės praneša būseną (`aria-expanded`), teksto spalvos -
+`*-strong` žetonai (rizikos ženklelis, skubių pirkimų juosta, prioritetas, komentarų avatarai); laukai be `for` ir spaudžiamos kortelės -
+per `shared/prieinamumas.js`.
+
 **DOCX struktūra:** A4 (11906×16838 DXA), 2 cm paraštės, Times New Roman 11pt/10pt/12pt, LITGRID AB header'iu, puslapio numeracija footer'yje, saugojimo metaduomenys (`PĮ 103 str. 6 d.`).
 
 ### 4.4 Pranešimai tiekėjams (23 šablonai)
