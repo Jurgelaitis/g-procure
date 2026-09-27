@@ -77,6 +77,17 @@
       patvirtinta: "aplinkos ministro 2011-06-28 įsakymas Nr. D1-508 (2022-12-13 įsakymo Nr. D1-401 redakcija, su 2024-01-16 Nr. D1-17 ir 2026-02-12 Nr. D1-20 pakeitimais)",
       // Aprašo 1 p.: taiko ir VPĮ perkančiosios organizacijos, ir PĮ perkantieji subjektai.
       url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.4B60A8C9678B/asr"
+    },
+    // VPĮ „centrinės valdžios institucija“ - į šį sąrašą įrašyta perkančioji organizacija (N.centrines_valdzios).
+    // Perskaityta e-tar 2026-09-27: ministerijos, įstaigos prie jų, Seimui ir Vyriausybei atskaitingos institucijos,
+    // teismai, kariuomenė ir kt.; UAB EPSO-G, LITGRID AB, AB Amber Grid ir UAB Energy cells jame nėra.
+    CVA: {
+      trumpai: "Centrinės valdžios institucijų sąrašas",
+      pavadinimas: "Centrinių valstybinio administravimo subjektų sistemai priklausančių perkančiųjų organizacijų sąrašas",
+      patvirtinta: "ekonomikos ir inovacijų ministro 2003-02-21 įsakymas Nr. 4-72",
+      patvirtintaEn: "Order No 4-72 of the Minister of the Economy and Innovation of 21 February 2003",
+      redakcija: "suvestinė redakcija nuo 2024-02-07",
+      url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.FC53446C3698/asr"
     }
   };
 
@@ -314,6 +325,8 @@
       PI: { a: "PI", s: 12, d: 3 }, VPI: { a: "VPI", s: 4, d: 3 } },
     centrines_valdzios: { tikrinta: "2026-09-26", apie: "centrinės valdžios institucija - perkančioji organizacija, įrašyta į Vyriausybės įgaliotos institucijos patvirtintą centrinių valstybinio administravimo subjektų sistemai priklausančių perkančiųjų organizacijų sąrašą",
       VPI: { a: "VPI", s: 2, d: 6 } },
+    centrines_valdzios_sarasas: { tikrinta: "2026-09-27", apie: "sąrašas, kurį nurodo centrinės valdžios institucijos sąvoka (suvestinė redakcija nuo 2024-02-07): ministerijos, įstaigos prie jų, Seimui ir Vyriausybei atskaitingos institucijos, teismai, kariuomenė ir kt.; UAB EPSO-G, LITGRID AB, AB Amber Grid ir UAB Energy cells jame nėra",
+      VPI: { a: "CVA" } },
     verte_dalims: { tikrinta: "2026-09-26", apie: "perkant dalimis, į numatomą vertę įskaičiuojamos visos dalys, o taikomos nuostatos parenkamos pagal bendrą visų dalių vertę",
       PI: { a: "PI", s: 13, d: 7 }, VPI: { a: "VPI", s: 5, d: 7 } },
     dalys_supaprastintai: { tikrinta: "2026-09-26", apie: "nors vertė lygi tarptautinio pirkimo ribai ar ją viršija, atskiroms dalims (prekių ir paslaugų - mažesnėms kaip 80 000 Eur, darbų - mažesnėms kaip 1 000 000 Eur) galima atlikti supaprastintą pirkimą, jei tokių dalių bendra vertė ne didesnė kaip 20 procentų visų dalių vertės",
@@ -413,6 +426,8 @@
     if (n.a === "ZALIEJI") return n.p
       ? (en ? "Green Procurement Rules, point " + n.p : "Žaliųjų pirkimų tvarkos aprašo " + n.p + " p.")
       : (en ? "Green Procurement Rules (Order No D1-508)" : "Žaliųjų pirkimų tvarkos aprašas (įsakymas Nr. D1-508)");
+    if (n.a === "CVA") return en ? "List of central government authorities (Order No 4-72)"
+      : "Centrinės valdžios institucijų sąrašas (įsakymas Nr. 4-72)";
     var akt = AKTAI[n.a];
     if (!akt || !n.s) klaida("netinkama nuoroda " + JSON.stringify(n));
     if (en) return akt.trumpai + " Art. " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "");

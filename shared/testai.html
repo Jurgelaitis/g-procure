@@ -1977,17 +1977,54 @@ async function testaiTaisykles(){
     } finally { f.remove(); }
   });
 
-  await testas("VPĮ prekės ir paslaugos tarp centrinės valdžios ir kitų organizacijų ribų - klausiama, o ne spėjama; PĮ tokios ribos nėra", async ()=>{
+  /* 2026-09-27: sąrašas perskaitytas e-tar - nė vienos grupės įmonės jame nėra (EPSO-G patvirtino ir pirkimų komanda).
+     Statusas - organizacijų registre; be jo (vykdytojas nežinomas) vertė tarp ribų klausiama. */
+  await testas("VPĮ prekės ir paslaugos tarp centrinės valdžios ir kitų organizacijų ribų: statusas iš organizacijų registro (EPSO-G - supaprastintas su paaiškinimu), nežinomas - klausiama, ne spėjama; PĮ tokios ribos nėra", async ()=>{
     const { f, w, T } = await taisykliuRemas();
     try {
       const R = w.GP_THRESHOLDS.VPI, v = Math.round((R.intl_goods_cva + R.intl_goods) / 2);
-      const r = T.tikrink({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "paslaugos", verte: v, budas: "S-AK" });
+      const eur = n => String(Math.round(n)).replace(/\B(?=(\d{3})+$)/g, "\u00a0");   // variklis tūkstančius skiria NBSP
+      lygu(w.GP_ORG.ORGANIZACIJOS.map(o => [o.id, o.centrinesValdzios]), [["litgrid", false], ["amber-grid", false], ["epso-g", false], ["energy-cells", false]], "organizacijų registras");
+      lygu([w.GP_TEISE.cit("centrines_valdzios_sarasas", "VPI"), w.GP_TEISE.tikrinta("centrines_valdzios_sarasas")], ["Centrinės valdžios institucijų sąrašas (įsakymas Nr. 4-72)", "2026-09-27"], "registro nuoroda");
+      tiesa(/TAR\.FC53446C3698\/asr$/.test(w.GP_TEISE.url("centrines_valdzios_sarasas", "VPI")) && /EPSO-G/.test(w.GP_TEISE.apie("centrines_valdzios_sarasas", "VPI")), "sąrašo adresas ir turinys");
+
+      // EPSO-G: sąraše nėra - supaprastintas be klausimo, paaiškinta, kodėl ne mažesnioji riba
+      const e = T.tikrink({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "paslaugos", verte: v, budas: "S-AK" });
+      const ek = e.radiniai.find(x => x.id === "kategorija");
+      lygu([ek.lygis, ek.teise.map(t => t.raktas)], ["info", ["supaprastintas_pirkimas", "centrines_valdzios", "centrines_valdzios_sarasas"]], "EPSO-G radinys");
+      tiesa(ek.tekstas.indexOf("supaprastintas pirkimas") > 0 && ek.tekstas.endsWith(" UAB EPSO-G nėra centrinės valdžios institucijų sąraše, todėl taikoma "
+            + eur(R.intl_goods) + " EUR, ne " + eur(R.intl_goods_cva) + " EUR riba."), ek.tekstas);
+      lygu([e.patikros.find(p => p.id === "kategorija").busena, e.radiniai.filter(x => x.lygis === "tikrinti" || x.lygis === "kliutis").length], ["gerai", 0], "EPSO-G: nei klausimo, nei kliūties");
+      lygu(T.budoVerte({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "paslaugos", verte: v, budas: "S-AK" }).lygis, "gerai", "supaprastintas būdas tinka");
+      lygu(T.budoVerte({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "paslaugos", verte: v, budas: "T-AK" }).teise.map(t => t.raktas), ["tarptautinis_pirkimas", "verte_dalims"], "tarptautinis būdas mažesnei vertei - kaip visur");
+      lygu(T.ribos("VPI", "prekes", "epso-g").tarptautine, R.intl_goods, "ribos() EPSO-G");
+      const en = T.tikrink({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "prekes", verte: v }, "en").radiniai.find(x => x.id === "kategorija");
+      tiesa(en.tekstas.endsWith("UAB EPSO-G is not on the list of central government authorities, so the EUR " + eur(R.intl_goods) + " threshold applies, not EUR " + eur(R.intl_goods_cva) + "."), en.tekstas);
+      const ribose = T.tikrink({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "prekes", verte: R.intl_goods_cva - 1 }).radiniai.find(x => x.id === "kategorija");
+      lygu(ribose.teise.map(t => t.raktas), ["supaprastintas_pirkimas"], "mažiau už abi ribas - sąrašas neminimas");
+      const kr = v2 => T.tikrink({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "prekes", verte: v2 }).radiniai.find(x => x.id === "kategorija").teise.map(t => t.raktas);
+      lygu([kr(R.intl_goods_cva), kr(R.intl_goods)], [["supaprastintas_pirkimas", "centrines_valdzios", "centrines_valdzios_sarasas"], ["tarptautinis_pirkimas"]],
+           "lygiai mažesnioji riba - jau tarp ribų (paaiškinama), lygiai įprastoji - tarptautinis (sąrašas nesvarbus)");
+
+      // Nežinoma organizacija: klausiama vieną kartą su sąrašo nuoroda
+      const r = T.tikrink({ rezimas: "VPI", objektas: "paslaugos", verte: v, budas: "S-AK" });
       const k = r.radiniai.find(x => x.id === "kategorija");
-      lygu([k.lygis, k.teise.map(t => t.cit)], ["tikrinti", [w.GP_TEISE.cit("centrines_valdzios", "VPI"), w.GP_TEISE.cit("tarptautinis_pirkimas", "VPI")]]);
-      tiesa(/UAB EPSO-G/.test(k.tekstas) && k.tekstas.indexOf("140") >= 0 && k.tekstas.indexOf("216") >= 0, k.tekstas);
+      lygu([k.lygis, k.teise.map(t => t.raktas)], ["tikrinti", ["centrines_valdzios", "centrines_valdzios_sarasas", "tarptautinis_pirkimas"]]);
+      tiesa(k.tekstas.indexOf(eur(R.intl_goods_cva)) >= 0 && k.tekstas.indexOf(eur(R.intl_goods)) >= 0, k.tekstas);
       tiesa(!r.radiniai.some(x => x.id === "budas_verte"), "tas pats klausimas nekartojamas būdo radinyje");
       lygu(T.tikrink({ rezimas: "VPI", objektas: "paslaugos", verte: v, budas: "T-AK" }).radiniai.filter(x => x.lygis === "tikrinti").length, 1, "ir tarptautiniam būdui - vienas klausimas");
+
+      // Sąraše esanti organizacija (grupėje tokios nėra - statusas pakeičiamas tik šiame rėmelyje): mažesnioji riba
+      const o = w.GP_ORG.pagalId("energy-cells"); o.centrinesValdzios = true;
+      const c = T.tikrink({ rezimas: "VPI", vykdytojas: "energy-cells", objektas: "prekes", verte: v, budas: "S-AK" });
+      const ck = c.radiniai.find(x => x.id === "kategorija"), cb = c.radiniai.find(x => x.id === "budas_verte");
+      lygu([T.kategorija({ rezimas: "VPI", vykdytojas: "energy-cells", objektas: "prekes", verte: v }).kodas, ck.lygis, cb.lygis], ["tarptautinis", "info", "kliutis"], "sąraše - tarptautinis, supaprastintas būdas - kliūtis");
+      tiesa(ck.tekstas.endsWith("UAB Energy cells įrašyta į centrinės valdžios institucijų sąrašą, todėl taikoma " + eur(R.intl_goods_cva) + " EUR, ne " + eur(R.intl_goods) + " EUR riba."), ck.tekstas);
+      delete o.centrinesValdzios;
+      lygu(T.kategorija({ rezimas: "VPI", vykdytojas: "energy-cells", objektas: "prekes", verte: v }).cva, true, "registre statuso nėra - vėl klausiama");
+
       lygu(T.kategorija({ rezimas: "PI", objektas: "paslaugos", verte: v }).cva, false, "PĮ - be centrinės valdžios ribos");
+      lygu(T.kategorija({ rezimas: "VPI", vykdytojas: "epso-g", objektas: "darbai", verte: v }).sarase, undefined, "darbams sąrašas nesvarbus");
     } finally { f.remove(); }
   });
 
