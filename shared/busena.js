@@ -69,6 +69,9 @@
       ".gpb-sukas{width:14px;height:14px;border-radius:50%;border:2px solid var(--color-graphite-30,#C7CDD3);",
       "border-top-color:var(--color-emerald-strong,#007554);animation:gpbSuk .8s linear infinite}",
       "@keyframes gpbSuk{to{transform:rotate(360deg)}}",
+      // Puslapio juostos („Nepavyko išsaugoti“, „būsena nežinoma“, „pakeista kitame skirtuke“) - apie programą, ne dokumento turinys:
+      // spausdinant nerodomos, kaip ir trumpi pranešimai (iki 2026-09-28 patekdavo į atspausdintą ataskaitą)
+      "@media print{#gpb-juostos{display:none!important}}",
       "@media (prefers-reduced-motion:reduce){.gpb-sukas{animation:none;border-top-color:var(--color-graphite-30,#C7CDD3)}}",
       ".gpb-btn{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border-radius:999px;padding:3px 12px;",
       "background:var(--color-white,#fff);color:var(--color-graphite,#2E3641);border:1px solid var(--color-graphite-30,#C7CDD3)}",
