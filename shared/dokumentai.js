@@ -98,8 +98,11 @@
   }
   function kalba(text) {
     var t = String(text || "").slice(0, 4000).toLowerCase();
-    var lt = (t.match(/\b(ir|arba|pirkimo|tiekėjas|tiekėjo|pasiūlym|sąlyg|dalis|reikalavim)\b/g) || []).length;
-    var en = (t.match(/\b(the|and|tender|supplier|procurement|shall|requirements|contract)\b/g) || []).length;
+    // Kamienai pasiūlym-, sąlyg-, reikalavim- - su bet kokia galūne. JS \b lietuviškų raidžių nelaiko žodžio dalimi, tad iki
+    // 2026-09-28 „pasiūlymas“, „sąlygos“, „reikalavimai“ nesiskaitė ir dvikalbiai LT / EN dokumentai būdavo žymimi „EN“
+    // (4 tikri LITGRID paketai: 11 iš 174). Be (?<!) - jo nepalaiko senesnis Safari.
+    var lt = (t.match(/(?:^|[^\p{L}\p{N}])(ir|arba|pirkimo|tiekėjas|tiekėjo|pasiūlym\p{L}*|sąlyg\p{L}*|dalis|reikalavim\p{L}*)(?![\p{L}\p{N}])/gu) || []).length;
+    var en = (t.match(/(?:^|[^\p{L}\p{N}])(the|and|tender|supplier|procurement|shall|requirements|contract)(?![\p{L}\p{N}])/gu) || []).length;
     if (lt === 0 && en === 0) return "other";
     if (lt >= en * 1.5) return "lt";
     if (en >= lt * 1.5) return "en";
