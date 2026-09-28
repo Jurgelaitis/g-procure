@@ -13,21 +13,33 @@
  * PARSINIMO taisykle (US/EU maisyma sprendziam pagal SKYRIKLIU pozicija):
  *  - Jei yra IR taskas, IR kablelis: decimalinis tas, kuris paskutinis
  *    (14,900.00 -> taskas decimalinis; 743.490,00 -> kablelis decimalinis).
- *  - Jei tik vienas skyriklio tipas: jis decimalinis TIK kai vienas ir po jo
- *    1-2 skaitmenys (12,5 arba 1234.56); kitaip - tukstanciu skyriklis
- *    (1,500,000; 1.500.000; 743.490).
+ *  - Jei tik vienas skyriklio tipas: jis decimalinis, kai vienas ir po jo NE 3
+ *    skaitmenys (12,5; 1234.56; 1234,5678 - su 4+ skaitmenimis tukstanciu grupe
+ *    negalima); kitaip - tukstanciu skyriklis (1,500,000; 1.500.000; 743.490).
  *  - Nevienareiksmis atvejis "1.500" / "1,500" (vienas skyriklis + 3 skaitmenys)
  *    traktuojamas kaip TUKSTANCIAI (1500), nes pirkimu sumos buna sveiki eurai,
  *    ne 3 skaiciu po kablelio tikslumas. Tai samoningas pasirinkimas.
+ *  - Tekste imamas PIRMAS skaicius (tarpai - tukstanciu skyrikliai, todel
+ *    pasalinami); skyriklis gale nesiskaito ("2,5 val.", "12,50 Eur/vnt." -
+ *    taskas is santrumpos). Iki 2026-09-28 visi skaitmenys ir skyrikliai buvo
+ *    suklijuojami: "1 234,56 Eur." -> 123456, "12 500 (15 125 su PVM)" -> 1250015125.
  * ========================================================================== */
 ;(function (global) {
   "use strict";
 
+  // Pirmas skaicius tekste be tarpu. Skyriklis priekyje - tik teksto pradzioje (",50"), gale - atmetamas.
+  // suZenklu: minusas ir rodykle (4,52E+02 - EPD lentelese) - ne pinigams.
+  function skaiciausTekstas(input, suZenklu) {
+    var s = String(input).replace(/[\s\u00a0\u202f]/g, "");
+    var m = s.match(suZenklu ? /^-?[.,]\d[\d.,]*(?:[eE][+-]?\d+)?|-?\d[\d.,]*(?:[eE][+-]?\d+)?/ : /^[.,]\d[\d.,]*|\d[\d.,]*/);
+    return m ? m[0].replace(/[.,]+$/, "") : "";
+  }
+
   // Pinigu tekstas -> Number arba null (jei neiskaitoma).
   function parseEUR(input) {
     if (input == null) return null;
-    var s = String(input).replace(/[^\d.,]/g, "");   // paliekam tik skaitmenis, . ,
-    if (!s) return null;                              // (tarpai - visada tukstanciu skyrikliai)
+    var s = skaiciausTekstas(input, false);           // tik skaitmenys, . ir , (zenklas - kvieteju reikalas)
+    if (!s) return null;
 
     var lastDot = s.lastIndexOf(".");
     var lastComma = s.lastIndexOf(",");
@@ -37,10 +49,10 @@
       dec = lastDot > lastComma ? "." : ",";          // paskutinis - decimalinis
     } else if (lastComma !== -1) {
       var afterC = s.length - lastComma - 1;
-      if (s.indexOf(",") === lastComma && afterC >= 1 && afterC <= 2) dec = ",";
+      if (s.indexOf(",") === lastComma && afterC !== 3) dec = ",";
     } else if (lastDot !== -1) {
       var afterD = s.length - lastDot - 1;
-      if (s.indexOf(".") === lastDot && afterD >= 1 && afterD <= 2) dec = ".";
+      if (s.indexOf(".") === lastDot && afterD !== 3) dec = ".";
     }
 
     var norm;
@@ -71,7 +83,7 @@
   function parseSkaicius(input) {
     if (input == null) return null;
     if (typeof input === "number") return isFinite(input) ? input : null;
-    var s = String(input).replace(/[\s\u00a0\u202f]/g, "");
+    var s = skaiciausTekstas(input, true);
     if (!s) return null;
     var t = s.lastIndexOf("."), k = s.lastIndexOf(",");
     if (t !== -1 && k !== -1) s = t > k ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
