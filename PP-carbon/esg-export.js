@@ -96,11 +96,14 @@
     try {
       var raw = storage.getItem(ESG_KEY);
       list = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(list)) list = []; // apsauga nuo sugadinto rakto
     } catch (e) {
       // Jei esamas raktas sugadintas - NEtrinam aklai; pranesam klaida.
       return { error: "Nepavyko perskaityti esamo ppesg.esrs (galimai sugadintas)" };
     }
+
+    /* Galiojantis JSON, bet ne sąrašas (sugadintas ar kitos sandaros raktas) - irgi neperrašomas: iki 2026-09-28 jis būdavo
+       pakeičiamas [] ir įrašomas vienas taškas, t. y. PP-ESG duomenys dingdavo (shared/saugykla.js principas). */
+    if (!Array.isArray(list)) return { error: "Esami ESRS duomenys (ppesg.esrs) netikėtos sandaros - neperrašomi" };
 
     // Dublikato apsauga: ieskom esamo musu tasko.
     var idx = -1;

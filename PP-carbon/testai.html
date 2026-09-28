@@ -319,9 +319,9 @@ async function testaiSkaiciavimai(){
 /* EPD atsakymo tikrinimas ir vienetai (epd-extract.js). Iki 2026-09-28 netestuota: be citatos reikšmė nepriimama, tonos
    perskaičiuojamos į kg; tą dieną ištaisyta - „kg CO2-eq.“, „kg CO2 eq“, „kg CO₂e“ buvo laikomi nesuderinamais su „kg CO2e“. */
 async function testaiEpdIstrauka(){
-  dabartine = grupe("EPD atsakymo tikrinimas ir vienetai (epd-extract.js)");
+  dabartine = grupe("EPD atsakymo tikrinimas, vienetai ir PP-ESG eksportas (epd-extract.js, esg-export.js)");
   const f = document.createElement("iframe");
-  await new Promise(r => { f.addEventListener("load", r, { once: true }); f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body><script src="epd-extract.js"><\/script></body></html>'; document.body.appendChild(f); });
+  await new Promise(r => { f.addEventListener("load", r, { once: true }); f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body><script src="epd-extract.js"><\/script><script src="esg-export.js"><\/script></body></html>'; document.body.appendChild(f); });
   const X = f.contentWindow.GP_EPD_EXTRACT, ats = o => ({ content: [{ type: "text", text: typeof o === "string" ? o : JSON.stringify(o) }] });
   try {
     await testas("Atsakymas: „found“ tik su teigiamu skaičiumi ir citata; markdown apvalkalas toleruojamas; ambiguous - tik skaitiniai variantai; nežinomas statusas ir ne JSON - klaida", async ()=>{
@@ -342,6 +342,23 @@ async function testaiEpdIstrauka(){
       lygu(k("kg CO2e", "1 t", "t CO2e/t"), 0.001, "kg -> t");
       lygu([X.checkUnitCompatibility("kg CO2e", "1 m³", "kg CO2e/m3").warning, X.checkUnitCompatibility("kg CO2e", "1 kg", "kg CO2e/vnt").warning !== ""], ["", true], "deklaruotas vienetas");
       lygu([X.convertValue({ value: 2.5, unit: "t CO2-eq", declaredUnit: "1 vnt" }, "kg CO2e/vnt").value, X.convertValue({ value: 2.5, unit: "g CO2e" }, "kg CO2e/vnt").value], [2500, null], "convertValue");
+    });
+    await testas("PP-ESG eksportas: taškas tonomis (eilutė, 3 skaitmenys), padengimas 0-100; įterpiama ar atnaujinama išlaikant PP-ESG id, kiti taškai nepaliečiami; sugadintas ar ne sąrašo raktas NEperrašomas", async ()=>{
+      const G = f.contentWindow.GP_ESG_EXPORT;
+      const st = (v) => { const m = { "ppesg.esrs": v }; return { getItem: k => (k in m ? m[k] : null), setItem: (k, x) => { m[k] = x; }, m }; };
+      const p = G.buildEsrsPoint(1234.5, { projectName: "Pastotė", coverage: 150, date: "2026-09-28T00:00:00Z" });
+      lygu([p.value, p.unit, p.esrs, p.coverage, p.source, p.sourceRef, /Pastotė$/.test(p.name), p.date], ["1.235", "tCO2e", "E1-6", 100, "module", "PP-CARBON", true, "2026-09-28T00:00:00.000Z"], "taškas");
+      lygu([G.buildEsrsPoint(1, { coverage: -5 }).coverage, G.buildEsrsPoint(1, {}).coverage], [0, 100], "padengimas");
+      const kitas = { id: "DP-2", name: "Kitas", source: "manual" }, a = st(JSON.stringify([kitas]));
+      lygu(G.upsertToEsg(a, p).action, "inserted", "įterpta");
+      const sen = JSON.parse(a.m["ppesg.esrs"]); sen[1].id = "DP-9"; a.m["ppesg.esrs"] = JSON.stringify(sen);
+      const r2 = G.upsertToEsg(a, G.buildEsrsPoint(2000, {}));
+      lygu([r2.action, r2.list.length, r2.list[0], r2.list[1].id, r2.list[1].value], ["updated", 2, kitas, "DP-9", "2"], "atnaujinta");
+      for (const blogas of ["{sugadinta", '{"schema":2,"taskai":[]}']) {
+        const b = st(blogas), r = G.upsertToEsg(b, p);
+        lygu([!!r.error, b.m["ppesg.esrs"]], [true, blogas], "neperrašoma: " + blogas);
+      }
+      tiesa(G.upsertToEsg(null, p).error, "be saugyklos - klaida");
     });
   } finally { f.remove(); }
 }
