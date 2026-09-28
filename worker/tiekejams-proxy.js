@@ -171,7 +171,8 @@ export default {
     // Kontekstas is kliento - tik duomenys (vardas, rezimas is baltojo saraso, patvirtinimo vėliavėlė); sakini sudaro serveris
     var kt = body.kontekstas && typeof body.kontekstas === "object" ? body.kontekstas : {};
     var kontekstas = { organizacija: s(kt.organizacija, 160), rezimas: kt.rezimas === "PI" || kt.rezimas === "VPI" ? kt.rezimas : null, patvirtinta: kt.patvirtinta === true };
-    var system = TAISYKLES[lang].replace("{KONTEKSTAS}", kontekstoEilute(lang, kontekstas)) + "\n\n" + (mode === "checklist" ? SCHEMA_CHECKLIST : SCHEMA_QA) + "\n\n" + KALBA_PABAIGAI[lang === "en" ? "en" : "lt"];
+    var eil = kontekstoEilute(lang, kontekstas);   // funkcija: organizacijos pavadinimas su „$&“ nebūtų String.replace šablonas
+    var system = TAISYKLES[lang].replace("{KONTEKSTAS}", function () { return eil; }) + "\n\n" + (mode === "checklist" ? SCHEMA_CHECKLIST : SCHEMA_QA) + "\n\n" + KALBA_PABAIGAI[lang === "en" ? "en" : "lt"];
     var title = s(body.procurement && body.procurement.title, 300) || "-";
     var L = lang === "en";
     var user;
