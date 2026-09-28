@@ -100,7 +100,7 @@
     var t = String(text || "").slice(0, 4000).toLowerCase();
     // Kamienai pasiūlym-, sąlyg-, reikalavim- - su bet kokia galūne. JS \b lietuviškų raidžių nelaiko žodžio dalimi, tad iki
     // 2026-09-28 „pasiūlymas“, „sąlygos“, „reikalavimai“ nesiskaitė ir dvikalbiai LT / EN dokumentai būdavo žymimi „EN“
-    // (4 tikri LITGRID paketai: 11 iš 174). Be (?<!) - jo nepalaiko senesnis Safari.
+    // (4 tikri LITGRID paketai: 11 iš 174). Be lookbehind - jo nepalaiko senesnis Safari.
     var lt = (t.match(/(?:^|[^\p{L}\p{N}])(ir|arba|pirkimo|tiekėjas|tiekėjo|pasiūlym\p{L}*|sąlyg\p{L}*|dalis|reikalavim\p{L}*)(?![\p{L}\p{N}])/gu) || []).length;
     var en = (t.match(/(?:^|[^\p{L}\p{N}])(the|and|tender|supplier|procurement|shall|requirements|contract)(?![\p{L}\p{N}])/gu) || []).length;
     if (lt === 0 && en === 0) return "other";
@@ -452,6 +452,15 @@
   // terminas stovėjo 1640-ame 2182 simbolių fragmento simbolyje).
   function zodziuSk(t) { var m = String(t).match(/\S+/g); return m ? m.length : 0; }
   // Ilgas blokas -> gabalai, kurių kiekvienas telpa į fragmentą kartu su persidengimu.
+  // Tekstas dalimis, kiekviena baigiasi ten, kur baigiasi reiškinio `re` (su /g) atitikmuo - kaip split su lookbehind, kurio
+  // senesnis Safari (iki 16.4) nepalaiko: toks literalas failo nebeįkeltų visai (iki 2026-09-28 - PP-tiekejams, PP-salygos).
+  function dalink(s, re) {
+    var out = [], nuo = 0, m;
+    re.lastIndex = 0;
+    while ((m = re.exec(s))) { out.push(s.slice(nuo, re.lastIndex)); nuo = re.lastIndex; }
+    out.push(s.slice(nuo));
+    return out;
+  }
   // Kerpama sakinio riboje, per ilgas sakinys - žodžio riboje, per ilgas „žodis" (pvz.
   // nuoroda be tarpų) - pagal simbolius. Tarpai ir eilučių lūžiai gabalų viduje išlieka.
   function gabalai(text, maxZ, maxS) {
@@ -462,9 +471,9 @@
       if (cur && (cz + z > maxZ || (cur + vnt).trimEnd().length > maxS)) { out.push(cur.trimEnd()); cur = ""; cz = 0; }
       cur += vnt; cz += z;
     }
-    text.split(/(?<=[.;:!?]\s+)(?=\S)/).forEach(function (sak) {
+    dalink(text, /[.;:!?]\s+(?=\S)/g).forEach(function (sak) {
       if (zodziuSk(sak) <= maxZ && sak.trimEnd().length <= maxS) { dek(sak); return; }
-      sak.split(/(?<=\s)(?=\S)/).forEach(function (zod) {
+      dalink(sak, /\s(?=\S)/g).forEach(function (zod) {
         while (zod.trimEnd().length > maxS) { dek(zod.slice(0, maxS)); zod = zod.slice(maxS); }
         dek(zod);
       });
