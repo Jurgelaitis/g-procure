@@ -28,7 +28,7 @@
   var SLEPIAMAS = "gp-antr-be-teksto";          // mygtukas rodomas tik ikona
   var TITLE = "data-gp-antr-title";             // title pridėjo šis failas (nuimamas vėl parodžius tekstą)
   var MATUOJA = "gp-antr-matuoja";             // matavimo metu - be perėjimų
-  var PLACIAI = "(min-width: 901px)";
+  var PLACIAI = "not all and (max-width: 900px)";   // tikslus CSS „iki 900 px“ papildinys (su masteliu plotis būna trupmeninis)
 
   function matomas(e) { return e.getClientRects().length > 0; }
 
