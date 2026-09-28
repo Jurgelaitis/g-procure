@@ -3539,6 +3539,78 @@ async function testaiBudai(){
   } finally { f.remove(); }
 }
 
+/* AI transportas (ai-proxy.js). Serveris imituojamas (w.fetch), pauzės tarp bandymų - be laukimo (w.setTimeout):
+   į tinklą nieko nesiunčiama. */
+async function testaiAiProxy(){
+  dabartine = grupe("AI transportas (ai-proxy.js)");
+  const { f, w } = await ramas(`<script src="ai-proxy.js"><\/script>`);
+  const A = w.GP_AI_PROXY, tikrasFetch = w.fetch, tikrasLaikas = w.setTimeout;
+  let kvietimai = [], pauzes = [];
+  // Atsakymai iš eilės ([status, kūnas] arba Error - tinklo klaida); paskutinis kartojamas
+  const serveris = (...ats) => {
+    kvietimai = []; pauzes = [];
+    w.fetch = (url, o) => { kvietimai.push({ url, o, kunas: o.body }); const a = ats[Math.min(kvietimai.length - 1, ats.length - 1)];
+      return a instanceof Error ? Promise.reject(a) : Promise.resolve(new w.Response(a[1], { status: a[0] })); };
+    w.setTimeout = (fn, ms) => { pauzes.push(ms); return tikrasLaikas.call(w, fn, 0); };
+  };
+  try {
+    await testas("Saugumas: raktas ir savos antraštės atmetami (niekas nesiunčiama); kito serverio adresas kelyje nepriimamas; vienintelė antraštė - Content-Type; kūnas - model, max_tokens, system, messages (PDF - document blokas)", async ()=>{
+      serveris([200, '{"content":[{"type":"text","text":"ok"}]}']);
+      const klaidos = [];
+      for (const o of [{ apiKey: "sk-ant-x" }, { headers: { "x-api-key": "sk-ant-x" } }]) {
+        try { await A.call(o); klaidos.push("priimta"); } catch (e) { klaidos.push(/apiKey|headers/.test(e.message) ? "atmesta" : e.message); }
+      }
+      lygu([klaidos, kvietimai.length], [["atmesta", "atmesta"], 0], "raktas");
+      await A.call({ path: "https://kitas.lt/api/x", system: "S", userMessage: "U" });
+      await A.call({ path: "api/y", maxTokens: 10, userMessage: "U", pdfBase64: "QUJD" });
+      await A.call({});
+      const k = kvietimai.map(x => ({ url: x.url, metodas: x.o.method, antrastes: x.o.headers, kunas: JSON.parse(x.kunas) }));
+      lygu(k.map(x => x.url), ["https://api.g-procure.com/api/x", "https://api.g-procure.com/api/y", "https://api.g-procure.com/api/analyze"], "adresai");
+      lygu([k[0].metodas, k[0].antrastes, k[0].kunas], ["POST", { "Content-Type": "application/json" },
+        { model: A.MODEL, max_tokens: 4000, system: "S", messages: [{ role: "user", content: "U" }] }], "kūnas");
+      lygu([k[1].kunas.max_tokens, k[1].kunas.messages[0].content], [10, [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: "QUJD" } },
+        { type: "text", text: "U" }]], "PDF");
+      lygu(k[2].kunas, { model: A.MODEL, max_tokens: 4000, system: "", messages: [{ role: "user", content: "" }] }, "be parametrų");
+      tiesa(k.every(x => !/sk-ant|x-api-key|anthropic-version/i.test(JSON.stringify(x))), "užklausoje - rakto ar Anthropic antraštės pėdsakas");
+    });
+
+    await testas("Klaidos žinutė žmogui: 413 - su tikra riba, 429, 401 / 403, 5xx; kitos - su serverio klaidos tekstu, bet HTML puslapis į ekraną nepatenka; tinklo klaida - status 0", async ()=>{
+      const zinute = async (...a) => { serveris(...a); const r = await A.call({ userMessage: "U" }); return [r.ok, r.status, r.error]; };
+      const mb = Math.floor(A.MAX_PDF_BAITU / (1024 * 1024)) + " MB";
+      lygu(await zinute([413, "<html><body>413 Request Entity Too Large nginx/1.28.3</body></html>"]),
+        [false, 413, "Failas per didelis - serveris jo nepriėmė. Didžiausias dokumento dydis apie " + mb + ". Pateikite mažesnės apimties failą."], "413");
+      lygu((await zinute([429, "{}"]))[2], "Per daug užklausų iš eilės. Palaukite kelias sekundes ir bandykite dar kartą.", "429");
+      lygu([(await zinute([401, ""]))[2], (await zinute([403, "Forbidden"]))[2]],
+        ["Serveris atmetė užklausą (401). Kreipkitės į sistemos prižiūrėtoją.", "Serveris atmetė užklausą (403). Kreipkitės į sistemos prižiūrėtoją."], "401 / 403");
+      lygu([(await zinute([500, "{}"]))[2], (await zinute([502, "<html>Bad gateway</html>"]))[2]],
+        ["Serverio klaida (500). Pabandykite po kelių minučių.", "Serverio klaida (502). Pabandykite po kelių minučių."], "5xx");
+      lygu([(await zinute([400, '{"error":{"type":"invalid_request_error","message":"max_tokens per didelis"}}']))[2], (await zinute([400, '{"error":"blogas kūnas"}']))[2],
+        (await zinute([404, "<!DOCTYPE html><html><body>Not found</body></html>"]))[2], (await zinute([400, "Blogas prašymas"]))[2]],
+        ['API klaida 400: {"type":"invalid_request_error","message":"max_tokens per didelis"}', "API klaida 400: blogas kūnas", "API klaida 404", "API klaida 400: Blogas prašymas"], "kitos");
+      lygu([await zinute(new Error("Failed to fetch")), await zinute(new Error(""))], [[false, 0, "Failed to fetch"], [false, 0, "Tinklo klaida"]], "tinklas");
+      lygu([mb, A.MAX_PDF_BAITU === Math.floor(A.MAX_BASE64 * 3 / 4), A.MAX_BASE64 < 10 * 1024 * 1024], ["6 MB", true, true], "ribos: 3/4 base64 biudžeto, žemiau serverio 10 MB");
+    });
+
+    await testas("Kartojimas pagal statusą: 429 ir 5xx (529 overloaded) - iki 3 kartų po 1, 2 ir 4 s, kartojama ta pati užklausa; 413, 400 ir tinklo klaida nekartojami", async ()=>{
+      const eiga = async (...a) => { serveris(...a); const r = await A.call({ system: "S", userMessage: "U" }); return [r.ok, r.status, r.text, kvietimai.length, pauzes]; };
+      lygu(await eiga([529, '{"error":{"type":"overloaded_error"}}'], [529, "{}"], [200, '{"content":[{"type":"text","text":"labas"}]}']), [true, 200, "labas", 3, [1000, 2000]], "529 -> 200");
+      lygu(await eiga([429, "{}"]), [false, 429, "", 4, [1000, 2000, 4000]], "429 kiekvieną kartą");
+      lygu(await eiga([500, "{}"], [200, "grynas tekstas"]), [true, 200, "grynas tekstas", 2, [1000]], "500 -> ne JSON tekstas");
+      lygu([kvietimai[0].kunas === kvietimai[1].kunas, kvietimai[0].url === kvietimai[1].url], [true, true], "identiška užklausa");
+      lygu([await eiga([413, "{}"]), await eiga([400, '{"error":"blogas"}']), await eiga(new Error("Failed to fetch"))].map(x => [x[3], x[4]]), [[1, []], [1, []], [1, []]], "nekartojami");
+    });
+
+    await testas("extractText: Anthropic content[] blokai (tušti praleidžiami), content / completion / text / message eilutė, message.content; tuščias ar nežinomas - tuščia eilutė; numatytasis modelis yra PP-ts pasirinkiklyje ir pažymėtas", async ()=>{
+      const X = A.extractText;
+      lygu([X({ content: [{ type: "text", text: "a" }, null, "b", { type: "tool_use" }, { content: "c" }] }), X({ content: "d" }), X({ completion: "e" }), X({ text: "f" }),
+        X({ message: "g" }), X({ message: { content: [{ text: "h" }] } }), X("i"), X(null), X({}), X({ content: [{ type: "text", text: "  j  " }] })],
+        ["a\nb\nc", "d", "e", "f", "g", "h", "i", "", "", "j"], "tekstas");
+      const ts = await saltinis("../PP-ts/TS_Asistentas.html");
+      tiesa(ts.includes('<option value="' + A.MODEL + '" selected>'), "PP-ts pasirinkiklyje nėra pažymėto " + A.MODEL + " (CLAUDE.md 6 sk.: keičiant DEFAULT_MODEL - patikrink ir PP-ts sąrašą)");
+    });
+  } finally { w.fetch = tikrasFetch; w.setTimeout = tikrasLaikas; f.remove(); }
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
@@ -3546,6 +3618,7 @@ async function testaiBudai(){
   await testaiPranesimai();
   await testaiDatos();
   await testaiBudai();
+  await testaiAiProxy();
   await testaiDocxStiliai();
   await testaiSkydelis();
   await testaiAntraste();
