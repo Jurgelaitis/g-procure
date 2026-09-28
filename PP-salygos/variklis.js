@@ -906,7 +906,7 @@ const GPGen = (() => {
         // "palik kaip yra" - kitaip nauja dalis tyliai gautu ankstesnes dalies
         // pavadinima su nauju numeriu, ir auditas nieko nerastu. Tuscia -> zyma.
         const m = x.match(DALIES_PRIESDELIS);
-        if (val)      x = m ? (m[1] + ' ' + val) : x.replace(/_+/, val);
+        if (val)      x = m ? (m[1] + ' ' + val) : x.replace(/_+/, () => val);   // funkcija: „$&“ pavadinime - ne šablonas
         else if (m)   x = m[1] + ' ' + TUSCIA_ZYMA;
         x = x.replace(/[;.\s]+$/, '') + (paskutine ? '.' : ';');
         return x;
