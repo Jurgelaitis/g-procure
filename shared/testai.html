@@ -2783,13 +2783,36 @@ function telefonoSlinktis(d){
     && ![...e.children].some(c => c.getBoundingClientRect().right > W + 1); });
   return de.scrollWidth + " px > " + W + " px" + (kaltas ? " (" + vardas(kaltas.parentElement) + " > " + vardas(kaltas) + ")" : "");
 }
+/* Nukirptas turinys (2026-09-29): overflow:hidden telefone paslepia dalį turinio, o puslapis neslenka - slinkties patikra to nemato.
+   Taip buvo PP-market-KPI ribų lentelė (dešinė pusė), informacinės skilties „Suskleisti“, PP-plan jungiklio paskutinis pasirinkimas,
+   PP-report 1 priedo skyriai (iki 288 px), PP-protocol naujo pirkimo vedlys ir A3-A5 formų lentelės. Lyginama su 1280 px - ten
+   apkarpyti elementai (sąmoningi) klaida nelaikomi; daugtaškis - sąmoningas trumpinimas. Grąžina išmatuotų pločių skaičių. */
+async function telefonoMatuok(f, kur, blogi){
+  const w = f.contentWindow, d = f.contentDocument;
+  const kadras = () => new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
+  const karpo = () => new Set([...d.body.querySelectorAll("*")].filter(e => {
+    if (!e.getClientRects().length || e.clientWidth <= 2 || e.closest("svg")) return false;
+    const cs = w.getComputedStyle(e); if (!/hidden|clip/.test(cs.overflowX) || cs.textOverflow === "ellipsis") return false;
+    return (e.innerText || "").trim() && e.scrollWidth > e.clientWidth + 3; }));
+  const pav = e => e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/)[0] : "");
+  f.style.width = "1280px"; await kadras(); const placiai = karpo();
+  let n = 0;
+  for (const p of [375, 320]) {
+    f.style.width = p + "px"; await kadras(); n++;
+    const k = kur + " (" + p + " px)", s = telefonoSlinktis(d);
+    if (s) blogi.push(k + ": " + s);
+    [...karpo()].filter(e => !placiai.has(e)).slice(0, 2).forEach(e => blogi.push(k + ": nukirpta " + (e.scrollWidth - e.clientWidth) + " px - " + pav(e) + " „" + e.innerText.trim().replace(/\s+/g, " ").slice(0, 40) + "“"));
+  }
+  f.style.width = "375px"; await kadras();
+  return n;
+}
 async function testaiTelefonas(){
   dabartine = grupe("Telefonas 375 ir 320 px (U4): puslapiai ir jų skirtukai neslenka horizontaliai");
 
   /* 2026-09-29: ir 320 px (WCAG 1.4.10 - 1280 px ekranas su 400 % mastelio; seni telefonai). 320-360 px iki tol slinko 22 būsenos:
      PP-tiekejams (ir 360 px - dažnas Android plotis: CVP IS nuoroda pavyzdyje, žymos), PP-negotiation (ir 360 px: nenupiešta
      diagrama, mygtukų eilės), PP-carbon, PP-plan, PP-market-KPI, PP-ts, KNA, atsarginė kopija ir PP-teise administravimas. */
-  await testas("Visi puslapiai, jų skirtukai ir pagrindinės būsenos (vedlių žingsniai, formos, sugeneruotas grafikas) telpa 375 px ir 320 px ekrane", async ()=>{
+  await testas("Visi puslapiai, jų skirtukai ir pagrindinės būsenos (vedlių žingsniai, formos, sugeneruotas grafikas) telpa 375 px ir 320 px ekrane - neslenka ir nenukerpa turinio", async ()=>{
     const A = GP_TESTU_APSAUGA.pradek(k => k === "pp_carbon_data" || k.indexOf("ppesg.") === 0 || k.indexOf("gprocure.testai.") === 0);
     const blogi = []; let matuota = 0;
     try {
@@ -2799,13 +2822,7 @@ async function testaiTelefonas(){
         const f = await telefonoRemas(m);
         try {
           const w = f.contentWindow, d = f.contentDocument;
-          const mat = async pav => {
-            for (const p of [375, 320]) {
-              f.style.width = p + "px"; await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
-              matuota++; const s = telefonoSlinktis(d); if (s) blogi.push(m.replace("../", "") + (pav ? " · " + pav : "") + " (" + p + " px): " + s);
-            }
-            f.style.width = "375px";
-          };
+          const mat = async pav => { matuota += await telefonoMatuok(f, m.replace("../", "") + (pav ? " · " + pav : ""), blogi); };
           await mat("");
           if (sel) for (const t of [...d.querySelectorAll(sel)]) { t.click(); await new Promise(r => setTimeout(r, 120)); await mat("„" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 30) + "“"); }
           for (const [pav, fn] of (TELEFONO_BUSENOS[m] || [])) { fn(w, d); await new Promise(r => setTimeout(r, 200)); await mat(pav); }
@@ -2813,6 +2830,31 @@ async function testaiTelefonas(){
       }
     } finally { A.atkurk(); }
     tiesa(matuota >= 140, "išmatuota tik " + matuota + " būsenų x pločių - pasikeitė skirtukų selektoriai?");
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  /* Su duomenimis (2026-09-29): tuščias modulis telpa, o su pirkimais ar pavyzdžiais - ne: PP-plan su pavyzdiniais duomenimis 375 px buvo
+     401 px (kategorijų juostų 150 + 180 px stulpeliai), PP-protocol sąrašas 320 px - 327 px (1fr stulpelis pagal ilgiausią kortelę), A3-A5
+     formų lentelės kortelėse nukirptos. Būsenos - tos pačios kaip prieinamumo testų (PRIEINAMUMO_BUSENOS); saugykla atkuriama. */
+  await testas("Su duomenimis (PP-protocol pirkimai ir formos, PP-plan pavyzdžiai ir skirtukai, skaičiuoklės pavyzdys, PP-report 2 priedas) 375 ir 320 px - neslenka ir nenukerpa", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(() => true);
+    const blogi = []; let matuota = 0;
+    try {
+      for (const [m, busenos] of Object.entries(PRIEINAMUMO_BUSENOS)) {
+        if (PRIEINAMUMO_PRIES[m]) PRIEINAMUMO_PRIES[m]();
+        const f = await telefonoRemas(m);
+        try {
+          const w = f.contentWindow, d = f.contentDocument;
+          for (const [pav, fn, sel] of busenos) {
+            try { await fn(w, d); } catch (e) { blogi.push(m + " · " + pav + ": būsena neatsivėrė - " + e.message); continue; }
+            await new Promise(r => setTimeout(r, 250));
+            matuota += await telefonoMatuok(f, m.replace("../", "") + " · " + pav, blogi);
+            if (sel) for (const t of [...d.querySelectorAll(sel)]) { t.click(); await new Promise(r => setTimeout(r, 150)); matuota += await telefonoMatuok(f, m.replace("../", "") + " · " + pav + " · „" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 25) + "“", blogi); }
+          }
+        } finally { f.remove(); }
+      }
+    } finally { A.atkurk(); }
+    tiesa(matuota >= 30, "išmatuota tik " + matuota + " būsenų x pločių");
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 
