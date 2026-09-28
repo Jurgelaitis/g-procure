@@ -275,14 +275,19 @@
   function isTrijuVienas(v) { return v === "taip" || v === "ne" || v === "nenustatyta"; }
 
   function parseResponse(text) {
-    if (!text) return { ok: false, error: "Tuscias AI atsakymas" };
+    if (!text) return { ok: false, error: "Tuščias AI atsakymas" };
     var m = String(text).match(/\{[\s\S]*\}/);            // toleruojam aplinkini teksta
-    if (!m) return { ok: false, error: "Atsakyme nera JSON" };
+    if (!m) return { ok: false, error: "Atsakyme nėra JSON" };
     var d;
     try { d = JSON.parse(m[0]); }
-    catch (e) { return { ok: false, error: "JSON klaida: " + e.message }; }
+    catch (e) {
+      // Modelis lietuvišką „ dažnai uždaro ASCII kabute - kaip AI pasiūlymuose (ai-patarejas.js), bandomas struktūrinis
+      // taisymas (shared/ai-proxy.js). Iki 2026-09-28 tokia citata paraiškoje sugadindavo visą analizę.
+      try { d = JSON.parse(root.GP_AI_PROXY.taisykJson(m[0])); }
+      catch (e2) { return { ok: false, error: "AI atsakymas nutrūko arba sugadintas (" + e.message + ")" }; }
+    }
     if (d.status === "neiskaitoma")
-      return { ok: false, error: "AI nurodo, kad dokumentas neiskaitomas" + (d.pastabos ? ": " + d.pastabos : "") };
+      return { ok: false, error: "AI nurodo, kad dokumentas neįskaitomas" + (d.pastabos ? ": " + d.pastabos : "") };
     if (d.status !== "ok" || !d.laukai || typeof d.laukai !== "object")
       return { ok: false, error: "Atsakymas neatitinka schemos (status/laukai)" };
     var L = d.laukai;

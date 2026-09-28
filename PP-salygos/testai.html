@@ -806,10 +806,40 @@ async function testaiGeneravimas(){
   });
 }
 
+/* Paraiškos laukai (paraiska-extract.js) - atsakymo tikrinimas ir laukų žemėlapis, be AI (2026-09-28; iki tol tiesiogiai netestuota). */
+async function testaiParaiska(){
+  dabartine = grupe("Paraiškos laukai (paraiska-extract.js) - be AI");
+  const X = W.GP_PARAISKA;
+  await testas("Atsakymas: griežtos reikšmės (taip / ne / nenustatyta; prekes / paslaugos / darbai) - kitos virsta „nenustatyta“; lietuviška kabutė, uždaryta ASCII kabute, nebesugadina analizės; neįskaitomas, tuščias ar be JSON - klaida", async () => {
+    const p1 = X.parseResponse('Štai: {"status":"ok","laukai":{"nacionalinis_saugumas":{"reiksme":"galbūt"},"dpa":{"reiksme":"taip"},"objekto_tipas":{"reiksme":"prekės"},"tipo_kandidatai":"x"}} ačiū');
+    lygu([p1.ok, p1.laukai.nacionalinis_saugumas.reiksme, p1.laukai.dpa.reiksme, p1.laukai.objekto_tipas.reiksme, p1.laukai.tipo_kandidatai], [true, "nenustatyta", "taip", "nenustatyta", []], "griežtos reikšmės");
+    const p3 = X.parseResponse('{"status":"ok","laukai":{"pavadinimas":{"reiksme":"Paslaugos „A" ir B","citata":"„A" ir B"}}}');
+    lygu([p3.ok, p3.ok && p3.laukai.pavadinimas.reiksme], [true, 'Paslaugos „A" ir B'], "ASCII kabutė");
+    lygu([X.parseResponse('{"status":"neiskaitoma","pastabos":"skenuota"}').error, X.parseResponse("").error, X.parseResponse("be json").error, X.parseResponse('{"status":"ok"}').error, X.parseResponse('{"status":"ok","laukai":{"a":').ok],
+      ["AI nurodo, kad dokumentas neįskaitomas: skenuota", "Tuščias AI atsakymas", "Atsakyme nėra JSON", "Atsakymas neatitinka schemos (status/laukai)", false], "klaidos");
+  });
+  await testas("Laukų žemėlapis: pavadinimas kilmininku be „pirkimas“; būdas per GP_METHODS (be šablono ar neatpažintas - neįrašomas su priežastimi); vertė EU ir JAV formatais, neaiški - neįrašoma; mišrus objektas pažymimas; „nenustatyta“ nesiūloma", async () => {
+    const L = { pavadinimas_kilmininkas: { reiksme: "Transformatorių priežiūros paslaugų pirkimas" }, pavadinimas: { reiksme: "Transformatorių priežiūros paslaugos", citata: "c1" },
+      pirkimo_budas: { reiksme: "Supaprastintas atviras konkursas", citata: "c2" }, verte_be_pvm: { reiksme: "743 490,50 Eur", citata: "c3" },
+      objekto_tipas: { reiksme: "prekes", citata: "c4" }, tipo_kandidatai: ["prekes", "paslaugos"], nacionalinis_saugumas: { reiksme: "taip", citata: "c5" },
+      dpa: { reiksme: "ne" }, es_lesos: { reiksme: "nenustatyta" }, registracijos_nr: { reiksme: "R-12" } };
+    const m = X.mapFields(L), pg = id => m.siulymai.find(x => x.id === id);
+    lygu([pg("pavadinimas").reiksme, pg("budas").reiksme, pg("budas").ok, pg("verte").reiksme, pg("tipas").kortele, pg("tipas").pastaba, pg("nacsaug").reiksme],
+      ["Transformatorių priežiūros paslaugų", "S-AK", true, "743 490,50", "prekes (galimi: paslaugos)", "mišrus objektas - peržiūrėkite", "taip"], "siūlymai");
+    lygu(m.info, [{ laukas: "Registracijos Nr.", reiksme: "R-12" }, { laukas: "Asmens duomenų tvarkymo sutartis (DPA)", reiksme: "ne" }], "informaciniai (be „nenustatyta“)");
+    const b = t => X.mapFields({ pirkimo_budas: { reiksme: t } }).siulymai[0];
+    lygu([b("Koncesija").ok, /neturi šablonų/.test(b("Koncesija").pastaba), b("kažkas").ok, /atpažinti nepavyko/.test(b("kažkas").pastaba)], [false, true, false, true], "būdas be šablono / neatpažintas");
+    const v = t => X.mapFields({ verte_be_pvm: { reiksme: t } }).siulymai[0];
+    lygu([v("1,234,567.89 EUR").reiksme, v("apie milijoną").reiksme, v("apie milijoną").ok], ["1 234 567,89", null, false], "vertė");
+    lygu(X.mapFields({ nacionalinis_saugumas: { reiksme: "nenustatyta" }, objekto_tipas: { reiksme: "nenustatyta" } }).siulymai, [], "„nenustatyta“ nesiūloma");
+  });
+}
+
 (async function(){
   try {
     await modulis();
     await testaiLogika();
+    await testaiParaiska();
     await testaiKlausimai();
     await testaiEiga();
     await testaiBusenos();
