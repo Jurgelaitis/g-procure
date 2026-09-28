@@ -127,7 +127,10 @@
     try {
       return JSON.parse(clean.slice(a, b + 1));
     } catch (e) {
-      return null;
+      // Neekranuota kabutė ar eilutės lūžis eilutėje (pvz. lietuviška „ uždaryta ASCII kabute) - struktūrinis taisymas
+      // (shared/ai-proxy.js, 2026-09-28); nutrūkęs JSON netaisomas ir lieka null.
+      try { return root.GP_AI_PROXY && root.GP_AI_PROXY.taisykJson ? JSON.parse(root.GP_AI_PROXY.taisykJson(clean.slice(a, b + 1))) : null; }
+      catch (e2) { return null; }
     }
   }
 
