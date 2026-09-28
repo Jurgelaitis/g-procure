@@ -346,6 +346,25 @@ async function testaiKopija(){
     lygu([W.eval("APP.state.project.name"), W.eval("APP.state.session.status"), W.eval("APP.state.session.rounds"), !!D.querySelector('[data-gpb-raktas="skaitymas"]')],
          ["Sena būsena", "active", [], false], "sena būsena su numatytosiomis reikšmėmis");
   });
+
+  await testas("CDN biblioteka neįsikėlė (ryšys ar įmonės tinklas): importas - priežastis žmogui, Excel eksportas - pranešimas, ne neperimta klaida; diagramų vietoje - paaiškinimas", async () => {
+    await modulis();
+    const tikri = { XLSX: W.XLSX, mammoth: W.mammoth, pdfjsLib: W.pdfjsLib, Chart: W.Chart }, gauta = [], rodyk = W.GP_PRANESIMAS.rodyk;
+    W.GP_PRANESIMAS.rodyk = (t, o) => { gauta.push([String(t), (o && o.tipas) || ""]); return rodyk.call(W.GP_PRANESIMAS, t, o); };
+    try {
+      Object.keys(tikri).forEach(k => { W[k] = undefined; });
+      const r = [];
+      for (const n of ["a.xlsx", "b.docx", "c.pdf"]) r.push(await W.parseFile(new W.File(["x"], n), "a"));
+      lygu(r.map(x => [x.ok, /Nepavyko įkelti bibliotekos/.test(x.error), /is not defined/.test(x.error)]), [[false, true, false], [false, true, false], [false, true, false]], "importas: " + JSON.stringify(r.map(x => x.error)));
+      let klaida = ""; try { W.exportXlsx(); } catch (e) { klaida = String(e); }
+      lygu([klaida, gauta.some(([t, tip]) => /„SheetJS \(Excel\)“/.test(t) && tip === "klaida")], ["", true], "eksportas: " + JSON.stringify(gauta));
+      W.renderChartTotals([{ name: "Alfa", total: 100 }], 0);
+      const c = D.getElementById("chartTotals"), p = c && c.parentNode.querySelector("[data-gp-biblioteka]");
+      lygu([!!p && /Chart\.js/.test(p.textContent), c.style.display], [true, "none"], "diagramos vieta");
+      W.Chart = tikri.Chart; W.renderChartTotals([{ name: "Alfa", total: 100 }], 0);
+      lygu([!!c.parentNode.querySelector("[data-gp-biblioteka]"), c.style.display !== "none"], [false, true], "Chart.js atsiradus");
+    } finally { Object.keys(tikri).forEach(k => { W[k] = tikri[k]; }); W.GP_PRANESIMAS.rodyk = rodyk; }
+  });
 }
 
 (async function(){
