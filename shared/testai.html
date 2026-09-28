@@ -2778,30 +2778,41 @@ function telefonoSlinktis(d){
   const de = d.documentElement, W = de.clientWidth;
   if (de.scrollWidth <= W + 1) return "";
   const vardas = e => e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/).slice(0, 2).join(".") : "");
-  const karpo = e => { for (let p = e.parentElement; p && p !== de; p = p.parentElement) { if (d.defaultView.getComputedStyle(p).overflowX !== "visible") return p.getBoundingClientRect().right <= W + 1; } return false; };
+  const karpo = e => { for (let p = e.parentElement; p && p !== de; p = p.parentElement) { if (p.namespaceURI === "http://www.w3.org/2000/svg") continue; if (d.defaultView.getComputedStyle(p).overflowX !== "visible") return p.getBoundingClientRect().right <= W + 1; } return false; };
   const kaltas = [...d.body.querySelectorAll("*")].find(e => { const r = e.getBoundingClientRect(); return r.right > W + 1 && r.width > 0 && !karpo(e)
     && ![...e.children].some(c => c.getBoundingClientRect().right > W + 1); });
   return de.scrollWidth + " px > " + W + " px" + (kaltas ? " (" + vardas(kaltas.parentElement) + " > " + vardas(kaltas) + ")" : "");
 }
 async function testaiTelefonas(){
-  dabartine = grupe("Telefonas 375 px (U4): puslapiai ir jų skirtukai neslenka horizontaliai");
+  dabartine = grupe("Telefonas 375 ir 320 px (U4): puslapiai ir jų skirtukai neslenka horizontaliai");
 
-  await testas("Visi puslapiai, jų skirtukai ir pagrindinės būsenos (vedlių žingsniai, formos, sugeneruotas grafikas) telpa 375 px ekrane", async ()=>{
-    const A = GP_TESTU_APSAUGA.pradek(k => k === "pp_carbon_data" || k.indexOf("ppesg.") === 0);
+  /* 2026-09-29: ir 320 px (WCAG 1.4.10 - 1280 px ekranas su 400 % mastelio; seni telefonai). 320-360 px iki tol slinko 22 būsenos:
+     PP-tiekejams (ir 360 px - dažnas Android plotis: CVP IS nuoroda pavyzdyje, žymos), PP-negotiation (ir 360 px: nenupiešta
+     diagrama, mygtukų eilės), PP-carbon, PP-plan, PP-market-KPI, PP-ts, KNA, atsarginė kopija ir PP-teise administravimas. */
+  await testas("Visi puslapiai, jų skirtukai ir pagrindinės būsenos (vedlių žingsniai, formos, sugeneruotas grafikas) telpa 375 px ir 320 px ekrane", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(k => k === "pp_carbon_data" || k.indexOf("ppesg.") === 0 || k.indexOf("gprocure.testai.") === 0);
     const blogi = []; let matuota = 0;
     try {
+      // Atsarginės kopijos lentelėje - ilgas raktas be tarpų: lentelė turi lūžti, o ne plėsti puslapį (nepriklausomai nuo to, kas saugykloje)
+      try { localStorage.setItem("gprocure.testai.labai-ilgas-rakto-pavadinimas-be-tarpu-telefono-testui", "1"); } catch (e) {}
       for (const [m, sel] of Object.entries(TELEFONO_PUSLAPIAI)) {
         const f = await telefonoRemas(m);
         try {
           const w = f.contentWindow, d = f.contentDocument;
-          const mat = pav => { matuota++; const s = telefonoSlinktis(d); if (s) blogi.push(m.replace("../", "") + (pav ? " · " + pav : "") + ": " + s); };
-          mat("");
-          if (sel) for (const t of [...d.querySelectorAll(sel)]) { t.click(); await new Promise(r => setTimeout(r, 120)); mat("„" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 30) + "“"); }
-          for (const [pav, fn] of (TELEFONO_BUSENOS[m] || [])) { fn(w, d); await new Promise(r => setTimeout(r, 200)); mat(pav); }
+          const mat = async pav => {
+            for (const p of [375, 320]) {
+              f.style.width = p + "px"; await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
+              matuota++; const s = telefonoSlinktis(d); if (s) blogi.push(m.replace("../", "") + (pav ? " · " + pav : "") + " (" + p + " px): " + s);
+            }
+            f.style.width = "375px";
+          };
+          await mat("");
+          if (sel) for (const t of [...d.querySelectorAll(sel)]) { t.click(); await new Promise(r => setTimeout(r, 120)); await mat("„" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 30) + "“"); }
+          for (const [pav, fn] of (TELEFONO_BUSENOS[m] || [])) { fn(w, d); await new Promise(r => setTimeout(r, 200)); await mat(pav); }
         } finally { f.remove(); }
       }
     } finally { A.atkurk(); }
-    tiesa(matuota >= 70, "išmatuota tik " + matuota + " būsenų - pasikeitė skirtukų selektoriai?");
+    tiesa(matuota >= 140, "išmatuota tik " + matuota + " būsenų x pločių - pasikeitė skirtukų selektoriai?");
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 
