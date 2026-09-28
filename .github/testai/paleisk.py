@@ -19,7 +19,10 @@ SAKNIS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
                     if not d.startswith(".") and os.path.isfile(os.path.join(SAKNIS, d, "testai.html"))),
                    key=lambda r: (not r.startswith("shared/"), r.lower()))
-LAIKAS = 900   # s vienam rinkiniui
+# Laiko ribos (s): vienam rinkiniui ir visiems kartu - darbo riba GitHub Actions 45 min., tad naujas rinkinys nepradedamas, kai lieka
+# mažiau nei minutė, o likę pažymimi „nepaleista“ (iki 2026-09-28: 15 x 900 s; keli užstrigę rinkiniai nutraukdavo darbą be santraukos)
+LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "600"))
+VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2400"))
 
 
 # ---------- statinis serveris (didelė eilė: puslapiai vienu metu krauna daug failų) ----------
@@ -102,18 +105,23 @@ class Chrome:
         self.p = subprocess.Popen([chrome_kelias(), "--headless=new", "--remote-debugging-port=%d" % self.portas, "--user-data-dir=" + self.profilis,
                                    "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--lang=en-GB",
                                    "--window-size=1280,1000", "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(150):
-            try:
-                puslapiai = [t for t in json.load(urllib.request.urlopen("http://127.0.0.1:%d/json/list" % self.portas, timeout=2)) if t.get("type") == "page"]
-                if puslapiai: break
-            except Exception:
-                pass
-            time.sleep(0.2)
-        else:
-            raise RuntimeError("Chrome nepasileido")
-        self.ws = WS(puslapiai[0]["webSocketDebuggerUrl"]); self.n = 0
-        self.komanda("Page.enable"); self.komanda("Runtime.enable")
-        self.komanda("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 1000, "deviceScaleFactor": 1, "mobile": False})
+        try:
+            for _ in range(150):
+                try:
+                    puslapiai = [t for t in json.load(urllib.request.urlopen("http://127.0.0.1:%d/json/list" % self.portas, timeout=2)) if t.get("type") == "page"]
+                    if puslapiai: break
+                except Exception:
+                    pass
+                time.sleep(0.2)
+            else:
+                raise RuntimeError("Chrome nepasileido")
+            self.ws = WS(puslapiai[0]["webSocketDebuggerUrl"]); self.n = 0
+            self.komanda("Page.enable"); self.komanda("Runtime.enable")
+            self.komanda("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 1000, "deviceScaleFactor": 1, "mobile": False})
+        except Exception:
+            # Nepasileidusi naršyklė nepaliekama veikti, o klaida tenka tik šiam rinkiniui (iki 2026-09-28 nutraukdavo visą paleidimą)
+            self.p.kill(); shutil.rmtree(self.profilis, ignore_errors=True)
+            raise
 
     def komanda(self, metodas, param=None):
         self.n += 1; nr = self.n
@@ -142,8 +150,10 @@ LAUK = """(async () => {
   while (Date.now() < pabaiga) {
     const b = document.getElementById('busena');
     if (/^(OK|KRITO)/.test(document.title) && document.getElementById('santrauka')) {
+      // Kritę: PP-market-KPI ir PP-cost-benefit - lentelės eilutės su .z-blogai, PP-teise - .t.krito
       return { baigta: true, busena: document.getElementById('santrauka').textContent.replace(/\\s+/g, ' ').trim(), gerai: /^OK/.test(document.title),
-        krito: [...document.querySelectorAll('.z-blogai')].map(z => z.closest('tr')).filter(Boolean).map(tr => tr.textContent.replace(/\\s+/g, ' ').trim().slice(0, 600)) };
+        krito: [...document.querySelectorAll('.z-blogai')].map(z => z.closest('tr')).filter(Boolean).concat([...document.querySelectorAll('.t.krito, .t.blogai')])
+          .map(e => e.textContent.replace(/\\s+/g, ' ').trim().slice(0, 600)) };
     }
     if (b && /praėjo|krito|Nepavyko/.test(b.textContent)) {
       const krito = [...document.querySelectorAll('.t.krito, .t.blogai')].map(e => e.textContent.replace(/\\s+/g, ' ').trim().slice(0, 600));
@@ -163,32 +173,36 @@ def main():
     srv = Serveris(("127.0.0.1", portas), Tylus)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     rezultatai = []
+    pradzia = time.time()
+    santrauka = os.environ.get("GITHUB_STEP_SUMMARY")
+    def rasyk_santrauka(tekstas):
+        # Kiekviena eilutė - iškart: jei darbas nutrūktų, jau paleistų rinkinių rezultatai lieka santraukoje
+        if santrauka:
+            with open(santrauka, "a", encoding="utf-8") as f: f.write(tekstas)
+    rasyk_santrauka("## G-Procure testai\n\n| Rinkinys | Būsena | Laikas |\n|---|---|---|\n")
     for r in rinkiniai:
-        ch = Chrome()   # kiekvienam rinkiniui - švari naršyklė (tikra saugykla nesidalijama)
-        pr = time.time()
-        try:
-            ch.komanda("Page.navigate", {"url": "http://127.0.0.1:%d/%s?ci=%d" % (portas, r, time.time())})
-            time.sleep(2)
-            x = ch.vykdyk(LAUK % LAIKAS)
-        except Exception as e:
-            x = {"baigta": False, "busena": "klaida: " + str(e)[:300], "gerai": False, "krito": []}
-        finally:
-            ch.uzdaryk()
-        x["rinkinys"] = r; x["sek"] = round(time.time() - pr)
+        liko = VISO_LAIKAS - (time.time() - pradzia)
+        if liko < 60:
+            x = {"baigta": False, "busena": "nepaleista - baigėsi bendras laikas (%d s)" % VISO_LAIKAS, "gerai": False, "krito": [], "rinkinys": r, "sek": 0}
+        else:
+            pr = time.time(); ch = None
+            try:
+                ch = Chrome()   # kiekvienam rinkiniui - švari naršyklė (tikra saugykla nesidalijama)
+                ch.komanda("Page.navigate", {"url": "http://127.0.0.1:%d/%s?ci=%d" % (portas, r, time.time())})
+                time.sleep(2)
+                x = ch.vykdyk(LAUK % int(min(LAIKAS, liko - 30)))
+            except Exception as e:
+                x = {"baigta": False, "busena": "klaida: " + str(e)[:300], "gerai": False, "krito": []}
+            finally:
+                if ch: ch.uzdaryk()
+            x["rinkinys"] = r; x["sek"] = round(time.time() - pr)
         rezultatai.append(x)
         print(("GERAI " if x["gerai"] else "KRITO ") + r + " | " + x["busena"] + " | " + str(x["sek"]) + " s", flush=True)
         for k in x["krito"]: print("    - " + k, flush=True)
+        rasyk_santrauka("| %s %s | %s | %s s |\n" % ("✅" if x["gerai"] else "❌", r, x["busena"].replace("|", "/"), x["sek"]))
     srv.shutdown()
     blogi = [x for x in rezultatai if not x["gerai"]]
-    santrauka = os.environ.get("GITHUB_STEP_SUMMARY")
-    if santrauka:
-        with open(santrauka, "a", encoding="utf-8") as f:
-            f.write("## G-Procure testai\n\n| Rinkinys | Būsena | Laikas |\n|---|---|---|\n")
-            for x in rezultatai:
-                f.write("| %s %s | %s | %s s |\n" % ("✅" if x["gerai"] else "❌", x["rinkinys"], x["busena"].replace("|", "/"), x["sek"]))
-            for x in blogi:
-                for k in x["krito"]: f.write("\n- **%s**: %s" % (x["rinkinys"], k.replace("|", "/")))
-            f.write("\n")
+    rasyk_santrauka("".join("\n- **%s**: %s" % (x["rinkinys"], k.replace("|", "/")) for x in blogi for k in x["krito"]) + "\n")
     print("\n%d rinkinių, kritusių: %d" % (len(rezultatai), len(blogi)))
     sys.exit(1 if blogi else 0)
 
