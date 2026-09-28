@@ -17,6 +17,13 @@
  *    (shared/backup.js), tad perrašius pagrindinį raktą duomenys nedingsta.
  *  - rasyk() grąžina { ok, klaida }: „Išsaugota“ rodoma tik pavykus.
  *  - Saugykla gali būti paduota iš išorės (testai nenaudoja tikros).
+ *  - Du to paties modulio skirtukai (2026-09-28): moduliai, kurie laiko visą būseną atmintyje
+ *    ir įrašo ją visą, iki tol tyliai perrašydavo kito skirtuko pakeitimus (laimėdavo paskutinis
+ *    įrašęs). Su { kitasSkirtukas: "Žmogui suprantamas pavadinimas" } skaityk() ir rasyk() įsimena
+ *    šio lango matytą reikšmę (arba prisimink(), jei modulis skaito pats; pavadinimas gali būti ir
+ *    funkcija - dvikalbiams moduliams); jei kitas skirtukas ją
+ *    pakeitė, rasyk() neperrašo - { ok: false, kodas: "kitas-skirtukas" } - o vos pakeitus (storage
+ *    įvykis) viršuje rodoma juosta su „Perkrauti“.
  *
  * Naudojimas:
  *   const r = GP_SAUGYKLA.skaityk("epsog_mpp_v1");
@@ -30,6 +37,7 @@
   "use strict";
 
   var ZYME = ".sugadinta-";
+  var MATYTA = {};            // raktas -> { zalia, pav }: ką šis langas paskutinį kartą matė (tik su kitasSkirtukas)
 
   function saugykla(s) {
     if (s) return s;
@@ -65,6 +73,7 @@
     var zalia;
     try { zalia = s.getItem(raktas); }
     catch (e) { return { busena: "neprieinama", kodas: "neprieinama", klaida: (e && e.message) || "naršyklės saugykla neprieinama" }; }
+    if (o.kitasSkirtukas && !o.saugykla) isimink(raktas, zalia, o.kitasSkirtukas);
     if (zalia === null || zalia === undefined) return { busena: "nera" };
     var reiksme;
     try { reiksme = JSON.parse(zalia); }
@@ -86,14 +95,54 @@
     o = o || {};
     var s = saugykla(o.saugykla);
     if (!s) return { ok: false, kodas: "neprieinama", klaida: "naršyklės saugykla neprieinama" };
+    var tekstas = typeof reiksme === "string" && o.zalia ? reiksme : JSON.stringify(reiksme);
+    if (o.kitasSkirtukas && Object.prototype.hasOwnProperty.call(MATYTA, raktas)) {
+      var dabar;
+      try { dabar = s.getItem(raktas); } catch (e) { dabar = MATYTA[raktas].zalia; }
+      // Kitas skirtukas pakeitė, ką šis langas matė: neperrašom jo pakeitimų. Ne konfliktas: tas pats turinys ir pašalintas
+      // raktas (moduliai „Išvalyti“ / „Naujas“ patys jį šalina tiesiogiai; blogiausiu atveju grąžinamas išvalytas, bet niekas neprarandama)
+      if (dabar !== null && dabar !== MATYTA[raktas].zalia && dabar !== tekstas) {
+        rodykKitaSkirtuka(raktas);
+        return { ok: false, kodas: "kitas-skirtukas", klaida: "duomenys pakeisti kitame šios naršyklės skirtuke" };
+      }
+    }
     try {
-      s.setItem(raktas, typeof reiksme === "string" && o.zalia ? reiksme : JSON.stringify(reiksme));
+      s.setItem(raktas, tekstas);
+      if (o.kitasSkirtukas && !o.saugykla) isimink(raktas, tekstas, o.kitasSkirtukas);
       return { ok: true };
     } catch (e) {
       var pilna = e && (e.name === "QuotaExceededError" || e.code === 22 || /quota/i.test(String(e.message)));
       return { ok: false, kodas: pilna ? "pilna" : "kita", klaida: pilna ? "naršyklės saugykla pilna" : ((e && e.message) || "įrašyti nepavyko") };
     }
   }
+
+  /* Kas matyta šiame lange; pirmą kartą - ir klausomasi kitų skirtukų (storage įvykis ateina tik į KITUS langus). */
+  var klausoma = false;
+  function isimink(raktas, zalia, pav) {
+    MATYTA[raktas] = { zalia: zalia === undefined ? null : zalia, pav: (typeof pav === "string" || typeof pav === "function") ? pav : "" };
+    if (klausoma || !global.addEventListener) return;
+    klausoma = true;
+    global.addEventListener("storage", function (e) {
+      // Pašalinimas ar visos saugyklos išvalymas (e.key null) - ne konfliktas (žr. rasyk), juostos nerodom
+      if (e.key === null || e.newValue === null || !Object.prototype.hasOwnProperty.call(MATYTA, e.key)) return;
+      if (e.newValue === MATYTA[e.key].zalia) return;
+      rodykKitaSkirtuka(e.key);
+    });
+  }
+  /* Modulis skaito pats (ne per skaityk): įsimenama dabartinė reikšmė. */
+  function prisimink(raktas, pav, o) {
+    var s = saugykla(o && o.saugykla);
+    if (!s || (o && o.saugykla)) return;
+    try { isimink(raktas, s.getItem(raktas), pav); } catch (e) { /* neprieinama - nėra ko saugoti */ }
+  }
+  function rodykKitaSkirtuka(raktas) {
+    if (!global.GP_BUSENA || !global.GP_BUSENA.juosta) return;
+    var pav = (MATYTA[raktas] && MATYTA[raktas].pav) || "";          // tekstas arba funkcija (dvikalbiams moduliams)
+    global.GP_BUSENA.juosta({ raktas: "kitas-skirtukas-" + raktas, tipas: "nezinoma",
+      tekstas: function () { return pranesimas({ ok: false, kodas: "kitas-skirtukas", juosta: true }, typeof pav === "function" ? pav() : pav); },
+      mygtukai: [{ tekstas: function () { return en() ? "Reload" : "Perkrauti"; }, veiksmas: function () { global.location.reload(); } }] });
+  }
+  function en() { return typeof document !== "undefined" && /^en/i.test(document.documentElement.getAttribute("lang") || ""); }
 
   /* Priežastis angliškai: moduliai paduoda lietuvišką (tikrink), todėl EN - pagal kodą, ne tekstą. */
   var KODAI_EN = { json: "the record is not valid JSON", sandara: "the record has an unexpected structure",
@@ -103,6 +152,12 @@
   function pranesimas(r, pav) {
     if (!r) return "";
     var en = typeof document !== "undefined" && /^en/i.test(document.documentElement.getAttribute("lang") || "");
+    if (r.kodas === "kitas-skirtukas") {
+      var kas = pav ? (en ? "The \u201C" + pav + "\u201D data" : "Duomenys „" + pav + "“") : (en ? "The data" : "Duomenys");
+      if (r.juosta) return en ? kas + " changed in another tab of this browser. Reload the page to see the latest data - until you do, changes here are not saved, so as not to overwrite those."
+                              : kas + " pakeisti kitame šios naršyklės skirtuke. Perkraukite puslapį, kad matytumėte naujausius duomenis - kol neperkrausite, pakeitimai čia neišsaugomi, kad nebūtų perrašyti anie.";
+      return en ? "Not saved: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " changed in another tab of this browser - reload the page." : "Neišsaugota: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " pakeisti kitame šios naršyklės skirtuke - perkraukite puslapį.";
+    }
     if (en) {
       var what = pav ? "\u201C" + pav + "\u201D" : "saved data";
       var why = KODAI_EN[r.kodas] || (r.kodas === "kita" ? "the write failed" : "unknown reason");
@@ -128,5 +183,5 @@
     return "";
   }
 
-  global.GP_SAUGYKLA = { skaityk: skaityk, rasyk: rasyk, pranesimas: pranesimas, ZYME: ZYME };
+  global.GP_SAUGYKLA = { skaityk: skaityk, rasyk: rasyk, pranesimas: pranesimas, prisimink: prisimink, ZYME: ZYME };
 })(typeof window !== "undefined" ? window : this);
