@@ -151,7 +151,13 @@
     return String(s == null ? "" : s).toLowerCase().replace(/[ąčęėįšųūž]/g, function (c) { return LT_MAP[c]; });
   }
 
-  function yraData(s) { return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + "T00:00:00Z")); }
+  /* Date.parse priima ir neegzistuojančias datas (2026-02-30 -> kovo 2, 2026-04-31 -> gegužės 1), todėl tikrinama atgaline
+     konversija, kaip pirkimo-kortele.js (2026-09-28; iki tol tokia registro data klaida nelaikyta). */
+  function yraData(s) {
+    if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    var t = Date.parse(s + "T00:00:00Z"), d = new Date(t);
+    return !isNaN(t) && d.getUTCFullYear() === +s.slice(0, 4) && d.getUTCMonth() + 1 === +s.slice(5, 7) && d.getUTCDate() === +s.slice(8, 10);
+  }
   function dienaISO(d) {
     var x = d instanceof Date ? d : new Date(d || Date.now());
     var m = x.getMonth() + 1, dd = x.getDate();
