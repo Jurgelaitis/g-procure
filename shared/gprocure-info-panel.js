@@ -90,7 +90,7 @@
       ".gpi-btn{white-space:nowrap}.gpi-btn svg{width:15px;height:15px;flex-shrink:0}",
       /* Siaurame ekrane mygtukai - į naują eilutę; kitaip pavadinimas ir aprašas suspaudžiami
          į 16-35 px stulpelį po vieną žodį (PP-esg ir PP-carbon telefone) */
-      "@media(max-width:640px){.gpi-head{flex-wrap:wrap}.gpi-titles{flex:1 1 calc(100% - 50px)}.gpi-actions{flex-basis:100%;justify-content:flex-end}}",
+      "@media(max-width:640px){.gpi-head{flex-wrap:wrap}.gpi-titles{flex:1 1 calc(100% - 50px)}.gpi-actions{flex-basis:100%;justify-content:flex-end;flex-wrap:wrap}}",   // flex-wrap: 320 px „Suskleisti“ buvo nukirptas (2026-09-29)
       /* Telefone žingsniai be 66 px įtraukos po ikona - kitaip tekstui liko ~230 px (Q4, 2026-09-26) */
       "@media(max-width:640px){.gpi .gpi-head{padding:12px 16px}.gpi .gpi-inner{padding:0 16px 16px}}",
       ".gpi-chev{width:15px;height:15px;transition:transform 200ms ease}",
