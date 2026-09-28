@@ -952,6 +952,55 @@ async function testaiPerziura(){
   });
 }
 
+/* Saugomi naudotojo tekstai į HTML - tik ekranuoti (2026-09-28). Pirkimo numeris, pavadinimas, tiekėjai ir vardai gali ateiti
+   iš kopijos failo, pirkimų importo ar kortelės (CVP IS skelbimo PDF). Žymeklis <img onerror> neturi nei atsirasti, nei suveikti,
+   o numeris su kabutėmis neturi sulaužyti perėjimų (onclick). Iki tol pavadinimas su <img onerror> vykdė kodą sąraše ir kortelėje. */
+async function testaiEkranavimas(){
+  grupe("Saugomi tekstai rodomi kaip tekstas, ne HTML");
+  await testas("Numeris su kabutėmis ir pavadinimas, tiekėjas, naudotojas su <img onerror>: sąrašas, kortelė, protokolas, pranešimai, auditas, kopijavimo langas ir importo peržiūra - tekstas; perėjimai veikia", async () => {
+    const ZYM = `"'><img src=x onerror="parent.__ppXss.push(1)">`;
+    window.__ppXss = [];
+    const id = `TEST-X'"<b>1`, pav = "Kenkėjiškas pirkimas " + ZYM;
+    W.saveProcurementData(id, Object.assign(pirkimas("atviras_tarptautinis"), { id, name: pav, korteles_data: "2026-09-01" + ZYM }));
+    localStorage.setItem("litgrid_user_profile_v1", JSON.stringify({ name: "Vardenis " + ZYM, email: "" }));
+    const st = W.loadNotifStore();
+    st[id] = [{ id: `notif-X'"1`, templateId: "12_atmetimas", pkId: id, sourceProtocolId: "A1", tiekejas: "UAB " + ZYM, lang: "lt", title: "Pranešimas " + ZYM,
+      bodyLt: "Tekstas " + ZYM + "\n<table><tr><td><img src=x onerror=\"parent.__ppXss.push(2)\"></td></tr></table>", data: {}, createdAt: "2026-09-28", status: "draft", templateVersion: "1" }];
+    W.saveNotifStore(st);
+    W.showPage("page-dashboard"); W.renderDashboard(); await lauk(100);
+    const korta = [...D.querySelectorAll(".pk-card")].find(k => k.textContent.includes("Kenkėjiškas pirkimas"));
+    tiesa(korta, "pirkimas sąraše");
+    lygu([korta.querySelector(".pk-badge").textContent, korta.querySelector("h3").textContent.includes(pav)], [id, true], "sąrašas");
+    korta.click(); await lauk(250);
+    lygu([W.eval("currentPkId"), D.querySelector("#detail-header h2").textContent, D.querySelector("#proto-sequence strong").textContent], [id, pav, id], "kortelė (perėjimas iš sąrašo)");
+    const prio = D.querySelector('#detail-header select[aria-label="Prioritetas"]');
+    prio.value = "urgent"; prio.dispatchEvent(new W.Event("change")); await lauk(100);
+    lygu(W.getProcurement(id).priority, "urgent", "prioriteto keitimas (onchange su numeriu)");
+    D.querySelector(".proto-item").click(); await lauk(300);
+    lygu([D.querySelector(".page.active") && D.querySelector(".page.active").id, W.eval("currentProtoId")], ["page-proto", "A1"], "protokolas (perėjimas)");
+    W.openPranesimaiPage(); await lauk(150); W.switchPnTab("list"); await lauk(100);
+    const pn = D.querySelector(".notification-item");
+    tiesa(pn && pn.textContent.includes("UAB " + ZYM), "pranešimų sąrašas: " + (pn && pn.textContent.slice(0, 120)));
+    pn.querySelector('button[aria-label="Peržiūrėti pranešimą"]').click(); await lauk(150);
+    const perz = D.getElementById("pn-preview-container").textContent;
+    tiesa(perz.includes("Tekstas " + ZYM) && perz.includes("<table>"), "peržiūra: tekstas ir <table> iš duomenų - kaip tekstas");
+    W.openGlobalAudit(); await lauk(150);
+    tiesa([...D.querySelectorAll(".audit-log__entry")].some(e => e.textContent.includes("Vardenis " + ZYM)), "auditas: naudotojo vardas tekstu");
+    W.openCopyModal(); await lauk(100);
+    const kop = [...D.querySelectorAll(".copy-source-item")].find(e => e.getAttribute("data-pk-id") === id);
+    tiesa(kop && kop.textContent.includes(id + " - " + pav), "kopijavimo langas");
+    kop.click(); await lauk(100);
+    W.showImportPreview([{ id: "IMP-1" + ZYM, name: "Importas " + ZYM, type: "atviras_tarptautinis", val_ex: 1000, kom_chair: "P. " + ZYM },
+      { id: "IMP-2" + ZYM, name: "Blogas " + ZYM, type: "kitas" + ZYM, val_ex: 1, kom_chair: "P." }]); await lauk(100);
+    const imp = D.getElementById("import-modal").textContent;
+    tiesa(imp.includes("Importas " + ZYM) && imp.includes("Blogas " + ZYM), "importo peržiūra");
+    W.closeImportModal();
+    await lauk(200);
+    lygu([D.querySelectorAll('img[src="x"]').length, window.__ppXss.length], [0, 0], "žymeklis neatsirado ir nesuveikė");
+    delete window.__ppXss;
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -967,6 +1016,7 @@ async function testaiPerziura(){
     await testaiTeise();
     await testaiTurinys();
     await testaiPerziura();
+    await testaiEkranavimas();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
