@@ -23,12 +23,12 @@
 
   var TEKSTAI = {
     lt: {
-      veiksmas: "Nepavyko įkelti bibliotekos „{p}“, todėl šis veiksmas negalimas. Priežastis: nėra interneto ryšio arba tinklas blokuoja bibliotekų serverį (cdnjs.cloudflare.com, cdn.jsdelivr.net). Perkraukite puslapį; jei kartojasi - kreipkitės į IT.",
-      diagrama: "Diagrama nerodoma: nepavyko įkelti bibliotekos „{p}“ (nėra ryšio arba tinklas blokuoja bibliotekų serverį). Perkraukite puslapį, kai ryšys bus."
+      veiksmas: "Nepavyko įkelti bibliotekos „{p}“, todėl šis veiksmas negalimas. Priežastis: nėra interneto ryšio arba tinklas blokuoja bibliotekų serverius (cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com, cdn.sheetjs.com). Perkraukite puslapį; jei kartojasi - kreipkitės į IT.",
+      diagrama: "Diagrama nerodoma: nepavyko įkelti bibliotekos „{p}“ (nėra ryšio arba tinklas blokuoja bibliotekų serverius). Perkraukite puslapį, kai ryšys bus."
     },
     en: {
-      veiksmas: "The “{p}” library could not be loaded, so this action is unavailable. Reason: no internet connection or the network blocks the library server (cdnjs.cloudflare.com, cdn.jsdelivr.net). Reload the page; if it persists, contact IT.",
-      diagrama: "Chart not shown: the “{p}” library could not be loaded (no connection or the network blocks the library server). Reload the page when the connection is back."
+      veiksmas: "The “{p}” library could not be loaded, so this action is unavailable. Reason: no internet connection or the network blocks the library servers (cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com, cdn.sheetjs.com). Reload the page; if it persists, contact IT.",
+      diagrama: "Chart not shown: the “{p}” library could not be loaded (no connection or the network blocks the library servers). Reload the page when the connection is back."
     }
   };
 

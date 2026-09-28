@@ -273,13 +273,22 @@
     var raktas = String(o.raktas || "bendra");
     var el = null;
     for (var i = 0; i < dez.children.length; i++) if (dez.children[i].getAttribute("data-gpb-raktas") === raktas) el = dez.children[i];
+    var n = isspresk(o), tipas = o.tipas || "eiga";
+    // Ta pati juosta (tipas, tekstas, be mygtukų) neperpiešiama: kartojamas nepavykęs įrašas (automatinis saugojimas kiekvienu
+    // klavišu) iki 2026-09-28 ją perpiešdavo kaskart, o ekrano skaitytuvas tą patį pranešimą kartodavo
+    var beMygtuku = function (x) { return !x || (!(x.mygtukai && x.mygtukai.length) && !x.kartoti && !x.atsaukti); };
+    if (el && !el.hidden && el._gpbO && el._gpbTipas === tipas && el._gpbTekstas === n.tekstas && !!el._gpbO.html === !!o.html
+        && beMygtuku(o) && beMygtuku(el._gpbO)) {
+      el._gpbO = o;
+      return { el: el, atnaujink: function () {}, eiga: function () {}, slepk: function () { slepk(el); } };
+    }
     if (!el) { el = document.createElement("div"); el.setAttribute("data-gpb-raktas", raktas); dez.appendChild(el); }
-    el._gpbO = o;
+    el._gpbO = o; el._gpbTipas = tipas; el._gpbTekstas = n.tekstas;
     if (!juostuStebetojas && typeof MutationObserver !== "undefined") {
       juostuStebetojas = new MutationObserver(perpieskJuostas);
       juostuStebetojas.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
     }
-    return rodyk(el, isspresk(o));
+    return rodyk(el, n);
   }
   function juostaSlepk(raktas) {
     var dez = document.getElementById("gpb-juostos");

@@ -19,10 +19,20 @@
 
   var pazadas = null;
 
+  // Klaidos tekstas žmogui pagal <html lang> (iki 2026-09-28 - tik lietuviškai, su naršyklės „Failed to fetch“)
+  function en() { return !!(global.document && /^en/i.test(global.document.documentElement.getAttribute("lang") || "")); }
+  function klaidosTekstas() {
+    return en() ? "Part of the PDF reading library (the pdf.js worker) could not be loaded: no internet connection, the network blocks cdnjs.cloudflare.com, or the file on the server has changed (security check). PDFs cannot be read - reload the page; if it persists, contact IT."
+                : "Nepavyko įkelti PDF skaitymo bibliotekos dalies (pdf.js darbininko): nėra interneto ryšio, tinklas blokuoja cdnjs.cloudflare.com arba failas serveryje pakeistas (saugumo patikra). PDF neskaitomas - perkraukite puslapį; jei kartojasi - kreipkitės į IT.";
+  }
+
   // -> Promise su blob: adresu; nustato pdfjsLib.GlobalWorkerOptions.workerSrc. Nepavykus (tinklas, kita maiša) -
   // klaida, adresas nekeičiamas, o kitas kvietimas bando iš naujo.
   function nustatyk() {
-    if (!global.pdfjsLib) return Promise.reject(new Error("PDF skaitymo biblioteka (pdf.js) neįkelta"));
+    if (!global.pdfjsLib) {
+      return Promise.reject(new Error(global.GP_BIBLIOTEKOS ? global.GP_BIBLIOTEKOS.tekstas("veiksmas", "pdf.js (PDF)")
+        : (en() ? "The PDF reading library (pdf.js) could not be loaded - reload the page." : "Nepavyko įkelti PDF skaitymo bibliotekos (pdf.js) - perkraukite puslapį.")));
+    }
     if (!pazadas) {
       pazadas = global.fetch(api.SRC, { integrity: api.SRI, mode: "cors", credentials: "omit" })
         .then(function (r) {
@@ -32,7 +42,8 @@
         .then(function (b) { return global.URL.createObjectURL(new Blob([b], { type: "text/javascript" })); })
         .catch(function (e) {
           pazadas = null;
-          throw new Error("PDF skaitymo bibliotekos dalis (darbininkas) nepasiekiama arba pakeista: " + ((e && e.message) || e));
+          if (global.console) global.console.warn("pdf.js darbininkas:", e);   // techninė priežastis - konsolėje, žmogui - tekstas
+          throw new Error(klaidosTekstas());
         });
     }
     return pazadas.then(function (u) { global.pdfjsLib.GlobalWorkerOptions.workerSrc = u; return u; });
