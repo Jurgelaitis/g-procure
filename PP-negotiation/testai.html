@@ -248,6 +248,7 @@ async function testaiKortele(){
    Rasta ir ištaisyta: tekstinis langelis „1.500,50“ ar „1,500.50“ virsdavo 1,5 (kaina ir kiekis), „0,125“ - teisingai tik atsitiktinai. */
 async function testaiSkaiciai(){
   grupe("Statistika, scenarijai ir skaičių formatai importe");
+  await modulis();   // ankstesnė grupė rėmelį pašalina - be naujo W būtų atjungtas langas (be File, XLSX veikimo)
   await testas("Statistika: mediana (lyginis ir nelyginis kiekis), standartinis nuokrypis (n - 1), kvartiliai ir išskirtys (1,5 × IQR)", async () => {
     const st = W.eval("stats");
     lygu([st.median([3, 1, 2]), st.median([4, 1, 3, 2]), st.median([])], [2, 2.5, null], "mediana");
@@ -277,6 +278,28 @@ async function testaiSkaiciai(){
     tiesa(b.ok && b.total === 1234567.89, "bendras pasiūlymas: " + JSON.stringify(b).slice(0, 200));
     const us = W.extractFromRows([["Commercial offer"], ["Total: 1,234,567.89 EUR excl. VAT"]], "c", "gama.xlsx");
     tiesa(us.ok && us.total === 1234567.89, "bendras pasiūlymas EN formatu: " + JSON.stringify(us).slice(0, 200));
+  });
+
+  await testas("Bendras pasiūlymas be lentelės: suma nesiplečia per skyrybą ar tarpą į kitą skaičių, skaitinis langelis lieka skaičiumi („12 345,67, PVM“ nevirsta 1 234 567)", async () => {
+    projektas();
+    const t = W.extractFromRows([["Kaina be PVM: 12 345,67, PVM: 2 592,59, iš viso: 14 938,26."]], "a", "alfa.pdf");
+    tiesa(t.ok && t.total === 14938.26, "skyryba po sumos: " + JSON.stringify(t).slice(0, 200));
+    const p = W.extractFromRows([["Iš viso 14 938,26 2 lapas"], ["Pasiūlymas galioja 90 dienų"]], "b", "beta.pdf");
+    tiesa(p.ok && p.total === 14938.26, "kitas skaičius toje pačioje eilutėje: " + JSON.stringify(p).slice(0, 200));
+    const x = W.extractFromRows([["Komercinis pasiūlymas", null], ["Iš viso", 14999.99 / 1.21]], "c", "gama.xlsx");
+    tiesa(x.ok && x.total === 14999.99 / 1.21, "skaitinis Excel langelis: " + JSON.stringify(x).slice(0, 200));
+    const n = W.extractFromRows([["Suma: 1 234 567 EUR, 2026 m."]], "d", "delta.pdf");
+    tiesa(n.ok && n.total === 1234567, "tūkstančiai tarpais: " + JSON.stringify(n).slice(0, 200));
+    const m = W.extractFromRows([["Pasiūlymas galioja 90 dienų"], ["2 lapas"]], "e", "epsilon.pdf");
+    tiesa(!m.ok, "vien maži skaičiai (dienos, lapai) - ne pasiūlymo suma: " + JSON.stringify(m).slice(0, 200));
+  });
+
+  await testas("CSV pasiūlymas: kiekiai ir įkainiai iš langelio teksto (LT ir EN formatai) - SheetJS spėjimas „1.500,50“ = 1,5005 nenaudojamas", async () => {
+    tiesa(W.XLSX, "Excel biblioteka neįsikėlė (reikia interneto)");
+    projektas();
+    const csv = new W.File([new TextEncoder().encode("Pavadinimas;Kiekis;Kaina\nTransformatorius;2;1.500,50\nKabelis;1 000;1,500.50\n")], "alfa.csv");
+    const c = await W.parseSpreadsheet(csv, "a");
+    lygu(c.positions.map(p => [p.name, p.qty, p.price]), [["Transformatorius", 2, 1500.5], ["Kabelis", 1000, 1500.5]], "CSV kiekiai ir įkainiai");
   });
 }
 

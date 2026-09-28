@@ -2591,7 +2591,8 @@ async function parseFile(file, supplierId) {
 
 async function parseSpreadsheet(file, supplierId) {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
+  // raw: true - CSV langeliai lieka tekstu (be jo SheetJS pats „1.500,50“ paverčia 1,5005); xlsx ir xls langelių nekeičia
+  const wb = XLSX.read(buf, { type: 'array', raw: true });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
   return extractFromRows(rows, supplierId, file.name);
@@ -2639,17 +2640,20 @@ function extractFromRows(rows, supplierId, fileName) {
   }
 
   if (headerIdx < 0) {
-    const flat = rows.flat().filter(v => v != null).map(v => v.toString()).join(' ');
-    const numMatch = flat.match(/(\d[\d\s.,]{3,})\s*(?:EUR|€|eur)?/gi);
-    if (numMatch && numMatch.length) {
-      const numbers = numMatch.map(s => {
-        const n = GP_MONEY.parseEUR(s.replace(/EUR|€|eur/gi, ''));   // pinigai: 1.500,50 ir 1,500.50
-        return n == null ? 0 : n;
-      }).filter(n => n > 100);
-      if (numbers.length) {
-        const maxNum = Math.max(...numbers);
-        return { ok: true, fixed: { totalPrice: maxNum }, total: maxNum, fileName, message: 'Aptiktas tikėtinas bendras pasiūlymas (be detalių pozicijų). Įrašyta į „Bendras pasiūlymas" lentelę.' };
-      }
+    // Bendras pasiūlymas be lentelės: skaitinis langelis - jau skaičius, tekstas - sumos iš jo (12 345,67; 1.500,50; 1,500.50).
+    // Suma nesiplečia per skyrybą ar tarpą į kitą skaičių: iki 2026-09-28 „12 345,67, PVM“ virsdavo 1 234 567, „14 938,26 2 lapas“ -
+    // 14 938 262, o Excel skaičius 12396.685950413223 - 12 396 685 950 413 223
+    const sumos = [];
+    rows.flat().forEach(v => {
+      if (typeof v === 'number') { if (isFinite(v)) sumos.push(v); return; }
+      if (v == null) return;
+      (String(v).match(/\d{1,3}(?:[\s.,]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+(?:[.,]\d{1,2})?(?!\d)/g) || [])
+        .forEach(t => { const n = GP_MONEY.parseEUR(t); if (n != null) sumos.push(n); });   // pinigai: 1.500,50 ir 1,500.50
+    });
+    const numbers = sumos.filter(n => n > 100);
+    if (numbers.length) {
+      const maxNum = Math.max(...numbers);
+      return { ok: true, fixed: { totalPrice: maxNum }, total: maxNum, fileName, message: 'Aptiktas tikėtinas bendras pasiūlymas (be detalių pozicijų). Įrašyta į „Bendras pasiūlymas" lentelę.' };
     }
     return { ok: false, error: 'Nepavyko aptikti lentelės. Patikrinkite, ar failas turi antraštes „Pavadinimas", „Kiekis", „Kaina".' };
   }
