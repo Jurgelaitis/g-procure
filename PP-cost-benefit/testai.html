@@ -731,17 +731,25 @@ testas("Du skirtukai", "Kitam skirtukui pakeitus skaičiuoklę - juosta su „Pe
   w.GP_BUSENA.juostaSlepk("kitas-skirtukas-" + K); w.GP_BUSENA.juostaSlepk("irasymas");
 });
 
-testas("Du skirtukai", "KNA: kitam skirtukui pakeitus analizę, šio skirtuko išsaugojimas jos neperrašo - pranešimas su priežastimi (iki 2026-09-28 laimėdavo paskutinis įrašęs)", async ()=>{
+testas("Du skirtukai", "KNA: kitam skirtukui pakeitus analizę, šio skirtuko išsaugojimas jos neperrašo; juostos „Atverti naujausią analizę“ įkelia kito skirtuko analizę, tada įrašoma (iki 2026-09-28 laimėdavo paskutinis įrašęs; perkrovus KNA rodydavo tuščią)", async ()=>{
   const APS = GP_TESTU_APSAUGA.pradek(k => k === "litgrid_cba");
-  localStorage.setItem("litgrid_cba", JSON.stringify({ bandymas: "pradinis" }));
-  const { f, w } = await remelisSuKortele("kastu_naudos_analize.html");
-  const gauta = [], rodyk = w.GP_PRANESIMAS.rodyk;
+  localStorage.removeItem("litgrid_cba");
+  const { f, w, d } = await remelisSuKortele("kastu_naudos_analize.html");
+  const gauta = [], rodyk = w.GP_PRANESIMAS.rodyk, K = "litgrid_cba", juosta = () => d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]');
   w.GP_PRANESIMAS.rodyk = (t, o) => { gauta.push([String(t), (o && o.tipas) || ""]); return rodyk.call(w.GP_PRANESIMAS, t, o); };
   try {
-    localStorage.setItem("litgrid_cba", JSON.stringify({ bandymas: "kitas skirtukas" }));    // šis langas įkeliant matė „pradinis“
-    w.saveData();
-    lygu([JSON.parse(localStorage.getItem("litgrid_cba")).bandymas, gauta.some(([t, tip]) => /pakeisti kitame šios naršyklės skirtuke/.test(t) && /error|klaida/.test(tip))],
-         ["kitas skirtukas", true], "pranešimai: " + JSON.stringify(gauta));
+    d.getElementById("proc_name").value = "Pirmas"; w.saveData();                          // šis skirtukas įrašė
+    const kito = JSON.parse(localStorage.getItem(K)); kito.formData.proc_name = "Kito skirtuko analizė";
+    localStorage.setItem(K, JSON.stringify(kito));                                           // kitas skirtukas
+    d.getElementById("proc_name").value = "Pirmas 2"; w.saveData();
+    lygu([JSON.parse(localStorage.getItem(K)).formData.proc_name, gauta.some(([t, tip]) => /pakeisti kitame šios naršyklės skirtuke/.test(t) && /error|klaida/.test(tip))],
+         ["Kito skirtuko analizė", true], "neperrašyta: " + JSON.stringify(gauta));
+    for (let i = 0; i < 100 && !juosta(); i++) await lauk(40);
+    tiesa(juosta() && /Spauskite „Atverti naujausią analizę“/.test(juosta().textContent) && juosta().querySelector("button").textContent === "Atverti naujausią analizę", "juosta: " + (juosta() && juosta().textContent));
+    juosta().querySelector("button").click(); await lauk(50);
+    lygu([d.getElementById("proc_name").value, !!juosta()], ["Kito skirtuko analizė", false], "atverta kito skirtuko analizė, juosta nuimta");
+    d.getElementById("proc_name").value = "Kito skirtuko analizė, papildyta"; w.saveData();
+    lygu(JSON.parse(localStorage.getItem(K)).formData.proc_name, "Kito skirtuko analizė, papildyta", "atvėrus - įrašoma");
   } finally { w.GP_PRANESIMAS.rodyk = rodyk; f.remove(); APS.atkurk(); }
 });
 
