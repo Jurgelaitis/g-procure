@@ -50,14 +50,14 @@
 
   var VERSION = "0.1";
 
-  var METHODOLOGY = "2025 m. Projektu SESD metodika; GHG Protocol; EN 15804 (A1-A3)";
+  var METHODOLOGY = "2025 m. Projektų ŠESD metodika; GHG Protocol; EN 15804 (A1-A3)";
   var DISCLAIMER_INTERNAL =
-    "Vidaus dokumentas. Anglies vertinimas - pagalbine priemone, ne galutinis " +
-    "verdiktas. Sesseline CO2 kaina - patvirtinti su metodikos savininku. " +
-    "Faktoriai, pazymeti \"review\" arba \"laukia EPD\", dar tikslinami.";
+    "Vidaus dokumentas. Anglies vertinimas - pagalbinė priemonė, ne galutinis " +
+    "verdiktas. Šešėlinė CO2 kaina - patvirtinti su metodikos savininku. " +
+    "Faktoriai, pažymėti „review“ arba „laukia EPD“, dar tikslinami.";
   var DISCLAIMER_PUBLIC =
-    "Viesas pjuvis. Pateikiami tik apibendrinti anglies pedsako duomenys. " +
-    "Komercine informacija (tiekeju kainos ir tapatybe) nerodoma. Metodika: " +
+    "Viešas pjūvis. Pateikiami tik apibendrinti anglies pėdsako duomenys. " +
+    "Komercinė informacija (tiekėjų kainos ir tapatybė) nerodoma. Metodika: " +
     METHODOLOGY + ".";
 
   // --- Pagalbines ---
@@ -90,11 +90,11 @@
       var pct = total > 0 ? round(kg / total * 100, 1) : 0;
       return [str(s.label), fmtKg(kg), pct + " %"];
     });
-    rows.push(["IS VISO", fmtKg(total), "100 %"]);
+    rows.push(["IŠ VISO", fmtKg(total), "100 %"]);
     return {
-      heading: "Projekto SESD pagal etapus",
-      paragraphs: ["Bendras projekto siltnamio efekta sukelianciu duju kiekis (A1-A3 pagrindu): " + fmtT(kgToT(total)) + " CO2e."],
-      tables: [{ columns: ["Etapas", "SESD", "Dalis"], rows: rows }]
+      heading: "Projekto ŠESD pagal etapus",
+      paragraphs: ["Bendras projekto šiltnamio efektą sukeliančių dujų kiekis (A1-A3 pagrindu): " + fmtT(kgToT(total)) + " CO2e."],
+      tables: [{ columns: ["Etapas", "ŠESD", "Dalis"], rows: rows }]
     };
   }
 
@@ -110,8 +110,8 @@
     var pending = Array.isArray(data.pendingEpd) ? data.pendingEpd : [];
     if (pending.length) {
       sections.push({
-        heading: "Pozicijos, laukiancios EPD",
-        paragraphs: ["Sios pozicijos NEitrauktos i bendra suma, kol negautas gamintojo EPD:"],
+        heading: "Pozicijos, laukiančios EPD",
+        paragraphs: ["Šios pozicijos NEįtrauktos į bendrą sumą, kol negautas gamintojo EPD:"],
         tables: [{ columns: ["Pozicija"], rows: pending.map(function (p) { return [str(p.label)]; }) }]
       });
     }
@@ -120,10 +120,10 @@
     var epd = Array.isArray(data.epdSources) ? data.epdSources : [];
     if (epd.length) {
       sections.push({
-        heading: "EPD saltiniai (audito pedsakas)",
-        paragraphs: ["AI istrauktos ir vertintojo patvirtintos A1-A3 reiksmes:"],
+        heading: "EPD šaltiniai (audito pėdsakas)",
+        paragraphs: ["AI ištrauktos ir vertintojo patvirtintos A1-A3 reikšmės:"],
         tables: [{
-          columns: ["Faktorius", "Reiksme", "Vienetas", "Psl.", "Dokumentas"],
+          columns: ["Faktorius", "Reikšmė", "Vienetas", "Psl.", "Dokumentas"],
           rows: epd.map(function (e) {
             return [str(e.factorLabel), num(e.value).toString(), str(e.unit),
                     e.page ? String(e.page) : "-", str(e.fileName)];
@@ -140,7 +140,7 @@
         .map(function (o) {
           return [
             String(num(o.rank)),
-            str(o.name) + (o.missingData ? " (truksta PCF)" : ""),
+            str(o.name) + (o.missingData ? " (trūksta PCF)" : ""),
             fmtEur(o.bidPrice),
             fmtT(o.carbonT),
             fmtEur(o.carbonCost),
@@ -148,13 +148,13 @@
           ];
         });
       sections.push({
-        heading: "Pasiulymu vertinimas",
+        heading: "Pasiūlymų vertinimas",
         paragraphs: [
-          "Modelis: " + modelTxt + ". Sesseline CO2 kaina: " + num(ev.shadowPrice) + " EUR/t CO2e.",
-          ev.winner ? ("Geriausias pasiulymas: " + str(ev.winner.name) + ".") : ""
+          "Modelis: " + modelTxt + ". Šešėlinė CO2 kaina: " + num(ev.shadowPrice) + " EUR/t CO2e.",
+          ev.winner ? ("Geriausias pasiūlymas: " + str(ev.winner.name) + ".") : ""
         ].filter(Boolean),
         tables: [{
-          columns: ["Vieta", "Tiekejas", "Kaina", "Anglis", "Anglies kaina", "Pakoreguota kaina"],
+          columns: ["Vieta", "Tiekėjas", "Kaina", "Anglis", "Anglies kaina", "Pakoreguota kaina"],
           rows: rows
         }]
       });
@@ -162,7 +162,7 @@
 
     return {
       audience: "internal",
-      title: "Anglies pedsako ataskaita - vidaus vertinimas",
+      title: "Anglies pėdsako ataskaita - vidaus vertinimas",
       meta: projectMeta(data.project),
       sections: sections,
       disclaimer: DISCLAIMER_INTERNAL
@@ -185,24 +185,24 @@
         // Anonimizacija: realus vardas PAKEICIAMAS "Tiekejas N" pagal reitinga.
         return [
           String(num(o.rank, i + 1)),
-          "Tiekejas " + (i + 1),
+          "Tiekėjas " + (i + 1),
           fmtT(o.carbonT) + " CO2e"
         ];
       });
       sections.push({
-        heading: "Pasiulymu anglies pedsako palyginimas",
+        heading: "Pasiūlymų anglies pėdsako palyginimas",
         paragraphs: [
-          "Tiekeju pasiulymai ivertinti pagal viso gyvavimo ciklo anglies pedsaka. " +
-          "Tiekeju tapatybe ir kainos sioje viesoje versijoje nerodomos.",
+          "Tiekėjų pasiūlymai įvertinti pagal viso gyvavimo ciklo anglies pėdsaką. " +
+          "Tiekėjų tapatybė ir kainos šioje viešoje versijoje nerodomos.",
           "Vertinimo metodas: anglimi pakoreguota kaina (MEAT kriterijus)."
         ],
-        tables: [{ columns: ["Vieta", "Pasiulymas", "Anglies pedsakas"], rows: rows }]
+        tables: [{ columns: ["Vieta", "Pasiūlymas", "Anglies pėdsakas"], rows: rows }]
       });
     }
 
     return {
       audience: "public",
-      title: "Anglies pedsako ataskaita - viesas pjuvis",
+      title: "Anglies pėdsako ataskaita - viešas pjūvis",
       meta: projectMeta(data.project).filter(function (m) {
         // Viesai nerodom perkanciojo subjekto detaliu? Paliekam projekta ir metodika,
         // bet pasalinam koda (vidinis identifikatorius).
