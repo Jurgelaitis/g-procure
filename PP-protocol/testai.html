@@ -1008,6 +1008,44 @@ async function testaiEkranavimas(){
   });
 }
 
+/* 2026-09-28: importas priimdavo bet kokį JSON - kito modulio kopijos (derybų projekto, skaičiuoklės, atsarginės kopijos) raktai
+   būdavo įrašomi kaip pirkimai, o po perkrovimo pirkimų sąrašas lūždavo (getSequence: type undefined) ir modulis likdavo tuščias. */
+async function testaiImportas(){
+  grupe("Pirkimų importas ir neatpažinti saugyklos įrašai");
+  await testas("Importas: kito modulio ar sugadintas JSON - atmetamas, pirkimai nepakeisti; pirkimų kopija - įkeliama", async () => {
+    await modulis();
+    localStorage.setItem("litgrid_procurements_v2", JSON.stringify({ [PK]: pirkimas("atviras_tarptautinis") }));
+    const pries = localStorage.getItem("litgrid_procurements_v2"), pranesimai = [], tikrasToast = W.toast;
+    W.toast = (t, tipas) => { pranesimai.push(tipas + ": " + t); };
+    const importuok = async turinys => { W.importData({ target: { files: [new W.File([turinys], "kopija.json")] } }); await lauk(200); };
+    try {
+      for (const f of [JSON.stringify({ project: { name: "Derybos" }, suppliers: [] }), JSON.stringify({ app: "G-Procure", version: 1, items: {} }), "null", "[1,2]",
+                       JSON.stringify({ "X-1": null }), JSON.stringify({ "X-2": { name: "be būdo" } }), "ne json {", "{}"]) await importuok(f);
+      lygu([localStorage.getItem("litgrid_procurements_v2") === pries, pranesimai.map(p => p.slice(0, 4))], [true, Array(8).fill("err:")], "atmesti: " + pranesimai.join(" | "));
+      tiesa(/ne pirkimas: project, suppliers/.test(pranesimai[0]), "pranešime - ne pirkimai: " + pranesimai[0]);
+      const kitas = Object.assign(pirkimas("derybos_tarptautinis"), { id: "TEST-2026-002", name: "Importuotas pirkimas" });
+      await importuok(JSON.stringify({ "TEST-2026-002": kitas }));
+      lygu([Object.keys(JSON.parse(localStorage.getItem("litgrid_procurements_v2"))).sort(), pranesimai[pranesimai.length - 1]],
+           [[PK, "TEST-2026-002"], "ok: Duomenys importuoti sėkmingai"], "pirkimų kopija įkelta");
+    } finally { W.toast = tikrasToast; }
+  });
+
+  await testas("Saugykloje neatpažinti įrašai (iki pataisos importuoti): sąrašas rodo pirkimus ir juostą; įrašant jie lieka; „Pašalinti juos“ - pašalina tik juos", async () => {
+    localStorage.setItem("litgrid_procurements_v2", JSON.stringify({ [PK]: pirkimas("atviras_tarptautinis"), project: { name: "Derybos" }, "X-1": null, suppliers: [] }));
+    await modulis();
+    W.showPage("page-dashboard"); W.renderDashboard(); await lauk(100);
+    const juosta = () => D.querySelector('[data-gpb-raktas="neatpazinti"]');
+    lygu([D.querySelectorAll(".pk-card").length, !!juosta() && /\(3: project, X-1, suppliers\)/.test(juosta().textContent)], [1, true], "sąrašas ir juosta: " + (juosta() && juosta().textContent));
+    const p = W.getProcurement(PK); p.name = "Pakeistas pavadinimas"; W.saveProcurementData(PK, p);
+    lygu(Object.keys(JSON.parse(localStorage.getItem("litgrid_procurements_v2"))).sort(), [PK, "project", "X-1", "suppliers"].sort(), "įrašant - neatpažinti lieka");
+    const tikrasConfirm = W.confirm; W.confirm = () => true;
+    try { [...juosta().querySelectorAll("button")].find(b => /Pašalinti/.test(b.textContent)).click(); } finally { W.confirm = tikrasConfirm; }
+    await lauk(100);
+    const s = JSON.parse(localStorage.getItem("litgrid_procurements_v2"));
+    lygu([Object.keys(s), s[PK].name, !!juosta(), D.querySelectorAll(".pk-card").length], [[PK], "Pakeistas pavadinimas", false, 1], "pašalinti tik neatpažinti");
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -1024,6 +1062,7 @@ async function testaiEkranavimas(){
     await testaiTurinys();
     await testaiPerziura();
     await testaiEkranavimas();
+    await testaiImportas();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

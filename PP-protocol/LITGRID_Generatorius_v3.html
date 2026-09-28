@@ -1222,13 +1222,33 @@ function rasykSaugiai(raktas, pav, reiksme) {
   return r.ok;
 }
 const yraObjektas = v => (v && typeof v === 'object' && !Array.isArray(v)) || 'netinkama įrašo sandara';
+/* Pirkimo įrašas - objektas su būdu (type): be jo sąrašas, kortelė ir protokolai lūžta (pk.type.startsWith). Kiti saugyklos
+   įrašai (iki 2026-09-28 importas priimdavo bet kokį JSON ir jo raktus įrašydavo kaip pirkimus - po perkrovimo sąrašas
+   lūždavo) nerodomi, bet ir netrinami tyliai: įrašant jie paliekami, pašalina tik žmogus juostos mygtuku. */
+const yraPirkimas = v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.type === 'string';
+let NEATPAZINTI = {};
 function loadStore() {
-  return skaitykSaugiai(STORE_KEY, 'Pirkimai ir protokolai', {}, yraObjektas);
+  const s = skaitykSaugiai(STORE_KEY, 'Pirkimai ir protokolai', {}, yraObjektas), pirkimai = {};
+  NEATPAZINTI = {};
+  Object.keys(s).forEach(k => { if (yraPirkimas(s[k])) pirkimai[k] = s[k]; else NEATPAZINTI[k] = s[k]; });
+  rodykNeatpazintus();
+  return pirkimai;
 }
 function saveStore(data) {
   setSaveState('saving');
-  if (rasykSaugiai(STORE_KEY, 'Pirkimai ir protokolai', data)) setSaveState('saved');
+  if (rasykSaugiai(STORE_KEY, 'Pirkimai ir protokolai', Object.assign({}, NEATPAZINTI, data))) setSaveState('saved');
   else setSaveState('error');
+}
+function rodykNeatpazintus() {
+  const raktai = Object.keys(NEATPAZINTI);
+  if (!raktai.length) { GP_BUSENA.juostaSlepk('neatpazinti'); return; }
+  GP_BUSENA.juosta({ raktas: 'neatpazinti', tipas: 'nezinoma',
+    tekstas: 'Saugykloje yra įrašų, kurie nėra pirkimai (' + raktai.length + ': ' + raktai.slice(0, 5).join(', ') + (raktai.length > 5 ? ', ...' : '') +
+      '), tikėtina - importuotas kito modulio failas. Jie nerodomi ir nekeičiami.',
+    mygtukai: [{ tekstas: 'Pašalinti juos', veiksmas: () => {
+      if (!confirm('Pašalinti neatpažintus įrašus (' + raktai.length + ')? Pirkimai ir protokolai nebus paliesti.')) return;
+      const s = loadStore(); NEATPAZINTI = {}; saveStore(s); rodykNeatpazintus(); renderDashboard();
+    } }] });
 }
 function getProcurements() { return loadStore(); }
 function getProcurement(id) { return loadStore()[id]; }
@@ -1254,8 +1274,16 @@ function importData(evt) {
   if (!f) return;
   const r = new FileReader();
   r.onload = e => {
+    let d;
+    try { d = JSON.parse(e.target.result); } catch { toast('Klaida importuojant failą: tai ne JSON', 'err'); return; }
+    // Tik šio modulio pirkimų kopija (eksportas): kiekvienas įrašas - pirkimas. Kitas failas nieko nekeičia (iki 2026-09-28 jo
+    // raktai būdavo įrašomi kaip pirkimai, o po perkrovimo pirkimų sąrašas lūždavo)
+    const raktai = yraObjektas(d) === true ? Object.keys(d) : [], blogi = raktai.filter(k => !yraPirkimas(d[k]));
+    if (!raktai.length || blogi.length) {
+      toast('Failas nėra pirkimų kopija - niekas nepakeista' + (blogi.length ? ' (ne pirkimas: ' + blogi.slice(0, 3).join(', ') + ')' : ''), 'err');
+      return;
+    }
     try {
-      const d = JSON.parse(e.target.result);
       const store = loadStore();
       Object.assign(store, d);
       saveStore(store);
