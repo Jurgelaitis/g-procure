@@ -181,6 +181,25 @@ async function testaiEpd(){
     f.remove();
   });
 
+  await testas("EPD suvestinės kopijavimas: pavykus - mygtukas ir pranešimas „Nukopijuota“ (girdi ir ekrano skaitytuvas); nepavykus - langas kopijuoti ranka, mygtukas nemeluoja (iki 2026-09-28 - „Nukopijuota“ ir nepavykus)", async ()=>{
+    const { f } = await puslapis("epd.html?lang=lt", 1280);
+    const w = f.contentWindow, d = f.contentDocument;
+    try {
+      const gauta = [], rodyk = w.GP_PRANESIMAS.rodyk;
+      w.GP_PRANESIMAS.rodyk = (t, o) => { gauta.push([String(t), (o && o.tipas) || ""]); return rodyk.call(w.GP_PRANESIMAS, t, o); };
+      w._summary = "EPD suvestinė: 7 kg CO2e";
+      if (!d.getElementById("copyBtn")) d.body.insertAdjacentHTML("beforeend", '<button id="copyBtn"><span>Kopijuoti suvestinę</span></button>');   // mygtukas atsiranda po analizės
+      w.Object.defineProperty(w.navigator, "clipboard", { value: { writeText: () => w.Promise.resolve() }, configurable: true });
+      w.copySummary(); await laukti(60);
+      lygu([gauta.some(([t, tip]) => t === "Nukopijuota" && tip === "gerai"), d.querySelector("#copyBtn span").textContent], [true, "Nukopijuota"], "pavyko");
+      w.Object.defineProperty(w.navigator, "clipboard", { value: { writeText: () => w.Promise.reject(new Error("neleista")) }, configurable: true });
+      d.execCommand = () => false;
+      w.copySummary(); await laukti(60);
+      lygu([!!d.getElementById("gp-kopija-langas"), d.getElementById("gp-kopija-langas").querySelector("textarea").value, d.querySelector("#copyBtn span").textContent],
+           [true, "EPD suvestinė: 7 kg CO2e", "Nepavyko - pažymėkite ir Ctrl+C"], "nepavyko");
+    } finally { f.remove(); }
+  });
+
   await testas("Viešas EPD įrankis irgi taiso modelio JSON su lietuviška kabute citatoje (iki 2026-09-28 - tik index.html)", async ()=>{
     const { f } = await puslapis("epd.html?lang=lt", 1280);
     try {
