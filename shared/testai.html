@@ -283,6 +283,16 @@ async function testaiKopija(){
       tiesa(zin.textContent.includes("Failas iš " + vt.getFullYear() + "-" + p2(vt.getMonth() + 1) + "-" + p2(vt.getDate())), "vietinė data: " + zin.textContent);
       zin = await ikelk({ app: "G-Procure", version: 1, createdAt: null, items: { "ok": "tekstas" } });
       tiesa(!/1970/.test(zin.textContent), "be datos - ne 1970-01-01: " + zin.textContent);
+      // Nepavykus dalį įrašyti - pasakoma, KURIE duomenys neatkurti (tikra saugykla nepaliečiama: netikra, lūžta dviem raktams)
+      const tikrasAtkurti = w.GP_BACKUP.atkurti, tikrasConfirm = w.confirm;
+      w.GP_BACKUP.atkurti = obj => tikrasAtkurti(obj, { getItem: () => null, setItem(k) { if (/^litgrid_pranesimai_audit|^zz_/.test(k)) throw new Error("QuotaExceededError"); } });
+      w.confirm = () => true;
+      try {
+        await ikelk({ app: "G-Procure", version: 1, createdAt: "2026-09-28T10:00:00Z", items: { "litgrid_procurements_v2": "{}", "litgrid_pranesimai_audit_v1": "[]", "zz_kita": "1" } });
+        d.getElementById("btn-atkurti").click(); await lauk(100);
+        const t = d.getElementById("perziura").textContent;
+        tiesa(/Atkurta 1 įrašų, 2 nepavyko/.test(t) && t.includes("Audito žurnalas (PP-protocol)") && t.includes("Kiti duomenys") && !t.includes("Pirkimai ir protokolai"), "žinutė: " + t);
+      } finally { w.GP_BACKUP.atkurti = tikrasAtkurti; w.confirm = tikrasConfirm; }
       await lauk(100);
       lygu(window.__gpXss.length, 0, "kodas neįvykdytas");
     } finally { f.remove(); delete window.__gpXss; }
@@ -302,10 +312,10 @@ async function testaiKopija(){
     lygu(st.getItem("c"), "nesusijes", "kitas raktas nepaliestas");
   });
 
-  await testas("Pilna saugykla praneša apie nepavykusius įrašus", async ()=>{
+  await testas("Pilna saugykla praneša apie nepavykusius įrašus - ir kuriuos", async ()=>{
     const st = netikraSaugykla({}, true);
     const r = GP_BACKUP.atkurti({ app: "G-Procure", items: { a: "1", b: "2" } }, st);
-    lygu([r.ok, r.blogai], [0, 2], "rezultatas");
+    lygu([r.ok, r.blogai, r.nepavyko], [0, 2, ["a", "b"]], "rezultatas");
   });
 
   await testas("Failo vardas su data", async ()=>{
