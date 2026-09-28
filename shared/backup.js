@@ -125,15 +125,16 @@
     return n;
   }
 
-  /* Įrašo failo reikšmes. Kiti saugyklos raktai nepaliečiami. */
+  /* Įrašo failo reikšmes. Kiti saugyklos raktai nepaliečiami. nepavyko - raktai, kurių įrašyti nepavyko
+     (pvz. pilna saugykla): puslapis pasako, KURIE duomenys neatkurti, ne tik kiek. */
   function atkurti(obj, saugykla) {
     var st = saugykla || global.localStorage;
-    var raktai = Object.keys(obj.items), ok = 0, blogai = 0;
+    var raktai = Object.keys(obj.items), ok = 0, nepavyko = [];
     for (var i = 0; i < raktai.length; i++) {
       try { st.setItem(raktai[i], obj.items[raktai[i]]); ok++; }
-      catch (e) { blogai++; }
+      catch (e) { nepavyko.push(raktai[i]); }
     }
-    return { ok: ok, blogai: blogai };
+    return { ok: ok, blogai: nepavyko.length, nepavyko: nepavyko };
   }
 
   function failoVardas(data) {
