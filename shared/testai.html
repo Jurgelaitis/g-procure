@@ -3479,12 +3479,73 @@ async function testaiDatos(){
   });
 }
 
+async function testaiBudai(){
+  dabartine = grupe("Pirkimo būdai (procurement-methods.js)");
+  const { f, w } = await ramas(`<script src="procurement-methods.js"><\/script>`);
+  const M = w.GP_METHODS, id = (x) => x ? x.id : null;
+  try {
+    await testas("Sąrašai: 24 įrašai su unikaliais id, 12 pagrindinių (11 būdų + apklausa žodžiu), numatytasis sąrašas be bazinių ir legacy, grupės <optgroup> tvarka, kiekvienas - su anglišku pavadinimu", async ()=>{
+      lygu([M.LIST.length, new Set(M.LIST.map(x => x.id)).size], [24, 24], "id");
+      lygu(M.listPagrindiniai().map(id), ["MV-NZ", "MV-NR", "MV-SAB", "MV-SAD", "S-AK", "S-SD", "S-ND", "T-AK", "T-SD", "T-ND", "DPS", "DPS-K"], "pagrindiniai");
+      lygu(M.listByGroup().map(g => [g.grupe, g.budai.map(id)]), [["mazos_vertes", ["MV-NZ", "MV-NR", "MV-SAB", "MV-SAD"]], ["supaprastinti", ["S-AK", "S-SD", "S-ND"]],
+        ["tarptautiniai", ["T-AK", "T-SD", "T-ND"]], ["dps", ["DPS", "DPS-K"]], ["kitos_proc", ["RK", "KD", "IP", "KS", "PS"]], ["kanalai", ["CPO", "VS"]]], "grupės");
+      lygu([M.listValid().length, M.listValid({ grupe: "mazos_vertes", skelbiama: false }).map(id), M.listByGroup({ rezimas: "tarptautinis" }).map(g => g.grupe),
+        M.listValid({ statusas: "legacy" }).map(id), M.listValid({ statusas: "bazinis" }).map(id)], [19, ["MV-NZ", "MV-NR"], ["tarptautiniai", "dps"], ["KONC"], ["AK", "SD", "ND", "MV"]], "filtrai");
+      tiesa(M.LIST.every(x => M.label(x.id, { kalba: "en" }) && M.label(x.id, { kalba: "en" }) !== x.label), "be angliško pavadinimo: " + M.LIST.filter(x => M.label(x.id, { kalba: "en" }) === x.label).map(id));
+    });
+
+    await testas("fromText: laisvas tekstas (PP-plan, PP-report) -> kanoninis būdas; režimas - iš „supaprastintas“ / „tarptautinis“, neskelbiamos derybos ne skelbiamos, apklausos porūšis; nežinomas ar tuščias - null (neišgalvojama)", async ()=>{
+      const T = ["Supaprastintas atviras konkursas", "Atviras konkursas (supaprastintas)", "Atviras konkursas", "ATVIRAS KONKURSAS (TARPTAUTINIS PIRKIMAS)", "Neskelbiamos derybos",
+        "Supaprastintos neskelbiamos derybos", "Skelbiamos derybos (tarptautinis pirkimas)", "Skelbiamos derybos", "Mažos vertės pirkimas", "Mažos vertės pirkimas (apklausa)",
+        "Neskelbiama apklausa žodžiu", "Neskelbiama apklausa raštu", "Skelbiama apklausa", "Skelbiama apklausa be derybų", "Skelbiama apklausa su derybomis",
+        "Dinaminė pirkimų sistema", "DPS konkretus pirkimas", "Centralizuotas pirkimas", "Vidaus sandoris", "Koncesija", "Preliminarioji sutartis", "Ribotas konkursas",
+        "Konkurencinis dialogas", "Inovacijų partnerystė", "Kvalifikacijos sistema", "", "  ", null, "kažkas kita",
+        "Atviras konkursas pagal PĮ", "Neskelbiamos derybos su vienu tiekėju", "Skelbiamų derybų procedūra"];   // be režimo žodžio - bazinis būdas
+      lygu(T.map(t => id(M.fromText(t))), ["S-AK", "S-AK", "AK", "T-AK", "ND", "S-ND", "T-SD", "SD", "MV", "MV", "MV-NZ", "MV-NR", "MV-SAB", "MV-SAB", "MV-SAD",
+        "DPS", "DPS-K", "CPO", "VS", "KONC", "PS", "RK", "KD", "IP", "KS", null, null, null, null, "AK", "ND", "SD"], "atpažinta");
+      tiesa(M.LIST.every(x => id(M.fromText(x.label)) === x.id), "ne visi pavadinimai atpažįstami kaip jie patys");
+    });
+
+    await testas("fromLegacy: seni modulių kodai; be režimo - bazinis būdas (režimas neišgalvojamas), su opts - režimo variantas; PP-salygos kodai ir apklausos pasirinkimai", async ()=>{
+      const L = [["pp-protocol", "atviras_tarptautinis"], ["pp-protocol", "atviras"], ["pp-protocol", "atviras", { rezimas: "supaprastintas" }], ["pp-protocol", "mazos"],
+        ["pp-protocol", "dps_konkretus"], ["pp-protocol", "nezinomas"], ["pp-protocol", null], ["pp-ts", "open", { international: true }], ["pp-ts", "open", { international: false }],
+        ["pp-ts", "open", {}], ["pp-ts", "open", { rezimas: "kitas" }], ["pp-ts", "small_value"], ["pp-ts", "framework", { international: true }], ["pp-negotiation", "derybos_skelb"],
+        ["pp-negotiation", "derybos_skelb", { rezimas: "tarptautinis" }], ["pp-salygos", "AK", { rezimas: "tarptautinis" }], ["pp-salygos", "ND", { international: false }],
+        ["pp-salygos", "AK"], ["pp-salygos", "MVP", { apklausa: "neskelbiama" }], ["pp-salygos", "MVP", { derybos: true }], ["pp-salygos", "MVP", {}], ["pp-salygos", "DPSK"],
+        ["pp-salygos", "DPSP"], ["pp-salygos", "TSD"], ["pp-salygos", "SSD"], ["pp-salygos", "XYZ"], ["pp-plan", "Atviras konkursas (supaprastintas)"], ["pp-report", "Neskelbiama apklausa raštu"]];
+      lygu(L.map(a => id(M.fromLegacy(a[0], a[1], a[2]))), ["T-AK", "AK", "S-AK", "MV", "DPS-K", null, null, "T-AK", "S-AK", "AK", "AK", "MV", "PS", "SD", "T-SD",
+        "T-AK", "S-ND", "AK", "MV-NR", "MV-SAD", "MV-SAB", "DPS", "DPS-K", "T-SD", "S-SD", null, "S-AK", "MV-NR"], "fromLegacy");
+    });
+
+    await testas("toModule / toSalygos ir atgal: PP-protocol, PP-negotiation, PP-cost-benefit ir PP-salygos - be praradimų; PP-ts ir PP-report sutraukia tik apklausų porūšius, kurių jų sąraše nėra", async ()=>{
+      const praradimai = {};
+      ["pp-protocol", "pp-negotiation", "pp-ts", "pp-cost-benefit", "pp-report"].forEach(m => {
+        praradimai[m] = M.LIST.filter(x => M.toModule(m, x.id)).map(x => [x.id, id(M.fromLegacy(m, M.toModule(m, x.id), { rezimas: x.rezimas }))]).filter(p => p[0] !== p[1]).map(p => p.join(">"));
+      });
+      praradimai["pp-salygos"] = M.LIST.filter(x => M.toSalygos(x.id)).map(x => [x.id, id(M.fromLegacy("pp-salygos", M.toSalygos(x.id).seima, M.toSalygos(x.id)))]).filter(p => p[0] !== p[1]).map(p => p.join(">"));
+      lygu(praradimai, { "pp-protocol": [], "pp-negotiation": [], "pp-ts": ["MV-NZ>MV", "MV-NR>MV", "MV-SAB>MV", "MV-SAD>MV"], "pp-cost-benefit": [], "pp-report": ["MV-SAD>MV-SAB"], "pp-salygos": [] }, "praradimai");
+      lygu([M.toModule("pp-protocol", "T-AK"), M.toModule("pp-report", "MV-NZ"), M.toModule("pp-cost-benefit", "IP"), M.toModule("pp-graphs", "T-AK"), M.toModule("pp-ts", "KONC"),
+        M.toModule("pp-salygos", "S-ND"), M.toSalygos("MV-NR"), M.toSalygos("MV-SAD").apklausa, M.toSalygos("MV-NZ"), M.toSalygos("RK")],
+        ["atviras_tarptautinis", "Neskelbiama apklausa žodžiu", "Inovacijų partnerystė", null, null, { seima: "ND", rezimas: "supaprastintas", derybos: true, skelbiama: false },
+          { seima: "MVP", rezimas: "mazos_vertes", derybos: false, skelbiama: false, apklausa: "neskelbiama" }, "skelbiama", null, null], "kodai");
+    });
+
+    await testas("label / grupesPav / isValid: ilgas, trumpas ir angliškas pavadinimas; nežinomas - null; paveldėti objekto raktai („toString“) - negaliojantys", async ()=>{
+      lygu([M.label("T-AK"), M.label("T-AK", { forma: "trumpas" }), M.label("T-AK", { kalba: "en" }), M.label("XX"), M.grupesPav("dps"), M.grupesPav("dps", "en"), M.grupesPav("nera"),
+        M.isValid("T-AK"), M.isValid("toString"), M.isValid(""), M.isValid(null), id(M.byId("S-ND")), M.byId("XX")],
+        ["Atviras konkursas (tarptautinis pirkimas)", "Atviras konkursas", "Open procedure (international procurement)", null, "Dinaminė pirkimų sistema", "Dynamic purchasing system", null,
+          true, false, false, false, "S-ND", null], "pavadinimai");
+    });
+  } finally { f.remove(); }
+}
+
 (async function(){
   await testaiJuosta();
   await testaiKopija();
   await testaiPinigai();
   await testaiPranesimai();
   await testaiDatos();
+  await testaiBudai();
   await testaiDocxStiliai();
   await testaiSkydelis();
   await testaiAntraste();
