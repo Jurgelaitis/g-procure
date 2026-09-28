@@ -1144,7 +1144,7 @@ const kontrastas = (a, b) => { const x = sviesumas(a), y = sviesumas(b); return 
 
 async function testaiBusena(){
   dabartine = grupe("Vienodos būsenos (busena.js)");
-  await testas("Ta pati juosta (tipas, tekstas, be mygtukų) neperpiešiama - kartojamas nepavykęs įrašas ekrano skaitytuvui nekartojamas; kitas tekstas - perpiešiama", async ()=>{
+  await testas("Ta pati juosta (tipas, tekstas, be mygtukų), pakartota per 3 s, neperpiešiama - automatinis saugojimas ekrano skaitytuvui nekartojamas; kitas tekstas ar vėlesnis veiksmas - perpiešiama", async ()=>{
     const { f, w, d } = await ramas('<div class="app-header"></div><script src="busena.js"><\/script>');
     try {
       const B = w.GP_BUSENA, o = { raktas: "irasymas", tipas: "klaida", tekstas: () => "Nepavyko išsaugoti" };
@@ -1155,6 +1155,14 @@ async function testaiBusena(){
       lygu([po === tx, d.querySelector('[data-gpb-raktas="irasymas"] .gpb-tx') === tx, d.querySelector('[data-gpb-raktas="irasymas"]').textContent.includes("Kita priežastis")], [true, false, true], "perpiešimas");
       B.juostaSlepk("irasymas"); B.juosta(o);
       tiesa(d.querySelector('[data-gpb-raktas="irasymas"]'), "po nuėmimo - vėl rodoma");
+      // Atskiras vėlesnis veiksmas (> 3 s nuo ankstesnio kvietimo) - vėl pranešama
+      const tx2 = d.querySelector('[data-gpb-raktas="irasymas"] .gpb-tx');
+      // Nuolatinis rašymas: kas 2 s - langas slenka, net praėjus > 3 s nuo pirmo piešimo neperpiešiama
+      const jEl = () => d.querySelector('[data-gpb-raktas="irasymas"]');
+      jEl()._gpbLaikas -= 2000; B.juosta(o); jEl()._gpbLaikas -= 2000; B.juosta(o);
+      tiesa(d.querySelector('[data-gpb-raktas="irasymas"] .gpb-tx') === tx2, "nuolatinis rašymas - perpiešta");
+      jEl()._gpbLaikas -= 4000; B.juosta(o);
+      tiesa(d.querySelector('[data-gpb-raktas="irasymas"] .gpb-tx') !== tx2, "po 3 s - perpiešta (pranešama iš naujo)");
     } finally { f.remove(); }
   });
   await testas("Puslapio juostos spausdinant nerodomos (@media print), inline būsenos - lieka", async ()=>{
@@ -1342,7 +1350,7 @@ async function testaiSaugykla(){
       tiesa(j && /Duomenys „Bandomieji“ pakeisti kitame šios naršyklės skirtuke/.test(j.textContent) && /Perkrauti/.test(j.textContent), "juosta: " + (j && j.textContent));
       const r = S.rasyk(K, { v: 3 }, o);
       lygu([r.ok, r.kodas, localStorage.getItem(K)], [false, "kitas-skirtukas", '{"v":2}'], "neperrašyta");
-      tiesa(/^Neišsaugota: duomenys „Bandomieji“ pakeisti kitame šios naršyklės skirtuke ar puslapyje - spauskite „Perkrauti“\.$/.test(S.pranesimas(r, "Bandomieji")), S.pranesimas(r, "Bandomieji"));
+      tiesa(/^Neišsaugota: duomenys „Bandomieji“ pakeisti kitame šios naršyklės skirtuke ar puslapyje, todėl čia neperrašomi\.$/.test(S.pranesimas(r, "Bandomieji")), S.pranesimas(r, "Bandomieji"));
       j.querySelector(".gpb-tx").__zyme = 1; S.rasyk(K, { v: 31 }, o);   // pakartotinis nepavykęs įrašas juostos neperpiešia
       tiesa(d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"] .gpb-tx').__zyme === 1, "juosta perpiešta");
       lygu([S.skaityk(K, o).reiksme.v, S.rasyk(K, { v: 4 }, o).ok, localStorage.getItem(K)], [2, true, '{"v":4}'], "perskaičius - rašoma");
@@ -1357,8 +1365,14 @@ async function testaiSaugykla(){
       localStorage.setItem(K, '{"v":42}'); await new Promise(r => setTimeout(r, 50));
       const jv = d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]');
       tiesa(jv && /Spauskite „Atverti naujausią“/.test(jv.textContent) && jv.querySelector("button").textContent === "Atverti naujausią", "juosta: " + (jv && jv.textContent));
-      jv.querySelector("button").click();
-      lygu([atverta, /spauskite „Atverti naujausią“/.test(S.pranesimas(S.rasyk(K, { v: 43 }, o), "Bandomieji"))], [1, true], "veiksmas ir pranešimas");
+      jv.querySelector("button").focus(); jv.querySelector("button").click();
+      // Po savo veiksmo juosta lieka (modulis neperskaitė) - fokusas lieka mygtuke; trumpame pranešime mygtuko nėra (šeštoji peržiūra)
+      lygu([atverta, /spauskite/.test(S.pranesimas(S.rasyk(K, { v: 43 }, o), "Bandomieji"))], [1, false], "veiksmas ir pranešimas");
+      S.atnaujinimas(K, { tekstas: "Atverti naujausią", veiksmas: () => { atverta++; S.skaityk(K, o); } });
+      d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"] button').focus();
+      d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"] button').click();
+      lygu([atverta, d.activeElement === d.querySelector("h1")], [2, true], "veiksmas nuėmė juostą - fokusas antraštėje");
+      localStorage.setItem(K, '{"v":44}'); await new Promise(r => setTimeout(r, 50));
       localStorage.removeItem(K); await new Promise(r => setTimeout(r, 50));
       tiesa(!d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]'), "pašalinus - juosta liko");
       localStorage.setItem(K, '{"v":4}'); S.skaityk(K, o);
@@ -3284,6 +3298,12 @@ async function testaiPrieinamumas(){
   const mygtukas = sel => (w, d) => { const b = d.querySelector(sel); if (!b || !b.getClientRects().length) throw new Error("nėra matomo mygtuko " + sel); b.focus(); b.click(); return b; };
   const LANGU_ATVEJAI = [
     ["../PP-carbon/index.html", "Nustatymai", mygtukas('[onclick="openSettings()"]')],
+    // shared/kopija.js: nepavykus nukopijuoti - langas kopijuoti ranka (iškarpinė neleidžiama, execCommand - false)
+    ["../PP-plan/bvpz-kodai.html", "Kopijuoti ranka (kopija.js)", (w, d) => {
+      w.Object.defineProperty(w.navigator, "clipboard", { value: { writeText: () => w.Promise.reject(new Error("neleista")) }, configurable: true });
+      d.execCommand = () => false;
+      const b = d.createElement("button"); b.textContent = "Kopijuoti kodą"; d.body.appendChild(b); b.focus();
+      w.copyText("03000000-1"); return b; }],
     ["../PP-esg/index.html", "Pridėti tiekėją", (w, d) => { w.setView("suppliers"); return mygtukas('[onclick="openSupplierModal()"]')(w, d); }],
     ["../PP-esg/index.html", "Importuoti iš CVP IS", (w, d) => { w.setView("suppliers"); return mygtukas('[onclick="openImportModal()"]')(w, d); }],
     ["../PP-esg/index.html", "ESRS - pridėti tašką", (w, d) => { w.setView("esrs"); return mygtukas('[onclick="addEsrsPoint()"]')(w, d); }],
@@ -3313,7 +3333,7 @@ async function testaiPrieinamumas(){
     const cs = d.defaultView.getComputedStyle(x); return cs.display !== "none" && cs.visibility !== "hidden" && x.getClientRects().length && cs.pointerEvents !== "none" && parseFloat(cs.opacity) > 0.05; });
   const vardasIs = (d, el) => (el.getAttribute("aria-label") || (el.getAttribute("aria-labelledby") || "").split(/\s+/).map(id => (d.getElementById(id) || {}).textContent || "").join(" ")).trim();
 
-  await testas("Modaliniai langai puslapiuose (23): fokusas atsivėrus lange, vaidmuo ir pavadinimas, Tab lieka lange, Esc uždaro, fokusas grįžta į mygtuką; įdėtinis langas (BVPŽ paieška pirkimo lange)", async ()=>{
+  await testas("Modaliniai langai puslapiuose (24): fokusas atsivėrus lange, vaidmuo ir pavadinimas, Tab lieka lange, Esc uždaro, fokusas grįžta į mygtuką; įdėtinis langas (BVPŽ paieška pirkimo lange)", async ()=>{
     const A = GP_TESTU_APSAUGA.pradek(() => true);
     const blogi = []; let patikrinta = 0;
     try {
@@ -3523,17 +3543,36 @@ async function testaiKopijavimas(){
       api({ writeText: t => { irasyta = t; return w.Promise.resolve(); } });
       lygu([await w.GP_KOPIJA.kopijuok("abc", { sekme: "Kodas nukopijuotas" }), irasyta, gauta.pop()], [true, "abc", ["Kodas nukopijuotas", "gerai"]], "pavyko");
       api({ writeText: () => w.Promise.reject(new Error("neleista")) });
-      lygu(await w.GP_KOPIJA.kopijuok("abc"), false, "atmesta ir execCommand false");
+      lygu(await w.GP_KOPIJA.kopijuok("abc", { langas: false }), false, "atmesta ir execCommand false");
       tiesa(/^Nepavyko nukopijuoti į iškarpinę - pažymėkite tekstą ir spauskite Ctrl\+C/.test(gauta[gauta.length - 1][0]) && gauta[gauta.length - 1][1] === "klaida", "klaida: " + JSON.stringify(gauta));
+      // Numatytai - langas kopijuoti ranka: tekstas pažymėtas, fokusas jame, Tab lieka lange, Esc uždaro ir grąžina fokusą į mygtuką
+      const myg = d.createElement("button"); myg.textContent = "Kopijuoti"; d.body.appendChild(myg); myg.focus();
+      const n0 = gauta.length;
+      lygu(await w.GP_KOPIJA.kopijuok("Laiško šablonas su tekstu"), false, "nepavyko");
+      const l = d.getElementById("gp-kopija-langas"), ta = l && l.querySelector("textarea"), dlg = l && l.querySelector("[role=dialog]");
+      lygu([!!l && l.hasAttribute("data-gp-langas"), dlg && dlg.getAttribute("aria-modal"), dlg && d.getElementById(dlg.getAttribute("aria-labelledby")).textContent,
+            ta && ta.value, d.activeElement === ta, ta && ta.selectionEnd - ta.selectionStart, gauta.length === n0],
+           [true, "true", "Nukopijuokite ranka", "Laiško šablonas su tekstu", true, 25, true], "langas");
+      ta.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+      tiesa(d.activeElement === l.querySelector("button"), "Tab - į „Uždaryti“");
+      d.activeElement.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+      tiesa(d.activeElement === ta, "Tab - atgal į tekstą");
+      ta.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      lygu([!!d.getElementById("gp-kopija-langas"), d.activeElement === myg], [false, true], "Esc uždarė, fokusas grįžo");
       exec = true;
-      lygu([await w.GP_KOPIJA.kopijuok("abc"), gauta.pop()[1]], [true, "gerai"], "atmesta, atsarginis pavyko");
+      const m2 = d.createElement("button"); d.body.appendChild(m2); m2.focus();
+      lygu([await w.GP_KOPIJA.kopijuok("abc"), gauta.pop()[1], d.activeElement === m2], [true, "gerai", true], "atmesta, atsarginis pavyko, fokusas liko");
       api(undefined);
       lygu([await w.GP_KOPIJA.kopijuok("abc"), gauta.pop()[0]], [true, "Nukopijuota į iškarpinę"], "be API");
       const n = gauta.length; exec = false;
       lygu([await w.GP_KOPIJA.kopijuok("abc", { tylus: true }), gauta.length], [false, n], "tylus");
       d.documentElement.setAttribute("lang", "en");
-      await w.GP_KOPIJA.kopijuok("abc");
+      await w.GP_KOPIJA.kopijuok("abc", { langas: false });
       tiesa(/^Could not copy to the clipboard/.test(gauta[gauta.length - 1][0]), "EN: " + gauta[gauta.length - 1][0]);
+      await w.GP_KOPIJA.kopijuok("abc");
+      tiesa(/Copy manually/.test(d.getElementById("gp-kopija-langas").textContent), "EN langas");
+      d.getElementById("gp-kopija-langas").querySelector("button").click();
+      tiesa(!d.getElementById("gp-kopija-langas"), "„Close“ uždarė");
     } finally { f.remove(); }
   });
   await testas("Sargas: kopijavimas į iškarpinę tik per shared/kopija.js - moduliuose nėra navigator.clipboard ir execCommand(\"copy\") (iki 2026-09-28 šešios kopijos: dalis nepavykus tylėjo, dalis sakė „Nukopijuota“)", async ()=>{

@@ -274,16 +274,17 @@
     var el = null;
     for (var i = 0; i < dez.children.length; i++) if (dez.children[i].getAttribute("data-gpb-raktas") === raktas) el = dez.children[i];
     var n = isspresk(o), tipas = o.tipas || "eiga";
-    // Ta pati juosta (tipas, tekstas, be mygtukų) neperpiešiama: kartojamas nepavykęs įrašas (automatinis saugojimas kiekvienu
-    // klavišu) iki 2026-09-28 ją perpiešdavo kaskart, o ekrano skaitytuvas tą patį pranešimą kartodavo
-    var beMygtuku = function (x) { return !x || (!(x.mygtukai && x.mygtukai.length) && !x.kartoti && !x.atsaukti); };
+    // Ta pati juosta (tipas, tekstas, be mygtukų), pakartota greičiau nei per 3 s nuo ankstesnio kvietimo, neperpiešiama:
+    // automatinis saugojimas kiekvienu klavišu iki 2026-09-28 ją perpiešdavo kaskart, o ekrano skaitytuvas tą patį kartodavo.
+    // Langas slenkantis (kiekvienas kvietimas jį pratęsia), tad atskiras vėlesnis veiksmas (antras paspaudimas) vėl pranešamas.
+    var dabar = Date.now(), beMygtuku = function (x) { return !x || (!(x.mygtukai && x.mygtukai.length) && !x.kartoti && !x.atsaukti); };
     if (el && !el.hidden && el._gpbO && el._gpbTipas === tipas && el._gpbTekstas === n.tekstas && !!el._gpbO.html === !!o.html
-        && beMygtuku(o) && beMygtuku(el._gpbO)) {
-      el._gpbO = o;
+        && beMygtuku(o) && beMygtuku(el._gpbO) && dabar - (el._gpbLaikas || 0) < 3000) {
+      el._gpbO = o; el._gpbLaikas = dabar;
       return { el: el, atnaujink: function () {}, eiga: function () {}, slepk: function () { slepk(el); } };
     }
     if (!el) { el = document.createElement("div"); el.setAttribute("data-gpb-raktas", raktas); dez.appendChild(el); }
-    el._gpbO = o; el._gpbTipas = tipas; el._gpbTekstas = n.tekstas;
+    el._gpbO = o; el._gpbTipas = tipas; el._gpbTekstas = n.tekstas; el._gpbLaikas = dabar;
     if (!juostuStebetojas && typeof MutationObserver !== "undefined") {
       juostuStebetojas = new MutationObserver(perpieskJuostas);
       juostuStebetojas.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
