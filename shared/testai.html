@@ -3466,7 +3466,7 @@ async function testaiPranesimai(){
 /* Visi kodo failai (puslapiai, bendri ir modulių .js) - sargams. */
 function kodoFailai(){
   return Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "")).concat(["ai-proxy.js", "backup.js", "busena.js",
-    "docx-stiliai.js", "dokumentai.js", "eksportas.js", "gprocure-info-panel.js", "lang-detect.js", "mano-pirkimai.js", "money.js", "neissaugotas-darbas.js",
+    "docx-stiliai.js", "dokumentai.js", "eksportas.js", "gprocure-info-panel.js", "lang-detect.js", "mano-pirkimai.js", "money.js", "neissaugotas-darbas.js", "pdf-darbininkas.js",
     "organizacijos.js", "parengtis.js", "pirkimo-kortele.js", "portal-link.js", "pranesimas.js", "prieinamumas.js", "procurement-methods.js", "saugykla.js",
     "skelbimas.js", "taisykles.js", "teise-stebesena.js", "teises-nuorodos.js", "testu-apsauga.js", "thresholds.js", "workdays.js",
     "../PP-carbon/carbon-factors.js", "../PP-carbon/epd-extract.js", "../PP-carbon/esg-export.js", "../PP-carbon/evaluation.js", "../PP-carbon/reports.js",
@@ -3564,6 +3564,29 @@ async function testaiDatos(){
       });
     }
     tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("pdf.js darbininkas su SRI: nustatyk() - blob: adresas ir PDF perskaitomas; kita maiša - atmetama, adresas nekeičiamas (iki 2026-09-28 darbininkas be patikros matė visus dokumentus)", async ()=>{
+    const PDFJS = '<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==" crossorigin="anonymous"><\/script>';
+    const { f, w } = await ramas(PDFJS + '<script src="pdf-darbininkas.js"><\/script>');
+    try {
+      tiesa(w.pdfjsLib && w.GP_PDF_DARBININKAS, "pdf.js ar pdf-darbininkas.js neįsikėlė (reikia interneto)");
+      const u = await w.GP_PDF_DARBININKAS.nustatyk();
+      const pdf = await w.pdfjsLib.getDocument({ data: pdfIsEiluciu(["Labas darbininke"]) }).promise;
+      const t = (await (await pdf.getPage(1)).getTextContent()).items.map(x => x.str).join(" ");
+      lygu([/^blob:/.test(u), w.pdfjsLib.GlobalWorkerOptions.workerSrc === u, /Labas darbininke/.test(t)], [true, true, true], "darbininkas ir tekstas");
+    } finally { f.remove(); }
+    const k = await ramas(PDFJS + '<script src="pdf-darbininkas.js"><\/script>');
+    try {
+      const tikra = k.w.GP_PDF_DARBININKAS.SRI;
+      k.w.GP_PDF_DARBININKAS.SRI = "sha512-" + "A".repeat(86) + "==";
+      let klaida = "";
+      try { await k.w.GP_PDF_DARBININKAS.nustatyk(); } catch (e) { klaida = e.message; }
+      lygu([/nepasiekiama arba pakeista/.test(klaida), k.w.pdfjsLib.GlobalWorkerOptions.workerSrc], [true, ""], "kita maiša: " + klaida);
+      // Nepavykus - kitas kvietimas bando iš naujo (nepavykęs pažadas neįsimenamas)
+      k.w.GP_PDF_DARBININKAS.SRI = tikra;
+      tiesa(/^blob:/.test(await k.w.GP_PDF_DARBININKAS.nustatyk()), "po nesėkmės - bandoma iš naujo");
+    } finally { k.f.remove(); }
   });
 
   await testas("GP_WORKDAYS.siandien() ir GP_EKSPORTAS - vietinė data: 00:30 Lietuvos laiku - ta pati diena (toISOString duotų vakarykštę)", async ()=>{
