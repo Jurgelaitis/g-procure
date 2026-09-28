@@ -170,6 +170,29 @@ async function testaiKelias(){
     tiesa(/Sėkmingai importuota/.test(D.getElementById("importStatus").textContent) && /Praleista neužbaigtų: 1/.test(D.getElementById("importStatus").textContent), D.getElementById("importStatus").textContent.slice(0, 200));
   });
 
+  await testas("Excel skaitiniai langeliai - tikra reikšmė, ne SheetJS tekstas: 14 999,99 / 1,21 ir „0.000“ formatas nevirsta 1 239 668 595 ir 1 500 125 EUR", async () => {
+    tiesa(W.XLSX, "Excel biblioteka neįsikėlė (reikia interneto)");
+    svarus();
+    const X = W.XLSX, ws = X.utils.aoa_to_sheet([["Pirkimo poreikio Nr.", "Pirkimo objektas", "Planuojama pirkimo vertė be PVM"],
+      ["28PP-1", "Vertė formule be formato", 14999.99 / 1.21], ["28PP-2", "Trys skaitmenys po kablelio", 1500.125],
+      ["28PP-3", "Tūkstančių formatas", 14900], ["28PP-4", "Tekstinis langelis", "14.900"]]);
+    ws.C3.z = "0.000"; ws.C4.z = "#,##0.00";
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "MPP");
+    W.handleFile(new W.File([X.write(wb, { type: "array", bookType: "xlsx" })], "planas.xlsx"));
+    tiesa(await laukTol(() => W.eval("DATA.procurements.length") === 4), "įkelta: " + W.eval("DATA.procurements.length"));
+    lygu(W.eval("DATA.procurements").map(p => [p.nr, Math.round(p.verte * 100) / 100]),
+      [["28PP-1", 12396.69], ["28PP-2", 1500.13], ["28PP-3", 14900], ["28PP-4", 14900]], "sumos");
+  });
+
+  await testas("CSV planas: sumos iš langelio teksto (LT ir JAV formatai) - SheetJS spėjimas „14.900,00“ = 14,9 nenaudojamas", async () => {
+    tiesa(W.XLSX, "Excel biblioteka neįsikėlė (reikia interneto)");
+    svarus();
+    const csv = "﻿Pirkimo poreikio Nr.;Pirkimo objektas;Planuojama pirkimo vertė be PVM\n28PP-5;Kanceliarinės prekės;14.900,00\n28PP-6;Kuras;1,500.50\n28PP-7;Remontas;12396.69\n";
+    W.handleFile(new W.File([new TextEncoder().encode(csv)], "planas.csv"));
+    tiesa(await laukTol(() => W.eval("DATA.procurements.length") === 3), "įkelta: " + W.eval("DATA.procurements.length"));
+    lygu(W.eval("DATA.procurements").map(p => [p.nr, p.verte]), [["28PP-5", 14900], ["28PP-6", 1500.5], ["28PP-7", 12396.69]], "sumos");
+  });
+
   await testas("Importo žurnalas: failo vardas ir lapo pavadinimas iš svetimo failo - tekstas, ne HTML (iki 2026-09-28 <img onerror> juose vykdė kodą)", async () => {
     tiesa(W.XLSX, "Excel biblioteka neįsikėlė (reikia interneto)");
     svarus(); window.__planXss = [];

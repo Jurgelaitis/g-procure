@@ -957,7 +957,9 @@ function handleFile(f){
   const reader = new FileReader();
   reader.onload = ev => {
     try{
-      const wb = XLSX.read(ev.target.result, {type:"array", cellDates:true});
+      // raw:true - CSV ir kiti tekstiniai failai lieka langelio tekstu (be jo SheetJS „14.900,00“ paverčia skaičiumi 14,9);
+      // xlsx ir xls langelių ši parinktis nekeičia
+      const wb = XLSX.read(ev.target.result, {type:"array", cellDates:true, raw:true});
       const defaultCompany = document.getElementById("companyFilter").value !== "ALL" ? document.getElementById("companyFilter").value : "EPSO-G";
       const log = [];
       let imported = 0, skipped = 0;
@@ -968,6 +970,9 @@ function handleFile(f){
         const ws = wb.Sheets[sn];
         // Read as array-of-arrays first to detect header row
         const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:""});
+        // Tos pačios eilutės su tikromis reikšmėmis: skaitinį vertės langelį raw:false duoda SheetJS tekstu su tašku kaip
+        // dešimtainiu („12396.68595“), o sumų taisyklė vieną skyriklį su 3+ skaitmenimis laiko tūkstančiais (2026-09-28)
+        const aoaReiksmes = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:""});
         if(aoa.length === 0){ log.push(`  ⏭ "${sn}": tuščias lapas`); return; }
 
         // Find header row by scanning first 15 rows for known field names
@@ -989,7 +994,7 @@ function handleFile(f){
 
         let sheetImported = 0, sheetSkipped = 0;
         for(let i = headerRowIdx + 1; i < aoa.length; i++){
-          const row = aoa[i] || [];
+          const row = aoa[i] || [], rowReiksmes = aoaReiksmes[i] || [];
           if(row.every(c => c === "" || c === null || c === undefined)) continue;
           const rec = {imone: defaultCompany};
           let hasData = false;
@@ -997,6 +1002,7 @@ function handleFile(f){
             const m = mappedHeaders[j];
             if(!m.key) continue;
             let v = row[j];
+            if(m.key === "verte" && typeof rowReiksmes[j] === "number") v = rowReiksmes[j];
             if(v === undefined || v === null) continue;
             // Skip Excel error values
             const sv = String(v).trim();
