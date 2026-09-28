@@ -90,7 +90,7 @@
   // Grazina { action: "inserted"|"updated", list } arba { error }.
   function upsertToEsg(storage, point) {
     if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") {
-      return { error: "Netinkama storage abstrakcija" };
+      return { error: "Naršyklės saugykla nepasiekiama" };
     }
     var list;
     try {
@@ -98,7 +98,7 @@
       list = raw ? JSON.parse(raw) : [];
     } catch (e) {
       // Jei esamas raktas sugadintas - NEtrinam aklai; pranesam klaida.
-      return { error: "Nepavyko perskaityti esamo ppesg.esrs (galimai sugadintas)" };
+      return { error: "Nepavyko perskaityti esamų ESRS duomenų (ppesg.esrs) - galimai sugadinti; niekas neperrašyta" };
     }
 
     /* Galiojantis JSON, bet ne sąrašas (sugadintas ar kitos sandaros raktas) - irgi neperrašomas: iki 2026-09-28 jis būdavo
@@ -126,7 +126,7 @@
     try {
       storage.setItem(ESG_KEY, JSON.stringify(list));
     } catch (e) {
-      return { error: "Nepavyko irasyti i ppesg.esrs" };
+      return { error: "Nepavyko įrašyti į ppesg.esrs (naršyklės saugykla pilna ar nepasiekiama)" };
     }
     return { action: action, list: list };
   }
