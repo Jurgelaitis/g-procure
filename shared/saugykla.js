@@ -103,7 +103,7 @@
       // raktas (moduliai „Išvalyti“ / „Naujas“ patys jį šalina tiesiogiai; blogiausiu atveju grąžinamas išvalytas, bet niekas neprarandama)
       if (dabar !== null && dabar !== MATYTA[raktas].zalia && dabar !== tekstas) {
         rodykKitaSkirtuka(raktas);
-        return { ok: false, kodas: "kitas-skirtukas", klaida: "duomenys pakeisti kitame šios naršyklės skirtuke ar puslapyje", mygtukas: mygtukoTekstas(raktas) };
+        return { ok: false, kodas: "kitas-skirtukas", klaida: "duomenys pakeisti kitame šios naršyklės skirtuke ar puslapyje" };
       }
     }
     try {
@@ -165,7 +165,14 @@
       tekstas: function () { return pranesimas({ ok: false, kodas: "kitas-skirtukas", juosta: true, mygtukas: mygtukoTekstas(raktas) }, typeof pav === "function" ? pav() : pav); },
       mygtukai: [{ tekstas: function () { return mygtukoTekstas(raktas); }, veiksmas: function () {
         var v = VEIKSMAI[raktas];
-        if (v && typeof v.veiksmas === "function") v.veiksmas(); else global.location.reload();
+        if (!(v && typeof v.veiksmas === "function")) { global.location.reload(); return; }
+        v.veiksmas();
+        // Juosta su mygtuku nuimta - fokusas neturi likti niekur (šeštoji peržiūra): į puslapio antraštę
+        var d = global.document, a = d.activeElement;
+        if (!a || a === d.body || !d.documentElement.contains(a)) {
+          var h = d.querySelector("h1") || d.querySelector("main, [role=main]");
+          if (h) { if (!h.hasAttribute("tabindex")) h.setAttribute("tabindex", "-1"); h.focus(); }
+        }
       } }] });
   }
   function slepkKitaSkirtuka(raktas) {
@@ -187,8 +194,9 @@
       // „Ar puslapyje“ - ir tame pačiame skirtuke: grįžus atgal naršyklės mygtuku atkuriamas senas puslapis
       if (r.juosta) return en ? kas + " changed in another tab or page of this browser. Press \u201C" + myg + "\u201D to see the latest - until then, changes here are not saved, so as not to overwrite those."
                               : kas + " pakeisti kitame šios naršyklės skirtuke ar puslapyje. Spauskite „" + myg + "“, kad matytumėte naujausius - iki tol pakeitimai čia neišsaugomi, kad nebūtų perrašyti anie.";
-      return en ? "Not saved: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " changed in another tab or page of this browser - press \u201C" + myg + "\u201D."
-                : "Neišsaugota: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " pakeisti kitame šios naršyklės skirtuke ar puslapyje - spauskite „" + myg + "“.";
+      // Trumpas (modulio „Neišsaugota“ juostai) - be mygtuko: jis gali būti jau nuimtas, o pavadinimas - kitos kalbos (šeštoji peržiūra)
+      return en ? "Not saved: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " changed in another tab or page of this browser, so it is not overwritten here."
+                : "Neišsaugota: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " pakeisti kitame šios naršyklės skirtuke ar puslapyje, todėl čia neperrašomi.";
     }
     if (en) {
       var what = pav ? "\u201C" + pav + "\u201D" : "saved data";
