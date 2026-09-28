@@ -56,6 +56,14 @@
           dydis: "Size limit exceeded - skipped (ZIP bomb protection).", gilus: "Nested archive too deep - not extracted.", perDidelis: "File too large (limit {mb} MB).",
           bendrasLimitas: "Total package limit exceeded - skipped." }
   };
+  // CDN biblioteka neįsikėlė (nėra ryšio ar įmonės tinklas blokuoja): priežastis žmogui iš shared/bibliotekos.js,
+  // ne „Cannot read properties of undefined (reading 'loadAsync')“ (2026-09-28); be jo - trumpas tekstas
+  function reikia(vardas, pav) {
+    if (global[vardas]) return;
+    if (global.GP_BIBLIOTEKOS) global.GP_BIBLIOTEKOS.reikia(vardas, pav);
+    throw new Error(pav + " neįkelta");
+  }
+  var ZIP_PAV = "JSZip (DOCX, ODT, XLSX, ZIP)";
   function pran(lang, key, vars) {
     var t = (PRAN[lang] || PRAN.lt)[key] || key;
     // Funkcija, ne eilutė: failo vardas ar klaidos tekstas su „$&“, „$'“, „$$“ kitaip būtų keičiamas (String.replace šablonai)
@@ -234,7 +242,7 @@
   }
 
   async function isPdf(buf, lang) {
-    if (!global.pdfjsLib) throw new Error("pdf.js neužkrauta");
+    reikia("pdfjsLib", "pdf.js (PDF)");
     // isEvalSupported:false - gynyba gilyn (CVE-2024-4367 kelias per šriftus čia
     // nevykdomas, nes kviečiamas tik getTextContent, bet užraktas nieko nekainuoja)
     // Darbininkas - su SRI iš blob: (shared/pdf-darbininkas.js); be jo pdf.js darbininką įkeltų iš CDN be patikros
@@ -256,6 +264,7 @@
   async function isDocx(buf, lang) {
     // Struktūra iš word/document.xml (pastraipos + lentelių langeliai) - tikslesnė
     // citata nei mammoth "raw text". mammoth lieka atsarginiu keliu.
+    reikia("JSZip", ZIP_PAV);   // ir dydžio patikrai prieš išskleidžiant
     var blocks = [], warnings = [];
     var kont = await konteinerioDydis(buf);
     if (kont.suma > MAX_FAILO_B) throw new Error(pran(lang, "dydis"));
@@ -305,6 +314,7 @@
   // įrankyje nematė). Struktūra - content.xml: text:p / text:h pastraipos, table:table
   // eilutės. Ribos tos pačios kaip DOCX.
   async function isOdt(buf, lang) {
+    reikia("JSZip", ZIP_PAV);
     var kont = await konteinerioDydis(buf);
     if (kont.suma > MAX_FAILO_B) throw new Error(pran(lang, "dydis"));
     var zip = kont.zip || await global.JSZip.loadAsync(buf);
@@ -350,7 +360,8 @@
   }
 
   async function isXlsx(buf, lang) {
-    if (!global.XLSX) throw new Error("XLSX neužkrauta");
+    reikia("XLSX", "SheetJS (Excel)");
+    reikia("JSZip", ZIP_PAV);   // be jo antraščių dydžio patikra prieš SheetJS būtų tyliai praleista
     // Antraščių suma prieš SheetJS (jis turi savą inflate): suklastotos antraštės
     // liekamoji rizika priimama sąmoningai - failas vis tiek ribotas MAX_FAILO_B.
     var kont = await konteinerioDydis(buf);
@@ -545,6 +556,7 @@
   }
 
   async function isZip(name, buf, ctx, gylis, onProgress) {
+    reikia("JSZip", ZIP_PAV);
     var docs = [], lang = ctx.lang;
     var zip = await global.JSZip.loadAsync(buf, { decodeFileName: decodeFileName });
     var entries = Object.keys(zip.files).map(function (k) { return zip.files[k]; }).filter(function (f) { return !f.dir; });
