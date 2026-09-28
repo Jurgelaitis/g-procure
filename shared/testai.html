@@ -879,6 +879,8 @@ async function testaiAntraste(){
       if (i === -1) { blogi.push(m + ": nejungia shared/modulio-antraste.css"); continue; }
       if (i > st) blogi.push(m + ": bendras failas turi būti prieš modulio <style>, kitaip modulio papildymai jo neperrašo");
       if (!/<header class="app-header"/.test(src)) blogi.push(m + ": nėra <header class=\"app-header\">");
+      // Antraštės tilpimas (2026-09-29): skriptas iškart po </header> - pritaikoma prieš pirmą piešimą
+      if (!/<\/header>\s*<script src="(\.\.\/)?shared\/modulio-antraste\.js"><\/script>/.test(src)) blogi.push(m + ": po </header> nėra <script src=\"shared/modulio-antraste.js\">");
       // Tik bazinė taisyklė (selektorius prasideda .brand-group / .btn-header); spausdinimo ar lūžio papildymai - leidžiami.
       if (/(^|[{};])\s*\.brand-group\s*\{/m.test(src)) blogi.push(m + ": modulyje vėl yra .brand-group stilius - jis gyvena shared/modulio-antraste.css");
       if (/(^|[{};])\s*\.btn-header\s*\{\s*display\s*:/m.test(src)) blogi.push(m + ": modulyje vėl apibrėžtas .btn-header - jis gyvena shared/modulio-antraste.css");
@@ -935,6 +937,90 @@ async function testaiAntraste(){
       } finally { f.remove(); }
     }
     tiesa(!blogi.length, blogi.join("\n  "));
+  });
+  /* 2026-09-29: 1280 px testas lūžimo nematė - antraštė lūždavo kitais pločiais ir su būsenos žymomis: kaštų ir naudos analizėje
+     po pirmo išsaugojimo („✓ Išsaugota 00:45“) 1328-1920 px, skaičiuoklėje 1440 px, PP-protocol 1366 px (nešiojamas kompiuteris),
+     PP-carbon ir PP-plan 904-1016 px (ten lipni antraštė slenkant uždengdavo skirtukus). Dabar tikrinama visais pločiais virš 900 px
+     su ILGIAUSIAIS kintamų žymų tekstais, ilgu vardu ir angliškai; tilpimą užtikrina shared/modulio-antraste.js. */
+  const ANTRASTES_ZYMOS = {
+    "../PP-protocol/LITGRID_Generatorius_v3.html": d => { d.getElementById("user-btn-label").textContent = "Aleksandra Vaitkevičiūtė-Jankauskienė"; },
+    "../PP-cost-benefit/kastu_naudos_analize.html": d => { d.getElementById("autosave_hint").textContent = "✓ Išsaugota 23:59"; },
+    "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html": d => { d.getElementById("busena").textContent = "Išsaugotų duomenų būsena nežinoma"; },
+    "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html": d => { d.getElementById("projectChip").classList.remove("hidden"); d.getElementById("projectChipName").textContent = "Kibernetinio saugumo auditas su labai ilgu pavadinimu"; },
+    "../PP-qual/PP-QUAL.html": d => { d.getElementById("badge-rezimas").textContent = "Bendrasis pirkimas (VPĮ)"; }
+  };
+  const ANTRASTES_EN = ["../PP-tiekejams/index.html", "../PP-carbon/index.html", "../PP-esg/index.html", "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html", "../pirkimu-korteles.html", "../skelbimo-parengtis.html"];
+  const kadrai = w => new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(() => setTimeout(r, 20))));
+  await testas("Antraštė vienos eilutės visais pločiais 904-1920 px, pavadinimas nuo 960 px - nenukirptas; ir su ilgiausiomis būsenos žymomis, ilgu vardu ir angliškai (modulio-antraste.js)", async ()=>{
+    const blogi = [];
+    const PLOCIAI = [904, 928, 960, 1000, 1024, 1096, 1152, 1180, 1280, 1328, 1366, 1400, 1440, 1464, 1536, 1920];
+    const atvejai = ANTRASTES_PUSLAPIAI.filter(m => !/epd\.html$/.test(m)).map(m => [m, ""]).concat(ANTRASTES_EN.map(m => [m, "en"]));
+    for (const [m, kalba] of atvejai) {
+      const f = await new Promise(res => {
+        const f = document.createElement("iframe");
+        f.style.width = "1920px"; f.style.height = "400px";
+        f.addEventListener("load", async () => { const d = f.contentDocument; if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 150)); res(f); }, { once: true });
+        f.src = m + "?b=" + Date.now() + (kalba ? "&lang=" + kalba : "") + (/korteles\.html$/.test(m) ? "&saugykla=testine" : "");
+        document.body.appendChild(f);
+      });
+      try {
+        const d = f.contentDocument, w = f.contentWindow;
+        if (!kalba && ANTRASTES_ZYMOS[m]) ANTRASTES_ZYMOS[m](d);
+        const h = d.querySelector(".app-header");
+        if (!h) { blogi.push(m + ": nėra .app-header"); continue; }
+        const pl = [];
+        const pav = h.querySelector(".brand-module");
+        for (const p of PLOCIAI) {
+          f.style.width = p + "px"; await kadrai(w);
+          const a = Math.round(h.getBoundingClientRect().height);
+          if (a > 80) pl.push(p + " px - " + a + " px");
+          // Pavadinimas trumpinamas daugtaškiu tik kaip paskutinė priemonė siauriausiame ruože (904-959 px)
+          else if (p >= 960 && pav && pav.scrollWidth > pav.clientWidth + 1) pl.push(p + " px - pavadinimas nukirptas");
+        }
+        if (pl.length) blogi.push(m + (kalba ? " [" + kalba + "]" : "") + ": " + pl.join(", "));
+      } finally { f.remove(); }
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+  await testas("Tilpimo tvarka (modulio-antraste.js): pirma antraeilių mygtukų tekstas, tada kitų, pagrindinio - paskutinis; be ikonos - niekada; iki 900 px - nieko; title grąžinamas", async ()=>{
+    // Pločiai deterministiniai: mygtuko tekstas 250 px, pavadinimas 300 px (šriftas nesvarbus). Lygiai: >= 1634 px - visi su tekstu,
+    // 1368-1633 - be A, 1102-1367 - be A ir B, 836-1101 - be A, B, C; D (be ikonos) - visada su tekstu.
+    const f = await new Promise(res => {
+      const f = document.createElement("iframe");
+      f.style.width = "1750px"; f.style.height = "300px";
+      f.addEventListener("load", async () => { await new Promise(r => setTimeout(r, 100)); res(f); }, { once: true });
+      const btn = (kl, id, svg, title) => '<button class="btn-header' + kl + '" id="' + id + '"' + (title ? ' title="' + title + '"' : "") + ">"
+        + (svg ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>' : "") + '<span class="t">' + id + "</span></button>";
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"><link rel="stylesheet" href="modulio-antraste.css">'
+        + "<style>body{margin:0;font-family:var(--font-base)} .header-inner{max-width:none} .btn-header .t{display:inline-block;width:250px} .brand-module .t{display:inline-block;width:300px}</style></head><body>"
+        + '<header class="app-header"><div class="header-inner"><div class="brand"><div class="brand-logo"></div><div class="brand-text"><span class="brand-group">GP</span>'
+        + '<h1 class="brand-module"><span class="t">Modulis</span></h1></div></div><div class="header-right">'
+        + btn(" btn-header--ikona", "A", true, "") + btn("", "B", true, "Esamas paaiškinimas") + btn(" btn-header--pagr", "C", true, "") + btn("", "D", false, "")
+        + '</div></div></header><script src="modulio-antraste.js"><\/script></body></html>';
+      document.body.appendChild(f);
+    });
+    try {
+      const d = f.contentDocument, w = f.contentWindow, h = d.querySelector(".app-header");
+      const be = () => ["A", "B", "C", "D"].filter(id => d.getElementById(id).classList.contains("gp-antr-be-teksto")).join("");
+      const eik = async p => { f.style.width = p + "px"; await kadrai(w); return be(); };
+      tiesa(await eik(1750) === "", "1750 px - visi su tekstu, gauta be teksto: " + be());
+      tiesa(await eik(1500) === "A", "1500 px - tik antraeilis A be teksto, gauta: " + be());
+      tiesa(d.getElementById("A").title === "A", "paslėpus tekstą pelei lieka title, gauta: " + d.getElementById("A").title);
+      tiesa(await eik(1235) === "AB", "1235 px - A ir B be teksto, gauta: " + be());
+      tiesa(d.getElementById("B").title === "Esamas paaiškinimas", "esamas title neperrašomas: " + d.getElementById("B").title);
+      tiesa(await eik(1000) === "ABC", "1000 px - A, B ir pagrindinis C be teksto, D (be ikonos) - su tekstu, gauta: " + be());
+      tiesa(Math.round(h.getBoundingClientRect().height) <= 80, "1000 px antraštė vienos eilutės: " + Math.round(h.getBoundingClientRect().height));
+      const sp = d.querySelector("#C .t"), cs = w.getComputedStyle(sp);
+      tiesa(cs.display !== "none" && cs.visibility !== "hidden" && cs.position === "absolute", "tekstas slepiamas tik akims (ekrano skaitytuvas jį skaito): " + cs.display + " / " + cs.visibility + " / " + cs.position);
+      tiesa(await eik(860) === "", "iki 900 px modulio-antraste.js nieko neslepia (antraštė ten gali būti dviejų eilučių), gauta: " + be());
+      tiesa(await eik(1750) === "" && !d.getElementById("A").hasAttribute("title") && d.getElementById("B").title === "Esamas paaiškinimas",
+        "praplatinus - visi tekstai grąžinami, pridėtas title nuimamas, esamas lieka: A " + d.getElementById("A").title + ", B " + d.getElementById("B").title);
+      // Pakeitus tekstą (pvz. būsenos žymą) perskaičiuojama pati - be lango dydžio pokyčio
+      f.style.width = "1500px"; await kadrai(w);
+      d.querySelector("#D .t").style.width = "600px"; d.querySelector("#D .t").textContent = "D ilgesnis";
+      await kadrai(w); await kadrai(w);
+      tiesa(be() === "AB", "pakeitus tekstą antraštė perskaičiuota (1500 px, D 600 px - be A ir B), gauta: " + be());
+    } finally { f.remove(); }
   });
   await testas("Grupės eilutė ant gradiento >= 4,5:1 ir šviesiausiame gradiento taške", async ()=>{
     const P = await antraste(1280);
