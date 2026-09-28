@@ -187,7 +187,8 @@
     en: "LANGUAGE: write every prose value (trumpas, reiksme, veiksmai, salygos, teiginys, tema, santrauka, pastaba, patikimumo_paaiskinimas, ispejimai, klausimas_cvpis) in ENGLISH, even though the fragments and the schema descriptions are in Lithuanian. Only \"citata\" stays verbatim. Field names and status values stay exactly as in the schema."
   };
   function sistema(lang, mode, kontekstas) {
-    var base = (lang === "en" ? TAISYKLES_EN : TAISYKLES_LT).replace("{KONTEKSTAS}", kontekstoEilute(lang, kontekstas));
+    var eil = kontekstoEilute(lang, kontekstas);   // funkcija žemiau: organizacijos pavadinimas su „$&“ nebūtų šablonas
+    var base = (lang === "en" ? TAISYKLES_EN : TAISYKLES_LT).replace("{KONTEKSTAS}", function () { return eil; });
     return base + "\n\n" + (mode === "checklist" ? SCHEMA_CHECKLIST : SCHEMA_QA) + "\n\n" + KALBA_PABAIGAI[lang === "en" ? "en" : "lt"];
   }
   // Vykdytojo eilutė user žinutėje - tik faktas apie būseną, be įstatymo (jį nustato sistemos eilutė)
