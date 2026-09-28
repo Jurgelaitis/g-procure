@@ -236,6 +236,8 @@
     if (!global.pdfjsLib) throw new Error("pdf.js neužkrauta");
     // isEvalSupported:false - gynyba gilyn (CVE-2024-4367 kelias per šriftus čia
     // nevykdomas, nes kviečiamas tik getTextContent, bet užraktas nieko nekainuoja)
+    // Darbininkas - su SRI iš blob: (shared/pdf-darbininkas.js); be jo pdf.js darbininką įkeltų iš CDN be patikros
+    if (global.GP_PDF_DARBININKAS) await global.GP_PDF_DARBININKAS.nustatyk();
     var pdf = await global.pdfjsLib.getDocument({ data: buf, isEvalSupported: false }).promise;
     var blocks = [], warnings = [], tuscių = 0;
     for (var pn = 1; pn <= pdf.numPages; pn++) {
