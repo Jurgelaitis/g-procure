@@ -316,9 +316,40 @@ async function testaiSkaiciavimai(){
   });
   P.f.remove();
 }
+/* EPD atsakymo tikrinimas ir vienetai (epd-extract.js). Iki 2026-09-28 netestuota: be citatos reikšmė nepriimama, tonos
+   perskaičiuojamos į kg; tą dieną ištaisyta - „kg CO2-eq.“, „kg CO2 eq“, „kg CO₂e“ buvo laikomi nesuderinamais su „kg CO2e“. */
+async function testaiEpdIstrauka(){
+  dabartine = grupe("EPD atsakymo tikrinimas ir vienetai (epd-extract.js)");
+  const f = document.createElement("iframe");
+  await new Promise(r => { f.addEventListener("load", r, { once: true }); f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body><script src="epd-extract.js"><\/script></body></html>'; document.body.appendChild(f); });
+  const X = f.contentWindow.GP_EPD_EXTRACT, ats = o => ({ content: [{ type: "text", text: typeof o === "string" ? o : JSON.stringify(o) }] });
+  try {
+    await testas("Atsakymas: „found“ tik su teigiamu skaičiumi ir citata; markdown apvalkalas toleruojamas; ambiguous - tik skaitiniai variantai; nežinomas statusas ir ne JSON - klaida", async ()=>{
+      const r = X.parseResponse(ats("```json\n" + JSON.stringify({ status: "found", value: "12.5", unit: "kg CO2e", declaredUnit: "1 vnt", page: "4", quote: "A1-A3 GWP-total 12,5 kg CO2e", standard: "EN 15804+A2" }) + "\n```"));
+      lygu([r.status, r.value, r.page, r.quote], ["found", 12.5, 4, "A1-A3 GWP-total 12,5 kg CO2e"], "found");
+      lygu([X.parseResponse(ats({ status: "found", value: 12.5, unit: "kg CO2e", quote: "" })).status, X.parseResponse(ats({ status: "found", value: -1, quote: "x" })).status,
+        X.parseResponse(ats({ status: "found", value: "n/a", quote: "x" })).status, X.parseResponse(ats({ status: "gal", value: 1, quote: "GWP 1 kg CO2e" })).status, X.parseResponse(ats("Nerasta.")).status,
+        X.parseResponse(ats({ status: "found", value: 3, quote: "q", page: "trečias" })).page], ["error", "error", "error", "error", "error", null], "atmetimai");
+      lygu(X.parseResponse(ats({ status: "found", value: 12.5, quote: " " })).error, "AI nepateike citatos - reiksme nepriimama", "be citatos");
+      const a = X.parseResponse(ats({ status: "ambiguous", candidates: [{ label: "A1-A3 (1 vnt)", value: 10, unit: "kg CO2e" }, { label: "?", value: "n/a" }, null] }));
+      lygu([a.status, a.candidates.length, a.candidates[0].value], ["ambiguous", 1, 10], "ambiguous");
+      lygu([X.parseResponse(ats({ status: "ambiguous", candidates: [{ value: "x" }] })).status, X.parseResponse(ats({ status: "not_found", notes: "nėra A1-A3" })).status], ["not_found", "not_found"], "be variantų");
+    });
+    await testas("Vienetai: „kg CO2e“, „kg CO2 eq“, „kg CO2-eq.“, „kg CO₂e“, „kg CO2-ekv.“ - tas pats; tonos x1000 (ir atvirkščiai x0,001); gramai ir „/kg“ - nesuderinama (sprendžia žmogus); kitas deklaruotas vienetas - įspėjimas", async ()=>{
+      const k = (u, d, o) => { const r = X.checkUnitCompatibility(u, d, o); return r.ok ? r.factor : "ne"; };
+      lygu(["kg CO2e", "kgCO2e", "kg CO2 eq", "kg CO2-eq.", "kg CO₂e", "kg CO₂-eq.", "kg CO2-ekv.", "t CO2e", "t CO2-eq", "g CO2e", "kg CO2e/kg"].map(u => k(u, "1 vnt", "kg CO2e/vnt")),
+        [1, 1, 1, 1, 1, 1, 1, 1000, 1000, "ne", "ne"], "į kg CO2e/vnt");
+      lygu(k("kg CO2e", "1 t", "t CO2e/t"), 0.001, "kg -> t");
+      lygu([X.checkUnitCompatibility("kg CO2e", "1 m³", "kg CO2e/m3").warning, X.checkUnitCompatibility("kg CO2e", "1 kg", "kg CO2e/vnt").warning !== ""], ["", true], "deklaruotas vienetas");
+      lygu([X.convertValue({ value: 2.5, unit: "t CO2-eq", declaredUnit: "1 vnt" }, "kg CO2e/vnt").value, X.convertValue({ value: 2.5, unit: "g CO2e" }, "kg CO2e/vnt").value], [2500, null], "convertValue");
+    });
+  } finally { f.remove(); }
+}
+
 (async function(){
   await testaiAntraste();
   await testaiEpd();
+  await testaiEpdIstrauka();
   await testaiBusenos();
   try { await testaiSkaiciavimai(); } finally { APSAUGA.atkurk(); }
   document.getElementById("busena").textContent =

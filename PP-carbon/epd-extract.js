@@ -189,11 +189,15 @@
   // --- 3. VIENETU SUDERINAMUMAS --------------------------------------------
 
   // Normalizuoja vieneta palyginimui: mazosios, be tarpu, be "co2e"/"co2" skirtumo.
+  // 2026-09-28: EPD užrašai „kg CO2-eq.“, „kg CO2 eq“, „kg CO₂e“, „m³“ - taškai, brūkšniai, apatiniai ir viršutiniai indeksai
+  // nebeskaido vieneto. Iki tol veikė tik „kg CO2e“: net numatytas „co2eq“ nesutapdavo (alternatyva „co2e“ sutapdavo pirma ir
+  // palikdavo „q“), tad dažniausio EN 15804 užrašo reikšmė būdavo laikoma nesuderinama ir nepritaikoma.
   function normUnit(u) {
     return str(u).toLowerCase()
-      .replace(/\s+/g, "")
-      .replace(/co2e|co2ekv|co2eq/g, "co2e")
-      .replace(/vnt\.?|unit|piece|pcs|szt/g, "vnt")
+      .replace(/[₂²]/g, "2").replace(/³/g, "3")
+      .replace(/[\s.\-]+/g, "")
+      .replace(/co2(?:ekv|eq|e)/g, "co2e")
+      .replace(/vnt|unit|piece|pcs|szt/g, "vnt")
       .replace(/tona|tonne|ton(?!n)/g, "t");
   }
 
