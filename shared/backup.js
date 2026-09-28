@@ -101,13 +101,17 @@
     };
   }
 
-  /* Failo tekstas -> { ok: true, obj } arba { ok: false, priezastis: "json" | "formatas" } */
+  /* Failo tekstas -> { ok: true, obj } arba { ok: false, priezastis: "json" | "formatas" | "reiksmes", raktai } */
   function patikrinti(tekstas) {
     var obj;
     try { obj = JSON.parse(tekstas); } catch (e) { return { ok: false, priezastis: "json" }; }
     if (!obj || obj.app !== APP || !obj.items || typeof obj.items !== "object" || Array.isArray(obj.items)) {
       return { ok: false, priezastis: "formatas" };
     }
+    /* Saugykloje reikšmės - tik tekstas (taip jas grąžina localStorage ir įrašo surinkti()). Skaičius ar objektas
+       (pvz. ranka taisytame faile) būtų įrašytas kaip „5“ ar „[object Object]“ ir perrašytų tikrus duomenis (2026-09-28). */
+    var blogi = Object.keys(obj.items).filter(function (k) { return typeof obj.items[k] !== "string"; });
+    if (blogi.length) return { ok: false, priezastis: "reiksmes", raktai: blogi };
     return { ok: true, obj: obj };
   }
 
