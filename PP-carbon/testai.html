@@ -319,9 +319,9 @@ async function testaiSkaiciavimai(){
 /* EPD atsakymo tikrinimas ir vienetai (epd-extract.js). Iki 2026-09-28 netestuota: be citatos reikšmė nepriimama, tonos
    perskaičiuojamos į kg; tą dieną ištaisyta - „kg CO2-eq.“, „kg CO2 eq“, „kg CO₂e“ buvo laikomi nesuderinamais su „kg CO2e“. */
 async function testaiEpdIstrauka(){
-  dabartine = grupe("EPD atsakymo tikrinimas, vienetai ir PP-ESG eksportas (epd-extract.js, esg-export.js)");
+  dabartine = grupe("EPD atsakymas, vienetai, PP-ESG eksportas ir ataskaitos (epd-extract.js, esg-export.js, reports.js)");
   const f = document.createElement("iframe");
-  await new Promise(r => { f.addEventListener("load", r, { once: true }); f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body><script src="epd-extract.js"><\/script><script src="esg-export.js"><\/script></body></html>'; document.body.appendChild(f); });
+  await new Promise(r => { f.addEventListener("load", r, { once: true }); f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body><script src="epd-extract.js"><\/script><script src="esg-export.js"><\/script><script src="reports.js"><\/script></body></html>'; document.body.appendChild(f); });
   const X = f.contentWindow.GP_EPD_EXTRACT, ats = o => ({ content: [{ type: "text", text: typeof o === "string" ? o : JSON.stringify(o) }] });
   try {
     await testas("Atsakymas: „found“ tik su teigiamu skaičiumi ir citata; markdown apvalkalas toleruojamas; ambiguous - tik skaitiniai variantai; nežinomas statusas ir ne JSON - klaida", async ()=>{
@@ -359,6 +359,21 @@ async function testaiEpdIstrauka(){
         lygu([!!r.error, b.m["ppesg.esrs"]], [true, blogas], "neperrašoma: " + blogas);
       }
       tiesa(G.upsertToEsg(null, p).error, "be saugyklos - klaida");
+    });
+    await testas("Ataskaitos (peržiūra ir Word): tekstas su lietuviškomis raidėmis (iki 2026-09-28 - „IS VISO“, „pedsako“, „Sesseline“); viešoje - tiekėjai „Tiekėjas N“, be vardų, kainų, EPD failų ir vidinio kodo", async ()=>{
+      const G = f.contentWindow.GP_REPORTS;
+      const duom = { project: { name: "Pastotės rekonstrukcija", code: "VID-7", subject: "LITGRID AB", date: "2026-09-28", lifetimeYears: 30 },
+        stages: [{ label: "Įranga", totalKg: 750 }, { label: "Statyba", totalKg: 250 }], totalKg: 1000,
+        pendingEpd: [{ label: "Kabelis 110 kV" }], epdSources: [{ factorLabel: "Jungtuvai", value: 12.5, unit: "kg CO2e/vnt", page: 4, fileName: "slaptas-epd.pdf" }],
+        evaluation: { model: "A", shadowPrice: 80, winner: { name: "UAB Slaptas" }, offers: [
+          { rank: 2, name: "UAB Kitas", bidPrice: 120000, carbonT: 2.5, carbonCost: 200, adjustedPrice: 120200 },
+          { rank: 1, name: "UAB Slaptas", bidPrice: 100000, carbonT: 3, carbonCost: 240, adjustedPrice: 100240 }] } };
+      const tekstai = m => [m.title, m.disclaimer].concat(m.meta.map(x => x.label + " " + x.value), ...m.sections.map(sk => [sk.heading].concat(sk.paragraphs, ...sk.tables.map(t => t.columns.concat(...t.rows)))));
+      const vid = tekstai(G.build("internal", duom)).join(" | "), vie = tekstai(G.build("public", duom)).join(" | ");
+      const ASCII = /pedsak|Pasiulym|Tiekej[ua]|siltnam|reiksm|IS VISO|(^|[^Š])SESD|saltini|Sesseline|viesas|pjuvis|pazymet|truksta|laukianc/;
+      lygu([ASCII.exec(vid), ASCII.exec(vie)], [null, null], "be lietuviškų raidžių");
+      tiesa(/IŠ VISO/.test(vid) && /Šešėlinė CO2 kaina: 80/.test(vid) && /UAB Slaptas/.test(vid) && /Anglies pėdsako ataskaita - viešas pjūvis/.test(vie), "tekstai");
+      lygu([/UAB Slaptas|UAB Kitas|slaptas-epd|VID-7|100\s000|120\s000|EUR/.test(vie), /Tiekėjas 1 \| 3 t CO2e/.test(vie)], [false, true], "viešoje - be tapatybių ir kainų");
     });
   } finally { f.remove(); }
 }
