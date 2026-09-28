@@ -56,18 +56,21 @@ atsinaujina mikroužduotimi po <code>&lt;html lang&gt;</code> pakeitimo.</div>
 
 <script>
 const R = { ok: 0, blogai: 0 };
+/* Pavadinimai ir klaidų tekstai - textContent: juose būna „<html lang>“, „<dialog>“, „<= 80 px“ (per innerHTML jie dingdavo). */
 function grupe(pav){
-  const d = document.createElement("div");
-  d.className = "grupe"; d.innerHTML = `<h2>${pav}</h2>`;
+  const d = document.createElement("div"), h = document.createElement("h2");
+  d.className = "grupe"; h.textContent = pav; d.appendChild(h);
   document.getElementById("rezultatai").appendChild(d);
   return d;
 }
 let dabartine = null;
 async function testas(pav, fn){
-  const eil = document.createElement("div");
-  try { await fn(); eil.className = "t geras"; eil.innerHTML = `<span class="zyma">GERAI</span><span>${pav}</span>`; R.ok++; }
-  catch (e) { eil.className = "t krito";
-    eil.innerHTML = `<span class="zyma">KRITO</span><span>${pav}<div class="det">${(e && e.message) || e}</div></span>`; R.blogai++; }
+  const eil = document.createElement("div"), zyma = document.createElement("span"), tekstas = document.createElement("span");
+  zyma.className = "zyma"; tekstas.textContent = pav;
+  try { await fn(); eil.className = "t geras"; zyma.textContent = "GERAI"; R.ok++; }
+  catch (e) { eil.className = "t krito"; zyma.textContent = "KRITO";
+    const det = document.createElement("div"); det.className = "det"; det.textContent = (e && e.message) || e; tekstas.appendChild(det); R.blogai++; }
+  eil.append(zyma, tekstas);
   dabartine.appendChild(eil);
   document.getElementById("n-ok").textContent = R.ok;
   document.getElementById("n-blogai").textContent = R.blogai;
@@ -103,6 +106,22 @@ async function testaiJuosta(){
     const { d } = await ramas(SKRIPTAS);
     tiesa(juosta(d), "juostos nėra");
     lygu(d.body.children[0].id, "gp-portalas", "pirmas body elementas");
+  });
+
+  await testas("Kalba „en-GB“ - angliškai; skriptas <head> dalyje - juosta įdedama įkėlus body; telefone (375 px) prierašas, skyriklis ir etiketė slepiami", async ()=>{
+    const { f: f1, d: d1 } = await ramas(SKRIPTAS, "en-GB");
+    try { lygu(etikete(d1), "All tools", "en-GB"); } finally { f1.remove(); }
+    const galva = await new Promise(res => { const f = document.createElement("iframe");
+      f.addEventListener("load", () => res(f), { once: true });
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><script src="portal-link.js"><\/script></head><body><h1>Turinys</h1></body></html>';
+      document.body.appendChild(f); });
+    try { lygu(galva.contentDocument.body.children[0].id, "gp-portalas", "skriptas galvoje"); } finally { galva.remove(); }
+    const matuok = plotis => new Promise(res => { const f = document.createElement("iframe"); f.style.width = plotis + "px";
+      f.addEventListener("load", () => { const d = f.contentDocument, w = f.contentWindow, rodo = sel => w.getComputedStyle(d.querySelector(sel)).display !== "none";
+        const r = [rodo(".gp-portalas__tag"), rodo(".gp-portalas__skyriklis"), rodo(".gp-portalas__etikete"), rodo(".gp-portalas__zenklas")]; f.remove(); res(r); }, { once: true });
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body>' + SKRIPTAS + '</body></html>';
+      document.body.appendChild(f); });
+    lygu([await matuok(375), await matuok(900)], [[false, false, false, true], [true, true, true, true]], "375 / 900 px");
   });
 
   await testas("Nuoroda veda į portalą (../index.html)", async ()=>{
@@ -340,6 +359,17 @@ async function testaiDocxStiliai(){
     ]});
     const pPr = x.match(/<w:style [^>]*w:styleId="GpCentras">[\s\S]*?<\/w:style>/)[0];
     tiesa(pPr.indexOf("<w:spacing") < pPr.indexOf("<w:jc"), "spacing turi būti prieš jc, kitaip griežti skaitytuvai ignoruoja");
+  });
+
+  await testas("Numatytieji: kalba lt-LT (Word rašybos tikrinimas) ir tarpai after=0 / line=240; savame stiliuje - paryškinimas, pasvirimas, įtrauka, before=\"0\", quickFormat:false", async ()=>{
+    const x = GP_DOCX_STILIAI.xml({ stiliai: [{ id: "GpSavas", name: "GP savas", quickFormat: false,
+      paragraph: { spacing: { before: 0, after: 120, line: 276 }, indent: { left: 720 }, alignment: "both" }, run: { bold: true, italics: true, font: "Arial" } }] });
+    const dd = x.slice(0, x.indexOf("</w:docDefaults>"));
+    tiesa(/<w:lang w:val="lt-LT"/.test(dd), "dokumento kalba lt-LT");
+    tiesa(/<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"\/><\/w:pPr><\/w:pPrDefault>/.test(dd), "numatytieji tarpai (kaip iki 2026-09-22)");
+    const st = x.match(/<w:style [^>]*w:styleId="GpSavas">[\s\S]*?<\/w:style>/)[0];
+    lygu([/<w:spacing w:before="0" w:after="120" w:line="276" w:lineRule="auto"\/>/.test(st), /<w:ind w:left="720"\/>/.test(st), /<w:jc w:val="both"\/>/.test(st),
+      /<w:b\/><w:bCs\/>/.test(st), /<w:i\/><w:iCs\/>/.test(st), /w:ascii="Arial"/.test(st), /<w:qFormat\/>/.test(st)], [true, true, true, true, true, true, false], "savas stilius");
   });
 
   await testas("Kabutės ir & šrifto varde ekranuojami", async ()=>{
@@ -973,6 +1003,23 @@ async function testaiDarbas(){
       tiesa(w.GP_DARBAS.pakeista() && klausia(w), "pakeitimas po generavimo į failą nepateko - turi būti klausiama");
       w.GP_DARBAS.atskaita(w.GP_DARBAS.momentas());
       tiesa(!w.GP_DARBAS.pakeista(), "sugeneravus ir atsisiuntus iš naujo - neklausiama");
+    } finally { f.remove(); }
+  });
+
+  await testas("Paieška, filtrai ir kortelės pasirinkimas (data-darbas-ne) darbo nekuria; nepavykęs momentas (null) atskaitoje reiškia „klausti“, ne „nepakeista“", async ()=>{
+    const { f, d, w } = await ramas('<div data-darbas-ne><input id="paieska"></div><input id="l"><script src="neissaugotas-darbas.js"><\/script>');
+    try {
+      w.GP_DARBAS.stebek();
+      rasyk(d, d.getElementById("paieska"), "transformator");
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "paieškos laukas su data-darbas-ne - ne darbas");
+      rasyk(d, d.getElementById("l"), "x");
+      tiesa(w.GP_DARBAS.pakeista(), "įprastas laukas - darbas");
+      let sugedo = true;
+      w.GP_DARBAS.stebek(() => { if (sugedo) throw new Error("sugedo"); return "gera"; });
+      const m = w.GP_DARBAS.momentas();
+      sugedo = false;
+      w.GP_DARBAS.atskaita(m);
+      lygu([m, w.GP_DARBAS.pakeista(), klausia(w)], [null, true, true], "atskaita(null)");
     } finally { f.remove(); }
   });
 
