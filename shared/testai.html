@@ -1144,6 +1144,19 @@ const kontrastas = (a, b) => { const x = sviesumas(a), y = sviesumas(b); return 
 
 async function testaiBusena(){
   dabartine = grupe("Vienodos būsenos (busena.js)");
+  await testas("Ta pati juosta (tipas, tekstas, be mygtukų) neperpiešiama - kartojamas nepavykęs įrašas ekrano skaitytuvui nekartojamas; kitas tekstas - perpiešiama", async ()=>{
+    const { f, w, d } = await ramas('<div class="app-header"></div><script src="busena.js"><\/script>');
+    try {
+      const B = w.GP_BUSENA, o = { raktas: "irasymas", tipas: "klaida", tekstas: () => "Nepavyko išsaugoti" };
+      B.juosta(o); const tx = d.querySelector('[data-gpb-raktas="irasymas"] .gpb-tx');
+      B.juosta(o); B.juosta(Object.assign({}, o));
+      const po = d.querySelector('[data-gpb-raktas="irasymas"] .gpb-tx');
+      B.juosta({ raktas: "irasymas", tipas: "klaida", tekstas: "Kita priežastis" });
+      lygu([po === tx, d.querySelector('[data-gpb-raktas="irasymas"] .gpb-tx') === tx, d.querySelector('[data-gpb-raktas="irasymas"]').textContent.includes("Kita priežastis")], [true, false, true], "perpiešimas");
+      B.juostaSlepk("irasymas"); B.juosta(o);
+      tiesa(d.querySelector('[data-gpb-raktas="irasymas"]'), "po nuėmimo - vėl rodoma");
+    } finally { f.remove(); }
+  });
   await testas("Puslapio juostos spausdinant nerodomos (@media print), inline būsenos - lieka", async ()=>{
     const { f, w, d } = await ramas('<div class="app-header"></div><div id="v"></div><script src="busena.js"><\/script>');
     try {
@@ -1329,8 +1342,33 @@ async function testaiSaugykla(){
       tiesa(j && /Duomenys „Bandomieji“ pakeisti kitame šios naršyklės skirtuke/.test(j.textContent) && /Perkrauti/.test(j.textContent), "juosta: " + (j && j.textContent));
       const r = S.rasyk(K, { v: 3 }, o);
       lygu([r.ok, r.kodas, localStorage.getItem(K)], [false, "kitas-skirtukas", '{"v":2}'], "neperrašyta");
-      tiesa(/^Neišsaugota: duomenys „Bandomieji“ pakeisti kitame šios naršyklės skirtuke - perkraukite puslapį\.$/.test(S.pranesimas(r, "Bandomieji")), S.pranesimas(r, "Bandomieji"));
+      tiesa(/^Neišsaugota: duomenys „Bandomieji“ pakeisti kitame šios naršyklės skirtuke ar puslapyje - spauskite „Perkrauti“\.$/.test(S.pranesimas(r, "Bandomieji")), S.pranesimas(r, "Bandomieji"));
+      j.querySelector(".gpb-tx").__zyme = 1; S.rasyk(K, { v: 31 }, o);   // pakartotinis nepavykęs įrašas juostos neperpiešia
+      tiesa(d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"] .gpb-tx').__zyme === 1, "juosta perpiešta");
       lygu([S.skaityk(K, o).reiksme.v, S.rasyk(K, { v: 4 }, o).ok, localStorage.getItem(K)], [2, true, '{"v":4}'], "perskaičius - rašoma");
+      tiesa(!d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]'), "perskaičius juosta nuimta");
+      // Kitas skirtukas grąžino matytą reikšmę arba pašalino - juosta nuimama
+      localStorage.setItem(K, '{"v":41}'); await new Promise(r => setTimeout(r, 50));
+      tiesa(d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]'), "juostos nėra");
+      localStorage.setItem(K, '{"v":4}'); await new Promise(r => setTimeout(r, 50));
+      tiesa(!d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]'), "grąžinus tą pačią - juosta liko");
+      // Modulio veiksmas vietoj perkrovimo (KNA - „Atverti“)
+      let atverta = 0; S.atnaujinimas(K, { tekstas: "Atverti naujausią", veiksmas: () => { atverta++; } });
+      localStorage.setItem(K, '{"v":42}'); await new Promise(r => setTimeout(r, 50));
+      const jv = d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]');
+      tiesa(jv && /Spauskite „Atverti naujausią“/.test(jv.textContent) && jv.querySelector("button").textContent === "Atverti naujausią", "juosta: " + (jv && jv.textContent));
+      jv.querySelector("button").click();
+      lygu([atverta, /spauskite „Atverti naujausią“/.test(S.pranesimas(S.rasyk(K, { v: 43 }, o), "Bandomieji"))], [1, true], "veiksmas ir pranešimas");
+      localStorage.removeItem(K); await new Promise(r => setTimeout(r, 50));
+      tiesa(!d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]'), "pašalinus - juosta liko");
+      localStorage.setItem(K, '{"v":4}'); S.skaityk(K, o);
+      // Grįžus atgal naršyklės mygtuku (puslapis iš talpyklos) - patikrinama iš karto, be storage įvykio
+      await new Promise(r => setTimeout(r, 50));
+      w.localStorage.setItem(K, '{"v":77}');                        // to paties dokumento įrašas - storage įvykio nėra
+      tiesa(!d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]'), "juosta be priežasties");
+      w.dispatchEvent(new w.PageTransitionEvent("pageshow", { persisted: true }));
+      tiesa(d.querySelector('[data-gpb-raktas="kitas-skirtukas-' + K + '"]'), "atkūrus puslapį juostos nėra");
+      S.skaityk(K, o);
       localStorage.setItem(K, '{"v":5}');
       lygu(S.rasyk(K, { v: 5 }, o).ok, true, "tas pats turinys - ne konfliktas");
       localStorage.setItem(K, '{"v":6}');
@@ -3421,7 +3459,7 @@ async function testaiBibliotekos(){
       const gauta = []; const r = w.GP_PRANESIMAS.rodyk; w.GP_PRANESIMAS.rodyk = (t, o) => { gauta.push([t, o && o.tipas]); return r.call(w.GP_PRANESIMAS, t, o); };
       lygu([w.GP_BIBLIOTEKOS.yra("document", "Dokumentas"), gauta.length], [true, 0], "yra");
       lygu(w.GP_BIBLIOTEKOS.yra("NeraTokios", "SheetJS (Excel)"), false, "nėra");
-      tiesa(gauta.length === 1 && gauta[0][1] === "klaida" && /„SheetJS \(Excel\)“/.test(gauta[0][0]) && /cdnjs\.cloudflare\.com/.test(gauta[0][0]) && /IT/.test(gauta[0][0]), "pranešimas: " + JSON.stringify(gauta));
+      tiesa(gauta.length === 1 && gauta[0][1] === "klaida" && /„SheetJS \(Excel\)“/.test(gauta[0][0]) && /cdnjs\.cloudflare\.com/.test(gauta[0][0]) && /cdn\.sheetjs\.com/.test(gauta[0][0]) && /IT/.test(gauta[0][0]), "pranešimas: " + JSON.stringify(gauta));
       w.document.documentElement.setAttribute("lang", "en");
       w.GP_BIBLIOTEKOS.yra("NeraTokios", "Chart.js");
       tiesa(/library could not be loaded/.test(gauta[1][0]), "EN: " + gauta[1][0]);
@@ -3441,7 +3479,7 @@ async function testaiBibliotekos(){
     const su = await ramas('<script src="bibliotekos.js"><\/script><script src="dokumentai.js"><\/script>');
     try {
       const t = await skaityk(su.w);
-      lygu([/„JSZip \(DOCX, ODT, XLSX, ZIP\)“/.test(t[0]), /„SheetJS \(Excel\)“/.test(t[1]), /„pdf\.js \(PDF\)“/.test(t[2]), /„JSZip/.test(t[3]), t.every(x => /blokuoja bibliotekų serverį/.test(x) && !/undefined/.test(x))],
+      lygu([/„JSZip \(DOCX, ODT, XLSX, ZIP\)“/.test(t[0]), /„SheetJS \(Excel\)“/.test(t[1]), /„pdf\.js \(PDF\)“/.test(t[2]), /„JSZip/.test(t[3]), t.every(x => /blokuoja bibliotekų serverius/.test(x) && !/undefined/.test(x))],
            [true, true, true, true, true], "su bibliotekos.js: " + JSON.stringify(t));
     } finally { su.f.remove(); }
     const be = await ramas('<script src="dokumentai.js"><\/script>');
@@ -3726,7 +3764,11 @@ async function testaiDatos(){
       k.w.GP_PDF_DARBININKAS.SRI = "sha512-" + "A".repeat(86) + "==";
       let klaida = "";
       try { await k.w.GP_PDF_DARBININKAS.nustatyk(); } catch (e) { klaida = e.message; }
-      lygu([/nepasiekiama arba pakeista/.test(klaida), k.w.pdfjsLib.GlobalWorkerOptions.workerSrc], [true, ""], "kita maiša: " + klaida);
+      lygu([/failas serveryje pakeistas/.test(klaida) && /kreipkitės į IT/.test(klaida) && !/Failed to fetch/.test(klaida), k.w.pdfjsLib.GlobalWorkerOptions.workerSrc], [true, ""], "kita maiša: " + klaida);
+      k.d.documentElement.setAttribute("lang", "en");
+      try { await k.w.GP_PDF_DARBININKAS.nustatyk(); } catch (e) { klaida = e.message; }
+      tiesa(/file on the server has changed/.test(klaida), "EN: " + klaida);
+      k.d.documentElement.setAttribute("lang", "lt");
       // Nepavykus - kitas kvietimas bando iš naujo (nepavykęs pažadas neįsimenamas)
       k.w.GP_PDF_DARBININKAS.SRI = tikra;
       tiesa(/^blob:/.test(await k.w.GP_PDF_DARBININKAS.nustatyk()), "po nesėkmės - bandoma iš naujo");

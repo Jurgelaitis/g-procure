@@ -103,7 +103,7 @@
       // raktas (moduliai „Išvalyti“ / „Naujas“ patys jį šalina tiesiogiai; blogiausiu atveju grąžinamas išvalytas, bet niekas neprarandama)
       if (dabar !== null && dabar !== MATYTA[raktas].zalia && dabar !== tekstas) {
         rodykKitaSkirtuka(raktas);
-        return { ok: false, kodas: "kitas-skirtukas", klaida: "duomenys pakeisti kitame šios naršyklės skirtuke" };
+        return { ok: false, kodas: "kitas-skirtukas", klaida: "duomenys pakeisti kitame šios naršyklės skirtuke ar puslapyje", mygtukas: mygtukoTekstas(raktas) };
       }
     }
     try {
@@ -116,17 +116,28 @@
     }
   }
 
-  /* Kas matyta šiame lange; pirmą kartą - ir klausomasi kitų skirtukų (storage įvykis ateina tik į KITUS langus). */
-  var klausoma = false;
+  /* Kas matyta šiame lange; pirmą kartą - ir klausomasi kitų skirtukų (storage įvykis ateina tik į KITUS langus).
+     Vėl sutapus (perskaityta iš naujo, įrašyta, kitas skirtukas grąžino tą pačią reikšmę ar ją pašalino) - juosta nuimama. */
+  var klausoma = false, VEIKSMAI = {};
   function isimink(raktas, zalia, pav) {
     MATYTA[raktas] = { zalia: zalia === undefined ? null : zalia, pav: (typeof pav === "string" || typeof pav === "function") ? pav : "" };
+    slepkKitaSkirtuka(raktas);
     if (klausoma || !global.addEventListener) return;
     klausoma = true;
     global.addEventListener("storage", function (e) {
-      // Pašalinimas ar visos saugyklos išvalymas (e.key null) - ne konfliktas (žr. rasyk), juostos nerodom
-      if (e.key === null || e.newValue === null || !Object.prototype.hasOwnProperty.call(MATYTA, e.key)) return;
-      if (e.newValue === MATYTA[e.key].zalia) return;
+      if (e.key === null) return;                                     // visa saugykla išvalyta - ne konfliktas (žr. rasyk)
+      if (!Object.prototype.hasOwnProperty.call(MATYTA, e.key)) return;
+      if (e.newValue === null || e.newValue === MATYTA[e.key].zalia) { slepkKitaSkirtuka(e.key); return; }
       rodykKitaSkirtuka(e.key);
+    });
+    // Grįžus atgal naršyklės mygtuku puslapis atkuriamas iš talpyklos su senais duomenimis - tikrinama iš karto
+    global.addEventListener("pageshow", function (e) {
+      if (!e.persisted) return;
+      var s = saugykla();
+      Object.keys(MATYTA).forEach(function (k) {
+        var dabar; try { dabar = s && s.getItem(k); } catch (x) { return; }
+        if (dabar !== null && dabar !== undefined && dabar !== MATYTA[k].zalia) rodykKitaSkirtuka(k);
+      });
     });
   }
   /* Modulis skaito pats (ne per skaityk): įsimenama dabartinė reikšmė. */
@@ -135,12 +146,30 @@
     if (!s || (o && o.saugykla)) return;
     try { isimink(raktas, s.getItem(raktas), pav); } catch (e) { /* neprieinama - nėra ko saugoti */ }
   }
+  /* Juostos mygtukas: numatytasis - „Perkrauti“ (modulis įkelia išsaugotus duomenis paleisdamas); modulis, kuris jų paleisdamas
+     neįkelia (KNA - „Atverti“), duoda savo: atnaujinimas(raktas, { tekstas, veiksmas }). Kitaip perkrovus rodomas tuščias
+     darbas, o rašant jis perrašytų kito skirtuko duomenis (penktoji peržiūra, 2026-09-28). */
+  function atnaujinimas(raktas, v) { VEIKSMAI[raktas] = v; }
+  function mygtukoTekstas(raktas) {
+    var v = VEIKSMAI[raktas];
+    if (v && v.tekstas) return typeof v.tekstas === "function" ? v.tekstas() : v.tekstas;
+    return en() ? "Reload" : "Perkrauti";
+  }
+  function juostosRaktas(raktas) { return "kitas-skirtukas-" + raktas; }
   function rodykKitaSkirtuka(raktas) {
-    if (!global.GP_BUSENA || !global.GP_BUSENA.juosta) return;
+    if (!global.GP_BUSENA || !global.GP_BUSENA.juosta || typeof document === "undefined") return;
+    // Jau rodoma - neperpiešiama (kitaip kiekvienas nepavykęs įrašas, pvz. kiekvienu klavišu, ją perpieštų ir skaitytuvas kartotų)
+    if (document.querySelector('[data-gpb-raktas="' + juostosRaktas(raktas) + '"]')) return;
     var pav = (MATYTA[raktas] && MATYTA[raktas].pav) || "";          // tekstas arba funkcija (dvikalbiams moduliams)
-    global.GP_BUSENA.juosta({ raktas: "kitas-skirtukas-" + raktas, tipas: "nezinoma",
-      tekstas: function () { return pranesimas({ ok: false, kodas: "kitas-skirtukas", juosta: true }, typeof pav === "function" ? pav() : pav); },
-      mygtukai: [{ tekstas: function () { return en() ? "Reload" : "Perkrauti"; }, veiksmas: function () { global.location.reload(); } }] });
+    global.GP_BUSENA.juosta({ raktas: juostosRaktas(raktas), tipas: "nezinoma",
+      tekstas: function () { return pranesimas({ ok: false, kodas: "kitas-skirtukas", juosta: true, mygtukas: mygtukoTekstas(raktas) }, typeof pav === "function" ? pav() : pav); },
+      mygtukai: [{ tekstas: function () { return mygtukoTekstas(raktas); }, veiksmas: function () {
+        var v = VEIKSMAI[raktas];
+        if (v && typeof v.veiksmas === "function") v.veiksmas(); else global.location.reload();
+      } }] });
+  }
+  function slepkKitaSkirtuka(raktas) {
+    if (global.GP_BUSENA && global.GP_BUSENA.juostaSlepk) global.GP_BUSENA.juostaSlepk(juostosRaktas(raktas));
   }
   function en() { return typeof document !== "undefined" && /^en/i.test(document.documentElement.getAttribute("lang") || ""); }
 
@@ -154,9 +183,12 @@
     var en = typeof document !== "undefined" && /^en/i.test(document.documentElement.getAttribute("lang") || "");
     if (r.kodas === "kitas-skirtukas") {
       var kas = pav ? (en ? "The \u201C" + pav + "\u201D data" : "Duomenys „" + pav + "“") : (en ? "The data" : "Duomenys");
-      if (r.juosta) return en ? kas + " changed in another tab of this browser. Reload the page to see the latest data - until you do, changes here are not saved, so as not to overwrite those."
-                              : kas + " pakeisti kitame šios naršyklės skirtuke. Perkraukite puslapį, kad matytumėte naujausius duomenis - kol neperkrausite, pakeitimai čia neišsaugomi, kad nebūtų perrašyti anie.";
-      return en ? "Not saved: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " changed in another tab of this browser - reload the page." : "Neišsaugota: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " pakeisti kitame šios naršyklės skirtuke - perkraukite puslapį.";
+      var myg = r.mygtukas || (en ? "Reload" : "Perkrauti");
+      // „Ar puslapyje“ - ir tame pačiame skirtuke: grįžus atgal naršyklės mygtuku atkuriamas senas puslapis
+      if (r.juosta) return en ? kas + " changed in another tab or page of this browser. Press \u201C" + myg + "\u201D to see the latest - until then, changes here are not saved, so as not to overwrite those."
+                              : kas + " pakeisti kitame šios naršyklės skirtuke ar puslapyje. Spauskite „" + myg + "“, kad matytumėte naujausius - iki tol pakeitimai čia neišsaugomi, kad nebūtų perrašyti anie.";
+      return en ? "Not saved: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " changed in another tab or page of this browser - press \u201C" + myg + "\u201D."
+                : "Neišsaugota: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " pakeisti kitame šios naršyklės skirtuke ar puslapyje - spauskite „" + myg + "“.";
     }
     if (en) {
       var what = pav ? "\u201C" + pav + "\u201D" : "saved data";
@@ -183,5 +215,5 @@
     return "";
   }
 
-  global.GP_SAUGYKLA = { skaityk: skaityk, rasyk: rasyk, pranesimas: pranesimas, prisimink: prisimink, ZYME: ZYME };
+  global.GP_SAUGYKLA = { skaityk: skaityk, rasyk: rasyk, pranesimas: pranesimas, prisimink: prisimink, atnaujinimas: atnaujinimas, ZYME: ZYME };
 })(typeof window !== "undefined" ? window : this);
