@@ -1072,6 +1072,26 @@ async function testaiImportas(){
       if (buves === null) localStorage.removeItem("litgrid_user_profile_v1"); else localStorage.setItem("litgrid_user_profile_v1", buves);
     }
   });
+
+  await testas("Laiško šablono kopijavimas: nepavykus (iškarpinė neleidžiama) - pranešimas su patarimu ir audite įrašo nėra; pavykus - „Šablonas nukopijuotas“ ir audito įrašas (iki 2026-09-28 nepavykus - tyla)", async () => {
+    localStorage.setItem("litgrid_procurements_v2", JSON.stringify({ [PK]: pirkimas("atviras_tarptautinis") }));
+    await modulis();
+    const pranesimai = [], rodyk = W.GP_PRANESIMAS.rodyk, tikrasExec = W.document.execCommand;
+    W.GP_PRANESIMAS.rodyk = (t, o) => { pranesimai.push([String(t), String((o && o.tipas) || "")]); return rodyk.call(W.GP_PRANESIMAS, t, o); };
+    const iskarpine = f => W.Object.defineProperty(W.navigator, "clipboard", { value: { writeText: f }, configurable: true });
+    try {
+      W.eval("currentPnPkId = " + JSON.stringify(PK) + "; currentPnNotifications = [{ id: 'n1', templateId: '12_atmetimas', title: 'Pranešimas', titleEn: 'Notice', lang: 'lt' }];");
+      const sel = D.getElementById("pn-preview-selector"); sel.innerHTML = '<option value="n1">Pranešimas</option>'; sel.value = "n1";
+      const kopijos = () => W.getAuditLog(PK).filter(e => e.action === "COPY_EMAIL").length;
+      const pries = kopijos();
+      iskarpine(() => Promise.reject(new Error("neleista"))); W.document.execCommand = () => false;
+      W.copyPnEmailTemplate(); await lauk(50);
+      lygu([kopijos() - pries, pranesimai.some(([t, tip]) => /Nepavyko nukopijuoti/.test(t) && /klaida/.test(tip))], [0, true], "nepavykus: " + JSON.stringify(pranesimai));
+      let irasyta = ""; iskarpine(t => { irasyta = t; return Promise.resolve(); });
+      W.copyPnEmailTemplate(); await lauk(50);
+      lygu([kopijos() - pries, /Pranešimas/.test(irasyta), pranesimai.some(([t]) => /Šablonas nukopijuotas/.test(t))], [1, true, true], "pavykus");
+    } finally { W.GP_PRANESIMAS.rodyk = rodyk; W.document.execCommand = tikrasExec; delete W.navigator.clipboard; }
+  });
 }
 
 (async function(){
