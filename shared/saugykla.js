@@ -47,7 +47,10 @@
         var k = s.key(i);
         if (k && k.indexOf(raktas + ZYME) === 0 && s.getItem(k) === zalia) return k;
       }
-      var naujas = raktas + ZYME + data();
+      // Tą pačią sekundę kita sugadinta reikšmė gauna priesagą („-2“): iki 2026-09-28 ji perrašydavo ankstesnę kopiją
+      var naujas = raktas + ZYME + data(), n = 1;
+      while (s.getItem(naujas + (n > 1 ? "-" + n : "")) !== null) n++;
+      naujas += n > 1 ? "-" + n : "";
       s.setItem(naujas, zalia);
       return naujas;
     } catch (e) { return null; }
