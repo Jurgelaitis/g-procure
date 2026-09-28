@@ -305,6 +305,45 @@ async function testaiSkaiciai(){
   });
 }
 
+/* 2026-09-28: „Atidaryti projektą“ priimdavo bet kokį JSON - kito modulio kopija (KNA, skaičiuoklė, PP-protocol) dabartinį projektą
+   pakeisdavo tuščiu ir išsaugodavo; netinkamo tipo laukas (suppliers: "x") lauždavo modulį ir po perkrovimo. */
+async function testaiKopija(){
+  grupe("Projekto kopija: atidarymas ir išsaugotos būsenos skaitymas");
+  await testas("Kito modulio ar sugadintas JSON - atmetamas, dabartinis projektas ir saugykla nepakeisti; senesnė kopija be dalies laukų - atveriama", async () => {
+    await modulis();
+    W.eval("APP.state.project.name = 'Esamas projektas'; storage.save()");
+    const raktas = W.eval("APP.storageKey"), pries = localStorage.getItem(raktas), pranesimai = [], tikrasToast = W.toast, ats = [];
+    W.toast = (t, tipas) => { pranesimai.push(tipas + ": " + t); };
+    const atverk = turinys => new Promise(r => W.eval("storage").importJSON(new W.File([turinys], "kopija.json"), ok => { ats.push(ok); r(); }));
+    try {
+      for (const f of [{ schemaVersion: 2, state: { alternatives: [{ name: "A0" }] }, formData: {} }, { pirkimas: { pavadinimas: "X" }, kriterijai: [], pasiulymai: [] },
+                       { "SD-1": { id: "SD-1", name: "Pirkimas", type: "derybos_tarptautinis" } }, null, [1], { project: { name: "Sugadintas" }, suppliers: "x" },
+                       { project: { name: "Sugadintas" }, suppliers: [null] }, { project: { name: "Sugadintas" }, strategy: { concessions: "x" } }]) await atverk(JSON.stringify(f));
+      lygu([ats, localStorage.getItem(raktas) === pries, W.eval("APP.state.project.name")], [Array(8).fill(false), true, "Esamas projektas"], "atmesti: " + pranesimai.join(" | "));
+      tiesa(/nėra derybų projekto kopija/.test(pranesimai[0]) && /laukas „suppliers“/.test(pranesimai[5]) && /laukas „strategy.concessions“/.test(pranesimai[7]), "priežastys: " + pranesimai.join(" | "));
+      await atverk(JSON.stringify({ project: { name: "Senesnė kopija" }, suppliers: [{ id: "s1", name: "UAB A" }], strategy: { targets: {} } }));
+      let klaida = "";
+      try { W.eval("render.all()"); } catch (e) { klaida = String(e); }
+      lygu([ats[8], W.eval("APP.state.project.name"), W.eval("APP.state.strategy.concessions"), W.eval("APP.state.project.currency"), klaida, JSON.parse(localStorage.getItem(raktas)).project.name],
+           [true, "Senesnė kopija", [], "EUR", "", "Senesnė kopija"], "senesnė kopija - su numatytosiomis reikšmėmis");
+    } finally { W.toast = tikrasToast; }
+  });
+
+  await testas("Išsaugota netinkama būsena (suppliers ne sąrašas) - „būsena nežinoma“, kopija išsaugoma, modulis veikia; senesnė būsena be dalies laukų - įkeliama", async () => {
+    const raktas = W.eval("APP.storageKey"), kopijos = () => Object.keys(localStorage).filter(k => k.indexOf(raktas + ".sugadinta-") === 0), buvo = kopijos();
+    localStorage.setItem(raktas, JSON.stringify({ project: { name: "Sugadintas" }, suppliers: "x" }));
+    await modulis();
+    const naujos = kopijos().filter(k => buvo.indexOf(k) < 0);
+    lygu([W.eval("APP.state.project.name"), W.eval("APP.state.suppliers.length"), !!D.querySelector('[data-gpb-raktas="skaitymas"]'), naujos.length,
+          naujos.length && JSON.parse(localStorage.getItem(naujos[0])).suppliers], ["", 0, true, 1, "x"], "sugadinta");
+    naujos.forEach(k => localStorage.removeItem(k));
+    localStorage.setItem(raktas, JSON.stringify({ project: { name: "Sena būsena" }, suppliers: [], session: { status: "active" } }));
+    await modulis();
+    lygu([W.eval("APP.state.project.name"), W.eval("APP.state.session.status"), W.eval("APP.state.session.rounds"), !!D.querySelector('[data-gpb-raktas="skaitymas"]')],
+         ["Sena būsena", "active", [], false], "sena būsena su numatytosiomis reikšmėmis");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -313,6 +352,7 @@ async function testaiSkaiciai(){
     await testaiBusenos();
     await testaiKortele();
     await testaiSkaiciai();
+    await testaiKopija();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
