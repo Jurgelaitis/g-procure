@@ -225,6 +225,42 @@ async function testaiKopija(){
     lygu(GP_BACKUP.patikrinti('{"app":"Kita","items":{}}').priezastis, "formatas", "svetimas failas");
     lygu(GP_BACKUP.patikrinti('{"app":"G-Procure","items":[]}').priezastis, "formatas", "items turi būti objektas");
     tiesa(GP_BACKUP.patikrinti('{"app":"G-Procure","items":{"a":"1"}}').ok, "savas failas turi būti priimtas");
+    // 2026-09-28: ne tekstinė reikšmė būtų įrašyta kaip „5“ / „[object Object]“ ir perrašytų tikrus duomenis
+    lygu(GP_BACKUP.patikrinti('{"app":"G-Procure","items":{"a":"1","b":5,"c":{"x":1},"d":null}}'), { ok: false, priezastis: "reiksmes", raktai: ["b", "c", "d"] }, "ne tekstas");
+  });
+
+  await testas("Kopijos puslapis: raktų pavadinimai ir failo laukai rodomi kaip tekstas, ne HTML (suklastotas failas kodo nevykdo); failas su ne tekstinėmis reikšmėmis neatkuriamas", async ()=>{
+    window.__gpXss = [];
+    const f = document.createElement("iframe");
+    const { w, d } = await new Promise(res => {
+      f.addEventListener("load", () => res({ w: f.contentWindow, d: f.contentDocument }), { once: true });
+      f.src = "../atsargine-kopija.html?b=" + Date.now();
+      document.body.appendChild(f);
+    });
+    try {
+      const KENKEJAS = '<img src="x" onerror="parent.__gpXss.push(1)">';
+      // Tikra saugykla neliečiama: įrašų sąrašas ir kalbos įsiminimas - netikri, „Atkurti“ nespaudžiamas
+      w.GP_BACKUP.irasai = () => [{ raktas: KENKEJAS, reiksme: "1", baitai: 40 }];
+      w.GP_LANG.remember = () => true;
+      d.querySelector('.lang-switch__btn[data-lang="lt"]').click();
+      await lauk(150);
+      const cele = d.querySelector("#apzvalga td.raktas");
+      lygu([cele && cele.textContent, d.querySelectorAll("#apzvalga img").length, window.__gpXss.length], [KENKEJAS, 0, 0], "apžvalga");
+      const ikelk = async (obj) => {
+        const dt = new w.DataTransfer(); dt.items.add(new w.File([JSON.stringify(obj)], "kopija.json", { type: "application/json" }));
+        const ivestis = d.getElementById("failas"); ivestis.files = dt.files;
+        ivestis.dispatchEvent(new w.Event("change", { bubbles: true }));
+        await lauk(300);
+        return d.getElementById("perziura");
+      };
+      let zin = await ikelk({ app: "G-Procure", version: 1, createdAt: "2026-09-28T00:00:00Z", items: { "gprocure.korteles": { schema: 1 }, [KENKEJAS]: 5, "ok": "tekstas" } });
+      tiesa(/reikšmės nėra tekstas/.test(zin.textContent) && zin.textContent.includes(KENKEJAS) && zin.textContent.includes("gprocure.korteles"), "žinutė: " + zin.textContent);
+      lygu([d.getElementById("btn-atkurti").disabled, zin.querySelectorAll("img").length], [true, 0], "atkūrimas neleidžiamas");
+      zin = await ikelk({ app: "G-Procure", version: 1, createdAt: '<img src=x onerror="parent.__gpXss.push(2)">', items: { "ok": "tekstas" } });
+      lygu([zin.querySelectorAll("img").length, zin.textContent.includes("<img src=x")], [0, true], "failo data - tekstas");
+      await lauk(100);
+      lygu(window.__gpXss.length, 0, "kodas neįvykdytas");
+    } finally { f.remove(); delete window.__gpXss; }
   });
 
   await testas("Perrašomų skaičius - tik tie raktai, kurie jau yra", async ()=>{
