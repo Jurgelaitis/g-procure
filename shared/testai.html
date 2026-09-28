@@ -3360,7 +3360,7 @@ async function testaiPranesimai(){
    be laiko juostos) rodė diena anksčiau. Šiandien - GP_WORKDAYS.siandien(), failo vardas - GP_EKSPORTAS.failoVardas().
    ========================================================================== */
 async function testaiDatos(){
-  dabartine = grupe("Datos ir failų vardai (workdays.js, eksportas.js)");
+  dabartine = grupe("Datos, šventės ir failų vardai (workdays.js, eksportas.js)");
   const DATU_FAILAI = Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "")).concat(["ai-proxy.js", "backup.js", "busena.js",
     "docx-stiliai.js", "dokumentai.js", "eksportas.js", "gprocure-info-panel.js", "lang-detect.js", "mano-pirkimai.js", "money.js", "neissaugotas-darbas.js",
     "organizacijos.js", "parengtis.js", "pirkimo-kortele.js", "portal-link.js", "pranesimas.js", "prieinamumas.js", "procurement-methods.js", "saugykla.js",
@@ -3369,6 +3369,61 @@ async function testaiDatos(){
     "../PP-carbon/taxonomy.js", "../PP-market-KPI/osp.js", "../PP-market-KPI/rinka.js", "../PP-salygos/ai-patarejas.js", "../PP-salygos/paraiska-extract.js",
     "../PP-salygos/variklis.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
     "../PP-ts/ts_asistentas_modules.js"]);
+
+  // Švenčių sąrašas perskaitytas e-tar 2026-09-28: Darbo kodekso 123 str. 1 d. (aktuali redakcija, 14 punktų).
+  // Velykų datos tikrinamos kitu algoritmu (Gauss), ne tuo pačiu, kuris yra workdays.js.
+  const { f: fd, w: wd } = await ramas(`<script src="workdays.js"><\/script>`);
+  const W = wd.GP_WORKDAYS, D = (s) => { const [y, m, d] = s.split("-").map(Number); return new wd.Date(y, m - 1, d); };
+
+  await testas("Šventės - kaip Darbo kodekso 123 str. 1 d. (e-tar, perskaityta 2026-09-28): 12 fiksuotų datų, Velykų sekmadienis ir pirmadienis, pirmas gegužės ir pirmas birželio sekmadienis", async ()=>{
+    lygu([...W.holidaysForYear(2027)].sort(), ["2027-01-01", "2027-02-16", "2027-03-11", "2027-03-28", "2027-03-29", "2027-05-01", "2027-05-02", "2027-06-06",
+      "2027-06-24", "2027-07-06", "2027-08-15", "2027-11-01", "2027-11-02", "2027-12-24", "2027-12-25", "2027-12-26"], "2027 m.");
+    // 2022-05-01 ir 2025-06-01 - sekmadieniai: pirmas mėnesio sekmadienis yra 1-oji diena (2022 m. Motinos diena sutampa su Darbo diena)
+    lygu([W.isHoliday(D("2022-05-01")), W.isHoliday(D("2022-05-08")), W.holidaysForYear(2022).size, W.isHoliday(D("2025-06-01")), W.isHoliday(D("2025-06-08")),
+      W.isHoliday(D("2026-05-03")), W.isHoliday(D("2026-06-07")), W.isHoliday(D("2026-05-10"))], [true, false, 15, true, false, true, true, false], "pirmas sekmadienis");
+  });
+
+  await testas("Velykos - kaip nepriklausomas Gauss algoritmas kiekvienais Grigaliaus kalendoriaus 1583-4099 m.; žinomos datos, tarp jų anksčiausia (2285-03-22) ir vėliausia (2038-04-25); Velykų pirmadienis - ne darbo diena", async ()=>{
+    const gauss = (Y) => { const K = Math.floor(Y / 100), M = 15 + Math.floor((3 * K + 3) / 4) - Math.floor((8 * K + 13) / 25), S = 2 - Math.floor((3 * K + 3) / 4),
+      A = Y % 19, Dd = (19 * A + M) % 30, Rr = Math.floor((Dd + Math.floor(A / 11)) / 29), OG = 21 + Dd - Rr, SZ = 7 - (Y + Math.floor(Y / 4) + S) % 7;
+      return W.isoLocal(new wd.Date(Y, 2, OG + 7 - (OG - SZ) % 7)); };
+    const blogi = [];
+    for (let y = 1583; y <= 4099; y++) { const e = W.isoLocal(W.easterSunday(y)); if (e !== gauss(y)) blogi.push(y + ": " + e + " / " + gauss(y)); }
+    tiesa(!blogi.length, "nesutampa: " + blogi.slice(0, 5).join("; "));
+    lygu([2008, 2024, 2025, 2026, 2027, 2028, 2038, 2285].map(y => W.isoLocal(W.easterSunday(y))),
+      ["2008-03-23", "2024-03-31", "2025-04-20", "2026-04-05", "2027-03-28", "2028-04-16", "2038-04-25", "2285-03-22"], "datos");
+    lygu([W.isHoliday(D("2026-04-05")), W.isHoliday(D("2026-04-06")), W.isHoliday(D("2026-04-07")), W.isWorkday(D("2026-04-06"))], [true, true, false, false], "Velykų pirmadienis");
+  });
+
+  await testas("isWorkday / addWorkdays: savaitgaliai ir šventės praleidžiami į priekį ir atgal, per metų ribą ir laiko sukimą; grąžinama vietinė vidurnaktis, paduota data nekeičiama", async ()=>{
+    lygu(["2026-09-26", "2026-09-27", "2026-09-28", "2026-07-06", "2026-11-02", "2026-11-03", "2027-02-16", "2027-03-11"].map(s => W.isWorkday(D(s))),
+      [false, false, true, false, false, true, false, false], "isWorkday");
+    const P = (s, n) => W.isoLocal(W.addWorkdays(D(s), n));
+    lygu([P("2026-12-23", 1), P("2026-12-28", -1), P("2027-03-26", 1), P("2027-03-30", -1), P("2026-12-31", 1), P("2026-09-28", 10), P("2026-09-28", -1)],
+      ["2026-12-28", "2026-12-23", "2027-03-30", "2027-03-26", "2027-01-04", "2026-10-12", "2026-09-25"], "addWorkdays");
+    const pries = new wd.Date(2026, 11, 23, 23, 30), po = W.addWorkdays(pries, 1), nulis = W.addWorkdays(pries, 0);
+    const sukimas = [W.addWorkdays(D("2026-10-23"), 1), W.addWorkdays(D("2027-03-26"), 1)];   // 2026-10-25 ir 2027-03-28 - laiko sukimas
+    lygu([po.getHours(), po.getMinutes(), pries.getDate(), pries.getHours(), W.isoLocal(nulis), nulis !== pries, nulis.getHours(), sukimas.map(x => W.isoLocal(x) + " " + x.getHours())],
+      [0, 0, 23, 23, "2026-12-23", true, 0, ["2026-10-26 0", "2027-03-30 0"]], "laikas");
+  });
+
+  await testas("fmtDate: Date, eilutė ir laiko žymė -> vietinė „YYYY-MM-DD“; neteisinga data - tuščia eilutė, ne „NaN-NaN-NaN“", async ()=>{
+    lygu([W.fmtDate(new wd.Date(2026, 8, 28, 0, 30)), W.fmtDate("2026-09-28T00:30"), W.fmtDate(new wd.Date(2026, 0, 5).getTime()), W.fmtDate("ne data"),
+      W.fmtDate(new wd.Date(NaN)), W.isoLocal(new wd.Date(2026, 8, 5))], ["2026-09-28", "2026-09-28", "2026-01-05", "", "", "2026-09-05"], "fmtDate");
+  });
+  fd.remove();
+
+  await testas("Sargas: švenčių sąrašas ir Velykų skaičiavimas - tik workdays.js (moduliuose savų švenčių datų be metų ir Velykų algoritmo nėra)", async ()=>{
+    const DIENA = /["'`](?:01-01|02-16|03-11|05-01|06-24|07-06|08-15|11-01|11-02|12-24|12-25|12-26)["'`]/g, VELYKOS = /%\s*19\b[\s\S]{0,300}?%\s*30\b/;
+    const blogi = [];
+    for (const m of DATU_FAILAI) {
+      if (m === "workdays.js") continue;
+      const src = await saltinis(m), n = (src.match(DIENA) || []).length;
+      if (n >= 2) blogi.push(m + ": " + n + " švenčių datos be metų");
+      if (VELYKOS.test(src)) blogi.push(m + ": Velykų skaičiavimas");
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
 
   await testas("GP_WORKDAYS.siandien() ir GP_EKSPORTAS - vietinė data: 00:30 Lietuvos laiku - ta pati diena (toISOString duotų vakarykštę)", async ()=>{
     const { f, w } = await ramas(`<script src="workdays.js"><\/script><script src="eksportas.js"><\/script><script src="backup.js"><\/script>`);
