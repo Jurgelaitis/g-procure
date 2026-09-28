@@ -13,32 +13,49 @@
  * PARSINIMO taisykle (US/EU maisyma sprendziam pagal SKYRIKLIU pozicija):
  *  - Jei yra IR taskas, IR kablelis: decimalinis tas, kuris paskutinis
  *    (14,900.00 -> taskas decimalinis; 743.490,00 -> kablelis decimalinis).
- *  - Jei tik vienas skyriklio tipas: jis decimalinis, kai vienas ir po jo NE 3
- *    skaitmenys (12,5; 1234.56; 1234,5678 - su 4+ skaitmenimis tukstanciu grupe
- *    negalima); kitaip - tukstanciu skyriklis (1,500,000; 1.500.000; 743.490).
+ *  - Jei tik vienas skyriklio tipas ir jis kartojasi - tukstanciai (1,500,000;
+ *    1.500.000). Jei vienas: tukstanciai TIK kai po jo 3 skaitmenys, o pries ji
+ *    1-3 skaitmenys (ne "0") - "14.900", "1,500", "150.000" (tokia tukstanciu
+ *    grupe); kitaip decimalinis: 12,5; 1234.56; 0,125; 12396.686; 1234,5678.
  *  - Nevienareiksmis atvejis "1.500" / "1,500" (vienas skyriklis + 3 skaitmenys)
  *    traktuojamas kaip TUKSTANCIAI (1500), nes pirkimu sumos buna sveiki eurai,
  *    ne 3 skaiciu po kablelio tikslumas. Tai samoningas pasirinkimas.
- *  - Tekste imamas PIRMAS skaicius (tarpai - tukstanciu skyrikliai, todel
- *    pasalinami); skyriklis gale nesiskaito ("2,5 val.", "12,50 Eur/vnt." -
- *    taskas is santrumpos). Iki 2026-09-28 visi skaitmenys ir skyrikliai buvo
- *    suklijuojami: "1 234,56 Eur." -> 123456, "12 500 (15 125 su PVM)" -> 1250015125.
+ *  - Tarpai ir apostrofai skaiciuje - tukstanciu skyrikliai (1 500 000; 1'500'000);
+ *    skyriklis, po kurio dar yra tarpu atskirta grupe ("1.500 000"), - irgi.
+ *  - Tekste pinigams imamas PIRMAS skaicius ("EUR 1 500", "1 500 Eur."), skyriklis
+ *    gale nesiskaito ("12,50 Eur/vnt." - taskas is santrumpos). parseSkaicius skaito
+ *    tik lauka, kuris skaiciumi PRASIDEDA: "Kabelis 110 kV", "zr. 2 priedą",
+ *    "kg CO2e 12,5" - ne skaiciai (kaip parseFloat). Iki 2026-09-28 visi skaitmenys
+ *    buvo suklijuojami: "1 234,56 Eur." -> 123456, "12 500 (15 125 su PVM)" -> 1250015125.
  * ========================================================================== */
 ;(function (global) {
   "use strict";
 
-  // Pirmas skaicius tekste be tarpu. Skyriklis priekyje - tik teksto pradzioje (",50"), gale - atmetamas.
-  // suZenklu: minusas ir rodykle (4,52E+02 - EPD lentelese) - ne pinigams.
-  function skaiciausTekstas(input, suZenklu) {
-    var s = String(input).replace(/[\s\u00a0\u202f]/g, "");
-    var m = s.match(suZenklu ? /^-?[.,]\d[\d.,]*(?:[eE][+-]?\d+)?|-?\d[\d.,]*(?:[eE][+-]?\d+)?/ : /^[.,]\d[\d.,]*|\d[\d.,]*/);
-    return m ? m[0].replace(/[.,]+$/, "") : "";
+  // Skaiciaus tekstas -> { s: be tarpu, grupes: po paskutinio skyriklio dar tarpu atskirta grupe } arba null.
+  // Pinigams - pirmas skaicius tekste (skyriklis priekyje - tik teksto pradzioje: ",50"); arSkaicius (kiekiai,
+  // koeficientai) - tik jei tekstas skaiciumi PRASIDEDA, su zenklu (-, minusas, bruksnys) ir rodykle (4,52E+02).
+  var TARPAS = /[\s\u00a0\u202f]/g;
+  function skaiciausTekstas(input, arSkaicius) {
+    var t = String(input).replace(/(\d)['\u2019](?=\d)/g, "$1").replace(/[\u2212\u2013]/g, "-");
+    var m = arSkaicius ? t.match(/^[\s\u00a0\u202f]*([+-]?[\s\u00a0\u202f]*(?:[.,](?=\d)|\d)[\d.,\s\u00a0\u202f]*(?:[eE][+-]?\d+)?)/)
+                       : t.match(/(?:^[\s\u00a0\u202f]*[.,](?=\d)|\d)[\d.,\s\u00a0\u202f]*/);
+    if (!m) return null;
+    var tok = (m[1] || m[0]).replace(/[.,\s\u00a0\u202f]+$/, "");
+    var p = Math.max(tok.lastIndexOf("."), tok.lastIndexOf(","));
+    return { s: tok.replace(TARPAS, ""), grupes: p >= 0 && /[\s\u00a0\u202f]/.test(tok.slice(p)) };
+  }
+
+  // Vienas skyriklis - tukstanciu, jei po jo 3 skaitmenys, o pries ji 1-3 skaitmenys (ne "0") arba po jo dar tarpu atskirta grupe.
+  function tukstanciai(s, i, grupes) {
+    var pries = s.slice(0, i);
+    return grupes || (s.length - i - 1 === 3 && pries.length >= 1 && pries.length <= 3 && pries !== "0");
   }
 
   // Pinigu tekstas -> Number arba null (jei neiskaitoma).
   function parseEUR(input) {
     if (input == null) return null;
-    var s = skaiciausTekstas(input, false);           // tik skaitmenys, . ir , (zenklas - kvieteju reikalas)
+    var r = skaiciausTekstas(input, false);           // tik skaitmenys, . ir , (zenklas - kvieteju reikalas)
+    var s = r && r.s;
     if (!s) return null;
 
     var lastDot = s.lastIndexOf(".");
@@ -48,11 +65,9 @@
     if (lastDot !== -1 && lastComma !== -1) {
       dec = lastDot > lastComma ? "." : ",";          // paskutinis - decimalinis
     } else if (lastComma !== -1) {
-      var afterC = s.length - lastComma - 1;
-      if (s.indexOf(",") === lastComma && afterC !== 3) dec = ",";
+      if (s.indexOf(",") === lastComma && !tukstanciai(s, lastComma, r.grupes)) dec = ",";
     } else if (lastDot !== -1) {
-      var afterD = s.length - lastDot - 1;
-      if (s.indexOf(".") === lastDot && afterD !== 3) dec = ".";
+      if (s.indexOf(".") === lastDot && !tukstanciai(s, lastDot, r.grupes)) dec = ".";
     }
 
     var norm;
@@ -78,17 +93,20 @@
 
   // Skaičius, kuris NE pinigai (kiekis, faktorius, trukmė, anglis): priimami ir LT, ir EN formatai. Kaip parseEUR - jei yra abu
   // skyrikliai, dešinysis dešimtainis; tas pats skyriklis kartojasi - tūkstančių. Skirtumas: VIENAS skyriklis visada dešimtainis
-  // (0,125 lieka 0,125 - kiekiai būna su trimis skaitmenimis po kablelio), neigiami leidžiami. Grąžina Number arba null.
+  // (0,125 lieka 0,125 - kiekiai būna su trimis skaitmenimis po kablelio), neigiami leidžiami (ir „−“). Laukas turi skaičiumi
+  // PRASIDĖTI („2,5 val.“ - 2,5; „Kabelis 110 kV“, „žr. 2 priedą“ - null): PP-negotiation PDF eilutės ir tekstiniai langeliai
+  // kitaip taptų pozicijomis. Grąžina Number arba null.
   // Iki 2026-09-28 PP-carbon ir PP-negotiation turėjo savus parserius, kurie „1.500.000“ skaitė kaip 1,5.
   function parseSkaicius(input) {
     if (input == null) return null;
     if (typeof input === "number") return isFinite(input) ? input : null;
-    var s = skaiciausTekstas(input, true);
+    var r = skaiciausTekstas(input, true);
+    var s = r && r.s;
     if (!s) return null;
     var t = s.lastIndexOf("."), k = s.lastIndexOf(",");
     if (t !== -1 && k !== -1) s = t > k ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
-    else if (k !== -1) s = s.indexOf(",") === k ? s.replace(",", ".") : s.replace(/,/g, "");
-    else if (t !== -1 && s.indexOf(".") !== t) s = s.replace(/\./g, "");
+    else if (k !== -1) s = s.indexOf(",") === k && !r.grupes ? s.replace(",", ".") : s.replace(/,/g, "");
+    else if (t !== -1 && (s.indexOf(".") !== t || r.grupes)) s = s.replace(/\./g, "");
     var n = parseFloat(s);
     return isFinite(n) ? n : null;
   }
