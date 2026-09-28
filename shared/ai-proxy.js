@@ -147,7 +147,9 @@
     if (result.status === 429) return true;      // per daug uzklausu
     if (result.status >= 500) return true;       // 529 overloaded ir kitos laikinos serverio klaidos
     // 413 (per didelis failas) NEKARTOJAMAS - kartojimas duotu ta pati atsakyma.
-    return /overloaded|rate/i.test(result.error || "");
+    // Tekste - tik žodžiai „overloaded“ ir „rate limit“ („rate_limit_error“): vien „rate“ pagaudavo ir „generate“, „accurate“,
+    // tad tokia 400 klaida buvo kartojama 3 kartus (2026-09-28)
+    return /overloaded|rate[\s_-]*limit/i.test(result.error || "");
   }
 
   // Pauze tarp bandymu (backoff). setTimeout - narsykles aplinka.
