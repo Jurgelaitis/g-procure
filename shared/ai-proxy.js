@@ -255,6 +255,12 @@
   // (dvitaškis po rakto; kablelis, po kurio prasideda raktas ar reikšmė; uždarantis
   // skliaustas; teksto pabaiga). Neuždaryta eilutė ar neuždarytas JSON NEtaisomi -
   // nutrauktas (max_tokens) atsakymas lieka null, kad dalis nebūtų rodoma kaip visuma.
+  /* Masyve po kablelio eilute uzdaro tik TIKRA JSON reiksme: kabute, objektas, masyvas arba
+     true / false / null / skaicius, po kuriu eina skyriklis. Iki 2026-09-28 pakako pirmos raides
+     (t, f, n, skaitmuo), tad lietuviskas tesinys mazaja raide - „... „Pasiulymo forma", nes ...",
+     „..., tik jei ...", „..., 3 egz." - uzdarydavo eilute per anksti ir visas atsakymas buvo prarandamas. */
+  var REIKSME_PO_KABLELIO = /^(?:true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*(?:[,\]}]|$)/;
+
   function taisykJson(s) {
     var out = "", i = 0, n = s.length, stack = [], expect = "value";
     function top() { return stack[stack.length - 1]; }
@@ -272,7 +278,10 @@
           if (c !== '"') { str += c; j++; continue; }
           var k = praleisk(j + 1), nx = s.charAt(k), closes;
           if (expect === "key") closes = nx === ":";
-          else if (nx === ",") { var nn = s.charAt(praleisk(k + 1)); closes = top() === "o" ? nn === '"' : /["\d\-{\[tfn]/.test(nn); }
+          else if (nx === ",") {
+            var kk = praleisk(k + 1), nn = s.charAt(kk);
+            closes = top() === "o" ? nn === '"' : (/["{\[]/.test(nn) || REIKSME_PO_KABLELIO.test(s.slice(kk, kk + 40)));
+          }
           else if (nx === "}") closes = top() === "o";
           else if (nx === "]") closes = top() === "a";
           else closes = k >= n;
