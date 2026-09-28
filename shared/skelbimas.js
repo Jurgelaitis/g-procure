@@ -251,7 +251,7 @@
     if (p) {
       var org = global.GP_ORG && global.GP_ORG.rask(p.value);
       if (org) prideti("vykdytojas", org.id, p.snippet);
-      else pastabos.push(P.neregistre.replace("{p}", p.value));
+      else pastabos.push(P.neregistre.replace("{p}", function () { return p.value; }));   // funkcija: skelbimo tekstas su „$&“ nekeičiamas
     }
     var r = rezimas(t, failoVardas);
     if (r.value) {
@@ -285,7 +285,7 @@
       }
       if (id) prideti("budas", id, bud.citata + (rusis ? P.failas + (rusis === "supaprastintas" ? P.nacionalinis : P.tarptautinis) : ""),
                       rusis ? P.variantas.replace("{r}", P.rusis[rusis] || rusis) : null);
-      else pastabos.push(P.budas.replace("{b}", bud.reiksme) + (b && b[2] ? P.budasVariantas : P.budasPatys));
+      else pastabos.push(P.budas.replace("{b}", function () { return bud.reiksme; }) + (b && b[2] ? P.budasVariantas : P.budasPatys));
     }
     var tikslas = ruozas(eil, /^2\.1\.1\s/i, /^2\.1\.[2-9]\s|^5\s+Pirkimo\s+dalis/i);
     var obj = laukas(tikslas, "Sutarties objektas");
@@ -295,7 +295,7 @@
     if (km) {
       var pilnas = bvpzPilnas(km[1]);
       if (pilnas) prideti("bvpz", pilnas.kodas, cpv.citata);
-      else pastabos.push(P.bvpz.replace("{k}", km[1] + (km[2] ? " (" + km[2] + ")" : "")));
+      else pastabos.push(P.bvpz.replace("{k}", function () { return km[1] + (km[2] ? " (" + km[2] + ")" : ""); }));
     }
     var vert = laukas(ruozas(eil, /^2\.1\.3\s/i, /^2\.1\.[4-9]\s|^5\s+Pirkimo\s+dalis/i), "Numatoma vert[ėe] be PVM");
     var v = vert && global.GP_MONEY ? global.GP_MONEY.parseEUR(vert.reiksme) : null;

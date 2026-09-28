@@ -58,7 +58,8 @@
   };
   function pran(lang, key, vars) {
     var t = (PRAN[lang] || PRAN.lt)[key] || key;
-    Object.keys(vars || {}).forEach(function (v) { t = t.replace("{" + v + "}", String(vars[v])); });
+    // Funkcija, ne eilutė: failo vardas ar klaidos tekstas su „$&“, „$'“, „$$“ kitaip būtų keičiamas (String.replace šablonai)
+    Object.keys(vars || {}).forEach(function (v) { var r = String(vars[v]); t = t.replace("{" + v + "}", function () { return r; }); });
     return t;
   }
 
