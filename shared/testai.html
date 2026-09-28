@@ -3566,6 +3566,19 @@ async function testaiDatos(){
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 
+  await testas("Sargas: pdf.js darbininkas tik per shared/pdf-darbininkas.js (su SRI iš blob:) - joks puslapis nenustato workerSrc CDN adresu, kiekvienas pdf.js naudojantis jį jungia, o prieš kiekvieną getDocument - nustatyk()", async ()=>{
+    const blogi = [];
+    for (const m of kodoFailai()) {
+      const src = await saltinis(m);
+      if (/workerSrc\s*=\s*["'`]https?:/.test(src)) blogi.push(m + ": workerSrc = CDN adresas");
+      if (/\.html$/.test(m) && /pdf(?:\.min)?\.js/.test(src.replace(/pdf-darbininkas\.js/g, "")) && /pdfjsLib|GP_DOK/.test(src) && !/<script src="(?:\.\.\/)?shared\/pdf-darbininkas\.js"><\/script>/.test(src)) blogi.push(m + ": pdf.js be shared/pdf-darbininkas.js");
+      // Be nustatyk() pdf.js darbininko adreso neturi (arba turi kito puslapio CDN) - skaitymas lūžta arba eina be patikros
+      for (const x of src.matchAll(/getDocument\(/g))
+        if (!/GP_PDF_DARBININKAS\.nustatyk\(\)/.test(src.slice(Math.max(0, x.index - 400), x.index))) blogi.push(m + ": getDocument be GP_PDF_DARBININKAS.nustatyk() prieš jį");
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
   await testas("pdf.js darbininkas su SRI: nustatyk() - blob: adresas ir PDF perskaitomas; kita maiša - atmetama, adresas nekeičiamas (iki 2026-09-28 darbininkas be patikros matė visus dokumentus)", async ()=>{
     const PDFJS = '<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==" crossorigin="anonymous"><\/script>';
     const { f, w } = await ramas(PDFJS + '<script src="pdf-darbininkas.js"><\/script>');
@@ -3587,6 +3600,31 @@ async function testaiDatos(){
       k.w.GP_PDF_DARBININKAS.SRI = tikra;
       tiesa(/^blob:/.test(await k.w.GP_PDF_DARBININKAS.nustatyk()), "po nesėkmės - bandoma iš naujo");
     } finally { k.f.remove(); }
+  });
+
+  await testas("PDF skaitymas moduliuose su darbininku iš blob: - PP-negotiation (pasiūlymas), PP-qual (priedas), PP-ts (specifikacija) ir PP-tiekejams (dokumentų paketas): tekstas perskaitomas", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(() => true);
+    const blogi = [], laukti = async (salyga) => { for (let i = 0; i < 150 && !salyga(); i++) await new Promise(r => setTimeout(r, 100)); };
+    const failas = w => new w.File([pdfIsEiluciu(["Komercinis pasiulymas Kabelis", "Is viso: 14 938,26 EUR be PVM"])], "bandymas.pdf", { type: "application/pdf" });
+    const ATVEJAI = [
+      ["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", async w => { const r = await w.parsePDF(failas(w), "a"); return r.ok && r.total === 14938.26 ? "Kabelis" : JSON.stringify(r); }],
+      ["../PP-qual/PP-QUAL.html", w => w.readPdf(failas(w))],
+      ["../PP-ts/TS_Asistentas.html", async (w, d) => { const i = d.getElementById("fileInput"), dt = new w.DataTransfer(); dt.items.add(failas(w)); i.files = dt.files;
+        i.dispatchEvent(new w.Event("change", { bubbles: true })); await laukti(() => /Kabelis/.test(d.getElementById("specText").value)); return d.getElementById("specText").value; }],
+      ["../PP-tiekejams/index.html", async w => { await w.__PPT.onFiles([failas(w)]); return (w.__PPT.S.docs[0] || { blocks: [] }).blocks.map(b => b.text).join(" "); }]
+    ];
+    try {
+      for (const [m, skaityk] of ATVEJAI) {
+        const f = await prieinamumoRemas(m);
+        try {
+          const w = f.contentWindow;
+          let t = ""; try { t = String(await skaityk(w, f.contentDocument)); } catch (e) { blogi.push(m + ": " + e.message); continue; }
+          if (!/Kabelis/.test(t)) blogi.push(m + ": tekstas neperskaitytas (" + t.slice(0, 100) + ")");
+          if (!/^blob:/.test(w.pdfjsLib.GlobalWorkerOptions.workerSrc)) blogi.push(m + ": darbininkas ne iš blob: (" + w.pdfjsLib.GlobalWorkerOptions.workerSrc + ")");
+        } finally { f.remove(); }
+      }
+    } finally { A.atkurk(); }
+    tiesa(!blogi.length, blogi.join("\n  "));
   });
 
   await testas("GP_WORKDAYS.siandien() ir GP_EKSPORTAS - vietinė data: 00:30 Lietuvos laiku - ta pati diena (toISOString duotų vakarykštę)", async ()=>{
