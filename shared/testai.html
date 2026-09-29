@@ -982,6 +982,26 @@ async function testaiAntraste(){
     }
     tiesa(!blogi.length, blogi.join("\n  "));
   });
+  /* Aštuntoji peržiūra: PP-protocol saugojimo žyma kinta („● Duomenys šioje naršyklėje“ ↔ „✓ Išsaugota“), tad be pastovaus pločio po kiekvieno
+     išsaugojimo 2,5 s mygtukų tekstai atsirasdavo ir vėl dingdavo (1084-1162 ir 1324-1396 px, tarp jų 1366 px nešiojamas kompiuteris). */
+  await testas("PP-protocol: išsaugojus antraštės mygtukai nešokinėja (saugojimo žymos plotis pastovus)", async ()=>{
+    const f = await new Promise(res => {
+      const f = document.createElement("iframe"); f.style.width = "1366px"; f.style.height = "300px";
+      f.addEventListener("load", async () => { const d = f.contentDocument; if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 150)); res(f); }, { once: true });
+      f.src = "../PP-protocol/LITGRID_Generatorius_v3.html?b=" + Date.now(); document.body.appendChild(f);
+    });
+    try {
+      const w = f.contentWindow, d = f.contentDocument, blogi = [];
+      const be = () => [...d.querySelectorAll(".app-header .btn-header")].filter(b => { const sp = [...b.children].find(c => c.tagName === "SPAN"); return sp && w.getComputedStyle(sp).position === "absolute"; }).length;
+      for (const p of [1100, 1150, 1366, 1390]) {
+        f.style.width = p + "px"; await kadrai(w);
+        const r = [];
+        for (const b of ["idle", "saved", "saving", "error", "idle"]) { w.setSaveState(b); await kadrai(w); r.push(be()); }
+        if (new Set(r).size > 1) blogi.push(p + " px: paslėptų tekstų skaičius keitėsi " + r.join(" -> "));
+      }
+      tiesa(!blogi.length, blogi.join("\n  "));
+    } finally { f.remove(); }
+  });
   await testas("Tilpimo tvarka (modulio-antraste.js): pirma antraeilių mygtukų tekstas, tada kitų, pagrindinio - paskutinis; be ikonos - niekada; iki 900 px - nieko; title grąžinamas", async ()=>{
     // Pločiai deterministiniai: mygtuko tekstas 250 px, pavadinimas 300 px (šriftas nesvarbus). Lygiai: >= 1634 px - visi su tekstu,
     // 1368-1633 - be A, 1102-1367 - be A ir B, 836-1101 - be A, B, C; D (be ikonos) - visada su tekstu.
@@ -996,6 +1016,7 @@ async function testaiAntraste(){
         + '<header class="app-header"><div class="header-inner"><div class="brand"><div class="brand-logo"></div><div class="brand-text"><span class="brand-group">GP</span>'
         + '<h1 class="brand-module"><span class="t">Modulis</span></h1></div></div><div class="header-right">'
         + btn(" btn-header--ikona", "A", true, "") + btn("", "B", true, "Esamas paaiškinimas") + btn(" btn-header--pagr", "C", true, "") + btn("", "D", false, "")
+        + '<span class="header-zyma" id="Z" style="display:none;width:300px">Būsena</span>'
         + '</div></div></header><script src="modulio-antraste.js"><\/script></body></html>';
       document.body.appendChild(f);
     });
@@ -1020,6 +1041,19 @@ async function testaiAntraste(){
       d.querySelector("#D .t").style.width = "600px"; d.querySelector("#D .t").textContent = "D ilgesnis";
       await kadrai(w); await kadrai(w);
       tiesa(be() === "AB", "pakeitus tekstą antraštė perskaičiuota (1500 px, D 600 px - be A ir B), gauta: " + be());
+      d.querySelector("#D .t").style.width = "250px"; d.querySelector("#D .t").textContent = "D"; await kadrai(w); await kadrai(w);
+      // Aštuntoji peržiūra: žyma parodoma / paslepiama tik stiliumi ar klase (PP-negotiation projekto žyma) - teksto pokyčio nėra, o .header-inner
+      // dydis nesikeičia (veiksmų juosta nesitraukia) - tilpimas perskaičiuojamas pagal veiksmų juostos dydį
+      tiesa(be() === "A", "1500 px pradžia - be A, gauta: " + be());
+      d.getElementById("Z").style.display = "inline-flex"; await kadrai(w); await kadrai(w);
+      tiesa(be() === "AB", "parodžius žymą (300 px) tik stiliumi - be A ir B, gauta: " + be());
+      d.getElementById("Z").style.display = "none"; await kadrai(w); await kadrai(w);
+      tiesa(be() === "A", "paslėpus žymą tik stiliumi - tekstai grąžinami (be A), gauta: " + be());
+      // Grupės eilutė platesnė už pavadinimą (PP-ts, PP-esg): virš 900 px ji nelūžta, o suspausta - kaip pavadinimas: pirma slepiami mygtukų tekstai
+      f.style.width = "1750px"; await kadrai(w);
+      tiesa(be() === "", "1750 px - visi su tekstu, gauta: " + be());
+      d.querySelector(".brand-group").textContent = "Labai ilga grupės eilutė su daug žodžių ".repeat(3); await kadrai(w); await kadrai(w);
+      tiesa(be() !== "" && Math.round(h.getBoundingClientRect().height) <= 80, "ilga grupės eilutė (daug žodžių) - mygtukų tekstai slepiami, antraštė vienos eilutės; gauta: „" + be() + "“, " + Math.round(h.getBoundingClientRect().height) + " px");
     } finally { f.remove(); }
   });
   await testas("Grupės eilutė ant gradiento >= 4,5:1 ir šviesiausiame gradiento taške", async ()=>{
@@ -2787,7 +2821,7 @@ function telefonoSlinktis(d){
    Taip buvo PP-market-KPI ribų lentelė (dešinė pusė), informacinės skilties „Suskleisti“, PP-plan jungiklio paskutinis pasirinkimas,
    PP-report 1 priedo skyriai (iki 288 px), PP-protocol naujo pirkimo vedlys ir A3-A5 formų lentelės. Lyginama su 1280 px - ten
    apkarpyti elementai (sąmoningi) klaida nelaikomi; daugtaškis - sąmoningas trumpinimas. Grąžina išmatuotų pločių skaičių. */
-async function telefonoMatuok(f, kur, blogi){
+async function telefonoMatuok(f, kur, blogi, plociai){
   const w = f.contentWindow, d = f.contentDocument;
   const kadras = () => new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
   const karpo = () => new Set([...d.body.querySelectorAll("*")].filter(e => {
@@ -2797,7 +2831,7 @@ async function telefonoMatuok(f, kur, blogi){
   const pav = e => e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/)[0] : "");
   f.style.width = "1280px"; await kadras(); const placiai = karpo();
   let n = 0;
-  for (const p of [375, 320]) {
+  for (const p of (plociai || [375, 320])) {
     f.style.width = p + "px"; await kadras(); n++;
     const k = kur + " (" + p + " px)", s = telefonoSlinktis(d);
     if (s) blogi.push(k + ": " + s);
@@ -2836,7 +2870,7 @@ async function testaiTelefonas(){
   /* Su duomenimis (2026-09-29): tuščias modulis telpa, o su pirkimais ar pavyzdžiais - ne: PP-plan su pavyzdiniais duomenimis 375 px buvo
      401 px (kategorijų juostų 150 + 180 px stulpeliai), PP-protocol sąrašas 320 px - 327 px (1fr stulpelis pagal ilgiausią kortelę), A3-A5
      formų lentelės kortelėse nukirptos. Būsenos - tos pačios kaip prieinamumo testų (PRIEINAMUMO_BUSENOS); saugykla atkuriama. */
-  await testas("Su duomenimis (PP-protocol pirkimai ir formos, PP-plan pavyzdžiai ir skirtukai, skaičiuoklės pavyzdys, PP-report 2 priedas) 375 ir 320 px - neslenka ir nenukerpa", async ()=>{
+  await testas("Su duomenimis (PP-protocol pirkimai ir formos, PP-plan pavyzdžiai ir skirtukai, skaičiuoklės pavyzdys, PP-report 2 priedas) planšetėje 720 ir 640 px ir telefone 375 ir 320 px - neslenka ir nenukerpa", async ()=>{
     const A = GP_TESTU_APSAUGA.pradek(() => true);
     const blogi = []; let matuota = 0;
     try {
@@ -2848,13 +2882,14 @@ async function testaiTelefonas(){
           for (const [pav, fn, sel] of busenos) {
             try { await fn(w, d); } catch (e) { blogi.push(m + " · " + pav + ": būsena neatsivėrė - " + e.message); continue; }
             await new Promise(r => setTimeout(r, 250));
-            matuota += await telefonoMatuok(f, m.replace("../", "") + " · " + pav, blogi);
-            if (sel) for (const t of [...d.querySelectorAll(sel)]) { t.click(); await new Promise(r => setTimeout(r, 150)); matuota += await telefonoMatuok(f, m.replace("../", "") + " · " + pav + " · „" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 25) + "“", blogi); }
+            // Planšetė (aštuntosios peržiūros tęsinys): PP-plan su pavyzdžiais 640-720 px slinko - kategorijų juosta siauresnėje kortelėje
+            matuota += await telefonoMatuok(f, m.replace("../", "") + " · " + pav, blogi, [720, 640, 375, 320]);
+            if (sel) for (const t of [...d.querySelectorAll(sel)]) { t.click(); await new Promise(r => setTimeout(r, 150)); matuota += await telefonoMatuok(f, m.replace("../", "") + " · " + pav + " · „" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 25) + "“", blogi, [720, 640, 375, 320]); }
           }
         } finally { f.remove(); }
       }
     } finally { A.atkurk(); }
-    tiesa(matuota >= 30, "išmatuota tik " + matuota + " būsenų x pločių");
+    tiesa(matuota >= 60, "išmatuota tik " + matuota + " būsenų x pločių");
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 
