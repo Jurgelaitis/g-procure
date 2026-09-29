@@ -787,7 +787,19 @@
       var b = document.createElement("button");
       b.type = "button"; b.className = "gpk-btn" + (pagr ? " gpk-btn--pagr" : "");
       b.textContent = tekstas;
-      b.addEventListener("click", fn);
+      // Perpiešus juostą mygtukas dažnai dingsta („Naudoti“, „Taikyti“) - klaviatūros naudotojo fokusas tada nukrisdavo į puslapio pradžią
+      // (išmatuota 2026-09-29: 10 modulių). Tada fokusas - į kortelės pasirinkimą, kur matyti rezultatas; atvėrus langą ar perkėlus fokusą - neliečiama.
+      b.addEventListener("click", function (e) {
+        fn(e);
+        var gelbek = function () {
+          var a = document.activeElement;
+          if (b.isConnected || (a && a !== document.body && a !== document.documentElement)) return;
+          // Modulis juostą gali perkurti (PP-qual) - tada imamas naujas pasirinkimo laukas, ne šios juostos
+          var s = sel.isConnected ? sel : document.getElementById("gpk-sel");
+          if (s && !s.disabled) s.focus();
+        };
+        gelbek(); setTimeout(gelbek, 0);
+      });
       return b;
     }
 
