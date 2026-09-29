@@ -2929,6 +2929,39 @@ async function testaiTelefonas(){
     tiesa(!blogi.length, [...new Set(blogi)].slice(0, 15).join("\n  "));
   });
 
+  /* Devintoji peržiūra: PP-report lentelė telefone yra savo slinkties rėmelis (display:block) - be width:fit-content 640-720 px eilutės
+     būdavo siauresnės už rėmelį (tuščia juosta). PP-plan kategorijų juostos lūžta tik kai netelpa - kompiuteryje turi likti vienoje eilutėje. */
+  await testas("PP-report lentelė telefone ir planšetėje užpildo savo rėmelį; PP-plan kategorijų juostos kompiuteryje (1000-1920 px) - vienoje eilutėje", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(() => true);
+    const blogi = [], kadrai = w => new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(() => setTimeout(r, 20))));
+    try {
+      let f = await telefonoRemas("../PP-report/PP-report.html");
+      try {
+        const w = f.contentWindow, d = f.contentDocument;
+        for (const [forma, p] of [[1, 720], [1, 640], [1, 375], [2, 720], [2, 680], [2, 640], [2, 375]]) {
+          if (w.__forma !== forma) { w.selectForm(forma); w.__forma = forma; await new Promise(r => setTimeout(r, 200)); }
+          f.style.width = p + "px"; await kadrai(w);
+          const lent = [...d.querySelectorAll(".data-table")].filter(t => t.getClientRects().length && t.rows.length);
+          if (!lent.length) { blogi.push("PP-report: nėra matomų lentelių"); break; }
+          lent.forEach(t => { const tuscia = t.clientWidth - t.rows[0].getBoundingClientRect().width;
+            if (tuscia > 2) blogi.push("PP-report " + forma + " priedas " + p + " px: lentelės " + (t.id || "be id") + " rėmelyje tuščia juosta " + Math.round(tuscia) + " px"); });
+        }
+      } finally { f.remove(); }
+      f = await prieinamumoRemas("../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html");
+      try {
+        const w = f.contentWindow, d = f.contentDocument; w.confirm = () => true; w.loadDemo(); await new Promise(r => setTimeout(r, 300));
+        for (const p of [1000, 1280, 1920]) {
+          f.style.width = p + "px"; await kadrai(w);
+          const eil = [...d.querySelectorAll(".catbar-row")].filter(x => x.getClientRects().length);
+          if (!eil.length) { blogi.push("PP-plan: kategorijų juostų nėra"); break; }
+          eil.forEach((x, i) => { const l = x.querySelector(".catbar-lbl").getBoundingClientRect(), v = x.querySelector(".catbar-val").getBoundingClientRect();
+            if (v.top > l.bottom - 4) blogi.push("PP-plan " + p + " px: " + (i + 1) + " juosta lūžo į dvi eilutes"); });
+        }
+      } finally { f.remove(); }
+    } finally { A.atkurk(); }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
   await testas("Pirkimo kortelės juosta telefone: ilgas kortelės pavadinimas neplečia modulio (ir kai modulio stulpelis 1fr)", async ()=>{
     const { f, w, d, K } = await korteleRemas('<div style="display:grid;grid-template-columns:1fr"><main><div id="infoPanelMount"></div><input id="f-pav"></main></div>');
     try {
