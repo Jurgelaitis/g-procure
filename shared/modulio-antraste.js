@@ -63,8 +63,11 @@
         }
       }
     }
-    var m = h.querySelector(".brand-module");
-    if (m && matomas(m) && m.scrollWidth > m.clientWidth + 1) return false;         // pavadinimas suspaustas
+    // Pavadinimas ar grupės eilutė suspausti (virš 900 px jie nelūžta - trumpinami daugtaškiu, žr. CSS). Grupės eilutė kai kuriuose
+    // moduliuose platesnė už pavadinimą (PP-ts, PP-esg, PP-qual, PP-tiekejams), tad ji suspaudžiama pirmoji (aštuntoji peržiūra).
+    var m = h.querySelector(".brand-module"), g = h.querySelector(".brand-group");
+    if (m && matomas(m) && m.scrollWidth > m.clientWidth + 1) return false;
+    if (g && matomas(g) && g.scrollWidth > g.clientWidth + 1) return false;
     return true;
   }
 
@@ -120,7 +123,12 @@
       pritaikyk(h);
       // Tekstas keičiasi (būsenos žyma, kalba, vardas) - klasės ir title (atributai) nestebimi, tad ciklo nėra
       if (global.MutationObserver) new global.MutationObserver(veliau).observe(h, { childList: true, subtree: true, characterData: true });
-      if (global.ResizeObserver) new global.ResizeObserver(veliau).observe(h.querySelector(".header-inner") || h);
+      // Ir veiksmų juosta: elementas paslepiamas klase ar stiliumi (PP-negotiation projekto žyma, „Naujas“) - .header-inner dydis tada nesikeičia
+      if (global.ResizeObserver) {
+        var ro = new global.ResizeObserver(veliau);
+        ro.observe(h.querySelector(".header-inner") || h);
+        var hr = h.querySelector(".header-right"); if (hr) ro.observe(hr);
+      }
     });
   }
 
