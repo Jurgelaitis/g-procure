@@ -706,6 +706,298 @@ async function testaiKortele() {
   });
 }
 
+/* ==========================================================================
+   9. TS APIMTIS IR WORD DOKUMENTAS (2026-10-02, naudotojo taisyklė)
+   TS aprašo tik pirkimo objektą: sutarties užtikrinimas ir sankcijos, tiekėjo kvalifikacija, pasiūlymų vertinimas ir numatoma
+   vertė į ją nepatenka - nei iš AI, nei iš kodo (TsApimtis). Pašalinta parodoma su priežastimi; skyriai, punktai, atitikties
+   lentelė ir nuorodos tekste pernumeruojami viena funkcija. Word - be žalios, fonai CLEAR šviesiai pilki, be ilgųjų brūkšnių.
+   Vertė modulyje lieka: klausimams, rinkos analizei ir kainos įvertinimui (kortelė, patikros forma).
+   ========================================================================== */
+const BR = '\u2013', BRE = '\u2014';   // ilgieji brūkšniai bandomiesiems duomenims (šaltinyje - tik kodai)
+const VERTE = 150000;
+function bandomojiTs() {
+  return {
+    title: 'Galimybių studijos parengimas ' + BR + ' paslaugos',
+    sections: [
+      { number: '1', title: 'Bendrosios nuostatos', content: '1.1. Paslaugos tikslas ' + BR + ' parengti studiją.\n1.2. Žr. 4.2 p. dėl terminų.\n1.3. Sutarties vykdymo užtikrinimas aprašytas 7 skyriuje.' },
+      { number: '2', title: 'Pirkimo objekto aprašymas', content: '2.1. Studija apima 3 alternatyvas.\n2.2. Numatoma pirkimo vertė - 150 000 EUR be PVM.\n2.3. Paslaugas teikiantys specialistai turi turėti ne mažiau kaip 3 metų patirtį.\n2.4. Elektroninė dokumentų apyvarta - per sistemą.\n2.5. Sutarties vykdymo metu užtikrinti duomenų apsaugą.' },
+      { number: '3', title: 'Reikalavimai tiekėjo kvalifikacijai ir specialistų kompetencijai', content: '3.1. Tiekėjas per paskutinius 3 metus turi būti įvykdęs bent 2 panašias sutartis.' },
+      { number: '4', title: 'Kokybės užtikrinimas ir terminai', content: '4.1. Kokybės užtikrinimo planas pateikiamas per 10 d. d.\n4.2. Studija pateikiama per 120 d.\n4.3. Už vėlavimą taikomi 0,05 % delspinigiai.\n4.4. Matmenys ir svoriai nurodomi brėžiniuose.' },
+      { number: '5', title: 'Pasiūlymų vertinimo kriterijai ir metodika', content: '5.1. Kaina - 60 balų, kokybė - 40 balų.' },
+      { number: '6', title: 'Garantijos sąlygos', content: '6.1. Garantija ' + BRE + ' 24 mėn.\n6.1.1. Defektai šalinami per 5 d. d.\n6.3. Garantinis aptarnavimas (žr. 4.2 p.).' },
+      { number: '7', title: 'Sutarties vykdymo užtikrinimas ir sankcijos', content: '7.1. Užtikrinimas - 5 %.' },
+      { number: '8', title: 'Numatoma pirkimo vertė', content: '8.1. 148 000 EUR.' },
+      { number: '9', title: 'Priedas Nr. 1 - Atitikties lentelės pildymo nurodymai', content: '9.1. Tiekėjas pildo lentelę (žr. 6.3 p.).' }
+    ],
+    complianceTable: [
+      { ref: '2.1', requirement: '3 alternatyvos', category: 'technical' },
+      { ref: '3.1', requirement: '2 sutartys', category: 'qualification' },
+      { ref: '4.2', requirement: 'Per 120 d.', category: 'delivery' },
+      { ref: '6.1.1', requirement: 'Defektai ' + BR + ' per 5 d. d.', category: 'warranty' },
+      { ref: '6.3', requirement: 'Aptarnavimas', category: 'warranty' },
+      { ref: '6.9.9', requirement: 'Nesamas punktas', category: 'warranty' },
+      { ref: '7.1', requirement: 'Užtikrinimas', category: 'other' }
+    ],
+    complianceKlaida: '',
+    evaluationCriteria: [{ name: 'Kaina', weight: 60, formula: 'Bk = (Cmin/C) * 60', description: '' }],
+    keyElements: { warranty: '24 mėn.', penalty: '0,05 %' },
+    recommendations: []
+  };
+}
+const tvarka = (ts, vertes) => M('TsApimtis.tvarkyk(' + JSON.stringify(ts || bandomojiTs()) + ', { vertes: ' + JSON.stringify(vertes || [VERTE, 148000, null]) + ' })');
+/* Word dalys be bibliotekų: ZIP centrinis katalogas -> visi atitinkantys failai -> DecompressionStream (kaip PP-protocol testuose) */
+async function docxDalys(blob, re) {
+  const b = new Uint8Array(await blob.arrayBuffer()), dv = new DataView(b.buffer);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  tiesa(eocd >= 0, 'ne ZIP failas');
+  let p = dv.getUint32(eocd + 16, true), out = '';
+  for (let k = 0, n = dv.getUint16(eocd + 10, true); k < n; k++) {
+    const metodas = dv.getUint16(p + 10, true), dydis = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+    if (re.test(new TextDecoder().decode(b.subarray(p + 46, p + 46 + nl)))) {
+      const pr = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true), d = b.subarray(pr, pr + dydis);
+      out += metodas === 0 ? new TextDecoder().decode(d) : await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    }
+    p += 46 + nl + el + cl;
+  }
+  return out;
+}
+/* Naujas pirkimas su numatoma verte iki 2 žingsnio; grąžina klausimų užklausą (vertė modulyje naudojama) */
+async function pirkimasSuVerte(pav, verte) {
+  const w = W(), d = D();
+  const origP = w.GP_AI_PROXY.call, origC = w.confirm;
+  let uzklausa = '';
+  w.confirm = () => true;
+  w.GP_AI_PROXY.call = async o => { uzklausa = o.userMessage; return atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek alternatyvų?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] })); };
+  try {
+    M('App.startNewGeneration()');
+    d.getElementById('genTitle').value = pav;
+    d.getElementById('genType').value = 'services';
+    d.getElementById('genBudget').value = String(verte);
+    await M('App.startGeneration()');
+  } finally { w.GP_AI_PROXY.call = origP; w.confirm = origC; }
+  return uzklausa;
+}
+
+async function testaiApimtis() {
+  grupe('TS apimtis ir Word dokumentas (2026-10-02): tik pirkimo objektas, ištisinė numeracija, be žalios');
+
+  await testas('Pašalinama, kas TS nepriklauso (užtikrinimas ir sankcijos, kvalifikacija, vertinimas, vertė) - su priežastimi; TS dalys lieka (kokybės užtikrinimas, svoriai brėžiniuose, dokumentų apyvarta, „sutarties vykdymo metu užtikrinti“)', () => {
+    const r = tvarka();
+    lygu(r.ts.sections.map(s => s.number + '. ' + s.title), ['1. Bendrosios nuostatos', '2. Pirkimo objekto aprašymas', '3. Kokybės užtikrinimas ir terminai',
+      '4. Garantijos sąlygos', '5. Priedas Nr. 1 - Atitikties lentelės pildymo nurodymai'], 'skyriai');
+    const tipai = r.pasalinta.map(x => x.tipas);
+    ['kvalifikacija', 'vertinimas', 'sutartis', 'verte'].forEach(x => tiesa(tipai.includes(x), 'nepašalinta: ' + x + '\n' + JSON.stringify(r.pasalinta)));
+    tiesa(r.pasalinta.every(x => x.ko && x.kodel && x.kur), 'be priežasties: ' + JSON.stringify(r.pasalinta));
+    const visas = r.ts.sections.map(s => s.content).join('\n');
+    ['150 000', '148 000', 'delspinig', 'balų', 'Užtikrinimas - 5', '7 skyriuje'].forEach(x => tiesa(visas.indexOf(x) < 0, 'liko: ' + x));
+    ['Kokybės užtikrinimo planas', 'Matmenys ir svoriai', 'dokumentų apyvarta', 'Sutarties vykdymo metu užtikrinti', 'specialistai'].forEach(x => turi(visas, x, 'TS turinys'));
+    tiesa(r.ispejimai.some(x => /specialist/.test(x.tekstas)), 'neaiški specialistų riba nepažymėta: ' + JSON.stringify(r.ispejimai));
+    lygu(r.ts.evaluationCriteria, [], 'vertinimo kriterijai');
+    tiesa(!('penalty' in r.ts.keyElements), 'delspinigiai pagrindiniuose elementuose');
+  });
+
+  await testas('Studijos TS turinys lieka (2026-10-02 tikru AI sugeneruotoje studijoje taip klaidingai pašalinti 2 punktai): alternatyvų vertinimo kriterijai ir svoriai, daugiakriterė analizė, investicijų biudžetas, alternatyvų kainos įvertinimas, tiekėjo pateikiamas rizikos vertinimas; pasiūlymų vertinimas, pliki „Vertinimo kriterijai“ ir „Kainos įvertinimas“ - šalinami', () => {
+    const ts = { title: 'Studija', sections: [
+      { number: '1', title: 'Alternatyvų vertinimo kriterijai', content: '1.1. Studija baigiasi daugiakrite analize: kiekviena alternatyva vertinama pagal kriterijus ir jų svorius, balais nuo 1 iki 5.\n' +
+        '1.2. Pradinė ataskaita apima vertinimo kriterijų sąrašą.\n1.3. Nurodomas kiekvienos alternatyvos investicijų biudžetas ir numatoma investicijų vertė.\n' +
+        '1.4. Tiekėjas pateikia rizikos vertinimą.\n1.5. Pasiūlymai vertinami pagal kainos ir kokybės santykį.\n1.6. Kaina - 60 balų, kokybė - 40 balų.' },
+      { number: '2', title: 'Alternatyvų kainos įvertinimas', content: '2.1. Kiekvienai alternatyvai - CAPEX ir OPEX.' },
+      { number: '3', title: 'Kainos įvertinimas', content: '3.1. Tekstas.' },
+      { number: '4', title: 'Vertinimo kriterijai', content: '4.1. Tekstas.' }
+    ], complianceTable: [] };
+    const r = tvarka(ts, [VERTE]);
+    lygu(r.ts.sections.map(s => s.title), ['Alternatyvų vertinimo kriterijai', 'Alternatyvų kainos įvertinimas'], 'skyriai');
+    const tekstas = r.ts.sections[0].content;
+    ['daugiakrite analize', 'vertinimo kriterijų sąrašą', 'investicijų biudžetas', 'numatoma investicijų vertė', 'rizikos vertinimą'].forEach(x => turi(tekstas, x, 'studijos turinys'));
+    ['kainos ir kokybės santykį', '60 balų'].forEach(x => tiesa(tekstas.indexOf(x) < 0, 'liko pasiūlymų vertinimas: ' + x));
+    lygu(tekstas.split('\n').map(l => l.split(' ')[0]), ['1.1.', '1.2.', '1.3.', '1.4.'], 'punktai');
+  });
+
+  await testas('Garantijos ir rezultatų naudojimo sąlygos - TS dalis (naudotojo sprendimas 2026-10-02: susijusios su TS išpildymu): nešalinamos ir patikra jų nežymi', () => {
+    const ts = { title: 'Studija', sections: [{ number: '8', title: 'Garantijos ir rezultatų naudojimo sąlygos', content: '8.1. Garantinis laikotarpis - 24 mėn. nuo galutinės ataskaitos priėmimo.\n' +
+      '8.2. Garantiniu laikotarpiu nustatyti Studijos trūkumai pašalinami per 10 d. d.\n8.3. Perkančiajam subjektui perduodamos turtinės teisės į Studiją ir jos duomenis.\n8.4. Rezultatai perduodami DOCX, XLSX ir SHP formatais.' }], complianceTable: [] };
+    const r = tvarka(ts, [VERTE]);
+    lygu([r.pasalinta.length, r.ts.sections.length, r.ts.sections[0].content.split('\n').length], [0, 1, 4], 'pašalinta, skyriai, punktai');
+    lygu(taisykles('## 8. Garantijos ir rezultatų naudojimo sąlygos\n' + ts.sections[0].content, { value: VERTE }).issues.filter(i => i.category === 'scope').length, 0, 'patikros pastabos');
+  });
+
+  await testas('Numeracija ištisinė: skyriai, punktai, atitikties lentelė ir nuorodos tekste - iš vienos struktūros; programinė patikra be pastabų; antras kartas (eksportas) nieko nekeičia', () => {
+    const r = tvarka(), s = r.ts.sections;
+    turi(s[0].content, '1.2. Žr. 3.2 p. dėl terminų.', 'nuoroda į buvusį 4.2');
+    lygu(s[1].content.split('\n').map(l => l.split(' ')[0]), ['2.1.', '2.2.', '2.3.', '2.4.'], '2 skyriaus punktai (2.2 pašalintas)');
+    lygu(s[2].content.split('\n').map(l => l.split(' ')[0]), ['3.1.', '3.2.', '3.3.'], 'buvęs 4 skyrius');
+    lygu(s[3].content.split('\n').map(l => l.split(' ')[0]), ['4.1.', '4.1.1.', '4.2.'], 'garantijos punktai (buvo 6.1, 6.1.1, 6.3)');
+    turi(s[3].content, '(žr. 3.2 p.)', 'nuoroda garantijos skyriuje');
+    turi(s[4].content, '5.1. Tiekėjas pildo lentelę (žr. 4.2 p.).', 'priedo nuoroda');
+    lygu(r.ts.complianceTable.map(x => x.ref), ['2.1', '3.2', '4.1.1', '4.2', '4'], 'atitikties lentelė (3.1 - kvalifikacija, 7.1 - pašalintas skyrius, 6.9.9 -> 4)');
+    tiesa(r.pasalinta.some(x => /atitikties lentelė, 7\.1/.test(x.kur)), 'eilutė į pašalintą 7.1 nepaminėta');
+    lygu(r.problemos, [], 'patikra');
+    lygu(M('TsApimtis.patikrink(' + JSON.stringify(r.ts) + ')'), [], 'patikra iš naujo');
+    const r2 = tvarka(r.ts, [VERTE]);
+    lygu(r2.ts.sections, r.ts.sections, 'antras kartas'); lygu(r2.pasalinta, [], 'antras kartas - pašalinta');
+    const blogas = { ...r.ts, complianceTable: [{ ref: '9.9', requirement: 'x' }] };
+    tiesa(M('TsApimtis.patikrink(' + JSON.stringify(blogas) + ')').some(x => /9\.9/.test(x)), 'nesamas punktas nepagautas');
+  });
+
+  await testas('Ilgieji brūkšniai (U+2013, U+2014) virsta „-“: pavadinime, skyriuose ir atitikties lentelėje (naudotojo sprendimas 2026-10-02)', () => {
+    const r = tvarka();
+    tiesa(!/[\u2013\u2014]/.test(JSON.stringify(r.ts)), 'liko ilgasis brūkšnys');
+    turi(r.ts.title, 'parengimas - paslaugos', 'pavadinimas');
+    turi(r.ts.sections[3].content, 'Garantija - 24 mėn.', 'skyrius');
+  });
+
+  await testas('Word (docx): jokio 00A072, žalių ir SOLID fonų; antraštės ir tekstas grafito; lentelių antraštės šviesiai pilkos su juodu tekstu; be vertinimo, vertės ir ilgųjų brūkšnių; numeracija kaip TS', async () => {
+    const r = tvarka();
+    const blob = await M('DocxBuilder.kurkTsDocx(' + JSON.stringify(r.ts) + ', ' + JSON.stringify({ title: 'Galimybių studijos parengimas', type: 'services', cpv: '71241000-9', criteria: 'best_price_quality', location: 'Vilnius' }) + ')');
+    const dok = await docxDalys(blob, /^word\/document\.xml$/), st = await docxDalys(blob, /^word\/styles\.xml$/), visi = dok + st;
+    lygu((visi.match(/00A072/gi) || []).length, 0, '00A072');
+    tiesa(!/w:val="solid"/.test(visi), 'SOLID fonas');
+    const fonai = [...dok.matchAll(/w:fill="([0-9A-Fa-f]{6})"/g)].map(m => m[1].toUpperCase());
+    tiesa(fonai.length > 0 && fonai.every(f => f === 'F2F2F2'), 'fonai: ' + [...new Set(fonai)].join(','));
+    const spalvos = [...visi.matchAll(/<w:color w:val="([0-9A-Fa-f]{6})"/g)].map(m => m[1].toUpperCase());
+    tiesa(spalvos.every(c => c === '2E3641' || c === '000000'), 'spalvos: ' + [...new Set(spalvos)].join(','));
+    tiesa(/<w:color w:val="000000"\/>(?:(?!<\/w:r>)[\s\S])*<w:t[^>]*>TS p\.<\/w:t>/.test(dok), 'atitikties lentelės antraštės tekstas ne juodas');
+    const tekstas = dok.replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '');
+    tiesa(!/[\u2013\u2014]/.test(tekstas), 'ilgasis brūkšnys');
+    ['Numatoma pirkimo vertė', 'Vertinimo kriterijus', 'vertinimo kriterijai', '150 000', '148 000', 'delspinig', 'Svoris'].forEach(x => tiesa(tekstas.indexOf(x) < 0, 'Word tekste: ' + x));
+    ['1. Bendrosios nuostatos', '3. Kokybės užtikrinimas ir terminai', '5. Priedas Nr. 1 - Atitikties lentelės pildymo nurodymai', '4.1.1. Defektai'].forEach(x => turi(tekstas, x, 'Word'));
+    // Ir neišvalytas tekstas (pvz. ranka pakeistas po generavimo) - Word kūrėjas pats keičia ilguosius brūkšnius
+    const neisvalyta = { title: 'Etapai ' + BR + ' planas', sections: [{ number: '1', title: 'Etapai', content: '1.1. I etapas ' + BR + ' parengti.\n1.2. II etapas ' + BRE + ' patikrinti.' }],
+      complianceTable: [{ ref: '1.1', requirement: 'I etapas ' + BR + ' parengti' }] };
+    const d2 = await docxDalys(await M('DocxBuilder.kurkTsDocx(' + JSON.stringify(neisvalyta) + ', { title: "Etapai" })'), /^word\/document\.xml$/);
+    tiesa(!/[\u2013\u2014]/.test(d2.replace(/<[^>]+>/g, '')), 'Word iš neišvalyto teksto - ilgasis brūkšnys');
+    turi(d2, 'I etapas - parengti', 'Word iš neišvalyto teksto');
+  });
+
+  await testas('Atsarginis .doc (HTML) ir Markdown: be žalios, be vertinimo ir vertės, be ilgųjų brūkšnių', () => {
+    const r = tvarka();
+    const h = String(M('DocxBuilder.buildTsDocx(' + JSON.stringify(r.ts) + ', { title: "Bandymas", criteria: "price" })'));
+    ['#00A072', '#007554', '#D7EEDB', '#EFF9F1', 'emerald', 'Numatoma pirkimo vertė', 'Vertinimo kriterijus', 'vertinimo kriterijai', 'Svoris'].forEach(x => tiesa(h.indexOf(x) < 0, '.doc: ' + x));
+    tiesa(!/[\u2013\u2014]/.test(h), '.doc ilgasis brūkšnys');
+    const h2 = String(M('DocxBuilder.buildTsDocx(' + JSON.stringify({ title: 'Etapai ' + BR, sections: [{ number: '1', title: 'Etapai', content: '1.1. I etapas ' + BRE + ' parengti.' }] }) + ', { title: "Etapai" })'));
+    tiesa(!/[\u2013\u2014]/.test(h2) && h2.indexOf('I etapas - parengti') >= 0, '.doc iš neišvalyto teksto - ilgasis brūkšnys');
+    const md = String(M('TSGenerator.tsToMarkdown(' + JSON.stringify({ title: 'TS', sections: [{ number: '1', title: 'Apimtis', content: '1.1. Tekstas.' }],
+      evaluationCriteria: [{ name: 'Kainos kriterijus', weight: 60, formula: 'Bk = (Cmin/C) * 60' }] }) + ')'));
+    tiesa(!/vertinimo kriterijai|Svoris|Kainos kriterijus/i.test(md), 'Markdown vertinimo lentelė: ' + md);
+  });
+
+  await testas('Generavimas: pašalinta parodoma peržiūroje su priežastimi; kainos įvertinimas veikia ir lieka modulyje (kortelė, patikros forma); vertė - klausimų užklausoje', async () => {
+    const w = W(), d = D(), G = w.TSGenerator, P = w.PriceEstimator;
+    const orig = { full: G.generateFullTs, market: G.analyzeMarket, price: P.estimate };
+    const klausimai = await pirkimasSuVerte('Galimybių studijos parengimas', VERTE);
+    turi(klausimai, 'Numatoma vertė: 150000 EUR', 'klausimų užklausa (vertė modulyje naudojama)');
+    let kainai = null;
+    G.generateFullTs = async () => bandomojiTs();
+    P.estimate = async meta => { kainai = meta; return { estimate: { central: 148000, min: 120000, max: 170000, confidence: 'medium' }, rationale: 'Pagal 3 analogus.' }; };
+    G.analyzeMarket = async () => null;
+    try {
+      await M('App.runFullGeneration()');
+      const prev = d.getElementById('genTsPreview').textContent;
+      ['Iš TS pašalinta', 'tai sutarties dalis', 'tai specialiųjų pirkimo sąlygų dalis', 'vertinimas - atskiras pirkimo dokumentų priedas',
+       'TS ji neskelbiama', 'Patikrinkite (riba neaiški)'].forEach(x => turi(prev, x, 'peržiūros pranešimas'));
+      tiesa(!/150 000 EUR be PVM|delspinigiai\./.test(prev.replace(/Iš TS pašalinta[\s\S]*?(Patikrinkite|$)/, '')), 'peržiūroje liko pašalintas tekstas');
+      tiesa(!/vertinimo kriterijai/i.test(d.getElementById('genFinalPreview').textContent), 'galutinėje peržiūroje vertinimo kriterijai');
+      tiesa(/148[\s\u00a0\u202f]000/.test(d.getElementById('genPriceCard').textContent), 'kainos kortelė: ' + d.getElementById('genPriceCard').textContent.slice(0, 120));
+      lygu(kainai && kainai.budget, VERTE, 'kainos įvertinimui paduotas pirkimas su formos verte');
+      M('App.editGenerated()');
+      lygu(d.getElementById('metaValue').value, '148000', 'patikros formos vertė iš kainos įvertinimo');
+      tiesa(!/150 000|delspinig/.test(d.getElementById('specText').value), 'į patikrą perkeltame tekste liko pašalinta');
+    } finally { G.generateFullTs = orig.full; G.analyzeMarket = orig.market; P.estimate = orig.price; }
+  });
+
+  await testas('Paskutinė apsauga: formos vertės suma Word tekste (pvz. skyriaus pavadinime) eksportą stabdo ir pasako kur; be sumos - eksportuojama', async () => {
+    const w = W(), d = D(), G = w.TSGenerator, P = w.PriceEstimator, DB = M('DocxBuilder');
+    const orig = { full: G.generateFullTs, market: G.analyzeMarket, price: P.estimate, word: DB.buildAndDownloadRealDocx };
+    await pirkimasSuVerte('Galimybių studijos parengimas', VERTE);
+    const kvietimai = [];
+    DB.buildAndDownloadRealDocx = async (ts, meta, vardas) => { kvietimai.push(vardas); };
+    P.estimate = async () => null; G.analyzeMarket = async () => null;
+    try {
+      G.generateFullTs = async () => ({ title: 'TS', sections: [{ number: '1', title: 'Paslaugos iki 150 000 Eur', content: '1.1. Tekstas.' }], complianceTable: [], keyElements: {}, recommendations: [] });
+      await M('App.runFullGeneration()');
+      await M('App.exportGeneratedDocx()');
+      lygu(kvietimai.length, 0, 'Word sukurtas nors tekste vertė');
+      tiesa(await laukTol(() => /Dokumentas nesukurtas: tekste yra suma, sutampanti su numatoma pirkimo verte \(1\. Paslaugos iki 150 000 Eur/.test(d.body.textContent)), 'pranešimas nerodytas');
+      G.generateFullTs = async () => ({ title: 'TS', sections: [{ number: '1', title: 'Paslaugų apimtis', content: '1.1. Tekstas.' }], complianceTable: [], keyElements: {}, recommendations: [] });
+      await M('App.runFullGeneration()');
+      await M('App.exportGeneratedDocx()');
+      lygu(kvietimai.length, 1, 'be vertės - eksportuota');
+    } finally { G.generateFullTs = orig.full; G.analyzeMarket = orig.market; P.estimate = orig.price; DB.buildAndDownloadRealDocx = orig.word; d.querySelectorAll('.gp-pranesimas button, [data-gp-pranesimas-uzdaryti]').forEach(b => b.click()); }
+  });
+
+  await testas('TS patikra: delspinigių ir baudų nebuvimas - ne trūkumas; užtikrinimas, kvalifikacija, vertinimas ir vertė - pastaba „scope“; kokybės užtikrinimas - ne', () => {
+    tiesa(!taisykles(SPEC).issues.some(i => i.id === 'no-penalty'), 'liko taisyklė „Nepaminėta atsakomybė už netinkamą vykdymą“');
+    const r = taisykles('## 7. Sutarties vykdymo užtikrinimas\nUž vėlavimą - 0,05 % delspinigiai.\n## 8. Pasiūlymų vertinimo kriterijai\nKaina - 60 balų.\n' +
+      '## 9. Reikalavimai tiekėjo kvalifikacijai\nTiekėjas turi būti įvykdęs 2 panašias sutartis.\nNumatoma pirkimo vertė - 150 000 EUR.\n## 4. Kokybės užtikrinimas\nKokybės planas.', { value: VERTE });
+    const scope = r.issues.filter(i => i.category === 'scope' && /^scope-/.test(i.id));
+    ['sutarties vykdymo užtikrinimas', 'kvalifikacijos', 'vertinimo kriterijai', 'numatoma pirkimo vertė'].forEach(x =>
+      tiesa(scope.some(i => i.title.toLowerCase().indexOf(x) >= 0), 'nėra pastabos: ' + x + '\n' + scope.map(i => i.title).join(' | ')));
+    tiesa(!scope.some(i => /Kokybės/.test(i.quote)), 'kokybės užtikrinimas pažymėtas');
+    tiesa(scope.every(i => i.severity === 'major' && i.recommendation), 'pastabos be rekomendacijos');
+  });
+
+  await testas('TS patikros AI atsakymas su lietuviška kabute, uždaryta ASCII kabute (tikras 2026-10-02 atvejis): pastabos perskaitomos, ne „0 pastabų“; atsakymas be pastabų sąrašo - klaida, ne „pastabų nėra“', async () => {
+    const w = W(), origP = w.GP_AI_PROXY.call, origT = w.setTimeout;
+    const obj = { summary: 'Pagrindiniai trūkumai - keliose vietose nepridėti „arba lygiavertis" papildymai.', strengths: ['Išsami apimtis', 'Aiškūs terminai'], actionPlan: ['Pataisyti'],
+      issues: [{ title: 'Prekės ženklas be „arba lygiavertis"', description: 'x', severity: 'major', category: 'brand_restriction', quote: '', recommendation: 'Pridėti', alternative: '', legalRef: '' },
+               { title: 'Subjektyvus terminas', description: 'y', severity: 'minor', category: 'subjective', quote: '', recommendation: 'Patikslinti', alternative: '', legalRef: '' }] };
+    // Kaip AI: „ uždaroma ASCII kabute be ekranavimo, atsakymas - ```json bloke
+    const ats = '```json\n' + JSON.stringify(obj, null, 2).split('lygiavertis\\"').join('lygiavertis"') + '\n```';
+    const nustatymai = { model: w.GP_AI_PROXY.MODEL, options: { grammar: true }, depth: 'quick' };
+    w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
+    try {
+      w.GP_AI_PROXY.call = async () => atsakymas(ats);
+      const r = await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai);
+      lygu(r.issues.length, 2, 'pastabų (iki tol - 0: iš atsakymo išskirtas „strengths“ masyvas)');
+      turi(r.summary, 'arba lygiavertis', 'santrauka');
+      // Nutrūkęs (ilgio riba) ir su ta pačia kabute (tikras atvejis: 19 tūkst. ženklų, iki tol 0 pastabų): pastabos perskaitomos, pasakoma, kad nutrūko
+      const nutruko = ats.slice(0, ats.lastIndexOf('"Subjektyvus terminas') + 22);
+      w.GP_AI_PROXY.call = async () => atsakymas(nutruko);
+      const r2 = await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai);
+      tiesa(r2.issues.length >= 1, 'nutrūkusio atsakymo pastabų: ' + r2.issues.length);
+      turi(r2.summary, 'AI atsakymas nutrūko', 'santrauka sako, kad nutrūko');
+      w.GP_AI_PROXY.call = async () => atsakymas('["Išsami apimtis", "Aiškūs terminai"]');
+      let klaida = '';
+      try { await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai); } catch (e) { klaida = e.message; }
+      turi(klaida, 'nėra pastabų sąrašo', 'masyvas vietoj atsakymo - klaida');
+      // Atsarginis skaitymas (raktai iš teksto) su tuščiu pastabų sąrašu - neperskaitytas atsakymas, ne „pastabų nėra“
+      const origS = w.smartParseJson;
+      w.smartParseJson = () => ({ summary: 'Santrauka', issues: [], _partial: true });
+      klaida = '';
+      try { await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai); } catch (e) { klaida = e.message; } finally { w.smartParseJson = origS; }
+      turi(klaida, 'nėra pastabų sąrašo', 'dalinis atsakymas be pastabų - klaida');
+    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+  });
+
+  await testas('AI instrukcijos: generavimas jų negeneruoja (struktūroje ir karkase nebėra užtikrinimo, kvalifikacijos, vertinimo, delspinigių); auditas jų nebereikalauja ir žymi, jei yra; vertė - rinkos užklausoje', async () => {
+    const w = W(), d = D(), origP = w.GP_AI_PROXY.call, origT = w.setTimeout, uzkl = [];
+    await pirkimasSuVerte('Galimybių studijos parengimas', VERTE);
+    w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
+    w.GP_AI_PROXY.call = async o => { uzkl.push(o); return klaida500(); };
+    try {
+      await M('App.runFullGeneration()');
+      paruosk(); d.getElementById('specText').value = SPEC;
+      await M('App.runAnalysis()');
+    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+    const karkas = uzkl.find(o => /"sectionTitles"/.test(o.userMessage));
+    tiesa(karkas, 'karkaso užklausos nėra');
+    turi(karkas.system, 'TS APIMTIS', 'generavimo instrukcija');
+    ['8. Sutarties vykdymo užtikrinimo priemonės', '9. Reikalavimai tiekėjui (kvalifikaciniai)', '10. Pasiūlymų vertinimo kriterijai'].forEach(x => tiesa(karkas.system.indexOf(x) < 0, 'instrukcijoje liko: ' + x));
+    ['evaluationCriteria', '"penalty"', 'Sutarties vykdymo užtikrinimas"'].forEach(x => tiesa(karkas.userMessage.indexOf(x) < 0, 'karkase liko: ' + x));
+    const rinka = uzkl.find(o => /Atlik LT\/ES rinkos analizę/.test(o.userMessage));
+    tiesa(rinka && /Numatoma vertė: 150[\s\u00a0\u202f]?000 EUR/.test(rinka.userMessage), 'rinkos užklausoje nėra vertės: ' + (rinka ? rinka.userMessage.slice(0, 300) : '(nėra)'));
+    const auditas = uzkl.find(o => /TECHNINĖS SPECIFIKACIJOS TEKSTAS/.test(o.userMessage));
+    tiesa(auditas, 'audito užklausos nėra');
+    turi(auditas.system, '6. **TS APIMTIS**', 'audito instrukcija');
+    turi(auditas.system, 'niekada nesiūlyk jų pridėti', 'audito instrukcija');
+    turi(auditas.system, 'rezultatų (produktų) naudojimo sąlygos', 'audito instrukcija: garantija ir rezultatų naudojimas - TS dalis (naudotojo sprendimas 2026-10-02)');
+    turi(karkas.system, 'rezultatų naudojimo sąlygos', 'generavimo instrukcija: rezultatų naudojimo sąlygos - TS dalis');
+    tiesa(auditas.system.indexOf('Trūkstamos sekcijos (garantijos, sutarties vykdymo užtikrinimas') < 0, 'auditas vis dar siūlo užtikrinimą');
+  });
+}
+
 /* ========================================================================== */
 async function viskas() {
   document.getElementById('paleisti').disabled = true;
@@ -725,6 +1017,7 @@ async function viskas() {
     await testaiAntrastes();
     await testaiBusenos();
     await testaiKortele();
+    await testaiApimtis();
 
     document.getElementById('busena').textContent =
       R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';

@@ -3755,11 +3755,12 @@ const App = (() => {
       return;
     }
     const { ts, kaina, rinka } = rez.reiksme;
-    gen.ts = ts;
     gen.priceData = kaina.r || null;
     gen.priceKlaida = kaina.klaida ? kodel(kaina.klaida) : '';
     gen.marketData = rinka.r || null;
     gen.marketKlaida = rinka.klaida ? kodel(rinka.klaida) : '';
+    gen.tsApimtis = null;
+    tvarkykTs(ts);   // TS apimtis ir numeracija (TsApimtis): kas pašalinta - parodoma, ne tyliai
 
     renderGeneratedTs();
     renderCompliance();
@@ -3777,6 +3778,39 @@ const App = (() => {
       GP_BUSENA.rodyk('#genFullBusena', { tipas: 'nezinoma', tekstas: 'TS sugeneruota ne visa: ' + trukumai.join('; ') + '. Vietos pažymėtos žemiau.' });
     }
     toast('TS sugeneruota!', 'success');
+  }
+
+  /* TS apimtis (2026-10-02): po kiekvieno AI pakeitimo (generavimas, rekomendacijų taikymas) ir prieš eksportą - pašalinama, kas TS
+     nepriklauso (sutarties užtikrinimas ir sankcijos, tiekėjo kvalifikacija, vertinimas, numatoma vertė), pernumeruojama, ilgieji brūkšniai (U+2013, U+2014) -> „-“.
+     Vertės: formos numatoma vertė ir kainos įvertinimo sumos - modulyje jos lieka, į TS nepatenka. Pašalinta kaupiama ir rodoma. */
+  function tsVertes() {
+    const sk = id => { const v = parseFloat(($('#' + id) || {}).value); return isFinite(v) ? v : null; };
+    const e = (gen.priceData && gen.priceData.estimate) || {};
+    return [gen.meta && gen.meta.budget, sk('genBudget'), sk('metaValue'), e.central, e.min, e.max, e.perUnit];
+  }
+  function tvarkykTs(ts) {
+    const r = TsApimtis.tvarkyk(ts, { vertes: tsVertes() });
+    gen.ts = r.ts;
+    const buvo = gen.tsApimtis || { pasalinta: [], ispejimai: [] };
+    gen.tsApimtis = { pasalinta: buvo.pasalinta.concat(r.pasalinta), ispejimai: r.ispejimai, problemos: r.problemos };
+    return r;
+  }
+  // Paskutinė patikra prieš bet kokį TS eksportą: formos numatomos vertės suma dokumento tekste eksportą stabdo (pasakoma kur).
+  function tsEksportui() {
+    const r = tvarkykTs(gen.ts);
+    if (r.pasalinta.length) { renderGeneratedTs(); renderCompliance(); renderFinalPreview(); }
+    const ts = gen.ts, m = gen.meta || {};
+    const tekstai = [['TS pavadinimas', ts.title], ['Pirkimo informacija', [m.title, m.cpv, m.quantity, m.unit, m.location].join('\n')]]
+      .concat((ts.sections || []).filter(s => !s._failed).map(s => [s.number + '. ' + (s.title || ''), (s.title || '') + '\n' + (s.content || '')]))
+      .concat([['Atitikties lentelė', (ts.complianceTable || []).map(x => x.requirement).join('\n')]]);
+    const sk = id => { const v = parseFloat(($('#' + id) || {}).value); return isFinite(v) ? v : null; };
+    const rasta = TsApimtis.nutekejimas(tekstai, [m.budget, sk('genBudget'), sk('metaValue')]);
+    if (rasta.length) {
+      GP_PRANESIMAS.rodyk('Dokumentas nesukurtas: tekste yra suma, sutampanti su numatoma pirkimo verte (' + rasta[0].kur + ': „' + rasta[0].istrauka +
+        '“). Numatoma vertė TS neskelbiama - jei komisija ją skelbia, tai daroma pirkimo sąlygose. Pataisykite tekstą arba pergeneruokite TS.', { tipas: 'klaida', trukme: 0 });
+      return null;
+    }
+    return ts;
   }
 
   // Kas sugeneruota ne iki galo - vienas sąrašas būsenai ir eksportui.
@@ -3857,7 +3891,28 @@ const App = (() => {
       ? `<div class="alert alert-warning mt-2" style="font-size: 13px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>Nesugeneruota ${failedCount} iš ${(gen.ts.sections || []).length} skyrių: ${escapeHtml(failed.map(s => ((s.number || s.number === 0) ? s.number + '. ' : '') + (s.title || '')).join('; '))}.${failed[0]._error ? ' Priežastis: ' + escapeHtml(kodel(failed[0]._error)) : ''} Word dokumente jų nebus - spauskite „Pergeneruoti“ arba pridėkite rankiniu būdu.</div></div>`
       : '';
 
-    $('#genTsPreview').innerHTML = `<h1>${escapeHtml(gen.ts.title || gen.meta.title)}</h1>` + auditHtml + sectionsHtml + failedNote;
+    $('#genTsPreview').innerHTML = `<h1>${escapeHtml(gen.ts.title || gen.meta.title)}</h1>` + apimtiesPastaba() + auditHtml + sectionsHtml + failedNote;
+  }
+
+  // Kas iš TS pašalinta ir kodėl (TsApimtis) - niekada tyliai; neaiški specialistų riba ir numeracijos neatitikimai - irgi
+  function apimtiesPastaba() {
+    const a = gen.tsApimtis;
+    if (!a || (!a.pasalinta.length && !a.ispejimai.length && !(a.problemos || []).length)) return '';
+    const li = x => `<li>${escapeHtml(x)}</li>`;
+    let h = '';
+    if (a.pasalinta.length) {
+      h += `<div><strong>Iš TS pašalinta (${a.pasalinta.length}) - techninė specifikacija aprašo tik pirkimo objektą:</strong><ul style="margin:4px 0 0 18px;">` +
+        a.pasalinta.slice(0, 12).map(x => li(x.kur + ' - ' + x.ko + ': ' + x.kodel + '.' + (x.istrauka ? ' „' + x.istrauka + '“' : ''))).join('') +
+        (a.pasalinta.length > 12 ? li('…ir dar ' + (a.pasalinta.length - 12)) : '') + '</ul></div>';
+    }
+    if (a.ispejimai.length) {
+      h += `<div style="margin-top:6px;"><strong>Patikrinkite (riba neaiški):</strong><ul style="margin:4px 0 0 18px;">` +
+        a.ispejimai.slice(0, 6).map(x => li(x.kur + ': ' + x.tekstas)).join('') + '</ul></div>';
+    }
+    if ((a.problemos || []).length) {
+      h += `<div style="margin-top:6px;"><strong>Numeracija ir nuorodos:</strong><ul style="margin:4px 0 0 18px;">` + a.problemos.slice(0, 8).map(li).join('') + '</ul></div>';
+    }
+    return `<div class="alert alert-warning mb-2" id="genApimtis" style="font-size:13px;display:block;">${h}</div>`;
   }
 
   // Vartotojas spustelėjo badge'ą - keičiame statusą
@@ -4143,7 +4198,6 @@ const App = (() => {
           ${k.additionalCpv?.length ? `<tr><td><strong>Papildomi CPV</strong></td><td>${k.additionalCpv.map(c => '<span class="tag-chip">' + escapeHtml(c) + '</span>').join(' ')}</td></tr>` : ''}
           ${k.standards?.length ? `<tr><td><strong>Standartai</strong></td><td>${k.standards.map(s => '<span class="tag-chip">' + escapeHtml(s) + '</span>').join(' ')}</td></tr>` : ''}
           ${k.warranty ? `<tr><td><strong>Garantija</strong></td><td>${escapeHtml(k.warranty)}</td></tr>` : ''}
-          ${k.penalty ? `<tr><td><strong>Delspinigiai</strong></td><td>${escapeHtml(k.penalty)}</td></tr>` : ''}
         </tbody>
       </table>
     `;
@@ -4200,6 +4254,8 @@ const App = (() => {
 
   async function exportGeneratedDocx() {
     if (!gen.ts) return toast('Pirmiausia sugeneruokite TS.', 'error');
+    const ts = tsEksportui();
+    if (!ts) return;
     const filename = GP_EKSPORTAS.failoVardas({ dokumentas: 'TS', pavadinimas: gen.meta.title || '' });
 
     // Diagnozė - logoti būseną prieš bandymą
@@ -4210,7 +4266,7 @@ const App = (() => {
       console.error('[DOCX export] docx.js biblioteka NEĮKRAUTA. CDN gali būti užblokuotas arba lėtas.');
       toast('docx.js biblioteka neįkrauta. Atsisiunčiamas .doc atsarginis variantas.', 'error');
       try {
-        const html = DocxBuilder.buildTsDocx(gen.ts, gen.meta, gen.priceData);
+        const html = DocxBuilder.buildTsDocx(ts, gen.meta);
         DocxBuilder.download(html, `${filename}.doc`);
       } catch (e2) {
         toast('Eksportas nepavyko: ' + e2.message, 'error');
@@ -4220,14 +4276,14 @@ const App = (() => {
 
     try {
       toast('Generuojamas .docx failas...', 'info');
-      await DocxBuilder.buildAndDownloadRealDocx(gen.ts, gen.meta, gen.priceData, filename);
+      await DocxBuilder.buildAndDownloadRealDocx(ts, gen.meta, filename);
       toast('.docx failas atsisiunčiamas.', 'success');
     } catch (err) {
       console.error('[DOCX export] Tikras .docx nepavyko:', err);
       console.error('[DOCX export] Stack:', err.stack);
       toast('docx.js klaida: ' + err.message + '. Naudojama atsarginė versija.', 'error');
       try {
-        const html = DocxBuilder.buildTsDocx(gen.ts, gen.meta, gen.priceData);
+        const html = DocxBuilder.buildTsDocx(ts, gen.meta);
         DocxBuilder.download(html, `${filename}.doc`);
         toast('Atsisiunčiamas .doc atsarginis variantas.', 'info');
       } catch (e2) {
@@ -4238,20 +4294,23 @@ const App = (() => {
 
   function exportGeneratedMd() {
     if (!gen.ts) return;
-    const md = TSGenerator.tsToMarkdown(gen.ts);
+    const ts = tsEksportui(); if (!ts) return;
+    const md = GP_DOCX_STILIAI.bruksniai(TSGenerator.tsToMarkdown(ts));
     downloadBlob(md, 'TS_' + Date.now() + '.md', 'text/markdown');
   }
 
   function exportGeneratedTxt() {
     if (!gen.ts) return;
-    const md = TSGenerator.tsToMarkdown(gen.ts);
+    const ts = tsEksportui(); if (!ts) return;
+    const md = GP_DOCX_STILIAI.bruksniai(TSGenerator.tsToMarkdown(ts));
     const txt = md.replace(/[#*_`]/g, '');
     downloadBlob(txt, 'TS_' + Date.now() + '.txt', 'text/plain');
   }
 
   function exportGeneratedHtml() {
     if (!gen.ts) return;
-    const html = DocxBuilder.buildTsDocx(gen.ts, gen.meta, gen.priceData);
+    const ts = tsEksportui(); if (!ts) return;
+    const html = DocxBuilder.buildTsDocx(ts, gen.meta);
     downloadBlob(html, 'TS_' + Date.now() + '.html', 'text/html');
   }
 
@@ -4261,7 +4320,7 @@ const App = (() => {
     if (window.PPTS_VALDIKLIS) window.PPTS_VALDIKLIS.abort();
     // Anksčiau liko ankstesnio pirkimo CVP IS analogai, rinkos duomenys ir klausimų kontekstas -
     // 3 žingsnis jų iš naujo neparsiųsdavo, ir jie keliaudavo į naujo pirkimo AI užklausas.
-    Object.assign(gen, { meta: {}, questions: [], answers: [], references: [], ts: null, priceData: null, marketData: null,
+    Object.assign(gen, { meta: {}, questions: [], answers: [], references: [], ts: null, tsApimtis: null, priceData: null, marketData: null,
       priceKlaida: '', marketKlaida: '', cvpisLinks: [], cvpisAnalogues: [], cvpisSelected: new Set(), cvpisKeywords: [],
       cvpisStats: null, cvpisRaktas: '', extraContext: null });
     ['#genQuestionsList', '#genAnaloguesList', '#genAnalogueStats', '#genCvpisLinks'].forEach(id => { const el = $(id); if (el) el.innerHTML = ''; });
@@ -4328,7 +4387,7 @@ const App = (() => {
     $('#btnSendToAnalysis').disabled = false;
     if (!rez.ok) return;
     const updatedTs = rez.reiksme;
-    gen.ts = updatedTs;
+    tvarkykTs(updatedTs);   // AI vėl galėjo įrašyti tai, kas TS nepriklauso - tas pats saugiklis kaip generuojant
     renderGeneratedTs();
     renderCompliance();
     renderKeyElements();
@@ -4541,6 +4600,315 @@ const KNOWLEDGE_BASE = [
     ]
   }
 ];
+
+// ---------- TS APIMTIS IR NUMERACIJA (2026-10-02) ----------
+/* Techninė specifikacija aprašo TIK pirkimo objektą (naudotojo taisyklė 2026-10-02). Jai nepriklauso ir NIEKADA negeneruojama:
+   - sutarties vykdymo užtikrinimas ir sankcijos (užtikrinimas, delspinigiai, baudos, nutraukimas, ginčai) - sutarties dalis;
+   - tiekėjo kvalifikacijos reikalavimai - specialiųjų pirkimo sąlygų dalis (paslaugos vykdymo organizavimas - kas atlieka darbą ir
+     kaip - gali likti objekto aprašyme; kai riba neaiški, tai pasakoma, o ne spėjama);
+   - pasiūlymų vertinimas (kriterijai, metodika, svoriai, balai, formulės ir jų santraukos) - atskiras pirkimo dokumentų priedas
+     (G-Procure - atskiras modulis); TS jų nemini net nuoroda;
+   - numatoma pirkimo vertė ir iš jos ar kainos įvertinimo kilusios sumos - jei komisija vertę skelbia, tai daroma pirkimo sąlygose.
+   Vertė modulyje lieka (klausimai, rinkos analizė, TS patikra, kainos įvertinimas) - draudžiama tik jos išvestis į TS dokumentą.
+   Vienas šaltinis trims vietoms: generavimas (po AI atsakymo, prieš rodant), eksportas (ir paskutinė patikra - formos vertės suma
+   Word tekste eksportą stabdo) ir TS patikros taisyklės (pažymi, jei tai yra tekste). Pašalinta niekada nedingsta tyliai - grąžinama
+   su priežastimi. Skyrių, punktų, atitikties lentelės ir nuorodų tekste numeracija - viena funkcija pernumeruok(), kad neišsiskirtų.
+   JS \b lietuviškų raidžių nelaiko žodžio dalimi - ribos per \p{L}; be lookbehind (Safari iki 16.4). */
+const TsApimtis = (() => {
+  const KUR = {
+    sutartis: { ko: 'sutarties vykdymo užtikrinimas ir sankcijos', kodel: 'tai sutarties dalis' },
+    kvalifikacija: { ko: 'tiekėjo kvalifikacijos reikalavimai', kodel: 'tai specialiųjų pirkimo sąlygų dalis' },
+    vertinimas: { ko: 'pasiūlymų vertinimo kriterijai, svoriai ar formulės', kodel: 'vertinimas - atskiras pirkimo dokumentų priedas' },
+    verte: { ko: 'numatoma pirkimo vertė ar iš jos kilusios sumos', kodel: 'TS ji neskelbiama; jei komisija ją skelbia - pirkimo sąlygose' },
+    nuoroda: { ko: 'tekstas, rodantis į pašalintą skyrių', kodel: 'skyrius, į kurį jis rodė, TS nepriklauso' }
+  };
+  // Antraštės (skyriaus pavadinimas). Vertė - tik daiktavardis „vertė“ (ne „vertinimas“); užtikrinimas - tik daiktavardis su „sutartis“
+  // ar „vykdymo“ („Kokybės užtikrinimas“ - TS dalis); svoriai - tik vertinimo („Matmenys ir svoriai“, „svorinė apkrova“ - TS dalis).
+  const VERTE = '(?:ė|ę|ės|ei|ėje)(?![\\p{L}])';
+  // Pasiūlymų vertinimas - tik pasiūlymų ar tiekėjų: studijos TS „alternatyvų vertinimo kriterijai“, „kriterijų svoriai“ (daugiakriterė
+  // analizė) ir „investicijų biudžetas“, „alternatyvų kainos įvertinimas“ - pirkimo objekto turinys (2026-10-02 tikru AI sugeneruotoje
+  // galimybių studijos TS taip klaidingai pašalinti 2 punktai). Pliki „Vertinimo kriterijai“, „Biudžetas“, „Kainos įvertinimas“ - vis tiek ne TS.
+  const A_VERTINIMAS = /pasiūlym\S*\s+(?:\S+\s+){0,2}vertinim|ekonomiškai\s+naudingiaus|kainos\s+ir\s+kokybės\s+santyk|^\s*(?:\d+\.?\s*)?vertinimo\s+(?:kriterij|metodik)\S*(?:\s+ir\s+(?:metodik|svor|formul)\S*)?\s*$/iu;
+  const A_VERTE = new RegExp('numatom\\S*\\s+(?:pirkimo\\s+|sutarties\\s+)?vert' + VERTE + '|pirkimo\\s+vert' + VERTE + '|sutarties\\s+vert' + VERTE +
+    '|(?:pirkimo|sutarties)\\s+biudžet|^\\s*(?:\\d+\\.?\\s*)?(?:biudžet\\S*|(?:pirkimo\\s+)?kainos\\s+(?:įvertin|vertinim|apskaičiav)\\S*)\\s*$', 'iu');
+  const A_SUTARTIS = /sutart\S*\s+(?:\S+\s+){0,2}užtikrinim|(?:^|[^\p{L}])(?:į)?vykdymo\s+užtikrinim|sankcij|delspinig|netesyb|(?:^|[^\p{L}])baud(?:a|os|ą|ų|omis)(?![\p{L}])|ginč|sutarties\s+nutraukim/iu;
+  const A_KVALIF = /kvalifikacij|kvalifikacin/iu;
+  const SPECIALISTAI = /specialist|personal|komand|ekspert|darbuotoj|kompetencij/iu;
+  const TIEKEJUI = /tiekėj|dalyv|pašalinim|atrank|pajėgum/iu;
+  // Turinio eilutės (kokybės užtikrinimas, tiekimo nutraukimas tinkle ir pan. - ne sankcijos, todėl „sutart...“ privalomas)
+  const E_VERTE = new RegExp('numatom\\S*\\s+(?:pirkimo\\s+|sutarties\\s+)?vert' + VERTE + '|pirkimo\\s+vert' + VERTE + '|(?:pirkimo|sutarties)\\s+biudžet', 'iu');
+  // Pasiūlymų vertinimas tekste: pasiūlymai ar tiekėjai su vertinimu, balais ar svoriais; kainos ir kokybės balai; ekonominio naudingumo formulės
+  const E_VERTINIMAS = /pasiūlym\S*\s+(?:\S+\s+){0,3}vertin|vertin\S*\s+(?:\S+\s+){0,4}pasiūlym|kriterij\S*\s+(?:\S+\s+){0,4}pasiūlym|(?:pasiūlym|tiekėj|dalyv)\S*\s+(?:\S+\s+){0,6}(?:bal(?:ų|ai|ais|as)|svor\S*)(?![\p{L}])|ekonomiškai\s+naudingiaus|kainos\s+ir\s+kokybės\s+santyk|(?:^|[^\p{L}])Bk\s*=|(?:^|[^\p{L}])(?:kain|kokyb)\S*\s*[-:=\u2013]?\s*\d{1,3}\s*(?:bal|%)/iu;
+  // „Sutarties vykdymo metu užtikrinti darbų saugą“ - TS dalis (veiksmažodis), „sutarties įvykdymo užtikrinimas“ - ne (daiktavardis)
+  const E_SUTARTIS = /delspinig|netesyb|(?:^|[^\p{L}])baud(?:a|os|ą|ų|omis)(?![\p{L}])|sutart\S*\s+(?:\S+\s+)?užtikrinim|sutarties\s+nutraukim|vienašališk\S*\s+(?:\S+\s+)?nutrauk|ginč\S*\s+(?:sprend|nagrin)/iu;
+  // Aiškūs tiekėjo atrankos reikalavimai; „dokumentų apyvarta“ - IT TS dalis, todėl apyvarta - tik metinė / vidutinė / su suma
+  const E_KVALIF = /kvalifikacijos\s+reikalavim|kvalifikacin\S*\s+reikalavim|(?:metin|vidutin)\S*\s+(?:\S+\s+){0,2}apyvart|apyvart\S*\s+(?:\S+\s+){0,3}(?:eur|mln|tūkst)|finansin\S*\s+pajėgum|(?:^|[^\p{L}])EBVPD(?![\p{L}])|įvykd\S*\s+(?:\S+\s+){0,3}sutart/iu;
+  const E_KVALIF_TIEKEJAS = /tiekėj\S*\s+(?:\S+\s+){0,4}(?:patirt|kvalifikacij)/iu;
+  const E_SPEC_REIK = /patirt|kvalifikacij|išsilavinim|atestat|diplom/iu;
+  // Punktas eilutės pradžioje: „3.1.“, „### 3.1.“, „**3.1.1.**“, „- 3.2“ (vieno lygio „1.“ - sąrašas, ne punktas)
+  const PUNKTAS = /^(\s*(?:#{1,6}\s+)?(?:[-*+]\s+)?(?:\*\*|__)?)(\d{1,3}(?:\.\d{1,3})+)(\.?)(?=\s|\*\*|__|$|[):\]])/;
+  // Nuoroda tekste: „žr. 3.2“ arba numeris su „p.“, „punkt...“, „papunk...“, „poskyr...“, „skyri...“; ir „4 skyriuje“
+  const NUORODA = /(žr\.\s*)?(\d{1,3}(?:\.\d{1,3})+)(\.?)(\s*(?:p\.|punkt\S*|papunk\S*|poskyr\S*|skyri\S*))?/giu;
+  const SKYRIAUS_NUORODA = /(^|[^\d.])(\d{1,2})(\.?\s*(?:-?(?:ame|ajame|ojo|asis|ąjį)\s*)?skyri\S*)/giu;
+  const SKAICIUS = /\d{1,3}(?:[ \u00a0\u202f.,']\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?/g;
+
+  const bb = s => GP_DOCX_STILIAI.bruksniai(s);
+
+  function antrastesTipas(pav) {
+    const t = String(pav || '');
+    if (A_VERTINIMAS.test(t)) return { tipas: 'vertinimas' };
+    if (A_VERTE.test(t)) return { tipas: 'verte' };
+    if (A_SUTARTIS.test(t)) return { tipas: 'sutartis' };
+    if (A_KVALIF.test(t)) return (SPECIALISTAI.test(t) && !TIEKEJUI.test(t)) ? { neaisku: true } : { tipas: 'kvalifikacija' };
+    return {};
+  }
+
+  // Sumos eilutėje (ir „150 tūkst.“, „0,15 mln.“) - skaičiai per GP_MONEY.parseEUR (JAV ir EU formatai)
+  function sumos(tekstas) {
+    const out = []; let m;
+    SKAICIUS.lastIndex = 0;
+    while ((m = SKAICIUS.exec(tekstas))) {
+      const v = GP_MONEY.parseEUR(m[0]);
+      if (v == null || !isFinite(v)) continue;
+      const po = tekstas.slice(m.index + m[0].length, m.index + m[0].length + 8);
+      out.push(v);
+      if (/^\s*tūkst/i.test(po)) out.push(v * 1000);
+      if (/^\s*mln/i.test(po)) out.push(v * 1e6);
+    }
+    return out;
+  }
+  const yraSuma = (tekstas, vertes) => vertes.length > 0 && sumos(tekstas).some(n => vertes.some(v => Math.abs(n - v) < 0.5));
+  const vertesSarasas = vertes => [...new Set((vertes || []).map(Number).filter(v => isFinite(v) && v >= 1000))];
+
+  // Kodėl turinio eilutė (ar lentelė) TS nepriklauso - arba null; „neaisku“ - specialistų reikalavimai be aiškios ribos
+  function eilutesTipas(tekstas, vertes) {
+    if (yraSuma(tekstas, vertes) || E_VERTE.test(tekstas)) return 'verte';
+    if (E_VERTINIMAS.test(tekstas)) return 'vertinimas';
+    if (E_SUTARTIS.test(tekstas)) return 'sutartis';
+    if (E_KVALIF.test(tekstas)) return 'kvalifikacija';
+    // Specialistų reikalavimai gali aprašyti paslaugos vykdymą (kas ir kaip atlieka darbą) - tada TS dalis: ne šalinama, o pasakoma
+    if (SPECIALISTAI.test(tekstas)) return E_SPEC_REIK.test(tekstas) ? 'neaisku' : null;
+    if (E_KVALIF_TIEKEJAS.test(tekstas)) return 'kvalifikacija';
+    return null;
+  }
+
+  function punktas(eilute) {
+    const m = PUNKTAS.exec(eilute);
+    return m ? { pries: m[1], id: m[2], taskas: m[3], lygis: m[2].split('.').length - 1, ilgis: m[0].length } : null;
+  }
+
+  // Nuorodos eilutėje (be punkto numerio pradžioje): [{ id, pradzia, pabaiga }] ir skyrių nuorodos [{ nr }]
+  function nuorodos(eilute) {
+    const p = punktas(eilute), nuo = p ? p.ilgis : 0, tekstas = eilute.slice(nuo), out = [];
+    let m;
+    NUORODA.lastIndex = 0;
+    while ((m = NUORODA.exec(tekstas))) {
+      if (!m[1] && !m[4]) continue;   // be „žr.“ ir be „p.“ / „punktas“ - skaičius (2.5 kV), ne nuoroda
+      out.push({ id: m[2], pradzia: nuo + m.index + (m[1] || '').length, pabaiga: nuo + m.index + (m[1] || '').length + m[2].length });
+    }
+    SKYRIAUS_NUORODA.lastIndex = 0;
+    while ((m = SKYRIAUS_NUORODA.exec(tekstas))) {
+      out.push({ id: m[2], skyrius: true, pradzia: nuo + m.index + m[1].length, pabaiga: nuo + m.index + m[1].length + m[2].length });
+    }
+    return out;
+  }
+
+  // Turinys -> blokai: lentelė (eilutės, prasidedančios „|“) - vienas blokas, kita - po eilutę
+  function blokai(turinys) {
+    const eil = String(turinys || '').split('\n'), out = [];
+    for (let i = 0; i < eil.length; i++) {
+      if (/^\s*\|/.test(eil[i])) {
+        const b = [];
+        while (i < eil.length && /^\s*\|/.test(eil[i])) b.push(eil[i++]);
+        i--; out.push({ eilutes: b, lentele: true });
+      } else out.push({ eilutes: [eil[i]] });
+    }
+    return out;
+  }
+
+  /* Pašalina, kas TS nepriklauso: skyrius pagal antraštę, punktus ir eilutes pagal turinį, eilutes su nuoroda į pašalintą skyrių.
+     Punkto antraštė su draudžiamu turiniu išmeta visą punktą (iki kito to paties ar aukštesnio lygio punkto). */
+  function valyk(ts, vertes) {
+    const pasalinta = [], ispejimai = [];
+    const pasalintiSkyriai = new Set();
+    const kur = s => ((s.number || s.number === 0) ? s.number + '. ' : '') + (s.title || '');
+    const liko = [];
+    for (const s of (ts.sections || [])) {
+      const a = antrastesTipas(s.title);
+      if (a.tipas) {
+        pasalinta.push({ tipas: a.tipas, kur: kur(s), istrauka: '', ...KUR[a.tipas] });
+        if (s.number || s.number === 0) pasalintiSkyriai.add(String(s.number));
+        continue;
+      }
+      if (a.neaisku) ispejimai.push({ kur: kur(s), tekstas: 'skyrius apie specialistų kvalifikaciją paliktas: jei jis aprašo paslaugos vykdymą (kas ir kaip atlieka darbą), jam vieta TS; jei tai reikalavimai tiekėjui atrinkti - specialiosiose pirkimo sąlygose.' });
+      liko.push(s);
+    }
+    const rodoIPasalinta = eilute => nuorodos(eilute).some(n => pasalintiSkyriai.has(String(n.id).split('.')[0]));
+    const sekcijos = liko.map(s => {
+      if (s._failed) return { ...s };
+      const isvestis = [];
+      let praleistiLygis = null;
+      for (const b of blokai(s.content)) {
+        const tekstas = b.eilutes.join('\n');
+        const p = b.lentele ? null : punktas(b.eilutes[0]);
+        if (praleistiLygis !== null) {
+          if (p && p.lygis <= praleistiLygis) praleistiLygis = null;
+          else continue;
+        }
+        let tipas = eilutesTipas(tekstas, vertes);
+        if (!tipas && rodoIPasalinta(tekstas)) tipas = 'nuoroda';
+        if (tipas === 'neaisku') {
+          ispejimai.push({ kur: kur(s), tekstas: 'specialistų reikalavimas palikta - patikrinkite, ar jis aprašo paslaugos vykdymą, ne tiekėjo atranką: „' + tekstas.trim().slice(0, 140) + '“' });
+          tipas = null;
+        }
+        if (tipas) {
+          pasalinta.push({ tipas, kur: kur(s), istrauka: tekstas.replace(/\s+/g, ' ').trim().slice(0, 160), ...KUR[tipas] });
+          if (p) praleistiLygis = p.lygis;
+          continue;
+        }
+        isvestis.push(...b.eilutes);
+      }
+      return { ...s, content: isvestis.join('\n').replace(/\n{3,}/g, '\n\n').trim() };
+    });
+    return { sekcijos, pasalinta, ispejimai, pasalintiSkyriai };
+  }
+
+  /* Ištisinė numeracija: skyriai 1..n (ir nesugeneruoti - kad numeriai neišsiskirtų), punktai kiekviename tėve 1..k; tas pats
+     žemėlapis (senas -> naujas) taikomas punktų numeriams, nuorodoms tekste ir atitikties lentelei. */
+  function pernumeruok(sekcijos, compliance, pasalintiSkyriai) {
+    const zemelapis = new Map(), skyriai = new Map(), naujos = [];
+    sekcijos.forEach((s, k) => {
+      const S = String(k + 1);
+      if (s.number || s.number === 0) skyriai.set(String(s.number), S);
+      const skaitikliai = [];
+      const eil = String(s.content || '').split('\n').map(l => {
+        const p = punktas(l);
+        if (!p) return { l };
+        const lygis = p.lygis;
+        for (let j = 1; j < lygis; j++) if (!skaitikliai[j]) skaitikliai[j] = 1;   // praleistas tėvas („3.1.1“ be „3.1“)
+        skaitikliai[lygis] = (skaitikliai[lygis] || 0) + 1;
+        skaitikliai.length = lygis + 1;
+        const naujas = [S].concat(skaitikliai.slice(1, lygis + 1)).join('.');
+        if (!zemelapis.has(p.id)) zemelapis.set(p.id, naujas);
+        return { l, p, naujas };
+      });
+      naujos.push({ s, S, eil });
+    });
+    const vertimas = id => {
+      id = String(id).replace(/\.$/, '');
+      if (zemelapis.has(id)) return zemelapis.get(id);
+      const d = id.split('.');
+      if (pasalintiSkyriai.has(d[0])) return null;
+      if (d.length === 1) return skyriai.get(d[0]) || null;   // viso skyriaus nuoroda („4“)
+      for (let k = d.length - 1; k >= 1; k--) {   // nesamas giliausias punktas -> artimiausias esamas tėvas
+        const t = d.slice(0, k).join('.');
+        if (k > 1 && zemelapis.has(t)) return zemelapis.get(t);
+        if (k === 1 && skyriai.has(t)) return skyriai.get(t);
+      }
+      return null;
+    };
+    const keiskNuorodas = l => {
+      const n = nuorodos(l).sort((a, b) => b.pradzia - a.pradzia);
+      for (const x of n) {
+        const v = x.skyrius ? (skyriai.get(String(x.id)) || null) : vertimas(x.id);
+        if (v) l = l.slice(0, x.pradzia) + v + l.slice(x.pabaiga);
+      }
+      return l;
+    };
+    const sections = naujos.map(({ s, S, eil }) => ({
+      ...s, number: S,
+      content: s._failed ? s.content : eil.map(({ l, p, naujas }) => {
+        if (!p) return keiskNuorodas(l);
+        return p.pries + naujas + p.taskas + keiskNuorodas(l.slice(p.ilgis));
+      }).join('\n')
+    }));
+    const atmesta = [];
+    const complianceTable = (compliance || []).map(r => {
+      const v = vertimas(r.ref);
+      if (!v) { atmesta.push(r); return null; }
+      return { ...r, ref: v, requirement: bb(r.requirement || '') };
+    }).filter(Boolean);
+    return { sections, complianceTable, atmesta };
+  }
+
+  // Esami numeriai dokumente: skyriai ir punktai
+  function numeriai(sections) {
+    const ids = new Set();
+    (sections || []).filter(s => !s._failed && (s.content || '').trim()).forEach(s => {
+      ids.add(String(s.number));
+      String(s.content || '').split('\n').forEach(l => { const p = punktas(l); if (p) ids.add(p.id); });
+    });
+    return ids;
+  }
+
+  /* Programinė patikra (ir testams): skyriai 1..n be tarpų, punktai kiekviename tėve 1..k, kiekvienas atitikties lentelės
+     numeris ir kiekviena nuoroda tekste egzistuoja dokumente. Grąžina neatitikimų sąrašą (tuščias - viskas gerai). */
+  function patikrink(ts) {
+    const prob = [], sek = (ts.sections || []).filter(s => !s._failed && (s.content || '').trim());
+    sek.forEach((s, i) => { if (String(s.number) !== String(i + 1)) prob.push(`skyrius „${s.title}“ - numeris ${s.number}, turėtų būti ${i + 1}`); });
+    const ids = numeriai(sek);
+    sek.forEach(s => {
+      const vaikai = new Map();
+      String(s.content || '').split('\n').forEach(l => {
+        const p = punktas(l); if (!p) return;
+        const d = p.id.split('.'), tevas = d.slice(0, -1).join('.'), nr = Number(d[d.length - 1]);
+        const buvo = vaikai.get(tevas) || 0;
+        if (d[0] !== String(s.number)) prob.push(`punktas ${p.id} skyriuje ${s.number}`);
+        else if (nr !== buvo + 1) prob.push(`punktas ${p.id}: po ${tevas}.${buvo} - tarpas numeracijoje`);
+        vaikai.set(tevas, nr);
+      });
+      String(s.content || '').split('\n').forEach(l => nuorodos(l).forEach(n => {
+        if (!ids.has(String(n.id))) prob.push(`nuoroda tekste į nesamą ${n.skyrius ? 'skyrių' : 'punktą'} ${n.id} (${s.number} skyrius)`);
+      }));
+    });
+    (ts.complianceTable || []).forEach(r => { if (!ids.has(String(r.ref).replace(/\.$/, ''))) prob.push(`atitikties lentelėje - nesamas punktas ${r.ref}`); });
+    return prob;
+  }
+
+  /* Visa tvarka po AI atsakymo (ir prieš eksportą - idempotentiška): pašalina, kas TS nepriklauso, pernumeruoja, ilguosius brūkšnius
+     keičia „-“. vertes - formos numatoma vertė ir kainos įvertinimo sumos (jos tekste - pašalinamos). */
+  function tvarkyk(ts, opts) {
+    if (!ts) return { ts, pasalinta: [], ispejimai: [], problemos: [] };
+    const vertes = vertesSarasas(opts && opts.vertes);
+    const v = valyk(ts, vertes);
+    const kompl = (ts.complianceTable || []).filter(r => {
+      const t = r.category === 'qualification' ? 'kvalifikacija' : eilutesTipas(String(r.requirement || ''), vertes);
+      if (t && t !== 'neaisku') { v.pasalinta.push({ tipas: t, kur: 'atitikties lentelė, ' + (r.ref || ''), istrauka: String(r.requirement || '').slice(0, 160), ...KUR[t] }); return false; }
+      return true;
+    });
+    const n = pernumeruok(v.sekcijos.map(s => ({ ...s, title: bb(s.title), content: s._failed ? s.content : bb(s.content) })), kompl, v.pasalintiSkyriai);
+    n.atmesta.forEach(r => v.pasalinta.push({ tipas: 'nuoroda', kur: 'atitikties lentelė, ' + (r.ref || ''), istrauka: String(r.requirement || '').slice(0, 160),
+      ko: 'atitikties lentelės eilutė, rodanti į pašalintą ar nesamą punktą', kodel: 'jos punkto TS nebėra' }));
+    const naujas = { ...ts, title: bb(ts.title), sections: n.sections, complianceTable: n.complianceTable, evaluationCriteria: [] };
+    if (naujas.keyElements) { naujas.keyElements = { ...naujas.keyElements }; delete naujas.keyElements.penalty; }
+    return { ts: naujas, pasalinta: v.pasalinta, ispejimai: v.ispejimai, problemos: patikrink(naujas) };
+  }
+
+  /* Paskutinė apsauga prieš Word: formos vertės (ir kainos įvertinimo) suma dokumento tekste. Grąžina radinius [{ kur, istrauka }]. */
+  function nutekejimas(tekstai, vertes) {
+    const vv = vertesSarasas(vertes), out = [];
+    if (!vv.length) return out;
+    (tekstai || []).forEach(([kur, tekstas]) => String(tekstas || '').split('\n').forEach(l => {
+      if (yraSuma(l, vv)) out.push({ kur, istrauka: l.replace(/\s+/g, ' ').trim().slice(0, 160) });
+    }));
+    return out;
+  }
+
+  /* TS patikrai (laisvas tekstas): kas jai nepriklauso. Antraštė - markdown „#“ arba „N. Pavadinimas“ eilutė; kitos - turinio eilutės. */
+  function radiniai(tekstas, vertes) {
+    const vv = vertesSarasas(vertes), out = [];
+    String(tekstas || '').split('\n').forEach(l => {
+      const t = l.trim(); if (!t) return;
+      const antraste = /^#{1,6}\s+/.test(t) || /^\d{1,2}\.?\s+\S/.test(t) && t.length < 120 && !/[.;:]$/.test(t);
+      let tipas = antraste ? antrastesTipas(t.replace(/^#{1,6}\s+/, '')).tipas : null;
+      if (!tipas) { const e = eilutesTipas(t, vv); tipas = e === 'neaisku' ? null : e; }
+      if (tipas) out.push({ tipas, antraste, istrauka: t.slice(0, 200), ...KUR[tipas] });
+    });
+    return out;
+  }
+
+  return { tvarkyk, patikrink, nutekejimas, radiniai, numeriai, KUR };
+})();
 
 // ---------- TAISYKLIŲ VARIKLIS ----------
 const RuleEngine = (() => {
@@ -4818,7 +5186,7 @@ const RuleEngine = (() => {
         source: 'rule',
         title: 'Specifikacija neturi aiškios struktūros',
         description: 'Tekste neaptikta numeruotų skyrių ar antraščių. Tai apsunkina tiekėjų supratimą.',
-        recommendation: 'Suskaidykite specifikaciją į skyrius: 1) Bendra informacija, 2) Pirkimo objekto aprašymas, 3) Techniniai reikalavimai, 4) Kokybės reikalavimai, 5) Sutarties vykdymas, 6) Garantijos.'
+        recommendation: 'Suskaidykite specifikaciją į skyrius: 1) Bendra informacija, 2) Pirkimo objekto aprašymas, 3) Techniniai reikalavimai, 4) Kokybės reikalavimai, 5) Pristatymo ar atlikimo sąlygos ir terminai, 6) Garantijos.'
       });
     }
     return issues;
@@ -4876,18 +5244,27 @@ const RuleEngine = (() => {
         recommendation: 'Aprašykite garantijos terminą (pvz., 24 mėn.), garantinio aptarnavimo apimtį, atsako laiką avariniais atvejais, ir kitus garantijos aspektus.'
       });
     }
-    if (!/delspinig|netesyb|baud/i.test(text)) {
-      issues.push({
-        id: 'no-penalty',
-        severity: 'minor',
-        category: 'contract_terms',
-        source: 'rule',
-        title: 'Nepaminėta atsakomybė už netinkamą vykdymą',
-        description: 'Sutarties įvykdymo užtikrinimo priemonės (delspinigiai, baudos) skatina tiekėjus laikytis terminų.',
-        recommendation: 'Numatykite delspinigius už pavėluotą įvykdymą (rekomendacija: 0,02–0,05% per dieną nuo nesuteiktos paslaugos vertės) ir baudas už esmines sutarties pažeidimus.'
-      });
-    }
+    // Delspinigių ir baudų nebuvimas - ne trūkumas (2026-10-02): sutarties vykdymo užtikrinimas ir sankcijos - sutarties dalis, ne TS
+    // (iki tol taisyklė „Nepaminėta atsakomybė už netinkamą vykdymą“ siūlė juos įrašyti į TS). Jų buvimą žymi checkTsScope.
     return issues;
+  }
+
+  // Kas TS nepriklauso (TsApimtis - tas pats šaltinis kaip generavimo saugiklis): sutarties užtikrinimas ir sankcijos, tiekėjo
+  // kvalifikacija, pasiūlymų vertinimas, numatoma vertė (ir formos vertės suma tekste)
+  function checkTsScope(text, meta) {
+    const kiek = {};
+    return TsApimtis.radiniai(text, [meta && meta.value]).filter(r => (kiek[r.tipas] = (kiek[r.tipas] || 0) + 1) <= 3).map((r, i) => ({
+      id: 'scope-' + r.tipas + '-' + i,
+      severity: 'major',
+      category: 'scope',
+      source: 'rule',
+      title: 'TS apima tai, kas jai nepriklauso: ' + r.ko,
+      description: 'Techninė specifikacija aprašo tik pirkimo objektą; ' + r.ko + ' - ' + r.kodel + '.',
+      quote: r.istrauka,
+      recommendation: r.tipas === 'verte'
+        ? 'Pašalinkite numatomą vertę ir iš jos kilusias sumas iš TS. Jei komisija vertę skelbia - ji nurodoma pirkimo sąlygose.'
+        : 'Pašalinkite iš TS ir perkelkite: ' + ({ sutartis: 'į sutarties projektą', kvalifikacija: 'į specialiąsias pirkimo sąlygas', vertinimas: 'į pasiūlymų vertinimo priedą' }[r.tipas] || 'į atitinkamą pirkimo dokumentą') + '.'
+    }));
   }
 
   function checkScopeSplitting(text, meta) {
@@ -4917,6 +5294,7 @@ const RuleEngine = (() => {
       ...checkLengthAndStructure(text),
       ...checkLithuanianGrammar(text),
       ...checkContractTerms(text),
+      ...checkTsScope(text, meta),
       ...checkScopeSplitting(text, meta),
     ];
 
@@ -5087,6 +5465,22 @@ function smartParseJson(content) {
   try { return JSON.parse(cleaned); }
   catch (e) { tried.push('2:fence_strip'); }
 
+  // STRATEGIJA 2b (2026-10-02): lietuviška „ uždaryta ASCII kabute - taisoma VISAM atsakymui, prieš ieškant balansuoto objekto.
+  // Tokia kabutė apgauna balansavimą (3 strategija laiko ją eilutės pabaiga), objektas iškerpamas klaidingai, ir 7 strategija grąžindavo
+  // pirmą vidinį masyvą („strengths“) - TS auditas rodė „0 pastabų“, nors AI jų pateikė (tikras 19 tūkst. ženklų atsakymas).
+  if (window.GP_AI_PROXY && GP_AI_PROXY.taisykJson && /^\s*\{/.test(cleaned)) {
+    try { return JSON.parse(GP_AI_PROXY.taisykJson(cleaned)); }
+    catch (e) { tried.push('2b:taisykJson'); }
+    // STRATEGIJA 2c: tas pats ir NUTRŪKĘS atsakymas (pasiekta atsakymo ilgio riba) - pirma kabutės, tada uždaromi skliaustai (atvirkščiai
+    // nepavyksta: nesutaisytos kabutės apgauna skliaustų skaičiavimą). Tikras 2026-10-02 TS audito atsakymas: 19 tūkst. ženklų, nutrūkęs
+    // ir su „...", - iki tol perskaityta 0 pastabų, dabar 17. Rezultatas pažymimas _nutrukes - jame gali trūkti paskutinių įrašų.
+    try {
+      const p = JSON.parse(repairTruncatedJson(GP_AI_PROXY.taisykJson(cleaned)));
+      if (p && typeof p === 'object' && !Array.isArray(p)) p._nutrukes = true;
+      return p;
+    } catch (e) { tried.push('2c:taisykJson_truncated'); }
+  }
+
   // STRATEGIJA 3: surasti balansuotą JSON objektą { ... }
   const balanced = extractBalancedJson(cleaned, '{', '}');
   if (balanced) {
@@ -5254,8 +5648,13 @@ ${['principai', 'ts_konkurencija', 'ts_zenklas', 'ts_standartai', 'ts_funkciniai
 
 5. **PRAKTINIAI PASIŪLYMAI**:
    - Alternatyvūs formuluočiai
-   - Trūkstamos sekcijos (garantijos, sutarties vykdymo užtikrinimas, žaliųjų aspektų)
+   - Trūkstamos objekto aprašymo dalys (garantijos, pristatymo ar atlikimo sąlygos, žaliųjų pirkimų aspektai)
    - Geroji praktika
+
+6. **TS APIMTIS**: techninė specifikacija aprašo TIK pirkimo objektą. Jai NEPRIKLAUSO: sutarties vykdymo užtikrinimas ir sankcijos (delspinigiai, baudos, nutraukimas, ginčai - sutarties dalis), tiekėjo kvalifikacijos reikalavimai (specialiųjų pirkimo sąlygų dalis; paslaugos vykdymo organizavimas - kas ir kaip atlieka darbą - gali būti TS), pasiūlymų vertinimo kriterijai, svoriai, balai ir formulės (atskiras pirkimo dokumentų priedas), numatoma pirkimo vertė ir sumos (pirkimo sąlygose, jei skelbiama).
+   - Jei tekste jų YRA - pateik pastabą (category "scope", severity "major"): ką perkelti ir kur.
+   - Jų NEBUVIMAS nėra trūkumas - niekada nesiūlyk jų pridėti į TS.
+   - Garantijos sąlygos ir rezultatų (produktų) naudojimo sąlygos (garantinis laikotarpis ir defektų šalinimas, teisės naudoti rezultatus, perdavimo formatai) - TS DALIS, nes susijusios su TS išpildymu: jų nežymėk kaip nepriklausančių TS.
 
 ATSAKYMO FORMATAS:
 Privalomai grąžink tik validų JSON objektą su tokia struktūra (be jokio įvadinio teksto, be markdown kodo blokų):
@@ -5377,6 +5776,11 @@ Atlik specifikacijos analizę pagal sistemos prompt'e nurodytas kryptis ir grą�
       console.error('Failed to parse AI response:', content?.slice(0, 500));
       throw e;
     }
+    // Be pastabų sąrašo (pvz. iš atsakymo išskirtas vidinis masyvas) - neperskaitytas atsakymas, ne „pastabų nėra“ (2026-10-02):
+    // JSON klaida - analyze() kartoja užklausą, o nepavykus - klaida su priežastimi
+    if (!parsed || Array.isArray(parsed) || !Array.isArray(parsed.issues) || (parsed._partial && !parsed.issues.length)) {
+      throw new Error('AI atsakymas neturi atpažįstamos JSON struktūros (nėra pastabų sąrašo).');
+    }
 
     // Normalize issues
     const issues = (parsed.issues || []).map((i, idx) => ({
@@ -5392,9 +5796,13 @@ Atlik specifikacijos analizę pagal sistemos prompt'e nurodytas kryptis ir grą�
       source: 'ai'
     }));
 
+    // Nutrūkęs atsakymas - perskaitytos pastabos rodomos, bet pasakoma, kad jų gali būti ne visos (ne tylus „tiek ir tėra“)
+    const nutruko = (parsed._nutrukes || parsed._partial)
+      ? 'AI atsakymas nutrūko (pasiekta atsakymo ilgio riba): parodyta ' + issues.length + ' perskaitytų pastabų, kitų gali trūkti - paleiskite analizę dar kartą. '
+      : '';
     return {
       issues,
-      summary: parsed.summary || '',
+      summary: nutruko + (parsed.summary || ''),
       strengths: parsed.strengths || [],
       actionPlan: parsed.actionPlan || []
     };
@@ -5417,7 +5825,7 @@ KONTEKSTAS:
 
 TAVO MISIJA:
 Generuoti aukščiausios kokybės techninę specifikaciją, kuri:
-1. Visiškai atitinka PĮ reikalavimus (ypač ${GP_TEISE.sarasas(['principai', 'ts', 'dokumentu_aiskumas', 'kvalifikacija', 'vertinimas', 'dalys', 'sutarties_keitimas'], 'PI')})
+1. Visiškai atitinka PĮ reikalavimus (ypač ${GP_TEISE.sarasas(['principai', 'ts', 'dokumentu_aiskumas', 'dalys'], 'PI')})
 2. Skatina konkurenciją (3+ tiekėjai gali pateikti pasiūlymus)
 3. Aiškiai, nedviprasmiškai, profesionaliai išreikšta
 4. Naudoja matuojamus parametrus ir nuorodas į standartus (ISO, IEC, EN, LST EN)
@@ -5425,27 +5833,30 @@ Generuoti aukščiausios kokybės techninę specifikaciją, kuri:
 6. NIEKADA neturi prekės ženklų be „arba lygiavertis"
 7. NIEKADA nenaudoja subjektyvių sąvokų be matuojamų kriterijų
 
+TS APIMTIS (privaloma): techninė specifikacija aprašo TIK pirkimo objektą - kas perkama, kiek, kokių savybių, kaip, kur ir kada pristatoma ar atliekama, kokybės ir garantijos reikalavimai, rezultatų naudojimo sąlygos (jos susijusios su TS išpildymu). TS NEGENERUOK, neminėk ir nedaryk nuorodų į:
+- sutarties vykdymo užtikrinimą ir sankcijas (užtikrinimas, delspinigiai, baudos, sutarties nutraukimas, ginčai) - tai sutarties dalis;
+- reikalavimus tiekėjo kvalifikacijai (patirtis, įvykdytos sutartys, apyvarta, finansinis pajėgumas, specialistų kvalifikacija tiekėjui atrinkti) - tai specialiųjų pirkimo sąlygų dalis; paslaugos vykdymo organizavimą (kas atlieka darbą ir kaip jis organizuojamas) aprašyti galima;
+- pasiūlymų vertinimo kriterijus, metodiką, svorius, balus, formules ir jų santraukas - vertinimas yra atskiras pirkimo dokumentų priedas;
+- numatomą pirkimo vertę, biudžetą ir jokias iš jų kilusias sumas ar intervalus - jei komisija vertę skelbia, tai daroma pirkimo sąlygose.
+
 TS STRUKTŪROS PAGRINDAS (visada laikytis):
-1. Bendrosios nuostatos (terminija, taikomi teisės aktai)
+1. Bendrosios nuostatos (terminija, taikomi teisės aktai ir standartai)
 2. Pirkimo objekto aprašymas (kas, kiek, kokios apimtys)
 3. Funkciniai reikalavimai (ką sprendimas turi daryti)
 4. Techniniai reikalavimai (techniniai parametrai)
 5. Kokybės reikalavimai (standartai, sertifikatai, bandymai)
 6. Pristatymo / atlikimo terminai ir vieta
-7. Garantijos sąlygos
-8. Sutarties vykdymo užtikrinimo priemonės (delspinigiai, baudos)
-9. Reikalavimai tiekėjui (kvalifikaciniai)
-10. Pasiūlymų vertinimo kriterijai
-11. Atitikties lentelės pildymo nurodymai (Priedas Nr. 1)
+7. Garantijos sąlygos (paslaugoms - ir rezultatų naudojimo sąlygos: teisės į rezultatus, perdavimo formatai)
+Atitikties lentelė (Priedas Nr. 1) sudaroma atskirai - kaip skyriaus jos nekurk.
 
 DAŽNIAUSIOS KLAIDOS, KURIŲ VENGTI:
 - Konkretūs prekės ženklai be „arba lygiavertis" (${teise('ts_zenklas')})
 - Subjektyvūs terminai („kokybiškas", „patikimas", „aukštos kokybės")
-- Per dideli kvalifikaciniai reikalavimai (${teise('met_patirtis')}: patirtis paprastai ne daugiau kaip 0,7 numatomos vertės)
 - Konkretus specialistų skaičius (geriau kompetencijos)
 - Magistro/daktaro reikalavimas be pagrindimo
-- Subjektyvūs vertinimo kriterijai
-- Neaiškūs kiekiai („pakankamas kiekis", „prireikus")`;
+- Neaiškūs kiekiai („pakankamas kiekis", „prireikus")
+
+RAŠYBA: brūkšniui naudok paprastą „-“ (ne U+2013 ir ne U+2014 brūkšnio), ir formulėje „(toliau - X)“.`;
 
   async function generateQuestions(meta, settings, onProgress) {
     const userMsg = `Pirkimo pirminė informacija:
@@ -5463,7 +5874,7 @@ DAŽNIAUSIOS KLAIDOS, KURIŲ VENGTI:
 - Aspektai: ${Object.entries(meta.flags || {}).filter(([_, v]) => v).map(([k]) => k).join(', ') || 'nėra'}
 
 UŽDUOTIS:
-Sugeneruok 6-8 svarbiausių patikslinimo klausimų. Trumpai - po vieną sakinį.
+Sugeneruok 6-8 svarbiausių patikslinimo klausimų. Trumpai - po vieną sakinį. Klausk TIK apie pirkimo objektą (ne apie tiekėjo kvalifikaciją, pasiūlymų vertinimą, sutarties užtikrinimą ar vertę - jie TS nepriklauso).
 
 GRĄŽINK TIK VALID JSON (be markdown, be paaiškinimo prieš ar po):
 {
@@ -5516,7 +5927,7 @@ KIEKVIENAS klausimas - trumpas, hint - max 1 sakinys. Bendras atsakymas < 4000 �
       return `${i+1}. "${a.name}" - ${val} (${dt})`;
     }).join('\n')}` : '';
 
-    const ctx = { meta, answersBlock, refsBlock, cvpisBlock };
+    const ctx = { meta, answersBlock, refsBlock, cvpisBlock, skyriai: [] };
     const signal = aiSignalas();
 
     // ŽINGSNIS 1: Sugeneruoti TS karkasą (antraštės + metaduomenys), 30-60 sek
@@ -5526,6 +5937,7 @@ KIEKVIENAS klausimas - trumpas, hint - max 1 sakinys. Bendras atsakymas < 4000 �
 
     // ŽINGSNIS 2: Generuoti kiekvieną skyrių LYGIAGREČIAI, 30-60 sek visiems iš karto
     const sectionTitles = skeleton.sectionTitles || [];
+    ctx.skyriai = sectionTitles;   // kiekvienam skyriui - visa struktūra, kad nuorodos rodytų į tikrus skyrius (iki tol AI jų nežinojo)
     // Be struktūros TS nėra - anksčiau tuščia TS buvo parodoma kaip „TS sugeneruota!“.
     if (!sectionTitles.length) throw new Error('AI negrąžino TS struktūros (skyrių sąrašo). Bandykite dar kartą.');
     onProgress?.(`2/3: Generuojami ${sectionTitles.length} skyriai (lygiagreciai)...`, 30);
@@ -5613,6 +6025,7 @@ ${answersBlock || '(praleisti)'}
 ${cvpisBlock}
 
 UŽDUOTIS: Sugeneruok TS karkasą (TIK antraščių pavadinimai + metaduomenys). Skyrių TURINIO NEGENERUOK - jis bus generuojamas atskirai.
+Skyrių apie sutarties vykdymo užtikrinimą ir sankcijas, tiekėjo kvalifikaciją, pasiūlymų vertinimą ir numatomą vertę NEKURK (žr. TS APIMTIS); atitikties lentelės skyriaus irgi nekurk - ji pridedama kaip Priedas Nr. 1.
 
 GRĄŽINK TIK VALID JSON (be markdown, be paaiškinimo):
 {
@@ -5623,18 +6036,13 @@ GRĄŽINK TIK VALID JSON (be markdown, be paaiškinimo):
     {"number": "3", "title": "Techniniai reikalavimai"},
     {"number": "4", "title": "Kokybės reikalavimai ir standartai"},
     {"number": "5", "title": "Pristatymas, atlikimas ir terminai"},
-    {"number": "6", "title": "Garantijos sąlygos"},
-    {"number": "7", "title": "Sutarties vykdymo užtikrinimas"}
-  ],
-  "evaluationCriteria": [
-    {"name": "Kainos kriterijus", "weight": 60, "formula": "Bk = (Cmin/C) * 60", "description": "Žemiausia kaina gauna max balus."}
+    {"number": "6", "title": "Garantijos sąlygos"}
   ],
   "keyElements": {
     "cpv": "siūlomas pagrindinis CPV",
     "additionalCpv": [],
     "standards": ["ISO/IEC/EN standartų sąrašas"],
-    "warranty": "Garantijos terminas (1 sakinys)",
-    "penalty": "Delspinigių dydis (1 sakinys)"
+    "warranty": "Garantijos terminas (1 sakinys)"
   },
   "recommendations": ["2-4 konkrečios rekomendacijos šiam pirkimui"]
 }`;
@@ -5667,6 +6075,8 @@ Reikalavimai:
 - Įtrauk standartus (ISO/IEC/EN/LST EN) kai taikoma
 - Jei mini prekės ženklą - PRIVALOMA "arba lygiavertis"
 - Atitik PĮ reikalavimus
+- Tik pirkimo objektas: jokio sutarties užtikrinimo ir sankcijų, tiekėjo kvalifikacijos reikalavimų, pasiūlymų vertinimo kriterijų ar svorių, numatomos pirkimo vertės ar sumų (žr. TS APIMTIS)
+- Nuorodas į kitus skyrius rašyk tik pagal šią TS struktūrą: ${(ctx.skyriai || []).map(s => s.number + '. ' + s.title).join('; ') || '(nežinoma - nuorodų į kitus skyrius nerašyk)'}
 
 GRĄŽINK TIK MARKDOWN turinį (NE JSON, NE markdown code fence \`\`\`). Pradėk tiesiogiai nuo "${section.number}.1." pasubsekcijos.`;
 
@@ -5686,7 +6096,7 @@ ${sectionsBrief.slice(0, 4000)}
 
 Pirkimas: ${ctx.meta.title}
 
-UŽDUOTIS: Sugeneruok Priedo Nr. 1 atitikties lentelės eilutes - 15-25 svarbiausius matuojamus reikalavimus iš visos TS.
+UŽDUOTIS: Sugeneruok Priedo Nr. 1 atitikties lentelės eilutes - 15-25 svarbiausius matuojamus reikalavimus iš visos TS. "ref" - tik pateiktoje struktūroje esančio punkto numeris; tiekėjo kvalifikacijos, vertinimo ir sutarties sąlygų eilučių nekurk.
 
 GRĄŽINK TIK VALID JSON (be markdown):
 {
@@ -5696,7 +6106,7 @@ GRĄŽINK TIK VALID JSON (be markdown):
   ]
 }
 
-Kategorijos: technical, quality, delivery, warranty, qualification, security, other.`;
+Kategorijos: technical, quality, delivery, warranty, security, other.`;
 
     const result = await callClaudeWithJsonRetry(userMsg, settings, 4000, 2);
     return result.items || result.complianceTable || [];
@@ -5749,14 +6159,7 @@ Kategorijos: technical, quality, delivery, warranty, qualification, security, ot
       md += `## ${nr}${s.title || ''}\n\n${s.content}\n\n`;
     });
 
-    if (ts.evaluationCriteria && ts.evaluationCriteria.length) {
-      md += `## Pasiūlymų vertinimo kriterijai\n\n`;
-      md += `| Kriterijus | Svoris | Formulė | Aprašymas |\n|---|---|---|---|\n`;
-      ts.evaluationCriteria.forEach(c => {
-        md += `| ${c.name} | ${c.weight} | \`${c.formula || ''}\` | ${c.description || ''} |\n`;
-      });
-      md += '\n';
-    }
+    // Pasiūlymų vertinimo kriterijų čia nebėra (2026-10-02): vertinimas - atskiras pirkimo dokumentų priedas, ne TS (TsApimtis)
     return md;
   }
 
@@ -6257,71 +6660,47 @@ const CVPISClient = (() => {
 // ---------- DOCX BUILDER (paprastas HTML→DOC su MS Word suderinamumu) ----------
 const DocxBuilder = (() => {
 
-  function buildTsDocx(ts, meta, priceData) {
+  /* Oficialus dokumentas (2026-10-02): be žalios - tekstas grafito, antraštės tik dydžiu ir pusjuodžiu, lentelės antraštė šviesiai
+     pilka su juodu tekstu; be vertinimo kriterijų ir numatomos vertės (TsApimtis); ilgieji brūkšniai - „-“. */
+  function buildTsDocx(ts, meta) {
     const date = new Date().toLocaleDateString('lt-LT');
     // Filtruoti tik sėkmingai sugeneruotus skyrius
     const validSections = (ts.sections || []).filter(s => !s._failed && (s.content || '').trim());
     const sections = validSections.map(s => {
       const content = mdToHtml(s.content);
       const nr = (s.number || s.number === 0) ? escapeHtml(s.number) + '. ' : '';   // be numerio - be „undefined."
-      return `<h2 style="color:var(--color-emerald-strong); font-size:16pt; margin-top:24pt; margin-bottom:12pt; border-bottom: 1pt solid #00A072; padding-bottom: 4pt;">${nr}${escapeHtml(s.title || '')}</h2>${content}`;
+      return `<h2 style="color:#2E3641; font-size:16pt; font-weight:bold; margin-top:24pt; margin-bottom:12pt;">${nr}${escapeHtml(s.title || '')}</h2>${content}`;
     }).join('\n');
 
     // Atitikties lentelė: tik jei yra duomenų - kitu atveju neįtraukiame Priedo Nr. 1
     const complianceItems = ts.complianceTable || [];
     const hasCompliance = complianceItems.length > 0;
     const compliance = hasCompliance ? buildComplianceTable(complianceItems) : '';
-    const evalCriteria = buildEvaluationTable(ts.evaluationCriteria || []);
 
     const css = `
 @page WordSection1 { size: 8.27in 11.69in; margin: 1.0in 1.0in 1.0in 1.0in; mso-page-orientation: portrait; }
 div.WordSection1 { page: WordSection1; }
 body { font-family: 'Nunito Sans', Arial, sans-serif; font-size: 11pt; color: #2E3641; line-height: 1.4; }
 h1 { font-family: 'Nunito Sans', Arial, sans-serif; font-size: 22pt; color: #2E3641; text-align: center; }
-h2 { font-family: 'Nunito Sans', Arial, sans-serif; font-size: 16pt; color: #007554; }
+h2 { font-family: 'Nunito Sans', Arial, sans-serif; font-size: 16pt; color: #2E3641; }
 h3 { font-family: 'Nunito Sans', Arial, sans-serif; font-size: 13pt; color: #2E3641; margin-top: 12pt; }
 p { margin: 6pt 0; }
 table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
-th { background: #D7EEDB; border: 0.75pt solid #00A072; padding: 6pt 8pt; text-align: left; font-weight: bold; font-size: 10pt; }
-td { border: 0.75pt solid #C7CDD3; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; }
+th { background: #F2F2F2; color: #000000; border: 0.75pt solid #BFBFBF; padding: 6pt 8pt; text-align: left; font-weight: bold; font-size: 10pt; }
+td { border: 0.75pt solid #BFBFBF; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; }
 .cover { text-align: center; padding-top: 60pt; }
 .cover h1 { font-size: 26pt; }
-.cover .meta { font-size: 14pt; color: #5B6470; margin-top: 24pt; }
+.cover .meta { font-size: 14pt; color: #2E3641; margin-top: 24pt; }
 .meta-table td { padding: 4pt 12pt; border: none; }
-.meta-table td:first-child { font-weight: bold; color: #5B6470; }
+.meta-table td:first-child { font-weight: bold; color: #2E3641; }
 .page-break { page-break-before: always; }
 ul, ol { margin: 6pt 0; padding-left: 24pt; }
 li { margin: 3pt 0; }
-.legend { background: #EFF9F1; border-left: 3pt solid #00A072; padding: 6pt 12pt; margin: 12pt 0; font-size: 10pt; }
-.footer { color: #5B6470; font-size: 9pt; text-align: center; margin-top: 36pt; }
+.legend { background: #F2F2F2; padding: 6pt 12pt; margin: 12pt 0; font-size: 10pt; }
+.footer { color: #2E3641; font-size: 9pt; text-align: center; margin-top: 36pt; }
     `;
 
-    const priceBlock = priceData ? `
-<div class="page-break"></div>
-<h2>Numatoma pirkimo vertė</h2>
-<p>${escapeHtml(priceData.rationale || '')}</p>
-<table class="meta-table">
-  <tr><td>Centrinis įvertinimas</td><td><strong>${formatPrice(priceData.estimate?.central)} EUR (be PVM)</strong></td></tr>
-  <tr><td>Minimumas</td><td>${formatPrice(priceData.estimate?.min)} EUR</td></tr>
-  <tr><td>Maksimumas</td><td>${formatPrice(priceData.estimate?.max)} EUR</td></tr>
-  ${priceData.estimate?.perUnit ? `<tr><td>Vieneto kaina</td><td>${formatPrice(priceData.estimate.perUnit)} EUR</td></tr>` : ''}
-  <tr><td>Patikimumas</td><td>${escapeHtml({high:'Aukštas',medium:'Vidutinis',low:'Žemas'}[priceData.estimate?.confidence] || '')}</td></tr>
-</table>
-
-<h3>Šaltiniai</h3>
-<ul>${(priceData.sources || []).map(s => `<li><strong>${escapeHtml(s.title)}</strong> - ${escapeHtml(s.description)}</li>`).join('')}</ul>
-
-${priceData.priceFactors ? `
-<h3>Kainą didinantys veiksniai</h3>
-<ul>${(priceData.priceFactors.increase || []).map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
-<h3>Kainą mažinantys veiksniai</h3>
-<ul>${(priceData.priceFactors.decrease || []).map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
-` : ''}
-
-${priceData.marketRisks?.length ? `<h3>Rinkos rizikos</h3><ul>${priceData.marketRisks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
-
-${priceData.recommendations?.length ? `<h3>Rekomendacijos</h3><ul>${priceData.recommendations.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
-` : '';
+    // Numatomos pirkimo vertės ir kainos įvertinimo skyriaus nebėra (2026-10-02): vertė TS neskelbiama - modulyje ji lieka (kainos kortelė)
 
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
@@ -6336,7 +6715,7 @@ ${priceData.recommendations?.length ? `<h3>Rekomendacijos</h3><ul>${priceData.re
 <div class="WordSection1">
 
 <div class="cover">
-  <p style="text-transform: uppercase; font-size: 11pt; color: #5B6470; letter-spacing: 2pt;">LITGRID AB</p>
+  <p style="text-transform: uppercase; font-size: 11pt; color: #2E3641; letter-spacing: 2pt;">LITGRID AB</p>
   <h1>${escapeHtml(ts.title || meta.title || 'Techninė specifikacija')}</h1>
   <div class="meta">
     <p>Pirkimo techninė specifikacija</p>
@@ -6355,7 +6734,6 @@ ${priceData.recommendations?.length ? `<h3>Rekomendacijos</h3><ul>${priceData.re
   <tr><td>Kiekis</td><td>${escapeHtml((meta.quantity || '-') + ' ' + (meta.unit || ''))}</td></tr>
   <tr><td>Sutarties trukmė</td><td>${escapeHtml(meta.duration ? meta.duration + ' mėn.' : '-')}</td></tr>
   <tr><td>Atlikimo vieta</td><td>${escapeHtml(meta.location || '-')}</td></tr>
-  <tr><td>Vertinimo kriterijus</td><td>${escapeHtml({price:'Mažiausia kaina',cost:'Sąnaudos (gyvavimo ciklas)',best_price_quality:'Ekonomiškai naudingiausias'}[meta.criteria] || '-')}</td></tr>
 </table>
 
 <div class="legend">
@@ -6363,10 +6741,6 @@ ${priceData.recommendations?.length ? `<h3>Rekomendacijos</h3><ul>${priceData.re
 </div>
 
 ${sections}
-
-${evalCriteria}
-
-${priceBlock}
 
 ${hasCompliance ? `
 <div class="page-break"></div>
@@ -6387,7 +6761,7 @@ Dokumentą sugeneravo TS Asistentas (Litgrid AB) · ${date}<br/>
 </body>
 </html>`;
 
-    return html;
+    return GP_DOCX_STILIAI.bruksniai(html);
   }
 
   function buildComplianceTable(items) {
@@ -6409,32 +6783,6 @@ Dokumentą sugeneravo TS Asistentas (Litgrid AB) · ${date}<br/>
 <th style="width: 25%;">Tiekėjo siūlomas sprendimas</th>
 <th style="width: 17%;">Atitikimo įrodymas (dokumentas, puslapis)</th>
 <th style="width: 8%;">Atitinka (Taip/Ne)</th>
-</tr>
-</thead>
-<tbody>
-${rows}
-</tbody>
-</table>`;
-  }
-
-  function buildEvaluationTable(criteria) {
-    if (!criteria || !criteria.length) return '';
-    const rows = criteria.map(c => `
-<tr>
-  <td>${escapeHtml(c.name || '')}</td>
-  <td>${escapeHtml(String(c.weight || ''))}</td>
-  <td style="font-family: monospace;">${escapeHtml(c.formula || '')}</td>
-  <td>${escapeHtml(c.description || '')}</td>
-</tr>`).join('');
-    return `
-<h2>Pasiūlymų vertinimo kriterijai</h2>
-<table>
-<thead>
-<tr>
-<th>Kriterijus</th>
-<th>Svoris (balai)</th>
-<th>Formulė</th>
-<th>Aprašymas</th>
 </tr>
 </thead>
 <tbody>
@@ -6496,19 +6844,23 @@ ${rows}
   }
 
   // -------- TIKRAS .docx GENERAVIMAS PER docx.js BIBLIOTEKĄ --------
-  // Naudoja Office Open XML formatą (tikras .docx, ne HTML-as-Word)
-  async function buildAndDownloadRealDocx(ts, meta, priceData, filename) {
+  // Naudoja Office Open XML formatą (tikras .docx, ne HTML-as-Word).
+  // Oficialus dokumentas (2026-10-02, shared/docx-stiliai.js): jokios žalios - tekstas ir antraštės grafito (antraštės išskiriamos tik
+  // dydžiu ir pusjuodžiu), lentelių antraštės ir raktų stulpelis - šviesiai pilkas CLEAR fonas su juodu tekstu (iki tol SOLID žali ir
+  // tamsus su baltu tekstu), ilgieji brūkšniai (U+2013, U+2014) -> „-“ (ir AI tekste). Be vertinimo kriterijų ir numatomos vertės - TS jų neskelbia (TsApimtis).
+  async function kurkTsDocx(ts, meta) {
     if (!window.docx) {
       throw new Error('docx.js biblioteka neįkrauta. Patikrinkite interneto prieigą.');
     }
-    const D = window.docx;
+    const D = GP_DOCX_STILIAI.oficialus(window.docx);
+    const OF = GP_DOCX_STILIAI.OFICIALUS;
     const children = [];
 
     // ===== TITULINIS PUSLAPIS =====
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
       spacing: { before: 2400, after: 240 },
-      children: [new D.TextRun({ text: 'LITGRID AB', size: 22, color: '737483' })]
+      children: [new D.TextRun({ text: 'LITGRID AB', size: 22, color: OF.tekstas })]
     }));
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
@@ -6518,19 +6870,19 @@ ${rows}
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
       spacing: { after: 120 },
-      children: [new D.TextRun({ text: 'Pirkimo techninė specifikacija', size: 28, color: '737483' })]
+      children: [new D.TextRun({ text: 'Pirkimo techninė specifikacija', size: 28, color: OF.tekstas })]
     }));
     if (meta.cpv) {
       children.push(new D.Paragraph({
         alignment: D.AlignmentType.CENTER,
         spacing: { after: 120 },
-        children: [new D.TextRun({ text: 'CPV: ' + meta.cpv, size: 24, color: '737483' })]
+        children: [new D.TextRun({ text: 'CPV: ' + meta.cpv, size: 24, color: OF.tekstas })]
       }));
     }
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
       spacing: { before: 720, after: 240 },
-      children: [new D.TextRun({ text: new Date().toLocaleDateString('lt-LT'), size: 24, color: '737483' })]
+      children: [new D.TextRun({ text: new Date().toLocaleDateString('lt-LT'), size: 24, color: OF.tekstas })]
     }));
 
     // Page break
@@ -6540,7 +6892,7 @@ ${rows}
     children.push(new D.Paragraph({
       heading: D.HeadingLevel.HEADING_1,
       spacing: { before: 240, after: 240 },
-      children: [new D.TextRun({ text: 'Pirkimo informacija', color: '00A072', bold: true })]
+      children: [new D.TextRun({ text: 'Pirkimo informacija', color: OF.tekstas, bold: true })]
     }));
 
     const infoRows = [
@@ -6549,16 +6901,14 @@ ${rows}
       ['CPV kodas', meta.cpv || '-'],
       ['Kiekis', (meta.quantity || '-') + ' ' + (meta.unit || '')],
       ['Sutarties trukmė', meta.duration ? meta.duration + ' mėn.' : '-'],
-      ['Atlikimo vieta', meta.location || '-'],
-      ['Vertinimo kriterijus', { price: 'Mažiausia kaina', cost: 'Sąnaudos (gyvavimo ciklas)', best_price_quality: 'Ekonomiškai naudingiausias' }[meta.criteria] || '-']
+      ['Atlikimo vieta', meta.location || '-']
     ];
     children.push(buildDocxKvTable(D, infoRows));
 
     // Bendros nuostatos
     children.push(new D.Paragraph({
       spacing: { before: 240, after: 120 },
-      shading: { type: D.ShadingType.SOLID, color: 'EFF9F1' },
-      border: { left: { style: D.BorderStyle.SINGLE, size: 12, color: '00A072', space: 4 } },
+      shading: GP_DOCX_STILIAI.fonas(D),
       children: [new D.TextRun({ text: 'Bendros nuostatos: ', bold: true }), new D.TextRun({ text: 'Ši specifikacija parengta vadovaujantis LR Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų įstatymu (PĮ), ES Direktyva 2014/25/ES, Viešųjų pirkimų tarnybos rekomendacijomis ir Litgrid AB vidaus tvarkomis. Visi techniniai reikalavimai yra minimalūs - tiekėjas gali pasiūlyti aukštesnio lygio sprendimą.' })]
     }));
 
@@ -6568,74 +6918,15 @@ ${rows}
       children.push(new D.Paragraph({
         heading: D.HeadingLevel.HEADING_1,
         spacing: { before: 360, after: 180 },
-        border: { bottom: { style: D.BorderStyle.SINGLE, size: 8, color: '00A072' } },
-        // Numeris ateina iš AI atsakymo: be jo antraštė anksčiau tapdavo „undefined. Pavadinimas"
-        children: [new D.TextRun({ text: ((section.number || section.number === 0) ? section.number + '. ' : '') + (section.title || ''), color: '00A072', bold: true })]
+        // Numeris - iš TsApimtis.pernumeruok (ištisinis); be numerio antraštė anksčiau tapdavo „undefined. Pavadinimas"
+        children: [new D.TextRun({ text: ((section.number || section.number === 0) ? section.number + '. ' : '') + (section.title || ''), color: OF.tekstas, bold: true })]
       }));
       const contentElements = mdToDocxElements(D, section.content || '');
       children.push(...contentElements);
     }
 
-    // ===== VERTINIMO KRITERIJAI =====
-    const evalCrit = ts.evaluationCriteria || [];
-    if (evalCrit.length) {
-      children.push(new D.Paragraph({
-        heading: D.HeadingLevel.HEADING_1,
-        spacing: { before: 360, after: 180 },
-        children: [new D.TextRun({ text: 'Pasiūlymų vertinimo kriterijai', color: '00A072', bold: true })]
-      }));
-      children.push(buildDocxEvalTable(D, evalCrit));
-    }
-
-    // ===== KAINOS VERTINIMAS =====
-    if (priceData) {
-      children.push(new D.Paragraph({ children: [new D.PageBreak()] }));
-      children.push(new D.Paragraph({
-        heading: D.HeadingLevel.HEADING_1,
-        spacing: { before: 240, after: 180 },
-        children: [new D.TextRun({ text: 'Numatoma pirkimo vertė', color: '00A072', bold: true })]
-      }));
-      if (priceData.rationale) {
-        children.push(new D.Paragraph({
-          spacing: { after: 240 },
-          children: [new D.TextRun({ text: priceData.rationale })]
-        }));
-      }
-      const e = priceData.estimate || {};
-      const fmt = n => n != null ? Number(n).toLocaleString('lt-LT', { maximumFractionDigits: 0 }) : '-';
-      const priceRows = [
-        ['Centrinis įvertinimas', fmt(e.central) + ' EUR (be PVM)'],
-        ['Minimumas', fmt(e.min) + ' EUR'],
-        ['Maksimumas', fmt(e.max) + ' EUR']
-      ];
-      if (e.perUnit) priceRows.push(['Vieneto kaina', fmt(e.perUnit) + ' EUR']);
-      if (e.confidence) priceRows.push(['Patikimumas', { high: 'Aukštas', medium: 'Vidutinis', low: 'Žemas' }[e.confidence] || e.confidence]);
-      children.push(buildDocxKvTable(D, priceRows));
-
-      if (priceData.sources && priceData.sources.length) {
-        children.push(new D.Paragraph({
-          heading: D.HeadingLevel.HEADING_2,
-          spacing: { before: 240, after: 120 },
-          children: [new D.TextRun({ text: 'Šaltiniai', color: '2E3641', bold: true })]
-        }));
-        priceData.sources.forEach(s => {
-          children.push(new D.Paragraph({
-            bullet: { level: 0 },
-            children: [new D.TextRun({ text: s.title + ' - ', bold: true }), new D.TextRun({ text: s.description || '' })]
-          }));
-        });
-      }
-      if (priceData.recommendations && priceData.recommendations.length) {
-        children.push(new D.Paragraph({
-          heading: D.HeadingLevel.HEADING_2,
-          spacing: { before: 240, after: 120 },
-          children: [new D.TextRun({ text: 'Rekomendacijos', color: '2E3641', bold: true })]
-        }));
-        priceData.recommendations.forEach(r => {
-          children.push(new D.Paragraph({ bullet: { level: 0 }, children: [new D.TextRun({ text: r })] }));
-        });
-      }
-    }
+    // Vertinimo kriterijų ir numatomos pirkimo vertės skyrių nebėra (2026-10-02): vertinimas - atskiras pirkimo dokumentų priedas,
+    // vertė TS neskelbiama (modulyje kainos įvertinimas lieka - kortelė, patikros forma)
 
     // ===== ATITIKTIES LENTELĖ (tik jei yra duomenų) =====
     const compItems = ts.complianceTable || [];
@@ -6649,7 +6940,7 @@ ${rows}
       children.push(new D.Paragraph({
         alignment: D.AlignmentType.CENTER,
         spacing: { after: 240 },
-        children: [new D.TextRun({ text: 'Atitikties lentelė', color: '00A072', bold: true, size: 32 })]
+        children: [new D.TextRun({ text: 'Atitikties lentelė', color: OF.tekstas, bold: true, size: 32 })]
       }));
       children.push(new D.Paragraph({
         spacing: { after: 240 },
@@ -6662,17 +6953,17 @@ ${rows}
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
       spacing: { before: 720, after: 120 },
-      border: { top: { style: D.BorderStyle.SINGLE, size: 4, color: 'C7CDD3' } },
-      children: [new D.TextRun({ text: 'Dokumentą sugeneravo TS Asistentas (Litgrid AB) · ' + new Date().toLocaleDateString('lt-LT'), color: '737483', size: 18 })]
+      border: { top: { style: D.BorderStyle.SINGLE, size: 4, color: OF.linija } },
+      children: [new D.TextRun({ text: 'Dokumentą sugeneravo TS Asistentas (Litgrid AB) · ' + new Date().toLocaleDateString('lt-LT'), color: OF.tekstas, size: 18 })]
     }));
     children.push(new D.Paragraph({
       alignment: D.AlignmentType.CENTER,
-      children: [new D.TextRun({ text: 'Šis dokumentas yra juodraštis ir turi būti peržiūrėtas pirkimų komisijos prieš skelbiant pirkimą.', color: '737483', size: 18, italics: true })]
+      children: [new D.TextRun({ text: 'Šis dokumentas yra juodraštis ir turi būti peržiūrėtas pirkimų komisijos prieš skelbiant pirkimą.', color: OF.tekstas, size: 18, italics: true })]
     }));
 
     // Sukuriam dokumentą su stiliais
     const doc = new D.Document({
-      externalStyles: GP_DOCX_STILIAI.xml({}),
+      externalStyles: GP_DOCX_STILIAI.xml({ oficialus: true }),
       creator: 'TS Asistentas · Litgrid AB',
       title: ts.title || meta.title || 'Techninė specifikacija',
       description: 'Sugeneruota TS Asistentu',
@@ -6687,7 +6978,11 @@ ${rows}
       }]
     });
 
-    const blob = await D.Packer.toBlob(doc);
+    return D.Packer.toBlob(doc);
+  }
+
+  async function buildAndDownloadRealDocx(ts, meta, filename) {
+    const blob = await kurkTsDocx(ts, meta);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename.replace(/\.(doc|docx)$/i, '') + '.docx';
@@ -6799,7 +7094,7 @@ ${rows}
         children: [
           new D.TableCell({
             width: { size: cols[0], type: D.WidthType.DXA },
-            shading: { type: D.ShadingType.SOLID, color: 'EFF1F1' },
+            shading: GP_DOCX_STILIAI.fonas(D),
             children: [new D.Paragraph({ children: [new D.TextRun({ text: k, bold: true })] })]
           }),
           new D.TableCell({
@@ -6808,30 +7103,6 @@ ${rows}
           })
         ]
       })));
-  }
-
-  // -------- HELPER: vertinimo kriterijų lentelė --------
-  function buildDocxEvalTable(D, criteria) {
-    // Kode proporcijų nebuvo - pasiūlyta 2026-09-19: kriterijus / svoris / formulė / aprašymas.
-    const cols = dxaCols([30, 10, 25, 35]);
-    const w = (i) => ({ size: cols[i], type: D.WidthType.DXA });
-    const headerRow = new D.TableRow({
-      tableHeader: true,
-      children: ['Kriterijus', 'Svoris', 'Formulė', 'Aprašymas'].map((t, i) => new D.TableCell({
-        width: w(i),
-        shading: { type: D.ShadingType.SOLID, color: 'D7EEDB' },
-        children: [new D.Paragraph({ children: [new D.TextRun({ text: t, bold: true })] })]
-      }))
-    });
-    const dataRows = criteria.map(c => new D.TableRow({
-      children: [
-        new D.TableCell({ width: w(0), children: [new D.Paragraph(c.name || '')] }),
-        new D.TableCell({ width: w(1), children: [new D.Paragraph(String(c.weight || ''))] }),
-        new D.TableCell({ width: w(2), children: [new D.Paragraph({ children: [new D.TextRun({ text: c.formula || '', font: 'Courier New' })] })] }),
-        new D.TableCell({ width: w(3), children: [new D.Paragraph(c.description || '')] })
-      ]
-    }));
-    return dxaTable(D, cols, [headerRow, ...dataRows]);
   }
 
   // -------- HELPER: atitikties lentelė (Priedas Nr. 1) --------
@@ -6843,9 +7114,9 @@ ${rows}
       tableHeader: true,
       children: headers.map((t, i) => new D.TableCell({
         width: w(i),
-        shading: { type: D.ShadingType.SOLID, color: '2E3641' },
+        shading: GP_DOCX_STILIAI.fonas(D),   // šviesiai pilka su juodu tekstu (iki 2026-10-02 - tamsi su baltu)
         children: [new D.Paragraph({
-          children: [new D.TextRun({ text: t, bold: true, color: 'FFFFFF', size: 18 })]
+          children: [new D.TextRun({ text: t, bold: true, color: GP_DOCX_STILIAI.OFICIALUS.juodas, size: 18 })]
         })]
       }))
     });
@@ -6863,6 +7134,7 @@ ${rows}
 
   return {
     buildTsDocx,
+    kurkTsDocx,
     buildAndDownloadRealDocx,
     mdToHtml,
     download
