@@ -27,10 +27,15 @@
  *     sections: [...]
  *   });
  *
+ * Oficialus pirkimo dokumentas (TS, protokolas, pranešimas tiekėjui; nuo 2026-10-02):
+ *   const D = GP_DOCX_STILIAI.oficialus(window.docx);        // tekste ilgieji brūkšniai (U+2013, U+2014) -> „-“
+ *   new D.Document({ externalStyles: GP_DOCX_STILIAI.xml({ oficialus: true }), ... });   // antraštės grafito
+ *   shading: GP_DOCX_STILIAI.fonas(D)                         // CLEAR, F2F2F2; tekstas - OFICIALUS.tekstas / juodas
+ *
  * Savi pastraipų stiliai (perrašo to paties `id` bazinį):
  *   GP_DOCX_STILIAI.xml({ font: "Nunito Sans", size: 21, stiliai: [
  *     { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal",
- *       run: { size: 28, bold: true, color: "00A072", font: "Nunito Sans" },
+ *       run: { size: 28, bold: true, color: "2E3641", font: "Nunito Sans" },
  *       paragraph: { spacing: { before: 240, after: 120 }, alignment: "center" } }
  *   ]});
  * ==========================================================================*/
@@ -83,6 +88,39 @@
       paragraphXml(s.paragraph) + runXml(s.run) + "</w:style>";
   }
 
+  /* ---------- OFICIALŪS PIRKIMO DOKUMENTAI (2026-10-02, naudotojo taisyklė) ----------
+     TS, pirkimo sąlygos, protokolai, pranešimai tiekėjams, sutartys - JOKIOS žalios spalvos: tekstas ir antraštės
+     juodi arba grafito (antraštės išskiriamos tik dydžiu ir pusjuodžiu), lentelės antraštės eilutė - šviesiai pilkas
+     fonas su juodu tekstu (ne tamsus su baltu), fonas - tik ShadingType.CLEAR su fill (SOLID Word piešia rašto
+     spalva, fill tada nenaudojamas), ilgųjų brūkšnių (U+2013, U+2014) nėra - „-“ (naudotojo sprendimas 2026-10-02: ir
+     „(toliau - X)“; LITGRID šablonų tekstas nekeičiamas). Modulių sąsajos spalvų tai neliečia - tik Word eksportą.
+     Naudoja PP-ts (TS) ir PP-protocol (protokolai, pranešimai tiekėjams); PP-salygos - bruksniai() įrašomoms reikšmėms. */
+  var OFICIALUS = { tekstas: "2E3641", juodas: "000000", fonas: "F2F2F2", linija: "BFBFBF" };
+
+  function bruksniai(s) { return String(s == null ? "" : s).replace(/[\u2013\u2014]/g, "-"); }
+
+  // Fonas: { type: CLEAR, color: auto, fill } - Word ir Pages piešia fill (SOLID - rašto spalvą)
+  function fonas(D, fill) { return { type: D.ShadingType.CLEAR, color: "auto", fill: fill || OFICIALUS.fonas }; }
+
+  /* docx.js vardų erdvė, kurios TextRun ir Paragraph tekstą (eilutė, { text }, children eilutės) praleidžia per bruksniai():
+     taip ilgasis brūkšnys nepatenka nei iš modulio, nei iš AI, nei iš įvestų laukų, nepriklausomai nuo to, kur tekstas sukurtas. */
+  function oficialus(D) {
+    function be(o) {
+      if (typeof o === "string") return bruksniai(o);
+      if (!o || typeof o !== "object") return o;
+      var k = {};
+      for (var x in o) if (Object.prototype.hasOwnProperty.call(o, x)) k[x] = o[x];
+      if (typeof k.text === "string") k.text = bruksniai(k.text);
+      if (Array.isArray(k.children)) k.children = k.children.map(function (c) { return typeof c === "string" ? bruksniai(c) : c; });
+      return k;
+    }
+    var N = Object.create(D);
+    // defineProperty, ne priskyrimas: paveldėtos nekeičiamos savybės priskyrimas tyliai neveiktų
+    Object.defineProperty(N, "TextRun", { value: class extends D.TextRun { constructor(o) { super(be(o)); } }, enumerable: true });
+    Object.defineProperty(N, "Paragraph", { value: class extends D.Paragraph { constructor(o) { super(be(o)); } }, enumerable: true });
+    return N;
+  }
+
   function xml(o) {
     o = o || {};
     /* Šriftas ir dydis NEPRIVALOMI: jei modulis jų nenustatinėjo (pvz. PP-ts), jų
@@ -93,6 +131,9 @@
 
     /* Bazė be tų stilių, kuriuos modulis perrašo savo id. */
     var baze = BAZE;
+    /* Oficialiam dokumentui antraštės ir nuorodos - grafito, ne docx.js numatytosios mėlynos (2E74B5, 1F4D78, 0563C1):
+       PP-ts skyrių vidinės antraštės spalvos neturi ir iki 2026-10-02 Word'e buvo mėlynos. */
+    if (o.oficialus) baze = baze.replace(/<w:color w:val="[0-9A-Fa-f]{6}"\/>/g, '<w:color w:val="' + OFICIALUS.tekstas + '"/>');
     for (var i = 0; i < savi.length; i++) {
       var re = new RegExp('<w:style [^>]*w:styleId="' + savi[i].id + '">[\\s\\S]*?</w:style>');
       baze = baze.replace(re, "");
@@ -129,5 +170,5 @@
       numatytieji + baze + mano + "</w:styles>";
   }
 
-  global.GP_DOCX_STILIAI = { version: "1.0", xml: xml };
+  global.GP_DOCX_STILIAI = { version: "1.1", xml: xml, OFICIALUS: OFICIALUS, fonas: fonas, bruksniai: bruksniai, oficialus: oficialus };
 })(typeof window !== "undefined" ? window : this);
