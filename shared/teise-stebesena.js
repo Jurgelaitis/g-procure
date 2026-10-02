@@ -660,7 +660,9 @@
       ".gps__warn{padding:8px 10px;border-radius:8px;background:var(--color-warning-5,#FEF6E8);color:#6B4A00;font-size:13px;margin-bottom:8px}",
       ".gps__tag{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;border-radius:20px;border:1px solid var(--color-graphite-30,#C7CDD3);color:var(--color-graphite-50-strong,#5B6470);margin-left:6px;vertical-align:middle}",
       "@media (max-width:1023px){.gps--portalas .gps__list{grid-template-columns:1fr 1fr}}",
-      "@media (max-width:640px){.gps__item{grid-template-columns:1fr}.gps--portalas{padding:20px 16px}.gps--portalas .gps__list{grid-template-columns:1fr}.gps__cta{width:100%;justify-content:center}}",
+      // Siaurai datos žyma gali lūžti tarp žodžių (pati data „2026-07-01“ nelūžta): 320 px su Windows slinkties juosta PP-qual kortelėje
+      // „Galioja nuo · 2026-07-01“ buvo platesnė už kortelę (2026-10-02)
+      "@media (max-width:640px){.gps__item{grid-template-columns:minmax(0,1fr)}.gps__date{white-space:normal}.gps--portalas{padding:20px 16px}.gps--portalas .gps__list{grid-template-columns:minmax(0,1fr)}.gps__cta{width:100%;justify-content:center}}",
       "@media print{.gps{display:none}}"
     ].join("\n");
     var st = doc.createElement("style"); st.id = STILIAUS_ID; st.textContent = css;
