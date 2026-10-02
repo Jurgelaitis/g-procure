@@ -315,15 +315,17 @@ const KALBOS_ATVEJAI = [
   ["numatytasis (be šablono)", "N", "N1", () => {}, { id: "X1", num: "9", name: "Kitas protokolas" }]
 ];
 let KALBOS_TEKSTAI = null;
-async function kalbosTekstai(){
-  if (KALBOS_TEKSTAI) return KALBOS_TEKSTAI;
+// atvejai ir poIkelimo - atskiram rinkiniui (pvz., su laikinai pakeistu registru); toks rezultatas neįsimenamas
+async function kalbosTekstai(atvejai, poIkelimo){
+  if (!atvejai && KALBOS_TEKSTAI) return KALBOS_TEKSTAI;
   await modulis();
+  if (poIkelimo) poIkelimo();
   const PKS = { A: "TEST-KALBA-A", D: "TEST-KALBA-D", N: "TEST-KALBA-N" };
   W.saveProcurementData(PKS.A, kalbosPirkimas(PKS.A, "atviras_tarptautinis", { confidential_appendix: true, cpo_applicable: true }));
   W.saveProcurementData(PKS.D, kalbosPirkimas(PKS.D, "derybos_tarptautinis", { eval_criteria: "kainą" }));
   W.saveProcurementData(PKS.N, kalbosPirkimas(PKS.N, "neskelbiamos_supaprastintas", { eval_criteria: "kainą" }));
   const out = {};
-  for (const [raktas, p, protoId, pildymas, kitas] of KALBOS_ATVEJAI) {
+  for (const [raktas, p, protoId, pildymas, kitas] of (atvejai || KALBOS_ATVEJAI)) {
     try {
       W.openProtocol(PKS[p], protoId);
       pildymas();
@@ -331,7 +333,8 @@ async function kalbosTekstai(){
       out[raktas] = await dokTekstas(await W.buildDocx(pk, proto, "2026-09-28", "P-12", true));
     } catch (e) { out[raktas] = "KLAIDA: " + ((e && e.message) || e); }
   }
-  return (KALBOS_TEKSTAI = out);
+  if (!atvejai) KALBOS_TEKSTAI = out;
+  return out;
 }
 // Sprendimų skilties pirmo lygio numeriai („N. ...“ eilutės pradžioje; papunkčiai - su įtrauka)
 function sprendimuNumeriai(t){
@@ -374,7 +377,7 @@ async function testaiWordTekstas(){
     tiesa(/\n {4}1\. UAB „Tiekėjas A“ - 470\s000,00 Eur be PVM;\n {4}2\. UAB „Tiekėjas B“ - 490\s000,50 Eur be PVM\.\n3\. /.test(T.D8), "D8 eilė");
   });
 
-  await testas("Kalbos taisymai ir nepakitusios teisės bei BPS nuorodos (58 ir 68 str., 13.2.1, 14.5, 19.3, 9.26 p.)", async () => {
+  await testas("Kalbos taisymai ir teisės bei BPS nuorodos (58 str., 68 str. 1 d., 13.2.1, 14.5, 19.3, 9.26 p.)", async () => {
     const T = await kalbosTekstai();
     const yra = (k, ...frazes) => frazes.forEach(f => tiesa(T[k].indexOf(f) >= 0, k + ": nėra „" + f + "“\n" + T[k].slice(T[k].indexOf("DARBOTVARK"))));
     const nera = (k, ...frazes) => frazes.forEach(f => tiesa(T[k].indexOf(f) < 0, k + ": liko „" + f + "“"));
@@ -408,7 +411,7 @@ async function testaiWordTekstas(){
     yra("D7 (tuščias)", "(tiekėjai nenurodyti)");
     yra("D8", "ir kainą / kainos ir kokybės santykį:", "Sudaryti tokią pasiūlymų eilę ekonominio naudingumo mažėjimo tvarka:",
         "Vadovaujantis Pirkimų įstatymo 58 str. nuostatomis, atmesti šių tiekėjų pasiūlymus: " + TC + " (Pirkimo sąlygų 9.7.1 p.), motyvas: Pasiūlymas neatitinka TS 4.2 p.\n",
-        "Vadovaujantis Pirkimų įstatymo 68 str. nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą.",
+        "Vadovaujantis Pirkimų įstatymo 68 str. 1 d. nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą.",
         "Pakviesti laimėjusį tiekėją sudaryti sutartį pasibaigus atidėjimo terminui.");
     tiesa(/Sutarties kaina - 470\s000,00 Eur be PVM\./.test(T.D8), "D8 sutarties kaina");
     yra("D8 (tuščias)", "(galutinių pasiūlymų nėra)", "Sutarties kaina - ___ Eur be PVM.");
@@ -771,6 +774,45 @@ async function testaiTeise(){
     tiesa(src.indexOf('<script src="../shared/teises-nuorodos.js"><\/script>') >= 0, "registras nejungiamas");
   });
 
+  /* 2026-10-02: keturiose vietose numeriai dar buvo įrašyti tekste - audito mygtuko ir nešališkumo paaiškinimai (title), terminų
+     skaičiuoklės pasirinkimai (<option>), protokolų sprendimai „Pirkimų įstatymo 58 str.“ ir „68 str.“. Teisingi, bet pasikeitus
+     registrui nebūtų atsinaujinę. D8 dabar - „68 str. 1 d.“: būtent 1 d. nustato pranešimą su tiksliu atidėjimo terminu (e-tar). */
+  await testas("title, <option> ir protokolų sprendimai (D4, D6, D8, N8) - nuorodos iš registro, ne įrašytos tekste", async () => {
+    await modulis();
+    const c = k => W.GP_TEISE.cit(k, "PI");
+    const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
+    const sablonai = [...new DOMParser().parseFromString(src, "text/html").querySelectorAll("[data-teise-sablonas]")];
+    const gyvi = [...D.querySelectorAll("[data-teise-sablonas]")];
+    const tekstas = el => el.tagName === "OPTION" ? el.textContent : el.getAttribute("title");
+    tiesa(sablonai.length >= 4 && gyvi.length === sablonai.length, "šablonų: " + sablonai.length + ", puslapyje: " + gyvi.length);
+    sablonai.forEach((s, i) => {
+      tiesa(/\{[a-z_]+\}/.test(tekstas(s)) && !/PĮ \d/.test(tekstas(s)), "šablone turi būti {raktas}, ne numeris: " + tekstas(s));
+      lygu(tekstas(gyvi[i]), tekstas(s).replace(/\{([a-z_]+)\}/g, (_, k) => c(k)), "užpildyta iš registro");
+    });
+    const vietos = [D.querySelector('[onclick="openGlobalAudit()"]'), [...D.querySelectorAll(".tooltip-helper")].find(e => /Komisijos veiklos gairės/.test(e.title)),
+      ...D.querySelectorAll("#term-kind option")];
+    tiesa(vietos.length === 4 && vietos.every(e => e && e.hasAttribute("data-teise-sablonas")), "ne visos keturios vietos - šablonai");
+    lygu(D.querySelector('[onclick="openGlobalAudit()"]').title, "Globalus audito žurnalas (" + c("eigos_dokumentavimas") + ")", "audito mygtukas");
+    lygu([...D.querySelectorAll("#term-kind option")].map(o => o.textContent),
+         ["Atidėjimo terminas (standstill, " + c("atidejimo_terminas") + ")", "Pretenzijos pateikimas (" + c("pretenzijos_terminas") + ")"], "terminų skaičiuoklė");
+    ["Vadovaujantis Pirkimų įstatymo 58 str.", "Vadovaujantis Pirkimų įstatymo 68 str."].forEach(x => tiesa(src.indexOf(x) < 0, "liko įrašyta tekste: " + x));
+    // Protokolai su laikinai pakeistu registru: sprendimų sakiniuose turi atsirasti registro reikšmė
+    const atvejai = KALBOS_ATVEJAI.filter(a => ["D4", "D6", "D8", "N8"].indexOf(a[0]) >= 0);
+    let tikras = null, T;
+    try {
+      T = await kalbosTekstai(atvejai, () => {
+        tikras = W.GP_TEISE.cit;
+        W.GP_TEISE.cit = (k, ...r) => ({ vertinimo_principai: "PĮ 958 str.", informavimas_rezultatai: "PĮ 968 str. 7 d." })[k] || tikras(k, ...r);
+      });
+    } finally { if (tikras) W.GP_TEISE.cit = tikras; }
+    const yra = (k, f) => tiesa(T[k] && T[k].indexOf(f) >= 0, k + ": nėra „" + f + "“\n" + (T[k] || "").slice((T[k] || "").indexOf("SPRENDIMAS")));
+    yra("D4", "Vadovaujantis Pirkimų įstatymo 958 str. ir Bendrųjų Pirkimo sąlygų nuostatomis, atmesti paraiškas");
+    yra("D6", "Vadovaujantis Pirkimų įstatymo 958 str. ir Bendrųjų Pirkimo sąlygų nuostatomis, atmesti šių tiekėjų pirminius pasiūlymus");
+    yra("D8", "Vadovaujantis Pirkimų įstatymo 958 str. nuostatomis, atmesti šių tiekėjų pasiūlymus");
+    ["D8", "N8"].forEach(k => yra(k, "Vadovaujantis Pirkimų įstatymo 968 str. 7 d. nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą."));
+    Object.entries(T).forEach(([k, v]) => tiesa(!/Pirkimų įstatymo [56]8 str\./.test(v), k + ": liko įrašytas 58 ar 68 str."));
+  });
+
   await testas("Pranešimų šablonai: pagrindai - registro raktai; 13 - tikras įstatymo pavadinimas; 15 - 66 str. 1 d.; 14 - pretenzija nestabdo procedūrų", async () => {
     const T = W.eval("PN_TEMPLATES"), blogi = [];
     Object.entries(T).forEach(([id, t]) => t.psi.forEach(k => { try { W.GP_TEISE.cit(k, "PI"); } catch (e) { blogi.push(id + ": " + k); } }));
@@ -876,7 +918,9 @@ async function testaiTurinys(){
   await testas("Nešališkumas: LITGRID - perkantysis subjektas, todėl ne „pagal PĮ 33 str.“; PĮ 33 str. 2 d. įvardijama kaip perkančiosios organizacijos pareiga", async () => {
     const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
     tiesa(src.indexOf("ĮSPĖJIMAS pagal ' + teise('nesaliskumas')") < 0 && src.indexOf('data-teise="nusisalinimas"') < 0, "PĮ 33 str. vis dar nurodomas kaip LITGRID pareigos pagrindas");
-    tiesa(src.indexOf("PĮ 33 str. 2 d. 1 p. šią pareigą nustato perkančiajam subjektui, kuris yra perkančioji organizacija") >= 0, "užuomina");
+    await modulis();
+    const u = [...D.querySelectorAll(".tooltip-helper")].find(e => /Komisijos veiklos gairės/.test(e.title));
+    tiesa(u && u.title.indexOf(W.GP_TEISE.cit("nesaliskumas", "PI") + " šią pareigą nustato perkančiajam subjektui, kuris yra perkančioji organizacija") >= 0, "užuomina: " + (u && u.title));
   });
 }
 
