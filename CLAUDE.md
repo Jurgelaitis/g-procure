@@ -187,6 +187,9 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   PP-protocol vedlys ir A3-A5 formų lentelės, informacinės skilties „Suskleisti“; ir būsenos SU DUOMENIMIS (`PRIEINAMUMO_BUSENOS` - PP-plan
   su pavyzdžiais 375 px buvo 401 px, planšetėje 640-720 px - +60 px). Lentelę kortelėje su `overflow:hidden` dėk į slenkantį rėmelį (`overflow-x:auto`);
   jei rėmelis - pati lentelė (`display:block`), duok ir `width:fit-content; max-width:100%`, kitaip plati vieta lieka tuščia.
+  Matavimo rėmeliuose slinkties juosta klasikinė, 17 px (`klasikineJuosta()`, nuo 2026-10-02): Mac'e ji permatoma ir vietos neužima, o Windows
+  ir GitHub Actions (Linux) - 15-17 px, tad 320 px puslapiui lieka ~303 px. Pirmas GitHub paleidimas taip rado PP-qual ir PP-protocol 320 px,
+  PP-market-KPI kategorijos kortelę, KNA svorių lentelę ir PP-plan juostas 1000 px, kurių Mac'e testai nematė - palik atsargą ir Windows juostai.
   Priežastys ir taisymas: tinklelio stulpelis `1fr` plečiasi iki ilgiausio sąrašo pasirinkimo ir diagramos drobės pločio - rašyk
   `minmax(0,1fr)` (ir `minmax(min(280px,100%),1fr)`, ne `minmax(280px,1fr)`), fiksuotam minimumui - `min(300px,100%)`, laukams
   `max-width:100%; min-width:0`, drobei - `canvas{max-width:100%}` (dar nenupiešta drobė - 300 px); lentelės slenka savo rėmelyje
@@ -335,6 +338,8 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   pull request'o ir paleidus ranka paleidžia VISUS `*/testai.html` tikru Chrome be ekrano (`.github/testai/paleisk.py` - tik Python standartinė
   biblioteka, rinkinius randa pats, kiekvienam - švari naršyklė; aplinka kaip vietoje: `TZ=Europe/Vilnius`, kalba en-GB).
   Rezultatas - Actions skirtuke ir santraukoje; svetainės diegimo nestabdo. Vietoje: `python3 .github/testai/paleisk.py [PP-qual ...]`.
+  Įsijungė 2026-10-02 (pirmas push'as su šiuo failu; raktui reikia `workflow` teisės). Žurnalas ir santrauka matomi tik prisijungus prie GitHub,
+  todėl kritę testai rašomi ir anotacijomis (`::error`) - jos matomos be prisijungimo (API `check-runs/<id>/annotations`).
   Katalogas `.github` (su tašku) į svetainę nepatenka - Jekyll taško katalogų nepublikuoja.
 - Po darbo - commit ir push į vieną `g-procure` repo. Jokio rankinio failų kėlimo.
 
