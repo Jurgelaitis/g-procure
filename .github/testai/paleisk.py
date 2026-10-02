@@ -166,6 +166,12 @@ LAUK = """(async () => {
 })()"""
 
 
+def anotacija(tekstas, pavadinimas=False):
+    # GitHub darbo eigos komandos reikšmė: %, eilučių lūžiai (ir pavadinime - : bei ,) koduojami, kitaip komanda nutrūksta
+    t = str(tekstas).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return t.replace(":", "%3A").replace(",", "%2C") if pavadinimas else t[:2000]
+
+
 def main():
     filtrai = sys.argv[1:]
     rinkiniai = [r for r in RINKINIAI if not filtrai or any(f in r for f in filtrai)]
@@ -199,6 +205,11 @@ def main():
         rezultatai.append(x)
         print(("GERAI " if x["gerai"] else "KRITO ") + r + " | " + x["busena"] + " | " + str(x["sek"]) + " s", flush=True)
         for k in x["krito"]: print("    - " + k, flush=True)
+        # GitHub: kritę testai - ir anotacijomis paleidimo puslapio viršuje. Žurnalas ir santrauka matomi tik prisijungus,
+        # o anotacijos - ir be prisijungimo (API check-runs/<id>/annotations); 2026-10-02 pirmo paleidimo priežasties neprisijungus nebuvo matyti
+        if os.environ.get("GITHUB_ACTIONS") == "true" and not x["gerai"]:
+            for k in (x["krito"] or [x["busena"]]):
+                print("::error title=%s::%s" % (anotacija(r, True), anotacija(k)), flush=True)
         rasyk_santrauka("| %s %s | %s | %s s |\n" % ("✅" if x["gerai"] else "❌", r, x["busena"].replace("|", "/"), x["sek"]))
     srv.shutdown()
     blogi = [x for x in rezultatai if not x["gerai"]]
