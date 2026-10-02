@@ -956,6 +956,73 @@ async function testaiPerziura(){
 /* Saugomi naudotojo tekstai į HTML - tik ekranuoti (2026-09-28). Pirkimo numeris, pavadinimas, tiekėjai ir vardai gali ateiti
    iš kopijos failo, pirkimų importo ar kortelės (CVP IS skelbimo PDF). Žymeklis <img onerror> neturi nei atsirasti, nei suveikti,
    o numeris su kabutėmis neturi sulaužyti perėjimų (onclick). Iki tol pavadinimas su <img onerror> vykdė kodą sąraše ir kortelėje. */
+/* 2026-10-02 (naudotojo taisyklė): oficialiuose dokumentuose jokios žalios; tekstas grafito ar juodas, lentelių antraštės šviesiai
+   pilkos (CLEAR, ne SOLID), be ilgųjų brūkšnių - ir naudotojo įvestame tekste (shared/docx-stiliai.js). Iki tol protokolo skyrių antraštės
+   buvo šviesiai mėlynos (D9E2F3, EEF2F7), puslapio viršus - pilkas tekstas su mėlyna linija, pranešimo lentelės antraštė - šviesiai žalia
+   (D7EEDB, be fono tipo). */
+async function docxVisos(blob, re){
+  const b = new Uint8Array(await blob.arrayBuffer()), dv = new DataView(b.buffer);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  tiesa(eocd >= 0, "ne ZIP failas");
+  let p = dv.getUint32(eocd + 16, true), out = "";
+  for (let k = 0, n = dv.getUint16(eocd + 10, true); k < n; k++) {
+    const metodas = dv.getUint16(p + 10, true), dydis = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+    if (re.test(new TextDecoder().decode(b.subarray(p + 46, p + 46 + nl)))) {
+      const pr = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true), d = b.subarray(pr, pr + dydis);
+      out += metodas === 0 ? new TextDecoder().decode(d) : await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+    }
+    p += 46 + nl + el + cl;
+  }
+  return out;
+}
+function oficialausPatikra(xml, kur){
+  const blogi = [];
+  const zalia = h => { const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return g > r + 20 && g >= b; };
+  [...xml.matchAll(/w:fill="([0-9A-Fa-f]{6})"/g)].map(m => m[1].toUpperCase()).forEach(f => { if (f !== "F2F2F2" && f !== "FFFFFF") blogi.push(kur + ": fonas " + f + (zalia(f) ? " (žalias)" : "")); });
+  [...xml.matchAll(/<w:color w:val="([0-9A-Fa-f]{6})"/g)].map(m => m[1].toUpperCase()).forEach(c => { if (c !== "2E3641" && c !== "000000") blogi.push(kur + ": teksto spalva " + c); });
+  if (/w:val="solid"/.test(xml)) blogi.push(kur + ": SOLID fonas");
+  if (/00A072/i.test(xml)) blogi.push(kur + ": 00A072");
+  if (/[\u2013\u2014]/.test(xml.replace(/<[^>]+>/g, ""))) blogi.push(kur + ": ilgasis brūkšnys");
+  return [...new Set(blogi)];
+}
+async function testaiOficialusStilius(){
+  grupe("Oficialus Word stilius (2026-10-02): be žalios, pilkos lentelių antraštės, be ilgųjų brūkšnių");
+  await testas("Protokolo Word (A1, A3): tekstas grafito ar juodas, skyrių ir lentelių antraštės šviesiai pilkos (CLEAR), be ilgųjų brūkšnių ir įvestame pavadinime", async () => {
+    const pk = Object.assign(pirkimas("atviras_tarptautinis"), { name: "Galios transformatorių pirkimas \u2013 2 dalis" });
+    W.saveProcurementData(PK, pk);
+    for (const id of ["A1", "A3"]) {
+      W.openProtocol(PK, id);
+      const p = W.getProcurement(PK), proto = W.getSequence(p.type).find(x => x.id === id);
+      const xml = await docxVisos(await W.buildDocx(p, proto, "2026-10-02", "P-1", true), /^word\/(document|styles|header\d*|footer\d*)\.xml$/);
+      const blogi = oficialausPatikra(xml, id);
+      tiesa(!blogi.length, blogi.join("\n"));
+      tiesa(/w:fill="F2F2F2"/.test(xml), id + ": antraštės be šviesiai pilko fono");
+      tiesa(/pirkimas - 2 dalis/.test(xml), id + ": įvestas pavadinimas nepakeistas į „-“");
+    }
+  });
+  await testas("Pranešimo tiekėjui Word: lentelės antraštė šviesiai pilka (CLEAR) su juodu tekstu, tekstas grafito, be ilgųjų brūkšnių (ir „(toliau - Pirkimas)“, tiekėjo pavadinime)", async () => {
+    const n = { id: "OF-1", templateId: "TEST", title: "Pranešimas apie sprendimą \u2013 bandymas", titleEn: "",
+      bodyLt: "Pirma pastraipa \u2013 su brūkšniu (toliau \u2013 Pirkimas).\n[LENTELĖ: vertinimas]\nAntra pastraipa \u2014 pabaiga.", bodyEn: "",
+      tiekejas: "UAB „Tiekėjas \u2013 A“", createdAt: "2026-10-02T10:00:00", lang: "lt", templateVersion: "1",
+      data: { vertinimo_lentele: "Tiekėjas | Kaina | Vieta\nUAB A | 100 | 1" } };
+    W.eval("currentPnNotifications = [" + JSON.stringify(n) + "]; currentPnPkId = " + JSON.stringify(PK));
+    const sel = D.getElementById("pn-preview-selector"), o = D.createElement("option");
+    o.value = "OF-1"; o.textContent = "OF-1"; sel.appendChild(o); sel.value = "OF-1";
+    const tikras = W.saveAs; let blob = null;
+    W.saveAs = b => { blob = b; };
+    try { await W.exportPnDocx(); } finally { W.saveAs = tikras; o.remove(); W.eval("currentPnNotifications = []"); }
+    tiesa(blob, "Word nesukurtas");
+    const xml = await docxVisos(blob, /^word\/(document|styles|header\d*|footer\d*)\.xml$/);
+    const blogi = oficialausPatikra(xml, "pranešimas");
+    tiesa(!blogi.length, blogi.join("\n"));
+    tiesa(/<w:shd [^>]*w:val="clear"[^>]*w:fill="F2F2F2"|<w:shd [^>]*w:fill="F2F2F2"[^>]*w:val="clear"/.test(xml), "lentelės antraštė be CLEAR F2F2F2");
+    tiesa(/<w:color w:val="000000"\/>(?:(?!<\/w:r>)[\s\S])*<w:t[^>]*>Tiekėjas<\/w:t>/.test(xml), "lentelės antraštės tekstas ne juodas");
+    tiesa(/\(toliau - Pirkimas\)/.test(xml) && /Tiekėjas - A/.test(xml) && /sprendimą - bandymas/.test(xml), "brūkšniai nepakeisti");
+  });
+}
+
 async function testaiEkranavimas(){
   grupe("Saugomi tekstai rodomi kaip tekstas, ne HTML");
   await testas("Numeris su kabutėmis ir pavadinimas, tiekėjas, naudotojas su <img onerror>: sąrašas, kortelė, protokolas, pranešimai, auditas, kopijavimo langas ir importo peržiūra - tekstas; perėjimai veikia", async () => {
@@ -1112,6 +1179,7 @@ async function testaiImportas(){
     await testaiTeise();
     await testaiTurinys();
     await testaiPerziura();
+    await testaiOficialusStilius();
     await testaiEkranavimas();
     await testaiImportas();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
