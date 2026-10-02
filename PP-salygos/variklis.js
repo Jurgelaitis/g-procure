@@ -6,6 +6,11 @@
             sluoksni (raudonas tekstas), komentaru sluoksni ir tuscias vietas.
    Reikalauja: vendor/jszip.min.js
    ========================================================================== */
+/* Įrašomas tekstas (naudotojo ir AI reikšmės, modulio sakiniai) - be ilgųjų brūkšnių: ilgieji brūkšniai (U+2013, U+2014) -> „-“ (naudotojo sprendimas
+   2026-10-02, oficialūs pirkimo dokumentai; taisyklė - shared/docx-stiliai.js). LITGRID šablonų tekstas nekeičiamas. Vidiniai
+   eksperto įrankiai be bendro failo (kartografas, E0) rašo kaip yra. */
+const gpBruksniai = s => (typeof GP_DOCX_STILIAI !== 'undefined' ? GP_DOCX_STILIAI.bruksniai(s) : String(s == null ? '' : s));
+
 const GPDocx = (() => {
   const NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const NS_CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -122,7 +127,7 @@ const GPDocx = (() => {
       while (i < s.length){
         if (mi < matches.length && i === matches[mi].start){
           const mt = matches[mi];
-          out.set(owner[i], out.get(owner[i]) + String(values[mt.name]));
+          out.set(owner[i], out.get(owner[i]) + gpBruksniai(values[mt.name]));
           filled[mt.name] = (filled[mt.name]||0) + 1;
           i = mt.end; mi++;
         } else {
@@ -805,7 +810,7 @@ const GPGen = (() => {
     for (let k=0;k<s.length;k++){
       const v = vs[vi];
       if (v && k === v.start){
-        const val = (arr[vi]||'').trim();
+        const val = gpBruksniai(arr[vi]||'').trim();
         // Tarpo apsauga: jei tuscia vieta sablone prilipusi prie zodzio (pries
         // ja - raide ar skaitmuo, pvz. "teise_____"), iterpiam tarpa, kad
         // "teise" + "susipazinti" netaptu "teisesusipazinti". Skliaustai, tarpai
@@ -894,7 +899,7 @@ const GPGen = (() => {
         // EN puseje LT teksto NEDEDAM (produkto savininko sprendimas: laisvam
         // tekstui - AI juodrastis matomame lauke, ne lietuviskas tekstas
         // angliskame dokumente). Tuscias EN -> lieka "____", ir tai pagauna auditas.
-        const val = String((en ? d.en : d.lt) || '').trim();
+        const val = gpBruksniai((en ? d.en : d.lt) || '').trim();
         let x = t;
         if (naujasNr && senasNr && senasNr !== naujasNr){
           x = x.replace(new RegExp('(^|\\s)' + senasNr + '(?=\\s)'), '$1' + naujasNr);
@@ -1080,8 +1085,8 @@ const GPGen = (() => {
       Array.from(tbl.getElementsByTagNameNS(W,'tr'))[0]
         ? GPDocx.els(Array.from(tbl.getElementsByTagNameNS(W,'tr'))[0],'t').map(t => t.textContent).join(' ') : '');
     const antraste = (dal) => {
-      const lt = `${dal.roman} Pirkimo objekto dalis – ${dal.lt || TUSCIA_ZYMA}:`;
-      return dvi ? `${lt} / Part ${dal.roman} of the Procurement object – ${dal.en || TUSCIA_ZYMA}:` : lt;
+      const lt = `${dal.roman} Pirkimo objekto dalis - ${gpBruksniai(dal.lt || TUSCIA_ZYMA)}:`;
+      return dvi ? `${lt} / Part ${dal.roman} of the Procurement object - ${gpBruksniai(dal.en || TUSCIA_ZYMA)}:` : lt;
     };
     const darytiAntraste = (dal) => {
       const p = bazine.cloneNode(true);
@@ -1189,7 +1194,7 @@ const GPGen = (() => {
     if (!rs.length) return false;
     const first = rs[0];
     const ts = GPDocx.els(first,'t');
-    if (ts.length){ ts[0].textContent = value; ts[0].setAttribute('xml:space','preserve'); }
+    if (ts.length){ ts[0].textContent = gpBruksniai(value); ts[0].setAttribute('xml:space','preserve'); }
     for (let k=1;k<ts.length;k++) ts[k].textContent = '';
     rs.slice(1).forEach(r => r.parentNode && r.parentNode.removeChild(r));
     for (const c of GPDocx.els(first,'color')) c.setAttributeNS(W,'w:val','auto');
@@ -1317,7 +1322,7 @@ const GPGen = (() => {
     const p = paras[i]; if (!p) return false;
     const ts = GPDocx.els(p,'t');
     if (!ts.length) return false;
-    ts[0].textContent = 'Vykdomas ' + value; ts[0].setAttribute('xml:space','preserve');
+    ts[0].textContent = 'Vykdomas ' + gpBruksniai(value); ts[0].setAttribute('xml:space','preserve');
     for (let k=1;k<ts.length;k++) ts[k].textContent = '';
     return true;
   }
