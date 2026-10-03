@@ -135,8 +135,9 @@
       PI: { a: "PI", s: 48, d: 4 } },
     kiekis: { apie: "pirkimo dokumentuose nurodomas objekto pavadinimas, kiekis (apimtis) ir terminai",
       PI: { a: "PI", s: 48, d: 2, p: 8 } },
-    cpo_argumentai: { apie: "pirkimo dokumentuose nurodomi sprendimo nepirkti per CPO argumentai",
-      PI: { a: "PI", s: 48, d: 2, p: 34 } },
+    // VPĮ - 2026-10-03 (centralizuotas LITGRID AB ir UAB „EPSO-G“ pirkimas, PP-salygos); PĮ dalis tą pačią dieną perskaityta iš naujo.
+    cpo_argumentai: { tikrinta: "2026-10-03", apie: "pirkimo dokumentuose nurodomi sprendimo nepirkti per CPO argumentai",
+      PI: { a: "PI", s: 48, d: 2, p: 34 }, VPI: { a: "VPI", s: 35, d: 2, p: 34 } },
     ts: { apie: "techninė specifikacija",
       PI: { a: "PI", s: 50 } },
     ts_proporcingumas: { apie: "ypatybės turi būti susijusios su pirkimo objektu ir proporcingos jo vertei ir tikslams",
@@ -175,8 +176,8 @@
       PI: { a: "PI", s: 94, d: 8 } },
     pretenzijos_terminai: { apie: "pretenzijos, prašymo ir ieškinio pateikimo terminai",
       PI: { a: "PI", s: 108 } },
-    cpo: { apie: "jei CPO kataloge siūlomas objektas atitinka poreikius, sprendimą pirkti ne per katalogą privaloma motyvuoti ir argumentus nurodyti pirkimo dokumentuose",
-      PI: { a: "PI", s: 90, d: 2, p: 1 } },
+    cpo: { tikrinta: "2026-10-03", apie: "jei CPO kataloge siūlomas objektas atitinka poreikius, sprendimą pirkti ne per katalogą privaloma motyvuoti ir argumentus nurodyti pirkimo dokumentuose",
+      PI: { a: "PI", s: 90, d: 2, p: 1 }, VPI: { a: "VPI", s: 82, d: 2, p: 1 } },
 
     // ---- Organizavimas ir kontrolė (PĮ; VPĮ - kur nurodyta)
     komisija_uzduotys: { apie: "pirkimo procedūroms atlikti sudaroma komisija, jai nustatomos užduotys; komisijos galima nesudaryti, pvz., atliekant mažos vertės pirkimų procedūras",
