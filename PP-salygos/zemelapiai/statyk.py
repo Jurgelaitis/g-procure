@@ -14,15 +14,23 @@ klydo ten, kur zodis atsitiktinai sutampa nesusijusiame punkte. Todel ribos
 imamos is perziuretos lenteles, o ko joje nera - lieka pazymeta "TIKRINTI"
 ir atiduodama ekspertui. Niekada nespejama tyliai.
 
-Naudojimas: python3 statyk.py            (patikrina lentele pries rankinius sprendimus)
-            python3 statyk.py --statyk   (irašo zemelapius)
+Naudojimas: python3 statyk.py [skenavimas.json]            (patikrina lentele pries rankinius sprendimus)
+            python3 statyk.py [skenavimas.json] --statyk   (irašo zemelapius)
+Skenavimas - kartografo (kartografas.html) eksportas visiems sablonams; numatyta - skenavimas_visi.json
+salia sio failo (arba aplinkos kintamasis STATYK_SKEN).
+
+Pakeitus sablonus (2026-10-03 - naujos LITGRID salygos): kartografas -> statyk.py --statyk -> rankiniai.py
+(text-anchored rankiniai pataisymai, zr. rankiniai.json) -> PP-salygos/testai.html.
 """
-import json, re, sys, unicodedata
+import json, os, re, sys, unicodedata
 from pathlib import Path
 
 CIA = Path(__file__).parent
-SKEN = Path('/private/tmp/claude-501/-Users-aj-Documents-g-procure/'
-            '0c8f606a-b7e3-4da2-8d55-a060ec2345eb/scratchpad/e0out/skenavimas_visi.json')
+sys.path.insert(0, str(CIA))
+import rankiniai
+_arg = [a for a in sys.argv[1:] if not a.startswith('--')]
+SKEN = Path(_arg[0] if _arg else os.environ.get('STATYK_SKEN', CIA / 'skenavimas_visi.json'))
+OUTD = Path(os.environ.get('STATYK_OUT', CIA))
 NUM_ONLY = re.compile(r'^\d+(\.\d+)*\.?$')
 
 VARDAI = {
@@ -46,11 +54,15 @@ VARDAI = {
     'SUBTIEKEJAI': 'Informacija apie subtiekėjus',
     'SANDORIS': 'Sandorio šalies duomenų forma',
     'DERYBOS': 'Pasiūlymų dėl derėtinų sąlygų forma',
+    # 2026-10-03: centralizuoto pirkimo (VPĮ) rinkinio priedai
+    'NACSAUGUMASVPI': 'Nacionalinio saugumo deklaracija (VPĮ)',
+    'VALDYMAS': 'Informacija apie valdymo ar priežiūros organus',
 }
 
 SEIMOS = {
     'TSD': 'Tarptautinės skelbiamos derybos',
     'AK': 'Atviras konkursas',
+    'AKV': 'Atviras konkursas (VPĮ, centralizuotas pirkimas)',
     'SSD': 'Supaprastintos skelbiamos derybos',
     'ND': 'Neskelbiamos derybos',
     'MVP': 'Mažos vertės pirkimas (skelbiama apklausa)',
@@ -106,10 +118,12 @@ def statyk(rasyk):
     sprendimai = P['sprendimai']
 
     # --- Patikra: ar lentele atkartoja rankinius sprendimus? ---------------
+    # Indeksai - 2026-10-03 LITGRID sablonu (iki tol C322/C566/C574 ir C614/C645/C1151/C1170 - sablonuose
+    # atsirado naujos pastraipos, salygos ir ju ribos tos pacios).
     RANKA = {
-        'templates/TSD_LT_SPS.docx':    {'C43': 44, 'C51': 57, 'C64': 65, 'C322': 323, 'C566': 567, 'C574': 575},
+        'templates/TSD_LT_SPS.docx':    {'C43': 44, 'C51': 57, 'C64': 65, 'C331': 332, 'C575': 576, 'C583': 584},
         'templates/TSD_LTEN_SPS.docx':  {'C92': 94, 'C109': 120, 'C134': 146, 'C148': 150,
-                                         'C614': 615, 'C645': 646, 'C1151': 1153, 'C1170': 1172},
+                                         'C632': 633, 'C663': 664, 'C1171': 1173, 'C1190': 1192},
         'templates/TSD_LT_PARAISKA.docx': {'C5': 7},
         'templates/TSD_LT_PASIULYMAS.docx': {'C6': 8},
         'templates/TSD_LTEN_PARAISKA.docx': {'C6': 8},
@@ -153,6 +167,9 @@ def statyk(rasyk):
     print('-' * 62)
     for f, v in V.items():
         vardas = f.replace('templates/', '').replace('.docx', '')
+        if 'klaida' in v:                       # kartografas sablono neperskaite - zemelapis nestatomas
+            klaidos.append(f"{vardas}: skenavimo klaida - {v['klaida']}")
+            continue
         seima, kalba, tipas = vardas.split('_')
         dvikalbis = kalba == 'LTEN'
         paras = {int(p['i']): p['text'] for p in v['paras']}
@@ -241,18 +258,22 @@ def statyk(rasyk):
                 klaidos.append(f"{vardas} {b['id']}: blokas {b['blokas']['nuo']}-{b['blokas']['iki']} "
                                f"apima kita salyga ({kirto})")
 
-        json.dump(Z, open(CIA / f'{vardas}.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        # Rankiniai pataisymai (rankiniai.json, susieti su tekstu) - kitaip pakeitus sablonus jie dingtu tyliai.
+        rk = rankiniai.pritaikyk(vardas, Z)
+        if rk:
+            klaidos.extend('RANKINIS ' + k for k in rk)
+        json.dump(Z, open(OUTD / f'{vardas}.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
         g = len({u.get('grupe') for u in v.get('vienetai', []) if u.get('grupe')})
         if blokai:
             print(f"{vardas:<22}{len(blokai):>8}{is_lenteles:>13}{tikrinti:>10}{g:>8}")
     print('-' * 62)
     if klaidos:
-        print("\n*** APSAUGA SUVEIKE - blokai kertasi su kitomis salygomis: ***")
+        print("\n*** APSAUGA SUVEIKE (blokai kertasi su kitomis salygomis ar nerasta rankinio pataisymo vieta): ***")
         for k in klaidos:
             print("  ! " + k)
-        print("Zemelapiai IRASYTI, bet siuos blokus BUTINA pataisyti perziura.json.")
+        print("Zemelapiai IRASYTI, bet sias vietas BUTINA pataisyti (perziura.json / rankiniai.json).")
     else:
-        print("Zemelapiai irasyti. Apsauga: nei vienas blokas neapima kitos salygos.")
+        print("Zemelapiai irasyti. Apsauga: nei vienas blokas neapima kitos salygos; rankiniai pataisymai pritaikyti.")
 
 
 if __name__ == '__main__':
