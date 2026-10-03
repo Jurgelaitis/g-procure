@@ -1115,6 +1115,84 @@ async function testaiNaujiSablonai(){
   });
 }
 
+/* ======================================================================== */
+/* 2026-10-03: šablonų klaidos, išvardytos laiške LITGRID, generatoriuje ištaisytos (sablonu-taisymai.py --taisyk). Tikrinama
+   ir šablonų failuose (visi šeimų ir priedų failai), ir sugeneruotuose dokumentuose. */
+async function sablonuFailai(){
+  const vardai = new Set();
+  Object.values(W.eval("SEIMOS")).forEach(k => Object.values(k).forEach(l => l.forEach(v => vardai.add(v + ".docx"))));
+  // priedų registre - žemėlapių vardai be plėtinio; nekeičiamas PDF (bankų sąrašas) - su plėtiniu, jis praleidžiamas
+  (await (await W.fetch("zemelapiai/priedai.json")).json()).priedai.forEach(p => Object.values(p.failai || {}).forEach(f => { if (!/\.[a-z0-9]+$/i.test(f)) vardai.add(f + ".docx"); }));
+  const out = {};
+  for (const v of [...vardai].sort()){
+    const z = await W.JSZip.loadAsync(await (await W.fetch("templates/" + v)).arrayBuffer()), dalys = {};
+    for (const n of Object.keys(z.files)) if (/\.(xml|rels)$/.test(n)) dalys[n] = await z.file(n).async("string");
+    out[v] = dalys;
+  }
+  return out;
+}
+const pastrTekstai = xml => xml ? visosPastraipos(xml).map(p => p.t) : [];
+async function testaiSablonuTaisymai(){
+  dabartine = grupe("Šablonų klaidos iš laiško LITGRID (2026-10-03) - generatoriuje ištaisytos");
+  const F = await sablonuFailai();
+
+  await testas("Neveikiančių nuorodų nebėra nė viename šablone (užšifravimo instrukcija, EIMIN, LITGRID privatumas, VPT straipsnis, melaginga informacija, „330 kV“ paieška); naujos - savo vietose", () => {
+    const SENOS = ["documents/files/uzsifravimo_instrukcija.pdf", "v17.1.2.pt.lrv.lt", "eimin.lrv.lt/lt/veiklos-sritys/verslo-aplinka/reglamentuojamu",
+      "litgrid.eu/index.php/apie-litgrid/asmens-duomenu-apsauga", "115005730625", "melaginga-informacija-pateikusiutiekeju", "Query=330+kV"];
+    const liko = [];
+    Object.entries(F).forEach(([f, d]) => Object.entries(d).forEach(([n, x]) => SENOS.forEach(s => { if (x.includes(s)) liko.push(f + " " + n + ": " + s); })));
+    lygu(liko, [], "liko senų nuorodų");
+    const turi = (f, n, s) => (F[f][n] || "").includes(s);
+    tiesa(["AK_LT_BPS.docx", "AKV_LT_BPS.docx", "ND_LT_BPS.docx", "SSD_LTEN_BPS.docx", "TSD_LTEN_BPS.docx"].every(f => turi(f, "word/footnotes.xml", "zmogiskuju-istekliu-pletra/reglamentuojamu-profesiniu-kvalifikaciju-pripazinimas/")), "EIMIN");
+    tiesa(turi("PRIEDAI_LT_KONFIDENCIALUMAS.docx", "word/_rels/footnotes.xml.rels", "https://www.litgrid.eu/privatumo-pranesimas"), "LITGRID privatumas");
+    tiesa(turi("AKV_LT_PASIULYMAS.docx", "word/_rels/footnotes.xml.rels", "sections/115001605645-Konfidencialumas"), "VPT DUK skiltis");
+    tiesa(turi("DPSP_LT_SALYGOS.docx", "word/_rels/document.xml.rels", 'Target="https://viesiejipirkimai.lt"'), "DPS nuoroda - į CVP IS");
+  });
+
+  await testas("Bankų sąrašo priedo numeris garantijos punkte - kaip to paties SPS priedų sąraše (ir EN); valdymo organų formos antraštė - kaip AKV SPS sąraše", () => {
+    const blogi = [];
+    Object.entries(F).filter(([f]) => /_SPS\.docx$/.test(f)).forEach(([f, d]) => {
+      const T = pastrTekstai(d["word/document.xml"]), J = T.join("\n");
+      const sar = J.match(/^(\d+) priedas\s*[–-]\s*Priimtinų bankų sąrašas/m), txt = J.match(/banko, nurodyto SPS (\d+) priede/);
+      const sarEN = J.match(/^Annex (\d+)\s*[–-]\s*List of eligible banks/m), txtEN = J.match(/bank specified in Annex (\d+) to the SPC/);
+      if (sar && txt && sar[1] !== txt[1]) blogi.push(f + " LT " + txt[1] + "/" + sar[1]);
+      if (sarEN && txtEN && sarEN[1] !== txtEN[1]) blogi.push(f + " EN " + txtEN[1] + "/" + sarEN[1]);
+    });
+    lygu(blogi, [], "nesutampa");
+    const nr = pastrTekstai(F["AKV_LT_SPS.docx"]["word/document.xml"]).join("\n").match(/^(\d+) priedas\s*[–-]\s*Informacija apie valdymo ar priežiūros organus/m);
+    lygu(pastrTekstai(F["PRIEDAI_LT_VALDYMAS.docx"]["word/document.xml"]).find(t => t), "SPS " + (nr && nr[1]) + " priedas", "valdymo organų forma");
+  });
+
+  await testas("„Jeigu ... gaus klausimų dėl Pirkimo dokumentų ...“ (AK ir AKV SPS) - automatinė numeracija, ne ranka įrašytas „2.8.“; pavyzdyje „prašydamas“ visuose šablonuose", () => {
+    ["AK_LT_SPS.docx", "AKV_LT_SPS.docx"].forEach(f => {
+      const p = visosPastraipos(F[f]["word/document.xml"]).find(x => /gaus klausimų dėl Pirkimo dokumentų/.test(x.t));
+      tiesa(p && p.num && /^Jeigu/.test(p.t), f + ": " + (p ? p.num + " " + p.t.slice(0, 30) : "nerasta"));
+    });
+    const liko = Object.entries(F).filter(([f, d]) => /kreipėsi į tiekėją prašydama\b|vykdytojas\d/.test(pastrTekstai(d["word/document.xml"]).join("\n"))).map(([f]) => f);
+    lygu(liko, [], "„prašydama“ arba be tarpo");
+  });
+
+  await testas("„Atviras konkursas VPĮ“: apibrėžtas terminas „Pirkimo vykdytojas“, ne PĮ „Perkantysis subjektas“ (tekste ir išnašose); VPĮ 17 str. 4 d., ne PĮ 29 str.; sugeneruotame pakete - taip pat", async () => {
+    const TERM = /[Pp]erkan(?:t|č)[a-zžąčęėįšųū]* subjekt[a-zžąčęėįšųū]*/g, TEIS = /perkančiųjų subjektų|sutartį su perkančiuoju subjektu/;
+    const liko = [];
+    ["AKV_LT_SPS.docx", "AKV_LT_BPS.docx", "AKV_LT_PASIULYMAS.docx"].forEach(f => ["word/document.xml", "word/footnotes.xml"].forEach(n =>
+      pastrTekstai(F[f][n]).forEach(t => { for (const m of t.matchAll(TERM)) if (!TEIS.test(t.slice(Math.max(0, m.index - 20), m.index + m[0].length))) liko.push(f + ": " + m[0]); })));
+    lygu(liko, [], "liko PĮ terminas");
+    ["AKV_LT_SPS.docx", "AKV_LT_PASIULYMAS.docx"].forEach(f => {
+      const J = pastrTekstai(F[f]["word/document.xml"]).join("\n");
+      tiesa(/pasirašiusioje VPĮ 17 straipsnio 4 dalyje nurodytus tarptautinius susitarimus/.test(J) && !/(^|[^V])PĮ \d/.test(J), f + ": tarptautinių susitarimų nuoroda");
+    });
+    const PI = pastrTekstai(F["AK_LT_SPS.docx"]["word/document.xml"]).join("\n");
+    tiesa(/pasirašiusioje PĮ 29 straipsnio 4 dalyje/.test(PI) && /Perkantysis subjektas/.test(PI), "PĮ šablonas neturi būti keičiamas");
+    const docs = await generuokSu({ budas: "T-AK", centr: true, priedai: ["BANKAI", "VALDYMAS"] });
+    const J = ["AKV_LT_SPS", "AKV_LT_BPS", "AKV_LT_PASIULYMAS"].map(d => docs[d].pars.join("\n")).join("\n");
+    tiesa(!/[Pp]erkantysis subjektas|Perkančiojo subjekto|Perkančiajam subjektui/.test(J) && /Pirkimo vykdytojui priimtiną Pasiūlymo galiojimo užtikrinimą – banko, nurodyto SPS 13 priede/.test(J), "sugeneruotas AKV paketas");
+    lygu(docs.PRIEDAI_LT_VALDYMAS.pars[0], "SPS 12 priedas", "sugeneruota valdymo organų forma");
+    const p28 = visosPastraipos(docs.AKV_LT_SPS.xml).find(x => /gaus klausimų dėl Pirkimo dokumentų/.test(x.t));
+    tiesa(p28 && p28.num && !/^2\.8/.test(p28.t), "sugeneruotame AKV SPS - automatinė numeracija");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1127,6 +1205,7 @@ async function testaiNaujiSablonai(){
     await testaiKortele();
     await testaiGeneravimas();
     await testaiNaujiSablonai();
+    await testaiSablonuTaisymai();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
