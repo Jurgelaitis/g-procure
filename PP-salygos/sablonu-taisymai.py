@@ -341,7 +341,71 @@ def taisymas_tekstas(taisyk):
                         zout.writestr(info, items[info.filename])
         viso += pak
     viso += _numeris_28(taisyk)
+    viso += _akv_numeracija(taisyk)
     return viso
+
+
+def _akv_numeracija(taisyk):
+    """AKV SPS numeracija, kaip AK (PĮ) SPS (2026-10-03). AKV skyriu antrastes (Heading 1) sunumeruotos KITU Word sarasu
+    nei punktai, tad:
+    a) 3 sk. pirmoji alternatyva („Tiekėjų kvalifikacija nėra tikrinama ...“) buvo 2 skyriaus punktu sarase - numeris
+       tesdavo 2 skyriu (2.11). Kitos dvi alternatyvos ranka „3.1.“ - pirmoji gauna ta pati „3.1.“ ir ju pPr;
+    b) 10 sk. punktu sarasas prasidejo 7 (7.1-7.3), nors alternatyvos ranka „10.1.“ - saraso 0 lygio pradzia = 10
+       (AK sablone tas pats sarasas prasideda 10). Keiciama tik jei sarasa naudoja vien sie trys punktai."""
+    f = 'AKV_LT_SPS.docx'; path = TPL / f
+    with zipfile.ZipFile(path) as zin:
+        infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+    xml, num = items['word/document.xml'], items['word/numbering.xml']
+    segs = [(m, _pastraipos_tekstas(m.group(0)).strip()) for m in _P_RE.finditer(xml)]
+    n = 0
+    # a) 3 sk. pirmoji alternatyva
+    i1 = next((k for k, (m, t) in enumerate(segs) if t.startswith('Tiekėjų kvalifikacija nėra tikrinama šiame Pirkime')
+               and b'<w:numPr>' in m.group(0)), None)
+    i2 = next((k for k, (m, t) in enumerate(segs) if k > (i1 or 0) and t.startswith('3.1. Tiekėjų pašalinimo pagrindų nebuvimas ir kvalifikacija yra tikrinami')), None)
+    if i1 is not None and i2 is not None:
+        seg = segs[i1][0].group(0)
+        ppr = _re.search(rb'<w:pPr>.*?</w:pPr>', segs[i2][0].group(0), _re.S).group(0)
+        seg2 = _keisk_pastraipa(seg, [(0, 0, '3.1. ')])
+        seg2 = _re.sub(rb'<w:pPr>.*?</w:pPr>', lambda x: ppr, seg2, count=1, flags=_re.S)
+        m = segs[i1][0]
+        xml = xml[:m.start()] + seg2 + xml[m.end():]
+        n += 1
+        print(f"  {f}: 3 sk. pirmoji alternatyva -> „3.1.“ kaip kitos dvi (buvo 2 skyriaus sarase)")
+    # b) 10 sk. punktu saraso pradzia
+    nums = dict(_re.findall(rb'<w:num w:numId="(\d+)"[^>]*>\s*<w:abstractNumId w:val="(\d+)"/>', num))
+    def abstr(seg):
+        mm = _re.search(rb'<w:numId w:val="(\d+)"/>', seg)
+        return nums.get(mm.group(1)) if mm else None
+    p10 = next((m.group(0) for m, t in segs if t.startswith('Jei Tiekėjas, kurio Pasiūlymas pagal vertinimo rezultatus') and b'<w:numPr>' in m.group(0)), None)
+    lit = next((t for m, t in segs if _re.match(r'^(\d+)\.1\. Jei Tiekėjas, kurio pasiūlymas pagal vertinimo rezultatus', t, _re.I)), None)
+    a = abstr(p10) if p10 else None
+    if a and lit:
+        tikslas = lit.split('.')[0].encode()
+        naudoja = [t for m, t in _P_RE_tekstai(xml) if abstr(m) == a]
+        zinomi = _re.compile(r'^(Jei Tiekėjas, kurio Pasiūlymas pagal vertinimo|(Perkantysis subjektas|Pirkimo vykdytojas) informuos Koordinavimo|'
+                             r'Pirkime numatoma, kad (Perkantysis subjektas|Pirkimo vykdytojas) informuos)')
+        if all(zinomi.match(t) for t in naudoja):
+            blokas = _re.search(rb'<w:abstractNum [^>]*w:abstractNumId="' + a + rb'".*?</w:abstractNum>', num, _re.S)
+            lvl0 = _re.search(rb'<w:lvl w:ilvl="0"[^>]*>.*?</w:lvl>', blokas.group(0), _re.S)
+            st = _re.search(rb'<w:start w:val="(\d+)"/>', lvl0.group(0))
+            if st and st.group(1) != tikslas:
+                lvl0n = lvl0.group(0)[:st.start()] + b'<w:start w:val="' + tikslas + b'"/>' + lvl0.group(0)[st.end():]
+                bl = blokas.group(0)[:lvl0.start()] + lvl0n + blokas.group(0)[lvl0.end():]
+                num = num[:blokas.start()] + bl + num[blokas.end():]
+                n += 1
+                print(f"  {f}: 10 sk. punktu sarasas prasideda {tikslas.decode()} (buvo {st.group(1).decode()})")
+        else:
+            print(f"  {f}: 10 sk. sarasa naudoja ir kiti punktai - nekeista: {naudoja}")
+    if n and taisyk:
+        items['word/document.xml'], items['word/numbering.xml'] = xml, num
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for info in infos:
+                zout.writestr(info, items[info.filename])
+    return n
+
+
+def _P_RE_tekstai(xml):
+    return [(m.group(0), _pastraipos_tekstas(m.group(0)).strip()) for m in _P_RE.finditer(xml)]
 
 
 def _numeris_28(taisyk):

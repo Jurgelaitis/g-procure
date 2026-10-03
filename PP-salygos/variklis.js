@@ -921,6 +921,22 @@ const GPGen = (() => {
     return -1;
   }
 
+  /* R1 (2026-10-03): numeris tekstu pastraipos pradzioje. SPS 4.2: pasirinkus 2 ar 3 zaliuju reikalavimu varianta,
+     antraste „4.2. ... turi atitikti:“ trinama, o jos numeris pereina i pasirinktaji. Formatas - pirmo teksto runo. */
+  function idetiNumeri(p, nr){
+    if (!p || !nr) return false;
+    const r0 = GPDocx.els(p, 'r').find(r => GPDocx.els(r, 't').some(t => t.textContent.trim()));
+    const d = p.ownerDocument, r = d.createElementNS(W, 'w:r');
+    const rpr = r0 && Array.from(r0.childNodes).find(c => c.localName === 'rPr');
+    if (rpr) r.appendChild(rpr.cloneNode(true));
+    const t = d.createElementNS(W, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = nr + ' ';
+    r.appendChild(t);
+    if (r0) r0.parentNode.insertBefore(r, r0); else p.appendChild(r);
+    return true;
+  }
+
   /* Salygiskai istrina LENTELES EILUTES (w:tr), kuriu VISOS pastraipos yra
      [nuo, iki] ribose. Skirta salyginiam turinio blokui LENTELEJE (pvz.
      nacionalinio saugumo "5 punktui"): pastraipu trynimas (trinti) tokioje
@@ -1491,9 +1507,337 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, perkeltiNumeri, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
+  return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
            keistiRaudonaTeksta, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
+})();
+
+/* ==========================================================================
+   GPNum - punktu numeracijos sutvarkymas sugeneruotame dokumente (2026-10-03).
+   KODEL. LITGRID sablonuose skyriu antrastes ir punktai daznai sunumeruoti SKIRTINGAIS
+   Word sarasais: punkto numerio pirmas skaicius imamas is saraso 0 lygio, kurio niekas
+   nenaudoja (Word rodo jo „start“ - pvz. TSD BPS 9 skyriuje 1.1-1.8, AKV 10 sk. 7.1),
+   sarasai tesiasi per skyrius (AKV 3 sk. - 2.11), du sarasai viename skyriuje kartoja
+   numerius (AK SPS 1 sk. - du „1.1“), lygio tekste irasytas kito punkto numeris
+   („2.8.%1.“), o Pages nenaudojamo lygio numerio isvis nerodo („1.“, „5.1.“). Istrynus
+   alternatyvas lieka ir ranka irasytu numeriu tarpu. Todel po generavimo: Word numeracija
+   emuliuojama (patikrinta: atkuria Word TURINIO numerius LT sablonuose), randami skyriai ir
+   punktai (LT - kuno pastraipos; dvikalbiuose - numeriu stulpelis lentelese, be turinio
+   lenteliu su „Eil. Nr.“), numeriai perskaiciuojami is eiles ir IRASOMI TEKSTU (nebepriklauso
+   nuo programos numeracijos). Atitraukimai - is buvusio saraso lygio. TURINIO numeriai suderinami,
+   istrinto skyriaus irasas salinamas. Pakeitimai grazinami ataskaitai (buvo -> tapo).
+   Formose (ir formu prieduose DPS salygose) numeriai NEperskaiciuojami: Word numeracija jose
+   teisinga, o tiekejo alternatyvos turi ta pati numeri („1.5.“ arba „1.5.“, „Pasiūlymo 1.5. punkte“) -
+   numeriai tik irasomi tekstu. Po raudono „ARBA“ (sablono alternatyva, sprendziama Word'e) -
+   tas pats numeris. Priedai tame paciame faile numeruojami atskirai; be skyriu antrasciu
+   (DPS priedai) - 0 lygio punktai is eiles.
+   ========================================================================== */
+const GPNum = (() => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const kids = (el, n) => el ? Array.from(el.childNodes).filter(c => c.nodeType === 1 && c.localName === n) : [];
+  const kid = (el, n) => kids(el, n)[0] || null;
+  const attr = (el, n) => el ? (el.getAttributeNS(W, n) || el.getAttribute('w:' + n)) : null;
+  const val = (el, n) => attr(kid(el, n), 'val');
+  const tekstas = p => Array.from(p.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('');
+  // pPr vaiku tvarka (OOXML schema): nauji elementai - i savo vieta, kitaip Word faila laiko sugadintu
+  const PPR = ['pStyle','keepNext','keepLines','pageBreakBefore','framePr','widowControl','numPr','suppressLineNumbers','pBdr','shd',
+    'tabs','suppressAutoHyphens','kinsoku','wordWrap','overflowPunct','topLinePunct','autoSpaceDE','autoSpaceDN','bidi','adjustRightInd',
+    'snapToGrid','spacing','ind','contextualSpacing','mirrorIndents','suppressOverlap','jc','textDirection','textAlignment',
+    'textboxTightWrap','outlineLvl','divId','cnfStyle','rPr','sectPr','pPrChange'];
+  function idek(ppr, el){
+    const k = PPR.indexOf(el.localName);
+    const po = Array.from(ppr.childNodes).find(c => c.nodeType === 1 && PPR.indexOf(c.localName) > k);
+    ppr.insertBefore(el, po || null);
+  }
+  function pPr(p){
+    let ppr = kid(p, 'pPr');
+    if (!ppr){ ppr = p.ownerDocument.createElementNS(W, 'w:pPr'); p.insertBefore(ppr, p.firstChild); }
+    return ppr;
+  }
+
+  /* ---------- Word numeracijos modelis ---------- */
+  function modelis(numDoc, styDoc){
+    const abst = {}, nums = {}, st = {};
+    if (numDoc){
+      for (const a of Array.from(numDoc.getElementsByTagNameNS(W, 'abstractNum'))){
+        const L = {};
+        for (const l of kids(a, 'lvl')){
+          const ppr = kid(l, 'pPr');
+          L[+attr(l, 'ilvl')] = { start: +(val(l, 'start') || 1), fmt: val(l, 'numFmt') || 'decimal', txt: val(l, 'lvlText') || '',
+                                 suff: val(l, 'suff') || 'tab', ind: ppr && kid(ppr, 'ind'), tabs: ppr && kid(ppr, 'tabs') };
+        }
+        abst[attr(a, 'abstractNumId')] = L;
+      }
+      for (const n of Array.from(numDoc.getElementsByTagNameNS(W, 'num'))){
+        const ov = {};
+        for (const o of kids(n, 'lvlOverride')){ const s = val(o, 'startOverride'); if (s != null) ov[+attr(o, 'ilvl')] = +s; }
+        nums[attr(n, 'numId')] = { a: val(n, 'abstractNumId'), ov };
+      }
+    }
+    if (styDoc){
+      for (const s of Array.from(styDoc.getElementsByTagNameNS(W, 'style'))){
+        const ppr = kid(s, 'pPr'), np = ppr && kid(ppr, 'numPr');
+        st[attr(s, 'styleId')] = { name: (val(s, 'name') || '').toLowerCase(), based: val(s, 'basedOn'),
+                                   numId: np && val(np, 'numId'), ilvl: np && val(np, 'ilvl') };
+      }
+    }
+    return { abst, nums, st };
+  }
+  function stiliausNumeris(M, sid){
+    for (let k = 0, s = M.st[sid]; s && k < 12; k++, s = M.st[s.based]) if (s.numId != null) return s;
+    return null;
+  }
+  function numeris(M, p){
+    const ppr = kid(p, 'pPr'), sid = ppr && val(ppr, 'pStyle'), np = ppr && kid(ppr, 'numPr');
+    let numId = np && val(np, 'numId'), ilvl = np && val(np, 'ilvl');
+    if (numId == null){ const s = stiliausNumeris(M, sid); if (s){ numId = s.numId; if (ilvl == null) ilvl = s.ilvl; } }
+    return { numId, ilvl: +(ilvl || 0), sid };
+  }
+  /* Word numeriai visoms pastraipoms dokumento tvarka. Skaitikliai - pagal abstractNum; nenaudotas tevinis lygis rodo
+     savo „start“ ir nuo tol laikomas panaudotu (taip Word: patikrinta su TURINIO numeriais). */
+  function wordZymes(M, pars){
+    const cnt = {}, ovNaudoti = new Set(), out = new Map();
+    for (const p of pars){
+      const n = numeris(M, p);
+      const nn = n.numId && n.numId !== '0' && M.nums[n.numId];
+      const L = nn && M.abst[nn.a];
+      if (!L || !L[n.ilvl]) continue;
+      const c = cnt[nn.a] || (cnt[nn.a] = {});
+      if (Object.keys(nn.ov).length && !ovNaudoti.has(n.numId)){
+        ovNaudoti.add(n.numId);
+        for (const k of Object.keys(c)) if (!(k in nn.ov)) delete c[k];
+        for (const k of Object.keys(nn.ov)) c[k] = nn.ov[k] - 1;
+      }
+      c[n.ilvl] = (n.ilvl in c) ? c[n.ilvl] + 1 : L[n.ilvl].start;
+      for (const k of Object.keys(c)) if (+k > n.ilvl) delete c[k];
+      const lv = L[n.ilvl];
+      if (lv.fmt === 'bullet' || lv.fmt === 'none') continue;
+      let desimt = /^decimal/.test(lv.fmt);
+      const label = lv.txt.replace(/%(\d)/g, (m, d) => {
+        const k = +d - 1;
+        if (!(k in c)) c[k] = (L[k] || { start: 1 }).start;
+        if (L[k] && !/^decimal/.test(L[k].fmt)) desimt = false;
+        return String(c[k]);
+      });
+      out.set(p, { label, desimt, lv });
+    }
+    return out;
+  }
+
+  /* ---------- Skyriai ir punktai ---------- */
+  const ETIKETE = /^(\d+(?:\.\d+)*)(\.?)(?=$|[\s ]|[^\d.\s)])/;     // „2.1.“, „2.1.Tekstas“, „9. ANTRASTE“; ne „2.1)“
+  const TIK_ETIKETE = /^(\d+(?:\.\d+)*)\.?$/;
+  const komp = s => s.replace(/\.$/, '').split('.').length;
+  function didziosios(s){
+    const r = (s || '').replace(/\([^)]*\)/g, '').replace(/[^\p{L}]/gu, '');
+    if (r.length < 4) return false;
+    let d = 0; for (const ch of r) if (ch !== ch.toLocaleLowerCase('lt')) d++;
+    return d >= 0.6 * r.length;
+  }
+  function turinioLentele(tbl){
+    // pasalinimo pagrindu, kitu reikalavimu ir pan. lenteles - antraste „Eil. Nr.“ / „No.“ vienoje is pirmu eiluciu
+    return kids(tbl, 'tr').slice(0, 3).some(tr => { const tc = kid(tr, 'tc'); return tc && /^\s*(eil\.?\s*nr|no\.)/i.test(tekstas(tc)); });
+  }
+  function pastraipa(M, Z, p, kont){
+    const t = tekstas(p).trim();
+    const ppr = kid(p, 'pPr'), st = M.st[ppr && val(ppr, 'pStyle')] || { name: '' };
+    const e = { p, kont, t, antraste: /^heading [1-9]$/.test(st.name), toc: /^toc /.test(st.name), lygis: null };
+    if (e.toc || !t && kont === 'kunas') return e;
+    const z = Z.get(p);
+    e.zy = z && z.desimt && /^\d+(\.\d+)*\.?$/.test(z.label) ? z : null;
+    const m = t.match(ETIKETE);
+    e.lit = m ? { nr: m[1], taskas: m[2], ilgis: m[0].length } : null;
+    if (e.zy && e.lit && komp(e.lit.nr) !== komp(e.zy.label)) e.lit = null;   // ne dvigubas numeris (pvz. metai teksto pradzioje)
+    if (!e.zy && !e.lit) return e;
+    e.senas = e.zy ? e.zy.label.replace(/\.$/, '') : e.lit.nr;
+    e.lygis = komp(e.senas) - 1;
+    return e;
+  }
+  /* Elementu srautas dokumento tvarka. LT dokumente - kuno pastraipos (lentelese numeracija vietine); dvikalbiame - ir lenteliu
+     eilutes, kuriu pirmame langelyje vien numeris (dokumento struktura), isskyrus turinio lenteles. */
+  // Dokumento priedai tame paciame faile (DPS salygos: „Pirkimo sąlygų 1 priedas „...““) turi savo numeracija - nuo cia nelieciama
+  const PRIEDO_PRADZIA = /^(pirkimo|dps|konkretaus pirkimo)\s+sąlygų\s+\d+\s+priedas\b/i;
+  // Priedas - forma, sarasas, priedelis ar atskiras dokumentas (EBVPD, TS, sutartis): numeriai lieka kaip Word
+  const PRIEDAS_FORMA = /form|sąraš|priedėl|ebvpd|specifikacij|sutarties projekt|įsipareigojim|deklaracij/i;
+  // Raudonas „ARBA“ / „OR“ tarp dvieju sablono alternatyvu, kurias rengejas sprendzia Word'e: po jo - tas pats numeris
+  const ALTERNATYVA = /^(arba|or)(\s*\([^)]*\))?\s*:?$/i;
+  function srautas(M, d, Z, opts){
+    const out = [], tuscios = [];
+    const eik = (el) => {
+      for (const c of Array.from(el.childNodes)){
+        if (c.nodeType !== 1) continue;
+        if (c.localName === 'p'){
+          const e = pastraipa(M, Z, c, 'kunas');
+          if (PRIEDO_PRADZIA.test(e.t) && !e.toc){ out.push({ priedas: true, t: e.t }); continue; }   // nauja numeracijos sritis
+          if (e.lygis == null && ALTERNATYVA.test(e.t)) e.alternatyva = true;
+          out.push(e);
+        }
+        else if (c.localName === 'sdt'){ const sc = kid(c, 'sdtContent'); if (sc) eik(sc); }
+        else if (c.localName === 'tbl' && opts.dvikalbis && !turinioLentele(c)){
+          for (const tr of kids(c, 'tr')){
+            const tcs = kids(tr, 'tc');
+            if (tcs.length < 2) continue;
+            const ps = Array.from(tcs[0].getElementsByTagNameNS(W, 'p'));
+            const p = ps.find(x => Z.get(x) || TIK_ETIKETE.test(tekstas(x).trim()));
+            if (!p || ps.some(x => x !== p && tekstas(x).trim())) continue;        // langelyje - tik numeris
+            const e = pastraipa(M, Z, p, c);
+            e.ltTekstas = tcs.slice(1).map(tc => tekstas(tc).trim()).find(Boolean) || '';
+            if (e.lygis == null) continue;
+            // istrynus alternatyva lieka eilute vien su numeriu - salinama (formose tuscios eilutes - pildymui, ju nelieciam)
+            if (!e.ltTekstas){ if (!opts.forma) tuscios.push(tr); continue; }
+            out.push(e);
+          }
+        }
+      }
+    };
+    eik(d.getElementsByTagNameNS(W, 'body')[0]);
+    return { S: out.filter(e => e.lygis != null || e.alternatyva || e.priedas), tuscios };
+  }
+
+  /* ---------- Nauji numeriai ---------- */
+  /* Formos: numeriai lieka tokie, kokius rodo Word (tiekejo alternatyvos „1.5.“ / „arba“ / „1.5.“, nuoroda „Pasiūlymo
+     1.5. punkte“), tik irasomi tekstu. Ju Word numeracija patikrinta visose formose: klaidu nera. */
+  function uzfiksuok(S){
+    return S.filter(e => e.lygis != null).map(e => { e.naujas = e.senas; return e; });
+  }
+  function perskaiciuok(S){
+    // Skyrius - vieno skaiciaus numeris su antrastes stiliumi arba DIDZIOSIOMIS raidemis (skliaustai neskaiciuojami:
+    // „PRIEDAI (koreguojama pagal poreikį)“). Kiti vieno skaiciaus numeriai - vietiniai sarasai (1., 2. ...), nelieciami.
+    S.forEach(e => {
+      if (e.lygis !== 0) return;
+      const tekst = e.kont === 'kunas' ? e.t.slice(e.lit && !e.zy ? e.lit.ilgis : 0) : e.ltTekstas;
+      e.skyrius = e.antraste || didziosios(tekst);
+    });
+    // Be skyriu antrasciu (DPS priedai: „1. ... 2. ... 3. Reikalavimai ...: 3.1. ...“) - 0 lygio punktai yra pagrindas ir
+    // numeruojami is eiles (iki 2026-10-03 DPS LT 2 priede po „5.“ buvo „7.“, dvikalbiame - du „4.“). Lenteliu antrastes
+    // („2 priedo 1 lentelė“) ir skaicius be tasko („2026-10-05“) - ne punktai.
+    const yraSkyriu = S.filter(e => e.lygis === 0 && e.skyrius).length >= 2;
+    const plokscias = e => e.zy || (e.lit && e.lit.taskas === '.' && +e.lit.nr <= 99 && !/^\s*(priedo\s+\d+\s+)?lentel/i.test(e.t.slice(e.lit.ilgis)));
+    let sk = 0, cnt = [], alt = false;
+    for (const e of S){
+      if (e.alternatyva){ alt = true; continue; }
+      if (e.lygis === 0){
+        if (yraSkyriu ? !e.skyrius : !plokscias(e)) continue;
+        sk = (yraSkyriu || sk) ? sk + 1 : (+e.senas || 1);
+        cnt = []; alt = false; e.naujas = String(sk); continue;
+      }
+      const senas = e.senas.split('.').map(Number);
+      if (!sk) continue;                                     // punktai pries pirma skyriu (titulinis) - nelieciami
+      const L = e.lygis;
+      while (cnt.length < L) cnt.push(0);
+      cnt.length = L;
+      for (let k = 0; k < L - 1; k++) if (!cnt[k]) cnt[k] = senas[k + 1] || 1;   // praleistas tevinis lygis
+      if (!(alt && cnt[L - 1])) cnt[L - 1] += 1;                                 // po „arba“ - alternatyva, tas pats numeris
+      alt = false;
+      e.naujas = [sk, ...cnt].join('.');
+    }
+    return S.filter(e => e.naujas);
+  }
+
+  /* ---------- Irasymas ---------- */
+  function rPrIs(p){
+    const r = Array.from(p.getElementsByTagNameNS(W, 'r')).find(x => tekstas(x).trim());
+    const src = r ? kid(r, 'rPr') : (kid(p, 'pPr') && kid(kid(p, 'pPr'), 'rPr'));
+    return src ? src.cloneNode(true) : null;
+  }
+  function nuimkSarasa(p, lv, d){
+    const ppr = pPr(p);
+    let np = kid(ppr, 'numPr');
+    if (!np){ np = d.createElementNS(W, 'w:numPr'); idek(ppr, np); }
+    let ni = kid(np, 'numId');
+    if (!ni){ ni = d.createElementNS(W, 'w:numId'); np.appendChild(ni); }
+    ni.setAttributeNS(W, 'w:val', '0');
+    // atitraukimas ir tabuliacija - buvusio numeracijos lygio (jei pastraipa savo neturi): tekstas lieka toje pacioje vietoje
+    if (!kid(ppr, 'ind') && lv.ind) idek(ppr, d.importNode(lv.ind, true));
+    if (!kid(ppr, 'tabs') && lv.tabs) idek(ppr, d.importNode(lv.tabs, true));
+  }
+  function idekZyma(p, zyma, suff, d){
+    const r = d.createElementNS(W, 'w:r');
+    const rp = rPrIs(p);
+    if (rp) r.appendChild(rp);
+    const t = d.createElementNS(W, 'w:t');
+    t.setAttribute('xml:space', 'preserve');   // kaip visas variklis (kitaip - dvigubas atributas)
+    t.textContent = zyma + (suff === 'space' ? ' ' : '');
+    r.appendChild(t);
+    if (suff === 'tab') r.appendChild(d.createElementNS(W, 'w:tab'));
+    const ppr = kid(p, 'pPr');
+    p.insertBefore(r, ppr ? ppr.nextSibling : p.firstChild);
+  }
+  /* Ranka irasyto numerio keitimas: istrinami „ilgis“ simboliai nuo pirmo ne tarpo, ju vietoje - naujas numeris. */
+  function keiskPradzia(p, ilgis, naujas, tarpas){
+    const ts = Array.from(p.getElementsByTagNameNS(W, 't'));
+    const visas = ts.map(t => t.textContent).join('');
+    const nuo = visas.length - visas.replace(/^\s+/, '').length, iki = nuo + ilgis;
+    let poz = 0, idetas = false;
+    for (const t of ts){
+      const s = t.textContent, a = poz, b = poz + s.length;
+      poz = b;
+      if (b <= nuo || a >= iki) continue;
+      const x = Math.max(nuo, a) - a, y = Math.min(iki, b) - a;
+      t.textContent = s.slice(0, x) + (idetas ? '' : naujas + (tarpas ? ' ' : '')) + s.slice(y);
+      if (!idetas) t.setAttribute('xml:space', 'preserve');   // kaip visas variklis (kitaip - dvigubas atributas)
+      idetas = true;
+    }
+  }
+
+  /* ---------- TURINYS ---------- */
+  const raktas = s => s.replace(/^\s*\d+(\.\d+)*\.?\s*/, '').replace(/\d+\s*$/, '').replace(/[^\p{L}]/gu, '').toLocaleUpperCase('lt');
+  function turinys(M, d, skyriai){
+    // raktas - visas antrastes tekstas (TURINIO irasas - tos antrastes kopija); vienodos antrastes - is eiles
+    const zem = new Map();
+    skyriai.forEach(e => { const k = raktas(e.kont === 'kunas' ? e.t.slice(e.lit ? e.lit.ilgis : 0) : e.ltTekstas); (zem.get(k) || zem.set(k, []).get(k)).push(e.naujas); });
+    const naudota = new Map();
+    const irasai = Array.from(d.getElementsByTagNameNS(W, 'p')).filter(p => {
+      const ppr = kid(p, 'pPr'), st = M.st[ppr && val(ppr, 'pStyle')];
+      return st && st.name === 'toc 1' && /^\s*\d+\.?/.test(tekstas(p)) && raktas(tekstas(p));
+    });
+    let pakeista = 0, istrinta = 0;
+    const truksta = irasai.filter(p => !zem.has(raktas(tekstas(p))));
+    // istrinto skyriaus irasas salinamas tik kai likusieji tiksliai atitinka antrastes (kitaip - tik numeriai)
+    const salinti = skyriai.length && truksta.length <= 3 && irasai.length - truksta.length === skyriai.length;
+    for (const p of irasai){
+      const t = tekstas(p), m = t.match(/^\s*(\d+)(\.?)/), k = raktas(t);
+      if (zem.has(k)){
+        const i = naudota.get(k) || 0; naudota.set(k, i + 1);
+        const nr = zem.get(k)[Math.min(i, zem.get(k).length - 1)];
+        if (nr !== m[1]){ keiskPradzia(p, m[1].length + m[2].length, nr + m[2], false); pakeista++; }
+      } else if (salinti){ p.parentNode.removeChild(p); istrinta++; }
+    }
+    return { pakeista, istrinta };
+  }
+
+  async function sutvarkyti(doc, opts = {}){
+    const d = doc.parts['word/document.xml'];
+    const M = modelis(await GPDocx.part(doc, 'word/numbering.xml'), await GPDocx.part(doc, 'word/styles.xml'));
+    const Z = wordZymes(M, Array.from(d.getElementsByTagNameNS(W, 'p')));
+    const sr = srautas(M, d, Z, opts);
+    sr.tuscios.forEach(tr => tr.parentNode.removeChild(tr));
+    // Sritys: dokumentas ir jo priedai tame paciame faile (DPS salygos). Priedas - forma ar sarasas - kaip forma (numeriai kaip
+    // Word, tekstu); kiti priedai (pasalinimo pagrindai, kvalifikacijos reikalavimai) - perskaiciuojami atskirai, nuo 1.
+    const sritys = [{ forma: !!opts.forma, S: [] }];
+    sr.S.forEach(e => { if (e.priedas) sritys.push({ forma: PRIEDAS_FORMA.test(e.t), S: [] }); else sritys[sritys.length - 1].S.push(e); });
+    const pagr = sritys[0].forma ? uzfiksuok(sritys[0].S) : perskaiciuok(sritys[0].S);
+    const S = pagr.concat(...sritys.slice(1).map(x => x.forma ? uzfiksuok(x.S) : perskaiciuok(x.S)));
+    const pak = [];
+    for (const e of S){
+      const tarpas = e.lit && e.t.length > e.lit.ilgis && !/[\s ]/.test(e.t.charAt(e.lit.ilgis));   // „1.5.Tekstas“
+      if (e.zy){
+        const taskas = /\.$/.test(e.zy.label) ? '.' : '';
+        nuimkSarasa(e.p, e.zy.lv, d);
+        if (e.lit) keiskPradzia(e.p, e.lit.ilgis, e.naujas + (e.lit.taskas || taskas), tarpas);
+        else idekZyma(e.p, e.naujas + taskas, e.kont !== 'kunas' || !e.t ? 'nothing' : e.zy.lv.suff, d);
+      } else if (e.naujas !== e.lit.nr || tarpas){
+        keiskPradzia(e.p, e.lit.ilgis, e.naujas + e.lit.taskas, tarpas);
+      } else continue;
+      if (e.senas !== e.naujas) pak.push({ buvo: e.senas, tapo: e.naujas, tekstas: (e.kont === 'kunas' ? e.t : e.ltTekstas).slice(0, 90) });
+    }
+    const toc = turinys(M, d, pagr.filter(e => e.lygis === 0 && e.skyrius));
+    doc.log.push('numeracija: ' + S.length + ' numeriu - tekstu, pakeista ' + pak.length + '; tusciu eiluciu istrinta ' + sr.tuscios.length +
+                 '; TURINYS: pakeista ' + toc.pakeista + ', istrinta ' + toc.istrinta);
+    return { numeriu: S.length, pakeitimai: pak, tusciuEiluciu: sr.tuscios.length, turinys: toc };
+  }
+
+  return { sutvarkyti, wordZymes, modelis };
 })();
 
 const GPAudit = (() => {

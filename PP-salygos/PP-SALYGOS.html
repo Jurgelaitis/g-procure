@@ -525,8 +525,10 @@ function derybosUI(){ $('#apimtisQ').classList.toggle('hid', !derybosTaip()); kr
    "Pasirinkti pirkimo buda" uzpildoma pagal si pasirinkima (anksciau ji buvo
    tiesiog trinama). Skelbiama ir neskelbiama (rastu) - tas pats sablonas. */
 const apklausaTipas = () => (budoSalygos() || {}).apklausa || 'skelbiama';
-const APKLAUSA_RE = /^pasirinkti pirkimo buda/;
+const APKLAUSA_RE = /^(pasirinkti pirkimo buda|a published an unpublished survey is being conducted$)/;
+const APKLAUSA_EN_RE = /^a published an unpublished survey/;            // dvikalbio MVP angliska eilute (2026-10-03)
 const APKLAUSA_TEKSTAI = { skelbiama:'Vykdoma skelbiama apklausa', neskelbiama:'Vykdoma neskelbiama apklausa' };
+const APKLAUSA_TEKSTAI_EN = { skelbiama:'A published survey is being conducted.', neskelbiama:'An unpublished survey is being conducted.' };
 
 /* Pirkimo objekto pavadinimas be pertekliniu galuniu. Laukas prasi tik OBJEKTO
    (kilmininku), o sablonas prideda savo " pirkimas" / "PIRKIMUI". Jei rengejas
@@ -958,8 +960,10 @@ const REZIMO_EN_TWIN     = /^(pasirinkti|choose)\b.*carried out/;
    pirkimui:" + 1 juoda redakcijos pastraipa. Rengejas palieka atitinkanti rezima,
    istrina kita (ir abu zymenis). Rezimas - is rezimo pozymio (kaip "Vykdomas [Pasirinkite]").
    Visuose 4 sablonuose redakcija = tiksliai 1 pastraipa po zymens.             */
-const REDAKCIJA_INTL = /^punkto redakcija tarptautiniam pirkimui/;
-const REDAKCIJA_SIMP = /^punkto redakcija supaprastintam pirkimui/;
+// Dvikalbiu SPS anglisku redakciju zymenys („For international procurement:“) - kaip lietuviski (iki 2026-10-03 likdavo
+// abi anglisku redakcijos ir zymenys, nors lietuviskai - tik pagal rezima)
+const REDAKCIJA_INTL = /^(punkto redakcija tarptautiniam pirkimui|for international procurement$)/;
+const REDAKCIJA_SIMP = /^(punkto redakcija supaprastintam pirkimui|for simplified procurement$)/;
 function kitasTuriniysPo(paras, i){
   for (let j = i + 1; j < paras.length; j++){
     if (GPDocx.paraText(paras[j]).trim()) return j;
@@ -1044,7 +1048,7 @@ function priedoNrSiulymai(n){
    klausimus arba kitu klausimu atsakymus - neklausiama atskirai.             */
 const SEKIMO = [
   { re:/^pasirinkti data/, veiksmas:'data', kodel:'įrašoma pirkimo sąlygų data iš 1 žingsnio' },
-  { re:/^\d+ lentele$/, veiksmas:'lentele', kodel:'lentelės antraštė seka lentelės sprendimą' },
+  { re:/^\d+ lentele( table \d+)?$/, veiksmas:'lentele', kodel:'lentelės antraštė seka lentelės sprendimą' },   // dvikalbiuose - „3 lentelė/Table 3“
   { re:/^4 2 zaliuosius reikalavimus pagal sps 3 lenteles/, seka:'zalieji',
     kodel:'punktas taikomas tik kai žalieji reikalavimai nustatomi pirkimo sąlygose' },
   { re:/^nepriklausomos istaigos isduota sertifikata/, seka:'zalieji',
@@ -1099,12 +1103,208 @@ function kvalifikacijosLenteles(){
   return { grupe: nariai.length > 0, atsakyta: pas.length > 0,
            tik1: pas.some(n => /netikrinama kvalifikacija|kvalifikacija netikrinama/.test(n.t)) };
 }
+/* Priedu saraso eilute, kurioje raudona ne visa pastraipa (sablone - „8 priedas – Konfidenciali informacija ...“ be raudono
+   bruksnio, „13 priedas – Priimtinų bankų sąrašas.“ su raudonu tik pavadinimu): iki 2026-10-03 ji nesekdavo priedo pasirinkimo ir
+   likdavo net isjungus prieda. Raudona pastaba skliaustuose („(jei Pasiūlymai vertinami ...)“) - ne eilute, o pastaba. */
+function prieduEiluteIntarpas(n){
+  const t = norm(n.text), r = norm(n.raudonas);
+  if (!/^\d+ priedas/.test(t) || !r || /^[\s–-]*\(/.test(n.raudonas || '')) return false;
+  return r.startsWith(t.split(' ').slice(0, 2).join(' ')) || (r.length >= 10 && t.endsWith(r));
+}
 /* Priedu saraso (SPS pabaigoje) numatytos reiksmes. */
 function priedoEilutesNumatyta(tekstas){
   const t = norm(tekstas);
   if (/nacionalinio saugumo/.test(t)) return nacsaugTaip();
   if (/deretinu salygu/.test(t))      return derybosTaip() && apimtis() !== 'kaina';
   return true;
+}
+
+/* ==========================================================================
+   R1 (2026-10-03): SABLONO ALTERNATYVOS SU RAUDONU „ARBA“. Iki tol „ARBA“ buvo trinamas kaip nurodymas rengejui, o
+   abi (ar visos trys) alternatyvos likdavo dokumente kaip viena kita paneigiantys punktai.
+   1. Pasiulymo galiojimo uztikrinimas (visu SPS skyrius): „Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo
+      užtikrinimo.“ ARBA „N.1. Kartu su (Pirminiu / Galutiniu) Pasiūlymu Tiekėjas privalo pateikti ... užtikrinimą“ ir
+      tolesni skyriaus punktai (dvikalbiuose - eilutes „N.1. | LT | EN“, antrojoje dar „ARBA“ / „OR“). Dokumente likdavo
+      ir „nereikalaujama“, ir „privalo pateikti“, o numeris N.1 - du kartus. Renkamasi pagal TA PATI atsakyma, kuris
+      parenka „Kitų nuostatų“ punkta („Jei taikomas Pasiūlymo galiojimo užtikrinimas“) - naujo klausimo nera.
+   2. Zaliuju reikalavimu atitikimo taisykle (SPS 4.2): „4.2. ... turi atitikti: a) ...; b) ...“ ARBA „Žaliuosius
+      reikalavimus ... turi atitikti Tiekėjas arba bent vienas Tiekėjų grupės narys. ...“ ARBA „[suformuluoti atitikimo
+      taisyklę]“ (dvikalbiuose - trys lenteles su „4.2.“). Kai zalieji reikalavimai pirkimo salygose nenustatomi, sablonas
+      liepia 3 lentele trinti „kartu su 4.2. punktu“ - trinamos visos trys (iki tol likdavo a), b) ir kitos dvi, dvikalbiuose -
+      ir 4.2 antraste). Kai nustatomi - renkamasi atitikimo taisykles klausime: sablono 1 ar 2 variantas arba sava taisykle
+      (projektai pagal VPT gaires, kaip iki siol). Nepasirinkus lieka visos trys su raudonu „ARBA“: sprendziama Word'e, o
+      patikra dokumenta rodo nebaigtu.
+   ========================================================================== */
+const UZT_NE_RE = /^(\d+( \d+)* )?(sio pirkimo metu nereikalaujama pateikti pasiulymo galiojimo uztikrinimo|tender security is not required)/;
+const UZT_TAIP_RE = /^(\d+( \d+)* )?(kartu su (pirminiu |galutiniu )?pasiulymu tiekejas privalo pateikti|together with the (initial |final )?tender the supplier must provide)/;
+// ND sablonuose - be alternatyvu: „4.2. Žaliuosius reikalavimus turi atitikti: a) ... b) ... c) ...“
+const ZAL_ANTR_RE = /^(\d+( \d+)* )?zaliuosius reikalavimus (pagal sps 3 lenteles reikalavima )?turi atitikti$/;
+const ZAL_V2_RE = /^zaliuosius reikalavimus pagal sps 3 lenteles reikalavima turi atitikti tiekejas/;
+const ZAL_V3_RE = /^suformuluoti atitikimo taisykle$/;
+const ZAL_V3_EN_RE = /^suformuluoti atitikimo taisykle angliskai$/;
+const ZAL_RAKTAS = 'T:suformuluoti atitikimo taisykle';                 // tusciaRaktas() - bendras visiems dokumentams
+const arbaZyma = t => t === 'arba' || t === 'or';
+function artiIndeksas(T, nuo, kiek, f){
+  for (let j = Math.max(0, nuo); j < Math.min(T.length, nuo + kiek); j++) if (f(T[j] || '')) return j;
+  return -1;
+}
+function uztikrinimasTaikomas(){                                        // true / false / null - neatsakyta
+  const raktai = Object.keys(ATS).filter(k => /^jei (ne)?taikomas pasiulymo galiojimo uztikrinimas/.test(k) && ATS[k] === true);
+  return raktai.length ? raktai.some(k => /^jei taikomas/.test(k)) : null;
+}
+/* Vietos pagal teksta: T - normalizuoti pastraipu tekstai indekso tvarka (tinka zemelapiui ir dokumentui). */
+function uztikrinimoVietos(T){
+  const a = T.findIndex(t => UZT_NE_RE.test(t || ''));
+  const m = a < 0 ? -1 : artiIndeksas(T, a + 1, 6, t => t === 'arba');
+  const b = m < 0 ? -1 : artiIndeksas(T, m + 1, 3, t => UZT_TAIP_RE.test(t));
+  return b < 0 ? null : { a, m, b };
+}
+function zaliujuVietos(T){
+  const h = T.findIndex(t => ZAL_ANTR_RE.test(t || ''));
+  if (h < 0) return null;
+  const m1 = artiIndeksas(T, h + 1, 14, arbaZyma);
+  const v2 = m1 < 0 ? -1 : artiIndeksas(T, m1 + 1, 4, t => ZAL_V2_RE.test(t));
+  const m2 = v2 < 0 ? -1 : artiIndeksas(T, v2 + 1, 6, arbaZyma);
+  const v3 = m2 < 0 ? -1 : artiIndeksas(T, m2 + 1, 5, t => ZAL_V3_RE.test(t));
+  if (v3 < 0) return { h, vienas: true };                               // be alternatyvu (ND)
+  return { h, m1, v2, m2, v3, v3en: artiIndeksas(T, v3 + 1, 3, t => ZAL_V3_EN_RE.test(t)) };
+}
+const zemelapioTekstai = Z => { const P = Z.paras || {}, n = Math.max(-1, ...Object.keys(P).map(Number)) + 1;
+  return Array.from({ length: n }, (_, i) => norm(P[String(i)])); };
+/* Sablono variantu tekstai klausimui (lietuviskai, kaip dokumente). */
+function zaliujuVariantai(Z){
+  const T = zemelapioTekstai(Z), v = zaliujuVietos(T);
+  if (!v || v.vienas) return null;
+  const P = Z.paras || {}, eil = i => String(P[String(i)] || '').replace(/^[a-z]\)\s*/, '').replace(/\s+/g, ' ').trim();
+  const ab = [];
+  for (let i = v.h + 1; i < v.m1; i++){
+    if (/^(a )?jei pasiulyma pateikia tiekeju grupe/.test(T[i]) || /^(b )?tiekejas gali pasitelkti kitu ukio subjektu pajegumus/.test(T[i])) ab.push(eil(i));
+  }
+  return { v1: ab.length === 2 ? 'a) ' + ab[0] + ' b) ' + ab[1] : null, v2: eil(v.v2) };
+}
+/* 1 / 2 / 3 - pasirinktas variantas, 'trinti' - zalieji reikalavimai salygose nenustatomi, null - nepasirinkta. */
+function zaliujuSprendimas(Z){
+  if (!sekaAtsakymas('zalieji')) return 'trinti';
+  if ((zaliujuVietos(zemelapioTekstai(Z)) || {}).vienas) return 1;
+  const ats = String(((ATS['B_' + ZAL_RAKTAS] || [])[0]) || '').trim();
+  if (!ats) return null;
+  const v = zaliujuVariantai(Z) || {};
+  return ats === v.v1 ? 1 : ats === v.v2 ? 2 : 3;
+}
+/* Kuriai alternatyvai priklauso raudona pastaba i (klausimynui): 'uztikrinimas', 'zalieji' arba null. */
+function alternatyvosTema(Z, i){
+  const T = zemelapioTekstai(Z);
+  const u = uztikrinimoVietos(T);
+  if (u && (i === u.m || (i > u.b - 1 && i <= u.b + 2 && arbaZyma(T[i])))) return 'uztikrinimas';
+  const z = zaliujuVietos(T);
+  if (z && i >= z.h - 1 && i <= (z.vienas ? z.h + 1 : (z.v3en >= 0 ? z.v3en : z.v3) + 1)) return 'zalieji';
+  return null;
+}
+
+/* Generavimui: ka trinti. Dokumente (paras) vietos ieskomos is naujo pagal teksta - zemelapio indeksai
+   cia sutampa, bet sandara (pastraipos ar dvikalbes eilutes) imama is paties dokumento. */
+const eiluteP = p => { for (let u = p && p.parentNode; u; u = u.parentNode) if (u.localName === 'tr') return u; return null; };
+const lentelePar = p => { for (let u = p && p.parentNode; u; u = u.parentNode) if (u.localName === 'tbl') return u; return null; };
+const didziosiomisLT = s => { const r = String(s || '').replace(/\([^)]*\)/g, '').replace(/[^A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž]/g, '');
+  return r.length >= 4 && [...r].filter(c => c !== c.toLocaleLowerCase('lt')).length >= 0.6 * r.length; };
+function uztikrinimoAlternatyvos(paras, trinti, trintiEiluciu){
+  const taikomas = uztikrinimasTaikomas();
+  if (taikomas === null) return null;                                   // grupe neatsakyta - generuoti neleidziama
+  const T = paras.map(p => norm(GPDocx.paraText(p)));
+  const v = uztikrinimoVietos(T);
+  if (!v) return null;
+  const idx = new Map(paras.map((p, i) => [p, i]));
+  const trA = eiluteP(paras[v.a]), trB = eiluteP(paras[v.b]);
+  if (trA && trB && trA !== trB){                                      // dvikalbis: eilutes „N.1. | LT | EN“
+    const eilIdx = tr => GPDocx.els(tr, 'p').map(p => idx.get(p)).filter(x => x != null);
+    const langeliai = tr => GPDocx.els(tr, 'tc').map(tc => GPDocx.els(tc, 't').map(t => t.textContent).join('').trim());
+    const skyrius = tr => (langeliai(tr)[0].match(/^(\d+)\./) || [])[1] || null;
+    const S = skyrius(trB);
+    if (!S) return null;
+    const B = [trB];
+    for (let tr = trB.nextSibling; tr; tr = tr.nextSibling){
+      if (tr.localName !== 'tr') continue;
+      const s = skyrius(tr), lt = langeliai(tr)[1] || '';
+      if ((s && s !== S) || (!s && didziosiomisLT(lt))) break;         // kitas skyrius
+      B.push(tr);
+    }
+    if (taikomas){
+      const ia = eilIdx(trA);
+      trintiEiluciu.push({ nuo: Math.min(...ia), iki: Math.max(...ia) });
+      eilIdx(trB).filter(i => arbaZyma(T[i])).forEach(i => trinti.add(i));
+    } else {
+      const ib = B.flatMap(eilIdx);
+      trintiEiluciu.push({ nuo: Math.min(...ib), iki: Math.max(...ib) });
+    }
+    return taikomas;
+  }
+  if (trA || trB) return null;                                          // nezinoma sandara - nieko nekeiciam
+  // LT: B - visa likusi skyriaus dalis, iki kito skyriaus antrastes
+  let iki = v.b;
+  for (let j = v.b + 1; j < paras.length; j++){
+    const t = GPDocx.paraText(paras[j]).trim();
+    if (!t) continue;
+    const st = (GPDocx.els(paras[j], 'pStyle')[0] || { getAttributeNS: () => '' }).getAttributeNS(GPDocx.NS_W, 'val') || '';
+    if (/heading|antra/i.test(st) || didziosiomisLT(t) || eiluteP(paras[j])) break;
+    iki = j;
+  }
+  trinti.add(v.m);
+  if (taikomas) trinti.add(v.a);
+  else for (let j = v.b; j <= iki; j++) trinti.add(j);
+  return taikomas;
+}
+/* Zaliuju 4.2: grazina sprendima (zr. zaliujuSprendimas); trinamos lenteles - i trintiLenteliu (salinamos 7 zingsnyje). */
+function zaliujuAlternatyvos(Z, paras, trinti, juodinti, trintiLenteliu){
+  const T = paras.map(p => norm(GPDocx.paraText(p)));
+  const v = zaliujuVietos(T);
+  if (!v) return { sprendimas: null };
+  const sp = zaliujuSprendimas(Z);
+  if (v.vienas){                                                        // ND: be alternatyvu - trinama tik kai zalieji nenustatomi
+    if (sp !== 'trinti') return { sprendimas: sp, vietos: v };
+    const t = lentelePar(paras[v.h]);
+    if (t){ trintiLenteliu.push(t); GPDocx.els(t, 'p').forEach(p => { const i = paras.indexOf(p); if (i >= 0) trinti.add(i); }); }
+    else {
+      trinti.add(v.h);
+      for (let i = v.h + 1; i < paras.length; i++){                     // a), b), c) papunkciai
+        const x = GPDocx.paraText(paras[i]).trim();
+        if (!x) continue;
+        if (!/^[a-z]\)/.test(x) || lentelePar(paras[i])) break;
+        trinti.add(i);
+      }
+    }
+    return { sprendimas: sp, vietos: v };
+  }
+  const lent = [v.h, v.v2, v.v3].map(i => lentelePar(paras[i]));
+  const dvikalbis = lent.every(Boolean) && new Set(lent).size === 3;
+  const markeriai = [v.m1, v.m2];
+  if (sp === null){                                                     // sprendziama Word'e: „ARBA“ lieka raudonas
+    markeriai.forEach(i => { trinti.delete(i); juodinti.delete(i); });
+    return { sprendimas: null };
+  }
+  const trinamiVariantai = sp === 'trinti' ? [1, 2, 3] : [1, 2, 3].filter(k => k !== sp);
+  markeriai.forEach(i => trinti.add(i));
+  const tuscia = i => paras[i] && !GPDocx.paraText(paras[i]).trim();
+  let nuo, iki;
+  if (dvikalbis){
+    trinamiVariantai.forEach(k => trintiLenteliu.push(lent[k - 1]));
+    // ir lenteliu pastraipos - kad nebutu pildomos ar juodinamos
+    trinamiVariantai.forEach(k => GPDocx.els(lent[k - 1], 'p').forEach(p => { const i = paras.indexOf(p); if (i >= 0) trinti.add(i); }));
+    if (sp !== 'trinti'){                                               // likusios lenteles raudoni numeriai ir antrastes - juodi
+      GPDocx.els(lent[sp - 1], 'p').forEach(p => { const i = paras.indexOf(p), t = norm(GPDocx.paraText(p));
+        if (i >= 0 && !ZAL_V3_RE.test(t) && !ZAL_V3_EN_RE.test(t)) juodinti.add(i); });
+    }
+    nuo = paras.indexOf(GPDocx.els(lent[0], 'p')[0]); iki = (v.v3en >= 0 ? v.v3en : v.v3) + 2;
+  } else {
+    const ribos = { 1: [v.h, v.m1 - 1], 2: [v.m1 + 1, v.m2 - 1], 3: [v.m2 + 1, v.v3] };
+    trinamiVariantai.forEach(k => { for (let i = ribos[k][0]; i <= ribos[k][1]; i++) trinti.add(i); });
+    if (sp === 1) juodinti.add(v.h);                                    // antraste lieka - juoda
+    nuo = v.h; iki = v.v3 + 1;
+  }
+  // tarp atmestu variantu likusios tuscios pastraipos (sablone - tarpai aplink „ARBA“): paliekama tik paskutine
+  const tuscios = [];
+  for (let i = nuo; i <= iki && i < paras.length; i++) if (!trinti.has(i) && !lentelePar(paras[i]) && tuscia(i)) tuscios.push(i);
+  tuscios.slice(0, -1).forEach(i => trinti.add(i));
+  return { sprendimas: sp, vietos: v, dvikalbis };
 }
 
 /* ==========================================================================
@@ -1344,12 +1544,28 @@ function surinktiKlausimus(){
             pastaba:rTekstas ? 'Parinkta automatiškai pagal pirkimo režimą (1 žingsnis).' : 'Nurodykite pirkimo režimą 1 žingsnyje - parinksime automatiškai.' });
         return;
       }
+      // R1: zaliuju 4.2 atitikimo taisykle - tik kai zalieji reikalavimai nustatomi pirkimo salygose (kitaip 4.2 trinamas visas)
+      if ((ZAL_V3_RE.test(norm(n.text)) || ZAL_V3_EN_RE.test(norm(n.text))) && zaliujuVietos(zemelapioTekstai(Z)) && !sekaAtsakymas('zalieji')){
+        pildomuIdx.add(n.i);
+        auto(trumpas, n.text.slice(0,60), 'trinama kartu su 4.2 punktu', 'žalieji reikalavimai pirkimo sąlygose nenustatomi (šablonas: 3 lentelė trinama „kartu su 4.2. punktu“)');
+        return;
+      }
       const formule = BLANKU_FORMULES.find(f => f.re.test(norm(n.text)));
       if (formule){                                           // CPO, atitikimo taisykle ir pan. (Nr. 6)
         pildomuIdx.add(n.i);
+        let variantai = formule.variantai.map(t => ({ tekstas:t })), pastaba = typeof formule.pastaba === 'function' ? formule.pastaba() : formule.pastaba;
+        // R1: SPS 4.2 - pirmiausia du sablono variantai (pazodziui is sablono), tada savos taisykles projektai
+        const sv = ZAL_V3_RE.test(norm(n.text)) && zaliujuVariantai(Z);
+        if (sv && sv.v1 && sv.v2){
+          variantai = [{ tekstas:sv.v1, kodel:'šablono 1 variantas (a ir b papunkčiai) - lieka šablono tekstas' },
+                       { tekstas:sv.v2, kodel:'šablono 2 variantas - lieka šablono tekstas' },
+                       ...variantai.map(v => ({ ...v, kodel:'sava taisyklė (3 variantas): projektas pagal VPT gaires' }))];
+          pastaba = 'SPS 4.2 punktas - kas turi atitikti žaliuosius reikalavimus (3 lentelė). Šablone trys variantai, tarp jų raudonas „ARBA“: '
+            + 'pasirinkite vieną, kiti du ištrinami (šablono variantas lieka kaip šablone, dvikalbiame - ir angliškas tekstas). '
+            + 'Nepasirinkus lieka visi trys - spręsite Word\'e. Savos taisyklės projektai: ' + pastaba;
+        }
         pridek('formuluotes', 'B|' + raktas, trumpas,
-          { tekstas:n.text, tipas:'blank', raktas, variantai:formule.variantai.map(t => ({ tekstas:t })),
-            pastaba:typeof formule.pastaba === 'function' ? formule.pastaba() : formule.pastaba,
+          { tekstas:n.text, tipas:'blank', raktas, variantai, pastaba,
             komentarai:komentaraiTies(Z, n.i), vietos:GPGen.vietos(n.text).length });
         return;
       }
@@ -1414,6 +1630,12 @@ function surinktiKlausimus(){
     (Z.intarpai||[]).forEach(n => {
       const kat = intarpoKat(n);
       if (isjungta.has(n.i)) return;
+      if (prieduEiluteIntarpas(n)){                           // SPS priedu sarasas, kai raudona tik eilutes dalis
+        const q = pridek('priedai', norm(n.text), trumpas, { tekstas:n.text });
+        dflt('A_' + norm(n.text), priedoEilutesNumatyta(n.text));
+        q.numatyta = priedoEilutesNumatyta(n.text);
+        return;
+      }
       if (kat === 'igaliojusios'){
         const v = igaliojusiosTekstas();
         auto(trumpas, 'Įgaliojusiosios organizacijos Pirkimo vykdymui', v ? `įrašoma „${v}“` : 'neįrašyta - įrašykite 1 žingsnyje',
@@ -1563,6 +1785,28 @@ function surinktiKlausimus(){
         auto(trumpas, n.text.slice(0,60), `įrašoma „${APKLAUSA_TEKSTAI[apklausaTipas()]}"`, 'mažos vertės apklausos tipas (1 žingsnis)');
         return;
       }
+      // R1: alternatyvu su „ARBA“ dalys - likima sprendzia generavimas (uztikrinimoAlternatyvos, zaliujuAlternatyvos)
+      const tema = alternatyvosTema(Z, n.i);
+      if (tema === 'uztikrinimas'){
+        ATS['N_' + r] = 'trinti';
+        const t = uztikrinimasTaikomas();
+        auto(trumpas, n.text.slice(0,60), t === null ? 'laukiama atsakymo apie pasiūlymo galiojimo užtikrinimą'
+             : t ? 'žymuo trinamas; lieka „Kartu su pasiūlymu Tiekėjas privalo pateikti ... užtikrinimą“, „nereikalaujama“ trinamas'
+                 : 'žymuo trinamas; lieka „nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo“, kita alternatyva trinama',
+             'pasiūlymo galiojimo užtikrinimo alternatyvos - pagal tą patį atsakymą, kuris parenka „Kitų nuostatų“ punktą');
+        return;
+      }
+      if (tema === 'zalieji'){
+        const sp = zaliujuSprendimas(Z);
+        ATS['N_' + r] = arbaZyma(r) || sp === 'trinti' ? 'trinti' : 'palikti';
+        const vienas = (zaliujuVietos(zemelapioTekstai(Z)) || {}).vienas;
+        auto(trumpas, n.text.slice(0,60), sp === 'trinti' ? 'trinama kartu su 4.2 punktu'
+             : vienas ? 'paliekama (juodai)'
+             : sp === null ? 'laukiama atitikimo taisyklės pasirinkimo (nepasirinkus - visi variantai lieka su raudonu „ARBA“)'
+             : `paliekamas ${sp} variantas, kiti trinami`,
+             'žaliųjų reikalavimų atitikimo taisyklė (SPS 4.2) - pagal žaliųjų reikalavimų ir atitikimo taisyklės atsakymus');
+        return;
+      }
       const s = SEKIMO.find(x => x.re.test(r));
       if (s){                                                 // automatika (Nr. 13)
         if (s.veiksmas === 'data'){
@@ -1571,7 +1815,7 @@ function surinktiKlausimus(){
         } else if (s.veiksmas === 'lentele'){
           // Antraste seka SAVO lenteles sprendima: jei lenteliu taisykle istrina
           // 3 lentele (ar "3 ir 4 lenteles") - ju antrastes irgi trinamos.
-          const nr = (r.match(/^(\d+) lentele$/) || [])[1];
+          const nr = (r.match(/^(\d+) lentele( table \d+)?$/) || [])[1];
           const taisykle = nr && [...Object.keys(K.lenteles), ...Object.keys(K.autoLenteles)]
             .find(k => k.includes(nr + ' lentel') || k.includes(nr + ' ir '));
           const ats = taisykle ? ATS['T_' + taisykle] : undefined;
@@ -1592,6 +1836,12 @@ function surinktiKlausimus(){
       if (instr){
         ATS['N_' + r] = 'trinti';
         auto(trumpas, n.text.slice(0,60), 'trinama', 'nurodymas rengėjui - dokumente likti negali');
+        return;
+      }
+      // Dvikalbis: angliska raudona pastaba, kurios lietuviskas dvynys toje pacioje eiluteje - neklausiama atskirai
+      if ((Z.dvyniai || {})[n.i] != null){
+        ATS['N_' + r] = 'dvynys';
+        auto(trumpas, n.text.slice(0,60), 'seka lietuviško to paties punkto sprendimą', 'angliškas dvynys toje pačioje lentelės eilutėje');
         return;
       }
       // liko tikros neaiskios vietos - jas klausiame "pastabos" stiliumi.
@@ -1658,7 +1908,15 @@ function surinktiKlausimus(){
     const ltF = BLANKU_FORMULES.find(f => f.re.test(norm(link.ltTekstas)));
     const enF = BLANKU_FORMULES.find(f => f.re.test(norm(link.enTekstas)));
     const idx = (ltVal && ltF) ? ltF.variantai.indexOf(ltVal) : -1;
-    if (idx >= 0 && enF && enF.variantai[idx]){
+    // R1: SPS 4.2 sablono variantas - angliskas jo tekstas jau yra sablone (toje pacioje lenteleje), EN vietos nepildoma
+    const zd = ZAL_V3_RE.test(norm(link.ltTekstas)) && DOK.find(d => d.trumpas === link.dok);
+    const sv = zd && zaliujuVariantai(zd.zemelapis);
+    link.sablono = !!(ltVal && sv && (ltVal === sv.v1 || ltVal === sv.v2));
+    if (link.sablono){
+      ATS[enKey] = new Array(link.vietos).fill('');
+      link.custom = false; link.parinkta = null;
+      auto(link.dok, link.enTekstas.slice(0,60), 'lieka pasirinkto šablono varianto angliškas tekstas', 'SPS 4.2 šablono variantas - abiem kalbomis kaip šablone');
+    } else if (idx >= 0 && enF && enF.variantai[idx]){
       const vals = new Array(link.vietos).fill(''); vals[0] = enF.variantai[idx];
       ATS[enKey] = vals;                                     // EN seka LT preseta besalygiskai
       link.parinkta = enF.variantai[idx];
@@ -1843,7 +2101,9 @@ function klausimynas(){
             oninput="uAts('I_${esc(enF.enRaktas)}', this.value, false)">
           <button type="button" class="sec" onclick="enPoraAI(this,'I_${esc(q.raktas)}','I_${esc(enF.enRaktas)}',false)">Pasiūlyti vertimą (AI)</button>`;
       } else if (enF && enF.tipas === 'formule'){
-        enBlok = enF.custom
+        enBlok = enF.sablono
+          ? `<div class="cite" style="margin-top:4px">Angliškas tekstas - pasirinkto šablono varianto, lieka dokumente kaip šablone.</div>`
+          : enF.custom
           ? `<div class="cite" style="margin-top:4px">Savai formuluotei suderinto angliško varianto nėra - įrašykite EN
                arba paprašykite AI pasiūlymo (per g-procure tarpinę į Claude API išsiunčiama tik lauko reikšmė).</div>
              <input type="text" style="margin-bottom:5px" placeholder="EN formuluotė" value="${esc((ATS['B_'+enF.enRaktas]||[])[0]||'')}"
@@ -2075,6 +2335,7 @@ async function generuotiViena(d, REZ){
 
   // 4. Raudonos pastabos - tik rengejo dokumentuose. Formose jos yra tiekejo
   //    instrukcijos ir paliekamos kaip sablone.
+  const dvyniai = [];                                // [angliska, lietuviska] - zr. raudonuDvyniai
   if (!forma){
     (Z.raudonosPastabos||[]).forEach(n => {
       const r = norm(n.text);
@@ -2101,11 +2362,22 @@ async function generuotiViena(d, REZ){
         if (dt) GPGen.keistiRaudonaTeksta(paras, n.i, dt);
       }
       else if (ATS['N_'+r] === 'apklausa'){                  // MVP budo eilute pagal apklausos tipa
-        GPGen.keistiRaudonaTeksta(paras, n.i, APKLAUSA_TEKSTAI[apklausaTipas()]);
+        GPGen.keistiRaudonaTeksta(paras, n.i, (APKLAUSA_EN_RE.test(r) ? APKLAUSA_TEKSTAI_EN : APKLAUSA_TEKSTAI)[apklausaTipas()]);
       }
+      else if (ATS['N_'+r] === 'dvynys' && (Z.dvyniai || {})[n.i] != null) dvyniai.push([n.i, Z.dvyniai[n.i]]);
       // 'word' - nieko nedarom; auditas apie tai pranes
     });
   }
+
+  // 4a. R1: alternatyvos su raudonu „ARBA“ - lieka tik pasirinktoji (zr. uztikrinimoAlternatyvos, zaliujuAlternatyvos)
+  const trintiLenteliu = [];
+  let zalieji = { sprendimas: null };
+  if (!forma){
+    uztikrinimoAlternatyvos(paras, trinti, trintiEiluciu);
+    zalieji = zaliujuAlternatyvos(Z, paras, trinti, juodinti, trintiLenteliu);
+  }
+  // 4b. Dvikalbiai: angliskas dvynys - kaip lietuviska pastaba (istrinta - trinamas, palikta - juodinamas, raudona - lieka)
+  dvyniai.forEach(([en, lt]) => { if (trinti.has(lt)) trinti.add(en); else if (juodinti.has(lt)) juodinti.add(en); });
 
   // 5. Tuscios vietos. Formose pildome TIK pirkimo pavadinima antrasteje -
   //    kitos vietos priklauso tiekejui.
@@ -2164,6 +2436,10 @@ async function generuotiViena(d, REZ){
   const sulietuIdx = new Set((Z.blokai||[]).filter(b => b.sulieta).map(b => b.i));
   (Z.intarpai||[]).forEach(n => {
     if (trinti.has(n.i) || sulietuIdx.has(n.i)) return;
+    if (!forma && prieduEiluteIntarpas(n)){                 // priedu saraso eilute - pagal priedo pasirinkima
+      if (ATS['A_' + norm(n.text)]) juodinti.add(n.i); else { trinti.add(n.i); prieduIstrinta++; }
+      return;
+    }
     if (forma){
       // Konfidencialumo isipareigojimas: „... vykdo [nurodyti pirkimo būdą ir pirkimo pavadinimą] ir ketina ...“ -
       // sakinyje truko zodzio „pirkimą“ ir kabute buvo ASCII (testuotojo radinys 2026-10-02).
@@ -2266,7 +2542,16 @@ async function generuotiViena(d, REZ){
   }
 
   // 7. Vykdom
-  sulietos.forEach(i => { if (!trinti.has(i)) intTrinta += GPGen.trintiRaudonusRunus(paras, i); });
+  sulietos.forEach(i => {
+    if (trinti.has(i)) return;
+    // Visa pastraipa raudona - „Sąlyga: nuostata“ viename rune (MVP LT/EN angliškas tiesioginio atsiskaitymo punktas):
+    // trinama tik sąlyga, nuostata lieka (iki 2026-10-03 dingdavo kartu ir angliška eilutė likdavo tuščia)
+    const p = paras[i], visas = GPDocx.paraText(p).trim();
+    const raud = GPGen.raudoniRunai(p).map(r => GPDocx.els(r, 't').map(t => t.textContent).join('')).join('').trim();
+    const m = raud === visas && visas.match(/^((jei|jeigu|kai|if|where|when|in case)\b[^:]{3,}:)\s*(\S.*)$/i);
+    if (m && GPGen.keistiRaudonaTeksta(paras, i, m[3])) intTrinta++;
+    else intTrinta += GPGen.trintiRaudonusRunus(paras, i);
+  });
   const nj = GPGen.juodinti(paras, [...juodinti].filter(i => !trinti.has(i)));
   lenteles.forEach(l => GPDocx.deleteTableAfter(doc, paras[l.i], l.kiek, l.numeriai));
   lenteles2.forEach(l => GPDocx.deleteNumberedTable(doc, paras[l.i], l.numeris));
@@ -2276,8 +2561,18 @@ async function generuotiViena(d, REZ){
   if (!forma && !(Z.blokai||[]).some(b => b.tipas === 'lentele' && lentelesTaisykle(b.klausimasLT || b.klausimas) === 'kvalifikacija')
       && kvalifikacijosLenteles().tik1 && (Z.vienetai||[]).some(v => v.grupe && /kvalifikacij/.test(norm(v.tekstas))))
     kvalLentele = GPDocx.deleteTableByCaption(doc, '2', 'Kvalifikacijos reikalavim');
+  // R1: dvikalbiu eiluciu anglu kalbos naslaiciai (lietuviska dalis istrinta visa)
+  if (!forma && Z.kalba === 'LTEN') angliskiNasliaciai(paras, trinti, trintiEiluciu);
   let ntEil = 0;
   trintiEiluciu.forEach(r => ntEil += GPGen.trintiEilutese(paras, r.nuo, r.iki));   // salyginiai lenteles blokai
+  // R1: atmestos dvikalbes alternatyvos - visa lentele (be eiluciu lentele Word laiko sugadinta)
+  trintiLenteliu.forEach(t => { if (t && t.parentNode) t.parentNode.removeChild(t); });
+  // R1: LT SPS 4.2 - pasirinkus 2 ar 3 varianta, antrastes „4.2.“ numeris pereina i ji (antraste trinama)
+  if (zalieji.sprendimas === 2 || zalieji.sprendimas === 3){
+    const v = zalieji.vietos;
+    const nr = !zalieji.dvikalbis && (GPDocx.paraText(paras[v.h]).trim().match(/^(\d+(\.\d+)+\.?)\s/) || [])[1];
+    if (nr) GPGen.idetiNumeri(paras[zalieji.sprendimas === 2 ? v.v2 : v.v3], nr);
+  }
   // 7a. Salygos antrastes punkto numeris (LT SPS zaliuju alternatyva "4.1.") pereina i pirma
   //     liekancia nuostatos pastraipa - kitaip pasirinkta nuostata likdavo be numerio.
   const trinamos = new Set(trinti);
@@ -2338,10 +2633,15 @@ async function generuotiViena(d, REZ){
     }
   }
 
+  // 10. Numeracija (2026-10-03): šablonų sąrašai dažnai rodo ne to skyriaus numerį (Word) arba jo nerodo (Pages), o ištrynus
+  //     alternatyvas lieka tarpų - visi skyrių ir punktų numeriai perskaičiuojami iš eilės ir įrašomi tekstu (GPNum, variklis.js).
+  const numeracija = await GPNum.sutvarkyti(doc, { dvikalbis: Z.kalba === 'LTEN', forma });
+
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
-  return { d, blob, audit, forma,
-           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera') } };
+  return { d, blob, audit, forma, numeracija,
+           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
+                   numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length } };
 }
 
 async function generuoti(){
@@ -2428,7 +2728,8 @@ function rodykRezultata(rez){
         <div class="cite">${r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
           : r.forma
           ? `tiekėjo pildomos vietos paliktos (${(a.tiekejo||[]).length}) &middot; ištrinta ${r.stats.trinta} &middot; užpildyta ${r.stats.pildyta}`
-          : `ištrinta ${r.stats.trinta} &middot; juodinta ${r.stats.juodinta} &middot; užpildyta ${r.stats.pildyta} &middot; nurodymų pašalinta ${r.stats.intTrinta}`}${sukurta ? ' &middot; ' + sukurta : ''}</div></td>
+          : `ištrinta ${r.stats.trinta} &middot; juodinta ${r.stats.juodinta} &middot; užpildyta ${r.stats.pildyta} &middot; nurodymų pašalinta ${r.stats.intTrinta}`}${sukurta ? ' &middot; ' + sukurta : ''}${
+          r.stats.numeriuPataisyta ? ` &middot; numerių pataisyta ${r.stats.numeriuPataisyta}` : ''}</div></td>
       <td>${zenklas}</td>
       <td><a href="${url}" download="${esc(vardai[ri])}"><button class="sec">Atsisiųsti</button></a></td></tr>`;
   });
@@ -2459,6 +2760,19 @@ function rodykRezultata(rez){
     h += `<div class="audit no" style="margin-top:10px"><b>Papildomai patikrinkite (${X.length}):</b>
       liko „X" vietoj skaičiaus arba neužpildytas vietos rezervas:
       <div class="lst">${X.map(x=>`<div><span class="n">${esc(x.d)}</span>${esc(x.text)}</div>`).join('')}</div></div>`;
+  }
+  /* Punktu numeracija (GPNum): numeriai irasyti tekstu - kas pataisyta, parodoma (nieko nenutylima). */
+  const numPak = rez.filter(r => r.numeracija && r.numeracija.pakeitimai.length);
+  const numViso = rez.reduce((s, r) => s + ((r.numeracija && r.numeracija.numeriu) || 0), 0);
+  if (numViso){
+    h += `<div class="audit ok" style="margin-top:10px"><b>Punktų numeracija:</b> ${numViso} numerių įrašyti tekstu, ne Word automatine
+      numeracija (šablonuose ji kai kur rodė ne savo skyriaus ar pasikartojančius numerius, o kitos programos, pvz. Pages, ją gali rodyti kitaip).
+      ${numPak.length ? `Pataisyta ${numPak.reduce((s, r) => s + r.numeracija.pakeitimai.length, 0)} - šablono sąrašų klaidos ir ištrintų
+      alternatyvų vietos; formose numeriai palikti kaip šablone (tiekėjo alternatyvos turi tą patį numerį).
+      <details><summary>Kas pataisyta (buvo → tapo)</summary><div class="lst">${numPak.map(r => r.numeracija.pakeitimai.map(x =>
+        `<div><span class="n">${esc(r.d.trumpas)}</span>${esc(x.buvo)} → ${esc(x.tapo)}: ${esc(x.tekstas.slice(0, 70))}</div>`).join('')).join('')}</div></details>`
+      : 'Numeriai šablone buvo iš eilės - pataisyti nereikėjo.'}
+      Nuorodas tekste į punktus (pvz. „SPS 3.1 punkte“) prieš skelbiant patikrinkite Word'e.</div>`;
   }
   const prieduIstr = rez.reduce((s,r) => s + (r.stats?.prieduIstrinta||0), 0);
   if (prieduIstr){
@@ -2581,7 +2895,7 @@ async function kraukDokumentus(){
   // SPS saraso eilutes numatytaja (dokumentas zada prieda -> failas dedamas
   // i paketa; tai istaiso ansktesni nenuosekluma, kai eilute likdavo, o failo
   // pakete nebudavo). Be poros - registro numatytoji.
-  const eiluciuTekstai = DOK.flatMap(d => (d.zemelapis.raudonosPastabos||[])
+  const eiluciuTekstai = DOK.flatMap(d => [...(d.zemelapis.raudonosPastabos||[]), ...(d.zemelapis.intarpai||[]).filter(prieduEiluteIntarpas)]
     .filter(n => /^\d+\s*priedas/i.test(n.text)).map(n => n.text));
   STATINIAI = [];
   prieduTinka(budas).forEach(p => {
@@ -2602,7 +2916,73 @@ async function kraukDokumentus(){
     const buf = await gaukBuf(Z.sablonas);
     DOK.push({ trumpas:f, pavadinimas:Z.pavadinimas, zemelapis:Z, buf });
   }
+  for (const d of DOK) if (d.zemelapis.kalba === 'LTEN' && !yraForma(d)) d.zemelapis.dvyniai = await raudonuDvyniai(d);
   return { ok:true };
+}
+
+/* Dvikalbiu rengejo dokumentu (SPS, BPS, salygos) raudonu pastabu dvyniai (2026-10-03): angliska pastaba toje pacioje
+   lenteles eiluteje kaip lietuviska (stulpeliai LT | EN) yra tos pacios vietos vertimas ir seka lietuviskos sprendima.
+   Iki tol angliskos pastabos buvo klausiamos atskirai su numatytuoju „palikti“, todel istrynus lietuviska nurodyma jo
+   vertimas likdavo juodas: „Specify other documents, if applicable.“, „Note: only the ESPD is submitted with the Tender.“,
+   „A certificate issued by an independent body ...“ (kai zalieji reikalavimai nenustatomi), priedu saraso „Annex N“.
+   Grazina { angliskos pastabos indeksas: lietuviskos indeksas }. Kesuojama pagal sablona. */
+const DVYNIU_KESAS = {};
+/* 'lt' / 'en' / null (numeris, tuscia). Lietuviskai - ir be diakritiku: „Nurodyti kitus dokumentus, jei taikoma.“ */
+function tekstoKalba(t){
+  if (/[ąčęėįšųūžĄČĘĖĮŠŲŪŽ]/.test(t) || /\b(jei|jeigu|ir|kad|su|pagal|kitus|dokumentus|taikoma|priedas|pirkimo|arba|tiekejas|nera)\b/i.test(t)) return 'lt';
+  return /\b(the|and|of|to|is|be|shall|with|for|tender|supplier|annex|or|if|only|must|contract|procurement)\b/i.test(t) ? 'en' : null;
+}
+/* Dvikalbe eilute (LT | EN), kurioje lietuviskas langelis istrintas visas, o angliskas liko - anglisko langelio tekstas
+   trinamas (be to EN likdavo vienas: dvyniu neradus ar lietuviska istrynus kitu budu); eilute, kurioje neliko jokio
+   teksto, salinama. Grazina istrintu angliskuju langeliu skaiciu. */
+function angliskiNasliaciai(paras, trinti, trintiEiluciu){
+  const idx = new Map(paras.map((p, i) => [p, i]));
+  const saknis = paras[0] && paras[0].ownerDocument.documentElement;
+  const eilutes = new Set();
+  trinti.forEach(i => { const tr = eiluteP(paras[i]); if (tr && saknis.contains(tr)) eilutes.add(tr); });
+  let n = 0;
+  eilutes.forEach(tr => {
+    const tcs = Array.from(tr.childNodes).filter(c => c.localName === 'tc');
+    const sut = tc => GPDocx.els(tc, 'p').map(p => idx.get(p)).filter(i => i != null && GPDocx.paraText(paras[i]).trim());
+    const kalbaL = ii => tekstoKalba(ii.map(i => GPDocx.paraText(paras[i])).join(' '));
+    for (let c = 0; c + 1 < tcs.length; c++){
+      const lt = sut(tcs[c]), en = sut(tcs[c + 1]);
+      if (!lt.length || !en.length || kalbaL(lt) !== 'lt' || kalbaL(en) !== 'en') continue;
+      if (lt.every(i => trinti.has(i)) && en.some(i => !trinti.has(i))){ en.forEach(i => trinti.add(i)); n++; }
+    }
+    const visos = tcs.flatMap(sut);
+    if (visos.length && visos.every(i => trinti.has(i))){
+      const ii = GPDocx.els(tr, 'p').map(p => idx.get(p)).filter(i => i != null);
+      trintiEiluciu.push({ nuo: Math.min(...ii), iki: Math.max(...ii) });
+    }
+  });
+  return n;
+}
+async function raudonuDvyniai(d){
+  const raktas = d.zemelapis.sablonas;
+  if (DVYNIU_KESAS[raktas]) return DVYNIU_KESAS[raktas];
+  const out = {};
+  try {
+    const doc = await GPDocx.open(d.buf.slice(0));
+    const paras = GPGen.snapshot(doc), idx = new Map(paras.map((p, i) => [p, i]));
+    const raud = new Set((d.zemelapis.raudonosPastabos || []).map(n => n.i));
+    const kalba = i => tekstoKalba(GPDocx.paraText(paras[i]));
+    const eilutes = new Set();
+    raud.forEach(i => { const tr = eiluteP(paras[i]); if (tr) eilutes.add(tr); });
+    for (const tr of eilutes){
+      const langeliai = Array.from(tr.childNodes).filter(c => c.localName === 'tc')
+        .map(tc => GPDocx.els(tc, 'p').map(p => idx.get(p)).filter(i => i != null && raud.has(i)));
+      langeliai.forEach((en, c) => {
+        const anglu = en.filter(i => kalba(i) === 'en');
+        if (!anglu.length) return;
+        let lt = null;
+        for (let k = c - 1; k >= 0 && !lt; k--){ const x = langeliai[k].filter(i => kalba(i) === 'lt'); if (x.length) lt = x; }
+        if (!lt) return;
+        anglu.forEach((i, k) => { out[i] = lt[Math.min(k, lt.length - 1)]; });
+      });
+    }
+  } catch (e) { console.warn('raudonuDvyniai', raktas, e); }                // be dvyniu - kaip iki siol (klausiama atskirai)
+  return (DVYNIU_KESAS[raktas] = out);
 }
 
 /* Priedo perjungimas 2 zingsnyje: failas + susieta SPS saraso eilute kartu. */
