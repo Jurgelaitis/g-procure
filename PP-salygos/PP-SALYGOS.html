@@ -152,7 +152,7 @@
       </div>
     </div>
     <div class="header-right">
-      <span class="header-zyma">PĮ (sektorinis)</span>
+      <span class="header-zyma" id="rezZyma">PĮ (sektorinis)</span>
       <span class="header-zyma">Bandomoji versija</span>
     </div>
   </div>
@@ -215,6 +215,22 @@
         todėl atskirai jų neklausiame.</div>
     </div>
 
+    <!-- Centralizuotas pirkimas (2026-10-03): „Atviras konkursas VPĮ“ sąlygos taikomos TIK tada, kai LITGRID AB
+         vykdo centralizuotą pirkimą sau ir UAB „EPSO-G“. Klausimas rodomas tik atviram konkursui. -->
+    <div class="q hid" id="centrQ"><div class="t" id="q-centr">Ar tai centralizuotas pirkimas?</div>
+      <div class="opts" style="flex-direction:column;align-items:stretch" role="radiogroup" aria-labelledby="q-centr">
+        <label class="opt"><input type="radio" name="centr" value="ne" checked onchange="budasPagalPI()"> Ne - LITGRID AB perka sau (PĮ)</label>
+        <label class="opt"><input type="radio" name="centr" value="taip" onchange="budasPagalPI()"> Taip - LITGRID AB vykdo centralizuotą pirkimą sau ir UAB „EPSO-G“ (VPĮ)</label>
+      </div>
+      <div class="cite" id="centrInfo">Centralizuotam pirkimui taikomos atskiros LITGRID sąlygos „Atviras konkursas VPĮ“.</div>
+      <div class="subq hid" id="centrLaukai">
+        <div class="t" id="q-igal" style="font-size:13px">Įgaliojusiosios organizacijos</div>
+        <input type="text" id="igaliojusios" aria-labelledby="q-igal" value="UAB „EPSO-G“" oninput="centrPerziura()">
+        <label class="opt" style="margin-top:6px"><input type="checkbox" id="perkaSau" checked onchange="centrPerziura()"> Pirkimo vykdytojas (LITGRID AB) perka ir sau</label>
+        <div class="cite" id="igalPerziura"></div>
+      </div>
+    </div>
+
     <div class="q" id="derybosQ"><div class="t" id="q-derybos">Ar Pirkimo metu bus vykdomos derybos?</div>
       <div class="opts" id="derybosOpts" role="radiogroup" aria-labelledby="q-derybos">
         <label class="opt"><input type="radio" name="derybos" value="taip" checked onchange="derybosUI()"> Taip</label>
@@ -238,6 +254,7 @@
         <label class="opt"><input type="radio" name="kalba" value="LT" checked> Lietuvių (LT)</label>
         <label class="opt"><input type="radio" name="kalba" value="LT_EN"> Dvikalbės (LT / EN)</label>
       </div>
+      <div class="cite hid" id="kalbaInfo">Atviro konkurso pagal VPĮ (centralizuoto pirkimo) LITGRID sąlygos yra tik lietuvių kalba.</div>
     </div>
 
     <div class="q"><div class="t" id="q-tipas">Pirkimo objekto tipas</div>
@@ -251,7 +268,7 @@
     <div class="q"><div class="t" id="q-verte">Numatoma pirkimo vertė (EUR be PVM)</div>
       <input type="text" id="verte" aria-labelledby="q-verte" placeholder="pvz. 1 500 000" oninput="rezimas()">
       <div class="cite" id="rezInfo">Režimą (tarptautinis / supaprastintas / mažos vertės) lemia pasirinktas
-        pirkimo būdas. Vertė naudojama patikrai pagal PĮ ribas.</div>
+        pirkimo būdas. Vertė naudojama patikrai pagal PĮ ribas (centralizuotam pirkimui - VPĮ).</div>
     </div>
 
     <div class="q"><div class="t" id="q-nacsaug">Ar pirkimo objektas susijęs su nacionaliniu saugumu?</div>
@@ -336,6 +353,7 @@
 
 <script src="../shared/thresholds.js"></script>
 <script src="../shared/money.js"></script>
+<script src="../shared/eksportas.js"></script>
 <script src="../shared/procurement-methods.js"></script>
 <!-- Bendra pirkimo kortelė (A1): modulis ją tik SKAITO - pats nieko nesaugo -->
 <script src="../shared/saugykla.js"></script>
@@ -361,10 +379,17 @@
 <script src="../shared/bibliotekos.js"></script>
 <script src="ai-patarejas.js"></script>
 <script>
-/* Teises nuorodos statiniame tekste (<span data-teise>) - is shared/teises-nuorodos.js. */
-GP_TEISE.uzpildyk(document, 'PI');
-/* Teises stebesenos irasai siam moduliui (PI rezimas) - is PP-teise registro. */
-if (window.GP_STEBESENA) GP_STEBESENA.mount({ target: '#teiseStebesena', modulis: 'PP-salygos', rezimas: 'PI', lang: 'lt', limit: 3 });
+/* Teises nuorodos statiniame tekste (<span data-teise>) - is shared/teises-nuorodos.js - ir teises stebesenos
+   irasai siam moduliui (PP-teise registras) - pagal taikoma istatyma: PĮ, centralizuotam pirkimui - VPĮ.
+   Perpiesiama tik pasikeitus rezimui (centrUI). */
+let TEISES_REZIMAS = null;
+function teisesKontekstas(rez){
+  if (rez === TEISES_REZIMAS) return;
+  TEISES_REZIMAS = rez;
+  GP_TEISE.uzpildyk(document, rez);
+  if (window.GP_STEBESENA) GP_STEBESENA.mount({ target: '#teiseStebesena', modulis: 'PP-salygos', rezimas: rez, lang: 'lt', limit: 3 });
+}
+teisesKontekstas('PI');
 
 /* ==========================================================================
    Sablonu rinkiniai pagal pirkimo buda ir kalba.
@@ -375,6 +400,9 @@ const SEIMOS = {
   // Atvirame konkurse paraisku etapo NEra - paraiskos forma nerengiama.
   AK:  { LT:    ['AK_LT_BPS','AK_LT_SPS','AK_LT_PASIULYMAS'],
          LT_EN: ['AK_LTEN_BPS','AK_LTEN_SPS','AK_LTEN_PASIULYMAS'] },
+  // Atviras konkursas pagal VPĮ - TIK centralizuotas pirkimas, kai LITGRID AB perka sau ir UAB „EPSO-G“
+  // (naudotojo apibrezimas 2026-10-03). LITGRID rinkinyje sios salygos yra tik lietuviskai.
+  AKV: { LT:    ['AKV_LT_BPS','AKV_LT_SPS','AKV_LT_PASIULYMAS'] },
   // Supaprastintos SD - "be paraisku"; priedai imami is skelbiamu derybu (TSD) rinkinio.
   SSD: { LT:    ['SSD_LT_BPS','SSD_LT_SPS','TSD_LT_PASIULYMAS'],
          LT_EN: ['SSD_LTEN_BPS','SSD_LTEN_SPS','TSD_LTEN_PASIULYMAS'] },
@@ -414,7 +442,13 @@ const PARAISKA_FIKSUOTA = { TSD:true, DPSK:true };
    dar nereiskia, kad tarptautinis budas netinka.                                */
 const budasKanonas = () => (window.GP_METHODS && GP_METHODS.byId($('#budas').value)) || null;
 const budoSalygos  = () => (window.GP_METHODS && GP_METHODS.toSalygos($('#budas').value)) || null;
-const seima = () => (budoSalygos() || {}).seima || null;
+/* Centralizuotas pirkimas (2026-10-03): atviras konkursas, kai LITGRID AB perka sau ir UAB „EPSO-G“ - tada
+   taikomas VPĮ ir sablonu seima AKV („Atviras konkursas VPĮ“). Kitais atvejais - PĮ, kaip iki siol. */
+const seimaPagalBuda = () => (budoSalygos() || {}).seima || null;
+const centralizuotas = () => seimaPagalBuda() === 'AK' && $('input[name=centr]:checked')?.value === 'taip';
+const seima = () => centralizuotas() ? 'AKV' : seimaPagalBuda();
+const teisesRezimas = () => centralizuotas() ? 'VPI' : 'PI';     // GP_TEISE / GP_TAISYKLES rezimas
+const istatymas = () => centralizuotas() ? 'VPĮ' : 'PĮ';
 const REZIMO_VARDAS = { tarptautinis:'tarptautinis', supaprastintas:'supaprastintas', 'mazos vertes':'mažos vertės' };
 
 /* --- LITGRID rekvizitai. Modulis skirtas tik LITGRID, tad ju neklausiame
@@ -461,6 +495,7 @@ function tusciaRaktas(n, dTrumpas){
 }
 
 let DOK = [];
+let STATINIAI = [];           // nekeiciami priedu failai (PDF), pridedami prie paketo be generavimo
 let PRIEDAI = [];
 let PRIEDU_PASIRINKIMAS = {};
 let PRIEDU_TOUCHED = new Set();
@@ -632,10 +667,46 @@ function pavPreview(){
   }
 }
 
-/* Derybu ir paraisku klausimu pritaikymas pagal pirkimo buda (PĮ). */
+/* Centralizuoto pirkimo klausimas - tik atviram konkursui (seima AK). Pasirinkus „Taip“: seima AKV, VPĮ,
+   tik lietuviskos salygos (dvikalbiu LITGRID rinkinyje nera), irasomos igaliojusiosios organizacijos. */
+function centrUI(){
+  const ak = seimaPagalBuda() === 'AK';
+  $('#centrQ').classList.toggle('hid', !ak);
+  const c = centralizuotas();
+  $('#centrLaukai').classList.toggle('hid', !c);
+  $('#centrInfo').innerHTML = c
+    ? 'Taikomos LITGRID sąlygos <b>„Atviras konkursas VPĮ“</b>: pirkimas vykdomas pagal <b>VPĮ</b>, sąlygos rengiamos lietuvių kalba.'
+    : 'Centralizuotam pirkimui (LITGRID AB ir UAB „EPSO-G“) taikomos atskiros LITGRID sąlygos „Atviras konkursas VPĮ“.';
+  const en = document.querySelector('input[name=kalba][value=LT_EN]');
+  if (en){
+    if (c && en.checked){ const lt = document.querySelector('input[name=kalba][value=LT]'); lt.checked = true; lt.dispatchEvent(new Event('change', { bubbles:true })); }
+    en.disabled = c;
+  }
+  $('#kalbaInfo').classList.toggle('hid', !c);
+  $('#rezZyma').textContent = c ? 'VPĮ (centralizuotas)' : 'PĮ (sektorinis)';
+  teisesKontekstas(teisesRezimas());
+  centrPerziura();
+}
+/* SPS 1.2 p. tekstas vietoj raudono nurodymo „(nurodyti UAB „EPSO-G“ įmonių grupės įmones, kurios įgaliojo
+   vykdyti šį Pirkimą, taip pat - ar Pirkimo vykdytojas perka sau)“. Taskas sakinio gale - is sablono. */
+function igaliojusiosTekstas(){
+  const org = ($('#igaliojusios').value || '').trim().replace(/[.;\s]+$/, '');
+  if (!org) return '';
+  return org + ($('#perkaSau').checked ? '. Pirkimo vykdytojas perka ir sau' : '. Pirkimo vykdytojas sau neperka');
+}
+function centrPerziura(){
+  const t = igaliojusiosTekstas();
+  $('#igalPerziura').innerHTML = t
+    ? `SPS 1.2 punkte: „Įgaliojusiosios organizacijos Pirkimo vykdymui: <b>${esc(t)}</b>.“`
+    : '<span style="color:var(--color-warning-strong)">Įrašykite įgaliojusias organizacijas - kitaip SPS 1.2 punkte liks raudonas nurodymas.</span>';
+}
+
+/* Derybu ir paraisku klausimu pritaikymas pagal pirkimo buda (PĮ; centralizuotam pirkimui - VPĮ). */
 function budasPagalPI(){
+  centrUI();
   const m = budasKanonas();
   const sm = seima();
+  const ist = istatymas();
   // Derybos - kanonas jas fiksuoja VISIEMS 11 budu (MV variantai jau issiskaide
   // i "su derybomis / be derybu", DPS derybos nevykdomos pagal DPS taisykles).
   const fiks = m && m.derybos === true ? 'taip' : 'ne';
@@ -649,8 +720,8 @@ function budasPagalPI(){
       ? 'Pasirinktas būdas - apklausa <b>su derybomis</b>.'
       : 'Skelbiamų / neskelbiamų derybų būde derybos vykdomos <b>visada</b> (PĮ) - nustatyta automatiškai.';
   } else {
-    auto.innerHTML = sm === 'AK'
-      ? 'Atvirame konkurse derybos <b>nevykdomos</b> (PĮ) - nustatyta automatiškai.'
+    auto.innerHTML = (sm === 'AK' || sm === 'AKV')
+      ? `Atvirame konkurse derybos <b>nevykdomos</b> (${ist}) - nustatyta automatiškai.`
       : (sm === 'DPSK' || sm === 'DPSP')
         ? 'DPS pirkimuose derybos <b>nevykdomos</b> - nustatyta pagal būdą.'
         : 'Pasirinktas būdas - apklausa <b>be derybų</b>.';
@@ -696,9 +767,14 @@ function rezimas(){
   const v = verteEUR();
   const tipas = $('input[name=tipas]:checked')?.value || 'prekes';
   let msg = rez
-    ? `Režimą lemia pasirinktas pirkimo <b>būdas</b>: <b>${REZIMO_VARDAS[rez] || rez}</b> pirkimas.`
+    ? `Režimą lemia pasirinktas pirkimo <b>būdas</b>: <b>${REZIMO_VARDAS[rez] || rez}</b> pirkimas. Vertė tikrinama pagal ${istatymas()} ribas.`
     : 'Pasirinkite pirkimo būdą.';
-  const bv = (m && v && window.GP_TAISYKLES) ? GP_TAISYKLES.budoVerte({ rezimas: 'PI', objektas: tipas, verte: v, budas: m.id }, 'lt') : null;
+  // „520 tūkst.“, „1,2 mln.“ - skaitytuvas (shared/money.js) zodziu nesupranta ir paimtu tik skaiciu (520 Eur).
+  const vTekstas = $('#verte')?.value || '';
+  if (/tūkst|tukst|mln|mlrd/i.test(vTekstas))
+    msg += ' <span style="color:var(--color-warning-strong);font-weight:600">Vertę įrašykite skaičiais (pvz. 520 000) - žodžių „tūkst.“, „mln.“ patikra nesupranta.</span>';
+  // Vykdytojas - LITGRID AB: VPĮ prekiu ir paslaugu riba priklauso nuo centrines valdzios saraso (shared/organizacijos.js).
+  const bv = (m && v && window.GP_TAISYKLES) ? GP_TAISYKLES.budoVerte({ rezimas: teisesRezimas(), objektas: tipas, verte: v, budas: m.id, vykdytojas: 'litgrid' }, 'lt') : null;
   if (bv && bv.lygis && bv.lygis !== 'gerai'){
     const cit = (bv.teise || []).map(t => t.cit).join('; ');
     const tekstas = esc(bv.tekstas) + (bv.pastaba ? ' ' + esc(bv.pastaba) : '') + (cit ? ` <span class="cite">(${esc(cit)})</span>` : '');
@@ -736,6 +812,22 @@ function rezimoAtsakymas(k, rez){
 /* --- Raudono intarpo kategorija ------------------------------------------ */
 const INSTR_RE = /(įrašom|įrašyt|nurodyt|pasirink|koreguojam|šis punktas|dalis reikalinga|suformuluot|pavadinimas|jei taikoma|pagal poreikį|palikti tik|fill in|leave only|part is required|to be completed|title of procurement|title of the object)/i;
 const SALYGOS_RE = /^[\s.,;]*(jei|jeigu|kai|if|where|when|in case)\b/i;
+/* Pavyzdines reiksmes sablone (data, metai prie tuscios vietos, suma eurais, trukme zodziais): tai ne nurodymas
+   ir ne salyginis tekstas, o pavyzdys, kuri rengejas pakeicia tikra reiksme. Iki 2026-10-03 jos tyliai tapdavo
+   juodu dokumento tekstu (apziuros data „2020 m. vasario 17 d.“, pasiulymo galiojimo uztikrinimas „25 000 Eur“,
+   DPS „110 KV ...“ is 2022-09-23). Dabar paliekamos raudonos - baigtumo patikra jas rodo, kol neirasyta tikra. */
+const PAVYZDYS_RE = [
+  /(^|[^\d])(19|20)\d{2}-[01]\d-[0-3]\d/,                              // 2022-09-23 (ir suklijuota su numeriu: „2022-09-23624995“)
+  /(19|20)\d{2}\s*m\.\s*[a-ząčęėįšųūž]+\s*\d{1,2}\s*d\./i,              // 2020 m. vasario 17 d.
+  /\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(19|20)\d{2}/,
+  /_{2,}\s*(19|20)\d{2}([^\d]|$)/,                                      // ___ _______ 2021
+  /\d{1,3}([ \u00a0]\d{3})*\s*Eur([^a-ząčęėįšųūž]|$)/i,           // 25 000 Eur (ir su nelaužiamu tarpu)
+  /\d+\s*\([a-ząčęėįšųūž]+\)\s*(metai|metų|mėn|dien)/i                 // 8 (aštuoni) metai
+];
+const arPavyzdys = raud => PAVYZDYS_RE.some(re => re.test(raud));
+/* AKV_LT_SPS 1.2 p.: „Vykdomas [Pasirinkite]. Įgaliojusiosios organizacijos Pirkimo vykdymui: (nurodyti ...)“ -
+   [Pasirinkite] pildo rezimo formuluote (tuscia vieta), raudona nurodyma - 1 zingsnio laukai. */
+const IGALIOJUSIOS_RE = /igaliojusiosios organizacijos pirkimo vykdymui/;
 function intarpoKat(n){
   const t = n.text || '';
   const raud = (n.raudonas || '').trim();
@@ -744,6 +836,11 @@ function intarpoKat(n){
   // "Pasirinkti."/"Choose." fragmentas - rengejo pasirinkimo vieta; jis niekada
   // negali tapti juodu dokumento tekstu.
   if (/^(pasirinkti|choose)\b/i.test(raud)) return 'teksto';
+  if (IGALIOJUSIOS_RE.test(norm(t))) return 'igaliojusios';
+  // „... neskaidomas vadovaujantis VPĮ 28 straipsnio 2 dalimi, nes (įrašyti priežastis ...)“: istrynus nurodyma
+  // sakinys liktu nebaigtas („..., nes .“) - tai pildoma vieta.
+  if (/(^|[^\p{L}])nes\s*\((įrašyti|nurodyti)/iu.test(t)) return 'teksto';
+  if (arPavyzdys(raud)) return 'pavyzdys';
   if (/\[[^\]]{4,}\]/.test(t)) return 'teksto';
   const skl = t.match(/\(([^)]{4,})\)?/g) || [];
   if (skl.some(x => INSTR_RE.test(x))) return 'trinti';
@@ -767,6 +864,17 @@ const PAV_EN_RE = /^The object of procurement\s*[–-]\s*_+/i;         // kuno e
 const TITULO_EN_RE = /fill in the title of procurement/i;            // titulinio "Procurement of (fill in ...)"
 const OBJEKTAS_EN_RE = /^\(object of procurement\)/i;                // formu antrastes "(object of procurement) GOODS/..."
 const TIPAI_EN = { prekes:'GOODS', paslaugos:'SERVICES', darbai:'WORKS' };
+const TIPAI_LT = { prekes:'PREKIŲ', paslaugos:'PASLAUGŲ', darbai:'DARBŲ' };
+const TIPU_SARASAS_RE = /PREKIŲ\s*\/\s*PASLAUGŲ\s*\/\s*DARBŲ/i;
+const TITULO_LT_RE = /^\(įrašomas pirkimo objekto pavadinim/i;     // titulinio nurodymas (be tuscios vietos - dvikalbiuose SPS)
+const REZIMO_EN_UZPILDYTA = /^simplified procurement with a value above the low value procurement threshold procurement shall be carried out/;
+/* Formos antraste: pavadinimas, jau besibaigiantis objekto rusimi („SERVERIŲ PRIEŽIŪROS PASLAUGŲ“), rusies nebekartoja
+   (iki 2026-10-03 - „... PASLAUGŲ PASLAUGŲ PIRKIMUI“). */
+const baigiasiRusimi = (pavU, tip) => {
+  const be = pavU.replace(/\s*\([^)]*\)\s*$/, '');            // „... PASLAUGŲ (II ETAPAS)“ - rusis pries patikslinima
+  return !!tip && (be === tip || be.endsWith(' ' + tip));
+};
+const suRusimiPav = (pavU, tip) => (!tip || baigiasiRusimi(pavU, tip)) ? pavU : pavU + ' ' + tip;
 
 /* Skaidymas i dalis. Sablonuose FIZISKAI yra tik dvi daliu eilutes (I ir II),
    o variklis naujo turinio nekuria. Jei rengejas nurodo daugiau daliu, apie tai
@@ -867,7 +975,8 @@ const PASIRINKTI_FORMULES = [
       { tekstas:'CVP IS priemonėmis', kodel:'formuluotė iš TSD šablono 1.3 p.' },
       { tekstas:'elektroniniu paštu', kodel:'šablono nurodyta parinktis (by e-mail)' },
     ], numatytas:0,
-    pastaba:'Mažos vertės pirkime galima pasirinkti komunikacijos kanalą (šablono nurodymas: „by means of CPP IS / by e-mail").' },
+    // Ta pati vieta yra ir MVP, ir SSD bei ND SPS - pastaba be „mažos vertės“ (testuotojo radinys 2026-10-02).
+    pastaba:'Šablonas palieka pasirinkti komunikacijos kanalą (šablono nurodymas: „by means of CPP IS / by e-mail“). Numatyta - CVP IS priemonėmis, kaip skelbiamų derybų šablone.' },
   { re:/^the procurement is carried out choose/,
     variantai:[
       { tekstas:'by means of CPP IS', kodel:'šablono nurodyta parinktis' },
@@ -893,9 +1002,10 @@ const TEKSTO_SPEC = [
 const BLANKU_FORMULES = [
   { re:/sprendimo neatlikti pirkimo naudojantis centralizuotu pirkimu katalogu/,
     variantai:['Atitinkamos prekės (paslaugos, darbai) CPO LT kataloge nesiūlomos.'],
-    pastaba: GP_TEISE.cit('cpo', 'PI') + ': jei CPO LT kataloge siūlomos prekės, paslaugos ar darbai atitinka poreikius, '
+    // Nuorodos - pagal taikoma istatyma (centralizuotam pirkimui - VPĮ), todel funkcija, ne tekstas.
+    pastaba: () => GP_TEISE.cit('cpo', teisesRezimas()) + ': jei CPO LT kataloge siūlomos prekės, paslaugos ar darbai atitinka poreikius, '
       + 'sprendimą pirkti ne per katalogą privaloma motyvuoti, o argumentus nurodyti pirkimo dokumentuose ('
-      + GP_TEISE.cit('cpo_argumentai', 'PI') + '). Prieš pasirinkdami patikrinkite CPO LT '
+      + GP_TEISE.cit('cpo_argumentai', teisesRezimas()) + '). Prieš pasirinkdami patikrinkite CPO LT '
       + 'katalogą (žr. šablono autorių pastabą).' },
   /* Angliskas CPO pagrindimo dvynys dvikalbiuose SPS. Variantu tvarka
      LYGIAGRETI lietuviskam irasui auksciau - poravimas eina indeksu.        */
@@ -945,11 +1055,21 @@ const SEKIMO = [
     kodel:'punktas taikomas tik kai pirkime kreipiamasi į Koordinavimo komisiją' },
   { re:/^uzpildyta tiekejo pasiulymu del deretinu salygu forma/, seka:'derybos-placiau',
     kodel:'forma reikalinga tik kai derybų apimtis platesnė nei kaina' },
-  { re:/^sioje dalyje pateikiama visa informacija kuri pagal pi 95/, seka:'be-projekto',
+  // PĮ sablonuose „pagal PĮ ... straipsnio“, AKV (VPĮ) - „12.1. ... pagal VPĮ ... straipsnio“ (numeris - sablono tekstas)
+  { re:/^(\d+( \d+)* )?sioje dalyje pateikiama visa informacija kuri pagal v?pi \d+ straipsn/, seka:'be-projekto',
     kodel:'dalis reikalinga tik kai nepridedamas Sutarties projektas' },
   { re:/^(\d+( \d+)* )?(nurodyti kitus dokumentus|suformuluoti|koreguojama pagal poreiki|pastaba su paraiska pateikiamas tik ebvpd|arba$)/,
     veiksmas:'trinti', kodel:'nurodymas rengėjui - dokumente likti negali' },
 ];
+/* Data raudona pastraipa (ISO arba „2020 m. vasario 17 d.“) ir titulinio lapo riba - pirma TURINYS / CONTENTS /
+   BENDROSIOS NUOSTATOS ar skyriaus numerio pastraipa. */
+const DATA_PASTABA_RE = /^((19|20)\d{2}-\d{2}-\d{2}|(19|20)\d{2}\s*m\.\s*[a-ząčęėįšųūž]+\s*\d{1,2}\s*d\.)$/i;
+function titulinioRiba(Z){
+  const P = Z.paras || {};
+  const k = Object.keys(P).map(Number).sort((a, b) => a - b)
+    .find(i => /^(turinys|contents|bendrosios nuostatos|general provisions|1\.?)\s*$/i.test(String(P[i] || '').trim()));
+  return k == null ? 12 : k;
+}
 function sekaAtsakymas(kodas){
   if (kodas === 'zalieji')  return ATS[norm('Jei žalieji reikalavimai nurodomi pirkimo sąlygose')] === true;
   if (kodas === 'nacsaug')  return nacsaugTaip();
@@ -957,6 +1077,27 @@ function sekaAtsakymas(kodas){
   if (kodas === 'derybos-placiau') return derybosTaip() && apimtis() !== 'kaina';
   if (kodas === 'be-projekto') return ATS[norm('Jei Pirkimo metu nėra rengiamas Sutarties projektas')] === true;
   return null;
+}
+/* R2 (2026-10-03): lenteliu taisykles, kurias lemia kiti atsakymai.
+   - kvalifikacija: „... 1 ir 2 lentelės paliekamos. Jei tikrinami tik pašalinimo pagrindai, paliekama atitinkama
+     lentelė“ - pagal kvalifikacijos alternatyvu pasirinkima (tik pasalinimo pagrindai - lieka 1, trinama 2);
+   - zalieji: „Jei pirkimo sąlygose nustatomi žalieji reikalavimai ..., 3 (ir 4) lentelė paliekama“ - pagal
+     zaliuju alternatyva „nurodomi pirkimo sąlygose“. */
+function lentelesTaisykle(k){
+  const t = norm(k);
+  if (/1 ir 2 lenteles paliekamos|tables 1 and 2 are kept/.test(t)) return 'kvalifikacija';
+  if (/^jei pirkimo salygose nustatomi zalieji reikalavimai/.test(t)) return 'zalieji';
+  return null;
+}
+function kvalifikacijosLenteles(){
+  const nariai = [];
+  DOK.forEach(d => (d.zemelapis.vienetai||[]).forEach(v => {
+    const t = norm(v.tekstas);
+    if (v.grupe && /pasalinimo pagrind/.test(t) && /kvalifikacij/.test(t)) nariai.push({ t, ats: ATS[salygosRaktas(v.tekstas)] === true });
+  }));
+  const pas = nariai.filter(n => n.ats);
+  return { grupe: nariai.length > 0, atsakyta: pas.length > 0,
+           tik1: pas.some(n => /netikrinama kvalifikacija|kvalifikacija netikrinama/.test(n.t)) };
 }
 /* Priedu saraso (SPS pabaigoje) numatytos reiksmes. */
 function priedoEilutesNumatyta(tekstas){
@@ -1015,7 +1156,7 @@ function isjungtosPastraipos(Z, REZ){
 function surinktiKlausimus(){
   const REZ = rezimas();
   DALIU_SK = 0;                      // perskaiciuojam kiekviena karta is naujo
-  const K = { grupes:{}, pavieniai:{}, autoSakos:[], lenteles:{}, priedai:{}, formuluotes:{},
+  const K = { grupes:{}, pavieniai:{}, autoSakos:[], lenteles:{}, autoLenteles:{}, priedai:{}, formuluotes:{},
               patikrinti:{}, tuscios:{}, automatika:[], formos:[],
               /* LT->EN poru nuorodos (dvikalbiai dokumentai): tuscios - EN laukas
                  prie LT klausimo; formuluotes - EN versija seka LT pasirinkima. */
@@ -1044,6 +1185,7 @@ function surinktiKlausimus(){
       ATS[raktas] ??= true;
   }));
 
+  const KVAL = kvalifikacijosLenteles();
   DOK.forEach(d => {
     const Z = d.zemelapis;
     const trumpas = d.trumpas.replace('TSD_','');
@@ -1071,8 +1213,25 @@ function surinktiKlausimus(){
     });
 
     (Z.blokai||[]).filter(b => b.tipas === 'lentele').forEach(b => {
-      const k = b.klausimasLT || b.klausimas;
-      pridek('lenteles', norm(k), trumpas, { tekstas:k, komentarai:komentarai(Z,b) });
+      const k = b.klausimasLT || b.klausimas, key = norm(k);
+      const tais = lentelesTaisykle(k);
+      // R2 (2026-10-03): lenteles, kurias lemia jau duotas atsakymas, nebeklausiamos atskirai.
+      if (tais === 'zalieji'){
+        ATS['T_' + key] = sekaAtsakymas('zalieji') === true;
+        K.autoLenteles[key] = true;
+        auto(trumpas, k.slice(0,70), ATS['T_' + key] ? 'lentelė paliekama' : 'lentelė trinama',
+             'seka žaliųjų reikalavimų pasirinkimą („nurodomi pirkimo sąlygose“)');
+        return;
+      }
+      if (tais === 'kvalifikacija' && KVAL.grupe){
+        ATS['T_' + key] = KVAL.tik1 ? 'tik1' : true;
+        K.autoLenteles[key] = true;
+        auto(trumpas, k.slice(0,70), !KVAL.atsakyta ? 'laukiama kvalifikacijos tikrinimo pasirinkimo'
+             : KVAL.tik1 ? 'paliekama 1 lentelė (pašalinimo pagrindai), 2 lentelė trinama' : 'paliekamos 1 ir 2 lentelės',
+             'seka pasirinkimą, kas tikrinama (pašalinimo pagrindai ir kvalifikacija)');
+        return;
+      }
+      pridek('lenteles', key, trumpas, { tekstas:k, komentarai:komentarai(Z,b), kval: tais === 'kvalifikacija' });
     });
 
     /* --- Formos: tuscios vietos ir raudonos pastabos - tiekejo (Nr. 10-12) - */
@@ -1190,7 +1349,8 @@ function surinktiKlausimus(){
         pildomuIdx.add(n.i);
         pridek('formuluotes', 'B|' + raktas, trumpas,
           { tekstas:n.text, tipas:'blank', raktas, variantai:formule.variantai.map(t => ({ tekstas:t })),
-            pastaba:formule.pastaba, komentarai:komentaraiTies(Z, n.i), vietos:GPGen.vietos(n.text).length });
+            pastaba:typeof formule.pastaba === 'function' ? formule.pastaba() : formule.pastaba,
+            komentarai:komentaraiTies(Z, n.i), vietos:GPGen.vietos(n.text).length });
         return;
       }
       const siulymai = priedoNrSiulymai(n);
@@ -1252,8 +1412,30 @@ function surinktiKlausimus(){
 
     /* --- Rengejo dokumentai: intarpai "reikia teksto" ---------------------- */
     (Z.intarpai||[]).forEach(n => {
-      if (intarpoKat(n) !== 'teksto') return;
+      const kat = intarpoKat(n);
       if (isjungta.has(n.i)) return;
+      if (kat === 'igaliojusios'){
+        const v = igaliojusiosTekstas();
+        auto(trumpas, 'Įgaliojusiosios organizacijos Pirkimo vykdymui', v ? `įrašoma „${v}“` : 'neįrašyta - įrašykite 1 žingsnyje',
+             'centralizuotas pirkimas (1 žingsnis)');
+        return;
+      }
+      if (kat === 'pavyzdys'){
+        auto(trumpas, n.text.slice(0,70), 'paliekama raudona',
+             'šablono pavyzdinė reikšmė (data, suma ar trukmė) - įrašykite tikrą Word\'e; kol neįrašyta, baigtumo patikra ją rodo');
+        return;
+      }
+      if (REZIMO_EN_UZPILDYTA.test(norm(n.text))){
+        auto(trumpas, n.text.slice(0,70), REZ === 'tarptautinis' ? 'įrašoma „International Procurement shall be carried out.“'
+             : (REZ ? 'paliekama šablono formuluotė' : 'laukiama pirkimo būdo'), 'angliška režimo eilutė - pagal pirkimo režimą (1 žingsnis)');
+        return;
+      }
+      if (TITULO_LT_RE.test(n.raudonas || '') && !(Z.tuscios||[]).some(x => x.i === n.i)){
+        const pv = pavClean($('#pavadinimas').value);
+        auto(trumpas, n.text.slice(0,70), pv ? `įrašoma „${pv} pirkimas“` : 'laukiama pavadinimo 1 žingsnyje', 'pirkimo pavadinimas');
+        return;
+      }
+      if (kat !== 'teksto') return;
       const raktas = norm(n.text);
       const nr = norm(n.text);
       /* LT->EN pora I_ kanale (DPSK: lauztiniu skliaustu vietos eina per
@@ -1333,8 +1515,13 @@ function surinktiKlausimus(){
         return;
       }
       ATS['I_' + raktas] ??= '';
+      // AKV 2.3 p. „... neskaidomas vadovaujantis VPĮ 28 straipsnio 2 dalimi, nes (įrašyti priežastis ...)“
+      const neskaidymas = /neskaidomas[\s\S]*(^|[^\p{L}])nes\s*\(/iu.test(n.text);
       pridek('formuluotes', 'I|' + raktas, trumpas,
-        { tekstas:n.text, tipas:'intarpas', raktas, variantai:[], komentarai:komentaraiTies(Z, n.i) });
+        { tekstas:n.text, tipas:'intarpas', raktas, variantai:[], komentarai:komentaraiTies(Z, n.i),
+          pastaba: neskaidymas ? (REZ === 'tarptautinis'
+            ? 'Įrašykite, kodėl pirkimo objektas neskaidomas į dalis (šablono nurodymas: priežastys nurodomos tarptautinio pirkimo atveju). Neįrašius vieta liks raudona.'
+            : 'Šablono nurodymas: priežastys nurodomos tik tarptautinio pirkimo atveju. Supaprastintame pirkime įrašykite trumpą priežastį arba sakinį sutvarkykite Word\'e - kitaip vieta liks raudona.') : undefined });
     });
 
     /* --- Rengejo dokumentai: raudonos pastabos ----------------------------- */
@@ -1359,6 +1546,18 @@ function surinktiKlausimus(){
         q.numatyta = priedoEilutesNumatyta(n.text);
         return;
       }
+      // Data raudonai: tituliniame lape - pirkimo salygu data (dvikalbiuose SPS sablone liko „2022-04-05“),
+      // kitur (grafiko lentele) - pavyzdys: paliekama raudona, kad neliktu sena data kaip tikra.
+      if (DATA_PASTABA_RE.test(n.text.trim())){
+        if (n.i < titulinioRiba(Z)){
+          ATS['N_' + r] = 'data_iso';
+          auto(trumpas, n.text.slice(0,60), `įrašoma data „${$('#sdata').value || 'nenurodyta'}“`, 'pirkimo sąlygų data iš 1 žingsnio (šablone - pavyzdinė)');
+        } else {
+          ATS['N_' + r] = 'word';
+          auto(trumpas, n.text.slice(0,60), 'paliekama raudona', 'šablono pavyzdinė data (pvz. grafike) - įrašykite tikrą Word\'e');
+        }
+        return;
+      }
       if (APKLAUSA_RE.test(r)){                               // MVP budo eilute: apklausos tipas
         ATS['N_' + r] = 'apklausa';
         auto(trumpas, n.text.slice(0,60), `įrašoma „${APKLAUSA_TEKSTAI[apklausaTipas()]}"`, 'mažos vertės apklausos tipas (1 žingsnis)');
@@ -1373,8 +1572,10 @@ function surinktiKlausimus(){
           // Antraste seka SAVO lenteles sprendima: jei lenteliu taisykle istrina
           // 3 lentele (ar "3 ir 4 lenteles") - ju antrastes irgi trinamos.
           const nr = (r.match(/^(\d+) lentele$/) || [])[1];
-          const taisykle = nr && Object.keys(K.lenteles).find(k => k.includes(nr + ' lentel') || k.includes(nr + ' ir '));
-          const trinama = !!(taisykle && ATS['T_' + taisykle] === false);
+          const taisykle = nr && [...Object.keys(K.lenteles), ...Object.keys(K.autoLenteles)]
+            .find(k => k.includes(nr + ' lentel') || k.includes(nr + ' ir '));
+          const ats = taisykle ? ATS['T_' + taisykle] : undefined;
+          const trinama = ats === false || (ats === 'tik1' && nr === '2');   // R2: „tik pašalinimo pagrindai“ - trinama 2
           ATS['N_' + r] = trinama ? 'trinti' : 'palikti';
           auto(trumpas, n.text.slice(0,60), trinama ? 'trinama (lentelė ištrinta)' : 'paliekama (juodai)', s.kodel);
         } else if (s.seka){
@@ -1486,8 +1687,9 @@ function prieduPoros(K){
   const poros = {};                                  // registro id -> [raktas, q]
   const laisvosEil = [];
   Object.entries(K.priedai).forEach(([raktas, q]) => {
-    const m = PRIEDO_ATITIKMUO.find(a => a.re.test(raktas));
-    if (m && registras.some(p => p.id === m.id) && !poros[m.id]) poros[m.id] = [raktas, q];
+    // ta pati eilute gali tikti keliems irasams (nacionalinio saugumo - PĮ ir VPĮ) - imamas registre esantis
+    const m = PRIEDO_ATITIKMUO.filter(a => a.re.test(raktas)).find(a => registras.some(p => p.id === a.id));
+    if (m && !poros[m.id]) poros[m.id] = [raktas, q];
     else laisvosEil.push([raktas, q]);
   });
   return { registras, poros, laisvosEil };
@@ -1551,12 +1753,17 @@ function klausimynas(){
     h += `<h3>Lentelės (${lt.length})</h3>`;
     lt.forEach(([raktas, q], qi) => {
       ATS['T_'+raktas] ??= true;
+      // R2: kvalifikacijos lenteliu taisykle turi dvi baigtis - abi lenteles arba tik 1 (pasalinimo pagrindai).
+      const [taip, ne, neVal] = q.kval
+        ? ['Palikti 1 ir 2 lenteles (tikrinami pašalinimo pagrindai ir kvalifikacija)', 'Palikti tik 1 lentelę (tikrinami tik pašalinimo pagrindai)', "'tik1'"]
+        : ['Palikti lentelę', 'Ištrinti lentelę', 'false'];
+      const neZym = q.kval ? ATS['T_'+raktas] === 'tik1' : !ATS['T_'+raktas];
       h += `<div class="q"><div class="t" id="q-T-${qi}">${esc(q.tekstas)}${zymos(q.dokumentai)}</div>
         <div class="opts" role="radiogroup" aria-labelledby="q-T-${qi}">
-          <label class="opt"><input type="radio" name="T_${esc(raktas)}" ${ATS['T_'+raktas]?'checked':''}
-            onchange="uAts('T_${esc(raktas)}',true)"> Palikti lentelę</label>
-          <label class="opt"><input type="radio" name="T_${esc(raktas)}" ${!ATS['T_'+raktas]?'checked':''}
-            onchange="uAts('T_${esc(raktas)}',false)"> Ištrinti lentelę</label>
+          <label class="opt"><input type="radio" name="T_${esc(raktas)}" ${ATS['T_'+raktas] === true?'checked':''}
+            onchange="uAts('T_${esc(raktas)}',true)"> ${taip}</label>
+          <label class="opt"><input type="radio" name="T_${esc(raktas)}" ${neZym?'checked':''}
+            onchange="uAts('T_${esc(raktas)}',${neVal})"> ${ne}</label>
         </div>${why(q.komentarai)}</div>`;
     });
   }
@@ -1851,8 +2058,11 @@ async function generuotiViena(d, REZ){
   });
 
   // 3. Lenteles
+  const lenteles2 = [];                              // R2: konkretaus numerio lentele (2 - kvalifikacija)
   (Z.blokai||[]).filter(b => b.tipas === 'lentele').forEach(b => {
-    if (ATS['T_' + norm(b.klausimasLT || b.klausimas)] !== false) return;
+    const ats = ATS['T_' + norm(b.klausimasLT || b.klausimas)];
+    if (ats === 'tik1'){ lenteles2.push({ i:b.i, numeris:'2' }); return; }
+    if (ats !== false) return;
     // Is taisykles teksto issitraukiam, KURIU NUMERIU lenteles ji valdo
     // ("3 lentele paliekama", "1 ir 2 lenteles"). Variklis pagal tai patikrina
     // lenteles antraste ir netrina svetimos - sablonu tvarka nevienoda.
@@ -1861,6 +2071,7 @@ async function generuotiViena(d, REZ){
       .flatMap(m => [m[1], m[2]]).filter(Boolean);
     lenteles.push({ i:b.i, kiek:b.lenteliu || 1, numeriai });
   });
+  const lenteliuIstrinta = () => lenteles.length + lenteles2.length + kvalLentele;
 
   // 4. Raudonos pastabos - tik rengejo dokumentuose. Formose jos yra tiekejo
   //    instrukcijos ir paliekamos kaip sablone.
@@ -1883,6 +2094,10 @@ async function generuotiViena(d, REZ){
       else if (ATS['N_'+r] === 'palikti') juodinti.add(n.i);
       else if (ATS['N_'+r] === 'data'){
         const dt = dataLT();
+        if (dt) GPGen.keistiRaudonaTeksta(paras, n.i, dt);
+      }
+      else if (ATS['N_'+r] === 'data_iso'){                  // dvikalbio titulinio data - sablono formatu (YYYY-MM-DD)
+        const dt = $('#sdata').value;
         if (dt) GPGen.keistiRaudonaTeksta(paras, n.i, dt);
       }
       else if (ATS['N_'+r] === 'apklausa'){                  // MVP budo eilute pagal apklausos tipa
@@ -1945,33 +2160,46 @@ async function generuotiViena(d, REZ){
   }
 
   // 6. Raudoni intarpai. Formose - tik konfidencialumo priedo pirkimo aprasas.
-  let intTrinta = 0, intTeksto = 0;
+  let intTrinta = 0, intTeksto = 0, rezimoEnTarpt = false;
   const sulietuIdx = new Set((Z.blokai||[]).filter(b => b.sulieta).map(b => b.i));
   (Z.intarpai||[]).forEach(n => {
     if (trinti.has(n.i) || sulietuIdx.has(n.i)) return;
     if (forma){
+      // Konfidencialumo isipareigojimas: „... vykdo [nurodyti pirkimo būdą ir pirkimo pavadinimą] ir ketina ...“ -
+      // sakinyje truko zodzio „pirkimą“ ir kabute buvo ASCII (testuotojo radinys 2026-10-02).
       if (/nurodyti pirkimo būdą ir pirkimo pavadinimą/i.test(n.raudonas || n.text)){
         const budas = $('#budas').value;
         if (pav && BUDO_KILM[budas] &&
-            GPGen.keistiRaudonaTeksta(paras, n.i, `${BUDO_KILM[budas]} „${pav}"`)) intTeksto++;
+            GPGen.keistiRaudonaTeksta(paras, n.i, `${BUDO_KILM[budas]} „${pav}“ pirkimą`)) intTeksto++;
+      }
+      if (/specify the procurement method and the name of the procurement/i.test(n.raudonas || n.text)){
+        const pEN = pavENval(), mEN = window.GP_METHODS ? GP_METHODS.label($('#budas').value, { kalba:'en' }) : '';
+        if (pEN && mEN && mEN !== $('#budas').value &&
+            GPGen.keistiRaudonaTeksta(paras, n.i, `the procurement “${pEN}” by ${mEN.charAt(0).toLowerCase() + mEN.slice(1)} `)) intTeksto++;
       }
       // Formos antraste: raudonas rezervas "(Pirkimo objektas) PREKIŲ / PASLAUGŲ /
       // DARBŲ" - abu zinomi is kontroliniu klausimu (pavadinimas + objekto tipas).
       // Antrastes kontekstas - bold DIDZIOSIOMIS ("LITGRID AB ... PIRKIMUI"), tad
-      // irasoma didziosiomis ir stilius suvienodinamas (pastaba Nr. 3).
-      if (/^\(pirkimo objektas\)/i.test((n.raudonas||'').trim())){
-        const tip = { prekes:'PREKIŲ', paslaugos:'PASLAUGŲ', darbai:'DARBŲ' }[$('input[name=tipas]:checked').value] || '';
-        // gale paliekamas tarpas - uz raudono fragmento juodas tekstas ("PIRKIMUI")
-        // prasideda be tarpo
-        if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, `${pav} ${tip} `.toLocaleUpperCase('lt'), { kaipAntraste:true })) intTeksto++;
+      // irasoma didziosiomis ir stilius suvienodinamas (pastaba Nr. 3). Nuo 2026-10-03
+      // dvikalbiuose sablonuose rusis yra atskiroje eiluteje ("PREKIŲ / PASLAUGŲ / DARBŲ
+      // PIRKIMUI"), o pavadinimas, jau besibaigiantis rusimi („... paslaugų“), jos nebekartoja.
+      const raudT = (n.raudonas||'').trim();
+      const tipLT = TIPAI_LT[$('input[name=tipas]:checked').value] || '';
+      const PAVU = pav.toLocaleUpperCase('lt');
+      if (/^\(pirkimo objektas\)/i.test(raudT)){
+        const suRusimi = TIPU_SARASAS_RE.test(raudT);
+        // gale paliekamas tarpas - uz raudono fragmento juodas tekstas ("PIRKIMUI") prasideda be tarpo
+        if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, suRusimi ? suRusimiPav(PAVU, tipLT) + ' ' : PAVU, { kaipAntraste:true })) intTeksto++;
+      } else if (TIPU_SARASAS_RE.test(raudT) && /^PREKIŲ/i.test(raudT)){
+        if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, baigiasiRusimi(PAVU, tipLT) ? '' : tipLT + ' ', { kaipAntraste:true })) intTeksto++;
       }
       // Angliskas antrastes dvynys: "(object of procurement) GOODS / SERVICES /
       // WORKS". Pildomas is TU PACIU kontroliniu klausimu - zmogus nieko neveda
       // dukart; pavadinima duoda pavENval() (EN laukas arba lietuviskas).
-      if (OBJEKTAS_EN_RE.test((n.raudonas||'').trim())){
+      if (OBJEKTAS_EN_RE.test(raudT)){
         const tipEN = TIPAI_EN[$('input[name=tipas]:checked').value] || '';
         const pEN = pavENval();
-        if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, `${pEN} ${tipEN} `.toLocaleUpperCase('lt'), { kaipAntraste:true })) intTeksto++;
+        if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, suRusimiPav(pEN.toLocaleUpperCase('lt'), tipEN) + ' ', { kaipAntraste:true })) intTeksto++;
       }
       // Daliu eilute "I/ II/ III/ IV PIRKIMO OBJEKTO DALIAI": romeniskas sarasas
       // pritaikomas prie tikro daliu skaiciaus (pastaba Nr. 4). Lieka raudonas -
@@ -1989,14 +2217,33 @@ async function generuotiViena(d, REZ){
       const pEN = pavENval();
       if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, pEN)){ intTeksto++; return; }
     }
+    // Lietuviskas titulas BE tuscios vietos (dvikalbiai SPS nuo 2026-10: „(įrašomas pirkimo objekto pavadinimas)
+    // pirkimas“): nurodymas keiciamas pavadinimu - istrynus liktu tik „pirkimas“. Be pavadinimo - lieka raudonas.
+    if (TITULO_LT_RE.test(n.raudonas || '') && !(Z.tuscios||[]).some(x => x.i === n.i)){
+      if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, pav)){ GPGen.taisytiSkliaustus(paras[n.i]); titulIdx.add(n.i); intTeksto++; }
+      return;
+    }
+    // R3: dvikalbio AK SPS angliska rezimo eilute sablone jau UZPILDYTA („Simplified Procurement ... shall be
+    // carried out.“) - tarptautiniam pirkimui ji perrasoma kaip skelbiamu derybu sablone (TSD_LTEN_SPS).
+    if (REZIMO_EN_UZPILDYTA.test(norm(n.text))){
+      if (REZ === 'tarptautinis'){ if (GPGen.keistiRaudonaTeksta(paras, n.i, 'International Procurement')) { rezimoEnTarpt = true; intTeksto++; } }
+      else juodinti.add(n.i);
+      return;
+    }
     const kat = intarpoKat(n);
     if (kat === 'trinti') intTrinta += GPGen.trintiRaudonusRunus(paras, n.i);
     else if (kat === 'teksto'){
       const v = (ATS['I_' + norm(n.text)] || '').trim();
       if (v === '__NETAIKYTI__') trinti.add(n.i);
       else if (v && GPGen.keistiRaudonaTeksta(paras, n.i, v)) intTeksto++;
+    } else if (kat === 'igaliojusios'){
+      const v = igaliojusiosTekstas();                 // be reiksmes nurodymas lieka raudonas - patikra ji rodo
+      if (v && GPGen.keistiRaudonaTeksta(paras, n.i, v)) intTeksto++;
+    } else if (kat === 'pavyzdys'){
+      // pavyzdine reiksme lieka raudona - rengejas iraso tikra (patikra rodo kaip neisspresta)
     } else juodinti.add(n.i);
   });
+  if (rezimoEnTarpt) GPDocx.replaceText(doc, 'International Procurement Procurement shall be carried out', 'International Procurement shall be carried out');
 
   // 6a. Titulo tarpas: istrynus raudona "(irasomas ... pavadinimas) " nurodyma
   //     kai kur dingsta tarpas pries "pirkimas" ("...kVpirkimas"). Uztikrinam.
@@ -2022,13 +2269,29 @@ async function generuotiViena(d, REZ){
   sulietos.forEach(i => { if (!trinti.has(i)) intTrinta += GPGen.trintiRaudonusRunus(paras, i); });
   const nj = GPGen.juodinti(paras, [...juodinti].filter(i => !trinti.has(i)));
   lenteles.forEach(l => GPDocx.deleteTableAfter(doc, paras[l.i], l.kiek, l.numeriai));
+  lenteles2.forEach(l => GPDocx.deleteNumberedTable(doc, paras[l.i], l.numeris));
+  // Sablonas be lenteliu taisykles (MVP_LT_SPS), o pasirinkta „kvalifikacija netikrinama“: kvalifikacijos lentele
+  // (2) prieštarautu 3.1 punktui - trinama tik ji (antraste ir turinys tikrinami variklyje).
+  let kvalLentele = 0;
+  if (!forma && !(Z.blokai||[]).some(b => b.tipas === 'lentele' && lentelesTaisykle(b.klausimasLT || b.klausimas) === 'kvalifikacija')
+      && kvalifikacijosLenteles().tik1 && (Z.vienetai||[]).some(v => v.grupe && /kvalifikacij/.test(norm(v.tekstas))))
+    kvalLentele = GPDocx.deleteTableByCaption(doc, '2', 'Kvalifikacijos reikalavim');
   let ntEil = 0;
   trintiEiluciu.forEach(r => ntEil += GPGen.trintiEilutese(paras, r.nuo, r.iki));   // salyginiai lenteles blokai
+  // 7a. Salygos antrastes punkto numeris (LT SPS zaliuju alternatyva "4.1.") pereina i pirma
+  //     liekancia nuostatos pastraipa - kitaip pasirinkta nuostata likdavo be numerio.
+  const trinamos = new Set(trinti);
+  let numeriuPerkelta = 0;
+  (Z.blokai||[]).filter(b => b.tipas === 'saka' && !b.sulieta && trinamos.has(b.i))
+    .forEach(b => { if (GPGen.perkeltiNumeri(paras, b.i, trinamos) >= 0) numeriuPerkelta++; });
   const nt = GPGen.trinti(paras, [...trinti]);
   GPDocx.cleanOrphanBookmarks(doc.parts['word/document.xml']);
 
   // 8. Rekvizitai (LITGRID konstantos - pastabos Nr. 1-2), pavadinimai, data
+  // „ĮMONĖS PAVADINIMAS“ visuose dokumentuose reiškia LITGRID AB (naudotojo nurodymas 2026-10-03). Iki 2026-10
+  // šablonuose žyma buvo „/ĮMONĖS PAVADINIMAS/“. Tik didžiosiomis: „Darbuotojo įmonės pavadinimas“ - tiekėjo laukas.
   GPDocx.replaceText(doc, '/ĮMONĖS PAVADINIMAS/', IMONE);
+  GPDocx.replaceText(doc, 'ĮMONĖS PAVADINIMAS', IMONE);
   if (pav){
     GPDocx.replaceText(doc, 'PIRKIMO PAVADINIMAS', pav);
     GPDocx.replaceText(doc, 'PROCUREMENT TITLE', pavENval());
@@ -2065,37 +2328,77 @@ async function generuotiViena(d, REZ){
   // 9. LITGRID logotipas pirmojo puslapio virsuje (pastaba Nr. 5). Dedamas
   //    PASKUTINIS - jis pridedamas naujas paragrafas, o visos teksto operacijos
   //    jau ivykdytos pries tai. 150x55 pt (islaiko 2,72:1) -> EMU.
-  let logoDetas = false;
+  //    Nuo 2026-10 LITGRID sablonai logotipa (MONO) turi patys antrasteje - tada nededamas (butu du logotipai).
+  let logoDetas = false, logoSablone = false;
   if (LOGO_TIPAI.has(dokTipas(d)) && window.GP_LOGO){
-    await GPDocx.insertLogo(doc, { bytes: GP_LOGO.bytes(), cxEmu: 150*12700, cyEmu: 55*12700 });
-    logoDetas = true;
+    logoSablone = await GPDocx.antrastejePaveikslas(doc);
+    if (!logoSablone){
+      await GPDocx.insertLogo(doc, { bytes: GP_LOGO.bytes(), cxEmu: 150*12700, cyEmu: 55*12700 });
+      logoDetas = true;
+    }
   }
 
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
   return { d, blob, audit, forma,
-           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteles.length, prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu } };
+           stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera') } };
 }
 
 async function generuoti(){
   klausimynas();                                     // atnaujina automatika pries generuojant
   const REZ = rezimas();
-  const rinkinys = [...DOK];                         // uzrakinam sarasa
+  const rinkinys = [...DOK], statiniai = [...STATINIAI];   // uzrakinam sarasus
   const rez = [];
   for (const d of rinkinys) rez.push(await generuotiViena(d, REZ));
+  // Nekeiciami priedai (banku sarasas PDF): failas pridedamas kaip yra - jame nera ko pildyti ar tikrinti.
+  for (const st of statiniai){
+    const buf = await gaukBuf('templates/' + st.failas);
+    const pletinys = (st.failas.match(/\.([a-z0-9]+)$/i) || [, 'pdf'])[1].toLowerCase();
+    rez.push({ d: { trumpas: st.trumpas, pavadinimas: st.pavadinimas }, blob: new Blob([buf], { type: pletinys === 'pdf' ? 'application/pdf' : 'application/octet-stream' }),
+               statinis: true, pletinys, forma: true, stats: {},
+               audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } });
+  }
   return rez;
+}
+
+/* Failu vardai - bendra G-Procure taisykle (shared/eksportas.js, CLAUDE.md 5 sk.): <pirkimo numeris>_<dokumentas>_
+   <pavadinimas>_<data>. Iki 2026-10-03 - sablonu kodai („SSD_LT_SPS.docx“), kurie tiekejui ir kolegai nieko nesako. */
+const DOK_VARDAI = { BPS:'BPS', SPS:'SPS', SALYGOS:'Pirkimo sąlygos', PASIULYMAS:'Pasiūlymo forma', PARAISKA:'Paraiškos forma',
+  PASALINIMAS:'Pašalinimo pagrindai', KVALIFIKACIJA:'Kvalifikacijos reikalavimai', SUTARTYS:'Sutarčių sąrašas',
+  SPECIALISTAI:'Specialistų sąrašas', SUBTIEKEJAS:'Sutikimas būti subtiekėju', IDARBINTAS:'Sutikimas būti įdarbintu',
+  KONFIDENCIALUMAS:'Konfidencialumo įsipareigojimas', NACSAUGUMAS:'Nacionalinio saugumo deklaracija',
+  NACSAUGUMASVPI:'Nacionalinio saugumo deklaracija', KONFINFO:'Konfidenciali informacija', SUBTIEKEJAI:'Informacija apie subtiekėjus',
+  SANDORIS:'Sandorio šalies duomenys', DERYBOS:'Pasiūlymai dėl derėtinų sąlygų', VALDYMAS:'Valdymo ar priežiūros organai',
+  BANKAI:'Priimtinų bankų sąrašas' };
+function failuVardai(rez){
+  const kalba = $('input[name=kalba]:checked').value === 'LT_EN' ? ' LT-EN' : '';
+  const bendra = { numeris: ((KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {}).numeris || '',
+                   pavadinimas: pavClean($('#pavadinimas').value), data: $('#sdata').value || undefined };
+  const naudoti = new Set();
+  return rez.map(r => {
+    const dok = (DOK_VARDAI[r.d.trumpas.split('_').pop()] || r.d.trumpas) + kalba;
+    let v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok, pletinys: r.pletinys || 'docx' });
+    // ta pati rūšis du kartus (pvz. DPS sutarčių sąrašas ir bendras priedas) - pridedamas šablono kodas
+    if (naudoti.has(v)) v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok + ' ' + r.d.trumpas, pletinys: r.pletinys || 'docx' });
+    naudoti.add(v);
+    return v;
+  });
 }
 
 function rodykRezultata(rez){
   const darboMomentas = GP_DARBAS.momentas();       // atsakymai, is kuriu sugeneruota
+  const vardai = failuVardai(rez);
   const kalba = $('input[name=kalba]:checked').value, budas = $('#budas').value;
   const m = metodas();                               // kanoninis budas (bendra taksonomija)
   const metStr = m ? `<div class="cite">Pirkimo būdas: <b>${esc(m.label)}</b> <code>${esc(m.id)}</code></div>` : '';
   // AI pasiulymai (A5) keicia tik ATSAKYMUS, ne teksta: sablono variantai arba reiksmes pazodziui is rengejo dokumentu.
   const aiP = aiPriimtuSantrauka();
   const aiStr = aiP.n ? `<div class="cite">Atsakymų, priimtų iš AI pasiūlymų: <b>${aiP.n}</b> (kiekvieną patvirtinote jūs; šaltiniai: ${esc(aiP.saltiniai.join(', '))}).</div>` : '';
-  let h = `<div class="hint">Dokumentai sugeneruoti iš LITGRID šablonų. Jokio AI teksto.</div>${aiStr}${metStr}<table class="rez">`;
-  rez.forEach(r => {
+  // „Jokio AI teksto“ buvo netikslu: angliška pavadinimo versija gali būti AI pasiūlymas (testuotojo radinys 2026-10-02).
+  const rezStr = centralizuotas() ? `<div class="cite">Centralizuotas pirkimas: LITGRID sąlygos „Atviras konkursas VPĮ“, taikomas <b>VPĮ</b>.</div>` : '';
+  let h = `<div class="hint">Dokumentai sugeneruoti iš LITGRID šablonų - sąlygų teksto AI nerašė. AI galėjo tik pasiūlyti
+    atsakymus ar angliško pavadinimo vertimą, kuriuos patvirtinote jūs.</div>${aiStr}${metStr}${rezStr}<table class="rez">`;
+  rez.forEach((r, ri) => {
     const url = URL.createObjectURL(r.blob);
     const a = r.audit;
     // Trys busenos. "svaru" NEreiskia "parengta skelbti" - tik kad automatine
@@ -2104,7 +2407,9 @@ function rodykRezultata(rez){
     // dokumentas atrode parengtas - dabar jie duoda atskira geltona busena.
     const svelnios = (a.patikrinti||[]).length;
     let zenklas;
-    if (!a.svarus){
+    if (r.statinis){
+      zenklas = `<span class="cite" title="Nekeičiamas LITGRID dokumentas - pridedamas toks, koks yra">pridedamas be pakeitimų</span>`;
+    } else if (!a.svarus){
       zenklas = `<a href="#baigtumas" style="text-decoration:none" title="Neišspręstos vietos, kurias reikės užbaigti Word'e - dokumente jos paliktos raudonai, sąrašas žemiau">
            <span style="color:var(--color-warning-strong);font-weight:600">spręsti Word'e: ${a.raudonos.length + a.tuscios.length} ↓</span></a>`;
     } else if (svelnios && !r.forma){
@@ -2120,11 +2425,12 @@ function rodykRezultata(rez){
       r.stats.sukurtaKvalif ? `kvalifikacijos lentelių dalims +${r.stats.sukurtaKvalif}` : '',
     ].filter(Boolean).join(' &middot; ');
     h += `<tr><td><b>${esc(r.d.pavadinimas)}</b>
-        <div class="cite">${r.forma
+        <div class="cite">${r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
+          : r.forma
           ? `tiekėjo pildomos vietos paliktos (${(a.tiekejo||[]).length}) &middot; ištrinta ${r.stats.trinta} &middot; užpildyta ${r.stats.pildyta}`
           : `ištrinta ${r.stats.trinta} &middot; juodinta ${r.stats.juodinta} &middot; užpildyta ${r.stats.pildyta} &middot; nurodymų pašalinta ${r.stats.intTrinta}`}${sukurta ? ' &middot; ' + sukurta : ''}</div></td>
       <td>${zenklas}</td>
-      <td><a href="${url}" download="${esc(r.d.trumpas)}.docx"><button class="sec">Atsisiųsti</button></a></td></tr>`;
+      <td><a href="${url}" download="${esc(vardai[ri])}"><button class="sec">Atsisiųsti</button></a></td></tr>`;
   });
   h += `</table><div class="actions"><button id="zip">Atsisiųsti visus (ZIP)</button></div><div id="zipBusena" hidden></div>`;
 
@@ -2176,7 +2482,9 @@ function rodykRezultata(rez){
 
   /* Q3: ZIP su būsena - anksčiau be jokios eigos ir be klaidos (nepavykus nieko neįvykdavo),
      o dvigubas paspaudimas ruošdavo du archyvus. */
-  const zipVardas = `Pirkimo_salygos_${(m && m.id) || budas}_${kalba}.zip`;
+  const zipVardas = GP_EKSPORTAS.failoVardas({ numeris: ((KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {}).numeris || '',
+    dokumentas: 'Pirkimo sąlygos ' + ((m && m.id) || budas) + (kalba === 'LT_EN' ? ' LT-EN' : ''),
+    pavadinimas: pavClean($('#pavadinimas').value), data: $('#sdata').value || undefined, pletinys: 'zip' });
   const ruoskZip = async () => {
     const mygt = $('#zip');
     if (mygt.disabled) return;
@@ -2188,7 +2496,7 @@ function rodykRezultata(rez){
       sekme: 'ZIP archyvas atsisiųstas: ' + zipVardas,
       veiksmas: async () => {
         const zip = new JSZip();
-        for (const r of rez) zip.file(`${r.d.trumpas}.docx`, await r.blob.arrayBuffer(), { createFolders:false });
+        for (const [ri, r] of rez.entries()) zip.file(vardai[ri], await r.blob.arrayBuffer(), { createFolders:false });
         const b = await zip.generateAsync({ type:'blob' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(b);
@@ -2232,9 +2540,12 @@ async function gaukBuf(url){
   if (!r.ok) throw new Error(`šablonas nepasiekiamas (${r.status}): ${url}`);
   return r.arrayBuffer();
 }
-const prieduTinka = budas => PRIEDAI.filter(p => p.seimos.includes('*') || p.seimos.includes(budas));
+/* Priedas tinka seimai ir taikomam istatymui: PĮ ir VPĮ priedu tekstas remiasi skirtingais straipsniais (pvz. nacionalinio
+   saugumo deklaracija, konfidenciali informacija), tad centralizuotam (VPĮ) pirkimui PĮ priedai nesiulomi ir atvirksciai. */
+const prieduTinka = budas => PRIEDAI.filter(p => (p.seimos.includes('*') || p.seimos.includes(budas))
+  && (!p.rezimas || p.rezimas === teisesRezimas()));
 function prieduNumatyta(p){
-  if (p.id === 'NACSAUGUMAS') return nacsaugTaip();
+  if (p.id === 'NACSAUGUMAS' || p.id === 'NACSAUGUMASVPI') return nacsaugTaip();
   if (p.id === 'DERYBOS')     return derybosTaip() && apimtis() !== 'kaina';
   return !!p.numatytas;
 }
@@ -2242,6 +2553,8 @@ function prieduNumatyta(p){
    zodzius, ne numerius - numeriai skiriasi tarp seimu).                      */
 const PRIEDO_ATITIKMUO = [
   { id:'NACSAUGUMAS',  re:/nacionalinio saugumo/ },
+  { id:'NACSAUGUMASVPI', re:/nacionalinio saugumo/ },       // ta pati eilute VPĮ (AKV) rinkinyje
+  { id:'BANKAI',       re:/priimtinu banku/ },
   { id:'SUTARTYS',     re:/sutarciu saras/ },
   { id:'SPECIALISTAI', re:/specialistu saras/ },
   { id:'SANDORIS',     re:/sandorio salies/ },
@@ -2270,13 +2583,19 @@ async function kraukDokumentus(){
   // pakete nebudavo). Be poros - registro numatytoji.
   const eiluciuTekstai = DOK.flatMap(d => (d.zemelapis.raudonosPastabos||[])
     .filter(n => /^\d+\s*priedas/i.test(n.text)).map(n => n.text));
+  STATINIAI = [];
   prieduTinka(budas).forEach(p => {
     if (!PRIEDU_TOUCHED.has(p.id)){
       const m = PRIEDO_ATITIKMUO.find(a => a.id === p.id);
       const eilute = m && eiluciuTekstai.find(t => m.re.test(norm(t)));
       PRIEDU_PASIRINKIMAS[p.id] = eilute ? priedoEilutesNumatyta(eilute) : prieduNumatyta(p);
     }
-    if (PRIEDU_PASIRINKIMAS[p.id]){ const f = p.failai[kalba] || p.failai.LT; if (f) baze.push(f); }
+    if (PRIEDU_PASIRINKIMAS[p.id]){
+      const f = p.failai[kalba] || p.failai.LT;
+      // Nekeiciamas failas (banku sarasas PDF) - be zemelapio, i paketa dedamas kaip yra.
+      if (f && p.statinis) STATINIAI.push({ trumpas: f.replace(/\.[a-z0-9]+$/i, ''), failas: f, pavadinimas: p.pavadinimas });
+      else if (f) baze.push(f);
+    }
   });
   for (const f of baze.slice(DOK.length)){
     const Z = await gaukJson(`zemelapiai/${f}.json`);
@@ -2490,7 +2809,7 @@ function pzPritaikyti(){
   // reiksme, tad "uzpildyta ranka" = naudotojo PALIESTA. Programinius ivykius
   // (pzPritaikyti fire) atskiria PZ_TAIKOMA veliava.
   $('#budas').addEventListener('change', () => { if (!PZ_TAIKOMA) PZ_RANKA.add('budas'); });
-  ['tipas','nacsaug'].forEach(name =>
+  ['tipas','nacsaug','centr'].forEach(name =>
     document.querySelectorAll(`input[name=${name}]`).forEach(r =>
       r.addEventListener('change', () => { if (!PZ_TAIKOMA) PZ_RANKA.add(name); })));
 })();
@@ -2504,8 +2823,9 @@ const AI = { saltiniai:[], siulymai:new Map(), analize:null, abort:null, priimta
 const AI_PDF = { src:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
   sri:'sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==' };
 const AI_TINKA = /\.(docx|pdf|odt|txt|md)$/i;
-/* Priedai, kurie seka 1 zingsnio atsakymus - AI apie juos neklausiama. */
-const AI_BE_1Z = new Set(['NACSAUGUMAS','DERYBOS']);
+/* Priedai, kurie seka 1 zingsnio atsakymus - AI apie juos neklausiama. Banku sarasas - irgi ne: matuojant su
+   tikrais paketais AI jo eilute supainiojo su sutarties priedo reikalavimais (zr. zemiau). */
+const AI_BE_1Z = new Set(['NACSAUGUMAS','NACSAUGUMASVPI','DERYBOS','BANKAI']);
 /* Angliski dvyniai AI neklausiami: EN seka LT atsakyma, teisinio teksto AI neverčia. */
 const arAngliskas = t => !/[ąčęėįšųūž]/i.test(t) &&
   /\b(the|of|and|shall|procurement|supplier|tender|contract|choose|carried|justification|requirement)\b/i.test(t);
@@ -2848,8 +3168,8 @@ $('#gen').onclick = generuotiDokumentus;
 
 /* Bendra pirkimo kortelė (A1 2 etapas, 2026-09-26): modulis ją tik SKAITO. Tušti laukai užpildomi, kitokie tik
    parodomi. Pavadinimas čia - kilmininku be „pirkimas“: kortelės „X pirkimas“ virsta „X“, kitaip parašytas -
-   neįrašomas (automatiškai linksniuoti neišeina). Šablonai - LITGRID ir PĮ, tad kitas vykdytojas ar VPĮ tik
-   įvardijami. Būdas ir objekto tipas turi numatytąsias reikšmes - kol žmogus jų nepalietė, jos laikomos tuščiomis;
+   neįrašomas (automatiškai linksniuoti neišeina). Šablonai - LITGRID (PĮ; VPĮ - tik centralizuotas atviras konkursas),
+   tad kitas vykdytojas tik įvardijamas, o VPĮ kortelė pažymi centralizuotą pirkimą. Būdas ir objekto tipas turi numatytąsias reikšmes - kol žmogus jų nepalietė, jos laikomos tuščiomis;
    kortelės užpildytos jų „paliestomis“ nežymi (PZ_TAIKOMA). Jungiama PRIEŠ GP_DARBAS. */
 const KORTELES_TIPAI = { prekes:'prekes', paslaugos:'paslaugos', paslaugos_it:'paslaugos', darbai:'darbai' };
 function kortelesTaikoma(f){ PZ_TAIKOMA = true; try { f(); } finally { PZ_TAIKOMA = false; } }
@@ -2873,8 +3193,17 @@ const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
       neimanoma: 'šablonuose - prekės, paslaugos arba darbai' },
     { kortele:'vykdytojas', gauk: () => 'litgrid', i: v => v === 'litgrid' ? v : null, dek: () => {},
       neimanoma: 'sąlygų šablonai - tik LITGRID AB' },
-    { kortele:'rezimas', gauk: () => 'PI', i: v => v === 'PI' ? v : null, dek: () => {},
-      neimanoma: 'šablonai - pagal PĮ' }
+    // VPĮ - tik centralizuotas atviras konkursas (LITGRID AB ir UAB „EPSO-G“, 2026-10-03): kortele su VPĮ pazymi
+    // „centralizuotas pirkimas“; kitam budui tokiu sablonu nera, tad juosta rodo skirtuma.
+    { kortele:'rezimas', gauk: () => teisesRezimas(),
+      i: (v, k) => v === 'PI' ? v
+        : (v === 'VPI' && k && k.vykdytojas === 'litgrid' && ((window.GP_METHODS && GP_METHODS.toSalygos(k.budas)) || {}).seima === 'AK') ? v : null,
+      numatyta: () => !PZ_RANKA.has('centr'),
+      dek: v => kortelesTaikoma(() => {
+        const r = document.querySelector(`input[name=centr][value=${v === 'VPI' ? 'taip' : 'ne'}]`);
+        if (r){ r.checked = true; budasPagalPI(); }
+      }),
+      neimanoma: 'šablonai - pagal PĮ; pagal VPĮ - tik centralizuotam LITGRID AB atviram konkursui (sau ir UAB „EPSO-G“)' }
   ]
 }) : null;
 
@@ -2924,7 +3253,8 @@ GP_DARBAS.stebek(() => [AI.priimta]);
       faq: [
         { q: "Ar AI rašo sąlygų tekstą?", a: "Ne. Tekstas - tik iš LITGRID šablonų. AI gali pasiūlyti atsakymą į klausimą, bet jį priimate jūs." },
         { q: "Ką reiškia „liko neišspręstų vietų“?", a: "Dokumente liko raudono teksto ar tuščių laukų. Jie palikti matomi - Word programoje juos rasite pagal raudoną spalvą." },
-        { q: "Kurie šablonai naudojami?", a: "LITGRID pirkimo dokumentų šablonai (PĮ). Kitų grupės įmonių šablonų modulyje nėra." }
+        { q: "Kurie šablonai naudojami?", a: "LITGRID pirkimo dokumentų šablonai (PĮ). Centralizuotam pirkimui, kai LITGRID AB perka sau ir UAB „EPSO-G“, - LITGRID sąlygos „Atviras konkursas VPĮ“ (tik lietuvių kalba). Kitų grupės įmonių šablonų modulyje nėra." },
+        { q: "Ką reiškia „ĮMONĖS PAVADINIMAS“ šablonuose?", a: "Visuose dokumentuose tai LITGRID AB - pavadinimas įrašomas automatiškai." }
       ],
       closeLabel: "Uždaryti ir grįžti"
     }

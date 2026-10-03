@@ -220,11 +220,11 @@ const GPDocx = (() => {
     // SOCIALINIU reikalavimu lentele. Todel trinam TIK tada, kai antraste
     // patvirtina numeri; nepatvirtinus - nedarom nieko (kaip ir iki siol).
     const laukiam = Array.isArray(numeriai) && numeriai.length ? numeriai : null;
-    let rasta = 0, po = false, antraste = '', praleista = 0;
+    let rasta = 0, po = false, antraste = '', antrastesP = null, praleista = 0;
     for (const node of Array.from(body.children)){
       if (node === vir){ po = true; continue; }
       if (!po) continue;
-      if (node.localName === 'p'){ const t = paraText(node).trim(); if (t) antraste = t; continue; }
+      if (node.localName === 'p'){ const t = paraText(node).trim(); if (t){ antraste = t; antrastesP = node; } continue; }
       if (node.localName !== 'tbl') continue;
       if (rasta >= kiek) break;
       if (laukiam){
@@ -232,12 +232,74 @@ const GPDocx = (() => {
         if (!m || !laukiam.includes(m[1])){ praleista++; break; }   // ne ta lentele - stojam
       }
       node.parentNode.removeChild(node);
+      salintiAntraste(antrastesP);
       rasta++;
-      antraste = '';
+      antraste = ''; antrastesP = null;
     }
     note(doc, `Lenteles po pastraipos: istrinta ${rasta} is ${kiek}`
       + (praleista ? ` (sustota: antraste nepatvirtino numerio ${(laukiam||[]).join('/')})` : '') + '.');
     return rasta;
+  }
+
+  /* Lenteles antraste („2 lentele“, „2 lentele/Table 2“) be lenteles neturi likti. Lietuviskuose SPS ja dar
+     tvarko raudonu pastabu taisykle, bet dvikalbiuose ji - intarpas (raudonas tik numeris), tad iki 2026-10-03
+     istrynus lentele antraste likdavo. Salinama TIK trumpa antrastes pastraipa. */
+  const ANTRASTE_RE = /^\s*\d+\s*lentel[^\s\/]*(\s*\/\s*table\s*\d+)?\s*$/i;
+  function salintiAntraste(p){
+    if (p && p.parentNode && ANTRASTE_RE.test(paraText(p))) p.parentNode.removeChild(p);
+  }
+
+  /* R2 atsarginis kelias (2026-10-03): sablone be lenteliu taisykles (MVP_LT_SPS) pasirinkus „kvalifikacija
+     netikrinama“ kvalifikacijos reikalavimu lentele prieštarautu 3.1 punktui. Trinama TIK pirma kuno lentele,
+     kurios antraste „N lentele“ ir kurios tekste yra `privaloma` (pvz. „Kvalifikacijos reikalavim“). */
+  function deleteTableByCaption(doc, numeris, privaloma){
+    const d = doc.parts['word/document.xml'];
+    const body = d.getElementsByTagNameNS(NS_W,'body')[0];
+    let antraste = '', antrastesP = null;
+    for (const node of Array.from(body.children)){
+      if (node.localName === 'p'){ const t = paraText(node).trim(); if (t){ antraste = t; antrastesP = node; } continue; }
+      if (node.localName !== 'tbl') continue;
+      const m = antraste.match(/^(\d+)\s*lentel/i);
+      if (m && m[1] === String(numeris) && els(node,'t').map(t => t.textContent).join('').includes(privaloma)){
+        node.parentNode.removeChild(node);
+        salintiAntraste(antrastesP);
+        note(doc, `Lentele ${numeris} („${privaloma}“) istrinta pagal pasirinkima.`);
+        return 1;
+      }
+      antraste = ''; antrastesP = null;
+    }
+    return 0;
+  }
+
+  /* R2 (2026-10-03): istrina lentele su NURODYTU numeriu po pastraipos, praleisdama kitas. Taisykle „1 ir 2
+     lenteles paliekamos. Jei tikrinami tik pasalinimo pagrindai, paliekama atitinkama lentele“: tikrinant tik
+     pasalinimo pagrindus lieka 1 lentele, trinama 2 (deleteTableAfter trindavo pirma - 1). Ziurima ne toliau
+     kaip `riba` lenteliu; neradus antrastes su tuo numeriu - nieko netrinama. */
+  function deleteNumberedTable(doc, paraNode, numeris, riba = 3){
+    const d = doc.parts['word/document.xml'];
+    const body = d.getElementsByTagNameNS(NS_W,'body')[0];
+    if (!paraNode) return 0;
+    let vir = paraNode;
+    while (vir && vir.parentNode && vir.parentNode !== body) vir = vir.parentNode;
+    if (!vir || vir.parentNode !== body) return 0;
+    let po = false, antraste = '', antrastesP = null, lenteliu = 0;
+    for (const node of Array.from(body.children)){
+      if (node === vir){ po = true; continue; }
+      if (!po) continue;
+      if (node.localName === 'p'){ const t = paraText(node).trim(); if (t){ antraste = t; antrastesP = node; } continue; }
+      if (node.localName !== 'tbl') continue;
+      if (++lenteliu > riba) break;
+      const m = antraste.match(/(\d+)\s*lentel/i);
+      if (m && m[1] === String(numeris)){
+        node.parentNode.removeChild(node);
+        salintiAntraste(antrastesP);
+        note(doc, `Lentele ${numeris} po pastraipos istrinta.`);
+        return 1;
+      }
+      antraste = ''; antrastesP = null;
+    }
+    note(doc, `Lentele ${numeris} po pastraipos nerasta - nieko netrinta.`);
+    return 0;
   }
 
   /* ---------- 3c. LOGOTIPO INJEKCIJA (OOXML, ne docx.js) -------------------
@@ -265,6 +327,23 @@ const GPDocx = (() => {
       + `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>`
       + `</pic:pic></a:graphicData></a:graphic>`
       + `</wp:inline></w:drawing></w:r></w:p>`;
+  }
+
+  /* Ar sablonas JAU turi paveiksla antrasteje (logotipa). Nuo 2026-10 LITGRID sablonuose MONO logotipas yra
+     pirmo puslapio (ar visu puslapiu) antrasteje - tada modulio logotipo kuno virsuje nereikia, kitaip butu du.
+     Antrastes tikrinamos kaip tekstas (be XML perrasymo - jos lieka nepaliestos). */
+  async function antrastejePaveikslas(doc){
+    const d = doc.parts['word/document.xml'];
+    const relsF = doc.zip.file('word/_rels/document.xml.rels');
+    if (!relsF) return false;
+    const ids = new Set(els(d,'headerReference').map(h => h.getAttributeNS(NS_R,'id') || h.getAttribute('r:id')));
+    const rels = parseXml(await relsF.async('string'));
+    for (const rel of Array.from(rels.getElementsByTagNameNS(NS_REL,'Relationship'))){
+      if (!ids.has(rel.getAttribute('Id'))) continue;
+      const f = doc.zip.file('word/' + String(rel.getAttribute('Target') || '').replace(/^\/?(word\/)?/, ''));
+      if (f && /<w:(drawing|pict)\b/.test(await f.async('string'))) return true;
+    }
+    return false;
   }
 
   async function insertLogo(doc, opts){
@@ -373,8 +452,8 @@ const GPDocx = (() => {
     return doc.zip.generateAsync({ type, compression:'DEFLATE' });
   }
 
-  return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, paraText, els, NS_W };
+  return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, paraText, els, NS_W };
 })();
 
 /* ==========================================================================
@@ -425,6 +504,18 @@ const GPMap = (() => {
     }
     return out.trim();
   }
+  /* Ne raudonu runu tekstas (numeriui pries raudona salyga atpazinti). */
+  function juodasRuno(p){
+    let out = '';
+    for (const r of GPDocx.els(p,'r')){
+      const t = GPDocx.els(r,'t').map(x => x.textContent).join('');
+      const rpr = r.getElementsByTagNameNS(W,'rPr')[0];
+      const col = rpr && rpr.getElementsByTagNameNS(W,'color')[0];
+      const v = col ? (col.getAttributeNS(W,'val')||'').toUpperCase() : '';
+      if (!RED.includes(v)) out += t;
+    }
+    return out.trim();
+  }
 
   function runState(p){
     let reds = 0, tot = 0;
@@ -468,26 +559,37 @@ const GPMap = (() => {
       let inTable = false, up = p.parentNode;
       while (up && up.localName !== 'body'){ if (up.localName === 'tbl'){ inTable = true; break; } up = up.parentNode; }
 
-      const st = runState(p);
+      let st = runState(p), tekstas = txt;
+      // RANKA IRASYTAS NUMERIS PRIES SALYGA (AKV_LT_SPS 4.1 p., 2026-10-03): juodai tik
+      // "4.1.", raudonai "Jei ...:". Tai ne sulieta salyga - nuostata eina kitose
+      // pastraipose - o SALYGA su numeriu, kaip numeruota (numPr) zaliuju alternatyva
+      // kituose sablonuose. Klausimas - be numerio; numeri generatorius perkelia i
+      // pirma likusia turinio pastraipa (GPGen.perkeltiNumeri).
+      const raud0 = st === 'inline' ? raudonasRuno(p) : '';
+      const juoda = raud0 ? juodasRuno(p) : '';
+      const numerisTekstu = raud0 && COND_SU_DVITASKIU.test(raud0) && /^\d+(\.\d+)*\.?$/.test(juoda) ? juoda : null;
+      if (numerisTekstu){ st = 'red'; tekstas = raud0; }
       // SULIETA SALYGA: dalis sablonu (MVP dvikalbis) salygos antraste iraso i TA
       // PACIA pastraipa kaip nuostata: raudonai "Jei X:" + juodai pati nuostata.
       // Tokia salyga valdo savo pacios pastraipa: itraukiant - raudona antraste
       // trinama, nuostata lieka; neitraukiant - trinama visa pastraipa.
-      const raud = st === 'inline' ? raudonasRuno(p) : '';
+      const raud = st === 'inline' ? raud0 : '';
       const sulieta = !!raud && COND_SU_DVITASKIU.test(raud);
+      const numeruota = !!numPr || !!numerisTekstu;
       out.push({
-        i, text: txt, state: st, style, ilvl, inTable,
+        i, text: tekstas, state: st, style, ilvl, inTable,
         sulieta, raudonas: raud,
         klausimasTekstas: sulieta ? raud.replace(/[:\s]+$/,'').replace(/^[\s.,;]+/,'') : null,
-        numbered: !!numPr,
+        numbered: numeruota,
+        numerisTekstu,
         heading: (!!numPr && ilvl === 0) || /heading|antra/i.test(style),
         // Salygos antraste paprastai NEnumeruota. Bet sablone pasitaiko ir
         // numeruotu (pvz. zaliuju alternatyva) - tokia laikom salyga tik jei ji
         // baigiasi dvitaskiu, t. y. aiskiai iveda toliau einancius punktus.
-        cond:   st === 'red' && (COND_RE.test(txt) || COND_RE_EN.test(txt)) && txt.length > 8
-                && (!numPr || /:\s*$/.test(txt)),
-        condEN: st === 'red' && COND_RE_EN.test(txt) && txt.length > 8 && (!numPr || /:\s*$/.test(txt)),
-        blank: BLANK_RE.test(txt),
+        cond:   st === 'red' && (COND_RE.test(tekstas) || COND_RE_EN.test(tekstas)) && tekstas.length > 8
+                && (!numeruota || /:\s*$/.test(tekstas)),
+        condEN: st === 'red' && COND_RE_EN.test(tekstas) && tekstas.length > 8 && (!numeruota || /:\s*$/.test(tekstas)),
+        blank: BLANK_RE.test(tekstas),
         comments: []
       });
     });
@@ -759,6 +861,64 @@ const GPGen = (() => {
       n++;
     }
     return n;
+  }
+
+  /* SALYGOS NUMERIS (2026-10-03). Kai kur salygos antraste pati turi punkto numeri: LT SPS
+     zaliuju alternatyva "4.1." - sablono numeracija (numPr), AKV_LT_SPS - ranka irasytas
+     "4.1." pries raudona "Jei ...:". Antraste visada trinama, tad iki tol pasirinkta nuostata
+     likdavo BE numerio (visuose LT SPS 4 skyriuje). Word'e rengejas istrintu antrastes
+     teksta su pastraipos zenklu - nuostata perimtu numeruotos pastraipos formata. Taip ir
+     cia: pirma LIEKANTI turinio pastraipa gauna antrastes pastraipos savybes (pPr su
+     numeracija) ir ranka irasyta numeri. Ieskoma tik iki kito numeruoto punkto, antrastes
+     ar lenteles ribos; neradus (visos alternatyvos atmestos) numeris dingsta su punktu.  */
+  const NUMERIS_TEKSTU = /^\d+(\.\d+)*\.?$/;
+  const PUNKTO_NUMERIS = /^\d+(\.\d+)+\.?\s/;
+  function arRaudonas(r){
+    const rpr = r.getElementsByTagNameNS(W,'rPr')[0];
+    const col = rpr && rpr.getElementsByTagNameNS(W,'color')[0];
+    return ['FF0000','C00000','ED1C24'].includes(col ? (col.getAttributeNS(W,'val')||'').toUpperCase() : '');
+  }
+  const pPrOf = p => Array.from(p.childNodes).find(c => c.localName === 'pPr') || null;
+  const lentelejeP = p => { for (let u = p.parentNode; u; u = u.parentNode) if (u.localName === 'tbl') return u; return null; };
+  function perkeltiNumeri(paras, i, trinamos){
+    const p = paras[i]; if (!p) return -1;
+    const ppr = pPrOf(p);
+    const numPr = ppr && ppr.getElementsByTagNameNS(W,'numPr')[0];
+    const juodi = GPDocx.els(p,'r').filter(r => !arRaudonas(r));
+    const tekstu = juodi.map(r => GPDocx.els(r,'t').map(t => t.textContent).join('')).join('').trim();
+    const ranka = NUMERIS_TEKSTU.test(tekstu);
+    if (!numPr && !ranka) return -1;
+    const lent = lentelejeP(p), saknis = p.ownerDocument.documentElement;
+    for (let j = i + 1; j < paras.length; j++){
+      const q = paras[j];
+      if (!q || trinamos.has(j) || !saknis.contains(q)) continue;     // trinama ar jau pasalinta su eilute
+      const t = GPDocx.paraText(q).trim();
+      if (!t) continue;
+      if (lentelejeP(q) !== lent) return -1;
+      const qppr = pPrOf(q);
+      const st = qppr && qppr.getElementsByTagNameNS(W,'pStyle')[0];
+      if ((qppr && qppr.getElementsByTagNameNS(W,'numPr')[0]) || PUNKTO_NUMERIS.test(t)
+          || /heading|antra/i.test(st ? st.getAttributeNS(W,'val') || '' : '')) return -1;   // savas numeris ar kitas skyrius
+      // pastraipos savybes - is antrastes, pastraipos zenklo formatas (rPr) - turinio
+      const naujas = ppr ? ppr.cloneNode(true) : null;
+      if (naujas){
+        Array.from(naujas.childNodes).filter(c => c.localName === 'rPr').forEach(c => naujas.removeChild(c));
+        const savas = qppr && Array.from(qppr.childNodes).find(c => c.localName === 'rPr');
+        if (savas) naujas.appendChild(savas.cloneNode(true));
+        if (qppr) q.replaceChild(naujas, qppr); else q.insertBefore(naujas, q.firstChild);
+      }
+      if (ranka){
+        const po = naujas || pPrOf(q);
+        let vieta = po ? po.nextSibling : q.firstChild;
+        juodi.forEach(r => { q.insertBefore(r.cloneNode(true), vieta); });
+        if (!/\s$/.test(juodi.map(r => GPDocx.els(r,'t').map(x => x.textContent).join('')).join(''))){
+          const tarpas = q.ownerDocument.createElementNS(W, 'w:r'), tt = q.ownerDocument.createElementNS(W, 'w:t');
+          tt.setAttribute('xml:space','preserve'); tt.textContent = ' '; tarpas.appendChild(tt); q.insertBefore(tarpas, vieta);
+        }
+      }
+      return j;
+    }
+    return -1;
   }
 
   /* Salygiskai istrina LENTELES EILUTES (w:tr), kuriu VISOS pastraipos yra
@@ -1193,10 +1353,14 @@ const GPGen = (() => {
     const rs = raudoniRunai(p);
     if (!rs.length) return false;
     const first = rs[0];
+    // Raudoni runai TIK is tarpu tarp raudonu fragmentu - to paties nurodymo dalis: palikti jie duodavo
+    // „... perka ir sau .“ (tarpas pries taska). Uz fragmento ribu esantys tarpai neliečiami.
+    const visi = GPDocx.els(p,'r'), nuo = visi.indexOf(first), iki = visi.indexOf(rs[rs.length - 1]);
+    const tarpai = visi.slice(nuo + 1, iki).filter(r => arRaudonas(r) && !rs.includes(r) && !GPDocx.els(r,'t').map(x => x.textContent).join('').trim());
     const ts = GPDocx.els(first,'t');
     if (ts.length){ ts[0].textContent = gpBruksniai(value); ts[0].setAttribute('xml:space','preserve'); }
     for (let k=1;k<ts.length;k++) ts[k].textContent = '';
-    rs.slice(1).forEach(r => r.parentNode && r.parentNode.removeChild(r));
+    rs.slice(1).concat(tarpai).forEach(r => r.parentNode && r.parentNode.removeChild(r));
     for (const c of GPDocx.els(first,'color')) c.setAttributeNS(W,'w:val','auto');
     // Formu antrastems: sablono "(Pirkimo objektas)" runas kursyvinis ne-bold,
     // o kaimynai ("LITGRID AB", "PIRKIMUI") - bold DIDZIOSIOMIS. Be suvienodinimo
@@ -1327,7 +1491,7 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
+  return { snapshot, juodinti, trinti, perkeltiNumeri, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
            keistiRaudonaTeksta, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
@@ -1364,9 +1528,9 @@ const GPAudit = (() => {
     // kriterijus nepagauna:
     //   1) "X" vietoj numerio ("SPS X priedas", "dydis - X Eur");
     //   2) vietos rezervai DIDZIOSIOMIS ("PIRKIMO PAVADINIMAS", "PROCUREMENT TITLE");
-    //   3) likes /ĮMONĖS PAVADINIMAS/ (jei keitimas nepavyko).
+    //   3) likes ĮMONĖS PAVADINIMAS (su ar be /.../ - jei keitimas nepavyko).
     const patikrinti = [];
-    const REZERVAS = /[„"']([A-ZĄČĘĖĮŠŲŪŽ][A-ZĄČĘĖĮŠŲŪŽ \-]{5,})[""']|\/ĮMONĖS PAVADINIMAS\//;
+    const REZERVAS = /[„"']([A-ZĄČĘĖĮŠŲŪŽ][A-ZĄČĘĖĮŠŲŪŽ \-]{5,})[""']|ĮMONĖS PAVADINIMAS/;
     paras.forEach((p, i) => {
       const t = GPDocx.paraText(p).trim();
       if (!t) return;

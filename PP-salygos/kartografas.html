@@ -68,6 +68,9 @@
       <option value="templates/AK_LTEN_BPS.docx">AK - LT/EN - Bendrosios</option>
       <option value="templates/AK_LTEN_SPS.docx">AK - LT/EN - Specialiosios</option>
       <option value="templates/AK_LTEN_PASIULYMAS.docx">AK - LT/EN - Pasiulymo forma</option>
+      <option value="templates/AKV_LT_BPS.docx">AK VPĮ (centralizuotas) - LT - Bendrosios</option>
+      <option value="templates/AKV_LT_SPS.docx">AK VPĮ (centralizuotas) - LT - Specialiosios</option>
+      <option value="templates/AKV_LT_PASIULYMAS.docx">AK VPĮ (centralizuotas) - LT - Pasiulymo forma</option>
       <option value="templates/SSD_LT_BPS.docx">SSD - LT - Bendrosios</option>
       <option value="templates/SSD_LT_SPS.docx">SSD - LT - Specialiosios</option>
       <option value="templates/SSD_LTEN_BPS.docx">SSD - LT/EN - Bendrosios</option>
@@ -101,6 +104,8 @@
       <option value="templates/PRIEDAI_LTEN_KONFIDENCIALUMAS.docx">Priedai - LT/EN - Konfidencialumo isipareigojimas</option>
       <option value="templates/PRIEDAI_LT_NACSAUGUMAS.docx">Priedai - LT - Nac. saugumo deklaracija</option>
       <option value="templates/PRIEDAI_LTEN_NACSAUGUMAS.docx">Priedai - LT/EN - Nac. saugumo deklaracija</option>
+      <option value="templates/PRIEDAI_LT_NACSAUGUMASVPI.docx">Priedai - LT - Nac. saugumo deklaracija (VPĮ)</option>
+      <option value="templates/PRIEDAI_LT_VALDYMAS.docx">Priedai - LT - Valdymo ar prieziuros organai (VPĮ)</option>
       <option value="templates/PRIEDAI_LT_KONFINFO.docx">Priedai - LT - Konfidenciali informacija</option>
       <option value="templates/PRIEDAI_LTEN_KONFINFO.docx">Priedai - LT/EN - Konfidenciali informacija</option>
       <option value="templates/PRIEDAI_LT_SUBTIEKEJAI.docx">Priedai - LT - Info apie subtiekejus</option>
@@ -116,6 +121,7 @@
     </select>
     <button id="scan">Kartografuoti</button>
     <button id="exp" class="sec" disabled>Eksportuoti zemelapi (JSON)</button>
+    <button id="visi" class="sec" title="Visi sarase esantys sablonai -> skenavimas_visi.json (zemelapiai/statyk.py formatas)">Skenuoti visus sablonus</button>
     <span id="prog" style="font-size:13px;color:var(--g)"></span>
   </div>
   <div id="out"></div>
@@ -216,6 +222,29 @@ function confirmB(id){
   render();
 }
 $('#scan').onclick = scan;
+/* Visi sablonai vienu failu (2026-10-03): skenavimas_visi.json -> python3 zemelapiai/statyk.py skenavimas_visi.json --statyk.
+   Statytojas pritaiko ekspertiniu sprendimu lentele (perziura.json) ir rankinius pataisymus (rankiniai.json). */
+$('#visi').onclick = async () => {
+  const out = {}, opts = Array.from(document.querySelectorAll('#tpl option')).map(o => o.value);
+  $('#visi').disabled = true;
+  try {
+    for (const [k, f] of opts.entries()){
+      $('#prog').textContent = `skenuojama ${k + 1} is ${opts.length}: ${f}`;
+      try {
+        const doc = await GPDocx.open(await (await fetch(f)).arrayBuffer());
+        const s = await GPMap.scan(doc);
+        out[f] = { paras: s.paras.map(p => ({ i: p.i, text: p.text })), blokai: s.blocks, vienetai: s.vienetai,
+          raudonosPastabos: s.notes.map(n => ({ i: n.i, text: n.text })), tuscios: s.blanks.map(n => ({ i: n.i, text: n.text })),
+          intarpai: s.inlines.map(n => ({ i: n.i, text: n.text, raudonas: n.raudonas })), komentarai: s.komentarai };
+      } catch (e){ out[f] = { klaida: String(e && e.message || e) }; }
+    }
+    const kl = Object.entries(out).filter(([, v]) => v.klaida).map(([f]) => f);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type:'application/json' }));
+    a.download = 'skenavimas_visi.json'; a.click();
+    $('#prog').textContent = `paruosta: ${opts.length} sablonu` + (kl.length ? `, KLAIDOS: ${kl.join(', ')}` : '');
+  } finally { $('#visi').disabled = false; }
+};
 $('#exp').onclick = () => {
   const blob = new Blob([JSON.stringify(MAP, null, 2)], {type:'application/json'});
   const a = document.createElement('a');

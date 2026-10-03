@@ -108,6 +108,12 @@ def taisymas_url(taisyk):
     2) DPSK_LT_SALYGOS ir DPSK_LTEN_SALYGOS: EBVPD nuoroda http -> https
        (http persikelia i https; saugom galutini adresa). LT versijoje ji
        yra ir tekste, ir hipernuorodos rels Target - keiciam abu."""
+    # 3) (2026-10-03, nauji LITGRID sablonai) BPS isnasose CVP IS uzsifravimo instrukcija - 404 (http://vpt.lrv.lt/...)
+    #    ir neegzistuojantis serveris (v17.1.2.pt.lrv.lt). Veikianti tos pacios instrukcijos nuoroda (200, PDF) - is
+    #    AUTENTISKU LITGRID sablonu DPSP_LT_SALYGOS / DPSP_LTEN_SALYGOS.
+    UZS_GERAS   = b'https://vpt.lrv.lt/uploads/vpt/documents/files/LT_versija/CVP_IS/Mokymu_medziaga/Tiekejams/Uzsifravimo_instrukcija.pdf'
+    UZS_BLOGI   = [b'http://vpt.lrv.lt/uploads/vpt/documents/files/uzsifravimo_instrukcija.pdf',
+                   b'http://v17.1.2.pt.lrv.lt/uploads/vpt/documents/files/uzsifravimo_instrukcija.pdf']
     VPT_BLOGAS = b'https://vpt.lrv.lt/melaginga-informacija-pateikusiutiekeju-sarasas-3'
     VPT_GERAS  = b'https://vpt.lrv.lt/lt/nuorodos/kiti-duomenys/powerbi/melaginga-informacija-pateikusiu-tiekeju-sarasas-3/'
     EBVPD_BLOGAS = b'http://ebvpd.eviesiejipirkimai.lt/espd-web/'
@@ -115,9 +121,10 @@ def taisymas_url(taisyk):
     TAISYMAI = [
         ('DPSK_LT_SALYGOS.docx',   [(VPT_BLOGAS, VPT_GERAS), (EBVPD_BLOGAS, EBVPD_GERAS)]),
         ('DPSK_LTEN_SALYGOS.docx', [(EBVPD_BLOGAS, EBVPD_GERAS)]),
-    ]
-    ENTRYS = ('word/document.xml', 'word/_rels/document.xml.rels')
-    print("\nTAISYMAS URL - VPT 404 ir EBVPD http->https:")
+    ] + [(f, [(b, UZS_GERAS) for b in UZS_BLOGI]) for f in
+         ('AK_LT_BPS.docx', 'AK_LTEN_BPS.docx', 'AKV_LT_BPS.docx', 'MVP_LT_BPS.docx', 'MVP_LTEN_BPS.docx', 'TSD_LT_BPS.docx', 'TSD_LTEN_BPS.docx')]
+    ENTRYS = ('word/document.xml', 'word/_rels/document.xml.rels', 'word/footnotes.xml', 'word/_rels/footnotes.xml.rels')
+    print("\nTAISYMAS URL - VPT 404, EBVPD http->https, CVP IS uzsifravimo instrukcija (BPS isnasos):")
     total = 0
     for fname, poros in TAISYMAI:
         path = TPL / fname
@@ -144,7 +151,7 @@ def taisymas_url(taisyk):
                     zout.writestr(info, items[info.filename])
             print(f"  -> irasyta i {fname}")
         total += pak
-    print(f"  (saltinis: AK_LT_SPS teisinga VPT nuoroda; abi nuorodos patikrintos 200)")
+    print(f"  (saltiniai: AK_LT_SPS teisinga VPT nuoroda, DPSP sablonu uzsifravimo instrukcija; nuorodos patikrintos 200)")
     return total
 
 
