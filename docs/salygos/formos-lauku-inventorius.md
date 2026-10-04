@@ -19,22 +19,35 @@ būseną PRIEŠ pakeitimus (tyrimas, commit 59cf088).
 | Sąsaja | Grupuojama pagal dokumentą ir skyrių; viršuje - „Užpildyta X iš Y“, juosta, „Kitas neužpildytas“, turinys; apačioje - „Prieš generuojant“ (privalomi sprendimai, neužpildyti laukai, siūlomos, pašalinamos nuorodos) su šuoliais. Kiekvienas laukas: klausimas, užuomina, „?“ (`shared/paaiskinimas.js`), pavadinimas su `label for`, „Pvz.:“ tik pavyzdys, peržiūra „Taip atrodys dokumente“. Techninė šablono žyma („LT_SPS“) - tik paaiškinime. |
 | Rastos klaidos | AKV interneto adreso pabraukimai - nebe laukas ir nebe patikros radinys; DPS LT tiekėjo formos vietos neklausiamos; „[nurodymas]____“ - viena vieta (ND derybų sąlygos nebeįrašomos du kartus); DPS „nuo X [data] ... iki X [data]“ - dvi atskiros datos (iki tol visi raudoni runai keičiami vienu tekstu). |
 
+### Klausimų tekstai (naudotojo sprendimai 2026-10-04)
+
+| Vieta | Klausimas | Būsena |
+|---|---|---|
+| Alternatyvos „Jei Pirkimo objektas į dalis neskaidomas / skaidomas į dalis“ | Ar pirkimo objektas skaidomas į dalis? | patvirtinta, įgyvendinta |
+| Alternatyvos „Jei numatoma / nenumatoma kviesti stebėtojus“ | Ar į komisijos posėdžius kviečiami stebėtojai? | patvirtinta, įgyvendinta |
+| Alternatyvos dėl pašalinimo pagrindų ir kvalifikacijos | Du klausimai (naudotojo pasiūlymas): „Ar tikrinate tik pašalinimo pagrindus ar ir kvalifikaciją?“ („Tik pašalinimo pagrindus“ / „Pašalinimo pagrindus ir kvalifikaciją“) ir „Tik galimo laimėtojo ar visų tiekėjų tikriname?“ („Tik galimo laimėtojo“ / „Visų tiekėjų“) | įgyvendinta: variantas parenkamas pagal abu atsakymus; šablone nesantis derinys (AK, AKV, SSD, TSD - „visų tiekėjų, tik pašalinimo pagrindai“) nepasirenkamas ir pažymėtas; vienintelis - parenkamas ir pasakoma; ND ir MVP LT antro klausimo nėra (pasakoma kodėl); visi šablono variantai - „?“ paaiškinime |
+| Alternatyvos „Jei žalieji reikalavimai nurodyti TS / pirkimo sąlygose“ | Kur nustatomi žalieji reikalavimai? | patvirtinta, įgyvendinta |
+| Alternatyvos dėl pasiūlymo galiojimo užtikrinimo | Ar taikomas pasiūlymo galiojimo užtikrinimas? | tekstas patvirtintas; NEįgyvendinta - šablone 3 variantai (du „netaikomas“ skiriasi vertinimo kriterijumi), laukia sprendimo dėl kriterijaus klausimo (žr. žemiau) |
+| CPO pagrindimo formuluotė | Kodėl pirkimas vykdomas ne per CPO LT katalogą? | patvirtinta, įgyvendinta |
+| „X Eur“ (sutarties įvykdymo užtikrinimas) | Koks sutarties įvykdymo užtikrinimo dydis (Eur)? | patvirtinta, įgyvendinta (tame pačiame sakinyje „Sutarties projekto X punkte/priede“ - antras laukas su savo pavadinimu) |
+| DPS konkretaus pirkimo kriterijai „[arba pateikiama informacija ...]“ | Ar vertinama tik pagal kainą? | „Taip“ įgyvendinta: nurodymas pašalinamas LT ir EN, matoma peržiūroje ir patikroje („Pašalinta pagal jūsų atsakymus“), atsakymas privalomas. „Ne“ - naudotojo sprendimas: papildomas priedas su pavadinimu ir pastaba; tekstai laukia patvirtinimo, kol kas - kriterijų laukas kaip iki tol |
+
+Rasta ir ištaisyta kartu: MVP LT/EN variantas „... o kvalifikacija nėra tikrinama“ nebuvo atpažįstamas - dokumente likdavo 2
+(kvalifikacijos) lentelė; „X“ vieta raudoname sąlygos tekste (pvz. AK SPS 11.3 „... X Eur“) formoje niekada nepasirodydavo.
+
 ### Laukia patvirtinimo (Code pasiūlymas, nepatvirtinta)
 
-Šie tekstai naudotojui NErodomi - formoje vietoje jų rodomi struktūriniai klausimai („Kuris variantas atitinka šį
-pirkimą?“, „Ar taikoma sąlyga „...“?“, „Ar palikti šią šablono nuostatą dokumente?“, „Kokia formuluotė įrašoma?“,
-„Ką įrašyti vietoj „X“?“) ir šablono tekstas.
-
-| Vieta | Siūlomas klausimas |
-|---|---|
-| Alternatyvos „Jei Pirkimo objektas į dalis neskaidomas / skaidomas į dalis“ | Ar pirkimo objektas skaidomas į dalis? |
-| Alternatyvos „Jei numatoma / nenumatoma kviesti stebėtojus“ | Ar į komisijos posėdžius kviečiami stebėtojai? |
-| Alternatyvos dėl pašalinimo pagrindų ir kvalifikacijos | Kas ir iš ko tikrinama: pašalinimo pagrindai, kvalifikacija? |
-| Alternatyvos „Jei žalieji reikalavimai nurodyti TS / pirkimo sąlygose“ | Kur nustatomi žalieji reikalavimai? |
-| Alternatyvos dėl pasiūlymo galiojimo užtikrinimo | Ar taikomas pasiūlymo galiojimo užtikrinimas? |
-| CPO pagrindimo formuluotė | Kodėl pirkimas vykdomas ne per CPO LT katalogą? |
-| „X Eur“ (sutarties įvykdymo užtikrinimas) | Koks sutarties įvykdymo užtikrinimo dydis (Eur)? |
-| DPS konkretaus pirkimo kriterijai „[arba pateikiama informacija ...]“ | Ar vertinama tik pagal kainą? „Taip“ - nurodymas pašalinamas; „Ne“ - įrašykite kriterijus (dabar: tuščias nurodymas lieka, patikra jį rodo) |
+- **Vertinimo kriterijus SPS** (5 klausimui): naujas klausimas „Pagal kokį kriterijų vertinami pasiūlymai?“ (šablono 8.1 p. variantai:
+  kainą / sąnaudas / kainos ir kokybės santykį / sąnaudų ir kokybės santykį). Lemtų: 8.1 p. lieka tik pasirinktas (dabar sugeneruotame SPS
+  lieka visi keturi - sąrašas šablone juodas, modulis jo neklausia); metodikos priedas („jei Pasiūlymai vertinami pagal sąnaudas, kainos ar
+  sąnaudų ir kokybės santykį“) - visiems, išskyrus kainą; galiojimo užtikrinimo „netaikomas“ variantas. Kainos atveju - ar trinti 8.1 p. sakinį
+  „... metodika pateikiama SPS priede Nr.__“. Alternatyva - 5 klausime palikti 3 šablono variantus.
+- **DPS „Ne“** (8 klausimui): priedo numeris - kitas po paskutinės sąrašo eilutės (7); sąrašo eilutė „7 priedas – Ekonomiškai naudingiausio
+  pasiūlymo vertinimo metodika.“ / „Annex 7 – Methodology for evaluating the most economically advantageous tender.“; 2.5 p. „... išrenka pagal
+  pasiūlymų vertinimo kriterijus ir tvarką, nurodytus šio konkretaus pirkimo sąlygų 7 priede.“ / „... according to the evaluation criteria and
+  procedure set out in Annex 7 to these conditions.“; priedo failas - „Konkretaus pirkimo sąlygų 7 priedas“, „EKONOMIŠKAI NAUDINGIAUSIO
+  PASIŪLYMO VERTINIMO METODIKA“, raudona pastaba „Pridėkite ekonominio naudingumo vertinimo kriterijus ir tvarką.“; DPS LT/EN šablono
+  klaidos „Annex 7“ (6-as priedas) ir „ANEXXES“ - taisyti generatoriuje.
 
 ### Brūkšniai (C6)
 
