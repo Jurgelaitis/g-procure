@@ -530,6 +530,80 @@ const GPDocx = (() => {
     return n;
   }
 
+  /* ---------- TURINIO SPRAGOS (2026-10-04, naudotojo prašymas: DPS LT sąlygų turinyje nėra 10 skyriaus) ----------
+     Šablone skyriaus antraštė gali būti ne antraštės stiliumi ir be turinio žymės (DPSK_LT_SALYGOS 10 sk. - ListParagraph, kitų
+     skyrių - Heading3), tad turinyje jos nėra ir Word jos neįtrauktų net atnaujindamas laukus. Jei numeruota DIDŽIOSIOMIS
+     antraštė N (ne lentelėje, ne turinyje) stovi tarp turinyje esančių N-1 ir N+1 skyrių antraščių, o pati turinyje nėra:
+     antraštė gauna N-1 antraštės pastraipos ir teksto formatavimą (stilius, lygiavimas, šriftas - kaip kaimyninių skyrių; Pages
+     turinį perstato pats pagal stilius, Word - pagal stiliaus turinio lygį) ir turinio žymę, o turinyje po N-1 eilutės įterpiama
+     eilutė (N-1 eilutės kopija su antraštės tekstu; puslapis - N+1 eilutės, Word perskaičiuos). Tekstas nekeičiamas.
+     Grąžina įterptų turinio eilučių tekstus. */
+  function turinioSpragos(doc){
+    const d = doc.parts['word/document.xml'], body = els(d, 'body')[0];
+    const toc = /^_Toc/;
+    const eil = els(d, 'p').filter(p => els(p, 'hyperlink').some(h => toc.test(h.getAttributeNS(NS_W, 'anchor'))) && els(p, 'instrText').some(t => /PAGEREF/.test(t.textContent)));
+    if (eil.length < 2) return [];
+    const zymes = new Map(els(d, 'bookmarkStart').map(b => [b.getAttributeNS(NS_W, 'name'), b]));
+    const pastraipa = b => { let u = b; while (u && u.localName !== 'p') u = u.parentNode; if (u) return u;
+      for (u = b.nextSibling; u; u = u.nextSibling) if (u.localName === 'p') return u; return null; };
+    const nr = p => (paraText(p).trim().match(/^(\d+)\.(?!\d)/) || [])[1];
+    const zinomi = new Map();
+    eil.forEach(e => {
+      const a = els(e, 'hyperlink').map(h => h.getAttributeNS(NS_W, 'anchor')).find(x => toc.test(x)), b = zymes.get(a), h = b && pastraipa(b), n = h && nr(h);
+      if (n && !zinomi.has(n)) zinomi.set(n, { eil: e, h });
+    });
+    const viduje = (p, tag) => { for (let u = p.parentNode; u && u !== body; u = u.parentNode) if (u.localName === tag) return true; return false; };
+    const pPr = p => Array.from(p.childNodes).find(c => c.localName === 'pPr');
+    let id = Math.max(0, ...els(d, 'bookmarkStart').map(b => +b.getAttributeNS(NS_W, 'id') || 0));
+    const out = [];
+    els(body, 'p').forEach(p => {
+      if (viduje(p, 'sdtContent') || viduje(p, 'tbl') || eil.includes(p)) return;
+      const n = nr(p);
+      if (!n || zinomi.has(n)) return;
+      const t = paraText(p).trim(), be = t.replace(/^\d+\.\s*/, '');
+      if (be.length < 8 || be !== be.toUpperCase() || !/[A-ZĄČĘĖĮŠŲŪŽ]/.test(be)) return;
+      const pr = zinomi.get(String(+n - 1)), po = zinomi.get(String(+n + 1));
+      if (!pr || !po || !(pr.h.compareDocumentPosition(p) & 4) || !(p.compareDocumentPosition(po.h) & 4)) return;
+      // turinio žymė ir eilutė - N-1 eilutės kopija (pirma - jei nepavyktų, antraštė nekeičiama)
+      const vardas = '_TocGP' + n + '_' + (++id), bs = d.createElementNS(NS_W, 'w:bookmarkStart'), bz = d.createElementNS(NS_W, 'w:bookmarkEnd');
+      bs.setAttributeNS(NS_W, 'w:id', String(id)); bs.setAttributeNS(NS_W, 'w:name', vardas); bz.setAttributeNS(NS_W, 'w:id', String(id));
+      const k = pr.eil.cloneNode(true);
+      ['paraId', 'textId'].forEach(a => k.removeAttributeNS('http://schemas.microsoft.com/office/word/2010/wordml', a));
+      const hl = els(k, 'hyperlink').find(h => toc.test(h.getAttributeNS(NS_W, 'anchor'))), senas = hl.getAttributeNS(NS_W, 'anchor');
+      hl.setAttributeNS(NS_W, 'w:anchor', vardas);
+      const visi = els(k, '*'), pradzia = visi.findIndex(e => e.localName === 'fldChar' && e.getAttributeNS(NS_W, 'fldCharType') === 'begin');
+      const tekstai = visi.slice(0, pradzia < 0 ? visi.length : pradzia).filter(e => e.localName === 't');
+      if (!tekstai.length) return;
+      tekstai.forEach((e, i) => { e.textContent = i ? '' : t; });
+      els(k, 'instrText').forEach(e => { e.textContent = e.textContent.split(senas).join(vardas); });
+      const psl = els(po.eil, '*'), sep = psl.findIndex(e => e.localName === 'fldChar' && e.getAttributeNS(NS_W, 'fldCharType') === 'separate');
+      const puslapis = sep < 0 ? null : psl.slice(sep).find(e => e.localName === 't');
+      const kv = els(k, '*'), ks = kv.findIndex(e => e.localName === 'fldChar' && e.getAttributeNS(NS_W, 'fldCharType') === 'separate');
+      const kt = ks < 0 ? null : kv.slice(ks).find(e => e.localName === 't');
+      if (kt && puslapis) kt.textContent = puslapis.textContent;
+      // formatavimas - kaip N-1 antraštės: pastraipos savybės (be numeracijos; sekcijos lūžis, jei buvo, lieka) ir teksto savybės
+      // (paliekami tik akcentai: kursyvas, pabraukimas, spalva ir pan.)
+      const senasPPr = pPr(p), naujas = pPr(pr.h) ? pPr(pr.h).cloneNode(true) : d.createElementNS(NS_W, 'w:pPr');
+      Array.from(naujas.childNodes).filter(c => ['numPr', 'sectPr', 'pPrChange'].includes(c.localName)).forEach(c => naujas.removeChild(c));
+      const sekc = senasPPr && Array.from(senasPPr.childNodes).find(c => c.localName === 'sectPr');
+      if (sekc) naujas.appendChild(sekc);
+      if (senasPPr) p.replaceChild(naujas, senasPPr); else p.insertBefore(naujas, p.firstChild);
+      const pavyzdys = els(pr.h, 'r').find(r => els(r, 't').some(x => x.textContent.trim()));
+      const rprP = pavyzdys && Array.from(pavyzdys.childNodes).find(c => c.localName === 'rPr');
+      const AKCENTAI = ['i', 'iCs', 'u', 'strike', 'dstrike', 'vertAlign', 'highlight', 'color'];
+      els(p, 'r').forEach(r => {
+        const sen = Array.from(r.childNodes).find(c => c.localName === 'rPr'), nauj = rprP ? rprP.cloneNode(true) : d.createElementNS(NS_W, 'w:rPr');
+        if (sen) Array.from(sen.childNodes).filter(c => AKCENTAI.includes(c.localName) && !Array.from(nauj.childNodes).some(x => x.localName === c.localName)).forEach(c => nauj.appendChild(c.cloneNode(true)));
+        if (sen) r.replaceChild(nauj, sen); else r.insertBefore(nauj, r.firstChild);
+      });
+      p.insertBefore(bs, naujas.nextSibling); p.appendChild(bz);
+      pr.eil.parentNode.insertBefore(k, pr.eil.nextSibling);
+      zinomi.set(n, { eil: k, h: p });
+      out.push(t);
+    });
+    return out;
+  }
+
   async function save(doc, type='blob'){
     for (const [path, xml] of Object.entries(doc.parts)){
       // createFolders:false - kitaip JSZip prideda kataloginius irasus ("word/"),
@@ -540,7 +614,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus, pertekliniaiLuziai,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 

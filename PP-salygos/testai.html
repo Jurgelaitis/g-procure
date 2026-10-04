@@ -2102,6 +2102,42 @@ async function testaiLenteles(){
     tiesa(/Tušti puslapiai: pašalinti puslapio lūžiai/.test(D.getElementById("rezultatas").textContent.replace(/\s+/g, " ")), "patikroje pasakyta apie tuščius puslapius");
     tiesa(!Object.keys(await generuokSu({ budas: "DPS", kalba: "LT_EN" })).some(k => /_GULSTI$/.test(k)), "DPS LT/EN (be gulsčių skyrių stačiame dokumente) - neskaidoma");
   });
+  await testas("Turinio spragos (GPDocx.turinioSpragos): DPS LT sąlygų 10 skyrius (šablone ListParagraph, be turinio žymės) - turinyje tarp 9 ir 11, antraštė - kaip kaimyninių skyrių (stilius, šriftas; Pages turinį perstato pagal stilių), žymė, į kurią rodo turinys; tekstas nepakitęs; pilnas turinys (AK LT) nekeičiamas; patikroje pasakyta", async () => {
+    const be = await generuokSu({ budas: "DPS", pries: () => { const G = W.eval("GPDocx"); G.turinioSpragos = () => []; } });
+    const su = await generuokSu({ budas: "DPS" }), x = su.DPSK_LT_SALYGOS;
+    tiesa(/Turinys: .*įterpta trūkstama skyriaus eilutė.*10\. EBVPD PATEIKIMO TVARKA/.test(D.getElementById("rezultatas").textContent.replace(/\s+/g, " ")), "patikroje pasakyta");
+    lygu(x.r.stats.turinioEilutes.map(t => t.slice(0, 30)), ["10. EBVPD PATEIKIMO TVARKA IR "], "įterpta eilutė");
+    const d = new W.DOMParser().parseFromString(x.xml, "application/xml");
+    const p = Array.from(d.getElementsByTagNameNS(NSW, "p"));
+    const tur = p.filter(q => Array.from(q.getElementsByTagNameNS(NSW, "hyperlink")).some(h => /^_Toc/.test(atW(h, "anchor"))));
+    const nr = q => (txW(q).match(/^(\d+)\./) || [])[1], numeriai = tur.map(nr).filter(Boolean).slice(0, 15);
+    lygu(numeriai, ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"], "turinio skyriai iš eilės");
+    const e10 = tur.find(q => nr(q) === "10"), anchor = atW(Array.from(e10.getElementsByTagNameNS(NSW, "hyperlink"))[0], "anchor");
+    const zyme = Array.from(d.getElementsByTagNameNS(NSW, "bookmarkStart")).find(b => atW(b, "name") === anchor);
+    let h10 = zyme; while (h10 && h10.localName !== "p") h10 = h10.parentNode;
+    const h9 = p.find(q => !tur.includes(q) && /^9\. TIEKĖJŲ KVALIFIKACIJOS/.test(txW(q)));
+    const st = q => atW(elW(elW(q, "pPr")[0], "pStyle")[0], "val"), rpr = q => new W.XMLSerializer().serializeToString(elW(elW(q, "r").find(r => txW(r).trim()), "rPr")[0]);
+    tiesa(h10 && /^10\. EBVPD PATEIKIMO TVARKA/.test(txW(h10)) && st(h10) === st(h9) && st(h9) === "Heading3" && rpr(h10) === rpr(h9), "antraštė kaip 9 skyriaus: " + (h10 && st(h10)) + " / " + st(h9));
+    tiesa(Array.from(e10.getElementsByTagNameNS(NSW, "instrText")).some(t => t.textContent.includes(anchor)), "turinio eilutės PAGEREF rodo į antraštės žymę");
+    lygu(x.pars.filter(q => !/PAGEREF/.test(q)).join("\n"), be.DPSK_LT_SALYGOS.pars.filter(q => !/PAGEREF/.test(q)).join("\n"), "tekstas už turinio nepakitęs");
+    const ak = await generuokSu({ budas: "T-AK" });
+    tiesa(Object.values(ak).every(y => !y.r.stats || !(y.r.stats.turinioEilutes || []).length), "pilno turinio dokumentai nekeičiami");
+  });
+  await testas("Turinio spragos sintetiniame dokumente: numeruota pastraipa mažosiomis tarp 9 ir 11 skyriaus ir „10.“ už 11 skyriaus į turinį nepatenka, antraštė DIDŽIOSIOMIS tarp jų - patenka po 9 eilutės su jos formatavimu", async () => {
+    const eil = (n, z, t, psl) => `<w:p><w:pPr><w:pStyle w:val="TOC3"/></w:pPr><w:hyperlink w:anchor="${z}"><w:r><w:t>${n}. ${t}</w:t></w:r><w:r><w:tab/></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGEREF ${z} \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>${psl}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:hyperlink></w:p>`;
+    const ant = (n, z, t, id) => `<w:p><w:pPr><w:pStyle w:val="Heading3"/><w:jc w:val="center"/></w:pPr><w:bookmarkStart w:id="${id}" w:name="${z}"/><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${n}. ${t}</w:t></w:r><w:bookmarkEnd w:id="${id}"/></w:p>`;
+    const dok = (vidurys, po = "") => ({ parts: { "word/document.xml": new W.DOMParser().parseFromString(`<w:document xmlns:w="${NSW}"><w:body>${eil(9, "_Toc9", "DEVINTAS SKYRIUS", 3)}${eil(11, "_Toc11", "VIENUOLIKTAS SKYRIUS", 4)}
+      ${ant(9, "_Toc9", "DEVINTAS SKYRIUS", 1)}<w:p><w:r><w:t>9.1. Tekstas.</w:t></w:r></w:p>${vidurys}${ant(11, "_Toc11", "VIENUOLIKTAS SKYRIUS", 2)}${po}<w:sectPr/></w:body></w:document>`, "application/xml") } });
+    const G = W.eval("GPDocx");
+    const a = dok(`<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr><w:r><w:t>10. Tiekėjas pateikia dokumentus pagal sąrašą.</w:t></w:r></w:p>`);
+    lygu(G.turinioSpragos(a), [], "pastraipa mažosiomis - ne antraštė");
+    lygu(G.turinioSpragos(dok("", `<w:p><w:r><w:t>10. PRIEDO PUNKTAS DIDŽIOSIOMIS</w:t></w:r></w:p>`)), [], "„10.“ už 11 skyriaus (pvz. priede) - ne trūkstamas skyrius");
+    const b = dok(`<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>10. DEŠIMTAS SKYRIUS</w:t></w:r></w:p>`);
+    lygu(G.turinioSpragos(b), ["10. DEŠIMTAS SKYRIUS"], "antraštė didžiosiomis - į turinį");
+    const ps = Array.from(b.parts["word/document.xml"].getElementsByTagNameNS(NSW, "p"));
+    lygu([ps.slice(0, 3).map(txW), atW(elW(elW(ps.find(q => txW(q) === "10. DEŠIMTAS SKYRIUS" && !elW(q, "hyperlink").length), "pPr")[0], "pStyle")[0], "val")],
+      [["9. DEVINTAS SKYRIUS3", "10. DEŠIMTAS SKYRIUS4", "11. VIENUOLIKTAS SKYRIUS4"], "Heading3"], "turinio tvarka ir antraštės stilius");
+  });
   await testas("Tušti puslapiai (GPDocx.pertekliniaiLuziai): puslapio lūžis, po kurio iki naujo puslapio skyriaus ar dokumento pabaigos - tik tuščios pastraipos, šalinamas; lūžis prieš tekstą, prieš „continuous“ skyrių ir su tekstu po jo - lieka; tekstas nepakitęs", async () => {
     const br = '<w:r><w:br w:type="page"/></w:r>', P = t => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`, T = '<w:p/>';
     const sp = (tipas = "") => `<w:sectPr>${tipas ? `<w:type w:val="${tipas}"/>` : ""}<w:pgSz w:w="11906" w:h="16838"/></w:sectPr>`;
