@@ -42,10 +42,10 @@ Nėra (2026-10-04 vakare naudotojas pritarė 5 klausimo A variantui ir 8 klausim
 
 ### Brūkšniai (C6)
 
-Mano sąsajos eilutėse ilgojo brūkšnio nėra. Šablonų tekste - „–“ 1771 vieta ir ilgasis brūkšnys 5 vietose (žr. 9 sk.).
-Pasiūlymas: šablonų nekeisti (LITGRID tekstas), o generuojamame dokumente juos jau keičia `shared/docx-stiliai.js`
-tik įrašomam tekstui; jei norite - ilgąjį brūkšnį angliškame sakinyje („required[U+2014]submission“) galima įtraukti į
-`sablonu-taisymai.py` kaip šablono klaidą.
+Mano sąsajos eilutėse ilgojo brūkšnio nėra. Šablonų tekste - „–“ 1771 vieta (LITGRID tekstas, nekeičiamas). Ilgasis brūkšnys (U+2014) buvo tik
+angliškame sakinyje „... no supporting documents are required[U+2014]submission of the ESPD is sufficient.“ 6 šablonuose - naudotojo sprendimu
+(2026-10-04: ilgojo brūkšnio nenaudoti nei LT, nei EN) `sablonu-taisymai.py` jį keičia į „ - “ visuose šablonuose (ir būsimuose); testas tikrina
+visus šablonus ir žemėlapius.
 
 
 Sudaryta 2026-10-03 iš tikro modulio (`PP-salygos/PP-SALYGOS.html`, commit 59cf088): 2 žingsnis atvertas visiems 24 pirkimo būdo ir kalbos deriniams (11 būdų x LT ir LT/EN, plius centralizuotas atviras konkursas x 2), su visomis sąlygų šakomis. Tai tyrimo dokumentas - modulio kodas nekeistas.
