@@ -1,9 +1,9 @@
 /* ============================================================================
- * G-Procure  shared/teise-stebesena.js   (v1.1)
+ * G-Procure  shared/teise-stebesena.js   (v1.2)
  * ----------------------------------------------------------------------------
  * Pirkimų teisės stebėsenos BRANDUOLYS (window.GP_STEBESENA) - vienas visiems:
  * PP-teise modulis (sąrašas, vaizdai, paieška, peržiūrų žurnalas), administravimo
- * aplinka, portalo blokas ir kontekstinės nuorodos PP-qual / PP-salygos.
+ * aplinka, portalo blokas, PP-qual kontekstinis blokas ir PP-salygos pokyčiai šiam pirkimui.
  *
  * KAS ČIA GYVENA (ir todėl NEdubliuojama moduliuose):
  *   - įrašo schema, būsenos, rūšys, šaltinių tipai, temos, moduliai;
@@ -19,7 +19,10 @@
  *     naudotojo duomenų neliečia - kaip shared/backup.js);
  *   - įkėlimas: NEPAVYKUSI patikra grąžina klaidą, o ne „pokyčių nėra“;
  *   - portalo blokas: iki trijų įrašų pagal REDAKCINĮ prioritetą (`portalas.prioritetas`,
- *     nustatomas administravimo aplinkoje) - automatinio „aktualumo“ neišgalvojama.
+ *     nustatomas administravimo aplinkoje) - automatinio „aktualumo“ neišgalvojama;
+ *   - pokyčiai konkrečiam pirkimui modulyje (nuo 2026-10-04, PP-salygos „Prieš generuojant“):
+ *     pirkimuiIrasai() / pirkimuiHTML() pagal pirkimo kontekstą, neaktualūs - suskleisti su priežastimi;
+ *     ikelkKarta() - registras įkeliamas vieną kartą puslapiui.
  *
  * DUOMENYS. Registras - PP-teise/duomenys/registras.json (bendras, repozitorijoje,
  * pildomas rankiniu / administratoriaus importu - automatinės jungties su e-tar
@@ -430,8 +433,11 @@
 
   /* ---------- Aktualumas pagal pirkimo kontekstą ---------- */
 
-  /* ctx: { rezimas: "PI"|"VPI", procedura, objektas, etapas, skelbimoData (YYYY-MM-DD) }
+  /* ctx: { rezimas: "PI"|"VPI", procedura, objektas, etapas, skelbimoData (YYYY-MM-DD), griezta }
      Grąžina { lygis: "aktualu"|"galimai"|"neaktualu"|"nezinoma", priezastys: [..] }.
+     Įprastai dalinis sutapimas - „galimai“ (PP-teise „Mano pirkimas“: kontekstas dažnai neišsamus). griezta: true - konkrečiam
+     pirkimui, kurio požymiai žinomi (modulio „Prieš generuojant“): nesutapus bent vienam patikrintam požymiui - „neaktualu“
+     (rodoma su priežastimi, ne slepiama); nenurodyti požymiai ir datos - kaip įprastai.
      Kai įrašas neturi aktualumo požymių arba jie pažymėti nežinomais - „nezinoma“.
      Teisiškai reikšmingos datos: jei planuojama skelbimo data ankstesnė už
      įsigaliojimą - dar netaikoma, bet rodoma su pereinamąja nuostata. */
@@ -451,17 +457,26 @@
       return { lygis: "nezinoma", priezastys: pr };
     }
     var lygis = "galimai", atitiko = 0, tikrinta = 0;
+    // priežastyje - žodyno pavadinimai, ne registro kodai („Transliavimo laikas, programos“, ne „media“)
+    var pav = function (zod, k) { return zod[k] ? zod[k][L] : k; };
+    /* reiksme - viena reikšmė arba sąrašas (atitinka, kai sutampa bent viena): modulio objektų žodynas stambesnis už
+       registro - pvz. PP-salygos „darbai“ tikrinami ir kaip „statyba“ (naudotojo sprendimas 2026-10-04). */
     function tik(saras, reiksme, zod) {
       if (!saras) return;                           // null = taikoma visiems
-      if (!reiksme) { pr.push(t("Nenurodyta: " + zod.lt, "Not specified: " + zod.en)); return; }
+      var rs = Array.isArray(reiksme) ? reiksme.filter(Boolean) : (reiksme ? [reiksme] : []);
+      if (!rs.length) { pr.push(t("Nenurodyta: " + zod.lt, "Not specified: " + zod.en)); return; }
       tikrinta++;
-      if (saras.indexOf(reiksme) !== -1) { atitiko++; }
-      else pr.push(t(zod.lt + " neatitinka (" + saras.join(", ") + ")", zod.en + " does not match (" + saras.join(", ") + ")"));
+      if (rs.some(function (v) { return saras.indexOf(v) !== -1; })) { atitiko++; }
+      else {
+        var sv = saras.map(function (k) { return pav(zod.zod || {}, k); }).join(", ");
+        pr.push(t(zod.lt + " neatitinka (įrašas taikomas: " + sv + ")", zod.en + " does not match (entry applies to: " + sv + ")"));
+      }
     }
-    tik(A.proceduros, c.procedura, { lt: "pirkimo būdas", en: "procedure" });
-    tik(A.objektai, c.objektas, { lt: "pirkimo objektas", en: "object" });
-    tik(A.etapai, c.etapas, { lt: "etapas", en: "stage" });
-    if (tikrinta && atitiko === tikrinta) lygis = "aktualu";
+    tik(A.proceduros, c.procedura, { lt: "pirkimo būdas", en: "procedure", zod: PROCEDUROS });
+    tik(A.objektai, c.objektas, { lt: "pirkimo objektas", en: "object", zod: OBJEKTAI });
+    tik(A.etapai, c.etapas, { lt: "etapas", en: "stage", zod: ETAPAI });
+    if (c.griezta && tikrinta && atitiko < tikrinta) lygis = "neaktualu";
+    else if (tikrinta && atitiko === tikrinta) lygis = "aktualu";
     else if (tikrinta && atitiko === 0) lygis = "neaktualu";
     else if (!tikrinta && !A.proceduros && !A.objektai && !A.etapai) lygis = "aktualu";
     if (yraData(c.skelbimoData) && r.datos.isigalioja) {
@@ -658,6 +673,8 @@
       ".gps__foot details{font-size:13px}.gps__foot summary{cursor:pointer;color:var(--color-emerald-strong,#007554);font-weight:700}",
       ".gps__err{padding:10px 12px;border-radius:8px;background:var(--color-error-5,#FBEBEE);color:#7F1722;font-weight:700}",
       ".gps__warn{padding:8px 10px;border-radius:8px;background:var(--color-warning-5,#FEF6E8);color:#6B4A00;font-size:13px;margin-bottom:8px}",
+      ".gps__kiti{margin-top:10px;font-size:14px}.gps__kiti summary{cursor:pointer;color:var(--color-emerald-strong,#007554);font-weight:700}.gps__kiti .gps__list{margin-top:8px}",
+      ".gps__item--kitas{grid-template-columns:minmax(0,1fr)}.gps__sub b{font-weight:700;color:var(--color-graphite,#2E3641)}",
       ".gps__tag{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;border-radius:20px;border:1px solid var(--color-graphite-30,#C7CDD3);color:var(--color-graphite-50-strong,#5B6470);margin-left:6px;vertical-align:middle}",
       "@media (max-width:1023px){.gps--portalas .gps__list{grid-template-columns:1fr 1fr}}",
       // Siaurai datos žyma gali lūžti tarp žodžių (pati data „2026-07-01“ nelūžta): 320 px su Windows slinkties juosta PP-qual kortelėje
@@ -678,7 +695,10 @@
           be_datos: "data nenurodyta", tuscias: "Registre įrašų nėra",
           paskirtis: "Kas pasikeitė pirkimų teisėje, nuo kada galioja, kam aktualu ir ką reikia peržiūrėti - vienas registras PĮ ir VPĮ pirkimams, su nuorodomis į šaltinius ir susijusius įrankius.",
           beprioriteto: "Aktualūs įrašai portalui dar neparinkti: redakcinį prioritetą įrašui suteikia administratorius (PP-teise/admin.html), automatiškai jis neskaičiuojamas. Visą registrą rasite stebėsenos puslapyje.",
-          apie: "Apie rinkinį", versija: "Rinkinio versija", apreptis: "Aprėptis", prioritetas: "Rodoma pagal redakcinį prioritetą, ne pagal naujumą" },
+          apie: "Apie rinkinį", versija: "Rinkinio versija", apreptis: "Aprėptis", prioritetas: "Rodoma pagal redakcinį prioritetą, ne pagal naujumą",
+          pirkimui: "Teisės pokyčiai šiam pirkimui", pirkimuiNera: "Su šiuo įrankiu susietų ir šiam pirkimui aktualių įrašų registre nėra.",
+          neaktualus: "Pagal jūsų atsakymus neaktualūs", kaDaryti: "Ką daryti", kaPatikrinti: "Ką patikrinti",
+          galimai: "galimai aktualu", nenustatyta: "aktualumas nenustatytas", negalima: "Teisės pokyčių šiam pirkimui patikrinti negalima." },
     en: { pav: "Procurement law monitoring", kraunama: "Loading...", klaida: "Could not load monitoring data",
           visi: "All changes", atverti: "Open monitoring", isigalios: "Enters into force", pasikeite: "Changed", projektas: "Draft",
           laukia: "awaiting specialist confirmation", nepatvirtinta: "explanation not confirmed", patikrinta: "Set checked",
@@ -687,7 +707,10 @@
           be_datos: "date not specified", tuscias: "No entries in the registry",
           paskirtis: "What changed in procurement law, since when, who it concerns and what needs review - one registry for utilities and public procurement, with links to sources and related tools.",
           beprioriteto: "Entries for the portal have not been selected yet: an editorial priority is assigned by the administrator (PP-teise/admin.html), it is never computed automatically. The full registry is on the monitoring page.",
-          apie: "About the set", versija: "Set version", apreptis: "Scope", prioritetas: "Shown by editorial priority, not by recency" }
+          apie: "About the set", versija: "Set version", apreptis: "Scope", prioritetas: "Shown by editorial priority, not by recency",
+          pirkimui: "Legal changes for this procurement", pirkimuiNera: "The registry has no entries linked to this tool that are relevant to this procurement.",
+          neaktualus: "Not relevant based on your answers", kaDaryti: "What to do", kaPatikrinti: "What to check",
+          galimai: "possibly relevant", nenustatyta: "relevance not determined", negalima: "Legal changes for this procurement cannot be checked." }
   };
 
   function atgal(kelias) { return (kelias || "").replace(/\/+$/, ""); }
@@ -791,6 +814,93 @@
     });
   }
 
+  /* ---------- Teisės pokyčiai konkrečiam pirkimui (modulio „Prieš generuojant“, nuo 2026-10-04) ----------
+     Iki tol moduliai rodė mount() bloką puslapio viršuje: kiekvienam pirkimui tie patys įrašai (atrinkti tik pagal PĮ / VPĮ),
+     ~450 px prieš darbo pradžią. Dabar - pagal pirkimo kontekstą, kai jis žinomas: aktualūs (ir „galimai“, ir nenustatyti - jie
+     niekada neslepiami) su „ką patikrinti“ (modulio susiejimo `kas`) ir „ką daryti“ (`veiksmas`); neaktualūs - suskleisti su
+     priežastimi (modulio objektų žodynas stambesnis už registro: paslaugų pirkimas gali būti ir transliavimo laikas). */
+
+  /* Registras įkeliamas vieną kartą puslapiui (kontekstas keičiasi dažnai, registras - ne); nepavykęs - kitą kartą bandomas iš naujo. */
+  var KESAS = {};
+  function ikelkKarta(url, opts) {
+    if (opts && opts.fetch) return ikelk(url, opts);
+    if (!KESAS[url]) KESAS[url] = ikelk(url).then(function (r) { if (!r.ok) delete KESAS[url]; return r; });
+    return KESAS[url];
+  }
+
+  /* tikrinta - tikrink() rezultatas; ctx - kaip aktualumas(). Grąžina { aktualus: [{ irasas, aktualumas, kas }], neaktualus: [...] }:
+     be demonstracinių ir archyvo, tik su šiuo moduliu susieti; tas pats pakeitimas PĮ ir VPĮ (susije) tarp aktualių - vieną kartą;
+     įsigaliosiantys - artimiausi pirmi, kiti - naujausi pirmi; „aktualu“ prieš „galimai“ ir nenustatytus. */
+  var LYGIO_EILE = { aktualu: 0, galimai: 1, nezinoma: 2 };
+  function pirkimuiIrasai(tikrinta, modulis, ctx, dabar, lang) {
+    var d = dabar || dienaISO();
+    var visi = ((tikrinta && tikrinta.irasai) || []).filter(function (x) {
+      return !x.demo && skiltis(x, d) !== "archyvas" && x.moduliai.some(function (m) { return m.modulis === modulis; });
+    });
+    var eile = rikiuok(visi.filter(function (x) { return skiltis(x, d) === "isigalios"; }), "artimiausi")
+      .concat(rikiuok(visi.filter(function (x) { return skiltis(x, d) !== "isigalios"; }), "naujausi"));
+    var out = { aktualus: [], neaktualus: [] }, rodomi = {};
+    eile.forEach(function (x) {
+      var a = aktualumas(x, ctx, lang);
+      var m = x.moduliai.filter(function (y) { return y.modulis === modulis; })[0];
+      var v = { irasas: x, aktualumas: a, kas: m && m.kas ? m.kas : "" };
+      if (a.lygis === "neaktualu") { out.neaktualus.push(v); return; }
+      if (rodomi[x.id] || x.susije.some(function (id) { return rodomi[id]; })) return;
+      rodomi[x.id] = true;
+      out.aktualus.push(v);
+    });
+    out.aktualus.sort(function (a, b) { return LYGIO_EILE[a.aktualumas.lygis] - LYGIO_EILE[b.aktualumas.lygis]; });
+    return out;
+  }
+
+  /* rez - ikelk() / ikelkKarta() rezultatas (null - dar kraunama); cfg: { modulis, ctx, lang, saknis, dabar, kontekstas (žmogui:
+     pagal ką atrinkta), kasZyma, H ("h3" | "h4") }. Grąžina HTML eilutę. Nepavykęs įkėlimas NIEKADA nevirsta „įrašų nėra“. */
+  function pirkimuiHTML(rez, cfg) {
+    var c = cfg || {}, lang = c.lang === "en" ? "en" : "lt", T = TEKSTAI[lang];
+    if (global.document) stilius(global.document);
+    var H = c.H || "h4", saknis = atgal(c.saknis == null ? ".." : c.saknis);
+    var modulioUrl = (saknis ? saknis + "/" : "") + "PP-teise/index.html";
+    var visu = modulioUrl + (c.modulis ? "?modulis=" + encodeURIComponent(c.modulis) : "");
+    var galva = function (n) {
+      return '<div class="gps__head"><' + H + ' class="gps__title">' + esc(T.pirkimui) + (n == null ? "" : " (" + n + ")") + '</' + H + '>' +
+        (c.kontekstas ? '<span class="gps__meta">' + esc(c.kontekstas) + '</span>' : "") + '</div>';
+    };
+    var pabaiga = function (tekstas) { return '<div class="gps__foot"><span>' + esc(tekstas || "") + '</span><a href="' + esc(visu) + '">' + esc(T.visi) + ' →</a></div></section>'; };
+    if (!rez) return '<section class="gps gps--pirkimui">' + galva(null) + '<p class="gps__sub">' + esc(T.kraunama) + '</p></section>';
+    if (!rez.ok) return '<section class="gps gps--pirkimui">' + galva(null) + '<div class="gps__err" role="alert">' + esc(T.klaida) + ' (' + esc(rez.klaida) + '). ' +
+      esc(T.negalima) + '</div>' + pabaiga("");
+    var dabar = c.dabar || dienaISO();
+    var R = pirkimuiIrasai(rez.tikrinta, c.modulis, c.ctx, dabar, lang);
+    var pat = patikimumas(rez.tikrinta, null, dabar, lang);
+    var nuoroda = function (x) { return '<a class="gps__nuoroda" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(x.pavadinimas) + '</a>'; };
+    var h = '<section class="gps gps--pirkimui">' + galva(R.aktualus.length);
+    if (rez.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
+    if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';
+    if (!R.aktualus.length) h += '<p class="gps__sub">' + esc(T.pirkimuiNera) + '</p>';
+    else {
+      h += '<ul class="gps__list">';
+      R.aktualus.forEach(function (v) {
+        var x = v.irasas, sd = svarbiausiaData(x, dabar, lang), lyg = v.aktualumas.lygis;
+        h += '<li class="gps__item"><span class="gps__date' + (sd.ateitis ? " gps__date--future" : "") + '">' + esc(sd.zyma) + (sd.data ? " · " + esc(sd.data) : " · " + esc(T.be_datos)) + '</span>' +
+          '<div>' + nuoroda(x) + (x.busena !== "patvirtinta" ? '<span class="gps__tag">' + esc(BUSENOS[x.busena][lang]) + '</span>' : "") +
+          (lyg !== "aktualu" ? '<span class="gps__tag">' + esc(lyg === "galimai" ? T.galimai : T.nenustatyta) + '</span>' : "") +
+          (v.kas ? '<p class="gps__sub"><b>' + esc(c.kasZyma || T.kaPatikrinti) + ':</b> ' + esc(v.kas) + '</p>' : "") +
+          (x.veiksmas ? '<p class="gps__sub"><b>' + esc(T.kaDaryti) + ':</b> ' + esc(x.veiksmas) + '</p>' : "") +
+          (v.aktualumas.priezastys.length ? '<p class="gps__reiksme">' + esc(v.aktualumas.priezastys.join("; ")) + '</p>' : "") + '</div></li>';
+      });
+      h += '</ul>';
+    }
+    if (R.neaktualus.length) {
+      h += '<details class="gps__kiti"><summary>' + esc(T.neaktualus) + ' (' + R.neaktualus.length + ')</summary><ul class="gps__list">';
+      R.neaktualus.forEach(function (v) {
+        h += '<li class="gps__item gps__item--kitas"><div>' + nuoroda(v.irasas) + '<p class="gps__sub">' + esc(v.aktualumas.priezastys.join("; ")) + '</p></div></li>';
+      });
+      h += '</ul></details>';
+    }
+    var laukia = R.aktualus.filter(function (v) { return v.irasas.busena !== "patvirtinta"; }).length;
+    return h + pabaiga(pat.registrasTekstas + (laukia ? " · " + laukia + " " + T.laukia : ""));
+  }
+
   global.GP_STEBESENA = {
     BUSENOS: BUSENOS, RUSYS: RUSYS, SALTINIO_TIPAI: SALTINIO_TIPAI, REZIMAI: REZIMAI, TEMOS: TEMOS,
     MODULIAI: MODULIAI, PROCEDUROS: PROCEDUROS, OBJEKTAI: OBJEKTAI, ETAPAI: ETAPAI, PRIVALOMI: PRIVALOMI,
@@ -802,6 +912,6 @@
     aktualumas: aktualumas, filtruok: filtruok, tekstasPaieskai: tekstasPaieskai,
     rinkinioBusena: rinkinioBusena, patikimumas: patikimumas, portaloIrasai: portaloIrasai,
     perziuros: perziuros, pazymekPerziureta: pazymekPerziureta, atsaukPerziura: atsaukPerziura,
-    ikelk: ikelk, mount: mount, TEKSTAI: TEKSTAI
+    ikelk: ikelk, ikelkKarta: ikelkKarta, mount: mount, pirkimuiIrasai: pirkimuiIrasai, pirkimuiHTML: pirkimuiHTML, TEKSTAI: TEKSTAI
   };
 })(typeof window !== "undefined" ? window : this);
