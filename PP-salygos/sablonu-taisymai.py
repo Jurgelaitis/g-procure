@@ -333,6 +333,12 @@ def taisymas_tekstas(taisyk):
     dps = [(_re.compile(r'^\s*(ANEXXES)\s*$'), 'ANNEXES', 1)]
     if nd: dps.append((_re.compile(r'^Annex (\d+)\s*[–-]\s*Counterparty'), nd, 1))
     darbai.append(('DPSP_LTEN_SALYGOS.docx', dps))
+    # F. Ilgasis brūkšnys (U+2014) - nei LT, nei EN versijoje (naudotojo taisyklė 2026-10-04). Šablonuose - angliškas sakinys
+    #    „... no supporting documents are required[U+2014]submission of the ESPD is sufficient.“ (lietuviškai - kablelis); keičiama į
+    #    „ - “ su tarpais (be tarpų žodžiai susilietų). Taikoma visiems šablonams - ir būsimiems.
+    ilgas = [(_re.compile(r'\s*\u2014\s*'), ' - ', 0)]
+    for f in sorted(p.name for p in TPL.glob('*.docx')):
+        darbai.append((f, ilgas))
     for f, poros in darbai:
         path = TPL / f
         with zipfile.ZipFile(path) as zin:
