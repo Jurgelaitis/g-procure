@@ -3624,6 +3624,8 @@ async function generuotiViena(d, REZ){
   // 12. Gulsti priedai stačiame dokumente (2026-10-04, naudotojo sprendimas): Pages visam dokumentui taiko pirmojo skyriaus
   //     orientaciją, tad gulsčius priedus rodo stačius ir jų lenteles nukerpa - jie generuojami atskirame (gulsčiame) faile.
   const gulsti = await GPDocx.atskirkGulsciusPriedus(doc);
+  // 13. Puslapio lūžis prieš naują skyrių ar dokumento pabaigą (tik tuščios pastraipos tarp) - tuščias puslapis: šalinamas
+  const tusciPuslapiai = GPDocx.pertekliniaiLuziai(doc);
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
   let gulsciasPriedas = null;
@@ -3631,12 +3633,14 @@ async function generuotiViena(d, REZ){
     const nr = gulsti.numeriai, nrT = nr.length > 1 && nr.every((x, i) => !i || x === nr[i - 1] + 1) ? nr[0] + '-' + nr[nr.length - 1] : nr.join(', ');
     const dok = nr.length ? `Pirkimo sąlygų ${nrT} ${nr.length > 1 ? 'priedai' : 'priedas'}` : 'Pirkimo sąlygų priedai';
     gulsciasPriedas = { d: { trumpas: d.trumpas + '_GULSTI', pavadinimas: `${dok} (gulsčias puslapis, iš „${d.pavadinimas}“)`, dokumentas: dok },
-      sablonas: d.trumpas, blob: await GPDocx.save(gulsti.doc, 'blob'), audit: GPAudit.check(gulsti.doc, IMONE, forma), forma, gulscias: true, stats: {} };
+      sablonas: d.trumpas, stats: { tusciPuslapiai: GPDocx.pertekliniaiLuziai(gulsti.doc) }, forma, gulscias: true };
+    gulsciasPriedas.audit = GPAudit.check(gulsti.doc, IMONE, forma);
+    gulsciasPriedas.blob = await GPDocx.save(gulsti.doc, 'blob');
   }
   return { d, blob, audit, forma, numeracija, lenteles: lentFormatas, gulsciasPriedas,
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
-                   numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr } };
+                   numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai } };
 }
 
 /* DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“, naudotojo sprendimas 2026-10-04): { nr } arba null. */
@@ -3911,6 +3915,9 @@ function rodykRezultata(rez){
     if (sum('netelpa')) h += `<div class="audit no" style="margin-top:6px"><b>Lentelės:</b> ${sum('netelpa')} eilučių net suskaidžius gali būti aukštesnės už puslapį (viena pastraipa ilgesnė už puslapį) - Pages jų pabaigą gali nukirpti; Word jas dalija.</div>`;
   }
   // Gulsti priedai - atskiras failas (Pages visam dokumentui taiko pirmojo skyriaus orientaciją): kas iškelta ir kas pašalinta iš turinio
+  const tp = rez.filter(r => r.stats && r.stats.tusciPuslapiai);
+  if (tp.length) h += `<div class="audit ok" style="margin-top:10px"><b>Tušti puslapiai:</b> pašalinti puslapio lūžiai, po kurių iki naujo skyriaus
+    (jis ir taip prasideda naujame puslapyje) ar dokumento pabaigos buvo tik tuščios pastraipos - ${tp.map(r => `${esc(r.d.pavadinimas)} (${r.stats.tusciPuslapiai})`).join(', ')}. Tekstas nekeistas.</div>`;
   rez.filter(r => r.atskirta && r.gulsciasPriedas).forEach(r => {
     const a = r.atskirta;
     h += `<div class="audit ok" style="margin-top:10px"><b>Gulsti priedai - atskiras failas:</b> ${esc(r.gulsciasPriedas.d.dokumentas)} iš „${esc(r.d.pavadinimas)}“ -

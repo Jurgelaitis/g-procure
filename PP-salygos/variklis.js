@@ -493,6 +493,43 @@ const GPDocx = (() => {
     return { doc: B, numeriai, turinys, nuorodos };
   }
 
+  /* ---------- PERTEKLINIAI PUSLAPIO LŪŽIAI (2026-10-04, naudotojo prašymas: tuščias puslapis tarp DPS 5 ir 6 priedo) ----------
+     Puslapio lūžis, po kurio iki kito skyriaus, prasidedančio nauju puslapiu, ar iki dokumento pabaigos - tik tuščios pastraipos,
+     duoda tuščią puslapį (Word ir Pages): naujas skyrius ir taip prasideda naujame puslapyje. Toks lūžis šalinamas, tekstas
+     nekeičiamas. Kaip prasideda skyrius, nurodo JO sectPr (pabaigoje) w:type, numatyta - nextPage. Grąžina pašalintų skaičių. */
+  function pertekliniaiLuziai(doc){
+    const body = els(doc.parts['word/document.xml'], 'body')[0];
+    const v = Array.from(body.childNodes).filter(n => n.nodeType === 1);
+    const sekc = n => { if (n.localName === 'sectPr') return n; if (n.localName !== 'p') return null;
+      const pp = Array.from(n.childNodes).find(c => c.localName === 'pPr'); return pp ? (Array.from(pp.childNodes).find(c => c.localName === 'sectPr') || null) : null; };
+    const turinys = n => n.localName !== 'p' || els(n, 't').some(t => t.textContent.trim()) || ['drawing', 'pict', 'object', 'fldSimple'].some(t => els(n, t).length);
+    const naujamePuslapyje = i => {            // ar skyrius, prasidedantis po v[i] (v[i] baigia skyrių), prasideda naujame puslapyje
+      const kitas = v.slice(i + 1).map(sekc).find(Boolean);
+      if (!kitas) return true;                 // dokumento pabaiga - lūžis duotų tuščią paskutinį puslapį
+      const t = els(kitas, 'type')[0];
+      return !t || t.getAttributeNS(NS_W, 'val') !== 'continuous';
+    };
+    let n = 0;
+    v.forEach((p, i) => {
+      if (p.localName !== 'p') return;
+      els(p, 'br').filter(b => b.getAttributeNS(NS_W, 'type') === 'page').forEach(br => {
+        // po lūžio šioje pastraipoje - joks tekstas ar paveikslas
+        const visi = Array.from(p.getElementsByTagNameNS(NS_W, '*')), k = visi.indexOf(br);
+        if (visi.slice(k + 1).some(e => (e.localName === 't' && e.textContent.trim()) || ['drawing', 'pict', 'object', 'br'].includes(e.localName) && e !== br)) return;
+        let j = i;
+        if (!sekc(p)){ j = i + 1; while (j < v.length && v[j].localName === 'p' && !turinys(v[j]) && !sekc(v[j])) j++; }
+        const galas = j >= v.length || v[j].localName === 'sectPr';
+        if (!galas && (turinys(v[j]) && v[j] !== p)) return;                 // po lūžio - turinys
+        if (!galas && !sekc(v[j])) return;
+        if (!galas && !naujamePuslapyje(j)) return;                           // kitas skyrius tęsiasi tame pačiame puslapyje
+        const r = br.parentNode; r.removeChild(br);
+        if (r.localName === 'r' && !Array.from(r.childNodes).some(c => c.nodeType === 1 && c.localName !== 'rPr')) r.parentNode.removeChild(r);
+        n++;
+      });
+    });
+    return n;
+  }
+
   async function save(doc, type='blob'){
     for (const [path, xml] of Object.entries(doc.parts)){
       // createFolders:false - kitaip JSZip prideda kataloginius irasus ("word/"),
@@ -503,7 +540,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus, pertekliniaiLuziai,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 

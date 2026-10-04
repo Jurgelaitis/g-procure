@@ -2097,7 +2097,29 @@ async function testaiLenteles(){
     const vardai = W.failuVardai(W.__R), iGul = W.__R.findIndex(r => r.d.trumpas === "DPSK_LT_SALYGOS_GULSTI");
     tiesa(iGul > 0 && W.__R[iGul - 1].d.trumpas === "DPSK_LT_SALYGOS" && /Pirkimo_sąlygų_5-6_priedai/.test(vardai[iGul]) && new Set(vardai).size === vardai.length, "failo vardas ir vieta: " + vardai.join(", "));
     tiesa(/Gulsti priedai - atskiras failas: Pirkimo sąlygų 5-6 priedai/.test(D.getElementById("rezultatas").textContent.replace(/\s+/g, " ")), "patikroje pasakyta");
+    lygu([A.r.stats.tusciPuslapiai, B.r.stats.tusciPuslapiai, (A.xml.match(/w:type="page"/g) || []).length, (B.xml.match(/w:type="page"/g) || []).length], [1, 1, 3, 1],
+      "tušti puslapiai: pagrindinio pabaigoje ir tarp 5 ir 6 priedo pašalinti, kiti lūžiai lieka");
+    tiesa(/Tušti puslapiai: pašalinti puslapio lūžiai/.test(D.getElementById("rezultatas").textContent.replace(/\s+/g, " ")), "patikroje pasakyta apie tuščius puslapius");
     tiesa(!Object.keys(await generuokSu({ budas: "DPS", kalba: "LT_EN" })).some(k => /_GULSTI$/.test(k)), "DPS LT/EN (be gulsčių skyrių stačiame dokumente) - neskaidoma");
+  });
+  await testas("Tušti puslapiai (GPDocx.pertekliniaiLuziai): puslapio lūžis, po kurio iki naujo puslapio skyriaus ar dokumento pabaigos - tik tuščios pastraipos, šalinamas; lūžis prieš tekstą, prieš „continuous“ skyrių ir su tekstu po jo - lieka; tekstas nepakitęs", async () => {
+    const br = '<w:r><w:br w:type="page"/></w:r>', P = t => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`, T = '<w:p/>';
+    const sp = (tipas = "") => `<w:sectPr>${tipas ? `<w:type w:val="${tipas}"/>` : ""}<w:pgSz w:w="11906" w:h="16838"/></w:sectPr>`;
+    const sk = (tipas, t = "") => `<w:p><w:pPr>${sp(tipas)}</w:pPr>${t ? `<w:r><w:t>${t}</w:t></w:r>` : ""}</w:p>`;
+    const xml = `<w:document xmlns:w="${NSW}"><w:body>
+      ${P("A")}<w:p>${br}</w:p>${T}${sk("")}
+      ${P("B")}<w:p>${br}</w:p>${T}${sk("continuous")}
+      ${P("C")}<w:p>${br}</w:p>${P("Tekstas po lūžio")}${sk("")}
+      ${P("D")}<w:p><w:r><w:t>prieš</w:t></w:r>${br}<w:r><w:t>po</w:t></w:r></w:p>${sk("")}
+      <w:p><w:pPr>${sp("")}</w:pPr><w:r><w:t>E</w:t></w:r>${br}</w:p>
+      ${P("F")}<w:p>${br}</w:p>${T}${T}${sp("")}</w:body></w:document>`;
+    // w:type nurodo, kaip prasideda skyrius, kurį tas sectPr BAIGIA: po A lūžio eina B skyrius - „continuous“ (lūžis reikalingas),
+    // po B lūžio - C skyrius (nextPage); C - lūžis prieš tekstą; D - tekstas po lūžio toje pačioje pastraipoje; E - lūžis su sectPr; F - dokumento pabaiga
+    const doc = { parts: { "word/document.xml": new W.DOMParser().parseFromString(xml, "application/xml") } }, d = doc.parts["word/document.xml"];
+    const pries = txW(d), n = W.eval("GPDocx").pertekliniaiLuziai(doc);
+    const liko = Array.from(d.getElementsByTagNameNS(NSW, "br")).map(b => { let p = b.parentNode; while (p.localName !== "p") p = p.parentNode;
+      let u = p; while (u && !(u.localName === "p" && txW(u))) u = u.previousSibling; return u ? txW(u) : "?"; });
+    lygu([n, liko, txW(d)], [3, ["A", "C", "priešpo"], pries], "pašalinta B, E, F; liko A (kitas skyrius - continuous), C (tekstas po), D (tekstas toje pačioje pastraipoje)");
   });
 }
 
