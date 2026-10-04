@@ -588,7 +588,7 @@ const TEISE_FAILAI = [
   "../PP-qual/PP-QUAL.html",
   "../PP-ts/TS_Asistentas.html", "../PP-ts/PROJECT_CONTEXT.md",
   "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-negotiation/PROJECT_CONTEXT.md",
-  "../PP-salygos/PP-SALYGOS.html", "../PP-salygos/variklis.js",
+  "../PP-salygos/PP-SALYGOS.html", "../PP-salygos/variklis.js", "../PP-salygos/laukai.js",
   "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "taisykles.js", "parengtis.js", "skelbimas.js", "../skelbimo-parengtis.html", "../pirkimu-korteles.html",
   "../PP-protocol/LITGRID_Generatorius_v3.html", "../PP-protocol/PROJECT_CONTEXT.md",
   "../CLAUDE.md"
@@ -3042,6 +3042,10 @@ async function testaiTelefonas(){
    ========================================================================== */
 // Būsenos su duomenimis (be jų dalis sąsajos nepiešiama): pavyzdiniai duomenys, PP-protocol pirkimai ir formos
 const PRIEINAMUMO_BUSENOS = {
+  // 2026-10-04: 2 žingsnis su tikrais klausimais (laukų registras, „?“ paaiškinimai, būsenos, eiga ir santrauka)
+  "../PP-salygos/PP-SALYGOS.html": [["2 žingsnis su klausimais (T-SD)", async w => { await w.iStep2(); }],
+    ["2 žingsnis LT/EN su derybomis (MV-SAD)", async (w, d) => { const s = d.getElementById("budas"); s.value = "MV-SAD"; s.dispatchEvent(new w.Event("change"));
+      const k = d.querySelector("input[name=kalba][value=LT_EN]"); k.checked = true; k.dispatchEvent(new w.Event("change")); await w.iStep2(); }]],
   "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html": [["pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ".tabbar .tab:not(a)"]],
   "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html": [["mokomasis pavyzdys", w => w.ikelkPavyzdi()]],
   "../PP-report/PP-report.html": [["2 priedas", w => w.selectForm(2)]],
@@ -3886,6 +3890,59 @@ async function testaiKopijavimas(){
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 }
+/* ---------- Paaiškinimas „?“ (paaiskinimas.js, 2026-10-04) ----------
+   Ne `title`: atsidaro užvedus pelę, fokusuojant klaviatūra ir paspaudus (palietus), Esc uždaro (WCAG 1.4.13). */
+async function testaiPaaiskinimas(){
+  dabartine = grupe("Paaiškinimas „?“ (paaiskinimas.js)");
+  await testas("paaiskinimas.js: mygtukas su pavadinimu, aria-expanded ir aria-controls; užvedus pelę ir fokusuojant atsidaro, Esc uždaro ir fokusas lieka; paspaudus - prisegamas, paspaudus šalia - uždaromas; LT / EN", async ()=>{
+    const { f, d, w } = await ramas(`<link rel="stylesheet" href="epso-g.css"><script src="paaiskinimas.js"><\/script><div id="v"></div><input id="kitas">`);
+    try {
+      await tiksas();
+      const P = w.GP_PAAISKINIMAS;
+      d.getElementById("v").innerHTML = P.html({ id: "pa1", etikete: "Kuris SPS priedas?", turinys: "<p>Iš <b>SPS priedų sąrašo</b>.</p>" });
+      const b = d.querySelector("[data-gpp]"), pop = d.getElementById("pa1");
+      lygu([b.tagName, b.type, b.getAttribute("aria-label"), b.getAttribute("aria-expanded"), b.getAttribute("aria-controls"), pop.getAttribute("role"), pop.hidden],
+        ["BUTTON", "button", "Paaiškinimas: Kuris SPS priedas?", "false", "pa1", "tooltip", true], "pradinė būsena");
+      tiesa(!b.hasAttribute("title"), "title atributas vietoj paaiškinimo");
+      b.dispatchEvent(new w.MouseEvent("mouseover", { bubbles: true }));
+      lygu([pop.hidden, b.getAttribute("aria-expanded")], [false, "true"], "užvedus pelę");
+      b.dispatchEvent(new w.MouseEvent("mouseout", { bubbles: true, relatedTarget: d.getElementById("kitas") }));
+      await new Promise(r => setTimeout(r, 400));
+      lygu(pop.hidden, true, "patraukus pelę neužsidarė");
+      // fokusas klaviatūra: rėmelis gali būti ne aktyviame lange - focusin perduodamas ir tiesiogiai (tas pats įvykis, kurį duoda Tab)
+      b.focus(); if (pop.hidden) b.dispatchEvent(new w.FocusEvent("focusin", { bubbles: true })); await tiksas();
+      lygu(pop.hidden, false, "fokusuojant neatsidarė");
+      d.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      lygu([pop.hidden, d.activeElement === b], [true, true], "Esc: uždaryta, fokusas mygtuke");
+      b.click(); await tiksas();
+      b.dispatchEvent(new w.MouseEvent("mouseout", { bubbles: true, relatedTarget: d.getElementById("kitas") }));
+      await new Promise(r => setTimeout(r, 400));
+      lygu(pop.hidden, false, "paspaustas (prisegtas) užsidarė patraukus pelę");
+      d.getElementById("kitas").click(); await tiksas();
+      lygu(pop.hidden, true, "paspaudus šalia neužsidarė");
+      b.click(); await tiksas(); b.click(); await tiksas();
+      lygu(pop.hidden, true, "antras paspaudimas neuždarė");
+      d.documentElement.lang = "en";
+      d.getElementById("v").innerHTML = P.html({ etikete: "Annex" });
+      lygu(d.querySelector("[data-gpp]").getAttribute("aria-label"), "Explanation: Annex", "EN");
+    } finally { f.remove(); }
+  });
+  await testas("paaiskinimas.js: paaiškinimo tekstas >= 4,5:1 ant balto; ilgas tekstas neplatina siauro ekrano (telpa 375 px); spausdinant nerodoma", async ()=>{
+    const { f, d, w } = await ramas(`<link rel="stylesheet" href="epso-g.css"><script src="paaiskinimas.js"><\/script><div id="v" style="padding:0 16px"></div>`);
+    try {
+      f.style.width = "375px"; f.style.height = "500px";
+      await tiksas();
+      d.getElementById("v").innerHTML = "Klausimas " + w.GP_PAAISKINIMAS.html({ id: "pa2", turinys: "<p>" + "Labai ilgas paaiškinimo tekstas be pertraukų ".repeat(12) + "</p>" });
+      const b = d.querySelector("[data-gpp]"); b.click(); await tiksas();
+      const pop = d.getElementById("pa2"), r = pop.getBoundingClientRect();
+      tiesa(r.right <= d.documentElement.clientWidth + 1 && r.left >= 0, "paaiškinimas išlenda už ekrano: " + Math.round(r.left) + "-" + Math.round(r.right));
+      const cs = w.getComputedStyle(pop);
+      tiesa(kontrastas(cs.color, cs.backgroundColor) >= 4.5, "kontrastas " + kontrastas(cs.color, cs.backgroundColor));
+      tiesa([...d.styleSheets].some(sh => { try { return [...sh.cssRules].some(x => /print/.test(x.cssText) && /\.gpp/.test(x.cssText)); } catch (e) { return false; } }), "spausdinimo taisyklės nėra");
+    } finally { f.remove(); }
+  });
+}
+
 async function testaiPranesimai(){
   dabartine = grupe("Trumpi pranešimai (pranesimas.js)");
   const skaityk = (d, rol) => d.querySelector('.gp-sr-pranesimai [role="' + rol + '"]').textContent;
@@ -4012,11 +4069,11 @@ async function testaiPranesimai(){
 function kodoFailai(){
   return Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "")).concat(["ai-proxy.js", "backup.js", "busena.js",
     "docx-stiliai.js", "dokumentai.js", "eksportas.js", "gprocure-info-panel.js", "lang-detect.js", "mano-pirkimai.js", "money.js", "neissaugotas-darbas.js", "pdf-darbininkas.js", "bibliotekos.js", "kopija.js",
-    "organizacijos.js", "parengtis.js", "pirkimo-kortele.js", "portal-link.js", "pranesimas.js", "prieinamumas.js", "procurement-methods.js", "saugykla.js",
+    "organizacijos.js", "paaiskinimas.js", "parengtis.js", "pirkimo-kortele.js", "portal-link.js", "pranesimas.js", "prieinamumas.js", "procurement-methods.js", "saugykla.js",
     "skelbimas.js", "taisykles.js", "teise-stebesena.js", "teises-nuorodos.js", "testu-apsauga.js", "thresholds.js", "workdays.js",
     "../PP-carbon/carbon-factors.js", "../PP-carbon/epd-extract.js", "../PP-carbon/esg-export.js", "../PP-carbon/evaluation.js", "../PP-carbon/reports.js",
     "../PP-carbon/taxonomy.js", "../PP-market-KPI/osp.js", "../PP-market-KPI/rinka.js", "../PP-salygos/ai-patarejas.js", "../PP-salygos/paraiska-extract.js",
-    "../PP-salygos/variklis.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
+    "../PP-salygos/variklis.js", "../PP-salygos/laukai.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
     "../PP-ts/ts_asistentas_modules.js"]);
 }
 
@@ -4408,6 +4465,7 @@ async function testaiAiProxy(){
   await testaiKopija();
   await testaiPinigai();
   await testaiPranesimai();
+  await testaiPaaiskinimas();
   await testaiBibliotekos();
   await testaiKopijavimas();
   await testaiDatos();
