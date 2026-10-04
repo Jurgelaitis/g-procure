@@ -1889,6 +1889,15 @@ const GPNum = (() => {
      langeliuose daro netolygius tarpus), vertikalus lygiavimas - viršus, be hideMark (vienoda aukščio logika); pusjuodis - pagal
      PUSJUODIS_ETIKETESE (numatyta - kaip šablone; kursyvas nekeičiamas), išskyrus BE_PUSJUODZIO eilutes (tiekėjo el. pašto
      eilutė - visada be pusjuodžio).
+   Pages (2026-10-04, matuota Pages eksportu, naudotojo sprendimas „1 ir 2 kartu“):
+   - abipusiai lygiuotą tekstą lentelės langelyje Pages išretina raidėmis, o pusjuodžiam - eilutės aukštį skaičiuoja kaip įprastam,
+     tad paskutinė eilutė iškrenta: VISOSE lentelėse abipusis ir „distribute“ -> LYGIAVIMAS_LENTELESE (ir iš stiliaus);
+   - Pages lentelės eilutės per puslapius NEDALIJA - kas netelpa, nukerpama (13 dokumentų, 209 pastraipos, daugiausia dvikalbiai
+     SPS): eilutė, kurios aukščio įvertis > SKAIDYTI_NUO puslapio, skaidoma ties pastraipomis į kelias eilutes (~DALIES_AUKSTIS
+     puslapio), tarp jų rėmelių nėra. Kiekviename stulpelyje pastraipų tvarka ta pati; numeruoto sąrašo punktai ir „laikyti su
+     kitu“ pastraipos neperskiriami; mažas vertikaliai sujungtas langelis lieka sujungtas; tęsinio langelis be teksto - tuščia pastraipa be
+     numeravimo (eilučių numeriai nepasikeičia); per aukštas vertikaliai sujungtas langelis atjungiamas ir jo turinys paskirstomas
+     sujungtoms eilutėms (tame stulpelyje be rėmelių). Word tokias eilutes dalijo pats - jame vaizdas beveik toks pat.
    Tekstas, eilučių tvarka ir raudonos žymos nekeičiami.
    ========================================================================== */
 const GPLent = (() => {
@@ -1901,6 +1910,15 @@ const GPLent = (() => {
   // Kitas šablono pusjuodis (pasiūlymo kainos eilutės, lentelių antraštės) lieka. Atpažįstama pagal eilutės tekstą (mažosiomis).
   const BE_PUSJUODZIO = ['nario elektroninio pašto adresas', 'email address of the supplier'];
   const CANTSPLIT_RIBA = 700;                 // simbolių eilutėje (ir iki 12 pastraipų) - tokia eilutė nedalijama per puslapį
+  const LYGIAVIMAS_LENTELESE = 'left';        // visų lentelių langeliuose vietoj abipusio; null - palikti šablono
+  const SKAIDYTI_NUO = 0.6;                   // eilutės aukščio įvertis (puslapio teksto aukščio dalimis), nuo kurio eilutė skaidoma
+  const DALIES_AUKSTIS = 0.33;                // didžiausias dalies aukštis (puslapio dalimis); Pages netelpančią eilutę kelia į kitą puslapį,
+                                              // tad mažesnės dalys - mažiau tuščios vietos puslapio apačioje
+  const DALIES_MIN = 0.12;                    // mažiausias dalies aukštis, jei galima (mažiau dalių - mažiau tarpų stulpeliuose)
+  const SARASAI_KARTU = false;                // numeruoto sąrašo punktai vienoje dalyje; Pages ir Word numeraciją per langelius tęsia
+                                              // (patikrinta Pages PDF: 1) - 12 psl., 2)-4) - 13, 5)-8) - 14), tad neprivaloma
+  const ZENKLO_PLOTIS = 0.5;                  // vidutinis ženklo plotis šrifto dydžio dalimis (Arial su atsarga; kalibruota Pages PDF)
+  const EILUTES_AUKSTIS = 1.15;               // viengubas eilučių tarpas šrifto dydžio dalimis
   const PARASTES = { top: 0, left: 108, bottom: 0, right: 108 };
   const TBLPR = ['tblStyle','tblpPr','tblOverlap','bidiVisual','tblStyleRowBandSize','tblStyleColBandSize','tblW','jc','tblCellSpacing','tblInd',
     'tblBorders','shd','tblLayout','tblCellMar','tblLook','tblCaption','tblDescription','tblPrChange'];
@@ -1942,7 +1960,7 @@ const GPLent = (() => {
   const trumpa = tr => tekstas(tr).length <= CANTSPLIT_RIBA && tr.getElementsByTagNameNS(W, 'p').length <= 12;
   const bePusjuodzio = tr => { const t = tekstas(tr).toLowerCase().replace(/\s+/g, ' '); return BE_PUSJUODZIO.some(f => t.includes(f)); };
 
-  /* Teksto plotis kiekvienai viršutinio lygio lentelei - pagal artimiausią po jos esantį sectPr. */
+  /* Teksto plotis ir aukštis kiekvienai lentelei - pagal artimiausią po jos esantį sectPr. */
   function sekcijuPlociai(body){
     const visi = Array.from(body.getElementsByTagNameNS(W, '*'));
     const out = new Map(); let laukia = [];
@@ -1951,15 +1969,244 @@ const GPLent = (() => {
       else if (n.localName === 'sectPr'){
         const pg = kid(n, 'pgSz'), mr = kid(n, 'pgMar'), cols = kid(n, 'cols');
         const w = pg && mr ? (+att(pg, 'w') || 0) - (+att(mr, 'left') || 0) - (+att(mr, 'right') || 0) : null;
+        const h = pg && mr ? (+att(pg, 'h') || 0) - Math.abs(+att(mr, 'top') || 0) - Math.abs(+att(mr, 'bottom') || 0) : null;
         const daugStulp = cols && +(att(cols, 'num') || 1) > 1;
-        laukia.forEach(t => out.set(t, daugStulp ? null : w)); laukia = [];
+        laukia.forEach(t => out.set(t, { w: daugStulp ? null : w, h: h > 0 ? h : null })); laukia = [];
       }
     });
     return out;
   }
+
+  /* Stilių ir numeracijos modelis aukščio įverčiui ir lygiavimui: šrifto dydis, lygiavimas (su basedOn), numeruoti sąrašai. */
+  function modelis(doc){
+    const M = { sz: {}, jc: {}, num: {}, ind: {}, base: {}, dsz: 20, djc: null, numatytas: null, numFmt: null, numInd: {} };
+    const S = doc && doc.parts && doc.parts['word/styles.xml'];
+    if (S){
+      const dd = S.getElementsByTagNameNS(W, 'rPrDefault')[0], ddsz = dd && dd.getElementsByTagNameNS(W, 'sz')[0];
+      if (ddsz) M.dsz = +att(ddsz, 'val') || 20;
+      const pd = S.getElementsByTagNameNS(W, 'pPrDefault')[0], pdjc = pd && pd.getElementsByTagNameNS(W, 'jc')[0];
+      if (pdjc) M.djc = att(pdjc, 'val');
+      Array.from(S.getElementsByTagNameNS(W, 'style')).forEach(s => {
+        const id = att(s, 'styleId'); if (!id) return;
+        const ppr = kid(s, 'pPr'), rpr = kid(s, 'rPr');
+        M.base[id] = att(kid(s, 'basedOn'), 'val');
+        if (kid(ppr, 'jc')) M.jc[id] = att(kid(ppr, 'jc'), 'val');
+        if (kid(rpr, 'sz')) M.sz[id] = +att(kid(rpr, 'sz'), 'val') || null;
+        const np = kid(ppr, 'numPr'); if (np && att(kid(np, 'numId'), 'val') !== '0') M.num[id] = att(kid(np, 'numId'), 'val');
+        const si = kid(ppr, 'ind'); if (si) M.ind[id] = +att(si, 'left') || +att(si, 'start') || 0;
+        if (att(s, 'type') === 'paragraph' && (att(s, 'default') === '1' || att(s, 'default') === 'true')) M.numatytas = id;
+      });
+    }
+    const N = doc && doc.parts && doc.parts['word/numbering.xml'];
+    if (N){
+      const abs = {};
+      Array.from(N.getElementsByTagNameNS(W, 'abstractNum')).forEach(a => {
+        const lv = {}, li = {};
+        kids(a, 'lvl').forEach(l => { const k = att(l, 'ilvl') || '0', ind = kid(kid(l, 'pPr'), 'ind'); lv[k] = att(kid(l, 'numFmt'), 'val'); li[k] = +att(ind, 'left') || +att(ind, 'start') || 0; });
+        abs[att(a, 'abstractNumId')] = { lv, li };
+      });
+      M.numFmt = {};
+      Array.from(N.getElementsByTagNameNS(W, 'num')).forEach(n => { const a = abs[att(kid(n, 'abstractNumId'), 'val')] || { lv: {}, li: {} }; M.numFmt[att(n, 'numId')] = a.lv; M.numInd[att(n, 'numId')] = a.li; });
+    }
+    return M;
+  }
+  const stiliaus = (M, id, k) => { for (let i = 0; id && i < 20; i++){ if (M[k][id] != null) return M[k][id]; id = M.base[id]; } return null; };
+  /* Numeruoto (ne ženklelių) sąrašo raktas pastraipai arba null. Be numbering.xml - bet koks sąrašas laikomas numeruotu (atsargiai). */
+  function numeruotas(p, M){
+    const ppr = kid(p, 'pPr'), np = kid(ppr, 'numPr');
+    const sid = att(kid(ppr, 'pStyle'), 'val');
+    const id = np ? att(kid(np, 'numId'), 'val') : stiliaus(M, sid, 'num');
+    if (!id || id === '0') return null;
+    if (!M.numFmt) return id;
+    const f = (M.numFmt[id] || {})[np ? (att(kid(np, 'ilvl'), 'val') || '0') : '0'];
+    return f === 'bullet' || f === 'none' ? null : id;
+  }
+
+  /* Aukščio įvertis (DXA). Sąmoningai su atsarga: per didelis įvertis tik daugiau skaido, per mažas - Pages nukirptų. */
+  function pAukstis(p, plotis, M){
+    const ppr = kid(p, 'pPr'), sid = att(kid(ppr, 'pStyle'), 'val') || M.numatytas;
+    let sz = 0;
+    Array.from(p.getElementsByTagNameNS(W, 'r')).forEach(r => { const v = +att(kid(kid(r, 'rPr'), 'sz'), 'val') || 0; if (v > sz && tekstas(r).trim()) sz = v; });
+    const pt = (sz || stiliaus(M, sid, 'sz') || M.dsz) / 2;
+    const ind = kid(ppr, 'ind'), np = kid(ppr, 'numPr');
+    // įtrauka: tiesioginė, kitaip - sąrašo lygio (numbering.xml), kitaip - stiliaus
+    const nid = np ? att(kid(np, 'numId'), 'val') : stiliaus(M, sid, 'num');
+    const kaire = ind && (att(ind, 'left') || att(ind, 'start')) != null ? (+att(ind, 'left') || +att(ind, 'start') || 0)
+      : nid && nid !== '0' && M.numInd[nid] ? (M.numInd[nid][np ? (att(kid(np, 'ilvl'), 'val') || '0') : '0'] || 0) : (stiliaus(M, sid, 'ind') || 0);
+    const w = Math.max(plotis - kaire - (+att(ind, 'right') || +att(ind, 'end') || 0), 300);
+    const sp = kid(ppr, 'spacing'), line = +att(sp, 'line') || 0, rule = att(sp, 'lineRule') || 'auto';
+    let lh = pt * 20 * EILUTES_AUKSTIS;
+    if (line) lh = rule === 'auto' ? lh * line / 240 : rule === 'exact' ? line : Math.max(line, lh);
+    const t = tekstas(p);
+    const luziai = Array.from(p.getElementsByTagNameNS(W, 'br')).filter(b => att(b, 'type') !== 'page').length;
+    const eil = (t.trim() ? Math.max(1, Math.ceil(t.length * pt * 20 * ZENKLO_PLOTIS / w * 1.05)) : 1) + luziai;
+    return eil * lh + (+att(sp, 'before') || 0) + (+att(sp, 'after') || 0);
+  }
+  function blokoAukstis(n, plotis, M){
+    if (n.localName === 'p') return pAukstis(n, plotis, M);
+    if (n.localName === 'tbl') return kids(n, 'tr').reduce((a, tr) => a + eilutesIvertis(tr, M, parastesL(kid(n, 'tblPr'))), 0);
+    if (n.localName === 'sdt'){ const c = kid(n, 'sdtContent'); return c ? Array.from(c.childNodes).filter(x => x.nodeType === 1).reduce((a, x) => a + blokoAukstis(x, plotis, M), 0) : 0; }
+    return 0;
+  }
+  const langelioPlotis = (tc, parastes) => (+att(kid(kid(tc, 'tcPr'), 'tcW'), 'w') || 2000) - parastes;
+  function eilutesIvertis(tr, M, parastes){
+    return Math.max(0, ...kids(tr, 'tc').map(tc => { const w = langelioPlotis(tc, parastes);
+      return Array.from(tc.childNodes).filter(n => n.nodeType === 1 && n.localName !== 'tcPr').reduce((a, n) => a + blokoAukstis(n, w, M), 0); }));
+  }
+
+  /* Langelio blokai skaidymui: pastraipa, įdėtinė lentelė ar turinio valdiklis; žymės ir kiti langelio vaikai - kartu su kitu bloku.
+     Numeruoto sąrašo punktai (nuo pirmo iki paskutinio to paties sąrašo) ir „laikyti su kitu“ pastraipa - vienas blokas. */
+  function langelioBlokai(tc, M, parastes){
+    const w = langelioPlotis(tc, parastes), out = []; let laukia = [];
+    Array.from(tc.childNodes).forEach(n => {
+      if (n.nodeType !== 1 || n.localName === 'tcPr') return;
+      if (['p', 'tbl', 'sdt'].includes(n.localName)){
+        out.push({ mazgai: laukia.concat([n]), h: blokoAukstis(n, w, M), sar: n.localName === 'p' ? numeruotas(n, M) : null,
+                   kartu: n.localName === 'p' && !!kid(kid(n, 'pPr'), 'keepNext') });
+        laukia = [];
+      } else laukia.push(n);
+    });
+    if (laukia.length){ if (out.length) out[out.length - 1].mazgai.push(...laukia); else out.push({ mazgai: laukia, h: 0, sar: null, kartu: false }); }
+    // sąrašų ribos: tas pats sąrašas - nuo pirmo iki paskutinio jo punkto
+    const ribos = {};
+    out.forEach((b, i) => { if (b.sar){ ribos[b.sar] = ribos[b.sar] || [i, i]; ribos[b.sar][1] = i; } });
+    const kartu = out.map(() => false);                      // kartu[i] - blokas i jungiamas su i+1
+    if (SARASAI_KARTU) Object.values(ribos).forEach(([a, z]) => { for (let i = a; i < z; i++) kartu[i] = true; });
+    out.forEach((b, i) => { if (b.kartu && i < out.length - 1) kartu[i] = true; });
+    const grupes = [];
+    out.forEach((b, i) => {
+      if (i && kartu[i - 1]){ const g = grupes[grupes.length - 1]; g.mazgai.push(...b.mazgai); g.h += b.h; }
+      else grupes.push({ mazgai: b.mazgai.slice(), h: b.h });
+    });
+    return grupes;
+  }
+  const BORDERS = ['top', 'start', 'left', 'bottom', 'end', 'right', 'insideH', 'insideV', 'tl2br', 'tr2bl'];
+  const NUSTATYMAI = { skaidyti: true };      // testams: false - be skaidymo ir sujungimų atjungimo (palyginti tekstą)
+  const SKAIDYTOS = new WeakSet();            // suskaidytos eilutės ir jų dalys - ne šablono etiketės eilutės
+  function beRemelio(tc, krastas){
+    const d = tc.ownerDocument, tcPr = savybes(tc, 'tcPr', []), b = vaikas(tcPr, 'tcBorders', TCPR);
+    let e = kid(b, krastas);
+    if (!e) e = idek(b, naujas(d, krastas), BORDERS);
+    Array.from(e.attributes).map(a => a.name).forEach(a => e.removeAttribute(a));
+    nustatyk(e, 'val', 'nil');
+  }
+  /* Tuščia tęsinio pastraipa: be numeravimo, stiliaus ir „laikyti su kitu“; šrifto dydis - kaip langelio pirmos pastraipos. */
+  function tusciaPastraipa(tc){
+    const d = tc.ownerDocument, p = naujas(d, 'p'), ppr = naujas(d, 'pPr'), sp = naujas(d, 'spacing');
+    nustatyk(sp, 'before', 0); nustatyk(sp, 'after', 0); ppr.appendChild(sp);
+    const pirma = kids(tc, 'p')[0], rpr = pirma && kid(kid(pirma, 'pPr'), 'rPr');
+    if (rpr) ppr.appendChild(rpr.cloneNode(true));
+    p.appendChild(ppr);
+    return p;
+  }
+  function uzbaikLangeli(tc){
+    const v = Array.from(tc.childNodes).filter(n => n.nodeType === 1 && n.localName !== 'tcPr');
+    if (!v.length || v[v.length - 1].localName !== 'p') tc.appendChild(tusciaPastraipa(tc));
+  }
+  /* Per aukštas vertikaliai sujungtas langelis (Pages ir jo per puslapius nedalija): sujungimas atjungiamas, turinys iš eilės
+     paskirstomas tų pačių eilučių langeliams (pagal kitų stulpelių aukštį, likutis - paskutiniam), tame stulpelyje tarp jų rėmelių
+     nėra - atrodo kaip vienas langelis; toliau per aukštas eilutes skaido skaidyk(). Jei tęsinio langelyje yra tekstas - neliečiama. */
+  function atjunkSujungimus(tbl, puslapis, M, st){
+    const parastes = parastesL(kid(tbl, 'tblPr')), eil = kids(tbl, 'tr');
+    const poz = eil.map(tr => { const m = new Map(); let g = +att(kid(kid(tr, 'trPr'), 'gridBefore'), 'val') || 0;
+      kids(tr, 'tc').forEach(tc => { m.set(g, tc); g += +att(kid(kid(tc, 'tcPr'), 'gridSpan'), 'val') || 1; }); return m; });
+    const vm = tc => kid(kid(tc, 'tcPr'), 'vMerge');
+    const aukstis = tc => langelioBlokai(tc, M, parastes).reduce((a, b) => a + b.h, 0);
+    eil.forEach((tr, i) => poz[i].forEach((tc, g) => {
+      const v = vm(tc);
+      if (!v || att(v, 'val') !== 'restart') return;
+      const grupe = [tc];
+      for (let j = i + 1; j < eil.length; j++){ const c = poz[j].get(g), w = c && vm(c); if (!w || att(w, 'val') === 'restart') break; grupe.push(c); }
+      if (grupe.length < 2 || aukstis(tc) <= SKAIDYTI_NUO * puslapis) return;
+      if (grupe.slice(1).some(c => tekstas(c).trim())) return;
+      const blokai = langelioBlokai(tc, M, parastes);
+      const talpa = grupe.map(c => Math.max(0, ...kids(c.parentNode, 'tc').filter(x => x !== c && !vm(x)).map(aukstis)));
+      grupe.forEach(c => { const w = vm(c); w.parentNode.removeChild(w);
+        const va = kid(kid(c, 'tcPr'), 'vAlign'); if (va && att(va, 'val') !== 'top') nustatyk(va, 'val', 'top'); });
+      grupe.slice(1).forEach(c => Array.from(c.childNodes).filter(n => n.nodeType === 1 && n.localName !== 'tcPr').forEach(n => c.removeChild(n)));
+      let gi = 0, y = 0;
+      blokai.forEach(b => {
+        while (gi < grupe.length - 1 && y > 0 && y + b.h / 2 > talpa[gi]){ gi++; y = 0; }
+        if (gi) b.mazgai.forEach(m => grupe[gi].appendChild(m));
+        y += b.h;
+      });
+      grupe.forEach((c, ci) => { uzbaikLangeli(c); if (ci < grupe.length - 1) beRemelio(c, 'bottom'); if (ci) beRemelio(c, 'top'); });
+      st.atjungta++;
+    }));
+  }
+  /* Dalių ribos: kiekvienai daliai parenkamas aukštis, kuriame pastraipos baigiasi daugelyje stulpelių - kad stulpeliuose liktų kuo
+     mažiau tuščios vietos (tarpai / aukštis); viršijus DALIES_AUKSTIS ar nesiekiant DALIES_MIN - bauda. Aukštesnis už ribą blokas
+     (numeruotas sąrašas, ilga pastraipa) irgi gali nustatyti dalies aukštį - kiti stulpeliai tada užpildo iki jo.
+     Grąžina kiekvienam stulpeliui - kiek blokų kiekvienoje dalyje. */
+  function dalys(blokai, puslapis){
+    const max = DALIES_AUKSTIS * puslapis, min = DALIES_MIN * puslapis, lubos = 0.9 * puslapis;
+    const c = blokai.map(b => b ? { b, i: 0 } : null), out = blokai.map(() => []);
+    const liko = x => x && x.i < x.b.length;
+    for (let apsauga = 0; c.some(liko) && apsauga < 500; apsauga++){
+      const imk = Y => c.map(x => { if (!liko(x)) return { j: x ? x.i : 0, h: 0 }; let y = 0, j = x.i; while (j < x.b.length && y + x.b[j].h <= Y + 1){ y += x.b[j].h; j++; } return { j, h: y }; });
+      const kandidatai = new Set();
+      c.forEach(x => { if (!liko(x)) return; let y = 0; for (let j = x.i; j < x.b.length; j++){ y += x.b[j].h; if (y > lubos && j > x.i) break; kandidatai.add(y); } });
+      let geriausias = null;
+      kandidatai.forEach(Y => {
+        const t = imk(Y), P = Math.max(...t.map(z => z.h));
+        if (!(P > 0)) return;
+        const lieka = t.some((z, k) => c[k] && z.j < c[k].b.length);
+        const tarpai = t.reduce((a, z, k) => a + (c[k] && z.j < c[k].b.length ? P - z.h : 0), 0);
+        const kaina = tarpai / P + 3 * Math.max(0, P - max) / puslapis + (P < min && lieka ? 1 : 0);
+        if (!geriausias || kaina < geriausias.kaina - 1e-9 || (Math.abs(kaina - geriausias.kaina) < 1e-9 && P > geriausias.P)) geriausias = { kaina, P, t };
+      });
+      geriausias.t.forEach((z, k) => { if (c[k]){ out[k].push(z.j - c[k].i); c[k].i = z.j; } else out[k].push(0); });
+    }
+    return out;
+  }
+  /* Per aukšta eilutė (Pages jos per puslapius nedalija) - kelios eilutės ties pastraipomis (ribos - dalys()); tarp dalių rėmelių nėra. */
+  function skaidyk(tbl, puslapis, M, st){
+    if (!puslapis) return;
+    const parastes = parastesL(kid(tbl, 'tblPr'));
+    kids(tbl, 'tr').forEach(tr => {
+      const trPr = kid(tr, 'trPr');
+      if (kid(trPr, 'tblHeader')) return;
+      const tcs = kids(tr, 'tc');
+      if (!tcs.length) return;
+      const sujungtas = tcs.map(tc => !!kid(kid(tc, 'tcPr'), 'vMerge'));
+      const blokai = tcs.map((tc, i) => sujungtas[i] ? null : langelioBlokai(tc, M, parastes));
+      const H = Math.max(0, ...blokai.filter(Boolean).map(b => b.reduce((a, x) => a + x.h, 0)));
+      if (H <= SKAIDYTI_NUO * puslapis) return;
+      const kiek = dalys(blokai, puslapis), k = Math.max(0, ...kiek.map(x => x.length));
+      if (k < 2) return;
+      const dalis = blokai.map((b, i) => { const o = []; let j = 0; for (let d = 0; d < k; d++){ const n = kiek[i][d] || 0; o.push(b ? b.slice(j, j + n) : []); j += n; } return o; });
+      const naud = Array.from({ length: k }, (_, j) => j).filter(j => dalis.some(o => o[j].length));
+      if (naud.length < 2) return;
+      st.skaidyta++; SKAIDYTOS.add(tr);
+      let po = tr;
+      const eilutes = [tr];
+      naud.slice(1).forEach(j => {
+        const n = naujas(tr.ownerDocument, 'tr');
+        const pex = kid(tr, 'tblPrEx'); if (pex) n.appendChild(pex.cloneNode(true));
+        if (trPr){ const c = trPr.cloneNode(true); ['trHeight', 'cantSplit'].forEach(t => { const e = kid(c, t); if (e) c.removeChild(e); }); if (c.childNodes.length) n.appendChild(c); }
+        tcs.forEach((tc, i) => {
+          const t = naujas(tr.ownerDocument, 'tc'), pr = kid(tc, 'tcPr');
+          if (pr){ const c = pr.cloneNode(true); const vm = kid(c, 'vMerge'); if (vm){ vm.removeAttributeNS(W, 'val'); vm.removeAttribute('w:val'); } t.appendChild(c); }
+          dalis[i][j].forEach(x => x.mazgai.forEach(m => t.appendChild(m)));
+          if (!dalis[i][j].length) t.appendChild(tusciaPastraipa(tc));
+          uzbaikLangeli(t);
+          n.appendChild(t);
+        });
+        tbl.insertBefore(n, po.nextSibling); po = n; eilutes.push(n); SKAIDYTOS.add(n); st.dalys++;
+      });
+      tcs.forEach(uzbaikLangeli);
+      // tarp dalių - be rėmelių
+      eilutes.forEach((e, ei) => kids(e, 'tc').forEach(tc => {
+        if (ei < eilutes.length - 1) beRemelio(tc, 'bottom');
+        if (ei > 0) beRemelio(tc, 'top');
+      }));
+      const liko = Math.max(0, ...eilutes.map(e => eilutesIvertis(e, M, parastes)));
+      if (liko > puslapis) st.netelpa++;
+    });
+  }
   const parastesL = tblPr => { const m = kid(tblPr, 'tblCellMar'); return m ? (+att(kid(m, 'left') || kid(m, 'start'), 'w') || 0) + (+att(kid(m, 'right') || kid(m, 'end'), 'w') || 0) : PARASTES.left + PARASTES.right; };
 
-  function vienaLentele(tbl, galima, st){
+  function vienaLentele(tbl, galima, st, puslapis, M){
     const d = tbl.ownerDocument;
     const tblPr = savybes(tbl, 'tblPr', []);
     const grid = kid(tbl, 'tblGrid');
@@ -1995,6 +2242,8 @@ const GPLent = (() => {
         });
       });
     }
+    // 1a. Per aukštos eilutės - kelios eilutės (Pages jų per puslapius nedalija); naujos eilutės toliau tvarkomos kaip visos
+    if (puslapis && NUSTATYMAI.skaidyti){ atjunkSujungimus(tbl, puslapis, M, st); skaidyk(tbl, puslapis, M, st); }
     // 2. Fiksuotas išdėstymas, aiškios paraštės
     const lay = vaikas(tblPr, 'tblLayout', TBLPR);
     if (att(lay, 'type') !== 'fixed'){ nustatyk(lay, 'type', 'fixed'); st.fixed++; }
@@ -2010,7 +2259,7 @@ const GPLent = (() => {
       if (h && att(h, 'hRule') === 'exact'){ nustatyk(h, 'hRule', 'atLeast'); st.exact++; }
       if (!kid(trPr, 'cantSplit') && trumpa(tr)){ trPr.appendChild(naujas(d, 'cantSplit')); st.cantSplit++; }
       if (!trPr.childNodes.length) tr.removeChild(trPr);
-      const etik = etiketesEilute(tr) && trumpa(tr);
+      const etik = !SKAIDYTOS.has(tr) && etiketesEilute(tr) && trumpa(tr);
       if (etik) st.etikeciu++;
       const beB = etik && (PUSJUODIS_ETIKETESE === 'ne' || bePusjuodzio(tr)), bPries = st.pusjuodis;
       kids(tr, 'tc').forEach((tc, ci, visi) => {
@@ -2026,11 +2275,18 @@ const GPLent = (() => {
         }
         const etiketesLangelis = etik && ci < visi.length - 1;
         Array.from(tc.getElementsByTagNameNS(W, 'p')).forEach(p => {
-          if (p.parentNode !== tc) return;                         // įdėtinės lentelės pastraipos - jų lentelėje
+          let u = p.parentNode; while (u && u !== tc && u.localName !== 'tbl') u = u.parentNode;
+          if (u !== tc) return;                                    // įdėtinės lentelės pastraipos - jų lentelėje
           const ppr = kid(p, 'pPr');
           const jc = ppr && kid(ppr, 'jc');
-          if (jc && ISSKIRSTYTI.has(att(jc, 'val'))){ nustatyk(jc, 'val', 'left'); st.distribute++; }
-          else if (jc && etiketesLangelis && LYGIAVIMAS_ETIKETESE && att(jc, 'val') === 'both'){ nustatyk(jc, 'val', LYGIAVIMAS_ETIKETESE); st.kairen++; }
+          const v = jc ? att(jc, 'val') : stiliaus(M, att(kid(ppr, 'pStyle'), 'val') || M.numatytas, 'jc') || M.djc;
+          if (jc && ISSKIRSTYTI.has(v)){ nustatyk(jc, 'val', 'left'); st.distribute++; }
+          else if (jc && etiketesLangelis && LYGIAVIMAS_ETIKETESE && v === 'both'){ nustatyk(jc, 'val', LYGIAVIMAS_ETIKETESE); st.kairen++; }
+          else if (LYGIAVIMAS_LENTELESE && (v === 'both' || ISSKIRSTYTI.has(v))){
+            if (jc) nustatyk(jc, 'val', LYGIAVIMAS_LENTELESE);
+            else { const e = idek(savybes(p, 'pPr', []), naujas(d, 'jc'), PPR); nustatyk(e, 'val', LYGIAVIMAS_LENTELESE); }
+            st.kairenVisos++;
+          }
         });
         Array.from(tc.getElementsByTagNameNS(W, 'rPr')).forEach(rpr => {
           ['spacing', 'w', 'fitText'].forEach(tag => { const e = kid(rpr, tag); if (e){ rpr.removeChild(e); st.tarpai++; } });
@@ -2044,9 +2300,9 @@ const GPLent = (() => {
     const D = doc.parts['word/document.xml'];
     const body = D.getElementsByTagNameNS(W, 'body')[0];
     const st = { lenteliu: 0, siaurinta: 0, itrauka: 0, tblW: 0, tcW: 0, fixed: 0, parastes: 0, exact: 0, cantSplit: 0, etikeciu: 0, kairen: 0, hideMark: 0,
-                 distribute: 0, tarpai: 0, pusjuodis: 0, pusjuodisEil: 0, shd: 0 };
+                 distribute: 0, tarpai: 0, pusjuodis: 0, pusjuodisEil: 0, shd: 0, kairenVisos: 0, skaidyta: 0, dalys: 0, netelpa: 0, atjungta: 0 };
     if (!body) return st;
-    const plociai = sekcijuPlociai(body);
+    const plociai = sekcijuPlociai(body), M = modelis(doc);
     const lenteles = Array.from(body.getElementsByTagNameNS(W, 'tbl')).filter(t => {
       for (let u = t.parentNode; u && u !== body; u = u.parentNode) if (u.localName === 'txbxContent') return false;   // teksto laukai - savo dydžio
       return true;
@@ -2056,17 +2312,18 @@ const GPLent = (() => {
       st.lenteliu++;
       let tc = null;
       for (let u = t.parentNode; u && u !== body; u = u.parentNode) if (u.localName === 'tc'){ tc = u; break; }
-      let galima = null;
+      let galima = null, puslapis = null;
       if (tc){
         const tw = kid(kid(tc, 'tcPr'), 'tcW');
         let tevas = tc; while (tevas && tevas.localName !== 'tbl') tevas = tevas.parentNode;
         galima = tw && att(tw, 'type') === 'dxa' ? (+att(tw, 'w') || 0) - parastesL(kid(tevas, 'tblPr')) : null;
-      } else galima = plociai.get(t) || null;
-      vienaLentele(t, galima, st);
+      } else { const m = plociai.get(t) || {}; galima = m.w || null; puslapis = m.h || null; }
+      vienaLentele(t, galima, st, puslapis, M);
     });
     return st;
   }
-  return { sutvarkyti, etiketesEilute, trumpa, bePusjuodzio, LYGIAVIMAS_ETIKETESE, PUSJUODIS_ETIKETESE, BE_PUSJUODZIO, CANTSPLIT_RIBA };
+  return { sutvarkyti, etiketesEilute, trumpa, bePusjuodzio, modelis, eilutesIvertis, parastesL, NUSTATYMAI, LYGIAVIMAS_ETIKETESE, LYGIAVIMAS_LENTELESE,
+           PUSJUODIS_ETIKETESE, BE_PUSJUODZIO, CANTSPLIT_RIBA, SKAIDYTI_NUO, DALIES_AUKSTIS };
 })();
 
 const GPAudit = (() => {
