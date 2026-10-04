@@ -191,6 +191,16 @@
     sutartys: 'Sutarčių sąrašo forma', specialistai: 'Specialistų sąrašo forma', ts: 'Techninė specifikacija', sutartis: 'Sutarties projektas', bankai: 'Priimtinų bankų sąrašas' };
   const EN_MENESIAI = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+  /* 8.1 p. kriterijų sąrašas ir metodikos sakinys - šablono tekstas (LT ir LT/EN SPS). Kodai bendri abiem kalboms. */
+  const KRITERIJAI_LT = { sarasas: 'kainos ir kokybės santykį / sąnaudų ir kokybės santykį / sąnaudas / kainą',
+    variantai: { kks: 'kainos ir kokybės santykį', sks: 'sąnaudų ir kokybės santykį', sanaudos: 'sąnaudas', kaina: 'kainą' },
+    sakinys: /Pasiūlymų vertinimo kriterijai ir ekonominio naudingumo vertinimo metodika pateikiama/ };
+  const KRITERIJAI_EN = { sarasas: 'price/quality ratio / cost and quality ratio / cost / price',
+    variantai: { kks: 'price/quality ratio', sks: 'cost and quality ratio', sanaudos: 'cost', kaina: 'price' },
+    sakinys: /The Tender evaluation criteria and cost-effectiveness evaluation methodology are provided/ };
+  // Formos pasirinkimų tvarka ir užrašai - šablono žodžiai
+  const KRITERIJU_PASIRINKIMAI = [['kks', 'Kainos ir kokybės santykį'], ['sks', 'Sąnaudų ir kokybės santykį'], ['sanaudos', 'Sąnaudas'], ['kaina', 'Kainą']];
+
   /* Vietos įvesties aprašas pagal sakinio tipą. Laukas be tipo (nauja šablono vieta) - klaida, ne „reikšmė N“:
      testai tikrina, kad visose 24 konfigūracijose kiekviena vieta turi tipą ir užrašą. */
   const priedoVieta = (raktas) => ({ ivestis: 'priedo-nr', uzrasas: PRIEDU_PAV[raktas] ? PRIEDU_PAV[raktas] + ' - SPS priedo Nr.' : 'SPS priedo Nr.', pvz: '3', priedas: raktas || null });
@@ -211,10 +221,25 @@
       klausimas: 'Kokius dokumentus tiekėjas turi pateikti šiam reikalavimui pagrįsti?',
       uzuomina: 'Tekstas įrašomas po „PATEIKIAMA:“ (kvalifikacijos reikalavimų lentelė).',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pateikiami dokumentai' })) },
-    { id: 'metodikos-priedas', re: /metodika pateikiama sps|methodology are provided in annex/,
-      klausimas: 'Kuriame SPS priede pateikta ekonominio naudingumo vertinimo metodika?',
-      uzuomina: 'Įrašykite priedo numerį iš SPS priedų sąrašo.',
-      vietos: vs => vs.map(() => priedoVieta('metodika')) },
+    // 8.1 p. (naudotojo sprendimas 2026-10-04, 5 klausimo A variantas): kriterijus pasirenkamas iš paties šablono sąrašo
+    // („kainos ir kokybės santykį / sąnaudų ir kokybės santykį / sąnaudas / kainą“ - lieka tik pasirinktasis); kainos atveju
+    // metodikos priedo nėra, todėl sakinys „... metodika pateikiama SPS priede Nr.__.“ pašalinamas.
+    { id: 'metodikos-priedas', kriterijus: true, re: /metodika pateikiama sps|methodology are provided in annex/,
+      klausimas: 'Pagal kokį kriterijų vertinami pasiūlymai?',
+      uzuomina: 'Pasirinkite vieną iš šablono 8.1 punkto kriterijų - kiti iš sakinio ištrinami. Pagal kriterijų parenkamas ir metodikos priedas bei pasiūlymo galiojimo užtikrinimo variantas.',
+      // šablone be kriterijų sąrašo - tik priedo numeris, kaip iki tol
+      klausimasBe: 'Kuriame SPS priede pateikta ekonominio naudingumo vertinimo metodika?', uzuominaBe: 'Įrašykite priedo numerį iš SPS priedų sąrašo.',
+      vietos: vs => vs.map(() => priedoVieta('metodika')),
+      pakeitimai: (t, anglu) => {
+        const K = anglu ? KRITERIJAI_EN : KRITERIJAI_LT, out = [];
+        const i = t.indexOf(K.sarasas);
+        if (i < 0) return out;
+        out.push({ start: i, end: i + K.sarasas.length, ivestis: 'kriterijus', uzrasas: 'Vertinimo kriterijus', variantai: K.variantai });
+        const j = t.search(K.sakinys);
+        if (j > i) out.push({ start: j, end: t.length, ivestis: 'salinamas', uzrasas: '', kopijaIvestis: 'kriterijus',
+          variantai: { kaina: '', sanaudos: null, kks: null, sks: null } });
+        return out;
+      } },
     { id: 'daliu-skaicius', re: /skaidomas i .*dali|divided into .*parts|subdivided into/,
       klausimas: 'Į kiek dalių skaidomas pirkimo objektas?',
       uzuomina: 'Šablone yra 2 dalių eilutės; daugiau dalių sukuriama automatiškai.',
@@ -265,7 +290,18 @@
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Nuorodos į priedus' })) },
     // Klausimas „Taip / Ne“ (naudotojo patvirtintas 2026-10-04): „Taip“ - nurodymas „[arba ...]“ pašalinamas (SALINTI),
     // „Ne“ - įrašomi vertinimo kriterijai ir tvarka.
-    { id: 'dps-kriterijai', taipNe: true, re: /isrenka pagal kainos kriteriju/,
+    { id: 'dps-kriterijai', taipNe: true, re: /isrenka pagal kainos kriteriju|according to the price criterion/,
+      // „Ne“ (naudotojo sprendimas 2026-10-04): „kainos kriterijų [arba ...]“ -> nuoroda į papildomą priedą (numeris - kodas „priedas:N“)
+      pakeitimai: (t, anglu) => {
+        const pr = anglu ? 'the price criterion' : 'kainos kriterijų', i = t.indexOf(pr), j = i < 0 ? -1 : t.indexOf(']', i);
+        if (i < 0 || j < 0) return [];
+        return [{ start: i, end: j + 1, ivestis: 'dps-priedas', uzrasas: 'Nuoroda į vertinimo kriterijų priedą', variantai: kodas => {
+          const m = /^priedas:(\d+)$/.exec(kodas || '');
+          if (!m) return null;
+          return anglu ? 'the evaluation criteria and procedure set out in Annex ' + m[1] + ' to these conditions'
+            : 'pasiūlymų vertinimo kriterijus ir tvarką, nurodytus šio konkretaus pirkimo sąlygų ' + m[1] + ' priede';
+        } }];
+      },
       klausimas: 'Ar vertinama tik pagal kainą?',
       uzuomina: 'Atsakius „Taip“, šablono nurodymas „[arba ...]“ pašalinamas. Atsakius „Ne“, įrašykite vertinimo kriterijus ir tvarką.',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Vertinimo kriterijai ir tvarka' })) },
@@ -302,21 +338,26 @@
   function laukas(tekstas, opts){
     const t = String(tekstas || '');
     const nt = norm(t);
-    const vs = tusciosVietos(t).concat(opts && opts.x ? xVietos(t) : []).sort((a, b) => a.start - b.start);
     const tipas = TIPAI.find(x => x.re.test(nt)) || null;
     const anglu = !/[ąčęėįšųūž]/i.test(t) && /\b(the|and|of|shall|must)\b/i.test(t);
-    const aprasai = tipas ? ((anglu && tipas.vietosEn) || tipas.vietos)(vs.filter(v => v.rusis !== 'x'), t) : [];
+    // pakeitimų vietos: šablono teksto atkarpa, kurią pakeičia ar pašalina žmogaus atsakymas (kodas, ne tekstas)
+    const pk = tipas && tipas.pakeitimai ? tipas.pakeitimai(t, anglu).map(v => Object.assign({ rusis: 'pakeitimas', pakeitimas: true, zyma: t.slice(v.start, v.end) }, v)) : [];
+    const vs = tusciosVietos(t).concat(opts && opts.x ? xVietos(t) : []).concat(pk).sort((a, b) => a.start - b.start);
+    const aprasai = tipas ? ((anglu && tipas.vietosEn) || tipas.vietos)(vs.filter(v => v.rusis !== 'x' && v.rusis !== 'pakeitimas'), t) : [];
     let bi = 0, ank = null;
     const vietos = vs.map(v => {
       let a = null;
-      if (v.rusis === 'x') a = xVietosAprasas(t, v, ank);
+      if (v.rusis === 'pakeitimas') a = {};
+      else if (v.rusis === 'x') a = xVietosAprasas(t, v, ank);
       else { a = aprasai[bi++] || null; if (!a && v.rusis === 'nurodymas') a = { ivestis: 'tekstas', uzrasas: nurodymoZyma(v.zyma), nurodymas: true }; }
       if (a && a.priedas) ank = a.priedas;
-      const sritis = neprivalomosSritis(t, v);
+      const sritis = v.rusis === 'pakeitimas' ? null : neprivalomosSritis(t, v);
       return Object.assign({}, v, a || {}, { aprasyta: !!a, klase: sritis ? 'b' : (a && (a.ivestis === 'priedo-nr' || a.ivestis === 'skyrius') ? 'a' : 'c'), salinti: sritis });
     });
+    vietos.forEach(v => { if (v.kopijaIvestis){ const j = vietos.findIndex(x => x.ivestis === v.kopijaIvestis); if (j >= 0) v.kopija = j; } });
+    const be = tipas && tipas.kriterijus && !vietos.some(v => v.ivestis === 'kriterijus');
     return { tekstas: t, tipas: tipas ? tipas.id : (vs.some(v => v.rusis === 'x') ? 'x' : null),
-      klausimas: tipas ? tipas.klausimas : xKlausimas(nt, vietos), uzuomina: tipas ? tipas.uzuomina : '', vietos };
+      klausimas: tipas ? (be ? tipas.klausimasBe : tipas.klausimas) : xKlausimas(nt, vietos), uzuomina: tipas ? (be ? tipas.uzuominaBe : tipas.uzuomina) : '', vietos };
   }
   /* „X“ vietų sakinio klausimas (naudotojo patvirtintas 2026-10-04); kitiems - struktūrinis klausimas modulyje. */
   const xKlausimas = (nt, vietos) => vietos.some(v => v.xRusis === 'suma') && /sutarties ivykdymo uztikrinim|contract performance security/.test(nt)
@@ -330,6 +371,7 @@
     { id: 'dalys', re: /^jei pirkimo objektas (i dalis neskaidomas|skaidomas i dalis)/, klausimas: 'Ar pirkimo objektas skaidomas į dalis?' },
     { id: 'stebetojai', re: /^jei (ne)?numatoma kviesti stebetoj/, klausimas: 'Ar į komisijos posėdžius kviečiami stebėtojai?' },
     { id: 'zalieji', re: /^jei zalieji reikalavimai nurod/, klausimas: 'Kur nustatomi žalieji reikalavimai?' },
+    { id: 'uztikrinimas', re: /^jei (ne)?taikomas pasiulymo galiojimo uztikrinimas/, klausimas: 'Ar taikomas pasiūlymo galiojimo užtikrinimas?' },
     { id: 'tikrinimas', re: /pasalinimo pagrind/, klausimas: 'Ar tikrinate tik pašalinimo pagrindus ar ir kvalifikaciją?',
       klausimas2: 'Tik galimo laimėtojo ar visų tiekėjų tikriname?' }
   ];
@@ -341,6 +383,15 @@
      pagrindai) arba 'abu'; kieno - 'laimetojas' (galimo laimėtojo) arba 'visi'. Šablonuose kvalifikacijos netikrinimas
      pasakomas trimis būdais: „netikrinama kvalifikacija“, „kvalifikacija netikrinama“, „kvalifikacija nėra tikrinama“
      (MVP LT/EN; iki 2026-10-04 lentelių taisyklė trečiojo neatpažino ir palikdavo kvalifikacijos lentelę). */
+  /* Pasiūlymo galiojimo užtikrinimo varianto prasmė: 'taikomas', o netaikomas - pagal vertinimo kriterijų: 'kaina' („perkame pagal
+     kainą ar sąnaudas“) arba 'kokybe' („... kainos (ar sąnaudų) ir kokybės santykį“). Kriterijaus kodas -> variantas: kaina, sąnaudos - 'kaina'. */
+  function uztikrinimoVariantas(tekstas){
+    const t = norm(tekstas);
+    if (/^jei taikomas pasiulymo galiojimo uztikrinimas/.test(t)) return 'taikomas';
+    if (!/^jei netaikomas pasiulymo galiojimo uztikrinimas/.test(t)) return null;
+    return /kokybes santyki/.test(t) ? 'kokybe' : /kaina ar sanaudas$/.test(t) ? 'kaina' : null;
+  }
+  const UZT_PAGAL_KRITERIJU = { kaina: 'kaina', sanaudos: 'kaina', kks: 'kokybe', sks: 'kokybe' };
   function tikrinimoVariantas(tekstas){
     const t = norm(tekstas);
     if (!/pasalinimo pagrind/.test(t)) return null;
@@ -358,6 +409,18 @@
     let p = 0;
     (vietos || []).forEach((v, k) => {
       const raw = String((reiksmes || [])[k] == null ? '' : reiksmes[k]).trim();
+      // Pakeitimo vieta: reikšmė - kodas; null (nėra kodo ar variantas paliekamas) - šablono tekstas lieka, vieta praleidžiama;
+      // '' - atkarpa pašalinama su tarpu prieš ją; tekstas - įrašomas vietoj atkarpos
+      if (v.pakeitimas){
+        const rep = !raw ? null : (typeof v.variantai === 'function' ? v.variantai(raw) : (v.variantai || {})[raw]);
+        if (rep == null || v.start < p) return;
+        let s = v.start;
+        if (rep === '') while (s > p && /\s/.test(t[s - 1])) s--;
+        if (s > p) out.push({ t: 'tekstas', s: t.slice(p, s) });
+        out.push(rep === '' ? { t: 'salinama', s: t.slice(s, v.end), k, sprendimu: true } : { t: 'reiksme', s: bruks(rep), k });
+        p = v.end;
+        return;
+      }
       // Vieta pašalinama pagal žmogaus atsakymą (pvz. „Vertinama tik pagal kainą“ - „[arba ...]“) kartu su tarpu prieš ją.
       if (raw === SALINTI){
         if (v.start < p) return;
@@ -461,5 +524,5 @@
 
   root.GP_LAUKAI = { norm, arTiekejoVieta, tusciosVietos, xVietos, laukas, planas, keitimai, tekstasIsPlano, gramatika, sutrauk,
     prieduSarasas, nuorodosPriedas, priedoRaktasIsTeksto, PRIEDU_PAV, EN_MENESIAI, skyriai, skyrius, arAntraste, TIPAI,
-    GRUPES, grupesKlausimas, tikrinimoVariantas, SALINTI };
+    GRUPES, grupesKlausimas, tikrinimoVariantas, uztikrinimoVariantas, UZT_PAGAL_KRITERIJU, SALINTI, KRITERIJU_PASIRINKIMAI };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1300,8 +1300,16 @@ function prieduEiluteIntarpas(n){
   return r.startsWith(t.split(' ').slice(0, 2).join(' ')) || (r.length >= 10 && t.endsWith(r));
 }
 /* Priedu saraso (SPS pabaigoje) numatytos reiksmes. */
+/* Metodikos priedo eilutė SPS priedų sąraše („... (jei Pasiūlymai vertinami pagal sąnaudas, kainos ar sąnaudų ir kokybės santykį)“):
+   lieka visiems kriterijams, išskyrus kainą (šablono sąlyga, naudotojo sprendimas 2026-10-04); likusioje eilutėje sąlyga skliaustuose
+   pašalinama (išspręsta), kaip kitos išspręstos sąlygos. */
+const METODIKOS_EIL_RE = /^\d+ priedas ekonomiskai naudingiausio pasiulymo vertinimo metodika/;
+const METODIKOS_EIL_DOK = /^\s*(\d+\s*priedas\s*[–-]\s*Ekonomiškai naudingiausio Pasiūlymo vertinimo metodika|Annex\s+\d+\s*[–-]\s*Methodology for evaluating the most economically advantageous tender)/i;
+const METODIKOS_SALYGA = /\s*\((?:jei Pasiūlymai vertinami pagal|if the Tenders are evaluated based on)[^)]*\)/i;
+const metodikosEiluteLieka = () => { const kr = kriterijus(); return kr ? kr !== 'kaina' : true; };
 function priedoEilutesNumatyta(tekstas){
   const t = norm(tekstas);
+  if (METODIKOS_EIL_RE.test(t)) return metodikosEiluteLieka();
   if (/nacionalinio saugumo/.test(t)) return nacsaugTaip();
   if (/deretinu salygu/.test(t))      return derybosTaip() && apimtis() !== 'kaina';
   return true;
@@ -1846,6 +1854,12 @@ function surinktiKlausimus(){
     (Z.intarpai||[]).forEach(n => {
       const kat = intarpoKat(n);
       if (isjungta.has(n.i)) return;
+      if (!forma && METODIKOS_EIL_RE.test(norm(n.text))){
+        const kr = kriterijus();
+        auto(trumpas, n.text, !kr ? 'laukiama vertinimo kriterijaus (8.1 p.)' : kr === 'kaina' ? 'eilutė trinama' : 'eilutė paliekama, sąlyga skliaustuose trinama',
+             'metodikos priedas - visiems kriterijams, išskyrus kainą (šablono sąlyga)');
+        return;
+      }
       if (prieduEiluteIntarpas(n)){                           // SPS priedu sarasas, kai raudona tik eilutes dalis
         const q = pridek('priedai', norm(n.text), trumpas, { tekstas:n.text, vieta:{ dok:d.trumpas, i:n.i } });
         siulyk('A_' + norm(n.text), null, priedoEilutesNumatyta(n.text), priedoEilutesKilme(n.text));
@@ -2180,6 +2194,7 @@ function surinktiKlausimus(){
 const SKYRIAUS_ZYMA = '⟦SKYRIUS⟧';
 function priedoEilutesKilme(t){
   const n = norm(t);
+  if (METODIKOS_EIL_RE.test(n) && kriterijus()) return `pagal vertinimo kriterijų „${KRITERIJU_PAV[kriterijus()]}“ (8.1 p.)`;
   if (/nacionalinio saugumo/.test(n)) return 'pagal 1 žingsnio atsakymą apie nacionalinį saugumą';
   if (/deretinu salygu/.test(n)) return 'pagal 1 žingsnio derybų apimtį';
   return 'eilutė yra šablono SPS priedų sąraše';
@@ -2449,11 +2464,19 @@ function kortelesVienetai(K, c){
     if (taipNeLaukas(q.lk)){
       const a = ATS['KR_' + c.raktas];
       out.push({ id: c.id + '-kr0', pavadinimas: q.lk.klausimas, busena: sprendimoBusena(a, 'KR_' + c.raktas), salyga: !!q.salyga,
-        blokuoja: a === undefined && !q.salyga, raktai: ['KR_' + c.raktas], reiksme: a === true ? 'Taip - nurodymas pašalinamas' : a === false ? 'Ne' : '' });
-      if (a !== false) return out;                // neatsakyta arba „Taip“ - vietų pildyti nereikia
+        blokuoja: a === undefined && !q.salyga, raktai: ['KR_' + c.raktas],
+        reiksme: a === true ? 'Taip - nurodymas pašalinamas' : a === false ? 'Ne - pridedamas vertinimo metodikos priedas' : '' });
+      return out;                                 // vietų pildyti nereikia - jas lemia atsakymas
     }
+    const salintos = pasalintosVietos(q, ATS[key] || []);
     (q.lk ? q.lk.vietos : []).forEach((v, k) => {
-      if (v.kopija != null) return;
+      if (v.kopija != null || salintos.has(k)) return;
+      if (v.ivestis === 'kriterijus'){
+        const kod = (ATS[key] || [])[k];
+        out.push({ id: c.id + '-v' + k + '-o0', pavadinimas: 'Vertinimo kriterijus: ' + be1Nr(q.tekstas), busena: vietosBusena(key, k, 'a'), salyga: !!q.salyga,
+          blokuoja: !kod && !q.salyga, raktai: [vRaktas(key, k)], reiksme: kod ? KRITERIJU_PAV[kod] : '' });
+        return;
+      }
       const s = SIUL.get(vRaktas(key, k));
       out.push({ id: c.id + '-v' + k, pavadinimas: (v.uzrasas || 'Reikšmė') + ': ' + be1Nr(q.tekstas), busena: vietosBusena(key, k, v.klase), salyga: !!q.salyga,
         raktai: [vRaktas(key, k)], reiksme: (ATS[key] || [])[k] === SKYRIAUS_ZYMA ? 'skyriaus numeris (įrašomas generuojant)' : (ATS[key] || [])[k] || '',
@@ -2530,6 +2553,7 @@ function kortelesHTML(K, c){
       komentarai: q.komentarai, pastaba: q.pagrindimas ? 'Riba peržiūrėta: ' + q.pagrindimas : '', dokai });
     const gk = GP_LAUKAI.grupesKlausimas(q.nariai);
     if (gk && gk.id === 'tikrinimas' && tikrinimoSkaidomas(q)) return tikrinimoHTML(c, klase, pa, gk);
+    if (gk && gk.id === 'uztikrinimas' && uztikrinimoSkaidomas(q)) return uztikrinimoHTML(c, klase, pa, gk);
     return `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, gk ? gk.klausimas : 'Kuris variantas atitinka šį pirkimą?', pa)}
       <p class="lk-uz" id="${c.id}-uz">Pasirinkite vieną (privaloma). Numatytojo atsakymo nėra sąmoningai: įtraukus dvi, dokumentas prieštarautų pats sau.</p>
       <div class="lk-var" role="radiogroup" aria-labelledby="${c.id}-kl" aria-describedby="${c.id}-uz">
@@ -2592,23 +2616,129 @@ function kortelesHTML(K, c){
   return '';
 }
 
+/* Vertinimo kriterijus (SPS 8.1 p., naudotojo sprendimas 2026-10-04): 8.1 kortelės „kriterijus“ vietos kodas - kks / sks / sanaudos /
+   kaina; null - neatsakyta arba šablone kriterijų sąrašo nėra. Pagal jį: 8.1 p. lieka tik pasirinktas, kainos atveju metodikos sakinys
+   pašalinamas, metodikos priedo eilutė (ne kainai), pasiūlymo galiojimo užtikrinimo „netaikomas“ variantas. */
+function kriterijausVieta(K){
+  for (const [r, q] of Object.entries((K || window.__K || {}).tuscios || {})){
+    const k = q.lk ? q.lk.vietos.findIndex(v => v.ivestis === 'kriterijus') : -1;
+    if (k >= 0) return { raktas: r, k, q };
+  }
+  return null;
+}
+function kriterijus(K){ const v = kriterijausVieta(K); return v ? ((ATS['B_' + v.raktas] || [])[v.k] || null) : null; }
+const KRITERIJU_PAV = Object.fromEntries(GP_LAUKAI.KRITERIJU_PASIRINKIMAI);
+/* Vietos, kurios pagal atsakymus atsidūrė pašalintoje atkarpoje (pvz. metodikos priedo numeris, kai vertinama pagal kainą) - jų neklausiama. */
+function pasalintosVietos(q, vals){
+  const out = new Set();
+  if (!q.lk) return out;
+  const sritys = GP_LAUKAI.planas(q.tekstas, q.lk.vietos, vals || []).filter(s => s.t === 'salinama').map(s => q.lk.vietos[s.k]).filter(Boolean);
+  q.lk.vietos.forEach((v, k) => { if (sritys.some(x => x !== v && v.start >= x.start && v.end <= x.end)) out.add(k); });
+  return out;
+}
+window.pasirinkKriteriju = (raktas, k, kod) => {
+  const key = 'B_' + raktas, q = window.__K.tuscios[raktas];
+  uAtsArr(key, k, kod);
+  q.lk.vietos.forEach((v, j) => { if (v.kopija === k){ ATS[key][j] = kod; PATV.add(vRaktas(key, j)); } });
+  klausimynas();
+};
+
 /* „Taip / Ne“ laukas (DPS konkretaus pirkimo „Ar vertinama tik pagal kainą?“, naudotojo sprendimas 2026-10-04): atsakymas
    KR_<raktas> privalomas, numatytojo nėra. „Taip“ - šablono nurodymas (ir angliškas jo dvynys) pašalinamas (GP_LAUKAI.SALINTI),
    tai matoma peržiūroje ir patikroje; „Ne“ - įrašomi vertinimo kriterijai ir tvarka, kaip kitos vietos. */
 const taipNeLaukas = lk => !!(lk && GP_LAUKAI.TIPAI.some(x => x.taipNe && x.id === lk.tipas));
+/* „Ne“ (naudotojo sprendimas 2026-10-04): 2.5 p. „kainos kriterijų [arba ...]“ -> nuoroda į papildomą priedą, kurio numeris - kitas po
+   paskutinės priedų sąrašo eilutės; generuojant pridedama sąrašo eilutė ir priedo failas (pavadinimas ir raudona pastaba). */
+function dpsPriedoNr(q){
+  const d = q && q.vieta && DOK.find(x => x.trumpas === q.vieta.dok);
+  const nr = d ? GP_LAUKAI.prieduSarasas(d.zemelapis.paras).map(e => parseInt(e.nr, 10)).filter(n => n > 0) : [];
+  return nr.length ? Math.max(...nr) + 1 : null;
+}
 window.taipNe = (raktas, taip) => {
-  const K = window.__K, q = K.tuscios[raktas], en = K.enPoros.tuscios[raktas];
+  const K = window.__K, q = K.tuscios[raktas], en = K.enPoros.tuscios[raktas], nr = dpsPriedoNr(q);
   uAts('KR_' + raktas, taip, false);
-  const rinkinys = (key, n) => {
+  const rinkinys = (key, vietos) => {
     const a = Array.isArray(ATS[key]) ? ATS[key] : (ATS[key] = []);
-    for (let k = 0; k < n; k++){
-      if (taip){ a[k] = GP_LAUKAI.SALINTI; PATV.add(vRaktas(key, k)); }
-      else if (a[k] === GP_LAUKAI.SALINTI) a[k] = '';
-    }
+    vietos.forEach((v, k) => {
+      a[k] = v.ivestis === 'dps-priedas' ? (taip || !nr ? '' : 'priedas:' + nr) : (taip ? GP_LAUKAI.SALINTI : '');
+      PATV.add(vRaktas(key, k));
+    });
     TOUCHED.add(key);
   };
-  rinkinys('B_' + raktas, (q.lk ? q.lk.vietos : []).length);
-  if (en) rinkinys('B_' + en.enRaktas, en.vietos);
+  rinkinys('B_' + raktas, q.lk ? q.lk.vietos : []);
+  if (en) rinkinys('B_' + en.enRaktas, GP_LAUKAI.laukas(en.tekstas || '', { x:true }).vietos);
+  klausimynas();
+};
+
+/* Pasiūlymo galiojimo užtikrinimas (5 klausimas, naudotojo sprendimas 2026-10-04): „Taip / Ne“; atsakius „Ne“, šablono variantas
+   („perkame pagal kainą ar sąnaudas“ / „... kokybės santykį“) parenkamas pagal vertinimo kriterijų - SPS 8.1 p. atsakymą, DPS konkretaus
+   pirkimo - „Ar vertinama tik pagal kainą?“ („Taip“ - kaina; „Ne“ - renkasi žmogus, nes tai gali būti ir sąnaudos, ir kokybė).
+   UZT_DALIS - „Ne“, kol variantas dar nenustatytas. */
+const UZT_DALIS = {};
+const uztikrinimoVariantai = g => g.nariai.map(n => ({ n, v: GP_LAUKAI.uztikrinimoVariantas(n.tekstas) }));
+function uztikrinimoSkaidomas(g){
+  const V = uztikrinimoVariantai(g);
+  return V.every(x => x.v) && ['taikomas', 'kaina', 'kokybe'].every(v => V.filter(x => x.v === v).length === 1);
+}
+/* Kriterijus 5 klausimui: { pagal: 'kaina'|'kokybe'|null, kodel } - null, kai nežinomas arba renkasi žmogus. */
+function uztikrinimoKriterijus(K){
+  const kr = kriterijus(K);
+  if (kr) return { pagal: GP_LAUKAI.UZT_PAGAL_KRITERIJU[kr], kodel: `pagal vertinimo kriterijų „${KRITERIJU_PAV[kr]}“ (8.1 p.)` };
+  if (kriterijausVieta(K)) return { pagal: null, laukia: 'kriterijus' };
+  const dps = Object.entries((K || {}).tuscios || {}).find(([, q]) => taipNeLaukas(q.lk));
+  if (dps){
+    const a = ATS['KR_' + dps[0]];
+    if (a === true) return { pagal: 'kaina', kodel: 'pagal atsakymą „Ar vertinama tik pagal kainą?“ - „Taip“' };
+    return { pagal: null, laukia: a === false ? 'zmogus' : 'dps' };
+  }
+  return { pagal: null, laukia: 'zmogus' };
+}
+function uztikrinimoAtsakymas(gid, g){
+  const V = uztikrinimoVariantai(g), pas = V.find(x => ATS[x.n.raktas] === true);
+  return pas ? (pas.v === 'taikomas' ? 'taip' : 'ne') : (UZT_DALIS[gid] || null);
+}
+/* Atsakius „Ne“ - variantas pagal kriterijų (kriterijus pakeitus - perparenkamas). Kviečiama prieš kiekvieną perpiešimą. */
+function uztikrinimoTaikyk(K){
+  if (!K) return;
+  const kr = uztikrinimoKriterijus(K);
+  Object.entries(K.grupes || {}).forEach(([gid, g]) => {
+    const gk = GP_LAUKAI.grupesKlausimas(g.nariai);
+    if (!gk || gk.id !== 'uztikrinimas' || !uztikrinimoSkaidomas(g) || uztikrinimoAtsakymas(gid, g) !== 'ne' || !kr.pagal) return;
+    const t = uztikrinimoVariantai(g).find(x => x.v === kr.pagal);
+    if (t && ATS[t.n.raktas] !== true) g.nariai.forEach(n => { ATS[n.raktas] = n.raktas === t.n.raktas; TOUCHED.add(n.raktas); PATV.add(n.raktas); });
+  });
+}
+function uztikrinimoHTML(c, klase, pa, gk){
+  const q = c.q, gid = c.raktas, V = uztikrinimoVariantai(q), nm = esc(gid), K = window.__K;
+  const ats = uztikrinimoAtsakymas(gid, q), pas = V.find(x => ATS[x.n.raktas] === true), kr = uztikrinimoKriterijus(K);
+  const paV = pa + `<p><b>Šablono variantai:</b></p>` + q.nariai.map(n => `<p class="lk-var-sab">${esc(n.tekstas)}</p>`).join('');
+  let h = `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, gk.klausimas, paV)}
+    <p class="lk-uz" id="${c.id}-uz">Atsakykite (privaloma). Atsakius „Ne“, šablono variantas parenkamas pagal vertinimo kriterijų.</p>
+    <div class="opts lk-ops" role="radiogroup" aria-labelledby="${c.id}-kl" aria-describedby="${c.id}-uz">
+      <label class="opt"><input type="radio" id="${c.id}-o0" name="GU_${nm}" ${ats === 'taip' ? 'checked' : ''} onchange="pasirinkUztikrinima('${nm}','taip')"> Taip</label>
+      <label class="opt"><input type="radio" id="${c.id}-o1" name="GU_${nm}" ${ats === 'ne' ? 'checked' : ''} onchange="pasirinkUztikrinima('${nm}','ne')"> Ne</label>
+    </div>`;
+  if (ats === 'ne' && !kr.pagal){
+    if (kr.laukia === 'zmogus'){
+      const ne = V.filter(x => x.v !== 'taikomas');
+      h += `<p class="lk-kl lk-kl2" id="${c.id}-kl2">Kuris variantas atitinka šį pirkimą?</p>
+        <p class="lk-uz" id="${c.id}-uz2">Pasiūlymai vertinami ne tik pagal kainą - pasirinkite pagal tai, ar vertinama ir kokybė.</p>
+        <div class="lk-var" role="radiogroup" aria-labelledby="${c.id}-kl2" aria-describedby="${c.id}-uz2">${ne.map((x, j) =>
+          `<label class="opt lk-opt"><input type="radio" id="${c.id}-k${j}" name="GUK_${nm}" ${ATS[x.n.raktas] === true ? 'checked' : ''} onchange="pasirinkGrupe('${nm}','${esc(x.n.raktas)}')"><span><span class="lk-opt-t">${esc(x.n.tekstas)}</span></span></label>`).join('')}</div>`;
+    } else h += `<p class="lk-salyga">Variantas bus parinktas atsakius į klausimą „${kr.laukia === 'kriterijus' ? 'Pagal kokį kriterijų vertinami pasiūlymai?' : 'Ar vertinama tik pagal kainą?'}“.</p>`;
+  }
+  if (pas){
+    const tekst = blokoTekstas({ dok: pas.n.dok, i: pas.n.bi }, pas.n.blokas);
+    h += `<div class="lk-pz"><span class="lk-pz-t">Šablono variantas</span> <span class="lk-pz-s">${esc(pas.n.tekstas)}</span>${ats === 'ne' && kr.pagal ? ` <span class="lk-kilme-t">(${esc(kr.kodel)})</span>` : ''}${tekst
+      ? `<span class="lk-pz-t lk-pz-t2">Dokumente lieka</span> <span class="lk-pz-k">${ilgasTekstas(tekst, 200)}</span>` : ''}</div>`;
+  }
+  return h + aiBlokas('G|' + gid) + `</section>`;
+}
+window.pasirinkUztikrinima = (gid, ats) => {
+  const g = window.__K.grupes[gid], V = uztikrinimoVariantai(g);
+  g.nariai.forEach(n => { TOUCHED.add(n.raktas); PATV.add(n.raktas); ATS[n.raktas] = false; });
+  if (ats === 'taip'){ delete UZT_DALIS[gid]; const t = V.find(x => x.v === 'taikomas'); ATS[t.n.raktas] = true; }
+  else UZT_DALIS[gid] = 'ne';                  // variantą pagal kriterijų parenka klausimynas() (uztikrinimoTaikyk)
   klausimynas();
 };
 
@@ -2693,18 +2823,31 @@ function laukoHTML(K, c, klase, kur, dokai){
       <label class="opt"><input type="radio" id="${c.id}-kr0" name="KR_${esc(c.raktas)}" ${tnA === true ? 'checked' : ''} onchange="taipNe('${esc(c.raktas)}',true)"> Taip</label>
       <label class="opt"><input type="radio" id="${c.id}-kr1" name="KR_${esc(c.raktas)}" ${tnA === false ? 'checked' : ''} onchange="taipNe('${esc(c.raktas)}',false)"> Ne</label></div>` : ''}
     <div class="lk-pz"><span class="lk-pz-t">Taip atrodys dokumente</span> <span class="lk-pz-s" id="${c.id}-pz">${perziurosHTML(q.tekstas, lk.vietos, vals)}</span></div>`;
-  // „Taip / Ne“ laukas: kol neatsakyta ar atsakius „Taip“ (nurodymas šalinamas), įvesties laukų nėra
-  if (tn && tnA !== false) return h + `</section>`;
+  // „Taip / Ne“ laukas: įvesties laukų nėra - „Taip“ nurodymas šalinamas, „Ne“ - nuoroda į papildomą priedą (pridedamas generuojant)
+  if (tn){
+    const nr = dpsPriedoNr(q);
+    return h + (tnA === false ? `<p class="lk-uz lk-priedas">Generuojant bus pridėtas ${nr ? nr + ' ' : ''}priedas „Ekonomiškai naudingiausio pasiūlymo
+      vertinimo metodika“ - su pavadinimu ir raudona pastaba, kad reikia įrašyti vertinimo kriterijus ir tvarką; priedų sąraše atsiras jo eilutė.</p>` : '') + `</section>`;
+  }
+  const salintos = pasalintosVietos(q, vals);
   h += `<div class="lk-vietos">`;
   let ui = 0;
   const kart = {};
   lk.vietos.forEach(v => { if (v.kopija == null) kart[v.uzrasas] = (kart[v.uzrasas] || 0) + 1; });
   const eil = {};
   lk.vietos.forEach((v, k) => {
-    if (v.kopija != null) return;
-    const u = c.vienetai.find(x => x.id === c.id + '-v' + k) || c.vienetai[ui];
+    if (v.kopija != null || salintos.has(k)) return;
+    const u = c.vienetai.find(x => x.id === c.id + '-v' + k || x.id === c.id + '-v' + k + '-o0') || c.vienetai[ui] || {};
     ui++;
     const id = c.id + '-v' + k, val = vals[k] === SKYRIAUS_ZYMA || vals[k] === GP_LAUKAI.SALINTI ? '' : (vals[k] || '');
+    // 8.1 p. vertinimo kriterijus - vienas iš šablono sąrašo (privaloma, numatytojo nėra)
+    if (v.ivestis === 'kriterijus'){
+      h += `<div class="lk-v"><div class="opts lk-ops" role="radiogroup" aria-labelledby="${c.id}-kl"${uz ? ` aria-describedby="${c.id}-uz"` : ''}>
+        ${GP_LAUKAI.KRITERIJU_PASIRINKIMAI.map(([kod, pav], j) => `<label class="opt"><input type="radio" id="${id}-o${j}" name="KRIT_${esc(c.raktas)}" ${val === kod ? 'checked' : ''}
+          onchange="pasirinkKriteriju('${esc(c.raktas)}', ${k}, '${kod}')"> ${pav}</label>`).join('')}</div>
+        <div class="lk-v-iv">${busenosZyma(u.busena || 'neuzpildyta', id + '-o0-b')}</div></div>`;
+      return;
+    }
     const nr = kart[v.uzrasas] > 1 ? (eil[v.uzrasas] = (eil[v.uzrasas] || 0) + 1) : 0;
     const aria = [uz ? c.id + '-uz' : '', id + '-s', c.id + '-pa'].filter(Boolean).join(' ');
     h += `<div class="lk-v"><label class="lk-v-l" for="${id}">${esc(v.uzrasas || 'Reikšmė')}${nr ? ` <span class="lk-nr">${nr} vieta sakinyje</span>` : ''}${v.klase === 'b' ? ' <span class="lk-nepriv">neprivaloma</span>' : ''}</label>
@@ -2977,6 +3120,7 @@ document.addEventListener('click', e => {
 function klausimynas(){
   const y = window.scrollY;
   const fokusas = document.activeElement && document.activeElement.id;
+  uztikrinimoTaikyk(window.__K);                  // 5 klausimas: „Ne“ - variantas pagal vertinimo kriterijų (pakeitus kriterijų - iš naujo)
   const K = window.__K = surinktiKlausimus();
   const S = formosSantrauka(K);
 
@@ -3250,6 +3394,10 @@ async function generuotiViena(d, REZ){
   const sulietuIdx = new Set((Z.blokai||[]).filter(b => b.sulieta).map(b => b.i));
   (Z.intarpai||[]).forEach(n => {
     if (trinti.has(n.i) || sulietuIdx.has(n.i)) return;
+    if (!forma && METODIKOS_EIL_RE.test(norm(n.text))){       // metodikos eilutė (AK, AKV): kainos atveju trinama
+      if (metodikosEiluteLieka()) juodinti.add(n.i); else { trinti.add(n.i); prieduIstrinta++; }
+      return;
+    }
     if (!forma && prieduEiluteIntarpas(n)){                 // priedu saraso eilute - pagal priedo pasirinkima
       if (ATS['A_' + norm(n.text)]) juodinti.add(n.i); else { trinti.add(n.i); prieduIstrinta++; }
       return;
@@ -3376,6 +3524,16 @@ async function generuotiViena(d, REZ){
   if (!forma && !(Z.blokai||[]).some(b => b.tipas === 'lentele' && lentelesTaisykle(b.klausimasLT || b.klausimas) === 'kvalifikacija')
       && kvalifikacijosLenteles().tik1 && (Z.vienetai||[]).some(v => v.grupe && /kvalifikacij/.test(norm(v.tekstas))))
     kvalLentele = GPDocx.deleteTableByCaption(doc, '2', 'Kvalifikacijos reikalavim');
+  // Metodikos priedo eilutė, kuri lieka: šablono sąlyga skliaustuose jau išspręsta - pašalinama (matoma patikroje)
+  if (!forma) paras.forEach((p, i) => {
+    if (trinti.has(i)) return;
+    const t = GPDocx.paraText(p), m = METODIKOS_EIL_DOK.test(t) && t.match(METODIKOS_SALYGA);
+    if (!m) return;
+    if (GPGen.keisti(paras, i, [{ start: m.index, end: m.index + m[0].length, tekstas: '' }])) salintiAtsakymu.push({ dok: d.trumpas, nuoroda: m[0].trim(), tekstas: t });
+  });
+  // DPS konkretus pirkimas, „Ar vertinama tik pagal kainą?“ - „Ne“: priedų sąraše - papildomo priedo eilutė (failas pridedamas generuojant)
+  const dpsPriedas = !forma && dokTipas(d) === 'SALYGOS' ? dpsMetodikosPriedas() : null;
+  if (dpsPriedas) pridekPriedoEilute(paras, dpsPriedas.nr, Z.kalba === 'LTEN');
   // R1: dvikalbiu eiluciu anglu kalbos naslaiciai (lietuviska dalis istrinta visa)
   if (!forma && Z.kalba === 'LTEN') angliskiNasliaciai(paras, trinti, trintiEiluciu);
   let ntEil = 0;
@@ -3465,6 +3623,86 @@ async function generuotiViena(d, REZ){
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr } };
 }
 
+/* DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“, naudotojo sprendimas 2026-10-04): { nr } arba null. */
+function dpsMetodikosPriedas(){
+  const K = window.__K;
+  const e = K && Object.entries(K.tuscios).find(([r, q]) => taipNeLaukas(q.lk) && ATS['KR_' + r] === false);
+  if (!e) return null;
+  const nr = dpsPriedoNr(e[1]);
+  return nr ? { nr } : null;
+}
+const DPS_PRIEDO_EIL = { lt: nr => `${nr} priedas - Ekonomiškai naudingiausio pasiūlymo vertinimo metodika.`,
+  en: nr => `Annex ${nr} - Methodology for evaluating the most economically advantageous tender.` };
+/* Pastraipos tekstas - pirmame w:t (formatavimas - pirmo runo), kiti runai ištuštinami. */
+function nustatykPastraiposTeksta(p, tekstas){
+  const ts = GPDocx.els(p, 't');
+  if (!ts.length) return false;
+  ts[0].textContent = tekstas; ts[0].setAttribute('xml:space', 'preserve');
+  for (let k = 1; k < ts.length; k++) ts[k].textContent = '';
+  return true;
+}
+const kabliataskiuGale = p => { const t = GPDocx.paraText(p); if (/\.\s*$/.test(t)) nustatykPastraiposTeksta(p, t.replace(/\.\s*$/, ';')); };
+const valykKlona = el => { ['bookmarkStart', 'bookmarkEnd'].forEach(n => GPDocx.els(el, n).forEach(x => x.parentNode.removeChild(x)));
+  [el, ...el.getElementsByTagName('*')].forEach(x => { ['w14:paraId', 'w14:textId'].forEach(a => x.removeAttribute && x.removeAttribute(a)); }); };
+/* Priedų sąrašo eilutė po paskutinės („6 priedas - ...“): LT dokumente - pastraipa, LT/EN - lentelės eilutė (LT | EN). Ankstesnės eilutės
+   taškas - kabliataškis (kaip kitose eilutėse). Įrašomas tekstas - be U+2013 (oficialūs dokumentai, shared/docx-stiliai.js). */
+function pridekPriedoEilute(paras, nr, dvikalbis){
+  const eil = paras.filter(p => /^\s*\d+\s*priedas\s*[–-]/.test(GPDocx.paraText(p)));
+  const pask = eil[eil.length - 1];
+  if (!pask) return false;
+  if (dvikalbis){
+    const tr = eiluteP(pask);
+    if (!tr) return false;
+    const kl = tr.cloneNode(true); valykKlona(kl);
+    tr.parentNode.insertBefore(kl, tr.nextSibling);
+    const [lt, en] = GPDocx.els(tr, 'tc').map(tc => GPDocx.els(tc, 'p').find(x => GPDocx.paraText(x).trim()));
+    const [klLt, klEn] = GPDocx.els(kl, 'tc').map(tc => GPDocx.els(tc, 'p').find(x => GPDocx.paraText(x).trim()));
+    if (lt) kabliataskiuGale(lt); if (en) kabliataskiuGale(en);
+    if (klLt) nustatykPastraiposTeksta(klLt, gpBruksniai(DPS_PRIEDO_EIL.lt(nr)));
+    if (klEn) nustatykPastraiposTeksta(klEn, gpBruksniai(DPS_PRIEDO_EIL.en(nr)));
+    return true;
+  }
+  const kl = pask.cloneNode(true); valykKlona(kl);
+  pask.parentNode.insertBefore(kl, pask.nextSibling);
+  kabliataskiuGale(pask);
+  nustatykPastraiposTeksta(kl, gpBruksniai(DPS_PRIEDO_EIL.lt(nr)));
+  return true;
+}
+/* Papildomo priedo failas: tas pats šablonas (stiliai, antraštė, puslapio nustatymai), kūne - priedo numeris, pavadinimas ir RAUDONA
+   pastaba (kol ji yra, baigtumo patikra paketą rodo nebaigtu). Dvikalbiam - abiem kalbomis. */
+async function dpsMetodikosFailas(d, nr){
+  const doc = await GPDocx.open(d.buf.slice(0));
+  await GPDocx.stripComments(doc);
+  const D = doc.parts['word/document.xml'], W = GPDocx.NS_W, body = GPDocx.els(D, 'body')[0];
+  const sect = Array.from(body.childNodes).find(n => n.localName === 'sectPr');
+  Array.from(body.childNodes).forEach(n => { if (n !== sect) body.removeChild(n); });
+  const pastr = (tekstas, o = {}) => {
+    const P = D.createElementNS(W, 'w:p'), pPr = D.createElementNS(W, 'w:pPr');
+    const sp = D.createElementNS(W, 'w:spacing'); sp.setAttributeNS(W, 'w:after', '240'); pPr.appendChild(sp);
+    if (o.jc){ const jc = D.createElementNS(W, 'w:jc'); jc.setAttributeNS(W, 'w:val', o.jc); pPr.appendChild(jc); }
+    P.appendChild(pPr);
+    const r = D.createElementNS(W, 'w:r'), rPr = D.createElementNS(W, 'w:rPr');
+    if (o.b) rPr.appendChild(D.createElementNS(W, 'w:b'));
+    if (o.raudonas){ const c = D.createElementNS(W, 'w:color'); c.setAttributeNS(W, 'w:val', 'FF0000'); rPr.appendChild(c); }
+    r.appendChild(rPr);
+    const t = D.createElementNS(W, 'w:t'); t.setAttribute('xml:space', 'preserve'); t.textContent = gpBruksniai(tekstas); r.appendChild(t);
+    P.appendChild(r);
+    body.insertBefore(P, sect || null);
+  };
+  pastr(`Konkretaus pirkimo sąlygų ${nr} priedas`, { jc: 'right' });
+  if (d.zemelapis.kalba === 'LTEN') pastr(`Annex ${nr} to the specific procurement conditions`, { jc: 'right' });
+  pastr('EKONOMIŠKAI NAUDINGIAUSIO PASIŪLYMO VERTINIMO METODIKA', { jc: 'center', b: true });
+  if (d.zemelapis.kalba === 'LTEN') pastr('METHODOLOGY FOR EVALUATING THE MOST ECONOMICALLY ADVANTAGEOUS TENDER', { jc: 'center', b: true });
+  pastr('Pridėkite ekonominio naudingumo vertinimo kriterijus ir tvarką.', { raudonas: true });
+  if (d.zemelapis.kalba === 'LTEN') pastr('Add the economic advantage evaluation criteria and procedure.', { raudonas: true });
+  // LITGRID logotipas - kaip šablono dokumentui (kai jo antraštėje nėra)
+  if (window.GP_LOGO && !(await GPDocx.antrastejePaveikslas(doc))) await GPDocx.insertLogo(doc, { bytes: GP_LOGO.bytes(), cxEmu: 150*12700, cyEmu: 55*12700 });
+  const audit = GPAudit.check(doc, IMONE, false);
+  const blob = await GPDocx.save(doc, 'blob');
+  return { d: { trumpas: d.trumpas.replace(/SALYGOS$/, 'METODIKA'), pavadinimas: `${nr} priedas - Ekonomiškai naudingiausio pasiūlymo vertinimo metodika` },
+           blob, audit, forma: false, papildomas: true, stats: {} };
+}
+
 /* Skyriaus numeris galutiniame dokumente: LT - pastraipos pradzia („12.<tab>ESMINĖS ...“), dvikalbiame - pirmas eilutes
    langelis („14.“). null - skyriaus nera. */
 function skyriausNumeris(doc, re){
@@ -3492,6 +3730,9 @@ async function generuoti(){
   const rinkinys = [...DOK], statiniai = [...STATINIAI];   // uzrakinam sarasus
   const rez = [];
   for (const d of rinkinys) rez.push(await generuotiViena(d, REZ));
+  // DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“): failas iš sąlygų šablono
+  const dpsP = dpsMetodikosPriedas(), dpsD = dpsP && rinkinys.find(d => /^DPSP_.*_SALYGOS$/.test(d.trumpas));
+  if (dpsD) rez.push(await dpsMetodikosFailas(dpsD, dpsP.nr));
   // Nekeiciami priedai (banku sarasas PDF): failas pridedamas kaip yra - jame nera ko pildyti ar tikrinti.
   for (const st of statiniai){
     const buf = await gaukBuf('templates/' + st.failas);
@@ -3511,7 +3752,7 @@ const DOK_VARDAI = { BPS:'BPS', SPS:'SPS', SALYGOS:'Pirkimo sąlygos', PASIULYMA
   KONFIDENCIALUMAS:'Konfidencialumo įsipareigojimas', NACSAUGUMAS:'Nacionalinio saugumo deklaracija',
   NACSAUGUMASVPI:'Nacionalinio saugumo deklaracija', KONFINFO:'Konfidenciali informacija', SUBTIEKEJAI:'Informacija apie subtiekėjus',
   SANDORIS:'Sandorio šalies duomenys', DERYBOS:'Pasiūlymai dėl derėtinų sąlygų', VALDYMAS:'Valdymo ar priežiūros organai',
-  BANKAI:'Priimtinų bankų sąrašas' };
+  BANKAI:'Priimtinų bankų sąrašas', METODIKA:'Vertinimo metodika' };
 function failuVardai(rez){
   const kalba = $('input[name=kalba]:checked').value === 'LT_EN' ? ' LT-EN' : '';
   const bendra = { numeris: ((KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {}).numeris || '',
@@ -4159,8 +4400,9 @@ function patarejoKlausimai(K){
   });
   // Priedų ir skyrių numeriai AI neklausiami: jie siūlomi iš paties SPS priedų sąrašo ir galutinės numeracijos
   const tikNuorodos = q => q.lk && q.lk.vietos.every(v => v.kopija != null || v.ivestis === 'priedo-nr' || v.ivestis === 'skyrius');
-  // „Taip / Ne“ laukai (DPS „Ar vertinama tik pagal kainą?“) - žmogaus sprendimas, AI neklausiamas
-  Object.entries(K.tuscios).forEach(([r, q]) => { if (!q.pastabaTipas && !arAngliskas(q.tekstas) && !tikNuorodos(q) && !taipNeLaukas(q.lk)) Q.push({ id:id('B'),
+  // „Taip / Ne“ laukai (DPS „Ar vertinama tik pagal kainą?“) ir vertinimo kriterijus (8.1 p.) - žmogaus sprendimai, AI neklausiamas
+  const pakeitimas = q => q.lk && q.lk.vietos.some(v => v.pakeitimas);
+  Object.entries(K.tuscios).forEach(([r, q]) => { if (!q.pastabaTipas && !arAngliskas(q.tekstas) && !tikNuorodos(q) && !taipNeLaukas(q.lk) && !pakeitimas(q)) Q.push({ id:id('B'),
     raktas:'B|' + r, rusis:'reiksme', tekstas:zodziu(q.tekstas, 700), vietos:q.vietos || 1,
     dok:q.dokumentai, pastaba:pastaba(q.komentarai) }); });
   if (K.dalys) for (let k = 0; k < K.dalys.iki - K.dalys.sablone; k++)
