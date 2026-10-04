@@ -1853,12 +1853,14 @@ function lenteliuKlaidos(xml, vardas, leistinas, info = { rasti: new Set(), elPa
     const ind = +atW(elW(tp, "tblInd")[0], "w") || 0, tp_ = !idet && plotis(tbl);
     if (tp_ && suma + Math.max(ind, 0) > tp_ + 5) k.push(v + ": platesnė už tekstą " + suma + "/" + tp_);
     if (!idet && ind < 0) k.push(v + ": neigiama įtrauka " + ind);
-    elW(tbl, "tr").forEach((tr, ri) => {
+    const rows = elW(tbl, "tr"), nil = (tr, kr) => elW(tr, "tc").every(tc => atW(elW(elW(elW(tc, "tcPr")[0], "tcBorders")[0], kr)[0], "val") === "nil");
+    const skaid = rows.map((tr, ri) => (ri < rows.length - 1 && nil(tr, "bottom") && nil(rows[ri + 1], "top")) || (ri > 0 && nil(tr, "top") && nil(rows[ri - 1], "bottom")));
+    rows.forEach((tr, ri) => {
       const trPr = elW(tr, "trPr")[0], h = elW(trPr, "trHeight")[0];
       if (h && atW(h, "hRule") === "exact") k.push(v + " eil. " + ri + ": aukštis exact");
       if (GPL().trumpa(tr) && !elW(trPr, "cantSplit").length) k.push(v + " eil. " + ri + ": be cantSplit");
       let gi = +atW(elW(trPr, "gridBefore")[0], "val") || 0;
-      const etik = GPL().etiketesEilute(tr) && GPL().trumpa(tr), tcs = elW(tr, "tc"), beB = etik && GPL().bePusjuodzio(tr);
+      const etik = !skaid[ri] && GPL().etiketesEilute(tr) && GPL().trumpa(tr), tcs = elW(tr, "tc"), beB = etik && GPL().bePusjuodzio(tr);
       if (beB){
         info.elPasto++;
         const b = Array.from(tr.getElementsByTagNameNS(NSW, "b")).filter(x => atW(x, "val") !== "0" && atW(x, "val") !== "false").length;
@@ -1871,8 +1873,11 @@ function lenteliuKlaidos(xml, vardas, leistinas, info = { rasti: new Set(), elPa
         elW(tc, "p").forEach(p => {
           const jc = elW(elW(p, "pPr")[0], "jc")[0], j = atW(jc, "val");
           if (/distribute|Kashida/.test(j || "")) k.push(v + " eil. " + ri + ": jc " + j);
-          if (etik && ci < tcs.length - 1 && GPL().LYGIAVIMAS_ETIKETESE && j === "both") k.push(v + " eil. " + ri + ": etiketė lygiuota abipusiai");
+          if (GPL().LYGIAVIMAS_LENTELESE && j === "both") k.push(v + " eil. " + ri + ": pastraipa lygiuota abipusiai");
         });
+        const vaikai = Array.from(tc.childNodes).filter(n => n.nodeType === 1 && n.localName !== "tcPr");
+        const galas = vaikai[vaikai.length - 1], sdtGalas = galas && galas.localName === "sdt" && (x => x && x.localName === "p")(Array.from((elW(galas, "sdtContent")[0] || galas).childNodes).filter(n => n.nodeType === 1).pop());
+        if (!galas || (galas.localName !== "p" && !sdtGalas)) k.push(v + " eil. " + ri + " langelis " + ci + ": langelis nesibaigia pastraipa");
         Array.from(tc.getElementsByTagNameNS(NSW, "rPr")).forEach(rp => ["spacing", "w", "fitText"].forEach(t => { if (elW(rp, t).length) k.push(v + " eil. " + ri + ": rPr " + t); }));
         if (etik && ci < tcs.length - 1) Array.from(tc.getElementsByTagNameNS(NSW, "r")).forEach(r => {
           const rp = elW(r, "rPr")[0], b = rp && elW(rp, "b")[0];
@@ -1885,22 +1890,51 @@ function lenteliuKlaidos(xml, vardas, leistinas, info = { rasti: new Set(), elPa
   });
   return k;
 }
+/* Kiekvienos viršutinio lygio lentelės kiekvieno tinklelio stulpelio tekstas iš eilės per visas eilutes ir tekstas už lentelių:
+   skaidant eilutes ir atjungiant sujungtus langelius jis turi likti toks pat. */
+function stulpeliuTekstai(xml){
+  const d = new W.DOMParser().parseFromString(xml, "application/xml"), body = d.getElementsByTagNameNS(NSW, "body")[0];
+  const virsut = n => { for (let u = n.parentNode; u && u !== body; u = u.parentNode) if (u.localName === "tc" || u.localName === "txbxContent") return false; return true; };
+  let eilutes = 0;
+  const lenteles = Array.from(body.getElementsByTagNameNS(NSW, "tbl")).filter(virsut).map(tbl => {
+    const st = {};
+    elW(tbl, "tr").forEach(tr => { eilutes++; let g = +atW(elW(elW(tr, "trPr")[0], "gridBefore")[0], "val") || 0;
+      elW(tr, "tc").forEach(tc => { st[g] = (st[g] || "") + txW(tc); g += +atW(elW(elW(tc, "tcPr")[0], "gridSpan")[0], "val") || 1; }); });
+    return Object.keys(st).sort((a, b) => a - b).map(k => st[k]);
+  });
+  const uz = Array.from(body.getElementsByTagNameNS(NSW, "p")).filter(p => { for (let u = p.parentNode; u && u !== body; u = u.parentNode) if (u.localName === "tbl") return false; return true; }).map(txW).join("\n");
+  return { lenteles, uz, eilutes };
+}
+/* Viršutinio lygio lentelių eilutės, kurių aukščio įvertis (GPLent) didesnis už puslapio teksto aukštį. */
+function aukstesnes(dok, M){
+  const body = dok.getElementsByTagNameNS(NSW, "body")[0], visi = Array.from(body.getElementsByTagNameNS(NSW, "*")), out = [];
+  Array.from(body.getElementsByTagNameNS(NSW, "tbl")).forEach((tbl, ti) => {
+    for (let u = tbl.parentNode; u && u !== body; u = u.parentNode) if (u.localName === "tc" || u.localName === "txbxContent") return;
+    const sp = visi.slice(visi.indexOf(tbl)).find(n => n.localName === "sectPr"); if (!sp) return;
+    const pg = elW(sp, "pgSz")[0], mr = elW(sp, "pgMar")[0], H = +atW(pg, "h") - Math.abs(+atW(mr, "top")) - Math.abs(+atW(mr, "bottom"));
+    const par = GPL().parastesL(elW(tbl, "tblPr")[0]);
+    elW(tbl, "tr").forEach((tr, ri) => { const h = GPL().eilutesIvertis(tr, M, par); if (h > H) out.push("lentelė " + ti + " eil. " + ri + " - " + (h / H).toFixed(2) + " puslapio (" + txW(tr).slice(0, 40) + ")"); });
+  });
+  return out;
+}
+const pirmasSkirtumas = (a, b) => { const x = JSON.stringify(a), y = JSON.stringify(b); let i = 0; while (i < x.length && x[i] === y[i]) i++; return "…" + x.slice(Math.max(0, i - 40), i + 40) + " / …" + y.slice(Math.max(0, i - 40), i + 40); };
 async function testaiLenteles(){
   dabartine = grupe("Lentelės visuose sugeneruotuose dokumentuose (GPLent, 2026-10-04)");
-  await testas("Visos lentelės visuose dokumentuose (10 paketų: AK, AKV, TSD, MVP, ND, DPS, DPS-K, LT ir LT/EN, visi priedai): ne „exact“, be simbolių tarpų ir „distribute“, trumpos eilutės nedalomos, tinklelis = tblW = langelių pločiai (DXA), telpa į teksto plotį, etiketės kairėn, pusjuodis tik iš šablono (kainos eilučių lieka), tiekėjo el. pašto eilutė - be pusjuodžio; tekstas toks pat kaip be sutvarkymo", async () => {
-    const blogi = [], leist = {}, info = { rasti: new Set(), elPasto: 0 }; let lenteliu = 0, dok = 0;
+  await testas("Visos lentelės visuose dokumentuose (10 paketų: AK, AKV, TSD, MVP, ND, DPS, DPS-K, LT ir LT/EN, visi priedai): ne „exact“, be simbolių tarpų ir „distribute“, trumpos eilutės nedalomos, tinklelis = tblW = langelių pločiai (DXA), telpa į teksto plotį, lentelėse be abipusio lygiavimo, langelis baigiasi pastraipa, pusjuodis tik iš šablono (kainos eilučių lieka), tiekėjo el. pašto eilutė - be pusjuodžio; per aukštos eilutės suskaidytos ir nė viena dalis neviršija puslapio", async () => {
+    const blogi = [], leist = {}, info = { rasti: new Set(), elPasto: 0 }; let lenteliu = 0, dok = 0, skaidyta = 0, netelpa = 0;
     for (const [budas, kalba, centr] of [["T-AK", "LT"], ["T-AK", "LT_EN"], ["S-AK", "LT", true], ["T-SD", "LT"], ["T-SD", "LT_EN"], ["MV-SAD", "LT"], ["MV-SAD", "LT_EN"], ["S-ND", "LT_EN"], ["DPS", "LT_EN"], ["DPS-K", "LT_EN"]]){
       const docs = await generuokSu({ budas, kalba, centr, priedai: LENT_PRIEDAI });
       for (const [v, x] of Object.entries(docs)){
         if (x.statinis || !x.xml || x.r.papildomas) continue;
         leist[v] ??= await sablonoPusjuodzios(v);
-        dok++; lenteliu += (x.r.lenteles || {}).lenteliu || 0;
+        dok++; lenteliu += (x.r.lenteles || {}).lenteliu || 0; skaidyta += (x.r.lenteles || {}).skaidyta || 0; netelpa += (x.r.lenteles || {}).netelpa || 0;
         lenteliuKlaidos(x.xml, budas + " " + v, leist[v], info).forEach(e => blogi.push(e));
       }
     }
     tiesa(dok >= 60 && lenteliu >= 150, "per mažai: dokumentų " + dok + ", lentelių " + lenteliu);
     // el. pašto eilutė yra AK, AKV, TSD ir DPSP pasiūlymo formose (LT ir LT/EN) - jos turi būti rastos, kitaip patikra nieko netikrina
     tiesa(info.elPasto >= 6, "el. pašto eilučių rasta tik " + info.elPasto);
+    tiesa(skaidyta >= 20 && !netelpa, "per aukštų eilučių suskaidyta " + skaidyta + ", netelpa " + netelpa);
     // kitas šablono pusjuodis lieka: pasiūlymo kainos eilutės, specialistų lentelės antraštės
     tiesa(["pasiulymo kaina", "su pvm", "nuo"].every(t => info.rasti.has(t)), "šablono pusjuodis neliko: " + [...info.rasti].slice(0, 8).join(" | "));
     tiesa(!blogi.length, blogi.length + ":\n  " + blogi.slice(0, 12).join("\n  "));
@@ -1959,6 +1993,82 @@ async function testaiLenteles(){
     const n = (el, tag) => el.getElementsByTagNameNS(NSW, tag).length;
     lygu(tr.map(r => elW(r, "tc").map(tc => n(tc, "b") + "/" + n(tc, "bCs"))), [["0/0", "1/0"], ["0/0", "1/0"], ["2/1", "1/0"], ["2/1", "1/0"]], "pusjuodis (b/bCs) langeliuose: el. pašto etiketės - 0, vertės langeliai ir kitos etiketės - kaip buvo");
     lygu([st.pusjuodisEil, GPL().bePusjuodzio(tr[3])], [2, false], "eilučių be pusjuodžio, kita etiketė");
+  });
+  await testas("Per aukštos lentelių eilutės (Pages jų per puslapius nedalija, matuota - 13 dokumentų prarasdavo tekstą): suskaidytos ir sujungti langeliai atjungti taip, kad kiekviename stulpelyje tekstas toks pat ir ta pačia tvarka kaip be skaidymo, tekstas už lentelių nepakitęs, jokia eilutė neaukštesnė už puslapį (AK LT ir LT/EN, TSD, ND, DPS-K, MVP LT/EN)", async () => {
+    const blogi = []; let skaidyta = 0, atjungta = 0, naujuEil = 0, dok = 0;
+    for (const [budas, kalba] of [["T-AK", "LT_EN"], ["T-AK", "LT"], ["T-SD", "LT_EN"], ["S-ND", "LT_EN"], ["DPS-K", "LT_EN"], ["MV-SAD", "LT_EN"]]){
+      const be = await generuokSu({ budas, kalba, priedai: LENT_PRIEDAI, pries: () => { GPL().NUSTATYMAI.skaidyti = false; } });
+      const su = await generuokSu({ budas, kalba, priedai: LENT_PRIEDAI });
+      for (const [v, x] of Object.entries(su)){
+        if (x.statinis || !x.xml || x.r.papildomas || !be[v] || !be[v].xml) continue;
+        dok++;
+        const a = stulpeliuTekstai(be[v].xml), b = stulpeliuTekstai(x.xml);
+        if (JSON.stringify([a.lenteles, a.uz]) !== JSON.stringify([b.lenteles, b.uz])) blogi.push(budas + " " + v + ": tekstas skiriasi " + pirmasSkirtumas([a.lenteles, a.uz], [b.lenteles, b.uz]));
+        skaidyta += (x.r.lenteles || {}).skaidyta || 0; atjungta += (x.r.lenteles || {}).atjungta || 0; naujuEil += b.eilutes - a.eilutes;
+        if ((be[v].r.lenteles || {}).skaidyta) blogi.push(budas + " " + v + ": be skaidymo vis tiek skaidyta");
+        const z = await W.JSZip.loadAsync(await x.r.blob.arrayBuffer()), parts = {};
+        for (const n of ["word/document.xml", "word/styles.xml", "word/numbering.xml"]){ const f = z.file(n); if (f) parts[n] = new W.DOMParser().parseFromString(await f.async("string"), "application/xml"); }
+        aukstesnes(parts["word/document.xml"], GPL().modelis({ parts })).forEach(e => blogi.push(budas + " " + v + ": " + e));
+      }
+    }
+    tiesa(dok >= 30 && skaidyta >= 20 && atjungta >= 2 && naujuEil >= 40, "dokumentų " + dok + ", suskaidyta " + skaidyta + ", atjungta " + atjungta + ", naujų eilučių " + naujuEil);
+    tiesa(!blogi.length, blogi.length + ":\n  " + blogi.slice(0, 10).join("\n  "));
+  });
+  await testas("GPLent sintetinėje lentelėje: per aukšta eilutė suskaidoma ties pastraipomis (eilutės numeris - tik pirmoje dalyje, tęsinyje be numeravimo ir teksto, tarp dalių be rėmelių, išoriniai rėmeliai lieka), per aukštas sujungtas langelis atjungiamas, mažas - lieka sujungtas; abipusis lygiavimas (ir iš stiliaus) - kairėn; tekstas stulpeliuose nepakitęs; dalys neaukštesnės už puslapį", async () => {
+    const P = (t, pr = "") => `<w:p><w:pPr>${pr}</w:pPr><w:r><w:t xml:space="preserve">${t}</w:t></w:r></w:p>`;
+    const kr = '<w:tcBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tcBorders>';
+    const tc = (w, turinys, vm = "") => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${vm}${kr}</w:tcPr>${turinys}</w:tc>`;
+    const lt = Array.from({ length: 40 }, (_, i) => P("LT pastraipa " + (i + 1) + ". " + "Tekstas lietuviškai. ".repeat(12), '<w:jc w:val="both"/>')).join("");
+    const en = Array.from({ length: 30 }, (_, i) => P("EN item " + (i + 1) + ". " + "English text here. ".repeat(10), i < 8 ? '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>' : '<w:pStyle w:val="Abipusis"/>')).join("");
+    const sujungtas = Array.from({ length: 45 }, (_, i) => P("Dokumentas " + (i + 1) + ". " + "Pateikiamas dokumentas. ".repeat(8))).join("");
+    const xml = `<w:document xmlns:w="${NSW}"><w:body>
+      <w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="4500"/><w:gridCol w:w="4538"/></w:tblGrid>
+        <w:tr>${tc(600, P("", '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'))}${tc(4500, lt)}${tc(4538, en)}</w:tr>
+        <w:tr>${tc(600, P("", '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'))}${tc(4500, P("Trumpa", '<w:jc w:val="both"/>'))}${tc(4538, P("Short"))}</w:tr></w:tbl>
+      <w:p/><w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="6638"/></w:tblGrid>
+        <w:tr>${tc(3000, P("Reikalavimas 1"))}${tc(6638, sujungtas, '<w:vMerge w:val="restart"/>')}</w:tr>
+        <w:tr>${tc(3000, P("Reikalavimas 2"))}${tc(6638, P(""), '<w:vMerge/>')}</w:tr>
+        <w:tr>${tc(3000, P("Reikalavimas 3"))}${tc(6638, P(""), '<w:vMerge/>')}</w:tr></w:tbl>
+      <w:p/><w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4819"/><w:gridCol w:w="4819"/></w:tblGrid>
+        <w:tr>${tc(4819, P("Mažas A"))}${tc(4819, P("Bendras"), '<w:vMerge w:val="restart"/>')}</w:tr>
+        <w:tr>${tc(4819, P("Mažas B"))}${tc(4819, P(""), '<w:vMerge/>')}</w:tr></w:tbl>
+      <w:p/><w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="6638"/><w:gridCol w:w="3000"/></w:tblGrid>
+        <w:tr>${tc(6638, lt)}${tc(3000, P("Bendras dokumentas"), '<w:vMerge w:val="restart"/>')}</w:tr>
+        <w:tr>${tc(6638, P("Kitas reikalavimas"))}${tc(3000, P(""), '<w:vMerge/>')}</w:tr></w:tbl>
+      <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:left="1701" w:right="567" w:top="1134" w:bottom="1134"/></w:sectPr></w:body></w:document>`;
+    const stiliai = `<w:styles xmlns:w="${NSW}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults>
+      <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+      <w:style w:type="paragraph" w:styleId="Abipusis"><w:name w:val="Abipusis"/><w:basedOn w:val="Normal"/><w:pPr><w:jc w:val="both"/></w:pPr></w:style></w:styles>`;
+    const num = `<w:numbering xmlns:w="${NSW}"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum>
+      <w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1)"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>
+      <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num></w:numbering>`;
+    const naujas = () => { const dp = new W.DOMParser(); return { parts: { "word/document.xml": dp.parseFromString(xml, "application/xml"), "word/styles.xml": dp.parseFromString(stiliai, "application/xml"), "word/numbering.xml": dp.parseFromString(num, "application/xml") } }; };
+    const ser = d => new W.XMLSerializer().serializeToString(d.parts["word/document.xml"]);
+    const a = naujas(), b = naujas();
+    let sa; GPL().NUSTATYMAI.skaidyti = false; try { sa = GPL().sutvarkyti(a); } finally { GPL().NUSTATYMAI.skaidyti = true; }
+    const st = GPL().sutvarkyti(b), po = ser(b), dok = b.parts["word/document.xml"];
+    // be skaidymo etiketėmis atrodo 4 eilutės su tuščiu sujungimo tęsiniu; atjungus 2 lentelės sujungimą jose atsiranda turinys -
+    // lieka 3 ir 4 lentelės mažų sujungimų tęsiniai; suskaidytų eilučių dalys (ir su tuščiu paskutiniu langeliu) - ne etiketės
+    lygu([sa.etikeciu, st.etikeciu], [4, 2], "etikečių eilutės: be skaidymo / su skaidymu");
+    lygu(JSON.stringify(stulpeliuTekstai(ser(a)).lenteles), JSON.stringify(stulpeliuTekstai(po).lenteles), "tekstas stulpeliuose");
+    lygu(lenteliuKlaidos(po, "sintetinė", new Set()), [], "lentelių patikra");
+    lygu(aukstesnes(dok, GPL().modelis(b)), [], "dalys neaukštesnės už puslapį");
+    const [t1, t2, t3, t4] = Array.from(dok.getElementsByTagNameNS(NSW, "tbl")), r1 = elW(t1, "tr"), n1 = r1.length - 1;
+    const M = GPL().modelis(b), H = 16838 - 2 * 1134;
+    const didz = Math.max(...r1.slice(0, n1).map(tr => GPL().eilutesIvertis(tr, M, GPL().parastesL(elW(t1, "tblPr")[0]))));
+    tiesa(GPL().DALIES_AUKSTIS === 0.33 && didz <= 0.33 * H * 1.25, "didžiausia dalis (0,33 puslapio ribą galima viršyti su bauda, jei mažiau tarpų) " + (didz / H).toFixed(2) + " puslapio, DALIES_AUKSTIS " + GPL().DALIES_AUKSTIS);
+    const vm4 = Array.from(t4.getElementsByTagNameNS(NSW, "vMerge")).map(v => atW(v, "val") || "tęsinys");
+    tiesa(elW(t4, "tr").length > 2 && vm4.filter(x => x === "restart").length === 1 && vm4.length === elW(t4, "tr").length, "mažas sujungimas suskaidytoje eilutėje - vienas pradžios langelis, kitose dalyse tęsinys: " + vm4.join(", "));
+    tiesa(st.skaidyta >= 2 && st.atjungta === 1 && n1 >= 4, "suskaidyta " + st.skaidyta + ", atjungta " + st.atjungta + ", 1 lentelės dalių " + n1);
+    const nr = r1.slice(0, n1).map(tr => elW(tr, "tc")[0]);
+    lygu(nr.map(tc => tc.getElementsByTagNameNS(NSW, "numPr").length), [1].concat(Array(n1 - 1).fill(0)), "eilutės numeris tik pirmoje dalyje");
+    lygu(nr.slice(1).map(txW).join(""), "", "tęsinio numerio langeliai be teksto");
+    const kr2 = (tr, k) => elW(tr, "tc").map(c => atW(elW(elW(elW(c, "tcPr")[0], "tcBorders")[0], k)[0], "val"));
+    lygu([kr2(r1[0], "top"), kr2(r1[n1 - 1], "bottom"), r1.slice(0, n1 - 1).every(tr => kr2(tr, "bottom").every(x => x === "nil")), r1.slice(1, n1).every(tr => kr2(tr, "top").every(x => x === "nil"))],
+      [["single", "single", "single"], ["single", "single", "single"], true, true], "rėmeliai: išoriniai lieka, tarp dalių - nil");
+    const enp = Array.from(t1.getElementsByTagNameNS(NSW, "p")).filter(p => /^EN item (9|[12]\d|30)\./.test(txW(p)));
+    lygu([enp.length, enp.every(p => atW(elW(elW(p, "pPr")[0], "jc")[0], "val") === "left")], [22, true], "abipusis iš stiliaus - tiesioginis kairėn");
+    lygu([t2.getElementsByTagNameNS(NSW, "vMerge").length, t3.getElementsByTagNameNS(NSW, "vMerge").length], [0, 2], "aukštas sujungimas atjungtas, mažas lieka");
   });
 }
 
