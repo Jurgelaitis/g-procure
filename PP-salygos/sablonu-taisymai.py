@@ -325,6 +325,14 @@ def taisymas_tekstas(taisyk):
                   _re.compile(r'^(\d+) priedas\s*[–-]\s*Informacija apie valdymo ar priežiūros organus'))
     if nv:
         darbai.append(('PRIEDAI_LT_VALDYMAS.docx', [(_re.compile(r'^\s*SPS (\d+) priedas\s*$'), nv, 1)]))
+    # E. DPS konkretaus pirkimo LT/EN salygos (2026-10-04, naudotojo sprendimas): priedu saraso eilute „6 priedas – Sandorio šalies ...“
+    #    angliskai „Annex 7 – Counterparty ...“ - numeris pagal to paties sarašo lietuviska eilute; antraste „ANEXXES“ -> „ANNEXES“
+    #    (pridejus 7 priedą angliškai butu du „Annex 7“).
+    nd = _sarasas(zipfile.ZipFile(TPL / 'DPSP_LTEN_SALYGOS.docx').read('word/document.xml'),
+                  _re.compile(r'^(\d+) priedas\s*[–-]\s*Sandorio šalies'))
+    dps = [(_re.compile(r'^\s*(ANEXXES)\s*$'), 'ANNEXES', 1)]
+    if nd: dps.append((_re.compile(r'^Annex (\d+)\s*[–-]\s*Counterparty'), nd, 1))
+    darbai.append(('DPSP_LTEN_SALYGOS.docx', dps))
     for f, poros in darbai:
         path = TPL / f
         with zipfile.ZipFile(path) as zin:
