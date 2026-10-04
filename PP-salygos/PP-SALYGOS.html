@@ -3621,9 +3621,20 @@ async function generuotiViena(d, REZ){
   //     variklis.js GPLent; tekstas nekeičiamas). Stiliai ir numeracija - šrifto dydžiui, lygiavimui ir sąrašams atpažinti.
   await GPDocx.part(doc, 'word/styles.xml'); await GPDocx.part(doc, 'word/numbering.xml');
   const lentFormatas = GPLent.sutvarkyti(doc);
+  // 12. Gulsti priedai stačiame dokumente (2026-10-04, naudotojo sprendimas): Pages visam dokumentui taiko pirmojo skyriaus
+  //     orientaciją, tad gulsčius priedus rodo stačius ir jų lenteles nukerpa - jie generuojami atskirame (gulsčiame) faile.
+  const gulsti = await GPDocx.atskirkGulsciusPriedus(doc);
   const audit = GPAudit.check(doc, IMONE, forma);
   const blob = await GPDocx.save(doc, 'blob');
-  return { d, blob, audit, forma, numeracija, lenteles: lentFormatas,
+  let gulsciasPriedas = null;
+  if (gulsti){
+    const nr = gulsti.numeriai, nrT = nr.length > 1 && nr.every((x, i) => !i || x === nr[i - 1] + 1) ? nr[0] + '-' + nr[nr.length - 1] : nr.join(', ');
+    const dok = nr.length ? `Pirkimo sąlygų ${nrT} ${nr.length > 1 ? 'priedai' : 'priedas'}` : 'Pirkimo sąlygų priedai';
+    gulsciasPriedas = { d: { trumpas: d.trumpas + '_GULSTI', pavadinimas: `${dok} (gulsčias puslapis, iš „${d.pavadinimas}“)`, dokumentas: dok },
+      sablonas: d.trumpas, blob: await GPDocx.save(gulsti.doc, 'blob'), audit: GPAudit.check(gulsti.doc, IMONE, forma), forma, gulscias: true, stats: {} };
+  }
+  return { d, blob, audit, forma, numeracija, lenteles: lentFormatas, gulsciasPriedas,
+           atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr } };
 }
@@ -3734,7 +3745,11 @@ async function generuoti(){
   const REZ = rezimas();
   const rinkinys = [...DOK], statiniai = [...STATINIAI];   // uzrakinam sarasus
   const rez = [];
-  for (const d of rinkinys) rez.push(await generuotiViena(d, REZ));
+  for (const d of rinkinys){
+    const r = await generuotiViena(d, REZ);
+    rez.push(r);
+    if (r.gulsciasPriedas) rez.push(r.gulsciasPriedas);        // gulsti priedai - atskiras failas iškart po savo dokumento
+  }
   // DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“): failas iš sąlygų šablono
   const dpsP = dpsMetodikosPriedas(), dpsD = dpsP && rinkinys.find(d => /^DPSP_.*_SALYGOS$/.test(d.trumpas));
   if (dpsD) rez.push(await dpsMetodikosFailas(dpsD, dpsP.nr));
@@ -3764,7 +3779,7 @@ function failuVardai(rez){
                    pavadinimas: pavClean($('#pavadinimas').value), data: $('#sdata').value || undefined };
   const naudoti = new Set();
   return rez.map(r => {
-    const dok = (DOK_VARDAI[r.d.trumpas.split('_').pop()] || r.d.trumpas) + kalba;
+    const dok = (r.d.dokumentas || DOK_VARDAI[r.d.trumpas.split('_').pop()] || r.d.trumpas) + kalba;
     let v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok, pletinys: r.pletinys || 'docx' });
     // ta pati rūšis du kartus (pvz. DPS sutarčių sąrašas ir bendras priedas) - pridedamas šablono kodas
     if (naudoti.has(v)) v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok + ' ' + r.d.trumpas, pletinys: r.pletinys || 'docx' });
@@ -3895,6 +3910,13 @@ function rodykRezultata(rez){
       ${sum('skaidyta') || sum('atjungta') ? `Per aukštos eilutės (Pages jų per puslapius nedalija ir netelpančią dalį nukerpa): ${sum('skaidyta')} suskaidyta ties pastraipomis, tęsinio eilučių - ${sum('dalys')}, tarp jų rėmelių nėra${sum('atjungta') ? `; per aukštų vertikaliai sujungtų langelių turinys paskirstytas jų eilutėms - ${sum('atjungta')}` : ''}. ` : ''}Tekstas nekeistas.</div>`;
     if (sum('netelpa')) h += `<div class="audit no" style="margin-top:6px"><b>Lentelės:</b> ${sum('netelpa')} eilučių net suskaidžius gali būti aukštesnės už puslapį (viena pastraipa ilgesnė už puslapį) - Pages jų pabaigą gali nukirpti; Word jas dalija.</div>`;
   }
+  // Gulsti priedai - atskiras failas (Pages visam dokumentui taiko pirmojo skyriaus orientaciją): kas iškelta ir kas pašalinta iš turinio
+  rez.filter(r => r.atskirta && r.gulsciasPriedas).forEach(r => {
+    const a = r.atskirta;
+    h += `<div class="audit ok" style="margin-top:10px"><b>Gulsti priedai - atskiras failas:</b> ${esc(r.gulsciasPriedas.d.dokumentas)} iš „${esc(r.d.pavadinimas)}“ -
+      Pages visam dokumentui taiko pirmojo skyriaus orientaciją, todėl stačiame dokumente gulsčių priedų lenteles nukirptų. Tekstas nekeistas${a.turinys.length
+      ? `; pagrindinio dokumento turinyje pašalintos jų eilutės (${a.turinys.length}): ${a.turinys.map(t => esc(t)).join('; ')}` : ''}${a.nuorodos ? `; ${a.nuorodos} nuorodų tekste rodo į iškeltą dalį` : ''}.</div>`;
+  });
   const skNr = rez.filter(r => r.stats && r.stats.skyriausNr);
   if (skNr.length){
     h += `<div class="audit ok" style="margin-top:10px">Sakinyje „Esminės sutarties sąlygos išdėstytos SPS ... dalyje“ įrašytas galutinis skyriaus

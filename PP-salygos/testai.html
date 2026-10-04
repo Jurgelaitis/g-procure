@@ -1918,6 +1918,8 @@ function aukstesnes(dok, M){
   return out;
 }
 const pirmasSkirtumas = (a, b) => { const x = JSON.stringify(a), y = JSON.stringify(b); let i = 0; while (i < x.length && x[i] === y[i]) i++; return "…" + x.slice(Math.max(0, i - 40), i + 40) + " / …" + y.slice(Math.max(0, i - 40), i + 40); };
+const sekcijuOrientacijos = xml => Array.from(new W.DOMParser().parseFromString(xml, "application/xml").getElementsByTagNameNS(NSW, "sectPr"))
+  .map(sp => { const pg = elW(sp, "pgSz")[0]; return +atW(pg, "w") > +atW(pg, "h") ? "L" : "P"; }).join("");
 async function testaiLenteles(){
   dabartine = grupe("Lentelės visuose sugeneruotuose dokumentuose (GPLent, 2026-10-04)");
   await testas("Visos lentelės visuose dokumentuose (10 paketų: AK, AKV, TSD, MVP, ND, DPS, DPS-K, LT ir LT/EN, visi priedai): ne „exact“, be simbolių tarpų ir „distribute“, trumpos eilutės nedalomos, tinklelis = tblW = langelių pločiai (DXA), telpa į teksto plotį, lentelėse be abipusio lygiavimo, langelis baigiasi pastraipa, pusjuodis tik iš šablono (kainos eilučių lieka), tiekėjo el. pašto eilutė - be pusjuodžio; per aukštos eilutės suskaidytos ir nė viena dalis neviršija puslapio", async () => {
@@ -1926,7 +1928,7 @@ async function testaiLenteles(){
       const docs = await generuokSu({ budas, kalba, centr, priedai: LENT_PRIEDAI });
       for (const [v, x] of Object.entries(docs)){
         if (x.statinis || !x.xml || x.r.papildomas) continue;
-        leist[v] ??= await sablonoPusjuodzios(v);
+        leist[v] ??= await sablonoPusjuodzios(x.r.sablonas || v);
         dok++; lenteliu += (x.r.lenteles || {}).lenteliu || 0; skaidyta += (x.r.lenteles || {}).skaidyta || 0; netelpa += (x.r.lenteles || {}).netelpa || 0;
         lenteliuKlaidos(x.xml, budas + " " + v, leist[v], info).forEach(e => blogi.push(e));
       }
@@ -2069,6 +2071,33 @@ async function testaiLenteles(){
     const enp = Array.from(t1.getElementsByTagNameNS(NSW, "p")).filter(p => /^EN item (9|[12]\d|30)\./.test(txW(p)));
     lygu([enp.length, enp.every(p => atW(elW(elW(p, "pPr")[0], "jc")[0], "val") === "left")], [22, true], "abipusis iš stiliaus - tiesioginis kairėn");
     lygu([t2.getElementsByTagNameNS(NSW, "vMerge").length, t3.getElementsByTagNameNS(NSW, "vMerge").length], [0, 2], "aukštas sujungimas atjungtas, mažas lieka");
+  });
+  await testas("Gulsti priedai stačiame dokumente (Pages visam dokumentui taiko pirmojo skyriaus orientaciją): DPS LT sąlygų 5 ir 6 priedai su priedėliais - atskirame faile, kurio pirmas skyrius gulsčias; pagrindinis - tik statūs skyriai; tekstas ir tvarka kaip viename faile, išskyrus pašalintas jų turinio eilutes; žymės be našlaičių, turinyje nėra nuorodų į iškeltą dalį; failo vardas ir patikra", async () => {
+    const be = await generuokSu({ budas: "DPS", pries: () => { W.eval("GPDocx").NUSTATYMAI.gulstiAtskirai = false; } });
+    const su = await generuokSu({ budas: "DPS" });
+    const A = su.DPSK_LT_SALYGOS, B = su.DPSK_LT_SALYGOS_GULSTI, X = be.DPSK_LT_SALYGOS;
+    tiesa(A && B && X && !be.DPSK_LT_SALYGOS_GULSTI, "failai: " + Object.keys(su).join(", "));
+    lygu([sekcijuOrientacijos(X.xml), sekcijuOrientacijos(A.xml), sekcijuOrientacijos(B.xml)], ["PPPPPLLP", "PPPPP", "LLP"], "skyrių orientacijos: buvo / pagrindinis / gulsti");
+    const tur = A.r.atskirta.turinys;
+    lygu([tur.length, tur.every(t => /^Pirkimo sąlygų 6 priedo priedėlis|^Pirkimo sąlygų [56] priedas/.test(t)), A.r.atskirta.numeriai, A.r.atskirta.nuorodos], [4, true, [5, 6], 0], "pašalintos turinio eilutės, priedų numeriai");
+    const bePasalintu = X.pars.filter(p => !(/PAGEREF/.test(p) && tur.some(t => p.startsWith(t.slice(0, 30)))));
+    const sujungta = A.pars.concat(B.pars);
+    tiesa(JSON.stringify(sujungta) === JSON.stringify(bePasalintu), "tekstas ir tvarka: pagrindinis + gulsti = vienas failas be pašalintų turinio eilučių; " + sujungta.length + " / " + bePasalintu.length + " " + pirmasSkirtumas(sujungta, bePasalintu));
+    tiesa(/^Pirkimo sąlygų 5 priedas „Atliktų darbų sąrašas“/.test(B.pars[0]) && B.pars.some(p => /^Pirkimo sąlygų 6 priedo priedėlis Nr\. 1/.test(p)), "gulsčiame faile - 5 priedas, 6 priedas ir priedėliai: " + B.pars.slice(0, 2).join(" | "));
+    for (const [v, x] of [["pagrindinis", A], ["gulsti", B]]){
+      const d = new W.DOMParser().parseFromString(x.xml, "application/xml");
+      const s = new Set(Array.from(d.getElementsByTagNameNS(NSW, "bookmarkStart")).map(e => atW(e, "id"))), e = new Set(Array.from(d.getElementsByTagNameNS(NSW, "bookmarkEnd")).map(e => atW(e, "id")));
+      const vardai = new Set(Array.from(d.getElementsByTagNameNS(NSW, "bookmarkStart")).map(e => atW(e, "name")));
+      const nuorodos = Array.from(d.getElementsByTagNameNS(NSW, "hyperlink")).map(h => atW(h, "anchor")).filter(Boolean).filter(a => !vardai.has(a));
+      tiesa([...s].every(i => e.has(i)) && [...e].every(i => s.has(i)) && !nuorodos.length, v + ": žymės be porų arba nuorodos į nesamas žymes: " + nuorodos.join(", "));
+      lygu(lenteliuKlaidos(x.xml, v, await sablonoPusjuodzios("DPSK_LT_SALYGOS")), [], v + ": lentelės");
+      const body = d.getElementsByTagNameNS(NSW, "body")[0];
+      lygu(Array.from(body.childNodes).filter(n => n.nodeType === 1).pop().localName, "sectPr", v + ": dokumento savybės kūno gale");
+    }
+    const vardai = W.failuVardai(W.__R), iGul = W.__R.findIndex(r => r.d.trumpas === "DPSK_LT_SALYGOS_GULSTI");
+    tiesa(iGul > 0 && W.__R[iGul - 1].d.trumpas === "DPSK_LT_SALYGOS" && /Pirkimo_sąlygų_5-6_priedai/.test(vardai[iGul]) && new Set(vardai).size === vardai.length, "failo vardas ir vieta: " + vardai.join(", "));
+    tiesa(/Gulsti priedai - atskiras failas: Pirkimo sąlygų 5-6 priedai/.test(D.getElementById("rezultatas").textContent.replace(/\s+/g, " ")), "patikroje pasakyta");
+    tiesa(!Object.keys(await generuokSu({ budas: "DPS", kalba: "LT_EN" })).some(k => /_GULSTI$/.test(k)), "DPS LT/EN (be gulsčių skyrių stačiame dokumente) - neskaidoma");
   });
 }
 
