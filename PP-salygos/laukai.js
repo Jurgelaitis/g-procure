@@ -20,6 +20,8 @@
 (function (root) {
   'use strict';
 
+  /* Vietos reikšmė „pašalinti“ (ne tekstas): planas() vietą su tarpu prieš ją pašalina, patikra tai parodo. */
+  const SALINTI = '⟦SALINTI⟧';
   const norm = s => String(s || '').toLowerCase()
     .replace(/[ąàá]/g, 'a').replace(/[čć]/g, 'c').replace(/[ęėé]/g, 'e').replace(/[įí]/g, 'i')
     .replace(/š/g, 's').replace(/[ųūú]/g, 'u').replace(/ž/g, 'z')
@@ -196,7 +198,7 @@
     { id: 'pavadinimas', auto: true, re: /irasomas pirkimo objekto pavadinim|^(\d+ )*pirkimo objektas( pirkimo objekto pavadinimas)?$|^the object of procurement( the title of the object of procurement)?$|title of the object of procurement/,
       klausimas: '', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Pirkimo pavadinimas (iš 1 žingsnio)' })) },
     { id: 'cpo-pagrindimas', formuluote: true, re: /centralizuotu pirkimu katalogu pagrindimas|centralized procurement directory/,
-      klausimas: '', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pagrindimas' })) },
+      klausimas: 'Kodėl pirkimas vykdomas ne per CPO LT katalogą?', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pagrindimas' })) },
     { id: 'esminiu-salygu-dalis', re: /esmines sutarties salygos isdestytos sps|terms of the contract are laid down|conditions of the contract are established/,
       klausimas: 'Kurioje SPS dalyje išdėstytos esminės sutarties sąlygos?',
       uzuomina: 'Įrašykite SPS dalies numerį. Tas pats numeris įrašomas abiejose sakinio vietose.',
@@ -261,9 +263,11 @@
     { id: 'dps-priedu-nuorodos', re: /yra pateikti siuose prieduose/,
       klausimas: 'Kuriuose konkretaus pirkimo sąlygų prieduose aprašytas pirkimo objektas?', uzuomina: '',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Nuorodos į priedus' })) },
-    { id: 'dps-kriterijai', re: /isrenka pagal kainos kriteriju/,
-      klausimas: 'Ar pasiūlymai vertinami ne tik pagal kainą? Jei taip - įrašykite vertinimo kriterijus ir tvarką.',
-      uzuomina: 'Šablone numatytasis tekstas - „pagal kainos kriterijų“; laužtiniuose skliaustuose - alternatyva.',
+    // Klausimas „Taip / Ne“ (naudotojo patvirtintas 2026-10-04): „Taip“ - nurodymas „[arba ...]“ pašalinamas (SALINTI),
+    // „Ne“ - įrašomi vertinimo kriterijai ir tvarka.
+    { id: 'dps-kriterijai', taipNe: true, re: /isrenka pagal kainos kriteriju/,
+      klausimas: 'Ar vertinama tik pagal kainą?',
+      uzuomina: 'Atsakius „Taip“, šablono nurodymas „[arba ...]“ pašalinamas. Atsakius „Ne“, įrašykite vertinimo kriterijus ir tvarką.',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Vertinimo kriterijai ir tvarka' })) },
     { id: 'dps-apziura', re: /suteiks galimybe apziureti pirkimo objekta|wishing to inspect the object must/,
       klausimas: 'Objekto apžiūra: iki kada kreiptis ir kada planuojama apžiūra?', uzuomina: '',
@@ -312,7 +316,36 @@
       return Object.assign({}, v, a || {}, { aprasyta: !!a, klase: sritis ? 'b' : (a && (a.ivestis === 'priedo-nr' || a.ivestis === 'skyrius') ? 'a' : 'c'), salinti: sritis });
     });
     return { tekstas: t, tipas: tipas ? tipas.id : (vs.some(v => v.rusis === 'x') ? 'x' : null),
-      klausimas: tipas ? tipas.klausimas : '', uzuomina: tipas ? tipas.uzuomina : '', vietos };
+      klausimas: tipas ? tipas.klausimas : xKlausimas(nt, vietos), uzuomina: tipas ? tipas.uzuomina : '', vietos };
+  }
+  /* „X“ vietų sakinio klausimas (naudotojo patvirtintas 2026-10-04); kitiems - struktūrinis klausimas modulyje. */
+  const xKlausimas = (nt, vietos) => vietos.some(v => v.xRusis === 'suma') && /sutarties ivykdymo uztikrinim|contract performance security/.test(nt)
+    ? 'Koks sutarties įvykdymo užtikrinimo dydis (Eur)?' : '';
+
+  /* ---------- Alternatyvų grupių klausimai (naudotojo patvirtinti 2026-10-04) ----------------------
+     Grupė atpažįstama pagal VISŲ narių (šablono sąlygų) tekstą; kitoms grupėms modulis klausia struktūriškai
+     („Kuris variantas atitinka šį pirkimą?“). Pašalinimo pagrindų ir kvalifikacijos grupė klausiama dviem
+     klausimais (kas tikrinama ir iš ko) - narys parenkamas pagal abu atsakymus (`tikrinimoVariantas`). */
+  const GRUPES = [
+    { id: 'dalys', re: /^jei pirkimo objektas (i dalis neskaidomas|skaidomas i dalis)/, klausimas: 'Ar pirkimo objektas skaidomas į dalis?' },
+    { id: 'stebetojai', re: /^jei (ne)?numatoma kviesti stebetoj/, klausimas: 'Ar į komisijos posėdžius kviečiami stebėtojai?' },
+    { id: 'zalieji', re: /^jei zalieji reikalavimai nurod/, klausimas: 'Kur nustatomi žalieji reikalavimai?' },
+    { id: 'tikrinimas', re: /pasalinimo pagrind/, klausimas: 'Ar tikrinate tik pašalinimo pagrindus ar ir kvalifikaciją?',
+      klausimas2: 'Tik galimo laimėtojo ar visų tiekėjų tikriname?' }
+  ];
+  function grupesKlausimas(nariai){
+    const ts = (nariai || []).map(n => norm(n && n.tekstas != null ? n.tekstas : n));
+    return (ts.length && GRUPES.find(g => ts.every(t => g.re.test(t)))) || null;
+  }
+  /* Pašalinimo pagrindų ir kvalifikacijos varianto prasmė pagal šablono sąlygą: kas - 'pasalinimo' (tik pašalinimo
+     pagrindai) arba 'abu'; kieno - 'laimetojas' (galimo laimėtojo) arba 'visi'. Šablonuose kvalifikacijos netikrinimas
+     pasakomas trimis būdais: „netikrinama kvalifikacija“, „kvalifikacija netikrinama“, „kvalifikacija nėra tikrinama“
+     (MVP LT/EN; iki 2026-10-04 lentelių taisyklė trečiojo neatpažino ir palikdavo kvalifikacijos lentelę). */
+  function tikrinimoVariantas(tekstas){
+    const t = norm(tekstas);
+    if (!/pasalinimo pagrind/.test(t)) return null;
+    return { kas: /netikrinama kvalifikacija|kvalifikacija (nera |ne)tikrinama/.test(t) || !/kvalifikacij/.test(t) ? 'pasalinimo' : 'abu',
+      kieno: /\bvisu\b/.test(t) ? 'visi' : /laimejusio|laimetojo/.test(t) ? 'laimetojas' : null };
   }
 
   /* ---------- Pildymo planas: viena funkcija ir peržiūrai, ir dokumentui -------------------------
@@ -325,6 +358,16 @@
     let p = 0;
     (vietos || []).forEach((v, k) => {
       const raw = String((reiksmes || [])[k] == null ? '' : reiksmes[k]).trim();
+      // Vieta pašalinama pagal žmogaus atsakymą (pvz. „Vertinama tik pagal kainą“ - „[arba ...]“) kartu su tarpu prieš ją.
+      if (raw === SALINTI){
+        if (v.start < p) return;
+        let s = v.start;
+        while (s > p && /\s/.test(t[s - 1])) s--;
+        if (s > p) out.push({ t: 'tekstas', s: t.slice(p, s) });
+        out.push({ t: 'salinama', s: t.slice(s, v.end), k, sprendimu: true });
+        p = v.end;
+        return;
+      }
       const val = raw ? bruks(raw) : '';
       if (!val && v.klase === 'b' && v.salinti){
         if (v.salinti.start < p) return;
@@ -354,7 +397,7 @@
       const ilgis = s.t === 'reiksme' ? null : s.s.length;
       if (s.t === 'tekstas'){ p += ilgis; return; }
       if (s.t === 'tuscia'){ p += ilgis; return; }
-      if (s.t === 'salinama'){ out.push({ start: p, end: p + ilgis, tekstas: '', k: s.k, salinta: true }); p += ilgis; return; }
+      if (s.t === 'salinama'){ out.push({ start: p, end: p + ilgis, tekstas: '', k: s.k, salinta: true, sprendimu: !!s.sprendimu }); p += ilgis; return; }
       const v = vietos[s.k];
       out.push({ start: v.start, end: v.end, tekstas: s.s, k: s.k });
       p = v.end;
@@ -417,5 +460,6 @@
   const arTiekejoVieta = t => /^[\s_]*Nr\.[\s_]*$/.test(String(t || '').trim()) || /^20\d_-_+-_+$/.test(String(t || '').trim());
 
   root.GP_LAUKAI = { norm, arTiekejoVieta, tusciosVietos, xVietos, laukas, planas, keitimai, tekstasIsPlano, gramatika, sutrauk,
-    prieduSarasas, nuorodosPriedas, priedoRaktasIsTeksto, PRIEDU_PAV, EN_MENESIAI, skyriai, skyrius, arAntraste, TIPAI };
+    prieduSarasas, nuorodosPriedas, priedoRaktasIsTeksto, PRIEDU_PAV, EN_MENESIAI, skyriai, skyrius, arAntraste, TIPAI,
+    GRUPES, grupesKlausimas, tikrinimoVariantas, SALINTI };
 })(typeof window !== 'undefined' ? window : globalThis);
