@@ -1873,6 +1873,194 @@ const GPNum = (() => {
   return { sutvarkyti, wordZymes, modelis };
 })();
 
+/* ==========================================================================
+   GPLent - VISŲ sugeneruotų dokumentų lentelės (2026-10-04, naudotojo užduotis: pasiūlymo formos lentelė „INFORMACIJA APIE
+   TIEKĖJĄ“ ir visos panašios). Vienas kodas visoms lentelėms, kviečiamas kiekvienam dokumentui po numeracijos (GPNum).
+   Šablonų faktai (visi 24 paketai, 265 failai): fiksuoto aukščio (hRule exact), simbolių tarpų (rPr spacing, w), „distribute“
+   lygiavimo ir fiksuotų eilučių tarpų nebuvo; buvo: beveik jokia eilutė neturi cantSplit, etiketės lygiuotos abipusiai
+   siauruose langeliuose (netolygūs tarpai), 114 lentelių platesnės už teksto plotį (pasiūlymo formos tiekėjo lentelė - 9855 /
+   9638 DXA), 124 be fiksuoto išdėstymo, pločiai ne DXA (auto, pct), hideMark tik dalyje eilučių. Taisoma:
+   - visos lentelės: eilutės aukštis niekada „exact“ (-> atLeast); be simbolių tarpų ir mastelio; „distribute“ -> kairėn;
+     tblLayout fixed, tblW = tblGrid suma (DXA), tcW = jungiamų gridCol suma (DXA); per plati lentelė proporcingai susiaurinama
+     iki teksto pločio (įdėtinė - iki langelio pločio), neigiama įtrauka - 0; aiškios langelių paraštės (jei šablone nėra - Word numatytosios 0/108);
+     fonas tik CLEAR; eilutė nedalijama per puslapį (cantSplit), jei ji trumpa (CANTSPLIT_RIBA) - ilgesnė už puslapį eilutė su
+     cantSplit Word'e būtų nukirpta;
+   - etiketės eilutė (paskutinis langelis tuščias - pildo tiekėjas): etikečių lygiavimas - LYGIAVIMAS_ETIKETESE (abipusis siauruose
+     langeliuose daro netolygius tarpus), vertikalus lygiavimas - viršus, be hideMark (vienoda aukščio logika); pusjuodis - pagal
+     PUSJUODIS_ETIKETESE (numatyta - kaip šablone; kursyvas nekeičiamas).
+   Tekstas, eilučių tvarka ir raudonos žymos nekeičiami.
+   ========================================================================== */
+const GPLent = (() => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  // Numatytieji sprendimai - viena vieta, kad būtų lengva atšaukti
+  const LYGIAVIMAS_ETIKETESE = 'left';        // null - palikti šablono (abipusį)
+  const PUSJUODIS_ETIKETESE = 'sablonas';     // 'sablonas' - kaip šablone; 'ne' - etikečių pusjuodis šalinamas
+  const CANTSPLIT_RIBA = 700;                 // simbolių eilutėje (ir iki 12 pastraipų) - tokia eilutė nedalijama per puslapį
+  const PARASTES = { top: 0, left: 108, bottom: 0, right: 108 };
+  const TBLPR = ['tblStyle','tblpPr','tblOverlap','bidiVisual','tblStyleRowBandSize','tblStyleColBandSize','tblW','jc','tblCellSpacing','tblInd',
+    'tblBorders','shd','tblLayout','tblCellMar','tblLook','tblCaption','tblDescription','tblPrChange'];
+  const TCPR = ['cnfStyle','tcW','gridSpan','hMerge','vMerge','tcBorders','shd','noWrap','tcMar','textDirection','tcFitText','vAlign','hideMark',
+    'headers','cellIns','cellDel','cellMerge','tcPrChange'];
+  const PPR = ['pStyle','keepNext','keepLines','pageBreakBefore','framePr','widowControl','numPr','suppressLineNumbers','pBdr','shd',
+    'tabs','suppressAutoHyphens','kinsoku','wordWrap','overflowPunct','topLinePunct','autoSpaceDE','autoSpaceDN','bidi','adjustRightInd',
+    'snapToGrid','spacing','ind','contextualSpacing','mirrorIndents','suppressOverlap','jc','textDirection','textAlignment',
+    'textboxTightWrap','outlineLvl','divId','cnfStyle','rPr','sectPr','pPrChange'];
+  const ISSKIRSTYTI = new Set(['distribute', 'lowKashida', 'mediumKashida', 'highKashida', 'thaiDistribute']);
+  const kids = (n, tag) => n ? Array.from(n.childNodes).filter(c => c.nodeType === 1 && c.localName === tag) : [];
+  const kid = (n, tag) => kids(n, tag)[0] || null;
+  const att = (n, a) => n ? (n.getAttributeNS(W, a) || n.getAttribute('w:' + a) || null) : null;
+  const nustatyk = (n, a, v) => n.setAttributeNS(W, 'w:' + a, String(v));
+  const naujas = (d, tag) => d.createElementNS(W, 'w:' + tag);
+  const tekstas = n => Array.from(n.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('');
+  function idek(tevas, el, tvarka){
+    const k = tvarka.indexOf(el.localName);
+    const po = Array.from(tevas.childNodes).find(c => c.nodeType === 1 && tvarka.indexOf(c.localName) > k);
+    tevas.insertBefore(el, po || null);
+    return el;
+  }
+  function vaikas(tevas, tag, tvarka){ return kid(tevas, tag) || idek(tevas, naujas(tevas.ownerDocument, tag), tvarka); }
+  function savybes(n, tag, pirmiau){
+    let pr = kid(n, tag);
+    if (!pr){
+      pr = naujas(n.ownerDocument, tag);
+      const po = Array.from(n.childNodes).find(c => c.nodeType === 1 && !(pirmiau || []).includes(c.localName));
+      n.insertBefore(pr, po || null);
+    }
+    return pr;
+  }
+  const tuscias = tc => !tekstas(tc).replace(/[\s_.…]/g, '');
+  /* Etiketės eilutė: bent du langeliai, paskutinis tuščias (pildo tiekėjas), prieš jį - tekstas. */
+  function etiketesEilute(tr){
+    const tcs = kids(tr, 'tc');
+    return tcs.length >= 2 && tuscias(tcs[tcs.length - 1]) && tcs.slice(0, -1).some(tc => !tuscias(tc));
+  }
+  const trumpa = tr => tekstas(tr).length <= CANTSPLIT_RIBA && tr.getElementsByTagNameNS(W, 'p').length <= 12;
+
+  /* Teksto plotis kiekvienai viršutinio lygio lentelei - pagal artimiausią po jos esantį sectPr. */
+  function sekcijuPlociai(body){
+    const visi = Array.from(body.getElementsByTagNameNS(W, '*'));
+    const out = new Map(); let laukia = [];
+    visi.forEach(n => {
+      if (n.localName === 'tbl') laukia.push(n);
+      else if (n.localName === 'sectPr'){
+        const pg = kid(n, 'pgSz'), mr = kid(n, 'pgMar'), cols = kid(n, 'cols');
+        const w = pg && mr ? (+att(pg, 'w') || 0) - (+att(mr, 'left') || 0) - (+att(mr, 'right') || 0) : null;
+        const daugStulp = cols && +(att(cols, 'num') || 1) > 1;
+        laukia.forEach(t => out.set(t, daugStulp ? null : w)); laukia = [];
+      }
+    });
+    return out;
+  }
+  const parastesL = tblPr => { const m = kid(tblPr, 'tblCellMar'); return m ? (+att(kid(m, 'left') || kid(m, 'start'), 'w') || 0) + (+att(kid(m, 'right') || kid(m, 'end'), 'w') || 0) : PARASTES.left + PARASTES.right; };
+
+  function vienaLentele(tbl, galima, st){
+    const d = tbl.ownerDocument;
+    const tblPr = savybes(tbl, 'tblPr', []);
+    const grid = kid(tbl, 'tblGrid');
+    let gc = grid ? kids(grid, 'gridCol').map(g => +att(g, 'w') || 0) : [];
+    // 1. Plotis: per plati lentelė - proporcingai iki galimo pločio; tblW = tblGrid suma; tcW = gridCol suma
+    if (gc.length && gc.every(x => x > 0)){
+      // neigiama įtrauka (lentelė išlenda į kairę paraštę, šablonuose iki 601 DXA) - 0: lentelė tarp paraščių, plotis - teksto plotis
+      let ind = +att(kid(tblPr, 'tblInd'), 'w') || 0;
+      if (ind < 0 && galima){ nustatyk(kid(tblPr, 'tblInd'), 'w', 0); nustatyk(kid(tblPr, 'tblInd'), 'type', 'dxa'); ind = 0; st.itrauka++; }
+      const riba = galima ? galima - ind : null;
+      const suma = gc.reduce((a, b) => a + b, 0);
+      if (riba && suma > riba + 5){
+        const k = riba / suma;
+        gc = gc.map(x => Math.max(1, Math.floor(x * k)));
+        gc[gc.length - 1] += riba - gc.reduce((a, b) => a + b, 0);
+        kids(grid, 'gridCol').forEach((g, i) => nustatyk(g, 'w', gc[i]));
+        st.siaurinta++;
+      }
+      const tw = vaikas(tblPr, 'tblW', TBLPR);
+      if (att(tw, 'type') !== 'dxa' || +att(tw, 'w') !== gc.reduce((a, b) => a + b, 0)){ nustatyk(tw, 'w', gc.reduce((a, b) => a + b, 0)); nustatyk(tw, 'type', 'dxa'); st.tblW++; }
+      kids(tbl, 'tr').forEach(tr => {
+        const trPr = kid(tr, 'trPr');
+        let gi = +att(kid(trPr, 'gridBefore'), 'val') || 0;
+        kids(tr, 'tc').forEach(tc => {
+          const tcPr = savybes(tc, 'tcPr', []);
+          const span = +att(kid(tcPr, 'gridSpan'), 'val') || 1;
+          if (gi + span <= gc.length){
+            const plotis = gc.slice(gi, gi + span).reduce((a, b) => a + b, 0);
+            const tcW = vaikas(tcPr, 'tcW', TCPR);
+            if (att(tcW, 'type') !== 'dxa' || +att(tcW, 'w') !== plotis){ nustatyk(tcW, 'w', plotis); nustatyk(tcW, 'type', 'dxa'); st.tcW++; }
+          }
+          gi += span;
+        });
+      });
+    }
+    // 2. Fiksuotas išdėstymas, aiškios paraštės
+    const lay = vaikas(tblPr, 'tblLayout', TBLPR);
+    if (att(lay, 'type') !== 'fixed'){ nustatyk(lay, 'type', 'fixed'); st.fixed++; }
+    if (!kid(tblPr, 'tblCellMar')){
+      const m = idek(tblPr, naujas(d, 'tblCellMar'), TBLPR);
+      ['top', 'left', 'bottom', 'right'].forEach(k => { const e = naujas(d, k); nustatyk(e, 'w', PARASTES[k]); nustatyk(e, 'type', 'dxa'); m.appendChild(e); });
+      st.parastes++;
+    }
+    // 3. Eilutės ir langeliai
+    kids(tbl, 'tr').forEach(tr => {
+      const trPr = savybes(tr, 'trPr', ['tblPrEx']);
+      const h = kid(trPr, 'trHeight');
+      if (h && att(h, 'hRule') === 'exact'){ nustatyk(h, 'hRule', 'atLeast'); st.exact++; }
+      if (!kid(trPr, 'cantSplit') && trumpa(tr)){ trPr.appendChild(naujas(d, 'cantSplit')); st.cantSplit++; }
+      if (!trPr.childNodes.length) tr.removeChild(trPr);
+      const etik = etiketesEilute(tr) && trumpa(tr);
+      if (etik) st.etikeciu++;
+      kids(tr, 'tc').forEach((tc, ci, visi) => {
+        const tcPr = kid(tc, 'tcPr');
+        if (tcPr){
+          const fit = kid(tcPr, 'tcFitText'); if (fit){ tcPr.removeChild(fit); st.tarpai++; }
+          if (etik){
+            const hm = kid(tcPr, 'hideMark'); if (hm){ tcPr.removeChild(hm); st.hideMark++; }
+            if (!kid(tcPr, 'vAlign')){ const v = idek(tcPr, naujas(d, 'vAlign'), TCPR); nustatyk(v, 'val', 'top'); }
+          }
+          const sh = kid(tcPr, 'shd');
+          if (sh && att(sh, 'val') === 'solid'){ const sp = att(sh, 'color'); nustatyk(sh, 'val', 'clear'); if (sp && sp !== 'auto') nustatyk(sh, 'fill', sp); nustatyk(sh, 'color', 'auto'); st.shd++; }
+        }
+        const etiketesLangelis = etik && ci < visi.length - 1;
+        Array.from(tc.getElementsByTagNameNS(W, 'p')).forEach(p => {
+          if (p.parentNode !== tc) return;                         // įdėtinės lentelės pastraipos - jų lentelėje
+          const ppr = kid(p, 'pPr');
+          const jc = ppr && kid(ppr, 'jc');
+          if (jc && ISSKIRSTYTI.has(att(jc, 'val'))){ nustatyk(jc, 'val', 'left'); st.distribute++; }
+          else if (jc && etiketesLangelis && LYGIAVIMAS_ETIKETESE && att(jc, 'val') === 'both'){ nustatyk(jc, 'val', LYGIAVIMAS_ETIKETESE); st.kairen++; }
+        });
+        Array.from(tc.getElementsByTagNameNS(W, 'rPr')).forEach(rpr => {
+          ['spacing', 'w', 'fitText'].forEach(tag => { const e = kid(rpr, tag); if (e){ rpr.removeChild(e); st.tarpai++; } });
+          if (etiketesLangelis && PUSJUODIS_ETIKETESE === 'ne') ['b', 'bCs'].forEach(tag => { const e = kid(rpr, tag); if (e){ rpr.removeChild(e); st.pusjuodis++; } });
+        });
+      });
+    });
+  }
+  function sutvarkyti(doc){
+    const D = doc.parts['word/document.xml'];
+    const body = D.getElementsByTagNameNS(W, 'body')[0];
+    const st = { lenteliu: 0, siaurinta: 0, itrauka: 0, tblW: 0, tcW: 0, fixed: 0, parastes: 0, exact: 0, cantSplit: 0, etikeciu: 0, kairen: 0, hideMark: 0,
+                 distribute: 0, tarpai: 0, pusjuodis: 0, shd: 0 };
+    if (!body) return st;
+    const plociai = sekcijuPlociai(body);
+    const lenteles = Array.from(body.getElementsByTagNameNS(W, 'tbl')).filter(t => {
+      for (let u = t.parentNode; u && u !== body; u = u.parentNode) if (u.localName === 'txbxContent') return false;   // teksto laukai - savo dydžio
+      return true;
+    });
+    // viršutinio lygio pirmos - įdėtinės gauna jau sutvarkyto langelio plotį
+    lenteles.forEach(t => {
+      st.lenteliu++;
+      let tc = null;
+      for (let u = t.parentNode; u && u !== body; u = u.parentNode) if (u.localName === 'tc'){ tc = u; break; }
+      let galima = null;
+      if (tc){
+        const tw = kid(kid(tc, 'tcPr'), 'tcW');
+        let tevas = tc; while (tevas && tevas.localName !== 'tbl') tevas = tevas.parentNode;
+        galima = tw && att(tw, 'type') === 'dxa' ? (+att(tw, 'w') || 0) - parastesL(kid(tevas, 'tblPr')) : null;
+      } else galima = plociai.get(t) || null;
+      vienaLentele(t, galima, st);
+    });
+    return st;
+  }
+  return { sutvarkyti, etiketesEilute, trumpa, LYGIAVIMAS_ETIKETESE, PUSJUODIS_ETIKETESE, CANTSPLIT_RIBA };
+})();
+
 const GPAudit = (() => {
   const W = GPDocx.NS_W;
   /* Baigtumo kriterijus: raudonos = 0, tuscios vietos = 0, komentarai = 0.
