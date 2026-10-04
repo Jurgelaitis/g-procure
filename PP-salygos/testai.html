@@ -231,8 +231,15 @@ function atsakykPrivalomus(){
     Object.keys(K.lenteles).forEach(k => { if (ATS()["T_" + k] === undefined){ W.uAts("T_" + k, true, false); n++; } });
     // Neprivaloma šablono nuostata („kvalifikacija dėl teisės ... netikrinama“) - kaip iki tol: „Netaikyti“ (angliška seka lietuvišką)
     Object.entries(K.formuluotes).forEach(([f, q]) => { if (q.netaikyti && !/^during/.test(q.raktas) && !ATS()["I_" + q.raktas]){ W.nustatykFormuluote(f, "__NETAIKYTI__", false); n++; } });
-    // „Ar vertinama tik pagal kainą?“ (DPS) - „Ne“: nurodymas lieka, kaip iki tol (tuščia vieta, patikra ją rodo)
-    Object.entries(K.tuscios).forEach(([r, q]) => { if (W.eval("taipNeLaukas")(q.lk) && ATS()["KR_" + r] === undefined){ W.taipNe(r, false); n++; } });
+    // „Ar vertinama tik pagal kainą?“ (DPS) - „Taip“: tik nurodymas „[arba ...]“ pašalinamas („Ne“ nuo 2026-10-04 prideda priedą)
+    Object.entries(K.tuscios).forEach(([r, q]) => { if (W.eval("taipNeLaukas")(q.lk) && ATS()["KR_" + r] === undefined){ W.taipNe(r, true); n++; } });
+    // 8.1 p. vertinimo kriterijus (2026-10-04, privalomas) - toks, kuris nekeičia ankstesnių rezultatų: metodikos priedas lieka, o
+    // galiojimo užtikrinimo variantas „pagal kainą ar sąnaudas“ (jei jis pasirinktas) - sąnaudos, kitaip - kainos ir kokybės santykis
+    const kv = W.kriterijausVieta(K);
+    if (kv && !(ATS()["B_" + kv.raktas] || [])[kv.k]){
+      const kainos = Object.values(K.grupes).some(g => g.nariai.some(x => /^Jei netaikomas Pasiūlymo galiojimo užtikrinimas ir perkame pagal kainą ar sąnaudas/.test(x.tekstas) && ATS()[x.raktas] === true));
+      W.pasirinkKriteriju(kv.raktas, kv.k, kainos ? "sanaudos" : "kks"); n++;
+    }
     W.klausimynas();
     if (!n) break;
   }
@@ -839,8 +846,9 @@ async function testaiGeneravimas(){
     lygu([svarumas(bps.r), svarumas(sps.r), sps.r.audit.raudonos.map(x => x.text.slice(0, 20))], [[0, 0, 0], [4, 10, 6], ["arba", "arba", "[suformuluoti atitik", "9.1. Kartu su Pasiūl"]], "švarumo patikra (liko žmogaus formuluotė ir jos alternatyvos, užtikrinimo pavyzdys ir pildomi laukai)");
     // 2026-10-03 nauji LITGRID šablonai: pajuodinta 209 -> 194 (šablono formatavimas, pavyzdys nebejuodinamas);
     // R1: ištrinta 60 -> 59 (+1 - užtikrinimo alternatyva „nereikalaujama“, -2 - žaliųjų „arba“ lieka nepasirinkus)
-    // 2026-10-04: užpildyta 3 -> 11 - priedų ir skyriaus numeriai (siūlomi iš SPS priedų sąrašo ir galutinės numeracijos), „X“ vietos
-    lygu(skaiciai(sps.r), [59, 194, 11, 8, 1, 6], "SPS: ištrinta, pajuodinta, užpildyta, intarpų, priedų, eilučių");
+    // 2026-10-04: užpildyta 3 -> 11 - priedų ir skyriaus numeriai (siūlomi iš SPS priedų sąrašo ir galutinės numeracijos), „X“ vietos;
+    // 11 -> 12 - 8.1 p. vertinimo kriterijus (privalomas; lieka tik pasirinktas iš šablono sąrašo)
+    lygu(skaiciai(sps.r), [59, 194, 12, 8, 1, 6], "SPS: ištrinta, pajuodinta, užpildyta, intarpų, priedų, eilučių");
   });
   await testas("S-ND: režimo eilutė be žymos („Vykdomas Pasirinkti“) - supaprastinto pirkimo formuluotė, vienas taškas, veiksmų skaičiai", async () => {
     const docs = await generuok("S-ND"), sps = docs.ND_LT_SPS;
@@ -851,8 +859,8 @@ async function testaiGeneravimas(){
     // raudonas lieka užtikrinimo pavyzdys („25 000 Eur“) - [[1, 8, 11], [51, 188, 2, 11, 2, 6]] -> žemiau
     // R1 (2026-10-03): taikomas pasiūlymo galiojimo užtikrinimas - alternatyva „nereikalaujama“ trinama (46 -> 47)
     // 2026-10-04 (laukų registras): priedų numeriai iš SPS priedų sąrašo ir „X“ vietose, skyriaus numeris - pildyta 2 -> 10,
-    // tuščių vietų 8 -> 5, „X“ patikrai 6 -> 2
-    lygu([svarumas(sps.r), skaiciai(sps.r)], [[2, 5, 2], [47, 167, 10, 11, 2, 6]], "švarumo patikra ir veiksmų skaičiai");
+    // tuščių vietų 8 -> 5, „X“ patikrai 6 -> 2; pildyta 10 -> 11 - 8.1 p. vertinimo kriterijus (2026-10-04, privalomas)
+    lygu([svarumas(sps.r), skaiciai(sps.r)], [[2, 5, 2], [47, 167, 11, 11, 2, 6]], "švarumo patikra ir veiksmų skaičiai");
   });
   await testas("Dalių sąrašas nepažinto šablono eilutėje: pavadinimas su „$&“, „$'“ ir „$$“ įrašomas pažodžiui (String.replace šablonai netaikomi)", async () => {
     const NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1411,7 +1419,8 @@ async function testaiForma(){
       Object.entries(K.grupes).forEach(([gid, g]) => {
         const kort = D.getElementById(W.lkId("grupe|" + gid));
         // pašalinimo pagrindų ir kvalifikacijos grupė klausiama dviem klausimais - šablono variantai išvardyti paaiškinime
-        const t = kort ? [...kort.querySelectorAll(W.tikrinimoSkaidomas(g) ? ".lk-var-sab" : ".lk-opt-t")].map(x => x.textContent) : [];
+        // ir pasiūlymo galiojimo užtikrinimo grupė („Taip / Ne“, variantas pagal vertinimo kriterijų)
+        const t = kort ? [...kort.querySelectorAll(W.tikrinimoSkaidomas(g) || W.uztikrinimoSkaidomas(g) ? ".lk-var-sab" : ".lk-opt-t")].map(x => x.textContent) : [];
         if (JSON.stringify(t) !== JSON.stringify(g.nariai.map(n => n.tekstas))) blogi.push(b + k + ": alternatyvų tekstai ne visi: " + gid);
       });
       D.querySelectorAll("#klausimai .ilg, #step2 .ilg").forEach(e => {
@@ -1654,14 +1663,15 @@ async function testaiForma(){
     }
   });
 
-  await testas("DPS „Ar vertinama tik pagal kainą?“: privalomas (numatytojo nėra); „Taip“ - nurodymas „[arba ...]“ pašalinamas lietuviškai ir angliškai, peržiūroje perbrauktas, patikroje „Pašalinta pagal jūsų atsakymus“; „Ne“ - įrašomi kriterijai", async () => {
+  await testas("DPS „Ar vertinama tik pagal kainą?“: privalomas (numatytojo nėra); „Taip“ - nurodymas „[arba ...]“ pašalinamas lietuviškai ir angliškai, peržiūroje perbrauktas, patikroje „Pašalinta pagal jūsų atsakymus“; „Ne“ - nuoroda į papildomą priedą, laukų nėra", async () => {
     await formosZingsnis("DPS-K", "LT_EN");
     const [r] = Object.entries(W.__K.tuscios).find(([, q]) => q.lk && q.lk.tipas === "dps-kriterijai");
     const el = () => D.getElementById(W.lkId("laukas|" + r));
     tiesa(ATS()["KR_" + r] === undefined && W.formosSantrauka(W.__K).blokuojantys.some(u => u.pavadinimas === "Ar vertinama tik pagal kainą?"), "ne privalomas sprendimas");
     tiesa(!el().querySelector("textarea, input[type=text]"), "neatsakius rodomi įvesties laukai");
     el().querySelector("input[id$=-kr1]").click();
-    tiesa(el().querySelector("textarea"), "„Ne“ - nėra kriterijų lauko");
+    tiesa(!el().querySelector("textarea, input[type=text]") && /Generuojant bus pridėtas 7 priedas „Ekonomiškai naudingiausio pasiūlymo vertinimo metodika“/.test(el().textContent.replace(/\s+/g, " "))
+      && /išrenka pagal pasiūlymų vertinimo kriterijus ir tvarką, nurodytus šio konkretaus pirkimo sąlygų 7 priede\./.test(D.getElementById(W.lkId("laukas|" + r) + "-pz").textContent), "„Ne“: " + el().textContent.slice(0, 300));
     el().querySelector("input[id$=-kr0]").click();
     const pz = D.getElementById(W.lkId("laukas|" + r) + "-pz");
     lygu([pz.querySelector("del") && pz.querySelector("del").textContent, el().querySelector("textarea")], [" [arba pateikiama informacija apie pasiūlymų vertinimo kriterijus ir tvarką]", null], "„Taip“ - peržiūra");
@@ -1670,6 +1680,69 @@ async function testaiForma(){
     tiesa(/išrenka pagal kainos kriterijų\. Su Tiekėju/.test(t) && /according to the price criterion\. With the Supplier/.test(t), "nurodymas nepašalintas: " + (t.match(/pagal kainos kriterijų.{0,40}/) || [""])[0]);
     tiesa(!/\[arba pateikiama informacija|\[or information on the evaluation/.test(t), "liko nurodymas");
     tiesa(/Pašalinta pagal jūsų atsakymus \(2\)/.test(D.getElementById("rezultatas").textContent), "patikroje neišvardyta");
+  });
+}
+
+/* 2026-10-04 vakaras (naudotojo sprendimai): 5 klausimas - A variantas (vertinimo kriterijus 8.1 p.), 8 klausimas „Ne“ - papildomas priedas. */
+const pasirink = kod => () => { const v = W.kriterijausVieta(W.__K); W.pasirinkKriteriju(v.raktas, v.k, kod); };
+async function testaiKriterijus(){
+  dabartine = grupe("Vertinimo kriterijus, galiojimo užtikrinimas ir DPS papildomas priedas (2026-10-04)");
+  await testas("Vertinimo kriterijus (8.1 p.): privalomas, iš šablono sąrašo; kainos atveju metodikos sakinys ir priedo eilutė pašalinami (numerio neklausiama); kitaip lieka tik pasirinktas kriterijus, priedo eilutė - be išspręstos sąlygos skliaustuose; LT ir EN", async () => {
+    await formosZingsnis("T-SD", "LT");
+    const kv = W.kriterijausVieta(W.__K), el = () => D.getElementById(W.lkId("laukas|" + kv.raktas));
+    lygu([el().querySelector(".lk-kl").textContent, [...el().querySelectorAll("input[type=radio]")].map(i => i.parentElement.textContent.trim())],
+      ["Pagal kokį kriterijų vertinami pasiūlymai?", ["Kainos ir kokybės santykį", "Sąnaudų ir kokybės santykį", "Sąnaudas", "Kainą"]], "klausimas");
+    tiesa(W.formosSantrauka(W.__K).blokuojantys.some(u => /^Vertinimo kriterijus/.test(u.pavadinimas)), "kriterijus neprivalomas");
+    tiesa(!W.patarejoKlausimai(W.__K).some(q => q.raktas === "B|" + kv.raktas), "kriterijus - AI pasiūlymų klausimuose (žmogaus sprendimas)");
+    el().querySelectorAll("input[type=radio]")[3].click();
+    lygu([el().querySelectorAll("input[type=text]").length, (el().querySelector(".lk-pz-s del") || {}).textContent], [0, " Pasiūlymų vertinimo kriterijai ir ekonominio naudingumo vertinimo metodika pateikiama SPS priede Nr.__."], "kaina - peržiūra");
+    // kaina: TSD (priedų sąrašo eilutė) ir AK (juoda eilutė su raudona sąlyga)
+    for (const [b, dok] of [["T-SD", "TSD_LT_SPS"], ["T-AK", "AK_LT_SPS"]]){
+      const t = (await generuokSu({ budas: b, pries: pasirink("kaina") }))[dok].pars.join("\n");
+      tiesa(/Pasiūlymų vertinimo kriterijų – kainą\.(\n|$)/.test(t) && !/vertinimo metodika pateikiama/.test(t) && !/Ekonomiškai naudingiausio Pasiūlymo vertinimo metodika/.test(t), b + " kaina: " + (t.match(/vertinimo kriterijų – .{0,100}/) || [""])[0]);
+      tiesa(/Pašalinta pagal jūsų atsakymus/.test(D.getElementById("rezultatas").textContent), b + ": patikroje neišvardyta");
+    }
+    // kainos ir kokybės santykis: AK LT/EN - abi kalbos
+    const t = (await generuokSu({ budas: "T-AK", kalba: "LT_EN", pries: pasirink("kks") })).AK_LTEN_SPS.pars.join("\n");
+    tiesa(/kriterijų – kainos ir kokybės santykį\. Pasiūlymų vertinimo kriterijai ir ekonominio naudingumo vertinimo metodika pateikiama SPS priede Nr\.\s*10\./.test(t), "LT 8.1: " + (t.match(/kriterijų – .{0,150}/) || [""])[0]);
+    tiesa(/Tender - price\/quality ratio\. The Tender evaluation criteria and cost-effectiveness evaluation methodology are provided in Annex\s*10 of the SPC\./.test(t), "EN 8.1: " + (t.match(/Tender - .{0,150}/) || [""])[0]);
+    tiesa(/10 priedas – Ekonomiškai naudingiausio Pasiūlymo vertinimo metodika\.(\n|$)/.test(t) && /Annex 10 – Methodology for evaluating the most economically advantageous tender\.(\n|$)/.test(t) && !/jei Pasiūlymai vertinami pagal|if the Tenders are evaluated/.test(t), "priedo eilutė be sąlygos");
+  });
+  await testas("Pasiūlymo galiojimo užtikrinimas (5 klausimas): „Taip / Ne“; „Ne“ - variantas pagal vertinimo kriterijų (pakeitus kriterijų - perparenkamas), kol kriterijaus nėra - pasakoma; DPS - pagal „Ar vertinama tik pagal kainą?“, „Ne“ - renkasi žmogus", async () => {
+    const V = () => { const [gid, g] = Object.entries(W.__K.grupes).find(([, g]) => W.uztikrinimoSkaidomas(g)); const n = g.nariai.find(x => ATS()[x.raktas] === true);
+      return { el: D.getElementById(W.lkId("grupe|" + gid)), v: n ? W.GP_LAUKAI.uztikrinimoVariantas(n.tekstas) : null }; };
+    await formosZingsnis("T-SD", "LT");
+    lygu(V().el.querySelector(".lk-kl").textContent, "Ar taikomas pasiūlymo galiojimo užtikrinimas?");
+    V().el.querySelector("input[id$=-o1]").click();
+    tiesa(V().v === null && /Variantas bus parinktas atsakius į klausimą „Pagal kokį kriterijų vertinami pasiūlymai\?“/.test(V().el.textContent) && V().el.dataset.busena === "neuzpildyta", "be kriterijaus");
+    pasirink("kks")(); lygu(V().v, "kokybe", "kainos ir kokybės santykis");
+    pasirink("sanaudos")(); lygu(V().v, "kaina", "sąnaudos - perparenkama");
+    tiesa(/pagal vertinimo kriterijų „Sąnaudas“ \(8\.1 p\.\)/.test(V().el.textContent), "kodėl parinkta");
+    V().el.querySelector("input[id$=-o0]").click(); lygu(V().v, "taikomas", "Taip");
+    await formosZingsnis("DPS-K", "LT");
+    const [r] = Object.entries(W.__K.tuscios).find(([, q]) => W.eval("taipNeLaukas")(q.lk));
+    V().el.querySelector("input[id$=-o1]").click();
+    W.taipNe(r, true); lygu(V().v, "kaina", "DPS: tik pagal kainą");
+    W.taipNe(r, false); W.klausimynas();
+    const radijai = V().el.querySelectorAll("input[name^=GUK_]");
+    tiesa(radijai.length === 2, "DPS „Ne“ - nėra pasirinkimo tarp dviejų variantų");
+    radijai[1].click(); lygu(V().v, "kokybe", "DPS: žmogaus pasirinkimas");
+  });
+  await testas("DPS „Ne“ (8 klausimas): 2.5 p. - nuoroda į 7 priedą (LT ir EN), priedų sąraše - nauja eilutė (ankstesnė baigiasi kabliataškiu), paketas - priedo failas su pavadinimu ir raudona pastaba (patikra - nebaigta); LT/EN šablono klaidos „Annex 7“ ir „ANEXXES“ ištaisytos", async () => {
+    const ne = () => { const [r] = Object.entries(W.__K.tuscios).find(([, q]) => W.eval("taipNeLaukas")(q.lk)); W.taipNe(r, false); };
+    const lt = await generuokSu({ budas: "DPS-K", pries: ne });
+    const t = lt.DPSP_LT_SALYGOS.pars.join("\n");
+    tiesa(/ekonomiškai naudingiausią pasiūlymą išrenka pagal pasiūlymų vertinimo kriterijus ir tvarką, nurodytus šio konkretaus pirkimo sąlygų 7 priede\. Su Tiekėju/.test(t), "2.5 p.: " + (t.match(/išrenka pagal .{0,120}/) || [""])[0]);
+    tiesa(/6 priedas – Sandorio šalies ir \(ar\) subtiekėjo duomenų forma;\n7 priedas - Ekonomiškai naudingiausio pasiūlymo vertinimo metodika\.(\n|$)/.test(t), "priedų sąrašas: " + (t.match(/6 priedas.{0,160}/s) || [""])[0]);
+    const m = lt.DPSP_LT_METODIKA;
+    tiesa(m && JSON.stringify(m.pars.filter(x => x.trim())) === JSON.stringify(["Konkretaus pirkimo sąlygų 7 priedas", "EKONOMIŠKAI NAUDINGIAUSIO PASIŪLYMO VERTINIMO METODIKA", "Pridėkite ekonominio naudingumo vertinimo kriterijus ir tvarką."]), "priedo failas: " + (m ? m.pars.join(" | ") : Object.keys(lt).join(", ")));
+    tiesa(m.r.audit.raudonos.some(x => /Pridėkite ekonominio naudingumo/.test(x.text)) && W.failuVardai(W.__R).some(v => /Vertinimo_metodika/.test(v)), "patikra ir failo vardas: " + W.failuVardai(W.__R).join(", "));
+    const en = await generuokSu({ budas: "DPS-K", kalba: "LT_EN", pries: ne });
+    const e = en.DPSP_LTEN_SALYGOS.pars.join("\n");
+    tiesa(/selects the most economically advantageous tender according to the evaluation criteria and procedure set out in Annex 7 to these conditions\. With the Supplier/.test(e), "EN 2.5: " + (e.match(/according to .{0,120}/) || [""])[0]);
+    tiesa(/Annex 6 – Counterparty and\/or Sub-Supplier Data form/.test(e) && /(^|\n)ANNEXES(\n|$)/.test(e) && !/ANEXXES|Annex 7 – Counterparty/.test(e), "šablono klaidos");
+    tiesa(/7 priedas - Ekonomiškai naudingiausio pasiūlymo vertinimo metodika\.\nAnnex 7 - Methodology for evaluating the most economically advantageous tender\./.test(e), "LT/EN eilutė");
+    tiesa(en.DPSP_LTEN_METODIKA && /Annex 7 to the specific procurement conditions/.test(en.DPSP_LTEN_METODIKA.pars.join(" ")), "LT/EN priedo failas");
   });
 }
 
@@ -1880,6 +1953,7 @@ async function testaiNumeracija(){
     await testaiSablonuTaisymai();
     await testaiNumeracija();
     await testaiForma();
+    await testaiKriterijus();
     await testaiTeise();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
