@@ -604,6 +604,72 @@ const GPDocx = (() => {
     return out;
   }
 
+  /* ---------- SULIETI PUNKTAI (2026-10-04, naudotojo prašymas: DPS LT sąlygų 10.3 punktas 10.2 pastraipoje) ----------
+     Šablone kito punkto numeris kartais įrašytas tos pačios pastraipos viduryje („... dokumentais. 10.3. Tiekėjas ...“): punktas
+     neatskirtas, o numeracija (GPNum) jo nemato ir kitus punktus pernumeruoja vienu mažiau (DPS LT: 10.4 tapdavo 10.3 - du 10.3).
+     Jei pastraipa (ne lentelėje) prasideda numeriu N (pvz. 10.2), o po sakinio pabaigos eina KITAS to paties lygio numeris
+     (10.3) ir sakinys didžiąja raide, pastraipa skaidoma prieš jį; abi dalys - tos pačios pastraipos savybės (skyriaus lūžis
+     lieka antrojoje). Tekstas nekeičiamas (pašalinamas tik tarpas pirmos dalies gale). Kviečiama PRIEŠ GPNum. Grąžina numerius. */
+  function sulietiPunktai(doc){
+    const d = doc.parts['word/document.xml'], body = els(d, 'body')[0], out = [];
+    const DID = 'A-ZĄČĘĖĮŠŲŪŽ';
+    const ilgis = n => els(n, 't').reduce((a, t) => a + t.textContent.length, 0) + (n.localName === 't' ? n.textContent.length : 0);
+    function skaidyk(p, poz){
+      let o = 0, kur = null;
+      for (const c of Array.from(p.childNodes)){
+        if (c.nodeType !== 1 || c.localName === 'pPr') continue;
+        const l = ilgis(c);
+        if (o + l > poz){ kur = { c, vid: poz - o }; break; }
+        o += l;
+      }
+      if (!kur || kur.c.localName !== 'r') return null;
+      const naujas = d.createElementNS(NS_W, 'w:p'), pPr = Array.from(p.childNodes).find(c => c.localName === 'pPr');
+      if (pPr){
+        const k = pPr.cloneNode(true), ks = Array.from(k.childNodes).find(c => c.localName === 'sectPr');
+        if (ks) k.removeChild(ks);
+        const os = Array.from(pPr.childNodes).find(c => c.localName === 'sectPr');
+        if (os){ pPr.removeChild(os); k.appendChild(os); }
+        naujas.appendChild(k);
+      }
+      let pirmas = kur.c;
+      if (kur.vid > 0){                                    // runas skeliamas: likusi dalis - kopijoje su tomis pačiomis savybėmis
+        const r = kur.c, kop = r.cloneNode(false), rPr = Array.from(r.childNodes).find(c => c.localName === 'rPr');
+        if (rPr) kop.appendChild(rPr.cloneNode(true));
+        let oo = 0;
+        Array.from(r.childNodes).filter(c => c.nodeType === 1 && c.localName !== 'rPr').forEach(c => {
+          const l = c.localName === 't' ? c.textContent.length : 0;
+          if (oo >= kur.vid) kop.appendChild(c);
+          else if (c.localName === 't' && oo + l > kur.vid){
+            const t2 = c.cloneNode(false); t2.setAttribute('xml:space', 'preserve'); t2.textContent = c.textContent.slice(kur.vid - oo);
+            c.textContent = c.textContent.slice(0, kur.vid - oo); c.setAttribute('xml:space', 'preserve'); kop.appendChild(t2);
+          }
+          oo += l;
+        });
+        r.parentNode.insertBefore(kop, r.nextSibling);
+        pirmas = kop;
+      }
+      for (let n = pirmas; n; ){ const kitas = n.nextSibling; naujas.appendChild(n); n = kitas; }
+      const paskutinis = els(p, 't').pop();
+      if (paskutinis) paskutinis.textContent = paskutinis.textContent.replace(/\s+$/, '');
+      p.parentNode.insertBefore(naujas, p.nextSibling);
+      return naujas;
+    }
+    els(body, 'p').filter(p => p.parentNode === body).forEach(p => {
+      for (let q = p, apsauga = 0; q && apsauga < 20; apsauga++){
+        const t = paraText(q), m = t.match(/^\s*(\d+(?:\.\d+)+)\.?/);
+        if (!m) break;
+        const dalys = m[1].split('.'), kitas = dalys.slice(0, -1).concat(+dalys[dalys.length - 1] + 1).join('.');
+        const mm = new RegExp('[.;:]\\s+(' + kitas.replace(/\./g, '\\.') + '\\.?)\\s+[' + DID + ']').exec(t.slice(m[0].length));
+        if (!mm) break;
+        const nq = skaidyk(q, m[0].length + mm.index + mm[0].indexOf(mm[1]));
+        if (!nq) break;
+        out.push(kitas);
+        q = nq;
+      }
+    });
+    return out;
+  }
+
   async function save(doc, type='blob'){
     for (const [path, xml] of Object.entries(doc.parts)){
       // createFolders:false - kitaip JSZip prideda kataloginius irasus ("word/"),
@@ -614,7 +680,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 
