@@ -163,6 +163,8 @@
   .lk-kl{margin:0;font-size:15px;font-weight:700;line-height:1.4;color:var(--color-graphite);flex:1 1 260px;min-width:0}
   .lk-gal .gpp{margin-top:-1px}
   .lk-uz{margin:2px 0 10px;font-size:13px;color:var(--color-graphite-50-strong)}
+  .lk-kl2{margin:12px 0 4px}
+  .lk-nera{font-size:13px;color:var(--color-graphite-50-strong)}
   .lk-b{display:inline-flex;align-items:center;border-radius:999px;font-size:11.5px;font-weight:700;padding:2px 9px;margin-left:6px;white-space:nowrap;border:1px solid}
   .lk-b--siuloma{background:var(--color-warning-5);color:var(--color-warning-strong);border-color:var(--color-warning)}
   .lk-b--patvirtinta{background:var(--color-green-5);color:var(--color-emerald-strong);border-color:var(--color-green-15)}
@@ -211,6 +213,7 @@
   .lk-pr-l input{margin-top:3px}
   .lk-pr-t{display:block;min-width:0;overflow-wrap:anywhere}
   .lk-pr-t .cite{display:block}
+  .lk-teise{margin-top:14px}
   .lk-santrauka{margin-top:22px;border:1px solid var(--color-graphite-15);border-radius:10px;padding:14px 16px;background:#fbfcfd}
   .lk-santrauka:empty{display:none}
   .lk-sa-t{margin:0 0 8px;font-size:15px;text-transform:none;letter-spacing:0;color:var(--color-graphite)}
@@ -266,8 +269,6 @@
 
 <main>
   <div id="infoPanelMount"></div>
-  <!-- Pirkimų teisės stebėsena: kas pasikeitė sąlygų rengimo srityje (bendras PP-teise registras, PĮ režimas). -->
-  <div id="teiseStebesena" style="margin-bottom:14px"></div>
   <div class="steps">
     <div class="step on" id="s1"><b>1. Kontroliniai klausimai</b>pirkimo būdas, vertė, kalba</div>
     <div class="step" id="s2"><b>2. Pirkimo sąlygos</b>tik jūsų sprendimai - kitką tvarko algoritmas</div>
@@ -444,6 +445,8 @@
     <div id="klausimai"></div>
     <!-- Santrauka prieš generavimą: privalomi sprendimai, neužpildyti laukai, nepatvirtintos siūlomos, pašalinamos nuorodos -->
     <div id="lkSantrauka" class="lk-santrauka" role="region" aria-label="Santrauka prieš generuojant"></div>
+    <!-- Teisės pokyčiai šiam pirkimui - pagal 1 žingsnio atsakymus (shared/teise-stebesena.js, PP-teise registras) -->
+    <div id="lkTeise" class="lk-teise"></div>
     <div class="actions">
       <button class="sec" id="back1">Atgal</button>
       <button id="gen">Generuoti dokumentus</button>
@@ -490,17 +493,51 @@
 <script src="../shared/bibliotekos.js"></script>
 <script src="ai-patarejas.js"></script>
 <script>
-/* Teises nuorodos statiniame tekste (<span data-teise>) - is shared/teises-nuorodos.js - ir teises stebesenos
-   irasai siam moduliui (PP-teise registras) - pagal taikoma istatyma: PĮ, centralizuotam pirkimui - VPĮ.
-   Perpiesiama tik pasikeitus rezimui (centrUI). */
+/* Teises nuorodos statiniame tekste (<span data-teise>) - is shared/teises-nuorodos.js - pagal taikoma istatyma: PĮ,
+   centralizuotam pirkimui - VPĮ. Perpiesiama tik pasikeitus rezimui (centrUI). */
 let TEISES_REZIMAS = null;
 function teisesKontekstas(rez){
   if (rez === TEISES_REZIMAS) return;
   TEISES_REZIMAS = rez;
   GP_TEISE.uzpildyk(document, rez);
-  if (window.GP_STEBESENA) GP_STEBESENA.mount({ target: '#teiseStebesena', modulis: 'PP-salygos', rezimas: rez, lang: 'lt', limit: 3 });
 }
 teisesKontekstas('PI');
+
+/* Teises pokyciai SIAM pirkimui (PP-teise registras, shared/teise-stebesena.js; naudotojo sprendimas 2026-10-04): ne puslapio
+   virsuje (iki tol ~450 px pries 1 zingsni, kiekvienam pirkimui tie patys irasai), o 2 zingsnio dalyje „Pries generuojant“ -
+   pagal 1 zingsnio atsakymus (istatymas, objektas, rengimo etapas, korteles planuojama paskelbimo data); 3 zingsnio patikroje -
+   viena eilute. Neaktualus - suskleisti su priezastimi; nepavykes ikelimas sakomas, niekada „pokyciu nera“. */
+const TEISES_REGISTRAS = '../PP-teise/duomenys/registras.json';
+let TEISE_REG = null;                                     // null - kraunama; { ok, tikrinta } arba { ok:false, klaida }
+function kraukTeise(){
+  if (!window.GP_STEBESENA) return;
+  GP_STEBESENA.ikelkKarta(TEISES_REGISTRAS).then(r => { TEISE_REG = r; teisesPirkimui(); });
+}
+kraukTeise();
+const OBJEKTAS_LT = { prekes: 'prekės', paslaugos: 'paslaugos', darbai: 'darbai' };
+function teisesPirkimuiKontekstas(){
+  const tipas = $('input[name=tipas]:checked')?.value || 'prekes';
+  let kortele = null;
+  try { kortele = KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta(); } catch (e) { kortele = null; }
+  const skelbimas = kortele && GP_STEBESENA.yraData(kortele.paskelbimas) ? kortele.paskelbimas : null;
+  return {
+    // registre statybos darbai - atskiras objektas: darbų pirkimui tinka abu (naudotojo sprendimas 2026-10-04)
+    // griezta: pirkimo požymiai žinomi - nesutapęs objektas ar etapas reiškia „neaktualu“ (rodoma suskleista su priežastimi)
+    ctx: { rezimas: teisesRezimas(), objektas: tipas === 'darbai' ? ['darbai', 'statyba'] : tipas, etapas: 'rengimas', skelbimoData: skelbimas, griezta: true },
+    tekstas: `Atrinkta pagal 1 žingsnį: ${istatymas()}, ${OBJEKTAS_LT[tipas] || tipas}, sąlygų rengimas` + (skelbimas ? `, planuojamas paskelbimas ${skelbimas} (pirkimo kortelė)` : '')
+  };
+}
+function teisesPirkimui(){
+  const el = document.getElementById('lkTeise');
+  if (!el || !window.GP_STEBESENA) return;
+  const k = teisesPirkimuiKontekstas();
+  // perpiešiama tik pasikeitus kontekstui ar įkėlimo būsenai - kitaip kiekvienas atsakymas suskleistų atvertą sąrašą
+  const raktas = JSON.stringify([k.ctx, TEISE_REG ? TEISE_REG.ok : null]);
+  if (el.dataset.raktas === raktas) return;
+  el.dataset.raktas = raktas;
+  el.innerHTML = GP_STEBESENA.pirkimuiHTML(TEISE_REG, { modulis: 'PP-salygos', ctx: k.ctx, lang: 'lt', saknis: '..', H: 'h4',
+    kontekstas: k.tekstas, kasZyma: 'Ką patikrinti sąlygose' });
+}
 
 /* ==========================================================================
    Sablonu rinkiniai pagal pirkimo buda ir kalba.
@@ -1247,11 +1284,12 @@ function kvalifikacijosLenteles(){
   const nariai = [];
   DOK.forEach(d => (d.zemelapis.vienetai||[]).forEach(v => {
     const t = norm(v.tekstas);
-    if (v.grupe && /pasalinimo pagrind/.test(t) && /kvalifikacij/.test(t)) nariai.push({ t, ats: ATS[salygosRaktas(v.tekstas)] === true });
+    if (v.grupe && /pasalinimo pagrind/.test(t) && /kvalifikacij/.test(t)) nariai.push({ t, tekstas: v.tekstas, ats: ATS[salygosRaktas(v.tekstas)] === true });
   }));
   const pas = nariai.filter(n => n.ats);
+  // „kvalifikacija nėra tikrinama“ (MVP LT/EN) - irgi tik pašalinimo pagrindai (iki 2026-10-04 neatpažinta)
   return { grupe: nariai.length > 0, atsakyta: pas.length > 0,
-           tik1: pas.some(n => /netikrinama kvalifikacija|kvalifikacija netikrinama/.test(n.t)) };
+           tik1: pas.some(n => (GP_LAUKAI.tikrinimoVariantas(n.tekstas) || {}).kas === 'pasalinimo') };
 }
 /* Priedu saraso eilute, kurioje raudona ne visa pastraipa (sablone - „8 priedas – Konfidenciali informacija ...“ be raudono
    bruksnio, „13 priedas – Priimtinų bankų sąrašas.“ su raudonu tik pavadinimu): iki 2026-10-03 ji nesekdavo priedo pasirinkimo ir
@@ -2166,6 +2204,10 @@ function priedoEilute(d, raktas){
 /* Ar pastraipa lieka dokumente pagal dabartinius atsakymus (raudona nuostata, priedu eilute, redakcija pagal rezima). */
 function pastraipaLieka(Z, i, REZ){
   const rp = (Z.raudonosPastabos || []).find(n => n.i === i);
+  // Raudonas sąlygos tekstas (sąlygos `pasirenkami`, pvz. AK SPS 11.3 „... X Eur“) - jo likimą lemia sąlygos atsakymas
+  // (isjungtosPastraipos; neatsakyta - laukas rodomas su pastaba). Iki 2026-10-04 čia ieškota raudonos nuostatos
+  // sprendimo, kurio forma tokiai pastraipai neklausia, todėl „X“ laukas niekada nepasirodydavo.
+  if (rp && (Z.blokai || []).some(b => (b.pasirenkami || []).includes(i))) return true;
   if (rp){
     const r = norm(rp.text);
     if (/^\d+\s*priedas/i.test(rp.text)) return !!ATS['A_' + r];
@@ -2323,7 +2365,7 @@ function perziurosHTML(tekstas, vietos, reiksmes){
       const zyma = (reiksmes || [])[s.k] === SKYRIAUS_ZYMA ? '[skyriaus Nr. - įrašomas generuojant]' : v.zyma;
       return `<mark class="lk-t" title="Dokumente liks žyma">${esc(zyma)}${sup(s.k)}</mark>`;
     }
-    return `<del class="lk-s" title="Neprivaloma nuoroda be numerio - bus pašalinta">${esc(s.s)}</del>`;
+    return `<del class="lk-s" title="${s.sprendimu ? 'Bus pašalinta pagal jūsų atsakymą' : 'Neprivaloma nuoroda be numerio - bus pašalinta'}">${esc(s.s)}</del>`;
   }).join('');
 }
 
@@ -2404,6 +2446,12 @@ function kortelesVienetai(K, c){
     }
   } else if (c.rusis === 'laukas'){
     const key = 'B_' + c.raktas;
+    if (taipNeLaukas(q.lk)){
+      const a = ATS['KR_' + c.raktas];
+      out.push({ id: c.id + '-kr0', pavadinimas: q.lk.klausimas, busena: sprendimoBusena(a, 'KR_' + c.raktas), salyga: !!q.salyga,
+        blokuoja: a === undefined && !q.salyga, raktai: ['KR_' + c.raktas], reiksme: a === true ? 'Taip - nurodymas pašalinamas' : a === false ? 'Ne' : '' });
+      if (a !== false) return out;                // neatsakyta arba „Taip“ - vietų pildyti nereikia
+    }
     (q.lk ? q.lk.vietos : []).forEach((v, k) => {
       if (v.kopija != null) return;
       const s = SIUL.get(vRaktas(key, k));
@@ -2480,7 +2528,9 @@ function kortelesHTML(K, c){
   if (c.rusis === 'grupe'){
     const pa = paaiskinimas({ vieta: kur, kas: 'Šios šablono sąlygos viena kitą paneigia: dokumente lieka tik pasirinktoji, kitos ištrinamos.',
       komentarai: q.komentarai, pastaba: q.pagrindimas ? 'Riba peržiūrėta: ' + q.pagrindimas : '', dokai });
-    return `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, 'Kuris variantas atitinka šį pirkimą?', pa)}
+    const gk = GP_LAUKAI.grupesKlausimas(q.nariai);
+    if (gk && gk.id === 'tikrinimas' && tikrinimoSkaidomas(q)) return tikrinimoHTML(c, klase, pa, gk);
+    return `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, gk ? gk.klausimas : 'Kuris variantas atitinka šį pirkimą?', pa)}
       <p class="lk-uz" id="${c.id}-uz">Pasirinkite vieną (privaloma). Numatytojo atsakymo nėra sąmoningai: įtraukus dvi, dokumentas prieštarautų pats sau.</p>
       <div class="lk-var" role="radiogroup" aria-labelledby="${c.id}-kl" aria-describedby="${c.id}-uz">
       ${q.nariai.map((n, k) => {
@@ -2542,6 +2592,88 @@ function kortelesHTML(K, c){
   return '';
 }
 
+/* „Taip / Ne“ laukas (DPS konkretaus pirkimo „Ar vertinama tik pagal kainą?“, naudotojo sprendimas 2026-10-04): atsakymas
+   KR_<raktas> privalomas, numatytojo nėra. „Taip“ - šablono nurodymas (ir angliškas jo dvynys) pašalinamas (GP_LAUKAI.SALINTI),
+   tai matoma peržiūroje ir patikroje; „Ne“ - įrašomi vertinimo kriterijai ir tvarka, kaip kitos vietos. */
+const taipNeLaukas = lk => !!(lk && GP_LAUKAI.TIPAI.some(x => x.taipNe && x.id === lk.tipas));
+window.taipNe = (raktas, taip) => {
+  const K = window.__K, q = K.tuscios[raktas], en = K.enPoros.tuscios[raktas];
+  uAts('KR_' + raktas, taip, false);
+  const rinkinys = (key, n) => {
+    const a = Array.isArray(ATS[key]) ? ATS[key] : (ATS[key] = []);
+    for (let k = 0; k < n; k++){
+      if (taip){ a[k] = GP_LAUKAI.SALINTI; PATV.add(vRaktas(key, k)); }
+      else if (a[k] === GP_LAUKAI.SALINTI) a[k] = '';
+    }
+    TOUCHED.add(key);
+  };
+  rinkinys('B_' + raktas, (q.lk ? q.lk.vietos : []).length);
+  if (en) rinkinys('B_' + en.enRaktas, en.vietos);
+  klausimynas();
+};
+
+/* Pašalinimo pagrindų ir kvalifikacijos grupė - du klausimai (naudotojo sprendimas 2026-10-04): kas tikrinama ir iš ko.
+   Šablono variantas parenkamas pagal abu atsakymus; jei pagal pirmą atsakymą šablone yra vienas variantas - jis parenkamas
+   iš karto ir tai pasakoma. Šablone nesančio derinio pasirinkti negalima (pažymėta). Atsakyta - kaip kitų grupių, kai
+   parinktas variantas; TIKR_DALIS - tik dalinis atsakymas, kol antras klausimas dar neatsakytas. */
+const TIKR_DALIS = {};
+const TIKR_KAS = { pasalinimo: 'Tik pašalinimo pagrindus', abu: 'Pašalinimo pagrindus ir kvalifikaciją' };
+const TIKR_KIENO = { laimetojas: 'Tik galimo laimėtojo', visi: 'Visų tiekėjų' };
+const tikrinimoVariantai = g => g.nariai.map(n => Object.assign({ n }, GP_LAUKAI.tikrinimoVariantas(n.tekstas) || {}));
+function tikrinimoSkaidomas(g){
+  const V = tikrinimoVariantai(g);
+  return V.every(v => v.kas && v.kieno) && new Set(V.map(v => v.kas + '|' + v.kieno)).size === V.length;
+}
+function tikrinimoDalis(gid, V){
+  const pas = V.find(v => ATS[v.n.raktas] === true);
+  return pas ? { kas: pas.kas, kieno: pas.kieno, pas } : Object.assign({}, TIKR_DALIS[gid] || {});
+}
+function tikrinimoHTML(c, klase, pa, gk){
+  const q = c.q, gid = c.raktas, V = tikrinimoVariantai(q), d = tikrinimoDalis(gid, V), nm = esc(gid);
+  const kas = Object.keys(TIKR_KAS).filter(k => V.some(v => v.kas === k));
+  const kienos = Object.keys(TIKR_KIENO).filter(k => V.some(v => v.kieno === k));
+  const cand = d.kas ? V.filter(v => v.kas === d.kas) : [];
+  // visi šablono variantai - paaiškinime (nieko nenutylima), pasirinktasis - po klausimais
+  const paV = pa + `<p><b>Šablono variantai:</b></p>` + q.nariai.map(n => `<p class="lk-var-sab">${esc(n.tekstas)}</p>`).join('');
+  let h = `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, gk.klausimas, paV)}
+    <p class="lk-uz" id="${c.id}-uz">Atsakykite (privaloma). Pagal atsakymus parenkamas vienas šablono variantas, kiti ištrinami.</p>
+    <div class="opts lk-ops" role="radiogroup" aria-labelledby="${c.id}-kl" aria-describedby="${c.id}-uz">
+    ${kas.map((k, i) => `<label class="opt"><input type="radio" id="${c.id}-o${i}" name="GK_${nm}" ${d.kas === k ? 'checked' : ''} onchange="pasirinkTikrinima('${nm}','kas','${k}')"> ${TIKR_KAS[k]}</label>`).join('')}
+    </div>`;
+  if (kienos.length > 1){
+    const uz2 = !d.kas ? 'Pirmiausia atsakykite į pirmą klausimą.'
+      : cand.length === 1 ? `Šiame šablone, kai tikrinami ${d.kas === 'abu' ? 'pašalinimo pagrindai ir kvalifikacija' : 'tik pašalinimo pagrindai'}, yra vienas variantas - jis ir parinktas.` : '';
+    h += `<p class="lk-kl lk-kl2" id="${c.id}-kl2">${esc(gk.klausimas2)}</p>${uz2 ? `<p class="lk-uz" id="${c.id}-uz2">${uz2}</p>` : ''}
+      <div class="opts lk-ops" role="radiogroup" aria-labelledby="${c.id}-kl2"${uz2 ? ` aria-describedby="${c.id}-uz2"` : ''}>
+      ${kienos.map((k, i) => {
+        const yra = cand.some(v => v.kieno === k);
+        return `<label class="opt"><input type="radio" id="${c.id}-k${i}" name="GKK_${nm}" ${d.kas && d.kieno === k ? 'checked' : ''}${!d.kas || !yra ? ' disabled' : ''}
+          onchange="pasirinkTikrinima('${nm}','kieno','${k}')"> ${TIKR_KIENO[k]}${d.kas && !yra ? ' <span class="lk-nera">(šablone tokio varianto nėra)</span>' : ''}</label>`;
+      }).join('')}</div>`;
+  } else h += `<p class="lk-uz">Antro klausimo („${esc(gk.klausimas2)}“) šiame šablone nėra: visi jo variantai taikomi ${kienos[0] === 'visi' ? 'visiems tiekėjams' : 'tik galimam laimėtojui'}.</p>`;
+  if (d.pas){
+    const tekst = blokoTekstas({ dok: d.pas.n.dok, i: d.pas.n.bi }, d.pas.n.blokas);
+    h += `<div class="lk-pz"><span class="lk-pz-t">Šablono variantas</span> <span class="lk-pz-s">${esc(d.pas.n.tekstas)}</span>${tekst
+      ? `<span class="lk-pz-t lk-pz-t2">Dokumente lieka</span> <span class="lk-pz-k">${ilgasTekstas(tekst, 200)}</span>` : ''}</div>`;
+  }
+  return h + aiBlokas('G|' + gid) + `</section>`;
+}
+window.pasirinkTikrinima = (gid, dalis, reiksme) => {
+  const g = window.__K.grupes[gid], V = tikrinimoVariantai(g);
+  const d = tikrinimoDalis(gid, V);
+  delete d.pas;
+  d[dalis] = reiksme;
+  const cand = V.filter(v => v.kas === d.kas);
+  // pakeitus pirmą atsakymą antras klausiamas iš naujo (nebent šablone liko vienas variantas)
+  if (dalis === 'kas') d.kieno = cand.length === 1 ? cand[0].kieno : undefined;
+  TIKR_DALIS[gid] = d;
+  const tinka = cand.find(v => v.kieno === d.kieno);
+  if (tinka) return pasirinkGrupe(gid, tinka.n.raktas);
+  // dalinis atsakymas: ankstesnis variantas nebegalioja, grupė vėl neatsakyta
+  g.nariai.forEach(n => { if (ATS[n.raktas] === true){ ATS[n.raktas] = false; TOUCHED.add(n.raktas); } });
+  klausimynas();
+};
+
 function laukoHTML(K, c, klase, kur, dokai){
   const q = c.q, key = 'B_' + c.raktas, lk = q.lk || { vietos: [], klausimas: '', uzuomina: '' };
   const vals = ATS[key] || [];
@@ -2554,18 +2686,25 @@ function laukoHTML(K, c, klase, kur, dokai){
   const pa = paaiskinimas({ vieta: kur, nurodymas: nurodymai, komentarai: q.komentarai,
     tuscia: b ? 'neprivaloma nuoroda „(SPS ___ priedas)“ bus pašalinta visa; kitos vietos lieka su žyma, ir patikra jas parodys.'
       : 'dokumente lieka žyma (brūkšniai, nurodymas ar „X“), ir baigtumo patikra ją parodys.', dokai });
+  const tn = taipNeLaukas(lk), tnA = tn ? ATS['KR_' + c.raktas] : null;
   let h = `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, kl, pa)}
     ${uz ? `<p class="lk-uz" id="${c.id}-uz">${esc(uz)}</p>` : ''}${salyga}
-    <div class="lk-pz"><span class="lk-pz-t">Taip atrodys dokumente</span> <span class="lk-pz-s" id="${c.id}-pz">${perziurosHTML(q.tekstas, lk.vietos, vals)}</span></div>
-    <div class="lk-vietos">`;
+    ${tn ? `<div class="opts lk-ops" role="radiogroup" aria-labelledby="${c.id}-kl"${uz ? ` aria-describedby="${c.id}-uz"` : ''}>
+      <label class="opt"><input type="radio" id="${c.id}-kr0" name="KR_${esc(c.raktas)}" ${tnA === true ? 'checked' : ''} onchange="taipNe('${esc(c.raktas)}',true)"> Taip</label>
+      <label class="opt"><input type="radio" id="${c.id}-kr1" name="KR_${esc(c.raktas)}" ${tnA === false ? 'checked' : ''} onchange="taipNe('${esc(c.raktas)}',false)"> Ne</label></div>` : ''}
+    <div class="lk-pz"><span class="lk-pz-t">Taip atrodys dokumente</span> <span class="lk-pz-s" id="${c.id}-pz">${perziurosHTML(q.tekstas, lk.vietos, vals)}</span></div>`;
+  // „Taip / Ne“ laukas: kol neatsakyta ar atsakius „Taip“ (nurodymas šalinamas), įvesties laukų nėra
+  if (tn && tnA !== false) return h + `</section>`;
+  h += `<div class="lk-vietos">`;
   let ui = 0;
   const kart = {};
   lk.vietos.forEach(v => { if (v.kopija == null) kart[v.uzrasas] = (kart[v.uzrasas] || 0) + 1; });
   const eil = {};
   lk.vietos.forEach((v, k) => {
     if (v.kopija != null) return;
-    const u = c.vienetai[ui++];
-    const id = c.id + '-v' + k, val = vals[k] === SKYRIAUS_ZYMA ? '' : (vals[k] || '');
+    const u = c.vienetai.find(x => x.id === c.id + '-v' + k) || c.vienetai[ui];
+    ui++;
+    const id = c.id + '-v' + k, val = vals[k] === SKYRIAUS_ZYMA || vals[k] === GP_LAUKAI.SALINTI ? '' : (vals[k] || '');
     const nr = kart[v.uzrasas] > 1 ? (eil[v.uzrasas] = (eil[v.uzrasas] || 0) + 1) : 0;
     const aria = [uz ? c.id + '-uz' : '', id + '-s', c.id + '-pa'].filter(Boolean).join(' ');
     h += `<div class="lk-v"><label class="lk-v-l" for="${id}">${esc(v.uzrasas || 'Reikšmė')}${nr ? ` <span class="lk-nr">${nr} vieta sakinyje</span>` : ''}${v.klase === 'b' ? ' <span class="lk-nepriv">neprivaloma</span>' : ''}</label>
@@ -2622,7 +2761,9 @@ function formuluotesHTML(K, c, klase, kur, dokai){
   const nurodymas = (GP_LAUKAI.tusciosVietos(q.tekstas)[0] || {}).zyma || '';
   const pa = paaiskinimas({ vieta: kur, nurodymas: nurodymas && nurodymas[0] === '[' ? nurodymas.replace(/^\[|\]$/g, '') : '',
     komentarai: q.komentarai, pastaba: q.pastaba, tuscia: 'šablono vieta lieka (raudona), ir patikra ją parodys - galėsite užbaigti Word\'e.', dokai });
-  const kl = (q.variantai || []).length ? 'Kokia formuluotė įrašoma?' : (q.netaikyti ? 'Ar ši nuostata taikoma? Jei taip - įrašykite tekstą.' : 'Kokį tekstą įrašyti?');
+  // patvirtintas formuluotės klausimas iš laukų registro (CPO pagrindimas), kitoms - struktūrinis
+  const tipasF = GP_LAUKAI.TIPAI.find(x => x.formuluote && x.re.test(norm(q.tekstas)));
+  const kl = (tipasF && tipasF.klausimas) || ((q.variantai || []).length ? 'Kokia formuluotė įrašoma?' : (q.netaikyti ? 'Ar ši nuostata taikoma? Jei taip - įrašykite tekstą.' : 'Kokį tekstą įrašyti?'));
   let h = `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, kl, pa)}
     <div class="lk-pz"><span class="lk-pz-t">Taip atrodys dokumente</span> <span class="lk-pz-s" id="${c.id}-pz">${formuluotesPerziura(q, cur)}</span></div>
     <div class="lk-var" role="radiogroup" aria-labelledby="${c.id}-kl">`;
@@ -2883,6 +3024,7 @@ function klausimynas(){
 
   $('#klausimai').innerHTML = h;
   if ($('#lkSantrauka')) $('#lkSantrauka').innerHTML = santraukosHTML(S);
+  teisesPirkimui();
   window.__S2 = S;
   if (PRIEDU_KLAIDA) GP_BUSENA.rodyk('#prieduBusena', { tipas:'nezinoma',
     tekstas:`Nepavyko įkelti priedų registro - priedų sąrašas nežinomas (${GP_BUSENA.klaidosTekstas(PRIEDU_KLAIDA)}).`,
@@ -3044,7 +3186,7 @@ async function generuotiViena(d, REZ){
   const raudonuIdx = new Set((Z.raudonosPastabos||[]).map(x => x.i));
   /* Pildoma pagal laukų registro planą (laukai.js) - tą patį, kurį formoje rodo „Taip atrodys dokumente“: reikšmės
      įrašomos, neprivaloma nuoroda be numerio („(SPS ___ priedas)“) pašalinama, kita tuščia vieta lieka su žyma. */
-  const salintos = [];
+  const salintos = [], salintiAtsakymu = [];       // neprivalomos nuorodos be numerio / pašalinta pagal atsakymą („Taip / Ne“ laukai)
   let skyriausZyma = false;
   const pildykLauka = (i, v, juodinamas) => {
     const t = GPDocx.paraText(paras[i]);
@@ -3052,7 +3194,7 @@ async function generuotiViena(d, REZ){
     if (!lk.vietos.length) return 0;
     const ed = GP_LAUKAI.keitimai(t, lk.vietos, v);
     const n = GPGen.keisti(paras, i, ed);
-    ed.filter(e => e.salinta).forEach(e => salintos.push({ dok: d.trumpas, nuoroda: t.slice(e.start, e.end).trim(), tekstas: t }));
+    ed.filter(e => e.salinta).forEach(e => (e.sprendimu ? salintiAtsakymu : salintos).push({ dok: d.trumpas, nuoroda: t.slice(e.start, e.end).trim(), tekstas: t }));
     if (ed.some(e => e.tekstas === SKYRIAUS_ZYMA)) skyriausZyma = true;
     // Uzpildyta vieta raudonoje pastraipoje = isspresta, tekstas juodinamas (pvz. zaliuju atitikimo taisykle). Neuzpildyta
     // lieka raudona, kad butu matoma Word'e ir auditui.
@@ -3320,7 +3462,7 @@ async function generuotiViena(d, REZ){
   const blob = await GPDocx.save(doc, 'blob');
   return { d, blob, audit, forma, numeracija,
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
-                   numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, skyriausNr } };
+                   numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr } };
 }
 
 /* Skyriaus numeris galutiniame dokumente: LT - pastraipos pradzia („12.<tab>ESMINĖS ...“), dvikalbiame - pirmas eilutes
@@ -3479,6 +3621,23 @@ function rodykRezultata(rez){
     h += `<div class="audit no" style="margin-top:10px"><b>Pašalintos neprivalomos nuorodos (${salintos.length}):</b> priedo numeris nenurodytas,
       todėl skliaustuose esanti nuoroda į priedą pašalinta visa (sakinys lieka be jos):
       <div class="lst">${salintos.map(x => `<div><span class="n">${esc(x.d)}</span><del>${esc(x.nuoroda)}</del> - ${ilgasTekstas(x.tekstas, 200)}</div>`).join('')}</div></div>`;
+  }
+  const salAts = rez.flatMap(r => ((r.stats && r.stats.salintiAtsakymu) || []).map(x => Object.assign({ d: r.d.trumpas }, x)));
+  if (salAts.length){
+    h += `<div class="audit ok" style="margin-top:10px"><b>Pašalinta pagal jūsų atsakymus (${salAts.length}):</b> šablono nurodymas, kurio pagal atsakymą netaikote:
+      <div class="lst">${salAts.map(x => `<div><span class="n">${esc(x.d)}</span><del>${esc(x.nuoroda)}</del> - ${ilgasTekstas(x.tekstas, 200)}</div>`).join('')}</div></div>`;
+  }
+  // Teisės pokyčiai šiam pirkimui - ta pati atranka kaip 2 žingsnio „Prieš generuojant“ (viena eilutė, kad nepasimestų)
+  if (window.GP_STEBESENA){
+    if (!TEISE_REG) h += `<div class="audit no" style="margin-top:10px">Teisės stebėsenos duomenys dar kraunami - teisės pokyčius šiam pirkimui patikrinkite 2 žingsnio dalyje „Prieš generuojant“.</div>`;
+    else if (!TEISE_REG.ok) h += `<div class="audit no" style="margin-top:10px">Teisės stebėsenos duomenų įkelti nepavyko (${esc(TEISE_REG.klaida)}) - teisės pokyčių šiam pirkimui patikrinti negalima.</div>`;
+    else {
+      const R = GP_STEBESENA.pirkimuiIrasai(TEISE_REG.tikrinta, 'PP-salygos', teisesPirkimuiKontekstas().ctx);
+      h += R.aktualus.length
+        ? `<div class="audit no" style="margin-top:10px"><b>Teisės pokyčiai, aktualūs šiam pirkimui (${R.aktualus.length}):</b> ${R.aktualus.map(v => esc(v.irasas.pavadinimas)).join('; ')}.
+            Ką patikrinti sąlygose - 2 žingsnio dalyje „Prieš generuojant“.</div>`
+        : `<div class="audit ok" style="margin-top:10px">Teisės pokyčių, aktualių šiam pirkimui, stebėsenos registre nėra${R.neaktualus.length ? ` (pagal atsakymus neaktualūs - ${R.neaktualus.length})` : ''}.</div>`;
+    }
   }
   const skNr = rez.filter(r => r.stats && r.stats.skyriausNr);
   if (skNr.length){
@@ -4000,7 +4159,8 @@ function patarejoKlausimai(K){
   });
   // Priedų ir skyrių numeriai AI neklausiami: jie siūlomi iš paties SPS priedų sąrašo ir galutinės numeracijos
   const tikNuorodos = q => q.lk && q.lk.vietos.every(v => v.kopija != null || v.ivestis === 'priedo-nr' || v.ivestis === 'skyrius');
-  Object.entries(K.tuscios).forEach(([r, q]) => { if (!q.pastabaTipas && !arAngliskas(q.tekstas) && !tikNuorodos(q)) Q.push({ id:id('B'),
+  // „Taip / Ne“ laukai (DPS „Ar vertinama tik pagal kainą?“) - žmogaus sprendimas, AI neklausiamas
+  Object.entries(K.tuscios).forEach(([r, q]) => { if (!q.pastabaTipas && !arAngliskas(q.tekstas) && !tikNuorodos(q) && !taipNeLaukas(q.lk)) Q.push({ id:id('B'),
     raktas:'B|' + r, rusis:'reiksme', tekstas:zodziu(q.tekstas, 700), vietos:q.vietos || 1,
     dok:q.dokumentai, pastaba:pastaba(q.komentarai) }); });
   if (K.dalys) for (let k = 0; k < K.dalys.iki - K.dalys.sablone; k++)

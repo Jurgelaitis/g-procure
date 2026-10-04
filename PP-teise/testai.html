@@ -191,6 +191,57 @@ async function testaiAktualumas(){
     const a = S.aktualumas(b, { rezimas: "PI", skelbimoData: "2026-11-15" }); lygu(a.lygis, "galimai"); tiesa(/pereinam/.test(a.priezastys.join(" ")), a.priezastys.join(" | "));
     lygu(S.aktualumas(b, { rezimas: "PI", skelbimoData: "2027-02-01" }).lygis, "aktualu", "po įsigaliojimo");
   });
+  /* 2026-10-04: konkretus pirkimas modulyje (PP-salygos „Prieš generuojant“) - griežtas režimas, objektų sąrašas, atranka ir piešimas. */
+  await testas("Griežtas režimas (pirkimo požymiai žinomi): bent vienas nesutapęs požymis -> neaktualu; objektų sąrašas (darbai ir statyba) atitinka bent vienu; priežastyje - žodyno pavadinimai, ne kodai", () => {
+    const r = S.normalizuok(irasas({ aktualumas: { proceduros: null, objektai: ["darbai", "statyba"], etapai: ["rengimas", "vertinimas"] } }));
+    lygu(S.aktualumas(r, { rezimas: "PI", objektas: "prekes", etapas: "rengimas" }).lygis, "galimai", "įprastas režimas nekeistas");
+    const g = S.aktualumas(r, { rezimas: "PI", objektas: "prekes", etapas: "rengimas", griezta: true });
+    lygu(g.lygis, "neaktualu");
+    tiesa(/pirkimo objektas neatitinka \(įrašas taikomas: Darbai, Statyba ir remontas\)/.test(g.priezastys.join(" | ")), g.priezastys.join(" | "));
+    const z = S.normalizuok(irasas({ aktualumas: { proceduros: null, objektai: ["prekes", "statyba"], etapai: null } }));
+    lygu([S.aktualumas(z, { rezimas: "PI", objektas: ["darbai", "statyba"], griezta: true }).lygis, S.aktualumas(z, { rezimas: "PI", objektas: ["darbai"], griezta: true }).lygis], ["aktualu", "neaktualu"], "sąrašas");
+    const be = S.normalizuok(irasas({ datos: { isigalioja: "2027-01-01" }, aktualumas: { proceduros: null, objektai: null, etapai: ["rengimas"] } }));
+    lygu(S.aktualumas(be, { rezimas: "PI", etapas: "rengimas", skelbimoData: "2026-11-15", griezta: true }).lygis, "galimai", "datos taisyklė - ir griežtame");
+    tiesa(/does not match \(entry applies to: Works, Construction and repair\)/.test(S.aktualumas(r, { rezimas: "PI", objektas: "prekes", griezta: true }, "en").priezastys.join(" ")), "EN");
+  });
+  const pirkReg = () => S.tikrink({ irasai: [
+    irasas({ id: "kval", pavadinimas: "Metodika", moduliai: [{ modulis: "PP-salygos", kas: "Kvalifikacijos lentelė" }], veiksmas: "Formuluoti pagal 16 p.", datos: { isigalioja: "2026-07-01" },
+      aktualumas: { proceduros: null, objektai: ["prekes", "paslaugos"], etapai: ["rengimas"] }, susije: ["kval-vpi"] }),
+    irasas({ id: "kval-vpi", pavadinimas: "Metodika (VPĮ)", rezimas: ["PI", "VPI"], moduliai: [{ modulis: "PP-salygos", kas: "Tas pats" }], datos: { isigalioja: "2026-07-01" }, saltinis: { url: "https://b.lt" },
+      aktualumas: { proceduros: null, objektai: null, etapai: null }, susije: ["kval"] }),
+    irasas({ id: "darb", pavadinimas: "LAT dėl darbų", moduliai: [{ modulis: "PP-salygos", kas: "Lentelės jungtukai" }], datos: { isigalioja: "2026-05-01" }, saltinis: { url: "https://c.lt" },
+      aktualumas: { proceduros: null, objektai: ["darbai", "statyba"], etapai: null } }),
+    irasas({ id: "neaisku", pavadinimas: "Nežinomas", moduliai: [{ modulis: "PP-salygos", kas: "" }], datos: { isigalioja: "2027-03-01" }, saltinis: { url: "https://d.lt" } }),
+    irasas({ id: "kitas", pavadinimas: "Kitam moduliui", moduliai: [{ modulis: "PP-qual" }], saltinis: { url: "https://e.lt" }, aktualumas: { proceduros: null, objektai: null, etapai: null } }),
+    irasas({ id: "demo", pavadinimas: "Demo", demo: true, moduliai: [{ modulis: "PP-salygos" }], saltinis: { url: "https://f.lt" } }),
+    irasas({ id: "arch", pavadinimas: "Archyvas", busena: "archyvuota", moduliai: [{ modulis: "PP-salygos" }], saltinis: { url: "https://g.lt" } })] });
+  const pirkCtx = { rezimas: "PI", objektas: "paslaugos", etapas: "rengimas", griezta: true };
+  await testas("Pokyčiai šiam pirkimui (pirkimuiIrasai): tik su moduliu susieti, be demonstracinių ir archyvo; neaktualūs - atskirai su priežastimi; nenustatyti - tarp aktualių; PĮ / VPĮ dvynys - vieną kartą; „ką patikrinti“ - modulio susiejimas", () => {
+    const R = S.pirkimuiIrasai(pirkReg(), "PP-salygos", pirkCtx, DABAR, "lt");
+    lygu([R.aktualus.map(v => [v.irasas.id, v.aktualumas.lygis, v.kas]), R.neaktualus.map(v => v.irasas.id)],
+      [[["kval", "aktualu", "Kvalifikacijos lentelė"], ["neaisku", "nezinoma", ""]], ["darb"]], "atranka");
+    tiesa(/Darbai, Statyba ir remontas/.test(R.neaktualus[0].aktualumas.priezastys.join(" ")), "neaktualaus priežastis");
+    // darbai: LAT - per „statybą“; PĮ įrašas (prekės, paslaugos) neaktualus, todėl jo VPĮ dvynys rodomas; aktualūs prieš nenustatytus
+    lygu(S.pirkimuiIrasai(pirkReg(), "PP-salygos", Object.assign({}, pirkCtx, { objektas: ["darbai", "statyba"] }), DABAR, "lt").aktualus.map(v => v.irasas.id),
+      ["kval-vpi", "darb", "neaisku"], "darbų pirkimas");
+  });
+  await testas("pirkimuiHTML: kraunama; nepavykęs įkėlimas - klaida, NIEKADA „įrašų nėra“; be aktualių - pasakoma; ką patikrinti ir ką daryti; neaktualūs suskleisti; nuorodos į stebėseną; tekstai ekranuoti", () => {
+    const cfg = { modulis: "PP-salygos", ctx: pirkCtx, lang: "lt", saknis: "..", kontekstas: "Atrinkta pagal 1 žingsnį", kasZyma: "Ką patikrinti sąlygose", dabar: DABAR };
+    const d = h => { const x = document.createElement("div"); x.innerHTML = h; return x; };
+    tiesa(/Kraunama/.test(d(S.pirkimuiHTML(null, cfg)).textContent), "kraunama");
+    const k = d(S.pirkimuiHTML({ ok: false, klaida: "HTTP 404" }, cfg));
+    tiesa(k.querySelector(".gps__err[role=alert]") && /HTTP 404/.test(k.textContent) && /patikrinti negalima/.test(k.textContent) && !/įrašų registre nėra/.test(k.textContent), "klaida: " + k.textContent);
+    const h = d(S.pirkimuiHTML({ ok: true, tikrinta: pirkReg() }, cfg));
+    lygu(h.querySelector(".gps__title").textContent, "Teisės pokyčiai šiam pirkimui (2)");
+    tiesa(/Ką patikrinti sąlygose: Kvalifikacijos lentelė/.test(h.textContent) && /Ką daryti: Formuluoti pagal 16 p\./.test(h.textContent) && /aktualumas nenustatytas/.test(h.textContent), "turinys: " + h.textContent.slice(0, 300));
+    const det = h.querySelector("details.gps__kiti");
+    tiesa(det && !det.open && /Pagal jūsų atsakymus neaktualūs \(1\)/.test(det.querySelector("summary").textContent) && /LAT dėl darbų/.test(det.textContent), "neaktualūs");
+    tiesa([...h.querySelectorAll("a.gps__nuoroda")].every(a => /^\.\.\/PP-teise\/index\.html#irasas=/.test(a.getAttribute("href"))) && /\?modulis=PP-salygos$/.test(h.querySelector(".gps__foot a").getAttribute("href")), "nuorodos");
+    const tuscias = d(S.pirkimuiHTML({ ok: true, tikrinta: S.tikrink({ irasai: [] }) }, cfg));
+    tiesa(/Su šiuo įrankiu susietų ir šiam pirkimui aktualių įrašų registre nėra/.test(tuscias.textContent) && /\(0\)/.test(tuscias.querySelector(".gps__title").textContent), "be aktualių");
+    const xss = d(S.pirkimuiHTML({ ok: true, tikrinta: S.tikrink({ irasai: [irasas({ id: "z", pavadinimas: "<img src=x onerror=alert(1)>", moduliai: [{ modulis: "PP-salygos", kas: "<b>x</b>" }] })] }) }, cfg));
+    tiesa(!xss.querySelector("img") && !xss.querySelector(".gps__sub b + b") && /<img src=x/.test(xss.textContent), "ekranavimas");
+  });
 }
 
 async function testaiPaieska(){
@@ -656,11 +707,16 @@ async function testaiIntegracijos(){
       lygu(P.w.getComputedStyle(P.d.querySelector(".grid")).gridTemplateColumns.split(" ").length, st, w + " px stulpeliai"); tiesa(P.d.documentElement.scrollWidth <= w + 1, w + " px plotis"); P.f.remove();
     }
   });
-  await testas("PP-qual ir PP-salygos jungia branduolį, turi #teiseStebesena, kviečia mount su savo moduliu ir gyvai rodo bloką", async () => {
+  await testas("PP-qual jungia branduolį ir gyvai rodo bloką; PP-salygos (nuo 2026-10-04) - ne puslapio viršuje, o „Prieš generuojant“: pokyčiai šiam pirkimui pagal 1 žingsnį", async () => {
     const q = await src("../PP-qual/PP-QUAL.html"), s = await src("../PP-salygos/PP-SALYGOS.html");
-    tiesa(/teise-stebesena\.js/.test(q) && /id="teiseStebesena"/.test(q) && /modulis:'PP-qual', rezimas:rezimas\(\)/.test(q), "PP-qual"); tiesa(/teise-stebesena\.js/.test(s) && /id="teiseStebesena"/.test(s) && /modulis: 'PP-salygos', rezimas: rez\b/.test(s) && /teisesKontekstas\('PI'\)/.test(s), "PP-salygos (nuo 2026-10-03 - pagal taikomą įstatymą: PĮ, centralizuotam pirkimui VPĮ)");
+    tiesa(/teise-stebesena\.js/.test(q) && /id="teiseStebesena"/.test(q) && /modulis:'PP-qual', rezimas:rezimas\(\)/.test(q), "PP-qual");
+    tiesa(/teise-stebesena\.js/.test(s) && !/id="teiseStebesena"/.test(s) && !/GP_STEBESENA\.mount\(/.test(s) && /id="lkTeise"/.test(s) && /GP_STEBESENA\.ikelkKarta\(/.test(s)
+      && /GP_STEBESENA\.pirkimuiHTML\(TEISE_REG, \{ modulis: 'PP-salygos'/.test(s) && /rezimas: teisesRezimas\(\)/.test(s) && /griezta: true/.test(s), "PP-salygos (įstatymas - PĮ, centralizuotam pirkimui VPĮ)");
     const pq = await puslapis("../PP-qual/PP-QUAL.html"); await kol(() => pq.d.querySelector("#teiseStebesena .gps__item, #teiseStebesena .gps__err"), "PP-qual blokas"); tiesa(pq.d.querySelector("#teiseStebesena .gps__item") && /Aktualu šiam moduliui/.test(pq.d.getElementById("teiseStebesena").textContent)); pq.f.remove();
-    const ps = await puslapis("../PP-salygos/PP-SALYGOS.html"); await kol(() => ps.d.querySelector("#teiseStebesena .gps__item, #teiseStebesena .gps__err"), "PP-salygos blokas"); tiesa(ps.d.querySelector("#teiseStebesena .gps__item")); ps.f.remove();
+    const ps = await puslapis("../PP-salygos/PP-SALYGOS.html");
+    await kol(() => ps.d.querySelector("#lkTeise .gps__item, #lkTeise .gps__err, #lkTeise .gps__sub:not(:empty)") && !/Kraunama/.test(ps.d.getElementById("lkTeise").textContent), "PP-salygos pokyčiai šiam pirkimui");
+    tiesa(!ps.d.getElementById("teiseStebesena") && /^Teisės pokyčiai šiam pirkimui \(\d+\)$/.test(ps.d.querySelector("#lkTeise .gps__title").textContent) && ps.d.getElementById("lkTeise").closest("#step2"), "PP-salygos: " + ps.d.getElementById("lkTeise").textContent.slice(0, 120));
+    ps.f.remove();
   });
   await testas("backup.js žymi ppteise. raktus; sw.js SAVI sąraše viskas, ką naudoja index.html, kiekvienas pasiekiamas, admin/testai nesaugomi", async () => {
     tiesa(/\["ppteise\.",\s*"PP-teise"/.test(await src("../shared/backup.js")), "backup");
