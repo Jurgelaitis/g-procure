@@ -1887,14 +1887,19 @@ const GPNum = (() => {
      cantSplit Word'e būtų nukirpta;
    - etiketės eilutė (paskutinis langelis tuščias - pildo tiekėjas): etikečių lygiavimas - LYGIAVIMAS_ETIKETESE (abipusis siauruose
      langeliuose daro netolygius tarpus), vertikalus lygiavimas - viršus, be hideMark (vienoda aukščio logika); pusjuodis - pagal
-     PUSJUODIS_ETIKETESE (numatyta - kaip šablone; kursyvas nekeičiamas).
+     PUSJUODIS_ETIKETESE (numatyta - kaip šablone; kursyvas nekeičiamas), išskyrus BE_PUSJUODZIO eilutes (tiekėjo el. pašto
+     eilutė - visada be pusjuodžio).
    Tekstas, eilučių tvarka ir raudonos žymos nekeičiami.
    ========================================================================== */
 const GPLent = (() => {
   const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   // Numatytieji sprendimai - viena vieta, kad būtų lengva atšaukti
   const LYGIAVIMAS_ETIKETESE = 'left';        // null - palikti šablono (abipusį)
-  const PUSJUODIS_ETIKETESE = 'sablonas';     // 'sablonas' - kaip šablone; 'ne' - etikečių pusjuodis šalinamas
+  const PUSJUODIS_ETIKETESE = 'sablonas';     // 'sablonas' - kaip šablone; 'ne' - visų etikečių pusjuodis šalinamas
+  // Etikečių eilutės, kurių pusjuodis šalinamas visada (naudotojo sprendimas 2026-10-04): pasiūlymo formos tiekėjo el. pašto
+  // eilutė - šablonuose (AK, AKV, TSD, DPSP; LT/EN - abiem kalbomis) vienintelė pusjuodė tarp tiekėjo duomenų eilučių, MVP LT - ne.
+  // Kitas šablono pusjuodis (pasiūlymo kainos eilutės, lentelių antraštės) lieka. Atpažįstama pagal eilutės tekstą (mažosiomis).
+  const BE_PUSJUODZIO = ['nario elektroninio pašto adresas', 'email address of the supplier'];
   const CANTSPLIT_RIBA = 700;                 // simbolių eilutėje (ir iki 12 pastraipų) - tokia eilutė nedalijama per puslapį
   const PARASTES = { top: 0, left: 108, bottom: 0, right: 108 };
   const TBLPR = ['tblStyle','tblpPr','tblOverlap','bidiVisual','tblStyleRowBandSize','tblStyleColBandSize','tblW','jc','tblCellSpacing','tblInd',
@@ -1935,6 +1940,7 @@ const GPLent = (() => {
     return tcs.length >= 2 && tuscias(tcs[tcs.length - 1]) && tcs.slice(0, -1).some(tc => !tuscias(tc));
   }
   const trumpa = tr => tekstas(tr).length <= CANTSPLIT_RIBA && tr.getElementsByTagNameNS(W, 'p').length <= 12;
+  const bePusjuodzio = tr => { const t = tekstas(tr).toLowerCase().replace(/\s+/g, ' '); return BE_PUSJUODZIO.some(f => t.includes(f)); };
 
   /* Teksto plotis kiekvienai viršutinio lygio lentelei - pagal artimiausią po jos esantį sectPr. */
   function sekcijuPlociai(body){
@@ -2006,6 +2012,7 @@ const GPLent = (() => {
       if (!trPr.childNodes.length) tr.removeChild(trPr);
       const etik = etiketesEilute(tr) && trumpa(tr);
       if (etik) st.etikeciu++;
+      const beB = etik && (PUSJUODIS_ETIKETESE === 'ne' || bePusjuodzio(tr)), bPries = st.pusjuodis;
       kids(tr, 'tc').forEach((tc, ci, visi) => {
         const tcPr = kid(tc, 'tcPr');
         if (tcPr){
@@ -2027,16 +2034,17 @@ const GPLent = (() => {
         });
         Array.from(tc.getElementsByTagNameNS(W, 'rPr')).forEach(rpr => {
           ['spacing', 'w', 'fitText'].forEach(tag => { const e = kid(rpr, tag); if (e){ rpr.removeChild(e); st.tarpai++; } });
-          if (etiketesLangelis && PUSJUODIS_ETIKETESE === 'ne') ['b', 'bCs'].forEach(tag => { const e = kid(rpr, tag); if (e){ rpr.removeChild(e); st.pusjuodis++; } });
+          if (etiketesLangelis && beB) ['b', 'bCs'].forEach(tag => { const e = kid(rpr, tag); if (e){ rpr.removeChild(e); st.pusjuodis++; } });
         });
       });
+      if (st.pusjuodis > bPries) st.pusjuodisEil++;
     });
   }
   function sutvarkyti(doc){
     const D = doc.parts['word/document.xml'];
     const body = D.getElementsByTagNameNS(W, 'body')[0];
     const st = { lenteliu: 0, siaurinta: 0, itrauka: 0, tblW: 0, tcW: 0, fixed: 0, parastes: 0, exact: 0, cantSplit: 0, etikeciu: 0, kairen: 0, hideMark: 0,
-                 distribute: 0, tarpai: 0, pusjuodis: 0, shd: 0 };
+                 distribute: 0, tarpai: 0, pusjuodis: 0, pusjuodisEil: 0, shd: 0 };
     if (!body) return st;
     const plociai = sekcijuPlociai(body);
     const lenteles = Array.from(body.getElementsByTagNameNS(W, 'tbl')).filter(t => {
@@ -2058,7 +2066,7 @@ const GPLent = (() => {
     });
     return st;
   }
-  return { sutvarkyti, etiketesEilute, trumpa, LYGIAVIMAS_ETIKETESE, PUSJUODIS_ETIKETESE, CANTSPLIT_RIBA };
+  return { sutvarkyti, etiketesEilute, trumpa, bePusjuodzio, LYGIAVIMAS_ETIKETESE, PUSJUODIS_ETIKETESE, BE_PUSJUODZIO, CANTSPLIT_RIBA };
 })();
 
 const GPAudit = (() => {

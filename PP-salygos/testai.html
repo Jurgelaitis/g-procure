@@ -1819,24 +1819,25 @@ async function testaiTeise(){
 
 /* 2026-10-04: lentelės visuose sugeneruotuose dokumentuose (GPLent, variklis.js). Kiekvienos lentelės kiekviena eilutė: ne „exact“,
    be simbolių tarpų ir „distribute“, trumpa eilutė nedalijama, tinklelis = tblW = langelių pločiai (DXA), lentelė telpa į teksto plotį,
-   etiketės eilutėse - lygiavimas pagal LYGIAVIMAS_ETIKETESE ir pusjuodis tik ten, kur jis yra šablono etiketėje. */
+   etiketės eilutėse - lygiavimas pagal LYGIAVIMAS_ETIKETESE ir pusjuodis tik ten, kur jis yra šablono etiketėje; tiekėjo el. pašto
+   eilutė (BE_PUSJUODZIO) - be pusjuodžio niekur, kitas šablono pusjuodis lieka. */
 const elW = (n, tag) => n ? Array.from(n.childNodes).filter(c => c.nodeType === 1 && c.localName === tag) : [];
 const atW = (n, a) => n ? (n.getAttributeNS(NSW, a) || n.getAttribute("w:" + a)) : null;
 const txW = n => Array.from(n.getElementsByTagNameNS(NSW, "t")).map(t => t.textContent).join("");
 const GPL = () => W.eval("GPLent");
 const LENT_PRIEDAI = ["KONFIDENCIALUMAS", "NACSAUGUMAS", "NACSAUGUMASVPI", "KONFINFO", "SUBTIEKEJAI", "SUTARTYS", "SPECIALISTAI", "SANDORIS", "DERYBOS", "VALDYMAS"];
-/* Šablono etikečių eilučių pusjuodžiai tekstai (normalizuoti) - leistinas pusjuodis. */
+/* Šablono etikečių eilučių pusjuodžiai tekstai (normalizuoti) - leistinas pusjuodis; el. pašto eilutės - ne. */
 async function sablonoPusjuodzios(vardas){
   const z = await W.JSZip.loadAsync(await (await W.fetch("templates/" + vardas + ".docx")).arrayBuffer());
   const d = new W.DOMParser().parseFromString(await z.file("word/document.xml").async("string"), "application/xml");
   const out = new Set();
-  Array.from(d.getElementsByTagNameNS(NSW, "tr")).filter(tr => GPL().etiketesEilute(tr)).forEach(tr => Array.from(tr.getElementsByTagNameNS(NSW, "r")).forEach(r => {
+  Array.from(d.getElementsByTagNameNS(NSW, "tr")).filter(tr => GPL().etiketesEilute(tr) && !GPL().bePusjuodzio(tr)).forEach(tr => Array.from(tr.getElementsByTagNameNS(NSW, "r")).forEach(r => {
     const rp = elW(r, "rPr")[0], b = rp && elW(rp, "b")[0];
     if (b && atW(b, "val") !== "0" && atW(b, "val") !== "false" && txW(r).trim()) out.add(W.GP_LAUKAI.norm(txW(r)));
   }));
   return out;
 }
-function lenteliuKlaidos(xml, vardas, leistinas){
+function lenteliuKlaidos(xml, vardas, leistinas, info = { rasti: new Set(), elPasto: 0 }){
   const d = new W.DOMParser().parseFromString(xml, "application/xml"), body = d.getElementsByTagNameNS(NSW, "body")[0], k = [];
   const visi = Array.from(body.getElementsByTagNameNS(NSW, "*"));
   const plotis = t => { const sp = visi.slice(visi.indexOf(t)).find(n => n.localName === "sectPr"); if (!sp) return null;
@@ -1857,7 +1858,12 @@ function lenteliuKlaidos(xml, vardas, leistinas){
       if (h && atW(h, "hRule") === "exact") k.push(v + " eil. " + ri + ": aukštis exact");
       if (GPL().trumpa(tr) && !elW(trPr, "cantSplit").length) k.push(v + " eil. " + ri + ": be cantSplit");
       let gi = +atW(elW(trPr, "gridBefore")[0], "val") || 0;
-      const etik = GPL().etiketesEilute(tr) && GPL().trumpa(tr), tcs = elW(tr, "tc");
+      const etik = GPL().etiketesEilute(tr) && GPL().trumpa(tr), tcs = elW(tr, "tc"), beB = etik && GPL().bePusjuodzio(tr);
+      if (beB){
+        info.elPasto++;
+        const b = Array.from(tr.getElementsByTagNameNS(NSW, "b")).filter(x => atW(x, "val") !== "0" && atW(x, "val") !== "false").length;
+        if (b) k.push(v + " eil. " + ri + ": el. pašto eilutėje pusjuodis (" + b + ")");
+      }
       tcs.forEach((tc, ci) => {
         const tcPr = elW(tc, "tcPr")[0], span = +atW(elW(tcPr, "gridSpan")[0], "val") || 1, w = elW(tcPr, "tcW")[0];
         const lauk = gc.slice(gi, gi + span).reduce((a, b) => a + b, 0); gi += span;
@@ -1870,7 +1876,9 @@ function lenteliuKlaidos(xml, vardas, leistinas){
         Array.from(tc.getElementsByTagNameNS(NSW, "rPr")).forEach(rp => ["spacing", "w", "fitText"].forEach(t => { if (elW(rp, t).length) k.push(v + " eil. " + ri + ": rPr " + t); }));
         if (etik && ci < tcs.length - 1) Array.from(tc.getElementsByTagNameNS(NSW, "r")).forEach(r => {
           const rp = elW(r, "rPr")[0], b = rp && elW(rp, "b")[0];
-          if (b && atW(b, "val") !== "0" && txW(r).trim() && (GPL().PUSJUODIS_ETIKETESE === "ne" || !leistinas.has(W.GP_LAUKAI.norm(txW(r))))) k.push(v + " eil. " + ri + ": pusjuodis ne iš šablono - " + txW(r).slice(0, 40));
+          if (!b || atW(b, "val") === "0" || !txW(r).trim()) return;
+          if (GPL().PUSJUODIS_ETIKETESE === "ne" || beB || !leistinas.has(W.GP_LAUKAI.norm(txW(r)))) k.push(v + " eil. " + ri + ": pusjuodis ne iš šablono - " + txW(r).slice(0, 40));
+          else info.rasti.add(W.GP_LAUKAI.norm(txW(r)));
         });
       });
     });
@@ -1879,21 +1887,25 @@ function lenteliuKlaidos(xml, vardas, leistinas){
 }
 async function testaiLenteles(){
   dabartine = grupe("Lentelės visuose sugeneruotuose dokumentuose (GPLent, 2026-10-04)");
-  await testas("Visos lentelės visuose dokumentuose (10 paketų: AK, AKV, TSD, MVP, ND, DPS, DPS-K, LT ir LT/EN, visi priedai): ne „exact“, be simbolių tarpų ir „distribute“, trumpos eilutės nedalomos, tinklelis = tblW = langelių pločiai (DXA), telpa į teksto plotį, etiketės kairėn, pusjuodis tik iš šablono; tekstas toks pat kaip be sutvarkymo", async () => {
-    const blogi = [], leist = {}; let lenteliu = 0, dok = 0;
+  await testas("Visos lentelės visuose dokumentuose (10 paketų: AK, AKV, TSD, MVP, ND, DPS, DPS-K, LT ir LT/EN, visi priedai): ne „exact“, be simbolių tarpų ir „distribute“, trumpos eilutės nedalomos, tinklelis = tblW = langelių pločiai (DXA), telpa į teksto plotį, etiketės kairėn, pusjuodis tik iš šablono (kainos eilučių lieka), tiekėjo el. pašto eilutė - be pusjuodžio; tekstas toks pat kaip be sutvarkymo", async () => {
+    const blogi = [], leist = {}, info = { rasti: new Set(), elPasto: 0 }; let lenteliu = 0, dok = 0;
     for (const [budas, kalba, centr] of [["T-AK", "LT"], ["T-AK", "LT_EN"], ["S-AK", "LT", true], ["T-SD", "LT"], ["T-SD", "LT_EN"], ["MV-SAD", "LT"], ["MV-SAD", "LT_EN"], ["S-ND", "LT_EN"], ["DPS", "LT_EN"], ["DPS-K", "LT_EN"]]){
       const docs = await generuokSu({ budas, kalba, centr, priedai: LENT_PRIEDAI });
       for (const [v, x] of Object.entries(docs)){
         if (x.statinis || !x.xml || x.r.papildomas) continue;
         leist[v] ??= await sablonoPusjuodzios(v);
         dok++; lenteliu += (x.r.lenteles || {}).lenteliu || 0;
-        lenteliuKlaidos(x.xml, budas + " " + v, leist[v]).forEach(e => blogi.push(e));
+        lenteliuKlaidos(x.xml, budas + " " + v, leist[v], info).forEach(e => blogi.push(e));
       }
     }
     tiesa(dok >= 60 && lenteliu >= 150, "per mažai: dokumentų " + dok + ", lentelių " + lenteliu);
+    // el. pašto eilutė yra AK, AKV, TSD ir DPSP pasiūlymo formose (LT ir LT/EN) - jos turi būti rastos, kitaip patikra nieko netikrina
+    tiesa(info.elPasto >= 6, "el. pašto eilučių rasta tik " + info.elPasto);
+    // kitas šablono pusjuodis lieka: pasiūlymo kainos eilutės, specialistų lentelės antraštės
+    tiesa(["pasiulymo kaina", "su pvm", "nuo"].every(t => info.rasti.has(t)), "šablono pusjuodis neliko: " + [...info.rasti].slice(0, 8).join(" | "));
     tiesa(!blogi.length, blogi.length + ":\n  " + blogi.slice(0, 12).join("\n  "));
   });
-  await testas("Pasiūlymo forma „INFORMACIJA APIE TIEKĖJĄ“: lentelė = teksto plotis (9638 DXA), visos 10 eilučių nedalomos, etiketės kairėn, vertikalus lygiavimas viršuje, be hideMark; tekstas, kursyvas ir šablono pusjuodis nepakeisti", async () => {
+  await testas("Pasiūlymo forma „INFORMACIJA APIE TIEKĖJĄ“: lentelė = teksto plotis (9638 DXA), visos 10 eilučių nedalomos, etiketės kairėn, vertikalus lygiavimas viršuje, be hideMark; el. pašto eilutė be pusjuodžio (LT ir LT/EN - abiem kalbomis), tekstas, kursyvas ir kitų eilučių pusjuodis nepakeisti", async () => {
     const docs = await generuokSu({ budas: "T-AK" });
     const d = new W.DOMParser().parseFromString(docs.AK_LT_PASIULYMAS.xml, "application/xml");
     const tbl = Array.from(d.getElementsByTagNameNS(NSW, "tbl")).find(t => /^Tiekėjo pavadinimas/.test(txW(t)));
@@ -1904,7 +1916,13 @@ async function testaiLenteles(){
     lygu([atW(elW(elW(tbl, "tblPr")[0], "tblW")[0], "w"), eil.length, eil.every(tr => elW(elW(tr, "trPr")[0], "cantSplit").length)], ["9638", 10, true], "plotis ir eilutės");
     lygu(eil.map(tr => txW(tr)), seil.map(tr => txW(tr)), "tekstas");
     const savyb = (tr, tag) => Array.from(tr.getElementsByTagNameNS(NSW, tag)).length;
-    lygu(eil.map(tr => [savyb(tr, "i"), savyb(tr, "b")]), seil.map(tr => [savyb(tr, "i"), savyb(tr, "b")]), "kursyvas ir pusjuodis kaip šablone");
+    const elp = tr => /nario elektroninio pašto adresas/.test(txW(tr));
+    tiesa(seil.filter(elp).length === 1 && savyb(seil.find(elp), "b") > 0, "šablone el. pašto eilutė pusjuodė");
+    lygu(eil.map(tr => [savyb(tr, "i"), savyb(tr, "b")]), seil.map(tr => [savyb(tr, "i"), elp(tr) ? 0 : savyb(tr, "b")]), "kursyvas kaip šablone, el. pašto eilutė be pusjuodžio, kitos - kaip šablone");
+    const en = await generuokSu({ budas: "T-AK", kalba: "LT_EN" });
+    const ed = new W.DOMParser().parseFromString(en.AK_LTEN_PASIULYMAS.xml, "application/xml");
+    const eel = Array.from(ed.getElementsByTagNameNS(NSW, "tr")).filter(tr => /email address of the Supplier/.test(txW(tr)));
+    lygu([eel.length, eel.map(tr => elW(tr, "tc").length), eel.map(tr => savyb(tr, "b"))], [1, [3], [0]], "LT/EN el. pašto eilutė be pusjuodžio abiem kalbomis");
     const el = eil.find(tr => /Veiklos partnerių patikros klausimynas pildymui/.test(txW(tr)));
     lygu([atW(elW(elW(elW(el, "tc")[0], "p")[0].getElementsByTagNameNS(NSW, "pPr")[0], "jc")[0], "val"), atW(elW(elW(elW(el, "tc")[0], "tcPr")[0], "vAlign")[0], "val"), tbl.getElementsByTagNameNS(NSW, "hideMark").length],
       ["left", "top", 0], "el. pašto eilutė");
@@ -1927,6 +1945,20 @@ async function testaiLenteles(){
     const eil = Array.from(doc.parts["word/document.xml"].getElementsByTagNameNS(NSW, "tr"));
     lygu([!!elW(elW(eil[0], "trPr")[0], "cantSplit").length, !!elW(elW(eil[1], "trPr")[0], "cantSplit").length], [true, false], "trumpa nedalijama, ilga dalijama");
     lygu(txW(doc.parts["word/document.xml"]), pries, "tekstas");
+  });
+  await testas("GPLent sintetinėje lentelėje: tiekėjo el. pašto eilutė (ir vien angliška, didžiosiomis) - be pusjuodžio (b ir bCs, ir pastraipos ženklo), kitos etiketės pusjuodis lieka, vertės langelis nekeičiamas", async () => {
+    const eil = (et, v) => `<w:tr><w:tc><w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:rPr><w:b/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t>${et}</w:t></w:r></w:p></w:tc>`
+      + `<w:tc><w:tcPr><w:tcW w:w="4638" w:type="dxa"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${v}</w:t></w:r></w:p></w:tc></w:tr>`;
+    const xml = `<w:document xmlns:w="${NSW}"><w:body><w:tbl><w:tblPr><w:tblW w:w="9638" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="4638"/></w:tblGrid>
+      ${eil("THE EMAIL ADDRESS OF THE SUPPLIER / each member of the group of Suppliers", "")}${eil("Tiekėjo/kiekvieno Tiekėjų grupės nario elektroninio pašto adresas", " ")}
+      ${eil("Pasiūlymo kaina Eur be PVM", "")}${eil("Telefono numeris", "+370")}
+    </w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:left="1701" w:right="567" w:top="1134" w:bottom="1134"/></w:sectPr></w:body></w:document>`;
+    const doc = { parts: { "word/document.xml": new W.DOMParser().parseFromString(xml, "application/xml") } };
+    const st = GPL().sutvarkyti(doc);
+    const tr = Array.from(doc.parts["word/document.xml"].getElementsByTagNameNS(NSW, "tr"));
+    const n = (el, tag) => el.getElementsByTagNameNS(NSW, tag).length;
+    lygu(tr.map(r => elW(r, "tc").map(tc => n(tc, "b") + "/" + n(tc, "bCs"))), [["0/0", "1/0"], ["0/0", "1/0"], ["2/1", "1/0"], ["2/1", "1/0"]], "pusjuodis (b/bCs) langeliuose: el. pašto etiketės - 0, vertės langeliai ir kitos etiketės - kaip buvo");
+    lygu([st.pusjuodisEil, GPL().bePusjuodzio(tr[3])], [2, false], "eilučių be pusjuodžio, kita etiketė");
   });
 }
 
