@@ -23,6 +23,14 @@
  * ==========================================================================*/
 (function (root) {
   "use strict";
+  /* Tekstas be kirpimo žodžio viduryje (2026-10-04): ribojama tik pilno žodžio riboje, su daugtaškiu. */
+  function zodziu(t, n){
+    t = String(t || "");
+    if (t.length <= n) return t;
+    let i = t.lastIndexOf(" ", n);
+    if (i < n * 0.6) i = n;
+    return t.slice(0, i).replace(/[\s,;:–-]+$/, "") + "…";
+  }
 
   var VERSION = "0.1";
   // Modelio cia NEnurodom - numatytasis gyvena shared/ai-proxy.js (DEFAULT_MODEL).
@@ -123,7 +131,7 @@
              " Arba {\"tekstas\": \"...\"} - tik pazodziui is saltinio.");
     }
     if (q.rusis === "reiksme") e.push("  Vietu skaicius: " + (q.vietos || 1));
-    if (q.pastaba) e.push("  Sablono autoriu pastaba: " + String(q.pastaba).replace(/\s+/g, " ").slice(0, 300));
+    if (q.pastaba) e.push("  Sablono autoriu pastaba: " + zodziu(String(q.pastaba).replace(/\s+/g, " "), 300));
     return e.join("\n");
   }
 
@@ -232,7 +240,7 @@
     var zodziai = (opts && opts.zodziai) || {};
     var out = { id: q.id, raktas: q.raktas, rusis: q.rusis, klausimas: q.tekstas,
                 reiksme: null, rodoma: "", citata: String(a.citata || "").trim(),
-                pagrindimas: String(a.pagrindimas || "").trim().slice(0, 240),
+                pagrindimas: zodziu(String(a.pagrindimas || "").trim(), 240),
                 saltinis: null, patikrinta: false, priezastis: "" };
     function atmesk(p) { out.priezastis = p; return out; }
 

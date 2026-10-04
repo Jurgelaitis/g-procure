@@ -965,11 +965,44 @@ const GPGen = (() => {
      Priimam reiksmiu masyva ir uzpildom eiles tvarka; tuscia reiksme palieka
      vieta nepakeista (ir auditas apie ja praneš).                            */
   const VIETA_RE = /_+|\[[^\]]{4,}\]/g;
+  // Pabraukimas interneto adreso viduje („draudeju_viesi_duomenys“) - ne pildoma vieta (2026-10-04; iki tol
+  // AKV SPS adresas buvo klausiamas kaip du laukai, o patikra ji rodydavo „tuščia“ net uzbaigtame dokumente).
+  const ADRESAS_RE = /(https?:\/\/|www\.)[^\s„“"<>]+/gi;
+  const adresuSritys = t => { const out = []; let m; ADRESAS_RE.lastIndex = 0; while ((m = ADRESAS_RE.exec(t))) out.push([m.index, m.index + m[0].length]); return out; };
   function vietos(text){
     VIETA_RE.lastIndex = 0;
-    const out = []; let m;
-    while ((m = VIETA_RE.exec(text))) out.push({ start:m.index, end:m.index+m[0].length, zyma:m[0] });
+    const out = [], u = adresuSritys(String(text || '')); let m;
+    while ((m = VIETA_RE.exec(text))){
+      const s = m.index, e = s + m[0].length;
+      if (!u.some(([a, b]) => s >= a && e <= b)) out.push({ start:s, end:e, zyma:m[0] });
+    }
     return out;
+  }
+  /* Teksto keitimai pastraipoje pagal GP_LAUKAI.keitimai() planą (2026-10-04): [{ start, end, tekstas }] pradinio teksto
+     pozicijose. Įrašas patenka į runą, kuriam priklauso pirmas keičiamas ženklas (formatavimas išlieka); tuščias
+     tekstas - ištrinama (neprivaloma nuoroda be numerio). Tas pats planas rodomas formos peržiūroje. */
+  function keisti(paras, i, edits){
+    const p = paras[i]; if (!p || !edits || !edits.length) return 0;
+    const ts = GPDocx.els(p,'t');
+    if (!ts.length) return 0;
+    const s = ts.map(t => t.textContent).join('');
+    const owner = [];
+    ts.forEach(t => { for (let k=0;k<t.textContent.length;k++) owner.push(t); });
+    const out = new Map(ts.map(t => [t,'']));
+    const E = edits.filter(e => e.start >= 0 && e.end <= s.length && e.end > e.start).sort((a, b) => a.start - b.start);
+    let ei = 0, n = 0;
+    for (let k=0;k<s.length;k++){
+      while (E[ei] && E[ei].start < k) ei++;                           // persidengiantis - praleidžiamas
+      const e = E[ei];
+      if (e && k === e.start){
+        if (e.tekstas){ out.set(owner[k], out.get(owner[k]) + gpBruksniai(e.tekstas)); n++; }
+        k = e.end - 1; ei++;
+        continue;
+      }
+      out.set(owner[k], out.get(owner[k]) + s[k]);
+    }
+    for (const t of ts){ t.textContent = out.get(t); t.setAttribute('xml:space','preserve'); }
+    return n;
   }
   function pildyti(paras, i, values){
     const p = paras[i]; if (!p) return 0;
@@ -1507,7 +1540,7 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
+  return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, keisti, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
            keistiRaudonaTeksta, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
@@ -1829,7 +1862,7 @@ const GPNum = (() => {
       } else if (e.naujas !== e.lit.nr || tarpas){
         keiskPradzia(e.p, e.lit.ilgis, e.naujas + e.lit.taskas, tarpas);
       } else continue;
-      if (e.senas !== e.naujas) pak.push({ buvo: e.senas, tapo: e.naujas, tekstas: (e.kont === 'kunas' ? e.t : e.ltTekstas).slice(0, 90) });
+      if (e.senas !== e.naujas) pak.push({ buvo: e.senas, tapo: e.naujas, tekstas: (e.kont === 'kunas' ? e.t : e.ltTekstas) });
     }
     const toc = turinys(M, d, pagr.filter(e => e.lygis === 0 && e.skyrius));
     doc.log.push('numeracija: ' + S.length + ' numeriu - tekstu, pakeista ' + pak.length + '; tusciu eiluciu istrinta ' + sr.tuscios.length +
@@ -1863,10 +1896,11 @@ const GPAudit = (() => {
           if (['FF0000','C00000','ED1C24'].includes(v)) red = true;
         }
       }
-      if (red) raudonos.push({ i, text: txt.slice(0,110) });
+      // Visas pastraipos tekstas (iki 2026-10-04 - 110 ženklų, kirpta ir žodžio viduryje); sutraukia rodymas.
+      if (red) raudonos.push({ i, text: txt });
       // Betekste bruksniu linija - dokumento pabaigos skirtukas, ne pildomas laukas.
       const vienBruksniai = txt.replace(/[_\s]/g,'') === '';
-      if (!vienBruksniai && /_+|\[[^\]]{4,}\]/.test(txt)) tuscios.push({ i, text: txt.slice(0,110) });
+      if (!vienBruksniai && GPGen.vietos(txt).length) tuscios.push({ i, text: txt });
     });
     // Svelnus ispejimas. Gaudom tris dalykus, kuriu "raudona / bruksneliai"
     // kriterijus nepagauna:
@@ -1882,12 +1916,12 @@ const GPAudit = (() => {
       // vietos rezervas vietoj skaiciaus. Atskiras "x" tekste teisiniuose
       // sablonuose praktiskai visada yra rezervas, tad geltona zyma saugi.
       if (/(^|[\s(])[Xx]([\s.,)]|$)/.test(t) || REZERVAS.test(t))
-        patikrinti.push({ i, text: t.slice(0,110) });
+        patikrinti.push({ i, text: t });
       // Dalis sablonu (pvz. konfidencialumo priedas) LITGRID rekvizitus rašo
       // TIESIOGIAI, ne per zyma: pavadinima, el. pasta. Perkant kitai imonei
       // jie liktu dokumente kaip svetimi duomenys.
       if (imone && !/litgrid/i.test(imone) && /litgrid/i.test(t))
-        patikrinti.push({ i, text: t.slice(0,110), svetimas: true });
+        patikrinti.push({ i, text: t, svetimas: true });
     });
     // TUSTI KVALIFIKACIJOS LANGELIAI: kvalifikacijos lenteleje (antraste turi
     // "Kvalifikacijos reikalavimas") duomenu eilute (>=3 langeliai), kurios
