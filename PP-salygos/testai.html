@@ -1817,6 +1817,119 @@ async function testaiTeise(){
   });
 }
 
+/* 2026-10-04: lentelės visuose sugeneruotuose dokumentuose (GPLent, variklis.js). Kiekvienos lentelės kiekviena eilutė: ne „exact“,
+   be simbolių tarpų ir „distribute“, trumpa eilutė nedalijama, tinklelis = tblW = langelių pločiai (DXA), lentelė telpa į teksto plotį,
+   etiketės eilutėse - lygiavimas pagal LYGIAVIMAS_ETIKETESE ir pusjuodis tik ten, kur jis yra šablono etiketėje. */
+const elW = (n, tag) => n ? Array.from(n.childNodes).filter(c => c.nodeType === 1 && c.localName === tag) : [];
+const atW = (n, a) => n ? (n.getAttributeNS(NSW, a) || n.getAttribute("w:" + a)) : null;
+const txW = n => Array.from(n.getElementsByTagNameNS(NSW, "t")).map(t => t.textContent).join("");
+const GPL = () => W.eval("GPLent");
+const LENT_PRIEDAI = ["KONFIDENCIALUMAS", "NACSAUGUMAS", "NACSAUGUMASVPI", "KONFINFO", "SUBTIEKEJAI", "SUTARTYS", "SPECIALISTAI", "SANDORIS", "DERYBOS", "VALDYMAS"];
+/* Šablono etikečių eilučių pusjuodžiai tekstai (normalizuoti) - leistinas pusjuodis. */
+async function sablonoPusjuodzios(vardas){
+  const z = await W.JSZip.loadAsync(await (await W.fetch("templates/" + vardas + ".docx")).arrayBuffer());
+  const d = new W.DOMParser().parseFromString(await z.file("word/document.xml").async("string"), "application/xml");
+  const out = new Set();
+  Array.from(d.getElementsByTagNameNS(NSW, "tr")).filter(tr => GPL().etiketesEilute(tr)).forEach(tr => Array.from(tr.getElementsByTagNameNS(NSW, "r")).forEach(r => {
+    const rp = elW(r, "rPr")[0], b = rp && elW(rp, "b")[0];
+    if (b && atW(b, "val") !== "0" && atW(b, "val") !== "false" && txW(r).trim()) out.add(W.GP_LAUKAI.norm(txW(r)));
+  }));
+  return out;
+}
+function lenteliuKlaidos(xml, vardas, leistinas){
+  const d = new W.DOMParser().parseFromString(xml, "application/xml"), body = d.getElementsByTagNameNS(NSW, "body")[0], k = [];
+  const visi = Array.from(body.getElementsByTagNameNS(NSW, "*"));
+  const plotis = t => { const sp = visi.slice(visi.indexOf(t)).find(n => n.localName === "sectPr"); if (!sp) return null;
+    const pg = elW(sp, "pgSz")[0], mr = elW(sp, "pgMar")[0]; return pg && mr ? +atW(pg, "w") - +atW(mr, "left") - +atW(mr, "right") : null; };
+  Array.from(body.getElementsByTagNameNS(NSW, "tbl")).forEach((tbl, ti) => {
+    let u = tbl.parentNode, tekstoLaukas = false, idet = false; for (; u && u !== body; u = u.parentNode){ if (u.localName === "txbxContent") tekstoLaukas = true; if (u.localName === "tc") idet = true; }
+    if (tekstoLaukas) return;
+    const v = vardas + " lentelė " + ti + " (" + txW(tbl).slice(0, 30) + ")";
+    const tp = elW(tbl, "tblPr")[0], tw = elW(tp, "tblW")[0], gc = elW(elW(tbl, "tblGrid")[0], "gridCol").map(g => +atW(g, "w"));
+    const suma = gc.reduce((a, b) => a + b, 0);
+    if (!tw || atW(tw, "type") !== "dxa" || +atW(tw, "w") !== suma) k.push(v + ": tblW " + (tw && atW(tw, "w") + "/" + atW(tw, "type")) + " != tinklelis " + suma);
+    if (atW(elW(tp, "tblLayout")[0], "type") !== "fixed") k.push(v + ": ne fixed");
+    const ind = +atW(elW(tp, "tblInd")[0], "w") || 0, tp_ = !idet && plotis(tbl);
+    if (tp_ && suma + Math.max(ind, 0) > tp_ + 5) k.push(v + ": platesnė už tekstą " + suma + "/" + tp_);
+    if (!idet && ind < 0) k.push(v + ": neigiama įtrauka " + ind);
+    elW(tbl, "tr").forEach((tr, ri) => {
+      const trPr = elW(tr, "trPr")[0], h = elW(trPr, "trHeight")[0];
+      if (h && atW(h, "hRule") === "exact") k.push(v + " eil. " + ri + ": aukštis exact");
+      if (GPL().trumpa(tr) && !elW(trPr, "cantSplit").length) k.push(v + " eil. " + ri + ": be cantSplit");
+      let gi = +atW(elW(trPr, "gridBefore")[0], "val") || 0;
+      const etik = GPL().etiketesEilute(tr) && GPL().trumpa(tr), tcs = elW(tr, "tc");
+      tcs.forEach((tc, ci) => {
+        const tcPr = elW(tc, "tcPr")[0], span = +atW(elW(tcPr, "gridSpan")[0], "val") || 1, w = elW(tcPr, "tcW")[0];
+        const lauk = gc.slice(gi, gi + span).reduce((a, b) => a + b, 0); gi += span;
+        if (gi <= gc.length && (!w || atW(w, "type") !== "dxa" || +atW(w, "w") !== lauk)) k.push(v + " eil. " + ri + " langelis " + ci + ": tcW " + (w && atW(w, "w")) + " != " + lauk);
+        elW(tc, "p").forEach(p => {
+          const jc = elW(elW(p, "pPr")[0], "jc")[0], j = atW(jc, "val");
+          if (/distribute|Kashida/.test(j || "")) k.push(v + " eil. " + ri + ": jc " + j);
+          if (etik && ci < tcs.length - 1 && GPL().LYGIAVIMAS_ETIKETESE && j === "both") k.push(v + " eil. " + ri + ": etiketė lygiuota abipusiai");
+        });
+        Array.from(tc.getElementsByTagNameNS(NSW, "rPr")).forEach(rp => ["spacing", "w", "fitText"].forEach(t => { if (elW(rp, t).length) k.push(v + " eil. " + ri + ": rPr " + t); }));
+        if (etik && ci < tcs.length - 1) Array.from(tc.getElementsByTagNameNS(NSW, "r")).forEach(r => {
+          const rp = elW(r, "rPr")[0], b = rp && elW(rp, "b")[0];
+          if (b && atW(b, "val") !== "0" && txW(r).trim() && (GPL().PUSJUODIS_ETIKETESE === "ne" || !leistinas.has(W.GP_LAUKAI.norm(txW(r))))) k.push(v + " eil. " + ri + ": pusjuodis ne iš šablono - " + txW(r).slice(0, 40));
+        });
+      });
+    });
+  });
+  return k;
+}
+async function testaiLenteles(){
+  dabartine = grupe("Lentelės visuose sugeneruotuose dokumentuose (GPLent, 2026-10-04)");
+  await testas("Visos lentelės visuose dokumentuose (10 paketų: AK, AKV, TSD, MVP, ND, DPS, DPS-K, LT ir LT/EN, visi priedai): ne „exact“, be simbolių tarpų ir „distribute“, trumpos eilutės nedalomos, tinklelis = tblW = langelių pločiai (DXA), telpa į teksto plotį, etiketės kairėn, pusjuodis tik iš šablono; tekstas toks pat kaip be sutvarkymo", async () => {
+    const blogi = [], leist = {}; let lenteliu = 0, dok = 0;
+    for (const [budas, kalba, centr] of [["T-AK", "LT"], ["T-AK", "LT_EN"], ["S-AK", "LT", true], ["T-SD", "LT"], ["T-SD", "LT_EN"], ["MV-SAD", "LT"], ["MV-SAD", "LT_EN"], ["S-ND", "LT_EN"], ["DPS", "LT_EN"], ["DPS-K", "LT_EN"]]){
+      const docs = await generuokSu({ budas, kalba, centr, priedai: LENT_PRIEDAI });
+      for (const [v, x] of Object.entries(docs)){
+        if (x.statinis || !x.xml || x.r.papildomas) continue;
+        leist[v] ??= await sablonoPusjuodzios(v);
+        dok++; lenteliu += (x.r.lenteles || {}).lenteliu || 0;
+        lenteliuKlaidos(x.xml, budas + " " + v, leist[v]).forEach(e => blogi.push(e));
+      }
+    }
+    tiesa(dok >= 60 && lenteliu >= 150, "per mažai: dokumentų " + dok + ", lentelių " + lenteliu);
+    tiesa(!blogi.length, blogi.length + ":\n  " + blogi.slice(0, 12).join("\n  "));
+  });
+  await testas("Pasiūlymo forma „INFORMACIJA APIE TIEKĖJĄ“: lentelė = teksto plotis (9638 DXA), visos 10 eilučių nedalomos, etiketės kairėn, vertikalus lygiavimas viršuje, be hideMark; tekstas, kursyvas ir šablono pusjuodis nepakeisti", async () => {
+    const docs = await generuokSu({ budas: "T-AK" });
+    const d = new W.DOMParser().parseFromString(docs.AK_LT_PASIULYMAS.xml, "application/xml");
+    const tbl = Array.from(d.getElementsByTagNameNS(NSW, "tbl")).find(t => /^Tiekėjo pavadinimas/.test(txW(t)));
+    const z = await W.JSZip.loadAsync(await (await W.fetch("templates/AK_LT_PASIULYMAS.docx")).arrayBuffer());
+    const sd = new W.DOMParser().parseFromString(await z.file("word/document.xml").async("string"), "application/xml");
+    const stbl = Array.from(sd.getElementsByTagNameNS(NSW, "tbl")).find(t => /^Tiekėjo pavadinimas/.test(txW(t)));
+    const eil = elW(tbl, "tr"), seil = elW(stbl, "tr");
+    lygu([atW(elW(elW(tbl, "tblPr")[0], "tblW")[0], "w"), eil.length, eil.every(tr => elW(elW(tr, "trPr")[0], "cantSplit").length)], ["9638", 10, true], "plotis ir eilutės");
+    lygu(eil.map(tr => txW(tr)), seil.map(tr => txW(tr)), "tekstas");
+    const savyb = (tr, tag) => Array.from(tr.getElementsByTagNameNS(NSW, tag)).length;
+    lygu(eil.map(tr => [savyb(tr, "i"), savyb(tr, "b")]), seil.map(tr => [savyb(tr, "i"), savyb(tr, "b")]), "kursyvas ir pusjuodis kaip šablone");
+    const el = eil.find(tr => /Veiklos partnerių patikros klausimynas pildymui/.test(txW(tr)));
+    lygu([atW(elW(elW(elW(el, "tc")[0], "p")[0].getElementsByTagNameNS(NSW, "pPr")[0], "jc")[0], "val"), atW(elW(elW(elW(el, "tc")[0], "tcPr")[0], "vAlign")[0], "val"), tbl.getElementsByTagNameNS(NSW, "hideMark").length],
+      ["left", "top", 0], "el. pašto eilutė");
+  });
+  await testas("GPLent sintetinėje lentelėje: exact -> atLeast, simbolių tarpai ir mastelis šalinami, distribute -> left, per plati ir neigiama įtrauka -> teksto plotis, pct / auto -> DXA, tcW pagal tinklelį, SOLID -> CLEAR, ilga eilutė lieka dalijama; tekstas nepakeistas", async () => {
+    const ilgas = "Ilgas tekstas. ".repeat(80);
+    const xml = `<w:document xmlns:w="${NSW}"><w:body><w:tbl><w:tblPr><w:tblW w:w="50" w:type="pct"/><w:tblInd w:w="-300" w:type="dxa"/></w:tblPr>
+      <w:tblGrid><w:gridCol w:w="6000"/><w:gridCol w:w="5000"/></w:tblGrid>
+      <w:tr><w:trPr><w:trHeight w:val="300" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/><w:shd w:val="solid" w:color="F2F2F2" w:fill="auto"/><w:hideMark/></w:tcPr>
+        <w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr><w:spacing w:val="40"/><w:w w:val="90"/></w:rPr><w:t>Etiketė</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr><w:p/></w:tc></w:tr>
+      <w:tr><w:tc><w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:t>Antra</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>${ilgas}</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:left="1701" w:right="567" w:top="1134" w:bottom="1134"/></w:sectPr></w:body></w:document>`;
+    const doc = { parts: { "word/document.xml": new W.DOMParser().parseFromString(xml, "application/xml") } };
+    const pries = txW(doc.parts["word/document.xml"]);
+    const st = GPL().sutvarkyti(doc);
+    const po = new W.XMLSerializer().serializeToString(doc.parts["word/document.xml"]);
+    lygu(lenteliuKlaidos(po, "sintetinė", new Set()), [], "po sutvarkymo");
+    lygu([st.exact, st.siaurinta, st.itrauka, st.shd, st.distribute, st.kairen, st.hideMark], [1, 1, 1, 1, 1, 1, 1], "veiksmai");
+    tiesa(/<w:trHeight w:val="300" w:hRule="atLeast"\/>/.test(po) && /w:fill="F2F2F2"/.test(po) && /<w:shd w:val="clear"/.test(po), "aukštis ir fonas: " + po.slice(0, 600));
+    const eil = Array.from(doc.parts["word/document.xml"].getElementsByTagNameNS(NSW, "tr"));
+    lygu([!!elW(elW(eil[0], "trPr")[0], "cantSplit").length, !!elW(elW(eil[1], "trPr")[0], "cantSplit").length], [true, false], "trumpa nedalijama, ilga dalijama");
+    lygu(txW(doc.parts["word/document.xml"]), pries, "tekstas");
+  });
+}
+
 async function testaiNumeracija(){
   dabartine = grupe("Numeracija tekstu (GPNum) ir šablono alternatyvos su „ARBA“ (R1)");
 
@@ -1965,6 +2078,7 @@ async function testaiNumeracija(){
     await testaiNumeracija();
     await testaiForma();
     await testaiKriterijus();
+    await testaiLenteles();
     await testaiTeise();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
