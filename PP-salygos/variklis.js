@@ -443,6 +443,56 @@ const GPDocx = (() => {
   }
 
   /* ---------- 6. IRASYMAS ------------------------------------------------- */
+  /* ---------- GULSTI PRIEDAI - ATSKIRAS FAILAS (2026-10-04, naudotojo sprendimas) ---------------------
+     Pages visam dokumentui taiko PIRMOJO skyriaus orientaciją (patikrinta Pages PDF eksportu: DPS LT sąlygų gulsčius 5 ir 6
+     priedus rodė stačius, plačias lenteles suspaudė ir nukirpo; subtiekėjų priedas, kurio pirmas skyrius gulsčias, - teisingas).
+     Todėl jei pirmas skyrius statmenas, o toliau yra gulsčias skyrius, prasidedantis priedo antrašte, - nuo jo iki dokumento
+     pabaigos viskas perkeliama į atskirą dokumentą (jo pirmas skyrius gulsčias). Tekstas nekeičiamas; pagrindinio dokumento turinio
+     eilutės, kurių žymės iškeltos, pašalinamos (Word, atnaujindamas laukus, jas pašalintų pats) ir grąžinamos patikrai.
+     Grąžina { doc, numeriai, turinys: [tekstai], nuorodos } arba null. NUSTATYMAI.gulstiAtskirai - testams. */
+  const NUSTATYMAI = { gulstiAtskirai: true };
+  async function atskirkGulsciusPriedus(doc){
+    if (!NUSTATYMAI.gulstiAtskirai) return null;
+    const skyriai = d => {
+      const body = els(d, 'body')[0], v = Array.from(body.childNodes).filter(n => n.nodeType === 1), out = []; let nuo = 0;
+      v.forEach((n, i) => {
+        const sp = n.localName === 'sectPr' ? n : n.localName === 'p' ? (Array.from(n.childNodes).find(c => c.localName === 'pPr') || { childNodes: [] }) : null;
+        const sect = n.localName === 'sectPr' ? n : sp && Array.from(sp.childNodes).find(c => c.localName === 'sectPr');
+        if (sect){ out.push({ nuo, iki: i, sect }); nuo = i + 1; }
+      });
+      return { body, v, out };
+    };
+    const gulscias = sk => { const pg = els(sk.sect, 'pgSz')[0]; return !!pg && +pg.getAttributeNS(NS_W, 'w') > +pg.getAttributeNS(NS_W, 'h'); };
+    const A = doc.parts['word/document.xml'], a = skyriai(A);
+    if (a.out.length < 2 || gulscias(a.out[0])) return null;
+    const k = a.out.findIndex(gulscias);
+    if (k < 1) return null;
+    const pirmaEil = sk => a.v.slice(sk.nuo, sk.iki + 1).map(n => n.localName === 'p' ? paraText(n).trim() : '').find(t => t) || '';
+    if (!/pried|annex/i.test(pirmaEil(a.out[k]))) return null;
+    // kopija - tas pats paketas (antraštės, išnašos, stiliai), iš jos paliekama tik perkeliama dalis
+    const B = await open(await save(doc, 'arraybuffer')), b = skyriai(B.parts['word/document.xml']);
+    b.v.slice(0, b.out[k].nuo).forEach(n => b.body.removeChild(n));
+    const numeriai = [];
+    a.out.slice(k).forEach(sk => { const m = pirmaEil(sk).match(/(\d+)\s+priedas\b|Annex\s+(\d+)/i); if (m) numeriai.push(+(m[1] || m[2])); });
+    // pagrindiniame - perkeliama dalis šalinama, paskutinio liekančio skyriaus savybės tampa dokumento savybėmis
+    const zymes = new Set();
+    a.v.slice(a.out[k].nuo).forEach(n => { els(n, 'bookmarkStart').forEach(z => zymes.add(z.getAttributeNS(NS_W, 'name'))); a.body.removeChild(n); });
+    const liko = a.out[k - 1].sect; liko.parentNode.removeChild(liko); a.body.appendChild(liko);
+    // turinio eilutės ir kitos nuorodos į iškeltas žymes
+    const turinys = []; let nuorodos = 0;
+    els(A, 'p').forEach(p => {
+      const iZyme = els(p, 'hyperlink').some(h => zymes.has(h.getAttributeNS(NS_W, 'anchor'))) ||
+                    els(p, 'instrText').some(t => (t.textContent.match(/PAGEREF\s+(\S+)/) || [])[1] && zymes.has(t.textContent.match(/PAGEREF\s+(\S+)/)[1]));
+      if (!iZyme) return;
+      const st = (els(p, 'pStyle')[0] || { getAttributeNS: () => '' }).getAttributeNS(NS_W, 'val');
+      let sdt = false; for (let u = p.parentNode; u; u = u.parentNode) if (u.localName === 'sdtContent'){ sdt = true; break; }
+      if (/^TOC|^Turinys/i.test(st) || sdt){ turinys.push(paraText(p).trim()); p.parentNode.removeChild(p); }
+      else nuorodos++;
+    });
+    cleanOrphanBookmarks(A); cleanOrphanBookmarks(B.parts['word/document.xml']);
+    return { doc: B, numeriai, turinys, nuorodos };
+  }
+
   async function save(doc, type='blob'){
     for (const [path, xml] of Object.entries(doc.parts)){
       // createFolders:false - kitaip JSZip prideda kataloginius irasus ("word/"),
@@ -453,7 +503,8 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, paraText, els, NS_W };
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus,
+           NUSTATYMAI, paraText, els, NS_W };
 })();
 
 /* ==========================================================================
