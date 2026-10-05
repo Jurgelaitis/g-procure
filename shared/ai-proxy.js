@@ -23,6 +23,8 @@
   var DEFAULT_PATH      = "/api/analyze";
   var DEFAULT_MODEL     = "claude-sonnet-4-6";
   var DEFAULT_MAX_TOKENS = 4000;
+  // Serveris (index.js, nuo 2026-10-05, R5) priima tik savo LEIDZIAMI_MODELIAI ir max_tokens riboja iki 8000 (MAX_TOKENS_RIBA):
+  // nauja modeli ar didesni ilgi PIRMIAU irasyk serveryje, kitaip moduliai gaus 400 arba nukirpta atsakyma (CLAUDE.md 6 sk.).
 
   /* Backend'o UZKLAUSOS KUNO riba (patikrinta gyvai 2026-07-17).
      Serveryje veikia express.json({ limit: "10mb" }), o pries ji - nginx su
