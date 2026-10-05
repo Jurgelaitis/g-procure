@@ -382,6 +382,136 @@ async function testaiKopija(){
   });
 }
 
+/* R4 (2026-10-05, naudotojo sprendimas): DI užklausa - tik užkoduota. Iki tol užklausoje buvo tiekėjų pavadinimai, planuojama
+   vertė ir visos sumos, o puslapis siūlė „Claude.ai / kitą LLM“, nors teigė „Duomenys užkoduoti automatiškai“. Tiekėjų vardai, kodai,
+   kontaktai, kortelės numeriai ir asmenys - tik rinkinio (nei tikri, nei bendri žodžiai), sumos parinktos taip, kad procentai jų nekartotų. */
+const DI_TIEKEJAI = [
+  { id: "a", name: "UAB „Alfaenergija“", code: "302999111", contact: "Petras Petraitis, petras@alfaenergija.lt", country: "Lietuva", notes: "Tel. 8 600 12345, sutinka derėtis" },
+  { id: "b", name: "Betatechnika OÜ", code: "14123456", contact: "+372 5123 4567", country: "Estija", notes: "Pasiūlymas 262 500 Eur, brangesnis už UAB „Alfaenergija“" },
+  { id: "c", name: "AB Gamatronas", contact: "info@gamatronas.lt", country: "Lietuva", notes: "Konkuruoja su Alfaenergija ir BETATECHNIKA" }];
+const DI_PAPILDOMAS = "Petras Petraitis skambino: Betatechnika OÜ sutinka, rašyti info@gamatronas.lt arba +372 5123 4567. Jonas Jonaitis prašo atsakyti iki penktadienio.";
+const DI_DRAUDZIAMA = [/alfaenergija/i, /betatechnika/i, /gamatronas/i, /302999111/, /14123456/, /Petras/, /Petraitis/, /@/, /\+372/, /8 600/, /12345/,
+  /VPP-777/, /7654321/, /Jonas/, /Jonaitis/];
+const DI_SUMOS = ["250000", "237500", "262500", "12500"];
+/* Modulis su pasirinkta kortele (numeris, CVP IS numeris, iniciatorius - turi būti pakeisti ir laisvame tekste); kortelės - tik atmintyje */
+async function diSuKortele(){
+  await modulisSuKortele();
+  W.eval("APP.state = defaultState(); render.all();");
+  const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia({ pavadinimas: "Pastotės įrangos pirkimas", numeris: "VPP-777", cvpisNr: "7654321",
+    iniciatorius: "Jonas Jonaitis, Pirkimų skyrius", verte: 250000 })).kortele;
+  W.KORTELE.atnaujink();
+  tiesa(await W.KORTELE.pasirink(k.id), "kortelė pasirinkta");
+}
+function diProjektas(pv){
+  W.eval(`APP.state = defaultState();
+    APP.state.project.name = 'Pastotės įrangos pirkimas (VPP-777)'; APP.state.project.plannedValue = ${pv};
+    APP.state.project.objective = 'Kad kaina neviršytų 250 000 Eur';
+    APP.state.project.backgroundNotes = 'Gamatronas laimėjo pernai; PV 250000; Betatechnika kodas 14123456';
+    APP.state.suppliers = ${JSON.stringify(DI_TIEKEJAI)};
+    APP.state.fixedOffers = { a: { totalPrice: 237500 }, b: { totalPrice: 262500 }, c: { totalPrice: 250000 } };
+    APP.state.strategy.mustHaves = ['Garantija kaip Betatechnika OÜ siūlo'];
+    APP.state.strategy.concessions = [{ id: 'k1', label: 'Avansas', weCanGive: '10 % avansas', weWant: 'Nuolaida 12 500 EUR' }];
+    render.all();`);
+  D.getElementById("aiExtra").value = DI_PAPILDOMAS;
+}
+/* Visų šablonų užklausos (tiekėjo šablonams - kiekvienam tiekėjui) */
+function diUzklausos(){
+  const r = {};
+  ["strategy", "risk", "memo", "techspec"].forEach(t => { r[t] = W.generatePrompt(t); });
+  ["supplier", "response"].forEach(t => ["a", "b", "c"].forEach(id => { D.getElementById("aiSupplier").value = id; r[t + ":" + id] = W.generatePrompt(t); }));
+  return r;
+}
+function diBeTapatybiu(r){
+  Object.entries(r).forEach(([k, t]) => {
+    DI_DRAUDZIAMA.forEach(re => tiesa(!re.test(t), k + ": rasta " + re + "\n" + t));
+    const glaustai = t.replace(/[\s  .,']/g, "");
+    DI_SUMOS.forEach(x => tiesa(glaustai.indexOf(x) < 0, k + ": rasta suma " + x + "\n" + t));
+    tiesa(!/€|(^|[^A-Za-z])(EUR|Eur|eur)([^A-Za-z]|$)/.test(t), k + ": valiuta užklausoje\n" + t);
+  });
+}
+async function testaiDI(){
+  grupe("DI užklausa - tik užkoduota (R4)");
+  await testas("Claude / ChatGPT mygtukų nėra; vienas „Kopijuoti užkoduotą užklausą“; įspėjimas matomas šalia jo, pastaba - prie laisvo teksto; vartotojiški DI nesiūlomi", async () => {
+    await modulis();
+    W.go("ai"); await lauk(50);
+    lygu([...D.querySelectorAll("button")].filter(b => /claude|chatgpt|gpt/i.test(b.textContent)).map(b => b.textContent), [], "mygtukai su Claude / ChatGPT");
+    const btn = D.getElementById("btnCopyPrompt"), isp = D.getElementById("aiIspejimas");
+    lygu(btn.textContent.trim(), "📋 Kopijuoti užkoduotą užklausą", "kopijavimo mygtukas");
+    tiesa(isp && isp.getBoundingClientRect().height > 0 && W.getComputedStyle(isp).display !== "none", "įspėjimas nematomas");
+    ["Užklausa užkoduota: tiekėjų pavadinimai pakeisti kodais (Tiekėjas A, B, C)", "procentiniais skirtumais nuo planuotos (numatomos) vertės",
+     "pati vertė, pirkimo numeris ir asmenų duomenys neįtraukti", "tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą)",
+     "Nenaudokite asmeninių ar vartotojiškų DI paskyrų (pvz. ChatGPT, Claude.ai)", "neužtikrina pirkimo konfidencialumo"].forEach(f => tiesa(isp.textContent.indexOf(f) >= 0, "įspėjime nėra „" + f + "“"));
+    tiesa(btn.parentElement.previousElementSibling === isp && btn.getAttribute("aria-describedby") === "aiIspejimas", "įspėjimas - ne šalia mygtuko");
+    const pst = D.getElementById("aiExtraPastaba");
+    tiesa(pst && pst.getBoundingClientRect().height > 0 && /Nerašykite čia tiekėjų pavadinimų, sumų ar asmens duomenų/.test(pst.textContent)
+      && D.getElementById("aiExtra").getAttribute("aria-describedby") === "aiExtraPastaba", "pastaba prie papildomo konteksto");
+    const pa = D.getElementById("aiPaantraste").textContent;
+    tiesa(/organizacijos patvirtintam DI įrankiui/.test(pa) && !/claude|llm/i.test(pa), "paantraštė: " + pa);
+    const kopija = D.body.cloneNode(true);
+    kopija.querySelectorAll("script, #aiIspejimas").forEach(x => x.remove());
+    const m = kopija.textContent.match(/.{0,60}(claude|chatgpt|llm).{0,40}/i);
+    tiesa(!m, "puslapis siūlo vartotojišką DI: " + (m && m[0]));
+  });
+
+  await testas("Užkoduota užklausa visuose šablonuose: tiekėjai - kodais (ir laisvame tekste), sumos - procentais nuo PV; nėra pavadinimų, kodų, kontaktų, PV, sumų, kortelės numerių ir asmenų", async () => {
+    await diSuKortele();
+    diProjektas(250000);
+    const r = diUzklausos();
+    diBeTapatybiu(r);
+    const s = r.strategy;
+    ["1. Tiekėjas A: 95 % PV (-5 % nuo PV)", "2. Tiekėjas C: 100 % PV (0 % nuo PV)", "3. Tiekėjas B: 105 % PV (+5 % nuo PV)",
+     "Planuojama vertė (PV): 100 % (absoliuti suma neįtraukta; be PVM)", "Mažiausias: 95 % PV (-5 % nuo PV)", "Vidurkis: 100 % PV (0 % nuo PV)",
+     "Sumos pateiktos procentais nuo planuojamos vertės (PV = 100 %)", "Tikslas: Kad kaina neviršytų [100 % PV]",
+     "Kontekstas: Tiekėjas C laimėjo pernai; PV [100 % PV]; Tiekėjas B kodas [įmonės kodas neįtrauktas]", "Garantija kaip Tiekėjas B siūlo",
+     "norime: Nuolaida [5 % PV]", "Pavadinimas: Pastotės įrangos pirkimas ([numeris neįtrauktas])",
+     "[kontaktas neįtrauktas] skambino: Tiekėjas B sutinka, rašyti [el. paštas neįtrauktas] arba [telefonas neįtrauktas]. [asmuo neįtrauktas] prašo"]
+      .forEach(f => tiesa(s.indexOf(f) >= 0, "strategijoje nėra „" + f + "“\n" + s));
+    ["- Kodas: Tiekėjas B", "- Pirminis pasiūlymas: 105 % PV (+5 % nuo PV)", "- Pastabos: Pasiūlymas [105 % PV], brangesnis už Tiekėjas A", "su ribomis procentais nuo PV"]
+      .forEach(f => tiesa(r["supplier:b"].indexOf(f) >= 0, "tiekėjo B šablone nėra „" + f + "“\n" + r["supplier:b"]));
+    tiesa(r["supplier:c"].indexOf("Pastabos: Konkuruoja su Tiekėjas A ir Tiekėjas B") >= 0, r["supplier:c"]);
+    tiesa(r["response:a"].indexOf("Pastabos: Tel. [telefonas neįtrauktas], sutinka derėtis") >= 0, r["response:a"]);
+    tiesa(/Tikslas: \d+(,\d)? % PV \(-\d+(,\d)? % nuo PV\)/.test(r["supplier:a"]) && /Rezervinė riba: \d+(,\d)? % PV/.test(r["supplier:a"]), r["supplier:a"]);
+  });
+
+  await testas("Be planuojamos vertės sumų nėra visai: užklausa sako, kodėl; sumos laisvame tekste - „[suma neįtraukta]“", async () => {
+    await diSuKortele();
+    diProjektas(0);
+    const r = diUzklausos();
+    diBeTapatybiu(r);
+    Object.entries(r).forEach(([k, t]) => {
+      tiesa(!/% PV|nuo PV\)/.test(t), k + ": procentai nuo PV be PV\n" + t);
+      tiesa(t.indexOf("Sumos neįtrauktos, nes nenurodyta planuojama vertė (PV).") >= 0 && t.indexOf("Planuojama vertė (PV): nenurodyta") >= 0, k + ": nepasakyta, kodėl sumų nėra\n" + t);
+      tiesa(t.indexOf("Tiekėjas A") >= 0, k + ": nėra kodų\n" + t);
+    });
+    tiesa(r.strategy.indexOf("Tikslas: Kad kaina neviršytų [suma neįtraukta]") >= 0 && r.strategy.indexOf("PV [suma neįtraukta]") >= 0 && /\n1\. Tiekėjas A\n/.test(r.strategy), r.strategy);
+    tiesa(r["supplier:b"].indexOf("- Sumos neįtrauktos (PV nenurodyta)") >= 0 && r["supplier:b"].indexOf("be konkrečių sumų - PV nenurodyta") >= 0, r["supplier:b"]);
+  });
+
+  await testas("Kopijuojama ir atsisiunčiama tai, kas rodoma peržiūroje (užkoduota); kodų raktas - tik ekrane; nesugeneravus kopijuojant sugeneruojama", async () => {
+    await diSuKortele();
+    diProjektas(250000);
+    W.go("ai"); await lauk(50);
+    let irasyta = null;
+    W.Object.defineProperty(W.navigator, "clipboard", { value: { writeText: t => { irasyta = t; return Promise.resolve(); } }, configurable: true });
+    try {
+      D.getElementById("btnGenPrompt").click();
+      const perz = D.getElementById("aiPromptOutput").value;
+      tiesa(perz.indexOf("Tiekėjas A") >= 0 && !/alfaenergija/i.test(perz), "peržiūra neužkoduota:\n" + perz);
+      D.getElementById("btnCopyPrompt").click(); await lauk(50);
+      lygu(irasyta, perz, "nukopijuota ne peržiūros tekstas");
+      const raktas = D.getElementById("aiKodai").textContent;
+      tiesa(/Tiekėjas A - UAB „Alfaenergija“/.test(raktas) && /Tiekėjas C - AB Gamatronas/.test(raktas) && /į užklausą neįtraukiamas/.test(raktas), "kodų raktas: " + raktas);
+      D.getElementById("aiPromptOutput").value = ""; irasyta = null;
+      D.getElementById("btnCopyPrompt").click(); await lauk(50);
+      tiesa(irasyta && irasyta === D.getElementById("aiPromptOutput").value && irasyta.indexOf("Tiekėjas A") >= 0, "nesugeneravus: " + irasyta);
+      let blob = null; const tikras = W.URL.createObjectURL, tikrasClick = W.HTMLAnchorElement.prototype.click;
+      W.URL.createObjectURL = b => { blob = b; return "blob:x"; }; W.HTMLAnchorElement.prototype.click = function(){};
+      try { D.getElementById("btnDownloadPrompt").click(); } finally { W.URL.createObjectURL = tikras; W.HTMLAnchorElement.prototype.click = tikrasClick; }
+      lygu(blob && await blob.text(), D.getElementById("aiPromptOutput").value, "atsisiųstas .txt - ne peržiūros tekstas");
+    } finally { delete W.navigator.clipboard; }
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -391,6 +521,7 @@ async function testaiKopija(){
     await testaiKortele();
     await testaiSkaiciai();
     await testaiKopija();
+    await testaiDI();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

@@ -60,7 +60,7 @@ Iki šio įrankio pasirengimas deryboms vyko fragmentiškai:
 | Subjektyvūs sprendimai dėl scenarijų | 3 scenarijai (agresyvus / realus / atsargus) automatiškai generuojami pagal duomenis |
 | MEAT vertinimas Excel'yje sunkiai matomas | Vizualus MEAT skaičiavimas su jautrumo analize (slankiklis) |
 | Derybų sesijos protokolas pildomas ranka popieriuje | Realaus laiko HUD su tikslo ir rezervinės ribos stebėjimu, raundų log'as |
-| Sprendimo memorandumas „nuo nulio" | Struktūruoti AI prompt'ai su visu kontekstu, paruošti VPT Ekspertui ar Claude |
+| Sprendimo memorandumas „nuo nulio" | Struktūruotos užkoduotos užklausos organizacijos patvirtintam DI įrankiui (pvz. VPT Ekspertui) |
 | Tiekėjų pasiūlymai PDF/DOCX/XLSX, sunku perkelti į analizę | Failų parser'is (PDF.js + SheetJS + mammoth.js) |
 | Komanda dirba skirtinguose įrenginiuose, sunku dalintis būsena | JSON eksportas/importas, XLSX ataskaitos, spausdinama PDF ataskaita |
 | Jautrūs pirkimo duomenys siunčiami į trečių šalių AI įrankius | 100% lokalus veikimas naršyklėje, jokio backend'o |
@@ -149,7 +149,7 @@ Iki šio įrankio pasirengimas deryboms vyko fragmentiškai:
 5. **Memo.** Komisijos sprendimo memorandumas.
 6. **Tech spec.** Techninės specifikacijos peržiūra (proporcingumas, lygiateisiškumas).
 
-Kontekstas kiekviename prompt'e: pirkimo info, tiekėjų rikiavimas, strategija. Vienas mygtukas „Kopijuoti" arba atsisiųsti .txt.
+Kontekstas kiekviename prompt'e: pirkimo info, tiekėjų rikiavimas, strategija. Nuo 2026-10-05 (R4) užklausa - tik užkoduota: tiekėjai - kodais „Tiekėjas A, B, C“, sumos - procentais nuo PV (be PV - sumų nėra), laisvame tekste pakeičiami tiekėjų pavadinimai, kontaktai, kortelės numeriai ir asmenys, el. paštai, telefonai ir sumos; kodų raktas - tik ekrane. Vienas mygtukas „Kopijuoti užkoduotą užklausą“ arba atsisiųsti .txt (tas pats tekstas).
 
 ### 4.10. Eksportas
 - **JSON:** pilnas projekto eksportas/importas (atsarginė kopija, dalijimasis).
