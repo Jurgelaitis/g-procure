@@ -213,6 +213,12 @@
       uzuomina: 'Šablono nurodymas: įrašomas dokumento pavadinimas arba nurodomas šių pirkimo sąlygų priedas, kuriame (kuriuose) nustatyti pirkime taikomi aplinkos apsaugos kriterijai. Įrašoma vietoj nurodymo laužtiniuose skliaustuose; sakinio pabaiga lieka.',
       uzrasas: 'Dokumentas arba priedas', pvz: 'šių pirkimo sąlygų 7 priede',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Dokumentas arba priedas' })) },
+    // DPS sąlygų 3.1 p. (2026-10-05, naudotojo prašymas): „Perkantysis subjektas numato įsigyti [įrašykite ... aprašymas.]“
+    { id: 'dps-pirkimo-objektas', formuluote: true, re: /perkantysis subjektas numato isigyti irasykite zinoma informacija apie ketinama isigyti pirkimo objekta/,
+      klausimas: 'Ką perkantysis subjektas numato įsigyti?',
+      uzuomina: 'Šablono nurodymas: žinoma informacija apie ketinamą įsigyti pirkimo objektą - perkamų prekių, paslaugų ar darbų pobūdis, trumpas apibūdinimas, kategorijų skaičius ir aprašymas. Rašoma po žodžių „numato įsigyti“ (galininku); taškas sakinio gale pridedamas.',
+      uzrasas: 'Pirkimo objektas', pvz: 'elektros tinklo objektų projektavimo paslaugas, 2 kategorijos: ...',
+      vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pirkimo objektas' })) },
     { id: 'cpo-pagrindimas', formuluote: true, re: /centralizuotu pirkimu katalogu pagrindimas|centralized procurement directory/,
       klausimas: 'Kodėl pirkimas vykdomas ne per CPO LT katalogą?', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pagrindimas' })) },
     { id: 'esminiu-salygu-dalis', re: /esmines sutarties salygos isdestytos sps|terms of the contract are laid down|conditions of the contract are established/,
