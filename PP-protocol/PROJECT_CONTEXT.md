@@ -264,8 +264,8 @@ Pagal VPT gaires:
 
 ### 4.14 AI motyvavimo asistentas
 - Modal su context input + sprendimo tipo select
-- Generuoja Claude/ChatGPT promptą su Litgrid kontekstu, PSĮ nuorodomis
-- Clipboard kopijavimas
+- Generuoja UŽKODUOTĄ užklausą su Litgrid kontekstu (R4, 2026-10-05): vietoj pavadinimo - objekto rūšis, tiekėjai - kodais „Tiekėjas A, B, C“, sumos - procentais nuo numatomos vertės (be vertės - sumų nėra), pirkimo numeris, komisijos nariai, naudotojas ir kontaktai neįtraukiami; mygtukai „Kopijuoti Claude / ChatGPT promptą“ pašalinti
+- Clipboard kopijavimas (vienas mygtukas „Kopijuoti užkoduotą užklausą“, įspėjimas - tik organizacijos patvirtintam DI įrankiui; kodų raktas - tik ekrane)
 - VPT Eksperto integracija (nuoroda)
 
 ### 4.15 Save state indikatorius
