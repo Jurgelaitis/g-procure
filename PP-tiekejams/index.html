@@ -26,6 +26,7 @@
 <script src="../shared/procurement-methods.js"></script>
 <!-- Bendras AI transportas (raktas tik serverio pusėje) -->
 <script src="../shared/ai-proxy.js"></script>
+<script src="../shared/di-zymejimas.js"></script>
 <script src="../shared/lang-detect.js"></script>
 <!-- Modulio sluoksniai -->
 <!-- Dokumentų teksto skaitymas - bendras su PP-salygos (shared/dokumentai.js) -->
@@ -80,6 +81,7 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .muted{color:var(--color-graphite-50-strong)}
 .small{font-size:13px}
 .hint{font-size:12.5px;color:var(--color-graphite-50-strong);line-height:1.5}
+.di-pranesimas{margin:0 0 10px;padding:6px 10px;border-left:3px solid var(--color-emerald);background:var(--color-graphite-5);color:var(--color-graphite);border-radius:0 6px 6px 0}
 
 /* Pradžia */
 .hero{background:#fff;border:1px solid var(--color-graphite-15);border-radius:var(--radius-lg);padding:var(--space-4);margin-bottom:var(--space-3);position:relative;overflow:hidden}
@@ -352,6 +354,7 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-4) var(-
         <div class="card card-pad">
           <div class="card-title"><span data-i18n="p.ask">Klausimas apie šį pirkimą</span> <span class="hint" id="askHint"></span></div>
           <div class="chips" id="askChips" style="margin-bottom:10px"></div>
+          <p class="small di-pranesimas" id="diPranesimas" data-i18n="ai.notice">Atsakymus rengia dirbtinis intelektas (Claude, Anthropic) pagal įkeltus pirkimo dokumentus. Kiekvienas teiginys pateikiamas su citata; atsakymas nėra teisinė konsultacija.</p>
           <div class="ask-grid">
             <textarea class="textarea" id="askInput" data-i18n-ph="p.ask.ph" placeholder="Pvz.: Kokia pasiūlymo galiojimo trukmė? Ar reikalaujamas pasiūlymo užtikrinimas?" data-i18n-aria="aria.ask" aria-label="Klausimas"></textarea>
             <div class="stack">
@@ -494,6 +497,7 @@ const I18N = {
     "p.title": "Konkretus pirkimas",
     "p.sub": "Nurodykite pirkimą (CVP IS nuoroda arba ID), atsisiųskite iš oficialaus puslapio dokumentų paketą ir įkelkite jį čia. Įrankis neimituoja gyvos jungties: kol nėra oficialios API, dokumentus įkeliate patys.",
     "p.ref": "Pirkimo santrauka ir būsena", "p.live.off": "Gyva CVP IS jungtis neįjungta", "p.ref.ph": "CVP IS nuoroda arba pirkimo ID (resourceId)", "p.ref.btn": "Nustatyti",
+    "ai.notice": "Atsakymus rengia dirbtinis intelektas (Claude, Anthropic) pagal įkeltus pirkimo dokumentus. Kiekvienas teiginys pateikiamas su citata; atsakymas nėra teisinė konsultacija.", "ai.badge": "Parengta naudojant DI",
     "p.ask": "Klausimas apie šį pirkimą", "p.ask.ph": "Pvz.: Kokia pasiūlymo galiojimo trukmė? Ar reikalaujamas pasiūlymo užtikrinimas?", "p.lot": "Pirkimo dalis (nebūtina)", "p.ask.btn": "Klausti",
     "p.chk.btn": "Sudaryti pasirengimo kontrolinį sąrašą", "p.diff.btn": "Kas pasikeitė tarp redakcijų?", "p.q.btn": "Klausimo CVP IS projektas",
     "p.docs": "Dokumentai ir šaltiniai", "p.drop.t": "Įkelkite CVP IS dokumentų paketą", "p.drop.s": "ZIP, PDF, DOCX, ODT, XLSX, XML, HTML, TXT. Tempkite čia arba spauskite. Failai lieka jūsų naršyklėje.",
@@ -567,6 +571,7 @@ const I18N = {
     "p.title": "Specific procurement",
     "p.sub": "Identify the procurement (CVP IS link or ID), download the document package from the official page and upload it here. The tool does not fake a live connection: until an official API exists, you upload the documents yourself.",
     "p.ref": "Procurement summary and status", "p.live.off": "Live CVP IS link not enabled", "p.ref.ph": "CVP IS link or procurement ID (resourceId)", "p.ref.btn": "Set",
+    "ai.notice": "Answers are prepared by artificial intelligence (Claude, Anthropic) based on the uploaded procurement documents. Every statement comes with a quote; an answer is not legal advice.", "ai.badge": "Prepared using AI",
     "p.ask": "Question about this procurement", "p.ask.ph": "E.g.: What is the bid validity period? Is bid security required?", "p.lot": "Lot (optional)", "p.ask.btn": "Ask",
     "p.chk.btn": "Build a readiness checklist", "p.diff.btn": "What changed between versions?", "p.q.btn": "Question draft for CVP IS",
     "p.docs": "Documents and sources", "p.drop.t": "Upload the CVP IS document package", "p.drop.s": "ZIP, PDF, DOCX, ODT, XLSX, XML, HTML, TXT. Drag here or click. Files stay in your browser.",
@@ -1284,8 +1289,12 @@ function renderNoSource(q, ans) {
     '<div class="toolbar" style="margin-top:12px"><button class="btn btn-secondary btn-sm" onclick="klausimoProjektas(' + esc(JSON.stringify({ klausimas: draft || q })).replace(/"/g, "&quot;") + ')">' + esc(t("p.q.btn")) + '</button></div>' +
     '<div class="feedback">' + esc(t("ans.chk")) + ': ' + esc(fmtDate(S.fetchedAt || new Date().toISOString())) + '</div>';
 }
+/* DI atsakymo žyma (DI akto 50 str. 1 ir 2 d.; shared/di-zymejimas.js): matoma „Parengta naudojant DI“ ir data-di gaubtas */
+function diGaubtas(html) {
+  return '<div data-di="sugeneruota" data-di-sistema="G-Procure - Tiekėjams">' + GP_DI.zyme({ tekstas: t("ai.badge") }) + html + '</div>';
+}
 function renderAnswer(a) {
-  if (a.status === "nera_saltinio") return renderNoSource(a.q, a);
+  if (a.status === "nera_saltinio") return diGaubtas(renderNoSource(a.q, a));
   let h = '<h4>' + esc(t("ans.short")) + '</h4><div class="trumpas">' + esc(a.trumpas) + '</div>';
   if (a.reiksme) h += '<h4>' + esc(t("ans.mean")) + '</h4><p>' + esc(a.reiksme) + '</p>';
   if (a.veiksmai.length) h += '<h4>' + esc(t("ans.do")) + '</h4><ul>' + a.veiksmai.map(x => "<li>" + esc(x) + "</li>").join("") + '</ul>';
@@ -1298,7 +1307,7 @@ function renderAnswer(a) {
   if (a.ispejimai.length) h += '<h4>' + esc(t("ans.warn")) + '</h4><ul>' + a.ispejimai.map(x => "<li>" + esc(x) + "</li>").join("") + '</ul>';
   h += '<div class="feedback">' + esc(t("ans.chk")) + ': ' + esc(fmtDate(S.fetchedAt || a.at)) + ' · ' + esc(t("fb.q")) + ' <button onclick="fb(this,1)">' + esc(t("fb.yes")) + '</button><button onclick="fb(this,0)">' + esc(t("fb.no")) + '</button></div>';
   if (a.status === "konfliktas" || a.klausimas_cvpis) h += '<div class="toolbar" style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="klausimoProjektas(' + esc(JSON.stringify({ klausimas: a.klausimas_cvpis || "", citata: a.saltiniai[0] ? a.saltiniai[0].citata : "", dokumentas: a.saltiniai[0] ? (S.docsById[a.saltiniai[0].docId] || {}).name : "" })).replace(/"/g, "&quot;") + ')">' + esc(t("p.q.btn")) + '</button></div>';
-  return h;
+  return diGaubtas(h);
 }
 function fb(btn, ok) {
   btn.parentElement.querySelectorAll("button").forEach(b => b.classList.remove("on")); btn.classList.add("on");
@@ -1340,10 +1349,10 @@ function renderChecklist(chk) {
     '<td><span class="tag st-' + p.busena + '">' + esc(t("st." + p.busena)) + '</span></td>' +
     '<td>' + esc(p.santrauka) + (p.pastaba ? '<div class="hint">' + esc(p.pastaba) + '</div>' : "") + (p.busena === "patikslinti" ? '<div style="margin-top:6px"><button class="btn-ghost" onclick="klausimoProjektas(' + esc(JSON.stringify({ neaiskumas: p.pastaba, citata: p.saltiniai[0] ? p.saltiniai[0].citata : "", dokumentas: p.saltiniai[0] ? (S.docsById[p.saltiniai[0].docId] || {}).name : "" })).replace(/"/g, "&quot;") + ')">' + esc(t("p.q.btn")) + '</button></div>' : "") + '</td>' +
     '<td>' + p.saltiniai.map(s => srcHtml(s)).join("") + '</td></tr>').join("");
-  return '<div class="card-title" style="margin-top:8px"><span>' + esc(t("chk.title")) + '</span> <button class="btn-ghost" onclick="copyChecklist()">' + esc(t("chk.copy")) + '</button></div>' +
+  return diGaubtas('<div class="card-title" style="margin-top:8px"><span>' + esc(t("chk.title")) + '</span> <button class="btn-ghost" onclick="copyChecklist()">' + esc(t("chk.copy")) + '</button></div>' +
     '<div class="table-wrap"><table class="calc"><thead><tr><th>' + esc(t("chk.item")) + '</th><th>' + esc(t("chk.status")) + '</th><th>' + esc(t("chk.what")) + '</th><th>' + esc(t("chk.src")) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     (chk.ispejimai.length ? '<div class="note warn" style="margin-top:8px">' + chk.ispejimai.map(esc).join("<br>") + '</div>' : "") +
-    '<div class="hint" style="margin-top:8px">' + esc(t("chk.note")) + ' · ' + esc(t("ans.chk")) + ': ' + esc(fmtDate(S.fetchedAt)) + '</div>';
+    '<div class="hint" style="margin-top:8px">' + esc(t("chk.note")) + ' · ' + esc(t("ans.chk")) + ': ' + esc(fmtDate(S.fetchedAt)) + '</div>');
 }
 function copyChecklist() {
   const chk = S.checklist; if (!chk) return;
