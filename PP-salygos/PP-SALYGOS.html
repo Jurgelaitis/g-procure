@@ -627,6 +627,13 @@ const BUDO_KILM = {
   'MV-SAD':'mažos vertės pirkimo (skelbiamos apklausos) būdu',
   'MV-NR':'mažos vertės pirkimo (neskelbiamos apklausos) būdu'
 };
+/* Konfidencialumo įsipareigojimas DPS (2026-10-05): DPS - ne pirkimo būdas, todėl ne „X būdu „Y“ pirkimą“, o šablonų žodžiais
+   (DPS sąlygų 2.1 p. „... kuriomis siekiama sukurti DPS“, GP_METHODS „Konkretus pirkimas pagal DPS“). Iki tol lietuviškas
+   sakinys DPS paketuose likdavo neužpildytas, nors angliškas pildomas. */
+const KONF_DPS = {
+  'DPS':   p => `„${p}“ pirkimą, kuriuo siekiama sukurti dinaminę pirkimo sistemą,`,
+  'DPS-K': p => `konkretų „${p}“ pirkimą pagal dinaminę pirkimo sistemą`
+};
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -728,6 +735,73 @@ function pavENclean(v){
    pateikia irankis (AI pasiulymas 1 zingsnyje arba LT tekstas).             */
 function pavENval(){
   return pavENclean($('#pavadinimasEN').value) || pavClean($('#pavadinimas').value);
+}
+/* DPS konkretaus pirkimo pavadinimas (2026-10-05): 2 žingsnio laukas „Konkretaus pirkimo pavadinimas“ (siūlomas iš 1 žingsnio),
+   be jo - 1 žingsnio pavadinimas. Vienas šaltinis sąlygoms, pasiūlymo formos antraštei ir konfidencialumo įsipareigojimui. */
+function dpsKonkretausPav(en){
+  const K = window.__K || {};
+  for (const [r, q] of Object.entries(K.tuscios || {})){
+    if (!q.lk || q.lk.tipas !== 'dps-konkretaus-pavadinimas') continue;
+    const e = en && K.enPoros && K.enPoros.tuscios[r];
+    if (en && !e) continue;
+    const v = String((ATS['B_' + (en ? e.enRaktas : r)] || [])[0] || '').trim();
+    if (v) return v;
+  }
+  return en ? pavENval() : pavClean($('#pavadinimas').value);
+}
+/* DPS, kurios pagrindu vykdomas konkretus pirkimas, pavadinimas (naudotojo sprendimas 2026-10-05): 2 žingsnio laukas
+   (GP_LAUKAI.dpsPavadinimoLaukas), dvikalbiame - ir angliškas. Šablono vietos - raudonas pavyzdys po atpažįstamų žodžių:
+   „... SISTEMOS „X“ PAGRINDU“, „(toliau – DPS) „X““, angliškai „... SYSTEM OF „TITLE OF THE DPS““, „(hereinafter – DPS) “Title of
+   the DPS”“. Be reikšmės pavyzdys lieka raudonas (patikra rodo). Pasiūlymo formos antraštėje - didžiosiomis, kaip konkretaus
+   pirkimo pavadinimas. */
+const DPS_PAV_RAKTAS = 'dps-pavadinimas', DPS_PAV_EN_RAKTAS = 'dps-pavadinimas-en';
+const arDpsEnPavyzdys = g => /^title of the dps$/i.test(String(g || '').trim());
+const DPS_PAV_VIETOS = [
+  { en: false, pries: (t, g) => !arDpsEnPavyzdys(g) && /(DINAMINĖS PIRKIMO SISTEMOS\s*|^|\(toliau\s*[–-]\s*DPS\)\s*)„\s*$/.test(t) },
+  { en: true,  pries: (t, g) => arDpsEnPavyzdys(g) && /(DYNAMIC PROCUREMENT SYSTEM OF\s*|^)„\s*$|\(hereinafter\s*[–-]\s*DPS\)\s*“\s*$/.test(t) }
+];
+const dpsPav = en => String((ATS['B_' + (en ? DPS_PAV_EN_RAKTAS : DPS_PAV_RAKTAS)] || [])[0] || '').trim();
+function dpsPavadinimoVietos(paras, i, forma){
+  let n = 0;
+  DPS_PAV_VIETOS.forEach(v => {
+    const r = dpsPav(v.en);
+    if (r && GPGen.keistiRaudonaGrupe(paras, i, v.pries, forma ? r.toLocaleUpperCase('lt') : r, forma ? { kaipAntraste:true } : undefined)) n++;
+  });
+  return n;
+}
+
+/* DPS konkretaus pirkimo sąlygų antraštė (2026-10-05): užpildžius konkretaus pirkimo pavadinimą, po juo viršutiniu indeksu
+   esantis užrašas „(pavadinimas)“ (ir LT/EN „(title)“) - pildymo nurodymas, ne pavadinimo dalis: šalinamas su savo eilutės
+   lūžiu ir kableliu po jo (LT - „KONKRETAUS PIRKIMO / „X“, / ATLIEKAMO ...“). Angliška vieta - pabrauktų tarpų eilutė
+   „“ ... ”“ (ne „___“, todėl ne 2 žingsnio laukas): įrašomas angliškas pavadinimas. Be pavadinimo - kaip šablone. */
+function dpsAntraste(paras, Z, trinti){
+  const P = Z.paras || {}, idx = Object.keys(P).map(Number).sort((a, b) => a - b).filter(i => String(P[i] || '').trim());
+  const rt = r => GPDocx.els(r, 't').map(t => t.textContent).join('');
+  const sal = r => r && r.parentNode && r.parentNode.removeChild(r);
+  let n = 0;
+  idx.forEach((i, k) => {
+    const t = String(P[i]), p = paras[i];
+    if (!p) return;
+    if (/^KONKRETAUS PIRKIMO\s*„_+“,\s*\(pavadinimas\)/.test(t) && !/_{3,}/.test(GPDocx.paraText(p))){
+      const rs = GPDocx.els(p, 'r'), u = rs.findIndex(r => rt(r).trim() === '(pavadinimas)');
+      if (u < 0) return;
+      let j = u - 1;
+      while (j >= 0 && !rt(rs[j]) && !GPDocx.els(rs[j], 'br').length) j--;          // komentaro nuoroda
+      if (j >= 0 && !rt(rs[j]) && GPDocx.els(rs[j], 'br').length) sal(rs[j]);
+      if (rs[u + 1] && /^,\s*$/.test(rt(rs[u + 1]))) sal(rs[u + 1]);
+      sal(rs[u]); n++;
+    }
+    if (/^“\s+”$/.test(t) && /SPECIFIC PROCUREMENT OF\s*$/i.test(String(P[idx[k - 1]] || '')) && String(P[idx[k + 1]] || '').trim() === '(title)'){
+      const v = dpsKonkretausPav(true), r = GPDocx.els(p, 'r').find(x => /^\s+$/.test(rt(x)));
+      if (!v || !r) return;
+      const ts = GPDocx.els(r, 't');
+      ts[0].textContent = gpBruksniai(v); ts[0].setAttribute('xml:space', 'preserve');
+      ts.slice(1).forEach(x => { x.textContent = ''; });
+      GPDocx.els(r, 'u').forEach(sal);                       // pabraukimas - tuščios vietos žymė
+      trinti.add(idx[k + 1]); n++;
+    }
+  });
+  return n;
 }
 
 /* AI pasiulymas EN pavadinimui: siunciamas TIK pavadinimas (ne dokumentas),
@@ -1012,6 +1086,10 @@ const PAVYZDYS_RE = [
   /\d+\s*\([a-ząčęėįšųūž]+\)\s*(metai|metų|mėn|dien)/i                 // 8 (aštuoni) metai
 ];
 const arPavyzdys = raud => PAVYZDYS_RE.some(re => re.test(raud));
+/* DPS konkretaus pirkimo sąlygose - DPS, kurios pagrindu perkama, pavadinimas: šablone kito pirkimo pavyzdys („110 KV ...“)
+   arba „TITLE OF THE DPS“. 1 žingsnis jo neklausia - lieka raudonas, patikra rodo. Iki 2026-10-05 LT antraštėje jis būdavo
+   ištrinamas (dėl „(pavadinimas)“ toje pačioje pastraipoje liko „SISTEMOS „“ PAGRINDU“), LT/EN antraštėse - pajuodinamas. */
+const arDpsPavadinimas = (raud, t) => !!raud && (/^title of the dps$/i.test(raud) || t.includes(`SISTEMOS „${raud}“`) || t.includes(`„${raud}“ PAGRINDU`));
 /* AKV_LT_SPS 1.2 p.: „Vykdomas [Pasirinkite]. Įgaliojusiosios organizacijos Pirkimo vykdymui: (nurodyti ...)“ -
    [Pasirinkite] pildo rezimo formuluote (tuscia vieta), raudona nurodyma - 1 zingsnio laukai. */
 const IGALIOJUSIOS_RE = /igaliojusiosios organizacijos pirkimo vykdymui/;
@@ -1027,7 +1105,7 @@ function intarpoKat(n){
   // „... neskaidomas vadovaujantis VPĮ 28 straipsnio 2 dalimi, nes (įrašyti priežastis ...)“: istrynus nurodyma
   // sakinys liktu nebaigtas („..., nes .“) - tai pildoma vieta.
   if (/(^|[^\p{L}])nes\s*\((įrašyti|nurodyti)/iu.test(t)) return 'teksto';
-  if (arPavyzdys(raud)) return 'pavyzdys';
+  if (arPavyzdys(raud) || arDpsPavadinimas(raud, t)) return 'pavyzdys';
   if (/\[[^\]]{4,}\]/.test(t)) return 'teksto';
   const skl = t.match(/\(([^)]{4,})\)?/g) || [];
   if (skl.some(x => INSTR_RE.test(x))) return 'trinti';
@@ -1872,6 +1950,19 @@ function surinktiKlausimus(){
              'centralizuotas pirkimas (1 žingsnis)');
         return;
       }
+      // DPS, kurios pagrindu perkama, pavadinimas: vienas 2 žingsnio laukas (antraštės pavyzdys), angliškas - prie jo
+      if (!forma && arDpsPavadinimas((n.raudonas || '').trim(), n.text || '')){
+        const raud = (n.raudonas || '').trim();
+        if (arDpsEnPavyzdys(raud)){
+          if (!Array.isArray(ATS['B_' + DPS_PAV_EN_RAKTAS])) ATS['B_' + DPS_PAV_EN_RAKTAS] = [''];
+          K.enPoros.tuscios[DPS_PAV_RAKTAS] = { enRaktas: DPS_PAV_EN_RAKTAS, vietos: 1, tekstas: n.text, uzrasai: [GP_LAUKAI.DPS_PAVADINIMAS.uzrasasEn] };
+        } else if (!K.tuscios[DPS_PAV_RAKTAS]){
+          const { tekstas, lk } = GP_LAUKAI.dpsPavadinimoLaukas(raud);
+          pridek('tuscios', DPS_PAV_RAKTAS, trumpas, { tekstas, vietos: 1, lk, vieta:{ dok:d.trumpas, i:n.i }, komentarai:komentaraiTies(Z, n.i), salyga:null });
+          if (!Array.isArray(ATS['B_' + DPS_PAV_RAKTAS])) ATS['B_' + DPS_PAV_RAKTAS] = [''];
+        }
+        return;
+      }
       if (kat === 'pavyzdys'){
         auto(trumpas, n.text, 'paliekama raudona',
              'šablono pavyzdinė reikšmė (data, suma ar trukmė) - įrašykite tikrą Word\'e; kol neįrašyta, baigtumo patikra ją rodo');
@@ -2261,6 +2352,9 @@ function siulymuPasas(K){
       } else if (v.zodziais != null){
         const sk = parseInt(String((ATS[key] || [])[v.zodziais] || '').trim(), 10);
         siulyk(key, k, SK_ZODZIAI_LT[sk] || null, 'skaičius žodžiais pagal įrašytą skaičių');
+      } else if (q.lk.tipas === 'dps-konkretaus-pavadinimas'){
+        const p = pavClean($('#pavadinimas').value);
+        siulyk(key, k, p || null, p ? '1 žingsnio pirkimo pavadinimas' : null);
       } else if (q.lk.tipas === 'min-reikalavimai' || q.lk.tipas === 'derybu-salygos'){
         const f = APIMTIS_FORMULES.find(x => x.re.test(norm(q.tekstas)));
         const vr = f && f.variantai.find(x => x.kada === apimtis());
@@ -2268,6 +2362,11 @@ function siulymuPasas(K){
       }
     });
     q.lk.vietos.forEach((v, k) => { if (v.kopija != null && Array.isArray(ATS[key])) ATS[key][k] = ATS[key][v.kopija]; });
+    const en = K.enPoros.tuscios[raktas];                 // angliškas laukas prie lietuviško klausimo
+    if (q.lk.tipas === 'dps-konkretaus-pavadinimas' && en){
+      const pEN = pavENval(), suEN = !!pavENclean($('#pavadinimasEN').value);
+      siulyk('B_' + en.enRaktas, 0, pEN || null, pEN ? (suEN ? '1 žingsnio pavadinimas anglų kalba' : '1 žingsnio pirkimo pavadinimas (anglų kalba neįvestas)') : null);
+    }
   });
   (K.kopijos || []).forEach(c => { ATS['B_' + c.en] = (ATS['B_' + c.lt] || []).slice(0, c.n); });
 }
@@ -2865,7 +2964,7 @@ function laukoHTML(K, c, klase, kur, dokai){
     for (let k = 0; k < enL.vietos; k++){
       const u = c.vienetai.find(x => x.id === c.id + '-en' + k) || {};
       const id = c.id + '-en' + k;
-      h += `<div class="lk-v"><label class="lk-v-l" for="${id}">${esc(((enLk.vietos[k] || {}).uzrasas || 'Reikšmė') + ' (EN)')}</label>
+      h += `<div class="lk-v"><label class="lk-v-l" for="${id}">${esc((enL.uzrasai && enL.uzrasai[k]) || (((enLk.vietos[k] || {}).uzrasas || 'Reikšmė') + ' (EN)'))}</label>
         <div class="lk-v-iv"><input type="text" class="lk-in${u.busena === 'siuloma' ? ' lk-in--siuloma' : ''}" id="${id}" data-lk="${esc(ek)}" data-k="${k}" value="${esc(ev[k] || '')}"
           aria-describedby="${id}-s ${c.id}-pa" oninput="lkIvestis(this)">${busenosZyma(u.busena || 'neuzpildyta', id + '-b')}
         <span class="lk-v-mygt" id="${id}-m">${u.busena === 'siuloma' ? patvirtinimoMygtukas(u.raktai, u.pavadinimas) : ''}</span></div>${kilmesEilute(id + '-s', u)}</div>`;
@@ -3365,6 +3464,9 @@ async function generuotiViena(d, REZ){
     if (Array.isArray(v)) pildyta += pildykLauka(x.i, v, raudonuIdx.has(x.i));
   });
 
+  // 5b. DPS konkretaus pirkimo sąlygų antraštė: užrašai „(pavadinimas)“ / „(title)“ ir angliška pavadinimo vieta (dpsAntraste)
+  if (!forma && /^DPSP_/.test(d.trumpas)) pildyta += dpsAntraste(paras, Z, trinti);
+
   // 5a. DALIU DAUGINIMAS. Sablone fiziskai yra tik dvi daliu eilutes; kai
   //     pirkimas skaidomas i daugiau, paskutine klonuojama. Daroma PO snapshot
   //     ir PO pildymo, kad klonas paveldetu jau tvarkinga pavyzdi, o zemelapio
@@ -3394,6 +3496,7 @@ async function generuotiViena(d, REZ){
   const sulietuIdx = new Set((Z.blokai||[]).filter(b => b.sulieta).map(b => b.i));
   (Z.intarpai||[]).forEach(n => {
     if (trinti.has(n.i) || sulietuIdx.has(n.i)) return;
+    if (/^DPSP_/.test(d.trumpas)) intTeksto += dpsPavadinimoVietos(paras, n.i, forma);   // DPS pavadinimas (2 žingsnis); kiti raudoni - toliau
     if (!forma && METODIKOS_EIL_RE.test(norm(n.text))){       // metodikos eilutė (AK, AKV): kainos atveju trinama
       if (metodikosEiluteLieka()) juodinti.add(n.i); else { trinti.add(n.i); prieduIstrinta++; }
       return;
@@ -3402,16 +3505,53 @@ async function generuotiViena(d, REZ){
       if (ATS['A_' + norm(n.text)]) juodinti.add(n.i); else { trinti.add(n.i); prieduIstrinta++; }
       return;
     }
+    // DPS paraiškos formos antraštė (naudotojo sprendimas 2026-10-04): šablone prieš „, siekiant sukurti dinaminę pirkimo
+    // sistemą“ - tik raudonas kablelis (pavadinimo vietos nėra), angliškai - „[Title]“; įrašomas pirkimo pavadinimas iš
+    // 1 žingsnio. Be pavadinimo - kaip iki šiol.
+    if (pav && (n.raudonas || '').trim() === ',' && /^\s*,\s*siekiant sukurti dinaminę pirkimo sistemą/i.test(n.text || '')
+        && GPGen.keistiRaudonaTeksta(paras, n.i, `„${pav}“, `)){ intTeksto++; return; }
+    if ((n.raudonas || '').trim() === '[Title]' && /with the aim of creating a dynamic procurement system/i.test(n.text || '')){
+      const pEN = pavENval();
+      if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, `“${pEN}”`)){
+        // tarpas po „[Title]“ šablone - raudoname rune (pašalinamas kartu): be jo „...”with the aim“
+        const t = GPDocx.els(paras[n.i], 't').find(x => x.textContent === `“${pEN}”`);
+        if (t && /”\S/.test(GPDocx.paraText(paras[n.i]))) t.textContent += ' ';
+        intTeksto++; return;
+      }
+    }
+    // Pirkimo pavadinimas rengėjo vietose (naudotojo sprendimas 2026-10-05; tiekėjo ir subtiekėjo pildomos vietos - sutikimai,
+    // deklaracijos - lieka kaip šablone). DPS sąlygų 2.1 p. „... numato įsigyti [pirkimo pavadinimas] (toliau – Pirkimas).“ ir
+    // EN „... intends to acquire the [subject of procurement] (hereinafter – the Procurement).“: iki tol nurodymas būdavo
+    // pajuodinamas ir likdavo dokumento tekstu. Be pavadinimo - lieka raudonas (patikra rodo).
+    if ((n.raudonas || '').trim() === 'pirkimo pavadinimas' && /numato įsigyti/.test(n.text || '')){
+      if (pav && GPGen.keistiRaudonaTeksta(paras, n.i, `„${pav}“`)) intTeksto++;     // raudonas tarpas po nurodymo lieka (jis ne fragmento dalis)
+      return;
+    }
+    if ((n.raudonas || '').trim() === 'subject of procurement' && /intends to acquire the/.test(n.text || '')){
+      const pEN = pavENval();
+      if (pEN && GPGen.keistiRaudonaTeksta(paras, n.i, `“${pEN}”`)) intTeksto++;
+      return;
+    }
+    // DPS konkretaus pirkimo pasiūlymo formos antraštė: šablone - kito pirkimo pavadinimas („110/10 kV ERŽVILKO ...“) ir
+    // „TITLE OF THE SPECIFIC PROCUREMENT“; įrašomas konkretaus pirkimo pavadinimas (tas pats kaip sąlygose). DPS, kurios
+    // pagrindu perkama, pavadinimas toje pačioje pastraipoje lieka raudonas (1 žingsnis jo neklausia).
+    if (forma && /^(DĖL KONKRETAUS PIRKIMO|REGARDING THE SPECIFIC PROCUREMENT OF)\s*„/i.test(n.text || '')){
+      const en = /^REGARDING/i.test(n.text), v = dpsKonkretausPav(en);
+      if (v && GPGen.keistiRaudonaGrupe(paras, n.i, /(KONKRETAUS PIRKIMO|SPECIFIC PROCUREMENT OF)\s*„\s*$/i,
+          v.toLocaleUpperCase('lt'), { kaipAntraste:true })) intTeksto++;
+      return;
+    }
     if (forma){
       // Konfidencialumo isipareigojimas: „... vykdo [nurodyti pirkimo būdą ir pirkimo pavadinimą] ir ketina ...“ -
       // sakinyje truko zodzio „pirkimą“ ir kabute buvo ASCII (testuotojo radinys 2026-10-02).
       if (/nurodyti pirkimo būdą ir pirkimo pavadinimą/i.test(n.raudonas || n.text)){
         const budas = $('#budas').value;
-        if (pav && BUDO_KILM[budas] &&
-            GPGen.keistiRaudonaTeksta(paras, n.i, `${BUDO_KILM[budas]} „${pav}“ pirkimą`)) intTeksto++;
+        const sak = KONF_DPS[budas] ? KONF_DPS[budas](budas === 'DPS-K' ? dpsKonkretausPav(false) : pav)
+          : BUDO_KILM[budas] ? `${BUDO_KILM[budas]} „${pav}“ pirkimą` : '';
+        if (pav && sak && GPGen.keistiRaudonaTeksta(paras, n.i, sak)) intTeksto++;
       }
       if (/specify the procurement method and the name of the procurement/i.test(n.raudonas || n.text)){
-        const pEN = pavENval(), mEN = window.GP_METHODS ? GP_METHODS.label($('#budas').value, { kalba:'en' }) : '';
+        const pEN = $('#budas').value === 'DPS-K' ? dpsKonkretausPav(true) : pavENval(), mEN = window.GP_METHODS ? GP_METHODS.label($('#budas').value, { kalba:'en' }) : '';
         if (pEN && mEN && mEN !== $('#budas').value &&
             GPGen.keistiRaudonaTeksta(paras, n.i, `the procurement “${pEN}” by ${mEN.charAt(0).toLowerCase() + mEN.slice(1)} `)) intTeksto++;
       }
@@ -3560,9 +3700,11 @@ async function generuotiViena(d, REZ){
   // šablonuose žyma buvo „/ĮMONĖS PAVADINIMAS/“. Tik didžiosiomis: „Darbuotojo įmonės pavadinimas“ - tiekėjo laukas.
   GPDocx.replaceText(doc, '/ĮMONĖS PAVADINIMAS/', IMONE);
   GPDocx.replaceText(doc, 'ĮMONĖS PAVADINIMAS', IMONE);
+  // DPS sąlygų antraštės žymos - tik su kabutėmis: be jų keitimas palietė ir jau įrašytą pavadinimą didžiosiomis (pasiūlymo
+  // formos antraštėje angliškas „... PROCUREMENT TITLE“ virsdavo „... Procurement title“; rasta testu 2026-10-05)
   if (pav){
-    GPDocx.replaceText(doc, 'PIRKIMO PAVADINIMAS', pav);
-    GPDocx.replaceText(doc, 'PROCUREMENT TITLE', pavENval());
+    GPDocx.replaceText(doc, '„PIRKIMO PAVADINIMAS“', `„${pav}“`);
+    GPDocx.replaceText(doc, '"PROCUREMENT TITLE"', `"${pavENval()}"`);
   }
   GPDocx.replaceRegex(doc, /incidentai@(?:_+|\/[^/]*\/)\.eu/g, INC_PASTAS);
   if (!forma) GPGen.valytiPastraipuZenklus(doc);

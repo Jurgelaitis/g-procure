@@ -2159,6 +2159,69 @@ async function testaiLenteles(){
     const sp = ps.slice(0, 3).map(q => elW(elW(q, "pPr")[0], "sectPr").length), jc = ps.slice(0, 3).map(q => atW(elW(elW(q, "pPr")[0], "jc")[0], "val")), b = ps.slice(0, 3).map(q => q.getElementsByTagNameNS(NSW, "b").length > 0);
     lygu([sp, jc, b], [[0, 0, 1], ["both", "both", "both"], [true, true, true]], "skyriaus lūžis - paskutinėje dalyje, savybės - tos pačios");
   });
+  await testas("DPS paraiškos formos antraštė: prieš „, siekiant sukurti dinaminę pirkimo sistemą“ (šablone - tik raudonas kablelis) ir vietoj „[Title]“ - pirkimo pavadinimas iš 1 žingsnio, ne raudonai (DPS LT sąlygų 4 priedas ir DPS LT/EN paraiška)", async () => {
+    const rau = (xml, re) => { const d = new W.DOMParser().parseFromString(xml, "application/xml");
+      const p = Array.from(d.getElementsByTagNameNS(NSW, "p")).find(q => re.test(txW(q)));
+      return p ? [txW(p), Array.from(p.getElementsByTagNameNS(NSW, "color")).some(c => /^(FF0000|C00000|E00000)$/i.test(atW(c, "val")))] : null; };
+    const lt = (await generuokSu({ budas: "DPS" })).DPSK_LT_SALYGOS;
+    lygu(rau(lt.xml, /siekiant sukurti dinaminę pirkimo sistemą$/), ["„" + PAVADINIMAS + "“, siekiant sukurti dinaminę pirkimo sistemą", false], "DPS LT sąlygų 4 priedas");
+    const en = (await generuokSu({ budas: "DPS", kalba: "LT_EN", pavEN: "Test procurement title" })).DPSK_LTEN_PARAISKA;
+    lygu([rau(en.xml, /siekiant sukurti dinaminę pirkimo sistemą$/), rau(en.xml, /with the aim of creating a dynamic procurement system$/)],
+      [["„" + PAVADINIMAS + "“, siekiant sukurti dinaminę pirkimo sistemą", false], ["“Test procurement title” with the aim of creating a dynamic procurement system", false]], "DPS LT/EN paraiška");
+  });
+  await testas("Pirkimo pavadinimas rengėjo vietose (DPS, naudotojo sprendimas 2026-10-05): DPS sąlygų 2.1 p. ir konfidencialumo įsipareigojimas; konkretaus pirkimo pavadinimas siūlomas iš 1 žingsnio ir tas pats - sąlygų antraštėje (be „(pavadinimas)“ / „(title)“), 1.1 p. ir pasiūlymo formos antraštėje; DPS pavadinimas - 2 žingsnio klausimas tik DPS-K (be reikšmės pavyzdys lieka raudonas, su reikšme - visos 6 vietos LT ir EN); tiekėjo ir subtiekėjo vietos - kaip šablone", async () => {
+    const RAUD = /^(FF0000|C00000|ED1C24)$/i;
+    const pastr = (xml, re) => { const d = new W.DOMParser().parseFromString(xml, "application/xml");
+      const p = Array.from(d.getElementsByTagNameNS(NSW, "p")).find(q => re.test(txW(q)));
+      if (!p) return null;
+      const raud = Array.from(p.getElementsByTagNameNS(NSW, "r")).filter(r => Array.from(r.getElementsByTagNameNS(NSW, "color")).some(c => RAUD.test(atW(c, "val"))))
+        .map(txW).join("").trim();
+      return [txW(p), raud]; };
+    const yra = (xml, re) => !!pastr(xml, re), P = PAVADINIMAS, EN = "Test procurement title";
+    const DPS_PAV = "110 KV TRANSFORMATORIŲ PASTOTĖS 110 KV SKIRSTYKLOS REKONSTRAVIMO DARBAI";
+    // DPS sukūrimas
+    const a = await generuokSu({ budas: "DPS", priedai: ["KONFIDENCIALUMAS", "SUBTIEKEJAI"],
+      pries: () => tiesa(!W.__K.tuscios["dps-pavadinimas"], "DPS sukūrime klausimo „Dinaminės pirkimo sistemos pavadinimas“ neturi būti") });
+    lygu(pastr(a.DPSK_LT_SALYGOS.xml, /numato įsigyti/), ["2.1. LITGRID AB (toliau – Perkantysis subjektas) atlieka tarptautinio pirkimo procedūras, kuriomis siekiama sukurti DPS ir jos galiojimo laikotarpiu numato įsigyti „" + P + "“ (toliau – Pirkimas).", ""], "DPS LT sąlygų 2.1 p.");
+    lygu(pastr(a.PRIEDAI_LT_KONFIDENCIALUMAS.xml, /ketina perduoti/)[0].match(/vykdo .* ir ketina/)[0], "vykdo „" + P + "“ pirkimą, kuriuo siekiama sukurti dinaminę pirkimo sistemą, ir ketina", "konfidencialumo įsipareigojimas (DPS)");
+    tiesa(pastr(a.PRIEDAI_LT_SUBTIEKEJAI.xml, /atliekamame .*pirkime/)[1].includes("(pirkimo pavadinimas)"), "subtiekėjo sutikime „(pirkimo pavadinimas)“ lieka raudonas");
+    const b = await generuokSu({ budas: "DPS", kalba: "LT_EN", pavEN: EN });
+    lygu(pastr(b.DPSK_LTEN_SALYGOS.xml, /intends to acquire/), ["LITGRID AB (hereinafter – Contracting Entity) is carrying out international procurement procedures with the aim of establishing a DPS, under which it intends to acquire the “" + EN + "” (hereinafter – the Procurement).", ""], "DPS LT/EN sąlygų 2.1 p. angliškai");
+    tiesa(yra(b.DPSK_LTEN_SUBTIEKEJAS.xml, /tarptautiniame „PAVADINIMAS“, siekiant/), "DPS subtiekėjo sutikimas - kaip šablone");
+    // Konkretus pirkimas: siūloma iš 1 žingsnio, žmogaus reikšmė - visose vietose
+    const KITAS = "Kitas konkretus pirkimas";
+    const c = await generuokSu({ budas: "DPS-K", priedai: ["KONFIDENCIALUMAS"], pries: () => {
+      const SIUL = W.eval("SIUL"), PATV = W.eval("PATV");
+      const raktai = Object.entries(W.__K.tuscios).filter(([, q]) => q.lk && q.lk.tipas === "dps-konkretaus-pavadinimas").map(([r]) => "B_" + r);
+      lygu(raktai.map(k => [ATS()[k][0], (SIUL.get(k + "#0") || {}).saltinis, PATV.has(k + "#0")]), raktai.map(() => [P, "1 žingsnio pirkimo pavadinimas", false]), "siūloma (nepatvirtinta) iš 1 žingsnio");
+      tiesa(raktai.length === 2, "konkretaus pirkimo pavadinimo vietų: " + raktai.length);
+      raktai.forEach(k => W.uAtsArr(k, 0, KITAS));
+      const q = W.__K.tuscios["dps-pavadinimas"];
+      lygu([q && q.lk.klausimas, ATS()["B_dps-pavadinimas"], !!W.__K.enPoros.tuscios["dps-pavadinimas"]], ["Dinaminės pirkimo sistemos pavadinimas", [""], false], "DPS pavadinimo klausimas (LT) - tuščias, be numatytosios"); } });
+    lygu(pastr(c.DPSP_LT_SALYGOS.xml, /^KONKRETAUS PIRKIMO/), ["KONKRETAUS PIRKIMO „" + KITAS + "“,ATLIEKAMO DINAMINĖS PIRKIMO SISTEMOS „" + DPS_PAV + "“ PAGRINDU, SĄLYGOS ", DPS_PAV], "sąlygų antraštė: be „(pavadinimas)“, DPS pavadinimas - raudonas (iki tol ištrintas)");
+    tiesa(pastr(c.DPSP_LT_SALYGOS.xml, /^1\.1 /)[0].includes("konkretaus pirkimo „" + KITAS + "“ (toliau – konkretus pirkimas)"), "sąlygų 1.1 p.");
+    const f = pastr(c.DPSP_LT_PASIULYMAS.xml, /^DĖL KONKRETAUS PIRKIMO/);
+    tiesa(f[0].startsWith("DĖL KONKRETAUS PIRKIMO „" + KITAS.toLocaleUpperCase("lt") + "“ATLIEKAMO") && /^110 kV IR 330 kV TP/.test(f[1]), "pasiūlymo formos antraštė: " + f.join(" | ").slice(0, 200));
+    lygu(pastr(c.PRIEDAI_LT_KONFIDENCIALUMAS.xml, /ketina perduoti/)[0].match(/vykdo .* ir ketina/)[0], "vykdo konkretų „" + KITAS + "“ pirkimą pagal dinaminę pirkimo sistemą ir ketina", "konfidencialumo įsipareigojimas (DPS-K)");
+    tiesa(yra(c.DPSP_LT_PASIULYMAS.xml, /dalyvaujantis \(nurodyti pirkimo pavadinimą\) pirkime/), "subtiekėjo sutikimas pasiūlymo formoje - kaip šablone");
+    const DL = "Elektros tinklo projektavimo paslaugos", DE = "Electricity network design services";
+    const e = await generuokSu({ budas: "DPS-K", kalba: "LT_EN", pavEN: EN, pries: () => {
+      const kort = D.getElementById(W.lkId("laukas|dps-pavadinimas"));
+      lygu(kort ? [...kort.querySelectorAll("label.lk-v-l")].map(x => x.textContent.trim()) : null, ["DPS pavadinimas", "DPS pavadinimas anglų kalba"], "klausimo kortelė su LT ir EN laukais");
+      W.uAtsArr("B_dps-pavadinimas", 0, DL); W.uAtsArr("B_dps-pavadinimas-en", 0, DE); } });
+    const ps = Array.from(new W.DOMParser().parseFromString(e.DPSP_LTEN_SALYGOS.xml, "application/xml").getElementsByTagNameNS(NSW, "p")).map(txW).filter(t => t.trim());
+    const k0 = ps.findIndex(t => /^KONKRETAUS PIRKIMO/.test(t));
+    lygu(ps.slice(k0, k0 + 7), ["KONKRETAUS PIRKIMO „" + P + "“,", "THE CONDITIONS OF THE SPECIFIC PROCUREMENT OF", "“" + EN + "”", "ATLIEKAMO DINAMINĖS PIRKIMO SISTEMOS ",
+      "„" + DL + "“ PAGRINDU, SĄLYGOS", "CONDUCTED ACCORDING TO THE DYNAMIC PROCUREMENT SYSTEM OF ", "„" + DE + "“"], "LT/EN sąlygų antraštė (be „(title)“, su DPS pavadinimu)");
+    lygu([pastr(e.DPSP_LTEN_SALYGOS.xml, /^„/)[1], pastr(e.DPSP_LTEN_SALYGOS.xml, /PAGRINDU, SĄLYGOS$/)[1]], ["", ""], "DPS pavadinimas antraštėje - ne raudonas");
+    const l11 = pastr(e.DPSP_LTEN_SALYGOS.xml, /^LITGRID AB \(toliau – Perkantysis subjektas\) atlieka konkretaus/), e11 = pastr(e.DPSP_LTEN_SALYGOS.xml, /procedures of the specific procurement/);
+    tiesa(l11[0].includes("(toliau – DPS) „" + DL + "“ pagrindu") && /^2022-09-23/.test(l11[1]), "LT/EN sąlygų 1.1 p. lietuviškai (data ir numeris lieka raudoni): " + l11.join(" | ").slice(0, 300));
+    tiesa(e11[0].includes("specific procurement “" + EN + "” (hereinafter") && e11[0].includes("(hereinafter – DPS) “" + DE + ".”") && /^23 September 2022/.test(e11[1]), "LT/EN sąlygų 1.1 p. angliškai: " + e11.join(" | ").slice(0, 300));
+    lygu(pastr(e.DPSP_LTEN_PASIULYMAS.xml, /^REGARDING THE SPECIFIC PROCUREMENT OF/), ["REGARDING THE SPECIFIC PROCUREMENT OF „" + EN.toUpperCase() + "“", ""], "LT/EN pasiūlymo formos antraštė");
+    lygu([pastr(e.DPSP_LTEN_PASIULYMAS.xml, /^ATLIEKAMO DINAMINĖS PIRKIMO SISTEMOS/), pastr(e.DPSP_LTEN_PASIULYMAS.xml, /^CONDUCTED ACCORDING TO THE DYNAMIC PROCUREMENT SYSTEM OF/)],
+      [["ATLIEKAMO DINAMINĖS PIRKIMO SISTEMOS „" + DL.toLocaleUpperCase("lt") + "“", ""], ["CONDUCTED ACCORDING TO THE DYNAMIC PROCUREMENT SYSTEM OF „" + DE.toUpperCase() + "“", ""]], "LT/EN pasiūlymo formos antraštė - DPS pavadinimas didžiosiomis");
+    tiesa(yra(e.DPSP_LTEN_SUBTIEKEJAS.xml, /dalyvaujantis \(nurodyti pirkimo pavadinimą\) pirkime/), "LT/EN subtiekėjo sutikimas - kaip šablone");
+  });
   await testas("Tušti puslapiai (GPDocx.pertekliniaiLuziai): puslapio lūžis, po kurio iki naujo puslapio skyriaus ar dokumento pabaigos - tik tuščios pastraipos, šalinamas; lūžis prieš tekstą, prieš „continuous“ skyrių ir su tekstu po jo - lieka; tekstas nepakitęs", async () => {
     const br = '<w:r><w:br w:type="page"/></w:r>', P = t => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`, T = '<w:p/>';
     const sp = (tipas = "") => `<w:sectPr>${tipas ? `<w:type w:val="${tipas}"/>` : ""}<w:pgSz w:w="11906" w:h="16838"/></w:sectPr>`;
