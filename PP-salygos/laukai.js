@@ -207,6 +207,12 @@
   const TIPAI = [
     { id: 'pavadinimas', auto: true, re: /irasomas pirkimo objekto pavadinim|^(\d+ )*pirkimo objektas( pirkimo objekto pavadinimas)?$|^the object of procurement( the title of the object of procurement)?$|title of the object of procurement/,
       klausimas: '', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Pirkimo pavadinimas (iš 1 žingsnio)' })) },
+    // DPS sąlygų 2.15 p. (2026-10-05, naudotojo prašymas): raudonas laužtinis nurodymas - formuluotės laukas (ne „___“)
+    { id: 'dps-aplinkos-kriterijai', formuluote: true, re: /dps sukurimui taikomi aplinkos apsaugos kriterijai nustatyti/,
+      klausimas: 'Kur nustatyti DPS sukūrimui taikomi aplinkos apsaugos kriterijai?',
+      uzuomina: 'Šablono nurodymas: įrašomas dokumento pavadinimas arba nurodomas šių pirkimo sąlygų priedas, kuriame (kuriuose) nustatyti pirkime taikomi aplinkos apsaugos kriterijai. Įrašoma vietoj nurodymo laužtiniuose skliaustuose; sakinio pabaiga lieka.',
+      uzrasas: 'Dokumentas arba priedas', pvz: 'šių pirkimo sąlygų 7 priede',
+      vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Dokumentas arba priedas' })) },
     { id: 'cpo-pagrindimas', formuluote: true, re: /centralizuotu pirkimu katalogu pagrindimas|centralized procurement directory/,
       klausimas: 'Kodėl pirkimas vykdomas ne per CPO LT katalogą?', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pagrindimas' })) },
     { id: 'esminiu-salygu-dalis', re: /esmines sutarties salygos isdestytos sps|terms of the contract are laid down|conditions of the contract are established/,

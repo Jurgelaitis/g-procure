@@ -3007,6 +3007,7 @@ function formuluotesHTML(K, c, klase, kur, dokai){
   const tipasF = GP_LAUKAI.TIPAI.find(x => x.formuluote && x.re.test(norm(q.tekstas)));
   const kl = (tipasF && tipasF.klausimas) || ((q.variantai || []).length ? 'Kokia formuluotė įrašoma?' : (q.netaikyti ? 'Ar ši nuostata taikoma? Jei taip - įrašykite tekstą.' : 'Kokį tekstą įrašyti?'));
   let h = `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, kl, pa)}
+    ${tipasF && tipasF.uzuomina ? `<p class="lk-uz" id="${c.id}-uz">${esc(tipasF.uzuomina)}</p>` : ''}
     <div class="lk-pz"><span class="lk-pz-t">Taip atrodys dokumente</span> <span class="lk-pz-s" id="${c.id}-pz">${formuluotesPerziura(q, cur)}</span></div>
     <div class="lk-var" role="radiogroup" aria-labelledby="${c.id}-kl">`;
   (q.variantai || []).forEach((v, k) => {
@@ -3015,8 +3016,8 @@ function formuluotesHTML(K, c, klase, kur, dokai){
   });
   if (q.netaikyti) h += `<label class="opt lk-opt"><input type="radio" id="${c.id}-on" name="F_${esc(fid)}" ${cur === '__NETAIKYTI__' ? 'checked' : ''}
       onchange="nustatykFormuluote('${esc(fid)}','__NETAIKYTI__')"><span class="lk-opt-t">Netaikyti - punktas išbraukiamas</span></label>`;
-  h += `</div><div class="lk-v"><label class="lk-v-l" for="${c.id}-c">${(q.variantai || []).length ? 'Kita formuluotė' : 'Tekstas'}</label>
-    <textarea rows="2" class="lk-in" id="${c.id}-c" aria-describedby="${c.id}-s" oninput="nustatykFormuluote('${esc(fid)}', this.value, false);lkAtnaujink()" onchange="klausimynas()">${esc(custom ? cur : '')}</textarea></div>
+  h += `</div><div class="lk-v"><label class="lk-v-l" for="${c.id}-c">${(q.variantai || []).length ? 'Kita formuluotė' : esc((tipasF && tipasF.uzrasas) || 'Tekstas')}</label>
+    <textarea rows="2" class="lk-in" id="${c.id}-c" aria-describedby="${tipasF && tipasF.uzuomina ? c.id + '-uz ' : ''}${c.id}-s"${tipasF && tipasF.pvz ? ` placeholder="Pvz.: ${esc(tipasF.pvz)}"` : ''} oninput="nustatykFormuluote('${esc(fid)}', this.value, false);lkAtnaujink()" onchange="klausimynas()">${esc(custom ? cur : '')}</textarea></div>
     <div class="lk-v-iv lk-v-iv--f" id="${c.id}-o0-m">${u.busena === 'siuloma' ? patvirtinimoMygtukas(u.raktai, u.pavadinimas) : ''}</div>
     ${kilmesEilute(c.id + '-s', u)}`;
   // LT->EN pora: EN versijos elgsena priklauso nuo pasirinkimo tipo (kaip iki 2026-10-04)
@@ -3043,12 +3044,46 @@ function formuluotesHTML(K, c, klase, kur, dokai){
   return h + aiBlokas('F|' + fid) + `</section>`;
 }
 
+/* Laužtinis šablono nurodymas raudoname intarpe (2026-10-05, DPS sąlygų 2.15 p.): keičiama TIK „[...]“ atkarpa. Raudonas taškas ir
+   tarpas po jos (LT „[...]. “), juoda uždaroji skliausto dalis (LT/EN „[...“ + juodas „]. “) ir EN taškas („[...].“) lieka sakinio
+   dalimi - iki tol keisti visi raudoni runai: „... nustatyti XJei ...“, „... X]. Jei“, „... set out in X If“. [pradžia, pabaiga) arba null. */
+function nurodymoSritis(t, nuo){
+  const a = String(t).indexOf('[', Math.max(0, nuo || 0));
+  if (a < 0) return null;
+  let g = 0;
+  for (let k = a; k < t.length; k++){ if (t[k] === '[') g++; else if (t[k] === ']' && !--g) return [a, k + 1]; }
+  return null;
+}
+const beDvigubotoTasko = (v, po) => po === '.' && /[^.]\.$/.test(v) ? v.slice(0, -1) : v;   // „... priede.“ + šablono „.“
+function irasykNurodyma(paras, i, v){
+  const p = paras[i], rs = p ? GPGen.raudoniRunai(p) : [];
+  if (!rs.length) return false;
+  const ts = GPDocx.els(p,'t'), t = ts.map(x => x.textContent).join('');
+  const raud = [];                                   // raudonų (ne tarpų) runų ženklų pozicijos
+  let poz = 0, nuo = -1;
+  for (const x of ts){
+    const r = rs.some(y => y.contains(x));
+    if (r && nuo < 0) nuo = poz;
+    if (r) for (let k = 0; k < x.textContent.length; k++) raud.push(poz + k);
+    poz += x.textContent.length;
+  }
+  if (nuo < 0 || t.slice(nuo).trimStart()[0] !== '[') return false;
+  const sr = nurodymoSritis(t, nuo);
+  if (!sr) return false;
+  // už skliaustų raudonai - tik skyrybos ženklai ir tarpai; kitaip (pvz. ND „[...]____“) - kaip iki šiol, visi raudoni runai
+  if (!/^[\s.,;:]*$/.test(raud.filter(k => k < sr[0] || k >= sr[1]).map(k => t[k]).join(''))) return false;
+  const iki = /^\s*$/.test(t.slice(sr[1])) ? t.length : sr[1];   // tarpai pastraipos gale - ne sakinio dalis
+  return GPGen.keisti(paras, i, [{ start: sr[0], end: iki, tekstas: beDvigubotoTasko(v, t[sr[1]]) }]) > 0;
+}
+
 /* Formuluotės peržiūra: blank - pagal planą; intarpas - raudonas šablono fragmentas keičiamas reikšme (kaip keistiRaudonaTeksta). */
 function formuluotesPerziura(q, cur){
   if (cur === '__NETAIKYTI__') return `<del class="lk-s">${esc(q.tekstas)}</del> <span class="cite">(punktas išbraukiamas)</span>`;
   const vs = GP_LAUKAI.tusciosVietos(q.tekstas).map(v => Object.assign({}, v, { klase: 'c' }));
   if (q.tipas === 'blank' && vs.length) return perziurosHTML(q.tekstas, vs, [cur].concat(new Array(Math.max(0, vs.length - 1)).fill('')));
   const r = String(q.raudonas || '').trim(), i = r ? q.tekstas.indexOf(r) : -1;
+  const sr = i >= 0 && cur && /^\[/.test(r) ? nurodymoSritis(q.tekstas, i) : null;
+  if (sr) return esc(q.tekstas.slice(0, sr[0])) + `<mark class="lk-r">${esc(beDvigubotoTasko(cur, q.tekstas[sr[1]]))}</mark>` + esc(q.tekstas.slice(sr[1]));
   if (i >= 0) return esc(q.tekstas.slice(0, i)) + (cur ? `<mark class="lk-r">${esc(cur)}</mark>` : `<mark class="lk-t">${esc(r)}</mark>`) + esc(q.tekstas.slice(i + r.length));
   return vs.length ? perziurosHTML(q.tekstas, vs.slice(0, 1), [cur]) : esc(q.tekstas);
 }
@@ -3425,6 +3460,7 @@ async function generuotiViena(d, REZ){
   const titulIdx = new Set();                        // titulo pastraipos - tarpui po pildymo
   const objIdx = new Set();                          // 2.1 "Pirkimo objektas – X" - sakinio galui
   const tekstoIdx = new Set((Z.intarpai||[]).filter(x => intarpoKat(x) === 'teksto' && !daugVietu(x)).map(x => x.i));
+  const likoNurodymas = new Set();                   // neužpildyti laužtiniai nurodymai - nejuodinami (ir įtrauktos šakos pastraipose)
   const daugIdx = new Set((Z.intarpai||[]).filter(x => intarpoKat(x) === 'teksto' && daugVietu(x)).map(x => x.i));
   const raudonuIdx = new Set((Z.raudonosPastabos||[]).map(x => x.i));
   /* Pildoma pagal laukų registro planą (laukai.js) - tą patį, kurį formoje rodo „Taip atrodys dokumente“: reikšmės
@@ -3614,7 +3650,9 @@ async function generuotiViena(d, REZ){
       if (daugIdx.has(n.i)) return;                    // keli „[...]“ - pildyta 5 zingsnyje (planas), juodinama ten
       const v = (ATS['I_' + norm(n.text)] || '').trim();
       if (v === '__NETAIKYTI__') trinti.add(n.i);
+      else if (v && irasykNurodyma(paras, n.i, v)){ juodinti.add(n.i); intTeksto++; }   // likę raudoni ženklai („. “) - sakinio dalis
       else if (v && GPGen.keistiRaudonaTeksta(paras, n.i, v)) intTeksto++;
+      else if (!v) likoNurodymas.add(n.i);           // neužpildytas lieka raudonas ir įtrauktoje šakoje (patikra rodo)
     } else if (kat === 'igaliojusios'){
       const v = igaliojusiosTekstas();                 // be reiksmes nurodymas lieka raudonas - patikra ji rodo
       if (v && GPGen.keistiRaudonaTeksta(paras, n.i, v)) intTeksto++;
@@ -3655,7 +3693,9 @@ async function generuotiViena(d, REZ){
     if (m && GPGen.keistiRaudonaTeksta(paras, i, m[3])) intTrinta++;
     else intTrinta += GPGen.trintiRaudonusRunus(paras, i);
   });
-  const nj = GPGen.juodinti(paras, [...juodinti].filter(i => !trinti.has(i)));
+  // Neužpildytas laužtinis nurodymas įtrauktos šakos pastraipoje iki 2026-10-05 būdavo pajuodinamas kartu su šaka (DPS sąlygų 2.15 p.)
+  // ir dokumente likdavo kaip tekstas, o patikra jo nematė - dabar lieka raudonas.
+  const nj = GPGen.juodinti(paras, [...juodinti].filter(i => !trinti.has(i) && !likoNurodymas.has(i)));
   lenteles.forEach(l => GPDocx.deleteTableAfter(doc, paras[l.i], l.kiek, l.numeriai));
   lenteles2.forEach(l => GPDocx.deleteNumberedTable(doc, paras[l.i], l.numeris));
   // Sablonas be lenteliu taisykles (MVP_LT_SPS), o pasirinkta „kvalifikacija netikrinama“: kvalifikacijos lentele
