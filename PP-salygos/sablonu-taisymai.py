@@ -364,6 +364,12 @@ def taisymas_tekstas(taisyk):
             (_re.compile(r'\((Annexes 1 and 2 of sub-annex 2\.2) of the Procurement conditions\)'), 'Appendices 1 and 2 to Annex ' + pe, 1)]))
         darbai.append(('DPSK_LTEN_IDARBINTAS.docx', [
             (_re.compile(r'^Pirkimo sąlygų ' + pe + r' priedo 2 priedėlis\s*/\s*(Appendix 2 to the Annex \d+) to the Procurement Conditions'), 'Appendix 2 to Annex ' + pe, 1)]))
+    # I. DPS sąlygos LT ir LT/EN (2026-10-05, naudotojo prašymas „4.1 punktas“): „ne vėliau kaip likus: 10 dienų iki pirminių paraiškų“ -
+    #    dvitaškis po „likus“ (nieko neišvardija) ir kilmininkas. To paties šablono 4.3 p. ir visuose kituose LITGRID šablonuose -
+    #    „ne vėliau kaip likus N dienoms“ (47 vietos); angliškai „no later than 10 days prior to“ - nekeičiama. Terminas nekeičiamas.
+    likus = [(_re.compile(r'ne vėliau kaip likus(:) ?10 dienų iki pirminių'), '', 1),
+             (_re.compile(r'ne vėliau kaip likus:? ?10 (dienų) iki pirminių'), 'dienoms', 1)]
+    darbai += [('DPSK_LT_SALYGOS.docx', likus), ('DPSK_LTEN_SALYGOS.docx', likus)]
     # F. Ilgasis brūkšnys (U+2014) - nei LT, nei EN versijoje (naudotojo taisyklė 2026-10-04). Šablonuose - angliškas sakinys
     #    „... no supporting documents are required[U+2014]submission of the ESPD is sufficient.“ (lietuviškai - kablelis); keičiama į
     #    „ - “ su tarpais (be tarpų žodžiai susilietų). Taikoma visiems šablonams - ir būsimiems.

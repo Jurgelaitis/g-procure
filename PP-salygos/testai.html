@@ -2453,6 +2453,23 @@ async function testaiNumeracija(){
     lygu([f.tekstai(), rf.pakeitimai.length], [PASTR.map(x => x[1]), 0], "formoje numeriai lieka kaip šablone");
   });
 
+  await testas("Po numerio - vienas skirtukas (2026-10-05, DPS sąlygų 4.1 p.): automatinis numeris su tabuliacija ir ranka įrašytas - be papildomo tarpo („4.1.<tab>Pirkimo“, „1.1. Du tarpai“), keli tarpai iš eilės (AK SPS 2.1 p. lygiavimas) lieka; DPS 4.1 p. „likus 10 dienoms“, be dvitaškio (LT ir LT/EN, sablonu-taisymai.py)", async () => {
+    const PASTR = [["Heading1", "1. SKYRIUS"], ["", "1.1.  Du tarpai."], ["", "1.2.\t Tabuliacija ir tarpas."], ["", "1.3.\t   Trys tarpai."], ["", "1.4. Vienas tarpas."], ["", "1.5.\tTabuliacija."], ["", "1.6. \tTarpas ir tabuliacija."], ["", "\t\t1.7.  Tabuliacijos prieš numerį."]];
+    const a = await gpnumDokumentas(PASTR), r = await W.eval("GPNum").sutvarkyti(a.doc, {});
+    lygu([a.tekstai(), r.tarpuPoNumerio], [["1. SKYRIUS", "1.1. Du tarpai.", "1.2.\tTabuliacija ir tarpas.", "1.3.\t   Trys tarpai.", "1.4. Vienas tarpas.", "1.5.\tTabuliacija.", "1.6.\tTarpas ir tabuliacija.", "\t\t1.7. Tabuliacijos prieš numerį."], 5], "ranka įrašyti numeriai (1.5 - be tarpo prieš tabuliaciją, kurį pridėtų keiskPradzia)");
+    const PERTEKLINIS = /^\d+(?:\.\d+)*\.?(?:[\t ][ \u00a0]\S| \t)/, TURINYS = /PAGEREF|\t\d+$/;
+    for (const [kalba, dok] of [["LT", "DPSK_LT_SALYGOS"], ["LT_EN", "DPSK_LTEN_SALYGOS"]]){
+      const docs = await generuokSu({ budas: "DPS", kalba }), P = docs[dok].pars;
+      const p41 = P.find(t => /gali būti paaiškinti, patikslinti tiekėjų iniciatyva/.test(t)) || "";
+      tiesa(/ne vėliau kaip likus 10 dienoms iki pirminių paraiškų/.test(p41) && !/likus:/.test(visasTekstas(docs)), kalba + " 4.1 p.: " + p41.slice(0, 40));
+      if (kalba === "LT") lygu([p41.slice(0, 14), (P.find(t => /^4\.2\./.test(t)) || "").slice(0, 16)], ["4.1.\tPirkimo d", "4.2.\tNesibaigus "], "4.1 ir 4.2 p. - automatinis numeris ir tabuliacija be tarpo");
+      const liko = Object.entries(docs).filter(([, x]) => !x.statinis).flatMap(([n, x]) => x.pars.filter(t => PERTEKLINIS.test(t) && !TURINYS.test(t)).map(t => n + ": " + t.slice(0, 30)));
+      lygu(liko, [], kalba + ": punktai su papildomu tarpu po numerio");
+    }
+    const ak = (await generuokSu({ budas: "S-AK" })).AK_LT_SPS.pars;
+    tiesa(ak.some(t => /^2\.1\.\t {3}Pirkimo objektas/.test(t)), "AK SPS 2.1 p.: trys tarpai po tabuliacijos lieka (lygiavimas su 2.2 p.)");
+  });
+
   await testas("Pasiūlymo galiojimo užtikrinimas taikomas, žaliųjų 4.2 - 2 šablono variantas: lieka tik pasirinktos alternatyvos, „4.2.“ numeris pereina į variantą; numeriai tekstu iš eilės (SPS, BPS), TURINYS sutampa; formoje - tiekėjo alternatyvos „1.5.“", async () => {
     const docs = await generuokSu({ budas: "S-AK", grupes: rinkis(/^jei taikomas pasiulymo galiojimo/, /^jei zalieji reikalavimai nurodomi pirkimo salygose/),
       pries: () => { const q = W.__K.formuluotes[ZAL_FID]; tiesa(q && q.variantai.length === 4, "atitikimo taisyklės klausime - 2 šablono variantai ir 2 projektai"); W.nustatykFormuluote(ZAL_FID, q.variantai[1].tekstas); } });

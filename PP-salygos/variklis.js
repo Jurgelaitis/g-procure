@@ -2202,6 +2202,37 @@ const GPNum = (() => {
     const ppr = kid(p, 'pPr');
     p.insertBefore(r, ppr ? ppr.nextSibling : p.firstChild);
   }
+  /* Po numerio - vienas skirtukas (2026-10-05, naudotojo prašymas „4.1 punktas“). Šablonuose po numerio būna ir daugiau tarpų:
+     automatinis numeris su tabuliacija, o pastraipa prasideda tarpu („4.1.<tab> Pirkimo“), ranka įrašytas numeris su tabuliacija
+     ir tarpu („9.3.<tab> Jeigu“) ar dviem tarpais („1.5.  Teikdami“) - Word ir Pages tekstą pradeda toliau nei kitų punktų; o
+     ranka įrašytam numeriui su tabuliacija („17.1.1.<tab>Sutarties“) keiskPradzia prideda tarpą prieš ją (tarpo ieško tik w:t tekste).
+     Kviečiama įrašius numerį tekstu: tarpas prieš tabuliaciją ir VIENAS papildomas tarpas po skirtuko (tabuliacijos ar tarpo)
+     šalinami - tekstas prasideda ties tabuliacijos sustojimu kaip kitų punktų. Keli tarpai iš eilės - sąmoningas lygiavimas
+     (AK ir AKV SPS 2.1 p. kabančiame atitraukime trys tarpai po tabuliacijos lygiuoja tekstą su 2.2 p.) - paliekami. Tikrinama tik
+     pastraipos pradžia (iki eilutės lūžio, paveikslo). */
+  const SUSTOK_PRADZIOJE = new Set(['br', 'cr', 'drawing', 'pict', 'object', 'sym']);
+  function tarpaiPoNumerio(p){
+    const ppr = kid(p, 'pPr');   // jame tabuliacijos sustojimai (w:tabs/w:tab) - ne tekstas
+    const vietos = []; let s = '';
+    for (const el of Array.from(p.getElementsByTagNameNS(W, '*'))){
+      if (ppr && ppr.contains(el)) continue;
+      const ln = el.localName;
+      if (ln === 't'){ const t = el.textContent; for (let i = 0; i < t.length; i++) vietos.push([el, i]); s += t; }
+      else if (ln === 'tab' || ln === 'ptab'){ vietos.push(null); s += '\t'; }
+      else if (SUSTOK_PRADZIOJE.has(ln)) break;
+      if (s.length > 80) break;
+    }
+    const m = /^[\t \u00a0]*\d+(?:\.\d+)*\.?/.exec(s);                    // prieš numerį gali būti tabuliacijos (DPS LT 7.2.1)
+    if (!m) return 0;
+    const del = [];
+    let j = m[0].length;                                                  // skirtukas
+    if (s[j] === ' ' && s[j + 1] === '\t') del.push(j++);                 // „17.1.1. <tab>“ - tarpas prieš tabuliaciją
+    if ((s[j] === '\t' || s[j] === ' ') && /[ \u00a0]/.test(s[j + 1] || '') && /\S/.test(s[j + 2] || '')) del.push(j + 1);
+    const pagal = new Map();
+    for (const i of del){ const [el, o] = vietos[i]; (pagal.get(el) || pagal.set(el, new Set()).get(el)).add(o); }
+    for (const [el, os] of pagal) el.textContent = el.textContent.split('').filter((c, i) => !os.has(i)).join('');   // indeksai - kaip vietos (UTF-16)
+    return del.length;
+  }
   /* Ranka irasyto numerio keitimas: istrinami „ilgis“ simboliai nuo pirmo ne tarpo, ju vietoje - naujas numeris. */
   function keiskPradzia(p, ilgis, naujas, tarpas){
     const ts = Array.from(p.getElementsByTagNameNS(W, 't'));
@@ -2258,8 +2289,10 @@ const GPNum = (() => {
     const pagr = sritys[0].forma ? uzfiksuok(sritys[0].S) : perskaiciuok(sritys[0].S);
     const S = pagr.concat(...sritys.slice(1).map(x => x.forma ? uzfiksuok(x.S) : perskaiciuok(x.S)));
     const pak = [];
+    let tarpu = 0;
     for (const e of S){
       const tarpas = e.lit && e.t.length > e.lit.ilgis && !/[\s ]/.test(e.t.charAt(e.lit.ilgis));   // „1.5.Tekstas“
+      let keista = true;
       if (e.zy){
         const taskas = /\.$/.test(e.zy.label) ? '.' : '';
         nuimkSarasa(e.p, e.zy.lv, d);
@@ -2267,13 +2300,15 @@ const GPNum = (() => {
         else idekZyma(e.p, e.naujas + taskas, e.kont !== 'kunas' || !e.t ? 'nothing' : e.zy.lv.suff, d);
       } else if (e.naujas !== e.lit.nr || tarpas){
         keiskPradzia(e.p, e.lit.ilgis, e.naujas + e.lit.taskas, tarpas);
-      } else continue;
-      if (e.senas !== e.naujas) pak.push({ buvo: e.senas, tapo: e.naujas, tekstas: (e.kont === 'kunas' ? e.t : e.ltTekstas) });
+      } else keista = false;
+      tarpu += tarpaiPoNumerio(e.p);
+      if (keista && e.senas !== e.naujas) pak.push({ buvo: e.senas, tapo: e.naujas, tekstas: (e.kont === 'kunas' ? e.t : e.ltTekstas) });
     }
     const toc = turinys(M, d, pagr.filter(e => e.lygis === 0 && e.skyrius));
-    doc.log.push('numeracija: ' + S.length + ' numeriu - tekstu, pakeista ' + pak.length + '; tusciu eiluciu istrinta ' + sr.tuscios.length +
+    doc.log.push('numeracija: ' + S.length + ' numeriu - tekstu, pakeista ' + pak.length + '; tarpu po numerio pasalinta ' + tarpu +
+                 '; tusciu eiluciu istrinta ' + sr.tuscios.length +
                  '; TURINYS: pakeista ' + toc.pakeista + ', istrinta ' + toc.istrinta);
-    return { numeriu: S.length, pakeitimai: pak, tusciuEiluciu: sr.tuscios.length, turinys: toc };
+    return { numeriu: S.length, pakeitimai: pak, tarpuPoNumerio: tarpu, tusciuEiluciu: sr.tuscios.length, turinys: toc };
   }
 
   return { sutvarkyti, wordZymes, modelis };
