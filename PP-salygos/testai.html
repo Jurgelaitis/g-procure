@@ -2318,6 +2318,47 @@ async function testaiLenteles(){
     lygu([pastr(e.DPSK_LTEN_SALYGOS.xml, /^Perkantysis subjektas numato įsigyti/), pastr(e.DPSK_LTEN_SALYGOS.xml, /^The Contracting Entity intends to procure/)],
       [["Perkantysis subjektas numato įsigyti " + O + ".", ""], ["The Contracting Entity intends to procure " + OE + ".", ""]], "3.1 LT/EN - vienas taškas");
   });
+  await testas("DPS sąlygų 3.5 p. (2026-10-05): be kategorijų - klausimas „Kokia DPS maksimali numatoma apimtis (vertė be PVM)?“, siūloma 1 žingsnio vertė (LT ir EN, nepatvirtinta); su kategorijomis - klausimai LT ir EN, užpildytas laukas įrašomas, neužpildytas lieka raudonas (iki tol pajuodindavo su šaka)", async () => {
+    const RAUD = /^(FF0000|C00000|ED1C24)$/i;
+    const pastr = (xml, re) => { const d = new W.DOMParser().parseFromString(xml, "application/xml");
+      const p = Array.from(d.getElementsByTagNameNS(NSW, "p")).find(q => re.test(txW(q)));
+      return p ? [txW(p), Array.from(p.getElementsByTagNameNS(NSW, "r")).filter(r => Array.from(r.getElementsByTagNameNS(NSW, "color")).some(c => RAUD.test(atW(c, "val")))).map(txW).join("").trim()] : null; };
+    const kat = taip => g => /kategorij/.test(g.nariai[0].tekstas) ? g.nariai.find(n => taip !== /ne(skirstom|ra suskirstyt)|nėra suskirstyt/.test(n.tekstas)) : null;
+    const fid = () => Object.keys(W.__K.formuluotes).find(f => /maksimali numatoma apimtis: \[nurodyti/.test(W.__K.formuluotes[f].tekstas));
+    const a = await generuokSu({ budas: "DPS", kalba: "LT_EN", verte: "1 500 000", grupes: kat(false), pries: () => {
+      const f = fid(), en = "I_" + W.__K.enPoros.formuluotes[f].enRaktas, k = "I_" + W.__K.formuluotes[f].raktas, SIUL = W.eval("SIUL"), PATV = W.eval("PATV");
+      lygu([ATS()[k], (SIUL.get(k) || {}).saltinis, PATV.has(k), ATS()[en], (SIUL.get(en) || {}).saltinis],
+        ["1 500 000 Eur be PVM", "1 žingsnio numatoma pirkimo vertė (be PVM)", false, "1 500 000 EUR excluding VAT", "1 žingsnio numatoma pirkimo vertė (be PVM)"], "siūloma iš 1 žingsnio, nepatvirtinta");
+      const kort = D.getElementById(W.lkId("formuluote|" + f));
+      tiesa(kort && kort.querySelector(".lk-kl").textContent.trim() === "Kokia DPS maksimali numatoma apimtis (vertė be PVM)?" && kort.querySelector("label.lk-v-l").textContent.trim() === "Vertė be PVM", "kortelė: " + (kort ? kort.innerText.slice(0, 200) : "nėra")); } });
+    lygu([pastr(a.DPSK_LTEN_SALYGOS.xml, /^DPS maksimali numatoma apimtis:/), pastr(a.DPSK_LTEN_SALYGOS.xml, /^The maximum estimated value of the DPS:/)],
+      [["DPS maksimali numatoma apimtis: 1 500 000 Eur be PVM.", ""], ["The maximum estimated value of the DPS: 1 500 000 EUR excluding VAT.", ""]], "be kategorijų - įrašyta");
+    // su kategorijomis: LT užpildytas, EN - ne
+    const b = await generuokSu({ budas: "DPS", kalba: "LT_EN", verte: "1 500 000", grupes: kat(true), pries: () => {
+      const q = Object.entries(W.__K.tuscios).filter(([, x]) => x.lk && /^dps-kategoriju-apimtis/.test(x.lk.tipas));
+      lygu(q.map(([, x]) => [x.tekstas.slice(0, 16), x.lk.klausimas, x.lk.vietos.map(v => v.uzrasas)]), [
+        ["DPS kategorijos ", "Kokios DPS kategorijos ir kokia jų maksimali numatoma apimtis (vertė be PVM)?", ["DPS kategorija (-os)", "Maksimali numatoma apimtis (vertė be PVM)"]],
+        ["Maximum estimate", "Kokios DPS kategorijos ir kokia jų maksimali numatoma apimtis (vertė be PVM) - anglų kalba?", ["DPS kategorija (-os) anglų kalba", "Maksimali numatoma apimtis anglų kalba"]]], "klausimai LT ir EN");
+      const lt = q.find(([, x]) => /^DPS kategorijos/.test(x.tekstas))[0];
+      W.uAtsArr("B_" + lt, 0, "1 ir 2"); W.uAtsArr("B_" + lt, 1, "500 000 Eur be PVM"); } });
+    lygu(pastr(b.DPSK_LTEN_SALYGOS.xml, /^DPS kategorijos/), ["DPS kategorijos 1 ir 2 maksimali numatoma apimtis 500 000 Eur be PVM.", ""], "su kategorijomis LT - įrašyta");
+    const e = pastr(b.DPSK_LTEN_SALYGOS.xml, /^Maximum estimated value for DPS categories/);
+    tiesa(e && /^\[insert specific category name\(s\)\]/.test(e[1]) && /\[insert value excluding VAT\]/.test(e[1]), "su kategorijomis EN neužpildyta - turi likti raudona: " + JSON.stringify(e));
+  });
+  await testas("DPS kategorijos (2026-10-05, naudotojo sprendimas): vienas klausimas „Ar DPS skirstoma į kategorijas?“ vietoj trijų grupių; kitos dvi vietos (3.5 p., paraiškos kategorijoms) seka atsakymą - dokumente visur tas pats variantas (LT ir LT/EN, abu atsakymai)", async () => {
+    const kat = taip => g => /kategorij/.test(g.nariai[0].tekstas) ? g.nariai.find(n => taip !== /neskirstom|nėra suskirstyt/.test(n.tekstas)) : null;
+    for (const [kalba, dok] of [["LT", "DPSK_LT_SALYGOS"], ["LT_EN", "DPSK_LTEN_SALYGOS"]]) for (const taip of [true, false]){
+      const docs = await generuokSu({ budas: "DPS", kalba, grupes: kat(taip), pries: () => {
+        const g = Object.values(W.__K.grupes).filter(x => x.nariai.some(n => /kategorij/.test(n.tekstas)));
+        lygu([g.length, W.GP_LAUKAI.grupesKlausimas(g[0].nariai) && W.GP_LAUKAI.grupesKlausimas(g[0].nariai).klausimas], [1, "Ar DPS skirstoma į kategorijas?"], kalba + ": vienas klausimas");
+        tiesa(W.__K.automatika.filter(a => /seka atsakymą „Ar DPS skirstoma į kategorijas\?“/.test(a.kodel)).length === 2, kalba + ": dvi sekančios vietos automatikoje"); } });
+      const J = docs[dok].pars.join("\n");                // ir lentelių langeliai (dvikalbės sąlygos - lentelė)
+      const yra = [/DPS (nėra skirstomas į kategorijas|skirstomas į \[)/.exec(J), /DPS (maksimali numatoma apimtis:|kategorijos \[)/.exec(J), /(Tiekėjas gali pateikti tik vieną paraišką|Tiekėjai gali pateikti paraiškas vienai, kelioms ar visoms kategorijoms)/.exec(J)].map(m => m && m[1]);
+      lygu(yra, taip ? ["skirstomas į [", "kategorijos [", "Tiekėjai gali pateikti paraiškas vienai, kelioms ar visoms kategorijoms"]
+        : ["nėra skirstomas į kategorijas", "maksimali numatoma apimtis:", "Tiekėjas gali pateikti tik vieną paraišką"], kalba + (taip ? " skirstoma" : " neskirstoma") + ": visos trys vietos - tas pats variantas");
+      tiesa(!/^(Jeigu|Jei|Kai) DPS [^,.\n]*kategorijas$/m.test(J), kalba + ": liko sąlygos antraštė");     // 12.1 p. „Jeigu DPS suskirstyta ..., tiekėjai“ - tekstas
+    }
+  });
   await testas("Tušti puslapiai (GPDocx.pertekliniaiLuziai): puslapio lūžis, po kurio iki naujo puslapio skyriaus ar dokumento pabaigos - tik tuščios pastraipos, šalinamas; lūžis prieš tekstą, prieš „continuous“ skyrių ir su tekstu po jo - lieka; tekstas nepakitęs", async () => {
     const br = '<w:r><w:br w:type="page"/></w:r>', P = t => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`, T = '<w:p/>';
     const sp = (tipas = "") => `<w:sectPr>${tipas ? `<w:type w:val="${tipas}"/>` : ""}<w:pgSz w:w="11906" w:h="16838"/></w:sectPr>`;

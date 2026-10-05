@@ -24,6 +24,7 @@ būseną PRIEŠ pakeitimus (tyrimas, commit 59cf088).
 | Vieta | Klausimas | Būsena |
 |---|---|---|
 | Alternatyvos „Jei Pirkimo objektas į dalis neskaidomas / skaidomas į dalis“ | Ar pirkimo objektas skaidomas į dalis? | patvirtinta, įgyvendinta |
+| DPS sąlygų alternatyvos „Jeigu DPS (ne)skirstoma į kategorijas“ (3.3 p.), „Jei DPS (ne)skirstomas ...“ (3.5 p.), „Kai DPS (nėra) suskirstyta ...“ (paraiškos kategorijoms) | Ar DPS skirstoma į kategorijas? | naudotojo sprendimas 2026-10-05: vienas klausimas, kitos dvi vietos seka atsakymą (`SUSIETOS_GRUPES`) |
 | Alternatyvos „Jei numatoma / nenumatoma kviesti stebėtojus“ | Ar į komisijos posėdžius kviečiami stebėtojai? | patvirtinta, įgyvendinta |
 | Alternatyvos dėl pašalinimo pagrindų ir kvalifikacijos | Du klausimai (naudotojo pasiūlymas): „Ar tikrinate tik pašalinimo pagrindus ar ir kvalifikaciją?“ („Tik pašalinimo pagrindus“ / „Pašalinimo pagrindus ir kvalifikaciją“) ir „Tik galimo laimėtojo ar visų tiekėjų tikriname?“ („Tik galimo laimėtojo“ / „Visų tiekėjų“) | įgyvendinta: variantas parenkamas pagal abu atsakymus; šablone nesantis derinys (AK, AKV, SSD, TSD - „visų tiekėjų, tik pašalinimo pagrindai“) nepasirenkamas ir pažymėtas; vienintelis - parenkamas ir pasakoma; ND ir MVP LT antro klausimo nėra (pasakoma kodėl); visi šablono variantai - „?“ paaiškinime |
 | Alternatyvos „Jei žalieji reikalavimai nurodyti TS / pirkimo sąlygose“ | Kur nustatomi žalieji reikalavimai? | patvirtinta, įgyvendinta |
