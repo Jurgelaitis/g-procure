@@ -387,7 +387,7 @@ Inicializuoja PDF.js worker'į iš cdnjs CDN.
    ```
 
 4. **Backend konfigūracija (jei reikia atstatyti):**
-   - Serveris: `178.105.219.33` (g-procure-server)
+   - Serveris: g-procure-server (adresas ir prieiga - ne viešoje saugykloje)
    - Backend kelias: `/var/www/g-procure/index.js`
    - PM2 procesas: `g-procure`
    - Nginx config: `/etc/nginx/sites-enabled/g-procure` su `proxy_read_timeout 300s` ir CORS `always`
