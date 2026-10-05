@@ -679,6 +679,50 @@ const GPDocx = (() => {
     return n;
   }
 
+  /* ---------- DI POŽYMIAI (2026-10-05, DI akto 50 str. 2 d.; shared/di-zymejimas.js) ----------
+     Savi Word požymiai docProps/custom.xml (savybes - [{ name, value }]): jei šablone failas jau yra (ND LT/EN SPS - MSIP žymos),
+     papildomas (to paties vardo požymis perrašomas, pid - po didžiausio), kitaip sukuriamas su [Content_Types] įrašu ir ryšiu
+     _rels/.rels. Grąžina įrašytų požymių skaičių. */
+  async function diPozymiai(doc, savybes){
+    if (!savybes || !savybes.length) return 0;
+    const NS_CP = 'http://schemas.openxmlformats.org/officeDocument/2006/custom-properties';
+    const NS_VT = 'http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes';
+    const FMT = '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}';
+    if (!doc.zip.file('docProps/custom.xml')){
+      doc.zip.file('docProps/custom.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="${NS_CP}" xmlns:vt="${NS_VT}"/>`, { createFolders:false });
+      const ct = await part(doc, '[Content_Types].xml');
+      if (!Array.from(ct.getElementsByTagNameNS(NS_CT, 'Override')).some(o => o.getAttribute('PartName') === '/docProps/custom.xml')){
+        const ov = ct.createElementNS(NS_CT, 'Override');
+        ov.setAttribute('PartName', '/docProps/custom.xml');
+        ov.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.custom-properties+xml');
+        ct.documentElement.appendChild(ov);
+      }
+      const rels = await part(doc, '_rels/.rels');
+      const TIPAS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties';
+      const rs = Array.from(rels.getElementsByTagNameNS(NS_REL, 'Relationship'));
+      if (!rs.some(r => r.getAttribute('Type') === TIPAS)){
+        const used = new Set(rs.map(r => r.getAttribute('Id')));
+        let j = 1; while (used.has('rId' + j)) j++;
+        const rel = rels.createElementNS(NS_REL, 'Relationship');
+        rel.setAttribute('Id', 'rId' + j); rel.setAttribute('Type', TIPAS); rel.setAttribute('Target', 'docProps/custom.xml');
+        rels.documentElement.appendChild(rel);
+      }
+    }
+    const x = await part(doc, 'docProps/custom.xml'), root = x.documentElement;
+    const esami = Array.from(root.getElementsByTagNameNS(NS_CP, 'property'));
+    let pid = esami.reduce((m, p) => Math.max(m, parseInt(p.getAttribute('pid'), 10) || 1), 1);
+    for (const { name, value } of savybes){
+      const senas = esami.find(p => p.getAttribute('name') === name);
+      if (senas) senas.parentNode.removeChild(senas);
+      const p = x.createElementNS(NS_CP, 'property');
+      p.setAttribute('fmtid', FMT); p.setAttribute('pid', String(++pid)); p.setAttribute('name', String(name));
+      const v = x.createElementNS(NS_VT, 'vt:lpwstr'); v.textContent = String(value);
+      p.appendChild(v); root.appendChild(p);
+    }
+    note(doc, 'DI požymiai: ' + savybes.length);
+    return savybes.length;
+  }
+
   /* ---------- DVIGUBI TARPAI (2026-10-05, naudotojo leidimas redakcinėms korekcijoms) ----------
      Ta pati taisyklė kaip sablonu-taisymai.py J, tik galutiniam tekstui po numeracijos: šablonuose raudonas tekstas (sąlygos,
      nurodymai) neliečiamas - pagal jį randamos vietos, o generuojant jis tampa juodu („nurodytus SPS  7.2. punkte“). Tarp žodžio,
@@ -875,7 +919,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai, diPozymiai,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 
