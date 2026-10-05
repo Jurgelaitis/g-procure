@@ -679,6 +679,52 @@ const GPDocx = (() => {
     return n;
   }
 
+  /* ---------- DVIGUBI TARPAI (2026-10-05, naudotojo leidimas redakcinėms korekcijoms) ----------
+     Ta pati taisyklė kaip sablonu-taisymai.py J, tik galutiniam tekstui po numeracijos: šablonuose raudonas tekstas (sąlygos,
+     nurodymai) neliečiamas - pagal jį randamos vietos, o generuojant jis tampa juodu („nurodytus SPS  7.2. punkte“). Tarp žodžio,
+     skaičiaus ar skyrybos 2-3 tarpai -> vienas, 4-6 - tik tarp raidžių ar skaitmenų. Neliečiama: likęs raudonas (neužpildytas
+     nurodymas) ir pabrauktas tekstas (pildymo linija), turinys, tarpai prie tabuliacijos, NBSP, „____“, „[   ]“, „(pareigos)
+     (parašas)“, 7 ir daugiau tarpų (išdėstymas). Grąžina pašalintų tarpų skaičių. */
+  const RAUDONA = ['FF0000', 'C00000', 'ED1C24'], PRIES_TARPA = '.,;:!?)»“”"\'%', PO_TARPO = '(„"\'«–-';
+  const ZODIS = /[\p{L}\p{N}]/u, TARPAS = /\s/;
+  function dvigubiTarpai(doc){
+    let n = 0;
+    for (const [vardas, d] of Object.entries(doc.parts || {})){
+      if (!/^word\/(document|footnotes|endnotes|header\d*|footer\d*)\.xml$/.test(vardas) || !d || !d.getElementsByTagNameNS) continue;
+      for (const p of els(d, 'p')){
+        if (els(p, 'txbxContent').length || els(p, 'instrText').some(t => /PAGEREF/.test(t.textContent))) continue;
+        const st = els(p, 'pStyle')[0];
+        if (st && /^toc/i.test(st.getAttributeNS(NS_W, 'val') || '')) continue;
+        const vietos = []; let s = '';
+        for (const r of els(p, 'r')){
+          const rpr = Array.from(r.childNodes).find(c => c.localName === 'rPr');
+          const spalva = rpr && Array.from(rpr.childNodes).find(c => c.localName === 'color');
+          const pabr = rpr && Array.from(rpr.childNodes).find(c => c.localName === 'u');
+          const zyme = (spalva && RAUDONA.includes((spalva.getAttributeNS(NS_W, 'val') || '').toUpperCase()))
+            || (pabr && (pabr.getAttributeNS(NS_W, 'val') || 'single') !== 'none');
+          for (const c of Array.from(r.childNodes)){
+            if (c.localName === 't'){ const t = c.textContent; for (let i = 0; i < t.length; i++) vietos.push({ el: c, i, zyme }); s += t; }
+            else if (['tab', 'ptab', 'br', 'cr', 'drawing', 'pict', 'object', 'sym'].includes(c.localName)){ vietos.push(null); s += '\t'; }
+          }
+        }
+        const salinti = new Map();
+        for (const m of s.matchAll(/ {2,}/g)){
+          const a = m.index, b = a + m[0].length;
+          if (!a || b >= s.length || vietos.slice(a - 1, b + 1).some(v => !v || v.zyme)) continue;
+          const pr = s[a - 1], po = s[b];
+          if (TARPAS.test(pr) || TARPAS.test(po)) continue;
+          const ok = b - a <= 3 ? (ZODIS.test(pr) || PRIES_TARPA.includes(pr)) && (ZODIS.test(po) || PO_TARPO.includes(po)) && !(pr === ')' && po === '(')
+            : b - a <= 6 && ZODIS.test(pr) && ZODIS.test(po);
+          if (!ok) continue;
+          for (let k = a + 1; k < b; k++){ const v = vietos[k]; (salinti.get(v.el) || salinti.set(v.el, new Set()).get(v.el)).add(v.i); }
+          n += b - a - 1;
+        }
+        for (const [el, is] of salinti) el.textContent = el.textContent.split('').filter((c, i) => !is.has(i)).join('');
+      }
+    }
+    return n;
+  }
+
   /* ---------- TURINIO SPRAGOS (2026-10-04, naudotojo prašymas: DPS LT sąlygų turinyje nėra 10 skyriaus) ----------
      Šablone skyriaus antraštė gali būti ne antraštės stiliumi ir be turinio žymės (DPSK_LT_SALYGOS 10 sk. - ListParagraph, kitų
      skyrių - Heading3), tad turinyje jos nėra ir Word jos neįtrauktų net atnaujindamas laukus. Jei numeruota DIDŽIOSIOMIS
@@ -829,7 +875,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 
@@ -2206,10 +2252,12 @@ const GPNum = (() => {
      automatinis numeris su tabuliacija, o pastraipa prasideda tarpu („4.1.<tab> Pirkimo“), ranka įrašytas numeris su tabuliacija
      ir tarpu („9.3.<tab> Jeigu“) ar dviem tarpais („1.5.  Teikdami“) - Word ir Pages tekstą pradeda toliau nei kitų punktų; o
      ranka įrašytam numeriui su tabuliacija („17.1.1.<tab>Sutarties“) keiskPradzia prideda tarpą prieš ją (tarpo ieško tik w:t tekste).
-     Kviečiama įrašius numerį tekstu: tarpas prieš tabuliaciją ir VIENAS papildomas tarpas po skirtuko (tabuliacijos ar tarpo)
-     šalinami - tekstas prasideda ties tabuliacijos sustojimu kaip kitų punktų. Keli tarpai iš eilės - sąmoningas lygiavimas
-     (AK ir AKV SPS 2.1 p. kabančiame atitraukime trys tarpai po tabuliacijos lygiuoja tekstą su 2.2 p.) - paliekami. Tikrinama tik
-     pastraipos pradžia (iki eilutės lūžio, paveikslo). */
+     Kviečiama įrašius numerį tekstu: šalinamas tarpas prieš tabuliaciją, vienas papildomas tarpas po skirtuko, o pastraipoje su
+     nuliniu atitraukimu (w:ind - visi 0) - visi tarpai po tabuliacijos („11.11.<tab>  Vadovaujantis“ - tekstas prasideda ties
+     tabuliacijos sustojimu kaip kaimyninių punktų). Paliekama: keli tarpai po tabuliacijos atitrauktoje pastraipoje (ar be savo
+     w:ind - atitraukimą tada duoda stilius) - ten tarpai lygiuoja tekstą su kitais punktais (AK SPS 2.1 p. kabantis atitraukimas,
+     AKV SPS 2.1 p. kairysis 360 - trys tarpai); keli tarpai po tarpo (lygiavimas tarpais). Tikrinama tik pastraipos pradžia
+     (iki eilutės lūžio, paveikslo). */
   const SUSTOK_PRADZIOJE = new Set(['br', 'cr', 'drawing', 'pict', 'object', 'sym']);
   function tarpaiPoNumerio(p){
     const ppr = kid(p, 'pPr');   // jame tabuliacijos sustojimai (w:tabs/w:tab) - ne tekstas
@@ -2227,7 +2275,12 @@ const GPNum = (() => {
     const del = [];
     let j = m[0].length;                                                  // skirtukas
     if (s[j] === ' ' && s[j + 1] === '\t') del.push(j++);                 // „17.1.1. <tab>“ - tarpas prieš tabuliaciją
-    if ((s[j] === '\t' || s[j] === ' ') && /[ \u00a0]/.test(s[j + 1] || '') && /\S/.test(s[j + 2] || '')) del.push(j + 1);
+    if (s[j] === '\t'){                                                  // po tabuliacijos - visi tarpai, jei atitraukimas nulinis
+      let k = j + 1; while (s[k] === ' ' || s[k] === '\u00a0') k++;        // (kitaip tarpai gali lygiuoti tekstą su kitais punktais)
+      const ind = ppr && kid(ppr, 'ind');
+      const nulinis = !!ind && ['left', 'start', 'hanging', 'firstLine'].every(a => !+(ind.getAttributeNS(W, a) || 0));
+      if (k > j + 1 && /\S/.test(s[k] || '') && (k === j + 2 || nulinis)) for (let i = j + 1; i < k; i++) del.push(i);
+    } else if (s[j] === ' ' && /[ \u00a0]/.test(s[j + 1] || '') && /\S/.test(s[j + 2] || '')) del.push(j + 1);
     const pagal = new Map();
     for (const i of del){ const [el, o] = vietos[i]; (pagal.get(el) || pagal.set(el, new Set()).get(el)).add(o); }
     for (const [el, os] of pagal) el.textContent = el.textContent.split('').filter((c, i) => !os.has(i)).join('');   // indeksai - kaip vietos (UTF-16)
