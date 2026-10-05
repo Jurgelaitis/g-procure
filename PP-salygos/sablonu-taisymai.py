@@ -332,6 +332,9 @@ def taisymas_tekstas(taisyk):
                   _re.compile(r'^(\d+) priedas\s*[–-]\s*Sandorio šalies'))
     dps = [(_re.compile(r'^\s*(ANEXXES)\s*$'), 'ANNEXES', 1)]
     if nd: dps.append((_re.compile(r'^Annex (\d+)\s*[–-]\s*Counterparty'), nd, 1))
+    #    2026-10-05 (naudotojo prašymas): pirmoje pastraipoje prieš antraštės lentelę - pavienis žodis „Linti“ (rengimo likutis;
+    #    vienkalbėse DPS konkretaus pirkimo sąlygose jo nėra). Tekstas pašalinamas, pastraipa lieka - žemėlapio numeracija nesikeičia.
+    dps.append((_re.compile(r'^(Linti)$'), '', 1))
     darbai.append(('DPSP_LTEN_SALYGOS.docx', dps))
     # F. Ilgasis brūkšnys (U+2014) - nei LT, nei EN versijoje (naudotojo taisyklė 2026-10-04). Šablonuose - angliškas sakinys
     #    „... no supporting documents are required[U+2014]submission of the ESPD is sufficient.“ (lietuviškai - kablelis); keičiama į

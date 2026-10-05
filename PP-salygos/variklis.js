@@ -346,6 +346,155 @@ const GPDocx = (() => {
     return false;
   }
 
+  /* Plaukiojantis pirmo puslapio antraštės logotipas virš lentelės (2026-10-05, naudotojo prašymas; matuota Pages): paveikslas
+     su „wrapTopAndBottom“ (wp:anchor), kurio apačia žemiau viršutinės paraštės, o dokumentas prasideda lentele. Pages plaukiojančio
+     antraštės paveikslo apačios nepaiso ir lentelę piešia ant logotipo (DPS sukūrimo ir konkretaus pirkimo LT/EN sąlygos).
+     Paveikslas tampa įdėtiniu (wp:inline) toje pačioje antraštės pastraipoje - antraštė apima logotipą, tekstas prasideda po juo.
+     Vieta išlaikoma: horizontaliai - tas pats centras (pastraipa centruojama, įtrauka - jei šablone centras ne teksto srities
+     viduryje), teigiamas vertikalus poslinkis - antraštės atstumas nuo krašto. Kai pirmas turinys - tekstas (formos: „SPS priedas Nr.“
+     dešinėje šalia logotipo), nekeičiama. Grąžina pakeistų paveikslų skaičių. */
+  const twip = emu => Math.round(Number(emu || 0) / 635);
+  const PPR_PO_SPACING = ['ind','contextualSpacing','mirrorIndents','suppressOverlap','jc','textDirection','textAlignment','textboxTightWrap','outlineLvl','divId','cnfStyle','rPr','sectPr','pPrChange'];
+  function pPrVaikas(p, vardas, po){
+    let pPr = Array.from(p.childNodes).find(c => c.localName === 'pPr');
+    if (!pPr){ pPr = p.ownerDocument.createElementNS(NS_W, 'w:pPr'); p.insertBefore(pPr, p.firstChild); }
+    let el = Array.from(pPr.childNodes).find(c => c.localName === vardas);
+    if (!el){
+      el = p.ownerDocument.createElementNS(NS_W, 'w:' + vardas);
+      const pries = Array.from(pPr.childNodes).find(c => po.includes(c.localName));
+      pPr.insertBefore(el, pries || null);
+    }
+    return el;
+  }
+  async function antrastesLogotipas(doc){
+    const d = doc.parts['word/document.xml'], body = els(d,'body')[0];
+    if (!body) return 0;
+    const pirmas = Array.from(body.childNodes).find(c => c.nodeType === 1 && (c.localName === 'tbl' || c.localName === 'sdt'
+      || (c.localName === 'p' && (paraText(c).trim() || els(c,'drawing').length))));
+    if (!pirmas || pirmas.localName !== 'tbl') return 0;
+    const sp = els(d,'sectPr')[0], relsF = doc.zip.file('word/_rels/document.xml.rels');
+    if (!sp || !relsF) return 0;
+    const a = (el, v) => el ? Number(el.getAttributeNS(NS_W, v) || el.getAttribute('w:' + v) || 0) : 0;
+    const mar = els(sp,'pgMar')[0], pg = els(sp,'pgSz')[0];
+    const top = a(mar,'top'), hd = a(mar,'header'), L = a(mar,'left'), R = a(mar,'right'), W = a(pg,'w');
+    const tp = els(sp,'titlePg')[0], pirmasPsl = tp && !/^(0|false)$/.test(tp.getAttributeNS(NS_W,'val') || tp.getAttribute('w:val') || '');
+    const ref = els(sp,'headerReference').find(h => (h.getAttributeNS(NS_W,'type') || h.getAttribute('w:type')) === (pirmasPsl ? 'first' : 'default'));
+    if (!ref) return 0;
+    const id = ref.getAttributeNS(NS_R,'id') || ref.getAttribute('r:id');
+    const rels = parseXml(await relsF.async('string'));
+    const rel = Array.from(rels.getElementsByTagNameNS(NS_REL,'Relationship')).find(r => r.getAttribute('Id') === id);
+    if (!rel) return 0;
+    // antraštė skaitoma atskirai ir į doc.parts patenka tik pakeista: įkelta dalis įrašant perrašoma (ir nepakeista)
+    const kelias = 'word/' + String(rel.getAttribute('Target') || '').replace(/^\/?(word\/)?/, '');
+    const hf = !doc.parts[kelias] && doc.zip.file(kelias);
+    const h = doc.parts[kelias] || (hf ? parseXml(await hf.async('string')) : null);
+    if (!h) return 0;
+    let n = 0;
+    for (const an of Array.from(h.getElementsByTagNameNS(NS_WP,'anchor'))){
+      if (!an.getElementsByTagNameNS(NS_WP,'wrapTopAndBottom').length) continue;
+      const vaikas = (el, vardas) => Array.from(el.childNodes).find(c => c.localName === vardas) || null;
+      const pv = vaikas(an,'positionV'), ph = vaikas(an,'positionH'), ext = vaikas(an,'extent');
+      const pvOff = pv && vaikas(pv,'posOffset');
+      if (!pv || !pvOff || !ext) continue;
+      const nuo = pv.getAttribute('relativeFrom'), off = twip(pvOff.textContent), cy = twip(ext.getAttribute('cy')), cx = twip(ext.getAttribute('cx'));
+      const pradzia = { page: 0, topMargin: 0, margin: top, paragraph: hd, line: hd }[nuo];
+      if (pradzia == null || pradzia + off + cy <= top) continue;
+      let p = an.parentNode; while (p && p.localName !== 'p') p = p.parentNode;
+      if (!p || paraText(p).trim()) continue;                      // antraštės pastraipoje - tik paveikslas
+      // horizontalus centras teksto srities atžvilgiu
+      const tw = W - L - R, phAl = ph && vaikas(ph,'align'), phOff = ph && vaikas(ph,'posOffset');
+      const phNuo = ph ? ph.getAttribute('relativeFrom') : 'column';
+      let X = tw / 2;
+      if (phAl && /center/.test(phAl.textContent)) X = phNuo === 'page' ? W / 2 - L : tw / 2;
+      else if (phOff) X = (phNuo === 'page' ? twip(phOff.textContent) - L : twip(phOff.textContent)) + cx / 2;
+      const inl = h.createElementNS(NS_WP, 'wp:inline');
+      ['distT','distB','distL','distR'].forEach(x => inl.setAttribute(x, '0'));
+      ['extent','effectExtent','docPr','cNvGraphicFramePr'].forEach(v => { const c = vaikas(an, v); if (c) inl.appendChild(c.cloneNode(true)); });
+      const gr = an.getElementsByTagNameNS(NS_A,'graphic')[0];
+      if (!gr) continue;
+      inl.appendChild(gr.cloneNode(true));
+      an.parentNode.replaceChild(inl, an);
+      // teigiamas poslinkis žemyn nuo antraštės pastraipos - antraštės atstumas nuo lapo krašto (tarpo prieš antraštės pastraipą
+      // Pages nepaiso: logotipas atsidurdavo 0,2 cm nuo krašto); kitų puslapių antraštės DPS sąlygose tuščios
+      if (off > 0 && (nuo === 'paragraph' || nuo === 'line')) mar.setAttributeNS(NS_W, 'w:header', String(hd + off));
+      const dx = Math.round(2 * X - tw);
+      if (Math.abs(dx) > 20){
+        const ind = pPrVaikas(p, 'ind', PPR_PO_SPACING.slice(1));
+        ind.setAttributeNS(NS_W, dx > 0 ? 'w:left' : 'w:right', String(Math.abs(dx)));
+      }
+      pPrVaikas(p, 'jc', PPR_PO_SPACING.slice(5)).setAttributeNS(NS_W, 'w:val', 'center');
+      n++;
+    }
+    if (n){ doc.parts[kelias] = h; note(doc, `Antraštės logotipas virš lentelės - įdėtinis (${n}).`); }
+    return n;
+  }
+
+  /* Pirmo puslapio antraštė Pages (2026-10-05, naudotojo prašymas): Pages antraštes ir poraštes rodo tik tada, kai bent viena
+     poraštė arba ne pirmo puslapio antraštė turi turinio. Matuota Pages: 13 LT šablonų (SPS, pasiūlymo formos, konfidenciali
+     informacija, TSD paraiška) logotipas yra tik pirmo puslapio antraštėje, o kitos dalys tuščios - logotipo nerodo; tuščia
+     įprasta antraštė ar tuščia pirmo puslapio poraštė nepadeda, vienas tarpas tuščioje poraštėje - padeda. Todėl tokiu atveju į
+     įprastą poraštę (jos nesant - į naują) įrašomas vienas tarpas (nematomas). Be „titlePg“ pirmo puslapio antraštės nenaudoja
+     ir Word (TSD LT paraiška) - jis pridedamas, kai įprastos antraštės nėra (ji negali dingti). Grąžina { titlePg, tarpas }. */
+  const SECTPR_PO_TITLEPG = ['textDirection','bidi','rtlGutter','docGrid','printerSettings','sectPrChange'];
+  const TURINYS_RE = /<w:t(?:\s[^>]*)?>[^<]*\S|<w:drawing\b|<w:pict\b|<w:fldSimple\b|<w:instrText\b/;
+  async function pirmoPuslapioAntraste(doc){
+    const out = { titlePg: false, tarpas: false };
+    const d = doc.parts['word/document.xml'], sp = els(d,'sectPr')[0], relsF = doc.zip.file('word/_rels/document.xml.rels');
+    if (!sp || !relsF) return out;
+    const relsD = doc.parts['word/_rels/document.xml.rels'] || parseXml(await relsF.async('string'));
+    const tikslas = id => { const r = Array.from(relsD.getElementsByTagNameNS(NS_REL,'Relationship')).find(x => x.getAttribute('Id') === id);
+      return r ? 'word/' + String(r.getAttribute('Target') || '').replace(/^\/?(word\/)?/, '') : null; };
+    const tekstas = async kel => doc.parts[kel] ? ser.serializeToString(doc.parts[kel]) : (doc.zip.file(kel) ? await doc.zip.file(kel).async('string') : '');
+    const refs = [];
+    for (const el of Array.from(sp.childNodes).filter(c => c.localName === 'headerReference' || c.localName === 'footerReference')){
+      const kel = tikslas(el.getAttributeNS(NS_R,'id') || el.getAttribute('r:id'));
+      refs.push({ el, rusis: el.localName === 'headerReference' ? 'header' : 'footer', tipas: el.getAttributeNS(NS_W,'type') || el.getAttribute('w:type') || 'default',
+        kel, turinys: kel ? TURINYS_RE.test(await tekstas(kel)) : false });
+    }
+    if (!refs.some(r => r.rusis === 'header' && r.tipas === 'first' && r.turinys)) return out;
+    const tp = els(sp,'titlePg')[0];
+    if (!tp && !refs.some(r => r.rusis === 'header' && r.tipas === 'default')){
+      const el = d.createElementNS(NS_W, 'w:titlePg');
+      sp.insertBefore(el, Array.from(sp.childNodes).find(c => SECTPR_PO_TITLEPG.includes(c.localName)) || null);
+      out.titlePg = true;
+    }
+    if (refs.some(r => r.turinys && !(r.rusis === 'header' && r.tipas === 'first'))) return out;
+    const tarpasP = x => { const r = x.createElementNS(NS_W, 'w:r'), t = x.createElementNS(NS_W, 'w:t');
+      t.setAttribute('xml:space', 'preserve'); t.textContent = ' '; r.appendChild(t); return r; };
+    const pr = refs.find(r => r.rusis === 'footer' && r.tipas === 'default' && r.kel && doc.zip.file(r.kel));
+    if (pr){
+      const f = await part(doc, pr.kel);
+      let p = f.getElementsByTagNameNS(NS_W,'p')[0];
+      if (!p){ p = f.createElementNS(NS_W, 'w:p'); f.documentElement.appendChild(p); }
+      p.appendChild(tarpasP(f));
+    } else {
+      // nauja įprasta poraštė su vienu tarpu: dalis, ryšys, turinio tipas, nuoroda skyriuje (nuorodos - sectPr pradžioje)
+      let k = 1; while (doc.zip.file('word/footerGP' + k + '.xml')) k++;
+      const vardas = 'footerGP' + k + '.xml';
+      doc.zip.file('word/' + vardas, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr xmlns:w="${NS_W}"><w:p><w:pPr><w:pStyle w:val="Footer"/></w:pPr><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p></w:ftr>`, { createFolders:false });
+      const ct = await part(doc, '[Content_Types].xml');
+      const ov = ct.createElementNS(NS_CT, 'Override');
+      ov.setAttribute('PartName', '/word/' + vardas);
+      ov.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml');
+      ct.documentElement.appendChild(ov);
+      const rels = await part(doc, 'word/_rels/document.xml.rels');
+      const used = new Set(Array.from(rels.getElementsByTagNameNS(NS_REL,'Relationship')).map(r => r.getAttribute('Id')));
+      let j = 1; while (used.has('rId' + j)) j++;
+      const rel = rels.createElementNS(NS_REL, 'Relationship');
+      rel.setAttribute('Id', 'rId' + j);
+      rel.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer');
+      rel.setAttribute('Target', vardas);
+      rels.documentElement.appendChild(rel);
+      const fr = d.createElementNS(NS_W, 'w:footerReference');
+      fr.setAttributeNS(NS_W, 'w:type', 'default');
+      fr.setAttributeNS(NS_R, 'r:id', 'rId' + j);
+      sp.insertBefore(fr, sp.firstChild);
+    }
+    out.tarpas = true;
+    note(doc, `Pirmo puslapio antraštė: ${out.titlePg ? 'titlePg pridėtas, ' : ''}tarpas poraštėje (Pages).`);
+    return out;
+  }
+
   async function insertLogo(doc, opts){
     const fname = opts.fname || 'litgrid-logo.png';
     const cx = opts.cxEmu, cy = opts.cyEmu;
@@ -680,7 +829,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 
