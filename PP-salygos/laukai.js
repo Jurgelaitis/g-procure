@@ -219,6 +219,24 @@
       uzuomina: 'Šablono nurodymas: žinoma informacija apie ketinamą įsigyti pirkimo objektą - perkamų prekių, paslaugų ar darbų pobūdis, trumpas apibūdinimas, kategorijų skaičius ir aprašymas. Rašoma po žodžių „numato įsigyti“ (galininku); taškas sakinio gale pridedamas.',
       uzrasas: 'Pirkimo objektas', pvz: 'elektros tinklo objektų projektavimo paslaugas, 2 kategorijos: ...',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pirkimo objektas' })) },
+    // DPS sąlygų 3.5 p. (2026-10-05, naudotojo prašymas): be kategorijų - formuluotė (vienas laužtinis nurodymas), siūloma iš
+    // 1 žingsnio numatomos vertės; su kategorijomis - laukas su dviem vietomis
+    { id: 'dps-apimtis', formuluote: true, re: /dps maksimali numatoma apimtis nurodyti apimti verte be pvm/,
+      klausimas: 'Kokia DPS maksimali numatoma apimtis (vertė be PVM)?',
+      uzuomina: 'Šablono nurodymas: nurodyti apimtį verte be PVM. Siūloma pagal 1 žingsnio numatomą pirkimo vertę - patikrinkite.',
+      uzrasas: 'Vertė be PVM', pvz: '1 500 000 Eur be PVM',
+      vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Vertė be PVM' })) },
+    { id: 'dps-kategoriju-apimtis', re: /dps kategorijos nurodyti konkrecia ias dps kategorija as maksimali numatoma apimtis/,
+      klausimas: 'Kokios DPS kategorijos ir kokia jų maksimali numatoma apimtis (vertė be PVM)?',
+      uzuomina: 'Šablono nurodymai: nurodyti konkrečią (-ias) DPS kategoriją (-as) ir apimtį verte be PVM.',
+      vietos: vs => vs.map((v, k) => [{ ivestis: 'tekstas', uzrasas: 'DPS kategorija (-os)', pvz: '1 ir 2' },
+        { ivestis: 'tekstas', uzrasas: 'Maksimali numatoma apimtis (vertė be PVM)', pvz: '500 000 Eur be PVM' }][k] || { ivestis: 'tekstas', uzrasas: 'Reikšmė ' + (k + 1) }) },
+    // angliška eilutė - atskira vieta (žemėlapyje be LT poros); sakinyje nėra „the / and / of“, todėl ji aprašyta atskirai
+    { id: 'dps-kategoriju-apimtis-en', re: /^maximum estimated value for dps categories insert specific category name/,
+      klausimas: 'Kokios DPS kategorijos ir kokia jų maksimali numatoma apimtis (vertė be PVM) - anglų kalba?',
+      uzuomina: 'Šablono nurodymai: insert specific category name(s), insert value excluding VAT.',
+      vietos: vs => vs.map((v, k) => [{ ivestis: 'tekstas', uzrasas: 'DPS kategorija (-os) anglų kalba', pvz: '1 and 2' },
+        { ivestis: 'tekstas', uzrasas: 'Maksimali numatoma apimtis anglų kalba', pvz: '500 000 EUR excluding VAT' }][k] || { ivestis: 'tekstas', uzrasas: 'Reikšmė ' + (k + 1) }) },
     { id: 'cpo-pagrindimas', formuluote: true, re: /centralizuotu pirkimu katalogu pagrindimas|centralized procurement directory/,
       klausimas: 'Kodėl pirkimas vykdomas ne per CPO LT katalogą?', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pagrindimas' })) },
     { id: 'esminiu-salygu-dalis', re: /esmines sutarties salygos isdestytos sps|terms of the contract are laid down|conditions of the contract are established/,
@@ -381,6 +399,9 @@
      klausimais (kas tikrinama ir iš ko) - narys parenkamas pagal abu atsakymus (`tikrinimoVariantas`). */
   const GRUPES = [
     { id: 'dalys', re: /^jei pirkimo objektas (i dalis neskaidomas|skaidomas i dalis)/, klausimas: 'Ar pirkimo objektas skaidomas į dalis?' },
+    // DPS kategorijos (2026-10-05, naudotojo sprendimas): šablone ta pati alternatyva trijose vietose, užrašyta skirtingai - klausiama
+    // viena (pirmoji dokumente), kitos seka jos atsakymą (SUSIETOS_GRUPES, PP-SALYGOS.html)
+    { id: 'dps-kategorijos', re: /^(jeigu|jei|kai) dps (neskirstom|skirstom|nera suskirstyt|suskirstyt)/, klausimas: 'Ar DPS skirstoma į kategorijas?' },
     { id: 'stebetojai', re: /^jei (ne)?numatoma kviesti stebetoj/, klausimas: 'Ar į komisijos posėdžius kviečiami stebėtojai?' },
     { id: 'zalieji', re: /^jei zalieji reikalavimai nurod/, klausimas: 'Kur nustatomi žalieji reikalavimai?' },
     { id: 'uztikrinimas', re: /^jei (ne)?taikomas pasiulymo galiojimo uztikrinimas/, klausimas: 'Ar taikomas pasiūlymo galiojimo užtikrinimas?' },

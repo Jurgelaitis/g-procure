@@ -1645,6 +1645,34 @@ function laukianciosPastraipos(Z, REZ){
   return out;
 }
 
+/* Susietos grupės (2026-10-05, naudotojo sprendimas): ta pati alternatyva šablone kartojasi keliose vietose, užrašyta skirtingai -
+   DPS sąlygose „Jeigu DPS (ne)skirstoma į kategorijas“ (3.3 p.), „Jei DPS (ne)skirstomas į kategorijas“ (3.5 p.) ir „Kai DPS (nėra)
+   suskirstyta į kategorijas“ (paraiškos kategorijoms). Klausiama viena - pirmoji dokumento tvarka, kitų narys parenkamas pagal
+   prasmę (`prasme`: true - skirstoma) ir formoje neklausiamas. Iki tol - trys klausimai; atsakius skirtingai dokumentas
+   prieštarautų pats sau. */
+const SUSIETOS_GRUPES = [
+  { id: 'dps-kategorijos', re: /^(jeigu|jei|kai) dps (neskirstom|skirstom|nera suskirstyt|suskirstyt)/, klausimas: 'Ar DPS skirstoma į kategorijas?',
+    prasme: t => !/(neskirstom|nera suskirstyt)/.test(norm(t)) }
+];
+/* [{ sg, grupes: [[{ raktas, tekstas }]] }] - grupės dokumento tvarka (DOK, pirmo bloko pastraipa); viena grupė keliuose dokumentuose - viena. */
+function susietuGrupiuPlanas(){
+  const visos = new Map();
+  DOK.forEach((d, di) => {
+    const Z = d.zemelapis, pagal = new Map();
+    (Z.vienetai || []).forEach(v => {
+      if (!v.grupe) return;
+      const bi = Math.min(...(Z.blokai || []).filter(b => b.vienetas === v.id).map(b => b.i), Infinity);
+      const g = pagal.get(v.grupe) || []; g.push({ raktas: salygosRaktas(v.tekstas), tekstas: v.tekstas, bi }); pagal.set(v.grupe, g);
+    });
+    pagal.forEach(nariai => {
+      const key = nariai.map(n => n.raktas).sort().join('|');
+      if (!visos.has(key)) visos.set(key, { key, nariai, tvarka: di * 1e6 + Math.min(...nariai.map(n => n.bi)) });
+    });
+  });
+  return SUSIETOS_GRUPES.map(sg => ({ sg, grupes: [...visos.values()].filter(g => g.nariai.length === 2 && g.nariai.every(n => sg.re.test(norm(n.tekstas))))
+    .sort((a, b) => a.tvarka - b.tvarka) })).filter(x => x.grupes.length >= 2);
+}
+
 function surinktiKlausimus(){
   const REZ = rezimas();
   DALIU_SK = 0;                      // perskaiciuojam kiekviena karta is naujo
@@ -1668,6 +1696,12 @@ function surinktiKlausimus(){
     if (v.grupe) grupiuRaktaiPre.add(salygosRaktas(v.tekstas));
   }));
   GRUPIU_RAKTAI = grupiuRaktaiPre;
+  // susietos grupės: sekančių grupių atsakymai nustatomi PRIEŠ skaičiuojant, kurios pastraipos ir laukai lieka
+  const SUSIETOS = susietuGrupiuPlanas();
+  SUSIETOS.forEach(({ sg, grupes }) => {
+    const pas = grupes[0].nariai.find(n => ATS[n.raktas] === true), r = pas ? sg.prasme(pas.tekstas) : null;
+    grupes.slice(1).forEach(g => g.nariai.forEach(n => { if (r == null) delete ATS[n.raktas]; else ATS[n.raktas] = sg.prasme(n.tekstas) === r; }));
+  });
   /* Pildomas laukas is registro (laukai.js): vietos su ivestimi, klase ir priedu; ATS masyvas - tiek, kiek vietu. */
   const vietuSk = t => GP_LAUKAI.laukas(t, { x:true }).vietos.length;
   const laukoKlausimas = (d, trumpas, raktas, n, extra) => {
@@ -1998,6 +2032,7 @@ function surinktiKlausimus(){
           }
           if (tusEn.poraTipas === 'ai'){                      // laisvas tekstas - EN laukas prie LT klausimo
             ATS['I_' + raktas] ??= '';
+            if (DPS_APIMTIS_RE.test(norm(ltInt.text))){ const a = dpsApimtis(true); siulyk('I_' + raktas, null, a, a ? DPS_APIMTIS_KILME : null); }
             K.enPoros.formuluotes['I|' + norm(ltInt.text)] = { enRaktas: raktas,
               ltTekstas: ltInt.text, enTekstas: n.text, kanalas: 'I', tipas: 'ai', dok: trumpas };
             return;
@@ -2057,6 +2092,8 @@ function surinktiKlausimus(){
         return;
       }
       ATS['I_' + raktas] ??= '';
+      // DPS sąlygų 3.5 p. (2026-10-05): maksimali numatoma apimtis - siūloma pagal 1 žingsnio numatomą vertę (patvirtina žmogus)
+      if (DPS_APIMTIS_RE.test(nr)){ const a = dpsApimtis(false); siulyk('I_' + raktas, null, a, a ? DPS_APIMTIS_KILME : null); }
       // AKV 2.3 p. „... neskaidomas vadovaujantis VPĮ 28 straipsnio 2 dalimi, nes (įrašyti priežastis ...)“
       const neskaidymas = /neskaidomas[\s\S]*(^|[^\p{L}])nes\s*\(/iu.test(n.text);
       pridek('formuluotes', 'I|' + raktas, trumpas,
@@ -2209,6 +2246,20 @@ function surinktiKlausimus(){
     g.dokumentai.forEach(d => { if (!x.dokumentai.includes(d)) x.dokumentai.push(d); });
   });
   K.grupes = sujungtos;
+  // susietų grupių sekančios formoje neklausiamos - jų dokumentai priskiriami pirmajai, sprendimas rodomas automatikoje
+  SUSIETOS.forEach(({ sg, grupes }) => {
+    const pirma = K.grupes[grupes[0].key];
+    const pas = grupes[0].nariai.find(n => ATS[n.raktas] === true);
+    grupes.slice(1).forEach(g => {
+      const x = K.grupes[g.key];
+      if (!x) return;
+      if (pirma) x.dokumentai.forEach(d => { if (!pirma.dokumentai.includes(d)) pirma.dokumentai.push(d); });
+      const nar = g.nariai.find(n => ATS[n.raktas] === true);
+      auto((x.vieta && x.vieta.dok || '').replace('TSD_', ''), g.nariai.map(n => n.tekstas).join(' / '),
+        nar ? `pasirinkta „${nar.tekstas}“` : 'laukiama atsakymo', `seka atsakymą „${sg.klausimas}“${pas ? ` („${pas.tekstas}“)` : ''}`);
+      delete K.grupes[g.key];
+    });
+  });
 
   /* Grupes narys nebeklausiamas kaip pavienis kitame dokumente. */
   const grupiuRaktai = new Set(Object.values(K.grupes).flatMap(g => g.nariai.map(n => n.raktas)));
@@ -3054,6 +3105,14 @@ function nurodymoSritis(t, nuo){
   for (let k = a; k < t.length; k++){ if (t[k] === '[') g++; else if (t[k] === ']' && !--g) return [a, k + 1]; }
   return null;
 }
+/* DPS sąlygų 3.5 p. (2026-10-05): „DPS maksimali numatoma apimtis: [nurodyti apimtį verte be PVM].“ - siūloma 1 žingsnio numatoma
+   pirkimo vertė („1 500 000 Eur be PVM“, EN „1 500 000 EUR excluding VAT“); be vertės - nesiūloma. */
+const DPS_APIMTIS_RE = /dps maksimali numatoma apimtis nurodyti apimti verte be pvm/;
+const DPS_APIMTIS_KILME = '1 žingsnio numatoma pirkimo vertė (be PVM)';
+function dpsApimtis(en){
+  const v = GP_MONEY.formatEUR(GP_MONEY.parseEUR($('#verte') ? $('#verte').value : '') || 0);
+  return v ? v + (en ? ' EUR excluding VAT' : ' Eur be PVM') : null;
+}
 const beDvigubotoTasko = (v, po) => po === '.' && /[^.]\.$/.test(v) ? v.slice(0, -1) : v;   // „... priede.“ + šablono „.“
 /* Įrašoma reikšmė: be dvigubo taško, o kai sakinio taškas - nurodymo viduje (DPS sąlygų 3.1 p. „[... aprašymas.]“) ir reikšmė be
    baigiamojo ženklo, taškas pridedamas (iki 2026-10-05 sakinys likdavo be taško). */
@@ -3498,6 +3557,12 @@ async function generuotiViena(d, REZ){
     const v = ATS['B_' + tusciaRaktas(n, d.trumpas)];
     if (!v) return;                                  // null = skirtukas, paliekamas
     pildyta += pildykLauka(n.i, v, raudonuIdx.has(n.i) || daugIdx.has(n.i));
+    // raudonas laukas su keliomis vietomis („[kategorija] ... [apimtis]“), užpildytas ne visas - lieka raudonas ir įtrauktoje šakoje
+    // (iki 2026-10-05 pajuodindavo su šaka: DPS sąlygų 3.5 p. su kategorijomis); patikra rodo
+    if (daugIdx.has(n.i)){
+      const lk = GP_LAUKAI.laukas(n.text, { x:true });
+      if (lk.vietos.some((vt, k) => vt.kopija == null && vt.klase !== 'b' && !String((v || [])[k] || '').trim())) likoNurodymas.add(n.i);
+    }
   });
   // „X“ vietos (2026-10-04): pastraipos be „___“, kuriose vietoj priedo numerio, sumos ar punkto - raidė „X“
   if (!forma) (d.xLaukai || []).forEach(x => {
