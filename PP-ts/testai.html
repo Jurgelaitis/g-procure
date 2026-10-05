@@ -603,8 +603,8 @@ async function testaiBusenos() {
 
   await testas('Kas siunčiama į AI - pasakyta prie „Pilnoji analizė“ ir 1 generavimo žingsnyje, tekstas >= 4,5:1', async () => {
     const t = [...D().querySelectorAll('.cite-ai')].map(e => e.textContent);
-    tiesa(t.some(x => /Pilnajai analizei specifikacijos tekstas/.test(x) && /Claude API/.test(x) && /Nesiųskite įslaptintos/.test(x)), 'analizė: ' + t.join(' | '));
-    tiesa(t.some(x => /Generuojant pirkimo informacija/.test(x) && /CVP IS/.test(x)), 'generavimas: ' + t.join(' | '));
+    tiesa(t.some(x => /Pilnajai analizei specifikacijos tekstas/.test(x) && /Claude API/.test(x) && /numatoma verte/.test(x) && /Nesiųskite įslaptintos/.test(x)), 'analizė: ' + t.join(' | '));
+    tiesa(t.some(x => /Generuojant pirkimo informacija/.test(x) && /numatoma verte/.test(x) && /CVP IS/.test(x)), 'generavimas: ' + t.join(' | '));
     const rgb = W().getComputedStyle(D().querySelector('.cite-ai')).color.match(/\d+/g).map(Number);
     const L = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
     const l = 0.2126 * L(rgb[0]) + 0.7152 * L(rgb[1]) + 0.0722 * L(rgb[2]);
@@ -869,6 +869,19 @@ async function testaiApimtis() {
     const d2 = await docxDalys(await M('DocxBuilder.kurkTsDocx(' + JSON.stringify(neisvalyta) + ', { title: "Etapai" })'), /^word\/document\.xml$/);
     tiesa(!/[\u2013\u2014]/.test(d2.replace(/<[^>]+>/g, '')), 'Word iš neišvalyto teksto - ilgasis brūkšnys');
     turi(d2, 'I etapas - parengti', 'Word iš neišvalyto teksto');
+  });
+
+  await testas('DI turinio žymėjimas (DI akto 50 str. 2 d., shared/di-zymejimas.js, 2026-10-05): Word faile - savas požymis „Parengta naudojant DI“ su moduliu ir modeliu, aprašas ir matoma poraštė; atsarginiame .doc - Word požymiai ir poraštė', async () => {
+    const r = tvarka();
+    const blob = await M('DocxBuilder.kurkTsDocx(' + JSON.stringify(r.ts) + ', { title: "DI žymėjimas" })');
+    const cust = await docxDalys(blob, /^docProps\/custom\.xml$/), core = await docxDalys(blob, /^docProps\/core\.xml$/), dok = await docxDalys(blob, /^word\/document\.xml$/);
+    tiesa(/name="DI_turinys"[^>]*>\s*<vt:lpwstr>Parengta naudojant DI<\/vt:lpwstr>/.test(cust), 'custom.xml: ' + cust.slice(0, 200));
+    tiesa(/name="DI_sistema"[^>]*>\s*<vt:lpwstr>G-Procure - TS asistentas</.test(cust) && /name="DI_modelis"[^>]*>\s*<vt:lpwstr>claude-/.test(cust), 'sistema ir modelis');
+    turi(core, 'Parengta naudojant DI', 'core.xml aprašas');
+    turi(dok.replace(/<[^>]+>/g, ''), 'Dalis teksto parengta naudojant DI (Claude). Prieš skelbiant turi būti peržiūrėta.', 'poraštė');
+    const h = String(M('DocxBuilder.buildTsDocx(' + JSON.stringify(r.ts) + ', { title: "DI žymėjimas" })'));
+    tiesa(/<o:DI_turinys dt:dt="string">Parengta naudojant DI<\/o:DI_turinys>/.test(h) && /<o:Description>Parengta naudojant DI/.test(h), '.doc požymiai');
+    turi(h, 'Dalis teksto parengta naudojant DI (Claude).', '.doc poraštė');
   });
 
   await testas('Atsarginis .doc (HTML) ir Markdown: be žalios, be vertinimo ir vertės, be ilgųjų brūkšnių', () => {
