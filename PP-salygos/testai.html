@@ -2359,6 +2359,65 @@ async function testaiLenteles(){
       tiesa(!/^(Jeigu|Jei|Kai) DPS [^,.\n]*kategorijas$/m.test(J), kalba + ": liko sąlygos antraštė");     // 12.1 p. „Jeigu DPS suskirstyta ..., tiekėjai“ - tekstas
     }
   });
+  await testas("DPS sąlygų nuorodos į sutikimų priedėlius (2026-10-05, 2 priedo 3.6 p.): LT - to paties šablono priedėlių antraščių priedas („6 priedo priedėlis Nr. 1 / Nr. 2“), LT/EN - 5 priedas (naudotojo sprendimas, abiem kalbomis ir įdarbinimo sutikimo antraštėje); „2.2 priedo“ nebėra (sablonu-taisymai.py)", async () => {
+    const z = await W.JSZip.loadAsync(await (await W.fetch("templates/DPSK_LT_SALYGOS.docx?b=" + Date.now())).arrayBuffer());
+    const d = new W.DOMParser().parseFromString(await z.file("word/document.xml").async("string"), "application/xml");
+    const P = Array.from(d.getElementsByTagNameNS(NSW, "p")).map(txW).map(t => t.trim());
+    const ant = {};
+    P.forEach(t => { const m = /^Pirkimo sąlygų (\d+) priedo priedėlis Nr\.\s*([12])$/.exec(t); if (m) ant[m[2]] = m[1]; });
+    lygu(ant, { 1: "6", 2: "6" }, "priedėlių antraštės");
+    const nuor = P.flatMap(t => [...t.matchAll(/Pirkimo sąlygų (\d+(?:\.\d+)?) priedo (?:[12](?: ir [12])? priedėl\p{L}*|priedėlius)/gu)].filter(m => !/^Pirkimo sąlygų \d+ priedo priedėlis Nr/.test(t)).map(m => m[1]));
+    tiesa(nuor.length >= 4 && nuor.every(n => n === "6"), "nuorodos į priedėlius: " + JSON.stringify(nuor));
+    tiesa(P.some(t => /^3\.6\. .*Pirkimo sąlygų 6 priedo 2 priedėlį \(Kvazisubtiekėjo sutikimą būti įdarbintu\)/.test(t)), "2 priedo 3.6 p.");
+    tiesa(!P.some(t => /2\.2 priedo/.test(t)), "liko „2.2 priedo“");
+    // LT/EN paketas (naudotojo sprendimas 2026-10-05): sutikimų priedėliai - 5 priedo (subtiekėjo sutikimo antraštė), abiem kalbomis
+    const tekst = async (f, dalis) => { const zz = await W.JSZip.loadAsync(await (await W.fetch("templates/" + f + ".docx?b=" + Date.now())).arrayBuffer());
+      const dd = new W.DOMParser().parseFromString(await zz.file(dalis || "word/document.xml").async("string"), "application/xml");
+      return Array.from(dd.getElementsByTagNameNS(NSW, "p")).map(txW).map(t => t.trim()).filter(Boolean); };
+    lygu([(await tekst("DPSK_LTEN_SUBTIEKEJAS"))[0], (await tekst("DPSK_LTEN_IDARBINTAS", "word/header1.xml"))[0]],
+      ["Pirkimo sąlygų 5 priedo 1 priedėlis / Appendix 1 to Annex 5 to the Procurement Conditions", "Pirkimo sąlygų 5 priedo 2 priedėlis / Appendix 2 to Annex 5 to the Procurement Conditions"], "LT/EN priedėlių antraštės");
+    const E = (await tekst("DPSK_LTEN_SALYGOS")).join("\n");
+    tiesa(!/2\.2 priedo|sub-annex 2\.2/.test(E) && /\(Pirkimo sąlygų 5 priedo 1 priedėlis\)/.test(E) && /\(Pirkimo sąlygų 5 priedo 1 ir 2 priedėliai\)/.test(E)
+      && /\(Appendix 1 to Annex 5 of the Procurement conditions\)/.test(E) && /\(Appendices 1 and 2 to Annex 5 of the Procurement conditions\)/.test(E), "LT/EN sąlygų 5.5.5 ir 5.5.6 p.");
+  });
+  await testas("DPS LT/EN sąlygų blokų ribos (2026-10-05): ištrinta alternatyva nebepasiima kitos lentelės eilutės numerio - 3 skyrius 3.1-3.5 abiem kategorijų atsakymais; DPS konkretaus pirkimo „nenumatoma apžiūra“ nebeapima 2.7-2.8.4 punktų - jie lieka abiem apžiūros atsakymais (LT ir LT/EN)", async () => {
+    const kat = taip => g => /kategorij/.test(g.nariai[0].tekstas) ? g.nariai.find(n => taip !== /neskirstom|nėra suskirstyt/.test(n.tekstas)) : null;
+    const apz = taip => g => /pirkimo objekto apžiūra/.test(g.nariai[0].tekstas) ? g.nariai.find(n => taip !== /nenumatoma/.test(n.tekstas)) : null;
+    const nr = t => /^\d+(\.\d+)*\.?$/.test(t);
+    // du deriniai, kad kiekviena alternatyva būtų ir ištrinta, ir jos kaimynė palikta: kategorijos, galiojimas (laikotarpis / trukmė), 2.15 p.
+    const DERINIAI = [{ taip: false, gal: /laikotarpiu/, apl: /^Jeigu DPS sukūrimui netaikomi aplinkos apsaugos kriterijai$/ },
+                      { taip: true, gal: /trukme/, apl: /^Jeigu DPS sukūrimui taikomi aplinkos/ }];
+    for (const { taip, gal, apl } of DERINIAI){
+      const rink = g => /kategorij/.test(g.nariai[0].tekstas) ? kat(taip)(g) : /DPS galiojimas apibrėžiamas/.test(g.nariai[0].tekstas) ? g.nariai.find(n => gal.test(n.tekstas))
+        : /aplinkos apsaugos kriterij/.test(g.nariai[0].tekstas) ? g.nariai.find(n => apl.test(n.tekstas)) : null;
+      const P = (await generuokSu({ budas: "DPS", kalba: "LT_EN", grupes: rink })).DPSK_LTEN_SALYGOS.pars;
+      const a = P.indexOf("OBJECT OF PROCUREMENT AND ITS SCOPE"), b = P.findIndex((t, k) => k > a && /^PIRKIMO DOKUMENTŲ PAAIŠKINIMAI IKI/.test(t));
+      const sk = P.slice(a + 1, b), nn = sk.filter(nr), ka = taip ? "skirstoma, trukmė" : "neskirstoma, laikotarpis";
+      lygu(nn, ["3.1.", "3.2.", "3.3.", "3.4.", "3.5.", "4."], "3 skyriaus numeriai (" + ka + ")");
+      lygu(sk.map((t, k) => nr(t) && t !== "4." ? sk[k + 1].slice(0, 14) : null).filter(Boolean),
+        ["Perkantysis su", "Atlikus šį Pir", taip ? "DPS skirstomas" : "DPS nėra skirs", taip ? "DPS galiojimo " : "DPS galioja nu", taip ? "DPS kategorijo" : "DPS maksimali "], "po numerio - jo eilutė (" + ka + ")");
+      // 2.15 ir 5.2 p.: palikta alternatyva - su savo numeriu (numerio langelis - prieš ją)
+      const pries = re => { const i = P.findIndex(t => re.test(t)); return i > 0 ? P[i - 1] : null; };
+      lygu([pries(taip ? /^DPS sukūrimui taikomi aplinkos apsaugos kriterijai nustatyti/ : /^DPS sukūrimui netaikomi aplinkos apsaugos kriterijai\./),
+        pries(taip ? /^Tiekėjai gali pateikti paraiškas vienai, kelioms ar visoms kategorijoms/ : /^Tiekėjas gali pateikti tik vieną paraišką/)], ["2.15.", "5.2."], "2.15 ir 5.2 p. numeriai (" + ka + ")");
+      // visas dokumentas: kiekvienas numeris - kitas po ankstesnio (tas pats lygis +1, gilesnis lygis nuo 1, aukštesnis +1)
+      const sek = P.filter(nr).map(t => t.replace(/\.$/, "").split(".").map(Number)), suoliai = [];
+      sek.forEach((x, k) => { if (!k) return; const y = sek[k - 1];
+        const ok = (x.length === y.length && x.slice(0, -1).join() === y.slice(0, -1).join() && x[x.length - 1] === y[y.length - 1] + 1)
+          || (x.length === y.length + 1 && x.slice(0, -1).join() === y.join() && x[x.length - 1] === 1)
+          || (x.length < y.length && x.slice(0, -1).join() === y.slice(0, x.length - 1).join() && x[x.length - 1] === y[x.length - 1] + 1);
+        if (!ok) suoliai.push(y.join(".") + " -> " + x.join(".")); });
+      lygu(suoliai, [], "numerių seka visame dokumente (" + ka + ")");
+    }
+    for (const [kalba, dok] of [["LT", "DPSP_LT_SALYGOS"], ["LT_EN", "DPSP_LTEN_SALYGOS"]]) for (const taip of [true, false]){
+      const P = (await generuokSu({ budas: "DPS-K", kalba, grupes: apz(taip) }))[dok].pars;
+      const kur = re => P.findIndex(t => re.test(t)), numeris = i => kalba === "LT" ? (P[i].match(/^\d+(\.\d+)*\./) || [""])[0] : P[i - 1];
+      const v = [/numato tiesioginio atsiskaitymo su Subtiekėjais/, /^(\d\S*\s*)?Tiekėjas savo konkretų pasiūlymą privalo/, /atnaujintas \(atnaujinti\) EBVPD/, /pasiūlymo galiojimo užtikrinimas \(jei taikoma\)/, /^(\d\S*\s*)?kiti dokumentai \[kartu su konkrečiu/].map(kur);
+      tiesa(v.every(i => i >= 0), kalba + (taip ? " apžiūra numatoma" : " nenumatoma") + ": trūksta 2.7-2.8.4: " + JSON.stringify(v));
+      lygu(v.map(numeris), ["2.7.", "2.8.", "2.8.1.", "2.8.3.", "2.8.4."], kalba + (taip ? " numatoma" : " nenumatoma") + ": numeriai");
+      tiesa(taip ? kur(/nerengs pirkimo objekto apžiūros/) < 0 && kur(/suteiks galimybę apžiūrėti/) >= 0 : kur(/nerengs pirkimo objekto apžiūros/) >= 0 && kur(/suteiks galimybę apžiūrėti/) < 0, kalba + ": apžiūros alternatyva");
+    }
+  });
   await testas("Tušti puslapiai (GPDocx.pertekliniaiLuziai): puslapio lūžis, po kurio iki naujo puslapio skyriaus ar dokumento pabaigos - tik tuščios pastraipos, šalinamas; lūžis prieš tekstą, prieš „continuous“ skyrių ir su tekstu po jo - lieka; tekstas nepakitęs", async () => {
     const br = '<w:r><w:br w:type="page"/></w:r>', P = t => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`, T = '<w:p/>';
     const sp = (tipas = "") => `<w:sectPr>${tipas ? `<w:type w:val="${tipas}"/>` : ""}<w:pgSz w:w="11906" w:h="16838"/></w:sectPr>`;
