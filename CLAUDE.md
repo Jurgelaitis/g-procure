@@ -258,6 +258,14 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
 - Numatytasis modelis naršyklės moduliams - `shared/ai-proxy.js` (`DEFAULT_MODEL`).
   Keisk TIK ten: moduliai modelio neperduoda, o `PP-ts` (turi vartotojo pasirinkiklį)
   ima jį kaip atsarginę reikšmę. Pakeitus patikrink ir `PP-ts` pasirinkiklio sąrašą.
+- **Serverio DI apsauga (R5, 2026-10-05, serverio `index.js`):** `/api/analyze` priima tik `LEIDZIAMI_MODELIAI` (Sonnet 4.6, Opus 4.6, Haiku 4.5 -
+  `DEFAULT_MODEL` ir PP-ts pasirinkiklis) ir `max_tokens` riboja iki `MAX_TOKENS_RIBA` 8000 (didžiausias modulio - PP-ts 8000; nenurodžius - 4000).
+  Naują modelį ar didesnį ilgį modulyje PIRMIAU įrašyk serveryje, kitaip modulis gaus 400 (modelis) arba nukirptą atsakymą (ilgis).
+  DI maršrutai (`/api/analyze`, `/api/price`, `/api/esg/sanctions-assessment`) priima tik su `Origin` g-procure.com, www, `null` (failas naršyklėje)
+  ar `http://localhost` / `127.0.0.1` (kaip nginx CORS sąrašas) - kitaip 403; kilmę suklastoti gali scenarijus, tad tai ne užraktas -
+  išlaidas riboja modeliai, ilgis, nginx `limit_req` ir Anthropic paskyros riba. Savas klaidų tvarkytojas į žurnalą rašo tik klaidos tipą
+  (Express numatytasis rašė steką, o Node netaisyklingo JSON klaidoje cituoja kūno gabalą), `x-powered-by` išjungta. Patikrinta gyvai
+  (403 / 400 / tikra užklausa 200, CORS ir klaidų atsakymuose). Ankstesnė versija serveryje - `index.js.pries-r5`, kopija - `~/Documents/g-procure-privatu/serveris/`.
 - Užklausos kūno riba naršyklės moduliams - `shared/ai-proxy.js`: `MAX_BASE64` (9 MB)
   ir `MAX_PDF_BAITU` (3/4 nuo jos, nes base64 pripučia 4/3). Ji atspindi SERVERIO
   nustatymą, todėl viena be kito nekeičiama.
@@ -338,7 +346,7 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   visi moduliai vienoje kilmėje dalijasi ta pačia localStorage, tad puslapis išsaugo VISKĄ į
   vieną JSON failą ir atkuria atgal. Logika - `shared/backup.js`.
 - Viešas privatumo pranešimas - `privatumas.html` (nuo 2026-10-05): vaidmenys (pirkimo vykdytojas - valdytojas, G-Procure teikėjas - tvarkytojas, kai persiunčia į DI, Anthropic - kitas tvarkytojas), kas siunčiama pagal įrankį, paslaugų teikėjai (Anthropic, Hetzner - Falkenšteino duomenų centras FSN1, Vokietija, Cloudflare, GitHub Pages, Google Fonts), terminai, perdavimas į JAV - ES standartinės sutarčių sąlygos (2021/914, 2 ir 3 moduliai) Anthropic duomenų tvarkymo priede (įsigaliojo 2025-02-24, pranešimas apie pažeidimą per 48 val.), Anthropic komercinės sąlygos (2025-06-17): kliento turiniu modelių mokyti negalima. Pakeitus paslaugų teikėją ar siunčiamus duomenis - atnaujink jį. Slapukų ir analitikos nėra - pridedant ką nors panašaus, pirmiau atnaujink pranešimą.
-- Serverio prieigos instrukcijos (adresas, naudotojas, prisijungimo būdas) - NE viešoje saugykloje (nuo 2026-10-05 - `~/Documents/g-procure-privatu/`); į saugyklą jų nerašyk. Serverio „nesaugo“ patikra pakartota 2026-10-05 (R6, žr. aukščiau). Laukia kartu su naudotoju: `/api/analyze` apsauga (ribojimas, leidžiami modeliai, Origin, Turnstile), SSH tik raktu.
+- Serverio prieigos instrukcijos (adresas, naudotojas, prisijungimo būdas) - NE viešoje saugykloje (nuo 2026-10-05 - `~/Documents/g-procure-privatu/`); į saugyklą jų nerašyk. Serverio „nesaugo“ patikra pakartota 2026-10-05 (R6, žr. aukščiau). `/api/analyze` modeliai, ilgis, kilmė ir klaidų tvarkytojas - įdiegta 2026-10-05 (R5, žr. 6 sk.). nginx versija neskelbiama (`server_tokens off`, `/etc/nginx/nginx.conf` 22 eil. - ten buvo `build`, todėl conf.d faile dubliuotųsi; atsarginė `/root/nginx.conf.pries-r5`). Laukia kartu su naudotoju: išlaidų riba Anthropic paskyroje (Settings > Billing > Spend limits; naudotojo sprendimas 2026-10-05 - atidėta ateičiai), Turnstile viešiems įrankiams, šablonai serveryje, SSH tik raktu.
 - ŽINOMA RIZIKA (ne galutinis sprendimas): `PP-protocol` audito žurnalas saugomas
   localStorage, nors PSĮ 103 str. reikalauja 4 metų saugojimo. Tai pažymėta kaip
   būsima migracija į backend'ą - neplėsk priklausomybės nuo localStorage šiam žurnalui.
