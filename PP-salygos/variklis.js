@@ -1634,10 +1634,40 @@ const GPGen = (() => {
     // „... perka ir sau .“ (tarpas pries taska). Uz fragmento ribu esantys tarpai neliečiami.
     const visi = GPDocx.els(p,'r'), nuo = visi.indexOf(first), iki = visi.indexOf(rs[rs.length - 1]);
     const tarpai = visi.slice(nuo + 1, iki).filter(r => arRaudonas(r) && !rs.includes(r) && !GPDocx.els(r,'t').map(x => x.textContent).join('').trim());
+    irasykIRaudonus(first, rs.slice(1).concat(tarpai), value, stilius);
+    return true;
+  }
+  /* Vienas ištisinis raudonas fragmentas pastraipoje, kurioje jų keli (2026-10-05, DPS konkretaus pirkimo pasiūlymo formos
+     antraštė: „DĖL KONKRETAUS PIRKIMO „X“ATLIEKAMO DINAMINĖS PIRKIMO SISTEMOS „Y“ ...“ - X ir Y raudoni): keičiama tik grupė,
+     prieš kurią esantis pastraipos tekstas atitinka `pries` (reguliarusis reiškinys arba funkcija (tekstas prieš, grupės tekstas));
+     kiti raudoni fragmentai lieka. */
+  function keistiRaudonaGrupe(paras, i, pries, value, stilius){
+    const p = paras[i]; if (!p) return false;
+    const visi = GPDocx.els(p,'r'), txt = r => GPDocx.els(r,'t').map(x => x.textContent).join('');
+    let pirma = '';
+    for (let k = 0; k < visi.length; k++){
+      if (arRaudonas(visi[k]) && txt(visi[k]).trim()){
+        let iki = k;
+        while (iki + 1 < visi.length && arRaudonas(visi[iki + 1])) iki++;
+        while (iki > k && !txt(visi[iki]).trim()) iki--;          // raudonas tarpas grupės gale - ne fragmento dalis
+        const grupe = visi.slice(k, iki + 1).map(txt).join('');
+        if (typeof pries === 'function' ? pries(pirma, grupe) : pries.test(pirma)){
+          irasykIRaudonus(visi[k], visi.slice(k + 1, iki + 1), value, stilius);
+          return true;
+        }
+        for (let j = k; j <= iki; j++) pirma += txt(visi[j]);
+        k = iki;
+        continue;
+      }
+      pirma += txt(visi[k]);
+    }
+    return false;
+  }
+  function irasykIRaudonus(first, salinti, value, stilius){
     const ts = GPDocx.els(first,'t');
     if (ts.length){ ts[0].textContent = gpBruksniai(value); ts[0].setAttribute('xml:space','preserve'); }
     for (let k=1;k<ts.length;k++) ts[k].textContent = '';
-    rs.slice(1).concat(tarpai).forEach(r => r.parentNode && r.parentNode.removeChild(r));
+    salinti.forEach(r => r.parentNode && r.parentNode.removeChild(r));
     for (const c of GPDocx.els(first,'color')) c.setAttributeNS(W,'w:val','auto');
     // Formu antrastems: sablono "(Pirkimo objektas)" runas kursyvinis ne-bold,
     // o kaimynai ("LITGRID AB", "PIRKIMUI") - bold DIDZIOSIOMIS. Be suvienodinimo
@@ -1655,7 +1685,6 @@ const GPGen = (() => {
         }
       }
     }
-    return true;
   }
 
   /* Formos daliu eilute "I/ II/ III/ IV PIRKIMO OBJEKTO DALIAI (palikti tik ta
@@ -1770,7 +1799,7 @@ const GPGen = (() => {
 
   return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, keisti, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
-           keistiRaudonaTeksta, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
+           keistiRaudonaTeksta, keistiRaudonaGrupe, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
 
 /* ==========================================================================

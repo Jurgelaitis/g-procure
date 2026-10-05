@@ -519,10 +519,24 @@
     return r;
   }
 
+  /* DPS, kurios pagrindu vykdomas konkretus pirkimas, pavadinimas (naudotojo sprendimas 2026-10-05; tik DPS konkretaus pirkimo
+     šablonai). Šablone jo vietoje - kito pirkimo pavyzdys raudonai („110 KV ...“, „TITLE OF THE DPS“), ne „___“, todėl laukas
+     aprašomas atskirai: konteksto sakinys - antraštės žodžiai su pavyzdžiu, vieta - pavyzdžio atkarpa (planas ir peržiūra kaip
+     kitų laukų). Vienas laukas visoms vietoms (sąlygų antraštė ir 1.1 p., pasiūlymo formos antraštė); dvikalbiame - ir angliškas. */
+  const DPS_PAVADINIMAS = { klausimas: 'Dinaminės pirkimo sistemos pavadinimas',
+    uzuomina: 'DPS, kurios pagrindu vykdomas šis konkretus pirkimas, pavadinimas - kaip DPS sukūrimo dokumentuose. Įrašomas konkretaus pirkimo sąlygų antraštėje ir 1.1 punkte bei pasiūlymo formos antraštėje.',
+    uzrasas: 'DPS pavadinimas', uzrasasEn: 'DPS pavadinimas anglų kalba' };
+  function dpsPavadinimoLaukas(pavyzdys){
+    const zyma = String(pavyzdys || '').trim(), pr = 'ATLIEKAMO DINAMINĖS PIRKIMO SISTEMOS „', tekstas = pr + zyma + '“ PAGRINDU, SĄLYGOS';
+    return { tekstas, lk: { tekstas, tipas: 'dps-pavadinimas', klausimas: DPS_PAVADINIMAS.klausimas, uzuomina: DPS_PAVADINIMAS.uzuomina,
+      vietos: [{ start: pr.length, end: pr.length + zyma.length, zyma, rusis: 'pavyzdys', ivestis: 'tekstas', uzrasas: DPS_PAVADINIMAS.uzrasas, aprasyta: true, klase: 'c', salinti: null }] } };
+  }
+
   /* Tiekėjo pildoma vieta priedo formoje, įdėtoje į sąlygų dokumentą (DPS sukūrimo sąlygos): „____ Nr.____“, „202_-__-__“. */
   const arTiekejoVieta = t => /^[\s_]*Nr\.[\s_]*$/.test(String(t || '').trim()) || /^20\d_-_+-_+$/.test(String(t || '').trim());
 
   root.GP_LAUKAI = { norm, arTiekejoVieta, tusciosVietos, xVietos, laukas, planas, keitimai, tekstasIsPlano, gramatika, sutrauk,
     prieduSarasas, nuorodosPriedas, priedoRaktasIsTeksto, PRIEDU_PAV, EN_MENESIAI, skyriai, skyrius, arAntraste, TIPAI,
-    GRUPES, grupesKlausimas, tikrinimoVariantas, uztikrinimoVariantas, UZT_PAGAL_KRITERIJU, SALINTI, KRITERIJU_PASIRINKIMAI };
+    GRUPES, grupesKlausimas, tikrinimoVariantas, uztikrinimoVariantas, UZT_PAGAL_KRITERIJU, SALINTI, KRITERIJU_PASIRINKIMAI,
+    DPS_PAVADINIMAS, dpsPavadinimoLaukas };
 })(typeof window !== 'undefined' ? window : globalThis);

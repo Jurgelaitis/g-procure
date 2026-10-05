@@ -329,6 +329,15 @@ Stulpelis „Siūlomas klausimas“ - **Code pasiūlymas, nepatvirtinta** (naudo
 - Siūlomas klausimas (Code pasiūlymas, nepatvirtinta): „Konkretaus pirkimo pavadinimas“
 - Siūloma užuomina (Code pasiūlymas, nepatvirtinta): Gali būti imamas iš 1 žingsnio pirkimo pavadinimo.
 - Dabar formoje: klausimo vietoje - pats šablono sakinys; laukai `<input type="text">` su užuomina „reikšmė 1“, „reikšmė 2“... (be pavadinimo); privalomumo nėra.
+- Nuo 2026-10-05 (naudotojo taisyklė: rengėjo vietose pirkimo pavadinimas įrašomas, tiekėjo ir subtiekėjo - ne): reikšmė siūloma iš 1 žingsnio pavadinimo (LT ir EN, būsena „Siūloma (nepatvirtinta)“); ta pati reikšmė įrašoma pasiūlymo formos antraštėje, o sąlygų antraštės užrašai „(pavadinimas)“ / „(title)“ šalinami.
+
+### dps-pavadinimas (DPS-K; naudotojo sprendimas 2026-10-05)
+
+- Klausimas: „Dinaminės pirkimo sistemos pavadinimas“ (tik DPS konkretus pirkimas; DPS sukūrime pavadinimas - 1 žingsnio)
+- Užuomina: DPS, kurios pagrindu vykdomas šis konkretus pirkimas, pavadinimas - kaip DPS sukūrimo dokumentuose. Įrašomas konkretaus pirkimo sąlygų antraštėje ir 1.1 punkte bei pasiūlymo formos antraštėje.
+- Vieta šablone - ne „___“, o kito pirkimo pavyzdys raudonai („110 KV TRANSFORMATORIŲ PASTOTĖS ...“, pasiūlymo formoje „110 kV IR 330 kV TP, ...“, EN „TITLE OF THE DPS“ / „Title of the DPS“); laukas aprašytas `GP_LAUKAI.dpsPavadinimoLaukas`.
+- Įvestis: laisvas tekstas; dvikalbiame - ir anglų kalba (užrašas „DPS pavadinimas anglų kalba“, „Pasiūlyti vertimą (AI)“ kaip kituose EN laukuose). Siūlomos reikšmės nėra.
+- Vietos: LT pakete 3 (sąlygų antraštė, 1.1 p., pasiūlymo formos antraštė didžiosiomis), LT/EN - 6. Neužpildžius pavyzdys lieka raudonas, patikra rodo.
 
 | ID | Šablonai | Vieta | Pilnas sakinys | Vietų | Dabartinis rodymas | Siūloma reikšmė (kilmė) |
 |---|---|---|---|---|---|---|
