@@ -61,9 +61,16 @@
   var keyHandler = null;
 
   var UI = {
-    lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Detali instrukcija" },
-    en: { collapse: "Collapse", expand: "Expand", more: "Learn more", close: "Close", aria: "Information panel", dialog: "Detailed guide" }
+    lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Detali instrukcija",
+          trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumas" },
+    en: { collapse: "Collapse", expand: "Expand", more: "Learn more", close: "Close", aria: "Information panel", dialog: "Detailed guide",
+          trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy" }
   };
+  /* Svetainės šaknis (2026-10-05): DI valdymo ir privatumo puslapiai - šaknyje, šis failas - shared/ kataloge. Moduliai - pakatalogiuose,
+     šaknies puslapiai (pirkimu-korteles.html) - šaknyje, todėl adresas skaičiuojamas iš šio skripto adreso, ne iš puslapio. */
+  var SAKNIS = (function () {
+    try { var src = document.currentScript && document.currentScript.src; return src ? new URL("..", src).href : ""; } catch (e) { return ""; }
+  })();
 
   /* ---------------------------------------------------------------- *
    *  CSS (savaiminis įdėjimas; naudoja bendrus modulio kintamuosius)
@@ -108,6 +115,9 @@
       ".gpi-note{display:flex;gap:10px;background:var(--color-cyan-5,#E8F7F9);border:1px solid var(--color-graphite-15,#E1E2E4);border-radius:var(--radius-sm,8px);padding:12px 14px;font-size:12.5px;color:var(--color-graphite,#2E3641);line-height:1.5}",
       ".gpi-note svg{width:18px;height:18px;flex-shrink:0;color:var(--color-blue,#00667D);margin-top:1px}",
       ".gpi-note-title{font-weight:800;display:block;margin-bottom:2px}",
+      ".gpi-trust{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:10px;font-size:12.5px;color:var(--color-graphite-50-strong,#5B6470)}",
+      ".gpi-trust svg{width:15px;height:15px;flex-shrink:0;color:var(--color-emerald-strong,#007554)}",
+      ".gpi-trust a{color:var(--color-emerald-strong,#007554);font-weight:700;text-decoration:underline;text-underline-offset:2px}",
       /* --- 2 lygis: modalinis langas --- */
       ".gpi-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:var(--space-3,24px);background:rgba(11,18,32,.55);backdrop-filter:blur(3px);overflow-y:auto}",
       ".gpi-overlay.open{display:flex}",
@@ -234,6 +244,8 @@
         '<div class="gpi-body"><div class="gpi-inner">' +
           (c.stepsTitle ? '<div class="gpi-steps-title">' + esc(c.stepsTitle) + '</div>' : "") +
           '<div class="gpi-steps">' + steps + '</div>' + noteHtml +
+          '<div class="gpi-trust">' + ICON_SHIELD + '<span>' + esc(ui.trust) + '</span><a href="' + esc(SAKNIS + "ai-valdymas.html") + '">' + esc(ui.ai) +
+            '</a><a href="' + esc(SAKNIS + "privatumas.html") + '">' + esc(ui.privacy) + '</a></div>' +
         '</div></div>' +
       '</div>';
 
