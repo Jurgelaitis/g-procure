@@ -391,8 +391,101 @@ def taisymas_tekstas(taisyk):
                     for info in infos:
                         zout.writestr(info, items[info.filename])
         viso += pak
+    viso += _dvigubi_tarpai(taisyk)
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
+    return viso
+
+
+_RUN_RE = _re.compile(rb'<w:r(?:\s[^>]*)?>.*?</w:r>', _re.S)
+_RAUD_RE = _re.compile(rb'<w:color w:val="(?:FF0000|C00000|ED1C24)"', _re.I)       # kaip variklis.js (raudonas sluoksnis)
+_PABR_RE = _re.compile(rb'<w:u w:val="(?!none")')                                 # pabraukti tarpai - pildymo linija
+_TURINYS_RE = _re.compile(rb'PAGEREF|w:pStyle w:val="(?:TOC|toc)', _re.S)
+_VISOS_P_RE = _re.compile(rb'<w:p(?:\s[^>]*?)?(?:/>|>.*?</w:p>)', _re.S)          # ir tuscios <w:p/> - kaip zemelapio indeksai
+_PRIES = set('.,;:!?)»“”"\'%')
+_PO = set('(„"\'«–-')
+
+
+def _tarpu_pakeitimai(tekstas, seg):
+    """Dvigubi tarpai pastraipoje: tarp zodzio, skaiciaus ar skyrybos 2-3 tarpai -> vienas; 4-6 - tik tarp raidziu ar
+    skaitmenu; 7 ir daugiau - isdestymas (NACSAUGUMAS „carried out by               ĮMONĖS PAVADINIMAS“). Nelieciama: raudonas tekstas (salygos ir nurodymai - pagal juos generatorius randa vietas),
+    pabraukti tarpai (pildymo linija), turinys, tarpai prie „____“,
+    „[   ]“, „(pareigos)    (parasas)“, tabuliacija ir NBSP."""
+    if _TURINYS_RE.search(seg):
+        return None
+    raud, skirt = [], set()                                              # skirt - tabuliacija ar luzis pries simboli k
+    for r in _RUN_RE.finditer(seg):
+        red = bool(_RAUD_RE.search(r.group(0)) or _PABR_RE.search(r.group(0)))
+        for m in _re.finditer(rb'<w:t(?:\s[^>]*)?>(.*?)</w:t>|<w:(?:p?tab|br|cr)(?:\s[^>]*)?/>', r.group(0), _re.S):
+            if m.group(1) is None: skirt.add(len(raud))
+            else: raud += [red] * len(_html.unescape(m.group(1).decode('utf-8')))
+    if len(raud) != len(tekstas):
+        return None                                                      # w:t ne rune - nesiimama
+    pak = []
+    for m in _re.finditer(r' {2,}', tekstas):
+        a, b = m.start(), m.end()
+        if a == 0 or b >= len(tekstas) or any(raud[a - 1:b + 1]):           # raudonas ar pabrauktas
+            continue
+        if any(k in skirt for k in range(a, b + 1)):                         # salia tabuliacijos ar luzio - isdestymas
+            continue
+        p, n = tekstas[a - 1], tekstas[b]
+        if b - a <= 3:
+            ok = (p.isalnum() or p in _PRIES) and (n.isalnum() or n in _PO) and not (p == ')' and n == '(')
+        else:                                                           # ilgesnė eilė - tik klaida sakinio viduryje
+            ok = b - a <= 6 and p.isalnum() and n.isalnum()                 # („politika    prieš“); 7+ - išdėstymas
+        if ok:
+            pak.append((a + 1, b, ''))
+    return pak
+
+
+def _dvigubi_tarpai(taisyk):
+    """J. Dvigubi tarpai (2026-10-05, naudotojo prasymas: DPS salygu 4.3 p. „likus 6  dienoms“, 4.6 p. „subjektą  dėl“ ir
+    leidimas tokias redakcines korekcijas daryti neklausiant). Visuose zemelapiu sablonuose; zemelapio pastraipu tekstas
+    suderinamas (tos pacios reiksmes - sena -> nauja). Pakartotinai - 0."""
+    import json as _json
+    viso = 0
+    ZEM = Path(__file__).parent / 'zemelapiai'
+    zem = {}
+    for zf in sorted(ZEM.glob('*.json')):
+        try:
+            Z = _json.loads(zf.read_text(encoding='utf-8'))
+        except Exception:
+            continue
+        if isinstance(Z, dict) and Z.get('sablonas') and 'paras' in Z:
+            zem.setdefault(Path(Z['sablonas']).stem, []).append(zf)
+    tekstai = lambda xml: [_pastraipos_tekstas(m.group(0)).strip() for m in _VISOS_P_RE.finditer(xml)]
+    for f in sorted(zem):
+        path = TPL / (f + '.docx')
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}; dalys = _dokumento_dalys(zin)
+        pries = tekstai(items['word/document.xml'])
+        pak = 0
+        for d in dalys:
+            items[d], n = _redaguok(items[d], _tarpu_pakeitimai)
+            pak += n
+        if not pak:
+            continue
+        po = tekstai(items['word/document.xml'])
+        poros = {a: b for a, b in zip(pries, po) if a != b} if len(pries) == len(po) else {}
+        print(f"  {f}.docx: dvigubi tarpai - {pak}" + ("" if len(pries) == len(po) else "  (PASTRAIPU SKAICIUS PASIKEITE - zemelapis nederinamas)"))
+        if taisyk:
+            with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                for info in infos:
+                    zout.writestr(info, items[info.filename])
+            for zf in zem[f]:
+                tekstas0 = zf.read_text(encoding='utf-8'); Z = _json.loads(tekstas0); k = [0]
+                def keisk(v):
+                    if isinstance(v, str):
+                        if v in poros: k[0] += 1; return poros[v]
+                        return v
+                    if isinstance(v, list): return [keisk(x) for x in v]
+                    if isinstance(v, dict): return {a: keisk(b) for a, b in v.items()}
+                    return v
+                Z = keisk(Z)
+                if k[0]:
+                    zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if tekstas0.endswith('\n') else ''), encoding='utf-8')
+                    print(f"      {zf.name}: suderinta {k[0]} reiksmiu")
+        viso += pak
     return viso
 
 
