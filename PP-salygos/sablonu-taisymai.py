@@ -336,6 +336,34 @@ def taisymas_tekstas(taisyk):
     #    vienkalbėse DPS konkretaus pirkimo sąlygose jo nėra). Tekstas pašalinamas, pastraipa lieka - žemėlapio numeracija nesikeičia.
     dps.append((_re.compile(r'^(Linti)$'), '', 1))
     darbai.append(('DPSP_LTEN_SALYGOS.docx', dps))
+    # G. DPS LT sąlygos (2026-10-05, naudotojo prašymas „3.6 punktas“): nuorodos į sutikimų priedėlius - pagal to paties šablono
+    #    priedėlių antraštes („Pirkimo sąlygų 6 priedo priedėlis Nr. 1“ - sutikimas būti subtiekėju / ūkio subjektu, „Nr. 2“ - būti
+    #    įdarbintu). Šablone: 2 priedo 3.6 p. „5 priedo 2 priedėlį (Kvazisubtiekėjo sutikimą ...)“ (5 priedas - Atliktų darbų sąrašas),
+    #    5.5.5 p. „(Pirkimo sąlygų 2.2 priedo 1 priedėlis)“, 5.5.6 p. „(... 2.2 priedo 1 ir 2 priedėliai)“ ir 6 priedo tekste „(užpildant Pirkimo sąlygų 2.2 priedo priedėlius)“ (2.2
+    #    priedo nėra). Turinio eilutės baigiasi puslapio numeriu, todėl antraštė imama tik visa pastraipa.
+    dx = zipfile.ZipFile(TPL / 'DPSK_LT_SALYGOS.docx').read('word/document.xml')
+    p1 = _sarasas(dx, _re.compile(r'^Pirkimo sąlygų (\d+) priedo priedėlis Nr\.\s*1$'))
+    p2 = _sarasas(dx, _re.compile(r'^Pirkimo sąlygų (\d+) priedo priedėlis Nr\.\s*2$'))
+    pried = []
+    if p2: pried.append((_re.compile(r'Pirkimo sąlygų (\d+(?:\.\d+)?) priedo 2 priedėlį \(Kvazisubtiekėjo sutikimą'), p2, 1))
+    if p1: pried += [(_re.compile(r'\(Pirkimo sąlygų (\d+(?:\.\d+)?) priedo 1 priedėlis\)'), p1, 1),
+                     (_re.compile(r'\(Pirkimo sąlygų (\d+(?:\.\d+)?) priedo 1 ir 2 priedėliai\)'), p1, 1),
+                     (_re.compile(r'\(užpildant Pirkimo sąlygų (\d+(?:\.\d+)?) priedo priedėlius\)'), p1, 1)]
+    if pried: darbai.append(('DPSK_LT_SALYGOS.docx', pried))
+    # H. DPS LT/EN paketas (2026-10-05, naudotojo sprendimas: sutikimų priedėliai priklauso 5 priedui) - numeris pagal to paties paketo
+    #    subtiekėjo sutikimo antraštę „Pirkimo sąlygų 5 priedo 1 priedėlis / Appendix 1 to Annex 5 ...“: sąlygų 5.5.5 ir 5.5.6 p. „2.2 priedo“
+    #    (EN „sub-annex 2.2“) ir įdarbinimo sutikimo angliška antraštė „Appendix 2 to the Annex 6“ (lietuviškai - „5 priedo 2 priedėlis“).
+    #    Lietuviškame pakete priedėliai - 6 priedo (jo paties antraštės, G).
+    pe = _sarasas(zipfile.ZipFile(TPL / 'DPSK_LTEN_SUBTIEKEJAS.docx').read('word/document.xml'),
+                  _re.compile(r'^Pirkimo sąlygų (\d+) priedo 1 priedėlis\s*/\s*Appendix 1 to Annex \d+'))
+    if pe:
+        darbai.append(('DPSK_LTEN_SALYGOS.docx', [
+            (_re.compile(r'\(Pirkimo sąlygų (2\.2) priedo 1 priedėlis\)'), pe, 1),
+            (_re.compile(r'\(Pirkimo sąlygų (2\.2) priedo 1 ir 2 priedėliai\)'), pe, 1),
+            (_re.compile(r'\((Annex 1 of sub-annex 2\.2) of the Procurement conditions\)'), 'Appendix 1 to Annex ' + pe, 1),
+            (_re.compile(r'\((Annexes 1 and 2 of sub-annex 2\.2) of the Procurement conditions\)'), 'Appendices 1 and 2 to Annex ' + pe, 1)]))
+        darbai.append(('DPSK_LTEN_IDARBINTAS.docx', [
+            (_re.compile(r'^Pirkimo sąlygų ' + pe + r' priedo 2 priedėlis\s*/\s*(Appendix 2 to the Annex \d+) to the Procurement Conditions'), 'Appendix 2 to Annex ' + pe, 1)]))
     # F. Ilgasis brūkšnys (U+2014) - nei LT, nei EN versijoje (naudotojo taisyklė 2026-10-04). Šablonuose - angliškas sakinys
     #    „... no supporting documents are required[U+2014]submission of the ESPD is sufficient.“ (lietuviškai - kablelis); keičiama į
     #    „ - “ su tarpais (be tarpų žodžiai susilietų). Taikoma visiems šablonams - ir būsimiems.
