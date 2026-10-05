@@ -1220,6 +1220,90 @@ async function testaiImportas(){
   });
 }
 
+/* R4 (2026-10-05, naudotojo sprendimas): DI užklausa - tik užkoduota. Iki tol - mygtukai „Kopijuoti Claude promptą“ ir
+   „Kopijuoti ChatGPT promptą“, o užklausoje - pirkimo pavadinimas, numatoma vertė eurais ir situacijos aprašymas su tiekėjais.
+   Vardai, numeriai ir sumos - tik rinkinio; sumos parinktos taip, kad procentai jų nekartotų. */
+const DI_PK = "VPP-2026-77";
+function diPirkimas(verte){
+  return Object.assign(pirkimas("atviras_tarptautinis"), { id: DI_PK, val_ex: verte, val_inc: verte * 1.21, cvp_nr: "765432",
+    komisija: { tipas: "nuolatine", date: "2026-01-10", nr: "K-17", name: "Nuolatinė pirkimų komisija", chair: "Ona Onaitė", secretary: "Rasa Rasaitė",
+      members: ["Tomas Tomaitis", "Lina Linaitė"], nesaliskumas: true, nesaliskumasData: "2026-09-01" } });
+}
+const DI_SITUACIJA = "UAB „Voltrona“ (kontaktas Mantas Mantaitis, mantas@voltrona.lt, tel. +370 600 11111) pasiūlė 480 000 Eur, o Kilovatas AB - 530 000 Eur. " +
+  "Pirkimas VPP-2026-77, CVP IS 765432. Ona Onaitė siūlo atmesti VOLTRONA pasiūlymą; Tomaitis nesutinka. Parengė Testo Naudotojas.";
+const DI_DRAUDZIAMA = [/voltrona/i, /kilovatas/i, /Mantas/, /Mantaitis/, /@/, /\+370/, /11111/, /765432/, /VPP-2026-77/, /K-17/, /(^|[^\p{L}])Ona([^\p{L}]|$)/u,
+  /Onaitė/, /Rasaitė/, /Tomaitis/, /Linaitė/, /Testo Naudotojas/, /Galios transformatorių/];
+const DI_SUMOS = ["500000", "605000", "480000", "530000"];
+async function diModulis(verte){
+  localStorage.setItem(RAKTAS, JSON.stringify({ [DI_PK]: diPirkimas(verte) }));
+  localStorage.setItem("litgrid_pranesimai_v1", JSON.stringify({ [DI_PK]: [{ id: "n-di-1", templateId: "12_atmetimas", pkId: DI_PK, tiekejas: "UAB „Voltrona“",
+    kontaktas: "Mantas Mantaitis", lang: "lt", title: "Pranešimas", data: { eile: [{ tiekejas: "UAB „Voltrona“", kaina: 480000 }, { tiekejas: "Kilovatas AB", kaina: 530000 }] },
+    tiekejai: [{ pavadinimas: "UAB „Voltrona“", kontaktas: "Mantas Mantaitis", kaina: "480000" }, { pavadinimas: "Kilovatas AB", kaina: "530000" }],
+    createdAt: "2026-10-05", status: "draft", templateVersion: "1" }] }));
+  localStorage.setItem("litgrid_user_profile_v1", JSON.stringify({ name: "Testo Naudotojas", email: "" }));   // ankstesnė grupė jį keičia
+  await modulis();
+  W.eval("currentPkId = " + JSON.stringify(DI_PK) + "; currentPnPkId = " + JSON.stringify(DI_PK) + ";");
+  W.openAiAssistant();
+  D.getElementById("ai-context").value = DI_SITUACIJA;
+}
+function diBeTapatybiu(t, kur){
+  DI_DRAUDZIAMA.forEach(re => tiesa(!re.test(t), kur + ": rasta " + re + "\n" + t));
+  const glaustai = t.replace(/[\s\u00a0\u202f.,']/g, "");
+  DI_SUMOS.forEach(x => tiesa(glaustai.indexOf(x) < 0, kur + ": rasta suma " + x + "\n" + t));
+  tiesa(!/€|(^|[^A-Za-z])(EUR|Eur|eur)([^A-Za-z]|$)/.test(t), kur + ": valiuta užklausoje\n" + t);
+}
+async function testaiDI(){
+  grupe("DI užklausa - tik užkoduota (R4)");
+  await testas("Claude / ChatGPT mygtukų nėra; vienas „Kopijuoti užkoduotą užklausą“ ir „Atverti VPT Ekspertą“; įspėjimas matomas šalia, pastaba - prie situacijos aprašymo; vartotojiški DI nesiūlomi", async () => {
+    await diModulis(500000);
+    lygu([...D.querySelectorAll("button")].filter(b => /claude|chatgpt|gpt/i.test(b.textContent) || /claude|chatgpt/i.test(b.getAttribute("onclick") || "")).map(b => b.textContent), [], "mygtukai su Claude / ChatGPT");
+    const btn = D.getElementById("ai-kopijuoti"), isp = D.getElementById("ai-ispejimas");
+    lygu(btn.textContent.trim(), "📋 Kopijuoti užkoduotą užklausą", "kopijavimo mygtukas");
+    tiesa([...btn.parentElement.querySelectorAll("button")].some(b => /Atverti VPT Ekspertą/.test(b.textContent)), "nėra „Atverti VPT Ekspertą“");
+    tiesa(D.getElementById("ai-modal").classList.contains("show") && isp.getBoundingClientRect().height > 0, "įspėjimas nematomas");
+    ["Užklausa užkoduota: tiekėjų pavadinimai pakeisti kodais (Tiekėjas A, B, C)", "procentiniais skirtumais nuo planuotos (numatomos) vertės",
+     "pati vertė, pirkimo numeris ir asmenų duomenys neįtraukti", "tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą)",
+     "Nenaudokite asmeninių ar vartotojiškų DI paskyrų (pvz. ChatGPT, Claude.ai)", "neužtikrina pirkimo konfidencialumo"].forEach(f => tiesa(isp.textContent.indexOf(f) >= 0, "įspėjime nėra „" + f + "“"));
+    tiesa(isp.nextElementSibling === btn.parentElement && btn.getAttribute("aria-describedby") === "ai-ispejimas", "įspėjimas - ne šalia mygtuko");
+    const pst = D.getElementById("ai-context-pastaba");
+    tiesa(pst.getBoundingClientRect().height > 0 && /Nerašykite čia tiekėjų pavadinimų, sumų ar asmens duomenų/.test(pst.textContent)
+      && D.getElementById("ai-context").getAttribute("aria-describedby") === "ai-context-pastaba", "pastaba prie situacijos aprašymo");
+    const kopija = D.getElementById("ai-modal").cloneNode(true); kopija.querySelector("#ai-ispejimas").remove();
+    tiesa(!/claude|chatgpt|gpt/i.test(kopija.textContent) && !/claude|gpt/i.test(D.getElementById("help-modal").textContent), "langas ar pagalba siūlo vartotojišką DI");
+  });
+
+  await testas("Užkoduota užklausa: tiekėjai - kodais, sumos - procentais nuo numatomos vertės, objekto rūšis vietoj pavadinimo; nėra tiekėjų, kontaktų, numerių, komisijos narių, naudotojo ir sumų; kopijuojama tai, kas rodoma; auditas - be tiekėjo", async () => {
+    await diModulis(500000);
+    let irasyta = null;
+    W.Object.defineProperty(W.navigator, "clipboard", { value: { writeText: t => { irasyta = t; return Promise.resolve(); } }, configurable: true });
+    try {
+      const pries = W.getAuditLog(DI_PK).filter(e => e.action === "COPY_AI_PROMPT").length;
+      D.getElementById("ai-kopijuoti").click(); await lauk(80);
+      tiesa(irasyta, "nenukopijuota");
+      diBeTapatybiu(irasyta, "užklausa");
+      ["- Pirkimo objektas: Prekės", "- Vertė: numatoma vertė = 100 % (absoliuti suma neįtraukta)", "Sumos pateiktos procentais nuo numatomos vertės.",
+       "Tiekėjas A (kontaktas [kontaktas neįtrauktas], [el. paštas neįtrauktas], tel. [telefonas neįtrauktas]) pasiūlė [96 % numatomos vertės], o Tiekėjas B - [106 % numatomos vertės].",
+       "Pirkimas [numeris neįtrauktas], CVP IS [numeris neįtrauktas].", "[asmuo neįtrauktas] siūlo atmesti Tiekėjas A pasiūlymą; [asmuo neįtrauktas] nesutinka. Parengė [asmuo neįtrauktas]."]
+        .forEach(f => tiesa(irasyta.indexOf(f) >= 0, "užklausoje nėra „" + f + "“\n" + irasyta));
+      const perz = D.getElementById("ai-prompt-preview");
+      lygu([perz.style.display, perz.textContent === irasyta], ["block", true], "peržiūra = nukopijuotas tekstas");
+      const raktas = D.getElementById("ai-kodai").textContent;
+      tiesa(/Tiekėjas A - UAB „Voltrona“/.test(raktas) && /Tiekėjas B - Kilovatas AB/.test(raktas) && /į užklausą neįtrauktas/.test(raktas), "kodų raktas: " + raktas);
+      const a = W.getAuditLog(DI_PK).filter(e => e.action === "COPY_AI_PROMPT");
+      tiesa(a.length === pries + 1 && !/claude|chatgpt|voltrona/i.test(JSON.stringify(a[a.length - 1])), "auditas: " + JSON.stringify(a.slice(-1)));
+    } finally { delete W.navigator.clipboard; }
+  });
+
+  await testas("Be numatomos vertės sumų nėra visai: užklausa sako, kodėl; sumos aprašyme - „[suma neįtraukta]“", async () => {
+    await diModulis(0);
+    const t = W.aiUzklausa().prompt;
+    diBeTapatybiu(t, "užklausa be vertės");
+    tiesa(!/% numatomos vertės|= 100 %/.test(t), "procentai be vertės:\n" + t);
+    ["- Vertė: nenurodyta", "Sumos neįtrauktos, nes nenurodyta numatoma vertė.", "pasiūlė [suma neįtraukta], o Tiekėjas B - [suma neįtraukta]."]
+      .forEach(f => tiesa(t.indexOf(f) >= 0, "užklausoje nėra „" + f + "“\n" + t));
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -1238,6 +1322,7 @@ async function testaiImportas(){
     await testaiOficialusStilius();
     await testaiEkranavimas();
     await testaiImportas();
+    await testaiDI();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

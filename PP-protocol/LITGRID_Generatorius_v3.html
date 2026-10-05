@@ -910,7 +910,7 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
         <li><strong>Pranešimų modulis</strong> - 19 šablonų tiekėjams (LT/LT-EN) su auto-terminų skaičiavimu</li>
         <li><strong>Rizikų sistema</strong> - VPT pažymėtos rizikos automatiškai aptinkamos</li>
         <li><strong>Audito žurnalas</strong> - visi veiksmai registruojami (<span data-teise="eigos_dokumentavimas"></span>)</li>
-        <li><strong>AI asistentas</strong> - clipboard kontekstas Claude/GPT motyvavimo formuluotėms</li>
+        <li><strong>AI asistentas</strong> - užkoduota užklausa (tiekėjai - kodais, sumos - procentais nuo numatomos vertės) organizacijos patvirtintam DI įrankiui motyvavimo formuluotėms</li>
       </ul>
 
       <h3 style="margin-bottom:8px;color:var(--color-emerald-strong)">VPT gairės, į kurias atsižvelgta</h3>
@@ -946,11 +946,12 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
       <button class="btn btn-secondary btn-sm" onclick="closeAiAssistant()" aria-label="Uždaryti" title="Uždaryti">✕</button>
     </div>
     <div class="epso-modal__body">
-      <p style="margin-bottom:12px">Šis įrankis paruošia kontekstą, kurį galite įklijuoti į <strong>Claude</strong>, <strong>ChatGPT</strong> arba <strong>VPT Ekspertą</strong>, kad gautumėte motyvavimo formuluočių pasiūlymus pagal VPT „Pasiūlymų vertinimo gaires".</p>
+      <p style="margin-bottom:12px">Šis įrankis paruošia užkoduotą užklausą, kurią galite įklijuoti į jūsų organizacijos patvirtintą DI įrankį (pvz. <strong>VPT Ekspertą</strong>), kad gautumėte motyvavimo formuluočių pasiūlymus pagal VPT „Pasiūlymų vertinimo gaires".</p>
 
       <div class="epso-fg" style="margin-bottom:12px">
-        <label>Situacijos aprašymas</label>
-        <textarea id="ai-context" rows="5" placeholder="Pvz., Tiekėjas UAB Pavyzdys pateikė pasiūlymą, kurio kainos struktūroje rastos aritmetinės klaidos. Tiekėjas buvo prašytas patikslinti per 3 d.d., bet pataisymo nepateikė. Reikalinga atmetimo motyvacija."></textarea>
+        <label for="ai-context">Situacijos aprašymas</label>
+        <textarea id="ai-context" rows="5" aria-describedby="ai-context-pastaba" placeholder="Pvz., Tiekėjas A pateikė pasiūlymą, kurio kainos struktūroje rastos aritmetinės klaidos. Tiekėjas buvo prašytas patikslinti per 3 d.d., bet pataisymo nepateikė. Reikalinga atmetimo motyvacija."></textarea>
+        <div class="hint" id="ai-context-pastaba">Nerašykite čia tiekėjų pavadinimų, sumų ar asmens duomenų. Tekstas įtraukiamas į užklausą; automatiškai pakeičiami tik šio pirkimo tiekėjų pavadinimai, komisijos narių vardai, pirkimo numeris, sumos su „Eur“ (procentais nuo numatomos vertės), el. paštai ir telefonai - kitų duomenų sistema neatpažįsta.</div>
       </div>
 
       <div class="epso-fg" style="margin-bottom:12px">
@@ -965,13 +966,15 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
         </select>
       </div>
 
+      <div class="warn-box" id="ai-ispejimas" role="note">⚠️ Užklausa užkoduota: tiekėjų pavadinimai pakeisti kodais (Tiekėjas A, B, C), sumos - procentiniais skirtumais nuo planuotos (numatomos) vertės, pati vertė, pirkimo numeris ir asmenų duomenys neįtraukti. Įklijuokite ją tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą). Nenaudokite asmeninių ar vartotojiškų DI paskyrų (pvz. ChatGPT, Claude.ai) pirkimo duomenims - jų sąlygos neužtikrina pirkimo konfidencialumo.</div>
+
       <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="copyAiPrompt('claude')">📋 Kopijuoti Claude promptą</button>
-        <button class="btn btn-secondary btn-sm" onclick="copyAiPrompt('chatgpt')">📋 Kopijuoti ChatGPT promptą</button>
+        <button class="btn btn-primary btn-sm" id="ai-kopijuoti" onclick="copyAiPrompt()" aria-describedby="ai-ispejimas">📋 Kopijuoti užkoduotą užklausą</button>
         <button class="btn btn-secondary btn-sm" onclick="openVptEkspertas()">🔗 Atverti VPT Ekspertą</button>
       </div>
 
       <div id="ai-prompt-preview" style="background:var(--epso-graphite-5);padding:12px;border-radius:8px;font-family:ui-monospace,monospace;font-size:12px;max-height:240px;overflow-y:auto;display:none;white-space:pre-wrap"></div>
+      <div id="ai-kodai" style="display:none;font-size:12px;color:var(--color-graphite-50-strong);margin-top:8px"></div>
     </div>
     <div class="epso-modal__footer">
       <button class="btn btn-secondary" onclick="closeAiAssistant()">Uždaryti</button>
@@ -5383,10 +5386,116 @@ function openAiAssistant(){
 }
 function closeAiAssistant(){ document.getElementById('ai-modal').classList.remove('show'); }
 
-function copyAiPrompt(provider){
-  const ctx = document.getElementById('ai-context').value.trim();
+/* R4 (2026-10-05, naudotojo sprendimas): konfidencialių pirkimo duomenų į vartotojiškus DI įrankius nesiunčiame (CLAUDE.md 6 sk.).
+   Iki tol buvo mygtukai „Kopijuoti Claude promptą“ ir „Kopijuoti ChatGPT promptą“, o užklausoje - pirkimo pavadinimas, numatoma
+   vertė eurais ir situacijos aprašymas su tiekėjų pavadinimais. Dabar - viena užkoduota užklausa:
+   - pavadinimo vietoje - pirkimo objekto rūšis (prekės, paslaugos, darbai); jos nesant - pavadinimas (paprastai viešas) per aiSlepk();
+   - numatoma vertė neįtraukiama: sumos situacijos aprašyme - procentais nuo jos, be vertės - sumų nėra;
+   - situacijos aprašyme (aiSlepk) pakeičiami šio pirkimo tiekėjų pavadinimai kodais „Tiekėjas A, B, C“ (iš atvertų protokolo ir
+     pranešimo formų bei išsaugotų pranešimų - pirkimo įraše tiekėjų sąrašo nėra), komisijos narių ir naudotojo vardai, pirkimo ir
+     CVP IS numeriai, kontaktai, el. paštai, telefonai, 9 skaitmenų kodai ir sumos (su „Eur“ arba lygios pirkimo sumai); kitų duomenų
+     sistema neatpažįsta - tai sakoma prie lauko. Kodų raktas rodomas tik ekrane. Bendra logika su PP-negotiation - kandidatas į shared/. */
+function aiTiekejoKodas(i){
+  let r = '', n = i + 1;
+  while(n > 0){ r = String.fromCharCode(65 + (n - 1) % 26) + r; n = Math.floor((n - 1) / 26); }
+  return 'Tiekėjas ' + r;
+}
+/* Pavadinimo variantai: kaip įrašyta, be kabučių ir be teisinės formos (UAB „Alfa“ -> Alfa). Kelių žodžių - nepaisant raidžių
+   dydžio, vienas žodis - tiksliai ir didžiosiomis (kitaip tiekėjas „UAB Statyba“ paverstų kodu kiekvieną žodį „statyba“). */
+function aiVardoVariantai(v){
+  const t = String(v || '').replace(/\s+/g, ' ').trim(), be = t.replace(/[„“”"«»]/g, '').replace(/\s+/g, ' ').trim();
+  const br = be.replace(/^(UAB|AB|MB|IĮ|VšĮ|VĮ|TŪB|KŪB|SIA|AS|OÜ|Oy|SA|GmbH|Ltd\.?)\s+/i, '')
+    .replace(/,?\s+(UAB|AB|SIA|AS|OÜ|Oy|Ab|SA|AG|BV|NV|GmbH|Ltd\.?|LLC|Inc\.?)$/i, '').trim();
+  const r = [];
+  [t, be, br].forEach(x => {
+    if(x.length < 3) return;
+    const vardai = /\s/.test(x) ? [[x, false]] : [[x, true], [x.toUpperCase(), true]];
+    vardai.forEach(y => { if(!r.some(z => z[0] === y[0])) r.push(y); });
+  });
+  return r;
+}
+const aiRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const aiSk = n => new Intl.NumberFormat('lt-LT', { maximumFractionDigits: 1 }).format(Math.abs(Math.round(n * 10) / 10));
+/* Suma tekste: valiuta prieš arba po skaičiaus (ir „mln.“, „tūkst.“); be valiutos - tik lygi pirkimo sumai (>= 1000). */
+const AI_SUMA = /(^|[^\p{L}\p{N}.,])((?:EUR|€)[  ]*)?(\d{1,3}(?:[   .,']\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)([  ]*(?:mln|tūkst)\.?)?([  ]*(?:eurų|eurai|eurus|euro|eur|€)(?!\p{L}))?/giu;
+
+/* Šio pirkimo užkodavimo kontekstas: tiekėjų kodai, keičiami tekstai (ilgiausi pirmi), žinomos sumos ir numatoma vertė. */
+function aiKontekstas(pkId){
+  const pk = getProcurement(pkId) || {}, pv = Number(pk.val_ex) || 0;
+  const vardai = [], kontaktai = [], sumos = [], poros = [];
+  const vardas = v => { v = String(v || '').replace(/\s+/g, ' ').trim(); if(v && !/^_+$/.test(v) && vardai.indexOf(v) < 0) vardai.push(v); };
+  const sk = v => { const n = typeof v === 'number' ? v : (window.GP_MONEY ? GP_MONEY.parseEUR(String(v == null ? '' : v)) : parseFloat(v)); if(n != null && isFinite(n) && n > 0) sumos.push(n); };
+  const tiek = t => { if(!t) return; vardas(t.pavadinimas); kontaktai.push(t.kontaktas); sk(t.kaina); };
+  document.querySelectorAll('.d4-name, .d5-name, .d6-name, .d8-name, .der-name, .e-name, .gp-name, .gp-inv-name, .kv-name, .nmp-name, .p31-name, .par-name, .r-name, .t-name, #pf-winner, #pf-winner-d8, [id$="pretenzijos_tiekejas"], [id$="galimas_laimetojas"]').forEach(el => vardas(el.value));
+  const vl = document.querySelector('[id$="vertinimo_lentele"]');
+  if(vl) String(vl.value || '').split('\n').slice(1).forEach(e => vardas(e.split('|')[0]));
+  pnTiekejai.concat(inlinePnTiekejai).forEach(tiek);
+  const pn = loadNotifStore()[pkId];
+  (Array.isArray(pn) ? pn : []).forEach(n => {
+    if(!n || typeof n !== 'object') return;
+    vardas(n.tiekejas); (Array.isArray(n.tiekejaiGroup) ? n.tiekejaiGroup : []).forEach(vardas);
+    (Array.isArray(n.tiekejai) ? n.tiekejai : []).forEach(tiek); kontaktai.push(n.kontaktas);
+    const d = n.data || {};
+    [d.pretenzijos_tiekejas, d.galimas_laimetojas, d.laimetojas].forEach(vardas);
+    (Array.isArray(d.eile) ? d.eile : []).forEach(e => { if(e){ vardas(e.tiekejas); sk(e.kaina); } });
+    [d.kaina_be, d.kaina_su, d.biudzetas, d.vidurkis].forEach(sk);
+  });
+  const kodai = vardai.map((v, i) => [aiTiekejoKodas(i), v]);
+  const pridek = (ka, kuo, tikslus) => { ka = String(ka || '').trim(); if(ka.length >= 3) poros.push([ka, kuo, tikslus]); };
+  kodai.forEach(([kodas, v]) => aiVardoVariantai(v).forEach(([x, tikslus]) => pridek(x, kodas, tikslus)));
+  kontaktai.forEach(k => { const s = String(k || ''); [s].concat(s.split(/[,;\/\n]/)).forEach(x => pridek(x, '[kontaktas neįtrauktas]', false)); });
+  const k = pk.komisija || {}, u = getCurrentUser();
+  [k.chair, k.secretary].concat(Array.isArray(k.members) ? k.members : [], u && u.name !== '(naudotojas nenurodytas)' ? [u.name] : []).forEach(a => {
+    a = String(a || '').replace(/\s+/g, ' ').trim();
+    pridek(a, '[asmuo neįtrauktas]', false);
+    const pav = a.split(' ').pop();
+    if(a.indexOf(' ') > 0 && pav.length >= 4) pridek(pav, '[asmuo neįtrauktas]', true);   // pavardė atskirai (vardininku)
+  });
+  if(u) pridek(u.email, '[el. paštas neįtrauktas]', false);
+  const kortele = window.KORTELE && typeof KORTELE.pasirinkta === 'function' ? KORTELE.pasirinkta() : null;
+  [pk.id, pk.cvp_nr, k.nr, document.getElementById('pf-cvp-nr')?.value].concat(kortele ? [kortele.numeris, kortele.cvpisNr] : [])
+    .forEach(n => pridek(n, '[numeris neįtrauktas]', false));
+  if(kortele) [kortele.iniciatorius, kortele.organizatorius].forEach(a => { a = String(a || ''); pridek(a, '[asmuo neįtrauktas]', false); pridek(a.split(',')[0], '[asmuo neįtrauktas]', false); });
+  poros.sort((a, b) => b[0].length - a[0].length);
+  [pk.val_ex, pk.val_inc].forEach(sk);
+  (Array.isArray(pk.parts) ? pk.parts : []).forEach(p => { if(p){ sk(p.ex); sk(p.inc); } });
+  document.querySelectorAll('input[type="number"]').forEach(el => sk(el.value));
+  return { pv, kodai, poros, sumos, naudoti: new Set() };
+}
+
+/* Laisvo teksto keitimas. Pakaitai pirma virsta žymėmis (privačios srities simboliai, ne raidės ir ne skaičiai), kad vėlesnis
+   keitimas nepaliestų jau pakeisto (pvz. el. pašto domeno su tiekėjo vardu); žymės atkuriamos pabaigoje. */
+function aiSlepk(tekstas, c){
+  let t = String(tekstas == null ? '' : tekstas);
+  if(!t.trim()) return '';
+  const zymes = [], zyme = p => { zymes.push(p); return '' + String.fromCharCode(0xE100 + zymes.length - 1) + ''; };
+  t = t.replace(/[^\s@<>()"„“,;:]+@[^\s@<>()"„“,;:]+\.\p{L}{2,}/gu, () => zyme('[el. paštas neįtrauktas]'));
+  t = t.replace(/(^|[^\p{L}\p{N}+])(\+\d[\d ()-]{6,}\d)/gu, (m, pr) => pr + zyme('[telefonas neįtrauktas]'));
+  t = t.replace(/(^|[^\p{L}])((?:tel|telefonas|telefono nr|mob)\.?[  ]*(?:nr\.?)?[  ]*[:.]?[  ]*)(\(?\d[\d ()-]{5,}\d)/giu, (m, pr, pav) => pr + pav + zyme('[telefonas neįtrauktas]'));
+  c.poros.forEach(([ka, kuo, tikslus]) => {
+    const re = new RegExp('(^|[^\\p{L}\\p{N}])' + aiRe(ka) + '(?=[^\\p{L}\\p{N}]|$)', tikslus ? 'gu' : 'giu');
+    t = t.replace(re, (m, pr) => { c.naudoti.add(kuo); return pr + zyme(kuo); });
+  });
+  t = t.replace(AI_SUMA, (m, pr, pries, skaicius, daug, po) => {
+    let v = window.GP_MONEY ? GP_MONEY.parseEUR(skaicius) : null;
+    if(v == null || !isFinite(v)) return m;
+    if(daug) v *= /mln/i.test(daug) ? 1e6 : 1e3;
+    const zinoma = v >= 1000 && c.sumos.some(x => Math.abs(x - v) < 0.005);
+    if(!pries && !po && !zinoma) return m;
+    return pr + zyme(c.pv > 0 ? '[' + aiSk(v / c.pv * 100) + ' % numatomos vertės]' : '[suma neįtraukta]');
+  });
+  t = t.replace(/(^|[^\p{N}])\d{9}(?=[^\p{N}]|$)/gu, (m, pr) => pr + zyme('[kodas neįtrauktas]'));
+  return t.replace(/([-])/g, (m, z) => zymes[z.charCodeAt(0) - 0xE100]);
+}
+
+/* Užkoduota užklausa ir kodų raktas (tik naudoti kodai; raktas į užklausą nepatenka). */
+function aiUzklausa(){
+  const pkId = currentPnPkId || currentPkId;
+  const pk = getProcurement(pkId) || {};
+  const c = aiKontekstas(pkId);
+  const ctx = aiSlepk(document.getElementById('ai-context').value.trim(), c);
   const type = document.getElementById('ai-decision-type').value;
-  const pk = getProcurement(currentPnPkId||currentPkId)||{};
+  const objektas = {prekes:'Prekės', paslaugos:'Paslaugos', darbai:'Darbai'}[pk.obj_type];
 
   const decisionMap = {
     atmetimas:'pasiūlymo atmetimo motyvavimui',
@@ -5400,10 +5509,15 @@ function copyAiPrompt(provider){
   const prompt = `Esu Lietuvos elektros perdavimo sistemos operatoriaus LITGRID AB pirkimų komisijos pirmininkas. Vadovaujuosi Lietuvos Respublikos pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymu (PSĮ).
 
 KONTEKSTAS:
-- Pirkimas: ${pk.name||'(nenurodyta)'}
+- ${objektas ? 'Pirkimo objektas: ' + objektas : 'Pirkimas: ' + (aiSlepk(pk.name, c) || '(nenurodyta)')}
 - Pirkimo būdas: ${pnPirkimoBudasLt(pk.type)}
-- Vertė: ${pk.val_ex?pnMoney(pk.val_ex)+' Eur be PVM':'(nenurodyta)'}
 - Kategorija: ${pk.val_cat||'(nenurodyta)'}
+- Vertė: ${c.pv > 0 ? 'numatoma vertė = 100 % (absoliuti suma neįtraukta)' : 'nenurodyta'}
+
+DUOMENŲ UŽKODAVIMAS:
+- Tiekėjai pažymėti kodais (Tiekėjas A, B, C...); pirkimo numeris, asmenų vardai ir kontaktai neįtraukti.
+- ${c.pv > 0 ? 'Sumos pateiktos procentais nuo numatomos vertės.' : 'Sumos neįtrauktos, nes nenurodyta numatoma vertė.'}
+- Atsakyme vartok tuos pačius kodus${c.pv > 0 ? ', sumas nurodyk procentais nuo numatomos vertės' : ''}.
 
 SPRENDIMO SITUACIJA (${decisionMap[type]||'sprendimo motyvavimui'}):
 ${ctx||'(prašau aprašyti situaciją)'}
@@ -5419,11 +5533,21 @@ Vengti: bendrų teiginių be konkrečių faktų; subjektyvių vertinimų; viršy
 
 Pasiūlyk geriausią formuluotę ir paaiškink, kodėl ji atitinka VPT gaires.`;
 
-  // shared/kopija.js: nepavykus - pranešimas su patarimu, peržiūra rodoma ir tada (kopijuoti ranka); audite - tik nukopijavus
-  GP_KOPIJA.kopijuok(prompt, { sekme: `${provider==='claude'?'Claude':'ChatGPT'} promptas nukopijuotas. Įklijuokite į pasirinktą AI įrankį.` }).then(ok => {
-    document.getElementById('ai-prompt-preview').style.display='block';
-    document.getElementById('ai-prompt-preview').textContent = prompt;
-    if (ok) logAudit('COPY_AI_PROMPT', currentPnPkId||currentPkId, {provider, type});
+  return { prompt, pkId, type, raktas: c.kodai.filter(([kodas]) => c.naudoti.has(kodas)) };
+}
+
+function copyAiPrompt(){
+  const u = aiUzklausa();
+  // shared/kopija.js: nepavykus - pranešimas su patarimu, peržiūra rodoma ir tada (kopijuoti ranka); audite - tik nukopijavus.
+  // Peržiūroje - tas pats užkoduotas tekstas, kuris kopijuojamas.
+  GP_KOPIJA.kopijuok(u.prompt, { sekme: 'Užkoduota užklausa nukopijuota. Įklijuokite ją tik į organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą).' }).then(ok => {
+    const pr = document.getElementById('ai-prompt-preview');
+    pr.style.display = 'block';
+    pr.textContent = u.prompt;
+    const r = document.getElementById('ai-kodai');
+    r.style.display = u.raktas.length ? 'block' : 'none';
+    r.innerHTML = u.raktas.length ? '<strong>Kodų raktas</strong> (rodomas tik jums, į užklausą neįtrauktas): ' + u.raktas.map(([k, v]) => hx(k) + ' - ' + hx(v)).join('; ') : '';
+    if (ok) logAudit('COPY_AI_PROMPT', u.pkId, {type: u.type, uzkoduota: true});
   });
 }
 
