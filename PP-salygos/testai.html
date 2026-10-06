@@ -759,6 +759,62 @@ async function testaiKortele(){
 }
 
 /* Bendras dokumentų skaitymas - vienas failas (shared/), abu moduliai jį jungia. */
+/* 2026-10-06 (naudotojo sprendimas): rinkos apžvalgos veiksmai iš pirkimo kortelės rodomi 2 žingsnyje - tik skaitymui. */
+async function testaiVeiksmai(){
+  dabartine = grupe("Rinkos apžvalgos veiksmai iš pirkimo kortelės (2 žingsnis)");
+  await testas("Kortelė su veiksmais: 2 žingsnyje - naujausia grupė su būsenomis, ankstesnė suskleista, nuoroda į apžvalgą su ?kortele=; tekstai ekranuoti; kortelė nekeičiama", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const K = W.GP_KORTELE;
+      const k = K.issaugok(K.tuscia(KORTELE)).kortele;
+      K.pridekVeiksmus(k.id, [
+        { raktas: "pp-market-kpi:statyba:yellow:0", saltinis: "pp-market-kpi", tekstas: "Senas veiksmas", kontekstas: "Statyba · geltonas režimas · 2026 m. rugpjūčio 1 d.", atlikta: true }]);
+      await miegok(5);
+      K.pridekVeiksmus(k.id, [
+        { raktas: "pp-market-kpi:statyba:red:0", saltinis: "pp-market-kpi", tekstas: "Indeksavimas: degalai, metalai, SSKI dedamosios", kontekstas: "Pastočių ir linijų statyba, rekonstrukcija · raudonas režimas · 2026 m. spalio 1 d.", atlikta: true },
+        { raktas: "pp-market-kpi:statyba:red:1", saltinis: "pp-market-kpi", tekstas: "<img src=x onerror=\"window.__xss=1\">PRR eskalacija", kontekstas: "Pastočių ir linijų statyba, rekonstrukcija · raudonas režimas · 2026 m. spalio 1 d.", atlikta: false }]);
+      const pries = JSON.stringify(K.gauk(k.id));
+      const api = W.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(k.id), "pasirinkta");
+      await W.iStep2();
+      const el = D.getElementById("lkVeiksmai");
+      const h = el.querySelector("#lkvH").textContent;
+      lygu(h, "Rinkos apžvalgos veiksmai šiam pirkimui (1 iš 2 atlikta)", "antraštė");
+      const pirma = [...el.querySelectorAll(".lkv > .lkv-list .lkv-item")].map(x => [x.querySelector(".lkv-zyma").textContent, x.querySelector(".lkv-t").textContent]);
+      lygu(pirma, [["Atlikta", "Indeksavimas: degalai, metalai, SSKI dedamosios"], ["Neatlikta", "<img src=x onerror=\"window.__xss=1\">PRR eskalacija"]], "naujausia grupė");
+      tiesa(!el.querySelector("img") && !W.__xss, "kortelės tekstas ekranuotas");
+      const meta = el.querySelector(".lkv-grupe").textContent;
+      tiesa(/^Rinkos rodiklių stebėsena · Pastočių ir linijų statyba, rekonstrukcija · raudonas režimas · 2026 m\. spalio 1 d\. · įrašyta \d{4}-\d{2}-\d{2}$/.test(meta), "grupės aprašas: " + meta);
+      const kiti = el.querySelector("details.lkv-kiti");
+      tiesa(kiti && !kiti.open && /Ankstesni įrašai \(1\)/.test(kiti.querySelector("summary").textContent) && /Senas veiksmas/.test(kiti.textContent), "ankstesnė grupė suskleista");
+      const a = el.querySelector(".lkv-foot a");
+      tiesa(a && a.getAttribute("href") === "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html?kortele=" + encodeURIComponent(k.id) + "#focusSec" && a.target === "_blank", "nuoroda: " + (a && a.getAttribute("href")));
+      tiesa(/tik rodomi/.test(el.querySelector(".lkv-foot").textContent), "pasakyta, kad tik rodoma");
+      lygu(JSON.stringify(K.gauk(k.id)), pries, "kortelė nepakeista");
+      tiesa(el.compareDocumentPosition(D.getElementById("lkTeise")) & W.Node.DOCUMENT_POSITION_FOLLOWING, "prieš teisės pokyčius");
+      tiesa(D.getElementById("lkSantrauka").compareDocumentPosition(el) & W.Node.DOCUMENT_POSITION_FOLLOWING, "po „Prieš generuojant“");
+    } finally { f.remove(); }
+  });
+
+  await testas("Kortelė be veiksmų - viena eilutė su nuoroda; be kortelės ir atsiejus - blokas tuščias (nerodomas)", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const K = W.GP_KORTELE;
+      const api = W.eval("KORTELE");
+      await W.iStep2();
+      lygu(D.getElementById("lkVeiksmai").innerHTML, "", "be kortelės - tuščia");
+      const k = K.issaugok(K.tuscia(KORTELE)).kortele;
+      api.atnaujink();
+      await api.pasirink(k.id);
+      const t = D.getElementById("lkVeiksmai").textContent.replace(/\s+/g, " ").trim();
+      tiesa(/rinkos apžvalgos veiksmų dar neįrašyta/.test(t) && /Atverti pirkimo rinkos apžvalgą/.test(t), t);
+      api.atsiek();
+      await miegok(10);
+      lygu(D.getElementById("lkVeiksmai").innerHTML, "", "atsiejus - tuščia");
+    } finally { f.remove(); }
+  });
+}
+
 async function testaiBendras(){
   dabartine = grupe("Bendras kodas");
   /* A3 (2026-09-26): būdo ir vertės patikra - bendras taisyklių variklis (shared/taisykles.js), ne modulio ribos. */
@@ -1809,7 +1865,7 @@ async function testaiTeise(){
     await kol(() => W.eval("TEISE_REG"), "registro įkėlimas");
     const r = W.eval("TEISE_REG"), t = D.querySelector("#lkTeise .gps__title");
     tiesa(t && /^Teisės pokyčiai šiam pirkimui( \(\d+\))?$/.test(t.textContent) && (r.ok ? /\(\d+\)$/.test(t.textContent) : D.querySelector("#lkTeise .gps__err")), "būsena: " + D.getElementById("lkTeise").textContent.slice(0, 120));
-    tiesa(D.getElementById("lkTeise").closest("#step2") && D.getElementById("lkTeise").previousElementSibling.id === "lkSantrauka", "vieta - po „Prieš generuojant“");
+    tiesa(D.getElementById("lkTeise").closest("#step2") && D.getElementById("lkTeise").previousElementSibling.id === "lkVeiksmai" && D.getElementById("lkVeiksmai").previousElementSibling.id === "lkSantrauka", "vieta - po „Prieš generuojant“ ir rinkos apžvalgos veiksmų (nuo 2026-10-06)");
   });
   await testas("Atranka pagal 1 žingsnį: įstatymas (centralizuotam - VPĮ), objektas (darbai - ir „statyba“), rengimo etapas; kito įrankio įrašai nerodomi; neaktualūs - suskleisti su priežastimi; kontekstas pasakomas", async () => {
     await formosZingsnis("T-SD", "LT");
@@ -2671,6 +2727,7 @@ async function testaiNumeracija(){
     await testaiBusenos();
     await testaiBendras();
     await testaiKortele();
+    await testaiVeiksmai();
     await testaiGeneravimas();
     await testaiNaujiSablonai();
     await testaiSablonuTaisymai();

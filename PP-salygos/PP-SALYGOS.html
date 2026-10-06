@@ -214,6 +214,23 @@
   .lk-pr-t{display:block;min-width:0;overflow-wrap:anywhere}
   .lk-pr-t .cite{display:block}
   .lk-teise{margin-top:14px}
+  /* Rinkos apžvalgos veiksmai (2026-10-06): tik skaitymui, iš pirkimo kortelės */
+  .lk-veiksmai{margin-top:14px}
+  .lk-veiksmai:empty{display:none}
+  .lkv{border:1px solid var(--color-graphite-15);border-radius:10px;padding:14px 16px;background:var(--color-white)}
+  .lkv-h{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+  .lkv-h h4{margin:0;font-size:16px;font-weight:800;text-transform:none;letter-spacing:0;color:var(--color-graphite)}
+  .lkv-meta{font-size:13px;color:var(--color-graphite-50-strong);overflow-wrap:anywhere}
+  .lkv-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+  .lkv-item{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;padding:9px 12px;border-radius:10px;background:var(--color-graphite-5);font-size:14px;overflow-wrap:anywhere}
+  .lkv-zyma{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap;min-width:92px;text-align:center;box-sizing:border-box}   /* vienodas plotis - tekstai viename stulpelyje */
+  .lkv-zyma--ne{background:var(--color-warning-5);color:var(--color-warning-strong)}
+  .lkv-zyma--taip{background:var(--color-green-5);color:var(--color-green-strong)}
+  .lkv-item--taip .lkv-t{color:var(--color-graphite-50-strong)}
+  .lkv-grupe{font-size:12.5px;color:var(--color-graphite-50-strong);margin:10px 0 6px}
+  .lkv-kiti{margin-top:10px;font-size:14px}.lkv-kiti summary{cursor:pointer;color:var(--color-emerald-strong);font-weight:700}
+  .lkv-foot{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:space-between;align-items:baseline;margin-top:10px;font-size:13px;color:var(--color-graphite-50-strong)}
+  .lkv-foot a{color:var(--color-emerald-strong);font-weight:700}
   .lk-santrauka{margin-top:22px;border:1px solid var(--color-graphite-15);border-radius:10px;padding:14px 16px;background:#fbfcfd}
   .lk-santrauka:empty{display:none}
   .lk-sa-t{margin:0 0 8px;font-size:15px;text-transform:none;letter-spacing:0;color:var(--color-graphite)}
@@ -445,6 +462,8 @@
     <div id="klausimai"></div>
     <!-- Santrauka prieš generavimą: privalomi sprendimai, neužpildyti laukai, nepatvirtintos siūlomos, pašalinamos nuorodos -->
     <div id="lkSantrauka" class="lk-santrauka" role="region" aria-label="Santrauka prieš generuojant"></div>
+    <!-- Rinkos apžvalgos veiksmai šiam pirkimui - iš pirkimo kortelės lauko „veiksmai“ (įrašo PP-market-KPI; čia tik rodoma) -->
+    <div id="lkVeiksmai" class="lk-veiksmai"></div>
     <!-- Teisės pokyčiai šiam pirkimui - pagal 1 žingsnio atsakymus (shared/teise-stebesena.js, PP-teise registras) -->
     <div id="lkTeise" class="lk-teise"></div>
     <div class="actions">
@@ -538,6 +557,59 @@ function teisesPirkimui(){
   el.dataset.raktas = raktas;
   el.innerHTML = GP_STEBESENA.pirkimuiHTML(TEISE_REG, { modulis: 'PP-salygos', ctx: k.ctx, lang: 'lt', saknis: '..', H: 'h4',
     kontekstas: k.tekstas, kasZyma: 'Ką patikrinti sąlygose' });
+}
+
+/* Rinkos apžvalgos veiksmai ŠIAM pirkimui (naudotojo sprendimas 2026-10-06: rodyti PP-salygos 2 žingsnyje). Šaltinis - pasirinktos
+   pirkimo kortelės laukas `veiksmai` (įrašo PP-market-KPI „Įrašyti į kortelę“, shared/pirkimo-kortele.js pridekVeiksmus); čia TIK
+   rodoma - būsena keičiama ten, kur veiksmai įrašyti. Grupė - šaltinis, profilis ir režimas (rakto pradžia); naujausia grupė rodoma,
+   ankstesnės - suskleistos. Be kortelės blokas tuščias; kortelė be veiksmų - viena eilutė su nuoroda. Kortelės tekstai - per esc(). */
+const VEIKSMU_SALTINIAI = {
+  'pp-market-kpi': { pav: 'Rinkos rodiklių stebėsena', apzvalga: 'pirkimo rinkos apžvalgą', url: '../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html', inkaras: '#focusSec' }
+};
+function veiksmuData(iso){   // vietinė data „YYYY-MM-DD“ (ne UTC: naktį būtų vakarykštė)
+  const d = new Date(iso); if (!iso || isNaN(d)) return '';
+  const p2 = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+}
+function veiksmaiPirkimui(){
+  const el = document.getElementById('lkVeiksmai');
+  if (!el) return;
+  let k = null;
+  try { k = KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta(); } catch (e) { k = null; }
+  if (k && window.GP_KORTELE) k = GP_KORTELE.gauk(k.id) || k;      // šviežia kopija - veiksmai galėjo būti įrašyti kitame skirtuke
+  if (!k) { el.innerHTML = ''; return; }
+  const nuoroda = (src) => {
+    const S = VEIKSMU_SALTINIAI[src] || VEIKSMU_SALTINIAI['pp-market-kpi'];
+    return `<a href="${esc(S.url + '?kortele=' + encodeURIComponent(k.id) + S.inkaras)}" target="_blank" rel="noopener">Atverti ${esc(S.apzvalga)} →</a>`;
+  };
+  const visi = (Array.isArray(k.veiksmai) ? k.veiksmai : []).filter(v => v && v.raktas);
+  if (!visi.length) {
+    el.innerHTML = `<div class="lkv"><div class="lkv-foot" style="margin-top:0"><span>Pirkimo kortelėje „${esc(k.pavadinimas)}“ rinkos apžvalgos veiksmų dar neįrašyta.</span>${nuoroda('pp-market-kpi')}</div></div>`;
+    return;
+  }
+  const grupes = [];
+  visi.forEach((v, i) => {
+    const raktas = v.raktas.split(':').slice(0, 3).join(':');
+    let g = grupes.find(x => x.raktas === raktas);
+    if (!g) { g = { raktas, saltinis: v.saltinis || raktas.split(':')[0], kontekstas: v.kontekstas || '', data: '', veiksmai: [] }; grupes.push(g); }
+    g.veiksmai.push(Object.assign({ i }, v));
+    const d = v.atnaujinta || v.data || '';
+    if (d > g.data) { g.data = d; if (v.kontekstas) g.kontekstas = v.kontekstas; }
+  });
+  grupes.sort((a, b) => (b.data > a.data ? 1 : b.data < a.data ? -1 : 0));
+  const sarasas = g => `<ul class="lkv-list">${g.veiksmai.map(v => `<li class="lkv-item${v.atlikta ? ' lkv-item--taip' : ''}">
+      <span class="lkv-zyma ${v.atlikta ? 'lkv-zyma--taip' : 'lkv-zyma--ne'}">${v.atlikta ? 'Atlikta' : 'Neatlikta'}</span><span class="lkv-t">${esc(v.tekstas)}</span></li>`).join('')}</ul>`;
+  const meta = g => [(VEIKSMU_SALTINIAI[g.saltinis] || {}).pav || g.saltinis, g.kontekstas, g.data ? 'įrašyta ' + veiksmuData(g.data) : ''].filter(Boolean).join(' · ');
+  const pirma = grupes[0], atlikta = pirma.veiksmai.filter(v => v.atlikta).length;
+  let h = `<section class="lkv" aria-labelledby="lkvH"><div class="lkv-h"><h4 id="lkvH">Rinkos apžvalgos veiksmai šiam pirkimui (${atlikta} iš ${pirma.veiksmai.length} atlikta)</h4>
+      <span class="lkv-meta">Iš pirkimo kortelės „${esc(k.pavadinimas)}“</span></div>
+    <div class="lkv-grupe">${esc(meta(pirma))}</div>${sarasas(pirma)}`;
+  if (grupes.length > 1) {
+    h += `<details class="lkv-kiti"><summary>Ankstesni įrašai (${grupes.length - 1})</summary>` +
+      grupes.slice(1).map(g => `<div class="lkv-grupe">${esc(meta(g))}</div>${sarasas(g)}`).join('') + `</details>`;
+  }
+  h += `<div class="lkv-foot"><span>Čia veiksmai tik rodomi; būsena keičiama ten, kur jie įrašyti.</span>${nuoroda(pirma.saltinis)}</div></section>`;
+  el.innerHTML = h;
 }
 
 /* ==========================================================================
@@ -3368,6 +3440,7 @@ function klausimynas(){
 
   $('#klausimai').innerHTML = h;
   if ($('#lkSantrauka')) $('#lkSantrauka').innerHTML = santraukosHTML(S);
+  veiksmaiPirkimui();
   teisesPirkimui();
   window.__S2 = S;
   if (PRIEDU_KLAIDA) GP_BUSENA.rodyk('#prieduBusena', { tipas:'nezinoma',
@@ -5066,6 +5139,7 @@ function kortelesTaikoma(f){ PZ_TAIKOMA = true; try { f(); } finally { PZ_TAIKOM
 const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
   modulis: 'PP-salygos',
   klaustiKitoPirkimo: true,
+  onPasirinkta: () => veiksmaiPirkimui(),      // rinkos apžvalgos veiksmai 2 žingsnyje - pagal pasirinktą kortelę (2026-10-06)
   laukai: [
     { kortele:'pavadinimas', el:'#pavadinimas',
       i: v => /\s+pirkimas\s*$/i.test(v) ? v.replace(/\s+pirkimas\s*$/i, '').trim() : null,
