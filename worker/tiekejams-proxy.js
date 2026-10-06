@@ -148,8 +148,9 @@ export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (request.method !== "POST") return json({ error: "Leidziamas tik POST" }, 405);
+    // Be Origin (ne narsykle) - atmetama (2026-10-06, saugumo planas); Origin suklastoti galima - todel ir Turnstile
     var origin = request.headers.get("Origin") || "";
-    if (origin && origin !== ALLOWED_ORIGIN) return json({ error: "Neleistinas saltinis" }, 403);
+    if (origin !== ALLOWED_ORIGIN) return json({ error: "Neleistinas saltinis" }, 403);
     var body; try { body = await request.json(); } catch (e) { return json({ error: "Netinkamas JSON" }, 400); }
     // Turnstile PRIVALOMAS: be jo tai butu atviras AI galinis taskas (Origin
     // antraste curl'u suklastojama). Klientas (index.html) widget'a rodo, kai

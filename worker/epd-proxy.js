@@ -85,9 +85,10 @@ export default {
       return json({ error: "Leidziamas tik POST" }, 405);
     }
 
-    // Saltinio patikra (narsykles atveju Origin visada bus)
+    // Saltinio patikra: narsykle kryzminei POST uzklausai Origin siuncia visada, todel be jos (curl, skriptai) - atmetama
+    // (2026-10-06, saugumo planas; iki tol uzklausa be Origin praeidavo). Origin suklastoti galima - tikra apsauga yra Turnstile.
     var origin = request.headers.get("Origin") || "";
-    if (origin && origin !== ALLOWED_ORIGIN) {
+    if (origin !== ALLOWED_ORIGIN) {
       return json({ error: "Neleistinas saltinis" }, 403);
     }
 
