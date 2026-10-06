@@ -4,6 +4,7 @@
 Naudojamas GitHub Actions (.github/workflows/testai.yml) ir vietoje:
     python3 .github/testai/paleisk.py                  # visi rinkiniai
     python3 .github/testai/paleisk.py PP-qual shared   # tik tie, kurių kelyje yra žodis
+    python3 .github/testai/paleisk.py saugumas         # tik saugumo patikra (.github/testai/saugumas.py, be naršyklės)
 Chrome: aplinkos kintamasis CHROME arba google-chrome / chromium / macOS Chrome.
 Tik Python standartinė biblioteka (be pip): statinis serveris + Chrome DevTools protokolas per WebSocket.
 Aplinka - kaip patikrinta vietoje: naršyklės kalba en-GB, laiko juosta Europe/Vilnius (workflow nustato TZ) - datų
@@ -115,8 +116,8 @@ class Chrome:
                 time.sleep(0.2)
             else:
                 raise RuntimeError("Chrome nepasileido")
-            self.ws = WS(puslapiai[0]["webSocketDebuggerUrl"]); self.n = 0
-            self.komanda("Page.enable"); self.komanda("Runtime.enable")
+            self.ws = WS(puslapiai[0]["webSocketDebuggerUrl"]); self.n = 0; self.csp = []
+            self.komanda("Page.enable"); self.komanda("Runtime.enable"); self.komanda("Log.enable")
             self.komanda("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 1000, "deviceScaleFactor": 1, "mobile": False})
         except Exception:
             # Nepasileidusi naršyklė nepaliekama veikti, o klaida tenka tik šiam rinkiniui (iki 2026-09-28 nutraukdavo visą paleidimą)
@@ -128,6 +129,11 @@ class Chrome:
         self.ws.siusk(json.dumps({"id": nr, "method": metodas, "params": param or {}}))
         while True:
             m = json.loads(self.ws.gauk())
+            # CSP (2026-10-06): naršyklės pranešimas apie užblokuotą užklausą ar įkėlimą bet kuriame rėmelyje - rinkinys krenta,
+            # kad naujas adresas modulyje nebūtų tyliai užblokuotas puslapio Content-Security-Policy <meta> žyma
+            if m.get("method") == "Log.entryAdded":
+                e = m["params"]["entry"]
+                if "Content Security Policy" in e.get("text", "") and len(self.csp) < 20: self.csp.append(e["text"][:400])
             if m.get("id") == nr:
                 if "error" in m: raise RuntimeError(metodas + ": " + json.dumps(m["error"]))
                 return m.get("result", {})
@@ -197,6 +203,9 @@ def main():
                 ch.komanda("Page.navigate", {"url": "http://127.0.0.1:%d/%s?ci=%d" % (portas, r, time.time())})
                 time.sleep(2)
                 x = ch.vykdyk(LAUK % int(min(LAIKAS, liko - 30)))
+                if ch.csp:
+                    x["gerai"] = False
+                    x["krito"] = x["krito"] + ["CSP užblokavo: " + t for t in dict.fromkeys(ch.csp)]
             except Exception as e:
                 x = {"baigta": False, "busena": "klaida: " + str(e)[:300], "gerai": False, "krito": []}
             finally:
@@ -212,6 +221,26 @@ def main():
                 print("::error title=%s::%s" % (anotacija(r, True), anotacija(k)), flush=True)
         rasyk_santrauka("| %s %s | %s | %s s |\n" % ("✅" if x["gerai"] else "❌", r, x["busena"].replace("|", "/"), x["sek"]))
     srv.shutdown()
+    # Saugumo patikra (2026-10-06): bibliotekų spragos (OSV), paslaptys saugykloje, security.txt galiojimas - be naršyklės.
+    # Workflow failo keisti nereikia: paleidžiama kartu su testais (be filtrų arba su žodžiu „saugumas“)
+    if not filtrai or any(f in "saugumas" for f in filtrai):
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        try:
+            import saugumas
+            x = saugumas.patikrink()
+        except Exception as e:
+            x = {"rinkinys": ".github/testai/saugumas.py", "baigta": False, "gerai": False, "busena": "klaida: " + str(e)[:300], "krito": [], "ispejimai": [], "sek": 0}
+        rezultatai.append(x)
+        print(("GERAI " if x["gerai"] else "KRITO ") + x["rinkinys"] + " | " + x["busena"] + " | " + str(x["sek"]) + " s", flush=True)
+        for k in x["krito"]: print("    - " + k, flush=True)
+        for k in x["ispejimai"]: print("    ! " + k, flush=True)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            for k in (x["krito"] or ([] if x["gerai"] else [x["busena"]])):
+                print("::error title=%s::%s" % (anotacija(x["rinkinys"], True), anotacija(k)), flush=True)
+            for k in x["ispejimai"]:
+                print("::warning title=%s::%s" % (anotacija(x["rinkinys"], True), anotacija(k)), flush=True)
+        rasyk_santrauka("| %s %s | %s | %s s |\n" % ("✅" if x["gerai"] else "❌", x["rinkinys"], x["busena"].replace("|", "/"), x["sek"])
+                        + "".join("\n- ⚠️ %s" % k.replace("|", "/") for k in x["ispejimai"]))
     blogi = [x for x in rezultatai if not x["gerai"]]
     rasyk_santrauka("".join("\n- **%s**: %s" % (x["rinkinys"], k.replace("|", "/")) for x in blogi for k in x["krito"]) + "\n")
     print("\n%d rinkinių, kritusių: %d" % (len(rezultatai), len(blogi)))
