@@ -82,3 +82,7 @@ sandarą; SSKI dedamosioms ir žaliavoms pagal kiekį - pastaba „rengiama su t
 pastaba nebekartoja rodiklio reikšmės („žr. 1 bloką“), kad kiekvienas skaičius liktų vienoje vietoje. Kiti įrankiai kortelės
 veiksmų dar nerodo - kitas žingsnis, kai naudotojas nuspręs, kur jie reikalingi (PP-salygos 2 žingsnis, PP-protocol).
 
+Naudotojo atsakymai 2026-10-06 (po įgyvendinimo): peržiūros slenkstis 5 % tinka (formuluotėje lieka numatytasis); kortelės veiksmus
+rodyti PP-salygos 2 žingsnyje - įgyvendinta: blokas „Rinkos apžvalgos veiksmai šiam pirkimui“ po „Prieš generuojant“, tik skaitymui,
+su nuoroda atgal į apžvalgą (`?kortele=`). „Kodėl“ tekstų peržiūra - dar laukia.
+
