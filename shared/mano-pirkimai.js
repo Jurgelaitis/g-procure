@@ -70,8 +70,9 @@
       var m = k.budas && global.GP_METHODS ? global.GP_METHODS.byId(k.budas) : null;
       return !!(m && m.derybos);
     } },
-    // Skelbimo parengties patikra (A4) - paskutinis žingsnis prieš skelbiant; neskelbiamiems būdams nesiūloma
-    parengtis: { kelias: "skelbimo-parengtis.html", salyga: function (k) {
+    // Parengtų dokumentų patikra (A4; nuo 2026-10-06 - PP-salygos skirtukas „Tikrinti parengtus dokumentus“) - paskutinis žingsnis
+    // prieš skelbiant; neskelbiamiems būdams nesiūloma. Ne tik LITGRID: paketo patikra bendra, su forma lyginama, kai ji atpažįstama.
+    parengtis: { kelias: "PP-salygos/PP-SALYGOS.html", zyme: "#tikrinti", salyga: function (k) {
       var m = k.budas && global.GP_METHODS ? global.GP_METHODS.byId(k.budas) : null;
       return !m || m.skelbiama !== false;
     } }
@@ -256,7 +257,7 @@
       var d = el("div", "gpmp-veiksmai");
       irankiai(k).forEach(function (raktas, i) {
         var btn = el("a", "gpmp-btn" + (!truksta.length && i === 0 ? " gpmp-btn--pagr" : ""), t[raktas]);
-        btn.href = saknis + IRANKIAI[raktas].kelias + "?kortele=" + id;
+        btn.href = saknis + IRANKIAI[raktas].kelias + "?kortele=" + id + (IRANKIAI[raktas].zyme || "");
         btn.target = "_blank"; btn.rel = "noopener";
         btn.setAttribute("aria-label", t[raktas] + ": " + (k.pavadinimas || "?") + " (" + t.naujasSkirtukas + ")");
         d.appendChild(btn);
