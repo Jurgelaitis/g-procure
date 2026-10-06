@@ -1081,6 +1081,33 @@ async function testaiOficialusStilius(){
 
 async function testaiEkranavimas(){
   grupe("Saugomi tekstai rodomi kaip tekstas, ne HTML");
+  // CodeQL js/xss-through-dom (2026-10-06): pranešimo formos laukai - motyvas iš D8 eilutės ir lėšų suma iš pirkimo - į HTML per hx()
+  await testas("Pranešimo formos laukai: D8 motyvas su „</textarea><img onerror>“ ir lėšų suma su kabutėmis lieka tekstu", async () => {
+    const ZYM = `</textarea>"'><img src=x onerror="parent.__ppXss2.push(1)">`;
+    window.__ppXss2 = [];
+    const id = "TEST-PN-LAUKAI";
+    W.saveProcurementData(id, Object.assign(pirkimas("atviras_tarptautinis"), { id, val_ex: '1" autofocus onfocus="parent.__ppXss2.push(2)' }));
+    W.eval("currentPkId = " + JSON.stringify(id));
+    const laik = [];
+    if (!D.getElementById("inline-pn-fields-card")) { const c = D.createElement("div"); c.id = "inline-pn-fields-card"; c.innerHTML = '<div class="card-body"></div>'; D.body.appendChild(c); laik.push(c); }
+    let sar = D.getElementById("pf-d8-list");
+    if (!sar) { sar = D.createElement("div"); sar.id = "pf-d8-list"; D.body.appendChild(sar); laik.push(sar); }
+    const ta = D.createElement("textarea"); ta.className = "d8-motyvas"; ta.value = "Motyvas " + ZYM; sar.prepend(ta);
+    try {
+      const T = W.eval("PN_TEMPLATES");
+      const tplMot = Object.keys(T).find(k => T[k].fields.includes("motyvas")), tplBiu = Object.keys(T).find(k => T[k].fields.includes("biudzetas"));
+      W.renderInlinePnFields(tplMot); await lauk(50);
+      lygu(D.getElementById("ipn-motyvas").value, "Motyvas " + ZYM, "motyvas - tekstas");
+      W.renderInlinePnFields(tplBiu); await lauk(50);
+      lygu(D.getElementById("ipn-biudzetas").getAttribute("value"), '1" autofocus onfocus="parent.__ppXss2.push(2)', "suma - atributo reikšmė");
+      tiesa(!D.querySelector("#inline-pn-fields-card img") && !D.getElementById("ipn-biudzetas").hasAttribute("onfocus"), "HTML neįterptas");
+      await lauk(100);
+      lygu(window.__ppXss2, [], "kodas nevykdytas");
+    } finally {
+      ta.remove(); laik.forEach(x => x.remove()); W.eval("currentPkId = null");
+    }
+  });
+
   await testas("Numeris su kabutėmis ir pavadinimas, tiekėjas, naudotojas su <img onerror>: sąrašas, kortelė, protokolas, pranešimai, auditas, kopijavimo langas ir importo peržiūra - tekstas; perėjimai veikia", async () => {
     const ZYM = `"'><img src=x onerror="parent.__ppXss.push(1)">`;
     window.__ppXss = [];
