@@ -898,7 +898,7 @@ const GPDocx = (() => {
         const t = paraText(q), m = t.match(/^\s*(\d+(?:\.\d+)+)\.?/);
         if (!m) break;
         const dalys = m[1].split('.'), kitas = dalys.slice(0, -1).concat(+dalys[dalys.length - 1] + 1).join('.');
-        const mm = new RegExp('[.;:]\\s+(' + kitas.replace(/\./g, '\\.') + '\\.?)\\s+[' + DID + ']').exec(t.slice(m[0].length));
+        const mm = new RegExp('[.;:]\\s+(' + kitas.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.?)\\s+[' + DID + ']').exec(t.slice(m[0].length));
         if (!mm) break;
         const nq = skaidyk(q, m[0].length + mm.index + mm[0].indexOf(mm[1]));
         if (!nq) break;
