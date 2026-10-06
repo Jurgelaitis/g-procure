@@ -45,8 +45,17 @@ TEKSTO_PLETINIAI = (".html", ".js", ".json", ".md", ".py", ".yml", ".yaml", ".cs
 
 
 def failai():
-    r = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=SAKNIS, capture_output=True, check=True)
-    return [f for f in r.stdout.decode("utf-8").split("\0") if f]
+    # Saugyklos failai ir nauji, dar neįtraukti (be .gitignore). Be git (pvz. „git archive“ kopija) - failai iš katalogo,
+    # be taško katalogų, išskyrus .well-known ir .github (kaip svetainėje ir CI'e)
+    try:
+        r = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=SAKNIS, capture_output=True, check=True)
+        return [f for f in r.stdout.decode("utf-8").split("\0") if f]
+    except (OSError, subprocess.CalledProcessError):
+        visi = []
+        for sak, katalogai, fs in os.walk(SAKNIS):
+            katalogai[:] = [k for k in katalogai if (not k.startswith(".") or k in (".well-known", ".github")) and k != "node_modules"]
+            visi += [os.path.relpath(os.path.join(sak, f), SAKNIS).replace(os.sep, "/") for f in fs if f != ".DS_Store"]
+        return visi
 
 
 def skaityk(f):
