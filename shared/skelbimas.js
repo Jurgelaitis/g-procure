@@ -227,7 +227,8 @@
     var eil = eilutes(tekstas);
     var sk = ruozas(eil, /^10\s+(?:Pakeitimas|Change)\b/i, /^Skelbimo\s+informacija|^Notice\s+information|^\d+\s+[A-ZĄČĘĖĮŠŲŪŽ]/i);
     if (!sk.length) return null;
-    var pr = laukas(sk, "Pagrindin[ėe]\s+pakeitimo\s+prie[žz]astis") || laukas(sk, "Main\s+reason\s+for\s+change");
+    // "\\s" - eilutėje reikia dviejų pasvirųjų: iki 2026-10-06 buvo "\s", t. y. raidė s, ir priežastis niekada nerasta (CodeQL)
+    var pr = laukas(sk, "Pagrindin[ėe]\\s+pakeitimo\\s+prie[žz]astis") || laukas(sk, "Main\\s+reason\\s+for\\s+change");
     var ap = laukas(sk, "Apra[šs]ymas") || laukas(sk, "Description");
     var tm = ap && /termin\S*\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/i.exec(ap.reiksme);
     return { priezastis: pr ? pr.reiksme : "", aprasymas: ap ? ap.reiksme : "",
