@@ -397,6 +397,9 @@ def taisymas_tekstas(taisyk):
     viso += _dps_71(taisyk)
     viso += _dps_72_rely(taisyk)
     viso += _vertimas_entities(taisyk)
+    viso += _dps_81(taisyk)
+    viso += _sankciju_kablelis(taisyk)
+    viso += _fizinio_asmens_skliaustai(taisyk)
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
     return viso
@@ -609,6 +612,107 @@ def _entities(tekstas, seg):
 def _vertimas_entities(taisyk):
     n = _su_zemelapiais(_entities, None, 'EN „on whose capacities“', taisyk)
     for t in _ENTITIES_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# P. DPS konkretaus pirkimo sąlygų 8.1 p. (2026-10-06, naudotojo prasymas „DPS sąlygų 8.1 punktas“; DPS sukūrimo sąlygų 8.1 p. klaidų
+#    neturi; teisės nuorodos - PĮ 58 str. 1 ir 5 d., 29 str. 2 d. 2 p. ir 4 d., Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos
+#    įstatymo 13 str. 4 d. 1 p., SESV 107 str. 1 d. - perskaitytos e-tar ir teisingos, nekeičiamos):
+#    8.1.4 - „dokumentų, patvirtinančių ... nustatytų reikalavimų“ -> „patvirtinančių atitiktį ... nustatytiems reikalavimams“ (raudona nuoroda
+#    „4.1 punkto 1 lentelėje“ nelieciama); 8.1.7 - skliaustuose „(jeigu Tiekėjas, ..., ar Kvazisubtiekėjas yra fizinis asmuo - ...)“, kaip
+#    įstatyme (PĮ 29 str. 5 d.) ir to paties šablono 8.2.3 p.; 8.1.14 - kablelis tarp veiksnio ir tarinio - žr. Q; 8.1.15 ir 8.1.16 - „Vyriausybei
+#    priėmė“ -> „Vyriausybė priėmė“ (kaip PĮ 58 str. 4¹ d. 4 p.); 8.1.18 - kablelis po šalutinio sakinio - žr. Q; 8.1.22 - „Yra“ -> „yra“ (kaip kiti papunkčiai ir dvikalbis); tarpai sakinio gale. EN: 8.1.7 - sąraše trūko „Supplier“,
+#    8.1.8 - „abnormally low“ (LT „neįprastai mažos kainos“), 8.1.14 - „The“ -> „the“ (kaip kiti papunkčiai). Raudonas tekstas nelieciamas.
+_DPS_81 = [
+    (_re.compile(r'nepatikslino dokumentų, patvirtinančių() konkretaus pirkimo sąlygų'), ' atitiktį', 1),
+    (_re.compile(r'lentelėje (nustatytų reikalavimų) per Komisijos nustatytą terminą'), 'nustatytiems reikalavimams', 1),
+    (_re.compile(r'nėra registruotas \((Tiekėjas, Subtiekėjas, Tiekėjų grupės narys, Ūkio subjektas, kurio pajėgumais remiamasi, '
+                 r'Kvazisubtiekėjas, kuris yra) fizinis asmuo'),
+     'jeigu Tiekėjas, Subtiekėjas, Tiekėjų grupės narys, Ūkio subjektas, kurio pajėgumais remiamasi, ar Kvazisubtiekėjas yra', 1),
+    (_re.compile(r'Lietuvos Respublikos (Vyriausybei) priėmė sprendimą'), 'Vyriausybė', 1),
+    (_re.compile(r'^\s*(?:8\.1\.22\.\s*)?(Yra) kitų Pirkimo sąlygose ar PĮ numatytų konkretaus pasiūlymo atmetimo'), 'yra', 1),
+    (_re.compile(r'Konkretus pasiūlymas atmetamas, jeigu:( +)$'), '', 1),
+    (_re.compile(r'per Komisijos nustatytą terminą;( +)$'), '', 1),
+    (_re.compile(r'kuris nustatytas EBVPD;( +)$'), '', 1),
+    (_re.compile(r'negalėjo iššifruoti visų konkretaus pasiūlymo dokumentų;( +)$'), '', 1),
+    (_re.compile(r'CVP IS elektroninėmis priemonėmis;( +)$'), '', 1),
+    (_re.compile(r'kaip tai numatyta PĮ 58 straipsnio 5 dalyje;( +)$'), '', 1),
+    (_re.compile(r'\(if the() sub-supplier, group member, economic operator, or quasi-subcontractor is a natural person'), ' Supplier,', 1),
+    (_re.compile(r'fails to provide appropriate justification of the offered() price or costs'), ' abnormally low', 1),
+    (_re.compile(r'^(The) Supplier who submitted a tender, upon request of the Contracting Entity'), 'the', 1),
+]
+_P_RAUDONI = []
+
+
+def _be_raudono(poros, kaupti):
+    """_regex_pakeitimai, bet raudono teksto (salygos ir nurodymai - pagal juos generatorius randa vietas) nelieciant."""
+    fn = _regex_pakeitimai(*poros)
+    def f(tekstas, seg):
+        pak = fn(tekstas, seg)
+        if not pak:
+            return pak
+        raud = []
+        for r in _RUN_RE.finditer(seg):
+            red = bool(_RAUD_RE.search(r.group(0)))
+            for m in _re.finditer(rb'<w:t(?:\s[^>]*)?>(.*?)</w:t>', r.group(0), _re.S):
+                raud += [red] * len(_html.unescape(m.group(1).decode('utf-8')))
+        if len(raud) != len(tekstas):
+            return None
+        geri = []
+        for a, b, v in pak:
+            sritis = raud[a:b] if b > a else raud[max(0, a - 1):a + 1]
+            if any(sritis):
+                kaupti.append(tekstas[max(0, a - 40):b + 40]); continue
+            geri.append((a, b, v))
+        return geri
+    return f
+
+
+# Q. Sankcijų sakinys (2026-10-06, rastas tvarkant DPS 8.1.18 p.; redakcinė korekcija - naudotojo leidimas 2026-10-05): „... kitų tarptautinių
+#    organizacijų, kurių narė yra arba kuriose dalyvauja Lietuvos Respublika[,] bei Jungtinių Amerikos Valstijų sankcijos“ - įterptas šalutinis
+#    sakinys neuždarytas kableliu, todėl galima perskaityti, kad „dalyvauja Lietuvos Respublika bei JAV“ (EN - „... or the United States of
+#    America“). 31 vieta: BPS atmetimo pagrindas, SPS ir DPS sąlygų „Pirkime negali dalyvauti ...“, sena TPS forma. Ir „Pasiūlymą pateikęs
+#    Tiekėjas[,] Perkančiojo subjekto ir/ar kompetentingų institucijų prašymu nepateikė“ - kablelis tarp veiksnio ir tarinio (DPS 8.1.14 p. ir
+#    BPS nacionalinio saugumo atmetimo pagrindas). Raudonas tekstas nelieciamas.
+_SANKCIJOS = [(_re.compile(r'kurių narė yra arba kuriose dalyvauja Lietuvos Respublika() bei Jungtinių Amerikos Valstijų'), ',', 1),
+              (_re.compile(r'Pasiūlymą pateikęs Tiekėjas(,) Perkančiojo subjekto ir/ar kompetentingų institucijų prašymu'), '', 1)]
+_Q_RAUDONI = []
+
+
+def _sankciju_kablelis(taisyk):
+    n = _su_zemelapiais(_be_raudono(_SANKCIJOS, _Q_RAUDONI), None, 'skyryba (sankcijos, veiksnys)', taisyk)
+    for t in _Q_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# T. Fizinio asmens skliaustai (2026-10-06, naudotojo patvirtinimas „Patvirtinu, sutvarkykite visur vienodai.“): „nėra registruotas
+#    (Tiekėjas, ..., Kvazisubtiekėjas, kuris yra fizinis asmuo – nuolat gyvenantis ar turintis pilietybę)“ - „kuris“ gramatiškai siejasi tik su
+#    paskutiniu sąrašo nariu, o 23 vietose dar ir „turintys“; vienodai, kaip DPS 8.1.7 p. (P), įstatyme (PĮ 29 str. 5 d.) ir DPS 8.2.3 p.:
+#    „(jeigu Tiekėjas, ..., ar Kvazisubtiekėjas yra fizinis asmuo – nuolat gyvenantis ar turintis pilietybę)“; sąrašo eilė ir raidžių dydis -
+#    kaip šablone, prieš „ar“ kablelis tik po šalutinio sakinio „kurio pajėgumais remiamasi“. 42 vietos 36 šablonuose (BPS, SPS, DPS sąlygos,
+#    pasiūlymo ir paraiškos formos, sena TPS forma); angliškas tekstas nekeičiamas. Raudonas tekstas nelieciamas.
+def _fizinis_asmuo(m):
+    sar = m.group(1)
+    return 'jeigu ' + sar + (', ar' if sar.endswith('remiamasi') else ' ar') + ' Kvazisubtiekėjas yra fizinis asmuo – nuolat gyvenantis ar turintis pilietybę'
+
+
+_FIZINIS = [(_re.compile(r'\(([^()]*?, Kvazisubtiekėjas, kuris yra fizinis asmuo,? – nuolat gyvenantis ar turint[iy]s pilietybę)\)'),
+             lambda m: _fizinis_asmuo(_re.match(r'(.*?), Kvazisubtiekėjas, kuris yra', m.group(1))), 1)]
+_T_RAUDONI = []
+
+
+def _fizinio_asmens_skliaustai(taisyk):
+    n = _su_zemelapiais(_be_raudono(_FIZINIS, _T_RAUDONI), None, 'fizinio asmens skliaustai', taisyk)
+    for t in _T_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+def _dps_81(taisyk):
+    n = _su_zemelapiais(_be_raudono(_DPS_81, _P_RAUDONI), ['DPSP_LT_SALYGOS', 'DPSP_LTEN_SALYGOS'], 'DPS 8.1 p.', taisyk)
+    for t in _P_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 
