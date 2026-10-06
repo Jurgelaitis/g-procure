@@ -393,6 +393,7 @@ def taisymas_tekstas(taisyk):
         viso += pak
     viso += _dvigubi_tarpai(taisyk)
     viso += _skyryba(taisyk)
+    viso += _dps_61(taisyk)
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
     return viso
@@ -508,6 +509,23 @@ def _skyryba(taisyk):
     socialiniu reikalavimu punktas (DPS konkretaus pirkimo 5.1 p., SPS) ir sakinys „... bus prašoma pateikti tik iš Tiekėjo,
     kuris pagal sudarytą pasiūlymų eilę pateikė ...“. Raudonas tekstas nelieciamas (siu vietu raudonose nera). Zemelapiu
     pastraipu tekstas suderinamas kaip J. Pakartotinai - 0."""
+    return _su_zemelapiais(_SKYRYBA, None, 'skyryba', taisyk)
+
+
+# L. DPS konkretaus pirkimo LT salygos (2026-10-06, naudotojo prasymas „DPS sąlygų 6.1 punktas“): 6.1 p. sakinys nutruksta -
+#    „Konkretų pasiūlymą sudaro Tiekėjo CVP IS priemonėmis pateiktų dokumentų visuma “ (be pabaigos ir tasko). Saltinis - to paties
+#    paketo dvikalbis DPSP_LTEN_SALYGOS 6.1 p.: „... dokumentų visuma (įskaitant konkretaus pasiūlymo paaiškinimus (jei tokių bus)).“
+_DPS_61 = [(_re.compile(r'Konkretų pasiūlymą sudaro Tiekėjo CVP IS priemonėmis pateiktų dokumentų visuma( *)$'),
+            ' (įskaitant konkretaus pasiūlymo paaiškinimus (jei tokių bus)).', 1)]
+
+
+def _dps_61(taisyk):
+    return _su_zemelapiais(_DPS_61, ['DPSP_LT_SALYGOS'], 'DPS 6.1 p.', taisyk)
+
+
+def _su_zemelapiais(poros, failai, vardas, taisyk):
+    """Teksto pakeitimai sablonuose (failai - stem sarasas, None - visi) ir to paties teksto suderinimas zemelapiuose
+    (sena -> nauja reiksme), kaip J. Grazina pakeitimu skaiciu."""
     import json as _json
     viso = 0
     ZEM = Path(__file__).parent / 'zemelapiai'
@@ -522,18 +540,20 @@ def _skyryba(taisyk):
     tekstai = lambda xml: [_pastraipos_tekstas(m.group(0)).strip() for m in _VISOS_P_RE.finditer(xml)]
     for path in sorted(TPL.glob('*.docx')):
         f = path.stem
+        if failai is not None and f not in failai:
+            continue
         with zipfile.ZipFile(path) as zin:
             infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}; dalys = _dokumento_dalys(zin)
         pries = tekstai(items['word/document.xml'])
         pak = 0
         for d in dalys:
-            items[d], n = _redaguok(items[d], _regex_pakeitimai(*_SKYRYBA))
+            items[d], n = _redaguok(items[d], _regex_pakeitimai(*poros))
             pak += n
         if not pak:
             continue
         po = tekstai(items['word/document.xml'])
-        poros = {a: b for a, b in zip(pries, po) if a != b} if len(pries) == len(po) else {}
-        print(f"  {f}.docx: skyryba - {pak}" + ("" if len(pries) == len(po) else "  (PASTRAIPU SKAICIUS PASIKEITE - zemelapis nederinamas)"))
+        pakeisti = {a: b for a, b in zip(pries, po) if a != b} if len(pries) == len(po) else {}
+        print(f"  {f}.docx: {vardas} - {pak}" + ("" if len(pries) == len(po) else "  (PASTRAIPU SKAICIUS PASIKEITE - zemelapis nederinamas)"))
         if taisyk:
             with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
                 for info in infos:
@@ -542,7 +562,7 @@ def _skyryba(taisyk):
                 tekstas0 = zf.read_text(encoding='utf-8'); Z = _json.loads(tekstas0); k = [0]
                 def keisk(v):
                     if isinstance(v, str):
-                        if v in poros: k[0] += 1; return poros[v]
+                        if v in pakeisti: k[0] += 1; return pakeisti[v]
                         return v
                     if isinstance(v, list): return [keisk(x) for x in v]
                     if isinstance(v, dict): return {a: keisk(b) for a, b in v.items()}
