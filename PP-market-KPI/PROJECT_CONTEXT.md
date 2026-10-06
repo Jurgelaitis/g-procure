@@ -111,6 +111,29 @@ Pilna lentelė visiems 15 rodiklių su žaliomis/geltonomis/raudonomis ribomis i
 
 ---
 
+### 5.9 Pirkimo rinkos apžvalga - rezultato langas (2026-10-06)
+
+Naudotojo užduotis: specialistams sunku nuskaityti rezultatą (VKI reikšmė kartojosi 3 kartus, veiksmai - paprastas sąrašas,
+indeksavimas - teksto siena be sutarties formuluočių). Prototipas ir wireframe - `docs/market-kpi/`. Rezultatas dabar:
+
+- **1 · Diagnozė** - režimo kortelė (profilis, būsena, matuoklis) ir kiekvienas veiksnys VIENĄ kartą kaip kortelė: reikšmė, būsena,
+  ribų juosta iš `thr` (geltona / raudona), OSP kodas ir dažnis (`INDEKSO_SALTINIS`) arba šaltinis, nuoroda į rodiklio kortelę.
+  Verdiktas (`focus.vda`) su kandidatų vardais; veiksnys, kuris nėra kandidatas šiai rūšiai (pvz. VMDU prekėms), įvardijamas
+  kaip rinkos signalas.
+- **2 · Veiksmai** - kairėje sutartiniai veiksmai kaip kontrolinis sąrašas: žymėjimas, eiga, „?“ paaiškinimas kiekvienam
+  (`shared/paaiskinimas.js`; tekstai `VEIKSMU_KODEL` LT / EN - juodraštis, naudotojas peržiūri), „Įrašyti į kortelę (n iš N atlikta)“
+  - visi rekomenduoti veiksmai su būsena į pirkimo kortelės lauką `veiksmai` (`GP_KORTELE.pridekVeiksmus`, raktas
+  `pp-market-kpi:<profilis>:<režimas>:<i>`; pažymėjimas atkuriamas iš kortelės; naudotojo sprendimas - bendra kortelė, ne modulio
+  saugykla), be kortelės - „Sukurti pirkimo kortelę“; dešinėje indeksavimo sąlyga penkiais žingsniais (indeksas ir šaltinis iš
+  modelio kandidatų, peržiūros teisė ir slenkstis, kam taikoma, formulė ir apvalinimas, procedūra) su „Kopijuoti sąlygą“ kiekvienam
+  ir „visas“. Formuluočių pagrindas - VPT tipinių paslaugų pirkimo-pardavimo sutarties sąlygų 5.3.3 p. (2024-12-30 Nr. 1S-209):
+  parengtos VPĮ sutartims, LITGRID (PĮ) - orientyras, pildomos vietos laužtiniuose skliaustuose, tvirtina teisininkas; SSKI
+  dedamosioms ir žaliavoms pagal kiekį - tik pastaba (rengiama su teisininku). EN režimu formuluotės nerodomos (sutarties kalba - LT).
+- Pirkimo kortelės juosta (A1) - pirmą kartą šiame modulyje: pavadinimas ir rūšis iš kortelės, pritaikius apžvalga sudaroma iš karto.
+- `copyFocus` - rodikliai vieną kartą, veiksmai su [x] / [ ], penkios sąlygos. Atsisakymas (`idx.disclaimer`) - vieną kartą.
+
+Nekeista: profilių logika, `indeksavimoModelis`, kandidatai be svorių, VMDU ne šalia SSKI.
+
 ## 6. Planuojamos funkcijos
 
 ### 6.1 Trumpalaikės (P1)
