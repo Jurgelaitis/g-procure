@@ -922,7 +922,7 @@ async function testaiAntraste(){
     // Tik CSS reikšmės (be kabučių): JS objektų laukai kaip { color: 'var(--epso-emerald)' } - taškų ir grafikų spalvos, ne tekstas.
     const TEKSTAS = /(^|[^\w-])color\s*:\s*(var\(\s*--(?:color-emerald(?:-120)?|smaragdas(?:-120)?|c-emerald(?:-120)?|epso-emerald(?:-120)?|brand(?:-dark)?|litgrid-green|accent(?:-dim)?|green-solid)\s*(?:,[^)]*)?\)|#00a072\b|#128a76\b)/gi;
     const blogi = [];
-    for (const m of ANTRASTES_PUSLAPIAI.concat(["../PP-teise/index.html", "../index.html", "../G-Procure_About.html", "../G-Procure_Project.html", "../atsargine-kopija.html", "../ai-valdymas.html", "../privatumas.html", "gprocure-info-panel.js", "teise-stebesena.js", "modulio-antraste.css", "pranesimas.js", "di-zymejimas.js"])) {
+    for (const m of ANTRASTES_PUSLAPIAI.concat(["../PP-teise/index.html", "../index.html", "../G-Procure_About.html", "../G-Procure_Project.html", "../atsargine-kopija.html", "../ai-valdymas.html", "../privatumas.html", "../saugumas.html", "gprocure-info-panel.js", "teise-stebesena.js", "modulio-antraste.css", "pranesimas.js", "di-zymejimas.js"])) {
       const src = await saltinis(m); let x; TEKSTAS.lastIndex = 0;
       while ((x = TEKSTAS.exec(src))) blogi.push(m + ":" + src.slice(0, x.index).split("\n").length + " „" + x[0].trim() + "“");
     }
@@ -2970,7 +2970,7 @@ async function testaiPalyginimas(){
    ========================================================================== */
 const TELEFONO_PUSLAPIAI = {
   "../index.html": "", "../G-Procure_About.html": "", "../G-Procure_Project.html": "", "../atsargine-kopija.html": "",
-  "../ai-valdymas.html": "", "../privatumas.html": "",
+  "../ai-valdymas.html": "", "../privatumas.html": "", "../saugumas.html": "",
   "../pirkimu-korteles.html?saugykla=testine": "",
   "../PP-tiekejams/index.html": ".tabbar .tab:not(a)", "../PP-carbon/index.html": ".tabbar .tab:not(a)", "../PP-carbon/epd.html": "",
   "../PP-esg/index.html": ".tabbar .tab:not(a)", "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html": ".tabbar .tab:not(a)",
@@ -4713,6 +4713,117 @@ async function testaiDi(){
   });
 }
 
+/* ==========================================================================
+   Saugumas (2026-10-06, saugumo planas, 0-30 dienų darbai): pdf.js be eval (CVE-2024-4367), SheetJS be žinomų spragų
+   (iki tol 0.18.5 iš cdnjs - CVE-2023-30533 ir CVE-2024-22363; cdnjs naujesnių neturi, todėl - cdn.sheetjs.com), Cloudflare
+   Workeriai be Origin užklausos nepriima (iki tol curl ar skriptas be Origin praeidavo) ir pranešimų apie saugumo spragas
+   kanalas: /.well-known/security.txt (RFC 9116) ir saugumas.html.
+   ========================================================================== */
+async function testaiSaugumas(){
+  dabartine = grupe("Saugumas (pdf.js, SheetJS, Workeriai, security.txt)");
+
+  await testas("Sargas: kiekvienas pdf.js getDocument - su isEvalSupported: false (CVE-2024-4367: pdf.js 3.11.174 suklastotas PDF šriftas galėjo vykdyti kodą)", async ()=>{
+    const blogi = [];
+    for (const m of kodoFailai().concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html"])) {
+      const src = await saltinis(m);
+      for (const x of src.matchAll(/getDocument\(/g)) {
+        const arg = src.slice(x.index, x.index + 200).split(")")[0];
+        if (!/isEvalSupported\s*:\s*false/.test(arg)) blogi.push(m + ":" + src.slice(0, x.index).split("\n").length + " " + arg.replace(/\s+/g, " "));
+      }
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("Sargas: SheetJS - tik 0.20.2 ar naujesnė (cdn.sheetjs.com, su SRI); 0.18.5 iš cdnjs turėjo CVE-2023-30533 (prototipo tarša skaitant failą) ir CVE-2024-22363 (ReDoS)", async ()=>{
+    const blogi = [], rasta = [];
+    for (const m of kodoFailai().concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html"])) {
+      const src = await saltinis(m);
+      for (const x of src.matchAll(/<script[^>]+src="([^"]*(?:xlsx|sheetjs)[^"]*)"[^>]*>/gi)) {
+        const v = /xlsx[-\/](\d+)\.(\d+)\.(\d+)/.exec(x[1]);
+        rasta.push(m);
+        const sk = v ? +v[1] * 1e6 + +v[2] * 1e3 + +v[3] : 0;
+        if (!v || sk < 20002 || !/^https:\/\/cdn\.sheetjs\.com\//.test(x[1]) || !/integrity="sha(256|384|512)-/.test(x[0])) blogi.push(m + ": " + x[0].slice(0, 160));
+      }
+    }
+    tiesa(rasta.length >= 4, "SheetJS rasta tik " + rasta.length + " puslapiuose: " + rasta.join(", "));
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  await testas("Cloudflare Workeriai užklausos be Origin nepriima (tik https://g-procure.com); tiekėjų Workeryje Turnstile privalomas", async ()=>{
+    for (const wk of ["../worker/epd-proxy.js", "../worker/tiekejams-proxy.js"]) {
+      const src = await saltinis(wk);
+      tiesa(/ALLOWED_ORIGIN\s*=\s*"https:\/\/g-procure\.com"/.test(src), wk + ": ALLOWED_ORIGIN");
+      tiesa(/if\s*\(\s*origin\s*!==\s*ALLOWED_ORIGIN\s*\)/.test(src), wk + ": nėra griežtos Origin patikros");
+      tiesa(!/origin\s*&&\s*origin\s*!==/.test(src), wk + ": tuščias Origin vis dar praleidžiamas");
+    }
+    const t = await saltinis("../worker/tiekejams-proxy.js");
+    tiesa(/TURNSTILE_SECRET_KEY/.test(t) && /siteverify/.test(t), "tiekejams-proxy.js: Turnstile");
+  });
+
+  await testas("CSP: kiekvienas puslapis iškart po <meta charset> turi Content-Security-Policy - object-src 'none', base-uri 'self', connect-src su leidžiamais adresais (paleidiklis krenta, jei vykdant testus CSP ką nors užblokuoja)", async ()=>{
+    const BAZE = "object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://cdnjs.cloudflare.com data: blob:";
+    // Papildomi adresai - tik ten, kur modulis į juos kreipiasi pats (EPD Worker'is ir Turnstile, OSP, PP-ts - bet koks dokumento adresas)
+    const PAPILDOMA = { "../PP-carbon/epd.html": " https://epd-api.g-procure.com https://challenges.cloudflare.com", "../PP-tiekejams/index.html": " https://challenges.cloudflare.com",
+      "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": " https://osp-rs.stat.gov.lt", "../PP-ts/TS_Asistentas.html": " https:" };
+    const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)).concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-teise/admin.html", "../PP-salygos/kartografas.html", "../PP-salygos/E0-variklis.html"]))];
+    const blogi = [];
+    for (const m of puslapiai) {
+      const src = await saltinis(m);
+      const x = /<meta charset="?UTF-8"?\s*\/?>\s*<meta http-equiv="Content-Security-Policy" content="([^"]*)">/i.exec(src);
+      if (!x) { blogi.push(m + ": nėra CSP žymos iškart po <meta charset>"); continue; }
+      if (x[1] !== BAZE + (PAPILDOMA[m] || "")) blogi.push(m + ": „" + x[1] + "“");
+      if ((src.match(/Content-Security-Policy/g) || []).length !== 1) blogi.push(m + ": CSP žyma ne viena");
+    }
+    tiesa(puslapiai.length >= 29, "puslapių tik " + puslapiai.length);
+    tiesa(!blogi.length, blogi.join("\n  "));
+    // PP-tiekejams Worker'is dar neįdiegtas (AI_ENDPOINT tuščias); įrašius adresą - jo kilmė turi būti CSP
+    const tk = await saltinis("../PP-tiekejams/index.html"), ep = /const AI_ENDPOINT = "([^"]*)"/.exec(tk);
+    tiesa(ep, "PP-tiekejams: AI_ENDPOINT nerastas");
+    if (ep[1]) tiesa((BAZE + PAPILDOMA["../PP-tiekejams/index.html"]).split(" ").includes(new URL(ep[1]).origin), "PP-tiekejams: AI_ENDPOINT " + ep[1] + " kilmė ne CSP connect-src");
+  });
+
+  await testas("security.txt (RFC 9116): Contact, Expires ne vėliau kaip po metų nuo saugumas.html datos, Canonical, Policy, kalbos; _config.yml jį publikuoja; Contact sutampa su puslapiu", async ()=>{
+    const st = await saltinis("../.well-known/security.txt");
+    const lauk = {}; for (const e of st.split("\n")) { const x = /^([A-Za-z-]+):\s*(.+)$/.exec(e.trim()); if (x) (lauk[x[1]] = lauk[x[1]] || []).push(x[2]); }
+    tiesa(lauk.Contact && lauk.Contact.every(c => /^(mailto:|https:\/\/)/.test(c)), "Contact: " + lauk.Contact);
+    tiesa(lauk.Expires && lauk.Expires.length === 1 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(lauk.Expires[0]), "Expires: " + lauk.Expires);
+    lygu(lauk.Canonical, ["https://g-procure.com/.well-known/security.txt"], "Canonical");
+    lygu(lauk.Policy, ["https://g-procure.com/saugumas.html"], "Policy");
+    tiesa(lauk["Preferred-Languages"] && /\blt\b/.test(lauk["Preferred-Languages"][0]) && /\ben\b/.test(lauk["Preferred-Languages"][0]), "Preferred-Languages");
+    const pg = await saltinis("../saugumas.html");
+    const data = /Paskelbta (\d{4}-\d{2}-\d{2})/.exec(pg);
+    tiesa(data, "saugumas.html: „Paskelbta YYYY-MM-DD“");
+    const nuo = Date.parse(data[1] + "T00:00:00Z"), iki = Date.parse(lauk.Expires[0]);
+    tiesa(iki > nuo && iki - nuo <= 366 * 864e5, "Expires " + lauk.Expires[0] + " ne per metus nuo " + data[1] + " (RFC 9116 rekomenduoja < 1 metų)");
+    const pastas = /^mailto:([^?]+)/.exec(lauk.Contact[0]);
+    tiesa(pastas && pg.includes("mailto:" + pastas[1] + "?"), "Contact adresas saugumas.html puslapyje: " + (pastas && pastas[1]));
+    const cfg = await saltinis("../_config.yml");
+    tiesa(/^include:\s*\n\s*-\s*\.well-known\s*$/m.test(cfg), "_config.yml: include .well-known");
+    tiesa(!/^exclude:/m.test(cfg) && !/^(theme|remote_theme):/m.test(cfg), "_config.yml: tik include (be exclude ir temos)");
+  });
+
+  await testas("saugumas.html: LT ir EN blokai, vienas h1, kontaktas abiem kalbomis; nuorodos iš DI valdymo ir privatumo puslapių (LT ir EN) ir svetainės žemėlapyje su hreflang", async ()=>{
+    const { f, w, d } = await new Promise(res => { const f = document.createElement("iframe"); f.addEventListener("load", () => res({ f, w: f.contentWindow, d: f.contentDocument }), { once: true }); f.src = "../saugumas.html?lang=lt"; document.body.appendChild(f); });
+    try {
+      const lt = d.querySelector('[data-kalba="lt"]'), en = d.querySelector('[data-kalba="en"]');
+      tiesa(lt && en && !lt.hidden && en.hidden && d.querySelectorAll("h1").length === 1 && d.querySelector("h1").textContent === "Pranešimas apie saugumo spragas", "LT blokas");
+      d.querySelector('.lang-switch__btn[data-lang="en"]').click();
+      tiesa(lt.hidden && !en.hidden && d.documentElement.lang === "en" && d.querySelector("h1").textContent === "Vulnerability disclosure", "EN blokas");
+      for (const b of [lt, en]) tiesa(b.querySelector('a[href^="mailto:arunas.jurgelaitis@litgrid.eu"]') && b.querySelector('a[href=".well-known/security.txt"]') && /epd-api\.g-procure\.com/.test(b.textContent) && /api\.g-procure\.com/.test(b.textContent), b.getAttribute("data-kalba") + ": kontaktas, security.txt, apimtis");
+      tiesa(/2026-10-06/.test(en.textContent), "EN data");
+      d.querySelector('.lang-switch__btn[data-lang="lt"]').click();
+    } finally { try { w.localStorage.removeItem("gprocure-lang"); } catch (e) {} f.remove(); }
+    for (const pg of ["../ai-valdymas.html", "../privatumas.html"]) {
+      const src = await saltinis(pg);
+      const lt = src.split('data-kalba="en"')[0], en = src.split('data-kalba="en"')[1] || "";
+      tiesa(/href="saugumas\.html"/.test(lt) && /href="saugumas\.html"/.test(en), pg + ": nuoroda į saugumas.html LT ir EN");
+    }
+    const sm = await saltinis("../sitemap.xml");
+    for (const v of ["", "?lang=lt", "?lang=en"]) tiesa(sm.includes("<loc>https://g-procure.com/saugumas.html" + v + "</loc>"), "sitemap: saugumas.html" + v);
+    tiesa(sm.includes('hreflang="en" href="https://g-procure.com/saugumas.html?lang=en"'), "sitemap: hreflang");
+  });
+}
+
 /* Bendras catch: išimtis už testas() (pvz. rėmelis neįsikėlė) kitaip palieka „Vykdoma...“, o CI laukia visą laiko limitą. */
 (async function(){
   try {
@@ -4740,6 +4851,7 @@ async function testaiDi(){
   await testaiParengtis();
   await testaiPalyginimas();
   await testaiDi();
+  await testaiSaugumas();
   await testaiTelefonas();
   await testaiPrieinamumas();
   document.getElementById("busena").textContent =
