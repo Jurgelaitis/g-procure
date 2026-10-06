@@ -291,10 +291,12 @@
           ti++;
           var rows = Array.from(n.getElementsByTagNameNS(NS, "tr"));
           rows.forEach(function (tr, ri) {
-            var cells = Array.from(tr.getElementsByTagNameNS(NS, "tc")).map(function (tc) {
+            // visi - ir tušti langeliai (stulpelių tvarka lentelių importui, PP-negotiation nuo 2026-10-06); text - kaip iki tol
+            var visi = Array.from(tr.getElementsByTagNameNS(NS, "tc")).map(function (tc) {
               return norm(Array.from(tc.getElementsByTagNameNS(NS, "t")).map(function (x) { return x.textContent; }).join(""));
-            }).filter(Boolean);
-            if (cells.length) blocks.push({ loc: { table: ti, row: ri + 1 }, text: cells.join(" | ") });
+            });
+            var cells = visi.filter(Boolean);
+            if (cells.length) blocks.push({ loc: { table: ti, row: ri + 1 }, text: cells.join(" | "), cells: visi });
           });
         }
       });
@@ -350,8 +352,8 @@
         } else if (c.namespaceURI === TBL && c.localName === "table") {
           ti++;
           Array.from(c.getElementsByTagNameNS(TBL, "table-row")).forEach(function (tr, ri) {
-            var cells = Array.from(tr.getElementsByTagNameNS(TBL, "table-cell")).map(tekstas).filter(Boolean);
-            if (cells.length) blocks.push({ loc: { table: ti, row: ri + 1 }, text: cells.join(" | ") });
+            var visi = Array.from(tr.getElementsByTagNameNS(TBL, "table-cell")).map(tekstas), cells = visi.filter(Boolean);
+            if (cells.length) blocks.push({ loc: { table: ti, row: ri + 1 }, text: cells.join(" | "), cells: visi });
           });
         } else eik(c);   // sąrašai, sekcijos - pastraipos jų viduje
       });
