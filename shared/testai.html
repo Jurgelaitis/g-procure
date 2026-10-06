@@ -1696,7 +1696,7 @@ async function testaiKortele(){
     const { f, K } = await korteleRemas();
     try {
       lygu(Object.keys(K.tuscia()).sort(), ["archyvuota","atnaujinta","budas","busena","bvpz","cvpisNr","dalys","id","iniciatorius","numeris","objektas",
-        "organizatorius","pasiulymuTerminas","paskelbimas","pavadinimas","pradzia","rezimas","sukurta","trukmeMen","verte","vykdytojas"], "laukai");
+        "organizatorius","pasiulymuTerminas","paskelbimas","pavadinimas","pradzia","rezimas","sukurta","trukmeMen","veiksmai","verte","vykdytojas"], "laukai");
       const x = K.normalizuok({ id: "k-1", pavadinimas: "  Transformatoriai  ", verte: "1.250.000,00", trukmeMen: "24", dalys: "ne", busena: "", komisija: [{ vardas: "X" }], ateitis: { a: 1 } });
       lygu([x.pavadinimas, x.verte, x.trukmeMen, x.dalys, x.busena, x.archyvuota, x.rezimas], ["Transformatoriai", 1250000, 24, null, "rengiamas", false, ""]);
       lygu([x.ateitis, x.komisija], [{ a: 1 }, [{ vardas: "X" }]], "nežinomi laukai lieka");
@@ -1777,6 +1777,35 @@ async function testaiKortele(){
       lygu(K.aktyvios(o).korteles.length, 2, "grąžinta iš archyvo");
       lygu(GP_BACKUP.zenklas("gprocure.korteles", "lt").pav, "Pirkimų kortelės", "atsarginė kopija");
       lygu(GP_BACKUP.zenklas("gprocure.korteles.sugadinta-20260926-120000", "lt").pav, "Pirkimų kortelės (neperskaitoma kopija)");
+    } finally { f.remove(); }
+  });
+
+  /* 2026-10-06: įrankių veiksmai kortelėje (PP-market-KPI „Įrašyti į kortelę“) - vienintelis laukas, kurį modulis keičia esamoje kortelėje. */
+  await testas("Kortelės veiksmai (pridekVeiksmus): pridedami pagal raktą, antrą kartą - atnaujinami, ne dubliuojami; kiti laukai ir kitos kortelės nekeičiami; netinkami įrašai nukrenta; sena kortelė be lauko skaitoma", async ()=>{
+    const { f, w, d, K } = await korteleRemas('<div class="container"></div>');
+    try {
+      const o = { saugykla: netikraSaugykla({}) };
+      const a = K.issaugok(K.tuscia({ pavadinimas: "Licencijos", objektas: "prekes", verte: 50000 }), o).kortele;
+      const b = K.issaugok(K.tuscia({ pavadinimas: "Kita" }), o).kortele;
+      lygu(a.veiksmai, [], "nauja kortelė - tuščias veiksmų sąrašas");
+      const r1 = K.pridekVeiksmus(a.id, [{ raktas: "pp-market-kpi:programine:red:0", saltinis: "pp-market-kpi", tekstas: "Išplėstinė patikra", kontekstas: "Programinė įranga · raudonas režimas", atlikta: true },
+        { raktas: "pp-market-kpi:programine:red:1", saltinis: "pp-market-kpi", tekstas: "Teisė nutraukti" }, { tekstas: "be rakto" }, null], o);
+      lygu([r1.ok, r1.prideta, r1.atnaujinta], [true, 2, 0], "pirmas įrašymas");
+      const k1 = K.gauk(a.id, o);
+      lygu(k1.veiksmai.map(v => [v.raktas, v.atlikta, v.saltinis, v.tekstas, v.kontekstas]), [["pp-market-kpi:programine:red:0", true, "pp-market-kpi", "Išplėstinė patikra", "Programinė įranga · raudonas režimas"], ["pp-market-kpi:programine:red:1", false, "pp-market-kpi", "Teisė nutraukti", ""]], "įrašyti veiksmai");
+      tiesa(k1.veiksmai.every(v => /^\d{4}-\d{2}-\d{2}T/.test(v.data)), "data ISO");
+      lygu([k1.pavadinimas, k1.objektas, k1.verte], ["Licencijos", "prekes", 50000], "kiti laukai nepakeisti");
+      const r2 = K.pridekVeiksmus(a.id, [{ raktas: "pp-market-kpi:programine:red:1", saltinis: "pp-market-kpi", tekstas: "Teisė nutraukti", atlikta: true }, { raktas: "kitas:1", saltinis: "kitas", tekstas: "Naujas" }], o);
+      lygu([r2.ok, r2.prideta, r2.atnaujinta], [true, 1, 1], "antras įrašymas");
+      const k2 = K.gauk(a.id, o);
+      lygu(k2.veiksmai.map(v => [v.raktas, v.atlikta]), [["pp-market-kpi:programine:red:0", true], ["pp-market-kpi:programine:red:1", true], ["kitas:1", false]], "atnaujinta, ne dubliuota");
+      tiesa(k2.veiksmai[1].atnaujinta && k2.veiksmai[1].data === k1.veiksmai[1].data, "pirmo įrašymo data lieka, atnaujinimo - nauja");
+      lygu(K.gauk(b.id, o).veiksmai, [], "kita kortelė nepaliesta");
+      lygu(K.pridekVeiksmus("nera", [{ raktas: "x" }], o).ok, false, "nerasta kortelė - klaida");
+      // sena kortelė be lauko (schema 1 iki 2026-10-06) ir sugadintas laukas - skaitoma, laukas normalizuojamas
+      const s2 = netikraSaugykla({ "gprocure.korteles": JSON.stringify({ schema: 1, korteles: [{ id: "s1", pavadinimas: "Sena" }, { id: "s2", pavadinimas: "Bloga", veiksmai: "ne masyvas" }, { id: "s3", pavadinimas: "Dalinė", veiksmai: [{ raktas: "a", atlikta: "taip" }, { tekstas: "be rakto" }] }] }) });
+      const sen = K.skaityk({ saugykla: s2 }).korteles;
+      lygu(sen.map(k => k.veiksmai.map(v => [v.raktas, v.saltinis, v.tekstas, v.kontekstas, v.atlikta, v.data === sen[2].atnaujinta])), [[], [], [["a", "", "", "", false, true]]], "veiksmų laukas normalizuojamas");
     } finally { f.remove(); }
   });
 

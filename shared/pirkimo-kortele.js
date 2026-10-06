@@ -140,6 +140,7 @@
       trukmeMen: null, pradzia: "", paskelbimas: "",
       pasiulymuTerminas: "",               // pasiūlymų ar paraiškų terminas „2026-10-02T15:00“ (Vilniaus laikas)
       iniciatorius: "", organizatorius: "",
+      veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
       busena: "rengiamas", archyvuota: false
     };
     return laukai ? normalizuok(Object.assign(k, laukai)) : k;
@@ -173,6 +174,9 @@
       .map(function (d) { return Object.assign({}, d, { pavadinimas: tekstas(d.pavadinimas), verte: skaicius(d.verte) }); });
     if (!o.busena) o.busena = "rengiamas";
     o.archyvuota = o.archyvuota === true;
+    o.veiksmai = Array.isArray(o.veiksmai) ? o.veiksmai.filter(function (v) { return v && typeof v === "object" && tekstas(v.raktas); })
+      .map(function (v) { return Object.assign({}, v, { raktas: tekstas(v.raktas), saltinis: tekstas(v.saltinis), tekstas: tekstas(v.tekstas),
+        kontekstas: tekstas(v.kontekstas), atlikta: v.atlikta === true, data: tekstas(v.data) || o.atnaujinta }); }) : [];
     return o;
   }
 
@@ -229,6 +233,30 @@
     var w = global.GP_SAUGYKLA.rasyk(RAKTAS, { schema: Math.max(SCHEMA, irasas.schema || 0), korteles: sarasas }, { saugykla: saug(o) });
     if (!w.ok) return { ok: false, r: w };
     return { ok: true, kortele: n, nauja: !rasta };
+  }
+
+  /* Įrankio rekomenduoti veiksmai kortelėje (2026-10-06, naudotojo sprendimas: „Priskirti pirkimui“ - į bendrą kortelę, ne į modulio
+     saugyklą). Vienintelė vieta, kur modulis keičia esamą kortelę, ir tik šį lauką: veiksmas atpažįstamas pagal `raktas`
+     (pvz. „pp-market-kpi:programine:red:0“) - esamas atnaujinamas (būsena, tekstas), naujas pridedamas; kiti laukai neliečiami.
+     Kviečiama tik žmogui paspaudus „Įrašyti į kortelę“. */
+  function pridekVeiksmus(id, veiksmai, o) {
+    var k = gauk(id, o);
+    if (!k) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė nerasta" } };
+    var esami = Array.isArray(k.veiksmai) ? k.veiksmai.slice() : [];
+    var dabar = new Date().toISOString(), prideta = 0, atnaujinta = 0;
+    (veiksmai || []).forEach(function (v) {
+      if (!v || !tekstas(v.raktas)) return;
+      var n = { raktas: tekstas(v.raktas), saltinis: tekstas(v.saltinis), tekstas: tekstas(v.tekstas), kontekstas: tekstas(v.kontekstas),
+                atlikta: v.atlikta === true, data: dabar };
+      var i = -1;
+      esami.forEach(function (e, j) { if (e && e.raktas === n.raktas) i = j; });
+      if (i >= 0) { n.data = esami[i].data || dabar; n.atnaujinta = dabar; esami[i] = n; atnaujinta++; }
+      else { esami.push(n); prideta++; }
+    });
+    k.veiksmai = esami;
+    var r = issaugok(k, o);
+    if (r.ok) { r.prideta = prideta; r.atnaujinta = atnaujinta; }
+    return r;
   }
 
   function archyvuok(id, taip, o) {
@@ -1104,7 +1132,7 @@
     OBJEKTAI: OBJEKTAI, BUSENOS: BUSENOS, REZIMAI: REZIMAI, LAUKAI: LAUKAI,
     vykdytojai: vykdytojai, vykdytojas: vykdytojas,
     tuscia: tuscia, normalizuok: normalizuok, sandara: sandara,
-    skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok,
+    skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
     naudokSaugykla: naudokSaugykla,
     tikrink: tikrink, pastabos: pastabos,
     santrauka: santrauka, formatas: formatas, budoPav: budoPav, laukoPav: laukoPav, mazaja: mazaja, reiksmesTekstas: reiksmesTekstas,
