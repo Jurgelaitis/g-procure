@@ -392,6 +392,7 @@ def taisymas_tekstas(taisyk):
                         zout.writestr(info, items[info.filename])
         viso += pak
     viso += _dvigubi_tarpai(taisyk)
+    viso += _skyryba(taisyk)
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
     return viso
@@ -473,6 +474,71 @@ def _dvigubi_tarpai(taisyk):
                 for info in infos:
                     zout.writestr(info, items[info.filename])
             for zf in zem[f]:
+                tekstas0 = zf.read_text(encoding='utf-8'); Z = _json.loads(tekstas0); k = [0]
+                def keisk(v):
+                    if isinstance(v, str):
+                        if v in poros: k[0] += 1; return poros[v]
+                        return v
+                    if isinstance(v, list): return [keisk(x) for x in v]
+                    if isinstance(v, dict): return {a: keisk(b) for a, b in v.items()}
+                    return v
+                Z = keisk(Z)
+                if k[0]:
+                    zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if tekstas0.endswith('\n') else ''), encoding='utf-8')
+                    print(f"      {zf.name}: suderinta {k[0]} reiksmiu")
+        viso += pak
+    return viso
+
+
+_SKYRYBA = [
+    # „kuris pagal sudarytą pasiūlymų eilę, pateikė“ - kablelis skiria tarinį nuo aplinkybės (intarpo nėra); 62 vietos
+    (_re.compile(r'pasiūlymų eilę(,) pateikė'), '', 1),
+    # „ūkio subjektas, kurio pajėgumais remiamasi privalo“ - šalutinis sakinys neuždarytas kableliu; 9 vietos (TPS formoje - ir trys tarpai)
+    (_re.compile(r'kurio pajėgumais remiamasi( +)privalo'), ', ', 1),
+    # „t. y., bent vieną“ - po „t. y.“ kablelis nerašomas (tik prieš šalutinį sakinį ar intarpą - AK BPS „t. y., ar nėra“
+    # paliekama); 10 vietų
+    (_re.compile(r't\. y\.(,) bent vieną'), '', 1),
+    # „ir / arba“ - kaip kitur tuose pačiuose šablonuose (191 pastraipa) „ir (arba)“; tiekėjo formų „(ir/arba)“ - kitas darinys, nelieciama
+    (_re.compile(r'derinimo priemonių ir (/ arba) bent'), '(arba)', 1),
+]
+
+
+def _skyryba(taisyk):
+    """K. Skyryba (2026-10-06, naudotojo prasymas „DPS salygu 5.1 punktas“ ir sprendimas taisyti visuose sablonuose):
+    socialiniu reikalavimu punktas (DPS konkretaus pirkimo 5.1 p., SPS) ir sakinys „... bus prašoma pateikti tik iš Tiekėjo,
+    kuris pagal sudarytą pasiūlymų eilę pateikė ...“. Raudonas tekstas nelieciamas (siu vietu raudonose nera). Zemelapiu
+    pastraipu tekstas suderinamas kaip J. Pakartotinai - 0."""
+    import json as _json
+    viso = 0
+    ZEM = Path(__file__).parent / 'zemelapiai'
+    zem = {}
+    for zf in sorted(ZEM.glob('*.json')):
+        try:
+            Z = _json.loads(zf.read_text(encoding='utf-8'))
+        except Exception:
+            continue
+        if isinstance(Z, dict) and Z.get('sablonas') and 'paras' in Z:
+            zem.setdefault(Path(Z['sablonas']).stem, []).append(zf)
+    tekstai = lambda xml: [_pastraipos_tekstas(m.group(0)).strip() for m in _VISOS_P_RE.finditer(xml)]
+    for path in sorted(TPL.glob('*.docx')):
+        f = path.stem
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}; dalys = _dokumento_dalys(zin)
+        pries = tekstai(items['word/document.xml'])
+        pak = 0
+        for d in dalys:
+            items[d], n = _redaguok(items[d], _regex_pakeitimai(*_SKYRYBA))
+            pak += n
+        if not pak:
+            continue
+        po = tekstai(items['word/document.xml'])
+        poros = {a: b for a, b in zip(pries, po) if a != b} if len(pries) == len(po) else {}
+        print(f"  {f}.docx: skyryba - {pak}" + ("" if len(pries) == len(po) else "  (PASTRAIPU SKAICIUS PASIKEITE - zemelapis nederinamas)"))
+        if taisyk:
+            with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                for info in infos:
+                    zout.writestr(info, items[info.filename])
+            for zf in zem.get(f, []):
                 tekstas0 = zf.read_text(encoding='utf-8'); Z = _json.loads(tekstas0); k = [0]
                 def keisk(v):
                     if isinstance(v, str):
