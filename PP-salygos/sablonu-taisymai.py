@@ -400,6 +400,7 @@ def taisymas_tekstas(taisyk):
     viso += _dps_81(taisyk)
     viso += _sankciju_kablelis(taisyk)
     viso += _fizinio_asmens_skliaustai(taisyk)
+    viso += _dps_91(taisyk)
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
     return viso
@@ -706,6 +707,33 @@ _T_RAUDONI = []
 def _fizinio_asmens_skliaustai(taisyk):
     n = _su_zemelapiais(_be_raudono(_FIZINIS, _T_RAUDONI), None, 'fizinio asmens skliaustai', taisyk)
     for t in _T_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# U. DPS sukūrimo sąlygų 9.1 p. (2026-10-06, naudotojo prašymas „DPS sąlygų 9.1 punktas“; konkretaus pirkimo sąlygų 9.1 p. klaidų neturi):
+#    „ūkio subjektams, kurių pajėgumais tiekėjai remiasi[,] ir, kai taikoma, subtiekėjams“ - šalutinis sakinys neuždarytas kableliu;
+#    2 priedo pavadinimas - kaip pačiame priede, turinyje ir priedų sąraše („... ir reikalaujami aplinkos apsaugos vadybos sistemų standartai“;
+#    9.1 p. buvo pridėta „kokybės bei“, EN - „Quality and“); EN tekste praleisti kokybės vadybos sistemos reikalavimai ir „ir (arba)“ (LT -
+#    „kvalifikacijos reikalavimai ir (arba) reikalavimai dėl kokybės vadybos sistemos ir (arba) aplinkos apsaugos vadybos sistemos standartų
+#    laikymosi“). Ir 9.4 p. (naudotojo patvirtinimas „Patvirtinu, suvienodinkite ir 9.4 punktą.“; šablone ranka „9.5.“ - numerį sutvarko GPNum):
+#    „2 priede „Tiekėjų kvalifikacijos reikalavimai ir reikalavimai laikytis ... standartų““ - taip pat priedo pavadinimu. Raudonas tekstas nelieciamas.
+_DPS_91 = [
+    (_re.compile(r'2 priede „Tiekėjų kvalifikacijos reikalavimai ir (reikalavimai laikytis aplinkos apsaugos vadybos sistemų standartų)“'),
+     'reikalaujami aplinkos apsaugos vadybos sistemų standartai', 1),
+    (_re.compile(r'ūkio subjektams, kurių pajėgumais tiekėjai remiasi() ir, kai taikoma, subtiekėjams'), ',', 1),
+    (_re.compile(r'2 priede „Tiekėjų kvalifikacijos reikalavimai ir reikalaujami (kokybės bei )aplinkos apsaugos vadybos sistemų standartai“'), '', 1),
+    (_re.compile(r'Annex 2 of these conditions, "Qualification Requirements and Required (Quality and )Environmental Management System Standards"'), '', 1),
+    (_re.compile(r'^(Qualification requirements and required environmental management system standards) for suppliers, Economic entities on whose'),
+     'Qualification requirements and/or requirements regarding compliance with quality management system and/or environmental management '
+     'system standards', 1),
+]
+_U_RAUDONI = []
+
+
+def _dps_91(taisyk):
+    n = _su_zemelapiais(_be_raudono(_DPS_91, _U_RAUDONI), ['DPSK_LT_SALYGOS', 'DPSK_LTEN_SALYGOS'], 'DPS 9.1 p.', taisyk)
+    for t in _U_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 
