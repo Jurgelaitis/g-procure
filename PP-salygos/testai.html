@@ -1303,6 +1303,43 @@ async function testaiSablonuTaisymai(){
     lygu(lt.replace(/^6\.1\. /, ""), dv, "LT 6.1 p. = dvikalbio LT tekstas");
   });
 
+  await testas("DPS sukūrimo sąlygų 7.1 p. (M, 2026-10-06, naudotojo prašymas „DPS sąlygų 7.1 punktas“): „neįtraukiamas į DPS“, „CVP IS“ (ne „CPV IS“), LT „7.1.2.“ ir „7.1.3.“ su tašku, be tarpų gale, EN „on whose capacity the supplier relies does not meet“; šablonai ir žemėlapiai; konkretaus pirkimo 7.1 p. nekeistas", async () => {
+    const liko = [];
+    for (const f of ["DPSK_LT_SALYGOS.docx", "DPSK_LTEN_SALYGOS.docx"]){
+      const T = pastrTekstai(F[f]["word/document.xml"]), J = T.join("\n");
+      // tarpai gale - netrumpintame tekste (pastrTekstai pastraipas apkerpa)
+      const Jr = Array.from(new W.DOMParser().parseFromString(F[f]["word/document.xml"], "application/xml").getElementsByTagNameNS(NSW, "p"))
+        .map(el => Array.from(el.getElementsByTagNameNS(NSW, "t")).map(t => t.textContent).join("")).join("\n");
+      [/neįtraukiamas DPS/, /ne CPV IS priemonėmis/, /relies on does not meet/, /^\s*7\.1\.[23]\s/m].forEach(r => { if (r.test(J)) liko.push(f + " " + r.source); });
+      if (/(7\.2 punkte|prašomos informacijos); +$/m.test(Jr)) liko.push(f + " tarpai gale");
+      if (!/Paraiška atmetama ir tiekėjas neįtraukiamas į DPS, kai:/i.test(J) || !/aišką pateikė ne CVP IS priemonėmis;/.test(J)) liko.push(f + ": nėra pataisyto 7.1 / 7.1.1 teksto");
+      const z = await (await W.fetch("zemelapiai/" + f.replace(/\.docx$/, ".json") + "?b=" + Date.now())).text();
+      if (/neįtraukiamas DPS|ne CPV IS|relies on does not meet/.test(z)) liko.push("zemelapiai/" + f);
+    }
+    lygu(liko, [], "liko klaidų");
+    const lt = pastrTekstai(F["DPSK_LT_SALYGOS.docx"]["word/document.xml"]);
+    lygu(lt.filter(t => /^\s*7\.1\.\d\./.test(t)).map(t => t.trim().slice(0, 7)), ["7.1.1.", "7.1.2.", "7.1.3.", "7.1.4.", "7.1.5."].map(x => x + " "), "LT 7.1 papunkčių numeriai");
+    tiesa(pastrTekstai(F["DPSK_LTEN_SALYGOS.docx"]["word/document.xml"]).some(t => /on whose capacity the supplier relies does not meet the qualification requirements/.test(t)), "EN 7.1.3");
+    tiesa(pastrTekstai(F["DPSP_LT_SALYGOS.docx"]["word/document.xml"]).some(t => /^7\.1\. Pirminį susipažinimą su konkrečiais pasiūlymais atlieka konkretų pirkimą vykdanti komisija\./.test(t)), "konkretaus pirkimo 7.1 p. - kaip buvo");
+  });
+
+  await testas("N (2026-10-06, naudotojo atsakymas „Taip, prašau sutvarkyti ir tai.“): DPS sukūrimo LT „7.2.“ su tašku, EN 7.2.1.2 p. su kabliataškiu; dvigubo „on whose / on which ... relies on“ nėra nė viename šablone ir žemėlapyje (buvo 69 vietos 20 angliškų šablonų, tarp jų raudona neprivaloma DPS 8.4 nuostata); O (naudotojo patvirtinimas): „on whose entities“ -> „on whose capacities“ 5 dvikalbiuose BPS", async () => {
+    const RX = /\bon (?:whose|which)\b[^.;,()]{0,60}?\brel(?:y|ies)\s+on\b/i, liko = [];
+    for (const [f, d] of Object.entries(F)){
+      Object.entries(d).filter(([n]) => /^word\/[^/]+\.xml$/.test(n)).forEach(([n, x]) => pastrTekstai(x).forEach(t => { if (RX.test(t)) liko.push(f + " " + n + ": " + t.match(RX)[0]); }));
+      const r = await W.fetch("zemelapiai/" + f.replace(/\.docx$/, ".json") + "?b=" + Date.now());
+      if (r.ok && RX.test(await r.text())) liko.push("zemelapiai/" + f);
+    }
+    lygu(liko, [], "liko dvigubo prielinksnio");
+    const lt = pastrTekstai(F["DPSK_LT_SALYGOS.docx"]["word/document.xml"]), en = pastrTekstai(F["DPSK_LTEN_SALYGOS.docx"]["word/document.xml"]);
+    tiesa(lt.some(t => /^7\.2\. Jeigu tiekėjas neatitinka reikalavimų/.test(t)) && !lt.some(t => /^7\.2 Jeigu/.test(t)), "LT 7.2.");
+    tiesa(en.some(t => /criminal act or violation committed by them, if applicable;$/.test(t)), "EN 7.2.1.2 su kabliataškiu");
+    tiesa(en.some(t => /on whose capacities the supplier intends to rely meet the grounds for exclusion/.test(t)), "raudona 8.4 nuostata pataisyta");
+    const be = Object.entries(F).filter(([f, d]) => /on whose entities/i.test(pastrTekstai(d["word/document.xml"]).join("\n"))).map(([f]) => f);
+    lygu(be, [], "„on whose entities“ (vertimo klaida, O)");
+    lygu(["AK", "MVP", "ND", "SSD", "TSD"].filter(k => !/economic entities on whose capacities the Supplier relies, and\/or the quasi[- ]sub-suppliers/i.test(pastrTekstai(F[k + "_LTEN_BPS.docx"]["word/document.xml"]).join("\n"))), [], "„on whose capacities“ dvikalbiuose BPS");
+  });
+
   await testas("Bankų sąrašo priedo numeris garantijos punkte - kaip to paties SPS priedų sąraše (ir EN); valdymo organų formos antraštė - kaip AKV SPS sąraše", () => {
     const blogi = [];
     Object.entries(F).filter(([f]) => /_SPS\.docx$/.test(f)).forEach(([f, d]) => {

@@ -394,6 +394,9 @@ def taisymas_tekstas(taisyk):
     viso += _dvigubi_tarpai(taisyk)
     viso += _skyryba(taisyk)
     viso += _dps_61(taisyk)
+    viso += _dps_71(taisyk)
+    viso += _dps_72_rely(taisyk)
+    viso += _vertimas_entities(taisyk)
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
     return viso
@@ -523,9 +526,105 @@ def _dps_61(taisyk):
     return _su_zemelapiais(_DPS_61, ['DPSP_LT_SALYGOS'], 'DPS 6.1 p.', taisyk)
 
 
+# M. DPS sukūrimo sąlygų 7.1 p. (2026-10-06, naudotojo prasymas „DPS sąlygų 7.1 punktas“; konkretaus pirkimo sąlygų 7.1 p. klaidų neturi):
+#    „neįtraukiamas DPS“ - be prielinksnio (įtraukti į ką); „CPV IS“ - rašybos klaida (tame pačiame šablone „CVP IS“ - 28 kartus; CPV - BVPŽ
+#    kodų žodynas); LT šablone ranka įrašyti „7.1.2“ ir „7.1.3“ - be taško (kiti punktai - „7.1.1.“, „7.1.4.“); tarpai sakinio gale;
+#    angliškai „on whose capacity the supplier relies on“ - du prielinksniai. Turinys, nuorodos ir terminai nekeičiami.
+_DPS_71 = [
+    (_re.compile(r'tiekėjas neįtraukiamas( )DPS, kai:'), ' į ', 1),
+    (_re.compile(r'[Pp]araišką pateikė ne (CPV) IS priemonėmis'), 'CVP', 1),
+    (_re.compile(r'^\s*7\.1\.[23]()\s+tiekėjas'), '.', 1),
+    (_re.compile(r'nustatytos 7\.2 punkte;( +)$'), '', 1),
+    (_re.compile(r'nepaaiškino prašomos informacijos;( +)$'), '', 1),
+    (_re.compile(r'on whose capacity the supplier relies( on) does not meet'), '', 1),
+]
+
+
+def _dps_71(taisyk):
+    return _su_zemelapiais(_DPS_71, ['DPSK_LT_SALYGOS', 'DPSK_LTEN_SALYGOS'], 'DPS 7.1 p.', taisyk)
+
+
+# N. Tas pats 7 skyrius ir angliski sablonai (2026-10-06, naudotojo atsakymas „Taip, prašau sutvarkyti ir tai.“):
+#    DPS sukūrimo LT sąlygų ranka įrašytas „7.2“ - be taško; EN 7.2.1.2 p. „... committed by them, if applicable“ - be kabliataškio
+#    (kiti papunkčiai baigiasi „;“); ir dvigubas prielinksnis „on whose / on which ... relies on“ (taip pat „rely on“, „does not rely
+#    on“, „intends to rely on“) 20-yje angliškų šablonų - antras „on“ šalinamas. Raudonas tekstas paprastai nelieciamas (kaip J), isskyrus
+#    DPS sukūrimo LT/EN 8.4 p. - visa raudona NEPRIVALOMA nuostata (paliekama - tampa juoda, tad klaida patektu i dokumenta; zemelapio
+#    tekstas suderinamas). „on whose entities“ (vertimo klaida - turinys) nekeičiama.
+_DPS_72 = [
+    (_re.compile(r'^\s*7\.2()\s+Jeigu tiekėjas neatitinka reikalavimų'), '.', 1),
+    (_re.compile(r'investigate and clarify the criminal act or violation committed by them, if applicable()$'), ';', 1),
+    (_re.compile(r'on whose capacities the supplier intends to rely( on) meet the grounds for exclusion specified in Annex 1'), '', 1),
+]
+_RELY_ON_RE = _re.compile(r'\bon (?:whose|which)\b[^.;,()]{0,60}?\brel(?:y|ies)( on)\b', _re.I)
+_RELY_RAUDONI = []
+
+
+def _rely_on(tekstas, seg):
+    if not _RELY_ON_RE.search(tekstas):
+        return None
+    raud = []
+    for r in _RUN_RE.finditer(seg):
+        red = bool(_RAUD_RE.search(r.group(0)))
+        for m in _re.finditer(rb'<w:t(?:\s[^>]*)?>(.*?)</w:t>', r.group(0), _re.S):
+            raud += [red] * len(_html.unescape(m.group(1).decode('utf-8')))
+    if len(raud) != len(tekstas):
+        return None
+    pak = []
+    for m in _RELY_ON_RE.finditer(tekstas):
+        a, b = m.span(1)
+        if any(raud[a:b]):
+            _RELY_RAUDONI.append(tekstas[max(0, a - 50):b + 20])
+            continue
+        pak.append((a, b, ''))
+    return pak
+
+
+# O. Vertimo klaida (2026-10-06, naudotojo patvirtinimas „Patvirtinu, ištaisykite.“): dvikalbių BPS (AK, MVP, ND, SSD, TSD) sakinyje apie
+#    priesaikos ar oficialią deklaraciją „the economic entities on whose entities the Supplier relies“ - LT „Ūkio subjektai, kurių pajėgumais
+#    remiamasi“, todėl „on whose capacities“ (kaip kitur tuose pačiuose šablonuose). Raudonas tekstas nelieciamas.
+_ENTITIES_RE = _re.compile(r'economic entities on whose (entities) the Supplier relies', _re.I)
+_ENTITIES_RAUDONI = []
+
+
+def _entities(tekstas, seg):
+    if not _ENTITIES_RE.search(tekstas):
+        return None
+    raud = []
+    for r in _RUN_RE.finditer(seg):
+        red = bool(_RAUD_RE.search(r.group(0)))
+        for m in _re.finditer(rb'<w:t(?:\s[^>]*)?>(.*?)</w:t>', r.group(0), _re.S):
+            raud += [red] * len(_html.unescape(m.group(1).decode('utf-8')))
+    if len(raud) != len(tekstas):
+        return None
+    pak = []
+    for m in _ENTITIES_RE.finditer(tekstas):
+        a, b = m.span(1)
+        if any(raud[a:b]):
+            _ENTITIES_RAUDONI.append(tekstas[max(0, a - 50):b + 30])
+            continue
+        pak.append((a, b, 'capacities'))
+    return pak
+
+
+def _vertimas_entities(taisyk):
+    n = _su_zemelapiais(_entities, None, 'EN „on whose capacities“', taisyk)
+    for t in _ENTITIES_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+def _dps_72_rely(taisyk):
+    n = _su_zemelapiais(_DPS_72, ['DPSK_LT_SALYGOS', 'DPSK_LTEN_SALYGOS'], 'DPS 7.2 p.', taisyk)
+    n += _su_zemelapiais(_rely_on, None, 'EN „relies on“', taisyk)
+    for t in _RELY_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
 def _su_zemelapiais(poros, failai, vardas, taisyk):
     """Teksto pakeitimai sablonuose (failai - stem sarasas, None - visi) ir to paties teksto suderinimas zemelapiuose
-    (sena -> nauja reiksme), kaip J. Grazina pakeitimu skaiciu."""
+    (sena -> nauja reiksme), kaip J. poros - _regex_pakeitimai poros arba pati funkcija fn(tekstas, segmentas).
+    Grazina pakeitimu skaiciu."""
     import json as _json
     viso = 0
     ZEM = Path(__file__).parent / 'zemelapiai'
@@ -547,7 +646,7 @@ def _su_zemelapiais(poros, failai, vardas, taisyk):
         pries = tekstai(items['word/document.xml'])
         pak = 0
         for d in dalys:
-            items[d], n = _redaguok(items[d], _regex_pakeitimai(*poros))
+            items[d], n = _redaguok(items[d], poros if callable(poros) else _regex_pakeitimai(*poros))
             pak += n
         if not pak:
             continue
