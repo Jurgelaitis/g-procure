@@ -2522,6 +2522,173 @@ async function testaiLenteles(){
   });
 }
 
+/* ======================================================================== */
+/* 2026-10-06: „Tikrinti parengtus dokumentus“ (tikrinimas.js, shared/palyginimas.js) - naudotojo sprendimai: vienas įrankis vietoj
+   „Ar pirkimas parengtas skelbti?“, bazė - mūsų pataisyti šablonai, generavimo pasas be atsakymų, Word ataskaita su mašinai
+   skaitomais sprendimais. Mutacijos įterpiamos į TIKRUS sugeneruotus dokumentus - rasti turi būti lygiai jos. */
+const NS_PASAS = "https://g-procure.com/pasas/1";
+async function zipas(blob){ return W.JSZip.loadAsync(await blob.arrayBuffer()); }
+async function pasoDalis(z){
+  for (const f of z.file(/^customXml\/item\d+\.xml$/)){ const x = await f.async("string"); if (x.indexOf(NS_PASAS) >= 0) return { vardas: f.name, xml: x }; }
+  return null;
+}
+/* Kūno lygio pastraipos su tekstu (ne lentelėse); keisk(ps, doc) jas keičia; be paso - paso dalis pašalinama. */
+async function keiskDocx(blob, keisk, { bePaso = false } = {}){
+  const z = await zipas(blob), xml = await z.file("word/document.xml").async("string");
+  const doc = new W.DOMParser().parseFromString(xml, "application/xml");
+  const ps = [...doc.getElementsByTagNameNS(NSW, "p")].filter(p => p.parentNode.localName === "body")
+    .map(p => ({ p, t: [...p.getElementsByTagNameNS(NSW, "t")].map(t => t.textContent).join("") }));
+  keisk(ps, doc);
+  z.file("word/document.xml", new W.XMLSerializer().serializeToString(doc));
+  if (bePaso){ const d = await pasoDalis(z); if (d) z.remove(d.vardas); }
+  return z.generateAsync({ type: "blob" });
+}
+/* Trys mutacijos ilgose BPS pastraipose (ne sąlyginėse, ne su dvitaškiu gale): žodis įterptas, pastraipa pašalinta, pridėta nauja. */
+const MUT_NAUJA = "Papildoma nuostata, kurios standartinėje formoje nėra: tiekėjas privalo pateikti ir papildomą banko garantiją už kiekvieną pirkimo objekto dalį.";
+function mutacijos(ps){
+  const tinka = ps.filter(x => x.t.length > 150 && !/:\s*$/.test(x.t) && !/^(\d+(\.\d+)*\.?\s*)?(Jei|Jeigu|Kai)\s/.test(x.t));
+  const [a, b, c] = [tinka[3], tinka[12], tinka[24]];
+  const t = a.p.getElementsByTagNameNS(NSW, "t")[0]; t.textContent = t.textContent.replace(" ", " papildomai ");
+  b.p.parentNode.removeChild(b.p);
+  const n = c.p.cloneNode(true), ts = [...n.getElementsByTagNameNS(NSW, "t")];
+  ts.forEach((x, i) => { x.textContent = i ? "" : MUT_NAUJA; });
+  c.p.parentNode.insertBefore(n, c.p.nextSibling);
+  return { pakeista: a.t, pasalinta: b.t };
+}
+async function tikrink(failai){
+  D.getElementById("tabTikrinti").click();
+  await W.GP_TIKRINIMAS.skaityk(failai);
+  const B = W.GP_TIKRINIMAS.busena;
+  tiesa(B.docs, "patikra neįvyko: " + (D.getElementById("tkBusena").textContent || ""));
+  return B;
+}
+const dokPagal = (B, vardas) => B.docs.find(d => d.name === vardas);
+async function testaiTikrinimas(){
+  dabartine = grupe("Tikrinti parengtus dokumentus: generavimo pasas, palyginimas su forma, sprendimai ir ataskaita (2026-10-06)");
+  let docs = null;
+  await testas("Generavimo pasas kiekviename sugeneruotame Word faile: šablonas, formos maiša (= formu-versijos.json), data ir galutinio teksto pastraipų maišos - be atsakymų; pakuotė tvarkinga (Content_Types, ryšys, itemProps)", async () => {
+    docs = await generuokSu({ budas: "T-AK", verte: "123 456,78" });
+    const R = await (await W.fetch("zemelapiai/formu-versijos.json")).json();
+    const blogi = [];
+    for (const [trumpas, x] of Object.entries(docs)){
+      if (x.statinis) continue;
+      const z = await zipas(x.r.blob), d = await pasoDalis(z);
+      if (!d){ blogi.push(trumpas + ": paso nėra"); continue; }
+      const pas = W.GP_PALYGINIMAS.skaitykPasa(d.xml), ps = W.GP_PALYGINIMAS.pastraipos(await z.file("word/document.xml").async("string"));
+      const n = d.vardas.match(/item(\d+)\.xml$/)[1];
+      const ct = await z.file("[Content_Types].xml").async("string"), rels = await z.file("word/_rels/document.xml.rels").async("string");
+      const ip = await z.file("customXml/itemProps" + n + ".xml").async("string");
+      const atributai = [...new W.DOMParser().parseFromString(d.xml, "application/xml").documentElement.attributes].map(a => a.name).sort();
+      if (pas.sablonas !== trumpas) blogi.push(trumpas + ": šablonas " + pas.sablonas);
+      if (R.formos[trumpas] && pas.forma !== R.formos[trumpas].dabartine) blogi.push(trumpas + ": formos maiša nesutampa su formu-versijos.json");
+      if (JSON.stringify(pas.pastraipos) !== JSON.stringify(ps.map(p => W.GP_PALYGINIMAS.maisa(p.n)))) blogi.push(trumpas + ": pastraipų maišos nesutampa su dokumentu");
+      if (JSON.stringify(atributai) !== JSON.stringify(["data", "forma", "modulis", "sablonas", "versija", "xmlns"])) blogi.push(trumpas + ": atributai " + atributai);
+      if (!/^\s*<\?xml[^>]*>\s*<pasas[^>]*><pastraipos>[0-9a-f ]*<\/pastraipos><\/pasas>\s*$/.test(d.xml)) blogi.push(trumpas + ": pase yra kas nors daugiau nei maišos");
+      if (ct.indexOf('/customXml/itemProps' + n + '.xml') < 0) blogi.push(trumpas + ": Content_Types be itemProps" + n);
+      if (rels.indexOf('../customXml/item' + n + '.xml') < 0) blogi.push(trumpas + ": document.xml.rels be paso ryšio");
+      if (ip.indexOf(NS_PASAS) < 0) blogi.push(trumpas + ": itemProps be schemos");
+    }
+    lygu(blogi, [], "pasai");
+    tiesa(Object.keys(docs).length >= 4, "per mažai dokumentų: " + Object.keys(docs).join(", "));
+  });
+  await testas("Tikrinimas pagal pasą: nepakeistas sugeneruotas SPS ir BPS - 0 nukrypimų („pagal generavimo pasą“); į BPS įterptos trys mutacijos (žodis, pašalinta ir pridėta pastraipa) - lygiai trys nukrypimai su tikru tekstu", async () => {
+    tiesa(docs, "nėra sugeneruotų dokumentų");
+    let mut = null;
+    const bps2 = await keiskDocx(docs.AK_LT_BPS.r.blob, ps => { mut = mutacijos(ps); });
+    const B = await tikrink([new W.File([docs.AK_LT_SPS.r.blob], "SPS.docx"), new W.File([docs.AK_LT_BPS.r.blob], "BPS.docx"), new W.File([bps2], "BPS pakeistas.docx")]);
+    const x = n => B.palyg[dokPagal(B, n).id];
+    lygu([x("SPS.docx").pagalPasa, x("SPS.docx").rez.statistika.nukrypimas, x("BPS.docx").rez.statistika.nukrypimas, x("BPS.docx").forma], [true, 0, 0, "AK_LT_BPS"], "nepakeisti");
+    const r = x("BPS pakeistas.docx").rez.pakeitimai.filter(p => p.rusis === "nukrypimas");
+    lygu(r.map(p => p.op), ["pakeista", "pasalinta", "prideta"], "mutacijos pagal pasą");
+    tiesa(/ papildomai /.test(r[0].dok) && r[2].dok === MUT_NAUJA && W.GP_PALYGINIMAS.norm(r[0].forma) === W.GP_PALYGINIMAS.norm(mut.pakeista), "tekstai: " + JSON.stringify(r.map(p => [p.forma.slice(0, 40), p.dok.slice(0, 40)])));
+    tiesa(/pagal generavimo pasą/.test(D.getElementById("tkp-dokumentai").textContent), "„Pagal dokumentą“ sako, kad lyginta pagal pasą");
+    lygu(D.querySelectorAll("#tkp-svarbiausia .tk-rad--nukrypimas").length, 3, "nukrypimų kortelės");
+  });
+  await testas("Be paso: forma atpažįstama pagal rodyklę (AK_LT_BPS, siūloma), tos pačios trys mutacijos - lygiai trys nukrypimai; pasirinkus „Nelyginti“ - „nepatikrinta“ su priežastimi, ne „be pastabų“", async () => {
+    let mut = null;
+    const bps = await keiskDocx(docs.AK_LT_BPS.r.blob, ps => { mut = mutacijos(ps); }, { bePaso: true });
+    const B = await tikrink([new W.File([bps], "BPS be paso.docx")]);
+    const d = B.docs[0], x = B.palyg[d.id];
+    lygu([!!x.pasas, x.pagal, x.forma, x.idf[0].id], [false, "atpazinta", "AK_LT_BPS", "AK_LT_BPS"], "atpažinimas");
+    lygu(x.rez.pakeitimai.filter(p => p.rusis === "nukrypimas").map(p => p.op), ["pakeista", "pasalinta", "prideta"], "mutacijos pagal formą");
+    tiesa(W.GP_PALYGINIMAS.norm(x.rez.pakeitimai.find(p => p.op === "pasalinta").forma) === W.GP_PALYGINIMAS.norm(mut.pasalinta), "pašalintos pastraipos formos tekstas");
+    tiesa(/Forma atpažinta: Atviras konkursas · BPS · LT/.test(D.getElementById("tkp-dokumentai").textContent), "„Pagal dokumentą“: " + D.getElementById("tkp-dokumentai").textContent.slice(0, 200));
+    const sel = D.querySelector("#tkp-dokumentai select[data-tk-forma]"); sel.value = ""; sel.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await kol(() => [...D.querySelectorAll("#tkPatikrosLent tr")].some(tr => /Palyginimas su forma: BPS be paso/.test(tr.textContent) && /nepatikrinta/.test(tr.textContent) && /nelyginti/.test(tr.textContent)), "nelyginama - nepatikrinta su priežastimi");
+    lygu(D.querySelectorAll("#tkp-svarbiausia .tk-rad--nukrypimas").length, 0, "nukrypimų nebėra");
+  });
+  await testas("Rezultatų langas ir sprendimai: žodžių skirtumas su tekstu ekrano skaitytuvui; „Priimta sąmoningai“ be pagrindimo - nebaigtas, su pagrindimu - baigtas; sprendimai - darbas (GP_DARBAS), failų pasirinkimas - ne; atsisiuntus ataskaitą - nebe", async () => {
+    const bps2 = await keiskDocx(docs.AK_LT_BPS.r.blob, ps => { mutacijos(ps); });
+    tiesa(!W.GP_DARBAS.pakeista(), "prieš tikrinimą darbo nėra");
+    const B = await tikrink([new W.File([bps2], "BPS.docx")]);
+    tiesa(!W.GP_DARBAS.pakeista(), "vien patikra darbo nekuria");
+    const kort = D.querySelector("#tkp-svarbiausia .tk-rad--nukrypimas");
+    tiesa(kort.querySelector("ins.tk-ins .sr-only") && /pridėta:/.test(kort.querySelector("ins.tk-ins").textContent), "pridėtas žodis su tekstu ekrano skaitytuvui: " + kort.innerHTML.slice(0, 300));
+    const raktas = kort.id.replace("tkr-", "");
+    kort.querySelector('[data-tk-spr="priimta"]').click();
+    const k2 = D.getElementById("tkr-" + raktas), ta = k2.querySelector("textarea");
+    lygu([k2.dataset.tkBusena, k2.querySelector('[data-tk-spr="priimta"]').getAttribute("aria-pressed"), D.activeElement === ta, !!k2.querySelector(".tk-truksta")], ["be_pagrindimo", "true", true, true], "be pagrindimo");
+    tiesa(W.GP_DARBAS.pakeista(), "sprendimas - neišsaugotas darbas");
+    tiesa(/be pagrindimo: 1/.test(D.getElementById("tkSantrauka").textContent), "santrauka: " + D.getElementById("tkSantrauka").textContent);
+    ta.value = "Komisija pritarė - papildomas žodis tikslina nuostatą"; ta.dispatchEvent(new W.Event("input", { bubbles: true }));
+    lygu([k2.dataset.tkBusena, B.sprendimai[raktas].pagrindimas], ["ispresta", "Komisija pritarė - papildomas žodis tikslina nuostatą"], "su pagrindimu");
+    const pries = W.HTMLAnchorElement.prototype.click; W.HTMLAnchorElement.prototype.click = function(){};
+    try {
+      D.getElementById("tkAtaskaita").click();
+      await kol(() => /Ataskaita atsisiųsta/.test(D.getElementById("tkAtaskaitosBusena").textContent), "ataskaita");
+    } finally { W.HTMLAnchorElement.prototype.click = pries; }
+    tiesa(!W.GP_DARBAS.pakeista(), "atsisiuntus ataskaitą - darbo nebėra");
+    tiesa(/Patikros_ataskaita/.test(D.getElementById("tkAtaskaitosBusena").textContent), "failo vardas: " + D.getElementById("tkAtaskaitosBusena").textContent);
+  });
+  await testas("Ataskaita (Word): oficialus stilius (be žalios, antraštės F2F2F2, be U+2013 ir U+2014), lentelės DXA ir fixed, pločių suma = teksto plotis; mašinai skaitomi sprendimai - įkėlus ją su nauja versija, sprendimas rodomas prie to paties radinio, pakeitimai suskaičiuoti", async () => {
+    const B = W.GP_TIKRINIMAS.busena, raktas = Object.keys(B.sprendimai)[0];
+    tiesa(raktas, "nėra sprendimo iš ankstesnio testo");
+    const blob = await W.GP_TIKRINIMAS.ataskaita(), z = await zipas(blob);
+    const xml = await z.file("word/document.xml").async("string"), st = await z.file("word/styles.xml").async("string");
+    const spalvos = [...new Set((xml + st).match(/w:color w:val="[0-9A-Fa-f]{6}"/g) || [])].map(x => x.slice(-7, -1).toUpperCase());
+    const zalios = spalvos.filter(c => { const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4), 16); return g > r + 30 && g > b; });
+    lygu([zalios, /[\u2013\u2014]/.test(xml), /w:fill="F2F2F2"/.test(xml), /w:val="solid"/i.test(xml)], [[], false, true, false], "stilius");
+    const blogos = [...xml.matchAll(/<w:tbl>[\s\S]*?<\/w:tbl>/g)].map(m => m[0]).filter(t => !/<w:tblLayout w:type="fixed"\/>/.test(t) ||
+      [...t.matchAll(/<w:gridCol w:w="(\d+)"\/>/g)].reduce((a, m) => a + +m[1], 0) !== 9638 || /w:type="(auto|pct)"/.test(t));
+    lygu(blogos.length, 0, "lentelės");
+    tiesa(/Komisija pritarė/.test(xml) && /Priimta sąmoningai/.test(xml), "sprendimas ir pagrindimas tekste");
+    const cx = await z.file("customXml/item1.xml").async("string");
+    const duom = JSON.parse(new W.DOMParser().parseFromString(cx, "application/xml").documentElement.textContent);
+    lygu([duom.versija, duom.sprendimai[raktas].s, duom.radiniai.includes(raktas), duom.dokumentai[0].pastraipos.split(" ").length > 100], [1, "priimta", true, true], "mašinai skaitomi duomenys");
+    // Nauja paketo versija: ta pati trijų mutacijų BPS ir dar vienas pakeitimas + ankstesnė ataskaita
+    const bps3 = await keiskDocx(docs.AK_LT_BPS.r.blob, ps => { mutacijos(ps); const t = ps[ps.length - 1].p.getElementsByTagNameNS(NSW, "t")[0]; if (t) t.textContent += " (redaguota)"; });
+    const B2 = await tikrink([new W.File([blob], "Patikros ataskaita.docx"), new W.File([bps3], "BPS 2 versija.docx")]);
+    lygu([B2.docs.length, !!B2.ankstesne, B2.ankstesne && B2.ankstesne.vardas], [1, true, "Patikros ataskaita.docx"], "ataskaita atpažinta ir į paketą neįtraukta");
+    tiesa(/Ankstesnė patikra/.test(D.getElementById("tkp-svarbiausia").textContent), "juosta apie ankstesnę patikrą");
+    const k = D.getElementById("tkr-" + raktas);
+    tiesa(k && /Ankstesnėje patikroje/.test(k.textContent) && /Komisija pritarė/.test(k.textContent) && !B2.sprendimai[raktas], "ankstesnis sprendimas rodomas, bet nepritaikytas savaime");
+    k.querySelector("[data-tk-palikti]").click();
+    lygu([B2.sprendimai[raktas].s, B2.sprendimai[raktas].pagrindimas, D.getElementById("tkr-" + raktas).dataset.tkBusena], ["priimta", "Komisija pritarė - papildomas žodis tikslina nuostatą", "ispresta"], "palikta žmogaus veiksmu");
+    tiesa(/Nuo ankstesnės patikros \(BPS\.docx\): pakeista 1, pridėta 0, pašalinta 0/.test(D.getElementById("tkp-dokumentai").textContent), "versijos pokyčiai: " + D.getElementById("tkp-dokumentai").textContent.slice(0, 400));
+  });
+  await testas("Formų rodyklė (formu-versijos.json) sutampa su šablonais: dabartinė maiša ir požymiai - kaip naršyklėje skaičiuojami (Python ir JS lygiavertiškumas); kiekvienas šablonas atpažįstamas kaip jis pats", async () => {
+    const R = await (await W.fetch("zemelapiai/formu-versijos.json?b=" + Date.now())).json(), P = W.GP_PALYGINIMAS, blogi = [];
+    for (const [id, f] of Object.entries(R.formos)){
+      const z = await W.JSZip.loadAsync(await (await W.fetch("templates/" + id + ".docx")).arrayBuffer());
+      const ps = P.pastraipos(await z.file("word/document.xml").async("string"));
+      if (P.formosMaisa(ps) !== f.dabartine) blogi.push(id + ": dabartinė maiša");
+      const poz = [...new Set(ps.filter(x => x.n.length > 40).map(x => P.maisa(x.n)).filter(h => parseInt(h.slice(-1), 16) < 4).map(h => h.slice(-8)))].sort().join(" ");
+      if (poz !== f.pozymiai) blogi.push(id + ": požymiai");
+      const top = P.identifikuok(ps, R.formos)[0];
+      if (top.id !== id || top.balas < 0.99) blogi.push(id + ": atpažinta kaip " + top.id + " " + top.balas);
+    }
+    lygu(blogi, [], "rodyklė");
+    tiesa(Object.keys(R.formos).length >= 26, "formų: " + Object.keys(R.formos).length);
+  });
+  await testas("Darbo sritys: #tikrinti atveria tikrinimą (rengimas paslėptas, mygtukai aria-pressed); grįžus - generatorius; tikrinimo srities failų pasirinkimas ir vaizdai darbo nekuria (data-darbas-ne)", async () => {
+    D.getElementById("tabRengti").click();
+    lygu([D.getElementById("rengimas").hidden, D.getElementById("tikrinimas").hidden, D.getElementById("tabRengti").getAttribute("aria-pressed"), W.location.hash], [false, true, "true", ""], "rengimas");
+    D.getElementById("tabTikrinti").click();
+    lygu([D.getElementById("rengimas").hidden, D.getElementById("tikrinimas").hidden, D.getElementById("tabTikrinti").getAttribute("aria-pressed"), W.location.hash], [true, false, "true", "#tikrinti"], "tikrinimas");
+    tiesa(D.getElementById("tikrinimas").hasAttribute("data-darbas-ne"), "data-darbas-ne");
+  });
+}
+
 async function testaiNumeracija(){
   dabartine = grupe("Numeracija tekstu (GPNum) ir šablono alternatyvos su „ARBA“ (R1)");
 
@@ -2736,6 +2903,7 @@ async function testaiNumeracija(){
     await testaiKriterijus();
     await testaiLenteles();
     await testaiTeise();
+    await testaiTikrinimas();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

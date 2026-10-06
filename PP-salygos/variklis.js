@@ -909,6 +909,61 @@ const GPDocx = (() => {
     return out;
   }
 
+  /* ---------- GENERAVIMO PASAS (2026-10-06, pirkimo sąlygų tikrinimas; naudotojo sprendimas) ----------
+     Atskira customXml dalis (vardų erdvė https://g-procure.com/pasas/1, shared/palyginimas.js pasoXml): šablono kodas, formos
+     maiša, data ir GALUTINIO dokumento pastraipų maišos - be atsakymų (juose yra numatoma vertė, o failas skelbiamas CVP IS).
+     Tikrinant parengtą dokumentą („Tikrinti parengtus dokumentus“) pagal pasą tiksliai matoma, kas pakeista PO generavimo.
+     Kviečiama PASKUTINĖ, kai dokumento tekstas nebesikeičia. Šablonuose jau yra customXml/item1.xml (bibliografija) - imamas
+     kitas laisvas numeris; jei paso dalis jau yra (generuota iš sugeneruoto failo) - ji perrašoma. Grąžina pastraipų skaičių. */
+  async function pasas(doc, info){
+    const P = (typeof window !== 'undefined' && window.GP_PALYGINIMAS) || null;
+    if (!P) return 0;
+    const ps = P.pastraipos(doc.parts['word/document.xml']);
+    const xml = P.pasoXml(info || {}, ps);
+    let n = 0;
+    for (let k = 1; k < 100; k++){
+      const f = doc.zip.file(`customXml/item${k}.xml`);
+      if (!f){ if (!n) n = k; break; }
+      if ((await f.async('string')).indexOf(P.NS_PASAS) >= 0){ n = k; break; }
+    }
+    if (!n) return 0;
+    const yra = !!doc.zip.file(`customXml/item${n}.xml`);
+    doc.zip.file(`customXml/item${n}.xml`, xml, { createFolders:false });
+    if (!yra){
+      const id = '{' + 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]) + '}';
+      doc.zip.file(`customXml/itemProps${n}.xml`, `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<ds:datastoreItem ds:itemID="${id}" xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"><ds:schemaRefs><ds:schemaRef ds:uri="${P.NS_PASAS}"/></ds:schemaRefs></ds:datastoreItem>`, { createFolders:false });
+      doc.zip.file(`customXml/_rels/item${n}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps${n}.xml"/></Relationships>`, { createFolders:false });
+      const ct = await part(doc, '[Content_Types].xml');
+      const ovs = Array.from(ct.getElementsByTagNameNS(NS_CT, 'Override'));
+      if (!ovs.some(o => o.getAttribute('PartName') === `/customXml/itemProps${n}.xml`)){
+        const ov = ct.createElementNS(NS_CT, 'Override');
+        ov.setAttribute('PartName', `/customXml/itemProps${n}.xml`);
+        ov.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.customXmlProperties+xml');
+        ct.documentElement.appendChild(ov);
+      }
+      // xml plėtinys - Default application/xml (visuose šablonuose yra); jei nėra - Override
+      const defs = Array.from(ct.getElementsByTagNameNS(NS_CT, 'Default'));
+      if (!defs.some(d => (d.getAttribute('Extension') || '').toLowerCase() === 'xml')){
+        const ov = ct.createElementNS(NS_CT, 'Override');
+        ov.setAttribute('PartName', `/customXml/item${n}.xml`); ov.setAttribute('ContentType', 'application/xml');
+        ct.documentElement.appendChild(ov);
+      }
+      const rels = await part(doc, 'word/_rels/document.xml.rels');
+      if (rels){
+        const rs = Array.from(rels.getElementsByTagNameNS(NS_REL, 'Relationship'));
+        const used = new Set(rs.map(r => r.getAttribute('Id')));
+        let j = 1; while (used.has('rId' + j)) j++;
+        const rel = rels.createElementNS(NS_REL, 'Relationship');
+        rel.setAttribute('Id', 'rId' + j);
+        rel.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml');
+        rel.setAttribute('Target', `../customXml/item${n}.xml`);
+        rels.documentElement.appendChild(rel);
+      }
+    }
+    note(doc, 'generavimo pasas: ' + ps.length + ' pastraipų');
+    return ps.length;
+  }
+
   async function save(doc, type='blob'){
     for (const [path, xml] of Object.entries(doc.parts)){
       // createFolders:false - kitaip JSZip prideda kataloginius irasus ("word/"),
@@ -919,7 +974,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai, diPozymiai,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai, diPozymiai, pasas,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 
