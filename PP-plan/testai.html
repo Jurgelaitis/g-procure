@@ -284,6 +284,27 @@ async function testaiKelias(){
     tiesa(/Failas parengtas: EPSO-G_MPP_/.test(D.getElementById("excelBusena").textContent), "būsena: " + D.getElementById("excelBusena").textContent);
   });
 
+  // jsPDF 4.2.1 ir autotable 5.0.8 nuo 2026-10-06 (iki tol 2.5.1 / 3.5.31 - 12 žinomų jsPDF spragų, saugumo planas): PDF kuriamas
+  // visais trimis tipais, lentelės ir poraštė - faile (jsPDF srautų nesuspaudžia, tekstas matomas PDF turinyje)
+  await testas("PDF eksportas (jsPDF 4, autotable 5): santrauka, pilnas sąrašas ir centralizavimas - lentelės, poraštė ir failo vardas", async () => {
+    tiesa(W.jspdf && W.jspdf.jsPDF && W.jspdf.jsPDF.API.autoTable, "jsPDF ar autotable neįsikėlė (reikia interneto)");
+    const tikras = W.jspdf; const gauti = [];
+    W.jspdf = { jsPDF: function (...a) { const d = new tikras.jsPDF(...a); d.save = vardas => { gauti.push({ vardas, pdf: d.output(), psl: d.getNumberOfPages(), y: d.lastAutoTable && d.lastAutoTable.finalY }); }; return d; } };
+    try {
+      for (const tipas of ["summary", "full", "central"]) { D.getElementById("exportPdfType").value = tipas; await W.exportPdf(); }
+    } finally { W.jspdf = tikras; }
+    lygu(gauti.map(g => g.vardas.replace(/\d{4}-\d{2}-\d{2}/, "D")), ["EPSO-G_MPP_summary_D.pdf", "EPSO-G_MPP_full_D.pdf", "EPSO-G_MPP_central_D.pdf"], "failų vardai");
+    const antr = [["Vykdomoji santrauka", "Bendra verte", "Bendra plano verte"], ["Pilnas pirkimu sarasas", "Objektas", "Sutartis"], ["Centralizavimo rekomendacijos", "Klasteris", "Galima sutaupyti"]];
+    gauti.forEach((g, i) => {
+      tiesa(/^%PDF-1\.\d/.test(g.pdf) && g.psl >= 1 && g.y > 38, g.vardas + ": PDF " + g.pdf.slice(0, 8) + ", psl. " + g.psl + ", lentelės pabaiga " + g.y);
+      for (const x of antr[i]) tiesa(g.pdf.includes("(" + x), g.vardas + ": nėra „" + x + "“");
+      tiesa(g.pdf.includes("MPP ataskaita") && g.pdf.includes("psl. " + g.psl + "/" + g.psl), g.vardas + ": poraštė");
+    });
+    const n = W.eval("DATA.procurements.length");
+    tiesa(n > 0 && gauti[1].pdf.split("(" + W.eval("pdfText(DATA.procurements[0].objektas.slice(0, 40))")).length > 1, "pilname sąraše nėra pirmo pirkimo objekto");
+    tiesa(/Failas parengtas: EPSO-G_MPP_central_/.test(D.getElementById("pdfBusena").textContent), "būsena: " + D.getElementById("pdfBusena").textContent);
+  });
+
   await testas("Tuščias planas neeksportuojamas kaip nulių failas; pasirinkta įmonė be pirkimų - pasakoma", async () => {
     const tikras = W.XLSX && W.XLSX.writeFile; let rasyta = 0;
     if (W.XLSX) W.XLSX.writeFile = () => { rasyta++; };
