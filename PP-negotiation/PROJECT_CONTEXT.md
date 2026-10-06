@@ -91,23 +91,47 @@ Iki šio įrankio pasirengimas deryboms vyko fragmentiškai:
 
 **Pašalinti laukai (pagal naudotojo feedback'ą):** CPV kodas, CPV objekto pavadinimas, pasiūlymų pateikimo terminas, derybų data, nes derybose nesukuria vertės.
 
-### 4.3. Tiekėjai
-- Pridėjimas/redagavimas modaliniame lange.
-- Laukai: pavadinimas, įmonės kodas, šalis, kontaktas, rizikos lygis (žema/vid/aukšta), spalva (vizualus identifikatorius), pastabos.
-- Kortelės su pasiūlymo statusu ir nuokrypiu nuo PV.
+### 4.3. Tiekėjai ir pasiūlymai (vienas žingsnis nuo 2026-10-06)
+- Tiekėjas ir jo pasiūlymas pridedami viename lange: pavadinimas, įmonės kodas, šalis, kontaktas, rizikos lygis, spalva, pastabos,
+  **pasiūlymo failas** (XLSX, XLS, CSV, PDF, DOCX, ODT) ir **bendra kaina** - failas nuskaitomas išsaugant.
+- Kortelėje - pasiūlymo būsena („Įkainotos pozicijos: 3 iš 4“, „Bendra kaina“, „Pasiūlymo dar nėra“), nuokrypis nuo PV ir
+  įkėlimo zona (ir klaviatūra: Enter / tarpas atveria failo pasirinkimą).
 - Trinant tiekėją, jo pasiūlymo duomenys taip pat ištrinami.
+- Iki 2026-10-06 „Tiekėjai“ ir „Importas“ buvo du žingsniai; senas `go('import')` veda į šį vaizdą.
 
-### 4.4. Pasiūlymų importas
-**Trys režimai (tab'ai):**
-1. **Įkainių pozicijos.** Inline-redaguojama lentelė: pozicijos × tiekėjai. Min/max paryškinimas. Pavyzdinių pozicijų generavimas.
-2. **Failo įkėlimas.** Drag-and-drop dropzone, palaikomi .xlsx/.xls/.csv/.pdf/.docx. Pasirinkti tiekėją, įkelti failą, parser'is automatiškai atpažįsta pozicijas (antraštės: „Pavadinimas", „Kiekis", „Kaina") ir priskiria įkainius. Jei nepavyksta atpažinti, ieško bendros sumos kaip fixed-price.
+### 4.4. Pasiūlymų įkėlimas: du lygiai
+**A lygis - rankinis srautas:**
+1. **Įkainių lentelė** (pozicijos × tiekėjai, min / max paryškinimas). **Įklijavimas iš Excel** (Ctrl+V / Cmd+V) nuo pažymėto
+   langelio: stulpeliai lentelės tvarka (pavadinimas, vnt., kiekis, planuojamas įkainis, tiekėjų įkainiai), trūkstamos eilutės
+   sukuriamos, skaičiai LT ir EN formatais (`GP_MONEY.parseSkaicius`).
+2. **Failas tiekėjui** (lange arba ant kortelės): antraštės „Pavadinimas“, „Kiekis“, „Kaina“ atpažįstamos; kai projekte pozicijų
+   dar nėra - sukuriamos (planuojamas įkainis = pirmo pasiūlymo įkainis, kol neįrašo žmogus), kitaip **sutapdinamos** su esamomis
+   (`sutapdinkPozicija`: tikslus - tas pats normalizuotas tekstas, tikėtinas - žodžių sutapimas >= 0,6, skaičiai svarbūs:
+   „40 MVA“ ir „25 MVA“ - skirtingos). Nerastos pozicijos įvardijamos. Be pozicijų - ieškoma bendros sumos.
+   - DOCX / ODT - per `shared/dokumentai.js` (lentelių langeliai `cells`); PDF - teksto elementai grupuojami į eilutes pagal y ir į
+     langelius pagal x tarpus (`pdfEilutesStulpeliais`); skenuotas PDF be teksto sluoksnio - pasakoma, ne „0 pozicijų“;
+     CSV - UTF-8 (griežtai) arba windows-1257.
 3. **Bendras pasiūlymas (fixed price).** Lentelė: tiekėjas × (bendra kaina, galiojimas, mokėjimo sąlygos, pristatymas, komentaras).
+
+**B lygis - masinis įkėlimas („Magic Upload“):** kelių failų zona viršuje - kiekvienas failas perskaitomas, **tiekėjas atpažįstamas**
+iš dokumento pradžios („Tiekėjas: ...“, teisinė forma su pavadinimu, įmonės kodas) ar failo vardo ir **siūlomas** (esamas pagal kodą
+ar pavadinimą arba naujas) su citata ir žyma „Siūloma (nepatvirtinta)“; pozicijos sutapdinamos su projekto lentele. **Peržiūros
+lange niekas neįrašoma**, kol žmogus nepaspaudžia „Priimti pažymėtus“ (tiekėją galima pakeisti, failą praleisti).
+
+**C lygis (DI skaitymas pasirinktam failui) - neįgyvendintas:** naudotojo sprendimas po B lygio matavimų; iki tol modulis į
+serverį nieko nesiunčia (taip sako ir `privatumas.html`).
 
 ### 4.5. Lyginamoji analizė
 - 4 KPI: min, vidurkis, mediana, max (su nuokrypiais nuo PV).
 - Du Chart.js grafikai: stulpelinis (pasiūlymai prieš PV) ir histograma.
 - Tiekėjų rikiavimas su Z-score, išskirčių žymėjimu.
-- Pozicijų analizė: kiekvienai pozicijai min/vid/med/max/CV.
+- **Įkainių matrica** (nuo 2026-10-06): pozicijos × tiekėjai su žymomis - *mažiausias*, *brangiausias*, *aukštas* (bent 15 % virš
+  pasiūlymų medianos arba planuojamo), *rizikingai žemas* (bent 25 % žemiau medianos, kai įkainojo bent 3 tiekėjai, arba 30 % žemiau
+  planuojamo - patikrinti apimtį), *vienintelis*, *trūksta*; **derybų svertas** = kiekis × (įkainis - mažiausias įkainis eilutėje);
+  rodymas EUR arba procentais nuo mažiausio / medianos / planuojamo, filtras „tik anomalijos“, rikiavimas pagal svertą ar vertę,
+  langelio detalės su veiksmu, slenksčiai keičiami lange (`settings.anomalijos`; tai darbo nuostatos, ne teisės normos - NMK
+  vertinimas lieka bendros kainos lygiu). Variklis `analitika` - grynos funkcijos (`matrica`, `tiekejui`), testuojamos be DOM.
+  „Rinkos vidurkio“ modulis neturi - lyginama su gautų pasiūlymų mediana ir planuojamu įkainiu.
 - Automatiniai dėmesio punktai:
   - Didelis/mažas kainų išsibarstymas (CV > 30 ar < 5).
   - Pasiūlymai virš PV +10% (galimas pirkimo nutraukimas).
@@ -123,6 +147,12 @@ Iki šio įrankio pasirengimas deryboms vyko fragmentiškai:
 - **Jautrumo analizė:** slankiklis (0-100) kainos svoriui, lentelė atnaujinama realiu laiku.
 
 ### 4.7. Derybų strategija
+- **Rekomendacijos kiekvienam tiekėjui** (nuo 2026-10-06, iš įkainių matricos): skirtukai tiekėjams, KPI (pirminis, eilučių tikslas,
+  derybų svertas, anomalijos) ir keturios kortelės - *Akcentuoti derybose* (didžiausias svertas), *Prašyti pagrįsti* (rizikingai
+  žemi), *Nespausti* (tiekėjas pigiausias - jo argumentas), *Trūksta arba nepalyginama*; tekstai deterministiniai, su skaičiais.
+  „Į užkoduotą DI užklausą“ - tiekėjo šablonas su įkainių analize tik procentais; „Į Excel“ - lapai „Įkainių matrica“ ir
+  „Rekomendacijos“. Derybų ribose - stulpelis „Eilučių tikslas“ (suma, kai kiekviena eilutė = mažiausias įkainis; mažina tikslą,
+  su bendra kaina nerodomas).
 - Trys sąrašai: must-have, nice-to-have, mainai (concessions su „ką duodame / ko prašome").
 - Automatinė BATNA/ZOPA lentelė kiekvienam tiekėjui:
   - Atidarymas (opener): 88-90% nuo dabartinio pasiūlymo.
@@ -181,6 +211,8 @@ Kontekstas kiekviename prompt'e: pirkimo info, tiekėjų rikiavimas, strategija.
 - **Komandos vaidmenys.** Skirtingi rodiniai pirkimo iniciatoriui, derybininkui, komisijos nariui, vadovui (read-only).
 - **Komentarai prie tiekėjų pasiūlymo pozicijų.** Diskusijos su pirkimo iniciatoriumi techniniais klausimais.
 - **Versijavimas.** Saugoti istorinius pasiūlymų variantus, lyginti tarp jų.
+- **DI skaitymas įkeltiems failams (C lygis).** Tik pasirinktam failui, su DI žymėjimu ir privatumo pranešimo atnaujinimu;
+  naudotojo sprendimas po B lygio matavimų su tikrais pasiūlymais.
 
 ### 5.3. Strateginės plėtros (v2.0+)
 
