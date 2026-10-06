@@ -534,6 +534,8 @@
     var doc = { id: "D" + (++ctx.n), name: name, ext: e, size: buf.byteLength, sha256: await sha256(buf),
                 fetchedAt: new Date().toISOString(), parseStatus: "parsed", warnings: [], blocks: [], pages: null,
                 rusis: rusis(name), versija: versijosPozymiai(name), language: "other", chunks: [] };
+    // Pradiniai baitai - tik paprašius (o.pasilikti, pvz. ["docx"]): PP-salygos tikrinimas DOCX lygina su forma ir skaito generavimo pasą
+    if (ctx.pasilikti && ctx.pasilikti.indexOf(e) >= 0) doc.buf = buf;
     if (DRAUDZIAMI[e]) { doc.parseStatus = "unsupported"; doc.warnings.push(pran(lang, "vykdomasis")); return doc; }
     if (!LEIDZIAMI[e]) { doc.parseStatus = "unsupported"; doc.warnings.push(pran(lang, "formatas", { e: e })); return doc; }
     try {
@@ -593,8 +595,8 @@
     return docs;
   }
 
-  async function apdorok(files, onProgress, lang) {
-    var ctx = { n: 0, failu: 0, baitu: 0, lang: lang === "en" ? "en" : "lt" };
+  async function apdorok(files, onProgress, lang, o) {
+    var ctx = { n: 0, failu: 0, baitu: 0, lang: lang === "en" ? "en" : "lt", pasilikti: (o && o.pasilikti) || null };
     var docs = [];
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
