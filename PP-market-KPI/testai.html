@@ -1305,7 +1305,7 @@ testas("Kalba", "EN režimu visame puslapyje nelieka lietuviško teksto", ()=>{
     const out = [];
     document.querySelectorAll("body *").forEach(el=>{
       if(el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
-      if(el.closest("#gp-portalas, .gp-pranesimai, .gp-sr-pranesimai")) return;   // bendri komponentai - žr. ltLikutis komentarą
+      if(el.closest("#gp-portalas, .gp-pranesimai, .gp-sr-pranesimai, #gpk")) return;   // #gpk - pirkimo kortelės juosta (shared), persipiešia mikroužduotimi   // bendri komponentai - žr. ltLikutis komentarą
       [...el.childNodes].filter(n=>n.nodeType === 3).forEach(n=>{
         const v = n.textContent.trim();
         // „Gižai TS" yra tikrinis vardas ir lieka toks pat abiem kalbomis.
@@ -1364,7 +1364,7 @@ function ltLikutis(w, ignoruoti){
       // nėra modulio turinys - jie verčiasi (pranešimai - nuimami) patys ir tikrinami
       // shared/testai.html. Be to, jie atsinaujina mikroužduotimi po <html lang> pakeitimo,
       // tad čia dar būtų senas tekstas.
-      if(el.closest("#gp-portalas, .gp-pranesimai, .gp-sr-pranesimai")) return;
+      if(el.closest("#gp-portalas, .gp-pranesimai, .gp-sr-pranesimai, #gpk")) return;   // #gpk - pirkimo kortelės juosta (shared), persipiešia mikroužduotimi
       const st = getComputedStyle(el);
       if(st.display === "none" || st.visibility === "hidden") return;
       [...el.childNodes].filter(n=>n.nodeType === 3).forEach(n=>{
@@ -1441,6 +1441,195 @@ testas("Kalba", "Kopijuojamas tekstas verčiamas", ()=>{
   tiesa(r.indexOf("Market profile:") > 0 && r.indexOf("Main drivers:") > 0, "laukų vardai");
   tiesa(!/[ąčęėįšųūž]/i.test(r.replace(/Pastočių rekonstrukcijos darbai/g, "").replace(/Gižai/g, "")),
         "kopijuojamame tekste neturi likti lietuviško teksto");
+  paruosk();
+});
+
+
+/* =========================================================================
+   12. REZULTATO LANGAS - DIAGNOZĖ / VEIKSMAI (2026-10-06)
+   ========================================================================= */
+function apzvalga(pav, rusis){
+  M('FOCUS.rusis = ' + (rusis ? JSON.stringify(rusis) : "null") + '; document.getElementById("focusName").value = ' + JSON.stringify(pav) + '; runFocus(' + (rusis ? '{ laikytiRusi: true }' : '') + ');');
+  return M('document.getElementById("focusResult").innerText');
+}
+testas("Rezultato langas", "Kiekvienas rodiklis rodomas vieną kartą: VKI reikšmė tik Diagnozės kortelėje, verdikte ir sąlygose - tik vardai", ()=>{
+  paruosk();
+  const txt = apzvalga("Microsoft licencijos");
+  const r = M(`(function(){
+    const vki = metricById("vki"), pc = fmtSigned(pctChange(vki), 1);
+    const t = document.getElementById("focusResult").innerText;
+    return { reiksme: pc, kartu: t.split(pc).length - 1, korteles: [...document.querySelectorAll("#focusResult .fk")].length,
+             pavadinimai: [...document.querySelectorAll("#focusResult .fk .fk-lbl span:first-child")].map(x=>x.textContent),
+             verdiktas: document.querySelector("#focusResult .fk-verdict").textContent.replace(/\\s+/g," ").trim(),
+             zingsniu: document.querySelectorAll("#focusResult details.fv-step").length,
+             riba: document.querySelector('#focusResult .fk[data-fk="vki"] .fk-scale-lbl').textContent };
+  })()`);
+  lygu(r.kartu, 1, "VKI reikšmė „" + r.reiksme + "“ turi būti tekste vieną kartą");
+  lygu(r.korteles, 3, "režimo kortelė + du veiksniai");
+  lygu(r.pavadinimai, ["Rinkos režimas", "VKI (vartotojų kainos)", "VMDU (IRT sektorius)"], "kortelių pavadinimai");
+  tiesa(r.verdiktas.indexOf("Indeksavimo gairės (VDA):") === 0 && r.verdiktas.indexOf("VKI (vartotojų kainos)") > 0 && r.verdiktas.indexOf("VMDU (IRT sektorius) - rinkos signalas") > 0, "verdiktas: " + r.verdiktas.slice(0, 160));
+  tiesa(r.riba.indexOf("riba 3 %") > 0 && r.riba.indexOf("riba 5 %") > 0, "VKI ribų juosta 3 % / 5 %, gauta: " + r.riba);
+  lygu(r.zingsniu, 5, "indeksavimo sąlygos žingsniai");
+  const tc = M('document.getElementById("focusResult").textContent');
+  tiesa(tc.indexOf("1 · Diagnozė") >= 0 && tc.indexOf("2 · Veiksmai") >= 0, "du blokai");
+  paruosk();
+});
+
+testas("Rezultato langas", "Sutartiniai veiksmai - kontrolinis sąrašas su „?“ paaiškinimu kiekvienam; tekstai iš VEIKSMU_KODEL, trūkstamas - profilio aprašas", ()=>{
+  paruosk();
+  apzvalga("Microsoft licencijos");
+  const r = M(`(function(){
+    const cat = DATA.categories.find(c=>c.id==="programine"), sk = statusKey(categoryStatus(cat));
+    const eil = [...document.querySelectorAll("#fvList .fv-chk")];
+    return { n: eil.length, acts: cat.act[sk].length, sk,
+             tekstai: eil.map(e=>e.querySelector(".t").textContent), zenklai: eil.map(e=>!!e.querySelector(".gpp-btn[aria-expanded]")),
+             kodel: eil.map(e=>e.querySelector(".gpp-pop").textContent.trim()), laukta: VEIKSMU_KODEL.lt.programine[sk],
+             trukstamas: kodelTekstas({ id: "nera", spend: "aprašas" }, "red", 0),
+             viso: DATA.categories.every(c => ["green","yellow","red"].every(m => (VEIKSMU_KODEL.lt[c.id][m] || []).length === c.act[m].length && (VEIKSMU_KODEL.en[c.id][m] || []).length === c.act[m].length)) };
+  })()`);
+  lygu(r.n, r.acts, "eilučių tiek, kiek veiksmų (" + r.sk + ")");
+  tiesa(r.zenklai.every(Boolean), "kiekviena eilutė su „?“");
+  lygu(r.kodel, r.laukta, "paaiškinimų tekstai");
+  lygu(r.trukstamas, "aprašas", "be paaiškinimo - profilio aprašas");
+  tiesa(r.viso, "VEIKSMU_KODEL LT ir EN turi po tekstą kiekvienam veiksmui visuose 8 profiliuose ir 3 režimuose");
+  paruosk();
+});
+
+testas("Rezultato langas", "Žymėjimas ir „Įrašyti į kortelę“: visi veiksmai su būsena į kortelės lauką veiksmai (GP_KORTELE.pridekVeiksmus), kortelės būsena rodoma ir atkuriama; be kortelės - „Sukurti pirkimo kortelę“", ()=>{
+  const w = paruosk();
+  const r = M(`(function(){
+    const saug = (function(){ const d = {}; return { get length(){ return Object.keys(d).length; }, key: i => Object.keys(d)[i] || null,
+      getItem: k => Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null, setItem: (k, v) => { d[k] = String(v); }, removeItem: k => { delete d[k]; } }; })();
+    GP_KORTELE.naudokSaugykla(saug);
+    const k = GP_KORTELE.issaugok({ pavadinimas: "Microsoft licencijos", objektas: "prekes" }).kortele;
+    const tikra = KORTELE;
+    let pasirinkta = null;
+    KORTELE = { pasirinkta: () => pasirinkta, atnaujink: () => {}, pasirink: () => Promise.resolve(true), atsiek: () => {}, skirtumai: () => null, pritaikyk: () => null };
+    const out = {};
+    try {
+      FOCUS.rusis = "prekes"; document.getElementById("focusName").value = "Microsoft licencijos"; runFocus({ laikytiRusi: true });
+      out.beKorteles = (document.querySelector("#focusResult .fv-foot .btn") || {}).textContent;
+      out.nota = document.getElementById("fvKortele").textContent;
+      pasirinkta = GP_KORTELE.gauk(k.id);
+      renderFocusCard("Microsoft licencijos", "programine", false);
+      const chk = document.querySelectorAll("#fvList [data-veiksmas]");
+      chk[0].checked = true; chk[0].dispatchEvent(new Event("change", { bubbles: true }));
+      out.mygtukas = document.querySelector("#focusResult .fv-foot .btn.primary").textContent;
+      out.eiga = document.getElementById("fvProg").style.width;
+      out.priesIrasant = (GP_KORTELE.gauk(k.id).veiksmai || []).length;
+      irasykVeiksmus();
+      const po = GP_KORTELE.gauk(k.id);
+      out.veiksmai = po.veiksmai.map(v => [v.raktas, v.atlikta, v.saltinis, v.tekstas.slice(0, 20)]);
+      out.kontekstas = po.veiksmai[0].kontekstas;
+      out.kiti = [po.pavadinimas, po.objektas];
+      out.nota2 = document.getElementById("fvKortele").textContent;
+      // nauja peržiūra iš kortelės: pažymėjimas atkuriamas
+      FOCUS.veiksmai = {}; FOCUS.veiksmaiIs = null; renderFocusCard("Microsoft licencijos", "programine", false);
+      out.atkurta = [...document.querySelectorAll("#fvList [data-veiksmas]")].map(c => c.checked);
+      // antras įrašymas tą patį veiksmą atnaujina, ne dubliuoja
+      document.querySelectorAll("#fvList [data-veiksmas]")[1].click();
+      irasykVeiksmus();
+      const po2 = GP_KORTELE.gauk(k.id);
+      out.po2 = [po2.veiksmai.length, po2.veiksmai.filter(v => v.atlikta).length];
+    } finally { KORTELE = tikra; GP_KORTELE.naudokSaugykla(null); }
+    return out;
+  })()`);
+  tiesa(r.beKorteles === "Sukurti pirkimo kortelę" && r.nota.indexOf("Kortelė nepasirinkta") === 0, "be kortelės: " + r.beKorteles + " / " + r.nota);
+  const n = r.veiksmai.length;
+  lygu(r.mygtukas, "Įrašyti į kortelę (1 iš " + n + " atlikta)", "mygtuko tekstas po pažymėjimo");
+  lygu(r.eiga, Math.round(100 / n) + "%", "eiga");
+  lygu(r.priesIrasant, 0, "iki paspaudimo kortelė nekeičiama");
+  lygu(r.veiksmai.map(v => [v[0], v[1], v[2]]), [["pp-market-kpi:programine:yellow:0", true, "pp-market-kpi"], ["pp-market-kpi:programine:yellow:1", false, "pp-market-kpi"], ["pp-market-kpi:programine:yellow:2", false, "pp-market-kpi"]].slice(0, r.veiksmai.length), "kortelės veiksmai");
+  tiesa(r.kontekstas.indexOf("Programinė įranga ir licencijos") === 0, "kontekstas: " + r.kontekstas);
+  lygu(r.kiti, ["Microsoft licencijos", "prekes"], "kiti kortelės laukai nepakeisti");
+  tiesa(r.nota2.indexOf("įrašyta") > 0 && r.nota2.indexOf("atlikta 1") > 0, "kortelės būsena: " + r.nota2);
+  lygu(r.atkurta.slice(0, 2), [true, false], "pažymėjimas atkurtas iš kortelės");
+  lygu(r.po2, [r.veiksmai.length, 2], "antras įrašymas atnaujina, ne dubliuoja");
+  paruosk();
+});
+
+testas("Rezultato langas", "Indeksavimo sąlyga: penki žingsniai iš VPT 5.3.3 p. sandaros su pildomomis vietomis; indeksas - iš modelio kandidatų; kiekviena sąlyga kopijuojama atskirai, visos - kartu", ()=>{
+  paruosk();
+  apzvalga("Microsoft licencijos");
+  const r = M(`(function(){
+    const c = i => document.getElementById("fvc" + i).textContent.replace(/\\s+/g, " ").trim();
+    let tekstas = [];
+    const orig = navigator.clipboard && navigator.clipboard.writeText;
+    if(navigator.clipboard) navigator.clipboard.writeText = v => { tekstas.push(v); return Promise.resolve(); };
+    kopijuokSalyga("fvc2"); kopijuokSalyga("visos");
+    if(navigator.clipboard && orig) navigator.clipboard.writeText = orig;
+    return { c1: c(1), c2: c(2), c3: c(3), c4: c(4), c5: c(5), kop: tekstas, zingsniai: [...document.querySelectorAll("#focusResult .fv-st")].map(x => x.firstChild.textContent),
+             ph: [...document.querySelectorAll("#fvc2 .ph")].map(x => x.textContent), pries2: document.querySelectorAll("#focusResult details.fv-step")[1].querySelector(".muted-note").textContent };
+  })()`);
+  lygu(r.zingsniai, ["Indeksas ir šaltinis", "Peržiūros teisė ir slenkstis", "Kam taikoma", "Formulė ir apvalinimas", "Procedūra"], "žingsniai");
+  tiesa(r.c1.indexOf("Valstybės duomenų agentūros") > 0 && r.c1.indexOf("VKI (vartotojų kainos), rodiklis S7R260") > 0 && r.c1.indexOf("GKI") < 0, "1 sąlyga su VKI, be GKI: " + r.c1.slice(0, 200));
+  lygu(r.ph, ["[12 (dvylikos) mėnesių]", "[Sutarties įsigaliojimo dienos]", "[formulės punkte]", "[5]", "[12 (dvylika)]"], "2 sąlygos pildomos vietos");
+  tiesa(r.c3.indexOf("prekėms, kurios nėra priimtos ir apmokėtos") > 0, "3 sąlyga pagal rūšį: " + r.c3.slice(0, 120));
+  tiesa(r.c4.indexOf("a1 = a × (1 + k / 100)") > 0 && r.c4.indexOf("keturių skaitmenų") > 0, "4 sąlyga formulė ir apvalinimas");
+  tiesa(r.c5.indexOf("prekių sąrašą su kiekiais") > 0 && r.c5.indexOf("[30 (trisdešimt) dienų]") > 0, "5 sąlyga");
+  tiesa(r.pries2.indexOf("VKI (vartotojų kainos) pokytis (žr. 1 bloką)") >= 0 && !/[+-]\d+,\d/.test(r.pries2), "2 žingsnio pastaba be reikšmės kartojimo: " + r.pries2.slice(0, 120));
+  lygu(r.kop[0], r.c2, "nukopijuota antra sąlyga");
+  tiesa(r.kop[1].indexOf("1. " + r.c1) === 0 && r.kop[1].indexOf("5. " + r.c5) > 0, "visos penkios");
+  paruosk();
+});
+
+testas("Rezultato langas", "Darbams - SSKI dedamųjų ir VMDU pastaba, prekėms su žaliavomis - vario pastaba, paslaugoms - ketvirtinio indekso įspėjimas; kelių indeksų sąlyga prašo priskirti kainos dalis", ()=>{
+  paruosk();
+  apzvalga("Pastočių rekonstrukcijos darbai", "darbai");
+  const d = M(`(function(){ const b = document.querySelectorAll("#focusResult details.fv-step")[3].querySelector(".fv-clause-foot .muted-note").textContent; return { po: b, c1: document.getElementById("fvc1").innerText }; })()`);
+  tiesa(d.po.indexOf("SSKI dedamąją") > 0 && d.po.indexOf("VMDU") > 0, "darbų 4 žingsnis: " + d.po.slice(0, 160));
+  tiesa(d.c1.indexOf("šiais indeksais:") > 0 && d.c1.indexOf("[nurodykite, kuri kainos dalis") > 0, "kelių indeksų sąlyga: " + d.c1.slice(0, 160));
+  apzvalga("110 kV transformatoriaus pirkimas", "prekes");
+  const p = M(`document.querySelectorAll("#focusResult details.fv-step")[3].querySelector(".fv-clause-foot .muted-note").textContent`);
+  tiesa(p.indexOf("pagal deklaruotą kiekį") > 0, "žaliavos pastaba prekėms: " + p.slice(0, 160));
+  apzvalga("Projektavimo paslaugos", "paslaugos");
+  const s = M(`document.querySelectorAll("#focusResult details.fv-step")[0].querySelector(".fv-clause-foot .muted-note").textContent`);
+  tiesa(s.indexOf("kas ketvirtį") > 0, "ketvirtinio indekso įspėjimas paslaugoms: " + s.slice(0, 160));
+  paruosk();
+});
+
+testas("Rezultato langas", "EN režimu: blokai, kortelės ir žingsniai angliškai, sutarties formuluotės nerodomos (sutarties kalba - LT), formulė su angliškais indeksais", ()=>{
+  const w = paruosk();
+  M('setLang("en"); FOCUS.rusis = "prekes"; document.getElementById("focusName").value = "Microsoft licencijos"; runFocus({ laikytiRusi: true });');
+  const r = M(`(function(){ const t = document.getElementById("focusResult").textContent; return {
+    diag: t.indexOf("1 · Diagnosis") >= 0 && t.indexOf("2 · Actions") >= 0, salygu: document.querySelectorAll("#focusResult .fv-clause").length,
+    nota: (document.querySelector("#focusResult .fv-ltonly") || {}).textContent || "", formule: (document.querySelector("#focusResult .fv-formula") || {}).textContent || "",
+    zingsniai: [...document.querySelectorAll("#focusResult .fv-st")].map(x => x.firstChild.textContent), mygtukas: document.querySelector("#focusResult .fv-foot .btn").textContent }; })()`);
+  tiesa(r.diag, "blokų antraštės angliškai");
+  lygu(r.salygu, 0, "formuluočių EN režimu nėra");
+  tiesa(r.nota.indexOf("shown in Lithuanian") > 0 && r.formule.indexOf("latest") > 0, "pastaba ir formulė: " + r.nota + " | " + r.formule);
+  lygu(r.zingsniai, ["Index and source", "Right of review and threshold", "What it applies to", "Formula and rounding", "Procedure"], "žingsniai angliškai");
+  lygu(ltLikutis(w, ["Microsoft licencijos", "Gižai"]), [], "neišversti tekstai");
+  paruosk();
+});
+
+testas("Rezultato langas", "Kopijuojama apžvalga: rodikliai vieną kartą, veiksmai su [x] / [ ], penkios sąlygos, pavadinimas ir režimas", ()=>{
+  paruosk();
+  apzvalga("Microsoft licencijos");
+  const r = M(`(function(){
+    document.querySelector("#fvList [data-veiksmas]").click();
+    let tekstas = "";
+    const orig = navigator.clipboard && navigator.clipboard.writeText;
+    if(navigator.clipboard) navigator.clipboard.writeText = v => { tekstas = v; return Promise.resolve(); };
+    copyFocus();
+    if(navigator.clipboard && orig) navigator.clipboard.writeText = orig;
+    const pc = fmtSigned(pctChange(metricById("vki")), 1);
+    return { t: tekstas, kartu: tekstas.split(pc).length - 1 };
+  })()`);
+  tiesa(r.t.indexOf("PIRKIMO RINKOS APŽVALGA") === 0 && r.t.indexOf("Pirkimas: Microsoft licencijos") > 0, "antraštė");
+  lygu(r.kartu, 1, "VKI reikšmė kopijuojamame tekste vieną kartą");
+  tiesa(/\n\[x\] Peržiūrėti licencijų kainodaros pokyčius pratęsiant\n\[ \] /.test(r.t), "veiksmai su būsena: " + r.t.slice(r.t.indexOf("Sutartiniai veiksmai"), r.t.indexOf("Sutartiniai veiksmai") + 300));
+  tiesa(r.t.indexOf("Indeksavimo sąlyga (5 žingsniai):") > 0 && r.t.indexOf("\n1. Atlikdamos Sutarties kainos") > 0 && r.t.indexOf("\n5. Šalis, siekianti") > 0, "sąlygos tekste");
+  paruosk();
+});
+
+testas("Rezultato langas", "Pirkimo kortelės juosta prijungta (GP_KORTELE) prieš informacinę skiltį; rūšis iš kortelės objekto", ()=>{
+  const w = paruosk();
+  const r = M(`(function(){ const g = document.getElementById("gpk"), i = document.getElementById("infoPanelMount");
+    return { yra: !!g && !!KORTELE, pries: !!g && !!i && (g.compareDocumentPosition(i) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+             rusys: ["prekes", "paslaugos", "paslaugos_it", "darbai", "misrus"].map(x => RUSIS_IS_KORTELES[x] || null) }; })()`);
+  tiesa(r.yra && r.pries, "juosta prieš informacinę skiltį");
+  lygu(r.rusys, ["prekes", "paslaugos", "paslaugos", "darbai", null], "objekto vertimas į rūšį");
   paruosk();
 });
 
