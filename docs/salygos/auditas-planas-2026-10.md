@@ -344,3 +344,53 @@ Kiekvienas etapas - atskiri commit'ai, testai su tikrais dokumentais ir mutacijo
   sprendimai, ataskaita ir kita versija, rodyklės ir šablonų lygiavertiškumas, darbo sritys); 7 kodo mutacijos - visos pagaunamos.
 - **Liko (kiti etapai):** 4 - privalomų elementų katalogas (Rekomendacijos lygis) ir kvalifikacijos ištraukimas į PP-qual; formų rodyklėje kol kas
   SPS, BPS ir DPS sąlygos - pasiūlymo ir kitos formos dar nelyginamos; PDF lyginimas su forma; 5 - DI (po bandomojo naudojimo).
+
+## 11. Būsena (2026-10-07) - 4 etapas: privalomų dokumentų elementų katalogas ir kvalifikacijos reikalavimų proporcingumas
+
+- **Katalogas** (`shared/privalomi-elementai.js`, `GP_PRIVALOMI`): 24 elementai iš PĮ 48 str. 2 d. ir VPĮ 35 str. 2 d., abu perskaityti e-tar
+  2026-10-07; kiekvienas - registro raktas (`shared/teises-nuorodos.js`, 21 naujas `dok_*` raktas ir esami `ebvpd_dokumentuose`,
+  `terminas_dokumentuose`, `cpo_argumentai`), paieškos požymiai ir taikymo sąlyga. VPĮ sąraše yra papildomas neskaidymo į dalis pagrindimo
+  punktas, todėl nuo jo VPĮ numeriai vienetu didesni; PĮ kvalifikacijos vertinimo sistemos konfidencialumo punktas VPĮ atitikmens neturi.
+  Įstatyme išvardyti, bet automatiškai netikrinami elementai (taikomi tik tam tikrais atvejais arba tikrinami kitur) - viena eilutė „nepatikrinta“.
+- **Rezultatas - tik faktas:** rasta (failas, vieta, citata), vieta yra, bet neužpildyta, nerasta (ko ieškota ir kur), netaikoma. Nerastas -
+  „Patikrinkite“ (formuluotė gali būti kita), „jeigu taikytina“ - informacija, neužpildyta - „Patikrinkite“ su vieta. Niekada kliūtis ir niekada
+  „atitinka įstatymą“. Be BPS - vienas apibendrintas radinys. Mažos vertės pirkimai ir DPS - pagal naudotojo sprendimus (žr. žemiau).
+- **Rodoma:** PP-salygos „Tikrinti parengtus dokumentus“ per `shared/parengtis.js` grupę „Privalomi dokumentų elementai“ (radiniai ir
+  „Visos patikros“ - 24 eilutės ir netikrinamų sąrašas), Word ataskaitoje - kartu su kitais radiniais.
+- **Išmatuota:** 6 vieši LITGRID CVP IS paketai (0 etapo) - rasta viskas, išskyrus vieną supaprastintą atvirą konkursą, parengtą pagal mažos
+  vertės formą (atviro konkurso nuoroda, ar pirmiausia vertinamas pasiūlymas, ir stebėtojų nuostata); klaidingų sutapimų po derinimo nėra
+  (kiekvieno elemento citata peržiūrėta). LITGRID šablonai (AK, AKV, SSD, TSD, ND, LT ir LT/EN): rasta viskas, o „Rengė:“ (asmenys, įgalioti
+  palaikyti ryšį su tiekėjais) ir CPO katalogo pagrindimas - tuščios formos vietos. Generatorius abiejų dabar klausia (CPO - nuo 2026-10-04, „Rengė:“ - nuo 2026-10-07).
+- **Testai (pirma dalis):** `shared/testai.html` +11 (233: katalogas prieš registrą, 24 mutacijos - kiekvieno elemento sakinį pašalinus nerandamas tik jis,
+  vieta ir citata, bendros BPS nuostatos - ne elementas, kur ieškoma, neužpildyta vieta, taikymas ir mažos vertės, DPS pagal etapą, parengties
+  radiniai PĮ / VPĮ / EN, be BPS); `PP-salygos/testai.html` +5 (139: LITGRID šablonai, MVP ir DPS formos, sugeneruotas paketas tikrinime, „Rengė:“
+  laukas ir siūlymas iš kortelės); 17 + 1 kodo mutacijų - visos pagaunamos.
+- **Derinimas pagal tikrą tekstą:** pirmoje versijoje dalis požymių „rasdavo“ elementą bendroje BPS frazėje (kvazisubtiekėjo apibrėžimas -
+  subtiekimas, eurų perskaičiavimo sakinys - terminas, „vadovaujantis SPS nurodytais kriterijais“ - kriterijus, „Komisija gali kviesti“ -
+  stebėtojai, skyriaus antraštė - galiojimas). Ištaisyta: konkretaus pirkimo sprendimai pirmiausia ieškomi SPS, terminas ir galiojimas -
+  SPS, skelbime („Pasiūlymų priėmimo terminas: ...“, „Laikotarpis, per kurį pasiūlymas turi išlikti galiojantis: 90 Diena“), tada BPS nuorodoje
+  į skelbimą; po to kiekvieno paketo kiekvieno elemento citata peržiūrėta.
+- **Naudotojo sprendimai (2026-10-07):** 1) „Rengė: vardas, tel., el. p.“ - kontaktinių asmenų vieta; generatoriaus 2 žingsnyje - klausimas
+  „Kas parengė pirkimo sąlygas ir palaikys ryšį su tiekėjais?“ (be numatytosios reikšmės, siūloma iš kortelės organizatoriaus, DI neklausiamas),
+  reikšmė įrašoma po dvitaškio (ND LT/EN Word sąrašo laukas pašalinamas). 2) Mažos vertės pirkimai tikrinami kaip kiti; DPS - pagal etapą:
+  sukūrimo sąlygose pasiūlymų elementai netaikomi (sukūrimo etape teikiamos paraiškos), ginčai - be atidėjimo termino; konkretaus pirkimo sąlygose
+  tiekėjų elementų ieškoma ir įkeltose sukūrimo sąlygose, be jų - informacija; DPS etapas be kortelės atpažįstamas iš antraštės. DPS formose
+  dalis elementų užrašyta kitaip („išrenka pagal kainos kriterijų“, „terminas nurodytas CVP IS kvietime“) - požymiai papildyti. 3) Kvalifikacija -
+  pirma apie 10 viešų LITGRID paketų su sumomis, išmatuoti, tada PP-qual skaičiavimas į `shared/` ir „Rekomendacija“.
+- **Antra dalis - kvalifikacijos reikalavimų proporcingumas:** PP-qual skaičiavimas perkeltas į `shared/proporcingumas.js` (`GP_PROPORCINGUMAS`;
+  PP-qual jį tik kviečia, jo 74 testai nepakito), `shared/kvalifikacija.js` (`GP_KVALIFIKACIJA`) iš SPS ištraukia tiekėjo patirties ir pajamų
+  reikalavimus su metais ir sumomis ir lygina su Metodikos normomis; parengties patikroje - grupė „Kvalifikacijos reikalavimai (Metodika)“,
+  lygis „Rekomendacija“ (rodomas tarp „Patikrinkite“ ir „Informacija“, „Priimta sąmoningai“ - su privalomu pagrindimu, nes Metodikos 7.3 p.
+  pirkimo vykdytojas turi galėti pagrįsti kiekvieną reikalavimą). Vertė, objektas ir trukmė - iš kortelės, be jos - iš skelbimo; nežinant -
+  „nepatikrinta“ su priežastimi. Specialistų patirtis netikrinama.
+- **Išmatuota (antra dalis):** 25 vieši LITGRID CVP IS paketai (2026-07 - 2026-10; atsisiųsti be prisijungimo, laikomi tik darbo kataloge).
+  Atpažinti reikalavimai 16-oje, 9-iose sumomis ar metais užrašytų tiekėjo reikalavimų nėra (tik specialistai, sertifikatai). Laikotarpio
+  rekomendacija - 8 paketuose (paslaugos 4-5 metai, prekės 5 metai; Metodikoje - 3, ilgesnis galimas dėl tinkamos konkurencijos - tekstas tai sako,
+  Metodikos 16 p. išnašos perskaitytos e-tar). Patirties vertė patikrinta tik 2 paketuose (numatoma vertė skelbime - tik 3): 0,21 ir 0,23 vertės -
+  be pastabų. Pajamų reikalavimai - 2 (vertės skelbime nėra - nepatikrinta). Klaidingų radinių nerasta. Dvikalbiuose PDF stulpeliai susimaišo -
+  ištraukimas leidžia įsiterpusį tekstą tarp skaičiaus ir „(penkerius) metus“ bei tarp „ne“ ir „mažesnės“, o reikalavimo sritis baigiasi ties
+  kitu reikalavimu (testas parodė, kad kitaip suma priskiriama gretimam reikalavimui).
+- **Testai (antra dalis):** `shared/testai.html` +4 (237), `PP-salygos/testai.html` +1 (140: rekomendacija ekrane su kortele, santraukos tvarka,
+  privalomas pagrindimas); 15 kodo mutacijų - visos pagaunamos. Visi 16 rinkinių - be klaidų.
+- **Liko:** patirties vertės ir pajamų patikrai reikia numatomos vertės - ji ateina tik iš kortelės (skelbime retai). Kitas žingsnis pagal
+  planą - bandomasis naudojimas, tada 5 etapas (DI) - ar ir kada, sprendžia naudotojas.
