@@ -32,6 +32,7 @@
 <script src="../shared/teise-stebesena.js"></script>
 <!-- VPT vertės ribos - Metodikos vertės kategorijai (2.1, 2.5, 2.10 p.) -->
 <script src="../shared/thresholds.js"></script>
+<script src="../shared/proporcingumas.js"></script>
 <!-- Pinigų sumų skaitymas (JAV ir ES formatai) - GP_MONEY -->
 <script src="../shared/money.js"></script>
 <script src="../shared/pdf-darbininkas.js"></script>
@@ -1084,7 +1085,7 @@ function startEntry(mode, kaip){
    jei jau nupiešti, vediklio (p-) ir audito (a-) formose - keičiama visur, o skaitoma pirmiausia
    iš formos, kad dar nesurinkta įvestis nedingtų. Jei darbas su kitu pirkimu pradėtas, klausiama
    tuo pačiu langu kaip „Pradėti naują“. */
-const KORTELES_OBJEKTAI={ prekes:'Prekės', paslaugos:'Paslaugos (kita)', paslaugos_it:'Paslaugos (IT/IS)', darbai:'Darbai (statyba)', misrus:'Mišrus' };
+const KORTELES_OBJEKTAI=GP_PROPORCINGUMAS.KORTELES_OBJEKTAI;
 function aktyviForma(){ const v=document.querySelector('.view.active'); return v && v.id==='view-audit' ? 'a' : (v && v.id==='view-wizard' ? 'p' : null); }
 function formosReiksme(id, busena){
   const pr=aktyviForma();
@@ -1764,9 +1765,9 @@ function renderStep5(){
    santykių intervalai) - GP_TEISE.normos, vertės ribos - shared/thresholds.js.
    Čia - tik tai, kas yra MODULIO rekomendacija (MODULIO_KOEF), ir skaičiavimas.
    ============================================================ */
-/* Modulio rekomendacija patirties koeficientui (NE teisės norma): Metodikos 16 p. leidžia
-   iki 0,7, o didesnės vertės sutartims modulis siūlo mažiau. Kategorija - Metodikos 2.1, 2.5, 2.10 p. */
-const MODULIO_KOEF = { didele:'0.3', vidutine:'0.5', maza:'0.7' };
+/* Modulio patirties koeficientas, trukmė iš teksto, vertės ribos ir visas proporcingumo skaičiavimas - shared/proporcingumas.js
+   (nuo 2026-10-07; tą patį skaičiavimą naudoja PP-salygos pirkimo dokumentų tikrinimas). */
+const MODULIO_KOEF = GP_PROPORCINGUMAS.MODULIO_KOEF;
 const KATEGORIJA_LT = { didele:'didelė', vidutine:'vidutinė', maza:'maža' };
 const KATEGORIJA_EN = { didele:'high', vidutine:'medium', maza:'low' };
 const KATEGORIJA_KILM = { didele:'didelės', vidutine:'vidutinės', maza:'mažos' };   // „didelės vertės sutarčiai"
@@ -1781,64 +1782,10 @@ function koefParinktys(pasirinkta){
   }).join('');
 }
 
-/* Sutarties trukmė mėnesiais iš laisvo teksto: „24 mėn. + 12 mėn. opcija" -> 36, „3 metai" -> 36,
-   „1,5 metų" -> 18. Pratęsimai sudedami - trukmė skaičiuojama su jais. Datos („2027 m.")
-   praleidžiamos. null - neatpažinta (tada pajamų riba skaičiuojama kaip trumpalaikei).      */
-function trukmeMen(tekstas){
-  const t=String(tekstas||'').toLowerCase().replace(/(\d),(\d)/g,'$1.$2');
-  const re=/(\d+(?:\.\d+)?)\s*(mėn|men\b|metai|metų|metus|metams|m\.|dien)/g;
-  let men=0, rasta=false, m;
-  while((m=re.exec(t))){
-    const n=parseFloat(m[1]), vnt=m[2];
-    if(vnt==='m.' && n>=1900) continue;            // „2027 m." - data, ne trukmė
-    if(/^m(ė|e)n/.test(vnt)) men+=n;
-    else if(vnt==='dien') men+=n/30;
-    else men+=n*12;
-    rasta=true;
-  }
-  return rasta && men>0 ? Math.round(men*10)/10 : null;
-}
-
-/* Vertės ribos Metodikos kategorijai: darbams - darbų, prekėms, paslaugoms ir mišriam - prekių ir paslaugų. */
-function vertesRibos(objectType, rez){
-  const T=(window.GP_THRESHOLDS||{})[rez||rezimas()];
-  if(!T) return null;
-  const darbai=objectType==='Darbai (statyba)';
-  return { maza: darbai?T.mv_works:T.mv_goods, tarptautine: darbai?T.intl_works:T.intl_goods,
-           darbai, misrus: objectType==='Mišrus' };
-}
-
-/* Viskas apie proporcingumą vienoje vietoje - skaičiuoklė, AI užklausa, taisyklės ir Word
-   priedas naudoja tą patį. p = { value, valueCat, objectType, duration }.                   */
-function proporcingumas(p, rez){
-  // Neigiama ar nulinė vertė - kaip nenurodyta (iki 2026-09-23 -100 davė neigiamas sumas).
-  const N=GP_TEISE.normos, v=p.value>0 ? p.value : 0;
-  const ribos=vertesRibos(p.objectType, rez);
-  const kategorija=GP_TEISE.vertesKategorija(v, ribos);
-  const men=trukmeMen(p.duration);
-  const trukme=GP_TEISE.sutartiesTrukme(men);
-  const ilgalaike=!!(trukme && trukme.kodas==='ilgalaike');
-  const koef=parseFloat(p.valueCat) || parseFloat(MODULIO_KOEF[kategorija?kategorija.kodas:'vidutine']);
-  const metine = ilgalaike ? v*12/men : v;        // didžiausia metinė vertė, kai vykdoma tolygiai
-  const tipas=p.objectType||'';
-  const laikotarpis = tipas==='Darbai (statyba)' ? { metai:N.patirtiesMetaiDarbai.reiksme, raktas:'met_patirtis_darbai' }
-    : tipas==='Mišrus' ? { metai:null, raktas:'met_patirtis_misrus' }
-    : tipas ? { metai:N.patirtiesMetaiPrekesPaslaugos.reiksme, raktas:'met_patirtis_prekes_paslaugos' }
-    : { metai:null, raktas:null };
-  return {
-    verte:v, kategorija, ribos, misrus:!!(ribos&&ribos.misrus), men, trukme, ilgalaike,
-    patirtis:{ koef, rekomenduojama:v*koef, riba:v*N.patirtiesRiba.reiksme },
-    pajamos:{
-      nenustatomos: !!(kategorija && kategorija.kodas==='maza'),
-      istatymoRiba: v*N.pajamuKartai.reiksme,
-      metodikosRiba: metine*N.pajamuKartai.reiksme,
-      metine,
-      pavyzdys36: (ilgalaike && Math.abs(men-36)<0.5) ? [v*N.pajamu36men.nuo, v*N.pajamu36men.iki] : null
-    },
-    laikotarpis,
-    santykiai: !!(kategorija && kategorija.kodas==='didele')
-  };
-}
+function trukmeMen(tekstas){ return GP_PROPORCINGUMAS.trukmeMen(tekstas); }
+function vertesRibos(objectType, rez){ return GP_PROPORCINGUMAS.vertesRibos(objectType, rez || rezimas()); }
+/* p = { value, valueCat, objectType, duration } - skaičiuoklė, AI užklausa, taisyklės ir Word priedas naudoja tą patį. */
+function proporcingumas(p, rez){ return GP_PROPORCINGUMAS.skaiciuok(p, rez || rezimas()); }
 
 /* Proporcingumo eilutės (LT arba EN) - tas pats turinys skaičiuoklėje, AI užklausoje ir Word priede. */
 function proporcingumoEilutes(c, kalba){
