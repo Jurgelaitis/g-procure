@@ -15,6 +15,9 @@
  * „Be pastabų“ reiškia tik tai, kad apibrėžtos patikros praėjo šiai paketo
  * versijai - ne teisinį patvirtinimą.
  *
+ * Grupė „privalomi“ (2026-10-07) - privalomų dokumentų elementų katalogas shared/privalomi-elementai.js
+ * (puslapis jį jungia šalia šio failo; neįkėlus - patikra „nepatikrinta“), išmatuotas su 6 LITGRID paketais.
+ *
  * Taisyklių katalogas išmatuotas su 4 viešais LITGRID CVP IS paketais
  * (9683631, 9566057, 9744290, 9495168; 2026-09-26) - rezultatai ir žinomi
  * apribojimai: CLAUDE.md, shared/pirkimo-kortele.js eilutė ir testai.
@@ -29,14 +32,17 @@
       vaidmuo: { skelbimas: "Skelbimas", sps: "SPS", bps: "BPS", ts: "Techninė specifikacija", sutartis: "Sutarties projektas (specialiosios sąlygos)",
                  sutartis_bendrosios: "Sutarties bendrosios sąlygos", pasiulymas: "Pasiūlymo forma", paraiska: "Paraiškos forma", ebvpd: "EBVPD",
                  paaiskinimas: "Paaiškinimai ir atsakymai", priedas: "Kitas priedas", kita: "Kita" },
-      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės" },
+      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės", privalomi: "Privalomi dokumentų elementai", kvalifikacija: "Kvalifikacijos reikalavimai (Metodika)" },
       patikra: {
         dokumentai: "Ar yra visi dokumentai pagal būdą", priedai: "SPS priedų sąrašas ir failai", neperskaityti: "Perskaityti failai",
         kalba: "Pasiūlymų kalba: skelbimas ir SPS", pavadinimas: "Pavadinimas: skelbimas ir SPS", dalys: "Dalys: skelbimas ir SPS",
         terminas: "Terminas: skelbimas ir SPS grafikas", skelbimo_data: "Paskelbimo data: skelbimas ir SPS grafikas",
         trukme: "Sutarties trukmė: skelbimas ir sutartis", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
         kortele: "Kortelė ir skelbimas", punktai: "Pasikartojantys punktų numeriai", alternatyvos: "Paliktos šablono alternatyvos",
-        laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", grafikas: "SPS grafiko datų tvarka"
+        laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", grafikas: "SPS grafiko datų tvarka",
+        privalomi: "Privalomi dokumentų elementai", privalomi_kiti: "Kiti įstatyme išvardyti elementai",
+        kval_reikalavimai: "Tiekėjo patirties ir pajamų reikalavimai SPS", kval_laikotarpis: "Patirties laikotarpis pagal Metodiką",
+        kval_patirties_verte: "Patirties vertė pagal Metodiką", kval_pajamos: "Metinės pajamos pagal Metodiką"
       },
       trukstaDok: "Pakete neradau: {d}. Jei jis pateikiamas kitu pavadinimu, pakeiskite failo vaidmenį sąraše.",
       beBudo: "Pirkimo būdas nežinomas (nėra kortelės ir skelbimo) - tikrinami tik pagrindiniai dokumentai: SPS, techninė specifikacija ir sutartis.",
@@ -66,6 +72,18 @@
       netaikoma: "netaikoma", nepatikrinta: "nepatikrinta", beSkelbimo: "nėra skelbimo", beSps: "nėra SPS", beSutarties: "nėra sutarties",
       beKorteles: "kortelė nepasirinkta", beDuomenu: "dokumente nerasta", beGrafiko: "SPS grafiko nerasta", bePriedu: "SPS priedų sąrašo nerasta",
       pakeitimoData: "įkeltas skelbimo pakeitimas - pirminio paskelbimo datos jame nėra",
+      privNerasta: "Neradau: {e}. Ieškota: {kur}. Jei tai parašyta kitais žodžiais ar kitame dokumente, viskas gerai - nurodykite vietą sprendimo pagrindime.",
+      privNerastaJei: "Neradau: {e}. Tai nurodoma, jeigu taikytina - patikrinkite, ar šiam pirkimui taikoma.",
+      privBeBps: "BPS pakete neradau, todėl privalomų elementų ieškota tik {kur}. Neradau {n}: {s}. Jei BPS teikiamos atskirai ar šie elementai yra kitame dokumente, viskas gerai.",
+      privKur: "BPS, SPS ir skelbime", privKurBeBps: "SPS ir skelbime", privKurVisi: "visuose paketo dokumentuose", privKurEbvpd: "BPS, SPS, skelbime ir EBVPD",
+      privNeuzpildyta: "Dokumente vieta yra, bet neužpildyta: {e}. Užpildykite prieš skelbdami.",
+      privBeDok: "nėra SPS ir BPS", privNeuzpildytaPast: "vieta yra, bet neužpildyta",
+      privDpsSukurimas: "DPS sukūrimo etape teikiamos paraiškos, ne pasiūlymai - tikrinama konkretaus pirkimo sąlygose",
+      privDpsKonkretus: "Neradau: {e}. Konkretaus pirkimo pagal DPS sąlygose tai gali būti nustatyta DPS sukūrimo sąlygose - įkelkite jas kartu, ir bus ieškoma ir ten.",
+      privKurDps: "DPS sąlygose ir skelbime",
+      privNeikeltas: "privalomų elementų katalogas neįkeltas", privBeBudo: "pirkimo būdas nežinomas (nėra kortelės ir skelbimo)", privNeAtviras: "ne atviras konkursas",
+      privKiti: "automatiškai netikrinama (taikoma tik tam tikrais atvejais arba tikrinama kitur): {s}",
+      kvalNeikeltas: "kvalifikacijos patikra neįkelta",
       laukuPav: { pavadinimas: "pavadinimas", verte: "vertė", budas: "būdas", bvpz: "BVPŽ kodas", dalys: "dalys", trukmeMen: "sutarties trukmė",
                   pasiulymuTerminas: "pasiūlymų terminas", paskelbimas: "paskelbimo data", vykdytojas: "vykdytojas", rezimas: "režimas" },
       men: "mėn."
@@ -74,14 +92,17 @@
       vaidmuo: { skelbimas: "Notice", sps: "SPS", bps: "BPS", ts: "Technical specification", sutartis: "Draft contract (special conditions)",
                  sutartis_bendrosios: "General contract conditions", pasiulymas: "Tender form", paraiska: "Application form", ebvpd: "ESPD",
                  paaiskinimas: "Clarifications and answers", priedas: "Other annex", kita: "Other" },
-      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules" },
+      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules", privalomi: "Required document elements", kvalifikacija: "Qualification requirements (Methodology)" },
       patikra: {
         dokumentai: "All documents for the procedure", priedai: "SPS list of annexes and files", neperskaityti: "Files read",
         kalba: "Tender language: notice and SPS", pavadinimas: "Title: notice and SPS", dalys: "Lots: notice and SPS",
         terminas: "Deadline: notice and SPS schedule", skelbimo_data: "Publication date: notice and SPS schedule",
         trukme: "Contract duration: notice and contract", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
         kortele: "Card and notice", punktai: "Repeated clause numbers", alternatyvos: "Template alternatives left in",
-        laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", grafikas: "Order of SPS schedule dates"
+        laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", grafikas: "Order of SPS schedule dates",
+        privalomi: "Required document elements", privalomi_kiti: "Other elements listed in the law",
+        kval_reikalavimai: "Supplier experience and turnover requirements in the SPS", kval_laikotarpis: "Experience period under the Methodology",
+        kval_patirties_verte: "Value of experience under the Methodology", kval_pajamos: "Annual turnover under the Methodology"
       },
       trukstaDok: "Not found in the package: {d}. If it has another name, change the file's role in the list.",
       beBudo: "The procedure is unknown (no card and no notice) - only the main documents are checked: SPS, technical specification and contract.",
@@ -111,6 +132,18 @@
       netaikoma: "not applicable", nepatikrinta: "not checked", beSkelbimo: "no notice", beSps: "no SPS", beSutarties: "no contract",
       beKorteles: "no card selected", beDuomenu: "not found in the document", beGrafiko: "no SPS schedule found", bePriedu: "no SPS list of annexes found",
       pakeitimoData: "a change notice was loaded - it does not contain the original publication date",
+      privNerasta: "Not found: {e}. Searched: {kur}. If it is worded differently or is in another document, that is fine - give the location in the decision note.",
+      privNerastaJei: "Not found: {e}. This is stated where applicable - check whether it applies to this procurement.",
+      privBeBps: "No BPS in the package, so the required elements were searched only {kur}. Not found ({n}): {s}. If the BPS is provided separately or these elements are in another document, that is fine.",
+      privKur: "in the BPS, SPS and notice", privKurBeBps: "in the SPS and notice", privKurVisi: "in all package documents", privKurEbvpd: "in the BPS, SPS, notice and ESPD",
+      privNeuzpildyta: "The document has a place for it, but it is empty: {e}. Fill it in before publication.",
+      privBeDok: "no SPS and no BPS", privNeuzpildytaPast: "the place is there, but empty",
+      privDpsSukurimas: "when a DPS is set up, requests to participate are submitted, not tenders - checked in the specific procurement conditions",
+      privDpsKonkretus: "Not found: {e}. In the conditions of a specific procurement under a DPS this may be set in the DPS set-up conditions - upload them too and they will be searched as well.",
+      privKurDps: "in the DPS conditions and notice",
+      privNeikeltas: "the catalogue of required elements is not loaded", privBeBudo: "the procedure is unknown (no card and no notice)", privNeAtviras: "not an open procedure",
+      privKiti: "not checked automatically (applies only in certain cases or is checked elsewhere): {s}",
+      kvalNeikeltas: "the qualification check is not loaded",
       laukuPav: { pavadinimas: "title", verte: "value", budas: "procedure", bvpz: "CPV code", dalys: "lots", trukmeMen: "contract duration",
                   pasiulymuTerminas: "tender deadline", paskelbimas: "publication date", vykdytojas: "contracting body", rezimas: "regime" },
       men: "months"
@@ -175,6 +208,9 @@
     if (/techni\w+\s+specifikacij/.test(n) && !/pried(as|o)\s+nr|\d\s+priedo\s+\d/.test(n)) return "ts";
     if (/specialiosios\s+pirkimo\s+salygos/.test(pradzia)) return "sps";
     if (/bendrosios\s+pirkimo\s+salygos/.test(pradzia)) return "bps";
+    // DPS sąlygos (2026-10-07): „... SIEKIANT SUKURTI DINAMINĘ PIRKIMO SISTEMĄ, SĄLYGOS“, „KONKRETAUS PIRKIMO „X“, ATLIEKAMO DINAMINĖS
+    // PIRKIMO SISTEMOS „Y“ PAGRINDU, SĄLYGOS“ - pirkimo sąlygos (šablonų rinkinyje - „DPS sąlygos“), todėl vaidmuo SPS
+    if (/siekiant\s+sukurti\s+dinamine\s+pirkimo\s+sistema|with\s+an\s+aim\s+of\s+creating\s+a\s+dynamic|konkretaus\s+pirkimo[\s\S]{0,300}dinamines\s+pirkimo\s+sistemos[\s\S]{0,300}pagrindu/.test(pradzia)) return "sps";
     if (/pried|annex/.test(n)) return "priedas";
     return "kita";
   }
@@ -414,7 +450,7 @@
     docs.forEach(function (d) { vaid[d.id] = (o.vaidmenys && o.vaidmenys[d.id]) || vaidmuo(d); });
     var P = pagrindiniai(docs, vaid);
     var radiniai = [], patikros = [];
-    function patikra(id, grupe, busena, pastaba) { patikros.push({ id: id, grupe: grupe, pav: X.patikra[id] || id, busena: busena, pastaba: pastaba || "" }); }
+    function patikra(id, grupe, busena, pastaba, pav) { patikros.push({ id: id, grupe: grupe, pav: pav || X.patikra[id] || id, busena: busena, pastaba: pastaba || "" }); }
     function radinys(r) { radiniai.push(r); }
 
     // Faktai
@@ -659,6 +695,86 @@
       patikra("grafikas", "aiskumas", blogai ? "radinys" : "gerai");
     }
 
+    /* ---- E. Privalomi dokumentų elementai (shared/privalomi-elementai.js; PĮ 48 str. 2 d. / VPĮ 35 str. 2 d. - per registrą).
+       Ieškoma visame pakete; nerastas - „Patikrinkite“ (požymiai euristiniai, formuluotė gali būti kita), „jeigu taikytina“ - informacija.
+       Niekada ne kliūtis ir niekada „atitinka įstatymą“: radus - tik vieta, kur tai parašyta. */
+    var PRV = global.GP_PRIVALOMI;
+    var mBudas = budas && global.GP_METHODS ? global.GP_METHODS.byId(budas) : null;
+    if (!mBudas && sps && sps.budas && global.GP_METHODS) mBudas = global.GP_METHODS.fromText(sps.budas.t);
+    // Mažos vertės pirkimai tikrinami kaip kiti, DPS - pagal etapą (naudotojo sprendimai 2026-10-07); be kortelės ir skelbimo
+    // DPS etapas atpažįstamas iš sąlygų antraštės
+    var procedura = mBudas ? mBudas.procedura : PRV ? PRV.dpsEtapas(docs) || "" : "";
+    var dps = /^dps_/.test(procedura);
+    if (!PRV) patikra("privalomi", "privalomi", "nepatikrinta", X.privNeikeltas);
+    else if (!P.sps && !P.bps) patikra("privalomi", "privalomi", "nepatikrinta", X.privBeDok);
+    else {
+      var pr = PRV.ieskok({ docs: docs, vaidmenys: vaid, budasProcedura: procedura,
+        dpsSukurimo: docs.filter(function (d) { return PRV.dpsDokumentas(d) === "sukurimas"; }) });
+      var kurTekstas = function (el) {
+        var kv = el.kur === undefined ? PRV.SALYGOS : el.kur;
+        if (!kv) return X.privKurVisi;
+        if (kv.indexOf("ebvpd") >= 0) return X.privKurEbvpd;
+        return dps ? X.privKurDps : P.bps ? X.privKur : X.privKurBeBps;
+      };
+      var beBps = [];
+      pr.forEach(function (x) {
+        var el = x.el, pav = PRV.pav(el, l), id = "privalomi_" + el.id, tr = teise(el.raktai || [el.raktas]);
+        if (x.busena === "netaikoma") { patikra(id, "privalomi", x.nezinomas ? "nepatikrinta" : "netaikoma",
+          x.nezinomas ? X.privBeBudo : x.priezastis === "dps_sukurimas" ? X.privDpsSukurimas : X.privNeAtviras, pav); return; }
+        if (x.busena === "rasta") {
+          var kur = [];
+          x.kur.forEach(function (v) {
+            var t = trumpas(v.doc.name) + (v.b && v.b.loc ? ", " + vieta(v.b.loc, l) : "");
+            if (kur.indexOf(t) < 0) kur.push(t);
+          });
+          patikra(id, "privalomi", "gerai", kur.join("; ") + (x.kur[0] && x.kur[0].citata ? ": " + kab(iskarpa(x.kur[0].citata, 140), l) : ""), pav);
+          return;
+        }
+        if (x.busena === "neuzpildyta") {
+          var v0 = x.kur[0];
+          patikra(id, "privalomi", "radinys", X.privNeuzpildytaPast, pav);
+          radinys({ id: id, grupe: "privalomi", lygis: "tikrinti", tekstas: sub(X.privNeuzpildyta, { e: pav }),
+            vietos: [docVieta(v0.doc, { loc: v0.b && v0.b.loc, t: v0.citata }, l)], teise: tr });
+          return;
+        }
+        patikra(id, "privalomi", "radinys", "", pav);
+        if (x.dpsSukurimoNera) { radinys({ id: id, grupe: "privalomi", lygis: "info", tekstas: sub(X.privDpsKonkretus, { e: pav }), vietos: [], teise: tr }); return; }
+        if (!P.bps && !dps && !el.jeiTaikytina) { beBps.push({ el: el, pav: pav, teise: tr }); return; }
+        radinys({ id: id, grupe: "privalomi", lygis: el.jeiTaikytina ? "info" : "tikrinti",
+          tekstas: sub(el.jeiTaikytina ? X.privNerastaJei : X.privNerasta, { e: pav, kur: kurTekstas(el) }), vietos: [], teise: tr });
+      });
+      if (beBps.length) {
+        var tb = []; beBps.forEach(function (x) { x.teise.forEach(function (t) { if (!tb.some(function (y) { return y.raktas === t.raktas; })) tb.push(t); }); });
+        radinys({ id: "privalomi_be_bps", grupe: "privalomi", lygis: "tikrinti",
+          tekstas: sub(X.privBeBps, { kur: X.privKurBeBps, n: beBps.length, s: beBps.map(function (x) { return x.pav; }).join("; ") }), vietos: [], teise: tb });
+      }
+      patikra("privalomi_kiti", "privalomi", "nepatikrinta", sub(X.privKiti, { s: PRV.NETIKRINAMI[l] }));
+    }
+
+    /* ---- F. Kvalifikacijos reikalavimų proporcingumas (shared/kvalifikacija.js, VPT Metodika per shared/proporcingumas.js - tas pats
+       skaičiavimas kaip PP-qual; naudotojo sprendimas 2026-10-07). Lygis - „Rekomendacija“; vertė, objektas ir trukmė - iš kortelės,
+       o be jos - iš skelbimo. */
+    var KV = global.GP_KVALIFIKACIJA;
+    var kpat = function (id, busena, pastaba) { patikra(id, "kvalifikacija", busena, pastaba); };
+    var teiseMet = function (raktai) {
+      if (!global.GP_TEISE) return [];
+      var o = [];
+      raktai.forEach(function (r) { try { o.push({ raktas: r, cit: global.GP_TEISE.cit(r, rezimas || undefined, l), url: global.GP_TEISE.url(r, rezimas || undefined), apie: global.GP_TEISE.apie(r, rezimas || undefined) }); } catch (e) {} });
+      return o;
+    };
+    if (!KV || !global.GP_PROPORCINGUMAS || !global.GP_PRIVALOMI) kpat("kval_reikalavimai", "nepatikrinta", X.kvalNeikeltas);
+    else if (!P.sps) kpat("kval_reikalavimai", "nepatikrinta", X.beSps);
+    else {
+      var lauk = function (f) { return k && k[f] != null && k[f] !== "" ? k[f] : sk && sk.laukai[f] ? sk.laukai[f].reiksme : null; };
+      var kv = KV.vertink({ reikalavimai: KV.istrauk({ docs: docs, vaidmenys: vaid }), verte: lauk("verte"), objektas: lauk("objektas"),
+        trukmeMen: lauk("trukmeMen"), rezimas: rezimas, mazosVertes: procedura === "mv_apklausa", kalba: l });
+      kv.patikros.forEach(function (x) { kpat(x.id, x.busena, x.pastaba); });
+      kv.radiniai.forEach(function (r) {
+        radinys({ id: r.id, grupe: "kvalifikacija", lygis: r.lygis, tekstas: r.tekstas, teise: teiseMet(r.teise),
+          vietos: r.vietos.map(function (v) { return docVieta(v.doc, { loc: v.b && v.b.loc, t: v.citata }, l); }) });
+      });
+    }
+
     /* ---- T. Taisyklių variklis (A3): kortelė, o be jos - skelbimo duomenys */
     var tk = null;
     if (k) tk = k;
@@ -668,7 +784,7 @@
     }
     var taisykles = tk && global.GP_TAISYKLES ? global.GP_TAISYKLES.tikrink(tk, l) : null;
 
-    var lygiai = { kliutis: 0, tikrinti: 0, info: 0 };
+    var lygiai = { kliutis: 0, tikrinti: 0, rekomendacija: 0, info: 0 };
     radiniai.forEach(function (r) { if (lygiai[r.lygis] != null) lygiai[r.lygis]++; });
     if (taisykles) taisykles.radiniai.forEach(function (r) { if (lygiai[r.lygis] != null) lygiai[r.lygis]++; });
     return {
@@ -683,7 +799,7 @@
       patikros: patikros,
       taisykles: taisykles,
       rezimas: rezimas,
-      santrauka: { kliutys: lygiai.kliutis, tikrinti: lygiai.tikrinti, info: lygiai.info,
+      santrauka: { kliutys: lygiai.kliutis, tikrinti: lygiai.tikrinti, rekomendacijos: lygiai.rekomendacija, info: lygiai.info,
                    gerai: patikros.filter(function (p) { return p.busena === "gerai"; }).length,
                    nepatikrinta: patikros.filter(function (p) { return p.busena === "nepatikrinta"; }).length, patikru: patikros.length }
     };
