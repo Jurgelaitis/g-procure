@@ -1981,6 +1981,30 @@ const GPGen = (() => {
     }
   }
 
+  /* „Rengė:“ / „Rengė / Prepared by:“ eilutė SPS pabaigoje (2026-10-07, naudotojo sprendimas - kontaktinių asmenų vieta): reikšmė
+     įrašoma po dvitaškio. Šablone po jo - tik tarpo runas (AK LT - raudonas kursyvas) arba Word sąrašo laukas „Choose an item.“
+     (ND LT/EN): jie pašalinami, įrašomas naujas runas su „Rengė:“ runo savybėmis (spalva - auto, be kursyvo). Grąžina, ar įrašyta. */
+  function irasykRengeja(paras, i, value){
+    const p = paras[i], v = String(value == null ? '' : value).trim();
+    if (!p || !v) return false;
+    const txt = r => GPDocx.els(r,'t').map(x => x.textContent).join('');
+    GPDocx.els(p,'sdt').forEach(sd => sd.parentNode && sd.parentNode.removeChild(sd));
+    const rs = GPDocx.els(p,'r');
+    let dv = -1;
+    rs.forEach((r, k) => { if (/:/.test(txt(r))) dv = k; });
+    if (dv < 0) return false;
+    rs.slice(dv + 1).forEach(r => { if (!txt(r).trim() && r.parentNode) r.parentNode.removeChild(r); });
+    const naujas = rs[dv].cloneNode(true), ts = GPDocx.els(naujas,'t');
+    if (!ts.length) return false;
+    ts[0].textContent = ' ' + gpBruksniai(v); ts[0].setAttribute('xml:space','preserve');
+    for (let k = 1; k < ts.length; k++) ts[k].textContent = '';
+    for (const c of GPDocx.els(naujas,'color')) c.setAttributeNS(W,'w:val','auto');
+    const rpr = naujas.getElementsByTagNameNS(W,'rPr')[0];
+    if (rpr) for (const tag of ['i','iCs']) for (const e of Array.from(rpr.getElementsByTagNameNS(W, tag))) rpr.removeChild(e);
+    rs[dv].parentNode.insertBefore(naujas, rs[dv].nextSibling);
+    return true;
+  }
+
   /* Formos daliu eilute "I/ II/ III/ IV PIRKIMO OBJEKTO DALIAI (palikti tik ta
      dali...)": romeniskas sarasas - statinis sablono tekstas, neatspindintis
      tikro daliu skaiciaus (pastaba Nr. 4). Perrasomas TIK sarasas jo raudoname
@@ -2093,7 +2117,7 @@ const GPGen = (() => {
 
   return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, keisti, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
-           keistiRaudonaTeksta, keistiRaudonaGrupe, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
+           keistiRaudonaTeksta, keistiRaudonaGrupe, irasykRengeja, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
 
 /* ==========================================================================

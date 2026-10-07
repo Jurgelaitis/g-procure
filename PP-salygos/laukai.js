@@ -565,11 +565,27 @@
       vietos: [{ start: pr.length, end: pr.length + zyma.length, zyma, rusis: 'pavyzdys', ivestis: 'tekstas', uzrasas: DPS_PAVADINIMAS.uzrasas, aprasyta: true, klase: 'c', salinti: null }] } };
   }
 
+  /* Pirkimo sąlygų rengėjas (2026-10-07, naudotojo sprendimas: „Rengė: vardas, tel., el. p.“ - asmenų, įgaliotų palaikyti tiesioginį
+     ryšį su tiekėjais, ir jų kontaktų vieta; privalomų elementų patikra - shared/privalomi-elementai.js „kontaktai“). Šablone eilutė
+     „Rengė:“ / „Rengė / Prepared by:“ SPS pabaigoje, po dvitaškio - tarpas (AK LT - raudonas) arba Word sąrašo laukas „Choose an item.“
+     (ND LT/EN), ne „___“, todėl laukas aprašomas atskirai, kaip DPS pavadinimas: konteksto sakinys - eilutė su „____“ vietoje reikšmės.
+     Vienas laukas visiems paketo dokumentams; dvikalbiame - ta pati reikšmė (vardas ir kontaktai nesiverčia). */
+  const RENGEJAS = { klausimas: 'Kas parengė pirkimo sąlygas ir palaikys ryšį su tiekėjais?',
+    uzuomina: 'Įrašoma SPS pabaigoje po „Rengė:“: vardas, pavardė, telefonas ir el. paštas. Šis asmuo pirkimo dokumentuose nurodomas kaip įgaliotas palaikyti tiesioginį ryšį su tiekėjais.',
+    uzrasas: 'Vardas, pavardė, telefonas, el. paštas', pvz: 'Vardenis Pavardenis, tel. +370 600 00000, el. p. vardenis.pavardenis@litgrid.eu' };
+  const RENGEJO_RE = /^\s*Rengė(\s*\/\s*Prepared by)?\s*:\s*(Choose an item\.?|Pasirinkite elementą\.?)?\s*$/;
+  const arRengejoEilute = t => RENGEJO_RE.test(String(t || ''));
+  function rengejoLaukas(t){
+    const m = String(t || '').match(/^\s*(Rengė(?:\s*\/\s*Prepared by)?\s*:)/), pr = (m ? m[1].replace(/\s+/g, ' ') : 'Rengė:') + ' ', zyma = '____', tekstas = pr + zyma;
+    return { tekstas, lk: { tekstas, tipas: 'rengejas', klausimas: RENGEJAS.klausimas, uzuomina: RENGEJAS.uzuomina,
+      vietos: [{ start: pr.length, end: pr.length + zyma.length, zyma, rusis: 'bruksnys', ivestis: 'tekstas', uzrasas: RENGEJAS.uzrasas, pvz: RENGEJAS.pvz, aprasyta: true, klase: 'c', salinti: null }] } };
+  }
+
   /* Tiekėjo pildoma vieta priedo formoje, įdėtoje į sąlygų dokumentą (DPS sukūrimo sąlygos): „____ Nr.____“, „202_-__-__“. */
   const arTiekejoVieta = t => /^[\s_]*Nr\.[\s_]*$/.test(String(t || '').trim()) || /^20\d_-_+-_+$/.test(String(t || '').trim());
 
   root.GP_LAUKAI = { norm, arTiekejoVieta, tusciosVietos, xVietos, laukas, planas, keitimai, tekstasIsPlano, gramatika, sutrauk,
     prieduSarasas, nuorodosPriedas, priedoRaktasIsTeksto, PRIEDU_PAV, EN_MENESIAI, skyriai, skyrius, arAntraste, TIPAI,
     GRUPES, grupesKlausimas, tikrinimoVariantas, uztikrinimoVariantas, UZT_PAGAL_KRITERIJU, SALINTI, KRITERIJU_PASIRINKIMAI,
-    DPS_PAVADINIMAS, dpsPavadinimoLaukas };
+    DPS_PAVADINIMAS, dpsPavadinimoLaukas, RENGEJAS, arRengejoEilute, rengejoLaukas };
 })(typeof window !== 'undefined' ? window : globalThis);
