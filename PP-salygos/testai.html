@@ -2768,6 +2768,128 @@ async function testaiTikrinimas(){
     lygu(blogi, [], "rodyklė");
     tiesa(Object.keys(R.formos).length >= 26, "formų: " + Object.keys(R.formos).length);
   });
+  await testas("Privalomi dokumentų elementai (shared/privalomi-elementai.js) LITGRID šablonuose: AK, AKV, SSD, TSD ir ND (LT ir LT/EN) BPS + SPS - rasti visi, išskyrus tuščias formos vietas „Rengė:“ ir CPO katalogo pagrindimą („neuzpildyta“); atviro konkurso elementas - tik AK ir AKV", async () => {
+    const SEIMOS = { AK_LT: "atviras", AK_LTEN: "atviras", AKV_LT: "atviras", SSD_LT: "skelb_derybos", SSD_LTEN: "skelb_derybos",
+                     TSD_LT: "skelb_derybos", TSD_LTEN: "skelb_derybos", ND_LT: "neskelb_derybos", ND_LTEN: "neskelb_derybos" };
+    const blogi = [];
+    for (const [s, proc] of Object.entries(SEIMOS)){
+      const fs = [];
+      for (const d of ["BPS", "SPS"]) fs.push(new W.File([await (await W.fetch("templates/" + s + "_" + d + ".docx")).blob()], s + "_" + d + ".docx"));
+      const docs = await W.GP_DOK.apdorok(fs, null, "lt"), vaid = {};
+      (docs.docs || docs).forEach(d => { vaid[d.id] = /_BPS/.test(d.name) ? "bps" : "sps"; });
+      const r = W.GP_PRIVALOMI.ieskok({ docs: docs.docs || docs, vaidmenys: vaid, budasProcedura: proc });
+      r.forEach(x => {
+        const tiketasi = x.el.id === "kontaktai" || x.el.id === "cpo" ? "neuzpildyta" : x.el.id === "ak_pirma" && proc !== "atviras" ? "netaikoma" : "rasta";
+        if (x.busena !== tiketasi) blogi.push(s + " " + x.el.id + ": " + x.busena);
+      });
+    }
+    lygu(blogi, [], "šablonai");
+  });
+  await testas("Privalomi elementai mažos vertės ir DPS formose (naudotojo sprendimai 2026-10-07): MVP - kaip kiti (nėra tik stebėtojų nuostatos); DPS sukūrimo sąlygose pasiūlymų elementai netaikomi; konkretaus pirkimo sąlygose tiekėjų elementai - ieškoti DPS sukūrimo sąlygose", async () => {
+    const PASIUL = ["rengimas", "nesudaryti", "kriterijai", "teisine_forma", "alternatyvus", "kaina", "uztikrinimas", "galiojimas", "susipazinimas", "eurais"];
+    const LAUK = {
+      MVP_LT: { proc: "mv_apklausa", failai: ["MVP_LT_BPS", "MVP_LT_SPS"], ne: { kontaktai: "neuzpildyta", cpo: "neuzpildyta", stebetojai: "nerasta", ak_pirma: "netaikoma" } },
+      DPSK_LT: { proc: "dps_sukurimas", failai: ["DPSK_LT_SALYGOS"], ne: Object.assign({ ak_pirma: "netaikoma", paaiskinimai: "nerasta", kontaktai: "nerasta", stebetojai: "nerasta", cpo: "nerasta" },
+        Object.fromEntries(PASIUL.map(x => [x, "netaikoma"]))) },
+      DPSP_LT: { proc: "dps_konkretus", failai: ["DPSP_LT_SALYGOS"], ne: { ak_pirma: "netaikoma", teise_verstis: "nerasta*", nepasalinti: "nerasta*", teisine_forma: "nerasta",
+        uztikrinimas: "nerasta", kontaktai: "nerasta", stebetojai: "nerasta", cpo: "nerasta" } } };
+    const blogi = [];
+    for (const [s, L] of Object.entries(LAUK)){
+      const fs = [];
+      for (const n of L.failai) fs.push(new W.File([await (await W.fetch("templates/" + n + ".docx")).blob()], n + ".docx"));
+      const docs = await W.GP_DOK.apdorok(fs, null, "lt"), dd = docs.docs || docs, vaid = {};
+      dd.forEach(d => { vaid[d.id] = /_BPS/.test(d.name) ? "bps" : "sps"; });
+      lygu(W.GP_PRIVALOMI.dpsEtapas(dd), /^dps_/.test(L.proc) ? L.proc : null, s + " etapas iš antraštės");
+      W.GP_PRIVALOMI.ieskok({ docs: dd, vaidmenys: vaid, budasProcedura: L.proc }).forEach(x => {
+        const t = L.ne[x.el.id] || "rasta", gauta = x.busena + (x.dpsSukurimoNera ? "*" : "");
+        if (gauta !== t) blogi.push(s + " " + x.el.id + ": " + gauta + " (tikėtasi " + t + ")");
+      });
+    }
+    lygu(blogi, [], "šablonai");
+  });
+  await testas("Privalomi elementai tikrinime: sugeneruotas T-AK paketas - patikrų sąraše grupė „Privalomi dokumentų elementai“ (24 elementai ir netikrinamų sąrašas), rasti - su failu ir citata; tuščia „Rengė:“ eilutė - „Patikrinkite“ su vieta", async () => {
+    tiesa(docs, "nėra sugeneruotų dokumentų");
+    const B = await tikrink([new W.File([docs.AK_LT_SPS.r.blob], "SPS.docx"), new W.File([docs.AK_LT_BPS.r.blob], "BPS.docx")]);
+    const pt = B.rez.patikros.filter(p => p.grupe === "privalomi");
+    lygu([pt.length, pt.filter(p => p.busena === "gerai").length >= 21, pt.find(p => p.id === "privalomi_kiti").busena], [25, true, "nepatikrinta"], "patikros: " + pt.filter(p => p.busena !== "gerai").map(p => p.id + ":" + p.busena).join(", "));
+    const kt = B.rez.radiniai.find(r => r.id === "privalomi_kontaktai");
+    tiesa(kt && kt.lygis === "tikrinti" && /neužpildyta/.test(kt.tekstas) && kt.vietos[0].failas === "SPS.docx" && /^Rengė/.test(kt.vietos[0].citata), "kontaktai: " + JSON.stringify(kt));
+    const eil = [...D.querySelectorAll("#tkPatikrosLent tr")].filter(tr => /Privalomi dokumentų elementai/.test(tr.textContent));
+    tiesa(eil.length === 25 && eil.some(tr => /Pasiūlymo galiojimo data ar laikotarpis/.test(tr.textContent) && /(SPS|BPS)\.docx, /.test(tr.textContent)) &&
+      eil.some(tr => /Subtiekimo reikalavimai/.test(tr.textContent) && /BPS\.docx, .*Subtiekėj/.test(tr.textContent)), "lentelė: " + eil.length + " " + eil.filter(tr => /galiojimo data|Subtiekimo/.test(tr.textContent)).map(tr => tr.textContent.slice(0, 200)).join(" || "));
+    tiesa(/neužpildyta: Asmenys, įgalioti/.test(D.getElementById("tkp-dokumentai").textContent), "„Pagal dokumentą“ - kontaktų radinys prie SPS");
+  });
+  await testas("„Rengė:“ - kontaktinių asmenų vieta (naudotojo sprendimas 2026-10-07): 2 žingsnio klausimas be numatytosios reikšmės, DI jo neklausiamas; įrašoma po dvitaškio juodu tekstu LT ir LT/EN SPS (ND LT/EN Word sąrašo laukas pašalinamas); tikrinant - kontaktai rasti", async () => {
+    const R = "Vardenis Pavardenis, tel. +370 600 00000, el. p. vardenis@example.lt";
+    const rengejoPastraipa = xml => {
+      const d = new W.DOMParser().parseFromString(xml, "application/xml");
+      return [...d.getElementsByTagNameNS(NSW, "p")].find(p => /^Rengė/.test(tekstasSuTab(p).trim()));
+    };
+    let q = null, ai = null, pradine = null;
+    const ak = await generuokSu({ budas: "T-AK", pries: async () => {
+      q = W.__K.tuscios.rengejas; pradine = (ATS().B_rengejas || []).slice();
+      ai = W.patarejoKlausimai(W.__K).map(x => x.raktas);
+      W.uAtsArr("B_rengejas", 0, R);
+    } });
+    tiesa(q && q.lk.klausimas === "Kas parengė pirkimo sąlygas ir palaikys ryšį su tiekėjais?" && q.lk.vietos.length === 1 && q.lk.vietos[0].uzrasas && q.dokumentai.length >= 1, "laukas: " + JSON.stringify(q && { k: q.lk.klausimas, d: q.dokumentai }));
+    lygu([pradine, ai.includes("B|rengejas")], [[""], false], "be numatytosios ir ne DI klausimas");
+    const p = rengejoPastraipa(ak.AK_LT_SPS.xml);
+    tiesa(p, "AK LT SPS - „Rengė:“ pastraipos nėra");
+    const runoTekstas = r => [...r.getElementsByTagNameNS(NSW, "t")].map(t => t.textContent).join("");
+    const rRun = [...p.getElementsByTagNameNS(NSW, "r")].find(r => runoTekstas(r).indexOf("Vardenis") >= 0);
+    tiesa(rRun, "runas su reikšme: " + tekstasSuTab(p));
+    lygu([tekstasSuTab(p).trim(), !!rRun.getElementsByTagNameNS(NSW, "i").length,
+          [...rRun.getElementsByTagNameNS(NSW, "color")].map(c => c.getAttribute("w:val")).filter(v => !/^(auto|000000)$/i.test(v))],
+         ["Rengė: " + R, false, []], "AK LT SPS");
+    const nd = await generuokSu({ budas: "S-ND", kalba: "LT_EN", pries: async () => { W.uAtsArr("B_rengejas", 0, R); } });
+    const p2 = rengejoPastraipa(nd.ND_LTEN_SPS.xml);
+    lygu([tekstasSuTab(p2).trim().replace(/\s+/g, " "), p2.getElementsByTagNameNS(NSW, "sdt").length], ["Rengė / Prepared by: " + R, 0], "ND LT/EN SPS");
+    // Tikrinimas: kontaktai rasti SPS su įrašyta reikšme
+    const B = await tikrink([new W.File([ak.AK_LT_SPS.r.blob], "SPS.docx"), new W.File([ak.AK_LT_BPS.r.blob], "BPS.docx")]);
+    const kt = B.rez.patikros.find(x => x.id === "privalomi_kontaktai");
+    lygu([kt.busena, /Rengė: Vardenis Pavardenis/.test(kt.pastaba), B.rez.radiniai.some(x => x.id === "privalomi_kontaktai")], ["gerai", true, false], "tikrinimas: " + kt.pastaba);
+  });
+  await testas("„Rengė:“ siūloma iš pirkimo kortelės organizatoriaus - „Siūloma (nepatvirtinta)“ su kilme, ne žmogaus įvestis", async () => {
+    const { f, W: W2, D: D2 } = await modulisSuKortele();
+    try {
+      const k = W2.GP_KORTELE.issaugok(W2.GP_KORTELE.tuscia(Object.assign({}, KORTELE, { organizatorius: "Vardenė Pavardenė" }))).kortele;
+      const api = W2.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(k.id), "pasirinkta");
+      W2.__K = null; D2.getElementById("toStep2").click();
+      await kol(() => W2.__K && !D2.getElementById("step2").classList.contains("hid"), "2 žingsnis");
+      const s = W2.eval("SIUL").get("B_rengejas#0");
+      lygu([W2.eval("ATS").B_rengejas[0], !!s && /organizatorius/.test(s.saltinis), W2.eval("PATV").has("B_rengejas#0")], ["Vardenė Pavardenė", true, false], "siūloma");
+    } finally { f.remove(); }
+  });
+  await testas("Kvalifikacijos reikalavimų proporcingumas (shared/kvalifikacija.js): paslaugų patirtis per 5 metus - „Rekomendacija“ skiltyje „Svarbiausia“ su Metodikos nuoroda; objektas ir vertė - iš pirkimo kortelės; santraukoje - prieš informaciją; „Priimta sąmoningai“ - su privalomu pagrindimu", async () => {
+    // docs sugeneruoti ankstesniame modulio rėmelyje (vėlesni testai jį pakeitė) - baitai perkeliami į dabartinį
+    const perkelk = async (b, Wx) => new Wx.Blob([new Wx.Uint8Array(await b.arrayBuffer())]);
+    const REIK = "Tiekėjas per paskutinius 5 (penkerius) metus iki pasiūlymų pateikimo termino pabaigos yra tinkamai suteikęs paslaugų, kurių bendra vertė ne mažesnė kaip 90 000,00 Eur be PVM.";
+    const sps = await keiskDocx(await perkelk(docs.AK_LT_SPS.r.blob, W), ps => {
+      const c = ps.filter(x => x.t.length > 100)[5], n = c.p.cloneNode(true), ts = [...n.getElementsByTagNameNS(NSW, "t")];
+      ts.forEach((x, i) => { x.textContent = i ? "" : REIK; });
+      c.p.parentNode.insertBefore(n, c.p.nextSibling);
+    });
+    const { f, W: W2, D: D2 } = await modulisSuKortele();
+    try {
+      const k = W2.GP_KORTELE.issaugok(W2.GP_KORTELE.tuscia(Object.assign({}, KORTELE, { objektas: "paslaugos", verte: 100000 }))).kortele;
+      const api = W2.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(k.id), "pasirinkta");
+      D2.getElementById("tabTikrinti").click();
+      await W2.GP_TIKRINIMAS.skaityk([new W2.File([await perkelk(sps, W2)], "SPS.docx"), new W2.File([await perkelk(docs.AK_LT_BPS.r.blob, W2)], "BPS.docx")]);
+      const kort = [...D2.querySelectorAll("#tkp-svarbiausia .tk-rad--rekomendacija")].filter(x => /per paskutinius 5 metus, o Metodikoje prekėms ir paslaugoms/.test(x.textContent));
+      lygu(kort.length, 1, "rekomendacija: " + [...D2.querySelectorAll("#tkp-svarbiausia .tk-rad--rekomendacija")].map(x => x.textContent.slice(0, 120)).join(" | "));
+      const v = kort[0].querySelector(".tk-zyma--rekomendacija");
+      lygu([v && v.textContent, /Kvalifikacijos reikalavimai \(Metodika\)/.test(kort[0].textContent), /Teisinis pagrindas: Metodikos/.test(kort[0].textContent), /SPS\.docx/.test(kort[0].textContent)],
+           ["Rekomendacija", true, true, true], "kortelė");
+      const st = D2.getElementById("tkSantrauka").textContent;
+      tiesa(st.indexOf("Rekomendacijos") > 0 && st.indexOf("Rekomendacijos") < st.indexOf("Informacija"), "santrauka: " + st);
+      const raktas = kort[0].id.replace("tkr-", "");
+      kort[0].querySelector('[data-tk-spr="priimta"]').click();
+      const k2 = D2.getElementById("tkr-" + raktas), tr = k2.querySelector(".tk-truksta");
+      lygu([k2.dataset.tkBusena, tr && /kodėl reikalavimas pagrįstas/.test(tr.textContent), /\(privalomas\)/.test(k2.querySelector(".tk-pagr label").textContent)], ["be_pagrindimo", true, true], "pagrindimas privalomas");
+    } finally { f.remove(); }
+  });
   await testas("Darbo sritys: #tikrinti atveria tikrinimą (rengimas paslėptas, mygtukai aria-pressed); grįžus - generatorius; tikrinimo srities failų pasirinkimas ir vaizdai darbo nekuria (data-darbas-ne)", async () => {
     D.getElementById("tabRengti").click();
     lygu([D.getElementById("rengimas").hidden, D.getElementById("tikrinimas").hidden, D.getElementById("tabRengti").getAttribute("aria-pressed"), W.location.hash], [false, true, "true", ""], "rengimas");

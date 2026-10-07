@@ -9,7 +9,7 @@
  *    templates/), forma atpažįstama pagal zemelapiai/formu-versijos.json rodyklę, ankstesnių oficialių redakcijų tekstas nelaikomas
  *    nukrypimu; šiuo moduliu sugeneruotas dokumentas lyginamas pagal generavimo pasą - tiksliai, kas pakeista PO generavimo;
  *  - lygiai: Kliūtis, Nukrypimas nuo formos, Patikrinkite, Informacija (Rekomendacija - kai bus privalomų elementų katalogas);
- *  - sprendimai: Ištaisyta / Priimta sąmoningai (nukrypimui ir kliūčiai - su pagrindimu) / Netaikoma; Word ataskaita su mašinai
+ *  - sprendimai: Ištaisyta / Priimta sąmoningai (nukrypimui, kliūčiai ir rekomendacijai - su pagrindimu) / Netaikoma; Word ataskaita su mašinai
  *    skaitomais sprendimais: įkėlus ją kartu su nauja paketo versija, sprendimai parodomi prie tų pačių radinių, o dokumentų
  *    pakeitimai nuo ankstesnės patikros suskaičiuojami (pastraipų maišos, ne tekstas).
  *
@@ -45,7 +45,9 @@
   var MAX_RODOMA = 10;
   var PAAISKINIMAS = { nukrypimas: "Standartinės LITGRID formos nekintamos nuostatos, kurias rengėjas pakeitė, pašalino ar pridėjo: komisija sprendžia, ar pakeitimas pagrįstas. " +
     "„Jautri sritis“ - pašalinimo pagrindai, kvalifikacija, vertinimas, užtikrinimas, sutartis, nacionalinis saugumas ar sankcijos: tokius peržiūrėkite pirmiausia. " +
-    "Užpildytos vietos, pasirinktos alternatyvos ir sąlyginės formos dalys čia nerodomos - jos skiltyje „Palyginimas su forma“." };
+    "Užpildytos vietos, pasirinktos alternatyvos ir sąlyginės formos dalys čia nerodomos - jos skiltyje „Palyginimas su forma“.",
+    rekomendacija: "Kvalifikacijos reikalavimai, kurie viršija VPT Metodikos įprastas ribas (patirties laikotarpis, patirties vertė, pajamos). " +
+    "Metodikos skaičiai taikomi „paprastai“: griežtesnis reikalavimas gali būti pagrįstas - tada turėkite pagrindimą." };
   var VAIZDAI = ["svarbiausia", "dokumentai", "palyginimas", "patikros"];
 
   var cfg = null, indeksas = null, indeksoKlaida = null, sablonai = {};
@@ -241,7 +243,9 @@
     sujungta.sort(function (a, b) { return TVARKA.indexOf(a.lygis) - TVARKA.indexOf(b.lygis) || (b.svarbus ? 1 : 0) - (a.svarbus ? 1 : 0); });
     B.radiniai = sujungta;
   }
-  function reikiaPagrindimo(r) { return r.lygis === "nukrypimas" || r.lygis === "kliutis"; }
+  /* Rekomendacija (kvalifikacijos reikalavimas virš Metodikos įprastos ribos) - irgi su pagrindimu: Metodikos 7.3 p. pirkimo vykdytojas
+     turi galėti motyvuotai pagrįsti kiekvieną reikalavimą ir jo reikšmę */
+  function reikiaPagrindimo(r) { return r.lygis === "nukrypimas" || r.lygis === "kliutis" || r.lygis === "rekomendacija"; }
   function sprendimoBusena(r) {
     var s = B.sprendimai[r.raktas];
     if (!s) return "nespresta";
@@ -344,7 +348,7 @@
       var priv = reikiaPagrindimo(r);
       h += '<div class="tk-pagr"><label for="' + id + '">Pagrindimas' + (priv ? " (privalomas)" : " (neprivalomas)") + "</label>" +
            '<textarea id="' + id + '" rows="2" data-tk-pagr="' + r.raktas + '"' + (priv ? ' aria-required="true"' : "") + ">" + esc(s.pagrindimas || "") + "</textarea>" +
-           (priv && !String(s.pagrindimas || "").trim() ? '<p class="tk-truksta" id="' + id + '-t">Įrašykite, kodėl nukrypimas priimtas - be pagrindimo sprendimas nebaigtas.</p>' : "") + "</div>";
+           (priv && !String(s.pagrindimas || "").trim() ? '<p class="tk-truksta" id="' + id + '-t">' + (r.lygis === "rekomendacija" ? "Įrašykite, kodėl reikalavimas pagrįstas" : "Įrašykite, kodėl nukrypimas priimtas") + " - be pagrindimo sprendimas nebaigtas.</p>" : "") + "</div>";
     }
     var A = B.ankstesne, as = A && A.sprendimai && A.sprendimai[r.raktas];
     if (as && !s) {
@@ -371,8 +375,8 @@
     B.radiniai.forEach(function (r) { if (sk[r.lygis] != null) sk[r.lygis]++; });
     var pt = visosPatikros(), gerai = pt.filter(function (p) { return p.busena === "gerai"; }).length, nep = pt.filter(function (p) { return p.busena === "nepatikrinta"; }).length;
     var h = "";
-    ["kliutis", "nukrypimas", "tikrinti", "info"].forEach(function (l) { h += '<li class="tk-s tk-s--' + l + '">' + LYG_DGS[l] + " <b>" + sk[l] + "</b></li>"; });
-    if (sk.rekomendacija) h += '<li class="tk-s tk-s--rekomendacija">' + LYG_DGS.rekomendacija + " <b>" + sk.rekomendacija + "</b></li>";
+    // Rekomendacijos (kvalifikacijos proporcingumas) - TVARKA eilėje, rodomos tik esant
+    TVARKA.forEach(function (l) { if (l !== "rekomendacija" || sk[l]) h += '<li class="tk-s tk-s--' + l + '">' + LYG_DGS[l] + " <b>" + sk[l] + "</b></li>"; });
     h += '<li class="tk-s tk-s--gerai">Patikrinta <b>' + gerai + "</b> iš " + pt.length + "</li>";
     if (nep) h += '<li class="tk-s tk-s--nepatikrinta">Nepatikrinta <b>' + nep + "</b></li>";
     var spr = B.radiniai.filter(function (r) { return r.lygis !== "info"; }), isp = spr.filter(function (r) { return sprendimoBusena(r) === "ispresta"; }).length,
