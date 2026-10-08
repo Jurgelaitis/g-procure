@@ -136,6 +136,10 @@
   .sb-ranka{margin-top:4px;padding:10px 12px;background:var(--color-graphite-5);border-radius:8px}
   .sb-ranka-l{display:block;font-size:13px;font-weight:600;color:var(--color-graphite);margin-bottom:4px}
   .sb-ranka select{width:100%}
+  .lk-sutartis{margin-top:26px;padding-top:4px;border-top:2px solid var(--color-graphite-15)}
+  .lk-sutartis h3{margin:12px 0 4px;font-size:18px;color:var(--color-graphite)}
+  .lk-sutartis-g{margin:18px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.3px;color:var(--color-graphite-50-strong)}
+  .lk-sutartis-pastaba{margin-top:14px}
   .sb-steb{margin-top:2px;font-size:12.5px;color:var(--color-graphite-50-strong)}
   .sb-steb summary{cursor:pointer;font-weight:600;color:var(--color-graphite-50-strong)}
   .sb-steb-t{margin-top:4px;overflow-wrap:anywhere}
@@ -604,6 +608,8 @@
 
     <div id="mapWarn" class="warnbar hid"></div>
     <div id="klausimai"></div>
+    <!-- Sutarties projekto klausimai (sutarčių planas S4, 2026-10-08; sutarties-forma.js) -->
+    <div id="sutartiesForma"></div>
     <!-- Santrauka prieš generavimą: privalomi sprendimai, neužpildyti laukai, nepatvirtintos siūlomos, pašalinamos nuorodos -->
     <div id="lkSantrauka" class="lk-santrauka" role="region" aria-label="Santrauka prieš generuojant"></div>
     <!-- Rinkos apžvalgos veiksmai šiam pirkimui - iš pirkimo kortelės lauko „veiksmai“ (įrašo PP-market-KPI; čia tik rodoma) -->
@@ -704,6 +710,8 @@
 <script src="variklis.js"></script>
 <script src="sutartys.js"></script>   <!-- sutarties projekto parinkimas (sutarčių planas S2, 2026-10-08) -->
 <script src="sutarties-blokas.js"></script>   <!-- blokas „Sutarties projektas“ 1 žingsnyje (S3, 2026-10-08) -->
+<script src="sutarciu-generatorius.js"></script>   <!-- sutarties projekto generavimas iš šablono ir žemėlapio (S4, 2026-10-08) -->
+<script src="sutarties-forma.js"></script>   <!-- sutarties klausimai 2 žingsnyje ir sprendimai generatoriui (S4, 2026-10-08) -->
 <script src="paraiska-extract.js"></script>
 <!-- AI atsakymu pasiulymai 2 zingsnyje (A5): dokumentu tekstas - bendras su PP-tiekejams -->
 <script src="../shared/dokumentai.js"></script>
@@ -3683,6 +3691,7 @@ function klausimynas(){
     tekstas:`Nepavyko įkelti priedų registro - priedų sąrašas nežinomas (${GP_BUSENA.klaidosTekstas(PRIEDU_KLAIDA)}).`,
     kartoti: async () => { await kraukPriedus(); if (!PRIEDU_KLAIDA) await kraukDokumentus(); klausimynas(); } });
   aiRodykSantrauka();
+  if (window.SUTARTIES_FORMA) window.SUTARTIES_FORMA.atnaujink();   // SPS atsakymai (užtikrinimas, kriterijus) - sutarties siūlymams
   window.scrollTo(0, y);
   if (fokusas){ const f = document.getElementById(fokusas); if (f) f.focus({ preventScroll: true }); }
 }
@@ -4372,6 +4381,11 @@ async function generuoti(){
                statinis: true, pletinys, forma: true, stats: {},
                audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } });
   }
+  // Sutarties projektas (S4, 2026-10-08): nepavykus - eilutė su priežastimi, SPS paketas nesikeičia
+  try { rez.push(...await sutartiesDokumentai()); }
+  catch (e) { rez.push({ d: { trumpas: 'SUTARTIS', pavadinimas: 'Sutarties projektas', dokumentas: 'Sutarties projektas' }, blob: null,
+                         sutartis: { klaidos: ['generuoti nepavyko: ' + ((e && e.message) || e)] }, stats: {},
+                         audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } }); }
   return rez;
 }
 
@@ -4413,6 +4427,11 @@ function rodykRezultata(rez){
   let h = `<div class="hint">Dokumentai sugeneruoti iš LITGRID šablonų - sąlygų teksto AI nerašė. AI galėjo tik pasiūlyti
     atsakymus ar angliško pavadinimo vertimą, kuriuos patvirtinote jūs.</div>${aiStr}${metStr}${rezStr}<table class="rez">`;
   rez.forEach((r, ri) => {
+    if (!r.blob){   // sutarties projektas nesugeneruotas - priežastis vietoje atsisiuntimo
+      h += `<tr><td><b>${esc(r.d.pavadinimas)}</b><div class="cite">${esc(((r.sutartis && r.sutartis.klaidos) || []).join(' · '))}</div></td>
+        <td><span style="color:var(--color-error-strong);font-weight:600">nesugeneruota</span></td><td></td></tr>`;
+      return;
+    }
     const url = URL.createObjectURL(r.blob);
     const a = r.audit;
     // Trys busenos. "svaru" NEreiskia "parengta skelbti" - tik kad automatine
@@ -4440,6 +4459,7 @@ function rodykRezultata(rez){
     ].filter(Boolean).join(' &middot; ');
     h += `<tr><td><b>${esc(r.d.pavadinimas)}</b>
         <div class="cite">${r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
+          : r.sutartis ? (r.sutartis.pakeista.length ? `pasirinkta ir įrašyta ${r.sutartis.pakeista.length} vietų &middot; pašalinta pastraipų ${r.sutartis.pasalinta.length} &middot; pildoma sudarant ${r.sutartis.palikta.filter(p => p.kodel === 'sudarant').length}` : 'be pakeitimų (bendrosios sąlygos)')
           : r.forma
           ? `tiekėjo pildomos vietos paliktos (${(a.tiekejo||[]).length}) &middot; ištrinta ${r.stats.trinta} &middot; užpildyta ${r.stats.pildyta}`
           : `ištrinta ${r.stats.trinta} &middot; juodinta ${r.stats.juodinta} &middot; užpildyta ${r.stats.pildyta} &middot; nurodymų pašalinta ${r.stats.intTrinta}`}${sukurta ? ' &middot; ' + sukurta : ''}${
@@ -4451,7 +4471,7 @@ function rodykRezultata(rez){
 
   h += `<h3 id="baigtumas">Baigtumo patikra</h3>`;
   const blogi = rez.filter(r => !r.audit.svarus);
-  const X = rez.flatMap(r => (r.audit.patikrinti||[]).map(x => ({...x, d:r.d.trumpas})));
+  const X = rez.filter(r => !r.sutartis).flatMap(r => (r.audit.patikrinti||[]).map(x => ({...x, d:r.d.trumpas})));   // sutarties vietos - atskirai žemiau
   if (!blogi.length){
     h += `<div class="audit ok"><b>Automatinė patikra: raudonų vietų, tuščių laukų ir komentarų neliko.</b>
       ${X.length ? ' Tačiau žemiau yra vietų, kurias reikia peržiūrėti (žr. „Papildomai patikrinkite“).' : ''}
@@ -4475,14 +4495,24 @@ function rodykRezultata(rez){
       liko „X" vietoj skaičiaus arba neužpildytas vietos rezervas:
       <div class="lst">${X.map(x=>`<div><span class="n">${esc(x.d)}</span>${ilgasTekstas(x.text, 220)}</div>`).join('')}</div></div>`;
   }
-  /* Sutarties projektas (S3, 2026-10-08): parinkimas rodomas, į paketą dar neįtraukiamas (generavimas - S4) */
+  /* Sutarties projektas (S3 parinkimas, S4 generavimas, 2026-10-08): kas pasirinkta, ar įtraukta į paketą, kas palikta sudarant ar Word */
   const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
   if (SB && SB.rodoma && !SB.laukia){
-    h += `<div class="audit" id="sutartiesPatikra" style="margin-top:10px;border:1px solid var(--color-graphite-15)"><b>Sutarties projektas (bandomoji):</b> `
+    const sutRez = rez.filter(r => r.sutartis), sug = sutRez.filter(r => r.blob), nesug = sutRez.filter(r => !r.blob);
+    const palikta = sug.flatMap(r => r.sutartis.palikta);
+    const grupe = kodel => [...new Set(palikta.filter(p => p.kodel === kodel).map(p => (p.vieta ? p.vieta + ' p. ' : '') + (p.rusis === 'laukas' ? '' : '') + String(p.aprasas || '').slice(0, 90)))];
+    h += `<div class="audit ${nesug.length ? 'no' : sug.length ? 'ok' : ''}" id="sutartiesPatikra" style="margin-top:10px;border:1px solid var(--color-graphite-15)"><b>Sutarties projektas (bandomoji):</b> `
       + (SB.pasirinkta ? `${esc(SB.pavadinimas)} - ${SB.patvirtinta ? 'patvirtinta' : 'siūloma (nepatvirtinta)'}`
           + (SB.zmogaus ? `; sistema siūlė: ${esc(SB.sistema.busena === 'klausimas' ? 'neatsakytas klausimas' : SB.sistema.busena === 'nerengiama' ? 'projekto nerengti' : SB.sistema.pavadinimas)}` : '')
         : 'nepasirinkta - 1 žingsnyje liko neatsakytas klausimas')
-      + '. Į dokumentų paketą sutarties projektas dar neįtraukiamas - jo generatorius rengiamas.</div>';
+      + (sug.length ? `. Į paketą įtrauktos bendrosios ir specialiosios sąlygos - šablono tekstas nekeistas, keistos tik pažymėtos vietos (patikrinta po generavimo).`
+           + (grupe('word').length ? `<div><b>Sutvarkykite Word programoje:</b> ${grupe('word').map(esc).join('; ')}.</div>` : '')
+           + (grupe('neatsakyta').length ? `<div><b>Liko neužpildyta (neprivaloma):</b> ${grupe('neatsakyta').map(esc).join('; ')}.</div>` : '')
+           + `<div class="cite">Pildoma sudarant sutartį: ${grupe('sudarant').length} vietos (tiekėjo duomenys, sumos, subtiekėjai, parašai) - jos paliktos šablono forma.</div>`
+         : nesug.length ? `. Sutarties projektas nesugeneruotas: ${esc(nesug.flatMap(r => r.sutartis.klaidos || []).join('; '))}.`
+         : !SB.sablonai ? '. Į paketą neįtraukiamas - šiai sutarčiai šablonas generatoriui dar neparuoštas arba projektas nerengiamas.'
+         : !SB.patvirtinta ? '. Į paketą neįtraukiamas - sutartis 1 žingsnyje nepatvirtinta.' : '.')
+      + '</div>';
   }
   /* Formos atsakymai (2026-10-04): kas patvirtinta, kas liko siūloma (į dokumentą pateko siūloma reikšmė), kurios
      neprivalomos nuorodos pašalintos - viskas, ko žmogus nepatvirtino, išvardijama. */
@@ -4590,7 +4620,7 @@ function rodykRezultata(rez){
     const a = e.target.closest('a[download]');
     if (!a) return;
     atsisiusti.add(a.getAttribute('download'));
-    if (atsisiusti.size >= rez.length) GP_DARBAS.atskaita(darboMomentas);
+    if (atsisiusti.size >= rez.filter(r => r.blob).length) GP_DARBAS.atskaita(darboMomentas);
   };
 
   /* Q3: ZIP su būsena - anksčiau be jokios eigos ir be klaidos (nepavykus nieko neįvykdavo),
@@ -4603,13 +4633,13 @@ function rodykRezultata(rez){
     if (mygt.disabled) return;
     mygt.disabled = true;
     const r = await GP_BUSENA.vykdyk('#zipBusena', {
-      tipas: 'eiga', tekstas: 'Ruošiamas ZIP archyvas (' + rez.length + ' dok.)...',
+      tipas: 'eiga', tekstas: 'Ruošiamas ZIP archyvas (' + rez.filter(r => r.blob).length + ' dok.)...',
       klaidosPriesdelis: 'ZIP archyvo paruošti nepavyko',
       kartoti: ruoskZip,
       sekme: 'ZIP archyvas atsisiųstas: ' + zipVardas,
       veiksmas: async () => {
         const zip = new JSZip();
-        for (const [ri, r] of rez.entries()) zip.file(vardai[ri], await r.blob.arrayBuffer(), { createFolders:false });
+        for (const [ri, r] of rez.entries()) if (r.blob) zip.file(vardai[ri], await r.blob.arrayBuffer(), { createFolders:false });
         const b = await zip.generateAsync({ type:'blob' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(b);
@@ -5448,6 +5478,7 @@ const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
    taisyklėms tikslinti (naudotojo sprendimas 2026-10-08); tai vienintelis šio modulio darbo įrašas saugykloje. */
 window.SUTARTIES_BLOKAS = window.GP_SUTARTIES_BLOKAS ? GP_SUTARTIES_BLOKAS.mount({
   vieta: '#sutartisQ',
+  onKeista: () => { if (window.SUTARTIES_FORMA) window.SUTARTIES_FORMA.atnaujink(); },
   duomenys: () => ({
     pavadinimas: pavClean(($('#pavadinimas').value || '').trim()),
     objektas: (document.querySelector('input[name=tipas]:checked') || {}).value || '',
@@ -5458,6 +5489,63 @@ window.SUTARTIES_BLOKAS = window.GP_SUTARTIES_BLOKAS ? GP_SUTARTIES_BLOKAS.mount
     budas: $('#budas').value
   })
 }) : null;
+
+/* Sutarties projekto klausimai 2 žingsnyje (S4, 2026-10-08): kontekstas - 1 žingsnis, pirkimo kortelė ir SPS atsakymai (užtikrinimas,
+   vertinimo kriterijus), kad sutartis neklaustų antrą kartą. Užtikrinimo procentus siūlo iš SPS sumos ir numatomos vertės
+   (naudotojo sprendimas 2026-10-08); numatoma vertė į sutartį nepatenka - tik procentai. */
+function sutartiesUztikrinimas(){
+  const K = window.__K || {};
+  const sal = Object.keys(ATS).find(k => /^jeigu taikomas sutarties ivykdymo uztikrinimas/.test(k));
+  let eur = null;
+  for (const [r, q] of Object.entries(K.tuscios || {})){
+    const k = q.lk ? q.lk.vietos.findIndex(v => v.xRusis === 'suma' && /užtikrinim/i.test(v.uzrasas || '')) : -1;
+    if (k >= 0){ const v = (ATS['B_' + r] || [])[k]; if (v) eur = GP_MONEY.parseEUR(v) || null; break; }
+  }
+  const taikomas = sal ? (ATS[sal] === true ? true : ATS[sal] === false ? false : null) : (eur > 0 ? true : null);
+  return { taikomas, eur };
+}
+function sutartiesKriterijus(){ const k = window.__K ? kriterijus(window.__K) : null; return k ? (GP_LAUKAI.UZT_PAGAL_KRITERIJU[k] || null) : null; }
+function sutartiesKontekstas(){
+  const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
+  if (!SB || !SB.rodoma || SB.laukia || !SB.pasirinkta) return null;
+  if (!SB.sablonai) return SB.pasirinkta.nerengiama ? null : { priezastis: `Sutarties projektas „${SB.pavadinimas}“ negeneruojamas - jo šablonas generatoriui dar neparuoštas.` };
+  if (!SB.patvirtinta) return { priezastis: `Sutarties projekto klausimai atsiras, kai 1 žingsnyje patvirtinsite sutartį („${SB.pavadinimas}“).` };
+  const k = (KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {};
+  return { seima: SB.pasirinkta.seima, kalba: SB.kalba, sablonai: SB.sablonai, pavadinimasSutarties: SB.pavadinimas,
+           pavadinimas: pavClean(($('#pavadinimas').value || '').trim()), pavadinimasEN: (($('#pavadinimasEN') || {}).value || '').trim(),
+           numeris: k.numeris || '', trukmeMen: k.trukmeMen || null, verte: verteEUR() || null,
+           uztikrinimas: sutartiesUztikrinimas(), kriterijus: sutartiesKriterijus(), nacsaug: nacsaugTaip() };
+}
+window.SUTARTIES_FORMA = window.GP_SUTARTIES_FORMA ? GP_SUTARTIES_FORMA.mount({ vieta: '#sutartiesForma', kontekstas: sutartiesKontekstas }) : null;
+
+/* Sutarties projekto dokumentai 3 žingsnyje (S4): BS be pakeitimų, SS - pagal 2 žingsnio sutarties atsakymus. Tik patvirtintai sutarčiai
+   (nepatvirtinta - į paketą neįtraukiama, priežastis - patikros eilutėje); neatsakius privalomų klausimų ar nepavykus - eilutė be failo su
+   priežastimi (SPS paketas nuo to nesikeičia). */
+async function sutartiesDokumentai(){
+  const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
+  if (!SB || !SB.rodoma || SB.laukia || !SB.pasirinkta || !SB.sablonai || !window.GP_SUTARCIU_GEN) return [];
+  const pav = SB.pavadinimas + (SB.kalba === 'LTEN' ? ' (LT/EN)' : '');
+  const be = (priezastys) => [{ d: { trumpas: 'SUTARTIS', pavadinimas: pav, dokumentas: 'Sutarties projektas' }, blob: null, sutartis: { klaidos: priezastys },
+    audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 }, stats: {} }];
+  if (!SB.patvirtinta) return [];
+  if (window.SUTARTIES_FORMA) await window.SUTARTIES_FORMA.atnaujink();
+  const F = window.SUTARTIES_FORMA ? window.SUTARTIES_FORMA.busena() : { paruosta: false, priezastis: 'sutarties klausimų modulis neįkeltas' };
+  if (!F.paruosta) return be([F.priezastis]);
+  if (F.truksta.length) return be(['neatsakyti sutarties klausimai 2 žingsnyje: ' + F.truksta.join('; ')]);
+  const reg = await gaukJson('zemelapiai/sutarciu-versijos.json');
+  const out = [];
+  for (const tip of ['BS', 'SS']){
+    const kod = SB.sablonai[tip], R = reg.sablonai[kod];
+    const r = await GP_SUTARCIU_GEN.generuok(await gaukBuf('templates/sutartys/' + kod + '.docx'), await gaukJson('zemelapiai/sutartys/' + kod + '.json'),
+      tip === 'SS' ? F.S : {}, { sablonas: kod, forma: R ? R.dabartine : '', data: GP_EKSPORTAS.siandien() });
+    const A = r.ataskaita, kita = A.palikta.filter(p => p.kodel !== 'sudarant');
+    out.push({ d: { trumpas: kod, pavadinimas: (R ? R.pavadinimas : kod) + (SB.kalba === 'LTEN' ? ' (LT/EN)' : ''), dokumentas: tip === 'BS' ? 'Sutarties BS' : 'Sutarties SS' },
+      blob: r.blob, sutartis: A, stats: {}, forma: false,
+      audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0,
+               patikrinti: kita.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` })) } });
+  }
+  return out;
+}
 
 /* Modulis nieko nesaugo: uzdarant su neatsisiustais atsakymais narsykle paklausia.
    Stebimi tik naudotojo ivykiai - automatines numatytosios (dflt) klausimo nesukelia.
@@ -5488,7 +5576,7 @@ GP_DARBAS.stebek(() => [AI.priimta, GP_TIKRINIMAS.darbas()]);
     purpose: "Pirkimo sąlygų (BPS, SPS ir formų) paketas iš LITGRID šablonų: jūs atsakote į klausimus, algoritmas sutvarko dokumentus.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Kontroliniai klausimai:</b> pirkimo būdas, pavadinimas, vertė, kalba. Galite įkelti DocLogix pirkimo paraiškos kortelę - AI pasiūlys laukų reikšmes, jas patvirtinate jūs. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs; sutarties dokumentų modulis dar nekuria.",
+      "<b>Kontroliniai klausimai:</b> pirkimo būdas, pavadinimas, vertė, kalba. Galite įkelti DocLogix pirkimo paraiškos kortelę - AI pasiūlys laukų reikšmes, jas patvirtinate jūs. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Patvirtinus prekių ar paslaugų sutartį, 2 žingsnyje atsiranda sutarties klausimai, o 3 žingsnyje - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato. Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu.",
       "<b>Prieš skelbdami</b> kiekvieną dokumentą peržiūrėkite Word programoje - automatinė patikra nėra leidimas skelbti.",
