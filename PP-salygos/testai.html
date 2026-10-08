@@ -3094,6 +3094,212 @@ async function testaiNumeracija(){
   });
 }
 
+/* ---- Sutarčių šablonai (sutarčių planas S1, 2026-10-08): paruošti PP-salygos/sutarciu-sablonai.py ---- */
+const SUTARTYS = ["PREKES_LT_BS", "PREKES_LT_SS", "PREKES_LTEN_BS", "PREKES_LTEN_SS",
+                  "PASLAUGOS_LT_BS", "PASLAUGOS_LT_SS", "PASLAUGOS_LTEN_BS", "PASLAUGOS_LTEN_SS"];
+const wel = (n, v) => Array.from(n.getElementsByTagNameNS(NSW, v));
+const wattr = (n, a) => n.getAttributeNS(NSW, a) || n.getAttribute("w:" + a);
+const xmlDekod = s => s.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+async function sutartis(kodas, buf){
+  buf = buf || await (await W.fetch("templates/sutartys/" + kodas + ".docx")).arrayBuffer();
+  const z = await W.JSZip.loadAsync(buf), xml = await z.file("word/document.xml").async("string");
+  return { kodas, buf, z, xml, doc: new W.DOMParser().parseFromString(xml, "application/xml") };
+}
+async function sha256(buf){
+  const h = await W.crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+/* Pastraipos tekstas (tik w:t, kaip sutarciu-sablonai.py); beValdikliu - be pastraipos viduje esančių valdiklių turinio. */
+function ptekstas(p, beValdikliu){
+  let s = "";
+  for (const t of wel(p, "t")) {
+    if (beValdikliu) { let q = t.parentNode, viduje = false; while (q && q !== p) { if (q.localName === "sdt") { viduje = true; break; } q = q.parentNode; } if (viduje) continue; }
+    s += t.textContent;
+  }
+  return s.replace(/\s+/g, " ").trim();
+}
+function langeliai(tr){
+  const out = [];
+  for (const c of Array.from(tr.childNodes)) {
+    if (c.namespaceURI !== NSW) continue;
+    if (c.localName === "tc") out.push(c);
+    else if (c.localName === "sdt") { const tc = wel(c, "tc")[0]; if (tc) out.push(tc); }   // valdiklis, apgaubiantis langelį
+  }
+  return out;
+}
+const visosNetuscios = doc => wel(doc, "p").map(p => ptekstas(p)).filter(Boolean).sort();
+function ltStulpelis(doc){
+  const body = wel(doc, "body")[0], out = [];
+  for (const p of wel(body, "p")) { let q = p.parentNode, lent = false; while (q && q !== body) { if (q.localName === "tbl") { lent = true; break; } q = q.parentNode; } if (!lent) { const t = ptekstas(p); if (t) out.push(t); } }
+  for (const tr of wel(body, "tr")) { const c = langeliai(tr); if (c.length === 2) for (const p of wel(c[0], "p")) { const t = ptekstas(p); if (t) out.push(t); } }
+  return out.sort();
+}
+/* 4 žingsnis: LT/EN lietuviškas stulpelis = LT rinkinys (visos netuščios pastraipos). */
+function paritetoKlaidos(ltDoc, ltenDoc){
+  const a = visosNetuscios(ltDoc), b = ltStulpelis(ltenDoc);
+  if (JSON.stringify(a) === JSON.stringify(b)) return [];
+  const m = new Map();
+  a.forEach(x => m.set(x, (m.get(x) || 0) + 1)); b.forEach(x => m.set(x, (m.get(x) || 0) - 1));
+  return [...m].filter(([, v]) => v).slice(0, 5).map(([k, v]) => (v > 0 ? "LT/EN trūksta: " : "LT/EN perteklius: ") + k.slice(0, 80));
+}
+function enKlaidos(ltenDoc){
+  const kl = [];
+  for (const tr of wel(ltenDoc, "tr")) {
+    const c = langeliai(tr); if (c.length !== 2) continue;
+    const lt = wel(c[0], "p").map(p => ptekstas(p)).join(" ").trim(), en = wel(c[1], "p").map(p => ptekstas(p)).join(" ").trim();
+    const elementai = wel(c[1], "listItem").map(li => wattr(li, "displayText") || "").join(" | ");
+    if (lt && !en) kl.push("EN tuščias: " + lt.slice(0, 50));
+    if (/[ąčęėįšųūžĄČĘĖĮŠŲŪŽ]/.test((en + " " + elementai).replace(/ĮMONĖS PAVADINIMAS/g, ""))) kl.push("EN su lietuviškomis raidėmis: " + (en + " " + elementai).slice(0, 70));
+    if (/Pasirinkite/i.test(en + elementai)) kl.push("EN su „Pasirinkite“: " + en.slice(0, 60));
+  }
+  return kl;
+}
+function a4Klaidos(doc){
+  const kl = [];
+  for (const sp of wel(doc, "sectPr")) {
+    const pg = wel(sp, "pgSz")[0], m = wel(sp, "pgMar")[0];
+    if (wattr(pg, "w") !== "11906" || wattr(pg, "h") !== "16838") kl.push("ne A4: " + wattr(pg, "w") + " x " + wattr(pg, "h"));
+    const plotis = 11906 - Number(wattr(m, "left")) - Number(wattr(m, "right"));
+    for (const tbl of wel(doc, "tbl")) {
+      const g = wel(tbl, "gridCol").reduce((a, x) => a + Number(wattr(x, "w")), 0);
+      if (g > plotis) kl.push("lentelė " + g + " > teksto plotis " + plotis);
+    }
+  }
+  return kl;
+}
+async function komentaruKlaidos(s){
+  const kl = [];
+  if (s.z.file(/^word\/comments/).length) kl.push("yra komentarų dalis");
+  if (/commentReference|commentRange/.test(s.xml)) kl.push("dokumente - komentarų žymės");
+  for (const f of s.z.file(/\.xml$/)) { const t = await f.async("string"); if (/iždo ir finansinių rizikų|803 tūkst/.test(t)) kl.push("vidinė grupės taisyklė faile " + f.name); }
+  return kl;
+}
+function valdikliuKlaidos(xml, Z){
+  const kl = [], sdt = xml.match(/<w:sdt>(?:(?!<w:sdt>)[\s\S])*?<\/w:sdt>/g) || [];
+  if (sdt.length !== Z.valdikliai.length) kl.push("valdiklių šablone " + sdt.length + ", žemėlapyje " + Z.valdikliai.length);
+  sdt.forEach((s, i) => {
+    const v = Z.valdikliai[i]; if (!v) return;
+    const el = [...s.replace(/<w:sdtContent>[\s\S]*/, "").matchAll(/<w:listItem w:displayText="([^"]*)" w:value="([^"]*)"\s*\/>/g)].map(m => xmlDekod(m[1]));
+    if (JSON.stringify(el) !== JSON.stringify(v.elementai.map(e => e.tekstas))) kl.push("valdiklio " + i + " (" + v.vieta + ") elementai skiriasi");
+    if (/dropDownList|comboBox/.test(s) && !/<w:showingPlcHdr\/>/.test(s)) kl.push("valdiklis " + i + " (" + v.vieta + ") pasirinktas - šablonas sprendimų neneša");
+  });
+  return kl;
+}
+/* Kiekviena pastraipa su spalvotu ar pažymėtu tekstu (ne valdiklyje) turi būti žemėlapio kategorijoje. */
+function spalvuKlaidos(doc, Z){
+  const ref = new Set();
+  ["pildomos", "nurodymai", "trynimo_nurodymai", "salygos", "laukai", "organizacija", "taikymo_salygos", "linijos", "paryskinimai",
+   "pritaikomos_nuostatos", "keiciamos_reiksmes", "di_juodrasciai"].forEach(k => (Z[k] || []).forEach(x => ref.add(x.i)));
+  (Z.alternatyvos || []).forEach(a => { a.skyrikliai.forEach(i => ref.add(i)); a.variantai.forEach(v => v.forEach(i => ref.add(i))); });
+  const kl = [];
+  wel(doc, "p").forEach((p, i) => {
+    let q = p.parentNode; while (q && q.localName !== "body") { if (q.localName === "sdt") return; q = q.parentNode; }
+    const spalvota = wel(p, "r").some(r => {
+      let a = r.parentNode; while (a && a !== p) { if (a.localName === "sdt") return false; a = a.parentNode; }
+      const t = wel(r, "t").map(x => x.textContent).join(""); if (!t.trim()) return false;
+      const c = wel(r, "color")[0], h = wel(r, "highlight")[0];
+      return (c && !/^(000000|auto)$/i.test(wattr(c, "val"))) || !!h;
+    });
+    if (spalvota && !ref.has(i)) kl.push("pastraipa " + i + " su spalvotu ar pažymėtu tekstu neatpažinta: " + ptekstas(p).slice(0, 60));
+  });
+  return kl;
+}
+async function testaiSutartys(){
+  dabartine = grupe("Sutarčių šablonai (sutarčių planas S1, 2026-10-08): registras, A4, žemėlapiai, LT/EN = LT");
+  const reg = await (await W.fetch("zemelapiai/sutarciu-versijos.json")).json();
+  const S = {}, Z = {};
+  for (const k of SUTARTYS) { S[k] = await sutartis(k); Z[k] = await (await W.fetch("zemelapiai/sutartys/" + k + ".json")).json(); }
+  await testas("Registras: 8 šablonai; failo sha256, teksto maiša (GP_PALYGINIMAS - kaip formu-versijos) ir žemėlapis sutampa su registru", async () => {
+    lygu(Object.keys(reg.sablonai).sort(), [...SUTARTYS].sort(), "registro šablonai");
+    for (const k of SUTARTYS) {
+      const r = reg.sablonai[k];
+      lygu(await sha256(S[k].buf), r.sha256, k + " sha256");
+      lygu(W.GP_PALYGINIMAS.formosMaisa(W.GP_PALYGINIMAS.pastraipos(S[k].xml)), r.dabartine, k + " teksto maiša");
+      lygu(Z[k].sha256, r.sha256, k + " žemėlapis paruoštas iš kito failo");
+      tiesa(r.saltinis && /^[0-9a-f]{64}$/.test(r.saltinis.sha256), k + ": nėra šaltinio maišos (sena kopija neatpažintų)");
+    }
+  });
+  await testas("A4 (naudotojo sprendimas 2026-10-08) ir lentelės telpa į teksto plotį", () => {
+    const kl = SUTARTYS.flatMap(k => a4Klaidos(S[k].doc).map(x => k + ": " + x));
+    tiesa(!kl.length, kl.join("\n"));
+  });
+  await testas("Komentarų (vidinių grupės taisyklių) nėra nė viename faile", async () => {
+    const kl = [];
+    for (const k of SUTARTYS) (await komentaruKlaidos(S[k])).forEach(x => kl.push(k + ": " + x));
+    tiesa(!kl.length, kl.join("\n"));
+  });
+  await testas("Žemėlapis atitinka šabloną: pastraipos, valdikliai su elementais, visi valdikliai nepasirinkti", () => {
+    const kl = [];
+    for (const k of SUTARTYS) {
+      const ps = wel(S[k].doc, "p").map(p => ptekstas(p, true));
+      if (JSON.stringify(ps) !== JSON.stringify(Z[k].pastraipos)) kl.push(k + ": pastraipos skiriasi nuo žemėlapio");
+      valdikliuKlaidos(S[k].xml, Z[k]).forEach(x => kl.push(k + ": " + x));
+    }
+    tiesa(!kl.length, kl.join("\n"));
+  });
+  await testas("Žemėlapis be neatpažintų vietų; kiekviena spalvota ar pažymėta pastraipa - žemėlapio kategorijoje", () => {
+    const kl = [];
+    for (const k of SUTARTYS) {
+      (Z[k].neatpazinta || []).forEach(x => kl.push(k + ": neatpažinta " + x.vieta + " " + x.tekstas));
+      spalvuKlaidos(S[k].doc, Z[k]).forEach(x => kl.push(k + ": " + x));
+    }
+    tiesa(!kl.length, kl.join("\n"));
+  });
+  await testas("SS valdiklių atsakymai pagal plano 3.4 lentelę: prekėse 12 iš duomenų, 4 standartai, 5 klausimai; LT/EN - poros", () => {
+    const sal = Z.PREKES_LT_SS.valdikliai.map(v => v.atsakymas.saltinis.split(":")[0]);
+    lygu([sal.filter(x => x === "klausimas").length, sal.filter(x => x === "standartas").length, sal.filter(x => !/^(klausimas|standartas)$/.test(x)).length],
+         [5, 4, 12], "prekių SS atsakymų šaltiniai");
+    for (const k of ["PREKES_LT_SS", "PASLAUGOS_LT_SS"]) tiesa(Z[k].valdikliai.every(v => v.atsakymas && v.atsakymas.saltinis), k + ": valdiklis be atsakymo šaltinio");
+    for (const k of ["PREKES_LTEN_SS", "PASLAUGOS_LTEN_SS"]) {
+      const V = Z[k].valdikliai, lt = V.filter(v => v.stulpelis === "LT"), en = V.filter(v => v.stulpelis === "EN");
+      lygu(lt.length, Z[k.replace("LTEN", "LT")].valdikliai.length, k + " LT valdiklių");
+      lygu(en.length, lt.length, k + " EN valdiklių");
+      tiesa(V.every(v => V[v.pora] && V[v.pora].pora === v.nr), k + ": valdiklių poros ne abipusės");
+      lt.forEach((v, i) => lygu(v.elementai.map(e => e.tekstas), Z[k.replace("LTEN", "LT")].valdikliai[i].elementai.map(e => e.tekstas), k + " LT valdiklio " + i + " elementai"));
+    }
+  });
+  await testas("4 žingsnis: LT/EN lietuviškas stulpelis = LT rinkinys (BS ir SS, prekės ir paslaugos)", () => {
+    const kl = [];
+    for (const k of SUTARTYS.filter(x => /LTEN/.test(x))) paritetoKlaidos(S[k.replace("LTEN", "LT")].doc, S[k].doc).forEach(x => kl.push(k + ": " + x));
+    tiesa(!kl.length, kl.join("\n"));
+  });
+  await testas("LT/EN anglų stulpelis: kiekvienai LT eilutei - EN tekstas, be lietuviškų raidžių ir „Pasirinkite“ (ir valdiklių elementuose)", () => {
+    const kl = SUTARTYS.filter(x => /LTEN/.test(x)).flatMap(k => enKlaidos(S[k].doc).map(x => k + ": " + x));
+    tiesa(!kl.length, kl.join("\n").slice(0, 1200));
+  });
+  await testas("Mutacijos: kiekvieną pažeidimą pagauna atitinkama patikra", async () => {
+    const LT = S.PREKES_LT_SS, LE = S.PREKES_LTEN_SS, P = new W.DOMParser();
+    const doc = x => P.parseFromString(x, "application/xml");
+    const pagauta = [];
+    // 1. LT/EN lietuviškame stulpelyje pakeistas žodis
+    tiesa(LE.xml.includes(">1.1. Pirkėjas<") || /1\.1\. <\/w:t>[\s\S]{0,400}?Pirkėjas/.test(LE.xml) || LE.xml.includes("Pirkėjas"), "mutacijos vieta nerasta");
+    pagauta.push(paritetoKlaidos(LT.doc, doc(LE.xml.replace("Pirkėjas", "Pirkejas"))).length > 0);
+    // 2. EN langelyje liko lietuviška valdiklio vieta
+    pagauta.push(enKlaidos(doc(LE.xml.replace(">Choose an item.<", ">Pasirinkite elementą.<"))).length > 0);
+    // 3. puslapis US Letter
+    pagauta.push(a4Klaidos(doc(LT.xml.replace('<w:pgSz w:w="11906" w:h="16838"/>', '<w:pgSz w:w="12240" w:h="15840"/>'))).length > 0);
+    // 4. per plati lentelė
+    pagauta.push(a4Klaidos(doc(LT.xml.replace(/<w:gridCol w:w="(\d+)"\/>/, (m, w) => '<w:gridCol w:w="' + (Number(w) + 2000) + '"/>'))).length > 0);
+    // 5. grąžintas komentaras
+    const z2 = await W.JSZip.loadAsync(LT.buf); z2.file("word/comments.xml", "<w:comments><w:comment><w:p><w:r><w:t>iždo ir finansinių rizikų politika</w:t></w:r></w:p></w:comment></w:comments>");
+    pagauta.push((await komentaruKlaidos({ z: z2, xml: LT.xml })).length > 0);
+    // 6. valdiklyje pašalintas elementas ir pasirinkta reikšmė
+    pagauta.push(valdikliuKlaidos(LT.xml.replace(/<w:listItem w:displayText="Punktas netaikomas\. " w:value="Punktas netaikomas\. "\/>/, ""), Z.PREKES_LT_SS).length > 0);
+    pagauta.push(valdikliuKlaidos(LT.xml.replace("<w:showingPlcHdr/>", ""), Z.PREKES_LT_SS).length > 0);
+    // 7. nauja spalvota vieta, kurios žemėlapis nežino (4.5 antraštė raudonai)
+    const i45 = Z.PREKES_LT_SS.pastraipos.findIndex(t => /^4\.5\. Kartu su Prekėmis/.test(t));
+    tiesa(i45 > 0, "4.5 antraštė nerasta");
+    const d7 = doc(LT.xml), r7 = wel(wel(d7, "p")[i45], "r").find(r => wel(r, "t").length);
+    const rpr = wel(r7, "rPr")[0] || r7.insertBefore(d7.createElementNS(NSW, "w:rPr"), r7.firstChild);
+    const col = d7.createElementNS(NSW, "w:color"); col.setAttributeNS(NSW, "w:val", "FF0000"); rpr.appendChild(col);
+    pagauta.push(spalvuKlaidos(d7, Z.PREKES_LT_SS).length > 0);
+    // 8. pakeistas failas - kita maiša
+    const b = new Uint8Array(LT.buf.slice(0)); b[b.length - 30] ^= 1;
+    pagauta.push(await sha256(b.buffer) !== reg.sablonai.PREKES_LT_SS.sha256);
+    lygu(pagauta, pagauta.map(() => true), "pagautos mutacijos (eilės tvarka 1-9)");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -3114,6 +3320,7 @@ async function testaiNumeracija(){
     await testaiLenteles();
     await testaiTeise();
     await testaiTikrinimas();
+    await testaiSutartys();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
