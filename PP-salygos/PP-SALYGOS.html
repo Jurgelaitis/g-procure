@@ -4509,6 +4509,7 @@ function rodykRezultata(rez){
            + (grupe('word').length ? `<div><b>Sutvarkykite Word programoje:</b> ${grupe('word').map(esc).join('; ')}.</div>` : '')
            + (grupe('neatsakyta').length ? `<div><b>Liko neužpildyta (neprivaloma):</b> ${grupe('neatsakyta').map(esc).join('; ')}.</div>` : '')
            + `<div class="cite">Pildoma sudarant sutartį: ${grupe('sudarant').length} vietos (tiekėjo duomenys, sumos, subtiekėjai, parašai) - jos paliktos šablono forma.</div>`
+           + (SB.kalba === 'LTEN' ? `<div class="cite" id="sutartiesEn">Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI (Claude) pagal VPT vertimų ir ES pirkimų terminiją, bendrosiose - VPT neoficialus vertimas su suvienodintais terminais; vertėjas netikrino. DI požymis įrašytas Word failų savybėse.</div>` : '')
          : nesug.length ? `. Sutarties projektas nesugeneruotas: ${esc(nesug.flatMap(r => r.sutartis.klaidos || []).join('; '))}.`
          : !SB.sablonai ? '. Į paketą neįtraukiamas - šiai sutarčiai šablonas generatoriui dar neparuoštas arba projektas nerengiamas.'
          : !SB.patvirtinta ? '. Į paketą neįtraukiamas - sutartis 1 žingsnyje nepatvirtinta.' : '.')
@@ -5521,6 +5522,17 @@ window.SUTARTIES_FORMA = window.GP_SUTARTIES_FORMA ? GP_SUTARTIES_FORMA.mount({ 
 /* Sutarties projekto dokumentai 3 žingsnyje (S4): BS be pakeitimų, SS - pagal 2 žingsnio sutarties atsakymus. Tik patvirtintai sutarčiai
    (nepatvirtinta - į paketą neįtraukiama, priežastis - patikros eilutėje); neatsakius privalomų klausimų ar nepavykus - eilutė be failo su
    priežastimi (SPS paketas nuo to nesikeičia). */
+/* LT/EN sutarties DI požymiai (2026-10-08, naudotojo sprendimas: anglų tekstas be geltono žymėjimo, vertėjas netikrins - požymis Word faile):
+   specialiųjų sąlygų anglų stulpelis suredaguotas naudojant DI pagal VPT vertimų ir ES pirkimų terminiją, bendrųjų - VPT neoficialus vertimas,
+   kurio terminai suvienodinti. Tai šablono rengimo metu, ne generuojant: pirkimo duomenys į DI nesiunčiami. */
+const SUTARTIES_EN = {
+  SS: 'Anglų kalbos tekstas parengtas naudojant DI (Claude) pagal VPT vertimų ir ES pirkimų terminiją; vertėjas netikrino',
+  BS: 'Anglų kalbos tekstas - VPT neoficialus vertimas, terminai suvienodinti naudojant DI (Claude); vertėjas netikrino'
+};
+function sutartiesDiSavybes(tip){
+  return GP_DI.savybes({ modulis: 'Pirkimo sąlygos - sutarties projektas', modelis: 'Claude (Anthropic), šablono rengimas 2026-10-08',
+    turinys: SUTARTIES_EN[tip], papildomai: [{ name: 'DI_kalba', value: 'EN' }] });
+}
 async function sutartiesDokumentai(){
   const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
   if (!SB || !SB.rodoma || SB.laukia || !SB.pasirinkta || !SB.sablonai || !window.GP_SUTARCIU_GEN) return [];
@@ -5537,7 +5549,7 @@ async function sutartiesDokumentai(){
   for (const tip of ['BS', 'SS']){
     const kod = SB.sablonai[tip], R = reg.sablonai[kod];
     const r = await GP_SUTARCIU_GEN.generuok(await gaukBuf('templates/sutartys/' + kod + '.docx'), await gaukJson('zemelapiai/sutartys/' + kod + '.json'),
-      tip === 'SS' ? F.S : {}, { sablonas: kod, forma: R ? R.dabartine : '', data: GP_EKSPORTAS.siandien() });
+      tip === 'SS' ? F.S : {}, { sablonas: kod, forma: R ? R.dabartine : '', data: GP_EKSPORTAS.siandien(), di: SB.kalba === 'LTEN' ? sutartiesDiSavybes(tip) : null });
     const A = r.ataskaita, kita = A.palikta.filter(p => p.kodel !== 'sudarant');
     out.push({ d: { trumpas: kod, pavadinimas: (R ? R.pavadinimas : kod) + (SB.kalba === 'LTEN' ? ' (LT/EN)' : ''), dokumentas: tip === 'BS' ? 'Sutarties BS' : 'Sutarties SS' },
       blob: r.blob, sutartis: A, stats: {}, forma: false,

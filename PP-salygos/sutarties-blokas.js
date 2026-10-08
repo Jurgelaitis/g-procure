@@ -217,6 +217,9 @@
           var n = z[0].di + z[1].di;
           if (n) h += '<div class="sb-isp">Anglų tekste yra nepatikrintų vertimo vietų: ' + n + " (bendrosiose sąlygose " + z[0].di + ", specialiosiose " + z[1].di +
             ") - tai DI vertimo juodraščiai, kuriuos turi patikrinti vertėjas.</div>";
+          // 2026-10-08 (naudotojo sprendimas): anglų tekstas suredaguotas, DI juodraščių nebeliko - sakoma, kaip jis parengtas
+          else h += '<div class="sb-dok" id="sbEn">Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI (Claude) pagal VPT vertimų ir ES pirkimų ' +
+            "terminiją, bendrosiose - VPT neoficialus vertimas su suvienodintais terminais; vertėjas netikrino. DI požymis įrašomas Word failų savybėse.</div>";
         } else if (z.some(function (x) { return x && x.busena === "klaida"; }))
           h += '<div class="sb-isp">Nepavyko patikrinti, ar anglų tekste liko nepatikrintų vertimo vietų (šablono žemėlapis neįkeltas).</div>';
       }

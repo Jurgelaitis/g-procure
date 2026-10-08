@@ -3483,15 +3483,15 @@ async function testaiSutartiesBlokas(){
     D.getElementById("sbGrazinti").click();
     lygu([b().zmogaus, b().patvirtinta, b().pasirinkta.seima], [false, false, "PREKES"], "grąžinus siūlomą");
   });
-  await testas("LT/EN: dvikalbės sutartys ir nepatikrintų vertimo vietų skaičius - iš šablonų žemėlapių (DI juodraščiai)", async () => {
+  await testas("LT/EN: dvikalbės sutartys; anglų tekstas be DI juodraščių (žemėlapiai), pasakoma, kaip jis parengtas", async () => {
     rad("kalba", "LT_EN"); SB().atnaujink();
     lygu([b().sablonai, b().kalba], [{ BS: "PREKES_LTEN_BS", SS: "PREKES_LTEN_SS" }, "LTEN"], "LT/EN šablonai");
     const n = async k => ((await (await W.fetch("zemelapiai/sutartys/" + k + ".json")).json()).di_juodrasciai || []).length;
-    const bs = await n("PREKES_LTEN_BS"), ss = await n("PREKES_LTEN_SS");
-    await kol(() => /Anglų tekste yra nepatikrintų vertimo vietų/.test(txt()), "DI juodraščių įspėjimas");
-    tiesa(txt().includes("vietų: " + (bs + ss) + " (bendrosiose sąlygose " + bs + ", specialiosiose " + ss + ")"), "skaičius ne iš žemėlapių: " + txt());
+    for (const k of ["PREKES_LTEN_BS", "PREKES_LTEN_SS", "PASLAUGOS_LTEN_BS", "PASLAUGOS_LTEN_SS"]) lygu(await n(k), 0, k + ": liko DI juodraščių (geltonai)");
+    await kol(() => /Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI \(Claude\)/.test(txt()), "anglų teksto pastaba");
+    tiesa(/vertėjas netikrino/.test(txt()) && !/nepatikrintų vertimo vietų/.test(txt()), "pastaba: " + txt());
     rad("kalba", "LT"); SB().atnaujink();
-    tiesa(!/Anglų tekste/.test(txt()), "LT sutarčiai - vertimo įspėjimas");
+    tiesa(!/Anglų (tekste|kalbos tekstas)/.test(txt()), "LT sutarčiai - anglų teksto pastaba");
   });
   await testas("Centralizuotas VPĮ pirkimas ir DPS sukūrimas: sutarties projektas nesiūlomas, priežastis pasakoma", () => {
     const v = G.parink({ pavadinimas: "Galios transformatorių", objektas: "prekes", rezimas: "VPI" });
@@ -3658,7 +3658,7 @@ async function testaiSutarciuGeneravimas(){
     tiesa(!ps.some(t => /^5\.3\.1\.2\.\d/.test(t)) && ps.some(t => /^5\.3\.1\.2\. Punktas ir 5\.3\.1\.2\.1/.test(t)), "5.3 netaikoma - papunkčiai liko");
     tiesa(ps.some(t => /^5\.4\.1\./.test(t)) && !ps.includes("Jei punktas netaikomas, visą žemiau esantį tekstą ištrinti:"), "5.4 taikoma - papunkčiai dingo ar liko nurodymas");
   });
-  await testas("LT/EN: anglų stulpelis seka lietuvišką (tas pats elementas ir variantas toje pačioje eilutėje), nurodymai šalinami abiem kalbomis, įrašoma angliška reikšmė; DI vertimo juodraščiai lieka pažymėti", async () => {
+  await testas("LT/EN: anglų stulpelis seka lietuvišką (tas pats elementas ir variantas toje pačioje eilutėje), nurodymai šalinami abiem kalbomis, įrašoma angliška reikšmė; anglų stulpelyje - be geltono, DI požymis - Word savybėse", async () => {
     const { buf, Z } = await sutartiesSablonas("PREKES_LTEN_SS");
     const r = await G.generuok(buf, Z, visiSprendimai(Z, "paskutinis"), { tipas: "uint8array" });
     lygu(r.ataskaita.klaidos, [], "klaidos");
@@ -3666,8 +3666,21 @@ async function testaiSutarciuGeneravimas(){
     const v51 = Z.valdikliai.find(v => v.vieta === "5.1" && v.stulpelis === "LT"), en51 = Z.valdikliai.find(v => v.nr === v51.pora);
     tiesa(ps.includes(v51.elementai[v51.elementai.length - 1].tekstas.trim()) && ps.includes(en51.elementai[en51.elementai.length - 1].tekstas.trim()), "5.1 LT ir EN - skirtingi elementai");
     tiesa(ps.some(t => t.includes("FILL")) && ps.some(t => t.includes("PILD")), "angliška reikšmė neįrašyta");
-    const di = (Z.di_juodrasciai || []).length, hl = d.getElementsByTagNameNS(NS, "highlight").length;
-    tiesa(di > 0 && hl > 0 && hl <= di, "DI juodraščių žymėjimas: " + hl + " iš " + di);
+    lygu((Z.di_juodrasciai || []).length, 0, "žemėlapyje - DI juodraščiai");
+    const enGeltona = [...d.getElementsByTagNameNS(NS, "tr")].filter(tr => { const tc = [...tr.childNodes].filter(c => c.localName === "tc").pop();
+      return tc && [...tc.getElementsByTagNameNS(NS, "highlight")].some(h => h.getAttributeNS(NS, "val") === "yellow"); }).length;
+    lygu(enGeltona, 0, "anglų stulpelyje - geltonai pažymėtų eilučių");
+    // 5.3.1.2.6 formulės anglų stulpelyje - tos pačios, su angliškais indeksais (šablone); pasirinkus „... papunkčiai netaikomi“
+    // jos šalinamos abiem kalbomis (EN „do not apply“ iki 2026-10-08 nebuvo atpažįstamas - anglų papunkčiai likdavo)
+    const sx = await (await W.JSZip.loadAsync(buf)).file("word/document.xml").async("string");
+    tiesa(/>naujausias</.test(sx) && />latest</.test(sx) && />start</.test(sx) && (sx.match(/<m:oMath>/g) || []).length === 4, "formulės anglų stulpelyje (šablonas)");
+    const mt = [...d.getElementsByTagNameNS("http://schemas.openxmlformats.org/officeDocument/2006/math", "t")].map(t => t.textContent);
+    tiesa(!mt.length && !ps.some(t => /^5\.3\.1\.2\.(1|6)\. /.test(t)), "5.3.1.2 netaikoma - liko formulė ar papunkčiai: " + mt.join(" "));
+    const custom = async blob => { const f = (await W.JSZip.loadAsync(blob)).file("docProps/custom.xml"); return f ? f.async("string") : ""; };
+    tiesa(!/DI_turinys/.test(await custom(r.blob)), "be info.di - DI požymis atsirado");
+    const r2 = await G.generuok(buf, Z, visiSprendimai(Z, "paskutinis"), { tipas: "uint8array", di: W.GP_DI.savybes({ modulis: "testas", turinys: "EN - DI" }) });
+    const c2 = await custom(r2.blob);
+    tiesa(/name="DI_turinys"/.test(c2) && /EN - DI/.test(c2), "info.di - požymis neįrašytas: " + c2.slice(0, 200));
   });
   await testas("Įrašoma reikšmė - be šablono spalvos ir žymėjimo; „ĮMONĖS PAVADINIMAS“ -> LITGRID AB; generavimo pasas su šablono kodu; kitas (pakeistas) šablonas - negeneruojama", async () => {
     const { buf, Z } = await sutartiesSablonas("PASLAUGOS_LT_SS");
@@ -3806,6 +3819,23 @@ async function testaiSutartiesForma(){
     W.rodykRezultata(rez);
     tiesa(/Į paketą įtrauktos bendrosios ir specialiosios sąlygos/.test(D.getElementById("sutartiesPatikra").textContent), "patikros eilutė");
     tiesa([...D.querySelectorAll("#rezultatas a[download]")].some(a => /Sutarties_SS/.test(a.getAttribute("download"))), "atsisiuntimo vardas");
+    // LT/EN (2026-10-08): DI požymis abiejuose sutarties Word failuose ir pastaba patikroje; LT sutartyje - nei vieno, nei kito
+    const custom = async blob => { const f = (await W.JSZip.loadAsync(blob)).file("docProps/custom.xml"); return f ? f.async("string") : ""; };
+    tiesa(!/Anglų kalbos tekstas/.test(D.getElementById("sutartiesPatikra").textContent), "LT sutarčiai - anglų teksto pastaba");
+    for (const r of s) tiesa(!/DI_turinys/.test(await custom(r.blob)), r.d.trumpas + ": LT sutartyje DI požymis");
+    const en = D.querySelector("input[name=kalba][value=LT_EN]"); en.checked = true; en.dispatchEvent(new W.Event("change"));
+    iv("pavadinimasEN", "Power transformers");
+    W.SUTARTIES_BLOKAS.atnaujink();
+    if (!W.SUTARTIES_BLOKAS.busena().patvirtinta){ W.rodyk(1); D.getElementById("sbPatv").click(); }
+    W.rodyk(2); await W.iStep2();
+    await kol(() => D.querySelector("#sutartiesForma .lk"), "LT/EN sutarties klausimai");
+    if (Fv().querySelector(".lk--siuloma")) D.getElementById("sfPatvVisas").click();
+    rez = await W.generuoti();
+    const sEn = rez.filter(r => r.sutartis && r.blob);
+    lygu(sEn.map(r => r.d.trumpas), ["PREKES_LTEN_BS", "PREKES_LTEN_SS"], "LT/EN sutarties dokumentai pakete");
+    for (const r of sEn){ const c = await custom(r.blob); tiesa(/name="DI_turinys"/.test(c) && /vertėjas netikrino/.test(c), r.d.trumpas + ": nėra DI požymio"); }
+    W.rodykRezultata(rez);
+    tiesa(/Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI/.test(D.getElementById("sutartiesPatikra").textContent), "LT/EN patikroje - nėra anglų teksto pastabos");
   });
 }
 

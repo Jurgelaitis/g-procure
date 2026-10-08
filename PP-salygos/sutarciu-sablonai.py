@@ -48,8 +48,9 @@ REDAKCIJOS = {
           '(nuo 2025-05-01); LITGRID šablonas „0922“; G-Procure redakciniai taisymai 2026-10-07 (sutarčių plano 5.5)',
     'SS': 'LITGRID specialiosios sąlygos pagal VPT tipinę formą; naudotojo patvirtinti taisymai ir standartinės reikšmės 2026-10-07 '
           '(sutarčių plano 5.5 ir 5.6), valdikliai nepasirinkti',
-    'LTEN': 'LT/EN = LT rinkinys + vertimas (2026-10-07): BS anglų stulpelis - VPT neoficialus vertimas (vpt.lrv.lt, 2026-08-07), SS - '
-            'LITGRID, VPT ar DI juodraštis; DI juodraščiai pažymėti geltonai ir laukia vertėjo patikros',
+    'LTEN': 'LT/EN = LT rinkinys + vertimas (2026-10-07): BS anglų stulpelis - VPT neoficialus vertimas (vpt.lrv.lt, 2026-08-07) su '
+            'suvienodintais terminais; SS anglų stulpelis 2026-10-08 suredaguotas naudojant DI pagal VPT vertimų ir ES pirkimų terminiją '
+            '(naudotojo sprendimas: vertėjas netikrins), be geltono žymėjimo - DI požymis sugeneruoto Word failo savybėse',
 }
 A4 = (11906, 16838)
 
@@ -179,7 +180,7 @@ SPALVA_NUORODA = {'0563C1'}
 # sutarties sąlyga (lieka sutartyje), ne nurodymas.
 NURODYMAS = re.compile(r"^\(\s*(nurodyti|nurodomos|įrašyti|jei reikalinga, nurodyti|jei tiekėjas yra|pasirinkti|pirkėjas gali|nereikalingą|"
                        r"arba nurodyti|pasirenkamas|specify|insert|delete|select|please specify|or specify|or such other \w+ as may be specified|the buyer may (select|choose)|"
-                       r"name, title|if applicable, (indicate|specify)|if necessary, specify|if the supplier is a natural person)", re.I)
+                       r"name, title|position, name|if applicable, (indicate|specify)|if necessary, specify|if the supplier is a natural person)", re.I)
 # Skyriaus antraštės taikymo sąlyga („10. ESMINĖS SUTARTIES SĄLYGOS (taikoma, jeigu užpildyta)“)
 TAIKYMO_SALYGA = re.compile(r"^\(\s*(taikoma, jei|applicable where|applicable if)", re.I)
 ANTRASTE = re.compile(r"^\d+\.\s+[A-ZĄČĘĖĮŠŲŪŽ][A-ZĄČĘĖĮŠŲŪŽ ,()/–-]{6,}")
