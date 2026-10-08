@@ -509,7 +509,7 @@ tikrinamos e-tar prieš įtraukiant šeimą; neteisinga - turinio radinys LITGRI
 | S0 | Matavimas: šablonų auditas, kalibravimas (386 sutartys), prototipas | **padaryta 2026-10-07** |
 | S1 | Šablonų paruošimas: redakcijų registras, `templates/sutartys/`, kartografas visiems žymėjimo būdams, žemėlapiai, redakcinių klaidų taisymai, blokuojančių šeimų žymė | kiekvienas šablonas - žemėlapis be neatpažintų vietų; taisymai pakartotinai - 0; testai su mutacijomis **prekėms ir paslaugoms padaryta 2026-10-08** (žr. žemiau); kitos šeimos - tuo pačiu keliu |
 | S2 | Parinkimo variklis (`PP-salygos/sutartys.js`, `GP_SUTARTYS.parink`) + taisyklių lentelė + kalibravimo testų rinkinys | 0 neteisingų automatinių parinkimų rinkinyje; >= 70 % be klausimų; stebėjimo režimas - generatorius siūlo, žmogus patvirtina, neatitikimai renkami **variklis padarytas 2026-10-08** (žr. žemiau); stebėjimo režimo sąsaja - S3 |
-| S3 | UX: blokas „Sutarties projektas“ 1 žingsnyje, klausimai K0-K5, sutarties laukai 2 žingsnyje, bendri SPS ir sutarties laukai | telefonas 375 / 320 px, prieinamumas, „Siūloma (nepatvirtinta)“ |
+| S3 | UX: blokas „Sutarties projektas“ 1 žingsnyje, klausimai K0-K5, sutarties laukai 2 žingsnyje, bendri SPS ir sutarties laukai | telefonas 375 / 320 px, prieinamumas, „Siūloma (nepatvirtinta)“ **1 žingsnio blokas padarytas 2026-10-08** (žr. žemiau); 2 žingsnio sutarties laukai - kartu su S4 |
 | S4 | Generavimas ir patikra po generavimo (4.5), pasas, tikrinimo skirtukas atpažįsta sutarčių formas | kiekvienai šeimai - sugeneruotas paketas be leistinų skirtumų už žemėlapio; mutacijos pagaunamos |
 | S5 | Word ir Pages patikra (lentelės, puslapio formatas - prekių failai US Letter), gyva patikra | kaip SPS |
 | S6 | Žinių bazė (6.1, 6.3) ir pakartotinio kalibravimo procesas | registro įrašai perskaityti e-tar |
@@ -554,6 +554,34 @@ Kalibravimo metu pridėta: techninė priežiūra su perdavimo linija ar tinklo o
 ... techninės priežiūros paslaugos“ - 7 iš 7 per CPO LT), o K2 turi atsakymą „Iš esmės įrangos tiekimas su įrengimu (prekės)“ (CVP IS
 „darbai“, bet sudaryta prekių sutartis). Imtis ta pati, iš kurios taisyklės sudarytos - tikra patikra bus stebėjimo režime.
 
+**S3 - 1 žingsnio blokas (2026-10-08).** `PP-salygos/sutarties-blokas.js` (`GP_SUTARTIES_BLOKAS`), 1 žingsnyje po „Pirkimo objekto
+tipas“, žymė „bandomoji“. Pagal 8 sk. 6 ir 7 p. rekomendacijas (ir 2026-10-04 formos principus):
+- **Siūloma sutartis** - pavadinimas, „Siūloma (nepatvirtinta)“, priežastis žodžiais iš paties pavadinimo („110 kV“, „rekonstravimo“ - iki
+  tol variklis rodė kamienus), dokumentai (BS ir SS, kalba) ir šablonų redakcija iš registro; „Patvirtinti“ - vienas paspaudimas.
+- **Klausimai** (K0-K5, CPO) - radijo grupės su „?“ paaiškinimu, be numatytojo atsakymo; atsakytas lieka matomas su pasirinkimu (rodyklėmis
+  galima keisti, fokusas lieka), kitas klausimas atsiranda po juo.
+- **„Pakeisti“** - visos šeimos (ir eksploatavimo variantai) ir „Sutarties projektas nerengiamas“ su priežastimi: CPO LT forma, tiekėjo
+  forma, esminės sutarties sąlygos SPS. Žmogaus pasirinkimas laikomas patvirtintu, duomenims pasikeitus nekeičiamas; parodoma, ką siūlytų
+  sistema; „Grąžinti siūlomą“.
+- **Patvirtinimas galioja sutarčiai:** pakeitus duomenis taip, kad siūloma kita, patvirtinimas nebegalioja ir pasakoma, kas buvo patvirtinta;
+  vėl pasiūlius tą pačią - galioja (pvz. netyčia pakeistas ir grąžintas objekto tipas).
+- **Ko nesiūlo:** centralizuotam VPĮ pirkimui šeima parenkama, bet šablonai nesiūlomi (8 sk. 5 p. - jūsų sprendimas); DPS sukūrimui blokas
+  nerodomas - LITGRID DPS sukūrimo sąlygose sutarties projekto priedo nėra; be pavadinimo - laukiama.
+- **LT/EN:** įspėjimas „Anglų tekste yra nepatikrintų vertimo vietų: N“ - skaičius iš šablonų žemėlapių (DI juodraščiai, 5.6), neblokuoja.
+- **3 žingsnis:** patikroje eilutė „Sutarties projektas (bandomoji)“ - sutartis, būsena, ką siūlė sistema; pasakoma, kad į paketą dar
+  neįtraukiama.
+- **Stebėjimo įrašai** (jūsų sprendimas 2026-10-08 - kaupti naršyklėje taisyklėms tikslinti): kol sutartis patvirtinta, šios naršyklės
+  saugykloje (`gprocure.sutartys.stebejimas`) laikomas vienas puslapio atvėrimo įrašas - pirkimo pavadinimas, objekto tipas, BVPŽ, kalba,
+  režimas, būdas, ką siūlė sistema, atsakymai į klausimus ir ką pasirinkote; patvirtinimui nebegaliojant - pašalinamas; iki 500 naujausių.
+  Bloke - skiltis „Stebėjimo įrašai šioje naršyklėje: N“ (kas įsimenama ir kodėl), „Atsisiųsti įrašus (JSON)“ ir „Išvalyti“ (su
+  patvirtinimu). Įrašai niekur nesiunčiami, patenka į atsarginę kopiją, aprašyti privatumo pranešime. Taisyklėms tikslinti atsisiųstą
+  failą perduodate G-Procure rengėjui - jis kartu su naujomis paskelbtomis LITGRID sutartimis tampa kalibravimo rinkiniu (6.4).
+  Generavimo pase (S4) - tik `palygink` įrašas, be pavadinimo (pasas keliauja su skelbiamu dokumentu).
+- Blokas aiškiai sako, kad sutarties dokumentų dar nekuria - pirkimo sąlygų paketas nuo jo nesikeičia.
+2 žingsnio sutarties laukai (SS valdikliai pagal 3.4, pildomos vietos, bendri su SPS) - kartu su S4: be generavimo jų atsakymų nebūtų kur
+patikrinti. Testai - `PP-salygos/testai.html` grupė „Sutarties projektas 1 žingsnyje“ (10; 23 kodo mutacijos - visos pagaunamos),
+telefono ir prieinamumo būsenos - `shared/testai.html`.
+
 ---
 
 ## 8. Jūsų sprendimai
@@ -569,7 +597,9 @@ Kalibravimo metu pridėta: techninė priežiūra su perdavimo linija ar tinklo o
    sumos ir bazės (9.3, 9.14.4, 8.2.1, 20 % ribos bazė) - kurios standartinės?
 5. **VPĮ (AKV, centralizuoti) pirkimai:** VPT tipinės sąlygos (VPĮ 87 str. 1 d.) ar LITGRID šablonai su pagrindimu?
 6. **Patvirtinimas:** rekomenduoju - automatiškai parinkta sutartis visada „Siūloma (nepatvirtinta)“, vienas paspaudimas „Patvirtinti“.
+   (S3 įgyvendinta pagal šią rekomendaciją ir 2026-10-04 formos principus.)
 7. **Sutarties projektas visada?** Rekomenduoju: taip (numatytasis), su galimybe „nerengiamas“ (CPO LT, tiekėjo forma, esminės sąlygos SPS).
+   (S3 įgyvendinta pagal šią rekomendaciją: „Pakeisti“ - „Sutarties projektas nerengiamas“ su viena iš trijų priežasčių.)
 8. **Iš anksto pasirinktos reikšmės** šablonuose - laikyti neatsakytomis (rekomenduoju).
 9. **Grupės užtikrinimo taisyklė** iš SS komentarų - ar generatorius ją siūlo (kaip „Siūloma“, su šaltiniu), ar tik rodo paaiškinime?
 10. **Redakcijų valdymas:** kas praneša apie naujas redakcijas ir ar galima žymėti failus redakcijos kodu (kaip Amber Grid „SUT-36 10.0“)?
