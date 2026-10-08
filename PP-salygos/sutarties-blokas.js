@@ -19,7 +19,8 @@
  *    BVPŽ, kalba, režimas, būdas, ką siūlė sistema, atsakymai į klausimus ir ką pasirinko žmogus; patvirtinimui nebegaliojant
  *    įrašas pašalinamas. Iki RIBA įrašų (seniausi šalinami), atsisiunčiami JSON failu, išvalomi žmogaus veiksmu; neperskaitomas
  *    įrašas neperrašomas (GP_SAUGYKLA kopija). Niekur nesiunčiama; patenka į atsarginę kopiją (shared/backup.js).
- * Sutarties dokumentų generatorius dar nekuria (S4) - blokas tai sako.
+ * Nuo 2026-10-08 (S4) patvirtinta prekių ar paslaugų sutartis generuojama 3 žingsnyje (klausimai - 2 žingsnyje, sutarties-forma.js);
+ * kitoms šeimoms šablonai dar neparuošti - blokas tai sako.
  */
 (function (global) {
   "use strict";
@@ -275,7 +276,9 @@
           '" aria-controls="sbRanka">Pasirinkti patiems</button></div>';
       }
       if (S.keiciama) h += rankinisHtml();
-      h += '<div class="cite">Sutarties projekto dokumentų generatorius dar nekuria: kol kas tik parenkama sutartis, pirkimo sąlygų paketas nuo to nesikeičia.</div>';
+      if (g) h += '<div class="cite">' + (sablonai() ? 'Patvirtinus sutartį, 2 žingsnyje atsiras sutarties klausimai, o 3 žingsnyje - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).'
+        : g.nerengiama ? 'Sutarties projektas į pirkimo sąlygų paketą neįtraukiamas.'
+        : 'Šios sutarties dokumentų generatorius dar nekuria - pirkimo sąlygų paketas nuo to nesikeičia.') + '</div>';
       h += stebejimoHtml();
       h += "</div>";
       vieta.innerHTML = h;

@@ -471,6 +471,13 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
                     break
             else:
                 Z['neatpazinta'].append({'i': v['i'], 'vieta': v['vieta'], 'tekstas': 'valdiklis be atsakymo šaltinio: ' + raktas[:120], 'spalva': ''})
+    # LT/EN: kiekvienai vietai - stulpelis (generatorius LT sprendimus taiko ir angliškiems atitikmenims pagal vietą ir eilę)
+    if lten:
+        for k, v in Z.items():
+            if isinstance(v, list) and k not in ('pastraipos', 'valdikliai', 'alternatyvos', 'neatpazinta'):
+                for e in v:
+                    if isinstance(e, dict) and e.get('i') is not None and 'stulpelis' not in e:
+                        e['stulpelis'] = pastr_info[e['i']]['stulpelis']
     Z['suvestine'] = {k: len(v) for k, v in Z.items() if isinstance(v, list) and k != 'pastraipos'}
     return Z
 
