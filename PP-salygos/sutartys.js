@@ -2,14 +2,17 @@
  * PP-salygos: sutarties projekto parinkimas pagal pirkimą (GP_SUTARTYS, sutarčių planas S2, 2026-10-08;
  * docs/salygos/sutartys-planas-2026-10.md 2.3-2.4 ir 3.1).
  *
- *   GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })
- *     -> { busena, seima, variantas, pavadinimas, priezastys, pozymiai, klausimas, sablonai, kalba, pastabos, atsakyta }
+ *   GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, rezimas, atsakymai })
+ *     -> { busena, seima, variantas, pavadinimas, priezastys, klausimas, sablonai, kalba, pastabos, atsakyta, nerengiama }
  *        busena: "parinkta"   - šeima ir paruošti šablonai (sablonai.BS / sablonai.SS - templates/sutartys/<kodas>.docx);
  *                "neparuosta" - šeima žinoma, bet jos šablonas generatoriui dar neparuoštas (S1 - tik prekės ir paslaugos);
  *                "klausimas"  - po taisyklių liko keli kandidatai: klausimas.kodas, tekstas, paaiškinimas, atsakymai [{ id, tekstas }];
  *                               atsakymas paduodamas atsakymai[kodas] = id ir parink kviečiamas iš naujo;
  *                "nerengiama" - LITGRID sutarties projektas nerengiamas (pvz. perkama per CPO LT - jo sutarties forma).
  *   GP_SUTARTYS.palygink(rezultatas, zmogausSeima, zmogausVariantas) -> stebėjimo įrašas (siūlyta / pasirinkta / sutampa)
+ *   GP_SUTARTYS.NERENGIAMA - priežastys, kai žmogus pats nusprendžia sutarties projekto nerengti (sąsaja - sutarties-blokas.js, S3)
+ *   rezimas: "VPI" (centralizuotas LITGRID ir EPSO-G pirkimas) - šeima parenkama, bet „neparuošta“: šablonai parengti PĮ pirkimams,
+ *            VPĮ pirkimų sutarties forma dar nenuspręsta (plano 6.2 ir 8 sk. 5 p.).
  *
  * Taisyklės - deterministinės, iš kalibravimo prototipo (277 LITGRID sutartys: 202 automatiškai be klaidų, 52 po vieno klausimo,
  * 23 po dviejų - imtis ta pati, iš kurios taisyklės sudarytos) ir naudotojo sprendimų 2026-10-08: transformatorių pastotės teritorijos
@@ -73,10 +76,18 @@
                        { id: "ne", tekstas: "Ne, LITGRID pirkimas", seima: "PASLAUGOS" }] }
   };
 
+  /* Kai sutarties projektas nerengiamas - žmogaus pasirinkimas „Pakeisti“ (plano 2.4 A ir 3.3). */
+  var NERENGIAMA = [
+    { id: "cpo", tekstas: "Perkama per CPO LT - naudojama CPO LT sutarties forma" },
+    { id: "tiekejo", tekstas: "Sutartis sudaroma tiekėjo forma" },
+    { id: "esmines", tekstas: "Sutarties projektas nepridedamas - esminės sutarties sąlygos išdėstomos SPS" }
+  ];
+
   var DIAKR = { "ą": "a", "č": "c", "ę": "e", "ė": "e", "į": "i", "š": "s", "ų": "u", "ū": "u", "ž": "z" };
   function be(s) {
     return String(s || "").toLowerCase().replace(/[ąčęėįšųūž]/g, function (c) { return DIAKR[c]; }).replace(/\s+/g, " ").trim();
   }
+  function tarpai(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
 
   /* Požymių klasės (plano 2.3; kamienai be diakritikų). [vardas žmogui, šablonai] */
   var P = {
@@ -108,9 +119,21 @@
     apsauga: ["apsaugos sistemos", [/apsaugos sistem/]],
     rangosDarbai: ["rangos ar statybos darbai", [/(^|[^a-z])rangos|statybos darb/]]
   };
-  function radinys(t, kl) {
+  /* Radinys - žodis (ar žodžiai) iš PATIES pavadinimo, ne kamienas: `t` ir `orig` tokio pat ilgio (be() tik keičia raidžių dydį ir
+     diakritikas), todėl sutapimo vieta išplečiama iki žodžio ribų originaliame tekste („rekonstrav“ -> „rekonstravimo“, „110 kv“ -> „110 kV“). */
+  function radinys(t, kl, orig) {
     var ps = P[kl][1];
-    for (var i = 0; i < ps.length; i++) { var m = ps[i].exec(t); if (m) return m[0].replace(/^[^a-z0-9]+|[^a-z0-9)]+$/g, ""); }
+    for (var i = 0; i < ps.length; i++) {
+      var m = ps[i].exec(t);
+      if (!m) continue;
+      var a = m.index, b = a + m[0].length;
+      while (a < b && !/[a-z0-9]/.test(t.charAt(a))) a++;
+      while (b > a && !/[a-z0-9]/.test(t.charAt(b - 1))) b--;
+      if (!orig || orig.length !== t.length) return t.slice(a, b);
+      while (a > 0 && /[a-z0-9]/.test(t.charAt(a - 1))) a--;
+      while (b < t.length && /[a-z0-9]/.test(t.charAt(b))) b++;
+      return orig.slice(a, b);
+    }
     return null;
   }
 
@@ -123,9 +146,9 @@
   }
 
   /* Sprendimų medis (plano 2.4) - be atsakymų. -> { seima, variantas, priezastys } | { klausimas, kandidatai, priezastys } | { nerengiama } */
-  function medis(t, rusis, bvpz, ats) {
-    var pz = [], kas = {};
-    function yra(kl) { var r = radinys(t, kl); if (r !== null) kas[kl] = r; return r !== null; }
+  function medis(t, rusis, bvpz, ats, orig) {
+    var kas = {};
+    function yra(kl) { var r = radinys(t, kl, orig); if (r !== null) kas[kl] = r; return r !== null; }
     function zyme(kl) { return P[kl][0] + " („" + kas[kl] + "“)"; }
     var b5 = String(bvpz || "").replace(/[^0-9]/g, "").slice(0, 5);
     var tinklas = yra("tinklas");
@@ -160,7 +183,7 @@
       var projektuoja = yra("projektas"), eso = yra("eso"), statyba = yra("statyba"), smulkus = yra("smulkus");
       if (yra("pagalbTvirtas") && smulkus && !projektuoja && !statyba && !eso)
         return { seima: "DARBAI_MAZOJI", priezastys: [zyme("pagalbTvirtas"), zyme("smulkus"), "nėra statybos veiksmo ir projektavimo" +
-                 (tinklas ? " (perdavimo tinklo objekto teritorijoje - vis tiek mažoji, naudotojo sprendimas 2026-10-08)" : "")] };
+                 (tinklas ? " (ir perdavimo tinklo objekto teritorijoje - darbų pirkimo-pardavimo sutartis)" : "")] };
       if (projektuoja && yra("rangosDarbai") && !eso)
         return { seima: "PROJEKTAVIMO_STATYBOS", priezastys: [zyme("projektas"), zyme("rangosDarbai")] };
       if (tinklas && (statyba || projektuoja))
@@ -188,7 +211,7 @@
       pastabos.push("Sutarčių šablonai - LITGRID AB; kitos organizacijos sutarčių formų generatoriuje nėra.");
     var priezastys = [], r, i = 0;
     while (i++ < 6) {
-      r = medis(t, rusis, duom.bvpz, ats);
+      r = medis(t, rusis, duom.bvpz, ats, tarpai(duom.pavadinimas));
       priezastys = priezastys.concat(r.priezastys || []);
       if (!r.klausimas) break;
       var a = ats[r.klausimas], def = a && KLAUSIMAI[r.klausimas].atsakymai.filter(function (x) { return x.id === a; })[0];
@@ -217,6 +240,12 @@
       rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių ir paslaugų pirkimo-pardavimo sutartys).");
       return rez;
     }
+    if (duom.rezimas === "VPI") {
+      rez.busena = "neparuosta";
+      rez.pastabos.push("Centralizuotam pirkimui pagal VPĮ sutarties projektas kol kas nesiūlomas: sutarčių šablonai parengti PĮ pirkimams, " +
+                        "o VPĮ pirkimų sutarties forma (VPT tipinės sąlygos ar LITGRID šablonai) dar nenuspręsta.");
+      return rez;
+    }
     rez.busena = "parinkta";
     rez.sablonai = S.sablonai[kalba] || S.sablonai.LT;
     if (!S.sablonai[kalba]) { rez.kalba = "LT"; rez.pastabos.push("Šios šeimos dvikalbės (LT/EN) sutarties nėra - parinkta lietuviška."); }
@@ -231,5 +260,5 @@
              sutampa: !!(rez && rez.seima === seima && (rez.variantas || null) === (variantas || null)) };
   }
 
-  global.GP_SUTARTYS = { versija: "S2-2026-10-08", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, parink: parink, palygink: palygink, normalizuok: be };
+  global.GP_SUTARTYS = { versija: "S3-2026-10-08", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, normalizuok: be };
 })(typeof window !== "undefined" ? window : this);

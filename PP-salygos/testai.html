@@ -46,6 +46,7 @@ laikomos tik atmintyje (?saugykla=testine). Paleidžiama per vietinį serverį r
 
 <div id="rezultatai"></div>
 
+<script src="../shared/testu-apsauga.js"></script>
 <script>
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
@@ -3402,7 +3403,177 @@ async function testaiParinkimas(){
   });
 }
 
+/* Blokas „Sutarties projektas“ 1 žingsnyje (sutarčių planas S3, 2026-10-08; sutarties-blokas.js). Atskiras modulio rėmelis -
+   ankstesnės grupės keičia 1 žingsnio laukus. Perpiešimas po įvesties atidedamas 250 ms - testai kviečia atnaujink() iš karto. */
+async function testaiSutartiesBlokas(){
+  dabartine = grupe("Sutarties projektas 1 žingsnyje (sutarčių planas S3, 2026-10-08): siūloma, klausimai, patvirtinimas, rankinis pasirinkimas");
+  await modulis();
+  const G = W.GP_SUTARTYS, SB = () => W.SUTARTIES_BLOKAS, b = () => SB().busena();
+  const Q = () => D.getElementById("sutartisQ"), txt = () => Q().textContent.replace(/\s+/g, " ");
+  const iv = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); };
+  const rad = (name, v) => { const e = D.querySelector("input[name=" + name + "][value=\"" + v + "\"]"); e.checked = true; e.dispatchEvent(new W.Event("change", { bubbles: true })); };
+  const busenosZyma = () => (Q().querySelector(".sb-rez .lk-b") || {}).textContent;
+  tiesa(SB(), "blokas neprijungtas (window.SUTARTIES_BLOKAS)");
+  // Stebėjimo įrašai - tik netikroje saugykloje (tikri įrašai neliečiami; GP_TESTU_APSAUGA - antra apsauga)
+  const atmintine = () => { const d = {}; return { getItem: k => (k in d ? d[k] : null), setItem: (k, v) => { d[k] = String(v); }, removeItem: k => { delete d[k]; },
+    key: i => Object.keys(d)[i] || null, get length(){ return Object.keys(d).length; }, raktai: () => Object.keys(d) }; };
+  const saug = atmintine(); SB().naudokSaugykla(saug);
+  await testas("Be pavadinimo - laukiama; prekės - „Siūloma (nepatvirtinta)“ su priežastimi, šablonai iš registro, redakcija, „?“ ir pastaba, kad dokumentų dar nekuria", async () => {
+    rad("tipas", "prekes"); iv("pavadinimas", ""); SB().atnaujink();
+    tiesa(/Įrašykite pirkimo pavadinimą/.test(txt()) && !D.getElementById("sbPatv"), "be pavadinimo turi laukti, ne siūlyti");
+    iv("pavadinimas", "Galios transformatorių"); SB().atnaujink();
+    lygu([b().pavadinimas, b().patvirtinta, b().sablonai, b().kalba], ["Prekių pirkimo-pardavimo sutartis", false, { BS: "PREKES_LT_BS", SS: "PREKES_LT_SS" }, "LT"], "prekės");
+    lygu(busenosZyma(), "Siūloma (nepatvirtinta)", "būsenos žyma");
+    tiesa(/Kodėl: pirkimo objektas - prekės/.test(txt()), "nėra priežasties");
+    tiesa(Q().querySelector(".gpp-btn[aria-label^='Paaiškinimas']"), "nėra „?“ paaiškinimo");
+    tiesa(/dokumentų generatorius dar nekuria/.test(txt()), "nepasakyta, kad sutarties dokumentų dar nekuria");
+    const reg = (await (await W.fetch("zemelapiai/sutarciu-versijos.json")).json()).sablonai;
+    await kol(() => Q().querySelector(".sb-red"), "šablonų redakcija iš registro");
+    tiesa(Q().querySelector(".sb-red").textContent.includes(reg.PREKES_LT_BS.redakcija), "redakcija ne iš registro");
+  });
+  await testas("Patvirtinti - tik paspaudus; fokusas lieka bloke; pasiūlius kitą sutartį patvirtinimas nebegalioja ir tai pasakoma, vėl pasiūlius tą pačią - galioja", () => {
+    D.getElementById("sbPatv").click();
+    lygu([b().patvirtinta, busenosZyma(), D.activeElement && D.activeElement.id, b().stebejimas.sutampa], [true, "Patvirtinta", "sbKeisti", true], "patvirtinus");
+    tiesa(!D.getElementById("sbPatv"), "„Patvirtinti“ liko po patvirtinimo");
+    rad("tipas", "paslaugos"); SB().atnaujink();
+    lygu([b().pavadinimas, b().patvirtinta, b().buvoPatvirtinta], ["Paslaugų pirkimo-pardavimo sutartis", false, "Prekių pirkimo-pardavimo sutartis"], "pasikeitus objektui");
+    tiesa(/Anksčiau patvirtinote: Prekių pirkimo-pardavimo sutartis/.test(txt()), "nepasakyta, kad patvirtinimas nebegalioja");
+    rad("tipas", "prekes"); SB().atnaujink();
+    lygu([b().patvirtinta, b().buvoPatvirtinta], [true, null], "grįžus prie patvirtintos sutarties");
+    iv("pavadinimas", "Galios transformatorių ir jų dalių"); SB().atnaujink();
+    tiesa(b().patvirtinta, "pakeitus pavadinimą (ta pati sutartis) patvirtinimas dingo");
+  });
+  await testas("Klausimas: radijo grupė su klausimu (legend) ir „?“; priežastis - žodžiai iš pavadinimo; atsakius - sutartis, klausimas lieka su pasirinkimu, fokusas lieka; neparuošta šeima pasakoma; K2 -> K3", () => {
+    rad("tipas", "darbai"); iv("pavadinimas", "110 kV Mažeikių skirstyklos rekonstravimo"); SB().atnaujink();
+    const fs = Q().querySelector("fieldset.sb-kl");
+    tiesa(fs, "nėra klausimo");
+    lygu(fs.querySelector("legend").textContent, G.KLAUSIMAI.K1.tekstas, "klausimo tekstas");
+    const radijai = [...fs.querySelectorAll("input[type=radio]")];
+    lygu([radijai.length, radijai.every(r => r.name === "sb-K1" && r.closest("label") && !r.checked)], [2, true], "atsakymai be numatytojo");
+    tiesa(fs.querySelector(".gpp-btn") && fs.getAttribute("aria-describedby"), "klausimas be „?“");
+    tiesa(!D.getElementById("sbPatv") && b().pasirinkta === null, "neatsakius - nieko nesiūloma");
+    tiesa(/„110 kV“/.test(txt()) && /„rekonstravimo“/.test(txt()), "priežastyje - ne pavadinimo žodžiai: " + txt().slice(0, 300));
+    const r = D.getElementById("sb-K1-uzsakovas"); r.focus(); r.checked = true; r.dispatchEvent(new W.Event("change", { bubbles: true }));
+    lygu([b().pasirinkta.seima, b().sablonai, D.activeElement && D.activeElement.id], ["STATYBOS_RANGOS", null, "sb-K1-uzsakovas"], "atsakius");
+    tiesa(D.getElementById("sb-K1-uzsakovas").checked, "atsakytas klausimas be pasirinkimo");
+    tiesa(/šablonas generatoriui dar neparuoštas/.test(txt()), "nepasakyta, kad šablonas neparuoštas");
+    iv("pavadinimas", "Darbų"); SB().atnaujink();
+    rad("sb-K2", "eksploatavimo");
+    lygu([...Q().querySelectorAll("fieldset.sb-kl legend")].map(l => l.textContent), [G.KLAUSIMAI.K2.tekstas, G.KLAUSIMAI.K3.tekstas], "K2 -> K3");
+    rad("sb-K3", "ol");
+    lygu(b().pavadinimas, "Eksploatavimo darbų sutartis - oro linijų eksploatavimas", "K3");
+  });
+  await testas("Pakeisti: sąrašas su etikete, žmogaus pasirinkimas patvirtintas ir duomenims pasikeitus nekeičiamas, sistema parodo savo siūlymą; „Grąžinti siūlomą“", () => {
+    rad("tipas", "paslaugos"); iv("pavadinimas", "Valymo paslaugų"); SB().atnaujink();
+    D.getElementById("sbKeisti").click();
+    const sel = D.getElementById("sbRankaSel");
+    tiesa(sel && D.querySelector("label[for=sbRankaSel]") && D.activeElement === sel, "sąrašas be etiketės ar fokuso");
+    lygu(D.getElementById("sbKeisti").getAttribute("aria-expanded"), "true", "aria-expanded");
+    const vertes = [...sel.options].map(o => o.value);
+    tiesa(Object.keys(G.SEIMOS).every(k => vertes.some(v => v.startsWith("s:" + k + ":"))) && G.NERENGIAMA.every(n => vertes.includes("n:" + n.id)), "sąraše trūksta sutarčių ar „nerengti“");
+    sel.value = ""; Q().querySelector("[data-sb=rinktis]").click();
+    tiesa(!b().zmogaus && D.activeElement === D.getElementById("sbRankaSel"), "tuščias pasirinkimas pritaikytas");
+    D.getElementById("sbRankaSel").value = "n:esmines"; Q().querySelector("[data-sb=rinktis]").click();
+    lygu([b().zmogaus, b().patvirtinta, b().pasirinkta.nerengiama.id, b().pavadinimas, b().stebejimas.sutampa, D.activeElement && D.activeElement.id],
+         [true, true, "esmines", "Sutarties projektas nerengiamas", false, "sbKeisti"], "rankinis pasirinkimas");
+    tiesa(/Sistema siūlytų: Paslaugų pirkimo-pardavimo sutartis/.test(txt()), "nerodoma, ką siūlytų sistema");
+    rad("tipas", "prekes"); SB().atnaujink();
+    lygu([b().pasirinkta.nerengiama.id, b().patvirtinta], ["esmines", true], "pasikeitus duomenims žmogaus pasirinkimas pakeistas");
+    tiesa(/Sistema siūlytų: Prekių pirkimo-pardavimo sutartis/.test(txt()), "sistemos siūlymas neatnaujintas");
+    D.getElementById("sbGrazinti").click();
+    lygu([b().zmogaus, b().patvirtinta, b().pasirinkta.seima], [false, false, "PREKES"], "grąžinus siūlomą");
+  });
+  await testas("LT/EN: dvikalbės sutartys ir nepatikrintų vertimo vietų skaičius - iš šablonų žemėlapių (DI juodraščiai)", async () => {
+    rad("kalba", "LT_EN"); SB().atnaujink();
+    lygu([b().sablonai, b().kalba], [{ BS: "PREKES_LTEN_BS", SS: "PREKES_LTEN_SS" }, "LTEN"], "LT/EN šablonai");
+    const n = async k => ((await (await W.fetch("zemelapiai/sutartys/" + k + ".json")).json()).di_juodrasciai || []).length;
+    const bs = await n("PREKES_LTEN_BS"), ss = await n("PREKES_LTEN_SS");
+    await kol(() => /Anglų tekste yra nepatikrintų vertimo vietų/.test(txt()), "DI juodraščių įspėjimas");
+    tiesa(txt().includes("vietų: " + (bs + ss) + " (bendrosiose sąlygose " + bs + ", specialiosiose " + ss + ")"), "skaičius ne iš žemėlapių: " + txt());
+    rad("kalba", "LT"); SB().atnaujink();
+    tiesa(!/Anglų tekste/.test(txt()), "LT sutarčiai - vertimo įspėjimas");
+  });
+  await testas("Centralizuotas VPĮ pirkimas ir DPS sukūrimas: sutarties projektas nesiūlomas, priežastis pasakoma", () => {
+    const v = G.parink({ pavadinimas: "Galios transformatorių", objektas: "prekes", rezimas: "VPI" });
+    lygu([v.busena, v.sablonai], ["neparuosta", null], "variklis su VPĮ");
+    const bud = D.getElementById("budas"); bud.value = "T-AK"; bud.dispatchEvent(new W.Event("change"));
+    rad("centr", "taip"); SB().atnaujink();
+    tiesa(b().sablonai === null && /Centralizuotam pirkimui pagal VPĮ/.test(txt()) && !/Dokumentai:/.test(txt()), "VPĮ - siūlomi PĮ šablonai");
+    rad("centr", "ne"); bud.value = "DPS"; bud.dispatchEvent(new W.Event("change")); SB().atnaujink();
+    tiesa(!b().rodoma && /DPS sukūrimo sąlygose sutarties projekto priedo nėra/.test(txt()) && !Q().querySelector("button[data-sb]"), "DPS sukūrimas");
+    bud.value = "T-SD"; bud.dispatchEvent(new W.Event("change")); SB().atnaujink();
+    tiesa(b().rodoma, "grąžinus būdą blokas nerodomas");
+  });
+  await testas("Atnaujinama pati: įvedus pavadinimą (po pauzės) ir paraiškos pritaikymu (pavPreview, be įvykio)", async () => {
+    rad("tipas", "darbai"); iv("pavadinimas", "Tvoros remonto");
+    await kol(() => (b().pasirinkta || {}).seima === "DARBAI_MAZOJI", "po įvesties");
+    D.getElementById("pavadinimas").value = "Biuro patalpų projektavimo";
+    D.querySelector("input[name=tipas][value=paslaugos]").checked = true;
+    W.pavPreview();
+    await kol(() => b().sistema.busena === "klausimas" && b().sistema.klausimas.kodas === "K4", "po pavPreview()");
+  });
+  await testas("3 žingsnio patikra: sutarties eilutė - sutartis, būsena, sistemos siūlymas ir kad į paketą dar neįtraukiama", () => {
+    rad("tipas", "paslaugos"); iv("pavadinimas", "Valymo paslaugų"); SB().atnaujink();
+    const eil = () => { W.rodykRezultata([]); return (D.getElementById("sutartiesPatikra") || {}).textContent || ""; };
+    tiesa(/Paslaugų pirkimo-pardavimo sutartis - siūloma \(nepatvirtinta\)/.test(eil()) && /dar neįtraukiamas/.test(eil()), "siūloma: " + eil());
+    D.getElementById("sbPatv").click();
+    tiesa(/Paslaugų pirkimo-pardavimo sutartis - patvirtinta/.test(eil()), "patvirtinta: " + eil());
+    D.getElementById("sbKeisti").click(); D.getElementById("sbRankaSel").value = "s:PREKES:"; Q().querySelector("[data-sb=rinktis]").click();
+    tiesa(/Prekių pirkimo-pardavimo sutartis - patvirtinta; sistema siūlė: Paslaugų/.test(eil()), "žmogaus pasirinkimas: " + eil());
+    D.getElementById("sbGrazinti").click();
+  });
+  await testas("Stebėjimo įrašai naršyklėje (naudotojo sprendimas 2026-10-08): patvirtinus - vienas įrašas puslapiui su pavadinimu, siūlyta ir pasirinkta; nepatvirtinus - pašalinamas; riba 500; atsisiuntimas; išvalymas su patvirtinimu; sugadintas neperrašomas", async () => {
+    const s2 = atmintine(); SB().naudokSaugykla(s2);
+    const z = () => SB().zurnalas(), R = "gprocure.sutartys.stebejimas";
+    rad("kalba", "LT"); rad("tipas", "darbai"); iv("pavadinimas", "110 kV Mažeikių skirstyklos rekonstravimo"); SB().atnaujink();
+    lygu(z().irasai.length, 0, "be patvirtinimo yra įrašų");
+    tiesa(/Stebėjimo įrašai šioje naršyklėje: 0/.test(txt()) && /niekur nesiunčiami/.test(txt()), "nepasakyta, kas ir kur įsimenama");
+    rad("sb-K1", "uzsakovas"); D.getElementById("sbPatv").click();
+    let i = z().irasai;
+    lygu([i.length, i[0].pavadinimas, i[0].objektas, i[0].siulyta, i[0].pasirinkta, i[0].klausimai, i[0].zmogaus, i[0].sutampa, i[0].budas],
+         [1, "110 kV Mažeikių skirstyklos rekonstravimo", "darbai", "STATYBOS_RANGOS", "STATYBOS_RANGOS", ["K1=uzsakovas"], false, true, D.getElementById("budas").value], "įrašas");
+    tiesa(/^\d{4}-\d{2}-\d{2}$/.test(i[0].data) && i[0].versija === G.versija, "data ar variklio versija");
+    D.getElementById("sbKeisti").click(); D.getElementById("sbRankaSel").value = "s:PROJEKTAVIMO_STATYBOS:"; Q().querySelector("[data-sb=rinktis]").click();
+    i = z().irasai;
+    lygu([i.length, i[0].siulyta, i[0].pasirinkta, i[0].zmogaus, i[0].sutampa], [1, "STATYBOS_RANGOS", "PROJEKTAVIMO_STATYBOS", true, false], "tas pats įrašas atnaujintas");
+    D.getElementById("sbGrazinti").click();
+    lygu(z().irasai.length, 0, "nepatvirtintas sprendimas liko įraše");
+    s2.setItem(R, JSON.stringify({ schema: 1, irasai: Array.from({ length: 500 }, (_, k) => ({ sesija: "senas-" + k, pavadinimas: "x" + k })) }));
+    D.getElementById("sbPatv").click();
+    i = z().irasai;
+    lygu([i.length, i[0].sesija, i[498].sesija, i[499].pasirinkta], [500, "senas-1", "senas-499", "STATYBOS_RANGOS"], "riba 500, seni įrašai nepakeisti");
+    let blob = null, vardas = null; const cou = W.URL.createObjectURL, spr = W.HTMLAnchorElement.prototype.click;
+    W.URL.createObjectURL = x => { blob = x; return "blob:testas"; };
+    W.HTMLAnchorElement.prototype.click = function () { vardas = this.download; };
+    try { D.getElementById("sbAtsisiusti").click(); } finally { W.URL.createObjectURL = cou; W.HTMLAnchorElement.prototype.click = spr; }
+    const f = JSON.parse(await blob.text());
+    lygu([f.schema, f.irasai.length, f.irasai[499].pavadinimas], [1, 500, "110 kV Mažeikių skirstyklos rekonstravimo"], "atsisiųstas failas");
+    tiesa(/stebėjimas_\d{4}-\d{2}-\d{2}\.json$/.test(vardas), "failo vardas: " + vardas);
+    D.getElementById("sbValyti").click();
+    tiesa(/Ištrinti 500 įrašų\?/.test(txt()) && D.activeElement && D.activeElement.id === "sbValytiNe" && z().irasai.length === 500, "trinama be patvirtinimo");
+    D.getElementById("sbValytiTaip").click();
+    lygu(z().irasai.map(x => x.pasirinkta), ["STATYBOS_RANGOS"], "išvalius lieka tik dabartinis patvirtintas sprendimas");
+    s2.setItem(R, "{sugadinta");
+    rad("tipas", "paslaugos"); SB().atnaujink(); D.getElementById("sbPatv").click();
+    tiesa(s2.getItem(R) === "{sugadinta" && /neperskaitomi - nauji neįrašomi/.test(txt()), "sugadintas įrašas perrašytas arba nepasakyta");
+    tiesa(s2.raktai().some(k => k.indexOf(R + ".sugadinta-") === 0), "neperskaitomo įrašo kopijos nėra");
+    SB().naudokSaugykla(saug);
+  });
+  await testas("Prieinamumas: grupė su pavadinimu, mygtukai su tekstu, kiekvienas radijas - etiketėje; telefone (375 px) neslenka", async () => {
+    const g = Q().querySelector(".sb[role=group]");
+    tiesa(g && D.getElementById(g.getAttribute("aria-labelledby")), "grupė be pavadinimo");
+    tiesa([...Q().querySelectorAll("button")].every(x => (x.textContent.trim() || x.getAttribute("aria-label"))), "mygtukas be pavadinimo");
+    const f = await modulis("siauras");
+    rad("tipas", "darbai"); iv("pavadinimas", "Darbų"); SB().atnaujink(); rad("sb-K2", "eksploatavimo"); D.getElementById("sbKeisti").click();
+    tiesa([...Q().querySelectorAll("input[type=radio]")].every(r => r.closest("label")), "radijas be etiketės");
+    lygu(D.documentElement.scrollWidth <= W.innerWidth, true, "telefone slenka horizontaliai (" + D.documentElement.scrollWidth + " > " + W.innerWidth + ")");
+    f.remove();
+  });
+}
+
 (async function(){
+  // Sutarties parinkimo stebėjimo įrašai (2026-10-08) - vienintelis PP-salygos įrašas saugykloje: tikri įrašai atkuriami
+  const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0);
   try {
     await modulis();
     await testaiLogika();
@@ -3424,11 +3595,12 @@ async function testaiParinkimas(){
     await testaiTikrinimas();
     await testaiSutartys();
     await testaiParinkimas();
+    await testaiSutartiesBlokas();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
-  }
+  } finally { APSAUGA.atkurk(); }
   document.documentElement.dataset.busena = "baigta";
 })();
 </script>
