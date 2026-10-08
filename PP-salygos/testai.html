@@ -3300,6 +3300,108 @@ async function testaiSutartys(){
   });
 }
 
+/* ---- Sutarties parinkimas pagal pirkimą (sutarčių planas S2, 2026-10-08): PP-salygos/sutartys.js ----
+   Atvejai - naudotojo pavyzdžiai (plano 2.3) ir sintetiniai pavadinimai kiekvienai taisyklei; kalibravimas su CVP IS sutartimis - privačiai. */
+const PARINKIMAS = [
+  // [pavadinimas, objektas, laukiama: šeima | "?KODAS" | "nerengiama", variantas]
+  ["Tvoros remontas", "darbai", "DARBAI_MAZOJI"],
+  ["Sandėlių durų keitimas", "darbai", "DARBAI_MAZOJI"],
+  ["Įvažiuojamojo kelio atstatymas", "darbai", "DARBAI_MAZOJI"],
+  ["Panevėžio TP tvoros remontas", "darbai", "DARBAI_MAZOJI"],           // naudotojo sprendimas 2026-10-08: TP teritorijoje - mažoji
+  ["Transformatorių pastotės patalpų remontas", "darbai", "DARBAI_MAZOJI"],
+  ["110 kV Mažeikių skirstyklos rekonstravimas", "darbai", "?K1"],
+  ["330 kV oro linijos rekonstravimo darbai (ESO)", "darbai", "?K1"],
+  ["Pastotės darbo projekto parengimas ir rangos darbai", "darbai", "PROJEKTAVIMO_STATYBOS"],
+  ["Darbų pirkimas", "darbai", "?K2"],
+  ["Vakarų regiono oro linijų eksploatavimo darbai", "darbai", "EKSPLOATAVIMO", "OL"],
+  ["Rytų regiono transformatorių pastočių eksploatavimo darbai", "darbai", "EKSPLOATAVIMO", "TP"],
+  ["Elektros linijų trasų valymo darbai", "darbai", "EKSPLOATAVIMO", "TRASOS"],
+  ["Administracinio pastato vėdinimo sistemų eksploatavimas", "darbai", "DARBAI_MAZOJI"],
+  ["Eksploatavimo darbai", "darbai", "?K3"],
+  ["Galios transformatorių pirkimas", "prekes", "PREKES"],
+  ["Programinės įrangos licencijų ir palaikymo paslaugų pirkimas", "prekes", "?K5"],
+  ["Valymo paslaugos", "paslaugos", "PASLAUGOS"],
+  ["Informacinės sistemos priežiūros paslaugos", "paslaugos_it", "PASLAUGOS"],
+  ["330 kV oro linijos projektavimo paslaugos", "paslaugos", "PROJEKTAVIMO_PASLAUGOS"],
+  ["Projekto vykdymo priežiūros paslaugos", "paslaugos", "PROJEKTAVIMO_PASLAUGOS"],
+  ["Apsaugos sistemų projektavimo paslaugos", "paslaugos", "PASLAUGOS"],
+  ["Biuro patalpų projektavimas", "paslaugos", "?K4"],
+  ["110 kV TP rekonstravimo darbo projekto ekspertizė", "paslaugos", "?CPO"],   // naudotojo sprendimas 2026-10-08: klausti dėl CPO LT
+  ["Statinio statybos techninės priežiūros paslaugos", "paslaugos", "?CPO"],
+  ["Elektros perdavimo linijos A-B techninės priežiūros paslaugos", "paslaugos", "?CPO"],
+  ["Kondicionierių techninės priežiūros paslaugos", "paslaugos", "PASLAUGOS"],
+  ["Pirkimas", "misrus", "?K0"],
+  ["Pirkimas", "", "?K0"]
+];
+async function testaiParinkimas(){
+  dabartine = grupe("Sutarties parinkimas pagal pirkimą (sutarčių planas S2, 2026-10-08): GP_SUTARTYS.parink");
+  const G = W.GP_SUTARTYS;
+  tiesa(G, "sutartys.js neįkeltas modulyje");
+  const kur = r => r.busena === "klausimas" ? "?" + r.klausimas.kodas : r.busena === "nerengiama" ? "nerengiama" : r.seima;
+  await testas("Taisyklės: naudotojo pavyzdžiai ir kiekviena sprendimų medžio šaka (" + PARINKIMAS.length + " atvejai); priežastis visada nurodyta", () => {
+    const kl = [];
+    for (const [pav, obj, laukiama, variantas] of PARINKIMAS) {
+      const r = G.parink({ pavadinimas: pav, objektas: obj });
+      if (kur(r) !== laukiama || (variantas && r.variantas !== variantas)) kl.push(pav + " [" + obj + "]: tikėtasi " + laukiama + (variantas ? ":" + variantas : "") + ", gauta " + kur(r) + (r.variantas ? ":" + r.variantas : ""));
+      if (!r.priezastys || !r.priezastys.length || r.priezastys.some(x => !x)) kl.push(pav + ": nėra priežasties");
+    }
+    tiesa(!kl.length, kl.join("\n"));
+  });
+  await testas("Paruoštos šeimos (prekės, paslaugos) - šablonai iš S1 registro (LT ir LT/EN); kitos - „neparuošta“, ne tylus pasirinkimas", async () => {
+    const reg = (await (await W.fetch("zemelapiai/sutarciu-versijos.json")).json()).sablonai;
+    for (const [seima, ss] of Object.entries(G.SEIMOS)) {
+      if (!ss.sablonai) continue;
+      for (const k of ["LT", "LTEN"]) for (const d of ["BS", "SS"]) tiesa(reg[ss.sablonai[k][d]], seima + " " + k + " " + d + ": šablono nėra registre");
+    }
+    const p = G.parink({ pavadinimas: "Galios transformatorių pirkimas", objektas: "prekes", kalba: "LT_EN" });
+    lygu([p.busena, p.sablonai, p.kalba], ["parinkta", { BS: "PREKES_LTEN_BS", SS: "PREKES_LTEN_SS" }, "LTEN"], "prekės LT/EN");
+    lygu(G.parink({ pavadinimas: "Valymo paslaugos", objektas: "paslaugos" }).sablonai, { BS: "PASLAUGOS_LT_BS", SS: "PASLAUGOS_LT_SS" }, "paslaugos LT");
+    const m = G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai" });
+    lygu([m.busena, m.sablonai], ["neparuosta", null], "mažoji");
+    tiesa(m.pastabos.some(x => /dar neparuoštas/.test(x)), "nepasakyta, kad šablonas neparuoštas");
+    tiesa(/TP|teritorij|pastatas/.test(G.parink({ pavadinimas: "Panevėžio TP tvoros remontas", objektas: "darbai" }).priezastys.join(" ")), "TP tvoros priežastis");
+  });
+  await testas("Klausimai: atsakius pasiekiama kiekviena šeima; K2 eksploatacija -> K3; CPO „taip“ - projektas nerengiamas, „ne“ - paslaugos", () => {
+    const g = (pav, obj, ats) => G.parink({ pavadinimas: pav, objektas: obj, atsakymai: ats });
+    lygu(kur(g("110 kV Mažeikių skirstyklos rekonstravimas", "darbai", { K1: "rangovas" })), "PROJEKTAVIMO_STATYBOS", "K1 rangovas");
+    lygu(kur(g("110 kV Mažeikių skirstyklos rekonstravimas", "darbai", { K1: "uzsakovas" })), "STATYBOS_RANGOS", "K1 užsakovas");
+    lygu(kur(g("Darbų pirkimas", "darbai", { K2: "eksploatavimo" })), "?K3", "K2 eksploatacija klausia K3");
+    const e = g("Darbų pirkimas", "darbai", { K2: "eksploatavimo", K3: "trasos" });
+    lygu([e.seima, e.variantas, e.atsakyta.map(a => a.kodas)], ["EKSPLOATAVIMO", "TRASOS", ["K2", "K3"]], "K2 + K3");
+    lygu(kur(g("Darbų pirkimas", "darbai", { K2: "prekes" })), "PREKES", "K2 įrangos tiekimas su įrengimu");
+    lygu(kur(g("Eksploatavimo darbai", "darbai", { K3: "pastatas" })), "DARBAI_MAZOJI", "K3 pastato sistemos");
+    lygu(kur(g("Biuro patalpų projektavimas", "paslaugos", { K4: "kita" })), "PASLAUGOS", "K4 kita");
+    lygu(kur(g("Licencijų ir palaikymo paslaugų pirkimas", "prekes", { K5: "palaikymas" })), "PASLAUGOS", "K5");
+    const c = g("Statinio statybos techninės priežiūros paslaugos", "paslaugos", { CPO: "taip" });
+    lygu([c.busena, c.seima], ["nerengiama", null], "CPO taip");
+    tiesa(/CPO LT/.test(c.nerengiama), "nepasakyta kodėl nerengiama");
+    lygu(g("110 kV TP rekonstravimo darbo projekto ekspertizė", "paslaugos", { CPO: "ne" }).sablonai, { BS: "PASLAUGOS_LT_BS", SS: "PASLAUGOS_LT_SS" }, "CPO ne");
+    lygu(kur(g("Pirkimas", "misrus", { K0: "prekes" })), "PREKES", "K0 prekės");
+    lygu(kur(g("Pirkimas", "misrus", { K0: "darbai" })), "?K2", "K0 darbai -> K2");
+    lygu(kur(g("110 kV Mažeikių skirstyklos rekonstravimas", "darbai", { K1: "nera_tokio" })), "?K1", "nežinomas atsakymas - klausiama vėl");
+    // kiekvienas atsakymas veda į žinomą šeimą arba „nerengiama“
+    for (const [kodas, K] of Object.entries(G.KLAUSIMAI)) for (const a of K.atsakymai)
+      tiesa(kodas === "K0" ? ["prekes", "paslaugos", "darbai"].includes(a.id) : (a.nerengiama || G.SEIMOS[a.seima]), kodas + " " + a.id + ": atsakymas neveda į šeimą");
+  });
+  await testas("Normalizavimas ir pastabos: diakritikos ir didžiosios raidės nesvarbu; tuščias pavadinimas, kita organizacija, kalba", () => {
+    lygu(kur(G.parink({ pavadinimas: "TVOROS REMONTAS", objektas: "Darbai" })), "DARBAI_MAZOJI", "didžiosios");
+    lygu(kur(G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai" })), kur(G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai" })), "pastovumas");
+    lygu(kur(G.parink({ pavadinimas: "Sandeliu duru keitimas", objektas: "darbai" })), "DARBAI_MAZOJI", "be diakritikų");
+    const t = G.parink({ pavadinimas: "", objektas: "prekes" });
+    tiesa(t.seima === "PREKES" && t.pastabos.some(x => /tuščias/.test(x)), "tuščias pavadinimas");
+    tiesa(G.parink({ pavadinimas: "Valymo paslaugos", objektas: "paslaugos", vykdytojas: "AB Amber Grid" }).pastabos.some(x => /LITGRID/.test(x)), "kita organizacija");
+    lygu(G.parink({ pavadinimas: "Valymo paslaugos", objektas: "paslaugos", kalba: "LT" }).kalba, "LT", "kalba LT");
+  });
+  await testas("Stebėjimo režimas: palygink() - siūlyta, pasirinkta, sutampa; pavadinimas į įrašą nepatenka", () => {
+    const r = G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai" });
+    const a = G.palygink(r, "DARBAI_MAZOJI"), b = G.palygink(r, "STATYBOS_RANGOS");
+    lygu([a.sutampa, b.sutampa, b.siulyta, b.pasirinkta], [true, false, "DARBAI_MAZOJI", "STATYBOS_RANGOS"], "palyginimas");
+    tiesa(!JSON.stringify(b).includes("Tvoros"), "pavadinimas įraše");
+    const e = G.parink({ pavadinimas: "Darbų pirkimas", objektas: "darbai", atsakymai: { K2: "eksploatavimo", K3: "ol" } });
+    lygu(G.palygink(e, "EKSPLOATAVIMO", "OL").klausimai, ["K2=eksploatavimo", "K3=ol"], "klausimai įraše");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -3321,6 +3423,7 @@ async function testaiSutartys(){
     await testaiTeise();
     await testaiTikrinimas();
     await testaiSutartys();
+    await testaiParinkimas();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
