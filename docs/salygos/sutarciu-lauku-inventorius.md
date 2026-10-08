@@ -8,7 +8,8 @@ taisyklės (išskleidžiamieji sąrašai) patvirtintos 2026-10-07 - jos čia pak
 
 Bendrosios sąlygos (BS) pildomų vietų neturi - generuojamos be pakeitimų (tik generavimo pasas ir lentelių sutvarkymas Pages programai).
 LT/EN dokumente sprendžiama tik lietuviškai - anglų stulpelis seka tą patį pasirinkimą toje pačioje eilutėje (patikrinta: visi keturi
-LT/EN failai generuojami be likusių lietuviškų ar angliškų nurodymų).
+LT/EN failai generuojami be likusių lietuviškų ar angliškų nurodymų). Anglų tekstas (2026-10-08, jūsų sprendimas: vertėjas netikrins) suredaguotas pagal VPT
+vertimų ir ES pirkimų terminiją, be geltono žymėjimo; LT/EN sutarties Word failuose - DI požymis (`DI_turinys`).
 
 Žymės: **D** - iš jau įvestų duomenų (1 žingsnis, pirkimo kortelė, SPS 2 žingsnis); **S** - LITGRID standartas (siūloma su kilme
 „LITGRID standartas“, patvirtinama vienu paspaudimu); **K** - klausimas 2 žingsnyje (skyrius „Sutarties projektas“); **SUD** - lieka
