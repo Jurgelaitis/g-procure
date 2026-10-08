@@ -37,7 +37,7 @@ const GP_SUTARCIU_GEN = (() => {
   const naujas = (d, tag) => d.createElementNS(W, 'w:' + tag);
   const tarpai = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
   const TRYN = /^(jei (punktas )?netaikoma?s?, visą žemiau esantį tekstą ištrinti:|if (not applicable|the clause does not apply), delete all the text below:)$/i;
-  const NETAIKOMA = /netaikom|not applicable|does not apply/i;
+  const NETAIKOMA = /netaikom|not applicable|do(es)? not apply/i;   // „... papunkčiai netaikomi“ - EN „... do not apply“ (iki 2026-10-08 neatpažinta: EN papunkčiai likdavo)
   const VIETA_REZ = /\[\.\.\.\]|\[…\]|\[_\]|\{\.*\}/g;
   const PASIRINKITE = /Pasirinkite elementą|Choose an item/;
   const IMONE = 'ĮMONĖS PAVADINIMAS';
@@ -404,6 +404,8 @@ const GP_SUTARCIU_GEN = (() => {
     await GPDocx.part(doc, 'word/styles.xml'); await GPDocx.part(doc, 'word/numbering.xml');
     if (typeof GPLent !== 'undefined' && info.lenteles !== false) A.lenteles = GPLent.sutvarkyti(doc);
     if (tekstai() !== pries) A.klaidos.push('lentelių tvarkymas pakeitė tekstą');
+    // DI požymiai (DI akto 50 str. 2 d.; shared/di-zymejimas.js): LT/EN sutarčių anglų tekstas suredaguotas naudojant DI rengiant šabloną
+    if (info.di && info.di.length) await GPDocx.diPozymiai(doc, info.di);
     if (info.pasas !== false) await GPDocx.pasas(doc, { sablonas: info.sablonas || '', forma: info.forma || '', data: info.data || '', modulis: 'PP-salygos' });
     const blob = A.klaidos.length ? null : await GPDocx.save(doc, info.tipas || 'blob');
     return { blob, ataskaita: A };
