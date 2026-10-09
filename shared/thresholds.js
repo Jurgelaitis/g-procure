@@ -15,6 +15,9 @@ window.GP_THRESHOLDS = {
   // pirkimo dalims, kurių kiekviena mažesnė už šias sumas, galima supaprastinta tvarka, jei jų bendra vertė
   // ne didesnė kaip dalisProc procentų visų dalių vertės. Skaičiai įrašyti pačiame įstatyme (ne VPT peržiūrimi).
   DALYS: { prekes_paslaugos: 80000, darbai: 1000000, dalisProc: 20 },
+  // Pirkimo sutarties turinio reikalavimų išimtis (PĮ 95 str. 4 d. / VPĮ 87 str. 5 d., GP_TEISE "sut_isimtis"; perskaityta e-tar
+  // 2026-10-09): reikalavimai gali būti netaikomi raštu sudaromai sutarčiai, kurios numatoma vertė mažesnė už šią sumą. Įrašyta įstatyme.
+  SUTARTIS: { reikalavimaiNuo: 15000 },
   // EPSO-G politikos slenkstis kastu-naudos analizei (pp-cost-benefit).
   // PASTABA: politikos (ne istatymo) riba, diskusines stadijos - tikslinti patvirtinus.
   CBA: { privaloma: 20000000, rekomenduojama: 10000000 }

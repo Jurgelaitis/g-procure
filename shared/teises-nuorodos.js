@@ -461,7 +461,40 @@
     dok_konfidenciali: { tikrinta: "2026-10-07", apie: "pirkimo dokumentuose nurodoma, kad tiekėjas privalo nurodyti, ar pasiūlyme yra konfidencialios informacijos ir kuri informacija konfidenciali",
       PI: { a: "PI", s: 48, d: 2, p: 30 }, VPI: { a: "VPI", s: 35, d: 2, p: 31 } },
     dok_nacsaugumas_patikra: { tikrinta: "2026-10-07", apie: "pirkimo dokumentuose nurodoma, kad jeigu bus atliekama patikra dėl atitikties nacionalinio saugumo interesams, tiekėjas turės pateikti jai reikalingus dokumentus",
-      PI: { a: "PI", s: 48, d: 2, p: 33 }, VPI: { a: "VPI", s: 35, d: 2, p: 33 } }
+      PI: { a: "PI", s: 48, d: 2, p: 33 }, VPI: { a: "VPI", s: 35, d: 2, p: 33 } },
+    // Privalomi pirkimo sutarties elementai (shared/sutarties-elementai.js) - PĮ 95 str. 1 d. ir VPĮ 87 str. 2 d., e-tar 2026-10-09.
+    // Punktų numeracija sutampa; VPĮ 7 p. papildomai: trukmė su pratęsimu > 6 mėn. - privaloma su mokesčiais nesusijusi kainos peržiūros sąlyga
+    // (išskyrus kintamo įkainio ar išlaidų atlyginimo kainodarą). VPĮ 87 str. 1 d. - tipinės VPT sutarčių sąlygos.
+    sut_salys: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomos sutarties šalių teisės ir pareigos",
+      PI: { a: "PI", s: 95, d: 1, p: 1 }, VPI: { a: "VPI", s: 87, d: 2, p: 1 } },
+    sut_objektas: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomos perkamos prekės, paslaugos ar darbai, preliminarus, o jeigu įmanoma, - tikslus jų kiekis",
+      PI: { a: "PI", s: 95, d: 1, p: 2 }, VPI: { a: "VPI", s: 87, d: 2, p: 2 } },
+    sut_kainodara: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomos kainodaros taisyklės pagal VPT patvirtintą metodiką",
+      PI: { a: "PI", s: 95, d: 1, p: 3 }, VPI: { a: "VPI", s: 87, d: 2, p: 3 } },
+    sut_mokejimas: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatoma mokėjimo tvarka; mokėjimo laikotarpiai - pagal mokėjimų vėlavimo prevencijos įstatymą",
+      PI: { a: "PI", s: 95, d: 1, p: 4 }, VPI: { a: "VPI", s: 87, d: 2, p: 4 } },
+    sut_terminai: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomi sutarties prievolių įvykdymo terminai",
+      PI: { a: "PI", s: 95, d: 1, p: 5 }, VPI: { a: "VPI", s: 87, d: 2, p: 5 } },
+    sut_uztikrinimas: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomas sutarties įvykdymo užtikrinimas",
+      PI: { a: "PI", s: 95, d: 1, p: 6 }, VPI: { a: "VPI", s: 87, d: 2, p: 6 } },
+    sut_perziura: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomos sutarties peržiūros sąlygos ar pasirinkimo galimybės, jeigu tai numatoma (VPĮ: trukmė su pratęsimu ilgesnė kaip 6 mėn. - privaloma su mokesčiais nesusijusi kainos peržiūros sąlyga, išskyrus kai perskaičiavimas negalimas, pvz. kintamo įkainio ar išlaidų atlyginimo kainodara)",
+      PI: { a: "PI", s: 95, d: 1, p: 7 }, VPI: { a: "VPI", s: 87, d: 2, p: 7 } },
+    sut_gincai: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatoma ginčų sprendimo tvarka",
+      PI: { a: "PI", s: 95, d: 1, p: 8 }, VPI: { a: "VPI", s: 87, d: 2, p: 8 } },
+    sut_nutraukimas: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomi sutarties nutraukimo atvejai, įskaitant įstatyme nurodytus, ir tvarka",
+      PI: { a: "PI", s: 95, d: 1, p: 9 }, VPI: { a: "VPI", s: 87, d: 2, p: 9 } },
+    sut_galiojimas: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomas sutarties galiojimas",
+      PI: { a: "PI", s: 95, d: 1, p: 10 }, VPI: { a: "VPI", s: 87, d: 2, p: 10 } },
+    sut_subtiekejai: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomi subtiekėjai, jeigu vykdant sutartį jie pasitelkiami, ir jų keitimo tvarka",
+      PI: { a: "PI", s: 95, d: 1, p: 11 }, VPI: { a: "VPI", s: 87, d: 2, p: 11 } },
+    sut_atsakingas: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomas vadovo sprendimu skiriamas asmuo (asmenys), atsakingas už sutarties vykdymą",
+      PI: { a: "PI", s: 95, d: 1, p: 12 }, VPI: { a: "VPI", s: 87, d: 2, p: 12 } },
+    sut_nacsaugumas: { tikrinta: "2026-10-09", apie: "perkantysis subjektas (perkančioji organizacija), veikiantis nacionaliniam saugumui užtikrinti strategiškai svarbių ūkio sektorių srityse ar laikomas esminiu subjektu, nustato sutarties nutraukimo atvejį, kai Vyriausybė priima sprendimą, kad sutartis neatitinka nacionalinio saugumo interesų",
+      PI: { a: "PI", s: 95, d: 3 }, VPI: { a: "VPI", s: 87, d: 4 } },
+    sut_isimtis: { tikrinta: "2026-10-09", apie: "sutarties turinio reikalavimai gali būti netaikomi raštu sudaromai sutarčiai, kai numatoma vertė mažesnė kaip 15 000 Eur be PVM arba sutarties turinys vienodas visiems tokių prekių, paslaugų ar darbų gavėjams",
+      PI: { a: "PI", s: 95, d: 4 }, VPI: { a: "VPI", s: 87, d: 5 } },
+    sut_tipines: { tikrinta: "2026-10-09", apie: "pirkimo sutartys sudaromos taikant VPT patvirtintas tipines pirkimo sutarčių sąlygas, išskyrus kai jos netaikytinos ar nepritaikomos (pagrindimas - ataskaitoje)",
+      VPI: { a: "VPI", s: 87, d: 1 } }
   };
   /* VPĮ atitikmenys (2026-09-26) esamiems PĮ raktams: aiškumas ir objekto kiekis - VPĮ 35 str. */
   N.dokumentu_aiskumas.VPI = { a: "VPI", s: 35, d: 4 };

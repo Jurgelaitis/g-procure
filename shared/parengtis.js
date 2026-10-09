@@ -32,7 +32,7 @@
       vaidmuo: { skelbimas: "Skelbimas", sps: "SPS", bps: "BPS", ts: "Techninė specifikacija", sutartis: "Sutarties projektas (specialiosios sąlygos)",
                  sutartis_bendrosios: "Sutarties bendrosios sąlygos", pasiulymas: "Pasiūlymo forma", paraiska: "Paraiškos forma", ebvpd: "EBVPD",
                  paaiskinimas: "Paaiškinimai ir atsakymai", priedas: "Kitas priedas", kita: "Kita" },
-      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės", privalomi: "Privalomi dokumentų elementai", kvalifikacija: "Kvalifikacijos reikalavimai (Metodika)" },
+      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės", privalomi: "Privalomi dokumentų elementai", kvalifikacija: "Kvalifikacijos reikalavimai (Metodika)", sutarties_elementai: "Privalomi sutarties elementai" },
       patikra: {
         dokumentai: "Ar yra visi dokumentai pagal būdą", priedai: "SPS priedų sąrašas ir failai", neperskaityti: "Perskaityti failai",
         kalba: "Pasiūlymų kalba: skelbimas ir SPS", pavadinimas: "Pavadinimas: skelbimas ir SPS", dalys: "Dalys: skelbimas ir SPS",
@@ -42,7 +42,8 @@
         laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", grafikas: "SPS grafiko datų tvarka",
         privalomi: "Privalomi dokumentų elementai", privalomi_kiti: "Kiti įstatyme išvardyti elementai",
         kval_reikalavimai: "Tiekėjo patirties ir pajamų reikalavimai SPS", kval_laikotarpis: "Patirties laikotarpis pagal Metodiką",
-        kval_patirties_verte: "Patirties vertė pagal Metodiką", kval_pajamos: "Metinės pajamos pagal Metodiką"
+        kval_patirties_verte: "Patirties vertė pagal Metodiką", kval_pajamos: "Metinės pajamos pagal Metodiką",
+        sut_elementai: "Privalomi sutarties elementai", sut_turinys: "Elementų turinys", sut_tipines: "VPT tipinės sutarčių sąlygos"
       },
       trukstaDok: "Pakete neradau: {d}. Jei jis pateikiamas kitu pavadinimu, pakeiskite failo vaidmenį sąraše.",
       beBudo: "Pirkimo būdas nežinomas (nėra kortelės ir skelbimo) - tikrinami tik pagrindiniai dokumentai: SPS, techninė specifikacija ir sutartis.",
@@ -84,6 +85,15 @@
       privNeikeltas: "privalomų elementų katalogas neįkeltas", privBeBudo: "pirkimo būdas nežinomas (nėra kortelės ir skelbimo)", privNeAtviras: "ne atviras konkursas",
       privKiti: "automatiškai netikrinama (taikoma tik tam tikrais atvejais arba tikrinama kitur): {s}",
       kvalNeikeltas: "kvalifikacijos patikra neįkelta",
+      sutNerasta: "Sutarties projekte neradau: {e}. Ieškota: {kur}. Jei tai parašyta kitais žodžiais ar kitame sutarties dokumente, viskas gerai - nurodykite vietą sprendimo pagrindime.",
+      sutNerastaJei: "Sutarties projekte neradau: {e}. Įstatymas tai numato tik tam tikrais atvejais - patikrinkite, ar taikoma šiai sutarčiai.",
+      sutMazaVerte: "Sutarties projekte neradau: {e}. Numatoma vertė mažesnė kaip {riba} Eur be PVM - šių reikalavimų galima netaikyti; patikrinkite, ar taip nuspręsta.",
+      sutVpiPerziura: "Sutarties projekte neradau: {e}. Sutarčiai, trunkančiai ilgiau kaip 6 mėnesius (su pratęsimais), VPĮ kainos peržiūrą numato privalomai, išskyrus kintamo įkainio ir išlaidų atlyginimo kainodarą - patikrinkite.",
+      sutKur: "sutarties specialiosiose ir bendrosiose sąlygose", sutKurSs: "sutarties specialiosiose sąlygose (bendrųjų sąlygų pakete nėra)",
+      sutKurBs: "sutarties bendrosiose sąlygose (specialiųjų sąlygų pakete nėra)",
+      sutBeDok: "pakete nėra sutarties projekto", sutNeikeltas: "sutarties elementų katalogas neįkeltas",
+      sutTurinys: "tikrinama tik, ar sutartyje yra kiekvienas elementas; ar jo turinys atitinka įstatymą (pvz., kainodaros taisyklės, mokėjimo terminai), nevertinama",
+      sutTipines: "VPĮ: pirkimo sutartys sudaromos taikant VPT patvirtintas tipines sąlygas, išskyrus kai jos netaikytinos ar nepritaikomos ({t}) - ar taikytos, nevertinama",
       laukuPav: { pavadinimas: "pavadinimas", verte: "vertė", budas: "būdas", bvpz: "BVPŽ kodas", dalys: "dalys", trukmeMen: "sutarties trukmė",
                   pasiulymuTerminas: "pasiūlymų terminas", paskelbimas: "paskelbimo data", vykdytojas: "vykdytojas", rezimas: "režimas" },
       men: "mėn."
@@ -92,7 +102,7 @@
       vaidmuo: { skelbimas: "Notice", sps: "SPS", bps: "BPS", ts: "Technical specification", sutartis: "Draft contract (special conditions)",
                  sutartis_bendrosios: "General contract conditions", pasiulymas: "Tender form", paraiska: "Application form", ebvpd: "ESPD",
                  paaiskinimas: "Clarifications and answers", priedas: "Other annex", kita: "Other" },
-      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules", privalomi: "Required document elements", kvalifikacija: "Qualification requirements (Methodology)" },
+      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules", privalomi: "Required document elements", kvalifikacija: "Qualification requirements (Methodology)", sutarties_elementai: "Required contract elements" },
       patikra: {
         dokumentai: "All documents for the procedure", priedai: "SPS list of annexes and files", neperskaityti: "Files read",
         kalba: "Tender language: notice and SPS", pavadinimas: "Title: notice and SPS", dalys: "Lots: notice and SPS",
@@ -102,7 +112,8 @@
         laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", grafikas: "Order of SPS schedule dates",
         privalomi: "Required document elements", privalomi_kiti: "Other elements listed in the law",
         kval_reikalavimai: "Supplier experience and turnover requirements in the SPS", kval_laikotarpis: "Experience period under the Methodology",
-        kval_patirties_verte: "Value of experience under the Methodology", kval_pajamos: "Annual turnover under the Methodology"
+        kval_patirties_verte: "Value of experience under the Methodology", kval_pajamos: "Annual turnover under the Methodology",
+        sut_elementai: "Required contract elements", sut_turinys: "Content of the elements", sut_tipines: "Standard contract terms of the Public Procurement Office"
       },
       trukstaDok: "Not found in the package: {d}. If it has another name, change the file's role in the list.",
       beBudo: "The procedure is unknown (no card and no notice) - only the main documents are checked: SPS, technical specification and contract.",
@@ -144,6 +155,15 @@
       privNeikeltas: "the catalogue of required elements is not loaded", privBeBudo: "the procedure is unknown (no card and no notice)", privNeAtviras: "not an open procedure",
       privKiti: "not checked automatically (applies only in certain cases or is checked elsewhere): {s}",
       kvalNeikeltas: "the qualification check is not loaded",
+      sutNerasta: "Not found in the draft contract: {e}. Searched: {kur}. If it is worded differently or is in another contract document, that is fine - give the location in the decision note.",
+      sutNerastaJei: "Not found in the draft contract: {e}. The law requires this only in certain cases - check whether it applies to this contract.",
+      sutMazaVerte: "Not found in the draft contract: {e}. The estimated value is below EUR {riba} excluding VAT - these requirements may be disapplied; check that this was decided.",
+      sutVpiPerziura: "Not found in the draft contract: {e}. For a contract lasting more than 6 months (including extensions) the Public Procurement Law requires price review, except for variable rate and cost reimbursement pricing - check.",
+      sutKur: "in the special and general conditions of the contract", sutKurSs: "in the special conditions of the contract (no general conditions in the package)",
+      sutKurBs: "in the general conditions of the contract (no special conditions in the package)",
+      sutBeDok: "no draft contract in the package", sutNeikeltas: "the catalogue of contract elements is not loaded",
+      sutTurinys: "only whether each element is present in the contract is checked; whether its content complies with the law (e.g. pricing rules, payment periods) is not assessed",
+      sutTipines: "Public Procurement Law: contracts are concluded using the standard terms approved by the Public Procurement Office, unless they are not applicable or cannot be adapted ({t}) - whether they were used is not assessed",
       laukuPav: { pavadinimas: "title", verte: "value", budas: "procedure", bvpz: "CPV code", dalys: "lots", trukmeMen: "contract duration",
                   pasiulymuTerminas: "tender deadline", paskelbimas: "publication date", vykdytojas: "contracting body", rezimas: "regime" },
       men: "months"
@@ -197,8 +217,9 @@
     if (doc.rusis === "Skelbimas" || /contract\s+notice|contest\s+notice|skelbimas\s+apie\s+pirkim/.test(n)) return "skelbimas";
     if (/atsakym|klausim|paaiskinim|patikslinim/.test(n)) return "paaiskinimas";
     // Sutarties dokumentai: „SS ...“, „... sutarties SS / BS“, „Specialiosios Sutarties sąlygos“
-    var sutarties = /(specialiosios|bendrosios)\s+sutarties\s+salyg|sutarties\s+(specialiosios|bendrosios)\s+salyg|sutarties\s+(ss|bs)\b|\(ss\)|\(bs\)/.test(n);
-    if (sutarties) return /bendrosios|\bbs\b|\(bs\)/.test(n) ? "sutartis_bendrosios" : "sutartis";
+    // (ir G-Procure sugeneruoto failo vardas „..._Sutarties-SS_...“ - 2026-10-09)
+    var sutarties = /(specialiosios|bendrosios)\s+sutarties\s+salyg|sutarties\s+(specialiosios|bendrosios)\s+salyg|sutarties[\s_-]+(ss|bs)(?![a-z])|\(ss\)|\(bs\)/.test(n);
+    if (sutarties) return /bendrosios|(^|[^a-z])bs(?![a-z])|\(bs\)/.test(n) ? "sutartis_bendrosios" : "sutartis";
     if (/^ss\s*\d/.test(n)) return "priedas";                                   // sutarties priedai
     if (/pasiulymo\s+forma|pirminio_galutinio|tender\s+form/.test(n)) return "pasiulymas";
     if (/paraiskos\s+forma|application\s+form/.test(n)) return "paraiska";
@@ -773,6 +794,43 @@
         radinys({ id: r.id, grupe: "kvalifikacija", lygis: r.lygis, tekstas: r.tekstas, teise: teiseMet(r.teise),
           vietos: r.vietos.map(function (v) { return docVieta(v.doc, { loc: v.b && v.b.loc, t: v.citata }, l); }) });
       });
+    }
+
+    /* ---- G. Privalomi sutarties elementai (shared/sutarties-elementai.js; PĮ 95 str. 1 d. / VPĮ 87 str. 2 d. - per registrą, sut_*).
+       Sutarties specialiosiose ir bendrosiose sąlygose; nerastas - „Patikrinkite“, „jeigu numatoma / pasitelkiami“ ir nacionalinio
+       saugumo nutraukimo atvejis - informacija; vertė < 15 000 Eur be PVM - informacija (išimtis). Niekada ne kliūtis ir ne „atitinka“. */
+    var SE = global.GP_SUTARTIES_ELEMENTAI;
+    var sutDocs = docs.filter(function (d) { return vaid[d.id] === "sutartis"; }).concat(docs.filter(function (d) { return vaid[d.id] === "sutartis_bendrosios"; }));
+    if (!SE || !global.GP_PRIVALOMI) patikra("sut_elementai", "sutarties_elementai", "nepatikrinta", X.sutNeikeltas);
+    else if (!P.sutartis && !P.sutartis_bendrosios) patikra("sut_elementai", "sutarties_elementai", "nepatikrinta", X.sutBeDok);
+    else {
+      var laukS = function (f) { return k && k[f] != null && k[f] !== "" ? k[f] : sk && sk.laukai[f] ? sk.laukai[f].reiksme : null; };
+      var sutKur = P.sutartis && P.sutartis_bendrosios ? X.sutKur : P.sutartis ? X.sutKurSs : X.sutKurBs;
+      var tIsimtis = teise(["sut_isimtis"]);
+      SE.ieskok({ docs: sutDocs, rezimas: rezimas, verte: laukS("verte"), trukmeMen: laukS("trukmeMen") }).forEach(function (x) {
+        var el = x.el, pav = SE.pav(el, l), id = "sut_" + el.id, tr = teise([el.raktas]);
+        if (x.busena === "rasta") {
+          var kur = [];
+          x.kur.forEach(function (v) {
+            var t = trumpas(v.doc.name) + (v.b && v.b.loc ? ", " + vieta(v.b.loc, l) : "");
+            if (kur.indexOf(t) < 0) kur.push(t);
+          });
+          patikra(id, "sutarties_elementai", "gerai", kur.join("; ") + (x.kur[0] && x.kur[0].citata ? ": " + kab(iskarpa(x.kur[0].citata, 140), l) : ""), pav);
+          return;
+        }
+        patikra(id, "sutarties_elementai", "radinys", "", pav);
+        var tekstas = x.priezastis === "maza_verte" ? X.sutMazaVerte : x.priezastis === "vpi_perziura" ? X.sutVpiPerziura :
+                      x.priezastis === "jei_taikytina" ? X.sutNerastaJei : X.sutNerasta;
+        var rb = global.GP_THRESHOLDS && global.GP_THRESHOLDS.SUTARTIS ? global.GP_THRESHOLDS.SUTARTIS.reikalavimaiNuo : "";
+        rb = String(rb).replace(/\B(?=(\d{3})+(?!\d))/g, l === "en" ? "," : " ");
+        radinys({ id: id, grupe: "sutarties_elementai", lygis: x.lygis, tekstas: sub(tekstas, { e: pav, kur: sutKur, riba: rb }), vietos: [],
+          teise: x.priezastis === "maza_verte" ? tr.concat(tIsimtis) : tr });
+      });
+      patikra("sut_turinys", "sutarties_elementai", "nepatikrinta", X.sutTurinys);
+      if (rezimas === "VPI") {
+        var tt = teise(["sut_tipines"]);
+        patikra("sut_tipines", "sutarties_elementai", "nepatikrinta", sub(X.sutTipines, { t: tt[0] ? tt[0].cit : "" }));
+      }
     }
 
     /* ---- T. Taisyklių variklis (A3): kortelė, o be jos - skelbimo duomenys */
