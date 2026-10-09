@@ -11,7 +11,8 @@
  *   GP_PALYGINIMAS.identifikuok(dok, rodykle)       -> [{ id, balas, apreptis, tikslumas }] - tas pats pagal formu-versijos.json rodyklę
  *   GP_PALYGINIMAS.kitosVersijos(irasas)            -> { maiša: versija } - ankstesnių oficialių formų pastraipos (lygink parinktis)
  *   GP_PALYGINIMAS.raktas(pakeitimas, formosId)     -> sprendimo raktas (ataskaitos sprendimai rodomi kitoje paketo versijoje)
- *   GP_PALYGINIMAS.lygink(forma, dok, { zemelapis, kitosVersijos }) -> { pakeitimai, statistika }  - klasifikuoti skirtumai
+ *   GP_PALYGINIMAS.lygink(forma, dok, { zemelapis, kitosVersijos, sutartis }) -> { pakeitimai, statistika }  - klasifikuoti skirtumai
+ *                                                    (sutartis - sutarties BS / SS: formos `vieta` pastraipos ir tik žemėlapio dalys)
  *   GP_PALYGINIMAS.pagalPasa(pasas, dok, forma)     -> tas pats rezultatas, bet tiksliai: kas pakeista PO generavimo
  *   GP_PALYGINIMAS.zodziai(a, b)                    -> [{ o: "=" | "-" | "+", t }] - pakeitimas žodžių lygiu
  *   GP_PALYGINIMAS.pasoXml(info, pastraipos)        -> generavimo paso XML (customXml dalis, žr. PP-salygos/variklis.js GPDocx.pasas)
@@ -150,13 +151,18 @@
   /* vietos[i] = true - formos pastraipa su pildoma vieta ar raudonu tekstu: tarpe ji poruojama su likusia dokumento pastraipa
      (pirma - pagal pradžią prieš vietą, tada - iš eilės), net jei tekstas mažai panašus („Vykdomas [Pasirinkite].“ -> „Vykdomas
      Supaprastintas pirkimas ...“, raudona data -> „2026 m. rugsėjo 29 d.“) */
-  function sulygink(A, B, vietos) {
+  /* vietos[i] - pildoma vieta (artimesnė pora, pagal pradžią); leidz[i] - leidžiami variantai (RegExp, sutarties išskleidžiamas sąrašas);
+     pozicija[i] - neradus poros, vieta poruojama su likusia tos pačios vietos dokumento pastraipa (numatyta - kaip vietos) */
+  function sulygink(A, B, vietos, leidz, pozicija, variantai) {
+    pozicija = pozicija || vietos;
     var poros = lcsPoros(A, B), ops = [], pa = 0, pb = 0;
     function tarpas(a1, a2, b1, b2) {
       var naudota = {}, i, j, laikini = [];
       for (i = a1; i < a2; i++) {
         var geriausia = null;
-        for (j = b1; j < b2; j++) {
+        // pasirinkimo vieta (sutarties išskleidžiamas sąrašas): pirmiausia - pastraipa, kuri yra vienas jos variantų
+        if (leidz && leidz[i]) for (j = b1; j < b2; j++) if (!naudota[j] && leidz[i].test(B[j])) { geriausia = { j: j, r: 0 }; break; }
+        if (!geriausia) for (j = b1; j < b2; j++) {
           if (naudota[j]) continue;
           var r = panasumas(A[i], B[j]);
           if (r >= 0.6 && (!geriausia || r > geriausia.r)) geriausia = { j: j, r: r };
@@ -168,10 +174,11 @@
         if (geriausia) { naudota[geriausia.j] = 1; laikini.push({ op: "~", a: i, b: geriausia.j, r: geriausia.r }); }
         else laikini.push({ op: "-", a: i, b: null });
       }
-      // likusios pildomos vietos - su likusiomis dokumento pastraipomis iš eilės (toje pačioje vietoje)
+      // likusios pildomos vietos - su likusiomis dokumento pastraipomis iš eilės (toje pačioje vietoje); pasirinkimo vieta su variantų sąrašu
+      // (sutartis) - ne: ji jau ieškojo savo varianto, o iš eilės paimta gretima nuostata būtų „užpildyta“, tikroji - „pašalinta“
       if (vietos) {
         var likB = []; for (j = b1; j < b2; j++) if (!naudota[j]) likB.push(j);
-        laikini.forEach(function (o) { if (o.op === "-" && vietos[o.a] && likB.length) { o.op = "~"; o.b = likB.shift(); o.r = 0; naudota[o.b] = 1; } });
+        laikini.forEach(function (o) { if (o.op === "-" && pozicija && pozicija[o.a] && likB.length) { o.op = "~"; o.b = likB.shift(); o.r = 0; naudota[o.b] = 1; } });
       }
       laikini.forEach(function (o) { ops.push(o); });
       for (j = b1; j < b2; j++) if (!naudota[j]) ops.push({ op: "+", a: null, b: j });
@@ -185,6 +192,35 @@
       if (o.op !== "-") return;
       var sar = prid[A[o.a]];
       if (sar && sar.length) { var k = sar.shift(); o.op = "perkelta"; o.b = ops[k].b; ops[k].op = "x"; }
+    });
+    // pasirinkimo vieta ir jos variantas skirtingose vietose (LT/EN lentelės eilutė suskaidyta - pastraipų eilė kita): pora per visą dokumentą
+    if (leidz) ops.forEach(function (o) {
+      if (o.op !== "-" || !leidz[o.a]) return;
+      var k = ops.findIndex(function (q) { return q.op === "+" && leidz[o.a].test(B[q.b]); });
+      if (k >= 0) { o.op = "~"; o.b = ops[k].b; o.r = 0; ops[k].op = "x"; }
+    });
+    // sutartis: pasirinkimo vietoje - ne formos variantas, bet į jį panašus tekstas (pakeistas variantas) - pora su artimiausiu variantu
+    if (leidz && variantai) ops.forEach(function (o, k) {
+      if (o.op !== "-" || !leidz[o.a] || !variantai[o.a]) return;
+      var g = null;
+      ops.forEach(function (y, q) {
+        if (y.op !== "+" || Math.abs(q - k) > 6) return;
+        variantai[o.a].forEach(function (v) { var r = panasumas(v.n, B[y.b]); if (r >= 0.6 && (!g || r > g.r)) g = { y: y, r: r, v: v.t }; });
+      });
+      if (g) { o.op = "~"; o.b = g.y.b; o.r = g.r; o.variantas = g.v; g.y.op = "x"; }
+    });
+    // sutartis: nuostata, kurios pora liko kitame tarpe (antraštė be „(taikoma, jeigu ...)“ sutapo su kitu tokio pat teksto punktu; LT/EN eilutė
+    // suskaidyta - pastraipų eilė kita, o pastraipa dar ir pakeista) - pora su panašiausia pridėta pastraipa
+    if (leidz) ops.forEach(function (o, k) {
+      if (o.op !== "-" || leidz[o.a]) return;
+      // greta - pakanka 0,6; toliau (LT/EN eilutė suskaidyta į kelias - pastraipų eilė kita) - tik labai panaši (0,85)
+      var g = null;
+      ops.forEach(function (y, q) {
+        if (y.op !== "+") return;
+        var r = panasumas(A[o.a], B[y.b]);
+        if (r >= (Math.abs(q - k) <= 4 ? 0.6 : 0.85) && (!g || r > g.r)) g = { y: y, r: r };
+      });
+      if (g) { o.op = "~"; o.b = g.y.b; o.r = g.r; g.y.op = "x"; }
     });
     return ops.filter(function (o) { return o.op !== "x"; });
   }
@@ -205,12 +241,14 @@
   /* ---------------------------------------------------------------- neprivalomos formos dalys */
   /* Iš formos sandaros (ne ranka sudarytas sąrašas): žemėlapio blokai; „Jei / Jeigu ... :“ papunkčiai iki kito to paties ar
      aukštesnio lygio punkto; nacionalinio saugumo dalis; raudona sąlygos antraštė ir jos juodi punktai. */
-  function neprivalomos(forma, zemelapis) {
+  function neprivalomos(forma, zemelapis, tikZemelapis) {
     var s = {}, i, j;
     ((zemelapis && zemelapis.blokai) || []).forEach(function (b) {
       if (b.blokas && b.blokas.nuo != null) for (var k = b.blokas.nuo; k <= b.blokas.iki; k++) s["i" + k] = 1;
       if (b.i != null) s["i" + b.i] = 1;
     });
+    // Sutartis: „jei / jeigu / kai ...“ ir nacionalinio saugumo nuostatos - sutarties sąlygos, ne rengėjo pasirinkimas - tik žemėlapio dalys
+    if (tikZemelapis) return s;
     var lygis = function (t) { var m = /^\s*(\d+(?:\.\d+)*)\.?\s/.exec(t); return m ? m[1].split(".").length : 0; };
     var SALYGA = /^(\d+(\.\d+)*\.?\s*)?(jei|jeigu|kai)\s/i;
     var arba = function (x) { return x.red && /^\s*arba\s*$/i.test(x.t); };
@@ -246,6 +284,8 @@
   var SVARBUS_SKYRIUS = /(PAŠALINIMO|KVALIFIKACIJ|VERTINIM|UŽTIKRINIM|SUTARTIES|NACIONALIN|SANKCIJ|ŽALI|KAINA)/;
   var SVARBUS_TURINYS = /(sankcij|Rusijos|Baltarusijos|nacionalinio saugumo|reglament\S* \(ES\)|negali dalyvauti)/i;
   var KVALIF_SKYRIUS = /(PAŠALINIMO|KVALIFIKACIJ|ŽALI)/;
+  // Sutartyje „SUTARTIES“ yra beveik kiekvienoje antraštėje - jautrios tik kaina, užtikrinimas, netesybos, nacionalinis saugumas, sankcijos
+  var SVARBUS_SUTARTIES = /(KAIN|UŽTIKRINIM|NETESYB|NACIONALIN|SANKCIJ)/;
   function skyriai(ps) { var cur = "", out = []; ps.forEach(function (x) { if (x.antraste && !x.toc) cur = x.t.replace(/\s\d{1,3}$/, ""); out.push(cur); }); return out; }
   function techninis(a, b) {
     if (TURINIO_EILUTE.test(a) || TURINIO_EILUTE.test(b)) return "turinys";
@@ -297,8 +337,14 @@
   /* forma, dok - pastraipos(); grąžina { pakeitimai: [{ op, rusis, poRusis, a, b, forma, dok, skyrius, svarbus }], statistika } */
   function lygink(forma, dok, o) {
     o = o || {};
-    var vietos = forma.map(function (x) { return x.red || /_{3,}|\[[^\]]*\]|pasirinkite/i.test(x.t) || (x.t.length < 40 && /:\s*$/.test(x.t)); });
-    var ops = sulygink(forma.map(function (x) { return x.n; }), dok.map(function (x) { return x.n; }), vietos);
+    // o.sutartis (2026-10-09): formos pastraipos su `vieta` - sutarties žemėlapio pildomos vietos (valdikliai, laukai, nurodymai, alternatyvos);
+    // SPS lentelių prielaidos netaikomos - sutarties specialiosios sąlygos yra lentelė, ir joje pridėta nuostata yra nukrypimas
+    var sut = !!o.sutartis, svarbSk = sut ? SVARBUS_SUTARTIES : SVARBUS_SKYRIUS;
+    var vietos = forma.map(function (x) { return x.red || x.vieta || /_{3,}|\[[^\]]*\]|pasirinkite/i.test(x.t) || (x.t.length < 40 && /:\s*$/.test(x.t)); });
+    var ops = sulygink(forma.map(function (x) { return x.n; }), dok.map(function (x) { return x.n; }), vietos,
+      sut ? forma.map(function (x) { return x.leidziami || null; }) : null,
+      sut ? forma.map(function (x, k) { return vietos[k] && !x.salinama && !x.leidziami; }) : null,
+      sut ? forma.map(function (x) { return x.variantai || null; }) : null);
     // pakeista skyriaus antraštė („14. PRIEDAI (koreguojama pagal poreikį)“ -> „PRIEDAI“): pašalinta ir pridėta antraštė greta - pora
     ops.forEach(function (x, k) {
       if (x.op !== "-" || !forma[x.a].antraste) return;
@@ -310,32 +356,51 @@
     });
     ops = ops.filter(function (x) { return x.op !== "x"; });
     var kitos = o.kitosVersijos || null;      // { maiša: "versija" } - oficialių formų versijų pastraipos, kurių dabartinėje nėra
-    var nepriv = neprivalomos(forma, o.zemelapis), skF = skyriai(forma), skD = skyriai(dok);
-    var st = { vienodos: 0, nukrypimas: 0, neprivaloma: 0, uzpildyta: 0, techninis: 0 }, pak = [];
+    // naujos - { maiša: 1 } formos pastraipos, kurių pradinėje redakcijoje nebuvo (sutarčių registras): dokumente pagal ankstesnę redakciją
+    // (bent viena jo pastraipa - iš kitos versijos) jų nebuvimas - techninis, ne nukrypimas
+    var naujos = o.naujos || null, formoje = {};
+    forma.forEach(function (y) { formoje[y.n] = 1; });
+    // ankstesnė redakcija - bent 2 ilgesnės jos pastraipos, kurių formoje nėra (trumpi pasirinkimai, pvz. „Punktas netaikomas.“, - ne požymis)
+    var sena = !!kitos && dok.filter(function (y) { return y.n.length > 40 && !formoje[y.n] && kitos[maisa(y.n)]; }).length >= 2;
+    var nepriv = neprivalomos(forma, o.zemelapis, sut), skF = skyriai(forma), skD = skyriai(dok);
+    var st = { vienodos: 0, nukrypimas: 0, neprivaloma: 0, uzpildyta: 0, techninis: 0 }, pak = [], ankst = null;
     ops.forEach(function (x) {
+      var po = ankst; if (x.a != null) ankst = forma[x.a];
       if (x.op === "=") { st.vienodos++; return; }
       var f = x.a != null ? forma[x.a] : null, d = x.b != null ? dok[x.b] : null, r, pr = null;
       if (x.op === "perkelta") { r = "techninis"; pr = "perkelta"; }
       else if (f && (f.toc || (d && d.toc))) { r = "techninis"; pr = "turinys"; }
       else if (x.antraste) { r = "techninis"; pr = "antraste"; }
       else if (d && kitos && kitos[maisa(d.n)]) { r = "techninis"; pr = "kita_versija"; }
+      else if (x.op === "-" && sena && naujos && naujos[maisa(f.n)]) { r = "techninis"; pr = "nauja_redakcija"; }
+      else if ((x.op === "-" && !f.n) || (x.op === "+" && !d.n)) { r = "techninis"; pr = "numeracija"; }   // pastraipa - tik punkto numeris („14.1.“)
+      // sutartis: išskleidžiamo sąrašo vietoje - tik formos variantas; pildoma vieta - bet kas; pašalinti - tik nurodymus ir pasirinkimo vietas
+      else if (sut && x.op === "~" && f.leidziami) { if (f.leidziami.test(d.n)) { r = "uzpildyta"; pr = "pasirinkimas"; } else { r = "nukrypimas"; pr = "ne_is_saraso"; } }
+      else if (sut && x.op === "~" && f.vieta) { r = "uzpildyta"; pr = "pazymeta"; }
+      else if (sut && x.op === "-") {
+        if (nepriv["i" + f.i]) { r = "neprivaloma"; pr = "pasalinta"; } else if (f.salinama) { r = "uzpildyta"; pr = "salinama"; } else r = "nukrypimas";
+      }
       else if (x.op === "+" && d.antraste && d.n.length >= 4 && forma.some(function (y) { return y.antraste && y.n.indexOf(d.n) === 0; })) { r = "techninis"; pr = "antraste"; }
-      else if (x.op === "+") {
+      else if (x.op === "+" && sut) {
+        // pridėta pastraipa iškart po pildomos vietos (pvz. kokybinių kriterijų tvarka keliomis pastraipomis) - užpildyta vieta
+        if (d.toc) { r = "techninis"; pr = "turinys"; }
+        else if (po && ((po.vieta && !po.leidziami) || po.vietaPo)) { r = "uzpildyta"; pr = "pazymeta"; } else r = "nukrypimas";
+      } else if (x.op === "+") {
         r = d.toc ? "techninis" : (d.lent ? "uzpildyta" : "nukrypimas");
         if (r === "techninis") pr = "turinys"; else if (d.lent) pr = "lentele";
-      } else if (f.red || (x.op === "~" && vietos[x.a] && x.r === 0)) { r = "uzpildyta"; pr = "raudonas"; }
+      } else if ((!sut && f.red) || (x.op === "~" && vietos[x.a] && x.r === 0)) { r = "uzpildyta"; pr = "raudonas"; }
       else if (x.op === "~" && (pr = techninis(f.t, d.t))) r = "techninis";
       else if (x.op === "~" && uzpildyta(f.t, d.t)) { r = "uzpildyta"; pr = "vieta"; }
-      else if (nepriv["i" + f.i]) { r = "neprivaloma"; pr = x.op === "-" ? "pasalinta" : "pakeista"; }
-      else if (f.lent && x.op === "-" && (!ilgaNuostata(f.t) || KVALIF_SKYRIUS.test(skF[x.a] || ""))) { r = "neprivaloma"; pr = "lentele"; }
+      else if (nepriv["i" + f.i] && !sut) { r = "neprivaloma"; pr = x.op === "-" ? "pasalinta" : "pakeista"; }   // sutartyje pasirinkto varianto tekstas nekeičiamas
+      else if (!sut && f.lent && x.op === "-" && (!ilgaNuostata(f.t) || KVALIF_SKYRIUS.test(skF[x.a] || ""))) { r = "neprivaloma"; pr = "lentele"; }
       else r = "nukrypimas";
       st[r]++;
       var sk = f ? skF[x.a] : skD[x.b];
       pak.push({ op: x.op === "~" ? "pakeista" : x.op === "-" ? "pasalinta" : x.op === "+" ? "prideta" : "perkelta",
-                 rusis: r, poRusis: pr, a: x.a, b: x.b, forma: f ? f.t : "", dok: d ? d.t : "",
-                 skyrius: sk || "", svarbus: SVARBUS_SKYRIUS.test(sk || "") || SVARBUS_TURINYS.test((f ? f.t : "") + " " + (d ? d.t : "")) });
+                 rusis: r, poRusis: pr, a: x.a, b: x.b, forma: x.variantas || (f ? f.t : ""), dok: d ? d.t : "",
+                 skyrius: sk || "", svarbus: svarbSk.test(sk || "") || SVARBUS_TURINYS.test((f ? f.t : "") + " " + (d ? d.t : "")) });
     });
-    return { pakeitimai: pak, statistika: st, formosPastraipu: forma.length, dokPastraipu: dok.length };
+    return { pakeitimai: pak, statistika: st, formosPastraipu: forma.length, dokPastraipu: dok.length, senaVersija: sena };
   }
 
   /* Su generavimo pasu: pastraipos lyginamos su paso maišomis - kas skiriasi, pakeista PO generavimo. Formos tekstas (forma)
@@ -389,13 +454,22 @@
     ps.forEach(function (x) { if (x.n.length > 40) { var h = maisa(x.n); if (parseInt(h.slice(-1), 16) < 4) o[h.slice(-8)] = 1; } });
     return o;
   }
+  /* kitosPozymiai (sutarčių registras, 2026-10-09) - ankstesnių redakcijų pastraipų požymiai: balas - didesnis iš F1 su dabartine forma ir
+     F1 su dabartine kartu su ankstesnėmis (LT/EN sutartis su LITGRID anglų tekstu kitaip būtų priskirta LT formai). */
   function identifikuok(dok, formos) {
     var D = pozymiai(dok), nd = Object.keys(D).length;
-    return Object.keys(formos || {}).map(function (id) {
-      var S = String((formos[id] || {}).pozymiai || "").split(/\s+/).filter(Boolean), rasta = 0;
+    var f1 = function (S) {
+      var rasta = 0;
       S.forEach(function (h) { if (D[h]) rasta++; });
       var ap = S.length ? rasta / S.length : 0, tk = nd ? rasta / nd : 0;
-      return { id: id, balas: ap + tk ? 2 * ap * tk / (ap + tk) : 0, apreptis: ap, tikslumas: tk };
+      return { balas: ap + tk ? 2 * ap * tk / (ap + tk) : 0, apreptis: ap, tikslumas: tk };
+    };
+    var dalys = function (t) { return String(t || "").split(/\s+/).filter(Boolean); };
+    return Object.keys(formos || {}).map(function (id) {
+      var S = dalys((formos[id] || {}).pozymiai), K = dalys((formos[id] || {}).kitosPozymiai);
+      var r = f1(S), rk = K.length ? f1(S.concat(K)) : null;
+      if (rk && rk.balas > r.balas) { r = rk; r.kitaVersija = true; }
+      return { id: id, balas: r.balas, apreptis: r.apreptis, tikslumas: r.tikslumas, kitaVersija: !!r.kitaVersija };
     }).sort(function (a, b) { return b.balas - a.balas; });
   }
   /* formu-versijos.json formos įrašas -> { maiša: "versijos pavadinimas" } (lygink parinktis kitosVersijos) */
