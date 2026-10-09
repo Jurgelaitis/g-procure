@@ -3829,6 +3829,18 @@ async function testaiSutartiesForma(){
     W.rodykRezultata(rez);
     tiesa(/Į paketą įtrauktos bendrosios ir specialiosios sąlygos/.test(D.getElementById("sutartiesPatikra").textContent), "patikros eilutė");
     tiesa(/Nuorodos į punktus ir priedus: patikrinta \d+, visos rodo į esamus/.test((D.getElementById("sutartiesNuorodos") || {}).textContent || ""), "nuorodų eilutė: " + ((D.getElementById("sutartiesNuorodos") || {}).textContent || "nėra"));
+    tiesa(/Privalomi sutarties elementai \(.*\): rasta 13 iš 13\.$/.test((D.getElementById("sutartiesElementai") || {}).textContent || "") && !D.getElementById("sutartiesElementai").classList.contains("lk-ispejimas"),
+      "elementų eilutė: " + ((D.getElementById("sutartiesElementai") || {}).textContent || "nėra"));
+    // nerastas elementas (katalogas pakeistas - šablonuose jų yra visi): SS patikroje ir 3 žingsnio eilutėje su pavadinimu
+    const iesk = W.GP_SUTARTIES_ELEMENTAI.ieskok;
+    W.GP_SUTARTIES_ELEMENTAI.ieskok = o => iesk(o).map(x => x.el.id === "galiojimas" ? Object.assign({}, x, { busena: "nerasta", kur: [], lygis: "tikrinti" }) : x);
+    try {
+      const rE = await W.generuoti(), ssE = rE.find(r => r.sutartis && /_SS$/.test(r.d.trumpas));
+      W.rodykRezultata(rE);
+      tiesa(ssE && ssE.audit.patikrinti.some(x => x.text === "Privalomas sutarties elementas nerastas: Sutarties galiojimas"), "SS patikroje nėra elemento radinio");
+      const el = D.getElementById("sutartiesElementai");
+      tiesa(/rasta 12 iš 13; nerasta: Sutarties galiojimas\./.test(el.textContent) && el.classList.contains("lk-ispejimas"), "3 žingsnio eilutė: " + el.textContent);
+    } finally { W.GP_SUTARTIES_ELEMENTAI.ieskok = iesk; }
     // nuoroda į neegzistuojantį punktą (patikra pakeista - tikri šablonai jų neturi): SS patikroje su citata, 3 žingsnio eilutė perspėja
     const tikrN = W.GP_SUTARCIU_NUORODOS.tikrink;
     W.GP_SUTARCIU_NUORODOS.tikrink = o => Object.assign(tikrN(o), { radiniai: [{ dok: "SS", i: 0, nr: "9.9.9", rusis: "punktas", citata: "taikomos 9.9.9 punkte nustatytos sąlygos" }] });
@@ -4286,6 +4298,53 @@ async function testaiSutarciuNuorodos(){
     tiesa(/Nuoroda į 5\.9 punktą/.test(D.getElementById("tkp-svarbiausia").textContent), "„Svarbiausia“ - nėra radinio");
     B = await tikrink([new W.File([ss], "Prekių sutarties specialiosios sąlygos.docx")]);
     tiesa(eil() && /nuorodų į kitą dokumentą nepatikrinta: \d+/.test(eil().textContent), "tik SS: " + (eil() && eil().textContent));
+  });
+  const E = W.GP_SUTARTIES_ELEMENTAI;
+  tiesa(E, "shared/sutarties-elementai.js neįkeltas modulyje");
+  const dokai = async (bs, ss) => (await W.GP_DOK.apdorok([new W.File([ss], "Sutarties SS.docx"), new W.File([bs], "Sutarties BS.docx")], null, "lt")).docs || [];
+  await testas("Privalomi sutarties elementai (shared/sutarties-elementai.js, PĮ 95 str. 1 ir 3 d.): visuose 8 šablonuose ir sugeneruotose sutartyse („Taip“ ir „Ne“) per GP_DOK, kaip tikrinime, rasti visi 13; citata - skyrius ar nuostata (SS 4.1, „2. ATSAKINGI ASMENYS“, BS 25 ir 22.2.2.13), ne apibrėžimas", async () => {
+    const blogi = [];
+    for (const seima of ["PREKES", "PASLAUGOS"]) for (const k of ["LT", "LTEN"]) {
+      const bsKod = seima + "_" + k + "_BS", ssKod = seima + "_" + k + "_SS";
+      const buf = async kod => new W.Uint8Array(await (await W.fetch("templates/sutartys/" + kod + ".docx")).arrayBuffer());
+      const bs = (await gen(bsKod)).blob;
+      for (const [kas, ssB, bsB] of [["šablonas", await buf(ssKod), await buf(bsKod)], ["taip", (await gen(ssKod, "taip")).blob, bs], ["ne", (await gen(ssKod, "ne")).blob, bs]]) {
+        const r = E.ieskok({ docs: await dokai(bsB, ssB), rezimas: "PI", verte: 1500000, trukmeMen: 24 });
+        const ner = r.filter(x => x.busena !== "rasta").map(x => x.el.id);
+        if (ner.length) { blogi.push(ssKod + " " + kas + ": nerasta " + ner.join(", ")); continue; }
+        const c = id => r.find(x => x.el.id === id).kur[0], pr = id => (/SS/.test(c(id).doc.name) ? "SS " : "BS ") + c(id).citata;
+        const tik = { terminai: /^SS 4\.1\. (Prekių pristatymo|Paslaugų suteikimo) terminas/, atsakingas: /^SS 2\. ATSAKINGI ASMENYS/, gincai: /^BS 25\. ?PRETENZIJOS IR GINČŲ/i, nacsaugumas: /^BS 22\.2\.2\.13\./, galiojimas: /^SS .*Sutartis galioja/ };
+        Object.entries(tik).forEach(([id, re]) => { if (!re.test(pr(id))) blogi.push(ssKod + " " + kas + " " + id + ": " + pr(id).slice(0, 60)); });
+      }
+    }
+    lygu(blogi, [], "elementai");
+  });
+  await testas("„Tikrinti parengtus dokumentus“: sugeneruotos sutarties failai (ir pervadinti - vaidmuo pagal generavimo pasą) - grupė „Privalomi sutarties elementai“, visi 13 rasti su vieta; tik SS - bendrųjų sąlygų elementai „Patikrinkite“ (be režimo - be teisės nuorodos); naudotojo pakeistas vaidmuo - pirmesnis", async () => {
+    // su generavimo pasu, kaip modulyje (be paso LT ir LT/EN sutarčių LT tekstas vienodas - forma pagal tekstą neatpažįstama vienareikšmiškai)
+    const genP = async (kod, kur) => { const { buf, Z } = await sutartiesSablonas(kod), ctx = ctxPagal(Z);
+      return G.generuok(buf, Z, /_SS$/.test(kod) ? F.sprendimai(Z, ctx, sutartiesAtsakymai(Z, ctx, kur)).S : {}, { sablonas: kod, tipas: "uint8array" }); };
+    const bs = (await genP("PREKES_LT_BS")).blob, ss = (await genP("PREKES_LT_SS", "taip")).blob;
+    const grupe = () => [...D.querySelectorAll("#tkPatikrosLent tr")].filter(tr => /Privalomi sutarties elementai/.test(tr.textContent));
+    for (const vardai of [["VPP-1_Sutarties-BS_Kabeliai_2026-10-09.docx", "VPP-1_Sutarties-SS_Kabeliai_2026-10-09.docx"], ["a.docx", "b.docx"]]) {
+      const B = await tikrink([new W.File([bs], vardai[0]), new W.File([ss], vardai[1])]);
+      const pt = B.rez.patikros.filter(p => p.grupe === "sutarties_elementai");
+      lygu([B.rez.dokumentai.map(d => d.vaidmuo), pt.filter(p => p.busena === "gerai").length, B.radiniai.filter(r => r.grupe === "Privalomi sutarties elementai").length],
+        [["sutartis_bendrosios", "sutartis"], 13, 0], vardai[0] + ": vaidmenys, rasti, radiniai");
+      tiesa(grupe().length === 14 && /Sutarties galiojimasPrivalomi sutarties elementaipatikrinta - be pastabų/.test(grupe().map(tr => tr.textContent).join(" | ")), vardai[0] + ": patikrų lentelė: " + grupe().length);
+    }
+    // pasirinkus „nelyginti su forma“, vaidmuo iš formos nebetaikomas (pervadintas failas - „kita“)
+    const fs = D.querySelector('[data-tk-forma]'); fs.value = ""; fs.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await kol(() => W.GP_TIKRINIMAS.busena.rez.dokumentai.some(d => d.vaidmuo === "kita"), "vaidmuo po formos pakeitimo");
+    const vm = W.GP_TIKRINIMAS.busena.rez.dokumentai.map(d => d.vaidmuo);
+    tiesa(vm.filter(v => v === "kita").length === 1 && vm.filter(v => /^sutartis/.test(v)).length === 1, "be formos - vienas failas nebe sutartis: " + vm.join(", "));
+    let B = await tikrink([new W.File([ss], "b.docx")]);
+    const rad = B.radiniai.filter(r => r.grupe === "Privalomi sutarties elementai");
+    lygu(rad.map(r => [r.lygis, /^Sutarties projekte neradau: /.test(r.tekstas), r.teise[0] && r.teise[0].cit]),
+      [["tikrinti", true, null], ["info", true, null]], "tik SS: ginčai ir nacionalinis saugumas (BS); be kortelės ir skelbimo režimas nežinomas - teisės nuorodos nėra (PĮ ir VPĮ nemaišomi)");
+    // naudotojas pažymi, kad tai ne sutartis - grupė nepatikrinta
+    const sel = D.querySelector("[data-tk-vaidmuo]"); sel.value = "kita"; sel.dispatchEvent(new W.Event("change", { bubbles: true }));
+    B = W.GP_TIKRINIMAS.busena;
+    lygu(B.rez.patikros.filter(p => p.grupe === "sutarties_elementai").map(p => p.pastaba), ["pakete nėra sutarties projekto"], "naudotojo vaidmuo");
   });
 }
 
