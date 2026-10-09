@@ -263,8 +263,8 @@
     B = nauja(); B.eiga = senas.eiga;
     B.docs = rez.reiksme.docs; B.ankstesne = rez.reiksme.ankstesne; B.palyg = rez.reiksme.palyg; B.laikas = new Date();
     GP_BUSENA.rodyk("#tkBusena", { tipas: "gerai", tekstas: "Perskaityta failų: " + B.docs.length + "." + (B.ankstesne ? " Ankstesnės patikros ataskaita: " + B.ankstesne.vardas + "." : "") });
-    tikrinkParengti();
     atpazinkFormas();
+    tikrinkParengti();
     await lyginkVisus();
     $("tkRezultatai").hidden = false;
     piesk();
@@ -320,9 +320,20 @@
   }
 
   /* ---------------------------------------------------------------- parengtis ir radiniai */
+  /* Sutarties dokumento vaidmuo pagal atpažintą ar pasirinktą formą (2026-10-09): sugeneruoto failo vardas („..._Sutarties-SS_...“) ar
+     rengėjo pavadinimas sutarties gali neįvardyti - tada privalomų sutarties elementų patikra jo nerastų. Naudotojo pasirinktas vaidmuo - pirmesnis. */
+  function vaidmenysSuFormomis() {
+    var v = {};
+    (B.docs || []).forEach(function (d) {
+      var f = pasirinktaForma(d);
+      if (/_SS$/.test(f)) v[d.id] = "sutartis"; else if (/_BS$/.test(f)) v[d.id] = "sutartis_bendrosios";
+    });
+    Object.keys(B.vaidmenys).forEach(function (id) { v[id] = B.vaidmenys[id]; });
+    return v;
+  }
   function tikrinkParengti() {
     if (!B.docs) return;
-    B.rez = GP_PARENGTIS.patikrink({ docs: B.docs, vaidmenys: B.vaidmenys, kortele: cfg.kortele ? cfg.kortele() : null, kalba: "lt" });
+    B.rez = GP_PARENGTIS.patikrink({ docs: B.docs, vaidmenys: vaidmenysSuFormomis(), kortele: cfg.kortele ? cfg.kortele() : null, kalba: "lt" });
   }
   function parengtiesRaktas(r) {
     var c = (r.vietos || []).map(function (v) { return v.citata || ""; }).join("|");
@@ -777,7 +788,7 @@
       else if (ds.tkForma) {
         var d = B.docs.find(function (q) { return q.id === ds.tkForma; });
         if (t.value === "__pasas") delete B.formos[d.id]; else B.formos[d.id] = t.value;
-        await lygink(d); surinkRadinius(); piesk(); var f = $("tkf-" + d.id); if (f) f.focus();
+        await lygink(d); tikrinkParengti(); surinkRadinius(); piesk(); var f = $("tkf-" + d.id); if (f) f.focus();
       } else if (t.id === "tkLaukiami") { B.laukiami = t.checked; $("tkp-palyginimas").innerHTML = palyginimasHtml(); $("tkLaukiami").focus(); }
       else if (t.id === "tkPlDok") { B.palygDok = t.value; $("tkp-palyginimas").innerHTML = palyginimasHtml(); $("tkPlDok").focus(); }
     });
