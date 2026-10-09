@@ -2795,6 +2795,42 @@ const GPLent = (() => {
     }
     return out;
   }
+  /* Lygiagretūs stulpeliai (LT/EN sutartys, 2026-10-09): kai bent du langeliai turi tų pačių punktų numerius („5.3.1.2.1.“ LT ir EN),
+     eilutė skaidoma tik ties numeriu, kuris yra visuose - kitaip dalys() kiekvienam stulpeliui ima tiek, kiek telpa, ir LT 5.3.1.2.3
+     atsidurdavo šalia EN 5.3.1.2.2. Kiti langeliai - tušti ar vieno bloko (visas jų turinys - pirmoje dalyje). Dalis - kuo daugiau punktų,
+     kol telpa į DALIES_AUKSTIS; tarp dviejų gretimų numerių daugiau nei lubos (0,9 puslapio) - null (skaidoma kaip iki šiol). */
+  // punkto numeris pastraipos pradžioje: „5.3.1.2.1.“, „16.1“ (be taško), „24.“; „1000 (vienas ...“ - ne numeris
+  const PUNKTAS = /^\s*(\d+(?:\.\d+)+|\d+(?=\.))\.?(?=\s|[^\d.])/;
+  function blokoNumeris(b){
+    const p = b.mazgai.find(n => n.nodeType === 1 && n.localName === 'p');
+    const m = p && PUNKTAS.exec(Array.from(p.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join(''));
+    return m ? m[1] : null;
+  }
+  function lygiagreciosDalys(blokai, puslapis){
+    const lyg = blokai.map((b, k) => b && b.length > 1 && b.some(x => blokoNumeris(x)) ? k : -1).filter(k => k >= 0);
+    if (lyg.length < 2 || blokai.some((b, k) => b && b.length > 1 && !lyg.includes(k))) return null;
+    const nr = lyg.map(k => { const o = {}; blokai[k].forEach((x, i) => { const n = blokoNumeris(x); if (n && o[n] == null) o[n] = i; }); return o; });
+    // inkarai - numeriai, esantys visuose lygiagrečiuose stulpeliuose, didėjančia tvarka kiekviename
+    const ink = [], pask = lyg.map(() => 0);
+    Object.keys(nr[0]).map(n => lyg.map((_, j) => nr[j][n])).filter(v => v.every(i => i != null)).sort((a, b) => a[0] - b[0])
+      .forEach(v => { if (v.every((i, j) => i > pask[j])){ ink.push(v); v.forEach((i, j) => { pask[j] = i; }); } });
+    if (ink.length < 1) return null;
+    const ribos = [lyg.map(() => 0)].concat(ink, [lyg.map(k => blokai[k].length)]);
+    const auk = (a, z) => Math.max(...lyg.map((k, j) => blokai[k].slice(ribos[a][j], ribos[z][j]).reduce((s, x) => s + x.h, 0)));
+    for (let i = 0; i + 1 < ribos.length; i++) if (auk(i, i + 1) > 0.9 * puslapis) return null;
+    const max = DALIES_AUKSTIS * puslapis, kirpti = [0];
+    for (let c = 0; c < ribos.length - 1; ){
+      let z = c + 1;
+      while (z + 1 < ribos.length && auk(c, z + 1) <= max) z++;
+      kirpti.push(z); c = z;
+    }
+    if (kirpti.length < 3) return null;
+    return blokai.map((b, k) => {
+      const j = lyg.indexOf(k);
+      if (j < 0) return kirpti.slice(1).map((_, d) => d === 0 && b ? b.length : 0);
+      return kirpti.slice(1).map((z, d) => ribos[z][j] - ribos[kirpti[d]][j]);
+    });
+  }
   /* Per aukšta eilutė (Pages jos per puslapius nedalija) - kelios eilutės ties pastraipomis (ribos - dalys()); tarp dalių rėmelių nėra. */
   function skaidyk(tbl, puslapis, M, st){
     if (!puslapis) return;
@@ -2808,7 +2844,9 @@ const GPLent = (() => {
       const blokai = tcs.map((tc, i) => sujungtas[i] ? null : langelioBlokai(tc, M, parastes));
       const H = Math.max(0, ...blokai.filter(Boolean).map(b => b.reduce((a, x) => a + x.h, 0)));
       if (H <= SKAIDYTI_NUO * puslapis) return;
-      const kiek = dalys(blokai, puslapis), k = Math.max(0, ...kiek.map(x => x.length));
+      const lyg = lygiagreciosDalys(blokai, puslapis);
+      if (lyg) st.lygiagreciai = (st.lygiagreciai || 0) + 1;
+      const kiek = lyg || dalys(blokai, puslapis), k = Math.max(0, ...kiek.map(x => x.length));
       if (k < 2) return;
       const dalis = blokai.map((b, i) => { const o = []; let j = 0; for (let d = 0; d < k; d++){ const n = kiek[i][d] || 0; o.push(b ? b.slice(j, j + n) : []); j += n; } return o; });
       const naud = Array.from({ length: k }, (_, j) => j).filter(j => dalis.some(o => o[j].length));
@@ -2936,7 +2974,7 @@ const GPLent = (() => {
     const D = doc.parts['word/document.xml'];
     const body = D.getElementsByTagNameNS(W, 'body')[0];
     const st = { lenteliu: 0, siaurinta: 0, itrauka: 0, tblW: 0, tcW: 0, fixed: 0, parastes: 0, exact: 0, cantSplit: 0, etikeciu: 0, kairen: 0, hideMark: 0,
-                 distribute: 0, tarpai: 0, pusjuodis: 0, pusjuodisEil: 0, shd: 0, kairenVisos: 0, skaidyta: 0, dalys: 0, netelpa: 0, atjungta: 0 };
+                 distribute: 0, tarpai: 0, pusjuodis: 0, pusjuodisEil: 0, shd: 0, kairenVisos: 0, skaidyta: 0, lygiagreciai: 0, dalys: 0, netelpa: 0, atjungta: 0 };
     if (!body) return st;
     const plociai = sekcijuPlociai(body), M = modelis(doc);
     const lenteles = Array.from(body.getElementsByTagNameNS(W, 'tbl')).filter(t => {

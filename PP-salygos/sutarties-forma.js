@@ -50,6 +50,29 @@
   var ZAL_SPS = { ts_sutartis: "žalieji reikalavimai nurodyti Techninėje specifikacijoje ir (ar) Sutarties projekte",
                   salygose: "žalieji reikalavimai nurodomi pirkimo sąlygose", savaime: "pirkimas laikomas žaliuoju savaime" };
   var en = function (id, uzrasas) { return { id: id, tipas: "formuluote", uzrasas: uzrasas, kada: "taip", tikLTEN: true }; };
+  /* LT/EN: terminas „30 (trisdešimt) dienų“ anglų stulpeliui - „30 (thirty) days“ (2026-10-09, Pages patikra: iki tol anglų stulpelyje
+     likdavo lietuviškai - „by more than 30 (trisdešimt) dienų“). Kitaip parašytas terminas - LT/EN sutarčiai neatsakytas klausimas. */
+  var EN_VNT = [[/^darbo\s+dien/i, "working day", "working days"], [/^kalendorini\S*\s+dien/i, "calendar day", "calendar days"], [/^dien/i, "day", "days"],
+                [/^savait/i, "week", "weeks"], [/^mėnes/i, "month", "months"], [/^met/i, "year", "years"], [/^valand/i, "hour", "hours"]];
+  var EN_SK = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+               "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+  var EN_DES = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+  function zodziaisEN(n){
+    if (n < 20) return EN_SK[n];
+    if (n < 100) return EN_DES[Math.floor(n / 10)] + (n % 10 ? "-" + EN_SK[n % 10] : "");
+    return EN_SK[Math.floor(n / 100)] + " hundred" + (n % 100 ? " and " + zodziaisEN(n % 100) : "");
+  }
+  function terminasEN(t){
+    var m = /^\s*(\d{1,3})\s*(\([^)]*\))?\s*([A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž ]+?)\s*\.?\s*$/.exec(String(t || ""));
+    if (!m) return null;
+    var n = +m[1], u = EN_VNT.filter(function (x) { return x[0].test(m[3]); })[0];
+    return u ? n + " (" + zodziaisEN(n) + ") " + (n === 1 ? u[1] : u[2]) : null;
+  }
+  var terminoPastaba = function (lauk) { return function (c, R) {
+    if (!LTEN(c) || !String(R[lauk] || "").trim()) return "";
+    var e = terminasEN(R[lauk]);
+    return e ? "Anglų stulpelyje: „" + e + "“." : "Anglų stulpeliui terminą įrašykite skaičiumi ir žodžiais, pvz. „30 (trisdešimt) dienų“ - tada jis išverčiamas.";
+  }; };
 
   var KLAUSIMAI = [
     { id: "trukme", grupe: "Sutarties trukmė ir terminai", tipas: "skaicius", privalomas: true,
@@ -115,7 +138,8 @@
     { id: "garantija", grupe: "Kokybė ir garantija", tipas: "taipne", privalomas: true, rodoma: paslaugos,
       klausimas: "Ar paslaugoms taikomas garantinis terminas (6.1-6.2 punktai)?",
       uzuomina: "„Ne“ - abiem punktams „Netaikoma“. „Taip“ - lieka šablono 6.1 nuostata (garantinio termino rūšį ir trukmę pasirinksite Word programoje) ir 6.2 terminas trūkumams pašalinti.",
-      laukai: [{ id: "salinimo_terminas", tipas: "tekstas", uzrasas: "Terminas trūkumams pašalinti (pvz. 10 dienų)", kada: "taip" }] },
+      laukai: [{ id: "salinimo_terminas", tipas: "tekstas", uzrasas: "Terminas trūkumams pašalinti (pvz. 10 (dešimt) dienų)", kada: "taip" }],
+      pastaba: terminoPastaba("salinimo_terminas") },
     { id: "kokybiniai", grupe: "Kokybė ir garantija", tipas: "taipne", privalomas: true,
       klausimas: "Ar nustatyti kokybiniai kriterijai, kurių įgyvendinimą reikia tikrinti sutarties vykdymo metu (6.3 punktas)?",
       uzuomina: "„Ne“ - „Netaikoma“ (kai kokybiniai kriterijai pirkimo dokumentuose nenustatyti). „Taip“ - įrašykite jų įgyvendinimo ir tikrinimo tvarką.",
@@ -137,7 +161,8 @@
       siuloma: function () { return { reiksme: "litgrid", kilme: LITGRID + " (plano 5.6, 2026-10-07)" }; } },
     { id: "velavimas", grupe: "Užtikrinimas ir atsakomybė", tipas: "tekstas", privalomas: false, rodoma: paslaugos,
       klausimas: "Po kiek laiko vėlavimo sutartį galima nutraukti (12.2.4 punktas)?",
-      uzuomina: "Pvz. „30 (trisdešimt) dienų“. Šablonas: ši aplinkybė taikoma, tik jei terminas įrašytas; neįrašius vieta lieka." },
+      uzuomina: "Pvz. „30 (trisdešimt) dienų“. Šablonas: ši aplinkybė taikoma, tik jei terminas įrašytas; neįrašius vieta lieka.",
+      pastaba: terminoPastaba("velavimas") },
 
     { id: "esmines", grupe: "Esminės sąlygos, galiojimas, pratęsimas", tipas: "taipne", privalomas: true,
       klausimas: "Ar sutartyje nustatomos esminės sutarties sąlygos (10.1-10.2 punktai)?",
@@ -186,7 +211,9 @@
       uzuomina: "„Taip“ - reikalingas Pirkėjo sutikimas dirbti (14.4.1-14.4.4) ir 9.10 bauda; „Ne“ - punktas ir bauda netaikomi." },
     { id: "pirkejo_atstovas", grupe: "Kita", tipas: "tekstas", privalomas: false,
       klausimas: "Kas bus Pirkėjo atstovas sutarčiai vykdyti (2.1 punktas)?",
-      uzuomina: "Padalinys, pareigos, vardas, pavardė, tel., el. paštas. Neįrašius - lieka šablono nurodymas, pildoma sudarant." },
+      uzuomina: "Padalinys, pareigos, vardas, pavardė, tel., el. paštas. Neįrašius - lieka šablono nurodymas, pildoma sudarant.",
+      // LT/EN: anglų stulpeliui - pareigos ir padalinys angliškai (rodoma, kai įrašytas lietuviškai)
+      laukai: [{ id: "pirkejo_atstovasEN", tipas: "tekstas", uzrasas: "Tas pats angliškai (padalinys, pareigos)", kada: "*", tikLTEN: true }] },
     { id: "cvp_adresas", grupe: "Kita", tipas: "tekstas", privalomas: false, rodoma: paslaugos,
       klausimas: "Kokiu adresu skelbiami pirkimo dokumentai (15.2 punktas)?",
       uzuomina: "CVP IS pirkimo adresas. Neįrašius - lieka šablono teksto laukas." }
@@ -255,6 +282,7 @@
       q.laukai.forEach(function (l) {
         if (q.reiksme === l.kada && (l.tipas === "formuluote" || l.tipas === "tekstas" || l.tipas === "skaicius") && !String(l.reiksme || "").trim() &&
             !/^(pirkejo|cvp|velavimas)/.test(l.id)) truksta.push(q.klausimas + " - " + l.uzrasas);
+        if (l.kada === "*" && String(q.reiksme || "").trim() && !String(l.reiksme || "").trim()) truksta.push(q.klausimas + " - " + l.uzrasas);
       });
     });
     var nust = function (x, s) { if (x) S[x.raktas] = s; };
@@ -273,7 +301,7 @@
     ["1.2", "2.2", "16"].forEach(function (v) { V.filter(function (x) { return x.rusis === "nurodymas" && x.vieta === v; }).forEach(function (x) { nust(x, { palikti: "sudarant" }); }); });
     V.filter(function (x) { return x.rusis === "pildoma" && x.vieta === "5.2"; }).forEach(function (x) { nust(x, { palikti: "sudarant" }); });
     var atst = rask("nurodymas", "2.1");
-    nust(atst, String(R.pirkejo_atstovas || "").trim() ? { tekstas: R.pirkejo_atstovas.trim(), tekstasEN: R.pirkejo_atstovas.trim() } : { palikti: "sudarant" });
+    nust(atst, String(R.pirkejo_atstovas || "").trim() ? { tekstas: R.pirkejo_atstovas.trim(), tekstasEN: String(R.pirkejo_atstovasEN || R.pirkejo_atstovas).trim() } : { palikti: "sudarant" });
 
     // 3.3 ES lėšos
     var v33 = rask("valdiklis", "3.3");
@@ -344,7 +372,11 @@
       nust(a62, { variantas: taip("garantija") ? 1 : 0 });
       V.filter(function (x) { return x.rusis === "nurodymas" && x.vieta === "6.1"; }).forEach(function (x) { nust(x, { palikti: "word" }); });
       var n62 = V.filter(function (x) { return x.rusis === "nurodymas" && x.vieta === "6.2"; });
-      if (n62[0] && taip("garantija") && String(R.salinimo_terminas || "").trim()) nust(n62[0], { tekstas: R.salinimo_terminas.trim(), tekstasEN: R.salinimo_terminas.trim() });
+      if (n62[0] && taip("garantija") && String(R.salinimo_terminas || "").trim()) {
+        var e62 = LTEN(ctx) ? terminasEN(R.salinimo_terminas) : R.salinimo_terminas.trim();
+        if (e62) nust(n62[0], { tekstas: R.salinimo_terminas.trim(), tekstasEN: e62 });
+        else truksta.push("Ar paslaugoms taikomas garantinis terminas (6.1-6.2 punktai)? - terminą įrašykite skaičiumi ir žodžiais, pvz. „10 (dešimt) dienų“ (anglų stulpeliui)");
+      }
       if (n62[1]) nust(n62[1], "salinti");
     }
     var a63 = rask("alternatyva", "6.3"), n63 = rask("nurodymas", "6.3");
@@ -373,7 +405,9 @@
     var v910 = rask("valdiklis", "9.10");
     if (R.tinklo) nust(v910, { elementas: R.tinklo === "taip" ? el(v910, /^100/) : el(v910, /netaikomas/i) });
     var p1224 = rask("pildoma", "12.2.4");
-    if (p1224) nust(p1224, String(R.velavimas || "").trim() ? { tekstas: R.velavimas.trim(), tekstasEN: R.velavimas.trim() } : { palikti: "neatsakyta" });
+    var e1224 = String(R.velavimas || "").trim() ? (LTEN(ctx) ? terminasEN(R.velavimas) : R.velavimas.trim()) : null;
+    if (p1224 && String(R.velavimas || "").trim() && !e1224) truksta.push("Po kiek laiko vėlavimo sutartį galima nutraukti (12.2.4 punktas)? - terminą įrašykite skaičiumi ir žodžiais, pvz. „30 (trisdešimt) dienų“ (anglų stulpeliui)");
+    if (p1224) nust(p1224, e1224 ? { tekstas: R.velavimas.trim(), tekstasEN: e1224 } : { palikti: "neatsakyta" });
 
     // 10. Esminės sąlygos (naudotojo sprendimas 2026-10-08: klausiama kiekvieną kartą)
     var a101 = rask("alternatyva", "10.1"), a102 = rask("alternatyva", "10.2");
@@ -487,7 +521,7 @@
         h += '<div class="lk-kilme"><span class="lk-kilme-t">Siūloma: <b>' + esc(vt ? vt.tekstas : q.reiksme) + "</b> - " + esc(q.siuloma.kilme) + ".</span></div>" +
           '<button type="button" class="sec lk-patv" data-sf-patv="' + q.id + '">Patvirtinti</button>';
       }
-      q.laukai.forEach(function (l) { if (q.reiksme === l.kada) h += laukoHtml(q, l); });
+      q.laukai.forEach(function (l) { if (q.reiksme === l.kada || (l.kada === "*" && String(q.reiksme || "").trim())) h += laukoHtml(q, l); });
       return h + "</div>";
     }
     function piesk(){
@@ -549,5 +583,5 @@
     };
   }
 
-  global.GP_SUTARTIES_FORMA = { versija: "S4-2026-10-09", KLAUSIMAI: KLAUSIMAI, klausimai: klausimai, sprendimai: sprendimai, mount: mount, _forma: forma };
+  global.GP_SUTARTIES_FORMA = { versija: "S4-2026-10-09", KLAUSIMAI: KLAUSIMAI, klausimai: klausimai, sprendimai: sprendimai, mount: mount, _forma: forma, _terminasEN: terminasEN };
 })(typeof window !== "undefined" ? window : this);

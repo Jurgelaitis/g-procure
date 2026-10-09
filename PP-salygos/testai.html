@@ -4089,6 +4089,126 @@ async function testaiSutarciuTikrinimas(){
   });
 }
 
+/* Sutartys Pages programoje (sutarčių planas S5, 2026-10-09). Matuota Pages PDF eksportu (scratchpad): 12 sugeneruotų sutarčių dokumentų -
+   0 prarastų pastraipų, visi A4; originalūs LITGRID SS šablonai Pages prarastų 7-57 pastraipas (eilučių skaidymas jas išsaugo). LT/EN
+   suskaidytos eilutės iki tol „nuslysdavo“ (LT 5.3.1.2.3 šalia EN 5.3.1.2.2) - dabar skaidoma ties punktu, esančiu abiejuose stulpeliuose. */
+const PUNKTO_NR = /^\s*(\d+(?:\.\d+)+|\d+(?=\.))\.?(?=\s|[^\d.])/;
+function lygiosEilutes(xml){
+  const d = new W.DOMParser().parseFromString(xml, "application/xml"), out = []; let viso = 0;
+  Array.from(d.getElementsByTagNameNS(NSW, "tr")).forEach(tr => {
+    const nr = elW(tr, "tc").map(tc => { const p = elW(tc, "p").map(txW).find(t => t.trim()); const m = p && PUNKTO_NR.exec(p); return m ? m[1] : null; }).filter(Boolean);
+    if (nr.length < 2) return;
+    viso++; if (new Set(nr).size > 1) out.push(nr.join(" / "));
+  });
+  return { viso, blogi: out };
+}
+/* Visi sutarties klausimai atsakyti „Taip“ (ilgiausias tekstas) arba „Ne“; laukai - pavyzdiniu tekstu. */
+function sutartiesAtsakymai(Z, ctx, kur){
+  const F = W.GP_SUTARTIES_FORMA, A = {};
+  const LT = "Pavyzdinis tekstas: Tiekėjas užtikrina, kad nurodyti reikalavimai būtų įgyvendinti visą Sutarties vykdymo laikotarpį, o Pirkėjas turi teisę bet kada patikrinti jų laikymąsi.";
+  const EN = "Sample text: the Supplier shall ensure that the specified requirements are implemented throughout the term of the Contract.";
+  const TERM = { velavimas: "30 (trisdešimt) dienų", salinimo_terminas: "10 (dešimt) dienų", zalieji_p: "4.1", cvp_adresas: "https://cvpp.eviesiejipirkimai.lt/" };
+  for (let k = 0; k < 6; k++) F.klausimai(Z, ctx, A).forEach(q => {
+    if (!A[q.id]) A[q.id] = { reiksme: q.tipas === "taipne" ? kur : q.tipas === "variantai" ? (kur === "taip" ? q.variantai[0].id : q.variantai[q.variantai.length - 1].id) : q.tipas === "skaicius" ? "12" : TERM[q.id] || LT, patvirtinta: true };
+    q.laukai.forEach(l => { if (!A[l.id] && (A[q.id].reiksme === l.kada || l.kada === "*")) A[l.id] = { reiksme: TERM[l.id] || (l.tipas === "skaicius" ? "10" : /EN$/.test(l.id) ? EN : LT), patvirtinta: true }; });
+  });
+  return A;
+}
+async function testaiSutartysPages(){
+  dabartine = grupe("Sutartys Pages programoje (sutarčių planas S5, 2026-10-09): eilučių aukštis, LT/EN lygiavimas, anglų stulpelio numeriai ir terminai");
+  await modulis();
+  const F = W.GP_SUTARTIES_FORMA, G = W.GP_SUTARCIU_GEN;
+  const ctxPagal = Z => ({ seima: Z.seima, kalba: Z.kalba, pavadinimas: "Galios transformatorių", pavadinimasEN: "Power transformers", numeris: "VPP-301", trukmeMen: 24, verte: 1500000,
+                          uztikrinimas: { taikomas: true, eur: 50000 }, kriterijus: "kaina", nacsaug: false });
+  const dalys = async bytes => { const z = await W.JSZip.loadAsync(bytes), parts = {};
+    for (const n of ["word/document.xml", "word/styles.xml", "word/numbering.xml"]){ const f = z.file(n); if (f) parts[n] = new W.DOMParser().parseFromString(await f.async("string"), "application/xml"); }
+    return parts; };
+  await testas("Visos 8 sutartys (SS - ir „Taip“, ir „Ne“ atsakymais): jokia lentelės eilutė neaukštesnė už puslapį (Pages tokios nedalija - nukerpa); stulpeliuose tekstas toks pat kaip be skaidymo; LT/EN - kiekvienoje eilutėje LT ir EN punkto numeris tas pats, skaidyta lygiagrečiai", async () => {
+    const blogi = []; let lyg = 0;
+    for (const kod of SUTARCIU_KODAI) for (const kur of (/_SS$/.test(kod) ? ["taip", "ne"] : ["-"])) {
+      const { buf, Z } = await sutartiesSablonas(kod), ctx = ctxPagal(Z);
+      const sp = /_SS$/.test(kod) ? F.sprendimai(Z, ctx, sutartiesAtsakymai(Z, ctx, kur)) : { S: {}, truksta: [] };
+      if (sp.truksta.length){ blogi.push(kod + " " + kur + ": neatsakyta " + sp.truksta.join("; ")); continue; }
+      const r = await G.generuok(buf, Z, sp.S, { tipas: "uint8array" });
+      let be; GPL().NUSTATYMAI.skaidyti = false; try { be = await G.generuok(buf, Z, sp.S, { tipas: "uint8array" }); } finally { GPL().NUSTATYMAI.skaidyti = true; }
+      if (r.ataskaita.klaidos.length){ blogi.push(kod + " " + kur + ": " + r.ataskaita.klaidos[0]); continue; }
+      const P = await dalys(r.blob), xml = new W.XMLSerializer().serializeToString(P["word/document.xml"]);
+      const Pb = await dalys(be.blob), xb = new W.XMLSerializer().serializeToString(Pb["word/document.xml"]);
+      aukstesnes(P["word/document.xml"], GPL().modelis({ parts: P })).forEach(e => blogi.push(kod + " " + kur + ": " + e));
+      const a = stulpeliuTekstai(xb), b = stulpeliuTekstai(xml);
+      if (JSON.stringify([a.lenteles, a.uz]) !== JSON.stringify([b.lenteles, b.uz])) blogi.push(kod + " " + kur + ": tekstas skiriasi " + pirmasSkirtumas([a.lenteles, a.uz], [b.lenteles, b.uz]));
+      if (/LTEN/.test(kod)) {
+        const l = lygiosEilutes(xml);
+        if (l.blogi.length || l.viso < 50) blogi.push(kod + " " + kur + ": LT/EN eilutės " + l.viso + ", nesutampa " + l.blogi.slice(0, 4).join(", "));
+        if (/_SS$/.test(kod)) lyg += (r.ataskaita.lenteles || {}).lygiagreciai || 0;
+      }
+    }
+    lygu(blogi, [], "sutartys");
+    tiesa(lyg >= 8, "LT/EN SS lygiagrečiai suskaidyta tik " + lyg);
+  });
+  await testas("Lygiagretus skaidymas sintetinėje LT/EN lentelėje: dalys prasideda tuo pačiu punktu abiejuose stulpeliuose; EN numeracijos klaida (1.4 ir 1.5 sukeisti) - tas punktas inkaru nelaikomas, tekstas ir tvarka stulpeliuose nepakinta, dalys neaukštesnės už puslapį", async () => {
+    const P = t => `<w:p><w:r><w:t xml:space="preserve">${t}</w:t></w:r></w:p>`;
+    const tc = (w, turinys) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/></w:tcPr>${turinys}</w:tc>`;
+    const nr = Array.from({ length: 30 }, (_, i) => "1." + (i + 1) + ".");
+    // pastraipos ~0,2 puslapio - dalyje telpa po vieną, tad kirpimas būna ties kiekvienu inkaru (ir ties sukeistais)
+    const lt = nr.map((n, i) => P(n + " " + "Lietuviška nuostata apie šalių teises ir pareigas. ".repeat(12 + (i % 3)))).join("");
+    const enNr = nr.slice(); [enNr[3], enNr[4]] = [enNr[4], enNr[3]];
+    const en = enNr.map((n, i) => P(n + " " + "English provision on the rights and obligations of the parties. ".repeat(10 + (i % 2)))).join("");
+    const xml = `<w:document xmlns:w="${NSW}"><w:body><w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4819"/><w:gridCol w:w="4819"/></w:tblGrid>
+      <w:tr>${tc(4819, lt)}${tc(4819, en)}</w:tr></w:tbl><w:p/>
+      <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:left="1701" w:right="567" w:top="1134" w:bottom="1134"/></w:sectPr></w:body></w:document>`;
+    const stiliai = `<w:styles xmlns:w="${NSW}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults>
+      <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>`;
+    const naujas = () => { const dp = new W.DOMParser(); return { parts: { "word/document.xml": dp.parseFromString(xml, "application/xml"), "word/styles.xml": dp.parseFromString(stiliai, "application/xml") } }; };
+    const ser = d => new W.XMLSerializer().serializeToString(d.parts["word/document.xml"]);
+    const a = naujas(), b = naujas();
+    GPL().NUSTATYMAI.skaidyti = false; try { GPL().sutvarkyti(a); } finally { GPL().NUSTATYMAI.skaidyti = true; }
+    const st = GPL().sutvarkyti(b), dok = b.parts["word/document.xml"], l = lygiosEilutes(ser(b));
+    lygu([st.lygiagreciai, l.blogi, l.viso >= 20], [1, [], true], "lygiagrečios dalys: " + l.viso);
+    const tuscios = Array.from(dok.getElementsByTagNameNS(NSW, "tr")).filter(tr => elW(tr, "tc").some(tc => !txW(tc).trim()));
+    lygu(tuscios.length, 0, "dalis su tuščiu stulpeliu");
+    lygu(JSON.stringify(stulpeliuTekstai(ser(a)).lenteles), JSON.stringify(stulpeliuTekstai(ser(b)).lenteles), "tekstas stulpeliuose");
+    lygu(aukstesnes(dok, GPL().modelis(b)), [], "dalys neaukštesnės už puslapį");
+  });
+  await testas("LT/EN šablonų anglų stulpelio numeriai (2026-10-09 redakcinė korekcija): kiekvienoje eilutėje LT ir EN punktas tas pats; anglų numeriai su tašku; paslaugų SS tiekėjo rekvizitai 1.2.x, prekių BS 24.2-24.5", async () => {
+    const blogi = [];
+    for (const kod of SUTARCIU_KODAI.filter(k => /LTEN/.test(k))) {
+      const { Z } = await sutartiesSablonas(kod), xml = await (await W.JSZip.loadAsync(await (await W.fetch("templates/sutartys/" + kod + ".docx")).arrayBuffer())).file("word/document.xml").async("string");
+      const l = lygiosEilutes(xml);
+      if (l.blogi.length) blogi.push(kod + ": " + l.blogi.join(", "));
+      const be = Z.pastraipos.filter(t => /^\d+(\.\d+)+ [A-Za-z(]/.test(t) || /^\d+(\.\d+)* \./.test(t));
+      if (be.length) blogi.push(kod + ": numeriai be taško " + be.slice(0, 3).join(" | "));
+    }
+    lygu(blogi, [], "šablonai");
+    const Zs = (await sutartiesSablonas("PASLAUGOS_LTEN_SS")).Z, Zb = (await sutartiesSablonas("PREKES_LTEN_BS")).Z;
+    tiesa(Zs.pastraipos.includes("1.2.1. Name") && Zs.pastraipos.includes("1.2.10. Grounds for representation"), "paslaugų SS tiekėjo rekvizitai");
+    tiesa(["24.2. ", "24.5. "].every(n => Zb.pastraipos.some(t => t.startsWith(n) && /[A-Za-z]/.test(t.slice(6, 8)))) && !Zb.pastraipos.some(t => /^24\.6\b/.test(t)), "prekių BS 24.2-24.5");
+  });
+  await testas("LT/EN sutarties terminai ir atstovas: „30 (trisdešimt) dienų“ anglų stulpelyje - „30 (thirty) days“ (pastaba prie klausimo); kitaip parašytas - neatsakyta su paaiškinimu; pirkėjo atstovas LT/EN - ir angliškai (LT - ne)", async () => {
+    const T = F._terminasEN;
+    lygu(["30 (trisdešimt) dienų", "10 (dešimt) darbo dienų", "1 (viena) diena", "45 (keturiasdešimt penkias) dienas", "2 (du) mėnesiai", "14 kalendorinių dienų", "121 (šimtas dvidešimt viena) diena", "per 30 dienų", "trisdešimt dienų"].map(T),
+         ["30 (thirty) days", "10 (ten) working days", "1 (one) day", "45 (forty-five) days", "2 (two) months", "14 (fourteen) calendar days", "121 (one hundred and twenty-one) days", null, null], "vertimas");
+    const { buf, Z } = await sutartiesSablonas("PASLAUGOS_LTEN_SS"), ctx = ctxPagal(Z);
+    const A = sutartiesAtsakymai(Z, ctx, "taip");
+    A.velavimas = { reiksme: "per mėnesį", patvirtinta: true };
+    const q = F.klausimai(Z, ctx, A);
+    tiesa(/Anglų stulpeliui terminą įrašykite skaičiumi ir žodžiais/.test(q.find(x => x.id === "velavimas").pastaba) && /„10 \(ten\) days“/.test(q.find(x => x.id === "garantija").pastaba), "pastabos: " + q.filter(x => x.pastaba).map(x => x.pastaba).join(" | "));
+    tiesa(F.sprendimai(Z, ctx, A).truksta.some(t => /12\.2\.4/.test(t) && /skaičiumi ir žodžiais/.test(t)), "neišverčiamas terminas - ne neatsakytas");
+    A.velavimas = { reiksme: "30 (trisdešimt) dienų", patvirtinta: true };
+    A.pirkejo_atstovas = { reiksme: "Pirkimų skyriaus vadovė Vardenė Pavardenė", patvirtinta: true }; delete A.pirkejo_atstovasEN;
+    tiesa(F.sprendimai(Z, ctx, A).truksta.some(t => /Pirkėjo atstovas/.test(t) && /angliškai/.test(t)), "atstovas be anglų teksto - turi būti neatsakyta");
+    A.pirkejo_atstovasEN = { reiksme: "Head of Procurement Division Vardenė Pavardenė", patvirtinta: true };
+    const sp = F.sprendimai(Z, ctx, A);
+    lygu(sp.truksta, [], "visi atsakyti");
+    const r = await G.generuok(buf, Z, sp.S, { tipas: "uint8array" }), { ps } = await docxPastraipos(r.blob), visa = ps.join("\n");
+    tiesa(/by more than 30 \(thirty\) days/.test(visa) || /30 \(thirty\) days/.test(visa), "12.2.4 angliškai");
+    tiesa(/no later than 10 \(ten\) days from the date of receipt/.test(visa) && /ne vėliau kaip per 10 \(dešimt\) dienų/.test(visa) && /Head of Procurement Division Vardenė Pavardenė/.test(visa), "6.2 ir 2.1 angliškai");
+    tiesa(!ps.some(t => /^[A-Z][a-z].*\b(the|shall)\b/.test(t) && /(trisdešimt|dešimt) dien|skyriaus vadovė/.test(t)), "anglų pastraipoje liko lietuviškai: " + ps.filter(t => /\b(the|shall)\b/.test(t) && /(trisdešimt|dešimt) dien|skyriaus vadovė/.test(t)).join(" | "));
+    const qlt = F.klausimai((await sutartiesSablonas("PASLAUGOS_LT_SS")).Z, Object.assign({}, ctx, { kalba: "LT" }), A);
+    lygu([qlt.find(x => x.id === "pirkejo_atstovas").laukai.length, qlt.find(x => x.id === "velavimas").pastaba], [0, ""], "LT sutartyje - be anglų lauko ir pastabos");
+  });
+}
+
 (async function(){
   // Sutarties parinkimo stebėjimo įrašai (2026-10-08) - vienintelis PP-salygos įrašas saugykloje: tikri įrašai atkuriami
   const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0);
@@ -4118,6 +4238,7 @@ async function testaiSutarciuTikrinimas(){
     await testaiSutartiesForma();
     await testaiSutartisSPS();
     await testaiSutarciuTikrinimas();
+    await testaiSutartysPages();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
