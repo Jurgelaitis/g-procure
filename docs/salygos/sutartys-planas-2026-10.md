@@ -308,6 +308,32 @@ Sutartims naudojamas tas pats variklis - naujo „DI generatoriaus“ nereikia.
 - Kalba: LT/EN SPS -> LT/EN sutartis, jei šeima ją turi; kitaip - pasakoma prieš generuojant.
 - Žalieji reikalavimai: SPS „nurodyti Techninėje specifikacijoje ir (ar) Sutarties projekte“ - tikrinama, ar sutartyje jie yra.
 
+**Padaryta 2026-10-09** (prekių ir paslaugų sutartys; jūsų „Taip, pradėkime nuo 1 darbo.“):
+
+- **Esminės sąlygos.** 1 žingsnio bloke patvirtinta sutartis - SPS sąlyga „Jei Pirkimo metu nėra rengiamas Sutarties projektas“ atsakoma
+  pati („Ne“), o SPS dalis „Esminės sutarties sąlygos (dalis reikalinga, jei nepridedamas Sutarties projektas)“ pašalinama visa: antraštė,
+  pastaba, tušti punktai ir turinio eilutė (LT/EN - turinys lentelėje); skyriai ir turinys perskaičiuojami (GPNum: turinio eilutės nurodymas
+  skliaustuose, kurio antraštėje nėra, pvz. „14. PRIEDAI (koreguojama pagal poreikį)“, pašalinamas - kitaip turinio numeris nepasikeisdavo).
+  „Sutarties projektas nerengiamas - esminės sąlygos SPS“ - dalis paliekama, 3 žingsnis primena ją užpildyti Word programoje; nepatvirtinta
+  sutartis, CPO LT ar tiekėjo forma - klausiama kaip iki šiol. Nuoroda „Esminės sutarties sąlygos išdėstytos SPS __ dalyje“ yra pačiame
+  šalinamame bloke - prieštaravimo nelieka.
+- **Tiesioginis atsiskaitymas.** Generuojamos sutarties BS 3.4 p. visada nustato tiesioginio atsiskaitymo su subtiekėjais tvarką (paslaugų
+  SS - ir priedas „Trišalės sutarties projektas“), todėl SPS sąlyga „Kai taikomas tiesioginis atsiskaitymas ...“ atsakoma pati („Taip“,
+  nuostata „tvarka nurodyta Sutarties projekte“ lieka); kitai ar nerengiamai sutarčiai - klausiama. Rasta ir ištaisyta: MVP LT/EN SPS ši
+  nuostata (sulieta su raudona sąlyga) prasidėdavo tarpu.
+- **Kalba.** Sutarties kalba imama iš 1 žingsnio (LT ar LT/EN) - ta pati kaip SPS; prekėms ir paslaugoms abi redakcijos yra.
+- **Žalieji reikalavimai.** Sutarties SS 13.1 p. klausimas rodo, kas pasirinkta SPS žaliųjų reikalavimų dalyje (atsakymas iš to neišvedamas -
+  SPS „ir (ar)“, kriterijai gali būti tik TS); „Patikrinkite (SPS ir sutartis)“ formoje ir 3 žingsnyje, kai SS 13.1 taikomas, o SPS nesako
+  „Sutarties projekte“, arba SS 13.1 netaikomas, o SPS sako „Techninėje specifikacijoje ir (ar) Sutarties projekte“.
+- **Tikrinimo skirtukas.** „Tikrinti parengtus dokumentus“ atpažįsta ir sutarčių BS ir SS (`sutarciu-versijos.json`), palyginimas - sutarties
+  režimu (`GP_PALYGINIMAS.lygink(..., { sutartis })`): pildomos vietos, išskleidžiamų sąrašų variantai ir pasirenkamos dalys - iš sutarties
+  žemėlapio; sąraše tik formos variantai (kitas tekstas - nukrypimas „ne iš sąrašo“); pridėta, pašalinta ar pakeista nuostata - nukrypimas
+  ir lentelėje (SS - visa lentelė). LITGRID „0922“ redakcija (ir LT/EN su LITGRID anglų tekstu) - ne nukrypimas: `sutarciu-sablonai.py --versijos`
+  įrašo ankstesnių redakcijų pastraipų maišas (`kitos_versijos`, `kitos_pozymiai`) ir mūsų taisymų maišas (`naujos`); registre - tik maišos.
+  Išmatuota: 8 šablonai, 8 LITGRID originalai (privatūs) ir 8 sugeneruoti be paso - 0 nukrypimų; keturiose SS po tris dirbtinius pakeitimus -
+  visi rasti. Palyginimas rado ir tikrą klaidą: LT/EN prekių SS anglų 5.3.1.2 p. sąrašo elementas kartojo punkto numerį (sugeneruotoje
+  sutartyje „5.3.1.2. 5.3.1.2. in the event ...“) - šablone pataisyta (redakcinė korekcija, kopija `originalai-2026-10-09/`).
+
 ### 4.5. Patikra po generavimo (stabdo, ne įspėja)
 
 1. **Palyginimas su šablono forma** (`GP_PALYGINIMAS`): leidžiami tik žemėlapio kintamieji ir atsakymais pašalinti blokai. Bet koks kitas
@@ -513,7 +539,7 @@ tikrinamos e-tar prieš įtraukiant šeimą; neteisinga - turinio radinys LITGRI
 | S1 | Šablonų paruošimas: redakcijų registras, `templates/sutartys/`, kartografas visiems žymėjimo būdams, žemėlapiai, redakcinių klaidų taisymai, blokuojančių šeimų žymė | kiekvienas šablonas - žemėlapis be neatpažintų vietų; taisymai pakartotinai - 0; testai su mutacijomis **prekėms ir paslaugoms padaryta 2026-10-08** (žr. žemiau); kitos šeimos - tuo pačiu keliu |
 | S2 | Parinkimo variklis (`PP-salygos/sutartys.js`, `GP_SUTARTYS.parink`) + taisyklių lentelė + kalibravimo testų rinkinys | 0 neteisingų automatinių parinkimų rinkinyje; >= 70 % be klausimų; stebėjimo režimas - generatorius siūlo, žmogus patvirtina, neatitikimai renkami **variklis padarytas 2026-10-08** (žr. žemiau); stebėjimo režimo sąsaja - S3 |
 | S3 | UX: blokas „Sutarties projektas“ 1 žingsnyje, klausimai K0-K5, sutarties laukai 2 žingsnyje, bendri SPS ir sutarties laukai | telefonas 375 / 320 px, prieinamumas, „Siūloma (nepatvirtinta)“ **1 žingsnio blokas padarytas 2026-10-08** (žr. žemiau); 2 žingsnio sutarties laukai - kartu su S4 |
-| S4 | Generavimas ir patikra po generavimo (4.5), pasas, tikrinimo skirtukas atpažįsta sutarčių formas | kiekvienai šeimai - sugeneruotas paketas be leistinų skirtumų už žemėlapio; mutacijos pagaunamos **prekėms ir paslaugoms padaryta 2026-10-08** (generavimas, 2 žingsnio klausimai, paketas - `docs/salygos/sutarciu-lauku-inventorius.md`); liko: SPS „Esminės sutarties sąlygos“ šalinimas, nuorodų sargas, PĮ 95 str. katalogas, tikrinimo skirtukas |
+| S4 | Generavimas ir patikra po generavimo (4.5), pasas, tikrinimo skirtukas atpažįsta sutarčių formas | kiekvienai šeimai - sugeneruotas paketas be leistinų skirtumų už žemėlapio; mutacijos pagaunamos **prekėms ir paslaugoms padaryta 2026-10-08** (generavimas, 2 žingsnio klausimai, paketas - `docs/salygos/sutarciu-lauku-inventorius.md`); **2026-10-09 - SPS „Esminės sutarties sąlygos“ šalinimas, tiesioginis atsiskaitymas, žaliųjų derinimas ir tikrinimo skirtukas (4.4)**; liko: nuorodų sargas, PĮ 95 str. katalogas |
 | S5 | Word ir Pages patikra (lentelės, puslapio formatas - prekių failai US Letter), gyva patikra | kaip SPS |
 | S6 | Žinių bazė (6.1, 6.3) ir pakartotinio kalibravimo procesas | registro įrašai perskaityti e-tar |
 
