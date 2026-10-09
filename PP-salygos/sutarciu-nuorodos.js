@@ -86,5 +86,47 @@
     });
     return out;
   }
-  global.GP_SUTARCIU_NUORODOS = { versija: "1.0", tikrink: tikrink, numeriai: numeriai, priedai: priedai };
+  /* Teisės aktų nuorodos (2026-10-09, sutarčių planas 6.1): VPĮ / PĮ straipsniai, dalys, punktai ir priedai (su grandine „... ir (ar) 47 straipsnio
+     8 dalyje / PĮ 50 straipsnio 8 dalyje“), kiti įvardyti aktai (CK, Darbo kodeksas, Sankcijų, Viešojo administravimo, Nacionaliniam saugumui
+     užtikrinti svarbių objektų apsaugos įstatymai, Vyriausybės nutarimas, ministro įsakymas, ES reglamentai, sprendimai, direktyvos) ir angliški
+     atitikmenys. Kiekviena turi būti patikrinta e-tar ir įrašyta zemelapiai/sutarciu-teises-nuorodos.json (testas). Grąžina normalizuotas eilutes. */
+  var L = "[a-ząčęėįšųūž]*";
+  var VNR = "\\d+(?:\\s+ir\\s+\\d+)?\\s+(?:straipsn" + L + "|pried" + L + ")(?:\\s+\\d+\\s+dal" + L + ")?(?:\\s+\\d+\\s+punkt" + L + ")?";
+  var TEISES = [
+    "(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s*/\\s*(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s+straipsn" + L,
+    "(?:VPĮ|PĮ)\\s+" + VNR + "(?:\\s*(?:ir\\s*\\(ar\\)|ir|/|,)\\s*(?:(?:VPĮ|PĮ)\\s+)?" + VNR + ")*",
+    "civilin" + L + "\\s+kodeks" + L + "(?:\\s+\\d+\\.\\d+\\s+straipsn" + L + ")?", "darbo\\s+kodeks" + L,
+    "(?:tarptautinių\\s+)?sankcijų\\s+įstatym" + L, "viešojo\\s+administravimo\\s+įstatym" + L, "akcinių\\s+bendrovių\\s+įstatym" + L, "viešųjų\\s+pirkimų\\s+įstatym" + L,
+    "pirkimų,\\s+atliekamų\\s+vandentvarkos,\\s+energetikos,\\s+transporto\\s+ar\\s+pašto\\s+paslaugų\\s+srities\\s+perkančiųjų\\s+subjektų,\\s+įstatym" + L,
+    "nacionaliniam\\s+saugumui\\s+užtikrinti\\s+svarbių\\s+objektų\\s+apsaugos\\s+įstatym" + L + "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?",
+    "nutarimu\\s+Nr\\.\\s*\\d+", "įsakymu\\s+Nr\\.\\s*[A-Z]+\\d*-\\d+", "(?:reglament|sprendim)" + L + "\\s+\\(ES\\)\\s+(?:Nr\\.\\s*)?\\d+/\\d+",
+    "direktyv" + L + "\\s+\\d+/\\d+/(?:ES|EB)", "aprašo\\s+\\d+\\s+pried" + L + "(?:\\s+[IVX]+\\s+skyri" + L + ")?",
+    // angliški atitikmenys
+    "(?:clause\\s+\\d+¹?\\s+of\\s+)?Articles?\\s+[\\d.]+(?:\\(\\d+¹?\\))?(?:\\s+and\\s+\\d+)?(?:\\s+(?:and/or|and|/)\\s+(?:Article\\s+)?[\\d.]+(?:\\(\\d+¹?\\))?)*" +
+      "(?:\\s+of\\s+the\\s+(?:LPP|LP|Public\\s+Procurement\\s+Law|Civil\\s+Code(?:\\s+of\\s+the\\s+Republic\\s+of\\s+Lithuania)?|Law\\s+on\\s+the\\s+Protection\\s+of\\s+Objects\\s+of\\s+Importance\\s+to\\s+Ensuring\\s+National\\s+Security))?",
+    "Annex\\s+\\d+\\s+to\\s+the\\s+(?:LPP|LP|Description)", "Resolution\\s+No\\.?\\s*\\d+", "Order\\s+No\\.?\\s*[A-Z]+\\d*-\\d+",
+    "(?:Regulation|Decision)\\s+\\(EU\\)\\s+(?:No\\.?\\s*)?\\d+/\\d+", "Directive\\s+\\d+/\\d+/(?:EU|EC)",
+    "Law\\s+on\\s+(?:International\\s+)?Sanctions", "Law\\s+on\\s+Public\\s+Administration", "Law\\s+on\\s+Companies", "Labour\\s+Code", "Law\\s+on\\s+Public\\s+Procurement",
+    "Law\\s+on\\s+Procurement\\s+by\\s+Contracting\\s+Entities\\s+in\\s+the\\s+Water,\\s+Energy,\\s+Transport\\s+(?:or|and)\\s+Postal\\s+Services\\s+Sectors"
+  ];
+  var TEISES_RE = new RegExp(TEISES.map(function (x) { return "(" + x + ")"; }).join("|"), "gi");
+  /* Žemėlapio tekstai: pastraipos ir išskleidžiamų sąrašų (valdiklių) variantai - pastarieji pastraipose nematomi. */
+  function zemelapioTekstai(Z) {
+    var v = [];
+    ((Z && Z.valdikliai) || []).forEach(function (x) { (x.elementai || []).forEach(function (e) { v.push(e.tekstas || ""); }); });
+    return ((Z && Z.pastraipos) || []).concat(v);
+  }
+  function teisesNuorodos(T) {
+    var out = [];
+    (T || []).forEach(function (t, i) {
+      var s = String(t || "").replace(/[\s\u00a0]+/g, " "), m;
+      TEISES_RE.lastIndex = 0;
+      while ((m = TEISES_RE.exec(s))) {
+        var n = m[0].replace(/[\s,/]+$/, "").trim();
+        if (!/^Articles?\s+[\d.]+$/i.test(n) || /of the/i.test(m[0])) out.push({ i: i, nuoroda: n, raktas: n.toLowerCase() });
+      }
+    });
+    return out;
+  }
+  global.GP_SUTARCIU_NUORODOS = { versija: "1.1", tikrink: tikrink, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
 })(typeof window !== "undefined" ? window : this);
