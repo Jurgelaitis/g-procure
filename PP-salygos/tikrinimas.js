@@ -328,8 +328,42 @@
     var c = (r.vietos || []).map(function (v) { return v.citata || ""; }).join("|");
     return "P" + P().maisa(r.id + "|" + (c || r.tekstas || ""));
   }
+  /* Sutarties nuorodos (2026-10-09, GP_SUTARCIU_NUORODOS): pakete - sutarties specialiosios ir (ar) bendrosios sąlygos (atpažinta forma arba
+     vaidmuo); kiekviena nuoroda į punktą ar priedą turi rodyti į esamą tos sutarties punktą ar priedą. Tik Word (DOCX) tekstas su
+     numeriais tekste (Word automatinės numeracijos punktai neturi teksto numerio - tada nepatikrinta). */
+  function sutartiesDokai() {
+    var tip = function (d) {
+      var x = B.palyg[d.id] || {}, f = x.forma || "", v = vaidmuo(d);
+      return /_SS$/.test(f) || (!f && v === "sutartis") ? "SS" : /_BS$/.test(f) || (!f && v === "sutartis_bendrosios") ? "BS" : null;
+    };
+    var o = {};
+    (B.docs || []).forEach(function (d) { var t = tip(d); if (t && !o[t]) o[t] = d; });
+    return o;
+  }
+  function sutartiesNuorodos() {
+    if (!global.GP_SUTARCIU_NUORODOS || !B.docs) return null;
+    var D = sutartiesDokai();
+    if (!D.SS && !D.BS) return null;
+    var tekstai = function (d) { var x = d && B.palyg[d.id]; return x && x.ps ? x.ps.map(function (y) { return y.t; }) : null; };
+    var T = { BS: tekstai(D.BS), SS: tekstai(D.SS) }, maz = ["BS", "SS"].filter(function (k) { return D[k] && !T[k]; });
+    var nr = function (t) { return t ? t.filter(function (x) { return /^\s*\d+\.\d+/.test(x); }).length : 0; };
+    if (maz.length || ["BS", "SS"].some(function (k) { return T[k] && nr(T[k]) < 20; }))
+      return { D: D, priezastis: maz.length ? "su sutarties tekstu tikrinamas tik Word (DOCX) failas" : "punktų numeriai ne tekste (Word automatinė numeracija) - nuorodų patikrinti negalima" };
+    var r = global.GP_SUTARCIU_NUORODOS.tikrink({ bs: T.BS, ss: T.SS });
+    r.D = D;
+    return r;
+  }
   function surinkRadinius() {
     var out = [], rz = B.rez;
+    var sn = B.sutNuorodos = sutartiesNuorodos();
+    if (sn && sn.radiniai) sn.radiniai.forEach(function (x) {
+      var d = sn.D[x.dok];
+      out.push({ raktas: "N" + P().maisa([x.dok, x.nr, x.citata].join("|")), lygis: "tikrinti", grupe: "Sutarties nuorodos",
+                 tekstas: (x.rusis === "priedas" ? "Nuoroda į Nr. " + x.nr + " priedą, kurio specialiųjų sąlygų priedų sąraše nėra" : "Nuoroda į " + x.nr + " punktą, kurio sutartyje nėra") +
+                   (x.dok === "BS" ? " (bendrosios sąlygos)" : " (specialiosios sąlygos)"),
+                 pastaba: "Patikrinkite, ar punktas nepašalintas ar nepernumeruotas; nuoroda turi rodyti į esamą sutarties punktą ar priedą.",
+                 vietos: [{ dok: d.id, failas: bazinis(d.name), vieta: "", citata: x.citata }], teise: [], kilme: "nuorodos" });
+    });
     if (rz) {
       rz.radiniai.forEach(function (r) { out.push({ raktas: parengtiesRaktas(r), lygis: r.lygis, grupe: GP_PARENGTIS.grupesPav(r.grupe, "lt"), tekstas: r.tekstas, pastaba: r.pastaba, vietos: r.vietos || [], teise: r.teise || [], kilme: "parengtis" }); });
       if (rz.taisykles) rz.taisykles.radiniai.forEach(function (r) {
@@ -401,6 +435,11 @@
                    pastaba: tr.length ? "trūksta: " + tr.join(", ") : "" });
       });
     }
+    var sn = B.sutNuorodos;
+    if (sn) out.push({ pav: "Sutarties nuorodos į punktus ir priedus", grupe: "Sutarties nuorodos",
+      busena: sn.priezastis ? "nepatikrinta" : sn.radiniai.length ? "radinys" : "gerai",
+      pastaba: sn.priezastis || ("nuorodų " + sn.nuorodu + (sn.radiniai.length ? ", į neegzistuojančius punktus ar priedus - " + sn.radiniai.length : "") +
+        (sn.nepatikrinta.length ? "; pakete tik " + (sn.D.SS ? "specialiosios" : "bendrosios") + " sąlygos - nuorodų į kitą dokumentą nepatikrinta: " + sn.nepatikrinta.length : "")) });
     return out.concat(palyginimoPatikros());
   }
 
