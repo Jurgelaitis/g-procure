@@ -4299,6 +4299,53 @@ async function testaiSutarciuNuorodos(){
     B = await tikrink([new W.File([ss], "Prekių sutarties specialiosios sąlygos.docx")]);
     tiesa(eil() && /nuorodų į kitą dokumentą nepatikrinta: \d+/.test(eil().textContent), "tik SS: " + (eil() && eil().textContent));
   });
+  await testas("Teisės aktų nuorodos sutarčių šablonuose (sutarčių planas 6.1): kiekviena VPĮ / PĮ straipsnio, dalies, priedo ir kito akto nuoroda (LT ir EN, ir išskleidžiamų sąrašų variantuose) visuose 8 šablonuose - patikrinta e-tar ir įrašyta zemelapiai/sutarciu-teises-nuorodos.json su šaltiniu; kiekvienas įrašas naudojamas; radiniai T1-T3 - su aprašu; pakeistas numeris ar nauja nuoroda - nepatikrinta", async () => {
+    const R = await (await W.fetch("zemelapiai/sutarciu-teises-nuorodos.json")).json();
+    const rasta = {}, blogi = [];
+    for (const kod of ["PREKES_LT", "PREKES_LTEN", "PASLAUGOS_LT", "PASLAUGOS_LTEN"]) for (const k of ["BS", "SS"]) {
+      const Z = await (await W.fetch("zemelapiai/sutartys/" + kod + "_" + k + ".json")).json();
+      N.teisesNuorodos(N.zemelapioTekstai(Z)).forEach(x => { rasta[x.raktas] = 1; if (!R.nuorodos[x.raktas]) blogi.push("nepatikrinta: " + kod + "_" + k + " „" + x.nuoroda + "“"); });
+    }
+    Object.keys(R.nuorodos).forEach(k => {
+      const e = R.nuorodos[k];
+      if (!rasta[k]) blogi.push("nebenaudojama: " + k);
+      if (!e.saltinis || !(e.aktai || []).length || e.aktai.some(a => !R.aktai[a] || !/e-tar|EUR-Lex|workdays/.test(R.aktai[a]))) blogi.push("be šaltinio ar akto: " + k);
+      if (!["teisinga", "radinys"].includes(e.busena) || (e.busena === "radinys") !== !!e.radinys || (e.radinys && !R.radiniai[e.radinys])) blogi.push("būsena: " + k);
+    });
+    lygu(blogi, [], "šablonų teisės nuorodos");
+    lygu([Object.keys(rasta).length >= 60, R.tikrinta, Object.keys(R.radiniai)], [true, "2026-10-09", ["T1", "T2", "T3"]], "apimtis, data, radiniai");
+    const r = t => N.teisesNuorodos([t]).map(x => x.nuoroda);
+    lygu(r("Sutartis gali būti nutraukiama VPĮ\u00a090 / PĮ 98 straipsnyje ir Sutartyje."), ["VPĮ 90 / PĮ 98 straipsnyje"], "„/“ forma ir NBSP");
+    lygu(r("paaiškėja VPĮ 37 straipsnio 9 dalyje ir (ar) 47 straipsnio 9 dalyje / PĮ 50 straipsnio 9 dalyje nurodytos aplinkybės"),
+      ["VPĮ 37 straipsnio 9 dalyje ir (ar) 47 straipsnio 9 dalyje / PĮ 50 straipsnio 9 dalyje"], "grandinė - viena nuoroda");
+    lygu(r("taikomos Lietuvos Respublikos civilinio kodekso 6.212 straipsnio ir Vyriausybės 1996 m. liepos 15 d. nutarimu Nr. 840 patvirtintos"), ["civilinio kodekso 6.212 straipsnio", "nutarimu Nr. 840"], "CK ir nutarimas");
+    lygu(r("in accordance with Article 90 of the LPP / Article 98 of the LP and Annex 5 to the LPP; Regulation (EU) 2016/679"), ["Article 90 of the LPP", "Article 98 of the LP", "Annex 5 to the LPP", "Regulation (EU) 2016/679"], "angliškai");
+    lygu(r("Priedas Nr. 2, Specialiųjų sąlygų 5.2 punkte, įstatymų bei kitų teisės aktų reikalavimų, Article 5 clause"), [], "sutarties punktai ir priedai, bendri žodžiai - ne teisės aktų nuorodos");
+    tiesa(!R.nuorodos[N.teisesNuorodos(["VPĮ 92 straipsnyje"])[0].raktas], "pakeistas numeris turi būti nepatikrintas");
+  });
+  await testas("PĮ pirkimui SS 14.1 p. VPĮ nuorodas pakeičia visose BS nuostatose (radinys T3, 2026-10-09): kiekvienas prekių ir paslaugų BS punktas su „VPĮ“ - SS 14.1 p. nauja redakcija arba sąraše „... punktuose minima sąvoka „VPĮ“ keičiama į sąvoką „VPĮ / PĮ““; prekių SS 16.4 ir 17.7 p. - su PĮ 7 priedu ir PĮ 99 straipsniu, LT/EN - ir angliškai", async () => {
+    const blogi = [];
+    for (const [seima, kalba] of [["PREKES", "LT"], ["PASLAUGOS", "LT"], ["PREKES", "LTEN"], ["PASLAUGOS", "LTEN"]]) {
+      const B = (await (await W.fetch("zemelapiai/sutartys/" + seima + "_LT_BS.json")).json()).pastraipos;
+      const S = (await (await W.fetch("zemelapiai/sutartys/" + seima + "_" + kalba + "_SS.json")).json()).pastraipos;
+      const ss = S.join(" ");
+      const nauji = new Set([...ss.matchAll(/„(\d+(?:\.\d+)+)\./g)].map(m => m[1]));
+      if (/22 skyriaus pirmoji pastraipa/.test(ss)) nauji.add("22");
+      const sar = /([\d.,\s]+)punktuose minima sąvoka „VPĮ“ keičiama/.exec(ss);
+      const sarasas = new Set(sar ? sar[1].split(",").map(x => x.trim().replace(/\.$/, "")).filter(Boolean) : []);
+      let nr = null;
+      B.forEach(t => {
+        const m = /^\s*(\d+(?:\.\d+)*)\.?/.exec(t || "");
+        if (m) nr = m[1];
+        if (/VPĮ/.test(t || "") && nr && !nauji.has(nr) && !sarasas.has(nr) && !(m === null && nauji.has(nr.split(".")[0])))
+          blogi.push(seima + "_" + kalba + ": BS " + nr + " lieka tik su VPĮ");
+      });
+      if (kalba === "LTEN" && !/the term “LPP” shall be replaced by the term “LPP \/ LP”/.test(ss)) blogi.push(seima + "_LTEN: nėra anglų sąrašo eilutės");
+      if (!/VPĮ 5 priede \/ PĮ 7 priede/.test(ss) || !/VPĮ 91 straipsnyje \/ PĮ 99 straipsnyje/.test(ss)) blogi.push(seima + "_" + kalba + ": 16.4 ar 17.7");
+      if (kalba === "LTEN" && (!/Annex 5 to the LPP \/ Annex 7 to the LP/.test(ss) || !/Article 91 of the LPP \/ Article 99 of the LP/.test(ss))) blogi.push(seima + "_LTEN: 16.4 ar 17.7 angliškai");
+    }
+    lygu(blogi, [], "VPĮ -> VPĮ / PĮ");
+  });
   const E = W.GP_SUTARTIES_ELEMENTAI;
   tiesa(E, "shared/sutarties-elementai.js neįkeltas modulyje");
   const dokai = async (bs, ss) => (await W.GP_DOK.apdorok([new W.File([ss], "Sutarties SS.docx"), new W.File([bs], "Sutarties BS.docx")], null, "lt")).docs || [];
