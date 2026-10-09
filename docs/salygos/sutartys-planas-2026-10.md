@@ -510,6 +510,29 @@ stulpelį su LT pastraipa į pastraipą - kad rinkiniai vėl neišsiskirtų; (5)
 teisės nuorodos (PĮ, VPĮ, CK, Statybos įstatymas, STR, Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymas, BDAR)
 tikrinamos e-tar prieš įtraukiant šeimą; neteisinga - turinio radinys LITGRID.
 
+**Prekėms ir paslaugoms padaryta 2026-10-09** (jūsų „Taip, pradėkime nuo teisės nuorodų patikros.“): `GP_SUTARCIU_NUORODOS.teisesNuorodos()`
+ištraukia visas teisės aktų nuorodas iš 8 šablonų (67 skirtingos, LT ir EN, ir išskleidžiamų sąrašų variantuose; ir Akcinių bendrovių įstatymas), kiekviena perskaityta e-tar (VPĮ 33, 37, 45, 47, 86, 90, 91 str.
+ir 5 priedas; PĮ 46, 50, 58, 94, 98, 99 str. ir 7 priedas; CK 6.212 str.; Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo
+17 str.; Tarptautinių sankcijų ir Viešojo administravimo įstatymai; Vyriausybės nutarimas Nr. 840; įsakymas Nr. D1-508 ir aprašo 2 priedas)
+ir EUR-Lex (BDAR, sprendimas (ES) 2017/1870) ir įrašyta `zemelapiai/sutarciu-teises-nuorodos.json`; testas neleidžia šablone atsirasti
+nepatikrintai nuorodai. Teisingos visos, išskyrus tris turinio radinius. Jūsų sprendimas (2026-10-09, „Taip, papildykite prekių SS 14.1 p.,
+palikite kaip VPT tipinėse sąlygose ir įtraukite T1, T2 į laišką“): T1 ir T2 - šablone paliekama kaip VPT tipinėse sąlygose, klausimai -
+laiške LITGRID (`~/Documents/g-procure-privatu/sutartys/laiskas-LITGRID-sutarciu-teises-nuorodos-2026-10-09.md`); T3 - ištaisyta:
+- **T1.** BS 22.2.2.14 ir SS 14.1 p.: „VPĮ 37 straipsnio 8 dalyje ir (ar) 47 straipsnio 8 dalyje / PĮ 50 straipsnio 8 dalyje ir (ar) VPĮ 47
+  straipsnio 8 dalyje nurodytos aplinkybės“. Įstatymo vienašalio nutraukimo pagrindas (VPĮ 90 str. 1 d. 4 p., PĮ 98 str. 1 d. 4 p., redakcija
+  nuo 2022-12-13 įstatymų Nr. XIV-1669 ir XIV-1672) - VPĮ 37 str. 9 d., 45 str. 2¹ d. ir 47 str. 9 d. (PĮ 50 str. 9 d., 58 str. 4¹ d., VPĮ 47 str.
+  9 d.). Taip pat parašyta VPT tipinėse sąlygose (1S-19, suvestinė nuo 2025-05-01). 8 dalys irgi apie nacionalinį saugumą, o sutartis gali
+  nustatyti papildomų nutraukimo atvejų (VPĮ 90 str. 3 d., PĮ 98 str. 3 d.) - todėl ne redakcinė klaida.
+- **T2.** BS 17.7 (ir paslaugų SS 14.1): „įtraukiamas į nepatikimų tiekėjų sąrašą VPĮ 91 straipsnyje / PĮ 99 straipsnyje nustatyta tvarka“ -
+  po 2021-09-30 įstatymų Nr. XIV-545, XIV-546 (paskelbti TAR 2021-10-15) šie straipsniai nustato informacijos apie sutarties neįvykdžiusius tiekėjus skelbimą CVP IS,
+  „nepatikimų tiekėjų sąrašo“ nebėra. Taip pat VPT tipinėse sąlygose.
+- **T3.** Prekių SS 14.1 p. neturi paslaugų SS eilutės „... punktuose minima sąvoka „VPĮ“ keičiama į sąvoką „VPĮ / PĮ““ ir 16.4, 17.7 p.
+  pakeitimų: PĮ pirkime prekių BS 1.1.1.9, 1.1.1.18, 1.2.2, 1.2.6, 3.3.1, 3.3.2, 7.4.1.2, 10.3, 16.4 (VPĮ 5 priedas), 17.7 (VPĮ 91 str.), 20.1 ir 21.4 p.
+  lieka tik su VPĮ. **Padaryta 2026-10-09:** prekių SS 14.1 p. (LT ir LT/EN) papildytas kaip paslaugų - sąrašo eilutė (prekių BS 1.1.1.18 vietoj
+  paslaugų 1.1.2) ir 16.4, 17.7 p. nauja redakcija (prekių BS tekstas, pakeistos tik VPĮ nuorodos); privatus `taisymai_6.py`, kopija
+  `originalai-2026-10-09c/`, LT/EN perkurtas `lten_ss.py` (anglų vertimai - kaip paslaugų SS), `sutarciu-sablonai.py --nauja-redakcija` ir
+  `--versijos`. Testas tikrina, kad abiejose šeimose kiekvienas BS punktas su VPĮ yra SS 14.1 p. nauja redakcija ar sąraše.
+
 ### 6.2. PĮ ir VPĮ
 
 - LITGRID (PĮ) - LITGRID šablonai. Paslaugų BS parašytos pagal VPĮ, o SS 14.1 jas perveda į PĮ - generatorius 14.1 įtraukia visada,
@@ -629,7 +652,8 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
    (taip - sutarties projektas nerengiamas, CPO LT forma; ne - Paslaugų sutartis); kitos lentelės taisyklės - S2 pradžia (stebėjimo režimas).
 2. ~~Eksploatavimo regioninės SS~~ - atsakyta: BS pridėtos 2026-10-07. Lieka: eksploatavimo BS patvirtinimo data (redakcijų registrui) ir
    trasų valymo SS 3.7 punktų išimtis.
-3. **Turinio klaidos:** ar parengti laišką LITGRID (kaip SPS šablonams) su visais [T] radiniais?
+3. **Turinio klaidos:** ar parengti laišką LITGRID (kaip SPS šablonams) su visais [T] radiniais? Iš dalies atsakyta 2026-10-09: laiškas dėl
+   teisės aktų nuorodų (T1, T2 ir informacija apie T3) parengtas; kiti [T] radiniai - dar laukia jūsų sprendimo.
 4. **LT/EN redakcijos (5.4):** ar LT/EN rinkinius atnaujinti pagal aktualią VPT redakciją (kaip LT; su nauju EN vertimu), o kol
    neatnaujinta - generatorius LT/EN sutarties nesiūlo ar siūlo su įspėjimu? 9.4 - atsakyta (1000 Eur, 5.5); kitos LT ir LT/EN skirtingos
    sumos ir bazės (9.3, 9.14.4, 8.2.1, 20 % ribos bazė) - kurios standartinės?
