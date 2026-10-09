@@ -8,6 +8,10 @@
  *  - palyginimas su standartine forma (shared/palyginimas.js): Word (DOCX) pastraipos lyginamos su LITGRID šablonu (mūsų pataisytu,
  *    templates/), forma atpažįstama pagal zemelapiai/formu-versijos.json rodyklę, ankstesnių oficialių redakcijų tekstas nelaikomas
  *    nukrypimu; šiuo moduliu sugeneruotas dokumentas lyginamas pagal generavimo pasą - tiksliai, kas pakeista PO generavimo;
+ *  - nuo 2026-10-09 (sutarčių planas 4.4) ir prekių bei paslaugų pirkimo-pardavimo sutarčių BS ir SS (zemelapiai/sutarciu-versijos.json):
+ *    pildomos vietos, išskleidžiamų sąrašų variantai ir pasirenkamos dalys - iš sutarties žemėlapio (sutartiesVietos), LITGRID „0922“
+ *    ir ankstesnių redakcijų tekstas - ne nukrypimas (kitos_versijos, naujos); išmatuota: 8 šablonai, 8 LITGRID originalai ir 8 sugeneruoti
+ *    be paso - 0 nukrypimų, kiekvienoje SS trys dirbtiniai pakeitimai (pakeista, pašalinta, pridėta nuostata) - visi rasti;
  *  - lygiai: Kliūtis, Nukrypimas nuo formos, Patikrinkite, Informacija (Rekomendacija - kai bus privalomų elementų katalogas);
  *  - sprendimai: Ištaisyta / Priimta sąmoningai (nukrypimui, kliūčiai ir rekomendacijai - su pagrindimu) / Netaikoma; Word ataskaita su mašinai
  *    skaitomais sprendimais: įkėlus ją kartu su nauja paketo versija, sprendimai parodomi prie tų pačių radinių, o dokumentų
@@ -37,9 +41,13 @@
   var PO_RUSIS = { raudonas: "užpildyta raudonai pažymėta vieta", vieta: "užpildyta tuščia vieta", pasalinta: "pašalinta sąlyginė dalis",
     pakeista: "pakeista sąlyginė dalis", lentele: "lentelės eilutė", turinys: "turinys", numeracija: "numeracija", skyryba: "skyryba",
     priedu_sarasas: "priedų sąrašas", perkelta: "perkelta", antraste: "skyriaus antraštė", kita_versija: "ankstesnės oficialios formos tekstas",
-    po_generavimo: "pakeista po generavimo" };
+    po_generavimo: "pakeista po generavimo", pazymeta: "užpildyta pildoma sutarties vieta",
+    nauja_redakcija: "formos taisymas, kurio dokumento redakcijoje nebuvo", pasirinkimas: "pasirinktas formos sąrašo variantas",
+    ne_is_saraso: "pasirinkimo vietoje - tekstas, kurio formos sąraše nėra", salinama: "pašalintas šablono nurodymas ar pildymo vieta" };
   var SEIMOS = { AK: "Atviras konkursas", AKV: "Atviras konkursas VPĮ", SSD: "Skelbiamos derybos (supaprastintas)", TSD: "Skelbiamos derybos (tarptautinis)",
-    ND: "Neskelbiamos derybos", MVP: "Mažos vertės pirkimas", DPSK: "DPS sukūrimas", DPSP: "Konkretus pirkimas pagal DPS" };
+    ND: "Neskelbiamos derybos", MVP: "Mažos vertės pirkimas", DPSK: "DPS sukūrimas", DPSP: "Konkretus pirkimas pagal DPS",
+    PREKES: "Prekių pirkimo-pardavimo sutartis", PASLAUGOS: "Paslaugų pirkimo-pardavimo sutartis" };
+  var SUTARTIES_DALIS = { BS: "bendrosios sąlygos", SS: "specialiosios sąlygos" };
   var VAIDMENU_TVARKA = ["sps", "bps", "skelbimas", "ts", "sutartis", "sutartis_bendrosios", "pasiulymas", "paraiska", "ebvpd", "paaiskinimas", "priedas", "kita"];
   var ATPAZINIMO_RIBA = 0.5, ATPAZINIMO_SKIRTUMAS = 0.05;   // išmatuota 2026-10-06: tikri SPS 0,57-0,76, BPS 1,0; antra forma - bent 0,08 mažiau
   var MAX_RODOMA = 10;
@@ -58,13 +66,14 @@
   }
   function $(id) { return document.getElementById(id); }
   function P() { return global.GP_PALYGINIMAS; }
+  function P_NORM(t) { return global.GP_PALYGINIMAS.norm(t); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]; }); }
   function kab(s) { return "„" + s + "“"; }
   function bazinis(v) { return String(v || "").split(/ › |\//).pop(); }
   function formosPav(id) {
     var m = /^([A-Z]+)_(LT|LTEN)_([A-Z]+)$/.exec(id || "");
     if (!m) return id || "";
-    return (SEIMOS[m[1]] || m[1]) + " · " + (m[3] === "SALYGOS" ? "sąlygos" : m[3]) + " · " + (m[2] === "LTEN" ? "LT/EN" : "LT");
+    return (SEIMOS[m[1]] || m[1]) + " · " + (m[3] === "SALYGOS" ? "sąlygos" : SUTARTIES_DALIS[m[3]] || m[3]) + " · " + (m[2] === "LTEN" ? "LT/EN" : "LT");
   }
   function laikoTekstas(dt) {
     if (!dt) return "";
@@ -74,21 +83,124 @@
   function vaidmuo(d) { return B.vaidmenys[d.id] || d.vaidmuo || (B.rez && (B.rez.dokumentai.find(function (x) { return x.id === d.id; }) || {}).vaidmuo) || "kita"; }
 
   /* ---------------------------------------------------------------- rodyklė ir šablonai */
+  /* Rodyklė - pirkimo sąlygų formos (formu-versijos.json) ir sutarčių šablonai (sutarciu-versijos.json, 2026-10-09: sutarčių planas 4.4).
+     Sutarties įrašas: { sutartis: true, failas, pavadinimas, kitos } - kitos: LITGRID „0922“ ir ankstesnių redakcijų pastraipų maišos.
+     Nepavykus įkelti sutarčių registro, pirkimo sąlygų formos lyginamos kaip iki tol, o sutartys - nepatikrintos su priežastimi. */
+  var sutarciuKlaida = null;
   async function gaukIndeksa() {
     if (indeksas) return indeksas;
-    indeksas = await cfg.gaukJson("zemelapiai/formu-versijos.json");
-    if (!indeksas || !indeksas.formos) { indeksas = null; throw new Error("formų rodyklė netinkama"); }
+    var ix = await cfg.gaukJson("zemelapiai/formu-versijos.json");
+    if (!ix || !ix.formos) throw new Error("formų rodyklė netinkama");
+    try {
+      var reg = await cfg.gaukJson("zemelapiai/sutarciu-versijos.json");
+      Object.keys((reg && reg.sablonai) || {}).forEach(function (id) {
+        var r = reg.sablonai[id];
+        ix.formos[id] = { sutartis: true, failas: r.failas, pavadinimas: r.pavadinimas, dabartine: r.dabartine, pozymiai: r.pozymiai,
+                          kitosPozymiai: r.kitos_pozymiai || "", kitos: r.kitos_versijos || {}, naujos: r.naujos || [] };
+      });
+      sutarciuKlaida = null;
+    } catch (e) { sutarciuKlaida = e.message || String(e); }
+    indeksas = ix;
     return indeksas;
   }
+  function formosIrasas(id) { return (indeksas && indeksas.formos[id]) || null; }
   function gaukForma(id) {
     if (!sablonai[id]) sablonai[id] = (async function () {
-      var buf = await cfg.gaukBuf("templates/" + id + ".docx");
+      var ir = formosIrasas(id) || {};
+      var buf = await cfg.gaukBuf(ir.sutartis ? String(ir.failas || "").replace(/^PP-salygos\//, "") : "templates/" + id + ".docx");
       var r = await P().skaityk(buf);
       var zem = null;
-      try { zem = await cfg.gaukJson("zemelapiai/" + id + ".json"); } catch (e) { zem = null; }
-      return { id: id, ps: r.pastraipos, zem: zem };
+      try { zem = await cfg.gaukJson((ir.sutartis ? "zemelapiai/sutartys/" : "zemelapiai/") + id + ".json"); } catch (e) { zem = null; }
+      if (!ir.sutartis) return { id: id, ps: r.pastraipos, zem: zem };
+      if (!zem) throw new Error("sutarties šablono žemėlapio " + id + " įkelti nepavyko");
+      var sz = await sutartiesVietos(buf, zem);
+      r.pastraipos.forEach(function (x) {
+        if (sz.vieta[x.i]) x.vieta = true;
+        if (sz.vietaPo[x.i]) x.vietaPo = true;
+        if (sz.salinama[x.i]) x.salinama = true;
+        if (sz.leidziami[x.i]) x.leidziami = sz.leidziami[x.i];
+        if (sz.variantai[x.i]) x.variantai = sz.variantai[x.i];
+      });
+      return { id: id, ps: r.pastraipos, zem: { blokai: sz.blokai }, sutartis: true };
     })().catch(function (e) { delete sablonai[id]; throw e; });
     return sablonai[id];
+  }
+  /* Sutarties šablono pildomos vietos ir pasirenkamos dalys iš jo žemėlapio (sutarciu-sablonai.py; pastraipų numeracija - visos w:p, kaip
+     GP_PALYGINIMAS.pastraipos ir sutarciu-generatorius.js): vieta - pastraipos su valdikliais, pildomomis vietomis, laukais, rekvizitais,
+     nurodymais, paryškinimais ir sąlygų užrašais; blokai - alternatyvų variantai su skyrikliais, o po trynimo nurodymo ir užrašo
+     „Jei punktas taikomas:“ - langelio likutis (pasirinkus „netaikoma“ jis šalinamas). */
+  async function sutartiesVietos(buf, Z) {
+    var zip = await global.JSZip.loadAsync(buf);
+    var doc = new DOMParser().parseFromString(await zip.file("word/document.xml").async("string"), "application/xml");
+    var W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    var P = Array.prototype.slice.call(doc.getElementsByTagNameNS(W, "p")), nr = new Map();
+    P.forEach(function (p, i) { nr.set(p, i); });
+    var tevas = function (n, vardas) { for (var q = n.parentNode; q; q = q.parentNode) if (q.namespaceURI === W && q.localName === vardas) return q; return null; };
+    var vieta = {}, vietaPo = {}, salinama = {}, leidziami = {}, variantai = {}, blokai = [];
+    var tekstas = function (p) { return Array.prototype.map.call(p.getElementsByTagNameNS(W, "t"), function (t) { return t.textContent; }).join("").trim(); };
+    ["valdikliai", "pildomos", "nurodymai", "laukai", "organizacija", "paryskinimai", "keiciamos_reiksmes", "taikymo_salygos", "trynimo_nurodymai", "salygos"]
+      .forEach(function (k) { (Z[k] || []).forEach(function (x) { if (x.i != null) vieta[x.i] = 1; }); });
+    // pašalinti galima: trynimo nurodymą, užrašą „Jei punktas taikomas:“, visą pastraipą sudarantį nurodymą ar taikymo sąlygą
+    (Z.trynimo_nurodymai || []).concat(Z.salygos || []).forEach(function (x) { salinama[x.i] = 1; });
+    (Z.nurodymai || []).concat(Z.taikymo_salygos || []).forEach(function (x) { if (P[x.i] && tekstas(P[x.i]) === String(x.tekstas || "").trim()) salinama[x.i] = 1; });
+    var SDT = Array.prototype.slice.call(doc.getElementsByTagNameNS(W, "sdt"));
+    SDT.forEach(function (sdt) {
+      var p = tevas(sdt, "p"), vidus = Array.prototype.slice.call(sdt.getElementsByTagNameNS(W, "p"));
+      if (p) { vieta[nr.get(p)] = 1; if (tekstas(p) === tekstas(sdt)) salinama[nr.get(p)] = 1; }
+      vidus.forEach(function (q) { vieta[nr.get(q)] = 1; salinama[nr.get(q)] = 1; });
+    });
+    // Išskleidžiamo sąrašo (dropDownList) pastraipa: leidžiami tik formos variantai (laisvo teksto sąrašas ir teksto valdiklis - bet kas);
+    // šablono vietos „[...]“, „[_]“, „{...}“ variante - bet koks tekstas. Palyginama su GP_PALYGINIMAS.norm tekstu (be punkto numerio).
+    var lite = function (t) { return P_NORM(t); };
+    var re = function (t) { return lite(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\[(_|\\\.\\\.\\\.|…)\\\]|\\\{\\\.\\\.\\\.\\\}/g, "[\\s\\S]*?").replace(/ /g, "\\s*"); };
+    var vald = function (sdt) { return (Z.valdikliai || [])[SDT.indexOf(sdt)] || null; };
+    var slotas = function (sdt) {
+      var v = vald(sdt);
+      if (!v || v.rusis !== "dropDownList" || !v.elementai || !v.elementai.length) return "[\\s\\S]*?";
+      return "(?:" + v.elementai.map(function (e) { return re(e.tekstas); }).concat([re(tekstas(sdt)), ""]).join("|") + ")";
+    };
+    var dalys = function (n, out) {
+      Array.prototype.forEach.call(n.childNodes, function (c) {
+        if (c.namespaceURI !== W) return;
+        if (c.localName === "sdt") out.push({ sdt: c });
+        else if (c.localName === "t") out.push({ t: c.textContent });
+        else if (c.localName === "tab") out.push({ t: " " });
+        else if (c.localName !== "pPr" && c.localName !== "rPr") dalys(c, out);
+      });
+      return out;
+    };
+    P.forEach(function (p, i) {
+      var sdts = SDT.filter(function (x) { return tevas(x, "p") === p; }), vienas = SDT.find(function (x) { return x.contains(p); });
+      var d = null;
+      if (sdts.length) d = dalys(p, []);
+      else if (vienas && vienas.getElementsByTagNameNS(W, "p").length === 1) d = [{ sdt: vienas }];
+      if (!d || !d.some(function (x) { var v = x.sdt && vald(x.sdt); return v && v.rusis === "dropDownList"; })) return;
+      var src = "";
+      d.forEach(function (x) { src += x.sdt ? "\u0001" + SDT.indexOf(x.sdt) + "\u0001" : x.t; });
+      // šablono tekstas be punkto numerio (dokumento pusė - norm, kuri numerį nuima), valdikliai - šablonai
+      var m = /^\s*(\d+(\.\d+)+(?=\s)|\d+(\.\d+)*\.)\s*/.exec(src); if (m) src = src.slice(m[0].length);
+      var r = src.split(/\u0001(\d+)\u0001/).map(function (t, k) { return k % 2 ? slotas(SDT[+t]) : re(t); }).join("\\s*");
+      try { leidziami[i] = new RegExp("^\\s*(?:\\d+(?:\\.\\d+)*\\.?\\s*)?" + r + "\\s*$"); } catch (e) { /* netinkamas šablonas - lieka vieta */ }
+      // visa pastraipa - vienas sąrašas: jo variantai (artimiausias rodomas kaip formos tekstas, kai įrašytas kitas)
+      var v1 = d.length === 1 && d[0].sdt && vald(d[0].sdt);
+      if (v1 && v1.rusis === "dropDownList") variantai[i] = v1.elementai.map(function (e) { return { t: String(e.tekstas).trim(), n: P_NORM(e.tekstas) }; });
+    });
+    // Tuščias laukas (pvz. sutarties pavadinimas po užrašo „Sutarties pavadinimas“) palyginime nematomas - užpildytą jį atpažįsta pagal
+    // ankstesnę netuščią pastraipą (vietaPo: po jos pridėta pastraipa - užpildyta vieta)
+    Object.keys(vieta).forEach(function (k) {
+      if (!P[k] || tekstas(P[k])) return;
+      for (var j = +k - 1; j >= 0; j--) if (tekstas(P[j])) { vietaPo[j] = 1; break; }
+    });
+    (Z.alternatyvos || []).forEach(function (a) {
+      var v = a.variantai.reduce(function (s, x) { return s.concat(x); }, []).concat(a.skyrikliai || []);
+      if (v.length) blokai.push({ blokas: { nuo: Math.min.apply(null, v), iki: Math.max.apply(null, v) } });
+    });
+    (Z.trynimo_nurodymai || []).concat(Z.salygos || []).forEach(function (x) {
+      var tc = P[x.i] && tevas(P[x.i], "tc"), iki = x.i;
+      if (tc) while (iki + 1 < P.length && tevas(P[iki + 1], "tc") === tc) iki++;
+      blokai.push({ blokas: { nuo: x.i, iki: iki } });
+    });
+    return { vieta: vieta, vietaPo: vietaPo, salinama: salinama, leidziami: leidziami, variantai: variantai, blokai: blokai };
   }
   /* Ankstesnės patikros ataskaita - Word failas su customXml dalimi NS_ATASKAITA (žr. ataskaita()). */
   async function skaitykAtaskaita(buf) {
@@ -199,7 +311,9 @@
         var dab = indeksas && indeksas.formos[x.forma] && indeksas.formos[x.forma].dabartine;
         x.pasoVersija = !x.pasas.forma ? "" : (dab && x.pasas.forma === dab ? "dabartine" : "kita");
       } else {
-        x.rez = P().lygink(f.ps, x.ps, { zemelapis: f.zem, kitosVersijos: P().kitosVersijos(indeksas.formos[x.forma]) });
+        var ir = indeksas.formos[x.forma];
+        var naujos = {}; (ir.naujos || []).forEach(function (h) { naujos[h] = 1; });
+        x.rez = P().lygink(f.ps, x.ps, { zemelapis: f.zem, kitosVersijos: P().kitosVersijos(ir.sutartis ? ir.kitos : ir), sutartis: !!ir.sutartis, naujos: naujos });
       }
       x.pagalPasa = pagalPasa;
     } catch (e) { x.klaidaLyg = e.message; }
@@ -258,12 +372,16 @@
     var out = [];
     B.docs.forEach(function (d) {
       var v = vaidmuo(d), x = B.palyg[d.id], pav = "Palyginimas su forma: " + bazinis(d.name);
-      var aktualu = v === "sps" || v === "bps" || (x && (x.siuloma || x.forma));
+      var sut = v === "sutartis" || v === "sutartis_bendrosios";
+      var aktualu = v === "sps" || v === "bps" || sut || (x && (x.siuloma || x.forma));
       if (!aktualu) return;
       if (!x) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: d.ext === "pdf" ? "PDF - su forma lyginamas tik Word (DOCX) failas" : "ne Word (DOCX) failas - su forma nelyginama" }); return; }
       if (x.klaida) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: "Word failo perskaityti nepavyko: " + x.klaida }); return; }
       if (!indeksas && !x.pasas) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: "formų rodyklė neįkelta (" + (indeksoKlaida || "nežinoma priežastis") + ")" }); return; }
-      if (!x.forma) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: B.formos[d.id] === "" ? "pasirinkta nelyginti" : "forma neatpažinta - jei tai LITGRID forma, pasirinkite ją „Pagal dokumentą“" }); return; }
+      if (!x.forma) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: B.formos[d.id] === "" ? "pasirinkta nelyginti"
+        : sut && sutarciuKlaida ? "sutarčių šablonų registras neįkeltas (" + sutarciuKlaida + ")"
+        : sut ? "sutarties forma neatpažinta - modulyje yra prekių ir paslaugų pirkimo-pardavimo sutarčių šablonai; jei tai viena iš jų, pasirinkite ją „Pagal dokumentą“"
+        : "forma neatpažinta - jei tai LITGRID forma, pasirinkite ją „Pagal dokumentą“" }); return; }
       if (x.klaidaLyg) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: x.klaidaLyg }); return; }
       var n = x.rez.statistika.nukrypimas;
       out.push({ pav: pav, grupe: "Palyginimas su forma", busena: n ? "radinys" : "gerai",
@@ -435,14 +553,17 @@
       if (B.formos[d.id] === "") return "Pasirinkta nelyginti su forma.";
       return (v === "sps" || v === "bps" || (art && art.balas >= 0.3)) && art
         ? "Forma neatpažinta (artimiausia - " + formosPav(art.id) + ", " + Math.round(art.balas * 100) + " %). Jei tai LITGRID forma - pasirinkite ją."
-        : "Su standartine forma nelyginama: rodyklėje - LITGRID SPS, BPS ir DPS sąlygų formos. Jei tai viena iš jų - pasirinkite.";
+        : "Su standartine forma nelyginama: rodyklėje - LITGRID SPS, BPS ir DPS sąlygų formos bei prekių ir paslaugų pirkimo-pardavimo sutarčių " +
+          "bendrosios ir specialiosios sąlygos" + (sutarciuKlaida ? " (sutarčių šablonų registro įkelti nepavyko: " + sutarciuKlaida + ")" : "") + ". Jei tai viena iš jų - pasirinkite.";
     }
     if (x.klaidaLyg) return "Palyginti nepavyko: " + x.klaidaLyg;
     var s = x.rez.statistika;
     var kaip = x.pagalPasa ? "Sugeneruota šiuo moduliu - lyginama pagal generavimo pasą (" + (x.pasas.data || "data nenurodyta") + (x.pasoVersija === "kita" ? "; sugeneruota iš ankstesnės formos versijos" : "") + ")"
       : (x.pagal === "atpazinta" && B.formos[d.id] === undefined ? "Forma atpažinta: " : "Forma pasirinkta: ") + formosPav(x.forma) +
         (x.idf && x.idf[0] && x.idf[0].id === x.forma ? " (panašumas " + Math.round(x.idf[0].balas * 100) + " %; siūloma - patikrinkite)" : "");
-    return kaip + ". Pastraipų: nepakeistos " + s.vienodos + ", nukrypimai " + s.nukrypimas + ", laukiami pakeitimai " + (s.neprivaloma + s.uzpildyta + s.techninis) + ".";
+    return kaip + ". Pastraipų: nepakeistos " + s.vienodos + ", nukrypimai " + s.nukrypimas + ", laukiami pakeitimai " + (s.neprivaloma + s.uzpildyta + s.techninis) + "." +
+      (x.rez.senaVersija && (formosIrasas(x.forma) || {}).sutartis ? " Dokumentas parengtas pagal ankstesnę formos redakciją (LITGRID „0922“): jos tekstas ir G-Procure taisymai nukrypimais nelaikomi. " +
+        "Jei rengėjas pašalino pastraipą, kurią G-Procure pataisė, palyginimas to nemato - tokias vietas (laukiamuose pakeitimuose) peržiūrėkite." : "");
   }
   function dokumentaiHtml() {
     if (!B.docs) return "";

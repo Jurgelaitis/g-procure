@@ -2426,18 +2426,33 @@ const GPNum = (() => {
     }
   }
 
+  /* Pastraipos teksto atkarpa [nuo, iki) pašalinama iš w:t mazgų (runų savybės nekeičiamos). */
+  function salinkAtkarpa(p, nuo, iki){
+    let poz = 0;
+    for (const t of Array.from(p.getElementsByTagNameNS(W, 't'))){
+      const s = t.textContent, a = poz, b = poz + s.length;
+      poz = b;
+      if (b <= nuo || a >= iki) continue;
+      t.textContent = s.slice(0, Math.max(nuo, a) - a) + s.slice(Math.min(iki, b) - a);
+      t.setAttribute('xml:space', 'preserve');
+    }
+  }
+
   /* ---------- TURINYS ---------- */
-  const raktas = s => s.replace(/^\s*\d+(\.\d+)*\.?\s*/, '').replace(/\d+\s*$/, '').replace(/[^\p{L}]/gu, '').toLocaleUpperCase('lt');
+  // skliaustai neskaičiuojami: antraštės raudonas nurodymas („PRIEDAI (koreguojama pagal poreikį)“) generuojant pašalinamas, o turinio
+  // eilutėje lieka - be to raktai nesutapdavo ir, pašalinus ankstesnį skyrių (2026-10-09 - „Esminės sutarties sąlygos“), numeris nepasikeisdavo
+  const raktas = s => s.replace(/\([^)]*\)/g, '').replace(/^\s*\d+(\.\d+)*\.?\s*/, '').replace(/\d+\s*$/, '').replace(/[^\p{L}]/gu, '').toLocaleUpperCase('lt');
   function turinys(M, d, skyriai){
     // raktas - visas antrastes tekstas (TURINIO irasas - tos antrastes kopija); vienodos antrastes - is eiles
-    const zem = new Map();
-    skyriai.forEach(e => { const k = raktas(e.kont === 'kunas' ? e.t.slice(e.lit ? e.lit.ilgis : 0) : e.ltTekstas); (zem.get(k) || zem.set(k, []).get(k)).push(e.naujas); });
+    const zem = new Map(), zemT = new Map();
+    skyriai.forEach(e => { const at = e.kont === 'kunas' ? e.t.slice(e.lit ? e.lit.ilgis : 0) : e.ltTekstas, k = raktas(at);
+      (zem.get(k) || zem.set(k, []).get(k)).push(e.naujas); (zemT.get(k) || zemT.set(k, []).get(k)).push(at); });
     const naudota = new Map();
     const irasai = Array.from(d.getElementsByTagNameNS(W, 'p')).filter(p => {
       const ppr = kid(p, 'pPr'), st = M.st[ppr && val(ppr, 'pStyle')];
       return st && st.name === 'toc 1' && /^\s*\d+\.?/.test(tekstas(p)) && raktas(tekstas(p));
     });
-    let pakeista = 0, istrinta = 0;
+    let pakeista = 0, istrinta = 0, nurodymu = 0;
     const truksta = irasai.filter(p => !zem.has(raktas(tekstas(p))));
     // istrinto skyriaus irasas salinamas tik kai likusieji tiksliai atitinka antrastes (kitaip - tik numeriai)
     const salinti = skyriai.length && truksta.length <= 3 && irasai.length - truksta.length === skyriai.length;
@@ -2447,9 +2462,13 @@ const GPNum = (() => {
         const i = naudota.get(k) || 0; naudota.set(k, i + 1);
         const nr = zem.get(k)[Math.min(i, zem.get(k).length - 1)];
         if (nr !== m[1]){ keiskPradzia(p, m[1].length + m[2].length, nr + m[2], false); pakeista++; }
+        // antraštėje pašalintas raudonas nurodymas skliaustuose („(koreguojama pagal poreikį)“) - šalinamas ir turinio eilutėje (2026-10-09)
+        const at = zemT.get(k)[Math.min(i, zemT.get(k).length - 1)] || '';
+        const sk = [...tekstas(p).matchAll(/\s*\([^)]*\)/g)].filter(x => !at.includes(x[0].trim()));
+        sk.reverse().forEach(x => { salinkAtkarpa(p, x.index, x.index + x[0].length); nurodymu++; });
       } else if (salinti){ p.parentNode.removeChild(p); istrinta++; }
     }
-    return { pakeista, istrinta };
+    return { pakeista, istrinta, nurodymu };
   }
 
   async function sutvarkyti(doc, opts = {}){
@@ -2483,7 +2502,7 @@ const GPNum = (() => {
     const toc = turinys(M, d, pagr.filter(e => e.lygis === 0 && e.skyrius));
     doc.log.push('numeracija: ' + S.length + ' numeriu - tekstu, pakeista ' + pak.length + '; tarpu po numerio pasalinta ' + tarpu +
                  '; tusciu eiluciu istrinta ' + sr.tuscios.length +
-                 '; TURINYS: pakeista ' + toc.pakeista + ', istrinta ' + toc.istrinta);
+                 '; TURINYS: pakeista ' + toc.pakeista + ', istrinta ' + toc.istrinta + ', nurodymu pasalinta ' + toc.nurodymu);
     return { numeriu: S.length, pakeitimai: pak, tarpuPoNumerio: tarpu, tusciuEiluciu: sr.tuscios.length, turinys: toc };
   }
 

@@ -46,6 +46,9 @@
   var ikainiai = function (R) { return R.kainodara === "fiksuotas_ikainis" || R.kainodara === "kintamas_ikainis"; };
   var prekes = function (c) { return c.seima === "PREKES"; }, paslaugos = function (c) { return c.seima === "PASLAUGOS"; };
   var LTEN = function (c) { return c.kalba === "LTEN"; };
+  /* SPS žaliųjų reikalavimų dalies variantai (ctx.zaliejiSPS - PP-SALYGOS.html spsZalieji) - pastabai ir derinimo patikrai */
+  var ZAL_SPS = { ts_sutartis: "žalieji reikalavimai nurodyti Techninėje specifikacijoje ir (ar) Sutarties projekte",
+                  salygose: "žalieji reikalavimai nurodomi pirkimo sąlygose", savaime: "pirkimas laikomas žaliuoju savaime" };
   var en = function (id, uzrasas) { return { id: id, tipas: "formuluote", uzrasas: uzrasas, kada: "taip", tikLTEN: true }; };
 
   var KLAUSIMAI = [
@@ -166,7 +169,8 @@
     { id: "zalieji", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true,
       klausimas: "Ar sutarties vykdymui nustatomi žaliųjų pirkimų tvarkos aprašo aplinkos apsaugos kriterijai (13.1 punktas)?",
       uzuomina: "„Taip“ - įrašykite Aplinkos apsaugos kriterijų taikymo, vykdant žaliuosius pirkimus, tvarkos aprašo papunktį (šablono vieta).",
-      laukai: [{ id: "zalieji_p", tipas: "tekstas", uzrasas: "Tvarkos aprašo papunktis (pvz. 4.1)", kada: "taip" }] },
+      laukai: [{ id: "zalieji_p", tipas: "tekstas", uzrasas: "Tvarkos aprašo papunktis (pvz. 4.1)", kada: "taip" }],
+      pastaba: function (c) { var z = c.zaliejiSPS; return z ? "SPS žaliųjų reikalavimų dalyje pasirinkta: " + z.map(function (k) { return "„" + ZAL_SPS[k] + "“"; }).join(", ") + "." : ""; } },
     { id: "pakavimas", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true, rodoma: prekes,
       klausimas: "Ar taikomas LITGRID kriterijus dėl prekių pakuočių (13.2 punktas - pakavimo lapas)?" },
     { id: "pristatymas", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true, rodoma: prekes,
@@ -217,7 +221,7 @@
       var k = E.kilmes[q.id], a = A[q.id];
       var busena = R[q.id] == null ? (q.privalomas ? "neuzpildyta" : "neprivaloma") : k === "zmogus" ? "patvirtinta" : "siuloma";
       if (k === "zmogus" && a && a.patvirtinta === false) busena = "siuloma";
-      return { id: q.id, grupe: q.grupe, klausimas: q.klausimas, uzuomina: q.uzuomina || "", tipas: q.tipas, privalomas: !!q.privalomas,
+      return { id: q.id, grupe: q.grupe, klausimas: q.klausimas, uzuomina: q.uzuomina || "", pastaba: q.pastaba ? q.pastaba(ctx, R) : "", tipas: q.tipas, privalomas: !!q.privalomas,
                variantai: (q.variantai || []).filter(function (v) { return !v.tik || v.tik(ctx); }).map(function (v) { return { id: v.id, tekstas: v.tekstas }; }),
                vienetai: q.vienetai ? q.vienetai(ctx) : null,
                laukai: (q.laukai || []).filter(function (l) { return !l.tikLTEN || LTEN(ctx); }).map(function (l) {
@@ -227,10 +231,24 @@
     });
   }
 
+  /* ---------------------------------------------------------------- SPS ir sutarties derinimas (sutarčių planas 4.4, 2026-10-09)
+     Nesutapimas - ne klaida (SPS „ir (ar)“, kriterijai gali būti tik TS), todėl „Patikrinkite“, o ne kliūtis; atsakymai nekeičiami. */
+  function derink(ctx, R){
+    var z = ctx.zaliejiSPS, out = [];
+    if (!z) return out;
+    var tsSut = z.indexOf("ts_sutartis") >= 0;
+    if (R.zalieji === "taip" && !tsSut)
+      out.push("SS 13.1 punktas nustato aplinkos apsaugos kriterijus sutarties vykdymui, o SPS žaliųjų reikalavimų dalyje nepasirinkta, kad " + ZAL_SPS.ts_sutartis +
+        " (pasirinkta: " + z.map(function (k) { return "„" + ZAL_SPS[k] + "“"; }).join(", ") + "). Patikrinkite, ar SPS ir sutartis sutampa.");
+    if (R.zalieji === "ne" && tsSut)
+      out.push("SPS nurodo, kad " + ZAL_SPS.ts_sutartis + ", o SS 13.1 punktas netaikomas. Patikrinkite, ar žalieji reikalavimai nurodyti Techninėje specifikacijoje.");
+    return out;
+  }
+
   /* ---------------------------------------------------------------- sprendimai generatoriui */
   function sprendimai(Z, ctx, A){
     A = A || {};
-    var V = global.GP_SUTARCIU_GEN.vietos(Z), R = efektyvus(ctx, A).R, S = {}, truksta = [], perspejimai = [];
+    var V = global.GP_SUTARCIU_GEN.vietos(Z), R = efektyvus(ctx, A).R, S = {}, truksta = [], perspejimai = [], derinimas = derink(ctx, R);
     var rodomi = klausimai(Z, ctx, A);
     rodomi.forEach(function (q) {
       if (q.privalomas && q.reiksme == null) truksta.push(q.klausimas);
@@ -408,7 +426,7 @@
 
     Object.keys(S).forEach(function (k) { var s = S[k]; if (s && typeof s === "object" && ((s.elementas != null && s.elementas < 0) || (s.variantas != null && s.variantas < 0)))
       { perspejimai.push("Šablone nerasta vieta sprendimui " + k + " - patikrinkite šablono redakciją."); delete S[k]; } });
-    return { S: S, truksta: truksta, perspejimai: perspejimai, R: R };
+    return { S: S, truksta: truksta, perspejimai: perspejimai, derinimas: derinimas, R: R };
   }
 
   /* ---------------------------------------------------------------- sąsaja 2 žingsnyje */
@@ -447,8 +465,9 @@
       var h = '<div class="lk lk--' + q.busena + '" id="' + id + '"><div class="lk-gal"><h5 class="lk-kl" id="' + id + '-kl">' + esc(q.klausimas) + "</h5>" +
         (global.GP_PAAISKINIMAS ? global.GP_PAAISKINIMAS.html({ id: id + "-pa", etikete: q.klausimas, turinys: "<p>" + esc(q.uzuomina || "Atsakymas parenka sutarties specialiųjų sąlygų šablono variantą.") +
           "</p><p>Sutarties šablono tekstas nekeičiamas - parenkamas jo variantas arba įrašoma reikšmė į pildomą vietą.</p>" }) : "") +
-        '<span class="lk-b lk-b--' + q.busena + '">' + BUSENOS[q.busena] + "</span></div>" + uz;
-      var aria = ' aria-labelledby="' + id + '-kl"' + (q.uzuomina ? ' aria-describedby="' + id + '-uz"' : "");
+        '<span class="lk-b lk-b--' + q.busena + '">' + BUSENOS[q.busena] + "</span></div>" + uz +
+        (q.pastaba ? '<p class="lk-uz lk-uz--sps" id="' + id + '-ps">' + esc(q.pastaba) + "</p>" : "");
+      var aria = ' aria-labelledby="' + id + '-kl"' + (q.uzuomina || q.pastaba ? ' aria-describedby="' + [q.uzuomina ? id + "-uz" : "", q.pastaba ? id + "-ps" : ""].filter(Boolean).join(" ") + '"' : "");
       if (q.tipas === "taipne" || q.tipas === "variantai"){
         var vs = q.tipas === "taipne" ? TN : q.variantai;
         h += '<div class="opts lk-ops' + (q.tipas === "variantai" ? " lk-var" : "") + '" role="radiogroup"' + aria + ">" + vs.map(function (v, j) {
@@ -488,6 +507,7 @@
         " · siūloma " + siul.length + " · neatsakyta " + nu.length + (siul.length ? ' <button type="button" class="sec lk-patv" id="sfPatvVisas" data-sf-visas="1">Patvirtinti visas siūlomas (' + siul.length + ")</button>" : "") + "</div>";
       var grupe = "";
       qs.forEach(function (q) { if (q.grupe !== grupe){ grupe = q.grupe; h += '<h4 class="lk-sutartis-g">' + esc(grupe) + "</h4>"; } h += korteleHtml(q); });
+      if (sp.derinimas.length) h += '<div class="lk-sa lk-sa--isp" id="sfDerinimas"><b>Patikrinkite (SPS ir sutartis):</b><ul>' + sp.derinimas.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + "</ul></div>";
       if (sp.perspejimai.length) h += '<div class="lk-sa lk-sa--isp"><b>Dėmesio:</b><ul>' + sp.perspejimai.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + "</ul></div>";
       h += '<div class="lk-sa"><b>Pildoma sudarant sutartį</b> (generatorius šias vietas palieka): ' + esc(SUDARANT) + ".</div></section>";
       vieta.innerHTML = h;
@@ -523,11 +543,11 @@
       busena: function () {
         if (!ctx || !ctx.sablonai || !Z) return { paruosta: false, priezastis: !ctx || !ctx.sablonai ? (ctx && ctx.priezastis) || "sutartis nepasirinkta" : klaida || "kraunamas šablono žemėlapis" };
         var sp = sprendimai(Z, ctx, A), qs = klausimai(Z, ctx, A);
-        return { paruosta: true, kodas: kodas, Z: Z, S: sp.S, truksta: sp.truksta, perspejimai: sp.perspejimai,
+        return { paruosta: true, kodas: kodas, Z: Z, S: sp.S, truksta: sp.truksta, perspejimai: sp.perspejimai, derinimas: sp.derinimas,
                  siulomos: qs.filter(function (q) { return q.busena === "siuloma"; }).map(function (q) { return q.klausimas; }) };
       }
     };
   }
 
-  global.GP_SUTARTIES_FORMA = { versija: "S4-2026-10-08", KLAUSIMAI: KLAUSIMAI, klausimai: klausimai, sprendimai: sprendimai, mount: mount, _forma: forma };
+  global.GP_SUTARTIES_FORMA = { versija: "S4-2026-10-09", KLAUSIMAI: KLAUSIMAI, klausimai: klausimai, sprendimai: sprendimai, mount: mount, _forma: forma };
 })(typeof window !== "undefined" ? window : this);

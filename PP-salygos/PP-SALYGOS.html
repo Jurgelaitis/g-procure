@@ -195,6 +195,7 @@
   .lk-kl{margin:0;font-size:15px;font-weight:700;line-height:1.4;color:var(--color-graphite);flex:1 1 260px;min-width:0}
   .lk-gal .gpp{margin-top:-1px}
   .lk-uz{margin:2px 0 10px;font-size:13px;color:var(--color-graphite-50-strong)}
+  .lk-uz--sps{border-left:3px solid var(--color-emerald);padding-left:8px}
   .lk-kl2{margin:12px 0 4px}
   .lk-nera{font-size:13px;color:var(--color-graphite-50-strong)}
   .lk-b{display:inline-flex;align-items:center;border-radius:999px;font-size:11.5px;font-weight:700;padding:2px 9px;margin-left:6px;white-space:nowrap;border:1px solid}
@@ -637,7 +638,7 @@
       <h2 id="tkPaketasH">Parengtų pirkimo dokumentų patikra</h2>
       <div class="hint">Prieš tvirtinant ir skelbiant: ar skelbimas, SPS, BPS, techninė specifikacija ir sutartis sako tą patį, ar yra visi
         dokumentai ir priedai, ar būdas tinka vertei, ar nurodyta įstatymo reikalaujama informacija (vertinimo kriterijai, terminai,
-        kontaktiniai asmenys ir kt. - parodoma, kur rasta) ir kuo SPS ar BPS skiriasi nuo standartinės LITGRID formos. Šiuo moduliu sugeneruoti
+        kontaktiniai asmenys ir kt. - parodoma, kur rasta) ir kuo SPS, BPS ar prekių ir paslaugų pirkimo-pardavimo sutarties sąlygos skiriasi nuo standartinės LITGRID formos. Šiuo moduliu sugeneruoti
         dokumentai lyginami tiksliai - pagal jų generavimo pasą. Įkelkite ZIP paketą (ir iš CVP IS) arba atskirus failus, o jei turite
         ankstesnės patikros ataskaitą (Word) - ir ją: sprendimai bus parodyti prie tų pačių radinių. Failai skaitomi tik šioje naršyklėje:
         niekur nesiunčiami ir neišsaugomi. DI nenaudojamas.</div>
@@ -1364,6 +1365,13 @@ function kontrolinisAtsakymas(k){
   if (/^jei nevykdomos derybos/.test(t) || /^if negotiations are not taking place/.test(t)) return { v:!derybosTaip(), kodel:'derybų klausimas' };
   if (/^jeigu pirkimas susijes su nacionaliniu saugumu/.test(t))                            return { v:nacsaugTaip(), kodel:'nacionalinio saugumo klausimas' };
   if (/^jei pirkime kreipiamasi i koordinavimo komisij/.test(t))                            return { v:komisijaTaip(), kodel:'koordinavimo komisijos klausimas' };
+  // Sutarties projektas (sutarčių planas 4.4, 2026-10-09): 1 žingsnio bloke patvirtinta sutartis - projektas pridedamas, „nerengiamas - esminės
+  // sąlygos SPS“ - nepridedamas; nepatvirtinta, CPO LT ar tiekėjo forma - klausiama kaip iki šiol
+  if (/^jei pirkimo metu nera rengiamas sutarties projektas/.test(t)){ const sp = sutartiesProjektas(); if (sp) return { v:!sp.pridedamas, kodel:sp.kodel }; }
+  // SPS „Tiesioginio atsiskaitymo ... tvarka nurodyta Sutarties projekte“: generuojamo prekių ar paslaugų sutarties BS 3.4 p. ją nustato visada
+  // (subtiekėjams pageidaujant); kitos sutarties ar nerengiamo projekto atveju - klausiama kaip iki šiol
+  if (/^kai taikomas tiesioginis atsiskaitymas su subtiekejais/.test(t)){ const sp = sutartiesProjektas();
+    if (sp && sp.generuojamas) return { v:true, kodel:'generuojamo sutarties projekto bendrųjų sąlygų 3.4 p. nustato tiesioginio atsiskaitymo su subtiekėjais tvarką' }; }
   return null;
 }
 function rezimoAtsakymas(k, rez){
@@ -1786,6 +1794,56 @@ const eiluteP = p => { for (let u = p && p.parentNode; u; u = u.parentNode) if (
 const lentelePar = p => { for (let u = p && p.parentNode; u; u = u.parentNode) if (u.localName === 'tbl') return u; return null; };
 const didziosiomisLT = s => { const r = String(s || '').replace(/\([^)]*\)/g, '').replace(/[^A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž]/g, '');
   return r.length >= 4 && [...r].filter(c => c !== c.toLocaleLowerCase('lt')).length >= 0.6 * r.length; };
+/* SPS dalis „ESMINĖS SUTARTIES SĄLYGOS (dalis reikalinga, jei nepridedamas Sutarties projektas)“ (sutarčių planas 4.4, 2026-10-09).
+   Kai sutarties projektas pridedamas, ji nereikalinga - šalinama visa: antraštė, šablono pastaba apie privalomą sutarties informaciją ir tuščios
+   pastraipos (dvikalbiame - skyriaus eilutės su numeriais), o turinyje - jos eilutė (LT ir EN; kiekviena turi savo uždarą PAGEREF lauką);
+   likusių skyrių numerius ir turinio numerius perskaičiuoja GPNum. Iki tol buvo šalinama tik pastaba („be-projekto“), o skyrius likdavo tuščias.
+   Struktūra visuose 11 SPS šablonų ta pati (patikrinta 2026-10-09). Grąžina { idx, lentele, turinys } arba null - kai sandara kitokia,
+   nieko nekeičiama. */
+const ESMINIU_ANTRASTE = /^(ESMINĖS SUTARTIES SĄLYGOS|ESSENTIAL CONDITIONS OF THE CONTRACT)\s*\((dalis reikalinga|part is required)/;
+const ESMINIU_PASTABA = /^(\d+(\.\d+)*\.?\s*)?(Šioje dalyje pateikiama visa informacija|This paragraph contains all the information)/;
+const ESMINIU_TURINYS = /^(\d+\.\s*)?(ESMINĖS SUTARTIES SĄLYGOS|ESSENTIAL CONDITIONS OF THE CONTRACT)(\s*\((dalis reikalinga|part is required)[^)]*\))?\s*\d*$/;
+function esminiuDalis(paras){
+  const T = paras.map(p => GPDocx.paraText(p).replace(/\s+/g, ' ').trim());
+  const a = T.findIndex(t => ESMINIU_ANTRASTE.test(t));
+  if (a < 0) return null;
+  const sekc = p => GPDocx.els(p, 'sectPr').length > 0;
+  const lauku = (p, tipas) => GPDocx.els(p, 'fldChar').filter(f => f.getAttributeNS(GPDocx.NS_W, 'fldCharType') === tipas).length;
+  // dvikalbiame turinys - lentelės langeliuose (LT ir EN): eilutė šalinama tik kai langelyje lieka kitų pastraipų
+  const langelis = p => { for (let u = p.parentNode; u; u = u.parentNode) if (u.localName === 'tc') return u; return null; };
+  const turinys = T.map((t, i) => i).filter(i => i < a && ESMINIU_TURINYS.test(T[i]) &&
+    (!langelis(paras[i]) || GPDocx.els(langelis(paras[i]), 'p').length > 1) &&
+    /^TOC\d/i.test((GPDocx.els(paras[i], 'pStyle')[0] || { getAttributeNS: () => '' }).getAttributeNS(GPDocx.NS_W, 'val')) &&
+    lauku(paras[i], 'begin') === lauku(paras[i], 'end'));
+  const tr0 = eiluteP(paras[a]);
+  if (tr0){                                                            // dvikalbis: eilutės „N. | LT | EN“, „N.1. | pastaba | note“
+    const idx = new Map(paras.map((p, i) => [p, i]));
+    const eilIdx = tr => GPDocx.els(tr, 'p').map(p => idx.get(p)).filter(x => x != null);
+    const langeliai = tr => GPDocx.els(tr, 'tc').map(tc => GPDocx.els(tc, 't').map(t => t.textContent).join('').replace(/\s+/g, ' ').trim());
+    const dalies = (tr, re) => langeliai(tr).every(l => !l || /^\d+(\.\d+)*\.?$/.test(l) || re.test(l));
+    if (!dalies(tr0, ESMINIU_ANTRASTE) || eilIdx(tr0).some(i => sekc(paras[i]))) return null;
+    const B = [tr0];
+    for (let tr = tr0.nextSibling; tr; tr = tr.nextSibling){
+      if (tr.localName !== 'tr') continue;
+      if (!dalies(tr, ESMINIU_PASTABA) || langeliai(tr).some(l => /^\d+\.$/.test(l))) break;     // kitas skyrius („13.“) ar nuostata
+      if (eilIdx(tr).some(i => sekc(paras[i]))) break;
+      B.push(tr);
+    }
+    return { idx: B.flatMap(eilIdx), lentele: true, turinys };
+  }
+  if (sekc(paras[a])) return null;
+  const idx = [a];
+  for (let j = a + 1; j < paras.length && !eiluteP(paras[j]) && !sekc(paras[j]) && (!T[j] || ESMINIU_PASTABA.test(T[j])); j++) idx.push(j);
+  return { idx, lentele: false, turinys };
+}
+/* Ar dalis šalinama: SPS sąlygos „Jei Pirkimo metu nėra rengiamas Sutarties projektas“ atsakymas (ji seka 1 žingsnį - kontrolinisAtsakymas),
+   o šablonuose, kur ši sąlyga nemodeliuota (MVP LT/EN), - 1 žingsnio sutarties pasirinkimas. null - nežinoma (dalis nekeičiama). */
+function esminiuSprendimas(){
+  const a = ATS[norm('Jei Pirkimo metu nėra rengiamas Sutarties projektas')], sp = sutartiesProjektas();
+  if (a === false) return { salinti: true, kodel: sp && sp.pridedamas ? sp.kodel : 'atsakymas „Ne“ į sąlygą „Jei Pirkimo metu nėra rengiamas Sutarties projektas“' };
+  if (a === true) return { salinti: false, kodel: sp && !sp.pridedamas ? sp.kodel : 'atsakymas „Taip“ į sąlygą „Jei Pirkimo metu nėra rengiamas Sutarties projektas“' };
+  return sp ? { salinti: sp.pridedamas, kodel: sp.kodel } : null;
+}
 function uztikrinimoAlternatyvos(paras, trinti, trintiEiluciu){
   const taikomas = uztikrinimasTaikomas();
   if (taikomas === null) return null;                                   // grupe neatsakyta - generuoti neleidziama
@@ -2604,6 +2662,12 @@ function surinktiKlausimus(){
       delete K.pavieniai[raktas];
     }
   });
+
+  /* SPS dalis „Esminės sutarties sąlygos“ (sutarčių planas 4.4): sprendimas matomas ir 2 žingsnyje („Išspręsta automatiškai“) */
+  const esm = esminiuSprendimas();
+  if (esm) DOK.filter(d => Object.values(d.zemelapis.paras || {}).some(t => ESMINIU_ANTRASTE.test(String(t).trim()))).forEach(d =>
+    auto(d.trumpas, 'SPS dalis „Esminės sutarties sąlygos (dalis reikalinga, jei nepridedamas Sutarties projektas)“',
+      esm.salinti ? 'šalinama visa (antraštė, pastaba ir tušti punktai)' : 'paliekama - esmines sutarties sąlygas įrašykite Word programoje', esm.kodel));
 
   /* LT->EN formuluociu sekimas: parinkus LT preseta, EN gauna LYGIAGRETU
      EN varianta (tuo paciu indeksu; abu sarasai kode surasyti zmogaus).
@@ -3844,6 +3908,18 @@ async function generuotiViena(d, REZ){
     uztikrinimoAlternatyvos(paras, trinti, trintiEiluciu);
     zalieji = zaliujuAlternatyvos(Z, paras, trinti, juodinti, trintiLenteliu);
   }
+  // 4c. SPS dalis „Esminės sutarties sąlygos“: pridedant sutarties projektą - šalinama visa (esminiuDalis, sutarčių planas 4.4)
+  let esminiu = null;
+  if (!forma){
+    const dalis = esminiuDalis(paras), spr = dalis && esminiuSprendimas();
+    if (spr){
+      esminiu = { pasalinta: spr.salinti, kodel: spr.kodel };
+      if (spr.salinti){
+        dalis.idx.concat(dalis.turinys).forEach(i => trinti.add(i));
+        if (dalis.lentele) trintiEiluciu.push({ nuo: Math.min(...dalis.idx), iki: Math.max(...dalis.idx) });
+      }
+    }
+  }
   // 4b. Dvikalbiai: angliskas dvynys - kaip lietuviska pastaba (istrinta - trinamas, palikta - juodinamas, raudona - lieka)
   dvyniai.forEach(([en, lt]) => { if (trinti.has(lt)) trinti.add(en); else if (juodinti.has(lt)) juodinti.add(en); });
 
@@ -4099,7 +4175,14 @@ async function generuotiViena(d, REZ){
     const raud = GPGen.raudoniRunai(p).map(r => GPDocx.els(r, 't').map(t => t.textContent).join('')).join('').trim();
     const m = raud === visas && visas.match(/^((jei|jeigu|kai|if|where|when|in case)\b[^:]{3,}:)\s*(\S.*)$/i);
     if (m && GPGen.keistiRaudonaTeksta(paras, i, m[3])) intTrinta++;
-    else intTrinta += GPGen.trintiRaudonusRunus(paras, i);
+    else {
+      const n = GPGen.trintiRaudonusRunus(paras, i);
+      intTrinta += n;
+      // Raudona sąlyga „Kai ...:“ pastraipos pradžioje, nuostata juoda: tarpas po dvitaškio buvo juodame rune - pastraipa prasidėdavo
+      // tarpu (MVP LT/EN SPS tiesioginio atsiskaitymo punktas, 2026-10-09)
+      const pirmas = n ? GPDocx.els(p, 't').find(t => t.textContent !== '') : null;
+      if (pirmas && /^ +/.test(GPDocx.paraText(p))) pirmas.textContent = pirmas.textContent.replace(/^ +/, '');
+    }
   });
   // Neužpildytas laužtinis nurodymas įtrauktos šakos pastraipoje iki 2026-10-05 būdavo pajuodinamas kartu su šaka (DPS sąlygų 2.15 p.)
   // ir dokumente likdavo kaip tekstas, o patikra jo nematė - dabar lieka raudonas.
@@ -4254,7 +4337,7 @@ async function generuotiViena(d, REZ){
   return { d, blob, audit, forma, numeracija, lenteles: lentFormatas, gulsciasPriedas,
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
-                   numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu } };
+                   numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu } };
 }
 
 /* DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“, naudotojo sprendimas 2026-10-04): { nr } arba null. */
@@ -4586,6 +4669,17 @@ function rodykRezultata(rez){
       Pages visam dokumentui taiko pirmojo skyriaus orientaciją, todėl stačiame dokumente gulsčių priedų lenteles nukirptų. Tekstas nekeistas${a.turinys.length
       ? `; pagrindinio dokumento turinyje pašalintos jų eilutės (${a.turinys.length}): ${a.turinys.map(t => esc(t)).join('; ')}` : ''}${a.nuorodos ? `; ${a.nuorodos} nuorodų tekste rodo į iškeltą dalį` : ''}.</div>`;
   });
+  /* SPS dalis „Esminės sutarties sąlygos“ (sutarčių planas 4.4, 2026-10-09): pašalinta, nes pridedamas sutarties projektas, arba palikta - tada ją
+     pildo rengėjas (šablone - tik pastaba, kokia informacija privaloma) */
+  const esmR = rez.filter(r => r.stats && r.stats.esminiu);
+  if (esmR.length){
+    const pas = esmR.filter(r => r.stats.esminiu.pasalinta), lik = esmR.filter(r => !r.stats.esminiu.pasalinta);
+    if (pas.length) h += `<div class="audit ok" id="esminiuPatikra" style="margin-top:10px">SPS dalis „Esminės sutarties sąlygos“ pašalinta (${pas.map(r => esc(r.d.trumpas)).join(', ')}) -
+      ${esc(pas[0].stats.esminiu.kodel)}; skyrių numeriai ir turinys perskaičiuoti.</div>`;
+    if (lik.length) h += `<div class="audit no" id="esminiuPatikra" style="margin-top:10px"><b>Įrašykite esmines sutarties sąlygas</b> SPS dalyje „Esminės sutarties sąlygos“
+      (${lik.map(r => esc(r.d.trumpas)).join(', ')}) Word programoje - ${esc(lik[0].stats.esminiu.kodel)}. Generatorius šios dalies nepildo: jos pirmame punkte šablonas
+      nurodo, kokia informacija privaloma.</div>`;
+  }
   const skNr = rez.filter(r => r.stats && r.stats.skyriausNr);
   if (skNr.length){
     h += `<div class="audit ok" style="margin-top:10px">Sakinyje „Esminės sutarties sąlygos išdėstytos SPS ... dalyje“ įrašytas galutinis skyriaus
@@ -5505,6 +5599,27 @@ function sutartiesUztikrinimas(){
   const taikomas = sal ? (ATS[sal] === true ? true : ATS[sal] === false ? false : null) : (eur > 0 ? true : null);
   return { taikomas, eur };
 }
+/* Ar pirkimo sąlygoms pridedamas sutarties projektas - pagal 1 žingsnio bloką „Sutarties projektas“ (sutarčių planas 4.4, 2026-10-09).
+   { pridedamas, kodel } arba null - nežinoma: blokas nerodomas ar laukia, sutartis nepatvirtinta, CPO LT ar tiekėjo forma (ar ji pridedama
+   kaip sutarties projektas, sprendžia žmogus 2 žingsnyje). Patvirtinta šeima be generatoriaus šablono - projektą prideda pats rengėjas. */
+function sutartiesProjektas(){
+  const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
+  if (!SB || !SB.rodoma || SB.laukia || !SB.pasirinkta || !SB.patvirtinta) return null;
+  const nr = SB.pasirinkta.nerengiama;
+  if (nr) return nr.id === 'esmines' ? { pridedamas: false, kodel: 'sutarties projektas nerengiamas - esminės sutarties sąlygos išdėstomos SPS' } : null;
+  return { pridedamas: true, generuojamas: !!SB.sablonai, kodel: SB.sablonai ? `pridedamas sutarties projektas „${SB.pavadinimas}“ (generuojamas pakete)`
+                                               : `pridedamas sutarties projektas „${SB.pavadinimas}“ (generatorius jo dar nekuria - pridėsite patys)` };
+}
+/* SPS žaliųjų reikalavimų dalies atsakymas sutarties SS 13.1 p. klausimui (sutarčių planas 4.4, 2026-10-09): pasirinkti variantai
+   ('ts_sutartis' - nurodyti TS ir (ar) Sutarties projekte, 'salygose' - pirkimo sąlygose, 'savaime' - žaliasis savaime); SPS be šios
+   dalies ar neatsakyta - null. Sutarties klausimo atsakymas iš to neišvedamas - rodoma pastaba ir derinimo patikra. */
+const ZAL_SPS = { ts_sutartis: 'Jei žalieji reikalavimai nurodyti Techninėje specifikacijoje ir (ar) Sutarties projekte',
+  salygose: 'Jei žalieji reikalavimai nurodomi pirkimo sąlygose', savaime: 'Jei pirkimas laikomas žaliuoju savaime' };
+function spsZalieji(){
+  if (!DOK.some(d => Object.values(d.zemelapis.paras || {}).some(t => String(t).trim().startsWith(ZAL_SPS.salygose)))) return null;
+  const v = Object.keys(ZAL_SPS).filter(k => ATS[norm(ZAL_SPS[k])] === true);
+  return v.length ? v : null;
+}
 function sutartiesKriterijus(){ const k = window.__K ? kriterijus(window.__K) : null; return k ? (GP_LAUKAI.UZT_PAGAL_KRITERIJU[k] || null) : null; }
 function sutartiesKontekstas(){
   const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
@@ -5515,7 +5630,7 @@ function sutartiesKontekstas(){
   return { seima: SB.pasirinkta.seima, kalba: SB.kalba, sablonai: SB.sablonai, pavadinimasSutarties: SB.pavadinimas,
            pavadinimas: pavClean(($('#pavadinimas').value || '').trim()), pavadinimasEN: (($('#pavadinimasEN') || {}).value || '').trim(),
            numeris: k.numeris || '', trukmeMen: k.trukmeMen || null, verte: verteEUR() || null,
-           uztikrinimas: sutartiesUztikrinimas(), kriterijus: sutartiesKriterijus(), nacsaug: nacsaugTaip() };
+           uztikrinimas: sutartiesUztikrinimas(), kriterijus: sutartiesKriterijus(), nacsaug: nacsaugTaip(), zaliejiSPS: spsZalieji() };
 }
 window.SUTARTIES_FORMA = window.GP_SUTARTIES_FORMA ? GP_SUTARTIES_FORMA.mount({ vieta: '#sutartiesForma', kontekstas: sutartiesKontekstas }) : null;
 
@@ -5554,7 +5669,8 @@ async function sutartiesDokumentai(){
     out.push({ d: { trumpas: kod, pavadinimas: (R ? R.pavadinimas : kod) + (SB.kalba === 'LTEN' ? ' (LT/EN)' : ''), dokumentas: tip === 'BS' ? 'Sutarties BS' : 'Sutarties SS' },
       blob: r.blob, sutartis: A, stats: {}, forma: false,
       audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0,
-               patikrinti: kita.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` })) } });
+               patikrinti: kita.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` }))
+                 .concat(tip === 'SS' ? (F.derinimas || []).map(t => ({ text: t })) : []) } });
   }
   return out;
 }
