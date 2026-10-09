@@ -20,8 +20,13 @@ Pakartotinai paleidus - 0 pakeitimų (failai baitas į baitą tie patys).
 Naudojimas:
     python3 PP-salygos/sutarciu-sablonai.py --saltinis <LITGRID sutarčių aplankas> [--komentarai <failas.json>] [--nauja-redakcija "aprašas"]
     python3 PP-salygos/sutarciu-sablonai.py --tikrink     # saugyklos šablonai prieš registrą ir žemėlapius (be šaltinio)
+    python3 PP-salygos/sutarciu-sablonai.py --versijos <aplankas> [<aplankas> ...]
+        # ankstesnių redakcijų pastraipų maišos tikrinimui (registro „kitos_versijos“; 2026-10-09): LITGRID šaltinių aplankas ir originalų
+        # kopijos (to paties vardo failai bet kuriame poaplankyje) bei šių šablonų git istorija. Tikrinant ranka parengtą sutartį, pastraipa,
+        # sutampanti su LITGRID „0922“ tekstu ar ankstesne mūsų redakcija, - ne rengėjo nukrypimas (kaip formu-versijos.py pirkimo sąlygoms).
+        # Paleiskite po kiekvieno šablonų pakeitimo commit'o; registre - tik maišos, ne tekstas.
 """
-import argparse, hashlib, html, io, json, re, sys, zipfile
+import argparse, hashlib, html, io, json, re, subprocess, sys, unicodedata, zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -514,6 +519,54 @@ def irasas(kodas, b):
             'pozymiai': ' '.join(sorted({h[-8:] for h in (FV.maisa(n) for n in dab if len(n) > 40) if int(h[-1], 16) < 4}))}
 
 
+PAAISKINIMAS = ('Generuoja PP-salygos/sutarciu-sablonai.py. Kiekvienam sutarties šablonui: šaltinis LITGRID aplanke ir jo sha256 '
+                '(kitas šaltinis - paruošimas stabdomas), paruošto šablono sha256, teksto maiša ir požymiai (GP_PALYGINIMAS.norm + maisa, '
+                'kaip formu-versijos.json), redakcija, paruošimo pakeitimai; ankstesnes - ankstesnių redakcijų maišos; kitos_versijos - '
+                'ankstesnių redakcijų pastraipų, kurių dabartiniame šablone nėra, maišos, kitos_pozymiai - jų atpažinimo požymiai, naujos - '
+                'dabartinio šablono pastraipos, kurių pradinėje LITGRID redakcijoje nebuvo (--versijos).')
+VERSIJOS = {'LITGRID 0922': 'LITGRID sutarčių šablonų „0922“ tekstas prieš G-Procure redakcinius taisymus (ir tarpinės taisymų būsenos)',
+            'G-Procure ankstesnės redakcijos': 'ankstesnės šio modulio sutarčių šablonų redakcijos (git istorija)'}
+
+
+def kitos_versijos(kodas, rel, aplankai):
+    """({ versija: [maišos] }, požymiai) - pastraipos, kurių dabartiniame šablone nėra (žr. --versijos), ir jų atpažinimo požymiai (kaip
+    irasas() „pozymiai“: ilgesnės nei 40 ženklų pastraipos, maišų ketvirtis, paskutiniai 8 ženklai) - kad ir ankstesnės redakcijos
+    dokumentas (pvz. LT/EN su LITGRID anglų tekstu) būtų atpažintas kaip šita forma, o ne kaip LT (GP_PALYGINIMAS.identifikuok)."""
+    # Skaičiuojama su pasikartojimais: ta pati pastraipa (pvz. „1.1.1. Name“ - pirkėjo ir tiekėjo rekvizituose) ankstesnėje redakcijoje gali
+    # būti kitą kartų skaičių - perteklinė kopija dokumente ar trūkstama formoje tada irgi ne nukrypimas
+    from collections import Counter
+    D = Counter(n for n in (FV.norm(x) for x in FV.tekstai((TPL / (kodas + '.docx')).read_bytes())) if n)
+    nfc = lambda t: unicodedata.normalize('NFC', t)
+    ilgos = set()
+    def kitos(b):
+        C = Counter(n for n in (FV.norm(x) for x in FV.tekstai(b)) if n)
+        ns = {n for n in C if C[n] > D[n]}
+        ilgos.update(FV.maisa(n) for n in ns if len(n) > 40 and n not in D)
+        return {FV.maisa(n) for n in ns}
+    vardas, litgrid, gp, rasti = nfc(Path(rel).name), set(), set(), []
+    for ap in aplankai:
+        for f in sorted(Path(ap).expanduser().rglob('*.docx')):
+            if nfc(f.name) == vardas:
+                litgrid |= kitos(f.read_bytes()); rasti.append(f)
+    # Pradinė LITGRID redakcija - seniausiai keistas to paties vardo failas (originalų kopijos išsaugo keitimo laiką); naujos - dabartinio
+    # šablono pastraipos, kurių joje nėra (G-Procure taisymai): dokumente pagal pradinę redakciją jų nebūna, ir tai ne rengėjo nukrypimas
+    naujos = set()
+    if rasti:
+        O = Counter(n for n in (FV.norm(x) for x in FV.tekstai(min(rasti, key=lambda f: f.stat().st_mtime).read_bytes())) if n)
+        naujos = {FV.maisa(n) for n in D if D[n] > O[n]}
+    kelias = 'PP-salygos/templates/sutartys/%s.docx' % kodas
+    for rev in subprocess.run(['git', '-C', str(REPO), 'log', '--format=%h', '--', kelias], capture_output=True, text=True).stdout.split():
+        r = subprocess.run(['git', '-C', str(REPO), 'show', '%s:%s' % (rev, kelias)], capture_output=True)
+        if not r.returncode and r.stdout:
+            gp |= kitos(r.stdout)
+    out = {}
+    if litgrid:
+        out['LITGRID 0922'] = sorted(litgrid)
+    if gp - litgrid:
+        out['G-Procure ankstesnės redakcijos'] = sorted(gp - litgrid)
+    return out, ' '.join(sorted({h[-8:] for h in ilgos if int(h[-1], 16) < 4})), sorted(naujos)
+
+
 def lt_laukai(kodas, kalba, nauji):
     """LT/EN žemėlapiui - LT žemėlapio laukų etiketės (LT failas paruošiamas anksčiau: SABLONAI tvarka LT, tada LT/EN)."""
     if kalba != 'LTEN':
@@ -530,9 +583,30 @@ def main():
     ap.add_argument('--komentarai')
     ap.add_argument('--nauja-redakcija')
     ap.add_argument('--tikrink', action='store_true')
+    ap.add_argument('--versijos', nargs='+')
     a = ap.parse_args()
     reg = json.loads(REG.read_text(encoding='utf-8')) if REG.exists() else {'sablonai': {}}
     klaidos, pakeista = [], 0
+    if a.versijos:
+        for kodas, seima, kalba, tipas, rel, pav in SABLONAI:
+            if kodas not in reg['sablonai']:
+                continue
+            kv, kp, nj = kitos_versijos(kodas, rel, a.versijos)
+            for k in ('kitos_versijos', 'kitos_pozymiai', 'naujos'):
+                reg['sablonai'][kodas].pop(k, None)
+            if kv:
+                reg['sablonai'][kodas]['kitos_versijos'] = kv
+            if kp:
+                reg['sablonai'][kodas]['kitos_pozymiai'] = kp
+            if nj:
+                reg['sablonai'][kodas]['naujos'] = nj
+            print('%-18s %s; naujų pastraipų %d' % (kodas, ', '.join('%s %d' % (k, len(v)) for k, v in kv.items()) or 'ankstesnių redakcijų nėra', len(nj)))
+        reg = {'paaiskinimas': PAAISKINIMAS, 'versijos': VERSIJOS, 'sablonai': reg['sablonai']}
+        js = json.dumps(reg, ensure_ascii=False, indent=1) + '\n'
+        if REG.read_text(encoding='utf-8') != js:
+            REG.write_text(js, encoding='utf-8'); pakeista += 1
+        print('pakeista failų:', pakeista)
+        return
     if a.tikrink:
         for kodas, seima, kalba, tipas, rel, pav in SABLONAI:
             b = (TPL / (kodas + '.docx')).read_bytes()
@@ -581,6 +655,9 @@ def main():
                                                                            'sha256': senas_ir.get('sha256'), 'dabartine': senas_ir.get('dabartine')}]
         elif senas_ir.get('ankstesnes'):
             nauji[kodas]['ankstesnes'] = senas_ir['ankstesnes']
+        for k in ('kitos_versijos', 'kitos_pozymiai', 'naujos'):   # --versijos rezultatas (perskaičiuojamas atskirai)
+            if senas_ir.get(k):
+                nauji[kodas][k] = senas_ir[k]
         nauji[kodas]['_zemelapis'] = z
     for kodas, seima, kalba, tipas, rel, pav in SABLONAI:
         if kalba == 'LTEN' and kodas in paruosti and kodas.replace('LTEN', 'LT') in paruosti:
@@ -598,10 +675,7 @@ def main():
             mp.write_text(js, encoding='utf-8'); pakeista += 1
         print('%-18s %s | %s' % (kodas, ', '.join(ir['paruosimas']) or 'be pakeitimų',
                                  ', '.join('%s %d' % (k, v) for k, v in z['suvestine'].items() if v)))
-    duom = {'paaiskinimas': 'Generuoja PP-salygos/sutarciu-sablonai.py. Kiekvienam sutarties šablonui: šaltinis LITGRID aplanke ir jo sha256 '
-                            '(kitas šaltinis - paruošimas stabdomas), paruošto šablono sha256, teksto maiša ir požymiai (GP_PALYGINIMAS.norm + maisa, '
-                            'kaip formu-versijos.json), redakcija, paruošimo pakeitimai; ankstesnes - ankstesnių redakcijų maišos.',
-            'sablonai': nauji}
+    duom = {'paaiskinimas': PAAISKINIMAS, 'versijos': reg.get('versijos', VERSIJOS), 'sablonai': nauji}
     js = json.dumps(duom, ensure_ascii=False, indent=1) + '\n'
     if not REG.exists() or REG.read_text(encoding='utf-8') != js:
         REG.write_text(js, encoding='utf-8'); pakeista += 1
