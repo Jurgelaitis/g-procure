@@ -712,6 +712,7 @@
 <script src="sutartys.js"></script>   <!-- sutarties projekto parinkimas (sutarčių planas S2, 2026-10-08) -->
 <script src="sutarties-blokas.js"></script>   <!-- blokas „Sutarties projektas“ 1 žingsnyje (S3, 2026-10-08) -->
 <script src="sutarciu-generatorius.js"></script>   <!-- sutarties projekto generavimas iš šablono ir žemėlapio (S4, 2026-10-08) -->
+<script src="sutarciu-nuorodos.js"></script>   <!-- sutarties nuorodų į punktus ir priedus patikra (sutarčių planas 4.5, 2026-10-09) -->
 <script src="sutarties-forma.js"></script>   <!-- sutarties klausimai 2 žingsnyje ir sprendimai generatoriui (S4, 2026-10-08) -->
 <script src="paraiska-extract.js"></script>
 <!-- AI atsakymu pasiulymai 2 zingsnyje (A5): dokumentu tekstas - bendras su PP-tiekejams -->
@@ -4592,6 +4593,8 @@ function rodykRezultata(rez){
            + (grupe('word').length ? `<div><b>Sutvarkykite Word programoje:</b> ${grupe('word').map(esc).join('; ')}.</div>` : '')
            + (grupe('neatsakyta').length ? `<div><b>Liko neužpildyta (neprivaloma):</b> ${grupe('neatsakyta').map(esc).join('; ')}.</div>` : '')
            + `<div class="cite">Pildoma sudarant sutartį: ${grupe('sudarant').length} vietos (tiekėjo duomenys, sumos, subtiekėjai, parašai) - jos paliktos šablono forma.</div>`
+           + (sug[0].sutartis.nuorodos ? `<div${sug[0].sutartis.nuorodos.radiniai.length ? ' class="lk-ispejimas"' : ''} id="sutartiesNuorodos">Nuorodos į punktus ir priedus: patikrinta ${sug[0].sutartis.nuorodos.nuorodu}`
+               + (sug[0].sutartis.nuorodos.radiniai.length ? `, į neegzistuojančius - ${sug[0].sutartis.nuorodos.radiniai.length} (žr. dokumentų patikroje)` : ', visos rodo į esamus') + '.</div>' : '')
            + (SB.kalba === 'LTEN' ? `<div class="cite" id="sutartiesEn">Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI (Claude) pagal VPT vertimų ir ES pirkimų terminiją, bendrosiose - VPT neoficialus vertimas su suvienodintais terminais; vertėjas netikrino. DI požymis įrašytas Word failų savybėse.</div>` : '')
          : nesug.length ? `. Sutarties projektas nesugeneruotas: ${esc(nesug.flatMap(r => r.sutartis.klaidos || []).join('; '))}.`
          : !SB.sablonai ? '. Į paketą neįtraukiamas - šiai sutarčiai šablonas generatoriui dar neparuoštas arba projektas nerengiamas.'
@@ -5670,7 +5673,16 @@ async function sutartiesDokumentai(){
       blob: r.blob, sutartis: A, stats: {}, forma: false,
       audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0,
                patikrinti: kita.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` }))
-                 .concat(tip === 'SS' ? (F.derinimas || []).map(t => ({ text: t })) : []) } });
+                 .concat(tip === 'SS' ? (F.derinimas || []).map(t => ({ text: t })) : [])
+                 .concat(A.pakeista.filter(p => p.ka === 'nuoroda').map(p => ({ text: `${p.vieta} p.: „${p.buvo}“ - „${p.tapo}“ (nurodytas punktas pašalintas)` }))) } });
+  }
+  // Nuorodos į punktus ir priedus (2026-10-09): sugeneruotose BS ir SS - tik į esamus punktus ir SS priedų sąrašo priedus
+  if (window.GP_SUTARCIU_NUORODOS && out.length === 2 && out.every(o => o.blob)){
+    const T = await Promise.all(out.map(async o => (await GP_PALYGINIMAS.skaityk(o.blob)).pastraipos.map(p => p.t)));
+    const n = GP_SUTARCIU_NUORODOS.tikrink({ bs: T[0], ss: T[1] });
+    out.forEach(o => { o.sutartis.nuorodos = n; });
+    n.radiniai.forEach(x => out[x.dok === 'BS' ? 0 : 1].audit.patikrinti.push({ text:
+      `Nuoroda į ${x.rusis === 'priedas' ? 'Nr. ' + x.nr + ' priedą, kurio priedų sąraše' : x.nr + ' punktą, kurio sutartyje'} nėra: „${x.citata}“` }));
   }
   return out;
 }

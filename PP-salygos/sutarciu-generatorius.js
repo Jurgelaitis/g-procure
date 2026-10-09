@@ -345,6 +345,21 @@ const GP_SUTARCIU_GEN = (() => {
       irasykValdikli(sdt, v.tekstas);
     }
 
+    // 6a. Nuoroda į pašalintą punktą (2026-10-09, nuorodų patikra): SS 9.8 „Punktas netaikomas, taikomos 8.3.2 punkte nustatytos sąlygos.“ -
+    //     kai užtikrinimas netaikomas, 8.3 su 8.3.2 pašalinami, ir nuoroda likdavo į nieką; tada lieka „Punktas netaikomas.“ (EN - taip pat)
+    const NR_PR = /^\s*(\d+(?:\.\d+)+)\./, pasalintiNr = new Set(), likeNr = new Set();
+    P.forEach((p, i) => { const m = NR_PR.exec(R[i] || ''); if (m) (istrinti.has(i) ? pasalintiNr : likeNr).add(m[1]); });
+    P.forEach((p, i) => {
+      if (istrinti.has(i)) return;
+      const m = /^Punktas netaikomas(, taikomos (\d+(?:\.\d+)+) punkte nustatytos sąlygos)\.$/.exec(R[i].trim()) ||
+                /^The clause does not apply(; the conditions set out in paragraph (\d+(?:\.\d+)+) shall apply)\.$/.exec(R[i].trim());
+      if (!m || !pasalintiNr.has(m[2]) || likeNr.has(m[2])) return;
+      const a = R[i].indexOf(m[1]);
+      if (a < 0 || !keisk(p, a, a + m[1].length, '')){ A.klaidos.push(`${vietaPagalI(Z, i)} p.: nepavyko pašalinti nuorodos į ${m[2]} punktą`); return; }
+      R[i] = R[i].slice(0, a) + R[i].slice(a + m[1].length);
+      if (!/^The /.test(m[0])) A.pakeista.push({ raktas: '', vieta: vietaPagalI(Z, i), ka: 'nuoroda', buvo: m[0], tapo: R[i].trim() });
+    });
+
     // 7. Šalinimas - nuo galo (langelio paskutinė pastraipa tik išvaloma)
     [...istrinti].sort((a, b) => b - a).forEach(i => { if (salink(P[i]) === 'isvalyta'){ R[i] = ''; istrinti.delete(i); } });
 
