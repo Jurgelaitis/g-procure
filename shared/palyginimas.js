@@ -178,7 +178,19 @@
       // (sutartis) - ne: ji jau ieškojo savo varianto, o iš eilės paimta gretima nuostata būtų „užpildyta“, tikroji - „pašalinta“
       if (vietos) {
         var likB = []; for (j = b1; j < b2; j++) if (!naudota[j]) likB.push(j);
-        laikini.forEach(function (o) { if (o.op === "-" && pozicija && pozicija[o.a] && likB.length) { o.op = "~"; o.b = likB.shift(); o.r = 0; naudota[o.b] = 1; } });
+        laikini.forEach(function (o) {
+          if (o.op !== "-" || !pozicija || !pozicija[o.a] || !likB.length) return;
+          // tame pačiame tarpe pašalinta nuostata be pildomos vietos, panašesnė į šią dokumento pastraipą (rangos SS: pakeistas pasirinktas
+          // variantas greta varianto su „priede Nr. []“, 2026-10-10) - pora su ja, kitaip pakeitimas atrodytų kaip užpildyta vieta
+          var ro = panasumas(A[o.a], B[likB[0]]), kita = null;
+          laikini.forEach(function (c) {
+            if (c === o || c.op !== "-" || pozicija[c.a]) return;
+            var rc = panasumas(A[c.a], B[likB[0]]);
+            if (rc >= 0.3 && rc > ro && (!kita || rc > kita.r)) kita = { c: c, r: rc };
+          });
+          var t = kita ? kita.c : o;
+          t.op = "~"; t.b = likB.shift(); t.r = kita ? kita.r : 0; naudota[t.b] = 1;
+        });
       }
       laikini.forEach(function (o) { ops.push(o); });
       for (j = b1; j < b2; j++) if (!naudota[j]) ops.push({ op: "+", a: null, b: j });
@@ -363,9 +375,10 @@
     // ankstesnė redakcija - bent 2 ilgesnės jos pastraipos, kurių formoje nėra (trumpi pasirinkimai, pvz. „Punktas netaikomas.“, - ne požymis)
     var sena = !!kitos && dok.filter(function (y) { return y.n.length > 40 && !formoje[y.n] && kitos[maisa(y.n)]; }).length >= 2;
     var nepriv = neprivalomos(forma, o.zemelapis, sut), skF = skyriai(forma), skD = skyriai(dok);
-    var st = { vienodos: 0, nukrypimas: 0, neprivaloma: 0, uzpildyta: 0, techninis: 0 }, pak = [], ankst = null;
+    var st = { vienodos: 0, nukrypimas: 0, neprivaloma: 0, uzpildyta: 0, techninis: 0 }, pak = [], ankst = null, liko = null;
     ops.forEach(function (x) {
-      var po = ankst; if (x.a != null) ankst = forma[x.a];
+      var po = ankst, poLiko = liko; if (x.a != null) ankst = forma[x.a];
+      if (x.a != null && x.op !== "-") liko = forma[x.a];   // paskutinė dokumente likusi formos pastraipa (rangos SS esminės sąlygos, 2026-10-10)
       if (x.op === "=") { st.vienodos++; return; }
       var f = x.a != null ? forma[x.a] : null, d = x.b != null ? dok[x.b] : null, r, pr = null;
       if (x.op === "perkelta") { r = "techninis"; pr = "perkelta"; }
@@ -384,7 +397,7 @@
       else if (x.op === "+" && sut) {
         // pridėta pastraipa iškart po pildomos vietos (pvz. kokybinių kriterijų tvarka keliomis pastraipomis) - užpildyta vieta
         if (d.toc) { r = "techninis"; pr = "turinys"; }
-        else if (po && ((po.vieta && !po.leidziami) || po.vietaPo)) { r = "uzpildyta"; pr = "pazymeta"; } else r = "nukrypimas";
+        else if ((po && ((po.vieta && !po.leidziami) || po.vietaPo)) || (poLiko && poLiko.vietaPo)) { r = "uzpildyta"; pr = "pazymeta"; } else r = "nukrypimas";
       } else if (x.op === "+") {
         r = d.toc ? "techninis" : (d.lent ? "uzpildyta" : "nukrypimas");
         if (r === "techninis") pr = "turinys"; else if (d.lent) pr = "lentele";
