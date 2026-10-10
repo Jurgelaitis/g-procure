@@ -598,9 +598,11 @@ const GPDocx = (() => {
      Todėl jei pirmas skyrius statmenas, o toliau yra gulsčias skyrius, prasidedantis priedo antrašte, - nuo jo iki dokumento
      pabaigos viskas perkeliama į atskirą dokumentą (jo pirmas skyrius gulsčias). Tekstas nekeičiamas; pagrindinio dokumento turinio
      eilutės, kurių žymės iškeltos, pašalinamos (Word, atnaujindamas laukus, jas pašalintų pats) ir grąžinamos patikrai.
-     Grąžina { doc, numeriai, turinys: [tekstai], nuorodos } arba null. NUSTATYMAI.gulstiAtskirai - testams. */
+     Grąžina { doc, numeriai, turinys: [tekstai], nuorodos } arba null. NUSTATYMAI.gulstiAtskirai - testams.
+     o.beAntrastes (2026-10-10, rangos sutarties SS etapų priedas): gulsčias skyrius prasideda ne žodžiu „priedas“ (objekto pavadinimu) -
+     kvietėjas žino, kad tai priedas (sutarties žemėlapio `skyriai`). */
   const NUSTATYMAI = { gulstiAtskirai: true };
-  async function atskirkGulsciusPriedus(doc){
+  async function atskirkGulsciusPriedus(doc, o){
     if (!NUSTATYMAI.gulstiAtskirai) return null;
     const skyriai = d => {
       const body = els(d, 'body')[0], v = Array.from(body.childNodes).filter(n => n.nodeType === 1), out = []; let nuo = 0;
@@ -617,7 +619,7 @@ const GPDocx = (() => {
     const k = a.out.findIndex(gulscias);
     if (k < 1) return null;
     const pirmaEil = sk => a.v.slice(sk.nuo, sk.iki + 1).map(n => n.localName === 'p' ? paraText(n).trim() : '').find(t => t) || '';
-    if (!/pried|annex/i.test(pirmaEil(a.out[k]))) return null;
+    if (!(o && o.beAntrastes) && !/pried|annex/i.test(pirmaEil(a.out[k]))) return null;
     // kopija - tas pats paketas (antraštės, išnašos, stiliai), iš jos paliekama tik perkeliama dalis
     const B = await open(await save(doc, 'arraybuffer')), b = skyriai(B.parts['word/document.xml']);
     b.v.slice(0, b.out[k].nuo).forEach(n => b.body.removeChild(n));

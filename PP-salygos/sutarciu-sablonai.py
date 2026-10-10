@@ -285,7 +285,155 @@ def i_a4(x):
     return x, pk
 
 
-def paruosk(b):
+# Stulpelių pločiai (2026-10-10, rangos SS Pages patikra): kodas -> [(pirmo lygio lentelės eilės nr., {senas plotis: naujas})].
+# Rangos SS kairysis (skyrių pavadinimų) stulpelis - 1561 DXA: pusjuodis „organizavimas“ jame netelpa ir lūžta žodžio viduryje
+# („organizavima / s“ - ir Word, ir Pages; Pages šriftą ima 11 pt). Plotis perkeliamas iš teksto stulpelio, lentelės plotis tas pats.
+STULPELIAI = {'PSR_LT_SS': [(0, {1561: 1814, 8220: 7967})]}
+
+
+def stulpeliai(x, kodas):
+    """Pirmo lygio lentelės stulpelių pločiai pagal STULPELIAI: tinklelis ir tos lentelės (ne įdėtinių) langeliai. -> (xml, pakeitimai)"""
+    pk = []
+    for nr, plociai in STULPELIAI.get(kodas, []):
+        virs = [(a, z) for a, z, gylis in lenteles(x) if gylis == 0]
+        a, z = virs[nr]
+        t = x[a:z]
+        ideti = [(ia - a, iz - a) for ia, iz, gylis in lenteles(x) if gylis > 0 and a < ia < z]
+        gm = re.search(r'<w:tblGrid>.*?</w:tblGrid>', t, re.S)
+        grid = [int(g) for g in re.findall(r'<w:gridCol w:w="(\d+)"/>', gm.group(0))]
+        if sorted(grid) != sorted(plociai) or sum(plociai.values()) != sum(grid):
+            raise SystemExit('%s: lentelės %d tinklelis %s neatitinka STULPELIAI' % (kodas, nr, grid))
+        nauji = '<w:tblGrid>' + ''.join('<w:gridCol w:w="%d"/>' % plociai[g] for g in grid) + '</w:tblGrid>'
+        n = [0]
+
+        def keisk(m):
+            if any(ia <= m.start() < iz for ia, iz in ideti):
+                return m.group(0)
+            n[0] += 1
+            return '<w:tcW w:w="%d" w:type="dxa"/>' % plociai[int(m.group(1))]
+        t2 = re.sub(r'<w:tcW w:w="(%s)" w:type="dxa"/>' % '|'.join(str(k) for k in plociai), keisk, t)
+        t2 = t2[:gm.start()] + nauji + t2[gm.end():]
+        eiluciu = len([1 for ia, iz, gylis in eilutes(t) if gylis == 0])
+        if n[0] != eiluciu * len(grid):
+            raise SystemExit('%s: lentelės %d langelių %d, eilučių %d x stulpelių %d' % (kodas, nr, n[0], eiluciu, len(grid)))
+        x = x[:a] + t2 + x[z:]
+        pk.append('stulpeliai %s -> %s' % ('+'.join(str(g) for g in grid), '+'.join(str(plociai[g]) for g in grid)))
+    return x, pk
+
+
+# Formatavimo suvienodinimas (2026-10-10, rangos SS Pages patikra; tekstas nekeičiamas): kodas -> funkcijų sąrašas.
+def numeriu_sriftas(x):
+    """Word punkto numerio šriftą ima iš pastraipos ženklo savybių. Rangos SS jos netolygios: 4 ir 19 punktų numeriai kursyvu, dalies
+    punktų su pusjuode antrašte numeriai pusjuodžiai, kitų - ne. Suvienodinama: numeris niekada kursyvu, pusjuodis - kai pusjuodis
+    pirmas pastraipos tekstas (punkto antraštė). -> (xml, pakeistų pastraipų skaičius)"""
+    n = [0]
+
+    def f(m):
+        pp = m.group(0)
+        if not re.search(r'<w:numId w:val="[1-9]\d*"/>', pp):
+            return pp
+        pm = re.search(r'<w:pPr>(.*?)</w:pPr>', pp, re.S)
+        if not pm:
+            return pp
+        ppr = pm.group(1)
+        rm = re.search(r'<w:r[ >].*?</w:r>', pp[pm.end():], re.S)
+        if not rm or '<w:t' not in rm.group(0):
+            return pp
+        pusjuodis = bool(re.search(r'<w:rPr>(?:(?!</w:rPr>).)*<w:b/>', rm.group(0), re.S))
+        zm = re.search(r'<w:rPr>(.*?)</w:rPr>', ppr, re.S)
+        zenklas = zm.group(1) if zm else ''
+        naujas = re.sub(r'<w:(?:i|iCs|b|bCs)/>', '', zenklas)
+        if pusjuodis:
+            fm = re.match(r'(<w:rStyle [^>]*/>)?(<w:rFonts [^>]*/>)?', naujas)
+            naujas = naujas[:fm.end()] + '<w:b/>' + naujas[fm.end():]
+        if naujas.replace('<w:bCs/>', '') == zenklas.replace('<w:bCs/>', ''):
+            return pp
+        n[0] += 1
+        if zm:
+            ppr2 = ppr[:zm.start(1)] + naujas + ppr[zm.end(1):]
+        else:
+            ppr2 = ppr + '<w:rPr>' + naujas + '</w:rPr>'
+        return pp[:pm.start(1)] + ppr2 + pp[pm.end(1):]
+    x = re.sub(r'<w:p[ >](?:(?!<w:p[ >]).)*?</w:p>', f, x, flags=re.S)
+    return x, ('punktų numerių šriftas suvienodintas: %d' % n[0]) if n[0] else None
+
+
+def sujunk_tuscius(x):
+    """Įdėtinėje lentelėje (rangos SS derinimo terminai) pirmo stulpelio langelis ir tuščias langelis po juo sujungiami vertikaliai,
+    kai kitos tokios poros toje lentelėje sujungtos („Techninis darbo projektas“ - vienintelė nesujungta). -> (xml, aprašas)"""
+    n = 0
+    for a, z, gylis in reversed(lenteles(x)):
+        if gylis == 0:
+            continue
+        t = x[a:z]
+        eil = [(ia, iz) for ia, iz, g in eilutes(t) if g == 0]
+        pirmas = lambda r: re.search(r'<w:tc>.*?</w:tc>', r, re.S)
+        if not any('<w:vMerge w:val="restart"/>' in pirmas(t[ia:iz]).group(0) for ia, iz in eil):
+            continue
+        for k in range(len(eil) - 2, 0, -1):
+            (ia, iz), (ja, jz) = eil[k], eil[k + 1]
+            c1, c2 = pirmas(t[ia:iz]), pirmas(t[ja:jz])
+            if 'w:vMerge' in c1.group(0) or 'w:vMerge' in c2.group(0) or not tekstas(c1.group(0)).strip() or tekstas(c2.group(0)).strip():
+                continue
+            tcw = r'(<w:tcW [^>]*/>)'
+            n2 = re.sub(tcw, r'\1<w:vMerge/>', c2.group(0), count=1)
+            n1 = re.sub(tcw, r'\1<w:vMerge w:val="restart"/>', c1.group(0), count=1)
+            if n1 == c1.group(0) or n2 == c2.group(0):
+                raise SystemExit('langelis be tcW - nesujungta')
+            t = t[:ja + c2.start()] + n2 + t[ja + c2.end():]
+            t = t[:ia + c1.start()] + n1 + t[ia + c1.end():]
+            n += 1
+        x = x[:a] + t + x[z:]
+    return x, ('vertikaliai sujungta langelių porų: %d' % n) if n else None
+
+
+# Naudotojo sprendimas 2026-10-10 („Noriu įprasto šrifto.“): rangos SS 3 p. pratęsimo sakinys ir 12 p. sakinio pabaiga („bus mokama Sutarties
+# bendrųjų sąlygų 7.3.7. punkte nustatyta tvarka.“) LITGRID formoje parašyti pusjuodžiu kursyvu - sutarties projekte įprastu šriftu.
+IPRASTAS_SRIFTAS = ['Darbų atlikimo terminas Šalių raštišku susitarimu gali būti pratęstas', 'Sutarties kaina bus mokama dalimis pagal Darbų žiniaraštį']
+
+
+def iprastas_sriftas(x):
+    """Pastraipos, prasidedančios IPRASTAS_SRIFTAS tekstu: pusjuodis ir kursyvas nuimami nuo teksto ir pastraipos ženklo. Kiekviena
+    pradžia turi atitikti lygiai vieną pastraipą, kurioje toks šriftas yra. -> (xml, aprašas)"""
+    rasta = {t: 0 for t in IPRASTAS_SRIFTAS}
+
+    def f(m):
+        pp = m.group(0)
+        pr = next((t for t in IPRASTAS_SRIFTAS if tekstas(pp).strip().startswith(t)), None)
+        if not pr:
+            return pp
+        nauja = re.sub(r'<w:rPr>.*?</w:rPr>', lambda r: re.sub(r'<w:(?:b|bCs|i|iCs)/>', '', r.group(0)), pp, flags=re.S)
+        if nauja == pp:
+            raise SystemExit('įprastas šriftas: pastraipoje „%s“ pusjuodžio ar kursyvo nėra' % pr)
+        rasta[pr] += 1
+        return nauja
+    x = re.sub(r'<w:p[ >](?:(?!<w:p[ >]).)*?</w:p>', f, x, flags=re.S)
+    if any(n != 1 for n in rasta.values()):
+        raise SystemExit('įprastas šriftas: pastraipų rasta %s' % rasta)
+    return x, 'pusjuodis kursyvas -> įprastas šriftas: %d pastraipos' % len(rasta)
+
+
+FORMATAS = {'PSR_LT_SS': [numeriu_sriftas, sujunk_tuscius, iprastas_sriftas]}
+
+
+def eilutes(t):
+    """Lentelės XML eilutės su gyliu (0 - pačios lentelės): [(nuo, iki, gylis)]"""
+    out, st, gylis = [], [], -1
+    for m in re.finditer(r'<w:tbl>|</w:tbl>|<w:tr[ >]|</w:tr>', t):
+        g = m.group(0)
+        if g == '<w:tbl>':
+            gylis += 1
+        elif g == '</w:tbl>':
+            gylis -= 1
+        elif g.startswith('<w:tr'):
+            st.append((m.start(), gylis))
+        else:
+            a, gy = st.pop()
+            out.append((a, m.end(), gy))
+    return out
+
+
+def paruosk(b, kodas=None):
     zi = zipfile.ZipFile(io.BytesIO(b))
     infos = zi.infolist()
     dalys = {i.filename: zi.read(i.filename) for i in infos}
@@ -293,6 +441,12 @@ def paruosk(b):
     kom = be_komentaru(dalys)
     x, vid = be_vidiniu(dalys['word/document.xml'])
     x, pk = i_a4(x)
+    x, pk2 = stulpeliai(x, kodas)
+    pk += pk2
+    for f in FORMATAS.get(kodas, []):
+        x, kas = f(x)
+        if kas:
+            pk.append(kas)
     kom += vid
     dalys['word/document.xml'] = x.encode('utf-8')
     if len(kom) > len(vid):
@@ -1010,7 +1164,7 @@ def main():
             klaidos.append('%s: šaltinis pasikeitė (%s) - nauja LITGRID redakcija ar sena kopija? Peržiūrėkite taisymus ir paleiskite su '
                            '--nauja-redakcija "aprašas"' % (kodas, rel))
             continue
-        b, kom, pk = paruosk(src)
+        b, kom, pk = paruosk(src, kodas)
         paruosti[kodas] = b
         if kom:
             visi_kom[kodas] = kom

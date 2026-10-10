@@ -5,7 +5,7 @@
  *
  *   GP_SUTARCIU_GEN.vietos(zemelapis) -> [{ raktas, rusis, vieta, aprasas, elementai?, variantai?, pildo? }]
  *     lietuviškos vietos, kurioms reikia sprendimo (LT/EN dokumente angliški atitikmenys seka lietuviškus pagal vietą ir eilę).
- *   GP_SUTARCIU_GEN.generuok(buf, zemelapis, sprendimai, info) -> Promise<{ blob, ataskaita }>
+ *   GP_SUTARCIU_GEN.generuok(buf, zemelapis, sprendimai, info) -> Promise<{ blob, ataskaita, priedas }>
  *     sprendimai pagal raktą:
  *       "v:<nr>"         valdiklis: { elementas: k, reiksmes: [...], reiksmesEN } - reikšmės vietoj „[...]“, „[_]“, „{...}“ elemento tekste;
  *                        teksto valdiklis (be elementų): { tekstas, tekstasEN }; { salinti: true } - valdiklis pašalinamas be teksto
@@ -35,7 +35,10 @@
  *     netaikoma(s), visą žemiau esantį tekstą ištrinti:“ - pašalinamas, o kai to langelio valdiklyje pasirinkta „netaikoma“ - ir
  *     tekstas po juo iki langelio pabaigos; išspręstų vietų geltonas žymėjimas, VPT mėlynos pritaikomos nuostatos ir keičiamos
  *     reikšmės - juodu tekstu; DI vertimo juodraščiai (LT/EN anglų stulpelis) lieka pažymėti. Tada lentelės (GPLent - Pages) ir pasas.
- *   ataskaita: { pakeista, pasalinta, palikta, klaidos, lenteles }. Klaida (šablonas nesutampa su žemėlapiu, pakeista ne žemėlapio
+ *     Pages (rangos SS, 2026-10-10): lentelė lentelės langelyje paverčiama pagrindinės lentelės eilutėmis (Pages ją rodytų tekstu;
+ *     ataskaita.isvyniota), o gulsčias priedas stačiame dokumente (žemėlapio `skyriai`) grąžinamas atskiru failu `priedas` (Pages visam
+ *     dokumentui taiko pirmojo skyriaus orientaciją; ataskaita.atskirta, pasas - `<šablonas>_GULSTI`; info.gulsti: false - viename faile).
+ *   ataskaita: { pakeista, pasalinta, palikta, klaidos, lenteles, isvyniota, atskirta }. Klaida (šablonas nesutampa su žemėlapiu, pakeista ne žemėlapio
  *     vieta, liko „Pasirinkite elementą“ ne paliktame valdiklyje, liko nurodymas išspręstoje vietoje) - blob null, atsisiųsti negalima.
  *
  * Šablono tekstas nekeičiamas: keičiamos tik žemėlapio vietos, o patikra po generavimo lygina kiekvieną nepaliestą pastraipą su
@@ -91,11 +94,19 @@ const GP_SUTARCIU_GEN = (() => {
     t.textContent = s.slice(x, y); t.setAttribute('xml:space', 'preserve');
     return r;
   }
-  /* Įrašomos reikšmės formatavimas: šablono nurodymo spalva, žymėjimas, kursyvas, pabraukimas ir vietos rezervo stilius nuimami */
-  function svarus(rPr){
+  /* Įrašomos reikšmės formatavimas: šablono nurodymo spalva, žymėjimas, kursyvas, pabraukimas ir vietos rezervo stilius nuimami.
+     Nuo 2026-10-10 (rangos SS Pages patikra): ženklų stilius nuimamas tik vietos rezervo („Placeholder Text“) - kitas (pvz. „NormalBold“:
+     „[dienos/mėnesiai] nuo Sutarties sudarymo dienos.“) lieka, kitaip reikšmė būtų kitokio šrifto nei jos sakinys; o.kursyvas - kursyvas
+     paliekamas (reikšmė kursyvu parašyto sakinio viduje). */
+  function svarus(rPr, o){
     if (!rPr) return;
-    for (const c of vaikai(rPr)) if (['color', 'highlight', 'i', 'iCs', 'u', 'shd', 'rStyle', 'vanish'].includes(c.localName)) rPr.removeChild(c);
+    for (const c of vaikai(rPr)){
+      if (c.localName === 'rStyle'){ if (/placeholder/i.test(c.getAttributeNS(W, 'val') || c.getAttribute('w:val') || '')) rPr.removeChild(c); continue; }
+      if (o && o.kursyvas && (c.localName === 'i' || c.localName === 'iCs')) continue;
+      if (['color', 'highlight', 'i', 'iCs', 'u', 'shd', 'vanish'].includes(c.localName)) rPr.removeChild(c);
+    }
   }
+  const kursyvu = r => { const k = vaikas(vaikas(r, 'rPr') || r, 'i'); return !!k && !/^(0|false)$/.test(k.getAttributeNS(W, 'val') || k.getAttribute('w:val') || ''); };
   /* Pastraipos teksto atkarpa [a, b) -> `nauja` (tuščia - pašalinama) */
   function keisk(p, a, b, nauja){
     skaidykRunus(p);
@@ -110,7 +121,10 @@ const GP_SUTARCIU_GEN = (() => {
     if (!nauja){ runai[0].parentNode.removeChild(runai[0]); return true; }
     const t = visi(runai[0], 't')[0];
     t.textContent = nauja; t.setAttribute('xml:space', 'preserve');
-    svarus(vaikas(runai[0], 'rPr'));
+    // kursyvas lieka, kai kursyvu parašytas ir gretimas to paties sakinio tekstas (ne vien pati pildoma vieta ar nurodymas)
+    const R0 = visi(p, 'r').filter(r => !virsSdt(r, p) && tarpai(visi(r, 't').map(x => x.textContent).join(''))), k0 = R0.indexOf(runai[0]);
+    const greta = [R0[k0 - 1], R0[k0 + 1]].filter(Boolean);
+    svarus(vaikas(runai[0], 'rPr'), { kursyvas: greta.length > 0 && greta.every(kursyvu) });
     return true;
   }
   /* Pastraipa šalinama; paskutinė langelio pastraipa tik išvaloma (Word langelyje reikia bent vienos) */
@@ -162,6 +176,136 @@ const GP_SUTARCIU_GEN = (() => {
   function numeruota(p){ const pPr = vaikas(p, 'pPr'), np = pPr && vaikas(pPr, 'numPr'); return !!np && val(vaikas(np, 'numId')) != null && val(vaikas(np, 'numId')) !== '0'; }
   const nuimkZymejima = p => visi(p, 'highlight').forEach(h => h.parentNode.removeChild(h));
   const juodink = p => visi(p, 'color').forEach(c => { if (MELYNA.has(String(c.getAttributeNS(W, 'val') || c.getAttribute('w:val') || '').toUpperCase())) c.parentNode.removeChild(c); });
+
+  /* ------------------------------------------------------------------ įdėtinės lentelės išvyniojimas
+     Pages įdėtinių lentelių nepalaiko - paverčia tekstu su tabuliacijomis (rangos SS derinimo terminai). Išorinės lentelės stulpelis,
+     kuriame yra įdėtinė lentelė, padalijamas į jos stulpelius (kitų eilučių langelis apima juos visus - gridSpan); įdėtinės lentelės
+     eilutės tampa išorinės lentelės eilutėmis (kiti tos eilutės langeliai tušti, be rėmelio su gretimomis), turinys prieš ją lieka savo
+     eilutėje, po jos - naujoje, be rėmelio tarp jų. Rėmeliai - įdėtinės lentelės (jos tblBorders arba jos stiliaus; nėra - be rėmelių).
+     Tik paprastas atvejis (išorinis langelis nesujungtas, eilutės be gridBefore / gridAfter, įdėtinėje nėra kitų įdėtinių); kitaip lentelė
+     lieka kaip buvo. Tekstas ir pastraipų tvarka dokumente nesikeičia (tikrina kvietėjas). Grąžina išvyniotų lentelių skaičių. */
+  const BORD = ['top', 'left', 'bottom', 'right'];
+  const TCPR_TVARKA = ['cnfStyle', 'tcW', 'gridSpan', 'hMerge', 'vMerge', 'tcBorders', 'shd', 'noWrap', 'tcMar', 'textDirection', 'tcFitText', 'vAlign', 'hideMark'];
+  const BORD_TVARKA = ['top', 'start', 'left', 'bottom', 'end', 'right', 'insideH', 'insideV', 'tl2br', 'tr2bl'];
+  function idekI(tevasEl, el, tvarka){
+    const sena = vaikas(tevasEl, el.localName); if (sena) tevasEl.removeChild(sena);
+    const k = tvarka.indexOf(el.localName), po = vaikai(tevasEl).find(c => tvarka.indexOf(c.localName) > k);
+    tevasEl.insertBefore(el, po || null);
+    return el;
+  }
+  const sk = (n, a) => +(n ? (n.getAttributeNS(W, a) || n.getAttribute('w:' + a)) : 0) || 0;
+  function tcPrOf(tc){ let pr = vaikas(tc, 'tcPr'); if (!pr){ pr = naujas(tc.ownerDocument, 'tcPr'); tc.insertBefore(pr, tc.firstChild); } return pr; }
+  function remelis(tc, krastas, e){   // e - null (be rėmelio) arba rėmelio elementas (jo savybės kopijuojamos)
+    const d = tc.ownerDocument, pr = tcPrOf(tc);
+    const b = vaikas(pr, 'tcBorders') || idekI(pr, naujas(d, 'tcBorders'), TCPR_TVARKA);
+    const n = naujas(d, krastas);
+    if (e && !/^(nil|none)$/.test(e.getAttributeNS(W, 'val') || e.getAttribute('w:val') || '')) Array.from(e.attributes).forEach(a => n.setAttribute(a.name, a.value));
+    else n.setAttribute('w:val', 'nil');
+    idekI(b, n, BORD_TVARKA);
+  }
+  function tusciasLangelis(pagal, be){
+    const d = pagal.ownerDocument, t = naujas(d, 'tc'), pr = vaikas(pagal, 'tcPr');
+    if (pr){ const k = pr.cloneNode(true); const vm = vaikas(k, 'vMerge'); if (vm) k.removeChild(vm); t.appendChild(k); }
+    const p = naujas(d, 'p'), pp = naujas(d, 'pPr'), sp = naujas(d, 'spacing');
+    sp.setAttribute('w:before', '0'); sp.setAttribute('w:after', '0'); pp.appendChild(sp);
+    p.appendChild(pp); t.appendChild(p);
+    be.forEach(k => remelis(t, k, null));
+    return t;
+  }
+  /* Lentelės stiliaus rėmeliai (styles.xml; basedOn grandinė) */
+  function stiliausRemeliai(stiliai, id){
+    for (let n = 0; stiliai && id && n < 10; n++){
+      const st = visi(stiliai, 'style').find(x => (x.getAttributeNS(W, 'styleId') || x.getAttribute('w:styleId')) === id);
+      if (!st) return null;
+      const tb = vaikas(vaikas(st, 'tblPr') || st, 'tblBorders');
+      if (tb) return tb;
+      const b = vaikas(st, 'basedOn'); id = b && (b.getAttributeNS(W, 'val') || b.getAttribute('w:val'));
+    }
+    return null;
+  }
+  function isvyniok(d, stiliai){
+    const praleistos = new WeakSet(); let n = 0;
+    const span = c => sk(vaikas(vaikas(c, 'tcPr') || c, 'gridSpan'), 'val') || 1;
+    for (;;){
+      const N = visi(d, 'tbl').find(t => !praleistos.has(t) && t.parentNode && t.parentNode.localName === 'tc' && !tevas(t.parentNode, 'tc') && !visi(t, 'tbl').length);
+      if (!N) break;
+      const tc = N.parentNode, tr = tc.parentNode, T = tr && tr.parentNode;
+      const grid = T && vaikas(T, 'tblGrid'), ngrid = vaikas(N, 'tblGrid');
+      const paprasta = T && T.localName === 'tbl' && tr.localName === 'tr' && grid && ngrid && span(tc) === 1 && !vaikas(vaikas(tc, 'tcPr') || tc, 'vMerge') &&
+        vaikai(T).every(c => ['tblPr', 'tblGrid', 'tr', 'bookmarkStart', 'bookmarkEnd'].includes(c.localName)) &&
+        vaikai(T, 'tr').every(r => { const pr = vaikas(r, 'trPr'); return vaikai(r).every(c => ['tc', 'trPr', 'tblPrEx'].includes(c.localName)) && (!pr || (!vaikas(pr, 'gridBefore') && !vaikas(pr, 'gridAfter'))); }) &&
+        vaikai(N, 'tr').length > 0 && vaikai(N, 'tr').every(r => vaikai(r, 'tc').length > 0 && vaikai(r).every(c => ['tc', 'trPr', 'tblPrEx'].includes(c.localName)));
+      if (!paprasta){ praleistos.add(N); continue; }
+      const G = vaikai(grid, 'gridCol'), langeliai = vaikai(tr, 'tc'), idx = langeliai.indexOf(tc);
+      let g = 0; for (const c of langeliai.slice(0, idx)) g += span(c);
+      const ng = vaikai(ngrid, 'gridCol').map(c => sk(c, 'w')), sumN = ng.reduce((x, y) => x + y, 0), Wg = sk(G[g], 'w');
+      if (!G[g] || !sumN || !Wg || ng.some(x => x <= 0)){ praleistos.add(N); continue; }
+      const nw = ng.map(x => Math.max(1, Math.floor(x * Wg / sumN))); nw[nw.length - 1] += Wg - nw.reduce((x, y) => x + y, 0);
+      const k = nw.length;
+      // 1. tinklelis: stulpelis g -> k stulpelių; kiekvienos eilutės langelis, apimantis g, - platesnis per k - 1
+      nw.forEach(w => { const c = naujas(d, 'gridCol'); c.setAttribute('w:w', String(w)); grid.insertBefore(c, G[g]); });
+      grid.removeChild(G[g]);
+      for (const r of vaikai(T, 'tr')){
+        let p = 0;
+        for (const c of vaikai(r, 'tc')){
+          const s = span(c);
+          if (p <= g && g < p + s){ const gs = naujas(d, 'gridSpan'); gs.setAttribute('w:val', String(s + k - 1)); idekI(tcPrOf(c), gs, TCPR_TVARKA); break; }
+          p += s;
+        }
+      }
+      // 2. įdėtinės lentelės rėmeliai: jos pačios arba jos stiliaus
+      const ts = vaikas(vaikas(N, 'tblPr') || N, 'tblStyle');
+      const tb = vaikas(vaikas(N, 'tblPr') || N, 'tblBorders') || stiliausRemeliai(stiliai, ts && (ts.getAttributeNS(W, 'val') || ts.getAttribute('w:val')));
+      // 3. turinys prieš lentelę lieka eilutėje, lentelės eilutės ir turinys po jos - naujos eilutės
+      const turinys = vaikai(tc).filter(x => x.localName !== 'tcPr'), po = turinys.slice(turinys.indexOf(N) + 1);
+      const yraPo = po.some(x => x.localName !== 'p' || tarpai(pTekstas(x)) || visi(x, 'drawing').length);
+      const kitiPries = langeliai.slice(0, idx), kitiPo = langeliai.slice(idx + 1), eil = vaikai(N, 'tr');
+      let poEil = tr;
+      eil.forEach((r, ri) => {
+        const e = naujas(d, 'tr'), trPr = vaikas(r, 'trPr'), paskutine = ri === eil.length - 1;
+        if (trPr){ vaikai(trPr).filter(c => !['cantSplit', 'trHeight'].includes(c.localName)).forEach(c => trPr.removeChild(c)); e.appendChild(trPr); }
+        const tusti = paskutine && !yraPo ? ['top'] : ['top', 'bottom'];
+        kitiPries.forEach(c => e.appendChild(tusciasLangelis(c, tusti)));
+        vaikai(r, 'tc').forEach((c, ci, visiC) => {
+          const pr = tcPrOf(c), w = vaikas(pr, 'tcW');
+          let p = 0; visiC.slice(0, ci).forEach(x => { p += span(x); });
+          const nwEl = naujas(d, 'tcW'); nwEl.setAttribute('w:w', String(nw.slice(p, p + span(c)).reduce((x, y) => x + y, 0))); nwEl.setAttribute('w:type', 'dxa');
+          if (w) pr.removeChild(w);
+          idekI(pr, nwEl, TCPR_TVARKA);
+          const turi = vaikas(pr, 'tcBorders');
+          BORD.forEach(b => {
+            if (turi && vaikas(turi, b)) return;
+            const krastinis = (b === 'top' && ri === 0) || (b === 'bottom' && paskutine) || (b === 'left' && ci === 0) || (b === 'right' && ci === visiC.length - 1);
+            remelis(c, b, tb ? vaikas(tb, krastinis ? b : (b === 'top' || b === 'bottom' ? 'insideH' : 'insideV')) : null);
+          });
+          e.appendChild(c);
+        });
+        kitiPo.forEach(c => e.appendChild(tusciasLangelis(c, tusti)));
+        T.insertBefore(e, poEil.nextSibling); poEil = e;
+      });
+      tc.removeChild(N);
+      if (yraPo){
+        const e = naujas(d, 'tr'), trPr = vaikas(tr, 'trPr');
+        if (trPr) e.appendChild(trPr.cloneNode(true));
+        kitiPries.forEach(c => e.appendChild(tusciasLangelis(c, ['top'])));
+        const c2 = naujas(d, 'tc'), pr = vaikas(tc, 'tcPr');
+        if (pr) c2.appendChild(pr.cloneNode(true));
+        po.forEach(x => c2.appendChild(x));
+        const gale = vaikai(c2).slice(-1)[0];
+        if (!gale || gale.localName !== 'p') c2.appendChild(naujas(d, 'p'));
+        remelis(c2, 'top', null);
+        e.appendChild(c2);
+        kitiPo.forEach(c => e.appendChild(tusciasLangelis(c, ['top'])));
+        T.insertBefore(e, poEil.nextSibling);
+      } else po.forEach(x => tc.removeChild(x));
+      // likusi pradinė eilutė: langelis turi baigtis pastraipa; po ja - lentelės eilutės, todėl apatinio rėmelio nėra
+      const gale = vaikai(tc).slice(-1)[0];
+      if (!gale || gale.localName !== 'p') tc.appendChild(naujas(d, 'p'));
+      langeliai.forEach(c => remelis(c, 'bottom', null));
+      n++;
+    }
+    return n;
+  }
 
   /* ------------------------------------------------------------------ vietos */
   const stulp = x => (x && x.stulpelis === 'EN') ? 'EN' : 'LT';
@@ -556,17 +700,34 @@ const GP_SUTARCIU_GEN = (() => {
       });
       return JSON.stringify(g);
     };
+    // 9a. Įdėtinė lentelė (rangos SS derinimo terminai): Pages jų nepalaiko - paverčia tekstu su tabuliacijomis; išvyniojama į išorinės
+    //     lentelės eilutes. Tekstas ir jo tvarka dokumente nesikeičia (tikrinama).
+    if (info.lenteles !== false){
+      const seka = () => visi(d, 'p').map(p => tarpai(GPDocx.paraText(p))).filter(Boolean).join('\u0001');
+      const iki = seka(), isvyniota = isvyniok(d, await GPDocx.part(doc, 'word/styles.xml'));
+      if (isvyniota){ A.isvyniota = isvyniota; if (seka() !== iki) A.klaidos.push('įdėtinės lentelės išvyniojimas pakeitė tekstą ar jo tvarką'); }
+    }
     const pries = tekstai();
     await GPDocx.part(doc, 'word/styles.xml'); await GPDocx.part(doc, 'word/numbering.xml');
     if (typeof GPLent !== 'undefined' && info.lenteles !== false) A.lenteles = GPLent.sutvarkyti(doc);
     if (tekstai() !== pries) A.klaidos.push('lentelių tvarkymas pakeitė tekstą');
     // DI požymiai (DI akto 50 str. 2 d.; shared/di-zymejimas.js): LT/EN sutarčių anglų tekstas suredaguotas naudojant DI rengiant šabloną
     if (info.di && info.di.length) await GPDocx.diPozymiai(doc, info.di);
+    // 10a. Gulsčias priedas stačiame dokumente (rangos SS etapų priedas): Pages visam dokumentui taiko pirmojo skyriaus orientaciją -
+    //      priedą rodo stačią ir jo lentelės antraštę nukerpa. Kaip pirkimo sąlygose (naudotojo sprendimas 2026-10-04) - atskiras failas
+    //      (pirmas jo skyrius gulsčias); tekstas nekeičiamas. Pašalintam priedui (k: „salinti“) gulsčio skyriaus nebėra - nieko neatskiriama.
+    let priedas = null;
+    if (info.gulsti !== false && (Z.skyriai || []).length && !A.klaidos.length){
+      priedas = await GPDocx.atskirkGulsciusPriedus(doc, { beAntrastes: true });
+      if (priedas) A.atskirta = { skyriai: Z.skyriai.map(k => k.sritis), priedai: Z.skyriai.map(k => k.priedas) };
+    }
     if (info.pasas !== false) await GPDocx.pasas(doc, { sablonas: info.sablonas || '', forma: info.forma || '', data: info.data || '', modulis: 'PP-salygos' });
+    if (priedas && info.pasas !== false) await GPDocx.pasas(priedas.doc, { sablonas: (info.sablonas || '') + '_GULSTI', forma: info.forma || '', data: info.data || '', modulis: 'PP-salygos' });
     const blob = A.klaidos.length ? null : await GPDocx.save(doc, info.tipas || 'blob');
-    return { blob, ataskaita: A };
+    const priedoBlob = priedas && !A.klaidos.length ? await GPDocx.save(priedas.doc, info.tipas || 'blob') : null;
+    return { blob, ataskaita: A, priedas: priedoBlob };
   }
 
-  return { versija: 'S4-2026-10-10', vietos: viesos, generuok, _keisk: keisk, _pTekstas: pTekstas };
+  return { versija: 'S5-2026-10-10', vietos: viesos, generuok, _keisk: keisk, _pTekstas: pTekstas, _isvyniok: isvyniok };
 })();
 if (typeof window !== 'undefined') window.GP_SUTARCIU_GEN = GP_SUTARCIU_GEN;

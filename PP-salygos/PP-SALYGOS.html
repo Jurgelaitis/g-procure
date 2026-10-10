@@ -4544,6 +4544,7 @@ function rodykRezultata(rez){
     ].filter(Boolean).join(' &middot; ');
     h += `<tr><td><b>${esc(r.d.pavadinimas)}</b>
         <div class="cite">${r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
+          : r.gulscias ? 'gulsčias puslapis - atskiras failas; tekstas kaip pagrindiniame dokumente'
           : r.sutartis ? (r.sutartis.pakeista.length ? `pasirinkta ir įrašyta ${r.sutartis.pakeista.length} vietų &middot; pašalinta pastraipų ${r.sutartis.pasalinta.length} &middot; pildoma sudarant ${r.sutartis.palikta.filter(p => p.kodel === 'sudarant').length}` : 'be pakeitimų (bendrosios sąlygos)')
           : r.forma
           ? `tiekėjo pildomos vietos paliktos (${(a.tiekejo||[]).length}) &middot; ištrinta ${r.stats.trinta} &middot; užpildyta ${r.stats.pildyta}`
@@ -4598,6 +4599,10 @@ function rodykRezultata(rez){
                + (sug[0].sutartis.nuorodos.radiniai.length ? `, į neegzistuojančius - ${sug[0].sutartis.nuorodos.radiniai.length} (žr. dokumentų patikroje)` : ', visos rodo į esamus') + '.</div>' : '')
            + (sug[0].sutartis.elementai ? (e => `<div${e.some(x => x.busena !== 'rasta') ? ' class="lk-ispejimas"' : ''} id="sutartiesElementai">Privalomi sutarties elementai (šalių teisės ir pareigos, kaina, terminai, užtikrinimas, ginčai, nutraukimas ir kt.): rasta ${e.filter(x => x.busena === 'rasta').length} iš ${e.length}`
                + (e.some(x => x.busena !== 'rasta') ? `; nerasta: ${e.filter(x => x.busena !== 'rasta').map(x => esc(GP_SUTARTIES_ELEMENTAI.pav(x.el, 'lt'))).join('; ')}` : '') + '.</div>')(sug[0].sutartis.elementai) : '')
+           + (prd => prd ? `<div id="sutartiesPriedas">Specialiųjų sąlygų priedas Nr. ${esc(prd.sutartiesPriedas.nr)} - atskirame gulsčiame faile: Pages visam dokumentui taiko pirmojo skyriaus
+               orientaciją ir stačiame dokumente priedo lentelę nukirptų. Priedo eilutė priedų sąraše liko specialiosiose sąlygose, tekstas nekeistas.</div>` : '')(rez.find(r => r.sutartiesPriedas))
+           + (sug.some(r => r.sutartis.isvyniota) ? `<div class="cite" id="sutartiesLenteles">Lentelė lentelės langelyje (dokumentacijos derinimo terminai) perkelta į pagrindinės lentelės eilutes -
+               Pages įdėtinę lentelę rodytų tekstu be langelių. Tekstas ir jo tvarka nekeisti (patikrinta po generavimo).</div>` : '')
            + (SB.kalba === 'LTEN' ? `<div class="cite" id="sutartiesEn">Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI (Claude) pagal VPT vertimų ir ES pirkimų terminiją, bendrosiose - VPT neoficialus vertimas su suvienodintais terminais; vertėjas netikrino. DI požymis įrašytas Word failų savybėse.</div>` : '')
          : nesug.length ? `. Sutarties projektas nesugeneruotas: ${esc(nesug.flatMap(r => r.sutartis.klaidos || []).join('; '))}.`
          : !SB.sablonai ? '. Į paketą neįtraukiamas - šiai sutarčiai šablonas generatoriui dar neparuoštas arba projektas nerengiamas.'
@@ -5667,25 +5672,35 @@ async function sutartiesDokumentai(){
   if (F.truksta.length) return be(['neatsakyti sutarties klausimai 2 žingsnyje: ' + F.truksta.join('; ')]);
   const reg = await gaukJson('zemelapiai/sutarciu-versijos.json');
   const out = [];
+  let priedas = null;
   for (const tip of ['BS', 'SS']){
     const kod = SB.sablonai[tip], R = reg.sablonai[kod], Zs = await gaukJson('zemelapiai/sutartys/' + kod + '.json');
     const r = await GP_SUTARCIU_GEN.generuok(await gaukBuf('templates/sutartys/' + kod + '.docx'), Zs,
       tip === 'SS' ? F.S : {}, { sablonas: kod, forma: R ? R.dabartine : '', data: GP_EKSPORTAS.siandien(), di: SB.kalba === 'LTEN' ? sutartiesDiSavybes(tip) : null });
-    const A = r.ataskaita, kita = [];
-    // rangos SS etapų priedo lentelės langeliai - viena eilutė (2026-10-10)
-    A.palikta.filter(p => p.kodel !== 'sudarant').forEach(p => {
-      const lauk = p.rusis === 'laukas' && kita.find(q => q.rusis === 'laukas' && q.vieta === p.vieta && q.kodel === p.kodel);
-      if (lauk) lauk.n++; else kita.push(Object.assign({ n: 1 }, p));
-    });
-    kita.forEach(p => { if (p.rusis === 'laukas' && p.n > 1) p.aprasas = `lentelės langeliai (${p.n})`; });
+    const A = r.ataskaita;
+    // Gulsčias SS priedas (rangos SS etapų priedas, S5 2026-10-10): atskiras failas - jo paliktos vietos rodomos prie jo
+    const priede = p => !!(r.priedas && A.atskirta && A.atskirta.skyriai.includes(p.vieta));
+    // paliktos vietos patikrai; lentelės langeliai (rangos SS etapų lentelė) - viena eilutė
+    const eilutes = sar => { const o = []; sar.forEach(p => {
+      const lauk = p.rusis === 'laukas' && o.find(q => q.rusis === 'laukas' && q.vieta === p.vieta && q.kodel === p.kodel);
+      if (lauk) lauk.n++; else o.push(Object.assign({ n: 1 }, p)); });
+      o.forEach(p => { if (p.rusis === 'laukas' && p.n > 1) p.aprasas = `lentelės langeliai (${p.n})`; });
+      return o.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` })); };
+    if (r.priedas){
+      const nr = A.atskirta.priedai.join(', ');
+      priedas = { d: { trumpas: kod + '_GULSTI', pavadinimas: `Sutarties specialiųjų sąlygų priedas Nr. ${nr} (gulsčias puslapis, iš „${R ? R.pavadinimas : kod}“)`, dokumentas: 'Sutarties SS priedas ' + nr },
+        blob: r.priedas, gulscias: true, sutartiesPriedas: { nr, is: kod }, sablonas: kod, stats: {}, forma: false,
+        audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0, patikrinti: eilutes(A.palikta.filter(p => p.kodel !== 'sudarant' && priede(p))) } };
+    }
     out.push({ d: { trumpas: kod, pavadinimas: (R ? R.pavadinimas : kod) + (SB.kalba === 'LTEN' ? ' (LT/EN)' : ''), dokumentas: tip === 'BS' ? 'Sutarties BS' : 'Sutarties SS' },
       blob: r.blob, sutartis: A, stats: {}, forma: false, wordNumeracija: Zs.numeracija === 'word',
       audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0,
-               patikrinti: kita.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` }))
+               patikrinti: eilutes(A.palikta.filter(p => p.kodel !== 'sudarant' && !priede(p)))
                  .concat(tip === 'SS' ? (F.derinimas || []).concat(F.perspejimai || []).map(t => ({ text: t })) : [])
                  .concat(A.pakeista.filter(p => p.ka === 'nuoroda').map(p => ({ text: `${p.vieta} p.: „${p.buvo}“ - „${p.tapo}“ (nurodytas punktas pašalintas)` }))) } });
   }
   // Nuorodos į punktus ir priedus (2026-10-09): sugeneruotose BS ir SS - tik į esamus punktus ir SS priedų sąrašo priedus
+  // (gulsčias SS priedas - atskiras failas; jo eilutė priedų sąraše lieka specialiosiose sąlygose)
   if (window.GP_SUTARCIU_NUORODOS && out.length === 2 && out.every(o => o.blob)){
     // rangos sutartys (2026-10-10): punktų numeriai - Word sąrašai, todėl tekstai su emuliuotais Word numeriais
     const T = await Promise.all(out.map(async o => o.wordNumeracija ? (await GP_SUTARCIU_NUORODOS.tekstai(await o.blob.arrayBuffer())).tekstai
@@ -5703,6 +5718,7 @@ async function sutartiesDokumentai(){
         `Privalomas sutarties elementas nerastas: ${GP_SUTARTIES_ELEMENTAI.pav(x.el, 'lt')}${x.lygis === 'info' ? ' (taikoma tik tam tikrais atvejais)' : ''}` }));
     }
   }
+  if (priedas && out.length === 2 && out[1].blob) out.push(priedas);   // iškart po specialiųjų sąlygų
   return out;
 }
 
