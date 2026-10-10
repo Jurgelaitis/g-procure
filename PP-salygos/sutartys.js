@@ -29,7 +29,7 @@
     PASLAUGOS: { pav: "Paslaugų pirkimo-pardavimo sutartis", sablonai: { LT: { BS: "PASLAUGOS_LT_BS", SS: "PASLAUGOS_LT_SS" }, LTEN: { BS: "PASLAUGOS_LTEN_BS", SS: "PASLAUGOS_LTEN_SS" } } },
     PROJEKTAVIMO_PASLAUGOS: { pav: "Projektavimo paslaugų sutartis", sablonai: null },
     DARBAI_MAZOJI: { pav: "Darbų pirkimo-pardavimo sutartis (mažoji)", sablonai: null },
-    PROJEKTAVIMO_STATYBOS: { pav: "Projektavimo ir statybos rangos sutartis", sablonai: null },
+    PROJEKTAVIMO_STATYBOS: { pav: "Projektavimo ir statybos rangos sutartis", sablonai: { LT: { BS: "PSR_LT_BS", SS: "PSR_LT_SS" } } },
     STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", sablonai: null },
     EKSPLOATAVIMO: { pav: "Eksploatavimo darbų sutartis", sablonai: null,
                      variantai: { OL: "oro linijų eksploatavimas", TP: "transformatorių pastočių eksploatavimas", TRASOS: "trasų valymas" } }

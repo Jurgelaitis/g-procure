@@ -2191,14 +2191,15 @@ const GPNum = (() => {
     }
     return { abst, nums, st };
   }
-  function stiliausNumeris(M, sid){
-    for (let k = 0, s = M.st[sid]; s && k < 12; k++, s = M.st[s.based]) if (s.numId != null) return s;
-    return null;
-  }
   function numeris(M, p){
     const ppr = kid(p, 'pPr'), sid = ppr && val(ppr, 'pStyle'), np = ppr && kid(ppr, 'numPr');
     let numId = np && val(np, 'numId'), ilvl = np && val(np, 'ilvl');
-    if (numId == null){ const s = stiliausNumeris(M, sid); if (s){ numId = s.numId; if (ilvl == null) ilvl = s.ilvl; } }
+    // numId ir lygis - kiekvienas iš artimiausio juos nurodančio stiliaus (2026-10-10, kaip Word ir sutarciu-sablonai.py word_numeriai:
+    // rangos BS „list by letter“ stiliuje tik lygis, numId - iš bazinio „List Paragraph“, kurio lygis kitas)
+    for (let k = 0, s = M.st[sid]; s && k < 12 && (numId == null || ilvl == null); k++, s = M.st[s.based]){
+      if (numId == null && s.numId != null) numId = s.numId;
+      if (ilvl == null && s.ilvl != null) ilvl = s.ilvl;
+    }
     return { numId, ilvl: +(ilvl || 0), sid };
   }
   /* Word numeriai visoms pastraipoms dokumento tvarka. Skaitikliai - pagal abstractNum; nenaudotas tevinis lygis rodo

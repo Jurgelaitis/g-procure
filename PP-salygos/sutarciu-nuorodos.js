@@ -15,6 +15,7 @@
  *
  *   GP_SUTARCIU_NUORODOS.tikrink({ bs: [tekstai] | null, ss: [tekstai] | null })
  *     -> { nuorodu, radiniai: [{ dok: "BS" | "SS", i, nr, rusis: "punktas" | "priedas", citata }], nepatikrinta: [{ dok, nr, priezastis }] }
+ *   GP_SUTARCIU_NUORODOS.tekstai(docx baitai) -> Promise<{ tekstai, wordNumeriu }> - tekstai su Word automatiniais numeriais (rangos sutartys)
  * ========================================================================== */
 (function (global) {
   "use strict";
@@ -25,7 +26,8 @@
   var KUR = "Bendrųjų\\s+(?:Sutarties\\s+|sutarties\\s+)?sąlygų|Specialiųjų\\s+(?:Sutarties\\s+|sutarties\\s+)?sąlygų|General\\s+Terms\\s+and\\s+Conditions|Special\\s+Terms\\s+and\\s+Conditions";
   var REF = new RegExp("(?:(" + KUR + ")[\\s,]*)?(?:(clauses?|paragraphs?|subparagraphs?|sub-paragraphs?|sections?|points?)\\s+)?(" + SAR + ")\\s*" +
                        "(punkt[a-ząčęėįšųūž]*|papunk[a-ząčęėįšųūž]*|skyri[a-ząčęėįšųūž]*|of\\s+the\\s+(?:General|Special|Contract))?", "gi");
-  var PRIED = /(\d+)\s*pried[a-ząčęėįšųūž]*|pried[a-ząčęėįšųūž]*\s*Nr\.\s*(\d+)|Annex(?:es)?\s*(?:No\.\s*)?(\d+)/gi;
+  // priedo numeris - ir dviejų lygių (rangos SS priedų sąrašas: „priede Nr. 1.1“, 2026-10-10)
+  var PRIED = /(\d+)\s*pried[a-ząčęėįšųūž]*|pried[a-ząčęėįšųūž]*\s*Nr\.\s*(\d+(?:\.\d+)?)|Annex(?:es)?\s*(?:No\.\s*)?(\d+)/gi;
   // teisės akto struktūra prieš numerį: „VPĮ 90 straipsnio 1 dalies 7 punkte“, „Article 45(2) point 3“ - ne sutarties punktas
   var TEISES_AKTAS = /(straipsn[a-ząčęėįšųūž]*|Article|įstatym[a-ząčęėįšųūž]*|kodeks[a-ząčęėįšųūž]*|Law|LPP|LP|VPĮ|PĮ|aprašo|reglament[a-ząčęėįšųūž]*|Regulation|Directive|direktyv[a-ząčęėįšųūž]*|dal(?:ies|yje|is)\s*(?:\d+\s*)?|paragraph\s*\(\d+\)|\(\d+\))\s*$/i;
   var PAVYZDYS = /(pavyzdžiui|pvz\.|e\.\s*g\.|for example)[\s,:]*$/i;
@@ -36,10 +38,35 @@
     return s;
   }
   // specialiųjų sąlygų priedų sąrašas: „15.1. Priedas Nr. 1 ...“ / „15.1. Annex No 1 ...“
+  // rangos SS (2026-10-10): po „SUTARTIES DOKUMENTAI IR PRIEDAI:“ - Word sąrašas, jo numeriai („1.1.“, „4.“) ir yra priedų numeriai
   function priedai(T) {
-    var s = {};
-    T.forEach(function (t) { var m = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*(\d+)/i.exec(t || ""); if (m) s[m[1]] = 1; });
+    var s = {}, sarase = false;
+    T.forEach(function (t) {
+      t = t || "";
+      var m = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*(\d+)/i.exec(t); if (m) s[m[1]] = 1;
+      if (/^\s*SUTARTIES DOKUMENTAI IR PRIEDAI:?\s*$/.test(t)) { sarase = true; return; }
+      if (sarase && /^\s*(Užsakovo|Rangovo) vardu:?\s*$/.test(t)) sarase = false;
+      var n = sarase && /^\s*(\d+(?:\.\d+)?)\.(?=\s)/.exec(t); if (n) s[n[1]] = 1;
+    });
     return s;
+  }
+  /* Sutarties dokumento pastraipų tekstai su Word automatiniais numeriais (2026-10-10, rangos sutartys: punktai sunumeruoti tik Word sąrašais,
+     tekste numerių nėra). Dešimtainis numeris („5.2.“, „1.1.2.13.“) pridedamas pastraipos pradžioje, jei tekstas pats numeriu neprasideda;
+     numeracija - GPNum (PP-salygos/variklis.js) emuliacija, sutikrinta su sutarciu-sablonai.py word_numeriai. Be GPNum - tekstai be numerių.
+     -> Promise<{ tekstai, wordNumeriu }> */
+  async function tekstai(buf) {
+    var W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main", z = await global.JSZip.loadAsync(buf), dp = new DOMParser();
+    var xml = async function (f) { var e = z.file(f); return e ? dp.parseFromString(await e.async("string"), "application/xml") : null; };
+    var d = await xml("word/document.xml"), P = Array.prototype.slice.call(d.getElementsByTagNameNS(W, "p")), zy = null, n = 0;
+    var N = typeof GPNum !== "undefined" ? GPNum : global.GPNum;   // variklis.js: viršutinio lygio const - ne window savybė
+    if (N) zy = N.wordZymes(N.modelis(await xml("word/numbering.xml"), await xml("word/styles.xml")), P);
+    var T = P.map(function (p) {
+      var t = Array.prototype.map.call(p.getElementsByTagNameNS(W, "t"), function (q) { return q.textContent; }).join("");
+      var e = zy && zy.get(p);
+      if (e && e.desimt && /^\d/.test(e.label) && !NR.test(t)) { n++; return e.label + " " + t; }
+      return t;
+    });
+    return { tekstai: T, wordNumeriu: n };
   }
   function tikrink(o) {
     var bs = o.bs ? numeriai(o.bs) : null, ss = o.ss ? numeriai(o.ss) : null, pr = o.ss ? priedai(o.ss) : null;
@@ -133,5 +160,5 @@
     });
     return out;
   }
-  global.GP_SUTARCIU_NUORODOS = { versija: "1.2", tikrink: tikrink, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
+  global.GP_SUTARCIU_NUORODOS = { versija: "1.3", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
 })(typeof window !== "undefined" ? window : this);

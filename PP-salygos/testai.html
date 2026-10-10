@@ -3433,12 +3433,16 @@ async function testaiParinkimas(){
     }
     tiesa(!kl.length, kl.join("\n"));
   });
-  await testas("Paruoštos šeimos (prekės, paslaugos) - šablonai iš S1 registro (LT ir LT/EN); kitos - „neparuošta“, ne tylus pasirinkimas", async () => {
+  await testas("Paruoštos šeimos (prekės, paslaugos - LT ir LT/EN; projektavimo ir statybos rangos - LT, nuo 2026-10-10) - šablonai iš S1 registro; kitos - „neparuošta“, ne tylus pasirinkimas", async () => {
     const reg = (await (await W.fetch("zemelapiai/sutarciu-versijos.json")).json()).sablonai;
     for (const [seima, ss] of Object.entries(G.SEIMOS)) {
       if (!ss.sablonai) continue;
-      for (const k of ["LT", "LTEN"]) for (const d of ["BS", "SS"]) tiesa(reg[ss.sablonai[k][d]], seima + " " + k + " " + d + ": šablono nėra registre");
+      for (const k of Object.keys(ss.sablonai)) for (const d of ["BS", "SS"]) tiesa(reg[ss.sablonai[k][d]], seima + " " + k + " " + d + ": šablono nėra registre");
     }
+    lygu(Object.entries(G.SEIMOS).filter(([, ss]) => ss.sablonai).map(([k, ss]) => k + ":" + Object.keys(ss.sablonai).join("+")), ["PREKES:LT+LTEN", "PASLAUGOS:LT+LTEN", "PROJEKTAVIMO_STATYBOS:LT"], "paruoštos šeimos");
+    const ps = G.parink({ pavadinimas: "Pastotės darbo projekto parengimas ir rangos darbai", objektas: "darbai", kalba: "LT_EN" });
+    lygu([ps.busena, ps.sablonai, ps.kalba], ["parinkta", { BS: "PSR_LT_BS", SS: "PSR_LT_SS" }, "LT"], "rangos LT/EN - lietuviška");
+    tiesa(ps.pastabos.some(x => /dvikalbės \(LT\/EN\) sutarties nėra/.test(x)), "nepasakyta, kad LT/EN nėra");
     const p = G.parink({ pavadinimas: "Galios transformatorių pirkimas", objektas: "prekes", kalba: "LT_EN" });
     lygu([p.busena, p.sablonai, p.kalba], ["parinkta", { BS: "PREKES_LTEN_BS", SS: "PREKES_LTEN_SS" }, "LTEN"], "prekės LT/EN");
     lygu(G.parink({ pavadinimas: "Valymo paslaugos", objektas: "paslaugos" }).sablonai, { BS: "PASLAUGOS_LT_BS", SS: "PASLAUGOS_LT_SS" }, "paslaugos LT");
@@ -3947,6 +3951,209 @@ async function testaiSutartiesForma(){
     for (const r of sEn){ const c = await custom(r.blob); tiesa(/name="DI_turinys"/.test(c) && /vertėjas netikrino/.test(c), r.d.trumpas + ": nėra DI požymio"); }
     W.rodykRezultata(rez);
     tiesa(/Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI/.test(D.getElementById("sutartiesPatikra").textContent), "LT/EN patikroje - nėra anglų teksto pastabos");
+  });
+}
+
+/* Projektavimo ir statybos rangos sutarties projekto generavimas (3 etapas, S4, 2026-10-10): klausimai KLAUSIMAI_PSR ir sprendimai
+   (sutarties-forma.js), „//“ punktai, nurodymų blokai, etapų priedo skyrius ir punkto numerio perkėlimas (sutarciu-generatorius.js);
+   taisyklės - docs/salygos/sutarciu-lauku-inventorius.md. Tikrinama sugeneruotu Word failu. */
+const PSR_CTX = { seima: "PROJEKTAVIMO_STATYBOS", kalba: "LT", pavadinimas: "330 kV skirstyklos Lietuvos elektrinėje rekonstravimo darbų", numeris: "VPP-301",
+  trukmeMen: 24, verte: 2000000, uztikrinimas: { taikomas: true, eur: 200000 }, kriterijus: "kaina", nacsaug: true };
+// A - darbai etapais, visi neprivalomi punktai, kurie turi formuluotę; B - ne etapais, kiti variantai ir „Punktas netaikomas.“
+const PSR_A = { objektas: "330 kV skirstykla Lietuvos elektrinėje", darbu_terminas: "18", etapai: "taip", pagrindiniai: "Pagrindinių įrenginių sąrašas - Techninės užduoties 3 priedas.",
+  fizine_sauga: "ne", dalinis: "ne", es_psr: "ne", bim: "ne", investicinis: "taip", investicinis_pav: "330 kV skirstyklos rekonstrukcija", investicinis_nr: "Nr. IP-123",
+  grafikas: "taip", grafiko_dienos: "45", ekspertize: "ne", atjungimai: "taip", uztikrinimas_psr: "virs", garantinis: "ne", esmines_psr: "taip",
+  esmines_psr_f: "Darbų atlikimo terminas;\nKokybės reikalavimai.", sprogmenys: "taip", koordinatorius: "abu", apmokejimas_psr: "ziniarastis", netesybos: "etapai", derinimas: "tp330",
+  pratesimas: "taip", pratesimo_terminas: "ne ilgiau kaip 3 mėnesiams", pratesimo_aplinkybes: "Užsakovo vėluojamų suteikti atjungimų",
+  uzsakovo_irenginiai: "ne", demontuoti: "taip", demontuoti_adresas: "Kauno g. 1, Vilnius", uzsakovo_atstovas: "Projektų vadovas Jonas Jonaitis" };
+const PSR_B = { objektas: "Transformatorių pastatas", darbu_terminas: "3", etapai: "ne", pagrindiniai: "Netaikoma.", fizine_sauga: "taip", fizine_sauga_f: "Darbai saugomoje teritorijoje - pagal Užsakovo tvarką.",
+  dalinis: "taip", dalinis_f: "Įrenginių ir Medžiagų sąrašas - Sutarties priedas Nr. 22.", es_psr: "taip", bim: "taip", bim_priedas: "24", investicinis: "ne", grafikas: "ne",
+  ekspertize: "taip", ekspertizes_dienos: "30", atjungimai: "taip", atjungimai_kiti: "skirstyklos kameros atjungimui - viena savaitė", uztikrinimas_psr: "netaikomas", garantinis: "taip",
+  esmines_psr: "ne", sprogmenys: "ne", koordinatorius: "p28", apmokejimas_psr: "visa", netesybos: "pakopos", derinimas: "kiti",
+  pratesimas: "ne", uzsakovo_irenginiai: "taip", uzsakovo_irenginiai_f: "Galios transformatorius - pagal Techninės užduoties 4 priedą.", uzsakovo_irenginiu_vieta: "Užsakovo sandėlyje, Kauno g. 1, Vilnius.",
+  demontuoti: "ne" };
+async function rangosSutartis(ats, ctx){
+  const F = W.GP_SUTARTIES_FORMA, G = W.GP_SUTARCIU_GEN, { buf, Z } = await sutartiesSablonas("PSR_LT_SS");
+  const sp = F.sprendimai(Z, ctx || PSR_CTX, sfA(ats)), r = await G.generuok(buf, Z, sp.S, { sablonas: "PSR_LT_SS", tipas: "uint8array" });
+  const x = r.blob ? await docxPastraipos(r.blob) : null;
+  return { sp, r, Z, x, numeruota: x ? [...x.d.getElementsByTagNameNS(x.NS, "p")].filter(p => { const n = p.getElementsByTagNameNS(x.NS, "numId")[0]; return n && n.getAttribute("w:val") === "11"; })
+    .map(p => [...p.getElementsByTagNameNS(x.NS, "t")].map(t => t.textContent).join("").replace(/\s+/g, " ").trim()) : [] };
+}
+async function testaiRangosGeneravimas(){
+  dabartine = grupe("Projektavimo ir statybos rangos sutarties projektas (3 etapas, S4, 2026-10-10): klausimai, generavimas, patikra su forma, modulis");
+  await modulis();
+  const F = W.GP_SUTARTIES_FORMA, G = W.GP_SUTARCIU_GEN, P = W.GP_PALYGINIMAS;
+  tiesa(F && G && F.KLAUSIMAI_PSR, "sutarties-forma.js be rangos klausimų");
+  const { Z } = await sutartiesSablonas("PSR_LT_SS");
+  await testas("Klausimai: SS punktų tvarka, be numatytųjų; siūloma - tik su kilme (Techninė užduotis - priedas Nr. 1.2 iš priedų sąrašo, derinimo terminai - 330 kV skirstykla pavadinime, užtikrinimas netaikomas - kai SPS jo nereikalauja, vienu mokėjimu - darbai iki 4 mėnesių); variantai „etapais“ - tik kai darbai etapais", () => {
+    const q = F.klausimai(Z, PSR_CTX, {}), Q = id => q.find(x => x.id === id);
+    lygu(q.length, 26, "klausimų skaičius");
+    lygu(q.filter(x => x.busena === "siuloma").map(x => x.id + "=" + x.reiksme), ["technine=Sutarties specialiųjų sąlygų priedas Nr. 1.2 „Techninė užduotis / projektavimo užduotis“.", "derinimas=tp330"], "siūlomos");
+    tiesa(q.every(x => x.busena !== "patvirtinta") && q.filter(x => x.privalomas).every(x => x.busena === "neuzpildyta" || x.busena === "siuloma"), "privalomi - be numatytųjų");
+    tiesa(/SPS: užtikrinimas reikalaujamas \(200000 Eur, 10 % numatomos vertės\)/.test(Q("uztikrinimas_psr").pastaba) && Q("uztikrinimas_psr").reiksme === null, "užtikrinimas reikalaujamas - pastaba, variantas nesiūlomas: " + Q("uztikrinimas_psr").pastaba);
+    lygu([Q("apmokejimas_psr").variantai.map(v => v.id), Q("netesybos").variantai.map(v => v.id)], [["ziniarastis", "visa"], ["vienos", "pakopos"]], "be etapų - be „etapais“");
+    const q2 = F.klausimai(Z, Object.assign({}, PSR_CTX, { pavadinimas: "Pastato stogo remonto darbų", uztikrinimas: { taikomas: false } }), sfA({ etapai: "taip", darbu_terminas: "3" }));
+    const Q2 = id => q2.find(x => x.id === id);
+    lygu([Q2("uztikrinimas_psr").reiksme, Q2("apmokejimas_psr").reiksme, Q2("netesybos").reiksme, Q2("derinimas").reiksme, Q2("apmokejimas_psr").variantai.length],
+      ["netaikomas", "visa", "etapai", null, 3], "SPS be užtikrinimo, 3 mėn., etapais, ne TP");
+    tiesa(/šablono rekomendacija/.test(Q2("apmokejimas_psr").siuloma.kilme) && /SPS/.test(Q2("uztikrinimas_psr").siuloma.kilme), "kilmė");
+    lygu(F.klausimai(Z, Object.assign({}, PSR_CTX, { pavadinimas: "110 kV Kauno TP rekonstravimo" }), {}).find(x => x.id === "derinimas").reiksme, "tp", "110 kV TP");
+    // be etapų priedo kiti priedai pernumeruojami
+    lygu([F._priedoNr(Z, { etapai: "taip" }, /^Techninė užduotis/), F._priedoNr(Z, { etapai: "ne" }, /^Techninė užduotis/), F._priedoNr(Z, { etapai: "ne" }, /^Užsakovui priimtinų bankų/)],
+      ["1.2", "1.1", "1.3"], "priedų numeriai");
+  });
+  await testas("Neatsakyti privalomi - kliūtis su klausimu; „Taip“ be formuluotės ar dienų - kliūtis; neprivalomi kontaktai, kiti atjungimo terminai - ne; skaičius po kurio šablone „darbo dienų“ netinka - perspėjimas", () => {
+    const t0 = F.sprendimai(Z, PSR_CTX, {}).truksta;
+    lygu(t0.length, 22, "privalomų klausimų (24, iš jų 2 siūlomi): " + t0.length);
+    const t1 = F.sprendimai(Z, PSR_CTX, sfA(PSR_A, { esmines_psr_f: "", grafiko_dienos: "" })).truksta;
+    lygu(t1, [F.KLAUSIMAI_PSR.find(q => q.id === "grafikas").klausimas + " - Per kiek dienų nuo Sutarties sudarymo",
+              F.KLAUSIMAI_PSR.find(q => q.id === "esmines_psr").klausimas + " - Esminės sutarties sąlygos"], "Taip be reikšmės");
+    lygu(F.sprendimai(Z, PSR_CTX, sfA(PSR_A)).truksta, [], "visi atsakyti (kontaktai - neprivalomi)");
+    // SS 3, 6, 8: „Taip“ be reikšmių - kliūtis (skelbiamame projekte neliktų „[terminas]“, „____“, „[adresas]“)
+    lygu(F.sprendimai(Z, PSR_CTX, sfA(PSR_A, { pratesimo_terminas: "", pratesimo_aplinkybes: "", demontuoti_adresas: "", uzsakovo_irenginiai: "taip" })).truksta.length, 5, "Taip be reikšmių - SS 3 (2), SS 6 (2), SS 8 (1)");
+    lygu(F.KLAUSIMAI_PSR.find(q => q.id === "koordinatorius").variantai.map(v => v.id), ["ne", "p28", "abu"], "koordinatorius: 29 punktas vienas nesiūlomas");
+    const s = F.sprendimai(Z, PSR_CTX, sfA(PSR_B, { ekspertizes_dienos: "25" }));
+    tiesa(s.perspejimai.some(p => /skaičiui 25 žodžio formą/.test(p)) && !F.sprendimai(Z, PSR_CTX, sfA(PSR_B)).perspejimai.length, "darbo dienų forma");
+    lygu(F.sprendimai(Z, Object.assign({}, PSR_CTX, { uztikrinimas: { taikomas: false } }), sfA(PSR_A)).derinimas.length, 1, "SPS be užtikrinimo, SS - 10 %");
+    tiesa(/9,5 % numatomos vertės/.test(F.sprendimai(Z, Object.assign({}, PSR_CTX, { uztikrinimas: { taikomas: true, eur: 190000 } }), sfA(PSR_A)).derinimas.join(" ")), "SPS suma ne 10 %");
+  });
+  await testas("A rinkinys (etapais): be klaidų; punktų numeriai 27 (be 22 ir 25), užtikrinimo 3 variantas - su numeriu; SS 6 ir 9 - „Punktas netaikomas.“, koordinatorius - 28 ir 29 punktai; įrašai ir šablono tekstas; nelieka „//“, „arba“, „Turi būti pasirinkta:“, „(pasirenkama“ - išskyrus etapų priedą (Word programoje); priedas ir du skyriai lieka", async () => {
+    const { r, x, numeruota } = await rangosSutartis(PSR_A);
+    lygu(r.ataskaita.klaidos, [], "generavimas");
+    const ps = x.ps, yra = re => ps.some(t => re.test(t));
+    lygu(numeruota.length, 27, "numeruoti punktai: " + numeruota.length);
+    lygu([ps.filter(t => t === "Punktas netaikomas.").length, ps.filter(t => t === "Netaikoma.").length], [2, 0], "„Punktas netaikomas.“ - SS 6 ir SS 9");
+    tiesa(yra(/^Užsakovo įrenginiai \[4\.9\.8\. punktas\]:$/) && !yra(/^Darbų atlikimui Užsakovas pateikia/) && !yra(/^Nurodytus Įrenginius ir Medžiagas/), "SS 6: antraštė lieka, sakiniai pakeisti");
+    tiesa(yra(/turi pristatyti Kauno g\. 1, Vilnius, pristatymo laiką/), "SS 8 adresas");
+    const iU = ps.indexOf("Užsakovo įrenginiai [4.9.8. punktas]:");
+    lygu([ps[iU + 1], ps[iU + 2], ps[iU + 3].slice(0, 12)], ["Punktas netaikomas.", "", "Fizinė sauga"], "SS 6: po pakeisto teksto - viena tuščia pastraipa, kaip šablone");
+    tiesa(!r.ataskaita.palikta.some(p => p.vieta === "6") && r.ataskaita.pakeista.some(p => p.ka === "nuostata" && p.vieta === "6" && p.tapo === "Punktas netaikomas."), "SS 6: pildomos vietos pakeistame tekste nelieka paliktų sąraše");
+    tiesa(yra(/^Esant Sutarties bendrųjų sąlygų 5\.2\.5 punkte .*\(toliau – Koordinatorius\)/) && yra(/^Rangovas ir Užsakovas susitaria, kad Koordinatorius/), "koordinatorius: 28 (su sąvokos apibrėžimu) ir 29");
+    tiesa(numeruota.some(t => /^Sutarties įvykdymas užtikrinamas .* lėšų deponavimu arba banko garantija/.test(t)), "užtikrinimo 3 variantas be numerio");
+    for (const re of [/^18 mėnesių nuo Sutarties sudarymo dienos\.$/, /gali būti pratęstas ne ilgiau kaip 3 mėnesiams dėl Užsakovo vėluojamų suteikti atjungimų Sutartyje nurodytomis/,
+                      /laimėjo pirkėjo skelbtą 330 kV skirstyklos Lietuvos elektrinėje rekonstravimo darbų pirkimą Nr\. VPP-301,/, /^330 kV skirstykla Lietuvos elektrinėje$/,
+                      /^Darbus Rangovas turi atlikti priede Nr\. 1\.1 nurodytais/, /priede Nr\. 1\.1\.$/, /prieduose Nr\. 1\.4 ir 1\.5\.$/, /^Papildomi fizinės saugos reikalavimai Darbams netaikomi\.$/,
+                      /^Punktas netaikomas\.$/, /^330 kV skirstyklos rekonstrukcija, Nr\. IP-123\.$/, /^Statinio informacinis modeliavimas \(BIM\) netaikomas\.$/,
+                      /per 45 dienas nuo Sutarties sudarymo dienos\.$/, /^Esminėmis yra laikomos šios Sutarties sąlygos:$/, /^Darbų atlikimo terminas;$/, /^Kokybės reikalavimai\.$/,
+                      /^Per 30 d\. d\. pastočių skirstyklų elektros įrenginių \(E\) dalis$/, /^Per 15 d\. d\. pirminių įrenginių ir savųjų reikmių dalis$/, /^\[OBJEKTAS\]$|^330 kV skirstykla Lietuvos elektrinėje$/,
+                      /Pagrindinių įrenginių sąrašas - Techninės užduoties 3 priedas\./, /^Projektų vadovas Jonas Jonaitis\s*\[Pareigos, vardas, pavardė\]$/, /koordinatoriaus nepriklausomą|Koordinatoriaus nepriklausomą/]) tiesa(yra(re), "nėra: " + re);
+    for (const re of [/^\/\//, /^arba$/, /^Turi būti pasirinkta:$/, /\(pasirenkama /, /\[dienos\/mėnesiai\]|\[pirkimo pavadinimas\]|\[OBJEKTAS\]|\[terminas\]|\[vieta, adresas\]|_{5,}Sutartyje/, /^Per 20 d\. d\. pastočių/,
+                      /Ekspertizės aktą/, /Garantinių įsipareigojimų užtikrinimas“ netaikomas/, /Sutarties kaina bus mokama dalimis pagal atliktus/, /^\[\.\.\.\];$/])
+      tiesa(!ps.some(t => re.test(t) && !/^\/\/Pildymo sąlygos/.test(t)), "liko: " + re);
+    tiesa(yra(/^\/\/Pildymo sąlygos:$/) && yra(/^\(rengiant sutartį pasirenkama/), "etapų priedo nurodymai - Word programoje");
+    tiesa(r.ataskaita.palikta.some(p => p.vieta === "1.1 priedas" && p.rusis === "laukas" && p.kodel === "word") && r.ataskaita.palikta.some(p => p.raktas === "nb:pildymo_sąlygos"), "palikta Word programai");
+    lygu([x.d.getElementsByTagNameNS(x.NS, "sectPr").length, yra(/^PROJEKTAVIMO IR STATYBOS DARBŲ ETAPAI$/), yra(/^Projektavimo ir statybos darbų etapai;$/)], [2, true, true], "etapų priedas lieka");
+    // kitos nuostatos: su nurodymu šalinama ir tuščia pastraipa tarp jo ir punkto (gretimų eilučių netikrinama - GPLent skaido aukštą langelį)
+    lygu(r.ataskaita.pasalinta.filter(p => p.vieta === "27").map(p => p.kodel), ["šablono nurodymas rengėjui", "tuščia pastraipa po nurodymo"], "27 punkto pašalintos pastraipos (visi trys punktai lieka)");
+  });
+  await testas("B rinkinys (ne etapais): 4 punkte - „Punktas netaikomas.“ (antraštė lieka, 1-19 punktų numeriai nesikeičia), etapų priedo skyrius ir jo priedų sąrašo eilutė pašalinti (dokumentas - vienas statmenas skyrius), priedai pernumeruoti (Techninė užduotis - 1.1, bankai - 1.3 ir 1.4); punktų numeriai 25 (be 20, 26, 27, 29); SS 3 pratęsimo sakinys pašalintas, SS 8 ir 18 - „Punktas netaikomas.“; užtikrinimo 1 variantas, 25 punktas, kiti atjungimo terminai, ekspertizė", async () => {
+    const { r: r2, x: x2, numeruota: n2 } = await rangosSutartis(PSR_B);
+    lygu(r2.ataskaita.klaidos, [], "generavimas");
+    const ps = x2.ps, yra = re => ps.some(t => re.test(t));
+    lygu(n2.length, 25, "numeruoti punktai: " + n2.length);
+    lygu(n2.slice(0, 19).map(t => t.replace(/ ?\[.*$|:$/g, "")), ["Objektas", "Techninė užduotis / Projektas", "Darbų atlikimo terminas", "Darbų etapai", "Pagrindiniai įrenginiai", "Užsakovo įrenginiai", "Fizinė sauga",
+      "Demontuojami įrenginiai, konstrukcijos ir medžiagos", "Nesumontuotų Įrenginių ir jiems įrengti būtinų Medžiagų dalinis apmokėjimas", "Šalių atstovai", "Sutarties kaina", "Apmokėjimas", "Sąskaita apmokėjimui",
+      "Europos Sąjungos fondų (programų) finansavimas", "Netesybos", "Užsakovui priimtini bankai ir draudimo bendrovės", "Statinio informacinis modeliavimas", "Projektas", "Šalių kontaktiniai duomenys"], "1-19 punktai - visi, ta pačia tvarka");
+    lygu([ps.filter(t => t === "Punktas netaikomas.").length, ps.filter(t => t === "Netaikoma.").length], [3, 1], "„Punktas netaikomas.“ - SS 4, 8 ir 18 (SS 5 „Netaikoma.“ - įrašytas atsakymas)");
+    const iE = ps.indexOf("Darbų etapai [2.2.3. punktas]:");
+    lygu([ps[iE + 1], ps.indexOf("Darbai") - iE, ps[iE - 2]], ["Punktas netaikomas.", 5, "3 mėnesiai nuo Sutarties sudarymo dienos."], "SS 3-4: pratęsimo sakinys pašalintas, 4 punkte - tekstas, tarpai kaip šablone");
+    tiesa(yra(/^Darbų atlikimui Užsakovas pateikia šiuos Įrenginius ir Medžiagas: Galios transformatorius - pagal Techninės užduoties 4 priedą\.$/) &&
+          yra(/^Nurodytus Įrenginius ir Medžiagas Užsakovas Rangovui perduos Užsakovo sandėlyje, Kauno g\. 1, Vilnius\.$/), "SS 6 įrašai (be dvigubo taško)");
+    tiesa(yra(/^Demontuojami įrenginiai, konstrukcijos ir medžiagos \[4\.6\.2\. punktas\]:$/) && !yra(/^Rangovas demontuotus tolimesniam/), "SS 8: antraštė lieka, sakinys pakeistas");
+    tiesa(yra(/^Esant Sutarties bendrųjų sąlygų 5\.2\.5 punkte/) && !yra(/Koordinatoriaus kandidatūrą/), "koordinatorius: tik 28 punktas");
+    const lent = d => d.getElementsByTagNameNS(NSW, "tbl").length, { x: xA } = await rangosSutartis(PSR_A), sab = await sutartis("PSR_LT_SS");
+    lygu([lent(xA.d), lent(x2.d)], [lent(sab.doc), lent(sab.doc) - 1], "etapų lentelė pašalinta visa (ne tuščia)");
+    // kitos įtampos TP: pirminis - 20 d. d., pakartotinis - 15 d. d. (E dalis ir pirminių įrenginių dalis)
+    const { x: xC } = await rangosSutartis(Object.assign({}, PSR_B, { derinimas: "tp" }));
+    tiesa(["Per 20 d. d. pastočių skirstyklų elektros įrenginių (E) dalis", "Per 15 d. d. pastočių skirstyklų elektros įrenginių (E) dalis",
+           "Per 20 d. d. pirminių įrenginių ir savųjų reikmių dalis", "Per 15 d. d. pirminių įrenginių ir savųjų reikmių dalis"].every(t => xC.ps.includes(t)) &&
+           !xC.ps.some(t => /^Per 30 d\. d\./.test(t)), "kitos įtampos TP derinimo terminai");
+    lygu([x2.d.getElementsByTagNameNS(x2.NS, "sectPr").length, x2.d.getElementsByTagNameNS(x2.NS, "sectPr")[0].parentNode.localName,
+          (x2.d.getElementsByTagNameNS(x2.NS, "pgSz")[0].getAttribute("w:orient") || "")], [1, "body", ""], "vienas statmenas skyrius");
+    for (const re of [/^Darbų atlikimo terminas Šalių raštišku susitarimu/, /^Darbus Rangovas turi atlikti priede/, /^PROJEKTAVIMO IR STATYBOS DARBŲ ETAPAI$/, /^Projektavimo ir statybos darbų etapai;$/, /^\/\//, /\(pasirenkama|\(rengiant sutartį/,
+                      /^Etapas$/, /Grafiką Rangovas turi parengti/, /^Esminėmis/, /karo laikų sprogmenų/, /\[terminas\]|\[vieta, adresas\]|\[įrenginiai/])
+      tiesa(!yra(re), "liko: " + re);
+    for (const re of [/^3 mėnesiai nuo Sutarties sudarymo dienos\.$/, /^Sutarties specialiųjų sąlygų priedas Nr\. 1\.1 „Techninė užduotis/, /prieduose Nr\. 1\.3 ir 1\.4\.$/,
+                      /^Darbus ketinama finansuoti Europos Sąjungos fondų/, /Užsakovo informacijos reikalavimai pateikiami priede Nr\. 24\.$/, /^Sutarties kaina bus sumokėta Rangovui įvykdžius/,
+                      /^2\) jeigu vėluojama užbaigti Darbus nuo 31 iki 60 dienų/, /^Per 15 d\. d\.$/, /^Per 10 d\. d\.$/, /per 30 darbo dienų nuo Techninio darbo projekto/, /^skirstyklos kameros atjungimui - viena savaitė;$/,
+                      /^Sutarties bendrųjų sąlygų 9\.7\. punktas „Sutarties įvykdymo užtikrinimas“ netaikomas/, /^Sutarties bendrųjų sąlygų 9\.9\. punktas/])
+      tiesa(yra(re), "nėra: " + re);
+    tiesa(r2.ataskaita.pakeista.some(p => p.ka === "priedas") && r2.ataskaita.pasalinta.some(p => p.vieta === "priedų sąrašas 1.1"), "ataskaitoje - pašalintas priedas");
+    tiesa(!r2.ataskaita.palikta.some(p => p.vieta === "1.1 priedas"), "pašalinto priedo vietos - paliktų sąraše");
+    // pašalinto punkto tuščia pastraipa šalinama kartu (po „Papildomos sąlygos“ - iškart 21 punktas; po 3 punkto - kaip šablone, 3 tuščios iki „Darbai“)
+    const ip = ps.indexOf("Papildomos sąlygos");
+    lygu(ps[ip + 1].slice(0, 9), "Nustatomi", "tuščia pastraipa po pašalinto 20 punkto");
+  });
+  await testas("Bendrosios sąlygos - be pakeitimų (tik įmonės pavadinimas), turinys lieka; be sprendimų rangos SS - vietos lieka, išvardijamos, generavimas be klaidų; pakeistas šablonas - negeneruojama", async () => {
+    const { buf, Z: ZB } = await sutartiesSablonas("PSR_LT_BS");
+    const rb = await G.generuok(buf, ZB, {}, { sablonas: "PSR_LT_BS", tipas: "uint8array" });
+    lygu([rb.ataskaita.klaidos, rb.ataskaita.palikta.length], [[], 0], "BS");
+    const xb = await docxPastraipos(rb.blob);
+    tiesa(!xb.ps.some(t => /ĮMONĖS PAVADINIMAS/.test(t)) && xb.d.getElementsByTagNameNS(xb.NS, "sdt").length === 1, "BS: įmonės pavadinimas ir turinys");
+    const s0 = await sutartiesSablonas("PSR_LT_SS"), r0 = await G.generuok(s0.buf, s0.Z, {}, { tipas: "uint8array" });
+    tiesa(!r0.ataskaita.klaidos.length && r0.ataskaita.palikta.filter(p => p.rusis === "salyginis").length === 7 && r0.ataskaita.palikta.some(p => p.rusis === "alternatyva" && p.vieta === "24"), "be sprendimų");
+    const Z2 = JSON.parse(JSON.stringify(s0.Z)); Z2.pastraipos[184] = "Esminėmis sąlygomis laikomos:";
+    lygu((await G.generuok(s0.buf, Z2, F.sprendimai(s0.Z, PSR_CTX, sfA(PSR_A)).S, {})).blob, null, "pakeistas šablonas");
+    // žemėlapyje dingęs blokas: jo „//“ nurodymas lieka ne paliktoje vietoje - klaida, failo nėra
+    const Z3 = JSON.parse(JSON.stringify(s0.Z)); Z3.salyginiai = Z3.salyginiai.filter(b => b.id !== "grafikas");
+    const r3 = await G.generuok(s0.buf, Z3, F.sprendimai(Z3, PSR_CTX, sfA(PSR_A)).S, {});
+    tiesa(r3.blob === null && r3.ataskaita.klaidos.some(k => /liko šablono nurodymas „\/\/ punktas įrašomas, jei Grafiką/.test(k)), "likęs „//“: " + r3.ataskaita.klaidos.join(" | "));
+  });
+  await testas("Tikrinti parengtus dokumentus: sugeneruotos rangos SS (A ir B) ir BS - forma atpažįstama, 0 nukrypimų su pasu ir be paso; B be paso su pridėtu sakiniu - lygiai vienas nukrypimas", async () => {
+    const REG = await (await W.fetch("zemelapiai/sutarciu-versijos.json?b=" + Date.now())).json(), failai = [], laukta = {};
+    for (const [vardas, ats] of [["A", PSR_A], ["B", PSR_B]]) {
+      const { buf, Z: Zs } = await sutartiesSablonas("PSR_LT_SS"), sp = F.sprendimai(Zs, PSR_CTX, sfA(ats));
+      const r = await G.generuok(buf, Zs, sp.S, { sablonas: "PSR_LT_SS", forma: REG.sablonai.PSR_LT_SS.dabartine, data: "2026-10-10", tipas: "uint8array" });
+      failai.push(new W.File([r.blob], "Rangos SS " + vardas + " su pasu.docx"), new W.File([await sutartisBePaso(r.blob)], "Rangos SS " + vardas + " be paso.docx"));
+      laukta["Rangos SS " + vardas + " su pasu.docx"] = laukta["Rangos SS " + vardas + " be paso.docx"] = "PSR_LT_SS";
+      if (vardas === "B") failai.push(new W.File([await sutartisBePaso(r.blob, ps => { const p = ps.find(x => /^Sutarties kaina bus sumokėta Rangovui/.test(x.t)).p, t = p.getElementsByTagNameNS(NSW, "t")[0]; t.textContent += " " + MUT_SUT; })],
+        "Rangos SS B pakeista.docx"));
+    }
+    const { buf: bb, Z: zb } = await sutartiesSablonas("PSR_LT_BS"), rb = await G.generuok(bb, zb, {}, { sablonas: "PSR_LT_BS", tipas: "uint8array" });
+    failai.push(new W.File([await sutartisBePaso(rb.blob)], "Rangos BS.docx")); laukta["Rangos BS.docx"] = "PSR_LT_BS";
+    const B = await tikrink(failai), blogi = [], nukr = d => { const x = B.palyg[d.id]; return x && x.rez ? x.rez.pakeitimai.filter(p => p.rusis === "nukrypimas") : null; };
+    B.docs.filter(d => laukta[d.name]).forEach(d => { const x = B.palyg[d.id], n = nukr(d);
+      if (!x || x.forma !== laukta[d.name]) blogi.push(d.name + ": forma " + (x && x.forma));
+      else if (n.length) blogi.push(d.name + ": " + n.slice(0, 3).map(p => p.op + " " + (p.dok || p.forma).slice(0, 70)).join(" | ")); });
+    lygu(blogi, [], "nukrypimai");
+    const m = nukr(B.docs.find(d => d.name === "Rangos SS B pakeista.docx"));
+    lygu([m.length, m[0] && m[0].op], [1, "pakeista"], "mutacija: " + JSON.stringify(B.palyg[B.docs.find(d => d.name === "Rangos SS B pakeista.docx").id].rez.pakeitimai.filter(p => /teisę vienašališkai|sumokėta Rangovui/.test((p.dok || "") + (p.forma || ""))).map(p => [p.op, p.rusis, p.poRusis, (p.dok || "").slice(0, 50), (p.forma || "").slice(0, 50)])));
+    tiesa(/Projektavimo ir statybos rangos sutartis · specialiosios sąlygos · LT/.test(D.getElementById("tkp-dokumentai").textContent), "formos pavadinimas");
+    // nuorodos: Word automatinės numeracijos punktai - su emuliuotais numeriais (iki 2026-10-10 - „nepatikrinta“)
+    const sn = B.sutNuorodos;
+    tiesa(sn && !sn.priezastis && sn.nuorodu > 50 && !sn.radiniai.length, "sutarties nuorodos: " + JSON.stringify(sn && { p: sn.priezastis, n: sn.nuorodu, r: (sn.radiniai || []).slice(0, 3) }));
+  });
+  await testas("Modulyje: rangos sutartis 1 žingsnyje (be klausimo - projektavimas ir rangos darbai), 2 žingsnyje - rangos klausimai SS punktų tvarka; paketas su PSR BS ir SS; patikroje - etapų lentelė viena eilute ir Word užduotys; nuorodų ir privalomų elementų eilutės", async () => {
+    const iv = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); };
+    const tipas = D.querySelector("input[name=tipas][value=darbai]"); tipas.checked = true; tipas.dispatchEvent(new W.Event("change", { bubbles: true }));
+    iv("pavadinimas", "330 kV skirstyklos darbo projekto parengimo ir rangos darbų");
+    const b = D.getElementById("budas"); b.value = "T-SD"; b.dispatchEvent(new W.Event("change"));
+    W.SUTARTIES_BLOKAS.atnaujink();
+    lygu([W.SUTARTIES_BLOKAS.busena().pasirinkta && W.SUTARTIES_BLOKAS.busena().pasirinkta.seima, W.SUTARTIES_BLOKAS.busena().sablonai], ["PROJEKTAVIMO_STATYBOS", { BS: "PSR_LT_BS", SS: "PSR_LT_SS" }], "1 žingsnis");
+    W.rodyk(1); D.getElementById("sbPatv").click(); W.rodyk(2); await W.iStep2();
+    await kol(() => D.querySelector("#sutartiesForma #sf-objektas"), "rangos klausimai");
+    const Fv = () => D.getElementById("sutartiesForma");
+    lygu([...Fv().querySelectorAll(".lk-sutartis-g")].map(h => h.textContent), ["Pagrindinės sąlygos", "Darbai", "Darbų organizavimas", "Kaina ir apmokėjimas", "Atsakomybė", "Baigiamos nuostatos", "Papildomos sąlygos"], "grupės");
+    tiesa(/Rangovo duomenys, registracijos valstybė/.test(Fv().textContent), "pildoma sudarant - rangos sąrašas");
+    const ans = (id, v) => { const r = Fv().querySelector('input[name="sf-' + id + '"][value="' + v + '"]'); r.checked = true; r.dispatchEvent(new W.Event("change", { bubbles: true })); };
+    const lauk = (id, v) => { const e = Fv().querySelector('[data-sf="' + id + '"]:not([type=radio])'); e.value = v; e.dispatchEvent(new W.Event("change", { bubbles: true })); };
+    for (const [k, v] of Object.entries(PSR_A)) {
+      const q = F.KLAUSIMAI_PSR.find(x => x.id === k);
+      if (q && (q.tipas === "taipne" || q.tipas === "variantai")) ans(k, v);
+    }
+    for (const [k, v] of Object.entries(PSR_A)) {
+      const q = F.KLAUSIMAI_PSR.find(x => x.id === k);
+      if (!q || (q.tipas !== "taipne" && q.tipas !== "variantai")) lauk(k, v);
+    }
+    if (Fv().querySelector(".lk--siuloma")) D.getElementById("sfPatvVisas").click();
+    tiesa(!Fv().querySelector(".lk--neuzpildyta"), "liko neatsakytų: " + [...Fv().querySelectorAll(".lk--neuzpildyta .lk-kl")].map(h => h.textContent).join(" | "));
+    const rez = await W.generuoti(), s = rez.filter(r => r.sutartis && r.blob);
+    lygu(s.map(r => r.d.trumpas), ["PSR_LT_BS", "PSR_LT_SS"], "sutarties dokumentai pakete: " + JSON.stringify(rez.filter(r => r.sutartis && !r.blob).map(r => r.sutartis.klaidos)));
+    const ss = s[1], pt = ss.audit.patikrinti.map(x => x.text);
+    tiesa(pt.filter(t => /^1\.1 priedas p\.: lentelės langeliai \(16\)/.test(t)).length === 1 && pt.some(t => /Pildymo sąlygos.*Word/.test(t)), "patikra: " + pt.join(" | "));
+    W.rodykRezultata(rez);
+    tiesa(/Nuorodos į punktus ir priedus: patikrinta \d+, visos rodo į esamus/.test((D.getElementById("sutartiesNuorodos") || {}).textContent || ""), "nuorodų eilutė: " + ((D.getElementById("sutartiesNuorodos") || {}).textContent || "nėra"));
+    tiesa(/Privalomi sutarties elementai \(.*\): rasta 13 iš 13\.$/.test((D.getElementById("sutartiesElementai") || {}).textContent || ""), "elementų eilutė: " + ((D.getElementById("sutartiesElementai") || {}).textContent || "nėra"));
   });
 }
 
@@ -4514,6 +4721,7 @@ async function testaiSutarciuNuorodos(){
     await testaiSutartiesForma();
     await testaiSutartisSPS();
     await testaiSutarciuTikrinimas();
+    await testaiRangosGeneravimas();
     await testaiSutartysPages();
     await testaiSutarciuNuorodos();
     document.getElementById("busena").textContent =

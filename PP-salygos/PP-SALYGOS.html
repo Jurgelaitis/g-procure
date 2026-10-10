@@ -5668,20 +5668,28 @@ async function sutartiesDokumentai(){
   const reg = await gaukJson('zemelapiai/sutarciu-versijos.json');
   const out = [];
   for (const tip of ['BS', 'SS']){
-    const kod = SB.sablonai[tip], R = reg.sablonai[kod];
-    const r = await GP_SUTARCIU_GEN.generuok(await gaukBuf('templates/sutartys/' + kod + '.docx'), await gaukJson('zemelapiai/sutartys/' + kod + '.json'),
+    const kod = SB.sablonai[tip], R = reg.sablonai[kod], Zs = await gaukJson('zemelapiai/sutartys/' + kod + '.json');
+    const r = await GP_SUTARCIU_GEN.generuok(await gaukBuf('templates/sutartys/' + kod + '.docx'), Zs,
       tip === 'SS' ? F.S : {}, { sablonas: kod, forma: R ? R.dabartine : '', data: GP_EKSPORTAS.siandien(), di: SB.kalba === 'LTEN' ? sutartiesDiSavybes(tip) : null });
-    const A = r.ataskaita, kita = A.palikta.filter(p => p.kodel !== 'sudarant');
+    const A = r.ataskaita, kita = [];
+    // rangos SS etapų priedo lentelės langeliai - viena eilutė (2026-10-10)
+    A.palikta.filter(p => p.kodel !== 'sudarant').forEach(p => {
+      const lauk = p.rusis === 'laukas' && kita.find(q => q.rusis === 'laukas' && q.vieta === p.vieta && q.kodel === p.kodel);
+      if (lauk) lauk.n++; else kita.push(Object.assign({ n: 1 }, p));
+    });
+    kita.forEach(p => { if (p.rusis === 'laukas' && p.n > 1) p.aprasas = `lentelės langeliai (${p.n})`; });
     out.push({ d: { trumpas: kod, pavadinimas: (R ? R.pavadinimas : kod) + (SB.kalba === 'LTEN' ? ' (LT/EN)' : ''), dokumentas: tip === 'BS' ? 'Sutarties BS' : 'Sutarties SS' },
-      blob: r.blob, sutartis: A, stats: {}, forma: false,
+      blob: r.blob, sutartis: A, stats: {}, forma: false, wordNumeracija: Zs.numeracija === 'word',
       audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0,
                patikrinti: kita.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` }))
-                 .concat(tip === 'SS' ? (F.derinimas || []).map(t => ({ text: t })) : [])
+                 .concat(tip === 'SS' ? (F.derinimas || []).concat(F.perspejimai || []).map(t => ({ text: t })) : [])
                  .concat(A.pakeista.filter(p => p.ka === 'nuoroda').map(p => ({ text: `${p.vieta} p.: „${p.buvo}“ - „${p.tapo}“ (nurodytas punktas pašalintas)` }))) } });
   }
   // Nuorodos į punktus ir priedus (2026-10-09): sugeneruotose BS ir SS - tik į esamus punktus ir SS priedų sąrašo priedus
   if (window.GP_SUTARCIU_NUORODOS && out.length === 2 && out.every(o => o.blob)){
-    const T = await Promise.all(out.map(async o => (await GP_PALYGINIMAS.skaityk(o.blob)).pastraipos.map(p => p.t)));
+    // rangos sutartys (2026-10-10): punktų numeriai - Word sąrašai, todėl tekstai su emuliuotais Word numeriais
+    const T = await Promise.all(out.map(async o => o.wordNumeracija ? (await GP_SUTARCIU_NUORODOS.tekstai(await o.blob.arrayBuffer())).tekstai
+                                                                     : (await GP_PALYGINIMAS.skaityk(o.blob)).pastraipos.map(p => p.t)));
     const n = GP_SUTARCIU_NUORODOS.tikrink({ bs: T[0], ss: T[1] });
     out.forEach(o => { o.sutartis.nuorodos = n; });
     n.radiniai.forEach(x => out[x.dok === 'BS' ? 0 : 1].audit.patikrinti.push({ text:
