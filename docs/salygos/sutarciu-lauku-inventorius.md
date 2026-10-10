@@ -197,6 +197,10 @@ apmokėjimas, netesybos, derinimo terminai, užtikrinimas). Bendri su SPS: užti
   GPNum), rangos priedų sąrašas atpažįstamas („priede Nr. 1.1“); privalomi sutarties elementai - ir „Sutarties kaina yra fiksuota“,
   „Subrangovai“; palyginimas su forma - neprivalomi punktai, nurodymų blokai ir priedo skyrius - pasirenkamos dalys, esminės sąlygos -
   užpildyta vieta. Išmatuota: abu atsakymų rinkiniai ir BS - 0 nukrypimų su pasu ir be jo, nuorodos ir 13 iš 13 elementų rasta.
+- Pages (S5, 2026-10-10): etapų priedas - atskirame gulsčiame faile „Sutarties SS priedas 1.1“ (`generuok()` -> `priedas`), SS 21 derinimo
+  terminų lentelė - pagrindinės lentelės eilutėmis (`isvyniok`), įrašyta reikšmė - to paties šrifto kaip jos sakinys; šablono paruošimas -
+  kairysis stulpelis 1814 DXA, punktų numerių šriftas, sujungta langelių pora, SS 3 pratęsimo sakinys ir SS 12 sakinio pabaiga - įprastu
+  šriftu (jūsų sprendimas 2026-10-10; `sutarciu-sablonai.py` `STULPELIAI`, `FORMATAS`, `IPRASTAS_SRIFTAS`).
 
 ## Jūsų sprendimai (2026-10-10: „Taip, įgyvendinkite visus penkis punktus taip, kaip jūs siūlote.“)
 
