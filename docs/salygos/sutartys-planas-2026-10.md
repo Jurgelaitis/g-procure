@@ -567,7 +567,7 @@ laiške LITGRID (`~/Documents/g-procure-privatu/sutartys/laiskas-LITGRID-sutarci
 | Etapas | Turinys | Priėmimo kriterijus |
 |---|---|---|
 | S0 | Matavimas: šablonų auditas, kalibravimas (386 sutartys), prototipas | **padaryta 2026-10-07** |
-| S1 | Šablonų paruošimas: redakcijų registras, `templates/sutartys/`, kartografas visiems žymėjimo būdams, žemėlapiai, redakcinių klaidų taisymai, blokuojančių šeimų žymė | kiekvienas šablonas - žemėlapis be neatpažintų vietų; taisymai pakartotinai - 0; testai su mutacijomis **prekėms ir paslaugoms padaryta 2026-10-08** (žr. žemiau); kitos šeimos - tuo pačiu keliu |
+| S1 | Šablonų paruošimas: redakcijų registras, `templates/sutartys/`, kartografas visiems žymėjimo būdams, žemėlapiai, redakcinių klaidų taisymai, blokuojančių šeimų žymė | kiekvienas šablonas - žemėlapis be neatpažintų vietų; taisymai pakartotinai - 0; testai su mutacijomis **prekėms ir paslaugoms padaryta 2026-10-08** (žr. žemiau); **projektavimo ir statybos rangai - 2026-10-10** (3 etapas, žr. žemiau); kitos šeimos - tuo pačiu keliu |
 | S2 | Parinkimo variklis (`PP-salygos/sutartys.js`, `GP_SUTARTYS.parink`) + taisyklių lentelė + kalibravimo testų rinkinys | 0 neteisingų automatinių parinkimų rinkinyje; >= 70 % be klausimų; stebėjimo režimas - generatorius siūlo, žmogus patvirtina, neatitikimai renkami **variklis padarytas 2026-10-08** (žr. žemiau); stebėjimo režimo sąsaja - S3 |
 | S3 | UX: blokas „Sutarties projektas“ 1 žingsnyje, klausimai K0-K5, sutarties laukai 2 žingsnyje, bendri SPS ir sutarties laukai | telefonas 375 / 320 px, prieinamumas, „Siūloma (nepatvirtinta)“ **1 žingsnio blokas padarytas 2026-10-08** (žr. žemiau); 2 žingsnio sutarties laukai - kartu su S4 |
 | S4 | Generavimas ir patikra po generavimo (4.5), pasas, tikrinimo skirtukas atpažįsta sutarčių formas | kiekvienai šeimai - sugeneruotas paketas be leistinų skirtumų už žemėlapio; mutacijos pagaunamos **prekėms ir paslaugoms padaryta 2026-10-08** (generavimas, 2 žingsnio klausimai, paketas - `docs/salygos/sutarciu-lauku-inventorius.md`); **2026-10-09 - SPS „Esminės sutarties sąlygos“ šalinimas, tiesioginis atsiskaitymas, žaliųjų derinimas ir tikrinimo skirtukas (4.4); nuorodų sargas (4.5 3 p.: `sutarciu-nuorodos.js`, 3 žingsnis ir tikrinimo skirtukas; šablonuose klaidų nebeliko, rasta ir ištaisyta SS 9.8 nuoroda į pašalintą 8.3.2)**; **PĮ 95 str. katalogas (4.5 4 p.: `shared/sutarties-elementai.js`, tikrinimo skirtukas ir 3 žingsnis) - 2026-10-09** |
@@ -600,6 +600,35 @@ statybos rangos, eksploatavimo (po BS gavimo).
 - Pages aukštose abipusiai lygiuotose lentelės eilutėse nukerpa paskutinę eilutę (taip buvo ir prieš A4) - generuojant tvarkys `GPLent`
   (kaip pirkimo sąlygose).
 Generatorius sutarčių dar nenaudoja - tai S2-S4.
+
+**S1 projektavimo ir statybos rangai (3 etapas, 2026-10-09/10; jūsų „LITGRID 2026-10-05 rangos šablonai yra galutiniai“).**
+`PSR_LT_BS` ir `PSR_LT_SS` (LT/EN nėra) - tame pačiame registre ir tuo pačiu keliu; šių šablonų žymėjimas kitoks nei prekių ir paslaugų
+(be spalvų ir valdiklių), todėl paruošimo skriptas papildytas:
+- **Word numeracija** (`word_numeriai`, kaip `GPNum`): SS punktai ir BS sąvokos sunumeruoti tik Word - žemėlapio vieta yra Word numeris
+  (BS „1.1.2.13“, SS „10“); po SS lentelės - atskiros sritys („priedų sąrašas“, „parašai“, „1.1 priedas“), kad priedų sąrašo „1.“-„23.“
+  nesimaišytų su SS punktais. Patikrinta: SS nuorodos į BS sąvokas ir punktus („[Sąvoka 1.1.2.13 punktas]“ ir kt.) rodo į teisingus BS
+  punktus, išskyrus SS 1.5 „[Sąvoka 1.1.2.9.]“ (žr. 8 sk. sprendimus).
+- **„//“ nurodymai ir „arba“** - aprašyti blokais (`BLOKAI`): 8 vietos, kur įrašomas tekstas (objektas, techninė užduotis, pagrindiniai
+  įrenginiai, fizinė sauga, dalinis apmokėjimas, ES fondai, BIM, investicinis projektas), 3 pasirinkimai (apmokėjimas, netesybos,
+  užtikrinimas), 4 derinimo terminų pasirinkimai („Turi būti pasirinkta:“), 7 neprivalomi punktai (etapai, grafikas, ekspertizė, atjungimai,
+  garantinis užtikrinimas, esminės sąlygos, kitos nuostatos) ir etapų priedo „Pildymo sąlygos“. Kiekvienas „//“ ir „arba“ turi būti bloke -
+  kitaip neatpažinta vieta (testas su mutacijomis).
+- **Žodžiai laužtiniuose skliaustuose** („[Rangovo pavadinimas]“, „[]“) - pildomos vietos su etikete; „[Sąvoka ...]“, „[2.2.3. punktas]“ -
+  BS nuorodos (sutarties tekstas); rekvizitai sakinio viduje (LITGRID kodas, adresas, sąskaita) ir „ĮMONĖS PAVADINIMAS“ sakinyje - po vieną įrašą.
+- **Keli skyriai** (SS gulsčias etapų priedas) ir **įdėtinė lentelė** (SS 16 p.); BS teksto laukas „LT“ (pastraipa pastraipoje) - pastraipos
+  skaičiuojamos kaip naršyklėje.
+- **Vidinė grupės taisyklė „//“ nurodyme** (SS 19 p. užtikrinimo riba) - kaip komentarai: į saugyklą nekeliama, skaičius pakeistas žodžiais
+  „vidaus taisyklėse nustatytos ribos“, originalas - privačiame komentarų faile (sutartyje nurodymų nelieka). Patvirtinta 2026-10-10.
+- **Redakciniai taisymai** (privatus `taisymai_7.py`, kopija `originalai-2026-10-09d/`): BS - 31 rašybos ir skyrybos vieta (pvz. „gražin-“,
+  „gali būtų“, „Excel, Word“, „Sutarties specialiosiose sąlygose“), 15 dvigubų tarpų, 9.1.10.7 a)-e) stilius ir turinio eilutė; SS - 5
+  („užtikrinamas“, „pateikiama nuoroda“, skliaustas, „koordinatorius“); pakartotinai - 0.
+- **Teisės aktų nuorodos** (6.1): 23 naujos PSR nuorodos patikrintos e-tar ir įrašytos (`sutarciu-teises-nuorodos.json`, 90 iš viso):
+  Statybos, Valstybinio socialinio draudimo, Atliekų tvarkymo, Specialiųjų žemės naudojimo sąlygų įstatymai, STR 1.04.02:2011, 1.04.04:2017,
+  1.06.01:2016, darboviečių nuostatai, Lietuvos banko draudimo taisyklės, F-dujų tvarka, elektros tinklų apsaugos taisyklės, ICC URDG 758,
+  CK ir NSOAĮ dalys; radiniai T4 (VPĮ ir PĮ sąvokų straipsnio dalys pavadintos „punktais“) ir T5 (pasenęs STR 1.04.02:2011 pavadinimas).
+Numeracijos, nuorodų ir terminų netikslumai (8 sk. 12 p. a-i) - ištaisyti 2026-10-10 jūsų sprendimu (privatus `taisymai_8.py`, kopija
+`originalai-2026-10-10/`): SS punktai 1-29, SS 5 p. nuoroda į 1.1.2.14, delspinigių pakopos, grafiko formos sakinys, el. paštas, BS 5.2.3.1
+raidės, 11.3.4 Rangovas, 2.3.12 sąvoka, T4 ir T5. Turinio klausimai - laiško LITGRID juodraštis (privatus, 2026-10-10). Generavimas (S4) - kitame žingsnyje.
 
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
@@ -666,3 +695,19 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
 9. **Grupės užtikrinimo taisyklė** iš SS komentarų - ar generatorius ją siūlo (kaip „Siūloma“, su šaltiniu), ar tik rodo paaiškinime?
 10. **Redakcijų valdymas:** kas praneša apie naujas redakcijas ir ar galima žymėti failus redakcijos kodu (kaip Amber Grid „SUT-36 10.0“)?
 11. ~~**Puslapio formatas**~~ - atsakyta 2026-10-08: **A4** (padaryta šablonuose, S1).
+12. ~~**Projektavimo ir statybos rangos šablonai (3 etapas, 2026-10-10)**~~ - atsakyta 2026-10-10: „Taip, ištaisykite a-i, 803 pakeitimas
+    tinka.“ - ištaisyta šablone (`taisymai_8.py`). Buvo klausta:
+    - a) SS punktų numeracija: dabar 1.1-1.5, po to vėl „1.“-„24.“ (nuorodų į SS punktus nėra). Rekomenduoju vientisą 1-29.
+    - b) SS 1.5 „[Sąvoka 1.1.2.9.]“ -> „[Sąvoka 1.1.2.14. punktas]“ (1.1.2.9 - „Įrenginiai“, 1.1.2.14 - „Pagrindiniai įrenginiai“).
+    - c) BS 11.3.4 „pagal Projektuotojo perduotus“ -> „pagal Rangovo perduotus“ (šalis - Rangovas).
+    - d) „info@Įmonės pavadinimas.eu“ (SS 14 p., BS 7.3.3) -> „info@litgrid.eu“, kaip kiti LITGRID rekvizitai.
+    - e) BS 5.2.3.1 a), b), c), e), f), g) -> a)-f) (praleista d)).
+    - f) SS 10 p. delspinigių pakopos: „nuo 31 iki 60 dienų (įskaitytinai)“, „nuo 61 iki 180 dienų (įskaitytinai)“ (dabar 31-a ir 61-a dienos nepatenka į jokią pakopą).
+    - g) SS 15 p.: keičiant BS 2.3.1 p. antrą sakinį išlaikyti „pagal tipinę Užsakovo Grafiko formą (šabloną)“.
+    - h) BS 2.3.12 „Pagrindinės įrangos“ -> apibrėžta sąvoka „Pagrindinių įrenginių“.
+    - i) Teisės nuorodos: T4 - „VPĮ 2 straipsnio 39 punkte arba PĮ 2 straipsnio 15 punkte“ -> „dalyje“; T5 - STR 1.04.02:2011 dabartinis
+      pavadinimas „Inžineriniai geologiniai (geotechniniai) tyrimai“.
+    - j) Vidinė užtikrinimo riba „//“ nurodyme saugykloje pakeista žodžiais (kaip komentarai) - ar tinka?
+    Lieka laiškui LITGRID (turinys): BS 2.3.5 bauda ir delspinigiai, 8.3.1 „5 % arba daugiau“ ir išnaša, derinimo terminai BS ir SS,
+    projektuotojo draudimo suma ir procentų bazė, ypatingojo statinio vadovas, nenugalima jėga, rizikos perėjimas, Koordinatoriaus 23 ir 24 p.,
+    statybos ir projektavimo-statybos BS skirtumai (4.9.4 ir 5.9.4 terminas), VPĮ sąvokos PĮ šablone.
