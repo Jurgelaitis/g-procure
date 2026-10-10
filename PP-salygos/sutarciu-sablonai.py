@@ -425,7 +425,12 @@ WORD_SEIMOS = {'PROJEKTAVIMO_STATYBOS'}
 #   irasyti     - nurodymas, kurio vietoje įrašomas tekstas (id, nurodymo pradžia)
 #   pasirinkimai - vienas iš variantų: (id, [(skyriklis - „//“ ar „arba“, varianto pirma pastraipa, paskutinė | None)])
 #   salyginiai  - neprivalomas punktas ar punktai: (id, „//“ nurodymas, [(pirma, paskutinė | None)] - kiekviena dalis atskirai)
+#   priedu_skyriai - priedas atskirame dokumento skyriuje (sritis, priedų sąrašo eilutės pradžia): generatorius gali jį pašalinti su
+#                 priedų sąrašo eilute (rangos SS etapų priedas, kai darbai etapais neskaidomi)
 #   nurodymu_blokai - nurodymų sąrašas, generuojant šalinamas visas: (id, „//“ antraštė, pirma, paskutinė)
+#   neprivalomos - šablono sakiniai be „//“, kurie pagal bendrąsias sąlygas taikomi tik tam tikru atveju (naudotojo sprendimas 2026-10-10:
+#                 SS 3 pratęsimo sakinys - BS 2.2.2, SS 6 Užsakovo įrenginiai - BS 4.9.8, SS 8 demontuojami įrenginiai): (id, pirma,
+#                 paskutinė | None) - generatorius juos pašalina arba pakeičia tekstu „Punktas netaikomas.“
 #   sritys      - nuo nurodytos pastraipos žemėlapio vieta prasideda srities vardu (Word numeriai ten - kito sąrašo, ne SS punktai)
 BLOKAI = {'PSR_LT_SS': {
     'sritys': [('priedų sąrašas', 'SUTARTIES DOKUMENTAI IR PRIEDAI:'), ('parašai', 'Užsakovo vardu:'), ('1.1 priedas', '[OBJEKTAS]')],
@@ -447,13 +452,18 @@ BLOKAI = {'PSR_LT_SS': {
         ('etapai', '//Jei Darbai atliekami etapais', [('Darbus Rangovas turi atlikti priede Nr.', None)]),
         ('grafikas', '// punktas įrašomas, jei Grafiką', [('Sutarties bendrųjų sąlygų 2.3.1. punkto', 'Grafiką Rangovas turi parengti pagal tipinę')]),
         ('ekspertizė', '// punktas įrašomas, jei Techninio darbo projekto', [('Sutarties bendrųjų sąlygų 3.3.10. punkto', 'Ekspertizės aktą Užsakovo')]),
-        ('atjungimai', '// punktas papildomas, jei yra galimybė', [('Sutarties bendrųjų sąlygų 4.5.1. punktą', '[...];')]),
+        ('atjungimai', '// punktas papildomas, jei yra galimybė', [('Sutarties bendrųjų sąlygų 4.5.1. punktą', 'elektros oro linijų remontui'),
+                                                                      ('[...];', None)]),   # antra dalis - papildomų terminų eilutė
         ('garantinis_užtikrinimas', '//įrašoma, kai atliekami nedidelės vertės', [('Sutarties bendrųjų sąlygų 9.9. punktas', None)]),
         ('esminės_sąlygos', '// įrašomos Sutarties sąlygos, dėl kurių', [('Esminėmis yra laikomos šios Sutarties sąlygos:', None)]),
         ('kitos_nuostatos', '// pagal poreikį įrašomos kitos nuostatos', [('Vadovaujantis Sutarties bendrųjų sąlygų 4.1.12', None),
                                                                          ('Esant Sutarties bendrųjų sąlygų 5.2.5', None),
                                                                          ('Rangovas ir Užsakovas susitaria, kad Koordinatorius', None)])],
-    'nurodymu_blokai': [('pildymo_sąlygos', '//Pildymo sąlygos:', 'Lentelė pildoma tik tuo atveju', 'Mokėtinos sumos stulpelis')]}}
+    'nurodymu_blokai': [('pildymo_sąlygos', '//Pildymo sąlygos:', 'Lentelė pildoma tik tuo atveju', 'Mokėtinos sumos stulpelis')],
+    'neprivalomos': [('pratęsimas', 'Darbų atlikimo terminas Šalių raštišku susitarimu gali būti pratęstas', None),
+                     ('užsakovo_įrenginiai', 'Darbų atlikimui Užsakovas pateikia šiuos Įrenginius', 'Nurodytus Įrenginius ir Medžiagas Užsakovas'),
+                     ('demontuojami', 'Rangovas demontuotus tolimesniam naudojimui', None)],
+    'priedu_skyriai': [('1.1 priedas', 'Projektavimo ir statybos darbų etapai;')]}}
 # Tušti laukai: ką pildo generatorius, ko - niekas iki sutarties sudarymo
 LAUKAI_GENERATORIUS = re.compile(r"^(Sutarties pavadinimas|Title of the Contract|3\.2\.|\d+\.\d+\. (Priedas Nr\.|Annex))")
 # Valdiklių atsakymai - sutarčių plano 3.4 lentelė (naudotojo sprendimai 2026-10-07): (vietos pradžia | None, elementų požymis) -> šaltinis
@@ -733,6 +743,26 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
         h = rask(galva, 0); a = rask(v_pr, h + 1); z = rask(v_iki, a)
         Z['nurodymu_blokai'].append({'id': bid, 'vieta': pastr_info[h]['vieta'], 'i': h, 'apima': sritis(h + 1, z)})
         naudoti.update([h] + sritis(h + 1, z))
+    for bid, v_pr, v_iki in B.get('neprivalomos', []):
+        a = next((q for q in range(len(PS)) if PS[q].startswith(v_pr)), None)
+        z = a if (a is None or not v_iki) else next((q for q in range(a, len(PS)) if PS[q].startswith(v_iki)), None)
+        if a is None or z is None:
+            raise SystemExit('%s: neprivalomos vietos „%s“ pastraipa nerasta' % (kodas, bid))
+        Z.setdefault('neprivalomos', []).append({'id': bid, 'vieta': pastr_info[a]['vieta'], 'pastraipos': sritis(a, z)})
+    # priedų sąrašas (Word numeriai - priedų numeriai SS nuorodoms „priede Nr. ...“) ir priedai atskiruose skyriuose
+    if B.get('priedu_skyriai'):
+        Z['priedai'] = [{'i': inf['i'], 'nr': inf['vieta'][len('priedų sąrašas '):], 'tekstas': PS[inf['i']]} for inf in pastr_info
+                        if inf['vieta'].startswith('priedų sąrašas ') and PS[inf['i']] and wn and wn[inf['i']]]
+        galai = [i for i, (pos, p) in enumerate(pars) if re.search(r'<w:pPr>(?:(?!</w:pPr>).)*<w:sectPr', p, re.S)]
+        Z['skyriai'] = []
+        for sv, eil in B['priedu_skyriai']:
+            pr = next((x for x in Z['priedai'] if x['tekstas'].startswith(eil)), None)
+            nuo = next((inf['i'] for inf in pastr_info if inf['vieta'] == sv), None)
+            if pr is None or nuo is None or not galai or galai[-1] != nuo - 1:
+                raise SystemExit('%s: priedo „%s“ skyrius ar priedų sąrašo eilutė nerasta (priedas turi būti paskutinis skyrius)' % (kodas, sv))
+            if sv != pr['nr'] + ' priedas':
+                raise SystemExit('%s: priedo „%s“ numeris priedų sąraše - %s' % (kodas, sv, pr['nr']))
+            Z['skyriai'].append({'sritis': sv, 'nuo': nuo, 'iki': len(PS) - 1, 'luzis': nuo - 1, 'priedas': pr['nr']})
     for q in dvigubi:
         if q not in naudoti:
             Z['neatpazinta'].append({'i': q, 'vieta': pastr_info[q]['vieta'], 'tekstas': '„//“ nurodymas be bloko: ' + PS[q][:100], 'spalva': ''})
@@ -822,6 +852,8 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
                 for e in v:
                     if isinstance(e, dict) and e.get('i') is not None and 'stulpelis' not in e:
                         e['stulpelis'] = pastr_info[e['i']]['stulpelis']
+    if wn:
+        Z['numeracija'] = 'word'   # punktų numeriai - Word sąrašai (generatorius perkelia numerį, kai pašalinama numeruota pastraipa)
     Z['suvestine'] = {k: len(v) for k, v in Z.items() if isinstance(v, list) and k != 'pastraipos'}
     return Z
 

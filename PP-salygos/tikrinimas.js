@@ -46,7 +46,7 @@
     ne_is_saraso: "pasirinkimo vietoje - tekstas, kurio formos sąraše nėra", salinama: "pašalintas šablono nurodymas ar pildymo vieta" };
   var SEIMOS = { AK: "Atviras konkursas", AKV: "Atviras konkursas VPĮ", SSD: "Skelbiamos derybos (supaprastintas)", TSD: "Skelbiamos derybos (tarptautinis)",
     ND: "Neskelbiamos derybos", MVP: "Mažos vertės pirkimas", DPSK: "DPS sukūrimas", DPSP: "Konkretus pirkimas pagal DPS",
-    PREKES: "Prekių pirkimo-pardavimo sutartis", PASLAUGOS: "Paslaugų pirkimo-pardavimo sutartis" };
+    PREKES: "Prekių pirkimo-pardavimo sutartis", PASLAUGOS: "Paslaugų pirkimo-pardavimo sutartis", PSR: "Projektavimo ir statybos rangos sutartis" };
   var SUTARTIES_DALIS = { BS: "bendrosios sąlygos", SS: "specialiosios sąlygos" };
   var VAIDMENU_TVARKA = ["sps", "bps", "skelbimas", "ts", "sutartis", "sutartis_bendrosios", "pasiulymas", "paraiska", "ebvpd", "paaiskinimas", "priedas", "kita"];
   var ATPAZINIMO_RIBA = 0.5, ATPAZINIMO_SKIRTUMAS = 0.05;   // išmatuota 2026-10-06: tikri SPS 0,57-0,76, BPS 1,0; antra forma - bent 0,08 mažiau
@@ -121,7 +121,7 @@
         if (sz.leidziami[x.i]) x.leidziami = sz.leidziami[x.i];
         if (sz.variantai[x.i]) x.variantai = sz.variantai[x.i];
       });
-      return { id: id, ps: r.pastraipos, zem: { blokai: sz.blokai }, sutartis: true };
+      return { id: id, ps: r.pastraipos, zem: { blokai: sz.blokai }, sutartis: true, wordNumeracija: zem.numeracija === "word" };
     })().catch(function (e) { delete sablonai[id]; throw e; });
     return sablonai[id];
   }
@@ -200,6 +200,22 @@
       if (tc) while (iki + 1 < P.length && tevas(P[iki + 1], "tc") === tc) iki++;
       blokai.push({ blokas: { nuo: x.i, iki: iki } });
     });
+    // Rangos SS (2026-10-10): „//“ neprivalomi punktai (su tuščia pastraipa po jų), nurodymų blokai, priedas paskutiniame
+    // skyriuje su priedų sąrašo eilute - pasirenkamos dalys; „//“ nurodymai šalinami; po esminių sąlygų užrašo - įrašytos sąlygos
+    (Z.salyginiai || []).forEach(function (b) {
+      var visos = b.dalys.reduce(function (s, x) { return s.concat(x); }, []);
+      var iki = Math.max.apply(null, visos);
+      blokai.push({ blokas: { nuo: b.i, iki: Z.pastraipos[iki + 1] === "" ? iki + 1 : iki } });
+      b.dalys.forEach(function (d) { blokai.push({ blokas: { nuo: Math.min.apply(null, d), iki: Math.max.apply(null, d) } }); });
+      if (/^esmin/.test(b.id)) visos.forEach(function (i) { if (/:$/.test(String(Z.pastraipos[i] || ""))) vietaPo[i] = 1; });
+    });
+    (Z.nurodymu_blokai || []).forEach(function (b) { [b.i].concat(b.apima).forEach(function (i) { salinama[i] = 1; }); });
+    // sakiniai, taikomi tik tam tikru atveju (rangos SS 3, 6, 8 p.): pašalinti arba pakeisti „Punktas netaikomas.“ - pasirenkama dalis
+    (Z.neprivalomos || []).forEach(function (b) { blokai.push({ blokas: { nuo: Math.min.apply(null, b.pastraipos), iki: Math.max.apply(null, b.pastraipos) } }); });
+    (Z.skyriai || []).forEach(function (k) {
+      blokai.push({ blokas: { nuo: k.luzis, iki: k.iki } });
+      (Z.priedai || []).filter(function (q) { return q.nr === k.priedas; }).forEach(function (q) { blokai.push({ blokas: { nuo: q.i, iki: q.i } }); });
+    });
     return { vieta: vieta, vietaPo: vietaPo, salinama: salinama, leidziami: leidziami, variantai: variantai, blokai: blokai };
   }
   /* Ankstesnės patikros ataskaita - Word failas su customXml dalimi NS_ATASKAITA (žr. ataskaita()). */
@@ -247,6 +263,10 @@
             if (at && !at.klaida) { ankstesne = at; ankstesne.vardas = bazinis(d.name); d.buf = null; continue; }
             try { var pr = await P().skaityk(d.buf); palyg[d.id] = { ps: pr.pastraipos, pasas: pr.pasas }; }
             catch (e) { palyg[d.id] = { klaida: e.message }; }
+            // Word automatinės numeracijos punktai (rangos sutartys, 2026-10-10) - nuorodų patikrai tekstai su emuliuotais numeriais
+            if (palyg[d.id].ps && global.GP_SUTARCIU_NUORODOS && global.GP_SUTARCIU_NUORODOS.tekstai) {
+              try { var tn = await global.GP_SUTARCIU_NUORODOS.tekstai(d.buf); if (tn.wordNumeriu) palyg[d.id].psNr = tn.tekstai; } catch (e) { /* lieka be Word numerių */ }
+            }
             d.buf = null;
           }
           docs.push(d);
@@ -306,6 +326,7 @@
       var f = null;
       if (indeksas && indeksas.formos[x.forma]) f = await gaukForma(x.forma);
       else if (!pagalPasa) throw new Error("formos " + x.forma + " modulyje nėra");
+      x.wordNumeracija = !!(f && f.wordNumeracija);
       if (pagalPasa) {
         x.rez = P().pagalPasa(x.pasas, x.ps, f ? f.ps : []);
         var dab = indeksas && indeksas.formos[x.forma] && indeksas.formos[x.forma].dabartine;
@@ -340,8 +361,8 @@
     return "P" + P().maisa(r.id + "|" + (c || r.tekstas || ""));
   }
   /* Sutarties nuorodos (2026-10-09, GP_SUTARCIU_NUORODOS): pakete - sutarties specialiosios ir (ar) bendrosios sąlygos (atpažinta forma arba
-     vaidmuo); kiekviena nuoroda į punktą ar priedą turi rodyti į esamą tos sutarties punktą ar priedą. Tik Word (DOCX) tekstas su
-     numeriais tekste (Word automatinės numeracijos punktai neturi teksto numerio - tada nepatikrinta). */
+     vaidmuo); kiekviena nuoroda į punktą ar priedą turi rodyti į esamą tos sutarties punktą ar priedą. Tik Word (DOCX) tekstas: numeriai
+     tekste arba (nuo 2026-10-10, rangos sutartys) Word automatinės numeracijos punktai su emuliuotais numeriais; kitaip - nepatikrinta. */
   function sutartiesDokai() {
     var tip = function (d) {
       var x = B.palyg[d.id] || {}, f = x.forma || "", v = vaidmuo(d);
@@ -355,9 +376,13 @@
     if (!global.GP_SUTARCIU_NUORODOS || !B.docs) return null;
     var D = sutartiesDokai();
     if (!D.SS && !D.BS) return null;
-    var tekstai = function (d) { var x = d && B.palyg[d.id]; return x && x.ps ? x.ps.map(function (y) { return y.t; }) : null; };
+    // punktų numeriai tekste: „5.2.“ ir vieno lygio „24.“ (rangos SS punktai 1-29)
+    var nr = function (t) { return t ? t.filter(function (x) { return /^\s*(\d+\.\d+|\d+\.(?!\d))/.test(x); }).length : 0; };
+    var tekstai = function (d) {
+      var x = d && B.palyg[d.id], t = x && x.ps ? x.ps.map(function (y) { return y.t; }) : null;
+      return t && x.psNr && (x.wordNumeracija || nr(t) < 20) ? x.psNr : t;   // Word numeracijos forma (rangos) - visada su Word numeriais
+    };
     var T = { BS: tekstai(D.BS), SS: tekstai(D.SS) }, maz = ["BS", "SS"].filter(function (k) { return D[k] && !T[k]; });
-    var nr = function (t) { return t ? t.filter(function (x) { return /^\s*\d+\.\d+/.test(x); }).length : 0; };
     if (maz.length || ["BS", "SS"].some(function (k) { return T[k] && nr(T[k]) < 20; }))
       return { D: D, priezastis: maz.length ? "su sutarties tekstu tikrinamas tik Word (DOCX) failas" : "punktų numeriai ne tekste (Word automatinė numeracija) - nuorodų patikrinti negalima" };
     var r = global.GP_SUTARCIU_NUORODOS.tikrink({ bs: T.BS, ss: T.SS });
