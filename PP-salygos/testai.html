@@ -3972,11 +3972,11 @@ const PSR_B = { objektas: "Transformatorių pastatas", darbu_terminas: "3", etap
   esmines_psr: "ne", sprogmenys: "ne", koordinatorius: "p28", apmokejimas_psr: "visa", netesybos: "pakopos", derinimas: "kiti",
   pratesimas: "ne", uzsakovo_irenginiai: "taip", uzsakovo_irenginiai_f: "Galios transformatorius - pagal Techninės užduoties 4 priedą.", uzsakovo_irenginiu_vieta: "Užsakovo sandėlyje, Kauno g. 1, Vilnius.",
   demontuoti: "ne" };
-async function rangosSutartis(ats, ctx){
+async function rangosSutartis(ats, ctx, info){
   const F = W.GP_SUTARTIES_FORMA, G = W.GP_SUTARCIU_GEN, { buf, Z } = await sutartiesSablonas("PSR_LT_SS");
-  const sp = F.sprendimai(Z, ctx || PSR_CTX, sfA(ats)), r = await G.generuok(buf, Z, sp.S, { sablonas: "PSR_LT_SS", tipas: "uint8array" });
-  const x = r.blob ? await docxPastraipos(r.blob) : null;
-  return { sp, r, Z, x, numeruota: x ? [...x.d.getElementsByTagNameNS(x.NS, "p")].filter(p => { const n = p.getElementsByTagNameNS(x.NS, "numId")[0]; return n && n.getAttribute("w:val") === "11"; })
+  const sp = F.sprendimai(Z, ctx || PSR_CTX, sfA(ats)), r = await G.generuok(buf, Z, sp.S, Object.assign({ sablonas: "PSR_LT_SS", tipas: "uint8array" }, info || {}));
+  const x = r.blob ? await docxPastraipos(r.blob) : null, xp = r.priedas ? await docxPastraipos(r.priedas) : null;   // xp - etapų priedas atskirame faile (S5)
+  return { sp, r, Z, x, xp, numeruota: x ? [...x.d.getElementsByTagNameNS(x.NS, "p")].filter(p => { const n = p.getElementsByTagNameNS(x.NS, "numId")[0]; return n && n.getAttribute("w:val") === "11"; })
     .map(p => [...p.getElementsByTagNameNS(x.NS, "t")].map(t => t.textContent).join("").replace(/\s+/g, " ").trim()) : [] };
 }
 async function testaiRangosGeneravimas(){
@@ -4017,8 +4017,8 @@ async function testaiRangosGeneravimas(){
     lygu(F.sprendimai(Z, Object.assign({}, PSR_CTX, { uztikrinimas: { taikomas: false } }), sfA(PSR_A)).derinimas.length, 1, "SPS be užtikrinimo, SS - 10 %");
     tiesa(/9,5 % numatomos vertės/.test(F.sprendimai(Z, Object.assign({}, PSR_CTX, { uztikrinimas: { taikomas: true, eur: 190000 } }), sfA(PSR_A)).derinimas.join(" ")), "SPS suma ne 10 %");
   });
-  await testas("A rinkinys (etapais): be klaidų; punktų numeriai 27 (be 22 ir 25), užtikrinimo 3 variantas - su numeriu; SS 6 ir 9 - „Punktas netaikomas.“, koordinatorius - 28 ir 29 punktai; įrašai ir šablono tekstas; nelieka „//“, „arba“, „Turi būti pasirinkta:“, „(pasirenkama“ - išskyrus etapų priedą (Word programoje); priedas ir du skyriai lieka", async () => {
-    const { r, x, numeruota } = await rangosSutartis(PSR_A);
+  await testas("A rinkinys (etapais): be klaidų; punktų numeriai 27 (be 22 ir 25), užtikrinimo 3 variantas - su numeriu; SS 6 ir 9 - „Punktas netaikomas.“, koordinatorius - 28 ir 29 punktai; įrašai ir šablono tekstas; nelieka „//“, „arba“, „Turi būti pasirinkta:“, „(pasirenkama“ - išskyrus etapų priedą (Word programoje); etapų priedas - atskirame gulsčiame faile, jo eilutė priedų sąraše lieka", async () => {
+    const { r, x, xp, numeruota } = await rangosSutartis(PSR_A);
     lygu(r.ataskaita.klaidos, [], "generavimas");
     const ps = x.ps, yra = re => ps.some(t => re.test(t));
     lygu(numeruota.length, 27, "numeruoti punktai: " + numeruota.length);
@@ -4040,9 +4040,10 @@ async function testaiRangosGeneravimas(){
     for (const re of [/^\/\//, /^arba$/, /^Turi būti pasirinkta:$/, /\(pasirenkama /, /\[dienos\/mėnesiai\]|\[pirkimo pavadinimas\]|\[OBJEKTAS\]|\[terminas\]|\[vieta, adresas\]|_{5,}Sutartyje/, /^Per 20 d\. d\. pastočių/,
                       /Ekspertizės aktą/, /Garantinių įsipareigojimų užtikrinimas“ netaikomas/, /Sutarties kaina bus mokama dalimis pagal atliktus/, /^\[\.\.\.\];$/])
       tiesa(!ps.some(t => re.test(t) && !/^\/\/Pildymo sąlygos/.test(t)), "liko: " + re);
-    tiesa(yra(/^\/\/Pildymo sąlygos:$/) && yra(/^\(rengiant sutartį pasirenkama/), "etapų priedo nurodymai - Word programoje");
+    tiesa(xp && xp.ps.some(t => /^\/\/Pildymo sąlygos:$/.test(t)) && xp.ps.some(t => /^\(rengiant sutartį pasirenkama/.test(t)) && !yra(/^\/\/Pildymo sąlygos:$/), "etapų priedo nurodymai - Word programoje (priedo faile)");
     tiesa(r.ataskaita.palikta.some(p => p.vieta === "1.1 priedas" && p.rusis === "laukas" && p.kodel === "word") && r.ataskaita.palikta.some(p => p.raktas === "nb:pildymo_sąlygos"), "palikta Word programai");
-    lygu([x.d.getElementsByTagNameNS(x.NS, "sectPr").length, yra(/^PROJEKTAVIMO IR STATYBOS DARBŲ ETAPAI$/), yra(/^Projektavimo ir statybos darbų etapai;$/)], [2, true, true], "etapų priedas lieka");
+    lygu([x.d.getElementsByTagNameNS(x.NS, "sectPr").length, yra(/^PROJEKTAVIMO IR STATYBOS DARBŲ ETAPAI$/), yra(/^Projektavimo ir statybos darbų etapai;$/), xp.ps.includes("PROJEKTAVIMO IR STATYBOS DARBŲ ETAPAI"),
+          xp.ps.includes("330 kV skirstykla Lietuvos elektrinėje")], [1, false, true, true, true], "etapų priedas - atskirame faile, priedų sąrašo eilutė lieka");
     // kitos nuostatos: su nurodymu šalinama ir tuščia pastraipa tarp jo ir punkto (gretimų eilučių netikrinama - GPLent skaido aukštą langelį)
     lygu(r.ataskaita.pasalinta.filter(p => p.vieta === "27").map(p => p.kodel), ["šablono nurodymas rengėjui", "tuščia pastraipa po nurodymo"], "27 punkto pašalintos pastraipos (visi trys punktai lieka)");
   });
@@ -4061,8 +4062,9 @@ async function testaiRangosGeneravimas(){
           yra(/^Nurodytus Įrenginius ir Medžiagas Užsakovas Rangovui perduos Užsakovo sandėlyje, Kauno g\. 1, Vilnius\.$/), "SS 6 įrašai (be dvigubo taško)");
     tiesa(yra(/^Demontuojami įrenginiai, konstrukcijos ir medžiagos \[4\.6\.2\. punktas\]:$/) && !yra(/^Rangovas demontuotus tolimesniam/), "SS 8: antraštė lieka, sakinys pakeistas");
     tiesa(yra(/^Esant Sutarties bendrųjų sąlygų 5\.2\.5 punkte/) && !yra(/Koordinatoriaus kandidatūrą/), "koordinatorius: tik 28 punktas");
-    const lent = d => d.getElementsByTagNameNS(NSW, "tbl").length, { x: xA } = await rangosSutartis(PSR_A), sab = await sutartis("PSR_LT_SS");
-    lygu([lent(xA.d), lent(x2.d)], [lent(sab.doc), lent(sab.doc) - 1], "etapų lentelė pašalinta visa (ne tuščia)");
+    // šablone 4 lentelės: sąlygų, įdėtinė derinimo terminų (išvyniojama), etapų (priede) ir parašų
+    const lent = d => d.getElementsByTagNameNS(NSW, "tbl").length, { x: xA, xp: xpA } = await rangosSutartis(PSR_A), sab = await sutartis("PSR_LT_SS");
+    lygu([lent(sab.doc), lent(xA.d), lent(xpA.d), lent(x2.d), r2.priedas], [4, 2, 1, 2, null], "etapų lentelė pašalinta visa (ne tuščia); A - tik priedo faile");
     // kitos įtampos TP: pirminis - 20 d. d., pakartotinis - 15 d. d. (E dalis ir pirminių įrenginių dalis)
     const { x: xC } = await rangosSutartis(Object.assign({}, PSR_B, { derinimas: "tp" }));
     tiesa(["Per 20 d. d. pastočių skirstyklų elektros įrenginių (E) dalis", "Per 15 d. d. pastočių skirstyklų elektros įrenginių (E) dalis",
@@ -4123,7 +4125,7 @@ async function testaiRangosGeneravimas(){
     const sn = B.sutNuorodos;
     tiesa(sn && !sn.priezastis && sn.nuorodu > 50 && !sn.radiniai.length, "sutarties nuorodos: " + JSON.stringify(sn && { p: sn.priezastis, n: sn.nuorodu, r: (sn.radiniai || []).slice(0, 3) }));
   });
-  await testas("Modulyje: rangos sutartis 1 žingsnyje (be klausimo - projektavimas ir rangos darbai), 2 žingsnyje - rangos klausimai SS punktų tvarka; paketas su PSR BS ir SS; patikroje - etapų lentelė viena eilute ir Word užduotys; nuorodų ir privalomų elementų eilutės", async () => {
+  await testas("Modulyje: rangos sutartis 1 žingsnyje (be klausimo - projektavimas ir rangos darbai), 2 žingsnyje - rangos klausimai SS punktų tvarka; paketas su PSR BS, SS ir gulsčiu SS priedu (atskiras failas iškart po SS); patikroje - etapų lentelė viena eilute ir Word užduotys prie priedo; nuorodų ir privalomų elementų eilutės; kas padaryta dėl Pages - pasakyta", async () => {
     const iv = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); };
     const tipas = D.querySelector("input[name=tipas][value=darbai]"); tipas.checked = true; tipas.dispatchEvent(new W.Event("change", { bubbles: true }));
     iv("pavadinimas", "330 kV skirstyklos darbo projekto parengimo ir rangos darbų");
@@ -4149,11 +4151,208 @@ async function testaiRangosGeneravimas(){
     tiesa(!Fv().querySelector(".lk--neuzpildyta"), "liko neatsakytų: " + [...Fv().querySelectorAll(".lk--neuzpildyta .lk-kl")].map(h => h.textContent).join(" | "));
     const rez = await W.generuoti(), s = rez.filter(r => r.sutartis && r.blob);
     lygu(s.map(r => r.d.trumpas), ["PSR_LT_BS", "PSR_LT_SS"], "sutarties dokumentai pakete: " + JSON.stringify(rez.filter(r => r.sutartis && !r.blob).map(r => r.sutartis.klaidos)));
-    const ss = s[1], pt = ss.audit.patikrinti.map(x => x.text);
-    tiesa(pt.filter(t => /^1\.1 priedas p\.: lentelės langeliai \(16\)/.test(t)).length === 1 && pt.some(t => /Pildymo sąlygos.*Word/.test(t)), "patikra: " + pt.join(" | "));
+    const ss = s[1], iSS = rez.indexOf(ss), prd = rez[iSS + 1], pt = ((prd && prd.audit.patikrinti) || []).map(x => x.text);
+    lygu([prd && prd.d.trumpas, !!(prd && prd.blob), prd && prd.gulscias, prd && prd.d.dokumentas], ["PSR_LT_SS_GULSTI", true, true, "Sutarties SS priedas 1.1"], "gulsčias SS priedas - iškart po specialiųjų sąlygų");
+    tiesa(pt.filter(t => /^1\.1 priedas p\.: lentelės langeliai \(16\)/.test(t)).length === 1 && pt.some(t => /Pildymo sąlygos.*Word/.test(t)), "priedo patikra: " + pt.join(" | "));
+    tiesa(!ss.audit.patikrinti.some(x => /^1\.1 priedas p\./.test(x.text)), "priedo vietos - prie specialiųjų sąlygų: " + ss.audit.patikrinti.map(x => x.text).join(" | "));
+    tiesa(/Pages|pirmojo skyriaus/.test(prd.d.pavadinimas) || /gulsčias puslapis/.test(prd.d.pavadinimas), "priedo pavadinimas: " + prd.d.pavadinimas);
     W.rodykRezultata(rez);
+    const eil = [...D.querySelectorAll("#rezultatas table.rez tr, table.rez tr")].map(tr => tr.textContent.replace(/\s+/g, " ").trim());
+    tiesa(eil.some(t => /Sutarties specialiųjų sąlygų priedas Nr\. 1\.1 \(gulsčias puslapis.*gulsčias puslapis - atskiras failas/.test(t)) && !eil.some(t => /undefined/.test(t)), "priedo eilutė rezultatuose: " + eil.filter(t => /pried|undefined/i.test(t)).join(" | "));
+    tiesa([...D.querySelectorAll("table.rez a[download]")].some(a => /(^|_)Sutarties_SS_priedas_1\.1_.*\.docx$/.test(a.getAttribute("download"))), "priedo failo vardas: " + [...D.querySelectorAll("table.rez a[download]")].map(a => a.getAttribute("download")).join(" | "));
+    tiesa(/priedas Nr\. 1\.1 - atskirame gulsčiame faile.*Pages.*tekstas nekeistas/.test(((D.getElementById("sutartiesPriedas") || {}).textContent || "").replace(/\s+/g, " ")), "eilutė apie priedą: " + ((D.getElementById("sutartiesPriedas") || {}).textContent || "nėra"));
+    tiesa(/derinimo terminai.*perkelta į pagrindinės lentelės eilutes.*Tekstas ir jo tvarka nekeisti/.test(((D.getElementById("sutartiesLenteles") || {}).textContent || "").replace(/\s+/g, " ")), "eilutė apie lentelę: " + ((D.getElementById("sutartiesLenteles") || {}).textContent || "nėra"));
     tiesa(/Nuorodos į punktus ir priedus: patikrinta \d+, visos rodo į esamus/.test((D.getElementById("sutartiesNuorodos") || {}).textContent || ""), "nuorodų eilutė: " + ((D.getElementById("sutartiesNuorodos") || {}).textContent || "nėra"));
     tiesa(/Privalomi sutarties elementai \(.*\): rasta 13 iš 13\.$/.test((D.getElementById("sutartiesElementai") || {}).textContent || ""), "elementų eilutė: " + ((D.getElementById("sutartiesElementai") || {}).textContent || "nėra"));
+  });
+}
+
+/* Rangos sutartis Pages programoje (3 etapas, S5, 2026-10-10). Pages patikra (PDF eksportu) parodė: gulsčią etapų priedą rodo stačią ir jo
+   lentelės antraštę nukerpa; lentelę lentelės langelyje (derinimo terminai) paverčia tekstu; įrašyta reikšmė buvo kitokio šrifto nei jos
+   sakinys; kairysis stulpelis per siauras („organizavima / s“). Tikrinama sugeneruotu Word failu ir šablonu. */
+async function testaiRangosPages(){
+  dabartine = grupe("Rangos sutartis Pages programoje (3 etapas, S5, 2026-10-10): gulsčias priedas atskirame faile, įdėtinė lentelė, įrašytų reikšmių šriftas, stulpelio plotis");
+  await modulis();
+  const F = W.GP_SUTARTIES_FORMA, G = W.GP_SUTARCIU_GEN;
+  const v = (n, t) => [...n.childNodes].filter(c => c.nodeType === 1 && (!t || c.localName === t));
+  const tx = n => [...n.getElementsByTagNameNS(NSW, "t")].map(t => t.textContent).join("").replace(/\s+/g, " ").trim();
+  const at = (n, a) => n ? (n.getAttributeNS(NSW, a) || n.getAttribute("w:" + a) || "") : "";
+  const rPr = r => v(r, "rPr")[0], turi = (r, t) => !!(rPr(r) && v(rPr(r), t).length);
+  const idetines = d => [...d.getElementsByTagNameNS(NSW, "tbl")].filter(t => { for (let u = t.parentNode; u; u = u.parentNode) if (u.localName === "tc") return true; return false; });
+  // kiekviena eilutė užpildo visą tinklelį, langelio plotis - jo stulpelių suma
+  const tinklelis = d => { const blogi = [];
+    [...d.getElementsByTagNameNS(NSW, "tbl")].forEach((tbl, ti) => {
+      const g = v(v(tbl, "tblGrid")[0], "gridCol").map(c => +at(c, "w"));
+      v(tbl, "tr").forEach((tr, ri) => { let k = 0;
+        v(tr, "tc").forEach(tc => { const pr = v(tc, "tcPr")[0], gs = +(at(v(pr, "gridSpan")[0], "val") || 1), w = +at(v(pr, "tcW")[0], "w"), turiButi = g.slice(k, k + gs).reduce((a, b) => a + b, 0);
+          if (w !== turiButi) blogi.push("lentelė " + ti + " eil. " + ri + ": plotis " + w + ", stulpelių " + turiButi); k += gs; });
+        if (k !== g.length) blogi.push("lentelė " + ti + " eil. " + ri + ": langeliai apima " + k + " iš " + g.length + " stulpelių"); });
+    });
+    return blogi; };
+  const remeliai = tc => { const b = v(v(tc, "tcPr")[0] || tc, "tcBorders")[0], o = {}; if (b) v(b).forEach(e => { o[e.localName] = at(e, "val"); }); return o; };
+
+  await testas("Šablonas (paruošimas): kairysis stulpelis 1814 DXA (pusjuodis „organizavimas“ telpa), lentelės plotis tas pats; punktų numeriai - ne kursyvu, pusjuodžiai, kai pusjuodė punkto antraštė; derinimo terminų lentelėje visos keturios pirmo stulpelio poros sujungtos; SS 3 pratęsimo sakinys ir SS 12 sakinio pabaiga - įprastu šriftu (naudotojo sprendimas); tekstas nepakitęs (registro forma ta pati)", async () => {
+    const sab = await sutartis("PSR_LT_SS"), REG = await (await W.fetch("zemelapiai/sutarciu-versijos.json?b=" + Date.now())).json();
+    const T = [...sab.doc.getElementsByTagNameNS(NSW, "tbl")], g = v(v(T[0], "tblGrid")[0], "gridCol").map(c => +at(c, "w"));
+    lygu([g, g.reduce((a, b) => a + b, 0)], [[1814, 7967], 9781], "sąlygų lentelės stulpeliai");
+    lygu(tinklelis(sab.doc), [], "langelių pločiai pagal tinklelį");
+    lygu(REG.sablonai.PSR_LT_SS.paruosimas.filter(x => /stulpeliai|numerių|sujungta/.test(x)), ["stulpeliai 1561+8220 -> 1814+7967", "punktų numerių šriftas suvienodintas: 12", "vertikaliai sujungta langelių porų: 1"], "paruošimo įrašai registre");
+    tiesa(REG.sablonai.PSR_LT_SS.paruosimas.includes("pusjuodis kursyvas -> įprastas šriftas: 2 pastraipos"), "paruošimo įrašas apie įprastą šriftą: " + REG.sablonai.PSR_LT_SS.paruosimas.join(" | "));
+    // naudotojo sprendimas 2026-10-10: SS 3 pratęsimo sakinys ir SS 12 sakinio pabaiga - įprastu šriftu (LITGRID formoje - pusjuodžiu kursyvu)
+    const ps = [...sab.doc.getElementsByTagNameNS(NSW, "p")], storas = n => turi(n, "b") || turi(n, "i");
+    for (const pr of ["Darbų atlikimo terminas Šalių raštišku susitarimu gali būti pratęstas", "Sutarties kaina bus mokama dalimis pagal Darbų žiniaraštį"]) {
+      const P1 = ps.filter(p => tx(p).startsWith(pr));
+      lygu(P1.length, 1, "pastraipa „" + pr + "“");
+      tiesa(/7\.3\.7\. punkte nustatyta tvarka\.$|Sutartyje nurodytomis sąlygomis ir tvarka\.$/.test(tx(P1[0])), "sakinio pabaiga: " + tx(P1[0]).slice(-60));
+      const zen = v(v(P1[0], "pPr")[0], "rPr")[0];
+      lygu([v(P1[0], "r").filter(r => tx(r) && storas(r)).map(tx), !!(zen && (v(zen, "b").length || v(zen, "i").length))], [[], false], "„" + pr.slice(0, 30) + "...“ - pusjuodis ar kursyvas");
+    }
+    // pusjuodžio žodžio plotis (Arial pusjuodis, 11 pt - Pages šriftą ima iš dokumento numatytojo) telpa į langelio teksto plotį
+    const cv = D.createElement("canvas").getContext("2d"); cv.font = "bold 11pt Arial";
+    const zodziai = v(T[0], "tr").flatMap(tr => tx(v(tr, "tc")[0]).split(" ")).filter(Boolean), plociausias = Math.max(...zodziai.map(z => cv.measureText(z).width * 15));   // px (96 dpi) -> DXA
+    tiesa(zodziai.includes("organizavimas") && plociausias <= 1814 - 216, "plačiausias kairiojo stulpelio žodis " + Math.round(plociausias) + " DXA netelpa į " + (1814 - 216));
+    const blogi = [];
+    [...sab.doc.getElementsByTagNameNS(NSW, "p")].forEach(p => {
+      const pp = v(p, "pPr")[0], nid = pp && pp.getElementsByTagNameNS(NSW, "numId")[0], r0 = v(p, "r").find(r => r.getElementsByTagNameNS(NSW, "t").length);
+      if (!nid || at(nid, "val") === "0" || !r0) return;
+      const zen = v(pp, "rPr")[0], b = !!(zen && v(zen, "b").length), i = !!(zen && v(zen, "i").length);
+      if (i || b !== turi(r0, "b")) blogi.push(tx(p).slice(0, 40) + (i ? " - numeris kursyvu" : " - numerio pusjuodis " + b + ", antraštės " + turi(r0, "b")));
+    });
+    lygu(blogi, [], "punktų numerių šriftas");
+    const der = idetines(sab.doc)[0], pirmi = v(der, "tr").map(tr => v(tr, "tc")[0]).map(tc => [tx(tc), at(v(v(tc, "tcPr")[0], "vMerge")[0], "val") || (v(v(tc, "tcPr")[0], "vMerge").length ? "tęsinys" : "")]);
+    lygu(pirmi.slice(1).map(x => x[1]), ["restart", "tęsinys", "restart", "tęsinys", "restart", "tęsinys", "restart", "tęsinys"], "derinimo lentelės pirmas stulpelis: " + JSON.stringify(pirmi));
+    lygu(pirmi.filter(x => x[1] === "tęsinys").map(x => x[0]), ["", "", "", ""], "sujungti tik tušti langeliai");
+  });
+
+  await testas("Įdėtinė lentelė (SS derinimo terminai) sugeneruotoje sutartyje - pagrindinės lentelės eilutės: įdėtinių lentelių nėra, eilutės užpildo tinklelį, derinimo eilutės - iškart po 21 punkto antraštės su visais rėmeliais, kairysis langelis tuščias be rėmelio tarp eilučių; tekstas ir pastraipų tvarka kaip be išvyniojimo (A ir B)", async () => {
+    for (const [vardas, ats] of [["A", PSR_A], ["B", PSR_B]]) {
+      const { r, x } = await rangosSutartis(ats), be = await rangosSutartis(ats, null, { lenteles: false, gulsti: false });
+      lygu([r.ataskaita.klaidos, r.ataskaita.isvyniota, idetines(x.d).length, idetines(be.x.d).length], [[], 1, 0, 1], vardas + ": išvyniota");
+      lygu(tinklelis(x.d), [], vardas + ": tinklelis");
+      const T = x.d.getElementsByTagNameNS(NSW, "tbl")[0], eil = v(T, "tr"), g = v(v(T, "tblGrid")[0], "gridCol").map(c => +at(c, "w"));
+      lygu([g.length, g[0], g.reduce((a, b) => a + b, 0)], [4, 1814, 9781], vardas + ": tinklelis po išvyniojimo");
+      const iA = eil.findIndex(tr => /Nustatomi šie dokumentacijos derinimo terminai:$/.test(tx(tr))), D9 = eil.slice(iA + 1, iA + 10);
+      tiesa(iA > 0 && /Nustatomi šie dokumentacijos derinimo terminai:$/.test(tx(v(eil[iA], "tc")[1])), vardas + ": 21 punkto antraštė - eilutės pabaigoje");
+      lygu(D9.map(tr => v(tr, "tc").length), Array(9).fill(4), vardas + ": derinimo eilutės - po 4 langelius");
+      lygu(D9.map(tr => v(tr, "tc").slice(1).map(tx).join(" | ")).slice(0, 3), ["Derinama dokumentacija | Derinimo etapas | Terminas (nuo pilnos apimties dokumentacijos pateikimo)",
+        "Projektiniai pasiūlymai | Pirminis derinimas | Per 20 d. d.", " | Kiekvienas pakartotinis derinimas | Per 10 d. d."], vardas + ": derinimo eilučių tekstas");
+      tiesa(D9.every(tr => tx(v(tr, "tc")[0]) === "" && remeliai(v(tr, "tc")[0]).top === "nil" && remeliai(v(tr, "tc")[0]).bottom === "nil"), vardas + ": kairysis langelis derinimo eilutėse - tuščias, be rėmelio");
+      tiesa(D9.every(tr => v(tr, "tc").slice(1).every(tc => { const b = remeliai(tc); return ["top", "left", "bottom", "right"].every(k => b[k] === "single"); })), vardas + ": derinimo langelių rėmeliai");
+      tiesa(v(eil[iA], "tc").every(tc => remeliai(tc).bottom === "nil") && v(eil[iA + 10], "tc").every(tc => remeliai(tc).top === "nil"), vardas + ": tarp punkto dalių rėmelio nėra");
+      lygu(D9.map(tr => at(v(v(v(tr, "tc")[1], "tcPr")[0], "vMerge")[0], "val") || (v(v(v(tr, "tc")[1], "tcPr")[0], "vMerge").length ? "t" : "-")).join(" "), "- restart t restart t restart t restart t", vardas + ": vertikalus sujungimas išlieka");
+      // tekstas: visos netuščios pastraipos (ir priedo failo) - tos pačios kaip be lentelių tvarkymo ir be priedo iškėlimo
+      const visos = y => y.ps.filter(Boolean), su = visos(x).concat(r.priedas ? visos(await docxPastraipos(r.priedas)) : []);
+      lygu(su.slice().sort(), visos(be.x).slice().sort(), vardas + ": tekstas");
+      // dokumentacijos derinimo dalis - ta pačia tvarka kaip šablone (lentelė skaitoma eilutėmis)
+      const nuo = t => t.indexOf("Nustatomi šie dokumentacijos derinimo terminai:"), iki = t => t.findIndex((y, k) => k > nuo(t) && /^Sutarties bendrųjų sąlygų (3\.3\.10|4\.5\.1)/.test(y));
+      lygu(visos(x).slice(nuo(visos(x)), iki(visos(x))), visos(be.x).slice(nuo(visos(be.x)), iki(visos(be.x))), vardas + ": derinimo dalies pastraipų tvarka");
+    }
+  });
+
+  await testas("Išvyniojimas sintetinėje lentelėje: tinklelis ir gridSpan, turinys prieš lentelę ir po jos - atskirose eilutėse, rėmeliai iš lentelės stiliaus (be stiliaus - be rėmelių), eilutės savybės (tik aukštis ir nedalomumas); nepaprastas atvejis (sujungtas išorinis langelis, lentelė lentelėje lentelėje) - nekeičiama", async () => {
+    const P = t => `<w:p><w:r><w:t xml:space="preserve">${t}</w:t></w:r></w:p>`;
+    const tc = (w, turinys, pr) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${pr || ""}</w:tcPr>${turinys}</w:tc>`;
+    const ideta = (stilius, rem) => `<w:tbl><w:tblPr>${stilius ? '<w:tblStyle w:val="Tinklelis"/>' : ""}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="3000"/></w:tblGrid>
+      <w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${tc(1000, P("a1"), '<w:vMerge w:val="restart"/>')}${tc(3000, P("b1"))}</w:tr><w:tr>${tc(1000, P(""), "<w:vMerge/>")}${tc(3000, P("b2"), rem || "")}</w:tr></w:tbl>`;
+    const dok = (vidus, antraEil) => new W.DOMParser().parseFromString(`<w:document xmlns:w="${NSW}"><w:body><w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="5000"/></w:tblGrid>
+      <w:tr>${tc(1000, P("L1"))}${tc(5000, vidus)}</w:tr>${antraEil || `<w:tr>${tc(1000, P("L2"))}${tc(5000, P("antra eilutė"))}</w:tr>`}</w:tbl><w:p/></w:body></w:document>`, "application/xml");
+    const stiliai = new W.DOMParser().parseFromString(`<w:styles xmlns:w="${NSW}"><w:style w:type="table" w:styleId="Bazinis"><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="8"/><w:left w:val="single" w:sz="8"/><w:bottom w:val="single" w:sz="8"/><w:right w:val="single" w:sz="8"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr></w:style>
+      <w:style w:type="table" w:styleId="Tinklelis"><w:basedOn w:val="Bazinis"/></w:style></w:styles>`, "application/xml");
+    const seka = d => [...d.getElementsByTagNameNS(NSW, "p")].map(tx).filter(Boolean).join("|");
+    const d = dok(P("prieš") + ideta(true) + P("po 1") + P("po 2")), s0 = seka(d);
+    lygu([G._isvyniok(d, stiliai), seka(d) === s0, idetines(d).length, tinklelis(d)], [1, true, 0, []], "išvyniota");
+    const T = d.getElementsByTagNameNS(NSW, "tbl")[0], eil = v(T, "tr");
+    lygu([v(v(T, "tblGrid")[0], "gridCol").map(c => +at(c, "w")), eil.map(tr => v(tr, "tc").map(tx).join("/"))], [[1000, 1250, 3750], ["L1/prieš", "/a1/b1", "//b2", "/po 1po 2", "L2/antra eilutė"]], "tinklelis ir eilutės");
+    lygu(eil.map(tr => v(tr, "tc").map(c => +(at(v(v(c, "tcPr")[0], "gridSpan")[0], "val") || 1)).join("+")), ["1+2", "1+1+1", "1+1+1", "1+2", "1+2"], "gridSpan");
+    lygu([remeliai(v(eil[1], "tc")[1]), remeliai(v(eil[2], "tc")[2])], [{ top: "single", left: "single", bottom: "single", right: "single" }, { top: "single", left: "single", bottom: "single", right: "single" }], "rėmeliai iš stiliaus (per basedOn)");
+    lygu([at(v(v(v(eil[1], "tc")[1], "tcPr")[0], "tcBorders")[0].getElementsByTagNameNS(NSW, "top")[0], "sz"), at(v(v(v(eil[1], "tc")[1], "tcPr")[0], "tcBorders")[0].getElementsByTagNameNS(NSW, "bottom")[0], "sz")], ["8", "4"], "kraštinis ir vidinis rėmelis");
+    lygu([remeliai(v(eil[0], "tc")[0]), remeliai(v(eil[1], "tc")[0]), remeliai(v(eil[2], "tc")[0]), remeliai(v(eil[3], "tc")[0]), remeliai(v(eil[3], "tc")[1])],
+      [{ bottom: "nil" }, { top: "nil", bottom: "nil" }, { top: "nil", bottom: "nil" }, { top: "nil" }, { top: "nil" }], "tarp punkto dalių - be rėmelio");
+    lygu(v(v(eil[1], "trPr")[0]).map(c => c.localName), ["cantSplit"], "eilutės savybės: antraštės kartojimas nepernešamas");
+    lygu([at(v(v(v(eil[1], "tc")[1], "tcPr")[0], "vMerge")[0], "val"), v(v(v(eil[2], "tc")[1], "tcPr")[0], "vMerge").length, v(v(v(eil[1], "tc")[0], "tcPr")[0], "vMerge").length], ["restart", 1, 0], "vertikalus sujungimas");
+    // po lentelės turinio nėra - paskutinės lentelės eilutės kairysis langelis palieka apatinį rėmelį (eilutė - punkto pabaiga)
+    const d2 = dok(P("prieš") + ideta(false) + P(""));
+    lygu([G._isvyniok(d2, stiliai), v(d2.getElementsByTagNameNS(NSW, "tbl")[0], "tr").map(tr => v(tr, "tc").map(tx).join("/"))], [1, ["L1/prieš", "/a1/b1", "//b2", "L2/antra eilutė"]], "be turinio po lentelės");
+    const e2 = v(d2.getElementsByTagNameNS(NSW, "tbl")[0], "tr");
+    lygu([remeliai(v(e2[2], "tc")[0]), remeliai(v(e2[1], "tc")[1])], [{ top: "nil" }, { top: "nil", left: "nil", bottom: "nil", right: "nil" }], "paskutinė eilutė ir lentelė be stiliaus");
+    // langelio savas rėmelis lieka (lentelės rėmeliai - tik ten, kur langelis savo neturi)
+    const d5 = dok(P("prieš") + ideta(true, '<w:tcBorders><w:bottom w:val="double" w:sz="12"/></w:tcBorders>') + P("po"));
+    lygu([G._isvyniok(d5, stiliai), remeliai(v(v(d5.getElementsByTagNameNS(NSW, "tbl")[0], "tr")[2], "tc")[2])], [1, { top: "single", left: "single", bottom: "double", right: "single" }], "savas langelio rėmelis");
+    // nepaprasti atvejai - nekeičiama
+    const d3 = dok(P("prieš") + ideta(true) + P("po"), `<w:tr>${tc(6000, P("sujungta"), '<w:gridSpan w:val="2"/>')}</w:tr>`), x3 = new W.XMLSerializer().serializeToString(d3);
+    const sujungtas = new W.DOMParser().parseFromString(x3.replace('<w:tcW w:w="5000" w:type="dxa"/>', '<w:tcW w:w="5000" w:type="dxa"/><w:vMerge w:val="restart"/>'), "application/xml"), xs = new W.XMLSerializer().serializeToString(sujungtas);
+    lygu([G._isvyniok(sujungtas, stiliai), new W.XMLSerializer().serializeToString(sujungtas) === xs], [0, true], "vertikaliai sujungtas išorinis langelis");
+    lygu([G._isvyniok(d3, stiliai), idetines(d3).length, tinklelis(d3)], [1, 0, []], "kita eilutė su gridSpan - plečiama");
+    lygu(v(v(d3.getElementsByTagNameNS(NSW, "tbl")[0], "tr").slice(-1)[0], "tc").map(c => at(v(v(c, "tcPr")[0], "gridSpan")[0], "val")), ["3"], "gridSpan 2 -> 3");
+    const d4 = dok(P("prieš") + `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr>${tc(4000, ideta(true) + P(""))}</w:tr></w:tbl>` + P("po")), x4 = new W.XMLSerializer().serializeToString(d4);
+    lygu([G._isvyniok(d4, stiliai), new W.XMLSerializer().serializeToString(d4) === x4], [0, true], "lentelė lentelėje lentelėje");
+  });
+
+  await testas("Įrašytos reikšmės šriftas - kaip jos sakinio: „18 mėnesių“ su tuo pačiu ženklų stiliumi kaip „nuo Sutarties sudarymo dienos.“, SS 3 pratęsimo sakinys su įrašytomis reikšmėmis ir SS 12 sakinys - visas įprastu šriftu; kursyvu parašyto sakinio reikšmė - kursyvu, vien pildomos vietos kursyvas, spalva ir vietos rezervo stilius nuimami", async () => {
+    const { x } = await rangosSutartis(PSR_A), ps = [...x.d.getElementsByTagNameNS(NSW, "p")];
+    const p1 = ps.find(p => tx(p) === "18 mėnesių nuo Sutarties sudarymo dienos."), R1 = v(p1, "r").filter(r => tx(r));
+    const st = r => at(rPr(r) && v(rPr(r), "rStyle")[0], "val");
+    tiesa(R1.length >= 2 && st(R1[0]) && R1.every(r => st(r) === st(R1[0])), "„18 mėnesių“ ženklų stilius: " + R1.map(r => tx(r) + "=" + st(r)).join(" | "));
+    const p2 = ps.find(p => /^Darbų atlikimo terminas Šalių raštišku susitarimu gali būti pratęstas ne ilgiau kaip 3 mėnesiams dėl Užsakovo/.test(tx(p))), R2 = v(p2, "r").filter(r => tx(r));
+    tiesa(R2.length >= 4 && R2.every(r => !turi(r, "i") && !turi(r, "b")), "pratęsimo sakinys ne įprastu šriftu: " + R2.filter(r => turi(r, "i") || turi(r, "b")).map(tx).join(" | "));
+    const p3 = ps.find(p => /^Sutarties kaina bus mokama dalimis pagal Darbų žiniaraštį\. .* 7\.3\.7\. punkte nustatyta tvarka\.$/.test(tx(p)));
+    tiesa(p3 && v(p3, "r").filter(r => tx(r)).every(r => !turi(r, "i") && !turi(r, "b")), "SS 12 sakinys ne įprastu šriftu: " + (p3 ? v(p3, "r").filter(r => turi(r, "i") || turi(r, "b")).map(tx).join(" | ") : "nerastas"));
+    const par = runai => new W.DOMParser().parseFromString(`<w:document xmlns:w="${NSW}"><w:body><w:p>${runai.map(([pr, t]) => `<w:r><w:rPr>${pr}</w:rPr><w:t xml:space="preserve">${t}</w:t></w:r>`).join("")}</w:p></w:body></w:document>`, "application/xml").getElementsByTagNameNS(NSW, "p")[0];
+    const po = (runai, nuo, iki) => { const p = par(runai); tiesa(G._keisk(p, nuo, iki, "REIKŠMĖ"), "nepakeista"); const r = v(p, "r").find(y => tx(y) === "REIKŠMĖ"); return v(rPr(r) || r).map(c => c.localName + (at(c, "val") ? "=" + at(c, "val") : "")).join(","); };
+    lygu(po([["<w:i/>", "Terminas gali būti pratęstas "], ["<w:i/><w:color w:val=\"FF0000\"/>", "[terminas]"], ["<w:i/>", " dėl aplinkybių."]], 28, 38), "i", "kursyvu parašytas sakinys - kursyvas lieka, spalva - ne");
+    lygu(po([["", "Terminas: "], ["<w:i/><w:iCs/><w:highlight w:val=\"yellow\"/>", "[nurodyti]"], ["", "."]], 10, 20), "", "vien pildoma vieta kursyvu - nuimama");
+    lygu(po([["<w:rStyle w:val=\"PlaceholderText\"/><w:i/>", "[vieta]"]], 0, 7), "", "vietos rezervo stilius ir kursyvas (pastraipa - vien vieta)");
+    lygu(po([["<w:rStyle w:val=\"NormalBold\"/>", "[dienos/mėnesiai]"], ["<w:rStyle w:val=\"NormalBold\"/>", " nuo Sutarties sudarymo dienos."]], 0, 17), "rStyle=NormalBold", "kitas ženklų stilius lieka");
+    lygu(po([["<w:i/>", "Prieš "], ["<w:i/>", "[vieta]"], ["", " po."]], 6, 13), "", "kursyvu tik viena pusė - nuimama");
+  });
+
+  await testas("Gulsčias etapų priedas - atskiras failas: specialiosios sąlygos lieka vieno stačio skyriaus, priedo failas - gulsčias A4 su objekto pavadinimu ir lentele, savas generavimo pasas; tekstas kaip viename faile; be etapų priedo failo nėra; `gulsti: false` - vienas failas kaip iki tol", async () => {
+    const { r, x, xp } = await rangosSutartis(PSR_A, null, { forma: "abc", data: "2026-10-10" });
+    lygu(r.ataskaita.atskirta, { skyriai: ["1.1 priedas"], priedai: ["1.1"] }, "ataskaita");
+    const sek = y => [...y.d.getElementsByTagNameNS(NSW, "sectPr")].map(sp => { const pg = sp.getElementsByTagNameNS(NSW, "pgSz")[0]; return at(pg, "w") + "x" + at(pg, "h") + (sp.parentNode.localName === "body" ? "" : " (pastraipoje)"); });
+    lygu([sek(x), sek(xp)], [["11906x16838"], ["16838x11906"]], "skyriai");
+    lygu([xp.ps.filter(Boolean).slice(0, 3), xp.d.getElementsByTagNameNS(NSW, "tbl").length, xp.ps.includes("I etapas"), x.ps.includes("I etapas")],
+      [["330 kV skirstykla Lietuvos elektrinėje", "PROJEKTAVIMO IR STATYBOS DARBŲ ETAPAI", "Etapas"], 1, true, false], "priedo failo turinys");
+    const pasas = async bytes => { const z = await W.JSZip.loadAsync(bytes); for (const f of z.file(/^customXml\/item\d+\.xml$/)) { const t = await f.async("string"); if (t.indexOf(NS_PASAS) >= 0) return (t.match(/sablonas="([^"]*)"/) || t.match(/<[^>]*sablonas[^>]*>([^<]*)</) || [])[1] || t.slice(0, 300); } return null; };
+    lygu([await pasas(r.blob), await pasas(r.priedas)], ["PSR_LT_SS", "PSR_LT_SS_GULSTI"], "generavimo pasai");
+    const vienas = await rangosSutartis(PSR_A, null, { gulsti: false });
+    lygu([vienas.r.priedas, vienas.r.ataskaita.atskirta === undefined, sek(vienas.x)], [null, true, ["11906x16838 (pastraipoje)", "16838x11906"]], "gulsti: false");
+    lygu(x.ps.filter(Boolean).concat(xp.ps.filter(Boolean)), vienas.x.ps.filter(Boolean), "tekstas ir tvarka - kaip viename faile");
+    const b = await rangosSutartis(PSR_B);
+    lygu([b.r.priedas, b.r.ataskaita.atskirta === undefined, sek(b.x)], [null, true, ["11906x16838"]], "be etapų - priedo failo nėra");
+  });
+
+  await testas("Jokia rangos SS lentelės eilutė neaukštesnė už puslapį (Pages tokios nedalija - nukerpa): A, B ir priedo failas", async () => {
+    const dalys = async bytes => { const z = await W.JSZip.loadAsync(bytes), parts = {};
+      for (const n of ["word/document.xml", "word/styles.xml", "word/numbering.xml"]){ const f = z.file(n); if (f) parts[n] = new W.DOMParser().parseFromString(await f.async("string"), "application/xml"); }
+      return parts; };
+    const blogi = [];
+    for (const [vardas, ats] of [["A", PSR_A], ["B", PSR_B]]) {
+      const { r } = await rangosSutartis(ats);
+      for (const [kas, bytes] of [["SS", r.blob], ["priedas", r.priedas]]) {
+        if (!bytes) continue;
+        const Pd = await dalys(bytes);
+        aukstesnes(Pd["word/document.xml"], GPL().modelis({ parts: Pd })).forEach(e => blogi.push(vardas + " " + kas + ": " + e));
+      }
+    }
+    lygu(blogi, [], "eilutės");
+  });
+
+  await testas("Tikrinti parengtus dokumentus: specialiosios sąlygos ir atskiras gulsčias priedas (su pasais) - abu atpažįstami pagal pasą, 0 nukrypimų; priedas - „priedas“, ne sutarties sąlygos: nuorodos ir privalomi elementai tikrinami specialiosiose sąlygose ir tada, kai priedo failas įkeltas pirmas", async () => {
+    const REG = await (await W.fetch("zemelapiai/sutarciu-versijos.json?b=" + Date.now())).json();
+    const { r } = await rangosSutartis(PSR_A, null, { forma: REG.sablonai.PSR_LT_SS.dabartine, data: "2026-10-10" });
+    const { buf: bb, Z: zb } = await sutartiesSablonas("PSR_LT_BS"), rb = await G.generuok(bb, zb, {}, { sablonas: "PSR_LT_BS", forma: REG.sablonai.PSR_LT_BS.dabartine, data: "2026-10-10", tipas: "uint8array" });
+    const B = await tikrink([new W.File([r.priedas], "A priedas 1.1.docx"), new W.File([r.blob], "B specialiosios.docx"), new W.File([rb.blob], "C bendrosios.docx")]);
+    const X = n => B.palyg[B.docs.find(d => d.name === n).id], nukr = n => X(n).rez ? X(n).rez.pakeitimai.filter(p => p.rusis === "nukrypimas").length : "nelyginta";
+    lygu([X("A priedas 1.1.docx").forma, X("A priedas 1.1.docx").gulscias, nukr("A priedas 1.1.docx"), X("B specialiosios.docx").forma, !!X("B specialiosios.docx").gulscias, nukr("B specialiosios.docx")],
+      ["PSR_LT_SS", true, 0, "PSR_LT_SS", false, 0], "formos ir nukrypimai");
+    const sn = B.sutNuorodos;
+    tiesa(sn && !sn.priezastis && sn.D.SS && sn.D.SS.name === "B specialiosios.docx" && sn.nuorodu > 50 && !sn.radiniai.length, "nuorodos - specialiosiose sąlygose: " + JSON.stringify(sn && { p: sn.priezastis, ss: sn.D && sn.D.SS && sn.D.SS.name, n: sn.nuorodu, r: (sn.radiniai || []).slice(0, 2) }));
+    const vaid = n => (B.rez.dokumentai.find(x => x.id === B.docs.find(d => d.name === n).id) || {}).vaidmuo;
+    lygu([vaid("A priedas 1.1.docx"), vaid("B specialiosios.docx"), vaid("C bendrosios.docx")], ["priedas", "sutartis", "sutartis_bendrosios"], "vaidmenys");
+    const sel = D.querySelector('#tkp-dokumentai select[data-tk-vaidmuo="' + B.docs.find(d => d.name === "A priedas 1.1.docx").id + '"]');
+    lygu(sel && sel.value, "priedas", "priedo vaidmuo dokumentų sąraše");
+    tiesa(!B.radiniai.some(x => x.grupe === "Privalomi sutarties elementai" && /nerad/i.test(x.tekstas) && x.lygis === "tikrinti"), "privalomi sutarties elementai: " + B.radiniai.filter(x => x.grupe === "Privalomi sutarties elementai").map(x => x.tekstas.slice(0, 80)).join(" | "));
   });
 }
 
@@ -4722,6 +4921,7 @@ async function testaiSutarciuNuorodos(){
     await testaiSutartisSPS();
     await testaiSutarciuTikrinimas();
     await testaiRangosGeneravimas();
+    await testaiRangosPages();
     await testaiSutartysPages();
     await testaiSutarciuNuorodos();
     document.getElementById("busena").textContent =

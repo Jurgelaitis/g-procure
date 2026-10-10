@@ -299,6 +299,7 @@
       if (x.pasas) {
         var id = String(x.pasas.sablonas || "").replace(/_(GULSTI|METODIKA)$/, function (m, s) { return s === "METODIKA" ? "_SALYGOS" : ""; });
         x.siuloma = id; x.pagal = "pasas";
+        x.gulscias = /_GULSTI$/.test(String(x.pasas.sablonas || ""));   // gulsčias priedas atskirame faile - ne pats dokumentas (2026-10-10)
         return;
       }
       if (!indeksas) return;
@@ -346,8 +347,10 @@
   function vaidmenysSuFormomis() {
     var v = {};
     (B.docs || []).forEach(function (d) {
-      var f = pasirinktaForma(d);
-      if (/_SS$/.test(f)) v[d.id] = "sutartis"; else if (/_BS$/.test(f)) v[d.id] = "sutartis_bendrosios";
+      var f = pasirinktaForma(d), x = B.palyg[d.id];
+      // sutarties specialiųjų sąlygų priedas atskirame gulsčiame faile (rangos SS etapų priedas) - priedas, ne sutarties sąlygos
+      if (x && x.gulscias && B.formos[d.id] === undefined && /_(SS|BS)$/.test(f)) v[d.id] = "priedas";
+      else if (/_SS$/.test(f)) v[d.id] = "sutartis"; else if (/_BS$/.test(f)) v[d.id] = "sutartis_bendrosios";
     });
     Object.keys(B.vaidmenys).forEach(function (id) { v[id] = B.vaidmenys[id]; });
     return v;
@@ -366,6 +369,7 @@
   function sutartiesDokai() {
     var tip = function (d) {
       var x = B.palyg[d.id] || {}, f = x.forma || "", v = vaidmuo(d);
+      if (x.gulscias && x.pagalPasa) return null;   // atskiras gulsčias priedas - nuorodos tikrinamos pačiose sąlygose
       return /_SS$/.test(f) || (!f && v === "sutartis") ? "SS" : /_BS$/.test(f) || (!f && v === "sutartis_bendrosios") ? "BS" : null;
     };
     var o = {};
