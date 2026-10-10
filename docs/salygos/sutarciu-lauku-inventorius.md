@@ -1,4 +1,4 @@
-# Sutarties projekto vietos ir jų sprendimai - prekių ir paslaugų specialiosios sąlygos
+# Sutarties projekto vietos ir jų sprendimai - prekių, paslaugų ir projektavimo ir statybos rangos specialiosios sąlygos
 
 2026-10-08, sutarčių planas S4 (`docs/salygos/sutartys-planas-2026-10.md` 3.4, 4.3-4.5). Įgyvendinta 2026-10-08
 (`PP-salygos/sutarties-forma.js`). Jūsų sprendimai 2026-10-08: užtikrinimo procentai - iš SPS sumos ir numatomos vertės; 8.2 - sutarties
@@ -110,3 +110,103 @@ Visi 8 šablonai generuojami dviem sprendimų rinkiniais be klaidų; kiekviena n
 „Pasirinkite elementą“, „arba“, „Jei punktas netaikomas ...“, nurodymų ir raudono teksto; be sprendimo vieta lieka kaip šablone ir
 išvardijama; pakeistas šablonas negeneruojamas; lentelių tvarkymas, pakeitęs tekstą, stabdo; LT/EN anglų stulpelis seka lietuvišką toje
 pačioje eilutėje. 7 testai, 12 kodo mutacijų - visos pagaunamos.
+
+---
+
+# Projektavimo ir statybos rangos specialiosios sąlygos (3 etapas, S4, 2026-10-10)
+
+Šablonas `PSR_LT_SS` (LITGRID 2026-10-05, tik LT). Jame nėra išskleidžiamųjų sąrašų - rengėjui skirti „//“ nurodymai, „arba“ ir
+„Turi būti pasirinkta:“ (žemėlapio blokai, S1). Kiekvienam nurodymui ar pasirinkimui - vienas klausimas 2 žingsnyje, SS punktų tvarka
+(`PP-salygos/sutarties-forma.js`, `KLAUSIMAI_PSR`). Bendrosios sąlygos (`PSR_LT_BS`) generuojamos be pakeitimų (tik „ĮMONĖS PAVADINIMAS“
+-> LITGRID AB, pasas, lentelės). Klausimų tekstai - juodraštis jūsų peržiūrai; formuluotės ir taisyklės - pagal jūsų sprendimus 2026-10-10
+(žr. pabaigą).
+
+Žymės - kaip aukščiau: **D** - iš jau įvestų duomenų, **K** - klausimas, **SUD** - pildoma sudarant, **W** - sutvarkoma Word programoje
+(generatorius vietą palieka ir ją išvardija 3 žingsnio patikroje).
+
+## 1. Pagrindinės sąlygos (SS 1-4)
+
+| Vieta | Šablone | Taisyklė | Žymė |
+|---|---|---|---|
+| Preambulė: „[pirkimo pavadinimas] pirkimą Nr. [numeris]“ | pildomos vietos | pavadinimas (kilmininku) iš 1 žingsnio; numeris - iš pirkimo kortelės, be jo vieta lieka | D |
+| Preambulė: Užsakovo pasirašantis asmuo, Rangovo duomenys, registracijos valstybė (teksto valdiklis) | pildomos vietos | sudarant | SUD |
+| 1 Objektas | „//nurodomas statomas, rekonstruojamas, arba remontuojamas statinys.“ | K (privalomas, formuluotė) - įrašoma vietoje nurodymo ir etapų priedo antraštėje vietoje „[OBJEKTAS]“ | K |
+| 2 Techninė užduotis / Projektas | „// nurodomas priedas ...“ | K (privalomas); siūloma: „Sutarties specialiųjų sąlygų priedas Nr. 1.2 „Techninė užduotis / projektavimo užduotis“.“ (numeris - iš SS priedų sąrašo, po pašalintų priedų) | K, SIŪLOMA |
+| 3 Darbų atlikimo terminas „[dienos/mėnesiai] nuo Sutarties sudarymo dienos.“ | pildoma vieta | K (privalomas): skaičius ir vienetas, forma pagal skaičių („18 mėnesių“, „1 mėnuo“, „90 dienų“) | K |
+| 3 pratęsimas „gali būti pratęstas [terminas] dėl ____“ | šablono sakinys su dviem pildomomis vietomis | K (privalomas): „Ar Darbų atlikimo terminas gali būti pratęstas?“ Taip - terminas ir aplinkybės (abu privalomi); Ne - sakinys pašalinamas (BS 2.2.2: pratęsimo galimybė nurodoma specialiosiose sąlygose) | K (2026-10-10) |
+| 4 Darbų etapai | „//Jei Darbai atliekami etapais ...“ + „priede Nr. []“ | K: „Ar Darbai atliekami etapais?“ Taip - lieka su priedo numeriu (1.1); Ne - antraštė lieka, tekstas - **„Punktas netaikomas.“** (1-19 punktų numeriai visose sutartyse tie patys), etapų priedas (paskutinis dokumento skyrius) ir jo eilutė priedų sąraše šalinami; Word perskaičiuoja priedų numerius, o SS nuorodos į priedus („priede Nr. ...“) skaičiuojamos po pašalinimo | K (2026-10-10) |
+
+## 2. Darbai (SS 5-9)
+
+| Vieta | Šablone | Taisyklė | Žymė |
+|---|---|---|---|
+| 5 Pagrindiniai įrenginiai | „// nurodomas Pagrindinių įrenginių sąrašas ...“ | K (privalomas, formuluotė) | K |
+| 6 Užsakovo įrenginiai | du šablono sakiniai su „[įrenginiai ir medžiagos ...]“, „[vieta, adresas]“ | K (privalomas): „Ar Užsakovas Darbams pateikia Įrenginius ir Medžiagas?“ Taip - abu laukai privalomi; Ne - vietoje abiejų sakinių **„Punktas netaikomas.“** (BS 4.9.8 taikomas, „kai Sutartyje nurodyta“) | K (2026-10-10) |
+| 7 Fizinė sauga | „// punkto reikalavimus parengia Fizinės saugos skyrius ...“ | K: Ne - „Papildomi fizinės saugos reikalavimai Darbams netaikomi.“ (šablono nurodymo formuluotė); Taip - reikalavimai (formuluotė) | K |
+| 8 Demontuojami įrenginiai „[adresas]“ | šablono sakinys su pildoma vieta | K (privalomas): Taip - adresas; Ne - vietoje sakinio **„Punktas netaikomas.“** | K (2026-10-10) |
+| 9 Dalinis apmokėjimas | „// Už Rangovo teikiamus ... 70 % ...“ | K: Taip - sąrašas arba priedas (formuluotė); Ne - **„Punktas netaikomas.“** (BS 5.9.5 c taikomas tik specialiosiose sąlygose nurodytiems Įrenginiams) | K (2026-10-10) |
+
+## 3. Darbų organizavimas, kaina ir apmokėjimas (SS 10-14)
+
+| Vieta | Šablone | Taisyklė | Žymė |
+|---|---|---|---|
+| 10 Užsakovo atstovas ir atsakingas už paskelbimą | „[Pareigos, vardas, pavardė]“, „[Telefonas, el. paštas]“ | K (neprivalomi); Rangovo atstovas - sudarant | K / SUD |
+| 11 Sutarties kaina, 13 sąskaita | pildomos vietos | sudarant (pagal laimėjusį pasiūlymą) | SUD |
+| 12 Apmokėjimas | 3 variantai su „//“ rekomendacijomis | K (privalomas): pagal Darbų žiniaraštį / pagal etapus (tik kai darbai etapais; „priede Nr. []“ - 1.1) / įvykdžius įsipareigojimus. Siūloma pagal šablono rekomendacijas: terminas iki 4 mėn. - vienu mokėjimu; pavadinime rekonstravimas, statyba, atramos - pagal žiniaraštį; remontas ir etapai - pagal etapus | K, SIŪLOMA |
+| 14 ES fondai | „// Jei Darbus numatoma finansuoti ...“ | K: šablono nurodymo formuluotės („Darbus ketinama finansuoti ...“ / „Darbai ... nefinansuojami.“) | K |
+
+## 4. Atsakomybė, baigiamos nuostatos (SS 15-19)
+
+| Vieta | Šablone | Taisyklė | Žymė |
+|---|---|---|---|
+| 15 Netesybos | 0,04 % / „arba“ pakopiniai / etapais | K (privalomas); etapais - tik kai darbai etapais (siūloma tada), „priede Nr. [...]“ - 1.1 | K, SIŪLOMA |
+| 16 Bankai ir draudimo bendrovės „prieduose Nr. [...]“ | pildoma vieta | „1.4 ir 1.5“ - iš SS priedų sąrašo (po pašalintų priedų - „1.3 ir 1.4“) | D |
+| 17 BIM | „// nurodoma ar turi būti taikomas ... priede Nr. [...]“ | K: Taip - „Rangovas turi pareigą taikyti statinio informacinį modeliavimą (BIM). Užsakovo informacijos reikalavimai pateikiami priede Nr. N.“ (BS 2.6.1 žodžiai, N - jūsų); Ne - „Statinio informacinis modeliavimas (BIM) netaikomas.“ Paaiškinime: atsakymas turi sutapti su Technine užduotimi, priedą įrašyti į priedų sąrašą (šablone jo nėra) | K (2026-10-10) |
+| 18 Investicinis projektas | „// nurodomas ... pavadinimas ir numeris“ | K: Taip - „{pavadinimas}, Nr. {numeris}.“; Ne - **„Punktas netaikomas.“** (BS 11.9.2 - „jei toks numatytas“) | K (2026-10-10) |
+| 19 Šalių kontaktai | LITGRID rekvizitai šablone; Rangovo - pildomos vietos | „ĮMONĖS PAVADINIMAS“ -> LITGRID AB; Rangovo - sudarant | D / SUD |
+
+## 5. Papildomos sąlygos (SS 20-29)
+
+| Vieta | Šablone | Taisyklė | Žymė |
+|---|---|---|---|
+| 20 Grafiko terminas (BS 2.3.1 pakeitimas) | „// punktas įrašomas, jei ... ne per 30 dienų“ | K: Taip - punktas su „per N dienas“ (forma pagal skaičių); Ne - punktas ir tuščia pastraipa po jo šalinami | K |
+| 21 Derinimo terminai (4 „Turi būti pasirinkta:“) | lentelė | K: 330 kV TP / kitos įtampos TP / kiti atvejai -> kiekviename langelyje vienas variantas (skliaustai „(pasirenkama ... atveju)“ skiria pagal projekto rūšį); „(pasirenkama ...)“ ir kablelis po jo šalinami; siūloma pagal pavadinimą (330 kV ir pastotė ar skirstykla). Paaiškinime - kas TP projekte galioja kitoms dalims: brėžiniams 15 ir 10 d. d. (BS 4.1.2), Pagrindiniams įrenginiams 10 ir 5 d. d. (BS 4.10.2) | K, SIŪLOMA (2026-10-10) |
+| 22 Ekspertizės terminas (BS 3.3.10 pakeitimas) | „// punktas įrašomas, jei ... ne per 20 darbo dienų“ | K: Taip - darbo dienų skaičius (šablone po jo „darbo dienų“ - kitam skaičiui nei 10-19, 20, 30 ... įspėjimas taisyti Word); Ne - punktas šalinamas | K |
+| 23 Atjungimo terminai (BS 4.5.1 papildymas) | „// punktas papildomas, jei ...“ + 2 terminai + „[...];“ | K: Taip - šablono punktas, „[...]“ - jūsų kiti terminai arba eilutė šalinama; Ne - punktas šalinamas | K |
+| 24 Užtikrinimas | 3 variantai su „//“ (vidaus taisyklių riba - be skaičiaus) | K (privalomas); siūloma „netaikomas“, kai SPS užtikrinimo nereikalauja; kai reikalauja - pastaba su SPS suma ir procentu, variantą (iki ar virš ribos) renkatės jūs; nesutapus su SPS - „Patikrinkite (SPS ir sutartis)“; 2 ir 3 variantai šablone be punkto numerio - numeris perkeliamas | K, SIŪLOMA |
+| 25 BS 9.9 netaikomas | „//įrašoma, kai ... nedidelės vertės remonto darbai“ | K: Taip - punktas įrašomas; Ne - šalinamas | K |
+| 26 Esminės sąlygos | „// įrašomos Sutarties sąlygos ...“ + „Esminėmis yra laikomos šios Sutarties sąlygos:“ | K: Taip - užrašas ir jūsų sąlygos (kiekviena eilutė - nauja pastraipa po užrašo); Ne - punktas šalinamas | K |
+| 27 Sprogmenų paieška | „// pagal poreikį įrašomos kitos nuostatos“ + šablono punktas | K: Taip / Ne | K |
+| 28-29 Koordinatorius | du beveik vienodi punktai be „arba“ | K: Ne / tik 28 p. / 28 ir 29 p. kartu - 29 p. vienas neįrašomas, nes sąvoka „Koordinatorius“ apibrėžta tik 28 p.; kitos nuostatos - Word programoje | K (2026-10-10) |
+| 1.1 priedas „Projektavimo ir statybos darbų etapai“ | lentelė, „(rengiant sutartį pasirenkama ...)“, „//Pildymo sąlygos:“ | darbai etapais - priedas lieka: „[OBJEKTAS]“ - 1 punkto atsakymas, lentelė ir nurodymai - W (generatorius lentelės nepildo); ne etapais - priedas šalinamas | D / W |
+| Priedų sąrašas, parašai | šablono tekstas | lieka (priedų sąrašą ir „Kiti priedai“ sutvarkote Word programoje, jei reikia) | SUD |
+
+Iš viso: 26 klausimai (2 neprivalomi - Užsakovo atstovai; papildomi laukai rodomi pagal atsakymą), siūloma reikšmė - 5 klausimams (Techninė užduotis,
+apmokėjimas, netesybos, derinimo terminai, užtikrinimas). Bendri su SPS: užtikrinimas (tik siūlymas ir derinimas).
+
+## Įgyvendinimas (2026-10-10)
+
+- Žemėlapis (`sutarciu-sablonai.py`): `priedai` (SS priedų sąrašas su Word numeriais), `skyriai` (etapų priedas - paskutinis skyrius),
+  `neprivalomos` (SS 3, 6 ir 8 sakiniai be „//“), 23 punkto dvi dalys (šablono terminai ir „[...];“), `numeracija: "word"`.
+- Generatorius (`sutarciu-generatorius.js`): `b:` neprivalomi „//“ punktai (taikoma, dalys, papildymas - naujos pastraipos; netaikoma su
+  tekstu - punktas su antrašte lieka, jo vietoje „Punktas netaikomas.“), `o:` šablono sakiniai (pašalinami arba pakeičiami tekstu; pildomos
+  vietos juose nebesprendžiamos), `nb:` nurodymų blokas, `k:` priedo skyrius (skyriaus lūžio savybės tampa dokumento pabaigos, visiškai pašalinta lentelė šalinama visa, priedų sąrašo
+  eilutė - kartu), punkto numerio perkėlimas pasirinktam variantui be numerio, „(pasirenkama ...)“ su kableliu; patikra: nelieka „//“,
+  „Turi būti pasirinkta:“, „(pasirenkama“ ne paliktose vietose.
+- Patikra pakete ir „Tikrinti parengtus dokumentus“: nuorodų patikra - tekstai su emuliuotais Word numeriais (`GP_SUTARCIU_NUORODOS.tekstai`,
+  GPNum), rangos priedų sąrašas atpažįstamas („priede Nr. 1.1“); privalomi sutarties elementai - ir „Sutarties kaina yra fiksuota“,
+  „Subrangovai“; palyginimas su forma - neprivalomi punktai, nurodymų blokai ir priedo skyrius - pasirenkamos dalys, esminės sąlygos -
+  užpildyta vieta. Išmatuota: abu atsakymų rinkiniai ir BS - 0 nukrypimų su pasu ir be jo, nuorodos ir 13 iš 13 elementų rasta.
+
+## Jūsų sprendimai (2026-10-10: „Taip, įgyvendinkite visus penkis punktus taip, kaip jūs siūlote.“)
+
+- **„Punktas netaikomas.“** (ne „Netaikoma.“, ne punkto šalinimas) - SS 4, 6, 8, 9 ir 18, kai punktas netaikomas: ta pati formuluotė kaip
+  paslaugų SS 13.1-13.2 (2026-10-08); 1-19 punktai lieka visi, todėl jų numeriai visose sutartyse tie patys. SS 20-29 - kaip šablone:
+  įrašomi tik taikomi (forma tai pasako prie grupės „Papildomos sąlygos“).
+- **BIM (SS 17)** - formuluotės tinka; paaiškinime - suderinimas su Technine užduotimi ir priedų sąrašu.
+- **Derinimo terminai (SS 21)** - vienas variantas; antra eilutė savo nuožiūra nepridedama (Pagrindiniams įrenginiams ji pakeistų kitų
+  dalių terminą iš BS 10 ir 5 d. d. į 15 ir 10 d. d. - klausimas laiške LITGRID).
+- **Koordinatorius (SS 28-29)** - Ne / tik 28 / 28 ir 29 kartu.
+- **SS 3, 6 ir 8** - sprendžia generatorius („Taip / Ne“ privalomi): skelbiamame projekte nelieka „[terminas]“, „____“, „[vieta, adresas]“.
+
+Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_PSR`).
