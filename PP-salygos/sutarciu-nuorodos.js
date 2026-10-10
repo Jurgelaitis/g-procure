@@ -91,16 +91,21 @@
      užtikrinti svarbių objektų apsaugos įstatymai, Vyriausybės nutarimas, ministro įsakymas, ES reglamentai, sprendimai, direktyvos) ir angliški
      atitikmenys. Kiekviena turi būti patikrinta e-tar ir įrašyta zemelapiai/sutarciu-teises-nuorodos.json (testas). Grąžina normalizuotas eilutes. */
   var L = "[a-ząčęėįšųūž]*";
-  var VNR = "\\d+(?:\\s+ir\\s+\\d+)?\\s+(?:straipsn" + L + "|pried" + L + ")(?:\\s+\\d+\\s+dal" + L + ")?(?:\\s+\\d+\\s+punkt" + L + ")?";
+  var VNR = "\\d+(?:\\s+ir\\s+\\d+)?\\s+(?:straipsn" + L + "|pried" + L + ")(?:\\s+\\d+(?:\\s+ir\\s+\\(arba\\)\\s+\\d+)?\\s+dal" + L + ")?(?:\\s+\\d+\\s+punkt" + L + ")?";
   var TEISES = [
     "(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s*/\\s*(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s+straipsn" + L,
     "(?:VPĮ|PĮ)\\s+" + VNR + "(?:\\s*(?:ir\\s*\\(ar\\)|ir|/|,)\\s*(?:(?:VPĮ|PĮ)\\s+)?" + VNR + ")*",
-    "civilin" + L + "\\s+kodeks" + L + "(?:\\s+\\d+\\.\\d+\\s+straipsn" + L + ")?", "darbo\\s+kodeks" + L,
+    "civilin" + L + "\\s+kodeks" + L + "(?:\\s+\\d+\\.\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?", "darbo\\s+kodeks" + L,
     "(?:tarptautinių\\s+)?sankcijų\\s+įstatym" + L, "viešojo\\s+administravimo\\s+įstatym" + L, "akcinių\\s+bendrovių\\s+įstatym" + L, "viešųjų\\s+pirkimų\\s+įstatym" + L,
     "pirkimų,\\s+atliekamų\\s+vandentvarkos,\\s+energetikos,\\s+transporto\\s+ar\\s+pašto\\s+paslaugų\\s+srities\\s+perkančiųjų\\s+subjektų,\\s+įstatym" + L,
     "nacionaliniam\\s+saugumui\\s+užtikrinti\\s+svarbių\\s+objektų\\s+apsaugos\\s+įstatym" + L + "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?",
     "nutarimu\\s+Nr\\.\\s*\\d+", "įsakymu\\s+Nr\\.\\s*[A-Z]+\\d*-\\d+", "(?:reglament|sprendim)" + L + "\\s+\\(ES\\)\\s+(?:Nr\\.\\s*)?\\d+/\\d+",
     "direktyv" + L + "\\s+\\d+/\\d+/(?:ES|EB)", "aprašo\\s+\\d+\\s+pried" + L + "(?:\\s+[IVX]+\\s+skyri" + L + ")?",
+    // rangos sutartys (2026-10-09): statybos teisės aktai, statybos techniniai reglamentai su pavadinimu, draudimo ir apsaugos taisyklės
+    "statybos\\s+įstatym" + L, "STR\\s+\\d\\.\\d{2}\\.\\d{2}:\\d{4}(?:\\s+„[^“”„]{3,80}[“”])?", "valstybinio\\s+socialinio\\s+draudimo\\s+įstatym" + L,
+    "atliekų\\s+tvarkymo\\s+įstatym" + L, "specialiųjų\\s+žemės\\s+naudojimo\\s+sąlygų\\s+įstatym" + L, "darboviečių\\s+įrengimo\\s+statybvietėse\\s+nuostat" + L,
+    "civilinės\\s+atsakomybės\\s+privalomojo\\s+draudimo\\s+taisykl" + L, "aplinkos\\s+ministro\\s+nustatyt" + L + "\\s+tvark" + L,
+    "elektros\\s+tinklų\\s+apsaugos\\s+taisykl" + L, "ICC\\s+Publication\\s+No\\.\\s*\\d+",
     // angliški atitikmenys
     "(?:clause\\s+\\d+¹?\\s+of\\s+)?Articles?\\s+[\\d.]+(?:\\(\\d+¹?\\))?(?:\\s+and\\s+\\d+)?(?:\\s+(?:and/or|and|/)\\s+(?:Article\\s+)?[\\d.]+(?:\\(\\d+¹?\\))?)*" +
       "(?:\\s+of\\s+the\\s+(?:LPP|LP|Public\\s+Procurement\\s+Law|Civil\\s+Code(?:\\s+of\\s+the\\s+Republic\\s+of\\s+Lithuania)?|Law\\s+on\\s+the\\s+Protection\\s+of\\s+Objects\\s+of\\s+Importance\\s+to\\s+Ensuring\\s+National\\s+Security))?",
@@ -128,5 +133,5 @@
     });
     return out;
   }
-  global.GP_SUTARCIU_NUORODOS = { versija: "1.1", tikrink: tikrink, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
+  global.GP_SUTARCIU_NUORODOS = { versija: "1.2", tikrink: tikrink, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
 })(typeof window !== "undefined" ? window : this);
