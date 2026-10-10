@@ -647,7 +647,26 @@ raidės, 11.3.4 Rangovas, 2.3.12 sąvoka, T4 ir T5. Turinio klausimai - laiško 
   variantas atrodydavo kaip užpildyta gretimo varianto vieta.
 - **Išmatuota:** du atsakymų rinkiniai (etapais ir ne) ir BS - generuojami be klaidų, 0 nukrypimų nuo formos su pasu ir be jo, 109
   nuorodos - visos į esamus punktus, 13 iš 13 privalomų elementų; 7 testai, 42 kodo mutacijos - visos pagaunamos.
-Liko: S5 - Pages patikra (gulsčias etapų priedas tame pačiame faile; prekių ir paslaugų atveju lentelės skaidomos) ir klausimų tekstų peržiūra.
+**S5 projektavimo ir statybos rangai (2026-10-10, „Taip, pradėkime S5 - patikrą Pages programoje.“).** Bendrosios sąlygos ir dviem atsakymų
+rinkiniais sugeneruotos specialiosios sąlygos atvertos Pages ir eksportuotos į PDF (BS - 49 psl., SS - 6 psl.):
+
+- **Tekstas:** sugeneruotuose dokumentuose neprarandama nė viena pastraipa (neparuoštas LITGRID SS šablonas Pages prarastų 14); puslapiai A4;
+  punktų numeriai Pages - tie patys kaip emuliuoti Word (BS 553, SS 54 ir 51 numeruota pastraipa).
+- **Gulsčias etapų priedas:** Pages visam dokumentui taiko pirmojo skyriaus orientaciją - priedą rodė stačią ir jo lentelės antraštę
+  nukirpdavo. Kaip pirkimo sąlygose (jūsų sprendimas 2026-10-04) - priedas generuojamas atskirame gulsčiame faile „Sutarties SS priedas 1.1“
+  (pakete - iškart po specialiųjų sąlygų; jo eilutė priedų sąraše lieka; savas generavimo pasas). Darbai ne etapais - priedo nėra.
+- **Lentelė lentelės langelyje (SS 21, derinimo terminai):** Pages ją paversdavo tekstu su tabuliacijomis. Generatorius ją perkelia į
+  pagrindinės lentelės eilutes (tekstas ir tvarka tie patys, rėmeliai - kaip įdėtinės lentelės) - Pages rodo lentelę.
+- **Įrašytų reikšmių šriftas:** „18 mėnesių“ buvo ne pusjuodžiu, nors sakinys pusjuodis; SS 3 pratęsimo sakinio reikšmės - ne kursyvu.
+  Dabar reikšmė - to paties šrifto kaip jos sakinys (prekių ir paslaugų sutarčių išvestis nepakito).
+- **Šablono paruošimas** (tekstas nekeistas): kairysis stulpelis platesnis („organizavima / s“ nebelūžta), punktų numerių šriftas
+  suvienodintas (4 ir 19 buvo kursyvu, dalis pusjuodžių), derinimo lentelėje sujungta „Techninis darbo projektas“ langelių pora.
+- **Jūsų sprendimas (2026-10-10, „Noriu įprasto šrifto.“):** SS 3 pratęsimo sakinys ir SS 12 sakinio pabaiga („bus mokama Sutarties
+  bendrųjų sąlygų 7.3.7. punkte nustatyta tvarka.“) LITGRID formoje parašyti pusjuodžiu kursyvu - sutarties projekte jie įprastu šriftu.
+- **Palikta:** eilutės nedalijamos per puslapį (Pages jų nedalytų - nukirptų), todėl puslapių pabaigoje lieka tuščios vietos.
+- 7 testai, 32 kodo mutacijos - visos pagaunamos.
+
+Liko: klausimų tekstų peržiūra (`KLAUSIMAI_PSR`).
 
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
