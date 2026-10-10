@@ -570,7 +570,7 @@ laiške LITGRID (`~/Documents/g-procure-privatu/sutartys/laiskas-LITGRID-sutarci
 | S1 | Šablonų paruošimas: redakcijų registras, `templates/sutartys/`, kartografas visiems žymėjimo būdams, žemėlapiai, redakcinių klaidų taisymai, blokuojančių šeimų žymė | kiekvienas šablonas - žemėlapis be neatpažintų vietų; taisymai pakartotinai - 0; testai su mutacijomis **prekėms ir paslaugoms padaryta 2026-10-08** (žr. žemiau); **projektavimo ir statybos rangai - 2026-10-10** (3 etapas, žr. žemiau); kitos šeimos - tuo pačiu keliu |
 | S2 | Parinkimo variklis (`PP-salygos/sutartys.js`, `GP_SUTARTYS.parink`) + taisyklių lentelė + kalibravimo testų rinkinys | 0 neteisingų automatinių parinkimų rinkinyje; >= 70 % be klausimų; stebėjimo režimas - generatorius siūlo, žmogus patvirtina, neatitikimai renkami **variklis padarytas 2026-10-08** (žr. žemiau); stebėjimo režimo sąsaja - S3 |
 | S3 | UX: blokas „Sutarties projektas“ 1 žingsnyje, klausimai K0-K5, sutarties laukai 2 žingsnyje, bendri SPS ir sutarties laukai | telefonas 375 / 320 px, prieinamumas, „Siūloma (nepatvirtinta)“ **1 žingsnio blokas padarytas 2026-10-08** (žr. žemiau); 2 žingsnio sutarties laukai - kartu su S4 |
-| S4 | Generavimas ir patikra po generavimo (4.5), pasas, tikrinimo skirtukas atpažįsta sutarčių formas | kiekvienai šeimai - sugeneruotas paketas be leistinų skirtumų už žemėlapio; mutacijos pagaunamos **prekėms ir paslaugoms padaryta 2026-10-08** (generavimas, 2 žingsnio klausimai, paketas - `docs/salygos/sutarciu-lauku-inventorius.md`); **2026-10-09 - SPS „Esminės sutarties sąlygos“ šalinimas, tiesioginis atsiskaitymas, žaliųjų derinimas ir tikrinimo skirtukas (4.4); nuorodų sargas (4.5 3 p.: `sutarciu-nuorodos.js`, 3 žingsnis ir tikrinimo skirtukas; šablonuose klaidų nebeliko, rasta ir ištaisyta SS 9.8 nuoroda į pašalintą 8.3.2)**; **PĮ 95 str. katalogas (4.5 4 p.: `shared/sutarties-elementai.js`, tikrinimo skirtukas ir 3 žingsnis) - 2026-10-09** |
+| S4 | Generavimas ir patikra po generavimo (4.5), pasas, tikrinimo skirtukas atpažįsta sutarčių formas | kiekvienai šeimai - sugeneruotas paketas be leistinų skirtumų už žemėlapio; mutacijos pagaunamos **prekėms ir paslaugoms padaryta 2026-10-08**; **projektavimo ir statybos rangai - 2026-10-10** (žr. žemiau) (generavimas, 2 žingsnio klausimai, paketas - `docs/salygos/sutarciu-lauku-inventorius.md`); **2026-10-09 - SPS „Esminės sutarties sąlygos“ šalinimas, tiesioginis atsiskaitymas, žaliųjų derinimas ir tikrinimo skirtukas (4.4); nuorodų sargas (4.5 3 p.: `sutarciu-nuorodos.js`, 3 žingsnis ir tikrinimo skirtukas; šablonuose klaidų nebeliko, rasta ir ištaisyta SS 9.8 nuoroda į pašalintą 8.3.2)**; **PĮ 95 str. katalogas (4.5 4 p.: `shared/sutarties-elementai.js`, tikrinimo skirtukas ir 3 žingsnis) - 2026-10-09** |
 | S5 | Word ir Pages patikra (lentelės, puslapio formatas - prekių failai US Letter), gyva patikra | kaip SPS **prekėms ir paslaugoms padaryta 2026-10-09**: Pages PDF - 12 dokumentų be prarasto teksto, A4, formulės; LT/EN eilutės skaidomos lygiagrečiai pagal punktų numerius; anglų stulpelio numeracija (paslaugų SS 1.2.x, prekių BS 24.2-24.5) ir LT/EN terminai („30 (thirty) days“) ištaisyti |
 | S6 | Žinių bazė (6.1, 6.3) ir pakartotinio kalibravimo procesas | registro įrašai perskaityti e-tar |
 
@@ -628,7 +628,26 @@ Generatorius sutarčių dar nenaudoja - tai S2-S4.
   CK ir NSOAĮ dalys; radiniai T4 (VPĮ ir PĮ sąvokų straipsnio dalys pavadintos „punktais“) ir T5 (pasenęs STR 1.04.02:2011 pavadinimas).
 Numeracijos, nuorodų ir terminų netikslumai (8 sk. 12 p. a-i) - ištaisyti 2026-10-10 jūsų sprendimu (privatus `taisymai_8.py`, kopija
 `originalai-2026-10-10/`): SS punktai 1-29, SS 5 p. nuoroda į 1.1.2.14, delspinigių pakopos, grafiko formos sakinys, el. paštas, BS 5.2.3.1
-raidės, 11.3.4 Rangovas, 2.3.12 sąvoka, T4 ir T5. Turinio klausimai - laiško LITGRID juodraštis (privatus, 2026-10-10). Generavimas (S4) - kitame žingsnyje.
+raidės, 11.3.4 Rangovas, 2.3.12 sąvoka, T4 ir T5. Turinio klausimai - laiško LITGRID juodraštis (privatus, 2026-10-10).
+
+**S4 projektavimo ir statybos rangai (2026-10-10; jūsų „Taip, pradėkime S4.“).** Klausimai ir taisyklės - `docs/salygos/sutarciu-lauku-inventorius.md`
+(antra dalis), juodraštis jūsų peržiūrai - 8 sk. 13 p.
+- **1 žingsnis:** `GP_SUTARTYS` šeima „Projektavimo ir statybos rangos sutartis“ - „parinkta“ su `PSR_LT_BS` / `PSR_LT_SS` (LT/EN nėra -
+  parenkama lietuviška ir tai pasakoma).
+- **2 žingsnis:** 26 klausimai SS punktų tvarka (7 grupės kaip SS skyriai), 5 su siūloma reikšme (Techninė užduotis - iš priedų sąrašo,
+  apmokėjimas ir netesybos - pagal šablono rekomendacijas, derinimo terminai - pagal pavadinimą, užtikrinimas - iš SPS); be numatytųjų.
+- **Generavimas:** neprivalomi „//“ punktai 20-29 (taikoma / ne, kelių dalių - pasirinktos dalys, esminės sąlygos - naujomis pastraipomis),
+  1-19 punktai lieka visi - netaikomame įrašoma „Punktas netaikomas.“ (SS 4, 6, 8, 9, 18; jūsų sprendimas 2026-10-10), SS 3 pratęsimo
+  sakinys pagal atsakymą šalinamas; darbai ne etapais - etapų priedas (paskutinis skyrius) ir jo eilutė priedų sąraše pašalinami, priedų
+  numeriai SS nuorodose - po pašalinimo; užtikrinimo 2 ir 3 variantams (šablone be numerio) perkeliamas punkto numeris; derinimo lentelė - vienas
+  variantas kiekviename langelyje, nurodymai „(pasirenkama ...)“ šalinami. Etapų lentelė - Word programoje (patikroje viena eilute).
+- **Patikra:** nuorodos Word numeracijos sutartyse tikrinamos su emuliuotais Word numeriais (GPNum suderintas su `word_numeriai`;
+  pirkimo sąlygų numeracija nepasikeitė), privalomi elementai - ir rangos formuluotės („Sutarties kaina yra fiksuota“, „Subrangovai“),
+  palyginimas su forma - neprivalomi punktai ir priedo skyrius kaip pasirenkamos dalys; ištaisytas poravimas, kai pakeistas pasirinktas
+  variantas atrodydavo kaip užpildyta gretimo varianto vieta.
+- **Išmatuota:** du atsakymų rinkiniai (etapais ir ne) ir BS - generuojami be klaidų, 0 nukrypimų nuo formos su pasu ir be jo, 109
+  nuorodos - visos į esamus punktus, 13 iš 13 privalomų elementų; 7 testai, 42 kodo mutacijos - visos pagaunamos.
+Liko: S5 - Pages patikra (gulsčias etapų priedas tame pačiame faile; prekių ir paslaugų atveju lentelės skaidomos) ir klausimų tekstų peržiūra.
 
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
@@ -711,3 +730,12 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
     Lieka laiškui LITGRID (turinys): BS 2.3.5 bauda ir delspinigiai, 8.3.1 „5 % arba daugiau“ ir išnaša, derinimo terminai BS ir SS,
     projektuotojo draudimo suma ir procentų bazė, ypatingojo statinio vadovas, nenugalima jėga, rizikos perėjimas, Koordinatoriaus 23 ir 24 p.,
     statybos ir projektavimo-statybos BS skirtumai (4.9.4 ir 5.9.4 terminas), VPĮ sąvokos PĮ šablone.
+
+13. ~~**Rangos sutarties klausimai (S4, 2026-10-10)**~~ - atsakyta 2026-10-10: „Taip, įgyvendinkite visus penkis punktus taip, kaip jūs
+    siūlote.“ - įgyvendinta (`docs/salygos/sutarciu-lauku-inventorius.md`, antros dalies pabaiga):
+    - b) SS 4, 6, 8, 9 ir 18, kai netaikoma, - „Punktas netaikomas.“ (punktas su antrašte lieka; 1-19 punktų numeriai nesikeičia);
+    - c) SS 17 BIM formuluotės tinka; paaiškinime - suderinimas su Technine užduotimi ir priedų sąrašu;
+    - d) SS 21 - vienas variantas; ar TP projekte kitoms dalims turi likti „Per 15 d. d.“, - laiške LITGRID;
+    - e) SS 28-29 - Ne / tik 28 / 28 ir 29 kartu (29 punktas vienas vartotų neapibrėžtą sąvoką „Koordinatorius“);
+    - f) SS 3 pratęsimo sakinys - privalomas „Taip / Ne“ („Ne“ - sakinys šalinamas), SS 6 ir 8 - „Taip / Ne“ („Ne“ - „Punktas netaikomas.“).
+    Lieka: a) klausimų tekstai - jūsų peržiūrai.
