@@ -27,7 +27,8 @@
   var SEIMOS = {
     PREKES: { pav: "Prekių pirkimo-pardavimo sutartis", sablonai: { LT: { BS: "PREKES_LT_BS", SS: "PREKES_LT_SS" }, LTEN: { BS: "PREKES_LTEN_BS", SS: "PREKES_LTEN_SS" } } },
     PASLAUGOS: { pav: "Paslaugų pirkimo-pardavimo sutartis", sablonai: { LT: { BS: "PASLAUGOS_LT_BS", SS: "PASLAUGOS_LT_SS" }, LTEN: { BS: "PASLAUGOS_LTEN_BS", SS: "PASLAUGOS_LTEN_SS" } } },
-    PROJEKTAVIMO_PASLAUGOS: { pav: "Projektavimo paslaugų sutartis", sablonai: null },
+    // P3 - specialiųjų sąlygų 3 priedas „Apmokėjimo tvarka pagal etapus“ (trečias sutarties dokumentas pakete; 2026-10-11)
+    PROJEKTAVIMO_PASLAUGOS: { pav: "Projektavimo paslaugų sutartis", sablonai: { LT: { BS: "PPS_LT_BS", SS: "PPS_LT_SS", P3: "PPS_LT_SS3" } } },
     DARBAI_MAZOJI: { pav: "Darbų pirkimo-pardavimo sutartis (mažoji)", sablonai: null },
     PROJEKTAVIMO_STATYBOS: { pav: "Projektavimo ir statybos rangos sutartis", sablonai: { LT: { BS: "PSR_LT_BS", SS: "PSR_LT_SS" } } },
     STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", sablonai: null },
@@ -237,7 +238,7 @@
                 priezastys: priezastys, kalba: kalba, pastabos: pastabos, atsakyta: atsakyta, sablonai: null };
     if (!S.sablonai) {
       rez.busena = "neparuosta";
-      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių ir paslaugų pirkimo-pardavimo ir projektavimo ir statybos rangos sutartys).");
+      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių ir paslaugų pirkimo-pardavimo, projektavimo ir statybos rangos ir projektavimo paslaugų sutartys).");
       return rez;
     }
     if (duom.rezimas === "VPI") {
@@ -260,5 +261,5 @@
              sutampa: !!(rez && rez.seima === seima && (rez.variantas || null) === (variantas || null)) };
   }
 
-  global.GP_SUTARTYS = { versija: "S3-2026-10-08", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, normalizuok: be };
+  global.GP_SUTARTYS = { versija: "S4-PPS-2026-10-11", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, normalizuok: be };
 })(typeof window !== "undefined" ? window : this);
