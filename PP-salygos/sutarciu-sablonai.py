@@ -458,7 +458,189 @@ def iprastas_sriftas(x):
     return x, 'pusjuodis kursyvas -> įprastas šriftas: %d pastraipos' % len(rasta)
 
 
-FORMATAS = {'PSR_LT_SS': [numeriu_sriftas, sujunk_tuscius, iprastas_sriftas]}
+def geltona_be_tarpu(x):
+    """Geltonai pažymėti tarpai pastraipos pradžioje ir gale (projektavimo paslaugų SS 7.1 p. „          A. s. ____“, „Telefonas “):
+    Word ir Pages juos rodo geltona juosta šalia teksto. Žymėjimas nuo tokių tarpų nuimamas (atkarpa, kurioje yra ir teksto, skaidoma į
+    dvi); tekstas ir kitas formatavimas nekeičiami. -> (xml, aprašas)"""
+    RUN = re.compile(r'<w:r[ >](?:(?!<w:r[ >]).)*?</w:r>', re.S)
+    HL = re.compile(r'<w:highlight\b[^>]*/>')
+    T = re.compile(r'(<w:t(?: [^>]*)?>)([^<]*)(</w:t>)')
+    n = [0]
+
+    def be_hl(r):
+        return re.sub(r'<w:rPr>.*?</w:rPr>', lambda m: HL.sub('', m.group(0)), r, count=1, flags=re.S)
+
+    def galas(runai, nuo_galo):
+        """Pirmoji (arba paskutinė) pažymėta atkarpa su tarpais krašte -> pakeistas sąrašas"""
+        eile = range(len(runai) - 1, -1, -1) if nuo_galo else range(len(runai))
+        for k in eile:
+            r = runai[k]
+            tt = T.findall(r)
+            rpr = re.search(r'<w:rPr>.*?</w:rPr>', r, re.S)
+            zym = bool(rpr and HL.search(rpr.group(0)))
+            kita = re.sub(r'<w:rPr>.*?</w:rPr>', '', r, flags=re.S)
+            if re.search(r'<w:(?:tab|br|drawing|pict|fldChar|instrText|footnoteReference|sym)\b', kita) or len(tt) > 1:
+                return
+            txt = tt[0][1] if tt else ''
+            if not txt.strip():
+                if zym and txt:
+                    runai[k] = be_hl(r); n[0] += 1
+                continue
+            if not zym:
+                return
+            m = re.search(r'\s+$' if nuo_galo else r'^\s+', txt)
+            if not m:
+                return
+            tarp, lik = m.group(0), (txt[:m.start()] if nuo_galo else txt[m.end():])
+            su = T.sub(lambda q: '<w:t xml:space="preserve">' + lik + '</w:t>', r, count=1)
+            be = be_hl(T.sub(lambda q: '<w:t xml:space="preserve">' + tarp + '</w:t>', r, count=1))
+            runai[k] = (su + be) if nuo_galo else (be + su)
+            n[0] += 1
+            return
+
+    def f(m):
+        pp = m.group(0)
+        if '<w:highlight' not in pp or '<w:sdt' in pp or '<w:hyperlink' in pp:
+            return pp
+        vietos = [(q.start(), q.end()) for q in RUN.finditer(pp)]
+        if not vietos:
+            return pp
+        runai = [pp[a:b] for a, b in vietos]
+        pries = list(runai)
+        galas(runai, False); galas(runai, True)
+        if runai == pries:
+            return pp
+        out, pos = [], 0
+        for (a, b), r in zip(vietos, runai):
+            out.append(pp[pos:a]); out.append(r); pos = b
+        out.append(pp[pos:])
+        nauja = ''.join(out)
+        if tekstas(nauja) != tekstas(pp):
+            raise SystemExit('geltoni tarpai: pasikeitė pastraipos tekstas „%s“' % tekstas(pp)[:60])
+        return nauja
+    x = re.sub(r'<w:p[ >](?:(?!<w:p[ >]).)*?</w:p>', f, x, flags=re.S)
+    return x, ('geltonas žymėjimas nuimtas nuo tarpų pastraipos krašte: %d' % n[0]) if n[0] else None
+
+
+# Naudotojo prašymas 2026-10-11 („sutvarkykite pastebėtas smulkmenas“) - projektavimo paslaugų SS ir jų 3 priedo įtraukos:
+#  - SS 7.1 p. Užsakovo kontaktai: penkios eilutės įtrauktos stiliumi „list by letter“ (567), trys - dešimčia tarpų; suvienodinta su
+#    Projektuotojo stulpeliu (be įtraukos): `nulis` - pastraipos įtrauka 0, `be_tarpu` - tarpai pastraipos pradžioje pašalinami;
+#  - 3 priedo 1 p. įtrauktas (360), 2 p. - ne; abu be įtraukos.
+ITRAUKOS = {'PPS_LT_SS': {'nulis': ['Užsakovo:', 'Karlo Gustavo Emilio Manerheimo g. 8,', 'LT-05131 Vilnius', 'Tel. +370\xa0707 02171', 'El. paštas: info@litgrid.eu'],
+                          'be_tarpu': ['A. s. ____________________', 'Bankas', 'PVM mokėtojo kodas LT100005748413']},
+            'PPS_LT_SS3': {'nulis': ['1. Projektavimo paslaugų kaina už tinkamai suteiktas projektavimo paslaugas bus mokama nurodytomis dalimis po kiekvieno lentelėje nurodyto etapo užbaigimo:'],
+                           'be_tarpu': []}}
+_PO_IND = r'<w:(?:contextualSpacing|mirrorIndents|suppressOverlap|jc|textDirection|textAlignment|textboxTightWrap|outlineLvl|divId|cnfStyle|rPr|sectPr|pPrChange)\b'
+
+
+def itraukos(kodas):
+    """-> funkcija (xml) -> (xml, aprašas): pagal ITRAUKOS[kodas]. Kiekvienas įrašas turi atitikti lygiai vieną pastraipą; žodžiai nekeičiami
+    (tikrinama be tarpų pastraipos pradžioje)."""
+    K = ITRAUKOS[kodas]
+
+    def f(x):
+        rasta = {k: 0 for k in K['nulis'] + K['be_tarpu']}
+        be = lambda t: ''.join(t.split())   # be tarpų: pastraipų tekstai čia sujungti be skirtuko
+
+        def pastraipa(m):
+            pp = m.group(0)
+            t = tekstas(pp)
+            if t.strip() in K['nulis'] and t == t.lstrip():
+                k = t.strip()
+                pm = re.match(r'(<w:p\b[^>]*>)(<w:pPr>.*?</w:pPr>)?', pp, re.S)
+                ppr = pm.group(2) or '<w:pPr></w:pPr>'
+                rpr = re.search(r'<w:rPr>.*?</w:rPr>', ppr, re.S)
+                kunas = ppr[:rpr.start()] if rpr else ppr[:-len('</w:pPr>')]
+                likutis = ppr[len(kunas):]
+                nauja_ind = '<w:ind w:left="0" w:firstLine="0"/>'
+                if re.search(r'<w:ind\b[^>]*/>', kunas):
+                    kunas = re.sub(r'<w:ind\b[^>]*/>', nauja_ind, kunas, count=1)
+                else:
+                    v = re.search(_PO_IND, kunas)
+                    kunas = (kunas[:v.start()] + nauja_ind + kunas[v.start():]) if v else kunas + nauja_ind
+                rasta[k] += 1
+                return pm.group(1) + kunas + likutis + pp[pm.end():]
+            if t != t.lstrip() and t.strip() in K['be_tarpu']:
+                k = t.strip()
+                nauja, pirmas = pp, True
+                while pirmas:
+                    r = re.search(r'<w:r[ >](?:(?!<w:r[ >]).)*?</w:r>', nauja, re.S)
+                    tt = re.findall(r'<w:t(?: [^>]*)?>([^<]*)</w:t>', r.group(0)) if r else None
+                    kita = re.sub(r'<w:rPr>.*?</w:rPr>', '', r.group(0), flags=re.S) if r else ''
+                    if not r or len(tt) != 1 or re.search(r'<w:(?:tab|br|drawing|pict|fldChar|instrText)\b', kita):
+                        raise SystemExit('įtraukos: pastraipos „%s“ pradžia neatpažinta' % k)
+                    if not tt[0].strip():
+                        nauja = nauja[:r.start()] + nauja[r.end():]          # atkarpa vien iš tarpų - šalinama
+                        continue
+                    rr = re.sub(r'(<w:t(?: [^>]*)?>)([^<]*)(</w:t>)', lambda q: q.group(1) + q.group(2).lstrip() + q.group(3), r.group(0), count=1)
+                    nauja = nauja[:r.start()] + rr + nauja[r.end():]
+                    pirmas = False
+                if tekstas(nauja) != t.lstrip():
+                    raise SystemExit('įtraukos: pasikeitė pastraipos „%s“ tekstas' % k)
+                rasta[k] += 1
+                return nauja
+            return pp
+        pries = be(tekstas(x))
+        x = re.sub(r'<w:p[ >](?:(?!<w:p[ >]).)*?</w:p>', pastraipa, x, flags=re.S)
+        if any(n != 1 for n in rasta.values()):
+            raise SystemExit('įtraukos (%s): pastraipų rasta %s' % (kodas, rasta))
+        if be(tekstas(x)) != pries:
+            raise SystemExit('įtraukos (%s): pasikeitė tekstas' % kodas)
+        return x, 'įtraukos suvienodintos: %d pastraipos' % len(rasta)
+    return f
+
+
+def nelauzomas_ty(x):
+    """„t. y.“ su jungiamuoju tarpu (U+00A0): projektavimo paslaugų SS 3.8 p. santrumpa lūždavo per dvi eilutes („... laikotarpį, t.“ /
+    „y. 24 mėnesius“). Keičiamas tik tarpas tarp „t.“ ir „y.“ (ir kai jie skirtingose atkarpose). -> (xml, aprašas)"""
+    n = [0]
+
+    def f(m):
+        pp = m.group(0)
+        T = [(q.start(2), q.end(2)) for q in re.finditer(r'(<w:t(?: [^>]*)?>)([^<]*)(</w:t>)', pp)]
+        t = ''.join(pp[a:b] for a, b in T)
+        vietos = [q.end() - 3 for q in re.finditer(r'(?:^|[^A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž])t\. y\.', t)]
+        if not vietos:
+            return pp
+        out = pp
+        for v in sorted(vietos, reverse=True):
+            pos = 0
+            for a, b in T:
+                if pos <= v < pos + (b - a):
+                    i = a + (v - pos)
+                    assert out[i] == ' '
+                    out = out[:i] + ' ' + out[i + 1:]
+                    break
+                pos += b - a
+            n[0] += 1
+        return out
+    x = re.sub(r'<w:p[ >](?:(?!<w:p[ >]).)*?</w:p>', f, x, flags=re.S)
+    if not n[0]:
+        raise SystemExit('„t. y.“ nerasta')
+    return x, '„t. y.“ su jungiamuoju tarpu: %d' % n[0]
+
+
+FORMATAS = {'PSR_LT_SS': [numeriu_sriftas, sujunk_tuscius, iprastas_sriftas],
+            'PPS_LT_SS': [itraukos('PPS_LT_SS'), nelauzomas_ty, geltona_be_tarpu],
+            'PPS_LT_SS3': [itraukos('PPS_LT_SS3')]}
+
+
+# Word teksto efektai (šešėlis, nematomas kontūras) - formatavimo likutis: projektavimo paslaugų SS 7.1 p. Užsakovo kontaktų eilutės
+# (stilius „list by letter“ ir pačios atkarpos) parašytos su šešėliu, todėl Pages ir Word jas rodo išplaukusias (2026-10-11).
+EFEKTAI = r'<w14:(shadow|textOutline|glow|reflection|props3d|scene3d)\b(?:[^>]*/>|.*?</w14:\1>)'
+
+
+def be_teksto_efektu(dalys, x):
+    """Teksto efektai šalinami iš dokumento ir stilių; tekstas nekeičiamas. -> (xml, pakeitimai)"""
+    n = len(re.findall(r'<w14:shadow\b', x))
+    x = re.sub(EFEKTAI, '', x, flags=re.S)
+    if 'word/styles.xml' in dalys:
+        sx = dalys['word/styles.xml'].decode('utf-8')
+        m = len(re.findall(r'<w14:shadow\b', sx))
+        if m:
+            dalys['word/styles.xml'] = re.sub(EFEKTAI, '', sx, flags=re.S).encode('utf-8')
+            n += m
+    return x, (['teksto šešėlis pašalintas: %d vietos' % n] if n else [])
 
 
 def eilutes(t):
@@ -488,7 +670,8 @@ def paruosk(b, kodas=None):
     x, pk0 = be_apvalkalo(x, kodas)
     x, pk = i_a4(x)
     x, pk2 = stulpeliai(x, kodas)
-    pk = pk0 + pk + pk2
+    x, pk3 = be_teksto_efektu(dalys, x)
+    pk = pk0 + pk + pk2 + pk3
     for f in FORMATAS.get(kodas, []):
         x, kas = f(x)
         if kas:
@@ -646,6 +829,9 @@ BE_LAUKU = {'PPS_LT_SS'}
 #   nurodymai_skliaustuose - nurodymas rengėjui laužtiniuose skliaustuose (ne pildoma vieta): (id, pastraipos pradžia, nurodymo pradžia)
 #   priedu_eilutes - priedų sąrašo eilutės „N priedas. Pavadinimas“ (numeris tekstu): reguliarioji išraiška su numerio grupe
 #   lenteliu_pasirinkimai - viena iš kelių lentelių: (id, [pirmo lygio lentelių eilės numeriai])
+#   zymejimas   - "pildoma": geltonas žymėjimas šablone reiškia pildomą vietą - sugeneruotoje sutartyje jis lieka ten, kur vieta palikta
+#                 pildyti sudarant sutartį (tiekėjo duomenys, kaina, atstovai), ir nuimamas išspręstose vietose bei `zinomos` pastraipose
+#   zinomos     - pažymėtos pastraipos, kuriose - jau žinoma reikšmė ar antraštė (Užsakovo adresas, „Užsakovo atstovas:“): visas tekstas
 BLOKAI = {'PSR_LT_SS': {
     'sritys': [('priedų sąrašas', 'SUTARTIES DOKUMENTAI IR PRIEDAI:'), ('parašai', 'Užsakovo vardu:'), ('1.1 priedas', '[OBJEKTAS]')],
     'irasyti': [('objektas', '//nurodomas statomas'), ('techninė_užduotis', '// nurodomas priedas, kuriame pateikiama Techninė užduotis'),
@@ -680,6 +866,10 @@ BLOKAI = {'PSR_LT_SS': {
     'priedu_skyriai': [('1.1 priedas', 'Projektavimo ir statybos darbų etapai;')]},
     'PPS_LT_SS': {
     'sritys': [('parašai', 'Tai patvirtindamos, Šalys pasirašė')],
+    'zymejimas': 'pildoma',
+    'zinomos': ['Užsakovo atstovas:', 'Projektuotojo atstovas:', 'Užsakovo atstovas, atsakingas už Sutarties ir jos pakeitimų viešinimą:', 'Užsakovo:',
+                'Karlo Gustavo Emilio Manerheimo g. 8,', 'LT-05131 Vilnius', 'Tel. +370 707 02171', 'El. paštas: info@litgrid.eu',
+                'PVM mokėtojo kodas LT100005748413', 'Projektuotojo:'],
     # naudotojo sprendimas 2026-10-11 (g): 3.1 p. „arba“ variantas perkeltas iš rangos sutarties („Darbai“, priedas „Projektavimo ir statybos
     # darbų etapai“, kurio šioje sutartyje nėra) - generatorius jo nesiūlo; klausimas LITGRID
     'nesiulomi': [('etapų_variantas', ['arba', '// Jei Darbai atliekami etapais'],
@@ -1037,6 +1227,16 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
         for q, tq in enumerate(PS):
             if re.search(r'\[pasirinkti vieną\]', tq, re.I) and q not in zymes:
                 Z['neatpazinta'].append({'i': q, 'vieta': pastr_info[q]['vieta'], 'tekstas': '„[pasirinkti vieną]“ be bloko: ' + tq[:100], 'spalva': ''})
+    if B.get('zymejimas'):
+        Z['zymejimas'] = B['zymejimas']
+        Z['zinomos'] = []
+        for pr in B.get('zinomos', []):
+            qs = [q for q, tq in enumerate(PS) if tq == pr]
+            if len(qs) != 1:
+                raise SystemExit('%s: žinomos reikšmės pastraipa „%s“ rasta %d kartų' % (kodas, pr, len(qs)))
+            if not any(x['i'] == qs[0] for x in Z['paryskinimai']):
+                raise SystemExit('%s: žinomos reikšmės pastraipa „%s“ šablone nepažymėta' % (kodas, pr))
+            Z['zinomos'].append(qs[0])
     if B.get('priedu_eilutes'):
         Z['priedai'] = [{'i': q, 'nr': m.group(1), 'tekstas': tq} for q, tq in enumerate(PS) for m in [re.match(B['priedu_eilutes'], tq)] if m]
         nrs = [int(x['nr']) for x in Z['priedai']]

@@ -4591,7 +4591,9 @@ function rodykRezultata(rez){
       + (SB.pasirinkta ? `${esc(SB.pavadinimas)} - ${SB.patvirtinta ? 'patvirtinta' : 'siūloma (nepatvirtinta)'}`
           + (SB.zmogaus ? `; sistema siūlė: ${esc(SB.sistema.busena === 'klausimas' ? 'neatsakytas klausimas' : SB.sistema.busena === 'nerengiama' ? 'projekto nerengti' : SB.sistema.pavadinimas)}` : '')
         : 'nepasirinkta - 1 žingsnyje liko neatsakytas klausimas')
-      + (sug.length ? `. Į paketą įtrauktos bendrosios ir specialiosios sąlygos - šablono tekstas nekeistas, keistos tik pažymėtos vietos (patikrinta po generavimo).`
+      + (sug.length ? `. Į paketą įtrauktos bendrosios ir specialiosios sąlygos${sug.some(r => r.sutartiesPriedoSablonas) ? ' ir specialiųjų sąlygų 3 priedas' : ''} - šablono tekstas nekeistas, keistos tik pažymėtos vietos (patikrinta po generavimo).`
+           + sug.flatMap(r => r.sutartis.pakeista.filter(p => p.ka === 'nesiūlomas variantas')).map(p => `<div id="sutartiesNesiulomi">Pašalintas šablono ${esc(p.vieta)} punkto variantas („${esc(String(p.buvo || '').slice(0, 110))}...“): ${esc(p.kodel || '')}.</div>`).join('')
+           + (sug.some(r => r.sutartiesPriedoSablonas) ? (kiek => `<div class="cite" id="sutartiesGeltona">Geltonas žymėjimas specialiosiose sąlygose paliktas tik vietose, pildomose sudarant sutartį (${kiek}); išspręstose vietose jis nuimtas.</div>`)(grupe('sudarant').length) : '')
            + (grupe('word').length ? `<div><b>Sutvarkykite Word programoje:</b> ${grupe('word').map(esc).join('; ')}.</div>` : '')
            + (grupe('neatsakyta').length ? `<div><b>Liko neužpildyta (neprivaloma):</b> ${grupe('neatsakyta').map(esc).join('; ')}.</div>` : '')
            + `<div class="cite">Pildoma sudarant sutartį: ${grupe('sudarant').length} vietos (tiekėjo duomenys, sumos, subtiekėjai, parašai) - jos paliktos šablono forma.</div>`
@@ -4603,6 +4605,7 @@ function rodykRezultata(rez){
                orientaciją ir stačiame dokumente priedo lentelę nukirptų. Priedo eilutė priedų sąraše liko specialiosiose sąlygose, tekstas nekeistas.</div>` : '')(rez.find(r => r.sutartiesPriedas))
            + (sug.some(r => r.sutartis.isvyniota) ? `<div class="cite" id="sutartiesLenteles">Lentelė lentelės langelyje (dokumentacijos derinimo terminai) perkelta į pagrindinės lentelės eilutes -
                Pages įdėtinę lentelę rodytų tekstu be langelių. Tekstas ir jo tvarka nekeisti (patikrinta po generavimo).</div>` : '')
+           + (nesug.length ? `<div class="lk-ispejimas" id="sutartiesNesugeneruota">Nesugeneruota: ${esc(nesug.map(r => (r.d.dokumentas || r.d.pavadinimas) + ' - ' + (r.sutartis.klaidos || []).join('; ')).join(' | '))}.</div>` : '')
            + (SB.kalba === 'LTEN' ? `<div class="cite" id="sutartiesEn">Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI (Claude) pagal VPT vertimų ir ES pirkimų terminiją, bendrosiose - VPT neoficialus vertimas su suvienodintais terminais; vertėjas netikrino. DI požymis įrašytas Word failų savybėse.</div>` : '')
          : nesug.length ? `. Sutarties projektas nesugeneruotas: ${esc(nesug.flatMap(r => r.sutartis.klaidos || []).join('; '))}.`
          : !SB.sablonai ? '. Į paketą neįtraukiamas - šiai sutarčiai šablonas generatoriui dar neparuoštas arba projektas nerengiamas.'
@@ -5719,6 +5722,19 @@ async function sutartiesDokumentai(){
     }
   }
   if (priedas && out.length === 2 && out[1].blob) out.push(priedas);   // iškart po specialiųjų sąlygų
+  // Specialiųjų sąlygų priedas su savu šablonu (projektavimo paslaugų SS 3 priedas „Apmokėjimo tvarka pagal etapus“, 2026-10-11):
+  // trečias sutarties dokumentas - lieka pasirinkta etapų lentelė
+  if (SB.sablonai.P3 && out.length >= 2 && out[1].blob){
+    const kod = SB.sablonai.P3, R = reg.sablonai[kod], Zp = await gaukJson('zemelapiai/sutartys/' + kod + '.json');
+    const ps = GP_SUTARTIES_FORMA.priedoSprendimai(Zp, F.R);
+    const d = { trumpas: kod, pavadinimas: R ? R.pavadinimas : kod, dokumentas: 'Sutarties SS 3 priedas' };
+    if (ps.truksta.length) out.push({ d, blob: null, sutartis: { klaidos: ps.truksta }, stats: {}, audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } });
+    else {
+      const r = await GP_SUTARCIU_GEN.generuok(await gaukBuf('templates/sutartys/' + kod + '.docx'), Zp, ps.S, { sablonas: kod, forma: R ? R.dabartine : '', data: GP_EKSPORTAS.siandien() });
+      out.push({ d, blob: r.blob, sutartis: r.ataskaita, sutartiesPriedoSablonas: kod, stats: {}, forma: false,
+        audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0, patikrinti: r.ataskaita.palikta.filter(p => p.kodel !== 'sudarant').map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}` })) } });
+    }
+  }
   return out;
 }
 
