@@ -44,6 +44,7 @@
     T.forEach(function (t) {
       t = t || "";
       var m = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*(\d+)/i.exec(t); if (m) s[m[1]] = 1;
+      m = /^\s*(\d+)\s+priedas\.\s/i.exec(t); if (m) s[m[1]] = 1;                               // „3 priedas. Apmokėjimo tvarka pagal etapus;“ (projektavimo paslaugų SS)
       if (/^\s*SUTARTIES DOKUMENTAI IR PRIEDAI:?\s*$/.test(t)) { sarase = true; return; }
       if (sarase && /^\s*(Užsakovo|Rangovo) vardu:?\s*$/.test(t)) sarase = false;
       var n = sarase && /^\s*(\d+(?:\.\d+)?)\.(?=\s)/.exec(t); if (n) s[n[1]] = 1;
@@ -104,7 +105,7 @@
         while ((m = PRIED.exec(t))) {
           var nrp = m[1] || m[2] || m[3], pr0 = t.slice(Math.max(0, m.index - 30), m.index);
           if (TEISES_AKTAS.test(pr0) || PAVYZDYS.test(pr0) || /^\s*to\s+the\s+(LPP|LP|Law)/i.test(t.slice(m.index + m[0].length, m.index + m[0].length + 16))) continue;
-          if (/^\s*\d+\.\d+\.?\s*(Priedas|Annex)/i.test(t) && m.index <= 12) continue;             // pats priedų sąrašo įrašas
+          if ((/^\s*\d+\.\d+\.?\s*(Priedas|Annex)/i.test(t) && m.index <= 12) || (/^\s*\d+\s+priedas\.\s/i.test(t) && m.index <= 4)) continue;   // pats priedų sąrašo įrašas
           out.nuorodu++;
           if (!pr) { out.nepatikrinta.push({ dok: dok, nr: nrp, priezastis: "specialiųjų sąlygų (priedų sąrašo) nėra" }); continue; }
           if (!pr[nrp]) out.radiniai.push({ dok: dok, i: i, nr: nrp, rusis: "priedas", citata: t.slice(Math.max(0, m.index - 30), m.index + m[0].length + 20).trim() });
@@ -119,12 +120,16 @@
      atitikmenys. Kiekviena turi būti patikrinta e-tar ir įrašyta zemelapiai/sutarciu-teises-nuorodos.json (testas). Grąžina normalizuotas eilutes. */
   var L = "[a-ząčęėįšųūž]*";
   var VNR = "\\d+(?:\\s+ir\\s+\\d+)?\\s+(?:straipsn" + L + "|pried" + L + ")(?:\\s+\\d+(?:\\s+ir\\s+\\(arba\\)\\s+\\d+)?\\s+dal" + L + ")?(?:\\s+\\d+\\s+punkt" + L + ")?";
+  var STR_DAL = "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?";
   var TEISES = [
     "(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s*/\\s*(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s+straipsn" + L,
     "(?:VPĮ|PĮ)\\s+" + VNR + "(?:\\s*(?:ir\\s*\\(ar\\)|ir|/|,)\\s*(?:(?:VPĮ|PĮ)\\s+)?" + VNR + ")*",
     "civilin" + L + "\\s+kodeks" + L + "(?:\\s+\\d+\\.\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?", "darbo\\s+kodeks" + L,
-    "(?:tarptautinių\\s+)?sankcijų\\s+įstatym" + L, "viešojo\\s+administravimo\\s+įstatym" + L, "akcinių\\s+bendrovių\\s+įstatym" + L, "viešųjų\\s+pirkimų\\s+įstatym" + L,
-    "pirkimų,\\s+atliekamų\\s+vandentvarkos,\\s+energetikos,\\s+transporto\\s+ar\\s+pašto\\s+paslaugų\\s+srities\\s+perkančiųjų\\s+subjektų,\\s+įstatym" + L,
+    "(?:tarptautinių\\s+)?sankcijų\\s+įstatym" + L, "viešojo\\s+administravimo\\s+įstatym" + L, "akcinių\\s+bendrovių\\s+įstatym" + L,
+    // pilnas VPĮ ar PĮ pavadinimas - su straipsniu ir dalimi, jei jie nurodyti iškart po jo (projektavimo paslaugų BS, 2026-10-11)
+    "viešųjų\\s+pirkimų\\s+įstatym" + L + STR_DAL,
+    "pirkimų,\\s+atliekamų\\s+vandentvarkos,\\s+energetikos,\\s+transporto\\s+ar\\s+pašto\\s+paslaugų\\s+srities\\s+perkančiųjų\\s+subjektų,\\s+įstatym" + L + STR_DAL,
+    "kainodaros\\s+taisyklių\\s+nustatymo\\s+metodik" + L,
     "nacionaliniam\\s+saugumui\\s+užtikrinti\\s+svarbių\\s+objektų\\s+apsaugos\\s+įstatym" + L + "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?",
     "nutarimu\\s+Nr\\.\\s*\\d+", "įsakymu\\s+Nr\\.\\s*[A-Z]+\\d*-\\d+", "(?:reglament|sprendim)" + L + "\\s+\\(ES\\)\\s+(?:Nr\\.\\s*)?\\d+/\\d+",
     "direktyv" + L + "\\s+\\d+/\\d+/(?:ES|EB)", "aprašo\\s+\\d+\\s+pried" + L + "(?:\\s+[IVX]+\\s+skyri" + L + ")?",
@@ -160,5 +165,5 @@
     });
     return out;
   }
-  global.GP_SUTARCIU_NUORODOS = { versija: "1.3", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
+  global.GP_SUTARCIU_NUORODOS = { versija: "1.4", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
 })(typeof window !== "undefined" ? window : this);

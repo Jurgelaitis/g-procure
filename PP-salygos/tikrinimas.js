@@ -154,6 +154,14 @@
     var lite = function (t) { return P_NORM(t); };
     var re = function (t) { return lite(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\[(_|\\\.\\\.\\\.|…)\\\]|\\\{\\\.\\\.\\\.\\\}/g, "[\\s\\S]*?").replace(/ /g, "\\s*"); };
     var vald = function (sdt) { return (Z.valdikliai || [])[SDT.indexOf(sdt)] || null; };
+    // Projektavimo paslaugų SS (2026-10-11): pasirinkimas pastraipos viduje („[pasirinkti vieną]“) - leidžiamas tik vienas iš šablono variantų
+    // (su tekstu prieš ir po), nepasirinkta pastraipa lieka kaip formoje; kitoks tekstas - pakeista nuostata
+    (Z.vidiniai || []).forEach(function (v) {
+      vieta[v.i] = 1;
+      try {
+        leidziami[v.i] = new RegExp("^\\s*(?:\\d+(?:\\.\\d+)*\\.?\\s*)?" + re(v.pries) + "\\s*(?:" + v.variantai.map(re).join("|") + ")\\s*" + re(v.po) + "\\s*$");
+      } catch (e) { /* netinkamas šablonas - lieka vieta */ }
+    });
     var slotas = function (sdt) {
       var v = vald(sdt);
       if (!v || v.rusis !== "dropDownList" || !v.elementai || !v.elementai.length) return "[\\s\\S]*?";
@@ -210,6 +218,8 @@
       if (/^esmin/.test(b.id)) visos.forEach(function (i) { if (/:$/.test(String(Z.pastraipos[i] || ""))) vietaPo[i] = 1; });
     });
     (Z.nurodymu_blokai || []).forEach(function (b) { [b.i].concat(b.apima).forEach(function (i) { salinama[i] = 1; }); });
+    // šablono variantas, kurio generatorius nesiūlo (projektavimo paslaugų SS 3.1 „arba“) - pasirenkama dalis: pašalinta - ne nukrypimas
+    (Z.nesiulomi || []).forEach(function (b) { blokai.push({ blokas: { nuo: Math.min.apply(null, b.pastraipos), iki: Math.max.apply(null, b.pastraipos) } }); });
     // sakiniai, taikomi tik tam tikru atveju (rangos SS 3, 6, 8 p.): pašalinti arba pakeisti „Punktas netaikomas.“ - pasirenkama dalis
     (Z.neprivalomos || []).forEach(function (b) { blokai.push({ blokas: { nuo: Math.min.apply(null, b.pastraipos), iki: Math.max.apply(null, b.pastraipos) } }); });
     (Z.skyriai || []).forEach(function (k) {
@@ -351,6 +361,7 @@
       // sutarties specialiųjų sąlygų priedas atskirame gulsčiame faile (rangos SS etapų priedas) - priedas, ne sutarties sąlygos
       if (x && x.gulscias && B.formos[d.id] === undefined && /_(SS|BS)$/.test(f)) v[d.id] = "priedas";
       else if (/_SS$/.test(f)) v[d.id] = "sutartis"; else if (/_BS$/.test(f)) v[d.id] = "sutartis_bendrosios";
+      else if (/_SS\d+$/.test(f)) v[d.id] = "priedas";   // sutarties specialiųjų sąlygų priedas su sava forma (projektavimo paslaugų SS 3 priedas)
     });
     Object.keys(B.vaidmenys).forEach(function (id) { v[id] = B.vaidmenys[id]; });
     return v;

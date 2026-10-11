@@ -237,7 +237,7 @@
                 priezastys: priezastys, kalba: kalba, pastabos: pastabos, atsakyta: atsakyta, sablonai: null };
     if (!S.sablonai) {
       rez.busena = "neparuosta";
-      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių ir paslaugų pirkimo-pardavimo sutartys).");
+      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių ir paslaugų pirkimo-pardavimo ir projektavimo ir statybos rangos sutartys).");
       return rez;
     }
     if (duom.rezimas === "VPI") {
