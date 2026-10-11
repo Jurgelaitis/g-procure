@@ -702,7 +702,30 @@ registre ir tuo pačiu keliu. Generatorius šios sutarties dar nerengia - tai S4
   viena 3 priedo lentelė - ne nukrypimas, pakeistas varianto tekstas - nukrypimas.
 - 5 testai (13 šablono ir žemėlapio mutacijų, 10 kodo mutacijų - visos pagaunamos).
 
-Liko S4 (klausimai ir generavimas: pasirinkimas pastraipos viduje, 3 priedas - trečias dokumentas pakete) ir S5 (Pages), laiškas LITGRID.
+**S4 projektavimo paslaugų sutarčiai (2026-10-11; jūsų „Taip, pradėkime S4, abu klausimai - kaip rekomenduojate.“).** Klausimai ir taisyklės -
+`docs/salygos/sutarciu-lauku-inventorius.md` (dalis „Projektavimo paslaugų sutartis“).
+- **1 žingsnis:** šeima „Projektavimo paslaugų sutartis“ parenkama su šablonais (bendrosios ir specialiosios sąlygos ir 3 priedas; tik LT).
+- **2 žingsnis:** 13 klausimų specialiųjų sąlygų punktų tvarka (`KLAUSIMAI_PPS`), visi privalomi, be numatytųjų. Pagal jūsų taisyklę
+  (sutarties projektas rengiamas prieš pirkimą) tiekėjo duomenų, kainos ir atstovų neklausiama - jie lieka kaip šablone. Siūloma tik su
+  kilme: 3 priedo lentelė pagal pirkimo pavadinimą, patikra pagal 1 žingsnio nacionalinio saugumo atsakymą, 3.6 punkto skaičius pagal 3.3,
+  užtikrinimas „ne“, kai SPS jo nereikalauja.
+- **Jūsų sprendimai:** netaikomame punkte - „Punktas netaikomas.“ (1.2, 8.2, 8.3, 8.4; punktų numeriai visose sutartyse tie patys);
+  12 priedo eilutė, kai patikra neatliekama, - „12 priedas. Pareigų sąrašas - netaikoma;“ (13-15 priedų numeriai nesikeičia).
+- **Generatorius:** pasirinkimas toje pačioje pastraipoje (4.2, 6.1, 8.1) - lieka pasirinktas šablono variantas, žyma „[pasirinkti vieną]“
+  pašalinama; 3.1 punkto „arba“ variantas (iš rangos sutarties) pašalinamas visada ir tai pasakoma patikroje su priežastimi; geltonas
+  žymėjimas lieka tik vietose, pildomose sudarant sutartį, - išspręstose vietose, prie žinomų reikšmių (Užsakovo adresas, antraštės) ir
+  tuščiose pastraipose nuimamas.
+- **3 priedas** - trečias sutarties dokumentas pakete (iškart po specialiųjų sąlygų): lieka pasirinkta etapų lentelė.
+- **Patikra:** nuorodos - visos į esamus punktus; privalomi sutarties elementai - 13 iš 13 (katalogas papildytas: šalis „Projektuotojas“,
+  „Šios Sutarties vykdymui Šalys paskiria ...“); „Tikrinti parengtus dokumentus“ - sugeneruoti dokumentai be nukrypimų su pasu ir be jo.
+- **Word ir Pages:** ruošiant šabloną pašalintas teksto šešėlis (7.1 punkto Užsakovo kontaktų eilutės atrodė išplaukusios) ir geltonas
+  žymėjimas nuo tarpų eilutės pradžioje; generuojant tarpas po pastraipos su likusiu geltonu žymėjimu perkeliamas į tuščią tikslaus aukščio
+  pastraipą (Pages žymėjimą nudažo ir per tarpą po pastraipos). Jūsų prašymu sutvarkytos ir trys smulkmenos: 7.1 punkto Užsakovo eilutės be
+  nevienodos įtraukos, 3.8 punkto „t. y.“ nebelūžta per dvi eilutes, 3 priedo 1 ir 2 punktai sulygiuoti. Pages: bendrosios sąlygos 23 psl.,
+  specialiosios 3 psl., 3 priedas 1 psl., A4, tekstas neprarandamas, numeriai kaip Word.
+- 9 testai, kodo mutacijos - žr. CLAUDE.md.
+
+Liko: klausimų tekstų peržiūra (`KLAUSIMAI_PPS`), laiškas LITGRID.
 
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
@@ -808,6 +831,8 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
     - j) SS 3.3-3.8 su tašku, „13 priedas.“.
     Lieka laiškui LITGRID (turinys): SS 3.1 „arba“ variantas, BS 4.2.2 ir 4.2.4 pasikartojantis sakinys, bauda ir delspinigiai už tą patį
     pažeidimą, BIM nuostata SS, priedų failai aplanke neatitinka priedų sąrašo, 7.4.1 e) ir 7.4.2, Viešųjų pirkimų įstatymo sąvokos (T6).
+    S4 (2026-10-11, „Taip, pradėkime S4, abu klausimai - kaip rekomenduojate.“): netaikomame punkte - „Punktas netaikomas.“; 12 priedo eilutė,
+    kai patikra neatliekama, lieka su žodžiu „netaikoma“ - įgyvendinta.
 15. **Grupės iždo politikos užtikrinimo riba** (jūsų atsakymas 2026-10-11: vidinė informacija, iš viešų šablonų pašalinta; „turi būti
     numatyta sistemoje pranešimas“): saugykla vieša, todėl skaičius kode vėl taptų viešas. Siūlomi keliai: (1) ribą įvedate naršyklėje
     (nustatymas, saugomas tik joje ir atsarginėje kopijoje), sistema pagal ją primena; (2) pranešimas be skaičiaus („patikrinkite pagal

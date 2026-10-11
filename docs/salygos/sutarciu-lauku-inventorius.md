@@ -246,5 +246,63 @@ tiekėjo rekvizitai, kaina ir kitos tik sudarant sutartį paaiškėjančios viet
 3 priedas - dvi etapų lentelės (1 lentelė: 10 / 20 / 50 / 20 proc., 2 lentelė: 20 / 20 / 40 / 20 proc.); šablono autorių pastaba - kiekvienam
 projektui pasirenkama viena: projektuojant pastotes rekomenduojama 1 lentelė, oro linijas - 2. S4 - klausimas, kuri lentelė taikoma; antroji šalinama. BS pildomų vietų neturi (tik „ĮMONĖS PAVADINIMAS“).
 
-S4 klausimai, kuriuos reikės suderinti su jumis: ar netaikomuose SS punktuose rašyti „Punktas netaikomas.“ (kaip rangos SS 1-19) ar punktą
-šalinti (tada keistųsi numeriai); ką daryti su 12 priedo eilute, kai patikra neatliekama (numeriai tekstu - „13 priedas.“ taptų 12-u).
+## Jūsų sprendimai (2026-10-11: „Taip, pradėkime S4, abu klausimai - kaip rekomenduojate.“)
+
+- **„Punktas netaikomas.“** netaikomame specialiųjų sąlygų punkte (1.2, 8.2, 8.3, 8.4) - punktas lieka, numeriai visose sutartyse tie patys
+  (kaip rangos SS 1-19 ir paslaugų SS 13.1-13.2).
+- **12 priedo eilutė** „Pareigų sąrašas“, kai patikra neatliekama, lieka su žodžiu „netaikoma“ („12 priedas. Pareigų sąrašas - netaikoma;“) -
+  13-15 priedų numeriai nesikeičia. Tas pats 15 priedo eilutei, kai kitų priedų nėra („15 priedas. Kiti priedai - netaikoma.“).
+
+## Klausimai 2 žingsnyje (S4, 2026-10-11; `KLAUSIMAI_PPS`, 13 - visi privalomi, be numatytųjų)
+
+| Nr. | SS vieta | Klausimas | Atsakymas -> sutartyje | Siūloma |
+|---|---|---|---|---|
+| 1 | 1.2 | Ar Sutartis sudaroma įgyvendinant Užsakovo investicinį projektą? | Taip - projekto pavadinimas ir numeris sakinyje; Ne - „Punktas netaikomas.“ | - |
+| 2 | 2.1 | Kokio objekto projektavimo paslaugos perkamos? | įrašoma kilmininku į sakinį „... kurias sudaro: <objektas> projektavimo paslaugos ...“ | - |
+| 3 | 3.1 | Per kiek laiko nuo Sutarties įsigaliojimo dienos suteikiamos projektavimo paslaugos? | „per 12 mėnesių“, „per 90 dienų“ (forma pagal skaičių); šablono „arba“ variantas pašalinamas | - |
+| 4 | 3.3 | Kiek mėnesių iš viso gali trukti visi terminų pratęsimai? | skaičius sakinyje „negali viršyti ... mėnesių“ | - |
+| 5 | 3.6 | Ilgiau kaip keliems mėnesiams terminas pratęsiamas tik laikantis Pirkimų įstatymo? | skaičius sakinyje „Ilgiau kaip ... mėnesiams“ | 3.3 atsakymas (nepatvirtinta) |
+| 6 | 3.8 | Kiek mėnesių truks Objekto statybos darbai (projekto vykdymo priežiūra)? | trys skaičiai: mėnesiai, pratęsimų skaičius, vieno pratęsimo trukmė | - |
+| 7 | 4.2 | Ar Paslaugas ketinama finansuoti ES fondų lėšomis? | lieka vienas iš dviejų šablono sakinių | - |
+| 8 | 3 priedas | Pagal kurią 3 priedo lentelę mokama projektavimo paslaugų kaina? | lieka 1 lentelė (10 / 20 / 50 / 20 proc.) arba 2 lentelė (20 / 20 / 40 / 20 proc.) | pagal pirkimo pavadinimą: pastotė - 1, oro linija - 2 (šablono rekomendacija) |
+| 9 | 6.1 | Ar reikalaujamas Sutarties įvykdymo užtikrinimas? | lieka vienas iš trijų šablono sakinių (pagal BS 7.5.1 ir 7.5.2 / nereikalaujama / tik 7.5.1) | „Ne“, kai SPS užtikrinimo nereikalauja; kitaip - pastaba su SPS suma, variantas nesiūlomas |
+| 10 | 8.1, 12 priedas | Ar bus atliekama BS 9.1 punkte nurodyta patikra? | „bus atliekama“ ir 12 priedas „Pareigų sąrašas“ / „nebus atliekama“ ir 12 priedo eilutėje „netaikoma“ | pagal 1 žingsnio nacionalinio saugumo atsakymą |
+| 11 | 8.2-8.3 | Ar koordinatorius skiriamas iš Projektuotojo deleguotų asmenų? | Ne - abu „Punktas netaikomas.“ / tik 8.2 / 8.2 ir 8.3 | - |
+| 12 | 8.4 | Ar įrašomos kitos papildomos sąlygos? | Taip - jūsų tekstas; Ne - „Punktas netaikomas.“ | - |
+| 13 | 15 priedas | Ar pridedami kiti priedai? | „15 priedas. Kiti priedai: <išvardyti>.“ / „... - netaikoma.“ | - |
+
+Neklausiama (pildoma sudarant sutartį, lieka kaip šablone ir geltonai pažymėta): Projektuotojo duomenys, registracijos valstybė ir atstovaujantis
+asmuo, Užsakovo atstovaujantis asmuo, Sutarties data ir numeris, 4.1 punkto kainos, Šalių atstovai (5.1), Projektuotojo kontaktai, Šalių sąskaitos
+ir bankai (7.1), pasirašantys asmenys. Įrašoma be klausimo: pirkimo pavadinimas (1 žingsnis) ir pirkimo numeris (kortelė) preambulėje,
+LITGRID AB vietoje „ĮMONĖS PAVADINIMAS“.
+
+Žodžio forma šablono sakiniuose fiksuota („... mėnesių“, „... mėnesiams“, „... mėnesius“, „... kartus“): kai įrašytam skaičiui ji netinka
+(pvz. 3.8 punkte 12 - „12 mėnesius“), forma rodo perspėjimą pataisyti Word programoje. SPS ir sutarties nesutapimas (užtikrinimas, nacionalinis
+saugumas) - „Patikrinkite (SPS ir sutartis)“.
+
+## Įgyvendinimas (S4, 2026-10-11)
+
+- Generatorius (`sutarciu-generatorius.js`): `vd:<id>` - pasirinkimas pastraipos viduje (lieka tekstas prieš, pasirinktas variantas ir tekstas
+  po; žyma „[pasirinkti vieną]“ ir kiti variantai šalinami; pastraipa turi tiksliai susidėti iš žemėlapio dalių - kitaip klaida);
+  žemėlapio `nesiulomi` šalinami visada ir išvardijami ataskaitoje su priežastimi; `glaustai` - įrašas be tarpo prieš vietą
+  („Kiti priedai: ...“); žemėlapio `zymejimas: "pildoma"` - geltona lieka tik vietose, pildomose sudarant sutartį, nuimama išspręstose
+  vietose, `zinomos` pastraipose (Užsakovo adresas, antraštės) ir tuščiose pastraipose; likusi žyma „[pasirinkti vieną]“ ne paliktoje
+  vietoje - klaida.
+- 3 priedas - trečias sutarties dokumentas pakete („Sutarties SS 3 priedas“, iškart po specialiųjų sąlygų): lieka pasirinkta etapų lentelė,
+  kita pašalinama (`GP_SUTARTIES_FORMA.priedoSprendimai`).
+- Patikra pakete: nuorodos (13-14 nuorodų, visos į esamus punktus), privalomi sutarties elementai - 13 iš 13 (`shared/sutarties-elementai.js`
+  papildytas: šalis „Projektuotojas“, „Šios Sutarties vykdymui Šalys paskiria ...: Užsakovo atstovas“); 3 žingsnis sako, koks šablono
+  variantas pašalintas ir kodėl, ir kur paliktas geltonas žymėjimas.
+- „Tikrinti parengtus dokumentus“: sugeneruotos specialiosios sąlygos, bendrosios sąlygos ir 3 priedas - 0 nukrypimų su pasu ir be jo.
+- Formatavimas Word ir Pages programoms (tekstas nekeičiamas): ruošiant šabloną pašalinamas Word teksto šešėlis (LITGRID formoje 7.1 punkto
+  Užsakovo kontaktų eilutės parašytos su šešėliu - atrodė išplaukusios; 36 vietos) ir geltonas žymėjimas nuo tarpų pastraipos krašte
+  („Telefonas “); generuojant po pastraipos su likusiu geltonu žymėjimu (ne lentelėje) tarpas perkeliamas
+  į tuščią tikslaus aukščio pastraipą - Pages pažymėto teksto foną nudažo ir per tarpą po pastraipos, todėl po preambulės ir kainų
+  eilutėmis buvo geltoni stačiakampiai (išdėstymas Word ir Pages programose nesikeičia).
+- Jūsų prašymu (2026-10-11, „sutvarkykite pastebėtas smulkmenas“) ruošiant šabloną: 7.1 punkto Užsakovo kontaktų eilutės - be įtraukos,
+  kaip Projektuotojo stulpelis (LITGRID formoje penkios eilutės įtrauktos stiliumi, trys - dešimčia tarpų); 3.8 punkte „t. y.“ su
+  jungiamuoju tarpu (santrumpa lūždavo per dvi eilutes); 3 priedo 1 punktas be įtraukos, kaip 2 punktas. Žodžiai nekeisti.
+- Pages (PDF eksportu, abu atsakymų rinkiniai): bendrosios sąlygos 23 psl., specialiosios sąlygos 3 psl., 3 priedas 1 psl., visi A4, tekstas
+  neprarandamas, punktų numeriai kaip Word.
+
+Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_PPS`).
