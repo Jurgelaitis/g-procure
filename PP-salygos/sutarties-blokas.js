@@ -232,7 +232,7 @@
         GP_PAAISKINIMAS.html({ id: "sb-pa", etikete: "Sutarties projektas", turinys:
           "<p>Sutarties forma parenkama taisyklėmis pagal pirkimo objekto tipą ir pavadinimą (DI nenaudojamas). Kai požymiai nevienareikšmiai, " +
           "užduodamas klausimas - sistema nespėja.</p><p>Siūlomą sutartį patvirtinate jūs arba pasirenkate kitą. Generatoriui paruošti prekių ir " +
-          "paslaugų pirkimo-pardavimo sutarčių šablonai; kitų šeimų sutartis atpažįstama, bet jos šablonas dar neparuoštas.</p>" }) + "</div>";
+          "paslaugų pirkimo-pardavimo ir projektavimo ir statybos rangos sutarčių šablonai; kitų šeimų sutartis atpažįstama, bet jos šablonas dar neparuoštas.</p>" }) + "</div>";
       if (!rodoma()) {
         vieta.innerHTML = h + '<div class="cite">LITGRID DPS sukūrimo sąlygose sutarties projekto priedo nėra - sutarties projektas parenkamas konkrečiam pirkimui pagal DPS.</div>';
         return;
