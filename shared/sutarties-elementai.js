@@ -29,11 +29,12 @@
   var KATALOGAS = [
     { id: "salys", raktas: "sut_salys", lt: "Sutarties šalių teisės ir pareigos", en: "Rights and obligations of the parties",
       reikia: [["(pirkejas|uzsakovas) isipareigoja", "(pirkejas|uzsakovas) (turi teise|privalo)", "the (buyer|customer) (shall|undertakes|has the right)"],
-               ["(tiekejas|rangovas|vykdytojas) isipareigoja", "(tiekejas|rangovas|vykdytojas) (turi teise|privalo)", "the (supplier|contractor) (shall|undertakes|has the right)"]] },
+               ["(tiekejas|rangovas|vykdytojas|projektuotojas) isipareigoja", "(tiekejas|rangovas|vykdytojas|projektuotojas) (turi teise|privalo)", "the (supplier|contractor) (shall|undertakes|has the right)"]] },
     { id: "objektas", raktas: "sut_objektas", lt: "Perkamos prekės, paslaugos ar darbai ir jų kiekis", en: "Goods, services or works purchased and their quantity",
-      reikia: [["sutarties (dalykas|objektas)", "sutarties (dalyk|objekt)", "(tiekejas|rangovas) isipareigoja.{0,200}(pristatyti|tiekti|suteikti|teikti|atlikti|parduoti|perduoti)", "subject matter of the contract"],
+      reikia: [["sutarties (dalykas|objektas)", "sutarties (dalyk|objekt)", "(tiekejas|rangovas|projektuotojas) isipareigoja.{0,200}(pristatyti|tiekti|suteikti|teikti|atlikti|parduoti|perduoti)", "subject matter of the contract"],
                ["kiek(io|is|iai|iu) \\(apimt", "(kiek\\w*|apimt\\w*|aprasym\\w*).{0,150}pried\\w* nr\\.? ?\\d+ .{0,3}technine specifikacija", "(prekiu|paslaugu|darbu) (kiek|apimt)", "kiek(is|io|iu|iai|ius|iui|iams|yb)", "apimt(is|ies|i|imi|yje|ys|ims)", "quantit"]] },
     // rangos sutartys (2026-10-10): „Sutarties kaina yra fiksuota ir galutinė“ (fiksuotos kainos kainodara), „Subrangovų pasitelkimas ir keitimas“
+    // projektavimo paslaugų sutartis (2026-10-11): šalis - „Projektuotojas“, atsakingi asmenys - „Šios Sutarties vykdymui Šalys paskiria ...: Užsakovo atstovas“
     { id: "kainodara", raktas: "sut_kainodara", lt: "Kainodaros taisyklės", en: "Pricing rules", reikia: [["kainodaros taisykl", "kainodara", "kainodar", "sutarties kaina (yra )?fiksuot", "pricing"]] },
     { id: "mokejimas", raktas: "sut_mokejimas", lt: "Mokėjimo tvarka", en: "Payment procedure",
       reikia: [["atsiskaitymo (su tiekeju )?(tvarka|terminas)", "mokejimu tvarka", "apmokejimo salygos", "apmokejim\\w*", "mokejimo (tvark|salyg|termin)", "atsiskait\\w*", "payment"]] },
@@ -54,7 +55,7 @@
                ["(subtiekeju|subrangovu) (bei specialistu )?pasitelkimas ir keitimas", "(subtiekeju|subrangovu) .{0,40}keitim", "(subtiekej|subrangov)\\w*.{0,200}keit",
                 "keit\\w*.{0,100}(subtiekej|subrangov)", "(replac|chang)\\w*.{0,100}subcontract"]] },
     { id: "atsakingas", raktas: "sut_atsakingas", lt: "Asmuo, atsakingas už sutarties vykdymą", en: "Person responsible for performance of the contract",
-      reikia: [["atsaking\\w* asmen", "atsaking\\w*.{0,60}(uz )?sutarties vykdym", "sutarties vykdym\\w*.{0,60}atsaking", "pirkejo atstov\\w*", "responsible for (the )?performance"]] },
+      reikia: [["atsaking\\w* asmen", "atsaking\\w*.{0,60}(uz )?sutarties vykdym", "sutarties vykdym\\w*.{0,60}atsaking", "pirkejo atstov\\w*", "sutarties vykdymui salys paskiria", "uzsakovo atstov\\w*", "responsible for (the )?performance"]] },
     { id: "nacsaugumas", raktas: "sut_nacsaugumas", lt: "Nutraukimo atvejis, kai Vyriausybė nusprendžia, kad sutartis neatitinka nacionalinio saugumo interesų",
       en: "Termination where the Government decides that the contract does not comply with national security interests", jeiTaikytina: true,
       reikia: [["vyriausybe.{0,250}sprendim\\w*.{0,200}neatitinka nacionalinio saugumo interes", "neatitinka nacionalinio saugumo interes\\w*.{0,200}nutrauk",
