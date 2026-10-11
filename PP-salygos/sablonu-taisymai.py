@@ -403,6 +403,7 @@ def taisymas_tekstas(taisyk):
     viso += _dps_91(taisyk)
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
+    viso += _vidine_riba(taisyk)
     return viso
 
 
@@ -803,6 +804,59 @@ def _su_zemelapiais(poros, failai, vardas, taisyk):
                     zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if tekstas0.endswith('\n') else ''), encoding='utf-8')
                     print(f"      {zf.name}: suderinta {k[0]} reiksmiu")
         viso += pak
+    return viso
+
+
+# V. Vidinė grupės taisyklė šablonų komentaruose (2026-10-11, naudotojo sprendimas: iždo politikos užtikrinimo riba - vidinė informacija,
+#    iš viešų šablonų šalinama). SPS ir DPS konkretaus pirkimo sąlygų šablonų Word komentare prie „Kai taikomas sutarties užtikrinimas:“
+#    („Vadovaujantis UAB „EPSO-G“ įmonių grupės iždo ir finansinių rizikų politika, Sutarties įvykdymo užtikrinimas privalo būti taikomas
+#    pirkimuose, kurių vertė viršija <riba> ...“) riba pakeičiama žodžiais „vidaus taisyklėse nustatytą ribą“ - kaip rangos SS „//“
+#    nurodyme (sutarciu-sablonai.py). Tas pats tekstas - žemėlapių `komentaruTaisykles` (modulis jį rodo 2 žingsnio paaiškinime „Šablono
+#    autorių pastaba“). Pati riba šiame scenarijuje neįrašyta - taisyklė bendra (skaičius su „tūkstančių eurų“ pastaboje apie užtikrinimą).
+_VIDINE_RIBA = _re.compile(r'viršija \d[\d \u00a0]*(?:tūkstanči\w+|tūkst\.|mln\.)\s+eurų')
+_VIDINE_RIBA_NAUJA = 'viršija vidaus taisyklėse nustatytą ribą'
+
+
+def _vidine_riba(taisyk):
+    import json as _json
+    print("\nVIDINĖ GRUPĖS TAISYKLĖ KOMENTARUOSE (V, 2026-10-11):")
+    viso = 0
+
+    def fn(tekstas, seg):
+        if 'žtikrinim' not in tekstas:
+            return None
+        return [(m.start(), m.end(), _VIDINE_RIBA_NAUJA) for m in _VIDINE_RIBA.finditer(tekstas)]
+    for path in sorted(TPL.glob('*.docx')):
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+        if 'word/comments.xml' not in items:
+            continue
+        items['word/comments.xml'], n = _redaguok(items['word/comments.xml'], fn)
+        if n:
+            print(f"  {path.name}: komentaruose - {n}")
+            if taisyk:
+                with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                    for info in infos:
+                        zout.writestr(info, items[info.filename])
+        viso += n
+    for zf in sorted((Path(__file__).parent / 'zemelapiai').glob('*.json')):
+        tekstas0 = zf.read_text(encoding='utf-8')
+        try:
+            Z = _json.loads(tekstas0)
+        except Exception:
+            continue
+        if not isinstance(Z, dict) or not Z.get('komentaruTaisykles'):
+            continue
+        k = 0
+        for kom in Z['komentaruTaisykles']:
+            t = kom.get('text') or ''
+            if 'žtikrinim' in t and _VIDINE_RIBA.search(t):
+                kom['text'], n = _VIDINE_RIBA.subn(_VIDINE_RIBA_NAUJA, t); k += n
+        if k:
+            print(f"  zemelapiai/{zf.name}: komentaruTaisykles - {k}")
+            if taisyk:
+                zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if tekstas0.endswith('\n') else ''), encoding='utf-8')
+        viso += k
     return viso
 
 
