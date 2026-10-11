@@ -214,3 +214,37 @@ apmokėjimas, netesybos, derinimo terminai, užtikrinimas). Bendri su SPS: užti
 - **SS 3, 6 ir 8** - sprendžia generatorius („Taip / Ne“ privalomi): skelbiamame projekte nelieka „[terminas]“, „____“, „[vieta, adresas]“.
 
 Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_PSR`).
+
+---
+
+# Projektavimo paslaugų sutartis (4 etapas): vietų inventorius (S1, 2026-10-11)
+
+Šablonai `PPS_LT_SS`, `PPS_LT_BS`, `PPS_LT_SS3`; žemėlapiai - `PP-salygos/zemelapiai/sutartys/`. Klausimai ir generavimas - S4; čia - kas
+šablone pažymėta ir kas tai pildys. **Taisyklė (jūsų 2026-10-11):** sutarties projektas rengiamas prieš pirkimą, laimėtojas nežinomas -
+tiekėjo rekvizitai, kaina ir kitos tik sudarant sutartį paaiškėjančios vietos lieka tuščios.
+
+| SS vieta | Šablone | Kas pildo |
+|---|---|---|
+| Preambulė | Užsakovo atstovas ir atstovavimo pagrindas; Projektuotojo pavadinimas, valstybė, kodas, adresas, atstovas; pirkimo pavadinimas ir numeris | pirkimo pavadinimas - generatorius (1 žingsnis); kita - sudarant sutartį |
+| 1.2 | „Ši Sutartis sudaryta įgyvendinant investicinį projektą [...]“ | klausimas (neprivaloma dalis) |
+| 2.1 | „[nurodomas objekto pavadinimas] projektavimo paslaugos“ | klausimas |
+| 3.1 | „per [nurodomas projektavimo paslaugų suteikimo terminas]“ | klausimas |
+| 3.1 „arba“ | variantas iš rangos sutarties (Darbai, priedas „Projektavimo ir statybos darbų etapai“) | nesiūloma, generatorius pašalina (jūsų sprendimas g) |
+| 3.3, 3.6 | „negali viršyti [...] mėnesių“, „Ilgiau kaip [...] mėnesiams“ | klausimai |
+| 3.8 | projekto vykdymo priežiūros trukmė mėnesiais, pratęsimų skaičius ir trukmė | klausimai |
+| 4.1 | „XXXX Eur be PVM / XXXX Eur su PVM“ (trys eilutės) | sudarant sutartį (laimėtojo kaina) |
+| 4.2 | [pasirinkti vieną]: ES fondų lėšomis finansuojama / nefinansuojama | klausimas |
+| 5.1 | Šalių atstovų lentelė | sudarant sutartį (Užsakovo atstovas - klausimas S4, jei žinomas iš anksto) |
+| 6.1 | [Pasirinkti vieną]: užtikrinimas pagal BS 7.5.1 ir 7.5.2 / nereikalaujama / tik pagal 7.5.1 | klausimas; siūloma pagal SPS užtikrinimo atsakymą |
+| 7.1 | Kontaktiniai duomenys: Užsakovo adresas, telefonas, el. paštas, PVM kodas - įrašyti; sąskaita ir bankas - tušti (jūsų sprendimas h); Projektuotojo - tušti | sudarant sutartį |
+| 8.1 | nacionalinio saugumo patikra „bus atliekama / nebus atliekama [pasirinkti vieną]“ | klausimas; siūloma pagal SPS 1 žingsnio nacionalinio saugumo atsakymą |
+| 8.2-8.3 | statinių projektavimo saugos ir sveikatos koordinatorius | klausimas (neprivalomos dalys; sąvoka „Koordinatorius“ apibrėžta 8.2 p.) |
+| 8.4 | „[Galima įrašyti kitas papildomas sąlygas ...]“ | klausimas (tekstas arba punktas šalinamas) |
+| 9.1 | priedų sąrašas 1-15; 12 priedas „Pareigų sąrašas [pridedama, jei bus atliekama ... patikra]“, 15 priedas „Kiti priedai [...]“ | 12 - pagal 8.1 atsakymą; 15 - klausimas |
+| Parašai | „[pareigos, vardas, pavardė]“ | sudarant sutartį |
+
+3 priedas - dvi etapų lentelės (1 lentelė: 10 / 20 / 50 / 20 proc., 2 lentelė: 20 / 20 / 40 / 20 proc.); šablono autorių pastaba - kiekvienam
+projektui pasirenkama viena: projektuojant pastotes rekomenduojama 1 lentelė, oro linijas - 2. S4 - klausimas, kuri lentelė taikoma; antroji šalinama. BS pildomų vietų neturi (tik „ĮMONĖS PAVADINIMAS“).
+
+S4 klausimai, kuriuos reikės suderinti su jumis: ar netaikomuose SS punktuose rašyti „Punktas netaikomas.“ (kaip rangos SS 1-19) ar punktą
+šalinti (tada keistųsi numeriai); ką daryti su 12 priedo eilute, kai patikra neatliekama (numeriai tekstu - „13 priedas.“ taptų 12-u).

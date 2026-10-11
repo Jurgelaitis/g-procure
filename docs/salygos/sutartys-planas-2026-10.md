@@ -668,6 +668,42 @@ rinkiniais sugeneruotos specialiosios sąlygos atvertos Pages ir eksportuotos į
 
 Liko: klausimų tekstų peržiūra (`KLAUSIMAI_PSR`).
 
+**S1 projektavimo paslaugų sutarčiai (4 etapas, 2026-10-11; jūsų „projektavimo paslaugų šablonai aplanke yra galutinė redakcija“).**
+`PPS_LT_BS`, `PPS_LT_SS` ir `PPS_LT_SS3` (specialiųjų sąlygų 3 priedas „Apmokėjimo tvarka pagal etapus“; LT/EN nėra) - tame pačiame
+registre ir tuo pačiu keliu. Generatorius šios sutarties dar nerengia - tai S4.
+- **Jūsų sprendimai 2026-10-11 (a-j)** - ištaisyta šablonuose (privatus `taisymai_9.py`, originalų kopija `originalai-2026-10-11/`):
+  a) BS punktai susieti su skyrių numeriais - buvo atskirame Word sąraše, todėl po „7.5. SUTARTIES ĮVYKDYMO UŽTIKRINIMAS“ pirmas punktas
+  buvo „1.2.112.“ (Pages - „2.112.“), nors SS ir pati BS nurodo „7.5.1“; dabar 9 skyriai, 46 poskyriai, 212 punktų ir 7 papunkčiai iš
+  eilės; b) „STATINIO INFORMACINIS MODELIAVIMAS“ - 2.5 poskyris (antraštės stilius, turinio eilutė); c) SS 8.2 nuoroda „bendrosios dalies
+  4.2.9 p.“ -> „bendrųjų sąlygų 4.2.10 punkte“ (koordinatorius; 4.2.9 - tiesioginis atsiskaitymas); d) BS 7.5.3, 9.1.5 „Rangovas“ ->
+  „Projektuotojas“, BS 2.5.3 ir SS 8.3, 12 priedo eilutė „Subrangovai“ -> „Subtiekėjai“; e) SS 7.1 „info@litgrid.eu“; f) STR 1.04.02:2011
+  dabartinis pavadinimas; i) 3 priedo 2 p. „projektavimo paslaugų kainos“; j) SS 3.3-3.8 ir 3.2.1-3.2.6 - pagrindiniame Word sąraše
+  (numeriai su tašku; Pages rodė „3.“, „1.“), priedų sąraše „13 priedas.“. g) SS 3.1 „arba“ variantas (iš rangos sutarties) šablone
+  lieka, bet žemėlapyje pažymėtas nesiūlomu - generatorius jį pašalins; klausimas - laiške LITGRID. h) Užsakovo banko rekvizitai lieka
+  tušti. **Jūsų nurodyta taisyklė visoms sutartims:** sutarties projektas rengiamas prieš pirkimą, laimėtojas nežinomas - tiekėjo
+  rekvizitai, kaina ir kitos tik sudarant sutartį paaiškėjančios vietos lieka tuščios.
+- **Redakcinės korekcijos** (rašyba, skyryba, dvigubi tarpai): BS 45 vietos ir 27 dvigubi tarpai, SS - 5 ir 7 (sąrašas - `taisymai_9.py`).
+- **Žymėjimas kitoks nei rangos** - pildomos vietos pažymėtos geltonai ir laužtiniais skliaustais, todėl `sutarciu-sablonai.py` papildytas:
+  `vidiniai` - pasirinkimas toje pačioje pastraipoje su žyma „[pasirinkti vieną]“ (SS 4.2 ES fondai, 6.1 užtikrinimas - trys variantai,
+  8.1 nacionalinio saugumo patikra): pastraipos tekstas turi tiksliai susidėti iš aprašytų dalių, kitaip - klaida; `nesiulomi` - 3.1 „arba“
+  variantas; `nurodymai_skliaustuose` - nurodymai rengėjui (8.4, 12 ir 15 priedų eilutės); `neprivalomos` - 1.2 investicinis projektas,
+  8.2-8.3 koordinatorius, 8.4, 12 ir 15 priedų eilutės; „XXXX Eur“ kainos - pildomos sudarant sutartį; `priedai` - priedų sąrašas 1-15;
+  3 priede - dvi etapų lentelės (transformatorių pastotėms ir oro linijoms), pasirenkama viena. Parašų blokas buvo lentelė lentelėje,
+  platesnė už A4 teksto plotį - apvalkalas nuimtas (tekstas tas pats). 3 priedas - A4 (buvo US Letter). Komentarai (tarp jų grupės iždo
+  politikos taisyklė prie 6.1 p.) pašalinti ir į saugyklą nepatenka.
+- **Nuorodos:** visos 17 BS ir SS nuorodų į punktus rodo į esamus punktus (pagal Word numeraciją); `sutarciu-nuorodos.js` atpažįsta priedų
+  sąrašo eilutes „N priedas.“.
+- **Teisės aktų nuorodos (6.1):** 28 skirtingos nuorodos, visos registre; naujos - Civilinio kodekso statybos rangos ir projektavimo darbų
+  rangos straipsniai (perskaityta e-tar 2026-10-11), VPT Kainodaros taisyklių nustatymo metodika (e-tar, galioja), pilnas įstatymo
+  pavadinimas su straipsniu („... įstatymo 97 straipsnio“). Radinys T6: BS sąvoka „Techninė užduotis“ nurodo Viešųjų pirkimų įstatymo
+  techninę specifikaciją, nors sutartis sudaroma pagal Pirkimų įstatymą - klausimas LITGRID, šablone nekeista.
+- **Pages:** BS 23 psl., SS 3 psl., 3 priedas 2 psl. - tekstas neprarandamas, numeriai - kaip Word (BS 261, SS 37 numeruotos pastraipos).
+- **Tikrinti parengtus dokumentus:** trys formos atpažįstamos; pasirinktas variantas, pašalintas „arba“ variantas, užpildytos vietos ir
+  viena 3 priedo lentelė - ne nukrypimas, pakeistas varianto tekstas - nukrypimas.
+- 5 testai (13 šablono ir žemėlapio mutacijų, 10 kodo mutacijų - visos pagaunamos).
+
+Liko S4 (klausimai ir generavimas: pasirinkimas pastraipos viduje, 3 priedas - trečias dokumentas pakete) ir S5 (Pages), laiškas LITGRID.
+
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
 smulkūs darbai - mažoji; ekspertizė ir techninė priežiūra - klausimas dėl CPO LT). Rezultatas: „parinkta“ (su šablonais iš S1 registro -
@@ -733,8 +769,8 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
 9. **Grupės užtikrinimo taisyklė** iš SS komentarų - ar generatorius ją siūlo (kaip „Siūloma“, su šaltiniu), ar tik rodo paaiškinime?
 10. **Redakcijų valdymas:** kas praneša apie naujas redakcijas ir ar galima žymėti failus redakcijos kodu (kaip Amber Grid „SUT-36 10.0“)?
 11. ~~**Puslapio formatas**~~ - atsakyta 2026-10-08: **A4** (padaryta šablonuose, S1).
-12. ~~**Projektavimo ir statybos rangos šablonai (3 etapas, 2026-10-10)**~~ - atsakyta 2026-10-10: „Taip, ištaisykite a-i, 803 pakeitimas
-    tinka.“ - ištaisyta šablone (`taisymai_8.py`). Buvo klausta:
+12. ~~**Projektavimo ir statybos rangos šablonai (3 etapas, 2026-10-10)**~~ - atsakyta 2026-10-10: a-i ištaisyti, vidinės ribos pakeitimas žodžiais
+    tinka - ištaisyta šablone (`taisymai_8.py`). Buvo klausta:
     - a) SS punktų numeracija: dabar 1.1-1.5, po to vėl „1.“-„24.“ (nuorodų į SS punktus nėra). Rekomenduoju vientisą 1-29.
     - b) SS 1.5 „[Sąvoka 1.1.2.9.]“ -> „[Sąvoka 1.1.2.14. punktas]“ (1.1.2.9 - „Įrenginiai“, 1.1.2.14 - „Pagrindiniai įrenginiai“).
     - c) BS 11.3.4 „pagal Projektuotojo perduotus“ -> „pagal Rangovo perduotus“ (šalis - Rangovas).
@@ -758,3 +794,21 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
     - e) SS 28-29 - Ne / tik 28 / 28 ir 29 kartu (29 punktas vienas vartotų neapibrėžtą sąvoką „Koordinatorius“);
     - f) SS 3 pratęsimo sakinys - privalomas „Taip / Ne“ („Ne“ - sakinys šalinamas), SS 6 ir 8 - „Taip / Ne“ („Ne“ - „Punktas netaikomas.“).
     Lieka: a) klausimų tekstai - jūsų peržiūrai.
+
+14. ~~**Projektavimo paslaugų šablonai (4 etapas, 2026-10-11)**~~ - atsakyta 2026-10-11 (a-j), ištaisyta šablonuose (`taisymai_9.py`):
+    - a) BS punktus susieti su skyrių numeriais (7.5.1 ir t. t.) - taip;
+    - b) „STATINIO INFORMACINIS MODELIAVIMAS“ - 2.5 poskyris - taip;
+    - c) SS 8.2 nuoroda - „bendrųjų sąlygų 4.2.10 punkte“;
+    - d) „Rangovas“ -> „Projektuotojas“, „Subrangovai“ -> „Subtiekėjai“;
+    - e) SS el. paštas - info@litgrid.eu;
+    - f) STR 1.04.02:2011 pavadinimas - dabartinis;
+    - g) SS 3.1 „arba“ variantas - generatorius nesiūlo, klausimas laiške LITGRID;
+    - h) Užsakovo banko rekvizitai - ne; sutarties projektas rengiamas prieš pirkimą, tiekėjo rekvizitai lieka tušti (taisyklė visoms sutartims);
+    - i) 3 priede - „projektavimo paslaugų kainos“;
+    - j) SS 3.3-3.8 su tašku, „13 priedas.“.
+    Lieka laiškui LITGRID (turinys): SS 3.1 „arba“ variantas, BS 4.2.2 ir 4.2.4 pasikartojantis sakinys, bauda ir delspinigiai už tą patį
+    pažeidimą, BIM nuostata SS, priedų failai aplanke neatitinka priedų sąrašo, 7.4.1 e) ir 7.4.2, Viešųjų pirkimų įstatymo sąvokos (T6).
+15. **Grupės iždo politikos užtikrinimo riba** (jūsų atsakymas 2026-10-11: vidinė informacija, iš viešų šablonų pašalinta; „turi būti
+    numatyta sistemoje pranešimas“): saugykla vieša, todėl skaičius kode vėl taptų viešas. Siūlomi keliai: (1) ribą įvedate naršyklėje
+    (nustatymas, saugomas tik joje ir atsarginėje kopijoje), sistema pagal ją primena; (2) pranešimas be skaičiaus („patikrinkite pagal
+    vidaus taisykles“). Laukia jūsų pasirinkimo.
