@@ -17,21 +17,30 @@ pildyti sudarant sutartį (pagal laimėjusį pasiūlymą; generatorius palieka v
 
 Kaip iki šiol formoje: siūloma reikšmė niekada neatrodo kaip jūsų - „Siūloma (nepatvirtinta)“ su kilme; „Taip / Ne“ - be numatytojo.
 
+**Jūsų taisyklė (2026-10-11): kas pildoma generuojant sutarties projektą** (galioja visoms sutarčių šeimoms):
+
+- **įrašoma automatiškai** - kas žinoma iš pirkimo: sutarties pavadinimas (= pirkimo pavadinimas), pirkimo pavadinimas ir numeris, pirkimo
+  vykdytojo (LITGRID AB) rekvizitai, ir sąskaita bei bankas. 2 žingsnyje tai rodoma sąraše „Įrašoma automatiškai“ su reikšme ir kilme;
+- **nepildoma** - kas paaiškėja tik sudarant sutartį: sutarties numeris, tiekėjo rekvizitai, Šalių atstovai, tiekėjo atstovas, nurodymas
+  „(jei Tiekėjas yra fizinis asmuo ...)“ - vietos lieka kaip šablone (sąrašas „Pildoma sudarant sutartį“);
+- **klausiama prieš generuojant** - kas žinoma rengiant pirkimą, bet ne iš jau įvestų duomenų: ES lėšos, 4.1 punkto pradžia ir terminas,
+  bendras paslaugų teikimo terminas. Pirkimo numeris klausiamas tik tada, kai jo nėra pirkimo kortelėje.
+
 ## 1. Sutarties šalys, dalykas, terminai
 
 | Vieta | Šablone | Taisyklė | Žymė |
 |---|---|---|---|
-| Sutarties pavadinimas | tuščias laukas | „{pirkimo pavadinimas} pirkimo-pardavimo sutartis“ (pavadinimas kilmininku iš 1 žingsnio, pvz. „Galios transformatorių pirkimo-pardavimo sutartis“); LT/EN - „Contract for the purchase of {EN pavadinimas}“ | D, SIŪLOMA |
+| Sutarties pavadinimas | tuščias laukas | = pirkimo pavadinimas: „{pirkimo pavadinimas} pirkimas“ (pavadinimas kilmininku iš 1 žingsnio, pvz. „Galios transformatorių pirkimas“); LT/EN - „{EN pavadinimas} procurement“. Įrašoma automatiškai (jūsų sprendimas 2026-10-11; iki tol - „... pirkimo-pardavimo sutartis“) | D |
 | Sutarties numeris, 1.1.9-1.1.10, 1.2.1-1.2.10 (Tiekėjo rekvizitai, atstovai) | tušti laukai | sudarant | SUD |
-| 1.1.1-1.1.8 (Pirkėjo rekvizitai) | LITGRID AB rekvizitai jau šablone; „ĮMONĖS PAVADINIMAS“ | „ĮMONĖS PAVADINIMAS“ -> LITGRID AB, kiti - kaip šablone | D |
+| 1.1.1-1.1.8 (Pirkėjo rekvizitai) | LITGRID AB rekvizitai jau šablone (kodas, adresas, PVM kodas, sąskaita, bankas, telefonas, el. paštas); „ĮMONĖS PAVADINIMAS“ | įrašoma automatiškai: „ĮMONĖS PAVADINIMAS“ -> LITGRID AB, kiti - kaip šablone | D |
 | 1.2 nurodymas „(jei Tiekėjas yra fizinis asmuo ... grupės nario informaciją)“ | nurodymas pildančiam | lieka (jis skirtas pildančiam sudarant) | SUD |
 | 2.1 Pirkėjo atstovas „(nurodyti padalinį / skyrių, pareigas, vardą, pavardę, tel., el. paštą)“ | nurodymas | K, neprivalomas: „Kas bus Pirkėjo atstovas sutarčiai vykdyti?“ - įrašius - vietoj nurodymo; neįrašius - nurodymas lieka | K, SIŪLOMA |
 | 2.2 Tiekėjo atstovas | nurodymas | lieka | SUD |
-| 3.2 Pirkimo pavadinimas ir numeris | tuščias laukas | „{pavadinimas} pirkimas“ ir, jei pirkimo kortelėje yra numeris, „, pirkimo Nr. {numeris}“ | D, SIŪLOMA |
+| 3.2 Pirkimo pavadinimas ir numeris | tuščias laukas | įrašoma automatiškai: „{pavadinimas} pirkimas, pirkimo Nr. {numeris}“; numeris - iš pirkimo kortelės, o kai kortelė nepasirinkta ar be numerio - privalomas klausimas „Koks pirkimo numeris?“ (iki 2026-10-11 be kortelės numeris būdavo tyliai praleidžiamas) | D / K |
 | 3.3 ES lėšos | valdiklis | K: „Ar pirkimas finansuojamas ES lėšomis?“ Taip - projekto Nr. ir pavadinimas | K |
 | 4.1 pradžia | valdiklis (3 variantai) | pagal kainodarą (5.1): fiksuota kaina - nuo įsigaliojimo; fiksuotas ar kintamas įkainis - nuo užsakymo; kitos - K (3 šablono variantai) | D / K |
 | 4.1 terminas | „[...]“ + vieneto valdiklis | K: skaičius ir vienetas; vieneto forma - pagal skaičių („1 mėnesį“, „3 mėnesius“, paslaugoms ir „10 mėnesių“, „dienas / dienų“); jei pasirinktas variantas „Techninėje specifikacijoje nustatytais terminais“ - neklausiama | K |
-| 4.1 bendras paslaugų terminas (paslaugos) | „[...]“ + valdiklis „punktas netaikomas / mėnesių / mėnesiai“ | K: „Bendras paslaugų teikimo terminas“ (mėn.) arba „netaikoma“ | K |
+| 4.1 bendras paslaugų terminas (paslaugos) | „[...]“ + valdiklis „punktas netaikomas / mėnesių / mėnesiai“ | K, privalomas: „Ar nustatomas bendras paslaugų teikimo terminas?“ Taip - mėnesių skaičius; Ne - „punktas netaikomas“ (iki 2026-10-11 klausimas buvo neprivalomas ir neįrašius būdavo parenkama „netaikoma“) | K |
 | 4.2 termino pratęsimas (paslaugos) | „Netaikoma“ / aplinkybių sąrašas | **SIŪLOMA S:** aplinkybių sąrašas (kaip prekių sutartyje, kur jis yra visada) | S, SIŪLOMA |
 | 4.3 užsakymų tvarka (prekės) | „Netaikoma“ / užsakymai el. sistemoje | pagal kainodarą: fiksuota kaina - „Netaikoma“; įkainiai - užsakymų tvarka; kitos - K | D / K, SIŪLOMA |
 
@@ -272,9 +281,11 @@ projektui pasirenkama viena: projektuojant pastotes rekomenduojama 1 lentelė, o
 | 13 | 15 priedas | Ar pridedami kiti priedai? | „15 priedas. Kiti priedai: <išvardyti>.“ / „... - netaikoma.“ | - |
 
 Neklausiama (pildoma sudarant sutartį, lieka kaip šablone ir geltonai pažymėta): Projektuotojo duomenys, registracijos valstybė ir atstovaujantis
-asmuo, Užsakovo atstovaujantis asmuo, Sutarties data ir numeris, 4.1 punkto kainos, Šalių atstovai (5.1), Projektuotojo kontaktai, Šalių sąskaitos
-ir bankai (7.1), pasirašantys asmenys. Įrašoma be klausimo: pirkimo pavadinimas (1 žingsnis) ir pirkimo numeris (kortelė) preambulėje,
-LITGRID AB vietoje „ĮMONĖS PAVADINIMAS“.
+asmuo, Užsakovo atstovaujantis asmuo, Sutarties data ir numeris, 4.1 punkto kainos, Šalių atstovai (5.1), Projektuotojo kontaktai, sąskaita
+ir bankas (7.1), pasirašantys asmenys. Įrašoma be klausimo: pirkimo pavadinimas (1 žingsnis) ir pirkimo numeris (kortelė, o be jos -
+klausimas „Koks pirkimo numeris?“) preambulėje, LITGRID AB vietoje „ĮMONĖS PAVADINIMAS“, Užsakovo sąskaita ir bankas 7.1 punkte (jūsų taisyklė
+2026-10-11: pirkimo vykdytojo rekvizitai žinomi; LITGRID formoje šios dvi eilutės tuščios - įrašoma iš organizacijų registro, kuris sutampa
+su prekių, paslaugų ir rangos sutarčių formomis).
 
 Žodžio forma šablono sakiniuose fiksuota („... mėnesių“, „... mėnesiams“, „... mėnesius“, „... kartus“): kai įrašytam skaičiui ji netinka
 (pvz. 3.8 punkte 12 - „12 mėnesius“), forma rodo perspėjimą pataisyti Word programoje. SPS ir sutarties nesutapimas (užtikrinimas, nacionalinis

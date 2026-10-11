@@ -725,6 +725,13 @@ registre ir tuo pačiu keliu. Generatorius šios sutarties dar nerengia - tai S4
   specialiosios 3 psl., 3 priedas 1 psl., A4, tekstas neprarandamas, numeriai kaip Word.
 - 9 testai, kodo mutacijos - žr. CLAUDE.md.
 
+**Kas pildoma generuojant (jūsų taisyklė 2026-10-11, visoms sutarčių šeimoms).** Įrašoma automatiškai: sutarties pavadinimas (= pirkimo
+pavadinimas, „{pavadinimas} pirkimas“), pirkimo pavadinimas ir numeris, pirkimo vykdytojo rekvizitai (LITGRID AB, ir sąskaita bei bankas -
+projektavimo paslaugų sutarties 7.1 punkte jie formoje tušti, todėl imami iš organizacijų registro `shared/organizacijos.js`, kuris sutampa
+su prekių, paslaugų ir rangos sutarčių formomis). Nepildoma: sutarties numeris, tiekėjo rekvizitai, Šalių atstovai. Klausiama prieš
+generuojant: ES lėšos, 4.1 punkto pradžia ir terminas, bendras paslaugų teikimo terminas (dabar privalomas „Taip / Ne“), o pirkimo numeris -
+tik kai jo nėra pirkimo kortelėje. 2 žingsnyje - sąrašas „Įrašoma automatiškai“ su reikšme ir kilme.
+
 Liko: klausimų tekstų peržiūra (`KLAUSIMAI_PPS`), laiškas LITGRID.
 
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
