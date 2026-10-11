@@ -533,6 +533,22 @@ ITRAUKOS = {'PPS_LT_SS': {'nulis': ['Užsakovo:', 'Karlo Gustavo Emilio Manerhei
 _PO_IND = r'<w:(?:contextualSpacing|mirrorIndents|suppressOverlap|jc|textDirection|textAlignment|textboxTightWrap|outlineLvl|divId|cnfStyle|rPr|sectPr|pPrChange)\b'
 
 
+def _ind_nulis(pp):
+    """Pastraipos įtrauka - `<w:ind w:left="0" w:firstLine="0"/>` (esama pakeičiama; nauja įrašoma pPr schemos vietoje)."""
+    pm = re.match(r'(<w:p\b[^>]*>)(<w:pPr>.*?</w:pPr>)?', pp, re.S)
+    ppr = pm.group(2) or '<w:pPr></w:pPr>'
+    rpr = re.search(r'<w:rPr>.*?</w:rPr>', ppr, re.S)
+    kunas = ppr[:rpr.start()] if rpr else ppr[:-len('</w:pPr>')]
+    likutis = ppr[len(kunas):]
+    nauja_ind = '<w:ind w:left="0" w:firstLine="0"/>'
+    if re.search(r'<w:ind\b[^>]*/>', kunas):
+        kunas = re.sub(r'<w:ind\b[^>]*/>', nauja_ind, kunas, count=1)
+    else:
+        v = re.search(_PO_IND, kunas)
+        kunas = (kunas[:v.start()] + nauja_ind + kunas[v.start():]) if v else kunas + nauja_ind
+    return pm.group(1) + kunas + likutis + pp[pm.end():]
+
+
 def itraukos(kodas):
     """-> funkcija (xml) -> (xml, aprašas): pagal ITRAUKOS[kodas]. Kiekvienas įrašas turi atitikti lygiai vieną pastraipą; žodžiai nekeičiami
     (tikrinama be tarpų pastraipos pradžioje)."""
@@ -546,20 +562,8 @@ def itraukos(kodas):
             pp = m.group(0)
             t = tekstas(pp)
             if t.strip() in K['nulis'] and t == t.lstrip():
-                k = t.strip()
-                pm = re.match(r'(<w:p\b[^>]*>)(<w:pPr>.*?</w:pPr>)?', pp, re.S)
-                ppr = pm.group(2) or '<w:pPr></w:pPr>'
-                rpr = re.search(r'<w:rPr>.*?</w:rPr>', ppr, re.S)
-                kunas = ppr[:rpr.start()] if rpr else ppr[:-len('</w:pPr>')]
-                likutis = ppr[len(kunas):]
-                nauja_ind = '<w:ind w:left="0" w:firstLine="0"/>'
-                if re.search(r'<w:ind\b[^>]*/>', kunas):
-                    kunas = re.sub(r'<w:ind\b[^>]*/>', nauja_ind, kunas, count=1)
-                else:
-                    v = re.search(_PO_IND, kunas)
-                    kunas = (kunas[:v.start()] + nauja_ind + kunas[v.start():]) if v else kunas + nauja_ind
-                rasta[k] += 1
-                return pm.group(1) + kunas + likutis + pp[pm.end():]
+                rasta[t.strip()] += 1
+                return _ind_nulis(pp)
             if t != t.lstrip() and t.strip() in K['be_tarpu']:
                 k = t.strip()
                 nauja, pirmas = pp, True
@@ -578,7 +582,9 @@ def itraukos(kodas):
                 if tekstas(nauja) != t.lstrip():
                     raise SystemExit('įtraukos: pasikeitė pastraipos „%s“ tekstas' % k)
                 rasta[k] += 1
-                return nauja
+                # ir pastraipos įtrauka 0: numatytasis stilius turi kabančią įtrauką (851), todėl per dvi eilutes netelpanti įrašyta reikšmė
+                # (banko pavadinimas ir kodas) antroje eilutėje atsitrauktų 1,5 cm
+                return _ind_nulis(nauja)
             return pp
         pries = be(tekstas(x))
         x = re.sub(r'<w:p[ >](?:(?!<w:p[ >]).)*?</w:p>', pastraipa, x, flags=re.S)
@@ -803,8 +809,9 @@ PASIRINKTI = {'turi būti pasirinkta:'}
 # Šeimos, kurių punktai sunumeruoti Word (ne tekstu): žemėlapio vieta - Word numeris (word_numeriai)
 WORD_SEIMOS = {'PROJEKTAVIMO_STATYBOS', 'PROJEKTAVIMO_PASLAUGOS'}
 # Papildomos pildomos vietos pagal šabloną: projektavimo paslaugų SS kainos „XXXX Eur be PVM / XXXX Eur su PVM“ (pildoma sudarant sutartį -
-# laimėtojo pasiūlymo kaina)
-PILDOMA_KODO = {'PPS_LT_SS': re.compile(r'X{4}')}
+# laimėtojo pasiūlymo kaina) ir 7.1 p. eilutė „Bankas“ (visa pastraipa - etiketė be reikšmės: Užsakovo - įrašoma automatiškai iš organizacijų
+# registro, Projektuotojo - pildoma sudarant sutartį; naudotojo taisyklė 2026-10-11)
+PILDOMA_KODO = {'PPS_LT_SS': re.compile(r'X{4}|^Bankas$')}
 # Šablonai, kuriuose tuščias lentelės langelis nėra pildomas laukas (projektavimo paslaugų SS: atstovų lentelės dešinė pusė ties Užsakovo
 # atstovu, atsakingu už viešinimą, ir parašų lentelės tarpai); pildomos vietos ten pažymėtos geltonai (paryskinimai)
 BE_LAUKU = {'PPS_LT_SS'}
