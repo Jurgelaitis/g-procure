@@ -29,6 +29,13 @@
  *     2026-09-27 (suvestinė redakcija nuo 2024-02-07): nė vienos iš keturių įmonių jame
  *     nėra; EPSO-G tą pačią dieną patvirtino ir pirkimų komanda. Naujai organizacijai
  *     laukas rašomas tik perskaičius sąrašą - be jo variklis tarpinei vertei klausia.
+ *   - `rekvizitai` (nuo 2026-10-11) - organizacijos, kaip sutarties šalies, rekvizitai: juridinio asmens kodas, adresas, PVM
+ *     mokėtojo kodas, atsiskaitomoji sąskaita, bankas ir jo kodas, telefonas, el. paštas. Rašomi TIK iš pačios organizacijos
+ *     dokumentų: LITGRID AB - iš jos sutarčių formų (prekių ir paslaugų pirkimo-pardavimo bei projektavimo ir statybos rangos
+ *     sutarčių specialiosios sąlygos, PP-salygos/templates/sutartys/); PP-salygos testai tikrina, kad registras sutampa su
+ *     šiomis formomis. Naudoja PP-salygos sutarties generatorius ten, kur formoje pirkimo vykdytojo sąskaita ir bankas palikti
+ *     tušti (projektavimo paslaugų sutarties 7.1 punktas) - naudotojo taisyklė 2026-10-11: pirkimo vykdytojo rekvizitai
+ *     rengiant sutarties projektą žinomi, todėl įrašomi automatiškai. Kitoms organizacijoms - `null` (formų nėra).
  * ==========================================================================*/
 ;(function (global) {
   "use strict";
@@ -39,6 +46,9 @@
     { id: "litgrid", pavadinimas: "LITGRID AB", atpazinimas: /\blitgrid\b/i, cvpisPaieska: "LITGRID AB", rezimasTiketinas: "PI", centrinesValdzios: false,
       nuorodos: { taisykles: "https://www.litgrid.eu/index.php/apie-litgrid/litgrid-pirkimai/pirkimu-taisykles/837", planas: "https://www.litgrid.eu/index.php/apie-litgrid/litgrid-pirkimai/pirkimai/829" },
       taisykles: { saltinis: "S3", patikrinta: "2026-09-02", pastaba: { lt: "Mažos vertės pirkimų aprašas ir informacija tiekėjams (LITGRID svetainė).", en: "Low-value procurement rules and supplier information (LITGRID website)." } },
+      rekvizitai: { kodas: "302564383", adresas: "Karlo Gustavo Emilio Manerheimo g. 8, LT-05131 Vilnius", pvmKodas: "LT100005748413", saskaita: "LT242150051000021766",
+                    bankas: "OP Corporate Bank plc Lietuvos filialas", bankoKodas: "21500", telefonas: "+370 707 02171", elPastas: "info@litgrid.eu",
+                    saltinis: "LITGRID AB sutarčių formos (prekių, paslaugų ir rangos sutarčių specialiosios sąlygos)", patikrinta: "2026-10-11" },
       patikrinta: PATIKRINTA },
     { id: "amber-grid", pavadinimas: "AB Amber Grid", atpazinimas: /\bamber\s*grid\b/i, cvpisPaieska: "Amber Grid", rezimasTiketinas: "PI", centrinesValdzios: false,
       nuorodos: {}, taisykles: null, patikrinta: PATIKRINTA },
@@ -61,6 +71,8 @@
   }
   function pagalId(id) { return ORGANIZACIJOS.filter(function (o) { return o.id === id; })[0] || null; }
   function sarasoUrl(o, nuo) { return global.GP_CVPIS ? global.GP_CVPIS.URL.organizacijosSarasas(o.cvpisPaieska, nuo) : null; }
+  // Sutarties šalies rekvizitai pagal organizacijos id arba pavadinimą; nežinomai ar be rekvizitų - null (nespėjama)
+  function rekvizitai(kas) { var o = pagalId(kas) || rask(kas); return o && o.rekvizitai ? o.rekvizitai : null; }
 
-  global.GP_ORG = { version: "0.2.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl };
+  global.GP_ORG = { version: "0.3.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl, rekvizitai: rekvizitai };
 })(typeof window !== "undefined" ? window : this);
