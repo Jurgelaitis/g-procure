@@ -8,7 +8,7 @@
  *   GP_SUTARTIES_FORMA.mount({ vieta, kontekstas, onKeista }) -> { atnaujink, busena, atsakymai }  - sąsaja (atskirai nuo taisyklių)
  *   GP_SUTARTIES_FORMA.priedoSprendimai(Zp, R) -> { S, truksta } - sprendimai sutarties priedui su savu šablonu (projektavimo paslaugų SS
  *                                                3 priedas: kuri etapų lentelė lieka); R - sprendimai().R
- *     ctx: { seima: "PREKES" | "PASLAUGOS" | "PROJEKTAVIMO_STATYBOS" | "PROJEKTAVIMO_PASLAUGOS", kalba: "LT" | "LTEN", pavadinimas, pavadinimasEN, numeris, trukmeMen, verte,
+ *     ctx: { seima: "PREKES" | "PASLAUGOS" | "PROJEKTAVIMO_STATYBOS" | "PROJEKTAVIMO_PASLAUGOS" | "DARBAI_MAZOJI", kalba: "LT" | "LTEN", pavadinimas, pavadinimasEN, numeris, trukmeMen, verte,
  *            uztikrinimas: { taikomas: true | false | null, eur }, kriterijus: "kaina" | "kokybe" | null, nacsaug: bool }
  *     A: { [klausimo id]: { reiksme, patvirtinta } } - žmogaus atsakymai; siūloma reikšmė (iš ctx ar LITGRID standarto) galioja, kol
  *        žmogus neatsakė, ir rodoma „Siūloma (nepatvirtinta)“ su kilme; „Patvirtinta“ - tik žmogaus veiksmu.
@@ -468,6 +468,78 @@
       uzuomina: "Šablono nurodymas: „pagal poreikį išvardijami prieš paskelbiant Pirkimą“. „Taip“ - įrašoma „15 priedas. Kiti priedai: <jūsų išvardyti priedai>.“; „Ne“ - „15 priedas. Kiti priedai - netaikoma.“",
       laukai: [{ id: "pp_kiti_priedai_f", tipas: "tekstas", uzrasas: "Kiti priedai (išvardykite; pvz. Užsakovo informacijos reikalavimai)", kada: "taip" }] }
   ];
+  /* ---------------------------------------------------------------- darbų pirkimo-pardavimo („mažoji“) SS (2026-10-12, 5 etapas S4)
+     Šablone - keturios dalys su nurodymu rengėjui „[... pasirenkama, kai ...]“ (2 skyrius „Užsakymai“, 3.2-3.4, 4.3, 4.4), trys išskleidžiami
+     sąrašai (1.2, 4.1, 6.3) ir pilkai pažymėtos pildomos vietos. Naudotojo sprendimai 2026-10-12 (sutarčių plano 8 sk. 16 p.): netaikomoje
+     dalyje - „Punktas netaikomas.“ (punktų numeriai nesikeičia; 2 skyriuje - viena eilutė „Skyrius netaikomas.“), leidžiami vienkartiniai
+     darbai be Grafiko (3.2-3.3 netaikomi, 3.4 ir 4.3 lieka), 3.1 p. pratęsimo sakinys - privalomas „Taip / Ne“, 4.1 p. variantas „yra:“
+     nesiūlomas. Tiekėjo duomenų, kainos ir atstovų neklausiama (pildoma sudarant sutartį). */
+  var DM = function (c) { return c.seima === "DARBAI_MAZOJI"; };
+  var SKYRIUS_NETAIKOMAS = "Skyrius netaikomas.";
+  var dmUzs = function (c, R) { return R.dm_vykdymas === "uzsakymai"; };
+  var KLAUSIMAI_DM = [
+    KL_NUMERIS("Sutarties dalykas ir darbų vykdymas", "sutarties įžanga"),
+    { id: "dm_vykdymas", grupe: "Sutarties dalykas ir darbų vykdymas", tipas: "variantai", privalomas: true,
+      klausimas: "Kaip vykdomi darbai (SS 2 skyrius, 3.2-3.4, 4.3 ir 4.4 punktai)?",
+      variantai: [{ id: "uzsakymai", tekstas: "Pagal atskirus Užsakovo užsakymus - lieka 2 skyrius „Užsakymai“ ir 4.4 punktas (Sutarties kaina - maksimali suma)" },
+                  { id: "grafikas", tekstas: "Vienkartinio pobūdžio darbai pagal Grafiką - lieka 3.2-3.4 punktai ir 4.3 punktas (Sutarties kaina - fiksuota suma)" },
+                  { id: "be_grafiko", tekstas: "Vienkartinio pobūdžio darbai be Grafiko - lieka 3.4 punktas (delspinigiai) ir 4.3 punktas (fiksuota suma), 3.2 ir 3.3 punktai netaikomi" }],
+      uzuomina: "Šablone šios dalys pažymėtos nurodymais rengėjui „[... pasirenkama, kai ...]“ - nurodymai pašalinami. Netaikomame punkte įrašoma „Punktas netaikomas.“ (2 skyriuje - „Skyrius netaikomas.“), todėl punktų numeriai visose sutartyse tie patys. Trečiasis atvejis šablone nepažymėtas: jame 3.4 ir 4.3 punktai taikomi, nors šablono nurodymai juos sieja su Grafiku." },
+    { id: "dm_aktas", grupe: "Sutarties dalykas ir darbų vykdymas", tipas: "variantai", privalomas: true,
+      klausimas: "Kokį dokumentą pasirašius darbai laikomi atliktais (SS 1.2 punktas)?",
+      variantai: [{ id: "aktas", tekstas: "Atliktų darbų aktą - „Darbai bus laikomi atliktais, kai abi Šalys pasirašys Atliktų darbų aktą.“" },
+                  { id: "paskutinis", tekstas: "Paskutinį Atliktų darbų aktą - „... kai abi Šalys pasirašys paskutinį Atliktų darbų aktą.“ (kai aktų keli)" }],
+      uzuomina: "Šablono sąrašo „Nurodykite, koks aktas bus pasirašomas“ variantai.",
+      siuloma: function (c, R) { return R.dm_vykdymas === "uzsakymai" ? { reiksme: "paskutinis", kilme: "darbai vykdomi pagal atskirus užsakymus - Atliktų darbų aktų bus keli" }
+                                      : R.dm_vykdymas === "be_grafiko" ? { reiksme: "aktas", kilme: "vienkartinio pobūdžio darbai be Grafiko" } : null; } },
+    { id: "dm_uzsakymu_dalykas", grupe: "Sutarties dalykas ir darbų vykdymas", tipas: "formuluote", privalomas: true, rodoma: dmUzs,
+      klausimas: "Ką Šalys suderina teikiant užsakymus (SS 2.2 punktas)?",
+      uzuomina: "Šablono vieta: „[užsakomus Darbus /Darbų kiekius /atlikimo terminus/...]“. Įrašoma į sakinį „Teikiant užsakymus Šalys suderins ... .“ (galininku).",
+      siuloma: function () { return { reiksme: "užsakomus Darbus, Darbų kiekius ir atlikimo terminus", kilme: "šablono 2.2 punkte išvardyti dalykai" }; } },
+    { id: "dm_uzsakymu_terminai", grupe: "Sutarties dalykas ir darbų vykdymas", tipas: "variantai", privalomas: true, rodoma: dmUzs,
+      klausimas: "Kaip nustatomi atskirų užsakymų įvykdymo terminai (SS 2.3 punktas)?",
+      variantai: [{ id: "derinami", tekstas: "Derinami kiekvieno užsakymo pateikimo metu" },
+                  { id: "priede", tekstas: "Nurodyti Sutarties priede" },
+                  { id: "kita", tekstas: "Kitaip (įrašysite formuluotę)" }],
+      uzuomina: "Šablono vieta: „[derinami kiekvieno užsakymo pateikimo metu / nurodyti Sutarties priede Nr.[ ] / ...]“. Įrašoma į sakinį „Atskirų užsakymų įvykdymo terminai ... .“",
+      laukai: [{ id: "dm_uzsakymu_priedas", tipas: "tekstas", uzrasas: "Sutarties priedo numeris", kada: "priede" },
+               { id: "dm_uzsakymu_terminai_f", tipas: "formuluote", uzrasas: "Formuluotė po žodžių „Atskirų užsakymų įvykdymo terminai“", kada: "kita" }] },
+
+    { id: "dm_terminas", grupe: "Terminai", tipas: "skaicius", privalomas: true,
+      klausimas: "Per kiek laiko nuo Sutarties įsigaliojimo dienos atliekami darbai arba kiek laiko teikiami užsakymai (SS 3.1 punktas)?",
+      uzuomina: "Skaičius; sakinio pradžia ir žodžio forma parenkamos pagal atsakymą į klausimą „Kaip vykdomi darbai?“: „Rangovas įsipareigoja Darbus atlikti per 6 mėnesius nuo Sutarties įsigaliojimo dienos.“ arba „Pagal šią Sutartį užsakymai Darbams bus teikiami 12 mėnesių nuo Sutarties įsigaliojimo dienos.“",
+      vienetai: function () { return [{ id: "men", tekstas: "mėnesiai" }, { id: "d", tekstas: "dienos" }]; },
+      siuloma: function (c) { return c.trukmeMen > 0 ? { reiksme: String(c.trukmeMen), kilme: "pirkimo kortelės sutarties trukmė mėnesiais" } : null; } },
+    { id: "dm_pratesimas", grupe: "Terminai", tipas: "taipne", privalomas: true,
+      klausimas: "Ar šis terminas gali būti pratęstas (SS 3.1 punkto antrasis sakinys)?",
+      uzuomina: "„Taip“ - lieka sakinys „Šis terminas gali būti pratęstas ... dėl ... .“ su jūsų įrašytu pratęsimo terminu ir aplinkybėmis. „Ne“ - sakinys pašalinamas.",
+      laukai: [{ id: "dm_pratesimo_terminas", tipas: "tekstas", uzrasas: "Pratęsimo terminas (po žodžio „pratęstas“, pvz. „1 mėnesiui“, „ne ilgiau kaip 30 dienų“)", kada: "taip" },
+               { id: "dm_pratesimo_aplinkybes", tipas: "formuluote", uzrasas: "Aplinkybės, kada terminas gali būti pratęstas (po žodžio „dėl“, kilmininku)", kada: "taip" }] },
+
+    { id: "dm_kaina", grupe: "Kaina", tipas: "variantai", privalomas: true,
+      klausimas: "Koks Sutarties kainos apskaičiavimo būdas (SS 4.1 punktas)?",
+      variantai: [{ id: "fiksuotas_ikainis", tekstas: "Fiksuotas įkainis" }, { id: "fiksuota_kaina", tekstas: "Fiksuota kaina" }, { id: "kintamas_ikainis", tekstas: "Kintamas įkainis" }],
+      uzuomina: "Šablono sąrašo „Kainos apskaičiavimo būdas“ variantai. Sąrašo variantas „yra:“ (be tęsinio) nesiūlomas.",
+      siuloma: function (c, R) { return R.dm_vykdymas === "grafikas" || R.dm_vykdymas === "be_grafiko"
+        ? { reiksme: "fiksuota_kaina", kilme: "vienkartinio pobūdžio darbai - pagal 4.3 punktą Sutarties kaina yra fiksuota suma" } : null; } },
+
+    { id: "dm_uztikrinimas", grupe: "Užtikrinimas ir priedai", tipas: "taipne", privalomas: true,
+      klausimas: "Ar reikalaujamas Sutarties įvykdymo užtikrinimas (SS 6.3 punktas, BS 3.5)?",
+      uzuomina: "„Taip“ - 6.3 punkte lieka „Rangovo sutartiniai įsipareigojimai užtikrinami ... Eur dydžio banko garantija arba draudimo bendrovės laidavimo raštu, pateikta(-u) Užsakovui prieš sudarant Sutartį“ su jūsų įrašyta suma. „Ne“ - „netaikoma“.",
+      laukai: [{ id: "dm_uztikrinimo_suma", tipas: "tekstas", uzrasas: "Užtikrinimo suma, Eur", kada: "taip" }],
+      siuloma: function (c) { var u = c.uztikrinimas; return u && u.taikomas === true ? { reiksme: "taip", kilme: "SPS: sutarties įvykdymo užtikrinimas reikalaujamas" }
+                                    : u && u.taikomas === false ? { reiksme: "ne", kilme: "SPS: sutarties įvykdymo užtikrinimas nereikalaujamas" } : null; },
+      pastaba: function () { return "Ar užtikrinimas privalomas - pagal vidaus taisykles (generatorius jų nežino)."; } },
+    { id: "dm_trisale", grupe: "Užtikrinimas ir priedai", tipas: "taipne", privalomas: true,
+      klausimas: "Ar prie Sutarties pridedamas trišalės sutarties (tiesioginio atsiskaitymo su subrangovu) projektas (priedų sąrašo 4 eilutė)?",
+      uzuomina: "„Taip“ - eilutė „Trišalės sutarties projektas“ lieka. „Ne“ - įrašoma „Trišalės sutarties projektas - netaikoma;“ (kitų priedų numeriai nesikeičia). Šios sutarties bendrosiose sąlygose tiesioginio atsiskaitymo su subrangovais tvarkos nėra - ji nustatoma trišalėje sutartyje.",
+      siuloma: function (c) { return c.tiesioginis === true ? { reiksme: "taip", kilme: "SPS: taikomas tiesioginis atsiskaitymas su subtiekėjais" }
+                                   : c.tiesioginis === false ? { reiksme: "ne", kilme: "SPS: tiesioginio atsiskaitymo su subtiekėjais nuostata netaikoma" } : null; } },
+    { id: "dm_kiti_priedai", grupe: "Užtikrinimas ir priedai", tipas: "taipne", privalomas: true,
+      klausimas: "Ar prie Sutarties pridedami kiti priedai (priedų sąrašo 5 eilutė)?",
+      uzuomina: "Šablono 5 eilutė - tuščia vieta „[...]“. „Taip“ - įrašomas jūsų nurodytas priedas (jei jų keli, kitus pridėkite Word programoje atskiromis eilutėmis); „Ne“ - „Kiti priedai - netaikoma.“",
+      laukai: [{ id: "dm_kiti_priedai_f", tipas: "tekstas", uzrasas: "Priedo pavadinimas (pvz. Darbų kiekių žiniaraštis)", kada: "taip" }] }
+  ];
   /* Priedo numeris SS priedų sąraše (Word numeracija) - po šalinamų priedų (etapų priedas, kai darbai etapais neskaidomi) */
   function priedoNr(Z, R, re){
     if (!Z || !Z.priedai) return null;
@@ -483,7 +555,7 @@
   }
 
   /* ---------------------------------------------------------------- efektyvūs atsakymai */
-  var rinkinys = function (ctx) { return PSR(ctx || {}) ? KLAUSIMAI_PSR : PPS(ctx || {}) ? KLAUSIMAI_PPS : KLAUSIMAI; };
+  var rinkinys = function (ctx) { return PSR(ctx || {}) ? KLAUSIMAI_PSR : PPS(ctx || {}) ? KLAUSIMAI_PPS : DM(ctx || {}) ? KLAUSIMAI_DM : KLAUSIMAI; };
   function efektyvus(ctx, A, Z){
     var R = {}, kilmes = {}, Q = rinkinys(ctx);
     Q.forEach(function (q) {
@@ -503,7 +575,21 @@
       R.procentai = skLT(apvalink(ctx.uztikrinimas.eur / ctx.verte * 100));
       kilmes.procentai = { kilme: "SPS užtikrinimo suma " + ctx.uztikrinimas.eur + " Eur / numatoma vertė " + ctx.verte + " Eur" };
     }
+    // darbų pirkimo-pardavimo SS 6.3 p.: užtikrinimo suma - iš SPS atsakymo (siūloma, kol žmogus neįrašė)
+    if (DM(ctx || {}) && R.dm_uztikrinimas === "taip" && (A.dm_uztikrinimo_suma == null || A.dm_uztikrinimo_suma.reiksme == null || A.dm_uztikrinimo_suma.reiksme === "") &&
+        ctx.uztikrinimas && ctx.uztikrinimas.eur > 0) {
+      R.dm_uztikrinimo_suma = sumaLT(ctx.uztikrinimas.eur);
+      kilmes.dm_uztikrinimo_suma = { kilme: "SPS sutarties įvykdymo užtikrinimo suma" };
+    }
     return { R: R, kilmes: kilmes };
+  }
+  /* Suma sutarties tekstui: „5 000“, „12 500,50“ (be valiutos); neatpažinta - tuščia */
+  function sumaLT(v){
+    var n = typeof v === "number" ? v : (global.GP_MONEY && global.GP_MONEY.parseEUR ? global.GP_MONEY.parseEUR(String(v)) : skaicius(v));
+    if (!(n > 0)) return "";
+    var c = Math.round(n * 100), sv = String(Math.floor(c / 100)), ct = c % 100, out = "";
+    for (var i = 0; i < sv.length; i++) out += ((sv.length - i) % 3 === 0 && i ? " " : "") + sv[i];
+    return ct ? out + "," + (ct < 10 ? "0" : "") + ct : out;
   }
 
   function klausimai(Z, ctx, A){
@@ -517,7 +603,7 @@
                variantai: (q.variantai || []).filter(function (v) { return !v.tik || v.tik(ctx, R); }).map(function (v) { return { id: v.id, tekstas: v.tekstas }; }),
                vienetai: q.vienetai ? q.vienetai(ctx) : null,
                laukai: (q.laukai || []).filter(function (l) { return !l.tikLTEN || LTEN(ctx); }).map(function (l) {
-                 return { id: l.id, tipas: l.tipas, uzrasas: l.uzrasas, kada: l.kada, neprivalomas: !!l.neprivalomas, reiksme: R[l.id] != null ? R[l.id] : "", siuloma: l.id === "procentai" && E.kilmes.procentai ? E.kilmes.procentai : null }; }),
+                 return { id: l.id, tipas: l.tipas, uzrasas: l.uzrasas, kada: l.kada, neprivalomas: !!l.neprivalomas, reiksme: R[l.id] != null ? R[l.id] : "", siuloma: (l.id === "procentai" || l.id === "dm_uztikrinimo_suma") && E.kilmes[l.id] ? E.kilmes[l.id] : null }; }),
                reiksme: R[q.id] != null ? R[q.id] : null, vienetas: (A[q.id + "_vnt"] || {}).reiksme || "men",
                siuloma: k && k !== "zmogus" ? k : null, busena: busena };
     });
@@ -555,6 +641,7 @@
     A = A || {};
     if (PSR(ctx)) return sprendimaiPSR(Z, ctx, A);
     if (PPS(ctx)) return sprendimaiPPS(Z, ctx, A);
+    if (DM(ctx)) return sprendimaiDM(Z, ctx, A);
     var V = global.GP_SUTARCIU_GEN.vietos(Z), R = efektyvus(ctx, A, Z).R, S = {}, perspejimai = [], derinimas = derink(ctx, R);
     var rodomi = klausimai(Z, ctx, A), truksta = trukstami(rodomi);
     var nust = function (x, s) { if (x) S[x.raktas] = s; };
@@ -878,7 +965,18 @@
     var R = efektyvus(ctx, A || {}, Z).R, pav = String(ctx.pavadinimas || "").trim(), nr = pirkimoNr(ctx, R), out = [], rek = uzsakovoRekvizitai();
     var nrKilme = String(ctx.numeris || "").trim() ? "pirkimo kortelė" : nr ? "jūsų atsakymas" : "";
     var pirk = pav ? pav + " pirkimas" : "";
-    if (PSR(ctx) || PPS(ctx)) {
+    if (DM(ctx)) {
+      out.push({ kas: "Sutarties pavadinimas (antraštė)", reiksme: pirk.toUpperCase(), kilme: "pirkimo pavadinimas (1 žingsnis)", truksta: pav ? "" : "pirkimo pavadinimo" });
+      out.push({ kas: "Pirkimo pavadinimas ir numeris (sutarties įžanga)", reiksme: pav ? pav + " pirkimą" + (nr ? " (pirkimo Nr. " + nr + ")" : "") : "",
+                 kilme: "1 žingsnis" + (nrKilme ? "; numeris - " + nrKilme : ""), truksta: !pav ? "pirkimo pavadinimo" : !nr ? "pirkimo numerio" : "" });
+      out.push({ kas: "Užsakovo rekvizitai (sutarties įžanga ir lentelė prieš parašus)",
+                 reiksme: "LITGRID AB" + (rek ? ", " + rek.adresas + ", įmonės kodas " + rek.kodas + ", PVM kodas " + rek.pvmKodas + ", sąskaita " + rek.saskaita + ", " + rek.bankas + ", banko kodas " + rek.bankoKodas + ", " + rek.telefonas + ", " + rek.elPastas : ""),
+                 kilme: "LITGRID AB rekvizitai (kaip prekių, paslaugų ir rangos sutarčių formose); formoje šios lentelės eilutės tuščios", truksta: rek ? "" : "organizacijų registro" });
+      var p2 = dmPriedoNr(Z, /^Techninė specifikacija/), p3 = dmPriedoNr(Z, /^Rangovo pasiūlymas/);
+      out.push({ kas: "Priedų numeriai tekste (1.1 punktas" + (R.dm_vykdymas === "uzsakymai" ? " ir 4.4 punktas" : "") + ")",
+                 reiksme: "Techninė specifikacija - " + p2 + " priedas" + (R.dm_vykdymas === "uzsakymai" ? "; įkainiai (Rangovo pasiūlymas) - " + p3 + " priedas" : ""),
+                 kilme: "to paties šablono priedų sąrašas", truksta: "" });
+    } else if (PSR(ctx) || PPS(ctx)) {
       out.push({ kas: "Pirkimo pavadinimas ir numeris (sutarties įžanga)", reiksme: pav ? pav + " pirkimą" + (nr ? " Nr. " + nr : "") : "",
                  kilme: "1 žingsnis" + (nrKilme ? "; numeris - " + nrKilme : ""), truksta: !pav ? "pirkimo pavadinimo" : !nr ? "pirkimo numerio" : "" });
       out.push({ kas: PPS(ctx) ? "Užsakovo rekvizitai (sutarties įžanga ir 7.1 punktas)" : "Užsakovo rekvizitai",
@@ -957,6 +1055,114 @@
 
     return { S: S, truksta: truksta, perspejimai: perspejimai, derinimas: derinimas, R: R };
   }
+  /* ---------------------------------------------------------------- darbų pirkimo-pardavimo SS sprendimai generatoriui (2026-10-12) */
+  function derinkDM(ctx, R){
+    var out = [], u = ctx.uztikrinimas, z = R.dm_uztikrinimas;
+    if (u && u.taikomas != null && z){
+      if (u.taikomas === false && z === "taip")
+        out.push("SPS sutarties įvykdymo užtikrinimo nereikalauja, o SS 6.3 punkte pasirinkta, kad užtikrinimas pateikiamas. Patikrinkite, ar SPS ir sutartis sutampa.");
+      if (u.taikomas === true && z === "ne")
+        out.push("SPS reikalauja sutarties įvykdymo užtikrinimo, o SS 6.3 punkte pasirinkta „netaikoma“. Patikrinkite, ar SPS ir sutartis sutampa.");
+      var s = sumaLT(R.dm_uztikrinimo_suma);
+      if (u.taikomas === true && z === "taip" && u.eur > 0 && s && s !== sumaLT(u.eur))
+        out.push("SPS nurodyta sutarties įvykdymo užtikrinimo suma - " + sumaLT(u.eur) + " Eur, o SS 6.3 punkte - " + s + " Eur. Patikrinkite, ar SPS ir sutartis sutampa.");
+    }
+    if (ctx.tiesioginis === true && R.dm_trisale === "ne")
+      out.push("SPS nurodo, kad taikomas tiesioginis atsiskaitymas su subtiekėjais, o trišalės sutarties projektas prie Sutarties nepridedamas (šios sutarties bendrosiose sąlygose tiesioginio atsiskaitymo tvarkos nėra). Patikrinkite, ar SPS ir sutartis sutampa.");
+    return out;
+  }
+  /* Užsakovo rekvizitų lentelės eilutės (etiketė šablone be reikšmės) - reikšmė iš organizacijų registro; registras - iš pačios sutarties įžangos */
+  var DM_REKV = [[/^Adresas:$/, function (r) { return r.adresas; }], [/^Įmonės kodas:$/, function (r) { return r.kodas; }], [/^PVM kodas:$/, function (r) { return r.pvmKodas; }],
+                 [/^Sąskaitos Nr\.$/, function (r) { return r.saskaita; }], [/^Bankas:$/, function (r) { return r.bankas; }], [/^Banko kodas:$/, function (r) { return r.bankoKodas; }],
+                 [/^Tel\. Nr\.$/, function (r) { return r.telefonas; }], [/^El\. p\.:$/, function (r) { return r.elPastas; }]];
+  function dmRegistras(Z){
+    var p = (Z.pastraipos || []).filter(function (t) { return /„Užsakovas“/.test(t) && /kaupiami ir saugomi/.test(t); })[0] || "";
+    var m = /duomenys apie bendrovę kaupiami ir saugomi ([^,]+),/.exec(p);
+    return m ? m[1].trim() : "";
+  }
+  function dmPriedoNr(Z, re){ var q = ((Z && Z.priedai) || []).filter(function (x) { return re.test(x.tekstas); })[0]; return q ? q.nr : ""; }
+  function sprendimaiDM(Z, ctx, A){
+    var V = global.GP_SUTARCIU_GEN.vietos(Z), R = efektyvus(ctx, A, Z).R, S = {}, perspejimai = [], derinimas = derinkDM(ctx, R);
+    var truksta = trukstami(klausimai(Z, ctx, A));
+    var nust = function (x, s) { if (x) S[x.raktas] = s; };
+    var t = function (id) { return String(R[id] == null ? "" : R[id]).trim(); };
+    var pild = function (v, re, n) { return V.filter(function (x) { return x.rusis === "pildoma" && x.vieta === v && (!re || re.test(x.tekstas || "")); })[n || 0] || null; };
+    var vald = function (v) { return V.filter(function (x) { return x.rusis === "valdiklis" && x.vieta === v; })[0] || null; };
+    var blok = function (id) { return V.filter(function (x) { return x.raktas === "b:" + id; })[0] || null; };
+    var nepr = function (id) { return V.filter(function (x) { return x.raktas === "o:" + id; })[0] || null; };
+    var irasyk = function (x, tekstas) { nust(x, tekstas ? { tekstas: tekstas } : { palikti: "neatsakyta" }); };
+    var sk = function (id) { var n = skaicius(R[id]); return n && n > 0 ? n : null; };
+    var be = function (x) { return String(x || "").replace(/^\[|\]$/g, ""); };
+    var pav = String(ctx.pavadinimas || "").trim(), m = R.dm_vykdymas;
+
+    // Sudarant (naudotojo taisyklė 2026-10-11): Sutarties data, vieta ir numeris, Rangovo duomenys ir atstovai, Užsakovo atstovas, kaina,
+    // atsakingi asmenys, Rangovo rekvizitai, pasirašantys asmenys
+    V.filter(function (x) { return x.rusis === "pildoma" || x.rusis === "valdiklis"; }).forEach(function (x) { nust(x, { palikti: "sudarant" }); });
+    // Žinoma iš pirkimo: sutarties pavadinimas (= pirkimo pavadinimas), pirkimo pavadinimas ir numeris, Užsakovo rekvizitai
+    irasyk(pild("", /^\[PERKAMI DARBAI\]$/), pav ? (pav + " pirkimas").toUpperCase() : "");
+    irasyk(pild("", /^\[pirkimo pavadinimas\]$/), pav);
+    irasyk(pild("", /^\[numeris\]$/), pirkimoNr(ctx, R));
+    var rek = uzsakovoRekvizitai(), reg = dmRegistras(Z);
+    if (rek) {
+      DM_REKV.forEach(function (e) { var x = pild("parašai", e[0], 0), v = e[1](rek); if (x && v) nust(x, { tekstas: x.tekstas + " " + v }); });
+      var xr = pild("parašai", /^Duomenys apie asmenį kaupiami:$/, 0);
+      if (xr && reg) nust(xr, { tekstas: xr.tekstas + " " + reg });
+    } else perspejimai.push("Užsakovo rekvizitai (lentelė prieš parašus) neįrašyti - neįkeltas organizacijų registras (shared/organizacijos.js).");
+    // 1.1 Techninės specifikacijos priedo numeris, 1.2 aktas
+    irasyk(pild("1.1", /^\[\.\.\.\]$/), dmPriedoNr(Z, /^Techninė specifikacija/));
+    var va = vald("1.2"), ka = { aktas: /^Atliktų darbų aktą$/, paskutinis: /^paskutinį Atliktų darbų aktą$/ }[R.dm_aktas];
+    if (va && ka) nust(va, { elementas: el(va, ka) });
+    // 2 skyrius, 3.2-3.4, 4.3, 4.4 - pagal darbų vykdymo atvejį; netaikomame punkte - „Punktas netaikomas.“ (numeriai nesikeičia)
+    if (m) {
+      nust(blok("užsakymai"), m === "uzsakymai" ? { taikoma: true } : { taikoma: false, lieka: [0], vietoje: { 1: SKYRIUS_NETAIKOMAS } });
+      nust(blok("grafikas"), m === "grafikas" ? { taikoma: true }
+        : m === "be_grafiko" ? { taikoma: false, vietoje: { 0: NETAIKOMAS, 1: NETAIKOMAS }, lieka: [2] } : { taikoma: false, vietoje: { 0: NETAIKOMAS, 1: NETAIKOMAS, 2: NETAIKOMAS } });
+      nust(blok("fiksuota_kaina"), m === "uzsakymai" ? { taikoma: false, vietoje: { 0: NETAIKOMAS } } : { taikoma: true });
+      nust(blok("maksimali_kaina"), m === "uzsakymai" ? { taikoma: true } : { taikoma: false, vietoje: { 0: NETAIKOMAS } });
+    }
+    if (m === "uzsakymai") {
+      // 2.1 „elektroniniu paštu“ - šablono reikšmė lieka (pažymėta tik kaip keičiama vieta), 2.2, 2.3
+      var ep = pild("2.1", /^elektroniniu paštu$/); if (ep) nust(ep, { tekstas: ep.tekstas });
+      irasyk(pild("2.2"), t("dm_uzsakymu_dalykas").replace(/[.\s]+$/, ""));
+      var x23 = pild("2.3"), dal = x23 ? be(x23.tekstas).split(/\s*\/\s*/) : [], ut = "";
+      if (R.dm_uzsakymu_terminai === "derinami") ut = dal[0] || "";
+      else if (R.dm_uzsakymu_terminai === "priede") ut = t("dm_uzsakymu_priedas") && dal[1] ? dal[1].replace(/\s*\[[\s\u00a0]*\]/, " " + t("dm_uzsakymu_priedas").replace(/^Nr\.?\s*/i, "").replace(/\.$/, "")) : "";
+      else if (R.dm_uzsakymu_terminai === "kita") ut = t("dm_uzsakymu_terminai_f").replace(/[.\s]+$/, "");
+      irasyk(x23, ut);
+      irasyk(pild("4.4", /^\[\.\.\.\]$/), dmPriedoNr(Z, /^Rangovo pasiūlymas/));
+    }
+    // 3.1 sakinio pradžia pagal atvejį, terminas (galininkas: „per 6 mėnesius“, „teikiami 12 mėnesių“), pratęsimo sakinys
+    var pora = pild("3.1", /^\[Rangovas įsipareigoja/), pr = pora ? pora.tekstas.split(/\]\s*\/\s*\[/).map(be) : [];
+    if (pora && m && pr.length === 2) nust(pora, { tekstas: m === "uzsakymai" ? pr[1] : pr[0] });
+    var n = sk("dm_terminas");
+    irasyk(pild("3.1", /^\[terminas\]$/), n ? n + " " + ((R.dm_terminas_vnt || "men") === "d" ? forma(n, "dieną", "dienas", "dienų") : forma(n, "mėnesį", "mėnesius", "mėnesių")) : "");
+    var sak = pild("3.1", /^Šis terminas gali būti pratęstas/);
+    if (R.dm_pratesimas === "ne") nust(sak, "salinti");
+    else if (R.dm_pratesimas === "taip" && sak)
+      irasyk(sak, t("dm_pratesimo_terminas") && t("dm_pratesimo_aplinkybes")
+        ? sak.tekstas.replace("[pratęsimo terminas]", t("dm_pratesimo_terminas").replace(/[.\s]+$/, "")).replace("[aplinkybės, kada gali būti pratęsta]", t("dm_pratesimo_aplinkybes").replace(/[.\s]+$/, "")) : "");
+    // 4.1 kainos apskaičiavimo būdas (sąrašo variantas „yra:“ nesiūlomas), 6.3 užtikrinimas
+    var vk = vald("4.1"), kk = { fiksuotas_ikainis: /^fiksuotas įkainis/, fiksuota_kaina: /^fiksuota kaina/, kintamas_ikainis: /^kintamas įkainis/ }[R.dm_kaina];
+    if (vk && kk) nust(vk, { elementas: el(vk, kk) });
+    var vu = vald("6.3");
+    if (vu && R.dm_uztikrinimas === "ne") nust(vu, { elementas: el(vu, /^netaikoma/) });
+    else if (vu && R.dm_uztikrinimas === "taip") {
+      var suma = sumaLT(R.dm_uztikrinimo_suma);
+      if (suma) nust(vu, { elementas: el(vu, /^Rangovo sutartiniai įsipareigojimai užtikrinami/), reiksmes: [suma] });
+      else if (t("dm_uztikrinimo_suma")) perspejimai.push("SS 6.3 punkto užtikrinimo suma „" + t("dm_uztikrinimo_suma") + "“ neatpažinta kaip suma eurais - įrašykite skaičių (pvz. 5 000).");
+    }
+    // Priedų sąrašas: 4 eilutė „Trišalės sutarties projektas“, 5 eilutė - kiti priedai
+    var tr = nepr("trišalė");
+    if (tr && R.dm_trisale === "ne") nust(tr, { tekstas: String(tr.aprasas || "").replace(/[;.\s]+$/, "") + " - netaikoma;" });
+    var kp = pild("priedų sąrašas", /^\[\.\.\.\]$/);
+    if (R.dm_kiti_priedai === "ne") nust(kp, { tekstas: "Kiti priedai - netaikoma" });
+    else if (R.dm_kiti_priedai === "taip") irasyk(kp, t("dm_kiti_priedai_f").replace(/[.;\s]+$/, ""));
+
+    Object.keys(S).forEach(function (k) { var s2 = S[k]; if (s2 && typeof s2 === "object" && s2.elementas != null && s2.elementas < 0)
+      { perspejimai.push("Šablone nerastas sąrašo variantas sprendimui " + k + " - patikrinkite šablono redakciją."); delete S[k]; } });
+    if (R.dm_uztikrinimas === "taip" && t("dm_uztikrinimo_suma") && !sumaLT(R.dm_uztikrinimo_suma)) truksta.push("Ar reikalaujamas Sutarties įvykdymo užtikrinimas (SS 6.3 punktas, BS 3.5)? - Užtikrinimo suma, Eur (neatpažinta suma)");
+    return { S: S, truksta: truksta, perspejimai: perspejimai, derinimas: derinimas, R: R };
+  }
   /* Sutarties priedas su savu šablonu (projektavimo paslaugų SS 3 priedas „Apmokėjimo tvarka pagal etapus“): lieka pasirinkta etapų lentelė */
   function priedoSprendimai(Zp, R){
     var V = global.GP_SUTARCIU_GEN.vietos(Zp), S = {}, truksta = [];
@@ -977,6 +1183,7 @@
   /* Rangos SS 20-29 punktai įrašomi tik taikomi, todėl sugeneruotoje sutartyje jų numeriai gali būti mažesni nei šablone */
   var GRUPIU_PASTABOS = { "Papildomos sąlygos": "Šios grupės punktai įrašomi tik tada, kai taikomi, todėl sugeneruotoje sutartyje jų numeriai gali būti mažesni nei šablone. Klausimuose - šablono numeriai." };
   var SUDARANT_PPS = "Projektuotojo duomenys, registracijos valstybė ir atstovaujantis asmuo, Sutarties data ir numeris, 4.1 punkto kainos (pagal laimėjusį pasiūlymą), Šalių atstovai (5.1 punktas), Projektuotojo kontaktai, sąskaita ir bankas (7.1 punktas), pasirašantys asmenys";
+  var SUDARANT_DM = "Sutarties data, vieta ir numeris, Rangovo duomenys, registracijos valstybė ir atstovaujantis asmuo, Užsakovui atstovaujantis asmuo, Sutarties kaina (4.2 punktas, pagal laimėjusį pasiūlymą), Šalių atsakingi asmenys (5.1 punktas), Rangovo rekvizitai, pasirašantys asmenys";
   var SUDARANT_PSR = "Rangovo duomenys, registracijos valstybė, atstovai, kontaktai ir sąskaita, Sutarties data ir numeris, 11 punkto kaina (pagal laimėjusį pasiūlymą), Užsakovo pasirašantis asmuo, parašai";
 
   function mount(o){
@@ -1063,8 +1270,8 @@
       h += '<div class="lk-sa" id="sfAuto"><b>Įrašoma automatiškai</b> (be klausimo):<ul>' + automatiniai(Z, ctx, A).map(function (a) {
         return "<li>" + esc(a.kas) + ": " + (a.truksta ? '<span class="lk-auto-nera">dar neįrašyta - trūksta ' + esc(a.truksta) + "</span>" : "<b>" + esc(a.reiksme) + "</b>") +
           ' <span class="lk-kilme-t">(' + esc(a.truksta ? KO_TRUKSTA[a.truksta] || a.kilme : a.kilme) + ")</span></li>"; }).join("") + "</ul></div>";
-      h += '<div class="lk-sa" id="sfSudarant"><b>Pildoma sudarant sutartį</b> (generatorius šias vietas palieka): ' + esc(PSR(ctx) ? SUDARANT_PSR : PPS(ctx) ? SUDARANT_PPS : SUDARANT) + "." +
-        (PPS(ctx) ? " Šablone šios vietos pažymėtos geltonai - žymėjimas jose lieka, kitur nuimamas." : "") + "</div></section>";
+      h += '<div class="lk-sa" id="sfSudarant"><b>Pildoma sudarant sutartį</b> (generatorius šias vietas palieka): ' + esc(PSR(ctx) ? SUDARANT_PSR : PPS(ctx) ? SUDARANT_PPS : DM(ctx) ? SUDARANT_DM : SUDARANT) + "." +
+        (PPS(ctx) ? " Šablone šios vietos pažymėtos geltonai - žymėjimas jose lieka, kitur nuimamas." : DM(ctx) ? " Šablone šios vietos pažymėtos pilkai - žymėjimas jose lieka, kitur nuimamas." : "") + "</div></section>";
       vieta.innerHTML = h;
       if (aktyvus){ var e = doc.getElementById(aktyvus); if (e) e.focus(); }
     }
@@ -1104,7 +1311,7 @@
     };
   }
 
-  global.GP_SUTARTIES_FORMA = { versija: "S4-AUTO-2026-10-11", KLAUSIMAI: KLAUSIMAI, KLAUSIMAI_PSR: KLAUSIMAI_PSR, KLAUSIMAI_PPS: KLAUSIMAI_PPS, klausimai: klausimai, sprendimai: sprendimai,
+  global.GP_SUTARTIES_FORMA = { versija: "S4-DM-2026-10-12", KLAUSIMAI: KLAUSIMAI, KLAUSIMAI_PSR: KLAUSIMAI_PSR, KLAUSIMAI_PPS: KLAUSIMAI_PPS, KLAUSIMAI_DM: KLAUSIMAI_DM, klausimai: klausimai, sprendimai: sprendimai,
                                  priedoSprendimai: priedoSprendimai, automatiniai: automatiniai, mount: mount,
-                                 _forma: forma, _terminasEN: terminasEN, _priedoNr: priedoNr };
+                                 _forma: forma, _terminasEN: terminasEN, _priedoNr: priedoNr, _sumaLT: sumaLT };
 })(typeof window !== "undefined" ? window : this);

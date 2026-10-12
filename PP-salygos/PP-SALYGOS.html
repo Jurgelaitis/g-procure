@@ -1372,10 +1372,11 @@ function kontrolinisAtsakymas(k){
   // Sutarties projektas (sutarčių planas 4.4, 2026-10-09): 1 žingsnio bloke patvirtinta sutartis - projektas pridedamas, „nerengiamas - esminės
   // sąlygos SPS“ - nepridedamas; nepatvirtinta, CPO LT ar tiekėjo forma - klausiama kaip iki šiol
   if (/^jei pirkimo metu nera rengiamas sutarties projektas/.test(t)){ const sp = sutartiesProjektas(); if (sp) return { v:!sp.pridedamas, kodel:sp.kodel }; }
-  // SPS „Tiesioginio atsiskaitymo ... tvarka nurodyta Sutarties projekte“: generuojamo prekių ar paslaugų sutarties BS 3.4 p. ją nustato visada
-  // (subtiekėjams pageidaujant); kitos sutarties ar nerengiamo projekto atveju - klausiama kaip iki šiol
-  if (/^kai taikomas tiesioginis atsiskaitymas su subtiekejais/.test(t)){ const sp = sutartiesProjektas();
-    if (sp && sp.generuojamas) return { v:true, kodel:'generuojamo sutarties projekto bendrųjų sąlygų 3.4 p. nustato tiesioginio atsiskaitymo su subtiekėjais tvarką' }; }
+  // SPS „Tiesioginio atsiskaitymo ... tvarka nurodyta Sutarties projekte“: generuojamos sutarties bendrosios sąlygos ją nustato visada
+  // (subtiekėjams pageidaujant) - TIESIOGINIS_BS; darbų pirkimo-pardavimo („mažosios“) sutarties bendrosiose sąlygose tokios tvarkos nėra,
+  // todėl jai, kitai sutarčiai ar nerengiamam projektui - klausiama kaip iki šiol
+  if (/^kai taikomas tiesioginis atsiskaitymas su subtiekejais/.test(t)){ const sp = sutartiesProjektas(), bs = sp && sp.generuojamas && TIESIOGINIS_BS[sp.seima];
+    if (bs) return { v:true, kodel:`generuojamo sutarties projekto bendrųjų sąlygų ${bs} p. nustato tiesioginio atsiskaitymo su subtiekėjais tvarką` }; }
   return null;
 }
 function rezimoAtsakymas(k, rez){
@@ -4595,7 +4596,7 @@ function rodykRezultata(rez){
         : 'nepasirinkta - 1 žingsnyje liko neatsakytas klausimas')
       + (sug.length ? `. Į paketą įtrauktos bendrosios ir specialiosios sąlygos${sug.some(r => r.sutartiesPriedoSablonas) ? ' ir specialiųjų sąlygų 3 priedas' : ''} - šablono tekstas nekeistas, keistos tik pažymėtos vietos (patikrinta po generavimo).`
            + sug.flatMap(r => r.sutartis.pakeista.filter(p => p.ka === 'nesiūlomas variantas')).map(p => `<div id="sutartiesNesiulomi">Pašalintas šablono ${esc(p.vieta)} punkto variantas („${esc(String(p.buvo || '').slice(0, 110))}...“): ${esc(p.kodel || '')}.</div>`).join('')
-           + (sug.some(r => r.sutartiesPriedoSablonas) ? (kiek => `<div class="cite" id="sutartiesGeltona">Geltonas žymėjimas specialiosiose sąlygose paliktas tik vietose, pildomose sudarant sutartį (${kiek}); išspręstose vietose jis nuimtas.</div>`)(grupe('sudarant').length) : '')
+           + (zs => zs ? (kiek => `<div class="cite" id="sutartiesGeltona">${zs.zymejimoSpalva === 'lightGray' ? 'Pilkas' : 'Geltonas'} žymėjimas specialiosiose sąlygose paliktas tik vietose, pildomose sudarant sutartį (${kiek}); išspręstose vietose jis nuimtas.</div>`)(grupe('sudarant').length) : '')(sug.find(r => r.zymejimoSpalva))
            + (grupe('word').length ? `<div><b>Sutvarkykite Word programoje:</b> ${grupe('word').map(esc).join('; ')}.</div>` : '')
            + (grupe('neatsakyta').length ? `<div><b>Liko neužpildyta (neprivaloma):</b> ${grupe('neatsakyta').map(esc).join('; ')}.</div>` : '')
            + `<div class="cite">Pildoma sudarant sutartį: ${grupe('sudarant').length} vietos (tiekėjo duomenys, sumos, subtiekėjai, parašai) - jos paliktos šablono forma.</div>`
@@ -5618,12 +5619,15 @@ function sutartiesUztikrinimas(){
 /* Ar pirkimo sąlygoms pridedamas sutarties projektas - pagal 1 žingsnio bloką „Sutarties projektas“ (sutarčių planas 4.4, 2026-10-09).
    { pridedamas, kodel } arba null - nežinoma: blokas nerodomas ar laukia, sutartis nepatvirtinta, CPO LT ar tiekėjo forma (ar ji pridedama
    kaip sutarties projektas, sprendžia žmogus 2 žingsnyje). Patvirtinta šeima be generatoriaus šablono - projektą prideda pats rengėjas. */
+/* Bendrųjų sąlygų punktas, nustatantis tiesioginio atsiskaitymo su subtiekėjais (subrangovais) tvarką, pagal sutarties šeimą (iš šablonų,
+   Word numeracija; 2026-10-12). Šeimos, kurios čia nėra (darbų pirkimo-pardavimo „mažoji“), bendrosios sąlygos tokios tvarkos neturi. */
+const TIESIOGINIS_BS = { PREKES: '3.4', PASLAUGOS: '3.4', PROJEKTAVIMO_STATYBOS: '5.2.2', PROJEKTAVIMO_PASLAUGOS: '4.2.7-4.2.8' };
 function sutartiesProjektas(){
   const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
   if (!SB || !SB.rodoma || SB.laukia || !SB.pasirinkta || !SB.patvirtinta) return null;
   const nr = SB.pasirinkta.nerengiama;
   if (nr) return nr.id === 'esmines' ? { pridedamas: false, kodel: 'sutarties projektas nerengiamas - esminės sutarties sąlygos išdėstomos SPS' } : null;
-  return { pridedamas: true, generuojamas: !!SB.sablonai, kodel: SB.sablonai ? `pridedamas sutarties projektas „${SB.pavadinimas}“ (generuojamas pakete)`
+  return { pridedamas: true, generuojamas: !!SB.sablonai, seima: SB.pasirinkta.seima, kodel: SB.sablonai ? `pridedamas sutarties projektas „${SB.pavadinimas}“ (generuojamas pakete)`
                                                : `pridedamas sutarties projektas „${SB.pavadinimas}“ (generatorius jo dar nekuria - pridėsite patys)` };
 }
 /* SPS žaliųjų reikalavimų dalies atsakymas sutarties SS 13.1 p. klausimui (sutarčių planas 4.4, 2026-10-09): pasirinkti variantai
@@ -5636,6 +5640,12 @@ function spsZalieji(){
   const v = Object.keys(ZAL_SPS).filter(k => ATS[norm(ZAL_SPS[k])] === true);
   return v.length ? v : null;
 }
+/* SPS sąlygos „Kai taikomas tiesioginis atsiskaitymas su subtiekėjais“ atsakymas (true / false / null - neatsakyta ar SPS be šios sąlygos) -
+   darbų pirkimo-pardavimo sutarties klausimui apie trišalės sutarties projekto priedą */
+function spsTiesioginis(){
+  const k = Object.keys(ATS).find(k => /^kai taikomas tiesioginis atsiskaitymas su subtiekejais/.test(k));
+  return k ? (ATS[k] === true ? true : ATS[k] === false ? false : null) : null;
+}
 function sutartiesKriterijus(){ const k = window.__K ? kriterijus(window.__K) : null; return k ? (GP_LAUKAI.UZT_PAGAL_KRITERIJU[k] || null) : null; }
 function sutartiesKontekstas(){
   const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
@@ -5646,7 +5656,7 @@ function sutartiesKontekstas(){
   return { seima: SB.pasirinkta.seima, kalba: SB.kalba, sablonai: SB.sablonai, pavadinimasSutarties: SB.pavadinimas,
            pavadinimas: pavClean(($('#pavadinimas').value || '').trim()), pavadinimasEN: (($('#pavadinimasEN') || {}).value || '').trim(),
            numeris: k.numeris || '', trukmeMen: k.trukmeMen || null, verte: verteEUR() || null,
-           uztikrinimas: sutartiesUztikrinimas(), kriterijus: sutartiesKriterijus(), nacsaug: nacsaugTaip(), zaliejiSPS: spsZalieji() };
+           uztikrinimas: sutartiesUztikrinimas(), kriterijus: sutartiesKriterijus(), nacsaug: nacsaugTaip(), zaliejiSPS: spsZalieji(), tiesioginis: spsTiesioginis() };
 }
 window.SUTARTIES_FORMA = window.GP_SUTARTIES_FORMA ? GP_SUTARTIES_FORMA.mount({ vieta: '#sutartiesForma', kontekstas: sutartiesKontekstas }) : null;
 
@@ -5690,7 +5700,8 @@ async function sutartiesDokumentai(){
       const lauk = p.rusis === 'laukas' && o.find(q => q.rusis === 'laukas' && q.vieta === p.vieta && q.kodel === p.kodel);
       if (lauk) lauk.n++; else o.push(Object.assign({ n: 1 }, p)); });
       o.forEach(p => { if (p.rusis === 'laukas' && p.n > 1) p.aprasas = `lentelės langeliai (${p.n})`; });
-      return o.map(p => ({ text: `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}` })); };
+      // ta pati eilutė (kelios vietos vienoje pastraipoje - darbų BS tvirtinimo įsakymo data ir numeris) - vieną kartą
+      return [...new Set(o.map(p => `${p.vieta ? p.vieta + ' p.: ' : ''}${p.aprasas}${p.kodel === 'word' ? ' (sutvarkyti Word programoje)' : ''}`))].map(text => ({ text })); };
     if (r.priedas){
       const nr = A.atskirta.priedai.join(', ');
       priedas = { d: { trumpas: kod + '_GULSTI', pavadinimas: `Sutarties specialiųjų sąlygų priedas Nr. ${nr} (gulsčias puslapis, iš „${R ? R.pavadinimas : kod}“)`, dokumentas: 'Sutarties SS priedas ' + nr },
@@ -5699,6 +5710,7 @@ async function sutartiesDokumentai(){
     }
     out.push({ d: { trumpas: kod, pavadinimas: (R ? R.pavadinimas : kod) + (SB.kalba === 'LTEN' ? ' (LT/EN)' : ''), dokumentas: tip === 'BS' ? 'Sutarties BS' : 'Sutarties SS' },
       blob: r.blob, sutartis: A, stats: {}, forma: false, wordNumeracija: Zs.numeracija === 'word',
+      zymejimoSpalva: tip === 'SS' && Zs.zymejimas === 'pildoma' ? ((Zs.paryskinimai.find(x => x.spalva) || {}).spalva || 'yellow') : null,
       audit: { svarus: true, raudonos: [], tuscios: [], tiekejo: [], komentarai: 0,
                patikrinti: eilutes(A.palikta.filter(p => p.kodel !== 'sudarant' && !priede(p)))
                  .concat(tip === 'SS' ? (F.derinimas || []).concat(F.perspejimai || []).map(t => ({ text: t })) : [])

@@ -20,7 +20,10 @@
  *                        { dalis: tekstas } } - taikoma: šalinamas nurodymas, lieka punkto tekstas (kelių dalių - tik `dalys` true), `papildymas` -
  *                        naujos pastraipos po dalies (eilutė - pastraipa); netaikoma: šalinamas nurodymas, punktas ir viena tuščia pastraipa
  *                        po jo; { taikoma: false, tekstas } - punktas su antrašte lieka, nurodymo vietoje - `tekstas` („Punktas netaikomas.“ -
- *                        rangos SS 4 p., kad 1-19 punktų numeriai nesikeistų), punkto tekstas šalinamas
+ *                        rangos SS 4 p., kad 1-19 punktų numeriai nesikeistų), punkto tekstas šalinamas; { taikoma: false, vietoje: { k: tekstas },
+ *                        lieka: [k] } (darbų pirkimo-pardavimo SS, 2026-10-12) - nurodymas šalinamas, k-toji dalies pastraipa (skaičiuojant visas
+ *                        dalių pastraipas iš eilės) pakeičiama tekstu („Punktas netaikomas.“ - punkto numeris lieka) arba paliekama (skyriaus
+ *                        antraštė), kitos šalinamos
  *       "o:<id>"         šablono sakinys be „//“, taikomas tik tam tikru atveju (rangos SS 3, 6, 8 p.; naudotojo sprendimas 2026-10-10):
  *                        "salinti" - pašalinamas; { tekstas } - jo vietoje `tekstas`; be sprendimo lieka (tai šablono tekstas)
  *       "nb:<id>"        nurodymų blokas (rangos SS etapų priedo „Pildymo sąlygos“): "salinti" arba { palikti }
@@ -59,7 +62,7 @@ const GP_SUTARCIU_GEN = (() => {
   const tarpai = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
   const TRYN = /^(jei (punktas )?netaikoma?s?, visą žemiau esantį tekstą ištrinti:|if (not applicable|the clause does not apply), delete all the text below:)$/i;
   const NETAIKOMA = /netaikom|not applicable|do(es)? not apply/i;   // „... papunkčiai netaikomi“ - EN „... do not apply“ (iki 2026-10-08 neatpažinta: EN papunkčiai likdavo)
-  const VIETA_REZ = /\[\.\.\.\]|\[…\]|\[_\]|\{\.*\}/g;
+  const VIETA_REZ = /\[\.\.\.\]|\[…\]|\[_\]|\[suma\]|\{\.*\}/g;   // „[suma]“ - darbų pirkimo-pardavimo SS 6.3 p. užtikrinimo variantas (2026-10-12)
   const PASIRINKITE = /Pasirinkite elementą|Choose an item/;
   const IMONE = 'ĮMONĖS PAVADINIMAS';
   const SALYGA = /^(jei punktas taikomas:|if the clause applies:)$/i;
@@ -166,6 +169,18 @@ const GP_SUTARCIU_GEN = (() => {
     const t = naujas(d, 't'); t.setAttribute('xml:space', 'preserve'); t.textContent = tekstas; r.appendChild(t);
     p.appendChild(r);
   }
+  /* Visa pastraipa -> `tekstas` pirmojo jos teksto runo formatu (be pusjuodžio, kursyvo, žymėjimo). Darbų pirkimo-pardavimo SS (2026-10-12):
+     punktų pastraipos ženklo savybėse - didžiosios raidės (w:caps), todėl irasykLauka „Punktas netaikomas.“ rašytų didžiosiomis. */
+  function irasykTeksta(p, tekstas){
+    const d = p.ownerDocument;
+    const r0 = visi(p, 'r').find(r => !virsSdt(r, p) && tarpai(visi(r, 't').map(t => t.textContent).join(''))), rp0 = r0 && vaikas(r0, 'rPr');
+    vaikai(p).forEach(c => { if (c.localName !== 'pPr') p.removeChild(c); });
+    const r = naujas(d, 'r');
+    if (rp0){ const k = rp0.cloneNode(true); vaikai(k).forEach(c => { if (['b', 'bCs'].includes(c.localName)) k.removeChild(c); }); svarus(k); r.appendChild(k); }
+    const t = naujas(d, 't'); t.setAttribute('xml:space', 'preserve'); t.textContent = tekstas; r.appendChild(t);
+    p.appendChild(r);
+  }
+  const zenkloDidziosios = p => { const pPr = vaikas(p, 'pPr'), prr = pPr && vaikas(pPr, 'rPr'); return !!(prr && vaikas(prr, 'caps')); };
   /* Pastraipos savybių elementų tvarka (OOXML CT_PPr) - įterpiant numeraciją ar atitraukimą */
   const PPR_TVARKA = ['pStyle', 'keepNext', 'keepLines', 'pageBreakBefore', 'framePr', 'widowControl', 'numPr', 'suppressLineNumbers', 'pBdr', 'shd',
     'tabs', 'suppressAutoHyphens', 'kinsoku', 'wordWrap', 'overflowPunct', 'topLinePunct', 'autoSpaceDE', 'autoSpaceDN', 'bidi', 'adjustRightInd',
@@ -581,6 +596,15 @@ const GP_SUTARCIU_GEN = (() => {
       }
       trinti(b.i, 'šablono nurodymas rengėjui');
       for (let i = b.i + 1; i < Math.min(...visos); i++) if (!Z.pastraipos[i]) trinti(i, 'tuščia pastraipa po nurodymo');
+      if (!s.taikoma && (s.vietoje || s.lieka)){   // netaikoma, bet punktų numeriai lieka: tekstas punkto vietoje, antraštė paliekama
+        const vt = s.vietoje || {}, lk = s.lieka || [];
+        visos.forEach((i, k) => {
+          if (vt[k] != null && String(vt[k]).trim()) salygosTekstas[i] = String(vt[k]);
+          else if (!lk.includes(k)) trinti(i, 'punktas netaikomas (jūsų atsakymas)');
+        });
+        A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'punktas', tapo: Object.values(vt).filter(Boolean)[0] || 'netaikomas' });
+        continue;
+      }
       b.dalys.forEach((d, k) => { if (!lieka[k]) for (let i = Math.min(...d); i <= Math.max(...d); i++) trinti(i, 'punktas netaikomas (jūsų atsakymas)'); });
       if (!lieka.some(Boolean)){
         const po = Math.max(...visos) + 1;   // tame pačiame langelyje (rangos SS punktai - vienos lentelės langelyje)
@@ -690,7 +714,7 @@ const GP_SUTARCIU_GEN = (() => {
       });
       if (!tarpai(R[i]) && !ks.some(k => k.x.rusis === 'pildoma') && !visi(P[i], 'sdt').length) trinti(i, 'tuščia po nurodymo pašalinimo');
     }
-    for (const [is, t] of Object.entries(salygosTekstas)){ irasykLauka(P[+is], t); R[+is] = t; isspresta.add(+is); }
+    for (const [is, t] of Object.entries(salygosTekstas)){ (zenkloDidziosios(P[+is]) ? irasykTeksta : irasykLauka)(P[+is], t); R[+is] = t; isspresta.add(+is); }
     for (const x of V.filter(x => x.rusis === 'laukas')){
       const s = sp(x);
       if ([x.lt, x.en].filter(Boolean).every(y => istrinti.has(y.i))) continue;   // pašalintame priede
@@ -700,6 +724,17 @@ const GP_SUTARCIU_GEN = (() => {
         irasykLauka(P[y.i], nauja); R[y.i] = nauja;
       }
       A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'laukas', tapo: s.tekstas });
+    }
+
+    // 5a. Įmonės pavadinimas puslapio antraštėse ir poraštėse (darbų pirkimo-pardavimo BS antraštė „ĮMONĖS PAVADINIMAS darbų pirkimo
+    //     sutarties bendrosios sąlygos“, 2026-10-12) - žemėlapis aprašo tik dokumento tekstą, todėl keičiama čia ir patikrinama
+    for (const f of doc.zip.file(/^word\/(header|footer)\d*\.xml$/)){
+      if ((await f.async('string')).indexOf(IMONE) < 0) continue;
+      const h = await GPDocx.part(doc, f.name);
+      let n = 0;
+      visi(h, 't').forEach(t => { if (t.textContent.indexOf(IMONE) >= 0){ t.textContent = t.textContent.split(IMONE).join(info.imone || 'LITGRID AB'); n++; } });
+      if (visi(h, 'p').some(p => visi(p, 't').map(t => t.textContent).join('').indexOf(IMONE) >= 0)) A.klaidos.push(`${f.name}: „${IMONE}“ nepakeistas`);
+      else if (n) A.pakeista.push({ raktas: '', vieta: /header/.test(f.name) ? 'puslapio antraštė' : 'puslapio poraštė', ka: 'organizacija', buvo: IMONE, tapo: info.imone || 'LITGRID AB' });
     }
 
     // 6. Valdikliai (DOM): eilutės valdiklio tekstas tampa pastraipos dalimi; blokinio - jo pastraipos tekstu
@@ -797,6 +832,8 @@ const GP_SUTARCIU_GEN = (() => {
       // rangos SS: „//“ nurodymai, „Turi būti pasirinkta:“ ir „(pasirenkama ...)“ - tik paliktose vietose
       if (/^\/\/|^Turi būti pasirinkta:$|\(pasirenkama /.test(t) && !neisspresta.has(i)) A.klaidos.push(`liko šablono nurodymas „${t.slice(0, 70)}“ (${vietaPagalI(Z, i)} p.)`);
       if (/\[pasirinkti vieną\]/i.test(t) && !neisspresta.has(i)) A.klaidos.push(`liko žyma „[pasirinkti vieną]“ (${vietaPagalI(Z, i)} p.)`);
+      // darbų pirkimo-pardavimo SS: nurodymas rengėjui laužtiniuose skliaustuose („[skyrius pasirenkamas, kai ...]“) - tik paliktose vietose
+      if (/^\[[^\[\]]*pasirenkam[^\[\]]*\]$/.test(t) && !neisspresta.has(i)) A.klaidos.push(`liko šablono nurodymas „${t.slice(0, 70)}“ (${vietaPagalI(Z, i)} p.)`);
       if (PASIRINKITE.test(t) && !virsSdt(p, null)) A.klaidos.push(`liko „${t}“ ne valdiklyje (${vietaPagalI(Z, i)} p.)`);
     });
 
@@ -859,6 +896,6 @@ const GP_SUTARCIU_GEN = (() => {
     return { blob, ataskaita: A, priedas: priedoBlob };
   }
 
-  return { versija: 'S4-PPS-2026-10-11', vietos: viesos, generuok, _keisk: keisk, _pTekstas: pTekstas, _isvyniok: isvyniok, _vidinioDalys: vidinioDalys, _tarpaiPoGeltonos: tarpaiPoGeltonos, _tarpasPo: tarpasPo };
+  return { versija: 'S4-DM-2026-10-12', vietos: viesos, generuok, _keisk: keisk, _pTekstas: pTekstas, _isvyniok: isvyniok, _vidinioDalys: vidinioDalys, _tarpaiPoGeltonos: tarpaiPoGeltonos, _tarpasPo: tarpasPo };
 })();
 if (typeof window !== 'undefined') window.GP_SUTARCIU_GEN = GP_SUTARCIU_GEN;

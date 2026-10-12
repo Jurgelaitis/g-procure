@@ -39,10 +39,14 @@
   }
   // specialiųjų sąlygų priedų sąrašas: „15.1. Priedas Nr. 1 ...“ / „15.1. Annex No 1 ...“
   // rangos SS (2026-10-10): po „SUTARTIES DOKUMENTAI IR PRIEDAI:“ - Word sąrašas, jo numeriai („1.1.“, „4.“) ir yra priedų numeriai
+  // darbų pirkimo-pardavimo SS (2026-10-12): po „Sutarties priedai:“ - Word sąrašas „1) ... 5)“, jo numeriai ir yra priedų numeriai
   function priedai(T) {
-    var s = {}, sarase = false;
+    var s = {}, sarase = false, sarase2 = false;
     T.forEach(function (t) {
       t = t || "";
+      if (/^\s*Sutarties priedai:\s*$/.test(t)) { sarase2 = true; return; }
+      var k = sarase2 && /^\s*(\d+)\)\s/.exec(t);
+      if (k) s[k[1]] = 1; else if (sarase2 && t.trim()) sarase2 = false;
       var m = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*(\d+)/i.exec(t); if (m) s[m[1]] = 1;
       m = /^\s*(\d+)\s+priedas\.\s/i.exec(t); if (m) s[m[1]] = 1;                               // „3 priedas. Apmokėjimo tvarka pagal etapus;“ (projektavimo paslaugų SS)
       if (/^\s*SUTARTIES DOKUMENTAI IR PRIEDAI:?\s*$/.test(t)) { sarase = true; return; }
@@ -129,6 +133,8 @@
     // pilnas VPĮ ar PĮ pavadinimas - su straipsniu ir dalimi, jei jie nurodyti iškart po jo (projektavimo paslaugų BS, 2026-10-11)
     "viešųjų\\s+pirkimų\\s+įstatym" + L + STR_DAL,
     "pirkimų,\\s+atliekamų\\s+vandentvarkos,\\s+energetikos,\\s+transporto\\s+ar\\s+pašto\\s+paslaugų\\s+srities\\s+perkančiųjų\\s+subjektų,\\s+įstatym" + L + STR_DAL,
+    // sutartyje apibrėžta sąvoka „Pirkimų įstatymas“ (darbų pirkimo-pardavimo BS, 2026-10-11) - su straipsniu ir dalimi, ir sutrumpintai („98 str.“)
+    "pirkimų\\s+įstatym" + L + "(?:\\s+\\d+\\s+(?:straipsn" + L + "|str\\.)(?:\\s+\\d+\\s+(?:dal" + L + "|d\\.))?)?",
     "kainodaros\\s+taisyklių\\s+nustatymo\\s+metodik" + L,
     "nacionaliniam\\s+saugumui\\s+užtikrinti\\s+svarbių\\s+objektų\\s+apsaugos\\s+įstatym" + L + "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?",
     "nutarimu\\s+Nr\\.\\s*\\d+", "įsakymu\\s+Nr\\.\\s*[A-Z]+\\d*-\\d+", "(?:reglament|sprendim)" + L + "\\s+\\(ES\\)\\s+(?:Nr\\.\\s*)?\\d+/\\d+",
@@ -165,5 +171,5 @@
     });
     return out;
   }
-  global.GP_SUTARCIU_NUORODOS = { versija: "1.4", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
+  global.GP_SUTARCIU_NUORODOS = { versija: "1.6", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
 })(typeof window !== "undefined" ? window : this);
