@@ -46,7 +46,8 @@
     ne_is_saraso: "pasirinkimo vietoje - tekstas, kurio formos sąraše nėra", salinama: "pašalintas šablono nurodymas ar pildymo vieta" };
   var SEIMOS = { AK: "Atviras konkursas", AKV: "Atviras konkursas VPĮ", SSD: "Skelbiamos derybos (supaprastintas)", TSD: "Skelbiamos derybos (tarptautinis)",
     ND: "Neskelbiamos derybos", MVP: "Mažos vertės pirkimas", DPSK: "DPS sukūrimas", DPSP: "Konkretus pirkimas pagal DPS",
-    PREKES: "Prekių pirkimo-pardavimo sutartis", PASLAUGOS: "Paslaugų pirkimo-pardavimo sutartis", PSR: "Projektavimo ir statybos rangos sutartis" };
+    PREKES: "Prekių pirkimo-pardavimo sutartis", PASLAUGOS: "Paslaugų pirkimo-pardavimo sutartis", PSR: "Projektavimo ir statybos rangos sutartis",
+    SR: "Statybos rangos sutartis", PPS: "Projektavimo paslaugų sutartis", DARBAI: "Darbų pirkimo-pardavimo sutartis" };
   var SUTARTIES_DALIS = { BS: "bendrosios sąlygos", SS: "specialiosios sąlygos" };
   var VAIDMENU_TVARKA = ["sps", "bps", "skelbimas", "ts", "sutartis", "sutartis_bendrosios", "pasiulymas", "paraiska", "ebvpd", "paaiskinimas", "priedas", "kita"];
   var ATPAZINIMO_RIBA = 0.5, ATPAZINIMO_SKIRTUMAS = 0.05;   // išmatuota 2026-10-06: tikri SPS 0,57-0,76, BPS 1,0; antra forma - bent 0,08 mažiau
@@ -143,6 +144,9 @@
     // pašalinti galima: trynimo nurodymą, užrašą „Jei punktas taikomas:“, visą pastraipą sudarantį nurodymą ar taikymo sąlygą
     (Z.trynimo_nurodymai || []).concat(Z.salygos || []).forEach(function (x) { salinama[x.i] = 1; });
     (Z.nurodymai || []).concat(Z.taikymo_salygos || []).forEach(function (x) { if (P[x.i] && tekstas(P[x.i]) === String(x.tekstas || "").trim()) salinama[x.i] = 1; });
+    // Statybos rangos SS (2026-10-12): nurodymas per kelias pastraipas („// Jei ...“, „arba“, „// Jei ...“) ir „arba“ po pasirenkamo punkto
+    // (žemėlapio „kartu“) - šalinami kartu su nurodymu
+    (Z.nurodymai || []).concat(Z.salyginiai || []).forEach(function (x) { (x.kartu || []).forEach(function (i) { vieta[i] = 1; salinama[i] = 1; }); });
     var SDT = Array.prototype.slice.call(doc.getElementsByTagNameNS(W, "sdt"));
     SDT.forEach(function (sdt) {
       var p = tevas(sdt, "p"), vidus = Array.prototype.slice.call(sdt.getElementsByTagNameNS(W, "p"));

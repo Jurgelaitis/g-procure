@@ -41,6 +41,7 @@ PREKES, PASLAUGOS = 'Prekių pirkimo - pardavimo sutartis/', 'Paslaugų pirkimo 
 PSR = 'Projektavimo ir statybos rangos sutartis/'
 PPS = 'Projektavimo paslaugų sutartis/'
 DARBAI = 'Darbų pirkimo - pardavimo sutartis (mazoji)/'
+SR = 'Statybos rangos sutartis/'
 SABLONAI = [
     ('PREKES_LT_BS', 'PREKES', 'LT', 'BS', PREKES + '0922-PREKIŲ bendrosios sąlygos.docx', 'Prekių pirkimo-pardavimo sutarties bendrosios sąlygos'),
     ('PREKES_LT_SS', 'PREKES', 'LT', 'SS', PREKES + '0922- PREKIŲ pirkimo-pardavimo sutarties specialiosios sąlygos.docx', 'Prekių pirkimo-pardavimo sutarties specialiosios sąlygos'),
@@ -61,6 +62,10 @@ SABLONAI = [
     # 2026-10-11 (5 etapas): LITGRID darbų pirkimo-pardavimo sutarties („mažosios“) šablonai (naudotojas: galutinė redakcija); LT/EN nėra
     ('DARBAI_LT_BS', 'DARBAI_MAZOJI', 'LT', 'BS', DARBAI + 'Bendrosios _Darbu_pirkimo_sutarties salygos_LT.docx', 'Darbų pirkimo-pardavimo sutarties bendrosios sąlygos'),
     ('DARBAI_LT_SS', 'DARBAI_MAZOJI', 'LT', 'SS', DARBAI + 'Specialiosios_Darbu_pirkimo_sutarties_salygos_LT.docx', 'Darbų pirkimo-pardavimo sutarties specialiosios sąlygos'),
+    # 2026-10-12 (6 etapas): LITGRID statybos rangos sutarties šablonai (naudotojas: galutinė redakcija); LT/EN nėra. Tos pačios kilmės kaip
+    # projektavimo ir statybos rangos: be projektavimo dalies, bendrųjų sąlygų skyrių numeriai vienetu mažesni
+    ('SR_LT_BS', 'STATYBOS_RANGOS', 'LT', 'BS', SR + 'Statybos rangos sutarties BS.docx', 'Statybos rangos sutarties bendrosios sąlygos'),
+    ('SR_LT_SS', 'STATYBOS_RANGOS', 'LT', 'SS', SR + 'Statybos rangos sutarties SS.docx', 'Statybos rangos sutarties specialiosios sąlygos'),
 ]
 REDAKCIJOS = {
     'BS': 'VPT tipinės sutarties bendrosios sąlygos (prekių - Nr. 1S-19, paslaugų - Nr. 1S-209) su 2025-04-17 pakeitimais Nr. 1S-51 / 1S-52 '
@@ -72,10 +77,20 @@ REDAKCIJOS = {
             '(naudotojo sprendimas: vertėjas netikrins), be geltono žymėjimo - DI požymis sugeneruoto Word failo savybėse',
 }
 # Šeimos sava redakcija (vietoj REDAKCIJOS pagal tipą)
-REDAKCIJOS_SEIMOS = {'PROJEKTAVIMO_STATYBOS': {
+REDAKCIJOS_SEIMOS = {'STATYBOS_RANGOS': {
+    'BS': 'LITGRID statybos rangos sutarties bendrosios sąlygos, patvirtintos 2026-10-05 įsakymu Nr. 26IS-147 (naudotojas 2026-10-12: '
+          'galutinė redakcija); G-Procure redakciniai taisymai 2026-10-12 (rašyba, skyryba, dvigubi tarpai) ir naudotojo patvirtinti '
+          '2026-10-12 (trijų išvardijimų raidės a), b), ... - punktų numeriai kaip nuorodose; nuorodos 2.3.8, 3.9.19, 3.10.3, 8.1.10.9, '
+          '8.8.9 p. ir 9.3.2 p. p) papunktyje; 6.3.3 el. paštas, 2.3.12 sąvoka, 1.1.2.19 straipsnių dalys, 4.2.5 poskyrio pavadinimas)',
+    'SS': 'LITGRID statybos rangos sutarties specialiosios sąlygos (naudotojas 2026-10-12: galutinė redakcija); G-Procure redakciniai '
+          'taisymai 2026-10-12 (rašyba, dvigubi tarpai) ir naudotojo patvirtinti 2026-10-12 (vientisa punktų numeracija 1-28, 5 p. nuoroda, '
+          '15 p. delspinigių pakopos, 20 p. grafiko forma, el. paštas, priedų sąrašas be projektavimo ir statybos rangos sutarties eilučių); '
+          'pasirinkimai - „//“ nurodymai ir „arba“ (žemėlapio blokai), neužpildyta'},
+    'PROJEKTAVIMO_STATYBOS': {
     'BS': 'LITGRID projektavimo ir statybos rangos sutarties bendrosios sąlygos, patvirtintos 2026-10-05 įsakymu Nr. 26IS-147 (naudotojas: '
           'galutinė redakcija); G-Procure redakciniai taisymai 2026-10-09 (rašyba, skyryba, dvigubi tarpai, 9.1.10.7 a)-e) stilius) ir naudotojo '
-          'patvirtinti 2026-10-10 (5.2.3.1 raidės, 11.3.4 šalis, 7.3.3 el. paštas, 2.3.12 sąvoka, 1.1.2.18 straipsnių dalys, STR 1.04.02:2011 pavadinimas)',
+          'patvirtinti 2026-10-10 (5.2.3.1 raidės, 11.3.4 šalis, 7.3.3 el. paštas, 2.3.12 sąvoka, 1.1.2.18 straipsnių dalys, STR 1.04.02:2011 pavadinimas); '
+          '2026-10-12 - rašyba (4.9.23 „grąžinus“) ir 2.3.12 sąvoka antroje vietoje',
     'SS': 'LITGRID projektavimo ir statybos rangos sutarties specialiosios sąlygos (2026-10-05, naudotojas: galutinė redakcija); G-Procure '
           'redakciniai taisymai 2026-10-09 ir naudotojo patvirtinti 2026-10-10 (vientisa punktų numeracija 1-29, 1.5 nuoroda, 10 p. delspinigių '
           'pakopos, 15 p. grafiko forma, el. paštas); pasirinkimai - „//“ nurodymai ir „arba“ (žemėlapio blokai), neužpildyta'},
@@ -345,7 +360,8 @@ def be_apvalkalo(x, kodas):
 # Stulpelių pločiai (2026-10-10, rangos SS Pages patikra): kodas -> [(pirmo lygio lentelės eilės nr., {senas plotis: naujas})].
 # Rangos SS kairysis (skyrių pavadinimų) stulpelis - 1561 DXA: pusjuodis „organizavimas“ jame netelpa ir lūžta žodžio viduryje
 # („organizavima / s“ - ir Word, ir Pages; Pages šriftą ima 11 pt). Plotis perkeliamas iš teksto stulpelio, lentelės plotis tas pats.
-STULPELIAI = {'PSR_LT_SS': [(0, {1561: 1814, 8220: 7967})]}
+STULPELIAI = {'PSR_LT_SS': [(0, {1561: 1814, 8220: 7967})],
+              'SR_LT_SS': [(0, {1542: 1814, 8239: 7967})]}   # statybos rangos SS (2026-10-12) - tas pats skyrių pavadinimų stulpelis
 
 
 def stulpeliai(x, kodas):
@@ -717,6 +733,7 @@ def parastes_prie_antrastes(x):
 
 
 FORMATAS = {'PSR_LT_SS': [numeriu_sriftas, sujunk_tuscius, iprastas_sriftas],
+            'SR_LT_SS': [numeriu_sriftas, iprastas_sriftas],   # statybos rangos SS (2026-10-12): tie patys sakiniai ir punktų numeriai kaip rangos SS
             'PPS_LT_SS': [itraukos('PPS_LT_SS'), nelauzomas_ty, geltona_be_tarpu],
             'PPS_LT_SS3': [itraukos('PPS_LT_SS3')],
             'DARBAI_LT_BS': [parastes_prie_antrastes],
@@ -899,7 +916,7 @@ BS_NUORODA = re.compile(r'^\[(Sąvoka\s+)?\d+(\.\d+)*\.?(\s[^\[\]]{0,40})?\]$')
 ISVARDIJIMAS = re.compile(r'^\[([a-z]|\d)\]$')   # „[a]“, „[1]“ - išvardijimo raidė ar skaitmuo sakinyje (projektavimo paslaugų BS 9.10.4)
 PASIRINKTI = {'turi būti pasirinkta:'}
 # Šeimos, kurių punktai sunumeruoti Word (ne tekstu): žemėlapio vieta - Word numeris (word_numeriai)
-WORD_SEIMOS = {'PROJEKTAVIMO_STATYBOS', 'PROJEKTAVIMO_PASLAUGOS', 'DARBAI_MAZOJI'}
+WORD_SEIMOS = {'PROJEKTAVIMO_STATYBOS', 'PROJEKTAVIMO_PASLAUGOS', 'DARBAI_MAZOJI', 'STATYBOS_RANGOS'}
 # Papildomos pildomos vietos pagal šabloną: projektavimo paslaugų SS kainos „XXXX Eur be PVM / XXXX Eur su PVM“ (pildoma sudarant sutartį -
 # laimėtojo pasiūlymo kaina) ir 7.1 p. eilutė „Bankas“ (visa pastraipa - etiketė be reikšmės: Užsakovo - įrašoma automatiškai iš organizacijų
 # registro, Projektuotojo - pildoma sudarant sutartį; naudotojo taisyklė 2026-10-11)
@@ -973,6 +990,44 @@ BLOKAI = {'PSR_LT_SS': {
                      ('užsakovo_įrenginiai', 'Darbų atlikimui Užsakovas pateikia šiuos Įrenginius', 'Nurodytus Įrenginius ir Medžiagas Užsakovas'),
                      ('demontuojami', 'Rangovas demontuotus tolimesniam naudojimui', None)],
     'priedu_skyriai': [('1.1 priedas', 'Projektavimo ir statybos darbų etapai;')]},
+    # Statybos rangos SS (2026-10-12): kaip projektavimo ir statybos rangos, bet variantai dažniau atskirti ir žodžiu „arba“:
+    #   irasyti (id, nurodymas, [kartu]) - kartu su nurodymu šalinamos pastraipos (antras to paties punkto nurodymas po „arba“:
+    #                 Europos Sąjungos fondai, statinio informacinis modeliavimas)
+    #   pasirinkimai  - skyriklis gali būti kelios pastraipos iš eilės („arba“ ir „//“ nurodymas)
+    #   salyginiai (id, nurodymas, dalys, [kartu]) - kartu šalinamas „arba“ be antro varianto (garantinių įsipareigojimų užtikrinimas)
+    'SR_LT_SS': {
+    'sritys': [('priedų sąrašas', 'SUTARTIES DOKUMENTAI IR PRIEDAI:'), ('parašai', 'Užsakovo vardu:'), ('1.1 priedas', '[OBJEKTAS]')],
+    'irasyti': [('objektas', '//nurodomas statomas'), ('techninė_užduotis', '//nurodomas priedas, kuriame pateikiama Techninė užduotis'),
+                ('pagrindiniai_įrenginiai', '// nurodomas Pagrindinių įrenginių sąrašas'), ('fizinė_sauga', '// punkto reikalavimus parengia Fizinės saugos'),
+                ('dalinis_apmokėjimas', '// Už Rangovo teikiamus'),
+                ('es_fondai', '// Jei Darbus numatoma finansuoti', ['arba', '// Jei Darbus nenumatoma finansuoti']),
+                ('bim', '// nurodoma ar turi būti taikomas statinio informacinis', ['arba', '// statinio informacinis modeliavimas (BIM) netaikomas']),
+                ('investicinis_projektas', '// nurodomas Užsakovo vykdomo investicinio')],
+    'pasirinkimai': [
+        ('apmokėjimas', [('// Jei atliekami naujos statybos', 'Sutarties kaina bus mokama dalimis pagal Darbų žiniaraštį', None),
+                         ('// Jei atliekami remonto darbai', 'Sutarties kaina bus mokama dalimis pagal atliktus', None),
+                         ('// Jei atliekami darbai trunka', 'Sutarties kaina bus sumokėta Rangovui', None)]),
+        ('netesybos', [('//Jei darbai atliekami vienu etapu', 'Laiku neužbaigęs visų Sutartyje numatytų Darbų, Rangovas Užsakovui moka 0,04%', None),
+                       ('arba', 'Laiku neužbaigęs visų Sutartyje numatytų Darbų, Rangovas Užsakovui moka šiuos', '4) Rangovui vėluojant'),
+                       ('//Jei darbai atliekami etapais', 'Netesybos už laiku neperduotus', None)]),
+        ('užtikrinimas', [('// įrašoma, kai atliekami nedidelės vertės', 'Sutarties bendrųjų sąlygų 8.7. punktas', None),
+                          (['arba', '// Tuo atveju, jeigu užtikrinimo priemonės taikomos pirkimuose iki'], 'Sutarties įvykdymas užtikrinamas', 'Sutarties įvykdymo užtikrinimo suma'),
+                          (['arba', '//Tuo atveju, jeigu užtikrinimo priemonės taikomos pirkimuose virš'], 'Sutarties įvykdymas užtikrinamas', 'Sutarties įvykdymo užtikrinimo suma')])],
+    'salyginiai': [
+        ('etapai', '//Jei Darbai atliekami etapais', [('Darbus Rangovas turi atlikti priede Nr.', None)]),
+        ('grafikas', '// punktas įrašomas, jei Grafiką', [('Sutarties bendrųjų sąlygų 2.3.1. punkto', 'Grafiką Rangovas turi parengti')]),
+        ('atjungimai', '// punktas papildomas, jei yra galimybė', [('Sutarties bendrųjų sąlygų 3.5.1. punktą', 'elektros oro linijų remontui'),
+                                                                      ('[...];', None)]),   # antra dalis - papildomų terminų eilutė
+        ('garantinis_užtikrinimas', '// įrašoma, kai atliekami nedidelės vertės', [('Sutarties bendrųjų sąlygų 8.9. punktas', None)], ['arba']),
+        ('esminės_sąlygos', '// įrašomos Sutarties sąlygos, dėl kurių', [('Esminėmis yra laikomos šios Sutarties sąlygos:', None)]),
+        ('kitos_nuostatos', '// pagal poreikį įrašomos kitos nuostatos', [('Vadovaujantis Sutarties bendrųjų sąlygų 3.1.12', None),
+                                                                         ('Esant Sutarties bendrųjų sąlygų 4.2.5', None),
+                                                                         ('Rangovas ir Užsakovas susitaria, kad Koordinatorius', None)])],
+    'nurodymu_blokai': [('pildymo_sąlygos', '//Pildymo sąlygos:', 'Lentelė pildoma tik tuo atveju', 'Mokėtinos sumos stulpelis')],
+    'neprivalomos': [('pratęsimas', 'Darbų atlikimo terminas Šalių raštišku susitarimu gali būti pratęstas', None),
+                     ('užsakovo_įrenginiai', 'Darbų atlikimui Užsakovas pateikia šiuos Įrenginius', 'Nurodytus Įrenginius ir Medžiagas Užsakovas'),
+                     ('demontuojami', 'Rangovas demontuotus tolimesniam naudojimui', None)],
+    'priedu_skyriai': [('1.1 priedas', 'Statybos darbų etapai;')]},
     'PPS_LT_SS': {
     'sritys': [('parašai', 'Tai patvirtindamos, Šalys pasirašė')],
     'zymejimas': 'pildoma',
@@ -1057,6 +1112,8 @@ ATSAKYMAI = [
 ]
 # Šeimos savi valdiklių atsakymai (tikrinami prieš ATSAKYMAI)
 ATSAKYMAI_SEIMOS = {'PROJEKTAVIMO_STATYBOS': [
+    (None, r'^tekstas$', 'sudarant', 'Rangovo registracijos valstybė („[Lietuvos] Respublikos“) - iš pasiūlymo, sudarant sutartį')],
+                    'STATYBOS_RANGOS': [
     (None, r'^tekstas$', 'sudarant', 'Rangovo registracijos valstybė („[Lietuvos] Respublikos“) - iš pasiūlymo, sudarant sutartį')],
                     'PROJEKTAVIMO_PASLAUGOS': [
     (None, r'^tekstas$', 'sudarant', 'Projektuotojo registracijos valstybė („[Lietuvos] Respublikos“) - iš pasiūlymo, sudarant sutartį')],
@@ -1328,23 +1385,40 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
         raise SystemExit('%s: bloko pastraipa nerasta: %s' % (kodas, pr))
     sritis = lambda a, z: [q for q in range(a, z + 1) if PS[q]]
     B = BLOKAI.get(kodas, {})
-    for bid, pr in B.get('irasyti', []):
+    for bid, pr, *kartu in B.get('irasyti', []):
         q = rask(pr, 0); naudoti.add(q)
-        Z['nurodymai'].append({'i': q, 'vieta': pastr_info[q]['vieta'], 'tekstas': PS[q], 'id': bid, 'zyme': '//'})
+        irasas = {'i': q, 'vieta': pastr_info[q]['vieta'], 'tekstas': PS[q], 'id': bid, 'zyme': '//'}
+        if kartu:   # kartu su nurodymu šalinamos pastraipos (statybos rangos SS: „arba“ ir antras to paties punkto nurodymas) - iškart po jo
+            ks, nuo = [], q + 1
+            for kp in kartu[0]:
+                kq = rask(kp, nuo); ks.append(kq); naudoti.add(kq); nuo = kq + 1
+            if [x for x in range(q + 1, ks[-1] + 1) if PS[x]] != ks:
+                raise SystemExit('%s: nurodymo „%s“ papildomos pastraipos ne iš eilės po jo' % (kodas, bid))
+            irasas['kartu'] = ks
+        Z['nurodymai'].append(irasas)
     for bid, dalys in B.get('pasirinkimai', []):
         sky, var, nuo = [], [], 0
         for j, (s_pr, v_pr, v_iki) in enumerate(dalys):
-            sq = rask(s_pr, nuo); naudoti.add(sq)
+            for sp1 in ([s_pr] if isinstance(s_pr, str) else s_pr):   # skyriklis - viena pastraipa arba kelios iš eilės („arba“ ir „//“)
+                sq = rask(sp1, nuo); naudoti.add(sq); sky.append(sq); nuo = sq + 1
             a = rask(v_pr, sq + 1); z = rask(v_iki, a) if v_iki else a
-            sky.append(sq); var.append(sritis(a, z)); naudoti.update(var[-1]); nuo = z + 1
+            var.append(sritis(a, z)); naudoti.update(var[-1]); nuo = z + 1
         Z['alternatyvos'].append({'vieta': pastr_info[var[0][0]]['vieta'], 'stulpelis': None, 'skyrikliai': sky, 'variantai': var, 'id': bid})
-    for bid, galva, dalys in B.get('salyginiai', []):
+    for bid, galva, dalys, *kartu in B.get('salyginiai', []):
         h = rask(galva, 0); naudoti.add(h)
         ds, nuo = [], h + 1
         for v_pr, v_iki in dalys:
             a = rask(v_pr, nuo); z = rask(v_iki, a) if v_iki else a
             ds.append(sritis(a, z)); naudoti.update(ds[-1]); nuo = z + 1
-        Z['salyginiai'].append({'id': bid, 'vieta': pastr_info[ds[0][0]]['vieta'], 'i': h, 'tekstas': PS[h], 'dalys': ds})
+        irasas = {'id': bid, 'vieta': pastr_info[ds[0][0]]['vieta'], 'i': h, 'tekstas': PS[h], 'dalys': ds}
+        if kartu:   # po punkto - visada šalinamos pastraipos (statybos rangos SS: „arba“ be antro varianto)
+            ks = []
+            for kp in kartu[0]:
+                kq = rask(kp, nuo); ks.append(kq); naudoti.add(kq); nuo = kq + 1
+            if [x for x in range(max(ds[-1]) + 1, ks[-1] + 1) if PS[x]] != ks:
+                raise SystemExit('%s: dalies „%s“ papildomos pastraipos ne iš eilės po jos' % (kodas, bid))
+            irasas['kartu'] = ks
+        Z['salyginiai'].append(irasas)
     for bid, galva, v_pr, v_iki in B.get('nurodymu_blokai', []):
         h = rask(galva, 0); a = rask(v_pr, h + 1); z = rask(v_iki, a)
         Z['nurodymu_blokai'].append({'id': bid, 'vieta': pastr_info[h]['vieta'], 'i': h, 'apima': sritis(h + 1, z)})
@@ -1571,7 +1645,7 @@ VERSIJOS = {'LITGRID 0922': 'LITGRID sutarčių šablonų „0922“ tekstas pri
             'LITGRID 2026-10-05': 'LITGRID rangos ir projektavimo paslaugų sutarčių šablonų (2026-10-05) tekstas prieš G-Procure redakcinius taisymus',
             'LITGRID darbų sutartis': 'LITGRID darbų pirkimo-pardavimo sutarties šablonų tekstas prieš G-Procure redakcinius taisymus (ir tos pačios bendrosios '
                                       'sąlygos eksploatavimo darbų sutarties aplanke, patvirtintos 2025-01-09 įsakymu Nr. 25IS-1)'}
-VERSIJU_ZYME = {'PROJEKTAVIMO_STATYBOS': 'LITGRID 2026-10-05', 'PROJEKTAVIMO_PASLAUGOS': 'LITGRID 2026-10-05', 'DARBAI_MAZOJI': 'LITGRID darbų sutartis'}   # kitaip - 'LITGRID 0922'
+VERSIJU_ZYME = {'STATYBOS_RANGOS': 'LITGRID 2026-10-05', 'PROJEKTAVIMO_STATYBOS': 'LITGRID 2026-10-05', 'PROJEKTAVIMO_PASLAUGOS': 'LITGRID 2026-10-05', 'DARBAI_MAZOJI': 'LITGRID darbų sutartis'}   # kitaip - 'LITGRID 0922'
 
 
 def kitos_versijos(kodas, rel, aplankai, seima=None):

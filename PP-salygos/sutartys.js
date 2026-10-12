@@ -10,7 +10,7 @@
  *                               atsakymas paduodamas atsakymai[kodas] = id ir parink kviečiamas iš naujo;
  *                "nerengiama" - LITGRID sutarties projektas nerengiamas (pvz. perkama per CPO LT - jo sutarties forma).
  *   GP_SUTARTYS.palygink(rezultatas, zmogausSeima, zmogausVariantas) -> stebėjimo įrašas (siūlyta / pasirinkta / sutampa)
- *   GP_SUTARTYS.NERENGIAMA - priežastys, kai žmogus pats nusprendžia sutarties projekto nerengti (sąsaja - sutarties-blokas.js, S3)
+ *   GP_SUTARTYS.NERENGIAMA - kai žmogus atsako, kad LITGRID standartinės sutarties sąlygos netaikomos (sąsaja - sutarties-blokas.js)
  *   rezimas: "VPI" (centralizuotas LITGRID ir EPSO-G pirkimas) - šeima parenkama, bet „neparuošta“: šablonai parengti PĮ pirkimams,
  *            VPĮ pirkimų sutarties forma dar nenuspręsta (plano 6.2 ir 8 sk. 5 p.).
  *
@@ -31,7 +31,7 @@
     PROJEKTAVIMO_PASLAUGOS: { pav: "Projektavimo paslaugų sutartis", sablonai: { LT: { BS: "PPS_LT_BS", SS: "PPS_LT_SS", P3: "PPS_LT_SS3" } } },
     DARBAI_MAZOJI: { pav: "Darbų pirkimo-pardavimo sutartis (mažoji)", sablonai: { LT: { BS: "DARBAI_LT_BS", SS: "DARBAI_LT_SS" } } },   // nuo 2026-10-12 (5 etapas, S4)
     PROJEKTAVIMO_STATYBOS: { pav: "Projektavimo ir statybos rangos sutartis", sablonai: { LT: { BS: "PSR_LT_BS", SS: "PSR_LT_SS" } } },
-    STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", sablonai: null },
+    STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", sablonai: { LT: { BS: "SR_LT_BS", SS: "SR_LT_SS" } } },   // nuo 2026-10-12 (6 etapas, S4)
     EKSPLOATAVIMO: { pav: "Eksploatavimo darbų sutartis", sablonai: null,
                      variantai: { OL: "oro linijų eksploatavimas", TP: "transformatorių pastočių eksploatavimas", TRASOS: "trasų valymas" } }
   };
@@ -77,10 +77,10 @@
                        { id: "ne", tekstas: "Ne, LITGRID pirkimas", seima: "PASLAUGOS" }] }
   };
 
-  /* Kai sutarties projektas nerengiamas - žmogaus pasirinkimas „Pakeisti“ (plano 2.4 A ir 3.3). */
+  /* Kai sutarties projektas nerengiamas - žmogaus atsakymas „Ne“ į klausimą „Ar taikomos tipinės LITGRID AB sutarties standartinės sąlygos?“
+     (naudotojo sprendimas 2026-10-12: „Ne“ - pridedamos esminės sutarties sąlygos; iki tol „Pakeisti“ sąraše buvo ir „CPO LT forma“ bei
+     „tiekėjo forma“). Sistemos išvada „perkama per CPO LT“ (klausimas CPO) - atskirai, žr. KLAUSIMAI. */
   var NERENGIAMA = [
-    { id: "cpo", tekstas: "Perkama per CPO LT - naudojama CPO LT sutarties forma" },
-    { id: "tiekejo", tekstas: "Sutartis sudaroma tiekėjo forma" },
     { id: "esmines", tekstas: "Sutarties projektas nepridedamas - esminės sutarties sąlygos išdėstomos SPS" }
   ];
 
@@ -238,7 +238,7 @@
                 priezastys: priezastys, kalba: kalba, pastabos: pastabos, atsakyta: atsakyta, sablonai: null };
     if (!S.sablonai) {
       rez.busena = "neparuosta";
-      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių, paslaugų ir darbų pirkimo-pardavimo, projektavimo ir statybos rangos ir projektavimo paslaugų sutartys).");
+      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių, paslaugų ir darbų pirkimo-pardavimo, projektavimo ir statybos rangos, statybos rangos ir projektavimo paslaugų sutartys).");
       return rez;
     }
     if (duom.rezimas === "VPI") {
@@ -261,5 +261,5 @@
              sutampa: !!(rez && rez.seima === seima && (rez.variantas || null) === (variantas || null)) };
   }
 
-  global.GP_SUTARTYS = { versija: "S4-PPS-2026-10-11", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, normalizuok: be };
+  global.GP_SUTARTYS = { versija: "S4-SR-2026-10-12", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, normalizuok: be };
 })(typeof window !== "undefined" ? window : this);
