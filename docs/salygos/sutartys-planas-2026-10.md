@@ -734,6 +734,84 @@ tik kai jo nėra pirkimo kortelėje. 2 žingsnyje - sąrašas „Įrašoma autom
 
 Liko: klausimų tekstų peržiūra (`KLAUSIMAI_PPS`), laiškas LITGRID.
 
+**S1 darbų pirkimo-pardavimo („mažajai“) sutarčiai (5 etapas, 2026-10-11; jūsų „„mažosios“ sutarties šablonai yra galutinė redakcija,
+pradėkime“).** `DARBAI_LT_BS` ir `DARBAI_LT_SS` (LT/EN nėra) - tame pačiame registre ir tuo pačiu keliu. Generavimas - S4 (žemiau,
+2026-10-12).
+- **Redakcinės korekcijos** (privatus `taisymai_10.py`, originalų kopija `originalai-2026-10-11b/`; žodžiai ir numeriai tie patys).
+  Bendrosios sąlygos - iš PDF paversto Word failo: 12 sakinių buvo perskelti per dvi pastraipas (sujungti), 19 tuščių pastraipų tarp
+  punktų (pašalintos), 5.11 ir 5.11.1 punktų numeriai įrašyti ranka (dabar Word numeracija), pavienis „17“ prieš „PATVIRTINTA“, rašyba
+  („taip pat“, „BAIGIAMOSIOS NUOSTATOS“, „trečiosiomis šalimis“, „gali būti laikomos“), skaičiai („3 000“, „1 500“ eurų), 19 dvigubų
+  tarpų. Specialiosios sąlygos: Užsakovo adresas preambulėje, taškai ir kabliataškiai sąrašų gale, išskleidžiamų sąrašų variantai be
+  tarpų gale, „prieš sudarant Sutartį“.
+- **Žymėjimas** (`sutarciu-sablonai.py` papildytas): keturios dalys su nurodymu rengėjui „[... pasirenkama ...]“ - 2 skyrius „Užsakymai“
+  (2.1-2.6), 3.2-3.4 (Grafikas), 4.3 (fiksuota kaina), 4.4 (maksimali kaina) - žemėlapio `salyginiai` (`NURODYMO_PASTRAIPA`); pildomos
+  vietos - laužtiniais skliaustais ir pilku žymėjimu (55; `pazymetos_vietos` - pažymėtos be skliaustų: atsakingų asmenų lentelė,
+  „elektroniniu paštu“, užsienio rangovui keičiami žodžiai); 3.1 p. dvi formuluotės „[...] / [...]“ ir 2.3 p. pasirinkimas - po vieną
+  vietą; rekvizitų lentelės etiketės - pildomos vietos; trys išskleidžiami sąrašai (1.2 aktas, 4.1 kainos apskaičiavimo būdas, 6.3
+  užtikrinimas) - atsakymas iš klausimo; priedų sąrašas „1)“-„5)“ (`priedu_sarasas`). Bendrosiose sąlygose pildoma tik tvirtinimo
+  įsakymo data ir numeris.
+- **Nuorodos:** 7 nuorodos į punktus - visos į esamus (pagal Word numeraciją); BS 158 numeruoti punktai iš eilės (5 skyriai, 33
+  poskyriai, 120 punktų), SS - 1-6.3.
+- **Teisės aktų nuorodos (6.1):** visos registre; naujos 6 - sąvoka „Pirkimų įstatymas“ ir jo straipsniai apie sutarties keitimą ir
+  vienašalį nutraukimą, Viešųjų pirkimų įstatymo nuostata apie nepatikimų valstybių ar teritorijų sąrašą (perskaityta e-tar 2026-10-11);
+  `sutarciu-nuorodos.js` (1.5) atpažįsta sutartyje apibrėžtą trumpinį „Pirkimų įstatymas“ su straipsniu. BS 5.1.2 p. nuoroda į 4.2.2 p.
+  h) papunktį - teisinga (ankstesnio audito klausimas išspręstas perskaičius įstatymą).
+- **Pages (PDF eksportu):** specialiosios sąlygos 3 psl., bendrosios - 9 psl., visi A4, tekstas neprarandamas. Bendrosios sąlygos -
+  dviem stulpeliais, puslapio antraštė - prie puslapio pririštas teksto laukas: kiekvieno puslapio pirma eilutė buvo rašoma ant
+  antraštės. Ruošiant šabloną viršutinė paraštė padidinta (29 -> 45 pt, visuose skyriuose - Pages taiko pirmojo skyriaus paraštes);
+  apatinė nekeista (padidinus dokumentas tampa 10 puslapių, o puslapio numerio laukas siauras - „10 / 10“ netelpa). Lieka: Pages
+  bendrųjų sąlygų pavadinimą rodo atskirame pirmame puslapyje (Word - tame pačiame su tekstu), nes Pages po stulpelių skaičiaus
+  pakeitimo pradeda naują puslapį; išbandyta - vienu stulpeliu pavadinimas ir tekstas būtų viename puslapyje (sprendimas - 8 sk. 16 p.).
+- **„Tikrinti parengtus dokumentus“:** abu šablonai atpažįstami, 0 nukrypimų; specialiosios sąlygos su pasirinktu darbų pagal Grafiką
+  atveju ir užpildytomis vietomis - 0 nukrypimų, pakeista nekintama nuostata - nukrypimas.
+- 9 testai (`testaiDarbuSablonai`), 11 šablono ir žemėlapio mutacijų - visos pagaunamos; 4 kodo mutacijos - 3 pagaunamos, ketvirta
+  šiai šeimai rezultato nekeičia (dalių blokai tikrinime sutampa su visos dalies bloku).
+
+Turinio klausimai - 8 sk. 16 p.; laiško LITGRID juodraštis - privačiai.
+
+**S4 darbų pirkimo-pardavimo („mažajai“) sutarčiai (5 etapas, 2026-10-12; jūsų „Taip, visi punktai - kaip rekomenduojate, pradėkime
+S4.“).** Sutartis generuojama: `GP_SUTARTYS` šeimai siūlo `DARBAI_LT_BS` ir `DARBAI_LT_SS` (LT; prašant LT/EN - lietuviška su pastaba).
+- **Jūsų sprendimai b-i (8 sk. 16 p.)** šablone (privatus `taisymai_11.py`, kopija `originalai-2026-10-12/`): SS 1.3 p. be „užtvarams“
+  dalies; preambulė „laimėjo Užsakovo vykdytą [pirkimo pavadinimas] pirkimą (pirkimo Nr. [numeris])“; BS 1.8.2 p. „Rangovas įsipareigoja
+  per visą ...“. Redakcinės korekcijos: BS 5.1.2 p. c) kableliai, 6.3 p. sąrašo pavadinimas „banko“. Sprendimas a) (BS tvirtinimo
+  eilutė; 2026-10-12 „Palikite tuščią.“) - eilutė lieka kaip formoje, 3 žingsnio patikroje rodoma kaip palikta vieta.
+- **Klausimai 2 žingsnyje** (`KLAUSIMAI_DM`, 11 klausimų SS punktų tvarka, visi privalomi, be numatytųjų; inventorius -
+  `sutarciu-lauku-inventorius.md`): pirkimo numeris (tik be kortelės numerio); kaip vykdomi darbai - pagal užsakymus / pagal Grafiką /
+  vienkartiniai be Grafiko; aktas (1.2 p.); užsakymų dalykas ir terminai (2.2, 2.3 p. - tik užsakymams); terminas mėnesiais ar dienomis
+  (3.1 p., sakinio pradžia - pagal atvejį); pratęsimas „Taip / Ne“ („Ne“ - sakinys šalinamas); kainos apskaičiavimo būdas (4.1 p., be
+  varianto „yra:“); užtikrinimas su suma (6.3 p.; siūloma iš SPS, nesutapus - „Patikrinkite (SPS ir sutartis)“); trišalės sutarties
+  projektas (siūloma pagal SPS tiesioginio atsiskaitymo atsakymą); kiti priedai.
+- **Netaikomos dalys - numeriai nesikeičia:** netaikomame punkte „Punktas netaikomas.“ (3.2-3.4, 4.3, 4.4 pagal atvejį); 2 skyriaus
+  antraštė lieka, jo vietoje - „2.1. Skyrius netaikomas.“; priedų sąraše - „Trišalės sutarties projektas - netaikoma;“ ir „Kiti priedai
+  - netaikoma.“. Nurodymai rengėjui „[... pasirenkama ...]“ pašalinami visada; likęs nurodymas - klaida.
+- **Įrašoma automatiškai** (taisyklė „kas pildoma generuojant“): antraštė „{PAVADINIMAS} PIRKIMAS“, pirkimo pavadinimas ir numeris
+  preambulėje, Užsakovo rekvizitai lentelėje prieš parašus (iš `GP_ORG.rekvizitai("litgrid")`; registras - iš sutarties įžangos),
+  Techninės specifikacijos ir Rangovo pasiūlymo priedų numeriai (1.1 ir 4.4 p.), LITGRID AB bendrųjų sąlygų tekste ir puslapio
+  antraštėje. **Pildoma sudarant sutartį** (neklausiama): data, vieta ir numeris, Rangovo duomenys ir rekvizitai, Šalių atstovai, kaina
+  (4.2 p.), atsakingi asmenys, parašai - pilkas žymėjimas lieka tik šiose vietose.
+- **SPS:** tiesioginio atsiskaitymo sąlyga šiai sutarčiai klausiama (bendrosiose sąlygose tvarkos nėra - `TIESIOGINIS_BS` tik šeimoms,
+  kurių BS ją nustato); „Sutarties projektas rengiamas“ ir esminių sąlygų dalies šalinimas - kaip kitoms šeimoms.
+- **Generatorius:** dalis be numerių keitimo (`{ taikoma: false, vietoje, lieka }`), tekstas pastraipoje su didžiųjų raidžių požymiu
+  (`irasykTeksta` - kitaip „PUNKTAS NETAIKOMAS.“), „[suma]“ išskleidžiamo sąrašo variante, įmonės pavadinimas puslapio antraštėse.
+- **„Tikrinti parengtus dokumentus“:** `shared/palyginimas.js` - žyma „Punktas netaikomas.“ / „Skyrius netaikomas.“ / „... - netaikoma;“
+  pasirenkamos dalies vietoje yra pasirinkimas, ne nukrypimas (ta pati žyma nepasirenkamoje nuostatoje - nukrypimas; žymų ne daugiau
+  nei pašalintų pasirenkamų pastraipų); pasirinkimo vieta pirmiausia suporuojama su savo variantu (4.3 ir 4.4 p. prasideda vienodai);
+  žemėlapio `grieztos_vietos` - pastraipa su pildoma vieta lyginama pagal šabloną (nekintamas tekstas turi likti); trumpa forma
+  atpažįstama pagal visų pastraipų požymius (registro `pozymiai_visi`). Trys sugeneruoti atvejai ir bendrosios sąlygos - 0 nukrypimų su
+  pasu ir be jo; pridėtas sakinys, pakeista nuostata ar pašalintas punktas - nukrypimas.
+- **Nuorodos ir privalomi elementai:** nuorodos į punktus ir priedus - visos į esamus (`sutarciu-nuorodos.js` 1.6: priedų sąrašas
+  „1)“-„5)“); privalomi sutarties elementai - 12 iš 13: šios sutarties sąlygose nėra atskiro nutraukimo atvejo, kai Vyriausybė
+  nusprendžia, kad sutartis neatitinka nacionalinio saugumo interesų (kitų keturių šeimų bendrosiose sąlygose yra; bendrųjų sąlygų
+  4.2.2 p. h) papunktis nurodo tik Pirkimų įstatymo straipsnį) - 3 žingsnis tai rodo kaip informaciją, klausimas - laiške LITGRID.
+  Kainodara - SS 4.1 p. „Sutarties kainos apskaičiavimo būdas“ (katalogo požymis papildytas).
+- **Pages (PDF eksportu):** trys specialiųjų sąlygų atvejai - po 3 psl., bendrosios - 9 psl., A4, tekstas neprarandamas, pilkas
+  žymėjimas neišsilieja. Rasta ir sutvarkyta ruošiant šabloną (redakcinės formatavimo korekcijos, tekstas tas pats): Užsakovo el. pašto
+  eilutė buvo rodoma didžiosiomis raidėmis (formos „El. p.:“ pirmoji raidė - su didžiųjų raidžių požymiu; nuimtas nuo 8 atkarpų be
+  mažųjų raidžių), o ilgos rekvizitų eilutės (registras, adresas) lūždavo su 1,5 cm kabančia įtrauka (numatytasis stilius) - 24 lentelių
+  eilutės be įtraukos.
+- 8 testai (`testaiDarbuGeneravimas`) ir bendras palyginimo testas; 53 kodo mutacijos - 52 pagaunamos (viena šiam šablonui rezultato
+  nekeičia), 2 šablono paruošimo mutacijos - pagaunamos. Word programos šiame kompiuteryje nėra - Word vaizdas netikrintas.
+
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
 smulkūs darbai - mažoji; ekspertizė ir techninė priežiūra - klausimas dėl CPO LT). Rezultatas: „parinkta“ (su šablonais iš S1 registro -
@@ -844,3 +922,26 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
     numatyta sistemoje pranešimas“): saugykla vieša, todėl skaičius kode vėl taptų viešas. Siūlomi keliai: (1) ribą įvedate naršyklėje
     (nustatymas, saugomas tik joje ir atsarginėje kopijoje), sistema pagal ją primena; (2) pranešimas be skaičiaus („patikrinkite pagal
     vidaus taisykles“). Laukia jūsų pasirinkimo.
+16. **Darbų pirkimo-pardavimo („mažosios“) sutarties šablonai (5 etapas, 2026-10-11)** - atsakyta 2026-10-12 („Taip, visi punktai -
+    kaip rekomenduojate, pradėkime S4.“): b-i - pirmas variantas, įgyvendinta (žr. 7 sk. S4). a) - jam rekomendacijos nebuvo, todėl
+    perklausta; atsakyta tą pačią dieną: „Palikite tuščią.“ - eilutė lieka kaip formoje. Klausimai buvo:
+    - a) bendrųjų sąlygų tvirtinimo eilutė „2025 m. ___________d. įsakymu Nr. ___“: tokios pačios bendrosios sąlygos eksploatavimo
+      darbų aplanke turi datą ir numerį - įrašyti juos / palikti tuščia;
+    - b) SS 1.3 p. „..., o įrengtiems užtvarams ir juos komplektuojančioms dalims dviejų metų garantinį terminą“ (konkretaus pirkimo
+      likutis): pašalinti / palikti klausimu „Ar kuriems nors darbų rezultatams nustatomas kitoks garantinis terminas?“;
+    - c) preambulė „laimėjo Užsakovo skelbtą [pirkimo pavadinimas, būdas, paskelbimo data ir numeris (jei apie pirkimą skelbiama)]“:
+      „laimėjo Užsakovo vykdytą [pirkimo pavadinimas] pirkimą (pirkimo Nr. [numeris])“, pildoma automatiškai / kaip šablone;
+    - d) vienkartiniai darbai be Grafiko: leisti trečią atvejį (3.2-3.3 netaikomi, 3.4 delspinigiai ir 4.3 fiksuota kaina lieka) /
+      tik du šablono atvejai;
+    - e) netaikomos dalys: numeriai nesikeičia, įrašoma „Punktas netaikomas.“ (kaip rangos sutartyje) / dalys šalinamos ir punktai
+      pernumeruojami (nuoroda „Sutarties 4.2. punkte“ perrašoma);
+    - f) BS 1.8.2 p. sakinys be veiksnio („Per visą Sutarties vykdymo laikotarpį turėti įdiegtą aplinkos apsaugos vadybos sistemą ...“):
+      „Rangovas įsipareigoja per visą ...“ / palikti;
+    - g) SS 3.1 p. pratęsimo sakinys - privalomas „Taip / Ne“ („Ne“ - sakinys šalinamas);
+    - h) 4.1 p. sąrašo variantas „yra:“ (be tęsinio) - nesiūlyti;
+    - i) bendrosios sąlygos Pages programoje: palikti du stulpelius (pavadinimas - atskirame pirmame puslapyje) / vienas stulpelis.
+    Laiškui LITGRID (turinys, netaisoma): specialiosiose sąlygose nėra draudimo punkto, nors bendrųjų sąlygų 3.4 poskyris taikomas tik
+    jį numačius; bendrosiose sąlygose nėra tiesioginio atsiskaitymo su subrangovais tvarkos, nors 4 priedas - „Trišalės sutarties
+    projektas“; indeksavimo formulė be kainos dalių svorių; kitų sutarčių sąvokos („Darbų žiniaraštis“, „Prekių, Paslaugų“); nuo
+    2026-10-12 - ir nutraukimo atvejis, kai Vyriausybė nusprendžia, kad sutartis neatitinka nacionalinio saugumo interesų (bendrosiose
+    sąlygose atskiro punkto nėra).

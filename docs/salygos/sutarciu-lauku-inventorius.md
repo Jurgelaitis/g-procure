@@ -317,3 +317,92 @@ saugumas) - „Patikrinkite (SPS ir sutartis)“.
   neprarandamas, punktų numeriai kaip Word.
 
 Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_PPS`).
+
+---
+
+# Darbų pirkimo-pardavimo („mažoji“) sutartis - vietų inventorius (5 etapas, S1, 2026-10-11)
+
+Šablonai `DARBAI_LT_BS` ir `DARBAI_LT_SS` paruošti (S1), sutartis generuojama nuo 2026-10-12 (S4 - žr. žemiau). Lentelėje - kiekviena
+specialiųjų sąlygų vieta ir kaip ji pildoma pagal taisyklę „kas pildoma generuojant“ (žinoma iš pirkimo - automatiškai, paaiškėja tik
+sudarant sutartį - lieka tuščia, kita - klausiama prieš generuojant). Lentelė surašyta S1 metu; „16 p.“ - sutarčių plano 8 skyriaus 16
+punkto klausimai, į kuriuos atsakėte 2026-10-12 (b-i - pirmas variantas).
+
+| SS vieta | Šablone | Siūloma |
+|---|---|---|
+| antraštė | „[PERKAMI DARBAI]“ | automatiškai - pirkimo pavadinimas |
+| antraštė | „[data], [vieta] Nr. __________“ | lieka (sudarant sutartį) |
+| preambulė, Užsakovas | „ĮMONĖS PAVADINIMAS“, kodas, adresas; „[pareigos, vardas, pavardė]“, „[atstovavimo pagrindas]“ | pavadinimas - automatiškai (LITGRID AB); atstovas - lieka |
+| preambulė, Rangovas | „[Rangovo pavadinimas]“, „[kodas]“, „[adresas]“, atstovas; pažymėta „Lietuvos Respublikos įstatymus“, „... juridinių asmenų registre“ | lieka (sudarant sutartį) |
+| preambulė, pirkimas | „laimėjo Užsakovo skelbtą [pirkimo pavadinimas, būdas, paskelbimo data ir numeris (jei apie pirkimą skelbiama)]“ | automatiškai - pavadinimas ir numeris (16 p. c klausimas) |
+| 1.1 | „Sutarties [...] priede nurodytus darbus“ | automatiškai - priedų sąrašo eilutės „Techninė specifikacija“ numeris |
+| 1.2 | sąrašas: „Atliktų darbų aktą“ / „paskutinį Atliktų darbų aktą“ | klausimas (siūloma pagal darbų vykdymo atvejį) |
+| 1.3 | garantiniai terminai; „užtvarams ... dviejų metų“ | 16 p. b klausimas |
+| 2 skyrius (2.1-2.6) | nurodymas „[skyrius pasirenkamas, kai perkami Darbai vykdomi pagal atskirus užsakymus]“ | klausimas „Kaip vykdomi darbai?“ - vienas atsakymas valdo 2 skyrių, 3.1 pradžią, 3.2-3.4, 4.3 ir 4.4 |
+| 2.1 | pažymėta „elektroniniu paštu“ | lieka kaip šablone, žymėjimas nuimamas |
+| 2.2 | „[užsakomus Darbus /Darbų kiekius /atlikimo terminus/...]“ | klausimas (tik užsakymams) |
+| 2.3 | „[derinami kiekvieno užsakymo pateikimo metu / nurodyti Sutarties priede Nr.[ ] / ...]“ | klausimas (tik užsakymams) |
+| 3.1 | „[Rangovas įsipareigoja Darbus atlikti per] / [Pagal šią Sutartį užsakymai Darbams bus teikiami] [terminas]“ | formuluotė - pagal atvejį; terminas - klausimas (siūloma iš kortelės trukmės) |
+| 3.1 | „Šis terminas gali būti pratęstas [pratęsimo terminas] dėl [aplinkybės ...]“ | „Taip / Ne“ (16 p. g klausimas) |
+| 3.2-3.4 | nurodymas „[... kai perkami vienkartinio pobūdžio Darbai, vykdomi pagal Grafiką]“ | pagal atvejį (16 p. d ir e klausimai) |
+| 4.1 | sąrašas: „fiksuotas įkainis.“ / „fiksuota kaina.“ / „kintamas įkainis.“ / „yra:“ | klausimas (siūloma pagal atvejį; „yra:“ - 16 p. h) |
+| 4.2 | „[suma ir valiuta]“ × 3 | lieka (sudarant sutartį) |
+| 4.3, 4.4 | fiksuota suma / maksimali suma; 4.4 „įkainiai yra nurodyti Sutarties [...] priede“ | pagal atvejį; priedo numeris - automatiškai („Rangovo pasiūlymas“) |
+| 5.1 | atsakingų asmenų lentelė | lieka (sudarant sutartį) |
+| 6.3 | sąrašas: „netaikoma“ / „... užtikrinami [suma] Eur dydžio banko garantija arba draudimo bendrovės laidavimo raštu ...“ | iš SPS atsakymo apie sutarties įvykdymo užtikrinimą; nesutapus - „Patikrinkite (SPS ir sutartis)“ |
+| priedai | 1) bendrosios sąlygos, 2) Techninė specifikacija, 3) Rangovo pasiūlymas, 4) Trišalės sutarties projektas, 5) „[...]“ | 4) - klausimas; 5) - neprivalomas klausimas „Kiti priedai“ |
+| rekvizitai, Užsakovas | etiketės be reikšmių | automatiškai iš organizacijų registro (kaip kitose sutartyse) |
+| rekvizitai, Rangovas; parašai | etiketės, „[vardas, pavardė]“, „[Pareigos]“ | lieka (sudarant sutartį) |
+
+Bendrosiose sąlygose pildomos vietos - tik tvirtinimo eilutė (16 p. a klausimas; jūsų sprendimas 2026-10-12 - palikti tuščią, kaip
+formoje) ir įmonės pavadinimas (automatiškai - ir puslapio antraštėje).
+
+## Jūsų sprendimai (2026-10-12: „Taip, visi punktai - kaip rekomenduojate, pradėkime S4.“)
+
+- b) SS 1.3 punkte nebėra „, o įrengtiems užtvarams ir juos komplektuojančioms dalims dviejų metų garantinį terminą“;
+- c) preambulė - „laimėjo Užsakovo vykdytą [pirkimo pavadinimas] pirkimą (pirkimo Nr. [numeris])“, pildoma automatiškai;
+- d) trečias atvejis „vienkartiniai darbai be Grafiko“: 3.2 ir 3.3 punktai netaikomi, 3.4 (delspinigiai) ir 4.3 (fiksuota kaina) lieka;
+- e) netaikomos dalys - numeriai nesikeičia: „Punktas netaikomas.“; 2 skyriuje lieka antraštė ir „2.1. Skyrius netaikomas.“ (2.2-2.6
+  punktų nebelieka); priedų sąraše - „Trišalės sutarties projektas - netaikoma;“, „Kiti priedai - netaikoma.“;
+- f) BS 1.8.2 punktas - „Rangovas įsipareigoja per visą Sutarties vykdymo laikotarpį turėti įdiegtą ...“;
+- g) 3.1 punkto pratęsimo sakinys - privalomas „Taip / Ne“;
+- h) 4.1 punkto sąrašo variantas „yra:“ nesiūlomas;
+- i) bendrosios sąlygos lieka dviem stulpeliais.
+- a) (BS tvirtinimo eilutė „2025 m. ___________d. įsakymu Nr. ___“) - rekomendacijos nebuvo, todėl perklausta; jūsų atsakymas tą pačią
+  dieną: „Palikite tuščią.“ Eilutė lieka kaip formoje, generatorius jos nepildo, 3 žingsnio patikra ją rodo kaip paliktą vietą.
+
+## Klausimai 2 žingsnyje (S4, 2026-10-12; `KLAUSIMAI_DM`, 11 - visi privalomi, be numatytųjų)
+
+| Nr. | SS vieta | Klausimas | Atsakymas ir kas įrašoma | Siūloma reikšmė |
+|---|---|---|---|---|
+| 1 | preambulė | Koks pirkimo numeris? | tekstas; rodomas tik kai kortelė nepasirinkta ar be numerio | - |
+| 2 | 2 sk., 3.2-3.4, 4.3, 4.4 | Kaip vykdomi darbai? | pagal atskirus užsakymus (lieka 2 skyrius ir 4.4) / pagal Grafiką (lieka 3.2-3.4 ir 4.3) / vienkartiniai be Grafiko (lieka 3.4 ir 4.3) | - |
+| 3 | 1.2 | Kokį dokumentą pasirašius darbai laikomi atliktais? | „Atliktų darbų aktą“ / „paskutinį Atliktų darbų aktą“ (šablono sąrašas) | užsakymams - „paskutinį“, be Grafiko - „aktą“ |
+| 4 | 2.2 | Ką Šalys suderina teikiant užsakymus? | formuluotė galininku (tik užsakymams) | šablone išvardyti dalykai |
+| 5 | 2.3 | Kaip nustatomi atskirų užsakymų įvykdymo terminai? | derinami kiekvieno užsakymo pateikimo metu / nurodyti Sutarties priede (numeris) / kitaip (formuluotė); tik užsakymams | - |
+| 6 | 3.1 | Per kiek laiko atliekami darbai arba kiek laiko teikiami užsakymai? | skaičius, mėnesiai ar dienos; sakinio pradžia ir žodžio forma - pagal 2 klausimą | kortelės sutarties trukmė mėnesiais |
+| 7 | 3.1 | Ar šis terminas gali būti pratęstas? | „Taip“ - pratęsimo terminas ir aplinkybės; „Ne“ - sakinys pašalinamas | - |
+| 8 | 4.1 | Koks Sutarties kainos apskaičiavimo būdas? | fiksuotas įkainis / fiksuota kaina / kintamas įkainis | vienkartiniams darbams - fiksuota kaina |
+| 9 | 6.3 | Ar reikalaujamas Sutarties įvykdymo užtikrinimas? | „Taip“ - suma eurais; „Ne“ - „netaikoma“ | iš SPS (ir suma); nesutapus - „Patikrinkite (SPS ir sutartis)“ |
+| 10 | priedų 4 eilutė | Ar pridedamas trišalės sutarties projektas? | „Taip“ - eilutė lieka; „Ne“ - „... - netaikoma;“ | pagal SPS tiesioginio atsiskaitymo atsakymą |
+| 11 | priedų 5 eilutė | Ar pridedami kiti priedai? | „Taip“ - priedo pavadinimas; „Ne“ - „Kiti priedai - netaikoma.“ | - |
+
+Ar užtikrinimas privalomas - pagal vidaus taisykles (generatorius jų nežino; klausimo pastaba tai sako). SPS sąlyga apie tiesioginį
+atsiskaitymą šiai sutarčiai nėra atsakoma pati - bendrosiose sąlygose tokios tvarkos nėra, ji nustatoma trišalėje sutartyje.
+
+## Įgyvendinimas (S4, 2026-10-12)
+
+- Forma (`sutarties-forma.js`): `KLAUSIMAI_DM`, `sprendimaiDM`, `derinkDM`; sąrašai „Įrašoma automatiškai“ (antraštė, pirkimas, Užsakovo
+  rekvizitai, priedų numeriai) ir „Pildoma sudarant sutartį“.
+- Generatorius (`sutarciu-generatorius.js`): dalis be numerių keitimo - `{ taikoma: false, vietoje: { k: tekstas }, lieka: [k] }`;
+  `irasykTeksta` - tekstas pastraipoje, kurios ženklo savybėse didžiosios raidės (kitaip „PUNKTAS NETAIKOMAS.“); „[suma]“ išskleidžiamo
+  sąrašo variante; „ĮMONĖS PAVADINIMAS“ puslapio antraštėse; likęs nurodymas „[... pasirenkama ...]“ ne paliktoje vietoje - klaida.
+- Patikra pakete: nuorodos - visos į esamus punktus ir priedus; privalomi sutarties elementai - 12 iš 13 (nerastas nutraukimo atvejis, kai
+  Vyriausybė nusprendžia, kad sutartis neatitinka nacionalinio saugumo interesų - šios sutarties sąlygose atskiro punkto nėra; rodoma kaip
+  informacija, klausimas - laiške LITGRID).
+- „Tikrinti parengtus dokumentus“: trys atvejai ir bendrosios sąlygos - 0 nukrypimų su pasu ir be jo (`shared/palyginimas.js`: žyma
+  netaikomos pasirenkamos dalies vietoje - pasirinkimas; žemėlapio `grieztos_vietos`; registro `pozymiai_visi` trumpai formai).
+- Formatavimas (ruošiant šabloną, tekstas tas pats): rekvizitų ir atsakingų asmenų lentelių eilutės be kabančios įtraukos (24), didžiųjų
+  raidžių požymis nuimtas nuo atkarpų be mažųjų raidžių (8) - kitaip Užsakovo el. paštas buvo rodomas didžiosiomis raidėmis.
+- Pages (PDF eksportu): specialiosios sąlygos trimis atvejais - po 3 psl., bendrosios - 9 psl., A4, tekstas neprarandamas.
+
+Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_DM`).
