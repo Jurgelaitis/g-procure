@@ -34,8 +34,9 @@
       reikia: [["sutarties (dalykas|objektas)", "sutarties (dalyk|objekt)", "(tiekejas|rangovas|projektuotojas) isipareigoja.{0,200}(pristatyti|tiekti|suteikti|teikti|atlikti|parduoti|perduoti)", "subject matter of the contract"],
                ["kiek(io|is|iai|iu) \\(apimt", "(kiek\\w*|apimt\\w*|aprasym\\w*).{0,150}pried\\w* nr\\.? ?\\d+ .{0,3}technine specifikacija", "(prekiu|paslaugu|darbu) (kiek|apimt)", "kiek(is|io|iu|iai|ius|iui|iams|yb)", "apimt(is|ies|i|imi|yje|ys|ims)", "quantit"]] },
     // rangos sutartys (2026-10-10): „Sutarties kaina yra fiksuota ir galutinė“ (fiksuotos kainos kainodara), „Subrangovų pasitelkimas ir keitimas“
+    // darbų pirkimo-pardavimo sutartis (2026-10-12): SS 4.1 p. „Sutarties kainos apskaičiavimo būdas: fiksuota kaina / fiksuotas įkainis / kintamas įkainis“
     // projektavimo paslaugų sutartis (2026-10-11): šalis - „Projektuotojas“, atsakingi asmenys - „Šios Sutarties vykdymui Šalys paskiria ...: Užsakovo atstovas“
-    { id: "kainodara", raktas: "sut_kainodara", lt: "Kainodaros taisyklės", en: "Pricing rules", reikia: [["kainodaros taisykl", "kainodara", "kainodar", "sutarties kaina (yra )?fiksuot", "pricing"]] },
+    { id: "kainodara", raktas: "sut_kainodara", lt: "Kainodaros taisyklės", en: "Pricing rules", reikia: [["kainodaros taisykl", "kainodara", "kainodar", "sutarties kaina (yra )?fiksuot", "kainos apskaiciavimo bud", "pricing"]] },
     { id: "mokejimas", raktas: "sut_mokejimas", lt: "Mokėjimo tvarka", en: "Payment procedure",
       reikia: [["atsiskaitymo (su tiekeju )?(tvarka|terminas)", "mokejimu tvarka", "apmokejimo salygos", "apmokejim\\w*", "mokejimo (tvark|salyg|termin)", "atsiskait\\w*", "payment"]] },
     { id: "terminai", raktas: "sut_terminai", lt: "Prievolių įvykdymo terminai", en: "Time limits for performance of obligations",

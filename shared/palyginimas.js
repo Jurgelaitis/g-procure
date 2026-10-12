@@ -158,10 +158,13 @@
     var poros = lcsPoros(A, B), ops = [], pa = 0, pb = 0;
     function tarpas(a1, a2, b1, b2) {
       var naudota = {}, i, j, laikini = [];
+      // pasirinkimo vieta (sutarties išskleidžiamas sąrašas ar griežta pildoma vieta): pirmiausia - pastraipa, kuri yra vienas jos variantų.
+      // Atskiru ėjimu per visą tarpą (2026-10-12): kitaip ankstesnė nuostata be vietos pagal panašumą pasiimdavo jos pastraipą (darbų SS
+      // 4.3 „... yra fiksuota suma“ ir 4.4 „... yra maksimali suma“ - prasideda vienodai)
+      var pagalVarianta = {};
+      if (leidz) for (i = a1; i < a2; i++) if (leidz[i]) for (j = b1; j < b2; j++) if (!naudota[j] && leidz[i].test(B[j])) { pagalVarianta[i] = j; naudota[j] = 1; break; }
       for (i = a1; i < a2; i++) {
-        var geriausia = null;
-        // pasirinkimo vieta (sutarties išskleidžiamas sąrašas): pirmiausia - pastraipa, kuri yra vienas jos variantų
-        if (leidz && leidz[i]) for (j = b1; j < b2; j++) if (!naudota[j] && leidz[i].test(B[j])) { geriausia = { j: j, r: 0 }; break; }
+        var geriausia = pagalVarianta[i] != null ? { j: pagalVarianta[i], r: 0 } : null;
         if (!geriausia) for (j = b1; j < b2; j++) {
           if (naudota[j]) continue;
           var r = panasumas(A[i], B[j]);
@@ -345,6 +348,12 @@
     return true;
   }
   function ilgaNuostata(t) { return t.length >= 120 && !/_{3,}/.test(t); }
+  /* Žyma vietoje netaikomos pasirenkamos dalies: „Punktas netaikomas.“, „Skyrius netaikomas.“ arba formos eilutė su „- netaikoma“ */
+  var NETAIKOMA_ZYME = /^(punktas|skyrius) netaikomas\.?$/i;
+  function netaikoma(formosT, dokT) {
+    var d = beNr(dokT).trim(), f = beNr(formosT).trim().replace(/[;.]\s*$/, "");
+    return NETAIKOMA_ZYME.test(d) || (!!f && d.replace(/[;.]\s*$/, "") === f + " - netaikoma");
+  }
 
   /* forma, dok - pastraipos(); grąžina { pakeitimai: [{ op, rusis, poRusis, a, b, forma, dok, skyrius, svarbus }], statistika } */
   function lygink(forma, dok, o) {
@@ -376,7 +385,15 @@
     var sena = !!kitos && dok.filter(function (y) { return y.n.length > 40 && !formoje[y.n] && kitos[maisa(y.n)]; }).length >= 2;
     var nepriv = neprivalomos(forma, o.zemelapis, sut), skF = skyriai(forma), skD = skyriai(dok);
     var st = { vienodos: 0, nukrypimas: 0, neprivaloma: 0, uzpildyta: 0, techninis: 0 }, pak = [], ankst = null, liko = null;
-    ops.forEach(function (x) {
+    // sutartis: tarpe (gretimi pakeitimai tarp sutampančių pastraipų) pašalintų pasirenkamų dalių pastraipų skaičius - tiek pridėtų žymų
+    // „Punktas netaikomas.“ tame tarpe yra pasirinkimas (pridėtos pastraipos tarpe rašomos po visų formos pastraipų, todėl kaimynė netinka)
+    var tarpoId = [], zymiuLiko = {}, tid = 0;
+    if (sut) ops.forEach(function (x, k) {
+      if (x.op === "=") tid++;
+      tarpoId[k] = tid;
+      if (x.op === "-" && nepriv["i" + forma[x.a].i]) zymiuLiko[tid] = (zymiuLiko[tid] || 0) + 1;
+    });
+    ops.forEach(function (x, opk) {
       var po = ankst, poLiko = liko; if (x.a != null) ankst = forma[x.a];
       if (x.a != null && x.op !== "-") liko = forma[x.a];   // paskutinė dokumente likusi formos pastraipa (rangos SS esminės sąlygos, 2026-10-10)
       if (x.op === "=") { st.vienodos++; return; }
@@ -387,6 +404,10 @@
       else if (d && kitos && kitos[maisa(d.n)]) { r = "techninis"; pr = "kita_versija"; }
       else if (x.op === "-" && sena && naujos && naujos[maisa(f.n)]) { r = "techninis"; pr = "nauja_redakcija"; }
       else if ((x.op === "-" && !f.n) || (x.op === "+" && !d.n)) { r = "techninis"; pr = "numeracija"; }   // pastraipa - tik punkto numeris („14.1.“)
+      // sutartis: pasirenkamos dalies pastraipa pakeista žyma, kad dalis netaikoma („Punktas netaikomas.“, „... - netaikoma;“ - punktų ir priedų
+      // numeriai nesikeičia; darbų pirkimo-pardavimo SS, 2026-10-12) - pasirinkimas, ne nukrypimas
+      else if (sut && x.op === "~" && nepriv["i" + f.i] && netaikoma(f.t, d.t)) { r = "neprivaloma"; pr = "netaikoma"; }
+      else if (sut && x.op === "+" && NETAIKOMA_ZYME.test(beNr(d.t).trim()) && zymiuLiko[tarpoId[opk]] > 0) { zymiuLiko[tarpoId[opk]]--; r = "neprivaloma"; pr = "netaikoma"; }
       // sutartis: išskleidžiamo sąrašo vietoje - tik formos variantas; pildoma vieta - bet kas; pašalinti - tik nurodymus ir pasirinkimo vietas
       else if (sut && x.op === "~" && f.leidziami) { if (f.leidziami.test(d.n)) { r = "uzpildyta"; pr = "pasirinkimas"; } else { r = "nukrypimas"; pr = "ne_is_saraso"; } }
       else if (sut && x.op === "~" && f.vieta) { r = "uzpildyta"; pr = "pazymeta"; }
@@ -470,18 +491,27 @@
   /* kitosPozymiai (sutarčių registras, 2026-10-09) - ankstesnių redakcijų pastraipų požymiai: balas - didesnis iš F1 su dabartine forma ir
      F1 su dabartine kartu su ankstesnėmis (LT/EN sutartis su LITGRID anglų tekstu kitaip būtų priskirta LT formai). */
   function identifikuok(dok, formos) {
-    var D = pozymiai(dok), nd = Object.keys(D).length;
-    var f1 = function (S) {
+    var D = pozymiai(dok), nd = Object.keys(D).length, Dv = null, ndv = 0;
+    var f1x = function (S, Dx, n) {
       var rasta = 0;
-      S.forEach(function (h) { if (D[h]) rasta++; });
-      var ap = S.length ? rasta / S.length : 0, tk = nd ? rasta / nd : 0;
+      S.forEach(function (h) { if (Dx[h]) rasta++; });
+      var ap = S.length ? rasta / S.length : 0, tk = n ? rasta / n : 0;
       return { balas: ap + tk ? 2 * ap * tk / (ap + tk) : 0, apreptis: ap, tikslumas: tk };
     };
+    var f1 = function (S) { return f1x(S, D, nd); };
     var dalys = function (t) { return String(t || "").split(/\s+/).filter(Boolean); };
     return Object.keys(formos || {}).map(function (id) {
       var S = dalys((formos[id] || {}).pozymiai), K = dalys((formos[id] || {}).kitosPozymiai);
       var r = f1(S), rk = K.length ? f1(S.concat(K)) : null;
       if (rk && rk.balas > r.balas) { r = rk; r.kitaVersija = true; }
+      // trumpa forma (sutarčių registro „pozymiai_visi“, 2026-10-12): ir pagal visų ilgesnių pastraipų požymius - ketvirtis jos maišų
+      // tėra keli požymiai, ir vienas pakeistas ar pasirinkimu pašalintas punktas nulemtų atpažinimą
+      var V = dalys((formos[id] || {}).pozymiaiVisi);
+      if (V.length) {
+        if (!Dv) { Dv = {}; dok.forEach(function (x) { if (x.n.length > 40) Dv[maisa(x.n).slice(-8)] = 1; }); ndv = Object.keys(Dv).length; }
+        var rv = f1x(V, Dv, ndv);
+        if (rv.balas > r.balas) { var kv = r.kitaVersija; r = rv; if (kv) r.kitaVersija = true; }
+      }
       return { id: id, balas: r.balas, apreptis: r.apreptis, tikslumas: r.tikslumas, kitaVersija: !!r.kitaVersija };
     }).sort(function (a, b) { return b.balas - a.balas; });
   }

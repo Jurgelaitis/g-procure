@@ -3398,6 +3398,53 @@ async function testaiPalyginimas(){
       lygu([P.raktas(p, "AK_LT_SPS") === P.raktas({ ...p }, "AK_LT_SPS"), P.raktas(p, "AK_LT_SPS") === P.raktas({ ...p, dok: p.dok + " ir daugiau" }, "AK_LT_SPS"),
             P.raktas(p, "AK_LT_SPS") === P.raktas({ ...p, forma: "7.1. " + p.forma.slice(5) }, "AK_LT_SPS")], [true, false, true], "raktas: tas pats / kitas tekstas / kitas numeris");
     });
+    await testas("Sutartis (2026-10-12): pasirenkamos dalies vietoje žyma „Punktas netaikomas.“, „Skyrius netaikomas.“ ar „... - netaikoma;“ - pasirinkimas, ne nukrypimas (ta pati žyma nepasirenkamoje nuostatoje - nukrypimas); griežta pildoma vieta suporuojama su savo variantu, nors ankstesnė nuostata prasideda taip pat; trumpa forma atpažįstama pagal visų pastraipų požymius", async ()=>{
+      const F = ["1. SUTARTIES DALYKAS",
+        "1.1. Rangovas įsipareigoja atlikti Darbus, nurodytus Sutarties priede, o Užsakovas įsipareigoja už tinkamai atliktus Darbus sumokėti Sutartyje nustatyta tvarka ir terminais.",
+        "2. UŽSAKYMAI",
+        "2.1. Užsakymai Rangovui teikiami elektroniniu paštu, o Rangovas per vieną darbo dieną patvirtina, kad užsakymą gavo ir jį vykdys nustatytais terminais.",
+        "4.3. Sutarties kaina yra fiksuota suma, kuri nurodyta Rangovo pasiūlyme ir negali būti keičiama visą Sutarties galiojimo laikotarpį, išskyrus Sutartyje nustatytus atvejus.",
+        "4.4. Sutarties kaina yra maksimali suma [suma] Eur be PVM, kurios Užsakovas neįsipareigoja išnaudoti per visą Sutarties galiojimo laikotarpį.",
+        "Trišalės sutarties projektas;"];
+      const forma = () => { const f = P.pastraipos(palygXml(F)); f[5].vieta = true; f[5].leidziami = /^sutarties kaina yra maksimali suma [\s\S]*? eur be pvm, kurios užsakovas neįsipareigoja išnaudoti per visą sutarties galiojimo laikotarpį\.$/; return f; };
+      const Z = { blokai: [{ blokas: { nuo: 3, iki: 3 } }, { blokas: { nuo: 4, iki: 4 } }, { i: 6 }] };
+      const lyg = (D, z) => P.lygink(forma(), P.pastraipos(palygXml(D)), { sutartis: true, zemelapis: z || Z }).pakeitimai.map(q => [q.op, q.rusis, q.poRusis || "", (q.dok || q.forma).slice(0, 18)]);
+      // pasirinkimai: 2 skyrius ir 4.3 netaikomi, 4.4 su suma, priedas netaikomas
+      const D = F.slice(); D[3] = "2.1. Skyrius netaikomas."; D[4] = "4.3. Punktas netaikomas."; D[5] = F[5].replace("[suma]", "25 000"); D[6] = "Trišalės sutarties projektas - netaikoma;";
+      // (trumpa žyma su ilga nuostata nesuporuojama - pašalinta pasirenkama dalis ir pridėta žyma po jos; abi - pasirinkimas)
+      const rus = D => lyg(D).map(q => q.slice(1).join(" | ")).sort();
+      lygu(rus(D), ["neprivaloma | netaikoma | 2.1. Skyrius netai", "neprivaloma | netaikoma | 4.3. Punktas netai", "neprivaloma | netaikoma | Trišalės sutarties",
+                    "neprivaloma | pasalinta | 2.1. Užsakymai Ran", "neprivaloma | pasalinta | 4.3. Sutarties kai", "uzpildyta | pasirinkimas | 4.4. Sutarties kai"], "pasirinkimai");
+      // ta pati žyma nepasirenkamoje nuostatoje - nukrypimas; kitoks tekstas pasirenkamoje dalyje - nukrypimas (sutartyje varianto tekstas nekeičiamas)
+      const D2 = F.slice(); D2[1] = "1.1. Punktas netaikomas.";
+      lygu(rus(D2), ["nukrypimas |  | 1.1. Punktas netai", "nukrypimas |  | 1.1. Rangovas įsip"], "žyma nepasirenkamoje nuostatoje");
+      const D3 = F.slice(); D3[4] = "4.3. Punktas netaikomas, kaina derinama atskirai.";
+      lygu(rus(D3), ["neprivaloma | pasalinta | 4.3. Sutarties kai", "nukrypimas |  | 4.3. Punktas netai"], "kitoks tekstas pasirenkamoje dalyje");
+      const D4 = F.slice(); D4[6] = "Trišalės sutarties projektas - pridedamas vėliau;";
+      lygu(rus(D4), ["nukrypimas |  | Trišalės sutarties"], "priedo eilutė su kitu prierašu");
+      // 4.3 netaikomas, 4.4 užpildytas: 4.4 suporuojamas su savo forma (ne su 4.3, kuris prasideda taip pat); žyma - po pašalintos pasirenkamos
+      // dalies tame pačiame tarpe, nors paskutinė tarpo formos pastraipa (4.4) - ne pasirenkama dalis
+      const D5 = F.slice(); D5.splice(4, 2, "4.3. Punktas netaikomas.", "4.4. Sutarties kaina yra maksimali suma 25 000 Eur be PVM, kurios Užsakovas neįsipareigoja išnaudoti per visą Sutarties galiojimo laikotarpį.");
+      lygu(rus(D5), ["neprivaloma | netaikoma | 4.3. Punktas netai", "neprivaloma | pasalinta | 4.3. Sutarties kai", "uzpildyta | pasirinkimas | 4.4. Sutarties kai"], "poros 4.3 ir 4.4");
+      // dvi žymos vienos pašalintos pasirenkamos dalies vietoje - antroji nukrypimas
+      const D7 = F.slice(); D7.splice(4, 1, "4.3. Punktas netaikomas.", "Punktas netaikomas.");
+      lygu(rus(D7), ["neprivaloma | netaikoma | 4.3. Punktas netai", "neprivaloma | pasalinta | 4.3. Sutarties kai", "nukrypimas |  | Punktas netaikomas"], "žymų daugiau nei pašalintų dalių");
+      // griežtoje vietoje pakeistas nekintamas tekstas - nukrypimas
+      const D6 = F.slice(); D6[5] = "4.4. Sutarties kaina yra maksimali suma 25 000 Eur be PVM, kurią Užsakovas įsipareigoja išnaudoti per visą Sutarties galiojimo laikotarpį.";
+      lygu(lyg(D6).map(q => [q[1], q[2]]), [["nukrypimas", "ne_is_saraso"]], "pakeistas tekstas šalia pildomos vietos");
+      // trumpa forma: ketvirtis maišų - vos keli požymiai; „pozymiaiVisi“ - visų ilgesnių pastraipų
+      const ilgos = F.filter(t => P.norm(t).length > 40), vis = [...new Set(ilgos.map(t => P.maisa(P.norm(t)).slice(-8)))];
+      const ketv = [...new Set(ilgos.map(t => P.maisa(P.norm(t))).filter(h => parseInt(h.slice(-1), 16) < 4).map(h => h.slice(-8)))];
+      const kita = F.map(t => t.replace(/Rangov/g, "Tiekėj").replace(/Darb/g, "Paslaug"));
+      const kv = [...new Set(kita.filter(t => P.norm(t).length > 40).map(t => P.maisa(P.norm(t)).slice(-8)))];
+      const Did = F.slice(); Did[4] = "4.3. Punktas netaikomas.";   // viena iš keturių ilgesnių pastraipų pakeista žyma
+      const dok = P.pastraipos(palygXml(Did));
+      const su = P.identifikuok(dok, { DM: { pozymiai: ketv.join(" "), pozymiaiVisi: vis.join(" ") }, KITA: { pozymiai: "", pozymiaiVisi: kv.join(" ") } });
+      const be = P.identifikuok(dok, { DM: { pozymiai: ketv.join(" ") }, KITA: { pozymiai: "" } });
+      lygu([vis.length, su[0].id, Math.round(su[0].balas * 100), Math.round(su[0].apreptis * 100), su[0].tikslumas, su[1].balas < 0.3], [4, "DM", 86, 75, 1, true], "su „pozymiaiVisi“: " + JSON.stringify(su));
+      tiesa(su[0].balas >= be.find(q => q.id === "DM").balas, "„pozymiaiVisi“ balo nemažina: " + JSON.stringify([su, be]));
+      lygu(P.identifikuok(P.pastraipos(palygXml(["Visai kitas dokumentas, techninė specifikacija su savo tekstu ir reikalavimais įrangai bei jos priežiūrai."])), { DM: { pozymiai: ketv.join(" "), pozymiaiVisi: vis.join(" ") } })[0].balas, 0, "svetimas dokumentas");
+    });
   } finally { f.remove(); }
 }
 
