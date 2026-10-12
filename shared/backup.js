@@ -44,6 +44,7 @@
     ["ppteise.",                 "PP-teise",        { lt: "Teisės stebėsenos peržiūros ir nustatymai", en: "Law monitoring reviews and settings" }],
     ["gprocure.korteles",        "G-Procure",       { lt: "Pirkimų kortelės", en: "Procurement cards" }],
     ["gprocure.sutartys.stebejimas", "PP-salygos",  { lt: "Sutarčių parinkimo stebėjimo įrašai", en: "Contract selection observation records" }],
+    ["gprocure.salygos.nustatymai", "PP-salygos",  { lt: "Nustatymai (jūsų įvesta vidaus taisyklių riba)", en: "Settings (internal-rule threshold you entered)" }],
     ["gprocure_help_collapsed",  "-",               { lt: "Pagalbos bloko būsena", en: "Help panel state" }],
     ["gprocure.infoPanel.",      "-",               { lt: "Informacinės skilties būsena", en: "Information panel state" }],
     ["gprocure-lang",            "-",               { lt: "Pasirinkta kalba", en: "Chosen language" }]
