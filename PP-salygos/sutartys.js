@@ -29,7 +29,7 @@
     PASLAUGOS: { pav: "Paslaugų pirkimo-pardavimo sutartis", sablonai: { LT: { BS: "PASLAUGOS_LT_BS", SS: "PASLAUGOS_LT_SS" }, LTEN: { BS: "PASLAUGOS_LTEN_BS", SS: "PASLAUGOS_LTEN_SS" } } },
     // P3 - specialiųjų sąlygų 3 priedas „Apmokėjimo tvarka pagal etapus“ (trečias sutarties dokumentas pakete; 2026-10-11)
     PROJEKTAVIMO_PASLAUGOS: { pav: "Projektavimo paslaugų sutartis", sablonai: { LT: { BS: "PPS_LT_BS", SS: "PPS_LT_SS", P3: "PPS_LT_SS3" } } },
-    DARBAI_MAZOJI: { pav: "Darbų pirkimo-pardavimo sutartis (mažoji)", sablonai: null },
+    DARBAI_MAZOJI: { pav: "Darbų pirkimo-pardavimo sutartis (mažoji)", sablonai: { LT: { BS: "DARBAI_LT_BS", SS: "DARBAI_LT_SS" } } },   // nuo 2026-10-12 (5 etapas, S4)
     PROJEKTAVIMO_STATYBOS: { pav: "Projektavimo ir statybos rangos sutartis", sablonai: { LT: { BS: "PSR_LT_BS", SS: "PSR_LT_SS" } } },
     STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", sablonai: null },
     EKSPLOATAVIMO: { pav: "Eksploatavimo darbų sutartis", sablonai: null,
@@ -238,7 +238,7 @@
                 priezastys: priezastys, kalba: kalba, pastabos: pastabos, atsakyta: atsakyta, sablonai: null };
     if (!S.sablonai) {
       rez.busena = "neparuosta";
-      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių ir paslaugų pirkimo-pardavimo, projektavimo ir statybos rangos ir projektavimo paslaugų sutartys).");
+      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių, paslaugų ir darbų pirkimo-pardavimo, projektavimo ir statybos rangos ir projektavimo paslaugų sutartys).");
       return rez;
     }
     if (duom.rezimas === "VPI") {

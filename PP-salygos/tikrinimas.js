@@ -96,7 +96,7 @@
       Object.keys((reg && reg.sablonai) || {}).forEach(function (id) {
         var r = reg.sablonai[id];
         ix.formos[id] = { sutartis: true, failas: r.failas, pavadinimas: r.pavadinimas, dabartine: r.dabartine, pozymiai: r.pozymiai,
-                          kitosPozymiai: r.kitos_pozymiai || "", kitos: r.kitos_versijos || {}, naujos: r.naujos || [] };
+                          pozymiaiVisi: r.pozymiai_visi || "", kitosPozymiai: r.kitos_pozymiai || "", kitos: r.kitos_versijos || {}, naujos: r.naujos || [] };
       });
       sutarciuKlaida = null;
     } catch (e) { sutarciuKlaida = e.message || String(e); }
@@ -193,6 +193,40 @@
       var v1 = d.length === 1 && d[0].sdt && vald(d[0].sdt);
       if (v1 && v1.rusis === "dropDownList") variantai[i] = v1.elementai.map(function (e) { return { t: String(e.tekstas).trim(), n: P_NORM(e.tekstas) }; });
     });
+    // Griežtos vietos (žemėlapio „grieztos_vietos“ - darbų pirkimo-pardavimo SS, 2026-10-12): pastraipa su pildomomis vietomis lyginama pagal
+    // šabloną - nekintamas tekstas turi likti, o vietoje: „[A] / [B]“ - viena iš dviejų formuluočių, sakinys su vietomis (3.1 p. pratęsimas) -
+    // yra (užpildytas) arba pašalintas, kita vieta - bet koks tekstas. Pastraipa, kurioje nekintamo teksto beveik nėra (antraštė, rekvizito
+    // etiketė, lentelės langelis), lieka paprasta pildoma vieta.
+    if (Z.grieztos_vietos) {
+      var nf = function (t) { return String(t || "").replace(/[„“”"]/g, "\"").replace(/[\u2013\u2014]/g, "-").replace(/\u00a0/g, " ").replace(/ĮMONĖS PAVADINIMAS/g, "LITGRID AB").replace(/\s+/g, " ").toLowerCase(); };
+      var rf = function (t) { return nf(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s*"); };
+      var PORA = /^\[([^\[\]]+)\]\s*\/\s*\[([^\[\]]+)\]$/, SKL = /\[[^\[\]]*\]/;
+      var vietosRe = function (f) {
+        var m = PORA.exec(f);
+        if (m) return "(?:" + rf(m[1]) + "|" + rf(m[2]) + ")";
+        if (!/^\[/.test(f) && SKL.test(f)) return "(?:" + f.split(/\[[^\[\]]*\]/).map(rf).join("[\\s\\S]+?") + ")?";
+        return "[\\s\\S]*?";
+      };
+      var pagalI = {};
+      (Z.pildomos || []).forEach(function (x) { if (x.i != null && x.tekstas) (pagalI[x.i] = pagalI[x.i] || []).push(x.tekstas); });
+      Object.keys(pagalI).forEach(function (k) {
+        var i = +k, p = P[i];
+        if (!p || leidziami[i] || p.getElementsByTagNameNS(W, "sdt").length) return;
+        var t = Array.prototype.map.call(p.getElementsByTagNameNS(W, "t"), function (q) { return q.textContent; }).join(""), uzimta = [], ok = true;
+        pagalI[i].forEach(function (f) {
+          var a = -1, nuo = 0;
+          do { a = t.indexOf(f, nuo); nuo = a + 1; } while (a >= 0 && uzimta.some(function (u) { return a < u[1] && a + f.length > u[0]; }));
+          if (a < 0) ok = false; else uzimta.push([a, a + f.length, f]);
+        });
+        if (!ok) return;
+        uzimta.sort(function (x, y) { return x[0] - y[0]; });
+        var pos = 0, src = "", fiks = "";
+        uzimta.forEach(function (u) { src += rf(t.slice(pos, u[0])) + vietosRe(u[2]); fiks += t.slice(pos, u[0]); pos = u[1]; });
+        src += rf(t.slice(pos)); fiks += t.slice(pos);
+        if (fiks.replace(/[^A-Za-zĄ-ž0-9]/g, "").length < 15) return;
+        try { leidziami[i] = new RegExp("^\\s*" + src + "\\s*$"); variantai[i] = [{ t: t.trim(), n: P_NORM(t) }]; } catch (e) { /* netinkamas šablonas - lieka vieta */ }
+      });
+    }
     // Tuščias laukas (pvz. sutarties pavadinimas po užrašo „Sutarties pavadinimas“) palyginime nematomas - užpildytą jį atpažįsta pagal
     // ankstesnę netuščią pastraipą (vietaPo: po jos pridėta pastraipa - užpildyta vieta)
     Object.keys(vieta).forEach(function (k) {
