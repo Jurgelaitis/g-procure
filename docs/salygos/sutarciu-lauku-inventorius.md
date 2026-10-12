@@ -386,7 +386,8 @@ formoje) ir įmonės pavadinimas (automatiškai - ir puslapio antraštėje).
 | 10 | priedų 4 eilutė | Ar pridedamas trišalės sutarties projektas? | „Taip“ - eilutė lieka; „Ne“ - „... - netaikoma;“ | pagal SPS tiesioginio atsiskaitymo atsakymą |
 | 11 | priedų 5 eilutė | Ar pridedami kiti priedai? | „Taip“ - priedo pavadinimas; „Ne“ - „Kiti priedai - netaikoma.“ | - |
 
-Ar užtikrinimas privalomas - pagal vidaus taisykles (generatorius jų nežino; klausimo pastaba tai sako). SPS sąlyga apie tiesioginį
+Ar užtikrinimas privalomas - pagal vidaus taisykles: nuo 2026-10-12 prie klausimo rodomas priminimas pagal ribą, kurią įvedate patys (ji
+saugoma tik jūsų naršyklėje; kol neįvesta - bendras priminimas „patikrinkite pagal vidaus taisykles“). SPS sąlyga apie tiesioginį
 atsiskaitymą šiai sutarčiai nėra atsakoma pati - bendrosiose sąlygose tokios tvarkos nėra, ji nustatoma trišalėje sutartyje.
 
 ## Įgyvendinimas (S4, 2026-10-12)
@@ -406,3 +407,32 @@ atsiskaitymą šiai sutarčiai nėra atsakoma pati - bendrosiose sąlygose tokio
 - Pages (PDF eksportu): specialiosios sąlygos trimis atvejais - po 3 psl., bendrosios - 9 psl., A4, tekstas neprarandamas.
 
 Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_DM`).
+
+
+# Statybos rangos specialiosios sąlygos (6 etapas, S4, 2026-10-12)
+
+Šablonai `SR_LT_BS`, `SR_LT_SS` (LITGRID 2026-10-05, tik LT; po jūsų sprendimų a-l - sutarčių plano 8 sk. 18 p.). Forma - tos pačios kilmės
+kaip projektavimo ir statybos rangos (toliau - rangos), todėl klausimai, taisyklės ir žymės - kaip aukščiau aprašytos rangos specialiosios
+sąlygos (`sutarties-forma.js`: bendras `rangosKlausimai()`, skirtumai - `RANGOS`). Žemiau - tik skirtumai.
+
+| SS punktas | Rangos SS | Statybos rangos SS |
+|---|---|---|
+| 2 Techninė užduotis / Projektas | siūloma „... priedas Nr. 1.2 „Techninė užduotis / projektavimo užduotis“.“ | siūloma „... priedas Nr. 1.2 „Techninė užduotis / Projektas“.“ (priedų sąrašo eilutė - jūsų sprendimas j); nurodyme - ir „Prijungimo sąlygos“ |
+| 4 Darbų etapai | priedas „Projektavimo ir statybos darbų etapai“ | priedas „Statybos darbų etapai“ |
+| 6, 8, 9, 14, 18 | BS 4.9.8, 4.6.2, 5.9.5, 11.11, 11.9.2 | BS 3.9.8, 3.6.2, 4.9.5, 10.11, 10.9.2 |
+| 14 Europos Sąjungos fondai, 17 BIM | vienas „//“ nurodymas | nurodymas dviem pastraipomis su „arba“ - generatorius šalina abi (žemėlapio `kartu`) |
+| 16 Bankai ir draudimo bendrovės | priedai Nr. 1.4 ir 1.5 (be etapų priedo - 1.3 ir 1.4) | priedai Nr. 1.3 ir 1.4 (be etapų priedo - 1.2 ir 1.3): priedų sąraše nėra „Apmokėjimas už Projektą“ |
+| 21 Derinimo terminai | kitoms dalims - BS 4.1.2 ir 4.10.2 | kitoms dalims - BS 3.1.2 ir 3.10.2 |
+| Ekspertizės terminas | 22 punktas (neprivalomas) | šio punkto formoje nėra - neklausiama |
+| Atjungimų terminai | 23 punktas, BS 4.5.1 | 22 punktas, BS 3.5.1 |
+| Sutarties įvykdymo užtikrinimas | 24 punktas, BS 9.7 | 23 punktas, BS 8.7 |
+| Garantinių įsipareigojimų užtikrinimas netaikomas | 25 punktas, BS 9.9 | 24 punktas, BS 8.9; po jo formoje - pavienis „arba“ (šalinamas) |
+| Esminės sąlygos | 26 punktas | 25 punktas |
+| Sprogmenų paieška | 27 punktas, BS 4.1.12-4.1.14 | 26 punktas, BS 3.1.12-3.1.14 |
+| Koordinatorius | 28 arba 28 ir 29 punktai, BS 5.2.5 | 27 arba 27 ir 28 punktai, BS 4.2.5 |
+
+Klausimų iš viso - 25 (rangos - 26). 1-19 punktai lieka visi (netaikomame - „Punktas netaikomas.“), 20-28 įrašomi tik taikomi - sugeneruotoje
+sutartyje jų numeriai gali būti mažesni nei šablone. Pildoma sudarant sutartį, „Įrašoma automatiškai“ ir etapų priedas (atskiras gulsčias
+failas) - kaip rangos sutartyje.
+
+Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (bendri su rangos sutartimi - `rangosKlausimai()`).
