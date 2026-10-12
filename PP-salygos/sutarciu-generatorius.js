@@ -10,7 +10,8 @@
  *       "v:<nr>"         valdiklis: { elementas: k, reiksmes: [...], reiksmesEN } - reikšmės vietoj „[...]“, „[_]“, „{...}“ elemento tekste;
  *                        teksto valdiklis (be elementų): { tekstas, tekstasEN }; { salinti: true } - valdiklis pašalinamas be teksto
  *       "a:<vieta>[#n]"  alternatyva: { variantas: k }
- *       "n:<vieta>#n"    nurodymas rengėjui: "salinti" arba { tekstas, tekstasEN } (įrašoma vietoj nurodymo)
+ *       "n:<vieta>#n"    nurodymas rengėjui: "salinti" arba { tekstas, tekstasEN } (įrašoma vietoj nurodymo); žemėlapio `kartu`
+ *                        (statybos rangos SS: „// Jei ...“, „arba“, „// Jei ...“) - nurodymo tęsinys, šalinamas kartu
  *       "p:<vieta>#n"    pildoma vieta pastraipoje: { tekstas, tekstasEN }
  *       "l:<etiketė>"    tuščias laukas: { tekstas, tekstasEN }
  *       "t:<vieta>"      skyriaus taikymo sąlyga „(taikoma, jeigu ...)“: "salinti"
@@ -414,6 +415,8 @@ const GP_SUTARCIU_GEN = (() => {
     for (const k of ['nurodymai', 'pildomos', 'laukai', 'trynimo_nurodymai', 'taikymo_salygos', 'valdikliai'])
       for (const x of Z[k] || []) if (x.i === i && x.vieta) return x.vieta;
     for (const b of Z.salyginiai || []) if (i >= b.i && i <= Math.max(...b.dalys.flat())) return b.vieta;
+    // nurodymo tęsinys (statybos rangos SS): jo pastraipos ir tuščios pastraipos tarp nurodymo dalių
+    for (const b of (Z.nurodymai || []).concat(Z.salyginiai || [])) if (b.kartu && b.kartu.length && (b.kartu.includes(i) || (!b.dalys && i > b.i && i < Math.max(...b.kartu)))) return b.vieta;
     for (const b of Z.nurodymu_blokai || []) if (b.i === i || b.apima.includes(i)) return b.vieta;
     for (const b of Z.neprivalomos || []) if (i >= Math.min(...b.pastraipos) && i <= Math.max(...b.pastraipos)) return b.vieta;
     for (const b of Z.vidiniai || []) if (b.i === i) return b.vieta;
@@ -486,7 +489,7 @@ const GP_SUTARCIU_GEN = (() => {
     const trinti = (i, kodel) => { if (!istrinti.has(i)){ istrinti.add(i); A.pasalinta.push({ vieta: vietaPagalI(Z, i), tekstas: Z.pastraipos[i], kodel }); } };
     const palik = (x, s, numatyta) => {
       A.palikta.push({ raktas: x.raktas, rusis: x.rusis, vieta: x.vieta, aprasas: x.aprasas || '', kodel: (s && s.palikti) || numatyta || 'neatsakyta' });
-      [x.lt, x.en].filter(Boolean).forEach(y => { if (y.i != null) neisspresta.add(y.i); });
+      [x.lt, x.en].filter(Boolean).forEach(y => { if (y.i != null) neisspresta.add(y.i); (y.kartu || []).forEach(i => neisspresta.add(i)); });
     };
 
     // 2. Valdiklių sprendimai (be DOM): kurie paliekami, kurie - „netaikoma“
@@ -586,6 +589,7 @@ const GP_SUTARCIU_GEN = (() => {
     for (const x of V.filter(x => x.rusis === 'salyginis')){
       const s = sp(x), b = x.lt, visos = b.dalys.flat();
       if (!yraSpr(s) || typeof s.taikoma !== 'boolean'){ palik(x, s); [b.i, ...visos].forEach(i => neisspresta.add(i)); continue; }
+      (b.kartu || []).forEach(i => trinti(i, 'šablono „arba“ be antro varianto'));
       const lieka = b.dalys.map((d, k) => s.taikoma && !(s.dalys && s.dalys[k] === false));
       if (!s.taikoma && s.tekstas){   // punktas lieka su antrašte, nurodymo vietoje - tekstas („Punktas netaikomas.“)
         salygosTekstas[b.i] = String(s.tekstas);
@@ -689,6 +693,8 @@ const GP_SUTARCIU_GEN = (() => {
       if (!yraSpr(s) || (s !== 'salinti' && (typeof s !== 'object' || s.tekstas == null))){ palik(x, s, x.rusis === 'pildoma' ? 'neatsakyta' : null); continue; }
       for (const y of [x.lt, x.en].filter(Boolean)) if (!istrinti.has(y.i) && salygosTekstas[y.i] == null)
         (keitimai[y.i] = keitimai[y.i] || []).push({ frag: y.tekstas, nauja: naujaPagal(x, y, s), x, lt: y === x.lt, glaustai: !!(s && s.glaustai) });
+      for (const y of [x.lt, x.en].filter(Boolean)) if (y.kartu && y.kartu.length)
+        for (let i = y.i + 1; i <= Math.max(...y.kartu); i++) if (y.kartu.includes(i) || !Z.pastraipos[i]) trinti(i, 'šablono nurodymo tęsinys');
     }
     for (const o of Z.organizacija.filter(o => o.laukas === 'pavadinimas')) if (R[o.i].indexOf(IMONE) >= 0)
       (keitimai[o.i] = keitimai[o.i] || []).push({ frag: IMONE, nauja: info.imone || 'LITGRID AB', x: { raktas: '', vieta: o.vieta, rusis: 'organizacija' }, lt: stulp(o) === 'LT' });
