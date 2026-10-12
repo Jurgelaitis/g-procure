@@ -812,6 +812,56 @@ S4.“).** Sutartis generuojama: `GP_SUTARTYS` šeimai siūlo `DARBAI_LT_BS` ir 
 - 8 testai (`testaiDarbuGeneravimas`) ir bendras palyginimo testas; 53 kodo mutacijos - 52 pagaunamos (viena šiam šablonui rezultato
   nekeičia), 2 šablono paruošimo mutacijos - pagaunamos. Word programos šiame kompiuteryje nėra - Word vaizdas netikrintas.
 
+**S1 statybos rangos sutarčiai (6 etapas, 2026-10-12; jūsų „Statybos rangos šablonai aplanke yra galutinė redakcija.“).**
+Šablonai `SR_LT_BS` ir `SR_LT_SS` (tik LT). Forma - tos pačios kilmės kaip projektavimo ir statybos rangos sutarties (toliau - rangos):
+bendrosios sąlygos - 10 skyrių (be projektavimo), specialiosios - 28 punktai (be ekspertizės punkto).
+- **Redakcinės korekcijos** (rašyba, dvigubi tarpai; privatūs `taisymai_12.py` ir `taisymai_13.py`): bendrosios sąlygos - 27 vietos ir 13
+  dvigubų tarpų, specialiosios - 5 vietos ir 3 dvigubi tarpai. Naujas testas rado „gražinus“ (BS 3.9.23 p.) - ištaisyta ir rangos BS
+  4.9.23 p. (rangos BS registre - nauja redakcija).
+- **Paruošimas** (`sutarciu-sablonai.py`, tekstas tas pats): komentarai šalinami (5), vidaus taisyklių riba dviejuose „//“ nurodymuose -
+  žodžiais, kairysis SS stulpelis 1542 -> 1814 DXA, punktų numerių šriftas suvienodintas (6), 1.3 p. pratęsimo sakinys - įprastu šriftu
+  (kaip rangos SS - jūsų sprendimas 2026-10-10).
+- **Žemėlapis:** tie patys blokų tipai kaip rangos SS; nauja - nurodymas rengėjui per kelias pastraipas („// Jei Darbus numatoma
+  finansuoti ...“, „arba“, „// Jei Darbus nenumatoma ...“; tas pats BIM) ir pavienis „arba“ po garantinių įsipareigojimų užtikrinimo
+  punkto (žemėlapio `kartu`). SS: 43 pildomos vietos, 8 įrašai nurodymo vietoje, 3 pasirinkimai ir 4 derinimo lentelės pasirinkimai,
+  6 neprivalomi punktai, 3 sakiniai „Taip / Ne“, 28 priedų sąrašo eilutės, etapų priedas - atskiras gulsčias skyrius; neatpažintų - 0.
+- **Nuorodos:** 94 nuorodos į punktus ir priedus; patikrintos ir pagal turinį (kiekviena BS nuoroda sugretinta su tuo pačiu rangos BS
+  sakiniu ir jo taikiniu). Rasta 5 BS nuorodos su rangos sutarties numeriais (3 - į punktus, kurių nėra) ir numeracijos klaida, dėl
+  kurios SS 22 p. nuoroda rodo ne į tą punktą - žr. 8 sk. 18 p. b) ir c). Teisės aktų nuorodos - 28, 26 jau registre; dvi laukia
+  sprendimo (registro skiltis `laukia_sprendimo`).
+- **Tikrinimo skirtukas:** abu šablonai atpažįstami kaip statybos rangos (ne rangos), 0 nukrypimų; užpildytos specialiosios sąlygos
+  (pašalinti nurodymai su tęsiniais, pasirinkti variantai) - 0; pakeista nuostata - nukrypimas. Privalomi sutarties elementai - 13 iš 13.
+- **Pages (PDF eksportu):** bendrosios sąlygos - 43 psl., A4, tekstas neprarandamas, punktų numeriai kaip emuliuoti (535) - t. y. Pages
+  rodo ir numeracijos klaidą; neužpildytos specialiosios sąlygos - 7 psl., eilutė „Papildomos sąlygos“ aukštesnė už puslapį (Pages
+  eilučių nedalija; generuojant sutvarko lentelių tvarkymas, kaip rangos SS - bus patikrinta S5).
+- **Generavimas (S4)** - po jūsų sprendimų (8 sk. 18 p.); padaryta tą pačią dieną, žr. žemiau.
+- 9 testai (`testaiStatybosRangosSablonai`); bendri šablonų, registro, rekvizitų ir teisės nuorodų testai - ir su šiais šablonais;
+  7 žemėlapio ir šablono mutacijos ir tikrinimo mutacija - pagaunamos.
+
+**Jūsų sprendimai a-l ir S4 statybos rangos sutarčiai (6 etapas, 2026-10-12; jūsų „Taip, visi punktai - kaip rekomenduojate, pradėkime S4.“).**
+- **Šablone ištaisyta** (privatus `taisymai_14.py`, kopija `originalai-2026-10-12d/`; pakartotinai - 0 pakeitimų):
+  specialiosios sąlygos - punktai vientisai 1-28, el. paštas info@litgrid.eu, delspinigių pakopos „nuo 31 iki 60“ ir „nuo 61 iki 180 dienų“,
+  Grafiko formos sakinys keičiant BS 2.3.1 p., „[Sąvoka 1.1.2.14. punktas]“, priedų sąrašas be dviejų rangos sutarties eilučių ir su savo
+  pavadinimais; bendrosios sąlygos - trys išvardijimai su raidėmis a), b), ... (tekstu, kaip visi kiti šios formos išvardijimai), penkios
+  nuorodos į savo punktus ir „8.8.5 punkte“, el. paštas, sąvoka „Pagrindinių įrenginių“ (antra vieta - ir rangos BS), sąvokų straipsnio
+  dalys, 4.2.5 poskyrio pavadinimas. Po to: 95 nuorodos - visos į esamus ir tinkamus punktus; Word numeracija be šuolių; „Darbuotojų saugos
+  koordinavimas“ - 4.2.5, kaip nurodo SS 27 p.
+- **Klausimai** - tie patys kaip rangos sutarties, be ekspertizės punkto (jo šioje formoje nėra): 25, SS punktų tvarka; skiriasi tik
+  „Papildomų sąlygų“ ir bendrųjų sąlygų punktų numeriai bei priedų pavadinimai (`sutarties-forma.js` `RANGOS`). Kiekvienas klausimuose
+  paminėtas bendrųjų sąlygų punktas patikrintas - jis toje šeimoje yra (testas tikrina abi rangos šeimas).
+- **Generatorius:** nurodymo antra dalis ir „arba“ (Europos Sąjungos fondai, BIM) šalinami kartu su nurodymu, pavienis „arba“ po garantinių
+  įsipareigojimų užtikrinimo punkto - kai punktas išspręstas; neatsakyta vieta lieka visa.
+- **1 žingsnis:** šeima „Statybos rangos sutartis“ parenkama su šablonais (pavadinimui be projektavimo - klausimas, ar rangovas rengs
+  projektą); pirkimo sąlygų sąlyga apie tiesioginį atsiskaitymą atsakoma pati (bendrųjų sąlygų 4.2.2 p.).
+- **Patikra:** dviem atsakymų rinkiniais (darbai etapais / ne etapais) ir bendrosios sąlygos - 0 nukrypimų nuo formos su pasu ir be jo,
+  nuorodos (96-97) - visos į esamus punktus ir priedus (neegzistuojantis priedo numeris - radinys), privalomi sutarties elementai - 13 iš 13.
+- **Pages (PDF eksportu, S5):** bendrosios sąlygos - 43 psl., specialiosios - 5 psl. (abu rinkiniai), etapų priedas - 1 gulsčias puslapis
+  atskirame faile; A4, tekstas neprarandamas, punktų numeriai kaip emuliuoti (522, 52 ir 48); derinimo terminų lentelė - pagrindinės
+  lentelės eilutėmis, išvardijimai su raidėmis.
+- 19 testų dviejose grupėse (`testaiStatybosRangosSablonai` - 10, `testaiStatybosRangosGeneravimas` - 9); 22 kodo mutacijos - visos
+  pagaunamos. Word programos šiame kompiuteryje nėra - Word vaizdas netikrintas.
+- Lieka jums: klausimų tekstų peržiūra (bendri su rangos sutartimi), laiškas LITGRID (juodraštis privačiai).
+
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
 smulkūs darbai - mažoji; ekspertizė ir techninė priežiūra - klausimas dėl CPO LT). Rezultatas: „parinkta“ (su šablonais iš S1 registro -
@@ -868,13 +918,18 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
 4. **LT/EN redakcijos (5.4):** ar LT/EN rinkinius atnaujinti pagal aktualią VPT redakciją (kaip LT; su nauju EN vertimu), o kol
    neatnaujinta - generatorius LT/EN sutarties nesiūlo ar siūlo su įspėjimu? 9.4 - atsakyta (1000 Eur, 5.5); kitos LT ir LT/EN skirtingos
    sumos ir bazės (9.3, 9.14.4, 8.2.1, 20 % ribos bazė) - kurios standartinės?
-5. **VPĮ (AKV, centralizuoti) pirkimai:** VPT tipinės sąlygos (VPĮ 87 str. 1 d.) ar LITGRID šablonai su pagrindimu?
-6. **Patvirtinimas:** rekomenduoju - automatiškai parinkta sutartis visada „Siūloma (nepatvirtinta)“, vienas paspaudimas „Patvirtinti“.
-   (S3 įgyvendinta pagal šią rekomendaciją ir 2026-10-04 formos principus.)
-7. **Sutarties projektas visada?** Rekomenduoju: taip (numatytasis), su galimybe „nerengiamas“ (CPO LT, tiekėjo forma, esminės sąlygos SPS).
-   (S3 įgyvendinta pagal šią rekomendaciją: „Pakeisti“ - „Sutarties projektas nerengiamas“ su viena iš trijų priežasčių.)
+5. **VPĮ (AKV, centralizuoti) pirkimai:** VPT tipinės sąlygos (VPĮ 87 str. 1 d.) ar LITGRID šablonai su pagrindimu? Atsakyta 2026-10-12:
+   „Palikime taip kaip yra.“ - centralizuotam VPĮ pirkimui sutarties projektas nerengiamas, priežastis pasakoma.
+6. ~~**Patvirtinimas**~~ ir 7. ~~**Sutarties projektas visada?**~~ - atsakyta 2026-10-12 (jūsų formuluotė): 1 žingsnio blokas - vienas
+   klausimas **„Ar taikomos tipinės LITGRID AB sutarties standartinės sąlygos?“**. „Taip“ - pridedamos standartinės LITGRID AB sutarties
+   bendroji ir specialioji dalys pagal pirkimo tipą; „Ne“ - pridedamos esminės sutarties sąlygos. Įgyvendinta: klausimas privalomas, be
+   numatytojo atsakymo; sutartis pagal pirkimo tipą rodoma prieš atsakant („Siūloma (nepatvirtinta)“ su priežastimi), „Taip“ ją
+   patvirtina; kai pirkimo tipą atitinka kelios sutartys - po „Taip“ užduodamas patikslinantis klausimas; „Pakeisti sutartį“ - tik
+   sutarčių sąrašas. Rankinių pasirinkimų „CPO LT forma“ ir „tiekėjo forma“ nebėra (tokiu atveju - „Ne“). Iki tol (S3): siūloma sutartis
+   su mygtukais „Patvirtinti“ ir „Pakeisti“.
 8. **Iš anksto pasirinktos reikšmės** šablonuose - laikyti neatsakytomis (rekomenduoju).
-9. **Grupės užtikrinimo taisyklė** iš SS komentarų - ar generatorius ją siūlo (kaip „Siūloma“, su šaltiniu), ar tik rodo paaiškinime?
+9. ~~**Grupės užtikrinimo taisyklė**~~ iš SS komentarų - ar generatorius ją siūlo (kaip „Siūloma“, su šaltiniu), ar tik rodo paaiškinime?
+   Atsakyta kartu su 15 p. (2026-10-12): tik primena, atsakymų nesiūlo.
 10. **Redakcijų valdymas:** kas praneša apie naujas redakcijas ir ar galima žymėti failus redakcijos kodu (kaip Amber Grid „SUT-36 10.0“)?
 11. ~~**Puslapio formatas**~~ - atsakyta 2026-10-08: **A4** (padaryta šablonuose, S1).
 12. ~~**Projektavimo ir statybos rangos šablonai (3 etapas, 2026-10-10)**~~ - atsakyta 2026-10-10: a-i ištaisyti, vidinės ribos pakeitimas žodžiais
@@ -921,7 +976,11 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
 15. **Grupės iždo politikos užtikrinimo riba** (jūsų atsakymas 2026-10-11: vidinė informacija, iš viešų šablonų pašalinta; „turi būti
     numatyta sistemoje pranešimas“): saugykla vieša, todėl skaičius kode vėl taptų viešas. Siūlomi keliai: (1) ribą įvedate naršyklėje
     (nustatymas, saugomas tik joje ir atsarginėje kopijoje), sistema pagal ją primena; (2) pranešimas be skaičiaus („patikrinkite pagal
-    vidaus taisykles“). Laukia jūsų pasirinkimo.
+    vidaus taisykles“). Atsakyta 2026-10-12: **1 variantas** („Pritariu rekomendacijai.“) - įgyvendinta (`PP-salygos/vidaus-riba.js`):
+    ribą įvedate patys prie užtikrinimo klausimo („Įvesti ribą“), ji saugoma tik jūsų naršyklėje ir atsarginėje kopijoje; sistema pagal
+    ją primena prie SPS sąlygos apie sutarties įvykdymo užtikrinimą, prie sutarties užtikrinimo klausimo ir 3 žingsnyje („Patikrinkite
+    (vidaus taisyklės)“, kai numatoma vertė viršija ribą, o užtikrinimo nereikalaujama); kol riba neįvesta - bendras priminimas. Į
+    dokumentus ir saugyklą riba nepatenka.
 16. **Darbų pirkimo-pardavimo („mažosios“) sutarties šablonai (5 etapas, 2026-10-11)** - atsakyta 2026-10-12 („Taip, visi punktai -
     kaip rekomenduojate, pradėkime S4.“): b-i - pirmas variantas, įgyvendinta (žr. 7 sk. S4). a) - jam rekomendacijos nebuvo, todėl
     perklausta; atsakyta tą pačią dieną: „Palikite tuščią.“ - eilutė lieka kaip formoje. Klausimai buvo:
@@ -944,4 +1003,42 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
     jį numačius; bendrosiose sąlygose nėra tiesioginio atsiskaitymo su subrangovais tvarkos, nors 4 priedas - „Trišalės sutarties
     projektas“; indeksavimo formulė be kainos dalių svorių; kitų sutarčių sąvokos („Darbų žiniaraštis“, „Prekių, Paslaugų“); nuo
     2026-10-12 - ir nutraukimo atvejis, kai Vyriausybė nusprendžia, kad sutartis neatitinka nacionalinio saugumo interesų (bendrosiose
-    sąlygose atskiro punkto nėra).
+    sąlygose atskiro punkto nėra). Tą pačią dieną patvirtinti trys įgyvendinimo pasirinkimai („Pritariu rekomendacijai.“): netaikomame
+    2 skyriuje - „2.1. Skyrius netaikomas.“, priedų sąraše - „... - netaikoma“, trišalės sutarties projektas - atskiras klausimas.
+17. ~~**Sutarties pavadinimo forma**~~ - atsakyta 2026-10-12: **„Tvoros remonto pirkimo sutartis“** („{pirkimo pavadinimas} pirkimo
+    sutartis“; iki tol - „... pirkimas“). Įgyvendinta visoms šeimoms; pirkimo pavadinimas kitose sutarties vietose lieka „... pirkimas“.
+18. ~~**Statybos rangos sutarties šablonai (6 etapas, 2026-10-12)**~~ - atsakyta 2026-10-12: „Taip, visi punktai - kaip rekomenduojate,
+    pradėkime S4.“ - visi punktai a-l įgyvendinti (7 sk.). Klausimai buvo (rekomendacija visiems - „taip“):
+    Tie patys kaip rangos sutartyje (ten nuspręsta 2026-10-10):
+    - a) SS punktų numeracija: dabar 1.1-1.6 (du Word sąrašai), tada 2-23 -> vientisa 1-28;
+    - d) el. paštas „info@Įmonės pavadinimas.eu“ (SS 14 p., BS 6.3.3 p.) -> „info@litgrid.eu“;
+    - e) SS 10 p. delspinigių pakopos -> „nuo 31 iki 60 dienų (įskaitytinai)“, „nuo 61 iki 180 dienų (įskaitytinai)“ (dabar 31-a ir
+      61-a vėlavimo dienos nepatenka į jokią pakopą);
+    - f) SS 15 p.: keičiant BS 2.3.1 p. antrą sakinį išlaikyti „pagal tipinę Užsakovo Grafiko formą (šabloną), pateikiamą šios
+      Sutarties specialiųjų sąlygų priede,“;
+    - g) BS 2.3.12 p. „Pagrindinės įrangos“ (2 vietos) -> apibrėžta sąvoka „Pagrindinių įrenginių“ (rangos BS antra vieta taip pat
+      liko - ištaisyti ir ten);
+    - h) BS sąvoka „Pirkimo dokumentai“: sąvokų straipsnio dalys pavadintos punktais -> „dalyje“ (T4);
+    - i) SS 1.5 p. „[Sąvoka 1.1.2.14.]“ -> „[Sąvoka 1.1.2.14. punktas]“ (vienodai su kitais).
+    Tik statybos rangos formoje:
+    - b) BS trys išvardijimai (13 pastraipų) neteko raidžių sąrašo: šeši atvejai po 4.2.3.1 p. („jam yra iškelta restruktūrizavimo ar
+      bankroto byla;“ ...), du Specialisto keitimo atvejai, penki gedimų šalinimo terminai. Word ir Pages juos numeruoja kaip punktus
+      (4.2.4-4.2.9, 4.2.11-4.2.12, 8.1.11-8.1.15) ir pastumia tolesnius: „Specialistai“ - 4.2.10, „Darbuotojų saugos koordinavimas“ -
+      4.2.13, nors SS 22 p. nurodo „bendrųjų sąlygų 4.2.5 punkte“. Siūloma: raidžių sąrašai a), b), ... kaip rangos BS - tada numeriai
+      sutampa su SS nuoroda;
+    - c) BS nuorodos su rangos sutarties numeriais: 2.3.8 p. „5.7 punktas“ -> 4.7 (ataskaitos); 3.9.19 p. „9.1 skyriuje“ -> 8.1
+      (kokybės garantija); 3.10.3 p. „šiame ... 4.10 punkte“ -> 3.10 (Pagrindiniai įrenginiai); gedimų šalinimo punkte „10.1.10.7
+      punkte“ -> 8.1.10.7; 9.3.2 p. p) papunktyje „11.1.10 punkte“ -> 10.1.10 (klausimynas); 8.8.9 p. „8.8.5 punktuose“ -> „punkte“;
+    - j) SS priedų sąrašas perkeltas iš rangos sutarties: „projektavimo ir statybos rangos sutarties bendrosios sąlygos“ -> „statybos
+      rangos sutarties bendrosios sąlygos“; „Techninė užduotis/projektavimo užduotis“ -> „Techninė užduotis / Projektas“ (kaip SS 1.2
+      p.); eilutės „Apmokėjimas už Projektą“ ir „Projektuotojo civilinės atsakomybės privalomojo draudimo liudijimo (poliso) kopija“ -
+      pašalinti (priedų numeriai - automatiniai). „Darbų žiniaraščio po Techninio darbo projekto parengimo pildoma forma“ ir
+      „Minimalūs informacijos saugos reikalavimai projektavimui ir diegimui“ - palikti (klausimas LITGRID);
+    - k) BS 4.2.5 poskyrio pavadinimas „Darbuotojų saugos koordinavimas kai projektuojant arba statant Objektą ...“ -> „..., kai
+      statant Objektą ...“ (punkto tekste - tik „statant“);
+    - l) generavimas - tais pačiais principais kaip rangos sutarties (jūsų sprendimai 2026-10-10): 1-19 punktai (po a) pernumeravimo) lieka visi,
+      netaikomame - „Punktas netaikomas.“; pratęsimas, Užsakovo įrenginiai, demontuojami įrenginiai - „Taip / Ne“; koordinatorius - 27 arba 27 ir
+      28 p. kartu; etapų priedas - atskiras gulsčias failas; užtikrinimas - su vidaus taisyklių ribos priminimu.
+    Laiškui LITGRID (turinys, netaisoma): „po Techninio darbo projekto parengimo“ (BS 2.3.12 p.) statybos rangos sutartyje; projektavimo
+    paminėjimai (BS 7.3.8, 8.2.3 p., netesybų e) papunktis, SS 7 p. nurodymas); pavienis „arba“ SS 19 p.; kiti - kaip rangos sutarties
+    laiške.
