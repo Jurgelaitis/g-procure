@@ -32,9 +32,22 @@
     DARBAI_MAZOJI: { pav: "Darbų pirkimo-pardavimo sutartis (mažoji)", sablonai: { LT: { BS: "DARBAI_LT_BS", SS: "DARBAI_LT_SS" } } },   // nuo 2026-10-12 (5 etapas, S4)
     PROJEKTAVIMO_STATYBOS: { pav: "Projektavimo ir statybos rangos sutartis", sablonai: { LT: { BS: "PSR_LT_BS", SS: "PSR_LT_SS" } } },
     STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", sablonai: { LT: { BS: "SR_LT_BS", SS: "SR_LT_SS" } } },   // nuo 2026-10-12 (6 etapas, S4)
-    EKSPLOATAVIMO: { pav: "Eksploatavimo darbų sutartis", sablonai: null,
+    // nuo 2026-10-13 (7 etapas, S4): vienos bendrosios sąlygos, specialiosios - pagal darbų rūšį (variantą); kodus grąžina kodai()
+    EKSPLOATAVIMO: { pav: "Eksploatavimo darbų sutartis", sablonai: { LT: { BS: "EKS_LT_BS", SS: { OL: "EKSOL_LT_SS", TP: "EKSTP_LT_SS", TRASOS: "EKSTV_LT_SS" } } },
                      variantai: { OL: "oro linijų eksploatavimas", TP: "transformatorių pastočių eksploatavimas", TRASOS: "trasų valymas" } }
   };
+  /* Šeimos šablonų kodai pasirinktai kalbai ir variantui: { kodai: { BS, SS, ... }, kalba } arba null (šeima be šablonų; šeimai su
+     variantais - nežinomas variantas). Dokumentas, kurio šablonas priklauso nuo varianto, SEIMOS aprašytas objektu { variantas: kodas }. */
+  function kodai(seima, variantas, kalba) {
+    var S = SEIMOS[seima];
+    if (!S || !S.sablonai) return null;
+    var k = S.sablonai[kalba] ? kalba : "LT", b = S.sablonai[k], out = {}, gerai = true;
+    Object.keys(b).forEach(function (d) {
+      out[d] = typeof b[d] === "string" ? b[d] : (variantas && b[d][variantas]) || null;
+      if (!out[d]) gerai = false;
+    });
+    return gerai ? { kodai: out, kalba: k } : null;
+  }
 
   /* Klausimai (plano 3.1). Atsakymų tekstai - pagal šablonų taikymo sritį; ko šablonai nesako, neteigiama. */
   var KLAUSIMAI = {
@@ -236,9 +249,10 @@
     var S = SEIMOS[r.seima];
     var rez = { seima: r.seima, variantas: r.variantas || null, pavadinimas: S.pav + (r.variantas ? " - " + S.variantai[r.variantas] : ""),
                 priezastys: priezastys, kalba: kalba, pastabos: pastabos, atsakyta: atsakyta, sablonai: null };
-    if (!S.sablonai) {
+    var sb = kodai(r.seima, r.variantas, kalba);
+    if (!sb) {
       rez.busena = "neparuosta";
-      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas (paruošti - prekių, paslaugų ir darbų pirkimo-pardavimo, projektavimo ir statybos rangos, statybos rangos ir projektavimo paslaugų sutartys).");
+      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas.");
       return rez;
     }
     if (duom.rezimas === "VPI") {
@@ -248,8 +262,8 @@
       return rez;
     }
     rez.busena = "parinkta";
-    rez.sablonai = S.sablonai[kalba] || S.sablonai.LT;
-    if (!S.sablonai[kalba]) { rez.kalba = "LT"; rez.pastabos.push("Šios šeimos dvikalbės (LT/EN) sutarties nėra - parinkta lietuviška."); }
+    rez.sablonai = sb.kodai;
+    if (sb.kalba !== kalba) { rez.kalba = "LT"; rez.pastabos.push("Šios šeimos dvikalbės (LT/EN) sutarties nėra - parinkta lietuviška."); }
     return rez;
   }
 
@@ -261,5 +275,5 @@
              sutampa: !!(rez && rez.seima === seima && (rez.variantas || null) === (variantas || null)) };
   }
 
-  global.GP_SUTARTYS = { versija: "S4-SR-2026-10-12", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, normalizuok: be };
+  global.GP_SUTARTYS = { versija: "S4-EKS-2026-10-13", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, kodai: kodai, normalizuok: be };
 })(typeof window !== "undefined" ? window : this);
