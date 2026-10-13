@@ -153,6 +153,15 @@
      Supaprastintas pirkimas ...“, raudona data -> „2026 m. rugsėjo 29 d.“) */
   /* vietos[i] - pildoma vieta (artimesnė pora, pagal pradžią); leidz[i] - leidžiami variantai (RegExp, sutarties išskleidžiamas sąrašas);
      pozicija[i] - neradus poros, vieta poruojama su likusia tos pačios vietos dokumento pastraipa (numatyta - kaip vietos) */
+  var PORA_SU_NUOSTATA = { nuo: 0.3, zodziu: 0.5 };
+  /* Bendrų žodžių dalis nuo trumpesniojo teksto žodžių: pakeistas tas pats sakinys - arti 1, nesusiję tekstai - iki ~0,35 */
+  function zodziuBendrumas(a, b) {
+    var zod = function (t) { var o = {}, n = 0; String(t || "").toLowerCase().split(/[^0-9a-ząčęėįšųūž]+/).forEach(function (w) { if (w && !o[w]) { o[w] = 1; n++; } }); return { o: o, n: n }; };
+    var x = zod(a), y = zod(b), bend = 0;
+    if (!x.n || !y.n) return 0;
+    for (var w in x.o) if (y.o[w]) bend++;
+    return bend / Math.min(x.n, y.n);
+  }
   function sulygink(A, B, vietos, leidz, pozicija, variantai) {
     pozicija = pozicija || vietos;
     var poros = lcsPoros(A, B), ops = [], pa = 0, pb = 0;
@@ -163,13 +172,19 @@
       // 4.3 „... yra fiksuota suma“ ir 4.4 „... yra maksimali suma“ - prasideda vienodai)
       var pagalVarianta = {};
       if (leidz) for (i = a1; i < a2; i++) if (leidz[i]) for (j = b1; j < b2; j++) if (!naudota[j] && leidz[i].test(B[j])) { pagalVarianta[i] = j; naudota[j] = 1; break; }
+      // panašios pastraipos - nuo panašiausios poros (2026-10-13): iš eilės einant, ankstesnė formos nuostata pasiimdavo dokumento pastraipą,
+      // kuri kur kas panašesnė į vėlesnę (statybos rangos SS 12 p.: pasirinktas variantas „... pagal atliktus Darbų etapus, kaip nurodyta
+      // priede Nr. 1.1.“ buvo suporuotas su variantu „... pagal Darbų žiniaraštį.“ ir rodytas kaip pakeista nuostata)
+      var kand = [], pagalPanasuma = {};
+      for (i = a1; i < a2; i++) if (pagalVarianta[i] == null) for (j = b1; j < b2; j++) {
+        if (naudota[j]) continue;
+        var r = panasumas(A[i], B[j]);
+        if (r >= 0.6) kand.push({ i: i, j: j, r: r });
+      }
+      kand.sort(function (x, y) { return y.r - x.r; });
+      kand.forEach(function (k) { if (pagalPanasuma[k.i] == null && !naudota[k.j]) { pagalPanasuma[k.i] = k; naudota[k.j] = 1; } });
       for (i = a1; i < a2; i++) {
-        var geriausia = pagalVarianta[i] != null ? { j: pagalVarianta[i], r: 0 } : null;
-        if (!geriausia) for (j = b1; j < b2; j++) {
-          if (naudota[j]) continue;
-          var r = panasumas(A[i], B[j]);
-          if (r >= 0.6 && (!geriausia || r > geriausia.r)) geriausia = { j: j, r: r };
-        }
+        var geriausia = pagalVarianta[i] != null ? { j: pagalVarianta[i], r: 0 } : pagalPanasuma[i] || null;
         if (!geriausia && vietos && vietos[i]) {
           var pr = A[i].split(/\[|_{3,}|\.\.\.|…|pasirinkite/)[0].trim();
           if (pr.length >= 6) for (j = b1; j < b2; j++) if (!naudota[j] && B[j].indexOf(pr) === 0) { geriausia = { j: j, r: 0 }; break; }
@@ -184,12 +199,16 @@
         laikini.forEach(function (o) {
           if (o.op !== "-" || !pozicija || !pozicija[o.a] || !likB.length) return;
           // tame pačiame tarpe pašalinta nuostata be pildomos vietos, panašesnė į šią dokumento pastraipą (rangos SS: pakeistas pasirinktas
-          // variantas greta varianto su „priede Nr. []“, 2026-10-10) - pora su ja, kitaip pakeitimas atrodytų kaip užpildyta vieta
+          // variantas greta varianto su „priede Nr. []“, 2026-10-10) - pora su ja, kitaip pakeitimas atrodytų kaip užpildyta vieta.
+          // Nuo 2026-10-13 - tik kai sutampa ir žodžiai (PORA_SU_NUOSTATA.zodziu): nesusijusių tekstų raidžių porų panašumas siekia 0,25-0,5,
+          // todėl rengėjo įrašytas tekstas (esminės sąlygos, kokybinių kriterijų tvarka) per atsitiktinį 0,001 skirtumą būdavo suporuojamas su
+          // pašalintu variantu „Netaikoma (tuo atveju, jeigu ...)“ ir sugeneruota sutartis be generavimo paso rodyta su nukrypimu;
+          // pakeistas variantas išlaiko daugumą savo žodžių, nesusijęs tekstas - ne
           var ro = panasumas(A[o.a], B[likB[0]]), kita = null;
           laikini.forEach(function (c) {
             if (c === o || c.op !== "-" || pozicija[c.a]) return;
             var rc = panasumas(A[c.a], B[likB[0]]);
-            if (rc >= 0.3 && rc > ro && (!kita || rc > kita.r)) kita = { c: c, r: rc };
+            if (rc >= PORA_SU_NUOSTATA.nuo && rc > ro && zodziuBendrumas(A[c.a], B[likB[0]]) >= PORA_SU_NUOSTATA.zodziu && (!kita || rc > kita.r)) kita = { c: c, r: rc };
           });
           var t = kita ? kita.c : o;
           t.op = "~"; t.b = likB.shift(); t.r = kita ? kita.r : 0; naudota[t.b] = 1;
@@ -377,6 +396,34 @@
         if (y.op === "=") break;
       }
     });
+    // sutartis: nuostata su nuoroda į punktą, kurio dokumente nebėra („Punktas netaikomas, taikomos 8.3.2 punkte nustatytos
+    // sąlygos.“ -> „Punktas netaikomas.“ - taip daro generatorius, kai užtikrinimas netaikomas; 2026-10-13): pora, ne pašalinta ir pridėta
+    if (sut) {
+      var dokNr = {};
+      dok.forEach(function (y) { var m = /^\s*(\d+(?:\.\d+)+)\.?(?=\s|$)/.exec(y.t); if (m) dokNr[m[1]] = 1; });
+      ops.forEach(function (x, k) {
+        var bn = x.op === "-" && forma[x.a].beNuorodos;
+        if (!bn) return;
+        for (var q = Math.max(0, k - 8); q < ops.length && q <= k + 8; q++) {
+          var y = ops[q];
+          if (y.op !== "+") continue;
+          var tinka = bn.filter(function (v) { return v.n === dok[y.b].n && !dokNr[v.punktas]; })[0];
+          if (tinka) { x.op = "~"; x.b = y.b; x.r = 0; x.beNuorodos = tinka; y.op = "x"; break; }
+        }
+      });
+      // skyriaus antraštė su taikymo sąlyga („10. ESMINĖS SUTARTIES SĄLYGOS (taikoma, jeigu užpildyta)“) liko be poros, nes dokumento antraštė be
+      // sąlygos sutapo su kitu tokio pat teksto punktu („10.1. Esminės Sutarties sąlygos“), o šio pastraipą pagal eilę pasiėmė gretima pildoma
+      // vieta (LT/EN) - pora grąžinama antraštei (pastraipa tiksliai atitinka jos variantą); kita formos pastraipa lieka be poros ir rodoma
+      ops.forEach(function (x, k) {
+        var f = x.op === "-" ? forma[x.a] : null;
+        if (!f || !f.suSalyga || !f.leidziami) return;
+        for (var q = Math.max(0, k - 12); q < ops.length && q <= k + 12; q++) {
+          var y = ops[q];
+          if (y.op !== "~" || y.b == null || !f.leidziami.test(dok[y.b].n)) continue;
+          x.op = "~"; x.b = y.b; x.r = 0; y.op = "-"; y.b = null; break;
+        }
+      });
+    }
     ops = ops.filter(function (x) { return x.op !== "x"; });
     var kitos = o.kitosVersijos || null;      // { maiša: "versija" } - oficialių formų versijų pastraipos, kurių dabartinėje nėra
     // naujos - { maiša: 1 } formos pastraipos, kurių pradinėje redakcijoje nebuvo (sutarčių registras): dokumente pagal ankstesnę redakciją
@@ -411,6 +458,7 @@
       else if (sut && x.op === "~" && nepriv["i" + f.i] && netaikoma(f.t, d.t)) { r = "neprivaloma"; pr = "netaikoma"; }
       else if (sut && x.op === "+" && NETAIKOMA_ZYME.test(beNr(d.t).trim()) && zymiuLiko[tarpoId[opk]] > 0) { zymiuLiko[tarpoId[opk]]--; r = "neprivaloma"; pr = "netaikoma"; }
       // sutartis: išskleidžiamo sąrašo vietoje - tik formos variantas; pildoma vieta - bet kas; pašalinti - tik nurodymus ir pasirinkimo vietas
+      else if (sut && x.op === "~" && x.beNuorodos) { r = "uzpildyta"; pr = "pasirinkimas"; }
       else if (sut && x.op === "~" && f.leidziami) { if (f.leidziami.test(d.n)) { r = "uzpildyta"; pr = "pasirinkimas"; } else { r = "nukrypimas"; pr = "ne_is_saraso"; } }
       else if (sut && x.op === "~" && f.vieta) { r = "uzpildyta"; pr = "pazymeta"; }
       else if (sut && x.op === "-") {

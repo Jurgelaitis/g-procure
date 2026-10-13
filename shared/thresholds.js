@@ -18,6 +18,10 @@ window.GP_THRESHOLDS = {
   // Pirkimo sutarties turinio reikalavimų išimtis (PĮ 95 str. 4 d. / VPĮ 87 str. 5 d., GP_TEISE "sut_isimtis"; perskaityta e-tar
   // 2026-10-09): reikalavimai gali būti netaikomi raštu sudaromai sutarčiai, kurios numatoma vertė mažesnė už šią sumą. Įrašyta įstatyme.
   SUTARTIS: { reikalavimaiNuo: 15000 },
+  // Standartinis PVM tarifas (Pridėtinės vertės mokesčio įstatymo 2 straipsnio 32 dalis: „Standartinis PVM tarifas - 21 procento PVM
+  // tarifas“; 19 straipsnio 1 dalis - kada jis taikomas; perskaityta e-tar aktualioje redakcijoje 2026-10-13). Naudoja PP-salygos sutarties
+  // projekto kainos eilutės: PVM ir suma su PVM apskaičiuojami iš rengėjo įrašytos sumos be PVM.
+  MOKESCIAI: { pvmStandartinis: 0.21 },
   // EPSO-G politikos slenkstis kastu-naudos analizei (pp-cost-benefit).
   // PASTABA: politikos (ne istatymo) riba, diskusines stadijos - tikslinti patvirtinus.
   CBA: { privaloma: 20000000, rekomenduojama: 10000000 }

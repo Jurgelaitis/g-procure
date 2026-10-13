@@ -3451,6 +3451,76 @@ async function testaiPalyginimas(){
       tiesa(su[0].balas >= be.find(q => q.id === "DM").balas, "„pozymiaiVisi“ balo nemažina: " + JSON.stringify([su, be]));
       lygu(P.identifikuok(P.pastraipos(palygXml(["Visai kitas dokumentas, techninė specifikacija su savo tekstu ir reikalavimais įrangai bei jos priežiūrai."])), { DM: { pozymiai: ketv.join(" "), pozymiaiVisi: vis.join(" ") } })[0].balas, 0, "svetimas dokumentas");
     });
+    await testas("Panašios pastraipos poruojamos nuo panašiausios poros (2026-10-13): pasirinktas variantas su įrašyta reikšme tenka savo formos pastraipai, o ne ankstesniam panašiam variantui (iki tol - iš eilės: statybos rangos sutarties apmokėjimo variantas rodytas kaip pakeista nuostata); vienodai panašios - iš eilės", ()=>{
+      const A = ["Sutarties kaina bus mokama dalimis pagal Darbų žiniaraštį.", "Sutarties kaina bus mokama dalimis pagal atliktus Darbų etapus, kaip nurodyta priede Nr. [ ].",
+                 "Sutarties kaina bus sumokėta Rangovui įvykdžius sutartinius įsipareigojimus."].map(P.norm);
+      const poros = B => P.sulygink(A, B.map(P.norm), { 1: true }).map(o => o.op + (o.a == null ? "" : " f" + o.a) + (o.b == null ? "" : " d" + o.b));
+      lygu(poros(["Sutarties kaina bus mokama dalimis pagal atliktus Darbų etapus, kaip nurodyta priede Nr. 1.1."]), ["- f0", "~ f1 d0", "- f2"], "antras variantas");
+      lygu(poros(["Sutarties kaina bus mokama dalimis pagal Darbų žiniaraščius."]), ["~ f0 d0", "- f1", "- f2"], "pakeistas pirmas variantas - su pirmu");
+      const K = ["Rangovas moka 0,02 proc. delspinigius už kiekvieną pradelstą dieną.", "Rangovas moka 0,02 proc. delspinigius už kiekvieną pradelstą dieną."].map(P.norm);
+      lygu(P.sulygink(["Rangovas moka 0,04 proc. delspinigius už kiekvieną pradelstą dieną.", "Rangovas moka 0,05 proc. delspinigius už kiekvieną pradelstą dieną."].map(P.norm), K).map(o => o.op + " f" + o.a + " d" + o.b),
+        ["~ f0 d0", "~ f1 d1"], "vienodai panašios - iš eilės");
+    });
+    await testas("Sutartis (2026-10-13, patikra su paskelbtais projektais): nuostata su nuoroda į punktą, kurio dokumente nebėra („Punktas netaikomas, taikomos 8.3.2 punkte nustatytos sąlygos.“ -> „Punktas netaikomas.“), - pasirinkimas, o kai tas punktas dokumente yra - nukrypimas; skyriaus antraštė be taikymo sąlygos skliaustuose - pasirinkimas (ir kai jos pastraipą pagal eilę buvo pasiėmusi gretima pildoma vieta), kita antraštė - nukrypimas; rengėjo įrašytas tekstas neporuojamas su pašalintu variantu „Netaikoma (...)“ vien dėl raidžių panašumo, o pakeistas variantas - poruojamas", async ()=>{
+      // 1) nuoroda į pašalintą punktą
+      const F1 = ["8. SUTARTIES ĮVYKDYMO UŽTIKRINIMAS",
+        "8.3.2. Sutarties įvykdymo užtikrinimo galiojimo terminas pratęsiamas, jeigu pratęsiamas Sutarties galiojimo terminas, o nepratęsus Tiekėjas moka Sutartyje nustatytą baudą.",
+        "9.8. Tiekėjui taikomos netesybos dėl Sutarties įvykdymo užtikrinimo nepratęsimo",
+        "Punktas netaikomas, taikomos 8.3.2 punkte nustatytos sąlygos.",
+        "9.9. Kitos netesybos Tiekėjui netaikomos, išskyrus šioje Sutartyje ir jos bendrosiose sąlygose aiškiai nurodytus atvejus."];
+      const f1 = () => { const f = P.pastraipos(palygXml(F1)); f[3].beNuorodos = [{ n: P.norm("Punktas netaikomas."), punktas: "8.3.2", t: F1[3] }]; return f; };
+      const Z1 = { blokai: [{ blokas: { nuo: 1, iki: 1 } }] };
+      const l1 = D => P.lygink(f1(), P.pastraipos(palygXml(D)), { sutartis: true, zemelapis: Z1 }).pakeitimai.map(q => [q.op, q.rusis, q.poRusis || "", (q.dok || q.forma).slice(0, 22)].join(" | ")).sort();
+      const be = F1.slice(); be.splice(1, 1); be[2] = "Punktas netaikomas.";
+      lygu(l1(be), ["pakeista | uzpildyta | pasirinkimas | Punktas netaikomas.", "pasalinta | neprivaloma | pasalinta | 8.3.2. Sutarties įvykd"], "8.3.2 punkto nebėra - sutrumpinta nuostata yra pasirinkimas");
+      lygu(P.lygink(f1(), P.pastraipos(palygXml(be)), { sutartis: true, zemelapis: Z1 }).pakeitimai.find(q => q.poRusis === "pasirinkimas").forma, F1[3], "rodomas formos tekstas");
+      const su = F1.slice(); su[3] = "Punktas netaikomas.";
+      lygu(l1(su), ["pasalinta | nukrypimas |  | Punktas netaikomas, ta", "prideta | nukrypimas |  | Punktas netaikomas."], "8.3.2 punktas yra - nuorodos pašalinimas yra nukrypimas");
+      const kitas = be.slice(); kitas[2] = "Punktas netaikomas, nes užtikrinimas nepratęsiamas.";
+      tiesa(l1(kitas).some(x => /nukrypimas/.test(x)), "kitoks tekstas - nukrypimas: " + l1(kitas).join(" || "));
+      lygu(l1(F1), [], "nepakeistas dokumentas");
+      // 2) skyriaus antraštė su taikymo sąlyga (LT/EN eilučių tvarka: antraštės, 10.1 punkto pavadinimai, pildomos vietos)
+      const F2 = ["9.9. Kitos netesybos Tiekėjui netaikomos, išskyrus šioje Sutartyje ir jos bendrosiose sąlygose aiškiai nurodytus atvejus.",
+        "10. ESMINĖS SUTARTIES SĄLYGOS (taikoma, jeigu užpildyta)", "10. ESSENTIAL TERMS OF THE CONTRACT (applicable if completed)",
+        "10.1. Esminės Sutarties sąlygos", "10.1. Essential terms of the Contract",
+        "(nurodyti Sutarties sąlygas, kurios laikomos esminėmis)", "(specify the contractual terms that are considered essential)",
+        "11. SUTARTIES GALIOJIMAS IR KEITIMAS"];
+      const f2 = () => { const f = P.pastraipos(palygXml(F2));
+        f[1].suSalyga = true; f[1].leidziami = /^\s*(?:\d+(?:\.\d+)*\.?\s*)?esminės\s*sutarties\s*sąlygos\s*(?:\(taikoma,\s*jeigu\s*užpildyta\))?\s*$/; f[1].variantai = [{ t: F2[1], n: f[1].n }];
+        f[2].suSalyga = true; f[2].leidziami = /^\s*(?:\d+(?:\.\d+)*\.?\s*)?essential\s*terms\s*of\s*the\s*contract\s*(?:\(applicable\s*if\s*completed\))?\s*$/; f[2].variantai = [{ t: F2[2], n: f[2].n }];
+        f[5].vieta = true; f[5].salinama = true; f[6].vieta = true; f[6].salinama = true; return f; };
+      const l2 = D => P.lygink(f2(), P.pastraipos(palygXml(D)), { sutartis: true, zemelapis: { blokai: [] } }).pakeitimai.map(q => [q.op, q.rusis, q.poRusis || "", (q.forma || q.dok).slice(0, 26)].join(" | "));
+      const D2 = [F2[0], "10. ESMINĖS SUTARTIES SĄLYGOS", "10. ESSENTIAL TERMS OF THE CONTRACT", F2[3], F2[4], "Prekių pristatymo terminas ir kokybės reikalavimai.", "Delivery time limit and quality requirements.", F2[7]];
+      tiesa(!l2(D2).some(x => /nukrypimas/.test(x)) && l2(D2).filter(x => /uzpildyta \| pasirinkimas \| 10\. (ESMINĖS|ESSENTIAL)/.test(x)).length === 2, "antraštės be sąlygos - pasirinkimas: " + l2(D2).join(" || "));
+      const D2b = D2.slice(); D2b[1] = "10. KITOS SUTARTIES NUOSTATOS";
+      tiesa(l2(D2b).some(x => /nukrypimas/.test(x) && /10\. ESMINĖS/.test(x)), "pakeista antraštė - nukrypimas: " + l2(D2b).join(" || "));
+      lygu(l2(F2), [], "antraštė su sąlyga (neužpildyta forma)");
+      // dokumento „10. ESMINĖS SUTARTIES SĄLYGOS“ sutampa su formos 10.1 punkto pavadinimu, todėl antraštei tenka kita tiksliai jos variantą
+      // atitinkanti pastraipa, nors ši jau buvo suporuota su panašia nuostata - ta nuostata lieka be poros ir rodoma (nieko nepaslepiama)
+      const F2c = [F2[0], F2[1], "10.1. Esminės Sutarties sąlygos", "Esminės Sutarties sąlygos:", F2[7]];
+      const f2c = () => { const f = P.pastraipos(palygXml(F2c)); f[1].suSalyga = true; f[1].leidziami = /^\s*(?:\d+(?:\.\d+)*\.?\s*)?esminės\s*sutarties\s*sąlygos\s*(?:\(taikoma,\s*jeigu\s*užpildyta\))?\s*$/; return f; };
+      const r2c = P.lygink(f2c(), P.pastraipos(palygXml([F2c[0], "10. ESMINĖS SUTARTIES SĄLYGOS", "Esminės Sutarties sąlygos", F2c[4]])), { sutartis: true, zemelapis: { blokai: [] } }).pakeitimai.map(q => [q.op, q.rusis, q.poRusis || "", (q.forma || q.dok).slice(0, 26)].join(" | "));
+      lygu(r2c, ["pakeista | uzpildyta | pasirinkimas | 10. ESMINĖS SUTARTIES SĄLY", "pasalinta | nukrypimas |  | Esminės Sutarties sąlygos:"], "antraštė ir pakeista gretima nuostata");
+      // 3) rengėjo tekstas greta pašalinto varianto „Netaikoma (...)“: raidžių porų panašumas atsitiktinai didesnis nei su pildoma vieta
+      const F3 = ["6.3. Kokybinių kriterijų įgyvendinimas ir tikrinimas Sutarties vykdymo metu",
+        // (tikri LITGRID prekių sutarties specialiųjų sąlygų 6.3 punkto tekstai)
+        "Netaikoma (tuo atveju, jeigu Kokybiniai kriterijai nebuvo nustatyti pirkimo dokumentuose arba laimėjęs Tiekėjas neatitiko arba nesiūlė tam tikrų Kokybinių kriterijų)",
+        "arba",
+        "(nurodyti Kokybinių kriterijų įgyvendinimo ir tikrinimo tvarką, pavyzdžiui, kaip dažnai bus tikrinamas Kokybinių kriterijų įgyvendinimas, kokius dokumentus Tiekėjas turės pateikti Pirkėjui, per kiek laiko Tiekėjas turi pateikti Pirkėjo prašomus dokumentus, pagrindžiančius Kokybinių kriterijų įgyvendinimo užtikrinimą ir pan.)",
+        "7. SUBTIEKĖJAI"];
+      // „arba“ - trumpa pastraipa (poruojama pagal eilę), nurodymas rengėjui - pašalinama pildoma vieta; visi trys - alternatyvos dalys
+      const f3 = () => { const f = P.pastraipos(palygXml(F3)); f[2].vieta = true; f[3].vieta = true; f[3].salinama = true; return f; };
+      const Z3 = { blokai: [{ blokas: { nuo: 1, iki: 3 } }] };
+      const l3 = D => P.lygink(f3(), P.pastraipos(palygXml(D)), { sutartis: true, zemelapis: Z3 }).pakeitimai.map(q => [q.op, q.rusis, q.poRusis || ""].join(" | ")).sort();
+      const LT = "Pavyzdinis tekstas: Tiekėjas užtikrina, kad nurodyti reikalavimai būtų įgyvendinti visą Sutarties vykdymo laikotarpį, o Pirkėjas turi teisę bet kada patikrinti jų laikymąsi.";
+      tiesa(P.panasumas(P.norm(F3[1]), P.norm(LT)) >= 0.3 && P.panasumas(P.norm(F3[1]), P.norm(LT)) > P.panasumas(P.norm(F3[2]), P.norm(LT)), "pavyzdys nebeatitinka sąlygos: raidžių porų panašumas su pašalintu variantu turi būti bent 0,3: " + P.panasumas(P.norm(F3[1]), P.norm(LT)));
+      tiesa(!l3([F3[0], LT, F3[4]]).some(x => /nukrypimas/.test(x)) && l3([F3[0], LT, F3[4]]).some(x => /^(pakeista|prideta) \| uzpildyta/.test(x)), "rengėjo tekstas - užpildyta vieta, pašalintas variantas - pasirinkimas: " + l3([F3[0], LT, F3[4]]).join(" || "));
+      // pakeistas pats variantas (dauguma žodžių tie patys) - poruojamas su juo ir yra nukrypimas (taisyklė nuo 2026-10-10 lieka)
+      const pak = "Netaikoma (Kokybiniai kriterijai nebuvo nustatyti, žr. pasiūlymą).";
+      // (raidžių porų panašumas - tarp 0,3 ir 0,6: pirmasis poravimo ėjimas jo nesuporuoja, lemia žodžių sutapimas)
+      tiesa(P.panasumas(P.norm(F3[1]), P.norm(pak)) < 0.6 && P.panasumas(P.norm(F3[1]), P.norm(pak)) >= 0.3, "pavyzdys nebetinka: " + P.panasumas(P.norm(F3[1]), P.norm(pak)));
+      tiesa(l3([F3[0], pak, F3[4]]).some(x => /^pakeista \| nukrypimas/.test(x)), "pakeistas variantas - nukrypimas: " + l3([F3[0], pak, F3[4]]).join(" || "));
+    });
   } finally { f.remove(); }
 }
 
@@ -3541,6 +3611,24 @@ async function sutartiesFormosBusena(w, d){
   const F = d.getElementById("sutartiesForma");
   const ans = (id, v) => { const r = F.querySelector('input[name="sf-' + id + '"][value="' + v + '"]'); if (r){ r.checked = true; r.dispatchEvent(new w.Event("change", { bubbles: true })); } };
   ans("uztikrinimas", "taip"); ans("esmines", "taip"); ans("garantine", "atvykti"); ans("es", "taip");
+}
+/* PP-salygos 2 žingsnis: rangos sutarties etapų lentelės redaktorius (2026-10-13; sutarties-forma.js, klausimo tipas „lentele“) - Darbai
+   etapais, lentelė pildoma čia, visi stulpeliai (delspinigiai ir mokėjimo dalis), ilgas tekstas pirmame etape. */
+async function etapuRedaktoriausBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  const iv = (id, v) => { const e = d.getElementById(id); e.value = v; e.dispatchEvent(new w.Event("input", { bubbles: true })); };
+  const rad = (n, v) => { const e = d.querySelector("input[name=" + n + "][value=\"" + v + "\"]"); e.checked = true; e.dispatchEvent(new w.Event("change", { bubbles: true })); };
+  const b = d.getElementById("budas"); b.value = "T-SD"; b.dispatchEvent(new w.Event("change"));
+  rad("kalba", "LT"); rad("tipas", "darbai"); iv("pavadinimas", "330 kV skirstyklos darbo projekto parengimo ir rangos darbų");
+  w.SUTARTIES_BLOKAS.atnaujink();
+  const pb = d.getElementById("sbTaip"); if (pb && !w.SUTARTIES_BLOKAS.busena().patvirtinta) pb.click();
+  await w.iStep2();
+  for (let i = 0; i < 100 && !d.querySelector("#sutartiesForma #sf-etapai"); i++) await new Promise(r => setTimeout(r, 50));
+  const F = d.getElementById("sutartiesForma");
+  const ans = (id, v) => { const r = F.querySelector('input[name="sf-' + id + '"][value="' + v + '"]'); if (r){ r.checked = true; r.dispatchEvent(new w.Event("change", { bubbles: true })); } };
+  ans("etapai", "taip"); ans("etapu_pildymas", "cia"); ans("apmokejimas_psr", "etapai"); ans("etapu_mokejimas", "dalys");
+  const t = F.querySelector('[data-sfl="0:darbai"]');
+  if (t){ t.value = "Parengtas techninis darbo projektas, kuriam Užsakovas neturi pastabų ir kuris suderintas su trečiosiomis šalimis;\nGauti_visi_Techninėje_užduotyje_numatyti_suderinimai_be_tarpų."; t.dispatchEvent(new w.Event("change", { bubbles: true })); }
 }
 const TELEFONO_BUSENOS = {
   [NEG]: NEG_BUSENOS,
@@ -3755,7 +3843,8 @@ const PRIEINAMUMO_BUSENOS = {
     ["tikrinimas su rezultatais (BPS su nukrypimais)", async (w, d) => { await tikrinimoBusena(w, d); }, "#tkVaizdai [role=tab]"],
     ["2 žingsnis su klausimais (T-SD)", async (w, d) => { d.getElementById("tabRengti").click(); await w.iStep2(); }],
     ["2 žingsnis LT/EN su derybomis (MV-SAD)", async (w, d) => { const s = d.getElementById("budas"); s.value = "MV-SAD"; s.dispatchEvent(new w.Event("change"));
-      const k = d.querySelector("input[name=kalba][value=LT_EN]"); k.checked = true; k.dispatchEvent(new w.Event("change")); await w.iStep2(); }]],
+      const k = d.querySelector("input[name=kalba][value=LT_EN]"); k.checked = true; k.dispatchEvent(new w.Event("change")); await w.iStep2(); }],
+    ["2 žingsnis: rangos sutarties etapų lentelės redaktorius (2026-10-13)", etapuRedaktoriausBusena]],
   "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html": [["pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ".tabbar .tab:not(a)"]],
   "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html": [["mokomasis pavyzdys", w => w.ikelkPavyzdi()]],
   "../PP-report/PP-report.html": [["2 priedas", w => w.selectForm(2)]],
