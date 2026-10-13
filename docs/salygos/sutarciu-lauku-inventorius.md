@@ -436,3 +436,103 @@ sutartyje jų numeriai gali būti mažesni nei šablone. Pildoma sudarant sutart
 failas) - kaip rangos sutartyje.
 
 Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (bendri su rangos sutartimi - `rangosKlausimai()`).
+
+
+# Eksploatavimo darbų sutarties specialiosios sąlygos (7 etapas, S4, 2026-10-13)
+
+Šablonai: bendrosios sąlygos `EKS_LT_BS` ir trys specialiosios sąlygos pagal darbų rūšį - oro linijų `EKSOL_LT_SS`, transformatorių
+pastočių `EKSTP_LT_SS`, trasų valymo `EKSTV_LT_SS` (tik LT). Specialiosios sąlygos - 19 eilučių lentelė; pildomos vietos - laužtiniuose
+skliaustuose ir pažymėtos pilkai. Darbų rūšį nustato sutarties parinkimas 1 žingsnyje (pagal pirkimo pavadinimą arba klausimą).
+
+## Jūsų sprendimai (2026-10-13: „A. 3.“, „B. Pritariu.“, „C. Pritariu.“, „E. Pritariu.“, „F. Pritariu.“, „D - pritariu siūlymui.“)
+
+- A (3 variantas) - aplanko bendrosios sąlygos priderintos prie LITGRID paskelbto teksto: be sąvokos „Sąlygos“ (sąvokos 1.1.20-1.1.25),
+  nuorodos „Sutarties bendrųjų sąlygų ...“, sąvoka „Sutartis“, 2.6.4, 5.3.13, 7.3.1 ir 8.6.3 punktai;
+- B - aštuonios pastraipos su ženkleliu yra punktai (2.2.1, 3.10.1, 4.2.7, 4.2.8, 8.3.3, 8.5.3, 8.7.2, 8.7.9), 10.11.3 p. bauda - 8.3.7 p.;
+- C - bendrųjų sąlygų 3.11.3 ir 3.11.4 p. nuoroda į 3.11.2 p.; pastočių ir trasų valymo SS 1 eilutės antraštėje - sąvoka 1.1.12; oro linijų
+  SS draudimo bendrovių sąrašas - 18 priede; trasų valymo SS 7 eilutėje nebėra pastabos apie koregavimą;
+- E - pastočių SS 9 eilutėje „ne mažiau kaip [įrašoma] darbuotojų“ (klausimas); trasų valymo SS 16 eilutėje užtikrinimo galiojimo
+  terminas - tas pats kaip 2 eilutėje; bendrųjų sąlygų 10.9.2 p. „Rangovas ir teises bei pareigas perėmęs trečiasis asmuo“ (ir abiejose
+  rangos bendrosiose sąlygose); 5.3.13 p. sakinys; 8.6.7 p. įstatymo pavadinimas; 5.1.2.12 p. ir tvirtinimo eilutė - nekeista;
+- F - generavimas tais pačiais principais kaip kitose šeimose (žr. žemiau);
+- D - Užsakovo telefonas „+370 707 02171“ ir el. paštas „info@litgrid.eu“ (17 eilutė; kaip organizacijų registre), interneto adresas
+  priedų sąraše - „http://www.litgrid.eu/...“ (formoje buvo žyma „Įmonės pavadinimas“ vietoje „litgrid“);
+- 5 eilutė „Pirkimas“ - lieka sutarties sudarymui („pritariu“ 2026-10-13).
+
+## Kas įrašoma automatiškai, kas klausiama, kas lieka sutarties sudarymui
+
+| SS vieta | Forma | Kas daroma |
+|---|---|---|
+| įžanga | „laimėjo Užsakovo skelbtą [pirkimo pavadinimas] pirkimą (Nr. ____)“ | automatiškai: pirkimo pavadinimas (1 žingsnis) ir numeris (kortelė arba klausimas) |
+| įžanga, 6, 7, 13, 14, 17 eil., parašai | Sutarties data ir numeris, Užsakovo atstovas, Rangovo duomenys, kaina, Šalių atstovai, Rangovo sąskaita ir kontaktai | lieka (sudarant sutartį) |
+| 1 eil. | įkainių priedas, priemokos, mokesčių priedai, minimalus Avarinių darbų mokestis | klausimai (oro linijos, pastotės); pastočių įkainių priedas - automatiškai iš priedų sąrašo („Darbų įkainiai ir aprašymai“); trasų valymo formoje vietų nėra |
+| 2 eil. | terminas mėnesiais | klausimas (siūloma iš kortelės trukmės) |
+| 3 eil. | objektų sąrašas; trasų valymo - regionas ir kiti regionai | klausimai |
+| 4 eil. (pastotės) | du „Pagrindinių darbų“ variantai su „arba“ ir nurodymas tiekėjui | lieka - variantą pasirenka tiekėjas, teikdamas pasiūlymą |
+| 5 eil. | „[Pirkimo pavadinimas, būdas, paskelbimo data ir numeris]“ | lieka (sudarant sutartį): paskelbimo data ir numeris paaiškėja tik paskelbus pirkimą; trasų valymo formoje taip ir parašyta |
+| 9 eil. | Brigadų skaičius (pastotės - trys skaičiai ir darbuotojų skaičius) | klausimai |
+| 10 eil. | Užsakovo išduodamų dokumentų sąrašas | „Taip / Ne“; „Ne“ - „Nėra“ |
+| 11 eil. | avarinio reagavimo terminai | klausimai |
+| 12 eil. | Užsakovo sandėliai | „Taip / Ne“; „Ne“ - „Netaikoma“ |
+| 15 eil. | papildomi garantiniai terminai | „Taip / Ne“; „Ne“ - „Nėra“ |
+| 16 eil. | užtikrinimas: priedų numeriai, dydis (oro linijos - skaičiais ir žodžiais), trasų valymo - galiojimo terminas | „Taip / Ne“ (siūloma iš SPS); bankų ir draudimo bendrovių sąrašų priedai - automatiškai iš priedų sąrašo; trasų valymo terminas - iš 2 eilutės; „Ne“ - „Netaikoma“ ir priedų sąraše „Sutarties įvykdymo užtikrinimas – netaikoma.“ |
+| 17 eil., priedų sąrašas | Užsakovo telefonas, el. paštas, interneto adresas | šablone ištaisyta jūsų sprendimu (D) - kaip organizacijų registre; generuojant nekeičiama |
+| 18 eil. (priedai) | regionas, darbų planų metai, įrenginių sąrašas; užtikrinimo dokumento rūšis | klausimai; dokumento rūšis (banko garantija ar laidavimo raštas) - lieka (sudarant sutartį) |
+| 19 eil. | preliminarių Darbų kiekių metai; už viešinimą atsakingas asmuo | klausimas; asmuo - lieka (sudarant sutartį) |
+| visur | „ĮMONĖS PAVADINIMAS“ | automatiškai - LITGRID AB |
+
+Žodžiai „Nėra“ ir „Netaikoma“ - tie patys, kuriuos LITGRID įrašė trasų valymo darbų sutarties formos 10, 12 ir 15 eilutėse; eilučių ir
+priedų numeriai nesikeičia.
+
+## Klausimai 2 žingsnyje (`KLAUSIMAI_EKS`; visi privalomi, be numatytųjų)
+
+Oro linijos - 15, transformatorių pastotės - 21, trasų valymas - 6 (be pirkimo kortelės numerio - dar klausimas „Koks pirkimo numeris?“).
+
+| SS vieta | Klausimas | Kam | Siūloma reikšmė |
+|---|---|---|---|
+| įžanga | Koks pirkimo numeris? | visoms (tik be kortelės numerio) | - |
+| priedai, 3 eil. | Kurio regiono objektuose bus atliekami darbai (regiono pavadinimas)? | visoms | - |
+| 3 eil. | Kokiuose objektuose Rangovas turi atlikti eksploatavimo darbus? | oro linijos, pastotės | - |
+| 3 eil. | Kurių kitų regionų linijose Rangovas privalo atlikti darbus Užsakovui pareikalavus? | trasų valymas | - |
+| 2 eil. | Kiek mėnesių nuo Sutarties įsigaliojimo dienos Rangovas vykdo darbus? | visoms | kortelės sutarties trukmė |
+| 1 eil. | Kuriame specialiųjų sąlygų priede nurodyti Rangovo įkainiai? | oro linijos | formos priedų sąrašo eilutė „Darbų įkainiai ir aprašymai“ |
+| 1 eil. | Kiek didesnė kaina mokama už Neplaninius darbus? | oro linijos, pastotės | - |
+| 1 eil. | Kiek didesnė kaina mokama už Avarinius darbus? | pastotės | - |
+| 1 eil. | Kuriame priede nurodytas minimalus mėnesinis eksploatavimo mokestis? | oro linijos, pastotės | - |
+| 1 eil. | Kuriame priede nurodytas reagavimo į Avarinius įvykius mokestis? | pastotės | - |
+| 1 eil. | Koks minimalus Avarinių darbų mokestis, Eur be PVM? | oro linijos, pastotės | - |
+| 9 eil. | Kiek Brigadų vienu metu turi galėti dirbti skirtinguose Objektuose? | oro linijos, trasų valymas | - |
+| 9 eil. | Kiek Brigadų, eksploatuojančių pirminius įrenginius / RAA įrenginius / vykdančių statybinius darbus (trys klausimai)? | pastotės | - |
+| 9 eil. | Iš kiek darbuotojų, turinčių operatyvines remonto teises, turi būti sudarytos RAA ir Pirminių įrenginių Brigados? | pastotės | - |
+| 11 eil. | Per kiek valandų Rangovas turi sureaguoti į avariją 1 ir 2 prioriteto objektuose darbo laiku / ne darbo laiku (du klausimai)? | oro linijos, pastotės | - |
+| 11 eil. | Per kiek valandų nuo Užsakovo pranešimo Rangovas privalo nuvykti į avarijos vietą? | trasų valymas | - |
+| 10 eil. | Ar Užsakovas išduoda Sutarčiai įvykdyti reikalingus leidimus, suderinimus, pažymas, licencijas ar kitus dokumentus? | oro linijos, pastotės | - |
+| 12 eil. | Ar Užsakovo įranga ir Medžiagos išduodamos, o demontuota įranga priimama Užsakovo sandėliuose? | oro linijos, pastotės | - |
+| 15 eil. | Ar nustatomi garantiniai terminai, kurie skiriasi nuo bendrųjų sąlygų 8.2.2 ir 8.2.3 punktuose nurodytų? | oro linijos, pastotės | - |
+| 16 eil. | Ar reikalaujamas Sutarties įvykdymo užtikrinimas? (su dydžiu eurais) | visoms | iš SPS (ir dydis); nesutapus - „Patikrinkite (SPS ir sutartis)“ |
+| priedai | Kurių metų darbų planai pridedami? | pastotės | - |
+| priedai | Kieno įrenginių sąrašas pridedamas? | pastotės | „<regionas> regiono“ - iš regiono atsakymo |
+| 19 eil. | Kurių metų Darbų kiekiai nurodyti kaip preliminarūs? | oro linijos, pastotės | - |
+
+Skaičių klausimuose priimamas tik sveikas skaičius, sumose - suma eurais; kitaip klausimas lieka neatsakytas ir pasakoma kodėl. Atsakymai su
+„Nr.“, „priede“, „regiono“, „metais“ ar tašku gale sakinyje nepasikartoja. Formos žodžiai po skaičiaus („Brigados“, „valandos“) nekeičiami.
+Prie užtikrinimo klausimo rodomas vidaus taisyklių ribos priminimas (ribą įvedate patys; ji saugoma tik jūsų naršyklėje).
+
+## Įgyvendinimas (S4, 2026-10-13)
+
+- Parinkimas (`sutartys.js`): šeimos specialiosios sąlygos aprašytos pagal darbų rūšį, kodus grąžina `GP_SUTARTYS.kodai(šeima, variantas,
+  kalba)`; 1 žingsnio blokas ir 2 žingsnio klausimai gauna ir variantą.
+- Forma (`sutarties-forma.js`): `KLAUSIMAI_EKS`, `sprendimaiEKS`, `derinkEKS`; suma žodžiais - `zodziaisLT` („125 000 Eur (vienas šimtas
+  dvidešimt penki tūkstančiai eurų)“); sąrašai „Įrašoma automatiškai“ ir „Pildoma sudarant sutartį“ - pagal darbų rūšį.
+- Šablonų žemėlapiai (`sutarciu-sablonai.py`): `neprivalomos` - eilutės, taikomos ne visada (10, 12, 15, 16; trasų valymo - 16);
+  `zinomos` - pastraipos, kuriose pilkas žymėjimas buvo tik pastraipos ženkle (nuimamas, kad žymėjimas liktų tik sudarant pildomose vietose).
+- SPS sąlyga apie tiesioginį atsiskaitymą su subtiekėjais atsakoma pati - tvarką nustato bendrųjų sąlygų 5.2.6-5.2.7 punktai.
+- Patikra pakete: nuorodos (51-55) - visos į esamus punktus ir priedus; privalomi sutarties elementai - 13 iš 13.
+- „Tikrinti parengtus dokumentus“: trijų darbų rūšių specialiosios sąlygos („Taip“ ir „Ne“ atsakymai) ir bendrosios sąlygos - 0 nukrypimų
+  su generavimo pasu ir be jo; „Nėra“ ir „Netaikoma“ pripažįstami tik eilutėse, kurios taikomos ne visada (`shared/palyginimas.js`);
+  pastraipa su pildoma vieta lyginama pagal formą (žemėlapio `grieztos_vietos`): pakeistas nekintamas tekstas šalia užpildytos vietos
+  („ne mažiau kaip“ -> „ne daugiau kaip“) - nukrypimas.
+- Pages (PDF eksportu): bendrosios sąlygos - 43 psl., specialiosios - 8 (oro linijos), 7 (pastotės) ir 6 (trasų valymas) psl., A4, tekstas
+  neprarandamas, punktų numeriai kaip Word (bendrosiose sąlygose - 524 numeruotos pastraipos); aukštos lentelės eilutės suskaidytos.
+
+Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_EKS`).
