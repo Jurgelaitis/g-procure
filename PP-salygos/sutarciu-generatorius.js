@@ -12,7 +12,10 @@
  *       "a:<vieta>[#n]"  alternatyva: { variantas: k }
  *       "n:<vieta>#n"    nurodymas rengėjui: "salinti" arba { tekstas, tekstasEN } (įrašoma vietoj nurodymo); žemėlapio `kartu`
  *                        (statybos rangos SS: „// Jei ...“, „arba“, „// Jei ...“) - nurodymo tęsinys, šalinamas kartu
- *       "p:<vieta>#n"    pildoma vieta pastraipoje: { tekstas, tekstasEN }
+ *       "p:<vieta>#n"    pildoma vieta pastraipoje: { tekstas, tekstasEN }; { tekstas, lieka } (2026-10-13) - įrašoma `tekstas`, o po jo lieka
+ *                        pildoma vieta `lieka` šablono formatu (eksploatavimo darbų SS 5 eil.: pirkimo pavadinimas įrašomas, „[būdas,
+ *                        paskelbimo data ir numeris]“ lieka sudarant sutartį) - vieta įrašoma į „palikta“ (kodel: sudarant)
+ *       "l:<etiketė>"    (žr. žemiau) - jei įrašytame lauko tekste yra vieta „[...]“, laukas įrašomas ir į „palikta“ (kodel: sudarant)
  *       "l:<etiketė>"    tuščias laukas: { tekstas, tekstasEN }
  *       "t:<vieta>"      skyriaus taikymo sąlyga „(taikoma, jeigu ...)“: "salinti"
  *       "s:<vieta>"      sąlyginis blokas „Jei punktas taikomas:“ be „Netaikoma“ varianto (paslaugų 13.1-13.2): { taikoma: true } - lieka
@@ -32,6 +35,21 @@
  *                        eilutė (Word numeracija perskaičiuoja kitus priedus); be sprendimo priedas lieka (tai šablono dalis, ne vieta)
  *       "vd:<id>"        pasirinkimas pastraipos viduje su žyma „[pasirinkti vieną]“ (projektavimo paslaugų SS, 2026-10-11): { variantas: k } -
  *                        pastraipoje lieka tekstas prieš, pasirinktas variantas ir tekstas po (kaip šablone), žyma ir kiti variantai šalinami
+ *       "kp:kiti"        priedų sąrašo eilutė kitiems priedams (žemėlapio `kiti_priedai`; 2026-10-13): { eilutes: [tekstas, ...] } - pirmoji
+ *                        įrašoma vietoje eilutės, kitos - naujomis to paties sąrašo eilutėmis po jos (numeruoja Word); { tekstas } - eilutės
+ *                        vietoje (pvz. „Kiti priedai - netaikoma.“); be sprendimo eilutė lieka ir įrašoma į „palikta“
+ *       "f:<id>"         šablono teksto atkarpa pastraipos viduje, taikoma ne visada (žemėlapio `fragmentai`; projektavimo paslaugų SS 2.1 p.
+ *                        „, projekto vykdymo priežiūros paslaugos“): "salinti" arba { tekstas }; be sprendimo lieka (tai šablono tekstas)
+ *       "lt:<sritis>"    lentelė priede (žemėlapio skyriaus `lentele`; 2026-10-13, rangos SS etapų lentelė): { eilutes: [{ etikete,
+ *                        langeliai: { <stulpelis>: [tekstas, ...] } }], beStulpeliu: [<stulpelis>] } - langelių tekstai (kelios eilutės -
+ *                        atskiros pastraipos), nereikalingos formos eilutės ir išvardyti stulpeliai šalinami, trūkstamos eilutės -
+ *                        paskutinės formos eilutės klonai; be sprendimo lentelė lieka Word programai
+ *       "pr:<nr>"        priedų sąrašo priedas (žemėlapio `priedai`; 2026-10-13, priedų sąrašas 2 žingsnyje): { netaikoma: true } - priedo eilutė
+ *                        lieka su žodžiu „netaikoma“ („Rizikų valdymo planas - netaikoma;“, anglų stulpelyje „- not applicable“): kitų priedų
+ *                        numeriai ir nuorodos į juos nesikeičia; { po: [tekstas, ...] } - papildomi priedai naujomis to paties sąrašo eilutėmis
+ *                        po šios (paskutinės) eilutės, jos gale taškas keičiamas kabliataškiu; be sprendimo priedas lieka (tai šablono tekstas)
+ *     Išskleidžiamo sąrašo valdiklyje { tekstas, tekstasEN, laisvas: true } - įrašoma formuluotė, kurios formos sąraše nėra (naudotojo
+ *     sprendimas 2026-10-13: prekių ir paslaugų SS 11.1.2 p.); ataskaitoje `ka: 'laisvas tekstas'` - 3 žingsnis tai pasako.
  *     Nurodymo ar pildomos vietos sprendime `glaustai: true` - įrašoma be tarpo prieš vietą („Kiti priedai [...]“ -> „Kiti priedai: ...“).
  *     Žemėlapio `nesiulomi` (šablono variantas, kurio generatorius nesiūlo: projektavimo paslaugų SS 3.1 „arba“) šalinami visada ir
  *     įrašomi į ataskaitą. Žemėlapis su `zymejimas: "pildoma"` (geltonai pažymėtos pildomos vietos): žymėjimas nuimamas išspręstose
@@ -117,8 +135,9 @@ const GP_SUTARCIU_GEN = (() => {
     }
   }
   const kursyvu = r => { const k = vaikas(vaikas(r, 'rPr') || r, 'i'); return !!k && !/^(0|false)$/.test(k.getAttributeNS(W, 'val') || k.getAttribute('w:val') || ''); };
-  /* Pastraipos teksto atkarpa [a, b) -> `nauja` (tuščia - pašalinama) */
-  function keisk(p, a, b, nauja){
+  /* Pastraipos teksto atkarpa [a, b) -> `nauja` (tuščia - pašalinama). o.palikti - atkarpos formatas (žymėjimas, spalva) nekeičiamas: tekstas
+     lieka pildoma vieta. Grąžina runą su nauju tekstu (pašalinus - true), nepavykus - false. */
+  function keisk(p, a, b, nauja, o){
     skaidykRunus(p);
     const M = [];
     let pos = 0;
@@ -134,8 +153,16 @@ const GP_SUTARCIU_GEN = (() => {
     // kursyvas lieka, kai kursyvu parašytas ir gretimas to paties sakinio tekstas (ne vien pati pildoma vieta ar nurodymas)
     const R0 = visi(p, 'r').filter(r => !virsSdt(r, p) && tarpai(visi(r, 't').map(x => x.textContent).join(''))), k0 = R0.indexOf(runai[0]);
     const greta = [R0[k0 - 1], R0[k0 + 1]].filter(Boolean);
-    svarus(vaikas(runai[0], 'rPr'), { kursyvas: greta.length > 0 && greta.every(kursyvu) });
-    return true;
+    if (!(o && o.palikti)) svarus(vaikas(runai[0], 'rPr'), { kursyvas: greta.length > 0 && greta.every(kursyvu) });
+    return runai[0];
+  }
+  /* Naujas runas su tekstu prieš `runas` - jo formatu be žymėjimo, spalvos ir kursyvo (įrašyta reikšmė prieš likusią pildomą vietą) */
+  function iterpkPries(runas, tekstas){
+    const nr = runas.cloneNode(true), t = visi(nr, 't')[0];
+    t.textContent = tekstas; t.setAttribute('xml:space', 'preserve');
+    svarus(vaikas(nr, 'rPr'));
+    runas.parentNode.insertBefore(nr, runas);
+    return nr;
   }
   /* Pastraipa šalinama; paskutinė langelio pastraipa tik išvaloma (Word langelyje reikia bent vienos) */
   function salink(p){
@@ -180,6 +207,21 @@ const GP_SUTARCIU_GEN = (() => {
     if (rp0){ const k = rp0.cloneNode(true); vaikai(k).forEach(c => { if (['b', 'bCs'].includes(c.localName)) k.removeChild(c); }); svarus(k); r.appendChild(k); }
     const t = naujas(d, 't'); t.setAttribute('xml:space', 'preserve'); t.textContent = tekstas; r.appendChild(t);
     p.appendChild(r);
+  }
+  /* Pastraipos tekstas -> `tekstas` jos pirmojo teksto runo formatu (kiti teksto runai šalinami); be teksto - false */
+  function perrasyk(p, tekstas){
+    const tt = visi(p, 't');
+    if (!tt.length) return false;
+    tt.forEach((t, j) => { if (j) t.parentNode.removeChild(t); else { t.textContent = tekstas; t.setAttribute('xml:space', 'preserve'); } });
+    visi(p, 'r').forEach(r => { if (!visi(r, 't').length && !vaikai(r).some(c => c.localName !== 'rPr')) r.parentNode.removeChild(r); });
+    return true;
+  }
+  /* Elemento kopija įterpimui į tą patį dokumentą: be žymių ir be pastraipų identifikatorių (jie dokumente turi būti unikalūs) */
+  function klonas(el){
+    const n = el.cloneNode(true);
+    visi(n, 'bookmarkStart').concat(visi(n, 'bookmarkEnd')).forEach(b => b.parentNode.removeChild(b));
+    [n, ...visi(n, 'p'), ...visi(n, 'tr')].forEach(q => { q.removeAttribute('w14:paraId'); q.removeAttribute('w14:textId'); });
+    return n;
   }
   const zenkloDidziosios = p => { const pPr = vaikas(p, 'pPr'), prr = pPr && vaikas(pPr, 'rPr'); return !!(prr && vaikas(prr, 'caps')); };
   /* Pastraipos savybių elementų tvarka (OOXML CT_PPr) - įterpiant numeraciją ar atitraukimą */
@@ -405,7 +447,11 @@ const GP_SUTARCIU_GEN = (() => {
     for (const b of Z.neprivalomos || []) out.push({ raktas: 'o:' + b.id, rusis: 'neprivaloma', vieta: b.vieta, lt: b, en: null, aprasas: Z.pastraipos[b.pastraipos[0]] });
     for (const k of Z.skyriai || []) out.push({ raktas: 'k:' + k.sritis, rusis: 'skyrius', vieta: k.sritis, lt: k, en: null,
       aprasas: ((Z.priedai || []).find(x => x.nr === k.priedas) || {}).tekstas || k.sritis });
+    for (const k of Z.skyriai || []) if (k.lentele) out.push({ raktas: 'lt:' + k.sritis, rusis: 'lentele', vieta: k.sritis, lt: k.lentele, en: null, aprasas: 'lentelė' });
     for (const b of Z.vidiniai || []) out.push({ raktas: 'vd:' + b.id, rusis: 'vidinis', vieta: b.vieta, lt: b, en: null, aprasas: Z.pastraipos[b.i], variantai: b.variantai.slice() });
+    if (Z.kiti_priedai) out.push({ raktas: 'kp:kiti', rusis: 'kiti_priedai', vieta: Z.kiti_priedai.vieta, lt: Z.kiti_priedai, en: null, aprasas: Z.pastraipos[Z.kiti_priedai.i] });
+    for (const b of Z.fragmentai || []) out.push({ raktas: 'f:' + b.id, rusis: 'fragmentas', vieta: b.vieta, lt: b, en: null, aprasas: b.tekstas });
+    for (const q of Z.priedai || []) out.push({ raktas: 'pr:' + q.nr, rusis: 'priedas', vieta: 'priedas ' + q.nr, lt: q, en: q.en != null ? { i: q.en } : null, aprasas: q.tekstas });
     return out;
   }
   const viesos = Z => vietos(Z).map(x => ({ raktas: x.raktas, rusis: x.rusis, vieta: x.vieta, aprasas: x.aprasas || '', saltinis: x.saltinis,
@@ -420,6 +466,7 @@ const GP_SUTARCIU_GEN = (() => {
     for (const b of Z.nurodymu_blokai || []) if (b.i === i || b.apima.includes(i)) return b.vieta;
     for (const b of Z.neprivalomos || []) if (i >= Math.min(...b.pastraipos) && i <= Math.max(...b.pastraipos)) return b.vieta;
     for (const b of Z.vidiniai || []) if (b.i === i) return b.vieta;
+    if (Z.kiti_priedai && Z.kiti_priedai.i === i) return Z.kiti_priedai.vieta;
     for (const b of Z.nesiulomi || []) if (b.pastraipos.includes(i)) return b.vieta;
     for (const a of Z.alternatyvos || []) if (a.skyrikliai.includes(i) || a.variantai.flat().includes(i)) return a.vieta;
     for (const k of Z.skyriai || []) if (i >= k.luzis && i <= k.iki) return k.sritis;
@@ -504,6 +551,11 @@ const GP_SUTARCIU_GEN = (() => {
       if (yraSpr(s) && !x.lt.elementai.length && s.tekstas){   // teksto valdiklis
         for (const v of [x.lt, x.en].filter(Boolean)) vsp[v.nr] = { tekstas: v === x.en && s.tekstasEN != null ? s.tekstasEN : s.tekstas, netaikoma: false };
         A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'tekstas', tapo: s.tekstas });
+        continue;
+      }
+      if (yraSpr(s) && s.laisvas === true && String(s.tekstas || '').trim()){   // formuluotė ne iš formos sąrašo (naudotojo sprendimas 2026-10-13)
+        for (const v of [x.lt, x.en].filter(Boolean)) vsp[v.nr] = { tekstas: v === x.en && s.tekstasEN != null ? s.tekstasEN : s.tekstas, netaikoma: false };
+        A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'laisvas tekstas', tapo: s.tekstas });
         continue;
       }
       if (!yraSpr(s) || s.elementas == null || !x.lt.elementai[s.elementas]){ palik(x, s); continue; }
@@ -636,6 +688,21 @@ const GP_SUTARCIU_GEN = (() => {
       }
       A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'nuostata', buvo: ps.map(i => Z.pastraipos[i]).join(' '), tapo: tekstas || 'pašalinta' });
     }
+    // Priedų sąrašo eilutė kitiems priedams: jos vietoje - pirmas priedas, kiti - naujomis to paties sąrašo eilutėmis (klonai įterpiami po
+    // spalvų tvarkymo, kad paveldėtų galutinį eilutės formatą); be sprendimo eilutė lieka ir parodoma kaip palikta vieta
+    const prieduEilutes = {};   // pastraipa -> { eilutes: [tekstas], x }
+    for (const x of V.filter(x => x.rusis === 'kiti_priedai')){
+      const s = sp(x), i = x.lt.i;
+      const eil = yraSpr(s) && typeof s === 'object' ? (s.eilutes || (s.tekstas ? [s.tekstas] : [])).map(tarpai).filter(Boolean) : [];
+      if (!eil.length){
+        // pildoma vieta toje pačioje pastraipoje („[...].“) jau parodoma kaip palikta - antro įrašo nereikia
+        if (!(Z.pildomos || []).some(q => q.i === i)) palik(x, s); else neisspresta.add(i);
+        continue;
+      }
+      salygosTekstas[i] = eil[0];
+      if (eil.length > 1) prieduEilutes[i] = { eilutes: eil.slice(1), x };
+      A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'priedai', buvo: Z.pastraipos[i], tapo: eil.join(' ') });
+    }
     // Priedas paskutiniame skyriuje: šalinamas skyrius (skyriaus lūžio pastraipos savybės tampa dokumento pabaigos) ir priedų sąrašo eilutė
     let skyriausLuzis = null;
     for (const x of V.filter(x => x.rusis === 'skyrius')){
@@ -684,6 +751,64 @@ const GP_SUTARCIU_GEN = (() => {
       A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'pasirinkimas', tapo: b.variantai[s.variantas] });
     }
 
+    // 4e. Lentelė priede (rangos SS etapų lentelė, 2026-10-13 - lentelės redaktorius 2 žingsnyje): eilutės iš jūsų atsakymų. Langelio tekstas -
+    //     jo pastraipoje, kitos eilutės - jos klonuose; nereikalingos formos eilutės ir netaikomi stulpeliai šalinami (7 žingsnyje; pašalinto
+    //     stulpelio plotis tinklelyje atitenka plačiausiam likusiam - langelių pločius pagal tinklelį sulygina lentelių tvarkymas), trūkstamos eilutės - paskutinės formos eilutės klonai; langelis be reikšmės lieka
+    //     laukas (pildomas sudarant sutartį). Be sprendimo lentelė lieka Word programai.
+    const lentLangeliai = new Set(), lentSalinti = [];
+    for (const x of V.filter(x => x.rusis === 'lentele')){
+      const s = sp(x), L = x.lt, eil = yraSpr(s) && typeof s === 'object' ? s.eilutes || [] : [];
+      if (!eil.length) continue;
+      const tcs = tr => vaikai(tr).filter(c => c.localName === 'tc'), n = L.stulpeliai.length;
+      const tbl = tevas(P[L.eilutes[0][0][0]], 'tbl'), trs = tbl ? vaikai(tbl).filter(c => c.localName === 'tr') : [];
+      const grid = tbl && vaikas(tbl, 'tblGrid') ? vaikai(vaikas(tbl, 'tblGrid')).filter(c => c.localName === 'gridCol') : [];
+      if (trs.length !== L.eilutes.length + 1 || grid.length !== n || trs.some(tr => tcs(tr).length !== n) ||
+          L.eilutes.some((e, r) => e.some((c, k) => c.some(i => tevas(P[i], 'tc') !== tcs(trs[r + 1])[k])))){
+        A.klaidos.push(`${x.vieta}: lentelė nesutampa su žemėlapiu - neužpildyta`); continue;
+      }
+      const be = (s.beStulpeliu || []).map(id => L.stulpeliai.indexOf(id)).filter(c => c > 0);
+      const reiksmes = (e, c) => (((e || {}).langeliai || {})[L.stulpeliai[c]] || []).map(tarpai).filter(Boolean);
+      const langelis = (p, tekstai) => {
+        irasykLauka(p, tekstai[0]);
+        let po = p;
+        tekstai.slice(1).forEach(t => { const np = klonas(p); irasykLauka(np, t); po.parentNode.insertBefore(np, po.nextSibling); po = np; });
+      };
+      L.eilutes.forEach((row, r) => {
+        if (r >= eil.length){ row.flat().forEach(i => trinti(i, 'lentelės eilutė nereikalinga (jūsų atsakymas)')); lentSalinti.push(trs[r + 1]); return; }
+        row.forEach((ps, c) => {
+          const t = reiksmes(eil[r], c);
+          if (!c || !t.length) return;
+          langelis(P[ps[0]], t); R[ps[0]] = t[0]; lentLangeliai.add(ps[0]);
+        });
+      });
+      let po = trs[L.eilutes.length];
+      for (let r = L.eilutes.length; r < eil.length; r++){
+        const ntr = klonas(trs[L.eilutes.length]);
+        tcs(ntr).forEach((tc, c) => {
+          const ps = vaikai(tc).filter(q => q.localName === 'p'), t = reiksmes(eil[r], c);
+          ps.slice(1).forEach(q => tc.removeChild(q));
+          if (!c) perrasyk(ps[0], tarpai(eil[r].etikete));
+          else if (t.length) langelis(ps[0], t);
+          else {
+            vaikai(ps[0]).forEach(q => { if (q.localName !== 'pPr') ps[0].removeChild(q); });
+            if (!be.includes(c)) A.palikta.push({ raktas: x.raktas, rusis: 'laukas', vieta: x.vieta, aprasas: tarpai(eil[r].etikete) + ' / ' + Z.pastraipos[L.antraste[c][0]], kodel: 'sudarant' });
+          }
+        });
+        po.parentNode.insertBefore(ntr, po.nextSibling); po = ntr;
+      }
+      const plotis = el => +(el.getAttributeNS(W, 'w') || 0), lieka = L.stulpeliai.map((_, c) => c).filter(c => !be.includes(c));
+      const platus = lieka.reduce((a, c) => plotis(grid[c]) > plotis(grid[a]) ? c : a, lieka[0]);
+      for (const c of be){
+        for (const tr of vaikai(tbl).filter(q => q.localName === 'tr')){
+          visi(tcs(tr)[c], 'p').forEach(q => { const i = P.indexOf(q); if (i >= 0) trinti(i, 'lentelės stulpelis netaikomas (jūsų atsakymas)'); });
+          lentSalinti.push(tcs(tr)[c]);
+        }
+        grid[platus].setAttributeNS(W, 'w:w', String(plotis(grid[platus]) + plotis(grid[c])));
+        lentSalinti.push(grid[c]);
+      }
+      A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'lentelė', tapo: 'eilučių: ' + eil.length, stulpeliai: be.map(c => Z.pastraipos[L.antraste[c][0]]) });
+    }
+
     // 5. Teksto vietos pastraipose (prieš valdiklius - kol pastraipos tekstas = žemėlapio): kiekvienoje pastraipoje nuo galo
     const keitimai = {};   // i -> [{ frag, nauja, x, lt }]
     const naujaPagal = (x, y, s) => s === 'salinti' ? '' : ((y === x.en && s.tekstasEN != null) ? s.tekstasEN : s.tekstas);
@@ -692,9 +817,17 @@ const GP_SUTARCIU_GEN = (() => {
       if ([x.lt, x.en].filter(Boolean).every(y => istrinti.has(y.i) || salygosTekstas[y.i] != null)) continue;   // vieta ištrintoje ar visa perrašytoje pastraipoje
       if (!yraSpr(s) || (s !== 'salinti' && (typeof s !== 'object' || s.tekstas == null))){ palik(x, s, x.rusis === 'pildoma' ? 'neatsakyta' : null); continue; }
       for (const y of [x.lt, x.en].filter(Boolean)) if (!istrinti.has(y.i) && salygosTekstas[y.i] == null)
-        (keitimai[y.i] = keitimai[y.i] || []).push({ frag: y.tekstas, nauja: naujaPagal(x, y, s), x, lt: y === x.lt, glaustai: !!(s && s.glaustai) });
+        (keitimai[y.i] = keitimai[y.i] || []).push({ frag: y.tekstas, nauja: naujaPagal(x, y, s), x, lt: y === x.lt, glaustai: !!(s && s.glaustai),
+                                                     lieka: x.rusis === 'pildoma' && s && typeof s === 'object' && s.lieka ? String(s.lieka) : '' });
       for (const y of [x.lt, x.en].filter(Boolean)) if (y.kartu && y.kartu.length)
         for (let i = y.i + 1; i <= Math.max(...y.kartu); i++) if (y.kartu.includes(i) || !Z.pastraipos[i]) trinti(i, 'šablono nurodymo tęsinys');
+    }
+    // Šablono teksto atkarpa, taikoma ne visada (projektavimo paslaugų SS 2.1 p.): be sprendimo lieka - tai šablono tekstas, ne palikta vieta
+    for (const x of V.filter(x => x.rusis === 'fragmentas')){
+      const s = sp(x), y = x.lt;
+      if (s !== 'salinti' && !(yraSpr(s) && typeof s === 'object' && s.tekstas != null)) continue;
+      if (istrinti.has(y.i) || salygosTekstas[y.i] != null) continue;
+      (keitimai[y.i] = keitimai[y.i] || []).push({ frag: y.tekstas, nauja: s === 'salinti' ? '' : String(s.tekstas), x, lt: true });
     }
     for (const o of Z.organizacija.filter(o => o.laukas === 'pavadinimas')) if (R[o.i].indexOf(IMONE) >= 0)
       (keitimai[o.i] = keitimai[o.i] || []).push({ frag: IMONE, nauja: info.imone || 'LITGRID AB', x: { raktas: '', vieta: o.vieta, rusis: 'organizacija' }, lt: stulp(o) === 'LT' });
@@ -713,6 +846,18 @@ const GP_SUTARCIU_GEN = (() => {
           if (a > 0 && R[i][a - 1] === ' ' && (b >= R[i].length || /[\s.,;:)]/.test(R[i][b]))) a--;
           else if (R[i][b] === ' ' && (a === 0 || /\s/.test(R[i][a - 1]))) b++;
         } else if (k.glaustai && a > 0 && R[i][a - 1] === ' ') a--;   // „Kiti priedai [...]“ -> „Kiti priedai: ...“
+        if (k.lieka){   // įrašoma reikšmė, o po jos lieka pildoma vieta šablono formatu (sudarant sutartį)
+          const rl = keisk(P[i], a, b, k.lieka, { palikti: true });
+          if (!rl || rl === true){ A.klaidos.push(`${k.x.vieta} p.: nepavyko pakeisti teksto`); return; }
+          iterpkPries(rl, k.nauja);
+          R[i] = R[i].slice(0, a) + k.nauja + k.lieka + R[i].slice(b);
+          if (k.lt){
+            A.pakeista.push({ raktas: k.x.raktas, vieta: k.x.vieta, ka: k.x.rusis, buvo: k.frag, tapo: k.nauja + k.lieka });
+            A.palikta.push({ raktas: k.x.raktas, rusis: 'pildoma', vieta: k.x.vieta, aprasas: k.lieka, kodel: 'sudarant' });
+          }
+          neisspresta.add(i);
+          return;
+        }
         if (!keisk(P[i], a, b, k.nauja)){ A.klaidos.push(`${k.x.vieta} p.: nepavyko pakeisti teksto`); return; }
         R[i] = R[i].slice(0, a) + k.nauja + R[i].slice(b);
         if (k.lt) A.pakeista.push({ raktas: k.x.raktas, vieta: k.x.vieta, ka: k.x.rusis, buvo: k.frag, tapo: k.nauja });
@@ -723,13 +868,15 @@ const GP_SUTARCIU_GEN = (() => {
     for (const [is, t] of Object.entries(salygosTekstas)){ (zenkloDidziosios(P[+is]) ? irasykTeksta : irasykLauka)(P[+is], t); R[+is] = t; isspresta.add(+is); }
     for (const x of V.filter(x => x.rusis === 'laukas')){
       const s = sp(x);
-      if ([x.lt, x.en].filter(Boolean).every(y => istrinti.has(y.i))) continue;   // pašalintame priede
+      if ([x.lt, x.en].filter(Boolean).every(y => istrinti.has(y.i)) || lentLangeliai.has(x.lt.i)) continue;   // pašalintame priede ar lentelės redaktoriaus užpildytas
       if (!yraSpr(s) || !s.tekstas){ palik(x, s, x.pildo === 'sudarant' ? 'sudarant' : null); continue; }
       for (const y of [x.lt, x.en].filter(Boolean)){
         const nauja = (y === x.en && s.tekstasEN != null ? s.tekstasEN : s.tekstas);
         irasykLauka(P[y.i], nauja); R[y.i] = nauja;
       }
       A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'laukas', tapo: s.tekstas });
+      // lauko tekste palikta vieta („..., pirkimo Nr. [...]“ - numeris įrašomas sudarant sutartį, 2026-10-13)
+      if (new RegExp(VIETA_REZ.source).test(s.tekstas)) A.palikta.push({ raktas: x.raktas, rusis: 'pildoma', vieta: x.vieta, aprasas: s.tekstas, kodel: 'sudarant' });
     }
 
     // 5a. Įmonės pavadinimas puslapio antraštėse ir poraštėse (darbų pirkimo-pardavimo BS antraštė „ĮMONĖS PAVADINIMAS darbų pirkimo
@@ -777,6 +924,32 @@ const GP_SUTARCIU_GEN = (() => {
       }
     }
 
+    // 6c. Priedų sąrašas (2026-10-13): nepridedamas priedas - eilutė lieka su žodžiu „netaikoma“ (prieš eilutės galo skyrybos ženklą); papildomi
+    //     priedai - po paskutinės eilutės (jos gale taškas tampa kabliataškiu, naujos eilutės įterpiamos 8a žingsnyje)
+    const galoKeitimas = (i, kaip, vieta) => {   // paskutinis ne tarpo ženklas -> kaip(ženklas); tas pats - laukiamame tekste R
+      const p = P[i], t = pTekstas(p), e = t.replace(/\s+$/, '').length, r = R[i].replace(/\s+$/, '').length;
+      if (!e || !r || t[e - 1] !== R[i][r - 1]){ A.klaidos.push(`${vieta}: priedo eilutės pabaiga neatpažinta - nepakeista`); return false; }
+      const naujas = kaip(t[e - 1]);
+      if (naujas === t[e - 1]) return true;
+      if (!keisk(p, e - 1, e, naujas)){ A.klaidos.push(`${vieta}: nepavyko pakeisti priedo eilutės`); return false; }
+      R[i] = R[i].slice(0, r - 1) + naujas + R[i].slice(r);
+      return true;
+    };
+    for (const x of V.filter(x => x.rusis === 'priedas')){
+      const s = sp(x);
+      if (!s || typeof s !== 'object') continue;
+      if (s.netaikoma === true){
+        let gerai = true;
+        for (const [y, zodis] of [[x.lt, ' - netaikoma'], [x.en, ' - not applicable']]){
+          if (!y || istrinti.has(y.i)) continue;
+          gerai = galoKeitimas(y.i, c => /[;.,]/.test(c) ? zodis + c : c + zodis, x.vieta) && gerai;
+        }
+        if (gerai) A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'priedas', buvo: x.aprasas, tapo: 'netaikoma' });
+      }
+      const po = (s.po || []).map(tarpai).filter(Boolean);
+      if (po.length && !istrinti.has(x.lt.i) && galoKeitimas(x.lt.i, c => c === '.' ? ';' : c, x.vieta)) prieduEilutes[x.lt.i] = { eilutes: po, x };
+    }
+
     // 6a. Nuoroda į pašalintą punktą (2026-10-09, nuorodų patikra): SS 9.8 „Punktas netaikomas, taikomos 8.3.2 punkte nustatytos sąlygos.“ -
     //     kai užtikrinimas netaikomas, 8.3 su 8.3.2 pašalinami, ir nuoroda likdavo į nieką; tada lieka „Punktas netaikomas.“ (EN - taip pat)
     const NR_PR = /^\s*(\d+(?:\.\d+)+)\./, pasalintiNr = new Set(), likeNr = new Set();
@@ -800,6 +973,7 @@ const GP_SUTARCIU_GEN = (() => {
       const ps = visi(tbl, 'p').map(p => P.indexOf(p));
       if (ps.length && ps.every(i => i >= 0 && istrinti.has(i))){ tbl.parentNode.removeChild(tbl); ps.forEach(i => nuimta.add(i)); }
     }
+    for (const el of lentSalinti) el.parentNode.removeChild(el);   // lentelės redaktoriaus pašalintos eilutės, stulpelių langeliai ir tinklelio stulpeliai
     [...istrinti].sort((a, b) => b - a).forEach(i => { if (!nuimta.has(i) && salink(P[i]) === 'isvalyta'){ R[i] = ''; istrinti.delete(i); } });
 
     // 8. Spalvos: išspręstų vietų geltonas žymėjimas, VPT mėlynos nuostatos ir keičiamos reikšmės - juodai (DI juodraščiai lieka)
@@ -821,6 +995,19 @@ const GP_SUTARCIU_GEN = (() => {
       if (prr) vaikai(prr).forEach(c => { if (c.localName === 'color' || c.localName === 'highlight') prr.removeChild(c); });
       visi(p, 'r').filter(r => !virsSdt(r, p) && !tarpai(visi(r, 't').map(t => t.textContent).join(''))).forEach(r => { const k = vaikas(r, 'rPr'); if (k) vaikai(k).forEach(c => { if (c.localName === 'color' || c.localName === 'highlight') k.removeChild(c); }); });
     });
+
+    // 8a. Kiti priedai: papildomos priedų sąrašo eilutės - eilutės klonai po jos (tas pats sąrašas ir formatas; numeruoja Word)
+    for (const [is, k] of Object.entries(prieduEilutes)){
+      let po = P[+is];
+      if (!po.parentNode){ A.klaidos.push(`${k.x.vieta}: priedų sąrašo eilutė dingo - papildomi priedai neįrašyti`); continue; }
+      for (const eil of k.eilutes){
+        const np = klonas(P[+is]);
+        const sect = vaikas(vaikas(np, 'pPr') || np, 'sectPr'); if (sect) sect.parentNode.removeChild(sect);
+        if (!perrasyk(np, eil)){ A.klaidos.push(`${k.x.vieta}: priedų sąrašo eilutė be teksto - papildomi priedai neįrašyti`); break; }
+        po.parentNode.insertBefore(np, po.nextSibling); po = np;
+        A.pakeista.push({ raktas: k.x.raktas, vieta: k.x.vieta, ka: 'papildyta', tapo: eil });
+      }
+    }
 
     // 9. Patikra: nepaliestos pastraipos - kaip šablone; paliestos - laukiamas tekstas; liko tik palikti valdikliai ir nurodymai
     P.forEach((p, i) => {
@@ -902,6 +1089,6 @@ const GP_SUTARCIU_GEN = (() => {
     return { blob, ataskaita: A, priedas: priedoBlob };
   }
 
-  return { versija: 'S4-DM-2026-10-12', vietos: viesos, generuok, _keisk: keisk, _pTekstas: pTekstas, _isvyniok: isvyniok, _vidinioDalys: vidinioDalys, _tarpaiPoGeltonos: tarpaiPoGeltonos, _tarpasPo: tarpasPo };
+  return { versija: 'S7-2026-10-13', vietos: viesos, generuok, _keisk: keisk, _pTekstas: pTekstas, _isvyniok: isvyniok, _vidinioDalys: vidinioDalys, _tarpaiPoGeltonos: tarpaiPoGeltonos, _tarpasPo: tarpasPo };
 })();
 if (typeof window !== 'undefined') window.GP_SUTARCIU_GEN = GP_SUTARCIU_GEN;

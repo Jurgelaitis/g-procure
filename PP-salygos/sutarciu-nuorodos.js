@@ -42,18 +42,27 @@
   // darbų pirkimo-pardavimo SS (2026-10-12): po „Sutarties priedai:“ - Word sąrašas „1) ... 5)“, jo numeriai ir yra priedų numeriai
   // eksploatavimo darbų sutarties SS (2026-10-13): tas pats sąrašas „1) ...“ po sakinio „Pasirašydamos Sutartį Šalys patvirtina, kad ...
   // dokumentus ..., kurie suprantami ir aiškinami kaip neatsiejama Sutarties dalis:“ („Kitų sąlygų“ sąrašas „1) ...“ - ne priedai)
+  // Nuo 2026-10-13 (priedų sąrašas 2 žingsnyje): priedas, kurio eilutė baigiasi žodžiu „netaikoma“ („Rizikų valdymo planas - netaikoma;“,
+  // prekių ir paslaugų SS - pavadinimo eilutėje po „15.N. Priedas Nr. N“), pažymimas reikšme "netaikomas" - nuoroda į jį yra radinys
+  var NETAIK = /(?:^|[-\u2013]\s*)(?:netaikoma|not applicable)\s*[;.]?\s*$/i;
   function priedai(T) {
     var s = {}, sarase = false, sarase2 = false;
-    T.forEach(function (t) {
+    var zym = function (nr, t) { s[nr] = NETAIK.test(t) ? "netaikomas" : 1; };
+    var ANTR = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*\d+\s*$/i;
+    T.forEach(function (t, i) {
       t = t || "";
       if (/^\s*Sutarties priedai:\s*$/.test(t) || /^\s*Pasirašydamos Sutartį Šalys patvirtina,.*neatsiejama Sutarties dalis:\s*$/.test(t)) { sarase2 = true; return; }
       var k = sarase2 && /^\s*(\d+)\)\s/.exec(t);
-      if (k) s[k[1]] = 1; else if (sarase2 && t.trim()) sarase2 = false;
-      var m = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*(\d+)/i.exec(t); if (m) s[m[1]] = 1;
-      m = /^\s*(\d+)\s+priedas\.\s/i.exec(t); if (m) s[m[1]] = 1;                               // „3 priedas. Apmokėjimo tvarka pagal etapus;“ (projektavimo paslaugų SS)
+      if (k) zym(k[1], t); else if (sarase2 && t.trim()) sarase2 = false;
+      var m = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*(\d+)/i.exec(t);
+      if (m) {   // pavadinimas - toje pačioje eilutėje arba kitoje netuščioje pastraipoje
+        var kita = ""; for (var j = i + 1; j < T.length && j <= i + 4 && !kita; j++) kita = String(T[j] || "").trim();
+        zym(m[1], ANTR.test(t) ? kita : t);
+      }
+      m = /^\s*(\d+)\s+priedas\.\s/i.exec(t); if (m) zym(m[1], t);                               // „3 priedas. Apmokėjimo tvarka pagal etapus;“ (projektavimo paslaugų SS)
       if (/^\s*SUTARTIES DOKUMENTAI IR PRIEDAI:?\s*$/.test(t)) { sarase = true; return; }
       if (sarase && /^\s*(Užsakovo|Rangovo) vardu:?\s*$/.test(t)) sarase = false;
-      var n = sarase && /^\s*(\d+(?:\.\d+)?)\.(?=\s)/.exec(t); if (n) s[n[1]] = 1;
+      var n = sarase && /^\s*(\d+(?:\.\d+)?)\.(?=\s)/.exec(t); if (n) zym(n[1], t);
     });
     return s;
   }
@@ -115,6 +124,9 @@
           out.nuorodu++;
           if (!pr) { out.nepatikrinta.push({ dok: dok, nr: nrp, priezastis: "specialiųjų sąlygų (priedų sąrašo) nėra" }); continue; }
           if (!pr[nrp]) out.radiniai.push({ dok: dok, i: i, nr: nrp, rusis: "priedas", citata: t.slice(Math.max(0, m.index - 30), m.index + m[0].length + 20).trim() });
+          // priedas priedų sąraše pažymėtas kaip netaikomas, o specialiosios sąlygos į jį nurodo (bendrųjų sąlygų nuorodos - sąlyginės:
+          // jos galioja tik tada, kai priedas pridedamas, todėl nežymimos)
+          else if (pr[nrp] === "netaikomas" && dok === "SS") out.radiniai.push({ dok: dok, i: i, nr: nrp, rusis: "priedas", netaikomas: true, citata: t.slice(Math.max(0, m.index - 30), m.index + m[0].length + 20).trim() });
         }
       });
     });
@@ -185,5 +197,5 @@
     });
     return out;
   }
-  global.GP_SUTARCIU_NUORODOS = { versija: "1.7", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
+  global.GP_SUTARCIU_NUORODOS = { versija: "1.8", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
 })(typeof window !== "undefined" ? window : this);
