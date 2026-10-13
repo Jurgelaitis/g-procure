@@ -40,11 +40,13 @@
   // specialiųjų sąlygų priedų sąrašas: „15.1. Priedas Nr. 1 ...“ / „15.1. Annex No 1 ...“
   // rangos SS (2026-10-10): po „SUTARTIES DOKUMENTAI IR PRIEDAI:“ - Word sąrašas, jo numeriai („1.1.“, „4.“) ir yra priedų numeriai
   // darbų pirkimo-pardavimo SS (2026-10-12): po „Sutarties priedai:“ - Word sąrašas „1) ... 5)“, jo numeriai ir yra priedų numeriai
+  // eksploatavimo darbų sutarties SS (2026-10-13): tas pats sąrašas „1) ...“ po sakinio „Pasirašydamos Sutartį Šalys patvirtina, kad ...
+  // dokumentus ..., kurie suprantami ir aiškinami kaip neatsiejama Sutarties dalis:“ („Kitų sąlygų“ sąrašas „1) ...“ - ne priedai)
   function priedai(T) {
     var s = {}, sarase = false, sarase2 = false;
     T.forEach(function (t) {
       t = t || "";
-      if (/^\s*Sutarties priedai:\s*$/.test(t)) { sarase2 = true; return; }
+      if (/^\s*Sutarties priedai:\s*$/.test(t) || /^\s*Pasirašydamos Sutartį Šalys patvirtina,.*neatsiejama Sutarties dalis:\s*$/.test(t)) { sarase2 = true; return; }
       var k = sarase2 && /^\s*(\d+)\)\s/.exec(t);
       if (k) s[k[1]] = 1; else if (sarase2 && t.trim()) sarase2 = false;
       var m = /^\s*\d+\.\d+\.?\s*(?:Priedas|Annex)\s*(?:Nr\.|No\.?)?\s*(\d+)/i.exec(t); if (m) s[m[1]] = 1;
@@ -124,7 +126,8 @@
      atitikmenys. Kiekviena turi būti patikrinta e-tar ir įrašyta zemelapiai/sutarciu-teises-nuorodos.json (testas). Grąžina normalizuotas eilutes. */
   var L = "[a-ząčęėįšųūž]*";
   var VNR = "\\d+(?:\\s+ir\\s+\\d+)?\\s+(?:straipsn" + L + "|pried" + L + ")(?:\\s+\\d+(?:\\s+ir\\s+\\(arba\\)\\s+\\d+)?\\s+dal" + L + ")?(?:\\s+\\d+\\s+punkt" + L + ")?";
-  var STR_DAL = "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?";
+  // dalis - ir dvi („92 straipsnio 14 ir (arba) 15 dalyje“ - eksploatavimo darbų sutarties BS, 2026-10-13)
+  var STR_DAL = "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+(?:\\s+ir\\s+\\(arba\\)\\s+\\d+)?\\s+dal" + L + ")?)?";
   var TEISES = [
     "(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s*/\\s*(?:VPĮ|PĮ)\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s+straipsn" + L,
     "(?:VPĮ|PĮ)\\s+" + VNR + "(?:\\s*(?:ir\\s*\\(ar\\)|ir|/|,)\\s*(?:(?:VPĮ|PĮ)\\s+)?" + VNR + ")*",
@@ -137,13 +140,24 @@
     "pirkimų\\s+įstatym" + L + "(?:\\s+\\d+\\s+(?:straipsn" + L + "|str\\.)(?:\\s+\\d+\\s+(?:dal" + L + "|d\\.))?)?",
     "kainodaros\\s+taisyklių\\s+nustatymo\\s+metodik" + L,
     "nacionaliniam\\s+saugumui\\s+užtikrinti\\s+svarbių\\s+objektų\\s+apsaugos\\s+įstatym" + L + "(?:\\s+\\d+\\s+straipsn" + L + "(?:\\s+\\d+\\s+dal" + L + ")?)?",
-    "nutarimu\\s+Nr\\.\\s*\\d+", "įsakymu\\s+Nr\\.\\s*[A-Z]+\\d*-\\d+", "(?:reglament|sprendim)" + L + "\\s+\\(ES\\)\\s+(?:Nr\\.\\s*)?\\d+/\\d+",
-    "direktyv" + L + "\\s+\\d+/\\d+/(?:ES|EB)", "aprašo\\s+\\d+\\s+pried" + L + "(?:\\s+[IVX]+\\s+skyri" + L + ")?",
+    // nutarimo ir įsakymo numeris - ir kilmininku ar galininku („nutarimo Nr. 99“, „įsakymą Nr. D1-393“), įsakymo numeris be raidžių („Nr. 1-309“)
+    // ir su data prieš numerį („įsakymu 2010 m. sausio 27 d. Nr. D1-79“); direktyva - ir be „/ES“ (eksploatavimo darbų sutartys, 2026-10-13)
+    "nutarim(?:u|o)\\s+Nr\\.\\s*\\d+", "įsakym(?:u|ą)\\s+(?:\\d{4}\\s+m\\.\\s+[a-ząčęėįšųūž]+\\s+\\d+\\s+d\\.\\s+)?Nr\\.\\s*(?:[A-Z]+\\d*|\\d+)-\\d+",
+    "(?:reglament|sprendim)" + L + "\\s+\\(ES\\)\\s+(?:Nr\\.\\s*)?\\d+/\\d+",
+    "direktyv" + L + "\\s+\\d+/\\d+(?:/(?:ES|EB))?", "aprašo\\s+\\d+\\s+pried" + L + "(?:\\s+[IVX]+\\s+skyri" + L + ")?",
     // rangos sutartys (2026-10-09): statybos teisės aktai, statybos techniniai reglamentai su pavadinimu, draudimo ir apsaugos taisyklės
-    "statybos\\s+įstatym" + L, "STR\\s+\\d\\.\\d{2}\\.\\d{2}:\\d{4}(?:\\s+„[^“”„]{3,80}[“”])?", "valstybinio\\s+socialinio\\s+draudimo\\s+įstatym" + L,
+    // su straipsniu (ir dalimis), jei jis nurodytas: „statybos įstatymo 22¹ straipsnio 1 ir 2 dalyse“, „valstybinio socialinio draudimo
+    // įstatymo 15¹ straipsnyje“ (eksploatavimo darbų sutarties BS, 2026-10-13)
+    "statybos\\s+įstatym" + L + "(?:\\s+\\d+¹?\\s+straipsn" + L + "(?:\\s+\\d+(?:\\s+ir\\s+\\d+)?\\s+dal" + L + ")?)?",
+    "STR\\s+\\d\\.\\d{2}\\.\\d{2}:\\d{4}(?:\\s+„[^“”„]{3,80}[“”])?",
+    "valstybinio\\s+socialinio\\s+draudimo\\s+įstatym" + L + "(?:\\s+\\d+¹?\\s+straipsn" + L + ")?",
     "atliekų\\s+tvarkymo\\s+įstatym" + L, "specialiųjų\\s+žemės\\s+naudojimo\\s+sąlygų\\s+įstatym" + L, "darboviečių\\s+įrengimo\\s+statybvietėse\\s+nuostat" + L,
     "civilinės\\s+atsakomybės\\s+privalomojo\\s+draudimo\\s+taisykl" + L, "aplinkos\\s+ministro\\s+nustatyt" + L + "\\s+tvark" + L,
     "elektros\\s+tinklų\\s+apsaugos\\s+taisykl" + L, "ICC\\s+Publication\\s+No\\.\\s*\\d+",
+    // eksploatavimo darbų sutartys (2026-10-13)
+    "metrologijos\\s+įstatym" + L, "atliekų\\s+tvarkymo\\s+taisykl" + L, "mobilizacijos\\s+ir\\s+priimanči" + L + "\\s+šalies(?:\\s+paramos)?\\s+įstatym" + L,
+    "atleidimo\\s+nuo\\s+atsakomybės\\s+esant\\s+nenugalimos\\s+jėgos\\s+\\(force\\s+majeure\\)\\s+aplinkybėms\\s+taisykl" + L,
+    "elektros\\s+linijų\\s+ir\\s+instaliacijos\\s+įrengimo\\s+taisykl" + L, "miško\\s+kirtimo\\s+taisykl" + L,
     // angliški atitikmenys
     "(?:clause\\s+\\d+¹?\\s+of\\s+)?Articles?\\s+[\\d.]+(?:\\(\\d+¹?\\))?(?:\\s+and\\s+\\d+)?(?:\\s+(?:and/or|and|/)\\s+(?:Article\\s+)?[\\d.]+(?:\\(\\d+¹?\\))?)*" +
       "(?:\\s+of\\s+the\\s+(?:LPP|LP|Public\\s+Procurement\\s+Law|Civil\\s+Code(?:\\s+of\\s+the\\s+Republic\\s+of\\s+Lithuania)?|Law\\s+on\\s+the\\s+Protection\\s+of\\s+Objects\\s+of\\s+Importance\\s+to\\s+Ensuring\\s+National\\s+Security))?",
@@ -171,5 +185,5 @@
     });
     return out;
   }
-  global.GP_SUTARCIU_NUORODOS = { versija: "1.6", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
+  global.GP_SUTARCIU_NUORODOS = { versija: "1.7", tikrink: tikrink, tekstai: tekstai, numeriai: numeriai, priedai: priedai, teisesNuorodos: teisesNuorodos, zemelapioTekstai: zemelapioTekstai };
 })(typeof window !== "undefined" ? window : this);

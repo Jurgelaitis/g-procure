@@ -181,9 +181,9 @@
     }
     function sablonai() {
       var g = S.galut;
-      if (!g || g.nerengiama || !G.SEIMOS[g.seima] || !G.SEIMOS[g.seima].sablonai || S.d.rezimas === "VPI") return null;
-      var k = S.sistema.kalba === "LTEN" ? "LTEN" : "LT", ss = G.SEIMOS[g.seima].sablonai;
-      return ss[k] ? { kodai: ss[k], kalba: k } : { kodai: ss.LT, kalba: "LT" };
+      if (!g || g.nerengiama || !G.SEIMOS[g.seima] || S.d.rezimas === "VPI") return null;
+      // šablonų kodai pagal šeimą, variantą (eksploatavimo darbų sutartis - specialiosios sąlygos pagal darbų rūšį) ir kalbą
+      return G.kodai(g.seima, g.variantas || null, S.sistema.kalba === "LTEN" ? "LTEN" : "LT");
     }
 
     function klausimoHtml(kodas, pasirinkta) {
@@ -271,7 +271,7 @@
           "pridedamos sutarties bendrosios ir specialiosios sąlygos pagal pirkimo tipą; „Ne“ - pirkimo sąlygose lieka esminės sutarties sąlygos.</p>" +
           "<p>Sutartis pagal pirkimo tipą parenkama taisyklėmis iš objekto tipo ir pavadinimo (DI nenaudojamas); kai požymiai nevienareikšmiai, " +
           "užduodamas klausimas - sistema nespėja. Generatoriui paruošti prekių, paslaugų ir darbų pirkimo-pardavimo, projektavimo ir statybos rangos, " +
-          "statybos rangos ir projektavimo paslaugų sutarčių šablonai; kitų šeimų sutartis atpažįstama, bet jos šablonas dar neparuoštas.</p>" }) + "</div>";
+          "statybos rangos, projektavimo paslaugų ir eksploatavimo darbų (oro linijų, transformatorių pastočių, trasų valymo) sutarčių šablonai.</p>" }) + "</div>";
       if (!rodoma()) {
         vieta.innerHTML = h + '<div class="cite">LITGRID DPS sukūrimo sąlygose sutarties projekto priedo nėra - sutarties projektas parenkamas konkrečiam pirkimui pagal DPS.</div>';
         return;

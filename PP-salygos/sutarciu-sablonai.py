@@ -42,6 +42,7 @@ PSR = 'Projektavimo ir statybos rangos sutartis/'
 PPS = 'Projektavimo paslaugų sutartis/'
 DARBAI = 'Darbų pirkimo - pardavimo sutartis (mazoji)/'
 SR = 'Statybos rangos sutartis/'
+EKS = 'Eksploatavimo darbų sutartis/'
 SABLONAI = [
     ('PREKES_LT_BS', 'PREKES', 'LT', 'BS', PREKES + '0922-PREKIŲ bendrosios sąlygos.docx', 'Prekių pirkimo-pardavimo sutarties bendrosios sąlygos'),
     ('PREKES_LT_SS', 'PREKES', 'LT', 'SS', PREKES + '0922- PREKIŲ pirkimo-pardavimo sutarties specialiosios sąlygos.docx', 'Prekių pirkimo-pardavimo sutarties specialiosios sąlygos'),
@@ -66,6 +67,15 @@ SABLONAI = [
     # projektavimo ir statybos rangos: be projektavimo dalies, bendrųjų sąlygų skyrių numeriai vienetu mažesni
     ('SR_LT_BS', 'STATYBOS_RANGOS', 'LT', 'BS', SR + 'Statybos rangos sutarties BS.docx', 'Statybos rangos sutarties bendrosios sąlygos'),
     ('SR_LT_SS', 'STATYBOS_RANGOS', 'LT', 'SS', SR + 'Statybos rangos sutarties SS.docx', 'Statybos rangos sutarties specialiosios sąlygos'),
+    # 2026-10-13 (7 etapas): LITGRID eksploatavimo darbų sutarties šablonai (naudotojas: galutinė redakcija); LT/EN nėra. Vienos bendrosios
+    # sąlygos ir trys specialiosios sąlygos pagal darbų rūšį (GP_SUTARTYS variantai OL, TP, TRASOS); kodai baigiasi „_BS“ / „_SS“
+    ('EKS_LT_BS', 'EKSPLOATAVIMO', 'LT', 'BS', EKS + 'Sutarties bendrosios sąlygos_Eksploatavimas.docx', 'Eksploatavimo darbų sutarties bendrosios sąlygos'),
+    ('EKSOL_LT_SS', 'EKSPLOATAVIMO', 'LT', 'SS', EKS + 'Sutarties specialiosios sąlygos (oro linijoms)_20251009.docx',
+     '110-400 kV elektros perdavimo oro linijų eksploatavimo darbų sutarties specialiosios sąlygos'),
+    ('EKSTP_LT_SS', 'EKSPLOATAVIMO', 'LT', 'SS', EKS + 'Sutarties specialiosios sąlygos (transformatorių pastotėms)_20251009.docx',
+     '110-400 kV transformatorių pastočių eksploatavimo darbų sutarties specialiosios sąlygos'),
+    ('EKSTV_LT_SS', 'EKSPLOATAVIMO', 'LT', 'SS', EKS + 'Sutarties specialiosios sąlygos (Trasų valymas)_20251009.docx',
+     '110-400 kV oro ir kabelių elektros perdavimo linijų trasų valymo darbų sutarties specialiosios sąlygos'),
 ]
 REDAKCIJOS = {
     'BS': 'VPT tipinės sutarties bendrosios sąlygos (prekių - Nr. 1S-19, paslaugų - Nr. 1S-209) su 2025-04-17 pakeitimais Nr. 1S-51 / 1S-52 '
@@ -81,7 +91,8 @@ REDAKCIJOS_SEIMOS = {'STATYBOS_RANGOS': {
     'BS': 'LITGRID statybos rangos sutarties bendrosios sąlygos, patvirtintos 2026-10-05 įsakymu Nr. 26IS-147 (naudotojas 2026-10-12: '
           'galutinė redakcija); G-Procure redakciniai taisymai 2026-10-12 (rašyba, skyryba, dvigubi tarpai) ir naudotojo patvirtinti '
           '2026-10-12 (trijų išvardijimų raidės a), b), ... - punktų numeriai kaip nuorodose; nuorodos 2.3.8, 3.9.19, 3.10.3, 8.1.10.9, '
-          '8.8.9 p. ir 9.3.2 p. p) papunktyje; 6.3.3 el. paštas, 2.3.12 sąvoka, 1.1.2.19 straipsnių dalys, 4.2.5 poskyrio pavadinimas)',
+          '8.8.9 p. ir 9.3.2 p. p) papunktyje; 6.3.3 el. paštas, 2.3.12 sąvoka, 1.1.2.19 straipsnių dalys, 4.2.5 poskyrio pavadinimas); naudotojo '
+          'patvirtinta 2026-10-13: 10.14.2 p. „Rangovas ir teises bei pareigas perėmęs trečiasis asmuo prieš Užsakovą atsako solidariai“',
     'SS': 'LITGRID statybos rangos sutarties specialiosios sąlygos (naudotojas 2026-10-12: galutinė redakcija); G-Procure redakciniai '
           'taisymai 2026-10-12 (rašyba, dvigubi tarpai) ir naudotojo patvirtinti 2026-10-12 (vientisa punktų numeracija 1-28, 5 p. nuoroda, '
           '15 p. delspinigių pakopos, 20 p. grafiko forma, el. paštas, priedų sąrašas be projektavimo ir statybos rangos sutarties eilučių); '
@@ -90,7 +101,8 @@ REDAKCIJOS_SEIMOS = {'STATYBOS_RANGOS': {
     'BS': 'LITGRID projektavimo ir statybos rangos sutarties bendrosios sąlygos, patvirtintos 2026-10-05 įsakymu Nr. 26IS-147 (naudotojas: '
           'galutinė redakcija); G-Procure redakciniai taisymai 2026-10-09 (rašyba, skyryba, dvigubi tarpai, 9.1.10.7 a)-e) stilius) ir naudotojo '
           'patvirtinti 2026-10-10 (5.2.3.1 raidės, 11.3.4 šalis, 7.3.3 el. paštas, 2.3.12 sąvoka, 1.1.2.18 straipsnių dalys, STR 1.04.02:2011 pavadinimas); '
-          '2026-10-12 - rašyba (4.9.23 „grąžinus“) ir 2.3.12 sąvoka antroje vietoje',
+          '2026-10-12 - rašyba (4.9.23 „grąžinus“) ir 2.3.12 sąvoka antroje vietoje; naudotojo patvirtinta 2026-10-13: 11.14.2 p. „Rangovas ir '
+          'teises bei pareigas perėmęs trečiasis asmuo prieš Užsakovą atsako solidariai“',
     'SS': 'LITGRID projektavimo ir statybos rangos sutarties specialiosios sąlygos (2026-10-05, naudotojas: galutinė redakcija); G-Procure '
           'redakciniai taisymai 2026-10-09 ir naudotojo patvirtinti 2026-10-10 (vientisa punktų numeracija 1-29, 1.5 nuoroda, 10 p. delspinigių '
           'pakopos, 15 p. grafiko forma, el. paštas); pasirinkimai - „//“ nurodymai ir „arba“ (žemėlapio blokai), neužpildyta'},
@@ -111,7 +123,35 @@ REDAKCIJOS_SEIMOS = {'STATYBOS_RANGOS': {
     'SS': 'LITGRID darbų pirkimo-pardavimo sutarties specialiosios sąlygos (naudotojas 2026-10-11: galutinė redakcija); G-Procure redakciniai '
           'taisymai 2026-10-11 (adresas, skyryba, išskleidžiamų sąrašų variantų skyryba) ir naudotojo patvirtinti 2026-10-12 (1.3 p. be konkretaus '
           'pirkimo garantinio termino, preambulėje „vykdytą [pirkimo pavadinimas] pirkimą (pirkimo Nr. [numeris])“); pildomos vietos ir '
-          'pasirinkimai neužpildyti'}}
+          'pasirinkimai neužpildyti'},
+    'EKSPLOATAVIMO': {
+    'BS': 'LITGRID eksploatavimo darbų sutarties bendrosios sąlygos (naudotojas 2026-10-13: galutinė redakcija; tvirtinimo įsakymo data ir '
+          'numeris formoje neįrašyti - paliekama tuščia); naudotojo sprendimu 2026-10-13 priderintos prie LITGRID paskelbto teksto (PDF, '
+          'sukurtas 2025-10-16, skelbtas CVP IS su pirkimų dokumentais): be sąvokos „Sąlygos“ (sąvokos 1.1.20-1.1.25), nuorodos „Sutarties '
+          'bendrųjų sąlygų ...“, aštuonios pastraipos su ženkleliu - punktai (2.2.1, 3.10.1, 4.2.7, 4.2.8, 8.3.3, 8.5.3, 8.7.2, 8.7.9), sąvoka '
+          '„Sutartis“, 2.6.4, 5.3.13, 7.3.1 ir 8.6.3 p.; naudotojo patvirtinta 2026-10-13 (skiriasi nuo paskelbto teksto): 3.11.3 ir 3.11.4 p. '
+          'nuoroda į 3.11.2 p., 10.11.3 p. nuoroda į 8.3.7 p., 10.9.2 p. „Rangovas ir teises bei pareigas perėmęs trečiasis asmuo“, 8.6.7 p. '
+          'įstatymo pavadinimas; 8.6.6 p. nuoroda - į bendrųjų sąlygų 8.6.1.1 p.; G-Procure redakciniai taisymai 2026-10-13 (rašyba, '
+          'skyryba, dvigubi tarpai, 3.2.5 p. straipsnių numerių viršutiniai indeksai)',
+    'SS': 'LITGRID eksploatavimo darbų sutarties specialiosios sąlygos (2025-10-09; naudotojas 2026-10-13: galutinė redakcija); G-Procure '
+          'redakciniai taisymai 2026-10-13 (rašyba, skyryba, dvigubi tarpai); pildomos vietos neužpildytos'}}
+# Šablono sava redakcija (vietoj šeimos): eksploatavimo darbų sutarties specialiosios sąlygos - naudotojo patvirtinti pakeitimai skiriasi
+_EKS_SS = ('LITGRID %s sutarties specialiosios sąlygos (2025-10-09; naudotojas 2026-10-13: galutinė redakcija); G-Procure redakciniai taisymai '
+           '2026-10-13 (rašyba, skyryba, dvigubi tarpai%s) ir naudotojo patvirtinta 2026-10-13: %s; pildomos vietos neužpildytos')
+REDAKCIJOS_KODO = {
+    'EKSOL_LT_SS': _EKS_SS % ('oro linijų eksploatavimo darbų', '', 'eilučių antraščių nuorodos į sąvokas pagal bendrųjų sąlygų numeraciją '
+                              '(1.1.22, 1.1.25), įkainių priedo numeris tekste - 18, kaip priedų sąraše, Užsakovo telefonas, el. paštas ir '
+                              'interneto adresas (formoje - žyma „Įmonės pavadinimas“ vietoje „litgrid“ ir telefonas su pertekliniu skaitmeniu)'),
+    'EKSTP_LT_SS': _EKS_SS % ('transformatorių pastočių eksploatavimo darbų', '', 'eilučių antraščių nuorodos į sąvokas pagal bendrųjų sąlygų '
+                              'numeraciją (1.1.12, 1.1.22, 1.1.25), brigados narių skaičius - pildoma vieta („ne mažiau kaip [įrašoma] '
+                              'darbuotojų“), Užsakovo telefonas, el. paštas ir interneto adresas (formoje - žyma „Įmonės pavadinimas“ '
+                              'vietoje „litgrid“ ir telefonas su pertekliniu skaitmeniu)'),
+    'EKSTV_LT_SS': _EKS_SS % ('trasų valymo darbų', ', pasikartojusi formulė', '„Kitų sąlygų“ 1 punkte netaikomi bendrųjų sąlygų punktai '
+                              'surašyti pagal dabartinę bendrųjų sąlygų numeraciją (3.1.4, 3.6.3-3.6.12, 3.7, 3.8, 3.9, 5.1.2, 5.1.4-5.1.6, '
+                              '8.6.6, 8.6.7), eilučių antraščių nuorodos į sąvokas (1.1.12, 1.1.22, 1.1.25), sutarties įvykdymo užtikrinimo '
+                              'galiojimo terminas - pildoma vieta (kaip Darbų atlikimo terminas), pašalinta pastaba apie reikalavimo koregavimą, '
+                              'Užsakovo telefonas ir el. paštas (formoje - žyma „Įmonės pavadinimas“ vietoje „litgrid“ ir telefonas su '
+                              'pertekliniu skaitmeniu)')}
 A4 = (11906, 16838)
 
 WP = re.compile(r"<w:p\b[^>]*?(?:/>|>.*?</w:p>)", re.S)
@@ -732,7 +772,98 @@ def parastes_prie_antrastes(x):
     return x, 'viršutinė paraštė %d -> %d visuose skyriuose (tekstas nebeužlipa ant puslapio antraštės): %d' % (PARASTES['top'] + (len(sek),))
 
 
+# Beveik juoda teksto spalva (iš kito dokumento nukopijuotų pastraipų likutis: 1F1F1F, 242424) - eksploatavimo darbų sutarties BS 3 atkarpos
+# ir oro linijų SS 19 skyriaus du punktai (2026-10-13). Spalva nuimama (tekstas - kaip visas kitas, juodas); kitaip žemėlapis ir patikra
+# tokią pastraipą laikytų pažymėta vieta. Tekstas nekeičiamas.
+BEVEIK_JUODA = ('1F1F1F', '242424')
+
+
+def juodas_tekstas(x):
+    rx = re.compile(r'<w:color w:val="(?:%s)"(?: w:themeColor="[^"]*")?(?: w:themeShade="[^"]*")?(?: w:themeTint="[^"]*")?/>' % '|'.join(BEVEIK_JUODA), re.I)
+    x2, n = rx.subn('', x)
+    if not n:
+        raise SystemExit('juodas_tekstas: beveik juodos spalvos atkarpų nerasta')
+    if re.search(r'<w:color w:val="(?:%s)"' % '|'.join(BEVEIK_JUODA), x2, re.I):
+        raise SystemExit('juodas_tekstas: liko beveik juodos spalvos žyma (kita atributų tvarka)')
+    return x2, 'beveik juoda teksto spalva nuimta (tekstas juodas): %d vietos' % n
+
+
+# Eksploatavimo darbų sutarties BS (2026-10-13, Pages patikra): 1.1 ir 1.2 punktai sunumeruoti dviem atskirais Word sąrašais, kurių lygio
+# tekste numeris įrašytas raidėmis („%1.1.“, „%1.2.“). Word rodo „1.1.“ ir „1.2.“, Pages - „1.“ ir „1.“. Abu punktai perkeliami į pagrindinį
+# sąrašą (tas pats, kuriuo sunumeruoti skyriai ir visi kiti punktai), 1 lygį: Word rodo tuos pačius numerius, Pages - taip pat „1.1.“, „1.2.“.
+# Pastraipų savos įtraukos lieka; tekstas nekeičiamas.
+ATSKIRI_SARASAI = [('3', 'Žemiau šiame punkte išvardintos'), ('4', 'Kitos Sąlygose vartojamos')]
+
+
+def i_pagrindini_sarasa(x):
+    n = 0
+    for num_id, pradzia in ATSKIRI_SARASAI:
+        buvo = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="%s"/></w:numPr>' % num_id
+        vietos = [m for m in WP.finditer(x) if buvo in m.group(0)]
+        if len(vietos) != 1 or not tekstas(vietos[0].group(0)).strip().startswith(pradzia):
+            raise SystemExit('i_pagrindini_sarasa: sąrašo %s pastraipa nerasta arba ne ta' % num_id)
+        m = vietos[0]
+        x = x[:m.start()] + m.group(0).replace(buvo, '<w:numPr><w:ilvl w:val="1"/><w:numId w:val="2"/></w:numPr>') + x[m.end():]
+        n += 1
+    return x, '1.1 ir 1.2 punktai - pagrindiniame Word sąraše (numeriai tie patys; Pages rodė „1.“): %d' % n
+
+
+# Eksploatavimo darbų sutarties SS (2026-10-13, Pages patikra): pagrindinės lentelės eilučių numeriai („1.“-„19.“) formoje - Word sąrašo
+# numeriai tuščiose pirmo stulpelio pastraipose; Pages tuščios pastraipos numerio nerodo, todėl skyriai lieka be numerių, o į juos nurodo
+# pati sutartis („4 punkte nurodytiems pagrindiniams darbams“, „specialiųjų sąlygų 19 p.“). Numeris įrašomas tekstu (sąrašas atjungiamas),
+# pirmas stulpelis paplatinamas iki EIL_NR_PLOTIS (antro stulpelio sąskaita; „19.“ netilpo į 365-370 DXA su įprastomis langelio paraštėmis),
+# langelio paraštės sumažinamos. Word rodo tą patį; kitų langelių tekstas nekeičiamas.
+EIL_NR_PLOTIS = 480
+EIL_NR_PARASTES = '<w:tcMar><w:left w:w="57" w:type="dxa"/><w:right w:w="28" w:type="dxa"/></w:tcMar>'
+
+
+def eiluciu_numeriai(x):
+    virs = [(a, z) for a, z, gylis in lenteles(x) if gylis == 0]
+    if len(virs) != 2 or any(g > 0 for _, _, g in lenteles(x)):
+        raise SystemExit('eiluciu_numeriai: laukta dviejų lentelių be įdėtinių')
+    a, z = virs[1]
+    t = x[a:z]
+    gm = re.search(r'<w:tblGrid>(.*?)</w:tblGrid>', t, re.S)
+    grid = [int(g) for g in re.findall(r'<w:gridCol w:w="(\d+)"/>', gm.group(1))]
+    if len(grid) != 4 or not 300 < grid[0] < EIL_NR_PLOTIS:
+        raise SystemExit('eiluciu_numeriai: netikėtas tinklelis %s' % grid)
+    d = EIL_NR_PLOTIS - grid[0]
+    nauji = [EIL_NR_PLOTIS, grid[1] - d] + grid[2:]
+    nr = [0]
+
+    def eilute(m):
+        r = m.group(0)
+        tcs = list(re.finditer(r'<w:tc>.*?</w:tc>', r, re.S))
+        if len(tcs) < 3:
+            raise SystemExit('eiluciu_numeriai: eilutėje %d langeliai' % len(tcs))
+        c0, c1 = tcs[0].group(0), tcs[1].group(0)
+        if '<w:tcW w:w="%d" w:type="dxa"/>' % grid[0] not in c0 or '<w:tcW w:w="%d" w:type="dxa"/>' % grid[1] not in c1:
+            raise SystemExit('eiluciu_numeriai: langelių pločiai ne pagal tinklelį')
+        ps = WP.findall(c0)
+        if len(ps) != 1 or tekstas(ps[0]).strip() or '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="5"/></w:numPr>' not in ps[0]:
+            raise SystemExit('eiluciu_numeriai: pirmo langelio pastraipa ne tuščia numeruota')
+        nr[0] += 1
+        rpr = re.search(r'<w:pPr>.*?(<w:rPr>.*?</w:rPr>)</w:pPr>', ps[0], re.S).group(1).replace('<w:caps/>', '')
+        p2 = ps[0].replace('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="5"/></w:numPr><w:spacing w:after="0"/>',
+                           '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr><w:spacing w:after="0"/><w:ind w:left="0" w:firstLine="0"/>', 1)
+        if p2 == ps[0] or not p2.endswith('</w:pPr></w:p>'):
+            raise SystemExit('eiluciu_numeriai: pirmo langelio pastraipos savybės kitokios nei laukta')
+        p2 = p2[:-len('</w:p>')] + '<w:r>%s<w:t>%d.</w:t></w:r></w:p>' % (rpr, nr[0])
+        c0n = c0.replace(ps[0], p2, 1).replace('<w:tcW w:w="%d" w:type="dxa"/>' % grid[0], '<w:tcW w:w="%d" w:type="dxa"/>%s' % (nauji[0], EIL_NR_PARASTES), 1)
+        c1n = c1.replace('<w:tcW w:w="%d" w:type="dxa"/>' % grid[1], '<w:tcW w:w="%d" w:type="dxa"/>' % nauji[1], 1)
+        return r[:tcs[0].start()] + c0n + r[tcs[0].end():tcs[1].start()] + c1n + r[tcs[1].end():]
+    t2 = re.sub(r'<w:tr[ >].*?</w:tr>', eilute, t, flags=re.S)
+    gm2 = re.search(r'<w:tblGrid>.*?</w:tblGrid>', t2, re.S)
+    t2 = t2[:gm2.start()] + '<w:tblGrid>' + ''.join('<w:gridCol w:w="%d"/>' % g for g in nauji) + '</w:tblGrid>' + t2[gm2.end():]
+    if nr[0] != 19:
+        raise SystemExit('eiluciu_numeriai: eilučių %d, laukta 19' % nr[0])
+    return x[:a] + t2 + x[z:], 'eilučių numeriai 1-19 įrašyti tekstu (Pages tuščios pastraipos numerio nerodo); numerių stulpelis %d -> %d, pavadinimų %d -> %d' % (
+        grid[0], nauji[0], grid[1], nauji[1])
+
+
 FORMATAS = {'PSR_LT_SS': [numeriu_sriftas, sujunk_tuscius, iprastas_sriftas],
+            'EKS_LT_BS': [juodas_tekstas, i_pagrindini_sarasa], 'EKSOL_LT_SS': [juodas_tekstas, eiluciu_numeriai],
+            'EKSTP_LT_SS': [eiluciu_numeriai], 'EKSTV_LT_SS': [eiluciu_numeriai],
             'SR_LT_SS': [numeriu_sriftas, iprastas_sriftas],   # statybos rangos SS (2026-10-12): tie patys sakiniai ir punktų numeriai kaip rangos SS
             'PPS_LT_SS': [itraukos('PPS_LT_SS'), nelauzomas_ty, geltona_be_tarpu],
             'PPS_LT_SS3': [itraukos('PPS_LT_SS3')],
@@ -912,11 +1043,12 @@ ORG_DALYS = dict(ORG, **{'LT242150051000021766': 'saskaita', 'OP Corporate Bank 
 # (sutarties tekstas, lieka); „[a]“ - išvardijimo raidė; lentelės langelyje „Turi būti pasirinkta:“ - kitos langelio eilutės yra variantai
 DVIGUBAS = re.compile(r'^\s*//')
 LAUZTINIAI = re.compile(r'\[[^\[\]]{0,120}\]')
-BS_NUORODA = re.compile(r'^\[(Sąvoka\s+)?\d+(\.\d+)*\.?(\s[^\[\]]{0,40})?\]$')
+# eksploatavimo darbų sutarties SS (2026-10-13): ir keli punktai - „[Sąvokos 1.1.2, 1.1.7, 1.1.12 punktai]“, „[3.6.10, 3.6.11 punktai]“
+BS_NUORODA = re.compile(r'^\[(Sąvok(?:a|os)\s+)?\d+(\.\d+)*\.?(,\s*\d+(\.\d+)*\.?)*(\s[^\[\]]{0,40})?\]$')
 ISVARDIJIMAS = re.compile(r'^\[([a-z]|\d)\]$')   # „[a]“, „[1]“ - išvardijimo raidė ar skaitmuo sakinyje (projektavimo paslaugų BS 9.10.4)
 PASIRINKTI = {'turi būti pasirinkta:'}
 # Šeimos, kurių punktai sunumeruoti Word (ne tekstu): žemėlapio vieta - Word numeris (word_numeriai)
-WORD_SEIMOS = {'PROJEKTAVIMO_STATYBOS', 'PROJEKTAVIMO_PASLAUGOS', 'DARBAI_MAZOJI', 'STATYBOS_RANGOS'}
+WORD_SEIMOS = {'PROJEKTAVIMO_STATYBOS', 'PROJEKTAVIMO_PASLAUGOS', 'DARBAI_MAZOJI', 'STATYBOS_RANGOS', 'EKSPLOATAVIMO'}
 # Papildomos pildomos vietos pagal šabloną: projektavimo paslaugų SS kainos „XXXX Eur be PVM / XXXX Eur su PVM“ (pildoma sudarant sutartį -
 # laimėtojo pasiūlymo kaina) ir 7.1 p. eilutė „Bankas“ (visa pastraipa - etiketė be reikšmės: Užsakovo - įrašoma automatiškai iš organizacijų
 # registro, Projektuotojo - pildoma sudarant sutartį; naudotojo taisyklė 2026-10-11)
@@ -929,11 +1061,18 @@ PILDOMA_KODO = {'PPS_LT_SS': re.compile(r'X{4}|^Bankas$'),
                                            # 3.1 p. pratęsimo sakinys (naudotojo sprendimas 2026-10-12: privalomas „Taip / Ne“; „Ne“ - sakinys šalinamas) - viena vieta
                                            r'|Šis\s+terminas\s+gali\s+būti\s+pratęstas\s+\[pratęsimo terminas\]\s+dėl\s+\[aplinkybės, kada gali būti pratęsta\]\.'
                                            r'|^(?:Duomenys apie asmenį kaupiami:|Adresas:|Įmonės kodas:|PVM kodas:|Sąskaitos Nr\.|Bankas:|Banko kodas:|Tel\. Nr\.|El\. p\.:)(?=\s*$)')}
+# eksploatavimo darbų sutarties SS (2026-10-13): sutarties datos ir numerio eilutė („202 . , Vilnius, Nr.“) ir eilutė „Už Sutarties ir jos
+# pakeitimų viešinimą atsakingas asmuo:“ - etiketės be reikšmės, pildomos sudarant sutartį (kitos vietos - laužtiniuose skliaustuose)
+EKS_PILDOMA = re.compile(r'^\s*202[\s._]*,\s*Vilnius,\s*Nr\.|Už Sutarties ir jos pakeitimų viešinimą atsakingas asmuo:(?=[\s.]*$)')
+PILDOMA_KODO.update({k: EKS_PILDOMA for k in ('EKSOL_LT_SS', 'EKSTP_LT_SS', 'EKSTV_LT_SS')})
+# eksploatavimo darbų sutarties BS: tvirtinimo eilutė „202_ m. d. įsakymu Nr.“ - data ir numeris formoje neįrašyti (naudotojo sprendimas
+# 2026-10-13: paliekama tuščia - generatorius nepildo ir neklausia, patikra rodo kaip paliktą vietą)
+PILDOMA_KODO['EKS_LT_BS'] = re.compile(r'^202_ m\. d\. įsakymu Nr\.(?=\s*$)')
 # Nurodymas rengėjui - visa pastraipa laužtiniuose skliaustuose („[skyrius pasirenkamas, kai ...]“): kaip „//“ nurodymas, turi priklausyti blokui
 NURODYMO_PASTRAIPA = {'DARBAI_LT_SS': re.compile(r'^\s*\[[^\[\]]*pasirenkam[^\[\]]*\]\s*$')}
 # Šablonai, kuriuose tuščias lentelės langelis nėra pildomas laukas (projektavimo paslaugų SS: atstovų lentelės dešinė pusė ties Užsakovo
 # atstovu, atsakingu už viešinimą, ir parašų lentelės tarpai); pildomos vietos ten pažymėtos geltonai (paryskinimai)
-BE_LAUKU = {'PPS_LT_SS'}
+BE_LAUKU = {'PPS_LT_SS', 'EKSOL_LT_SS', 'EKSTP_LT_SS', 'EKSTV_LT_SS'}   # eksploatavimo SS: parašų lentelės tarpai
 # Blokai šablonuose, kur langelyje - keli punktai, o pasirinkimai ir neprivalomi punktai pažymėti „//“ ir „arba“ (projektavimo ir statybos
 # rangos SS, audito 5 sk.). Pastraipos nurodomos pradžia (pirma nepanaudota nuo paieškos vietos), „arba“ - visa. Kiekvienas „//“ nurodymas ir
 # kiekvienas „arba“ turi priklausyti blokui - kitaip neatpažinta vieta.
@@ -1082,6 +1221,36 @@ BLOKAI = {'PSR_LT_SS': {
     # „Trišalės sutarties projektas - netaikoma;“ (kitų priedų numeriai nesikeičia)
     'neprivalomos': [('trišalė', 'Trišalės sutarties projektas', None)],
     'priedu_sarasas': ('priedų sąrašas', r'^(\d+)\)$')}}
+# Eksploatavimo darbų sutarties SS (2026-10-13; oro linijos, transformatorių pastotės, trasų valymas): pirmas puslapis (šalys, parašai),
+# toliau - lentelė iš 19 eilučių: numeris (Word sąrašas) | pavadinimas ir nuoroda į bendrųjų sąlygų punktą | turinys.
+#   eilutes_vieta - žemėlapio vieta yra lentelės eilutės numeris (pirmo stulpelio Word numeris); sąrašai langelio viduje („1.“, „1)“, „a.“)
+#                 vietos nekeičia; sritis galioja iki eilutės galo (priedų sąrašas - 18 eilutėje, „Kitos sąlygos“ - vėl „19“)
+#   sudarant_pasirinkimai - variantai, iš kurių pasirenka tiekėjas pasiūlyme (transformatorių pastočių SS „Pagrindiniai darbai“): sutarties
+#                 projekte lieka visi su „arba“ - pildoma sudarant sutartį: (id, [variantų pradžios])
+def _eks_ss(antraste, papildomai=None):
+    b = {'sritys': [('parašai', 'Tai patvirtindamos, Šalys pasirašė'), ('', antraste), ('priedų sąrašas', 'Pasirašydamos Sutartį Šalys patvirtina')],
+         'eilutes_vieta': True, 'zymejimas': 'pildoma', 'zinomos_be_vietu': True, 'pazymetos_vietos': True,
+         # tikrinant parengtą dokumentą pastraipa su pildoma vieta lyginama pagal formą: nekintamas tekstas aplink vietą turi likti
+         'grieztos_vietos': True,
+         'priedu_sarasas': ('priedų sąrašas', r'^(\d+)\)$')}
+    b.update(papildomai or {})
+    return b
+
+
+# S4 (2026-10-13): eilutės, kurių turinys taikomas tik tam tikru atveju (bendrosios sąlygos: 2.1.5 p. „sąrašas nurodomas“, 8.2.2 p. „jei ...
+# nenurodyti kitokie garantiniai terminai“, 8.7.1 p. „Jei Sutarties specialiosiose sąlygose nurodyta ...“) - `neprivalomos`: netaikomoje
+# eilutėje generatorius įrašo tą patį žodį, kurį LITGRID įrašė trasų valymo formoje („Nėra“ - 10 ir 15 eil., „Netaikoma“ - 12 eil.)
+_EKS_UZT = ('užtikrinimas', 'Iki Sutarties pasirašymo Rangovas Užsakovui pateikė Sutarties įvykdymo užtikrinimą', 'Sutarties vykdymo užtikrinimo dydis')
+_EKS_DOK = ('dokumentai', '[Nurodomas preliminarus Sutarčiai įvykdyti reikalingų leidimų', None)
+_EKS_GAR = ('garantiniai', '[nurodomi garantiniai terminai, kurie skiriasi nuo', None)
+BLOKAI.update({
+    'EKSOL_LT_SS': _eks_ss('110-400 kV ELEKTROS PERDAVIMO ORO LINIJŲ', {
+        'neprivalomos': [_EKS_DOK, ('sandėliai', 'Montuojama Užsakovo [įrašoma sandėliuojama įranga ir Medžiagos]', None), _EKS_GAR, _EKS_UZT]}),
+    'EKSTP_LT_SS': _eks_ss('110-400 kV TRANSFORMATORIŲ PASTOČIŲ', {
+        'nurodymai_skliaustuose': [('pagrindiniai_darbai', 'Darbai, kuriuos turės atlikti pats Rangovas', '[Rangovas Pirkimo metu')],
+        'sudarant_pasirinkimai': [('pagrindiniai_darbai', ['Pirminių įrenginių remontas ir techninė priežiūra', 'RAA planinės techninės priežiūros'])],
+        'neprivalomos': [_EKS_DOK, ('sandėliai', 'Montuojama Užsakovo įranga ir medžiagos (metalo konstrukcijos', '[įrašoma]'), _EKS_GAR, _EKS_UZT]}),
+    'EKSTV_LT_SS': _eks_ss('110-400 kV ORO IR KABELIŲ ELEKTROS PERDAVIMO LINIJŲ', {'neprivalomos': [_EKS_UZT]})})
 # Tušti laukai: ką pildo generatorius, ko - niekas iki sutarties sudarymo
 LAUKAI_GENERATORIUS = re.compile(r"^(Sutarties pavadinimas|Title of the Contract|3\.2\.|\d+\.\d+\. (Priedas Nr\.|Annex))")
 # Valdiklių atsakymai - sutarčių plano 3.4 lentelė (naudotojo sprendimai 2026-10-07): (vietos pradžia | None, elementų požymis) -> šaltinis
@@ -1120,7 +1289,9 @@ ATSAKYMAI_SEIMOS = {'PROJEKTAVIMO_STATYBOS': [
                     'DARBAI_MAZOJI': [
     ('1.2', r'Atliktų darbų aktą', 'klausimas', 'darbų priėmimo dokumentas: vienas Atliktų darbų aktas arba paskutinis (kai aktų keli)'),
     ('4.1', r'fiksuotas įkainis', 'klausimas', 'kainos apskaičiavimo būdas (4.1)'),
-    ('6.3', r'netaikoma', 'klausimas', 'sutarties įvykdymo užtikrinimas (6.3) - siūloma pagal SPS')]}
+    ('6.3', r'netaikoma', 'klausimas', 'sutarties įvykdymo užtikrinimas (6.3) - siūloma pagal SPS')],
+                    'EKSPLOATAVIMO': [
+    (None, r'^tekstas$', 'sudarant', 'Rangovo registracijos valstybė („pagal [Lietuvos] įstatymus įsteigta“) - iš pasiūlymo, sudarant sutartį')]}
 
 
 def atkarpos(p):
@@ -1193,6 +1364,7 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
     nur_pastr = NURODYMO_PASTRAIPA.get(kodas)
     wn = word_numeriai(zipfile.ZipFile(io.BytesIO(b))) if seima in WORD_SEIMOS else None
     sritys, sritis_v = list(BLOKAI.get(kodas, {}).get('sritys', [])), ''
+    eil_vieta = bool(B0.get('eilutes_vieta'))
     dvigubi, pasirinkti = [], []
     vieta, pastr_info = '', []
     atviras = False  # skliaustas, atidarytas ankstesnėje to paties langelio pastraipoje
@@ -1208,9 +1380,14 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
             Z['pastraipos'].append(re.sub(r'\s+', ' ', t).strip())
             continue
         en = lten and l is not None and l[2] == 1
+        if eil_vieta and l is not None and l[2] == 0:
+            # nauja lentelės eilutė: numeris - pirmame stulpelyje (tekstu arba Word sąrašo), sritis baigiasi
+            mnr = re.fullmatch(r'(\d+)\.', (wn[i] if wn and wn[i] else t.strip()) or '')
+            if mnr:
+                sritis_v = ''; vieta = mnr.group(1)
         if sritys and re.sub(r'\s+', ' ', t).strip().startswith(sritys[0][1]):
             sritis_v = sritys.pop(0)[0]; vieta = sritis_v
-        if not en:
+        if not en and not eil_vieta:
             m = NR.match(t)
             if m:
                 vieta = m.group(1)
@@ -1404,6 +1581,16 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
             a = rask(v_pr, sq + 1); z = rask(v_iki, a) if v_iki else a
             var.append(sritis(a, z)); naudoti.update(var[-1]); nuo = z + 1
         Z['alternatyvos'].append({'vieta': pastr_info[var[0][0]]['vieta'], 'stulpelis': None, 'skyrikliai': sky, 'variantai': var, 'id': bid})
+    for bid, pradzios in B.get('sudarant_pasirinkimai', []):
+        sky, var, nuo = [], [], 0
+        for j, v_pr in enumerate(pradzios):
+            if j:
+                sq = rask('arba', nuo); naudoti.add(sq); sky.append(sq); nuo = sq + 1
+            a = rask(v_pr, nuo); var.append([a]); naudoti.add(a); nuo = a + 1
+        if [x for x in range(var[0][0], var[-1][0] + 1) if PS[x]] != sorted(sky + [v[0] for v in var]):
+            raise SystemExit('%s: pasirinkimo „%s“ variantai ne iš eilės' % (kodas, bid))
+        Z['alternatyvos'].append({'vieta': pastr_info[var[0][0]]['vieta'], 'stulpelis': None, 'skyrikliai': sky, 'variantai': var, 'id': bid,
+                                  'pildo': 'sudarant'})
     for bid, galva, dalys, *kartu in B.get('salyginiai', []):
         h = rask(galva, 0); naudoti.add(h)
         ds, nuo = [], h + 1
@@ -1467,6 +1654,12 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
             if not any(x['i'] == qs[0] for x in Z['paryskinimai']):
                 raise SystemExit('%s: žinomos reikšmės pastraipa „%s“ šablone nepažymėta' % (kodas, pr))
             Z['zinomos'].append(qs[0])
+        # eksploatavimo darbų SS (2026-10-13): pažymėta pastraipa su tekstu, bet be pildomos vietos, pasirinkimo ar nurodymo - žymėjimas tik
+        # pastraipos ženkle ar tarpuose (nematomas likutis); generatorius jį nuima, kad žymėjimas liktų tik sudarant sutartį pildomose vietose
+        if B.get('zinomos_be_vietu'):
+            su_vieta = {x['i'] for kat in ('pildomos', 'nurodymai', 'valdikliai') for x in Z[kat]}
+            su_vieta |= {q for a in Z['alternatyvos'] for q in a['skyrikliai'] + [w for v in a['variantai'] for w in v]}
+            Z['zinomos'] += [x['i'] for x in Z['paryskinimai'] if PS[x['i']].strip() and x['i'] not in su_vieta and x['i'] not in Z['zinomos']]
     if B.get('priedu_eilutes'):
         Z['priedai'] = [{'i': q, 'nr': m.group(1), 'tekstas': tq} for q, tq in enumerate(PS) for m in [re.match(B['priedu_eilutes'], tq)] if m]
         nrs = [int(x['nr']) for x in Z['priedai']]
@@ -1644,8 +1837,11 @@ VERSIJOS = {'LITGRID 0922': 'LITGRID sutarčių šablonų „0922“ tekstas pri
             'G-Procure ankstesnės redakcijos': 'ankstesnės šio modulio sutarčių šablonų redakcijos (git istorija)',
             'LITGRID 2026-10-05': 'LITGRID rangos ir projektavimo paslaugų sutarčių šablonų (2026-10-05) tekstas prieš G-Procure redakcinius taisymus',
             'LITGRID darbų sutartis': 'LITGRID darbų pirkimo-pardavimo sutarties šablonų tekstas prieš G-Procure redakcinius taisymus (ir tos pačios bendrosios '
-                                      'sąlygos eksploatavimo darbų sutarties aplanke, patvirtintos 2025-01-09 įsakymu Nr. 25IS-1)'}
-VERSIJU_ZYME = {'STATYBOS_RANGOS': 'LITGRID 2026-10-05', 'PROJEKTAVIMO_STATYBOS': 'LITGRID 2026-10-05', 'PROJEKTAVIMO_PASLAUGOS': 'LITGRID 2026-10-05', 'DARBAI_MAZOJI': 'LITGRID darbų sutartis'}   # kitaip - 'LITGRID 0922'
+                                      'sąlygos eksploatavimo darbų sutarties aplanke, patvirtintos 2025-01-09 įsakymu Nr. 25IS-1)',
+            'LITGRID eksploatavimo sutartis': 'LITGRID eksploatavimo darbų sutarties šablonų (specialiosios sąlygos - 2025-10-09) tekstas prieš G-Procure '
+                                              'redakcinius taisymus'}
+VERSIJU_ZYME = {'STATYBOS_RANGOS': 'LITGRID 2026-10-05', 'PROJEKTAVIMO_STATYBOS': 'LITGRID 2026-10-05', 'PROJEKTAVIMO_PASLAUGOS': 'LITGRID 2026-10-05', 'DARBAI_MAZOJI': 'LITGRID darbų sutartis',
+                'EKSPLOATAVIMO': 'LITGRID eksploatavimo sutartis'}   # kitaip - 'LITGRID 0922'
 
 
 def kitos_versijos(kodas, rel, aplankai, seima=None):
@@ -1766,7 +1962,7 @@ def main():
         if z['neatpazinta']:
             klaidos += ['%s: neatpažinta vieta %s: %s' % (kodas, n['vieta'], n['tekstas']) for n in z['neatpazinta']]
         r = irasas(kodas, b)
-        red = REDAKCIJOS_SEIMOS.get(seima, {}).get(tipas) or REDAKCIJOS['LTEN' if kalba == 'LTEN' else tipas]
+        red = REDAKCIJOS_KODO.get(kodas) or REDAKCIJOS_SEIMOS.get(seima, {}).get(tipas) or REDAKCIJOS['LTEN' if kalba == 'LTEN' else tipas]
         z = {'pavadinimas': pav, 'redakcija': red, 'sha256': r['sha256']} | z
         senas_ir = reg['sablonai'].get(kodas, {})
         nauji[kodas] = {'failas': 'templates/sutartys/%s.docx' % kodas, 'pavadinimas': pav, 'seima': seima, 'kalba': kalba, 'tipas': tipas,
