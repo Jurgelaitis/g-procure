@@ -348,8 +348,10 @@
     return true;
   }
   function ilgaNuostata(t) { return t.length >= 120 && !/_{3,}/.test(t); }
-  /* Žyma vietoje netaikomos pasirenkamos dalies: „Punktas netaikomas.“, „Skyrius netaikomas.“ arba formos eilutė su „- netaikoma“ */
-  var NETAIKOMA_ZYME = /^(punktas|skyrius) netaikomas\.?$/i;
+  /* Žyma vietoje netaikomos pasirenkamos dalies: „Punktas netaikomas.“, „Skyrius netaikomas.“ arba formos eilutė su „- netaikoma“;
+     nuo 2026-10-13 - ir „Netaikoma“ bei „Nėra“ (eksploatavimo darbų SS lentelės eilutėse: tie patys žodžiai, kuriuos LITGRID įrašė
+     trasų valymo darbų sutarties formos netaikomose eilutėse). Žyma skaitoma tik pasirenkamos dalies vietoje - kitur ji yra nukrypimas. */
+  var NETAIKOMA_ZYME = /^((punktas|skyrius) netaikomas|netaikoma|nėra)\.?$/i;
   function netaikoma(formosT, dokT) {
     var d = beNr(dokT).trim(), f = beNr(formosT).trim().replace(/[;.]\s*$/, "");
     return NETAIKOMA_ZYME.test(d) || (!!f && d.replace(/[;.]\s*$/, "") === f + " - netaikoma");
