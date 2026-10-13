@@ -377,8 +377,8 @@ Pavyzdžiai (patikrinti tekste):
 
 | Šeima | Radinys | Rūšis |
 |---|---|---|
-| Eksploatavimo (3 regioninės SS) | Su 2026-10-07 pridėtomis eksploatavimo BS (10 skyrių) visos SS nuorodos sutampa (7.3, 8.2.2, 8.3.1 lentelės 15 eilutė, 9.3, 3.1.3, 3.3, 3.8-3.10, 5.1.2, 5.1.4-5.1.6, 8.6.6-8.6.7), sąvokos „Brigados“, „Neplaniniai“ ir „Avariniai darbai“ apibrėžtos. Išimtis: trasų valymo SS „3.7.3-3.7.14 ... punktų reikalavimai nebus taikomi“ - BS 3.7 turi tik 3.7.1-3.7.5 | turinys (kurie 3.7 punktai netaikomi trasų valymui) |
-| Eksploatavimo BS | 3.11.3 ir 3.11.4 „Dėl Sąlygų 3.12.2 punkte nurodytų priežasčių“ - 3.12.2 nėra; priežastys išvardytos 3.11.2 | redakcinė |
+| Eksploatavimo (3 regioninės SS) | Su 2026-10-07 pridėtomis eksploatavimo BS (10 skyrių) SS nuorodos rodo į esamus punktus (7.3, 8.2.2, 8.3.1 lentelės 15 eilutė, 9.3, 5.1.2, 5.1.4-5.1.6, 8.6.6-8.6.7), sąvokos „Brigados“, „Neplaniniai“ ir „Avariniai darbai“ apibrėžtos. Išimtis - trasų valymo SS „Kitų sąlygų“ 1 p. „3.1.3, 3.3, 3.7.3-3.7.14, 3.8, 3.9, 3.10 ... punktų reikalavimai nebus taikomi“: BS 3.7 turi tik 3.7.1-3.7.5, o sakinys paveldėtas iš ankstesnių BS redakcijų (EDS:2021: 3.3 „Užsakovo patalpos“, 3.7 „Įrenginiai ir medžiagos“, 3.8-3.10 - įrankiai, matavimai, demontavimas) ir po pernumeravimo neperskaičiuotas (2026-10-13 analizė pagal paskelbtas LITGRID trasų valymo sutartis ir BS redakcijas). Tos pačios kilmės: TV ir TP SS „[Sąvokos 1.1.2, 1.1.7, 1.1.11 punktai]“ - „Neplaniniai darbai“ yra 1.1.12; TV SS pastaba „reikalavimas koreguotas ... 19 p. 3 p.“ | turinys - naudotojo sprendimas 2026-10-13: generatoriuje „3.1.4, 3.6.3-3.6.12, 3.7, 3.8, 3.9, 5.1.2, 5.1.4-5.1.6, 8.6.6, 8.6.7“ („3.3“ išbraukiamas) - pritaikyta šablone 2026-10-13 (šeimos S1, 7 sk.); trys klausimai - laiške LITGRID (juodraštis privačiai); antraščių „1.1.11“ ir pastaba „19 p. 3 p.“ - 8 sk. 19 p. |
+| Eksploatavimo BS | 3.11.3 ir 3.11.4 „Dėl Sąlygų 3.12.2 punkte nurodytų priežasčių“ - 3.12.2 nėra; priežastys išvardytos 3.11.2. 2026-10-13 auditas: aplanko failas skiriasi nuo LITGRID 2025-12 ir 2026-04 pirkimuose paskelbtos redakcijos (sąvoka „Sąlygos“, aštuonių punktų numeriai, 5.3.13 ir 8.6.3 p.); devynios pastraipos su ženkleliu vietoj numerio; 3.2.5 p. straipsnių numeriai be indekso („151“, „221“) | ištaisyta 2026-10-13 jūsų sprendimais (8 sk. 19 p. A-C, E): priderinta prie paskelbto teksto, punktai sunumeruoti, nuoroda - į 3.11.2 p.; indeksai, rašyba ir skyryba - redakcinės korekcijos |
 | Darbų pirkimo-pardavimo | SS 1.3: „o įrengtiems užtvarams ir juos komplektuojančioms dalims dviejų metų garantinį terminą“ - konkretaus pirkimo likutis | turinys |
 | Darbų pirkimo-pardavimo | BS neturi tiesioginio atsiskaitymo tvarkos, o SS priedų sąraše - „Trišalės sutarties projektas“ | turinys |
 | Tiesioginio atsiskaitymo (darbai) | parašyta projektavimo ir statybos rangai („projektavimo ir statybos darbų pirkimo sutartį“, „Techninis projektas“, „Darbų žiniaraštis“) | turinys / generatoriaus variantas |
@@ -575,7 +575,7 @@ laiške LITGRID (`~/Documents/g-procure-privatu/sutartys/laiskas-LITGRID-sutarci
 | S6 | Žinių bazė (6.1, 6.3) ir pakartotinio kalibravimo procesas | registro įrašai perskaityti e-tar |
 
 Prioritetas pagal kalibravimą: projektavimo ir statybos rangos, paslaugų, projektavimo paslaugų, darbų pirkimo-pardavimo, prekių,
-statybos rangos, eksploatavimo (po BS gavimo).
+statybos rangos, eksploatavimo (po BS gavimo). Visos septynios šeimos generuojamos nuo 2026-10-13.
 
 **S1 prekėms ir paslaugoms (2026-10-08, jūsų sprendimas pradėti nuo jų - jie vieninteliai sutvarkyti iki galo).**
 `PP-salygos/sutarciu-sablonai.py --saltinis <LITGRID sutarčių aplankas>` paruošia 8 šablonus `PP-salygos/templates/sutartys/`
@@ -862,6 +862,106 @@ bendrosios sąlygos - 10 skyrių (be projektavimo), specialiosios - 28 punktai (
   pagaunamos. Word programos šiame kompiuteryje nėra - Word vaizdas netikrintas.
 - Lieka jums: klausimų tekstų peržiūra (bendri su rangos sutartimi), laiškas LITGRID (juodraštis privačiai).
 
+**S1 eksploatavimo darbų sutartims (7 etapas, 2026-10-13; jūsų „Eksploatavimo šablonai aplanke yra galutinė redakcija, pradėkime.“).**
+- **Šablonai:** vienos bendrosios sąlygos `EKS_LT_BS` ir trys specialiosios sąlygos - oro linijų `EKSOL_LT_SS`, transformatorių pastočių
+  `EKSTP_LT_SS`, trasų valymo `EKSTV_LT_SS` (tik LT; kodai baigiasi „_BS“ / „_SS“); žemėlapiai, registras (šeima `EKSPLOATAVIMO`,
+  redakcijos žyma „LITGRID eksploatavimo sutartis“). Toliau aprašyta būsena iki jūsų sprendimų; kas pasikeitė po jų ir generavimas (S4) -
+  kitame bloke.
+- **Auditas:** visi keturi dokumentai perskaityti pastraipa po pastraipos; privatus audito failas ir laiško LITGRID juodraštis -
+  `g-procure-privatu/sutartys/` (`eksploatavimo-auditas-2026-10-13.md`).
+- **Redakcinės korekcijos** (privatus `taisymai_15.py`, kopija `originalai-2026-10-13/`; pakartotinai - 0): bendrosios sąlygos - 23 vietos
+  (rašyba, linksniai, skyryba, skliaustai) ir 20 dvigubų tarpų; specialiosios sąlygos - 17 vietų ir 25 dvigubi tarpai (oro linijų SS
+  įžangoje praleistas „atitinka“ ir Užsakovo adresas be namo numerio; trasų valymo SS formulė buvo įrašyta du kartus).
+  Bendrųjų sąlygų 3.2.5 p. „įstatymo 151 straipsnyje“ ir „221 straipsnio“ - Valstybinio socialinio draudimo įstatymo 15¹ ir Statybos
+  įstatymo 22¹ straipsniai (perskaityta e-tar 2026-10-13; Word faile dingęs indekso formatavimas).
+- **Jūsų sprendimas 2026-10-13 (1 variantas)** - trasų valymo SS „Kitų sąlygų“ 1 punktas: „Sutarties bendrųjų sąlygų 3.1.4, 3.6.3-3.6.12,
+  3.7, 3.8, 3.9, 5.1.2, 5.1.4-5.1.6, 8.6.6, 8.6.7 punktų reikalavimai nebus taikomi.“
+- **Žymėjimas** (`sutarciu-sablonai.py`): SS - pirmas puslapis (šalys, parašai) ir lentelė iš 19 eilučių (numeris | pavadinimas su nuoroda
+  į bendrųjų sąlygų punktą | turinys). Nauja: `eilutes_vieta` (žemėlapio vieta - lentelės eilutės numeris; sąrašai langelio viduje vietos
+  nekeičia; priedų sąrašas - 18 eilutėje), nuoroda į kelis punktus („[Sąvokos 1.1.2, 1.1.7, 1.1.12 punktai]“, „[3.6.10, 3.6.11 punktai]“),
+  `sudarant_pasirinkimai` (transformatorių pastočių SS „Pagrindiniai darbai“ - du variantai su „arba“, iš kurių pasirenka tiekėjas
+  pasiūlyme: sutarties projekte lieka abu), sutarties datos eilutė ir „Už Sutarties ir jos pakeitimų viešinimą atsakingas asmuo:“ - pildomos
+  sudarant sutartį. Pildomų vietų: oro linijų SS - 51, transformatorių pastočių - 57, trasų valymo - 39; bendrosiose sąlygose - nėra.
+- **Paruošimas** (formatavimas, tekstas tas pats; registre - paruošimo įrašai): beveik juoda teksto spalva nuimta (iš kito dokumento
+  nukopijuotos pastraipos - BS 3 vietos, oro linijų SS 11); BS 1.1 ir 1.2 punktai perkelti į pagrindinį Word sąrašą (buvo du atskiri
+  sąrašai su įrašytu numeriu - Pages rodė „1.“ ir „1.“); SS lentelės eilučių numeriai 1-19 įrašyti tekstu, numerių stulpelis paplatintas
+  iki 480 DXA (Pages tuščios pastraipos Word numerio nerodo - skyriai buvo be numerių, o į juos nurodo pati sutartis).
+- **Nuorodos** (`sutarciu-nuorodos.js` 1.7): priedų sąrašas „1) ...“ po sakinio „Pasirašydamos Sutartį Šalys patvirtina, kad ...
+  neatsiejama Sutarties dalis:“ („Kitų sąlygų“ sąrašas „1) ...“ - ne priedai). Kiekvienoje poroje (BS ir viena SS) - 48-50 nuorodų, visos
+  į esamus punktus ir priedus, išskyrus žinomą BS 3.11.3 ir 3.11.4 p. „3.12.2“.
+- **Teisės aktų nuorodos:** 30 skirtingų (BS - 22, trasų valymo SS - 8) - visos perskaitytos e-tar ir įrašytos registre (naujos ištraukimo
+  taisyklės: įstatymo straipsnis su indeksu, dvi dalys po pilno įstatymo pavadinimo, nutarimo ir įsakymo numeris kilmininku ir galininku,
+  įsakymo numeris be raidžių ir su data, direktyva be „/ES“, Metrologijos įstatymas, Atliekų tvarkymo, Miško kirtimo, Elektros linijų ir
+  instaliacijos įrengimo taisyklės). Radiniai: T7 - BS 5.1.2.12 p. nurodytas aplinkos ministro 2015-05-08 įsakymas Nr. D1-393 neteko
+  galios 2024-11-01; T8 - BS 8.6.7 p. įstatymo pavadinimas (e-tar: Mobilizacijos ir priimančiosios šalies paramos įstatymas).
+- **Aplanko bendrosios sąlygos ir LITGRID paskelbta redakcija.** Bendrosios sąlygos, paskelbtos su 2025-12 ir 2026-04 oro linijų
+  eksploatavimo pirkimais (PDF, sukurtas 2025-10-16), skiriasi nuo aplanko failo: jose nėra sąvokos „Sąlygos“ (todėl šešių sąvokų numeriai
+  vienetu mažesni, o vietoj „Sąlygų N punkte“ - „Sutarties bendrųjų sąlygų N punkte“), aštuonios aplanko pastraipos su ženkleliu yra punktai
+  (2.2.1, 3.10.1, 4.2.7, 4.2.8, 8.3.3, 8.5.3, 8.7.2, 8.7.9), 5.3.13 p. sakinys užbaigtas, 8.6.3 p. pridėta mobilizacijos išlyga. Aplanko
+  rinkinys tarpusavyje nuoseklus (SS antraščių numeriai atitinka aplanko bendrąsias sąlygas). Kuri redakcija turi būti generatoriuje -
+  jūsų sprendimas (8 sk. 19 p. A).
+- **Tikrinti parengtus dokumentus:** visi keturi šablonai atpažįstami kaip savo forma (trys panašios SS - ne viena kitos), 0 nukrypimų;
+  užpildytos SS - 0 nukrypimų; pakeista nuostata - nukrypimas. Privalomi sutarties elementai - 13 iš 13 su kiekvienomis SS.
+- **Pages** (PDF eksportu): bendrosios sąlygos - 42 psl., tekstas neprarandamas, 517 punktų numerių kaip Word; specialiosios sąlygos -
+  6-7 psl., eilutės „Sutarties dokumentai ir priedai“ ir „Kitos sąlygos“ aukštesnės už puslapį - Pages jų nedalija ir dalį teksto nukerpa
+  (6-13 pastraipų): tai sprendžia generatorius (eilučių skaidymas, kaip kitose sutartyse) - S4.
+- 11 testų (`testaiEksploatavimoSablonai`); bendri šablonų, registro ir teisės nuorodų testai - ir su šiais šablonais; 8 žemėlapio ir
+  šablono mutacijos ir 12 kodo mutacijų - visos pagaunamos.
+- Sprendimai (8 sk. 19 p.) gauti 2026-10-13 - žr. kitą bloką.
+
+**Jūsų sprendimai eksploatavimo darbų sutartims ir S4 (7 etapas, 2026-10-13; „A. 3.“, „B. Pritariu.“, „C. Pritariu.“, „E. Pritariu.“,
+„F. Pritariu.“; tą pačią dieną - „D - pritariu siūlymui.“ ir „5 eilutė „Pirkimas“ - pritariu.“).**
+- **A (3 variantas) - bendrosios sąlygos priderintos prie LITGRID paskelbto teksto** (privatus `taisymai_16.py`, kopija
+  `originalai-2026-10-13b/`; pakartotinai - 0). Paskelbtas tekstas perskaitytas iš dviejų nepriklausomai nuskaitytų PDF kopijų (per
+  viešųjų duomenų jungtį); skirtumu laikyta tik tai, kas sutampa abiejose. Padaryta: sąvoka „Sąlygos“ pašalinta (sąvokos 1.1.20-1.1.25),
+  „Sąlygų <punktas>“ -> „Sutarties bendrųjų sąlygų <punktas>“ (27 vietos), sąvoka „Sutartis“, 2.6.4, 5.3.13, 7.3.1 („(www.stat.gov.lt)“)
+  ir 8.6.3 p. (mobilizacijos išlyga). Trys „Sąlygose“ (1.1 ir 1.2 p., 8.3.3 p. pavyzdys) lieka - taip ir paskelbtame tekste.
+  Nuo paskelbto teksto sąmoningai skiriasi: 8.6.6 p. nuoroda - į bendrųjų sąlygų 8.6.1.1 p. (paskelbta - „specialiųjų“, nors punktas
+  yra bendrosiose sąlygose), 10.11.3 p. bauda - 8.3.7 p. (paskelbta - 8.3.6; žr. B), mūsų redakcinės korekcijos (rašyba, skyryba).
+- **B** - aštuonios pastraipos su ženkleliu sunumeruotos kaip paskelbtame tekste (2.2.1, 3.10.1, 4.2.7, 4.2.8, 8.3.3, 8.5.3, 8.7.2, 8.7.9;
+  pagrindinis Word sąrašas); 8.2.1 p. antroji pastraipa lieka su ženkleliu (taip ir paskelbtame tekste); 10.11.3 p. „8.3.6 papunktyje
+  nurodyta bauda“ -> 8.3.7. Patikrinta: kiekviena bendrųjų ir visų trijų specialiųjų sąlygų nuoroda po pernumeravimo rodo į tą pačią
+  pastraipą kaip prieš tai (išskyrus sąmoningai pakeistas).
+- **C** - c1) bendrųjų sąlygų 3.11.3 ir 3.11.4 p. nuoroda - į 3.11.2 p.; c2) pastočių ir trasų valymo SS 1 eilutės antraštė - „[Sąvokos
+  1.1.2, 1.1.7, 1.1.12 punktai]“; c3) oro linijų SS draudimo bendrovių sąrašas - 18 priede; c4) trasų valymo SS 7 eilutėje pastaba
+  „(reikalavimas koreguotas ...)“ pašalinta. Visų SS antraštės „Sutarties kaina“ ir „Užsakovas“ - sąvokos 1.1.22 ir 1.1.25.
+- **E** - e1) pastočių SS 9 eilutė „iš ne mažiau kaip [įrašoma] darbuotojų“ (klausimas 2 žingsnyje); e2) trasų valymo SS 16 eilutė
+  „galiojimo terminas – [įrašoma] mėn. (Darbų atlikimo terminas) ir 1 (vienas) mėnuo“ (generatorius įrašo 2 eilutės terminą);
+  e3) bendrųjų sąlygų 10.9.2 p. „Rangovas ir teises bei pareigas perėmęs trečiasis asmuo prieš Užsakovą atsako solidariai“ - ir
+  projektavimo ir statybos rangos (11.14.2 p.) bei statybos rangos (10.14.2 p.) bendrosiose sąlygose (registre - nauja redakcija, ankstesnė
+  įrašyta); e4) 5.3.13 p. - paskelbto teksto sakinys; e5) 8.6.7 p. „Mobilizacijos ir priimančiosios šalies paramos įstatyme“ (T8 -
+  ištaisyta); e6) 5.1.2.12 p. nekeistas (T7 - klausimas LITGRID); e7) tvirtinimo eilutė „202_ m. d. įsakymu Nr.“ lieka tuščia -
+  generatorius jos nepildo, patikra rodo kaip paliktą vietą.
+- **D** (privatus `taisymai_17.py`, kopija `originalai-2026-10-13c/`): visų SS 17 eilutėje Užsakovo telefonas „+370 707 02171“ ir el. paštas
+  „info@litgrid.eu“ (kaip organizacijų registre ir kitose LITGRID sutarčių formose), oro linijų ir pastočių SS priedų sąraše -
+  „http://www.litgrid.eu/...“. LITGRID formoje rodomas tekstas buvo su žyma „Įmonės pavadinimas“ vietoje „litgrid“ (nuorodų taikiniai faile -
+  teisingi ir nekeisti), telefonas - su pertekliniu skaitmeniu. Jei kita formos redakcija vėl atneštų žymą el. pašto ar interneto adrese,
+  2 ir 3 žingsnis tai pasakys.
+- **5 eilutė „Pirkimas“** - palikta visa sutarties sudarymui (jūsų „pritariu“ 2026-10-13).
+- **Po sprendimų:** pildomų vietų - oro linijų SS 51, pastočių 58, trasų valymo 40, bendrosiose sąlygose - 1 (tvirtinimo eilutė); nuorodų
+  kiekvienoje poroje - 50-52, visos į esamus punktus ir priedus (radinių nėra); teisės nuorodų registre - 8.6.7 p. įstatymo pavadinimas
+  įrašytas kaip teisingas; bendrųjų sąlygų Pages PDF - 43 psl., 524 numeruotos pastraipos kaip Word.
+- **F - generavimas (S4).** `GP_SUTARTYS`: šeima parinkta, specialiosios sąlygos - pagal darbų rūšį (`kodai(šeima, variantas, kalba)`;
+  LT, prašant LT/EN - lietuviška su pastaba). 2 žingsnyje klausimai pagal darbų rūšį (`KLAUSIMAI_EKS`: oro linijos - 15, pastotės - 21,
+  trasų valymas - 6; visi privalomi, be numatytųjų; inventorius - `docs/salygos/sutarciu-lauku-inventorius.md`). Automatiškai: pirkimo
+  pavadinimas ir numeris sutarties įžangoje, LITGRID AB, priedų numeriai tekste (pastočių įkainių priedas; bankų ir draudimo bendrovių
+  sąrašų priedai), trasų valymo užtikrinimo galiojimo terminas (iš 2 eilutės). Sudarant sutartį: Sutarties data ir numeris, Užsakovo
+  atstovas, Rangovo duomenys, 5 eilutė „Pirkimas“ (paskelbimo data ir numeris paaiškėja tik paskelbus pirkimą - trasų valymo formoje taip
+  ir parašyta), kaina, Šalių atstovai, Rangovo sąskaita ir kontaktai, užtikrinimo dokumento rūšis, už viešinimą atsakingas asmuo, parašai;
+  pastočių 4 eilutės „Pagrindinių darbų“ variantą pasirenka tiekėjas - abu variantai ir nurodymas lieka. Eilutės, taikomos ne visada
+  (10 „Dokumentai“, 12 „Užsakovo sandėliai“, 15 „Papildomi garantiniai terminai“, 16 „Sutarties įvykdymo užtikrinimas“): „Taip / Ne“,
+  o „Ne“ - tas pats žodis, kurį LITGRID įrašė trasų valymo formoje („Nėra“ - 10 ir 15 eil., „Netaikoma“ - 12 eil.; 16 eil. -
+  „Netaikoma“, priedų sąraše - „Sutarties įvykdymo užtikrinimas – netaikoma.“); eilučių ir priedų numeriai nesikeičia. Oro linijų SS
+  užtikrinimo dydis - skaičiais ir žodžiais („125 000 Eur (vienas šimtas dvidešimt penki tūkstančiai eurų)“). SPS sąlyga apie tiesioginį
+  atsiskaitymą atsakoma pati (bendrųjų sąlygų 5.2.6-5.2.7 p.). Pilkas žymėjimas lieka tik sudarant sutartį pildomose vietose.
+- **Išmatuota:** trys darbų rūšys dviem atsakymų rinkiniais („Taip“ ir „Ne“) ir bendrosios sąlygos - 0 nukrypimų nuo formos su generavimo
+  pasu ir be jo; pakeistas nekintamas tekstas šalia užpildytos vietos - nukrypimas (žemėlapio `grieztos_vietos`); nuorodos (51-55) - visos
+  į esamus punktus ir priedus; privalomi sutarties elementai - 13 iš 13. Pages (PDF eksportu):
+  bendrosios sąlygos 43 psl., specialiosios - 8, 7 ir 6 psl., A4, tekstas neprarandamas (aukštos eilutės suskaidytos), eilučių ir priedų
+  numeriai matomi.
+- Testai: `testaiEksploatavimoSablonai` (12) ir `testaiEksploatavimoGeneravimas` (10).
+- Lieka jums: klausimų tekstų peržiūra; laiškas LITGRID (juodraštis privačiai).
+
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
 smulkūs darbai - mažoji; ekspertizė ir techninė priežiūra - klausimas dėl CPO LT). Rezultatas: „parinkta“ (su šablonais iš S1 registro -
@@ -911,8 +1011,9 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
 1. ~~**Taisyklės (2.4)**~~ - atsakyta 2026-10-08: tinka. TP teritorijos pastatų ir teritorijos smulkūs darbai (be statybos veiksmo ir
    projektavimo) - **mažoji, be klausimo**; ekspertizė ir statinio statybos techninė priežiūra - **klausiama „Ar perkama per CPO LT?“**
    (taip - sutarties projektas nerengiamas, CPO LT forma; ne - Paslaugų sutartis); kitos lentelės taisyklės - S2 pradžia (stebėjimo režimas).
-2. ~~Eksploatavimo regioninės SS~~ - atsakyta: BS pridėtos 2026-10-07. Lieka: eksploatavimo BS patvirtinimo data (redakcijų registrui) ir
-   trasų valymo SS 3.7 punktų išimtis.
+2. ~~Eksploatavimo regioninės SS~~ - atsakyta: BS pridėtos 2026-10-07. Lieka: eksploatavimo BS patvirtinimo data (redakcijų registrui).
+   Trasų valymo SS punktų išimtis - atsakyta 2026-10-13 (žr. 5.1 lentelę): generatoriuje „3.1.4, 3.6.3-3.6.12, 3.7, 3.8, 3.9, 5.1.2,
+   5.1.4-5.1.6, 8.6.6, 8.6.7“; klausimai LITGRID (3.1.3 ar 3.1.4, privažiavimo keliai ir aplinkosauga, kilmės nuostatos) - laiško juodraštyje.
 3. **Turinio klaidos:** ar parengti laišką LITGRID (kaip SPS šablonams) su visais [T] radiniais? Iš dalies atsakyta 2026-10-09: laiškas dėl
    teisės aktų nuorodų (T1, T2 ir informacija apie T3) parengtas; kiti [T] radiniai - dar laukia jūsų sprendimo.
 4. **LT/EN redakcijos (5.4):** ar LT/EN rinkinius atnaujinti pagal aktualią VPT redakciją (kaip LT; su nauju EN vertimu), o kol
@@ -1042,3 +1143,52 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
     Laiškui LITGRID (turinys, netaisoma): „po Techninio darbo projekto parengimo“ (BS 2.3.12 p.) statybos rangos sutartyje; projektavimo
     paminėjimai (BS 7.3.8, 8.2.3 p., netesybų e) papunktis, SS 7 p. nurodymas); pavienis „arba“ SS 19 p.; kiti - kaip rangos sutarties
     laiške.
+19. ~~**Eksploatavimo darbų sutarties šablonai (7 etapas, 2026-10-13)**~~ - atsakyta 2026-10-13: „A. 3.“, „B. Pritariu.“, „C. Pritariu.“,
+    „E. Pritariu.“, „F. Pritariu.“, „D - pritariu siūlymui.“ - visi punktai įgyvendinti, S4 padarytas (7 sk.). Trasų valymo SS punktų
+    išimtis - nuspręsta 2026-10-13 (1 variantas, pritaikyta). 5 eilutė „Pirkimas“ lieka sutarties sudarymui („pritariu“ 2026-10-13).
+    Klausimai buvo:
+    - **A. Bendrųjų sąlygų redakcija.** Aplanko Word failas skiriasi nuo bendrųjų sąlygų, kurias LITGRID paskelbė su 2025-12 ir 2026-04
+      oro linijų eksploatavimo pirkimais (7 sk.; palyginimo lentelė - privačiame audito faile). Variantai: (1) gauti iš LITGRID paskelbtos
+      redakcijos Word failą - tada šablonas pakeičiamas vienu paleidimu (`--nauja-redakcija`), o SS antraščių numeriai „1.1.23“ ir „1.1.26“
+      suderinami; (2) palikti aplanko redakciją (rinkinys tarpusavyje nuoseklus) ir klausimą įtraukti į laišką LITGRID; (3) aplanko failą
+      priderinti prie paskelbto teksto pagal palyginimo lentelę (apie 45 pakeitimai; tekstas - iš paskelbto PDF). Rekomenduoju 1, o kol
+      failo nėra - 2 (taip padaryta dabar).
+    - **B. Pastraipos su ženkleliu vietoj punkto numerio** (jei lieka aplanko redakcija): devynios bendrųjų sąlygų pastraipos (2.2, 3.10,
+      4.2 - dvi, 8.2.1, 8.3, 8.5, 8.7 - dvi) Word ir Pages rodomos su „•“. Paskelbtoje redakcijoje aštuonios iš jų - punktai. Siūloma:
+      sunumeruoti aštuonias kaip paskelbtoje redakcijoje (2.2.1, 3.10.1, 4.2.7, 4.2.8, 8.3.3, 8.5.3, 8.7.2, 8.7.9) ir 10.11.3 p. nuorodą
+      „8.3.6 papunktyje nurodyta bauda“ pakeisti į 8.3.7 (bauda pasislenka); kitos nuorodos (ir visų trijų SS) nesikeičia.
+    - **C. Nuorodos** (siūloma - taip):
+      - c1) bendrųjų sąlygų 3.11.3 ir 3.11.4 p. „Dėl Sąlygų 3.12.2 punkte nurodytų priežasčių“ -> 3.11.2 (3.12.2 punkto nėra);
+      - c2) transformatorių pastočių ir trasų valymo SS 1 eilutės antraštė „[Sąvokos 1.1.2, 1.1.7, 1.1.11 punktai]“ -> „1.1.12“
+        („Neplaniniai darbai“; 1.1.11 - „Mėnesio grafikas“; oro linijų SS - jau 1.1.12);
+      - c3) oro linijų SS „Kitų sąlygų“ 11 p. „draudimo bendrovių sąrašas pateikiamas 19 priede“ -> „18 priede“ (19 - „Subrangovų sąrašas“);
+      - c4) trasų valymo SS 7 eilutė: „... 7.3 punkte (reikalavimas koreguotas Sutarties specialiųjų sąlygų 19 p. 3 p.) nustatyta tvarka“ -
+        pastabą skliaustuose pašalinti (19 eilutės 3 p. dabar apie vėlinamus ar ankstinamus darbus; oro linijų ir pastočių SS jos nėra).
+    - **D. Užsakovo duomenys** (kaip ankstesnėse šeimose; siūloma - taip): visų SS 17 eilutėje „El. paštas info@Įmonės pavadinimas.eu“ ->
+      „info@litgrid.eu“, „Tel. +370 707 021717“ -> „+370 707 02171“ (organizacijų registras ir kitos LITGRID formos); oro linijų ir
+      pastočių SS priedų sąraše „http://www.Įmonės pavadinimas.eu/...“ -> „http://www.litgrid.eu/...“ (adresas su „litgrid“ veikia - nukreipia į dabartinį LITGRID puslapį „Reikalavimai rangovams“; tikrinta 2026-10-13).
+    - **E. Turinys:**
+      - e1) transformatorių pastočių SS 9 eilutė: „Brigados turi būti sudarytos iš ne mažiau kaip darbuotojų turinčių operatyvines remonto
+        teises“ - nėra skaičiaus. Siūloma: pildoma vieta „ne mažiau kaip [įrašoma] darbuotojų“ (klausimas 2 žingsnyje);
+      - e2) trasų valymo SS 16 eilutė: užtikrinimo galiojimo terminas „36 (trisdešimt šeši) mėnesiai (Darbų atlikimo terminas) ir 1
+        (vienas) mėnuo“, o 2 eilutėje darbų atlikimo terminas pildomas. Siūloma: 16 eilutėje - pildoma vieta, kurią generatorius užpildo
+        tuo pačiu terminu kaip 2 eilutėje;
+      - e3) bendrųjų sąlygų 10.9.2 p. „Jei Rangovas nesilaiko šio reikalavimo, Užsakovas ir teises bei pareigas perėmęs trečiasis asmuo prieš
+        Užsakovą atsako solidariai“ -> „Rangovas ir ...“ (taip - darbų pirkimo-pardavimo ir projektavimo paslaugų bendrosiose sąlygose). Tas
+        pats sakinys yra projektavimo ir statybos rangos bei statybos rangos bendrosiose sąlygose - siūloma ištaisyti visose trijose;
+      - e4) bendrųjų sąlygų 5.3.13 p. nebaigtas sakinys. Siūloma - paskelbtos redakcijos tekstas: „Siekiant įvertinti Rangovo darbuotojų
+        saugos būklę, Rangovas, Užsakovui prašant, privalo pateikti su darbuotojų sauga susijusią informaciją (...)“;
+      - e5) bendrųjų sąlygų 8.6.7 p. „Mobilizacijos ir priimančios šalies įstatyme“ -> „Mobilizacijos ir priimančiosios šalies paramos
+        įstatyme“ (pavadinimas pagal e-tar; T8). Siūloma - taip;
+      - e6) bendrųjų sąlygų 5.1.2.12 p.: aplinkos ministro 2015-05-08 įsakymas Nr. D1-393 neteko galios 2024-11-01 (T7). Siūloma šablone
+        nekeisti ir klausti LITGRID (koks reikalavimas turi būti dabar) - laiško juodraštyje;
+      - e7) bendrųjų sąlygų tvirtinimo eilutė „202_ m. d. įsakymu Nr.“ - siūloma palikti tuščią, kaip darbų pirkimo-pardavimo
+        bendrosiose sąlygose (jūsų sprendimas 2026-10-12).
+    - **F. Generavimas (S4)** - siūloma tais pačiais principais kaip kitose šeimose: iš pirkimo žinoma (pirkimo pavadinimas, numeris,
+      būdas, Užsakovo rekvizitai) - automatiškai; Rangovo duomenys, kaina, atstovai, sąskaita, sutarties data ir numeris, viešinimo
+      atsakingas asmuo, pastočių SS pagrindinių darbų variantas - sudarant sutartį; kita (įkainių priedas, priemokos, terminas, objektų
+      sąrašas, brigadų skaičius, reagavimo terminai, sandėliai, garantiniai terminai, užtikrinimas, regionas, metai) - klausimai 2 žingsnyje;
+      specialiosios sąlygos parenkamos pagal variantą (oro linijos, pastotės, trasų valymas), kurį jau nustato sutarties parinkimas.
+    Laiškui LITGRID (turinys, netaisoma): trasų valymo SS trys klausimai (2026-10-13), A punkto klausimai, bendrųjų sąlygų 3.1.3, 3.1.8,
+    7.3.2-7.3.3 p. sakiniai, 8.3 netesybų pavyzdžio sumos, 5.2.9 ir 10.11.6 p. rangos sutarties sąvokos, oro linijų SS „Kitų sąlygų“ 2, 4 ir
+    9 p. - juodraštis privačiai.
