@@ -536,3 +536,76 @@ Prie užtikrinimo klausimo rodomas vidaus taisyklių ribos priminimas (ribą įv
   neprarandamas, punktų numeriai kaip Word (bendrosiose sąlygose - 524 numeruotos pastraipos); aukštos lentelės eilutės suskaidytos.
 
 Lieka jūsų peržiūrai: klausimų tekstai ir paaiškinimai (`KLAUSIMAI_EKS`).
+
+---
+
+# Pataisos po patikros su paskelbtais sutarčių projektais (2026-10-13)
+
+Generatoriaus sutartys sulygintos su LITGRID paskelbtais sutarčių projektais (visos septynios šeimos; ataskaita su pirkimų numeriais -
+privati, ne saugykloje). Jūsų sprendimas: „Taip, pradėkime nuo mažų pataisų, pritariu visoms rekomendacijoms.“ Žemiau - kas pasikeitė
+klausimuose. Visi nauji klausimai - be numatytųjų atsakymų; siūloma tik tai, kas turi kilmę (ji rodoma).
+
+## Visoms šeimoms
+
+| Klausimas | Atsakymai | Kas daroma |
+|---|---|---|
+| Koks pirkimo numeris? (kai pirkimo kortelė nepasirinkta ar be numerio) | „Numeris žinomas - įrašysiu“ (su lauku „Pirkimo numeris“) / „Numerio dar nėra - bus įrašytas sudarant sutartį“ | antruoju atveju numerio vieta lieka ir išvardijama sąraše „Pildoma sudarant sutartį“ (iki tol be numerio sutartis negeneruota) |
+| Kurie formos priedų sąrašo priedai pridedami prie šios Sutarties? | žymimieji langeliai prie kiekvieno formos priedo; siūloma - visi (kilmė: „kaip LITGRID formoje“), patvirtinate jūs | nepažymėto priedo eilutė lieka su žodžiu „netaikoma“ (LT/EN - ir „not applicable“), todėl kitų priedų numeriai ir nuorodos į juos nesikeičia. Užrakinti (pilki, su priežastimi): sutarties bendrosios ir specialiosios sąlygos ir priedai, kuriuos valdo kiti klausimai (etapų priedas, trišalės sutarties projektas, pareigų sąrašas, užtikrinimas, pirkimo dokumentų adresas, projektavimo paslaugų 3 priedas) |
+
+Specialiųjų sąlygų nuoroda į priedą, kuris priedų sąraše pažymėtas „netaikoma“, - radinys 3 žingsnio patikroje ir skirtuke „Tikrinti
+parengtus dokumentus“ (bendrųjų sąlygų nuorodos į priedus sąlyginės, todėl nežymimos).
+
+## Maksimali sutarties kaina (neprivalomas klausimas)
+
+„Ar sutarties projekte nurodoma maksimali sutarties kaina?“ - eksploatavimo darbų (SS 7 eilutė), rangos ir statybos rangos (SS 11 punktas),
+prekių ir paslaugų sutartyse (5.2 punktas - tik kai kainodara fiksuotais įkainiais ir kiekis nenustatytas). „Taip“ - laukas „Maksimali
+sutarties kaina be PVM, eurais“; generatorius įrašo sumą be PVM, PVM ir sumą su PVM (PVM tarifas - `shared/thresholds.js`
+`MOKESCIAI.pvmStandartinis`, perskaityta e-tar 2026-10-13). Suma iš numatomos pirkimo vertės nesiūloma. Neatsakius ar „Ne“ - vietos lieka
+pildyti sudarant sutartį, kaip iki šiol.
+
+## Prekių ir paslaugų sutartys
+
+| Vieta | Klausimas | Kas daroma |
+|---|---|---|
+| 4.1 (prekės) | Ar prekių pristatymo terminą pasiūlyme nurodo tiekėjas? (siūloma „Ne“, kai vertinimo kriterijus - kaina) | „Taip“ - termino vieta ir vienetas lieka pildyti sudarant sutartį pagal laimėjusį pasiūlymą |
+| 11.1.2 | Ilgiausias tiekimo ar teikimo terminas - naujas variantas „Kita formuluotė (formos sąraše jos nėra)“ | įrašoma jūsų formuluotė (LT/EN - ir angliška); 3 žingsnis tai pasako, o tikrinant dokumentą be generavimo paso ji rodoma kaip tekstas ne iš formos sąrašo |
+| 15.4-15.5 (prekės) | Ar prie Sutarties pridedami papildomi priedai? | „Taip“ - iki dviejų pavadinimų (LT/EN - abiem kalbomis, tiek pat); „Ne“ - „Netaikoma“ („Not applicable“); tuščių punktų nelieka |
+
+## Rangos ir statybos rangos sutartys
+
+| Vieta | Klausimas | Kas daroma |
+|---|---|---|
+| priedų sąrašo eilutė „Kiti priedai (išvardijami prieš paskelbiant Pirkimą).“ | Ar prie Sutarties pridedami kiti priedai, kurių formos priedų sąraše nėra? | „Taip“ - kiekvienas jūsų įrašytas priedas tampa atskira numeruota eilute; „Ne“ - „Kiti priedai - netaikoma.“ (iki tol formos eilutė su nurodymu rengėjui likdavo sutartyje) |
+| etapų priedas | Kur užpildysite etapų lentelę? - „Čia“ / „Word programoje“ | „Word programoje“ - kaip iki šiol (tuščia lentelė ir „Pildymo sąlygos“ priede) |
+| etapų lentelė | Kokie Darbų etapai? (lentelės redaktorius: perduodami darbai, perdavimo terminas mėnesiais ar dienomis; pagal kitus atsakymus - delspinigių dydis ir mokėjimo dalis) | langeliai užpildomi jūsų tekstu (kiekviena darbų eilutė - atskira pastraipa), nereikalingos formos eilutės pašalinamos, penktam ir tolesniems etapams pridedamos eilutės („V etapas“ ...); formos „Pildymo sąlygos“ pašalinamos; tuščios eilutės pabaigoje nepatenka |
+| stulpelis „Delspinigių dydis“ | Nuo ko skaičiuojami delspinigiai už laiku neperduotą Darbų etapą? - nuo Sutarties kainos / nuo Darbų etapo kainos / kiekvienam etapui atskirai (tik kai netesybos pagal etapus, SS 15) | stulpelio antraštėje lieka pasirinktas formos nurodymo variantas; kai netesybos skaičiuojamos ne pagal etapus - stulpelis pašalinamas |
+| stulpelis „Mokėtina suma“ | Kaip etapų lentelėje nurodomos mokėtinos sumos? - mokėjimo dalimi procentais / sumomis sudarant sutartį (tik kai mokama pagal etapus, SS 12) | dalis rašoma „20 proc. Sutarties kainos be PVM“ (antraštė - kaip formoje); sumos sudarant - langeliai lieka ir išvardijami sąraše „Pildoma sudarant sutartį“; kai mokama ne pagal etapus - stulpelis pašalinamas (taip nurodo formos „Pildymo sąlygos“) |
+
+Perspėjimai (ne kliūtys): etapo perdavimo terminas ilgesnis už Darbų atlikimo terminą (tais pačiais vienetais); mokėjimo dalių suma - ne
+100 proc. Pastabos po lentele (jų turi dalis paskelbtų projektų) - Word programoje.
+
+## Projektavimo paslaugų sutartis
+
+| Vieta | Klausimas | Kas daroma |
+|---|---|---|
+| SS 2.1, 3.8, 4.1 | Ar perkamos ir projekto vykdymo priežiūros paslaugos? | „Ne“ - iš 2.1 punkto pašalinami žodžiai apie priežiūros paslaugas, 3.8 punkte - „Punktas netaikomas.“, kainos eilutėje - „... - netaikoma.“ (numeriai nesikeičia); klausimai apie priežiūros terminą nerodomi |
+
+## Darbų pirkimo-pardavimo ir eksploatavimo darbų sutartys
+
+- Darbų pirkimo-pardavimo: kiti priedai - kiekvienas atskira priedų sąrašo eilute (iki tol - vienas).
+- Eksploatavimo darbų: „Ar prie Sutarties pridedami kiti priedai, kurių formos priedų sąraše nėra (SS 18 eilutė)?“ - „Taip“: naujos
+  numeruotos eilutės po paskutinio formos priedo; SS 5 eilutėje „Pirkimas“ pirkimo pavadinimas įrašomas automatiškai, o pirkimo būdas,
+  paskelbimo data ir numeris lieka pildyti sudarant sutartį.
+
+## Tikrinimas („Tikrinti parengtus dokumentus“)
+
+- Sugeneruota sutartis be generavimo paso: „Punktas netaikomas.“ vietoje nuostatos su nuoroda į pašalintą punktą ir skyriaus antraštė be
+  taikymo sąlygos skliaustuose - pasirinkimai, ne nukrypimai; priedų eilutės su žodžiu „netaikoma“, pridėti priedai ir užpildyta etapų
+  lentelė - ne nukrypimai.
+- Panašios pastraipos poruojamos nuo panašiausios poros (iki tol - iš eilės): pasirinktas variantas su įrašyta reikšme nebelaikomas
+  pakeistu ankstesniu variantu (statybos rangos SS 12 punktas).
+- Neatpažintam dokumentui, panašiam į sutarties formą, rodoma panašiausia forma su pastaba, kad jis gali būti parengtas pagal ankstesnę
+  formos redakciją.
+
+Lieka jūsų peržiūrai: naujų klausimų tekstai ir paaiškinimai; ar mokėjimo dalis po antrašte „Mokėtina suma (Eur be PVM)“ jums tinka;
+ar netaikomus etapų lentelės stulpelius šalinti (kaip dabar), ar palikti su žodžiu „Netaikoma“.
