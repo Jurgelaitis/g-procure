@@ -51,6 +51,8 @@
   var SUTARTIES_DALIS = { BS: "bendrosios sąlygos", SS: "specialiosios sąlygos" };
   var VAIDMENU_TVARKA = ["sps", "bps", "skelbimas", "ts", "sutartis", "sutartis_bendrosios", "pasiulymas", "paraiska", "ebvpd", "paaiskinimas", "priedas", "kita"];
   var ATPAZINIMO_RIBA = 0.5, ATPAZINIMO_SKIRTUMAS = 0.05;   // išmatuota 2026-10-06: tikri SPS 0,57-0,76, BPS 1,0; antra forma - bent 0,08 mažiau
+  // sutarties dokumentui (pagal failo vardą ar pradžią) panašiausia sutarties forma rodoma nuo šio panašumo - žemiau jo sutapimas atsitiktinis
+  var NEATPAZINTOS_NUO = 0.12;
   var MAX_RODOMA = 10;
   var PAAISKINIMAS = { nukrypimas: "Standartinės LITGRID formos nekintamos nuostatos, kurias rengėjas pakeitė, pašalino ar pridėjo: komisija sprendžia, ar pakeitimas pagrįstas. " +
     "„Jautri sritis“ - pašalinimo pagrindai, kvalifikacija, vertinimas, užtikrinimas, sutartis, nacionalinis saugumas ar sankcijos: tokius peržiūrėkite pirmiausia. " +
@@ -121,6 +123,8 @@
         if (sz.salinama[x.i]) x.salinama = true;
         if (sz.leidziami[x.i]) x.leidziami = sz.leidziami[x.i];
         if (sz.variantai[x.i]) x.variantai = sz.variantai[x.i];
+        if (sz.beNuorodos[x.i]) x.beNuorodos = sz.beNuorodos[x.i];
+        if (sz.suSalyga[x.i]) x.suSalyga = true;
       });
       return { id: id, ps: r.pastraipos, zem: { blokai: sz.blokai }, sutartis: true, wordNumeracija: zem.numeracija === "word" };
     })().catch(function (e) { delete sablonai[id]; throw e; });
@@ -137,7 +141,7 @@
     var P = Array.prototype.slice.call(doc.getElementsByTagNameNS(W, "p")), nr = new Map();
     P.forEach(function (p, i) { nr.set(p, i); });
     var tevas = function (n, vardas) { for (var q = n.parentNode; q; q = q.parentNode) if (q.namespaceURI === W && q.localName === vardas) return q; return null; };
-    var vieta = {}, vietaPo = {}, salinama = {}, leidziami = {}, variantai = {}, blokai = [];
+    var vieta = {}, vietaPo = {}, salinama = {}, leidziami = {}, variantai = {}, blokai = [], beNuorodos = {}, suSalyga = {};
     var tekstas = function (p) { return Array.prototype.map.call(p.getElementsByTagNameNS(W, "t"), function (t) { return t.textContent; }).join("").trim(); };
     ["valdikliai", "pildomos", "nurodymai", "laukai", "organizacija", "paryskinimai", "keiciamos_reiksmes", "taikymo_salygos", "trynimo_nurodymai", "salygos"]
       .forEach(function (k) { (Z[k] || []).forEach(function (x) { if (x.i != null) vieta[x.i] = 1; }); });
@@ -158,6 +162,41 @@
     var lite = function (t) { return P_NORM(t); };
     var re = function (t) { return lite(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\[(_|\\\.\\\.\\\.|…)\\\]|\\\{\\\.\\\.\\\.\\\}/g, "[\\s\\S]*?").replace(/ /g, "\\s*"); };
     var vald = function (sdt) { return (Z.valdikliai || [])[SDT.indexOf(sdt)] || null; };
+    // Skyriaus taikymo sąlyga antraštės pastraipoje („10. ESMINĖS SUTARTIES SĄLYGOS (taikoma, jeigu užpildyta)“; 2026-10-13): antraštė su ja
+    // arba be jos - generatorius sąlygą pašalina; be šito sugeneruota sutartis be generavimo paso buvo žymima nukrypimu
+    (Z.taikymo_salygos || []).forEach(function (x) {
+      var p = P[x.i], t = p ? tekstas(p) : "", fr = String(x.tekstas || "").trim(), a = fr ? t.indexOf(fr) : -1;
+      if (a < 0 || t === fr || p.getElementsByTagNameNS(W, "sdt").length) return;
+      try {
+        leidziami[x.i] = new RegExp("^\\s*(?:\\d+(?:\\.\\d+)*\\.?\\s*)?" + re(t.slice(0, a).replace(/^\s*\d+(\.\d+)*\.?\s*/, "")) + "\\s*(?:" + re(fr) + ")?\\s*" + re(t.slice(a + fr.length)) + "\\s*$");
+        variantai[x.i] = [{ t: t, n: P_NORM(t) }]; suSalyga[x.i] = 1;
+      } catch (e) { /* netinkamas šablonas - lieka vieta */ }
+    });
+    // Priedų sąrašo eilutės (žemėlapio „priedai“, 2026-10-13): priedas pridedamas arba jo eilutė lieka su žodžiu „netaikoma“ („- not
+    // applicable“) - abu variantai leidžiami; eilutės galo skyryba nelyginama (paskutinės eilutės taškas ir kabliataškis keičiasi)
+    (Z.priedai || []).forEach(function (q) {
+      [[q.i, " - netaikoma"], [q.en, " - not applicable"]].forEach(function (pv) {
+        var i = pv[0], p = i != null ? P[i] : null, t = p ? tekstas(p).replace(/[\s;.,]+$/, "") : "";
+        if (!t || vieta[i] || leidziami[i] || p.getElementsByTagNameNS(W, "sdt").length || (Z.kiti_priedai && Z.kiti_priedai.i === i)) return;
+        try {
+          leidziami[i] = new RegExp("^\\s*(?:\\d+(?:\\.\\d+)*\\.?\\s*)?" + re(t.replace(/^\s*\d+(\.\d+)*\.?\s*/, "")) + "\\s*(?:" + re(pv[1]) + ")?\\s*[;.,]?\\s*$");
+          variantai[i] = [{ t: tekstas(p), n: P_NORM(tekstas(p)) }];
+        } catch (e) { /* netinkamas šablonas - lieka paprasta pastraipa */ }
+      });
+    });
+    // priedų sąrašas be eilutės kitiems priedams (eksploatavimo darbų SS): kiti priedai - naujos eilutės po paskutinio formos priedo
+    if (!Z.kiti_priedai && (Z.priedai || []).length && Z.priedai.every(function (q) { return q.antraste == null; })) vietaPo[Z.priedai[Z.priedai.length - 1].i] = 1;
+    // Priedų sąrašo eilutė kitiems priedams (žemėlapio „kiti_priedai“, 2026-10-13): jos vietoje ir po jos - rengėjo įrašyti priedai
+    if (Z.kiti_priedai) { vieta[Z.kiti_priedai.i] = 1; vietaPo[Z.kiti_priedai.i] = 1; }
+    // šablono teksto atkarpa, taikoma ne visada (žemėlapio „fragmentai“): pastraipa su ja - pildoma vieta
+    (Z.fragmentai || []).forEach(function (b) { vieta[b.i] = 1; });
+    // Nuostata su nuoroda į punktą, kurio sutartyje gali nelikti („Punktas netaikomas, taikomos 8.3.2 punkte nustatytos sąlygos.“):
+    // generatorius nuorodą į pašalintą punktą pašalina - lieka „Punktas netaikomas.“ (palyginimas tai priima tik kai to punkto dokumente nėra)
+    var NUOR = [/^(Punktas netaikomas), taikomos (\d+(?:\.\d+)+) punkte nustatytos sąlygos\.$/, /^(The clause does not apply); the conditions set out in paragraph (\d+(?:\.\d+)+) shall apply\.$/];
+    P.forEach(function (p, i) {
+      var t = tekstas(p);
+      NUOR.forEach(function (rx) { var m = rx.exec(t); if (m) beNuorodos[i] = [{ n: P_NORM(m[1] + "."), punktas: m[2], t: t }]; });
+    });
     // Projektavimo paslaugų SS (2026-10-11): pasirinkimas pastraipos viduje („[pasirinkti vieną]“) - leidžiamas tik vienas iš šablono variantų
     // (su tekstu prieš ir po), nepasirinkta pastraipa lieka kaip formoje; kitoks tekstas - pakeista nuostata
     (Z.vidiniai || []).forEach(function (v) {
@@ -196,6 +235,7 @@
       // visa pastraipa - vienas sąrašas: jo variantai (artimiausias rodomas kaip formos tekstas, kai įrašytas kitas)
       var v1 = d.length === 1 && d[0].sdt && vald(d[0].sdt);
       if (v1 && v1.rusis === "dropDownList") variantai[i] = v1.elementai.map(function (e) { return { t: String(e.tekstas).trim(), n: P_NORM(e.tekstas) }; });
+
     });
     // Griežtos vietos (žemėlapio „grieztos_vietos“ - darbų pirkimo-pardavimo SS, 2026-10-12): pastraipa su pildomomis vietomis lyginama pagal
     // šabloną - nekintamas tekstas turi likti, o vietoje: „[A] / [B]“ - viena iš dviejų formuluočių, sakinys su vietomis (3.1 p. pratęsimas) -
@@ -264,7 +304,7 @@
       blokai.push({ blokas: { nuo: k.luzis, iki: k.iki } });
       (Z.priedai || []).filter(function (q) { return q.nr === k.priedas; }).forEach(function (q) { blokai.push({ blokas: { nuo: q.i, iki: q.i } }); });
     });
-    return { vieta: vieta, vietaPo: vietaPo, salinama: salinama, leidziami: leidziami, variantai: variantai, blokai: blokai };
+    return { vieta: vieta, vietaPo: vietaPo, salinama: salinama, leidziami: leidziami, variantai: variantai, blokai: blokai, beNuorodos: beNuorodos, suSalyga: suSalyga };
   }
   /* Ankstesnės patikros ataskaita - Word failas su customXml dalimi NS_ATASKAITA (žr. ataskaita()). */
   async function skaitykAtaskaita(buf) {
@@ -448,7 +488,8 @@
     if (sn && sn.radiniai) sn.radiniai.forEach(function (x) {
       var d = sn.D[x.dok];
       out.push({ raktas: "N" + P().maisa([x.dok, x.nr, x.citata].join("|")), lygis: "tikrinti", grupe: "Sutarties nuorodos",
-                 tekstas: (x.rusis === "priedas" ? "Nuoroda į Nr. " + x.nr + " priedą, kurio specialiųjų sąlygų priedų sąraše nėra" : "Nuoroda į " + x.nr + " punktą, kurio sutartyje nėra") +
+                 tekstas: (x.netaikomas ? "Nuoroda į Nr. " + x.nr + " priedą, kuris specialiųjų sąlygų priedų sąraše pažymėtas kaip netaikomas"
+                   : x.rusis === "priedas" ? "Nuoroda į Nr. " + x.nr + " priedą, kurio specialiųjų sąlygų priedų sąraše nėra" : "Nuoroda į " + x.nr + " punktą, kurio sutartyje nėra") +
                    (x.dok === "BS" ? " (bendrosios sąlygos)" : " (specialiosios sąlygos)"),
                  pastaba: "Patikrinkite, ar punktas nepašalintas ar nepernumeruotas; nuoroda turi rodyti į esamą sutarties punktą ar priedą.",
                  vietos: [{ dok: d.id, failas: bazinis(d.name), vieta: "", citata: x.citata }], teise: [], kilme: "nuorodos" });
@@ -679,10 +720,15 @@
     if (!x.forma) {
       var v = vaidmuo(d), art = x.idf && x.idf[0];
       if (B.formos[d.id] === "") return "Pasirinkta nelyginti su forma.";
-      return (v === "sps" || v === "bps" || (art && art.balas >= 0.3)) && art
-        ? "Forma neatpažinta (artimiausia - " + formosPav(art.id) + ", " + Math.round(art.balas * 100) + " %). Jei tai LITGRID forma - pasirinkite ją."
-        : "Su standartine forma nelyginama: rodyklėje - LITGRID SPS, BPS ir DPS sąlygų formos bei prekių ir paslaugų pirkimo-pardavimo sutarčių " +
-          "bendrosios ir specialiosios sąlygos" + (sutarciuKlaida ? " (sutarčių šablonų registro įkelti nepavyko: " + sutarciuKlaida + ")" : "") + ". Jei tai viena iš jų - pasirinkite.";
+      // Neatpažinta forma (2026-10-13, patikra su paskelbtais projektais: 8 iš 18 sutarčių projektų parengti pagal ankstesnes redakcijas ir
+      // patys neatpažinti): atpažinimo riba nekeičiama, bet prie dokumento rodoma panašiausia forma ir pasakoma, kad tai gali būti
+      // ankstesnė redakcija - pasirinkus formą, palyginimas parodo skirtumus nuo dabartinės
+      var sutF = !!(art && (formosIrasas(art.id) || {}).sutartis);
+      return (v === "sps" || v === "bps" || ((v === "sutartis" || v === "sutartis_bendrosios") && sutF && art.balas >= NEATPAZINTOS_NUO) || (art && art.balas >= 0.3)) && art
+        ? "Forma neatpažinta. Panašiausia - " + formosPav(art.id) + " (panašumas " + Math.round(art.balas * 100) + " %); dokumentas gali būti parengtas pagal ankstesnę formos redakciją. " +
+          "Jei tai ši forma - pasirinkite ją sąraše „Forma“: palyginimas parodys skirtumus nuo dabartinės redakcijos."
+        : "Su standartine forma nelyginama: rodyklėje - LITGRID SPS, BPS ir DPS sąlygų formos bei sutarčių bendrosios ir specialiosios sąlygos" +
+          (sutarciuKlaida ? " (sutarčių šablonų registro įkelti nepavyko: " + sutarciuKlaida + ")" : "") + ". Jei tai viena iš jų - pasirinkite.";
     }
     if (x.klaidaLyg) return "Palyginti nepavyko: " + x.klaidaLyg;
     var s = x.rez.statistika;
