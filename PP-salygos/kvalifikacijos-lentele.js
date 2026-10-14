@@ -330,15 +330,114 @@
   /* ---------- Modelis su žmogaus pakeitimais: numeriai, grupės, specialistai ----------------------------------- */
   /* pakeitimai[i] = { grupe, specialistas } - žmogaus pasirinkimai. Eilučių tvarka - kaip šaltinyje (tekste gali būti
      nuorodų į savo punktus: „2.1.-2.3. punktuose“), numeriai - iš eilės per visas grupes, kaip LITGRID skelbiamose SPS. */
-  function numeriai(M, pakeitimai){
-    const pk = pakeitimai || {};
+  /* vertimas (DI vertimas, kai šaltinyje anglų teksto nėra) - { eil: { i: { reik: [str], dok: [str], zmogus } }, antrastes: { lt: en },
+     neVisa: [str] }; šaltinio angliškas tekstas visada pirmesnis. */
+  function numeriai(M, pakeitimai, vertimas){
+    const pk = pakeitimai || {}, vt = (vertimas && vertimas.eil) || {}, va = (vertimas && vertimas.antrastes) || {};
     return M.eilutes.map((e, i) => {
-      const p = pk[i] || {};
-      return Object.assign({}, e, { i, nr: i + 1,
+      const p = pk[i] || {}, v = vt[i];
+      const reikEN = e.reikEN && pTekstas(e.reikEN) ? e.reikEN : (v && v.reik ? enPastraipos(e.reik, v.reik) : e.reikEN);
+      const dokEN = e.dokEN && pTekstas(e.dokEN) ? e.dokEN : (v && v.dok ? enPastraipos(e.dok, v.dok) : e.dokEN);
+      const antraste = e.antraste && !e.antraste.en && va[e.antraste.lt] ? Object.assign({}, e.antraste, { en: va[e.antraste.lt] }) : e.antraste;
+      return Object.assign({}, e, { i, nr: i + 1, reikEN, dokEN, antraste,
+        diVertimas: !!(v && !(e.reikEN && pTekstas(e.reikEN))), vertimasZmogaus: !!(v && v.zmogus),
         grupe: p.grupe !== undefined ? p.grupe : e.grupe, grupeZmogaus: p.grupe !== undefined,
         specialistas: p.specialistas !== undefined ? p.specialistas : e.specialistas, specZmogaus: p.specialistas !== undefined });
     });
   }
+  /* Angliškos pastraipos pagal lietuviškas: tos pačios tuščios vietos, pusjuodis - kai visa lietuviška pastraipa pusjuodė. */
+  function enPastraipos(lt, en){
+    const ne = (en || []).map(x => String(x == null ? '' : x)).filter(x => x.trim());
+    let k = 0;
+    const out = (lt || []).map(p => {
+      if (!p.tekstas.trim()) return { atk: [], tekstas: '' };
+      const t = ne[k++] || '';
+      const b = p.atk.filter(a => a.t.trim()).every(a => a.b) && p.atk.some(a => a.t.trim());
+      return { atk: t ? [{ t, b, i: false, u: false, va: '', spalva: '' }] : [], tekstas: t };
+    });
+    while (k < ne.length) out.push({ atk: [{ t: ne[k], b: false, i: false, u: false, va: '', spalva: '' }], tekstas: ne[k++] });
+    return out;
+  }
+
+  /* ---------- DI vertimo pasiūlymas (kai pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų teksto nėra) --------------
+     Užklausa ir atsakymo patikra - čia (grynos funkcijos), kvietimas ir sąsaja - PP-SALYGOS.html. Partijos - dėl atsakymo ilgio
+     ribos (serverio max_tokens 8000), ne dėl užklausos dydžio: kiekviena partija - visos eilutės su visomis jų pastraipomis. */
+  const VERTIMO_TERMINAI = [['Tiekėjas', 'Supplier'], ['Tiekėjų grupė', 'Supplier group'], ['Perkantysis subjektas', 'Contracting Entity'],
+    ['Pasiūlymas', 'Tender'], ['Pirminis pasiūlymas', 'Initial Tender'], ['Paraiška', 'Application'], ['EBVPD', 'ESPD'], ['SPS', 'SPC'], ['BPS', 'GPC'],
+    ['Kvalifikacijos reikalavimai', 'Qualification Requirements'], ['Komisija', 'Commission'], ['Ūkio subjektas', 'Economic entity'],
+    ['Subtiekėjas', 'Sub-supplier'], ['Kvazisubtiekėjas', 'Quasi-Sub-supplier'], ['Sutartis', 'Contract'], ['Techninė specifikacija', 'Technical Specification'],
+    ['Rangovas', 'Contractor'], ['skaitmeninė kopija', 'digital copy'], ['CVP IS', 'CVP IS']];
+  const VERTIMO_SISTEMA = 'Esi teisinių pirkimo dokumentų vertėjas iš lietuvių į anglų kalbą. Verti LITGRID AB (Lietuvos elektros perdavimo sistemos operatoriaus) '
+    + 'pirkimo sąlygų kvalifikacijos reikalavimų lentelę dvikalbėms (LT / EN) pirkimo sąlygoms. Taisyklės: '
+    + '1) versk tiksliai ir pilnai - nieko nepridėk, nepraleisk ir neaiškink; '
+    + '2) vartok šiuos terminus: ' + VERTIMO_TERMINAI.map(([a, b]) => a + ' - ' + b).join('; ') + '; '
+    + '3) skaičius, sumas (ir jų skyrybą), datas, punktų numerius (pvz. „1.1.“), nuorodas, el. pašto adresus, matavimo vienetus (kV, MVA) '
+    + 'ir standartų bei reglamentų žymenis (ISO, LST EN, STR) palik nepakeistus; '
+    + '4) teisės aktų ir institucijų pavadinimus versk pažodžiui, santrumpų nesugalvok; '
+    + '5) kiekvieną pastraipą versk atskirai: tiek pat pastraipų ir ta pačia tvarka, tuščia pastraipa lieka tuščia; '
+    + '6) atsakyk TIK JSON objektu, be jokio kito teksto.';
+  const VERTIMO_PARTIJA = 6000;   // lietuviško teksto ženklų vienai užklausai (atsakymas - panašaus ilgio)
+  /* Eilutės, kurias reikia versti (be šaltinio angliško teksto ir be jau esamo vertimo), suskirstytos į partijas. */
+  function vertimoPartijos(M, vertimas, opts){
+    const vt = (vertimas && vertimas.eil) || {}, visas = opts && opts.visas;
+    const reikia = M.eilutes.map((e, i) => i).filter(i => !(M.eilutes[i].reikEN && pTekstas(M.eilutes[i].reikEN)) && (visas ? !(vt[i] && vt[i].zmogus) : !vt[i]));
+    const partijos = [];
+    let dab = [], ilgis = 0;
+    reikia.forEach(i => {
+      const e = M.eilutes[i], n = pTekstas(e.reik).length + pTekstas(e.dok).length;
+      if (dab.length && ilgis + n > VERTIMO_PARTIJA){ partijos.push(dab); dab = []; ilgis = 0; }
+      dab.push(i); ilgis += n;
+    });
+    if (dab.length) partijos.push(dab);
+    // kitos grupės antraštės ir „ne visa apimtimi“ tekstas - pirmoje partijoje (arba vieni, jei eilučių versti nebereikia)
+    const antr = [...new Set(M.eilutes.filter(e => e.antraste && !e.antraste.en && !((vertimas && vertimas.antrastes) || {})[e.antraste.lt]).map(e => e.antraste.lt))];
+    const nv = M.neVisa && pTekstas(M.neVisa.lt) && !(M.neVisa.en && pTekstas(M.neVisa.en)) && !(vertimas && vertimas.neVisa) ? M.neVisa.lt.map(p => p.tekstas) : null;
+    if (!partijos.length && (antr.length || nv)) partijos.push([]);
+    return partijos.map((eil, k) => ({ eilutes: eil, antrastes: k ? [] : antr, neVisa: k ? null : nv }));
+  }
+  function vertimoUzklausa(M, partija){
+    const duom = { eilutes: partija.eilutes.map(i => ({ nr: i + 1, reikalavimas: M.eilutes[i].reik.map(p => p.tekstas), dokumentai: M.eilutes[i].dok.map(p => p.tekstas) })) };
+    if (partija.antrastes.length) duom.antrastes = partija.antrastes;
+    if (partija.neVisa) duom.neVisa = partija.neVisa;
+    return { system: VERTIMO_SISTEMA, userMessage: 'Išversk į anglų kalbą. Grąžink JSON tokios pačios sandaros (tie patys raktai ir „nr“, vietoj lietuviško teksto - '
+      + 'angliškas):\n' + JSON.stringify(duom) };
+  }
+  const skaiciai = s => (String(s).match(/\d+/g) || []).sort().join(' ');
+  const LT_RAIDES = /[ąčęėįšųūž]/i;
+  /* Atsakymo patikra prieš rodant: kiekviena eilutė - su savo numeriu, tiek pat netuščių pastraipų kaip lietuviškai; skaičiai, kurių
+     vertime nėra, ar likusios lietuviškos raidės - perspėjimas (vertimas rodomas, bet „Patikrinkite“). Neatpažintas atsakymas - klaida. */
+  function vertimoAtsakymas(tekstas, M, partija, taisyk){
+    const s = String(tekstas || ''), a = s.indexOf('{'), b = s.lastIndexOf('}');
+    let o = null;
+    if (a >= 0 && b > a){
+      const j = s.slice(a, b + 1);
+      try { o = JSON.parse(j); } catch (e){ const t = taisyk ? taisyk(j) : null; if (t){ try { o = typeof t === 'string' ? JSON.parse(t) : t; } catch (e2){ o = null; } } }
+    }
+    if (!o || typeof o !== 'object') return { klaida: 'DI atsakymo nepavyko perskaityti (ne JSON).' };
+    const eil = {}, nepavyko = [], perspejimai = {};
+    const arr = Array.isArray(o.eilutes) ? o.eilutes : [];
+    partija.eilutes.forEach(i => {
+      const x = arr.find(z => z && Number(z.nr) === i + 1), e = M.eilutes[i];
+      if (!x || !Array.isArray(x.reikalavimas) || !Array.isArray(x.dokumentai)){ nepavyko.push({ i, priezastis: 'eilutės atsakyme nėra' }); return; }
+      const ne = (arr2) => arr2.map(z => String(z == null ? '' : z)).filter(z => z.trim()).length;
+      if (ne(x.reikalavimas) !== e.reik.filter(p => p.tekstas.trim()).length || ne(x.dokumentai) !== e.dok.filter(p => p.tekstas.trim()).length){
+        nepavyko.push({ i, priezastis: 'pastraipų skaičius nesutampa su lietuvišku tekstu' }); return; }
+      const reik = x.reikalavimas.map(z => String(z == null ? '' : z).trim()), dok = x.dokumentai.map(z => String(z == null ? '' : z).trim());
+      const p = [];
+      if (skaiciai(pTekstas(e.reik) + ' ' + pTekstas(e.dok)) !== skaiciai(reik.join(' ') + ' ' + dok.join(' '))) p.push('skaičiai vertime ne tokie patys kaip lietuviškai');
+      if (LT_RAIDES.test(reik.join(' ') + dok.join(' '))) p.push('vertime liko lietuviškų raidžių');
+      eil[i] = { reik, dok };
+      if (p.length) perspejimai[i] = p;
+    });
+    const antrastes = {};
+    if (partija.antrastes.length && Array.isArray(o.antrastes)) partija.antrastes.forEach((lt, k) => { const v = String(o.antrastes[k] || '').trim(); if (v) antrastes[lt] = v; });
+    let neVisa = null;
+    if (partija.neVisa && Array.isArray(o.neVisa) && o.neVisa.filter(z => String(z || '').trim()).length === partija.neVisa.filter(z => z.trim()).length)
+      neVisa = o.neVisa.map(z => String(z == null ? '' : z).trim());
+    return { eil, nepavyko, perspejimai, antrastes, neVisa };
+  }
+  /* Kiek eilučių išversta DI (žmogaus taisytos irgi skaičiuojamos - tekstas parengtas naudojant DI). */
+  const diVertimuSk = (M, vertimas) => M ? numeriai(M, {}, vertimas).filter(e => e.diVertimas).length : 0;
   function punktai(nr, budas){
     const a = (nr || []).map(String);
     if (!a.length) return '';
@@ -366,7 +465,10 @@
     const t = ktx && ktx.terminas;
     if (t === 'pasiulymas' && /paraisk/.test(n)) out.push('Reikalavimuose minima „Paraiška“, o šiame pirkimo būde teikiamas „Pasiūlymas“ - patikrinkite terminų formuluotes.');
     if (t === 'paraiska' && /pasiulym/.test(n) && !/paraisk/.test(n)) out.push('Reikalavimuose minimas „Pasiūlymas“, o šiame pirkimo būde pirmiausia teikiama „Paraiška“ - patikrinkite terminų formuluotes.');
-    if (ktx && ktx.dvikalbis && !M.dvikalbe) out.push('Pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų kalbos nėra: angliški langeliai liks raudoni su nurodymu. Įkelkite dvikalbį dokumentą (pvz. PP-qual LT / EN) arba įrašykite vertimą Word programoje.');
+    if (ktx && ktx.dvikalbis && !M.dvikalbe){
+      const be = numeriai(M, {}, ktx.vertimas).filter(e => !pTekstas(e.reikEN)).length;
+      if (be) out.push(`Pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų kalbos nėra: ${be === M.eilutes.length ? 'angliški langeliai' : `${be} eilučių angliški langeliai`} liks raudoni su nurodymu. Pasiūlykite vertimą (DI) žemiau, įkelkite dvikalbį dokumentą (pvz. PP-qual LT / EN) arba įrašykite vertimą Word programoje.`);
+    }
     const g = grupiuTvarka(numeriai(M, ktx && ktx.pakeitimai));
     if (g.kartojasi.length) out.push('Reikalavimai neišdėstyti grupėmis iš eilės - lentelėje grupės antraštė pasikartos. Eilučių tvarka nekeičiama, nes tekste gali būti nuorodų į punktų numerius.');
     const sn = M.saltinioNumeriai.filter(Boolean);
@@ -501,7 +603,7 @@
     const enReik = st.reikEn && st.reikEn !== ltReik ? st.reikEn : null, enDok = st.dokEn && st.dokEn !== ltDok ? st.dokEn : null;
     const dvikalbis = !!(enReik || enDok);
     const rPr0 = baziniaiRPr(tbl);
-    const E = numeriai(M, o.pakeitimai);
+    const E = numeriai(M, o.pakeitimai, o.vertimas);
     const pries = R.neVisaAntraste || null;
     const kiek = {}, naudotos = new Set();
     let dabar = null;
@@ -551,13 +653,14 @@
       if (tr){
         const c = langeliai(tr);
         pildykLangeli(doc, c[0].tc, M.neVisa.lt, rPr0);
-        if (c[1]) pildykLangeli(doc, c[1].tc, M.neVisa.en && pTekstas(M.neVisa.en) ? M.neVisa.en : null, rPr0, { zyma: VERTIMO_ZYMA });
+        const nvEn = M.neVisa.en && pTekstas(M.neVisa.en) ? M.neVisa.en : (o.vertimas && o.vertimas.neVisa ? enPastraipos(M.neVisa.lt, o.vertimas.neVisa) : null);
+        if (c[1]) pildykLangeli(doc, c[1].tc, nvEn, rPr0, { zyma: VERTIMO_ZYMA });
         R.neVisaTurinys.filter(x => x !== tr && x.parentNode).forEach(x => tbl.removeChild(x));
         neVisa = 'is-dokumento';
       }
     }
     const pasalintos = Object.keys(GRUPES).filter(g => R.grupes[g] && !naudotos.has(g)).map(g => GRUPES[g].lt);
-    return { eiluciu: E.length, grupes: Object.entries(kiek).map(([pav, n]) => ({ pav, kiek: n })), pasalintos,
+    return { eiluciu: E.length, grupes: Object.entries(kiek).map(([pav, n]) => ({ pav, kiek: n })), pasalintos, diVertimu: dvikalbis ? E.filter(e => e.diVertimas).length : 0,
       specialistai: E.filter(e => e.specialistas).map(e => e.nr), neVisa, dvikalbis, beVertimo: dvikalbis ? E.filter(e => !pTekstas(e.reikEN)).length : 0 };
   }
 
@@ -573,5 +676,6 @@
   }
 
   root.GP_KVAL_LENTELE = { skaityk, skaitykXml, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
+    vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos, VERTIMO_TERMINAI,
     raskLentele, GRUPES, grupesPav, grupiuTvarka, pTekstas, VERTIMO_ZYMA };
 })(typeof window !== 'undefined' ? window : this);

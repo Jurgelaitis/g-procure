@@ -8352,6 +8352,120 @@ async function testaiKvalLentele(){
     lygu(await darbas(async () => W.kvlGrupe(0, "techninis")), true, "grupės pakeitimas");
     lygu(await darbas(async () => D.querySelector('[data-lk-patv="KVL"]').click()), true, "patvirtinimas");
   });
+  /* DI vertimo pasiūlymas (2026-10-14): netikras vertėjas - kiekviena pastraipa „EN “ + tekstas be diakritikų (skaičiai tie patys,
+     lietuviškų raidžių nelieka); užklausa perimama (perimkAI), niekas į serverį nesiunčiama. */
+  const enT = t => t ? "EN " + String(t).normalize("NFD").replace(/[̀-ͯ]/g, "") : "";
+  const vertejas = (keisk) => opts => { const j = JSON.parse(opts.userMessage.slice(opts.userMessage.indexOf("{")));
+    const o = { eilutes: j.eilutes.map(e => ({ nr: e.nr, reikalavimas: e.reikalavimas.map(enT), dokumentai: e.dokumentai.map(enT) })) };
+    if (j.antrastes) o.antrastes = j.antrastes.map(enT); if (j.neVisa) o.neVisa = j.neVisa.map(enT);
+    if (keisk) keisk(o);
+    return { ok: true, status: 200, text: "Štai vertimas:\n" + JSON.stringify(o), raw: { stop_reason: "end_turn" }, error: null }; };
+  const kvlM = () => W.eval("kvlModelis()");
+  const verskIr = async () => { D.querySelector('[data-kvl="versti"],[data-kvl="versti-vel"]').click(); await kol(() => !D.querySelector("#kvlVertBusena [data-gpb-atsaukti]") && kvlM() && kvlM().vertimas !== undefined, "vertimas", 20000); await new Promise(r => setTimeout(r, 50)); };
+
+  await testas("DI vertimas (LT/EN, lentelė be anglų teksto): mygtukas su tuo, kas siunčiama; siunčiama tik lentelė - be numatomos vertės; vertimas siūlomas su DI žyma prie kiekvienos eilutės; Word - angliški langeliai, DI požymis, 3 žingsnis", async () => {
+    let siusta = null;
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "darbai", verte: "987 654", po2: async () => {
+      await kvlIkelk(KVL_A);
+      const sek = D.getElementById(W.lkId("kvl|KVL")), b = sek.querySelector('[data-kvl="versti"]');
+      tiesa(b && /Pasiūlyti vertimą \(DI\)/.test(b.textContent), "mygtuko nėra");
+      tiesa(/per G-Procure serverį į Claude API \(Anthropic\) siunčiamas tik šios lentelės lietuviškas tekstas \(5 eil\./.test(sek.textContent) && /be numatomos vertės/.test(sek.textContent), "nesakoma, kas siunčiama");
+      lygu(AI.kvietimai.length, 0, "siųsta be paspaudimo");
+      AI.atsakymas = vertejas();
+      await verskIr();
+      lygu(AI.kvietimai.length, 1, "užklausų");
+      siusta = AI.kvietimai[0];
+      const s2 = D.getElementById(W.lkId("kvl|KVL"));
+      lygu([s2.querySelectorAll(".kvl-en[data-di]").length, s2.querySelectorAll(".kvl-en .gp-di-zyme").length], [5, 5], "DI žyma prie eilučių");
+      tiesa(/Išversta 5 iš 5 eilučių/.test(s2.textContent) && s2.querySelector('[data-lk-patv="KVL_EN"]'), "vertimo santrauka ar patvirtinimas");
+      tiesa(W.formosSantrauka(W.__K).siulomi.some(u => /^Angliškas kvalifikacijos reikalavimų tekstas - DI vertimas \(5 eil\.\)$/.test(u.pavadinimas)), "vertimas ne „Siūloma“");
+    } });
+    tiesa(/Rangovas turi turėti teisę vykdyti elektros įrenginių eksploatavimo darbus/.test(siusta.userMessage) && !/987[\s ]?654/.test(siusta.userMessage)
+      && /Contracting Entity/.test(siusta.system) && siusta.maxTokens === 8000 && !siusta.model, "užklausa: " + siusta.userMessage.slice(0, 200));
+    const T = kvlLentele(docs.AK_LTEN_SPS.xml), e1 = T.find(e => e.length === 5 && e[0].t === "1.");
+    lygu([e1[2].t.split("\n")[0], e1[4].t], ["EN Rangovas turi tureti teise vykdyti elektros irenginiu eksploatavimo darbus:", "EN Valstybines energetikos reguliavimo tarybos atestato skaitmenine kopija.\nNote: only the ESPD is submitted with the Tender."], "angliški langeliai");
+    tiesa(!docs.AK_LTEN_SPS.pars.some(p => p === W.GP_KVAL_LENTELE.VERTIMO_ZYMA), "liko nurodymas įrašyti vertimą");
+    const t = (D.getElementById("kvalLentelePatikra") || {}).textContent.replace(/\s+/g, " ");
+    tiesa(/Angliškas tekstas 5 eilutėse - DI vertimas \(Claude\), nepatvirtintas; vertėjas netikrino/.test(t) && D.getElementById("kvalLentelePatikra").classList.contains("no"), "3 žingsnis: " + t);
+    tiesa(/kvalifikacijos reikalavimų lentelės angliškas tekstas - DI vertimas/.test(D.getElementById("rezultatas").textContent), "bendra 3 žingsnio pastaba");
+    const sps = W.__R.find(r => r.d.trumpas === "AK_LTEN_SPS"), z = await W.JSZip.loadAsync(await sps.blob.arrayBuffer());
+    const cx = await z.file("docProps/custom.xml").async("string");
+    tiesa(/DI_vertimu[\s\S]*?<vt:i4>5<\/vt:i4>|DI_vertimu[\s\S]*?>5</.test(cx) && /kvalifikacijos reikalavimų lentelės angliškas tekstas - DI vertimas/.test(cx), "DI požymiai: " + cx.slice(0, 600));
+  });
+  await testas("DI vertimas: patikra prieš rodant (kita pastraipų skaičius - neišversta, kiti skaičiai - „Patikrinkite“), „Versti likusias“ - tik trūkstamos, taisymas ranka ir patvirtinimas; „Atmesti vertimą“", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT_EN", "darbai"); await kvlIkelk(KVL_A);
+    AI.atsakymas = vertejas(o => { o.eilutes[1].reikalavimas.pop(); o.eilutes[2].reikalavimas[0] = o.eilutes[2].reikalavimas[0].replace(/\d|$/, "7"); o.eilutes[4].dokumentai[0] += " (finansinės)"; });
+    await verskIr();
+    const M = kvlM(), sek = () => D.getElementById(W.lkId("kvl|KVL"));
+    lygu([Object.keys(M.vertimas.eil).sort(), M.vertimas.nepavyko.map(x => x.i + ":" + x.priezastis)], [["0", "2", "3", "4"], ["1:pastraipų skaičius nesutampa su lietuvišku tekstu"]], "patikra");
+    tiesa(/Neišversta: 2\. eilutė - pastraipų skaičius nesutampa/.test(sek().textContent) && sek().querySelector('[data-kvl="versti"]').textContent === "Versti likusias (DI)", "neišverstos eilutės nesakomos");
+    const e3 = sek().querySelector('[id$="-e2"] .kvl-en');
+    tiesa(e3 && e3.open && /Patikrinkite: skaičiai vertime ne tokie patys kaip lietuviškai/.test(e3.textContent), "perspėjimas apie skaičius");
+    tiesa(/Patikrinkite: vertime liko lietuviškų raidžių/.test(sek().querySelector('[id$="-e4"] .kvl-en').textContent), "perspėjimas apie lietuviškas raides");
+    AI.kvietimai = []; AI.atsakymas = vertejas();
+    await verskIr();
+    lygu([AI.kvietimai.length, JSON.parse(AI.kvietimai[0].userMessage.slice(AI.kvietimai[0].userMessage.indexOf("{"))).eilutes.map(e => e.nr)], [1, [2]], "verčiama tik trūkstama eilutė");
+    lygu(Object.keys(kvlM().vertimas.eil).length, 5, "visos išverstos");
+    // taisymas ranka: eilutė pažymima, perspėjimas nuimamas; patvirtinimas - tik paspaudus
+    const ta = sek().querySelector('[id$="-e2-enr"]'); ta.focus(); ta.value = "The Contractor must have a construction engineer."; ta.dispatchEvent(new W.Event("change"));
+    tiesa(/DI vertimas, taisytas/.test(sek().querySelector('[id$="-e2"] .kvl-en').textContent) && !kvlM().vertimas.perspejimai[2], "taisymas nepažymėtas");
+    lygu(D.activeElement && D.activeElement.id, ta.id, "fokusas po perpiešimo");
+    sek().querySelector('[data-lk-patv="KVL_EN"]').click();
+    tiesa(W.formosSantrauka(W.__K).patvirtinti.some(u => /DI vertimas/.test(u.pavadinimas)), "nepatvirtinta");
+    // „Versti iš naujo“ - žmogaus taisyta eilutė lieka
+    AI.kvietimai = []; D.querySelector('[data-kvl="versti-vel"]').click();
+    await kol(() => AI.kvietimai.length && !D.querySelector("#kvlVertBusena [data-gpb-atsaukti]") && kvlM().vertimas && Object.keys(kvlM().vertimas.eil).length === 5, "vertimas iš naujo", 20000);
+    tiesa(kvlM().vertimas.eil[2].reik[0] === "The Contractor must have a construction engineer." && !JSON.parse(AI.kvietimai[0].userMessage.slice(AI.kvietimai[0].userMessage.indexOf("{"))).eilutes.some(e => e.nr === 3), "taisyta eilutė perrašyta");
+    tiesa(!W.eval("PATV").has("KVL_EN"), "išvertus iš naujo patvirtinimas liko");
+    sek().querySelector('[data-kvl="vertimas-atmesti"]').click();
+    tiesa(kvlM().vertimas === null && sek().querySelector('[data-kvl="versti"]') && /Pasiūlyti vertimą/.test(sek().querySelector('[data-kvl="versti"]').textContent), "atmesta - vertimas liko");
+  });
+  await testas("DI vertimas: klaida, nutrūkęs atsakymas ir atšaukimas - niekas nepritaikoma, priežastis ir „Bandyti dar kartą“; ilga lentelė - keliomis užklausomis, kiekviena eilutė - vieną kartą", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT_EN", "darbai"); await kvlIkelk(KVL_A);
+    AI.atsakymas = () => ({ ok: false, status: 503, text: "", raw: null, error: "Serveris laikinai nepasiekiamas" });
+    await verskIr();
+    const st = () => D.getElementById("kvlVertBusena").textContent.replace(/\s+/g, " ");
+    tiesa(/Vertimo gauti nepavyko: Serveris laikinai nepasiekiamas/.test(st()) && D.querySelector("#kvlVertBusena [data-gpb-kartoti], #kvlVertBusena button"), "klaida: " + st());
+    lygu(kvlM().vertimas, null, "klaida - kažkas pritaikyta");
+    AI.atsakymas = () => ({ ok: true, status: 200, text: '{"eilutes":[{"nr":1,"reikalavimas":["EN', raw: { stop_reason: "max_tokens" }, error: null });
+    await verskIr();
+    tiesa(/nutrūko/.test(st()) && kvlM().vertimas === null, "nutrūkęs: " + st());
+    AI.atsakymas = opts => new Promise(res => opts.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })));
+    D.querySelector('[data-kvl="versti"]').click();
+    await kol(() => D.querySelector("#kvlVertBusena [data-gpb-atsaukti]"), "atšaukimo mygtukas");
+    D.querySelector("#kvlVertBusena [data-gpb-atsaukti]").click();
+    await kol(() => /Vertimas atšauktas/.test(st()), "atšaukta");
+    lygu(kvlM().vertimas, null, "atšaukus pritaikyta");
+    // ilga lentelė: 12 eilučių po ~1000 ženklų - kelios užklausos
+    const ilgas = i => "Tiekėjas turi turėti " + (i + 1) + " specialistą. " + "Reikalavimo aprašymas su detalėmis. ".repeat(28);
+    await kvlIkelk(["Ilga.docx", [{ lentele: [["Eil. Nr.", "Reikalavimai", "Pateikiami dokumentai"]].concat(Array.from({ length: 12 }, (_, i) => [String(i + 1) + ".", ilgas(i), "Dokumentai " + (i + 1) + "."])) }]]);
+    AI.kvietimai = []; AI.atsakymas = vertejas();
+    await verskIr();
+    const nr = AI.kvietimai.map(k => JSON.parse(k.userMessage.slice(k.userMessage.indexOf("{"))).eilutes.map(e => e.nr));
+    tiesa(nr.length >= 2 && nr.flat().sort((a, b) => a - b).join() === Array.from({ length: 12 }, (_, i) => i + 1).join() && Object.keys(kvlM().vertimas.eil).length === 12, "partijos: " + JSON.stringify(nr));
+  });
+  await testas("DI vertimas: kitos grupės antraštė ir „ne visa apimtimi“ - irgi verčiami (dvikalbės eilutės), pusjuodis - tik kai visa lietuviška pastraipa pusjuodė", async () => {
+    const beEN = x => Array.isArray(x) ? x.filter(y => !(y && y.en)).map(beEN) : (x && typeof x === "object" && !x.t && !x.atk ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, beEN(v)])) : x);
+    const KVL_B_LT = ["PP-qual_reikalavimai_LT.docx", [{ lentele: KVL_B[1][0].lentele.map(e => Array.isArray(e) ? e.map(beEN) : { visa: typeof e.visa === "string" ? e.visa.split(" / ")[0] : beEN(e.visa) }).map((e, k) => k ? e : ["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"]) }]];
+    let docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "darbai", po2: async () => { await kvlIkelk(KVL_B_LT); AI.atsakymas = vertejas(); await verskIr(); } });
+    let T = kvlLentele(docs.AK_LTEN_SPS.xml);
+    tiesa(T.some(e => e.length === 1 && e[0].t === "Kokybės ir aplinkos apsaugos vadybos standartai / EN Kokybes ir aplinkos apsaugos vadybos standartai"), "kitos grupės antraštė: " + T.filter(e => e.length === 1).map(e => e[0].t).join(" | "));
+    const nv = T.find(e => e.length === 2 && /kvalifikacija dėl teisės atlikti suvirinimo darbus/.test(e[0].t));
+    tiesa(nv && /^EN Pirkimo proceduros metu kvalifikacija del teises atlikti suvirinimo darbus netikrinama/.test(nv[1].t), "ne visa apimtimi EN: " + (nv && nv[1].t));
+    // pusjuodis: 4 eilutės pirmoje pastraipoje pusjuodis tik dalyje - angliškame langelyje pusjuodžio nėra
+    docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "darbai", po2: async () => { await kvlIkelk(KVL_A); AI.atsakymas = vertejas(); await verskIr(); } });
+    T = kvlLentele(docs.AK_LTEN_SPS.xml);
+    const e4 = T.find(e => e.length === 5 && e[0].t === "4.");
+    lygu([Array.from(e4[1].el.getElementsByTagNameNS(NSW, "b")).length > 0, Array.from(e4[2].el.getElementsByTagNameNS(NSW, "b")).length], [true, 0], "pusjuodis LT ir EN");
+    const pj = W.GP_KVAL_LENTELE.enPastraipos([{ tekstas: "A", atk: [{ t: "A", b: true }] }, { tekstas: "", atk: [] }, { tekstas: "B", atk: [{ t: "B", b: false }] }], ["X", "Y"]);
+    lygu(pj.map(x => [x.tekstas, !!(x.atk[0] && x.atk[0].b)]), [["X", true], ["", false], ["Y", false]], "pastraipos ir pusjuodis");
+  });
+  await testas("DI vertimas nesiūlomas: lietuviškos sąlygos ir dvikalbis šaltinis (PP-qual LT / EN)", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT", "darbai"); await kvlIkelk(KVL_A);
+    tiesa(!D.querySelector('[data-kvl="versti"]') && !D.querySelector(".kvl-vert"), "LT sąlygose siūloma versti");
+    await modulis(); await zingsnis2("T-AK", "LT_EN", "darbai"); await kvlIkelk(KVL_B);
+    tiesa(!D.querySelector('[data-kvl="versti"]') && !D.querySelector(".kvl-vert"), "dvikalbiam šaltiniui siūloma versti");
+  });
   await testas("Telefone (375 px): kortelė su perkėlimu neplatina puslapio", async () => {
     await modulis("siauras"); await zingsnis2("T-AK", "LT", "darbai"); await kvlIkelk(KVL_B);
     const s = D.getElementById(W.lkId("kvl|KVL"));

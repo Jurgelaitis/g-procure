@@ -253,6 +253,14 @@
   .kvl-past ul{margin:4px 0 0;padding-left:18px}
   .kvl-klaida{margin:6px 0;color:var(--color-error-strong);font-size:13px;font-weight:600}
   .kvl-veiksmai{flex-wrap:wrap;gap:8px}
+  .kvl-vert{margin:10px 0;padding:10px 12px;border:1px solid var(--color-graphite-15);border-radius:8px;background:var(--color-white);font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+  .kvl-vert-gal{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .kvl-vert-t{margin:6px 0}
+  .kvl-vert .actions{flex-wrap:wrap;gap:8px;margin-top:6px}
+  .kvl-en{margin-top:8px;padding:6px 10px;border-left:3px solid var(--color-graphite-15);background:var(--color-graphite-5);border-radius:0 6px 6px 0}
+  .kvl-en summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px}
+  .kvl-en-s{color:var(--color-graphite);overflow-wrap:anywhere}
+  .kvl-ta{width:100%;margin:4px 0 8px;font-size:13px}
   .kvl .lk-uz,.kvl-info,.kvl-past,.kvl-klaida{overflow-wrap:anywhere}
   .kvl-pr{overflow-wrap:anywhere;margin-top:8px;padding:8px 12px;border-radius:7px;background:var(--color-green-15);font-size:13px;line-height:1.55;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   .lk-auto-k{margin-left:6px;padding:2px 10px;font-size:12px}
@@ -1832,6 +1840,61 @@ async function kvlSkaityk(failai, kortele){
   if (nauju && !PATV.has('KVL')){ KVL.pasirinkta = pirmas; KVL.pakeitimai = {}; KVL.atmesta = false; }
   return nauju;
 }
+/* DI vertimo pasiūlymas (2026-10-14, naudotojo „Pradėkime nuo DI vertimo pasiūlymo dvikalbėms lentelėms“): kai pirkimo sąlygos dvikalbės,
+   o įkeltoje lentelėje anglų teksto nėra. Siunčiamas TIK lentelės lietuviškas tekstas (eilutės, kitos grupės antraštės, „ne visa apimtimi“)
+   per G-Procure serverį į Claude API; numatoma vertė ir kiti pirkimo duomenys nesiunčiami. Vertimas - M.vertimas (kartu su įkelta
+   lentele: įkėlus iš naujo - iš naujo), siūlomas (PATV 'KVL_EN' - tik žmogaus veiksmu), ekrane ir Word faile pažymėtas kaip DI.
+   Būsenos elementas nuolatinis (KVL_VERT_EL) - perpiešiant klausimus jis perkeliamas į naują kortelę, eiga ir „Atšaukti“ lieka. */
+const KVL_VERT_EL = document.createElement('div');
+KVL_VERT_EL.id = 'kvlVertBusena';
+async function kvlVersk(visas){
+  const M = kvlModelis(), L = GP_KVAL_LENTELE;
+  if (!M) return;
+  M.vertimas ??= { eil: {}, antrastes: {}, neVisa: null, perspejimai: {}, nepavyko: [] };
+  if (visas){                                          // „Versti iš naujo“ - žmogaus taisytos eilutės lieka
+    Object.keys(M.vertimas.eil).forEach(i => { if (!M.vertimas.eil[i].zmogus){ delete M.vertimas.eil[i]; delete M.vertimas.perspejimai[i]; } });
+    M.vertimas.antrastes = {}; M.vertimas.neVisa = null;
+  }
+  M.vertimas.nepavyko = [];
+  const partijos = L.vertimoPartijos(M, M.vertimas);
+  if (!partijos.length){ klausimynas(); return; }
+  PATV.delete('KVL_EN');
+  const n = partijos.reduce((a, x) => a + x.eilutes.length, 0);
+  const v = await GP_BUSENA.vykdyk(KVL_VERT_EL, { tipas: 'ai', atsaukiama: true, procentai: partijos.length > 1 ? 0 : undefined,
+    tekstas: `DI verčia ${n} eilut${n === 1 ? 'ę' : 'es'} į anglų kalbą - tai gali užtrukti iki minutės`,
+    klaidosPriesdelis: 'Vertimo gauti nepavyko', kartoti: () => kvlVersk(false),
+    atsauktaTekstas: 'Vertimas atšauktas - tai, kas jau išversta, lieka; kitų eilučių langeliai liks raudoni.',
+    sekme: () => { const np = M.vertimas.nepavyko.length; return np ? `Išversta, išskyrus ${np} eilut${np === 1 ? 'ę' : 'es'} - žr. kortelę.` : 'Vertimas paruoštas - patikrinkite ir patvirtinkite.'; },
+    veiksmas: async (signal, h) => {
+      if (!window.GP_AI_PROXY) throw new Error('DI tarpinė neprijungta');
+      for (let k = 0; k < partijos.length; k++){
+        if (partijos.length > 1 && h && h.eiga) h.eiga(Math.round(k / partijos.length * 100), `${k + 1}/${partijos.length} dalis`);
+        const u = L.vertimoUzklausa(M, partijos[k]);
+        const r = await GP_AI_PROXY.call({ module: 'pp-salygos', maxTokens: 8000, system: u.system, userMessage: u.userMessage, signal });
+        if (signal && signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+        if (!r.ok) throw new Error(r.error || 'DI klaida');
+        if (r.raw && r.raw.stop_reason === 'max_tokens') throw new Error('DI atsakymas nutrūko (per ilgas) - pabandykite dar kartą');
+        const a = L.vertimoAtsakymas(r.text, M, partijos[k], GP_AI_PROXY.taisykJson);
+        if (a.klaida) throw new Error(a.klaida);
+        Object.assign(M.vertimas.eil, a.eil); Object.assign(M.vertimas.antrastes, a.antrastes); Object.assign(M.vertimas.perspejimai, a.perspejimai);
+        if (a.neVisa) M.vertimas.neVisa = a.neVisa;
+        M.vertimas.nepavyko.push(...a.nepavyko);
+      }
+      return true;
+    } });
+  if (!v.ok && !Object.keys(M.vertimas.eil).length && !M.vertimas.neVisa && !Object.keys(M.vertimas.antrastes).length) M.vertimas = null;
+  klausimynas();
+}
+window.kvlEn = (i, lauk, val) => {
+  const M = kvlModelis();
+  if (!M || !M.vertimas) return;
+  const x = M.vertimas.eil[i] ??= { reik: [], dok: [] };
+  x[lauk] = String(val || '').split('\n').map(t => t.trim());
+  x.zmogus = true;
+  delete M.vertimas.perspejimai[i];
+  klausimynas();
+};
+
 function kvlSalinkFaila(vardas){
   const buvo = kvlModelis();
   KVL.kandidatai = KVL.kandidatai.filter(M => M.failas !== vardas);
@@ -3252,6 +3315,9 @@ function kortelesVienetai(K, c){
     out.push({ id: c.id + '-patv', pavadinimas: `SPS 2 lentelė iš „${q.M.failas}“ (${E.length} reikalavim${E.length === 1 ? 'as' : 'ai'})`,
       busena: be.length ? 'neuzpildyta' : (PATV.has('KVL') ? 'patvirtinta' : 'siuloma'), blokuoja: be.length > 0, raktai: ['KVL'],
       reiksme: be.length ? `nepasirinkta grupė: ${be.map(e => e.nr).join(', ')} eil.` : `${E.length} reikalavimai`, saltinis: 'įkeltas dokumentas - patikrinkite grupes ir specialistus' });
+    const nDI = q.dvikalbis && !q.M.dvikalbe ? GP_KVAL_LENTELE.diVertimuSk(q.M, q.M.vertimas) : 0;
+    if (nDI) out.push({ id: c.id + '-en', pavadinimas: `Angliškas kvalifikacijos reikalavimų tekstas - DI vertimas (${nDI} eil.)`,
+      busena: PATV.has('KVL_EN') ? 'patvirtinta' : 'siuloma', raktai: ['KVL_EN'], reiksme: `${nDI} eilučių`, saltinis: 'DI vertimas - patikrinkite' });
   } else if (c.rusis === 'dalis'){
     const d = (ATS['DALYS'] || [])[q.k] || {};
     const b = (lauk, rk) => !String(d[lauk] || '').trim() ? 'neuzpildyta' : (PATV.has(rk) ? 'patvirtinta' : 'siuloma');
@@ -3399,8 +3465,9 @@ function kvlHTML(K, c, klase, kur){
         : 'Jau turite kvalifikacijos reikalavimus Word faile (pvz. iš PP-qual)? Įkelkite jį - reikalavimai bus perkelti į SPS 2 lentelę pažodžiui, su grupėmis ir numeriais, o 3.7 punkto specialistų numeriai pasiūlyti. Failas skaitomas tik jūsų naršyklėje.'}</p>
       ${klaida}<div class="actions kvl-veiksmai">${atm ? '<button type="button" class="sec" data-kvl="naudoti">Naudoti įkeltą lentelę</button>' : ''}${ikelti}</div></section>`;
   }
-  const E = L.numeriai(M, KVL.pakeitimai);
+  const E = L.numeriai(M, KVL.pakeitimai, M.vertimas);
   const u0 = c.vienetai[0] || {};
+  const dvik = q.dvikalbis && !M.dvikalbe, VT = M.vertimas;
   const opt = (v, t, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(t)}</option>`;
   let grupe = undefined, eil = '';
   E.forEach(e => {
@@ -3431,12 +3498,13 @@ function kvlHTML(K, c, klase, kur){
             onchange="kvlSpec(${e.i},this.checked)"> Specialisto reikalavimas (SPS 3.7 p.)</label></span>
           <span class="kvl-kilme" id="${id}-sk">${esc(sKilme)}</span>
         </div>
+        ${dvik && e.diVertimas ? kvlEnHTML(id, e, VT) : ''}
       </div></div>`;
   });
   const spec = E.filter(e => e.specialistas).map(e => e.nr);
   const naudotos = new Set(E.map(e => e.grupe));
   const pasal = Object.keys(L.GRUPES).filter(g => !naudotos.has(g)).map(g => L.GRUPES[g].lt);
-  const past = L.pastabos(M, { terminas: q.terminas, dvikalbis: q.dvikalbis, pakeitimai: KVL.pakeitimai });
+  const past = L.pastabos(M, { terminas: q.terminas, dvikalbis: q.dvikalbis, pakeitimai: KVL.pakeitimai, vertimas: VT });
   const kitos = KVL.kandidatai.length > 1 ? `<div class="lk-v"><label class="lk-v-l" for="${c.id}-k">Kuri lentelė perkeliama?</label>
     <select class="lk-in" id="${c.id}-k" onchange="kvlPasirink(this.value)">${KVL.kandidatai.map((x, j) =>
       opt(String(j), `„${x.failas}“, ${x.lentele}-oji lentelė (${x.eilutes.length} eil.)`, j === KVL.pasirinkta)).join('')}</select></div>` : '';
@@ -3458,9 +3526,56 @@ function kvlHTML(K, c, klase, kur){
       <li>${nv}</li>
     </ul>
     ${past.length ? `<div class="kvl-past"><b>Patikrinkite:</b><ul>${past.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+    ${dvik ? kvlVertimoHTML(c, M, E, c.vienetai.find(u => u.raktai && u.raktai.includes('KVL_EN'))) : ''}
     <div class="actions kvl-veiksmai">${u0.busena === 'siuloma' ? '<button type="button" data-lk-patv="KVL">Patvirtinti perkėlimą</button>' : ''}
       <button type="button" class="sec" data-kvl="atmesti">Nenaudoti - pildysiu šablono laukus</button>${ikelti}</div>
   </section>`;
+}
+/* Angliškas tekstas dvikalbėms sąlygoms: be vertimo - pasiūlymas versti (ką siunčia ir kur); su vertimu - kiek išversta, kas nepavyko,
+   patvirtinimas, „Versti iš naujo“ ir „Atmesti vertimą“. */
+function kvlVertimoHTML(c, M, E, u){
+  const VT = M.vertimas, L = GP_KVAL_LENTELE;
+  const nDI = E.filter(e => e.diVertimas).length, be = E.filter(e => !L.pTekstas(e.reikEN)).length;
+  const simb = M.eilutes.reduce((a, e) => a + L.pTekstas(e.reik).length + L.pTekstas(e.dok).length, 0);
+  const kas = `Paspaudus per G-Procure serverį į Claude API (Anthropic) siunčiamas tik šios lentelės lietuviškas tekstas (${M.eilutes.length} eil., apie ${simb} ženklų) - be numatomos vertės ir kitų pirkimo duomenų; nei naršyklėje, nei serveryje jis nesaugomas. Nesiųskite įslaptintos informacijos.`;
+  const nep = VT && VT.nepavyko && VT.nepavyko.length ? `<p class="kvl-klaida">Neišversta: ${VT.nepavyko.map(x => esc(x.i + 1 + '. eilutė - ' + x.priezastis)).join('; ')}. Spauskite „Versti likusias“ arba įrašykite ranka prie eilutės.</p>` : '';
+  const vieta = '<div class="kvl-vert-vieta"></div>';
+  if (!VT || (!nDI && !VT.neVisa && !Object.keys(VT.antrastes || {}).length)){
+    return `<div class="kvl-vert" id="${c.id}-vert"><div class="kvl-vert-gal"><b>Angliškas tekstas.</b> Pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų kalbos nėra.</div>
+      <p class="kvl-vert-t">DI gali pasiūlyti vertimą pagal pirkimo sąlygų terminus (Supplier, Tender, Contracting Entity, ESPD ...). Vertimas bus siūlomas, kol jo nepatvirtinsite, ir pažymėtas kaip parengtas naudojant DI - ekrane ir Word faile.</p>
+      ${nep}<div class="actions"><button type="button" class="sec lk-ai" data-kvl="versti">Pasiūlyti vertimą (DI)</button></div>
+      <div class="cite cite-ai">${esc(kas)}</div>${vieta}</div>`;
+  }
+  const busena = u ? busenosZyma(u.busena) : '';
+  return `<div class="kvl-vert" id="${c.id}-vert" data-di="sugeneruota"><div class="kvl-vert-gal">${GP_DI.zyme({ tekstas: 'DI vertimas' })} <b>Angliškas tekstas - DI vertimas (Claude)</b> ${busena}</div>
+    <p class="kvl-vert-t">Išversta ${nDI} iš ${M.eilutes.length} eilučių${be ? `, be vertimo - ${be} (langeliai liks raudoni)` : ''}${VT.neVisa ? ', „ne visa apimtimi“ - taip pat' : ''}.
+      Angliškas tekstas rodomas prie kiekvienos eilutės - patikrinkite, prireikus pataisykite ir patvirtinkite. Vertėjas jo netikrino.</p>
+    ${nep}<div class="actions">${u && u.busena === 'siuloma' ? '<button type="button" data-lk-patv="KVL_EN">Patvirtinti vertimą</button>' : ''}
+      ${be || (VT.nepavyko || []).length ? '<button type="button" class="sec lk-ai" data-kvl="versti">Versti likusias (DI)</button>' : ''}
+      <button type="button" class="sec lk-ai" data-kvl="versti-vel">Versti iš naujo (DI)</button>
+      <button type="button" class="sec" data-kvl="vertimas-atmesti">Atmesti vertimą</button></div>
+    <div class="cite cite-ai">${esc(kas)}</div>${vieta}</div>`;
+}
+/* Eilutės angliškas tekstas (DI): suskleista santrauka, išskleidus - taisymo laukai (pastraipa - eilutė). Atverti lieka atverti perpiešus
+   (kitaip pataisius eilutę fokusas dingtų suskleistame bloke). */
+const KVL_EN_ATVIRI = new Set();
+document.addEventListener('toggle', e => {
+  const d = e.target;
+  if (!d || !d.matches || !d.matches('details.kvl-en')) return;
+  const i = Number(d.dataset.kvlEn);
+  if (d.open) KVL_EN_ATVIRI.add(i); else KVL_EN_ATVIRI.delete(i);
+}, true);
+function kvlEnHTML(id, e, VT){
+  const L = GP_KVAL_LENTELE, r = L.pTekstas(e.reikEN), d = L.pTekstas(e.dokEN), p = (VT && VT.perspejimai && VT.perspejimai[e.i]) || [];
+  const santr = r.split('\n')[0];
+  return `<details class="kvl-en" data-di="sugeneruota" data-kvl-en="${e.i}"${p.length || KVL_EN_ATVIRI.has(e.i) ? ' open' : ''}><summary>${GP_DI.zyme({ tekstas: e.vertimasZmogaus ? 'DI vertimas, taisytas' : 'DI vertimas' })}
+      <span class="kvl-en-s">${esc(santr.length > 120 ? santr.slice(0, santr.lastIndexOf(' ', 120)) + ' …' : santr)}</span></summary>
+    ${p.length ? `<p class="kvl-klaida">Patikrinkite: ${esc(p.join('; '))}.</p>` : ''}
+    <label class="kvl-l" for="${id}-enr">Kvalifikacijos reikalavimas angliškai</label>
+    <textarea class="lk-in kvl-ta" id="${id}-enr" rows="${Math.min(10, r.split('\n').length + 1)}" onchange="kvlEn(${e.i},'reik',this.value)">${esc(r)}</textarea>
+    <label class="kvl-l" for="${id}-end">Pateikiami dokumentai angliškai</label>
+    <textarea class="lk-in kvl-ta" id="${id}-end" rows="${Math.min(8, d.split('\n').length + 1)}" onchange="kvlEn(${e.i},'dok',this.value)">${esc(d)}</textarea>
+    <p class="kvl-kilme">Kiekviena eilutė lauke - atskira pastraipa dokumente.</p></details>`;
 }
 window.kvlGrupe = (i, v) => { (KVL.pakeitimai[i] ??= {}).grupe = v || null; klausimynas(); };
 window.kvlSpec = (i, b) => { (KVL.pakeitimai[i] ??= {}).specialistas = !!b; klausimynas(); };
@@ -3486,6 +3601,8 @@ document.addEventListener('click', e => {
     return;
   }
   const k = b.dataset.kvl;
+  if (k === 'versti' || k === 'versti-vel'){ kvlVersk(k === 'versti-vel'); return; }
+  if (k === 'vertimas-atmesti'){ const M = kvlModelis(); if (M) M.vertimas = null; PATV.delete('KVL_EN'); GP_BUSENA.slepk(KVL_VERT_EL); klausimynas(); kortele(); return; }
   if (k === 'ikelti') $('#kvlFailas').click();
   else if (k === 'atmesti'){ KVL.atmesta = true; PATV.delete('KVL'); klausimynas(); kortele(); }
   else if (k === 'naudoti'){ KVL.atmesta = false; klausimynas(); kortele(); }
@@ -4098,6 +4215,8 @@ function klausimynas(){
   }
 
   $('#klausimai').innerHTML = h;
+  const kvlVieta = document.querySelector('#klausimai .kvl-vert-vieta');   // DI vertimo būsena - tas pats elementas (eiga, „Atšaukti“)
+  if (kvlVieta) kvlVieta.replaceWith(KVL_VERT_EL);
   if ($('#lkSantrauka')) $('#lkSantrauka').innerHTML = santraukosHTML(S);
   veiksmaiPirkimui();
   teisesPirkimui();
@@ -4601,8 +4720,8 @@ async function generuotiViena(d, REZ){
   if (!forma && window.GP_KVAL_LENTELE){
     const kv = window.__K && window.__K.kvl, xd = doc.parts['word/document.xml'];
     if (kv && kv.M && kv.dokai.includes(d.trumpas)){
-      kvalIsDok = GP_KVAL_LENTELE.irasyk(xd, kv.M, { pakeitimai: KVL.pakeitimai, neVisa: kv.neVisaAuto });
-      if (kvalIsDok){ kvalIsDok.failas = kv.M.failas; kvalIsDok.patvirtinta = PATV.has('KVL'); }
+      kvalIsDok = GP_KVAL_LENTELE.irasyk(xd, kv.M, { pakeitimai: KVL.pakeitimai, neVisa: kv.neVisaAuto, vertimas: kv.M.vertimas });
+      if (kvalIsDok){ kvalIsDok.failas = kv.M.failas; kvalIsDok.patvirtinta = PATV.has('KVL'); kvalIsDok.vertimasPatvirtintas = PATV.has('KVL_EN'); }
       else kvalIsDok = { klaida: true, failas: kv.M.failas };
     }
     neVisaPasalinta = GP_KVAL_LENTELE.tusciaNeVisa(xd);
@@ -4874,8 +4993,10 @@ function rodykRezultata(rez){
   const aiStr = aiP.n ? `<div class="cite">Atsakymų, priimtų iš AI pasiūlymų: <b>${aiP.n}</b> (kiekvieną patvirtinote jūs; šaltiniai: ${esc(aiP.saltiniai.join(', '))}).</div>` : '';
   // „Jokio AI teksto“ buvo netikslu: angliška pavadinimo versija gali būti AI pasiūlymas (testuotojo radinys 2026-10-02).
   const rezStr = centralizuotas() ? `<div class="cite">Centralizuotas pirkimas: LITGRID sąlygos „Atviras konkursas VPĮ“, taikomas <b>VPĮ</b>.</div>` : '';
+  // 2026-10-14: kvalifikacijos reikalavimų lentelės angliškas tekstas gali būti DI vertimas - tada sakoma ir tai
+  const diLent = rez.some(r => r.stats && r.stats.kvalIsDokumento && r.stats.kvalIsDokumento.diVertimu);
   let h = `<div class="hint">Dokumentai sugeneruoti iš LITGRID šablonų - sąlygų teksto AI nerašė. AI galėjo tik pasiūlyti
-    atsakymus ar angliško pavadinimo vertimą, kuriuos patvirtinote jūs.</div>${aiStr}${metStr}${rezStr}<table class="rez">`;
+    atsakymus ar angliško pavadinimo vertimą, kuriuos patvirtinote jūs${diLent ? ', o kvalifikacijos reikalavimų lentelės angliškas tekstas - DI vertimas (žr. žemiau)' : ''}.</div>${aiStr}${metStr}${rezStr}<table class="rez">`;
   rez.forEach((r, ri) => {
     if (!r.blob){   // sutarties projektas nesugeneruotas - priežastis vietoje atsisiuntimo
       h += `<tr><td><b>${esc(r.d.pavadinimas)}</b><div class="cite">${esc(((r.sutartis && r.sutartis.klaidos) || []).join(' · '))}</div></td>
@@ -5047,10 +5168,11 @@ function rodykRezultata(rez){
     const k = r.stats.kvalIsDokumento, L = GP_KVAL_LENTELE;
     if (k.klaida){ h += `<div class="audit no" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai neperkelti:</b> ${esc(r.d.pavadinimas)} - SPS 2 lentelės
       dokumente neradome, todėl „${esc(k.failas)}“ reikalavimų įrašyti nepavyko. Lentelė palikta kaip šablone - užpildykite ją Word programoje.</div>`; return; }
-    h += `<div class="audit ${k.patvirtinta && !k.beVertimo ? 'ok' : 'no'}" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai (SPS 2 lentelė):</b> ${esc(r.d.pavadinimas)} -
+    h += `<div class="audit ${k.patvirtinta && !k.beVertimo && (!k.diVertimu || k.vertimasPatvirtintas) ? 'ok' : 'no'}" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai (SPS 2 lentelė):</b> ${esc(r.d.pavadinimas)} -
       iš „${esc(k.failas)}“ perkelta ${k.eiluciu} (${k.grupes.map(g => esc(g.pav) + ' ' + g.kiek).join(', ')}), numeriai 1-${k.eiluciu}${k.pasalintos.length ? `; pašalintos grupės be reikalavimų: ${esc(k.pasalintos.join(', '))}` : ''}${
       k.neVisa ? '; „ne visa apimtimi“ - iš jūsų dokumento' : ''}${k.specialistai.length ? `; specialistų reikalavimai (3.7 p.): ${esc(L.punktai(k.specialistai, 'ir'))}` : ''}.${
       k.patvirtinta ? '' : ' <b>Perkėlimas nepatvirtintas</b> - grupės ir specialistai buvo tik siūlomi; peržiūrėkite lentelę Word programoje.'}${
+      k.diVertimu ? ` Angliškas tekstas ${k.diVertimu} eilutėse - <b>DI vertimas (Claude)</b>${k.vertimasPatvirtintas ? ', jūsų patvirtintas' : ', <b>nepatvirtintas</b>'}; vertėjas netikrino, Word faile įrašytas DI požymis.` : ''}${
       k.beVertimo ? ` <b>Angliškas tekstas</b> ${k.beVertimo} eilutėse neįrašytas - langeliuose raudonas nurodymas „${esc(L.VERTIMO_ZYMA)}“.` : ''}</div>`;
   });
   const nvp = rez.filter(r => r.stats && r.stats.neVisaPasalinta);
@@ -5851,9 +5973,13 @@ function aiRodykSantrauka(){
    vertimai). Be jų - null (požymių nėra: sąlygų tekstas iš šablonų). */
 function diPozymiuSavybes(){
   const n = aiPriimtuSantrauka().n;
-  const v = [...SIUL.values()].filter(x => x && x.saltinis === 'AI vertimas - patikrinkite').length + (PZ_ZYMES.has('pavadinimasEN') ? 1 : 0);
+  // kvalifikacijos reikalavimų lentelės DI vertimas (2026-10-14) - tik kai lentelė perkeliama į dvikalbes sąlygas
+  const kv = window.__K && window.__K.kvl, kvM = kv && kv.dvikalbis && kv.M && !kv.M.dvikalbe ? kv.M : null;
+  const lv = kvM ? GP_KVAL_LENTELE.diVertimuSk(kvM, kvM.vertimas) : 0;
+  const v = [...SIUL.values()].filter(x => x && x.saltinis === 'AI vertimas - patikrinkite').length + (PZ_ZYMES.has('pavadinimasEN') ? 1 : 0) + lv;
   if (!n && !v) return null;
-  return GP_DI.savybes({ modulis: 'Pirkimo sąlygos', turinys: 'Priimti DI pasiūlymai (sąlygų tekstas - iš šablonų)',
+  return GP_DI.savybes({ modulis: 'Pirkimo sąlygos', turinys: lv ? 'Priimti DI pasiūlymai ir vertimai (sąlygų tekstas - iš šablonų, kvalifikacijos reikalavimų lentelės angliškas tekstas - DI vertimas)'
+    : 'Priimti DI pasiūlymai (sąlygų tekstas - iš šablonų)',
     papildomai: [{ name: 'DI_pasiulymu_priimta', value: n }, { name: 'DI_vertimu', value: v }] });
 }
 function aiPriimtuSantrauka(){
@@ -6184,7 +6310,8 @@ $('#tabTikrinti').addEventListener('click', () => darboSritis('tikrinti'));
 if (/^#tikrinti$/.test(location.hash)) darboSritis('tikrinti');
 window.addEventListener('hashchange', () => darboSritis(/^#tikrinti$/.test(location.hash) ? 'tikrinti' : 'rengti'));
 GP_DARBAS.stebek(() => [AI.priimta, GP_TIKRINIMAS.darbas(), APZIURA_KLAUSTI, EBVPD_TRINTI,
-  KVL.kandidatai.map(M => M.failas + '#' + M.lentele), KVL.pasirinkta, KVL.atmesta, KVL.pakeitimai, PATV.has('KVL')]);
+  KVL.kandidatai.map(M => M.failas + '#' + M.lentele + (M.vertimas ? JSON.stringify([M.vertimas.eil, M.vertimas.antrastes, M.vertimas.neVisa]) : '')),
+  KVL.pasirinkta, KVL.atmesta, KVL.pakeitimai, PATV.has('KVL'), PATV.has('KVL_EN')]);
 </script>
 <!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas
      shared/gprocure-info-panel.js (turinys - šio modulio, stilius ir elgsena - bendri). -->
