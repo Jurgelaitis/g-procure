@@ -359,6 +359,8 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
 <script src="../shared/procurement-methods.js"></script>
 <!-- Bendra pirkimo kortelė (A1): naujo pirkimo vedlys pildomas iš kortelės -->
 <script src="../shared/money.js"></script>
+<!-- Standartinis PVM tarifas (MOKESCIAI.pvmStandartinis) - vienas visiems moduliams; iki 2026-10-14 modulis skaičiavo su įrašytu tarifu -->
+<script src="../shared/thresholds.js"></script>
 <script src="../shared/organizacijos.js"></script>
 <script src="../shared/pirkimo-kortele.js"></script>
 </head>
@@ -1928,12 +1930,19 @@ function deleteProcurement() {
 }
 
 // ════════════════════════════════════════════════════════
+// PVM: standartinis tarifas - iš shared/thresholds.js (vienas tiesos šaltinis visiems moduliams; iki 2026-10-14 modulis
+// skaičiavo su įrašytu tarifu). Tarifo neįkėlus suma su PVM neskaičiuojama: laukas lieka tuščias, dokumente - „___“
+// ════════════════════════════════════════════════════════
+function pvmTarifas(){ const m = window.GP_THRESHOLDS && window.GP_THRESHOLDS.MOKESCIAI; return m && m.pvmStandartinis > 0 ? m.pvmStandartinis : null; }
+function suPvm(be){ const t = pvmTarifas(); return t ? be * (1 + t) : null; }
+
+// ════════════════════════════════════════════════════════
 // NEW PROCUREMENT WIZARD
 // ════════════════════════════════════════════════════════
 function autoCalcVat() {
   const v = parseFloat(document.getElementById('new-pk-val-ex').value);
   const inc = document.getElementById('new-pk-val-inc');
-  if (v && v > 0) inc.value = (v * 1.21).toFixed(2);
+  if (v && v > 0) inc.value = pvmTarifas() ? suPvm(v).toFixed(2) : '';
   else if (!v) inc.value = '';
 }
 function toggleNotSplitWarning(){
@@ -1969,7 +1978,7 @@ function autoCalcPartVat(input) {
   const inc = row.querySelector('.part-inc');
   if (!inc) return;
   const v = parseFloat(input.value);
-  if (v && v > 0) inc.value = (v * 1.21).toFixed(2);
+  if (v && v > 0) inc.value = pvmTarifas() ? suPvm(v).toFixed(2) : '';
   else if (!v) inc.value = '';
 }
 function updatePartLabels() {
@@ -4169,7 +4178,7 @@ async function autoGenerateNotification(templateId, protoId, pk){
       pirkimo_nr: pk.cvp_nr||'',
       tiekejas: r._group ? 'Tiekėjams, dalyvaujantiems Pirkime' : (r.pavadinimas||'Tiekėjams, dalyvaujantiems Pirkime'),
       kaina_be: parseFloat(r.kaina)||0,
-      kaina_su: (parseFloat(r.kaina)||0)*1.21,
+      kaina_su: suPvm(parseFloat(r.kaina)||0),
       biudzetas: pk.val_ex||0,
       vidurkis: 0, skirtumas: '30',
       motyvas:'', atmetimo_motyvas:'', pretenzijos_motyvas:'',
@@ -4520,7 +4529,7 @@ function buildInlinePnNotifs(templateId, protoId){
       pirkimo_nr: pk.cvp_nr||'',
       tiekejas: r._group?'Tiekėjams, dalyvaujantiems Pirkime':r.pavadinimas,
       kaina_be: parseFloat(fdata.kaina_be||r.kaina)||0,
-      kaina_su: parseFloat(fdata.kaina_su)||((parseFloat(fdata.kaina_be||r.kaina)||0)*1.21),
+      kaina_su: parseFloat(fdata.kaina_su)||suPvm(parseFloat(fdata.kaina_be||r.kaina)||0),
       biudzetas: parseFloat(fdata.biudzetas)||pk.val_ex||0,
       vidurkis: parseFloat(fdata.vidurkis)||0,
       skirtumas: fdata.skirtumas||'30',
@@ -5056,7 +5065,7 @@ function generatePranesimai(){
       pirkimo_nr: pk.cvp_nr||'',
       tiekejas: r._group?'Tiekėjams, dalyvaujantiems Pirkime':r.pavadinimas,
       kaina_be: parseFloat(fdata.kaina_be||r.kaina)||0,
-      kaina_su: parseFloat(fdata.kaina_su)||((parseFloat(fdata.kaina_be||r.kaina)||0)*1.21),
+      kaina_su: parseFloat(fdata.kaina_su)||suPvm(parseFloat(fdata.kaina_be||r.kaina)||0),
       biudzetas: parseFloat(fdata.biudzetas)||pk.val_ex||0,
       vidurkis: parseFloat(fdata.vidurkis)||0,
       skirtumas: fdata.skirtumas||'30',
@@ -5801,7 +5810,8 @@ const IMPORT_COLUMNS = [
   {key:'name', label:'Pavadinimas', required:true, example:'Elektros tinklo techninė priežiūra'},
   {key:'type', label:'Pirkimo būdas', required:true, example:'atviras_supaprastintas', hint:'atviras_tarptautinis | atviras_supaprastintas | derybos_tarptautinis | derybos_supaprastintas | neskelbiamos_tarptautinis | neskelbiamos_supaprastintas | dps_steigimas | dps_konkretus'},
   {key:'val_ex', label:'Vertė be PVM (EUR)', required:true, example:50000},
-  {key:'val_inc', label:'Vertė su PVM (EUR)', required:false, example:60500, hint:'Jei tuščia - auto-skaičiuojama × 1.21'},
+  {key:'val_inc', label:'Vertė su PVM (EUR)', required:false, example: pvmTarifas() ? Math.round(suPvm(50000)) : '',
+   hint: pvmTarifas() ? 'Jei tuščia - auto-skaičiuojama × ' + (1 + pvmTarifas()).toFixed(2) : 'Jei tuščia - neskaičiuojama: PVM tarifas neįkeltas'},
   {key:'obj_type', label:'Objekto tipas', required:false, example:'paslaugos', hint:'prekes | paslaugos | darbai'},
   {key:'terminas', label:'Sutarties trukmė (mėn.)', required:false, example:12},
   {key:'korteles_data', label:'Kortelės data', required:false, example:'2026-06-01', hint:'Formatas YYYY-MM-DD'},
@@ -5987,7 +5997,7 @@ function confirmImport(){
     if(errors.length > 0) return;
     const id = String(r.id).trim();
     const valEx = parseFloat(r.val_ex) || 0;
-    const valInc = parseFloat(r.val_inc) || (valEx * 1.21);
+    const valInc = parseFloat(r.val_inc) || suPvm(valEx);
     const members = String(r.kom_members||'').split(';').map(s=>s.trim()).filter(Boolean);
     const pk = {
       id,

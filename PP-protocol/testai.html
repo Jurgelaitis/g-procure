@@ -1279,6 +1279,42 @@ function diBeTapatybiu(t, kur){
   DI_SUMOS.forEach(x => tiesa(glaustai.indexOf(x) < 0, kur + ": rasta suma " + x + "\n" + t));
   tiesa(!/€|(^|[^A-Za-z])(EUR|Eur|eur)([^A-Za-z]|$)/.test(t), kur + ": valiuta užklausoje\n" + t);
 }
+async function testaiPvm(){
+  grupe("PVM tarifas - iš shared/thresholds.js (2026-10-14; iki tol modulis skaičiavo su įrašytu tarifu)");
+  await testas("Modulyje savo tarifo nėra; naujo pirkimo vedlys, dalių eilutės ir Excel importas - pagal bendrą tarifą (ir jį pakeitus); importo šablono pavyzdys ir užuomina - iš to paties tarifo; tarifo neįkėlus suma su PVM neskaičiuojama (laukas tuščias, ne ankstesnė reikšmė)", async () => {
+    const src = await (await fetch("LITGRID_Generatorius_v3.html?b=" + Date.now())).text();
+    tiesa(src.includes('<script src="../shared/thresholds.js">') && !/1\.21|0\.21|60500/.test(src), "modulyje - savas PVM tarifas arba neprijungtas shared/thresholds.js");
+    localStorage.setItem("litgrid_procurements_v2", "{}");
+    await modulis();
+    const M = W.GP_THRESHOLDS.MOKESCIAI, buvo = M.pvmStandartinis, v = id => D.getElementById(id), apv = x => x == null ? x : Math.round(x * 100) / 100;
+    const vedlys = be => { v("new-pk-val-ex").value = be; W.autoCalcVat(); return v("new-pk-val-inc").value; };
+    const dalis = be => { const ex = D.querySelector("#new-parts-list .part-ex"); ex.value = be; W.autoCalcPartVat(ex); return D.querySelector("#new-parts-list .part-inc").value; };
+    const tikrasSaveAs = W.saveAs; W.saveAs = () => {};
+    const importuok = (id, be) => { W.showImportPreview([{ id, name: "PVM importas", type: "atviras_supaprastintas", val_ex: be, kom_chair: "Pirmininkas P." }]); W.confirmImport(); const p = W.getProcurement(id); return p && apv(p.val_inc); };
+    try {
+      W.showPage("page-new-pk");
+      v("new-pk-parts").checked = true; W.toggleNewParts();
+      lygu([vedlys("1000"), dalis("500000"), importuok("TEST-PVM-1", 1000)], ["1210.00", "605000.00", 1210], "21 %");
+      // pranešimas laimėjusiam tiekėjui iš D8 protokolo: kaina su PVM - pagal bendrą tarifą
+      const pranesimas = async kaina => {
+        localStorage.removeItem("litgrid_pranesimai_v1");
+        W.saveProcurementData("TEST-PVM-D", kalbosPirkimas("TEST-PVM-D", "derybos_tarptautinis", { eval_criteria: "kainą" }));
+        W.openProtocol("TEST-PVM-D", "D8");
+        pildyk(eil(".d8-row", 0), { ".d8-name": TA, ".d8-atit": "taip", ".d8-ex": kaina, ".d8-vieta": "1", ".d8-vk": "laimetojas" });
+        await W.autoGenerateNotification("9_laimetojui_kaina", "D8", W.getProcurement("TEST-PVM-D"));
+        const n = (W.loadNotifStore()["TEST-PVM-D"] || []).find(x => x.templateId === "9_laimetojui_kaina");
+        return n ? [n.data.kaina_be, apv(n.data.kaina_su)] : "pranešimo nėra";
+      };
+      const col = W.eval("IMPORT_COLUMNS").find(c => c.key === "val_inc");
+      lygu([col.example, col.hint], [60500, "Jei tuščia - auto-skaičiuojama × 1.21"], "importo šablono stulpelis");
+      lygu([await pranesimas("1000")], [[1000, 1210]], "pranešimo kaina su PVM");
+      M.pvmStandartinis = 0.09;
+      lygu([vedlys("1000"), dalis("500000"), importuok("TEST-PVM-2", 1000), apv(W.suPvm(200)), await pranesimas("1000")], ["1090.00", "545000.00", 1090, 218, [1000, 1090]], "pakeistas bendras tarifas");
+      delete M.pvmStandartinis;
+      lygu([vedlys("2000"), dalis("300000"), importuok("TEST-PVM-3", 1000), W.suPvm(200)], ["", "", null, null], "be tarifo - neskaičiuojama");
+    } finally { M.pvmStandartinis = buvo; W.saveAs = tikrasSaveAs; }
+  });
+}
 async function testaiDI(){
   grupe("DI užklausa - tik užkoduota (R4)");
   await testas("Claude / ChatGPT mygtukų nėra; vienas „Kopijuoti užkoduotą užklausą“ ir „Atverti VPT Ekspertą“; įspėjimas matomas šalia, pastaba - prie situacijos aprašymo; vartotojiški DI nesiūlomi", async () => {
@@ -1349,6 +1385,7 @@ async function testaiDI(){
     await testaiOficialusStilius();
     await testaiEkranavimas();
     await testaiImportas();
+    await testaiPvm();
     await testaiDI();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
