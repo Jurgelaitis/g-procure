@@ -607,5 +607,9 @@ Perspėjimai (ne kliūtys): etapo perdavimo terminas ilgesnis už Darbų atlikim
 - Neatpažintam dokumentui, panašiam į sutarties formą, rodoma panašiausia forma su pastaba, kad jis gali būti parengtas pagal ankstesnę
   formos redakciją.
 
-Lieka jūsų peržiūrai: naujų klausimų tekstai ir paaiškinimai; ar mokėjimo dalis po antrašte „Mokėtina suma (Eur be PVM)“ jums tinka;
-ar netaikomus etapų lentelės stulpelius šalinti (kaip dabar), ar palikti su žodžiu „Netaikoma“.
+Jūsų sprendimas 2026-10-14 („Pritariu visiems penkiems pasirinkimams.“): mokėjimo dalis rašoma po formos antrašte „Mokėtina suma
+(Eur be PVM)“ (antraštė nekeičiama); netaikomi etapų lentelės stulpeliai šalinami; projektavimo paslaugų sutartyje be priežiūros sutarties
+pavadinimas įžangoje ir bendrosios sąlygos nekeičiami; nuoroda į priedą, pažymėtą „netaikoma“, žymima tik specialiosiose sąlygose;
+pastabos po etapų lentele - Word programoje.
+
+Lieka jūsų peržiūrai: naujų klausimų tekstai ir paaiškinimai.
