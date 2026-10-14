@@ -35,6 +35,7 @@
     ["epsog_mpp",                "PP-plan",         { lt: "Metinis pirkimų planas", en: "Annual procurement plan" }],
     ["epsog_dash_metric",        "PP-plan",         { lt: "Suvestinės rodiklis (vertė ar kiekis)", en: "Dashboard measure (value or count)" }],
     ["epsog_derybos",            "PP-negotiation",  { lt: "Derybų pasirengimas", en: "Negotiation preparation" }],
+    ["ppnegotiation.lang",       "PP-negotiation",  { lt: "Pasirinkta kalba", en: "Chosen language" }],
     ["pp_carbon_data",           "PP-carbon",       { lt: "Anglies pėdsako duomenys", en: "Carbon footprint data" }],
     ["ppcarbon.lang",            "PP-carbon",       { lt: "Pasirinkta kalba (EPD įrankis)", en: "Chosen language (EPD tool)" }],
     ["ppesg.",                   "PP-esg",          { lt: "ESG ir atitiktis", en: "ESG and compliance" }],
