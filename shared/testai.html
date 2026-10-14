@@ -3664,12 +3664,29 @@ async function kvalLentelesBusena(w, d){
   await w.kvlSkaityk([new w.File([await z.generateAsync({ type: "blob" })], "Kvalifikacijos_reikalavimai_PP-qual_ilgas_failo_vardas_be_tarpu.docx")], true);
   w.klausimynas();
 }
+/* Ta pati kortelė LT/EN sąlygoms su DI vertimu (2026-10-14): DI atsakymas imituojamas (į serverį nieko nesiunčiama), vienoje eilutėje -
+   skaičių perspėjimas (anglų laukai atverti), ilgas žodis vertime. */
+async function kvalVertimoBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  const k = d.querySelector("input[name=kalba][value=LT_EN]"); k.checked = true; k.dispatchEvent(new w.Event("change"));
+  await kvalLentelesBusena(w, d);
+  w.GP_AI_PROXY.call = async o => {
+    const u = JSON.parse(o.userMessage.slice(o.userMessage.indexOf("{")));
+    const en = (s, be) => "The Contractor shall provide the required evidence " + (be ? "" : (String(s).match(/\d+/g) || []).join(" ")) + " https://www.licencijavimas.lt/lis-epp-app/public/licenceSearch_without_spaces";
+    return { ok: true, text: JSON.stringify({ eilutes: u.eilutes.map(e => ({ nr: e.nr, reikalavimas: e.reikalavimas.map(s => en(s, e.nr === 2)), dokumentai: e.dokumentai.map(s => en(s, e.nr === 2)) })),
+      antrastes: (u.antrastes || []).map(() => "Professional and technical capacity") }) };
+  };
+  const b = d.querySelector('[data-kvl="versti"]'); if (b) b.click();
+  for (let i = 0; i < 100 && !d.querySelector('[data-kvl="vertimas-atmesti"]'); i++) await new Promise(r => setTimeout(r, 50));
+  if (!d.querySelector('details.kvl-en[open]')) throw new Error("DI vertimo būsena nepasiekta (nėra atverto anglų teksto su perspėjimu)");
+}
 const TELEFONO_BUSENOS = {
   [NEG]: NEG_BUSENOS,
   "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": KPI_BUSENOS,
   "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis: sutarties projektas - klausimai ir rankinis pasirinkimas (2026-10-08)", sutartiesBusena],
     ["2 žingsnis", w => w.rodyk(2)], ["3 žingsnis", w => w.rodyk(3)],
     ["2 žingsnis: kvalifikacijos reikalavimai iš dokumento (2026-10-14)", kvalLentelesBusena],
+    ["2 žingsnis: kvalifikacijos reikalavimai LT/EN su DI vertimu (2026-10-14)", kvalVertimoBusena],
     ["tikrinimo skirtukas (2026-10-06)", (w, d) => d.getElementById("tabTikrinti").click()]],
   "../PP-report/PP-report.html": [["1 priedas", w => w.selectForm(1)]],
   "../PP-protocol/LITGRID_Generatorius_v3.html": [["naujo pirkimo vedlys", w => w.showPage("page-new-pk")]],
@@ -3753,7 +3770,10 @@ async function testaiTelefonas(){
           const mat = async pav => { matuota += await telefonoMatuok(f, m.replace("../", "") + (pav ? " · " + pav : ""), blogi); };
           await mat("");
           if (sel) for (const t of [...d.querySelectorAll(sel)]) { t.click(); await new Promise(r => setTimeout(r, 120)); await mat("„" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 30) + "“"); }
-          for (const [pav, fn] of (TELEFONO_BUSENOS[m] || [])) { fn(w, d); await new Promise(r => setTimeout(r, 200)); await mat(pav); }
+          // Būsenos laukiamos (2026-10-14): iki tol asinchroninė būsena (2 žingsnis, kvalifikacijos lentelė) matuota po 200 ms - galbūt dar neatsivėrusi
+          for (const [pav, fn] of (TELEFONO_BUSENOS[m] || [])) {
+            try { await fn(w, d); } catch (e) { blogi.push(m + " · " + pav + ": būsena neatsivėrė - " + e.message); continue; }
+            await new Promise(r => setTimeout(r, 200)); await mat(pav); }
         } finally { f.remove(); }
       }
     } finally { A.atkurk(); }
@@ -3880,7 +3900,8 @@ const PRIEINAMUMO_BUSENOS = {
     ["2 žingsnis LT/EN su derybomis (MV-SAD)", async (w, d) => { const s = d.getElementById("budas"); s.value = "MV-SAD"; s.dispatchEvent(new w.Event("change"));
       const k = d.querySelector("input[name=kalba][value=LT_EN]"); k.checked = true; k.dispatchEvent(new w.Event("change")); await w.iStep2(); }],
     ["2 žingsnis: rangos sutarties etapų lentelės redaktorius (2026-10-13)", etapuRedaktoriausBusena],
-    ["2 žingsnis: kvalifikacijos reikalavimai iš dokumento (2026-10-14)", kvalLentelesBusena]],
+    ["2 žingsnis: kvalifikacijos reikalavimai iš dokumento (2026-10-14)", kvalLentelesBusena],
+    ["2 žingsnis: kvalifikacijos reikalavimai LT/EN su DI vertimu (2026-10-14)", kvalVertimoBusena]],
   "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html": [["pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ".tabbar .tab:not(a)"]],
   "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html": [["mokomasis pavyzdys", w => w.ikelkPavyzdi()]],
   "../PP-report/PP-report.html": [["2 priedas", w => w.selectForm(2)]],
