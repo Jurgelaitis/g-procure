@@ -50,14 +50,14 @@
 
   var VERSION = "0.1";
 
-  var METHODOLOGY = "2025 m. Projektų ŠESD metodika; GHG Protocol; EN 15804 (A1-A3)";
+  var METHODOLOGY = "GHG Protocol; EN 15804 (A1-A3); prielaidos - pagal Litgrid projektų ŠESD vertinimo praktiką";
   var DISCLAIMER_INTERNAL =
     "Vidaus dokumentas. Anglies vertinimas - pagalbinė priemonė, ne galutinis " +
-    "verdiktas. Šešėlinė CO2 kaina - patvirtinti su metodikos savininku. " +
+    "verdiktas. Šešėlinė CO2 kaina - patvirtinti su už ŠESD vertinimą atsakingais specialistais. " +
     "Faktoriai, pažymėti „review“ arba „laukia EPD“, dar tikslinami.";
   var DISCLAIMER_PUBLIC =
     "Viešas pjūvis. Pateikiami tik apibendrinti anglies pėdsako duomenys. " +
-    "Komercinė informacija (tiekėjų kainos ir tapatybė) nerodoma. Metodika: " +
+    "Komercinė informacija (tiekėjų kainos ir tapatybė) nerodoma. Metodinis pagrindas: " +
     METHODOLOGY + ".";
 
   // --- Pagalbines ---
@@ -77,7 +77,7 @@
     if (p.subject) m.push({ label: "Perkantysis subjektas", value: str(p.subject) });
     if (p.date) m.push({ label: "Data", value: str(p.date) });
     if (p.lifetimeYears) m.push({ label: "Gyvavimo ciklas", value: num(p.lifetimeYears) + " m." });
-    m.push({ label: "Metodika", value: METHODOLOGY });
+    m.push({ label: "Metodinis pagrindas", value: METHODOLOGY });
     return m;
   }
 

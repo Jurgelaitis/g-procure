@@ -1,8 +1,9 @@
 /* ============================================================================
  * G-Procure  pp-carbon/carbon-factors.js   (v0.1 - MVP pamatas)
  * Tarsos faktoriu biblioteka projektu SESD (siltnamio efekta sukelianciu duju)
- * skaiciavimui. Pagal "2025 m. Projektu SESD metodika" (GHG protokolas, EN 15804
- * A1-A3 moduliai). Faktoriai = kg CO2e uz vieneta, nebent nurodyta kitaip.
+ * skaiciavimui: GHG protokolas, EN 15804 (A1-A3 moduliai); prielaidos - pagal Litgrid 2025 m. projektu SESD
+ * skaiciavimu praktika (ne oficiali patvirtinta metodika; naudotojo patikslinimas 2026-10-14).
+ * Faktoriai = kg CO2e uz vieneta, nebent nurodyta kitaip.
  *
  * SVARBU - duomenu kokybe:
  *  - supplierProvided:true  => faktorius is gamintojo EPD (metodikoje "[UZKLAUSTI]");
@@ -19,7 +20,7 @@
   var FACTORS = {
     meta: {
       version: "0.1",
-      methodology: "2025 m. Projektu SESD metodika",
+      methodology: "Litgrid projektų ŠESD vertinimo praktika (2025 m.; ne oficiali patvirtinta metodika)",
       standard: "GHG Protocol; EN 15804 (A1-A3)",
       unitDefault: "kg CO2e / vienetas",
       note: "MVP pamatas. Faktoriu saltinius ir vienetus patvirtinti su Aplinkos sk."
