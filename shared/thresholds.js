@@ -20,7 +20,7 @@ window.GP_THRESHOLDS = {
   SUTARTIS: { reikalavimaiNuo: 15000 },
   // Standartinis PVM tarifas (Pridėtinės vertės mokesčio įstatymo 2 straipsnio 32 dalis: „Standartinis PVM tarifas - 21 procento PVM
   // tarifas“; 19 straipsnio 1 dalis - kada jis taikomas; perskaityta e-tar aktualioje redakcijoje 2026-10-13). Naudoja PP-salygos sutarties
-  // projekto kainos eilutės: PVM ir suma su PVM apskaičiuojami iš rengėjo įrašytos sumos be PVM.
+  // projekto kainos eilutės (PVM ir suma su PVM apskaičiuojami iš rengėjo įrašytos sumos be PVM) ir PP-report bei PP-protocol (sumos su ir be PVM, nuo 2026-10-14).
   MOKESCIAI: { pvmStandartinis: 0.21 },
   // EPSO-G politikos slenkstis kastu-naudos analizei (pp-cost-benefit).
   // PASTABA: politikos (ne istatymo) riba, diskusines stadijos - tikslinti patvirtinus.
