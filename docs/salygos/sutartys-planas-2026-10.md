@@ -1002,8 +1002,7 @@ priedų sąrašą, etapų lentelę, kainos vietas; kelios generatoriaus paliktos
 - Testai: `testaiPataisos` (12), `testaiPrieduSarasas` (6), `testaiEtapuLentele` (7); bendri - `shared/testai.html` palyginimo grupė ir
   redaktoriaus būsena telefono (320 ir 375 px) bei prieinamumo testuose. Kodo mutacijos: pataisų - 55, priedų sąrašo - 50, etapų
   lentelės - 68; visos pagaunamos (kelios parodė nereikalingą kodą - pašalintas).
-- Lieka jums: naujų klausimų tekstų peržiūra; ar mokėjimo dalis po antrašte „Mokėtina suma (Eur be PVM)“ tinka; ar netaikomus etapų
-  lentelės stulpelius šalinti, ar palikti su „Netaikoma“; pastabos po etapų lentele - kol kas Word programoje.
+- Įgyvendinimo pasirinkimai patvirtinti 2026-10-14 (8 sk. 20 p.). Lieka jums: naujų klausimų tekstų peržiūra.
 
 **S2 (2026-10-08).** `PP-salygos/sutartys.js` - `GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, atsakymai })`:
 kalibravimo prototipo taisyklės be pakeitimų (privatus palyginimas - visi sprendimai sutampa) ir jūsų sprendimai 2026-10-08 (TP teritorijos
@@ -1240,7 +1239,8 @@ telefono ir prieinamumo būsenos - `shared/testai.html`.
     eilutė „Kiti priedai“, keli darbų sutarties priedai, projektavimo paslaugų priežiūra „Taip / Ne“, prekių terminas pagal pasiūlymą ir
     laisva 11.1.2 formuluotė, du klaidingi nukrypimai tikrinant) ir šešios rekomendacijos (pirkimo numeris „sudarant sutartį“, maksimali
     sutarties kaina, rangos etapų lentelės redaktorius, priedų sąrašas su langeliais, eksploatavimo SS 5 eilutės pirkimo pavadinimas,
-    panašiausia forma prie neatpažinto dokumento). Peržiūrai - įgyvendinimo pasirinkimai: mokėjimo dalis rašoma „N proc. Sutarties
-    kainos be PVM“ po formos antrašte „Mokėtina suma (Eur be PVM)“; netaikomi etapų lentelės stulpeliai šalinami; projektavimo paslaugų
-    sutartyje be priežiūros sutarties pavadinimas ir bendrosios sąlygos nekeičiami; nuoroda į netaikomą priedą žymima tik specialiosiose
-    sąlygose.
+    panašiausia forma prie neatpažinto dokumento). Įgyvendinimo pasirinkimai - patvirtinti 2026-10-14: „Pritariu visiems penkiems
+    pasirinkimams.“ (1) mokėjimo dalis rašoma „N proc. Sutarties kainos be PVM“ po formos antrašte „Mokėtina suma (Eur be PVM)“ -
+    antraštė nekeičiama; (2) netaikomi etapų lentelės stulpeliai šalinami, o ne pildomi žodžiu „Netaikoma“; (3) projektavimo paslaugų
+    sutartyje be priežiūros sutarties pavadinimas įžangoje ir bendrosios sąlygos nekeičiami; (4) nuoroda į priedą, pažymėtą „netaikoma“,
+    žymima tik specialiosiose sąlygose; (5) pastabos po etapų lentele lieka Word programai. Lieka: naujų klausimų tekstų peržiūra.
