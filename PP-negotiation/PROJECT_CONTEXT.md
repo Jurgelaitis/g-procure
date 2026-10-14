@@ -193,6 +193,21 @@ Kontekstas kiekviename prompt'e: pirkimo info, tiekėjų rikiavimas, strategija.
 - Teisinis pagrindas (VPĮ/PĮ/VPT).
 - Privatumo deklaracija.
 
+### 4.12. Kalba (LT / EN, nuo 2026-10-14)
+Naudotojo pasiūlymas: derybos ir pasirengimas anglų kalba, kiti G-Procure naudotojai.
+- **Jungiklis LT / EN** antraštėje (`setLang`); pradinė kalba - `shared/lang-detect.js` (`?lang=`, rankinis pasirinkimas,
+  lankytojas iš Lietuvos - LT, kiti - EN). Pasirinkimas - `ppnegotiation.lang` (ne projekto JSON; patenka į atsarginę kopiją).
+- **Kas verčiama:** visa sąsaja (antraštė, navigacija, vaizdai, langai, pranešimai, informacinė skiltis, pirkimo kortelės juosta -
+  bendras komponentas), skaičių ir datų formatas (`en-GB`), Excel lapai ir stulpeliai, failų vardai (`Negotiation_analysis_…`,
+  `Negotiation_project_…`), matricos žymos, rekomendacijų ir scenarijų tekstai, užkoduotos DI užklausos (`generatePromptEn` -
+  tie patys 6 šablonai, „Supplier A, B, C“, tos pačios užkodavimo taisyklės; atpažįsta ir „euros“, „million“, „phone“).
+- **Kas neverčiama:** projekto duomenys (pavadinimai, pastabos, tiekėjai, pozicijos), įstatymų santrumpos PĮ / VPĮ (teisės
+  nuorodos - `GP_TEISE.cit(..., "en")`), įmonių pavadinimai.
+- Perjungus kalbą vaizdai perpiešiami, projektas nekinta, DI šablonas, tiekėjas ir papildomas kontekstas išlieka, jau sugeneruota
+  užklausa sugeneruojama iš naujo nauja kalba.
+- Kode: `L(lt, en)` - autoriaus tekstas; statiniam HTML - `data-en`, `data-en-title`, `data-en-aria` (`kalbaStatiniam()`).
+  Naują tekstą rašyk iškart abiem kalbomis; lietuviškas režimas po vertimo sutapo su ankstesne versija (vaizdai, užklausos, Excel).
+
 ---
 
 ## 5. Planuojamos funkcijos
@@ -369,7 +384,7 @@ Kontekstas kiekviename prompt'e: pirkimo info, tiekėjų rikiavimas, strategija.
 - Safari/Firefox testavimas.
 - Automatiniai unit testai pagrindinėms funkcijoms (stats, strategy, parsers).
 - Accessibility (WCAG AA atitiktis).
-- I18n pagrindas (en/lt jungiklis).
+- ~~I18n pagrindas (en/lt jungiklis)~~ - padaryta 2026-10-14 (4.12).
 
 ---
 
