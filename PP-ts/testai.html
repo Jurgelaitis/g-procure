@@ -1011,6 +1011,314 @@ async function testaiApimtis() {
   });
 }
 
+/* ==========================================================================
+   10. RINKOS KONSULTACIJA (2026-10-15)
+   Klausimynas rinkos konsultacijai pagal TS - LITGRID formos pagrindu. Tikrinama: šaltiniai ir laukai iš konteksto,
+   formos ir katalogo klausimai, taisyklių klausimai iš teksto (su citata), DI užklausa ir atsakymo patikra (netikras
+   atsakymas), redagavimas, kvietimo tekstas abiem formomis, Word, parengtis, kopijavimas, kortelė.
+   ========================================================================== */
+const RK_TS = 'Tiekėjas turi pateikti 4 vnt. 110 kV galios transformatorių, atitinkančių IEC 60076 ir LST EN 50588-1 standartus. Pristatymo terminas - per 180 kalendorinių dienų nuo sutarties pasirašymo. Įranga turi būti Siemens arba ABB gamybos. Reikalingas pakankamas kiekis atsarginių dalių. Garantija - 5 metai. Gamykliniai bandymai (FAT) atliekami dalyvaujant Užsakovo atstovams. Mokymai - 2 dienų kursas 6 darbuotojams. Dokumentacija pateikiama lietuvių kalba. Transformatoriai turi būti modernūs ir patikimi.';
+const RK_D = { vykdytojas: 'LITGRID AB', pavadinimas: '110 kV galios transformatorių pirkimas', tipas: 'prekes', budas: 'T-AK', metai: '2027', ketvirtis: 'I', forma: 'cvpis',
+  terminas: '2026-10-30', laikas: '10.00', susitikimas: '', darbotvarke: true, konfidencialu: false, konfDokumentai: '',
+  priedai: [{ kodas: 'ts', pav: 'Techninė specifikacija su priedais', itrauktas: true }, { kodas: 'sut', pav: 'Sutarties projektas', itrauktas: false }], asmuo: 'Jonas Jonaitis, pirkimų vadovas', kontaktai: '+370 600 00000, jonas@litgrid.eu' };
+const RK_KL = [{ tema: 'kiti', tekstas: 'K1 formos klausimas?', saltinis: 'forma' }, { tema: 'objektas', tekstas: 'K2 DI klausimas apie izoliaciją?', saltinis: 'di' }];
+function rkParuosk(o) {
+  const w = W(), d = D(); o = o || {};
+  const oc = w.confirm; w.confirm = () => true;
+  try { M('App.rkNaujas()'); } finally { w.confirm = oc; }
+  d.querySelector('.tab-btn[data-tab="konsultacija"]').click();
+  const set = (id, v) => { d.getElementById(id).value = v; };
+  set('rkPav', o.pav == null ? '110 kV galios transformatorių pirkimas' : o.pav); set('rkTipas', o.tipas == null ? 'prekes' : o.tipas); set('rkBudas', o.budas == null ? 'T-AK' : o.budas);
+  set('rkMetai', '2027'); set('rkKetvirtis', 'I');
+  if (o.tekstas !== null) { set('rkTekstas', o.tekstas || RK_TS); M('App.rkTekstoPokytis()'); }
+  return { w, d };
+}
+const rkKl = () => M('App.rkBusena()').klausimai;
+const rkPure = (f, ...a) => M('RinkosKonsultacija.' + f + '(' + a.map(x => JSON.stringify(x)).join(', ') + ')');
+async function testaiKonsultacija() {
+  grupe('Rinkos konsultacija (2026-10-15): klausimynas rinkos dalyviams pagal TS - LITGRID formos pagrindu');
+
+  await testas('Skirtukas, žingsniai ir šaltiniai: tušti laukai iš pirkimo konteksto (ranka įrašyti neperrašomi), būdai iš klasifikatoriaus, sugeneruota ir tikrinama TS, TXT failas, teksto riba', async () => {
+    const { w, d } = rkParuosk({ pav: '', tipas: '', budas: '', tekstas: null });
+    tiesa(d.querySelector('[data-panel="konsultacija"]').classList.contains('active'), 'skirtukas neatvertas');
+    d.getElementById('genTitle').value = ''; d.getElementById('genType').value = '';
+    d.getElementById('metaTitle').value = 'Pastotės rekonstrukcijos darbai'; d.getElementById('metaType').value = 'works';
+    M('App.rkAtvertas()');
+    lygu([d.getElementById('rkPav').value, d.getElementById('rkTipas').value, /konteksto/.test(d.getElementById('rkIsKur').textContent)], ['Pastotės rekonstrukcijos darbai', 'darbai', true], 'iš konteksto');
+    d.getElementById('rkPav').value = 'Mano pavadinimas'; M('App.rkAtvertas()');
+    lygu(d.getElementById('rkPav').value, 'Mano pavadinimas', 'ranka įrašyta perrašyta');
+    const budai = [...d.querySelectorAll('#rkBudas option')].map(o => o.value);
+    ['T-AK', 'S-SD', 'MV-SAB', 'RK', 'DPS'].forEach(b => tiesa(budai.includes(b), 'nėra būdo ' + b));
+    ['CPO', 'VS', 'KS', 'PS'].forEach(b => tiesa(!budai.includes(b), 'kanalas sąraše: ' + b));
+    turi(d.getElementById('rkPrivaloma').textContent, 'Kada konsultacija privaloma', 'užuomina');
+    turi(d.getElementById('rkPrivaloma').textContent, M('GP_TEISE.cit("rinkos_konsultacijos", "PI")'), 'užuominos nuoroda iš registro');
+    // žingsniai
+    M('App.rkZingsnis(2)');
+    lygu([d.querySelector('.rk-step[data-rk-step="2"]').hidden, d.querySelector('.rk-step[data-rk-step="1"]').hidden, d.querySelector('#rkStepper [data-rk-step="1"]').classList.contains('completed')], [false, true, true], '2 žingsnis');
+    M('App.rkZingsnis(3)'); tiesa(/KONSULTACIJA SU RINKOS DALYVIAIS/.test(d.getElementById('rkPerziura').textContent), '3 žingsnio peržiūra');
+    M('App.rkZingsnis(1)');
+    // šaltiniai
+    M('App.genBusena().ts = null'); d.getElementById('specText').value = ''; M('App.rkAtvertas()');
+    lygu([d.getElementById('rkIsGen').disabled, d.getElementById('rkIsSpec').disabled], [true, true], 'be šaltinių mygtukai turi būti išjungti');
+    M('Object.assign(App.genBusena(), { ts: ' + JSON.stringify(bandomojiTs()) + ', meta: { title: "Studija" } })'); d.getElementById('specText').value = SPEC; M('App.rkAtvertas()');
+    lygu([d.getElementById('rkIsGen').disabled, d.getElementById('rkIsSpec').disabled], [false, false], 'su šaltiniais');
+    M('App.rkNaudokTs("sugeneruota")');
+    turi(d.getElementById('rkTekstas').value, 'Galimybių studijos', 'sugeneruota TS');
+    M('App.genBusena().ts = null'); d.getElementById('rkTekstas').value = 'abc';
+    const origR = w.GP_PRANESIMAS.rodyk, pran = []; w.GP_PRANESIMAS.rodyk = (t, o) => pran.push([t, (o || {}).tipas]);
+    try { M('App.rkNaudokTs("sugeneruota")'); } finally { w.GP_PRANESIMAS.rodyk = origR; }
+    lygu([d.getElementById('rkTekstas').value, pran.length === 1 && /Sugeneruotos TS dar nėra/.test(pran[0][0]) && pran[0][1] === 'error'], ['abc', true], 'be sugeneruotos TS');
+    M('Object.assign(App.genBusena(), { ts: ' + JSON.stringify(bandomojiTs()) + ', meta: { title: "Studija" } })'); turi(d.getElementById('rkSaltinis').textContent, 'sugeneruota TS', 'šaltinis');
+    tiesa(!/[\u2013\u2014]/.test(d.getElementById('rkTekstas').value), 'ilgasis brūkšnys iš sugeneruotos TS');
+    M('App.rkNaudokTs("tikrinama")');
+    lygu([d.getElementById('rkTekstas').value, /tikrinama TS/.test(d.getElementById('rkSaltinis').textContent)], [SPEC, true], 'tikrinama TS');
+    const i = d.getElementById('rkFailas'), dt = new w.DataTransfer(); dt.items.add(new w.File(['Failo TS tekstas apie 330 kV oro liniją.'], 'ts.txt', { type: 'text/plain' })); i.files = dt.files;
+    i.dispatchEvent(new w.Event('change')); await new Promise(r => setTimeout(r, 300));
+    lygu([d.getElementById('rkTekstas').value, /failas ts\.txt/.test(d.getElementById('rkSaltinis').textContent), /Įkelta/.test(d.getElementById('rkFailoSarasas').textContent)], ['Failo TS tekstas apie 330 kV oro liniją.', true, true], 'failas');
+    d.getElementById('rkTekstas').value = 'x'.repeat(120500); M('App.rkTekstoPokytis()');
+    lygu([M('App.rkBusena()').tekstas.length, /per ilga/.test(d.getElementById('rkKirpimas').textContent)], [120000, true], 'riba');
+    M('App.genBusena().ts = null');
+  });
+
+  await testas('Formos klausimai: 17 LITGRID formos klausimų įtraukti iš karto, temų tvarka kaip formoje, pažodžiui; 2 žingsnyje - 11 temų su skaičiais ir suvestinė', async () => {
+    const { d } = rkParuosk({ tekstas: null });
+    M('App.rkPradek()');
+    const f = rkKl().filter(k => k.saltinis === 'forma');
+    lygu([f.length, f.every(k => k.itraukta), rkKl().filter(k => k.saltinis === 'taisykle').length], [17, true, 0], 'formos klausimai (be TS - be taisyklių)');
+    lygu([...new Set(f.map(k => k.tema))], ['dalyvavimas', 'dokumentacija', 'kvalifikacija', 'kaina', 'kainodara', 'sutartis', 'vertinimas', 'kiti'], 'formos temos');
+    ['Prašome pateikti pirkimo objekto preliminarią kainą.', 'Ar teko įgyvendinti panašaus pobūdžio projektus?', 'Kokius pasiūlytumėte taikyti ekonominio naudingumo kriterijus?', 'Kiti čia nepaminėti klausimai, prašome įvardinti.']
+      .forEach(t => tiesa(f.some(k => k.tekstas === t), 'nėra formos klausimo: ' + t));
+    lygu(d.querySelectorAll('#rkTemos .rk-tema').length, 11, 'temos ekrane');
+    turi(d.getElementById('rkSuvestine').textContent, 'LITGRID formos 17', 'suvestinė');
+    turi(d.querySelector('#rkTemos .rk-tema summary').textContent, 'įtraukta 3', 'dalyvavimo tema');
+    const kat = rkKl().filter(k => k.saltinis === 'katalogas');
+    lygu([kat.length, kat.every(k => !k.itraukta), kat.filter(k => /\(prekės\)/.test(k.pagrindas)).length], [11, true, 4], 'katalogas prekėms - siūlomas, neįtrauktas');
+    lygu(d.querySelectorAll('#rkTemos .rk-kl.siulomas').length, 11, 'siūlomi ekrane');
+    tiesa([...d.querySelectorAll('#rkTemos input[type=checkbox]')].every(c => /^Įtraukti į kvietimą: /.test(c.getAttribute('aria-label') || '')), 'langeliai be pavadinimo');
+    // antrą kartą - neklonuojama
+    M('App.rkZingsnis(1)'); M('App.rkPradek()');
+    lygu(rkKl().length, 28, 'antras kartas padvigubino');
+  });
+
+  await testas('Taisyklių klausimai iš TS teksto (naršyklėje): standartai, prekių ženklai viename sakinyje, subjektyvūs terminai, neaiškus kiekis, terminas, garantija, bandymai, mokymai, atsarginės dalys, kalba, kiekiai - su citata iš teksto, siūlomi; trumpam ar neutraliam tekstui - nėra', async () => {
+    rkParuosk();
+    M('App.rkPradek()');
+    const t = rkKl().filter(k => k.saltinis === 'taisykle');
+    tiesa(t.length >= 11 && t.every(k => !k.itraukta), 'taisyklių klausimų ' + t.length);
+    const norm = s => M('RinkosKonsultacija.norm(' + JSON.stringify(s) + ')'), nt = norm(RK_TS);
+    t.forEach(k => tiesa(k.citata && nt.indexOf(norm(k.citata.replace(/\.\.\.$/, ''))) >= 0, 'citata ne iš teksto: ' + k.citata));
+    const rask = re => t.find(k => re.test(k.tekstas));
+    turi((rask(/standartai/) || {}).tekstas, 'IEC 60076, LST EN 50588-1', 'standartai');
+    turi((rask(/gamintojų/) || {}).tekstas, '„Siemens“, „ABB“', 'prekių ženklai viename klausime');
+    const subj = rask(/formuluotes/); tiesa(subj && /„modernūs“/.test(subj.tekstas) && /„patikimi“/.test(subj.tekstas) && subj.tema === 'dokumentacija', 'subjektyvūs: ' + JSON.stringify(subj));
+    tiesa(rask(/Kiekis ar apimtis „pakankamas kiekis“/), 'neaiškus kiekis');
+    const term = rask(/TS numatytas terminas/); tiesa(term && term.tema === 'terminai' && /180 kalendorinių dienų/.test(term.tekstas), 'terminas');
+    lygu(t.filter(k => k.tema === 'terminai').length, 1, 'terminų klausimas tik sakiniui su terminu (ne „Garantija - 5 metai“)');
+    ['garantinis laikotarpis', 'bandymai ir priėmimo', 'mokymų apimtis', 'atsarginių dalių sąrašas', 'kalbos reikalavimai', 'nurodyti kiekiai'].forEach(x => tiesa(rask(new RegExp(x)), 'nėra: ' + x));
+    lygu(t.filter(k => k.tema === 'objektas').length >= 6 && t.some(k => k.tema === 'rinka'), true, 'temos');
+    lygu(rkPure('taisykliuKlausimai', 'trumpas'), [], 'trumpas tekstas');
+    lygu(rkPure('taisykliuKlausimai', 'Paslaugos teikiamos pagal sutartį visą sutarties laikotarpį. Tiekėjas pateikia ataskaitas kas mėnesį.'), [], 'neutralus tekstas');
+    // pakartotinai - neįtraukti pakeičiami, įtrauktas lieka
+    const pirmas = t[0].id; M('App.rkPerjunk("' + pirmas + '", true)');
+    M('App.rkSiulykTaisykles()');
+    const t2 = rkKl().filter(k => k.saltinis === 'taisykle');
+    lygu([t2.length, t2.some(k => k.id === pirmas && k.itraukta)], [t.length, true], 'pakartotinis pasiūlymas');
+    D().getElementById('rkTekstas').value = 'Paslaugos teikiamos pagal sutartį visą sutarties laikotarpį. Tiekėjas pateikia ataskaitas kas mėnesį. Garantija - 24 mėn.'; M('App.rkTekstoPokytis()'); M('App.rkSiulykTaisykles()');
+    const t3 = rkKl().filter(k => k.saltinis === 'taisykle');
+    lygu([t3.filter(k => k.id === pirmas).length, t3.filter(k => k.id !== pirmas && /standartai|Siemens|modernūs/.test(k.tekstas)).length, t3.some(k => /garantinis/.test(k.tekstas))], [1, 0, true], 'pakeitus tekstą - seni neįtraukti dingsta, įtrauktas lieka');
+  });
+
+  await testas('Katalogas pagal objekto tipą: bendri ir tipo klausimai; pakeitus tipą neįtraukti pakeičiami, įtraukti lieka', async () => {
+    lygu([rkPure('katalogoKlausimai', 'darbai').length, rkPure('katalogoKlausimai', 'paslaugos').length, rkPure('katalogoKlausimai', 'misrus').length, rkPure('katalogoKlausimai', '').length], [10, 10, 10, 7], 'kiekiai');
+    tiesa(rkPure('katalogoKlausimai', 'darbai').some(k => /atjungimų/.test(k.tekstas) && /\(darbai\)/.test(k.pagrindas)), 'darbų klausimas');
+    tiesa(rkPure('katalogoKlausimai', '').every(k => k.pagrindas === 'Katalogo klausimas' && k.saltinis === 'katalogas' && !k.itraukta), 'bendri');
+    const { d } = rkParuosk({ tipas: 'prekes', tekstas: null });
+    M('App.rkPradek()');
+    const prek = rkKl().find(k => k.saltinis === 'katalogas' && /gamybos ir pristatymo terminas/.test(k.tekstas));
+    M('App.rkPerjunk("' + prek.id + '", true)');
+    M('App.rkZingsnis(1)'); d.getElementById('rkTipas').value = 'darbai'; M('App.rkPradek()');
+    const kat = rkKl().filter(k => k.saltinis === 'katalogas');
+    lygu([kat.length, kat.filter(k => k.itraukta).map(k => k.id), kat.some(k => /atjungimų/.test(k.tekstas))], [11, [prek.id], true], 'po tipo pakeitimo');
+  });
+
+  await testas('DI pasiūlymai: siunčiama TS, pavadinimas, tipas ir būdas (ne vertė, ne asmuo), atsakymas tikrinamas prieš rodant (citata tekste / nerasta, nežinoma tema -> kiti, per trumpas ir dublikatas atmetami), rodomi su data-di ir „Siūloma“; „Įtraukti visus“; 500 - klaida be pakeitimų; atšaukimas; JSON kartojimas', async () => {
+    const { w, d } = rkParuosk();
+    d.getElementById('metaValue').value = '150000'; d.getElementById('rkAsmuo').value = 'Jonas Jonaitis'; d.getElementById('rkKontaktai').value = 'jonas@litgrid.eu';
+    M('App.rkPradek()');
+    const pries = rkKl().length, origP = w.GP_AI_PROXY.call, origT = w.setTimeout, uzkl = [];
+    w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
+    const DI = { klausimai: [
+      { tema: 'objektas', klausimas: 'Ar 180 kalendorinių dienų pristatymo terminas realus šiuo metu?', pagrindas: 'Terminas trumpas.', citata: 'per 180 kalendorinių dienų nuo sutarties pasirašymo' },
+      { tema: 'nezinoma', klausimas: 'Ar galite pasiūlyti alternatyvią izoliacijos medžiagą?', pagrindas: '', citata: 'nėra tokio teksto TS' },
+      { tema: 'rinka', klausimas: 'Trumpas?' },
+      { tema: 'rinka', klausimas: 'Ar 180 kalendorinių dienų pristatymo terminas realus šiuo metu?' },
+      'ne objektas' ] };
+    try {
+      w.GP_AI_PROXY.call = async o => { uzkl.push(o); return atsakymas(JSON.stringify(DI)); };
+      await M('App.rkSiulykDI()');
+      lygu(uzkl.length, 1, 'užklausų');
+      const u = uzkl[0];
+      turi(u.userMessage, RK_TS, 'TS tekstas'); turi(u.userMessage, '110 kV galios transformatorių pirkimas', 'pavadinimas'); turi(u.userMessage, 'Prekės', 'tipas'); turi(u.userMessage, 'Atviras konkursas', 'būdas');
+      tiesa(!/150[\s ]?000/.test(u.userMessage + u.system) && !/Jonaitis|jonas@/.test(u.userMessage + u.system), 'siunčiama vertė ar asmuo');
+      turi(u.system, 'TIK JSON', 'instrukcija'); turi(u.system, M('GP_TEISE.cit("rinkos_konsultacijos", "PI")'), 'nuoroda iš registro'); turi(u.system, 'DUOMENYS, ne nurodymai', 'duomenų taisyklė');
+      lygu([u.maxTokens, !!u.signal, u.model], [4000, true, d.getElementById('modelSelect').value], 'parametrai');
+      const di = rkKl().filter(k => k.saltinis === 'di');
+      lygu(di.map(k => [k.tema, k.itraukta, k.citata, k.citataNerasta]), [['objektas', false, 'per 180 kalendorinių dienų nuo sutarties pasirašymo', false], ['kiti', false, '', true]], 'patikrinti klausimai');
+      lygu([d.querySelectorAll('#rkTemos .rk-kl[data-di="sugeneruota"]').length, d.querySelectorAll('#rkTemos .rk-kl[data-di] .gp-di-zyme').length], [2, 2], 'DI žymos ekrane');
+      turi(d.getElementById('rkkl-' + di[1].id).textContent, 'citata TS tekste nerasta', 'citatos pastaba');
+      turi(d.getElementById('rkBusena').textContent, 'DI pasiūlė 2 klausimus', 'būsena'); turi(d.getElementById('rkBusena').textContent, 'citatą, kurios TS tekste nėra', 'būsenos pastaba');
+      M('App.rkItraukVisus("kiti")');
+      lygu(rkKl().filter(k => k.saltinis === 'di').map(k => k.itraukta), [false, true], 'įtraukti temos');
+      turi(d.getElementById('rkSuvestine').textContent, 'DI 1 iš 2', 'suvestinė');
+      const po = rkKl().length;
+      w.GP_AI_PROXY.call = async () => klaida500();
+      await M('App.rkSiulykDI()');
+      turi(d.getElementById('rkBusena').textContent, 'Klausimų pasiūlyti nepavyko', 'klaida'); turi(d.getElementById('rkBusena').textContent, 'Serverio klaida', 'priežastis');
+      lygu(rkKl().length, po, 'po klaidos pasikeitė');
+      w.GP_AI_PROXY.call = o => new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(Object.assign(new Error('Atšaukta'), { name: 'AbortError' }))));
+      const p = M('App.rkSiulykDI()'); await new Promise(r => origT.call(w, r, 60));
+      const atsaukti = [...d.querySelectorAll('#rkBusena button')].find(b => /Atšaukti/.test(b.textContent)); tiesa(atsaukti, 'nėra „Atšaukti“'); atsaukti.click(); await p;
+      lygu([rkKl().length, /Atšaukta/.test(d.getElementById('rkBusena').textContent)], [po, true], 'atšaukimas');
+      let n = 0; w.GP_AI_PROXY.call = async () => atsakymas(++n === 1 ? 'Čia ne JSON' : JSON.stringify({ klausimai: [{ tema: 'terminai', klausimas: 'Ar 5 metų garantija įprasta rinkoje?', citata: 'Garantija - 5 metai.' }] }));
+      await M('App.rkSiulykDI()');
+      lygu([n, rkKl().filter(k => k.saltinis === 'di').length], [2, 3], 'JSON kartojimas');
+      w.GP_AI_PROXY.call = async () => atsakymas(JSON.stringify({ klausimai: [{ tema: 'kiti', klausimas: 'Ar teko įgyvendinti panašaus pobūdžio projektus?' }] }));
+      await M('App.rkSiulykDI()');
+      lygu([rkKl().filter(k => k.saltinis === 'di').length, /DI pasiūlė 0 klausimų/.test(d.getElementById('rkBusena').textContent)], [3, true], 'esamas formos klausimas iš DI nekartojamas');
+      // pats tikrintuvas
+      tiesa((() => { try { rkPure('tikrinkAtsakyma', { issues: [] }, RK_TS); return false; } catch (e) { return /JSON struktūr/.test(e.message); } })(), 'be sąrašo turi mesti klaidą');
+      const daug = { klausimai: Array.from({ length: 35 }, (_, i) => ({ tema: 'kiti', klausimas: 'Klausimas numeris ' + i + ' apie objektą?' })), _partial: true };
+      const r = rkPure('tikrinkAtsakyma', daug, RK_TS);
+      lygu([r.klausimai.length, r.pastabos.some(p => /pirmi 30/.test(p)), r.pastabos.some(p => /nutrūko/.test(p))], [30, true, true], 'riba ir nutrūkimas');
+    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+    lygu(rkKl().length - pries, 3, 'iš viso pridėta');
+  });
+
+  await testas('Redagavimas ir savi klausimai: pridėti, išsaugoti (tuščias - pašalinamas), redaguoti formos klausimą (žyma „pakeista“, originalas), atšaukti, pašalinti, perjungti, pašalinti neįtrauktus (formos lieka), brūkšniai', async () => {
+    const { d } = rkParuosk({ tekstas: null });
+    M('App.rkPradek()');
+    M('App.rkPridek("kiti")');
+    let ta = d.querySelector('#rkTemos textarea'); tiesa(ta && d.activeElement === ta, 'naujas klausimas be lauko ar fokuso');
+    const id = ta.id.replace('rked-', '');
+    ta.value = 'Ar galite pateikti ' + BR + ' pavyzdį?'; M('App.rkIssaugok("' + id + '")');
+    const k = rkKl().find(x => x.id === id);
+    lygu([k.tekstas, k.saltinis, k.itraukta, k.pakeista], ['Ar galite pateikti - pavyzdį?', 'zmogus', true, false], 'savas klausimas');
+    turi(d.getElementById('rkkl-' + id).textContent, 'Jūsų klausimas', 'žyma');
+    const f = rkKl().find(x => x.saltinis === 'forma'), orig = f.tekstas;
+    M('App.rkRedaguok("' + f.id + '")'); d.getElementById('rked-' + f.id).value = 'Pakeistas formos klausimas?'; M('App.rkIssaugok("' + f.id + '")');
+    lygu([rkKl().find(x => x.id === f.id).tekstas, rkKl().find(x => x.id === f.id).pakeista, rkKl().find(x => x.id === f.id).originalas], ['Pakeistas formos klausimas?', true, orig], 'formos klausimo redagavimas');
+    turi(d.getElementById('rkkl-' + f.id).textContent, 'pakeista', 'žyma pakeista');
+    M('App.rkPridek("kaina")'); ta = d.querySelector('#rkTemos textarea'); const id2 = ta.id.replace('rked-', ''); M('App.rkAtsauk("' + id2 + '")');
+    tiesa(!rkKl().some(x => x.id === id2), 'tuščias atšauktas liko');
+    M('App.rkPridek("kaina")'); ta = d.querySelector('#rkTemos textarea'); const id3 = ta.id.replace('rked-', ''); ta.value = '   '; M('App.rkIssaugok("' + id3 + '")');
+    tiesa(!rkKl().some(x => x.id === id3), 'tuščias išsaugotas liko');
+    M('App.rkSalink("' + id + '")'); tiesa(!rkKl().some(x => x.id === id), 'pašalintas liko');
+    M('App.rkPerjunk("' + f.id + '", false)'); lygu(rkKl().find(x => x.id === f.id).itraukta, false, 'perjungimas');
+    tiesa(d.getElementById('rkkl-' + f.id).classList.contains('siulomas'), 'neįtrauktas ne pilkas');
+    const kat = rkKl().find(x => x.saltinis === 'katalogas'); M('App.rkPerjunk("' + kat.id + '", true)');
+    M('App.rkAtmeskNeitrauktus()');
+    lygu([rkKl().filter(x => x.saltinis === 'katalogas').map(x => x.id), rkKl().filter(x => x.saltinis === 'forma').length], [[kat.id], 17], 'neįtraukti pašalinti, formos lieka');
+    M('App.rkItraukVisus()'); tiesa(rkKl().every(x => x.itraukta), 'įtraukti visi');
+  });
+
+  await testas('Kvietimo tekstas: LITGRID formos struktūra, CVP IS forma (be taisyklių) ir susitikimas (taisyklės, data, darbotvarkė), terminas lietuviškai, „pirkimas“ gale nukerpamas, būdo kilmininkas, lentelė tik su įtrauktais klausimais temų tvarka, DI pažymėtas, konfidencialūs dokumentai ir priedų numeriai, teisės nuorodos iš registro, be ilgųjų brūkšnių, tušti laukai - skliaustuose', async () => {
+    const t = rkPure('tekstas', rkPure('dokumentas', RK_D, RK_KL)), cit = r => M('GP_TEISE.cit("' + r + '", "PI")').replace(/^PĮ /, 'Pirkimų įstatymo ');
+    turi(t, 'DĖL „110 KV GALIOS TRANSFORMATORIŲ“ PIRKIMO ATVIRO KONKURSO BŪDU', 'antraštė');
+    turi(t, 'planuoja 2027 metų I ketvirtį skelbti „110 kV galios transformatorių“ pirkimą', 'įžanga');
+    turi(t, 'iki 2026 m. spalio 30 d. 10.00 val. CVP IS priemonėmis', 'terminas');
+    turi(t, 'vadovaudamasis ' + cit('rinkos_konsultacijos') + ',', 'nuoroda 39 str. 1 d. 1 p.');
+    turi(t, 'vienodą informaciją (' + cit('rinkos_konsultacijos_informacija') + ')', 'nuoroda 39 str. 3 d.');
+    turi(t, 'Vadovaujantis ' + cit('rinkos_konsultacijos_informacija') + ' ir ' + M('GP_TEISE.cit("rinkos_konsultacijos_dalyvavimas", "PI")').replace(/^PĮ /, ''), 'nuoroda 39 str. 3-4 d.');
+    tiesa(!/\b\d+ str\./.test(t.replace(/Pirkimų įstatymo \d+ str\. \d+ d\.( \d+ p\.)?/g, '').replace(/ir \d+ str\. \d+ d\./g, '')), 'straipsnio numeris ne iš registro: ' + (t.match(/.{30}\d+ str\..{20}/g) || []).join(' | '));
+    turi(t, '1 priedas - Techninė specifikacija su priedais.', 'priedai'); tiesa(!/priedas - Sutarties projektas/.test(t), 'nepažymėtas priedas sąraše');
+    turi(t, 'Jonas Jonaitis, pirkimų vadovas, +370 600 00000, jonas@litgrid.eu', 'asmuo');
+    tiesa(!/Rinkos konsultacijos taisyklės|darbotvarkė|konfidencialūs ir bus pateikiami/.test(t), 'CVP IS formoje - susitikimo ar konfidencialumo dalys');
+    tiesa(!/[\u2013\u2014]/.test(t), 'ilgasis brūkšnys');
+    const B = rkPure('dokumentas', RK_D, RK_KL), lent = B.find(b => b.t === 'lentele');
+    lygu(lent.eilutes.map(e => [e.tema, e.klausimai.map(k => k.tekstas + (k.di ? ' [DI]' : ''))]), [['Techninė specifikacija ir pirkimo objektas', ['K2 DI klausimas apie izoliaciją? [DI]']], ['Kiti klausimai', ['K1 formos klausimas?']]], 'lentelė');
+    lygu(lent.antraste, ['Nuostata', 'Klausimas / siūloma redakcija', 'Teikiamas komentaras / siūlymas'], 'lentelės antraštė kaip formoje');
+    const h = rkPure('html', B);
+    tiesa(/<p class="di" data-di="sugeneruota">K2 DI klausimas/.test(h) && /<th scope="col">Nuostata<\/th>/.test(h) && !/<p class="di"[^>]*>K1/.test(h), 'HTML peržiūra: ' + h.slice(0, 200));
+    const d2 = Object.assign({}, RK_D, { forma: 'susitikimas', susitikimas: '2026-11-05', darbotvarke: true, konfidencialu: true, konfDokumentai: 'Pastotės schemos', budas: 'MV-SAB' });
+    const t2 = rkPure('tekstas', rkPure('dokumentas', d2, RK_KL));
+    ['Rinkos konsultacijos taisyklės', '1) pastabos ir klausimai teikiami užpildant rinkos konsultacijos formą', '5) turi aiškių ir objektyviai nustatomų požymių', 'planuojama 2026 m. lapkričio 5 d.',
+     'PIRKIMO SKELBIAMOS APKLAUSOS BŪDU', 'Konfidencialumo įsipareigojimą (2 priedas): Pastotės schemos', '2 priedas - Konfidencialumo įsipareigojimas.', 'Preliminari susitikimo darbotvarkė',
+     '1. Įžanga: konsultacijos tikslas ir taisyklės (10 min.)', '2. Techninė specifikacija ir pirkimo objektas (15 min.)', '4. Apibendrinimas ir tolesni žingsniai (10 min.)', 'Numatoma trukmė - apie 50 min.',
+     '(' + cit('principai') + ' ir ' + M('GP_TEISE.cit("rinkos_konsultacijos", "PI")').replace(/^PĮ /, '') + ')'].forEach(x => turi(t2, x, 'susitikimas'));
+    tiesa(!/iki 2026 m. spalio 30 d. 10.00 val. CVP IS priemonėmis pateikti nuomones, siūlymus ir rekomendacijas pateiktiems su šiuo kvietimu dokumentams, užpildydami žemiau esančią rinkos konsultacijos formą\. Klausimai/.test(t2), 'susitikimo formoje - CVP IS pastraipa');
+    const t3 = rkPure('tekstas', rkPure('dokumentas', {}, []));
+    ['[pirkimo pavadinimas]', '[metai] metų [X] ketvirtį', 'iki [data] 10.00 val.', '(priedų nenurodyta)', '[vardas, pavardė, pareigos, kontaktai]'].forEach(x => turi(t3, x, 'tušti laukai'));
+    tiesa(!/BŪDU/.test(t3.split('\n')[2]), 'be būdo antraštėje neturi būti „BŪDU“');
+    lygu(['MV-SAB', 'MV-NR', 'S-SD', 'RK', 'T-ND', 'KD', ''].map(b => rkPure('budoKilmininkas', b)), ['skelbiamos apklausos', 'neskelbiamos apklausos', 'skelbiamų derybų', 'riboto konkurso', 'neskelbiamų derybų', 'konkurencinio dialogo', ''], 'būdų kilmininkai');
+    lygu([rkPure('dataLt', '2026-01-03'), rkPure('dataLt', 'x'), rkPure('bePirkimo', 'Kabelių PIRKIMAS'), rkPure('bePirkimo', 'Pirkimas kabelių')], ['2026 m. sausio 3 d.', '', 'Kabelių', 'Pirkimas kabelių'], 'pagalbinės');
+    const kt = rkPure('klausimuTekstas', RK_KL); lygu(kt, 'Techninė specifikacija ir pirkimo objektas:\n- K2 DI klausimas apie izoliaciją?\n\nKiti klausimai:\n- K1 formos klausimas?', 'klausimų tekstas kopijavimui');
+  });
+
+  await testas('Word (docx): gulsčias A4, trys stulpeliai DXA = naudingas plotis, FIXED, antraštė F2F2F2 juodu tekstu, be žalios ir SOLID, tekstas ir lentelė; DI požymiai (custom.xml, aprašas) ir poraštė - tik su DI klausimais; modulio eksportas - failo vardas su pavadinimu ir data', async () => {
+    const su = await M('RinkosKonsultacija.kurkDocx(' + JSON.stringify(RK_D) + ', ' + JSON.stringify(RK_KL) + ', { modelis: "claude-test-1" })');
+    const dok = await docxDalys(su, /^word\/document\.xml$/), st = await docxDalys(su, /^word\/styles\.xml$/), cust = await docxDalys(su, /^docProps\/custom\.xml$/), core = await docxDalys(su, /^docProps\/core\.xml$/);
+    turi(dok, 'w:orient="landscape"', 'orientacija'); turi(dok, 'w:w="16838" w:h="11906"', 'A4 gulsčias');
+    const grid = [...dok.matchAll(/<w:gridCol w:w="(\d+)"\/>/g)].map(m => +m[1]);
+    lygu([grid.length, grid.reduce((a, b) => a + b, 0)], [3, 16838 - 1134 - 1418], 'stulpeliai'); turi(dok, 'w:type="fixed"', 'FIXED');
+    lygu((dok + st).match(/00A072/gi), null, '00A072'); tiesa(!/w:val="solid"/.test(dok), 'SOLID');
+    const fonai = [...dok.matchAll(/w:fill="([0-9A-Fa-f]{6})"/g)].map(m => m[1].toUpperCase()); tiesa(fonai.length === 3 && fonai.every(f => f === 'F2F2F2'), 'fonai: ' + fonai.join(','));
+    tiesa([...(dok + st).matchAll(/<w:color w:val="([0-9A-Fa-f]{6})"/g)].every(m => /^(2E3641|000000)$/i.test(m[1])), 'spalvos');
+    const tekstas = dok.replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '');
+    ['KONSULTACIJA SU RINKOS DALYVIAIS', 'DĖL „110 KV GALIOS TRANSFORMATORIŲ“ PIRKIMO ATVIRO KONKURSO BŪDU', 'Nuostata', 'K2 DI klausimas apie izoliaciją?', 'K1 formos klausimas?', '1 priedas - Techninė specifikacija su priedais.', M('GP_DI.poraste("lt")')].forEach(x => turi(tekstas, x, 'Word tekstas'));
+    tiesa(!/[\u2013\u2014]/.test(tekstas), 'ilgasis brūkšnys Word faile');
+    turi(cust, 'DI_turinys', 'DI požymis'); turi(cust, 'claude-test-1', 'modelis'); turi(core, 'Parengta naudojant DI', 'aprašas');
+    const be = await M('RinkosKonsultacija.kurkDocx(' + JSON.stringify(RK_D) + ', ' + JSON.stringify([RK_KL[0]]) + ', {})');
+    const dok2 = await docxDalys(be, /^word\/document\.xml$/), cust2 = await docxDalys(be, /^docProps\/custom\.xml$/);
+    tiesa(dok2.indexOf(M('GP_DI.poraste("lt")')) < 0 && !/DI_turinys/.test(cust2), 'be DI klausimų - DI požymiai');
+    // modulio eksportas
+    const { w, d } = rkParuosk({ tekstas: null }); M('App.rkPradek()'); M('App.rkZingsnis(3)');
+    const origC = w.HTMLAnchorElement.prototype.click, origU = w.URL.createObjectURL; let vardas = '';
+    w.HTMLAnchorElement.prototype.click = function () { vardas = this.download; }; w.URL.createObjectURL = () => 'blob:x';
+    try {
+      await M('App.rkEksportuok()');
+      tiesa(/^Rinkos_konsultacija_110_kV_galios_transformatorių_pirkimas_\d{4}-\d{2}-\d{2}\.docx$/.test(vardas), 'failo vardas: ' + vardas);
+      turi(d.getElementById('rkEksportoBusena').textContent, 'Atsisiunčiama', 'būsena');
+      M('App.rkBusena().klausimai.forEach(k => { k.itraukta = false; })'); vardas = '';
+      await M('App.rkEksportuok()');
+      lygu(vardas, '', 'be klausimų eksportuota');
+    } finally { w.HTMLAnchorElement.prototype.click = origC; w.URL.createObjectURL = origU; }
+  });
+
+  await testas('Parengtis skelbti - tik faktai (terminas, susitikimas, klausimai, DI, priedai, konfidencialūs dokumentai, asmuo, TS); kopijavimas per GP_KOPIJA su klausimais pagal temas', async () => {
+    const p = (d, kl, t) => rkPure('parengtis', d, kl, t).map(x => x.lygis + ':' + x.tekstas);
+    const r = p(RK_D, RK_KL, RK_TS);
+    ['ok:Pirkimo pavadinimas', 'ok:Pirkimo būdas', 'ok:Paskelbimas: 2027 m. I ketv.', 'ok:Atsakymų terminas 2026-10-30', 'ok:2 klausimai 2 temose', 'info:1 DI pasiūlytas klausimas - peržiūrėkite prieš skelbiant', 'ok:Priedai: 1', 'ok:Atsakingas asmuo'].forEach(x => tiesa(r.includes(x), 'nėra: ' + x + '\n' + r.join('\n')));
+    const r2 = p(Object.assign({}, RK_D, { pavadinimas: '', budas: '', terminas: '2020-01-01', forma: 'susitikimas', susitikimas: '2019-12-31', konfidencialu: true, asmuo: '', priedai: [] }), [], '');
+    ['warn:Pirkimo pavadinimas neįrašytas', 'warn:Pirkimo būdas nepasirinktas', 'warn:Atsakymų terminas 2020-01-01 - šiandien arba praeityje', 'warn:Susitikimas 2019-12-31 - anksčiau nei atsakymų terminas', 'warn:Nėra nė vieno įtraukto klausimo',
+     'warn:Nepažymėtas nė vienas pridedamas dokumentas', 'warn:Konfidencialūs dokumentai neišvardyti', 'warn:Atsakingas asmuo nenurodytas', 'info:Be TS teksto - tik standartiniai ir katalogo klausimai'].forEach(x => tiesa(r2.includes(x), 'nėra: ' + x + '\n' + r2.join('\n')));
+    tiesa(!r2.some(x => /^ok:Priedai/.test(x)), 'tušti priedai');
+    const { w, d } = rkParuosk({ tekstas: null }); M('App.rkPradek()'); M('App.rkZingsnis(3)');
+    tiesa(d.querySelectorAll('#rkParengtis span.warn').length >= 2 && d.querySelectorAll('#rkParengtis span.ok').length >= 3, 'parengtis ekrane');
+    const orig = w.GP_KOPIJA.kopijuok; let nukop = '';
+    w.GP_KOPIJA.kopijuok = async (t, o) => { nukop = t; return true; };
+    try { await M('App.rkKopijuok()'); } finally { w.GP_KOPIJA.kopijuok = orig; }
+    turi(nukop, 'Dalyvavimas pirkime:\n- Prašome pateikti atsakymą', 'kopija'); turi(nukop, 'Kiti klausimai:\n- Kiti čia nepaminėti', 'kopijos pabaiga');
+    tiesa(!/Techninė specifikacija ir pirkimo objektas:/.test(nukop), 'kopijoje tema be klausimų');
+  });
+
+  await testas('Pirkimo kortelė: pavadinimas, objektas, būdas ir paskelbimo metai su ketvirčiu iš kortelės; eksporto failo vardas su kortelės numeriu', async () => {
+    const { f, KW, KD } = await modulisSuKortele();
+    try {
+      const K = KW.GP_KORTELE;
+      const k = K.issaugok(K.tuscia({ numeris: 'VPP-7', pavadinimas: 'Kabelių pirkimas', objektas: 'darbai', budas: 'S-SD', paskelbimas: '2027-05-10', vykdytojas: 'litgrid', rezimas: 'PI' })).kortele;
+      KW.KORTELE.atnaujink(); tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta');
+      KD.querySelector('.tab-btn[data-tab="konsultacija"]').click();
+      const v = id => KD.getElementById(id).value;
+      lygu([v('rkPav'), v('rkTipas'), v('rkBudas'), v('rkMetai'), v('rkKetvirtis'), /kortelės „Kabelių pirkimas“/.test(KD.getElementById('rkIsKur').textContent)], ['Kabelių pirkimas', 'darbai', 'S-SD', '2027', 'II', true], 'iš kortelės');
+      KW.eval('App.rkPradek(); App.rkZingsnis(3)');
+      turi(KD.getElementById('rkPerziura').textContent, 'DĖL „KABELIŲ“ PIRKIMO SKELBIAMŲ DERYBŲ BŪDU', 'antraštė');
+      let vardas = ''; KW.HTMLAnchorElement.prototype.click = function () { vardas = this.download; }; KW.URL.createObjectURL = () => 'blob:x';
+      await KW.eval('App.rkEksportuok()');
+      tiesa(/^VPP-7_Rinkos_konsultacija_Kabelių_pirkimas_/.test(vardas), 'vardas: ' + vardas);
+    } finally { f.remove(); }
+  });
+}
+
 /* ========================================================================== */
 async function viskas() {
   document.getElementById('paleisti').disabled = true;
@@ -1031,6 +1339,7 @@ async function viskas() {
     await testaiBusenos();
     await testaiKortele();
     await testaiApimtis();
+    await testaiKonsultacija();
 
     document.getElementById('busena').textContent =
       R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';
