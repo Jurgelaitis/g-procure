@@ -1945,7 +1945,7 @@
       }
       var h = '<section class="lk-sutartis" aria-labelledby="sfH"><h3 id="sfH">Sutarties projektas: ' + esc(ctx.pavadinimasSutarties || "") +
         ' <span class="pz-nepriv">bandomoji</span></h3><div class="hint">Klausimai sutarties specialiosioms sąlygoms (SS)' + (PPS(ctx) ? " ir jų 3 priedui" : "") + '. Bendrosios sąlygos generuojamos be pakeitimų. ' +
-        "Siūlomos reikšmės - iš jau įvestų duomenų (1 žingsnis, pirkimo kortelė, šio žingsnio SPS atsakymai) ir LITGRID standartų; jas patvirtinate jūs.</div>";
+        "Siūlomos reikšmės - iš jau įvestų duomenų (1 žingsnis, pirkimo kortelė, 2 žingsnio SPS atsakymai) ir LITGRID standartų; jas patvirtinate jūs.</div>";
       if (krauna){ vieta.innerHTML = h + '<div class="cite">Kraunamas sutarties šablono žemėlapis...</div></section>'; return; }
       if (klaida){ vieta.innerHTML = h + '<div class="lk-ispejimas">Sutarties šablono žemėlapio įkelti nepavyko (' + esc(klaida) + ") - sutarties projektas nebus sugeneruotas.</div></section>"; return; }
       var qs = klausimai(Z, ctx, A), sp = sprendimai(Z, ctx, A);
@@ -2026,6 +2026,8 @@
       atnaujink: atnaujink,
       atsakymai: function () { return JSON.parse(JSON.stringify(A)); },
       atstatyk: function () { A = {}; piesk(); },
+      // juodraščio atkūrimas (2026-10-15): tie patys atsakymai su būsenomis - patvirtinta lieka patvirtinta, siūlomos skaičiuojamos iš naujo
+      atkurk: function (x) { A = x && typeof x === "object" && !Array.isArray(x) ? JSON.parse(JSON.stringify(x)) : {}; return atnaujink(); },
       busena: function () {
         if (!ctx || !ctx.sablonai || !Z) return { paruosta: false, priezastis: !ctx || !ctx.sablonai ? (ctx && ctx.priezastis) || "sutartis nepasirinkta" : klaida || "kraunamas šablono žemėlapis" };
         var sp = sprendimai(Z, ctx, A), qs = klausimai(Z, ctx, A);

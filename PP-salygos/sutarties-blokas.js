@@ -6,6 +6,7 @@
  *     duomenys() -> { pavadinimas, objektas, bvpz, kalba, rezimas, salyguSeima, budas }   (1 žingsnio ir kortelės reikšmės)
  *     busena()   -> { rodoma, laukia, atsakymas, sistema, pasirinkta, zmogaus, patvirtinta, buvoPatvirtinta, sablonai, kalba, stebejimas }
  *     atsakyk("taip" | "ne") - tas pats, kas pažymėti atsakymą (testams)
+ *     juodrastis() / atkurk(x) - žmogaus sprendimai pirkimo sąlygų juodraščiui (2026-10-15, juodrastis.js)
  *     zurnalas() -> { busena: "yra" | "nera" | "sugadinta" | "neprieinama", irasai, klaida }   (stebėjimo įrašai naršyklėje)
  *
  * Naudotojo sprendimas 2026-10-12 (plano 8 sk. 6-7 p.): blokas - vienas privalomas klausimas be numatytojo atsakymo
@@ -329,8 +330,8 @@
       }
       if (S.keiciama && !esmines(g)) h += rankinisHtml();
       if (g) h += '<div class="cite">' + (esmines(g) || g.nerengiama ? 'Sutarties projektas į pirkimo sąlygų paketą neįtraukiamas.'
-        : sablonai() ? (S.patvirtinta ? '2 žingsnyje atsiras sutarties klausimai, o 3 žingsnyje - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).'
-                                      : 'Atsakius „Taip“, 2 žingsnyje atsiras sutarties klausimai, o 3 žingsnyje - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).')
+        : sablonai() ? (S.patvirtinta ? 'Žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai (galite juos atsakyti ir vėliau), o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).'
+                                      : 'Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).')
         : 'Šios sutarties dokumentų generatorius dar nekuria - LITGRID AB standartines sąlygas prie pirkimo sąlygų pridėsite patys; pirkimo sąlygų paketas nuo to nesikeičia.') + '</div>';
       h += stebejimoHtml();
       h += "</div>";
@@ -418,7 +419,17 @@
                  stebejimas: g ? G.palygink(S.sistema, g.seima, g.variantas) : null };
       },
       atsakyk: atsakyk,
-      atstatyk: function () { S.ats = {}; S.taip = false; S.zmogaus = null; S.patvirtinta = null; S.buvo = null; S.keiciama = false; skaiciuok(); irasyk(); piesk(); }
+      atstatyk: function () { S.ats = {}; S.taip = false; S.zmogaus = null; S.patvirtinta = null; S.buvo = null; S.keiciama = false; skaiciuok(); irasyk(); piesk(); },
+      /* Juodraštis (2026-10-15): žmogaus sprendimai - atsakymai į klausimus, „Taip“, pasirinkta ir patvirtinta sutartis. Atkuriama po 1 žingsnio
+         laukų; skaiciuok() patvirtinimą palieka tik tai pačiai sutarčiai (pasikeitus taisyklėms - pasakoma, kaip ir keičiant duomenis). */
+      juodrastis: function () { return JSON.parse(JSON.stringify({ ats: S.ats, taip: S.taip, zmogaus: S.zmogaus, patvirtinta: S.patvirtinta, buvo: S.buvo })); },
+      atkurk: function (x) {
+        x = x && typeof x === "object" ? x : {};
+        var obj = function (v) { return v && typeof v === "object" && !Array.isArray(v) ? JSON.parse(JSON.stringify(v)) : null; };
+        S.ats = obj(x.ats) || {}; S.taip = x.taip === true; S.zmogaus = obj(x.zmogaus); S.patvirtinta = obj(x.patvirtinta); S.buvo = obj(x.buvo); S.keiciama = false;
+        skaiciuok(); irasyk(); piesk();
+        if (o.onKeista) o.onKeista();
+      }
     };
     skaiciuok(); skaitykZurnala(); piesk();
     return api;
