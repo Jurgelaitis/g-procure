@@ -46,6 +46,7 @@
     ["gprocure.korteles",        "G-Procure",       { lt: "Pirkimų kortelės", en: "Procurement cards" }],
     ["gprocure.sutartys.stebejimas", "PP-salygos",  { lt: "Sutarčių parinkimo stebėjimo įrašai", en: "Contract selection observation records" }],
     ["gprocure.salygos.nustatymai", "PP-salygos",  { lt: "Nustatymai (jūsų įvesta vidaus taisyklių riba)", en: "Settings (internal-rule threshold you entered)" }],
+    ["gprocure.salygos.juodrastis.", "PP-salygos", { lt: "Pirkimo sąlygų juodraštis (atsakymai, numatoma vertė)", en: "Procurement conditions draft (answers, estimated value)" }],
     ["gprocure_help_collapsed",  "-",               { lt: "Pagalbos bloko būsena", en: "Help panel state" }],
     ["gprocure.infoPanel.",      "-",               { lt: "Informacinės skilties būsena", en: "Information panel state" }],
     ["gprocure-lang",            "-",               { lt: "Pasirinkta kalba", en: "Chosen language" }]
