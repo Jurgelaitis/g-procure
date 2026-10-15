@@ -154,8 +154,14 @@
       PI: { a: "PI", s: 50, d: 8 } },
 
     // ---- Planavimas, vertė, dalys (PĮ)
-    rinkos_konsultacijos: { apie: "rengiantis pirkimui galima konsultuotis su rinkos dalyviais",
+    // 2026-10-15 (PP-ts rinkos konsultacija): 39 str. perskaitytas e-tar visas - 1 d. 1 p. (konsultacijos ir kada privalomos),
+    // 3 d. (priemonės, kad padėjęs pasirengti nepažeistų konkurencijos) ir 4 d. (atmetimas tik be pagrindimo); 5 d. neteko galios 2022-04-01
+    rinkos_konsultacijos: { tikrinta: "2026-10-15", apie: "rengiantis pirkimui galima konsultuotis su rinkos dalyviais; kvietimas ir susijusi informacija skelbiami CVP IS VPT nustatyta tvarka; skelbiamam pirkimui konsultacija privaloma, jeigu per paskutinius 12 mėnesių paskutiniame tokių pačių ar panašių prekių, paslaugų ar darbų skelbiamame pirkime negauta nė vienos arba gauta tik viena tinkama paraiška ar pasiūlymas",
       PI: { a: "PI", s: 39, d: 1, p: 1 } },
+    rinkos_konsultacijos_informacija: { tikrinta: "2026-10-15", apie: "kai kandidatas ar dalyvis padėjo pasirengti pirkimui, perkantysis subjektas imasi priemonių, kad nebūtų pažeista konkurencija: jų gautą informaciją pateikia kitiems kandidatams ir dalyviams ir paskelbia CVP IS, nustato pakankamus pasiūlymų terminus",
+      PI: { a: "PI", s: 39, d: 3 } },
+    rinkos_konsultacijos_dalyvavimas: { tikrinta: "2026-10-15", apie: "padėjusio pasirengti pirkimui kandidato ar dalyvio paraiška ar pasiūlymas atmetamas tik jeigu jis raštu nepagrindžia, kad išankstinės konsultacijos negalėjo pažeisti konkurencijos",
+      PI: { a: "PI", s: 39, d: 4 } },
     dalys: { apie: "pirkimo objekto skaidymas į dalis",
       PI: { a: "PI", s: 40 } },
     verte: { apie: "numatomos pirkimo vertės skaičiavimas",
