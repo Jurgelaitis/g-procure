@@ -8168,6 +8168,8 @@ async function testaiKvalDps(){
     const gp = gTc.getElementsByTagNameNS(NSW, "p");
     tiesa(gp.length === 1 && gp[0].getElementsByTagNameNS(NSW, "jc")[0].getAttribute("w:val") === "center" && Array.from(gp[0].getElementsByTagNameNS(NSW, "r")).every(r => r.getElementsByTagNameNS(NSW, "b").length), "antraštė ne pusjuodė ar necentruota");
     tiesa(gTc.getElementsByTagNameNS(NSW, "tcBorders").length === 1, "antraštės langelis be formos rėmelių");
+    const knT = e => { const ps = e.flatMap(c => Array.from(c.el.getElementsByTagNameNS(NSW, "p"))); return ps.every(p => (p.getElementsByTagNameNS(NSW, "keepNext") || []).length === 1); };
+    lygu(T.map(knT), [true, true, false, true, false, false, false, true, false], "keepNext sugeneruotame dokumente (po lentelių tvarkymo)");
     tiesa(!T.some(e => e.some(c => c.t === "...")), "liko formos eilutė „...“");
     const d = new W.DOMParser().parseFromString(s.xml, "application/xml");
     lygu(d.getElementsByTagName("parsererror").length, 0, "XML");
@@ -8221,7 +8223,7 @@ async function testaiKvalDps(){
     const tr = c => '<w:tr>' + c.map(x => '<w:tc>' + pp(x) + '</w:tc>').join('') + '</w:tr>';
     const xml = '<w:document xmlns:w="' + NSW + '"><w:body>' + pp("2 lentelė. Informacija apie ūkio subjektus, kurių pajėgumais remiamasi")
       + '<w:tbl>' + tr(["Eil. Nr.", "Ūkio subjekto pavadinimas", "Kvalifikacijos reikalavimas, kuriam atitikti pasitelkiamas"]) + tr(["1.", "", ""]) + '</w:tbl>'
-      + pp("2 priedo 1 lentelė „Kvalifikacijos reikalavimai“") + '<w:tbl>' + tr(["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"]) + tr(["1.", "", ""]) + tr(["...", "", ""]) + '</w:tbl></w:body></w:document>';
+      + pp("2 priedo 1 lentelė „Kvalifikacijos reikalavimai“") + '<w:tbl>' + tr(["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"]).replace("<w:p>", '<w:p><w:pPr><w:pStyle w:val="Lentele"/><w:keepNext/></w:pPr>') + tr(["1.", "", ""]) + tr(["...", "", ""]) + '</w:tbl></w:body></w:document>';
     const doc = new W.DOMParser().parseFromString(xml, "application/xml");
     const L = W.GP_KVAL_LENTELE;                // šio rėmelio (ankstesni testai rėmelį pakeitė)
     const M = (await L.skaityk(await kvlBuf(KVL_B), KVL_B[0])).lenteles[0];
@@ -8238,6 +8240,14 @@ async function testaiKvalDps(){
     lygu([ant.getElementsByTagNameNS(NSW, "tc").length, ant.getElementsByTagNameNS(NSW, "gridSpan")[0] && ant.getElementsByTagNameNS(NSW, "gridSpan")[0].getAttribute("w:val"),
       !!r0.getElementsByTagNameNS(NSW, "b").length, r0.getElementsByTagNameNS(NSW, "sz")[0] && r0.getElementsByTagNameNS(NSW, "sz")[0].getAttribute("w:val")], [1, "3", true, "20"], "antraštės eilutė");
     tiesa(Array.from(ant.getElementsByTagNameNS(NSW, "tcW")).every(w => w.getAttribute("w:w")), "tuščias tcW (formoje langelių pločių nėra)");
+    // „laikyti su kitu“ (2026-10-15, naudotojo sprendimas „Tik Word“): lentelės antraštė ir grupių antraštės - keepNext visose pastraipose, reikalavimų eilutės - ne;
+    // formos antraštės pirmoje pastraipoje požymis jau yra (su pStyle) - antras nepridedamas
+    const kn = tr => { const ps = Array.from(tr.getElementsByTagNameNS(NSW, "p")); return ps.length > 0 && ps.every(p => { const pr = p.getElementsByTagNameNS(NSW, "pPr")[0];
+      const k = pr && pr.getElementsByTagNameNS(NSW, "keepNext");     // vienas, pastraipos savybių pradžioje (po pStyle) - Word schemos tvarka
+      return k && k.length === 1 && (!k[0].previousElementSibling || k[0].previousElementSibling.localName === "pStyle"); }); };
+    const eil1 = Array.from(Array.from(doc.getElementsByTagNameNS(NSW, "tbl"))[1].getElementsByTagNameNS(NSW, "tr"));
+    lygu(eil1.map(kn), [true, true, false, true, false, true, false], "keepNext: antraštė, grupės - taip, reikalavimai - ne");
+    lygu(Array.from(Array.from(doc.getElementsByTagNameNS(NSW, "tbl"))[0].getElementsByTagNameNS(NSW, "tr")).map(kn), [false, false], "ūkio subjektų lentelė nepaliesta");
     // su tinkleliu ir langelių pločiais (kaip LITGRID forma): antraštės plotis - tinklelio suma
     const xml2 = xml.replace('<w:tbl>' + tr(["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"]), '<w:tbl><w:tblGrid><w:gridCol w:w="700"/><w:gridCol w:w="4800"/><w:gridCol w:w="4500"/></w:tblGrid>'
       + tr(["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"])).replace(tr(["1.", "", ""]) + tr(["...", "", ""]),
@@ -8453,6 +8463,9 @@ async function testaiKvalLentele(){
       "Kokybės ir aplinkos apsaugos vadybos standartai / Quality and environmental management standards", "3.", "Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi / Information on the partial application of qualification requirements",
       "Pirkimo procedūros metu kvalifikacija dėl teisės atlikti suvirinimo darbus netikrinama, tačiau Tiekėjas įsipareigoja, kad sutartį vykdys tik tokią teisę turintys asmenys. | During the procedure the right to weld is not verified."], "eilutės");
     lygu(T[2].map(c => c.t), ["1.", "Tiekėjas turi turėti teisę atlikti elektros darbus.", "The Supplier must have the right to perform electrical works.", "Atestato kopija.\nPastaba: su Pasiūlymu pateikiamas tik EBVPD.", "Copy of the certificate.\nNote: only the ESPD is submitted with the Tender."], "1 eilutė abiem kalbomis");
+    // „laikyti su kitu“ (2026-10-15): grupių ir „ne visa apimtimi“ antraštės - su kita eilute (Word)
+    const kn = e => e.flatMap(c => Array.from(c.el.getElementsByTagNameNS(NSW, "p"))).every(p => p.getElementsByTagNameNS(NSW, "keepNext").length === 1);
+    lygu(T.map(kn), [true, true, false, true, false, true, false, true, false], "keepNext eilutėse");
     tiesa(!/\[įrašyti\]/.test(docs.AK_LTEN_SPS.pars.join("\n")), "liko šablono [įrašyti]");
     docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "darbai", po2: async () => { await kvlIkelk(KVL_A); } });
     T = kvlLentele(docs.AK_LTEN_SPS.xml);
