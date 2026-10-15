@@ -599,6 +599,20 @@
     return tr;
   }
   const VERTIMO_ZYMA = 'Įrašykite vertimą į anglų kalbą.';
+  /* „Laikyti su kitu“ (2026-10-15, naudotojo sprendimas „Tik Word“): lentelės antraštės ir grupių antraščių eilučių pastraipoms - w:keepNext.
+     Word tokią eilutę laiko su kita eilute - antraštė nelieka viena puslapio apačioje. Pages šio požymio lentelėse nepaiso (išbandyta PDF
+     eksportu); vienintelis būdas ten - skaidyti kitą eilutę, bet tada visose programose dokumentų stulpelio tekstas pirmoje eilutėje po
+     antrašte prasidėtų žemiau, todėl to nedarome. keepNext - pastraipos savybių pradžioje (po pStyle, kaip schemoje). */
+  function laikykSuKitu(doc, tr){
+    visi(tr, 'p').forEach(p => {
+      let pPr = vaikas(p, 'pPr');
+      if (!pPr){ pPr = naujas(doc, 'pPr'); p.insertBefore(pPr, p.firstChild); }
+      if (vaikas(pPr, 'keepNext')) return;
+      const st = vaikas(pPr, 'pStyle');
+      pPr.insertBefore(naujas(doc, 'keepNext'), st ? st.nextSibling : pPr.firstChild);
+    });
+    return tr;
+  }
   /* Grupės antraštės eilutė formai, kurioje jų nėra (DPS sukūrimo sąlygų LT 2 priedo 1 lentelė; naudotojo sprendimas 2026-10-15 - kaip SPS
      2 lentelėje ir LT/EN priede): vienas langelis per visą plotį, tekstas pusjuodis ir centruotas, rėmeliai ir lygiavimas vertikaliai - kaip
      formos eilutės; aukštis - pagal turinį (formos eilutės aukštis pritaikytas tuščiai reikalavimo vietai). Tekstą įrašo antrastesEiluteSu. */
@@ -654,8 +668,8 @@
         dabar = rkt;
         const sab = R.grupes[g] || R.pirmaGrupe || sukurta;
         if (sab){
-          if (GRUPES[g]) nauji.push(R.grupes[g] && !naudotos.has(g) ? R.grupes[g].cloneNode(true) : antrastesEiluteSu(doc, sab, GRUPES[g].lt, GRUPES[g].en, dvikalbis));
-          else nauji.push(antrastesEiluteSu(doc, sab, (e.antraste && e.antraste.lt) || 'Kiti reikalavimai', e.antraste && e.antraste.en, dvikalbis));
+          if (GRUPES[g]) nauji.push(laikykSuKitu(doc, R.grupes[g] && !naudotos.has(g) ? R.grupes[g].cloneNode(true) : antrastesEiluteSu(doc, sab, GRUPES[g].lt, GRUPES[g].en, dvikalbis)));
+          else nauji.push(laikykSuKitu(doc, antrastesEiluteSu(doc, sab, (e.antraste && e.antraste.lt) || 'Kiti reikalavimai', e.antraste && e.antraste.en, dvikalbis)));
         }
         naudotos.add(g);
       }
@@ -673,8 +687,9 @@
       const pv = grupesPav(g, e.antraste, 'lt') || GRUPES.techninis.lt;
       kiek[pv] = (kiek[pv] || 0) + 1;
     });
-    // šablono grupių ir tuščių eilučių vietoje - perkeltos eilutės
+    // šablono grupių ir tuščių eilučių vietoje - perkeltos eilutės; lentelės antraštė - su pirmąja grupe
     R.kitos.forEach(tr => { if (tr.parentNode) tr.parentNode.removeChild(tr); });
+    laikykSuKitu(doc, R.antraste);
     nauji.forEach(tr => {
       // klonai: žymės ir komentarai nešalinami kartu su originalu, o pastraipų w14 identifikatoriai turi būti unikalūs
       visi(tr, 'bookmarkStart').concat(visi(tr, 'bookmarkEnd'), visi(tr, 'commentRangeStart'), visi(tr, 'commentRangeEnd'), visi(tr, 'commentReference'))
@@ -695,6 +710,7 @@
         const nvEn = M.neVisa.en && pTekstas(M.neVisa.en) ? M.neVisa.en : (o.vertimas && o.vertimas.neVisa ? enPastraipos(M.neVisa.lt, o.vertimas.neVisa) : null);
         if (c[1]) pildykLangeli(doc, c[1].tc, nvEn, rPr0, { zyma: VERTIMO_ZYMA });
         R.neVisaTurinys.filter(x => x !== tr && x.parentNode).forEach(x => tbl.removeChild(x));
+        if (R.neVisaAntraste && R.neVisaAntraste.parentNode) laikykSuKitu(doc, R.neVisaAntraste);
         neVisa = 'is-dokumento';
       }
     }
