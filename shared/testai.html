@@ -1161,6 +1161,24 @@ async function testaiDarbas(){
     } finally { f.remove(); }
   });
 
+  await testas("priesUzdarant (2026-10-15): funkcija kviečiama prieš klausimą - išsaugojus ir pakvietus atskaita() neklausiama; nepavykus ar su klaida - klausiama", async ()=>{
+    const { f, d, w } = await ramas(DARBAS);
+    try {
+      w.GP_DARBAS.stebek();
+      let pavyks = true, kv = 0;
+      w.GP_DARBAS.priesUzdarant(() => { kv++; if (pavyks) w.GP_DARBAS.atskaita(); });
+      rasyk(d, d.getElementById("l"), "abc");
+      tiesa(w.GP_DARBAS.pakeista() && !klausia(w) && kv === 1, "išsaugota prieš klausimą - neturi būti klausiama (kvietimų " + kv + ")");
+      pavyks = false; rasyk(d, d.getElementById("l"), "d");
+      tiesa(klausia(w), "išsaugoti nepavyko - turi būti klausiama");
+      w.GP_DARBAS.priesUzdarant(() => { throw new Error("klaida"); });
+      pavyks = true; rasyk(d, d.getElementById("l"), "e");
+      tiesa(!klausia(w), "kitos funkcijos klaida neturi trukdyti pirmajai");
+      rasyk(d, d.getElementById("l"), "f"); pavyks = false;
+      tiesa(klausia(w), "klaida funkcijoje nereiškia „išsaugota“");
+    } finally { f.remove(); }
+  });
+
   await testas("Programiniai įvykiai (dispatchEvent) darbo nekuria, naudotojo rašymas - kuria", async ()=>{
     const { f, d, w } = await ramas(DARBAS);
     try {
@@ -1255,7 +1273,7 @@ async function testaiDarbas(){
     } finally { f.remove(); }
   });
 
-  await testas("PP-salygos: klausiama, kol neatsisiųsti VISI dokumentai; ZIP - iš karto; po generavimo pakeisti atsakymai lieka nauji", async ()=>{
+  await testas("PP-salygos: klausiama, kol neatsisiųsti VISI dokumentai; ZIP - iš karto; po generavimo pakeisti atsakymai išsaugomi juodraštyje (2026-10-15) - neklausiama, o neišsaugojus (pilna saugykla) - klausiama", async ()=>{
     const f = await modulioRemas("../PP-salygos/PP-SALYGOS.html");
     const w = f.contentWindow, d = f.contentDocument;
     try {
@@ -1265,7 +1283,9 @@ async function testaiDarbas(){
       const l = d.querySelector("#step1 input[type=text]");
       tiesa(l, "1 žingsnyje nėra teksto lauko");
       rasyk(d, l, "Transformatorių pirkimas");
-      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "įrašius tekstą turi būti klausiama");
+      tiesa(w.GP_DARBAS.pakeista(), "įrašius tekstą - pakeista");
+      // 2026-10-15: uždarant atsakymai išsaugomi juodraštyje (šioje naršyklėje) - nebėra ko prarasti
+      tiesa(!klausia(w) && !w.GP_DARBAS.pakeista() && w.JD.dabartinis() && w.localStorage.getItem("gprocure.salygos.juodrastis." + w.JD.dabartinis()), "uždarant juodraštis neišsaugotas arba klausiama");
       const rez = w.eval("[1, 2].map(i => ({ d: { trumpas: 'DOK' + i, pavadinimas: 'Dokumentas ' + i }, blob: new Blob(['x']), forma: false,"
         + " audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [] }, stats: { trinta: 0, juodinta: 0, pildyta: 0, intTrinta: 0 } }))");
       w.rodykRezultata(rez);
@@ -1279,7 +1299,13 @@ async function testaiDarbas(){
       rasyk(d, l, " (II dalis)");
       w.HTMLAnchorElement.prototype.click = function(){};              // ZIP failas neatsisiunčiamas
       await d.getElementById("zip").onclick();
-      tiesa(w.GP_DARBAS.pakeista(), "po generavimo įvestas pakeitimas į ZIP nepateko - turi būti klausiama");
+      tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "po generavimo įvestas pakeitimas išsaugotas juodraštyje - neturi būti klausiama");
+      // juodraščio išsaugoti nepavyksta - atsakymai lieka tik lange: klausiama
+      w.GP_JUODRASTIS.naudokSaugykla({ length: 0, key: () => null, getItem: () => null, removeItem: () => {}, setItem: () => { throw new w.DOMException("pilna", "QuotaExceededError"); } });
+      rasyk(d, l, " (III dalis)");
+      await d.getElementById("zip").onclick();
+      tiesa(w.GP_DARBAS.pakeista() && klausia(w), "juodraščio išsaugoti nepavyko - turi būti klausiama");
+      w.GP_JUODRASTIS.naudokSaugykla(null);
       w.rodykRezultata(rez);
       await d.getElementById("zip").onclick();
       tiesa(!w.GP_DARBAS.pakeista() && !klausia(w), "sugeneravus iš naujo ir atsisiuntus ZIP neklausiama");
@@ -3619,11 +3645,38 @@ async function sutartiesLtenBusena(w, d){
 async function sutartiesFormosBusena(w, d){
   d.getElementById("tabRengti").click(); w.rodyk(1);
   if (!w.SUTARTIES_BLOKAS.busena().patvirtinta){ w.SUTARTIES_BLOKAS.atnaujink(); const pb = d.getElementById("sbTaip"); if (pb) pb.click(); }
-  await w.iStep2();
+  await w.iStep2("sutartis");                                     // sutarties klausimai - žingsnis „3. Sutarties projektas“ (2026-10-15)
   for (let i = 0; i < 100 && !d.querySelector("#sutartiesForma .lk"); i++) await new Promise(r => setTimeout(r, 50));
   const F = d.getElementById("sutartiesForma");
   const ans = (id, v) => { const r = F.querySelector('input[name="sf-' + id + '"][value="' + v + '"]'); if (r){ r.checked = true; r.dispatchEvent(new w.Event("change", { bubbles: true })); } };
   ans("uztikrinimas", "taip"); ans("esmines", "taip"); ans("garantine", "atvykti"); ans("es", "taip");
+}
+/* PP-salygos juodraštis ir darbo sritys (2026-10-15): neužbaigtų juodraščių sąrašas (ilgas pavadinimas be tarpų, patvirtinimo klausimas) ir
+   saugojimo būsena; „Dokumentai“ su atidėta sutartimi, paketo būsena ir „Reikia pergeneruoti“. Juodraščiai - tikroje saugykloje, testų
+   sukurti pašalinami (JD_APSAUGA). */
+async function juodrasciuBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  const id = "testasjd" + Date.now().toString(36);
+  w.localStorage.setItem("gprocure.salygos.juodrastis." + id, JSON.stringify({ schema: 1, id, sukurta: new Date().toISOString(), keista: new Date().toISOString(),
+    meta: { pavadinimas: "Labai_ilgo_pavadinimo_be_tarpų_" + "transformatorių_".repeat(6), numeris: "VPP-2026-000123", etapas: "2", etapoPav: "tęsti nuo „2. Pirkimo sąlygos“" }, duomenys: { z1: {} } }));
+  w.JD.piesk();
+  const t = d.querySelector('#jdSarasas [data-jd="trinti"]'); if (t) t.click();
+  const iv = d.getElementById("pavadinimas"); iv.value = "Galios transformatorių"; iv.dispatchEvent(new w.Event("input", { bubbles: true }));
+  w.JD.issaugok({ priverstinai: true });
+}
+async function atidetosSutartiesBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  const iv = (id, v) => { const e = d.getElementById(id); e.value = v; e.dispatchEvent(new w.Event("input", { bubbles: true })); };
+  const b = d.getElementById("budas"); b.value = "T-SD"; b.dispatchEvent(new w.Event("change"));
+  iv("pavadinimas", "Galios transformatorių"); iv("verte", "1 500 000");
+  w.SUTARTIES_BLOKAS.atnaujink();
+  const pb = d.getElementById("sbTaip"); if (pb && !w.SUTARTIES_BLOKAS.busena().patvirtinta) pb.click();
+  await w.iStep2();
+  const rez = await w.generuoti({ sutartis: false });
+  w.__R = rez; w.__GEN = { parasai: w.genParasai(), kada: new Date(), sutartis: false, is: "2" };
+  w.rodykRezultata(rez); w.rodyk(3);
+  iv("verte", "1 600 000"); w.zingsniuBusena();
+  if (!d.getElementById("pergen") || !d.querySelector("#rezultatas tr[data-atideta]")) throw new Error("atidėtos sutarties ir pergeneravimo būsena nepasiekta");
 }
 /* PP-salygos 2 žingsnis: rangos sutarties etapų lentelės redaktorius (2026-10-13; sutarties-forma.js, klausimo tipas „lentele“) - Darbai
    etapais, lentelė pildoma čia, visi stulpeliai (delspinigiai ir mokėjimo dalis), ilgas tekstas pirmame etape. */
@@ -3635,7 +3688,7 @@ async function etapuRedaktoriausBusena(w, d){
   rad("kalba", "LT"); rad("tipas", "darbai"); iv("pavadinimas", "330 kV skirstyklos darbo projekto parengimo ir rangos darbų");
   w.SUTARTIES_BLOKAS.atnaujink();
   const pb = d.getElementById("sbTaip"); if (pb && !w.SUTARTIES_BLOKAS.busena().patvirtinta) pb.click();
-  await w.iStep2();
+  await w.iStep2("sutartis");                                     // sutarties klausimai - žingsnis „3. Sutarties projektas“ (2026-10-15)
   for (let i = 0; i < 100 && !d.querySelector("#sutartiesForma #sf-etapai"); i++) await new Promise(r => setTimeout(r, 50));
   const F = d.getElementById("sutartiesForma");
   const ans = (id, v) => { const r = F.querySelector('input[name="sf-' + id + '"][value="' + v + '"]'); if (r){ r.checked = true; r.dispatchEvent(new w.Event("change", { bubbles: true })); } };
@@ -3689,7 +3742,10 @@ const TELEFONO_BUSENOS = {
   [NEG]: NEG_BUSENOS,
   "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": KPI_BUSENOS,
   "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis: sutarties projektas - klausimai ir rankinis pasirinkimas (2026-10-08)", sutartiesBusena],
-    ["2 žingsnis", w => w.rodyk(2)], ["3 žingsnis", w => w.rodyk(3)],
+    ["2 žingsnis", w => w.rodyk(2)], ["3 žingsnis (Dokumentai)", w => w.rodyk(3)],
+    ["sutarties projekto žingsnis su klausimais (2026-10-15)", sutartiesFormosBusena],
+    ["juodraščių sąrašas ir saugojimo būsena (2026-10-15)", juodrasciuBusena],
+    ["Dokumentai: atidėta sutartis, paketo būsena ir „Reikia pergeneruoti“ (2026-10-15)", atidetosSutartiesBusena],
     ["2 žingsnis: kvalifikacijos reikalavimai iš dokumento (2026-10-14)", kvalLentelesBusena],
     ["2 žingsnis: kvalifikacijos reikalavimai LT/EN su DI vertimu (2026-10-14)", kvalVertimoBusena],
     ["tikrinimo skirtukas (2026-10-06)", (w, d) => d.getElementById("tabTikrinti").click()]],
@@ -3899,12 +3955,14 @@ const PRIEINAMUMO_BUSENOS = {
   "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": KPI_BUSENOS,
   // 2026-10-04: 2 žingsnis su tikrais klausimais (laukų registras, „?“ paaiškinimai, būsenos, eiga ir santrauka)
   "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis: LT/EN sutarties projektas su redakcija ir vertimo įspėjimu (2026-10-08)", sutartiesLtenBusena],
-    ["2 žingsnis: sutarties klausimai su papildomais laukais (S4, 2026-10-08)", sutartiesFormosBusena],
+    ["sutarties projekto žingsnis: klausimai su papildomais laukais (S4, 2026-10-08; atskiras žingsnis - 2026-10-15)", sutartiesFormosBusena],
+    ["juodraščių sąrašas ir saugojimo būsena (2026-10-15)", juodrasciuBusena],
+    ["Dokumentai: atidėta sutartis, paketo būsena ir „Reikia pergeneruoti“ (2026-10-15)", atidetosSutartiesBusena],
     ["tikrinimas su rezultatais (BPS su nukrypimais)", async (w, d) => { await tikrinimoBusena(w, d); }, "#tkVaizdai [role=tab]"],
     ["2 žingsnis su klausimais (T-SD)", async (w, d) => { d.getElementById("tabRengti").click(); await w.iStep2(); }],
     ["2 žingsnis LT/EN su derybomis (MV-SAD)", async (w, d) => { const s = d.getElementById("budas"); s.value = "MV-SAD"; s.dispatchEvent(new w.Event("change"));
       const k = d.querySelector("input[name=kalba][value=LT_EN]"); k.checked = true; k.dispatchEvent(new w.Event("change")); await w.iStep2(); }],
-    ["2 žingsnis: rangos sutarties etapų lentelės redaktorius (2026-10-13)", etapuRedaktoriausBusena],
+    ["sutarties projekto žingsnis: rangos sutarties etapų lentelės redaktorius (2026-10-13)", etapuRedaktoriausBusena],
     ["2 žingsnis: kvalifikacijos reikalavimai iš dokumento (2026-10-14)", kvalLentelesBusena],
     ["2 žingsnis: kvalifikacijos reikalavimai LT/EN su DI vertimu (2026-10-14)", kvalVertimoBusena],
     ["2 žingsnis: kvalifikacijos reikalavimai į DPS sąlygų 2 priedo 1 lentelę (2026-10-14)", kvalDpsBusena]],
@@ -5521,6 +5579,8 @@ async function testaiSaugumas(){
 
 /* Bendras catch: išimtis už testas() (pvz. rėmelis neįsikėlė) kitaip palieka „Vykdoma...“, o CI laukia visą laiko limitą. */
 (async function(){
+  // PP-salygos juodraščiai (2026-10-15): moduliuose rašant tikrais įvykiais sukuriamas juodraštis - testų sukurti šalinami, tikri atkuriami
+  const JD_APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.salygos.juodrastis.") === 0);
   try {
   await testaiJuosta();
   await testaiKopija();
@@ -5556,7 +5616,7 @@ async function testaiSaugumas(){
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
-  }
+  } finally { JD_APSAUGA.atkurk(); }
 })();
 </script>
 </body>

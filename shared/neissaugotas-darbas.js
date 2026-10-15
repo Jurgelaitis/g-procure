@@ -3,8 +3,9 @@
  * ----------------------------------------------------------------------------
  * Įspėjimas prieš uždarant puslapį su neišsaugotu darbu (window.GP_DARBAS).
  *
- * KODĖL. PP-qual, PP-salygos ir PP-graphs sąmoningai nieko nesaugo naršyklėje -
- * rezultatas atsiduria tik atsisiųstame dokumente. Iki 2026-09-25 uždarius
+ * KODĖL. PP-qual ir PP-graphs sąmoningai nieko nesaugo naršyklėje - rezultatas
+ * atsiduria tik atsisiųstame dokumente (PP-salygos nuo 2026-10-15 darbą saugo
+ * juodraštyje ir prieš klausimą jį išsaugo - priesUzdarant). Iki 2026-09-25 uždarius
  * kortelę, perkrovus puslapį ar paspaudus nuorodą visas įvestas darbas dingdavo
  * be jokio klausimo. Dabar naršyklė paklausia, ar tikrai išeiti, jei po
  * paskutinio atsisiuntimo kas nors pasikeitė. Nieko nesaugoma ir niekur
@@ -28,6 +29,7 @@
  *   const m = GP_DARBAS.momentas();    // sugeneravus; atsisiuntus - GP_DARBAS.atskaita(m),
  *                                      // kad po generavimo įvesti pakeitimai liktų nauji
  *   GP_DARBAS.pakeista();              // true - uždarant bus klausiama
+ *   GP_DARBAS.priesUzdarant(() => ...); // prieš klausimą (pvz. modulis išsaugo juodraštį ir kviečia atskaita()) - nuo 2026-10-15
  *
  * Klaida skaičiuojant būseną NIEKADA nereiškia „nėra ką prarasti“ - tada
  * klausiama. Klausimo tekstą rodo pati naršyklė, puslapis jo pakeisti negali.
@@ -42,6 +44,7 @@
   var ivykiai = 0;       // tikrų naudotojo įvykių skaičius
   var atskaita = null;   // parašas, nuo kurio skaičiuojami pakeitimai (null - nežinomas)
   var ijungta = false;   // modulis pasakė, ką stebėti
+  var pries = [];        // kviečiama prieš sprendžiant, ar klausti (2026-10-15: PP-salygos išsaugo juodraštį)
 
   ["input", "change", "drop"].forEach(function (tipas) {
     doc.addEventListener(tipas, function (e) {
@@ -77,10 +80,14 @@
     },
     atskaita: nustatykAtskaita,
     momentas: function () { try { return parasas(); } catch (e) { return null; } },
-    pakeista: pakeista
+    pakeista: pakeista,
+    /* Prieš uždarant (2026-10-15): modulis, kuris darbą išsaugo pats (PP-salygos juodraštis), gali tai padaryti prieš klausimą - išsaugojęs
+       jis kviečia atskaita(), tada neklausiama. Klaida funkcijoje NIEKADA nereiškia „išsaugota“ - tada klausiama kaip įprastai. */
+    priesUzdarant: function (f) { if (typeof f === "function") pries.push(f); }
   };
 
   global.addEventListener("beforeunload", function (e) {
+    for (var i = 0; i < pries.length; i++) { try { pries[i](); } catch (x) {} }
     if (!pakeista()) return;
     e.preventDefault();
     e.returnValue = true;   // senesnėms naršyklėms (Chrome iki 119 versijos)
