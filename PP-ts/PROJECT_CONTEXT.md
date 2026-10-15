@@ -137,6 +137,13 @@ Plus auto-retry API kvietimo jei parsavimas nepavyksta (2 papildomi bandymai su 
 - Markdown, TXT, HTML alternatyvos
 - Automatinis failo pavadinimas su data
 
+### Rinkos konsultacija (skirtukas „Rinkos konsultacija“, 2026-10-15)
+- Klausimynas rinkos konsultacijai pagal TS - LITGRID formos „Konsultacija su rinkos dalyviais“ pagrindu
+- 1 žingsnis: TS (sugeneruota, tikrinama, failas ar įklijuota) ir pirkimo duomenys (iš kortelės ar konteksto), konsultacijos forma, terminai, priedai, atsakingas asmuo
+- 2 žingsnis: 17 formos klausimų (įtraukti), katalogo ir taisyklių klausimai iš TS teksto (naršyklėje), DI pasiūlymai su citatos patikra - visi pasiūlymai įtraukiami tik žmogaus
+- 3 žingsnis: kvietimo tekstas su teisės nuorodomis iš `GP_TEISE`, parengtis, kopijavimas, Word (gulsčias A4, DI požymiai tik su DI klausimais)
+- Kodas: `RinkosKonsultacija` (script #3, grynos funkcijos) ir `App.rk*` (sąsaja); testai - `testai.html` grupė „Rinkos konsultacija“
+
 ---
 
 ## 5. Kokios funkcijos PLANUOJAMOS
