@@ -1054,11 +1054,11 @@ async function testaiNaujiSablonai(){
     tiesa(!rodomas(), "skelbiamoms deryboms klausimas rodomas");
     sel.value = "S-AK"; sel.dispatchEvent(new W.Event("change"));
     tiesa(rodomas(), "atviram konkursui klausimo nėra");
-    lygu([W.eval("seima()"), W.eval("teisesRezimas()"), D.getElementById("rezZyma").textContent], ["AK", "PI", "PĮ (sektorinis)"], "numatyta - PĮ");
+    lygu([W.eval("seima()"), W.eval("teisesRezimas()"), W.eval("istatymas()"), !!D.getElementById("rezZyma")], ["AK", "PI", "PĮ", false], "numatyta - PĮ (antraštėje režimo žymos nebėra, 2026-10-15)");
     const en = D.querySelector("input[name=kalba][value=LT_EN]"); en.checked = true; en.dispatchEvent(new W.Event("change"));
     const c = D.querySelector("input[name=centr][value=taip]"); c.checked = true; c.dispatchEvent(new W.Event("change"));
-    lygu([W.eval("seima()"), W.eval("teisesRezimas()"), D.getElementById("rezZyma").textContent, en.disabled, D.querySelector("input[name=kalba]:checked").value],
-      ["AKV", "VPI", "VPĮ (centralizuotas)", true, "LT"], "centralizuotas - VPĮ, tik LT");
+    lygu([W.eval("seima()"), W.eval("teisesRezimas()"), W.eval("istatymas()"), en.disabled, D.querySelector("input[name=kalba]:checked").value],
+      ["AKV", "VPI", "VPĮ", true, "LT"], "centralizuotas - VPĮ, tik LT");
     tiesa(/Pirkimo vykdymui: <b>UAB „EPSO-G“\. Pirkimo vykdytojas perka ir sau<\/b>/.test(D.getElementById("igalPerziura").innerHTML), D.getElementById("igalPerziura").innerHTML);
     // Vertė tarp VPĮ ir PĮ tarptautinių ribų: VPĮ supaprastintam - kliūtis, PĮ - ne
     const rv = W.GP_TAISYKLES.ribos("VPI", "paslaugos", "litgrid").tarptautine, rp = W.GP_TAISYKLES.ribos("PI", "paslaugos", "litgrid").tarptautine;
@@ -1993,7 +1993,9 @@ async function testaiTeise(){
     await kol(() => W.eval("TEISE_REG"), "registro įkėlimas");
     const r = W.eval("TEISE_REG"), t = D.querySelector("#lkTeise .gps__title");
     tiesa(t && /^Teisės pokyčiai šiam pirkimui( \(\d+\))?$/.test(t.textContent) && (r.ok ? /\(\d+\)$/.test(t.textContent) : D.querySelector("#lkTeise .gps__err")), "būsena: " + D.getElementById("lkTeise").textContent.slice(0, 120));
-    tiesa(D.getElementById("lkTeise").closest("#step2") && D.getElementById("lkTeise").previousElementSibling.id === "lkVeiksmai" && D.getElementById("lkVeiksmai").previousElementSibling.id === "lkSantrauka", "vieta - po „Prieš generuojant“ ir rinkos apžvalgos veiksmų (nuo 2026-10-06)");
+    const lt = D.getElementById("lkTeise");
+    tiesa(lt.closest("#step2") && lt.tagName === "DETAILS" && !lt.open && lt.previousElementSibling.id === "genBusena" && (D.getElementById("lkPabaiga").compareDocumentPosition(lt) & W.Node.DOCUMENT_POSITION_FOLLOWING)
+      && D.getElementById("lkVeiksmai").previousElementSibling.id === "lkSantrauka", "vieta - suskleista po mygtukų (2026-10-15), rinkos apžvalgos veiksmai - po „Prieš generuojant“ (2026-10-06)");
   });
   await testas("Atranka pagal 1 žingsnį: įstatymas (centralizuotam - VPĮ), objektas (darbai - ir „statyba“), rengimo etapas; kito įrankio įrašai nerodomi; neaktualūs - suskleisti su priežastimi; kontekstas pasakomas", async () => {
     await formosZingsnis("T-SD", "LT");
@@ -2012,6 +2014,32 @@ async function testaiTeise(){
     await teiseRodyk({ ok: true, tikrinta: teisesRinkinys() });
     tiesa(teiseAkt().includes("VPĮ norma") && /VPĮ/.test(D.querySelector("#lkTeise .gps__meta").textContent), "centralizuotas - VPĮ: " + teiseAkt().join(", "));
   });
+  await testas("Suskleista eilutė po mygtukų (2026-10-15): kraunama / įkelti nepavyko / aktualūs ir neaktualūs su skaičiais, neperžiūrėtų - pagal naudotojo PP-teise žurnalą, registro data; išskleidus - visas blokas, perpiešiant atvertas lieka; be aktualių - „aktualių nėra“, ne tuščia", async () => {
+    await formosZingsnis("T-SD", "LT");
+    const S = () => D.getElementById("lkTeiseS").textContent.replace(/\s+/g, " ").trim();
+    await kol(() => W.eval("TEISE_REG"), "registro įkėlimas");
+    if (W.eval("TEISE_REG").ok) tiesa(/aktual.* · registras \d{4}-\d{2}-\d{2}$/.test(S()), "tikras registras - su data: " + S());
+    const rodyk = rez => { W.eval("TEISE_REG = " + JSON.stringify(rez)); D.getElementById("lkTeise").dataset.raktas = ""; W.teisesPirkimui(); };
+    rodyk(null);
+    tiesa(/^Teisės pokyčiai šiam pirkimui - kraunama/.test(S()), "kraunama: " + S());
+    rodyk({ ok: false, klaida: "HTTP 404" });
+    tiesa(/įkelti nepavyko, patikrinti negalima$/.test(S()) && D.querySelector("#lkTeiseT .gps__err"), "klaida: " + S());
+    const perz0 = W.GP_STEBESENA.perziuros;
+    W.GP_STEBESENA.perziuros = () => ({});
+    rodyk({ ok: true, tikrinta: teisesRinkinys() });
+    tiesa(/^Teisės pokyčiai šiam pirkimui: aktualūs - 1 \(neperžiūrėtų - 1\) · pagal atsakymus neaktualūs - 3( · registras \d{4}-\d{2}-\d{2})?$/.test(S()), "santrauka: " + S());
+    const id = W.eval("TEISE_REG").tikrinta.irasai.find(x => x.pavadinimas === "Metodika").id;
+    W.GP_STEBESENA.perziuros = () => ({ [id]: { data: "2026-10-01" } });
+    rodyk({ ok: true, tikrinta: teisesRinkinys() });
+    tiesa(/aktualūs - 1 · pagal atsakymus neaktualūs - 3/.test(S()) && !/neperžiūrėtų/.test(S()), "peržiūrėtas: " + S());
+    const lt = D.getElementById("lkTeise");
+    tiesa(!lt.open && lt.querySelector("#lkTeiseT .gps__title") && /\(1\)$/.test(lt.querySelector(".gps__title").textContent), "viduje - visas blokas");
+    lt.open = true;
+    const be = teisesRinkinys(); be.irasai = be.irasai.filter(x => x.pavadinimas !== "Metodika");
+    rodyk({ ok: true, tikrinta: be });
+    tiesa(lt.open && /aktualių nėra/.test(S()) && /registre nėra/.test(D.getElementById("lkTeiseT").textContent), "be aktualių: " + S());
+    W.GP_STEBESENA.perziuros = perz0;
+  });
   await testas("Nepavykęs įkėlimas - klaida, ne „pokyčių nėra“; atsakinėjant blokas neperpiešiamas (atvertas neaktualių sąrašas lieka atviras); 3 žingsnio patikroje - viena eilutė", async () => {
     await formosZingsnis("T-SD", "LT");
     await teiseRodyk({ ok: false, klaida: "HTTP 404" });
@@ -2024,7 +2052,7 @@ async function testaiTeise(){
     tiesa(D.querySelector("#lkTeise details") === det && det.open, "perpiešta atsakant");
     await generuokSu({ budas: "T-SD", pries: () => teiseRodyk({ ok: true, tikrinta: teisesRinkinys() }) });
     const rt = D.getElementById("rezultatas").textContent.replace(/\s+/g, " ");
-    tiesa(/Teisės pokyčiai, aktualūs šiam pirkimui \(1\): Metodika\. Ką patikrinti sąlygose - 2 žingsnio dalyje „Prieš generuojant“/.test(rt), "patikroje: " + (rt.match(/Teisės pokyč.{0,140}/) || [""])[0]);
+    tiesa(/Teisės pokyčiai, aktualūs šiam pirkimui \(1\): Metodika\. Ką patikrinti sąlygose - 2 žingsnio skiltyje „Teisės pokyčiai šiam pirkimui“ \(po mygtukų\)/.test(rt), "patikroje: " + (rt.match(/Teisės pokyč.{0,160}/) || [""])[0]);
     await generuokSu({ budas: "T-SD", pries: () => teiseRodyk({ ok: false, klaida: "HTTP 404" }) });
     tiesa(/Teisės stebėsenos duomenų įkelti nepavyko \(HTTP 404\) - teisės pokyčių šiam pirkimui patikrinti negalima/.test(D.getElementById("rezultatas").textContent.replace(/\s+/g, " ")), "patikroje - klaida");
   });
@@ -8749,13 +8777,17 @@ async function testaiJuodrastis(){
     await sl(1000);
     const nauji = jdRaktai().filter(k => !pries.includes(k));
     lygu([nauji.length, W.JD.busena().kodas, W.JD.dabartinis()], [0, "nera", null], "juodraštis sukurtas be įvesties: " + nauji.map(k => k + " = " + String(localStorage.getItem(k)).slice(0, 300)).join(" | "));
-    tiesa(/bus išsaugotas šioje naršyklėje, kai pradėsite pildyti/.test(D.getElementById("jdBusena").textContent), "būsena: " + D.getElementById("jdBusena").textContent);
+    lygu([D.getElementById("jdZymaT").textContent, D.getElementById("jdBusena").textContent, !!D.querySelector("#jdSarasas .jd-e--dabar")], ["Juodraštis dar nepradėtas", "", false], "būsena prieš pradedant");
     let atsk = 0; const a0 = W.GP_DARBAS.atskaita; W.GP_DARBAS.atskaita = m => { atsk++; return a0(m); };
     W.JD.pakeista({ isTrusted: true, type: "input", target: D.getElementById("pavadinimas") });
     await kol(() => W.JD.dabartinis() && localStorage.getItem(JD_PREF + W.JD.dabartinis()), "išsaugotas juodraštis", 5000);
     const r = JSON.parse(localStorage.getItem(JD_PREF + W.JD.dabartinis()));
     lygu([r.schema, r.meta.pavadinimas, r.duomenys.z1["v:pavadinimas"], r.duomenys.s2, atsk >= 1], [1, "Programiškai įrašytas", "Programiškai įrašytas", null, true], "įrašas");
-    tiesa(/^Juodraštis išsaugotas šioje naršyklėje \d\d:\d\d/.test(D.getElementById("jdBusena").textContent.trim()) && D.querySelector('#jdBusena [data-jd="atsisiusti"]'), "būsena: " + D.getElementById("jdBusena").textContent);
+    tiesa(/^Juodraštis išsaugotas \d\d:\d\d$/.test(D.getElementById("jdZymaT").textContent) && !D.getElementById("jdZyma").classList.contains("header-zyma--klaida") && D.getElementById("jdBusena").textContent === "",
+      "antraštės žyma: " + D.getElementById("jdZymaT").textContent + " / po žingsniais: " + D.getElementById("jdBusena").textContent);
+    const dab = D.querySelector("#jdSarasas .jd-e--dabar");
+    tiesa(dab && /šis pirkimas/.test(dab.textContent) && /išsaugota \d\d:\d\d/.test(dab.textContent) && dab.querySelector('[data-jd="atsisiusti"]:not([data-id])') && dab.querySelector('[data-jd="trinti-dabar"]')
+      && /Juodraščiai šioje naršyklėje \(\d+\)/.test(D.getElementById("jdSarasas").textContent), "dabartinis juodraštis sąraše: " + (dab ? dab.textContent : "nėra"));
     // nepakitęs - neperrašomas (ta pati keitimo data)
     await sl(30); W.JD.issaugok();
     lygu(JSON.parse(localStorage.getItem(JD_PREF + W.JD.dabartinis())).keista, r.keista, "nepakitęs juodraštis perrašytas");
@@ -8789,16 +8821,16 @@ async function testaiJuodrastis(){
     lygu(["step1", "step2", "stepSut", "step3"].filter(x => !D.getElementById(x).classList.contains("hid")), ["stepSut"], "atvertas etapas");
     lygu([D.getElementById("pavadinimas").value, D.getElementById("budas").value, W.SUTARTIES_BLOKAS.busena().atsakymas, W.SUTARTIES_BLOKAS.busena().patvirtinta], ["Galios transformatorių", "T-AK", "taip", true], "1 žingsnis");
     tiesa(/Tęsiamas juodraštis „Galios transformatorių“.*sugeneruoti dokumentai juodraštyje nesaugomi/.test((D.getElementById("gpb-juostos") || {}).textContent || ""), "juosta: " + ((D.getElementById("gpb-juostos") || {}).textContent || "nėra"));
-    tiesa(/^Tęsiamas juodraštis, išsaugotas/.test(D.getElementById("jdBusena").textContent.trim()), "būsena: " + D.getElementById("jdBusena").textContent);
+    tiesa(W.JD.busena().kodas === "atkurtas" && /^Juodraštis išsaugotas \d\d:\d\d$/.test(D.getElementById("jdZymaT").textContent) && D.getElementById("jdBusena").textContent === "", "būsena: " + D.getElementById("jdZymaT").textContent);
     lygu(W.GP_DARBAS.pakeista(), false, "uždarant būtų klausiama, nors viskas išsaugota");
     const docs2 = await dokTekstai(await W.generuoti({ sutartis: false }));
     lygu(Object.keys(docs2), Object.keys(docs1), "dokumentų rinkinys");
     Object.keys(docs1).forEach(k => lygu(docs2[k], docs1[k], k + " tekstas skiriasi po atkūrimo"));
     // ištrynimas
-    D.querySelector('#jdBusena [data-jd="trinti-dabar"]').click();
-    tiesa(/Ištrinti šį juodraštį\?/.test(D.getElementById("jdBusena").textContent) && D.activeElement === D.querySelector('[data-jd="trinti-dabar-taip"]'), "patvirtinimo klausimas ir fokusas");
+    D.querySelector('#jdSarasas [data-jd="trinti-dabar"]').click();
+    tiesa(/Ištrinti šį juodraštį\?/.test(D.getElementById("jdSarasas").textContent) && D.activeElement === D.querySelector('[data-jd="trinti-dabar-taip"]'), "patvirtinimo klausimas ir fokusas");
     D.querySelector('[data-jd="trinti-dabar-taip"]').click();
-    lygu([localStorage.getItem(JD_PREF + id), W.JD.dabartinis(), /juodrastis=/.test(W.location.search)], [null, null, false], "ištrinta");
+    lygu([localStorage.getItem(JD_PREF + id), W.JD.dabartinis(), /juodrastis=/.test(W.location.search), D.getElementById("jdZymaT").textContent], [null, null, false, "Juodraštis dar nepradėtas"], "ištrinta");
   });
 
   await testas("Juodraštis: keli pirkimai - sąraše abu (naujausias pirmas), „Tęsti“ atveria pasirinktą; ?kortele= - tos kortelės juodraštis pirmas ir pažymėtas; pavadinimas su HTML - tik tekstas", async () => {
@@ -8843,8 +8875,9 @@ async function testaiJuodrastis(){
       ivesk1("pavadinimas", "Pilna saugykla");
       const w = W.JD.issaugok({ priverstinai: true });
       const t = D.getElementById("jdBusena").textContent;
-      lygu([w.ok, atsk, /Juodraščio išsaugoti nepavyko: naršyklės saugykla pilna/.test(t), /atsisiųskite juodraštį failu/.test(t), /išsaugotas šioje naršyklėje/.test(t), !!D.querySelector('#jdBusena [data-jd="atsisiusti"]')],
-        [false, 0, true, true, false, true], "būsena: " + t);
+      lygu([w.ok, atsk, /Juodraščio išsaugoti nepavyko: naršyklės saugykla pilna/.test(t), /atsisiųskite juodraštį failu/.test(t), /išsaugotas šioje naršyklėje/.test(t), !!D.querySelector('#jdBusena [data-jd="atsisiusti"]'),
+            D.getElementById("jdZymaT").textContent, D.getElementById("jdZyma").classList.contains("header-zyma--klaida")],
+        [false, 0, true, true, false, true, "Juodraštis neišsaugotas", true], "būsena: " + t);
       D.getElementById("pauze2").click();
       tiesa(/Juodraščio išsaugoti nepavyko/.test(D.getElementById("pauzeBusena2").textContent), "pauzės pranešimas: " + D.getElementById("pauzeBusena2").textContent);
     } finally { W.GP_JUODRASTIS.naudokSaugykla(null); }
@@ -9045,6 +9078,52 @@ async function testaiJuodrastis(){
     await W.atkurkJuodrasti(r);
     lygu([(W.eval("KORTELE").pasirinkta() || {}).id, D.getElementById("pavadinimas").value], ["k-jd-1", "Autotransformatorių 400/110 kV"], "kortelė atkurta");
     kur.remove();
+  });
+
+  await testas("Antraštė (2026-10-15): be „PĮ (sektorinis)“ ir „Bandomoji versija“; juodraščio žyma pastovaus pločio visose būsenose; „Naujas pirkimas“ - mygtukas su ikona ir tekstu; bandomoji versija paaiškinta informacinėje skiltyje", async () => {
+    await modulis();
+    const hr = D.querySelector(".header-right");
+    tiesa(!/PĮ \(sektorinis\)|Bandomoji versija/.test(hr.textContent) && !D.getElementById("rezZyma"), "antraštėje liko senos žymos: " + hr.textContent);
+    const z = D.getElementById("jdZyma"), zt = D.getElementById("jdZymaT"), plotis = () => Math.round(z.getBoundingClientRect().width);
+    const p0 = plotis();
+    zt.textContent = "Juodraštis išsaugotas 12:58"; const p1 = plotis();
+    zt.textContent = "Juodraštis išsaugotas 2026-10-14"; const p2 = plotis();
+    zt.textContent = "Juodraštis neišsaugotas"; const p3 = plotis();
+    zt.textContent = "Išsaugoma..."; const p4 = plotis();
+    lygu([p1, p2, p3, p4], [p0, p0, p0, p0], "žymos plotis šokinėja");
+    tiesa(p0 >= 150 && p0 <= 320, "žymos plotis: " + p0);
+    const b = D.getElementById("naujasPirkimas");
+    tiesa(b && b.classList.contains("btn-header") && b.querySelector("svg") && b.querySelector("span") && b.querySelector("span").textContent === "Naujas pirkimas", "mygtukas „Naujas pirkimas“");
+    tiesa(/bandomoji versija: dokumentai generuojami iš LITGRID šablonų/.test(D.body.textContent), "bandomoji versija nepaaiškinta");
+  });
+
+  await testas("Kontekstas po žingsniais (2026-10-15): 1 žingsnyje nerodomas; nuo 2 žingsnio - pavadinimas, būdas, taikomas įstatymas pilnu pavadinimu (PĮ; centralizuotam - VPĮ), kalba, vertė, kortelės numeris; „Keisti“ - į 1 žingsnį; be pavadinimo ir vertės - pasakoma", async () => {
+    await modulis();
+    const kt = D.getElementById("kontekstas"), T = () => kt.textContent.replace(/\s+/g, " ").trim();
+    tiesa(kt.hidden, "1 žingsnyje rodomas");
+    await jdPirkimas({ budas: "T-SD" });
+    tiesa(!kt.hidden && /^Rengiama: Galios transformatorių pirkimas · Skelbiamos derybos \(tarptautinis pirkimas\) · Pirkimų įstatymas \(PĮ\) · lietuvių k\. · 1 500 000 Eur be PVM Keisti$/.test(T()), "kontekstas: " + T());
+    tiesa(/vandentvarkos, energetikos/.test(kt.querySelector("[title]").title), "pilnas įstatymo pavadinimas antraštėje (title)");
+    D.getElementById("ktKeisti").click();
+    tiesa(!D.getElementById("step1").classList.contains("hid") && kt.hidden, "„Keisti“ - į 1 žingsnį");
+    ivesk1("pavadinimas", ""); ivesk1("verte", "");
+    const sel = D.getElementById("budas"); sel.value = "S-AK"; sel.dispatchEvent(new W.Event("change"));
+    radijas1("centr", "taip"); radijas1("kalba", "LT");
+    W.__K = null; await W.iStep2();
+    tiesa(/^Rengiama: pavadinimas neįrašytas · Atviras konkursas \(supaprastintas pirkimas\) · Viešųjų pirkimų įstatymas \(VPĮ\) - centralizuotas pirkimas · lietuvių k\. · vertė neįrašyta Keisti$/.test(T()), "centralizuotas: " + T());
+    W.rodyk(1); radijas1("centr", "ne"); radijas1("kalba", "LT_EN"); ivesk1("pavadinimas", "Galios transformatorių");
+    W.__K = null; await W.iStep2();
+    tiesa(/Pirkimų įstatymas \(PĮ\) · lietuvių ir anglų k\./.test(T()), "LT/EN: " + T());
+    W.rodyk("sutartis");
+    tiesa(!kt.hidden, "sutarties žingsnyje nerodomas");
+    // kortelė su numeriu (netikra saugykla)
+    const f = await modulisAdresu("saugykla=testine");
+    W.GP_KORTELE.issaugok(Object.assign({ id: "k-kt-1", numeris: "VPP-2026-55" }, KORTELE));
+    await W.eval("KORTELE").pasirink("k-kt-1", { pildyti: true, savas: true });
+    W.__K = null; await W.iStep2();
+    const T2 = () => D.getElementById("kontekstas").textContent.replace(/\s+/g, " ").trim();     // naujas rėmelis - ne pirmojo elementas
+    tiesa(/^Rengiama: Autotransformatorių 400\/110 kV pirkimas · Nr\. VPP-2026-55 · /.test(T2()), "su kortele: " + T2());
+    f.remove();
   });
 
   await testas("Darbo sritys: keturi žingsniai mygtukais (dabartinis - aria-current), „Dokumentai“ - tik sugeneravus; 375 px - juodraščių sąrašas ir būsena su ilgu pavadinimu neslenka", async () => {

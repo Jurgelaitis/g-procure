@@ -7,9 +7,10 @@
  * niekur nesiunčiamas, patenka į atsarginę kopiją (shared/backup.js), aprašytas privatumas.html. Juodraštyje yra numatoma vertė ir
  * kiti pirkimo duomenys, todėl failu atsisiųstą juodraštį laikykite kaip pirkimo dokumentus (ne tiekėjams).
  *
- *   GP_JUODRASTIS.mount({ sarasas, busena, surink, meta, sritis, darbas })
- *     sarasas  - vieta neužbaigtų juodraščių sąrašui (rodomas puslapio pradžioje, kai juodraščių yra)
- *     busena   - vieta saugojimo būsenai („Juodraštis išsaugotas šioje naršyklėje 14:32“, klaida, kitas skirtukas)
+ *   GP_JUODRASTIS.mount({ sarasas, busena, zyma, surink, meta, sritis, darbas })
+ *     sarasas  - vieta juodraščių sąrašui (dabartinis - pirmas su „Atsisiųsti“ ir „Ištrinti“, kiti - su „Tęsti“; rodomas, kai juodraščių yra)
+ *     zyma     - antraštės žyma (trumpa būsena: „Juodraštis išsaugotas 14:32“, „Juodraštis neišsaugotas“; 2026-10-15 - vietoj modulio žymų)
+ *     busena   - vieta problemoms po žingsniais (išsaugoti nepavyko - priežastis ir „Atsisiųsti juodraštį“; kitas skirtukas); kitaip tuščia
  *     surink() -> duomenys (JSON objektas; tas pats objektas -> tas pats juodraštis - lyginama eilute)
  *     meta()   -> { pavadinimas, kortele, numeris, etapas, etapoPav } - sąrašui
  *     sritis   - elementas, kurio naudotojo veiksmai (input / change / click) pradeda juodraštį ir jį išsaugo
@@ -46,6 +47,14 @@
     return (data === siandien ? "" : data + " ") + p2(d.getHours()) + ":" + p2(d.getMinutes());
   }
   function naujasId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  /* antraštės žymai: šiandien - tik laikas, kitaip - tik data (plotis - kaip ilgiausio teksto) */
+  function laikasTrumpas(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return "";
+    var siandien = global.GP_EKSPORTAS ? global.GP_EKSPORTAS.siandien() : "";
+    var data = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    return data === siandien ? p2(d.getHours()) + ":" + p2(d.getMinutes()) : data;
+  }
 
   var SAUG = null;                         // testams - paduota saugykla (tada kitų skirtukų patikros nėra)
   function saug() { if (SAUG) return SAUG; try { return global.localStorage; } catch (e) { return null; } }
@@ -118,35 +127,39 @@
 
   function mount(cfg) {
     var dabar = null, irasas = null, paskutinis = null, pradeta = false, laikmatis = null, busena = { kodas: "nera" }, klausti = null, rodytiSar = false;
-    var sarEl = $(cfg.sarasas), busEl = $(cfg.busena), sritis = $(cfg.sritis);
+    var sarEl = $(cfg.sarasas), busEl = $(cfg.busena), zymaEl = $(cfg.zyma), sritis = $(cfg.sritis);
     var param = (global.location.search.match(/[?&]juodrastis=([a-z0-9]{4,40})/) || [])[1] || null;
     // atverta iš pirkimo kortelės (?kortele=<id>, pvz. „Mano pirkimai“) - tos kortelės juodraščiai sąraše pirmi ir pažymėti
     var korteleParam = (global.location.search.match(/[?&]kortele=([^&#]+)/) || [])[1] || null;
     try { if (korteleParam) korteleParam = decodeURIComponent(korteleParam); } catch (e) { korteleParam = null; }
 
+    var problema = function () { return busena.kodas === "klaida" || busena.kodas === "kitas-skirtukas"; };
+    function zymosTekstas() {
+      var b = busena;
+      if (b.kodas === "issaugota" || b.kodas === "atkurtas") return "Juodraštis išsaugotas " + laikasTrumpas(b.kada);
+      if (b.kodas === "saugoma") return "Išsaugoma...";
+      if (problema()) return "Juodraštis neišsaugotas";
+      return "Juodraštis dar nepradėtas";
+    }
     function tekstoBusena() {
       var b = busena;
-      if (b.kodas === "issaugota") return '<span class="jd-ok">Juodraštis išsaugotas šioje naršyklėje ' + esc(laikas(b.kada)) + "</span>";
-      if (b.kodas === "saugoma") return '<span class="jd-ok">Išsaugoma...</span>';
       if (b.kodas === "kitas-skirtukas") return '<span class="jd-kl" role="alert">Šį juodraštį pakeitė kitas skirtukas - šio lango pakeitimai neįrašyti, kad neperrašytų ' +
         "kito skirtuko darbo. Perkraukite puslapį ir tęskite juodraštį (bus atvertas naujausias) arba atsisiųskite šio lango juodraštį failu.</span>";
       if (b.kodas === "klaida") return '<span class="jd-kl" role="alert">Juodraščio išsaugoti nepavyko: ' + esc(b.klaida) +
         ". Atsakymai lieka tik šiame lange - atsisiųskite juodraštį failu, kad jų neprarastumėte.</span>";
-      if (b.kodas === "atkurtas") return '<span class="jd-ok">Tęsiamas juodraštis, išsaugotas ' + esc(laikas(b.kada)) + "</span>";
-      return '<span class="jd-pr">Juodraštis bus išsaugotas šioje naršyklėje, kai pradėsite pildyti.</span>';
+      return "";
     }
+    /* antraštės žyma - visada (trumpa būsena); po žingsniais - tik problema su „Atsisiųsti juodraštį“ */
     function pieskBusena() {
-      if (!busEl) return;
-      var h = '<div class="jd-b" id="jdB">' + tekstoBusena();
-      if (dabar) {
-        h += ' <span class="jd-v"><button type="button" class="sec jd-mz" data-jd="atsisiusti">Atsisiųsti juodraštį</button>';
-        h += klausti === "trinti-dabar"
-          ? ' <span class="jd-kl-t">Ištrinti šį juodraštį? Atsakymai liks tik šiame lange.</span> <button type="button" class="sec jd-mz" data-jd="trinti-dabar-taip">Taip, ištrinti</button>' +
-            ' <button type="button" class="sec jd-mz" data-jd="trinti-ne">Ne</button>'
-          : ' <button type="button" class="sec jd-mz" data-jd="trinti-dabar">Ištrinti juodraštį</button>';
-        h += "</span>";
+      if (zymaEl) {
+        var zt = zymaEl.querySelector("[data-jd-zyma]") || zymaEl;
+        zt.textContent = zymosTekstas();
+        zymaEl.classList.toggle("header-zyma--klaida", problema());
       }
-      busEl.innerHTML = h + "</div>";
+      if (!busEl) return;
+      busEl.innerHTML = problema()
+        ? '<div class="jd-b" id="jdB">' + tekstoBusena() + ' <span class="jd-v"><button type="button" class="sec jd-mz" data-jd="atsisiusti">Atsisiųsti juodraštį</button></span></div>'
+        : "";
     }
     function etapoTekstas(m) { return m && m.etapoPav ? m.etapoPav : ""; }
     function pieskSarasa() {
@@ -160,8 +173,20 @@
       }
       var ikelti = '<button type="button" class="sec jd-mz" data-jd="ikelti">Įkelti juodraštį iš failo</button>' +
         '<input type="file" id="jdFailas" accept=".json,application/json" hidden aria-label="Juodraščio failas (JSON)">';
-      if (!kiti.length) { sarEl.innerHTML = '<div class="jd-sar jd-sar--tuscias">' + ikelti + "</div>"; return; }
-      var eil = kiti.map(function (x) {
+      if (!kiti.length && !dabar) { sarEl.innerHTML = '<div class="jd-sar jd-sar--tuscias">' + ikelti + "</div>"; return; }
+      // dabartinis juodraštis - pirmas: „Atsisiųsti“ ir „Ištrinti“ (su patvirtinimu) čia, ne po žingsniais (2026-10-15)
+      var dab = "";
+      if (dabar) {
+        var md = (irasas && irasas.meta) || {};
+        dab = '<li class="jd-e jd-e--dabar"><span class="jd-e-t"><b>' + (md.pavadinimas ? esc(md.pavadinimas) : "<i>be pavadinimo</i>") + '</b> <span class="jd-e-z">šis pirkimas</span>' +
+          '<span class="jd-e-m">' + [md.numeris ? "Nr. " + esc(md.numeris) : "", irasas && irasas.keista ? (busena.kodas === "klaida" || busena.kodas === "kitas-skirtukas" ? "neišsaugota" : "išsaugota " + esc(laikas(irasas.keista))) : ""].filter(Boolean).join(" · ") +
+          "</span></span><span class=\"jd-v\"><button type=\"button\" class=\"sec jd-mz\" data-jd=\"atsisiusti\">Atsisiųsti</button>" +
+          (klausti === "trinti-dabar"
+            ? ' <span class="jd-kl-t">Ištrinti šį juodraštį? Atsakymai liks tik šiame lange.</span> <button type="button" class="sec jd-mz" data-jd="trinti-dabar-taip">Taip, ištrinti</button>' +
+              ' <button type="button" class="sec jd-mz" data-jd="trinti-ne">Ne</button>'
+            : ' <button type="button" class="sec jd-mz" data-jd="trinti-dabar">Ištrinti</button>') + "</span></li>";
+      }
+      var eil = dab + kiti.map(function (x) {
         var r = x.irasas, m = (r && r.meta) || {};
         if (x.busena !== "yra")
           return '<li class="jd-e"><span class="jd-e-t"><b>Neperskaitomas juodraštis</b> <span class="jd-e-m">' + esc(x.klaida || x.busena) +
@@ -180,7 +205,7 @@
               ' <button type="button" class="sec jd-mz" data-jd="trinti-ne">Ne</button>'
             : ' <button type="button" class="sec jd-mz" data-jd="trinti" data-id="' + esc(x.id) + '">Ištrinti</button>') + "</span></li>";
       }).join("");
-      var antr = dabar ? "Kiti juodraščiai šioje naršyklėje (" + kiti.length + ")" : "Neužbaigti pirkimo sąlygų juodraščiai šioje naršyklėje (" + kiti.length + ")";
+      var antr = dabar ? "Juodraščiai šioje naršyklėje (" + (kiti.length + 1) + ")" : "Neužbaigti pirkimo sąlygų juodraščiai šioje naršyklėje (" + kiti.length + ")";
       sarEl.innerHTML = '<details class="jd-sar" id="jdSar"' + (dabar && !rodytiSar ? "" : " open") + '><summary><h2 class="jd-sar-h">' + antr + "</h2></summary>" +
         '<div class="hint">Juodraštis saugomas tik šioje naršyklėje: niekur nesiunčiamas, patenka į atsarginę kopiją. Jame yra numatoma vertė - ' +
         "atsisiųstą failą laikykite kaip pirkimo dokumentus. Tęsiant atveriamas atskiras puslapis; dabartinis darbas prieš tai išsaugomas.</div>" +
@@ -216,7 +241,7 @@
         if (!buvo) paskutinis = null;
       }
       pieskBusena();
-      if (!buvo) pieskSarasa();
+      pieskSarasa();
       return w;
     }
     // naują juodraštį pradeda tik įvestis (rašymas, pasirinkimas, įkeltas failas); paspaudimai (pvz. perėjimas tarp žingsnių) - tik išsaugo esamą
@@ -264,7 +289,7 @@
       if (v === "ikelti") { var f = doc.getElementById("jdFailas"); if (f) f.click(); return; }
       if (v === "trinti") { klausti = "trinti:" + id; rodytiSar = true; pieskSarasa(); var t = sarEl && sarEl.querySelector('[data-jd="trinti-taip"]'); if (t) t.focus(); return; }
       if (v === "trinti-taip") { trink(id); klausti = null; pieskSarasa(); pranesk("Juodraštis ištrintas.", "gerai"); return; }
-      if (v === "trinti-dabar") { klausti = "trinti-dabar"; pieskBusena(); var t2 = busEl.querySelector('[data-jd="trinti-dabar-taip"]'); if (t2) t2.focus(); return; }
+      if (v === "trinti-dabar") { klausti = "trinti-dabar"; rodytiSar = true; pieskSarasa(); var t2 = doc.querySelector('[data-jd="trinti-dabar-taip"]'); if (t2) t2.focus(); return; }
       if (v === "trinti-dabar-taip") {
         trink(dabar); dabar = null; irasas = null; paskutinis = null; pradeta = false; klausti = null; busena = { kodas: "nera" };
         if (global.history && /[?&]juodrastis=/.test(global.location.search)) global.history.replaceState(null, "", global.location.pathname + global.location.hash);
