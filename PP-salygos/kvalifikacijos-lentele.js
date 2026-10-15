@@ -18,7 +18,9 @@
  *   numeriai(M, pakeitimai)     -> eilutės su SPS numeriais, grupėmis ir specialistais (tas pats, kas bus dokumente)
  *   punktai(nr, budas)          -> „2, 3, 4 ir 5“ / „2 ir/ar 3 ir/ar 4“ / „2, 3 and 4“ / „2 and/or 3“
  *   pastabos(M, kontekstas)     -> nuoseklumo pastabos (sąvokos „Rangovas“, „Paraiška“, išnašos, vertimas)
- *   irasyk(doc, M, opts)        -> sugeneruoto SPS DOM dokumento 2 lentelė pakeičiama; ataskaita arba null
+ *   irasyk(doc, M, opts)        -> sugeneruoto SPS DOM dokumento 2 lentelė (DPS sukūrimo sąlygose - 2 priedo 1 lentelė)
+ *                                  pakeičiama; ataskaita arba null
+ *   patirtiesEilutes(E)         -> tiekėjo patirties reikalavimų numeriai (nuorodoms formose, pvz. „1 lentelės 8 punktą“)
  *   tusciaNeVisa(doc)           -> „Informacija dėl ... ne visa apimtimi“ be turinio - antraštė ir tuščia eilutė šalinamos
  * ==========================================================================*/
 (function (root) {
@@ -455,7 +457,8 @@
     return { seka, kartojasi: [...new Set(kart)] };
   }
 
-  /* Nuoseklumo pastabos: SPS sąvokos ir procedūra (kontekstas: { terminas: 'Pasiūlym' | 'Pirmin' | 'Paraišk', dvikalbis }). */
+  /* Nuoseklumo pastabos: SPS sąvokos ir procedūra (kontekstas: { terminas: 'pasiulymas' | 'paraiska', dvikalbis, pakeitimai, vertimas,
+     pavKur - kur lentelė, pvz. „SPS 2 lentelėje“ }). */
   function pastabos(M, ktx){
     const out = (M.ispejimai || []).slice();
     const visas = M.eilutes.map(e => pTekstas(e.reik) + '\n' + pTekstas(e.dok)).join('\n');
@@ -473,13 +476,16 @@
     if (g.kartojasi.length) out.push('Reikalavimai neišdėstyti grupėmis iš eilės - lentelėje grupės antraštė pasikartos. Eilučių tvarka nekeičiama, nes tekste gali būti nuorodų į punktų numerius.');
     const sn = M.saltinioNumeriai.filter(Boolean);
     if (sn.length === M.eilutes.length && sn.some((x, i) => x !== String(i + 1)))
-      out.push(`Šaltinio eilutės numeruotos ${sn[0]}-${sn[sn.length - 1]}, SPS lentelėje bus 1-${M.eilutes.length}: patikrinkite nuorodas į punktus reikalavimų tekste.`);
+      out.push(`Šaltinio eilutės numeruotos ${sn[0]}-${sn[sn.length - 1]}, ${(ktx && ktx.pavKur) || 'SPS lentelėje'} bus 1-${M.eilutes.length}: patikrinkite nuorodas į punktus reikalavimų tekste.`);
     return out;
   }
 
   /* ---------- Įrašymas į sugeneruotą SPS ------------------------------------------------------------------------ */
   const tekstas = el => visi(el, 't').map(t => t.textContent).join('');
-  /* SPS 2 lentelė: pirma kūno lentelė, kurios antraštėje „Kvalifikacijos reikalavim...“, o prieš ją - „N lentelė“. */
+  /* Lentelės pavadinimas prieš ją: SPS - „2 lentelė“, DPS sukūrimo sąlygos (2026-10-14) - „2 priedo 1 lentelė „Kvalifikacijos
+     reikalavimai““, dvikalbės - „2 priedo 1 lentelė /“ ir „Table 1 of Annex 2“. */
+  const LENTELES_PAV = /^(\d+\s*(priedo\s+\d+\s*)?lentel|table\s+\d+)/i;
+  /* Kvalifikacijos lentelė: pirma kūno lentelė, kurios antraštėje „Kvalifikacijos reikalavim...“ ir dokumentų stulpelis, o prieš ją - pavadinimas. */
   function raskLentele(doc){
     const body = visi(doc, 'body')[0];
     if (!body) return null;
@@ -488,12 +494,14 @@
       if (kunas[i].localName !== 'tbl') continue;
       const tr0 = vaikas(kunas[i], 'tr');
       if (!tr0 || !/kvalifikacijos reikalavim/i.test(tekstas(tr0))) continue;
+      const st0 = stulpeliai(langeliai(tr0));
+      if (!st0.reik || !(st0.dok || st0.dokLt)) continue;          // pvz. DPS LT/EN priedo antraštinė lentelė „TIEKĖJŲ KVALIFIKACIJOS REIKALAVIMAI ...“
       for (let j = i - 1; j >= 0; j--){
         if (kunas[j].localName === 'tbl') break;
         if (kunas[j].localName !== 'p') continue;
         const t = tekstas(kunas[j]).trim();
         if (!t) continue;
-        if (/^\d+\s*lentel/i.test(t)) return kunas[i];
+        if (LENTELES_PAV.test(t)) return kunas[i];
         break;
       }
     }
@@ -591,6 +599,36 @@
     return tr;
   }
   const VERTIMO_ZYMA = 'Įrašykite vertimą į anglų kalbą.';
+  /* Grupės antraštės eilutė formai, kurioje jų nėra (DPS sukūrimo sąlygų LT 2 priedo 1 lentelė; naudotojo sprendimas 2026-10-15 - kaip SPS
+     2 lentelėje ir LT/EN priede): vienas langelis per visą plotį, tekstas pusjuodis ir centruotas, rėmeliai ir lygiavimas vertikaliai - kaip
+     formos eilutės; aukštis - pagal turinį (formos eilutės aukštis pritaikytas tuščiai reikalavimo vietai). Tekstą įrašo antrastesEiluteSu. */
+  function grupesEilute(doc, tbl, proto, rPr0){
+    const tr = proto.cloneNode(true);
+    const trPr = vaikas(tr, 'trPr');
+    if (trPr) vaikai(trPr, 'trHeight').forEach(x => trPr.removeChild(x));
+    const tcs = vaikai(tr, 'tc'), tc = tcs[0];
+    tcs.slice(1).forEach(x => tr.removeChild(x));
+    // stulpelių skaičius ir plotis - iš lentelės tinklelio, be jo - iš formos eilutės langelių
+    const grid = visi(vaikas(tbl, 'tblGrid'), 'gridCol'), lp = langeliai(proto);
+    const n = grid.length || lp.reduce((a, c) => Math.max(a, c.iki + 1), 0);
+    const plotis = grid.length ? grid.reduce((a, g) => a + (parseInt(atr(g, 'w'), 10) || 0), 0)
+      : lp.reduce((a, c) => a + (parseInt(atr(vaikas(vaikas(c.tc, 'tcPr'), 'tcW'), 'w'), 10) || 0), 0);
+    let pr = vaikas(tc, 'tcPr');
+    if (!pr){ pr = naujas(doc, 'tcPr'); tc.insertBefore(pr, tc.firstChild); }
+    vaikai(pr, 'gridSpan').concat(vaikai(pr, 'vMerge'), vaikai(pr, 'hMerge')).forEach(x => pr.removeChild(x));
+    let w = vaikas(pr, 'tcW');
+    if (!w){ w = naujas(doc, 'tcW'); pr.insertBefore(w, pr.firstChild); }
+    if (plotis){ nustatyk(w, 'w', String(plotis)); nustatyk(w, 'type', 'dxa'); }
+    const gs = naujas(doc, 'gridSpan'); nustatyk(gs, 'val', String(n)); pr.insertBefore(gs, w.nextSibling);
+    if (!atr(w, 'w')) pr.removeChild(w);                          // pločio nežinome - be tuščio tcW (GPLent pločius sutvarko pats)
+    const pPr = pastraiposPPr(doc, vaikas(vaikai(tc, 'p')[0], 'pPr'));
+    vaikai(pPr, 'jc').forEach(x => pPr.removeChild(x));
+    const jc = naujas(doc, 'jc'); nustatyk(jc, 'val', 'center');
+    pPr.insertBefore(jc, vaikai(pPr).find(x => /^(textDirection|textAlignment|textboxTightWrap|outlineLvl|divId|cnfStyle|rPr|sectPr|pPrChange)$/.test(x.localName)) || null);   // schemos tvarka
+    vaikai(tc).filter(x => x.localName !== 'tcPr').forEach(x => tc.removeChild(x));
+    const p = naujas(doc, 'p'); p.appendChild(pPr); p.appendChild(atkarpa(doc, { t: '', b: true }, rPr0)); tc.appendChild(p);
+    return tr;
+  }
 
   /* opts: { pakeitimai, dvikalbis } -> { eiluciu, grupes: [{ pav, kiek }], pasalintos: [pav], specialistai: [nr], neVisa } */
   function irasyk(doc, M, opts){
@@ -605,6 +643,7 @@
     const rPr0 = baziniaiRPr(tbl);
     const E = numeriai(M, o.pakeitimai, o.vertimas);
     const pries = R.neVisaAntraste || null;
+    const sukurta = !R.pirmaGrupe && R.pirmasPrototipas ? grupesEilute(doc, tbl, R.pirmasPrototipas, rPr0) : null;   // forma be grupių antraščių
     const kiek = {}, naudotos = new Set();
     let dabar = null;
     const nauji = [];
@@ -613,7 +652,7 @@
       const rkt = g === 'kita' ? 'kita:' + (e.antraste && e.antraste.lt) : g;
       if (rkt !== dabar){
         dabar = rkt;
-        const sab = R.grupes[g] || R.pirmaGrupe;
+        const sab = R.grupes[g] || R.pirmaGrupe || sukurta;
         if (sab){
           if (GRUPES[g]) nauji.push(R.grupes[g] && !naudotos.has(g) ? R.grupes[g].cloneNode(true) : antrastesEiluteSu(doc, sab, GRUPES[g].lt, GRUPES[g].en, dvikalbis));
           else nauji.push(antrastesEiluteSu(doc, sab, (e.antraste && e.antraste.lt) || 'Kiti reikalavimai', e.antraste && e.antraste.en, dvikalbis));
@@ -661,8 +700,14 @@
     }
     const pasalintos = Object.keys(GRUPES).filter(g => R.grupes[g] && !naudotos.has(g)).map(g => GRUPES[g].lt);
     return { eiluciu: E.length, grupes: Object.entries(kiek).map(([pav, n]) => ({ pav, kiek: n })), pasalintos, diVertimu: dvikalbis ? E.filter(e => e.diVertimas).length : 0,
-      specialistai: E.filter(e => e.specialistas).map(e => e.nr), neVisa, dvikalbis, beVertimo: dvikalbis ? E.filter(e => !pTekstas(e.reikEN)).length : 0 };
+      specialistai: E.filter(e => e.specialistas).map(e => e.nr), neVisa, dvikalbis, beVertimo: dvikalbis ? E.filter(e => !pTekstas(e.reikEN)).length : 0,
+      antrastesIrasytos: !!sukurta, neVisaNeperkelta: !R.neVisaAntraste && !!(M.neVisa && pTekstas(M.neVisa.lt)) };
   }
+
+  /* Tiekėjo patirties (įvykdytų sutarčių) reikalavimai - ne specialistų. Formose būna nuoroda į konkretų lentelės punktą
+     (DPS sukūrimo sąlygų 5 priedas „Atliktų darbų sąrašas“: „pagal kvalifikacijos reikalavimų 1 lentelės 8 punktą“). */
+  const PATIRTIS_RE = /(patirt|ivykd|atlikt\S* (darb|paslaug)|vykdyt\S* sutart)/;
+  const patirtiesEilutes = E => E.filter(e => !e.specialistas && PATIRTIS_RE.test(norm(pTekstas(e.reik)))).map(e => e.nr);
 
   /* „Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi“ be turinio (nuostata „Netaikyti“): iki 2026-10-14
      dokumente likdavo antraštė ir tuščia eilutė. Grąžina, ar pašalinta. */
@@ -677,5 +722,5 @@
 
   root.GP_KVAL_LENTELE = { skaityk, skaitykXml, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
     vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos, VERTIMO_TERMINAI,
-    raskLentele, GRUPES, grupesPav, grupiuTvarka, pTekstas, VERTIMO_ZYMA };
+    raskLentele, GRUPES, grupesPav, grupiuTvarka, pTekstas, VERTIMO_ZYMA, patirtiesEilutes, LENTELES_PAV };
 })(typeof window !== 'undefined' ? window : this);

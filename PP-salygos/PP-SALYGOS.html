@@ -1793,20 +1793,32 @@ function kvalifikacijosLenteles(){
    atpažįstama naršyklėje - be DI, niekur nesiunčiama. Kortelė „Kvalifikacijos reikalavimai (SPS 2 lentelė)“ rodo, kas bus perkelta:
    grupės (iš dokumento antraščių arba siūlomos pagal tekstą), numeriai, specialistų reikalavimai (3.7 p.). Šablono 2 lentelės laukai
    („Tiekėjas turi teisę ...“, „PATEIKIAMOS ...“) tada neklausiami, 3.7 p. „X“ siūlomi, „Informacija dėl ... ne visa apimtimi“ - iš
-   dokumento arba siūloma netaikyti. Perkėlimą patvirtina žmogus (PATV 'KVL'); „Nenaudoti“ - grįžta šablono laukai. */
+   dokumento arba siūloma netaikyti. Perkėlimą patvirtina žmogus (PATV 'KVL'); „Nenaudoti“ - grįžta šablono laukai.
+   Nuo 2026-10-14 (naudotojo „Pradėkime nuo DPS priedo lentelės perkėlimo“) - ir DPS sukūrimo sąlygų 2 priedo 1 lentelė: grupės kaip SPS
+   (LT formoje grupių antraščių nėra - jos įrašomos, naudotojo sprendimas 2026-10-15 „Taip, prašau pridėti.“); 3.7 p. ir „ne visa apimtimi“
+   eilutės DPS formose nėra - specialistų nežymima, dokumento „ne visa apimtimi“ tekstas neperkeliamas (pasakoma). */
 const KVL = { kandidatai: [], pasirinkta: 0, pakeitimai: {}, atmesta: false, klaida: '' };
 function kvlModelis(){ return (!KVL.atmesta && KVL.kandidatai[KVL.pasirinkta]) || null; }
-/* Šablono 2 lentelė žemėlapyje: antraštė „Kvalifikacijos reikalavimas“ (prieš ją - „N lentelė“), pirma grupė „Teisė verstis veikla“,
-   „Informacija dėl ... ne visa apimtimi“ ir kita nuostata po lentelės. Be grupių (DPS priedo lentelė) - null. */
+/* Šablono kvalifikacijos lentelė žemėlapyje: antraštė „Kvalifikacijos reikalavimas“ (prieš ją - „N lentelė“, DPS - „2 priedo 1 lentelė“ /
+   „Table 1 of Annex 2“), pirma grupė „Teisė verstis veikla“ (DPS LT formoje grupių nėra - pirma eilutė „1.“), „Informacija dėl ... ne
+   visa apimtimi“ ir kita nuostata po lentelės. pav / pavKur / pavKa - lentelės vardas sąsajai („SPS 2 lentelė“, „... lentelėje“, „... lentelę“). */
 function kvalSritis(Z){
   const P = Z.paras || {}, ks = Object.keys(P).map(Number).sort((a, b) => a - b), t = i => String(P[String(i)] || '').trim();
-  const h = ks.find(i => /^kvalifikacijos reikalavimas$/i.test(t(i)) && ks.some(j => j < i && j >= i - 4 && /^\d+\s*lentel/i.test(t(j))));
+  const PAV = GP_KVAL_LENTELE.LENTELES_PAV;
+  const h = ks.find(i => /^kvalifikacijos reikalavimas$/i.test(t(i)) && ks.some(j => j < i && j >= i - 4 && PAV.test(t(j))));
   if (h == null) return null;
   const g = ks.find(i => i > h && i < h + 12 && /^Teisė verstis veikla/.test(t(i)));
-  if (g == null) return null;
-  const nv = ks.find(i => i > g && i < g + 80 && /^Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi/.test(t(i)));
-  const pab = ks.find(i => i > (nv ?? g) && /^(Kai vieną|When one|\d+\.\d+\.?(\s|$))/.test(t(i)));
-  return { nuo: h, grupe: g, neVisa: nv ?? null, iki: nv ?? pab ?? Infinity, pab: pab ?? Infinity };
+  const pirm = g ?? ks.find(i => i > h && i < h + 6 && /^1\.?$/.test(t(i)));      // forma be grupių antraščių (DPS sukūrimo LT)
+  if (pirm == null) return null;
+  const nv = g == null ? undefined : ks.find(i => i > g && i < g + 80 && /^Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi/.test(t(i)));
+  const pab = ks.find(i => i > (nv ?? pirm) && /^(Kai vieną|When one|\d+\.\d+\.?(\s|$))/.test(t(i)));
+  // vardas - iš pavadinimo prieš lentelę: „2 lentelė“ -> SPS 2 lentelė, „2 priedo 1 lentelė“ -> DPS sąlygų 2 priedo 1 lentelė
+  const pv = ks.filter(j => j < h && j >= h - 4).map(t).find(x => PAV.test(x)) || '';
+  const m = /^(\d+)\s*priedo\s+(\d+)\s*lentel/i.exec(pv), m2 = /^(\d+)\s*lentel/i.exec(pv);
+  const kam = /^DPS/.test(Z.seima || '') ? 'DPS sąlygų' : 'Pirkimo sąlygų';
+  const pav = m ? `${kam} ${m[1]} priedo ${m[2]} lentelė` : `SPS ${m2 ? m2[1] : '2'} lentelė`;
+  return { nuo: h, grupe: pirm, grupes: g != null, neVisa: nv ?? null, iki: nv ?? pab ?? Infinity, pab: pab ?? Infinity,
+    pav, pavKur: pav.replace(/lentelė$/, 'lentelėje'), pavKa: pav.replace(/lentelė$/, 'lentelę'), priedas: !!m, nr: Number(m ? m[2] : m2 ? m2[1] : 2) };
 }
 /* Kaip šiame būde vadinamas tiekėjo dokumentas (nuoseklumo pastaboms) - pagal šablono pastabą 2 lentelėje. */
 function kvlTerminas(Z, sr){
@@ -1815,9 +1827,9 @@ function kvlTerminas(Z, sr){
     if (/su paraiska pateikiamas/.test(n)) return 'paraiska';
     if (/su (pirminiu )?pasiulymu pateikiamas/.test(n)) return 'pasiulymas';
   }
-  return null;
+  return /^DPSK/.test(Z.seima || '') ? 'paraiska' : null;    // DPS sukūrimas: tiekėjai teikia paraiškas (LT formos tekste - ir „Pasiūlymą“)
 }
-const kvlKilme = M => `iš įkelto dokumento „${M.failas}“ (SPS 2 lentelė)`;
+const kvlKilme = (M, kv) => `iš įkelto dokumento „${M.failas}“ (${(kv && kv.lent && kv.lent.pav) || 'SPS 2 lentelė'})`;
 /* DOCX failai -> kandidatai. kortele - įkelta kortelės mygtuku: tada pasakoma ir tai, kad lentelės nerasta. */
 async function kvlSkaityk(failai, kortele){
   const docx = [...(failai || [])].filter(f => /\.docx$/i.test(f.name));
@@ -2307,7 +2319,8 @@ function surinktiKlausimus(){
     const kvs = !forma && !KVAL.tik1 ? kvalSritis(Z) : null;   // 2 lentelė trinama („tik pašalinimo pagrindai“) - nieko neperkeliama
     if (kvs){
       if (!K.kvl) K.kvl = { vieta: { dok: d.trumpas, i: kvs.grupe }, dokumentai: [], dokai: [], M: KVLM, terminas: kvlTerminas(Z, kvs),
-        dvikalbis: Z.kalba === 'LTEN', neVisaAuto: false };
+        dvikalbis: Z.kalba === 'LTEN', neVisaAuto: false, spec: false, nuorodos: [],
+        lent: { pav: kvs.pav, pavKur: kvs.pavKur, pavKa: kvs.pavKa, grupes: kvs.grupes, neVisa: kvs.neVisa != null, priedas: kvs.priedas, nr: kvs.nr } };
       if (!K.kvl.dokumentai.includes(trumpas)) K.kvl.dokumentai.push(trumpas);
       K.kvl.dokai.push(d.trumpas);
     }
@@ -2394,7 +2407,7 @@ function surinktiKlausimus(){
     (Z.tuscios||[]).forEach(n => {
       if (isjungta.has(n.i)){ return; }                       // isjungtos sakos laukas (Nr. 7)
       if (kvlSrityje(n.i)){                                   // SPS 2 lentelė - iš įkelto dokumento
-        auto(trumpas, n.text, 'pakeičiama įkelto dokumento reikalavimais', kvlKilme(KVLM));
+        auto(trumpas, n.text, 'pakeičiama įkelto dokumento reikalavimais', kvlKilme(KVLM, K.kvl));
         return;
       }
       if (tekstoIdx.has(n.i)) return;                         // tvarko formuluotes UI
@@ -2700,7 +2713,7 @@ function surinktiKlausimus(){
           siulyk('I_' + raktas, null, null, null);
           ATS['I_' + raktas] ??= '';
           K.kvl.neVisaAuto = true;
-          auto(trumpas, n.text, 'šablono sakinio vietoje įrašomas jūsų dokumento tekstas', kvlKilme(KVLM));
+          auto(trumpas, n.text, 'šablono sakinio vietoje įrašomas jūsų dokumento tekstas', kvlKilme(KVLM, K.kvl));
           return;
         }
         // Angliskas dvynys seka lietuviska ZMOGAUS sprendima „Netaikyti“ (siuloma, kol nepatvirtinta)
@@ -2881,10 +2894,26 @@ function surinktiKlausimus(){
       if (v.xRusis !== 'lenteles-punktai' || !/\b2\b/.test(v.uzrasas || '')) return;
       const budas = en ? (eil ? 'and/or' : 'and') : (/ir\/ar/.test(v.zyma || '') ? 'ir/ar' : 'ir');
       eil++;
+      if (K.kvl) K.kvl.spec = true;                          // kortelė rodo specialisto žymą tik kai yra kur siūlyti (DPS formose 3.7 p. nėra)
       siulyk('B_' + r, k, kvlSpec.length ? GP_KVAL_LENTELE.punktai(kvlSpec, budas) : null,
         kvlSpec.length ? `įkelta kvalifikacijos lentelė: specialistų reikalavimai - ${GP_KVAL_LENTELE.punktai(kvlSpec, 'ir')} punktai` : null);
     });
   });
+
+  /* Nuorodos į konkretų kvalifikacijos lentelės punktą kitose formose (2026-10-14): DPS sukūrimo sąlygų 5 priede „Atliktų darbų sąrašas“ -
+     „pagal kvalifikacijos reikalavimų 1 lentelės 8 punktą“, SPS sutarčių sąraše - „pagal SPS 3.1 punkto 2 lentelės 1 punktą“ (LT/EN priede
+     lietuviškai „8 punktą“, angliškai „Qualification requirement No. 1 in Table 2“). Tik į tą pačią lentelę (ne į 1 lentelę - pašalinimo
+     pagrindus). Perkėlus kitą lentelę numeris gali nebetikti - kortelė tai pasako; tekstas nekeičiamas (nuoroda - turinys). */
+  if (K.kvl) DOK.forEach(d => Object.values((d.zemelapis && d.zemelapis.paras) || {}).forEach(t => {
+    // tarpai - ir nelaužomi (šablone „8 punktą“): JS \s juos apima
+    const lt = /(?:kvalifikacijos\s+reikalavimų|SPS\s+\d+(?:\.\d+)*\s+punkto)\s+(?:\d+\s+priedo\s+)?(\d+)\s+lentelės\s+(\d+)\s+punkt\S*/i.exec(t);
+    const en = /Qualification\s+requirement\s+No\.\s*(\d+)\s+in\s+Table\s+(\d+)/i.exec(t);
+    const x = lt ? { lent: Number(lt[1]), nr: Number(lt[2]), tekstas: lt[0] } : en ? { lent: Number(en[2]), nr: Number(en[1]), tekstas: en[0] } : null;
+    if (x) x.tekstas = x.tekstas.replace(/\s+/g, ' ');
+    if (!x || x.lent !== K.kvl.lent.nr) return;
+    const dok = d.pavadinimas || d.trumpas;
+    if (!K.kvl.nuorodos.some(y => y.dok === dok && y.tekstas === x.tekstas)) K.kvl.nuorodos.push({ dok, nr: x.nr, tekstas: x.tekstas });
+  }));
 
   /* Grupes: sujungiam vienodo turinio grupes is skirtingu dokumentu. */
   const sujungtos = {};
@@ -3311,10 +3340,11 @@ function kortelesVienetai(K, c){
     }
   } else if (c.rusis === 'kvl'){
     if (!q.M) return out;                         // be dokumento - tik pasiūlymas įkelti (neprivaloma)
-    const E = GP_KVAL_LENTELE.numeriai(q.M, KVL.pakeitimai), be = E.filter(e => !e.grupe);
-    out.push({ id: c.id + '-patv', pavadinimas: `SPS 2 lentelė iš „${q.M.failas}“ (${E.length} reikalavim${E.length === 1 ? 'as' : 'ai'})`,
+    const lt = q.lent || {}, E = GP_KVAL_LENTELE.numeriai(q.M, KVL.pakeitimai), be = E.filter(e => !e.grupe);
+    out.push({ id: c.id + '-patv', pavadinimas: `${lt.pav || 'SPS 2 lentelė'} iš „${q.M.failas}“ (${E.length} reikalavim${E.length === 1 ? 'as' : 'ai'})`,
       busena: be.length ? 'neuzpildyta' : (PATV.has('KVL') ? 'patvirtinta' : 'siuloma'), blokuoja: be.length > 0, raktai: ['KVL'],
-      reiksme: be.length ? `nepasirinkta grupė: ${be.map(e => e.nr).join(', ')} eil.` : `${E.length} reikalavimai`, saltinis: 'įkeltas dokumentas - patikrinkite grupes ir specialistus' });
+      reiksme: be.length ? `nepasirinkta grupė: ${be.map(e => e.nr).join(', ')} eil.` : `${E.length} reikalavimai`,
+      saltinis: `įkeltas dokumentas - patikrinkite grupes${q.spec ? ' ir specialistus' : ''}` });
     const nDI = q.dvikalbis && !q.M.dvikalbe ? GP_KVAL_LENTELE.diVertimuSk(q.M, q.M.vertimas) : 0;
     if (nDI) out.push({ id: c.id + '-en', pavadinimas: `Angliškas kvalifikacijos reikalavimų tekstas - DI vertimas (${nDI} eil.)`,
       busena: PATV.has('KVL_EN') ? 'patvirtinta' : 'siuloma', raktai: ['KVL_EN'], reiksme: `${nDI} eilučių`, saltinis: 'DI vertimas - patikrinkite' });
@@ -3452,17 +3482,20 @@ function kortelesHTML(K, c){
    dokumente, numeriai, specialistai 3.7 p.), siūlomi pasirinkimai su pagrindu, nuoseklumo pastabos ir patvirtinimas. */
 function kvlHTML(K, c, klase, kur){
   const q = c.q, M = q.M, L = GP_KVAL_LENTELE;
+  // lentelė dokumente: SPS 2 lentelė arba DPS sukūrimo sąlygų 2 priedo 1 lentelė (LT formoje grupių antraščių nėra - įrašomos; 3.7 p. - tik SPS)
+  const lt = q.lent || { pav: 'SPS 2 lentelė', pavKur: 'SPS 2 lentelėje', pavKa: 'SPS 2 lentelę', grupes: true, neVisa: true };
+  const spec37 = !!q.spec;
   const pa = paaiskinimas({ vieta: kur,
-    kas: 'Kvalifikacijos reikalavimai perkeliami iš jūsų Word dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“): tekstas pažodžiui, su pusjuodžiu, kursyvu ir pabraukimu, eilučių tvarka kaip dokumente, numeriai iš eilės per visas grupes. Šablono tuščios eilutės ir grupės be reikalavimų pašalinamos. Dokumentas skaitomas tik jūsų naršyklėje - niekur nesiunčiamas, DI nenaudojamas.',
-    pastaba: 'Grupę (kai jūsų dokumente grupių antraščių nėra) ir ar eilutė yra specialisto reikalavimas (SPS 3.7 p.) modulis tik siūlo pagal žodžius tekste - patikrinkite ir prireikus pakeiskite.' });
+    kas: `Kvalifikacijos reikalavimai perkeliami iš jūsų Word dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) į ${lt.pavKa}: tekstas pažodžiui, su pusjuodžiu, kursyvu ir pabraukimu, eilučių tvarka kaip dokumente, numeriai iš eilės per visas grupes. ${lt.grupes ? 'Šablono tuščios eilutės ir grupės be reikalavimų pašalinamos.' : 'Formos tuščios eilutės pašalinamos; LITGRID formoje grupių antraščių nėra - jos įrašomos taip pat kaip SPS 2 lentelėje.'} Dokumentas skaitomas tik jūsų naršyklėje - niekur nesiunčiamas, DI nenaudojamas.`,
+    pastaba: `Grupę (kai jūsų dokumente grupių antraščių nėra)${spec37 ? ' ir ar eilutė yra specialisto reikalavimas (SPS 3.7 p.)' : ''} modulis tik siūlo pagal žodžius tekste - patikrinkite ir prireikus pakeiskite.` });
   const ikelti = `<button type="button" class="sec" data-kvl="ikelti">${M ? 'Įkelti kitą dokumentą' : 'Įkelti kvalifikacijos reikalavimus (DOCX)'}</button>`;
   const klaida = KVL.klaida ? `<div class="kvl-klaida" role="alert">${esc(KVL.klaida)}</div>` : '';
-  const galva = kortelesGalva(c, 'Kvalifikacijos reikalavimai (SPS 2 lentelė)', pa);
+  const galva = kortelesGalva(c, `Kvalifikacijos reikalavimai (${lt.pav})`, pa);
   if (!M){
     const atm = KVL.atmesta && KVL.kandidatai[KVL.pasirinkta];
     return `<section class="${klase} kvl" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${galva}
-      <p class="lk-uz">${atm ? `Įkelta lentelė iš „${esc(atm.failas)}“ nenaudojama - SPS 2 lentelę pildote šio skyriaus laukais.`
-        : 'Jau turite kvalifikacijos reikalavimus Word faile (pvz. iš PP-qual)? Įkelkite jį - reikalavimai bus perkelti į SPS 2 lentelę pažodžiui, su grupėmis ir numeriais, o 3.7 punkto specialistų numeriai pasiūlyti. Failas skaitomas tik jūsų naršyklėje.'}</p>
+      <p class="lk-uz">${atm ? `Įkelta lentelė iš „${esc(atm.failas)}“ nenaudojama - ${lt.priedas ? `${lt.pav} lieka kaip formoje (užpildykite ją Word programoje)` : `${lt.pavKa} pildote šio skyriaus laukais`}.`
+        : `Jau turite kvalifikacijos reikalavimus Word faile (pvz. iš PP-qual)? Įkelkite jį - reikalavimai bus perkelti į ${lt.pavKa} pažodžiui, su grupėmis ir numeriais${spec37 ? ', o 3.7 punkto specialistų numeriai pasiūlyti' : ''}. Failas skaitomas tik jūsų naršyklėje.`}</p>
       ${klaida}<div class="actions kvl-veiksmai">${atm ? '<button type="button" class="sec" data-kvl="naudoti">Naudoti įkeltą lentelę</button>' : ''}${ikelti}</div></section>`;
   }
   const E = L.numeriai(M, KVL.pakeitimai, M.vertimas);
@@ -3494,36 +3527,46 @@ function kvlHTML(K, c, klase, kur){
               ${M.eilutes[e.i].antraste ? opt('kita', `„${M.eilutes[e.i].antraste.lt}“ (jūsų dokumento antraštė)`, e.grupe === 'kita') : ''}
             </select></span>
           <span class="kvl-kilme" id="${id}-gk">${esc(gKilme)}</span>
-          <span class="kvl-vv"><label class="kvl-sp"><input type="checkbox" id="${id}-s" aria-describedby="${id}-sk" ${e.specialistas ? 'checked' : ''}
+          ${spec37 ? `<span class="kvl-vv"><label class="kvl-sp"><input type="checkbox" id="${id}-s" aria-describedby="${id}-sk" ${e.specialistas ? 'checked' : ''}
             onchange="kvlSpec(${e.i},this.checked)"> Specialisto reikalavimas (SPS 3.7 p.)</label></span>
-          <span class="kvl-kilme" id="${id}-sk">${esc(sKilme)}</span>
+          <span class="kvl-kilme" id="${id}-sk">${esc(sKilme)}</span>` : ''}
         </div>
         ${dvik && e.diVertimas ? kvlEnHTML(id, e, VT) : ''}
       </div></div>`;
   });
   const spec = E.filter(e => e.specialistas).map(e => e.nr);
   const naudotos = new Set(E.map(e => e.grupe));
-  const pasal = Object.keys(L.GRUPES).filter(g => !naudotos.has(g)).map(g => L.GRUPES[g].lt);
-  const past = L.pastabos(M, { terminas: q.terminas, dvikalbis: q.dvikalbis, pakeitimai: KVL.pakeitimai, vertimas: VT });
+  const pasal = lt.grupes ? Object.keys(L.GRUPES).filter(g => !naudotos.has(g)).map(g => L.GRUPES[g].lt) : [];   // forma be grupių - šalinti nėra ko
+  const past = L.pastabos(M, { terminas: q.terminas, dvikalbis: q.dvikalbis, pakeitimai: KVL.pakeitimai, vertimas: VT, pavKur: lt.pavKur });
+  // nuorodos į konkretų lentelės punktą kitose formose (DPS 5 priedas „... 1 lentelės 8 punktą“) - kai numeris nebeatitinka patirties eilučių
+  const pat = L.patirtiesEilutes(E);
+  (q.nuorodos || []).forEach(x => {
+    if (pat.length === 1 && pat[0] === x.nr) return;
+    past.push(`„${x.dok}“ nurodo „${x.tekstas}“ - perkeltoje lentelėje ${pat.length ? `tiekėjo patirties reikalavim${pat.length === 1 ? 'as yra' : 'ai yra'} ${L.punktai(pat, 'ir')} punkt${pat.length === 1 ? 'as' : 'ai'}` : 'tiekėjo patirties reikalavimo neradome'}${E.length < x.nr ? `, ${x.nr} punkto nėra` : ''}. Nuorodos modulis nekeičia - pataisykite ją Word programoje.`);
+  });
   const kitos = KVL.kandidatai.length > 1 ? `<div class="lk-v"><label class="lk-v-l" for="${c.id}-k">Kuri lentelė perkeliama?</label>
     <select class="lk-in" id="${c.id}-k" onchange="kvlPasirink(this.value)">${KVL.kandidatai.map((x, j) =>
       opt(String(j), `„${x.failas}“, ${x.lentele}-oji lentelė (${x.eilutes.length} eil.)`, j === KVL.pasirinkta)).join('')}</select></div>` : '';
-  const nv = M.neVisa && L.pTekstas(M.neVisa.lt)
+  const nv = !lt.neVisa ? (M.neVisa && L.pTekstas(M.neVisa.lt)
+      ? `Jūsų dokumento nuostata „... ne visa apimtimi“ (${ilgasTekstas(L.pTekstas(M.neVisa.lt), 120)}) neperkeliama - ${lt.pavKur} tokios eilutės nėra, o formos įžangoje jau yra sakinys apie tiekėjo įsipareigojimą, kai kvalifikacija dėl teisės verstis veikla tikrinama ne visa apimtimi. Jei jūsų nuostata kitokia - įrašykite ją Word programoje.`
+      : '')
+    : M.neVisa && L.pTekstas(M.neVisa.lt)
     ? (q.neVisaAuto ? `„Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi“ - įrašoma iš jūsų dokumento: ${ilgasTekstas(L.pTekstas(M.neVisa.lt), 160)}`
                     : '„Informacija dėl ... ne visa apimtimi“ - jūs jau atsakėte šio skyriaus klausime, todėl jūsų dokumento tekstas neperkeliamas.')
     : '„Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi“ - jūsų dokumente tokios nuostatos nėra, todėl šio skyriaus klausime siūloma ją netaikyti.';
   return `<section class="${klase} kvl" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${galva}
-    <p class="lk-uz" id="${c.id}-uz">Iš „${esc(M.failas)}“ į SPS 2 lentelę perkeliam${E.length === 1 ? 'as 1 reikalavimas' : `i ${E.length} reikalavimai`} -
-      tekstas pažodžiui, tvarka kaip jūsų dokumente, numeriai 1-${E.length}. Šablono eilutės „Tiekėjas turi teisę ...“ ir „PATEIKIAMOS ...“ nebeklausiamos.
-      Patikrinkite grupes ir specialistų reikalavimus, tada patvirtinkite.</p>
+    <p class="lk-uz" id="${c.id}-uz">Iš „${esc(M.failas)}“ į ${esc(lt.pavKa)} perkeliam${E.length === 1 ? 'as 1 reikalavimas' : `i ${E.length} reikalavimai`} -
+      tekstas pažodžiui, tvarka kaip jūsų dokumente, numeriai 1-${E.length}. ${lt.priedas ? 'Formos tuščios eilutės pašalinamos.' : 'Šablono eilutės „Tiekėjas turi teisę ...“ ir „PATEIKIAMOS ...“ nebeklausiamos.'}
+      Patikrinkite grupes${spec37 ? ' ir specialistų reikalavimus' : ''}, tada patvirtinkite.</p>
     ${kitos}${klaida}
-    <div class="kvl-lent" role="group" aria-label="Taip bus SPS 2 lentelėje">${eil}</div>
+    <div class="kvl-lent" role="group" aria-label="Taip bus ${esc(lt.pavKur)}">${eil}</div>
     <ul class="kvl-info">
-      <li>SPS 3.7 punkte siūloma: ${spec.length ? `„SPS 2 lentelės <b>${esc(L.punktai(spec, 'ir'))}</b> punktų reikalavimams“ ir „<b>${esc(L.punktai(spec, 'ir/ar'))}</b> punktui“ - patvirtinkite lauke „Ką įrašyti vietoj „X“?“ žemiau.`
-        : 'specialistų reikalavimų nepažymėta - 3.7 punkto „X“ vietas užpildykite patys.'}</li>
+      ${spec37 ? `<li>SPS 3.7 punkte siūloma: ${spec.length ? `„SPS 2 lentelės <b>${esc(L.punktai(spec, 'ir'))}</b> punktų reikalavimams“ ir „<b>${esc(L.punktai(spec, 'ir/ar'))}</b> punktui“ - patvirtinkite lauke „Ką įrašyti vietoj „X“?“ žemiau.`
+        : 'specialistų reikalavimų nepažymėta - 3.7 punkto „X“ vietas užpildykite patys.'}</li>` : ''}
+      ${lt.grupes ? '' : '<li>LITGRID formoje grupių antraščių nėra - jos įrašomos taip pat kaip SPS 2 lentelėje ir dvikalbiame DPS priede.</li>'}
       ${pasal.length ? `<li>Šablono grup${pasal.length === 1 ? 'ė' : 'ės'} be reikalavimų bus pašalint${pasal.length === 1 ? 'a' : 'os'}: ${esc(pasal.join(', '))}.</li>` : ''}
       ${K.ebvpd && !K.ebvpd.trinti ? `<li>Kiekvienos eilutės dokumentų langelio gale lieka šablono pastaba „${esc(K.ebvpd.tekstas.trim())}“ (kaip 1 lentelėje); jei dokumentai teikiami kartu su pasiūlymu - ją pašalinsite skiltyje „Išspręsta automatiškai“.</li>` : ''}
-      <li>${nv}</li>
+      ${nv ? `<li>${nv}</li>` : ''}
     </ul>
     ${past.length ? `<div class="kvl-past"><b>Patikrinkite:</b><ul>${past.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
     ${dvik ? kvlVertimoHTML(c, M, E, c.vienetai.find(u => u.raktai && u.raktai.includes('KVL_EN'))) : ''}
@@ -4721,8 +4764,9 @@ async function generuotiViena(d, REZ){
     const kv = window.__K && window.__K.kvl, xd = doc.parts['word/document.xml'];
     if (kv && kv.M && kv.dokai.includes(d.trumpas)){
       kvalIsDok = GP_KVAL_LENTELE.irasyk(xd, kv.M, { pakeitimai: KVL.pakeitimai, neVisa: kv.neVisaAuto, vertimas: kv.M.vertimas });
-      if (kvalIsDok){ kvalIsDok.failas = kv.M.failas; kvalIsDok.patvirtinta = PATV.has('KVL'); kvalIsDok.vertimasPatvirtintas = PATV.has('KVL_EN'); }
-      else kvalIsDok = { klaida: true, failas: kv.M.failas };
+      const pav = (kv.lent && kv.lent.pav) || 'SPS 2 lentelė';
+      if (kvalIsDok){ kvalIsDok.failas = kv.M.failas; kvalIsDok.pav = pav; kvalIsDok.spec37 = !!kv.spec; kvalIsDok.patvirtinta = PATV.has('KVL'); kvalIsDok.vertimasPatvirtintas = PATV.has('KVL_EN'); }
+      else kvalIsDok = { klaida: true, failas: kv.M.failas, pav };
     }
     neVisaPasalinta = GP_KVAL_LENTELE.tusciaNeVisa(xd);
   }
@@ -5166,11 +5210,13 @@ function rodykRezultata(rez){
   /* Kvalifikacijos reikalavimai iš įkelto dokumento (2026-10-14) ir tuščia „ne visa apimtimi“ dalis */
   rez.filter(r => r.stats && r.stats.kvalIsDokumento).forEach(r => {
     const k = r.stats.kvalIsDokumento, L = GP_KVAL_LENTELE;
-    if (k.klaida){ h += `<div class="audit no" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai neperkelti:</b> ${esc(r.d.pavadinimas)} - SPS 2 lentelės
+    const pav = k.pav || 'SPS 2 lentelė';
+    if (k.klaida){ h += `<div class="audit no" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai neperkelti:</b> ${esc(r.d.pavadinimas)} - ${esc(pav.replace(/lentelė$/, 'lentelės'))}
       dokumente neradome, todėl „${esc(k.failas)}“ reikalavimų įrašyti nepavyko. Lentelė palikta kaip šablone - užpildykite ją Word programoje.</div>`; return; }
-    h += `<div class="audit ${k.patvirtinta && !k.beVertimo && (!k.diVertimu || k.vertimasPatvirtintas) ? 'ok' : 'no'}" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai (SPS 2 lentelė):</b> ${esc(r.d.pavadinimas)} -
+    h += `<div class="audit ${k.patvirtinta && !k.beVertimo && (!k.diVertimu || k.vertimasPatvirtintas) ? 'ok' : 'no'}" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai (${esc(pav)}):</b> ${esc(r.d.pavadinimas)} -
       iš „${esc(k.failas)}“ perkelta ${k.eiluciu} (${k.grupes.map(g => esc(g.pav) + ' ' + g.kiek).join(', ')}), numeriai 1-${k.eiluciu}${k.pasalintos.length ? `; pašalintos grupės be reikalavimų: ${esc(k.pasalintos.join(', '))}` : ''}${
-      k.neVisa ? '; „ne visa apimtimi“ - iš jūsų dokumento' : ''}${k.specialistai.length ? `; specialistų reikalavimai (3.7 p.): ${esc(L.punktai(k.specialistai, 'ir'))}` : ''}.${
+      k.antrastesIrasytos ? '; grupių antraštės įrašytos (LITGRID formoje jų nėra)' : ''}${
+      k.neVisa ? '; „ne visa apimtimi“ - iš jūsų dokumento' : ''}${k.neVisaNeperkelta ? '; jūsų dokumento „ne visa apimtimi“ nuostata neperkelta - formoje tokios eilutės nėra' : ''}${k.specialistai.length && k.spec37 ? `; specialistų reikalavimai (3.7 p.): ${esc(L.punktai(k.specialistai, 'ir'))}` : ''}.${
       k.patvirtinta ? '' : ' <b>Perkėlimas nepatvirtintas</b> - grupės ir specialistai buvo tik siūlomi; peržiūrėkite lentelę Word programoje.'}${
       k.diVertimu ? ` Angliškas tekstas ${k.diVertimu} eilutėse - <b>DI vertimas (Claude)</b>${k.vertimasPatvirtintas ? ', jūsų patvirtintas' : ', <b>nepatvirtintas</b>'}; vertėjas netikrino, Word faile įrašytas DI požymis.` : ''}${
       k.beVertimo ? ` <b>Angliškas tekstas</b> ${k.beVertimo} eilutėse neįrašytas - langeliuose raudonas nurodymas „${esc(L.VERTIMO_ZYMA)}“.` : ''}</div>`;
@@ -5901,7 +5947,7 @@ async function aiPridek(files){
   if (klaida) GP_BUSENA.rodyk('#aiBusena', { tipas:'klaida', tekstas: klaida.trim() });
   else GP_BUSENA.slepk('#aiBusena');
   aiRodykSaltinius();
-  // Kvalifikacijos reikalavimų lentelė DOCX faile - perkeliama į SPS 2 lentelę be DI (kvalifikacijos-lentele.js)
+  // Kvalifikacijos reikalavimų lentelė DOCX faile - perkeliama į SPS 2 lentelę (DPS - į sąlygų 2 priedo 1 lentelę) be DI (kvalifikacijos-lentele.js)
   if (await kvlSkaityk(geri, false)) kvlPranesk();
 }
 function kvlPranesk(){ if (window.__K) klausimynas(); else kvlZinute(); }
@@ -5911,7 +5957,7 @@ function kvlZinute(){
   if (!el) return;
   if (!M || !K || !K.kvl){ el.hidden = true; el.innerHTML = ''; return; }
   el.hidden = false;
-  el.innerHTML = `Faile „${esc(M.failas)}“ rasta kvalifikacijos reikalavimų lentelė (${M.eilutes.length} reikalavim${M.eilutes.length === 1 ? 'as' : 'ai'}) - ji perkeliama į SPS 2 lentelę be DI.
+  el.innerHTML = `Faile „${esc(M.failas)}“ rasta kvalifikacijos reikalavimų lentelė (${M.eilutes.length} reikalavim${M.eilutes.length === 1 ? 'as' : 'ai'}) - ji perkeliama į ${esc((K.kvl.lent && K.kvl.lent.pavKa) || 'SPS 2 lentelę')} be DI.
     <button type="button" class="sec" data-kvl="perziureti">Peržiūrėti perkėlimą</button>`;
 }
 
@@ -6325,7 +6371,7 @@ GP_DARBAS.stebek(() => [AI.priimta, GP_TIKRINIMAS.darbas(), APZIURA_KLAUSTI, EBV
     stepsTitle: "Kaip naudotis",
     steps: [
       "<b>Kontroliniai klausimai:</b> pirkimo būdas, pavadinimas, vertė, kalba. Galite įkelti DocLogix pirkimo paraiškos kortelę - AI pasiūlys laukų reikšmes, jas patvirtinate jūs. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Patvirtinus prekių ar paslaugų sutartį, 2 žingsnyje atsiranda sutarties klausimai, o 3 žingsnyje - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
-      "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis. Įkėlę kvalifikacijos reikalavimų Word failą (pvz. iš PP-qual), gausite SPS 2 lentelę su jūsų reikalavimais ir 3.7 punkto specialistų numeriais - be DI.",
+      "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis. Įkėlę kvalifikacijos reikalavimų Word failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais - be DI.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu.",
       "<b>Prieš skelbdami</b> kiekvieną dokumentą peržiūrėkite Word programoje - automatinė patikra nėra leidimas skelbti.",
       "<b>Tikrinti parengtus dokumentus</b> (skirtukas viršuje): įkelkite paketą ar atskirus failus - jie bus palyginti tarpusavyje, su pirkimo kortele ir su standartine LITGRID forma (šiuo moduliu sugeneruoti - pagal generavimo pasą), o įstatymo reikalaujamos pirkimo dokumentų informacijos (vertinimo kriterijų, terminų, kontaktinių asmenų ir kt.) bus ieškoma visame pakete ir parodoma, kur ji rasta. Kiekvienam radiniui įrašykite sprendimą ir atsisiųskite Word ataskaitą; kitą kartą įkelkite ją kartu su nauja paketo versija."

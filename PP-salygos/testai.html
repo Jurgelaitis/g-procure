@@ -8106,6 +8106,203 @@ function kvlLentele(xml){
 async function kvlIkelk(x){ await W.kvlSkaityk([await kvlFailas(x)], true); W.klausimynas(); }
 const KVLv = () => W.eval("KVL");
 
+/* DPS sukūrimo sąlygų 2 priedo 1 lentelė (2026-10-14, naudotojo „Pradėkime nuo DPS priedo lentelės perkėlimo“): ta pati kvalifikacijos
+   lentelės perkėlimo logika - LT formoje (DPSK_LT_SALYGOS) grupių antraščių nėra, jos įrašomos kaip SPS (naudotojo sprendimas 2026-10-15
+   „Taip, prašau pridėti.“), LT/EN priede (DPSK_LTEN_KVALIFIKACIJA) - kaip SPS. */
+async function testaiKvalDps(){
+  dabartine = grupe("Kvalifikacijos reikalavimai iš įkelto dokumento į DPS sukūrimo sąlygų 2 priedo 1 lentelę (2026-10-14)");
+  const L = W.GP_KVAL_LENTELE;
+  const sek = () => D.getElementById(W.lkId("kvl|KVL"));
+  const tx = el => (el && el.textContent || "").replace(/\s+/g, " ");
+
+  await testas("Atpažinimas žemėlapiuose: visų šeimų ir priedų šablonai - DPS atpažįstami tik DPSK_LT_SALYGOS (be grupių) ir DPSK_LTEN_KVALIFIKACIJA (su grupėmis), SPS - kaip iki šiol („SPS 2 lentelė“, su grupėmis); paraiškos formos ir konkretaus pirkimo lentelės - ne", async () => {
+    const vardai = new Set();
+    Object.values(W.eval("SEIMOS")).forEach(k => Object.values(k).forEach(l => l.forEach(v => vardai.add(v))));
+    const rasta = {};
+    for (const v of [...vardai].sort()){
+      const r = await W.fetch("zemelapiai/" + v + ".json");
+      if (!r.ok) continue;
+      const k = W.kvalSritis(await r.json());
+      if (k) rasta[v] = k;
+    }
+    lygu(Object.keys(rasta).filter(v => /^DPS/.test(v)), ["DPSK_LTEN_KVALIFIKACIJA", "DPSK_LT_SALYGOS"], "DPS dokumentai");
+    lygu([rasta.DPSK_LT_SALYGOS.pav, rasta.DPSK_LT_SALYGOS.grupes, rasta.DPSK_LT_SALYGOS.priedas, rasta.DPSK_LT_SALYGOS.neVisa], ["DPS sąlygų 2 priedo 1 lentelė", false, true, null], "DPS LT");
+    lygu([rasta.DPSK_LTEN_KVALIFIKACIJA.pav, rasta.DPSK_LTEN_KVALIFIKACIJA.grupes, rasta.DPSK_LTEN_KVALIFIKACIJA.pavKa], ["DPS sąlygų 2 priedo 1 lentelė", true, "DPS sąlygų 2 priedo 1 lentelę"], "DPS LT/EN");
+    const sps = Object.entries(rasta).filter(([v]) => !/^DPS/.test(v));
+    tiesa(sps.length >= 10 && sps.every(([, k]) => k.pav === "SPS 2 lentelė" && k.grupes && !k.priedas), "SPS: " + sps.map(([v, k]) => v + " " + k.pav + " " + k.grupes).join("; "));
+  });
+
+  await testas("DPS LT, 2 žingsnis: kortelė „Kvalifikacijos reikalavimai (DPS sąlygų 2 priedo 1 lentelė)“ - grupės kaip SPS (formoje jų nėra - pasakoma, kad įrašomos), be specialisto žymos (3.7 p. DPS sąlygose nėra); pastabos: 5 priedo nuoroda „1 lentelės 8 punktą“ ir patirties punktas; „Paraiška“ - ne pastaba", async () => {
+    await modulis(); await zingsnis2("DPS", "LT", "darbai");
+    tiesa(sek() && /Kvalifikacijos reikalavimai \(DPS sąlygų 2 priedo 1 lentelė\)/.test(tx(sek())) && sek().dataset.busena === "neprivaloma", "kortelė be dokumento: " + tx(sek()).slice(0, 200));
+    tiesa(/perkelti į DPS sąlygų 2 priedo 1 lentelę pažodžiui, su grupėmis ir numeriais\./.test(tx(sek())) && !/3\.7/.test(tx(sek())), "kvietimas įkelti: " + tx(sek()));
+    lygu(W.__K.kvl.terminas, "paraiska", "DPS sukūrimas - paraiškos");
+    await kvlIkelk(KVL_A);
+    const t = tx(sek());
+    tiesa(sek().querySelectorAll(".kvl-sel").length === 5 && !sek().querySelector('input[type=checkbox][id$="-s"]'), "grupių pasirinkimai yra, specialisto žymos nėra");
+    lygu([...sek().querySelectorAll(".kvl-gr")].map(x => x.textContent), ["Teisė verstis veikla", "Techninis ir profesinis pajėgumas", "Finansinis ir ekonominis pajėgumas"], "grupės kortelėje");
+    lygu([...sek().querySelectorAll(".kvl-nr")].map(x => x.textContent), ["1.", "2.", "3.", "4.", "5."], "numeriai");
+    tiesa(/Formos tuščios eilutės pašalinamos; LITGRID formoje grupių antraščių nėra - jos įrašomos taip pat kaip SPS 2 lentelėje\./.test(t), "paaiškinimas „?“: " + t);
+    tiesa(/Iš „Kvalifikaciniai reikalavimai\.docx“ į DPS sąlygų 2 priedo 1 lentelę perkeliami 5 reikalavimai/.test(t) && /Formos tuščios eilutės pašalinamos\./.test(t) && /Patikrinkite grupes, tada patvirtinkite\./.test(t), "įžanga: " + t.slice(0, 400));
+    tiesa(/LITGRID formoje grupių antraščių nėra - jos įrašomos taip pat kaip SPS 2 lentelėje ir dvikalbiame DPS priede\./.test(t) && !/SPS 3\.7 punkte/.test(t) && !/ne visa apimtimi/.test(t) && !/Šablono grup/.test(t), "informacija: " + t);
+    tiesa(/nurodo „kvalifikacijos reikalavimų 1 lentelės 8 punktą\*“ - perkeltoje lentelėje tiekėjo patirties reikalavimas yra 4 punktas, 8 punkto nėra\. Nuorodos modulis nekeičia/.test(t), "5 priedo nuoroda: " + t);
+    tiesa(/„Rangovas“/.test(t) && !/minimas „Pasiūlymas“|minima „Paraiška“/.test(t), "terminų pastabos: " + t);
+    lygu(sek().dataset.busena, "siuloma", "būsena - siūloma (visos grupės pasiūlytos)");
+    D.querySelector('[data-lk-patv="KVL"]').click();
+    lygu(sek().dataset.busena, "patvirtinta", "patvirtinta žmogaus veiksmu");
+  });
+
+  await testas("DPS LT, generavimas: 2 priedo 1 lentelėje - grupių antraštės (vienas langelis per visą plotį, pusjuodis, centruotas, be formos eilutės aukščio) ir 5 reikalavimai šaltinio tvarka, numeriai tekstu 1-5, be formos eilutės „...“; ūkio subjektų lentelė nepakitusi; 3 žingsnis sako, kad antraštės įrašytos", async () => {
+    const docs = await generuokSu({ budas: "DPS", tipas: "darbai", po2: async () => { await kvlIkelk(KVL_A); D.querySelector('[data-lk-patv="KVL"]').click(); } });
+    const s = docs.DPSK_LT_SALYGOS, T = kvlLentele(s.xml);
+    tiesa(T, "2 priedo 1 lentelės nėra");
+    lygu(T.map(e => e.length + ":" + e[0].t), ["3:Eil. Nr.", "1:Teisė verstis veikla", "3:1.", "1:Techninis ir profesinis pajėgumas", "3:2.", "3:3.", "3:4.", "1:Finansinis ir ekonominis pajėgumas", "3:5."], "eilutės");
+    tiesa(T.filter(e => e.length === 3).slice(1).every(e => !e[0].auto), "numerių langeliuose liko Word sąrašas");
+    lygu(T[2][1].t, "Rangovas turi turėti teisę vykdyti elektros įrenginių eksploatavimo darbus:\n1.1. Skirstyklų iki 400 kV remonto darbus.\n(Saugos taisyklių 166 p.)", "1 reikalavimas");
+    lygu(T[4][2].t, "1. Atestatų kopijos;\n2. Specialistų sąrašas.", "dokumentai tekstu (EBVPD pastabos šioje formoje nėra)");
+    // antraštės eilutė: gridSpan per visus 3 stulpelius, plotis - tinklelio suma, be formos eilutės aukščio, tekstas pusjuodis ir centruotas
+    const gTr = T[1][0].el.parentNode, gTc = T[1][0].el, gTbl = gTr.parentNode;
+    const plotis = Array.from(gTbl.getElementsByTagNameNS(NSW, "gridCol")).reduce((a, g) => a + Number(g.getAttribute("w:w")), 0);
+    lygu([gTc.getElementsByTagNameNS(NSW, "gridSpan")[0].getAttribute("w:val"), Number(gTc.getElementsByTagNameNS(NSW, "tcW")[0].getAttribute("w:w")), gTr.getElementsByTagNameNS(NSW, "trHeight").length],
+      ["3", plotis, 0], "antraštės langelis");
+    const gp = gTc.getElementsByTagNameNS(NSW, "p");
+    tiesa(gp.length === 1 && gp[0].getElementsByTagNameNS(NSW, "jc")[0].getAttribute("w:val") === "center" && Array.from(gp[0].getElementsByTagNameNS(NSW, "r")).every(r => r.getElementsByTagNameNS(NSW, "b").length), "antraštė ne pusjuodė ar necentruota");
+    tiesa(gTc.getElementsByTagNameNS(NSW, "tcBorders").length === 1, "antraštės langelis be formos rėmelių");
+    tiesa(!T.some(e => e.some(c => c.t === "...")), "liko formos eilutė „...“");
+    const d = new W.DOMParser().parseFromString(s.xml, "application/xml");
+    lygu(d.getElementsByTagName("parsererror").length, 0, "XML");
+    const uk = Array.from(d.getElementsByTagNameNS(NSW, "tbl")).find(x => /Ūkio subjekto pavadinimas/.test(x.getElementsByTagNameNS(NSW, "tr")[0].textContent));
+    tiesa(uk && Array.from(uk.getElementsByTagNameNS(NSW, "tr")).length === 3 && !/Rangovas turi turėti/.test(uk.textContent), "ūkio subjektų lentelė pakeista");
+    lygu(T.slice(1).flatMap(e => e.flatMap(c => Array.from(c.el.getElementsByTagNameNS(NSW, "p")).filter(p => p.getAttribute("w14:paraId")))).length, 0, "w14:paraId perkeltose eilutėse");
+    const k = s.r.stats.kvalIsDokumento;
+    lygu([k.eiluciu, k.grupes.map(g => g.pav + " " + g.kiek), k.antrastesIrasytos, k.pav, k.neVisaNeperkelta, k.pasalintos],
+      [5, ["Teisė verstis veikla 1", "Techninis ir profesinis pajėgumas 3", "Finansinis ir ekonominis pajėgumas 1"], true, "DPS sąlygų 2 priedo 1 lentelė", false, []], "ataskaita");
+    const t = tx(D.getElementById("kvalLentelePatikra"));
+    tiesa(/Kvalifikacijos reikalavimai \(DPS sąlygų 2 priedo 1 lentelė\):/.test(t) && /perkelta 5 \(Teisė verstis veikla 1, Techninis ir profesinis pajėgumas 3, Finansinis ir ekonominis pajėgumas 1\), numeriai 1-5; grupių antraštės įrašytos \(LITGRID formoje jų nėra\)\./.test(t) && !/nepatvirtintas|3\.7 p\./.test(t), "3 žingsnis: " + t);
+  });
+
+  await testas("DPS LT/EN: 2 priedas (DPSK_LTEN_KVALIFIKACIJA) - grupės kaip SPS (dvikalbės antraštės, finansinė be reikalavimų pašalinta), angliški stulpeliai iš 5 stulpelių dokumento; kortelėje grupių pasirinkimai yra, specialisto žymos nėra", async () => {
+    const docs = await generuokSu({ budas: "DPS", kalba: "LT_EN", tipas: "darbai", po2: async () => {
+      await kvlIkelk(KVL_C);
+      tiesa(sek().querySelector(".kvl-sel") && !sek().querySelector('input[type=checkbox][id$="-s"]') && /\(DPS sąlygų 2 priedo 1 lentelė\)/.test(tx(sek())), "kortelė LT/EN: " + tx(sek()).slice(0, 200));
+      D.querySelector('[data-lk-patv="KVL"]').click(); } });
+    const s = docs.DPSK_LTEN_KVALIFIKACIJA, T = kvlLentele(s.xml);
+    tiesa(T, "2 priedo 1 lentelės nėra");
+    lygu(T.map(e => e.length === 1 ? e[0].t : e[0].t), ["Eil. Nr. /\nNo.", "Teisė verstis veikla / Right to pursue an activity", "1.", "Techninis ir profesinis pajėgumas / Technical and professional capacity", "2."], "eilutės");
+    lygu(T[2].map(c => c.t), ["1.", "Tiekėjas turi teisę verstis veikla.", "The Supplier has the right to pursue the activity.", "Išrašas.", "Extract."], "1 eilutė abiem kalbomis");
+    lygu(s.r.stats.kvalIsDokumento.pasalintos, ["Finansinis ir ekonominis pajėgumas"], "grupė be reikalavimų");
+    tiesa(!/Finansinis ir ekonominis/.test(s.pars.join("\n").split("Reikalavimai Kvalifikacijos reikalavimų atitikimui")[0]), "finansinės grupės antraštė liko");
+    tiesa(docs.DPSK_LTEN_SALYGOS && !docs.DPSK_LTEN_SALYGOS.r.stats.kvalIsDokumento, "sąlygų faile lentelės nėra - neliečiama");
+    const t = tx(D.getElementById("kvalLentelePatikra"));
+    tiesa(/Kvalifikacijos reikalavimai \(DPS sąlygų 2 priedo 1 lentelė\):/.test(t) && /perkelta 2 \(Teisė verstis veikla 1, Techninis ir profesinis pajėgumas 1\)/.test(t), "3 žingsnis: " + t);
+  });
+
+  await testas("DPS LT/EN, lietuviškas ar PP-qual dokumentas: „ne visa apimtimi“ neperkeliama ir tai pasakoma (kortelėje ir 3 žingsnyje); be anglų teksto - raudonas nurodymas ir DI vertimo pasiūlymas", async () => {
+    let docs = await generuokSu({ budas: "DPS", kalba: "LT_EN", tipas: "darbai", po2: async () => {
+      await kvlIkelk(KVL_B);
+      tiesa(/nuostata „\.\.\. ne visa apimtimi“ .* neperkeliama - DPS sąlygų 2 priedo 1 lentelėje tokios eilutės nėra/.test(tx(sek())), "kortelė: " + tx(sek()));
+      tiesa(!sek().querySelector('[data-kvl="versti"]'), "dvikalbiam dokumentui vertimas nesiūlomas"); } });
+    let k = docs.DPSK_LTEN_KVALIFIKACIJA.r.stats.kvalIsDokumento;
+    lygu([k.neVisa, k.neVisaNeperkelta], [null, true], "ne visa apimtimi");
+    tiesa(!/netikrinama, tačiau Tiekėjas įsipareigoja/.test(docs.DPSK_LTEN_KVALIFIKACIJA.pars.join("\n")), "dokumento „ne visa apimtimi“ tekstas įrašytas");
+    tiesa(/„ne visa apimtimi“ nuostata neperkelta - formoje tokios eilutės nėra/.test(tx(D.getElementById("kvalLentelePatikra"))), "3 žingsnis");
+    const T0 = kvlLentele(docs.DPSK_LTEN_KVALIFIKACIJA.xml);
+    tiesa(T0.some(e => e.length === 1 && /^Kokybės ir aplinkos apsaugos vadybos standartai \/ Quality and environmental management standards$/.test(e[0].t)), "kita grupė - dvikalbė antraštė");
+    docs = await generuokSu({ budas: "DPS", kalba: "LT_EN", tipas: "darbai", po2: async () => {
+      await kvlIkelk(KVL_A);
+      tiesa(sek().querySelector('[data-kvl="versti"]'), "DI vertimo mygtukas"); } });
+    const T = kvlLentele(docs.DPSK_LTEN_KVALIFIKACIJA.xml), e1 = T.find(e => e.length === 5 && e[0].t === "1.");
+    lygu([e1[2].t, e1[4].t], [L.VERTIMO_ZYMA, L.VERTIMO_ZYMA], "angliški langeliai");
+    tiesa(/Angliškas tekstas 5 eilutėse neįrašytas/.test(tx(D.getElementById("kvalLentelePatikra"))), "3 žingsnis - be vertimo");
+  });
+
+  await testas("Įrašymas (sintetinė DPS forma): prieš kvalifikacijos lentelę - ūkio subjektų lentelė be dokumentų stulpelio (neliečiama), „2 priedo 1 lentelė“ be grupių - antraštės įrašomos (ir dokumento kita antraštė), formos „...“ pašalinta; ataskaita - antraštės įrašytos, „ne visa apimtimi“ neperkelta; patirties eilutės", async () => {
+    const pp = t => '<w:p>' + (t ? '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="20"/></w:rPr><w:t>' + t + '</w:t></w:r>' : '') + '</w:p>';
+    const tr = c => '<w:tr>' + c.map(x => '<w:tc>' + pp(x) + '</w:tc>').join('') + '</w:tr>';
+    const xml = '<w:document xmlns:w="' + NSW + '"><w:body>' + pp("2 lentelė. Informacija apie ūkio subjektus, kurių pajėgumais remiamasi")
+      + '<w:tbl>' + tr(["Eil. Nr.", "Ūkio subjekto pavadinimas", "Kvalifikacijos reikalavimas, kuriam atitikti pasitelkiamas"]) + tr(["1.", "", ""]) + '</w:tbl>'
+      + pp("2 priedo 1 lentelė „Kvalifikacijos reikalavimai“") + '<w:tbl>' + tr(["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"]) + tr(["1.", "", ""]) + tr(["...", "", ""]) + '</w:tbl></w:body></w:document>';
+    const doc = new W.DOMParser().parseFromString(xml, "application/xml");
+    const L = W.GP_KVAL_LENTELE;                // šio rėmelio (ankstesni testai rėmelį pakeitė)
+    const M = (await L.skaityk(await kvlBuf(KVL_B), KVL_B[0])).lenteles[0];
+    const r = L.irasyk(doc, M, {});
+    lygu([r.eiluciu, r.grupes.map(g => g.pav), r.antrastesIrasytos, r.neVisaNeperkelta, r.pasalintos],
+      [3, ["Teisė verstis veikla", "Techninis ir profesinis pajėgumas", "Kokybės ir aplinkos apsaugos vadybos standartai"], true, true, []], "ataskaita");
+    const lent = Array.from(doc.getElementsByTagNameNS(NSW, "tbl")).map(t => Array.from(t.getElementsByTagNameNS(NSW, "tr")).map(x => x.textContent));
+    lygu(lent[0], ["Eil. Nr.Ūkio subjekto pavadinimasKvalifikacijos reikalavimas, kuriam atitikti pasitelkiamas", "1."], "ūkio subjektų lentelė nepakitusi");
+    lygu(lent[1], ["Eil. Nr.Kvalifikacijos reikalavimasPateikiami dokumentai", "Teisė verstis veikla", "1.Tiekėjas turi turėti teisę atlikti elektros darbus.Atestato kopija.",
+      "Techninis ir profesinis pajėgumas", "2.Tiekėjas turi turėti projekto vadovą.CV.", "Kokybės ir aplinkos apsaugos vadybos standartai", "3.Tiekėjas taiko ISO 9001 standartą.Sertifikatas."], "kvalifikacijos lentelė");
+    // sintetinė antraštė: pusjuodis iš formos teksto savybių (šriftas, dydis), langelis per 3 stulpelius
+    const ant = Array.from(doc.getElementsByTagNameNS(NSW, "tbl"))[1].getElementsByTagNameNS(NSW, "tr")[1];
+    const r0 = ant.getElementsByTagNameNS(NSW, "r")[0];
+    lygu([ant.getElementsByTagNameNS(NSW, "tc").length, ant.getElementsByTagNameNS(NSW, "gridSpan")[0] && ant.getElementsByTagNameNS(NSW, "gridSpan")[0].getAttribute("w:val"),
+      !!r0.getElementsByTagNameNS(NSW, "b").length, r0.getElementsByTagNameNS(NSW, "sz")[0] && r0.getElementsByTagNameNS(NSW, "sz")[0].getAttribute("w:val")], [1, "3", true, "20"], "antraštės eilutė");
+    tiesa(Array.from(ant.getElementsByTagNameNS(NSW, "tcW")).every(w => w.getAttribute("w:w")), "tuščias tcW (formoje langelių pločių nėra)");
+    // su tinkleliu ir langelių pločiais (kaip LITGRID forma): antraštės plotis - tinklelio suma
+    const xml2 = xml.replace('<w:tbl>' + tr(["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"]), '<w:tbl><w:tblGrid><w:gridCol w:w="700"/><w:gridCol w:w="4800"/><w:gridCol w:w="4500"/></w:tblGrid>'
+      + tr(["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"])).replace(tr(["1.", "", ""]) + tr(["...", "", ""]),
+      '<w:tr><w:tc><w:tcPr><w:tcW w:w="700" w:type="dxa"/></w:tcPr>' + pp("1.") + '</w:tc><w:tc><w:tcPr><w:tcW w:w="4800" w:type="dxa"/></w:tcPr>' + pp("") + '</w:tc><w:tc><w:tcPr><w:tcW w:w="4500" w:type="dxa"/></w:tcPr>' + pp("") + '</w:tc></w:tr>');
+    const doc2 = new W.DOMParser().parseFromString(xml2, "application/xml");
+    L.irasyk(doc2, M, {});
+    const ant2 = Array.from(doc2.getElementsByTagNameNS(NSW, "tbl"))[1].getElementsByTagNameNS(NSW, "tr")[1];
+    lygu([ant2.getElementsByTagNameNS(NSW, "gridSpan")[0].getAttribute("w:val"), ant2.getElementsByTagNameNS(NSW, "tcW")[0].getAttribute("w:w")], ["3", "10000"], "antraštės plotis - tinklelio suma");
+    lygu(L.patirtiesEilutes(L.numeriai((await L.skaityk(await kvlBuf(KVL_A), KVL_A[0])).lenteles[0])), [4], "patirties eilutė - ne specialistų");
+    const SP = ["Spec.docx", [{ lentele: [["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"],
+      ["1.", "Projekto vadovas, turintis ne mažesnę kaip 3 metų patirtį.", "CV."], ["2.", "Tiekėjas yra įvykdęs bent vieną sutartį.", "Sąrašas."]] }]];
+    const Es = L.numeriai((await L.skaityk(await kvlBuf(SP), SP[0])).lenteles[0]);
+    lygu([Es.map(e => e.specialistas), L.patirtiesEilutes(Es)], [[true, false], [2]], "specialisto patirtis - ne tiekėjo patirties reikalavimas");
+    lygu(["2 lentelė", "2 priedo 1 lentelė „Kvalifikacijos reikalavimai“", "Table 1 of Annex 2", "Lentelė 2", "2.1. lentelėje"].map(x => L.LENTELES_PAV.test(x)), [true, true, true, false, false], "lentelės pavadinimas");
+  });
+  await testas("DPS LT, dokumentas su grupių antraštėmis (PP-qual LT / EN): kortelėje - grupės iš dokumento (ir kita antraštė), „ne visa apimtimi“ neperkeliama; eilutė be grupės požymių - grupę pasirinkti privaloma, kaip SPS; grupės ne iš eilės ir šaltinio numeriai - pastabos su DPS lentelės vardu", async () => {
+    await modulis(); await zingsnis2("DPS", "LT", "darbai"); await kvlIkelk(KVL_B);
+    const t = tx(sek());
+    lygu([...sek().querySelectorAll(".kvl-gr")].map(x => x.textContent), ["Teisė verstis veikla", "Techninis ir profesinis pajėgumas", "Kokybės ir aplinkos apsaugos vadybos standartai"], "grupės iš dokumento");
+    tiesa(/nuostata „\.\.\. ne visa apimtimi“ .* neperkeliama/.test(t) && !/neįrašomos/.test(t), "ne visa apimtimi: " + t);
+    tiesa(!/Šablono grup/.test(t), "formoje grupių eilučių nėra - šalinti nėra ko: " + t);
+    // grupės ne iš eilės ir šaltinio numeriai 3-5: antraštė pasikartos (kaip SPS), numerių pastaba - su DPS lentelės vardu
+    const PER = ["Per.docx", [{ lentele: [["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"],
+      ["3.", "Tiekėjas yra įvykdęs bent vieną sutartį.", "Sąrašas."], ["4.", "Tiekėjo metinės pajamos ne mažesnės kaip 10 000 Eur.", "Ataskaita."], ["5.", "Tiekėjas turi turėti ISO 9001 sertifikatą.", "Sertifikatas."]] }]];
+    await kvlIkelk(PER);
+    let tp = tx(sek());
+    tiesa(/grupės antraštė pasikartos/.test(tp) && /Šaltinio eilutės numeruotos 3-5, DPS sąlygų 2 priedo 1 lentelėje bus 1-3/.test(tp), "DPS pastabos: " + tp);
+    const BE = ["Be_grupes.docx", [{ lentele: [["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"], ["1.", "Tiekėjas užtikrina konfidencialumą.", "Deklaracija."]] }]];
+    await kvlIkelk(BE);
+    lygu([W.GP_KVAL_LENTELE.numeriai(W.eval("kvlModelis()")).map(e => e.grupe), sek().dataset.busena, !!sek().querySelector(".kvl-e--be")], [[null], "neuzpildyta", true], "DPS LT - grupė privaloma");
+    await modulis(); await zingsnis2("T-AK", "LT", "darbai"); await kvlIkelk(BE);
+    lygu([sek().dataset.busena, !!sek().querySelector(".kvl-e--be")], ["neuzpildyta", true], "SPS - grupė privaloma");
+    await kvlIkelk(PER);
+    tp = tx(sek());
+    tiesa(/grupės antraštė pasikartos/.test(tp) && /Šaltinio eilutės numeruotos 3-5, SPS 2 lentelėje bus 1-3/.test(tp), "SPS pastabos: " + tp);
+  });
+  await testas("Nuorodos į kvalifikacijos lentelės punktą kitose formose: SPS LT/EN su „Sutarčių sąrašu“ - lietuviška „2 lentelės 8 punktą“ ir angliška „No. 1 in Table 2“ (abi tikrinamos pagal perkeltos lentelės patirties eilutę), nuoroda į 1 lentelę (pašalinimo pagrindai) - ne", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT_EN", "darbai");
+    const { poros } = W.prieduPoros(W.__K);
+    await W.perjunkPrieda("SUTARTYS", poros.SUTARTYS ? poros.SUTARTYS[0] : "", true);
+    await kvlIkelk(KVL_C);
+    lygu(W.__K.kvl.nuorodos.map(x => [x.nr, x.tekstas]), [[8, "SPS 3.1 punkto 2 lentelės 8 punktą"], [1, "Qualification requirement No. 1 in Table 2"]], "nuorodos");
+    const t = tx(sek());
+    tiesa(/nurodo „SPS 3\.1 punkto 2 lentelės 8 punktą“ - perkeltoje lentelėje tiekėjo patirties reikalavimas yra 2 punktas, 8 punkto nėra/.test(t) && /nurodo „Qualification requirement No\. 1 in Table 2“ - perkeltoje lentelėje tiekėjo patirties reikalavimas yra 2 punktas\./.test(t), "pastabos: " + t);
+    // nuoroda į kitą lentelę (1 lentelė - pašalinimo pagrindai) neįtraukiama, į tą pačią - įtraukiama (žemėlapio pastraipa testui)
+    const Z0 = W.eval("DOK").find(d => d.trumpas === "AK_LTEN_SPS").zemelapis;
+    Z0.paras["99991"] = "pagal SPS 3.1 punkto 1 lentelės 5 punktą"; Z0.paras["99992"] = "pagal SPS 3.1 punkto 2 lentelės 7 punktą";
+    W.klausimynas();
+    lygu(W.__K.kvl.nuorodos.map(x => x.nr).sort(), [1, 7, 8], "tik 2 lentelės nuorodos");
+    delete Z0.paras["99991"]; delete Z0.paras["99992"]; W.klausimynas();
+    const T1 = ["Patirtis_1.docx", [{ lentele: [["Eil. Nr.", "Kvalifikacijos reikalavimas", "Pateikiami dokumentai"], ["1.", "Tiekėjas per paskutinius 3 metus yra įvykdęs bent vieną sutartį.", "Sutarčių sąrašas."]] }]];
+    await kvlIkelk(T1);
+    const t1 = tx(sek());
+    tiesa(/„SPS 3\.1 punkto 2 lentelės 8 punktą“ - perkeltoje lentelėje tiekėjo patirties reikalavimas yra 1 punktas, 8 punkto nėra/.test(t1) && !/No\. 1 in Table 2“ - /.test(t1), "sutampanti nuoroda - be pastabos: " + t1);
+  });
+  await testas("SPS: kortelė „Kvalifikacijos reikalavimai (SPS 2 lentelė)“ su grupėmis, specialisto žyma ir 3.7 p. siūlymais, kaip iki šiol; „Sutarčių sąrašo“ nuoroda į 2 lentelės 1 punktą - pastaba su patirties punktu", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT", "darbai"); await kvlIkelk(KVL_A);
+    const t = tx(sek());
+    tiesa(/Kvalifikacijos reikalavimai \(SPS 2 lentelė\)/.test(t) && sek().querySelector(".kvl-sel") && sek().querySelector('input[type=checkbox][id$="-s"]') && /SPS 3\.7 punkte siūloma/.test(t) && !/grupių antraščių neturi/.test(t), "SPS kortelė: " + t.slice(0, 300));
+    // SPS priedų sąraše yra „Sutarčių sąrašas“ su nuoroda „pagal SPS 3.1 punkto 2 lentelės 1 punktą“ - perkeltoje lentelėje patirtis yra 4 punktas
+    lygu([W.__K.kvl.lent.pav, W.__K.kvl.spec, W.__K.kvl.nuorodos.map(x => [x.nr, x.tekstas])], ["SPS 2 lentelė", true, [[1, "SPS 3.1 punkto 2 lentelės 1 punktą"]]], "SPS aprašas");
+    tiesa(/nurodo „SPS 3\.1 punkto 2 lentelės 1 punktą“ - perkeltoje lentelėje tiekėjo patirties reikalavimas yra 4 punktas\. Nuorodos modulis nekeičia/.test(t), "SPS nuorodos pastaba: " + t);
+  });
+}
+
 async function testaiKvalLentele(){
   dabartine = grupe("Kvalifikacijos reikalavimai iš įkelto dokumento į SPS 2 lentelę, režimo formuluotė ir objekto apžiūra (2026-10-14)");
   const L = W.GP_KVAL_LENTELE;
@@ -8520,6 +8717,7 @@ async function testaiKvalLentele(){
     await testaiPrieduSarasas();
     await testaiEtapuLentele();
     await testaiKvalLentele();
+    await testaiKvalDps();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
