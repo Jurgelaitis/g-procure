@@ -423,14 +423,14 @@ async function testaiEiga(){
     D.querySelector("[data-ai-salinti]").click();
     tiesa(D.getElementById("aiSiuntimas").style.display === "none" && !W.eval("AI.saltiniai").length, "pašalinimas");
   });
-  await testas("PDF su teksto sluoksniu: pdf.js įkeliama tik prireikus (su SRI) ir tekstas perskaitomas", async () => {
+  await testas("PDF su teksto sluoksniu: pdf.js įkeliama tik prireikus (iš svetainės, shared/vendor/) ir tekstas perskaitomas", async () => {
     tiesa(!W.pdfjsLib, "pdf.js įkelta iš anksto");
     await W.aiPridek([pdf("Kvalifikacija.pdf", ["Pasiulymo galiojimo uztikrinimas netaikomas.", "Tiekejas turi tureti 3 metu patirti."])]);
     tiesa(W.pdfjsLib, "pdf.js neįkelta");
     const s = W.eval("AI.saltiniai").find(x => x.vardas === "Kvalifikacija.pdf");
     tiesa(s && s.simboliai > 40 && s.blokai.some(b => /galiojimo uztikrinimas netaikomas/.test(b.text) && b.loc.page === 1), "PDF tekstas: " + JSON.stringify(s && s.blokai));
     const sk = [...D.querySelectorAll("script")].find(x => /pdf\.min\.js/.test(x.src));
-    tiesa(sk && /^sha512-/.test(sk.integrity) && sk.crossOrigin === "anonymous", "pdf.js be SRI");
+    tiesa(sk && new URL(sk.src).origin === W.location.origin && /\/shared\/vendor\/pdfjs-[\d.]+\/pdf\.min\.js$/.test(sk.src), "pdf.js ne iš svetainės: " + (sk && sk.src));
   });
   await testas("Netinkamas failas praleidžiamas su paaiškinimu", async () => {
     await W.aiPridek([new W.File(["x"], "Kainos.xlsx")]);
@@ -4708,6 +4708,8 @@ async function testaiSutartiesBlokas(){
   });
   await testas("Stebėjimo įrašai naršyklėje (naudotojo sprendimas 2026-10-08): atsakius - vienas įrašas puslapiui su pavadinimu, siūlyta ir pasirinkta; nepatvirtinus - pašalinamas; riba 500; atsisiuntimas; išvalymas su patvirtinimu; sugadintas neperrašomas", async () => {
     const s2 = atmintine(); SB().naudokSaugykla(s2);
+    // Nuo 2026-10-16 - tik su sutikimu (slapukų kategorija „tobulinimo“); testų puslapyje sutikimas laikomas tik atmintyje
+    W.GP_SUTIKIMAS.naudokSaugykla(null); W.GP_SUTIKIMAS.nustatyk({ nustatymai: true, tobulinimo: true }, "visi");
     const z = () => SB().zurnalas(), R = "gprocure.sutartys.stebejimas";
     rad("kalba", "LT"); rad("tipas", "darbai"); iv("pavadinimas", "110 kV Mažeikių skirstyklos rekonstravimo"); SB().atnaujink();
     lygu(z().irasai.length, 0, "be patvirtinimo yra įrašų");
@@ -4747,6 +4749,32 @@ async function testaiSutartiesBlokas(){
     tiesa(s2.getItem(R) === "{sugadinta" && /neperskaitomi - nauji neįrašomi/.test(txt()), "sugadintas įrašas perrašytas arba nepasakyta");
     tiesa(s2.raktai().some(k => k.indexOf(R + ".sugadinta-") === 0), "neperskaitomo įrašo kopijos nėra");
     SB().naudokSaugykla(saug);
+  });
+  await testas("Stebėjimo įrašai - tik su sutikimu (2026-10-16, slapukų kategorija „tobulinimo“): be sutikimo nekaupiami ir pasakoma kodėl, „Slapukų nustatymai“ atveria langą; sutikus - įrašomas dabartinis sprendimas; atšaukus - nauji nekaupiami, sukaupti lieka ir atsisiunčiami", async () => {
+    W.GP_SUTIKIMAS.naudokSaugykla(null);          // pirma - be sprendimo: naudokSaugykla() iškart įrašo dabartinį sprendimą
+    const s3 = atmintine(); SB().naudokSaugykla(s3);
+    const z = () => SB().zurnalas();
+    try {
+      lygu([W.GP_SUTIKIMAS.busena().busena, W.GP_SUTIKIMAS.leidzia("tobulinimo")], ["nera", false], "be sprendimo");
+      rad("kalba", "LT"); rad("tipas", "darbai"); iv("pavadinimas", "110 kV Telšių pastotės rekonstravimo"); SB().atnaujink(); taip(); rad("sb-K1", "uzsakovas");
+      lygu([b().patvirtinta, z().irasai.length, s3.raktai()], [true, 0, []], "be sutikimo įrašyta");
+      tiesa(/Stebėjimo įrašai: nekaupiami - nėra jūsų sutikimo/.test(txt()) && /įjunkite „Tobulinimo įrašai“/.test(txt()) && /Jei sutiksite: kai atsakote/.test(txt()), "nepasakyta, kodėl nekaupiama: " + txt().slice(-400));
+      const m = D.getElementById("sbSutikimas");
+      tiesa(m && m.hasAttribute("data-gp-slapukai") && m.textContent === "Slapukų nustatymai" && D.getElementById(m.getAttribute("aria-describedby")), "nėra mygtuko „Slapukų nustatymai“");
+      m.click(); await new Promise(r => setTimeout(r, 30));
+      const L = D.querySelector("dialog.gpsk-d");
+      tiesa(L && L.open && !L.querySelector("#gpsk-sw-tobulinimo").checked, "langas neatsivėrė ar tobulinimo įrašai įjungti iš anksto");
+      L.querySelector("[data-gpsk=visi]").click(); await new Promise(r => setTimeout(r, 80));
+      let i = z().irasai;
+      lygu([L.open, i.length, i[0] && i[0].pasirinkta, /Stebėjimo įrašai šioje naršyklėje: 1/.test(txt())], [false, 1, "STATYBOS_RANGOS", true], "sutikus - įrašomas dabartinis sprendimas");
+      W.GP_SUTIKIMAS.nustatyk({ nustatymai: true, tobulinimo: false }, "pasirinkta");
+      tiesa(/nekaupiami - nėra jūsų sutikimo \(sukaupta anksčiau: 1\)/.test(txt()) && /Anksčiau sukaupti įrašai lieka/.test(txt()) && D.getElementById("sbAtsisiusti") && D.getElementById("sbValyti"), "atšaukus - nepasakyta apie sukauptus ar nėra atsisiuntimo / valymo");
+      D.getElementById("sbKeisti").click(); D.getElementById("sbRankaSel").value = "s:PROJEKTAVIMO_STATYBOS:"; Q().querySelector("[data-sb=rinktis]").click();
+      i = z().irasai;
+      lygu([i.length, i[0].pasirinkta], [1, "STATYBOS_RANGOS"], "atšaukus sutikimą įrašas atnaujintas");
+    } finally {
+      SB().naudokSaugykla(saug); W.GP_SUTIKIMAS.naudokSaugykla(null); W.GP_SUTIKIMAS.nustatyk({ nustatymai: true, tobulinimo: true }, "visi");
+    }
   });
   await testas("Prieinamumas: grupė su pavadinimu, mygtukai su tekstu, kiekvienas radijas - etiketėje; telefone (375 px) neslenka", async () => {
     const g = Q().querySelector(".sb[role=group]");
@@ -4844,6 +4872,7 @@ async function testaiVidausRiba(){
     let K = null, sps = null, sut = null, vidaus2 = null, sutUzt = null;
     const docs = await generuokSu({ budas: "T-AK", tipas: "darbai", pav: "Tvoros remonto", verte: "50000", sutartis: "patvirtinti", pries: async () => {
       K = W.__K;
+      W.GP_SUTIKIMAS.nustatyk({ nustatymai: true, tobulinimo: true }, "visi");   // stebėjimo įrašai kaupiami (2026-10-16 - tik su sutikimu) - riba į juos nepatenka
       const saugykla = vrAtmintine(); V().naudokSaugykla(saugykla); W.klausimynas();
       const raktas = Object.keys(K.pavieniai).find(k => /^kai taikomas sutarties uztikrinimas/.test(k));
       tiesa(raktas, "AK LT SPS nėra sąlygos „Kai taikomas sutarties užtikrinimas“");
@@ -4885,6 +4914,7 @@ async function testaiVidausRiba(){
       }
     }
     tiesa(!/12[  ]?345/.test(D.getElementById("step3").textContent), "3 žingsnio tekste yra riba");
+    tiesa(W.SUTARTIES_BLOKAS.zurnalas().irasai.length > 0, "stebėjimo įrašų nėra - patikra, kad riba į juos nepatenka, beprasmė");
     tiesa(!/12[  ]?345/.test(JSON.stringify(W.SUTARTIES_BLOKAS.zurnalas())), "stebėjimo įrašuose yra riba");
     lygu(sps.raktai(), [R], "saugykloje - tik nustatymų raktas");
   });

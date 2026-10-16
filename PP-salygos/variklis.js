@@ -4,7 +4,7 @@
    GPDocx - deterministine .docx chirurgija (JSZip + XML). Jokio AI.
    GPMap  - sablono kartografavimas: is paties sablono istraukia salygu
             sluoksni (raudonas tekstas), komentaru sluoksni ir tuscias vietas.
-   Reikalauja: vendor/jszip.min.js
+   Reikalauja: ../shared/vendor/jszip-3.10.1/jszip.min.js
    ========================================================================== */
 /* Įrašomas tekstas (naudotojo ir AI reikšmės, modulio sakiniai) - be ilgųjų brūkšnių: ilgieji brūkšniai (U+2013, U+2014) -> „-“ (naudotojo sprendimas
    2026-10-02, oficialūs pirkimo dokumentai; taisyklė - shared/docx-stiliai.js). LITGRID šablonų tekstas nekeičiamas. Vidiniai
