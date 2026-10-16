@@ -38,6 +38,7 @@
     ["ppnegotiation.lang",       "PP-negotiation",  { lt: "Pasirinkta kalba", en: "Chosen language" }],
     ["pp_carbon_data",           "PP-carbon",       { lt: "Anglies pėdsako duomenys", en: "Carbon footprint data" }],
     ["ppcarbon.lang",            "PP-carbon",       { lt: "Pasirinkta kalba (EPD įrankis)", en: "Chosen language (EPD tool)" }],
+    ["ppesg.lang",               "PP-esg",          { lt: "Pasirinkta kalba", en: "Chosen language" }],
     ["ppesg.",                   "PP-esg",          { lt: "ESG ir atitiktis", en: "ESG and compliance" }],
     ["pp_tiekejams",             "PP-tiekejams",    { lt: "Tiekėjų asistento duomenys", en: "Supplier assistant data" }],
     ["pptiekejams.lang",         "PP-tiekejams",    { lt: "Pasirinkta kalba", en: "Chosen language" }],
@@ -49,7 +50,8 @@
     ["gprocure.salygos.juodrastis.", "PP-salygos", { lt: "Pirkimo sąlygų juodraštis (atsakymai, numatoma vertė)", en: "Procurement conditions draft (answers, estimated value)" }],
     ["gprocure_help_collapsed",  "-",               { lt: "Pagalbos bloko būsena", en: "Help panel state" }],
     ["gprocure.infoPanel.",      "-",               { lt: "Informacinės skilties būsena", en: "Information panel state" }],
-    ["gprocure-lang",            "-",               { lt: "Pasirinkta kalba", en: "Chosen language" }]
+    ["gprocure-lang",            "-",               { lt: "Pasirinkta kalba", en: "Chosen language" }],
+    ["gprocure.sutikimas",       "-",               { lt: "Jūsų sprendimas dėl slapukų", en: "Your cookie decision" }]
   ];
 
   function zenklas(raktas, lang) {
@@ -151,6 +153,8 @@
     version: "1.0", APP: APP, FORMATO_VERSIJA: VERSION,
     zenklas: zenklas, irasai: irasai, baitai: baitai,
     surinkti: surinkti, patikrinti: patikrinti, perrasomi: perrasomi,
-    atkurti: atkurti, failoVardas: failoVardas
+    atkurti: atkurti, failoVardas: failoVardas,
+    /* Raktų sąrašas (kopija) - slapukų politikos lentelei (slapukai.html, 2026-10-16) */
+    ZENKLAI: ZENKLAI.map(function (z) { return [z[0], z[1], { lt: z[2].lt, en: z[2].en }]; })
   };
 })(typeof window !== "undefined" ? window : this);
