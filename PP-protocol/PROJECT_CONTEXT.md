@@ -278,7 +278,7 @@ Pagal VPT gaires:
 - `Esc` - uždaryti bet kurį modalo langą
 
 ### 4.17 Brand stilius (EPSO-G Brandbook 2026)
-- Šriftas: Nunito Sans (CDN: fonts.googleapis.com)
+- Šriftas: Nunito Sans (svetainėje - shared/sriftai/, per shared/epso-g.css; nuo 2026-10-16)
 - Pagrindinė spalva: Smaragdas #00A072
 - Hover: Smaragdas-120 #128A76
 - Tekstas: Grafitas #2E3641
@@ -363,12 +363,12 @@ Pagal VPT gaires:
 
 **Naudojimas:** `XLSX.utils.book_new()`, `XLSX.writeFile()`, `XLSX.read()`.
 
-### 6.5 Google Fonts (Nunito Sans) per CDN
-**Sprendimas:** `<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800">`
+### 6.5 Nunito Sans - svetainėje (nuo 2026-10-16)
+**Sprendimas:** šriftas `shared/sriftai/` (kintamasis, lotynų ir lotynų išplėstinis poaibiai), `@font-face` - `shared/epso-g.css`.
 
-**Kodėl:** EPSO-G brandbook reikalauja Nunito Sans. Google Fonts CDN garantuoja prieinamumą, cache'inimą.
+**Kodėl:** EPSO-G brandbook reikalauja Nunito Sans. Iki 2026-10-16 jis buvo kraunamas iš Google Fonts - kiekviename atvėrime lankytojo IP adresas ir naršyklės duomenys keliavo Google; dabar - iš tos pačios svetainės.
 
-**Fallback:** `font-family: "Nunito Sans", Arial, sans-serif` - jei CDN nepasiekiamas, naudojamas Arial.
+**Fallback:** `font-family: var(--font-base)` - jei šriftas neįsikėlė, naudojamas sistemos šriftas.
 
 ### 6.6 GitHub Pages deployment
 **Sprendimas:** `https://jurgelaitis.github.io/PP-Protocols/LITGRID_Generatorius_v3.html`
