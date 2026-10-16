@@ -5139,7 +5139,7 @@ function kodoFailai(){
     "../PP-salygos/variklis.js", "../PP-salygos/laukai.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
     "../PP-ts/ts_asistentas_modules.js", "palyginimas.js", "privalomi-elementai.js", "proporcingumas.js", "kvalifikacija.js", "../PP-salygos/tikrinimas.js",
     "../PP-salygos/sutartys.js", "../PP-salygos/sutarties-blokas.js", "../PP-salygos/sutarciu-generatorius.js", "../PP-salygos/sutarties-forma.js",
-    "../PP-salygos/kvalifikacijos-lentele.js", "sutikimas.js"]);
+    "../PP-salygos/kvalifikacijos-lentele.js", "sutikimas.js", "analitika.js", "../PP-salygos/juodrastis.js"]);
 }
 
 async function testaiDatos(){
@@ -5631,7 +5631,9 @@ async function testaiSaugumas(){
   });
 
   await testas("CSP: kiekvienas puslapis iškart po <meta charset> turi Content-Security-Policy - object-src 'none', base-uri 'self', connect-src su leidžiamais adresais (paleidiklis krenta, jei vykdant testus CSP ką nors užblokuoja)", async ()=>{
-    const BAZE = "object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:";
+    // Naudojimosi statistikos adresas (PostHog ES) - tik puslapiuose, kurie jungia shared/analitika.js (vidiniai įrankiai jo neturi)
+    const BAZE = "object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:";
+    const BE_STATISTIKOS = "object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:";
     // Papildomi adresai - tik ten, kur modulis į juos kreipiasi pats (EPD Worker'is ir Turnstile, OSP, PP-ts - bet koks dokumento adresas)
     const PAPILDOMA = { "../PP-carbon/epd.html": " https://epd-api.g-procure.com https://challenges.cloudflare.com", "../PP-tiekejams/index.html": " https://challenges.cloudflare.com",
       "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": " https://osp-rs.stat.gov.lt", "../PP-ts/TS_Asistentas.html": " https:" };
@@ -5641,7 +5643,8 @@ async function testaiSaugumas(){
       const src = await saltinis(m);
       const x = /<meta charset="?UTF-8"?\s*\/?>\s*<meta http-equiv="Content-Security-Policy" content="([^"]*)">/i.exec(src);
       if (!x) { blogi.push(m + ": nėra CSP žymos iškart po <meta charset>"); continue; }
-      if (x[1] !== BAZE + (PAPILDOMA[m] || "")) blogi.push(m + ": „" + x[1] + "“");
+      const suStatistika = /<script src="(?:\.\.\/)?shared\/analitika\.js"><\/script>/.test(src);
+      if (x[1] !== (suStatistika ? BAZE : BE_STATISTIKOS) + (PAPILDOMA[m] || "")) blogi.push(m + ": „" + x[1] + "“" + (suStatistika ? "" : " (be analitika.js - be PostHog adreso)"));
       if ((src.match(/Content-Security-Policy/g) || []).length !== 1) blogi.push(m + ": CSP žyma ne viena");
     }
     tiesa(puslapiai.length >= 29, "puslapių tik " + puslapiai.length);
@@ -5719,12 +5722,12 @@ const sutAtmintis = (pradzia) => { const d = Object.assign({}, pradzia || {}); r
 async function testaiSutikimas(){
   dabartine = grupe("Slapukų sutikimas ir privatumo politika (sutikimas.js, slapukai.html, privatumas.html, šriftas svetainėje)");
 
-  await testas("Kategorijos ir numatytosios reikšmės: būtini - visada, nustatymai - iki sprendimo leidžiami, tobulinimo - tik su sutikimu, analitika - niekada; įrašas 12 mėn.; „Tik būtinieji“ ištrina nustatymus, darbo duomenų ir tobulinimo įrašų neliečia; pasibaigęs, kitos versijos ir sugadintas - kaip nėra", async () => {
+  await testas("Kategorijos ir numatytosios reikšmės: būtini - visada, nustatymai - iki sprendimo leidžiami, tobulinimo ir statistika - tik su sutikimu, reklama - niekada; įrašas 12 mėn.; „Tik būtinieji“ ištrina nustatymus, darbo duomenų ir tobulinimo įrašų neliečia; pasibaigęs, kitos versijos ir sugadintas - kaip nėra", async () => {
     const { f, w } = await ramas(SUTIK_FAILAI);
     const A = GP_TESTU_APSAUGA.pradek(k => k === "gprocure.sutikimas");
     try {
       const S = w.GP_SUTIKIMAS;
-      tiesa(S && S.RAKTAS === "gprocure.sutikimas" && /^\d{4}-\d{2}-\d{2}$/.test(S.VERSIJA), "GP_SUTIKIMAS neįkeltas ar be versijos");
+      tiesa(S && S.RAKTAS === "gprocure.sutikimas" && /^\d{4}-\d{2}-\d{2}(-\d+)?$/.test(S.VERSIJA), "GP_SUTIKIMAS neįkeltas ar be versijos");
       // Testų puslapyje sprendimas - tik atmintyje: tikras naudotojo sprendimas nekeičiamas
       const tikras = localStorage.getItem("gprocure.sutikimas");
       S.nustatyk({ nustatymai: false, tobulinimo: true }, "pasirinkta");
@@ -5732,20 +5735,21 @@ async function testaiSutikimas(){
       const s = sutAtmintis({ "gprocure-lang": "en", "ppesg.lang": "en", "gprocure.infoPanel.pp-qual": "closed", "epsog_dash_metric": "count", "gprocure_help_collapsed": "1",
         "epsog_mpp_v1": "{}", "ppesg.suppliers": "[]", "gprocure.korteles": "{}", "gprocure.sutartys.stebejimas": '{"schema":1,"irasai":[]}' });
       S.naudokSaugykla(s);
-      lygu([S.busena().busena, ["butini", "nustatymai", "tobulinimo", "analitika"].map(S.leidzia)], ["nera", [true, true, false, false]], "be sprendimo");
+      lygu([S.busena().busena, ["butini", "nustatymai", "tobulinimo", "statistika", "analitika"].map(S.leidzia)], ["nera", [true, true, false, false, false]], "be sprendimo");
       lygu(["gprocure-lang", "ppesg.lang", "ppesg.suppliers", "gprocure.infoPanel.pp-qual", "gprocure.sutartys.stebejimas", "gprocure.sutikimas", "epsog_mpp_v1", "ppmarket.lang", "epsog_dash_metric"].map(S.kategorija),
         ["nustatymai", "nustatymai", "butini", "nustatymai", "tobulinimo", "butini", "butini", "nustatymai", "nustatymai"], "kategorijos");
       let ivykis = null; w.addEventListener("gp-sutikimas", e => { ivykis = e.detail; });
-      const v = S.nustatyk({ nustatymai: true, tobulinimo: true }, "visi");
+      const v = S.nustatyk({ nustatymai: true, tobulinimo: true, statistika: true }, "visi");
       const r = JSON.parse(s.getItem("gprocure.sutikimas"));
-      lygu([v.ok, r.schema, r.versija, r.budas, r.kategorijos, S.leidzia("tobulinimo"), S.busena().busena], [true, 1, S.VERSIJA, "visi", { nustatymai: true, tobulinimo: true }, true, "yra"], "priimti visus");
+      lygu([v.ok, r.schema, r.versija, r.budas, r.kategorijos, S.leidzia("tobulinimo"), S.leidzia("statistika"), S.busena().busena],
+        [true, 1, S.VERSIJA, "visi", { nustatymai: true, tobulinimo: true, statistika: true }, true, true, "yra"], "priimti visus");
       const men = (Date.parse(r.galioja) - Date.parse(r.data)) / 86400000;
       tiesa(men >= 364 && men <= 367, "galioja ne 12 mėnesių: " + men + " d.");
       tiesa(ivykis && ivykis.tobulinimo === true, "įvykis gp-sutikimas neišsiųstas");
       const b = S.nustatyk({ nustatymai: false, tobulinimo: false }, "butini");
       lygu(b.pasalinta.sort(), ["epsog_dash_metric", "gprocure-lang", "gprocure.infoPanel.pp-qual", "gprocure_help_collapsed", "ppesg.lang"], "ištrinti nustatymai");
       lygu(s.raktai(), ["epsog_mpp_v1", "gprocure.korteles", "gprocure.sutartys.stebejimas", "gprocure.sutikimas", "ppesg.suppliers"], "liko darbo duomenys ir tobulinimo įrašai");
-      lygu(["nustatymai", "tobulinimo"].map(S.leidzia), [false, false], "po „Tik būtinieji“");
+      lygu(["nustatymai", "tobulinimo", "statistika"].map(S.leidzia), [false, false, false], "po „Tik būtinieji“");
       const senas = Object.assign({}, r, { galioja: "2020-01-01T00:00:00.000Z" });
       s.setItem("gprocure.sutikimas", JSON.stringify(senas));
       lygu([S.busena().busena, S.leidzia("tobulinimo"), S.leidzia("nustatymai")], ["pasibaige", false, true], "pasibaigęs");
@@ -5753,7 +5757,7 @@ async function testaiSutikimas(){
       lygu([S.busena().busena, S.leidzia("tobulinimo")], ["kita-versija", false], "kita versija");
       s.setItem("gprocure.sutikimas", "{sugadinta");
       lygu([S.busena().busena, S.leidzia("nustatymai"), S.leidzia("tobulinimo")], ["sugadintas", true, false], "sugadintas");
-      lygu(S.nustatyk({ tobulinimo: "taip" }, "kitas").irasas.kategorijos, { nustatymai: false, tobulinimo: false }, "tik true - sutikimas (ne tekstas)");
+      lygu(S.nustatyk({ tobulinimo: "taip", statistika: 1 }, "kitas").irasas.kategorijos, { nustatymai: false, tobulinimo: false, statistika: false }, "tik true - sutikimas (ne tekstas)");
       lygu(S.nustatyk({ nustatymai: true }, "kitas").irasas.budas, "pasirinkta", "nežinomas būdas");
       const neprieinama = { getItem: () => { throw new Error("x"); }, setItem: () => { throw new Error("x"); }, removeItem() {}, key: () => null, length: 0 };
       S.naudokSaugykla(neprieinama);
@@ -5770,7 +5774,8 @@ async function testaiSutikimas(){
       tiesa(!d.querySelector("[data-gpsk-juosta]"), "testų puslapio rėmelyje juosta parodyta pati");
       S.rodyk(); const J = d.querySelector("[data-gpsk-juosta]");
       tiesa(J && J === d.body.firstElementChild && J.getAttribute("aria-labelledby") && d.getElementById(J.getAttribute("aria-labelledby")).textContent === "Jūsų privatumas ir naršyklės saugykla", "juosta - pirmas body elementas su pavadinimu");
-      tiesa(/12 mėnesių/.test(J.textContent) && /nenaudojame/.test(J.textContent), "juosta nesako, kiek įsimenama, ar kad analitikos nėra");
+      tiesa(/12 mėnesių/.test(J.textContent) && /nenaudojame/.test(J.textContent) && /naudojimosi statistiką/.test(J.textContent) && /IP adreso neįrašant/.test(J.textContent),
+        "juosta nesako, kiek įsimenama, kad reklamos nėra ar kokia statistika renkama");
       const myg = [...J.querySelectorAll("button[data-gpsk]")].map(b => b.getAttribute("data-gpsk") + ":" + b.textContent);
       lygu(myg, ["kalba:English", "visi:Priimti visus", "butini:Tik būtinieji", "nustatymai:Nustatymai"], "juostos mygtukai");
       const st = x => { const c = w.getComputedStyle(J.querySelector("[data-gpsk=" + x + "]")); return [c.backgroundColor, c.color, c.fontWeight, c.fontSize, c.paddingTop, c.borderTopWidth].join(" "); };
@@ -5793,10 +5798,11 @@ async function testaiSutikimas(){
       d.querySelector("[data-gpsk=nustatymai]").click(); await lauk(30);
       const L = d.querySelector("dialog.gpsk-d");
       tiesa(L && L.open && L.getAttribute("aria-labelledby") && d.getElementById(L.getAttribute("aria-labelledby")).textContent === "Slapukų ir naršyklės saugyklos nustatymai", "langas neatsivėrė ar be pavadinimo");
-      lygu([...L.querySelectorAll(".gpsk-kat h3")].map(h => h.textContent), ["Būtinieji", "Nustatymų įsiminimas", "Tobulinimo įrašai", "Analitika ir reklama"], "kategorijos");
+      lygu([...L.querySelectorAll(".gpsk-kat h3")].map(h => h.textContent), ["Būtinieji", "Nustatymų įsiminimas", "Tobulinimo įrašai", "Naudojimosi statistika", "Reklama ir socialiniai tinklai"], "kategorijos");
       const sw = id => L.querySelector("#gpsk-sw-" + id);
-      lygu([sw("nustatymai").checked, sw("tobulinimo").checked, sw("nustatymai").getAttribute("role"), !!L.querySelector("#gpsk-sw-butini"), !!L.querySelector("#gpsk-sw-analitika")],
-        [true, false, "switch", false, false], "jungikliai (būtinieji ir analitika - be jungiklio)");
+      lygu([sw("nustatymai").checked, sw("tobulinimo").checked, sw("statistika").checked, sw("nustatymai").getAttribute("role"), !!L.querySelector("#gpsk-sw-butini"), !!L.querySelector("#gpsk-sw-analitika")],
+        [true, false, false, "switch", false, false], "jungikliai (statistika - numatyta išjungta; būtinieji ir reklama - be jungiklio)");
+      tiesa(/PostHog ES duomenų centre/.test(L.textContent) && /neįrašomi/.test(L.textContent), "statistikos aprašas be gavėjo ar IP sakinio");
       tiesa(/Visada įjungti/.test(L.textContent) && /Nenaudojama/.test(L.textContent) && /Sprendimo dar nepriėmėte/.test(L.textContent), "būsenos tekstai");
       tiesa(sw("tobulinimo").getAttribute("aria-labelledby").split(" ").map(i => d.getElementById(i).textContent).join(" ") === "Tobulinimo įrašai Išjungta", "jungiklio pavadinimas");
       // Sukaupti tobulinimo įrašai - trinami tik patvirtinus
@@ -5809,12 +5815,12 @@ async function testaiSutikimas(){
       lygu(L.querySelector("#gpsk-swt-tobulinimo").textContent, "Įjungta", "jungiklio būsenos tekstas");
       L.querySelector("[data-gpsk=issaugoti]").click(); await lauk(100);
       const r = JSON.parse(s.getItem("gprocure.sutikimas"));
-      lygu([r.budas, r.kategorijos, L.open, !!d.querySelector("[data-gpsk-juosta]")], ["pasirinkta", { nustatymai: true, tobulinimo: true }, false, false], "išsaugotas pasirinkimas");
+      lygu([r.budas, r.kategorijos, L.open, !!d.querySelector("[data-gpsk-juosta]")], ["pasirinkta", { nustatymai: true, tobulinimo: true, statistika: false }, false, false], "išsaugotas pasirinkimas");
       tiesa(d.activeElement === d.getElementById("pagr"), "fokusas po sprendimo ne pagrindiniame turinyje: " + d.activeElement.tagName);
       d.getElementById("nuoroda").click(); await lauk(30);
       tiesa(L.open && /Jūsų sprendimas: \d{4}-\d{2}-\d{2}, galioja iki \d{4}-\d{2}-\d{2}/.test(L.textContent) && sw("tobulinimo").checked, "nuoroda neatvėrė lango arba nerodo sprendimo");
       L.querySelector("[data-gpsk=butini]").click(); await lauk(100);
-      lygu([JSON.parse(s.getItem("gprocure.sutikimas")).kategorijos, L.open], [{ nustatymai: false, tobulinimo: false }, false], "atšaukta tuo pačiu langu");
+      lygu([JSON.parse(s.getItem("gprocure.sutikimas")).kategorijos, L.open], [{ nustatymai: false, tobulinimo: false, statistika: false }, false], "atšaukta tuo pačiu langu");
       tiesa(d.activeElement === d.getElementById("nuoroda"), "fokusas negrįžo į nuorodą, iš kurios atverta");
       const css = d.getElementById("gpsk-stiliai").textContent;
       tiesa(/@media print\{\.gpsk,\.gpsk-d,\.gpsk-tarpas\{display:none!important\}\}/.test(css), "spausdinant juosta ir langas rodomi");
@@ -5919,11 +5925,11 @@ async function testaiSutikimas(){
       lygu(eil.length, n, "lentelės eilučių");
       const e = eil.find(t => t.querySelector("code").textContent === "gprocure.sutartys.stebejimas"), s = eil.find(t => t.querySelector("code").textContent === "gprocure.sutikimas");
       lygu([e.children[3].textContent, s.children[3].textContent, s.children[4].textContent], ["Tobulinimo įrašai", "Būtinieji", "12 mėnesių"], "kategorija ir trukmė");
-      tiesa(/Sprendimo dar nepriėmėte\. Dabar: Būtinieji - visada įjungti; Nustatymų įsiminimas - įjungta; Tobulinimo įrašai - išjungta\./.test(d.getElementById("sprendimas").textContent), "sprendimo būsena: " + d.getElementById("sprendimas").textContent);
+      tiesa(/Sprendimo dar nepriėmėte\. Dabar: Būtinieji - visada įjungti; Nustatymų įsiminimas - įjungta; Tobulinimo įrašai - išjungta; Naudojimosi statistika - išjungta\./.test(d.getElementById("sprendimas").textContent), "sprendimo būsena: " + d.getElementById("sprendimas").textContent);
       d.querySelector("#nustatymai [data-gp-slapukai]").click(); await lauk(30);
       const L = d.querySelector("dialog.gpsk-d"); tiesa(L && L.open, "mygtukas neatvėrė lango");
       L.querySelector("[data-gpsk=visi]").click(); await lauk(60);
-      tiesa(/Jūsų sprendimas \d{4}-\d{2}-\d{2} \(galioja iki \d{4}-\d{2}-\d{2}\): .*Tobulinimo įrašai - įjungta\./.test(d.getElementById("sprendimas").textContent), "po sprendimo būsena neatnaujinta");
+      tiesa(/Jūsų sprendimas \d{4}-\d{2}-\d{2} \(galioja iki \d{4}-\d{2}-\d{2}\): .*Tobulinimo įrašai - įjungta; Naudojimosi statistika - įjungta\./.test(d.getElementById("sprendimas").textContent), "po sprendimo būsena neatnaujinta");
       lygu([...d.querySelectorAll("[data-gp-versija]")].map(x => x.textContent), [w.GP_SUTIKIMAS.VERSIJA, w.GP_SUTIKIMAS.VERSIJA], "versija");
       d.querySelector('.lang-switch__btn[data-lang="en"]').click();
       tiesa(d.querySelector("h1").textContent === "Cookie policy" && d.querySelectorAll("#en-irasu-lentele tr").length === n && /Your decision/.test(d.getElementById("sprendimas").textContent), "EN");
@@ -5938,7 +5944,7 @@ async function testaiSutikimas(){
                              [en, [/Article 73\(4\)/, /Article 6\(1\)\(f\)/, /Article 6\(1\)\(a\)/, /Article 7\(3\)/, /Article 22\(1\)/, /Article 77\(1\)/]]])
         re.forEach(x => tiesa(x.test(b.textContent), b.getAttribute("data-kalba") + ": nėra " + x));
       tiesa(!/Google \(Google Fonts\)/.test(d.body.innerHTML) && lt.querySelector('a[href="slapukai.html"]') && en.querySelector('a[href="slapukai.html"]') && lt.querySelector("button[data-gp-slapukai]") && en.querySelector("button[data-gp-slapukai]"), "teikėjai ar nuorodos į slapukų politiką ir nustatymus");
-      tiesa(lt.querySelectorAll("table.lentele--plati tbody tr").length === 10 && en.querySelectorAll("table.lentele--plati tbody tr").length === 10, "teisinių pagrindų lentelė - ne 10 eilučių");
+      tiesa(lt.querySelectorAll("table.lentele--plati tbody tr").length === 11 && en.querySelectorAll("table.lentele--plati tbody tr").length === 11, "teisinių pagrindų lentelė - ne 11 eilučių");
       for (const [b, re] of [[lt, /BDAR \d+ str\.|Elektroninių ryšių įstatymo 73 straipsnio 4 dal|organizacija/], [en, /Article \d+\(\d+\)|organisation/]])
         [...b.querySelectorAll("table.lentele--plati tbody tr")].forEach(tr => tiesa(re.test(tr.lastElementChild.textContent), b.getAttribute("data-kalba") + ": eilutė „" + tr.firstElementChild.textContent + "“ be teisinio pagrindo nuorodos"));
       lt.querySelector("button[data-gp-slapukai]").click(); await lauk(30);
@@ -5954,6 +5960,224 @@ async function testaiSutikimas(){
     const sm = await saltinis("../sitemap.xml");
     for (const v of ["", "?lang=lt", "?lang=en"]) if (!sm.includes("<loc>https://g-procure.com/slapukai.html" + v + "</loc>")) blogi.push("sitemap: slapukai.html" + v);
     if (!sm.includes('hreflang="en" href="https://g-procure.com/slapukai.html?lang=en"')) blogi.push("sitemap: hreflang");
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+}
+
+/* ==========================================================================
+   Naudojimosi statistika (2026-10-16, naudotojo sprendimai: griežtas variantas, tik su sutikimu, įvykių sąrašas patvirtintas,
+   vieta pagal IP išjungta, PP-tiekejams įtrauktas; docs/analitika/ivykiu-sarasas.md). Tikra PostHog biblioteka (shared/vendor/)
+   su perimtu tinklu (fetch, sendBeacon, XMLHttpRequest): kas tiksliai būtų išsiųsta ir kad naršyklėje nieko neįrašoma.
+   ========================================================================== */
+const AN_PERIMTA = '<script>window.__siusta = [];' +
+  'window.fetch = function (u, o) { __siusta.push({ budas: "fetch", url: String(u), body: o && o.body }); return Promise.resolve(new Response(\'{"status":1}\', { status: 200, headers: { "Content-Type": "application/json" } })); };' +
+  'navigator.sendBeacon = function (u, b) { __siusta.push({ budas: "beacon", url: String(u), body: b }); return true; };' +
+  'XMLHttpRequest.prototype.open = function (m, u) { this.__u = u; }; XMLHttpRequest.prototype.send = function (b) { __siusta.push({ budas: "xhr", url: String(this.__u), body: b }); };' +
+  '<\/script>';
+const AN_FAILAI = AN_PERIMTA + SUTIK_FAILAI + '<script src="analitika.js"><\/script>';
+async function anLauk(salyga, ms) { for (let i = 0; i < (ms || 8000) / 100; i++) { if (await salyga()) return true; await new Promise(r => setTimeout(r, 100)); } return !!(await salyga()); }
+async function anIvykiai(w) {
+  const out = [];
+  for (const x of w.__siusta) {
+    let b = x.body;
+    if (b && typeof b !== "string" && typeof b.text === "function") b = await b.text();
+    let j = null; try { j = JSON.parse(b); } catch (e) { j = null; }
+    (j ? (Array.isArray(j) ? j : (j.batch || [j])) : []).forEach(e => out.push({ url: x.url, budas: x.budas, e }));
+  }
+  return out;
+}
+async function testaiAnalitika(){
+  dabartine = grupe("Naudojimosi statistika (analitika.js, PostHog ES - griežtas variantas, tik su sutikimu)");
+
+  await testas("Be sutikimo - nieko: biblioteka neįkeliama, įvykiai neišsiunčiami ir neįsimenami; su sutikimu, bet ne g-procure.com (vietinis serveris), su „Do Not Track“ ar „Global Privacy Control“ - irgi nieko", async () => {
+    const { f, w, d } = await ramas(AN_FAILAI);
+    try {
+      const A = w.GP_ANALITIKA;
+      tiesa(A && w.GP_SUTIKIMAS, "analitika.js ar sutikimas.js neįsikėlė");
+      lygu([A.galima(), A.ivykis("modulio_veiksmas", { veiksmas: "ts_sugeneruota" })], [false, false], "be sutikimo");
+      w.GP_SUTIKIMAS.nustatyk({ statistika: true }, "pasirinkta");
+      lygu([w.GP_SUTIKIMAS.leidzia("statistika"), A.galima(), A.ivykis("modulio_veiksmas", { veiksmas: "ts_sugeneruota" })], [true, false, false], "sutikta, bet vietinė kilmė");
+      Object.defineProperty(w.navigator, "globalPrivacyControl", { value: true, configurable: true });
+      A.testams({ kilme: true });
+      lygu([A.galima(), A.ivykis("modulio_veiksmas", { veiksmas: "ts_sugeneruota" })], [false, false], "Global Privacy Control");
+      Object.defineProperty(w.navigator, "globalPrivacyControl", { value: false, configurable: true });
+      Object.defineProperty(w.navigator, "doNotTrack", { value: "1", configurable: true });
+      lygu(A.galima(), false, "Do Not Track");
+      A.testams(null);
+      await new Promise(r => setTimeout(r, 300));
+      lygu([d.querySelectorAll("script[data-gp-analitika]").length, w.__siusta.length, typeof w.posthog], [0, 0, "undefined"], "kažkas įkelta ar išsiųsta");
+    } finally { f.remove(); }
+  });
+
+  await testas("Žodynas: įvykis ar savybė ne pagal sąrašą, laisvas tekstas, skaičius už ribų ar ne sveikasis - atmetama (grąžina false); bendros savybės - modulis, puslapis be parametrų, kalba, įrenginys", async () => {
+    const { f, w } = await ramas(AN_FAILAI);
+    try {
+      const A = w.GP_ANALITIKA, gauta = [];
+      A.testams({ siunta: (v, p, gal) => gauta.push([v, p, gal]) });
+      const bandyk = (v, p) => { const n = gauta.length; A.ivykis(v, p); return gauta.length > n; };
+      lygu([bandyk("nezinomas", {}), bandyk("modulio_veiksmas", { veiksmas: "nezinomas_veiksmas" }), bandyk("modulio_veiksmas", { veiksmas: "Mano pirkimas UAB Alfa 150 000 Eur" }),
+            bandyk("modulio_veiksmas", { veiksmas: "ts_sugeneruota", pavadinimas: "x" }), bandyk("dokumentu_tikrinimas", { rezultatas: "pavyko", dokumentai: 100 }),
+            bandyk("dokumentu_tikrinimas", { rezultatas: "pavyko", dokumentai: 1.5 }), bandyk("dokumentu_tikrinimas", { rezultatas: "pavyko", dokumentai: "3" }),
+            bandyk("salygos_zingsnis", { zingsnis: "2", budas: "T-AK; drop" }), bandyk("modulio_veiksmas", { veiksmas: "protokolas_sukurtas", protokolas: "Komisija" })],
+           [false, false, false, false, false, false, false, false, false], "atmesti");
+      lygu([bandyk("modulio_veiksmas", { veiksmas: "ts_sugeneruota", objektas: "paslaugos" }), bandyk("salygos_zingsnis", { zingsnis: "sutartis", budas: "DPS-K", dokumentu_kalba: "lt_en", istatymas: "VPI" }),
+            bandyk("modulio_veiksmas", { veiksmas: "protokolas_sukurtas", protokolas: "N6.1" }), bandyk("dokumentu_tikrinimas", { rezultatas: "pavyko", dokumentai: 7, kliutys: 0, nukrypimai: 3, patikrinkite: 12 })],
+           [true, true, true, true], "priimti");
+      const p = gauta[0][1];
+      lygu([Object.keys(p).sort(), p.modulis, p.puslapis, p.kalba, ["telefonas", "plansete", "kompiuteris"].includes(p.irenginys), gauta[0][2]],
+        [["irenginys", "kalba", "modulis", "objektas", "puslapis", "veiksmas"], "kita", "/srcdoc", "lt", true, false], "bendros savybės (be sutikimo - neišsiųstų; rėmelio adresas about:srcdoc)");
+      // Žodyno reikšmės - tik raidės, skaičiai ir „_“ (ne tekstas): visos sąrašo reikšmės atitinka
+      const blogos = [];
+      Object.entries(A.IVYKIAI).forEach(([ev, z]) => Object.entries(z).forEach(([k, sp]) => { if (Array.isArray(sp)) sp.forEach(x => { if (!/^[A-Za-z0-9_.-]{1,40}$/.test(x)) blogos.push(ev + "." + k + "=" + x); }); }));
+      tiesa(!blogos.length, blogos.join(", "));
+    } finally { f.remove(); }
+  });
+
+  await testas("Pirkimo būdas - tik GP_METHODS kodas (be klasifikatoriaus - tik kodo forma), sutarties šeima - tik PP-salygos GP_SUTARTYS.SEIMOS ar „nerengiama“ / „atideta“", async () => {
+    const be = await ramas(AN_FAILAI);
+    try {
+      const A = be.w.GP_ANALITIKA;
+      lygu(["T-AK", "S-AK", "AK", "DPS-K", "MV-SAB", "t-ak", "Atviras konkursas", "T-AK-XXXX", "T-AK; drop", "", null].map(v => A.budas(v)),
+        ["T-AK", "S-AK", "AK", "DPS-K", "MV-SAB", undefined, undefined, undefined, undefined, undefined, undefined], "be klasifikatoriaus");
+    } finally { be.f.remove(); }
+    const su = await ramas(AN_FAILAI + '<script src="procurement-methods.js"><\/script><script src="../PP-salygos/sutartys.js"><\/script>');
+    try {
+      const A = su.w.GP_ANALITIKA, M = su.w.GP_METHODS, S = su.w.GP_SUTARTYS;
+      const ids = M.LIST.map(x => x.id);
+      tiesa(ids.length >= 20 && ids.every(id => A.budas(id) === id), "ne visi GP_METHODS kodai priimami: " + ids.filter(id => A.budas(id) !== id).join(", "));
+      lygu([A.budas("ZZ-AK"), A.budas("XYZ")], [undefined, undefined], "klasifikatoriuje nesantis kodas");
+      const sar = A.IVYKIAI.salygos_generavimas.sutartis;
+      lygu(sar.filter(x => x !== "nerengiama" && x !== "atideta").sort(), Object.keys(S.SEIMOS).sort(), "šeimos - kaip GP_SUTARTYS.SEIMOS");
+    } finally { su.f.remove(); }
+  });
+
+  await testas("PostHog nustatymai - kiekvienas apsaugos sluoksnis atskirai (net jei kitas sluoksnis tą patį jau užtikrina): ES adresas, be slapukų ir saugyklos, be profilių, be automatinio rinkimo, įrašų, žemėlapių, apklausų, vėliavų ir išorinio kodo, be šaltinio ir kampanijų, filtras prieš siunčiant; testų išimtys - tik testams", async () => {
+    const { f, w } = await ramas(AN_FAILAI);
+    try {
+      const A = w.GP_ANALITIKA, N = A.nustatymai();
+      const TURI = { api_host: "https://eu.i.posthog.com", ui_host: "https://eu.posthog.com", cookieless_mode: "always", persistence: "memory", disable_persistence: true,
+        person_profiles: "never", autocapture: false, rageclick: false, capture_pageview: false, capture_pageleave: false, capture_heatmaps: false, capture_dead_clicks: false,
+        capture_exceptions: false, capture_performance: false, disable_session_recording: true, disable_surveys: true, disable_conversations: true, disable_product_tours: true,
+        disable_web_experiments: true, advanced_disable_flags: true, advanced_disable_feature_flags: true, disable_external_dependency_loading: true,
+        save_referrer: false, save_campaign_params: false, disable_capture_url_hashes: true, mask_all_text: true, mask_all_element_attributes: true,
+        mask_personal_data_properties: true, respect_dnt: true };
+      const blogi = Object.keys(TURI).filter(k => N[k] !== TURI[k]).map(k => k + "=" + JSON.stringify(N[k]));
+      tiesa(!blogi.length, "nustatymai: " + blogi.join(", "));
+      tiesa(N.before_send === A.filtras, "before_send - ne filtras");
+      tiesa(!("request_batching" in N) && !("opt_out_useragent_filter" in N), "testų išimtys tikroje konfigūracijoje");
+      A.testams({ betarpiskai: true }); const T = A.nustatymai(); A.testams(null);
+      lygu([T.request_batching, T.opt_out_useragent_filter, T.cookieless_mode], [false, true, "always"], "testų konfigūracija");
+    } finally { f.remove(); }
+  });
+
+  await testas("Su sutikimu - tikra PostHog biblioteka (be išorinių priedų) iš svetainės: siunčiama tik į eu.i.posthog.com, tik sąrašo įvykiai ir savybės, režimas be slapukų, be vietos pagal IP; naršyklėje nieko neįrašoma (localStorage, sessionStorage, slapukai); atsisiuntimo failo vardas nesiunčiamas; atšaukus - nebesiunčiama", async () => {
+    const { f, w, d } = await ramas(AN_FAILAI);
+    try {
+      const A = w.GP_ANALITIKA;
+      const ls0 = Object.keys(w.localStorage).sort(), ss0 = Object.keys(w.sessionStorage).sort(), ck0 = d.cookie;
+      A.testams({ kilme: true, betarpiskai: true });
+      w.GP_SUTIKIMAS.nustatyk({ statistika: true }, "pasirinkta");
+      tiesa(await anLauk(() => typeof w.posthog === "object" && w.__siusta.length > 0), "PostHog neįsikėlė ar nieko neišsiuntė: " + w.__siusta.length);
+      const sk = [...d.querySelectorAll("script[src]")].map(x => x.src);
+      lygu([sk.every(u => new URL(u).origin === location.origin), sk.filter(u => /posthog/.test(u)).map(u => new URL(u).pathname)],
+        [true, [new URL(A.BIBLIOTEKA).pathname]], "skriptai: " + sk.join(", "));
+      tiesa(A.ivykis("modulio_veiksmas", { veiksmas: "ts_sugeneruota", objektas: "paslaugos" }), "leistinas įvykis neišsiųstas");
+      lygu(A.ivykis("modulio_veiksmas", { veiksmas: "Slaptas pirkimas UAB Alfa" }), false, "laisvas tekstas");
+      const a = d.createElement("a"); a.download = "VPP-268_SPS_Slaptas pavadinimas UAB Alfa_2026-10-16.docx"; a.href = "#";
+      a.addEventListener("click", e => e.preventDefault()); d.body.appendChild(a); a.click(); a.remove();
+      tiesa(await anLauk(async () => (await anIvykiai(w)).length >= 3), "laukiama 3 įvykių: " + JSON.stringify(await anIvykiai(w)).slice(0, 300));
+      const ev = await anIvykiai(w), vardai = ev.map(x => x.e.event);
+      lygu(["puslapis_atvertas", "modulio_veiksmas", "failas_atsisiustas"].map(v => vardai.includes(v)), [true, true, true], "įvykiai: " + vardai.join(", "));
+      const blogi = [];
+      ev.forEach(({ url, e }) => {
+        if (!/^https:\/\/eu\.i\.posthog\.com\//.test(url)) blogi.push("adresas " + url);
+        const z = A.IVYKIAI[e.event];
+        if (!z) { blogi.push("įvykis " + e.event); return; }
+        const leidziami = Object.keys(A.BENDROS).concat(Object.keys(z), A.SISTEMOS, ["$geoip_disable", "$process_person_profile"]);
+        Object.keys(e.properties || {}).forEach(k => { if (!leidziami.includes(k)) blogi.push(e.event + "." + k); });
+        if (e.properties.$cookieless_mode !== true || e.properties.distinct_id !== "$posthog_cookieless" || e.properties.$geoip_disable !== true || e.properties.$process_person_profile !== false)
+          blogi.push(e.event + ": ne be slapukų / be vietos / be profilio");
+        ["$set", "$set_once"].forEach(k => { if (e[k] !== undefined) blogi.push(e.event + " " + k); });
+      });
+      tiesa(!blogi.length, blogi.join("; "));
+      const visas = JSON.stringify(ev);
+      tiesa(!/Slaptas|UAB Alfa|VPP-268|kortele=|\$current_url|\$referrer|\$browser|\$screen|\$pathname|\$session_id|\$device_id/.test(visas), "išsiųsta tai, ko neturėtų būti: " + visas.slice(0, 400));
+      const fa = ev.find(x => x.e.event === "failas_atsisiustas").e.properties;
+      lygu([fa.dokumentas, fa.formatas], ["sps", "docx"], "atsisiuntimas - tik rūšis ir formatas");
+      lygu([Object.keys(w.localStorage).sort(), Object.keys(w.sessionStorage).sort(), /ph_|posthog/i.test(d.cookie), d.cookie === ck0], [ls0, ss0, false, true], "naršyklėje kažkas įrašyta");
+      // Atšaukus - iškart nebesiunčiama (ir PostHog eilėje nelieka)
+      const n = w.__siusta.length;
+      w.GP_SUTIKIMAS.nustatyk({ statistika: false }, "pasirinkta");
+      lygu(A.ivykis("modulio_veiksmas", { veiksmas: "ts_patikrinta" }), false, "po atšaukimo priimta");
+      w.posthog.capture("modulio_veiksmas", { veiksmas: "ts_patikrinta", modulis: "kita", puslapis: "/x", kalba: "lt", irenginys: "kompiuteris" });
+      await new Promise(r => setTimeout(r, 600));
+      lygu(w.__siusta.length, n, "po atšaukimo išsiųsta");
+    } finally { f.remove(); }
+  });
+
+  await testas("Bendri failai praneša įvykius: DI užklausa (rezultatas, klaidos rūšis pagal statusą, trukmė, bandymai - be turinio), ilgas veiksmas su pavadinimu (pavyko / klaida / atšaukta), neįsikėlusi biblioteka; dokumento rūšis iš failo vardo", async () => {
+    const { f, w, d } = await ramas(AN_FAILAI + '<div id="vt"></div><script src="pranesimas.js"><\/script><script src="busena.js"><\/script><script src="bibliotekos.js"><\/script><script src="ai-proxy.js"><\/script>');
+    try {
+      const A = w.GP_ANALITIKA, gauta = [];
+      A.testams({ siunta: (v, p) => gauta.push([v, p]) });
+      w.fetch = () => Promise.resolve(new w.Response("{}", { status: 413 }));
+      const r = await w.GP_AI_PROXY.call({ userMessage: "Slaptas tekstas", maxTokens: 10 });
+      const di = gauta.filter(x => x[0] === "di_uzklausa").map(x => x[1]);
+      lygu([r.ok, di.length, di[0] && di[0].rezultatas, di[0] && di[0].klaidos_rusis, di[0] && di[0].bandymai, di[0] && di[0].trukme, JSON.stringify(di).includes("Slaptas")],
+        [false, 1, "klaida", "per_didelis_failas", 1, "iki_10s", false], "DI užklausa: " + JSON.stringify(di));
+      w.fetch = () => Promise.resolve(new w.Response(JSON.stringify({ content: [{ type: "text", text: "ok" }] }), { status: 200 }));
+      await w.GP_AI_PROXY.call({ userMessage: "x" });
+      lygu(gauta.filter(x => x[0] === "di_uzklausa").map(x => [x[1].rezultatas, x[1].klaidos_rusis]), [["klaida", "per_didelis_failas"], ["pavyko", undefined]], "DI užklausa pavyko");
+      await w.GP_BUSENA.vykdyk("#vt", { analitika: "ts_sugeneruota", veiksmas: () => 1 });
+      await w.GP_BUSENA.vykdyk("#vt", { analitika: "ts_patikrinta", veiksmas: () => { throw new Error("Slapta klaida"); } });
+      await w.GP_BUSENA.vykdyk("#vt", { veiksmas: () => 1 });   // be pavadinimo - nepranešama
+      lygu(gauta.filter(x => x[0] === "veiksmo_rezultatas").map(x => [x[1].veiksmas, x[1].rezultatas]), [["ts_sugeneruota", "pavyko"], ["ts_patikrinta", "klaida"]], "ilgi veiksmai");
+      w.GP_BIBLIOTEKOS.yra("NeraTokios", "SheetJS (Excel)");
+      lygu(gauta.filter(x => x[0] === "biblioteka_neisikele").map(x => x[1].biblioteka), ["sheetjs"], "biblioteka");
+      lygu([["SPS_Pavadinimas_2026-10-16.docx", "sps"], ["VPP-1_Sutarties-SS_X.docx", "sutartis"], ["Protokolas-D6_X.docx", "protokolas"], ["Rinkos_konsultacija_X.docx", "konsultacija"],
+            ["paketas.zip", "paketas_zip"], ["g-procure-kopija-2026-10-16.json", "kopija"], ["Negotiation_analysis_2026.xlsx", "derybu_analize"], ["Pažyma_1_priedas.docx", "pazyma"],
+            ["kazkas.bin", "kita"]].map(([v]) => A.dokumentas(v).dokumentas),
+        ["sps", "sutartis", "protokolas", "konsultacija", "paketas_zip", "kopija", "derybu_analize", "pazyma", "kita"], "dokumento rūšis");
+      lygu([A.dokumentas("x.bin").formatas, A.trukme(9999), A.trukme(10000), A.trukme(61000), A.klaidosRusis(0), A.klaidosRusis(429), A.klaidosRusis(503), A.klaidosRusis(403)],
+        ["kita", "iki_10s", "10_30s", "virs_60s", "tinklas", "per_daug_uzklausu", "serverio", "atmesta"], "pagalbinės");
+    } finally { f.remove(); }
+  });
+
+  const AN_MODULIAI = ["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-report/PP-report.html",
+    "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html", "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
+    "../PP-cost-benefit/kastu_naudos_analize.html", "../PP-carbon/index.html", "../PP-carbon/epd.html", "../PP-esg/index.html", "../PP-tiekejams/index.html", "../PP-teise/index.html",
+    "../PP-ts/TS_Asistentas.html", "../PP-qual/PP-QUAL.html", "../PP-protocol/LITGRID_Generatorius_v3.html", "../PP-salygos/PP-SALYGOS.html"];
+  await testas("Sargai: analitika.js visuose tikruose puslapiuose iškart po sutikimas.js; kitų analitikos ar sekimo įrankių nėra; kiekvienas įvykis kode - iš žodyno; biblioteka - sąraše ir darbininke; ES adresai ir viešas raktas", async () => {
+    const blogi = [];
+    const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)))];
+    for (const m of puslapiai) {
+      const src = await saltinis(m);
+      const su = src.search(/<script src="(?:\.\.\/)?shared\/sutikimas\.js"><\/script>\n<script src="(?:\.\.\/)?shared\/analitika\.js"><\/script>/);
+      if (su < 0) blogi.push(m + ": analitika.js ne iškart po sutikimas.js");
+      if ((src.match(/<script src="(?:\.\.\/)?shared\/analitika\.js"><\/script>/g) || []).length !== 1) blogi.push(m + ": analitika.js ne vieną kartą");
+    }
+    const SEKIMAS = /googletagmanager|google-analytics|gtag\(|plausible\.io|matomo\.(js|php|cloud)|hotjar|clarity\.ms|facebook\.net|connect\.facebook|us\.i\.posthog|us-assets|app\.posthog|posthog\.com\/static|segment\.com|mixpanel\.com\/track/i;
+    const failai = [...new Set(kodoFailai().concat(BIB_PUSLAPIAI_PAPILDOMI, ["analitika.js", "busena.js", "bibliotekos.js", "ai-proxy.js", "mano-pirkimai.js", "../PP-salygos/juodrastis.js", "../PP-salygos/tikrinimas.js", "../PP-tiekejams/sw.js", "../bibliotekos-sw.js"]))];
+    const { f, w } = await ramas(AN_FAILAI);
+    let A; try { A = w.GP_ANALITIKA; } finally { f.remove(); }
+    const VEIKSMAI = A.IVYKIAI.modulio_veiksmas.veiksmas, naudoti = new Set();
+    const veiksmas = (m, v, kas) => { naudoti.add(v); if (!VEIKSMAI.includes(v)) blogi.push(m + ": " + kas + " „" + v + "“ ne žodyne"); };
+    for (const m of [...new Set(failai.concat(AN_MODULIAI))]) {
+      const src = await saltinis(m);
+      src.split("\n").forEach((eil, i) => { if (SEKIMAS.test(eil)) blogi.push(m + ":" + (i + 1) + " sekimas: " + eil.trim().slice(0, 90)); });
+      for (const x of src.matchAll(/ivykis\(\s*["']([a-z_]+)["']/g)) if (!A.IVYKIAI[x[1]]) blogi.push(m + ": įvykis „" + x[1] + "“ ne žodyne");
+      for (const x of src.matchAll(/analitika:\s*(?:sus \? )?["']([a-z_]+)["'](?:\s*:\s*["']([a-z_]+)["'])?/g)) [x[1], x[2]].filter(Boolean).forEach(v => veiksmas(m, v, "veiksmas"));
+      for (const x of src.matchAll(/statistika\(\s*["']([a-z_]+)["']/g)) if (!["pavyko", "klaida", "atsaukta"].includes(x[1])) veiksmas(m, x[1], "statistika()");
+      for (const x of src.matchAll(/["']modulio_veiksmas["'],\s*\{\s*veiksmas:\s*["']([a-z_]+)["']/g)) veiksmas(m, x[1], "modulio_veiksmas");
+    }
+    // Atvirkščiai: žodyne nėra veiksmo, kurio kodas nesiunčia (docs/analitika/ivykiu-sarasas.md turi sutapti su tuo, kas tikrai renkama)
+    VEIKSMAI.filter(v => !naudoti.has(v)).forEach(v => blogi.push("žodyno veiksmas „" + v + "“ kode nenaudojamas"));
+    const an = await saltinis("analitika.js"), M = await (await fetch("vendor/bibliotekos.json?b=" + Date.now())).json(), sw = await saltinis("../bibliotekos-sw.js");
+    const b = M.bibliotekos.find(x => x.npm === "posthog-js");
+    tiesa(b && an.includes('"shared/vendor/' + b.katalogas + '/array.no-external.js"') && an.includes('var VERSIJA = "' + b.versija + '"') && sw.includes('"shared/vendor/' + b.katalogas + '/array.no-external.js"'),
+      "PostHog biblioteka ne sąraše, ne darbininke ar kita versija");
+    tiesa(/var API = "https:\/\/eu\.i\.posthog\.com"/.test(an) && /var TOKEN = "phc_[A-Za-z0-9]{20,}"/.test(an) && /var KILME = "https:\/\/g-procure\.com"/.test(an), "ne ES adresas, ne viešas projekto raktas ar ne g-procure.com");
+    tiesa(puslapiai.length >= 28, "puslapių tik " + puslapiai.length);
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 }
@@ -6131,6 +6355,7 @@ async function testaiVendor(){
   await testaiPalyginimas();
   await testaiDi();
   await testaiSutikimas();
+  await testaiAnalitika();
   await testaiSaugumas();
   await testaiVendor();
   await testaiTelefonas();

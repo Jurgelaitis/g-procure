@@ -546,6 +546,8 @@
           $("gpk-dlg-pav").removeAttribute("aria-invalid");
           return;
         }
+        // Naudojimosi statistika (tik su sutikimu): iš kur sukurta - be kortelės duomenų
+        if (global.GP_ANALITIKA) global.GP_ANALITIKA.ivykis("kortele_issaugota", { saltinis: /pp-plan/i.test((o && o.modulis) || "") ? "pp_plan" : "modulis", nauja: r.nauja ? "taip" : "ne" });
         baik(r.kortele);
       });
       $("gpk-dlg-ne").addEventListener("click", function () { baik(null); });

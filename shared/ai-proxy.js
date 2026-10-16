@@ -240,8 +240,22 @@
             return run(attemptIndex + 1);
           });
         }
+        statistika(result, attemptIndex + 1);
         return result;
       });
+    }
+    // Naudojimosi statistika (tik su sutikimu, shared/analitika.js): rezultatas, klaidos rūšis pagal statusą, trukmė ir
+    // bandymų skaičius - be užklausos ir atsakymo turinio, be klaidos teksto
+    var pradzia = Date.now();
+    function statistika(result, bandymai) {
+      var A = global.GP_ANALITIKA;
+      if (!A) return;
+      try {
+        var atsaukta = !!(opts.signal && opts.signal.aborted);
+        A.ivykis("di_uzklausa", { rezultatas: result && result.ok ? "pavyko" : atsaukta ? "atsaukta" : "klaida",
+          klaidos_rusis: result && !result.ok && !atsaukta ? A.klaidosRusis(result.status) : undefined,
+          trukme: A.trukme(Date.now() - pradzia), bandymai: bandymai });
+      } catch (e) {}
     }
 
     return run(0);
