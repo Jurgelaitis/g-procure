@@ -10,7 +10,7 @@
  *
  * STRATEGIJA (kaip PP-tiekejams/sw.js):
  *   - savi failai: pirmiausia TINKLAS, talpykla tik kai tinklo nėra;
- *   - šriftai (Google Fonts): talpykla, jei jau buvo parsiųsti;
+ *   - šriftas (shared/sriftai/, nuo 2026-10-16 - ne Google Fonts): savas failas, kaip kiti;
  *   - administravimo puslapis, testai ir viskas kita: tik tinklas, nesaugoma.
  * Vidiniai naudotojo įrašai (peržiūrų žurnalas) gyvena localStorage, ne čia.
  *
@@ -18,7 +18,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppteise-2026-10-06-1";
+var VERSIJA = "ppteise-2026-10-16-2";
 
 var SAVI = [
   "./",
@@ -26,12 +26,18 @@ var SAVI = [
   "./duomenys/registras.json",
   "./duomenys/saltiniai.json",
   "../shared/epso-g.css",
+  "../shared/sriftai/nunito-sans-latin.woff2",
+  "../shared/sriftai/nunito-sans-latin-ext.woff2",
+  "../shared/sriftai/nunito-sans-italic-latin.woff2",
+  "../shared/sriftai/nunito-sans-italic-latin-ext.woff2",
   "../shared/portal-link.js",
+  "../shared/sutikimas.js",
+  "../shared/bibliotekos-atmintis.js",
   "../shared/prieinamumas.js",
   "../shared/teise-stebesena.js"
 ];
 
-var SRIFTAI = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
+/* Šriftas nuo 2026-10-16 - svetainėje (shared/sriftai/), ne iš Google Fonts: išsaugomas kartu su savais failais. */
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(VERSIJA).then(function (c) {
@@ -71,19 +77,6 @@ function tinklasPirma(req) {
   });
 }
 
-function talpyklaPirma(req) {
-  return caches.match(req.url).then(function (m) {
-    if (m) return m;
-    return fetch(req).then(function (r) {
-      if (r && (r.ok || r.type === "opaque")) {
-        var kopija = r.clone();
-        caches.open(VERSIJA).then(function (c) { c.put(req.url, kopija); });
-      }
-      return r;
-    });
-  });
-}
-
 self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
@@ -94,5 +87,4 @@ self.addEventListener("fetch", function (e) {
     }
     return;
   }
-  if (SRIFTAI.test(req.url)) { e.respondWith(talpyklaPirma(req)); }
 });
