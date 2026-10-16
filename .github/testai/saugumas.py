@@ -4,16 +4,18 @@
 Paleidžiama kartu su testais (.github/testai/paleisk.py - be filtrų arba su žodžiu „saugumas“) ir atskirai:
     python3 .github/testai/saugumas.py
 Tikrina:
-  1. Bibliotekas (SCA): package.json nėra, todėl surenkamos visų CDN adresų versijos (cdnjs, jsDelivr, unpkg, cdn.sheetjs.com) ir
-     saugykloje laikomos kopijos (vendor), o žinomos spragos ieškomos OSV duomenų bazėje (api.osv.dev, npm). Rasta spraga be
-     pagrįstos išimties (saugumas-isimtys.json) - krenta. OSV nepasiekiamas - KRENTA (nepavykusi patikra niekada nerodoma kaip
-     „spragų nėra“).
+  1. Bibliotekas (SCA): package.json nėra. Nuo 2026-10-16 bibliotekos gyvena svetainėje (shared/vendor/, sąrašas
+     shared/vendor/bibliotekos.json): kiekvieno failo sha384 tikrinama pagal sąrašą, npm paketas ir versija - iš jo; failas
+     kataloge vendor/, kurio sąraše nėra, - klaida. Jei kur nors vėl atsirastų CDN adresas (cdnjs, jsDelivr, unpkg,
+     cdn.sheetjs.com), jo versija irgi surenkama. Žinomos spragos ieškomos OSV duomenų bazėje (api.osv.dev, npm). Rasta spraga
+     be pagrįstos išimties (saugumas-isimtys.json) - krenta. OSV nepasiekiamas - KRENTA (nepavykusi patikra niekada nerodoma
+     kaip „spragų nėra“).
   2. Paslaptis saugykloje: API raktai, privatūs raktai, prieigos raktai; ir serverio IP adresas (paimamas iš DNS, ne įrašytas čia -
      serverio duomenys viešoje saugykloje nelaikomi). Rastos reikšmės nespausdinamos - tik failas, eilutė ir rūšis.
   3. /.well-known/security.txt galiojimą (RFC 9116 Expires): pasibaigęs - krenta, liko mažiau nei 30 dienų - įspėjimas.
 Išėjimo kodas 1, jei bent viena patikra krito.
 """
-import datetime, json, os, re, socket, subprocess, sys, time, urllib.request
+import base64, datetime, hashlib, json, os, re, socket, subprocess, sys, time, urllib.request
 
 SAKNIS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 ISIMTYS = os.path.join(os.path.dirname(__file__), "saugumas-isimtys.json")
@@ -22,9 +24,8 @@ OSV = "https://api.osv.dev/v1"
 # cdnjs bibliotekos vardas -> npm paketas (OSV ieško pagal npm). Nauja biblioteka be įrašo - klaida, kad nebūtų praleista.
 CDNJS_NPM = {"pdf.js": "pdfjs-dist", "jszip": "jszip", "mammoth": "mammoth", "FileSaver.js": "file-saver", "Chart.js": "chart.js",
              "jspdf": "jspdf", "jspdf-autotable": "jspdf-autotable", "xlsx": "xlsx", "docx": "docx"}
-# Saugykloje laikomos bibliotekų kopijos: paketas ir versija - iš paties failo
-VENDOR = {"PP-salygos/vendor/jszip.min.js": ("jszip", r"JSZip v(\d+\.\d+\.\d+)"),
-          "PP-cost-benefit/chart.umd.min.js": ("chart.js", r'static version="(\d+\.\d+\.\d+)"')}
+# Bibliotekos svetainėje (nuo 2026-10-16): sąrašas su npm paketu, versija ir kiekvieno failo sha384
+VENDOR_SARASAS = "shared/vendor/bibliotekos.json"
 CDN_RE = [
     (re.compile(r"https://cdnjs\.cloudflare\.com/ajax/libs/([A-Za-z0-9._-]+)/(\d+\.\d+\.\d+)/"), "cdnjs"),
     (re.compile(r"https://cdn\.jsdelivr\.net/npm/((?:@[a-z0-9._-]+/)?[a-z0-9._-]+)@(\d+\.\d+\.\d+)/"), "npm"),
@@ -84,7 +85,8 @@ def bibliotekos(visi):
     """{(paketas, versija): [failai]} ir nežinomos cdnjs bibliotekos."""
     rasta, nezinomos = {}, set()
     for f in visi:
-        if not f.endswith((".html", ".js")) or f.startswith("docs/"): continue
+        # Bibliotekų failai (vendor/) - pagal sąrašą žemiau; jų kode esantys adresai (pvz. jsPDF - pdfobject) nekraunami
+        if not f.endswith((".html", ".js")) or f.startswith("docs/") or re.search(r"(^|/)vendor/", f): continue
         src = skaityk(f)
         for rx, tipas in CDN_RE:
             for m in rx.finditer(src):
@@ -94,11 +96,27 @@ def bibliotekos(visi):
                     if not pak: nezinomos.add(m.group(1)); continue
                 else: pak, ver = m.group(1), m.group(2)
                 rasta.setdefault((pak, ver), set()).add(f)
-    for f, (pak, rx) in VENDOR.items():
-        if f in visi:
-            m = re.search(rx, skaityk(f)[:200000])
-            if m: rasta.setdefault((pak, m.group(1)), set()).add(f)
-            else: nezinomos.add(f + " (versija neatpažinta)")
+    sarase = set()
+    try:
+        with open(os.path.join(SAKNIS, VENDOR_SARASAS), encoding="utf-8") as h:
+            sar = json.load(h)
+    except (OSError, ValueError) as e:
+        nezinomos.add("%s neperskaitytas (%s)" % (VENDOR_SARASAS, e)); sar = {"bibliotekos": []}
+    for b in sar.get("bibliotekos", []):
+        if not b.get("npm") or not b.get("versija") or not b.get("katalogas", "").endswith("-" + str(b.get("versija"))):
+            nezinomos.add("%s: įraše trūksta npm, versijos ar katalogo <vardas>-<versija>" % b.get("katalogas")); continue
+        for vardas, maisa in b.get("failai", {}).items():
+            f = "shared/vendor/%s/%s" % (b["katalogas"], vardas); sarase.add(f)
+            try:
+                with open(os.path.join(SAKNIS, f), "rb") as h:
+                    gauta = "sha384-" + base64.b64encode(hashlib.sha384(h.read()).digest()).decode()
+            except OSError:
+                nezinomos.add(f + " (sąraše, bet failo nėra)"); continue
+            if gauta != maisa: nezinomos.add(f + " (sha384 nesutampa su sąrašu - failas pakeistas)"); continue
+            rasta.setdefault((b["npm"], b["versija"]), set()).add(f)
+    for f in visi:
+        if re.search(r"(^|/)vendor/.+\.js$", f) and f not in sarase and not f.startswith("docs/"):
+            nezinomos.add(f + " (bibliotekos failas ne sąraše %s)" % VENDOR_SARASAS)
     return rasta, nezinomos
 
 
@@ -106,7 +124,7 @@ def sca(visi, isimtys, siandien):
     krito, ispejimai = [], []
     rasta, nezinomos = bibliotekos(visi)
     for n in sorted(nezinomos):
-        krito.append("Biblioteka „%s“ neįrašyta į CDNJS_NPM / VENDOR (.github/testai/saugumas.py) - jos spragos netikrinamos" % n)
+        krito.append("Biblioteka „%s“: neįrašyta į CDNJS_NPM (.github/testai/saugumas.py) ar shared/vendor/bibliotekos.json arba jos failas neatitinka sąrašo - spragos netikrinamos" % n)
     raktai = sorted(rasta)
     try:
         ats = http_json(OSV + "/querybatch", {"queries": [{"package": {"name": p, "ecosystem": "npm"}, "version": v} for p, v in raktai]})
