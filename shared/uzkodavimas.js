@@ -2,17 +2,20 @@
    G-Procure: DI užklausų užkodavimas (window.GP_UZKODAVIMAS, 2026-10-15)
 
    Tekstas į DI (per G-Procure serverį į Claude API) patenka be tiekėjų ar rinkos dalyvių pavadinimų, jų įmonių kodų,
-   el. pašto adresų, telefonų ir sumų. Logika - iš PP-negotiation diSlepk (2026-10-05, R4); pirmas šio failo naudotojas -
-   PP-ts rinkos konsultacijos suvestinė. PP-negotiation (diSlepk) ir PP-protocol (aiSlepk) dar turi savo kopijas -
-   kandidatai perkelti čia (elgsena ta pati, tik pakaitų tekstai ir kontekstas jų).
+   el. pašto adresų, telefonų ir sumų. Logika - iš PP-negotiation diSlepk (2026-10-05, R4). Naudoja PP-ts rinkos konsultacijos
+   suvestinė, PP-negotiation (diSlepk, nuo 2026-10-16) ir PP-protocol (aiSlepk, nuo 2026-10-16) - moduliai renka tik savo kontekstą
+   (kodus, keičiamus tekstus, žinomas sumas); savo užkodavimo kopijų moduliuose nerašyk (sargas shared/testai.html).
 
    API:
      GP_UZKODAVIMAS.kodas(i, priesdelis)       -> „Dalyvis A“, ..., „Dalyvis Z“, „Dalyvis AA“ (i nuo 0)
      GP_UZKODAVIMAS.vardoVariantai(vardas)     -> [[variantas, tikslus]]: kaip įrašyta, be kabučių, be teisinės formos;
                                                   vienas žodis - tiksliai ir didžiosiomis, keli - nepaisant raidžių dydžio
      GP_UZKODAVIMAS.poros(sarasas)             -> [[ka, kuo, tikslus]] ilgiausi pirmi; sarasas: [{ vardas, kodas, kiti: [[tekstas, kuo]] }]
-     GP_UZKODAVIMAS.slepk(tekstas, o)          -> užkoduotas tekstas; o: { poros, sumos: [žinomos sumos], pv, kalba, imones, asmenys }
-                                                  sumos su valiuta (ar lygios žinomai >= 1000) - „[x % PV]“, be PV - „[suma neįtraukta]“;
+     GP_UZKODAVIMAS.slepk(tekstas, o)          -> užkoduotas tekstas; o: { poros, sumos: [žinomos sumos], pv, pvPavadinimas, kalba, imones,
+                                                  asmenys, naudoti }
+                                                  sumos su valiuta (ar lygios žinomai >= 1000) - „[x % PV]“ (pvPavadinimas - vietoj „PV“, pvz.
+                                                  PP-protocol „numatomos vertės“), be PV - „[suma neįtraukta]“; naudoti (Set) - į jį įrašomi
+                                                  panaudoti porų pakaitai (PP-protocol kodų raktui);
                                                   imones: true - ir kiti įmonių pavadinimai su teisine forma (UAB „X“, „X“, UAB, X OÜ);
                                                   asmenys: true - vardas ir pavardė po etikečių („Kontaktinis asmuo:“, „Pagarbiai,“, „Direktorius“)
      GP_UZKODAVIMAS.sumos(tekstas)             -> [{ suma, citata, pozicija, pvm: "be" | "su" | null }] - sumos su valiuta tekste
@@ -91,16 +94,16 @@
       function (m, pr, pav) { return pr + pav + zyme(P.tel); });
     (o.poros || []).forEach(function (p) {
       var r = new RegExp("(^|[^\\p{L}\\p{N}])" + re(p[0]) + "(?=[^\\p{L}\\p{N}]|$)", p[2] ? "gu" : "giu");
-      t = t.replace(r, function (m, pr) { return pr + zyme(p[1]); });
+      t = t.replace(r, function (m, pr) { if (o.naudoti && typeof o.naudoti.add === "function") o.naudoti.add(p[1]); return pr + zyme(p[1]); });
     });
-    var sumos = o.sumos || [], pv = Number(o.pv) || 0;
+    var sumos = o.sumos || [], pv = Number(o.pv) || 0, pvPav = String(o.pvPavadinimas || "PV");
     t = t.replace(SUMA, function (m, pr, pries, sk, daug, po) {
       var v = skaicius(sk);
       if (v == null || !isFinite(v)) return m;
       if (daug) v *= /mln|million/i.test(daug) ? 1e6 : 1e3;
       var zinoma = v >= 1000 && sumos.some(function (x) { return Math.abs(x - v) < 0.005; });
       if (!pries && !po && !zinoma) return m;
-      return pr + zyme(pv > 0 ? "[" + procentai(v / pv * 100, k) + " % PV]" : P.suma);
+      return pr + zyme(pv > 0 ? "[" + procentai(v / pv * 100, k) + " % " + pvPav + "]" : P.suma);
     });
     t = t.replace(/(^|[^\p{N}])\d{9}(?=[^\p{N}]|$)/gu, function (m, pr) { return pr + zyme(P.kodas); });
     if (o.imones) IMONES.forEach(function (r) { t = t.replace(r, function (m, pr) { return pr + zyme(P.imone); }); });
@@ -130,5 +133,5 @@
     return out;
   }
 
-  window.GP_UZKODAVIMAS = { version: "1.0", kodas: kodas, vardoVariantai: vardoVariantai, poros: poros, slepk: slepk, sumos: sumos, PAKAITAI: PAKAITAI };
+  window.GP_UZKODAVIMAS = { version: "1.1", kodas: kodas, vardoVariantai: vardoVariantai, poros: poros, slepk: slepk, sumos: sumos, PAKAITAI: PAKAITAI };
 })();
