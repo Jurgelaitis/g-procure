@@ -1,10 +1,11 @@
 /* ============================================================================
  * G-Procure  shared/bibliotekos.js   (window.GP_BIBLIOTEKOS)
  * ----------------------------------------------------------------------------
- * Kai CDN biblioteka (Chart.js, SheetJS, docx, jsPDF, mammoth, pdf.js) neįsikėlė:
- * nėra ryšio arba įmonės tinklas blokuoja cdnjs.cloudflare.com / cdn.jsdelivr.net
- * (2026-09-28). Iki tol modulis tokiu atveju lūždavo („Chart is not defined“ -
- * PP-plan suvestinė nebepiešiama) arba mygtukas tyliai nieko nedarydavo.
+ * Kai programų biblioteka (Chart.js, SheetJS, docx, jsPDF, mammoth, pdf.js) neįsikėlė (2026-09-28). Iki tol modulis
+ * tokiu atveju lūždavo („Chart is not defined“ - PP-plan suvestinė nebepiešiama) arba mygtukas tyliai nieko nedarydavo.
+ * Nuo 2026-10-16 bibliotekos - iš pačios svetainės (shared/vendor/) ir po pirmo panaudojimo laikomos naršyklėje
+ * (bibliotekos-sw.js), todėl neįsikelia tik tada, kai nėra ryšio, o biblioteka dar neišsaugota (iki tol - ir kai
+ * įmonės tinklas blokuodavo cdnjs.cloudflare.com ar cdn.jsdelivr.net).
  *
  *   if (!GP_BIBLIOTEKOS.yra("XLSX", "SheetJS (Excel)")) return;
  *       -> true, jei window.XLSX yra; kitaip klaidos pranešimas su priežastimi
@@ -23,12 +24,12 @@
 
   var TEKSTAI = {
     lt: {
-      veiksmas: "Nepavyko įkelti bibliotekos „{p}“, todėl šis veiksmas negalimas. Priežastis: nėra interneto ryšio arba tinklas blokuoja bibliotekų serverius (cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com, cdn.sheetjs.com). Perkraukite puslapį; jei kartojasi - kreipkitės į IT.",
-      diagrama: "Diagrama nerodoma: nepavyko įkelti bibliotekos „{p}“ (nėra ryšio arba tinklas blokuoja bibliotekų serverius). Perkraukite puslapį, kai ryšys bus."
+      veiksmas: "Nepavyko įkelti bibliotekos „{p}“, todėl šis veiksmas negalimas. Priežastis: nėra interneto ryšio, o ši biblioteka šioje naršyklėje dar neišsaugota darbui be interneto. Perkraukite puslapį, kai ryšys bus; jei kartojasi - kreipkitės į IT.",
+      diagrama: "Diagrama nerodoma: nepavyko įkelti bibliotekos „{p}“ (nėra ryšio, o biblioteka dar neišsaugota darbui be interneto). Perkraukite puslapį, kai ryšys bus."
     },
     en: {
-      veiksmas: "The “{p}” library could not be loaded, so this action is unavailable. Reason: no internet connection or the network blocks the library servers (cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com, cdn.sheetjs.com). Reload the page; if it persists, contact IT.",
-      diagrama: "Chart not shown: the “{p}” library could not be loaded (no connection or the network blocks the library servers). Reload the page when the connection is back."
+      veiksmas: "The “{p}” library could not be loaded, so this action is unavailable. Reason: no internet connection, and this library has not yet been saved in this browser for offline use. Reload the page when the connection is back; if it persists, contact IT.",
+      diagrama: "Chart not shown: the “{p}” library could not be loaded (no connection, and the library has not yet been saved for offline use). Reload the page when the connection is back."
     }
   };
 

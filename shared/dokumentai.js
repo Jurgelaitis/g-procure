@@ -20,8 +20,8 @@
  *   - dokumentų tekstas laikomas NEPATIKIMU turiniu: nurodymai modeliui jame
  *     niekada nevykdomi (žr. asistentas.js - sanitizacija ir sisteminė taisyklė).
  *
- * Bibliotekos (visos jau naudojamos kituose G-Procure moduliuose, iš CDN):
- *   pdfjsLib (pdf.js 3.11.174), mammoth (1.8), XLSX (0.18.5), JSZip (3.10.1).
+ * Bibliotekos (puslapis jas jungia iš shared/vendor/, žr. shared/vendor/bibliotekos.json):
+ *   pdfjsLib (pdf.js 3.11.174), mammoth (1.13.0), XLSX (SheetJS 0.20.3), JSZip (3.10.1).
  * Niekas nesaugoma serveryje. Viskas lieka naudotojo naršyklėje.
  * ==========================================================================*/
 ;(function (global) {
@@ -56,7 +56,7 @@
           dydis: "Size limit exceeded - skipped (ZIP bomb protection).", gilus: "Nested archive too deep - not extracted.", perDidelis: "File too large (limit {mb} MB).",
           bendrasLimitas: "Total package limit exceeded - skipped." }
   };
-  // CDN biblioteka neįsikėlė (nėra ryšio ar įmonės tinklas blokuoja): priežastis žmogui iš shared/bibliotekos.js,
+  // Biblioteka neįsikėlė (nėra ryšio, o ji dar neišsaugota darbui be interneto): priežastis žmogui iš shared/bibliotekos.js,
   // ne „Cannot read properties of undefined (reading 'loadAsync')“ (2026-09-28); be jo - trumpas tekstas
   function reikia(vardas, pav) {
     if (global[vardas]) return;
@@ -245,7 +245,7 @@
     reikia("pdfjsLib", "pdf.js (PDF)");
     // isEvalSupported:false - gynyba gilyn (CVE-2024-4367 kelias per šriftus čia
     // nevykdomas, nes kviečiamas tik getTextContent, bet užraktas nieko nekainuoja)
-    // Darbininkas - su SRI iš blob: (shared/pdf-darbininkas.js); be jo pdf.js darbininką įkeltų iš CDN be patikros
+    // Darbininkas - iš svetainės (shared/pdf-darbininkas.js); be jo pdf.js darbininko adreso neturėtų
     if (global.GP_PDF_DARBININKAS) await global.GP_PDF_DARBININKAS.nustatyk();
     var pdf = await global.pdfjsLib.getDocument({ data: buf, isEvalSupported: false }).promise;
     var blocks = [], warnings = [], tuscių = 0;
