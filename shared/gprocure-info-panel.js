@@ -62,9 +62,9 @@
 
   var UI = {
     lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Detali instrukcija",
-          trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumas" },
+          trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumas", cookies: "Slapukų nustatymai" },
     en: { collapse: "Collapse", expand: "Expand", more: "Learn more", close: "Close", aria: "Information panel", dialog: "Detailed guide",
-          trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy" }
+          trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy", cookies: "Cookie settings" }
   };
   /* Svetainės šaknis (2026-10-05): DI valdymo ir privatumo puslapiai - šaknyje, šis failas - shared/ kataloge. Moduliai - pakatalogiuose,
      šaknies puslapiai (pirkimu-korteles.html) - šaknyje, todėl adresas skaičiuojamas iš šio skripto adreso, ne iš puslapio. */
@@ -191,6 +191,8 @@
     return cfg.defaultOpen !== false;
   }
   function setOpen(cfg, open) {
+    // Skilties būsena - slapukų kategorija „nustatymai“ (shared/sutikimas.js): išjungus neįrašoma (2026-10-16)
+    if (global.GP_SUTIKIMAS && !global.GP_SUTIKIMAS.leidzia("nustatymai")) return;
     try { localStorage.setItem(storageKey(cfg.moduleId), open ? "open" : "closed"); } catch (e) {}
   }
 
@@ -245,7 +247,9 @@
           (c.stepsTitle ? '<div class="gpi-steps-title">' + esc(c.stepsTitle) + '</div>' : "") +
           '<div class="gpi-steps">' + steps + '</div>' + noteHtml +
           '<div class="gpi-trust">' + ICON_SHIELD + '<span>' + esc(ui.trust) + '</span><a href="' + esc(SAKNIS + "ai-valdymas.html") + '">' + esc(ui.ai) +
-            '</a><a href="' + esc(SAKNIS + "privatumas.html") + '">' + esc(ui.privacy) + '</a></div>' +
+            '</a><a href="' + esc(SAKNIS + "privatumas.html") + '">' + esc(ui.privacy) + '</a>' +
+            // Slapukų nustatymai (2026-10-16): su shared/sutikimas.js atveria nustatymų langą, be jo - slapukų politiką
+            '<a href="' + esc(SAKNIS + "slapukai.html#nustatymai") + '" data-gp-slapukai aria-haspopup="dialog">' + esc(ui.cookies) + '</a></div>' +
         '</div></div>' +
       '</div>';
 

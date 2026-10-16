@@ -131,11 +131,13 @@
     } catch (e) { /* adreso sinchronizavimas yra patogumas, ne būtinybė */ }
   }
 
-  // Įrašo rankinį pasirinkimą. Grąžina true, jei pavyko.
+  /* Įrašo rankinį pasirinkimą. Grąžina true, jei pavyko. Kalbos įsiminimas - slapukų kategorija „nustatymai“
+     (shared/sutikimas.js): naudotojui ją išjungus kalba taikoma tik šiam puslapiui ir neįrašoma (2026-10-16). */
   function remember(key, lang, storage) {
     if (!key || !saugiKalba(lang)) return false;
     sinchronizuokAdresa(lang);
     zymekKanonini(lang);
+    if (!storage && global.GP_SUTIKIMAS && !global.GP_SUTIKIMAS.leidzia("nustatymai")) return false;
     try { (storage || global.localStorage).setItem(key, lang); return true; } catch (e) { return false; }
   }
 
