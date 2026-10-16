@@ -142,7 +142,9 @@ Plus auto-retry API kvietimo jei parsavimas nepavyksta (2 papildomi bandymai su 
 - 1 žingsnis: TS (sugeneruota, tikrinama, failas ar įklijuota) ir pirkimo duomenys (iš kortelės ar konteksto), konsultacijos forma, terminai, priedai, atsakingas asmuo
 - 2 žingsnis: 17 formos klausimų (įtraukti), katalogo ir taisyklių klausimai iš TS teksto (naršyklėje), DI pasiūlymai su citatos patikra - visi pasiūlymai įtraukiami tik žmogaus
 - 3 žingsnis: kvietimo tekstas su teisės nuorodomis iš `GP_TEISE`, parengtis, kopijavimas, Word (gulsčias A4, DI požymiai tik su DI klausimais)
-- Kodas: `RinkosKonsultacija` (script #3, grynos funkcijos) ir `App.rk*` (sąsaja); testai - `testai.html` grupė „Rinkos konsultacija“
+- 3 žingsnio Word faile - kvietimo duomenys (customXml), kad grąžintą formą ar išsiųstą kvietimą būtų galima atpažinti
+- 4 žingsnis (atsakymų suvestinė): rinkos dalyvių atsakymai (užpildyta forma, LITGRID forma, laiškas, PDF, ZIP, įklijuotas tekstas) -> pastabos pagal temas; žmogus vertina (nagrinėti ar ne su priežastimi, konfidenciali, tema, sprendimas), siūlomi ketinimai ir preliminarios kainos; DI apibendrina tik užkoduotas pastabas (`shared/uzkodavimas.js`); vieša suvestinė CVP IS (be pavadinimų, kainų, konfidencialių pastabų) ir vidaus ataskaita (Word; ją įkėlus darbas atkuriamas); niekas neišsaugoma
+- Kodas: `RinkosKonsultacija` ir `RinkosSuvestine` (script #3, grynos funkcijos), `App.rk*` / `App.rkSv*` (sąsaja); testai - `testai.html` grupės „Rinkos konsultacija“ ir „Rinkos konsultacijos suvestinė“
 
 ---
 
