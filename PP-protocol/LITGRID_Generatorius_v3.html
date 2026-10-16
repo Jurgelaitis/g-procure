@@ -2,7 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Protokolų generatorius · G-Procure</title>
 <meta name="description" content="PSĮ atitinkančių pirkimo komisijos protokolų generavimas. Vienoda struktūra, mažiau klaidų, greitesnis darbas.">
@@ -369,6 +369,7 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
 <script src="../shared/portal-link.js"></script>
 <script src="../shared/prieinamumas.js"></script>
 <script src="../shared/sutikimas.js"></script>
+<script src="../shared/analitika.js"></script>
 <script src="../shared/bibliotekos-atmintis.js"></script>
 <script src="../shared/pranesimas.js"></script>
 <!-- Kopijavimas į iškarpinę su tikru rezultatu (GP_KOPIJA) -->
@@ -2958,6 +2959,7 @@ async function generateCurrentProtocol() {
     pk.protocols[currentProtoId] = { done: true, date: posDate, filename: fileName };
     saveProcurementData(pk.id, pk);
     toast('Protokolas sugeneruotas: ' + fileName, 'ok');
+    statistika('protokolas_sukurtas', proto.num);
     return true;
   } catch(err) {
     console.error(err);
@@ -4241,6 +4243,7 @@ async function autoGenerateNotification(templateId, protoId, pk){
       priezastis = priezastis || (e && e.message) || String(e);
     }
   }
+  if (newNotifs.length) statistika('pranesimai_sukurti');
   return { sukurta: newNotifs.length, failuNepavyko, priezastis };
 }
 
@@ -5518,8 +5521,14 @@ function copyAiPrompt(){
     const r = document.getElementById('ai-kodai');
     r.style.display = u.raktas.length ? 'block' : 'none';
     r.innerHTML = u.raktas.length ? '<strong>Kodų raktas</strong> (rodomas tik jums, į užklausą neįtrauktas): ' + u.raktas.map(([k, v]) => hx(k) + ' - ' + hx(v)).join('; ') : '';
-    if (ok) logAudit('COPY_AI_PROMPT', u.pkId, {type: u.type, uzkoduota: true});
+    if (ok) { logAudit('COPY_AI_PROMPT', u.pkId, {type: u.type, uzkoduota: true}); statistika('uzklausa_nukopijuota'); }
   });
+}
+/* Naudojimosi statistika (tik su sutikimu, shared/analitika.js): veiksmas ir protokolo šablono kodas - be pirkimo, tiekėjų ir komisijos duomenų */
+function statistika(veiksmas, protokolas){
+  if (!window.GP_ANALITIKA) return;
+  const pr = typeof protokolas === 'string' && /^[A-Z]{1,2}\d{1,2}(\.\d)?[a-z]?$/.test(protokolas) ? protokolas : undefined;
+  try { GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas, protokolas: pr }); } catch (e) {}
 }
 
 function openVptEkspertas(){
