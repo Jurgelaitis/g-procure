@@ -12,10 +12,10 @@
  *   - Savi failai (šis modulis ir ../shared/): pirmiausia TINKLAS, talpykla tik
  *     kai tinklo nėra. Taip prisijungęs naršytojas visada gauna naujausią kodą, o
  *     pamiršus pakeisti VERSIJA niekas neužstringa senoje versijoje.
- *   - CDN bibliotekos (pdf.js, mammoth, xlsx, jszip): pirmiausia TALPYKLA - jų
- *     adresuose yra versijos numeris, turinys nesikeičia. SRI (integrity) patikra
- *     lieka: talpykloje saugomas tas pats CORS atsakymas, baitai nekinta.
- *   - Šriftai (Google Fonts): talpykla, jei jau buvo parsiųsti; kitaip tinklas.
+ *   - Bibliotekos (pdf.js su darbininku, mammoth, xlsx, jszip) - nuo 2026-10-16 iš pačios svetainės
+ *     (../shared/vendor/<vardas>-<versija>/; iki tol - iš CDN): išsaugomos diegiant
+ *     ir imamos pirmiausia iš TALPYKLOS - adrese yra versija, turinys nesikeičia.
+ *   - Šriftas (shared/sriftai/, nuo 2026-10-16 - ne Google Fonts): savas failas, kaip kiti.
  *   - AI užklausos (api.g-procure.com) ir visa kita: TIK tinklas, niekas nesaugoma.
  *     Klausimai ir dokumentų fragmentai į talpyklą niekada nepatenka.
  *
@@ -23,7 +23,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppt-2026-10-11-1";
+var VERSIJA = "ppt-2026-10-16-2";
 
 var SAVI = [
   "./",
@@ -38,11 +38,17 @@ var SAVI = [
   "../shared/organizacijos.js",
   "../shared/skelbimas.js",
   "../shared/epso-g.css",
+  "../shared/sriftai/nunito-sans-latin.woff2",
+  "../shared/sriftai/nunito-sans-latin-ext.woff2",
+  "../shared/sriftai/nunito-sans-italic-latin.woff2",
+  "../shared/sriftai/nunito-sans-italic-latin-ext.woff2",
   "../shared/modulio-antraste.css",
   "../shared/modulio-antraste.js",
   "../shared/ai-proxy.js",
   "../shared/lang-detect.js",
   "../shared/portal-link.js",
+  "../shared/sutikimas.js",
+  "../shared/bibliotekos-atmintis.js",
   "../shared/prieinamumas.js",
   "../shared/pranesimas.js",
   "../shared/di-zymejimas.js",
@@ -51,30 +57,22 @@ var SAVI = [
   "../shared/gprocure-info-panel.js"
 ];
 
-/* Tie patys adresai kaip index.html (ir pdf.js darbinis failas, kurį pdf.js
-   kraus tik atidarius pirmą PDF - todėl jį išsaugom iš anksto). */
-var CDN = [
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.13.0/mammoth.browser.min.js",
-  "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+/* Tos pačios bibliotekos kaip index.html (ir pdf.js darbininkas, kurį pdf.js kraus tik atidarius pirmą PDF -
+   todėl jis išsaugomas iš anksto). Adresuose - versija (žr. ../shared/vendor/bibliotekos.json). */
+var BIBLIOTEKOS = [
+  "../shared/vendor/pdfjs-3.11.174/pdf.min.js",
+  "../shared/vendor/pdfjs-3.11.174/pdf.worker.min.js",
+  "../shared/vendor/mammoth-1.13.0/mammoth.browser.min.js",
+  "../shared/vendor/xlsx-0.20.3/xlsx.full.min.js",
+  "../shared/vendor/jszip-3.10.1/jszip.min.js"
 ];
 
-var SRIFTAI = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
+/* Šriftas nuo 2026-10-16 - svetainėje (shared/sriftai/, SAVI), ne iš Google Fonts. */
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(VERSIJA).then(function (c) {
-    // Savi failai privalomi: jei jų nepavyko išsaugoti, veikimas be interneto neveiktų.
-    return c.addAll(SAVI).then(function () {
-      // CDN - po vieną ir be lūžio: vienos bibliotekos nepasiekiamumas neturi
-      // sugriauti viso diegimo (ją išsaugos pirmas įprastas įkėlimas).
-      return Promise.all(CDN.map(function (u) {
-        return fetch(new Request(u, { mode: "cors", credentials: "omit" }))
-          .then(function (r) { if (r.ok) return c.put(u, r); })
-          .catch(function () {});
-      }));
-    });
+    // Savi failai ir bibliotekos privalomi: jei jų nepavyko išsaugoti, veikimas be interneto neveiktų.
+    return c.addAll(SAVI.concat(BIBLIOTEKOS));
   }).then(function () { return self.skipWaiting(); }));
 });
 
@@ -102,12 +100,11 @@ function tinklasPirma(req) {
   });
 }
 
-function talpyklaPirma(req, corsRezimas) {
-  return caches.match(req.url).then(function (m) {
+function talpyklaPirma(req) {
+  return caches.match(req.url, { ignoreSearch: true }).then(function (m) {
     if (m) return m;
-    var uzkl = corsRezimas ? new Request(req.url, { mode: "cors", credentials: "omit" }) : req;
-    return fetch(uzkl).then(function (r) {
-      if (r && (r.ok || r.type === "opaque")) {
+    return fetch(req).then(function (r) {
+      if (r && r.ok && r.type === "basic") {
         var kopija = r.clone();
         caches.open(VERSIJA).then(function (c) { c.put(req.url, kopija); });
       }
@@ -122,14 +119,11 @@ self.addEventListener("fetch", function (e) {
   var url = new URL(req.url);
   if (url.origin === self.location.origin) {
     // Tik savi statiniai failai; testų puslapio ir kitų modulių nesaugom
+    if (/\/shared\/vendor\//.test(url.pathname)) { e.respondWith(talpyklaPirma(req)); return; }   // bibliotekos - talpykla pirma
     if (/\/PP-tiekejams\/|\/shared\//.test(url.pathname) && !/testai\.html$/.test(url.pathname)) {
       e.respondWith(tinklasPirma(req));
     }
     return;
   }
-  // CDN visada parsisiunčiam CORS režimu: pdf.js darbinis failas prašomas „no-cors",
-  // o nepermatomas (opaque) atsakymas talpykloje sulaužytų SRI patikrą kitiems skriptams.
-  if (CDN.indexOf(req.url) !== -1) { e.respondWith(talpyklaPirma(req, true)); return; }
-  if (SRIFTAI.test(req.url)) { e.respondWith(talpyklaPirma(req, false)); return; }
   // Visa kita (CVP IS, TED, api.g-procure.com ir t. t.) - naršyklė tvarko pati
 });
