@@ -1656,6 +1656,177 @@ async function testaiSuvestine() {
   });
 }
 
+/* ==========================================================================
+   12. RINKOS KONSULTACIJOS SUSITIKIMAS (2026-10-16): susitikimo kortelė 4 žingsnyje (tik formai „CVP IS ir susitikimas“),
+   darbotvarkė - ta pati, kaip kvietime, susitikimo santrauka (šablonas ir užpildyta, Word), paaiškinimai viešoje suvestinėje,
+   susitikime pateiktos pastabos - bendrame pastabų sąraše, atkūrimas iš vidaus ataskaitos.
+   ========================================================================== */
+function rkSusForma(forma, data) {
+  const d = D(); d.querySelector('input[name="rkForma"][value="' + forma + '"]').checked = true; M('App.rkFormosPokytis()');
+  if (data !== undefined) d.getElementById('rkSusitikimas').value = data;
+}
+const rkSusTekstas = () => RKo().tekstas(RSv().susitikimoSantrauka(M('App.rkDuomenys()'), M('App.rkBusena()').sv, M('App.rkBusena()').klausimai.filter(k => k.itraukta))).replace(/ /g, ' ');
+/* Pirkimas su formos klausimais ir susitikimo forma, 4 žingsnis (rkParuosk jau išvalo ankstesnį darbą) */
+function rkSusPradzia(data) { rkParuosk({ tekstas: null }); rkSusForma('susitikimas', data === undefined ? '2026-10-25' : data); M('App.rkPradek(true)'); M('App.rkZingsnis(4)'); }
+async function rkSusParuosk() {
+  rkSusPradzia();
+  await rkSvIkelk([new (W().File)(['Rinkos dalyvis: UAB „Alfa“\nTechninė specifikacija ir pirkimo objektas\nSiūlome leisti lygiaverčius standartus.'], 'alfa.txt', { type: 'text/plain' })]);
+  return M('App.rkBusena()').sv;
+}
+async function testaiSusitikimas() {
+  grupe('Rinkos konsultacijos susitikimas (2026-10-16): susitikimo eiga, santrauka, paaiškinimai viešoje suvestinėje');
+
+  await testas('Kortelė - tik formai „CVP IS ir susitikimas“; kvietimo data - tik paspaudus; laukai, dalyvavimas, atstovų skaičius (netinkamas - nekeičiamas), susitikimo dalyvis be atsakymo, susitikime pateikta pastaba - bendrame sąraše (dublikatas neįrašomas, pašalinama), veiksmai, punktai su turiniu - atverti', async () => {
+    rkParuosk({ tekstas: null }); M('App.rkPradek(true)'); M('App.rkZingsnis(4)');
+    const d = D();
+    lygu([d.getElementById('rkSvSusKortele').hidden, d.getElementById('rkSvPerzSus').hidden], [true, true], 'CVP IS forma - be susitikimo');
+    rkSusForma('susitikimas', '2026-10-25'); M('App.rkSvPiesk()');
+    lygu([d.getElementById('rkSvSusKortele').hidden, d.getElementById('rkSvPerzSus').hidden, d.getElementById('rksvs-data').value], [false, false, ''], 'susitikimo forma - kortelė, data nesiūloma kaip įvesta');
+    const nb = [...d.querySelectorAll('#rkSvSus button')].find(b => /Kvietime planuota: 2026 m. spalio 25 d./.test(b.textContent));
+    tiesa(nb, 'kvietimo datos mygtukas'); nb.click();
+    lygu([M('App.rkBusena()').sv.susitikimas.data, d.getElementById('rksvs-data').value], ['2026-10-25', '2026-10-25'], 'data - paspaudus');
+    const S = await rkSusParuosk(), x = S.dalyviai[0];
+    M(`App.rkSvSus('data', '2026-10-25')`); M(`App.rkSvSus('pradzia', '09:50')`);
+    tiesa(/09\.50-10\.00/.test(d.querySelector('#rksvs-p-ivadas summary').textContent) && /10\.00-10\.15/.test(d.querySelectorAll('#rkSvSus details.rk-sv-sus-p')[1].querySelector('summary').textContent), 'darbotvarkės laikas nuo pradžios');
+    M(`App.rkSvSus('vieta', 'Nuotoliniu būdu')`); M(`App.rkSvSus('nera', 'x')`); M(`App.rkSvSus('temos', 'x')`);
+    lygu([S.susitikimas.vieta, 'nera' in S.susitikimas, typeof S.susitikimas.temos], ['Nuotoliniu būdu', false, 'object'], 'tik žinomi laukai');
+    M(`App.rkSvSusDalyvavo('${x.id}', 'taip')`); M(`App.rkSvSusAtstovu('${x.id}', '2')`);
+    const w = W(), origR = w.GP_PRANESIMAS.rodyk, pr = []; w.GP_PRANESIMAS.rodyk = t => pr.push(t);
+    try { M(`App.rkSvSusAtstovu('${x.id}', '-1')`); M(`App.rkSvSusAtstovu('${x.id}', '1,5')`); } finally { w.GP_PRANESIMAS.rodyk = origR; }
+    lygu([x.susitikime, x.atstovu, pr.length], ['taip', 2, 2], 'dalyvavimas ir atstovų skaičius');
+    d.getElementById('rksvs-naujas').value = 'Beta UAB'; M('App.rkSvSusNaujasDalyvis()');
+    const b = S.dalyviai[1];
+    lygu([b.vardas, b.kilme, b.susitikime, b.failai.length], ['Beta UAB', 'zmogus', 'taip', 0], 'susitikimo dalyvis');
+    turi(d.getElementById('rkSvParengtis').textContent, 'Atsakymus pateikė 1 rinkos dalyvis', 'tik dalyvavęs ir nieko nepateikęs - ne atsakymą pateikęs');
+    d.getElementById('rksvs-pd-kvalifikacija').value = b.id; d.getElementById('rksvs-px-kvalifikacija').value = 'Ar FAT galima atlikti nuotoliniu būdu?';
+    M(`App.rkSvSusPastaba('kvalifikacija')`);
+    const p = S.pastabos.find(q => q.susitikime);
+    lygu([p.dalyvis, p.tema, p.failas, p.vieta, p.busena], [b.id, 'kvalifikacija', 'Susitikimas', 'susitikimas 2026-10-25', null], 'susitikimo pastaba');
+    tiesa(d.querySelector('#rksv-' + p.id) && /Susitikimas/.test(d.querySelector('#rksv-' + p.id + ' .rk-sv-p-galva').textContent), 'pastaba - ir pastabų pagal temas sąraše (vertinama kartu)');
+    tiesa(d.querySelector('#rksvs-p-kvalifikacija').open && !d.querySelector('#rksvs-p-kainodara').open && /pastabų: 1/.test(d.querySelector('#rksvs-p-kvalifikacija summary').textContent), 'punktas su turiniu - atvertas, kiti suskleisti');
+    w.GP_PRANESIMAS.rodyk = t => pr.push(t);
+    try { d.getElementById('rksvs-pd-kvalifikacija').value = b.id; d.getElementById('rksvs-px-kvalifikacija').value = 'Ar FAT galima atlikti nuotoliniu būdu?'; M(`App.rkSvSusPastaba('kvalifikacija')`); } finally { w.GP_PRANESIMAS.rodyk = origR; }
+    lygu([S.pastabos.filter(q => q.susitikime).length, /jau įrašyta/.test(pr[pr.length - 1])], [1, true], 'dublikatas');
+    lygu([RSv().pridekSusitikimo(S, b.id, 'nera', 'Tekstas'), RSv().pridekSusitikimo(S, 'd999', 'kiti', 'Tekstas'), RSv().pridekSusitikimo(S, b.id, 'kiti', '  ')], [null, null, null], 'netinkama tema, dalyvis ar tuščias tekstas');
+    turi(d.getElementById('rkSvParengtis').textContent, 'Atsakymus pateikė 2 rinkos dalyviai', 'su pastaba - pateikęs');
+    tiesa(RSv().uzklausa(S, ['kvalifikacija'], {}).msg.indexOf('Dalyvis B: Ar FAT galima atlikti nuotoliniu būdu?') > 0, 'susitikimo pastaba - DI užklausoje (užkoduota)');
+    M('App.rkSvSusVeiksmas()'); M(`App.rkSvSusVeiksmoLaukas(0, 'tekstas', 'Patikslinti TS 3.2 p.')`); M(`App.rkSvSusVeiksmoLaukas(0, 'nera', 'x')`);
+    lygu(S.susitikimas.veiksmai, [{ tekstas: 'Patikslinti TS 3.2 p.', atsakingas: '', terminas: '' }], 'veiksmas');
+    const oc = w.confirm; w.confirm = () => true;
+    try { M(`App.rkSvSusSalinkPastaba('${p.id}')`); M(`App.rkSvSusSalinkPastaba('${S.pastabos[0].id}')`); M('App.rkSvSusSalinkVeiksma(0)'); } finally { w.confirm = oc; }
+    lygu([S.pastabos.length, S.pastabos[0].susitikime, S.susitikimas.veiksmai.length], [1, undefined, 0], 'pašalinta tik susitikimo pastaba ir veiksmas');
+  });
+
+  await testas('Darbotvarkė - ta pati, kaip kvietime: punktai, trukmė, klausimų numeriai (kainos tema neaptariama); laikas nuo pradžios ir per valandą; kvietimo darbotvarkės tekstas nepakito', async () => {
+    const kl = RK_KL2().concat([{ tema: 'kaina', tekstas: 'Kaina?', saltinis: 'forma' }]);
+    const P = RKo().darbotvarkesPunktai(kl);
+    tiesa(P[0].id === 'ivadas' && P[P.length - 1].id === 'apibendrinimas' && !P.some(x => x.id === 'kaina') && P.every(x => x.min === (x.id === 'ivadas' || x.id === 'apibendrinimas' ? 10 : 15)), 'punktai');
+    const nr = RKo().numeruok(kl), obj = P.find(x => x.id === 'objektas');
+    lygu(obj.nr, nr.find(e => e.tema === 'objektas').klausimai.map(k => k.nr), 'klausimų numeriai - kaip kvietimo lentelėje');
+    const tv = RKo().darbotvarke(kl);
+    lygu([tv[0], tv[tv.length - 2], tv[tv.length - 1]], ['1. Įžanga: konsultacijos tikslas ir taisyklės (10 min.)', P.length + '. Apibendrinimas ir tolesni žingsniai (10 min.)',
+      'Numatoma trukmė - apie ' + (() => { const m = P.reduce((a, x) => a + x.min, 0); return (Math.floor(m / 60) ? Math.floor(m / 60) + ' val. ' : '') + (m % 60 ? (m % 60) + ' min.' : ''); })().trim()], 'kvietimo darbotvarkė');
+    lygu(RSv().laikoIntervalai([{ min: 10 }, { min: 15 }, { min: 15 }], '09:45'), ['09.45-09.55', '09.55-10.10', '10.10-10.25'], 'laikas');
+    lygu(RSv().laikoIntervalai([{ min: 10 }], ''), [''], 'be pradžios');
+    lygu(RSv().laikoIntervalai([{ min: 10 }], '9.45'), [''], 'tik HH:MM');
+  });
+
+  await testas('Santrauka: neužpildyta - šablonas (planuota data, darbotvarkė su laiku ir klausimais, tuščios dalyvių ir veiksmų eilutės, vieta parašui); užpildyta - dalyviai su pavadinimais, eiga, pastabos su dalyviu, paaiškinimai, veiksmai; Word gulsčias, lentelės teksto pločio, oficialus stilius, be DI požymių; įkelta santrauka - ne atsakymas', async () => {
+    rkSusPradzia();
+    let t = rkSusTekstas();
+    ['RINKOS KONSULTACIJOS SUSITIKIMO SANTRAUKA', 'dėl „110 kV galios transformatorių“ pirkimo', 'Data | planuota 2026 m. spalio 25 d.', '1. Įžanga: konsultacijos tikslas ir taisyklės',
+     '10 min. | 1. Įžanga', 'Apibendrinimas ir tolesni žingsniai', 'Santrauką parengė: ______________________ (vardas, pavardė, pareigos).', M('GP_TEISE.cit("rinkos_konsultacijos_informacija", "PI")').replace(/^PĮ /, 'Pirkimų įstatymo ')]
+      .forEach(x => turi(t, x, 'šablonas'));
+    const eil = t.split('\n');
+    lygu([eil.filter(l => l === ' |  |  | ').length, eil.filter(l => l === ' |  | ').length], [4, 3], 'tuščios dalyvių ir veiksmų eilutės');
+    const S = await rkSusParuosk(), d = D();
+    ['data:2026-10-25', 'pradzia:10:00', 'pabaiga:11:30', 'vieta:Nuotoliniu būdu', 'moderatorius:Rasa Rasaitė', 'atstovai:Ona Onaitė, pirkimų vadovė\nTomas Tomaitis, inžinierius', 'irasas:taip', 'parenge:Rasa Rasaitė, pirkimų specialistė']
+      .forEach(x => { const i = x.indexOf(':'); M(`App.rkSvSus(${JSON.stringify(x.slice(0, i))}, ${JSON.stringify(x.slice(i + 1))})`); });
+    M(`App.rkSvSusDalyvavo('${S.dalyviai[0].id}', 'taip')`); M(`App.rkSvSusAtstovu('${S.dalyviai[0].id}', '2')`);
+    d.getElementById('rksvs-naujas').value = 'Beta UAB'; M('App.rkSvSusNaujasDalyvis()'); M(`App.rkSvSusDalyvavo('${S.dalyviai[1].id}', 'ne')`);
+    M(`App.rkSvSusTema('kvalifikacija', 'aptarta', 'Aptarti standartai ir FAT.')`); M(`App.rkSvSusTema('kvalifikacija', 'paaiskinimai', 'Lygiaverčiai standartai bus leidžiami.')`);
+    RSv().pridekSusitikimo(S, S.dalyviai[0].id, 'kvalifikacija', 'Ar FAT nuotoliniu būdu?'); RSv().pridekSusitikimo(S, S.dalyviai[0].id, 'objektas', 'Siūlome leisti lygiaverčius standartus.');
+    M('App.rkSvSusVeiksmas()'); M(`App.rkSvSusVeiksmoLaukas(0, 'tekstas', 'Patikslinti TS 3.2 p.')`); M(`App.rkSvSusVeiksmoLaukas(0, 'atsakingas', 'Tomas Tomaitis')`); M(`App.rkSvSusVeiksmoLaukas(0, 'terminas', '2026-11-05')`);
+    const P = RKo().darbotvarkesPunktai(M('App.rkBusena()').klausimai.filter(k => k.itraukta)), io = P.findIndex(x => x.id === 'kvalifikacija');
+    t = rkSusTekstas();
+    ['Data | 2026 m. spalio 25 d.', 'Laikas | 10.00-11.30', 'Vieta ar būdas | Nuotoliniu būdu', 'Perkančiojo subjekto atstovai | Ona Onaitė, pirkimų vadovė\nTomas Tomaitis, inžinierius',
+     'Garso ar vaizdo įrašas | Daromas - dalyviai informuoti iš anksto', 'Dalyvis A | UAB „Alfa“ | Taip | 2', 'Dalyvis B | Beta UAB | Ne | ',
+     (io + 1) + '. Reikalavimai tiekėjo kvalifikacijai', 'Aptarti standartai ir FAT. | Dalyvis A (UAB „Alfa“): Ar FAT nuotoliniu būdu? | Lygiaverčiai standartai bus leidžiami.',
+     'Patikslinti TS 3.2 p. | Tomas Tomaitis | 2026 m. lapkričio 5 d.', 'Santrauką parengė: Rasa Rasaitė, pirkimų specialistė.'].forEach(x => turi(t, x, 'užpildyta'));
+    tiesa(!P.some(x => x.id === 'objektas') && /Apibendrinimas ir tolesni žingsniai \|  \| Dalyvis A \(UAB „Alfa“\): Siūlome leisti lygiaverčius standartus\. \[Techninė specifikacija ir pirkimo objektas\]/.test(t), 'temos, kurios nėra darbotvarkėje, pastaba - apibendrinime su tema');
+    tiesa(/Siūlome leisti lygiaverčius standartus\./.test(D().querySelector('#rksvs-p-apibendrinimas').textContent) && D().querySelector('#rksvs-p-apibendrinimas').open, 'ir kortelėje - apibendrinimo punkte');
+    const blob = await RSv().kurkSusitikimo(M('App.rkDuomenys()'), S, M('App.rkBusena()').klausimai.filter(k => k.itraukta));
+    const dok = await docxDalys(blob, /^word\/document\.xml$/), cust = await docxDalys(blob, /^docProps\/custom\.xml$/);
+    turi(dok, 'w:orient="landscape"', 'gulsčias');
+    lygu(dok.split('<w:tbl>').slice(1).map(x => [...x.split('</w:tblGrid>')[0].matchAll(/<w:gridCol w:w="(\d+)"\/>/g)].reduce((a, m) => a + +m[1], 0)).filter(x => x !== 14286), [], 'lentelių plotis');
+    tiesa(!/00A072/i.test(dok) && [...dok.matchAll(/w:fill="([0-9A-Fa-f]{6})"/g)].every(m => m[1].toUpperCase() === 'F2F2F2') && !/DI_turinys/.test(cust), 'oficialus stilius, be DI');
+    turi(await docxDalys(blob, /^customXml\/item\d+\.xml$/), RSv().SS_NS, 'santraukos žymė');
+    const n = S.dalyviai.length;
+    await rkSvIkelk([new (W().File)([blob], 'santrauka.docx')]);
+    lygu([S.dalyviai.length, /susitikimo santrauka - neįkeliama/.test(S.failai[S.failai.length - 1].tekstas)], [n, true], 'įkelta santrauka - ne atsakymas');
+    const w = W(), origC = w.HTMLAnchorElement.prototype.click, origU = w.URL.createObjectURL, vardai = [];
+    w.HTMLAnchorElement.prototype.click = function () { vardai.push(this.download); }; w.URL.createObjectURL = () => 'blob:x';
+    try { rkSusPradzia(''); await M(`App.rkSvEksportuok('susitikimas')`); } finally { w.HTMLAnchorElement.prototype.click = origC; w.URL.createObjectURL = origU; }
+    tiesa(vardai.length === 1 && /^Rinkos_konsultacijos_susitikimo_santrauka_/.test(vardai[0]), 'šablonas be atsakymų atsisiunčiamas: ' + vardai.join(', '));
+  });
+
+  await testas('Vieša suvestinė: susitikimo sakinys (data, dalyvavusių skaičius - be pavadinimų) ir Perkančiojo subjekto paaiškinimai (tik įrašyti, darbotvarkės tvarka); CVP IS formai - nieko; vidaus ataskaitoje - susitikimas su dalyviais; parengtis', async () => {
+    const S = await rkSusParuosk(), d = D();
+    let t = RKo().tekstas(RSv().viesa(M('App.rkDuomenys()'), S));
+    turi(t, 'Rinkos konsultacija susitikimo būdu įvyko [data]; susitikime dalyvavo [skaičius] rinkos dalyvių.', 'neužpildyta');
+    tiesa(t.indexOf('paaiškinimai, pateikti susitikimo metu') < 0, 'be paaiškinimų - be lentelės');
+    let par = RSv().parengtis(M('App.rkDuomenys()'), S).map(x => x.lygis + ':' + x.tekstas);
+    tiesa(par.includes('warn:Susitikimo data neįrašyta') && par.includes('warn:Nepažymėta, ar dalyvavo susitikime: 1'), par.join(' | '));
+    M(`App.rkSvSus('data', '2026-10-25')`); M(`App.rkSvSus('moderatorius', 'Rasa Rasaitė')`); M(`App.rkSvSus('atstovai', 'Ona Onaitė')`);
+    M(`App.rkSvSusDalyvavo('${S.dalyviai[0].id}', 'taip')`);
+    d.getElementById('rksvs-naujas').value = 'Beta UAB'; M('App.rkSvSusNaujasDalyvis()'); M(`App.rkSvSusDalyvavo('${S.dalyviai[1].id}', 'ne')`);
+    M(`App.rkSvSusTema('apibendrinimas', 'paaiskinimai', 'Pirkimas planuojamas I ketvirtį.')`); M(`App.rkSvSusTema('kvalifikacija', 'paaiskinimai', 'Lygiaverčiai standartai bus leidžiami.')`);
+    M(`App.rkSvSusTema('kvalifikacija', 'aptarta', 'Vidinė pastaba apie Alfa.')`);
+    RSv().pridekSusitikimo(S, S.dalyviai[1].id, 'kvalifikacija', 'Ar FAT nuotoliniu būdu?');
+    t = RKo().tekstas(RSv().viesa(M('App.rkDuomenys()'), S));
+    ['Nuomones, siūlymus ir rekomendacijas pateikė 2 rinkos dalyviai.', 'Rinkos konsultacija susitikimo būdu įvyko 2026 m. spalio 25 d.; susitikime dalyvavo 1 rinkos dalyvis. Susitikimo metu pateiktos pastabos ir klausimai įtraukti į toliau pateiktą lentelę.',
+     'Perkančiojo subjekto paaiškinimai, pateikti susitikimo metu', 'Reikalavimai tiekėjo kvalifikacijai | Lygiaverčiai standartai bus leidžiami.\nApibendrinimas ir tolesni žingsniai | Pirkimas planuojamas I ketvirtį.']
+      .forEach(x => turi(t, x, 'vieša'));
+    ['Alfa', 'Beta', 'Rasa', 'Onaitė', 'Vidinė pastaba'].forEach(x => tiesa(t.indexOf(x) < 0, 'viešoje: ' + x));
+    par = RSv().parengtis(M('App.rkDuomenys()'), S).map(x => x.lygis + ':' + x.tekstas);
+    tiesa(!par.some(x => /Susitikimo data|Nepažymėta/.test(x)) && par.includes('info:Susitikime suteikti paaiškinimai bus paskelbti suvestinėje'), par.join(' | '));
+    const vt = RKo().tekstas(RSv().vidaus(M('App.rkDuomenys()'), S, {}));
+    turi(vt, 'Susitikimas: 2026 m. spalio 25 d. Dalyvavo: Dalyvis A (UAB „Alfa“). Susitikimo eiga ir paaiškinimai - susitikimo santraukoje.', 'vidaus');
+    turi(vt, 'Dalyvis B\nBeta UAB | susitikime | Ar FAT nuotoliniu būdu?', 'susitikimo pastaba vidaus lentelėje');
+    M(`App.rkSvPerziura('susitikimas')`); turi(d.getElementById('rkSvPerziura').textContent, 'RINKOS KONSULTACIJOS SUSITIKIMO SANTRAUKA', 'santraukos peržiūra');
+    rkSusForma('cvpis'); M('App.rkSvPiesk()');
+    lygu([/APIBENDRINTA INFORMACIJA/.test(d.getElementById('rkSvPerziura').textContent), d.getElementById('rkSvPerzViesa').getAttribute('aria-pressed'), d.getElementById('rkSvSusKortele').hidden],
+      [true, 'true', true], 'pakeitus formą į CVP IS - santraukos peržiūros nebelieka');
+    t = RKo().tekstas(RSv().viesa(M('App.rkDuomenys()'), S)) + RKo().tekstas(RSv().vidaus(M('App.rkDuomenys()'), S, {}));
+    tiesa(!/susitikimo būdu įvyko|paaiškinimai, pateikti susitikimo metu|Susitikimas: /.test(t) && !RSv().parengtis(M('App.rkDuomenys()'), S).some(x => /susitikim/i.test(x.tekstas)), 'CVP IS formai - be susitikimo');
+  });
+
+  await testas('Atkūrimas iš vidaus ataskaitos: susitikimo duomenys, dalyvavimas, atstovai, susitikimo pastabos ir veiksmai; suklastoti duomenys atmetami; tekstai ekrane - tik tekstas', async () => {
+    const S = await rkSusParuosk(), d = D();
+    M(`App.rkSvSus('data', '2026-10-25')`); M(`App.rkSvSus('pradzia', '10:00')`); M(`App.rkSvSus('irasas', 'ne')`);
+    M(`App.rkSvSusDalyvavo('${S.dalyviai[0].id}', 'taip')`); M(`App.rkSvSusAtstovu('${S.dalyviai[0].id}', '3')`);
+    M(`App.rkSvSusTema('kvalifikacija', 'paaiskinimai', 'Lygiaverčiai standartai.')`); RSv().pridekSusitikimo(S, S.dalyviai[0].id, 'kvalifikacija', 'Ar FAT nuotoliniu būdu?');
+    M('App.rkSvSusVeiksmas()'); M(`App.rkSvSusVeiksmoLaukas(0, 'tekstas', 'Patikslinti TS')`); M(`App.rkSvSusVeiksmoLaukas(0, 'terminas', '2026-11-05')`);
+    const ib = await RSv().kurkVidaus(M('App.rkDuomenys()'), S, M('App.rkBusena()').klausimai, {});
+    rkSusPradzia();
+    const S2 = await rkSvIkelk([new (W().File)([ib], 'vidaus.docx')]);
+    lygu([S2.susitikimas.data, S2.susitikimas.pradzia, S2.susitikimas.irasas, S2.dalyviai[0].susitikime, S2.dalyviai[0].atstovu, S2.pastabos.filter(q => q.susitikime).length,
+      S2.susitikimas.temos.kvalifikacija.paaiskinimai, S2.susitikimas.veiksmai], ['2026-10-25', '10:00', 'ne', 'taip', 3, 1, 'Lygiaverčiai standartai.', [{ tekstas: 'Patikslinti TS', atsakingas: '', terminas: '2026-11-05' }]], 'atkurta');
+    const x = RSv().susitikimoDuomenys({ data: 'vakar', pradzia: '25:99x', pabaiga: '11:30', irasas: 'gal', vieta: 7, temos: { nera: { aptarta: 'x' }, objektas: { aptarta: 5, paaiskinimai: 'Gerai' }, apibendrinimas: 'x' },
+      veiksmai: Array.from({ length: 60 }, (_, i) => i ? { tekstas: 'v' + i, terminas: 'rytoj' } : 'blogas') });
+    lygu([x.data, x.pradzia, x.pabaiga, x.irasas, x.vieta, Object.keys(x.temos), x.temos.objektas, x.veiksmai.length, x.veiksmai[0]],
+      ['', '', '11:30', null, '7', ['objektas'], { aptarta: '5', paaiskinimai: 'Gerai' }, 49, { tekstas: 'v1', atsakingas: '', terminas: '' }], 'susitikimo duomenų patikra');
+    const sv = RSv().suvestine({ dalyviai: [{ id: 'd1', vardas: 'A', susitikime: 'gal', atstovu: -1 }, { id: 'd2', vardas: 'B', susitikime: 'ne', atstovu: 100 }, { id: 'd3', vardas: 'C', susitikime: 'taip', atstovu: 4 }],
+      pastabos: [{ id: 'p4', dalyvis: 'd3', tema: 'kiti', tekstas: 'x', susitikime: 'taip' }], susitikimas: { moderatorius: '"><img src=x data-xss=3>' } }).S;
+    lygu([sv.dalyviai.map(y => [y.susitikime, y.atstovu]), sv.pastabos[0].susitikime], [[[null, null], ['ne', null], ['taip', 4]], true], 'dalyvių laukai');
+    const w = W(), oc = w.confirm; w.confirm = () => true;
+    try { M('App.rkSvPriimk(' + JSON.stringify([{ tipas: 'suvestine', failas: 'b.docx', sv: { S: sv, d: { forma: 'susitikimas', klausimai: [], priedai: [] } } }]) + ')'); } finally { w.confirm = oc; }
+    rkSusForma('susitikimas'); M('App.rkSvPiesk()'); M(`App.rkSvPerziura('susitikimas')`);
+    tiesa(d.querySelectorAll('#rkSvSus img, #rkSvPerziura img').length === 0 && d.getElementById('rksvs-moderatorius').value === '"><img src=x data-xss=3>', 'tekstas, ne HTML');
+    M(`App.rkSvPerziura('viesa')`);
+  });
+}
+
 /* ========================================================================== */
 async function viskas() {
   document.getElementById('paleisti').disabled = true;
@@ -1678,6 +1849,7 @@ async function viskas() {
     await testaiApimtis();
     await testaiKonsultacija();
     await testaiSuvestine();
+    await testaiSusitikimas();
 
     document.getElementById('busena').textContent =
       R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';
