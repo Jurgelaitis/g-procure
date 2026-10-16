@@ -144,6 +144,7 @@ Plus auto-retry API kvietimo jei parsavimas nepavyksta (2 papildomi bandymai su 
 - 3 žingsnis: kvietimo tekstas su teisės nuorodomis iš `GP_TEISE`, parengtis, kopijavimas, Word (gulsčias A4, DI požymiai tik su DI klausimais)
 - 3 žingsnio Word faile - kvietimo duomenys (customXml), kad grąžintą formą ar išsiųstą kvietimą būtų galima atpažinti
 - 4 žingsnis (atsakymų suvestinė): rinkos dalyvių atsakymai (užpildyta forma, LITGRID forma, laiškas, PDF, ZIP, įklijuotas tekstas) -> pastabos pagal temas; žmogus vertina (nagrinėti ar ne su priežastimi, konfidenciali, tema, sprendimas), siūlomi ketinimai ir preliminarios kainos; DI apibendrina tik užkoduotas pastabas (`shared/uzkodavimas.js`); vieša suvestinė CVP IS (be pavadinimų, kainų, konfidencialių pastabų) ir vidaus ataskaita (Word; ją įkėlus darbas atkuriamas); niekas neišsaugoma
+- Susitikimas (2026-10-16, tik formai „CVP IS ir susitikimas“): susitikimo duomenys, dalyvavimas, darbotvarkės punktų eiga, paaiškinimai (skelbiami viešoje suvestinėje), susitikime pateiktos pastabos (bendrame sąraše), veiksmai; susitikimo santrauka Word (neužpildyta - šablonas)
 - Kodas: `RinkosKonsultacija` ir `RinkosSuvestine` (script #3, grynos funkcijos), `App.rk*` / `App.rkSv*` (sąsaja); testai - `testai.html` grupės „Rinkos konsultacija“ ir „Rinkos konsultacijos suvestinė“
 
 ---
