@@ -359,6 +359,8 @@ body { font-family: "Nunito Sans", Arial, sans-serif !important; background: var
 <script src="../shared/procurement-methods.js"></script>
 <!-- Bendra pirkimo kortelė (A1): naujo pirkimo vedlys pildomas iš kortelės -->
 <script src="../shared/money.js"></script>
+<!-- DI užklausų užkodavimas - bendras su PP-negotiation ir PP-ts (iki 2026-10-16 - sava kopija šiame faile) -->
+<script src="../shared/uzkodavimas.js"></script>
 <!-- Standartinis PVM tarifas (MOKESCIAI.pvmStandartinis) - vienas visiems moduliams; iki 2026-10-14 modulis skaičiavo su įrašytu tarifu -->
 <script src="../shared/thresholds.js"></script>
 <script src="../shared/organizacijos.js"></script>
@@ -5404,31 +5406,9 @@ function closeAiAssistant(){ document.getElementById('ai-modal').classList.remov
    - situacijos aprašyme (aiSlepk) pakeičiami šio pirkimo tiekėjų pavadinimai kodais „Tiekėjas A, B, C“ (iš atvertų protokolo ir
      pranešimo formų bei išsaugotų pranešimų - pirkimo įraše tiekėjų sąrašo nėra), komisijos narių ir naudotojo vardai, pirkimo ir
      CVP IS numeriai, kontaktai, el. paštai, telefonai, 9 skaitmenų kodai ir sumos (su „Eur“ arba lygios pirkimo sumai); kitų duomenų
-     sistema neatpažįsta - tai sakoma prie lauko. Kodų raktas rodomas tik ekrane. Bendra logika su PP-negotiation - kandidatas į shared/. */
-function aiTiekejoKodas(i){
-  let r = '', n = i + 1;
-  while(n > 0){ r = String.fromCharCode(65 + (n - 1) % 26) + r; n = Math.floor((n - 1) / 26); }
-  return 'Tiekėjas ' + r;
-}
-/* Pavadinimo variantai: kaip įrašyta, be kabučių ir be teisinės formos (UAB „Alfa“ -> Alfa). Kelių žodžių - nepaisant raidžių
-   dydžio, vienas žodis - tiksliai ir didžiosiomis (kitaip tiekėjas „UAB Statyba“ paverstų kodu kiekvieną žodį „statyba“). */
-function aiVardoVariantai(v){
-  const t = String(v || '').replace(/\s+/g, ' ').trim(), be = t.replace(/[„“”"«»]/g, '').replace(/\s+/g, ' ').trim();
-  const br = be.replace(/^(UAB|AB|MB|IĮ|VšĮ|VĮ|TŪB|KŪB|SIA|AS|OÜ|Oy|SA|GmbH|Ltd\.?)\s+/i, '')
-    .replace(/,?\s+(UAB|AB|SIA|AS|OÜ|Oy|Ab|SA|AG|BV|NV|GmbH|Ltd\.?|LLC|Inc\.?)$/i, '').trim();
-  const r = [];
-  [t, be, br].forEach(x => {
-    if(x.length < 3) return;
-    const vardai = /\s/.test(x) ? [[x, false]] : [[x, true], [x.toUpperCase(), true]];
-    vardai.forEach(y => { if(!r.some(z => z[0] === y[0])) r.push(y); });
-  });
-  return r;
-}
-const aiRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const aiSk = n => new Intl.NumberFormat('lt-LT', { maximumFractionDigits: 1 }).format(Math.abs(Math.round(n * 10) / 10));
-/* Suma tekste: valiuta prieš arba po skaičiaus (ir „mln.“, „tūkst.“); be valiutos - tik lygi pirkimo sumai (>= 1000). */
-const AI_SUMA = /(^|[^\p{L}\p{N}.,])((?:EUR|€)[  ]*)?(\d{1,3}(?:[   .,']\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)([  ]*(?:mln|tūkst)\.?)?([  ]*(?:eurų|eurai|eurus|euro|eur|€)(?!\p{L}))?/giu;
-
+     sistema neatpažįsta - tai sakoma prie lauko. Kodų raktas rodomas tik ekrane. Keitimo logika - shared/uzkodavimas.js (bendra su
+     PP-negotiation ir PP-ts, nuo 2026-10-16); čia - tik šio pirkimo kontekstas. */
+function aiTiekejoKodas(i){ return GP_UZKODAVIMAS.kodas(i, 'Tiekėjas '); }
 /* Šio pirkimo užkodavimo kontekstas: tiekėjų kodai, keičiami tekstai (ilgiausi pirmi), žinomos sumos ir numatoma vertė. */
 function aiKontekstas(pkId){
   const pk = getProcurement(pkId) || {}, pv = Number(pk.val_ex) || 0;
@@ -5452,7 +5432,7 @@ function aiKontekstas(pkId){
   });
   const kodai = vardai.map((v, i) => [aiTiekejoKodas(i), v]);
   const pridek = (ka, kuo, tikslus) => { ka = String(ka || '').trim(); if(ka.length >= 3) poros.push([ka, kuo, tikslus]); };
-  kodai.forEach(([kodas, v]) => aiVardoVariantai(v).forEach(([x, tikslus]) => pridek(x, kodas, tikslus)));
+  kodai.forEach(([kodas, v]) => GP_UZKODAVIMAS.vardoVariantai(v).forEach(([x, tikslus]) => pridek(x, kodas, tikslus)));
   kontaktai.forEach(k => { const s = String(k || ''); [s].concat(s.split(/[,;\/\n]/)).forEach(x => pridek(x, '[kontaktas neįtrauktas]', false)); });
   const k = pk.komisija || {}, u = getCurrentUser();
   [k.chair, k.secretary].concat(Array.isArray(k.members) ? k.members : [], u && u.name !== '(naudotojas nenurodytas)' ? [u.name] : []).forEach(a => {
@@ -5473,29 +5453,9 @@ function aiKontekstas(pkId){
   return { pv, kodai, poros, sumos, naudoti: new Set() };
 }
 
-/* Laisvo teksto keitimas. Pakaitai pirma virsta žymėmis (privačios srities simboliai, ne raidės ir ne skaičiai), kad vėlesnis
-   keitimas nepaliestų jau pakeisto (pvz. el. pašto domeno su tiekėjo vardu); žymės atkuriamos pabaigoje. */
+/* Laisvo teksto keitimas - shared/uzkodavimas.js; sumos - „[x % numatomos vertės]“, panaudoti kodai - c.naudoti (kodų raktui). */
 function aiSlepk(tekstas, c){
-  let t = String(tekstas == null ? '' : tekstas);
-  if(!t.trim()) return '';
-  const zymes = [], zyme = p => { zymes.push(p); return '' + String.fromCharCode(0xE100 + zymes.length - 1) + ''; };
-  t = t.replace(/[^\s@<>()"„“,;:]+@[^\s@<>()"„“,;:]+\.\p{L}{2,}/gu, () => zyme('[el. paštas neįtrauktas]'));
-  t = t.replace(/(^|[^\p{L}\p{N}+])(\+\d[\d ()-]{6,}\d)/gu, (m, pr) => pr + zyme('[telefonas neįtrauktas]'));
-  t = t.replace(/(^|[^\p{L}])((?:tel|telefonas|telefono nr|mob)\.?[  ]*(?:nr\.?)?[  ]*[:.]?[  ]*)(\(?\d[\d ()-]{5,}\d)/giu, (m, pr, pav) => pr + pav + zyme('[telefonas neįtrauktas]'));
-  c.poros.forEach(([ka, kuo, tikslus]) => {
-    const re = new RegExp('(^|[^\\p{L}\\p{N}])' + aiRe(ka) + '(?=[^\\p{L}\\p{N}]|$)', tikslus ? 'gu' : 'giu');
-    t = t.replace(re, (m, pr) => { c.naudoti.add(kuo); return pr + zyme(kuo); });
-  });
-  t = t.replace(AI_SUMA, (m, pr, pries, skaicius, daug, po) => {
-    let v = window.GP_MONEY ? GP_MONEY.parseEUR(skaicius) : null;
-    if(v == null || !isFinite(v)) return m;
-    if(daug) v *= /mln/i.test(daug) ? 1e6 : 1e3;
-    const zinoma = v >= 1000 && c.sumos.some(x => Math.abs(x - v) < 0.005);
-    if(!pries && !po && !zinoma) return m;
-    return pr + zyme(c.pv > 0 ? '[' + aiSk(v / c.pv * 100) + ' % numatomos vertės]' : '[suma neįtraukta]');
-  });
-  t = t.replace(/(^|[^\p{N}])\d{9}(?=[^\p{N}]|$)/gu, (m, pr) => pr + zyme('[kodas neįtrauktas]'));
-  return t.replace(/([-])/g, (m, z) => zymes[z.charCodeAt(0) - 0xE100]);
+  return GP_UZKODAVIMAS.slepk(tekstas, { poros: c.poros, sumos: c.sumos, pv: c.pv, pvPavadinimas: 'numatomos vertės', kalba: 'lt', naudoti: c.naudoti });
 }
 
 /* Užkoduota užklausa ir kodų raktas (tik naudoti kodai; raktas į užklausą nepatenka). */
