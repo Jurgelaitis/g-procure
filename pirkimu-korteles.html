@@ -2,7 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pirkimų kortelės · G-Procure</title>
 <meta name="description" content="Bendra pirkimo kortelė: pirkimo pavadinimas, vertė, būdas, vykdytojas, režimas, dalys ir terminai vienoje vietoje - G-Procure įrankiai juos skaito, kad duomenų nereikėtų vesti iš naujo.">
@@ -139,6 +139,7 @@
 <body>
 <script src="shared/prieinamumas.js"></script>
 <script src="shared/sutikimas.js"></script>
+<script src="shared/analitika.js"></script>
 <script src="shared/bibliotekos-atmintis.js"></script>
 <script src="shared/portal-link.js" data-portalas="index.html"></script>
 
@@ -765,6 +766,7 @@
     $("archyvuoti").hidden = !redaguojama;
     $("archyvuoti").textContent = redaguojama && redaguojama.archyvuota ? tx("grazinti") : tx("archyvuoti");
     uzpildyk(redaguojama || K.tuscia(duom || null));
+    IS_SKELBIMO = false;
     if (!redaguojama && duom && !duom.rezimas) {           // kaip pasirinkus vykdytoją ranka - siūlomas įprastas režimas
       var vk = K.vykdytojas(f.elements.vykdytojas.value);
       if (vk && vk.rezimas) f.querySelector('input[name="rezimas"][value="' + vk.rezimas + '"]').checked = true;
@@ -898,8 +900,10 @@
     if (el.tagName === "SELECT" && !el.querySelector('option[value="' + CSS.escape(v) + '"]')) return;
     el.value = v;
   }
+  var IS_SKELBIMO = false;      // formoje pritaikyti CVP IS skelbimo pasiūlymai (tik statistikai - iš kur sukurta kortelė)
   function taikykPasiulymus() {
     var n = 0;
+    IS_SKELBIMO = true;
     siulymai.forEach(function (x, i) { var cb = $("sk-" + i); if (cb && cb.checked) { irasykLauka(x.laukas, x.reiksme); n++; } });
     $("skelbimoPasiulymai").hidden = true;
     rodykPastabas();
@@ -937,6 +941,7 @@
       return;
     }
     var buvoModulis = isModulio, buvoNauja = r.nauja;
+    if (window.GP_ANALITIKA) GP_ANALITIKA.ivykis("kortele_issaugota", { saltinis: IS_SKELBIMO ? "cvp_is_skelbimas" : /pp-plan/i.test(isModulio) ? "pp_plan" : isModulio ? "modulis" : "korteliu_puslapis", nauja: buvoNauja ? "taip" : "ne" });
     uzdaryk();
     sarasas();
     GP_BUSENA.issaugota("#busena", txf(buvoNauja ? "issaugotaNauja" : "issaugotaPak", { p: r.kortele.pavadinimas }));
@@ -1093,6 +1098,7 @@
       if (!e || !(e.busena === "naujas" || e.busena === "panasus")) { praleista++; continue; }
       var r = K.issaugok(Object.assign({}, e.kortele, { busena: pas[j].busena }));
       if (!r.ok) { klaida = r.r; break; }
+      if (window.GP_ANALITIKA) GP_ANALITIKA.ivykis("kortele_issaugota", { saltinis: "pp_protocol_perkelimas", nauja: r.nauja ? "taip" : "ne" });
       n++;
     }
     sarasas();
