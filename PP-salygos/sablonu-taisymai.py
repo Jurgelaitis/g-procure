@@ -404,6 +404,7 @@ def taisymas_tekstas(taisyk):
     viso += _numeris_28(taisyk)
     viso += _akv_numeracija(taisyk)
     viso += _vidine_riba(taisyk)
+    viso += _uztikrinimo_sakinys(taisyk)
     return viso
 
 
@@ -815,6 +816,25 @@ def _su_zemelapiais(poros, failai, vardas, taisyk):
 #    autorių pastaba“). Pati riba šiame scenarijuje neįrašyta - taisyklė bendra (skaičius su „tūkstančių eurų“ pastaboje apie užtikrinimą).
 _VIDINE_RIBA = _re.compile(r'viršija \d[\d \u00a0]*(?:tūkstanči\w+|tūkst\.|mln\.)\s+eurų')
 _VIDINE_RIBA_NAUJA = 'viršija vidaus taisyklėse nustatytą ribą'
+
+
+# W. Sutarties įvykdymo užtikrinimo sakinys (2026-10-16, rasta tvarkant naudotojo pastebėjimą dėl SPS „Sutarties projekto X punkte/priede“;
+#    redakcinė korekcija - naudotojo leidimas 2026-10-05): „Laimėjęs Tiekėjas pateikia Sutarties užtikrinimo įvykdymo užtikrinimą“ - žodis
+#    „užtikrinimo“ perteklinis (to paties sakinio AK ir MVP LT SPS: „pateikia Sutarties įvykdymo užtikrinimą“) - ND, SSD, TSD SPS (LT ir LT/EN),
+#    MVP ir AK LT/EN SPS, sena TPS forma; AK LT/EN SPS dar „Reikalavimai Sutarties įvykdymo užtikrinimui, nurodyti“ - be kablelio, kaip LT SPS.
+#    Angliškas tekstas nekeičiamas, raudonas - nelieciamas. Šis sakinys - 2 žingsnio laukas (užtikrinimo dydis), jo raktas - pastraipos tekstas,
+#    todėl ankstesnio juodraščio atsakymas perkeliamas į naują raktą (PP-SALYGOS.html RAKTU_PERVADINIMAI).
+_UZTIKRINIMO_SAKINYS = [(_re.compile(r'pateikia Sutarties (užtikrinimo )įvykdymo užtikrinimą'), '', 1),
+                        (_re.compile(r'Reikalavimai Sutarties įvykdymo užtikrinimui(,) nurodyti'), '', 1)]
+_W_RAUDONI = []
+
+
+def _uztikrinimo_sakinys(taisyk):
+    print("\nSUTARTIES ĮVYKDYMO UŽTIKRINIMO SAKINYS (W, 2026-10-16):")
+    n = _su_zemelapiais(_be_raudono(_UZTIKRINIMO_SAKINYS, _W_RAUDONI), None, 'užtikrinimo sakinys', taisyk)
+    for t in _W_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
 
 
 def _vidine_riba(taisyk):
