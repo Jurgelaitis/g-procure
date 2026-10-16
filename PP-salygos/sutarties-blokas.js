@@ -89,7 +89,12 @@
                pasirinkta: p.pasirinkta, pasirinktasVariantas: p.pasirinktasVariantas,
                nerengiama: S.galut.nerengiama ? S.galut.nerengiama.id : null, zmogaus: !!S.zmogaus, sutampa: p.sutampa };
     }
+    /* Sutikimas (2026-10-16): stebėjimo įrašai - slapukų kategorija „tobulinimo“ (shared/sutikimas.js; tai ne naudotojo užsakyta
+       paslauga, todėl - tik su sutikimu, numatyta - išjungta). Be sutikimo nauji nekaupiami; sukaupti anksčiau lieka, kol žmogus juos
+       ištrina (čia „Išvalyti“ arba slapukų nustatymuose), ir atsisiunčiami kaip iki tol. */
+    function sutikta() { return !!(global.GP_SUTIKIMAS && global.GP_SUTIKIMAS.leidzia("tobulinimo")); }
     function irasyk() {
+      if (!sutikta()) return;
       if (skaitykZurnala().busena === "sugadinta" || Z.busena === "neprieinama") return;   // neperskaitomas - neperrašomas
       var irasai = Z.irasai.slice(), k = -1;
       for (var i = 0; i < irasai.length; i++) if (irasai[i] && irasai[i].sesija === SESIJA) k = i;
@@ -123,12 +128,18 @@
       if (Z.busena === "sugadinta" || Z.busena === "neprieinama" || Z.busena === "klaida")
         h += "Stebėjimo įrašai: " + (Z.busena === "klaida" ? "paskutinio įrašyti nepavyko" : "neperskaitomi - nauji neįrašomi") + "</summary>" +
              '<div class="sb-isp">Priežastis: ' + esc(Z.klaida) + "." + (Z.busena === "sugadinta" ? " Neperskaitomas įrašas išsaugotas atskira kopija." : "") + "</div>";
+      else if (!sutikta()) h += "Stebėjimo įrašai: nekaupiami - nėra jūsų sutikimo" + (n ? " (sukaupta anksčiau: " + n + ")" : "") + "</summary>" +
+        '<div class="sb-isp" id="sbSutikimasT">Šie įrašai kaupiami tik jums sutikus: slapukų nustatymuose įjunkite „Tobulinimo įrašai“. ' +
+        (n ? "Anksčiau sukaupti įrašai lieka, kol juos ištrinsite. " : "") +
+        (global.GP_SUTIKIMAS ? "" : "Slapukų sutikimo modulis neįkeltas - įrašai nekaupiami.") + "</div>";
       else h += "Stebėjimo įrašai šioje naršyklėje: " + n + "</summary>";
-      h += '<div class="sb-steb-t">Kai atsakote į klausimą ar pasirenkate sutartį, šioje naršyklėje įsimenama: pirkimo pavadinimas, objekto tipas, BVPŽ, ' +
+      h += '<div class="sb-steb-t">' + (sutikta() ? "Kai" : "Jei sutiksite: kai") + ' atsakote į klausimą ar pasirenkate sutartį, šioje naršyklėje įsimenama: pirkimo pavadinimas, objekto tipas, BVPŽ, ' +
            "kalba, pirkimo būdas, ką siūlė sistema, jūsų atsakymai į klausimus ir ką pasirinkote (vienas įrašas šiam puslapio atvėrimui). " +
            "Įrašai niekur nesiunčiami ir naudojami sutarčių parinkimo taisyklėms tikslinti - atsisiųstą failą galite perduoti G-Procure rengėjui. " +
            "Įrašai patenka į atsarginę kopiją; laikoma ne daugiau kaip " + RIBA + " naujausių.</div>";
       h += '<div class="sb-veiksmai">';
+      if (!sutikta() && global.GP_SUTIKIMAS)
+        h += '<button type="button" class="sec" id="sbSutikimas" data-gp-slapukai aria-haspopup="dialog" aria-describedby="sbSutikimasT">Slapukų nustatymai</button>';
       if (n) h += '<button type="button" class="sec" id="sbAtsisiusti" data-sb="atsisiusti">Atsisiųsti įrašus (JSON)</button>';
       if (n || Z.busena === "sugadinta") h += steb.valyti
         ? '<span class="sb-steb-k" id="sbValytiK">Ištrinti ' + (n ? n + " " + irasuZodis(n) : "neperskaitomus įrašus") + "?</span>" +
@@ -406,6 +417,8 @@
     });
 
     vieta.addEventListener("toggle", function (e) { if (e.target && e.target.id === "sbSteb") steb.atvira = e.target.open; }, true);
+    // Sutikimas pakeistas (ir kitame skirtuke): sutikus - įrašomas dabartinis sprendimas, atšaukus - nauji nebekaupiami
+    global.addEventListener("gp-sutikimas", function () { skaitykZurnala(); irasyk(); piesk(); });
 
     var api = {
       atnaujink: function () { skaiciuok(); irasyk(); piesk(); },
