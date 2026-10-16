@@ -260,6 +260,12 @@
         btn.href = saknis + IRANKIAI[raktas].kelias + "?kortele=" + id + (IRANKIAI[raktas].zyme || "");
         btn.target = "_blank"; btn.rel = "noopener";
         btn.setAttribute("aria-label", t[raktas] + ": " + (k.pavadinimas || "?") + " (" + t.naujasSkirtukas + ")");
+        // Naudojimosi statistika (tik su sutikimu): kuris įrankis ir kokiame etape - be kortelės duomenų
+        btn.addEventListener("click", function () {
+          var A = global.GP_ANALITIKA, m = /^(PP-[A-Za-z-]+)\//.exec(IRANKIAI[raktas].kelias);
+          if (A) A.ivykis("mano_pirkimai_paspausta", { irankis: m ? m[1] : "kita",
+            etapas: { planuojamas: "planuojama", rengiamas: "rengiama", paskelbtas: "paskelbta", vertinamas: "vertinama" }[k.busena] || "kita" });
+        });
         d.appendChild(btn);
       });
       var kort = el("a", "gpmp-btn" + (truksta.length ? " gpmp-btn--pagr" : ""), t.kortele);

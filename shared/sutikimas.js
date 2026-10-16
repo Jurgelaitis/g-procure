@@ -21,9 +21,11 @@
  *   tobulinimo  - PP-salygos sutarčių parinkimo stebėjimo įrašai (taisyklėms tikslinti - ne naudotojo užsakyta paslauga).
  *                 Tik su sutikimu; numatyta - išjungta. Atšaukus nauji nekaupiami, sukaupti lieka, kol naudotojas juos ištrina
  *                 (jie yra tik jo naršyklėje; ištrinti - čia arba PP-salygos bloke „Sutarties projektas“).
- *   Analitika, reklama, socialiniai tinklai - NENAUDOJAMA. Pridedant ką nors panašaus: nauja kategorija, VERSIJA, politika.
+ *   statistika  - naudojimosi statistika (nuo 2026-10-16, naudotojo sprendimas - griežtas variantas, tik su sutikimu):
+ *                 shared/analitika.js, PostHog ES. Numatyta - išjungta; naršyklėje nieko neįrašo. Atšaukus - nebesiunčiama.
+ *   Reklama, socialiniai tinklai, sekimas - NENAUDOJAMA. Pridedant ką nors panašaus: nauja kategorija, VERSIJA, politika.
  *
- * ĮRAŠAS - localStorage „gprocure.sutikimas“: { schema: 1, versija, data, galioja, budas, kategorijos: { nustatymai, tobulinimo } }.
+ * ĮRAŠAS - localStorage „gprocure.sutikimas“: { schema: 1, versija, data, galioja, budas, kategorijos: { nustatymai, tobulinimo, statistika } }.
  * Galioja 12 mėnesių; pasibaigus ar pasikeitus VERSIJA (nauja kategorija ar paskirtis) - klausiama iš naujo. Politikos teksto
  * pataisymas be naujos paskirties VERSIJA nekeičia.
  *
@@ -35,7 +37,7 @@
  * nepriklauso nuo naudotojo sprendimo ir jo nekeičia); naudokSaugykla(s) - netikra saugykla.
  *
  *   GP_SUTIKIMAS.leidzia("nustatymai")      // true / false
- *   GP_SUTIKIMAS.nustatyk({ nustatymai: true, tobulinimo: false }, "pasirinkta")
+ *   GP_SUTIKIMAS.nustatyk({ nustatymai: true, tobulinimo: false, statistika: false }, "pasirinkta")
  *   GP_SUTIKIMAS.atverk()                   // nustatymų langas
  *   window.addEventListener("gp-sutikimas", e => e.detail)   // sprendimas pasikeitė (ir kitame skirtuke)
  * ==========================================================================*/
@@ -45,7 +47,7 @@
 
   var doc = global.document;
   var RAKTAS = "gprocure.sutikimas";
-  var VERSIJA = "2026-10-16";
+  var VERSIJA = "2026-10-16-2";      // -2: nauja kategorija „statistika“ (iki tol - 2026-10-16)
   var GALIOJA_MEN = 12;
 
   /* Ne būtini įrašai: prefiksas -> kategorija. Visi kiti šios kilmės įrašai - būtini (darbo duomenys). */
@@ -61,8 +63,9 @@
       juostaPav: "Jūsų privatumas ir naršyklės saugykla",
       juosta: "G-Procure jūsų darbą saugo tik šioje naršyklėje - be to įrankiai neveiktų, todėl šie įrašai veikia visada. " +
         "Nustatymus (kalbą, skilčių būseną) įsimename, kad nereikėtų rinktis iš naujo - tai galite išjungti. " +
-        "Su jūsų sutikimu pirkimo sąlygų įrankis kaups sutarčių parinkimo įrašus taisyklėms tikslinti; jie niekur nesiunčiami. " +
-        "Analitikos, reklamos ir socialinių tinklų slapukų nenaudojame. Jūsų pasirinkimą įsiminsime 12 mėnesių, kad nebeklaustume.",
+        "Su jūsų sutikimu pirkimo sąlygų įrankis kaups sutarčių parinkimo įrašus taisyklėms tikslinti (jie niekur nesiunčiami), " +
+        "o mes rinksime naudojimosi statistiką - kurie įrankiai ir žingsniai naudojami, be jūsų įvesto teksto, IP adreso neįrašant. " +
+        "Reklamos ir socialinių tinklų slapukų nenaudojame. Jūsų pasirinkimą įsiminsime 12 mėnesių, kad nebeklaustume.",
       visi: "Priimti visus", butini: "Tik būtinieji", nustatymai: "Nustatymai",
       politika: "Slapukų politika", privatumas: "Privatumo politika", kitaKalba: "English", kitaKalbaLang: "en",
       langoPav: "Slapukų ir naršyklės saugyklos nustatymai",
@@ -85,8 +88,14 @@
       yraIrasu: "Šioje naršyklėje yra anksčiau sukauptų tobulinimo įrašų - išjungus jie lieka, kol juos ištrinsite.",
       trinti: "Ištrinti sukauptus įrašus", trintiK: "Ištrinti visus sukauptus tobulinimo įrašus?", trintiTaip: "Taip, ištrinti", trintiNe: "Ne",
       istrinta: "Sukaupti tobulinimo įrašai ištrinti.",
-      katAnalitika: "Analitika ir reklama",
-      katAnalitikaT: "G-Procure lankytojų neseka: nenaudoja analitikos, reklamos, socialinių tinklų slapukų ar sekimo pikselių.",
+      katStatistika: "Naudojimosi statistika",
+      katStatistikaT: "Kurie įrankiai ir žingsniai naudojami, kiek veiksmų baigiasi klaida, telefonas ar kompiuteris. Siunčiami tik iš anksto " +
+        "apibrėžti įvykiai su reikšmėmis iš sąrašo - be jūsų įvesto teksto, pavadinimų, sumų ir failų. Duomenys - PostHog ES duomenų centre " +
+        "(Frankfurtas); IP adresas ir naršyklės aprašas naudojami tik dienos lankytojo kodui apskaičiuoti ir neįrašomi, naršyklėje nieko " +
+        "neįrašoma, žmonių profiliai nekuriami, kitą dieną jūs neatpažįstami. " +
+        "Išjungus nebesiunčiama.",
+      katAnalitika: "Reklama ir socialiniai tinklai",
+      katAnalitikaT: "G-Procure nenaudoja reklamos, socialinių tinklų slapukų ar sekimo pikselių ir lankytojų tarp svetainių neseka.",
       issaugoti: "Išsaugoti pasirinkimą",
       sprendimas: function (d, g) { return "Jūsų sprendimas: " + d + ", galioja iki " + g + "."; },
       nera: "Sprendimo dar nepriėmėte - kol jo nėra, veikia būtinieji įrašai ir nustatymų įsiminimas.",
@@ -97,8 +106,9 @@
       juostaPav: "Your privacy and browser storage",
       juosta: "G-Procure keeps your work only in this browser - the tools cannot work without it, so this storage is always on. " +
         "We remember settings (language, panel state) so you do not have to choose again - you can turn this off. " +
-        "With your consent, the procurement conditions tool keeps contract selection records to refine its rules; they are never sent anywhere. " +
-        "We use no analytics, advertising or social media cookies. We will remember your choice for 12 months so we do not ask again.",
+        "With your consent, the procurement conditions tool keeps contract selection records to refine its rules (they are never sent anywhere), " +
+        "and we collect usage statistics - which tools and steps are used, without the text you enter and without storing your IP address. " +
+        "We use no advertising or social media cookies. We will remember your choice for 12 months so we do not ask again.",
       visi: "Accept all", butini: "Necessary only", nustatymai: "Settings",
       politika: "Cookie policy", privatumas: "Privacy policy", kitaKalba: "Lietuviškai", kitaKalbaLang: "lt",
       langoPav: "Cookie and browser storage settings",
@@ -121,8 +131,14 @@
       yraIrasu: "This browser holds improvement records collected earlier - if you turn this off, they stay until you delete them.",
       trinti: "Delete collected records", trintiK: "Delete all collected improvement records?", trintiTaip: "Yes, delete", trintiNe: "No",
       istrinta: "Collected improvement records deleted.",
-      katAnalitika: "Analytics and advertising",
-      katAnalitikaT: "G-Procure does not track visitors: no analytics, advertising or social media cookies and no tracking pixels.",
+      katStatistika: "Usage statistics",
+      katStatistikaT: "Which tools and steps are used, how many actions end in an error, phone or computer. Only predefined events with values " +
+        "from a fixed list are sent - not the text you enter, titles, amounts or files. The data is kept in the PostHog EU data centre " +
+        "(Frankfurt); your IP address and browser description are used only to compute a daily visitor code and are not stored, nothing " +
+        "is stored in your browser, no personal profiles are created and you are not recognised the next day. " +
+        "If turned off, nothing is sent.",
+      katAnalitika: "Advertising and social media",
+      katAnalitikaT: "G-Procure uses no advertising or social media cookies or tracking pixels and does not track visitors across websites.",
       issaugoti: "Save my choice",
       sprendimas: function (d, g) { return "Your decision: " + d + ", valid until " + g + "."; },
       nera: "You have not decided yet - until you do, only necessary storage and remembered settings are used.",
@@ -172,7 +188,8 @@
     var r = galiojantis();
     if (k === "nustatymai") return r ? r.kategorijos.nustatymai !== false : true;
     if (k === "tobulinimo") return !!(r && r.kategorijos.tobulinimo === true);
-    return false;                          // analitika ir kita - nenaudojama
+    if (k === "statistika") return !!(r && r.kategorijos.statistika === true);
+    return false;                          // reklama ir kita - nenaudojama
   }
   function kategorija(raktas) {
     raktas = String(raktas == null ? "" : raktas);
@@ -201,7 +218,7 @@
 
   function busena() {
     var r = skaityk();
-    return { busena: r.busena, sprendimas: r.irasas, nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo"),
+    return { busena: r.busena, sprendimas: r.irasas, nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo"), statistika: leidzia("statistika"),
              galioja: r.irasas ? r.irasas.galioja : null, versija: VERSIJA };
   }
   function siusk() {
@@ -214,7 +231,7 @@
     gal.setMonth(gal.getMonth() + GALIOJA_MEN);
     var rec = { schema: 1, versija: VERSIJA, data: dabar.toISOString(), galioja: gal.toISOString(),
                 budas: budas === "visi" || budas === "butini" ? budas : "pasirinkta",
-                kategorijos: { nustatymai: k.nustatymai === true, tobulinimo: k.tobulinimo === true } };
+                kategorijos: { nustatymai: k.nustatymai === true, tobulinimo: k.tobulinimo === true, statistika: k.statistika === true } };
     var s = saug(), ok = false;
     ATMINTYJE = null;
     try { s.setItem(RAKTAS, JSON.stringify(rec)); ok = s.getItem(RAKTAS) !== null; } catch (e) { ok = false; }
@@ -353,6 +370,7 @@
       kategorijaHtml("butini", L.katButini, L.katButiniT, '<span class="gpsk-st">' + esc(L.visadaIjungti) + "</span>") +
       kategorijaHtml("nustatymai", L.katNustatymai, L.katNustatymaiT, jungiklis("nustatymai", L, pasirinkta.nustatymai)) +
       kategorijaHtml("tobulinimo", L.katTobulinimo, L.katTobulinimoT, jungiklis("tobulinimo", L, pasirinkta.tobulinimo), yra) +
+      kategorijaHtml("statistika", L.katStatistika, L.katStatistikaT, jungiklis("statistika", L, pasirinkta.statistika)) +
       kategorijaHtml("analitika", L.katAnalitika, L.katAnalitikaT, '<span class="gpsk-st">' + esc(L.nenaudojama) + "</span>") +
       '<p class="gpsk-sp" id="gpsk-sp">' + esc(r ? L.sprendimas(vietineData(r.data), vietineData(r.galioja)) : L.nera) + "</p></div>" +
       '<div class="gpsk-df"><button type="button" class="gpsk-b" data-gpsk="issaugoti">' + esc(L.issaugoti) + "</button>" +
@@ -363,9 +381,9 @@
   }
 
   function pasirinkimaiLange() {
-    var o = { nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo") };
+    var o = { nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo"), statistika: leidzia("statistika") };
     if (!LANGAS) return o;
-    ["nustatymai", "tobulinimo"].forEach(function (k) { var x = LANGAS.querySelector("#gpsk-sw-" + k); if (x) o[k] = x.checked; });
+    ["nustatymai", "tobulinimo", "statistika"].forEach(function (k) { var x = LANGAS.querySelector("#gpsk-sw-" + k); if (x) o[k] = x.checked; });
     return o;
   }
 
@@ -433,7 +451,7 @@
         }
       });
     }
-    pieskLanga({ nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo") });
+    pieskLanga({ nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo"), statistika: leidzia("statistika") });
     if (!LANGAS.open) {
       if (typeof LANGAS.showModal === "function") LANGAS.showModal(); else LANGAS.setAttribute("open", "");
     }
@@ -464,7 +482,7 @@
     var r = galiojantis();
     if (r) slepk(); else if (JUOSTA) rodyk();
     if (LANGAS && LANGAS.open) pieskLanga(pasirinkimaiLange());
-    else if (LANGAS) pieskLanga({ nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo") });
+    else if (LANGAS) pieskLanga({ nustatymai: leidzia("nustatymai"), tobulinimo: leidzia("tobulinimo"), statistika: leidzia("statistika") });
   }
 
   function pranesk(tekstas, tipas) {
@@ -483,8 +501,8 @@
     if (t.hasAttribute("data-gp-slapukai") && !t.hasAttribute("data-gpsk")) { e.preventDefault(); atverk(t); return; }
     if (!(JUOSTA && JUOSTA.contains(t)) && !(LANGAS && LANGAS.contains(t))) return;
     var v = t.getAttribute("data-gpsk"), L = T[kalba()];
-    if (v === "visi") sprendimas({ nustatymai: true, tobulinimo: true }, "visi");
-    else if (v === "butini") sprendimas({ nustatymai: false, tobulinimo: false }, "butini");
+    if (v === "visi") sprendimas({ nustatymai: true, tobulinimo: true, statistika: true }, "visi");
+    else if (v === "butini") sprendimas({ nustatymai: false, tobulinimo: false, statistika: false }, "butini");
     else if (v === "issaugoti") sprendimas(pasirinkimaiLange(), "pasirinkta");
     else if (v === "nustatymai") atverk(t);
     else if (v === "uzdaryti") uzdaryk();
@@ -524,7 +542,7 @@
 
   global.GP_SUTIKIMAS = {
     RAKTAS: RAKTAS, VERSIJA: VERSIJA, GALIOJA_MEN: GALIOJA_MEN,
-    KATEGORIJOS: ["butini", "nustatymai", "tobulinimo"],
+    KATEGORIJOS: ["butini", "nustatymai", "tobulinimo", "statistika"],
     NE_BUTINI: NE_BUTINI.map(function (x) { return x.slice(); }),
     TEKSTAI: T,
     leidzia: leidzia, kategorija: kategorija, busena: busena, nustatyk: nustatyk,

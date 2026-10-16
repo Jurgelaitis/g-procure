@@ -217,6 +217,13 @@
        pakartojus tik veiksmą, rezultatas niekur nepatektų. */
     var kartoti = typeof o.kartoti === "function" ? o.kartoti
       : (o.kartoti === true ? function () { return vykdyk(v, Object.assign({}, o, { valdiklis: null })); } : null);
+    // Naudojimosi statistika (tik su sutikimu ir tik kai modulis veiksmui davė žodyno pavadinimą o.analitika)
+    var pradzia = Date.now();
+    function statistika(rez) {
+      var A = global.GP_ANALITIKA;
+      if (!A || !o.analitika) return;
+      try { A.ivykis("veiksmo_rezultatas", { veiksmas: o.analitika, rezultatas: rez, trukme: A.trukme(Date.now() - pradzia) }); } catch (e) {}
+    }
     return Promise.resolve().then(function () { return o.veiksmas(signal, h); }).then(function (r) {
       if (r && r.ok === false && r.error) throw new Error(r.error);
       if (signal && signal.aborted) throw Object.assign(new Error("Aborted"), { name: "AbortError" });
@@ -224,12 +231,15 @@
         if (o.sekme) rodyk(v, { tipas: "gerai", tekstas: typeof o.sekme === "function" ? o.sekme(r) : o.sekme });
         else slepk(v);
       }
+      statistika("pavyko");
       return { ok: true, reiksme: r };
     }).catch(function (e) {
       if (arAtsaukta(e, signal)) {
         if (dar()) rodyk(v, { tipas: "tuscia", tekstas: o.atsauktaTekstas || ui().atsaukta });
+        statistika("atsaukta");
         return { ok: false, atsaukta: true };
       }
+      statistika("klaida");
       var t = (o.klaidosPriesdelis || ui().klaida) + ": " + klaidosTekstas(e);
       if (dar()) rodyk(v, { tipas: "klaida", tekstas: t, kartoti: kartoti });
       return { ok: false, klaida: e };

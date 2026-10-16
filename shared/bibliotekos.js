@@ -40,8 +40,13 @@
   // Funkcija, ne eilutė: pavadinimas su „$&“ nebūtų String.replace šablonas
   function tekstas(raktas, pav) { var p = String(pav || ""); return TEKSTAI[kalba()][raktas].replace("{p}", function () { return p; }); }
 
+  // Naudojimosi statistika (tik su sutikimu): kuri biblioteka neįsikėlė - žodyno pavadinimu
+  function statistika(pav) {
+    try { if (global.GP_ANALITIKA) global.GP_ANALITIKA.ivykis("biblioteka_neisikele", { biblioteka: global.GP_ANALITIKA.biblioteka(pav) }); } catch (e) {}
+  }
   function yra(globalus, pav) {
     if (global[globalus]) return true;
+    statistika(pav || globalus);
     var t = tekstas("veiksmas", pav || globalus);
     if (global.GP_PRANESIMAS) global.GP_PRANESIMAS.rodyk(t, { tipas: "klaida" });
     else if (global.console) global.console.error(t);
@@ -49,12 +54,13 @@
   }
 
   function reikia(globalus, pav) {
-    if (!global[globalus]) throw new Error(tekstas("veiksmas", pav || globalus));
+    if (!global[globalus]) { statistika(pav || globalus); throw new Error(tekstas("veiksmas", pav || globalus)); }
   }
 
   var ZYMA = "data-gp-biblioteka";
   function vietoje(el, pav) {
     if (!el || !el.parentNode) return;
+    statistika(pav);
     var d = global.document, esamas = el.parentNode.querySelector("[" + ZYMA + "]");
     el.style.display = "none";
     if (esamas) { esamas.textContent = tekstas("diagrama", pav); return; }
