@@ -49,6 +49,30 @@
     return gerai ? { kodai: out, kalba: k } : null;
   }
 
+  /* Sutarties įvykdymo užtikrinimo reikalavimų vieta sutarties projekte (2026-10-16, naudotojo pastebėjimas: SPS sakinio „Reikalavimai Sutarties
+     įvykdymo užtikrinimui nurodyti Sutarties projekto X punkte/priede.“ numerį generatorius žino pats - sutartį jis ir kuria). Numeriai - iš
+     šablonų (Word numeracija - emuliuota GPNum, kaip nuorodų patikroje); testas tikrina, kad nurodytoje vietoje šablone yra užtikrinimo nuostata.
+     Forma - kaip LITGRID paskelbtose SPS (eksploatavimo: „Sutarties Specialiųjų sąlygų 16 p. ir Sutarties Bendrųjų sąlygų 8.7 p.“).
+     Sutarčių šeimoms be generuojamo šablono - nieko (klausiama, kaip iki tol). [numeris, forma vietininku, antraštė šablone] */
+  var UZTIKRINIMO_VIETA = {
+    PREKES: { SS: ["8", "skyriuje", "Prievolių pagal Sutartį įvykdymo užtikrinimas"], BS: ["10", "skyriuje", "Sutarties įvykdymo užtikrinimas (jei taikoma)"] },
+    PASLAUGOS: { SS: ["8", "skyriuje", "Prievolių pagal Sutartį įvykdymo užtikrinimas"], BS: ["10", "skyriuje", "Sutarties įvykdymo užtikrinimas (jei taikoma)"] },
+    PROJEKTAVIMO_PASLAUGOS: { SS: ["6", "skyriuje", "Sutarties įvykdymo užtikrinimas"], BS: ["7.5", "punkte", "Sutarties įvykdymo užtikrinimas"] },
+    DARBAI_MAZOJI: { SS: ["6.3", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["3.5", "punkte", "Sutarties įvykdymo užtikrinimas"] },
+    PROJEKTAVIMO_STATYBOS: { SS: ["24", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["9.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
+    STATYBOS_RANGOS: { SS: ["23", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
+    EKSPLOATAVIMO: { SS: ["16", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"] }
+  };
+  var VARD = { skyriuje: "skyrius", punkte: "punktas" };
+  /* -> { tekstas (vietoj „X punkte/priede“), kilme, SS, BS } arba null */
+  function uztikrinimoVieta(seima) {
+    var u = UZTIKRINIMO_VIETA[seima];
+    if (!u) return null;
+    return { SS: u.SS, BS: u.BS,
+             tekstas: "Specialiųjų sąlygų " + u.SS[0] + " " + u.SS[1] + " ir Bendrųjų sąlygų " + u.BS[0] + " " + u.BS[1],
+             kilme: "specialiųjų sąlygų " + u.SS[0] + " " + VARD[u.SS[1]] + " „" + u.SS[2] + "“, bendrųjų sąlygų " + u.BS[0] + " " + VARD[u.BS[1]] + " „" + u.BS[2] + "“" };
+  }
+
   /* Klausimai (plano 3.1). Atsakymų tekstai - pagal šablonų taikymo sritį; ko šablonai nesako, neteigiama. */
   var KLAUSIMAI = {
     K0: { tekstas: "Kas sudaro pagrindinę pirkimo dalį?",
@@ -275,5 +299,6 @@
              sutampa: !!(rez && rez.seima === seima && (rez.variantas || null) === (variantas || null)) };
   }
 
-  global.GP_SUTARTYS = { versija: "S4-EKS-2026-10-13", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, kodai: kodai, normalizuok: be };
+  global.GP_SUTARTYS = { versija: "S4-EKS-2026-10-13", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, kodai: kodai, normalizuok: be,
+                         UZTIKRINIMO_VIETA: UZTIKRINIMO_VIETA, uztikrinimoVieta: uztikrinimoVieta };
 })(typeof window !== "undefined" ? window : this);
