@@ -276,21 +276,25 @@
       rd.onerror = function () { if (el) el.innerHTML = '<span class="jd-kl" role="alert">Failo „' + esc(f.name) + "“ perskaityti nepavyko.</span>"; };
       rd.readAsText(f);
     }
+    // Naudojimosi statistika (tik su sutikimu): kuris juodraščio veiksmas - be juodraščio turinio
+    function stat(v) { try { if (global.GP_ANALITIKA) global.GP_ANALITIKA.ivykis("salygos_juodrastis", { veiksmas: v }); } catch (e) {} }
     function veiksmas(e) {
       var b = e.target.closest && e.target.closest("[data-jd]");
       if (!b || b.tagName === "INPUT") return;
       var v = b.getAttribute("data-jd"), id = b.getAttribute("data-id");
-      if (v === "testi") return testi(id);
+      if (v === "testi") { stat("testi"); return testi(id); }
       if (v === "atsisiusti") {
+        stat("atsisiusti");
         var x = id ? (skaityk(id).reiksme || null) : (issaugok(), irasas);
         if (x) pranesk("Atsisiųstas juodraštis: " + atsisiusk(x) + ". Jame yra numatoma vertė - neperduokite tiekėjams.", "gerai");
         return;
       }
       if (v === "ikelti") { var f = doc.getElementById("jdFailas"); if (f) f.click(); return; }
       if (v === "trinti") { klausti = "trinti:" + id; rodytiSar = true; pieskSarasa(); var t = sarEl && sarEl.querySelector('[data-jd="trinti-taip"]'); if (t) t.focus(); return; }
-      if (v === "trinti-taip") { trink(id); klausti = null; pieskSarasa(); pranesk("Juodraštis ištrintas.", "gerai"); return; }
+      if (v === "trinti-taip") { stat("istrinti"); trink(id); klausti = null; pieskSarasa(); pranesk("Juodraštis ištrintas.", "gerai"); return; }
       if (v === "trinti-dabar") { klausti = "trinti-dabar"; rodytiSar = true; pieskSarasa(); var t2 = doc.querySelector('[data-jd="trinti-dabar-taip"]'); if (t2) t2.focus(); return; }
       if (v === "trinti-dabar-taip") {
+        stat("istrinti");
         trink(dabar); dabar = null; irasas = null; paskutinis = null; pradeta = false; klausti = null; busena = { kodas: "nera" };
         if (global.history && /[?&]juodrastis=/.test(global.location.search)) global.history.replaceState(null, "", global.location.pathname + global.location.hash);
         pieskBusena(); pieskSarasa(); pranesk("Juodraštis ištrintas. Šio lango atsakymai išsaugoti nebus, kol vėl ką nors pakeisite.", "gerai");
@@ -300,7 +304,7 @@
     }
     doc.addEventListener("click", veiksmas);
     doc.addEventListener("change", function (e) {
-      if (e.target && e.target.id === "jdFailas" && e.target.files && e.target.files[0]) { ikelkFaila(e.target.files[0]); e.target.value = ""; }
+      if (e.target && e.target.id === "jdFailas" && e.target.files && e.target.files[0]) { stat("ikelti"); ikelkFaila(e.target.files[0]); e.target.value = ""; }
     });
     if (sarEl) sarEl.addEventListener("toggle", function (e) { if (e.target && e.target.id === "jdSar") rodytiSar = e.target.open; }, true);
     if (sritis) ["input", "change", "click", "drop"].forEach(function (ev) { sritis.addEventListener(ev, pakeista, true); });

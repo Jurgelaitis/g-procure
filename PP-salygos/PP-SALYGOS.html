@@ -2,7 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pirkimo sąlygų generatorius · G-Procure</title>
 <meta name="description" content="Deterministinis pirkimo sąlygų dokumentų (BPS, SPS, paraiškos ir pasiūlymo formų bei priedų) generavimas .docx formatu iš LITGRID šablonų ir parengtų pirkimo dokumentų patikra prieš skelbiant: palyginimas su standartine forma, kryžminė paketo patikra, komisijos sprendimai. Be AI teksto.">
@@ -590,6 +590,7 @@
 <script src="../shared/portal-link.js"></script>
 <script src="../shared/prieinamumas.js"></script>
 <script src="../shared/sutikimas.js"></script>
+<script src="../shared/analitika.js"></script>
 <script src="../shared/bibliotekos-atmintis.js"></script>
 <script src="../shared/pranesimas.js"></script>
 <header class="app-header">
@@ -5621,12 +5622,35 @@ function rodyk(n){
     b.classList.toggle('on', j === i); b.classList.toggle('done', j < i);
     if (j === i) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
   });
+  const buvo = ETAPAS;
   ETAPAS = ZINGSNIAI[i][0];
+  if (buvo !== ETAPAS) statistikaZingsnis(ETAPAS);
   document.body.dataset.etapas = ETAPAS;   // plačiame ekrane 2 žingsnio eiga - šoninė juosta (CSS pagal body[data-etapas])
   if (ETAPAS === 'sutartis' && window.SUTARTIES_FORMA) window.SUTARTIES_FORMA.atnaujink();
   zingsniuBusena();
   window.scrollTo(0,0);
   if (window.JD) window.JD.pakeista();
+}
+
+/* Naudojimosi statistika (tik su sutikimu, shared/analitika.js; docs/analitika/ivykiu-sarasas.md): žingsnis, būdo kodas, dokumentų
+   kalba ir įstatymas; generavimo rezultatas, apimtis ir sutarties šeimos kodas. Pavadinimų, vertės ir atsakymų - ne. */
+function statistikosKontekstas(){
+  const b = ($('#budas') && $('#budas').value) || '', k = $('input[name=kalba]:checked');
+  return { budas: GP_ANALITIKA.budas(b), dokumentu_kalba: k ? (k.value === 'LT_EN' ? 'lt_en' : 'lt') : undefined,
+           istatymas: istatymas() === 'VPĮ' ? 'VPI' : 'PI' };
+}
+function statistikaZingsnis(z){
+  if (!window.GP_ANALITIKA) return;
+  try { GP_ANALITIKA.ivykis('salygos_zingsnis', Object.assign({ zingsnis: z === '3' ? '4' : String(z) }, statistikosKontekstas())); } catch (e) {}
+}
+function statistikaGeneravimas(r, visi, pradzia){
+  if (!window.GP_ANALITIKA) return;
+  try {
+    const SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena(), sk = SB && SB.pasirinkta && SB.pasirinkta.seima;
+    const sutartis = !visi ? 'atideta' : (sk && GP_ANALITIKA.IVYKIAI.salygos_generavimas.sutartis.indexOf(sk) >= 0 ? sk : 'nerengiama');
+    GP_ANALITIKA.ivykis('salygos_generavimas', { rezultatas: r.ok ? 'pavyko' : 'klaida', apimtis: visi ? 'salygos_ir_sutartis' : 'salygos',
+      sutartis, budas: statistikosKontekstas().budas, trukme: GP_ANALITIKA.trukme(Date.now() - pradzia) });
+  } catch (e) {}
 }
 
 /* Priedu registras (zemelapiai/priedai.json) - TIK duomenys. UI perkelta i
@@ -6441,9 +6465,11 @@ async function generuotiDokumentus(o = {}){
     }
   }
   $(mygt).disabled = true;
+  const genPradzia = Date.now();
   const r = await GP_BUSENA.vykdyk(bus, { tipas:'eiga', tekstas: visi ? 'Generuojamos pirkimo sąlygos ir sutarties projektas iš šablonų...' : 'Generuojamos pirkimo sąlygos iš šablonų...', laikmatis:true,
     klaidosPriesdelis:'Nepavyko sugeneruoti dokumentų', kartoti: () => generuotiDokumentus(o), veiksmas: () => generuoti({ sutartis: visi }) });
   $(mygt).disabled = false;
+  if (!r.atsaukta) statistikaGeneravimas(r, visi, genPradzia);
   if (!r.ok){ if (r.klaida) console.error(r.klaida); return; }
   window.__R = r.reiksme; window.__GEN = { parasai: genParasai(), kada: new Date(), sutartis: visi, is: visi ? 'sutartis' : '2' };
   rodykRezultata(r.reiksme); rodyk(3);
@@ -6975,6 +7001,7 @@ if (window.SUTARTIES_FORMA) document.getElementById('sutartiesForma').addEventLi
 document.querySelectorAll('[data-pauze]').forEach(b => b.addEventListener('click', () => {
   const vieta = b.closest('.lk-pabaiga, section').querySelector('.jd-pauze');
   if (!window.JD){ vieta.innerHTML = '<span class="jd-kl">Juodraščio modulis neįkeltas - atsakymų išsaugoti negalima.</span>'; return; }
+  if (window.GP_ANALITIKA) GP_ANALITIKA.ivykis('salygos_juodrastis', { veiksmas: 'issaugoti_veliau' });
   const w = window.JD.issaugok({ priverstinai: true }), r = window.JD.irasas(), kada = r && r.keista ? new Date(r.keista).toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' }) : '';
   if (w.ok){
     vieta.innerHTML = `<span class="jd-ok">Juodraštis išsaugotas šioje naršyklėje ${esc(kada)}.</span> Grįžę į šį puslapį, jį rasite sąraše „Neužbaigti pirkimo sąlygų juodraščiai“
