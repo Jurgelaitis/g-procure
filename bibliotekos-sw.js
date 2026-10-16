@@ -10,7 +10,8 @@
  * LIEČIA TIK BIBLIOTEKŲ FAILUS: kiti adresai (puslapiai, moduliai, duomenys, DI užklausos) nepertraukiami - juos
  * naršyklė krauna kaip įprasta. Adresuose yra versija, todėl failas niekada nesikeičia: talpykla pirma.
  * Nauja ar atnaujinta biblioteka - naujas adresas BIBLIOTEKOS sąraše (testai tikrina, kad sąrašas = bibliotekos.json);
- * įsijungus naujai versijai iš talpyklos pašalinami sąraše nebesantys failai.
+ * įsijungus naujai versijai iš talpyklos pašalinami sąraše nebesantys failai. Pirmame atvėrime bibliotekos įsikelia dar be
+ * darbininko - shared/bibliotekos-atmintis.js atsiunčia jų adresus (žinutė „issaugok“), ir jos išsaugomos iškart.
  *
  * Talpykla - būtinoji naršyklės saugykla (programos failai, ne jūsų duomenys; slapukai.html). Registruoja
  * shared/bibliotekos-atmintis.js. PP-tiekejams ir PP-teise turi savus darbininkus (jų katalogams jie svarbesni).
@@ -54,6 +55,23 @@ self.addEventListener("activate", function (e) {
         .map(function (r) { return c.delete(r); }));
     });
   }).catch(function () {}).then(function () { return self.clients.claim(); }));
+});
+
+// Puslapis praneša, kurias bibliotekas jau įkėlė be darbininko (pirmas atvėrimas): išsaugomos tik sąrašo bibliotekos
+self.addEventListener("message", function (e) {
+  var d = e.data || {};
+  if (d.tipas !== "issaugok" || !Array.isArray(d.adresai)) return;
+  var keliai = [];
+  d.adresai.slice(0, 50).forEach(function (u) {
+    var x; try { x = new URL(String(u), self.location.href); } catch (er) { return; }
+    if (x.origin !== self.location.origin || KELIAI.indexOf(x.pathname) < 0) return;
+    if (keliai.indexOf(x.pathname) < 0) keliai.push(x.pathname);
+    if (KARTU[x.pathname] && keliai.indexOf(KARTU[x.pathname]) < 0) keliai.push(KARTU[x.pathname]);
+  });
+  if (!keliai.length) return;
+  e.waitUntil(caches.open(TALPYKLA).then(function (c) {
+    return Promise.all(keliai.map(function (k) { return issaugok(c, k); }));
+  }).catch(function () {}));
 });
 
 self.addEventListener("fetch", function (e) {
