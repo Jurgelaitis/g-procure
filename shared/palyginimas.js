@@ -346,7 +346,20 @@
     if (beAlternatyvos(a, b)) return true;
     // vieta užpildyta gale („Rengė:“ -> „Rengė: vardas“)
     if (/:\s*$/.test(a) && b.indexOf(a.replace(/\s+$/, "")) === 0) return true;
+    // sutarties projekto nuoroda vietoj „X punkte/priede“ (EN „clause X / Annex“): rengėjo įrašyta bet kokia nuoroda („8.1 punkte“, „Sutarties
+    // Specialiųjų sąlygų 16 p. ir Sutarties Bendrųjų sąlygų 8.7 p.“), kai tekstas prieš ir po vietos nepakitęs (2026-10-16, kaip generatorius)
+    if (sutartiesVieta(a, b)) return true;
     return false;
+  }
+  var SUT_VIETA = /(?:Sutarties\s+projekto\s+)?X\s+punkte\s*\/\s*priede|clause\s+X\s*\/\s*Annex/;   // LITGRID SPS keičia ir „Sutarties projekto“
+  function sutartiesVieta(a, b) {
+    var m = SUT_VIETA.exec(a);
+    if (!m) return false;
+    var tp = function (t) { return String(t).replace(/\s+/g, " ").trim(); };
+    var pries = tp(a.slice(0, m.index)), po = tp(a.slice(m.index + m[0].length)), bb = tp(b);
+    if (bb.indexOf(pries) !== 0 || bb.length - po.length < pries.length || bb.slice(bb.length - po.length) !== po) return false;
+    var vid = bb.slice(pries.length, bb.length - po.length).trim();
+    return !!vid && !/^X\b/.test(vid);
   }
   function beAlternatyvos(a, b) {
     if (a.indexOf("/") < 0) return false;

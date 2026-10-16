@@ -3398,6 +3398,13 @@ async function testaiPalyginimas(){
             ab("11.1. Su Laimėjusiu Tiekėju sudaromos Sutarties kaina bus lygi Sutarties projekte nurodytai sumai."),
             ab("11.1. Su Laimėjusiu Tiekėju sudaromos Sutarties kaina bus lygi Laimėjusio Tiekėjo Pasiūlymo kainai ir avansui.")],
         [["uzpildyta"], ["uzpildyta"], ["nukrypimas"]], "A / B");
+      // sutarties projekto nuoroda vietoj „X punkte/priede“ (2026-10-16): bet kokia rengėjo nuoroda - užpildyta; pakeistas kitas sakinio tekstas - nukrypimas
+      const sv = (forma, d) => P.lygink(P.pastraipos(palygXml([forma])), P.pastraipos(palygXml([d])), {}).pakeitimai.map(p => p.rusis);
+      const LTF = "11.3. Laimėjęs Tiekėjas pateikia Sutarties įvykdymo užtikrinimą iki Sutarties sudarymo dienos. Reikalavimai Sutarties įvykdymo užtikrinimui nurodyti Sutarties projekto X punkte/priede.";
+      lygu([sv(LTF, LTF.replace("X punkte/priede", "Specialiųjų sąlygų 8 skyriuje ir Bendrųjų sąlygų 10 skyriuje")), sv(LTF, LTF.replace("Sutarties projekto X punkte/priede", "Sutarties Specialiųjų sąlygų 16 p. ir Sutarties Bendrųjų sąlygų 8.7 p.")),
+            sv(LTF, LTF.replace("X punkte/priede", "8.1 punkte").replace("iki Sutarties sudarymo", "po Sutarties sudarymo")),
+            sv("The requirements for Contract performance security are specified in clause X / Annex of the draft Contract.", "The requirements for Contract performance security are specified in Section 8 of the Special Terms and Conditions of the draft Contract.")],
+        [["uzpildyta"], ["uzpildyta"], ["nukrypimas"], ["uzpildyta"]], "sutarties projekto nuoroda (ir LITGRID paskelbtų SPS forma)");
     });
     await testas("Ankstesnės oficialios formos redakcijos pastraipa (formu-versijos.json maiša) - techninis pakeitimas, ne nukrypimas; žemėlapio blokas - neprivaloma dalis", async ()=>{
       const forma = P.pastraipos(palygXml(PALYG_FORMA)), dok = P.pastraipos(palygXml(PALYG_DOK));
@@ -3653,6 +3660,26 @@ async function sutartiesFormosBusena(w, d){
   const ans = (id, v) => { const r = F.querySelector('input[name="sf-' + id + '"][value="' + v + '"]'); if (r){ r.checked = true; r.dispatchEvent(new w.Event("change", { bubbles: true })); } };
   ans("uztikrinimas", "taip"); ans("esmines", "taip"); ans("garantine", "atvykti"); ans("es", "taip");
 }
+/* PP-salygos (2026-10-16): SPS užtikrinimo punkto nuoroda į generuojamą sutartį - kortelėje „Įrašoma automatiškai“ (ilgas tekstas su kilme)
+   ir skiltyje „Išspręsta automatiškai“; sutarties žingsnyje - pastaba „Patikrinkite (SPS ir sutartis)“ su mygtukais į klausimus. */
+async function uztikrinimoNuorodosBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  const iv = d.getElementById("pavadinimas"); iv.value = "Galios transformatorių su ilgu pavadinimu be tarpų_400/110kV_autotransformatorius"; iv.dispatchEvent(new w.Event("input", { bubbles: true }));
+  const b = d.getElementById("budas"); b.value = "T-AK"; b.dispatchEvent(new w.Event("change"));
+  w.SUTARTIES_BLOKAS.atnaujink(); if (w.SUTARTIES_BLOKAS.busena().atsakymas !== "taip") d.getElementById("sbTaip").click();
+  await w.iStep2();
+  const K = w.__K, re = /^(jeigu taikomas sutarties ivykdymo uztikrinimas|kai taikomas sutarties uztikrinimas)/;
+  const r = Object.keys(K.pavieniai).find(k => re.test(k)), g = Object.entries(K.grupes).find(([, g]) => g.nariai.some(n => re.test(n.raktas)));
+  const kort = d.getElementById(r ? w.lkId("pavienis|" + r) : g ? w.lkId("grupe|" + g[0]) : "x");
+  const t = kort && [...kort.querySelectorAll("input[type=radio]")].find(x => /Taip/.test(x.closest("label").textContent)); if (t) t.click();
+  const a = d.querySelector("#klausimai details.auto"); if (a) a.open = true;
+}
+async function sutartiesPastabuBusena(w, d){
+  await uztikrinimoNuorodosBusena(w, d);
+  w.rodyk("sutartis");
+  for (let i = 0; i < 100 && !d.querySelector('#sutartiesForma input[name="sf-socialiniai"]'); i++) await new Promise(r => setTimeout(r, 50));
+  const x = d.querySelector('#sutartiesForma input[name="sf-socialiniai"][value="ne"]'); if (x){ x.checked = true; x.dispatchEvent(new w.Event("change", { bubbles: true })); }
+}
 /* PP-salygos juodraštis ir darbo sritys (2026-10-15): neužbaigtų juodraščių sąrašas (ilgas pavadinimas be tarpų, patvirtinimo klausimas) ir
    saugojimo būsena; „Dokumentai“ su atidėta sutartimi, paketo būsena ir „Reikia pergeneruoti“. Juodraščiai - tikroje saugykloje, testų
    sukurti pašalinami (JD_APSAUGA). */
@@ -3790,6 +3817,8 @@ const TELEFONO_BUSENOS = {
   "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis: sutarties projektas - klausimai ir rankinis pasirinkimas (2026-10-08)", sutartiesBusena],
     ["2 žingsnis", w => w.rodyk(2)], ["3 žingsnis (Dokumentai)", w => w.rodyk(3)],
     ["sutarties projekto žingsnis su klausimais (2026-10-15)", sutartiesFormosBusena],
+    ["2 žingsnis: SPS užtikrinimo nuoroda į sutartį įrašyta automatiškai (2026-10-16)", uztikrinimoNuorodosBusena],
+    ["sutarties projekto žingsnis: pastaba „Patikrinkite“ su mygtukais (2026-10-16)", sutartiesPastabuBusena],
     ["juodraščių sąrašas ir saugojimo būsena (2026-10-15)", juodrasciuBusena],
     ["Dokumentai: atidėta sutartis, paketo būsena ir „Reikia pergeneruoti“ (2026-10-15)", atidetosSutartiesBusena],
     ["2 žingsnis: kvalifikacijos reikalavimai iš dokumento (2026-10-14)", kvalLentelesBusena],
@@ -4003,6 +4032,8 @@ const PRIEINAMUMO_BUSENOS = {
   // 2026-10-04: 2 žingsnis su tikrais klausimais (laukų registras, „?“ paaiškinimai, būsenos, eiga ir santrauka)
   "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis: LT/EN sutarties projektas su redakcija ir vertimo įspėjimu (2026-10-08)", sutartiesLtenBusena],
     ["sutarties projekto žingsnis: klausimai su papildomais laukais (S4, 2026-10-08; atskiras žingsnis - 2026-10-15)", sutartiesFormosBusena],
+    ["2 žingsnis: SPS užtikrinimo nuoroda į sutartį įrašyta automatiškai (2026-10-16)", uztikrinimoNuorodosBusena],
+    ["sutarties projekto žingsnis: pastaba „Patikrinkite“ su mygtukais (2026-10-16)", sutartiesPastabuBusena],
     ["juodraščių sąrašas ir saugojimo būsena (2026-10-15)", juodrasciuBusena],
     ["Dokumentai: atidėta sutartis, paketo būsena ir „Reikia pergeneruoti“ (2026-10-15)", atidetosSutartiesBusena],
     ["tikrinimas su rezultatais (BPS su nukrypimais)", async (w, d) => { await tikrinimoBusena(w, d); }, "#tkVaizdai [role=tab]"],
