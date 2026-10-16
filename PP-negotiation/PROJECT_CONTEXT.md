@@ -179,7 +179,7 @@ serverį nieko nesiunčia (taip sako ir `privatumas.html`).
 5. **Memo.** Komisijos sprendimo memorandumas.
 6. **Tech spec.** Techninės specifikacijos peržiūra (proporcingumas, lygiateisiškumas).
 
-Kontekstas kiekviename prompt'e: pirkimo info, tiekėjų rikiavimas, strategija. Nuo 2026-10-05 (R4) užklausa - tik užkoduota: tiekėjai - kodais „Tiekėjas A, B, C“, sumos - procentais nuo PV (be PV - sumų nėra), laisvame tekste pakeičiami tiekėjų pavadinimai, kontaktai, kortelės numeriai ir asmenys, el. paštai, telefonai ir sumos; kodų raktas - tik ekrane. Vienas mygtukas „Kopijuoti užkoduotą užklausą“ arba atsisiųsti .txt (tas pats tekstas).
+Kontekstas kiekviename prompt'e: pirkimo info, tiekėjų rikiavimas, strategija. Nuo 2026-10-05 (R4) užklausa - tik užkoduota: tiekėjai - kodais „Tiekėjas A, B, C“, sumos - procentais nuo PV (be PV - sumų nėra), laisvame tekste pakeičiami tiekėjų pavadinimai, kontaktai, kortelės numeriai ir asmenys, el. paštai, telefonai ir sumos (nuo 2026-10-16 keitimas - bendras `shared/uzkodavimas.js`, modulyje - tik kontekstas); kodų raktas - tik ekrane. Vienas mygtukas „Kopijuoti užkoduotą užklausą“ arba atsisiųsti .txt (tas pats tekstas).
 
 ### 4.10. Eksportas
 - **JSON:** pilnas projekto eksportas/importas (atsarginė kopija, dalijimasis).

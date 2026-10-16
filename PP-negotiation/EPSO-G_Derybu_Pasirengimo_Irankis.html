@@ -39,6 +39,8 @@
 <script src="../shared/saugykla.js"></script>
 <!-- Bendra pirkimo kortelė (A1): projekto duomenys pildomi iš kortelės -->
 <script src="../shared/money.js"></script>
+<!-- DI užklausų užkodavimas - bendras su PP-protocol ir PP-ts (iki 2026-10-16 - sava kopija šiame faile) -->
+<script src="../shared/uzkodavimas.js"></script>
 <script src="../shared/pdf-darbininkas.js"></script>
 <!-- DOCX ir ODT lentelės langeliais - pasiūlymų importui per bendrą skaitytuvą (GP_DOK, nuo 2026-10-06); JSZip - jo dydžio patikrai -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous"></script>
@@ -3362,39 +3364,17 @@ function importoPerziura(items) {
      šio projekto tiekėjų pavadinimai, jų įmonių kodai ir kontaktai, pasirinktos kortelės numeriai ir asmenys, el. paštai, telefonai,
      9 skaitmenų kodai ir sumos (su „Eur“ arba lygios projekto sumai); kitų duomenų sistema neatpažįsta - tai sakoma prie lauko;
    - pavadinimas paliekamas (projekte objekto rūšies nėra, pavadinimas paprastai viešas), bet per tą patį diSlepk().
-   Kodų raktas rodomas tik ekrane (į užklausą nepatenka). Bendra logika su PP-protocol - kandidatas į shared/. */
+   Kodų raktas rodomas tik ekrane (į užklausą nepatenka). Keitimo logika - shared/uzkodavimas.js (bendra su PP-protocol ir PP-ts, nuo 2026-10-16);
+   čia - tik šio modulio kontekstas (kodai, keičiami tekstai, žinomos sumos). */
 const DI_ISPEJIMAS = () => L('Užklausa užkoduota: tiekėjų pavadinimai pakeisti kodais (Tiekėjas A, B, C), sumos - procentiniais skirtumais nuo planuotos (numatomos) vertės, pati vertė, pirkimo numeris ir asmenų duomenys neįtraukti. Įklijuokite ją tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą). Nenaudokite asmeninių ar vartotojiškų DI paskyrų (pvz. ChatGPT, Claude.ai) pirkimo duomenims - jų sąlygos neužtikrina pirkimo konfidencialumo.',
   'The prompt is encoded: supplier names are replaced with codes (Supplier A, B, C), amounts with percentage differences from the planned (estimated) value; the value itself, the procurement number and personal data are not included. Paste it only into an AI tool approved by your organisation (e.g. the VPT Ekspertas assistant of the Public Procurement Office). Do not use personal or consumer AI accounts (e.g. ChatGPT, Claude.ai) for procurement data - their terms do not ensure the confidentiality of the procurement.');
 const DI_LAUKO_PASTABA = () => L('Nerašykite čia tiekėjų pavadinimų, sumų ar asmens duomenų. Tekstas įtraukiamas į užklausą; automatiškai pakeičiami tik šio projekto tiekėjų pavadinimai, sumos su „Eur“ (procentais nuo PV), el. paštai ir telefonai - kitų duomenų sistema neatpažįsta.',
   'Do not enter supplier names, amounts or personal data here. The text is included in the prompt; only this project’s supplier names, amounts with “EUR” (as a percentage of PV), emails and phone numbers are replaced automatically - the tool does not recognise other data.');
 
-function diTiekejoKodas(i) {
-  let r = '', n = i + 1;
-  while (n > 0) { r = String.fromCharCode(65 + (n - 1) % 26) + r; n = Math.floor((n - 1) / 26); }
-  return L('Tiekėjas ', 'Supplier ') + r;
-}
-/* Pavadinimo variantai paieškai tekste: kaip įrašyta, be kabučių ir be teisinės formos (UAB „Alfa“ -> Alfa).
-   Kelių žodžių variantas ieškomas nepaisant raidžių dydžio, vienas žodis - tiksliai ir didžiosiomis (kitaip tiekėjas
-   „UAB Statyba“ paverstų kodu kiekvieną žodį „statyba“). */
-function diVardoVariantai(v) {
-  const t = String(v || '').replace(/\s+/g, ' ').trim(), be = t.replace(/[„“”"«»]/g, '').replace(/\s+/g, ' ').trim();
-  const br = be.replace(/^(UAB|AB|MB|IĮ|VšĮ|VĮ|TŪB|KŪB|SIA|AS|OÜ|Oy|SA|GmbH|Ltd\.?)\s+/i, '')
-    .replace(/,?\s+(UAB|AB|SIA|AS|OÜ|Oy|Ab|SA|AG|BV|NV|GmbH|Ltd\.?|LLC|Inc\.?)$/i, '').trim();
-  const r = [];
-  [t, be, br].forEach(x => {
-    if (x.length < 3) return;
-    const vardai = /\s/.test(x) ? [[x, false]] : [[x, true], [x.toUpperCase(), true]];
-    vardai.forEach(y => { if (!r.some(z => z[0] === y[0])) r.push(y); });
-  });
-  return r;
-}
-const diRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function diTiekejoKodas(i) { return GP_UZKODAVIMAS.kodas(i, L('Tiekėjas ', 'Supplier ')); }
 const diSk = n => new Intl.NumberFormat(LOKALE(), { maximumFractionDigits: 1 }).format(Math.abs(Math.round(n * 10) / 10));
 const diSkirtumas = n => { const r = Math.round(n * 10) / 10; return (r > 0 ? '+' : r < 0 ? '-' : '') + diSk(r) + ' %'; };
 const diPV = (v, pv) => diSk(v / pv * 100) + ' % PV (' + diSkirtumas((v - pv) / pv * 100) + L(' nuo PV)', ' vs PV)');
-/* Suma tekste: valiuta prieš arba po skaičiaus (ir „mln.“, „tūkst.“, „million“, „thousand“); be valiutos - tik lygi projekto sumai (>= 1000). */
-const DI_SUMA = /(^|[^\p{L}\p{N}.,])((?:EUR|€)[  ]*)?(\d{1,3}(?:[   .,']\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)([  ]*(?:mln|million|tūkst|thousand)\.?)?([  ]*(?:eurų|eurai|eurus|euros|euro|eur|€)(?!\p{L}))?/giu;
-
 /* Užkodavimo kontekstas vienai užklausai: kodai, keičiami tekstai (ilgiausi pirmi) ir žinomos sumos. Pakaitų tekstai - LANG kalba. */
 function diKontekstas() {
   const s = APP.state, pv = strategy.plannedTotal(), poros = [], kodai = {}, raktas = [], sumos = [];
@@ -3402,7 +3382,7 @@ function diKontekstas() {
   s.suppliers.forEach((sup, i) => {
     const kodas = diTiekejoKodas(i);
     kodai[sup.id] = kodas; raktas.push([kodas, sup.name || L('(be pavadinimo)', '(untitled)')]);
-    diVardoVariantai(sup.name).forEach(([v, tikslus]) => pridek(v, kodas, tikslus));
+    GP_UZKODAVIMAS.vardoVariantai(sup.name).forEach(([v, tikslus]) => pridek(v, kodas, tikslus));
     pridek(sup.code, L('[įmonės kodas neįtrauktas]', '[company code removed]'), true);
     const kont = String(sup.contact || '');
     [kont].concat(kont.split(/[,;\/\n]/)).forEach(x => pridek(x, L('[kontaktas neįtrauktas]', '[contact removed]'), false));
@@ -3424,29 +3404,10 @@ function diKontekstas() {
   return { pv, kodai, raktas, poros, sumos };
 }
 
-/* Laisvo teksto keitimas. Pakaitai pirma virsta žymėmis (privačios srities simboliai, ne raidės ir ne skaičiai), kad vėlesnis
-   keitimas nepaliestų jau pakeisto (pvz. el. pašto domeno su tiekėjo vardu); žymės atkuriamos pabaigoje. */
+/* Laisvo teksto keitimas - shared/uzkodavimas.js: el. paštai, telefonai, šio projekto poros (tiekėjai, kodai, kontaktai, kortelė),
+   sumos (su valiuta arba lygios projekto sumai) - procentais nuo PV, 9 skaitmenų kodai; pakaitai - sąsajos kalba. */
 function diSlepk(tekstas, c) {
-  let t = String(tekstas == null ? '' : tekstas);
-  if (!t.trim()) return '';
-  const zymes = [], zyme = p => { zymes.push(p); return '' + String.fromCharCode(0xE100 + zymes.length - 1) + ''; };
-  t = t.replace(/[^\s@<>()"„“,;:]+@[^\s@<>()"„“,;:]+\.\p{L}{2,}/gu, () => zyme(L('[el. paštas neįtrauktas]', '[email removed]')));
-  t = t.replace(/(^|[^\p{L}\p{N}+])(\+\d[\d ()-]{6,}\d)/gu, (m, pr) => pr + zyme(L('[telefonas neįtrauktas]', '[phone removed]')));
-  t = t.replace(/(^|[^\p{L}])((?:tel|telefonas|telefono nr|mob|telephone|phone|mobile)\.?[  ]*(?:nr\.?|no\.?)?[  ]*[:.]?[  ]*)(\(?\d[\d ()-]{5,}\d)/giu, (m, pr, pav) => pr + pav + zyme(L('[telefonas neįtrauktas]', '[phone removed]')));
-  c.poros.forEach(([ka, kuo, tikslus]) => {
-    const re = new RegExp('(^|[^\\p{L}\\p{N}])' + diRe(ka) + '(?=[^\\p{L}\\p{N}]|$)', tikslus ? 'gu' : 'giu');
-    t = t.replace(re, (m, pr) => pr + zyme(kuo));
-  });
-  t = t.replace(DI_SUMA, (m, pr, pries, skaicius, daug, po) => {
-    let v = window.GP_MONEY ? GP_MONEY.parseEUR(skaicius) : null;
-    if (v == null || !isFinite(v)) return m;
-    if (daug) v *= /mln|million/i.test(daug) ? 1e6 : 1e3;
-    const zinoma = v >= 1000 && c.sumos.some(x => Math.abs(x - v) < 0.005);
-    if (!pries && !po && !zinoma) return m;
-    return pr + zyme(c.pv > 0 ? '[' + diSk(v / c.pv * 100) + ' % PV]' : L('[suma neįtraukta]', '[amount removed]'));
-  });
-  t = t.replace(/(^|[^\p{N}])\d{9}(?=[^\p{N}]|$)/gu, (m, pr) => pr + zyme(L('[kodas neįtrauktas]', '[code removed]')));
-  return t.replace(/([-])/g, (m, z) => zymes[z.charCodeAt(0) - 0xE100]);
+  return GP_UZKODAVIMAS.slepk(tekstas, { poros: c.poros, sumos: c.sumos, pv: c.pv, kalba: LANG === 'en' ? 'en' : 'lt' });
 }
 
 function generatePrompt(template) {
