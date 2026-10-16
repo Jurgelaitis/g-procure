@@ -568,7 +568,7 @@ testas("Word priedas", "Klaida - tikra priežastis prie mygtuko: biblioteka atsk
   try {
     M('state.pirkimas.budas = "kaina"');
     const b = d.getElementById("priedoBusena");
-    w.uzkraukDocx = () => Promise.reject(new Error("CDN nepasiekiamas"));
+    w.uzkraukDocx = () => Promise.reject(new Error("biblioteka neįsikėlė"));
     await w.sukurkPrieda();
     tiesa(b.classList.contains("gpb--klaida") && /Word priedo parengti nepavyko: Word biblioteka neįsikėlė/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "bibliotekos klaida: " + b.textContent);
     w.uzkraukDocx = () => Promise.resolve();
@@ -671,6 +671,27 @@ testas("Formulės", "Brangiausio ir pigiausio formulė: visų kainos lygios - vi
 testas("Formulės", "Apvalinimas pusė aukštyn ir su dvejetainėmis trupmenomis (1,005 -> 1,01; 2,675 -> 2,68); skaičius su kableliu skaitomas", ()=>{
   lygu([M("apvalink(1.005, 2)"), M("apvalink(2.675, 2)"), M("apvalink(0.125, 2)")], [1.01, 2.68, 0.13], "apvalink");
   lygu([M("sk('12,5')"), M("sk('7.25')"), M("sk('')"), M("sk(null)"), M("sk('abc')")], [12.5, 7.25, null, null, null], "sk");
+});
+
+testas("Diagramos be bibliotekos", "Chart.js neįsikėlė (nėra ryšio, o biblioteka dar neišsaugota): skaičiuoklės ir kaštų ir naudos analizės diagramų vietoje - paaiškinimas, ne tuščia vieta; atsiradus - diagrama grąžinama (bendras shared/bibliotekos.js)", async ()=>{
+  paruosk();
+  const Ch = M('window.Chart');
+  try {
+    M('window.Chart = undefined; ikelkPavyzdi();');
+    const p = M('(function(){ const c = document.getElementById("enGrafikas"); const x = c && c.parentNode.querySelector("[data-gp-biblioteka]"); return [!!c, c && c.style.display, x && x.textContent]; })()');
+    tiesa(p[0] && p[1] === "none" && /Diagrama nerodoma: nepavyko įkelti bibliotekos „Chart\.js“/.test(p[2] || ""), "skaičiuoklė: " + JSON.stringify(p));
+  } finally { ramas.contentWindow.Chart = Ch; M('renderAll();'); }
+  tiesa(M('!document.querySelector("[data-gp-biblioteka]") && document.getElementById("enGrafikas").style.display !== "none"'), "skaičiuoklė: grąžinus Chart.js - diagrama");
+  const APS = GP_TESTU_APSAUGA.pradek(k => k === "litgrid_cba");
+  const { f, w } = await remelisSuKortele("kastu_naudos_analize.html");
+  try {
+    const d = w.document, el = d.getElementById("cost_chart"), Tikras = w.Chart;
+    w.Chart = undefined; w.drawChart("cost_chart", "bar", { labels: ["A"], datasets: [{ data: [1] }] });
+    const x = el.parentNode.querySelector("[data-gp-biblioteka]");
+    tiesa(el.style.display === "none" && x && /„Chart\.js“/.test(x.textContent), "KNA: paaiškinimo nėra");
+    w.Chart = Tikras; w.drawChart("cost_chart", "bar", { labels: ["A"], datasets: [{ data: [1] }] });
+    tiesa(!el.parentNode.querySelector("[data-gp-biblioteka]") && el.style.display !== "none", "KNA: grąžinus Chart.js - diagrama");
+  } finally { f.remove(); APS.atkurk(); }
 });
 
 testas("Kaštų ir naudos analizė", "NPV: pirmieji metai nediskontuojami, norma - procentais (100 + 110 / 1,1 + 121 / 1,21 = 300)", async ()=>{

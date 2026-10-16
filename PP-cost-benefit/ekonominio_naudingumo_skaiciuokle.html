@@ -2,14 +2,11 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://cdnjs.cloudflare.com data: blob:">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ekonominio naudingumo skaičiuoklė · G-Procure</title>
 <meta name="description" content="Ekonomiškai naudingiausio pasiūlymo skaičiuoklė pirkimų iniciatoriams ir projektų vadovams: vertinimo kriterijai, lyginamieji svoriai, VPT gairių formulės ir tiekėjų pasiūlymų balai viename lape.">
 <link rel="canonical" href="https://g-procure.com/PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap" rel="stylesheet">
 <!-- EPSO-G dizaino žetonai (spalvos + šriftas) - bendras failas, vienas tiesos šaltinis -->
 <link rel="stylesheet" href="../shared/epso-g.css">
 <!-- Modulio antraštė ir skirtukai - bendri visiems moduliams (shared/modulio-antraste.css) -->
@@ -25,8 +22,9 @@
 <script src="../shared/procurement-methods.js"></script>
 <script src="../shared/organizacijos.js"></script>
 <script src="../shared/pirkimo-kortele.js"></script>
-<!-- Chart.js lokaliai - tas pats failas, kurį naudoja 2 dalis -->
-<script src="chart.umd.min.js"></script>
+<!-- Chart.js - iš pačios svetainės (shared/vendor/), tas pats failas kaip kituose moduliuose -->
+<script src="../shared/vendor/chartjs-4.4.1/chart.umd.min.js"></script>
+<script src="../shared/bibliotekos.js"></script>
 <style>
 :root{
   /* Bendros spalvos, šriftas, tarpai - ../shared/epso-g.css. Žemiau - tik tai, ko brandbook'e nėra:
@@ -197,6 +195,8 @@ footer{padding:24px 0 40px;font-size:12px;color:var(--muted)}
 <body>
 <script src="../shared/portal-link.js"></script>
 <script src="../shared/prieinamumas.js"></script>
+<script src="../shared/sutikimas.js"></script>
+<script src="../shared/bibliotekos-atmintis.js"></script>
 <script src="../shared/pranesimas.js"></script>
 
 <header class="app-header">
@@ -976,16 +976,11 @@ let _docxKrovimas = null;
 function uzkraukDocx(){
   if(window.docx) return Promise.resolve();
   if(_docxKrovimas) return _docxKrovimas;
-  // cdnjs docx 8.5.0 kelias grąžina 404 (patikrinta 2026-09-19) - pirmas veikiantis jsdelivr, kaip PP-qual.
-  const urls = ["https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js", "https://unpkg.com/docx@8.5.0/build/index.umd.js"];
-  const SRI_DOCX = "sha384-4xaIisuLEy2lo2HkB2C4rEf7v8jbTb2kuogX6TkuEt9feTWKBSFSOzsqNNbV+sKh";   // SRI (2026-09-28): pakeistas CDN failas neįvykdomas
+  // Iš pačios svetainės (shared/vendor/, nuo 2026-10-16; iki tol - jsDelivr ir UNPKG); įkeliama tik prireikus
   _docxKrovimas = new Promise((res, rej)=>{
-    let i = 0;
-    (function kitas(){
-      if(i >= urls.length){ _docxKrovimas = null; rej(new Error("CDN nepasiekiamas")); return; }
-      const sc = document.createElement("script"); sc.src = urls[i++]; sc.integrity = SRI_DOCX; sc.crossOrigin = "anonymous";   // tas pats npm failas abiejuose CDN
-      sc.onload = ()=>res(); sc.onerror = kitas; document.head.appendChild(sc);
-    })();
+    const sc = document.createElement("script"); sc.src = "../shared/vendor/docx-8.5.0/index.umd.js";
+    sc.onload = ()=>res(); sc.onerror = ()=>{ _docxKrovimas = null; rej(new Error("biblioteka neįsikėlė")); };
+    document.head.appendChild(sc);
   });
   return _docxKrovimas;
 }
@@ -1037,7 +1032,7 @@ function sukurkPrieda(){
     kartoti: sukurkPrieda,
     sekme: "Word priedas parengtas: " + vardas,
     veiksmas: ()=> uzkraukDocx()
-      .catch(()=>{ throw new Error("Word biblioteka neįsikėlė - reikia interneto ir prieigos prie cdnjs / jsdelivr / unpkg"); })
+      .catch(()=>{ throw new Error("Word biblioteka neįsikėlė - nėra interneto ryšio, o biblioteka dar neišsaugota darbui be interneto"); })
       .then(()=> sudarykDocx(t))
       .then(blob=>{
         const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
@@ -1277,6 +1272,8 @@ function renderRezultatai(){
     grafikas = new Chart(c, { type:"bar", data:{ labels:r.rikiuoti.map(e=>e.tiekejas), datasets:[{ data, backgroundColor:spalvos, borderRadius:6 }] },
       options:{ indexAxis:"y", responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: x => (r.balais ? fmtSk(x.raw, r.apv) + " bal." : fmtEUR(x.raw) + " EUR") } } },
         scales:{ x:{ ticks:{ callback: v => r.balais ? fmtSk(v, 2) : fmtEUR(v) }, grid:{ color:"#E1E2E4" } }, y:{ grid:{ display:false } } } } });
+  } else if(r.rikiuoti.length > 1 && window.GP_BIBLIOTEKOS){
+    GP_BIBLIOTEKOS.vietoje(document.getElementById("enGrafikas"), "Chart.js");   // biblioteka neįsikėlė - paaiškinimas, ne tuščia vieta
   }
   renderIspejimai(r);
   renderSimuliacija(r);
