@@ -18,7 +18,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppteise-2026-10-16-2";
+var VERSIJA = "ppteise-2026-10-16-3";
 
 var SAVI = [
   "./",
@@ -32,6 +32,7 @@ var SAVI = [
   "../shared/sriftai/nunito-sans-italic-latin-ext.woff2",
   "../shared/portal-link.js",
   "../shared/sutikimas.js",
+  "../shared/analitika.js",
   "../shared/bibliotekos-atmintis.js",
   "../shared/prieinamumas.js",
   "../shared/teise-stebesena.js"
