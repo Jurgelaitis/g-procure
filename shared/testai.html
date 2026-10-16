@@ -6025,9 +6025,10 @@ async function testaiVendor(){
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 
-  await testas("bibliotekos-atmintis.js: svetainės šaknis - iš skripto adreso, registruojamas šaknies bibliotekos-sw.js (scope - šaknis); be darbininkų palaikymo - nieko nedaroma", async ()=>{
-    const saknis = new URL("../", location.href).href;
-    const { f, w } = await ramas('<script src="bibliotekos-atmintis.js"><\/script>');
+  await testas("bibliotekos-atmintis.js: svetainės šaknis - iš skripto adreso, registruojamas šaknies bibliotekos-sw.js (scope - šaknis), pirmame atvėrime jau įkeltos bibliotekos išsaugomos iškart; be darbininkų palaikymo - nieko nedaroma", async ()=>{
+    const saknis = new URL("../", location.href).href, fs = new URL("vendor/file-saver-2.0.5/FileSaver.min.js", location.href).pathname;
+    if (self.caches) await (await caches.open("gp-bibliotekos-1")).delete(fs);
+    const { f, w } = await ramas('<script src="vendor/file-saver-2.0.5/FileSaver.min.js"><\/script><script src="bibliotekos-atmintis.js"><\/script>');
     try {
       lygu(w.GP_BIBLIOTEKU_ATMINTIS.saknis, saknis, "šaknis");
       if (w.isSecureContext && w.navigator.serviceWorker) {
@@ -6036,8 +6037,26 @@ async function testaiVendor(){
         tiesa(reg && reg.scope === saknis, "registracija: " + (reg && reg.scope));
         const sw = reg && (reg.installing || reg.waiting || reg.active);
         tiesa(sw && sw.scriptURL === saknis + "bibliotekos-sw.js", "darbininkas: " + (sw && sw.scriptURL));
+        lygu(w.GP_BIBLIOTEKU_ATMINTIS.ikeltos().map(u => new URL(u).pathname), [fs], "puslapio įkeltos bibliotekos");
+        // Biblioteka įsikėlė prieš darbininką - jis ją išsaugo pagal žinutę (kitaip - tik kitame atvėrime)
+        const c = await caches.open("gp-bibliotekos-1");
+        let ir = null; for (let i = 0; i < 100 && !ir; i++) { ir = await c.match(fs); if (!ir) await new Promise(r => setTimeout(r, 100)); }
+        tiesa(ir && (await ir.text()).length > 1000, "pirmo atvėrimo biblioteka neišsaugota");
       }
     } finally { f.remove(); }
+    // Žinutė - ir kai darbininkas jau veikia (reg.active), ir kai tik diegiamas (po „activated“); tik šios svetainės bibliotekos
+    const srcA = await saltinis("bibliotekos-atmintis.js");
+    const siuntos = [], klaus = {};
+    const darb = busena => { const o = { state: busena, postMessage: d => siuntos.push([o.state, d]), addEventListener: (t, f) => { klaus[t] = f; } }; return o; };
+    const netikras = reg => ({ document: { currentScript: { src: saknis + "shared/bibliotekos-atmintis.js" }, readyState: "complete" }, isSecureContext: true,
+      navigator: { serviceWorker: { register: () => Promise.resolve(reg) } }, addEventListener(){},
+      performance: { getEntriesByType: () => [{ name: saknis + "shared/vendor/docx-8.5.0/index.umd.js" }, { name: saknis + "shared/money.js" }, { name: "https://example.com/shared/vendor/x.js" }] } });
+    const W1 = netikras({ active: darb("activated") }); new Function("window", srcA)(W1); await W1.GP_BIBLIOTEKU_ATMINTIS.registracija;
+    const diegiamas = darb("installing"), W2 = netikras({ installing: diegiamas }); new Function("window", srcA)(W2); await W2.GP_BIBLIOTEKU_ATMINTIS.registracija;
+    lygu(siuntos.length, 1, "veikiantis darbininkas - viena žinutė, diegiamas - dar ne");
+    diegiamas.state = "activated"; klaus.statechange && klaus.statechange();
+    lygu(siuntos.map(x => [x[0], x[1].tipas, x[1].adresai]), [["activated", "issaugok", [saknis + "shared/vendor/docx-8.5.0/index.umd.js"]],
+      ["activated", "issaugok", [saknis + "shared/vendor/docx-8.5.0/index.umd.js"]]], "žinutės");
     // Be navigator.serviceWorker (senesnė naršyklė, failas diske) - registracija nebandoma
     const src = await saltinis("bibliotekos-atmintis.js");
     const W = { document: { currentScript: { src: saknis + "shared/bibliotekos-atmintis.js" }, readyState: "complete" }, navigator: {}, isSecureContext: true, addEventListener(){ throw new Error("neturi laukti"); } };
@@ -6066,6 +6085,12 @@ async function testaiVendor(){
     await fetch("vendor/pdfjs-3.11.174/pdf.min.js");
     let d = null; for (let i = 0; i < 50 && !d; i++) { d = await c.match(darb); if (!d) await new Promise(r => setTimeout(r, 100)); }
     tiesa(d && (await d.text()).length > 100000, "pdf.js darbininkas neišsaugotas kartu su pdf.min.js");
+    // Žinutė „issaugok“: tik sąrašo bibliotekos, tik ši kilmė (kitas adresas ir ne biblioteka - ignoruojami)
+    const chA = new URL(kelias, location.href);
+    await c.delete(kelias);
+    navigator.serviceWorker.controller.postMessage({ tipas: "issaugok", adresai: [chA.href, new URL("money.js", location.href).href, "https://example.com" + kelias] });
+    let ci = null; for (let i = 0; i < 50 && !ci; i++) { ci = await c.match(kelias); if (!ci) await new Promise(r => setTimeout(r, 100)); }
+    tiesa(ci && (await ci.text()) === tikras, "žinutė „issaugok“: biblioteka neišsaugota");
     // Ne biblioteka - nesaugoma
     await fetch("money.js?b=" + Date.now());
     tiesa(!(await c.match(new URL("money.js", location.href).pathname)) && !(await c.keys()).some(r => !/\/shared\/vendor\//.test(new URL(r.url).pathname)), "talpykloje - ne bibliotekos failas");
