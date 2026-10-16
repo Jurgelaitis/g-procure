@@ -366,6 +366,7 @@
         return { docs: docs, ankstesne: ankstesne, palyg: palyg };
       }
     });
+    if (!rez.ok && !rez.atsaukta) statistika("klaida", 0);
     if (!rez.ok || mano !== B.eiga) return;
     var senas = B;
     B = nauja(); B.eiga = senas.eiga;
@@ -376,7 +377,19 @@
     await lyginkVisus();
     $("tkRezultatai").hidden = false;
     piesk();
+    statistika("pavyko", B.docs.length);
     $("tkH").focus();
+  }
+  // Naudojimosi statistika (tik su sutikimu): rezultatas, dokumentų ir radinių skaičiai pagal lygį - be failų, vardų ir radinių turinio
+  function statistika(rezultatas, dokumentai) {
+    if (!global.GP_ANALITIKA) return;
+    try {
+      var sk = { kliutis: 0, nukrypimas: 0, tikrinti: 0 }, riba = function (n) { return Math.min(99, n); };
+      (B.radiniai || []).forEach(function (r) { if (sk[r.lygis] != null) sk[r.lygis]++; });
+      global.GP_ANALITIKA.ivykis("dokumentu_tikrinimas", rezultatas === "pavyko"
+        ? { rezultatas: rezultatas, dokumentai: Math.max(1, riba(dokumentai)), kliutys: riba(sk.kliutis), nukrypimai: riba(sk.nukrypimas), patikrinkite: riba(sk.tikrinti) }
+        : { rezultatas: rezultatas });
+    } catch (e) {}
   }
 
   /* ---------------------------------------------------------------- formos atpažinimas ir palyginimas */
