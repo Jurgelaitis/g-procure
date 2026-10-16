@@ -11,6 +11,7 @@
 <script src="saugykla.js"></script>
 <script src="testu-apsauga.js"></script>
 <script src="money.js"></script>
+<script src="uzkodavimas.js"></script>
 <style>
   body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
        background:var(--color-graphite-5);font-size:14px;line-height:1.5}
@@ -3749,7 +3750,26 @@ function rkKlausimuBusena(w, d){
   w.eval('App.rkTekstoPokytis(); App.rkPradek(true); if (!App.rkBusena().klausimai.some(k => k.id === "di-t")) App.rkBusena().klausimai.push({ id: "di-t", tema: "objektas", tekstas: "Ar 180 kalendorinių dienų pristatymo terminas realus dabartinėmis rinkos sąlygomis?", saltinis: "di", itraukta: false, pagrindas: "Terminas trumpas gamybai.", citata: "per 180 kalendorinių dienų nuo sutarties pasirašymo", citataNerasta: false, pakeista: false }); App.rkItraukVisus("objektas"); App.rkZingsnis(2)');
 }
 function rkKvietimoBusena(w, d){ rkKlausimuBusena(w, d); w.eval('App.rkZingsnis(3)'); }
-const RK_BUSENOS = [["rinkos konsultacija: 2 žingsnis - klausimai su DI pasiūlymu (2026-10-15)", rkKlausimuBusena], ["rinkos konsultacija: 3 žingsnis - kvietimas ir parengtis (2026-10-15)", rkKvietimoBusena]];
+/* 4 žingsnis (atsakymų suvestinė): ilgas dalyvio pavadinimas ir adresas be tarpų, nenagrinėjama pastaba su kita priežastimi, kainų lentelė, DI pasiūlymas */
+async function rkSuvestinesBusena(w, d){
+  rkKvietimoBusena(w, d);
+  await w.eval(`(async () => {
+    const a = await RinkosSuvestine.atpazink({ name: "Rinkos_konsultacija_UAB_Labai_ilgas_rinkos_dalyvio_pavadinimas_atsakymas.docx", parseStatus: "parsed", blocks: [
+      "Rinkos dalyvis: UAB „Labai ilgas rinkos dalyvio pavadinimas su keliais žodžiais Lietuvoje“", "Techninė specifikacija ir pirkimo objektas",
+      "Siūlome leisti IEC 60076 lygiaverčius standartus, žr. https://example.com/labai/ilgas/adresas/be/tarpu/kuris/gali/isplesti/puslapi/telefone.",
+      "Pirkimo objekto kaina", "Preliminari kaina - 1 250 000 Eur be PVM.", "Dalyvavimas pirkime", "1.1. Taip. 1.2. Taip, ketiname pateikti pasiūlymą.",
+      "Terminai ir vykdymo sąlygos", "Prašome pratęsti terminą."].map(t => ({ text: t })) }, { klausimai: [] });
+    App.rkSvPriimk([a]);
+    const S = App.rkBusena().sv, t = S.pastabos.find(p => p.tema === "terminai");
+    App.rkSvBusena(t.id, "nenagrineta"); App.rkSvPriezastis(t.id, "kita");
+    S.di.objektas = { apibendrinimas: "Vienas rinkos dalyvis siūlė leisti lygiaverčius standartus.", pastabos: [{ tekstas: "Lygiaverčiai standartai", dalyviai: ["A"], citata: "Siūlome leisti IEC 60076 lygiaverčius standartus" }],
+      atsakymoJuodrastis: "Pastaba bus įvertinta rengiant pirkimo dokumentus.", nerasta: 0 };
+    App.rkZingsnis(4);
+  })()`);
+}
+function rkVidausBusena(w, d){ return rkSuvestinesBusena(w, d).then(() => w.eval('App.rkSvPerziura("vidaus")')); }
+const RK_BUSENOS = [["rinkos konsultacija: 2 žingsnis - klausimai su DI pasiūlymu (2026-10-15)", rkKlausimuBusena], ["rinkos konsultacija: 3 žingsnis - kvietimas ir parengtis (2026-10-15)", rkKvietimoBusena],
+  ["rinkos konsultacija: 4 žingsnis - atsakymai, vertinimas, DI pasiūlymas ir kainos (2026-10-15)", rkSuvestinesBusena], ["rinkos konsultacija: 4 žingsnis - vidaus ataskaitos peržiūra (2026-10-15)", rkVidausBusena]];
 const TELEFONO_BUSENOS = {
   [NEG]: NEG_BUSENOS,
   "../PP-ts/TS_Asistentas.html": RK_BUSENOS,
@@ -4713,6 +4733,46 @@ async function testaiPinigai(){
 }
 
 /* ==========================================================================
+   DI užklausų užkodavimas (uzkodavimas.js, 2026-10-15): rinkos dalyvių ir tiekėjų pavadinimai - kodais, kitos įmonės, asmenys,
+   el. paštai, telefonai, įmonių kodai ir sumos - pakaitais. Pirmas naudotojas - PP-ts rinkos konsultacijos suvestinė.
+   ========================================================================== */
+async function testaiUzkodavimas(){
+  dabartine = grupe("DI užklausų užkodavimas (uzkodavimas.js)");
+  const U = GP_UZKODAVIMAS, poros = U.poros([{ vardas: "UAB „Alfa“", kodas: "Dalyvis A" }, { vardas: "Beta OÜ", kodas: "Dalyvis B", kiti: [["Beta Group", "Dalyvis B"]] }]);
+  await testas("Kodai ir vardų variantai: A-Z, AA...; vardas kaip įrašytas, be kabučių, be teisinės formos (vienas žodis - tiksliai ir didžiosiomis); poros - ilgiausi pirmi", async ()=>{
+    lygu([0, 1, 25, 26, 27, 51, 52, 701, 702].map(i => U.kodas(i)).concat([U.kodas(1, "")]), ["Dalyvis A", "Dalyvis B", "Dalyvis Z", "Dalyvis AA", "Dalyvis AB", "Dalyvis AZ", "Dalyvis BA", "Dalyvis ZZ", "Dalyvis AAA", "B"]);
+    lygu([U.vardoVariantai("UAB „Alfa“"), U.vardoVariantai("Beta OÜ"), U.vardoVariantai("AB")], [[["UAB „Alfa“", false], ["UAB Alfa", false], ["Alfa", true], ["ALFA", true]], [["Beta OÜ", false], ["Beta", true], ["BETA", true]], []]);
+    lygu(poros.map(p => p[0]), ["UAB „Alfa“", "Beta Group", "UAB Alfa", "Beta OÜ", "Alfa", "ALFA", "Beta", "BETA"], "ilgiausi pirmi");
+  });
+  await testas("slepk: žinomi pavadinimai - kodais (vienas žodis - tik tikslus ar didžiosiomis: „alfa dalelės“ lieka), el. paštas, telefonai, įmonės kodas, sumos su valiuta; skaičiai be valiutos (kiekiai, kV, metai) lieka", async ()=>{
+    const sl = t => U.slepk(t, { poros, imones: true, asmenys: true });
+    lygu(sl("UAB „Alfa“ siūlo; Alfa ir ALFA, bet alfa dalelės - ne. Beta Group ir BETA OÜ."), "Dalyvis A siūlo; Dalyvis A ir Dalyvis A, bet alfa dalelės - ne. Dalyvis B ir Dalyvis B.");
+    lygu(sl("Rašykite tomas@alfa.lt arba +370 612 34567, tel. 8 612 34567, mob.: 861234567, įm. k. 123456789."),
+      "Rašykite [el. paštas neįtrauktas] arba [telefonas neįtrauktas], tel. [telefonas neįtrauktas], mob.: [telefonas neįtrauktas], įm. k. [kodas neįtrauktas].");
+    lygu(sl("Kaina 1 250 000 Eur be PVM, apie 1,2 mln. eurų, EUR 900 000; 4 vnt., 110 kV, 2024 m., 240 dienų, 1500 vnt."),
+      "Kaina [suma neįtraukta] be PVM, apie [suma neįtraukta], [suma neįtraukta]; 4 vnt., 110 kV, 2024 m., 240 dienų, 1500 vnt.");
+    lygu(U.slepk("Kaina 1 250 000 Eur be PVM, apie 1,2 mln. eurų, EUR 900 000; 4 vnt.", { pv: 1500000 }), "Kaina [83,3 % PV] be PVM, apie [80 % PV], [60 % PV]; 4 vnt.", "procentai nuo numatomos vertės");
+    lygu(U.slepk("Vertė 1 500 000, kiekis 1500.", { sumos: [1500000] }), "Vertė [suma neįtraukta], kiekis 1500.", "žinoma suma be valiutos");
+    lygu([U.slepk("  "), U.slepk(null)], ["", ""]);
+  });
+  await testas("slepk: kitos įmonės (imones) ir asmenys po etikečių (asmenys) - tik paprašius; etiketė mažąja raide su ne vardu - nekeičiama; EN pakaitai; jau pakeistas tekstas antrą kartą nekeičiamas", async ()=>{
+    const t = "Kaip UAB „Kitas“, „Zeta“, UAB ir Gama Statyba UAB bei Omega OÜ sutartyse.";
+    lygu([U.slepk(t), U.slepk(t, { imones: true })], [t, "Kaip [įmonė neįtraukta], [įmonė neįtraukta] ir [įmonė neįtraukta] bei [įmonė neįtraukta] sutartyse."]);
+    const a = "Kontaktinis asmuo: Tomas Tomaitis. Pagarbiai, Petras Petraitis. Direktorius Jonas Jonaitis. kontaktinis asmuo - nenurodytas.";
+    lygu([U.slepk(a), U.slepk(a, { asmenys: true })], [a, "Kontaktinis asmuo: [asmuo neįtrauktas]. Pagarbiai, [asmuo neįtrauktas]. Direktorius [asmuo neįtrauktas]. kontaktinis asmuo - nenurodytas."]);
+    lygu(U.slepk("Contact person: John Smith, john@x.com, EUR 5 000. Regards, Ann Lee", { kalba: "en", asmenys: true }), "Contact person: [person removed], [email removed], [amount removed]. Regards, [person removed]");
+    lygu(U.slepk("Dalyvis A ir UAB „Alfa“: info@alfa.lt", { poros, imones: true }), "Dalyvis A ir Dalyvis A: [el. paštas neįtrauktas]", "kodas ir el. paštas - nepakeisti dar kartą");
+  });
+  await testas("sumos: suma, sakinys citatai ir PVM (be / su / nenurodyta) pagal žodžius šalia; skaičiai be valiutos - ne sumos; PP-ts jungia šį failą", async ()=>{
+    lygu(U.sumos("Kaina 1 250 000 Eur be PVM. Su PVM - 1.512.500,00 EUR. Apie 2 mln. eurų (su PVM). EUR 900 000 neįskaitant PVM; 4 vnt. 150 Eur.").map(x => [x.suma, x.citata, x.pvm]),
+      [[1250000, "Kaina 1 250 000 Eur be PVM.", "be"], [1512500, "Su PVM - 1.512.500,00 EUR.", "su"], [2000000, "Apie 2 mln. eurų (su PVM).", "su"], [900000, "EUR 900 000 neįskaitant PVM;", "be"], [150, "150 Eur.", null]], "citata - sakinys (santrumpos taškas laikomas sakinio pabaiga)");
+    lygu(U.sumos("4 vnt., 110 kV, 2024 m."), []);
+    const h = await (await fetch("../PP-ts/TS_Asistentas.html?ci=" + Date.now())).text();
+    tiesa(h.indexOf('<script src="../shared/uzkodavimas.js">') > 0, "PP-ts nejungia uzkodavimas.js");
+  });
+}
+
+/* ==========================================================================
    Trumpi pranešimai (B5, 2026-09-28): shared/pranesimas.js vietoj 11 modulių kopijų. Iki tol: skirtinga vieta
    (apačioje, viršuje, centre), trukmė (1,8-5 s) ir spalvos - baltas tekstas ant smaragdo ar raudonos 3,35-4,3:1;
    ekrano skaitytuvas girdėjo tik 2 iš 11 (kiti įterpiami be gyvos srities).
@@ -5599,6 +5659,7 @@ async function testaiSaugumas(){
   await testaiJuosta();
   await testaiKopija();
   await testaiPinigai();
+  await testaiUzkodavimas();
   await testaiPranesimai();
   await testaiPaaiskinimas();
   await testaiBibliotekos();
