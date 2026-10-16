@@ -34,7 +34,7 @@ Kaip iki šiol formoje: siūloma reikšmė niekada neatrodo kaip jūsų - „Si�
 | Sutarties numeris, 1.1.9-1.1.10, 1.2.1-1.2.10 (Tiekėjo rekvizitai, atstovai) | tušti laukai | sudarant | SUD |
 | 1.1.1-1.1.8 (Pirkėjo rekvizitai) | LITGRID AB rekvizitai jau šablone (kodas, adresas, PVM kodas, sąskaita, bankas, telefonas, el. paštas); „ĮMONĖS PAVADINIMAS“ | įrašoma automatiškai: „ĮMONĖS PAVADINIMAS“ -> LITGRID AB, kiti - kaip šablone | D |
 | 1.2 nurodymas „(jei Tiekėjas yra fizinis asmuo ... grupės nario informaciją)“ | nurodymas pildančiam | lieka (jis skirtas pildančiam sudarant) | SUD |
-| 2.1 Pirkėjo atstovas „(nurodyti padalinį / skyrių, pareigas, vardą, pavardę, tel., el. paštą)“ | nurodymas | K, neprivalomas: „Kas bus Pirkėjo atstovas sutarčiai vykdyti?“ - įrašius - vietoj nurodymo; neįrašius - nurodymas lieka | K, SIŪLOMA |
+| 2.1 Pirkėjo atstovas „(nurodyti padalinį / skyrių, pareigas, vardą, pavardę, tel., el. paštą)“ | nurodymas | lieka - sudarant sutartį (jūsų sprendimas 2026-10-16: paaiškėja tik po pirkimo, todėl neklausiama; iki tol - neprivalomas klausimas „Kas bus Pirkėjo atstovas sutarčiai vykdyti?“) | SUD |
 | 2.2 Tiekėjo atstovas | nurodymas | lieka | SUD |
 | 3.2 Pirkimo pavadinimas ir numeris | tuščias laukas | įrašoma automatiškai: „{pavadinimas} pirkimas, pirkimo Nr. {numeris}“; numeris - iš pirkimo kortelės, o kai kortelė nepasirinkta ar be numerio - privalomas klausimas „Koks pirkimo numeris?“ (iki 2026-10-11 be kortelės numeris būdavo tyliai praleidžiamas) | D / K |
 | 3.3 ES lėšos | valdiklis | K: „Ar pirkimas finansuojamas ES lėšomis?“ Taip - projekto Nr. ir pavadinimas | K |
@@ -159,7 +159,7 @@ pačioje eilutėje. 7 testai, 12 kodo mutacijų - visos pagaunamos.
 
 | Vieta | Šablone | Taisyklė | Žymė |
 |---|---|---|---|
-| 10 Užsakovo atstovas ir atsakingas už paskelbimą | „[Pareigos, vardas, pavardė]“, „[Telefonas, el. paštas]“ | K (neprivalomi); Rangovo atstovas - sudarant | K / SUD |
+| 10 Užsakovo atstovas ir atsakingas už paskelbimą | „[Pareigos, vardas, pavardė]“, „[Telefonas, el. paštas]“ | sudarant sutartį (2026-10-16, kaip prekių ir paslaugų SS 2.1 - jūsų sprendimas: asmenys paaiškėja tik po pirkimo; iki tol - du neprivalomi klausimai); Rangovo atstovas - sudarant | SUD |
 | 11 Sutarties kaina, 13 sąskaita | pildomos vietos | sudarant (pagal laimėjusį pasiūlymą) | SUD |
 | 12 Apmokėjimas | 3 variantai su „//“ rekomendacijomis | K (privalomas): pagal Darbų žiniaraštį / pagal etapus (tik kai darbai etapais; „priede Nr. []“ - 1.1) / įvykdžius įsipareigojimus. Siūloma pagal šablono rekomendacijas: terminas iki 4 mėn. - vienu mokėjimu; pavadinime rekonstravimas, statyba, atramos - pagal žiniaraštį; remontas ir etapai - pagal etapus | K, SIŪLOMA |
 | 14 ES fondai | „// Jei Darbus numatoma finansuoti ...“ | K: šablono nurodymo formuluotės („Darbus ketinama finansuoti ...“ / „Darbai ... nefinansuojami.“) | K |
@@ -190,7 +190,7 @@ pačioje eilutėje. 7 testai, 12 kodo mutacijų - visos pagaunamos.
 | 1.1 priedas „Projektavimo ir statybos darbų etapai“ | lentelė, „(rengiant sutartį pasirenkama ...)“, „//Pildymo sąlygos:“ | darbai etapais - priedas lieka: „[OBJEKTAS]“ - 1 punkto atsakymas, lentelė ir nurodymai - W (generatorius lentelės nepildo); ne etapais - priedas šalinamas | D / W |
 | Priedų sąrašas, parašai | šablono tekstas | lieka (priedų sąrašą ir „Kiti priedai“ sutvarkote Word programoje, jei reikia) | SUD |
 
-Iš viso: 26 klausimai (2 neprivalomi - Užsakovo atstovai; papildomi laukai rodomi pagal atsakymą), siūloma reikšmė - 5 klausimams (Techninė užduotis,
+Iš viso: 24 klausimai (iki 2026-10-16 - 26: du neprivalomi Užsakovo atstovų klausimai pašalinti - pildoma sudarant; papildomi laukai rodomi pagal atsakymą), siūloma reikšmė - 5 klausimams (Techninė užduotis,
 apmokėjimas, netesybos, derinimo terminai, užtikrinimas). Bendri su SPS: užtikrinimas (tik siūlymas ir derinimas).
 
 ## Įgyvendinimas (2026-10-10)
