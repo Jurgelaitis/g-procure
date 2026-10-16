@@ -2,7 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com data: blob:">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob:">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Derybų pasirengimo įrankis · G-Procure</title>
 <meta name="description" content="Nuo tiekėjų pasiūlymų iki derybų plano: įkainių matrica, derybų ribos ir rekomendacijos kiekvienam tiekėjui.">
@@ -652,6 +652,7 @@ a:hover { text-decoration: underline; }
 <script src="../shared/portal-link.js"></script>
 <script src="../shared/prieinamumas.js"></script>
 <script src="../shared/sutikimas.js"></script>
+<script src="../shared/analitika.js"></script>
 <script src="../shared/bibliotekos-atmintis.js"></script>
 <script src="../shared/pranesimas.js"></script>
 <!-- Kopijavimas į iškarpinę su tikru rezultatu (GP_KOPIJA) -->
@@ -1876,7 +1877,7 @@ const views = {
 
     <div class="card card--accent">
       <div class="card__title">${L('💡 Privatumo principas', '💡 Privacy principle')}</div>
-      <p class="mt-1" style="font-size: 13px;">${L('Šis įrankis veikia jūsų naršyklėje ir nieko nesiunčia. Užklausa užkoduojama: tiekėjai - kodais, sumos - procentais nuo planuojamos vertės, asmenų duomenys neįtraukiami. Ją įklijuokite tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą), ne į asmenines ar vartotojiškas DI paskyras.', 'This tool runs in your browser and sends nothing. The prompt is encoded: suppliers as codes, amounts as a percentage of the planned value, personal data are not included. Paste it only into an AI tool approved by your organisation (e.g. VPT Ekspertas), not into personal or consumer AI accounts.')}</p>
+      <p class="mt-1" style="font-size: 13px;">${L('Šis įrankis veikia jūsų naršyklėje ir į DI nieko nesiunčia. Užklausa užkoduojama: tiekėjai - kodais, sumos - procentais nuo planuojamos vertės, asmenų duomenys neįtraukiami. Ją įklijuokite tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą), ne į asmenines ar vartotojiškas DI paskyras.', 'This tool runs in your browser and sends nothing to AI. The prompt is encoded: suppliers as codes, amounts as a percentage of the planned value, personal data are not included. Paste it only into an AI tool approved by your organisation (e.g. VPT Ekspertas), not into personal or consumer AI accounts.')}</p>
     </div>
   `,
 
@@ -3346,6 +3347,7 @@ function importoPerziura(items) {
       priimta++;
     });
     storage.save(); render.all(); closeModal();
+    if (priimta) window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'pasiulymai_ikelti', failai: Math.min(99, priimta) });   // statistika (tik su sutikimu)
     toast(L('Priimta failų: ' + priimta + (naujuTiekeju ? ', naujų tiekėjų: ' + naujuTiekeju : '') + (praleista ? ', praleista: ' + praleista : ''),
       'Files accepted: ' + priimta + (naujuTiekeju ? ', new suppliers: ' + naujuTiekeju : '') + (praleista ? ', skipped: ' + praleista : '')), priimta ? 'success' : 'warn');
   };
@@ -3980,6 +3982,9 @@ function go(view) {
   $$('.sidenav__btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   $$('.content .view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
   if (view === 'analysis') setTimeout(() => render.analysis(), 60);
+  // Naudojimosi statistika (tik su sutikimu): atvertas įkainių matricos ar rekomendacijų vaizdas
+  if (view === 'analysis') window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'matrica_perziureta' });
+  if (view === 'strategy') window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'rekomendacijos_perziuretos' });
   if (view === 'meat') setTimeout(() => render.meatView(), 60);
   if (view === 'dashboard') setTimeout(() => render.dashboard(), 60);
 }
@@ -4030,11 +4035,13 @@ function setLang(l) {
 async function importuokIrPranesk(files, supId) {
   const sup = APP.state.suppliers.find(x => x.id === supId);
   if (!sup) { toast(L('Tiekėjas nerastas', 'Supplier not found'), 'error'); return; }
+  let kiek = 0;
   for (const file of Array.from(files || [])) {
     const res = await parseFile(file, supId);
     if (!res.ok) toast(sup.name + ', ' + file.name + ': ' + res.error, 'error');
-    else toast(sup.name + ': ' + (res.message || (L('rasta ' + res.rowsFound + ' pozicijų', res.rowsFound + ' items found'))), 'success');
+    else { kiek++; toast(sup.name + ': ' + (res.message || (L('rasta ' + res.rowsFound + ' pozicijų', res.rowsFound + ' items found'))), 'success'); }
   }
+  if (kiek) window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'pasiulymai_ikelti', failai: Math.min(99, kiek) });   // statistika (tik su sutikimu)
   render.all();
 }
 /* Visos įkėlimo zonos: data-drop="sup" (tiekėjo kortelė), "modal" (tiekėjo langas), "bulk" (visi tiekėjai iš karto). */
@@ -4132,7 +4139,8 @@ function bindViewEvents() {
       if (!out.value) diRodyk();
       out.select();
       // shared/kopija.js: iki 2026-09-28 „Nukopijuota“ rodyta ir nepavykus (writeText pažadas nelauktas)
-      GP_KOPIJA.kopijuok(out.value, { sekme: L('Užkoduota užklausa nukopijuota. Įklijuokite ją tik į organizacijos patvirtintą DI įrankį.', 'Encoded prompt copied. Paste it only into an AI tool approved by your organisation.') });
+      GP_KOPIJA.kopijuok(out.value, { sekme: L('Užkoduota užklausa nukopijuota. Įklijuokite ją tik į organizacijos patvirtintą DI įrankį.', 'Encoded prompt copied. Paste it only into an AI tool approved by your organisation.') })
+        .then(ok => { if (ok) window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'uzklausa_nukopijuota' }); });
     }
     if (e.target.id === 'btnDownloadPrompt') {
       if (!$('#aiPromptOutput').value) diRodyk();
