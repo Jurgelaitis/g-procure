@@ -67,8 +67,10 @@
     { rusis: 'priedas', re: /(pried(?:ą|as|o|e)\s+Nr\.\s*)([Xx])(?=[\s.,;:)]|$)/g },
     { rusis: 'priedas', re: /(Annex\s+(?:[Nn]o\.\s*)?)([Xx])(?=[\s.,;:)“”"]|$)/g },
     { rusis: 'suma', re: /(^|[\s(–-])([Xx])(?=\s+(?:Eur|EUR)(?:[\s.,;:)]|$))/g },
-    { rusis: 'sutarties-punktas', re: /(projekto\s+)([Xx])(?=\s+punkte)/g },
-    { rusis: 'sutarties-punktas', re: /(clause\s+)([Xx])(?=\s*\/\s*Annex)/g }
+    // Sutarties įvykdymo užtikrinimo reikalavimų vieta (SPS „... Sutarties projekto X punkte/priede.“, EN „... in clause X / Annex of the
+    // draft Contract.“): vieta apima ir pasirinkimą „punkte/priede“ - įrašoma visa nuoroda (sutartiesNuoroda; 2026-10-16, iki tol „8.1 punkte/priede“)
+    { rusis: 'sutarties-punktas', re: /(projekto\s+)([Xx]\s+punkte\s*\/\s*priede)/g },
+    { rusis: 'sutarties-punktas', re: /(in\s+)(clause\s+[Xx]\s*\/\s*Annex)/g, en: true }
   ];
   function xVietos(t){
     t = String(t || '');
@@ -78,10 +80,36 @@
       while ((m = s.re.exec(t))){
         const start = m.index + m[1].length, end = start + m[2].length;
         if (out.some(v => start < v.end && end > v.start)) continue;
-        out.push({ start, end, zyma: m[2], rusis: 'x', xRusis: s.rusis });
+        out.push(Object.assign({ start, end, zyma: m[2], rusis: 'x', xRusis: s.rusis }, s.en ? { en: true } : {}));
       }
     });
     return out.sort((a, b) => a.start - b.start);
+  }
+  /* Sutarties projekto nuoroda vietoj „X punkte/priede“ (EN „clause X / Annex“): vien numeris ar numeriai („8.1“, „8.1 ir 8.2“) - su žodžiu
+     „punkte“ / „punktuose“ (EN „clause“ / „clauses“); kitas tekstas („3 priede“, „Specialiųjų sąlygų 8 skyriuje ir ...“) įrašomas toks, koks yra.
+     Angliškoje vietoje lietuviška nuoroda (LT/EN SPS reikšmė ta pati abiem kalbom) verčiama pagal tas pačias formas - sutarčių LT/EN
+     šablonų terminais („Section 8 of the Special Terms and Conditions“, „clause 9.7 of the General Terms and Conditions“). */
+  const NUMERIAI = /^\d+(?:\.\d+)*\.?(?:\s*(?:,|ir|and|-|–)\s*\d+(?:\.\d+)*\.?)*$/;
+  const SAL_EN = { 'specialiųjų': 'Special', 'bendrųjų': 'General' };
+  function sutartiesNuoroda(reiksme, en){
+    const v = String(reiksme || '').trim();
+    if (!v) return '';
+    if (NUMERIAI.test(v)){
+      const nr = v.replace(/\.(?=\s|$|,)/g, '').replace(/\s+(?:ir|and)\s+/g, en ? ' and ' : ' ir ');
+      const daug = /,|\sir\s|\sand\s|[-–]/.test(nr);
+      return en ? (daug ? 'clauses ' : 'clause ') + nr : nr + (daug ? ' punktuose' : ' punkte');
+    }
+    if (!en) return v;
+    // „(Sutarties) Specialiųjų sąlygų 8 skyriuje ir (Sutarties) Bendrųjų sąlygų 10 skyriuje“, „3 priede“, „8.1 punkte“ -> angliškai
+    const dalis = d => {
+      let m = /^(?:Sutarties\s+)?(Specialiųjų|Bendrųjų)\s+sąlygų\s+(\d+(?:\.\d+)*)\.?\s+(skyriuje|punkte|poskyryje)$/iu.exec(d);
+      if (m) return (m[3].toLowerCase() === 'punkte' ? 'clause ' : m[3].toLowerCase() === 'poskyryje' ? 'Subsection ' : 'Section ') + m[2] + ' of the ' + SAL_EN[m[1].toLowerCase()] + ' Terms and Conditions';
+      m = /^(\d+(?:\.\d+)*)\.?\s+(punkte|priede|skyriuje)$/iu.exec(d);
+      if (m) return ({ punkte: 'clause ', priede: 'Annex ', skyriuje: 'Section ' })[m[2].toLowerCase()] + m[1];
+      return null;
+    };
+    const ds = v.split(/\s+ir\s+/).map(dalis);
+    return ds.every(Boolean) ? ds.join(' and ') : v;
   }
 
   /* ---------- Priedai: SPS priedų sąrašas ir nuorodos į jį ---------------------------------------- */
@@ -354,7 +382,7 @@
   function xVietosAprasas(t, v, ankstesnis){
     if (v.xRusis === 'priedas'){ const r = nuorodosPriedas(t, v, ankstesnis); return priedoVieta(r); }
     if (v.xRusis === 'suma') return { ivestis: 'suma', uzrasas: /užtikrinim|security/i.test(t) ? 'Sutarties įvykdymo užtikrinimo dydis, Eur' : 'Suma, Eur', pvz: '50 000' };
-    if (v.xRusis === 'sutarties-punktas') return { ivestis: 'tekstas', uzrasas: 'Sutarties projekto punktas arba priedas', pvz: '8.1' };
+    if (v.xRusis === 'sutarties-punktas') return { ivestis: 'tekstas', uzrasas: 'Sutarties projekto punktas arba priedas', pvz: '8.1 arba 3 priede', sutartiesVieta: true };
     if (v.xRusis === 'lenteles-punktai'){
       const lent = (t.slice(Math.max(0, v.start - 40), v.start).match(/(\d+)\s*lentelės\s*$/u) || t.slice(v.end, v.end + 30).match(/of\s+Table\s+(\d+)/i) || [])[1];
       return { ivestis: 'tekstas', uzrasas: (lent ? 'SPS ' + lent + ' lentelės' : 'SPS lentelės') + ' punktų numeriai', pvz: '1.3, 1.4' };
@@ -464,7 +492,7 @@
         p = v.end;
         return;
       }
-      const val = raw ? bruks(raw) : '';
+      const val = raw ? bruks(v.xRusis === 'sutarties-punktas' ? sutartiesNuoroda(raw, v.en) : raw) : '';
       if (!val && v.klase === 'b' && v.salinti){
         if (v.salinti.start < p) return;
         if (v.salinti.start > p) out.push({ t: 'tekstas', s: t.slice(p, v.salinti.start) });
@@ -587,5 +615,5 @@
   root.GP_LAUKAI = { norm, arTiekejoVieta, tusciosVietos, xVietos, laukas, planas, keitimai, tekstasIsPlano, gramatika, sutrauk,
     prieduSarasas, nuorodosPriedas, priedoRaktasIsTeksto, PRIEDU_PAV, EN_MENESIAI, skyriai, skyrius, arAntraste, TIPAI,
     GRUPES, grupesKlausimas, tikrinimoVariantas, uztikrinimoVariantas, UZT_PAGAL_KRITERIJU, SALINTI, KRITERIJU_PASIRINKIMAI,
-    DPS_PAVADINIMAS, dpsPavadinimoLaukas, RENGEJAS, arRengejoEilute, rengejoLaukas };
+    DPS_PAVADINIMAS, dpsPavadinimoLaukas, RENGEJAS, arRengejoEilute, rengejoLaukas, sutartiesNuoroda };
 })(typeof window !== 'undefined' ? window : globalThis);

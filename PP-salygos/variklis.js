@@ -2065,6 +2065,27 @@ const GPGen = (() => {
     return false;
   }
 
+  /* Titulo pavadinimas ir „pirkimas“ vienu stiliumi (2026-10-16, naudotojo pastebėjimas: „Projekto ... darbų pirkimas“ - pavadinimas pusjuodis,
+     o „pirkimas“ ne pusjuodis ir pabrauktas). LT SPS šablone pavadinimas įrašomas į „____“ runą (pusjuodis kursyvas, be pabraukimo), o
+     „pirkimas“ - atskiras runas (kursyvas; pabraukimas - iš pastraipos stiliaus Subtitle). Paskutiniam runui (žodis „pirkimas“ su tarpu ar
+     skliaustu prieš jį) suteikiamos pavadinimo runo savybės. Keičiama tik kai prieš jį - tikras pavadinimas (raidės, ne „____“) ir savybės skiriasi;
+     tekstas nekeičiamas. Dvikalbiuose SPS abu runai jau vienodi (kursyvas su pastraipos pabraukimu) - nekeičiama. */
+  function vienodasTitulas(paras, i){
+    const p = paras[i]; if (!p) return false;
+    const runai = GPDocx.els(p, 'r').filter(r => GPDocx.els(r, 't').some(t => t.textContent));
+    const tekstas = r => GPDocx.els(r, 't').map(t => t.textContent).join('');
+    const k = runai.length - 1;
+    if (k < 1 || !/^[\s)]*(pirkimas|PIRKIMAS)\s*$/.test(tekstas(runai[k]))) return false;
+    const pav = runai[k - 1];
+    if (!/\p{L}/u.test(tekstas(pav))) return false;
+    const sav = r => GPDocx.els(r, 'rPr')[0] || null, a = sav(pav), b = sav(runai[k]);
+    const xml = e => e ? new XMLSerializer().serializeToString(e) : '';
+    if (!a || xml(a) === xml(b)) return false;
+    const n = a.cloneNode(true);
+    if (b) runai[k].replaceChild(n, b); else runai[k].insertBefore(n, runai[k].firstChild);
+    return true;
+  }
+
   /* Sakinio galo tvarkymas po raudonu runu trynimo (2.1 "Pirkimo objektas - X").
      Sablone tarp pildomos vietos ir tasko yra literalus tarpas (jis dengia raudona
      nurodyma, kuris istrinamas) - lieka "X ." Dalyje sablonu (MVP) raudonas runas
@@ -2119,7 +2140,7 @@ const GPGen = (() => {
 
   return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, keisti, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
-           keistiRaudonaTeksta, keistiRaudonaGrupe, irasykRengeja, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
+           keistiRaudonaTeksta, keistiRaudonaGrupe, irasykRengeja, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, vienodasTitulas, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
 
 /* ==========================================================================

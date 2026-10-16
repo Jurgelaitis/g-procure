@@ -378,6 +378,13 @@
   .kvl .lk-uz,.kvl-info,.kvl-past,.kvl-klaida{overflow-wrap:anywhere}
   .kvl-pr{overflow-wrap:anywhere;margin-top:8px;padding:8px 12px;border-radius:7px;background:var(--color-green-15);font-size:13px;line-height:1.55;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   .lk-auto-k{margin-left:6px;padding:2px 10px;font-size:12px}
+  /* lauko vieta, įrašoma automatiškai (sutarties projekto nuoroda) - reikšmė su kilme, ne įvestis */
+  .lk-auto-r{font-size:13.5px;line-height:1.55;padding:6px 10px;border-radius:7px;background:var(--color-green-5);border:1px solid var(--color-green-15);overflow-wrap:anywhere}
+  .lk-auto-r .lk-kilme-t{color:var(--color-graphite-50-strong);font-size:12.5px}
+  /* šuolis iš pastabos „Patikrinkite“ į klausimą (2026-10-16): trumpai pažymima, kur nukeliauta */
+  .lk-tikslas{outline:3px solid var(--color-warning-strong);outline-offset:3px;border-radius:10px;transition:outline-color .3s}
+  .sf-eiti-g{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:6px;vertical-align:middle}
+  .sf-eiti{padding:2px 10px;font-size:12px;white-space:normal}
   @media (max-width:640px){ .kvl-e{padding:10px 8px;gap:6px} .kvl-nr{flex-basis:20px} .kvl-vv{width:100%} .kvl-sel{flex:1 1 auto;width:100%} }
   .lk-kilme-b{display:block}
   .lk-kilme-t + .lk-kilme-b{margin-top:2px}
@@ -3277,6 +3284,9 @@ function siulymuPasas(K){
         siulyk(key, k, e ? e.nr : null, e ? `SPS priedų sąraše: „${e.tekstas}“` : null);
       } else if (v.ivestis === 'skyrius'){
         siulyk(key, k, SKYRIAUS_ZYMA, `skyriaus „${v.skyrius}“ numeris - įrašomas generuojant pagal galutinę numeraciją`);
+      } else if (v.xRusis === 'sutarties-punktas' && !v.en){
+        const u = sutartiesUztikrinimoVieta();
+        siulyk(key, k, u ? u.tekstas : null, u ? u.kilme : null);
       } else if (v.zodziais != null){
         const sk = parseInt(String((ATS[key] || [])[v.zodziais] || '').trim(), 10);
         siulyk(key, k, SK_ZODZIAI_LT[sk] || null, 'skaičius žodžiais pagal įrašytą skaičių');
@@ -3424,6 +3434,24 @@ const sprendimoBusena = (ats, raktas) => ats === undefined || ats === null ? 'ne
    vietos - SPS priedo numeris ir kiekvienas rastas tame pačiame SPS priedų sąraše, numeris įrašomas be klausimo ir rodomas skiltyje
    „Išspręsta automatiškai“ su kilme ir „Keisti“. Žmogui pakeitus ar priedo sąraše neradus - klausimas kaip iki tol. */
 const NR_KLAUSTI = new Set();
+/* Sutarties įvykdymo užtikrinimo reikalavimų vieta sutarties projekte (2026-10-16, naudotojo pastebėjimas: SPS 11.3 p. „Sutarties projekto
+   X punkte/priede“ - numerį žino pats generatorius): kai sutartis generuojama pakete (1 žingsnis - „Taip“ ir šeima su šablonais), nuoroda
+   į tos šeimos specialiųjų ir bendrųjų sąlygų užtikrinimo nuostatas (GP_SUTARTYS.uztikrinimoVieta) įrašoma be klausimo - kortelėje ir skiltyje
+   „Išspręsta automatiškai“ su kilme ir „Keisti“. Kitaip (sutartis nerengiama, šablono nėra, žmogus pakeitė) - klausimas kaip iki tol. */
+const AUTO_SUT_KILME = 'pagal generuojamą sutarties projektą';
+function sutartiesUztikrinimoVieta(){
+  const sp = sutartiesProjektas(), SB = window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.busena();
+  if (!sp || !sp.pridedamas || !sp.generuojamas || !SB || !window.GP_SUTARTYS || !GP_SUTARTYS.uztikrinimoVieta) return null;
+  const u = GP_SUTARTYS.uztikrinimoVieta(sp.seima);
+  return u ? { tekstas: u.tekstas, kilme: AUTO_SUT_KILME + ' „' + SB.pavadinimas + '“ - ' + u.kilme } : null;
+}
+/* Ar lauko vieta išspręsta automatiškai (reikšmė - siūlymas iš generuojamos sutarties, žmogus jo nekeitė ir nepaprašė klausti) */
+function autoSutVieta(key, k, v){
+  if (!v || v.xRusis !== 'sutarties-punktas' || v.en) return null;
+  const r = vRaktas(key, k), x = SIUL.get(r);
+  if (NR_KLAUSTI.has(r) || PATV.has(r) || PATV.has(key) || !x || !String(x.saltinis || '').startsWith(AUTO_SUT_KILME) || (ATS[key] || [])[k] !== x.reiksme) return null;
+  return x;
+}
 function autoPriedoNr(c){
   if (c.rusis !== 'laukas' || NR_KLAUSTI.has(c.raktas) || c.q.salyga) return null;
   const lk = c.q.lk, key = 'B_' + c.raktas;
@@ -3454,6 +3482,14 @@ function formosModelis(K){
     const a = autoPriedoNr(kort[i]);
     if (a){ autoNr.unshift(Object.assign({ raktas: kort[i].raktas, q: kort[i].q, dok: (kort[i].vieta || {}).dok || '' }, a)); kort.splice(i, 1); }
   }
+  const autoSut = [];
+  kort.forEach(c => {
+    if (c.rusis !== 'laukas' || !c.q.lk) return;
+    c.q.lk.vietos.forEach((v, k) => {
+      const x = autoSutVieta('B_' + c.raktas, k, v);
+      if (x) autoSut.push({ raktas: c.raktas, k, kortele: c.id, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: x.reiksme, saltinis: x.saltinis });
+    });
+  });
   kort.forEach(c => {
     c.vienetai = kortelesVienetai(K, c);
     c.busena = c.rusis === 'kvl' && !c.vienetai.length ? 'neprivaloma' : blogiausia(c.vienetai.map(u => u.busena));
@@ -3471,7 +3507,7 @@ function formosModelis(K){
   });
   const G = [...grupes.values()].sort((a, b) => a.dokIdx - b.dokIdx || (a.skyrius ? a.skyrius.i : -1) - (b.skyrius ? b.skyrius.i : -1));
   G.forEach(g => g.korteles.sort((a, b) => (a.vieta ? a.vieta.i : 0) - (b.vieta ? b.vieta.i : 0)));
-  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr };
+  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr, autoSut };
 }
 
 /* Vienetas = vienas atsakymas: { id (lauko id šuoliui), pavadinimas, busena, blokuoja, raktai (PATV), reiksme, saltinis } */
@@ -3525,6 +3561,7 @@ function kortelesVienetai(K, c){
           blokuoja: !kod && !q.salyga, raktai: [vRaktas(key, k)], reiksme: kod ? KRITERIJU_PAV[kod] : '' });
         return;
       }
+      if (autoSutVieta(key, k, v)) return;      // įrašoma automatiškai (skiltis „Išspręsta automatiškai“) - ne klausimas
       const s = SIUL.get(vRaktas(key, k));
       out.push({ id: c.id + '-v' + k, pavadinimas: (v.uzrasas || 'Reikšmė') + ': ' + be1Nr(q.tekstas), busena: vietosBusena(key, k, v.klase), salyga: !!q.salyga,
         raktai: [vRaktas(key, k)], reiksme: (ATS[key] || [])[k] === SKYRIAUS_ZYMA ? 'skyriaus numeris (įrašomas generuojant)' : (ATS[key] || [])[k] || '',
@@ -4073,6 +4110,13 @@ function laukoHTML(K, c, klase, kur, dokai){
   const eil = {};
   lk.vietos.forEach((v, k) => {
     if (v.kopija != null || salintos.has(k)) return;
+    const ax = autoSutVieta(key, k, v);
+    if (ax){                                       // įrašoma automatiškai pagal generuojamą sutartį - ne įvestis, o reikšmė su kilme ir „Keisti“
+      h += `<div class="lk-v lk-v--auto" id="${c.id}-v${k}-auto"><span class="lk-v-l">${esc(v.uzrasas || 'Reikšmė')}</span>
+        <div class="lk-auto-r">Įrašoma automatiškai: <b>${esc(GP_LAUKAI.sutartiesNuoroda(ax.reiksme))}</b> <span class="lk-kilme-t">(${esc(ax.saltinis)})</span>
+        <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(vRaktas(key, k))}" aria-label="Keisti - ${esc(v.uzrasas || 'reikšmė')}">Keisti</button></div></div>`;
+      return;
+    }
     const u = c.vienetai.find(x => x.id === c.id + '-v' + k || x.id === c.id + '-v' + k + '-o0') || c.vienetai[ui] || {};
     ui++;
     const id = c.id + '-v' + k, val = vals[k] === SKYRIAUS_ZYMA || vals[k] === GP_LAUKAI.SALINTI ? '' : (vals[k] || '');
@@ -4440,8 +4484,8 @@ function klausimynas(){
   h += prieduHTML(K, S.M);
 
   /* Automatika - viskas matoma, nieko nenutylima (pilni tekstai; ilgi - sutraukiami žodžio riboje) */
-  const autoNr = (S && S.M && S.M.autoNr) || [];
-  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length;
+  const autoNr = (S && S.M && S.M.autoNr) || [], autoSut = (S && S.M && S.M.autoSut) || [];
+  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length + autoSut.length;
   if (autoSk){
     h += `<details class="auto"${autoAtverta ? ' open' : ''}><summary>Išspręsta automatiškai (${autoSk}) - peržiūrėti</summary><div class="auto-lst">`;
     // tai, ką galima pakeisti (objekto apžiūra), - sąrašo pradžioje ir su mygtuku
@@ -4460,6 +4504,10 @@ function klausimynas(){
     autoNr.forEach(a => {
       h += `<div data-auto-nr="${esc(a.raktas)}"><span class="n">${esc(a.dok)}</span>${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>SPS priedo Nr. ${esc(a.nr.join(', '))}</b>
         <span class="n">${esc(a.saltinis)}</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(a.raktas)}" aria-label="Keisti SPS priedo numerį (Nr. ${esc(a.nr.join(', '))})">Keisti</button></div>`;
+    });
+    autoSut.forEach(a => {
+      h += `<div data-auto-sut="${esc(a.raktas)}"><span class="n">${esc(a.dok)}</span>${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>${esc(GP_LAUKAI.sutartiesNuoroda(a.reiksme))}</b>
+        <span class="n">${esc(a.saltinis)}</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(vRaktas('B_' + a.raktas, a.k))}" aria-label="Keisti sutarties projekto punktą ar priedą">Keisti</button></div>`;
     });
     h += `</div></details>`;
   }
@@ -4870,6 +4918,9 @@ async function generuotiViena(d, REZ){
   // 6a. Titulo tarpas: istrynus raudona "(irasomas ... pavadinimas) " nurodyma
   //     kai kur dingsta tarpas pries "pirkimas" ("...kVpirkimas"). Uztikrinam.
   titulIdx.forEach(i => { if (!trinti.has(i)) GPGen.taisytiTitulTarpa(paras, i); });
+  // 6a'. Titulo pavadinimas ir žodis „pirkimas“ - vienu stiliumi (2026-10-16, naudotojo pastebėjimas): LT SPS šablone pavadinimo vieta „____“
+  //      pusjuodė kursyvu be pabraukimo, o „pirkimas“ - kursyvu, pabrauktas (pastraipos stilius Subtitle) - įrašytas pavadinimas ir „pirkimas“ atrodė skirtingai
+  if (!forma){ const riba = titulinioRiba(Z); titulIdx.forEach(i => { if (!trinti.has(i) && i < riba) GPGen.vienodasTitulas(paras, i); }); }
   // 2.1 sakinio galas: sablone tarp pildomos vietos ir tasko - literalus tarpas
   // (dengias raudonu nurodymu, kuris ka tik istrintas), o MVP raudonas runas
   // prarija ir taska. Lieka "X ." arba "X" - sutvarkome galuni.
@@ -5391,6 +5442,9 @@ function rodykRezultata(rez){
     const anr = (S.M && S.M.autoNr) || [];
     if (anr.length) h += `<div class="audit ok" id="autoNrPatikra" style="margin-top:10px"><b>SPS priedų numeriai įrašyti automatiškai (${anr.length}):</b> pagal to paties SPS priedų sąrašą -
       ${anr.map(a => esc('Nr. ' + a.nr.join(', '))).join('; ')}. Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
+    const asut = (S.M && S.M.autoSut) || [];
+    if (asut.length) h += `<div class="audit ok" id="autoSutPatikra" style="margin-top:10px"><b>Sutarties įvykdymo užtikrinimo reikalavimų vieta įrašyta automatiškai:</b>
+      „Sutarties projekto ${asut.map(a => esc(GP_LAUKAI.sutartiesNuoroda(a.reiksme))).join('“; „')}“ (${esc(asut[0].saltinis)}). Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
     h += `<div class="audit ${S.siulomi.length || S.zingsnis1.length ? 'no' : 'ok'}" style="margin-top:10px"><b>Formos atsakymai:</b> patvirtinta ${S.patvirtinti.length}
       (mygtuku „Patvirtinti“ - ${poVien}, skyriaus mygtuku - ${sky.reduce((a, z) => a + z.kiek, 0)}${sky.length ? ': ' + sky.map(z => esc(z.skyrius) + ' (' + z.kiek + ')').join(', ') : ''}).
       ${S.siulomi.length ? `<b>Nepatvirtintos siūlomos reikšmės (${S.siulomi.length})</b> įrašytos į dokumentus - patikrinkite:
@@ -6525,7 +6579,45 @@ function sutartiesKontekstas(){
            uztikrinimas: sutartiesUztikrinimas(), kriterijus: sutartiesKriterijus(), nacsaug: nacsaugTaip(), zaliejiSPS: spsZalieji(), tiesioginis: spsTiesioginis(),
            socialiniaiSPS: spsSocialiniai() };
 }
-window.SUTARTIES_FORMA = window.GP_SUTARTIES_FORMA ? GP_SUTARTIES_FORMA.mount({ vieta: '#sutartiesForma', kontekstas: sutartiesKontekstas }) : null;
+/* Šuoliai iš sutarties pastabų „Patikrinkite“ ir „Dėmesio“ (2026-10-16, naudotojo pastebėjimas: sunku suprasti, kurioje vietoje kas ne taip):
+   sutarties klausimas - toje pačioje darbo srityje (sutarties-forma.js), SPS klausimas - 2 žingsnyje, nacionalinio saugumo - 1 žingsnyje.
+   Kortelė randama pagal SPS sąlygos atsakymo raktą (pavienė sąlyga ar alternatyvų grupė); automatiškai atsakyta ar neberodoma - mygtuko nėra. */
+const SPS_SALYGOS = {
+  uztikrinimas: k => SUT_UZT_SALYGA.test(k),
+  zalieji: k => Object.values(ZAL_SPS).some(t => norm(t) === k),
+  tiesioginis: k => /^kai taikomas tiesioginis atsiskaitymas su subtiekejais/.test(k)
+};
+function spsKortelesId(tipas){
+  const K = window.__K, tinka = SPS_SALYGOS[tipas];
+  if (!K || !tinka) return null;
+  const id = (() => {
+    // kelios tos pačios temos sąlygos (žalieji: „pirkimo sąlygose“, „TS ir (ar) sutartyje“, „žaliuoju savaime“) - pirmiausia ta, į kurią atsakyta „Taip“
+    const kort = [...Object.keys(K.pavieniai || {}).filter(tinka).map(r => ({ id: lkId('pavienis|' + r), raktai: [r] })),
+      ...Object.entries(K.grupes || {}).filter(([, g]) => g.nariai.some(n => tinka(n.raktas))).map(([gid, g]) => ({ id: lkId('grupe|' + gid), raktai: g.nariai.map(n => n.raktas) }))];
+    const c = kort.find(x => x.raktai.some(r => tinka(r) && ATS[r] === true)) || kort[0];
+    if (c) return c.id;
+    // SPS be užtikrinimo sąlygos (MVP) - užtikrinimo dydžio laukas
+    const l = tipas === 'uztikrinimas' && Object.entries(K.tuscios || {}).find(([, q]) => q.lk && q.lk.vietos.some(v => v.xRusis === 'suma' && /užtikrinim/i.test(v.uzrasas || '')));
+    return l ? lkId('laukas|' + l[0]) : null;
+  })();
+  return id && document.getElementById(id) ? id : null;
+}
+function sutartiesPastabosVieta(x){
+  if (x && x.z1 === 'nacsaug'){
+    const el = document.querySelector('input[name=nacsaug]'), q = el && (el.closest('.q') || el.parentElement);
+    return q ? { mygtukas: 'Eiti į 1 žingsnį', pavadinimas: ($('#q-nacsaug') || q).textContent.trim(), el: q } : null;
+  }
+  const id = x && spsKortelesId(x.sps), kl = id && document.getElementById(id + '-kl');
+  return id ? { mygtukas: 'Eiti į SPS klausimą', pavadinimas: kl ? kl.textContent.trim() : 'SPS sąlyga', id } : null;
+}
+function eikISutartiesPastabosVieta(x){
+  const v = sutartiesPastabosVieta(x);
+  if (!v) return;
+  rodyk(v.el ? 1 : 2);
+  GP_SUTARTIES_FORMA.pazymek(v.el || document.getElementById(v.id));
+}
+window.SUTARTIES_FORMA = window.GP_SUTARTIES_FORMA ? GP_SUTARTIES_FORMA.mount({ vieta: '#sutartiesForma', kontekstas: sutartiesKontekstas,
+  kurVieta: sutartiesPastabosVieta, eiti: eikISutartiesPastabosVieta }) : null;
 // Naudotojas įvedė, pakeitė ar pašalino vidaus taisyklių ribą (vidaus-riba.js) - priminimai prie SPS ir sutarties klausimų perpiešiami
 document.addEventListener('gp-vidaus-riba', () => { if (window.__S2) klausimynas(); else if (window.SUTARTIES_FORMA) window.SUTARTIES_FORMA.atnaujink(); });
 
@@ -6702,6 +6794,11 @@ function juodrascioMeta(){
 }
 // Atkūrimas švariame puslapyje (adresas ?juodrastis=<id>): 1 žingsnio laukai (būdas pirmas - nuo jo priklauso kiti), kortelė, sutarties
 // blokas; jei juodraštis buvo toliau nei 1 žingsnis - šablonai įkeliami iš naujo ir atkuriami atsakymai su būsenomis.
+/* Šablonų redakcinės korekcijos, keičiančios 2 žingsnio laukų raktus (lauko raktas - normalizuotas pastraipos tekstas): ankstesnio juodraščio
+   atsakymai, patvirtinimai ir siūlymai perkeliami į naują raktą. 2026-10-16 - „Sutarties užtikrinimo įvykdymo užtikrinimą“ -> „Sutarties įvykdymo
+   užtikrinimą“ (sablonu-taisymai.py W; šiame sakinyje - užtikrinimo dydžio laukas). */
+const RAKTU_PERVADINIMAI = [['sutarties uztikrinimo ivykdymo uztikrinima', 'sutarties ivykdymo uztikrinima']];
+const naujasRaktas = k => RAKTU_PERVADINIMAI.reduce((a, [sena, nauja]) => a.split(sena).join(nauja), String(k));
 async function atkurkJuodrasti(r){
   const D = r.duomenys || {}, L = D.z1 || {};
   const nustatyk = (k, v) => {
@@ -6732,17 +6829,17 @@ async function atkurkJuodrasti(r){
     PRIEDU_TOUCHED.clear(); (S2.PRIEDU_TOUCHED || []).forEach(x => PRIEDU_TOUCHED.add(x));
     const kr = await kraukDokumentus();
     if (!kr.ok) throw new Error(`šiam pirkimo būdui ir kalbai šablonų rinkinio nėra (${kr.budas} / ${kr.kalba})`);
-    Object.keys(ATS).forEach(k => delete ATS[k]); Object.assign(ATS, S2.ATS || {});
-    TOUCHED.clear(); (S2.TOUCHED || []).forEach(x => TOUCHED.add(x));
-    PATV.clear(); (S2.PATV || []).forEach(x => PATV.add(x));
-    SIUL.clear(); (S2.SIUL || []).forEach(([k, v]) => SIUL.set(k, v));
+    Object.keys(ATS).forEach(k => delete ATS[k]); Object.entries(S2.ATS || {}).forEach(([k, v]) => { ATS[naujasRaktas(k)] = v; });
+    TOUCHED.clear(); (S2.TOUCHED || []).forEach(x => TOUCHED.add(naujasRaktas(x)));
+    PATV.clear(); (S2.PATV || []).forEach(x => PATV.add(naujasRaktas(x)));
+    SIUL.clear(); (S2.SIUL || []).forEach(([k, v]) => SIUL.set(naujasRaktas(k), v));
     ZURNALAS.length = 0; (S2.ZURNALAS || []).forEach(z => ZURNALAS.push(z));
     AUTO_SAKOS.clear(); (S2.AUTO_SAKOS || []).forEach(x => AUTO_SAKOS.add(x));
     APZIURA_KLAUSTI = !!S2.APZIURA_KLAUSTI; EBVPD_TRINTI = !!S2.EBVPD_TRINTI;
     const kv = S2.KVL || {};
     KVL.kandidatai = Array.isArray(kv.kandidatai) ? kv.kandidatai : []; KVL.pasirinkta = Number(kv.pasirinkta) || 0;
     KVL.pakeitimai = kv.pakeitimai && typeof kv.pakeitimai === 'object' ? kv.pakeitimai : {}; KVL.atmesta = !!kv.atmesta; KVL.klaida = '';
-    AI.siulymai = new Map((S2.AI || []).filter(x => Array.isArray(x) && x[1] && x[1].busena === 'priimta'));
+    AI.siulymai = new Map((S2.AI || []).filter(x => Array.isArray(x) && x[1] && x[1].busena === 'priimta').map(([k, v]) => [naujasRaktas(k), v]));
     AI.priimta = AI.siulymai.size;
     klausimynas();
     klausimynas();                // antras kartas - siūlymų kilmė, priklausanti nuo ankstesnio modelio (pvz. vertinimo kriterijaus), kaip dirbant
@@ -6826,8 +6923,14 @@ document.addEventListener('click', e => {
   if (!b) return;
   const r = b.getAttribute('data-nr-klausti');
   NR_KLAUSTI.add(r); klausimynas();
-  const el = document.getElementById(lkId('laukas|' + r));
-  if (el){ el.scrollIntoView({ block: 'center' }); const f = el.querySelector('input, textarea'); if (f) f.focus(); }
+  // lauko vieta („B_<raktas>#<k>“, sutarties projekto nuoroda) - jos įvestis; visas laukas (SPS priedų numeriai) - pirmoji įvestis
+  const j = /^B_.*#\d+$/.test(r) ? r.lastIndexOf('#') : -1;
+  const el = document.getElementById(lkId('laukas|' + (j > 0 ? r.slice(2, j) : r)));
+  if (el){
+    el.scrollIntoView({ block: 'center' });
+    const f = (j > 0 && document.getElementById(el.id + '-v' + r.slice(j + 1))) || el.querySelector('input, textarea');
+    if (f) f.focus();
+  }
 });
 $('#naujasPirkimas').addEventListener('click', () => { location.href = location.pathname; });   // neišsaugojus - naršyklė paklausia (GP_DARBAS), laukiantis juodraštis išsaugomas prieš tai
 function zingsniuBusena(){
