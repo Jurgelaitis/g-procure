@@ -1354,6 +1354,63 @@ async function paleisk() {
     W.__PPT.issaugokKonteksta("", ""); lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], [null, null, false], "tuščias rankinis - nenustatyta");
     W.__PPT.atstatykKonteksta();
   });
+  // Pirkimo sąlygų sąvokos (2026-10-17): sandara - kaip 21 tikro paketo bendrosiose sąlygose („1.16. Perkantysis subjektas – LITGRID AB, į. k. ...“)
+  const BPS_PI = "1.15. Pasiūlymas - Tiekėjo pateiktas dokumentas.\n1.16. Perkantysis subjektas – LITGRID AB, į. k. 302564383, pagal Lietuvos Respublikos įstatymus įsteigta įmonė.\n" + "Perkantysis subjektas vertina pasiūlymus. ".repeat(20);
+  const BPS_VPI = "1.10. Perkančioji organizacija – UAB „EPSO-G“, įmonės kodas 302826889, buveinė Vilniuje.\n" + "Perkančioji organizacija vertina pasiūlymus. ".repeat(20);
+  const BPS_VPI_LG = "1.10. Perkančioji organizacija – LITGRID AB (kodas 302564383), Vilnius.\n" + "Perkančioji organizacija vertina pasiūlymus. ".repeat(20);
+  const SPS_PI = "2.5. Perkantysis subjektas derėsis dėl šių sąlygų: Pasiūlymo kainos.\n" + "Perkantysis subjektas tikrina kvalifikaciją. ".repeat(20);
+  await testas("atpazinkRezimaDokumente: apibrėžimas „Perkantysis subjektas – ...“ (PĮ) ir „Perkančioji organizacija – ...“ (VPĮ), EN, vartosena, ribos ir neaiškūs atvejai", () => {
+    const bl = (...t) => t.map((x, i) => ({ text: x, loc: { page: i + 1 } }));
+    let r = C.atpazinkRezimaDokumente(bl("Įžanga.", "1.16. Perkantysis subjektas – LITGRID AB, į. k. 302564383, pagal įstatymus įsteigta įmonė."));
+    lygu([r.value, r.budas, r.loc.page], ["PI", "apibrezimas", 2]); tiesa(/^Perkantysis subjektas – LITGRID AB, į\. k\. 302564383/.test(r.citata), r.citata);
+    r = C.atpazinkRezimaDokumente(bl("1.10. Perkančioji organizacija – UAB „EPSO-G“, įmonės kodas 302826889."));
+    lygu([r.value, r.budas], ["VPI", "apibrezimas"]); turi(r.citata, "UAB „EPSO-G“");
+    lygu(C.atpazinkRezimaDokumente(bl("Contracting Entity – LITGRID AB, reg. No 302564383.")).value, "PI", "EN PĮ");
+    lygu(C.atpazinkRezimaDokumente(bl("Contracting Authority – UAB EPSO-G, code 302826889.")).value, "VPI", "EN VPĮ");
+    r = C.atpazinkRezimaDokumente(bl("Perkantysis subjektas – už paslaugos prenumeratą bei naudojimą.", "Perkantysis subjektas moka."));
+    lygu([r.value, r.neaiskus], [null, false], "po brūkšnio - ne pavadinimas: ne apibrėžimas, vartosenos per mažai");
+    r = C.atpazinkRezimaDokumente(bl("Perkantysis subjektas – LITGRID AB.", "Perkančioji organizacija – LITGRID AB."));
+    lygu([r.value, r.neaiskus, r.apibrezimai.length], [null, true, 2], "abi sąvokos apibrėžtos");
+    r = C.atpazinkRezimaDokumente(bl("Perkantysis subjektas tikrina pasiūlymus. ".repeat(20) + "Kaip nurodo Perkančioji organizacija, terminas trumpas."));
+    lygu([r.value, r.budas], ["PI", "vartosena"]); tiesa(/^Perkantysis subjektas tikrina pasiūlymus\.$/.test(r.citata), "citata - sakinys: " + r.citata);
+    lygu(C.atpazinkRezimaDokumente(bl("Perkantysis subjektas tikrina. ".repeat(14))).value, null, "mažiau kaip 15 - nevertinama");
+    r = C.atpazinkRezimaDokumente(bl("Perkantysis subjektas tikrina. ".repeat(20) + "Perkančioji organizacija tikrina. ".repeat(5)));
+    lygu([r.value, r.neaiskus], [null, true], "abiejų daug - neaišku");
+    lygu(C.atpazinkRezimaDokumente(bl("Tiekėjas pateikia pasiūlymą perkančiajai organizacijai. ".repeat(30))).value, null, "mažąja raide - ne sąvoka");
+    lygu(C.atpazinkRezimaDokumente(bl("Įstatymas taikomas perkantysis subjektas sąvokai. ".repeat(30))).value, null, "mažąja raide - ne sąvoka (PĮ)");
+    lygu(C.atpazinkRezimaDokumente(bl("The Contracting Authority evaluates tenders. ".repeat(20))).value, "VPI", "EN vartosena");
+    r = C.atpazinkRezimaDokumente(bl("Įžanga apie šį pirkimą ir jo eigą. Perkantysis subjektas tikrina pasiūlymus. " + "Perkantysis subjektas tikrina. ".repeat(20)));
+    lygu(r.citata, "Perkantysis subjektas tikrina pasiūlymus.", "citata - nuo sakinio pradžios");
+    lygu(C.atpazinkRezimaDokumente(bl("Perkančiojo subjekto ir Perkančiajam subjektui bei Perkantįjį subjektą. ".repeat(6))).value, "PI", "linksniai");
+  });
+  await testas("Režimas iš pirkimo sąlygų: be skelbimo - iš BPS apibrėžimo; skelbimas be direktyvos - dokumentai pirmiau už registrą; prieštaravimas tarp sąlygų ar su skelbimu - neaišku", async () => {
+    let S = await ikelk({ "Bendrosios pirkimo sąlygos.txt": BPS_PI, "dok/Specialiosios pirkimo sąlygos.txt": SPS_PI });
+    lygu([S.kontekstas.rezimas, S.kontekstas.isDokumentu, S.kontekstas.isRegistro, S.kontekstas.neaiskus, S.kontekstas.patvirtinta], ["PI", true, false, false, false]);
+    let box = D.getElementById("kontekstasBox").textContent;
+    turi(box, "iš pirkimo dokumentų: „Perkantysis subjektas – LITGRID AB, į. k. 302564383"); turi(box, "Atpažinta iš pirkimo dokumentų, dar nepatvirtinta"); tiesa(!!D.getElementById("ctxConfirm"), "Patvirtinti");
+    lygu(W.__PPT.promptoKontekstas(), { organizacija: "", rezimas: "PI", patvirtinta: false }, "nepatvirtinta");
+    // EPSO-G 9281765: skelbimas be direktyvos, BPS - „Perkančioji organizacija – UAB „EPSO-G““
+    S = await ikelk({ [V_VPI]: SK_EPSOG, "Bendrosios pirkimo sąlygos.txt": BPS_VPI });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.isDokumentu, S.kontekstas.isRegistro], ['UAB "EPSO-G"', "VPI", true, false], "dokumentai pirmiau už registrą");
+    // LITGRID 9022598: skelbimas be direktyvos, BPS - „Perkančioji organizacija – LITGRID AB“, SPS - „Perkantysis subjektas“
+    S = await ikelk({ "9022598_National Contract notice - general directive_0.txt": skelbimas("LITGRID AB (PV)", "Perkančiosios organizacijos veiklos sritis: X", "Kitas"),
+      "0.1 Mažos vertės bendrosios sąlygos.txt": BPS_VPI_LG, "0.2. Mažos vertės specialiosios sąlygos.txt": SPS_PI });
+    lygu([S.kontekstas.rezimas, S.kontekstas.neaiskus, S.kontekstas.isRegistro], [null, true, false], "sąlygos prieštarauja - neaišku, registras nesiūlomas");
+    box = D.getElementById("kontekstasBox").textContent;
+    turi(box, "Perkančioji organizacija – LITGRID AB"); turi(box, "Perkantysis subjektas derėsis"); turi(box, "Skelbime ar pirkimo dokumentuose yra ir PĮ, ir VPĮ požymių"); tiesa(!D.getElementById("ctxConfirm"), "be patvirtinimo");
+    S = await ikelk({ "Bendrosios pirkimo sąlygos.txt": "1.16. Perkantysis subjektas – LITGRID AB.\n1.17. Perkančioji organizacija – LITGRID AB." });
+    lygu([S.kontekstas.rezimas, S.kontekstas.neaiskus], [null, true], "viename dokumente apibrėžtos abi sąvokos");
+    // Skelbimas su direktyva ir sąlygos sutampa - iš skelbimo; nesutampa - neaišku
+    S = await ikelk({ [V_PI]: SK_LITGRID, "Bendrosios pirkimo sąlygos.txt": BPS_PI });
+    lygu([S.kontekstas.rezimas, S.kontekstas.isDokumentu, S.kontekstas.neaiskus], ["PI", false, false], "skelbimas ir sąlygos sutampa");
+    S = await ikelk({ [V_PI]: SK_LITGRID, "Bendrosios pirkimo sąlygos.txt": BPS_VPI_LG });
+    lygu([S.kontekstas.rezimas, S.kontekstas.neaiskus], [null, true], "skelbimas PĮ, sąlygos - VPĮ: neaišku");
+    // Registras ir dokumentai nesutampa - pasakoma
+    S = await ikelk({ "9614756_Nacionalinis skelbimas apie pirkimą - bendroji direktyva_1.txt": SK_ECELLS, "Bendrosios pirkimo sąlygos.txt": BPS_VPI.replace("UAB „EPSO-G“", "Energy cells, UAB") });
+    lygu([S.kontekstas.rezimas, S.kontekstas.isDokumentu], ["VPI", true]);
+    turi(D.getElementById("kontekstasBox").textContent, "o pirkimo dokumentuose ji apibrėžta kaip VPĮ (perkančioji organizacija) - siūlomas dokumentų režimas");
+    neturi(D.getElementById("metaList").textContent, "Perkantysis subjektas –", "sąlygų sąvoka - kontekste, ne santraukos sąraše");
+  }, "patikra su 21 tikru paketu: EPSO-G, Energy cells ir LITGRID mažos vertės skelbimai be direktyvos režimo nenurodo, o sąlygos jį apibrėžia; 9022598 sąlygos prieštarauja pačios sau");
   await testas("Paketas be skelbimo: kontekstas nenustatytas, promptas neteigia įstatymo; pirkėjo vardas iš SPS teksto neimamas", async () => {
     const S = await ikelk({ "dok/SPS.txt": SPS_SENAS + "\n\nOficialus pavadinimas: UAB Kita" });
     lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], [null, null, false]);
