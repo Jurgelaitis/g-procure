@@ -121,7 +121,7 @@
     if (epd.length) {
       sections.push({
         heading: "EPD šaltiniai (audito pėdsakas)",
-        paragraphs: ["AI ištrauktos ir vertintojo patvirtintos A1-A3 reikšmės:"],
+        paragraphs: ["DI ištrauktos ir vertintojo patvirtintos A1-A3 reikšmės:"],
         tables: [{
           columns: ["Faktorius", "Reikšmė", "Vienetas", "Psl.", "Dokumentas"],
           rows: epd.map(function (e) {
