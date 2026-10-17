@@ -364,6 +364,59 @@
     return { laukai: laukai, pastabos: pastabos, pirkejas: p ? p.value : null };
   }
 
-  global.GP_SKELBIMAS = { version: "1.1", pirkejas: pirkejas, rezimas: rezimas, atpazink: atpazink, kalbos: kalbos, pakeitimas: pakeitimas,
+  // ---------------------------------------------------------------------------
+  // Režimas iš pirkimo DOKUMENTŲ (2026-10-17, naudotojo užduotis). Bendrosios sąlygos apibrėžia pirkimo vykdytoją:
+  // „Perkantysis subjektas – LITGRID AB, į. k. ...“ (PĮ sąvoka) arba „Perkančioji organizacija – UAB „EPSO-G“ ...“
+  // (VPĮ sąvoka); dvikalbėse - ir „Contracting Entity – ...“ / „Contracting Authority – ...“. Išmatuota su 21 tikru
+  // CVP IS paketu (18 LITGRID, Amber Grid 9742096, EPSO-G 9281765, Energy cells 9614756): apibrėžimas rastas 17-os
+  // bendrosiose sąlygose (nerasta: 9748635 - .7z, 9328700 - DPS sąlygos, 8759862 ir 8979138 - dvikalbės sąlygos),
+  // sąvokos vartosena atitiko apibrėžimą, o
+  // LITGRID 9022598 bendrosios sąlygos apibrėžia „Perkančioji organizacija – LITGRID AB“, specialiosios vartoja
+  // „Perkantysis subjektas“ - toks paketas lieka neaiškus, sprendžia žmogus.
+  // Be apibrėžimo - sąvokos vartosena dokumente: bent VARTOSENA_MIN kartų ir kitos - ne daugiau kaip 10 %.
+  // Apibrėžimas - tik kai po brūkšnio eina pavadinimas didžiąja raide ar kabute („Perkantysis subjektas – už
+  // paslaugos prenumeratą ...“ techninėje specifikacijoje - ne apibrėžimas). Sąvokos - tik didžiąja raide (apibrėžtos).
+  // ---------------------------------------------------------------------------
+  var DOK_PI = /Perkan(?:tysis|čiojo|čiajam|tįjį|čiuoju|čiajame)\s+subjekt\p{L}*|Contracting\s+Entit(?:y|ies)/gu;
+  var DOK_VPI = /Perkan(?:čioji|čiosios|čiajai|čiąją|čiąja|čiojoje)\s+organizacij\p{L}*|Contracting\s+Authorit(?:y|ies)/gu;
+  var DOK_APIBR = /(Perkantysis\s+subjektas|Perkančioji\s+organizacija|Contracting\s+Entity|Contracting\s+Authority)\s*[\u2013\u2014-]\s*(?=[„"“A-ZĄČĘĖĮŠŲŪŽ])[^;\n]{2,140}/gu;
+  var VARTOSENA_MIN = 15;
+  function kiek(re, t) { re.lastIndex = 0; var n = 0; while (re.exec(t)) n++; return n; }
+  /* Sakinys aplink vietą (citatai): nuo ankstesnio sakinio pabaigos iki kito, ne ilgiau kaip 200 ženklų. */
+  function sakinys(t, i, ilgis) {
+    var a = Math.max(t.lastIndexOf(". ", i), t.lastIndexOf("\n", i), t.lastIndexOf("; ", i));
+    var pr = a < 0 ? Math.max(0, i - 60) : a + 1;
+    var gal = t.slice(i + ilgis).search(/[.;\n]/);
+    var pb = gal < 0 ? t.length : i + ilgis + gal + 1;
+    return minkstas(t.slice(pr, Math.min(pb, pr + 200)));
+  }
+  // blocks - GP_DOK dokumento blokai ({ text, loc }); grąžina { value, budas: "apibrezimas" | "vartosena", citata, loc, pi, vpi }
+  // arba { value: null, neaiskus } (abi sąvokos apibrėžtos ar abiejų daug)
+  function rezimasDokumente(blocks) {
+    var bl = (blocks || []).filter(function (b) { return b && typeof b.text === "string" && b.text; });
+    var apibr = [];
+    bl.forEach(function (b) {
+      DOK_APIBR.lastIndex = 0; var m;
+      while ((m = DOK_APIBR.exec(b.text))) apibr.push({ value: /subjektas|Entity/.test(m[1]) ? "PI" : "VPI", citata: minkstas(m[0]).replace(/[,\s]+$/, "").slice(0, 160), loc: b.loc });
+    });
+    var visas = bl.map(function (b) { return b.text; }).join("\n");
+    var pi = kiek(DOK_PI, visas), vpi = kiek(DOK_VPI, visas);
+    if (apibr.length) {
+      var reiksmes = apibr.map(function (x) { return x.value; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+      if (reiksmes.length > 1) return { value: null, neaiskus: true, pi: pi, vpi: vpi, apibrezimai: apibr };
+      return { value: apibr[0].value, budas: "apibrezimas", citata: apibr[0].citata, loc: apibr[0].loc, pi: pi, vpi: vpi };
+    }
+    var dom = Math.max(pi, vpi), kita = Math.min(pi, vpi);
+    if (dom < VARTOSENA_MIN) return { value: null, neaiskus: false, pi: pi, vpi: vpi };
+    if (kita > dom * 0.1) return { value: null, neaiskus: true, pi: pi, vpi: vpi };
+    var re = pi > vpi ? DOK_PI : DOK_VPI;
+    for (var i = 0; i < bl.length; i++) {
+      re.lastIndex = 0; var m2 = re.exec(bl[i].text);
+      if (m2) return { value: pi > vpi ? "PI" : "VPI", budas: "vartosena", citata: sakinys(bl[i].text, m2.index, m2[0].length), loc: bl[i].loc, pi: pi, vpi: vpi };
+    }
+    return { value: null, neaiskus: false, pi: pi, vpi: vpi };
+  }
+
+  global.GP_SKELBIMAS = { version: "1.2", pirkejas: pirkejas, rezimas: rezimas, rezimasDokumente: rezimasDokumente, atpazink: atpazink, kalbos: kalbos, pakeitimas: pakeitimas,
                           _eilutes: eilutes, _laukas: laukas, _skelbimoRusis: skelbimoRusis };
 })(typeof window !== "undefined" ? window : this);
