@@ -280,7 +280,7 @@
     ".gpsk-in{max-width:1180px;margin:0 auto;padding:16px 20px;display:flex;gap:14px 28px;align-items:center;flex-wrap:wrap}" +
     ".gpsk-tx{flex:1 1 520px;min-width:0}" +
     ".gpsk-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;margin:0 0 4px}" +
-    ".gpsk h2{margin:0;font-size:17px;font-weight:800;line-height:1.3;color:#2E3641}" +
+    ".gpsk h2{margin:0;font-size:17px;font-weight:700;line-height:1.3;color:#2E3641}" +
     ".gpsk p{margin:0;color:#2E3641}" +
     ".gpsk a,.gpsk-d a{color:#007554;font-weight:700;text-decoration:underline;text-underline-offset:2px}" +
     ".gpsk-l{margin-top:6px;font-size:14px}" +
@@ -301,14 +301,14 @@
     ".gpsk-d[open]{display:flex;flex-direction:column}" +
     ".gpsk-d::backdrop{background:rgba(46,54,65,.55)}" +
     ".gpsk-dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 4px 24px}" +
-    ".gpsk-dh h2{margin:6px 0 0;font-size:20px;font-weight:800;line-height:1.3;color:#2E3641}" +
+    ".gpsk-dh h2{margin:6px 0 0;font-size:20px;font-weight:700;line-height:1.3;color:#2E3641}" +
     ".gpsk-x{flex:0 0 auto;width:44px;height:44px;border:0;border-radius:8px;background:none;color:#2E3641;font-size:22px;line-height:1;cursor:pointer}" +
     ".gpsk-x:hover{background:#EFF1F1}" +
     ".gpsk-db{padding:0 24px 8px;overflow-y:auto;min-height:0}" +
     ".gpsk-db>p{margin:8px 0 4px}" +
     ".gpsk-kat{border:1px solid #C7CDD3;border-radius:12px;padding:12px 16px;margin:12px 0}" +
     ".gpsk-kh{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap}" +
-    ".gpsk-kh h3{margin:0;font-size:16px;font-weight:800;line-height:1.3;color:#2E3641}" +
+    ".gpsk-kh h3{margin:0;font-size:16px;font-weight:700;line-height:1.3;color:#2E3641}" +
     ".gpsk-st{font-size:14px;font-weight:700;color:#5B6470}" +
     ".gpsk-sw{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700;cursor:pointer;min-height:32px}" +
     ".gpsk-sw input{width:22px;height:22px;margin:0;accent-color:#007554;cursor:pointer}" +

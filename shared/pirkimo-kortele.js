@@ -687,7 +687,7 @@
       ".gpk-eil{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:8px 12px;background:var(--color-white,#fff);",
       "border:1px solid var(--color-graphite-15,#E1E2E4);border-left:4px solid var(--color-emerald,#00A072);border-radius:8px;font-size:14px;line-height:1.45}",
       ".gpk-ik{display:inline-flex;color:var(--color-emerald-strong,#007554)}",
-      ".gpk-et{font-weight:800;font-size:13px;white-space:nowrap}",
+      ".gpk-et{font-weight:700;font-size:13px;white-space:nowrap}",
       ".gpk-sel{font:inherit;font-size:14px;min-width:0;max-width:100%;flex:0 1 340px;padding:5px 8px;border:1px solid var(--color-graphite-30,#C7CDD3);border-radius:6px;background:#fff;color:inherit}",
       ".gpk-sel:focus-visible,.gpk-btn:focus-visible,.gpk-a:focus-visible{outline:2px solid var(--color-emerald-strong,#007554);outline-offset:2px}",
       ".gpk-sant{flex:1 1 220px;min-width:0;color:#5B6470;font-size:13px;overflow-wrap:anywhere}",
@@ -706,7 +706,7 @@
       ".gpk-zin p{margin:0 0 4px}.gpk-zin p:last-child{margin-bottom:0}",
       ".gpk-sk{list-style:none;margin:4px 0 6px;padding:0;display:grid;gap:4px}",
       ".gpk-sk li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}",
-      ".gpk-sk b{font-weight:800}",
+      ".gpk-sk b{font-weight:700}",
       ".gpk-past{color:#5B6470}",
       "@media (max-width:640px){.gpk-sel{flex:1 1 100%;width:100%}.gpk-sant{flex-basis:100%}}",   // U4: procentinis plotis - sąrašo pločio neapsprendžia ilgiausias pavadinimas
       "@media print{.gpk{display:none!important}}",

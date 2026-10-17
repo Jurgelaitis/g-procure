@@ -33,7 +33,7 @@
   var GYLIS             = 2;                  // įdėtinių ZIP lygiai
   var CHUNK_ZODZIU      = 180;                // fragmento dydis žodžiais
   var CHUNK_PERDANGA    = 30;                 // persidengimas žodžiais
-  var CHUNK_SIMBOLIU    = 1400;               // fragmento riba simboliais = kiek fragmento mato AI (žr. fragmentai())
+  var CHUNK_SIMBOLIU    = 1400;               // fragmento riba simboliais = kiek fragmento mato DI (žr. fragmentai())
   var PERDANGA_SIMBOLIU = 200;                // persidengimo riba simboliais
 
   var LEIDZIAMI = { pdf:1, docx:1, odt:1, xlsx:1, xlsm:1, xml:1, html:1, htm:1, txt:1, zip:1, csv:1, md:1 };
