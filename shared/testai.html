@@ -6026,6 +6026,63 @@ async function testaiSutikimas(){
       if (!/\.footer__meta a, \.footer__meta span \{ white-space: nowrap; \}/.test(await saltinis(pg))) blogi.push(pg + ": poraštės nuorodos gali lūžti per vidurį");
     tiesa(!blogi.length, blogi.join("\n  "));
   });
+
+  /* Modulių puslapiai (2026-10-17, tas pats principas kaip informaciniuose ir portalo puslapiuose): antraštės ir skirtukų kraštai =
+     turinio kraštai (modulis nurodo --antraste-plotis ir --antraste-paraste, shared/modulio-antraste.css), tekstas be dirbtinio pločio
+     apribojimo (iki tol 760 px, 72ch, 84ch, 980 px - dešinėje iki 500 px tuščia), vienas šriftas (iki tol kodai, formulės, žurnalai ir
+     DI užklausos - lygiapločiu). Matuojama 1280 ir 375 px su klasikine slinkties juosta, kaip GitHub. */
+  await testas("Modulių puslapiai (2026-10-17): 1280 ir 375 px - antraštė, skirtukai ir turinys tais pačiais kraštais, tekstas be dirbtinio pločio apribojimo, visas tekstas tuo pačiu šriftu; moduliuose nėra lygiapločio šrifto ir antraštės pločio skaičiumi", async () => {
+    const PSL = ["PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "PP-plan/bvpz-kodai.html", "PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html", "PP-ts/TS_Asistentas.html",
+      "PP-qual/PP-QUAL.html", "PP-salygos/PP-SALYGOS.html", "PP-cost-benefit/index.html", "PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
+      "PP-cost-benefit/kastu_naudos_analize.html", "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "PP-protocol/LITGRID_Generatorius_v3.html",
+      "PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "PP-report/PP-report.html", "PP-esg/index.html", "PP-carbon/index.html", "PP-carbon/epd.html",
+      "PP-tiekejams/index.html", "PP-teise/index.html", "PP-teise/admin.html"];
+    // turinio blokas, su kuriuo lyginama antraštė (numatyta - pirkimo kortelės juosta ar informacinė skiltis)
+    const TURINYS = { "PP-cost-benefit/index.html": ".dalis", "PP-teise/index.html": ".vaizdai button", "PP-teise/admin.html": ".kortele" };
+    const blogi = [];
+    for (const plotis of [1280, 375]) for (const pg of PSL) {
+      const f = document.createElement("iframe"); f.style.cssText = "width:" + plotis + "px;height:900px;position:absolute;left:-9999px";
+      await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = "../" + pg + "?saugykla=testine"; document.body.appendChild(f); });
+      try {
+        const d = f.contentDocument, w = f.contentWindow; w.alert = () => {}; klasikineJuosta(d); await d.fonts.ready; await lauk(250);
+        const vis = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
+        const vidus = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return [r.left + parseFloat(c.borderLeftWidth) + parseFloat(c.paddingLeft), r.right - parseFloat(c.borderRightWidth) - parseFloat(c.paddingRight)]; };
+        const vardas = pg + " " + plotis + " px";
+        // 1. Kraštai
+        const hi = d.querySelector(".header-inner") || d.querySelector(".virsus .wrap");
+        const kort = [...d.querySelectorAll(TURINYS[pg] || ".gpk, .gpi")].filter(vis);
+        if (!hi || !kort.length) blogi.push(vardas + ": nerasta antraštė ar turinys");
+        else {
+          const h = vidus(hi), kl = Math.min(...kort.map(k => k.getBoundingClientRect().left)), kr = Math.max(...kort.map(k => k.getBoundingClientRect().right));
+          // derybos: šoninis meniu - antraštės ženklas ties meniu ikonomis
+          const sn = plotis > 900 && d.querySelector(".sidenav__btn svg"), kairys = sn ? sn.getBoundingClientRect().left : kl;
+          if (Math.abs(h[0] - kairys) > 1 || Math.abs(h[1] - kr) > 1) blogi.push(vardas + ": antraštė " + h.map(Math.round) + ", turinys " + [kairys, kr].map(Math.round));
+          const tb = d.querySelector(".tabbar-inner, .app-tabs-inner");
+          const tk = tb && vis(tb) && tb.querySelector(".tab, .tab-btn");
+          if (tk && Math.abs(tk.getBoundingClientRect().left - h[0]) > 1) blogi.push(vardas + ": skirtukai prasideda " + Math.round(tk.getBoundingClientRect().left) + ", antraštė " + Math.round(h[0]));
+        }
+        // 2. Tekstas be dirbtinio pločio apribojimo (centruotas trumpas tekstas - leidžiamas)
+        const savoTekstas = el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 2);
+        [...d.querySelectorAll("body *")].filter(el => savoTekstas(el) && vis(el) && el.textContent.trim().length > 70 && !/^inline/.test(w.getComputedStyle(el).display)
+            && w.getComputedStyle(el).maxWidth !== "none" && w.getComputedStyle(el).textAlign !== "center" && !el.closest('[role=dialog], .gpi-modal, header, .app-header, svg'))
+          .forEach(el => { const t = vidus(el.parentElement)[1] - el.getBoundingClientRect().right;
+            if (t > 40) blogi.push(vardas + ": tekstas siauresnis už bloką " + Math.round(t) + " px (max-width " + w.getComputedStyle(el).maxWidth + ", „" + el.textContent.trim().slice(0, 30) + "“)"); });
+        // 3. Vienas šriftas (Word dokumento peržiūra - dokumento šriftu)
+        const kiti = new Set();
+        [...d.querySelectorAll("body *")].filter(el => savoTekstas(el) && vis(el) && !el.closest(".preview-doc, svg")).forEach(el => {
+          const sr = w.getComputedStyle(el).fontFamily.split(",")[0].replace(/["']/g, "").trim(); if (!/Nunito Sans/.test(sr)) kiti.add(sr + " (" + el.tagName.toLowerCase() + "." + String(el.className).split(" ")[0] + ")"); });
+        if (kiti.size) blogi.push(vardas + ": kitas šriftas - " + [...kiti].slice(0, 4).join(", "));
+        if (d.documentElement.scrollWidth > w.innerWidth + 1) blogi.push(vardas + ": puslapis slenka horizontaliai");
+      } finally { f.remove(); }
+    }
+    // 4. Šaltiniai: lygiaplotis šriftas ir antraštės plotis skaičiumi (vietoje --antraste-plotis)
+    for (const pg of PSL.map(x => "../" + x).concat(["kopija.js"])) {
+      const src = await saltinis(pg);
+      if (/monospace|SFMono|Menlo|Consolas/.test(src)) blogi.push(pg + ": lygiaplotis šriftas");
+      if (/\.(header|tabbar)-inner[^{]*\{[^}]*max-width:\s*\d/.test(src)) blogi.push(pg + ": antraštės plotis skaičiumi - naudokite --antraste-plotis");
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
 }
 
 /* ==========================================================================
