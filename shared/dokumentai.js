@@ -13,10 +13,10 @@
  * atsakymai galėtų cituoti tiksliai.
  *
  * Saugumo ribos (žr. docs/tiekejams/architecture.md):
- *   - MAX_FAILO_B, MAX_ISSKLEISTA_B, MAX_FAILU - apsauga nuo ZIP bombų;
+ *   - MAX_FAILO_B, MAX_ISSKLEISTA_B, MAX_DARBO_B, MAX_FAILU - apsauga nuo ZIP bombų;
  *   - ZIP kelių normalizacija (zip slip: "../" ir absoliutūs keliai atmetami);
  *   - vykdomieji / nežinomi plėtiniai NEatidaromi, tik pažymimi 'unsupported';
- *   - įdėtiniai ZIP išskleidžiami tik iki GYLIS lygių;
+ *   - įdėtiniai ZIP ir el. parašo konteineriai (ADOC, ASiC) išskleidžiami tik iki GYLIS lygių;
  *   - dokumentų tekstas laikomas NEPATIKIMU turiniu: nurodymai modeliui jame
  *     niekada nevykdomi (žr. asistentas.js - sanitizacija ir sisteminė taisyklė).
  *
@@ -27,10 +27,16 @@
 ;(function (global) {
   "use strict";
 
-  var MAX_FAILO_B       = 60 * 1024 * 1024;   // vienas failas iki 60 MB
-  var MAX_ISSKLEISTA_B  = 250 * 1024 * 1024;  // visas išskleistas paketas
+  // Ribos (2026-10-17, patikra su 18 tikrų LITGRID CVP IS paketų): iki tol 60 MB riba galiojo ir archyvui, todėl 66 MB paketas
+  // nebuvo skaitomas visai, o įdėtinis archyvas trečiame lygyje - neišskleidžiamas (paketuose archyvai įdėti iki 6 lygių:
+  // CVP IS paketas › pirkimo dokumentai › TS su priedais › priedėliai › ...). Dabar dokumentas - iki 60 MB, archyvas - iki 250 MB,
+  // visų dokumentų suma - iki 250 MB, o viskas, ką tenka išskleisti (dokumentai ir įdėtiniai archyvai, kurių turinys
+  // skaičiuojamas antrą kartą), - iki 600 MB (išmatuota: didžiausias paketas - 284 MB).
+  var MAX_FAILO_B       = 60 * 1024 * 1024;   // vienas dokumentas iki 60 MB
+  var MAX_ISSKLEISTA_B  = 250 * 1024 * 1024;  // visų paketo dokumentų suma; ir vienas archyvas
+  var MAX_DARBO_B       = 600 * 1024 * 1024;  // viskas, kas išskleidžiama: dokumentai ir įdėtiniai archyvai
   var MAX_FAILU         = 200;                // failų skaičius pakete
-  var GYLIS             = 2;                  // įdėtinių ZIP lygiai
+  var GYLIS             = 8;                  // įdėtinių archyvų lygiai
   var CHUNK_ZODZIU      = 180;                // fragmento dydis žodžiais
   var CHUNK_PERDANGA    = 30;                 // persidengimas žodžiais
   var CHUNK_SIMBOLIU    = 1400;               // fragmento riba simboliais = kiek fragmento mato DI (žr. fragmentai())
@@ -38,6 +44,15 @@
 
   var LEIDZIAMI = { pdf:1, docx:1, odt:1, xlsx:1, xlsm:1, xml:1, html:1, htm:1, txt:1, zip:1, csv:1, md:1 };
   var DRAUDZIAMI = { exe:1, bat:1, cmd:1, com:1, scr:1, msi:1, js:1, vbs:1, ps1:1, sh:1, jar:1, dll:1, app:1 };
+  // El. parašo konteineriai - ZIP su dokumentu ir parašu: ADOC (Lietuvos vyriausiojo archyvaro specifikacija; CVP IS paketuose -
+  // pasirašytos išvados ir ataskaitos), ASiC-E ir ASiC-S (ETSI EN 319 162: .asice / .sce, .asics / .scs), BDOC, EDOC.
+  // Skaitomi dokumentai; parašai ir metaduomenys (mimetype, META-INF/, metadata/) praleidžiami, parašo galiojimas netikrinamas.
+  var KONTEINERIAI = { adoc:1, asice:1, sce:1, asics:1, scs:1, bdoc:1, edoc:1 };
+  // Archyvai, kurių naršyklė išskleisti negali (2026-10-17: tikrame pakete pirkimo sąlygos buvo vienas 63 MB .7z failas)
+  var KITI_ARCHYVAI = { "7z":1, rar:1, tar:1, gz:1, tgz:1, bz2:1, xz:1, zst:1, cab:1, arj:1 };
+  // Seni biuro formatai - kuo pakeisti (2026-10-17: tikruose paketuose - SS priedas .DOC)
+  var SENI = { doc: "DOCX", xls: "XLSX", rtf: "DOCX" };
+  function archyvas(e) { return e === "zip" || !!KONTEINERIAI[e]; }
 
   // ---------------------------------------------------------------------------
   // Pranešimai naudotojui (LT/EN) - tekstai gyvena čia, o ne UI sluoksnyje
@@ -45,13 +60,19 @@
   var PRAN = {
     lt: { skenuotas: "PDF be teksto sluoksnio (skenuotas) - reikalingas OCR; tekstas neišgautas.", beTeksto: "{n} psl. be teksto sluoksnio.",
           docxStrukt: "DOCX struktūra neperskaityta ({e}), naudojamas grynas tekstas.", xml: "XML neišanalizuotas, imamas kaip tekstas.",
-          vykdomasis: "Vykdomasis / scenarijaus failas neatidaromas saugumo sumetimais.", formatas: "Formatas .{e} nepalaikomas (palaikoma: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP). Atidarykite jį atskira programa.",
+          vykdomasis: "Vykdomasis / scenarijaus failas neatidaromas saugumo sumetimais.", formatas: "Formatas .{e} nepalaikomas (palaikoma: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP ir el. parašo konteineriai ADOC, ASiC). Atidarykite jį atskira programa.",
+          archyvasKitas: "Archyvas .{e} naršyklėje neišskleidžiamas. Išskleiskite jį kompiuteryje ir įkelkite failus (arba ZIP archyvą).",
+          senas: "Senas formatas .{e} naršyklėje neskaitomas. Atidarykite jį programa ir, jei reikia, išsaugokite kaip {naujas} arba PDF.",
+          konteinerisTuscias: "El. parašo konteineryje dokumento nerasta.",
           neperskaityta: "Neperskaityta: {e}", kelias: "Nesaugus kelias archyve - praleista.", failuLimitas: "Viršytas failų limitas ({n}) - praleista.",
           dydis: "Viršytas dydžio limitas - praleista (apsauga nuo ZIP bombų).", gilus: "Per gilus įdėtinis archyvas - neišskleistas.", perDidelis: "Failas per didelis (riba {mb} MB).",
           bendrasLimitas: "Viršyta bendra paketo riba - praleista." },
     en: { skenuotas: "PDF without a text layer (scanned) - OCR required; text not extracted.", beTeksto: "{n} page(s) without a text layer.",
           docxStrukt: "DOCX structure not read ({e}), plain text used.", xml: "XML not parsed, taken as text.",
-          vykdomasis: "Executable / script file is not opened for security reasons.", formatas: "Format .{e} is not supported (supported: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP). Open it with a separate application.",
+          vykdomasis: "Executable / script file is not opened for security reasons.", formatas: "Format .{e} is not supported (supported: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP and e-signature containers ADOC, ASiC). Open it with a separate application.",
+          archyvasKitas: "Archive .{e} cannot be extracted in the browser. Extract it on your computer and upload the files (or a ZIP archive).",
+          senas: "Legacy format .{e} cannot be read in the browser. Open it in its application and, if needed, save it as {naujas} or PDF.",
+          konteinerisTuscias: "No document found in the e-signature container.",
           neperskaityta: "Not read: {e}", kelias: "Unsafe path in archive - skipped.", failuLimitas: "File limit exceeded ({n}) - skipped.",
           dydis: "Size limit exceeded - skipped (ZIP bomb protection).", gilus: "Nested archive too deep - not extracted.", perDidelis: "File too large (limit {mb} MB).",
           bendrasLimitas: "Total package limit exceeded - skipped." }
@@ -69,6 +90,13 @@
     // Funkcija, ne eilutė: failo vardas ar klaidos tekstas su „$&“, „$'“, „$$“ kitaip būtų keičiamas (String.replace šablonai)
     Object.keys(vars || {}).forEach(function (v) { var r = String(vars[v]); t = t.replace("{" + v + "}", function () { return r; }); });
     return t;
+  }
+  // Kodėl failas neskaitomas - pagal plėtinį (vykdomasis, kitas archyvas, senas formatas, kitas)
+  function netinkamas(lang, e) {
+    if (DRAUDZIAMI[e]) return pran(lang, "vykdomasis");
+    if (KITI_ARCHYVAI[e]) return pran(lang, "archyvasKitas", { e: e });
+    if (SENI[e]) return pran(lang, "senas", { e: e, naujas: SENI[e] });
+    return pran(lang, "formatas", { e: e });
   }
 
   // ---------------------------------------------------------------------------
@@ -536,8 +564,7 @@
                 rusis: rusis(name), versija: versijosPozymiai(name), language: "other", chunks: [] };
     // Pradiniai baitai - tik paprašius (o.pasilikti, pvz. ["docx"]): PP-salygos tikrinimas DOCX lygina su forma ir skaito generavimo pasą
     if (ctx.pasilikti && ctx.pasilikti.indexOf(e) >= 0) doc.buf = buf;
-    if (DRAUDZIAMI[e]) { doc.parseStatus = "unsupported"; doc.warnings.push(pran(lang, "vykdomasis")); return doc; }
-    if (!LEIDZIAMI[e]) { doc.parseStatus = "unsupported"; doc.warnings.push(pran(lang, "formatas", { e: e })); return doc; }
+    if (DRAUDZIAMI[e] || !LEIDZIAMI[e]) { doc.parseStatus = "unsupported"; doc.warnings.push(netinkamas(lang, e)); return doc; }
     try {
       var r;
       if (e === "pdf") { r = await isPdf(buf, lang); doc.pages = r.pages; }
@@ -559,54 +586,76 @@
     return doc;
   }
 
-  async function isZip(name, buf, ctx, gylis, onProgress) {
+  // Archyvas (ZIP) arba el. parašo konteineris (konteineris - plėtinys: tada praleidžiami parašai ir metaduomenys)
+  async function isZip(name, buf, ctx, gylis, onProgress, konteineris) {
     reikia("JSZip", ZIP_PAV);
     var docs = [], lang = ctx.lang;
     var zip = await global.JSZip.loadAsync(buf, { decodeFileName: decodeFileName });
     var entries = Object.keys(zip.files).map(function (k) { return zip.files[k]; }).filter(function (f) { return !f.dir; });
     var stub = function (vardas, status, msg, size) { return { id: "D" + (++ctx.n), name: vardas, parseStatus: status, warnings: [msg], blocks: [], chunks: [], size: size || 0 }; };
+    var pilnas = function (k) { return (name ? name + " \u203a " : "") + k; };
+    var dokumentu = 0;
     for (var i = 0; i < entries.length; i++) {
       var f = entries[i];
       var originalus = f.unsafeOriginalName || f.name;
       var kelias = saugusKelias(f.name);
       if (!kelias || !saugusKelias(originalus)) { docs.push(stub(String(originalus).replace(/[\r\n\t]+/g, " "), "failed", pran(lang, "kelias"))); continue; }
       if (/^__MACOSX\//.test(kelias) || /(^|\/)\./.test(kelias)) continue; // sisteminės šiukšlės
-      if (ctx.failu >= MAX_FAILU) { docs.push(stub(kelias, "failed", pran(lang, "failuLimitas", { n: MAX_FAILU }))); continue; }
-      var e = ext(kelias);
-      // Riba tikrinama IŠSKLEIDŽIANT (srautu), o ne po išskleidimo
-      var liko = Math.min(MAX_FAILO_B, MAX_ISSKLEISTA_B - ctx.baitu);
-      if (liko <= 0) { docs.push(stub(kelias, "failed", pran(lang, "bendrasLimitas"))); continue; }
+      if (konteineris && (kelias === "mimetype" || /^(META-INF|metadata)\//i.test(kelias))) continue; // parašai ir metaduomenys
+      dokumentu++;
+      if (ctx.failu >= MAX_FAILU) { docs.push(stub(pilnas(kelias), "failed", pran(lang, "failuLimitas", { n: MAX_FAILU }))); continue; }
+      var e = ext(kelias), arch = archyvas(e), skaitomas = !arch && LEIDZIAMI[e] && !DRAUDZIAMI[e];
+      var deklaruota = (f._data && f._data.uncompressedSize) || 0;
+      // Riba tikrinama IŠSKLEIDŽIANT (srautu), o ne po išskleidimo: archyvui - iki 250 MB, dokumentui - iki 60 MB,
+      // abiem - kiek liko bendrų ribų (dokumentų suma ir viskas, kas išskleista)
+      var likoDarbo = MAX_DARBO_B - ctx.darbo;
+      var liko = arch ? Math.min(MAX_ISSKLEISTA_B, likoDarbo) : Math.min(MAX_FAILO_B, MAX_ISSKLEISTA_B - ctx.baitu, likoDarbo);
+      if (arch && gylis >= GYLIS) { ctx.failu++; docs.push(stub(pilnas(kelias), "unsupported", pran(lang, "gilus"), deklaruota)); continue; }
+      // Neskaitomas formatas, didesnis už ribą, neišskleidžiamas - pasakoma kodėl jis neskaitomas, ne „viršyta riba“
+      if (!arch && !skaitomas && deklaruota > liko) { ctx.failu++; docs.push(stub(pilnas(kelias), "unsupported", netinkamas(lang, e), deklaruota)); continue; }
+      if (liko <= 0) { docs.push(stub(pilnas(kelias), "failed", pran(lang, "bendrasLimitas"))); continue; }
       var ab = await issklekRibotai(f, liko);
       ctx.failu++;
-      if (!ab) { docs.push(stub(kelias, "failed", pran(lang, "dydis"), (f._data && f._data.uncompressedSize) || 0)); continue; }
-      ctx.baitu += ab.byteLength;
-      if (e === "zip") {
-        if (gylis >= GYLIS) { docs.push(stub(kelias, "unsupported", pran(lang, "gilus"), ab.byteLength)); continue; }
-        // Įdėtinio archyvo dokumentai gauna pilną kelią (išorinis › vidinis › failas) vieną kartą
-        var inner = await isZip((name ? name + " › " : "") + kelias, ab, ctx, gylis + 1, onProgress);
-        docs = docs.concat(inner);
+      if (!ab) { docs.push(stub(pilnas(kelias), "failed", pran(lang, "dydis"), deklaruota)); continue; }
+      ctx.darbo += ab.byteLength;
+      if (arch) {
+        // Įdėtinio archyvo dokumentai gauna pilną kelią (išorinis › vidinis › failas) vieną kartą; sugadintas įdėtinis
+        // archyvas nesustabdo viso paketo - pažymimas jis vienas
+        try { docs = docs.concat(await isZip(pilnas(kelias), ab, ctx, gylis + 1, onProgress, KONTEINERIAI[e] ? e : null)); }
+        catch (err) { docs.push(stub(pilnas(kelias), "failed", pran(lang, "neperskaityta", { e: (err && err.message ? err.message : String(err)) }), ab.byteLength)); }
       } else {
+        ctx.baitu += ab.byteLength;
         if (onProgress) onProgress(kelias);
         var d = await apdorokFaila(kelias, ab, ctx);
-        d.name = (name ? name + " › " : "") + kelias;
+        d.name = pilnas(kelias);
+        if (konteineris) {
+          // Pasirašyto dokumento rūšis ir versija - ir iš konteinerio vardo (vidinis failas dažnai vadinasi bendriau)
+          var kv = String(name || "").split(" \u203a ").pop();
+          if (d.rusis === "Kita") d.rusis = rusis(kv);
+          d.versija = versijosPozymiai(kv + " " + kelias);
+          d.konteineris = konteineris;
+        }
         docs.push(d);
       }
     }
+    if (konteineris && !dokumentu) docs.push(stub(name, "unsupported", pran(lang, "konteinerisTuscias"), buf.byteLength));
     return docs;
   }
 
   async function apdorok(files, onProgress, lang, o) {
-    var ctx = { n: 0, failu: 0, baitu: 0, lang: lang === "en" ? "en" : "lt", pasilikti: (o && o.pasilikti) || null };
+    var ctx = { n: 0, failu: 0, baitu: 0, darbo: 0, lang: lang === "en" ? "en" : "lt", pasilikti: (o && o.pasilikti) || null };
     var docs = [];
+    var klaida = function (f, msg) { docs.push({ id: "D" + (++ctx.n), name: f.name, parseStatus: "failed", warnings: [msg], blocks: [], chunks: [], size: f.size }); };
     for (var i = 0; i < files.length; i++) {
-      var f = files[i];
-      if (f.size > MAX_FAILO_B) { docs.push({ id: "D" + (++ctx.n), name: f.name, parseStatus: "failed", warnings: [pran(ctx.lang, "perDidelis", { mb: Math.round(MAX_FAILO_B / 1048576) })], blocks: [], chunks: [], size: f.size }); continue; }
-      if (ctx.failu >= MAX_FAILU) { docs.push({ id: "D" + (++ctx.n), name: f.name, parseStatus: "failed", warnings: [pran(ctx.lang, "failuLimitas", { n: MAX_FAILU })], blocks: [], chunks: [], size: f.size }); continue; }
-      if (ctx.baitu + f.size > MAX_ISSKLEISTA_B) { docs.push({ id: "D" + (++ctx.n), name: f.name, parseStatus: "failed", warnings: [pran(ctx.lang, "bendrasLimitas")], blocks: [], chunks: [], size: f.size }); continue; }
+      var f = files[i], e = ext(f.name), arch = archyvas(e);
+      var riba = arch ? MAX_ISSKLEISTA_B : MAX_FAILO_B;
+      if (f.size > riba) { klaida(f, pran(ctx.lang, "perDidelis", { mb: Math.round(riba / 1048576) })); continue; }
+      if (ctx.failu >= MAX_FAILU) { klaida(f, pran(ctx.lang, "failuLimitas", { n: MAX_FAILU })); continue; }
+      if (ctx.darbo + f.size > MAX_DARBO_B || (!arch && ctx.baitu + f.size > MAX_ISSKLEISTA_B)) { klaida(f, pran(ctx.lang, "bendrasLimitas")); continue; }
       var buf = await f.arrayBuffer();
-      ctx.failu++; ctx.baitu += buf.byteLength;
-      if (ext(f.name) === "zip") docs = docs.concat(await isZip(f.name, buf, ctx, 0, onProgress));
-      else { if (onProgress) onProgress(f.name); docs.push(await apdorokFaila(f.name, buf, ctx)); }
+      ctx.failu++; ctx.darbo += buf.byteLength;
+      if (arch) docs = docs.concat(await isZip(f.name, buf, ctx, 0, onProgress, KONTEINERIAI[e] ? e : null));
+      else { ctx.baitu += buf.byteLength; if (onProgress) onProgress(f.name); docs.push(await apdorokFaila(f.name, buf, ctx)); }
     }
     // Komplektiškumas: visi perskaityti / iš dalies / nepavyko
     var parsed = docs.filter(function (d) { return d.parseStatus === "parsed"; }).length;
@@ -635,7 +684,7 @@
     rusis: rusis,
     pdfTekstas: pdfTekstas,
     punktas: punktas,
-    limits: { MAX_FAILO_B: MAX_FAILO_B, MAX_ISSKLEISTA_B: MAX_ISSKLEISTA_B, MAX_FAILU: MAX_FAILU, GYLIS: GYLIS, CHUNK_ZODZIU: CHUNK_ZODZIU, CHUNK_SIMBOLIU: CHUNK_SIMBOLIU },
+    limits: { MAX_FAILO_B: MAX_FAILO_B, MAX_ISSKLEISTA_B: MAX_ISSKLEISTA_B, MAX_DARBO_B: MAX_DARBO_B, MAX_FAILU: MAX_FAILU, GYLIS: GYLIS, CHUNK_ZODZIU: CHUNK_ZODZIU, CHUNK_SIMBOLIU: CHUNK_SIMBOLIU },
     _internal: { isDocx: isDocx, isXml: isXml, isHtml: isHtml, isTxt: isTxt, isXlsx: isXlsx, saugusKelias: saugusKelias, decodeFileName: decodeFileName, kalba: kalba, issklekRibotai: issklekRibotai, konteinerioDydis: konteinerioDydis, pran: pran }
   };
 })(typeof window !== "undefined" ? window : this);

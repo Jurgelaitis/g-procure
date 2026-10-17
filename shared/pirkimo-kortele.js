@@ -308,8 +308,8 @@
     var v = vykdytojas(k.vykdytojas);
     if (v && v.rezimas && k.rezimas && v.rezimas !== k.rezimas) {
       out.push(en
-        ? v.pavadinimas + " usually procures under " + REZIMAI[v.rezimas].en + ". The regime is set by the notice form - check it."
-        : v.pavadinimas + " paprastai perka pagal " + REZIMAI[v.rezimas].lt + ". Režimą lemia skelbimo forma - patikrinkite ją.");
+        ? v.pavadinimas + " usually procures under " + REZIMAI[v.rezimas].en + ". Check which law the notice (directive) or the procurement documents state."
+        : v.pavadinimas + " paprastai perka pagal " + REZIMAI[v.rezimas].lt + ". Patikrinkite, kurį įstatymą nurodo skelbimas (direktyva) ar pirkimo dokumentai.");
     }
     if (Array.isArray(k.dalys) && k.dalys.length && k.verte > 0) {
       var suma = 0, visos = true;
@@ -441,7 +441,7 @@
   /* ================================================================ KORTELĖ MODULYJE
    * Naudotojo sprendimas (2026-09-26): kortelė kuriama tiesiai modulyje, be naujo skirtuko. Langas rodo, kas bus
    * perimta iš modulio; pavadinimas redaguojamas (privalomas), netinkamos reikšmės neperkeliamos ir įvardijamos; be
-   * modulio režimo žinomam vykdytojui siūlomas jo įprastas režimas (pažymėta, kad galioja skelbimo forma).
+   * modulio režimo žinomam vykdytojui siūlomas jo įprastas režimas (pažymėta, kad pakeisti, jei skelbimas ar pirkimo dokumentai nurodo kitą įstatymą).
    * Įrašoma TIK paspaudus „Išsaugoti kortelę“ - ir tik kortelė: modulio darbas toliau nesaugomas. Daugiau laukų
    * (datos, BVPŽ, skelbimo PDF) - „Pildyti kortelių puslapyje“ (naujas skirtukas, kaip iki šiol).
    * GP_KORTELE.kurkLange(laukai, { modulis, onIssaugota }) -> Promise: kortelė | { atverta } | { blokuota } | null
@@ -463,7 +463,7 @@
     var bazine = tuscia();
     neperkelta.forEach(function (n) { k[n.laukas] = bazine[n.laukas]; });
     /* Režimo modulis neduoda, o vykdytojas žinomas - siūlomas jam įprastas režimas (kaip kortelių puslapyje, naudotojo
-       sprendimas 2026-09-26). Lange pažymima, kad tai pasiūlymas, ne modulio duomuo, ir kad galioja skelbimo forma. */
+       sprendimas 2026-09-26). Lange pažymima, kad tai pasiūlymas, ne modulio duomuo, ir kad jį reikia pakeisti, jei skelbimas ar pirkimo dokumentai nurodo kitą įstatymą. */
     var siulomasRezimas = null;
     if (!k.rezimas && k.vykdytojas) {
       var vk = vykdytojas(k.vykdytojas);
@@ -651,7 +651,7 @@
       dlgApie: "Kortelė bus išsaugota šioje naršyklėje (ji patenka į atsarginę kopiją), ir ją galės skaityti kiti įrankiai. Pats modulio darbas nesaugomas.",
       dlgPav: "Pirkimo pavadinimas", dlgIs: "Iš modulio perimama:", dlgIsM: "Iš modulio „{m}“ perimama:", dlgNieko: "Kitų duomenų modulyje dar nėra - juos galėsite įrašyti vėliau.",
       dlgNeperkeliama: "Neperkeliama:", dlgDaugiau: "Pildyti kortelių puslapyje", dlgAtsaukti: "Atšaukti", dlgSaugoti: "Išsaugoti kortelę",
-      dlgRezimas: "Siūlomas režimas: {r} - įprastas {v}. Galioja skelbimo forma: jei ji kitokia, pakeiskite kortelėje."
+      dlgRezimas: "Siūlomas režimas: {r} - įprastas {v}. Jei skelbimas ar pirkimo dokumentai nurodo kitą įstatymą, pakeiskite kortelėje."
     },
     en: {
       zyme: "Procurement card", pirkimas: "Procurement card", be: "- none selected -",
@@ -672,7 +672,7 @@
       dlgApie: "The card will be saved in this browser (it is included in the backup) and other tools will be able to read it. The module's own work is not saved.",
       dlgPav: "Procurement title", dlgIs: "Taken from the module:", dlgIsM: "Taken from “{m}”:", dlgNieko: "There is no other data in the module yet - you can add it later.",
       dlgNeperkeliama: "Not transferred:", dlgDaugiau: "Fill in on the cards page", dlgAtsaukti: "Cancel", dlgSaugoti: "Save card",
-      dlgRezimas: "Suggested regime: {r} - usual for {v}. The notice form prevails: if it differs, change it on the card."
+      dlgRezimas: "Suggested regime: {r} - usual for {v}. If the notice or the procurement documents state a different law, change it on the card."
     }
   };
   function t(k) { var l = kalba(); return (T[l] && T[l][k]) || T.lt[k] || k; }

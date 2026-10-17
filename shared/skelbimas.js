@@ -22,8 +22,14 @@
  *    variantas (supaprastintas ar tarptautinis) siūlomas tik pagal failo vardą
  *    („Nacionalinis skelbimas...“ - supaprastintas, „Skelbimas apie pirkimą...“ -
  *    tarptautinis), kitaip - tik pastaba, kurį būdą skelbimas nurodo.
- *  - Režimą lemia skelbimas, ne organizacija (Energy cells 9614756 - perkančiosios
- *    organizacijos formos): abiejų režimų požymiai - neaiškus, nesiūloma.
+ *  - Režimą lemia skelbimas, ne organizacija: abiejų režimų požymiai - neaiškus,
+ *    nesiūloma. Bet skelbimas su „Teisinis pagrindas: Kitas“ (be direktyvos) režimo
+ *    NENURODO (2026-10-17, naudotojo sprendimas): nacionaliniuose LITGRID ir Energy cells
+ *    skelbimuose (9982633, 9610775, 9022598, 9614756) forma - „Perkančiosios organizacijos
+ *    veiklos sritis“, nors jų pirkimo dokumentai - „Perkantysis subjektas“ ir PĮ; EPSO-G
+ *    9281765 - ta pati forma ir VPĮ. Tada režimas nesiūlomas, o formos požymiai grąžinami
+ *    atskirai (formosPozymiai) - modulis gali pasiūlyti organizacijos įprastą režimą,
+ *    kurį patvirtina žmogus.
  *  - BVPŽ skelbime be kontrolinio skaitmens: pilnas kodas imamas iš
  *    shared/cpv-data.js (GP_CPV_DATA), jei jis įkeltas; kitaip - pastaba.
  * Nieko nesiunčia ir nesaugo.
@@ -82,11 +88,23 @@
     });
     return out;
   }
-  // Grąžina { value: "PI" | "VPI" | null, neaiskus, pozymiai } - neaiškus, kai yra abiejų režimų požymių
+  // Skelbimo „Teisinis pagrindas: Kitas“ (EN „Legal basis: Other“) - direktyva netaikoma; grąžina lauko citatą
+  function teisinisKitas(tekstas) {
+    var eil = eilutes(tekstas);
+    var l = laukas(eil, "Teisinis pagrindas") || laukas(eil, "Legal basis");
+    return l && /^(kitas|other)(\s|[.,;]|$)/i.test(l.reiksme) ? l.citata : null;
+  }
+  // Grąžina { value: "PI" | "VPI" | null, neaiskus, pozymiai } - neaiškus, kai yra abiejų režimų požymių;
+  // be direktyvos („Kitas“) - value null, o formos požymiai ir citata - formosPozymiai, teisinisPagrindas
   function rezimas(tekstas, failoVardas) {
     var vardas = String(failoVardas || "").split(" › ").pop();
     var pi = pozymiai(SEKTORIUS, tekstas, vardas, "PI"), vpi = pozymiai(KLASIKA, tekstas, vardas, "VPI");
     var visi = pi.concat(vpi);
+    var kitas = teisinisKitas(tekstas);
+    if (kitas && !visi.some(function (p) { return /2014\/2[45]/.test(p.tekstas); }))
+      // Pirmiausia - skelbimo eilutė (veiklos sritis), ne failo vardas: ją citata ir rodo žmogui
+      return { value: null, neaiskus: false, pozymiai: [], teisinisPagrindas: kitas,
+               formosPozymiai: visi.filter(function (p) { return p.kur === "tekstas"; }).concat(visi.filter(function (p) { return p.kur !== "tekstas"; })) };
     if (!visi.length) return { value: null, neaiskus: false, pozymiai: [] };
     if (pi.length && vpi.length) return { value: null, neaiskus: true, pozymiai: visi };
     return { value: pi.length ? "PI" : "VPI", neaiskus: false, pozymiai: visi };
@@ -179,6 +197,7 @@
   var PASTABOS = {
     lt: { neregistre: "Pirkėjas „{p}“ organizacijų registre nerastas - vykdytojo nesiūlome.",
           abuRezimai: "Skelbime yra ir PĮ, ir VPĮ požymių - režimo nesiūlome, patikrinkite skelbimo formą.",
+          beDirektyvos: "Skelbimo teisinis pagrindas - „Kitas“ (direktyva netaikoma), todėl skelbimo forma („{f}“) įstatymo nenurodo - režimo iš skelbimo nesiūlome. Kurį įstatymą taiko pirkimas, nurodo pirkimo dokumentai.",
           failoVardas: "failo vardas: ", numeris: "Patikrinkite numerį skliaustuose: iš PDF brūkšneliai (pvz. „VPP-268“) dingsta.",
           failas: " · failas: ", nacionalinis: "nacionalinis skelbimas", tarptautinis: "skelbimas apie pirkimą",
           variantas: "Variantas ({r}) - pagal skelbimo rūšį failo varde.", rusis: { supaprastintas: "supaprastintas", tarptautinis: "tarptautinis" },
@@ -191,6 +210,7 @@
           pakeitimas: "Tai skelbimo pakeitimas, išsiųstas {d}: paskelbimo datos nesiūlome - pirminio skelbimo datos šiame PDF nėra." },
     en: { neregistre: "Buyer “{p}” is not in the organisation register - no contracting body is suggested.",
           abuRezimai: "The notice has signs of both PĮ and VPĮ - no regime is suggested; check the notice form.",
+          beDirektyvos: "The notice legal basis is “Other” (no directive applies), so the notice form (“{f}”) does not show the law - no regime is suggested from the notice. The procurement documents state which law applies.",
           failoVardas: "file name: ", numeris: "Check the number in brackets: hyphens (e.g. “VPP-268”) are lost in the PDF text.",
           failas: " · file: ", nacionalinis: "national notice", tarptautinis: "contract notice",
           variantas: "Variant ({r}) - from the notice type in the file name.", rusis: { supaprastintas: "simplified", tarptautinis: "international" },
@@ -265,6 +285,8 @@
       prideti("rezimas", r.value, cit.join("; "));
     }
     else if (r.neaiskus) pastabos.push(P.abuRezimai);
+    else if (r.teisinisPagrindas && r.formosPozymiai.length)
+      pastabos.push(P.beDirektyvos.replace("{f}", function () { return r.formosPozymiai[0].tekstas; }));
 
     // 2.1 Procedūra: pavadinimas ir būdas; 2.1.1 - objektas ir BVPŽ; 2.1.3 - vertė
     var pr = ruozas(eil, /^2\.1\s+Proced/i, /^(?:2\.1\.1\s|5\s+Pirkimo\s+dalis|5\.1\s)/i);
