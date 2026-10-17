@@ -5,11 +5,18 @@
  * (window.GP_CVPIS). URL šablonai patikrinti 2026-09-02 (be prisijungimo,
  * HTTP 200) - žr. docs/tiekejams/cvpis-feasibility.md.
  *
- * MVP: tik NUORODOS (navigacija), NE fetch. CVP IS neturi CORS ir API, tad
- * naršyklė jo nuskaityti negali; gyvai jungčiai skirtas adapterio kontraktas
- * (ProcurementSourceAdapter) čia aprašytas, bet įgyvendinimas - 2 etapas
- * (serverio pusė). Kol jo nėra, status() grąžina aiškią techninę būseną, o
- * įrankis NIEKADA neimituoja gyvos jungties.
+ * MVP: tik NUORODOS (navigacija), NE fetch. CVP IS puslapiai ir VPT dokumentuota
+ * duomenų API (2026-05-20, POST epps-integration/api/cft-details-export) CORS
+ * antraščių neturi, o API reikalauja prieigos rakto (be jo - 401 „Please include
+ * a valid apiKey“; patikrinta 2026-10-17), tad naršyklė jų nuskaityti negali -
+ * tik serveris su VPT išduotu raktu (2 etapas, neįdiegta). Kol jo nėra, status()
+ * grąžina aiškią techninę būseną, o įrankis NIEKADA neimituoja gyvos jungties.
+ *
+ * Nuo 2026-10-17: paieška pagal pavadinimą atveria CVP IS rezultatus (title=,
+ * GET be sesijos), o visų dokumentų pakete esantis CVP IS dokumentų sąrašas
+ * („List of Contract Documents“, <vykdytojo id>_<pirkimo id>.pdf) skaitomas
+ * dokumentuSarasas() ir sulyginamas su perskaitytais failais (apreptis()) -
+ * matyti, ar perskaityti visi paskelbti dokumentai ir kokie papildymai.
  *
  * PIRKIMO VYKDYTOJAS IR TEISINIS REŽIMAS (nuo 2026-09-24) nebėra konstanta:
  * jie atpažįstami iš įkelto skelbimo PDF teksto ir failo vardo
@@ -35,6 +42,8 @@
       return BASE + "/viewCFTSAction.do?mode=search&isFTS=true&type=cftFTS&isPopup=false&contractAuthority=" + encodeURIComponent(String(pavadinimas || "")).replace(/%20/g, "+") + "&publicationFromDate=" + ddmmyyyy + "&d-3680175-p=1";
     },
     advancedSearch: BASE + "/prepareAdvancedSearch.do?type=cftFTS",
+    // Paieška pagal pavadinimą (GET be sesijos, patikrinta 2026-10-17: „tipinių atramų projektavimo“ - 2 LITGRID pirkimai)
+    paieska: function (tekstas) { return BASE + "/viewCFTSAction.do?mode=search&isFTS=true&type=cftFTS&isPopup=false&title=" + encodeURIComponent(String(tekstas || "").trim()).replace(/%20/g, "+") + "&d-3680175-p=1"; },
     latest: BASE + "/quickSearchAction.do?searchType=cftFTS&latest=true",
     home: BASE + "/home.do",
     register: BASE + "/prepareRegisterEOOrg.do?registerEO=true",
@@ -54,7 +63,7 @@
     if (ted) return { ok: true, kind: "ted", tedNumber: ted[1], officialUrl: URL.ted(ted[1]), links: { ted: URL.ted(ted[1]) }, input: s,
                       note: "TED numeris. CVP IS resourceId reikia paimti iš TED skelbimo nuorodų arba paties CVP IS." };
     if (/viesiejipirkimai\.lt/i.test(s)) return { ok: false, reason: "no-id", input: s };
-    return { ok: true, kind: "text", query: s, links: { search: URL.advancedSearch, latest: URL.latest }, input: s };
+    return { ok: true, kind: "text", query: s, links: { search: URL.paieska(s), latest: URL.latest }, input: s };
   }
   // buyer: null - pirkimo vykdytojas iš ID nežinomas; jį duoda skelbimas (atpazinkPirkeja) arba naudotojas
   function ref(id, kind, input) {
@@ -107,13 +116,71 @@
     return new Date(guess);
   }
 
+  // ---------------------------------------------------------------------------
+  // CVP IS dokumentų sąrašas iš visų dokumentų paketo (2026-10-17). CVP IS į ZIP
+  // („Atsisiųsti Zip failą“) įdeda PDF <vykdytojo id>_<pirkimo id>.pdf: „List of
+  // Contract Documents“ (#Addenda ID, Status, Title, File Associated :<failas>) ir
+  // „List of Notices“. Sandara - iš dviejų tikrų LITGRID paketų; pavadinimai ir
+  // failų vardai gali persikelti į kitą eilutę, todėl tarpai suvienodinami, o
+  // failų vardai lyginami be tarpų. Neatpažinus - null (nieko nespėjama).
+  // ---------------------------------------------------------------------------
+  function dokumentuSarasas(tekstas) {
+    var t = String(tekstas || "").replace(/\s+/g, " ");
+    var i = t.indexOf("List of Contract Documents"); if (i < 0) return null;
+    var j = t.indexOf("List of Notices", i);
+    var irasai = function (dalis, rusis) {
+      var out = [], re = /#Addenda ID (\S+) Status (.+?) Title (.+?) File Associated ?: ?<(.+?)>/g, m;
+      while ((m = re.exec(dalis))) out.push({ rusis: rusis, papildymas: /^\d+$/.test(m[1]) ? +m[1] : null, statusas: m[2].trim(), pavadinimas: m[3].trim(), failas: m[4].trim() });
+      return out;
+    };
+    var dokumentai = irasai(j > 0 ? t.slice(i, j) : t.slice(i), "dokumentas");
+    if (!dokumentai.length) return null;
+    return { dokumentai: dokumentai, skelbimai: j > 0 ? irasai(t.slice(j), "skelbimas") : [] };
+  }
+  // Failo vardas palyginimui: be tarpų ir didžiųjų raidžių; skelbimo versijų priesaga „_0“, „_1“ ZIP'e nuimama
+  function vardoRaktas(v, skelbimas) {
+    var s = String(v || "").split(/\s*›\s*|\//).pop().normalize("NFC").toLowerCase().replace(/\s+/g, "");
+    return skelbimas ? s.replace(/_\d+(\.pdf)$/, "$1") : s;
+  }
+  // Sąrašo įrašai prieš perskaitytus failus: rastas ir perskaitytas / rastas, bet neperskaitytas / nerastas.
+  // Archyvas (pvz. „1_Pirkimo dokumentai.zip“) laikomas perskaitytu, kai perskaitytas bent vienas jo failas.
+  function apreptis(sarasas, docs) {
+    if (!sarasas) return null;
+    var keliai = (docs || []).map(function (d) {
+      var dalys = String(d.name || "").split(/\s*›\s*/);
+      return { dalys: dalys.map(function (x) { return vardoRaktas(x); }), d: d };
+    });
+    var bukle = function (e) {
+      var raktas = vardoRaktas(e.failas, e.rusis === "skelbimas"), be = raktas.replace(/^\d+_/, "");
+      var rasti = keliai.filter(function (k) { return k.dalys.some(function (x, n) {
+        var y = e.rusis === "skelbimas" ? x.replace(/_\d+(\.pdf)$/, "$1") : x;
+        return y === raktas || (n === k.dalys.length - 1 && y === be); }); });
+      if (!rasti.length) return "nerastas";
+      return rasti.some(function (k) { return k.d.parseStatus === "parsed" || k.d.parseStatus === "partial"; }) ? "perskaitytas" : "neperskaitytas";
+    };
+    var visi = sarasas.dokumentai.concat(sarasas.skelbimai).map(function (e) { return Object.assign({ bukle: bukle(e) }, e); });
+    var dok = visi.filter(function (e) { return e.rusis === "dokumentas"; });
+    return { irasai: visi, dokumentu: dok.length, skelbimu: visi.length - dok.length,
+             perskaityta: dok.filter(function (e) { return e.bukle === "perskaitytas"; }).length,
+             papildymai: dok.filter(function (e) { return e.papildymas !== null; }) };
+  }
+  // Ar paketas atrodo kaip tik pradinis pirkimo dokumentų ZIP (be CVP IS sąrašo) - tada vėliau paskelbti
+  // papildymai (atsakymai į klausimus, aktualios redakcijos) į jį neįeina
+  function tikPradinisZip(docs) {
+    var virsus = {};
+    (docs || []).forEach(function (d) { virsus[String(d.name || "").split(/\s*›\s*/)[0]] = 1; });
+    var v = Object.keys(virsus);
+    return v.length === 1 && /pirkimo dokumentai/i.test(v[0]) && /\.zip$/i.test(v[0]);
+  }
+
   // Adapterio kontraktas 2 etapui (serverio pusė). Čia - tik būsena.
   function status() {
     return { live: false, mode: "manual-upload",
-             lt: "Gyva CVP IS jungtis neįjungta: CVP IS neturi viešos API ir CORS, todėl nuskaityti galima tik per serverį (2 etapas). Dokumentus įkelkite iš oficialaus puslapio.",
-             en: "Live CVP IS link is not enabled: CVP IS has no public API or CORS, so it can only be read via a server (phase 2). Upload the documents from the official page." };
+             lt: "Gyva CVP IS jungtis neįjungta: VPT dokumentuota CVP IS duomenų API reikalauja prieigos rakto ir nepriima naršyklės užklausų (nėra CORS), todėl ją galima naudoti tik per serverį - G-Procure tokios jungties dar neturi. Dokumentus įkelkite iš oficialaus puslapio.",
+             en: "Live CVP IS link is not enabled: the CVP IS data API documented by VPT requires an access key and does not accept browser requests (no CORS), so it can only be used via a server - G-Procure does not have such a link yet. Upload the documents from the official page." };
   }
 
-  global.GP_CVPIS = { version: "0.3.0", URL: URL, resolve: resolve, terminas: terminas, parseData: parseData, status: status,
-                      atpazinkPirkeja: atpazinkPirkeja, atpazinkRezima: atpazinkRezima };
+  global.GP_CVPIS = { version: "0.4.0", URL: URL, resolve: resolve, terminas: terminas, parseData: parseData, status: status,
+                      atpazinkPirkeja: atpazinkPirkeja, atpazinkRezima: atpazinkRezima,
+                      dokumentuSarasas: dokumentuSarasas, apreptis: apreptis, tikPradinisZip: tikPradinisZip };
 })(typeof window !== "undefined" ? window : this);

@@ -2,13 +2,39 @@
 
 Patikrinta: **2026-09-02** (curl iš macOS ir WebFetch iš kitos infrastruktūros, viešos užklausos be prisijungimo; papildomai - kritiko patikra tą pačią dieną). Visi teiginiai žemiau turi HTTP būseną arba pažymėti kaip nepatikrinti.
 
+## Atnaujinimas 2026-10-17 (technologinė analizė iš tiekėjo perspektyvos)
+
+Patikrinta 2026-10-17 curl užklausomis be prisijungimo ir be prieigos rakto:
+
+- **API yra, bet ne naršyklei.** VPT 2026-05-20 paskelbė CVP IS pirkimų duomenų API papildymą
+  ([VPT pranešimas](https://vpt.lrv.lt/lt/naujienos-3/del-api-funkcionalumo-papildymo-w0Y/)): `POST
+  https://viesiejipirkimai.lt/epps-integration/api/cft-details-export`, puslapiavimas `pageSize` / `pageNum`, laukai -
+  pirkimo santraukos nuoroda ir numeris, vertinimo būdas, BVPŽ, NUTS, terminai, trukmė, TED nuorodos ir kt. Dokumentų ir
+  priedų pranešime nėra. Be rakto atsakymas `401 {"code":"UNAUTHORIZED_API_KEY","detail":"Please include a valid apiKey"}`,
+  CORS antraščių nėra (ir OPTIONS - 401). Kaip gauti raktą, pranešime nenurodyta; pavyzdyje matomo rakto nenaudojome.
+  Todėl 1 argumentas žemiau tikslintinas: viešai dokumentuota API yra, bet ji reikalauja rakto ir tinka tik serveriui.
+- **Paieška pagal pavadinimą veikia GET be sesijos:** `/epps/viewCFTSAction.do?mode=search&isFTS=true&type=cftFTS&isPopup=false&title={tekstas}&d-3680175-p=1`
+  („tipinių atramų projektavimo“ - 2 LITGRID pirkimai, visas pavadinimas - 1). Kiti parametrų vardai (`contractTitle`,
+  `cftTitle`) ignoruojami. Modulis teksto paieškai dabar atveria šiuos rezultatus, ne tuščią išplėstinę paiešką.
+- **Visų dokumentų ZIP turi CVP IS dokumentų sąrašą.** `downloadCftResourceItems.do` grąžina `<vykdytojo id>_<pirkimo id>.zip`
+  su pradiniu dokumentų ZIP, atskirai paskelbtais papildymais (atsakymai į klausimus, aktualios redakcijos), c4t XML,
+  visomis skelbimo versijomis (`_0`, `_1`, ...) ir PDF `<vykdytojo id>_<pirkimo id>.pdf`: „List of Contract Documents“
+  (`#Addenda ID`, `Status`, `Title`, `File Associated :<failas>`) ir „List of Notices“. Patikrinta su dviem LITGRID paketais
+  (6 dokumentai ir 3 skelbimai; 5 ir 1); pavadinimai ir failų vardai gali persikelti į kitą eilutę. Modulis šį sąrašą
+  skaito ir parodo aprėptį („Perskaityta N iš M“, papildymai su ID, kas nerasta ar neperskaityta), o kai įkeltas tik
+  pradinis „Pirkimo dokumentai“ ZIP - įspėja, kad vėliau paskelbti papildymai į jį neįeina. Tai sprendžia analizės
+  nurodytą spragą be serverio; sąrašas atspindi paketo atsisiuntimo akimirką.
+- Atvirų duomenų jungtis (data.gov.lt pagrindu) pirkimui grąžina ir metaduomenis, ir failų sąrašą su papildymų ID - tai
+  galimas serverio jungties šaltinis kartu su VPT API; sprendimas dėl serverio sluoksnio lieka naudotojo
+  (žr. `pletros-sprendimai-2026-10.md`).
+
 ## Išvada (go / no-go)
 
 **NO-GO gyvai CVP IS jungčiai MVP etape. GO rankiniam oficialaus dokumentų paketo įkėlimui + plonoms oficialioms nuorodoms.**
 
 Argumentai:
 
-1. CVP IS neturi nei viešos API, nei CORS antraščių (patikrinta su `Origin: https://g-procure.com`) - iš naršyklės nuskaityti neįmanoma, tik per serverį.
+1. CVP IS puslapiai ir VPT dokumentuota duomenų API (nuo 2026-05-20; reikalauja prieigos rakto) neturi CORS antraščių (patikrinta su `Origin: https://g-procure.com`) - iš naršyklės nuskaityti neįmanoma, tik per serverį. Iki 2026-10-17 čia buvo parašyta „nėra viešos API“ - tai pasenę.
 2. Serverio sluoksnio nėra kam administruoti (Hetzner be šeimininko), Cloudflare Worker neturi saugyklos ir tvarkaraščio, o kešuotas pirkimų indeksas serveryje prieštarauja CLAUDE.md 7 sk. nuostatai „jokios serverio DB" be atskiro vartotojo sprendimo.
 3. Kritiniai duomenys (terminai, pratęsimai, aktualios redakcijos) CVP IS neturi struktūrinės žymos - tik „Papildymo ID" ir pavadinimų euristika. Kešuotas veidrodis reikštų pasenusią informaciją su teisine pasekme tiekėjui.
 4. Teisinis pagrindas nepatvirtintas: VPT nepaklausta dėl automatinio nuskaitymo (naudojimo sąlygų puslapio nėra, robots.txt neegzistuoja), o asistentas apie konkretų pirkimą gali būti traktuojamas kaip neoficialus paaiškinimų kanalas (PĮ 48 str. 2 d. 20 p., 49 str.).
