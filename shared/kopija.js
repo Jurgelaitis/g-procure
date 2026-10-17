@@ -60,7 +60,7 @@
     fonas.style.cssText = "position:fixed;inset:0;background:rgba(46,54,65,.45);display:flex;align-items:center;justify-content:center;z-index:10050;padding:16px;box-sizing:border-box";
     fonas.innerHTML = '<div role="dialog" aria-modal="true" aria-labelledby="gp-kopija-antraste" aria-describedby="gp-kopija-aprasas" ' +
       'style="background:#fff;color:var(--color-graphite,#2E3641);border-radius:12px;max-width:640px;width:100%;padding:16px 18px;box-sizing:border-box;box-shadow:0 12px 40px rgba(0,0,0,.25);font-family:var(--font-base,inherit)">' +
-      '<h2 id="gp-kopija-antraste" style="font-size:17px;line-height:1.3;margin:0 0 6px">' + (L ? "Copy manually" : "Nukopijuokite ranka") + '</h2>' +
+      '<h2 id="gp-kopija-antraste" style="font-size:18px;line-height:1.3;margin:0 0 6px">' + (L ? "Copy manually" : "Nukopijuokite ranka") + '</h2>' +
       '<p id="gp-kopija-aprasas" style="margin:0 0 10px;font-size:14px;line-height:1.45">' +
       (L ? "Automatic copying failed. The text below is selected - press Ctrl+C (Mac: Cmd+C)." : "Automatiškai nukopijuoti nepavyko. Tekstas žemiau pažymėtas - spauskite Ctrl+C (Mac - Cmd+C).") + '</p>' +
       '<textarea readonly rows="10" aria-label="' + (L ? "Text to copy" : "Tekstas kopijuoti") + '" ' +

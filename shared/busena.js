@@ -73,7 +73,7 @@
       // spausdinant nerodomos, kaip ir trumpi pranešimai (iki 2026-09-28 patekdavo į atspausdintą ataskaitą)
       "@media print{#gpb-juostos{display:none!important}}",
       "@media (prefers-reduced-motion:reduce){.gpb-sukas{animation:none;border-top-color:var(--color-graphite-30,#C7CDD3)}}",
-      ".gpb-btn{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border-radius:999px;padding:3px 12px;",
+      ".gpb-btn{font:inherit;font-size:13px;font-weight:600;cursor:pointer;border-radius:999px;padding:3px 12px;",
       "background:var(--color-white,#fff);color:var(--color-graphite,#2E3641);border:1px solid var(--color-graphite-30,#C7CDD3)}",
       ".gpb-btn:hover{border-color:var(--color-graphite-50,#737483)}",
       ".gpb-btn:focus-visible{outline:2px solid var(--color-emerald-strong,#007554);outline-offset:2px}",
