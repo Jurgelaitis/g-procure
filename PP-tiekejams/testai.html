@@ -116,17 +116,88 @@ async function paleisk() {
     tiesa(!vardai.some(v => v.indexOf("__MACOSX") !== -1), "__MACOSX praleistas");
     lygu(S.completeness, "partial", "komplektiškumas ne 'complete', kai yra neperskaitytų");
   }, "tinklo ar failo klaida negali tapti 'reikalavimo nėra' išvada - rinkinys pažymimas neišsamiu");
-  await testas("Įdėtinis ZIP išskleidžiamas, per gilus - ne", async () => {
+  await testas("Įdėtiniai archyvai iki 8 lygių išskleidžiami (tikruose paketuose - iki 6), per gilus - ne", async () => {
     const vidinis = await paketas({ "priedai/EBVPD.txt": "EBVPD tekstas." }, "EBVPD.zip");
     const vidBuf = await vidinis.arrayBuffer();
-    // paketas > a.zip (1 lygis) > b.zip (2 lygis) > c.zip (3 lygis, per gilus)
-    const c = new W.JSZip(); c.file("l3.txt", "giliai"); const cBuf = await c.generateAsync({ type: "arraybuffer" });
-    const b = new W.JSZip(); b.file("c.zip", cBuf); const bBuf = await b.generateAsync({ type: "arraybuffer" });
-    const a = new W.JSZip(); a.file("b.zip", bBuf); const aBuf = await a.generateAsync({ type: "arraybuffer" });
-    const S = await ikelk({ "EBVPD.zip": vidBuf, "a.zip": aBuf });
+    // z1.zip > z2.zip > ... > zn.zip > l.txt (paketas - dar vienas lygis virš jų)
+    const grandine = async n => {
+      let z = new W.JSZip(); z.file("l.txt", "4.1. Giliai " + n + "."); let buf = await z.generateAsync({ type: "arraybuffer" });
+      for (let i = n; i >= 2; i--) { z = new W.JSZip(); z.file("z" + i + ".zip", buf); buf = await z.generateAsync({ type: "arraybuffer" }); }
+      return buf;
+    };
+    let S = await ikelk({ "EBVPD.zip": vidBuf, "z1.zip": await grandine(6) });
     tiesa(S.docs.some(d => d.name.indexOf("EBVPD.txt") !== -1 && d.parseStatus === "parsed"), "1 lygio įdėtinis perskaitytas");
-    tiesa(S.docs.some(d => d.parseStatus === "unsupported" && /gilus/.test(d.warnings.join(" "))), "3 lygio įdėtinis pažymėtas kaip neišskleistas: " + S.docs.map(d => d.name + "|" + d.parseStatus).join(", "));
+    const l6 = S.docs.find(d => /z6\.zip › l\.txt$/.test(d.name));
+    tiesa(l6 && l6.parseStatus === "parsed", "6 lygių grandinė (kaip pakete 9288992) perskaityta: " + S.docs.map(d => d.name + "|" + d.parseStatus).join(", "));
+    S = await ikelk({ "z1.zip": await grandine(8) });
+    tiesa(S.docs.some(d => /z8\.zip › l\.txt$/.test(d.name) && d.parseStatus === "parsed"), "8 lygiai perskaityti");
+    S = await ikelk({ "z1.zip": await grandine(9) });
+    const z9 = S.docs.find(d => /z9\.zip$/.test(d.name));
+    tiesa(z9 && z9.parseStatus === "unsupported" && /gilus/.test(z9.warnings.join(" ")), "9 lygis pažymėtas kaip neišskleistas: " + S.docs.map(d => d.name + "|" + d.parseStatus).join(", "));
+    lygu(K.limits.GYLIS, 8, "riba");
+  }, "iki 2026-10-17 riba buvo 2 lygiai: pakete 9288992 TS priedai (36 failai 3-6 lygiuose) liko neperskaityti");
+  // El. parašo konteineris: dokumentas, parašai ir metaduomenys (sandara - kaip tikrame ADOC iš paketo 9744290)
+  const konteineris = async dok => {
+    const z = new W.JSZip(); z.file("mimetype", "application/vnd.lt.archyvai.adoc-2008", { compression: "STORE" });
+    z.file("META-INF/manifest.xml", "<manifest>parašas</manifest>"); z.file("META-INF/signatures/signatures0.xml", "<Signature>4.1. Parašas.</Signature>");
+    z.file("metadata/signableMetadata0.xml", "<m>Metaduomenys</m>"); z.file("metadata/unsignableMetadata0.xml", "<m/>");
+    Object.keys(dok).forEach(k => z.file(k, dok[k]));
+    return z.generateAsync({ type: "arraybuffer" });
+  };
+  await testas("El. parašo konteineris (ADOC, ASiC): skaitomas dokumentas, parašai ir metaduomenys praleidžiami", async () => {
+    let S = await ikelk({ "5_Tyrimai/Išvada.adoc": await konteineris({ "Išvada 2026-09-03.txt": "4.1. Grunto tyrimų išvada." }), "SPS.txt": "4.1. Tekstas." });
+    const d = S.docs.find(x => /Išvada\.adoc › Išvada 2026-09-03\.txt$/.test(x.name));
+    tiesa(d && d.parseStatus === "parsed", "dokumentas konteineryje perskaitytas: " + S.docs.map(x => x.name + "|" + x.parseStatus).join(", "));
+    lygu(d.konteineris, "adoc", "konteinerio žyma"); turi(d.blocks.map(b => b.text).join(" "), "Grunto tyrimų", "tekstas");
+    tiesa(!S.docs.some(x => /META-INF|metadata\/|mimetype/.test(x.name)), "parašai ir metaduomenys - ne dokumentai");
+    lygu(S.completeness, "complete", "paketas pilnas");
+    // Pasirašytas dokumentas įkeltas tiesiogiai (.asice) ir rūšis iš konteinerio vardo
+    await svarus(); await W.__PPT.onFiles([new W.File([await konteineris({ "dokumentas.txt": "1. Reikalavimai." })], "Techninė specifikacija 2026-09-03.asice")]);
+    const ts = W.__PPT.S.docs.find(x => /\.asice › dokumentas\.txt$/.test(x.name));
+    tiesa(ts && ts.parseStatus === "parsed", "ASiC-E įkeltas tiesiogiai"); lygu(ts.rusis, "TS", "rūšis - iš konteinerio vardo");
+    // Konteineris be dokumento - pasakoma
+    S = await ikelk({ "Tuščias.adoc": await konteineris({}) });
+    const t = S.docs.find(x => /Tuščias\.adoc$/.test(x.name));
+    tiesa(t && t.parseStatus === "unsupported", "tuščias konteineris pažymėtas"); turi(t.warnings[0], "dokumento nerasta");
+  }, "iki 2026-10-17 .adoc buvo „Formatas .adoc nepalaikomas“ (paketas 9744290: pasirašyta geologinių tyrimų vertinimo išvada)");
+  await testas("Nepalaikomi formatai - priežastis ir ką daryti (.7z, .DOC, .xls, .mpp)", async () => {
+    const S = await ikelk({ "1_Pirkimo sąlygos.7z": "7z", "SS 7 priedas.DOC": "doc", "Senas.xls": "xls", "SS 4 priedas grafikas.mpp": "mpp" });
+    const isp = v => (S.docs.find(d => d.name.endsWith(v)) || { warnings: [""] }).warnings.join(" ");
+    turi(isp(".7z"), "Išskleiskite jį kompiuteryje", ".7z"); turi(isp(".DOC"), "išsaugokite kaip DOCX", ".DOC");
+    turi(isp(".xls"), "XLSX", ".xls"); turi(isp(".mpp"), "Formatas .mpp nepalaikomas", ".mpp");
+    lygu(S.completeness, "failed", "nė vienas neperskaitytas");
   });
+  await testas("Archyvas didesnis už 60 MB skaitomas; didelis neskaitomo formato failas neišskleidžiamas", async () => {
+    const mazas = await (await paketas({ "a.txt": "4.1. Tekstas." }, "x.zip")).arrayBuffer();
+    const netikras = (vardas, mb, buf) => ({ name: vardas, size: mb * 1048576, arrayBuffer: async () => buf });
+    let out = await K.apdorok([netikras("Paketas.zip", 70, mazas)], null, "lt");
+    tiesa(out.docs.some(d => /a\.txt$/.test(d.name) && d.parseStatus === "parsed"), "70 MB archyvas skaitomas (riba - 250 MB)");
+    out = await K.apdorok([netikras("Paketas.zip", 260, mazas)], null, "lt"); turi(out.docs[0].warnings[0], "250 MB", "per didelis archyvas");
+    out = await K.apdorok([netikras("SPS.pdf", 61, mazas)], null, "lt"); turi(out.docs[0].warnings[0], "60 MB", "dokumento riba nepakito");
+    out = await K.apdorok([netikras("Sutartis.adoc", 70, await konteineris({ "Sutartis.txt": "1.1. Tekstas." }))], null, "lt");
+    tiesa(out.docs.some(d => /Sutartis\.txt$/.test(d.name) && d.parseStatus === "parsed"), "parašo konteineris - kaip archyvas");
+    // Kaip pakete 9748635: pirkimo sąlygos - vienas 63 MB .7z failas
+    const z = new W.JSZip(); z.file("1_Pirkimo sąlygos.7z", new W.Uint8Array(61 * 1048576)); z.file("SPS.txt", "4.1. Tekstas.");
+    out = await K.apdorok([new W.File([await z.generateAsync({ type: "arraybuffer", compression: "DEFLATE" })], "1159_9748635.zip")], null, "lt");
+    const d7 = out.docs.find(d => /\.7z$/.test(d.name));
+    lygu(d7.parseStatus, "unsupported", "7z"); turi(d7.warnings[0], "Išskleiskite", "priežastis - formatas"); neturi(d7.warnings[0], "bombų", "ne „viršyta riba“");
+    lygu(d7.size, 61 * 1048576, "dydis iš archyvo antraštės");
+    tiesa(out.docs.some(d => /SPS\.txt$/.test(d.name) && d.parseStatus === "parsed"), "kiti paketo failai perskaityti");
+    // Įdėtinis archyvas didesnis už 60 MB (nesuspaustas viduje) - irgi išskleidžiamas
+    const v = new W.JSZip(); v.file("Sąlygos.7z", new W.Uint8Array(61 * 1048576)); v.file("TS.txt", "1.1. Techninė specifikacija.");
+    const vBuf = await v.generateAsync({ type: "arraybuffer", compression: "STORE" });
+    const o = new W.JSZip(); o.file("1_Pirkimo dokumentai.zip", vBuf);
+    out = await K.apdorok([new W.File([await o.generateAsync({ type: "arraybuffer", compression: "DEFLATE" })], "Paketas.zip")], null, "lt");
+    tiesa(out.docs.some(d => /1_Pirkimo dokumentai\.zip › TS\.txt$/.test(d.name) && d.parseStatus === "parsed"), "61 MB įdėtinis archyvas išskleistas: " + out.docs.map(d => d.name + "|" + d.parseStatus + "|" + d.warnings.join(" ")).join(", "));
+    lygu(K.limits.MAX_DARBO_B, 600 * 1048576, "viso išskleidimo riba");
+  }, "iki 2026-10-17 66 MB paketas 9748635 buvo atmestas visas („Failas per didelis (riba 60 MB)“)");
+  await testas("Sugadintas įdėtinis archyvas pažymimas, kiti paketo failai perskaitomi", async () => {
+    const S = await ikelk({ "Priedai.zip": "tai ne ZIP archyvas", "SPS.txt": "4.1. Tekstas." });
+    const b = S.docs.find(d => /Priedai\.zip$/.test(d.name));
+    tiesa(b && b.parseStatus === "failed", "sugadintas pažymėtas: " + S.docs.map(d => d.name + "|" + d.parseStatus).join(", "));
+    turi(b.warnings[0], "Neperskaityta", "priežastis");
+    tiesa(S.docs.some(d => /SPS\.txt$/.test(d.name) && d.parseStatus === "parsed"), "kitas failas perskaitytas");
+  }, "iki 2026-10-17 sugadintas įdėtinis archyvas sustabdydavo viso paketo skaitymą");
   await testas("LT failų vardai be UTF-8 vėliavėlės dekoduojami (windows-1257)", () => {
     const bytes = new Uint8Array([0xE0, 0xE8, 0xE6, 0x2E, 0x74, 0x78, 0x74]); // "ąčę.txt" cp1257
     lygu(K._internal.decodeFileName(bytes), "ąčę.txt", "dekodavimas");
@@ -491,6 +562,29 @@ async function paleisk() {
     const txt = D.getElementById("metaList").textContent;
     turi(txt, "nesutampa", "konflikto žyma"); neturi(txt, "liko ", "žalia žyma");
   });
+  await testas("Termino rūšis (paraiškų ar pasiūlymų) ir pastaba apie vėlesnio etapo terminą", async () => {
+    const eilutes = () => [...D.querySelectorAll("#metaList li")].map(x => x.textContent);
+    const pastaba = () => (D.querySelector("#metaList li.meta-pastaba") || {}).textContent || "";
+    await ikelk({ "9022598_National Contract notice_0.txt": "Dalyvavimo prašymų priėmimo terminas: 05/08/2099 15:00 +03:00" });
+    tiesa(eilutes().some(x => /^Paraiškų \(dalyvavimo prašymų\) terminas/.test(x)), "paraiškų terminas: " + eilutes().join(" | "));
+    turi(pastaba(), "kvietime dalyviams per CVP IS", "paraiškų etapas - pastaba");
+    await ikelk({ "dok/SPS.txt": "Pirkimas vykdomas atviro konkurso būdu. Pasiūlymų pateikimo terminas: 2099-09-07 14:00" });
+    tiesa(eilutes().some(x => /^Pasiūlymų pateikimo terminas/.test(x)), "pasiūlymų terminas: " + eilutes().join(" | "));
+    lygu(pastaba(), "", "atviras konkursas su likusiu terminu - be pastabos");
+    await ikelk({ "dok/SPS.txt": "Pirkimo būdas: skelbiamos derybos. Pasiūlymų pateikimo terminas: 2099-09-07 14:00" });
+    turi(pastaba(), "vėlesnio etapo terminą", "derybos - pastaba");
+    await ikelk({ "dok/SPS.txt": "Pasiūlymų arba paraiškų pateikimo terminas: 2020-09-07 14:00" });
+    tiesa(eilutes().some(x => /^Pasiūlymų \/ paraiškų terminas/.test(x)), "abu - bendras pavadinimas");
+    turi(pastaba(), "nebūtinai reiškia, kad pirkimas baigtas", "praėjęs terminas - pastaba");
+    neturi(pastaba(), "keliais etapais", "be etapų požymio - tik praėjusio termino pastaba");
+  }, "patikra su 16 tikrų paketų: 9 kelių etapų pirkimuose CVP IS terminas buvo vėlesnio etapo, kurio viešame pakete nėra");
+  await testas("Skelbime „Numatoma vertė be PVM: 0 Euro“ - rodoma, kad vertė nenurodyta", async () => {
+    const vertes = () => [...D.querySelectorAll("#metaList li")].map(x => x.textContent).find(x => /^Numatoma vertė/.test(x)) || "";
+    await ikelk({ "9022598_National Contract notice_0.txt": "Numatoma vertė be PVM: 0 Euro\nDalyvavimo prašymų priėmimo terminas: 05/08/2099 15:00 +03:00" });
+    turi(vertes(), "numatoma vertė nenurodyta", "0 - ne vertė"); neturi(vertes(), "be PVM", "ne „0 EUR be PVM“");
+    await ikelk({ "9566057_National Contract notice_0.txt": "Numatoma vertė be PVM: 1 319 009 Euro" });
+    turi(vertes(), "1 319 009 EUR", "tikra vertė"); turi(vertes(), "be PVM", "su „be PVM“");
+  }, "2 iš 18 tikrų paketų skelbime įrašyta 0 - santrauka rodė „0 EUR be PVM“");
 
   grupe("Peržiūros radiniai - dokumentų sluoksnis (S4, S8)");
   await testas("ZIP bomba atmetama neišskleidus (uncompressedSize + srauto riba)", async () => {
@@ -1125,7 +1219,7 @@ async function paleisk() {
   const SK_AMBER = skelbimas('AB "Amber Grid"', "Perkančiojo subjekto veiklos sritis: Dujų arba šilumos gamyba, transportavimas ar paskirstymas", "Direktyva 2014/25/ES");
   const SK_EPSOG = skelbimas('UAB "EPSO­G" (PV)', "Perkančiosios organizacijos veiklos sritis: Ekonomikos ir finansų reikalai", "Kitas");
   const SK_ECELLS = skelbimas("Energy cells UAB (PV)", "Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos", "Kitas");
-  const SK_NEAISKUS = skelbimas("UAB Testas (PV)", "Perkančiojo subjekto veiklos sritis: Su elektros energija susijusi veikla", "Kitas", ["Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos"]);
+  const SK_NEAISKUS = skelbimas("UAB Testas (PV)", "Perkančiojo subjekto veiklos sritis: Su elektros energija susijusi veikla", "Direktyva 2014/25/ES", ["Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos"]);
   const V_PI = "9683631_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą – komunalinio sektoriaus direktyva, įprasta tvarka_0.txt";
   const V_VPI = "9281765_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą - bendroji direktyva, įprasta tvarka_0.txt";
 
@@ -1138,11 +1232,14 @@ async function paleisk() {
     lygu(C.atpazinkPirkeja("1 Pirkėjas 1.1 Pirkėjas Oficialus pavadinimas: UAB Testas (PV) Pirkėjo teisinė forma: X").value, "UAB Testas", "viena eilutė be \\n (DOCX / TXT blokas)");
     lygu(C.atpazinkPirkeja(""), null);
   });
-  await testas("atpazinkRezima: PĮ iš „Perkančiojo subjekto“ ir direktyvos 2014/25, VPĮ iš „Perkančiosios organizacijos“ (Teisinis pagrindas „Kitas“ - be signalo), failo vardas, abu požymiai - neaišku", () => {
+  await testas("atpazinkRezima: PĮ iš „Perkančiojo subjekto“ ir direktyvos 2014/25; su „Teisinis pagrindas: Kitas“ (be direktyvos) skelbimo forma režimo nenurodo; failo vardas, abu požymiai - neaišku", () => {
     const pi = C.atpazinkRezima(SK_LITGRID, V_PI); lygu(pi.value, "PI"); lygu(pi.neaiskus, false);
     tiesa(pi.pozymiai.some(p => /Perkančiojo subjekto veiklos sritis/.test(p.tekstas)) && pi.pozymiai.some(p => /2014\/25/.test(p.tekstas)) && pi.pozymiai.some(p => p.kur === "vardas"), JSON.stringify(pi.pozymiai));
-    const vpi = C.atpazinkRezima(SK_EPSOG, V_VPI); lygu(vpi.value, "VPI"); tiesa(vpi.pozymiai.some(p => /Perkančiosios organizacijos/.test(p.tekstas)) && vpi.pozymiai.some(p => /bendroji direktyv/i.test(p.tekstas)), JSON.stringify(vpi.pozymiai));
-    lygu(C.atpazinkRezima(SK_ECELLS, "x.pdf").value, "VPI", "Energy cells skelbimas - perkančiosios organizacijos formos");
+    // EPSO-G 9281765 ir Energy cells 9614756 - tos pačios formos nacionaliniai skelbimai; pirkimo dokumentuose EPSO-G - VPĮ, Energy cells - PĮ
+    const vpi = C.atpazinkRezima(SK_EPSOG, V_VPI); lygu([vpi.value, vpi.neaiskus, vpi.teisinisPagrindas], [null, false, "Teisinis pagrindas: Kitas"], "EPSO-G: forma režimo nenurodo");
+    tiesa(vpi.formosPozymiai.some(p => /Perkančiosios organizacijos/.test(p.tekstas)) && vpi.formosPozymiai.some(p => /bendroji direktyv/i.test(p.tekstas)), JSON.stringify(vpi.formosPozymiai));
+    lygu(C.atpazinkRezima(SK_ECELLS, "x.pdf").value, null, "Energy cells: forma režimo nenurodo");
+    lygu(C.atpazinkRezima("Perkančiosios organizacijos veiklos sritis: X\nTeisinis pagrindas:\nKitas\nDirektyva 2014/24/ES", "x.pdf").value, "VPI", "„Kitas“, bet tekste yra direktyva - kaip iki tol");
     lygu(C.atpazinkRezima("Teisinis pagrindas:\nKitas\nPavadinimas: X", "9281765_x_0.pdf").value, null, "„Kitas“ be veiklos srities - nenustatyta");
     lygu(C.atpazinkRezima("nieko", "Contract notice - classic directive, standard regime_0.pdf").value, "VPI", "EN failo vardas");
     const n = C.atpazinkRezima(SK_NEAISKUS, "x.pdf"); lygu(n.value, null); lygu(n.neaiskus, true); tiesa(n.pozymiai.some(p => p.rezimas === "PI") && n.pozymiai.some(p => p.rezimas === "VPI"));
@@ -1212,20 +1309,34 @@ async function paleisk() {
     lygu(D.getElementById("askHint").textContent, "Atsakoma tik iš įkeltų dokumentų.");
     const pr = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }); turi(pr.system, "LITGRID AB - yra perkantysis subjektas"); turi(pr.system, "naudotojas tai patvirtino");
     await ikelk({ [V_VPI]: SK_EPSOG });
-    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], ['UAB "EPSO-G"', "VPI", false], "naujas skelbimas - naujas, nepatvirtintas kontekstas");
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta, S.kontekstas.isRegistro], ['UAB "EPSO-G"', "VPI", false, true], "naujas skelbimas - naujas, nepatvirtintas kontekstas (režimas - iš registro)");
   });
-  await testas("VPĮ skelbimas (EPSO-G): rodoma perkančioji organizacija, įspėjimas, kad VPĮ atitikmenų dar nėra, ir tas pats įspėjimas bendruose klausimuose; registro režimas sutampa", async () => {
+  await testas("VPĮ (EPSO-G, skelbimas be direktyvos): režimas pagal organizacijų sąrašą su šaltiniu, perkančioji organizacija, įspėjimas, kad VPĮ atitikmenų dar nėra, ir tas pats įspėjimas bendruose klausimuose", async () => {
     const box = D.getElementById("kontekstasBox").textContent;
-    turi(box, 'UAB "EPSO-G"'); turi(box, "VPĮ (perkančioji organizacija)"); turi(box, "Perkančiosios organizacijos veiklos sritis"); turi(box, "VPĮ atitikmenų dar nėra"); neturi(box, "galioja skelbimas");
+    turi(box, 'UAB "EPSO-G"'); turi(box, "VPĮ (perkančioji organizacija)"); turi(box, "pagal organizacijų sąrašą (įprastas UAB EPSO-G režimas)"); turi(box, "Teisinis pagrindas: Kitas; Perkančiosios organizacijos veiklos sritis");
+    turi(box, "režimas pasiūlytas pagal organizacijų sąrašą, ne pagal skelbimą"); neturi(box, "Atpažinta iš skelbimo, dar nepatvirtinta");
+    turi(box, "VPĮ atitikmenų dar nėra"); neturi(box, "galioja skelbimas");
     turi(box, "Organizacija registre: UAB EPSO-G"); turi(box, "taisyklių registre nėra");
     W.setView("bendri"); turi(D.getElementById("bendriPriminimas").textContent, "VPĮ atitikmenų dar nėra");
     D.getElementById("ctxConfirm").click(); turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NIEKADA nesiremk PĮ");
   });
-  await testas("Energy cells skelbimas perkančiosios organizacijos formos, o registre - PĮ subjektas: nesutapimas parodomas ir galioja skelbimas", async () => {
-    const S = await ikelk({ "9614756_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą - bendroji direktyva, įprasta tvarka_1.txt": SK_ECELLS });
-    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas], ["Energy cells UAB", "VPI"]);
-    const box = D.getElementById("kontekstasBox").textContent; turi(box, "galioja skelbimas"); turi(box, "Registre ši organizacija žymima kaip PĮ (perkantysis subjektas)");
-  }, "2026-09-24 tikras skelbimas 9614756: „Perkančiosios organizacijos veiklos sritis“, nors CLAUDE.md 2 sk. Energy cells - PĮ subjektas");
+  await testas("Nacionalinis skelbimas su „Teisinis pagrindas: Kitas“ (Energy cells, LITGRID mažos vertės): režimas iš skelbimo nenustatomas - siūlomas organizacijos įprastas, nepatvirtintas; patvirtinus - promptui; nežinomai organizacijai - nenustatytas", async () => {
+    let S = await ikelk({ "9614756_Nacionalinis skelbimas apie pirkimą arba skelbimas apie projekto konkursą - bendroji direktyva, įprasta tvarka_1.txt": SK_ECELLS });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.isRegistro, S.kontekstas.patvirtinta], ["Energy cells UAB", "PI", true, false]);
+    let box = D.getElementById("kontekstasBox").textContent; neturi(box, "galioja skelbimas"); turi(box, "PĮ (perkantysis subjektas)"); turi(box, "pagal organizacijų sąrašą");
+    neturi(box, "Teisinis režimasVPĮ", "VPĮ nebesiūlomas"); neturi(D.getElementById("metaList").textContent, "regimeForma", "techninis laukas santraukoje nerodomas");
+    lygu(W.__PPT.promptoKontekstas(), { organizacija: "Energy cells UAB", rezimas: "PI", patvirtinta: false }, "nepatvirtinta - promptas įstatymo neteigia");
+    const lg = skelbimas("LITGRID AB (PV)", "Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos", "Kitas");
+    S = await ikelk({ "9982633_National Contract notice or Design Contest notice - general directive, standard regime_0.txt": lg });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.isRegistro], ["LITGRID AB", "PI", true], "LITGRID mažos vertės skelbimas");
+    tiesa(!!D.getElementById("ctxConfirm"), "mygtukas Patvirtinti"); D.getElementById("ctxConfirm").click();
+    lygu(W.__PPT.promptoKontekstas(), { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: true }, "patvirtinus - PĮ");
+    S = await ikelk({ "x_National Contract notice - general directive_0.txt": skelbimas("UAB Testas (PV)", "Perkančiosios organizacijos veiklos sritis: X", "Kitas") });
+    lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.isRegistro], ["UAB Testas", null, false], "registre nėra - nenustatytas");
+    S = await ikelk({ [V_VPI]: skelbimas("LITGRID AB (PV)", "Perkančiosios organizacijos veiklos sritis: X", "Direktyva 2014/24/ES") });
+    lygu([S.kontekstas.rezimas, S.kontekstas.isRegistro], ["VPI", false], "su direktyva - galioja skelbimas, kaip iki tol");
+    box = D.getElementById("kontekstasBox").textContent; turi(box, "galioja skelbimas");
+  }, "iki 2026-10-17 skelbimo forma lėmė VPĮ, nors tikrų pirkimų dokumentuose (Energy cells 9614756, LITGRID 9982633, 9610775, 9022598) - „Perkantysis subjektas“ ir PĮ");
   await testas("Abiejų režimų požymiai viename skelbime: režimas nenustatytas, sąsaja prašo pasirinkti, mygtuko „Patvirtinti“ nėra, prompte - NEPATVIRTINTI", async () => {
     const S = await ikelk({ "x_Skelbimas_0.txt": SK_NEAISKUS });
     lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.neaiskus], ["UAB Testas", null, true]);
