@@ -65,7 +65,8 @@
     opts = opts || {};
     var cov = opts.coverage === undefined ? 100 : num(opts.coverage, 100);
     if (cov < 0) cov = 0; if (cov > 100) cov = 100;
-    var name = "Scope 3 emisijos - pirkimu anglies pedsakas (A1-A3)";
+    // 2026-10-17: pavadinimas su lietuviškomis raidėmis (iki tol „pirkimu anglies pedsakas“); taškas atpažįstamas pagal source / sourceRef, ne pavadinimą.
+    var name = "Scope 3 emisijos - pirkimų anglies pėdsakas (A1-A3)";
     if (opts.projectName) name += " · " + String(opts.projectName);
     return {
       name: name,
