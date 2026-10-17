@@ -122,7 +122,7 @@
      { id:'G1', raktas:'G|...', rusis:'variantas'|'formuluote'|'reiksme',
        tekstas, variantai:[...], netaikyti:bool, vietos:n, dok:[...], pastaba } */
   /* Vidiniai sablonu vardai (LT_SPS ir pan.) i prompta NEdedami: 2026-09-25 su tikru
-     paketu AI is ju padare isvada, kad jam truksta paties sablono, ir neatsake. */
+     paketu DI is ju padare isvada, kad jam truksta paties sablono, ir neatsake. */
   function klausimoEilute(q) {
     var e = [q.id + " [" + q.rusis + "] " + q.tekstas];
     (q.variantai || []).forEach(function (v, i) { e.push("  " + (i + 1) + ") " + v); });
@@ -215,14 +215,14 @@
      strukturinis taisymas is shared/ai-proxy.js (tas pats kaip PP-tiekejams). Nutrauktas
      (neuzdarytas) JSON netaisomas - dalis nerodoma kaip visuma. */
   function parseResponse(text) {
-    if (!text) return { ok: false, error: "Tuščias AI atsakymas" };
+    if (!text) return { ok: false, error: "Tuščias DI atsakymas" };
     var m = String(text).match(/\{[\s\S]*\}/);            // toleruojam aplinkini teksta
     if (!m) return { ok: false, error: "Atsakyme nėra JSON" };
     var d;
     try { d = JSON.parse(m[0]); }
     catch (e) {
       try { d = JSON.parse(root.GP_AI_PROXY.taisykJson(m[0])); }
-      catch (e2) { return { ok: false, error: "AI atsakymas nutrūko arba sugadintas (" + e.message + ")" }; }
+      catch (e2) { return { ok: false, error: "DI atsakymas nutrūko arba sugadintas (" + e.message + ")" }; }
     }
     if (!d || !Array.isArray(d.atsakymai)) return { ok: false, error: "Atsakymas neatitinka schemos (atsakymai)" };
     return { ok: true, atsakymai: d.atsakymai, pastabos: typeof d.pastabos === "string" ? d.pastabos : "" };
@@ -288,7 +288,7 @@
     var cit = lygink(out.citata);
     if (q.rusis === "formuluote" && out.reiksme.tekstas) {
       if (lygink(out.reiksme.tekstas).length < 3 || cit.indexOf(lygink(out.reiksme.tekstas)) < 0)
-        return atmesk("įrašomo teksto citatoje nėra - AI formuluočių nekuria");
+        return atmesk("įrašomo teksto citatoje nėra - DI formuluočių nekuria");
     }
     if (q.rusis === "reiksme") {
       var skaiciai = out.reiksme.filter(function (v) { return /^\d+$/.test(v); });
@@ -328,9 +328,9 @@
      Grazina { siulymai, nezinomi, pastabos, simboliai }. */
   function analizuoti(opts) {
     opts = opts || {};
-    if (!root.GP_AI_PROXY) return Promise.reject(new Error("AI tarpinė neprijungta"));
+    if (!root.GP_AI_PROXY) return Promise.reject(new Error("DI tarpinė neprijungta"));
     var klausimai = opts.klausimai || [], saltiniai = opts.saltiniai || [];
-    if (!klausimai.length) return Promise.reject(new Error("Nėra klausimų, į kuriuos AI galėtų pasiūlyti atsakymą"));
+    if (!klausimai.length) return Promise.reject(new Error("Nėra klausimų, į kuriuos DI galėtų pasiūlyti atsakymą"));
     if (!saltiniai.length) return Promise.reject(new Error("Neįkeltas nė vienas dokumentas"));
     var sk = simboliai(saltiniai);
     if (sk > MAX_SIMBOLIU) return Promise.reject(new Error(
@@ -343,9 +343,9 @@
       userMessage: userText(klausimai, saltiniai, opts.kontekstas),
       signal: opts.signal
     }).then(function (r) {
-      if (!r.ok) throw new Error(r.error || "AI klaida");
+      if (!r.ok) throw new Error(r.error || "DI klaida");
       if (r.raw && r.raw.stop_reason === "max_tokens")
-        throw new Error("AI atsakymas nutrūko (per ilgas). Pašalinkite dalį dokumentų ir bandykite dar kartą.");
+        throw new Error("DI atsakymas nutrūko (per ilgas). Pašalinkite dalį dokumentų ir bandykite dar kartą.");
       var p = parseResponse(r.text);
       if (!p.ok) throw new Error(p.error);
       var rez = patikrink(p.atsakymai, klausimai, saltiniai, opts);
