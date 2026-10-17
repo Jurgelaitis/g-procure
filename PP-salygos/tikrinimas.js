@@ -334,7 +334,7 @@
       klaidosPriesdelis: "Failų perskaityti nepavyko",
       kartoti: function () { skaityk(failai); },
       veiksmas: async function (signal, h) {
-        if (failai.some(function (f) { return /\.(pdf|zip)$/i.test(f.name); }) && cfg.pdf) { try { await cfg.pdf(); } catch (e) { /* PDF failams priežastį pasakys GP_DOK */ } }
+        if (failai.some(function (f) { return /\.(pdf|zip|adoc|asice|sce|asics|scs|bdoc|edoc)$/i.test(f.name); }) && cfg.pdf) { try { await cfg.pdf(); } catch (e) { /* PDF failams priežastį pasakys GP_DOK */ } }
         var n = 0, r;
         try {
           r = await GP_DOK.apdorok(failai, function (v) { n++; if (h && h.eiga) h.eiga(Math.min(80, 5 + n * 3), "Skaitoma: " + bazinis(v)); }, "lt", { pasilikti: ["docx"] });
