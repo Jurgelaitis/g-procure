@@ -6259,10 +6259,16 @@ async function testaiSutikimas(){
      mažos lentelės ir mygtukai, 14 - modulio tekstas, 16 - klausimai ir skyrių antraštės, 18, 20, 24, 32, 48 - antraštės. Iki tol
      PP-salygos - 16 skirtingų dydžių (89 % teksto 10-13,5 px). Moduliai pereina po vieną - SKALEJE (šaltiniai) ir būsenos (ekranas).
      Išimtis - modulio antraštės pavadinimas (19 px, nuo jo priklauso 79 px antraštė visuose moduliuose); em dydžiai (sup) leidžiami. */
-  await testas("Dydžių skalė (2026-10-17): PP-salygos ir bendri jo puslapio komponentai - tik 12, 13, 14, 16, 18, 20, 24, 32, 48 px (šaltiniuose ir ekrane: 1, 2 ir sutarties žingsnis, tikrinimo rezultatai)", async () => {
+  /* Moduliai dydžių skalėje (perkeltas modulis - viena eilutė): būsenos [pavadinimas, fn, ar spausti skirtukus pagal TELEFONO_PUSLAPIAI]. */
+  const SKALES_PUSLAPIAI = {
+    "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis", () => {}], ["2 žingsnis", async w => { await w.iStep2(); }], ["sutarties žingsnis", sutartiesFormosBusena],
+      ["tikrinimo rezultatai", tikrinimoBusena]],
+    "../PP-qual/PP-QUAL.html": [["pradinis ir skirtukai", () => {}, true]]
+  };
+  await testas("Dydžių skalė (2026-10-17): perkelti moduliai (" + Object.keys(SKALES_PUSLAPIAI).map(k => k.split("/")[1]).join(", ") + ") ir bendri komponentai - tik 12, 13, 14, 16, 18, 20, 24, 32, 48 px (šaltiniuose ir ekrane 1280 ir 375 px)", async () => {
     const SKALE = [12, 13, 14, 16, 18, 20, 24, 32, 48], blogi = [];
-    const SKALEJE = ["../PP-salygos/PP-SALYGOS.html", "gprocure-info-panel.js", "portal-link.js", "teise-stebesena.js", "pirkimo-kortele.js", "busena.js",
-      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js"];
+    const SKALEJE = Object.keys(SKALES_PUSLAPIAI).concat(["gprocure-info-panel.js", "portal-link.js", "teise-stebesena.js", "pirkimo-kortele.js", "busena.js",
+      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js"]);
     for (const pg of SKALEJE) {
       const src = await saltinis(pg), kiti = new Set(); let m; const re = /font-size\s*:\s*([0-9.]+)px/g;
       while ((m = re.exec(src))) if (+m[1] !== 0 && !SKALE.includes(+m[1])) kiti.add(m[1] + " px");
@@ -6270,19 +6276,24 @@ async function testaiSutikimas(){
     }
     const A = GP_TESTU_APSAUGA.pradek(() => true);
     try {
-      for (const [pav, fn] of [["1 žingsnis", () => {}], ["2 žingsnis", async w => { await w.iStep2(); }], ["sutarties žingsnis", sutartiesFormosBusena],
-          ["tikrinimo rezultatai", tikrinimoBusena]]) for (const plotis of [1280, 375]) {
+      for (const [pg, busenos] of Object.entries(SKALES_PUSLAPIAI)) for (const [pav, fn, skirtukai] of busenos) for (const plotis of [1280, 375]) {
         const f = document.createElement("iframe"); f.style.cssText = "width:" + plotis + "px;height:900px;position:absolute;left:-9999px";
-        await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = "../PP-salygos/PP-SALYGOS.html?saugykla=testine&b=" + Date.now(); document.body.appendChild(f); });
+        await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = pg + "?saugykla=testine&b=" + Date.now(); document.body.appendChild(f); });
         try {
           const d = f.contentDocument, w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
           await d.fonts.ready; await lauk(250); await fn(w, d); await lauk(500);
-          const kiti = new Set();
-          [...d.querySelectorAll("body *")].filter(el => el.getClientRects().length && [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()))
-            .forEach(el => { const fs = parseFloat(w.getComputedStyle(el).fontSize); if (fs === 0 || SKALE.includes(fs) || el.closest("sup")
-                || (fs === 19 && el.closest(".app-header"))) return; kiti.add(fs + " px (" + el.tagName.toLowerCase() + "." + String(el.className).split(" ")[0] + ")"); });
-          if (kiti.size) blogi.push("PP-salygos · " + pav + " · " + plotis + " px: " + [...kiti].slice(0, 5).join(", "));
-          if (d.documentElement.scrollWidth > w.innerWidth + 1) blogi.push("PP-salygos · " + pav + " · " + plotis + " px: puslapis slenka horizontaliai");
+          const vardas = pg.split("/")[1] + " · " + pav + " · " + plotis + " px";
+          const tikrink = kur => {
+            const kiti = new Set();
+            [...d.querySelectorAll("body *")].filter(el => el.getClientRects().length && [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()))
+              .forEach(el => { const fs = parseFloat(w.getComputedStyle(el).fontSize); if (fs === 0 || SKALE.includes(fs) || el.closest("sup")
+                  || (fs === 19 && el.closest(".app-header"))) return; kiti.add(fs + " px (" + el.tagName.toLowerCase() + "." + String(el.className).split(" ")[0] + ")"); });
+            if (kiti.size) blogi.push(vardas + kur + ": " + [...kiti].slice(0, 5).join(", "));
+            if (d.documentElement.scrollWidth > w.innerWidth + 1) blogi.push(vardas + kur + ": puslapis slenka horizontaliai");
+          };
+          tikrink("");
+          const sk = skirtukai && TELEFONO_PUSLAPIAI[pg];
+          if (sk) for (const t of [...d.querySelectorAll(sk)].filter(x => x.getClientRects().length)) { t.click(); await lauk(250); tikrink(" · „" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 25) + "“"); }
         } finally { f.remove(); }
       }
     } finally { A.atkurk(); }
