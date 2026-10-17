@@ -62,7 +62,7 @@
       "border-left:4px solid var(--color-graphite-30,#C7CDD3);border-radius:var(--radius-sm,8px);padding:8px 12px;margin:8px 0}",
       ".gpb[hidden]{display:none}",
       ".gpb-tx{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}",
-      ".gpb-tx b{font-weight:800}",
+      ".gpb-tx b{font-weight:700}",
       ".gpb-laikas{font-variant-numeric:tabular-nums;color:#5B6470;font-size:12px}",
       ".gpb-ic{width:16px;height:16px;flex-shrink:0;display:inline-flex}",
       ".gpb-ic svg{width:16px;height:16px}",

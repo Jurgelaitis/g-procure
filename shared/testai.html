@@ -6204,6 +6204,56 @@ async function testaiSutikimas(){
     } finally { A.atkurk(); }
     tiesa(!blogi.length, blogi.join("\n  "));
   });
+
+  /* Tipografijos sistema (2026-10-17, naudotojo pasirinkimas „Nunito Sans + sistema“ iš vertinimo maketų): iki tol 16 % portalo teksto -
+     800 svorio (206 vietos 31 faile), antraštės 21-28 px be raidžių tarpo, glotninimas - tik keliuose puslapiuose. */
+  await testas("Tipografijos sistema (2026-10-17): svoriai ne didesni kaip 700 (šaltiniuose ir ekrane, su skirtukais), antraštės nuo 20 px - su neigiamu raidžių tarpu, mažos - be jo, lentelėse lygiapločiai skaičiai, glotninimas", async () => {
+    const blogi = [];
+    // 1. Šaltiniai: 800, 900, 750 ir „bolder“ nebenaudojami (puslapiai ir bendri failai su stiliais)
+    const PUSL = Object.keys(TELEFONO_PUSLAPIAI).map(k => k.split("?")[0]);
+    const BENDRI = ["epso-g.css", "modulio-antraste.css", "dokumento-puslapis.css", "busena.js", "gprocure-info-panel.js", "kopija.js", "mano-pirkimai.js",
+      "paaiskinimas.js", "pirkimo-kortele.js", "portal-link.js", "sutikimas.js", "teise-stebesena.js", "pranesimas.js", "prieinamumas.js"];
+    for (const pg of PUSL.concat(BENDRI)) {
+      const src = await saltinis(pg), m = src.match(/font-weight\s*:\s*(?:[89]00|750|bolder)\b|font\s*:\s*(?:italic\s+)?[89]00\s/);
+      if (m) blogi.push(pg + ": „" + m[0] + "“ - naudokite 700");
+    }
+    const css = await saltinis("epso-g.css");
+    if (!/body\s*\{[^}]*-webkit-font-smoothing:\s*antialiased/.test(css)) blogi.push("epso-g.css: nėra glotninimo (body)");
+    if (!/:where\(h1, h2, h3, h4\)\s*\{\s*letter-spacing:\s*clamp\(/.test(css)) blogi.push("epso-g.css: nėra antraščių raidžių tarpo taisyklės");
+    if (!/:where\(table\)\s*\{\s*font-variant-numeric:\s*tabular-nums/.test(css)) blogi.push("epso-g.css: lentelėse nėra lygiapločių skaičių");
+    // 2. Ekrane 1280 px: visi puslapiai ir jų skirtukai
+    const A = GP_TESTU_APSAUGA.pradek(() => true);
+    try {
+      for (const [pg, sk] of Object.entries(TELEFONO_PUSLAPIAI)) {
+        const f = document.createElement("iframe"); f.style.cssText = "width:1280px;height:900px;position:absolute;left:-9999px";
+        await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = pg + (pg.includes("?") ? "&" : "?saugykla=testine&") + "b=" + Date.now(); document.body.appendChild(f); });
+        try {
+          const d = f.contentDocument, w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
+          await d.fonts.ready; await lauk(250);
+          const vis = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
+          const savo = el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 1);
+          const bs = w.getComputedStyle(d.body);
+          if ("webkitFontSmoothing" in bs && bs.webkitFontSmoothing !== "antialiased") blogi.push(pg + ": body be glotninimo (" + bs.webkitFontSmoothing + ")");
+          const tikrink = kur => {
+            const v = pg + (kur ? " · " + kur : ""), sunkus = new Set(), antr = new Set();
+            [...d.querySelectorAll("body *")].filter(el => savo(el) && vis(el) && !el.closest(".preview-doc, svg")).forEach(el => {
+              if (+w.getComputedStyle(el).fontWeight > 700) sunkus.add(el.tagName.toLowerCase() + "." + String(el.className).split(" ")[0] + " " + w.getComputedStyle(el).fontWeight);
+            });
+            [...d.querySelectorAll("h1, h2, h3, h4")].filter(vis).forEach(h => { const c = w.getComputedStyle(h), fs = parseFloat(c.fontSize), ls = c.letterSpacing;
+              if (fs >= 20 && c.textTransform === "none" && (ls === "normal" || parseFloat(ls) >= 0)) antr.add(h.tagName.toLowerCase() + " " + fs + " px (" + ls + ", „" + h.textContent.trim().slice(0, 25) + "“)");
+              if (fs <= 14 && parseFloat(ls) < 0) antr.add(h.tagName.toLowerCase() + " " + fs + " px su neigiamu tarpu " + ls); });
+            [...d.querySelectorAll("table")].filter(vis).forEach(t => { const c = t.querySelector("td"); if (c && !/tabular-nums/.test(w.getComputedStyle(c).fontVariantNumeric))
+              antr.add("lentelė be lygiapločių skaičių (" + (t.id || t.className || "table") + ")"); });
+            if (sunkus.size) blogi.push(v + ": svoris > 700 - " + [...sunkus].slice(0, 4).join(", "));
+            if (antr.size) blogi.push(v + ": " + [...antr].slice(0, 4).join("; "));
+          };
+          tikrink("");
+          if (sk) for (const t of [...d.querySelectorAll(sk)].filter(vis)) { t.click(); await lauk(200); tikrink("„" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 30) + "“"); }
+        } finally { f.remove(); }
+      }
+    } finally { A.atkurk(); }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
 }
 
 /* ==========================================================================

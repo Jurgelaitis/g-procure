@@ -103,7 +103,7 @@
   function fonas(D, fill) { return { type: D.ShadingType.CLEAR, color: "auto", fill: fill || OFICIALUS.fonas }; }
 
   /* docx.js vardų erdvė, kurios TextRun ir Paragraph tekstą (eilutė, { text }, children eilutės) praleidžia per bruksniai():
-     taip ilgasis brūkšnys nepatenka nei iš modulio, nei iš AI, nei iš įvestų laukų, nepriklausomai nuo to, kur tekstas sukurtas. */
+     taip ilgasis brūkšnys nepatenka nei iš modulio, nei iš DI, nei iš įvestų laukų, nepriklausomai nuo to, kur tekstas sukurtas. */
   function oficialus(D) {
     function be(o) {
       if (typeof o === "string") return bruksniai(o);
