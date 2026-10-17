@@ -143,7 +143,7 @@
     var data = parseJsonLoose(text);
 
     if (!data || typeof data !== "object") {
-      return { status: "error", error: "AI atsakymas ne JSON formato", raw: text };
+      return { status: "error", error: "DI atsakymas ne JSON formato", raw: text };
     }
 
     var st = data.status;
@@ -162,7 +162,7 @@
         return { label: str(c.label), value: Number(c.value), unit: str(c.unit) };
       }) : [];
       if (!cands.length) {
-        return { status: "not_found", notes: "AI grąžino ambiguous be tinkamų variantų" };
+        return { status: "not_found", notes: "DI grąžino ambiguous be tinkamų variantų" };
       }
       return { status: "ambiguous", candidates: cands, notes: str(data.notes) };
     }
@@ -174,7 +174,7 @@
     }
     if (!data.quote || !String(data.quote).trim()) {
       // Be citatos nepriimam - zmogus negali patikrinti.
-      return { status: "error", error: "AI nepateikė citatos - reikšmė nepriimama", raw: text };
+      return { status: "error", error: "DI nepateikė citatos - reikšmė nepriimama", raw: text };
     }
 
     return {
