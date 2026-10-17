@@ -4441,7 +4441,16 @@ async function testaiPrieinamumas(){
       lygu([c2.data.datasets[0].borderColor[1], c2.data.datasets[1].borderColor], [b2[1], l2], "pakartotinis atnaujinimas nekeičia");
       const c3 = new C(el("c3"), { type: "bar", data: { labels: ["X"], datasets: [{ data: [1], backgroundColor: "#00667D" }] }, options: { animation: false } });
       lygu([c3.data.datasets[0].borderColor, el("c3").getAttribute("aria-label")], [undefined, "Stiprios spalvos. X 1"], "stipri spalva - be kontūro");
+      lygu(C.defaults.font.family, "'Helvetica Neue', 'Helvetica', 'Arial', sans-serif", "puslapis be epso-g.css - Chart.js šriftas nekeičiamas");
     } finally { f.remove(); }
+    // Šriftas (2026-10-17): su epso-g.css diagramų tekstas - puslapio šriftu (--font-base); modulio nustatytas - paliekamas
+    const sr = await ramas(`<link rel="stylesheet" href="epso-g.css"><script src="vendor/chartjs-4.4.1/chart.umd.min.js"><\/script><script src="prieinamumas.js"><\/script>`);
+    try {
+      lygu(sr.w.Chart.defaults.font.family, sr.w.getComputedStyle(sr.d.documentElement).getPropertyValue("--font-base").trim(), "su epso-g.css - --font-base");
+      tiesa(/^"Nunito Sans"/.test(sr.w.Chart.defaults.font.family), "ne Nunito Sans: " + sr.w.Chart.defaults.font.family);
+    } finally { sr.f.remove(); }
+    const sm = await ramas(`<link rel="stylesheet" href="epso-g.css"><script src="vendor/chartjs-4.4.1/chart.umd.min.js"><\/script><script>Chart.defaults.font.family = "Modulio šriftas";<\/script><script src="prieinamumas.js"><\/script>`);
+    try { lygu(sm.w.Chart.defaults.font.family, "Modulio šriftas", "modulio nustatytas šriftas paliekamas"); } finally { sm.f.remove(); }
     // Chart.js įkeliamas PO prieinamumas.js - papildinys užregistruojamas įkėlus puslapį; tuščia drobė paslėpta, nupiešus - grąžinama
     // (modulis diagramą piešia DOMContentLoaded metu - dar prieš „load“: papildinys turi būti jau užregistruotas)
     const g = await ramas(`<script src="prieinamumas.js"><\/script><script src="vendor/chartjs-4.4.1/chart.umd.min.js"><\/script><h3>Vėliau</h3>${deze("c4")}
@@ -6135,6 +6144,64 @@ async function testaiSutikimas(){
       if (/monospace|SFMono|Menlo|Consolas/.test(src)) blogi.push(pg + ": lygiaplotis šriftas");
       if (/\.(header|tabbar)-inner[^{]*\{[^}]*max-width:\s*\d/.test(src)) blogi.push(pg + ": antraštės plotis skaičiumi - naudokite --antraste-plotis");
     }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  /* Moduliai su duomenimis kompiuteryje (2026-10-17): rasta - PP-plan terminų katalogas (min-width 1100 px pusės pločio kortelėje),
+     skaičiuoklės kriterijų lentelė (nelūžtančios antraštės - iki 1820 px), KNA 8 žingsniai (1280 px paskutinis už krašto), tikrinimo
+     grupės aprašas (90ch) ir diagramų tekstas Chart.js numatytuoju Helvetica / Arial (PP-plan, derybos, skaičiuoklė, KNA). */
+  await testas("Modulių puslapiai su duomenimis (2026-10-17): 1280 ir 1440 px - lentelės ir žingsnių juostos telpa be slinkties (PP-plan pavyzdžiai ir terminų katalogas, skaičiuoklės pavyzdys, KNA 8 žingsniai, derybų matrica, sąlygų tikrinimo rezultatai), diagramų tekstas - Nunito Sans, tekstas be dirbtinio pločio apribojimo ir tuo pačiu šriftu", async () => {
+    const BUS = [
+      ["PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ['[data-section="dashboard"]', '[data-section="register"]', '[data-section="duration"]'], true],
+      ["PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html", "mokomasis pavyzdys", w => w.ikelkPavyzdi(), [], true],
+      ["PP-cost-benefit/kastu_naudos_analize.html", "žingsniai", () => {}, [".tabs .tab"], false],
+      [NEG.replace("../", ""), "įkainių matrica", w => { negProjektas(w); w.go("analysis"); }, [], true],
+      ["PP-salygos/PP-SALYGOS.html", "tikrinimo rezultatai", tikrinimoBusena, ["#tkVaizdai [role=tab]"], false]];
+    const blogi = [];
+    const A = GP_TESTU_APSAUGA.pradek(() => true);
+    try {
+      for (const plotis of [1280, 1440]) for (const [pg, pav, fn, skirtukai, diagramos] of BUS) {
+        const f = document.createElement("iframe"); f.style.cssText = "width:" + plotis + "px;height:900px;position:absolute;left:-9999px";
+        await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = "../" + pg + "?saugykla=testine&b=" + Date.now(); document.body.appendChild(f); });
+        try {
+          const d = f.contentDocument, w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
+          klasikineJuosta(d); await d.fonts.ready; await lauk(250);
+          await fn(w, d); await lauk(400);
+          const vis = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
+          const vidus = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return [r.left + parseFloat(c.borderLeftWidth) + parseFloat(c.paddingLeft), r.right - parseFloat(c.borderRightWidth) - parseFloat(c.paddingRight)]; };
+          const savoTekstas = el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 2);
+          const tikrink = kur => {
+            const vardas = pg + " " + plotis + " px · " + pav + (kur ? " · " + kur : "");
+            const visi = [...d.querySelectorAll("body *")].filter(vis);
+            visi.forEach(el => { const c = w.getComputedStyle(el);
+              if (el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 0 && /auto|scroll/.test(c.overflowX) && el.tagName !== "TEXTAREA" && !el.matches(".tabbar-inner, .app-tabs-inner, .sidenav"))
+                blogi.push(vardas + ": slenka " + el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + "." + String(el.className).split(" ")[0] + " " + el.clientWidth + " < " + el.scrollWidth); });
+            visi.filter(el => savoTekstas(el) && el.textContent.trim().length > 70 && !el.querySelector("select, input, textarea") && !/^inline/.test(w.getComputedStyle(el).display)
+                && w.getComputedStyle(el).maxWidth !== "none" && w.getComputedStyle(el).textAlign !== "center" && !el.closest("[role=dialog], .gpi-modal, header, .app-header, svg"))
+              .forEach(el => { const t = vidus(el.parentElement)[1] - el.getBoundingClientRect().right;
+                if (t > 40) blogi.push(vardas + ": tekstas siauresnis už bloką " + Math.round(t) + " px (max-width " + w.getComputedStyle(el).maxWidth + ", „" + el.textContent.trim().slice(0, 30) + "“)"); });
+            const kiti = new Set();
+            visi.filter(el => savoTekstas(el) && !el.closest(".preview-doc, svg")).forEach(el => {
+              const sr = w.getComputedStyle(el).fontFamily.split(",")[0].replace(/["']/g, "").trim(); if (!/Nunito Sans/.test(sr)) kiti.add(sr + " (" + el.tagName.toLowerCase() + "." + String(el.className).split(" ")[0] + ")"); });
+            if (kiti.size) blogi.push(vardas + ": kitas šriftas - " + [...kiti].slice(0, 4).join(", "));
+            if (d.documentElement.scrollWidth > w.innerWidth + 1) blogi.push(vardas + ": puslapis slenka horizontaliai");
+            // Diagramos: ašys, legendos ir patarimai - puslapio šriftu (drobės tekstas getComputedStyle nemato)
+            const ch = w.Chart && w.Chart.instances ? Object.values(w.Chart.instances).filter(c => c.canvas && vis(c.canvas)) : [];
+            ch.forEach(c => { const sr = [c.options.font && c.options.font.family].concat(Object.values(c.scales || {}).map(s => s.options && s.options.ticks && s.options.ticks.font && s.options.ticks.font.family),
+                c.options.plugins && c.options.plugins.legend && c.options.plugins.legend.labels && c.options.plugins.legend.labels.font && c.options.plugins.legend.labels.font.family).filter(Boolean);
+              const ne = sr.filter(x => !/Nunito Sans/.test(x));
+              if (ne.length) blogi.push(vardas + ": diagramos " + (c.canvas.id || "") + " šriftas - " + ne[0]); });
+            return ch.length;
+          };
+          let diagramu = tikrink("");
+          for (const s of skirtukai) for (const t of [...d.querySelectorAll(s)]) {
+            t.click(); await lauk(250);
+            diagramu += tikrink("„" + t.textContent.trim().replace(/\s+/g, " ").slice(0, 30) + "“");
+          }
+          if (diagramos && !diagramu) blogi.push(pg + " " + plotis + " px · " + pav + ": diagramų nerasta - šrifto patikra neatlikta");
+        } finally { f.remove(); }
+      }
+    } finally { A.atkurk(); }
     tiesa(!blogi.length, blogi.join("\n  "));
   });
 }
