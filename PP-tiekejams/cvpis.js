@@ -83,6 +83,10 @@
   function atpazinkRezima(tekstas, failoVardas) {
     return global.GP_SKELBIMAS ? global.GP_SKELBIMAS.rezimas(tekstas, failoVardas) : { value: null, neaiskus: false, pozymiai: [] };
   }
+  // Režimas iš pirkimo sąlygų (BPS, SPS): „Perkantysis subjektas – ...“ / „Perkančioji organizacija – ...“ (2026-10-17)
+  function atpazinkRezimaDokumente(blocks) {
+    return global.GP_SKELBIMAS && global.GP_SKELBIMAS.rezimasDokumente ? global.GP_SKELBIMAS.rezimasDokumente(blocks) : { value: null, neaiskus: false };
+  }
 
   // Terminas su Europe/Vilnius laiko zona ir likusiu laiku (tik rodymui; šaltinis - dokumentas)
   function terminas(isoOrText, lang) {
@@ -181,6 +185,6 @@
   }
 
   global.GP_CVPIS = { version: "0.4.0", URL: URL, resolve: resolve, terminas: terminas, parseData: parseData, status: status,
-                      atpazinkPirkeja: atpazinkPirkeja, atpazinkRezima: atpazinkRezima,
+                      atpazinkPirkeja: atpazinkPirkeja, atpazinkRezima: atpazinkRezima, atpazinkRezimaDokumente: atpazinkRezimaDokumente,
                       dokumentuSarasas: dokumentuSarasas, apreptis: apreptis, tikPradinisZip: tikPradinisZip };
 })(typeof window !== "undefined" ? window : this);
