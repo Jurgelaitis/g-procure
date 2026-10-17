@@ -25,6 +25,8 @@
  *    priemimas.
  *  - Konservatyvumo taisykle: jei EPD pateikia diapazona, imama VIRSUTINE riba.
  *
+ * 2026-10-17: klaidų žinutės, įspėjimai ir AI užklausa - su lietuviškomis raidėmis (iki tol be jų).
+ *
  * Naudojimas:  <script src="epd-extract.js"></script> -> window.GP_EPD_EXTRACT
  * ========================================================================== */
 (function (root) {
@@ -41,32 +43,32 @@
   // Sisteminis promptas: grieztas JSON, jokiu spejimu, citatos privalomos.
   function systemPrompt() {
     return [
-      "Tu esi dokumentu analizes asistentas, istraukiantis anglies pedsako",
-      "duomenis is EPD (Environmental Product Declaration) arba LCA dokumentu.",
+      "Tu esi dokumentų analizės asistentas, ištraukiantis anglies pėdsako",
+      "duomenis iš EPD (Environmental Product Declaration) arba LCA dokumentų.",
       "",
-      "UZDUOTIS: rasti produkto A1-A3 (product stage / gamybos etapo) GWP",
-      "reiksme (Global Warming Potential, kg CO2e arba t CO2e).",
+      "UŽDUOTIS: rasti produkto A1-A3 (product stage / gamybos etapo) GWP",
+      "reikšmę (Global Warming Potential, kg CO2e arba t CO2e).",
       "",
-      "GRIEZTOS TAISYKLES:",
+      "GRIEŽTOS TAISYKLĖS:",
       "1. Atsakyk TIK gryno JSON formatu, be jokio kito teksto, be markdown.",
-      "2. Jei A1-A3 reiksmes dokumente NERA arba nesi tikras - grazink",
-      "   status \"not_found\". NIEKADA nespek ir neskaiciuok pats.",
-      "3. Jei dokumente pateiktas diapazonas - imk VIRSUTINE (didziausia)",
-      "   riba (konservatyvumo taisykle).",
-      "4. Jei yra keli scenarijai/produktai - imk ta, kuris atitinka",
-      "   uzklausoje nurodyta produkta; jei neaisku - status \"ambiguous\"",
-      "   ir israsyk variantus candidates masyve.",
-      "5. Butinai nurodyk citata: puslapio numeri ir tikslų teksto fragmenta,",
-      "   is kurio paimta reiksme.",
+      "2. Jei A1-A3 reikšmės dokumente NĖRA arba nesi tikras - grąžink",
+      "   status \"not_found\". NIEKADA nespėk ir neskaičiuok pats.",
+      "3. Jei dokumente pateiktas diapazonas - imk VIRŠUTINĘ (didžiausią)",
+      "   ribą (konservatyvumo taisyklė).",
+      "4. Jei yra keli scenarijai/produktai - imk tą, kuris atitinka",
+      "   užklausoje nurodytą produktą; jei neaišku - status \"ambiguous\"",
+      "   ir išrašyk variantus candidates masyve.",
+      "5. Būtinai nurodyk citatą: puslapio numerį ir tikslų teksto fragmentą,",
+      "   iš kurio paimta reikšmė.",
       "",
       "JSON schema:",
       "{",
       "  \"status\": \"found\" | \"not_found\" | \"ambiguous\",",
-      "  \"value\": <skaicius arba null>,",
+      "  \"value\": <skaičius arba null>,",
       "  \"unit\": \"<matavimo vienetas, pvz. kg CO2e>\",",
       "  \"declaredUnit\": \"<deklaruotas vienetas, pvz. 1 vnt / 1 kg / 1 m3>\",",
       "  \"page\": <puslapio numeris arba null>,",
-      "  \"quote\": \"<tikslus fragmentas is dokumento>\",",
+      "  \"quote\": \"<tikslus fragmentas iš dokumento>\",",
       "  \"standard\": \"<pvz. EN 15804+A2, jei nurodyta>\",",
       "  \"candidates\": [ {\"label\":\"...\",\"value\":...,\"unit\":\"...\"} ],",
       "  \"notes\": \"<trumpa pastaba, jei reikia>\"",
@@ -78,9 +80,9 @@
   // factorLabel - kurio faktoriaus EPD ieskome (pvz. "Jungtuvai 110-400 kV").
   // expectedUnit - musu faktoriaus vienetas (pvz. "kg CO2e/vnt").
   function userText(factorLabel, expectedUnit) {
-    return "Produktas/iranga: " + factorLabel +
-           ". Musu faktoriaus vienetas: " + expectedUnit +
-           ". Rask A1-A3 GWP reiksme ir grazink JSON pagal schema.";
+    return "Produktas/įranga: " + factorLabel +
+           ". Mūsų faktoriaus vienetas: " + expectedUnit +
+           ". Rask A1-A3 GWP reikšmę ir grąžink JSON pagal schemą.";
   }
 
   // Vartotojo zinute su PDF priedu (document + text). Teksta ima is userText().
@@ -146,7 +148,7 @@
 
     var st = data.status;
     if (st !== "found" && st !== "not_found" && st !== "ambiguous") {
-      return { status: "error", error: "Nezinomas status: " + st, raw: text };
+      return { status: "error", error: "Nežinomas status: " + st, raw: text };
     }
 
     if (st === "not_found") {
@@ -160,7 +162,7 @@
         return { label: str(c.label), value: Number(c.value), unit: str(c.unit) };
       }) : [];
       if (!cands.length) {
-        return { status: "not_found", notes: "AI grazino ambiguous be tinkamu variantu" };
+        return { status: "not_found", notes: "AI grąžino ambiguous be tinkamų variantų" };
       }
       return { status: "ambiguous", candidates: cands, notes: str(data.notes) };
     }
@@ -168,11 +170,11 @@
     // status === "found": grieztieji reikalavimai
     var value = Number(data.value);
     if (!isFinite(value) || value < 0) {
-      return { status: "error", error: "Rasta reiksme ne teigiamas skaicius", raw: text };
+      return { status: "error", error: "Rasta reikšmė ne teigiamas skaičius", raw: text };
     }
     if (!data.quote || !String(data.quote).trim()) {
       // Be citatos nepriimam - zmogus negali patikrinti.
-      return { status: "error", error: "AI nepateike citatos - reiksme nepriimama", raw: text };
+      return { status: "error", error: "AI nepateikė citatos - reikšmė nepriimama", raw: text };
     }
 
     return {
@@ -235,7 +237,7 @@
     var perOk = !ourPer || !dd || dd.indexOf(ourPer) !== -1;
     var warning = "";
     if (!perOk) {
-      warning = "EPD deklaruotas vienetas (" + str(epdDeclaredUnit) + ") gali neatitikti faktoriaus vardiklio (/" + ourPer + ") - patikrinkite pries tvirtindami";
+      warning = "EPD deklaruotas vienetas (" + str(epdDeclaredUnit) + ") gali neatitikti faktoriaus vardiklio (/" + ourPer + ") - patikrinkite prieš tvirtindami";
     }
 
     return { ok: true, factor: factor, converted: null, warning: warning };
