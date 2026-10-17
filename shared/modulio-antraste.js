@@ -14,7 +14,9 @@
  *   1) antraeilių (.btn-header--ikona), 2) visų, išskyrus pagrindinį (--pagr), 3) ir pagrindinio.
  * Tekstas slepiamas TIK akims (ekrano skaitytuvas jį skaito, pelei - title). Liečiami tik mygtukai
  * su ikona (<svg>) ir tekstu <span> - mygtukas be ikonos niekada netampa tuščias (PP-market-KPI).
- * Iki 900 px nieko nedaroma: ten antraštė slenka ir gali būti dviejų eilučių (modulio-antraste.css).
+ * Iki 900 px tekstas neslepiamas: ten antraštė slenka ir gali būti dviejų eilučių (modulio-antraste.css). Planšetėje
+ * (641-900 px, nuo 2026-10-17) - tik pažymima, kai veiksmai perėjo į antrą eilutę (.gp-antr-dvi): tada jie lygiuojami
+ * kairėje, nuo pavadinimo krašto, kaip telefone; toje pačioje eilutėje - dešinėje.
  * Perskaičiuojama keičiantis pločiui, antraštės tekstui (būsenos žyma, kalba, vardas) ir įsikėlus šriftui.
  *
  * Jungiama iškart po </header>: <script src="../shared/modulio-antraste.js"></script> - taip pritaikoma
@@ -29,6 +31,17 @@
   var TITLE = "data-gp-antr-title";             // title pridėjo šis failas (nuimamas vėl parodžius tekstą)
   var MATUOJA = "gp-antr-matuoja";             // matavimo metu - be perėjimų
   var PLACIAI = "not all and (max-width: 900px)";   // tikslus CSS „iki 900 px“ papildinys (su masteliu plotis būna trupmeninis)
+  var PLANSETE = "(min-width: 641px) and (max-width: 900px)";   // tas pats kaip modulio-antraste.css
+  var DVI = "gp-antr-dvi";                       // planšetėje veiksmai - antroje eilutėje (lygiuojami kairėje)
+
+  // Ar veiksmai perėjo į antrą eilutę - matuojama be .gp-antr-dvi (su ja jie visada antroje)
+  function eilutes(h) {
+    h.classList.remove(DVI);
+    if (!global.matchMedia || !global.matchMedia(PLANSETE).matches) return;
+    var r = h.querySelector(".header-right"), br = h.querySelector(".brand");
+    if (!r || !br || !matomas(r) || !matomas(br)) return;
+    if (r.getBoundingClientRect().top >= br.getBoundingClientRect().bottom - 2) h.classList.add(DVI);
+  }
 
   function matomas(e) { return e.getClientRects().length > 0; }
 
@@ -92,6 +105,7 @@
     h.classList.add(MATUOJA);
     try {
       mygtukai.forEach(rodyk);
+      eilutes(h);
       if (!global.matchMedia || !global.matchMedia(PLACIAI).matches || !matomas(h)) return 0;
       for (var l = 0; l < LYGIAI.length; l++) {
         if (telpa(h)) return l;
