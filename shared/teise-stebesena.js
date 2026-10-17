@@ -645,15 +645,15 @@
     if (doc.getElementById(STILIAUS_ID)) return;
     var css = [
       ".gps{font-family:var(--font-base,'Nunito Sans',sans-serif);color:var(--color-graphite,#2E3641);",
-      "  background:var(--color-white,#fff);border:1px solid var(--color-graphite-15,#E1E2E4);border-radius:12px;padding:16px 18px;font-size:15px;line-height:1.5}",
+      "  background:var(--color-white,#fff);border:1px solid var(--color-graphite-15,#E1E2E4);border-radius:12px;padding:16px 18px;font-size:14px;line-height:1.5}",
       ".gps--portalas{padding:28px 32px;border-left:4px solid var(--color-emerald,#00A072)}",
       ".gps__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;margin-bottom:10px}",
       ".gps__title{font-weight:700;font-size:16px;margin:0;color:var(--color-graphite,#2E3641);text-transform:none;letter-spacing:0}",
-      ".gps--portalas .gps__title{font-size:22px;letter-spacing:-.01em}",
+      ".gps--portalas .gps__title{font-size:24px;letter-spacing:-.01em}",
       ".gps__paskirtis{margin:4px 0 0;font-size:16px;color:var(--color-graphite-50-strong,#5B6470);max-width:70ch}",
       ".gps__meta{font-size:13px;color:var(--color-graphite-50-strong,#5B6470)}",
       ".gps__cta{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 20px;border-radius:999px;background:var(--color-graphite,#2E3641);color:#fff !important;",
-      "  font-weight:700;font-size:15px;text-decoration:none;white-space:nowrap;flex-shrink:0}",
+      "  font-weight:700;font-size:14px;text-decoration:none;white-space:nowrap;flex-shrink:0}",
       ".gps__cta:hover,.gps__cta:focus-visible{background:var(--color-emerald-strong-hover,#006649);color:#fff}",
       ".gps__list{list-style:none;margin:0;padding:0;display:grid;gap:10px}",
       ".gps--portalas .gps__list{grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}",
@@ -675,7 +675,7 @@
       ".gps__warn{padding:8px 10px;border-radius:8px;background:var(--color-warning-5,#FEF6E8);color:#6B4A00;font-size:13px;margin-bottom:8px}",
       ".gps__kiti{margin-top:10px;font-size:14px}.gps__kiti summary{cursor:pointer;color:var(--color-emerald-strong,#007554);font-weight:700}.gps__kiti .gps__list{margin-top:8px}",
       ".gps__item--kitas{grid-template-columns:minmax(0,1fr)}.gps__sub b{font-weight:700;color:var(--color-graphite,#2E3641)}",
-      ".gps__tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:20px;border:1px solid var(--color-graphite-30,#C7CDD3);color:var(--color-graphite-50-strong,#5B6470);margin-left:6px;vertical-align:middle}",
+      ".gps__tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 7px;border-radius:20px;border:1px solid var(--color-graphite-30,#C7CDD3);color:var(--color-graphite-50-strong,#5B6470);margin-left:6px;vertical-align:middle}",
       "@media (max-width:1023px){.gps--portalas .gps__list{grid-template-columns:1fr 1fr}}",
       // Siaurai datos žyma gali lūžti tarp žodžių (pati data „2026-07-01“ nelūžta): 320 px su Windows slinkties juosta PP-qual kortelėje
       // „Galioja nuo · 2026-07-01“ buvo platesnė už kortelę (2026-10-02)
@@ -759,7 +759,7 @@
             '<p class="gps__paskirtis">' + esc(T.paskirtis) + '</p></div><a class="gps__cta" href="' + esc(modulioUrl) + '">' + esc(T.atverti) + ' →</a></div>';
         if (r.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
         if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';
-        if (!rodyti.length) h += '<p class="gps__sub" style="font-size:15px">' + esc(T.beprioriteto) + '</p>';
+        if (!rodyti.length) h += '<p class="gps__sub" style="font-size:14px">' + esc(T.beprioriteto) + '</p>';
         else {
           h += '<ul class="gps__list">';
           rodyti.forEach(function (x) {

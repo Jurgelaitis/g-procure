@@ -275,19 +275,19 @@
   var CSS =
     ".gpsk{position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:#fff;color:#2E3641;border-top:3px solid #00A072;" +
     "box-shadow:0 -6px 24px rgba(46,54,65,.18);font-family:var(--font-base,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif);" +
-    "font-size:15px;line-height:1.5;max-height:85vh;overflow-y:auto;text-align:left}" +
+    "font-size:14px;line-height:1.5;max-height:85vh;overflow-y:auto;text-align:left}" +
     ".gpsk *,.gpsk-d *{box-sizing:border-box}" +
     ".gpsk-in{max-width:1180px;margin:0 auto;padding:16px 20px;display:flex;gap:14px 28px;align-items:center;flex-wrap:wrap}" +
     ".gpsk-tx{flex:1 1 520px;min-width:0}" +
     ".gpsk-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;margin:0 0 4px}" +
-    ".gpsk h2{margin:0;font-size:17px;font-weight:700;line-height:1.3;color:#2E3641}" +
+    ".gpsk h2{margin:0;font-size:18px;font-weight:700;line-height:1.3;color:#2E3641}" +
     ".gpsk p{margin:0;color:#2E3641}" +
     ".gpsk a,.gpsk-d a{color:#007554;font-weight:700;text-decoration:underline;text-underline-offset:2px}" +
     ".gpsk-l{margin-top:6px;font-size:14px}" +
     ".gpsk-kalba{font:inherit;font-size:14px;font-weight:700;color:#007554;background:none;border:0;padding:4px 2px;cursor:pointer;" +
     "text-decoration:underline;text-underline-offset:2px;min-height:32px}" +
     ".gpsk-btns{display:flex;gap:8px;flex-wrap:wrap;flex:0 1 auto}" +
-    ".gpsk-b{font:inherit;font-size:15px;font-weight:700;line-height:1.25;min-height:44px;padding:10px 18px;border-radius:8px;cursor:pointer;" +
+    ".gpsk-b{font:inherit;font-size:14px;font-weight:700;line-height:1.25;min-height:44px;padding:10px 18px;border-radius:8px;cursor:pointer;" +
     "border:2px solid #2E3641;background:#2E3641;color:#fff;white-space:normal}" +
     ".gpsk-b:hover{background:#1C2129;border-color:#1C2129}" +
     ".gpsk-b--2{background:#fff;color:#2E3641}" +
@@ -296,13 +296,13 @@
     "{outline:3px solid #007554;outline-offset:2px}" +
     ".gpsk-tarpas{display:block}" +
     ".gpsk-d{position:fixed;inset:0;margin:auto;height:fit-content;border:0;border-radius:16px;padding:0;width:100%;max-width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 32px);" +
-    "color:#2E3641;background:#fff;font-family:var(--font-base,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif);font-size:15px;" +
+    "color:#2E3641;background:#fff;font-family:var(--font-base,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif);font-size:14px;" +
     "line-height:1.5;box-shadow:0 18px 48px rgba(46,54,65,.28);text-align:left}" +
     ".gpsk-d[open]{display:flex;flex-direction:column}" +
     ".gpsk-d::backdrop{background:rgba(46,54,65,.55)}" +
     ".gpsk-dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 4px 24px}" +
     ".gpsk-dh h2{margin:6px 0 0;font-size:20px;font-weight:700;line-height:1.3;color:#2E3641}" +
-    ".gpsk-x{flex:0 0 auto;width:44px;height:44px;border:0;border-radius:8px;background:none;color:#2E3641;font-size:22px;line-height:1;cursor:pointer}" +
+    ".gpsk-x{flex:0 0 auto;width:44px;height:44px;border:0;border-radius:8px;background:none;color:#2E3641;font-size:24px;line-height:1;cursor:pointer}" +
     ".gpsk-x:hover{background:#EFF1F1}" +
     ".gpsk-db{padding:0 24px 8px;overflow-y:auto;min-height:0}" +
     ".gpsk-db>p{margin:8px 0 4px}" +
