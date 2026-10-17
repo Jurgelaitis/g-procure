@@ -23,7 +23,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppt-2026-10-17-3";
+var VERSIJA = "ppt-2026-10-17-4";
 
 var SAVI = [
   "./",
@@ -116,7 +116,7 @@ function talpyklaPirma(req) {
 
 self.addEventListener("fetch", function (e) {
   var req = e.request;
-  if (req.method !== "GET") return;                 // AI kvietimai (POST) - tik tinklas
+  if (req.method !== "GET") return;                 // DI kvietimai (POST) - tik tinklas
   var url = new URL(req.url);
   if (url.origin === self.location.origin) {
     // Tik savi statiniai failai; testų puslapio ir kitų modulių nesaugom

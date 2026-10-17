@@ -257,6 +257,75 @@ async function paleisk() {
     lygu(C.status().live, false); turi(D.getElementById("liveTag").textContent, "neįjungta");
   });
 
+  /* 2026-10-17 (PP-TIEKEJAMS technologinė analizė): CVP IS visų dokumentų ZIP turi dokumentų sąrašą „List of Contract Documents“.
+     Tekstai - kaip pdf.js juos išskiria iš dviejų tikrų LITGRID paketų (pirkimų numeriai pakeisti); B - su eilučių lūžiais pavadinimuose. */
+  const SARASAS_A = "List of Contract Documents\n#Addenda ID N/A Status Final\nTitle Pirkimo dokumentai\nFile Associated :<1_Pirkimo dokumentai (2).zip >\n#Addenda ID N/A Status Final\nTitle Tender Structure XML - Cycle 1\nFile Associated :<2_c4t_1234567_1.xml >\n#Addenda ID 1 Status Final\nTitle Atsakymas į paklausimą\nFile Associated :<3_2.2 priedas. Rašto projektas.pdf >\n#Addenda ID 2 Status Final\nTitle Atsakymai į klausimus 08.17\nFile Associated :<4_Rašto projektas.pdf >\n#Addenda ID 3 Status Final\nTitle Aktuali redakcija_Techninė specifikacija\nFile Associated :<5_SPS 3 priedas. TS (aktuali redakcija 2026-08-26) (1).docx >\n#Addenda ID 4 Status Final\nTitle ATN1 ataskaita\nFile Associated :<6_PPA-1234567-0925.xlsx >\nList of Notices\n#Addenda ID 1 Status Published\nTitle Contract notice - sectoral directive, standard regime\nFile Associated :<1234567_Contract notice - sectoral directive, standard regime.pdf >\n#Addenda ID 2 Status Published\nTitle Contract notice - sectoral directive, standard regime\nFile Associated :<1234567_Contract notice - sectoral directive, standard regime.pdf >\n#Addenda ID 3 Status Published\nTitle Contract notice - sectoral directive, standard regime\nFile Associated :<1234567_Contract notice - sectoral directive, standard regime.pdf >";
+  const SARASAS_B = "List of Contract Documents\n#Addenda ID N/A Status Final\nTitle Pirkimo dokumentai paskelbimui\nFile Associated :<1_Pirkimo dokumentai paskelbimui.zip >\n#Addenda ID N/A Status Final\nTitle Tender Structure XML - Cycle 1\nFile Associated :<2_c4t_7654321_1.xml >\n#Addenda ID 1 Status Final\nTitle Atsakymai į klausimus\nFile Associated :<3_Atsakymai į klausimus.docx >\n#Addenda ID 2 Status Final\nTitle 3 priedo 2 priedas Techniniai reikalavimai (2026-10-02 nauja\nredakcija)\nFile Associated :<4_3 priedo 2 priedas Techniniai reikalavimai (2026-10-02 nauja redakcija).docx\n>\n#Addenda ID 3 Status Final\nTitle ATSakymai į klausimus2\nFile Associated :<5_Atsakymai į klausimus 10.07.pdf >\nList of Notices\n#Addenda ID 1 Status Published\nTitle National Contract notice or Design Contest notice - sectoral\ndirective, standard regime\nFile Associated :<7654321_National Contract notice or Design Contest notice - sectoral directive,\nstandard regime.pdf >";
+  await testas("CVP IS dokumentų sąrašas iš visų dokumentų ZIP: dokumentai, papildymų ID, skelbimai; pavadinimai per kelias eilutes; kitas tekstas - null", () => {
+    const a = C.dokumentuSarasas(SARASAS_A);
+    lygu([a.dokumentai.length, a.skelbimai.length], [6, 3], "A: dokumentų ir skelbimų");
+    lygu(a.dokumentai.map(e => e.papildymas), [null, null, 1, 2, 3, 4], "A: papildymų ID");
+    lygu([a.dokumentai[0].failas, a.dokumentai[3].pavadinimas, a.dokumentai[0].statusas], ["1_Pirkimo dokumentai (2).zip", "Atsakymai į klausimus 08.17", "Final"], "A: įrašas");
+    const b = C.dokumentuSarasas(SARASAS_B);
+    lygu([b.dokumentai.length, b.skelbimai.length], [5, 1], "B: dokumentų ir skelbimų");
+    lygu(b.dokumentai[3].pavadinimas, "3 priedo 2 priedas Techniniai reikalavimai (2026-10-02 nauja redakcija)", "B: pavadinimas per dvi eilutes");
+    lygu(b.dokumentai[3].failas, "4_3 priedo 2 priedas Techniniai reikalavimai (2026-10-02 nauja redakcija).docx", "B: failas per dvi eilutes");
+    lygu(C.dokumentuSarasas("SPECIALIOSIOS PIRKIMO SĄLYGOS\n4.1. Terminas"), null, "ne sąrašas");
+    lygu(C.dokumentuSarasas("List of Contract Documents\nnieko daugiau"), null, "sąrašas be įrašų - nespėjama");
+  });
+  await testas("Aprėptis pagal CVP IS sąrašą: perskaityta / neperskaityta / pakete nerasta; archyvas - per jo failus; skelbimo versijos _0, _1; failo vardas be tarpų", () => {
+    const K = "1159_1234567.zip › ";
+    const docs = [
+      { name: K + "1_Pirkimo dokumentai (2).zip › 1. SPS.docx", parseStatus: "parsed" },
+      { name: K + "2_c4t_1234567_1.xml", parseStatus: "parsed" },
+      { name: K + "3_2.2 priedas. Rašto projektas.pdf", parseStatus: "parsed" },
+      { name: K + "4_Rašto projektas.pdf", parseStatus: "failed" },
+      { name: K + "6_PPA-1234567-0925.xlsx", parseStatus: "partial" },
+      { name: K + "1234567_Contract notice - sectoral directive, standard regime_0.pdf", parseStatus: "parsed" },
+      { name: K + "1234567_Contract notice - sectoral directive, standard regime_1.pdf", parseStatus: "parsed" },
+      { name: K + "1159_1234567.pdf", parseStatus: "parsed" }];
+    const a = C.apreptis(C.dokumentuSarasas(SARASAS_A), docs);
+    lygu([a.dokumentu, a.skelbimu, a.perskaityta], [6, 3, 4], "skaičiai");
+    lygu(a.irasai.filter(e => e.rusis === "dokumentas").map(e => e.bukle), ["perskaitytas", "perskaitytas", "perskaitytas", "neperskaitytas", "nerastas", "perskaitytas"], "dokumentų būklė");
+    lygu(a.irasai.filter(e => e.rusis === "skelbimas").map(e => e.bukle), ["perskaitytas", "perskaitytas", "perskaitytas"], "skelbimų versijos");
+    lygu(a.papildymai.map(e => e.papildymas), [1, 2, 3, 4], "papildymai");
+    const b = C.apreptis(C.dokumentuSarasas(SARASAS_B), [{ name: "1159_7654321.zip › 4_3 priedo 2 priedas Techniniai reikalavimai (2026-10-02 nauja redakcija).docx", parseStatus: "parsed" },
+      { name: "3 priedo 2 priedas Techniniai reikalavimai (2026-10-02 nauja redakcija).docx", parseStatus: "parsed" }]);
+    lygu(b.irasai[3].bukle, "perskaitytas", "eilutės lūžis failo varde nekliudo");
+    lygu(C.apreptis(null, docs), null, "be sąrašo - null");
+    tiesa(C.tikPradinisZip([{ name: "Pirkimo dokumentai (2).zip › 1. SPS.docx" }, { name: "Pirkimo dokumentai (2).zip › 2. BPS.docx" }]), "tik pradinis ZIP");
+    tiesa(!C.tikPradinisZip(docs) && !C.tikPradinisZip([{ name: "SPS.docx" }]), "visų dokumentų ZIP ar atskiri failai - ne pradinis");
+  });
+  await testas("Modulyje: aprėptis po įkėlimo - sąrašas, papildymai, trūkstamas failas; vien pradinis ZIP - įspėjimas su nuoroda; be sąrašo - pilnumo patikrinti negalima", async () => {
+    const SAR = "List of Contract Documents\n#Addenda ID N/A Status Final\nTitle Pirkimo dokumentai\nFile Associated :<1_Pirkimo dokumentai.txt >\n#Addenda ID 1 Status Final\nTitle Atsakymai į klausimus\nFile Associated :<2_Atsakymai i klausimus.txt >\n#Addenda ID 2 Status Final\nTitle Aktuali redakcija_SPS\nFile Associated :<3_SPS aktuali redakcija.txt >\nList of Notices";
+    W.__PPT.S.ref = C.resolve("1234567");
+    let S = await ikelk({ "1_Pirkimo dokumentai.txt": SPS_SENAS, "2_Atsakymai i klausimus.txt": ATSAKYMAS, "3_SPS aktuali redakcija.txt": SPS_NAUJAS, "1159_1234567.txt": SAR }, "1159_1234567.zip");
+    let t = D.getElementById("aprep").textContent;
+    turi(t, "3 dokumentai ir 0 skelbimų. Perskaityta 3 iš 3."); turi(t, "1 - Atsakymai į klausimus"); turi(t, "2 - Aktuali redakcija_SPS");
+    neturi(t, "Neperskaityta ar pakete nerasta", "viskas perskaityta"); tiesa(D.querySelector("#aprep .note.ok"), "žalia, kai viskas perskaityta");
+    S = await ikelk({ "1_Pirkimo dokumentai.txt": SPS_SENAS, "1159_1234567.txt": SAR }, "1159_1234567.zip");
+    t = D.getElementById("aprep").textContent;
+    turi(t, "Perskaityta 1 iš 3."); turi(t, "Neperskaityta ar pakete nerasta"); turi(t, "Atsakymai į klausimus (2_Atsakymai i klausimus.txt) pakete nerasta");
+    tiesa(D.querySelector("#aprep .note.warn"), "įspėjimas, kai trūksta");
+    S = await ikelk({ "1. SPS.txt": SPS_SENAS });
+    t = D.getElementById("aprep").textContent;
+    turi(t, "Įkeltas tik pradinis pirkimo dokumentų ZIP"); turi(t, "Atverti CVP IS dokumentų sąrašą");
+    tiesa(D.querySelector('#aprep a[href*="listContractDocuments.do?resourceId=1234567"]'), "nuoroda į dokumentų sąrašą");
+    S = await ikelk({ "SPS.txt": SPS_SENAS }, "paketas.zip");
+    turi(D.getElementById("aprep").textContent, "Pakete nėra CVP IS dokumentų sąrašo");
+    await svarus(); lygu(D.getElementById("aprep").textContent, "", "be dokumentų - tuščia");
+    W.__PPT.setLang("en"); S = await ikelk({ "1_Pirkimo dokumentai.txt": SPS_SENAS, "1159_1234567.txt": SAR }, "1159_1234567.zip");
+    turi(D.getElementById("aprep").textContent, "3 documents and 0 notices. Read 1 of 3."); W.__PPT.setLang("lt");
+    await svarus(); W.__PPT.S.ref = null;
+  });
+  await testas("Paieška pagal pavadinimą - CVP IS rezultatai su title=, ne tuščia išplėstinė paieška; API būsena - be teiginio „neturi viešos API“", () => {
+    const u = C.URL.paieska("tipinių atramų projektavimo");
+    turi(u, "viewCFTSAction.do?mode=search&isFTS=true&type=cftFTS"); turi(u, "title=tipini%C5%B3+atram%C5%B3+projektavimo");
+    lygu(C.resolve("tipinių atramų projektavimo").links.search, u, "teksto nuoroda");
+    neturi(C.status().lt, "neturi viešos API"); turi(C.status().lt, "prieigos rakto"); turi(C.status().en, "access key");
+    neturi(D.documentElement.innerHTML, "neturi viešos API", "puslapyje"); neturi(D.documentElement.innerHTML, "no public API", "puslapyje EN");
+  });
+
   grupe("Bendrieji klausimai ir šaltinių registras");
   await testas("Kiekviena tema turi LT ir EN atsakymą, bent vieną registro šaltinį ir spragą", () => {
     Z.TEMOS.forEach(tm => {
@@ -975,7 +1044,7 @@ async function paleisk() {
       await W.__PPT.klausk();
       const ans = D.querySelector("#chat .ans:last-child").innerHTML;
       lygu(kviesta, 0, "AI kvietimų");
-      turi(ans, "Be interneto AI atsakymas neprieinamas"); turi(ans, "Tikėtinos vietos dokumentuose"); turi(ans, "priėmimo terminas");
+      turi(ans, "Be interneto DI atsakymas neprieinamas"); turi(ans, "Tikėtinos vietos dokumentuose"); turi(ans, "priėmimo terminas");
       turi(ans, "24/09/2026", "ištrauka turi rodyti patį faktą, ne pirmas skelbimo eilutes");
       neturi(ans, "Patikimumas", "be AI jokios patikimumo išvados");
     } finally { suTinklu(); W.GP_AI_PROXY.call = aiOrig; }
@@ -989,7 +1058,7 @@ async function paleisk() {
       D.getElementById("askInput").value = "Iki kada reikia pateikti pasiūlymą?";
       await W.__PPT.klausk();
       const ans = D.querySelector("#chat .ans:last-child").innerHTML;
-      turi(ans, "Nepavyko susisiekti su AI"); turi(ans, "Tikėtinos vietos dokumentuose");
+      turi(ans, "Nepavyko susisiekti su DI"); turi(ans, "Tikėtinos vietos dokumentuose");
     } finally { W.GP_AI_PROXY.call = aiOrig; }
   });
 
