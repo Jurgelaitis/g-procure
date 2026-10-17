@@ -64,7 +64,7 @@
       '<p id="gp-kopija-aprasas" style="margin:0 0 10px;font-size:14px;line-height:1.45">' +
       (L ? "Automatic copying failed. The text below is selected - press Ctrl+C (Mac: Cmd+C)." : "Automatiškai nukopijuoti nepavyko. Tekstas žemiau pažymėtas - spauskite Ctrl+C (Mac - Cmd+C).") + '</p>' +
       '<textarea readonly rows="10" aria-label="' + (L ? "Text to copy" : "Tekstas kopijuoti") + '" ' +
-      'style="display:block;width:100%;max-width:100%;box-sizing:border-box;font:13px/1.45 ui-monospace,Menlo,monospace;padding:8px;border:1px solid var(--color-graphite-30,#C7CDD3);border-radius:8px;resize:vertical"></textarea>' +
+      'style="display:block;width:100%;max-width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.45;padding:8px;border:1px solid var(--color-graphite-30,#C7CDD3);border-radius:8px;resize:vertical"></textarea>' +
       '<div style="text-align:right;margin-top:10px"><button type="button" data-gp-uzdaryti ' +
       'style="font:inherit;font-weight:700;background:var(--color-emerald-strong,#007554);color:#fff;border:0;border-radius:8px;padding:8px 16px;cursor:pointer">' +
       (L ? "Close" : "Uždaryti") + '</button></div></div>';
