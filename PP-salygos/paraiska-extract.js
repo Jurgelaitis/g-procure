@@ -41,7 +41,7 @@
      buvo 100 KB - express.json() be argumento. Del jos cia gyveno 10 pakopu
      suspaudimo kopecia ir korteles skaidymas i fragmentus, siunciamus
      atskiromis uzklausomis, su ju rezultatu suliejimu. Abu apejimai pasalinti:
-     jie kainavo AI tiksluma ir iki 3 kartu daugiau apmokamu uzklausu.        */
+     jie kainavo DI tiksluma ir iki 3 kartu daugiau apmokamu uzklausu.        */
   var BASE64_BIUDZETAS = (root.GP_AI_PROXY && root.GP_AI_PROXY.MAX_BASE64) || 9 * 1024 * 1024;
   var PDF_MAX_BAITU    = (root.GP_AI_PROXY && root.GP_AI_PROXY.MAX_PDF_BAITU) ||
                          Math.floor(BASE64_BIUDZETAS * 3 / 4);
@@ -51,7 +51,7 @@
      Prie 9 MB biudzeto pirmas kandidatas telpa VISADA (iprasta DocLogix
      kortele 1850x972 ties q=0.92 uzima ~200 KB), tad likusieji yra tik atsarga
      milziniskiems ekranams. Zemiau q=0.6 JPEG artefaktai sulieja smulku srifta
-     ir AI klysta (issematuota: q=0.5 duoda "PL5L24126" vietoj "PLSL24126") -
+     ir DI klysta (issematuota: q=0.5 duoda "PL5L24126" vietoj "PLSL24126") -
      todel tokiu pakopu cia SAMONINGAI nebera. Geriau aiski klaida nei tyliai
      blogai perskaityta kortele.                                              */
   var KANDIDATAI = [
@@ -275,7 +275,7 @@
   function isTrijuVienas(v) { return v === "taip" || v === "ne" || v === "nenustatyta"; }
 
   function parseResponse(text) {
-    if (!text) return { ok: false, error: "Tuščias AI atsakymas" };
+    if (!text) return { ok: false, error: "Tuščias DI atsakymas" };
     var m = String(text).match(/\{[\s\S]*\}/);            // toleruojam aplinkini teksta
     if (!m) return { ok: false, error: "Atsakyme nėra JSON" };
     var d;
@@ -284,10 +284,10 @@
       // Modelis lietuvišką „ dažnai uždaro ASCII kabute - kaip AI pasiūlymuose (ai-patarejas.js), bandomas struktūrinis
       // taisymas (shared/ai-proxy.js). Iki 2026-09-28 tokia citata paraiškoje sugadindavo visą analizę.
       try { d = JSON.parse(root.GP_AI_PROXY.taisykJson(m[0])); }
-      catch (e2) { return { ok: false, error: "AI atsakymas nutrūko arba sugadintas (" + e.message + ")" }; }
+      catch (e2) { return { ok: false, error: "DI atsakymas nutrūko arba sugadintas (" + e.message + ")" }; }
     }
     if (d.status === "neiskaitoma")
-      return { ok: false, error: "AI nurodo, kad dokumentas neįskaitomas" + (d.pastabos ? ": " + d.pastabos : "") };
+      return { ok: false, error: "DI nurodo, kad dokumentas neįskaitomas" + (d.pastabos ? ": " + d.pastabos : "") };
     if (d.status !== "ok" || !d.laukai || typeof d.laukai !== "object")
       return { ok: false, error: "Atsakymas neatitinka schemos (status/laukai)" };
     var L = d.laukai;
@@ -407,7 +407,7 @@
         signal: opts.signal
       });
     }).then(function (r) {
-      if (!r.ok) throw new Error(r.error || "AI klaida");
+      if (!r.ok) throw new Error(r.error || "DI klaida");
       var p = parseResponse(r.text);
       if (!p.ok) throw new Error(p.error);
       return { laukai: p.laukai, pastabos: p.pastabos || "",
