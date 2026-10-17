@@ -2060,6 +2060,15 @@ async function testaiSkelbimasDarbastalis(){
       lygu(pagal(S.atpazink(skelbimoTekstas(), V_NAC)).dalys.reiksme, [], "viena dalis");
       const abu = S.atpazink(skelbimoTekstas({ veikla: "Perkančiosios organizacijos veiklos sritis: Bendrosios paslaugos" }), "x.pdf");
       tiesa(!pagal(abu).rezimas && abu.pastabos.some(x => /ir PĮ, ir VPĮ/.test(x)), "neaiškus režimas");
+      // Teisinis pagrindas „Kitas“ (nacionaliniai LITGRID ir Energy cells MV skelbimai 2026-10-17) - forma režimo nenurodo
+      const mv = S.atpazink(skelbimoTekstas({ veikla: "Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos", pagrindas: "Kitas" }), V_NAC);
+      tiesa(!pagal(mv).rezimas && pagal(mv).vykdytojas && pagal(mv).vykdytojas.reiksme === "litgrid", "be režimo, vykdytojas lieka: " + JSON.stringify(mv.laukai.map(x => x.laukas)));
+      tiesa(mv.pastabos.some(x => /teisinis pagrindas - „Kitas“.*Perkančiosios organizacijos veiklos sritis.*pirkimo dokumentai/.test(x)), "pastaba: " + mv.pastabos.join(" | "));
+      tiesa(S.atpazink(skelbimoTekstas({ veikla: "Perkančiosios organizacijos veiklos sritis: X", pagrindas: "Kitas" }), V_NAC, "en").pastabos.some(x => /legal basis is “Other”/.test(x)), "EN pastaba");
+      const rz = S.rezimas(skelbimoTekstas({ veikla: "Perkančiosios organizacijos veiklos sritis: X", pagrindas: "Kitas" }), "x_bendroji direktyva_0.pdf");
+      lygu([rz.value, rz.neaiskus, rz.pozymiai.length, rz.formosPozymiai.length, rz.teisinisPagrindas], [null, false, 0, 2, "Teisinis pagrindas: Kitas"], "rezimas() be direktyvos");
+      lygu(S.rezimas(skelbimoTekstas({ pagrindas: "Direktyva 2014/25/ES" }), "x.pdf").value, "PI", "su direktyva - kaip iki tol");
+      lygu(S.rezimas("Legal basis:\nOther\nActivity of the contracting authority: General public services", "x.pdf").value, null, "EN „Other“");
       const bv = S.atpazink(skelbimoTekstas(), V_NAC);
       tiesa(!pagal(bv).bvpz && bv.pastabos.some(x => /44510000.*be kontrolinio skaitmens/.test(x)), "BVPŽ be žodyno");
       w.GP_CPV_DATA = { codes: [["44510000-8", "Įrankiai", "Tools"]] };
@@ -2097,6 +2106,30 @@ async function testaiSkelbimasDarbastalis(){
       lygu(w.GP_KORTELE.skaityk().korteles.length, 0, "neišsaugota, kol žmogus nepaspaudė „Išsaugoti kortelę“");
     } finally { fr.remove(); }
   });
+
+  await testas("Kortelių puslapis: skelbimas su „Teisinis pagrindas: Kitas“ - režimo iš skelbimo nesiūlo, perkėlus pažymimas vykdytojo įprastas režimas ir pasakoma, iš kur", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id);
+      $("naujaHeader").click();
+      const eil = skelbimoTekstas({ veikla: "Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos", pagrindas: "Kitas", budas: "Atviras" })
+        .normalize("NFD").replace(/[̀-ͯ]/g, "").split("\n");
+      const dt = new w.DataTransfer();
+      dt.items.add(new w.File([pdfIsEiluciu(eil)], "9982633_National Contract notice or Design Contest notice - general directive, standard regime_0.pdf", { type: "application/pdf" }));
+      $("skelbimoFailas").files = dt.files;
+      $("skelbimoFailas").dispatchEvent(new w.Event("change", { bubbles: true }));
+      for (let i = 0; i < 120 && $("skelbimoPasiulymai").hidden && !/nepavyko/i.test($("skelbimoBusena").textContent); i++) await lauk(100);
+      const box = $("skelbimoPasiulymai").textContent;
+      const pav = [...d.querySelectorAll("#skelbimoPasiulymai .pasiulymas b")].map(x => x.textContent);
+      tiesa(pav.length > 2 && !pav.some(x => /^Režimas:/.test(x)) && pav.some(x => /^Vykdytojas:/.test(x)), "režimo pasiūlymo nėra, vykdytojo - yra: " + pav.join(" | "));
+      tiesa(/teisinis pagrindas - „Kitas“/.test(box), "pastaba apie skelbimo formą: " + box.slice(0, 400));
+      [...d.querySelectorAll("#skelbimoPasiulymai button")].find(b => /Perkelti/.test(b.textContent)).click();
+      lygu([$("formaForm").elements.vykdytojas.value, d.querySelector('input[name="rezimas"]:checked').value], ["litgrid", "PI"]);
+      tiesa($("skelbimoBusena").textContent.includes("pažymėtas įprastas LITGRID AB režimas (PĮ) pagal organizacijų sąrašą"), "pasakyta, iš kur režimas: " + $("skelbimoBusena").textContent);
+    } finally { fr.remove(); }
+  }, "iki 2026-10-17 LITGRID mažos vertės skelbimas (forma „Perkančiosios organizacijos veiklos sritis“) kortelei siūlė VPĮ, o „Mano pirkimai“ tada nesiūlė LITGRID įrankių");
 
   await testas("Darbo stalas: be kortelių nerodomas; neperskaitoma saugykla - sakoma; terminai darbo dienomis (su šventėmis), užbaigti - tik skaičius, trūkstami laukai kilmininku", async ()=>{
     const { f, w, d } = await ramas('<link rel="stylesheet" href="epso-g.css"><section id="sek" hidden><div id="mp"></div></section>' + KORTELES_FAILAI
@@ -2360,7 +2393,7 @@ async function testaiKortele2(){
       const saugok = async (laukai) => { const p = K.kurkLange(laukai); const r = d.getElementById("gpk-dlg-rezimas"); const t = r ? r.textContent : null;
         d.getElementById("gpk-dlg-taip").click(); return { k: await p, t: t }; };
       let x = await saugok({ pavadinimas: "EPSO-G paslaugos", vykdytojas: "epso-g" });
-      lygu([x.k.rezimas, x.t], ["VPI", "Siūlomas režimas: VPĮ - įprastas UAB EPSO-G. Galioja skelbimo forma: jei ji kitokia, pakeiskite kortelėje."], "pasiūlytas ir pažymėtas");
+      lygu([x.k.rezimas, x.t], ["VPI", "Siūlomas režimas: VPĮ - įprastas UAB EPSO-G. Jei skelbimas ar pirkimo dokumentai nurodo kitą įstatymą, pakeiskite kortelėje."], "pasiūlytas ir pažymėtas");
       x = await saugok({ pavadinimas: "Energy cells pirkimas", vykdytojas: "energy-cells", rezimas: "VPI" });
       lygu([x.k.rezimas, x.t], ["VPI", null], "modulio režimas neperrašomas");
       x = await saugok({ pavadinimas: "Be vykdytojo" });

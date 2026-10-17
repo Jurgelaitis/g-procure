@@ -18,9 +18,11 @@
  *     (data „patikrinta“). Be jo `taisykles: null`, ir sąsaja sako, kad
  *     organizacijos taisyklių registre nėra - ne spėja.
  *   - `rezimasTiketinas` - ką organizacija paprastai taiko; konkretaus pirkimo
- *     režimą lemia SKELBIMAS (2026-09-24 tikruose skelbimuose: Energy cells
- *     skelbimas 9614756 buvo „perkančiosios organizacijos“ formos). Nesutapimas
- *     rodomas naudotojui, ne nutylimas.
+ *     režimą lemia SKELBIMAS su direktyva; nacionalinis skelbimas su „Teisinis
+ *     pagrindas: Kitas“ režimo nenurodo (2026-10-17: Energy cells 9614756 ir LITGRID
+ *     mažos vertės skelbimai - „perkančiosios organizacijos“ formos, o jų pirkimo
+ *     dokumentai - „Perkantysis subjektas“ ir PĮ) - tada siūlomas šis režimas,
+ *     nepatvirtintas. Nesutapimas su skelbimu rodomas naudotojui, ne nutylimas.
  *   - `cvpisPaieska` - pirkimo vykdytojo lauko reikšmė CVP IS sąrašo adresui;
  *     patikrinta curl 2026-09-24 (sąrašas grąžino šios organizacijos pirkimus).
  *   - `centrinesValdzios` - ar organizacija įrašyta į centrinės valdžios institucijų
