@@ -366,12 +366,33 @@
       } catch (e) { /* pavadinimas - pagalba, ne sąlyga */ }
     }
   };
+  // Diagramų tekstas (ašys, legendos, patarimai) - puslapio šriftu (--font-base, Nunito Sans), ne Chart.js numatytuoju
+  // Helvetica / Arial (2026-10-17: PP-plan, PP-negotiation, skaičiuoklės ir KNA diagramos buvo kitu šriftu nei puslapis).
+  // Modulio nustatytas šriftas (PP-esg) paliekamas; puslapis be epso-g.css - nekeičiamas.
+  var CHART_SRIFTAS = "'Helvetica Neue', 'Helvetica', 'Arial', sans-serif";
+  function diagramuSriftas(C) {
+    try {
+      var f = C.defaults && C.defaults.font;
+      if (!f || f.family !== CHART_SRIFTAS) return;
+      var b = global.getComputedStyle(doc.documentElement).getPropertyValue("--font-base").trim();
+      if (b) f.family = b;
+    } catch (e) { /* šriftas - išvaizda, ne sąlyga */ }
+  }
   function registruokDiagramas() {
     var C = global.Chart;
     if (!C || typeof C.register !== "function" || C.__gpPrieinamumas) return;
+    diagramuSriftas(C);
     try { C.register(DIAGRAMOS_PAPILDINYS); C.__gpPrieinamumas = true; } catch (e) { /* sena Chart.js versija */ }
   }
   registruokDiagramas();
+  // Drobė šrifto neįkelia pati: diagrama, nupiešta prieš įsikeliant Nunito Sans, perpiešiama juo (ir išmatuojama iš naujo)
+  // („loadingdone“ - kiekvieną kartą įsikėlus šriftams; „ready“ pačioje pradžioje gali būti jau įvykdytas)
+  function perpieskDiagramas() {
+    var C = global.Chart;
+    if (!C || !C.instances) return;
+    Object.keys(C.instances).forEach(function (k) { try { C.instances[k].update("none"); } catch (e) { /* sunaikinta */ } });
+  }
+  if (doc.fonts && doc.fonts.addEventListener) doc.fonts.addEventListener("loadingdone", perpieskDiagramas);
 
   doc.addEventListener("keydown", function (e) {
     var el = e.target;
