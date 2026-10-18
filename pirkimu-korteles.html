@@ -433,6 +433,7 @@
       vptNeatpazinta: "Iš VPT duomenų (pirkimas Nr. {v}) kortelės laukų atpažinti nepavyko - pildykite ranka.",
       vptCit: "VPT duomenyse: „{c}“", vptPerkelta: "Iš VPT duomenų perkelta laukų: {n}. Patikrinkite ir išsaugokite kortelę.",
       vptRezimasIsSaraso: " VPT duomenys režimo nenurodo - pažymėtas įprastas {v} režimas ({r}) pagal organizacijų sąrašą; patikrinkite, kurį įstatymą nurodo pirkimo dokumentai.",
+      vptPazymeti: " Kortelėje kitaip nei CVP IS: {l} - šie laukai pažymėti, patikrinkite ir perkelkite.",
       issaugotaNauja: "Kortelė „{p}“ išsaugota šioje naršyklėje", issaugotaPak: "Kortelės „{p}“ pakeitimai išsaugoti šioje naršyklėje",
       griztiM: "Modulyje „{m}“ kortelė jau pasirinkta - galite grįžti į tą skirtuką.", griztiI: "Atidariusiame įrankyje kortelė jau pasirinkta - galite grįžti į tą skirtuką.",
       uzdarytiSkirtuka: "Uždaryti šį skirtuką",
@@ -480,6 +481,7 @@
       vptNeatpazinta: "No card fields could be recognised in the VPT data (procurement No. {v}) - fill in manually.",
       vptCit: "In the VPT data: “{c}”", vptPerkelta: "Fields transferred from the VPT data: {n}. Check and save the card.",
       vptRezimasIsSaraso: " The VPT data do not show the regime - the usual regime of {v} ({r}) is selected from the organisation register; check which law the procurement documents state.",
+      vptPazymeti: " Different on the card than in CVP IS: {l} - these fields are ticked; check and transfer them.",
       issaugotaNauja: "Card “{p}” saved in this browser", issaugotaPak: "Changes to card “{p}” saved in this browser",
       griztiM: "The card is already selected in “{m}” - you can return to that tab.", griztiI: "The card is already selected in the tool that opened this page - you can return to that tab.",
       uzdarytiSkirtuka: "Close this tab",
@@ -855,7 +857,10 @@
   }
   /* VPT CVP IS duomenys per G-Procure serverį (2026-10-18): numeris (ar nuoroda su resourceId) -> GP_VPT.pirkimas ->
      kortelės laukų pasiūlymai GP_VPT.korteles - tas pats sąrašas kaip iš skelbimo PDF, patvirtina žmogus. */
-  async function gaukIsVpt() {
+  /* o.pazymeti - atverta iš „Mano pirkimai“ „Atnaujinti kortelę“ (?vpt=1): laukai, kurie kortelėje skiriasi nuo CVP IS
+     (GP_VPT.skirtumai - terminas, paskelbimo data, būsena), pažymimi iš karto - žmogus juos peržiūri ir perkelia pats. */
+  async function gaukIsVpt(o) {
+    var pazymeti = !!(o && o.pazymeti === true);
     var v = String($("vptNr").value || f.elements.cvpisNr.value || "").trim();
     var m = /resourceId=(\d{5,9})/i.exec(v) || /^(\d{5,9})$/.exec(v);
     valykSkelbima();
@@ -863,7 +868,7 @@
     var nr = m[1];
     $("vptNr").value = nr;
     var rez = await GP_BUSENA.vykdyk("#skelbimoBusena", {
-      tipas: "eiga", tekstas: txf("vptGaunama", { v: nr }), klaidosPriesdelis: tx("vptNepavyko"), kartoti: gaukIsVpt,
+      tipas: "eiga", tekstas: txf("vptGaunama", { v: nr }), klaidosPriesdelis: tx("vptNepavyko"), kartoti: function () { gaukIsVpt({ pazymeti: pazymeti }); },
       veiksmas: async function () {
         if (!window.GP_CPV_DATA) { try { await krauk("shared/cpv-data.js"); } catch (e) { /* be žodyno BVPŽ lieka pastaba */ } }
         var r = await GP_VPT.pirkimas(nr);
@@ -874,7 +879,8 @@
     if (!rez.ok) return;
     var r = rez.reiksme;
     if (!r.ok) { GP_BUSENA.rodyk("#skelbimoBusena", { tipas: "tuscia", tekstas: txf("vptNera", { v: nr, t: GP_VPT.atnaujinta(r.meta && r.meta.atnaujinta, L) }) }); return; }
-    rodykPasiulymus(GP_VPT.korteles(r.pirkimas, L), { nr: nr, t: GP_VPT.atnaujinta(r.meta && r.meta.atnaujinta, L) }, "vpt");
+    var paz = pazymeti ? GP_VPT.skirtumai(surink(), r.pirkimas).skirtumai.map(function (x) { return x.laukas; }) : [];
+    rodykPasiulymus(GP_VPT.korteles(r.pirkimas, L), { nr: nr, t: GP_VPT.atnaujinta(r.meta && r.meta.atnaujinta, L) }, "vpt", paz);
   }
   function tuscias(laukas, v) {
     if (laukas === "busena") return !v || v === "rengiamas";           // naujos kortelės numatytoji būsena
@@ -886,7 +892,8 @@
     if (Array.isArray(a) || Array.isArray(b)) return JSON.stringify(a) === JSON.stringify(b);
     return String(a == null ? "" : a).trim().toLowerCase() === String(b == null ? "" : b).trim().toLowerCase();
   }
-  function rodykPasiulymus(r, vardas, saltinis) {
+  function rodykPasiulymus(r, vardas, saltinis, pazymeti) {
+    pazymeti = pazymeti || [];
     siulymai = r.laukai;
     SALTINIS = saltinis === "vpt" ? "vpt" : "skelbimas";
     var vpt = SALTINIS === "vpt";
@@ -896,13 +903,15 @@
     p.textContent = vpt
       ? (r.laukai.length ? txf("vptAtpazinta", { v: vardas.nr, t: vardas.t, n: r.laukai.length }) : txf("vptNeatpazinta", { v: vardas.nr }))
       : (r.laukai.length ? txf("atpazinta", { v: vardas, n: r.laukai.length }) : txf("neatpazinta", { v: vardas }));
+    var pazymeta = r.laukai.filter(function (x) { return pazymeti.indexOf(x.laukas) >= 0; });
+    if (vpt && pazymeta.length) p.textContent += txf("vptPazymeti", { l: pazymeta.map(function (x) { return K.mazaja(K.laukoPav(x.laukas, L)); }).join(", ") });
     box.appendChild(p);
     r.laukai.forEach(function (x, i) {
       var cur = dab[x.laukas], perraso = !tuscias(x.laukas, cur) && !vienodas(x.laukas, cur, x.reiksme);
       var lab = document.createElement("label");
       lab.className = "pasiulymas";
       var cb = document.createElement("input");
-      cb.type = "checkbox"; cb.id = "sk-" + i; cb.checked = !perraso;
+      cb.type = "checkbox"; cb.id = "sk-" + i; cb.checked = !perraso || pazymeti.indexOf(x.laukas) >= 0;
       var sp = document.createElement("span"), b = document.createElement("b");
       b.textContent = K.laukoPav(x.laukas, L) + ": ";
       sp.appendChild(b);
@@ -1208,15 +1217,27 @@
 
   GP_DARBAS.stebek(function () { return forma.open ? parasas() : ""; });
 
+  /* Kortelė pagal id (adresas #kortele=<id>); vpt - ir CVP IS duomenys su pažymėtais skirtumais („Mano pirkimai“ „Atnaujinti kortelę“).
+     GP_KORTELIU_PUSLAPIS - ir testams. */
+  function atverkKortele(id, o) {
+    var k = K.gauk(id);
+    if (!k) return false;
+    atidaryk(k);
+    if (o && o.vpt && k.cvpisNr) gaukIsVpt({ pazymeti: true });
+    return true;
+  }
+  window.GP_KORTELIU_PUSLAPIS = { atverkKortele: atverkKortele };
+
   /* ---------- atvertas iš modulio ---------- */
   var s = sarasas();
   var h = location.hash;
   var laukia = false;
+  // ?vpt=1 - iš „Mano pirkimai“ „Atnaujinti kortelę“: atvėrus kortelę CVP IS duomenys gaunami patys (žmogus to paprašė paspausdamas)
+  var qs = new URLSearchParams(location.search), vptAuto = qs.get("vpt") === "1";
+  qs.delete("vpt");
   if (h.indexOf("#kortele=") === 0) {
-    var id = decodeURIComponent(h.slice(9));
-    var k = K.gauk(id);
-    if (k) atidaryk(k);
-    else if (s.busena === "yra" || s.busena === "nera") GP_BUSENA.rodyk("#busena", { tipas: "nezinoma", tekstas: tx("nerastaK") });
+    if (!atverkKortele(decodeURIComponent(h.slice(9)), { vpt: vptAuto }) && (s.busena === "yra" || s.busena === "nera"))
+      GP_BUSENA.rodyk("#busena", { tipas: "nezinoma", tekstas: tx("nerastaK") });
   } else if (h === "#nauja" && s.busena !== "sugadinta" && s.busena !== "neprieinama") {
     if (window.opener && location.origin !== "null") {
       laukia = true;
@@ -1233,7 +1254,7 @@
       setTimeout(function () { if (laukia) { laukia = false; atidaryk(null); } }, 1500);
     } else atidaryk(null);
   }
-  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  if (location.hash || vptAuto) history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : ""));
 })();
 </script>
 
