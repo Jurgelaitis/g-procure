@@ -2157,7 +2157,9 @@ async function testaiSkelbimasDarbastalis(){
         ["Competitive dialogue", false, KL, "KD"], ["Innovation partnership", true, KL, "IP"], ["DPS Specific Contract", false, SE, "DPS-K"], ["Dynamic Purchasing System", true, SE, "DPS"],
         ["Simplified Open", false, NE, "MV-SAB"], ["Simplified Open with negotiations", false, NE, "MV-SAD"], ["Simplified Open", false, SE, undefined], ["Open", false, NE, undefined],
         ["Open", true, "prompt.directive.defence", undefined], ["Open", true, "prompt.directive.concession", undefined], ["Specific Contract", true, SE, undefined],
-        ["Competitive with negotiation", true, SE, undefined], ["Simplified", false, NE, undefined]];
+        ["Competitive with negotiation", true, SE, undefined], ["Simplified", false, NE, undefined],
+        ["Competitive with negotiation", true, KL, "T-SD"], ["Competitive with negotiation", false, KL, "S-SD"], ["Accelerated open", false, KL, "S-AK"], ["Accelerated open", true, SE, "T-AK"],
+        ["Qualification System", null, SE, "KS"], ["Qualification System", null, KL, undefined]];
       const gauta = budai.map(([p, a, d]) => pagal(V.korteles(vptPirkimas({ procedure: p, aboveThreshold: a, directive: d }), "lt")).budas);
       lygu(gauta, budai.map(x => x[3]), "būdai");
       const neaiskus = V.korteles(vptPirkimas({ procedure: "Specific Contract" }), "lt");
@@ -2233,6 +2235,185 @@ async function testaiSkelbimasDarbastalis(){
       const ctl = new w.AbortController(); ctl.abort();
       lygu((await V.paieska({ cpv: "45" }, { signal: ctl.signal, fetch: (u, o) => o.signal.aborted ? Promise.reject(new w.DOMException("a", "AbortError")) : Promise.resolve(ats) })).rusis, "atsaukta");
     } finally { f.remove(); }
+  });
+
+  /* Rinkos duomenys pagal BVPŽ (shared/vpt-rinka.js, 2026-10-18b) */
+  const turi = (s, x) => tiesa(String(s).includes(x), "trūksta: " + x + "\n  tekste: " + String(s).slice(0, 500));
+  const neturi = (s, x, ka) => tiesa(!String(s).includes(x), (ka || "neturėtų būti") + ": " + x);
+  const RINKA_SK = VPT_SK + '<script src="busena.js"><\/script><script src="vpt-rinka.js"><\/script>';
+  const rinkosStat = (viso, o) => Object.assign({ viso, aktyvus: 4, nutraukta: 6, rinkosKonsultacijos: 5, tarptautiniai: 7, esLesos: 2,
+    vertinimas: { "Lowest Price": 45, "MEAT": 15, "-": 5 },
+    terminai: [{ budas: "Open", tarptautinis: false, n: 30, p10: 7, p25: 9, mediana: 12, p75: 16, p90: 21 }, { budas: "Open", tarptautinis: true, n: 3 },
+      { budas: "Preliminary Market Consultation", tarptautinis: null, n: 5, p10: 3, p25: 5, mediana: 7, p75: 9, p90: 12 },
+      { budas: "Negotiated with prior call for competition", tarptautinis: false, n: 8, p10: 10, p25: 14, mediana: 19.5, p75: 26, p90: 37 }],
+    sprendimoDienos: { n: 40, p10: 8, p25: 16, mediana: 32, p75: 64, p90: 130 }, sutartiesDienos: { n: 3 },
+    verte: { n: 25, p10: 20000, p25: 60000, mediana: 150000, p75: 400000, p90: 900000 }, trukmeMen: { n: 30, p10: 3, p25: 6, mediana: 12, p75: 24, p90: 36 },
+    vykdytojai: [{ pavadinimas: "<b>LITGRID AB (PV)</b>", kodas: null, kiekis: 9 }, { pavadinimas: "AB Amber Grid", kodas: "303090867", kiekis: 4 }] }, o || {});
+  await testas("Rinkos duomenys: reikšminga BVPŽ kodo pradžia (be kontrolinio skaitmens ir galinių nulių, 2-5 skaitmenys)", async ()=>{
+    const { f, w } = await ramas(RINKA_SK);
+    try {
+      lygu(["45231000-5", "45000000-7", "44321000", "30192100-3", "71000000-8", "50532000-3", "4523", "7", "", null].map(x => w.GP_VPT_RINKA.pradzia(x)),
+           ["45231", "45", "44321", "30192", "71", "50532", "4523", null, null, null]);
+      // Kortelės būdas -> VPT procedūros: kiekviena turi pavadinimą ir per GP_VPT.budas grįžta į tą patį būdą
+      const V = w.GP_VPT, KL = "prompt.directive.classic", SE = "prompt.directive.utilities", NE = "prompt.directive.none";
+      const ids = w.GP_METHODS.LIST.map(m => m.id), atgal = [];
+      ids.forEach(id => { const x = V.vptBudas(id); if (!x || w.GP_METHODS.byId(id).statusas === "bazinis") return;
+        x.proceduros.forEach(p => { tiesa(V.PROCEDUROS[p], "be pavadinimo: " + p);
+          const gr = [KL, SE, NE].map(dir => V.budas({ procedure: p, aboveThreshold: x.tarptautinis, directive: dir })).filter(Boolean).map(b => b.id);
+          atgal.push([id, p, gr.includes(id)]); }); });
+      lygu(atgal.filter(x => !x[2]), [], "procedūra negrįžta į tą patį būdą");
+      lygu(ids.filter(id => !V.vptBudas(id)).sort(), ["CPO", "KONC", "MV-NR", "MV-NZ", "PS", "VS"], "be VPT atitikmens");
+      lygu([V.budas({ procedure: "Qualification System", directive: SE }).id, V.budas({ procedure: "Qualification System", directive: KL })], ["KS", null], "kvalifikacijos sistema - tik sektorinė");
+      lygu([V.vptBudas("T-SD").proceduros, V.vptBudas("S-ND").tarptautinis, V.vptBudas("RK").tarptautinis], [["Negotiated with prior call for competition", "Competitive with negotiation"], false, null]);
+      lygu(["T-AK", "S-AK", "T-SD", "S-SD", "T-ND", "S-ND", "MV-SAB", "MV-SAD", "MV", "AK", "DPS-K"].map(id => V.vptBudas(id).tarptautinis), [true, false, true, false, true, false, false, false, false, null, null], "tarptautinė vertė");
+      lygu([V.vptBudas("S-SD", "VPI").proceduros, V.vptBudas("S-SD", "PI").proceduros, V.vptBudas("T-ND", "VPI").proceduros, V.vptBudas("T-AK", "VPI").proceduros],
+           [["Competitive with negotiation"], ["Negotiated with prior call for competition"], ["Negotiated without prior publication"], ["Open"]], "pagal įstatymą");
+    } finally { f.remove(); }
+  });
+  await testas("Rinkos duomenys: tik paspaudus; per mažai panašių - grupė praplečiama ir tai pasakoma; būdas pažymėtas, rinkos konsultacijos ir per mažai duomenų - atskirai; siauresnė / platesnė grupė; tekstai - ne HTML; nėra, klaida, be BVPŽ; EN", async ()=>{
+    const { f, w, d } = await ramas('<div id="r"></div>' + RINKA_SK);
+    try {
+      const kv = []; let ats = null, g = { bvpz: "45231000-5", budas: "S-AK", tipas: "Works" };
+      w.fetch = (u, o) => { kv.push(new URL(u)); const cpv = new URL(u).searchParams.get("cpv");
+        return Promise.resolve(typeof ats === "function" ? ats(cpv) : ats); };
+      ats = cpv => vptAtsakymas(200, { statistika: rinkosStat({ "45231": 8, "4523": 12, "452": 60, "45": 900 }[cpv] || 0), meta: { atnaujinta: "2026-10-18T08:00:00Z" } });
+      const api = w.GP_VPT_RINKA.mount("#r", { gauk: () => g, kalba: () => d.documentElement.lang });
+      const r = d.getElementById("r"), btn = r.querySelector(".gpvr-btn");
+      lygu([btn.textContent, kv.length], ["Rodyti rinkos duomenis (CVP IS)", 0], "be paspaudimo - nesiunčiama");
+      tiesa(/siunčiama tik BVPŽ kodo pradžia ir objektas/.test(r.textContent) && d.getElementById(btn.getAttribute("aria-describedby")), "kas siunčiama - susieta su mygtuku");
+      const laukR = async n => { for (let i = 0; i < 80 && !(kv.length >= n && (r.querySelector(".gpvr-rez p") || /gpb--(klaida|tuscia)/.test(r.querySelector(".gpvr-busena").className))); i++) await lauk(30); };
+      btn.click(); await laukR(3);
+      lygu(kv.map(u => u.pathname + " " + u.searchParams.get("cpv") + " " + u.searchParams.get("tipas")), ["/api/cvpis/statistika 45231 Works", "/api/cvpis/statistika 4523 Works", "/api/cvpis/statistika 452 Works"], "praplečiama iki 20 ir daugiau");
+      const nuo = kv[0].searchParams.get("nuo"), mt = new Date(); mt.setMonth(mt.getMonth() - 24);
+      tiesa(/^\d{4}-\d{2}-\d{2}$/.test(nuo) && nuo.slice(0, 7) === mt.toISOString().slice(0, 7), "24 mėn.: " + nuo);
+      const tx = r.textContent;
+      ["Panašūs pirkimai CVP IS: BVPŽ 452… (darbai), paskelbti nuo " + nuo, "Su BVPŽ 45231… panašių pirkimų buvo per mažai - grupė praplėsta iki 452…", "VPT sąrašas atnaujintas 2026-10-18 11:00",
+       "Paskelbta60", "Nutraukta6 (10 %)", "Rinkos konsultacijos5", "Vertinimo kriterijus: kaina 75 %, ekonominis naudingumas (kaina ir kokybė) 25 %",
+       "Nuo termino iki sprendimo dėl laimėtojo: 32 d. (pusė pirkimų - 16 d.-64 d.; 40 pirk.)", "Nuo termino iki sutarties: per mažai duomenų (3 pirk.)",
+       "Numatoma vertė (kai nurodyta): 150 000 EUR", "Sutarties trukmė: 12 mėn.", "<b>LITGRID AB (PV)</b> - 9", "ne teisės normos"].forEach(x => turi(tx.replace(/ /g, " "), x));
+      tiesa(!r.querySelector("li b"), "vykdytojo pavadinimas - tekstas");
+      const eil = [...r.querySelectorAll("tbody tr")].map(e => [e.className, e.textContent]);
+      lygu(eil.map(e => e[0]), ["gpvr-jusu", ""], "pažymėtas tik jūsų būdas (S-AK = Open, ne tarptautinis); rinkos konsultacija ir retas būdas - ne lentelėje");
+      lygu([...r.querySelectorAll("tbody tr")].map(e => [...e.children].map(c => c.textContent)),
+           [["Atviras konkursas - ne tarptautinis← jūsų būdas", "12", "9-16", "30"], ["Skelbiamos derybos (PĮ) - ne tarptautinis", "19,5", "14-26", "8"]], "langeliai: mediana, pusė pirkimų, kiekis");
+      lygu([...r.querySelectorAll("thead th")].map(e => e.textContent), ["Būdas", "Mediana", "Pusė pirkimų", "Pirkimų"]);
+      turi(r.textContent, "Retesni būdai (mažiau kaip 5 pirkimai - per mažai duomenų): Atviras konkursas - tarptautinis (3).");
+      turi(r.textContent, "PĮ ir VPĮ prie derybų - pagal VPT procedūros pavadinimą");
+      const lp = d.getElementById(r.querySelector("table").getAttribute("aria-labelledby"));
+      tiesa(lp && lp.textContent.indexOf("kalendorinės dienos") >= 0 && !lp.closest(".gpvr-lent") && r.querySelector("thead th").scope === "col", "lentelės pavadinimas (už slenkančio rėmelio) ir th");
+      // Siauresnė / platesnė grupė - viena užklausa, be praplėtimo pranešimo
+      kv.length = 0; [...r.querySelectorAll(".gpvr-btn")].find(b => b.textContent === "Siauresnė BVPŽ grupė").click(); await laukR(1); await lauk(60);
+      lygu(kv.map(u => u.searchParams.get("cpv")), ["4523"]); turi(r.textContent, "BVPŽ 4523…"); neturi(r.textContent, "praplėsta");
+      kv.length = 0; [...r.querySelectorAll(".gpvr-btn")].find(b => b.textContent === "Platesnė BVPŽ grupė").click(); await laukR(1); await lauk(60);
+      lygu(kv.map(u => u.searchParams.get("cpv")), ["452"]);
+      // Būdas be atitikmens VPT duomenyse - be žymės; būdas, kurio panašiuose nėra - pasakoma
+      g = { bvpz: "45231000-5", budas: "KD", tipas: "Works" }; kv.length = 0; api.rodyk(); await laukR(3); await lauk(60);
+      turi(r.textContent, "Jūsų būdo panašiuose pirkimuose nėra arba per mažai."); lygu(r.querySelectorAll("tr.gpvr-jusu").length, 0);
+      g = { bvpz: "45231000-5", budas: "MV-NR", tipas: null }; kv.length = 0; api.rodyk(); await laukR(3); await lauk(60);
+      tiesa(kv.every(u => !u.searchParams.has("tipas")) && !/Jūsų būdo/.test(r.textContent), "be objekto ir be būdo atitikmens");
+      // Nėra visose grupėse - „nėra“ su sąrašo laiku; klaida - ne „nėra“; be BVPŽ - be užklausos
+      ats = () => vptAtsakymas(200, { statistika: rinkosStat(0), meta: { atnaujinta: "2026-10-18T08:00:00Z" } }); kv.length = 0; api.rodyk(); await laukR(4);
+      const b = r.querySelector(".gpvr-busena");
+      tiesa(/gpb--tuscia/.test(b.className) && /Panašių pirkimų pagal BVPŽ 45… VPT duomenyse per 24 mėn. nėra/.test(b.textContent.replace("45 ", "45… ")) || /nėra \(sąrašas atnaujintas 2026-10-18 11:00\)/.test(b.textContent), b.textContent);
+      lygu([kv.length, r.querySelector(".gpvr-rez").textContent], [4, ""], "praplėsta iki 2 skaitmenų, rezultatų nėra");
+      ats = vptAtsakymas(503, {}); kv.length = 0; api.rodyk(); await laukR(1);
+      tiesa(/gpb--klaida/.test(b.className) && /Rinkos duomenų gauti nepavyko: G-Procure serveris neatsakė/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]") && !/nėra/.test(b.textContent), b.textContent);
+      g = { bvpz: "", budas: "S-AK" }; kv.length = 0; api.rodyk(); await lauk(50);
+      tiesa(kv.length === 0 && /Įrašykite BVPŽ kodą/.test(b.textContent), "be BVPŽ - paaiškinimas");
+      // EN
+      g = { bvpz: "45231000-5", budas: "S-AK", tipas: "Works" };
+      ats = cpv => vptAtsakymas(200, { statistika: rinkosStat({ "45231": 30 }[cpv] || 0), meta: { atnaujinta: "2026-10-18T08:00:00Z" } });
+      d.documentElement.lang = "en"; await lauk(30); kv.length = 0; api.rodyk(); await laukR(1); await lauk(60);
+      ["Similar procurements in CVP IS: CPV 45231… (works)", "Award criterion: price 75 %", "your procedure", "Open procedure - below EU threshold", "Tender period - calendar days"].forEach(x => turi(r.textContent, x));
+      lygu(r.querySelector(".gpvr-eil .gpvr-btn").textContent, "Show market data (CVP IS)");
+      api.isvalyk(); lygu([r.querySelector(".gpvr-rez").textContent, r.querySelector(".gpvr-busena").hidden], ["", true], "išvalyta");
+    } finally { f.remove(); }
+  });
+  await testas("Rinkos duomenys: modulio grafiko etapas (mano) - kalendorinės ir darbo dienos greta jūsų būdo medianos; be datos - tik darbo dienos; be būdo medianos - be jos; perpiesk() - be užklausos", async ()=>{
+    const { f, w, d } = await ramas('<div id="r"></div>' + RINKA_SK);
+    try {
+      const kv = []; let g = { bvpz: "45231000-5", budas: "S-AK" }, m = { pavadinimas: "Pasiūlymų gavimas", dd: 9, kd: 13 };
+      w.fetch = u => { kv.push(new URL(u)); return Promise.resolve(vptAtsakymas(200, { statistika: rinkosStat(40), meta: { atnaujinta: "2026-10-18T08:00:00Z" } })); };
+      const api = w.GP_VPT_RINKA.mount("#r", { gauk: () => g, mano: () => m, kalba: () => d.documentElement.lang });
+      const r = d.getElementById("r"), mano = () => (r.querySelector(".gpvr-mano") || { textContent: null }).textContent;
+      api.perpiesk(); lygu([kv.length, mano()], [0, null], "prieš užklausą perpiesk() nieko nedaro");
+      api.rodyk(); for (let i = 0; i < 80 && !r.querySelector("tbody tr"); i++) await lauk(30);
+      lygu(mano(), "Jūsų grafike „Pasiūlymų gavimas“ - 13 kal. d. nuo paskelbimo (9 d. d.). Panašių CVP IS pirkimų, vykdytų jūsų būdu, mediana - 12 kal. d.");
+      m = { pavadinimas: "Pasiūlymų gavimas", dd: 9, kd: null }; api.perpiesk();
+      lygu([kv.length, mano()], [1, "Jūsų grafike „Pasiūlymų gavimas“ - 9 d. d. (kalendorines dienas matysite įrašę pradžios datą). Panašių CVP IS pirkimų, vykdytų jūsų būdu, mediana - 12 kal. d."], "perpiešta be užklausos");
+      g = { bvpz: "45231000-5", budas: "T-AK" }; m = { pavadinimas: "<i>Pasiūlymų</i> gavimas", dd: 25, kd: 35 }; api.perpiesk();
+      lygu(mano(), "Jūsų grafike „<i>Pasiūlymų</i> gavimas“ - 35 kal. d. nuo paskelbimo (25 d. d.).", "tarptautinio atviro - per mažai duomenų, medianos nėra; pavadinimas - tekstas");
+      tiesa(!r.querySelector(".gpvr-mano i"), "ne HTML");
+      const ju = r.querySelector("tr.gpvr-jusu");
+      lygu([ju.textContent.includes("per mažai duomenų"), [...ju.children].reduce((a, c) => a + (c.colSpan || 1), 0), r.querySelectorAll("thead th").length], [true, 4, 4], "jūsų būdas be medianos - lentelėje, stulpeliai sutampa");
+      g = { bvpz: "45231000-5", budas: "S-AK" };
+      m = null; api.perpiesk(); lygu(mano(), null, "be grafiko etapo - be eilutės");
+      m = { pavadinimas: "Pasiūlymų gavimas", dd: 0, kd: 0 }; api.perpiesk(); lygu(mano(), null, "0 d. d. - be eilutės");
+      m = { pavadinimas: "Pasiūlymų gavimas", dd: 9, kd: 13 }; d.documentElement.lang = "en"; await lauk(40);
+      lygu(mano(), "In your schedule, “Pasiūlymų gavimas” - 13 calendar days from publication (9 working days). Median for your procedure in similar CVP IS procurements - 12 calendar days.");
+      turi(r.textContent, "the CVP IS deadline may be that of a later stage");
+      d.documentElement.lang = "lt"; await lauk(40); turi(r.textContent, "CVP IS terminas gali būti ir vėlesnio etapo");
+    } finally { f.remove(); }
+  });
+  await testas("Rinkos duomenys: derybos PĮ ir VPĮ - pagal įstatymą (rezimas) pažymima tik to įstatymo eilutė; be įstatymo - abi; DPS ir kvalifikacijos sistema lentelėje nerodomos ir tai pasakoma; DPS būdui - be „jūsų būdo nėra“", async ()=>{
+    const { f, w, d } = await ramas('<div id="r"></div>' + RINKA_SK);
+    try {
+      let g = { bvpz: "71300000-1", budas: "T-SD", rezimas: "PI" };
+      const st = rinkosStat(40, { terminai: [
+        { budas: "Negotiated with prior call for competition", tarptautinis: true, n: 30, p10: 30, p25: 40, mediana: 55, p75: 70, p90: 90 },
+        { budas: "Competitive with negotiation", tarptautinis: true, n: 12, p10: 40, p25: 50, mediana: 66, p75: 80, p90: 99 },
+        { budas: "Dynamic Purchasing System", tarptautinis: true, n: 9, p10: 900, p25: 1100, mediana: 1800, p75: 2300, p90: 2600 },
+        { budas: "Qualification System", tarptautinis: true, n: 5, p10: 900, p25: 1000, mediana: 1100, p75: 1200, p90: 1300 },
+        { budas: "Open", tarptautinis: true, n: 20, p10: 30, p25: 31, mediana: 34, p75: 37, p90: 40 },
+        { budas: "Simplified", tarptautinis: false, n: 2 }] });
+      w.fetch = () => Promise.resolve(vptAtsakymas(200, { statistika: st, meta: { atnaujinta: "2026-10-18T08:00:00Z" } }));
+      const api = w.GP_VPT_RINKA.mount("#r", { gauk: () => g, mano: () => ({ pavadinimas: "Paraiškų gavimas", dd: 25, kd: 40 }), kalba: () => "lt" });
+      const r = d.getElementById("r"), jusu = () => [...r.querySelectorAll("tr.gpvr-jusu th")].map(e => e.firstChild.textContent);
+      api.rodyk(); for (let i = 0; i < 80 && !r.querySelector("tbody tr"); i++) await lauk(30);
+      lygu([...r.querySelectorAll("tbody th")].map(e => e.firstChild.textContent), ["Skelbiamos derybos (PĮ) - tarptautinis", "Skelbiamos derybos (VPĮ) - tarptautinis", "Atviras konkursas - tarptautinis"], "eilutės be sistemų");
+      lygu(jusu(), ["Skelbiamos derybos (PĮ) - tarptautinis"], "PĮ");
+      lygu([...r.querySelectorAll(".gpvr-rez .gpvr-btn")].map(b => b.textContent), ["Platesnė BVPŽ grupė"], "visa BVPŽ pradžia - siauresnės grupės nėra");
+      turi(r.querySelector(".gpvr-mano").textContent, "mediana - 55 kal. d.");
+      turi(r.textContent, "Dinaminės pirkimų sistemos ir kvalifikacijos sistemos lentelėje nerodomos");
+      turi(r.textContent, "Retesni būdai (mažiau kaip 5 pirkimai - per mažai duomenų): Simplified - ne tarptautinis (2).");
+      turi(r.textContent, "Rodoma kaip VPT duomenyse, nes reikšmė neaiški: „Simplified“.");
+      g = { bvpz: "71300000-1", budas: "T-SD", rezimas: "VPI" }; api.perpiesk();
+      lygu(jusu(), ["Skelbiamos derybos (VPĮ) - tarptautinis"], "VPĮ"); turi(r.querySelector(".gpvr-mano").textContent, "mediana - 66 kal. d.");
+      lygu([...r.querySelectorAll("tbody th")].map(e => e.firstChild.textContent), ["Skelbiamos derybos (VPĮ) - tarptautinis", "Skelbiamos derybos (PĮ) - tarptautinis", "Atviras konkursas - tarptautinis"], "jūsų būdas - pirmas");
+      tiesa(r.querySelector(".gpvr-mano").compareDocumentPosition(r.querySelector("table")) & 4, "palyginimas su grafiku - prieš lentelę");
+      g = { bvpz: "71300000-1", budas: "T-SD", rezimas: null }; api.perpiesk();
+      lygu(jusu().length, 2, "be įstatymo - abi"); turi(r.querySelector(".gpvr-mano").textContent, "mediana - 55 kal. d.");
+      g = { bvpz: "71300000-1", budas: "DPS", rezimas: "PI" }; api.perpiesk();
+      lygu(jusu().length, 0); neturi(r.textContent, "Jūsų būdo panašiuose pirkimuose nėra"); neturi(r.querySelector(".gpvr-mano").textContent, "mediana");
+      turi(r.textContent, "jų terminas CVP IS - sistemos galiojimo pabaiga");
+      // Tik atviras konkursas - be sistemų ir derybų pastabų
+      w.fetch = () => Promise.resolve(vptAtsakymas(200, { statistika: rinkosStat(40, { terminai: [st.terminai[4]] }), meta: { atnaujinta: "2026-10-18T08:00:00Z" } }));
+      g = { bvpz: "71300000-1", budas: "T-AK", rezimas: "PI" }; api.rodyk(); await lauk(200);
+      neturi(r.textContent, "sistemos galiojimo pabaiga"); neturi(r.textContent, "PĮ ir VPĮ prie derybų"); neturi(r.textContent, "Retesni būdai"); neturi(r.textContent, "reikšmė neaiški"); lygu(jusu(), ["Atviras konkursas - tarptautinis"]);
+      lygu([w.GP_VPT.kodas("toString", w.GP_VPT.PROCEDUROS, "lt"), w.GP_VPT.kodas("Simplified", w.GP_VPT.PROCEDUROS, "lt").isverstas], [{ tekstas: "toString", kodas: "toString", isverstas: false }, false], "žodyne - tik savi raktai");
+      lygu([w.GP_VPT.procedurosIstatymas("Open"), w.GP_VPT.procedurosIstatymas("toString"), w.GP_VPT.vptBudas("toString"), w.GP_VPT.vptBudas("KS", "VPI").proceduros], [null, null, null, ["Qualification System"]]);
+    } finally { f.remove(); }
+  });
+  await testas("Kortelių puslapis: rinkos duomenys formoje - BVPŽ, būdas ir objektas iš formos; atvėrus kitą kortelę - išvalyta", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id), F = $("formaForm").elements, kv = [];
+      const tikras = w.fetch.bind(w);
+      const st = rinkosStat(40); st.terminai.push({ budas: "Competitive with negotiation", tarptautinis: false, n: 9, p10: 9, p25: 15, mediana: 21, p75: 30, p90: 40 });
+      w.fetch = (u, o) => { if (!String(u).includes("/api/cvpis/")) return tikras(u, o); kv.push(new URL(u)); return Promise.resolve(vptAtsakymas(200, { statistika: st, meta: { atnaujinta: "2026-10-18T08:00:00Z" } })); };
+      $("naujaHeader").click();
+      F.bvpz.value = "45231000-5"; F.objektas.value = "darbai"; F.budas.value = "S-SD";
+      d.querySelector('input[name="rezimas"][value="VPI"]').checked = true;
+      const btn = $("rinkaVieta").querySelector(".gpvr-btn");
+      lygu(kv.length, 0, "be paspaudimo - nesiunčiama"); btn.click();
+      for (let i = 0; i < 80 && !$("rinkaVieta").querySelector("tbody tr"); i++) await lauk(30);
+      lygu([kv.length, kv[0].searchParams.get("cpv"), kv[0].searchParams.get("tipas")], [1, "45231", "Works"]);
+      lygu([...$("rinkaVieta").querySelectorAll("tr.gpvr-jusu th")].map(e => e.firstChild.textContent), ["Skelbiamos derybos (VPĮ) - ne tarptautinis"], "formos būdas ir įstatymas (VPĮ) pažymėti");
+      $("naujaHeader").click();
+      lygu($("rinkaVieta").querySelector(".gpvr-rez").textContent, "", "nauja forma - be ankstesnių rinkos duomenų");
+    } finally { fr.remove(); }
   });
 
   await testas("Kortelių puslapis: CVP IS numeris ar nuoroda -> VPT duomenų pasiūlymai („VPT duomenyse“), įvesta kitokia vertė nepažymėta, perkėlus forma užpildyta, neišsaugota; „nėra“ - su sąrašo laiku; ryšio klaida - „Bandyti dar kartą“; netinkamas numeris - be užklausos; MV - režimas iš organizacijų sąrašo", async ()=>{
@@ -4301,6 +4482,35 @@ async function manoPirkimaiCvpBusena(w) {
   await api.tikrinkCvp();
   w.document.getElementById("mano-pirkimai").scrollIntoView();
 }
+/* Rinkos duomenys pagal BVPŽ (2026-10-18b): lentelė su ilgais VPT procedūrų ir vykdytojų pavadinimais, pastabos, palyginimas su grafiku */
+const RINKOS_TEL = { viso: 736, aktyvus: 23, nutraukta: 53, rinkosKonsultacijos: 52, tarptautiniai: 51, esLesos: 78, vertinimas: { "Lowest Price": 300, "MEAT": 170 },
+  terminai: [{ budas: "Open", tarptautinis: false, n: 272, p10: 9, p25: 12, mediana: 14.8, p75: 20, p90: 30 },
+    { budas: "cft.procedure.type.qs.specific.contract", tarptautinis: false, n: 13, p10: 2, p25: 2.1, mediana: 4.1, p75: 5.3, p90: 9 },
+    { budas: "Negotiated without prior call for competition", tarptautinis: true, n: 7, p10: 0.7, p25: 0.7, mediana: 13.9, p75: 62.9, p90: 90 },
+    { budas: "Competitive with negotiation", tarptautinis: false, n: 3 }, { budas: "Dynamic Purchasing System", tarptautinis: true, n: 7, p10: 1500, p25: 1811.7, mediana: 1847.9, p75: 2457, p90: 2600 }],
+  sprendimoDienos: { n: 308, p10: 8, p25: 17.1, mediana: 29.1, p75: 56, p90: 120 }, sutartiesDienos: { n: 9, p10: 3, p25: 5.6, mediana: 6.6, p75: 19.6, p90: 30 },
+  verte: { n: 218, p10: 10000, p25: 32291, mediana: 144000, p75: 500000, p90: 1200000 }, trukmeMen: { n: 616, p10: 3, p25: 7, mediana: 12, p75: 18, p90: 36 },
+  vykdytojai: [{ pavadinimas: "Lietuvos sveikatos mokslų universiteto ligoninė Kauno klinikos (PV)", kodas: null, kiekis: 66 }, { pavadinimas: "UAB Ignitis grupės paslaugų centras (PV)", kodas: null, kiekis: 179 }] };
+async function rinkosBusena(w, d, vieta) {
+  const tikras = w.fetch.bind(w);
+  w.fetch = (u, o) => String(u).includes("/api/cvpis/") ? Promise.resolve({ status: 200, json: () => Promise.resolve({ statistika: RINKOS_TEL, meta: { atnaujinta: "2026-10-18T08:00:00Z" } }) }) : tikras(u, o);
+  d.querySelector(vieta + " .gpvr-btn").click();
+  for (let i = 0; i < 80 && !d.querySelector(vieta + " tbody tr"); i++) await lauk(30);
+  if (!d.querySelector(vieta + " tbody tr")) throw new Error("rinkos duomenys nepasirodė");
+  d.querySelector(vieta).scrollIntoView();
+}
+async function rinkosKortelesBusena(w, d) {
+  d.getElementById("naujaHeader").click();
+  const F = d.getElementById("formaForm").elements; F.bvpz.value = "45231000-5"; F.objektas.value = "darbai"; F.budas.value = "S-AK";
+  await rinkosBusena(w, d, "#rinkaVieta");
+}
+async function rinkosGrafikuBusena(w, d) {
+  d.querySelector(".tabbar .tab").click();
+  const n = (id, v) => { const e = d.getElementById(id); e.value = v; e.dispatchEvent(new w.Event("change", { bubbles: true })); };
+  n("f-company", "litgrid"); n("f-budas", "S-AK"); w.onMethodChange(); n("f-pradzia", "2026-11-02"); n("f-bvpz", "45231000-5");
+  await rinkosBusena(w, d, "#rinkaGrafikai");
+  if (!d.querySelector("#rinkaGrafikai .gpvr-mano")) throw new Error("be palyginimo su grafiku");
+}
 const TELEFONO_BUSENOS = {
   // Slapukų sutikimas (2026-10-16): juosta ir nustatymų langas (testų rėmelyje jie patys nerodomi - atveriami)
   "../index.html": [["slapukų sutikimo juosta", w => { w.GP_SUTIKIMAS.rodyk(); }], ["slapukų nustatymų langas", w => { w.GP_SUTIKIMAS.atverk(); }],
@@ -4322,8 +4532,9 @@ const TELEFONO_BUSENOS = {
     ["slapukų sutikimo juosta angliškai (LT puslapyje - perjungiklis, 2026-10-16)", (w, d) => { w.GP_SUTIKIMAS.rodyk(); d.querySelector("[data-gpsk=kalba]").click(); }]],
   "../PP-report/PP-report.html": [["1 priedas", w => w.selectForm(1)]],
   "../PP-protocol/LITGRID_Generatorius_v3.html": [["naujo pirkimo vedlys", w => w.showPage("page-new-pk")]],
-  "../pirkimu-korteles.html?saugykla=testine": [["kortelės forma", (w, d) => d.getElementById("naujaHeader").click()]],
-  "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html": [["sugeneruotas grafikas", (w, d) => {
+  "../pirkimu-korteles.html?saugykla=testine": [["kortelės forma", (w, d) => d.getElementById("naujaHeader").click()],
+    ["kortelės forma: rinkos duomenys pagal BVPŽ (2026-10-18b)", rinkosKortelesBusena]],
+  "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html": [["rinkos duomenys pagal BVPŽ ir palyginimas su grafiku (2026-10-18b)", rinkosGrafikuBusena], ["sugeneruotas grafikas", (w, d) => {
     d.querySelector(".tabbar .tab").click();                      // generatoriaus vaizdas (skirtukai baigėsi skaičiuoklėje)
     const n = (id, v) => { const e = d.getElementById(id); e.value = v; e.dispatchEvent(new w.Event("change", { bubbles: true })); };
     n("f-company", "litgrid"); n("f-budas", w.eval("Object.keys(METHODS)[0]")); w.onMethodChange(); n("f-pradzia", "2026-10-05"); w.refreshAll(); }],
@@ -6784,7 +6995,7 @@ async function testaiSutikimas(){
   await testas("Dydžių skalė (2026-10-17): perkelti moduliai (" + Object.keys(SKALES_PUSLAPIAI).map(k => k.split("/")[1]).join(", ") + ") ir bendri komponentai - tik 12, 13, 14, 16, 18, 20, 24, 32, 48 px, be clamp() ir vw (šaltiniuose ir ekrane 1280, 768 ir 375 px; išimtys - portalo antraštė 56 px ir modulio antraštės pavadinimas 19 px)", async () => {
     const SKALE = [12, 13, 14, 16, 18, 20, 24, 32, 48], blogi = [];
     const SKALEJE = Object.keys(SKALES_PUSLAPIAI).concat(["gprocure-info-panel.js", "portal-link.js", "teise-stebesena.js", "pirkimo-kortele.js", "busena.js",
-      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js", "dokumento-puslapis.css", "mano-pirkimai.js"]);
+      "sutikimas.js", "kopija.js", "paaiskinimas.js", "pranesimas.js", "dokumento-puslapis.css", "mano-pirkimai.js", "vpt-rinka.js"]);
     for (const pg of SKALEJE) {
       const src = await saltinis(pg), kiti = new Set(); let m; const re = /font-size\s*:\s*([0-9.]+)px/g;
       while ((m = re.exec(src))) if (+m[1] !== 0 && !SKALE.includes(+m[1]) && !(SKALES_ISIMTYS[pg] || { px: [] }).px.includes(+m[1])) kiti.add(m[1] + " px");
