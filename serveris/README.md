@@ -66,6 +66,12 @@ sąrašo laiką ir nuorodą į CVP IS (terminas, pratęsimai ir aktualios redakc
 - Rasta diegiant ir ištaisyta: perkrovus paslaugą disko kopija buvo tikrinama kaip VPT atsakymas ir datos, BVPŽ bei NUTS
   dingdavo - įrašo tikrinimas dabar duoda tą patį rezultatą pakartotinai (testas „Pakartotinis tikrinimas nieko nekeičia“).
 
+### Kas naudoja
+
+- **PP-tiekejams** (nuo 2026-10-18): `GP_CVPIS.vptPirkimas` - blokas „CVP IS duomenys (VPT API)“ nurodžius pirkimą ar įkėlus paketą,
+  termino palyginimas su paketu. Naujas modulis jungiamas taip pat: tik GET, būsenos per `shared/busena.js`, 503 ar ryšio klaida - ne
+  „nėra“, atsakymo tekstai tik per ekranavimą, nuorodos sudaromos modulyje, CSP `connect-src` - `https://api.g-procure.com`.
+
 ### Failai
 
 | Failas | Paskirtis |
