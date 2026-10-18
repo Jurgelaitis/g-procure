@@ -2208,6 +2208,33 @@ async function testaiSkelbimasDarbastalis(){
     } finally { f.remove(); }
   });
 
+  await testas("VPT duomenys: paieska() ir statistika() - tik žinomi parametrai, reikšmės užkoduotos, be slapukų; 400 - „parametrai“ su paaiškinimu, 503 - neįkelta, kitoks atsakymas ir ryšys - „rysys“; CVP IS nuoroda - sudaroma", async ()=>{
+    const { f, w } = await ramas(VPT_SK);
+    try {
+      const V = w.GP_VPT, kv = []; let ats = null;
+      const fe = (u, o) => { kv.push([u, o]); return typeof ats === "function" ? ats(u) : Promise.resolve(ats); };
+      lygu([(await V.paieska({}, { fetch: fe })).rusis, (await V.paieska({ kita: "x", q: "  " }, { fetch: fe })).rusis, kv.length], ["parametrai", "parametrai", 0], "be parametrų - nesiunčiama");
+      ats = vptAtsakymas(200, { rezultatai: [{ id: 5, title: "A", nuoroda: "javascript:alert(1)" }, { id: "x" }, null], viso: 7, psl: 2, dydis: 20, meta: { atnaujinta: "2026-10-18T08:00:00Z" } });
+      const r = await V.paieska({ q: "elektros & <b>", cpv: ["45", "", "71"], busena: "aktyvus", rikiuoti: "terminas", psl: 2, kita: "x", tipas: null }, { fetch: fe });
+      const u = new URL(kv[0][0]);
+      lygu([u.origin + u.pathname, [...u.searchParams.keys()], u.searchParams.get("q"), u.searchParams.get("cpv")],
+           ["https://api.g-procure.com/api/cvpis/paieska", ["q", "cpv", "busena", "rikiuoti", "psl"], "elektros & <b>", "45,71"], "parametrai");
+      lygu([kv[0][1].credentials, kv[0][1].referrerPolicy, kv[0][1].method], ["omit", "no-referrer", "GET"]);
+      lygu([r.ok, r.rezultatai.length, r.rezultatai[0].nuoroda, r.viso, r.psl, r.meta.atnaujinta], [true, 1, "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=5", 7, 2, "2026-10-18T08:00:00Z"]);
+      ats = vptAtsakymas(400, { klaida: "BVPŽ kodas (cpv) - 2-8 skaitmenys." });
+      lygu(await V.paieska({ cpv: "1" }, { fetch: fe }), { ok: false, rusis: "parametrai", klaida: "BVPŽ kodas (cpv) - 2-8 skaitmenys." });
+      ats = vptAtsakymas(503, {}); lygu((await V.statistika({ cpv: "45" }, { fetch: fe })).rusis, "neikelta");
+      ats = vptAtsakymas(200, { rezultatai: "x" }); lygu((await V.paieska({ cpv: "45" }, { fetch: fe })).rusis, "rysys", "kitoks atsakymas");
+      ats = () => Promise.reject(new TypeError("Failed to fetch")); lygu((await V.statistika({ cpv: "45" }, { fetch: fe })).rusis, "rysys");
+      ats = vptAtsakymas(200, { statistika: { viso: 3, pagalBuda: { Open: 3 } }, meta: {} });
+      const s = await V.statistika({ cpv: "45", vykdytojas: "litgrid" }, { fetch: fe });
+      lygu([s.ok, s.statistika.viso, new URL(kv[kv.length - 1][0]).pathname], [true, 3, "/api/cvpis/statistika"]);
+      ats = vptAtsakymas(200, { statistika: { viso: "3" } }); lygu((await V.statistika({ cpv: "45" }, { fetch: fe })).rusis, "rysys", "netinkama statistika");
+      const ctl = new w.AbortController(); ctl.abort();
+      lygu((await V.paieska({ cpv: "45" }, { signal: ctl.signal, fetch: (u, o) => o.signal.aborted ? Promise.reject(new w.DOMException("a", "AbortError")) : Promise.resolve(ats) })).rusis, "atsaukta");
+    } finally { f.remove(); }
+  });
+
   await testas("Kortelių puslapis: CVP IS numeris ar nuoroda -> VPT duomenų pasiūlymai („VPT duomenyse“), įvesta kitokia vertė nepažymėta, perkėlus forma užpildyta, neišsaugota; „nėra“ - su sąrašo laiku; ryšio klaida - „Bandyti dar kartą“; netinkamas numeris - be užklausos; MV - režimas iš organizacijų sąrašo", async ()=>{
     const fr = document.createElement("iframe");
     fr.style.width = "1280px"; fr.style.height = "900px";
@@ -2468,6 +2495,54 @@ async function testaiSkelbimasDarbastalis(){
       b.w.GP_MANO_PIRKIMAI.mount({ target: "#mp", sekcija: "#sek", saknis: "../" });
       tiesa(b.d.querySelector(".gpmp-cvpis").hidden && b.d.querySelectorAll(".gpmp-eil").length === 1, "be VPT kliento - tik sąrašas");
     } finally { b.f.remove(); }
+  });
+
+  await testas("Kortelių puslapis: organizacijos pirkimai CVP IS - tik paspaudus, vykdytojas pagal organizacijų sąrašą, kuriems kortelė jau yra - „Atverti kortelę“, kitiems - „Sukurti kortelę“ su VPT pasiūlymais; išsaugojus - „jau yra“; nerasta ir klaida - ne „nėra“", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id), K = w.GP_KORTELE;
+      w.GP_CPV_DATA = { codes: [["45231000-5", "Vamzdynų, ryšių ir elektros linijų tiesimo darbai", "Construction work for pipelines"]] };
+      lygu([...$("vptOrgPas").options].map(o => o.value), ["litgrid", "amber-grid", "epso-g", "energy-cells"], "organizacijos iš GP_ORG");
+      K.issaugok(K.tuscia({ pavadinimas: "Jau kortelėje", cvpisNr: "1111111", vykdytojas: "litgrid", rezimas: "PI", busena: "paskelbtas" }));
+      const META = { atnaujinta: "2026-10-18T08:00:00Z" }, kv = []; let ats = null;
+      const tikras = w.fetch.bind(w);
+      w.fetch = (u, o) => { if (!String(u).includes("/api/cvpis/")) return tikras(u, o); kv.push(String(u)); return Promise.resolve(typeof ats === "function" ? ats(String(u)) : ats); };
+      const sar = [{ id: 1111111, title: "Transformatorių remontas", caName: "LITGRID AB (PV)", procedure: "Open", status: "Bid submission", tenderSubmissionDeadline: "2099-10-20T15:00:00", datePublished: "2026-10-02T10:00:00" },
+                   { id: 9566057, title: "<b>Klaipėdos TP</b>", caName: "LITGRID AB (PV)", procedure: "Negotiated with prior call for competition", status: "Evaluation", tenderSubmissionDeadline: "2099-10-02T13:00:00", datePublished: "2026-09-09T10:12:00" }];
+      ats = u => /\/paieska\?/.test(u) ? vptAtsakymas(200, { rezultatai: sar, viso: 2, psl: 1, dydis: 20, meta: META }) : vptAtsakymas(200, { pirkimas: vptPirkimas(), meta: META });
+      const lauk2 = async (re, n) => { for (let i = 0; i < 80 && !(kv.length >= n && re.test($("vptOrgBusena").textContent + $("vptOrgRez").textContent)); i++) await lauk(50); };
+      lygu(kv.length, 0, "be paspaudimo - nesiunčiama");
+      $("vptOrgPas").value = "litgrid"; $("vptOrgBtn").click();
+      await lauk2(/Rasta pirkimų|nepavyko/, 1);
+      lygu(Object.fromEntries(new URL(kv[0]).searchParams), { vykdytojas: "LITGRID AB", busena: "aktyvus", rikiuoti: "terminas", psl: "1" }, "užklausa");
+      const rez = $("vptOrgRez"), el = [...rez.querySelectorAll(".vpt-org-el")];
+      tiesa(/Rasta pirkimų: 2, rodoma 2 \(VPT sąrašas atnaujintas 2026-10-18 11:00\); kortelės jau yra: 1\./.test(rez.textContent), rez.textContent.slice(0, 200));
+      tiesa(/Kortelė jau yra/.test(el[0].textContent) && [...el[0].querySelectorAll("button")].some(b => b.textContent === "Atverti kortelę"), "pirmas - jau kortelėje");
+      tiesa(!rez.querySelector("b b") && el[1].querySelector("b").textContent === "<b>Klaipėdos TP</b>", "pavadinimas - tekstu");
+      tiesa(/CVP IS 9566057 · Skelbiamos derybos · Vertinimas · terminas 2099-10-02 13:00 · paskelbta 2026-09-09/.test(el[1].textContent), el[1].textContent);
+      lygu([...el[1].querySelectorAll("a")].map(a => a.getAttribute("href")), ["https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=9566057"]);
+      [...el[1].querySelectorAll("button")].find(b => b.textContent === "Sukurti kortelę").click();
+      for (let i = 0; i < 80 && $("skelbimoPasiulymai").hidden; i++) await lauk(50);
+      tiesa($("forma").open && $("vptNr").value === "9566057" && kv[kv.length - 1].endsWith("/pirkimas/9566057") && !$("skelbimoPasiulymai").hidden, "nauja kortelė su VPT pasiūlymais");
+      [...$("skelbimoPasiulymai").querySelectorAll("button")].find(b => /Perkelti/.test(b.textContent)).click();
+      $("formaForm").requestSubmit ? $("formaForm").requestSubmit() : $("formaForm").dispatchEvent(new w.Event("submit", { cancelable: true }));
+      for (let i = 0; i < 40 && $("forma").open; i++) await lauk(50);
+      lygu(K.skaityk().korteles.filter(k => k.cvpisNr === "9566057").length, 1, "išsaugota tik paspaudus „Išsaugoti kortelę“");
+      tiesa(/kortelės jau yra: 2\./.test($("vptOrgRez").textContent) && [...$("vptOrgRez").querySelectorAll(".vpt-org-el")][1].textContent.includes("Kortelė jau yra"), "sąrašas perpieštas: " + $("vptOrgRez").textContent.slice(0, 160));
+      // Visi pirkimai per 12 mėn. (be termino filtro), kita organizacija
+      kv.length = 0; $("vptOrgAkt").checked = false; $("vptOrgPas").value = "amber-grid"; $("vptOrgBtn").click(); await lauk2(/Rasta pirkimų|nepavyko/, 1);
+      const p = Object.fromEntries(new URL(kv[0]).searchParams);
+      tiesa(p.vykdytojas === "Amber Grid" && /^\d{4}-\d{2}-\d{2}$/.test(p.nuo) && !p.busena && +p.nuo.slice(0, 4) === new Date().getFullYear() - 1, JSON.stringify(p));
+      // Nieko nerasta - su sąrašo laiku; ryšys ir 503 - klaida su „Bandyti dar kartą“
+      ats = vptAtsakymas(200, { rezultatai: [], viso: 0, psl: 1, dydis: 20, meta: META }); kv.length = 0; $("vptOrgBtn").click(); await lauk2(/nėra|nepavyko/, 1);
+      tiesa(/VPT duomenyse pagal šiuos filtrus pirkimų nėra \(sąrašas atnaujintas 2026-10-18 11:00\)/.test($("vptOrgBusena").textContent) && !$("vptOrgRez").querySelector(".vpt-org-el"), $("vptOrgBusena").textContent);
+      for (const a of [() => Promise.reject(new TypeError("Failed to fetch")), vptAtsakymas(503, {})]) {
+        ats = a; kv.length = 0; $("vptOrgBtn").click(); await lauk2(/nepavyko/, 1);
+        tiesa(/CVP IS pirkimų gauti nepavyko/.test($("vptOrgBusena").textContent) && $("vptOrgBusena").querySelector("[data-gpb-kartoti]") && !/nėra \(/.test($("vptOrgBusena").textContent), $("vptOrgBusena").textContent);
+      }
+    } finally { fr.remove(); }
   });
 
   await testas("Kortelių puslapis: „Atnaujinti kortelę“ (?vpt=1) - VPT duomenys gaunami patys, skirtingi terminas ir būsena pažymėti, kiti perrašantys - ne; adresas be vpt; be numerio - nesiunčiama", async ()=>{
