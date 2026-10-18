@@ -82,6 +82,38 @@ function docxBaitai(paragrafai, lentele) {
   return zip.generateAsync({ type: "arraybuffer" });
 }
 
+/* VPT CVP IS API per G-Procure serverį (2026-10-18): testuose tikras serveris nekviečiamas - api.g-procure.com/api/cvpis
+   užklausos atsakomos iš VPT_ATS (numatyta - 503), kitos eina į tikrą fetch. */
+let VPT_ATS = null; const VPT_UZKL = [];
+function vptStub() {
+  const tikras = W.fetch.bind(W);
+  W.fetch = async (url, o) => {
+    const u = String(url);
+    if (u.indexOf("https://api.g-procure.com/api/cvpis/") !== 0) return tikras(url, o);
+    VPT_UZKL.push({ url: u, o: o || {} });
+    const a = typeof VPT_ATS === "function" ? VPT_ATS(u) : (VPT_ATS || { status: 503, body: { klaida: "neįkelta" } });
+    if (a.delsa) await laukti(a.delsa);
+    if (a.tinklas) throw new TypeError("Failed to fetch");
+    return new W.Response(a.tekstas !== undefined ? a.tekstas : JSON.stringify(a.body), { status: a.status, headers: { "Content-Type": "application/json" } });
+  };
+}
+function vptIrasas(o) {
+  return Object.assign({ id: 1234501, title: "Bandomasis pirkimas", caName: "Bandomoji organizacija (PV)", procedure: "Open", status: "Bid submission",
+    datePublished: "2026-10-02T10:15:00", tenderSubmissionDeadline: "2099-10-20T15:00:00", clarificationPeriodEnd: "2099-10-14T23:59:59",
+    estimatedValue: 180000, cpvCodes: ["31000000", "31200000-8"], contractDuration: "12_months", tenderValidity: "3_months", euFunding: false,
+    directive: "prompt.directive.classic", tedLink: ["https://ted.europa.eu/lt/notice/-/detail/123-2099"] }, o || {});
+}
+const VPT_META = { atnaujinta: "2026-10-18T08:01:19Z", kiekis: 80385 };
+const vptOk = (o) => ({ status: 200, body: { pirkimas: vptIrasas(o), nuoroda: "javascript:alert(1)", meta: VPT_META } });
+async function laukiVpt() {
+  for (let i = 0; i < 60; i++) {
+    const b = D.getElementById("vptBusena");
+    if (D.getElementById("vptBox").textContent || (!b.hidden && /gpb--(klaida|tuscia)/.test(b.className))) return;
+    await laukti(50);
+  }
+}
+async function nustatyk(v) { D.getElementById("refInput").value = v; W.__PPT.nustatykRef(); await laukiVpt(); }
+
 async function paleisk() {
   const P = W.GP_PAIESKA, A = W.GP_ASIST, C = W.GP_CVPIS, K = W.GP_DOK, Z = W.GP_ZINIOS;
 
@@ -324,8 +356,9 @@ async function paleisk() {
     lygu(C.resolve("99999999").buyer, null, "buyer null");
     turi(D.getElementById("kontekstasBox").textContent, "Nenustatyta", "kontekstas nenustatytas");
   });
-  await testas("CVP IS jungties būsena aiškiai 'neįjungta' (neimituojama)", () => {
-    lygu(C.status().live, false); turi(D.getElementById("liveTag").textContent, "neįjungta");
+  await testas("CVP IS būsena: duomenys - VPT API per G-Procure serverį, dokumentų jungties nėra (neimituojama)", () => {
+    lygu([C.status().live, C.status().vpt], [false, true]); turi(D.getElementById("liveTag").textContent, "VPT API");
+    turi(C.status().lt, "Dokumentų API nėra"); turi(C.status().en, "There is no document API");
   });
 
   /* 2026-10-17 (PP-TIEKEJAMS technologinė analizė): CVP IS visų dokumentų ZIP turi dokumentų sąrašą „List of Contract Documents“.
@@ -393,7 +426,7 @@ async function paleisk() {
     const u = C.URL.paieska("tipinių atramų projektavimo");
     turi(u, "viewCFTSAction.do?mode=search&isFTS=true&type=cftFTS"); turi(u, "title=tipini%C5%B3+atram%C5%B3+projektavimo");
     lygu(C.resolve("tipinių atramų projektavimo").links.search, u, "teksto nuoroda");
-    neturi(C.status().lt, "neturi viešos API"); turi(C.status().lt, "prieigos rakto"); turi(C.status().en, "access key");
+    neturi(C.status().lt, "neturi viešos API"); turi(C.status().lt, "per G-Procure serverį"); turi(C.status().en, "via the G-Procure server");
     neturi(D.documentElement.innerHTML, "neturi viešos API", "puslapyje"); neturi(D.documentElement.innerHTML, "no public API", "puslapyje EN");
   });
 
@@ -1447,6 +1480,110 @@ async function paleisk() {
     tiesa(!/data-di=/.test(be), "be DI - be žymos");
   });
 
+  grupe("VPT CVP IS duomenys per G-Procure serverį (2026-10-18)");
+  await testas("Nurodžius pirkimą - viena užklausa tik į api.g-procure.com/api/cvpis/pirkimas/<nr> be slapukų; duomenys su VPT kodais, terminu, verte ir atnaujinimo laiku", async () => {
+    VPT_UZKL.length = 0; VPT_ATS = vptOk();
+    await nustatyk("https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=1234501");
+    lygu(VPT_UZKL.map(x => x.url), ["https://api.g-procure.com/api/cvpis/pirkimas/1234501"]);
+    lygu([VPT_UZKL[0].o.credentials, VPT_UZKL[0].o.referrerPolicy, VPT_UZKL[0].o.method], ["omit", "no-referrer", "GET"]);
+    const box = D.getElementById("vptBox"), tx = box.textContent;
+    ["CVP IS duomenys (VPT API)", "Bandomasis pirkimas", "Bandomoji organizacija (PV)", "Atviras konkursas", "(VPT: Open)", "Pasiūlymų teikimas", "(VPT: Bid submission)",
+     "31000000, 31200000-8", "12 mėn.", "3 mėn.", "2014/24/ES (klasikinė)", "TED 1", "atnaujinta 2026-10-18 11:01", "Galioja CVP IS"].forEach(x => turi(tx, x));
+    tiesa(/180\s000 EUR/.test(tx), "vertė: " + tx);
+    tiesa(/2099-10-20 15:00/.test(tx) && /liko/.test(tx), "terminas su likusiu laiku");
+    lygu([...box.querySelectorAll("a")].map(a => a.getAttribute("href")), ["https://ted.europa.eu/lt/notice/-/detail/123-2099", "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=1234501"], "nuorodos - TED ir CVP IS (serverio „nuoroda“ nenaudojama)");
+    tiesa(D.getElementById("vptBusena").hidden, "būsena paslėpta");
+  });
+  await testas("Nepatikimas atsakymas: HTML tekstas lieka tekstu, TED nuorodos - tik https://ted.europa.eu/, nežinomas kodas - su žyma „VPT kodas“", async () => {
+    VPT_ATS = vptOk({ title: '<img src=x onerror="window.__vptXss=1">', caName: "<b>Org</b>", procedure: "Kažkas <i>naujo</i>", status: null,
+      tedLink: ["javascript:alert(1)", "https://evil.example/https://ted.europa.eu/", "http://ted.europa.eu/x", "https://ted.europa.eu/lt/notice/-/detail/1-2099"], estimatedValue: 0 });
+    await nustatyk("1234501");
+    const box = D.getElementById("vptBox");
+    tiesa(!box.querySelector("img, b, i") && W.__vptXss === undefined, "HTML nevykdomas: " + box.innerHTML.slice(0, 300));
+    turi(box.textContent, '<img src=x onerror="window.__vptXss=1">'); turi(box.textContent, "Kažkas <i>naujo</i> (VPT kodas)");
+    lygu([...box.querySelectorAll("a")].map(a => a.getAttribute("href")).filter(h => /ted/.test(h)), ["https://ted.europa.eu/lt/notice/-/detail/1-2099"]);
+    turi(box.textContent, "VPT duomenyse 0 - numatoma vertė nenurodyta"); neturi(box.textContent, "Būsena CVP IS", "be būsenos - eilutės nėra");
+  });
+  await testas("Sąraše nėra (404) - „nėra“ su sąrašo laiku; neįkelta (503), ryšys, riba (429), kitas numeris ar sugadintas atsakymas - klaida su „Bandyti dar kartą“, ne „nėra“", async () => {
+    VPT_ATS = { status: 404, body: { klaida: "x", meta: VPT_META } };
+    await nustatyk("1234501");
+    const b = D.getElementById("vptBusena");
+    tiesa(/gpb--tuscia/.test(b.className), "tuščia būsena: " + b.className);
+    turi(b.textContent, "VPT sąraše pirkimo su šiuo numeriu nėra (sąrašas atnaujintas 2026-10-18 11:01)"); lygu(D.getElementById("vptBox").textContent, "");
+    for (const a of [{ status: 503, body: { klaida: "x" } }, { tinklas: true }, { status: 429, body: {} }, vptOk({ id: 7654321 }), { status: 200, tekstas: "<html>" }, { status: 404, body: { klaida: "be meta" } }]) {
+      VPT_ATS = a; await nustatyk("1234501");
+      tiesa(/gpb--klaida/.test(b.className), "klaida: " + JSON.stringify(a).slice(0, 60) + " -> " + b.className);
+      turi(b.textContent, "VPT duomenų gauti nepavyko"); turi(b.textContent, "Patikrinkite pirkimą CVP IS"); neturi(b.textContent, "nėra (sąrašas");
+      tiesa(!!b.querySelector("[data-gpb-kartoti]"), "„Bandyti dar kartą“"); lygu(D.getElementById("vptBox").textContent, "");
+    }
+    const n = VPT_UZKL.length; VPT_ATS = vptOk();
+    b.querySelector("[data-gpb-kartoti]").click(); await laukiVpt();
+    lygu(VPT_UZKL.length, n + 1, "pakartota"); turi(D.getElementById("vptBox").textContent, "Bandomasis pirkimas");
+  });
+  await testas("Tekstas, TED numeris ar nuoroda be ID - jokios užklausos; numeris tikrinamas prieš siunčiant", async () => {
+    const n = VPT_UZKL.length;
+    for (const v of ["transformatorių remontas", "511550-2026", "https://viesiejipirkimai.lt/epps/kita.do", ""]) {
+      D.getElementById("refInput").value = v; W.__PPT.nustatykRef(); await laukti(30);
+      lygu(D.getElementById("vptBox").textContent, "", "be duomenų: " + v); tiesa(D.getElementById("vptBusena").hidden, "be būsenos: " + v);
+    }
+    lygu(await C.vptPirkimas("12a45"), { ok: false, rusis: "numeris" }); lygu(await C.vptPirkimas("1234"), { ok: false, rusis: "numeris" });
+    lygu(await C.vptPirkimas("../busena"), { ok: false, rusis: "numeris" });
+    lygu(VPT_UZKL.length, n, "užklausų nebuvo");
+  });
+  await testas("Terminas lyginamas su įkeltu paketu: sutampa - žyma; skiriasi - pastaba su abiem datomis (galioja CVP IS)", async () => {
+    VPT_ATS = vptOk(); await nustatyk("1234501");
+    await ikelk({ "dok/SPS.txt": "4.1. Pasiūlymų pateikimo terminas: 2099-10-20 15:00." });
+    turi(D.getElementById("vptBox").textContent, "sutampa su įkeltu paketu"); tiesa(!D.querySelector("#vptBox .note"), "be pastabos");
+    await ikelk({ "dok/SPS.txt": "4.1. Pasiūlymų pateikimo terminas: 2099-10-13 15:00." });
+    const pst = (D.querySelector("#vptBox .note") || {}).textContent || "";
+    tiesa(/VPT duomenimis terminas - 2099-10-20 15:00.*įkeltame pakete - 2099-10-13 15:00.*Galioja CVP IS/.test(pst), "pastaba: " + pst);
+    await svarus();
+  });
+  await testas("Pirkimo numeris iš įkelto paketo: nenurodžius - nustatomas ir užklausiamas; nurodžius kitą - pastaba, nurodytas nekeičiamas", async () => {
+    W.__PPT.S.ref = null; D.getElementById("refInput").value = ""; await W.__PPT.gaukVpt(null);
+    VPT_UZKL.length = 0; VPT_ATS = (u) => vptOk({ id: +u.split("/").pop() });
+    await ikelk({ "1_Pirkimo dokumentai.txt": SPS_SENAS }, "1159_1234502.zip"); await laukiVpt();
+    lygu([W.__PPT.S.ref && W.__PPT.S.ref.resourceId, D.getElementById("refInput").value, VPT_UZKL.map(x => x.url.split("/").pop())], ["1234502", "1234502", ["1234502"]]);
+    turi(D.getElementById("vptBox").textContent, "Pirkimo numeris atpažintas iš įkelto paketo.");
+    await nustatyk("1234501");
+    await ikelk({ "1_Pirkimo dokumentai.txt": SPS_SENAS }, "1159_1234503.zip");
+    lygu(W.__PPT.S.ref.resourceId, "1234501", "nurodytas nekeičiamas");
+    turi(D.getElementById("vptBox").textContent, "Įkeltas paketas yra kito pirkimo (Nr. 1234503), o nurodytas pirkimas - Nr. 1234501.");
+    lygu([C.paketoId([{ name: "9_1234504.zip › x.txt" }, { name: "1234504_National Contract notice_0.pdf" }]), C.paketoId([{ name: "1_1234504.zip" }, { name: "1_1234505.zip" }]), C.paketoId([{ name: "Pirkimo dokumentai.zip › SPS.docx" }])],
+      ["1234504", null, null], "vienas numeris - taip; keli ar nė vieno - ne");
+    await svarus();
+  });
+  await testas("Vėlesnė užklausa neperrašoma ankstesnės, vėliau atėjusios", async () => {
+    VPT_ATS = (u) => u.endsWith("/1234501") ? Object.assign(vptOk({ id: 1234501, title: "Senas" }), { delsa: 300 }) : vptOk({ id: 1234502, title: "Naujas" });
+    D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+    await nustatyk("1234502"); await laukti(400);
+    turi(D.getElementById("vptBox").textContent, "Naujas"); neturi(D.getElementById("vptBox").textContent, "Senas");
+  });
+  await testas("Anglų kalba: antraštė, VPT kodų vertimai, data ir šaltinio pastaba", async () => {
+    VPT_ATS = vptOk(); await nustatyk("1234501");
+    W.setLang("en");
+    try {
+      const tx = D.getElementById("vptBox").textContent;
+      ["CVP IS data (VPT API)", "Open procedure", "Tender submission", "2014/24/EU (classic)", "12 months", "From the VPT CVP IS API", "updated 18/10/2026, 11:01", "Open in CVP IS"].forEach(x => turi(tx, x));
+      neturi(tx, "Pasiūlymų teikimas");
+    } finally { W.setLang("lt"); }
+  });
+  await testas("Šaltinio sargai: tik api.g-procure.com, CSP leidžia, paleidus rėmelyje automatiškai nekviečiama, privatumo tekstai LT / EN, darbas be interneto API nesaugo", async () => {
+    const cv = await (await W.fetch("cvpis.js?b=" + Date.now())).text(), ix = await (await W.fetch("index.html?b=" + Date.now())).text(), sw = await (await W.fetch("sw.js?b=" + Date.now())).text();
+    lygu(C.API_BAZE, "https://api.g-procure.com/api/cvpis");
+    const api = [...cv.matchAll(/https:\/\/api\.[^"'\s]+/g)].map(m => m[0]);
+    tiesa(api.length && api.every(u => u.indexOf("https://api.g-procure.com/api/cvpis") === 0), "tik G-Procure API: " + api);
+    tiesa(/f\(API_BAZE \+ "\/pirkimas\/" \+ id,/.test(cv), "užklausa - API_BAZE + /pirkimas/ + patikrintas numeris");
+    tiesa(/credentials: "omit"/.test(cv) && /referrerPolicy: "no-referrer"/.test(cv), "be slapukų ir nukreipimo informacijos");
+    tiesa(/connect-src [^"]*https:\/\/api\.g-procure\.com/.test(ix), "CSP");
+    tiesa(/S\.ref\.resourceId && window\.top === window\) gaukVpt/.test(ix), "rėmelyje - tik paspaudus");
+    W.setLang("en"); const en = D.getElementById("privBox").textContent; W.setLang("lt"); const lt = D.getElementById("privBox").textContent;
+    turi(lt, "pirkimo numeris (ar atpažintas iš įkelto paketo) siunčiamas į G-Procure serverį"); turi(lt, "neįrašomos"); turi(lt, "Jūsų duomenys VPT nesiunčiami");
+    turi(en, "procurement number you enter (or the one recognised from the uploaded package) is sent to the G-Procure server"); turi(en, "not written to the server access log");
+    tiesa(/url\.origin === self\.location\.origin/.test(sw) && /api\.g-procure\.com ir t\. t\.\) - naršyklė tvarko pati/.test(sw), "sw.js API užklausų neperima");
+    W.__PPT.S.ref = null; D.getElementById("refInput").value = ""; await W.__PPT.gaukVpt(null); VPT_ATS = null;
+  });
+
   grupe("Saugykla");
   await testas("Netinkama saugyklos reikšmė (null, skaičius, tekstas, sąrašas, sugadintas JSON) - modulis vis tiek pasileidžia (iki 2026-09-28 „null“ nutraukdavo paleidimą)", async () => {
     const rez = [];
@@ -1486,6 +1623,7 @@ ramas.addEventListener("load", async () => {
   let n = 0; while ((typeof W.__PPT === "undefined" || !W.JSZip || !W.pdfjsLib) && n++ < 80) await laukti(100);
   if (typeof W.__PPT === "undefined") { document.getElementById("busena").textContent = "Nepavyko pasiekti index.html rėmelyje (paleiskite per http)."; return; }
   fiksuokKalba();
+  vptStub();
   await paleisk();
 });
 </script>

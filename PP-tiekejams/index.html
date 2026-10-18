@@ -24,6 +24,7 @@
 <script src="../shared/procurement-methods.js"></script>
 <!-- Bendras AI transportas (raktas tik serverio pusėje) -->
 <script src="../shared/ai-proxy.js"></script>
+<script src="../shared/busena.js"></script>
 <script src="../shared/di-zymejimas.js"></script>
 <script src="../shared/lang-detect.js"></script>
 <!-- Modulio sluoksniai -->
@@ -339,19 +340,21 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-4) var(-
   <section class="view" id="view-pirkimas">
     <div class="page-head">
       <h2 class="page-title" data-i18n="p.title">Konkretus pirkimas</h2>
-      <p class="page-sub" data-i18n="p.sub">Nurodykite pirkimą (CVP IS nuoroda arba ID), atsisiųskite iš oficialaus puslapio dokumentų paketą ir įkelkite jį čia. Įrankis neimituoja gyvos jungties: kol G-Procure neprijungtas prie CVP IS duomenų API, dokumentus įkeliate patys.</p>
+      <p class="page-sub" data-i18n="p.sub">Nurodykite pirkimą (CVP IS nuoroda arba ID) - pagrindinius jo duomenis (terminą, būdą, būseną) parodysime iš VPT CVP IS API. Dokumentų API nėra: dokumentų paketą atsisiųskite iš oficialaus puslapio ir įkelkite čia.</p>
     </div>
 
     <div class="work">
       <div class="stack">
         <!-- 1 zona: pirkimo santrauka -->
         <div class="card card-pad">
-          <div class="card-title"><span data-i18n="p.ref">Pirkimo santrauka ir būsena</span> <span class="tag amber" id="liveTag"><span class="d"></span><span data-i18n="p.live.off">Gyva CVP IS jungtis neįjungta</span></span></div>
+          <div class="card-title"><span data-i18n="p.ref">Pirkimo santrauka ir būsena</span> <span class="tag blue" id="liveTag"><span class="d"></span><span data-i18n="p.live.off">Duomenys - VPT API, dokumentai - jūsų</span></span></div>
           <div class="search-row">
             <input class="input" id="refInput" data-i18n-ph="p.ref.ph" placeholder="CVP IS nuoroda arba pirkimo ID (resourceId)" data-i18n-aria="aria.ref" aria-label="Pirkimo nuoroda arba ID" />
             <button class="btn btn-secondary" onclick="nustatykRef()"><span data-i18n="p.ref.btn">Nustatyti</span></button>
           </div>
           <div id="refBox" style="margin-top:12px"></div>
+          <div id="vptBusena" hidden style="margin-top:12px"></div>
+          <div id="vptBox"></div>
           <div id="kontekstasBox" style="margin-top:14px"></div>
         </div>
 
@@ -502,8 +505,8 @@ const I18N = {
     "how.2.t": "Citata prie kiekvieno teiginio", "how.2.s": "Citatos tikrinamos dokumentuose prieš rodant. Nėra šaltinio - nėra atsakymo, tik klausimo projektas CVP IS.",
     "how.3.t": "Niekas nesaugoma serveryje", "how.3.s": "Dokumentai apdorojami jūsų naršyklėje; į DI keliauja tik parinkti fragmentai su dokumentų pavadinimais ir klausimas, ne ištisi dokumentai.",
     "p.title": "Konkretus pirkimas",
-    "p.sub": "Nurodykite pirkimą (CVP IS nuoroda arba ID), atsisiųskite iš oficialaus puslapio dokumentų paketą ir įkelkite jį čia. Įrankis neimituoja gyvos jungties: kol G-Procure neprijungtas prie CVP IS duomenų API, dokumentus įkeliate patys.",
-    "p.ref": "Pirkimo santrauka ir būsena", "p.live.off": "Gyva CVP IS jungtis neįjungta", "p.ref.ph": "CVP IS nuoroda arba pirkimo ID (resourceId)", "p.ref.btn": "Nustatyti",
+    "p.sub": "Nurodykite pirkimą (CVP IS nuoroda arba ID) - pagrindinius jo duomenis (terminą, būdą, būseną) parodysime iš VPT CVP IS API. Dokumentų API nėra: dokumentų paketą atsisiųskite iš oficialaus puslapio ir įkelkite čia.",
+    "p.ref": "Pirkimo santrauka ir būsena", "p.live.off": "Duomenys - VPT API, dokumentai - jūsų", "p.ref.ph": "CVP IS nuoroda arba pirkimo ID (resourceId)", "p.ref.btn": "Nustatyti",
     "ai.notice": "Atsakymus rengia dirbtinis intelektas (Claude, Anthropic) pagal įkeltus pirkimo dokumentus. Kiekvienas teiginys pateikiamas su citata; atsakymas nėra teisinė konsultacija.", "ai.badge": "Parengta naudojant DI",
     "p.ask": "Klausimas apie šį pirkimą", "p.ask.ph": "Pvz.: Kokia pasiūlymo galiojimo trukmė? Ar reikalaujamas pasiūlymo užtikrinimas?", "p.lot": "Pirkimo dalis (nebūtina)", "p.ask.btn": "Klausti",
     "p.chk.btn": "Sudaryti pasirengimo kontrolinį sąrašą", "p.diff.btn": "Kas pasikeitė tarp redakcijų?", "p.q.btn": "Klausimo CVP IS projektas",
@@ -514,6 +517,12 @@ const I18N = {
     "a.title": "Kaip tikrinami atsakymai", "a.sub": "Principai, šaltinių registras, techninė būsena ir privatumas.", "a.princ": "Principai", "a.tech": "Techninė būsena", "a.src": "Šaltinių registras",
     "a.src.t": "Šaltinis", "a.src.type": "Tipas", "a.src.red": "Redakcija / data", "a.src.chk": "Patikrinta", "a.priv": "Privatumas ir atsakomybė",
     // dinaminiai
+    "vpt.title": "CVP IS duomenys (VPT API)", "vpt.kraunama": "Gaunami pirkimo duomenys iš VPT CVP IS API...", "vpt.klaida": "VPT duomenų gauti nepavyko",
+    "vpt.rysys": "G-Procure serveris neatsakė arba VPT sąrašas dar neįkeltas. Patikrinkite pirkimą CVP IS.",
+    "vpt.nera": "VPT sąraše pirkimo su šiuo numeriu nėra (sąrašas atnaujintas {t}). Jei pirkimas ką tik paskelbtas, patikrinkite CVP IS.",
+    "vpt.saltinis": "Iš VPT CVP IS API per G-Procure serverį; sąrašas atnaujinamas kas 6 val., atnaujinta {t}. Galioja CVP IS - terminą, pratęsimus ir aktualias redakcijas tikrinkite oficialiame puslapyje.",
+    "vpt.pav": "Pavadinimas", "vpt.org": "Pirkimo vykdytojas", "vpt.budas": "Pirkimo būdas", "vpt.busena": "Būsena CVP IS", "vpt.paskelbta": "Paskelbta", "vpt.terminas": "Pasiūlymų / paraiškų terminas", "vpt.aiskinimai": "Paaiškinimų laikotarpio pabaiga", "vpt.verte": "Numatoma vertė", "vpt.verte0": "VPT duomenyse 0 - numatoma vertė nenurodyta", "vpt.bvpz": "BVPŽ kodai", "vpt.trukme": "Sutarties trukmė", "vpt.galiojimas": "Pasiūlymo galiojimas", "vpt.es": "Finansuojama iš ES fondų", "vpt.direktyva": "ES direktyva", "vpt.ted": "TED skelbimai", "vpt.kodas": "VPT kodas", "vpt.cvpis": "Atidaryti CVP IS",
+    "vpt.sutampa": "sutampa su įkeltu paketu", "vpt.skiriasi": "VPT duomenimis terminas - {v}, įkeltame pakete - {p}. Galioja CVP IS - patikrinkite, ar terminas nepakeistas.", "vpt.kitasPaketas": "Įkeltas paketas yra kito pirkimo (Nr. {p}), o nurodytas pirkimas - Nr. {r}.", "vpt.isPaketo": "Pirkimo numeris atpažintas iš įkelto paketo.",
     "ref.none": "Pirkimas dar nenurodytas. Įklijuokite CVP IS nuorodą arba ID - parodysime oficialias nuorodas.",
     "ref.official": "Atidaryti oficialiame CVP IS", "ref.docs": "Dokumentų sąrašas", "ref.notices": "Skelbimai", "ref.notice": "Skelbimo PDF", "ref.zip": "Atsisiųsti visų dokumentų ZIP",
     "ref.id": "CVP IS pirkimo ID", "ref.buyer": "Pirkimo vykdytojas", "ref.tz": "Laiko zona", "ref.note.text": "Pavadinimas atpažintas kaip tekstas - CVP IS paieškos rezultatai atidaryti naujame skirtuke; pasirinkite pirkimą ir įklijuokite jo nuorodą ar ID.",
@@ -582,8 +591,8 @@ const I18N = {
     "how.2.t": "A citation for every statement", "how.2.s": "Quotes are verified in the documents before display. No source - no answer, only a question draft for CVP IS.",
     "how.3.t": "Nothing stored on a server", "how.3.s": "Documents are processed in your browser; only selected fragments with document names and the question go to the AI, never whole documents.",
     "p.title": "Specific procurement",
-    "p.sub": "Identify the procurement (CVP IS link or ID), download the document package from the official page and upload it here. The tool does not fake a live connection: until G-Procure is connected to the CVP IS data API, you upload the documents yourself.",
-    "p.ref": "Procurement summary and status", "p.live.off": "Live CVP IS link not enabled", "p.ref.ph": "CVP IS link or procurement ID (resourceId)", "p.ref.btn": "Set",
+    "p.sub": "Identify the procurement (CVP IS link or ID) - we show its key data (deadline, procedure, status) from the VPT CVP IS API. There is no document API: download the document package from the official page and upload it here.",
+    "p.ref": "Procurement summary and status", "p.live.off": "Data - VPT API, documents - yours", "p.ref.ph": "CVP IS link or procurement ID (resourceId)", "p.ref.btn": "Set",
     "ai.notice": "Answers are prepared by artificial intelligence (Claude, Anthropic) based on the uploaded procurement documents. Every statement comes with a quote; an answer is not legal advice.", "ai.badge": "Prepared using AI",
     "p.ask": "Question about this procurement", "p.ask.ph": "E.g.: What is the bid validity period? Is bid security required?", "p.lot": "Lot (optional)", "p.ask.btn": "Ask",
     "p.chk.btn": "Build a readiness checklist", "p.diff.btn": "What changed between versions?", "p.q.btn": "Question draft for CVP IS",
@@ -593,6 +602,12 @@ const I18N = {
     "b.search.ph": "Type a question, e.g. how to fill in the ESPD",
     "a.title": "How answers are verified", "a.sub": "Principles, source registry, technical status and privacy.", "a.princ": "Principles", "a.tech": "Technical status", "a.src": "Source registry",
     "a.src.t": "Source", "a.src.type": "Type", "a.src.red": "Version / date", "a.src.chk": "Verified", "a.priv": "Privacy and liability",
+    "vpt.title": "CVP IS data (VPT API)", "vpt.kraunama": "Fetching procurement data from the VPT CVP IS API...", "vpt.klaida": "Could not get the VPT data",
+    "vpt.rysys": "The G-Procure server did not respond or the VPT list is not loaded yet. Check the procurement in CVP IS.",
+    "vpt.nera": "There is no procurement with this number in the VPT list (list updated {t}). If it was published just now, check CVP IS.",
+    "vpt.saltinis": "From the VPT CVP IS API via the G-Procure server; the list is refreshed every 6 hours, updated {t}. CVP IS prevails - check the deadline, extensions and current versions on the official page.",
+    "vpt.pav": "Title", "vpt.org": "Contracting entity", "vpt.budas": "Procedure", "vpt.busena": "Status in CVP IS", "vpt.paskelbta": "Published", "vpt.terminas": "Tender / application deadline", "vpt.aiskinimai": "End of clarification period", "vpt.verte": "Estimated value", "vpt.verte0": "0 in the VPT data - estimated value not stated", "vpt.bvpz": "CPV codes", "vpt.trukme": "Contract duration", "vpt.galiojimas": "Tender validity", "vpt.es": "Financed from EU funds", "vpt.direktyva": "EU directive", "vpt.ted": "TED notices", "vpt.kodas": "VPT code", "vpt.cvpis": "Open in CVP IS",
+    "vpt.sutampa": "matches the uploaded package", "vpt.skiriasi": "According to VPT the deadline is {v}, in the uploaded package - {p}. CVP IS prevails - check whether the deadline was changed.", "vpt.kitasPaketas": "The uploaded package belongs to another procurement (No. {p}), while the selected procurement is No. {r}.", "vpt.isPaketo": "Procurement number recognised from the uploaded package.",
     "ref.none": "No procurement selected yet. Paste a CVP IS link or ID - we will show the official links.",
     "ref.official": "Open in the official CVP IS", "ref.docs": "Document list", "ref.notices": "Notices", "ref.notice": "Notice PDF", "ref.zip": "Download all documents as ZIP",
     "ref.id": "CVP IS procurement ID", "ref.buyer": "Contracting entity", "ref.tz": "Time zone", "ref.note.text": "Recognised as a title - the CVP IS search results opened in a new tab; choose the procurement and paste its link or ID.",
@@ -736,8 +751,9 @@ function nustatykRef() {
   S.ref = r.ok ? r : null;
   if (r.ok && r.resourceId) Store.update(d => { d.lastRef = r.resourceId; });
   // Bloga CVP IS nuoroda (be resourceId) - aiški klaida, ne "dar nenurodytas" (UX-01)
-  if (!r.ok && r.reason === "no-id") { renderRefBad(t("ref.bad")); return; }
+  if (!r.ok && r.reason === "no-id") { renderRefBad(t("ref.bad")); gaukVpt(null); return; }
   renderRef();
+  gaukVpt(r.ok && r.resourceId ? r.resourceId : null);
 }
 function renderRef() {
   const box = $("#refBox"), r = S.ref;
@@ -760,6 +776,78 @@ function renderRef() {
     '<div class="hint" style="margin-top:10px">' + esc(t("ref.step1")) + '<br>' + esc(t("ref.step2")) + '</div>';
 }
 function renderRefBad(msg) { $("#refBox").innerHTML = '<div class="note err">' + esc(msg) + '</div>'; }
+
+/* ---------------- VPT CVP IS API (per G-Procure serverį, nuo 2026-10-18; serveris/README.md) ----------------
+   Pirkimo numeris -> https://api.g-procure.com/api/cvpis/pirkimas/<nr> (GP_CVPIS.vptPirkimas). Serveris atsako iš
+   viešų VPT duomenų kopijos, atnaujinamos kas 6 val., todėl rodomas atnaujinimo laikas, o oficialiu šaltiniu lieka CVP IS.
+   Nepavykusi užklausa - klaida su „Bandyti dar kartą“, niekada „pirkimo nėra“; „nėra“ - tik kai įkeltame sąraše jo tikrai nėra. */
+const VPT = { id: null, rez: null, kartas: 0, isPaketo: false };
+function vptLaikas(iso) {
+  if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(iso)) return "-";
+  return new Intl.DateTimeFormat(LANG === "en" ? "en-GB" : "lt-LT", { timeZone: "Europe/Vilnius", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+}
+async function gaukVpt(id, isPaketo) {
+  const kartas = ++VPT.kartas;
+  VPT.id = id || null; VPT.rez = null; VPT.isPaketo = !!isPaketo;
+  $("#vptBox").innerHTML = "";
+  if (!id) { GP_BUSENA.slepk("#vptBusena"); return; }
+  const rez = await GP_BUSENA.vykdyk("#vptBusena", { tipas: "eiga", tekstas: t("vpt.kraunama"), klaidosPriesdelis: t("vpt.klaida"),
+    kartoti: () => gaukVpt(id, isPaketo),
+    veiksmas: () => GP_CVPIS.vptPirkimas(id).then(r => { if (!r.ok && r.rusis !== "nera") throw new Error(t("vpt.rysys")); return r; }) });
+  if (kartas !== VPT.kartas || !rez.ok) return;   // naujesnė užklausa arba klaida (parodyta su „Bandyti dar kartą“)
+  VPT.rez = rez.reiksme;
+  renderVpt();
+}
+function renderVpt() {
+  const box = $("#vptBox"), r = VPT.rez;
+  if (!box) return;
+  if (!VPT.id || !r) { box.innerHTML = ""; return; }
+  if (!r.ok) {   // įkeltame VPT sąraše šio pirkimo nėra
+    box.innerHTML = "";
+    GP_BUSENA.rodyk("#vptBusena", { tipas: "tuscia", tekstas: t("vpt.nera").replace("{t}", vptLaikas(r.meta && r.meta.atnaujinta)) });
+    return;
+  }
+  const p = r.pirkimas, C = GP_CVPIS, eil = [];
+  const li = (k, v) => { if (v) eil.push('<li><span class="k">' + esc(k) + '</span><span class="v">' + v + '</span></li>'); };
+  const kodas = (x) => x ? esc(x.tekstas) + ' <span class="muted small">(' + (x.isverstas ? "VPT: " + esc(x.kodas) : esc(t("vpt.kodas"))) + ')</span>' : "";
+  const tx = (s) => typeof s === "string" && s ? esc(s) : "";
+  const data = (s) => { const d = C.terminas(s, LANG); return d ? esc(d.text) : ""; };
+  li(t("vpt.pav"), tx(p.title));
+  li(t("vpt.org"), tx(p.caName));
+  li(t("vpt.budas"), kodas(C.vptKodas(p.procedure, C.PROCEDUROS, LANG)));
+  li(t("vpt.busena"), kodas(C.vptKodas(p.status, C.BUSENOS, LANG)));
+  li(t("vpt.paskelbta"), data(p.datePublished));
+  // Terminas su žyma; palyginimas su įkeltu paketu (vėliau paskelbtas pratęsimas pakete nebūna)
+  let pastaba = "";
+  const tr = C.terminas(p.tenderSubmissionDeadline, LANG);
+  if (tr) {
+    let v = esc(tr.text) + " " + (tr.praejes ? '<span class="tag red">' + esc(t("meta.deadlinePast")) + '</span>'
+      : '<span class="tag green">' + esc(t("meta.deadlineLeft")) + " " + tr.liko.dienos + " " + esc(t("unit.d")) + " " + tr.liko.valandos + " " + esc(t("unit.h")) + '</span>');
+    const pk = S.meta && S.meta.deadline ? C.terminas(S.meta.deadline.value, LANG) : null;
+    if (pk) {
+      if (Math.abs(pk.date.getTime() - tr.date.getTime()) <= 60000) v += ' <span class="tag blue">' + esc(t("vpt.sutampa")) + '</span>';
+      else pastaba = t("vpt.skiriasi").replace("{v}", tr.text).replace("{p}", pk.text);
+    }
+    li(t("vpt.terminas"), v);
+  }
+  li(t("vpt.aiskinimai"), data(p.clarificationPeriodEnd));
+  if (typeof p.estimatedValue === "number" && isFinite(p.estimatedValue) && p.estimatedValue >= 0)
+    li(t("vpt.verte"), p.estimatedValue === 0 ? esc(t("vpt.verte0")) : esc(new Intl.NumberFormat(LANG === "en" ? "en-GB" : "lt-LT", { maximumFractionDigits: 2 }).format(p.estimatedValue)) + " EUR");
+  li(t("vpt.bvpz"), Array.isArray(p.cpvCodes) ? esc(p.cpvCodes.filter(x => typeof x === "string").join(", ")) : "");
+  li(t("vpt.trukme"), tx(C.vptTrukme(p.contractDuration, LANG)));
+  li(t("vpt.galiojimas"), tx(C.vptTrukme(p.tenderValidity, LANG)));
+  if (p.euFunding === true || p.euFunding === false) li(t("vpt.es"), esc(t(p.euFunding ? "meta.yes" : "meta.no")));
+  li(t("vpt.direktyva"), kodas(C.vptKodas(p.directive, C.DIREKTYVOS, LANG)));
+  li(t("vpt.ted"), C.vptTed(p.tedLink).map((u, i) => '<a href="' + esc(u) + '" target="_blank" rel="noopener">TED ' + (i + 1) + '</a>').join(" · "));
+  const pid = C.paketoId(S.docs);
+  const kitas = pid && pid !== VPT.id ? t("vpt.kitasPaketas").replace("{p}", pid).replace("{r}", VPT.id) : "";
+  box.innerHTML = '<div class="vpt" style="margin-top:12px"><div class="card-title" style="font-size:14px">' + esc(t("vpt.title")) + '</div>' +
+    '<ul class="meta-list">' + eil.join("") + '</ul>' +
+    (pastaba ? '<div class="note warn" style="margin-top:10px">' + esc(pastaba) + '</div>' : "") +
+    (kitas ? '<div class="note warn" style="margin-top:10px">' + esc(kitas) + '</div>' : "") +
+    '<div class="hint" style="margin-top:8px">' + (VPT.isPaketo ? esc(t("vpt.isPaketo")) + " " : "") + esc(t("vpt.saltinis").replace("{t}", vptLaikas(r.meta && r.meta.atnaujinta))) +
+    ' <a href="' + esc(r.nuoroda) + '" target="_blank" rel="noopener">' + esc(t("vpt.cvpis")) + '</a></div></div>';
+}
 
 /* ---------------- Pirkimo vykdytojas ir teisinis režimas ----------------
    Iki 2026-09-24 kiekvienam pirkimui buvo priskiriama „LITGRID AB“ ir PĮ. Dabar abu ateina iš
@@ -886,6 +974,10 @@ function perindeksuok() {
   S.meta = metaIsDokumentu(S.docs);
   atnaujinkKonteksta();
   renderDocs(); renderMeta(); renderKontekstas(); renderAskState(); renderBendri();
+  // Pirkimas dar nenurodytas, o pakete vienas CVP IS numeris - jį ir naudojam (nuorodos, VPT duomenys)
+  const pid = GP_CVPIS.paketoId(S.docs);
+  if (pid && !(S.ref && S.ref.resourceId)) { $("#refInput").value = pid; S.ref = GP_CVPIS.resolve(pid); renderRef(); gaukVpt(pid, true); }
+  else renderVpt();
 }
 function rodykDocNote(msg) { const el = $("#docNote"); if (!el) return; el.textContent = msg; el.style.display = msg ? "" : "none"; }
 function isvalykDokumentus() { S.docs = []; S.chat = []; S.checklist = null; S.lastRaw = null; S.meta = null; S.fetchedAt = null; $("#chat").innerHTML = ""; $("#checklistBox").innerHTML = ""; rodykDocNote(""); perindeksuok(); }
@@ -1509,7 +1601,7 @@ function renderApie() {
   $("#princList").innerHTML = PRINCIPAI[LANG].map(p => "<li>" + esc(p) + "</li>").join("");
   const st = GP_CVPIS.status();
   $("#techList").innerHTML =
-    '<li><span class="k">' + esc(t("tech.live")) + '</span><span class="v"><span class="tag amber"><span class="d"></span>' + esc(t("p.live.off")) + '</span><span class="src">' + esc(st[LANG]) + '</span></span></li>' +
+    '<li><span class="k">' + esc(t("tech.live")) + '</span><span class="v"><span class="tag blue"><span class="d"></span>' + esc(t("p.live.off")) + '</span><span class="src">' + esc(st[LANG]) + '</span></span></li>' +
     '<li><span class="k">' + esc(t("tech.ai")) + '</span><span class="v">' + esc(AI_ENDPOINT ? t("tech.ai.worker") : t("tech.ai.proxy")) + '</span></li>' +
     '<li><span class="k">' + esc(t("tech.store")) + '</span><span class="v" style="font-weight:600">' + esc(t("tech.store.v")) + '</span></li>' +
     '<li><span class="k">' + esc(t("tech.ver")) + '</span><span class="v">' + esc(t("tech.ver.v").replace("{v}", "0.2.0").replace("{d}", GP_DOK.version).replace("{p}", GP_PAIESKA.version).replace("{z}", GP_ZINIOS.PATIKRINTA)) + '</span></li>';
@@ -1517,8 +1609,8 @@ function renderApie() {
   const TIPAI = { lt: { instrukcija: "instrukcija", teises_aktas: "teisės aktas", perkanciojo_taisykles: "perkančiojo taisyklės", duk: "DUK", metodine: "metodinė medžiaga" }, en: { instrukcija: "guide", teises_aktas: "statute", perkanciojo_taisykles: "contracting entity rules", duk: "FAQ", metodine: "guidance" } };
   $("#srcBody").innerHTML = GP_ZINIOS.SALTINIAI.map(s => '<tr><td>' + esc(s.id) + '</td><td><a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title[LANG]) + '</a><div class="hint">' + esc(s.pastaba[LANG]) + '</div></td><td>' + esc((TIPAI[LANG] || TIPAI.lt)[s.tipas] || s.tipas) + '</td><td>' + esc(s.redakcija) + (s.galiojaIki ? '<div class="hint">' + (LANG === "en" ? "valid until " : "galioja iki ") + esc(s.galiojaIki) + '</div>' : "") + '</td><td>' + esc(s.patikrinta) + '</td></tr>').join("");
   $("#privBox").innerHTML = LANG === "en"
-    ? "<p><b>What leaves your browser:</b> the text fragments selected for a question (up to 14) or for the checklist (up to 28), each up to 1 400 characters, together with the document file names, the procurement title and CVP IS ID from the notice, the lot you entered, the document-set status and the question itself are sent to the AI service via the G-Procure proxy; the API key is on the server. All of this is public CVP IS data; whole documents are never uploaded to a server. The G-Procure backend does not store request content (verified at the source on 2026-07-17; the AI provider processes the fragments under its own terms).</p><p><b>What is stored in your browser:</b> language, the last procurement ID, anonymous “helped / did not help” counters and the info panel state (open / collapsed). Questions and documents are not stored.</p><p><b>Liability:</b> " + esc(DISCLAIMER.en) + "</p>"
-    : "<p><b>Kas išeina iš jūsų naršyklės:</b> į DI paslaugą per G-Procure proxy siunčiami klausimui (iki 14) arba kontroliniam sąrašui (iki 28) parinkti tekstų fragmentai po ne daugiau kaip 1 400 simbolių, kartu su dokumentų failų pavadinimais, pirkimo pavadinimu ir CVP IS ID iš skelbimo, jūsų nurodyta dalimi, dokumentų rinkinio būsena ir pačiu klausimu; API raktas - serveryje. Visa tai - vieši CVP IS duomenys; ištisi dokumentai į serverį nekeliami. G-Procure backend'as užklausų turinio nesaugo (patikrinta prie šaltinio 2026-07-17; DI tiekėjas fragmentus apdoroja pagal savo sąlygas).</p><p><b>Kas saugoma jūsų naršyklėje:</b> kalba, paskutinis pirkimo ID, anoniminiai „padėjo / nepadėjo“ skaitikliai ir informacinio skydelio būsena (atidarytas / suskleistas). Klausimai ir dokumentai nesaugomi.</p><p><b>Atsakomybė:</b> " + esc(DISCLAIMER.lt) + "</p>";
+    ? "<p><b>What leaves your browser:</b> the text fragments selected for a question (up to 14) or for the checklist (up to 28), each up to 1 400 characters, together with the document file names, the procurement title and CVP IS ID from the notice, the lot you entered, the document-set status and the question itself are sent to the AI service via the G-Procure proxy; the API key is on the server. All of this is public CVP IS data; whole documents are never uploaded to a server. The G-Procure backend does not store request content (verified at the source on 2026-07-17; the AI provider processes the fragments under its own terms).</p><p><b>CVP IS data:</b> the procurement number you enter (or the one recognised from the uploaded package) is sent to the G-Procure server, which answers from its copy of the public VPT CVP IS data (refreshed every 6 hours); these requests are not written to the server access log. No data of yours is sent to VPT.</p><p><b>What is stored in your browser:</b> language, the last procurement ID, anonymous “helped / did not help” counters and the info panel state (open / collapsed). Questions and documents are not stored.</p><p><b>Liability:</b> " + esc(DISCLAIMER.en) + "</p>"
+    : "<p><b>Kas išeina iš jūsų naršyklės:</b> į DI paslaugą per G-Procure proxy siunčiami klausimui (iki 14) arba kontroliniam sąrašui (iki 28) parinkti tekstų fragmentai po ne daugiau kaip 1 400 simbolių, kartu su dokumentų failų pavadinimais, pirkimo pavadinimu ir CVP IS ID iš skelbimo, jūsų nurodyta dalimi, dokumentų rinkinio būsena ir pačiu klausimu; API raktas - serveryje. Visa tai - vieši CVP IS duomenys; ištisi dokumentai į serverį nekeliami. G-Procure backend'as užklausų turinio nesaugo (patikrinta prie šaltinio 2026-07-17; DI tiekėjas fragmentus apdoroja pagal savo sąlygas).</p><p><b>CVP IS duomenys:</b> jūsų nurodytas pirkimo numeris (ar atpažintas iš įkelto paketo) siunčiamas į G-Procure serverį - jis atsako iš savo viešų VPT CVP IS duomenų kopijos (atnaujinama kas 6 val.); šios užklausos į serverio prieigos žurnalą neįrašomos. Jūsų duomenys VPT nesiunčiami.</p><p><b>Kas saugoma jūsų naršyklėje:</b> kalba, paskutinis pirkimo ID, anoniminiai „padėjo / nepadėjo“ skaitikliai ir informacinio skydelio būsena (atidarytas / suskleistas). Klausimai ir dokumentai nesaugomi.</p><p><b>Atsakomybė:</b> " + esc(DISCLAIMER.lt) + "</p>";
 }
 const DISCLAIMER = {
   lt: "G-Procure Tiekėjams yra informacinis pagalbinis įrankis. Oficialūs pirkimo dokumentai ir pranešimai skelbiami CVP IS. Atsakymai nėra individuali teisinė konsultacija ir nepakeičia tiekėjo pareigos patikrinti aktualią dokumentų redakciją bei laiku atlikti veiksmus CVP IS.",
@@ -1531,19 +1623,19 @@ const INFO_CONTENT = {
   lt: { title: "G-Procure Tiekėjams", purpose: "Aiškūs, šaltiniais pagrįsti atsakymai ir pasirengimas dalyvauti bet kuriame CVP IS pirkime. Pirkimo vykdytojas ir teisinis režimas (PĮ / VPĮ) atpažįstami iš skelbimo ir patvirtinami jūsų. Oficialios informacijos šaltiniu visada išlieka CVP IS.",
     stepsTitle: "Kaip naudotis",
     steps: ["<b>Konkretus pirkimas:</b> įklijuokite CVP IS nuorodą, iš oficialaus puslapio atsisiųskite dokumentų ZIP ir įkelkite jį - viskas apdorojama jūsų naršyklėje.", "<b>Klauskite:</b> atsakymas su citatomis iš įkeltų dokumentų, patikimumo lygiu ir patikrinimo laiku; be šaltinio - tik klausimo projektas CVP IS.", "<b>Kontrolinis sąrašas ir pokyčiai:</b> 15 pasirengimo punktų su 5 būsenomis (privaloma, su sąlyga, netaikoma, nerasta, patikslinti); redakcijų palyginimas pastraipų lygiu.", "<b>Bendri klausimai:</b> PĮ (perkantiesiems subjektams), VPT instrukcijos ir patikrintos organizacijų taisyklės (šiuo metu LITGRID) - su nuorodomis ir spragų sąrašu; VPĮ atitikmenų dar nėra."],
-    noteTitle: "Ribos", note: "Įrankis nesijungia prie CVP IS gyvai ir to neimituoja: VPT dokumentuota CVP IS duomenų API reikalauja prieigos rakto ir veikia tik per serverį. Nepateikia pasiūlymų, nesiunčia klausimų, nevertina kvalifikacijos ir neprognozuoja rezultatų. Bendras atsakymas niekada nėra konkretaus pirkimo taisyklė.", moreLabel: "Plačiau",
+    noteTitle: "Ribos", note: "Pagrindiniai pirkimo duomenys (terminas, būdas, būsena) - iš VPT CVP IS API per G-Procure serverį, atnaujinama kas 6 val.; galioja CVP IS. Dokumentų API nėra - juos įkeliate patys. Nepateikia pasiūlymų, nesiunčia klausimų, nevertina kvalifikacijos ir neprognozuoja rezultatų. Bendras atsakymas niekada nėra konkretaus pirkimo taisyklė.", moreLabel: "Plačiau",
     details: { title: "G-Procure Tiekėjams - detaliau", intro: "Kaip veikia atsakymų grandinė ir kur jos ribos.", processTitle: "Atsakymo kelias",
       process: [{ title: "Dokumentai", text: "ZIP/PDF/DOCX/XLSX/XML skaitomi naršyklėje; kiekvienas fragmentas gauna vietą (puslapis, pastraipa, lentelės eilutė) ir SHA-256; nesaugūs ar nepalaikomi failai pažymimi, ne slepiami." }, { title: "Paieška", text: "Tiksli terminų / punktų paieška ir BM25 tik šio pirkimo fragmentuose - kito pirkimo įrodymai patekti negali." }, { title: "DI", text: "Į modelį keliauja tik parinkti fragmentai su ID; modelis privalo cituoti; citatos tikrinamos dokumentuose, netikros atmetamos, patikimumas mažinamas." }, { title: "Rodymas", text: "Trumpas atsakymas, reikšmė, veiksmai, sąlygos, šaltiniai, patikimumas, patikrinimo laikas; grįžtamasis ryšys be asmens duomenų." }],
       conceptsTitle: "Sąvokos", concepts: [{ code: "PĮ / VPĮ", term: "Pirkimų įstatymai", def: "PĮ taikomas perkantiesiems subjektams (energetika, vandentvarka, transportas, paštas; direktyva 2014/25/ES), VPĮ - perkančiosioms organizacijoms (direktyva 2014/24/ES). Kuris taikomas, rodo pirkimo skelbimas - įrankis jį atpažįsta, jūs patvirtinate." }, { code: "EBVPD", term: "Europos bendrasis viešųjų pirkimų dokumentas", def: "Tiekėjo deklaracija dėl pašalinimo pagrindų ir kvalifikacijos; pildoma iš perkančiojo pateikto XML." }, { code: "SPS / BPS", term: "Specialiosios / bendrosios pirkimo sąlygos", def: "LITGRID pirkimo dokumentų dalys; SPS nustato konkretaus pirkimo sąlygas, BPS - bendras. Kitos organizacijos dokumentus gali vadinti kitaip." }, { code: "AKTUALI REDAKCIJA", term: "Pakeista dokumento redakcija", def: "LITGRID pakeistas sąlygas į CVP IS įkelia kaip naują failą su šia žyma ir data; kitų organizacijų versijavimas gali skirtis - tada redakcijos nesuporuojamos." }],
-      faqTitle: "Dažniausi klausimai", faq: [{ q: "Kodėl reikia įkelti dokumentus pačiam?", a: "VPT dokumentavo CVP IS duomenų API, bet ji reikalauja prieigos rakto ir nepriima naršyklės užklausų (nėra CORS), todėl ją galima naudoti tik per serverį. G-Procure tokios jungties dar neturi, o kol jos nėra, įrankis neimituoja gyvos jungties. Visų dokumentų ZIP iš CVP IS dokumentų sąrašo turi ir CVP IS dokumentų sąrašą - pagal jį įrankis parodo, ar perskaityti visi paskelbti dokumentai." }, { q: "Ar mano dokumentai ar klausimai kur nors saugomi?", a: "G-Procure pusėje - ne: dokumentai lieka naršyklės atmintyje, klausimai nesaugomi; į DI keliauja tik parinkti fragmentai su dokumentų pavadinimais ir klausimas, kuriuos DI tiekėjas apdoroja pagal savo sąlygas (žr. „Kaip tikrinami atsakymai“ - Privatumas)." }, { q: "Ar atsakymas yra oficialus paaiškinimas?", a: "Ne. Oficialius paaiškinimus teikia tik pirkimo vykdytojas CVP IS. Įrankis padeda suformuluoti klausimą, bet jo nesiunčia." }], closeLabel: "Uždaryti" } },
+      faqTitle: "Dažniausi klausimai", faq: [{ q: "Kodėl reikia įkelti dokumentus pačiam?", a: "VPT CVP IS API teikia tik pagrindinius pirkimų duomenis (terminą, būdą, būseną, vertę ir pan.) - juos G-Procure gauna per savo serverį ir parodo įvedus pirkimo numerį. Dokumentų per API gauti negalima, todėl paketą atsisiunčiate iš oficialaus CVP IS puslapio. Visų dokumentų ZIP iš CVP IS dokumentų sąrašo turi ir CVP IS dokumentų sąrašą - pagal jį įrankis parodo, ar perskaityti visi paskelbti dokumentai." }, { q: "Ar mano dokumentai ar klausimai kur nors saugomi?", a: "G-Procure pusėje - ne: dokumentai lieka naršyklės atmintyje, klausimai nesaugomi; į DI keliauja tik parinkti fragmentai su dokumentų pavadinimais ir klausimas, kuriuos DI tiekėjas apdoroja pagal savo sąlygas (žr. „Kaip tikrinami atsakymai“ - Privatumas)." }, { q: "Ar atsakymas yra oficialus paaiškinimas?", a: "Ne. Oficialius paaiškinimus teikia tik pirkimo vykdytojas CVP IS. Įrankis padeda suformuluoti klausimą, bet jo nesiunčia." }], closeLabel: "Uždaryti" } },
   en: { title: "G-Procure for Suppliers", purpose: "Clear, source-grounded answers and readiness for any CVP IS procurement. The contracting entity and the legal regime (PĮ / VPĮ) are recognised from the notice and confirmed by you. CVP IS always remains the official source.",
     stepsTitle: "How to use",
     steps: ["<b>Specific procurement:</b> paste the CVP IS link, download the document ZIP from the official page and upload it - everything is processed in your browser.", "<b>Ask:</b> an answer with quotes from the uploaded documents, a confidence level and verification time; without a source - only a question draft for CVP IS.", "<b>Checklist and changes:</b> 15 readiness items with 5 statuses (mandatory, conditional, not required, not found, clarify); version comparison at paragraph level.", "<b>General questions:</b> PĮ (for contracting entities), PPO guidance and verified organisation rules (currently LITGRID) - with links and a list of gaps; VPĮ equivalents are not available yet."],
-    noteTitle: "Limits", note: "The tool does not connect to CVP IS live and does not fake it: the CVP IS data API documented by VPT requires an access key and works only via a server. It does not submit bids, send questions, assess qualification or predict results. A general answer is never a rule of a specific procurement.", moreLabel: "Learn more",
+    noteTitle: "Limits", note: "Key procurement data (deadline, procedure, status) come from the VPT CVP IS API via the G-Procure server, refreshed every 6 hours; CVP IS prevails. There is no document API - you upload the documents yourself. It does not submit bids, send questions, assess qualification or predict results. A general answer is never a rule of a specific procurement.", moreLabel: "Learn more",
     details: { title: "G-Procure for Suppliers - in detail", intro: "How the answer chain works and where its limits are.", processTitle: "Answer path",
       process: [{ title: "Documents", text: "ZIP/PDF/DOCX/XLSX/XML are read in the browser; each fragment gets a location (page, paragraph, table row) and a SHA-256; unsafe or unsupported files are flagged, not hidden." }, { title: "Search", text: "Exact term / clause search and BM25 only within this procurement's fragments - evidence from another procurement cannot enter." }, { title: "AI", text: "Only selected fragments with IDs go to the model; the model must cite; quotes are verified in the documents, false ones rejected, confidence reduced." }, { title: "Display", text: "Short answer, meaning, actions, conditions, sources, confidence, verification time; feedback without personal data." }],
       conceptsTitle: "Concepts", concepts: [{ code: "PĮ / VPĮ", term: "The procurement laws", def: "PĮ applies to contracting entities (energy, water, transport, postal services; Directive 2014/25/EU), VPĮ to contracting authorities (Directive 2014/24/EU). The notice shows which one applies - the tool recognises it, you confirm." }, { code: "ESPD", term: "European Single Procurement Document", def: "The supplier's self-declaration on exclusion grounds and qualification; filled from the XML provided by the contracting entity." }, { code: "SPS / BPS", term: "Special / general procurement conditions", def: "Parts of LITGRID procurement documents; SPS set the conditions of a specific procurement, BPS the general ones. Other organisations may name their documents differently." }, { code: "CURRENT VERSION", term: "Amended document version", def: "LITGRID uploads amended conditions to CVP IS as a new file with this mark and a date; other organisations may version differently - then versions are not paired." }],
-      faqTitle: "FAQ", faq: [{ q: "Why do I have to upload the documents myself?", a: "VPT has documented a CVP IS data API, but it requires an access key and does not accept browser requests (no CORS), so it can only be used via a server. G-Procure does not have such a link yet, and until then the tool does not fake a live connection. The ZIP of all documents from the CVP IS document list also contains the CVP IS document list - the tool uses it to show whether all published documents were read." }, { q: "Are my documents or questions stored anywhere?", a: "Not on the G-Procure side: documents stay in browser memory, questions are not stored; only selected fragments with document names and the question go to the AI, which processes them under its own terms (see “How answers are verified” - Privacy)." }, { q: "Is the answer an official clarification?", a: "No. Official clarifications are given only by the contracting entity in CVP IS. The tool helps draft the question but does not send it." }], closeLabel: "Close" } }
+      faqTitle: "FAQ", faq: [{ q: "Why do I have to upload the documents myself?", a: "The VPT CVP IS API provides only key procurement data (deadline, procedure, status, value etc.) - G-Procure gets them via its server and shows them when you enter the procurement number. Documents are not available via the API, so you download the package from the official CVP IS page. The ZIP of all documents from the CVP IS document list also contains the CVP IS document list - the tool uses it to show whether all published documents were read." }, { q: "Are my documents or questions stored anywhere?", a: "Not on the G-Procure side: documents stay in browser memory, questions are not stored; only selected fragments with document names and the question go to the AI, which processes them under its own terms (see “How answers are verified” - Privacy)." }, { q: "Is the answer an official clarification?", a: "No. Official clarifications are given only by the contracting entity in CVP IS. The tool helps draft the question but does not send it." }], closeLabel: "Close" } }
 };
 function mountInfoPanel() {
   if (typeof GProcureInfoPanel === "undefined") return;
@@ -1557,18 +1649,20 @@ function renderChat() {
   S.chat.forEach(a => { const q = document.createElement("div"); q.className = "q-user"; q.textContent = a.q + (a.lot ? " (" + a.lot + ")" : ""); chat.appendChild(q); const d = document.createElement("div"); d.className = "ans"; d.innerHTML = renderAnswer(a); chat.appendChild(d); });
   if (S.checklist) $("#checklistBox").innerHTML = renderChecklist(S.checklist);
 }
-function renderAll() { renderHome(); renderRef(); renderKontekstas(); renderDocs(); renderMeta(); renderAskState(); renderChat(); renderBendri(); renderApie(); rodykRysi(); $("#footDisclaimer").textContent = DISCLAIMER[LANG]; $("#lnkCvpis").href = GP_CVPIS.URL.home; }
+function renderAll() { renderHome(); renderRef(); renderVpt(); renderKontekstas(); renderDocs(); renderMeta(); renderAskState(); renderChat(); renderBendri(); renderApie(); rodykRysi(); $("#footDisclaimer").textContent = DISCLAIMER[LANG]; $("#lnkCvpis").href = GP_CVPIS.URL.home; }
 function boot() {
   applyI18n(); mountInfoPanel();
   const d = Store.read(); if (d.lastRef) { $("#refInput").value = d.lastRef; S.ref = GP_CVPIS.resolve(d.lastRef); }
   renderAll();
+  // Grįžus prie paskutinio pirkimo - VPT duomenys; rėmelyje (testai, kiti puslapiai) - tik paspaudus „Nustatyti“
+  if (S.ref && S.ref.resourceId && window.top === window) gaukVpt(S.ref.resourceId);
   $("#homeSearch").addEventListener("keydown", e => { if (e.key === "Enter") isPradziosPaieskos(); });
   $("#refInput").addEventListener("keydown", e => { if (e.key === "Enter") nustatykRef(); });
   $("#askInput").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) klausk(); });
 }
 document.addEventListener("DOMContentLoaded", boot);
 // Testams: vidinė būsena ir funkcijos
-window.__PPT = { S, onFiles, klausk, kontrolinis, metaIsDokumentu, perindeksuok, renderAnswer, setLang, parinkFragmentus, faktuFragmentai, renderBeAI, renderChecklistBeAI, beInterneto, promptoKontekstas, patvirtinkKonteksta, issaugokKonteksta, atstatykKonteksta, renderKontekstas, get LANG() { return LANG; } };
+window.__PPT = { S, VPT, gaukVpt, renderVpt, nustatykRef, onFiles, klausk, kontrolinis, metaIsDokumentu, perindeksuok, renderAnswer, setLang, parinkFragmentus, faktuFragmentai, renderBeAI, renderChecklistBeAI, beInterneto, promptoKontekstas, patvirtinkKonteksta, issaugokKonteksta, atstatykKonteksta, renderKontekstas, get LANG() { return LANG; } };
 </script>
 </body>
 </html>

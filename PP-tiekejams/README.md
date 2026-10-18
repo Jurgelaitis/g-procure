@@ -76,6 +76,7 @@ Dabar:
 
 - Dokumentai apdorojami tik naršyklėje ir lieka jos atmintyje (uždarius skirtuką dingsta). Į serverį ištisi dokumentai nekeliami.
 - Į AI (per proxy) siunčiami parinkti fragmentai (klausimui iki 14, kontroliniam sąrašui iki 28, po ne daugiau kaip 1 400 simbolių) su dokumentų pavadinimais, pirkimo pavadinimas ir CVP IS ID iš skelbimo, nurodyta dalis, rinkinio būsena ir klausimas - visa tai vieši CVP IS duomenys. API raktas - serveryje.
+- Pirkimo numeris (nurodytas ar atpažintas iš įkelto paketo) nuo 2026-10-18 siunčiamas į G-Procure serverį (`https://api.g-procure.com/api/cvpis/pirkimas/<nr>`, be slapukų) - jis atsako iš viešų VPT CVP IS duomenų kopijos, atnaujinamos kas 6 val. (`serveris/README.md`); užklausa į prieigos žurnalą neįrašoma, VPT jūsų duomenų negauna.
 - Klausimai nesaugomi. `localStorage` (`pp_tiekejams`, `pptiekejams.lang`, `gprocure.infoPanel.pp-tiekejams`): kalba, paskutinis pirkimo ID, anoniminiai „padėjo / nepadėjo" skaitikliai, informacinio skydelio būsena.
-- CDN bibliotekos su SRI (`integrity`); `xlsx` imamas iš cdn.sheetjs.com 0.20.3 (cdnjs turi tik 0.18.5 su žinomomis CVE). `pdf.worker.min.js` per `workerSrc` SRI nepadengiamas.
+- Programų bibliotekos - iš pačios svetainės (`shared/vendor/`, nuo 2026-10-16; iki tol - CDN su SRI); pdf.js darbininkas - per `shared/pdf-darbininkas.js`.
 - Jokių tiekėjo paskyrų, pasiūlymų ar komercinių dokumentų įkėlimo MVP nėra ir neturi būti be atskiro saugaus duomenų modelio.

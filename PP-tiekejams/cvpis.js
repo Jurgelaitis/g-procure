@@ -5,12 +5,17 @@
  * (window.GP_CVPIS). URL šablonai patikrinti 2026-09-02 (be prisijungimo,
  * HTTP 200) - žr. docs/tiekejams/cvpis-feasibility.md.
  *
- * MVP: tik NUORODOS (navigacija), NE fetch. CVP IS puslapiai ir VPT dokumentuota
- * duomenų API (2026-05-20, POST epps-integration/api/cft-details-export) CORS
- * antraščių neturi, o API reikalauja prieigos rakto (be jo - 401 „Please include
- * a valid apiKey“; patikrinta 2026-10-17), tad naršyklė jų nuskaityti negali -
- * tik serveris su VPT išduotu raktu (2 etapas, neįdiegta). Kol jo nėra, status()
- * grąžina aiškią techninę būseną, o įrankis NIEKADA neimituoja gyvos jungties.
+ * CVP IS puslapiai ir VPT dokumentuota duomenų API (2026-05-20, POST
+ * epps-integration/api/cft-details-export) CORS antraščių neturi, o API reikalauja
+ * prieigos rakto, tad naršyklė jų tiesiogiai nuskaityti negali. Nuo 2026-10-18
+ * (naudotojo sprendimas) pagrindiniai pirkimo duomenys (terminas, būdas, būsena,
+ * vertė, BVPŽ, TED nuorodos) gaunami per G-Procure serverį - serveris/README.md:
+ * vptPirkimas() kreipiasi TIK į https://api.g-procure.com/api/cvpis/pirkimas/<nr>
+ * (tik skaitmenys, be slapukų, be nukreipimo informacijos). Serveris VPT sąrašą
+ * atnaujina kas 6 val., todėl duomenys rodomi su atnaujinimo laiku, o oficialiu
+ * šaltiniu lieka CVP IS. Dokumentų API nėra - juos naudotojas įkelia pats; status()
+ * tai sako, ir įrankis NIEKADA neimituoja gyvos dokumentų jungties. Nepavykusi
+ * užklausa ar dar neįkeltas sąrašas niekada nerodomas kaip „pirkimo nėra“.
  *
  * Nuo 2026-10-17: paieška pagal pavadinimą atveria CVP IS rezultatus (title=,
  * GET be sesijos), o visų dokumentų pakete esantis CVP IS dokumentų sąrašas
@@ -177,14 +182,105 @@
     return v.length === 1 && /pirkimo dokumentai/i.test(v[0]) && /\.zip$/i.test(v[0]);
   }
 
-  // Adapterio kontraktas 2 etapui (serverio pusė). Čia - tik būsena.
-  function status() {
-    return { live: false, mode: "manual-upload",
-             lt: "Gyva CVP IS jungtis neįjungta: VPT dokumentuota CVP IS duomenų API reikalauja prieigos rakto ir nepriima naršyklės užklausų (nėra CORS), todėl ją galima naudoti tik per serverį - G-Procure tokios jungties dar neturi. Dokumentus įkelkite iš oficialaus puslapio.",
-             en: "Live CVP IS link is not enabled: the CVP IS data API documented by VPT requires an access key and does not accept browser requests (no CORS), so it can only be used via a server - G-Procure does not have such a link yet. Upload the documents from the official page." };
+  // ---------------------------------------------------------------------------
+  // VPT CVP IS API per G-Procure serverį (nuo 2026-10-18; serveris/README.md)
+  // ---------------------------------------------------------------------------
+  var API_BAZE = "https://api.g-procure.com/api/cvpis";
+  // Grąžina { ok: true, pirkimas, meta, nuoroda } | { ok: false, rusis: "nera" (sąraše nėra), meta } |
+  // { ok: false, rusis: "neikelta" (serveryje sąrašas dar neįkeltas) | "rysys" (ryšys, riba, kita) | "numeris" | "atsaukta" }.
+  // CVP IS nuoroda sudaroma čia (URL.details), ne iš atsakymo - serverio tekstas į href nepatenka.
+  function vptPirkimas(id, opts) {
+    opts = opts || {};
+    id = String(id == null ? "" : id).trim();
+    if (!/^\d{5,9}$/.test(id)) return Promise.resolve({ ok: false, rusis: "numeris" });
+    var f = opts.fetch || global.fetch;
+    if (typeof f !== "function") return Promise.resolve({ ok: false, rusis: "rysys" });
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var laik = ctl ? setTimeout(function () { ctl.abort(); }, opts.laikas || 15000) : null;
+    if (ctl && opts.signal) { if (opts.signal.aborted) ctl.abort(); else opts.signal.addEventListener("abort", function () { ctl.abort(); }); }
+    var baik = function (x) { if (laik) clearTimeout(laik); return x; };
+    return Promise.resolve().then(function () {
+      return f(API_BAZE + "/pirkimas/" + id, { method: "GET", credentials: "omit", referrerPolicy: "no-referrer", headers: { "Accept": "application/json" }, signal: ctl ? ctl.signal : undefined });
+    }).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (j) {
+        var p = j && j.pirkimas;
+        if (r.status === 200 && p && typeof p === "object" && p.id === +id) return baik({ ok: true, pirkimas: p, meta: (j.meta && typeof j.meta === "object") ? j.meta : {}, nuoroda: URL.details(id) });
+        if (r.status === 404 && j && j.meta && typeof j.meta === "object") return baik({ ok: false, rusis: "nera", meta: j.meta });
+        if (r.status === 503) return baik({ ok: false, rusis: "neikelta" });
+        return baik({ ok: false, rusis: "rysys", status: r.status });
+      });
+    }, function () {
+      return baik({ ok: false, rusis: opts.signal && opts.signal.aborted ? "atsaukta" : "rysys" });
+    });
+  }
+  // VPT kodai -> žmogui. Verčiama tik tai, kas aišku; kitaip rodomas VPT kodas (modulis visada parodo ir jį).
+  var PROCEDUROS = {
+    "Open": { lt: "Atviras konkursas", en: "Open procedure" },
+    "Simplified Open": { lt: "Supaprastintas atviras konkursas", en: "Simplified open procedure" },
+    "Restricted": { lt: "Ribotas konkursas", en: "Restricted procedure" },
+    "Negotiated with prior call for competition": { lt: "Skelbiamos derybos", en: "Negotiated procedure with prior call for competition" },
+    "Negotiated without prior call for competition": { lt: "Neskelbiamos derybos", en: "Negotiated procedure without prior call for competition" },
+    "Negotiated without prior publication": { lt: "Neskelbiamos derybos", en: "Negotiated procedure without prior publication" },
+    "Competitive dialogue": { lt: "Konkurencinis dialogas", en: "Competitive dialogue" },
+    "Innovation partnership": { lt: "Inovacijų partnerystė", en: "Innovation partnership" },
+    "Preliminary Market Consultation": { lt: "Rinkos konsultacija", en: "Preliminary market consultation" },
+    "DPS Specific Contract": { lt: "Konkretus pirkimas pagal DPS", en: "Specific contract under a DPS" }
+  };
+  var BUSENOS = {
+    "Published": { lt: "Paskelbtas", en: "Published" },
+    "Bid submission": { lt: "Pasiūlymų teikimas", en: "Tender submission" },
+    "Proposal Submission": { lt: "Pasiūlymų teikimas", en: "Tender submission" },
+    "Proposal Submission Closed": { lt: "Pasiūlymų teikimas baigtas", en: "Tender submission closed" },
+    "Awaiting bid opening": { lt: "Laukiama pasiūlymų atplėšimo", en: "Awaiting tender opening" },
+    "Evaluation": { lt: "Vertinimas", en: "Evaluation" },
+    "Cancelled": { lt: "Nutrauktas", en: "Cancelled" }
+  };
+  var DIREKTYVOS = {
+    "prompt.directive.classic": { lt: "2014/24/ES (klasikinė)", en: "2014/24/EU (classic)" },
+    "prompt.directive.utilities": { lt: "2014/25/ES (sektorinė)", en: "2014/25/EU (utilities)" },
+    "prompt.directive.defence": { lt: "2009/81/EB (gynyba ir saugumas)", en: "2009/81/EC (defence and security)" },
+    "prompt.directive.concession": { lt: "2014/23/ES (koncesijos)", en: "2014/23/EU (concessions)" },
+    "prompt.directive.none": { lt: "netaikoma", en: "not applicable" }
+  };
+  function vptKodas(kodas, zodynas, lang) {
+    if (typeof kodas !== "string" || !kodas) return null;
+    var z = zodynas[kodas];
+    return { tekstas: z ? z[lang === "en" ? "en" : "lt"] : kodas, kodas: kodas, isverstas: !!z };
+  }
+  // „24_months“ -> „24 mėn.“; kita - kaip yra
+  function vptTrukme(s, lang) {
+    var m = /^(\d{1,4})_(days|weeks|months|years)$/.exec(String(s || ""));
+    if (!m) return s || null;
+    var V = { lt: { days: "d.", weeks: "sav.", months: "mėn.", years: "m." }, en: { days: "days", weeks: "weeks", months: "months", years: "years" } };
+    return m[1] + " " + V[lang === "en" ? "en" : "lt"][m[2]];
+  }
+  // TED nuorodos - tik https://ted.europa.eu/ (serveris jau tikrina; čia - dar kartą prieš dedant į href)
+  function vptTed(v) {
+    return (Array.isArray(v) ? v : []).filter(function (x) { return typeof x === "string" && /^https:\/\/ted\.europa\.eu\/[A-Za-z0-9\-._~\/?=&%#:+]{1,300}$/.test(x); }).slice(0, 10);
+  }
+  // Įkelto paketo CVP IS numeris: visų dokumentų ZIP „<vykdytojo id>_<pirkimo id>.zip“ ar skelbimo failas
+  // „<pirkimo id>_..._notice/skelbimas...“. Vienas numeris - grąžinamas; nė vieno ar keli - null.
+  function paketoId(docs) {
+    var ids = {};
+    (docs || []).forEach(function (d) {
+      String(d && d.name || "").split(/\s*›\s*/).forEach(function (dalis) {
+        var m = /^\d{1,9}_(\d{5,9})\.(zip|pdf)$/i.exec(dalis) || /^(\d{5,9})_.*(notice|skelbimas)/i.exec(dalis);
+        if (m) ids[m[1]] = 1;
+      });
+    });
+    var v = Object.keys(ids);
+    return v.length === 1 ? v[0] : null;
   }
 
-  global.GP_CVPIS = { version: "0.4.0", URL: URL, resolve: resolve, terminas: terminas, parseData: parseData, status: status,
+  function status() {
+    return { live: false, vpt: true, mode: "vpt-api-ir-ikelimas",
+             lt: "Pagrindiniai pirkimo duomenys (terminas, būdas, būsena) - iš VPT CVP IS API per G-Procure serverį, sąrašas atnaujinamas kas 6 val. Dokumentų API nėra - dokumentų paketą atsisiunčiate iš oficialaus CVP IS puslapio ir įkeliate patys. Oficialiu šaltiniu lieka CVP IS.",
+             en: "Key procurement data (deadline, procedure, status) come from the VPT CVP IS API via the G-Procure server; the list is refreshed every 6 hours. There is no document API - you download the document package from the official CVP IS page and upload it yourself. CVP IS remains the official source." };
+  }
+
+  global.GP_CVPIS = { version: "0.5.0", URL: URL, resolve: resolve, terminas: terminas, parseData: parseData, status: status,
+                      API_BAZE: API_BAZE, vptPirkimas: vptPirkimas, vptKodas: vptKodas, vptTrukme: vptTrukme, vptTed: vptTed, paketoId: paketoId,
+                      PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS,
                       atpazinkPirkeja: atpazinkPirkeja, atpazinkRezima: atpazinkRezima, atpazinkRezimaDokumente: atpazinkRezimaDokumente,
                       dokumentuSarasas: dokumentuSarasas, apreptis: apreptis, tikPradinisZip: tikPradinisZip };
 })(typeof window !== "undefined" ? window : this);
