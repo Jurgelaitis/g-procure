@@ -23,10 +23,11 @@ dalyvių informacija - nenaudojamas (duomenų mažinimas).
 | Adresas | Atsakymas |
 |---|---|
 | `/api/cvpis/pirkimas/<5-9 skaitmenys>` | 200 - pirkimo duomenys, CVP IS nuoroda, sąrašo laikas; 404 - sąraše nėra (su sąrašo laiku); 503 - sąrašas dar neįkeltas |
-| `/api/cvpis/paieska?q=<3-100 ženklų>` | iki 20 pirkimų pagal pavadinimą, vykdytoją ar numerį (be diakritikų, visi žodžiai), naujausi pirmi, ir bendras skaičius |
+| `/api/cvpis/paieska?...` | pirkimai pagal filtrus (bent vienas): `q` (žodžiai pavadinime, vykdytojo pavadinime ar numeryje, 3-100 ženklų), `vykdytojas` (žodžiai vykdytojo pavadinime), `ca` (vykdytojo kodas), `cpv` (BVPŽ pradžia, 2-8 skaitmenys, iki 5 per kablelį), `tipas` (Supplies / Services / Works), `budas` ir `busena` (VPT kodai; `busena=aktyvus` - terminas nepraėjęs, nenutrauktas), `nuo` / `iki` (paskelbimo data), `rikiuoti` (naujausi / terminas), `psl` (1-50, po 20); su bendru skaičiumi (nuo 2026-10-18b; iki tol - tik `q`) |
+| `/api/cvpis/statistika?...` | tie patys filtrai: kiekiai pagal būdą, būseną, objektą, vertinimo kriterijų, direktyvą, kalbą; tarptautiniai, ES lėšos, dalimis, e. aukcionai, nutraukti, rinkos konsultacijos, aktyvūs; pasiūlymų teikimo laikotarpis (dienomis) pagal būdą ir tarptautinę vertę, dienos nuo termino iki sprendimo ir sutarties, numatoma vertė, trukmė mėnesiais - kvantiliai (tik nuo 5 reikšmių); paskelbimai pagal mėnesį (36), dažniausi vykdytojai (10); kešuojama iki naujo sąrašo |
 | `/api/cvpis/busena` | ar sąrašas įkeltas, kada atnaujintas, kiek įrašų, paskutinės klaidos laikas ir rūšis, kitas atnaujinimas |
 
-Laukai - tik išvardyti `cvpis-logika.js` (`TEKSTAI`, `DATOS`, `LOGINIAI` ir keli kiti). Datos VPT pateikiamos be laiko juostos
+Visi 38 OpenAPI aprašo laukai (`AbstractCftDetailsDTO`) laikomi; atsakyme laukai - tik išvardyti `cvpis-logika.js` (`TEKSTAI`, `DATOS`, `LOGINIAI` ir keli kiti). Datos VPT pateikiamos be laiko juostos
 (`dd-mm-yyyy hh:mm:ss`) - grąžinamos `yyyy-mm-ddThh:mm:ss` be juostos; tai **Lietuvos laikas** (patikrinta įdiegus 2026-10-18:
 pirkimo, kurio skelbime terminas 13:00 +03:00, API terminas - 13:00). Duomenys gali būti iki 6 val. senumo - modulis turi rodyti
 sąrašo laiką ir nuorodą į CVP IS (terminas, pratęsimai ir aktualios redakcijos - ten). `procedure` ir `status` - VPT angliški kodai

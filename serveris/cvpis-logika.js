@@ -24,7 +24,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var VERSIJA = "2026-10-18";
+  var VERSIJA = "2026-10-18b";
   // Kilmės, kurioms grąžinama CORS antraštė (kaip /api/analyze): svetainė ir vietinis tikrinimas.
   var KILMES = ["https://g-procure.com", "https://www.g-procure.com"];
   var VIETINE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
@@ -162,14 +162,199 @@
       .replace(/[^a-z0-9]+/g, " ").trim();
   }
 
+  /* Indeksas: pagalId - pirkimas pagal numerį; paieska - [id, tekstas (pavadinimas, vykdytojas, numeris), vykdytojas], surikiuota
+     nuo naujausio paskelbimo (paieškos ir statistikos rezultatai jau tvarkingi); kesas - statistikos atsakymai (išvalomi su nauju sąrašu). */
   function sukurkIndeksa(irasai, atnaujinta) {
     var pagalId = new Map(), paieska = [];
     irasai.forEach(function (o) {
       if (!o || pagalId.has(o.id)) return;
       pagalId.set(o.id, o);
-      paieska.push([o.id, " " + paieskosTekstas((o.title || "") + " " + (o.caName || "") + " " + o.id) + " "]);
+      paieska.push([o.id, " " + paieskosTekstas((o.title || "") + " " + (o.caName || "") + " " + o.id) + " ", " " + paieskosTekstas(o.caName || "") + " "]);
     });
-    return { pagalId: pagalId, paieska: paieska, kiekis: pagalId.size, atnaujinta: atnaujinta || null };
+    paieska.sort(function (a, b) {
+      var x = pagalId.get(a[0]), y = pagalId.get(b[0]);
+      return String(y.datePublished || "").localeCompare(String(x.datePublished || "")) || y.id - x.id;
+    });
+    return { pagalId: pagalId, paieska: paieska, kiekis: pagalId.size, atnaujinta: atnaujinta || null, kesas: new Map() };
+  }
+
+  /* Dabartinis Lietuvos laikas „yyyy-mm-ddThh:mm:ss“ - VPT datos be laiko juostos yra Lietuvos laikas (README). */
+  function dabarLT(d) {
+    var p = {};
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(d || new Date())
+      .forEach(function (x) { p[x.type] = x.value; });
+    return p.year + "-" + p.month + "-" + p.day + "T" + p.hour + ":" + p.minute + ":" + p.second;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Paieškos ir statistikos filtrai (2026-10-18b). Visi neprivalomi, bet bent vienas būtinas; netinkamas - 400 su parametro
+     pavadinimu (įvestis neatkartojama).
+       q          - žodžiai pavadinime, vykdytojo pavadinime ar numeryje (3-100 ženklų, iki 8 žodžių, visi)
+       vykdytojas - žodžiai pirkimo vykdytojo pavadinime (3-100 ženklų)
+       ca         - pirkimo vykdytojo kodas (5-15 skaitmenų; VPT duomenyse jo dažnai nėra - tada vykdytojas)
+       cpv        - BVPŽ kodo pradžia, 2-8 skaitmenys, iki 5 kodų per kablelį (bet kuris pirkimo kodas)
+       tipas      - Supplies / Services / Works
+       budas      - VPT procedūros pavadinimas („Open“, „Simplified Open“ ...), būsena - VPT būsena arba „aktyvus“
+                    (pasiūlymų terminas dar nepraėjęs ir pirkimas nenutrauktas)
+       nuo, iki   - paskelbimo data yyyy-mm-dd (imtinai)
+       rikiuoti   - naujausi (numatyta) / terminas (artimiausias terminas pirmas, be termino - gale)
+       psl        - puslapis 1-50 (po 20; tik paieškai)
+   --------------------------------------------------------------------------- */
+  var TIPAI = { Supplies: 1, Services: 1, Works: 1 };
+  var KODAS_VPT = /^[A-Za-z][A-Za-z ]{2,59}$/;
+  var PSL_DYDIS = 20, PSL_MAX = 50;
+  function galiojantiData(s) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    var p = s.split("-").map(Number), d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    return p[0] >= 2000 && p[0] <= 2100 && d.getUTCMonth() === p[1] - 1 && d.getUTCDate() === p[2];
+  }
+  function zodziai(s, ilgiausias) {
+    if (typeof s !== "string" || s.length > (ilgiausias || 100)) return null;
+    var n = paieskosTekstas(s);
+    return n.length >= 3 ? n.split(" ").filter(Boolean).slice(0, 8) : null;
+  }
+  function filtrai(sp) {
+    var f = {}, yra = false, v;
+    var gauk = function (k) { var x = sp.get(k); return x === null ? null : String(x); };
+    if ((v = gauk("q")) !== null) { if (!(f.q = zodziai(v))) return { klaida: "q" }; yra = true; }
+    if ((v = gauk("vykdytojas")) !== null) { if (!(f.vykdytojas = zodziai(v))) return { klaida: "vykdytojas" }; yra = true; }
+    if ((v = gauk("ca")) !== null) { if (!/^\d{5,15}$/.test(v)) return { klaida: "ca" }; f.ca = v; yra = true; }
+    if ((v = gauk("cpv")) !== null) {
+      var k = v.split(",").map(function (x) { return x.trim(); });
+      if (!k.length || k.length > 5 || !k.every(function (x) { return /^\d{2,8}$/.test(x); })) return { klaida: "cpv" };
+      f.cpv = k; yra = true;
+    }
+    if ((v = gauk("tipas")) !== null) { if (!TIPAI[v]) return { klaida: "tipas" }; f.tipas = v; yra = true; }
+    if ((v = gauk("budas")) !== null) { if (!KODAS_VPT.test(v)) return { klaida: "budas" }; f.budas = v; yra = true; }
+    if ((v = gauk("busena")) !== null) { if (!KODAS_VPT.test(v)) return { klaida: "busena" }; f.busena = v; yra = true; }
+    if ((v = gauk("nuo")) !== null) { if (!galiojantiData(v)) return { klaida: "nuo" }; f.nuo = v; yra = true; }
+    if ((v = gauk("iki")) !== null) { if (!galiojantiData(v)) return { klaida: "iki" }; f.iki = v; yra = true; }
+    if ((v = gauk("rikiuoti")) !== null) { if (v !== "naujausi" && v !== "terminas") return { klaida: "rikiuoti" }; f.rikiuoti = v; }
+    if ((v = gauk("psl")) !== null) { if (!/^\d{1,2}$/.test(v) || +v < 1 || +v > PSL_MAX) return { klaida: "psl" }; f.psl = +v; }
+    if (!yra) return { klaida: "tuscia" };
+    return { f: f };
+  }
+  function visiYra(tekstas, zodz) {
+    for (var j = 0; j < zodz.length; j++) if (tekstas.indexOf(zodz[j]) < 0) return false;
+    return true;
+  }
+  function atitinka(e, o, f, dabar) {
+    if (f.q && !visiYra(e[1], f.q)) return false;
+    if (f.vykdytojas && !visiYra(e[2], f.vykdytojas)) return false;
+    if (f.ca && o.caNumber !== f.ca) return false;
+    if (f.cpv && !o.cpvCodes.some(function (c) { return f.cpv.some(function (p) { return c.indexOf(p) === 0; }); })) return false;
+    if (f.tipas && o.procurementType !== f.tipas) return false;
+    if (f.budas && o.procedure !== f.budas) return false;
+    if (f.busena === "aktyvus") {
+      if (!o.tenderSubmissionDeadline || o.tenderSubmissionDeadline <= dabar || o.status === "Cancelled") return false;
+    } else if (f.busena && o.status !== f.busena) return false;
+    var pd = o.datePublished ? o.datePublished.slice(0, 10) : null;
+    if (f.nuo && (!pd || pd < f.nuo)) return false;
+    if (f.iki && (!pd || pd > f.iki)) return false;
+    return true;
+  }
+  function atrinkti(ix, f, dabar) {
+    var out = [];
+    for (var i = 0; i < ix.paieska.length; i++) {
+      var e = ix.paieska[i], o = ix.pagalId.get(e[0]);
+      if (atitinka(e, o, f, dabar)) out.push(o);
+    }
+    return out;
+  }
+  var FILTRU_KLAIDOS = {
+    tuscia: "Nurodykite bent vieną paieškos parametrą (q, vykdytojas, ca, cpv, tipas, budas, busena, nuo, iki).",
+    q: "Paieškos tekstas (q) turi būti 3-100 ženklų (raidės ir skaitmenys).",
+    vykdytojas: "Vykdytojo pavadinimas (vykdytojas) turi būti 3-100 ženklų.",
+    ca: "Vykdytojo kodas (ca) - 5-15 skaitmenų.",
+    cpv: "BVPŽ kodas (cpv) - 2-8 skaitmenys, iki 5 kodų per kablelį.",
+    tipas: "Pirkimo objektas (tipas) - Supplies, Services arba Works.",
+    budas: "Būdas (budas) - VPT procedūros pavadinimas lotyniškomis raidėmis.",
+    busena: "Būsena (busena) - VPT būsena lotyniškomis raidėmis arba „aktyvus“.",
+    nuo: "Data (nuo) - yyyy-mm-dd.", iki: "Data (iki) - yyyy-mm-dd.",
+    rikiuoti: "Rikiavimas (rikiuoti) - naujausi arba terminas.", psl: "Puslapis (psl) - 1-50."
+  };
+
+  /* --- statistika --- */
+  function dienos(a, b) {
+    if (!a || !b) return null;
+    var x = Date.parse(a + "Z"), y = Date.parse(b + "Z");
+    if (!isFinite(x) || !isFinite(y) || y < x) return null;
+    return Math.round((y - x) / 86400000 * 10) / 10;
+  }
+  function menesiais(s) {
+    var m = /^(\d{1,4})_(days|weeks|months|years)$/.exec(String(s || ""));
+    if (!m) return null;
+    var n = +m[1], k = { days: 1 / 30.4375, weeks: 7 / 30.4375, months: 1, years: 12 }[m[2]];
+    var r = Math.round(n * k * 10) / 10;
+    return r > 0 && r <= 600 ? r : null;
+  }
+  // Kvantiliai - tik kai reikšmių bent 5 (kitaip mediana būtų klaidinanti)
+  var MAZIAUSIAI = 5;
+  function kvantiliai(v) {
+    var a = v.filter(function (x) { return typeof x === "number" && isFinite(x); }).sort(function (x, y) { return x - y; });
+    if (a.length < MAZIAUSIAI) return { n: a.length };
+    var q = function (p) { return a[Math.round(p * (a.length - 1))]; };
+    return { n: a.length, p10: q(0.1), p25: q(0.25), mediana: q(0.5), p75: q(0.75), p90: q(0.9) };
+  }
+  function skaiciuok(m, k) { if (k === null || k === undefined || k === "") k = "-"; m[k] = (m[k] || 0) + 1; }
+  function statistika(sar, dabar) {
+    var s = { viso: sar.length, pagalBuda: {}, pagalBusena: {}, pagalTipa: {}, vertinimas: {}, direktyva: {}, kalba: {},
+      tarptautiniai: 0, esLesos: 0, dalimis: 0, eAukcionas: 0, nutraukta: 0, rinkosKonsultacijos: 0, aktyvus: 0,
+      paskelbtaNuo: null, paskelbtaIki: null };
+    var terminai = {}, sprendimas = [], sutartis = [], vertes = [], trukme = [], menesiai = {}, vykd = {};
+    sar.forEach(function (o) {
+      skaiciuok(s.pagalBuda, o.procedure); skaiciuok(s.pagalBusena, o.status); skaiciuok(s.pagalTipa, o.procurementType);
+      skaiciuok(s.vertinimas, o.evaluationMechanism); skaiciuok(s.direktyva, o.directive); skaiciuok(s.kalba, o.publicationLanguage);
+      if (o.aboveThreshold === true) s.tarptautiniai++;
+      if (o.euFunding === true) s.esLesos++;
+      if (o.contractAwardedInLots === true) s.dalimis++;
+      if (o.inclusionEAuctions === true) s.eAukcionas++;
+      if (o.status === "Cancelled") s.nutraukta++;
+      if (o.procedure === "Preliminary Market Consultation") s.rinkosKonsultacijos++;
+      if (o.tenderSubmissionDeadline && o.tenderSubmissionDeadline > dabar && o.status !== "Cancelled") s.aktyvus++;
+      if (o.datePublished) {
+        var pd = o.datePublished.slice(0, 10);
+        if (!s.paskelbtaNuo || pd < s.paskelbtaNuo) s.paskelbtaNuo = pd;
+        if (!s.paskelbtaIki || pd > s.paskelbtaIki) s.paskelbtaIki = pd;
+        skaiciuok(menesiai, o.datePublished.slice(0, 7));
+      }
+      // Pasiūlymų (paraiškų) teikimo laikotarpis - nuo paskelbimo iki termino; pagal būdą ir tarptautinę vertę
+      var d = dienos(o.datePublished, o.tenderSubmissionDeadline);
+      if (d !== null && o.procedure) {
+        var rk = o.procedure + "|" + (o.aboveThreshold === true ? "T" : o.aboveThreshold === false ? "S" : "-");
+        (terminai[rk] = terminai[rk] || []).push(d);
+      }
+      var sp = dienos(o.tenderSubmissionDeadline, o.awardDate);
+      if (sp !== null) sprendimas.push(sp);
+      var su = dienos(o.tenderSubmissionDeadline, o.contractAwardDate);
+      if (su !== null) sutartis.push(su);
+      if (typeof o.estimatedValue === "number" && o.estimatedValue > 0) vertes.push(o.estimatedValue);
+      var tr = menesiais(o.contractDuration);
+      if (tr !== null) trukme.push(tr);
+      if (o.caName) {
+        var vk = o.caName + "|" + (o.caNumber || "");
+        vykd[vk] = (vykd[vk] || 0) + 1;
+      }
+    });
+    s.terminai = Object.keys(terminai).map(function (k) {
+      var p = k.split("|"), q = kvantiliai(terminai[k]);
+      q.budas = p[0]; q.tarptautinis = p[1] === "T" ? true : p[1] === "S" ? false : null;
+      return q;
+    }).sort(function (a, b) { return b.n - a.n; }).slice(0, 20);
+    s.sprendimoDienos = kvantiliai(sprendimas);
+    s.sutartiesDienos = kvantiliai(sutartis);
+    s.verte = kvantiliai(vertes);
+    s.trukmeMen = kvantiliai(trukme);
+    s.menesiai = Object.keys(menesiai).sort().slice(-36).map(function (m) { return [m, menesiai[m]]; });
+    s.vykdytojai = Object.keys(vykd).map(function (k) { var p = k.split("|"); return { pavadinimas: p[0], kodas: p[1] || null, kiekis: vykd[k] }; })
+      .sort(function (a, b) { return b.kiekis - a.kiekis || a.pavadinimas.localeCompare(b.pavadinimas); }).slice(0, 10);
+    return s;
+  }
+  function trumpas(o) {
+    return { id: o.id, title: o.title, caName: o.caName, caNumber: o.caNumber, procedure: o.procedure, status: o.status,
+      procurementType: o.procurementType, cpvCodes: o.cpvCodes.slice(0, 5), estimatedValue: o.estimatedValue, aboveThreshold: o.aboveThreshold,
+      datePublished: o.datePublished, tenderSubmissionDeadline: o.tenderSubmissionDeadline, nuoroda: CVP_IS_NUORODA + o.id };
   }
 
   // ---------------------------------------------------------------------------
@@ -205,11 +390,13 @@
     neikelta: "CVP IS duomenys serveryje dar neįkelti arba įkelti nepavyko - pirkimo duomenų patikrinti negalima. Patikrinkite CVP IS.",
     numeris: "Pirkimo numeris turi būti 5-9 skaitmenys.",
     paieska: "Paieškos tekstas turi būti 3-100 ženklų (raidės ir skaitmenys).",
+    statistika: "Statistikai nurodykite bent vieną parametrą (q, vykdytojas, ca, cpv, tipas, budas, busena, nuo, iki).",
     metodas: "Leidžiamos tik GET užklausos.",
     kelias: "Tokio adreso nėra."
   };
 
-  function atsakymas(ix, metodas, adresas, kilme, busena) {
+  function atsakymas(ix, metodas, adresas, kilme, busena, dabar) {
+    dabar = typeof dabar === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(dabar) ? dabar : dabarLT();
     metodas = String(metodas || "").toUpperCase();
     if (metodas === "OPTIONS") return { status: 204, antrastes: antrastes(kilme, false), kunas: "" };
     if (metodas !== "GET" && metodas !== "HEAD") return json(405, { klaida: KLAIDOS.metodas }, kilme, false);
@@ -235,25 +422,33 @@
       return json(200, { pirkimas: o, nuoroda: CVP_IS_NUORODA + id, meta: meta(ix) }, kilme, true);
     }
 
-    if (kelias === "/api/cvpis/paieska") {
-      var q = u.searchParams.get("q");
-      var norm = paieskosTekstas(q);
-      if (typeof q !== "string" || q.length > 100 || norm.length < 3) return json(400, { klaida: KLAIDOS.paieska }, kilme, false);
+    if (kelias === "/api/cvpis/paieska" || kelias === "/api/cvpis/statistika") {
+      var st = kelias === "/api/cvpis/statistika";
+      var fr = filtrai(u.searchParams);
+      if (fr.klaida) return json(400, { klaida: fr.klaida === "tuscia" ? (st ? KLAIDOS.statistika : KLAIDOS.paieska) : FILTRU_KLAIDOS[fr.klaida] }, kilme, false);
       if (!ix) return json(503, { klaida: KLAIDOS.neikelta }, kilme, false);
-      var zodziai = norm.split(" ").filter(Boolean).slice(0, 8);
-      var rasti = [];
-      for (var i = 0; i < ix.paieska.length; i++) {
-        var t = ix.paieska[i][1], visi = true;
-        for (var j = 0; j < zodziai.length; j++) if (t.indexOf(zodziai[j]) < 0) { visi = false; break; }
-        if (visi) rasti.push(ix.pagalId.get(ix.paieska[i][0]));
+      var f = fr.f;
+      if (st) {
+        // Statistika kešuojama iki naujo sąrašo; „aktyvus“ priklauso nuo laiko - raktas su valanda
+        var raktas = JSON.stringify(f) + (f.busena === "aktyvus" ? "|" + dabar.slice(0, 13) : "");
+        var kb = ix.kesas && ix.kesas.get(raktas);
+        if (!kb) {
+          kb = JSON.stringify({ statistika: statistika(atrinkti(ix, f, dabar), dabar), meta: meta(ix) });
+          if (ix.kesas) { if (ix.kesas.size >= 300) ix.kesas.delete(ix.kesas.keys().next().value); ix.kesas.set(raktas, kb); }
+        }
+        return { status: 200, antrastes: antrastes(kilme, true), kunas: kb };
       }
-      rasti.sort(function (a, b) { return String(b.datePublished || "").localeCompare(String(a.datePublished || "")) || b.id - a.id; });
-      var viso = rasti.length;
-      var rezultatai = rasti.slice(0, 20).map(function (o) {
-        return { id: o.id, title: o.title, caName: o.caName, procedure: o.procedure, status: o.status,
-          datePublished: o.datePublished, tenderSubmissionDeadline: o.tenderSubmissionDeadline, nuoroda: CVP_IS_NUORODA + o.id };
-      });
-      return json(200, { rezultatai: rezultatai, viso: viso, rodoma: rezultatai.length, meta: meta(ix) }, kilme, true);
+      var rasti = atrinkti(ix, f, dabar);
+      if (f.rikiuoti === "terminas") {
+        rasti.sort(function (a, b) {
+          var x = a.tenderSubmissionDeadline, y = b.tenderSubmissionDeadline;
+          if (!x !== !y) return x ? -1 : 1;
+          return String(x || "").localeCompare(String(y || "")) || b.id - a.id;
+        });
+      }
+      var psl = f.psl || 1, viso = rasti.length;
+      var rezultatai = rasti.slice((psl - 1) * PSL_DYDIS, psl * PSL_DYDIS).map(trumpas);
+      return json(200, { rezultatai: rezultatai, viso: viso, rodoma: rezultatai.length, psl: psl, dydis: PSL_DYDIS, meta: meta(ix) }, kilme, true);
     }
 
     return json(404, { klaida: KLAIDOS.kelias }, kilme, false);
@@ -263,6 +458,7 @@
     VERSIJA: VERSIJA, KILMES: KILMES, TEKSTAI: TEKSTAI, DATOS: DATOS, LOGINIAI: LOGINIAI, KLAIDOS: KLAIDOS,
     tekstas: tekstas, data: data, verte: verte, bvpz: bvpz, nuts: nuts, tedNuorodos: tedNuorodos,
     normalizuokIrasa: normalizuokIrasa, tikrinkPuslapi: tikrinkPuslapi, priimtinasKiekis: priimtinasKiekis,
-    paieskosTekstas: paieskosTekstas, sukurkIndeksa: sukurkIndeksa, atsakymas: atsakymas, kilmesAntraste: kilmesAntraste
+    paieskosTekstas: paieskosTekstas, sukurkIndeksa: sukurkIndeksa, atsakymas: atsakymas, kilmesAntraste: kilmesAntraste,
+    filtrai: filtrai, statistika: statistika, kvantiliai: kvantiliai, dabarLT: dabarLT, PSL_DYDIS: PSL_DYDIS
   };
 });

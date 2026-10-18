@@ -4,7 +4,7 @@
  *
  * Ką daro: kas ATNAUJINIMAS_VAL valandų parsisiunčia VPT CVP IS API sąrašą (vieši pirkimų duomenys),
  * laiko jį atmintyje ir disko kopijoje (gzip, viena eilutė - vienas pirkimas) ir atsako į GET užklausas:
- *   /api/cvpis/pirkimas/<numeris>   /api/cvpis/paieska?q=<tekstas>   /api/cvpis/busena
+ *   /api/cvpis/pirkimas/<numeris>   /api/cvpis/paieska?<filtrai>   /api/cvpis/statistika?<filtrai>   /api/cvpis/busena
  * Logika ir tikrinimai - cvpis-logika.js (testai - serveris/testai.html). Diegimas ir saugumas - README.md.
  *
  * Saugumas:
