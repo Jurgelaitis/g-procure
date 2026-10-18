@@ -110,8 +110,14 @@
   var PROCEDUROS = {
     "Open": { lt: "Atviras konkursas", en: "Open procedure" },
     "Simplified Open": { lt: "Supaprastintas atviras konkursas", en: "Simplified open procedure" },
+    "Simplified Open with negotiations": { lt: "Supaprastintas atviras konkursas su derybomis", en: "Simplified open procedure with negotiations" },
     "Restricted": { lt: "Ribotas konkursas", en: "Restricted procedure" },
     "Negotiated with prior call for competition": { lt: "Skelbiamos derybos", en: "Negotiated procedure with prior call for competition" },
+    // Klasikinės direktyvos (VPĮ) skelbiamos derybos VPT duomenyse - „Competitive with negotiation“ (2026-10-18b: visi 355 įrašai - klasikinė direktyva)
+    "Competitive with negotiation": { lt: "Skelbiamos derybos", en: "Competitive procedure with negotiation" },
+    "Accelerated open": { lt: "Atviras konkursas (sutrumpinti terminai)", en: "Accelerated open procedure" },
+    "Qualification System": { lt: "Kvalifikacijos sistema", en: "Qualification system" },
+    "cft.procedure.type.qs.specific.contract": { lt: "Konkretus pirkimas pagal kvalifikacijos sistemą", en: "Specific contract under a qualification system" },
     "Negotiated without prior call for competition": { lt: "Neskelbiamos derybos", en: "Negotiated procedure without prior call for competition" },
     "Negotiated without prior publication": { lt: "Neskelbiamos derybos", en: "Negotiated procedure without prior publication" },
     "Competitive dialogue": { lt: "Konkurencinis dialogas", en: "Competitive dialogue" },
@@ -138,7 +144,7 @@
   };
   function kodas(k, zodynas, lang) {
     if (typeof k !== "string" || !k) return null;
-    var z = zodynas[k];
+    var z = Object.prototype.hasOwnProperty.call(zodynas, k) ? zodynas[k] : null;   // VPT duomenys - ne „toString“ ir pan.
     return { tekstas: z ? z[lang === "en" ? "en" : "lt"] : k, kodas: k, isverstas: !!z };
   }
   // „24_months“ -> „24 mėn.“; kita - kaip yra
@@ -175,6 +181,9 @@
   var BUDU = {
     "Open": { t: "T-AK", s: "S-AK" },
     "Negotiated with prior call for competition": { t: "T-SD", s: "S-SD" },
+    "Competitive with negotiation": { t: "T-SD", s: "S-SD", tik: KLASIKINE },
+    "Accelerated open": { t: "T-AK", s: "S-AK" },
+    "Qualification System": { visada: "KS", tik: SEKTORINE },
     "Negotiated without prior call for competition": { t: "T-ND", s: "S-ND" },
     "Negotiated without prior publication": { t: "T-ND", s: "S-ND" },
     "Restricted": { visada: "RK" },
@@ -189,13 +198,44 @@
     var b = p && BUDU[p.procedure], id = null, pagrindas = null;
     if (!b) return null;
     if (b.mv) { if (p.directive === NETAIKOMA) { id = b.mv; pagrindas = "mv"; } }
-    else if (p.directive === KLASIKINE || p.directive === SEKTORINE) {
+    else if ((p.directive === KLASIKINE || p.directive === SEKTORINE) && (!b.tik || p.directive === b.tik)) {
       if (b.visada) { id = b.visada; pagrindas = "procedura"; }
       else if (p.aboveThreshold === true) { id = b.t; pagrindas = "tarptautinis"; }
       else if (p.aboveThreshold === false) { id = b.s; pagrindas = "supaprastintas"; }
     }
     if (!id || (global.GP_METHODS && !global.GP_METHODS.isValid(id))) return null;
     return { id: id, pagrindas: pagrindas };
+  }
+  /* Atvirkščiai: kortelės būdas (GP_METHODS id) -> VPT procedūros ir tarptautinė vertė (rinkos duomenims, 2026-10-18b).
+     MV-NR, MV-NZ, CPO, PS, VS ir KONC - VPT duomenyse aiškaus atitikmens nėra (null; „Simplified“ - mažos vertės, bet apklausos rūšis
+     nenurodyta). Bazinis būdas (AK, SD, ND) - be tarptautinės vertės (null - abi). */
+  var VPT_PAGAL_BUDA = {
+    "T-AK": [["Open"], true], "S-AK": [["Open"], false],
+    "T-SD": [["Negotiated with prior call for competition", "Competitive with negotiation"], true],
+    "S-SD": [["Negotiated with prior call for competition", "Competitive with negotiation"], false],
+    "T-ND": [["Negotiated without prior call for competition", "Negotiated without prior publication"], true],
+    "S-ND": [["Negotiated without prior call for competition", "Negotiated without prior publication"], false],
+    "AK": [["Open"], null], "SD": [["Negotiated with prior call for competition", "Competitive with negotiation"], null],
+    "ND": [["Negotiated without prior call for competition", "Negotiated without prior publication"], null],
+    "MV": [["Simplified Open", "Simplified Open with negotiations"], false], "KS": [["Qualification System"], null],
+    "RK": [["Restricted"], null], "KD": [["Competitive dialogue"], null], "IP": [["Innovation partnership"], null],
+    "DPS-K": [["DPS Specific Contract"], null], "DPS": [["Dynamic Purchasing System"], null],
+    "MV-SAB": [["Simplified Open"], false], "MV-SAD": [["Simplified Open with negotiations"], false]
+  };
+  /* Derybų procedūrų pavadinimai VPT duomenyse priklauso nuo direktyvos (2026-10-18b, visi ~80 400 įrašų): „Negotiated with prior
+     call for competition“ ir „Qualification System“ - tik sektorinė (PĮ), „Competitive with negotiation“ - tik klasikinė (VPĮ),
+     „Negotiated without prior call for competition“ - 98 % sektorinė, „Negotiated without prior publication“ - 95 % klasikinė
+     (likusios - gynybos). vptBudas(id, "PI" | "VPI") palieka to įstatymo procedūras (kitų nėra - visas). */
+  var PROC_ISTATYMAS = {
+    "Negotiated with prior call for competition": "PI", "Negotiated without prior call for competition": "PI", "Qualification System": "PI",
+    "Competitive with negotiation": "VPI", "Negotiated without prior publication": "VPI"
+  };
+  function procedurosIstatymas(p) { return Object.prototype.hasOwnProperty.call(PROC_ISTATYMAS, p) ? PROC_ISTATYMAS[p] : null; }
+  function vptBudas(id, rezimas) {
+    var x = Object.prototype.hasOwnProperty.call(VPT_PAGAL_BUDA, id) ? VPT_PAGAL_BUDA[id] : null;
+    if (!x) return null;
+    var pr = x[0].filter(function (p) { return !rezimas || !PROC_ISTATYMAS[p] || PROC_ISTATYMAS[p] === rezimas; });
+    return { proceduros: pr.length ? pr : x[0].slice(), tarptautinis: x[1] };
   }
   var KORTELES_BUSENOS = {
     "Published": "paskelbtas", "Bid submission": "paskelbtas", "Proposal Submission": "paskelbtas",
@@ -324,6 +364,6 @@
   global.GP_VPT = {
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, ted: ted, atnaujinta: atnaujinta,
     PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai,
-    paieska: paieska, statistika: statistika
+    paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas
   };
 })(typeof window !== "undefined" ? window : this);
