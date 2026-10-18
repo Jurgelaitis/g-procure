@@ -76,7 +76,7 @@
   // shared/skelbimas.js (GP_SKELBIMAS.pirkejas / rezimas), nes tuo pačiu atpažinimu
   // pildoma ir bendra pirkimo kortelė (tobulinimo planas A2). Čia - tik nuorodos,
   // kad modulio kodas ir testai liktų tokie patys. Sandara - iš keturių tikrų
-  // CVP IS skelbimų PDF 2026-09-24 (LITGRID 9683631, Amber Grid 9742096, EPSO-G
+  // CVP IS skelbimų PDF 2026-09-24 (LITGRID, Amber Grid 9742096, EPSO-G
   // 9281765, Energy cells 9614756); aprašas - shared/skelbimas.js.
   // ---------------------------------------------------------------------------
   function atpazinkPirkeja(tekstas) { return global.GP_SKELBIMAS ? global.GP_SKELBIMAS.pirkejas(tekstas) : null; }
