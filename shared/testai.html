@@ -2016,7 +2016,7 @@ function pdfIsEiluciu(eilutes){
   return new Uint8Array([...s].map(c => c.charCodeAt(0)));
 }
 async function testaiSkelbimasDarbastalis(){
-  dabartine = grupe("Skelbimo atpažinimas, importas ir darbo stalas (skelbimas.js, mano-pirkimai.js)");
+  dabartine = grupe("Skelbimo atpažinimas, VPT duomenys, importas ir darbo stalas (skelbimas.js, vpt-duomenys.js, mano-pirkimai.js)");
   const SK = '<script src="organizacijos.js"><\/script><script src="procurement-methods.js"><\/script><script src="money.js"><\/script><script src="skelbimas.js"><\/script>';
 
   await testas("Tekstas su „$&“, „$'“ ir „$$“ pastabose lieka pažodžiui: skelbimo pirkėjas, būdas ir BVPŽ aprašas, dokumento skaitymo klaida (String.replace šablonai netaikomi)", async ()=>{
@@ -2130,6 +2130,158 @@ async function testaiSkelbimasDarbastalis(){
       tiesa($("skelbimoBusena").textContent.includes("pažymėtas įprastas LITGRID AB režimas (PĮ) pagal organizacijų sąrašą"), "pasakyta, iš kur režimas: " + $("skelbimoBusena").textContent);
     } finally { fr.remove(); }
   }, "iki 2026-10-17 LITGRID mažos vertės skelbimas (forma „Perkančiosios organizacijos veiklos sritis“) kortelei siūlė VPĮ, o „Mano pirkimai“ tada nesiūlė LITGRID įrankių");
+
+  /* VPT CVP IS duomenys per G-Procure serverį (shared/vpt-duomenys.js, 2026-10-18): pirkimo kortelės pasiūlymai pagal CVP IS numerį */
+  const VPT_SK = '<script src="organizacijos.js"><\/script><script src="procurement-methods.js"><\/script><script src="vpt-duomenys.js"><\/script>';
+  const vptPirkimas = (o) => Object.assign({ id: 9566057, title: "Pastotės rekonstrukcijos darbų pirkimas", caName: "LITGRID AB", procedure: "Negotiated with prior call for competition",
+    aboveThreshold: false, directive: "prompt.directive.utilities", procurementType: "Works", cpvCodes: ["45231000", "45317000"], estimatedValue: 1319009,
+    contractDuration: "24_months", tenderSubmissionDeadline: "2026-10-02T13:00:00", datePublished: "2026-09-09T10:12:00", status: "Evaluation" }, o || {});
+  const vptAtsakymas = (status, j) => ({ status: status, json: () => j === undefined ? Promise.reject(new Error("ne JSON")) : Promise.resolve(j) });
+
+  await testas("VPT duomenys: kortelės pasiūlymai su citatomis; būdas pagal procedūrą, tarptautinę vertę ir direktyvą (13 būdų, neaiškūs - nesiūlomi); mažos vertės ir kitos direktyvos - be režimo; rinkos konsultacija; BVPŽ, vertė, trukmė, būsenos; EN", async ()=>{
+    const { f, w } = await ramas(VPT_SK);
+    try {
+      const V = w.GP_VPT, pagal = r => Object.fromEntries(r.laukai.map(x => [x.laukas, x.reiksme]));
+      w.GP_CPV_DATA = { codes: [["45231000-5", "Vamzdynų, ryšių ir elektros linijų tiesimo darbai", "Construction work for pipelines"]] };
+      const r = V.korteles(vptPirkimas(), "lt"), l = pagal(r);
+      lygu([l.pavadinimas, l.vykdytojas, l.rezimas, l.objektas, l.budas, l.bvpz, l.verte, l.trukmeMen, l.pasiulymuTerminas, l.paskelbimas, l.busena, l.cvpisNr],
+           ["Pastotės rekonstrukcijos darbų pirkimas", "litgrid", "PI", "darbai", "S-SD", "45231000-5", 1319009, 24, "2026-10-02T13:00", "2026-09-09", "vertinamas", "9566057"]);
+      tiesa(r.laukai.every(x => x.citata), "kiekvienas pasiūlymas turi citatą");
+      lygu(r.pastabos, [], "pastabų nėra");
+      const lb = Object.fromEntries(r.laukai.map(x => [x.laukas, x]));
+      tiesa(/ne tarptautinės vertės/.test(lb.budas.pastaba) && /procedure: Negotiated with prior call.*tarptautinė vertė: false.*direktyva: prompt\.directive\.utilities/.test(lb.budas.citata), "būdo pagrindas ir citata: " + JSON.stringify(lb.budas));
+      tiesa(/6 val\..*CVP IS/.test(lb.pasiulymuTerminas.pastaba), "terminas - iki 6 val. senumo, galioja CVP IS");
+      const KL = "prompt.directive.classic", SE = "prompt.directive.utilities", NE = "prompt.directive.none";
+      const budai = [["Open", true, KL, "T-AK"], ["Open", false, SE, "S-AK"], ["Open", null, SE, undefined], ["Negotiated with prior call for competition", true, SE, "T-SD"],
+        ["Negotiated without prior call for competition", true, KL, "T-ND"], ["Negotiated without prior publication", false, SE, "S-ND"], ["Restricted", true, SE, "RK"],
+        ["Competitive dialogue", false, KL, "KD"], ["Innovation partnership", true, KL, "IP"], ["DPS Specific Contract", false, SE, "DPS-K"], ["Dynamic Purchasing System", true, SE, "DPS"],
+        ["Simplified Open", false, NE, "MV-SAB"], ["Simplified Open with negotiations", false, NE, "MV-SAD"], ["Simplified Open", false, SE, undefined], ["Open", false, NE, undefined],
+        ["Open", true, "prompt.directive.defence", undefined], ["Open", true, "prompt.directive.concession", undefined], ["Specific Contract", true, SE, undefined],
+        ["Competitive with negotiation", true, SE, undefined], ["Simplified", false, NE, undefined]];
+      const gauta = budai.map(([p, a, d]) => pagal(V.korteles(vptPirkimas({ procedure: p, aboveThreshold: a, directive: d }), "lt")).budas);
+      lygu(gauta, budai.map(x => x[3]), "būdai");
+      const neaiskus = V.korteles(vptPirkimas({ procedure: "Specific Contract" }), "lt");
+      tiesa(neaiskus.pastabos.some(x => /„Specific Contract“.*nepaverčiame/.test(x)), "neaiškus būdas - pastaba: " + neaiskus.pastabos.join(" | "));
+      const mv = V.korteles(vptPirkimas({ procedure: "Simplified Open", directive: NE }), "lt");
+      tiesa(!("rezimas" in pagal(mv)) && mv.pastabos.some(x => /direktyva netaikoma.*pirkimo dokumentai/.test(x)), "MV - be režimo: " + mv.pastabos.join(" | "));
+      lygu(pagal(V.korteles(vptPirkimas({ directive: KL }), "lt")).rezimas, "VPI", "klasikinė - VPĮ");
+      const gyn = V.korteles(vptPirkimas({ directive: "prompt.directive.defence" }), "lt");
+      tiesa(!("rezimas" in pagal(gyn)) && gyn.pastabos.some(x => /defence.*režimo nesiūlome/.test(x)), "gynybos direktyva: " + gyn.pastabos.join(" | "));
+      const rk = V.korteles(vptPirkimas({ procedure: "Preliminary Market Consultation", directive: null, status: "Published", aboveThreshold: null }), "lt"), lrk = pagal(rk);
+      tiesa(!lrk.budas && !lrk.busena && !lrk.rezimas && rk.pastabos.some(x => /rinkos konsultacija/.test(x)) && !rk.pastabos.some(x => /direktyva/.test(x)), "rinkos konsultacija: " + rk.pastabos.join(" | "));
+      lygu([pagal(V.korteles(vptPirkimas({ status: "Cancelled" }))).busena, pagal(V.korteles(vptPirkimas({ status: "Bid submission" }))).busena], ["nutrauktas", "paskelbtas"]);
+      const bs = V.korteles(vptPirkimas({ status: "Contract awarded" }), "lt");
+      tiesa(!pagal(bs).busena && bs.pastabos.some(x => /„Contract awarded“/.test(x)), "nežinoma būsena - pastaba");
+      lygu([pagal(V.korteles(vptPirkimas({ estimatedValue: 0 }))).verte, pagal(V.korteles(vptPirkimas({ contractDuration: "90_days" }))).trukmeMen, pagal(V.korteles(vptPirkimas({ contractDuration: "2_years" }))).trukmeMen],
+           [undefined, undefined, 24], "vertė 0 nesiūloma, dienos - ne mėnesiai, metai - mėnesiais");
+      const kitas = V.korteles(vptPirkimas({ caName: "UAB „Kita $& $' $$“", cpvCodes: ["99999999"] }), "lt");
+      tiesa(!pagal(kitas).vykdytojas && kitas.pastabos.some(x => x.includes("„UAB „Kita $& $' $$““ organizacijų registre nerastas")), "nežinomas vykdytojas - pastaba pažodžiui: " + kitas.pastabos.join(" | "));
+      tiesa(!pagal(kitas).bvpz && kitas.pastabos.some(x => /„99999999“.*žodyne nerasta/.test(x)), "BVPŽ ne žodyne");
+      delete w.GP_CPV_DATA;
+      lygu([pagal(V.korteles(vptPirkimas())).bvpz, pagal(V.korteles(vptPirkimas({ cpvCodes: ["45231000-5"] }))).bvpz], [undefined, "45231000-5"], "be žodyno - tik su kontroliniu skaitmeniu");
+      lygu(V.korteles(null), { laukai: [], pastabos: [] }, "be pirkimo");
+      const en = V.korteles(vptPirkimas({ procedure: "Simplified Open", directive: NE }), "en");
+      tiesa(en.pastabos.some(x => /no directive applies/.test(x)) && /low-value published survey/.test(en.laukai.find(x => x.laukas === "budas").pastaba), "EN: " + en.pastabos.join(" | "));
+    } finally { f.remove(); }
+  });
+
+  await testas("VPT duomenys: pirkimas() - tik 5-9 skaitmenys, GET be slapukų ir nukreipimo informacijos; 404 - „nėra“ su sąrašo laiku, 503 - neįkelta, kitas numeris atsakyme ir ryšio klaida - ne „nėra“; atšaukus; laikas Lietuvos", async ()=>{
+    const { f, w } = await ramas(VPT_SK);
+    try {
+      const V = w.GP_VPT, kv = [];
+      const su = atsakymas => (u, o) => { kv.push([u, o]); return typeof atsakymas === "function" ? atsakymas() : Promise.resolve(atsakymas); };
+      lygu([(await V.pirkimas("12", { fetch: su(null) })).rusis, (await V.pirkimas("95660571234", { fetch: su(null) })).rusis, (await V.pirkimas("9566057; x", { fetch: su(null) })).rusis, kv.length],
+           ["numeris", "numeris", "numeris", 0], "netinkamas numeris - užklausos nėra");
+      const ok = await V.pirkimas(" 9566057 ", { fetch: su(vptAtsakymas(200, { pirkimas: vptPirkimas(), meta: { atnaujinta: "2026-10-18T08:00:00Z" } })) });
+      lygu([ok.ok, ok.pirkimas.id, ok.meta.atnaujinta, ok.nuoroda], [true, 9566057, "2026-10-18T08:00:00Z", "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=9566057"]);
+      lygu([kv[0][0], kv[0][1].method, kv[0][1].credentials, kv[0][1].referrerPolicy], ["https://api.g-procure.com/api/cvpis/pirkimas/9566057", "GET", "omit", "no-referrer"], "užklausa");
+      lygu((await V.pirkimas("9566057", { fetch: su(vptAtsakymas(200, { pirkimas: vptPirkimas({ id: 1234567 }) })) })).rusis, "rysys", "kito pirkimo atsakymas - ne duomenys");
+      const nera = await V.pirkimas("1234567", { fetch: su(vptAtsakymas(404, { meta: { atnaujinta: "2026-10-18T08:00:00Z" } })) });
+      lygu([nera.ok, nera.rusis, nera.meta.atnaujinta], [false, "nera", "2026-10-18T08:00:00Z"]);
+      lygu([(await V.pirkimas("1234567", { fetch: su(vptAtsakymas(404, { klaida: "x" })) })).rusis, (await V.pirkimas("1234567", { fetch: su(vptAtsakymas(503, { klaida: "x" })) })).rusis,
+            (await V.pirkimas("1234567", { fetch: su(vptAtsakymas(429)) })).rusis, (await V.pirkimas("1234567", { fetch: su(() => Promise.reject(new TypeError("Failed to fetch"))) })).rusis],
+           ["rysys", "neikelta", "rysys", "rysys"], "404 be sąrašo laiko, 503, 429 (nginx - be JSON), ryšys");
+      const ctl = new w.AbortController(); ctl.abort();
+      lygu((await V.pirkimas("1234567", { signal: ctl.signal, fetch: (u, o) => o.signal.aborted ? Promise.reject(new w.DOMException("aborted", "AbortError")) : Promise.resolve(vptAtsakymas(503, {})) })).rusis, "atsaukta");
+      lygu([V.atnaujinta("2026-10-18T08:00:00Z", "lt"), V.atnaujinta("2026-01-15T22:30:00Z", "lt"), V.atnaujinta("<b>", "lt")], ["2026-10-18 11:00", "2026-01-16 00:30", "-"], "UTC -> Lietuvos laikas (vasara, žiema)");
+      lygu([V.trukmeMen("36_months"), V.trukmeMen("3_years"), V.trukmeMen("12_weeks"), V.trukmeMen("0_months"), V.trukmeMen("x")], [36, 36, null, null, null]);
+    } finally { f.remove(); }
+  });
+
+  await testas("Kortelių puslapis: CVP IS numeris ar nuoroda -> VPT duomenų pasiūlymai („VPT duomenyse“), įvesta kitokia vertė nepažymėta, perkėlus forma užpildyta, neišsaugota; „nėra“ - su sąrašo laiku; ryšio klaida - „Bandyti dar kartą“; netinkamas numeris - be užklausos; MV - režimas iš organizacijų sąrašo", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id), F = $("formaForm").elements;
+      w.GP_CPV_DATA = { codes: [["45231000-5", "Vamzdynų, ryšių ir elektros linijų tiesimo darbai", "Construction work for pipelines"]] };
+      const kv = []; let atsakymas = () => Promise.resolve(vptAtsakymas(200, { pirkimas: vptPirkimas(), meta: { atnaujinta: "2026-10-18T08:00:00Z" } }));
+      const tikras = w.fetch.bind(w);
+      w.fetch = (u, o) => { if (!String(u).includes("/api/cvpis/")) return tikras(u, o); kv.push(u); return atsakymas(u, o); };
+      // laukiama, kol bus n užklausų ir būsena atitiks (ankstesnė būsena su tuo pačiu tekstu nesiskaito)
+      const laukBusenos = async (re, n) => { for (let i = 0; i < 80 && !(kv.length >= (n || 0) && re.test($("skelbimoBusena").textContent + ($("skelbimoPasiulymai").hidden ? "" : " [pasiūlymai]"))); i++) await lauk(50); };
+      $("naujaHeader").click();
+      $("k-verte").value = "1 000 000";
+      $("vptNr").value = "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=9566057&b=x";
+      $("vptMygtukas").click();
+      await laukBusenos(/\[pasiūlymai\]|nepavyko/i, 1);
+      tiesa(!$("skelbimoPasiulymai").hidden, "pasiūlymai neparodyti: " + $("skelbimoBusena").textContent);
+      lygu([kv.length, kv[0], $("vptNr").value], [1, "https://api.g-procure.com/api/cvpis/pirkimas/9566057", "9566057"], "užklausa ir numeris iš nuorodos");
+      const box = $("skelbimoPasiulymai"), eil = [...box.querySelectorAll(".pasiulymas")];
+      tiesa(/Iš VPT duomenų \(pirkimas Nr\. 9566057, sąrašas atnaujintas 2026-10-18 11:00\) atpažinta laukų: 12/.test(box.textContent), "įžanga: " + box.querySelector("p").textContent);
+      tiesa(eil.length === 12 && eil.every(x => /VPT duomenyse: „/.test(x.textContent)) && !/Skelbime: „/.test(box.textContent), "citatos „VPT duomenyse“");
+      const verte = eil.find(x => /Vertė:/.test(x.textContent));
+      tiesa(verte && !verte.querySelector("input").checked && /Perrašytų įvestą reikšmę „1 000 000 EUR“/.test(verte.textContent), "įvesta vertė nepažymėta: " + (verte && verte.textContent));
+      [...box.querySelectorAll("button")].find(b => /Perkelti/.test(b.textContent)).click();
+      lygu([F.pavadinimas.value, F.vykdytojas.value, F.rezimas.value, F.objektas.value, F.budas.value, F.bvpz.value, $("k-verte").value, F.trukmeMen.value, F.pasiulymuTerminas.value, F.paskelbimas.value, F.cvpisNr.value, F.busena.value],
+           ["Pastotės rekonstrukcijos darbų pirkimas", "litgrid", "PI", "darbai", "S-SD", "45231000-5", "1 000 000", "24", "2026-10-02T13:00", "2026-09-09", "9566057", "vertinamas"]);
+      tiesa($("skelbimoBusena").textContent.includes("Iš VPT duomenų perkelta laukų: 11. Patikrinkite ir išsaugokite kortelę.") && !/režimas|organizacijų sąrašą/.test($("skelbimoBusena").textContent), $("skelbimoBusena").textContent);
+      lygu(w.GP_KORTELE.skaityk().korteles.length, 0, "neišsaugota, kol žmogus nepaspaudė „Išsaugoti kortelę“");
+      // Tuščias laukas - imamas formos CVP IS numeris
+      $("vptNr").value = "";
+      $("vptMygtukas").click();
+      await laukBusenos(/\[pasiūlymai\]|nepavyko/i, 2);
+      lygu([kv[1], $("vptNr").value], ["https://api.g-procure.com/api/cvpis/pirkimas/9566057", "9566057"], "numeris iš formos lauko „CVP IS numeris“");
+      // Sąraše nėra - sakoma su sąrašo laiku, pasiūlymų nėra; Enter lauke
+      atsakymas = () => Promise.resolve(vptAtsakymas(404, { meta: { atnaujinta: "2026-10-18T08:00:00Z" } }));
+      $("vptNr").value = "1234567";
+      $("vptNr").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await laukBusenos(/nėra/, 3);
+      tiesa(/VPT sąraše pirkimo Nr\. 1234567 nėra \(sąrašas atnaujintas 2026-10-18 11:00\)/.test($("skelbimoBusena").textContent) && $("skelbimoPasiulymai").hidden, "nėra: " + $("skelbimoBusena").textContent);
+      // Ryšio klaida (ir 503) - ne „nėra“, su „Bandyti dar kartą“; pakartojus - pasiūlymai
+      atsakymas = () => Promise.reject(new TypeError("Failed to fetch"));
+      $("vptMygtukas").click();
+      await laukBusenos(/nepavyko/i, 4);
+      const bandyk = [...d.querySelectorAll("#skelbimoBusena button")].find(b => /Bandyti dar kartą/.test(b.textContent));
+      tiesa(/CVP IS duomenų gauti nepavyko[\s\S]*neatsakė arba VPT sąrašas dar neįkeltas/.test($("skelbimoBusena").textContent) && !/nėra \(/.test($("skelbimoBusena").textContent) && bandyk, "klaida: " + $("skelbimoBusena").textContent);
+      atsakymas = () => Promise.resolve(vptAtsakymas(503, { klaida: "neįkelta" }));
+      bandyk.click();
+      await laukBusenos(/nepavyko/i, 5);
+      tiesa(/neatsakė arba VPT sąrašas dar neįkeltas/.test($("skelbimoBusena").textContent), "503: " + $("skelbimoBusena").textContent);
+      atsakymas = () => Promise.resolve(vptAtsakymas(200, { pirkimas: vptPirkimas({ id: 1234567 }), meta: { atnaujinta: "2026-10-18T08:00:00Z" } }));
+      [...d.querySelectorAll("#skelbimoBusena button")].find(b => /Bandyti dar kartą/.test(b.textContent)).click();
+      await laukBusenos(/\[pasiūlymai\]/, 6);
+      tiesa(!$("skelbimoPasiulymai").hidden && kv[kv.length - 1].endsWith("/pirkimas/1234567"), "pakartota tuo pačiu numeriu");
+      // Netinkamas numeris - klaida, užklausos nėra
+      const pries = kv.length;
+      $("vptNr").value = "pirkimas abc";
+      $("vptMygtukas").click();
+      await lauk(50);
+      tiesa(/5-9 skaitmenys/.test($("skelbimoBusena").textContent) && kv.length === pries && d.activeElement === $("vptNr"), "netinkamas numeris: " + $("skelbimoBusena").textContent);
+      // Mažos vertės (direktyva netaikoma): režimo nesiūlo, perkėlus - įprastas vykdytojo režimas su paaiškinimu
+      $("naujaHeader").click();
+      lygu($("vptNr").value, "", "nauja forma - laukas tuščias");
+      atsakymas = () => Promise.resolve(vptAtsakymas(200, { pirkimas: vptPirkimas({ id: 9982633, procedure: "Simplified Open", directive: "prompt.directive.none", procurementType: "Services", estimatedValue: 0 }), meta: { atnaujinta: "2026-10-18T08:00:00Z" } }));
+      $("vptNr").value = "9982633";
+      $("vptMygtukas").click();
+      await laukBusenos(/\[pasiūlymai\]|nepavyko/i, pries + 1);
+      const pav = [...d.querySelectorAll("#skelbimoPasiulymai .pasiulymas b")].map(x => x.textContent);
+      tiesa(!pav.some(x => /^Režimas:/.test(x)) && pav.some(x => /^Vykdytojas:/.test(x)) && /direktyva netaikoma/.test($("skelbimoPasiulymai").textContent), "MV: " + pav.join(" | "));
+      [...d.querySelectorAll("#skelbimoPasiulymai button")].find(b => /Perkelti/.test(b.textContent)).click();
+      lygu([F.vykdytojas.value, F.rezimas.value, F.budas.value], ["litgrid", "PI", "MV-SAB"]);
+      tiesa($("skelbimoBusena").textContent.includes("VPT duomenys režimo nenurodo - pažymėtas įprastas LITGRID AB režimas (PĮ) pagal organizacijų sąrašą"), "pasakyta, iš kur režimas: " + $("skelbimoBusena").textContent);
+    } finally { fr.remove(); }
+  });
 
   await testas("Darbo stalas: be kortelių nerodomas; neperskaitoma saugykla - sakoma; terminai darbo dienomis (su šventėmis), užbaigti - tik skaičius, trūkstami laukai kilmininku", async ()=>{
     const { f, w, d } = await ramas('<link rel="stylesheet" href="epso-g.css"><section id="sek" hidden><div id="mp"></div></section>' + KORTELES_FAILAI
