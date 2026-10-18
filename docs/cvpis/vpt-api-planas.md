@@ -19,6 +19,19 @@ ir `pageNum`.
   nesuteikti; į VPT dėl to nesikreipiame (naudotojo taisyklė) - dalyvių ir laimėtojų duomenų ieškoma kituose viešuose šaltiniuose
   (pvz. TED skelbimai apie sutarties sudarymą tarptautiniams pirkimams).
 
+## Ką rodo patys duomenys (2026-10-18b, visi įrašai per serverio statistiką)
+
+- Procedūrų pavadinimai priklauso nuo direktyvos: skelbiamos derybos - „Negotiated with prior call for competition“ (tik sektorinė,
+  PĮ) ir „Competitive with negotiation“ (tik klasikinė, VPĮ); neskelbiamos - „Negotiated without prior call for competition“
+  (98 % sektorinė) ir „Negotiated without prior publication“ (95 % klasikinė, kitos - gynybos). Kortelės būdas ir rinkos duomenys
+  juos skiria (`GP_VPT.procedurosIstatymas`).
+- Kiti pavadinimai: „Simplified“ (mažos vertės, be direktyvos, 2021-2026; apklausos rūšis nenurodyta - būdo nesiūlome),
+  „Simplified Open“ (nuo 2025-07), „Simplified Open with negotiations“, „Accelerated open“ (sutrumpinti terminai), „Specific Contract“
+  (be tarptautinės vertės; prasmė neaiški - rodoma kaip yra), „Qualification System“ ir
+  „cft.procedure.type.qs.specific.contract“ (sektorinė kvalifikacijos sistema ir konkretus pirkimas pagal ją).
+- DPS ir kvalifikacijos sistemos „terminas“ - sistemos galiojimo pabaiga (DPS mediana ~1 800 d.), todėl terminų lentelėje jų nėra.
+- Kelių etapų pirkimuose CVP IS terminas gali būti vėlesnio etapo (žr. PP-tiekejams patikrą su paketais) - komponentas tai sako.
+
 ## Serveris (2026-10-18b; diegiama kartu su atminties patikra)
 
 - `/api/cvpis/pirkimas/<nr>` - kaip iki tol.
@@ -37,9 +50,10 @@ ir `pageNum`.
    kortelė vienu paspaudimu (padaryta 2026-10-18b).
 3. **PP-tiekejams** - pirkimų paieška pagal žodžius, BVPŽ, vykdytoją, objektą, tik aktyvūs; pasirinkus - CVP IS duomenų blokas (padaryta 2026-10-18b;
    veikia įdiegus serverio 2026-10-18b versiją).
-4. **Rinkos duomenys pagal BVPŽ** - bendras komponentas: kiek panašių pirkimų, kokie būdai ir vertinimo kriterijai, faktiniai
-   pasiūlymų teikimo laikotarpiai, sprendimo trukmė, vertės, nutraukimų dalis, kitų vykdytojų rinkos konsultacijos. Naudotojai:
-   pirkimų grafikai (realūs terminai), TS asistentas ir rinkos konsultacija, kvalifikacija (vertės), kortelių forma.
+4. **Rinkos duomenys pagal BVPŽ** - bendras komponentas `shared/vpt-rinka.js`: kiek panašių pirkimų, kokie būdai ir vertinimo
+   kriterijai, faktiniai pasiūlymų teikimo laikotarpiai, sprendimo trukmė, vertės, nutraukimų dalis, kitų vykdytojų rinkos konsultacijos.
+   Padaryta 2026-10-18b: kortelių forma ir pirkimų grafikai (greta grafiko „Pasiūlymų gavimas“ - CVP IS mediana jūsų būdu). Liko:
+   TS asistentas ir rinkos konsultacija, kvalifikacija (vertės).
 5. **PP-plan** - plano eilutės ir paskelbti organizacijos pirkimai (BVPŽ ir pavadinimas): kas jau paskelbta, kada, kokia būsena.
 6. **PP-salygos tikrinimas** - paketas prieš CVP IS duomenis (terminas, būdas, vertė, kalba), kai skelbimo PDF nėra.
 7. **Dalyvių ir laimėtojų duomenys** - VPT dalyvių maršrutas mūsų raktui neprieinamas (401); galimas šaltinis - TED (tarptautiniai
