@@ -51,15 +51,23 @@
     if (typeof v !== "string") return null;
     var s = v.replace(/\r\n?/g, "\n").replace(VALDYMO, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     if (!s) return null;
-    if (s.length > max) s = s.slice(0, max).replace(/\s+\S*$/, "") + "…";
+    // Kerpama iki max ženklų su daugtaškiu - kad pakartotinis tikrinimas (disko kopija) teksto nebekeistų
+    if (s.length > max) s = s.slice(0, max - 1).replace(/\s+\S*$/, "") + "…";
     return s;
   }
 
   // VPT data „dd-mm-yyyy hh:mm:ss“ -> „yyyy-mm-ddThh:mm:ss“ (laiko juosta API nenurodyta - README).
+  // Priimama ir jau perrašyta „yyyy-mm-ddThh:mm:ss“ - disko kopija tikrinama ta pačia funkcija (2026-10-18: be to
+  // perkrovus paslaugą datos dingdavo).
   function data(v) {
     if (typeof v !== "string") return null;
-    var m = /^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})$/.exec(v.trim());
-    if (!m) return null;
+    var s = v.trim(), m = /^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})$/.exec(s);
+    if (m) m = [m[0], m[1], m[2], m[3], m[4], m[5], m[6]];
+    else {
+      var iso = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(s);
+      if (!iso) return null;
+      m = [iso[0], iso[3], iso[2], iso[1], iso[4], iso[5], iso[6]];
+    }
     var d = +m[1], men = +m[2], met = +m[3], h = +m[4], min = +m[5], sek = +m[6];
     if (met < 2000 || met > 2100 || men < 1 || men > 12 || h > 23 || min > 59 || sek > 59) return null;
     var dienu = new Date(Date.UTC(met, men, 0)).getUTCDate();
@@ -84,6 +92,7 @@
   }
 
   function bvpz(v) {
+    if (Array.isArray(v)) v = v.filter(function (x) { return typeof x === "string"; }).join(" ");
     if (typeof v !== "string") return [];
     var kodai = v.match(/\d{8}(-\d)?/g) || [];
     var out = [];
@@ -92,6 +101,7 @@
   }
 
   function nuts(v) {
+    if (Array.isArray(v)) v = v.filter(function (x) { return typeof x === "string"; }).join(" ");
     if (typeof v !== "string") return [];
     var out = [];
     (v.toUpperCase().match(/[A-Z]{2}[A-Z0-9]{0,3}/g) || []).forEach(function (k) {

@@ -27,9 +27,11 @@ dalyvių informacija - nenaudojamas (duomenų mažinimas).
 | `/api/cvpis/busena` | ar sąrašas įkeltas, kada atnaujintas, kiek įrašų, paskutinės klaidos laikas ir rūšis, kitas atnaujinimas |
 
 Laukai - tik išvardyti `cvpis-logika.js` (`TEKSTAI`, `DATOS`, `LOGINIAI` ir keli kiti). Datos VPT pateikiamos be laiko juostos
-(`dd-mm-yyyy hh:mm:ss`) - grąžinamos `yyyy-mm-ddThh:mm:ss` be juostos; ar tai Lietuvos laikas, tikrinama įdiegus (palyginti su
-CVP IS puslapiu). Duomenys gali būti iki 6 val. senumo - modulis turi rodyti sąrašo laiką ir nuorodą į CVP IS (terminas,
-pratęsimai ir aktualios redakcijos - ten).
+(`dd-mm-yyyy hh:mm:ss`) - grąžinamos `yyyy-mm-ddThh:mm:ss` be juostos; tai **Lietuvos laikas** (patikrinta įdiegus 2026-10-18:
+pirkimo, kurio skelbime terminas 13:00 +03:00, API terminas - 13:00). Duomenys gali būti iki 6 val. senumo - modulis turi rodyti
+sąrašo laiką ir nuorodą į CVP IS (terminas, pratęsimai ir aktualios redakcijos - ten). `procedure` ir `status` - VPT angliški kodai
+(„Open“, „Simplified Open“, „Bid submission“ ...), `directive` - `prompt.directive.classic` / `utilities` / `none` / `defence` /
+`concession` arba `null` (rinkos konsultacijos).
 
 ### Saugumas
 
@@ -51,6 +53,18 @@ pratęsimai ir aktualios redakcijos - ten).
   default-src 'none'`, `Referrer-Policy: no-referrer`. Neįkeltas sąrašas niekada nerodomas kaip „pirkimo nėra“ (503).
 - **Žurnalas** (`journalctl -u g-procure-cvpis`): tik paleidimas, atnaujinimų suvestinės (kiekis, atmesta, puslapių, trukmė) ir
   klaidų rūšys - be užklausų turinio ir be rakto.
+
+### Įdiegta 2026-10-18
+
+- Pirmas atnaujinimas: 80 385 pirkimai, atmesta 0, 17 puslapių, 60 s; disko kopija 13,4 MB.
+- Atmintis: po įkėlimo iš kopijos ~270 MB, pirmo atnaujinimo piko metu 538 MB - todėl V8 riba `--max-old-space-size=768`,
+  systemd `MemoryHigh=1000M`, `MemoryMax=1200M` (atnaujinant atmintyje - senas ir naujas sąrašas).
+- `systemd-analyze security g-procure-cvpis`: 1.5 („OK“).
+- Išorės patikra: CORS tik g-procure.com, svetimai kilmei - be CORS, POST ir PUT - 403, 400 / 404 netinkamiems adresams,
+  31 užklausa iš karto praeina, toliau - 429 (nginx 429 atsakyme CORS antraštės nėra - naršyklėje tai matoma kaip ryšio klaida;
+  modulis turi rodyti „nepavyko, bandykite vėliau“), `/api/analyze` nepaliestas.
+- Rasta diegiant ir ištaisyta: perkrovus paslaugą disko kopija buvo tikrinama kaip VPT atsakymas ir datos, BVPŽ bei NUTS
+  dingdavo - įrašo tikrinimas dabar duoda tą patį rezultatą pakartotinai (testas „Pakartotinis tikrinimas nieko nekeičia“).
 
 ### Failai
 
