@@ -6,7 +6,7 @@
  *  - pirkejas() ir rezimas() - pirkimo vykdytojas ir teisinis režimas. Iki
  *    2026-09-26 gyveno PP-tiekejams/cvpis.js (atpazinkPirkeja / atpazinkRezima;
  *    ten jie paliko kaip nuorodos į šiuos). Sandara - iš 4 tikrų skelbimų
- *    (LITGRID 9683631, Amber Grid 9742096, EPSO-G 9281765, Energy cells 9614756);
+ *    (LITGRID, Amber Grid 9742096, EPSO-G 9281765, Energy cells 9614756);
  *  - atpazink() - pirkimo kortelės laukų PASIŪLYMAI (tobulinimo planas A2):
  *    pavadinimas, būdas, objektas, BVPŽ, vertė, dalys, galiojimas (mėn.),
  *    pasiūlymų ar paraiškų terminas, išsiuntimo data, CVP IS numeris, būsena;
