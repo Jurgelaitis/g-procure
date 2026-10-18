@@ -15,6 +15,8 @@
  *    { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [] }. Patvirtina žmogus. Būdas - pagal VPT
  *    `procedure`, `aboveThreshold` (tarptautinė vertė) ir `directive` (be direktyvos - mažos vertės); atitikmenys
  *    patikrinti 2026-10-18 su 7 žinomais pirkimais (LITGRID, Amber Grid, EPSO-G, Energy cells); neaiškus - nesiūlomas.
+ *  - paieska(filtrai) / statistika(filtrai) - /api/cvpis/paieska ir /statistika (q, vykdytojas, ca, cpv, tipas, budas, busena,
+ *    nuo, iki, rikiuoti, psl - serveris/README.md); parametrų klaida - „parametrai“, ryšys ir neįkelta - ne „nieko nerasta“.
  *  - skirtumai(kortele, pirkimas) - kortelės pasiūlymų termino, paskelbimo datos ir būsenos skirtumai nuo VPT duomenų
  *    („Mano pirkimai“ patikra „Patikrinti CVP IS duomenis“, kortelių puslapio ?vpt=1).
  *
@@ -49,6 +51,56 @@
       });
     }, function () {
       return baik({ ok: false, rusis: opts.signal && opts.signal.aborted ? "atsaukta" : "rysys" });
+    });
+  }
+
+  /* Paieška ir statistika (serveris 2026-10-18b; serveris/README.md). Tik žinomi parametrai, reikšmės - per URLSearchParams
+     (adresą sudaro šis failas). paieska() -> { ok: true, rezultatai, viso, psl, dydis, meta }, statistika() -> { ok: true, statistika, meta };
+     klaida - { ok: false, rusis: "parametrai" (su serverio paaiškinimu - tik tekstui) / "neikelta" / "rysys" / "atsaukta" }. */
+  var PARAMETRAI = ["q", "vykdytojas", "ca", "cpv", "tipas", "budas", "busena", "nuo", "iki", "rikiuoti", "psl"];
+  function uzklausa(kelias, param, opts, tinka) {
+    opts = opts || {};
+    var sp = new URLSearchParams();
+    PARAMETRAI.forEach(function (k) {
+      var v = param ? param[k] : null;
+      if (Array.isArray(v)) v = v.filter(function (x) { return x !== null && x !== undefined && String(x).trim(); }).join(",");
+      if (v === null || v === undefined || v === false || String(v).trim() === "") return;
+      sp.set(k, String(v === true ? "1" : v).trim().slice(0, 120));
+    });
+    if (!sp.toString()) return Promise.resolve({ ok: false, rusis: "parametrai" });
+    var f = opts.fetch || global.fetch;
+    if (typeof f !== "function") return Promise.resolve({ ok: false, rusis: "rysys" });
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var laik = ctl ? setTimeout(function () { ctl.abort(); }, opts.laikas || 15000) : null;
+    if (ctl && opts.signal) { if (opts.signal.aborted) ctl.abort(); else opts.signal.addEventListener("abort", function () { ctl.abort(); }); }
+    var baik = function (x) { if (laik) clearTimeout(laik); return x; };
+    return Promise.resolve().then(function () {
+      return f(API_BAZE + kelias + "?" + sp.toString(), { method: "GET", credentials: "omit", referrerPolicy: "no-referrer", headers: { "Accept": "application/json" }, signal: ctl ? ctl.signal : undefined });
+    }).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (r.status === 200 && j && typeof j === "object") { var x = tinka(j); if (x) return baik(x); }
+        if (r.status === 400) return baik({ ok: false, rusis: "parametrai", klaida: j && typeof j.klaida === "string" ? j.klaida.slice(0, 300) : "" });
+        if (r.status === 503) return baik({ ok: false, rusis: "neikelta" });
+        return baik({ ok: false, rusis: "rysys", status: r.status });
+      });
+    }, function () {
+      return baik({ ok: false, rusis: opts.signal && opts.signal.aborted ? "atsaukta" : "rysys" });
+    });
+  }
+  function paieska(param, opts) {
+    return uzklausa("/paieska", param, opts, function (j) {
+      if (!Array.isArray(j.rezultatai)) return null;
+      var rez = j.rezultatai.filter(function (x) { return x && typeof x === "object" && typeof x.id === "number" && x.id > 0; }).slice(0, 50)
+        .map(function (x) { x.nuoroda = CVP_IS + x.id; return x; });   // nuoroda - sudaroma čia, ne iš atsakymo
+      return { ok: true, rezultatai: rez, viso: typeof j.viso === "number" ? j.viso : rez.length, psl: typeof j.psl === "number" ? j.psl : 1,
+        dydis: typeof j.dydis === "number" ? j.dydis : 20, meta: j.meta && typeof j.meta === "object" ? j.meta : {} };
+    });
+  }
+  function statistika(param, opts) {
+    return uzklausa("/statistika", param, opts, function (j) {
+      var s = j.statistika;
+      if (!s || typeof s !== "object" || typeof s.viso !== "number") return null;
+      return { ok: true, statistika: s, meta: j.meta && typeof j.meta === "object" ? j.meta : {} };
     });
   }
 
@@ -271,6 +323,7 @@
 
   global.GP_VPT = {
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, ted: ted, atnaujinta: atnaujinta,
-    PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai
+    PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai,
+    paieska: paieska, statistika: statistika
   };
 })(typeof window !== "undefined" ? window : this);
