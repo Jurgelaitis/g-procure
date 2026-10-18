@@ -1584,6 +1584,85 @@ async function paleisk() {
     W.__PPT.S.ref = null; D.getElementById("refInput").value = ""; await W.__PPT.gaukVpt(null); VPT_ATS = null;
   });
 
+  async function laukPaieskos(n) {
+    for (let i = 0; i < 80; i++) {
+      const b = D.getElementById("homeBusena");
+      if (VPT_UZKL.length >= (n || 1) && (D.getElementById("homeRez").querySelector(".vpt-rez") || (!b.hidden && /gpb--(klaida|tuscia)/.test(b.className)))) return;
+      await laukti(40);
+    }
+  }
+  const pf = (o) => { const $ = id => D.getElementById(id); $("homeSearch").value = o.q || ""; $("homeCpv").value = o.cpv || ""; $("homeVykd").value = o.vykd || ""; $("homeTipas").value = o.tipas || ""; $("homeAktyvus").checked = o.aktyvus !== false; };
+  const paiesk = async (o, n) => { VPT_UZKL.length = 0; pf(o); W.setView("home"); W.isPradziosPaieskos(); await laukPaieskos(n); };
+  const rez = (o) => Object.assign({ id: 1234501, title: "Transformatorių remontas", caName: "LITGRID AB (PV)", procedure: "Open", status: "Bid submission", cpvCodes: ["50532000-3", "45310000-3"],
+    datePublished: "2026-10-02T10:00:00", tenderSubmissionDeadline: "2099-10-20T15:00:00", nuoroda: "javascript:alert(1)" }, o || {});
+  grupe("Pirkimų paieška VPT CVP IS duomenyse (2026-10-18)");
+  await testas("Žodžiai ir filtrai -> /api/cvpis/paieska be slapukų (tik su nepraėjusiu terminu - busena=aktyvus, rikiuoti=terminas); rezultatai tekstu, CVP IS nuoroda - sudaroma modulyje; pasirinkus - pirkimo duomenys; „Rodyti daugiau“ - kitas puslapis", async () => {
+    VPT_ATS = u => /\/paieska\?/.test(u) ? { status: 200, body: { rezultatai: [rez({ title: '<img src=x onerror="window.__pXss=1">Transformatorių remontas' }), rez({ id: 1234502, title: "Kabeliai", caName: "Kita", procedure: "Simplified Open", status: "Published", tenderSubmissionDeadline: null, cpvCodes: [] }), { id: "x" }, null],
+      viso: 25, psl: +(new URL(u).searchParams.get("psl") || 1), dydis: 20, meta: VPT_META } } : vptOk();
+    await paiesk({ q: "transformatorių remontas", cpv: "5053, 45x;7", tipas: "Services" });
+    const u = new URL(VPT_UZKL[0].url), p = Object.fromEntries(u.searchParams);
+    lygu([u.origin + u.pathname, p], ["https://api.g-procure.com/api/cvpis/paieska", { q: "transformatorių remontas", cpv: "5053,45", tipas: "Services", busena: "aktyvus", rikiuoti: "terminas", psl: "1" }], "užklausa (BVPŽ - tik 2-8 skaitmenys)");
+    lygu([VPT_UZKL[0].o.credentials, VPT_UZKL[0].o.referrerPolicy], ["omit", "no-referrer"]);
+    const box = D.getElementById("homeRez"), el = [...box.querySelectorAll(".vpt-rez-el")];
+    turi(box.textContent, "Rasta pirkimų: 25, rodoma 2 (VPT sąrašas atnaujintas 2026-10-18 11:01)");
+    tiesa(el.length === 2 && !box.querySelector("img") && W.__pXss === undefined, "2 tinkami įrašai, HTML - tekstu");
+    turi(el[0].textContent, '<img src=x onerror="window.__pXss=1">Transformatorių remontas'); turi(el[0].textContent, "LITGRID AB (PV) · Atviras konkursas · Pasiūlymų teikimas");
+    tiesa(/Terminas: 2099-10-20 15:00 \(liko \d+ d\.\) · BVPŽ: 50532000-3, 45310000-3 · ID 1234501/.test(el[0].textContent), el[0].textContent);
+    turi(el[1].textContent, "Kita · Supaprastintas atviras konkursas · Paskelbtas"); neturi(el[1].textContent, "Terminas:");
+    lygu(el[0].querySelector("a").getAttribute("href"), "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=1234501", "ne serverio „nuoroda“");
+    const cvp = [...box.querySelectorAll(".vpt-rez-veiksmai a")].find(a => /Ieškoti CVP IS svetainėje/.test(a.textContent));
+    tiesa(cvp && /^https:\/\/viesiejipirkimai\.lt\//.test(cvp.href) && cvp.target === "_blank", "CVP IS paieška - šalia");
+    D.getElementById("homeDaugiau").click(); await laukPaieskos(1); for (let i = 0; i < 40 && box.querySelectorAll(".vpt-rez-el").length < 4; i++) await laukti(30);
+    lygu([new URL(VPT_UZKL[VPT_UZKL.length - 1].url).searchParams.get("psl"), box.querySelectorAll(".vpt-rez-el").length], ["2", 4], "kitas puslapis pridedamas");
+    VPT_UZKL.length = 0; box.querySelector(".vpt-rez-pav").click(); await laukiVpt();
+    lygu([D.getElementById("view-pirkimas").classList.contains("active"), D.getElementById("refInput").value, VPT_UZKL.map(x => x.url)],
+         [true, "1234501", ["https://api.g-procure.com/api/cvpis/pirkimas/1234501"]], "pasirinkus - konkretus pirkimas");
+    turi(D.getElementById("vptBox").textContent, "Bandomasis pirkimas");
+  });
+  await testas("Tik filtrai (BVPŽ, vykdytojas, objektas), be termino filtro; nieko neįrašius - paaiškinimas be užklausos; numeris ar nuoroda - kaip iki tol", async () => {
+    VPT_ATS = { status: 200, body: { rezultatai: [rez()], viso: 1, psl: 1, dydis: 20, meta: VPT_META } };
+    await paiesk({ cpv: "45", vykd: "Amber Grid", aktyvus: false });
+    lygu(Object.fromEntries(new URL(VPT_UZKL[0].url).searchParams), { vykdytojas: "Amber Grid", cpv: "45", psl: "1" });
+    neturi(D.getElementById("homeRez").textContent, "Ieškoti CVP IS svetainėje", "be žodžių - CVP IS paieškos nuorodos nėra");
+    VPT_UZKL.length = 0; pf({ q: "ab", vykd: "x" }); W.isPradziosPaieskos(); await laukti(50);
+    lygu(VPT_UZKL.length, 0, "nesiunčiama"); turi(D.getElementById("homeBusena").textContent, "Įrašykite bent 3 ženklų žodį");
+    VPT_ATS = vptOk(); pf({ q: "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=1234501" }); VPT_UZKL.length = 0; W.isPradziosPaieskos(); await laukiVpt();
+    lygu(VPT_UZKL.map(x => x.url), ["https://api.g-procure.com/api/cvpis/pirkimas/1234501"], "nuoroda - pirkimas, ne paieška");
+  });
+  await testas("Nieko nerasta - „nerasta“ su sąrašo laiku; neįkelta (503), ryšys, kitoks atsakymas - klaida su „Bandyti dar kartą“ ir CVP IS paieška, ne „nerasta“; parametrų klaida - serverio paaiškinimas", async () => {
+    VPT_ATS = { status: 200, body: { rezultatai: [], viso: 0, psl: 1, dydis: 20, meta: VPT_META } };
+    await paiesk({ q: "neegzistuojantis pirkimas" });
+    const b = D.getElementById("homeBusena");
+    tiesa(/gpb--tuscia/.test(b.className), b.className); turi(b.textContent, "Pagal šiuos kriterijus pirkimų nerasta (VPT sąrašas atnaujintas 2026-10-18 11:01)");
+    tiesa(!D.getElementById("homeRez").querySelector(".vpt-rez") && /Ieškoti CVP IS svetainėje/.test(D.getElementById("homeRez").textContent), "be sąrašo, su CVP IS paieška");
+    for (const a of [{ status: 503, body: { klaida: "x" } }, { tinklas: true }, { status: 200, body: { kita: 1 } }, { status: 429, body: {} }]) {
+      VPT_ATS = { status: 200, body: { rezultatai: [rez()], viso: 1, psl: 1, dydis: 20, meta: VPT_META } }; await paiesk({ q: "transformatoriai" });
+      VPT_ATS = a; await paiesk({ q: "transformatoriai" });
+      tiesa(/gpb--klaida/.test(b.className) && /Paieška nepavyko: G-Procure serveris neatsakė/.test(b.textContent) && !!b.querySelector("[data-gpb-kartoti]"), JSON.stringify(a) + " -> " + b.textContent);
+      neturi(b.textContent, "nerasta");
+      const rz = D.getElementById("homeRez");
+      tiesa(!rz.querySelector(".vpt-rez") && /Ieškoti CVP IS svetainėje/.test(rz.textContent), "po klaidos - be ankstesnių rezultatų, su CVP IS paieška");
+    }
+    VPT_ATS = { status: 200, body: { rezultatai: [rez()], viso: 1, psl: 1, dydis: 20, meta: VPT_META } }; VPT_UZKL.length = 0;
+    b.querySelector("[data-gpb-kartoti]").click(); await laukPaieskos();
+    lygu(D.getElementById("homeRez").querySelectorAll(".vpt-rez-el").length, 1, "pakartota");
+    VPT_ATS = { status: 400, body: { klaida: "BVPŽ kodas (cpv) - 2-8 skaitmenys, iki 5 kodų per kablelį." } };
+    await paiesk({ q: "transformatoriai" });
+    turi(b.textContent, "Paieška nepavyko: BVPŽ kodas (cpv) - 2-8 skaitmenys");
+  });
+  await testas("Anglų kalba ir privatumo tekstas apie paieškos žodžius (LT / EN)", async () => {
+    VPT_ATS = { status: 200, body: { rezultatai: [rez()], viso: 1, psl: 1, dydis: 20, meta: VPT_META } };
+    W.setLang("en");
+    try {
+      await paiesk({ q: "transformer repair" });
+      const tx = D.getElementById("homeRez").textContent;
+      ["Procurements found: 1, shown 1 (VPT list updated 18/10/2026, 11:01)", "Open procedure", "Tender submission", "Deadline: 2099-10-20 15:00", "days left", "CPV: 50532000-3"].forEach(x => turi(tx, x));
+      turi(D.getElementById("homeFiltrai").textContent, "Only with a deadline not yet passed"); turi(D.getElementById("homePriv").textContent, "Search words and filters are sent to the G-Procure server");
+      turi(D.getElementById("privBox").textContent, "also the search words and filters (CPV, contracting entity, subject)");
+    } finally { W.setLang("lt"); }
+    turi(D.getElementById("privBox").textContent, "ir paieškos žodžiai bei filtrai (BVPŽ, vykdytojas, objektas)");
+    VPT_ATS = null; W.setView("home");
+  });
   grupe("Saugykla");
   await testas("Netinkama saugyklos reikšmė (null, skaičius, tekstas, sąrašas, sugadintas JSON) - modulis vis tiek pasileidžia (iki 2026-09-28 „null“ nutraukdavo paleidimą)", async () => {
     const rez = [];
