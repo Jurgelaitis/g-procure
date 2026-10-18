@@ -2,6 +2,14 @@
 
 Patikrinta: **2026-09-02** (curl iš macOS ir WebFetch iš kitos infrastruktūros, viešos užklausos be prisijungimo; papildomai - kritiko patikra tą pačią dieną). Visi teiginiai žemiau turi HTTP būseną arba pažymėti kaip nepatikrinti.
 
+## Atnaujinimas 2026-10-18 (VPT API per G-Procure serverį)
+
+Naudotojo sprendimu VPT API naudojama per G-Procure serverį (`serveris/README.md`): viešas OpenAPI aprašas
+(`/epps-integration/v3/api-docs`) leidžia tik puslapiavimą (`pageSize`, `pageNum`), todėl serveris kas 6 val. parsisiunčia visą sąrašą
+(2026-10-18 - 80 385 pirkimai, 5 000 per puslapį) ir atsako `/api/cvpis/pirkimas/<nr>`. Datos - Lietuvos laikas (palyginta su skelbimu).
+PP-tiekejams rodo pirkimo duomenis ir lygina terminą su įkeltu paketu. Dokumentų API nėra - rankinis paketo įkėlimas lieka; žemiau esanti
+2026-10-17 išvada apie gyvą dokumentų jungtį galioja.
+
 ## Atnaujinimas 2026-10-17 (technologinė analizė iš tiekėjo perspektyvos)
 
 Patikrinta 2026-10-17 curl užklausomis be prisijungimo ir be prieigos rakto:
