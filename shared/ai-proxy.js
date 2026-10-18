@@ -262,7 +262,7 @@
   }
 
   // PERKELTA 2026-09-25 is PP-tiekejams/asistentas.js: PP-salygos AI pasiūlymų JSON su tikru LITGRID
-  // paketu 9683631 irgi sulūžo (tikėtina dėl šaltinio „Packing list" su ASCII uždarančia kabute).
+  // paketu irgi sulūžo (tikėtina dėl šaltinio „Packing list" su ASCII uždarančia kabute).
   // Viena kopija visiems moduliams.
   // Modelio JSON su pažeidimais, kuriuos matėme TIKRUOSE atsakymuose (2026-09-02,
   // CVP IS paketas 1159_9187214): neekranuota ASCII kabutė eilutės viduje (lietuviška

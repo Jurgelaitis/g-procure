@@ -19,7 +19,7 @@
  * (puslapis jį jungia šalia šio failo; neįkėlus - patikra „nepatikrinta“), išmatuotas su 6 LITGRID paketais.
  *
  * Taisyklių katalogas išmatuotas su 4 viešais LITGRID CVP IS paketais
- * (9683631, 9566057, 9744290, 9495168; 2026-09-26) - rezultatai ir žinomi
+ * (2026-09-26) - rezultatai ir žinomi
  * apribojimai: CLAUDE.md, shared/pirkimo-kortele.js eilutė ir testai.
  * Nieko nesaugo ir nesiunčia.
  * ==========================================================================*/
