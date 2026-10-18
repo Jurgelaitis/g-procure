@@ -15,7 +15,11 @@
  *    nežino, kas jau padaryta, todėl nieko nežadame.
  *  - Užbaigti (sudaryta sutartis, nutrauktas) ir archyvuoti nerodomi - tik jų skaičius.
  *  - Tekstai LT / EN pagal <html lang>; kortelių turinys - kaip įvestas.
- * Nieko nesaugo ir nesiunčia (tik skaito korteles).
+ *  - CVP IS patikra (2026-10-18): TIK paspaudus „Patikrinti CVP IS duomenis“ aktyvių kortelių CVP IS numeriai siunčiami
+ *    per shared/vpt-duomenys.js (G-Procure serveris, vieši VPT duomenys); prie kortelės - pasiūlymų termino, paskelbimo datos
+ *    ir būsenos skirtumai (GP_VPT.skirtumai) ir „Atnaujinti kortelę“ (kortelių puslapis ?vpt=1). Kortelės nekeičiamos,
+ *    rezultatai - tik atmintyje; ryšio klaida niekada nevirsta „sutampa“ ar „nėra“ (shared/busena.js).
+ * Nieko nesaugo.
  * ==========================================================================*/
 (function (global) {
   "use strict";
@@ -31,7 +35,21 @@
       ts: "TS", salygos: "Sąlygos", protokolai: "Protokolai", pazyma: "Pažyma", derybos: "Derybos", vertinimas: "Vertinimas", parengtis: "Parengtis skelbti",
       kna: "Kaštų ir naudos analizė", vertinamasMV: "pasiūlymų vertinimas ir pažyma",
       naujasSkirtukas: "atsidaro naujame skirtuke", daugiau: "Rodyti visus", baigti: "Užbaigti ar archyvuoti: ",
-      visosKorteles: "visos kortelės", aktyviuNera: "Aktyvių pirkimų nėra.", CVP: "CVP IS "
+      visosKorteles: "visos kortelės", aktyviuNera: "Aktyvių pirkimų nėra.", CVP: "CVP IS ",
+      cvpTikrinti: "Patikrinti CVP IS duomenis",
+      cvpPag: "Į G-Procure serverį siunčiami tik šių kortelių CVP IS numeriai ({n}); jis atsako iš viešų VPT duomenų, atnaujinamų kas 6 val. Kortelės nekeičiamos.",
+      cvpEiga: "Tikrinami CVP IS duomenys ({n})...", cvpNepavyko: "CVP IS duomenų patikrinti nepavyko",
+      cvpRysys: "G-Procure serveris neatsakė arba VPT sąrašas dar neįkeltas - bandykite vėliau.",
+      cvpSuvestine: "Patikrinta kortelių: {n} (VPT sąrašas atnaujintas {t}). Skiriasi nuo CVP IS: {p}, sutampa: {s}",
+      cvpNeraS: ", VPT sąraše nėra: {m}", cvpKlaidaS: ", patikrinti nepavyko: {k}",
+      cvpRiba: " Vienu kartu tikrinama {r} kortelių su artimiausiais terminais.",
+      cvpTerminas: "CVP IS pasiūlymų terminas: {v}", cvpPaskelbimas: "CVP IS paskelbimo data: {v}", cvpBusena: "CVP IS būsena: {v}",
+      cvpKortelejeYra: " (kortelėje - {k})", cvpKortelejeNera: " (kortelėje neįrašyta)",
+      cvpSutampa: "Sutampa su CVP IS duomenimis: {l}.", cvpLTerminas: "pasiūlymų terminas", cvpLPaskelbimas: "paskelbimo data", cvpLBusena: "būsena",
+      cvpNeraDuomenu: "CVP IS duomenyse termino, paskelbimo datos ir būsenos nėra.",
+      cvpNera: "CVP IS numerio {nr} VPT sąraše nėra - patikrinkite numerį kortelėje.",
+      cvpKlaida: "Šios kortelės CVP IS duomenų gauti nepavyko.",
+      cvpAtnaujinti: "Atnaujinti kortelę", cvpAtverti: "Atverti CVP IS"
     },
     en: {
       kortelesPav: "Procurement cards", pradzia: "Procurement start", paskelbimas: "Publication", pasiulymuTerminas: "Tender deadline",
@@ -43,7 +61,21 @@
       ts: "Specification", salygos: "Conditions", protokolai: "Protocols", pazyma: "Report", derybos: "Negotiation", vertinimas: "Evaluation", parengtis: "Readiness check",
       kna: "Cost-benefit analysis", vertinamasMV: "tender evaluation and the report",
       naujasSkirtukas: "opens in a new tab", daugiau: "Show all", baigti: "Completed or archived: ",
-      visosKorteles: "all cards", aktyviuNera: "No active procurements.", CVP: "CVP IS "
+      visosKorteles: "all cards", aktyviuNera: "No active procurements.", CVP: "CVP IS ",
+      cvpTikrinti: "Check CVP IS data",
+      cvpPag: "Only the CVP IS numbers of these cards ({n}) are sent to the G-Procure server; it answers from public VPT data refreshed every 6 hours. The cards are not changed.",
+      cvpEiga: "Checking CVP IS data ({n})...", cvpNepavyko: "Could not check the CVP IS data",
+      cvpRysys: "The G-Procure server did not respond or the VPT list is not loaded yet - try again later.",
+      cvpSuvestine: "Cards checked: {n} (VPT list updated {t}). Differ from CVP IS: {p}, match: {s}",
+      cvpNeraS: ", not in the VPT list: {m}", cvpKlaidaS: ", could not be checked: {k}",
+      cvpRiba: " Up to {r} cards with the nearest dates are checked at a time.",
+      cvpTerminas: "CVP IS tender deadline: {v}", cvpPaskelbimas: "CVP IS publication date: {v}", cvpBusena: "CVP IS status: {v}",
+      cvpKortelejeYra: " (on the card: {k})", cvpKortelejeNera: " (not on the card)",
+      cvpSutampa: "Matches the CVP IS data: {l}.", cvpLTerminas: "tender deadline", cvpLPaskelbimas: "publication date", cvpLBusena: "status",
+      cvpNeraDuomenu: "The CVP IS data have no deadline, publication date or status.",
+      cvpNera: "CVP IS number {nr} is not in the VPT list - check the number on the card.",
+      cvpKlaida: "Could not get the CVP IS data for this card.",
+      cvpAtnaujinti: "Update the card", cvpAtverti: "Open in CVP IS"
     }
   };
   /* Įrankiai, kurie skaito kortelę (A1). Kelias - nuo svetainės šaknies. Rodomi pagal pirkimo būseną (naudotojo
@@ -100,6 +132,26 @@
   var TRUKSTA = { lt: { verte: "vertės", budas: "būdo", vykdytojas: "vykdytojo", rezimas: "režimo" },
                   en: { verte: "value", budas: "procedure", vykdytojas: "contracting body", rezimas: "legal regime" } };
   var TERMINAI = ["pasiulymuTerminas", "paskelbimas", "pradzia"];
+  /* CVP IS patikra: vienu paspaudimu - ne daugiau kaip MAX_CVP numerių (nginx riba - 30 užklausų iš karto), po 3 lygiagrečiai. */
+  var MAX_CVP = 25, LYGIAGRECIAI = 3;
+  var CVP_ET = { pasiulymuTerminas: "cvpTerminas", paskelbimas: "cvpPaskelbimas", busena: "cvpBusena" };
+  var CVP_PAV = { pasiulymuTerminas: "cvpLTerminas", paskelbimas: "cvpLPaskelbimas", busena: "cvpLBusena" };
+  var SKAITIKLIS = 0;
+  function fmt(s, o) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return o[k] != null ? String(o[k]) : m; }); }
+  function cvpNr(k) { var n = String((k && k.cvpisNr) || "").trim(); return /^\d{5,9}$/.test(n) ? n : ""; }
+  /* f kiekvienam sąrašo elementui, ne daugiau kaip n vienu metu; rezultatai - ta pačia tvarka (klaida - { ok: false, rusis: "rysys" }). */
+  function eile(sarasas, n, f) {
+    var rez = new Array(sarasas.length), i = 0;
+    function kitas() {
+      if (i >= sarasas.length) return Promise.resolve();
+      var j = i++;
+      return Promise.resolve().then(function () { return f(sarasas[j]); })
+        .then(function (r) { rez[j] = r; }, function () { rez[j] = { ok: false, rusis: "rysys" }; }).then(kitas);
+    }
+    var darbai = [];
+    for (var k = 0; k < Math.min(n, sarasas.length); k++) darbai.push(kitas());
+    return Promise.all(darbai).then(function () { return rez; });
+  }
 
   function kalba(o) {
     var l = o && o.getLang ? o.getLang() : (document.documentElement.getAttribute("lang") || "lt");
@@ -154,6 +206,18 @@
       ".gpmp a:focus-visible,.gpmp button:focus-visible{outline:2px solid var(--color-emerald-strong,#007554);outline-offset:2px}",
       ".gpmp-apacia{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:14px;color:#5B6470}",
       ".gpmp-apacia button{font:inherit;font-weight:700;background:none;border:0;padding:0;color:var(--color-emerald-strong,#007554);text-decoration:underline;cursor:pointer}",
+      ".gpmp-cvpis{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:10px}",
+      ".gpmp-cvpis[hidden]{display:none}",
+      ".gpmp-cvpis .gpmp-mazas{margin-top:0;flex:1 1 16em;min-width:0}",
+      ".gpmp-cvp-busena{flex-basis:100%}",
+      "button.gpmp-btn{font:inherit;font-size:13px;font-weight:700;cursor:pointer}",
+      "button.gpmp-btn:disabled{cursor:default;color:#5B6470}",
+      ".gpmp-cvp{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;",
+      "border-top:1px solid var(--color-graphite-15,#E1E2E4);padding-top:10px;font-size:14px}",
+      ".gpmp-cvp ul{margin:0;padding-left:18px;flex:1 1 16em;min-width:0}",
+      ".gpmp-cvp li{overflow-wrap:anywhere}",
+      ".gpmp-cvp--skiriasi{border-top:2px solid var(--color-warning,#FAB03B)}",
+      ".gpmp-cvp--ok{color:#5B6470;font-size:13px}",
       ".gpmp-isp{background:var(--color-warning-5,#FEF6E8);border:1px solid #F3D9A8;border-left:4px solid var(--color-warning,#FAB03B);border-radius:12px;padding:12px 16px;font-size:14px}",
       "@media (max-width:900px){.gpmp-eil{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.gpmp-veiksmai{grid-column:1 / -1;justify-content:flex-start}}",
       "@media (max-width:560px){.gpmp-eil{grid-template-columns:minmax(0,1fr)}}"
@@ -178,14 +242,31 @@
     stilius();
     var saknis = o.saknis == null ? "" : String(o.saknis);
     var visi = false;
+    /* CVP IS patikra (2026-10-18): juosta su mygtuku ir būsena - pastovios (GP_BUSENA būsena neperrašoma perpiešiant),
+       eilutės perpiešiamos; skirtumai skaičiuojami piešiant pagal dabartinę kortelę, todėl ją atnaujinus kitame skirtuke
+       (storage įvykis) pastaba dingsta pati. */
+    var cvp = { busena: "nepatikrinta", rez: {}, tekstas: "", riba: 0 }, cvpNumeriai = [];
+    vieta.innerHTML = "";
+    var juosta = el("div", "gpmp gpmp-cvpis");
+    juosta.hidden = true;
+    var cvpBtn = el("button", "gpmp-btn");
+    cvpBtn.type = "button";
+    var cvpPag = el("span", "gpmp-mazas");
+    cvpPag.id = "gpmp-cvp-pag-" + (++SKAITIKLIS);
+    cvpBtn.setAttribute("aria-describedby", cvpPag.id);
+    var cvpBusena = el("div", "gpmp-cvp-busena");
+    cvpBusena.hidden = true;
+    juosta.appendChild(cvpBtn); juosta.appendChild(cvpPag); juosta.appendChild(cvpBusena);
+    var box = el("div", "gpmp");
+    vieta.appendChild(juosta); vieta.appendChild(box);
+    cvpBtn.addEventListener("click", function () { tikrinkCvp(); });
 
     function piesk() {
       var l = kalba(o), t = T[l], K = global.GP_KORTELE;
       var dabar = o.dabar ? new Date(o.dabar) : new Date();
       var s = K.skaityk();
-      vieta.innerHTML = "";
-      var box = el("div", "gpmp");
-      vieta.appendChild(box);
+      box.innerHTML = "";
+      juosta.hidden = true;
       if (s.busena === "sugadinta" || s.busena === "neprieinama") {
         box.appendChild(el("div", "gpmp-isp", global.GP_SAUGYKLA ? global.GP_SAUGYKLA.pranesimas(s.r, t.kortelesPav) : ""));
         if (sekcija) sekcija.hidden = false;
@@ -202,6 +283,15 @@
         if (ab !== bb) return ab ? -1 : 1;
         return a.k.atnaujinta < b.k.atnaujinta ? 1 : a.k.atnaujinta > b.k.atnaujinta ? -1 : 0;
       });
+      cvpNumeriai = [];
+      aktyvios.forEach(function (x) { var n = cvpNr(x.k); if (n && cvpNumeriai.indexOf(n) < 0) cvpNumeriai.push(n); });
+      if (global.GP_VPT && global.GP_BUSENA && cvpNumeriai.length) {
+        juosta.hidden = false;
+        cvpBtn.textContent = t.cvpTikrinti;
+        cvpBtn.disabled = cvp.busena === "eiga";
+        cvpPag.textContent = fmt(t.cvpPag, { n: Math.min(cvpNumeriai.length, MAX_CVP) });
+        if (cvp.busena === "baigta") suvestine(t, l, aktyvios);
+      }
       if (!aktyvios.length) box.appendChild(el("p", "gpmp-apacia", t.aktyviuNera));
       var max = o.max || 5;
       aktyvios.slice(0, visi ? aktyvios.length : max).forEach(function (x) { box.appendChild(eilute(x.k, x.t, t, l)); });
@@ -273,7 +363,94 @@
       kort.setAttribute("aria-label", t.kortele + ": " + (k.pavadinimas || "?"));
       d.appendChild(kort);
       r.appendChild(d);
+      // 5. CVP IS patikros rezultatas (tik po „Patikrinti CVP IS duomenis“)
+      var cr = cvp.busena === "baigta" && cvpNr(k) ? cvp.rez[cvpNr(k)] : null;
+      if (cr) r.appendChild(cvpPastaba(k, cr, t, l, id));
       return r;
+    }
+
+    function rodomas(v) { return String(v || "").replace("T", " "); }
+    function cvpPastaba(k, cr, t, l, id) {
+      var K = global.GP_KORTELE, V = global.GP_VPT, p = el("div", "gpmp-cvp");
+      if (cr.ok) {
+        var s = V.skirtumai(k, cr.pirkimas);
+        if (!s.skirtumai.length) {
+          p.className += " gpmp-cvp--ok";
+          p.appendChild(el("span", null, s.palyginta.length
+            ? fmt(t.cvpSutampa, { l: s.palyginta.map(function (f) { return t[CVP_PAV[f]]; }).join(", ") }) : t.cvpNeraDuomenu));
+          return p;
+        }
+        p.className += " gpmp-cvp--skiriasi";
+        var ul = el("ul");
+        s.skirtumai.forEach(function (x) {
+          var b = x.laukas === "busena";
+          var v = b ? (K.busenosPav(x.vpt, l) || x.vpt) + " (VPT: " + x.kodas + ")" : rodomas(x.vpt);
+          var kv = b ? (K.busenosPav(x.kortele, l) || x.kortele) : rodomas(x.kortele);
+          ul.appendChild(el("li", null, fmt(t[CVP_ET[x.laukas]], { v: v }) + (x.kortele ? fmt(t.cvpKortelejeYra, { k: kv }) : t.cvpKortelejeNera)));
+        });
+        p.appendChild(ul);
+        var vv = el("div", "gpmp-veiksmai");
+        var a = el("a", "gpmp-btn gpmp-btn--pagr", t.cvpAtnaujinti);
+        a.href = saknis + "pirkimu-korteles.html?vpt=1#kortele=" + id;
+        a.target = "_blank"; a.rel = "noopener";
+        a.setAttribute("aria-label", t.cvpAtnaujinti + ": " + (k.pavadinimas || "?") + " (" + t.naujasSkirtukas + ")");
+        vv.appendChild(a);
+        if (cr.nuoroda) {
+          var c = el("a", "gpmp-btn", t.cvpAtverti);
+          c.href = cr.nuoroda; c.target = "_blank"; c.rel = "noopener";
+          c.setAttribute("aria-label", t.cvpAtverti + ": " + (k.pavadinimas || "?") + " (" + t.naujasSkirtukas + ")");
+          vv.appendChild(c);
+        }
+        p.appendChild(vv);
+      } else if (cr.rusis === "nera") p.appendChild(el("span", null, fmt(t.cvpNera, { nr: cvpNr(k) })));
+      else p.appendChild(el("span", null, t.cvpKlaida));
+      return p;
+    }
+
+    /* Suvestinė pagal dabartines korteles; ta pati - neperpiešiama (gyva sritis nekartoja to paties). */
+    function suvestine(t, l, aktyvios) {
+      var c = { n: 0, p: 0, s: 0, nera: 0, k: 0 }, laikas = null;
+      Object.keys(cvp.rez).forEach(function (nr) {
+        var r = cvp.rez[nr], kk = aktyvios.filter(function (x) { return cvpNr(x.k) === nr; });
+        if (!kk.length) return;
+        c.n++;
+        if (r.ok || r.rusis === "nera") laikas = laikas || (r.meta && r.meta.atnaujinta) || null;
+        if (r.ok) {
+          if (kk.some(function (x) { return global.GP_VPT.skirtumai(x.k, r.pirkimas).skirtumai.length; })) c.p++; else c.s++;
+        } else if (r.rusis === "nera") c.nera++;
+        else c.k++;
+      });
+      if (!c.n) { cvp.tekstas = ""; global.GP_BUSENA.slepk(cvpBusena); return; }
+      var tx = fmt(t.cvpSuvestine, { n: c.n, t: global.GP_VPT.atnaujinta(laikas, l), p: c.p, s: c.s })
+        + (c.nera ? fmt(t.cvpNeraS, { m: c.nera }) : "") + (c.k ? fmt(t.cvpKlaidaS, { k: c.k }) : "") + "."
+        + (cvp.riba ? fmt(t.cvpRiba, { r: cvp.riba }) : "");
+      if (tx === cvp.tekstas) return;
+      cvp.tekstas = tx;
+      global.GP_BUSENA.rodyk(cvpBusena, { tipas: "gerai", tekstas: tx, kartoti: c.k ? function () { tikrinkCvp(); } : null });
+    }
+
+    function tikrinkCvp() {
+      var V = global.GP_VPT, B = global.GP_BUSENA;
+      if (!V || !B || cvp.busena === "eiga" || !cvpNumeriai.length) return Promise.resolve();
+      var t = T[kalba(o)], tikr = cvpNumeriai.slice(0, MAX_CVP);
+      cvp = { busena: "eiga", rez: {}, tekstas: "", riba: cvpNumeriai.length > MAX_CVP ? MAX_CVP : 0 };
+      piesk();
+      return B.vykdyk(cvpBusena, {
+        tipas: "eiga", tekstas: fmt(t.cvpEiga, { n: tikr.length }), klaidosPriesdelis: t.cvpNepavyko,
+        kartoti: function () { tikrinkCvp(); },
+        veiksmas: function () {
+          return eile(tikr, LYGIAGRECIAI, function (nr) { return V.pirkimas(nr); }).then(function (rs) {
+            // Ryšys ar neįkeltas sąrašas visiems - klaida su „Bandyti dar kartą“, ne „sutampa“
+            if (!rs.some(function (r) { return r && (r.ok || r.rusis === "nera"); })) throw new Error(t.cvpRysys);
+            return rs;
+          });
+        }
+      }).then(function (rez) {
+        if (!rez.ok) { cvp.busena = "klaida"; piesk(); return; }
+        rez.reiksme.forEach(function (r, i) { cvp.rez[tikr[i]] = r || { ok: false, rusis: "rysys" }; });
+        cvp.busena = "baigta";
+        piesk();
+      });
     }
 
     piesk();
@@ -281,7 +458,7 @@
     if (typeof MutationObserver !== "undefined") {
       new MutationObserver(piesk).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
     }
-    return { atnaujink: piesk };
+    return { atnaujink: piesk, tikrinkCvp: tikrinkCvp };
   }
 
   global.GP_MANO_PIRKIMAI = { mount: mount, terminas: terminas, darboDienos: darboDienos };

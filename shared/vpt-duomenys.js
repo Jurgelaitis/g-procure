@@ -2,8 +2,8 @@
  * G-Procure  shared/vpt-duomenys.js   (window.GP_VPT)
  * ----------------------------------------------------------------------------
  * VPT CVP IS API duomenys per G-Procure serverį (nuo 2026-10-18; serveris/README.md). Vienas klientas visiems
- * moduliams: PP-tiekejams (pirkimo duomenys, termino palyginimas) ir pirkimo kortelės puslapis (kortelės laukų
- * pasiūlymai pagal CVP IS numerį).
+ * moduliams: PP-tiekejams (pirkimo duomenys, termino palyginimas), pirkimo kortelės puslapis (kortelės laukų
+ * pasiūlymai pagal CVP IS numerį) ir portalo „Mano pirkimai“ (termino ir būsenos patikra).
  *
  *  - pirkimas(nr) - GET https://api.g-procure.com/api/cvpis/pirkimas/<nr> (tik 5-9 skaitmenys, be slapukų, be
  *    nukreipimo informacijos). Grąžina { ok: true, pirkimas, meta, nuoroda } arba { ok: false, rusis }:
@@ -15,6 +15,8 @@
  *    { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [] }. Patvirtina žmogus. Būdas - pagal VPT
  *    `procedure`, `aboveThreshold` (tarptautinė vertė) ir `directive` (be direktyvos - mažos vertės); atitikmenys
  *    patikrinti 2026-10-18 su 7 žinomais pirkimais (LITGRID, Amber Grid, EPSO-G, Energy cells); neaiškus - nesiūlomas.
+ *  - skirtumai(kortele, pirkimas) - kortelės pasiūlymų termino, paskelbimo datos ir būsenos skirtumai nuo VPT duomenų
+ *    („Mano pirkimai“ patikra „Patikrinti CVP IS duomenis“, kortelių puslapio ?vpt=1).
  *
  * Duomenys - iki 6 val. senumo VPT sąrašo kopija; oficialiu šaltiniu lieka CVP IS. Datos - Lietuvos laikas.
  * Nieko nesaugo.
@@ -239,8 +241,36 @@
     return { laukai: laukai, pastabos: pastabos };
   }
 
+  /* Kortelės ir VPT duomenų skirtumai „Mano pirkimai“ patikrai (2026-10-18) - tik tai, ką CVP IS keičia pirkimo eigoje:
+     pasiūlymų terminas (pratęsimai), paskelbimo data ir būsena. Būsena - tik kai VPT būsena vėlesnė už kortelės arba pirkimas
+     nutrauktas (ankstesnė - ne: kortelę žmogus galėjo pažengti pats; rinkos konsultacijai - ne). Grąžina
+     { skirtumai: [{ laukas, kortele, vpt, kodas? }], palyginta: [laukai, kuriuos VPT duomenyse buvo su kuo palyginti] }. */
+  var EIGA = ["planuojamas", "rengiamas", "paskelbtas", "vertinamas", "sutartis"];
+  function skirtumai(k, p) {
+    var r = { skirtumai: [], palyginta: [] };
+    if (!k || typeof k !== "object" || !p || typeof p !== "object") return r;
+    var iso = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):\d{2}$/;
+    var tm = typeof p.tenderSubmissionDeadline === "string" && iso.exec(p.tenderSubmissionDeadline);
+    if (tm) {
+      r.palyginta.push("pasiulymuTerminas");
+      if (tm[1] + "T" + tm[2] !== String(k.pasiulymuTerminas || "")) r.skirtumai.push({ laukas: "pasiulymuTerminas", kortele: String(k.pasiulymuTerminas || ""), vpt: tm[1] + "T" + tm[2] });
+    }
+    var pd = typeof p.datePublished === "string" && iso.exec(p.datePublished);
+    if (pd) {
+      r.palyginta.push("paskelbimas");
+      if (pd[1] !== String(k.paskelbimas || "")) r.skirtumai.push({ laukas: "paskelbimas", kortele: String(k.paskelbimas || ""), vpt: pd[1] });
+    }
+    var vb = p.procedure === "Preliminary Market Consultation" ? null : KORTELES_BUSENOS[p.status];
+    if (vb) {
+      r.palyginta.push("busena");
+      if (vb !== k.busena && k.busena !== "nutrauktas" && (vb === "nutrauktas" || EIGA.indexOf(vb) > EIGA.indexOf(k.busena)))
+        r.skirtumai.push({ laukas: "busena", kortele: String(k.busena || ""), vpt: vb, kodas: String(p.status).slice(0, 60) });
+    }
+    return r;
+  }
+
   global.GP_VPT = {
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, ted: ted, atnaujinta: atnaujinta,
-    PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles
+    PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai
   };
 })(typeof window !== "undefined" ? window : this);
