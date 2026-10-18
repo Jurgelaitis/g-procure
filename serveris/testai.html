@@ -173,7 +173,7 @@ async function testaiAtsakymai(){
   await testas("Paieška: be diakritikų, visi žodžiai, naujausi pirmi, ne daugiau 20 su bendru skaičiumi; per trumpas ar per ilgas tekstas - 400", () => {
     let k = kunas(L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=" + encodeURIComponent("Transformatoriu prieziura"), ""));
     lygu([k.viso, k.rezultatai.map(x => x.id)], [1, [1234502]]);
-    tiesa(Object.keys(k.rezultatai[0]).join() === "id,title,caName,procedure,status,datePublished,tenderSubmissionDeadline,nuoroda", "paieškos laukai: " + Object.keys(k.rezultatai[0]));
+    tiesa(Object.keys(k.rezultatai[0]).join() === "id,title,caName,caNumber,procedure,status,procurementType,cpvCodes,estimatedValue,aboveThreshold,datePublished,tenderSubmissionDeadline,nuoroda", "paieškos laukai: " + Object.keys(k.rezultatai[0]));
     k = kunas(L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=pirkimas", ""));
     lygu([k.viso, k.rodoma], [30, 20]);
     tiesa(k.rezultatai.every((x, i, a) => i === 0 || String(a[i - 1].datePublished) >= String(x.datePublished)), "naujausi pirmi");
@@ -188,6 +188,112 @@ async function testaiAtsakymai(){
     k = kunas(L.atsakymas(null, "GET", "/api/cvpis/busena", ""));
     lygu([k.busena, k.kiekis, k.atnaujinta], ["neikelta", 0, null]);
     lygu(L.atsakymas(ix, "GET", "/api/cvpis/busena", "").antrastes["Cache-Control"], "no-store");
+  });
+}
+
+/* Paieška su filtrais ir statistika (2026-10-18b): įvairių pirkimų rinkinys */
+function filtruIndeksas(){
+  const v = (id, o) => L.normalizuokIrasa(vptIrasas(Object.assign({ id }, o)));
+  const r = [
+    v(2000001, { title: "Transformatorių priežiūra", caName: "LITGRID AB (PV)", caNumber: "", cpvCodes: "50532000-3", procurementType: "Services", procedure: "Open", aboveThreshold: true,
+      datePublished: "01-09-2026 10:00:00", tenderSubmissionDeadline: "06-10-2026 10:00:00", awardDate: "20-10-2026 10:00:00", status: "Awarded", estimatedValue: "500000", contractDuration: "24_months", evaluationMechanism: "MEAT", euFunding: true }),
+    v(2000002, { title: "Kabelių pirkimas", caName: "LITGRID AB (PV)", caNumber: null, cpvCodes: "44321000-6", procurementType: "Supplies", procedure: "Simplified Open", aboveThreshold: false,
+      datePublished: "10-10-2026 10:00:00", tenderSubmissionDeadline: "25-10-2026 15:00:00", status: "Bid submission", estimatedValue: "90000", contractDuration: "12_months" }),
+    v(2000003, { title: "Dujų skaitikliai", caName: "AB \"Amber Grid\"", caNumber: "303090867", cpvCodes: "38421100-3, 44321000-6", procurementType: "Supplies", procedure: "Open", aboveThreshold: true,
+      datePublished: "05-10-2026 10:00:00", tenderSubmissionDeadline: "12-11-2026 10:00:00", status: "Bid submission", estimatedValue: "1200000", contractDuration: "2_years" }),
+    v(2000004, { title: "Konsultacija dėl kabelių", caName: "AB \"Amber Grid\"", caNumber: "303090867", cpvCodes: "44321000-6", procurementType: "Supplies", procedure: "Preliminary Market Consultation", aboveThreshold: null,
+      datePublished: "02-10-2026 10:00:00", tenderSubmissionDeadline: "08-10-2026 10:00:00", status: "Evaluation", estimatedValue: null, directive: null }),
+    v(2000005, { title: "Statybos darbai", caName: "UAB \"EPSO-G\" (PV)", caNumber: "302826889", cpvCodes: "45000000-7", procurementType: "Works", procedure: "Open", aboveThreshold: false,
+      datePublished: "15-08-2026 10:00:00", tenderSubmissionDeadline: "30-10-2026 10:00:00", status: "Cancelled", estimatedValue: "2000000", contractDuration: "90_days" })
+  ];
+  // Penki to paties būdo pirkimai - kvantiliams (laikotarpis 5, 7, 10, 12, 20 d.)
+  [5, 7, 10, 12, 20].forEach((d, i) => r.push(v(2000100 + i, { title: "Kanceliarinės prekės " + i, caName: "Kita organizacija", caNumber: "111111111", cpvCodes: "30192000-1", procurementType: "Supplies",
+    procedure: "Simplified Open", aboveThreshold: false, datePublished: "0" + (i + 1) + "-09-2026 09:00:00", tenderSubmissionDeadline: String(i + 1 + d).padStart(2, "0") + "-09-2026 09:00:00", status: "Concluded",
+    awardDate: String(i + 3 + d).padStart(2, "0") + "-09-2026 09:00:00", estimatedValue: String(10000 * (i + 1)), contractDuration: (i + 1) + "_months", evaluationMechanism: "Lowest Price" })));
+  return L.sukurkIndeksa(r, "2026-10-18T06:00:00Z");
+}
+const DABAR = "2026-10-18T12:00:00";
+const kunas = r => JSON.parse(r.kunas);
+const ats = (ix, kelias) => L.atsakymas(ix, "GET", kelias, "", null, DABAR);
+const ids = (ix, kelias) => kunas(ats(ix, kelias)).rezultatai.map(x => x.id);
+
+async function testaiFiltrai(){
+  grupe("Paieška su filtrais ir statistika (2026-10-18b)");
+  const ix = filtruIndeksas();
+  await testas("Indeksas - nuo naujausio paskelbimo; dabarLT - Lietuvos laikas be laiko juostos", () => {
+    lygu(ix.paieska.slice(0, 3).map(e => e[0]), [2000002, 2000003, 2000004]);
+    lygu(L.dabarLT(new Date("2026-10-18T09:30:05Z")), "2026-10-18T12:30:05", "vasaros laikas");
+    lygu(L.dabarLT(new Date("2026-01-15T22:30:00Z")), "2026-01-16T00:30:00", "žiemos laikas");
+  });
+  await testas("Filtrai: vykdytojas, ca, cpv (pradžia, keli), tipas, budas, busena (ir „aktyvus“), nuo / iki, kartu su q; q - kaip iki tol", () => {
+    lygu(ids(ix, "/api/cvpis/paieska?vykdytojas=litgrid"), [2000002, 2000001]);
+    lygu(ids(ix, "/api/cvpis/paieska?ca=303090867"), [2000003, 2000004]);
+    lygu(ids(ix, "/api/cvpis/paieska?cpv=4432"), [2000002, 2000003, 2000004], "BVPŽ pradžia, ir ne pirmas kodas");
+    lygu(ids(ix, "/api/cvpis/paieska?cpv=45,50532000"), [2000001, 2000005], "keli kodai");
+    lygu(ids(ix, "/api/cvpis/paieska?tipas=Works"), [2000005]);
+    lygu(ids(ix, "/api/cvpis/paieska?budas=" + encodeURIComponent("Preliminary Market Consultation")), [2000004]);
+    lygu(ids(ix, "/api/cvpis/paieska?busena=Awarded"), [2000001]);
+    lygu(ids(ix, "/api/cvpis/paieska?busena=aktyvus"), [2000002, 2000003], "terminas nepraėjęs ir nenutrauktas (2000005 - nutrauktas)");
+    lygu(ids(ix, "/api/cvpis/paieska?nuo=2026-10-02&iki=2026-10-05"), [2000003, 2000004], "paskelbimo datos imtinai");
+    lygu(ids(ix, "/api/cvpis/paieska?q=kabeliu&vykdytojas=amber"), [2000004], "filtrai kartu");
+    lygu(ids(ix, "/api/cvpis/paieska?vykdytojas=litgrid&busena=aktyvus&cpv=44"), [2000002]);
+    lygu(ids(ix, "/api/cvpis/paieska?q=transformatoriu"), [2000001], "tik q");
+    lygu(ids(ix, "/api/cvpis/paieska?cpv=532"), [], "BVPŽ - tik kodo pradžia (532 yra 50532000 viduryje)");
+    lygu(ids(ix, "/api/cvpis/paieska?vykdytojas=transformatoriu"), [], "vykdytojas - tik vykdytojo pavadinime, ne pirkimo");
+  });
+  await testas("Rikiavimas pagal terminą (be termino - gale), puslapiai po 20 su bendru skaičiumi; laukai - ir BVPŽ, objektas, vertė", () => {
+    lygu(ids(ix, "/api/cvpis/paieska?vykdytojas=amber&rikiuoti=terminas"), [2000004, 2000003]);
+    const ix2 = L.sukurkIndeksa([1, 2, 3].map(i => L.normalizuokIrasa(vptIrasas({ id: 3000000 + i, tenderSubmissionDeadline: i === 2 ? null : "2" + i + "-10-2026 10:00:00" }))), "x");
+    lygu(ids(ix2, "/api/cvpis/paieska?q=bandomasis&rikiuoti=terminas"), [3000001, 3000003, 3000002]);
+    const daug = L.sukurkIndeksa(Array.from({ length: 45 }, (_, i) => L.normalizuokIrasa(vptIrasas({ id: 4000000 + i }))), "x");
+    const p1 = kunas(ats(daug, "/api/cvpis/paieska?q=bandomasis")), p3 = kunas(ats(daug, "/api/cvpis/paieska?q=bandomasis&psl=3"));
+    lygu([p1.viso, p1.rodoma, p1.psl, p1.dydis, p3.rodoma, p3.psl], [45, 20, 1, 20, 5, 3]);
+    const k = kunas(ats(ix, "/api/cvpis/paieska?ca=303090867")).rezultatai[0];
+    lygu([k.cpvCodes, k.procurementType, k.estimatedValue, k.aboveThreshold, k.caNumber, k.nuoroda],
+         [["38421100-3", "44321000-6"], "Supplies", 1200000, true, "303090867", "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=2000003"]);
+  });
+  await testas("Netinkami parametrai - 400 su parametro pavadinimu, įvestis neatkartojama; be parametrų - 400; neįkeltas sąrašas - 503", () => {
+    const blogi = { vykdytojas: "ab", ca: "12a45", cpv: "1,22,33,44,55,66", tipas: "Prekes", budas: "<script>", busena: "1abc", nuo: "2026-02-30", iki: "18-10-2026", rikiuoti: "x", psl: "51" };
+    Object.keys(blogi).forEach(p => {
+      const r = ats(ix, "/api/cvpis/paieska?q=kabeliu&" + p + "=" + encodeURIComponent(blogi[p]));
+      tiesa(r.status === 400 && kunas(r).klaida.indexOf("(" + p + ")") >= 0 && r.kunas.indexOf("<script") < 0, p + ": " + r.status + " " + r.kunas);
+    });
+    lygu([ats(ix, "/api/cvpis/paieska?psl=2").status, ats(ix, "/api/cvpis/paieska?rikiuoti=terminas").status, ats(ix, "/api/cvpis/statistika").status], [400, 400, 400], "be filtro");
+    tiesa(/Statistikai/.test(kunas(ats(ix, "/api/cvpis/statistika")).klaida));
+    lygu([ats(null, "/api/cvpis/paieska?vykdytojas=litgrid").status, ats(null, "/api/cvpis/statistika?cpv=44").status], [503, 503]);
+  });
+  await testas("Statistika: kiekiai pagal būdą, būseną, objektą, vertinimą; aktyvūs, nutraukti, rinkos konsultacijos, ES lėšos; laikotarpiai ir vertės - kvantiliai tik nuo 5", () => {
+    let s = kunas(ats(ix, "/api/cvpis/statistika?cpv=4432")).statistika;
+    lygu([s.viso, s.pagalBuda, s.pagalTipa, s.aktyvus, s.rinkosKonsultacijos, s.tarptautiniai], [3, { "Simplified Open": 1, "Open": 1, "Preliminary Market Consultation": 1 }, { Supplies: 3 }, 2, 1, 1]);
+    lygu([s.verte.n, s.verte.mediana], [2, undefined], "mažiau kaip 5 - be medianos");
+    lygu(s.vykdytojai, [{ pavadinimas: "AB \"Amber Grid\"", kodas: "303090867", kiekis: 2 }, { pavadinimas: "LITGRID AB (PV)", kodas: null, kiekis: 1 }]);
+    s = kunas(ats(ix, "/api/cvpis/statistika?tipas=Supplies&budas=" + encodeURIComponent("Simplified Open") + "&vykdytojas=kita")).statistika;
+    const t = s.terminai[0];
+    lygu([s.viso, t.budas, t.tarptautinis, t.n, t.p10, t.p25, t.mediana, t.p75, t.p90], [5, "Simplified Open", false, 5, 5, 7, 10, 12, 20], "pasiūlymų teikimo laikotarpis");
+    lygu([s.sprendimoDienos.mediana, s.verte.mediana, s.trukmeMen.mediana, s.vertinimas, s.pagalBusena], [2, 30000, 3, { "Lowest Price": 5 }, { Concluded: 5 }]);
+    lygu([s.paskelbtaNuo, s.paskelbtaIki, s.menesiai], ["2026-09-01", "2026-09-05", [["2026-09", 5]]]);
+    s = kunas(ats(ix, "/api/cvpis/statistika?q=transformatoriu")).statistika;
+    lygu([s.esLesos, s.trukmeMen.n, s.terminai[0].n, s.terminai[0].tarptautinis], [1, 1, 1, true]);
+    s = kunas(ats(ix, "/api/cvpis/statistika?tipas=Works")).statistika;
+    lygu([s.nutraukta, s.aktyvus, s.trukmeMen.n], [1, 0, 1], "nutrauktas - ne aktyvus; 90 dienų - mėnesiais");
+  });
+  await testas("Statistika kešuojama iki naujo sąrašo (ne daugiau 300), „aktyvus“ - pagal valandą; paieška nekešuojama serveryje", () => {
+    const ix3 = filtruIndeksas();
+    const a = ats(ix3, "/api/cvpis/statistika?cpv=44"), b = ats(ix3, "/api/cvpis/statistika?cpv=44");
+    lygu([a.status, a.kunas === b.kunas, ix3.kesas.size, a.antrastes["Cache-Control"]], [200, true, 1, "public, max-age=300"]);
+    L.atsakymas(ix3, "GET", "/api/cvpis/statistika?busena=aktyvus", "", null, "2026-10-18T12:00:00");
+    L.atsakymas(ix3, "GET", "/api/cvpis/statistika?busena=aktyvus", "", null, "2026-10-18T12:59:00");
+    L.atsakymas(ix3, "GET", "/api/cvpis/statistika?busena=aktyvus", "", null, "2026-10-18T13:00:00");
+    lygu(ix3.kesas.size, 3, "aktyvūs - ta pati valanda vienas įrašas");
+    lygu(kunas(L.atsakymas(ix3, "GET", "/api/cvpis/statistika?busena=aktyvus", "", null, "2026-11-30T00:00:00")).statistika.viso, 0, "vėliau - nebėra aktyvių");
+    for (let i = 0; i < 310; i++) ats(ix3, "/api/cvpis/statistika?nuo=2026-01-01&psl=" + (1 + (i % 50)) + "&q=x" + i);
+    tiesa(ix3.kesas.size <= 300, "kešo dydis: " + ix3.kesas.size);
+    ats(ix3, "/api/cvpis/paieska?cpv=44");
+    lygu(L.sukurkIndeksa([], "y").kesas.size, 0, "naujas sąrašas - tuščias kešas");
+  });
+  await testas("Kvantiliai: mažiau kaip 5 - tik kiekis; netinkamos reikšmės praleidžiamos", () => {
+    lygu(L.kvantiliai([3, 1, 2]), { n: 3 });
+    lygu(L.kvantiliai([5, 1, 4, 2, 3, NaN, "x"]), { n: 5, p10: 1, p25: 2, mediana: 3, p75: 4, p90: 5 });
   });
 }
 
@@ -248,6 +354,7 @@ async function testaiSargai(){
     if (!L) throw new Error("cvpis-logika.js neįsikėlė");
     await testaiNormalizavimas();
     await testaiAtsakymai();
+    await testaiFiltrai();
     await testaiSargai();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
