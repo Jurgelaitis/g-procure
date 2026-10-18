@@ -5,7 +5,8 @@
  *   GP_SUTARTIES_FORMA.klausimai(Z, ctx, A)  -> rodomi klausimai: [{ id, grupe, klausimas, uzuomina, pa, tipas, variantai, laukai,
  *                                                privalomas, siuloma: { reiksme, kilme } | null, reiksme, busena }]
  *   GP_SUTARTIES_FORMA.sprendimai(Z, ctx, A) -> { S (GP_SUTARCIU_GEN sprendimai), truksta: [klausimai be atsakymo], siulomos: [...] }
- *   GP_SUTARTIES_FORMA.mount({ vieta, kontekstas, onKeista }) -> { atnaujink, busena, atsakymai }  - sąsaja (atskirai nuo taisyklių)
+ *   GP_SUTARTIES_FORMA.mount({ vieta, kontekstas, onKeista, poPiesimo }) -> { atnaujink, busena, atsakymai, klausimai, visiKlausimai, irasyk }
+ *                                                - sąsaja (atskirai nuo taisyklių); poPiesimo() - po kiekvieno perpiešimo (PP-SALYGOS.html DI skiltis)
  *   GP_SUTARTIES_FORMA.priedoSprendimai(Zp, R) -> { S, truksta } - sprendimai sutarties priedui su savu šablonu (projektavimo paslaugų SS
  *                                                3 priedas: kuri etapų lentelė lieka); R - sprendimai().R
  *     ctx: { seima: "PREKES" | "PASLAUGOS" | "PROJEKTAVIMO_STATYBOS" | "STATYBOS_RANGOS" | "PROJEKTAVIMO_PASLAUGOS" | "DARBAI_MAZOJI", kalba: "LT" | "LTEN", pavadinimas, pavadinimasEN, numeris, trukmeMen, verte,
@@ -14,7 +15,11 @@
  *        žmogus neatsakė, ir rodoma „Siūloma (nepatvirtinta)“ su kilme; „Patvirtinta“ - tik žmogaus veiksmu.
  *
  * Sutarties šablono tekstas nekeičiamas - sprendimai tik renkasi šablono variantus ir įrašo reikšmes į pildomas vietas. Ko šablonas
- * nenumato (pvz. pratęsimo sąlygų redagavimas), paliekama Word programai ir išvardijama patikroje. DI nenaudojamas.
+ * nenumato (pvz. pratęsimo sąlygų redagavimas), paliekama Word programai ir išvardijama patikroje. Taisyklėse DI nenaudojamas.
+ * DI atsakymai iš pirkimo dokumentų (2026-10-18, naudotojo sprendimas: ką rodo pateikti dokumentai, pakartotinai neklausiama): ctx.di[klausimo id] =
+ * { reiksme, vnt, laukai, saltinis, vieta, citata } - PP-SALYGOS.html, patikrinta ai-patarejas.js (citata pažodžiui dokumente). Tai siūloma reikšmė,
+ * kaip ir kitos: „Siūloma (nepatvirtinta)“ su DI žyme ir citata, pirmesnė už taisyklių siūlymus (ji iš šio pirkimo dokumentų; kitokia taisyklių
+ * reikšmė parodoma), patvirtina žmogus - patvirtinta lieka su žyme A[id].di, kol jos nepakeičia.
  */
 (function (global) {
   "use strict";
@@ -976,15 +981,29 @@
       if (u && u.reiksme) R[q.id + "_vnt"] = u.reiksme;
       (q.laukai || []).forEach(function (l) { var b = A[l.id]; if (b && b.reiksme != null && b.reiksme !== "") R[l.id] = b.reiksme; });
     });
+    // atsakymai iš pirkimo dokumentų (DI, patikrinta citata) - pirmesni už taisyklių siūlymus: jie iš šio pirkimo dokumentų (2026-10-18)
+    var DIA = (ctx && ctx.di) || {};
+    Q.forEach(function (q) {
+      var d = DIA[q.id];
+      if (!d || kilmes[q.id] === "zmogus" || d.reiksme == null || d.reiksme === "") return;
+      R[q.id] = d.reiksme; kilmes[q.id] = { kilme: "iš dokumento „" + d.saltinis + "“ (DI)", di: d };
+      if (d.vnt && !(A[q.id + "_vnt"] && A[q.id + "_vnt"].reiksme)) R[q.id + "_vnt"] = d.vnt;
+    });
     // siūlomos - tvarka svarbi (kainodara -> pradžia ir kt.), todėl kelis kartus
     for (var k = 0; k < 3; k++) Q.forEach(function (q) {
       if (kilmes[q.id] === "zmogus" || !q.siuloma) return;
       var s = q.siuloma(ctx, R, Z);
+      // DI reikšmė lieka; kitokia taisyklių reikšmė parodoma šalia
+      if (kilmes[q.id] && kilmes[q.id].di) { kilmes[q.id].kitaip = s && String(s.reiksme) !== String(R[q.id]) ? s : null; return; }
       if (s) { R[q.id] = s.reiksme; kilmes[q.id] = s; } else if (kilmes[q.id] && kilmes[q.id] !== "zmogus") { delete R[q.id]; delete kilmes[q.id]; }
     });
-    // laukų siūlymai (2026-10-15): kai klausimo atsakymas lauką rodo ir žmogus lauko nepildė
+    // laukų siūlymai (2026-10-15): kai klausimo atsakymas lauką rodo ir žmogus lauko nepildė; iš dokumento (DI) - pirmiau
     Q.forEach(function (q) { (q.laukai || []).forEach(function (l) {
-      if (typeof l.siuloma !== "function" || (A[l.id] && A[l.id].reiksme != null && A[l.id].reiksme !== "")) return;   // procentai ir sumos - žemiau
+      if (A[l.id] && A[l.id].reiksme != null && A[l.id].reiksme !== "") return;
+      var d = DIA[q.id];
+      if (d && d.laukai && d.laukai[l.id] && (!l.kada || l.kada === "*" || R[q.id] === l.kada)) {
+        R[l.id] = d.laukai[l.id]; kilmes[l.id] = { kilme: "iš dokumento „" + d.saltinis + "“ (DI)", di: d }; return; }
+      if (typeof l.siuloma !== "function") return;   // procentai ir sumos - žemiau
       if (l.kada && l.kada !== "*" && R[q.id] !== l.kada) return;
       var s = l.siuloma(ctx, R, Z);
       if (s && s.reiksme) { R[l.id] = s.reiksme; kilmes[l.id] = s; }
@@ -1017,10 +1036,12 @@
     return ct ? out + "," + (ct < 10 ? "0" : "") + ct : out;
   }
 
-  function klausimai(Z, ctx, A){
+  /* o.visi (DI užklausai, 2026-10-18): ir klausimai, kurie atsiranda tik atsakius į kitus (rodoma priklauso nuo R), - kad dokumentų atsakymas
+     būtų paruoštas iš anksto; klausimai, kurie priklauso tik nuo šeimos ar varianto (rodoma(ctx)), - tik savo šeimai */
+  function klausimai(Z, ctx, A, o){
     A = A || {};
-    var E = efektyvus(ctx, A, Z), R = E.R;
-    return rinkinys(ctx).filter(function (q) { return !q.rodoma || q.rodoma(ctx, R, Z); }).map(function (q) {
+    var E = efektyvus(ctx, A, Z), R = E.R, visi = !!(o && o.visi);
+    return rinkinys(ctx).filter(function (q) { return !q.rodoma || (visi && q.rodoma.length >= 2) || q.rodoma(ctx, R, Z); }).map(function (q) {
       var k = E.kilmes[q.id], a = A[q.id];
       var busena = R[q.id] == null ? (q.privalomas ? "neuzpildyta" : "neprivaloma") : k === "zmogus" ? "patvirtinta" : "siuloma";
       if (k === "zmogus" && a && a.patvirtinta === false) busena = "siuloma";
@@ -1030,12 +1051,12 @@
       return { id: q.id, grupe: q.grupe, klausimas: q.klausimas, uzuomina: typeof q.uzuomina === "function" ? q.uzuomina(ctx, R) : q.uzuomina || "", pastaba: q.pastaba ? q.pastaba(ctx, R) : "", vidausRiba: q.vidausRiba || null, tipas: q.tipas, privalomas: !!q.privalomas,
                variantai: (q.variantai || []).filter(function (v) { return !v.tik || v.tik(ctx, R); }).map(function (v) { return { id: v.id, tekstas: v.tekstas }; }),
                vienetai: q.vienetai ? q.vienetai(ctx) : null,
-               laukai: (q.laukai || []).filter(function (l) { return (!l.tikLTEN || LTEN(ctx)) && (!l.rodoma || l.rodoma(ctx, R)); }).map(function (l) {
+               laukai: (q.laukai || []).filter(function (l) { return (!l.tikLTEN || LTEN(ctx)) && (!l.rodoma || visi || l.rodoma(ctx, R)); }).map(function (l) {
                  return { id: l.id, tipas: l.tipas, uzrasas: l.uzrasas, kada: l.kada, neprivalomas: !!l.neprivalomas, reiksme: R[l.id] != null ? R[l.id] : "",
                           siuloma: E.kilmes[l.id] && E.kilmes[l.id] !== "zmogus" ? E.kilmes[l.id] : null }; }),
                priedai: q.tipas === "priedai" ? prieduSarasas(Z, ctx, R) : null,
                lentele: q.tipas === "lentele" ? etapuRedaktorius(Z, R) : null,
-               reiksme: R[q.id] != null && !beEiluciu ? R[q.id] : null, vienetas: (A[q.id + "_vnt"] || {}).reiksme || "men",
+               reiksme: R[q.id] != null && !beEiluciu ? R[q.id] : null, vienetas: R[q.id + "_vnt"] || "men",
                siuloma: k && k !== "zmogus" ? k : null, busena: busena };
     });
   }
@@ -1149,7 +1170,7 @@
     if (R.pradzia === "ts") { nust(pTerm, { tekstas: "" }); nust(vVnt, { salinti: true }); }
     else if (prekes(ctx) && R.terminas_pasiulyme === "taip") { nust(pTerm, { palikti: "sudarant" }); nust(vVnt, { palikti: "sudarant" }); }
     else if (R.terminas != null && skaicius(R.terminas)) {
-      var n = skaicius(R.terminas), vnt = (A.terminas_vnt || {}).reiksme || "men";
+      var n = skaicius(R.terminas), vnt = R.terminas_vnt || "men";
       var zod = vnt === "d" ? forma(n, "dieną.", "dienas.", "dienų.") : forma(n, "mėnesį.", "mėnesius.", "mėnesių.");
       var k = el(vVnt, new RegExp("^" + zod.replace(".", "\\.") + "$"));
       if (k < 0) pastaba(perspejimai, "4.1 punkto vieneto sąraše nėra formos „" + zod + "“ - pasirinkite kitą terminą arba vienetą.", [{ q: "terminas" }]);
@@ -1963,7 +1984,7 @@
         : '<input class="lk-in' + (l.tipas === "skaicius" ? " lk-in--trumpas" : "") + (l.siuloma && !(A[l.id] && A[l.id].reiksme) ? " lk-in--siuloma" : "") +
           '" id="' + id + '" data-sf="' + l.id + '" type="text"' + (l.tipas === "skaicius" ? ' inputmode="decimal"' : "") + ' value="' + v + '">';
       return '<div class="lk-v"><label class="lk-v-l" for="' + id + '">' + esc(l.uzrasas) + "</label><div class=\"lk-v-iv\">" + ivestis + "</div>" +
-        (l.siuloma && !(A[l.id] && A[l.id].reiksme) ? '<div class="lk-kilme">Siūloma - ' + esc(l.siuloma.kilme) + ". Patikrinkite ir, jei reikia, pakeiskite.</div>" : "") + "</div>";
+        (l.siuloma && !(A[l.id] && A[l.id].reiksme) ? '<div class="lk-kilme"' + (l.siuloma.di ? ' data-di="sugeneruota"' : "") + ">Siūloma - " + esc(l.siuloma.kilme) + ". Patikrinkite ir, jei reikia, pakeiskite.</div>" : "") + "</div>";
     }
     function korteleHtml(q){
       var id = "sf-" + q.id, uz = q.uzuomina ? '<p class="lk-uz" id="' + id + '-uz">' + esc(q.uzuomina) + "</p>" : "";
@@ -2013,9 +2034,16 @@
             : q.vienetai ? '<span class="lk-nr">' + esc(q.vienetai[0].tekstas) + "</span>" : "") + "</div></div>";
       }
       if (q.busena === "siuloma" && q.siuloma){
-        var vt = (q.tipas === "taipne" ? TN : q.variantai || []).filter(function (x) { return x.id === q.reiksme; })[0];
-        h += '<div class="lk-kilme"><span class="lk-kilme-t">Siūloma: <b>' + esc(q.tipas === "priedai" ? "pridedami visi pažymėti priedai" : vt ? vt.tekstas : q.reiksme) + "</b> - " + esc(q.siuloma.kilme) + ".</span></div>" +
-          '<button type="button" class="sec lk-patv" data-sf-patv="' + q.id + '">Patvirtinti</button>';
+        var rodyk = function (v) { var vt = (q.tipas === "taipne" ? TN : q.variantai || []).filter(function (x) { return x.id === v; })[0];
+          var u = q.tipas === "skaicius" && q.vienetai ? (q.vienetai.filter(function (x) { return x.id === q.vienetas; })[0] || q.vienetai[0]) : null;
+          return q.tipas === "priedai" ? "pridedami visi pažymėti priedai" : vt ? vt.tekstas : v + (u ? " " + u.tekstas : ""); };
+        var di = q.siuloma.di;
+        h += di ? '<div class="lk-kilme lk-kilme--di" data-di="sugeneruota">' + (global.GP_DI ? global.GP_DI.zyme({ tekstas: "DI iš dokumento" }) + " " : "") +
+            '<span class="lk-kilme-t">Siūloma: <b>' + esc(rodyk(q.reiksme)) + "</b>" + (di.is ? " (" + esc(di.is) + ")" : "") + " - iš dokumento „" + esc(di.saltinis) + "“" +
+            (di.vieta ? ", " + esc(di.vieta) : "") + ': <q class="lk-cit">' + esc(di.citata) + "</q>" +
+            (q.siuloma.kitaip ? ' <span class="lk-kitaip">Pagal kitus duomenis (' + esc(q.siuloma.kitaip.kilme) + ") būtų: <b>" + esc(rodyk(q.siuloma.kitaip.reiksme)) + "</b>.</span>" : "") + "</span></div>"
+          : '<div class="lk-kilme"><span class="lk-kilme-t">Siūloma: <b>' + esc(rodyk(q.reiksme)) + "</b> - " + esc(q.siuloma.kilme) + ".</span></div>";
+        h += '<button type="button" class="sec lk-patv" data-sf-patv="' + q.id + '">Patvirtinti</button>';
       }
       q.laukai.forEach(function (l) { if (q.reiksme === l.kada || (l.kada === "*" && String(q.reiksme || "").trim())) h += laukoHtml(q, l); });
       return h + "</div>";
@@ -2024,13 +2052,14 @@
       var aktyvus = doc.activeElement && vieta.contains(doc.activeElement) ? doc.activeElement.id : "";
       if (!ctx || !ctx.sablonai){
         vieta.innerHTML = ctx && ctx.priezastis ? '<div class="lk-sutartis-pastaba cite">' + esc(ctx.priezastis) + "</div>" : "";
+        if (o.poPiesimo) o.poPiesimo();
         return;
       }
       var h = '<section class="lk-sutartis" aria-labelledby="sfH"><h3 id="sfH">Sutarties projektas: ' + esc(ctx.pavadinimasSutarties || "") +
         ' <span class="pz-nepriv">bandomoji</span></h3><div class="hint">Klausimai sutarties specialiosioms sąlygoms (SS)' + (PPS(ctx) ? " ir jų 3 priedui" : "") + '. Bendrosios sąlygos generuojamos be pakeitimų. ' +
         "Siūlomos reikšmės - iš jau įvestų duomenų (1 žingsnis, pirkimo kortelė, 2 žingsnio SPS atsakymai) ir LITGRID standartų; jas patvirtinate jūs.</div>";
-      if (krauna){ vieta.innerHTML = h + '<div class="cite">Kraunamas sutarties šablono žemėlapis...</div></section>'; return; }
-      if (klaida){ vieta.innerHTML = h + '<div class="lk-ispejimas">Sutarties šablono žemėlapio įkelti nepavyko (' + esc(klaida) + ") - sutarties projektas nebus sugeneruotas.</div></section>"; return; }
+      if (krauna){ vieta.innerHTML = h + '<div class="cite">Kraunamas sutarties šablono žemėlapis...</div></section>'; if (o.poPiesimo) o.poPiesimo(); return; }
+      if (klaida){ vieta.innerHTML = h + '<div class="lk-ispejimas">Sutarties šablono žemėlapio įkelti nepavyko (' + esc(klaida) + ") - sutarties projektas nebus sugeneruotas.</div></section>"; if (o.poPiesimo) o.poPiesimo(); return; }
       var qs = klausimai(Z, ctx, A), sp = sprendimai(Z, ctx, A);
       var siul = qs.filter(function (q) { return q.busena === "siuloma"; }), nu = qs.filter(function (q) { return q.busena === "neuzpildyta"; });
       h += '<div class="lk-sa"><b>Sutarties klausimai:</b> ' + qs.length + " · patvirtinta " + qs.filter(function (q) { return q.busena === "patvirtinta"; }).length +
@@ -2068,6 +2097,7 @@
         (PPS(ctx) ? " Šablone šios vietos pažymėtos geltonai - žymėjimas jose lieka, kitur nuimamas." : DM(ctx) || EKS(ctx) ? " Šablone šios vietos pažymėtos pilkai - žymėjimas jose lieka, kitur nuimamas." : "") + "</div></section>";
       vieta.innerHTML = h;
       if (aktyvus){ var e = doc.getElementById(aktyvus); if (e) e.focus(); }
+      if (o.poPiesimo) o.poPiesimo();
     }
     function keista(perpiesti){ if (perpiesti !== false) piesk(); if (o.onKeista) o.onKeista(); }
     vieta.addEventListener("change", function (e) {
@@ -2120,7 +2150,12 @@
       if (!b) return;
       var qs = klausimai(Z, ctx, A);
       var kurie = b.hasAttribute("data-sf-visas") ? qs.filter(function (q) { return q.busena === "siuloma"; }) : qs.filter(function (q) { return q.id === b.getAttribute("data-sf-patv"); });
-      kurie.forEach(function (q) { A[q.id] = { reiksme: q.reiksme, patvirtinta: true }; q.laukai.forEach(function (l) { if (l.siuloma && l.reiksme) A[l.id] = { reiksme: l.reiksme, patvirtinta: true }; }); });
+      // DI reikšmė patvirtinus lieka pažymėta (A[id].di - Word failo DI požymiams), kol žmogus jos nepakeičia
+      var zyme = function (s, v) { return s && s.di ? { reiksme: v, saltinis: s.di.saltinis } : null; };
+      kurie.forEach(function (q) {
+        A[q.id] = { reiksme: q.reiksme, patvirtinta: true }; if (zyme(q.siuloma, q.reiksme)) A[q.id].di = Object.assign(zyme(q.siuloma, q.reiksme), { klausimas: true });
+        if (q.siuloma && q.siuloma.di && q.siuloma.di.vnt && !A[q.id + "_vnt"]) A[q.id + "_vnt"] = { reiksme: q.vienetas, patvirtinta: true };
+        q.laukai.forEach(function (l) { if (l.siuloma && l.reiksme) { A[l.id] = { reiksme: l.reiksme, patvirtinta: true }; if (zyme(l.siuloma, l.reiksme)) A[l.id].di = zyme(l.siuloma, l.reiksme); } }); });
       keista();
       var f = doc.getElementById(kurie.length === 1 ? "sf-" + kurie[0].id + "-kl" : "sfH");
       if (f){ f.setAttribute("tabindex", "-1"); f.focus(); }
@@ -2128,14 +2163,27 @@
     return {
       atnaujink: atnaujink,
       atsakymai: function () { return JSON.parse(JSON.stringify(A)); },
+      // rodomi klausimai su efektyviomis reikšmėmis; visiKlausimai - ir dar nerodomi (DI užklausai, 2026-10-18); neparuošus - tuščia
+      klausimai: function () { return ctx && ctx.sablonai && Z ? klausimai(Z, ctx, A) : []; },
+      visiKlausimai: function () { return ctx && ctx.sablonai && Z ? klausimai(Z, ctx, A, { visi: true }) : []; },
+      kodas: function () { return Z ? kodas : null; },
+      // žmogaus atsakymai (testams ir atkūrimui): { [klausimo ar lauko id]: { reiksme, di } } - patvirtinta
+      irasyk: function (irasai) {
+        Object.keys(irasai || {}).forEach(function (k) { var x = irasai[k];
+          A[k] = { reiksme: x.reiksme, patvirtinta: true }; if (x.di) A[k].di = x.di; });
+        keista();
+      },
       atstatyk: function () { A = {}; piesk(); },
       // juodraščio atkūrimas (2026-10-15): tie patys atsakymai su būsenomis - patvirtinta lieka patvirtinta, siūlomos skaičiuojamos iš naujo
       atkurk: function (x) { A = x && typeof x === "object" && !Array.isArray(x) ? JSON.parse(JSON.stringify(x)) : {}; return atnaujink(); },
       busena: function () {
         if (!ctx || !ctx.sablonai || !Z) return { paruosta: false, priezastis: !ctx || !ctx.sablonai ? (ctx && ctx.priezastis) || "sutartis nepasirinkta" : klaida || "kraunamas šablono žemėlapis" };
         var sp = sprendimai(Z, ctx, A), qs = klausimai(Z, ctx, A);
+        // DI reikšmės, kurios pateks į dokumentą: siūlomos iš dokumentų ir patvirtintos nepakeistos (Word failo DI požymiams)
+        var diK = qs.filter(function (q) { var a = A[q.id]; return (q.busena === "siuloma" && q.siuloma && q.siuloma.di) || (a && a.di && a.di.klausimas && a.reiksme === a.di.reiksme && q.reiksme === a.reiksme); });
         return { paruosta: true, kodas: kodas, Z: Z, S: sp.S, R: sp.R, truksta: sp.truksta, perspejimai: sp.perspejimai, derinimas: sp.derinimas, vidaus: vidausPriminimai(Z, ctx, A),
-                 siulomos: qs.filter(function (q) { return q.busena === "siuloma"; }).map(function (q) { return q.klausimas; }) };
+                 siulomos: qs.filter(function (q) { return q.busena === "siuloma"; }).map(function (q) { return q.klausimas; }),
+                 di: diK.length, diSiulomos: diK.filter(function (q) { return q.busena === "siuloma"; }).map(function (q) { return q.id; }) };
       }
     };
   }

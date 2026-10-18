@@ -9908,6 +9908,236 @@ async function testaiPastabos1016(){
   });
 }
 
+/* Sutarties klausimai iš pirkimo dokumentų (2026-10-18, naudotojo „pradėkime 2 etapą - sutarties atsakymai iš TS (ar kitų pridedamų dokumentų)“ ir
+   sprendimas: ką rodo pateikti dokumentai, užpildoma pati, pakartotinai neklausiama): ai-patarejas.js režimas „sutartis“ (skaičius su vienetu, metai -
+   mėnesiais, laukai), klausimų atranka, automatinis paleidimas, siūlomos reikšmės su DI žyme, patvirtinimas, DI požymiai. */
+async function testaiSutartiesDI(){
+  dabartine = grupe("Sutarties klausimai iš pirkimo dokumentų (DI, 2026-10-18): ai-patarejas.js „sutartis“, klausimų atranka, užpildoma pati, DI požymiai");
+  await modulis();
+  const P = W.GP_PATAREJAS, F = W.GP_SUTARTIES_FORMA;
+  const Z = async k => (await (await W.fetch("zemelapiai/sutartys/" + k + ".json")).json());
+  const MEN = { id: "men", tekstas: "mėnesiai", re: "men|month" }, MENM = Object.assign({ metai: true }, MEN), DD = { id: "d", tekstas: "dienos", re: "dien|day", darbo: false };
+  const S1 = { id: "S1", vardas: "TS.docx", blokai: [
+    { loc: {}, text: "Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties įsigaliojimo dienos." },
+    { loc: {}, text: "Nustatyti trūkumai pašalinami per 10 darbo dienų nuo pranešimo." },
+    { loc: {}, text: "Sutarties trukmė - 2 metai nuo jos įsigaliojimo." },
+    { loc: {}, text: "Paslaugos teikiamos trejus metus nuo Sutarties įsigaliojimo." },
+    { loc: {}, text: "Pirkimas finansuojamas Europos Sąjungos lėšomis pagal projektą Nr. 02-001-K-0001 „Elektros tinklo modernizavimas“." },
+    { loc: {}, text: "Pagrindiniai įrenginiai: galios transformatorius 110/10 kV (2 vnt.) ir 10 kV skirstykla." }] };
+  await testas("ai-patarejas.js „sutartis“: įvadas apie sutarties projektą, taisyklės skaičiui (metai - perskaičiuoja programa) ir laukams; SPS įvadas nepakito; skaičius - skaitmenimis citatoje su vienetu, „darbo dienos“ - ne dienos, metai (ir „trejus metus“) - į mėnesius; laukai - tik pasirinkus jų atsakymą ir esantys citatoje", async () => {
+    const sut = P.systemPrompt("sutartis"), sps = P.systemPrompt();
+    tiesa(/pirkimo sutarties projekto specialiasias/.test(sut) && /PRIES pirkima/.test(sut) && /7a\. \[skaicius\]/.test(sut) && /perskaiciuos programa/.test(sut) && /7b\./.test(sut) && !/specialiasias pirkimo salygas \(SPS\)/.test(sut), "sutarties įvadas: " + sut.slice(0, 300));
+    tiesa(/specialiasias pirkimo salygas \(SPS\)/.test(sps) && !/sutarties projekto specialiasias/.test(sps), "SPS įvadas");
+    tiesa(/"metai" \(kai citatoje - metai\)/.test(P.userText([{ id: "Q1", rusis: "skaicius", tekstas: "Kokia trukmė?", vienetai: [MENM] }], [S1], {})), "metai užklausoje");
+    const q = (o) => Object.assign({ id: "Q1", raktas: "x", tekstas: "Per kiek laiko pristatomos prekės?", rusis: "skaicius", vienetai: [MEN, DD] }, o);
+    const pt = (a, qq) => P.patikrink([Object.assign({ id: "Q1", saltinis: "S1" }, a)], [qq || q()], [S1]).siulymai[0];
+    const ok = pt({ atsakymas: { skaicius: "3", vienetas: "men" }, citata: "Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties" });
+    lygu([ok.patikrinta, ok.reiksme, ok.rodoma], [true, { skaicius: "3", vienetas: "men" }, "3 mėnesiai"], "skaičius su vienetu");
+    lygu([pt({ atsakymas: { skaicius: "90", vienetas: "d" }, citata: "Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties" }).priezastis,
+          pt({ atsakymas: { skaicius: "3", vienetas: "d" }, citata: "Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties" }).priezastis,
+          pt({ atsakymas: { skaicius: "10", vienetas: "d" }, citata: "Nustatyti trūkumai pašalinami per 10 darbo dienų" }).priezastis,
+          pt({ atsakymas: { skaicius: "2", vienetas: "metai" }, citata: "Sutarties trukmė - 2 metai nuo jos įsigaliojimo" }).priezastis,
+          pt({ atsakymas: { skaicius: "2" }, citata: "Sutarties trukmė - 2 metai nuo jos įsigaliojimo" }, q({ vienetai: [MEN] })).priezastis,
+          pt({ atsakymas: { skaicius: "24" }, citata: "Sutarties trukmė - 24 mėnesiai nuo jos įsigaliojimo" }, q({ vienetai: [MEN] })).priezastis,
+          pt({ atsakymas: "apie tris", citata: "Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties" }).priezastis],
+         ["skaičiaus „90“ citatoje nėra", "vieneto („dienos“) citatoje nėra", "citatoje - darbo dienos, o sutartyje - dienos: įrašykite patys", "vienetas neatpažintas",
+          "vieneto („mėnesiai“) citatoje nėra", "citata šaltinyje nerasta", "ne skaičius"], "atmetimai");
+    // metai -> mėnesiai (perskaičiuoja programa): skaitmenimis ir kuopiniu skaitvardžiu; kitas skaičius - atmetama
+    const m2 = pt({ atsakymas: { skaicius: "2", vienetas: "metai" }, citata: "Sutarties trukmė - 2 metai nuo jos įsigaliojimo" }, q({ vienetai: [MENM] }));
+    const m3 = pt({ atsakymas: { skaicius: "3", vienetas: "metai" }, citata: "Paslaugos teikiamos trejus metus nuo Sutarties įsigaliojimo" }, q({ vienetai: [MENM, DD] }));
+    lygu([m2.patikrinta, m2.reiksme, m2.rodoma, m3.patikrinta, m3.reiksme.skaicius, m3.reiksme.vienetas, m3.reiksme.is,
+          pt({ atsakymas: { skaicius: "4", vienetas: "metai" }, citata: "Paslaugos teikiamos trejus metus nuo Sutarties įsigaliojimo" }, q({ vienetai: [MENM] })).priezastis,
+          pt({ atsakymas: { skaicius: "2", vienetas: "metai" }, citata: "Sutarties trukmė - 2 metai nuo jos įsigaliojimo" }, q({ vienetai: [DD] })).priezastis],
+         [true, { skaicius: "24", vienetas: "men", is: "2 metai" }, "24 mėnesiai (2 metai)", true, "36", "men", "3 metai", "„4 metai“ citatoje nėra", "vienetas neatpažintas"], "metai");
+    lygu(pt({ atsakymas: { skaicius: "2" }, citata: "galios transformatorius 110/10 kV (2 vnt.) ir 10 kV skirstykla" }, q({ vienetai: [] })).patikrinta, true, "skaičius be vieneto");
+    const es = { id: "Q1", raktas: "es", tekstas: "Ar pirkimas finansuojamas Europos Sąjungos lėšomis?", rusis: "variantas", variantai: ["Taip", "Ne"],
+      laukai: [{ id: "L1", lid: "es_nr", uzrasas: "Projekto numeris", kada: 1, tipas: "tekstas" }, { id: "L2", lid: "es_pav", uzrasas: "Projekto pavadinimas", kada: 1, tipas: "tekstas" }] };
+    const cit = "Pirkimas finansuojamas Europos Sąjungos lėšomis pagal projektą Nr. 02-001-K-0001 „Elektros tinklo modernizavimas“";
+    const e1 = pt({ atsakymas: 1, citata: cit, laukai: { L1: "02-001-K-0001", L2: "Elektros tinklo modernizavimas" } }, es);
+    lygu([e1.patikrinta, e1.reiksme, e1.laukai, e1.laukaiAtmesti], [true, 0, { es_nr: "02-001-K-0001", es_pav: "Elektros tinklo modernizavimas" }, []], "laukai");
+    const e2 = pt({ atsakymas: 1, citata: cit, laukai: { L1: "02-001-K-0001", L2: "Tinklo plėtra" } }, es);
+    lygu([e2.laukai, e2.laukaiAtmesti.map(x => x.uzrasas)], [{ es_nr: "02-001-K-0001" }, ["Projekto pavadinimas"]], "išgalvotas lauko tekstas atmestas");
+    const e3 = pt({ atsakymas: 2, citata: cit, laukai: { L1: "02-001-K-0001" } }, es);
+    lygu([e3.laukai, /tik pasirinkus kitą/.test((e3.laukaiAtmesti[0] || {}).priezastis)], [{}, true], "laukas kitam atsakymui");
+    // sutartis: tekstas su tais pačiais tarpais viename šaltinio bloke (suklijuotos eilutės - atmetama); šalių žodžiai - ne temos sutapimas; JSON su tekstu po jo
+    const S2 = { id: "S1", vardas: "TU.docx", blokai: [{ loc: {}, text: "110-10 kV Plungės TP" }, { loc: {}, text: "110 kV TRANSFORMATORIŲ PASTOTĖJE RAA IR TSPĮ ĮRENGINIŲ KEITIMAS" },
+      { loc: {}, text: "Rangovas turi parengti techninį darbo projektą ir gamybos bei montavimo brėžinius." }] };
+    const obj = { id: "Q1", raktas: "objektas", tekstas: "Koks statinys statomas?", rusis: "reiksme", vietos: 1 };
+    const pts = (a, qq, sal) => P.patikrink([Object.assign({ id: "Q1", saltinis: "S1" }, a)], [qq], [sal], { rezimas: "sutartis" }).siulymai[0];
+    lygu([pts({ atsakymas: ["110-10 kV Plungės TP110 kV TRANSFORMATORIŲ PASTOTĖJE"], citata: "110-10 kV Plungės TP ... 110 kV TRANSFORMATORIŲ PASTOTĖJE RAA" }, obj, S2).patikrinta,
+          P.patikrink([{ id: "Q1", saltinis: "S1", atsakymas: ["110-10 kV Plungės TP110 kV TRANSFORMATORIŲ PASTOTĖJE"], citata: "110-10 kV Plungės TP ... 110 kV TRANSFORMATORIŲ PASTOTĖJE RAA" }], [obj], [S2]).siulymai[0].patikrinta,
+          pts({ atsakymas: ["110 kV transformatorių pastotėje"], citata: "110 kV TRANSFORMATORIŲ PASTOTĖJE RAA IR TSPĮ ĮRENGINIŲ KEITIMAS" }, obj, S2).patikrinta],
+         [false, true, true], "suklijuotas tekstas - tik sutarčiai atmetamas");
+    const bim = { id: "Q1", raktas: "bim", tekstas: "Ar Rangovas turi taikyti statinio informacinį modeliavimą (BIM) (SS 17 punktas, BS 2.6)?", rusis: "variantas", variantai: ["Taip", "Ne"] };
+    lygu(pts({ atsakymas: 2, citata: "Rangovas turi parengti techninį darbo projektą ir gamybos bei montavimo brėžinius." }, bim, S2).silpna, true, "„Rangovas“ - ne temos sutapimas");
+    const pr = P.parseResponse('{"atsakymai":[{"id":"Q1","atsakymas":1}],"pastabos":"x"}\nPastaba: {ne JSON}');
+    lygu([pr.ok, pr.atsakymai.length, P.pirmasJson('a {"b":"}{"} c {"d":1}')], [true, 1, '{"b":"}{"}'], "pirmas JSON objektas");
+    const fq = { id: "Q1", raktas: "pagrindiniai", tekstas: "Kokie Pagrindiniai įrenginiai?", rusis: "reiksme", vietos: 1 };
+    lygu([pt({ atsakymas: ["galios transformatorius 110/10 kV (2 vnt.) ir 10 kV skirstykla"], citata: "Pagrindiniai įrenginiai: galios transformatorius 110/10 kV (2 vnt.) ir 10 kV skirstykla." }, fq).patikrinta,
+          /citatoje nėra/.test(pt({ atsakymas: ["galios transformatoriai ir skirstyklos"], citata: "Pagrindiniai įrenginiai: galios transformatorius 110/10 kV (2 vnt.) ir 10 kV skirstykla." }, fq).priezastis)], [true, true], "formuluotė - tik iš citatos");
+  });
+
+  await testas("Klausimų atranka visose šeimose: neklausiama to, kas išvesta iš SPS ar 1 žingsnio (užtikrinimas, žalieji, socialiniai, tiesioginis atsiskaitymas, pristatymo terminas pasiūlyme, patikra), sumų, numerio, priedų, etapų lentelės ir angliškų laukų; „Taip / Ne“ ir variantai - su laukais, skaičius - su vienetais (trukmė - mėnesiai su metais); ir dar nerodomi tos šeimos klausimai, bet ne kitos šeimos ar darbų rūšies", async () => {
+    const pr = W.sfAiKlausimai(F.klausimai(await Z("PREKES_LT_SS"), Object.assign({}, SF_CTX, { numeris: "" }), {}, { visi: true })), R = id => pr.find(q => q.raktas === id);
+    const ne = ["uztikrinimas", "zalieji", "socialiniai", "terminas_pasiulyme", "priedai_sar", "pirkimo_nr", "papildomi_priedai", "maks_kaina"];
+    tiesa(!ne.some(R), "prekės: neturėjo būti " + ne.filter(R).join(", "));
+    lygu([R("kainodara").rusis, R("kainodara").ids[0], R("es").variantai, R("es").laukai.map(l => [l.lid, l.kada]), R("trukme").vienetai.map(v => [v.id, !!v.metai]),
+          R("garantine").laukai.map(l => [l.lid, l.kada]), R("avansas").ids, !!R("kiekis"), !!R("bendras_taikomas")],
+         ["variantas", "fiksuota_kaina", ["Taip", "Ne"], [["es_nr", 1], ["es_pav", 1]], [["men", true]], [["atvykti_d", 2]], ["ne", "taip"], true, false], "prekės (ir kiekis - rodomas tik įkainiams)");
+    tiesa(pr.every((q, i) => q.id === "Q" + (i + 1)) && pr.every(q => q.tekstas && q.tema), "id ir tekstai");
+    tiesa(!W.sfAiKlausimai(F.klausimai(await Z("PREKES_LT_SS"), SF_CTX, {})).some(q => q.raktas === "kiekis"), "be visi - tik rodomi");
+    const en = W.sfAiKlausimai(F.klausimai(await Z("PREKES_LTEN_SS"), Object.assign({}, SF_CTX, { kalba: "LTEN" }), {}, { visi: true }));
+    tiesa(!en.some(q => (q.laukai || []).some(l => /EN$/.test(l.lid))) && en.find(q => q.raktas === "esmines").laukai.some(l => l.lid === "esmines_1"), "LT/EN - be angliškų laukų");
+    const ps = W.sfAiKlausimai(F.klausimai(await Z("PASLAUGOS_LT_SS"), Object.assign({}, SF_CTX, { seima: "PASLAUGOS" }), {}, { visi: true }));
+    tiesa(!ps.some(q => q.raktas === "cvp_adresas" || q.raktas === "garantine") && ps.find(q => q.raktas === "terminas").vienetai.map(v => v.id).join() === "men,d" && ps.find(q => q.raktas === "velavimas").rusis === "reiksme", "paslaugos");
+    const rg = W.sfAiKlausimai(F.klausimai(await Z("PSR_LT_SS"), PSR_CTX, {}, { visi: true }));
+    tiesa(!rg.some(q => /^etapu_|uztikrinim|kiti_priedai/.test(q.raktas)) && rg.find(q => q.raktas === "darbu_terminas").vienetai.map(v => v.id).join() === "men,d" && rg.find(q => q.raktas === "objektas").rusis === "reiksme", "projektavimo ir statybos ranga: " + rg.map(q => q.raktas).join(","));
+    const pp = W.sfAiKlausimai(F.klausimai(await Z("PPS_LT_SS"), PPS_CTX, {}, { visi: true }));
+    tiesa(!pp.some(q => ["pp_patikra", "pp_etapu_lentele", "pp_uztikrinimas", "pp_kiti_priedai"].includes(q.raktas)) && pp.some(q => q.raktas === "pp_objektas"), "projektavimo paslaugos");
+    const ek = W.sfAiKlausimai(F.klausimai(await Z("EKSTP_LT_SS"), ekCtx("TP"), {}, { visi: true }));
+    tiesa(!ek.some(q => /_priedas$|uztikrinim|kiti_priedai/.test(q.raktas)) && ek.find(q => q.raktas === "ek_reagavimas_darbo").vienetai[0].re === "val|hour" &&
+          ek.find(q => q.raktas === "ek_brigados_raa").vienetai[0].re === undefined && !ek.some(q => q.raktas === "ek_kiti_regionai" || q.raktas === "ek_brigados"), "eksploatavimas (pastotės) - be kitų darbų rūšių klausimų");
+    // vienetas iš dokumento (dienos) - į formos klausimą ir sutarties tekstą (paslaugų 4.1 p.: „per 30 dienų“)
+    const pz = await Z("PASLAUGOS_LT_SS"), pctx = Object.assign({}, SF_CTX, { seima: "PASLAUGOS", di: { terminas: W.sfAiReiksme({ d: ps.find(q => q.raktas === "terminas"),
+      reiksme: { skaicius: "30", vienetas: "d" }, saltinis: { vardas: "TS.docx", vieta: "" }, citata: "per 30 dienų nuo Sutarties įsigaliojimo" }) } });
+    const qt = F.klausimai(pz, pctx, {}).find(q => q.id === "terminas"), sp = F.sprendimai(pz, pctx, sfA(SF_ATS, { terminas: undefined }));
+    lygu([pctx.di.terminas.vnt, qt.reiksme, qt.vienetas, qt.busena, !!(qt.siuloma && qt.siuloma.di)], ["d", "30", "d", "siuloma", true], "dienos iš dokumento");
+    tiesa(JSON.stringify(sp.S).includes('"tekstas":"30"') && !sp.perspejimai.some(t => /4\.1 punkto vieneto/.test(t)), "4.1 p. sprendimai: " + JSON.stringify(sp.perspejimai));
+    const dm = W.sfAiKlausimai(F.klausimai(await Z("DARBAI_LT_SS"), DM_CTX, {}, { visi: true }));
+    tiesa(!dm.some(q => ["dm_trisale", "dm_uztikrinimas", "dm_kiti_priedai"].includes(q.raktas)) && dm.some(q => q.raktas === "dm_terminas"), "darbų pirkimo-pardavimo");
+  });
+
+  const TS_EIL = ["Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties įsigaliojimo dienos.",
+    "Pirkimas finansuojamas Europos Sąjungos lėšomis pagal projektą Nr. 02-001-K-0001 „Elektros tinklo modernizavimas“.",
+    "Avansas Tiekėjui nemokamas.", "Garantinio laikotarpio metu Tiekėjas atvyksta per 5 dienas nuo Pirkėjo pranešimo.",
+    "Taikoma fiksuotos kainos kainodara.", "Sutartis sudaroma 3 (trejų) metų laikotarpiui."];
+  /* DI atsakymas pagal tą pačią klausimų atranką, kuri išsiųsta */
+  const diAts = () => opts => {
+    const Q = W.sfAiKlausimai(W.SUTARTIES_FORMA.visiKlausimai()), q = r => Q.find(x => x.raktas === r);
+    return aiOk({ atsakymai: [
+      { id: q("terminas").id, atsakymas: { skaicius: "3" }, saltinis: "S1", citata: TS_EIL[0], pagrindimas: "TS nustato pristatymo terminą." },
+      { id: q("es").id, atsakymas: 1, saltinis: "S1", citata: TS_EIL[1], laukai: { [q("es").laukai[0].id]: "02-001-K-0001", [q("es").laukai[1].id]: "Elektros tinklo modernizavimas" } },
+      { id: q("avansas").id, atsakymas: 1, saltinis: "S1", citata: TS_EIL[2] },
+      { id: q("garantine").id, atsakymas: 2, saltinis: "S1", citata: TS_EIL[3], laukai: { [q("garantine").laukai[0].id]: "5" } },
+      { id: q("kainodara").id, atsakymas: 1, saltinis: "S1", citata: TS_EIL[4] },
+      { id: q("trukme").id, atsakymas: { skaicius: "3", vienetas: "metai" }, saltinis: "S1", citata: TS_EIL[5] },
+      { id: q("nenumatytos").id, atsakymas: 2, saltinis: "S1", citata: "Nenumatytų prekių pirkti nenumatoma jokiomis aplinkybėmis" },
+      { id: q("pradzia").id, atsakymas: 1, saltinis: "S1", citata: TS_EIL[4] },      // silpna citata (neįvardija termino) - nenaudojama
+      { id: "Q999", atsakymas: 1, saltinis: "S1", citata: TS_EIL[4] }], pastabos: "" })(opts);
+  };
+  await testas("Užpildoma pati (be mygtuko): rengiant sutartį ir įkėlus dokumentą DI užklausa išsiunčiama vieną kartą (perpiešiant - nekartojama); užklausoje - sutarties klausimai ir dokumentai, be numatomos vertės ir paraiškos; patikrinti atsakymai - „Siūloma (nepatvirtinta)“ su DI žyme, citata ir laukais, metai - mėnesiais, kita taisyklių reikšmė parodoma; nepatikrinti nenaudojami; klausimų nebeklausiama; patvirtinus - DI žymė lieka, pakeitus ranka - dingsta; pašalinus dokumentą - reikšmės dingsta; Word faile - DI požymiai", async () => {
+    await modulis();
+    AI.atsakymas = diAts();
+    await jdPirkimas();
+    W.rodyk("sutartis");
+    await kol(() => D.querySelector("#sutartiesForma #sf-kainodara") && !D.getElementById("sfAi").hidden, "sutarties klausimai");
+    await sl(1200);
+    lygu(AI.kvietimai.length, 0, "išsiųsta be dokumentų");
+    tiesa(/Dokumentų dar neįkelta/.test(D.getElementById("sfAiSaltiniai").textContent) && D.getElementById("sfAiSiuntimas").hidden, "be dokumentų - paaiškinimas");
+    await W.aiPridek([await docx("Techninė specifikacija.docx", TS_EIL)], "#sfAiBusena");
+    await kol(() => AI.kvietimai.length === 1, "automatinė užklausa", 10000);
+    await kol(() => /Iš dokumentų atsakyta: 6 iš \d+ sutarties klausimų/.test(D.getElementById("sfAiSantrauka").textContent), "santrauka", 10000);
+    const u = AI.kvietimai[0];
+    tiesa(/pirkimo sutarties projekto specialiasias/.test(u.system) && /sutartis - /.test(u.userMessage) && /Techninė specifikacija\.docx/.test(u.userMessage) &&
+          !/1 ?500 ?000|1500000/.test(u.userMessage) && !/užtikrinimo \(banko garantijos/.test(u.userMessage) && /Kokios apmokėjimo sąlygos/.test(u.userMessage), "užklausa");
+    tiesa(/nepatikrinta ir nenaudota: 2/.test(D.getElementById("sfAiSantrauka").textContent) && /laukia jūsų patvirtinimo: 6/.test(D.getElementById("sfAiSantrauka").textContent),
+      "santrauka: " + D.getElementById("sfAiSantrauka").textContent.replace(/\s+/g, " "));
+    // perpiešiant ir keičiant kitus atsakymus - nekartojama
+    W.SUTARTIES_FORMA.atnaujink(); W.klausimynas(); await sl(1500);
+    lygu(AI.kvietimai.length, 1, "užklausa pakartota be pokyčio");
+    const kort = k => D.getElementById("sf-" + k), A = () => W.SUTARTIES_FORMA.atsakymai(), Qv = id => W.SUTARTIES_FORMA.klausimai().find(q => q.id === id);
+    const kt = kort("terminas").querySelector(".lk-kilme--di");
+    tiesa(kt && kt.getAttribute("data-di") === "sugeneruota" && /Siūloma: 3 mėnesiai - iš dokumento „Techninė specifikacija\.docx“/.test(kt.textContent) && /per 3 mėnesius nuo Sutarties/.test(kt.textContent) &&
+          /Siūloma \(nepatvirtinta\)/.test(kort("terminas").querySelector(".lk-b").textContent), "terminas: " + (kt ? kt.textContent : "nėra"));
+    lygu([Qv("terminas").reiksme, Qv("es").reiksme, Qv("avansas").reiksme, Qv("garantine").reiksme, Qv("kainodara").reiksme, Qv("trukme").reiksme, Qv("nenumatytos").reiksme, A().terminas, (Qv("pradzia").siuloma || {}).di],
+         ["3", "taip", "ne", "atvykti", "fiksuota_kaina", "36", null, undefined, undefined], "siūlomos reikšmės (nepatikrinta ir silpna nenaudotos, į atsakymus nepateko)");
+    tiesa(/Siūloma: 36 \(3 metai\) - iš dokumento/.test(kort("trukme").textContent), "metai: " + kort("trukme").textContent.replace(/\s+/g, " ").slice(-400));
+    tiesa(/Pagal kitus duomenis \(LITGRID standartas \(2026-10-07\)\) būtų: Trūkumai šalinami/.test(kort("garantine").textContent) && D.getElementById("sf-atvykti_d").value === "5" &&
+          kort("garantine").querySelector('.lk-v [data-di="sugeneruota"]') && !/Pagal kitus duomenis/.test(kort("avansas").textContent), "garantinė: " + kort("garantine").textContent.replace(/\s+/g, " ").slice(0, 400));
+    tiesa(D.getElementById("sf-es_nr").value === "02-001-K-0001" && D.getElementById("sf-es_pav").value === "Elektros tinklo modernizavimas", "ES laukai");
+    const tr = W.SUTARTIES_FORMA.busena().truksta;
+    tiesa(!tr.some(t => /Per kiek laiko tiekėjas|Europos Sąjungos|kainos apskaičiavimo/.test(t)), "atsakyti dokumentais klausimai vis dar trūksta: " + tr.join("; "));
+    lygu(W.SUTARTIES_FORMA.busena().di, 6, "DI reikšmių");
+    // patvirtinti vieną ir visus; pakeitus ranka - DI žymė dingsta
+    kort("terminas").querySelector("[data-sf-patv]").click();
+    await kol(() => A().terminas, "patvirtinta");
+    lygu([A().terminas.reiksme, A().terminas.di && A().terminas.di.klausimas], ["3", true], "patvirtinta su DI žyme");
+    D.getElementById("sfPatvVisas").click();
+    await kol(() => A().es && A().es_nr, "visos patvirtintos");
+    lygu([A().es.di.klausimas, A().es_nr.di.saltinis, A().trukme.reiksme, A().garantine.reiksme, A().atvykti_d.reiksme, !!A().avansas.di], [true, "Techninė specifikacija.docx", "36", "atvykti", "5", true], "patvirtinti");
+    lygu(W.SUTARTIES_FORMA.busena().di, 6, "DI reikšmių po patvirtinimo");
+    const ti = D.getElementById("sf-terminas-in"); ti.value = "4"; ti.dispatchEvent(new W.Event("input", { bubbles: true })); ti.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await kol(() => W.SUTARTIES_FORMA.busena().di === 5, "pakeista ranka");
+    lygu(A().terminas.di, undefined, "pakeitus ranka DI žymė liko");
+    const J = W.surinkJuodrasti();
+    tiesa(J.sf.es.di && J.sf.es.di.klausimas && J.sf.es_nr.di && !J.sf.terminas.di, "juodraštis: " + JSON.stringify([J.sf.es, J.sf.terminas]));
+    // likę atsakymai - žmogaus; generuojant - DI požymiai sutarties SS faile
+    const papildyk = {}; Object.entries(SF_ATS).forEach(([k, v]) => { if (!A()[k]) papildyk[k] = { reiksme: v }; });
+    papildyk.zalieji = { reiksme: "ne" };
+    W.SUTARTIES_FORMA.irasyk(papildyk);
+    // kiti neatsakyti (šio pirkimo kontekste) - „Ne“ ar pirmas variantas
+    for (let k = 0; k < 3; k++) { const n = {}; W.SUTARTIES_FORMA.klausimai().filter(q => q.busena === "neuzpildyta").forEach(q => {
+      if (q.tipas === "taipne") n[q.id] = { reiksme: "ne" }; else if (q.tipas === "variantai") n[q.id] = { reiksme: q.variantai[0].id }; }); if (Object.keys(n).length) W.SUTARTIES_FORMA.irasyk(n); }
+    tiesa(!W.SUTARTIES_FORMA.busena().truksta.length, "trūksta atsakymų: " + W.SUTARTIES_FORMA.busena().truksta.join(" | ").slice(0, 600));
+    const rez = await W.generuoti();
+    const ss = rez.find(r => r.d && r.d.dokumentas === "Sutarties SS"), bs = rez.find(r => r.d && r.d.dokumentas === "Sutarties BS");
+    tiesa(ss && ss.blob && bs && bs.blob, "sutarties dokumentai nesugeneruoti");
+    const cx = async b => { const f = (await W.JSZip.loadAsync(b)).file("docProps/custom.xml"); return f ? f.async("string") : ""; };
+    const sx = await cx(ss.blob), bx = await cx(bs.blob);
+    tiesa(/name="DI_pasiulymu_priimta"[^>]*><vt:lpwstr>5</.test(sx) && /Priimti DI atsakymų pasiūlymai \(5\)/.test(sx) && !/DI_pasiulymu_priimta/.test(bx), "DI požymiai: SS " + sx.slice(0, 300) + " / BS " + bx.slice(0, 100));
+    W.rodykRezultata(rez);
+    tiesa(/Sutarties atsakymų, priimtų iš DI pasiūlymų: 5/.test((D.getElementById("sutartiesDiPatikra") || {}).textContent || ""), "4 žingsnio eilutė");
+    // pašalinus dokumentą - DI reikšmės nebenaudojamos (patvirtintos lieka žmogaus atsakymais)
+    await modulis();
+    AI.atsakymas = diAts();
+    await jdPirkimas();
+    await W.aiPridek([await docx("TS.docx", TS_EIL)]);
+    W.rodyk("sutartis");
+    await kol(() => W.SUTARTIES_FORMA.busena().di === 6, "užpildyta", 10000);
+    W.aiSalinkSaltini(W.eval("AI.saltiniai")[0].raktas);
+    await kol(() => W.SUTARTIES_FORMA.klausimai().find(q => q.id === "kainodara").reiksme == null, "pašalinus dokumentą");
+    lygu([W.SUTARTIES_FORMA.busena().di, AI.kvietimai.length], [0, 1], "po šalinimo");
+  });
+
+  await testas("DI klaida - priežastis ir „Bandyti dar kartą“, automatiškai nekartojama, reikšmių nėra; nutrūkęs atsakymas - klaida; atšaukus - ne klaida; nerengiant sutarties (1 žingsnyje „Ne“) - nesiunčiama", async () => {
+    await modulis();
+    AI.atsakymas = () => ({ ok: false, status: 503, text: "", raw: null, error: "Serveris laikinai nepasiekiamas" });
+    await jdPirkimas();
+    await W.aiPridek([await docx("TS.docx", TS_EIL)]);
+    W.rodyk("sutartis");
+    await kol(() => /Sutarties klausimų užpildyti iš dokumentų nepavyko/.test(D.getElementById("sfAiBusena").textContent), "klaida", 10000);
+    W.SUTARTIES_FORMA.atnaujink(); await sl(1500);
+    lygu([AI.kvietimai.length, W.SUTARTIES_FORMA.busena().di], [1, 0], "klaida pakartota automatiškai arba yra reikšmių");
+    tiesa(D.querySelector("#sfAiBusena [data-gpb-kartoti]"), "be „Bandyti dar kartą“");
+    AI.atsakymas = () => ({ ok: true, status: 200, text: '{"atsakymai":[', raw: { stop_reason: "max_tokens" }, error: null });
+    D.querySelector("#sfAiBusena [data-gpb-kartoti]").click();
+    await kol(() => AI.kvietimai.length === 2 && /nutrūko/.test(D.getElementById("sfAiBusena").textContent), "nutrūkęs", 10000);
+    W.GP_AI_PROXY.call = o => new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    D.querySelector("#sfAiBusena [data-gpb-kartoti]").click();
+    await kol(() => D.querySelector("#sfAiBusena [data-gpb-atsaukti]"), "eiga su „Atšaukti“");
+    D.querySelector("#sfAiBusena [data-gpb-atsaukti]").click();
+    await sl(300);
+    tiesa(!/nepavyko/.test(D.getElementById("sfAiBusena").textContent), "atšaukimas - kaip klaida: " + D.getElementById("sfAiBusena").textContent);
+    perimkAI();
+    // sugadintas DI atsakymas - automatiškai pakartojama vieną kartą
+    await modulis();
+    let n = 0; const geras = diAts();
+    AI.atsakymas = o => (++n === 1 ? { ok: true, status: 200, text: 'Atsakymas: {"atsakymai": [ {"id": "Q1", "atsakymas": 1,, } ] }', raw: { stop_reason: "end_turn" }, error: null } : geras(o));
+    await jdPirkimas();
+    await W.aiPridek([await docx("TS.docx", TS_EIL)]);
+    W.rodyk("sutartis");
+    await kol(() => W.SUTARTIES_FORMA.busena().di === 6, "po pakartojimo užpildyta", 15000);
+    lygu(AI.kvietimai.length, 2, "užklausų (su vienu pakartojimu)");
+    // nerengiant sutarties - nesiunčiama
+    await modulis();
+    AI.atsakymas = diAts();
+    await jdPirkimas({ sutartis: "ne" });
+    await W.aiPridek([await docx("TS.docx", TS_EIL)]);
+    await sl(1500);
+    lygu([AI.kvietimai.length, D.getElementById("sfAi").hidden], [0, true], "nerengiant sutarties");
+  });
+}
+
 (async function(){
   // Sutarties parinkimo stebėjimo įrašai (2026-10-08), nustatymai ir juodraščiai (2026-10-15, gprocure.salygos.juodrastis.*) - tikri įrašai atkuriami, testų sukurti šalinami
   const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0 || k.indexOf("gprocure.salygos") === 0);
@@ -9959,6 +10189,7 @@ async function testaiPastabos1016(){
     await testaiDokumentai();
     await testaiJuodrastis();
     await testaiPastabos1016();
+    await testaiSutartiesDI();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
