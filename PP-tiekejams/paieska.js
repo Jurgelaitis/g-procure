@@ -64,7 +64,7 @@
   }
 
   // Pirkimo objekto žodžiai (iš pavadinimo, opts.silpni) yra beveik kiekviename to pirkimo
-  // fragmente, todėl nerodo, APIE KĄ klausiama. 2026-09-22 (9495168): klausimas „What is the
+  // fragmente, todėl nerodo, APIE KĄ klausiama. 2026-09-22 (tikras LITGRID paketas): klausimas „What is the
   // delivery time for the mobile switchyard?" iškeldavo 14 techninės specifikacijos fragmentų
   // su „mobile switchyard", o sutarties 4.1 p. („deliver ... no later than 36 months") nebūdavo
   // net tarp 40 geriausių. Tokie žodžiai sveria SILPNO_SVORIS dalį.
