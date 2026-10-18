@@ -66,7 +66,7 @@ Nuo 2026-09-25 failas gyvena `shared/`: tą patį teksto skaitymą naudoja ir PP
 - BM25 su LT diakritikų suliejimu ir grubiu kamienu; stop-žodžiai LT/EN.
 - Filtrai: docIds, kalba. Indeksas visada tik vieno pirkimo fragmentams - kito pirkimo įrodymai negali patekti (kritinė taisyklė).
 - Semantinės (vektorinės) paieškos MVP nėra: ji reikalautų serverio; BM25 + tikslūs raktai + platus kandidatų rinkinys (14) dengia pirkimo dokumentų atvejį.
-- Pirkimo objekto žodžiai (iš pavadinimo, `opts.silpni`) BM25 balui duoda tik `SILPNO_SVORIS` (0,25) dalį: jie beveik kiekviename to pirkimo fragmente ir nerodo, apie ką klausiama (9495168: „delivery time for the mobile switchyard" sutarties 4.1 p. buvo 53-ias, su svoriu - 8-as).
+- Pirkimo objekto žodžiai (iš pavadinimo, `opts.silpni`) BM25 balui duoda tik `SILPNO_SVORIS` (0,25) dalį: jie beveik kiekviename to pirkimo fragmente ir nerodo, apie ką klausiama (tikras LITGRID paketas: „delivery time for the mobile switchyard" sutarties 4.1 p. buvo 53-ias, su svoriu - 8-as).
 - Fragmentų parinkimas klausimui (`parinkFragmentus`, `index.html`): (1) santraukos fakto fragmentai, jei klausimas apie tą temą (`FAKTU_TEMOS`), ir tą pačią reikšmę patvirtinantys kiti dokumentai (`patvirtina`, pvz. pakeitimo skelbimo „10 Pakeitimas" šalia pratęsimo rašto); (2) paaiškinimų / atsakymų / pratęsimų fragmentai, jei balas >= 40 % geriausio (`PAPILDYMO_RIBA`; nesusiję surinkdavo 4-31 %, susiję 55-100 %); (3) BM25; iš viso iki 14. Be (1) klausimas „Iki kada pateikti?" gaudavo 14 bendrų BPS frazių apie tai, kad „terminas nurodomas CVP IS".
 
 ## AI sluoksnis (`asistentas.js`, `worker/tiekejams-proxy.js`)

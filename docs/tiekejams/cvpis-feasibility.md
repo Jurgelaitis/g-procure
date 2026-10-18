@@ -76,7 +76,7 @@ Keturi skelbimai atsisiųsti curl per `downloadNoticeForAdvSearch.do?resourceId=
 
 | resourceId | Failo vardas (Content-Disposition) | „1.1 Pirkėjas / Oficialus pavadinimas“ | Veiklos srities eilutė | „Teisinis pagrindas“ |
 |---|---|---|---|---|
-| 9683631 (LITGRID) | `..._Nacionalinis skelbimas ... – komunalinio sektoriaus direktyva, įprasta tvarka.pdf` | `LITGRID AB (PV)` | Perkančiojo subjekto veiklos sritis | Direktyva 2014/25/ES |
+| LITGRID | `..._Nacionalinis skelbimas ... – komunalinio sektoriaus direktyva, įprasta tvarka.pdf` | `LITGRID AB (PV)` | Perkančiojo subjekto veiklos sritis | Direktyva 2014/25/ES |
 | 9742096 (Amber Grid) | `..._Skelbimas apie pirkimą - komunalinio sektoriaus direktyva, įprasta tvarka.pdf` | `AB "Amber Grid"` | Perkančiojo subjekto veiklos sritis | Direktyva 2014/25/ES |
 | 9281765 (EPSO-G) | `..._Nacionalinis skelbimas ... - bendroji direktyva, įprasta tvarka.pdf` | `UAB "EPSO­G" (PV)` (minkštasis brūkšnelis U+00AD) | Perkančiosios organizacijos veiklos sritis | Kitas |
 | 9614756 (Energy cells) | `..._Nacionalinis skelbimas ... - bendroji direktyva, įprasta tvarka.pdf` | `Energy cells UAB (PV)` | Perkančiosios organizacijos veiklos sritis | Kitas |
