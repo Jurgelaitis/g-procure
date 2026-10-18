@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Serverio paslaugų testai</title>
+<link rel="stylesheet" href="../shared/epso-g.css">
+<style>
+  body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);background:var(--color-graphite-5);font-size:14px;line-height:1.5}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:#5B6470;margin-bottom:18px}
+  #santrauka{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .n{font-size:24px;font-weight:700} .ok{color:var(--color-emerald-strong)} .blogai{color:var(--color-error-strong)}
+  .grupe{background:#fff;border:1px solid var(--color-graphite-15);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .grupe h2{font-size:14px;margin:0;padding:11px 16px;background:var(--color-green-5);color:var(--color-emerald-strong);border-bottom:1px solid var(--color-graphite-15)}
+  .t{display:flex;gap:10px;padding:9px 16px;border-bottom:1px solid #F0F3F5;align-items:flex-start}
+  .t:last-child{border-bottom:0}
+  .zyma{flex:0 0 auto;font-weight:700;font-size:12px;padding:2px 8px;border-radius:20px;margin-top:1px}
+  .t.geras .zyma{background:var(--color-green-5);color:var(--color-emerald-strong)}
+  .t.krito .zyma{background:var(--color-error-5);color:#7F1722} .t.krito{background:#FFFAFA}
+  .det{color:#7F1722;font-size:12px;margin-top:3px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+
+<h1>Serverio paslaugų testai</h1>
+<div class="sub">CVP IS duomenų paslauga (VPT API per G-Procure serverį, 2026-10-18): VPT atsakymo tikrinimas ir
+normalizavimas (tik išvardyti laukai, tipai, ilgio ribos, datos, TED nuorodos), naujo sąrašo priėmimas, paieška ir užklausų
+atsakymai (keliai, numeriai, CORS, neįkeltas sąrašas - ne „pirkimo nėra“, įvestis neatkartojama), serverio failo ir systemd bei
+nginx nustatymų sargai (raktas tik iš kredencialų failo, tik 127.0.0.1, izoliacija, jokio rakto saugykloje). Serverio kodas
+naršyklėje nevykdomas - tik išnagrinėjamas; tinklo ir failų dalis tikrinama įdiegus (README.md).</div>
+
+<div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
+  <span class="n blogai" id="n-blogai">0</span> krito
+  <span id="busena" style="color:#5B6470">Vykdoma...</span></div>
+<div id="rezultatai"></div>
+
+<script src="cvpis-logika.js"></script>
+<script>
+const R = { ok: 0, blogai: 0 };
+function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
+let dabartine = null;
+function grupe(pav){ const d = document.createElement("div"); d.className = "grupe"; d.innerHTML = "<h2>" + ekranuok(pav) + "</h2>"; document.getElementById("rezultatai").appendChild(d); dabartine = d; }
+async function testas(pav, fn){
+  const eil = document.createElement("div");
+  try { await fn(); eil.className = "t geras"; eil.innerHTML = '<span class="zyma">GERAI</span><span>' + ekranuok(pav) + '</span>'; R.ok++; }
+  catch (e) { eil.className = "t krito"; eil.innerHTML = '<span class="zyma">KRITO</span><span>' + ekranuok(pav) + '<div class="det">' + ekranuok((e && e.message) || e) + '</div></span>'; R.blogai++; }
+  dabartine.appendChild(eil);
+  document.getElementById("n-ok").textContent = R.ok; document.getElementById("n-blogai").textContent = R.blogai;
+}
+function tiesa(s, ka){ if (!s) throw new Error(ka || "sąlyga netenkinama"); }
+function lygu(g, t, ka){ if (JSON.stringify(g) !== JSON.stringify(t)) throw new Error((ka || "reikšmė") + "\n  tikėtasi: " + JSON.stringify(t) + "\n  gauta:    " + JSON.stringify(g)); }
+const tekstas = async kelias => { const r = await fetch(kelias, { cache: "no-store" }); if (!r.ok) throw new Error(kelias + ": HTTP " + r.status); return r.text(); };
+
+const L = window.GP_CVPIS_API;
+/* Išgalvotas VPT įrašas - sandara kaip tikrame cft-details-export atsakyme (2026-10-18), reikšmės netikros. */
+function vptIrasas(o){
+  return Object.assign({
+    title: "Bandomasis elektros įrenginių pirkimas", id: 1234501, caName: "Bandomoji organizacija (PV)", caNumber: "123456789",
+    datePublished: "02-10-2026 10:15:00", tenderSubmissionDeadline: "20-10-2026 15:00:00", procedure: "Open", status: "Published",
+    awardDate: null, estimatedValue: "180000", activeCycle: 1, planReference: null, cftCaUniqueId: "BP-1",
+    evaluationMechanism: "Lowest Price", description: "Bandomasis aprašymas", procurementType: "Supplies",
+    directive: "prompt.directive.classic", cftInvolves: "notice.type.contract", cpvCodes: "31000000, 31200000-8",
+    awardPerItem: null, inclusionEAuctions: false, nutsCode: "LT011", aboveThreshold: true,
+    dispatchingInvitationDeadline: null, clarificationPeriodEnd: "14-10-2026 23:59:59", uploadClarification: null,
+    tendersOpeningDate: null, onlineInterestAllowed: null, contractAwardedInLots: false, contractDuration: "12 mėn.",
+    tenderValidity: null, euFunding: false, multipleTenders: null, tedLink: ["https://ted.europa.eu/lt/notice/-/detail/123-2026"],
+    publicationLanguage: "LT", numberOfOpeners: null, contractAwardDate: null, dateAcceptedByContractor: null
+  }, o || {});
+}
+function indeksas(n){
+  const irasai = [];
+  for (let i = 0; i < (n || 3); i++) irasai.push(L.normalizuokIrasa(vptIrasas({ id: 1234501 + i, title: "Pirkimas Nr. " + i + (i === 1 ? " transformatorių priežiūra" : ""), datePublished: String(i + 1).padStart(2, "0") + "-10-2026 10:00:00" })));
+  return L.sukurkIndeksa(irasai, "2026-10-18T06:00:00Z");
+}
+
+async function testaiNormalizavimas(){
+  grupe("VPT atsakymas - nepatikimi duomenys");
+  await testas("Įrašas: tik išvardyti laukai, tipai, datos ISO, vertė skaičiumi, BVPŽ ir NUTS sąrašu", () => {
+    const o = L.normalizuokIrasa(vptIrasas({ slapta: "x", __proto__x: 1 }));
+    lygu(o.id, 1234501); lygu(o.title, "Bandomasis elektros įrenginių pirkimas");
+    lygu([o.datePublished, o.tenderSubmissionDeadline, o.clarificationPeriodEnd, o.awardDate], ["2026-10-02T10:15:00", "2026-10-20T15:00:00", "2026-10-14T23:59:59", null]);
+    lygu([o.estimatedValue, o.activeCycle, o.aboveThreshold, o.euFunding, o.multipleTenders], [180000, 1, true, false, null]);
+    lygu([o.cpvCodes, o.nutsCode, o.tedLink.length], [["31000000", "31200000-8"], ["LT011"], 1]);
+    tiesa(!("slapta" in o) && !("__proto__x" in o), "nežinomi laukai neperduodami");
+    const leidziami = ["id", "caNumber", "estimatedValue", "activeCycle", "numberOfOpeners", "cpvCodes", "nutsCode", "tedLink"].concat(Object.keys(L.TEKSTAI), L.DATOS, L.LOGINIAI);
+    lygu(Object.keys(o).filter(k => leidziami.indexOf(k) < 0), [], "tik žinomi laukai");
+  });
+  await testas("Netinkamos reikšmės: data su metais 0028, vasario 30, kitas formatas; vertė su raidėmis; neteisingas id - įrašas atmetamas", () => {
+    lygu([L.data("14-06-0028 00:00:00"), L.data("30-02-2026 10:00:00"), L.data("2026-10-02"), L.data("29-02-2028 00:00:00"), L.data("01-01-2026 24:00:00")], [null, null, null, "2028-02-29T00:00:00", null]);
+    lygu([L.verte("180000"), L.verte("1500.50"), L.verte("180 000"), L.verte("-5"), L.verte("1e9"), L.verte(null)], [180000, 1500.5, null, null, null, null]);
+    lygu([L.normalizuokIrasa(vptIrasas({ id: "abc" })), L.normalizuokIrasa(vptIrasas({ id: 0 })), L.normalizuokIrasa(vptIrasas({ id: 1.5 })), L.normalizuokIrasa(null), L.normalizuokIrasa([1])], [null, null, null, null, null]);
+    lygu(L.normalizuokIrasa(vptIrasas({ id: "1234501" })).id, 1234501, "skaitmenų tekstas priimamas");
+    lygu(L.normalizuokIrasa(vptIrasas({ caNumber: "" })).caNumber, null, "tuščias kodas");
+    lygu(L.normalizuokIrasa(vptIrasas({ caNumber: "12<b>" })).caNumber, null, "kodas - tik skaitmenys");
+  });
+  await testas("Tekstas: valdymo ir krypties ženklai šalinami, tarpai suglaudinami, per ilgas - kerpamas ties žodžiu su daugtaškiu, ne tekstas - null", () => {
+    lygu(L.tekstas("A\u0000B‮c​﻿  d\r\n\r\n\r\n\re", 100), "ABc d\n\ne");
+    const ilgas = L.tekstas("žodis ".repeat(200), 50);
+    tiesa(ilgas.length <= 51 && /(^| )žodis…$/.test(ilgas), "kerpama ties žodžiu: " + ilgas);
+    lygu([L.tekstas(5, 10), L.tekstas({}, 10), L.tekstas("   ", 10)], [null, null, null]);
+    const o = L.normalizuokIrasa(vptIrasas({ title: "<img src=x onerror=alert(1)>" }));
+    lygu(o.title, "<img src=x onerror=alert(1)>", "tekstas lieka tekstu - ekranuoja naršyklės modulis; serveris HTML negamina");
+  });
+  await testas("TED nuorodos: tik https://ted.europa.eu/, ne daugiau 10; javascript:, http:, kitas domenas ir ne tekstas atmetami", () => {
+    lygu(L.tedNuorodos(["https://ted.europa.eu/lt/notice/-/detail/1-2026", "javascript:alert(1)", "http://ted.europa.eu/x", "https://ted.europa.eu.evil.com/x", "https://evil.com/?https://ted.europa.eu/", 5, "https://ted.europa.eu/x y"]),
+      ["https://ted.europa.eu/lt/notice/-/detail/1-2026"]);
+    lygu(L.tedNuorodos("https://ted.europa.eu/x"), [], "ne sąrašas");
+    lygu(L.tedNuorodos(Array(15).fill("https://ted.europa.eu/a")).length, 10);
+  });
+  await testas("Puslapis: ne sąrašas - klaida; netinkami įrašai praleidžiami ir suskaičiuojami", () => {
+    let klaida = null; try { L.tikrinkPuslapi({ data: [] }); } catch (e) { klaida = e.message; }
+    tiesa(/ne sąrašas/.test(klaida), "objektas - klaida");
+    const p = L.tikrinkPuslapi([vptIrasas(), { id: "x" }, null, vptIrasas({ id: 1234502 })]);
+    lygu([p.irasai.length, p.atmesta], [2, 2]);
+  });
+  await testas("Naujas sąrašas priimamas: bent 1 000 įrašų ir ne mažiau 80 % ankstesnio", () => {
+    lygu([L.priimtinasKiekis(999, 0), L.priimtinasKiekis(1000, 0), L.priimtinasKiekis(80000, 100000), L.priimtinasKiekis(79999, 100000), L.priimtinasKiekis(120000, 100000), L.priimtinasKiekis(NaN, 0)],
+      [false, true, true, false, true, false]);
+  });
+}
+
+async function testaiAtsakymai(){
+  grupe("Užklausų atsakymai");
+  const ix = indeksas(30);
+  const kunas = r => JSON.parse(r.kunas);
+  await testas("Pirkimas pagal numerį: 200 su leidžiamais laukais, CVP IS nuoroda, laiku ir CORS tik G-Procure kilmei", () => {
+    const r = L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/1234502", "https://g-procure.com", null);
+    lygu(r.status, 200); const k = kunas(r);
+    lygu([k.pirkimas.id, k.nuoroda, k.meta.atnaujinta, k.meta.kiekis], [1234502, "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=1234502", "2026-10-18T06:00:00Z", 30]);
+    lygu([r.antrastes["Access-Control-Allow-Origin"], r.antrastes["X-Content-Type-Options"], r.antrastes["Cache-Control"]], ["https://g-procure.com", "nosniff", "public, max-age=300"]);
+    tiesa(/default-src 'none'/.test(r.antrastes["Content-Security-Policy"]), "CSP");
+    lygu(L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/1234502", "https://www.g-procure.com").antrastes["Access-Control-Allow-Origin"], "https://www.g-procure.com");
+    lygu(L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/1234502", "http://localhost:8000").antrastes["Access-Control-Allow-Origin"], "http://localhost:8000");
+    ["https://evil.example", "null", "https://g-procure.com.evil.example", "http://g-procure.com", undefined].forEach(k =>
+      tiesa(!("Access-Control-Allow-Origin" in L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/1234502", k).antrastes), "be CORS: " + k));
+  });
+  await testas("Neįkeltas sąrašas - 503 su paaiškinimu, niekada „pirkimo nėra“; nerastas įkeltame - 404 su sąrašo laiku", () => {
+    const r = L.atsakymas(null, "GET", "/api/cvpis/pirkimas/1234502", "https://g-procure.com");
+    lygu(r.status, 503); tiesa(/dar neįkelti/.test(kunas(r).klaida) && !/nėra/.test(kunas(r).klaida), kunas(r).klaida);
+    lygu(L.atsakymas(null, "GET", "/api/cvpis/paieska?q=elektros", "").status, 503);
+    const n = L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/7654321", "");
+    lygu(n.status, 404); tiesa(/7654321 VPT API sąraše nėra \(sąrašas atnaujintas 2026-10-18T06:00:00Z\)/.test(kunas(n).klaida), kunas(n).klaida);
+    lygu(n.antrastes["Cache-Control"], "no-store", "nerastas nekešuojamas - gali atsirasti po atnaujinimo");
+  });
+  await testas("Neteisingi keliai, numeriai ir metodai: 400 / 404 / 405; įvestis atsakyme neatkartojama", () => {
+    lygu(["abc", "1234", "1234567890", "12%3Cb%3E", "1234567%20"].map(x => L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/" + x, "").status), [400, 400, 400, 400, 400]);
+    lygu(["POST", "PUT", "DELETE", "PATCH", "TRACE", ""].map(m => L.atsakymas(ix, m, "/api/cvpis/busena", "").status), [405, 405, 405, 405, 405, 405]);
+    lygu(["/api/cvpis/", "/api/cvpis/pirkimas", "/api/cvpis/pirkimas/1234502/x", "/kita", "/api/cvpis/busena/x"].map(k => L.atsakymas(ix, "GET", k, "").status), [404, 404, 404, 404, 404]);
+    lygu(L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/" + "1".repeat(400), "").status, 404, "per ilgas adresas");
+    const xss = L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=" + encodeURIComponent("<script>alert(1)<\/script> elektros"), "");
+    tiesa(xss.kunas.indexOf("<script") < 0 && xss.kunas.indexOf("alert(1)") < 0, "paieškos tekstas neatkartojamas");
+    ["<b>", "<img src=x onerror=1>" + "x".repeat(100)].forEach(q => {
+      const r = L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=" + encodeURIComponent(q), "");
+      tiesa(r.status === 400 && r.kunas.indexOf("<") < 0 && r.kunas.indexOf("onerror") < 0, "netinkamas paieškos tekstas klaidoje neatkartojamas: " + r.kunas);
+    });
+    tiesa(L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/abc%3Cscript%3E", "").kunas.indexOf("script") < 0, "numeris neatkartojamas");
+    const opt = L.atsakymas(ix, "OPTIONS", "/api/cvpis/pirkimas/1234502", "https://g-procure.com");
+    lygu([opt.status, opt.kunas, opt.antrastes["Access-Control-Allow-Methods"]], [204, "", "GET, HEAD, OPTIONS"]);
+    lygu(L.atsakymas(ix, "GET", "/api/cvpis/pirkimas/../busena", "").status, 200, "URL normalizuojamas - ne kelio apėjimas");
+  });
+  await testas("Paieška: be diakritikų, visi žodžiai, naujausi pirmi, ne daugiau 20 su bendru skaičiumi; per trumpas ar per ilgas tekstas - 400", () => {
+    let k = kunas(L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=" + encodeURIComponent("Transformatoriu prieziura"), ""));
+    lygu([k.viso, k.rezultatai.map(x => x.id)], [1, [1234502]]);
+    tiesa(Object.keys(k.rezultatai[0]).join() === "id,title,caName,procedure,status,datePublished,tenderSubmissionDeadline,nuoroda", "paieškos laukai: " + Object.keys(k.rezultatai[0]));
+    k = kunas(L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=pirkimas", ""));
+    lygu([k.viso, k.rodoma], [30, 20]);
+    tiesa(k.rezultatai.every((x, i, a) => i === 0 || String(a[i - 1].datePublished) >= String(x.datePublished)), "naujausi pirmi");
+    k = kunas(L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=1234510", ""));
+    lygu(k.rezultatai.map(x => x.id), [1234510], "ir pagal numerį");
+    lygu([L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=ab", "").status, L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=" + "a".repeat(101), "").status, L.atsakymas(ix, "GET", "/api/cvpis/paieska", "").status, L.atsakymas(ix, "GET", "/api/cvpis/paieska?q=%21%21%21%21", "").status], [400, 400, 400, 400]);
+    lygu(L.paieskosTekstas("Elektros ĮRENGINIŲ  priežiūra-2026"), "elektros irenginiu prieziura 2026");
+  });
+  await testas("Būsena: veikia / neįkelta, paskutinė klaida - tik laikas ir rūšis, kitas atnaujinimas; nekešuojama", () => {
+    let k = kunas(L.atsakymas(ix, "GET", "/api/cvpis/busena", "", { klaida: { laikas: "2026-10-18T06:00:00Z", rusis: "vpt-503", detales: "slapta" }, kita: "2026-10-18T12:00:00Z" }));
+    lygu([k.busena, k.kiekis, k.paskutineKlaida, k.kitasAtnaujinimas], ["veikia", 30, { laikas: "2026-10-18T06:00:00Z", rusis: "vpt-503" }, "2026-10-18T12:00:00Z"]);
+    k = kunas(L.atsakymas(null, "GET", "/api/cvpis/busena", ""));
+    lygu([k.busena, k.kiekis, k.atnaujinta], ["neikelta", 0, null]);
+    lygu(L.atsakymas(ix, "GET", "/api/cvpis/busena", "").antrastes["Cache-Control"], "no-store");
+  });
+}
+
+async function testaiSargai(){
+  grupe("Serverio failas, systemd ir nginx - sargai");
+  const srv = await tekstas("cvpis-serveris.js");
+  const vienetas = await tekstas("g-procure-cvpis.service");
+  const ng = await tekstas("nginx-cvpis.conf");
+  await testas("Serverio failas išnagrinėjamas (sintaksė) ir naudoja tik Node modulius ir cvpis-logika.js", () => {
+    new Function("require", "module", "process", "__dirname", srv.replace(/^#!.*\n/, ""));
+    const req = [...srv.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)].map(m => m[1]);
+    lygu(req.filter(x => !/^node:/.test(x) && x !== "./cvpis-logika.js"), [], "tik node: ir logika");
+    tiesa(!/child_process|\beval\s*\(|new Function|vm\.run/.test(srv), "jokio kodo vykdymo");
+  });
+  await testas("VPT adresas - viena konstanta https://viesiejipirkimai.lt/; fetch tik į ją, be nukreipimų, su laiko riba", () => {
+    lygu([...srv.matchAll(/https:\/\/[^"'\s)]+/g)].map(m => m[0]).filter(u => !/^https:\/\/g-procure\.com\//.test(u)), ["https://viesiejipirkimai.lt/epps-integration/api/cft-details-export"]);
+    lygu([...srv.matchAll(/fetch\(\s*([A-Za-z_]+)/g)].map(m => m[1]), ["VPT_URL"]);
+    tiesa(/redirect:\s*"error"/.test(srv) && /AbortSignal\.timeout\(/.test(srv) && /MAX_PUSLAPIO_BAITU/.test(srv), "redirect, laikas, dydis");
+  });
+  await testas("Raktas - tik iš systemd kredencialų failo; į žurnalą, atsakymus ir aplinkos kintamuosius nepatenka", () => {
+    tiesa(/CREDENTIALS_DIRECTORY/.test(srv) && /"vpt_api_key"/.test(srv), "kredencialų failas");
+    tiesa(!/process\.env\.(VPT|API_?KEY|KEY)/i.test(srv), "ne aplinkos kintamasis");
+    const zurn = [...srv.matchAll(/zurnalas\([^;]*\)/g)].map(m => m[0]).join("\n");
+    tiesa(!/\bkey\b|raktas\(\)\s*[,}]/.test(zurn.replace(/raktas: raktas\(\) \? "yra" : "nera"/, "")), "žurnale rakto nėra: " + zurn);
+    tiesa(!/console\.(log|error|warn)\((?!JSON\.stringify\(Object\.assign\(\{ laikas)/.test(srv), "console - tik per zurnalas()");
+    lygu((srv.match(/"apiKey":\s*key/g) || []).length, 1, "raktas - tik VPT užklausos antraštėje");
+  });
+  await testas("Klausomasi tik 127.0.0.1; IP iš X-Real-IP tik vietinei jungčiai; laiko ribos ir antroji užklausų riba", () => {
+    tiesa(/listen\(PORTAS, "127\.0\.0\.1"\)/.test(srv), "127.0.0.1");
+    tiesa(/vietinis && typeof req\.headers\["x-real-ip"\]/.test(srv), "X-Real-IP tik vietinei");
+    tiesa(/requestTimeout = \d+/.test(srv) && /headersTimeout = \d+/.test(srv) && /RIBA_IP_MIN/.test(srv), "ribos");
+    tiesa(/priimtinasKiekis\(irasai\.length, IX \? IX\.kiekis : 0\)/.test(srv) && /renameSync\(laikinas, KOPIJA\)/.test(srv), "visas sąrašas ir atominis įrašas");
+  });
+  await testas("systemd: DynamicUser, LoadCredential, griežta izoliacija, be teisių; raktas ne Environment", () => {
+    ["DynamicUser=yes", "LoadCredential=vpt_api_key:/etc/g-procure-cvpis/vpt_api_key", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
+     "PrivateTmp=yes", "PrivateDevices=yes", "CapabilityBoundingSet=\n", "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX", "SystemCallFilter=@system-service",
+     "StateDirectory=g-procure-cvpis", "MemoryMax=", "ExecStart=/usr/bin/node /opt/g-procure-cvpis/cvpis-serveris.js"].forEach(e => tiesa(vienetas.indexOf(e) >= 0, "trūksta: " + e));
+    tiesa(!/Environment=.*(KEY|RAKT|apiKey)/i.test(vienetas) && !/EnvironmentFile/.test(vienetas), "raktas ne aplinkoje");
+  });
+  await testas("nginx: tik GET / HEAD / OPTIONS, užklausų riba, be prieigos žurnalo, į 127.0.0.1:3001 su X-Real-IP", () => {
+    ["limit_except GET HEAD OPTIONS { deny all; }", "limit_req zone=gp_cvpis", "access_log off;", "proxy_pass http://127.0.0.1:3001;", "proxy_set_header X-Real-IP $remote_addr;", "client_max_body_size 1k;", "zone=gp_cvpis:10m rate=60r/m"]
+      .forEach(e => tiesa(ng.indexOf(e) >= 0, "trūksta: " + e));
+  });
+  await testas("Saugykloje nėra prieigos rakto: jokiame serverio faile UUID ar apiKey reikšmės", async () => {
+    const visi = [srv, vienetas, ng, await tekstas("cvpis-logika.js"), await tekstas("README.md"), document.documentElement.outerHTML];
+    visi.forEach((t, i) => {
+      tiesa(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(t), "UUID faile Nr. " + i);
+      tiesa(!/apiKey["']?\s*[:=]\s*["'][A-Za-z0-9-]{8,}/.test(t), "apiKey reikšmė faile Nr. " + i);
+    });
+  });
+}
+
+(async function(){
+  try {
+    if (!L) throw new Error("cvpis-logika.js neįsikėlė");
+    await testaiNormalizavimas();
+    await testaiAtsakymai();
+    await testaiSargai();
+    document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
+  } catch (e) {
+    document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
+  }
+})();
+</script>
+</body>
+</html>
