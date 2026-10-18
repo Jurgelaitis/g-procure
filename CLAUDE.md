@@ -346,8 +346,9 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   (`DynamicUser`, izoliacija, be teisių), raktas - `LoadCredential` failas (ne kodas, ne aplinkos kintamasis, ne saugykla), be npm
   priklausomybių, klausosi tik 127.0.0.1, nginx - tik GET, `limit_req`, be prieigos žurnalo. Gryna logika `cvpis-logika.js` veikia ir
   naršyklėje - testai `serveris/testai.html` (VPT atsakymas, atsakymai, sargai serverio, systemd ir nginx failams; 21 mutacija
-  pagaunama). Neįkeltas sąrašas - 503, niekada „pirkimo nėra“. Rakto reikšmės saugykloje nėra ir nerašyk. Būsena 2026-10-18 -
-  parengta, NEĮDIEGTA; moduliai jos dar nenaudoja.
+  pagaunama). Neįkeltas sąrašas - 503, niekada „pirkimo nėra“. Rakto reikšmės saugykloje nėra ir nerašyk. ĮDIEGTA 2026-10-18
+  (`https://api.g-procure.com/api/cvpis/...`; 80 385 pirkimai, datos - Lietuvos laikas, `systemd-analyze security` 1.5, išorės patikra - README);
+  moduliai jos dar nenaudoja - sąsaja ir privatumo politika - kitas žingsnis.
 
 ---
 
