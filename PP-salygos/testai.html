@@ -8986,15 +8986,17 @@ async function testaiDokumentai(){
     lygu(W.eval("KVL.klaida"), "Tinka Word (.docx) arba PDF su tekstu.");
   });
 
-  await testas("1 žingsnis „Pirkimo dokumentai“: rūšys atpažįstamos (paraiška, kvalifikacija, TS, sutarties priedas), netinkamas failas - priežastis; niekas nesiunčiama; į DI šaltinius nededama paraiška; lentelės perkeliamos; netekęs galios aktas - įvardytas", async () => {
+  await testas("1 žingsnis „Pirkimo dokumentai“: rūšys atpažįstamos (paraiška, kvalifikacija, TS, sutarties priedas), netinkamas failas - priežastis; į DI iš karto - tik paraiškos nuotrauka; į DI šaltinius nededama paraiška; lentelės perkeliamos; netekęs galios aktas - įvardytas", async () => {
     await modulis();
     const png = new W.File([new Uint8Array([137, 80, 78, 71])], "DocLogix_kortele.png", { type: "image/png" });
+    const gauti = [];
+    W.GP_PARAISKA.analizuoti = f => { gauti.push(f.name); return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
     await W.dkPridek([png, KVPDF(), await docx(TS[0], TS[1]), PRIEDAS_PDF(), new W.File(["x"], "Kainos.xlsx")]);
     const eil = [...D.querySelectorAll("#dkSarasas .dk-d")];
     lygu(eil.map(e => e.dataset.rusis), ["paraiska", "kvalifikacija", "ts", "priedas"], "rūšys");
     lygu(eil.map(e => e.querySelector("select").value), ["paraiska", "kvalifikacija", "ts", "priedas"], "pasirinkimas sąraše");
     tiesa(/Praleista.*Kainos\.xlsx/.test(D.getElementById("dkBusena").textContent), "netinkamo failo priežastis: " + D.getElementById("dkBusena").textContent);
-    lygu(AI.kvietimai.length, 0, "įkėlus kažkas išsiųsta į DI");
+    lygu([AI.kvietimai.length, gauti], [0, ["DocLogix_kortele.png"]], "į DI iš karto - tik paraiška (kiti dokumentai - ne)");
     lygu(W.eval("AI.saltiniai.map(s => s.vardas)"), ["Kvalifikaciniai reikalavimai.pdf", TS[0], "19. Aplinkosaugos reikalavimai.pdf"], "DI šaltiniai (be paraiškos)");
     lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length")], [1, 1], "perkeltos lentelės");
     const kv = eil[1].textContent.replace(/\s+/g, " ");
@@ -9006,15 +9008,15 @@ async function testaiDokumentai(){
     // tas pats numeris kitais metais - kitas aktas; numeris su tarpais aplink brūkšnį; ilgesnis numeris - ne tas
     lygu([W.negaliojantysTekste("aplinkos ministro 2019 m. sausio 2 d. isakymas Nr. D1-393").length, W.negaliojantysTekste("aplinkos ministro 2015 m. geguzes 8 d. isakymas Nr. D1 - 393").length,
       W.negaliojantysTekste("2015 m. isakymas Nr. D1-3930").length], [0, 1, 0], "akto atpažinimas pagal numerį ir metus");
-    tiesa(/1 žingsnio laukus/.test(eil[0].textContent) && eil[0].querySelector("[data-dk-paraiska]") && D.querySelectorAll("[data-dk-paraiska]").length === 1, "paraiškos mygtukas - tik prie paraiškos");
+    const e0 = D.querySelector("#dkSarasas .dk-d[data-rusis=paraiska]");
+    tiesa(/Paraiška perskaityta: tušti 1 žingsnio laukai užpildyti/.test(e0.textContent) && /Analizuoti iš naujo \(DI\)/.test(e0.querySelector("[data-dk-paraiska]").textContent)
+      && D.querySelectorAll("[data-dk-paraiska]").length === 1, "paraiškos būsena ir mygtukas - tik prie paraiškos: " + e0.textContent.replace(/\s+/g, " "));
     tiesa(/Sutarties priedas - modulis jo nekeičia/.test(eil[3].textContent), "priedo poveikis");
     tiesa(eil.every(e => e.querySelector("label").htmlFor === e.querySelector("select").id), "rūšies laukas be pavadinimo");
-    // paraiška - tik paspaudus
-    let gauta = null;
-    W.GP_PARAISKA.analizuoti = f => { gauta = f; return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
-    eil[0].querySelector("[data-dk-paraiska]").click();
-    await kol(() => gauta, "paraiškos analizė");
-    lygu(gauta.name, "DocLogix_kortele.png", "analizuotas failas");
+    // analizė iš naujo - mygtuku
+    e0.querySelector("[data-dk-paraiska]").click();
+    await kol(() => gauti.length === 2, "paraiškos analizė iš naujo");
+    lygu(gauti[1], "DocLogix_kortele.png", "analizuotas failas");
   });
   await testas("Rūšies keitimas: kvalifikacijos dokumentas - kita rūšis -> lentelės nebeperkeliamos, grąžinus - vėl; PDF priedas - paraiška -> išimamas iš DI šaltinių, atsiranda paraiškos mygtukas; pašalinus - visur, fokusas lieka sąraše", async () => {
     const sel = rusis => D.querySelector(`#dkSarasas .dk-d[data-rusis=${rusis}] select`);
@@ -9027,9 +9029,12 @@ async function testaiDokumentai(){
     keisk(D.querySelectorAll("#dkSarasas .dk-d")[1].querySelector("select"), "kvalifikacija");
     lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length")], [1, 1], "grąžinus - abi lentelės");
     tiesa(D.activeElement === D.querySelectorAll("#dkSarasas .dk-d")[1].querySelector("select"), "fokusas po perpiešimo");
+    const gauti = [];
+    W.GP_PARAISKA.analizuoti = f => { gauti.push(f.name); return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
     keisk(sel("priedas"), "paraiska");
     lygu(W.eval("AI.saltiniai.map(s => s.vardas)"), ["Kvalifikaciniai reikalavimai.pdf", TS[0]], "paraiška DI šaltiniuose");
-    lygu(D.querySelectorAll("[data-dk-paraiska]").length, 2, "PDF paraiškai - mygtukas");
+    await kol(() => gauti.length === 1 && D.querySelectorAll("[data-dk-paraiska]").length === 2, "rūšį paraiška pasirinko žmogus - analizuojama iš karto");
+    lygu(gauti, ["19. Aplinkosaugos reikalavimai.pdf"], "analizuotas failas");
     tiesa(!D.querySelector("#dkSarasas .dk-d[data-rusis=ts] option[value=paraiska]"), "DOCX failui siūloma paraiška (DI jos neskaito)");
     D.querySelector("#dkSarasas .dk-d[data-rusis=kvalifikacija] [data-dk-salinti]").click();
     lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length"), W.eval("AI.saltiniai.map(s => s.vardas)")], [0, 0, [TS[0]]], "pašalinta ne visur");
@@ -9041,6 +9046,93 @@ async function testaiDokumentai(){
     lygu([W.eval("AI.saltiniai.length"), W.eval("DK.failai.map(d => d.vardas)")], [0, ["DocLogix_kortele.png", "19. Aplinkosaugos reikalavimai.pdf"]], "pašalinta 2 žingsnyje");
   });
 
+  await testas("Paraiška be paspaudimų: tušti laukai užpildomi patys su žyme, ranka įrašytas kitoks - abi reikšmės ir pasirinkimas, neperskaitytas - priežastis; „Grąžinti ankstesnes reikšmes“; santrauka prieš generuojant", async () => {
+    await modulis();
+    const X = W.GP_PARAISKA;
+    const L = { pavadinimas_kilmininkas: { reiksme: "Transformatorių priežiūros paslaugų pirkimas" }, pavadinimas: { reiksme: "Transformatorių priežiūros paslaugos", citata: "Transformatorių priežiūros paslaugos" },
+      pirkimo_budas: { reiksme: "Supaprastintas atviras konkursas", citata: "Supaprastintas atviras konkursas" }, verte_be_pvm: { reiksme: "743 490,50 Eur", citata: "743 490,50" },
+      objekto_tipas: { reiksme: "paslaugos", citata: "paslaugos" }, nacionalinis_saugumas: { reiksme: "taip", citata: "13 str. 4 d." }, registracijos_nr: { reiksme: "R-12" } };
+    const ivesk = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); };
+    ivesk("pavadinimas", "Ranka įrašytas");
+    const pries = { budas: D.getElementById("budas").value, tipas: (D.querySelector("input[name=tipas]:checked") || {}).value || "" };
+    let n = 0;
+    W.GP_PARAISKA.analizuoti = () => { n++; return Promise.resolve({ map: X.mapFields(L), pastabos: "" }); };
+    await W.dkPridek([new W.File([new Uint8Array([137, 80, 78, 71])], "Kortele.jpg", { type: "image/jpeg" })]);
+    lygu(n, 1, "analizė nepaleista iš karto");
+    lygu([D.getElementById("budas").value, D.getElementById("verte").value, D.querySelector("input[name=tipas]:checked").value, D.querySelector("input[name=nacsaug]:checked").value, D.getElementById("pavadinimas").value],
+      ["S-AK", "743 490,50", "paslaugos", "taip", "Ranka įrašytas"], "užpildyti laukai (ranka įrašytas pavadinimas - neperrašytas)");
+    lygu(W.eval("[...PZ_ZYMES.keys()].sort()"), ["budas", "nacsaug", "tipas", "verte"], "žymės „iš paraiškos“");
+    const rez = () => D.getElementById("pzRez").textContent.replace(/\s+/g, " ");
+    tiesa(/Iš paraiškos „Kortele\.jpg“ užpildyta: 4 laukai/.test(rez()) && /Registracijos Nr\.: R-12/.test(rez()), "rezultatas: " + rez());
+    const konf = D.querySelector('#pzRez [data-pz-konf][data-pz-v="taikyti"]');
+    tiesa(konf && /Dabar įrašyta: Ranka įrašytas/.test(rez()) && /Paraiškoje: Transformatorių priežiūros paslaugų/.test(rez()), "nesutapimas nerodomas: " + rez());
+    tiesa(!D.querySelector('#pzRez input[type=checkbox]') && !/Pritaikyti pažymėtus/.test(rez()), "liko žymimieji langeliai ir „Pritaikyti pažymėtus“");
+    konf.click();
+    lygu([D.getElementById("pavadinimas").value, !!D.querySelector("#pzRez [data-pz-konf]"), W.eval("PZ_ZYMES.has('pavadinimas')")], ["Transformatorių priežiūros paslaugų", false, true], "„Įrašyti iš paraiškos“");
+    tiesa(D.activeElement && D.activeElement.matches("[data-pz-grazinti]"), "fokusas po pasirinkimo");
+    // grąžinimas: patvirtintas ✓ laukas (objekto tipas) lieka, kiti grąžinami
+    const chipas = [...D.querySelectorAll(".pz-zyme")].find(c => c.closest(".q") && c.closest(".q").querySelector("input[name=tipas]"));
+    tiesa(chipas, "objekto tipo žymės nėra");
+    chipas.querySelector("button").click();
+    D.querySelector("#pzRez [data-pz-grazinti]").click();
+    lygu([D.getElementById("budas").value, D.getElementById("verte").value, (D.querySelector("input[name=tipas]:checked") || {}).value || "", D.getElementById("pavadinimas").value, W.eval("PZ_ZYMES.size")],
+      [pries.budas, "", "paslaugos", "Ranka įrašytas", 0], "grąžintos ankstesnės reikšmės (patvirtintas laukas lieka)");
+    tiesa(/Grąžintos ankstesnės 4 laukų reikšmės/.test(D.getElementById("pzBusena").textContent), "pranešimas: " + D.getElementById("pzBusena").textContent);
+    // neperskaitytas laukas
+    W.GP_PARAISKA.analizuoti = () => Promise.resolve({ map: X.mapFields({ pirkimo_budas: { reiksme: "Koncesija" } }), pastabos: "" });
+    await W.pzAnalizuoti(new W.File(["a"], "Kita.pdf", { type: "application/pdf" }));
+    tiesa(/Neįrašyta \(1\):\s?Pirkimo būdas: Koncesija - .*neturi šablonų/.test(rez()) && !/užpildyta:/.test(rez()), "neperskaitytas: " + rez());
+    // „Palikti įrašytą“; naujas dokumentas ankstesnės paraiškos iš naujo neanalizuoja
+    let m = 0;
+    W.GP_PARAISKA.analizuoti = () => { m++; return Promise.resolve({ map: X.mapFields(L), pastabos: "" }); };
+    await W.pzAnalizuoti(new W.File(["a"], "Kortele.jpg", { type: "image/jpeg" }));
+    D.querySelector('#pzRez [data-pz-konf][data-pz-v="palikti"]').click();
+    lygu([D.getElementById("pavadinimas").value, !!D.querySelector("#pzRez [data-pz-konf]"), W.eval("PZ_ZYMES.has('pavadinimas')")], ["Ranka įrašytas", false, false], "„Palikti įrašytą“");
+    await W.dkPridek([KVPDF()]);
+    lygu(m, 1, "įkėlus kitą dokumentą paraiška analizuota iš naujo");
+    W.__K = null; D.getElementById("toStep2").click();
+    await kol(() => W.__K && !D.getElementById("step2").classList.contains("hid"), "2 žingsnis");
+    const sa = () => (D.getElementById("lkSantrauka") || {}).textContent.replace(/\s+/g, " ");
+    await kol(() => D.getElementById("lkTeiseAktai"), "netekę galios aktai santraukoje", 10000);
+    tiesa(/Patikrinkite teisės aktus \(1\).*Kvalifikaciniai reikalavimai\.pdf: Minimas teisės aktas \(aplinkos ministro 2015-05-08 įsakymas Nr\. D1-393\)/.test(sa()), "santrauka: " + sa());
+    tiesa(/1 žingsnio reikšmės, laukiančios patvirtinimo \(4\)/.test(sa()), "1 žingsnio reikšmės santraukoje: " + sa());
+  });
+  await testas("Neaiški paraiška nesiunčiama: PDF su tekstu be DocLogix požymių - priežastis ir mygtukas; su požymiais - iš karto; nepavykusi analizė - priežastis ir „Analizuoti iš naujo“", async () => {
+    await modulis();
+    let n = 0;
+    W.GP_PARAISKA.analizuoti = () => { n++; return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
+    await W.dkPridek([pdf("Paraiska.pdf", ["Tiekejo paraiskos forma", "Tiekejas pildo sia forma ir pateikia su pasiulymu."])]);
+    const e = () => D.querySelector("#dkSarasas .dk-d[data-rusis=paraiska]");
+    lygu([n, !!e()], [0, true], "neaiški paraiška išsiųsta");
+    tiesa(/DocLogix paraiškos požymių .* neradome, todėl į DI jis automatiškai nesiųstas/.test(e().textContent.replace(/\s+/g, " ")) && /Užpildyti laukus iš paraiškos \(DI\)/.test(e().querySelector("[data-dk-paraiska]").textContent), "priežastis ir mygtukas");
+    e().querySelector("[data-dk-paraiska]").click();
+    await kol(() => n === 1, "analizė mygtuku");
+    await modulis();
+    n = 0;
+    W.GP_PARAISKA.analizuoti = () => { n++; return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
+    await W.dkPridek([pdf("Kortele.pdf", ["PIRKIMO PARAISKA", "Registracijos Nr. 26-123", "Pirkimo budas: atviras konkursas"])]);
+    lygu([n, e() && e().dataset.rusis], [1, "paraiska"], "DocLogix paraiška pagal tekstą - iš karto");
+    W.GP_PARAISKA.analizuoti = () => Promise.reject(new Error("Atsakyme nėra JSON"));
+    e().querySelector("[data-dk-paraiska]").click();
+    await kol(() => /Paraiškos perskaityti nepavyko/.test(e().textContent), "nepavykusi analizė", 10000);
+    tiesa(/Analizuoti iš naujo \(DI\)/.test(e().querySelector("[data-dk-paraiska]").textContent) && /Atsakyme nėra JSON/.test(D.getElementById("pzBusena").textContent), "nesėkmė: " + D.getElementById("pzBusena").textContent);
+    // atšaukta - ne nesėkmė; kol analizuojama - mygtuko nėra
+    W.GP_PARAISKA.analizuoti = (f, o) => new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    e().querySelector("[data-dk-paraiska]").click();
+    await kol(() => D.querySelector("#pzBusena [data-gpb-atsaukti]"), "eiga su „Atšaukti“");
+    tiesa(!e().querySelector("[data-dk-paraiska]") && /DI skaito paraišką/.test(e().textContent), "analizės metu - mygtukas ar ne ta būsena");
+    D.querySelector("#pzBusena [data-gpb-atsaukti]").click();
+    await kol(() => e().querySelector("[data-dk-paraiska]"), "po atšaukimo - mygtukas");
+    tiesa(!/nepavyko/.test(e().textContent) && /Užpildyti laukus iš paraiškos \(DI\)/.test(e().querySelector("[data-dk-paraiska]").textContent), "atšaukimas rodomas kaip nesėkmė: " + e().textContent.replace(/\s+/g, " "));
+    // PDF be teksto, pavadintas paraiška - iš karto (skaityti gali tik DI); paraiška DOCX - nesiunčiama (DI jos neskaito)
+    await modulis();
+    n = 0;
+    W.GP_PARAISKA.analizuoti = () => { n++; return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
+    await W.dkPridek([pdfPoz("Pirkimo paraiska.pdf", [[]])]);
+    lygu(n, 1, "skenuota paraiška neišsiųsta");
+    await W.dkPridek([await docx("Paraiska.docx", ["Pirkimo paraiska", "Registracijos Nr. 1"])]);
+    lygu(n, 1, "DOCX paraiška išsiųsta");
+  });
   await testas("2 žingsnis su žaliųjų lentele (T-AK, darbai): klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats (skiltyje „Išspręsta automatiškai“, su mygtuku), 3 lentelė lieka, šablono eilutės laukai neklausiami; kortelė rodo eilutes ir laukia patvirtinimo; „Nenaudoti“ - grįžta ankstesnis žmogaus atsakymas", async () => {
     await modulis(); await zingsnis2("T-AK", "LT", "darbai");
     const gid = () => Object.keys(W.__K.grupes).find(g => W.__K.grupes[g].nariai.some(n => n.raktas === ZAL_K("Jei žalieji reikalavimai nurodomi pirkimo sąlygose")));
@@ -9122,6 +9214,23 @@ async function testaiDokumentai(){
     await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(A)) });
     await kol(() => W.__K && ZAL_KORTELE(), "atkurta žaliųjų kortelė", 60000);
     lygu([ZAL_KORTELE().dataset.busena, ATS()[tsK], W.eval("DK.failai.length")], ["patvirtinta", false, 0], "atkurta (failų sąrašas neišsaugomas)");
+    // atkurtų lentelių netekę galios aktai - ir be įkelto failo (kvalifikacijos lentelės 2 eilutė)
+    await kol(() => D.getElementById("lkTeiseAktai"), "atkurtos lentelės netekęs galios aktas „Prieš generuojant“", 10000);
+    tiesa(/Patikrinkite teisės aktus \(1\)[\s\S]*D1-393/.test(D.getElementById("lkTeiseAktai").textContent), "santrauka po atkūrimo: " + D.getElementById("lkTeiseAktai").textContent);
+    // tas pats aktas abiejose to paties failo lentelėse - viena eilutė; žaliųjų lentelėje - irgi randamas
+    const Z = W.eval("zalModelis()"), K = W.eval("kvlModelis()");
+    Z.eilutes[0].reik = Z.eilutes[0].reik.concat([{ tekstas: "Pagal aplinkos ministro 2015 m. geguzes 8 d. isakyma Nr. D1-393." }]);
+    lygu(W.negaliojantysDokumentuose().length, 1, "tas pats aktas dviejose lentelėse - kartojasi");
+    const kvEil = K.eilutes; K.eilutes = [];
+    lygu(W.negaliojantysDokumentuose().length, 1, "žaliųjų lentelės aktas nerastas, kai jos failas toks pat kaip kvalifikacijos lentelės");
+    K.eilutes = kvEil;
+    // 2 žingsnyje įkeltas DI šaltinis (ne iš 1 žingsnio sąrašo)
+    W.eval("AI.saltiniai").push({ vardas: "TS_2_zingsnyje.docx", blokai: [{ text: "Pagal aplinkos ministro 2015 m. geguzes 8 d. isakyma Nr. D1-393." }] });
+    tiesa(W.negaliojantysDokumentuose().some(x => x.vardas === "TS_2_zingsnyje.docx"), "2 žingsnio šaltinio aktas nerastas");
+    W.eval("AI.saltiniai.pop()");
+    // visi klausimai atsakyti, bet aktas yra - ne „Visi klausimai atsakyti“
+    const h = W.santraukosHTML({ blokuojantys: [], neuzpildyti: [], siulomi: [], neprivalomi: [], patvirtinti: [], zingsnis1: [], teise: [{ vardas: "a.pdf", tekstas: "Minimas teisės aktas" }] });
+    tiesa(/id="lkTeiseAktai"/.test(h) && !/Visi klausimai atsakyti/.test(h), "santrauka su aktu, kai viskas atsakyta: " + h);
     ZAL_KORTELE().querySelector('[data-zal="atmesti"]').click();
     lygu(ATS()[tsK], true, "žmogaus atsakymas negrįžo po atkūrimo");
   });

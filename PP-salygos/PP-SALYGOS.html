@@ -164,6 +164,14 @@
   .dk-p li.dk-isp{color:var(--color-graphite)}
   .dk-ve{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   .dk-ve button{padding:5px 14px;font-size:13px}
+  /* Paraiškos rezultatas (2026-10-18): kas užpildyta, kur skiriasi nuo įrašyto, ko perskaityti nepavyko */
+  .pz-auto,.pz-konf,.pz-nep{margin-top:10px;background:var(--color-white);border:1px solid var(--color-graphite-15);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+  .pz-auto{border-left:4px solid var(--color-emerald)}
+  .pz-konf{border-left:4px solid var(--color-warning)}
+  .pz-sar{margin:6px 0 0;padding-left:18px}
+  .pz-sar li{margin:2px 0}
+  .pz-ve{flex-wrap:wrap;gap:8px;margin-top:6px}
+  .pz-ve button{padding:5px 14px;font-size:13px}
   @media (max-width:640px){ .dk-d{padding:9px 10px} .dk-r{width:100%} .dk-r select{flex:1 1 auto} }
 
   /* AI pasiulymai 2 zingsnyje (A5, bandomoji). Juosta - tas pats "spartintuvas"
@@ -675,9 +683,10 @@
         kvalifikacijos ir aplinkosaugos (žaliuosius) reikalavimus, sutarties projektą ar jo priedus - PDF, DOCX, ODT, TXT, paraišką ir JPG, PNG.
         <input type="file" id="dkFailai" multiple accept=".pdf,.docx,.odt,.txt,.md,.jpg,.jpeg,.png,application/pdf,image/*" hidden>
       </div>
-      <div class="cite" id="dkPaaiskinimas">Dokumentai perskaitomi jūsų naršyklėje ir niekur nesiunčiami. Kvalifikacijos ir žaliųjų reikalavimų
-        lentelės perkeliamos į pirkimo sąlygų lenteles be DI - 2 žingsnyje šių klausimų nebeklausiama. Į DI siunčiama tik paspaudus mygtuką:
-        paraiškos laukams - čia, atsakymų pasiūlymams - 2 žingsnyje.</div>
+      <div class="cite" id="dkPaaiskinimas">Pirkimo paraiška (nuotrauka ar DocLogix PDF) iškart siunčiama DI analizei per G-Procure serverį į
+        Claude API - tušti laukai užpildomi patys, jūs juos patvirtinate; nesiųskite įslaptintos informacijos. Kiti dokumentai perskaitomi jūsų
+        naršyklėje ir niekur nesiunčiami: kvalifikacijos ir žaliųjų reikalavimų lentelės perkeliamos į pirkimo sąlygų lenteles be DI (2 žingsnyje
+        šių klausimų nebeklausiama), o 2 žingsnio DI atsakymų pasiūlymams - tik paspaudus mygtuką.</div>
       <div id="dkBusena" hidden></div>
       <div id="dkSarasas" class="dk-sarasas"></div>
       <div id="pzBusena" hidden></div>
@@ -3750,7 +3759,24 @@ function formosSantrauka(K){
     siulomi: visi.filter(u => u.busena === 'siuloma'),
     neprivalomi: visi.filter(u => u.busena === 'neprivaloma'),
     patvirtinti: visi.filter(u => u.busena === 'patvirtinta'),
-    zingsnis1: z1 };
+    zingsnis1: z1, teise: negaliojantysDokumentuose() };
+}
+/* Netekę galios teisės aktai visuose įkeltuose dokumentuose (1 žingsnio sąrašas, 2 žingsnio šaltiniai ir perkeltos lentelės, įkeltos kortelės
+   mygtuku) - „Prieš generuojant“ (2026-10-18, naudotojo prašymas: kad nepraslystų). Registro neįkėlus - tuščia (prie dokumento tai pasakoma). */
+function negaliojantysDokumentuose(){
+  if (!NEG.aktai) return [];
+  const L = GP_KVAL_LENTELE, tx = bb => (bb || []).map(b => b.text).join('\n');
+  const docs = DK.failai.map(d => ({ vardas: d.vardas, tekstas: tx(d.blokai) }))
+    .concat(AI.saltiniai.filter(x => !x.dk).map(x => ({ vardas: x.vardas, tekstas: tx(x.blokai) })));
+  const yra = new Set(docs.map(x => x.vardas));      // abi lentelės iš to paties failo - tikrinamos abi
+  [kvlModelis(), zalModelis()].forEach(M => { if (M && !yra.has(M.failas))
+    docs.push({ vardas: M.failas, tekstas: M.eilutes.map(e => L.pTekstas(e.reik) + '\n' + L.pTekstas(e.dok)).join('\n') }); });
+  const out = [], buvo = new Set();
+  docs.forEach(x => negaliojantysTekste(x.tekstas).forEach(a => {
+    const k = x.vardas + '|' + a.aktas;
+    if (!buvo.has(k)){ buvo.add(k); out.push({ vardas: x.vardas, tekstas: negTekstas(a) }); }
+  }));
+  return out;
 }
 
 /* ---------- Kortelių HTML ----------------------------------------------------------------------------------- */
@@ -4525,7 +4551,8 @@ function santraukosHTML(S){
     return `<li><a href="#${u.id}" data-lk-suolis="${u.id}">${esc(zyma)}</a>${u.kur ? ` <span class="lk-sa-kur">${esc(u.kur)}</span>` : ''}`
       + `${tekst ? `<div class="lk-sa-tx">${ilgasTekstas(tekst, 130)}</div>` : ''}${f ? f(u) : ''}</li>`; }).join('')}</ul>`;
   let h = `<h3 class="lk-sa-t">Prieš generuojant</h3>`;
-  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length)
+  const teise = S.teise || [];
+  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length && !teise.length)
     return h + `<p class="lk-sa-ok">Visi klausimai atsakyti ir patvirtinti.</p>`;
   if (S.blokuojantys.length) h += `<div class="lk-sa lk-sa--kl"><b>Privalomi sprendimai (${S.blokuojantys.length}) - kol neatsakyta, generuoti neleidžiama:</b>${sar(S.blokuojantys)}</div>`;
   if (S.neuzpildyti.length) h += `<div class="lk-sa lk-sa--isp"><b>Neužpildyti laukai (${S.neuzpildyti.length})</b> - dokumente liks žyma (brūkšniai, nurodymas ar „X“), patikra ją parodys:${sar(S.neuzpildyti)}</div>`;
@@ -4533,6 +4560,8 @@ function santraukosHTML(S){
     sar(S.siulomi, u => u.reiksme ? ` - <span class="lk-sa-r">${esc(String(u.reiksme))}</span>` : '')}</div>`;
   if (S.zingsnis1.length) h += `<div class="lk-sa lk-sa--siul"><b>1 žingsnio reikšmės, laukiančios patvirtinimo (${S.zingsnis1.length}):</b> ${S.zingsnis1.map(z => esc(z.pavadinimas)).join(', ')}
     - patvirtinkite ✓ prie lauko 1 žingsnyje.</div>`;
+  if (teise.length) h += `<div class="lk-sa lk-sa--isp" id="lkTeiseAktai"><b>Patikrinkite teisės aktus (${teise.length})</b> - įkeltuose dokumentuose minimi netekę galios aktai; dokumentų tekstas nekeičiamas, reikalavimą patikrinkite su iniciatoriumi:
+    <ul>${teise.map(x => `<li><b>${esc(x.vardas)}</b>: ${esc(x.tekstas)}</li>`).join('')}</ul></div>`;
   if (S.neprivalomi.length) h += `<div class="lk-sa"><b>Neprivalomos nuorodos be numerio (${S.neprivalomi.length})</b> - bus pašalintos:${
     sar(S.neprivalomi, u => u.neprivaloma ? ` - <del class="lk-s">${esc(u.neprivaloma)}</del>` : '')}</div>`;
   return h;
@@ -6090,11 +6119,14 @@ $('#toStep2').onclick = () => iStep2();
 $('#budas').addEventListener('change', budasPagalPI);
 
 /* --- DocLogix paraiskos ikelimas (AI istraukimas + zmogaus patvirtinimas) --
-   Logika: paraiska-extract.js (GP_PARAISKA). Cia tik UI: failas -> analize ->
-   siulymu perziura -> pritaikymas i laukus. AI nieko neuzpildo pats.          */
+   Logika: paraiska-extract.js (GP_PARAISKA). Cia tik UI: failas -> analize -> laukai.
+   Nuo 2026-10-18 (naudotojo sprendimas - be perteklinių paspaudimų): TUŠTI laukai (ir select / radio, kurių žmogus nelietė)
+   užpildomi patys, kiekvienas su žyme „iš paraiškos (nepatvirtinta)“ - ji dingsta tik žmogui pakeitus lauką ar patvirtinus ✓;
+   ranka įrašytas kitoks laukas neperrašomas - parodomos abi reikšmės ir renkasi žmogus („Įrašyti iš paraiškos“ / „Palikti įrašytą“);
+   „Grąžinti ankstesnes reikšmes“ atšaukia užpildymą. Iki tol - sąrašas su žymimaisiais langeliais ir „Pritaikyti pažymėtus“.   */
 let PZ_MAP = null;
 let PZ_ABORT = null;
-let PZ_TAIKOMA = false;        // true, kol pzPritaikyti programiskai keicia laukus
+let PZ_TAIKOMA = false;        // true, kol pzIrasyk / pzGrazink programiskai keicia laukus
 const PZ_RANKA = new Set();    // laukai, kuriuos naudotojas paliete RANKA (select/radio
                                // visada turi numatytaja reiksme, tad "uzpildyta" = paliesta)
 const PZ_ZYMES = new Map();    // laukas -> nuimti(): zymes "is paraiskos" registras
@@ -6175,36 +6207,86 @@ async function pzAnalizuoti(file){
     valdiklis: mano, klaidosPriesdelis:'Paraiškos analizė nepavyko', kartoti: () => pzAnalizuoti(file),
     // Techniniai paruosimo parametrai (px, kokybe, KB) organizatoriui nieko nesako - tik kad dirbama.
     veiksmas: (signal, h) => GP_PARAISKA.analizuoti(file, { signal, onParuosta: () => h.atnaujink(`DI analizuoja ${file.name}`) }) });
-  if (mano !== PZ_ABORT || !r.ok) return;                  // pradeta nauja analize arba nepavyko
-  PZ_MAP = r.reiksme.map;
-  pzRodyk(r.reiksme.map, r.reiksme.pastabos);
+  if (mano !== PZ_ABORT) return null;                       // pradėta nauja analizė
+  if (!r.ok) return r.atsaukta ? null : false;              // atšaukė žmogus / nepavyko (priežastis - #pzBusena)
+  pzTaikyk(r.reiksme.map, r.reiksme.pastabos, file.name);
+  return true;
+}
+/* Vieno siūlymo įrašymas į 1 žingsnio lauką su žyme (programiniai įvykiai nežymi lauko paliestu ranka - PZ_TAIKOMA). */
+function pzIrasyk(s){
+  const fire = el => { el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };
+  PZ_TAIKOMA = true;
+  try {
+    if (s.id === 'budas'){ $('#budas').value = s.reiksme; budasPagalPI(); }
+    else if (s.id === 'pavadinimas'){ $('#pavadinimas').value = s.reiksme; pavPreview(); }
+    else if (s.id === 'verte'){ $('#verte').value = s.reiksme; rezimas(); }
+    else {
+      const r = document.querySelector(`input[name=${s.id}][value=${s.reiksme}]`);
+      if (!r) return false;
+      r.checked = true; fire(r);
+    }
+  } finally { PZ_TAIKOMA = false; }
+  pzUzdekZyme(s.id);     // PO reiksmes/ivykiu - kad zymes klausytojai negautu musu pacu ivykio
+  return true;
+}
+/* Ankstesnė lauko reikšmė (grąžinimui). */
+function pzBusena(id){ return { id, buvo: pzDabartine(id) }; }
+function pzGrazink(b){
+  const fire = el => { el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };
+  const zyme = PZ_ZYMES.get(b.id);
+  if (zyme) zyme();
+  PZ_TAIKOMA = true;
+  try {
+    if (b.id === 'budas'){ $('#budas').value = b.buvo; budasPagalPI(); }
+    else if (b.id === 'pavadinimas'){ $('#pavadinimas').value = b.buvo; pavPreview(); }
+    else if (b.id === 'verte'){ $('#verte').value = b.buvo; rezimas(); }
+    else {
+      const r = b.buvo ? document.querySelector(`input[name=${b.id}][value=${b.buvo}]`) : null;
+      document.querySelectorAll(`input[name=${b.id}]`).forEach(x => { x.checked = x === r; });
+      if (r) fire(r);
+    }
+  } finally { PZ_TAIKOMA = false; }
+}
+/* Analizės rezultatas: tušti (ir nepaliesti) laukai - užpildomi; ranka įrašyti kitokie - klausiama; neperskaityti - priežastis. */
+let PZ_REZ = null;
+function pzTaikyk(map, pastabos, vardas){
+  PZ_MAP = map;
+  const R = { vardas: vardas || '', pastabos: pastabos || '', uzpildyta: [], konfliktai: [], nepavyko: [], grazinti: [] };
+  (map.siulymai || []).forEach(s => {
+    if (!s.ok){ R.nepavyko.push(s); return; }
+    if (pzPerraso(s)){ R.konfliktai.push({ s, sprendimas: null, dabar: pzDabartineRodoma(s.id) }); return; }
+    const b = pzBusena(s.id);
+    if (pzIrasyk(s)){ R.uzpildyta.push(s); R.grazinti.push(b); }
+  });
+  PZ_REZ = R;
+  pzRodyk(map, pastabos);
+  if (window.__K) klausimynas();
 }
 
 function pzRodyk(map, pastabos){
+  const R = PZ_REZ || { vardas: '', uzpildyta: [], konfliktai: [], nepavyko: [], grazinti: [] };
+  const rodoma = s => s.rodoma || s.reiksme;
+  const cit = s => s.citata ? `<span class="pz-k"> · kortelėje: „${esc(s.citata)}“</span>` : '';
   let h = '';
-  if (!map.siulymai.length){
+  if (!(map.siulymai || []).length){
     h = '<div class="pz-ne">Kortelėje neatpažinta nė vieno pildomo lauko. Užpildykite rankiniu būdu.</div>';
   } else {
-    map.siulymai.forEach((s, i) => {
-      // Perrasymo apsauga (3-V1): jei laukas jau uzpildytas ir reiksme skiriasi,
-      // rodome dabartine ir zymimojo NEpazymime - perrasymas tampa samoningu opt-in.
-      const perraso = pzPerraso(s);
-      h += `<div class="pz-eile">
-        <input type="checkbox" id="pz_${i}" ${s.ok ? (perraso ? '' : 'checked') : 'disabled'}>
-        <div style="flex:1">
-          <div class="pz-l">${esc(s.laukas)}</div>
-          <div class="pz-k">Kortelėje: ${esc(s.kortele)}${s.citata ? ` <span title="${esc(s.citata)}">&#9432;</span>` : ''}</div>
-          ${perraso ? `<div class="pz-dabar">Dabar įrašyta: <b>${esc(pzDabartineRodoma(s.id))}</b> - pažymėję perrašysite</div>` : ''}
-          ${s.ok
-            ? `<div class="pz-v">Bus įrašyta: <b>${esc(s.rodoma || s.reiksme)}</b>${s.pastaba ? ` <span class="pz-k">(${esc(s.pastaba)})</span>` : ''}</div>`
-            : `<div class="pz-ne">${esc(s.pastaba || 'nepavyko atvaizduoti')}</div>`}
-        </div></div>`;
-    });
-    h += `<div class="actions" style="margin-top:10px">
-      <button onclick="pzPritaikyti()">Pritaikyti pažymėtus</button>
-      <button class="sec" onclick="$('#pzRez').style.display='none';PZ_MAP=null">Atmesti</button></div>`;
+    if (R.uzpildyta.length) h += `<div class="pz-auto"><b>Iš paraiškos${R.vardas ? ` „${esc(R.vardas)}“` : ''} užpildyta: ${R.uzpildyta.length} lauk${R.uzpildyta.length === 1 ? 'as' : 'ai'}.</b>
+      Kiekvienas pažymėtas žyme „iš paraiškos (nepatvirtinta)“ - patvirtinkite ✓ arba pataisykite. Peržiūrėkite ir vertės bei būdo suderinamumo įspėjimą, jei jis rodomas.
+      <ul class="pz-sar">${R.uzpildyta.map(s => `<li><span class="pz-l">${esc(s.laukas)}:</span> <b>${esc(rodoma(s))}</b>${s.pastaba ? ` <span class="pz-k">(${esc(s.pastaba)})</span>` : ''}${cit(s)}</li>`).join('')}</ul>
+      ${R.grazinti.length ? '<div class="actions pz-ve"><button type="button" class="sec" data-pz-grazinti>Grąžinti ankstesnes reikšmes</button> <span class="pz-k">(laukams, kurių dar nepatvirtinote ar nepataisėte)</span></div>' : ''}</div>`;
+    const lauk = R.konfliktai.filter(k => !k.sprendimas);
+    if (lauk.length) h += `<div class="pz-konf" role="group" aria-label="Skiriasi nuo paraiškos"><b>Jau įrašyta kitokia reikšmė (${lauk.length}) - pasirinkite:</b>
+      ${R.konfliktai.map((k, i) => k.sprendimas ? '' : `<div class="pz-eile"><div style="flex:1">
+        <div class="pz-l">${esc(k.s.laukas)}</div>
+        <div class="pz-dabar">Dabar įrašyta: <b>${esc(k.dabar)}</b></div>
+        <div class="pz-v">Paraiškoje: <b>${esc(rodoma(k.s))}</b>${cit(k.s)}</div>
+        <div class="actions pz-ve"><button type="button" data-pz-konf="${i}" data-pz-v="taikyti">Įrašyti iš paraiškos</button>
+          <button type="button" class="sec" data-pz-konf="${i}" data-pz-v="palikti">Palikti įrašytą</button></div></div></div>`).join('')}</div>`;
+    if (R.nepavyko.length) h += `<div class="pz-nep"><b>Neįrašyta (${R.nepavyko.length}):</b><ul class="pz-sar">${R.nepavyko.map(s =>
+      `<li><span class="pz-l">${esc(s.laukas)}:</span> ${esc(s.kortele || '')} - <span class="pz-ne">${esc(s.pastaba || 'nepavyko atvaizduoti')}</span></li>`).join('')}</ul></div>`;
   }
-  if (map.info.length)
+  if ((map.info || []).length)
     h += `<div class="cite" style="margin-top:8px"><b>Kiti kortelės duomenys</b> (modulis jų neklausia, bet pravers rengiant):
       ${map.info.map(x => `${esc(x.laukas)}: <b>${esc(x.reiksme)}</b>`).join(' · ')}</div>`;
   if (pastabos) h += `<div class="cite">DI pastaba: ${esc(pastabos)}</div>`;
@@ -6212,42 +6294,34 @@ function pzRodyk(map, pastabos){
   rez.innerHTML = h;
   rez.style.display = '';
 }
-
-function pzPritaikyti(){
-  if (!PZ_MAP) return;
-  const fire = el => { el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };
-  let n = 0;
-  PZ_TAIKOMA = true;   // programiniai ivykiai zemiau nezymi lauku kaip paliestu ranka
-  try {
-    PZ_MAP.siulymai.forEach((s, i) => {
-      const cb = $('#pz_' + i);
-      if (!cb || !cb.checked || !s.ok) return;
-      n++;
-      if (s.id === 'budas'){
-        $('#budas').value = s.reiksme; budasPagalPI();
-      } else if (s.id === 'pavadinimas'){
-        $('#pavadinimas').value = s.reiksme; pavPreview();
-      } else if (s.id === 'verte'){
-        $('#verte').value = s.reiksme; rezimas();
-      } else {
-        const r = document.querySelector(`input[name=${s.id}][value=${s.reiksme}]`);
-        if (!r) return;
-        r.checked = true; fire(r);
-      }
-      pzUzdekZyme(s.id);     // PO reiksmes/ivykiu - kad zymes klausytojai negautu musu pacu ivykio
-    });
-  } finally { PZ_TAIKOMA = false; }
-  GP_BUSENA.rodyk('#pzBusena', { tipas:'gerai', html:true, tekstas:`<b>Pritaikyta ${n} lauk.</b> Kiekvienas pažymėtas
-    žyme „iš paraiškos" - ji dings, kai lauką pakeisite arba patvirtinsite ✓. Peržiūrėkite juos
-    (ypač vertės ir būdo suderinamumo įspėjimą, jei rodomas) ir užpildykite likusius.` });
-  $('#pzRez').style.display = 'none';
-}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-pz-grazinti],[data-pz-konf]');
+  if (!b || !PZ_REZ || !PZ_MAP) return;
+  const R = PZ_REZ;
+  if (b.hasAttribute('data-pz-grazinti')){
+    // grąžinami tik laukai su žyme „iš paraiškos“ - jūsų patvirtinti ✓ ar pataisyti lieka
+    const gr = R.grazinti.filter(x => PZ_ZYMES.has(x.id)), n = gr.length;
+    gr.slice().reverse().forEach(pzGrazink);
+    R.uzpildyta = R.uzpildyta.filter(x => !gr.some(g => g.id === x.id)); R.grazinti = R.grazinti.filter(x => !gr.includes(x));
+    pzRodyk(PZ_MAP, R.pastabos);
+    GP_BUSENA.rodyk('#pzBusena', { tipas: 'gerai', tekstas: `Grąžintos ankstesnės ${n} lauk${n === 1 ? 'o' : 'ų'} reikšmės - iš paraiškos neįrašyta nieko.` });
+  } else {
+    const k = R.konfliktai[+b.dataset.pzKonf];
+    if (!k) return;
+    k.sprendimas = b.dataset.pzV;
+    if (k.sprendimas === 'taikyti'){ const st = pzBusena(k.s.id); if (pzIrasyk(k.s)){ R.uzpildyta.push(k.s); R.grazinti.push(st); } }
+    pzRodyk(PZ_MAP, R.pastabos);
+    const kitas = $('#pzRez').querySelector('[data-pz-konf]') || $('#pzRez').querySelector('[data-pz-grazinti]') || $('#dkZona');
+    if (kitas) kitas.focus();
+  }
+  if (window.__K) klausimynas();
+});
 
 (() => {
-  // Paraiškos failas įkeliamas skiltyje „Pirkimo dokumentai“ (dkPridek), DI analizė - tik mygtuku „Užpildyti laukus iš paraiškos (DI)“
+  // Paraiškos failas įkeliamas skiltyje „Pirkimo dokumentai“ (dkPridek); aiški paraiška analizuojama iš karto, kitaip - mygtuku
   // Rankos sekimas perrasymo apsaugai: select/radio visada turi numatytaja
   // reiksme, tad "uzpildyta ranka" = naudotojo PALIESTA. Programinius ivykius
-  // (pzPritaikyti fire) atskiria PZ_TAIKOMA veliava.
+  // (pzIrasyk / pzGrazink) atskiria PZ_TAIKOMA veliava.
   $('#budas').addEventListener('change', () => { if (!PZ_TAIKOMA) PZ_RANKA.add('budas'); });
   ['tipas','nacsaug','centr'].forEach(name =>
     document.querySelectorAll(`input[name=${name}]`).forEach(r =>
@@ -6452,6 +6526,7 @@ async function aiPdfBiblioteka(){
 async function aiPridek(files){
   const visi = [...(files || [])];
   if (!visi.length) return;
+  negKrauk();
   const geri = visi.filter(f => AI_TINKA.test(f.name));
   const netinka = visi.filter(f => !AI_TINKA.test(f.name)).map(f => f.name);
   let klaida = netinka.length ? `Praleista (tinka DOCX, PDF, ODT, TXT): ${netinka.join(', ')}. ` : '';
@@ -6603,8 +6678,9 @@ function aiPriimtuSantrauka(){
    tekstas), žmogus ją gali pakeisti; prie dokumento pasakoma, kas iš jo padaroma:
    - kvalifikacijos reikalavimų lentelė -> SPS 2 lentelė (KVL), žaliųjų reikalavimų lentelė -> SPS 3 lentelė (ZAL): be DI, 2 žingsnyje šių
      klausimų nebeklausiama, perkėlimą patvirtina žmogus (2 žingsnio kortelės);
-   - paraiška -> 1 žingsnio laukai TIK paspaudus „Užpildyti laukus iš paraiškos (DI)“ (pzAnalizuoti; iki 2026-10-18 failas į DI keliaudavo
-     iš karto jį įkėlus); į 2 žingsnio DI šaltinius nededama - joje numatoma vertė;
+   - paraiška -> 1 žingsnio laukai: kai paraiška aiški (nuotrauka, DocLogix PDF ar žmogaus pasirinkta rūšis - dkParaiskaAiski), ji iš karto
+     siunčiama DI analizei ir tušti laukai užpildomi patys (pzTaikyk; naudotojo sprendimas 2026-10-18 - be perteklinių paspaudimų), kitaip -
+     mygtukas „Užpildyti laukus iš paraiškos (DI)“ su priežastimi; į 2 žingsnio DI šaltinius nededama - joje numatoma vertė;
    - kiti dokumentai (techninė specifikacija, sutarties projektas ir priedai) - 2 žingsnio DI atsakymų pasiūlymų šaltiniai (AI.saltiniai),
      siunčiami tik ten paspaudus „Gauti pasiūlymus“;
    - nuoroda į teisės aktą, kurį sutarčių teisės nuorodų registras (perskaityta e-tar) žymi kaip netekusį galios, - pasakoma (faktas ir
@@ -6616,6 +6692,25 @@ const DK_RUSYS = { paraiska: 'Pirkimo paraiška', kvalifikacija: 'Kvalifikacijos
 const DK_TINKA = /\.(docx|pdf|odt|txt|md|jpe?g|png)$/i;
 const DK_PARAISKAI = /\.(pdf|jpe?g|png)$/i;                 // GP_PARAISKA skaito PDF ir paveikslėlius
 const DK_PAVEIKSLAS = /\.(jpe?g|png)$/i;
+/* Paraiška aiški - siunčiama DI analizei iš karto: nuotrauka (kito dokumento nuotraukų čia neskaitome), PDF su DocLogix paraiškos požymiais,
+   PDF be teksto sluoksnio, pavadintas paraiška (skaityti gali tik DI), ar rūšį „Pirkimo paraiška“ pasirinko pats žmogus. PDF su tekstu, bet be
+   požymių (pvz. tiekėjo paraiškos forma) - ne: mygtukas su priežastimi. */
+const DK_PARAISKOS_POZYMIAI = /pirkimo paraiska|paraiskos kortele|doclogix|registracijos (nr|data).{0,400}(pirkimo budas|numatoma)/;
+function dkParaiskaAiski(d){
+  if (d.rusis !== 'paraiska' || !DK_PARAISKAI.test(d.vardas)) return false;
+  if (DK_PAVEIKSLAS.test(d.vardas) || d.rusis !== d.auto) return true;
+  const pr = norm((d.blokai || []).slice(0, 40).map(b => b.text).join(' '));
+  return DK_PARAISKOS_POZYMIAI.test(pr) || (!d.simboliai && /parai?sk/.test(norm(d.vardas)));
+}
+/* Paraiškos analizė iš 1 žingsnio sąrašo: būsena eilutėje (vyksta / atlikta / nepavyko), rezultatas - po sąrašu (pzTaikyk). */
+async function dkAnalizuok(d){
+  d.analize = 'vyksta'; dkRodyk();
+  const ok = await pzAnalizuoti(d.failas);
+  if (!DK.failai.includes(d)) return ok;
+  d.analize = ok === true ? 'atlikta' : ok === false ? 'nepavyko' : null;
+  dkRodyk();
+  return ok;
+}
 /* Rūšis: lentelės pirmiau už vardą (kvalifikacijos ir žaliųjų lentelės - pagal stulpelius), vardas - pirmiau už tekstą. */
 function dkRusis(d){
   if (DK_PAVEIKSLAS.test(d.vardas)) return 'paraiska';
@@ -6678,6 +6773,9 @@ async function dkPridek(files){
   if (klaidos.length) GP_BUSENA.rodyk('#dkBusena', { tipas: 'klaida', tekstas: klaidos.join(' ') });
   else GP_BUSENA.slepk('#dkBusena');
   dkPoPakeitimo();
+  // aiški paraiška - iš karto į DI analizę (kelios - paskutinė; kitas galima analizuoti mygtuku)
+  const par = DK.failai.filter(d => geri.includes(d.failas) && dkParaiskaAiski(d)).pop();
+  if (par) await dkAnalizuok(par);
 }
 /* Pašalinti dokumentą visur: sąrašas, DI šaltiniai, perkeltos lentelės. */
 function dkSalink(d, tyliai){
@@ -6697,9 +6795,13 @@ function dkPoveikis(d){
   const kv = d.lent ? d.lent.lenteles : [], zl = d.lent ? d.lent.zaliuju : [];
   const reik = n => `${n} reikalavim${n % 10 === 1 && n % 100 !== 11 ? 'as' : n % 10 === 0 || (n % 100 > 10 && n % 100 < 20) ? 'ų' : 'ai'}`;
   if (d.rusis === 'paraiska'){
-    out.push({ k: 'info', t: DK_PARAISKAI.test(d.vardas)
-      ? 'Iš paraiškos DI gali užpildyti 1 žingsnio laukus (pavadinimas, būdas, vertė ir kt.) - tik paspaudus mygtuką; kiekvieną reikšmę patvirtinate jūs. Failas siunčiamas per G-Procure serverį į Claude API; nei naršyklėje, nei serveryje jis nesaugomas.'
-      : 'Paraiškos laukus DI perskaito iš PDF ar paveikslėlio (JPG, PNG) - šio failo formato paraiškai nenaudojame.' });
+    const siunt = 'Failas siunčiamas per G-Procure serverį į Claude API; nei naršyklėje, nei serveryje jis nesaugomas.';
+    if (!DK_PARAISKAI.test(d.vardas)) out.push({ k: 'info', t: 'Paraiškos laukus DI perskaito iš PDF ar paveikslėlio (JPG, PNG) - šio failo formato paraiškai nenaudojame.' });
+    else if (d.analize === 'vyksta') out.push({ k: 'info', t: 'DI skaito paraišką - tušti 1 žingsnio laukai bus užpildyti patys. ' + siunt });
+    else if (d.analize === 'atlikta') out.push({ k: 'ok', t: 'Paraiška perskaityta: tušti 1 žingsnio laukai užpildyti ir pažymėti žyme „iš paraiškos (nepatvirtinta)“ - žr. žemiau. ' + siunt });
+    else if (d.analize === 'nepavyko') out.push({ k: 'isp', t: 'Paraiškos perskaityti nepavyko - priežastis žemiau. Galite bandyti dar kartą arba užpildyti laukus ranka.' });
+    else if (dkParaiskaAiski(d)) out.push({ k: 'info', t: 'Paraiška siunčiama DI analizei iškart ją įkėlus; tušti laukai užpildomi patys. ' + siunt });
+    else out.push({ k: 'isp', t: 'DocLogix paraiškos požymių (pvz. „Pirkimo paraiška“, „Registracijos Nr.“) dokumente neradome, todėl į DI jis automatiškai nesiųstas. Jei tai pirkimo paraiška - spauskite mygtuką. ' + siunt });
     out.push({ k: 'info', t: 'Į 2 žingsnio DI pasiūlymų šaltinius neįtraukiama - paraiškoje yra numatoma vertė.' });
   }
   if (d.rusis === 'kvalifikacija'){
@@ -6740,7 +6842,7 @@ function dkRodyk(){
           .map(([k, t]) => `<option value="${k}"${k === d.rusis ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></span>
         <button type="button" class="sec" data-dk-salinti="${d.raktas}" aria-label="Pašalinti ${esc(d.vardas)}">Pašalinti</button></div>
       <ul class="dk-p">${pov.map(x => `<li class="dk-${x.k}">${x.t}</li>`).join('')}</ul>
-      ${par ? `<div class="dk-ve"><button type="button" class="lk-ai" data-dk-paraiska="${d.raktas}">Užpildyti laukus iš paraiškos (DI)</button></div>` : ''}
+      ${par && d.analize !== 'vyksta' ? `<div class="dk-ve"><button type="button" class="${d.analize === 'atlikta' ? 'sec ' : ''}lk-ai" data-dk-paraiska="${d.raktas}">${d.analize === 'atlikta' || d.analize === 'nepavyko' ? 'Analizuoti iš naujo (DI)' : 'Užpildyti laukus iš paraiškos (DI)'}</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -6805,7 +6907,7 @@ function negaliojantysEilutese(M, numeriai){
       dkSalink(d);
       const kitas = $('#dkSarasas').querySelectorAll('[data-dk-salinti]')[Math.min(i, DK.failai.length - 1)];
       (kitas || zona).focus();
-    } else pzAnalizuoti(d.failas);
+    } else dkAnalizuok(d);
   });
   $('#dkSarasas').addEventListener('change', e => {
     const sel = e.target.closest('[data-dk-rusis]');
@@ -6813,10 +6915,12 @@ function negaliojantysEilutese(M, numeriai){
     const d = DK.failai.find(x => String(x.raktas) === sel.dataset.dkRusis);
     if (!d) return;
     d.rusis = sel.value;
+    if (d.rusis !== 'paraiska') d.analize = null;
     dkTaikyk(d);
     dkPoPakeitimo();
     const nb = document.querySelector(`[data-dk-rusis="${d.raktas}"]`);
     if (nb) nb.focus();
+    if (d.rusis === 'paraiska' && dkParaiskaAiski(d)) dkAnalizuok(d);    // rūšį paraiška pasirinko pats žmogus
   });
 })();
 
@@ -7298,6 +7402,7 @@ async function atkurkJuodrasti(r){
     ZAL.kandidatai = Array.isArray(zv.kandidatai) ? zv.kandidatai.filter(M => M && Array.isArray(M.eilutes)) : []; ZAL.pasirinkta = Number(zv.pasirinkta) || 0; ZAL.atmesta = !!zv.atmesta;
     if (ZAL.pasirinkta >= ZAL.kandidatai.length) ZAL.pasirinkta = 0;
     ZAL_AUTO.clear(); (Array.isArray(zv.auto) ? zv.auto : []).forEach(x => { if (Array.isArray(x) && typeof x[0] === 'string') ZAL_AUTO.set(x[0], x[2] ? undefined : x[1]); });
+    if (KVL.kandidatai.length || ZAL.kandidatai.length) negKrauk();   // atkurtų lentelių netekusių galios aktų patikra
     AI.siulymai = new Map((S2.AI || []).filter(x => Array.isArray(x) && x[1] && x[1].busena === 'priimta').map(([k, v]) => [naujasRaktas(k), v]));
     AI.priimta = AI.siulymai.size;
     klausimynas();
@@ -7489,7 +7594,7 @@ zingsniuBusena();
     purpose: "Pirkimo sąlygų (BPS, SPS ir formų) paketas iš LITGRID šablonų: jūs atsakote į klausimus, algoritmas sutvarko dokumentus.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); iš paraiškos DI pasiūlo laukų reikšmes tik paspaudus mygtuką - jas patvirtinate jūs; nuoroda į netekusį galios teisės aktą pasakoma. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
+      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje; abu be DI, perkėlimą patvirtinate jūs.",
       "<b>Sutarties projektas:</b> sutarties klausimai atskirame žingsnyje - galite juos atsakyti dabar arba vėliau. „Generuoti pirkimo sąlygas“ sugeneruoja sąlygas be sutarties (pakete ji pažymima „atidėta“, sąlygų tekstas nesikeičia), „Generuoti pirkimo sąlygas ir sutarties projektą“ - abu.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu. Pakeitus atsakymus po generavimo, rodoma „Reikia pergeneruoti“ ir kurie dokumentai paveikti.",
@@ -7498,7 +7603,7 @@ zingsniuBusena();
       "<b>Tikrinti parengtus dokumentus</b> (skirtukas viršuje): įkelkite paketą ar atskirus failus - jie bus palyginti tarpusavyje, su pirkimo kortele ir su standartine LITGRID forma (šiuo moduliu sugeneruoti - pagal generavimo pasą), o įstatymo reikalaujamos pirkimo dokumentų informacijos (vertinimo kriterijų, terminų, kontaktinių asmenų ir kt.) bus ieškoma visame pakete ir parodoma, kur ji rasta. Kiekvienam radiniui įrašykite sprendimą ir atsisiųskite Word ataskaitą; kitą kartą įkelkite ją kartu su nauja paketo versija."
     ],
     noteTitle: "Kas siunčiama ir kas saugoma",
-    note: "Sąlygų tekstą kuria algoritmas iš šablonų - <b>DI teksto nerašo</b>. DI naudojamas tik pasiūlymams ir tik paspaudus DI mygtuką: tada jūsų įkelta paraiškos kortelė ar pirkimo dokumentų tekstas siunčiami per G-Procure serverį į Claude API; įkėlus dokumentą niekas nesiunčiama. Nesiųskite įslaptintos informacijos. Jūsų atsakymai (ir numatoma vertė) automatiškai išsaugomi juodraštyje tik šioje naršyklėje - niekur nesiunčiami, patenka į atsarginę kopiją; juodraštį galite ištrinti ar atsisiųsti failu (jo neperduokite tiekėjams). Įkelti failai (paraiška, DI pasiūlymų dokumentai) ir sugeneruoti dokumentai juodraštyje nesaugomi; uždarant su neatsisiųstais dokumentais ar neišsaugotu juodraščiu naršyklė paklaus. Įrankis - bandomoji versija: dokumentai generuojami iš LITGRID šablonų ir tikrinami automatiškai, bet prieš skelbiant juos peržiūri rengėjas Word programoje; pastebėjimus praneškite įrankio rengėjui. Sutarties parinkimo stebėjimo įrašai: patvirtinus sutartį šioje naršyklėje įsimenama, ką siūlė sistema ir ką pasirinkote (su pirkimo pavadinimu), kad būtų galima tikslinti parinkimo taisykles; jie niekur nesiunčiami, juos galite atsisiųsti ar išvalyti bloke „Sutarties projektas“. Kvalifikacijos ir žaliųjų reikalavimų lentelės iš įkelto Word ar PDF failo perkeliamos naršyklėje (jų tekstas išsaugomas ir juodraštyje) - failas niekur nesiunčiamas, DI nenaudojamas; ar dokumente minimas teisės aktas netekęs galios, tikrinama pagal G-Procure teisės nuorodų registrą (iš svetainės). Tikrinant parengtus dokumentus failai skaitomi tik naršyklėje, niekur nesiunčiami, DI nenaudojamas; sugeneruotuose Word failuose įrašomas generavimo pasas (šablonas ir pastraipų maišos, be jūsų atsakymų ir numatomos vertės).",
+    note: "Sąlygų tekstą kuria algoritmas iš šablonų - <b>DI teksto nerašo</b>. DI naudojamas tik pasiūlymams: paraiškos kortelė siunčiama per G-Procure serverį į Claude API iškart ją įkėlus (kai aišku, kad tai paraiška), pirkimo dokumentų tekstas - tik paspaudus „Gauti pasiūlymus“; kiti įkelti dokumentai niekur nesiunčiami. Nesiųskite įslaptintos informacijos. Jūsų atsakymai (ir numatoma vertė) automatiškai išsaugomi juodraštyje tik šioje naršyklėje - niekur nesiunčiami, patenka į atsarginę kopiją; juodraštį galite ištrinti ar atsisiųsti failu (jo neperduokite tiekėjams). Įkelti failai (paraiška, DI pasiūlymų dokumentai) ir sugeneruoti dokumentai juodraštyje nesaugomi; uždarant su neatsisiųstais dokumentais ar neišsaugotu juodraščiu naršyklė paklaus. Įrankis - bandomoji versija: dokumentai generuojami iš LITGRID šablonų ir tikrinami automatiškai, bet prieš skelbiant juos peržiūri rengėjas Word programoje; pastebėjimus praneškite įrankio rengėjui. Sutarties parinkimo stebėjimo įrašai: patvirtinus sutartį šioje naršyklėje įsimenama, ką siūlė sistema ir ką pasirinkote (su pirkimo pavadinimu), kad būtų galima tikslinti parinkimo taisykles; jie niekur nesiunčiami, juos galite atsisiųsti ar išvalyti bloke „Sutarties projektas“. Kvalifikacijos ir žaliųjų reikalavimų lentelės iš įkelto Word ar PDF failo perkeliamos naršyklėje (jų tekstas išsaugomas ir juodraštyje) - failas niekur nesiunčiamas, DI nenaudojamas; ar dokumente minimas teisės aktas netekęs galios, tikrinama pagal G-Procure teisės nuorodų registrą (iš svetainės). Tikrinant parengtus dokumentus failai skaitomi tik naršyklėje, niekur nesiunčiami, DI nenaudojamas; sugeneruotuose Word failuose įrašomas generavimo pasas (šablonas ir pastraipų maišos, be jūsų atsakymų ir numatomos vertės).",
     moreLabel: "Plačiau",
     details: {
       title: "Pirkimo sąlygų generatorius - išsami instrukcija",
