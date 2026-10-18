@@ -8804,7 +8804,9 @@ async function testaiKvalLentele(){
       && /Contracting Entity/.test(siusta.system) && siusta.maxTokens === 8000 && !siusta.model, "užklausa: " + siusta.userMessage.slice(0, 200));
     const T = kvlLentele(docs.AK_LTEN_SPS.xml), e1 = T.find(e => e.length === 5 && e[0].t === "1.");
     lygu([e1[2].t.split("\n")[0], e1[4].t], ["EN Rangovas turi tureti teise vykdyti elektros irenginiu eksploatavimo darbus:", "EN Valstybines energetikos reguliavimo tarybos atestato skaitmenine kopija.\nNote: only the ESPD is submitted with the Tender."], "angliški langeliai");
-    tiesa(!docs.AK_LTEN_SPS.pars.some(p => p === W.GP_KVAL_LENTELE.VERTIMO_ZYMA), "liko nurodymas įrašyti vertimą");
+    tiesa(!T.some(e => e.some(c => c.t.split("\n").includes(W.GP_KVAL_LENTELE.VERTIMO_ZYMA))), "SPS 2 lentelėje liko nurodymas įrašyti vertimą");
+    // tame pačiame dokumente esanti žaliųjų lentelė (2026-10-18) perkeliama į SPS 3 lentelę be vertimo - nurodymas lieka ir 4 žingsnis tai sako
+    tiesa(/Žalieji reikalavimai \(SPS 3 lentelė\).*Angliškas tekstas 1 eilutėje neįrašytas/.test((D.getElementById("zalLentelePatikra") || {}).textContent.replace(/\s+/g, " ")), "žaliųjų lentelės vertimo nurodymas nepasakytas");
     const t = (D.getElementById("kvalLentelePatikra") || {}).textContent.replace(/\s+/g, " ");
     tiesa(/Angliškas tekstas 5 eilutėse - DI vertimas \(Claude\), nepatvirtintas; vertėjas netikrino/.test(t) && D.getElementById("kvalLentelePatikra").classList.contains("no"), "3 žingsnis: " + t);
     tiesa(/kvalifikacijos reikalavimų lentelės angliškas tekstas - DI vertimas/.test(D.getElementById("rezultatas").textContent), "bendra 3 žingsnio pastaba");
@@ -8897,6 +8899,234 @@ async function testaiKvalLentele(){
 /* ======================================================================== */
 /* 2026-10-15: juodraštis ir darbo sritys (naudotojo pasiūlymas - parengti sąlygas, padaryti pauzę ir vėliau tęsti sutarties projektą
    neprarandant atsakymų). Juodraščiai - tikroje saugykloje (perkrovimui), testų sukurti raktai pašalinami (GP_TESTU_APSAUGA). */
+/* ========================================================================
+   Pirkimo dokumentai 1 žingsnyje, PDF lentelės ir žalieji reikalavimai (2026-10-18, naudotojo pasiūlymas)
+   ======================================================================== */
+/* PDF su teksto gabalais nurodytose vietose (Helvetica 10 pt, WinAnsi; tik ASCII ir „\x95“ - ženklelis): puslapiai - [[x, y, tekstas, "B"?], ...];
+   "B" - pusjuodis šriftas (pdf.js tada gabalų nesujungia, kaip tikrame PDF). */
+function pdfPoz(vardas, puslapiai){
+  const n = puslapiai.length;
+  const obj = ["<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [" + puslapiai.map((_, i) => (5 + 2 * i) + " 0 R").join(" ") + "] /Count " + n + " >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"];
+  puslapiai.forEach((p, i) => {
+    const t = p.map(([x, y, tx, f]) => "BT /F" + (f === "B" ? 2 : 1) + " 10 Tf " + x + " " + y + " Td (" + tx.replace(/[()\\]/g, "\\$&") + ") Tj ET").join("\n");
+    obj.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents " + (6 + 2 * i) + " 0 R >>");
+    obj.push("<< /Length " + t.length + " >>\nstream\n" + t + "\nendstream");
+  });
+  let s = "%PDF-1.4\n"; const off = [];
+  obj.forEach((o, i) => { off.push(s.length); s += (i + 1) + " 0 obj\n" + o + "\nendobj\n"; });
+  const x = s.length;
+  s += "xref\n0 " + (obj.length + 1) + "\n0000000000 65535 f \n" + off.map(o => String(o).padStart(10, "0") + " 00000 n \n").join("");
+  s += "trailer\n<< /Size " + (obj.length + 1) + " /Root 1 0 R >>\nstartxref\n" + x + "\n%%EOF";
+  const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255;
+  return new W.File([b], vardas, { type: "application/pdf" });
+}
+/* Kvalifikacijos ir žaliųjų reikalavimų PDF kaip iniciatorių: antraštė per dvi eilutes („Eil. Nr.“ aukščiau), žodis antraštėje skaidytas
+   („R“ + „eikalavimai“), sąrašas dokumentų stulpelyje, eilutė su „reikalavima ... dokumentu“ (ne antraštė), adresas per dvi eilutes,
+   ženklelis, puslapio numeris, ta pati antraštė 2 puslapyje ir eilutės tęsinys, tekstas po lentele, žaliųjų lentelė su centruota antrašte. */
+const KVPDF = () => pdfPoz("Kvalifikaciniai reikalavimai.pdf", [
+  [[86, 760, "Eil. Nr."], [133, 744, "R", "B"], [140.22, 744, "eikalavimai"], [346, 744, "Pateikiami dokumentai"],
+   [85, 716, "1."], [133, 716, "Rangovas turi tureti teise vykdyti:"], [343, 716, "1."], [361, 716, "Atestato skaitmenine kopija."],
+   [133, 704, "1.1. Elektros skirstyklu remonto darbus."], [361, 704, "Komisija tikrina duomenis pati"],
+   [133, 692, "1.2. Remonto darbus."], [361, 692, "reikalavima"], [417, 692, "irodanciu"], [465, 692, "dokumentu."], [520, 692, "Jeigu"],
+   [361, 680, "(https://www.licencijavimas.lt/lis-"], [361, 668, "epp-app/public)."],
+   [85, 640, "2."], [133, 640, "Rangovas turi tureti:"], [346, 640, "\x95"], [364, 640, "Pateikiamos kopijos."],
+   [133, 628, "2.1. darbu vadova;"], [364, 616, "Pateikiami"], [418, 616, "dokumentai"], [472, 616, "ir"], [482, 616, "reikalavimai."], [297, 40, "1"]],
+  [[86, 790, "Eil. Nr."], [133, 774, "Reikalavimai"], [346, 774, "Pateikiami dokumentai"],
+   [133, 746, "2.2. ne maziau kaip 3 darbu vykdytojus,"], [133, 734, "turincius pazymejimus pagal aplinkos"],
+   [133, 722, "ministro 2015 m. geguzes 8 d. isakyma"], [133, 710, "Nr. D1-393."],
+   [72, 680, "Tiekejas, kurio pajegumais remiamasi, turi atitikti visus reikalavimus, nurodytus lenteleje."],
+   [133, 668, "Pastaba: kopijos teikiamos per CVP IS."], [297, 40, "2"]],
+  [[91, 790, "Eil. Nr."], [294, 784, "ZALIEJI REIKALAVIMAI"], [209, 760, "Reikalavimas"], [403, 760, "Pateikiami dokumentai"],
+   [91, 742, "1."], [139, 742, "Tiekejas taikys aplinkos apsaugos"], [353, 742, "Nepriklausomos istaigos sertifikatas."],
+   [139, 730, "vadybos sistema pagal LST EN ISO 14001."], [353, 718, "."]]
+]);
+const PRIEDAS_PDF = () => pdf("19. Aplinkosaugos reikalavimai.pdf", ["APLINKOSAUGOS REIKALAVIMAI", "1. Aprasas skirtas Bendroves padaliniams ir rangovams."]);
+const ZAL_KORTELE = () => D.getElementById(W.lkId("zal|ZAL"));
+const ZAL_K = t => W.GP_LAUKAI.norm(t);
+const zalLentele = xml => {
+  const d = new W.DOMParser().parseFromString(xml, "application/xml");
+  return Array.from(d.getElementsByTagNameNS(NSW, "tbl")).find(t => /ŽALIESIEMS PIRKIMAMS|ŽALIEJI REIKALAVIMAI/.test(Array.from((t.getElementsByTagNameNS(NSW, "tr")[0] || t).getElementsByTagNameNS(NSW, "t")).map(x => x.textContent).join("")));
+};
+const eilTekstai = tbl => Array.from(tbl.getElementsByTagNameNS(NSW, "tr")).filter(tr => tr.parentNode === tbl)
+  .map(tr => Array.from(tr.getElementsByTagNameNS(NSW, "tc")).filter(tc => tc.parentNode === tr).map(tc => Array.from(tc.getElementsByTagNameNS(NSW, "p")).map(p => Array.from(p.getElementsByTagNameNS(NSW, "t")).map(x => x.textContent).join("")).filter(Boolean)));
+
+async function testaiDokumentai(){
+  dabartine = grupe("Pirkimo dokumentai 1 žingsnyje, PDF lentelės ir žalieji reikalavimai (2026-10-18)");
+
+  await testas("PDF lentelės (pdf.js): kvalifikacijos lentelė per du puslapius - antraštė per dvi eilutes ir skaidytu žodžiu, pasikartojanti antraštė - tęsinys, kūno eilutė su „reikalavima ... dokumentu“ - ne antraštė; sąrašo žymės, adresas, ženklelis, puslapio numeris; tekstas po lentele - pabaiga; žaliųjų lentelė - atskirai", async () => {
+    await modulis();
+    await W.aiPdfBiblioteka();
+    const L = W.GP_KVAL_LENTELE, r = await W.kvlLenteles(KVPDF());
+    lygu([r.lenteles.length, r.zaliuju.length, r.zalieji], [1, 1, 1], "lentelių skaičius");
+    const M = r.lenteles[0], P = x => x.map(p => p.tekstas);
+    lygu([M.eilutes.length, M.saltinioNumeriai, M.pdf, M.dvikalbe], [2, ["1", "2"], true, false], "kvalifikacijos eilutės");
+    lygu(P(M.eilutes[0].reik), ["Rangovas turi tureti teise vykdyti:", "1.1. Elektros skirstyklu remonto darbus.", "1.2. Remonto darbus."], "1 eilutės reikalavimas");
+    const dok1 = L.pTekstas(M.eilutes[0].dok);
+    tiesa(/^1\. Atestato skaitmenine kopija\./.test(dok1) && dok1.includes("lis-epp-app/public).") && dok1.includes("reikalavima irodanciu dokumentu. Jeigu"), "1 eilutės dokumentai: " + dok1);
+    lygu(P(M.eilutes[1].reik), ["Rangovas turi tureti:", "2.1. darbu vadova;", "2.2. ne maziau kaip 3 darbu vykdytojus, turincius pazymejimus pagal aplinkos ministro 2015 m. geguzes 8 d. isakyma Nr. D1-393."], "2 eilutė su tęsiniu kitame puslapyje");
+    lygu(P(M.eilutes[1].dok), ["Pateikiamos kopijos.", "Pateikiami dokumentai ir reikalavimai."], "vienas ženklelis - be žymės; eilutė su antraštės žodžiais kita tvarka - ne antraštė");
+    tiesa(!/Tiekejas, kurio|Pastaba: kopijos/.test(L.pTekstas(M.eilutes[1].reik)) && !/(^|\s)[12]$/.test(L.pTekstas(M.eilutes[1].reik)), "tekstas po lentele ar puslapio numeris pateko į lentelę");
+    tiesa(/pusjuodžio, kursyvo ir pabraukimo PDF faile nėra/.test(M.ispejimai.join(" ")), "įspėjimas apie formatavimą");
+    const Z = r.zaliuju[0];
+    lygu([Z.eilutes.length, Z.zalieji, P(Z.eilutes[0].reik), P(Z.eilutes[0].dok)],
+      [1, true, ["Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001."], ["Nepriklausomos istaigos sertifikatas."]], "žaliųjų lentelė (pavienis taškas - ne pastraipa)");
+    lygu(Z.saltinioNumeriai, ["1"], "žaliųjų lentelės numeris - numerio stulpelyje, ne tekste");
+  });
+  await testas("PDF be teksto sluoksnio ir PDF be lentelių: įspėjimas, ne „lentelių nėra“; tas pats per kortelės mygtuką - priežastis žmogui", async () => {
+    const tuscias = pdfPoz("Skenuotas.pdf", [[]]);
+    const r = await W.kvlLenteles(tuscias);
+    lygu([r.lenteles.length, r.zaliuju.length], [0, 0]);
+    tiesa(/be teksto sluoksnio/.test(r.ispejimai.join(" ")), "įspėjimo nėra: " + JSON.stringify(r.ispejimai));
+    await W.kvlSkaityk([PRIEDAS_PDF()], true);
+    tiesa(/kvalifikacijos reikalavimų lentelės .* neradome/.test(W.eval("KVL.klaida")), "klaida: " + W.eval("KVL.klaida"));
+    await W.kvlSkaityk([new W.File(["x"], "Reikalavimai.odt")], true);
+    lygu(W.eval("KVL.klaida"), "Tinka Word (.docx) arba PDF su tekstu.");
+  });
+
+  await testas("1 žingsnis „Pirkimo dokumentai“: rūšys atpažįstamos (paraiška, kvalifikacija, TS, sutarties priedas), netinkamas failas - priežastis; niekas nesiunčiama; į DI šaltinius nededama paraiška; lentelės perkeliamos; netekęs galios aktas - įvardytas", async () => {
+    await modulis();
+    const png = new W.File([new Uint8Array([137, 80, 78, 71])], "DocLogix_kortele.png", { type: "image/png" });
+    await W.dkPridek([png, KVPDF(), await docx(TS[0], TS[1]), PRIEDAS_PDF(), new W.File(["x"], "Kainos.xlsx")]);
+    const eil = [...D.querySelectorAll("#dkSarasas .dk-d")];
+    lygu(eil.map(e => e.dataset.rusis), ["paraiska", "kvalifikacija", "ts", "priedas"], "rūšys");
+    lygu(eil.map(e => e.querySelector("select").value), ["paraiska", "kvalifikacija", "ts", "priedas"], "pasirinkimas sąraše");
+    tiesa(/Praleista.*Kainos\.xlsx/.test(D.getElementById("dkBusena").textContent), "netinkamo failo priežastis: " + D.getElementById("dkBusena").textContent);
+    lygu(AI.kvietimai.length, 0, "įkėlus kažkas išsiųsta į DI");
+    lygu(W.eval("AI.saltiniai.map(s => s.vardas)"), ["Kvalifikaciniai reikalavimai.pdf", TS[0], "19. Aplinkosaugos reikalavimai.pdf"], "DI šaltiniai (be paraiškos)");
+    lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length")], [1, 1], "perkeltos lentelės");
+    const kv = eil[1].textContent.replace(/\s+/g, " ");
+    tiesa(/Kvalifikacijos reikalavimų lentelė \(2 reikalavimai\) perkeliama į SPS 2 lentelę be DI/.test(kv) && /Žaliųjų reikalavimų lentelė \(1 reikalavimas\) perkeliama į SPS 3 lentelę be DI/.test(kv), "kvalifikacijos dokumento poveikis: " + kv);
+    await kol(() => /neteko galios 2024-11-01/.test(D.querySelector("#dkSarasas .dk-d[data-rusis=kvalifikacija]").textContent), "netekęs galios aktas", 10000);
+    const ng = D.querySelector("#dkSarasas .dk-d[data-rusis=kvalifikacija]").textContent.replace(/\s+/g, " ");
+    tiesa(/Minimas teisės aktas \(aplinkos ministro 2015-05-08 įsakymas Nr\. D1-393\) neteko galios 2024-11-01 pagal aplinkos ministro 2024-09-10 įsakymo Nr\. D1-299 4\.3 p\./.test(ng), "netekusio galios akto tekstas: " + ng);
+    tiesa(!/neteko galios/.test(eil[2].textContent + eil[3].textContent), "netekęs galios aktas priskirtas kitam dokumentui");
+    // tas pats numeris kitais metais - kitas aktas; numeris su tarpais aplink brūkšnį; ilgesnis numeris - ne tas
+    lygu([W.negaliojantysTekste("aplinkos ministro 2019 m. sausio 2 d. isakymas Nr. D1-393").length, W.negaliojantysTekste("aplinkos ministro 2015 m. geguzes 8 d. isakymas Nr. D1 - 393").length,
+      W.negaliojantysTekste("2015 m. isakymas Nr. D1-3930").length], [0, 1, 0], "akto atpažinimas pagal numerį ir metus");
+    tiesa(/1 žingsnio laukus/.test(eil[0].textContent) && eil[0].querySelector("[data-dk-paraiska]") && D.querySelectorAll("[data-dk-paraiska]").length === 1, "paraiškos mygtukas - tik prie paraiškos");
+    tiesa(/Sutarties priedas - modulis jo nekeičia/.test(eil[3].textContent), "priedo poveikis");
+    tiesa(eil.every(e => e.querySelector("label").htmlFor === e.querySelector("select").id), "rūšies laukas be pavadinimo");
+    // paraiška - tik paspaudus
+    let gauta = null;
+    W.GP_PARAISKA.analizuoti = f => { gauta = f; return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
+    eil[0].querySelector("[data-dk-paraiska]").click();
+    await kol(() => gauta, "paraiškos analizė");
+    lygu(gauta.name, "DocLogix_kortele.png", "analizuotas failas");
+  });
+  await testas("Rūšies keitimas: kvalifikacijos dokumentas - kita rūšis -> lentelės nebeperkeliamos, grąžinus - vėl; PDF priedas - paraiška -> išimamas iš DI šaltinių, atsiranda paraiškos mygtukas; pašalinus - visur, fokusas lieka sąraše", async () => {
+    const sel = rusis => D.querySelector(`#dkSarasas .dk-d[data-rusis=${rusis}] select`);
+    const keisk = (el, v) => { el.value = v; el.dispatchEvent(new W.Event("change", { bubbles: true })); };
+    keisk(sel("kvalifikacija"), "ts");
+    lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length")], [0, 0], "lentelės liko");
+    tiesa(/rūšį pakeitėte jūs/.test(D.querySelectorAll("#dkSarasas .dk-d")[1].textContent), "nepasakyta, kad rūšį pakeitė žmogus");
+    keisk(D.querySelectorAll("#dkSarasas .dk-d")[1].querySelector("select"), "zalieji");
+    lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length")], [0, 1], "žaliųjų dokumentas - tik žaliųjų lentelė");
+    keisk(D.querySelectorAll("#dkSarasas .dk-d")[1].querySelector("select"), "kvalifikacija");
+    lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length")], [1, 1], "grąžinus - abi lentelės");
+    tiesa(D.activeElement === D.querySelectorAll("#dkSarasas .dk-d")[1].querySelector("select"), "fokusas po perpiešimo");
+    keisk(sel("priedas"), "paraiska");
+    lygu(W.eval("AI.saltiniai.map(s => s.vardas)"), ["Kvalifikaciniai reikalavimai.pdf", TS[0]], "paraiška DI šaltiniuose");
+    lygu(D.querySelectorAll("[data-dk-paraiska]").length, 2, "PDF paraiškai - mygtukas");
+    tiesa(!D.querySelector("#dkSarasas .dk-d[data-rusis=ts] option[value=paraiska]"), "DOCX failui siūloma paraiška (DI jos neskaito)");
+    D.querySelector("#dkSarasas .dk-d[data-rusis=kvalifikacija] [data-dk-salinti]").click();
+    lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length"), W.eval("AI.saltiniai.map(s => s.vardas)")], [0, 0, [TS[0]]], "pašalinta ne visur");
+    tiesa(D.activeElement && D.activeElement.matches("[data-dk-salinti]"), "fokusas dingo: " + (D.activeElement && D.activeElement.outerHTML.slice(0, 80)));
+    // 2 žingsnio šaltinių sąraše - 1 žingsnio dokumentas; pašalinus ten - dingsta ir 1 žingsnio sąraše
+    W.aiRodykSaltinius();
+    tiesa(/įkelta 1 žingsnyje/.test(D.getElementById("aiSaltiniai").textContent), "2 žingsnis nesako, iš kur dokumentas");
+    D.querySelector("#aiSaltiniai [data-ai-salinti]").click();
+    lygu([W.eval("AI.saltiniai.length"), W.eval("DK.failai.map(d => d.vardas)")], [0, ["DocLogix_kortele.png", "19. Aplinkosaugos reikalavimai.pdf"]], "pašalinta 2 žingsnyje");
+  });
+
+  await testas("2 žingsnis su žaliųjų lentele (T-AK, darbai): klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats (skiltyje „Išspręsta automatiškai“, su mygtuku), 3 lentelė lieka, šablono eilutės laukai neklausiami; kortelė rodo eilutes ir laukia patvirtinimo; „Nenaudoti“ - grįžta ankstesnis žmogaus atsakymas", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT", "darbai");
+    const gid = () => Object.keys(W.__K.grupes).find(g => W.__K.grupes[g].nariai.some(n => n.raktas === ZAL_K("Jei žalieji reikalavimai nurodomi pirkimo sąlygose")));
+    tiesa(gid(), "be dokumento - žaliųjų klausimo nėra");
+    const tsK = ZAL_K("Jei žalieji reikalavimai nurodyti Techninėje specifikacijoje ir (ar) Sutarties projekte");
+    W.pasirinkGrupe(gid(), tsK);
+    lygu(ATS()[tsK], true, "žmogaus atsakymas");
+    await W.dkPridek([KVPDF()]);
+    tiesa(!gid(), "klausimas vis dar klausiamas");
+    lygu([ATS()[ZAL_K("Jei žalieji reikalavimai nurodomi pirkimo sąlygose")], ATS()[tsK], W.eval("sekaAtsakymas('zalieji')")], [true, false, true], "atsakymas pagal dokumentą");
+    const a = W.__K.automatika.find(x => x.keisti === "zal");
+    tiesa(a && /paliekama „Jei žalieji reikalavimai nurodomi pirkimo sąlygose“/.test(a.veiksmas) && /Kvalifikaciniai reikalavimai\.pdf/.test(a.kodel), "automatika: " + JSON.stringify(a));
+    tiesa(D.querySelector('#klausimai details.auto [data-zal="perziureti"]'), "automatikoje nėra mygtuko");
+    tiesa(W.__K.automatika.some(x => /pakeičiama įkelto dokumento žaliaisiais reikalavimais/.test(x.veiksmas)), "šablono eilutės laukas - ne automatikoje");
+    tiesa(!Object.values(W.__K.formuluotes).concat(Object.values(W.__K.tuscios)).some(q => /laikotarpiu teikiamoms paslaugoms/.test(q.tekstas || "")), "šablono 3 lentelės eilutės klausimas liko");
+    tiesa(W.__K.autoLenteles[Object.keys(W.__K.autoLenteles).find(k => /3 lentel|zaliuj/.test(k)) || ""] !== undefined || Object.keys(ATS()).some(k => /^T_.*(zali|3 lentel)/.test(k) && ATS()[k] === true), "3 lentelė nepaliekama");
+    const c = ZAL_KORTELE();
+    tiesa(c && c.dataset.busena === "siuloma", "kortelė: " + (c && c.dataset.busena));
+    const ct = c.textContent.replace(/\s+/g, " ");
+    tiesa(/Iš „Kvalifikaciniai reikalavimai\.pdf“ į SPS 3 lentelę perkeliamas 1 reikalavimas/.test(ct) && /Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001\./.test(ct) && /Nepriklausomos istaigos sertifikatas\./.test(ct), "kortelės tekstas: " + ct.slice(0, 400));
+    tiesa(/Iš PDF perkeliamas tik tekstas/.test(ct), "PDF pastaba");
+    // kvalifikacijos kortelė - netekęs galios aktas eilutėje
+    await kol(() => /2 eilutėje: Minimas teisės aktas \(aplinkos ministro 2015-05-08 įsakymas Nr\. D1-393\) neteko galios/.test((D.getElementById(W.lkId("kvl|KVL")) || {}).textContent || ""), "kvalifikacijos kortelėje - netekęs galios aktas", 10000);
+    c.querySelector('[data-lk-patv="ZAL"]').click();
+    tiesa(W.eval("PATV.has('ZAL')") && ZAL_KORTELE().dataset.busena === "patvirtinta", "patvirtinimas");
+    ZAL_KORTELE().querySelector('[data-zal="atmesti"]').click();
+    tiesa(gid() && ATS()[tsK] === true && ATS()[ZAL_K("Jei žalieji reikalavimai nurodomi pirkimo sąlygose")] !== true, "Nenaudoti: klausimas ir žmogaus atsakymas negrįžo: " + JSON.stringify([gid(), ATS()[tsK]]));
+    tiesa(!W.eval("PATV.has('ZAL')") && D.activeElement === ZAL_KORTELE() && ZAL_KORTELE().querySelector('[data-zal="naudoti"]'), "po „Nenaudoti“ - kortelė su „Naudoti įkeltą lentelę“ ir fokusas");
+    ZAL_KORTELE().querySelector('[data-zal="naudoti"]').click();
+    tiesa(!gid() && ATS()[tsK] === false, "Naudoti: vėl pagal dokumentą");
+    D.querySelector('#klausimai [data-zal="perziureti"]').click();
+    tiesa(D.activeElement === ZAL_KORTELE(), "„Peržiūrėti“ - fokusas kortelėje");
+  });
+
+  await testas("Generavimas LT (T-AK, darbai) iš PDF: SPS 3 lentelė - dokumento eilutė su numeriu 1., šablono ISO eilutės nėra, antraštės eilutės „laikyti su kitu“, 4.2 p. lieka; SPS 2 lentelė - 2 reikalavimai iš PDF; 4 žingsnis sako", async () => {
+    const docs = await generuokSu({ budas: "T-AK", tipas: "darbai", po2: async () => { await W.dkPridek([KVPDF()]);
+      D.querySelector('[data-lk-patv="KVL"]') && D.querySelector('[data-lk-patv="KVL"]').click(); ZAL_KORTELE().querySelector('[data-lk-patv="ZAL"]').click(); } });
+    const s = docs.AK_LT_SPS, T = zalLentele(s.xml);
+    tiesa(T, "3 lentelės nėra");
+    const E = eilTekstai(T), duom = E.filter(e => /^\d+\.$/.test((e[0] || [])[0] || ""));
+    lygu(duom.map(e => e.slice(0, 3)), [[["1."], ["Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001."], ["Nepriklausomos istaigos sertifikatas."]]], "3 lentelės eilutės");
+    tiesa(!s.pars.some(p => /laikotarpiu teikiamoms paslaugoms\/ atliekamiems darbams/.test(p)), "šablono ISO eilutė liko");
+    tiesa(s.pars.some(p => /Žaliuosius reikalavimus pagal SPS 3 lentelės reikalavimą turi atitikti/.test(p)), "4.2 p. dingo");
+    const hdr = Array.from(T.getElementsByTagNameNS(NSW, "tr")).slice(0, 2);
+    tiesa(hdr.every(tr => Array.from(tr.getElementsByTagNameNS(NSW, "p")).every(p => p.getElementsByTagNameNS(NSW, "keepNext").length)), "antraštės eilutės be „laikyti su kitu“");
+    tiesa(/Pirkime taikomi žalieji reikalavimai, nurodyti 3 lentelėje/.test(s.pars.join("\n")) && !/Pirkime taikomi žalieji reikalavimai, kurie nurodyti Techninėje specifikacijoje/.test(s.pars.join("\n")), "žaliųjų alternatyva");
+    const K2 = kvlLentele(s.xml), k2 = K2 ? K2.map(e => e.map(c => c.t).join(" | ")).join("\n") : "";
+    tiesa(/Rangovas turi tureti teise vykdyti/.test(k2) && /2\.2\. ne maziau kaip 3 darbu vykdytojus/.test(k2), "SPS 2 lentelė iš PDF: " + k2.slice(0, 300));
+    const p = D.getElementById("zalLentelePatikra");
+    tiesa(p && /Žalieji reikalavimai \(SPS 3 lentelė\):.*iš „Kvalifikaciniai reikalavimai\.pdf“ perkelta 1 eil\., numeriai 1-1/.test(p.textContent.replace(/\s+/g, " ")) && p.classList.contains("ok"), "4 žingsnio eilutė: " + (p && p.textContent));
+    tiesa(/iš PDF - tik tekstas/.test(p.textContent), "PDF pastaba 4 žingsnyje");
+  });
+  await testas("Generavimas LT/EN (T-AK) ir ND LT (S-ND): dvikalbėje - lietuviški langeliai iš dokumento, angliški - raudonas nurodymas; ND - „ŽALIEJI REIKALAVIMAI“ lentelė; nepatvirtinta - 4 žingsnis sako", async () => {
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "darbai", po2: async () => { await W.dkPridek([KVPDF()]); } });
+    const s = docs.AK_LTEN_SPS, T = zalLentele(s.xml);
+    tiesa(T, "LT/EN 3 lentelės nėra");
+    const vis = visosPastraipos(s.xml);
+    tiesa(vis.some(p => p.t === "Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001."), "lietuviškas langelis");
+    tiesa(vis.filter(p => p.red === W.GP_KVAL_LENTELE.VERTIMO_ZYMA).length >= 1, "angliškame langelyje nėra raudono nurodymo");
+    tiesa(!vis.some(p => /The supplier for the works\/services under the Contract/.test(p.t)), "šablono angliška ISO eilutė liko");
+    const p = D.getElementById("zalLentelePatikra");
+    tiesa(p && p.classList.contains("no") && /Perkėlimas nepatvirtintas/.test(p.textContent) && /Angliškas tekstas/.test(p.textContent), "4 žingsnis: " + (p && p.textContent));
+    const nd = await generuokSu({ budas: "S-ND", tipas: "darbai", po2: async () => { await W.dkPridek([KVPDF()]); ZAL_KORTELE().querySelector('[data-lk-patv="ZAL"]').click(); } });
+    const n = nd.ND_LT_SPS, NT = zalLentele(n.xml);
+    tiesa(NT, "ND 3 lentelės nėra");
+    tiesa(eilTekstai(NT).some(e => (e[1] || [])[0] === "Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001."), "ND eilutė");
+    tiesa(/Pirkime taikomi žalieji reikalavimai, nurodyti 3 lentelėje ir kiti reikalavimai, nurodyti 4 lentelėje/.test(n.pars.join("\n")), "ND alternatyva su 4 lentele");
+  });
+  await testas("Juodraštis: žaliųjų lentelė, jos patvirtinimas ir žmogaus atsakymas prieš automatinį - išsaugomi ir atkuriami; „Nenaudoti“ po atkūrimo grąžina žmogaus atsakymą", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT", "darbai");
+    const tsK = ZAL_K("Jei žalieji reikalavimai nurodyti Techninėje specifikacijoje ir (ar) Sutarties projekte");
+    const gid = Object.keys(W.__K.grupes).find(g => W.__K.grupes[g].nariai.some(n => n.raktas === tsK));
+    W.pasirinkGrupe(gid, tsK);
+    await W.dkPridek([KVPDF()]);
+    ZAL_KORTELE().querySelector('[data-lk-patv="ZAL"]').click();
+    const A = W.surinkJuodrasti();
+    tiesa(A.s2 && A.s2.ZAL && A.s2.ZAL.kandidatai.length === 1 && A.s2.ZAL.auto.some(x => x[0] === tsK && x[1] === true), "juodraštyje: " + JSON.stringify(A.s2 && A.s2.ZAL && A.s2.ZAL.auto));
+    await modulis();
+    await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(A)) });
+    await kol(() => W.__K && ZAL_KORTELE(), "atkurta žaliųjų kortelė", 60000);
+    lygu([ZAL_KORTELE().dataset.busena, ATS()[tsK], W.eval("DK.failai.length")], ["patvirtinta", false, 0], "atkurta (failų sąrašas neišsaugomas)");
+    ZAL_KORTELE().querySelector('[data-zal="atmesti"]').click();
+    lygu(ATS()[tsK], true, "žmogaus atsakymas negrįžo po atkūrimo");
+  });
+}
+
 const JD_PREF = "gprocure.salygos.juodrastis.";
 const jdRaktai = () => Object.keys(localStorage).filter(k => k.indexOf(JD_PREF) === 0);
 const sl = ms => new Promise(r => setTimeout(r, ms));
@@ -9617,6 +9847,7 @@ async function testaiPastabos1016(){
     await testaiEtapuLentele();
     await testaiKvalLentele();
     await testaiKvalDps();
+    await testaiDokumentai();
     await testaiJuodrastis();
     await testaiPastabos1016();
     document.getElementById("busena").textContent =
