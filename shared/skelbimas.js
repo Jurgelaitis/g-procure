@@ -27,7 +27,7 @@
  *    NENURODO (2026-10-17, naudotojo sprendimas): nacionaliniuose LITGRID ir Energy cells
  *    skelbimuose (9982633, 9610775, 9614756) forma - „Perkančiosios organizacijos
  *    veiklos sritis“, nors jų pirkimo dokumentai - „Perkantysis subjektas“ ir PĮ; EPSO-G
- *    9281765 ir bendras EPSO-G grupės pirkimas 9022598 (organizavo LITGRID, BPS - pagal VPĮ) -
+ *    9281765 ir vienas bendras EPSO-G grupės pirkimas (organizavo LITGRID, BPS - pagal VPĮ) -
  *    ta pati forma ir VPĮ. Tada režimas nesiūlomas, o formos požymiai grąžinami
  *    atskirai (formosPozymiai) - modulis gali pasiūlyti organizacijos įprastą režimą,
  *    kurį patvirtina žmogus.
@@ -372,7 +372,7 @@
   // CVP IS paketu (18 LITGRID, Amber Grid 9742096, EPSO-G 9281765, Energy cells 9614756): apibrėžimas rastas 17-os
   // bendrosiose sąlygose (nerasta: 9748635 - .7z, 9328700 - DPS sąlygos, 8759862 ir 8979138 - dvikalbės sąlygos),
   // sąvokos vartosena atitiko apibrėžimą, o
-  // LITGRID 9022598 (bendras EPSO-G grupės pirkimas pagal VPĮ) bendrosios sąlygos apibrėžia „Perkančioji organizacija – LITGRID AB“,
+  // vieno bendro EPSO-G grupės pirkimo pagal VPĮ (organizavo LITGRID) bendrosios sąlygos apibrėžia „Perkančioji organizacija – LITGRID AB“,
   // specialiosios vartoja „Perkantysis subjektas“ - toks paketas lieka neaiškus, sprendžia žmogus.
   // Be apibrėžimo - sąvokos vartosena dokumente: bent VARTOSENA_MIN kartų ir kitos - ne daugiau kaip 10 %.
   // Apibrėžimas - tik kai po brūkšnio eina pavadinimas didžiąja raide ar kabute („Perkantysis subjektas – už

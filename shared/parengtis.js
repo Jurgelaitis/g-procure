@@ -499,7 +499,7 @@
     var trukmes = P.sutartis ? sutartiesTrukmes(P.sutartis) : [];
     var k = o.kortele || null;
     // Pirkimo vykdytojo sąvoka BPS ir SPS (2026-10-17, shared/skelbimas.js rezimasDokumente): „Perkantysis subjektas – LITGRID AB“ - PĮ,
-    // „Perkančioji organizacija – ...“ - VPĮ. Tikruose paketuose sąvoka atitiko režimą, o LITGRID 9022598 BPS ir SPS jos skyrėsi
+    // „Perkančioji organizacija – ...“ - VPĮ. Tikruose paketuose sąvoka atitiko režimą, o viename bendrame EPSO-G grupės pirkime pagal VPĮ BPS ir SPS jos skyrėsi
     var savokos = [];
     if (global.GP_SKELBIMAS && global.GP_SKELBIMAS.rezimasDokumente) ["bps", "sps"].forEach(function (r) {
       if (!P[r]) return;
