@@ -109,6 +109,16 @@ async function testaiNormalizavimas(){
     lygu(L.tedNuorodos("https://ted.europa.eu/x"), [], "ne sąrašas");
     lygu(L.tedNuorodos(Array(15).fill("https://ted.europa.eu/a")).length, 10);
   });
+  await testas("Pakartotinis tikrinimas nieko nekeičia (disko kopija perkrovus): datos, BVPŽ, NUTS, TED, kirptas tekstas", () => {
+    const pirmas = L.normalizuokIrasa(vptIrasas({ description: "žodis ".repeat(600), cpvCodes: "31000000-6 31200000-8", nutsCode: "LT011, LT021" }));
+    const antras = L.normalizuokIrasa(JSON.parse(JSON.stringify(pirmas)));
+    lygu(antras, pirmas, "normalizuotas įrašas po JSON ir antro tikrinimo");
+    lygu([antras.datePublished, antras.cpvCodes, antras.nutsCode, antras.tedLink.length], ["2026-10-02T10:15:00", ["31000000-6", "31200000-8"], ["LT011", "LT021"], 1]);
+    tiesa(pirmas.description.length <= L.TEKSTAI.description, "kirptas tekstas telpa į ribą: " + pirmas.description.length);
+    const zodis = L.tekstas("a".repeat(3000), 50);
+    lygu([zodis.length, L.tekstas(zodis, 50)], [50, zodis], "vienas ilgas žodis - kerpamas iki ribos ir antrą kartą nebekeičiamas");
+    lygu([L.data("2026-10-02T10:15:00"), L.data("2026-02-30T10:15:00"), L.data("2026-10-02 10:15:00")], ["2026-10-02T10:15:00", null, null]);
+  });
   await testas("Puslapis: ne sąrašas - klaida; netinkami įrašai praleidžiami ir suskaičiuojami", () => {
     let klaida = null; try { L.tikrinkPuslapi({ data: [] }); } catch (e) { klaida = e.message; }
     tiesa(/ne sąrašas/.test(klaida), "objektas - klaida");
@@ -214,7 +224,10 @@ async function testaiSargai(){
   await testas("systemd: DynamicUser, LoadCredential, griežta izoliacija, be teisių; raktas ne Environment", () => {
     ["DynamicUser=yes", "LoadCredential=vpt_api_key:/etc/g-procure-cvpis/vpt_api_key", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes",
      "PrivateTmp=yes", "PrivateDevices=yes", "CapabilityBoundingSet=\n", "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX", "SystemCallFilter=@system-service",
-     "StateDirectory=g-procure-cvpis", "MemoryMax=", "ExecStart=/usr/bin/node /opt/g-procure-cvpis/cvpis-serveris.js"].forEach(e => tiesa(vienetas.indexOf(e) >= 0, "trūksta: " + e));
+     "StateDirectory=g-procure-cvpis", "MemoryMax=", "MemoryHigh="].forEach(e => tiesa(vienetas.indexOf(e) >= 0, "trūksta: " + e));
+    tiesa(/\nExecStart=\/usr\/bin\/node --max-old-space-size=\d+ \/opt\/g-procure-cvpis\/cvpis-serveris\.js\n/.test(vienetas), "ExecStart su V8 atminties riba");
+    const v8 = +(/--max-old-space-size=(\d+)/.exec(vienetas) || [])[1], cg = +(/\nMemoryMax=(\d+)M/.exec(vienetas) || [])[1];
+    tiesa(v8 > 0 && cg > 0 && v8 + 300 <= cg, "V8 riba (" + v8 + " MB) mažesnė už systemd ribą (" + cg + " MB) su atsarga");
     tiesa(!/Environment=.*(KEY|RAKT|apiKey)/i.test(vienetas) && !/EnvironmentFile/.test(vienetas), "raktas ne aplinkoje");
   });
   await testas("nginx: tik GET / HEAD / OPTIONS, užklausų riba, be prieigos žurnalo, į 127.0.0.1:3001 su X-Real-IP", () => {
