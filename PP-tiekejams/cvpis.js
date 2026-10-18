@@ -10,7 +10,7 @@
  * prieigos rakto, tad naršyklė jų tiesiogiai nuskaityti negali. Nuo 2026-10-18
  * (naudotojo sprendimas) pagrindiniai pirkimo duomenys (terminas, būdas, būsena,
  * vertė, BVPŽ, TED nuorodos) gaunami per G-Procure serverį - serveris/README.md:
- * vptPirkimas() kreipiasi TIK į https://api.g-procure.com/api/cvpis/pirkimas/<nr>
+ * vptPirkimas() (shared/vpt-duomenys.js) kreipiasi TIK į G-Procure serverio /api/cvpis/pirkimas/<nr>
  * (tik skaitmenys, be slapukų, be nukreipimo informacijos). Serveris VPT sąrašą
  * atnaujina kas 6 val., todėl duomenys rodomi su atnaujinimo laiku, o oficialiu
  * šaltiniu lieka CVP IS. Dokumentų API nėra - juos naudotojas įkelia pats; status()
@@ -183,81 +183,10 @@
   }
 
   // ---------------------------------------------------------------------------
-  // VPT CVP IS API per G-Procure serverį (nuo 2026-10-18; serveris/README.md)
+  // VPT CVP IS API per G-Procure serverį (nuo 2026-10-18) - bendras shared/vpt-duomenys.js (GP_VPT), jį naudoja ir
+  // pirkimo kortelės puslapis. Čia - tik nuorodos, kad modulio kodas ir testai liktų tokie patys.
   // ---------------------------------------------------------------------------
-  var API_BAZE = "https://api.g-procure.com/api/cvpis";
-  // Grąžina { ok: true, pirkimas, meta, nuoroda } | { ok: false, rusis: "nera" (sąraše nėra), meta } |
-  // { ok: false, rusis: "neikelta" (serveryje sąrašas dar neįkeltas) | "rysys" (ryšys, riba, kita) | "numeris" | "atsaukta" }.
-  // CVP IS nuoroda sudaroma čia (URL.details), ne iš atsakymo - serverio tekstas į href nepatenka.
-  function vptPirkimas(id, opts) {
-    opts = opts || {};
-    id = String(id == null ? "" : id).trim();
-    if (!/^\d{5,9}$/.test(id)) return Promise.resolve({ ok: false, rusis: "numeris" });
-    var f = opts.fetch || global.fetch;
-    if (typeof f !== "function") return Promise.resolve({ ok: false, rusis: "rysys" });
-    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    var laik = ctl ? setTimeout(function () { ctl.abort(); }, opts.laikas || 15000) : null;
-    if (ctl && opts.signal) { if (opts.signal.aborted) ctl.abort(); else opts.signal.addEventListener("abort", function () { ctl.abort(); }); }
-    var baik = function (x) { if (laik) clearTimeout(laik); return x; };
-    return Promise.resolve().then(function () {
-      return f(API_BAZE + "/pirkimas/" + id, { method: "GET", credentials: "omit", referrerPolicy: "no-referrer", headers: { "Accept": "application/json" }, signal: ctl ? ctl.signal : undefined });
-    }).then(function (r) {
-      return r.json().catch(function () { return null; }).then(function (j) {
-        var p = j && j.pirkimas;
-        if (r.status === 200 && p && typeof p === "object" && p.id === +id) return baik({ ok: true, pirkimas: p, meta: (j.meta && typeof j.meta === "object") ? j.meta : {}, nuoroda: URL.details(id) });
-        if (r.status === 404 && j && j.meta && typeof j.meta === "object") return baik({ ok: false, rusis: "nera", meta: j.meta });
-        if (r.status === 503) return baik({ ok: false, rusis: "neikelta" });
-        return baik({ ok: false, rusis: "rysys", status: r.status });
-      });
-    }, function () {
-      return baik({ ok: false, rusis: opts.signal && opts.signal.aborted ? "atsaukta" : "rysys" });
-    });
-  }
-  // VPT kodai -> žmogui. Verčiama tik tai, kas aišku; kitaip rodomas VPT kodas (modulis visada parodo ir jį).
-  var PROCEDUROS = {
-    "Open": { lt: "Atviras konkursas", en: "Open procedure" },
-    "Simplified Open": { lt: "Supaprastintas atviras konkursas", en: "Simplified open procedure" },
-    "Restricted": { lt: "Ribotas konkursas", en: "Restricted procedure" },
-    "Negotiated with prior call for competition": { lt: "Skelbiamos derybos", en: "Negotiated procedure with prior call for competition" },
-    "Negotiated without prior call for competition": { lt: "Neskelbiamos derybos", en: "Negotiated procedure without prior call for competition" },
-    "Negotiated without prior publication": { lt: "Neskelbiamos derybos", en: "Negotiated procedure without prior publication" },
-    "Competitive dialogue": { lt: "Konkurencinis dialogas", en: "Competitive dialogue" },
-    "Innovation partnership": { lt: "Inovacijų partnerystė", en: "Innovation partnership" },
-    "Preliminary Market Consultation": { lt: "Rinkos konsultacija", en: "Preliminary market consultation" },
-    "DPS Specific Contract": { lt: "Konkretus pirkimas pagal DPS", en: "Specific contract under a DPS" }
-  };
-  var BUSENOS = {
-    "Published": { lt: "Paskelbtas", en: "Published" },
-    "Bid submission": { lt: "Pasiūlymų teikimas", en: "Tender submission" },
-    "Proposal Submission": { lt: "Pasiūlymų teikimas", en: "Tender submission" },
-    "Proposal Submission Closed": { lt: "Pasiūlymų teikimas baigtas", en: "Tender submission closed" },
-    "Awaiting bid opening": { lt: "Laukiama pasiūlymų atplėšimo", en: "Awaiting tender opening" },
-    "Evaluation": { lt: "Vertinimas", en: "Evaluation" },
-    "Cancelled": { lt: "Nutrauktas", en: "Cancelled" }
-  };
-  var DIREKTYVOS = {
-    "prompt.directive.classic": { lt: "2014/24/ES (klasikinė)", en: "2014/24/EU (classic)" },
-    "prompt.directive.utilities": { lt: "2014/25/ES (sektorinė)", en: "2014/25/EU (utilities)" },
-    "prompt.directive.defence": { lt: "2009/81/EB (gynyba ir saugumas)", en: "2009/81/EC (defence and security)" },
-    "prompt.directive.concession": { lt: "2014/23/ES (koncesijos)", en: "2014/23/EU (concessions)" },
-    "prompt.directive.none": { lt: "netaikoma", en: "not applicable" }
-  };
-  function vptKodas(kodas, zodynas, lang) {
-    if (typeof kodas !== "string" || !kodas) return null;
-    var z = zodynas[kodas];
-    return { tekstas: z ? z[lang === "en" ? "en" : "lt"] : kodas, kodas: kodas, isverstas: !!z };
-  }
-  // „24_months“ -> „24 mėn.“; kita - kaip yra
-  function vptTrukme(s, lang) {
-    var m = /^(\d{1,4})_(days|weeks|months|years)$/.exec(String(s || ""));
-    if (!m) return s || null;
-    var V = { lt: { days: "d.", weeks: "sav.", months: "mėn.", years: "m." }, en: { days: "days", weeks: "weeks", months: "months", years: "years" } };
-    return m[1] + " " + V[lang === "en" ? "en" : "lt"][m[2]];
-  }
-  // TED nuorodos - tik https://ted.europa.eu/ (serveris jau tikrina; čia - dar kartą prieš dedant į href)
-  function vptTed(v) {
-    return (Array.isArray(v) ? v : []).filter(function (x) { return typeof x === "string" && /^https:\/\/ted\.europa\.eu\/[A-Za-z0-9\-._~\/?=&%#:+]{1,300}$/.test(x); }).slice(0, 10);
-  }
+  var V = global.GP_VPT || {};
   // Įkelto paketo CVP IS numeris: visų dokumentų ZIP „<vykdytojo id>_<pirkimo id>.zip“ ar skelbimo failas
   // „<pirkimo id>_..._notice/skelbimas...“. Vienas numeris - grąžinamas; nė vieno ar keli - null.
   function paketoId(docs) {
@@ -279,8 +208,8 @@
   }
 
   global.GP_CVPIS = { version: "0.5.0", URL: URL, resolve: resolve, terminas: terminas, parseData: parseData, status: status,
-                      API_BAZE: API_BAZE, vptPirkimas: vptPirkimas, vptKodas: vptKodas, vptTrukme: vptTrukme, vptTed: vptTed, paketoId: paketoId,
-                      PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS,
+                      API_BAZE: V.API_BAZE, vptPirkimas: V.pirkimas, vptKodas: V.kodas, vptTrukme: V.trukme, vptTed: V.ted, paketoId: paketoId,
+                      PROCEDUROS: V.PROCEDUROS, BUSENOS: V.BUSENOS, DIREKTYVOS: V.DIREKTYVOS,
                       atpazinkPirkeja: atpazinkPirkeja, atpazinkRezima: atpazinkRezima, atpazinkRezimaDokumente: atpazinkRezimaDokumente,
                       dokumentuSarasas: dokumentuSarasas, apreptis: apreptis, tikPradinisZip: tikPradinisZip };
 })(typeof window !== "undefined" ? window : this);
