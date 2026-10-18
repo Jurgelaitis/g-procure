@@ -11,8 +11,13 @@
  * pabraukimu, tokia pačia eilučių tvarka. Ką modulis tik SIŪLO (grupė, kai šaltinyje jos antraštės nėra; ar eilutė -
  * specialisto reikalavimas 3.7 p.), rodoma su pagrindu ir keičiama žmogaus; perkėlimą patvirtina žmogus.
  *
- *   skaityk(buf, vardas)        -> Promise<{ lenteles: [Modelis], zalieji, ispejimai }>
+ * Nuo 2026-10-18 (naudotojo pasiūlymas - dokumentus įkelti jau 1 žingsnyje) - ir PDF (tekstas pagal pdf.js teksto sluoksnio
+ * geometriją, be formatavimo) ir žaliųjų (aplinkosaugos) reikalavimų lentelė -> SPS 3 lentelė.
+ *
+ *   skaityk(buf, vardas)        -> Promise<{ lenteles: [Modelis], zaliuju: [Modelis], zalieji, ispejimai }> (DOCX)
  *   skaitykXml(xml, numXml, v)  -> tas pats be ZIP (testams)
+ *   skaitykPdf(buf, vardas)     -> Promise<tas pats> iš PDF (reikia pdfjsLib); pdfLenteles(puslapiai, vardas) - be pdf.js (testams)
+ *   irasykZaliuosius(doc, M)    -> sugeneruoto SPS žaliųjų lentelės (3 lentelė) šablono eilutės pakeičiamos; ataskaita arba null
  *   grupe(tekstas)              -> { grupe, pagrindas } | { grupe: null }
  *   specialistas(tekstas)       -> { taip, pagrindas }
  *   numeriai(M, pakeitimai)     -> eilutės su SPS numeriais, grupėmis ir specialistais (tas pats, kas bus dokumente)
@@ -258,15 +263,18 @@
     const doc = DP.parseFromString(xml, 'application/xml');
     const numer = numeracijosZemelapis(numXml ? DP.parseFromString(numXml, 'application/xml') : null);
     const body = visi(doc, 'body')[0];
-    const out = { lenteles: [], zalieji: 0, ispejimai: [] };
+    const out = { lenteles: [], zalieji: 0, zaliuju: [], ispejimai: [] };
     if (!body) return out;
     const tbls = visi(body, 'tbl').filter(t => !protevis(t, 'tbl'));
     tbls.forEach((tbl, ti) => {
       const eil = vaikai(tbl, 'tr');
       const a = antrastesEilute(eil);
       if (!a) return;
-      const virsus = eil.slice(0, a.k + 2).map(tr => norm(langeliai(tr).map(c => c.tekstas).join(' '))).join(' ');
-      if (ZALIEJI_RE.test(virsus)){ out.zalieji++; return; }
+      // žaliųjų reikalavimų lentelė - pagal antraštės eilutes (iki 2026-10-18 - ir pirmą duomenų eilutę: kvalifikacijos reikalavimas,
+      // kuriame minimi „žalieji“, lentelę paversdavo žaliųjų)
+      const virsus = eil.slice(0, a.k + 1).map(tr => norm(langeliai(tr).map(c => c.tekstas).join(' '))).join(' ');
+      const zalia = ZALIEJI_RE.test(virsus);
+      if (zalia) out.zalieji++;
       if (ATITIKTIES_RE.test(norm(a.c.map(c => c.tekstas).join(' ')))) return;
       const st = { isnasos: 0, idetines: 0, raudona: false };
       const s = a.s;
@@ -316,7 +324,7 @@
       if (st.isnasos) M.ispejimai.push(`Lentelėje ${st.isnasos} išnašos nuorod${st.isnasos === 1 ? 'a' : 'os'} - išnašų tekstas neperkeliamas, įrašykite jį Word programoje.`);
       if (st.idetines) M.ispejimai.push('Langeliuose yra įdėtinių lentelių - jų tekstas perkeliamas pastraipomis.');
       if (st.raudona) M.ispejimai.push('Dalis teksto šaltinyje raudona - perkeliama raudona, kad matytumėte, ką dar reikia užpildyti.');
-      out.lenteles.push(M);
+      if (zalia){ M.zalieji = true; out.zaliuju.push(M); } else out.lenteles.push(M);
     });
     return out;
   }
@@ -327,6 +335,246 @@
     if (!f) return { lenteles: [], zalieji: 0, ispejimai: ['Faile nėra Word dokumento teksto.'] };
     const nf = zip.file('word/numbering.xml');
     return skaitykXml(await f.async('string'), nf ? await nf.async('string') : '', vardas);
+  }
+
+  /* ---------- PDF lentelės (2026-10-18) --------------------------------------------------------------------------------------------
+     Naudotojo pasiūlymas: iniciatoriai kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus dažnai pateikia PDF faile, ir jie
+     turi patekti į SPS 2 ir 3 lenteles taip pat, kaip iš Word. pdf.js teksto sluoksnyje rėmelių nėra - tik teksto gabalai su vieta.
+     Todėl: stulpeliai - pagal antraštės žodžius („Eil. Nr.“, „Reikalavimai“, „Pateikiami dokumentai“) ir tarpą tarp jų, kurio nekerta
+     joks teksto gabalas (stulpelio riba; tinka ir kairėn, ir centre lygiuotoms antraštėms); eilutės - pagal numerį pirmame stulpelyje
+     (be numerio - ankstesnės eilutės tęsinys, ir kitame puslapyje); pastraipos - nauja, kai eilutė prasideda sąrašo žyme („1.1.“, „•“,
+     „a)“), kai ankstesnė trumpa eilutė baigiasi sakinio ženklu arba kai tarpas tarp eilučių didesnis. Ta pati antraštė kito puslapio
+     viršuje - tos pačios lentelės tęsinys; žodis, kertantis stulpelio ribą, - grupės antraštė (trumpa) arba lentelės pabaiga. Formatavimo
+     (pusjuodžio, kursyvo) PDF tekste nėra - perkeliamas tekstas, ir tai pasakoma. Modelis - toks pat kaip iš DOCX.
+       pdfLenteles(puslapiai, vardas) - puslapiai: [[{ s, x, y, w, fs }]] (pdf.js elementai: x, y - kairysis apatinis taškas)
+       skaitykPdf(buf, vardas)        - per pdf.js (reikia pdfjsLib ir GP_PDF_DARBININKAS) */
+  const PDF_ZYME_RE = /^((\d+\.)+\d*\.?\s|\d+\)\s|[a-zą-ž]\)\s|[•▪◦‣·●○■□–-]\s?)/i;
+  const KULKA_RE = /^[•▪◦‣·●○■□]\s*/;
+  function pdfEilutes(items, puslapis){
+    const lines = [];
+    (items || []).forEach(it => {
+      if (!it || !it.s || !String(it.s).trim()) return;
+      const fs = it.fs || 10;
+      let line = null;
+      for (let k = lines.length - 1, n = 0; k >= 0 && n < 80; k--, n++) if (Math.abs(lines[k].y - it.y) <= Math.max(2, 0.35 * fs)){ line = lines[k]; break; }
+      if (!line){ line = { y: it.y, p: puslapis, items: [], fs }; lines.push(line); }
+      line.items.push({ x: it.x, w: it.w || 0, s: String(it.s), fs });
+      line.fs = Math.max(line.fs, fs);
+    });
+    lines.forEach(l => l.items.sort((a, b) => a.x - b.x));
+    return lines.sort((a, b) => b.y - a.y);
+  }
+  /* Gabalų tekstas su tarpais pagal geometriją (kaip shared/dokumentai.js). */
+  function sujunk(items){
+    let s = '';
+    items.forEach((it, i) => {
+      if (i){
+        const pr = items[i - 1], gap = it.x - (pr.x + pr.w), riba = Math.max(0.15 * (it.fs || 10), 0.8);
+        if (!/\s$/.test(s) && !/^\s/.test(it.s) && (!pr.w || gap > riba)) s += ' ';
+      }
+      s += it.s;
+    });
+    return s.replace(/\s+/g, ' ').trim();
+  }
+  const eilTekstas = l => sujunk(l.items);
+  /* Žodžiai su pradžios x: pdf.js vieną žodį kartais skaido į kelis gabalus („R“ + „eikalavimai“) - be tarpo tarp jų sujungiami. */
+  function zodziai(items){
+    const out = [];
+    items.forEach((it, i) => {
+      const pr = i ? items[i - 1] : null, riba = Math.max(0.15 * (it.fs || 10), 0.8);
+      const kartu = pr && out.length && !/\s$/.test(pr.s) && !/^\s/.test(it.s) && pr.w && it.x - (pr.x + pr.w) <= riba;
+      if (kartu) out[out.length - 1].s += it.s; else out.push({ x: it.x, s: it.s });
+    });
+    return out.map(z => ({ x: z.x, s: z.s.trim() })).filter(z => z.s);
+  }
+  /* Antraštė: eilutė su „reikalavim“ ir „dokument“ / „pateikiam“ (EN - „requirement“ ir „document“); virš jos (iki 3 eilučių tame pačiame
+     puslapyje) gali būti „Eil. Nr.“ ir (žaliųjų lentelėje) „ŽALIEJI REIKALAVIMAI“ - antraštės langeliai lygiuojami ir viršuje.
+     Grąžina stulpelių inkarus (x), pirmos antraštės eilutės indeksą ir ar tai žaliųjų lentelė. */
+  const NR_RE = /^(eil|nr\b|no\b|no\.|eil\.)/;
+  const ANTRASTES_ZODIS = /^[(]?(eil|nr|no|reikalavim|requirement|pateikiam|dokument|document|evidence|to|be|submitted|kvalifikacij|qualification|tiekej|supplier|zalie|zaliuj|green|environment|procurement|aprasym|description|ir|and|of|-|–|\d+\.?)[\p{L}.,:)]*$/u;
+  function pdfAntraste(lines, k){
+    const l = lines[k];
+    if (!l) return null;
+    const n = norm(eilTekstas(l));
+    if (!(/reikalavim|requirement/.test(n) && /(dokument|pateikiam|documents|evidence)/.test(n))) return null;
+    // antraštės eilutėje - tik antraštės žodžiai (kūno sakinys „... reikalavimą įrodančių dokumentų.“ - ne antraštė)
+    const zl = n.split(/[\s\/]+/).filter(Boolean);
+    if (zl.length > 12 || zl.filter(z => ANTRASTES_ZODIS.test(z)).length < 0.8 * zl.length) return null;
+    const virsus = [];
+    for (let q = k - 1, ap = l; q >= 0 && virsus.length < 3; q--){
+      const e = lines[q], t = eilTekstas(e), nt = norm(t);
+      if (e.p !== l.p || e.y - ap.y > 3.2 * l.fs) break;
+      if (!(zodziai(e.items).some(z => NR_RE.test(norm(z.s))) || ZALIEJI_RE.test(nt) || /requirements|reikalavimai/.test(nt) && t === t.toUpperCase())) break;
+      virsus.push(e); ap = e;
+    }
+    const inkarai = [];
+    const ieskok = (eil, re, raktas) => {
+      if (inkarai.some(a => a.k === raktas)) return;
+      const z = zodziai(eil.items).find(x => re.test(norm(x.s)));
+      if (z) inkarai.push({ k: raktas, x: z.x });
+    };
+    [l].concat(virsus).forEach(eil => ieskok(eil, NR_RE, 'nr'));
+    ieskok(l, /reikalavim/, 'reikLt'); ieskok(l, /requirement/, 'reikEn');
+    ieskok(l, /(pateikiam|dokument)/, 'dokLt'); ieskok(l, /(documents|evidence)/, 'dokEn');
+    if (!inkarai.some(a => a.k === 'reikLt' || a.k === 'reikEn') || !inkarai.some(a => a.k === 'dokLt' || a.k === 'dokEn')) return null;
+    const xR = Math.min(...inkarai.filter(a => /^reik/.test(a.k)).map(a => a.x)), xD = Math.min(...inkarai.filter(a => /^dok/.test(a.k)).map(a => a.x));
+    if (xR >= xD) return null;                                                      // reikalavimų stulpelis - prieš dokumentų
+    const virsT = norm(virsus.map(eilTekstas).concat(eilTekstas(l)).join(' '));
+    return { inkarai: inkarai.sort((a, b) => a.x - b.x), pradzia: k - virsus.length, zalia: ZALIEJI_RE.test(virsT) || /environmental procurement/.test(virsT), p: l.p };
+  }
+  /* Stulpelių ribos: tarp gretimų inkarų - plačiausia vieta, kurią kerta mažiausiai kūno eilučių (paprastai - nė viena). Eilutės per visą
+     plotį (tekstas po lentele, grupės antraštė) kerta visą tarpą vienodai, todėl ribos nekeičia. */
+  function pdfRibos(inkarai, kunas){
+    const tarpai = inkarai.slice(0, -1).map((x, j) => [x.x, inkarai[j + 1].x]);
+    const naud = kunas;
+    return tarpai.map(([a, b]) => {
+      const Z = 0.5, n = Math.max(1, Math.ceil((b - a) / Z)), cnt = new Uint16Array(n);
+      naud.forEach(l => {
+        const zym = new Uint8Array(n);
+        l.items.forEach(it => {
+          const s = Math.max(0, Math.floor((it.x - a) / Z)), e = Math.min(n - 1, Math.ceil((it.x + Math.max(it.w, 0.5) - a) / Z));
+          for (let q = s; q <= e; q++) zym[q] = 1;
+        });
+        for (let q = 0; q < n; q++) cnt[q] += zym[q];
+      });
+      let min = Infinity;
+      for (let q = 0; q < n; q++) min = Math.min(min, cnt[q]);
+      let geriausia = null, pr = -1;
+      for (let q = 0; q <= n; q++){
+        if (q < n && cnt[q] === min){ if (pr < 0) pr = q; continue; }
+        if (pr >= 0){ const ilgis = q - pr; if ((min > 0 || ilgis * Z >= 1.5) && (!geriausia || ilgis > geriausia.ilgis)) geriausia = { pr, ilgis }; pr = -1; }
+      }
+      return geriausia ? a + (geriausia.pr + geriausia.ilgis / 2) * Z : b - 2;
+    });
+  }
+  /* Langelio eilutės -> pastraipos { atk, tekstas }. */
+  function pdfPastraipos(eil, desine){
+    const ps = [];
+    if (!eil.length) return ps;
+    const tarpai = [];
+    for (let i = 1; i < eil.length; i++) if (eil[i].p === eil[i - 1].p) tarpai.push(eil[i - 1].y - eil[i].y);
+    const iprastas = tarpai.length ? tarpai.slice().sort((a, b) => a - b)[Math.floor(tarpai.length / 2)] : 0;
+    let dab = null;
+    eil.forEach((e, i) => {
+      const pr = i ? eil[i - 1] : null;
+      // pavienis skyrybos ženklas atskiroje eilutėje (šaltinio likutis) - ne pastraipa ir ne „ .“ gale
+      if (/^[.,;:]+$/.test(e.t)){ if (dab && !/[.,;:]$/.test(dab.t)) dab.t += e.t; return; }
+      const naujas = !dab || PDF_ZYME_RE.test(e.t) ||
+        (pr && pr.p === e.p && iprastas && pr.y - e.y > 1.6 * iprastas) ||
+        (pr && /[.;:!?]$/.test(pr.t) && desine - pr.xR > 0.15 * Math.max(desine - pr.xL, 1));
+      if (naujas){ dab = { t: e.t }; ps.push(dab); return; }
+      // brūkšnelis eilutės gale tarp raidžių ar skaitmenų - žodis ar adresas tęsiasi be tarpo („lis-epp-“ + „app“, „F-“ + „dujos“)
+      dab.t += /[\p{L}\p{N}]-$/u.test(dab.t) ? e.t : ' ' + e.t;
+    });
+    const kulku = ps.filter(p => KULKA_RE.test(p.t)).length;
+    return ps.map(p => {
+      let t = p.t.replace(/\s+/g, ' ').trim();
+      if (KULKA_RE.test(t)) t = (kulku > 1 ? '- ' : '') + t.replace(KULKA_RE, '');   // kaip iš Word: kelių punktų sąrašas - „- “, vienas - be žymės
+      return t;
+    }).filter(t => t && !/^[\s.,;:·•-]+$/.test(t))                                    // pavienis „.“ - šaltinio likutis
+      .map(t => ({ atk: [{ t, b: false, i: false, u: false, va: '', spalva: '' }], tekstas: t }));
+  }
+  function pdfLenteles(puslapiai, vardas){
+    const out = { lenteles: [], zalieji: 0, zaliuju: [], ispejimai: [], pdf: true };
+    const lines = [];
+    (puslapiai || []).forEach((items, p) => pdfEilutes(items, p + 1).forEach(l => lines.push(l)));
+    let k = 0, nr = 0;
+    while (k < lines.length){
+      const A = pdfAntraste(lines, k);
+      if (!A){ k++; continue; }
+      // kūnas - iki kitos (ne pasikartojančios) antraštės; pasikartojanti antraštė kito puslapio viršuje praleidžiama
+      const kunas = [];
+      let j = k + 1, kitaPradzia = lines.length;
+      while (j < lines.length){
+        const B = pdfAntraste(lines, j);
+        if (B){
+          const tasPats = B.p !== A.p && B.zalia === A.zalia && B.inkarai.length === A.inkarai.length &&
+            B.inkarai.every((x, q) => x.k === A.inkarai[q].k && Math.abs(x.x - A.inkarai[q].x) < 8);
+          while (kunas.length && lines.indexOf(kunas[kunas.length - 1]) >= B.pradzia) kunas.pop();   // antraštės viršutinės eilutės - ne kūnas
+          if (!tasPats){ kitaPradzia = B.pradzia; break; }
+          j++; continue;
+        }
+        kunas.push(lines[j]); j++;
+      }
+      // puslapio numeris ar poraštė („2“, „2 / 5“, „Puslapis 2“) - pirma ar paskutinė puslapio eilutė, ne lentelės tekstas
+      const PSL_RE = /^(\d{1,3}|\d{1,3}\s*(\/|iš|is|of)\s*\d{1,3}|(puslapis|psl\.?|page)\s*\d{1,3}.*)$/i;
+      const krastine = l => { const vienam = lines.filter(x => x.p === l.p); return vienam[0] === l || vienam[vienam.length - 1] === l; };
+      for (let q = kunas.length - 1; q >= 0; q--) if (PSL_RE.test(eilTekstas(kunas[q])) && kunas[q].items.length === 1 && krastine(kunas[q])) kunas.splice(q, 1);
+      const ribos = pdfRibos(A.inkarai, kunas);
+      const stulp = it => { let q = 0; while (q < ribos.length && it.x >= ribos[q]) q++; return A.inkarai[q].k; };
+      const kerta = l => l.items.some(it => ribos.some(r => it.x < r - 1 && it.x + it.w > r + 1));
+      // stulpelio dešinysis kraštas (trumpos eilutės atpažinimui) - pagal visas lentelės eilutes
+      const desine = {};
+      kunas.forEach(l => { if (!kerta(l)) l.items.forEach(it => { const st = stulp(it); desine[st] = Math.max(desine[st] || 0, it.x + it.w); }); });
+      const M = { failas: vardas || '', lentele: ++nr, dvikalbe: A.inkarai.some(a => a.k === 'reikEn'), eilutes: [], neVisa: null,
+        ispejimai: ['Iš PDF perkeliamas tik tekstas - pusjuodžio, kursyvo ir pabraukimo PDF faile nėra. Jei jų reikia, įkelkite Word failą.'], saltinioNumeriai: [], pdf: true };
+      let eil = null, grupe = null, antraste = null, neVisa = false, baigta = false;
+      const uzdaryk = () => {
+        if (!eil) return;
+        const cel = {};
+        Object.keys(eil.c).forEach(st => { cel[st] = pdfPastraipos(eil.c[st], desine[st]); });
+        const reik = cel.reikLt || [], dok = cel.dokLt || [];
+        eil = null;
+        if (!pTekstas(reik) && !pTekstas(dok)) return;
+        const rt = pTekstas(reik);
+        if (neVisa || (neVisaTekstas(norm(rt)) && !pTekstas(dok))){ M.neVisa = { lt: reik, en: cel.reikEn || null }; return; }
+        const gs = grupe ? { grupe, kilme: 'antraste' } : Object.assign({ kilme: 'tekstas' }, kvGrupe(rt));
+        const sp = specialistas(rt);
+        M.eilutes.push({ reik, dok, reikEN: cel.reikEn || null, dokEN: cel.dokEn || null, grupe: gs.grupe, grupesKilme: gs.grupe ? gs.kilme : null,
+          grupesPagrindas: gs.pagrindas || '', antraste: grupe === 'kita' ? antraste : null, specialistas: sp.taip, specPagrindas: sp.pagrindas || '' });
+      };
+      for (const l of kunas){
+        if (baigta) break;
+        if (kerta(l)){
+          const t = eilTekstas(l), g = antrastesGrupe(t);
+          if (t.length <= 120 && (g.grupe !== 'kita' || t === t.toUpperCase())){       // grupės antraštė per visą plotį
+            uzdaryk();
+            if (g.grupe === 'neVisa'){ neVisa = true; continue; }
+            grupe = g.grupe; antraste = g.grupe === 'kita' ? { lt: t, en: null } : null;
+            continue;
+          }
+          baigta = true; break;                                                        // tekstas po lentele
+        }
+        const pagal = {};
+        l.items.forEach(it => { (pagal[stulp(it)] ??= []).push(it); });
+        const nrT = pagal.nr ? sujunk(pagal.nr) : '';
+        if (/^\d+(\.\d+)*\.?$/.test(nrT) || (!eil && Object.keys(pagal).length)){ uzdaryk(); eil = { c: {} }; M.saltinioNumeriai.push(nrT.replace(/\.$/, '') || null); }
+        Object.entries(pagal).forEach(([st, its]) => {
+          if (st === 'nr') return;
+          const t = sujunk(its);
+          if (!t) return;
+          const xL = its[0].x, xR = Math.max(...its.map(x => x.x + x.w));
+          (eil.c[st] ??= []).push({ t, y: l.y, p: l.p, xL, xR });
+        });
+      }
+      uzdaryk();
+      if (M.eilutes.length){
+        if (A.zalia){ M.zalieji = true; out.zalieji++; out.zaliuju.push(M); } else out.lenteles.push(M);
+      }
+      k = Math.max(kitaPradzia, k + 1);
+    }
+    return out;
+  }
+  const kvGrupe = t => grupe(t);
+  async function skaitykPdf(buf, vardas){
+    if (!root.pdfjsLib) throw new Error('PDF skaitymo biblioteka (pdf.js) neįsikėlė');
+    if (root.GP_PDF_DARBININKAS) await root.GP_PDF_DARBININKAS.nustatyk();
+    const pdf = await root.pdfjsLib.getDocument({ data: buf, isEvalSupported: false }).promise;
+    const puslapiai = [];
+    let beTeksto = 0;
+    for (let pn = 1; pn <= pdf.numPages; pn++){
+      const page = await pdf.getPage(pn);
+      const tc = await page.getTextContent();
+      const items = tc.items.map(it => {
+        const tr = it.transform || [1, 0, 0, 1, 0, 0];
+        return { s: it.str, x: tr[4], y: tr[5], w: it.width || 0, fs: Math.hypot(tr[0], tr[1]) || Math.abs(tr[3]) || 10 };
+      });
+      if (!items.some(x => String(x.s).trim())) beTeksto++;
+      puslapiai.push(items);
+    }
+    const r = pdfLenteles(puslapiai, vardas);
+    if (pdf.numPages && beTeksto === pdf.numPages) r.ispejimai.push('PDF be teksto sluoksnio (tikėtina, skenuotas) - lentelės perskaityti neįmanoma. Įkelkite Word failą.');
+    return r;
   }
 
   /* ---------- Modelis su žmogaus pakeitimais: numeriai, grupės, specialistai ----------------------------------- */
@@ -644,6 +892,15 @@
     return tr;
   }
 
+  /* Klonai: žymės ir komentarai nešalinami kartu su originalu, o pastraipų w14 identifikatoriai turi būti unikalūs. */
+  function valykKlona(tr){
+    visi(tr, 'bookmarkStart').concat(visi(tr, 'bookmarkEnd'), visi(tr, 'commentRangeStart'), visi(tr, 'commentRangeEnd'), visi(tr, 'commentReference'))
+      .forEach(x => x.parentNode && x.parentNode.removeChild(x));
+    [tr, ...Array.from(tr.getElementsByTagName('*'))].forEach(x => Array.from(x.attributes || []).forEach(a => {
+      if (a.localName === 'paraId' || a.localName === 'textId') x.removeAttributeNode(a);
+    }));
+    return tr;
+  }
   /* opts: { pakeitimai, dvikalbis } -> { eiluciu, grupes: [{ pav, kiek }], pasalintos: [pav], specialistai: [nr], neVisa } */
   function irasyk(doc, M, opts){
     const o = opts || {};
@@ -691,12 +948,7 @@
     R.kitos.forEach(tr => { if (tr.parentNode) tr.parentNode.removeChild(tr); });
     laikykSuKitu(doc, R.antraste);
     nauji.forEach(tr => {
-      // klonai: žymės ir komentarai nešalinami kartu su originalu, o pastraipų w14 identifikatoriai turi būti unikalūs
-      visi(tr, 'bookmarkStart').concat(visi(tr, 'bookmarkEnd'), visi(tr, 'commentRangeStart'), visi(tr, 'commentRangeEnd'), visi(tr, 'commentReference'))
-        .forEach(x => x.parentNode && x.parentNode.removeChild(x));
-      [tr, ...Array.from(tr.getElementsByTagName('*'))].forEach(x => Array.from(x.attributes || []).forEach(a => {
-        if (a.localName === 'paraId' || a.localName === 'textId') x.removeAttributeNode(a);
-      }));
+      valykKlona(tr);
       tbl.insertBefore(tr, pries && pries.parentNode === tbl ? pries : null);
     });
     // „ne visa apimtimi“ iš įkelto dokumento (tik kai šablono nuostatos klausimas neatsakytas žmogaus - opts.neVisa)
@@ -720,6 +972,53 @@
       antrastesIrasytos: !!sukurta, neVisaNeperkelta: !R.neVisaAntraste && !!(M.neVisa && pTekstas(M.neVisa.lt)) };
   }
 
+  /* ---------- Žaliųjų reikalavimų lentelė (2026-10-18) --------------------------------------------------------------------------------
+     SPS 3 lentelė „REIKALAVIMAI ŽALIESIEMS PIRKIMAMS“ (dvikalbėse - ir „REQUIREMENT FOR ENVIRONMENTAL PROCUREMENTS“): šablono reikalavimų
+     eilutės (ISO 14001 / EMAS) pakeičiamos įkelto dokumento žaliųjų reikalavimų lentelės eilutėmis - tekstas pažodžiui, tvarka kaip
+     dokumente, numeriai 1-N; antraštės eilutės lieka ir laikomos su kita eilute. Dvikalbėje be anglų teksto - raudonas nurodymas įrašyti
+     vertimą (kaip kvalifikacijos lentelėje). */
+  const ZAL_LENT_RE = /reikalavimai zaliesiems pirkimams|(^|[^a-z])zalieji reikalavimai|requirements? for environmental procurement/;   // ND, MVP - „ŽALIEJI REIKALAVIMAI“
+  function raskZaliujuLentele(doc){
+    const body = visi(doc, 'body')[0];
+    if (!body) return null;
+    for (const tbl of vaikai(body, 'tbl')){
+      const eil = vaikai(tbl, 'tr');
+      if (!eil.length || !ZAL_LENT_RE.test(norm(tekstas(eil[0])))) continue;
+      for (let k = 0; k < Math.min(3, eil.length); k++){
+        const st = stulpeliai(langeliai(eil[k]));
+        if (st.reik && (st.dok || st.dokLt)) return { tbl, k, st, nr: st.nr || stulpeliai(langeliai(eil[0])).nr || null };
+      }
+    }
+    return null;
+  }
+  function irasykZaliuosius(doc, M){
+    const R = raskZaliujuLentele(doc);
+    if (!R || !M || !M.eilutes.length) return null;
+    const { tbl, k, st } = R;
+    const eil = vaikai(tbl, 'tr'), duom = eil.slice(k + 1);
+    const proto = duom.find(tr => langeliai(tr).length > 1);
+    if (!proto) return null;
+    const ltReik = st.reikLt || st.reik, ltDok = st.dokLt || st.dok;
+    const enReik = st.reikEn && st.reikEn !== ltReik ? st.reikEn : null, enDok = st.dokEn && st.dokEn !== ltDok ? st.dokEn : null;
+    const dvikalbis = !!(enReik || enDok);
+    const rPr0 = baziniaiRPr(tbl);
+    const nauji = M.eilutes.map((e, i) => {
+      const tr = proto.cloneNode(true);
+      const nrL = langelisPagal(tr, R.nr);
+      if (nrL) pildykLangeli(doc, nrL.tc, [{ atk: [{ t: (i + 1) + '.' }] }], rPr0);
+      const rl = langelisPagal(tr, ltReik), dl = langelisPagal(tr, ltDok);
+      if (rl) pildykLangeli(doc, rl.tc, e.reik, rPr0);
+      if (dl && dl !== rl) pildykLangeli(doc, dl.tc, e.dok, rPr0);
+      if (enReik){ const x = langelisPagal(tr, enReik); if (x) pildykLangeli(doc, x.tc, e.reikEN && pTekstas(e.reikEN) ? e.reikEN : null, rPr0, { zyma: VERTIMO_ZYMA }); }
+      if (enDok){ const x = langelisPagal(tr, enDok); if (x) pildykLangeli(doc, x.tc, e.dokEN && pTekstas(e.dokEN) ? e.dokEN : (pTekstas(e.dok) ? null : []), rPr0, { zyma: VERTIMO_ZYMA }); }
+      return valykKlona(tr);
+    });
+    duom.forEach(tr => tbl.removeChild(tr));
+    nauji.forEach(tr => tbl.appendChild(tr));
+    eil.slice(0, k + 1).forEach(tr => laikykSuKitu(doc, tr));
+    return { eiluciu: nauji.length, dvikalbis, beVertimo: dvikalbis ? M.eilutes.filter(e => !pTekstas(e.reikEN)).length : 0 };
+  }
+
   /* Tiekėjo patirties (įvykdytų sutarčių) reikalavimai - ne specialistų. Formose būna nuoroda į konkretų lentelės punktą
      (DPS sukūrimo sąlygų 5 priedas „Atliktų darbų sąrašas“: „pagal kvalifikacijos reikalavimų 1 lentelės 8 punktą“). */
   const PATIRTIS_RE = /(patirt|ivykd|atlikt\S* (darb|paslaug)|vykdyt\S* sutart)/;
@@ -736,7 +1035,7 @@
     return true;
   }
 
-  root.GP_KVAL_LENTELE = { skaityk, skaitykXml, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
+  root.GP_KVAL_LENTELE = { skaityk, skaitykXml, skaitykPdf, pdfLenteles, irasykZaliuosius, raskZaliujuLentele, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
     vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos, VERTIMO_TERMINAI,
     raskLentele, GRUPES, grupesPav, grupiuTvarka, pTekstas, VERTIMO_ZYMA, patirtiesEilutes, LENTELES_PAV };
 })(typeof window !== 'undefined' ? window : this);
