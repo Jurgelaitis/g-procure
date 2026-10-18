@@ -901,6 +901,14 @@
         <span class="hint"><button type="button" class="inline-link-btn" onclick="switchView('calculator')">Nežinote tinkamos datos? Pasinaudokite trukmių skaičiuokle →</button></span>
       </div>
 
+      <!-- Rinkos duomenys pagal BVPŽ (2026-10-18b, shared/vpt-rinka.js): faktiniai pasiūlymų teikimo laikotarpiai panašiuose CVP IS pirkimuose -->
+      <div class="form-field full">
+        <label for="f-bvpz">BVPŽ kodas (neprivaloma - panašių pirkimų terminams CVP IS)</label>
+        <input type="text" id="f-bvpz" inputmode="numeric" maxlength="20" placeholder="pvz. 45231000-5" aria-describedby="f-bvpz-pag" data-darbas-ne>
+        <span class="hint" id="f-bvpz-pag">Kiek panašiuose CVP IS pirkimuose iš tikrųjų trunka pasiūlymų teikimas (kalendorinėmis dienomis), sprendimas ir sutartis - palyginkite su grafiko etapais (jie skaičiuojami darbo dienomis).</span>
+      </div>
+      <div class="form-field full" id="rinkaGrafikai"></div>
+
     </div>
   </section>
 
@@ -1248,6 +1256,9 @@
 <script src="../shared/money.js"></script>
 <script src="../shared/organizacijos.js"></script>
 <script src="../shared/pirkimo-kortele.js"></script>
+<script src="../shared/busena.js"></script>
+<script src="../shared/vpt-duomenys.js"></script>
+<script src="../shared/vpt-rinka.js"></script>
 <!-- Modulis nieko nesaugo: uždarant su įvestu grafiku naršyklė paklausia - GP_DARBAS -->
 <script src="../shared/neissaugotas-darbas.js"></script>
 <script>
@@ -2125,6 +2136,7 @@ function deleteSubPhase(groupCode, subCode){
 /* ---------- 7. REFRESH PIPELINE ---------- */
 function refreshAll(){
   if(!state.methodCode){
+    if(typeof RINKA !== 'undefined' && RINKA) RINKA.perpiesk();
     els.phasesEmpty.style.display='block';
     els.phasesContent.style.display='none';
     els.previewEmpty.style.display='block';
@@ -2639,6 +2651,7 @@ function escapeXml(s){
 
 /* ---------- 10. PREVIEW (Type A & Type B) ---------- */
 function refreshPreview(){
+  if(typeof RINKA !== 'undefined' && RINKA) RINKA.perpiesk();   // grafiko etapas rinkos duomenų palyginime
   if(!state.methodCode){
     els.previewEmpty.style.display='block';
     els.previewA.style.display='none';
@@ -2905,6 +2918,9 @@ function resetForm(){
   if(cSel) cSel.value = '';
   state.company = null;
   els.pradzia.value='';
+  const bvpz = document.getElementById('f-bvpz');
+  if(bvpz) bvpz.value = '';
+  if(typeof RINKA !== 'undefined' && RINKA) RINKA.isvalyk();
   state.methodCode=null;
   state.groups=[];
   state.notes={};
@@ -3170,9 +3186,33 @@ const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
     { kortele: 'organizatorius', el: '#f-organizatorius' },
     { kortele: 'budas', el: '#f-budas', i: v => METHODS[v] ? v : null,
       pastaba: 'Pakeitus būdą, etapai sudaromi iš naujo.' },
-    { kortele: 'pradzia', el: '#f-pradzia', numatyta: () => els.pradzia.value === PRADZIA_NUMATYTA }
+    { kortele: 'pradzia', el: '#f-pradzia', numatyta: () => els.pradzia.value === PRADZIA_NUMATYTA },
+    { kortele: 'bvpz', el: '#f-bvpz' }
   ]
 }) : null;
+/* Rinkos duomenys pagal BVPŽ (2026-10-18b): tik paspaudus, į G-Procure serverį - BVPŽ kodo pradžia; būdas - iš formos.
+   Palyginimui - grafiko pasiūlymų teikimo laikotarpis: pirmas „... gavimas“ etapas nuo paskelbimo (ankstesnio skelbimo ar kvietimo
+   etapo pabaigos; kai tokio etapo prieš jį nėra, pvz. skelbimas ir gavimas viename etape, - nuo etapo pradžios) iki jo pabaigos. var, ne const: refreshPreview()
+   jį tikrina dar init metu (const - TDZ klaida). */
+function pasiulymuLaikotarpis(){
+  if(!state.methodCode) return null;
+  const sched = computeSchedule();
+  const i = sched.findIndex(r => /gavimas/i.test(r.group.name || ''));
+  if(i < 0) return null;
+  const r = sched[i], ankst = i > 0 ? sched[i-1] : null;
+  let nuo = r.start;
+  if(ankst && /skelbimas|kvietim|išsiuntimas/i.test(ankst.group.name || '')) nuo = ankst.end;
+  const kd = (nuo && r.end) ? Math.round((r.end - nuo) / 86400000) : null;
+  return { pavadinimas: r.group.name, dd: r.groupDuration, kd: kd };
+}
+/* Jūsų būdo eilutei - įmonės įprastas įstatymas (GP_ORG rezimasTiketinas; derybos VPT duomenyse PĮ ir VPĮ vadinamos skirtingai) */
+function rinkosRezimas(){
+  const v = document.getElementById('f-company').value, id = Object.keys(IMONES_KORTELE).find(k => IMONES_KORTELE[k] === v);
+  const o = id && window.GP_ORG ? GP_ORG.pagalId(id) : null;
+  return o ? o.rezimasTiketinas : null;
+}
+var RINKA = window.GP_VPT_RINKA ? GP_VPT_RINKA.mount('#rinkaGrafikai', { kalba: () => 'lt', mano: pasiulymuLaikotarpis,
+  gauk: () => ({ bvpz: document.getElementById('f-bvpz').value, budas: els.budas.value, tipas: null, rezimas: rinkosRezimas() }) }) : null;
 
 /* Įspėjimas uždarant: grafiko duomenys (be peržiūros kalbos ir formos režimo). Spausdinimas
    būsenos neišsaugo - PDF ar popierius vėl neatveriamas redaguoti, todėl klausiama ir po jo. */
@@ -3192,12 +3232,12 @@ GP_DARBAS.stebek(() => [state.methodCode, state.groups, state.notes, state.compa
     stepsTitle: "Kaip naudotis",
     steps: [
       "<b>Pirkimo informacija:</b> įmonė, pavadinimas, iniciatorius, organizatorius, pirkimo būdas ir pradžios data (žodiniams ir CPO pirkimams grafikai nerengiami). Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - šie laukai bus užpildyti iš jos (modulis kortelės nekeičia).",
-      "<b>Pirkimo etapai:</b> peržiūrėkite ir pakoreguokite etapų trukmes.",
+      "<b>Pirkimo etapai:</b> peržiūrėkite ir pakoreguokite etapų trukmes. Įrašę <b>BVPŽ kodą</b> ir paspaudę „Rodyti rinkos duomenis (CVP IS)“, matysite, kiek panašiuose CVP IS pirkimuose iš tikrųjų trunka pasiūlymų teikimas jūsų būdu - greta jūsų grafiko „Pasiūlymų gavimas“ kalendorinėmis dienomis.",
       "<b>Grafikų peržiūra:</b> detalus grafikas komandai ir grafikas tiekėjams - spausdinkite ar išsaugokite PDF.",
       "<b>Trukmių skaičiuoklė:</b> visa pirkimo trukmė, atgalinis skaičiavimas nuo sutarties datos arba tik vykdymo trukmė."
     ],
     noteTitle: "Duomenys ir datos",
-    note: "Datos skaičiuojamos <b>darbo dienomis</b> su LR šventėmis (kiekvieniems metams automatiškai). Modulis nieko neišsaugo ir nesiunčia - rezultatas yra atspausdintas ar išsaugotas grafikas; uždarant su neišsaugotais pakeitimais naršyklė paklaus."
+    note: "Datos skaičiuojamos <b>darbo dienomis</b> su LR šventėmis (kiekvieniems metams automatiškai). Modulis nieko neišsaugo - rezultatas yra atspausdintas ar išsaugotas grafikas; uždarant su neišsaugotais pakeitimais naršyklė paklaus. Paspaudus „Rodyti rinkos duomenis (CVP IS)“ į G-Procure serverį siunčiama tik BVPŽ kodo pradžia - atsakoma iš viešų VPT CVP IS duomenų."
   } };
   GProcureInfoPanel.mount({
     target: "#infoPanelMount",
