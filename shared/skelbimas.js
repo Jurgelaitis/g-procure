@@ -382,13 +382,15 @@
   var DOK_APIBR = /(Perkantysis\s+subjektas|Perkančioji\s+organizacija|Contracting\s+Entity|Contracting\s+Authority)\s*[\u2013\u2014-]\s*(?=[„"“A-ZĄČĘĖĮŠŲŪŽ])[^;\n]{2,140}/gu;
   var VARTOSENA_MIN = 15;
   function kiek(re, t) { re.lastIndex = 0; var n = 0; while (re.exec(t)) n++; return n; }
-  /* Sakinys aplink vietą (citatai): nuo ankstesnio sakinio pabaigos iki kito, ne ilgiau kaip 200 ženklų. */
+  /* Sakinys aplink vietą (citatai): nuo ankstesnio sakinio pabaigos (ar lentelės langelio ribos „ | “) iki kito,
+     ne ilgiau kaip 200 ženklų. */
   function sakinys(t, i, ilgis) {
-    var a = Math.max(t.lastIndexOf(". ", i), t.lastIndexOf("\n", i), t.lastIndexOf("; ", i));
+    var lang = t.lastIndexOf(" | ", i);
+    var a = Math.max(t.lastIndexOf(". ", i), t.lastIndexOf("\n", i), t.lastIndexOf("; ", i), lang < 0 ? -1 : lang + 2);
     var pr = a < 0 ? Math.max(0, i - 60) : a + 1;
-    var gal = t.slice(i + ilgis).search(/[.;\n]/);
+    var gal = t.slice(i + ilgis).search(/[.;\n|]/);
     var pb = gal < 0 ? t.length : i + ilgis + gal + 1;
-    return minkstas(t.slice(pr, Math.min(pb, pr + 200)));
+    return minkstas(t.slice(pr, Math.min(pb, pr + 200))).replace(/\s*\|$/, "");
   }
   // blocks - GP_DOK dokumento blokai ({ text, loc }); grąžina { value, budas: "apibrezimas" | "vartosena", citata, loc, pi, vpi }
   // arba { value: null, neaiskus } (abi sąvokos apibrėžtos ar abiejų daug)

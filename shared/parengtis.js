@@ -40,6 +40,7 @@
         trukme: "Sutarties trukmė: skelbimas ir sutartis", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
         kortele: "Kortelė ir skelbimas", punktai: "Pasikartojantys punktų numeriai", alternatyvos: "Paliktos šablono alternatyvos",
         laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", grafikas: "SPS grafiko datų tvarka",
+        vykdytojo_savoka: "Pirkimo vykdytojo sąvoka: BPS ir SPS", rezimas_salygos: "Režimas: skelbimas ir pirkimo sąlygos",
         privalomi: "Privalomi dokumentų elementai", privalomi_kiti: "Kiti įstatyme išvardyti elementai",
         kval_reikalavimai: "Tiekėjo patirties ir pajamų reikalavimai SPS", kval_laikotarpis: "Patirties laikotarpis pagal Metodiką",
         kval_patirties_verte: "Patirties vertė pagal Metodiką", kval_pajamos: "Metinės pajamos pagal Metodiką",
@@ -63,7 +64,12 @@
       budas: "Skelbime pirkimo būdas - {s}, o SPS nurodyta: {p}.",
       vykdytojas: "Skelbime pirkėjas - {s}, o SPS antraštėje - {p}.",
       kortele: "Kortelėje {l} - {k}, o {kur} - {d}. Atnaujinkite kortelę arba dokumentą.",
-      korteleSkelbime: "skelbime", korteleSps: "SPS",
+      korteleSkelbime: "skelbime", korteleSps: "SPS", korteleSalygose: "pirkimo sąlygose",
+      savokaSkirtinga: "Pirkimo sąlygose pirkimo vykdytojas įvardytas skirtingai: {s}. „Perkantysis subjektas“ - Pirkimų įstatymo (PĮ), „Perkančioji organizacija“ - Viešųjų pirkimų įstatymo (VPĮ) sąvoka. Suvienodinkite pagal pirkimui taikomą įstatymą.",
+      savokaPI: "„Perkantysis subjektas“", savokaVPI: "„Perkančioji organizacija“", savokaAbi: "abi sąvokos (PĮ - {pi}, VPĮ - {vpi} kartų)",
+      savokaNerasta: "pirkimo vykdytojo sąvokos („Perkantysis subjektas“, „Perkančioji organizacija“) nerasta", savokaNeikelta: "sąvokų atpažinimas neįkeltas",
+      skRezimoNera: "skelbimas režimo nenurodo", savokaNevienoda: "pirkimo sąlygų sąvoka nevienoda arba nerasta - žr. „Dokumentų aiškumas“",
+      rezimasSalygos: "Skelbime - {s} požymiai, o pirkimo sąlygose pirkimo vykdytojas įvardytas {d}. Patikrinkite, kuris įstatymas taikomas, ir suderinkite dokumentus.",
       punktai: "Punktas {n} kartojasi {k} kartus su skirtingu tekstu - tikėtina, paliktos abi šablono alternatyvos. Palikite vieną.",
       alternatyvos: "Vienoje pastraipoje - dvi to paties turinio formuluotės, tikėtina, šablono alternatyvos. Palikite vieną.",
       laukai: "Neužpildytas pasirinkimo laukas („{t}“). Jei jį pildo tiekėjas ar jis pildomas pasirašant sutartį, viskas gerai.",
@@ -95,7 +101,7 @@
       sutTurinys: "tikrinama tik, ar sutartyje yra kiekvienas elementas; ar jo turinys atitinka įstatymą (pvz., kainodaros taisyklės, mokėjimo terminai), nevertinama",
       sutTipines: "VPĮ: pirkimo sutartys sudaromos taikant VPT patvirtintas tipines sąlygas, išskyrus kai jos netaikytinos ar nepritaikomos ({t}) - ar taikytos, nevertinama",
       laukuPav: { pavadinimas: "pavadinimas", verte: "vertė", budas: "būdas", bvpz: "BVPŽ kodas", dalys: "dalys", trukmeMen: "sutarties trukmė",
-                  pasiulymuTerminas: "pasiūlymų terminas", paskelbimas: "paskelbimo data", vykdytojas: "vykdytojas", rezimas: "režimas" },
+                  pasiulymuTerminas: "pasiūlymų terminas", paskelbimas: "paskelbimo data", vykdytojas: "vykdytojas", rezimas: "režimas", rezimas_salygose: "režimas" },
       men: "mėn."
     },
     en: {
@@ -110,6 +116,7 @@
         trukme: "Contract duration: notice and contract", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
         kortele: "Card and notice", punktai: "Repeated clause numbers", alternatyvos: "Template alternatives left in",
         laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", grafikas: "Order of SPS schedule dates",
+        vykdytojo_savoka: "Contracting body term: BPS and SPS", rezimas_salygos: "Regime: notice and procurement conditions",
         privalomi: "Required document elements", privalomi_kiti: "Other elements listed in the law",
         kval_reikalavimai: "Supplier experience and turnover requirements in the SPS", kval_laikotarpis: "Experience period under the Methodology",
         kval_patirties_verte: "Value of experience under the Methodology", kval_pajamos: "Annual turnover under the Methodology",
@@ -133,7 +140,12 @@
       budas: "The notice gives the procedure as {s}, while the SPS says: {p}.",
       vykdytojas: "The buyer in the notice is {s}, while the SPS heading says {p}.",
       kortele: "On the card the {l} is {k}, while {kur} it is {d}. Update the card or the document.",
-      korteleSkelbime: "in the notice", korteleSps: "in the SPS",
+      korteleSkelbime: "in the notice", korteleSps: "in the SPS", korteleSalygose: "in the procurement conditions",
+      savokaSkirtinga: "The procurement conditions name the contracting body differently: {s}. “Perkantysis subjektas” (contracting entity) is the term of the utilities procurement law (PĮ), “Perkančioji organizacija” (contracting authority) - of the public procurement law (VPĮ). Align them with the law that applies to the procurement.",
+      savokaPI: "“Perkantysis subjektas” (contracting entity)", savokaVPI: "“Perkančioji organizacija” (contracting authority)", savokaAbi: "both terms (PĮ - {pi}, VPĮ - {vpi} times)",
+      savokaNerasta: "no contracting body term (“Perkantysis subjektas”, “Perkančioji organizacija”) found", savokaNeikelta: "term recognition not loaded",
+      skRezimoNera: "the notice does not show the regime", savokaNevienoda: "the term in the procurement conditions differs or was not found - see “Clarity of documents”",
+      rezimasSalygos: "The notice shows {s} signs, while the procurement conditions name the contracting body {d}. Check which law applies and align the documents.",
       punktai: "Clause {n} appears {k} times with different text - both template alternatives were probably left in. Keep one.",
       alternatyvos: "One paragraph has two wordings of the same content, probably template alternatives. Keep one.",
       laukai: "An unfilled choice field (“{t}”). If the supplier fills it in or it is completed at signature, that is fine.",
@@ -165,7 +177,7 @@
       sutTurinys: "only whether each element is present in the contract is checked; whether its content complies with the law (e.g. pricing rules, payment periods) is not assessed",
       sutTipines: "Public Procurement Law: contracts are concluded using the standard terms approved by the Public Procurement Office, unless they are not applicable or cannot be adapted ({t}) - whether they were used is not assessed",
       laukuPav: { pavadinimas: "title", verte: "value", budas: "procedure", bvpz: "CPV code", dalys: "lots", trukmeMen: "contract duration",
-                  pasiulymuTerminas: "tender deadline", paskelbimas: "publication date", vykdytojas: "contracting body", rezimas: "regime" },
+                  pasiulymuTerminas: "tender deadline", paskelbimas: "publication date", vykdytojas: "contracting body", rezimas: "regime", rezimas_salygose: "regime" },
       men: "months"
     }
   };
@@ -486,9 +498,27 @@
     var sps = P.sps ? spsFaktai(P.sps) : null;
     var trukmes = P.sutartis ? sutartiesTrukmes(P.sutartis) : [];
     var k = o.kortele || null;
+    // Pirkimo vykdytojo sąvoka BPS ir SPS (2026-10-17, shared/skelbimas.js rezimasDokumente): „Perkantysis subjektas – LITGRID AB“ - PĮ,
+    // „Perkančioji organizacija – ...“ - VPĮ. Tikruose paketuose sąvoka atitiko režimą, o LITGRID 9022598 BPS ir SPS jos skyrėsi
+    var savokos = [];
+    if (global.GP_SKELBIMAS && global.GP_SKELBIMAS.rezimasDokumente) ["bps", "sps"].forEach(function (r) {
+      if (!P[r]) return;
+      var x = global.GP_SKELBIMAS.rezimasDokumente(P[r].blocks);
+      if (x.value || x.neaiskus) savokos.push({ r: r, doc: P[r], x: x });
+    });
+    var savokuReiksmes = savokos.map(function (v) { return v.x.value; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+    var dokRezimas = savokos.length && !savokos.some(function (v) { return v.x.neaiskus; }) && savokuReiksmes.length === 1
+      ? (savokos.filter(function (v) { return v.x.budas === "apibrezimas"; })[0] || savokos[0]) : null;
 
-    // Režimas teisės nuorodoms: kortelė -> skelbimas -> SPS vykdytojo įprastas (tik pastabai - PĮ ir VPĮ nemaišomi)
-    var rezimas = (k && (k.rezimas === "PI" || k.rezimas === "VPI") && k.rezimas) || (sk && sk.laukai.rezimas && sk.laukai.rezimas.reiksme) || "";
+    // Režimas teisės nuorodoms: kortelė -> skelbimas -> pirkimo sąlygų sąvoka (sutampanti BPS ir SPS); PĮ ir VPĮ nemaišomi
+    var rezimas = (k && (k.rezimas === "PI" || k.rezimas === "VPI") && k.rezimas) || (sk && sk.laukai.rezimas && sk.laukai.rezimas.reiksme) ||
+                  (dokRezimas && dokRezimas.x.value) || "";
+    function rezPav(v) { return v === "PI" ? "PĮ" : v === "VPI" ? "VPĮ" : v; }
+    function savokosVietos(v) {
+      if (v.x.value) return [docVieta(v.doc, { loc: v.x.loc, t: v.x.citata }, l)];
+      if (v.x.apibrezimai) return v.x.apibrezimai.slice(0, 2).map(function (a) { return docVieta(v.doc, { loc: a.loc, t: a.citata }, l); });
+      return [docVieta(v.doc, null, l)];
+    }
     function teise(raktai) {
       if (!rezimas || !global.GP_TEISE) return [];
       var out = [];
@@ -654,6 +684,19 @@
       patikra("trukme", "skelbimas", sutampa ? "gerai" : "radinys");
     }
 
+    // Režimas: skelbimas (su direktyva) ir pirkimo sąlygų sąvoka
+    var skRz = sk && sk.laukai.rezimas;
+    if (!sk) patikra("rezimas_salygos", "skelbimas", "nepatikrinta", X.beSkelbimo);
+    else if (!skRz) patikra("rezimas_salygos", "skelbimas", "nepatikrinta", X.skRezimoNera);
+    else if (!dokRezimas) patikra("rezimas_salygos", "skelbimas", "nepatikrinta", !P.sps && !P.bps ? X.beSps : X.savokaNevienoda);
+    else {
+      var skirtR = skRz.reiksme !== dokRezimas.x.value;
+      if (skirtR) radinys({ id: "rezimas_salygos", grupe: "skelbimas", lygis: "tikrinti",
+        tekstas: sub(X.rezimasSalygos, { s: rezPav(skRz.reiksme), d: dokRezimas.x.value === "PI" ? X.savokaPI : X.savokaVPI }),
+        vietos: [docVieta(sk.doc, { loc: null, t: skRz.citata }, l)].concat(savokosVietos(dokRezimas)), teise: [] });
+      patikra("rezimas_salygos", "skelbimas", skirtR ? "radinys" : "gerai");
+    }
+
     /* ---- K. Kortelė ir dokumentai */
     if (!k) patikra("kortele", "kortele", "nepatikrinta", X.beKorteles);
     else if (!sk && !sps) patikra("kortele", "kortele", "nepatikrinta", X.beSkelbimo);
@@ -684,6 +727,7 @@
         if (sps.pavadinimas) palygink("pavadinimas", k.pavadinimas, sps.pavadinimas.t, function (a, b) { var p = panasumas(a, b); return p === null || p >= 0.6; }, tekst, X.korteleSps, docVieta(P.sps, sps.pavadinimas.e, l));
         if (sps.dalys && Array.isArray(k.dalys)) palygink("dalys", Math.max(1, k.dalys.length), Math.max(1, sps.dalys.n), lyg, function (v) { return v === 1 ? X.dalysViena : sub(X.dalysKelios, { n: v }); }, X.korteleSps, docVieta(P.sps, sps.dalys.e, l));
       }
+      if (dokRezimas) palygink("rezimas_salygose", k.rezimas, dokRezimas.x.value, lyg, rezPav, X.korteleSalygose, savokosVietos(dokRezimas)[0]);
       patikra("kortele", "kortele", skirtumai ? "radinys" : "gerai");
     }
 
@@ -714,6 +758,20 @@
       if (blogai) radinys({ id: "grafikas", grupe: "aiskumas", lygis: "tikrinti",
         tekstas: sub(X.grafikas, { a: blogai[1].etapas, ad: blogai[1].data, b: blogai[0].etapas, bd: blogai[0].data }), vietos: [docVieta(P.sps, blogai[1].e, l)], teise: teise(AISK) });
       patikra("grafikas", "aiskumas", blogai ? "radinys" : "gerai");
+    }
+
+    // Pirkimo vykdytojo sąvoka BPS ir SPS
+    if (!P.sps && !P.bps) patikra("vykdytojo_savoka", "aiskumas", "nepatikrinta", X.beSps);
+    else if (!global.GP_SKELBIMAS || !global.GP_SKELBIMAS.rezimasDokumente) patikra("vykdytojo_savoka", "aiskumas", "nepatikrinta", X.savokaNeikelta);
+    else if (!savokos.length) patikra("vykdytojo_savoka", "aiskumas", "nepatikrinta", X.savokaNerasta);
+    else if (!dokRezimas) {
+      var aprasas = savokos.map(function (v) { return X.vaidmuo[v.r] + " - " + (v.x.value ? (v.x.value === "PI" ? X.savokaPI : X.savokaVPI) : sub(X.savokaAbi, { pi: v.x.pi, vpi: v.x.vpi })); }).join(", ");
+      radinys({ id: "vykdytojo_savoka", grupe: "aiskumas", lygis: "tikrinti", tekstas: sub(X.savokaSkirtinga, { s: aprasas }),
+        vietos: [].concat.apply([], savokos.map(savokosVietos)), teise: teise(AISK) });
+      patikra("vykdytojo_savoka", "aiskumas", "radinys");
+    } else {
+      var dv0 = savokosVietos(dokRezimas)[0];
+      patikra("vykdytojo_savoka", "aiskumas", "gerai", savokos.map(function (v) { return X.vaidmuo[v.r]; }).join(", ") + ": " + kab(iskarpa(dokRezimas.x.citata, 140), l) + (dv0.vieta ? " (" + dv0.failas + ", " + dv0.vieta + ")" : " (" + dv0.failas + ")"));
     }
 
     /* ---- E. Privalomi dokumentų elementai (shared/privalomi-elementai.js; PĮ 48 str. 2 d. / VPĮ 35 str. 2 d. - per registrą).

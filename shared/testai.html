@@ -2871,6 +2871,54 @@ async function testaiParengtis(){
 
   /* 2026-10-06 (naudotojo sprendimas): „Ar pirkimas parengtas skelbti?“ - PP-salygos skirtukas „Tikrinti parengtus dokumentus“
      (PP-salygos/tikrinimas.js); senas adresas nukreipia ten su tais pačiais parametrais. Modulis lietuviškas - EN sąsajos nebėra. */
+  await testas("Pirkimo vykdytojo sąvoka BPS ir SPS: sutampa - gerai su citata; skiriasi - „Patikrinkite“ su abiem vietomis; skelbimas su direktyva ir kortelė - prieš sąlygas; be skelbimo režimo - teisės nuorodos pagal sąlygas", async ()=>{
+    const { f, w, P } = await parengtiesRemas();
+    try {
+      // Sandara - kaip tikrų paketų BPS („1.16. Perkantysis subjektas – LITGRID AB, į. k. ...“); 9022598: BPS „Perkančioji organizacija – LITGRID AB“, SPS „Perkantysis subjektas“
+      const bps = sav => dokas("D7", "0.5 Skelbiamos derybos BPS be paraiškų supaprastintos.docx", ["LITGRID AB BENDROSIOS PIRKIMO SĄLYGOS",
+        "1.16. " + sav + " – LITGRID AB, į. k. 302564383, pagal Lietuvos Respublikos įstatymus įsteigta įmonė."].concat(Array(20).fill(sav + " vertina pasiūlymus.")));
+      const pk = (o, sav, savSps) => paketas(Object.assign({}, o, { sps: Object.assign({}, (o || {}).sps, { papildomai: Array(20).fill((savSps || sav) + " tikrina kvalifikaciją.") }) }))
+        .map(d => d.id === "D7" ? bps(sav) : d);
+      const pt = (r, id) => { const x = r.patikros.find(p => p.id === id); return x ? [x.busena, x.pastaba] : null; };
+      const rd = (r, id) => r.radiniai.filter(x => x.id === id);
+      let r = P.patikrink({ docs: pk({}, "Perkantysis subjektas"), kalba: "lt" });
+      lygu(pt(r, "vykdytojo_savoka")[0], "gerai"); tiesa(/^BPS, SPS: „Perkantysis subjektas – LITGRID AB, į\. k\. 302564383/.test(pt(r, "vykdytojo_savoka")[1]), pt(r, "vykdytojo_savoka")[1]);
+      lygu(pt(r, "rezimas_salygos"), ["gerai", ""], "skelbimas (2014/25) ir sąlygos - PĮ");
+      lygu(rd(r, "vykdytojo_savoka").length + rd(r, "rezimas_salygos").length, 0, "radinių nėra");
+      // 9022598 atvejis
+      r = P.patikrink({ docs: pk({}, "Perkančioji organizacija", "Perkantysis subjektas"), kalba: "lt" });
+      const x = rd(r, "vykdytojo_savoka")[0];
+      tiesa(x && x.lygis === "tikrinti" && x.grupe === "aiskumas", "radinys: " + JSON.stringify(x));
+      tiesa(/BPS - „Perkančioji organizacija“, SPS - „Perkantysis subjektas“/.test(x.tekstas) && /Suvienodinkite/.test(x.tekstas), x.tekstas);
+      tiesa(x.vietos.length === 2 && /^Perkančioji organizacija – LITGRID AB, į\. k\./.test(x.vietos[0].citata) && /^Perkantysis subjektas tikrina kvalifikaciją/.test(x.vietos[1].citata) && x.vietos[1].failas === "0.5 Skelbiamos derybos SPS be paraiškų supaprastintos.docx", "abi vietos: " + JSON.stringify(x.vietos));
+      lygu(x.teise.map(t => t.cit), [w.GP_TEISE.cit("dokumentu_aiskumas", "PI")], "nuoroda - pagal skelbimo režimą");
+      lygu(pt(r, "rezimas_salygos")[0], "nepatikrinta", "sąlygos nevienodos - su skelbimu nelyginama");
+      tiesa(/differently: BPS - “Perkančioji organizacija”/.test(P.patikrink({ docs: pk({}, "Perkančioji organizacija", "Perkantysis subjektas"), kalba: "en" }).radiniai.find(y => y.id === "vykdytojo_savoka").tekstas), "EN");
+      // Skelbimas su 2014/25 direktyva, o sąlygos - VPĮ sąvoka
+      r = P.patikrink({ docs: pk({}, "Perkančioji organizacija"), kalba: "lt" });
+      const y = rd(r, "rezimas_salygos")[0];
+      tiesa(y && y.lygis === "tikrinti" && /Skelbime - PĮ požymiai, o pirkimo sąlygose pirkimo vykdytojas įvardytas „Perkančioji organizacija“/.test(y.tekstas), JSON.stringify(y));
+      lygu(y.vietos.length, 2, "skelbimo ir BPS vietos");
+      // Skelbimas be direktyvos („Kitas“): su skelbimu nelyginama, teisės nuorodos - pagal sąlygas
+      r = P.patikrink({ docs: pk({ sk: { veikla: "Perkančiosios organizacijos veiklos sritis: Bendrosios viešosios paslaugos", pagrindas: "Kitas" } }, "Perkantysis subjektas"), kalba: "lt" });
+      lygu([pt(r, "rezimas_salygos"), r.rezimas], [["nepatikrinta", "skelbimas režimo nenurodo"], "PI"]);
+      // Kortelė prieš sąlygas
+      r = P.patikrink({ docs: pk({}, "Perkantysis subjektas"), kortele: { pavadinimas: "Elektrinių įrankių ir matavimo prietaisų bei pagalbinės įrangos pirkimas", rezimas: "VPI" }, kalba: "lt" });
+      const z = rd(r, "kortele_rezimas_salygose")[0];
+      tiesa(z && /Kortelėje režimas - VPĮ, o pirkimo sąlygose - PĮ/.test(z.tekstas) && /Perkantysis subjektas – LITGRID AB/.test(z.vietos[0].citata), JSON.stringify(z));
+      // Viename dokumente apibrėžtos abi sąvokos
+      const abiBps = dokas("D7", "BPS.docx", ["1.16. Perkantysis subjektas – LITGRID AB.", "1.17. Perkančioji organizacija – LITGRID AB."]);
+      r = P.patikrink({ docs: paketas().map(d => d.id === "D7" ? abiBps : d), kalba: "lt" });
+      tiesa(rd(r, "vykdytojo_savoka").length === 1 && /BPS - abi sąvokos/.test(rd(r, "vykdytojo_savoka")[0].tekstas), "abi vienoje: " + JSON.stringify(rd(r, "vykdytojo_savoka")));
+      r = P.patikrink({ docs: paketas({ sps: { papildomai: Array(20).fill("Perkantysis subjektas tikrina kvalifikaciją.") } }).map(d => d.id === "D7" ? abiBps : d), kalba: "lt" });
+      tiesa(rd(r, "vykdytojo_savoka").length === 1 && /BPS - abi sąvokos.*SPS - „Perkantysis subjektas“/.test(rd(r, "vykdytojo_savoka")[0].tekstas) && pt(r, "rezimas_salygos")[0] === "nepatikrinta",
+            "BPS abi, SPS viena - neaišku, ne SPS režimas: " + JSON.stringify(rd(r, "vykdytojo_savoka")));
+      // Sąvokos nėra
+      r = P.patikrink({ docs: paketas(), kalba: "lt" });
+      lygu(pt(r, "vykdytojo_savoka"), ["nepatikrinta", "pirkimo vykdytojo sąvokos („Perkantysis subjektas“, „Perkančioji organizacija“) nerasta"]);
+    } finally { f.remove(); }
+  }, "patikra su 21 tikru paketu: LITGRID 9022598 bendrosiose sąlygose „Perkančioji organizacija – LITGRID AB“, specialiosiose - „Perkantysis subjektas“; kituose 20 - radinių nėra");
+
   await testas("Tikrinti parengtus dokumentus (PP-salygos): įkeltas paketas (DOCX ir skelbimas) - santrauka, kliūtis su vietomis ir nuoroda; vaidmens keitimas persiskaičiuoja; kortelė per juostą; nieko neišsaugo; senas adresas nukreipia su parametrais", async ()=>{
     const AP = GP_TESTU_APSAUGA.pradek(k => k === "gprocure-lang");
     const fr = document.createElement("iframe");
