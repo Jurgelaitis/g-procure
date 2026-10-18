@@ -105,7 +105,7 @@
     return out;
   }
   /* Pirkimu sinonimai: zalieji reikalavimai = aplinkosauginiai (ekologiniai) kriterijai
-     (tikras paketas 9683631 - teisinga citata kitaip butu pazymeta be reikalo). */
+     (tikras LITGRID paketas - teisinga citata kitaip butu pazymeta be reikalo). */
   var SINONIMAI = { zali: ["apli", "ekol"] };
   function citataSusijusi(q, citata) {
     var tema = kamienai(q.tema || q.tekstas), c = kamienai(citata), k;
