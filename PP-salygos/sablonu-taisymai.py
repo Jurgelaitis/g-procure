@@ -405,6 +405,7 @@ def taisymas_tekstas(taisyk):
     viso += _akv_numeracija(taisyk)
     viso += _vidine_riba(taisyk)
     viso += _uztikrinimo_sakinys(taisyk)
+    viso += _spc_nuorodos(taisyk)
     return viso
 
 
@@ -835,6 +836,60 @@ def _uztikrinimo_sakinys(taisyk):
     for t in _W_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
+
+
+# X. Nuorodos į SPS priedus (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“; rado sugeneruoto paketo patikra): tekstas nurodo ne
+#    tą priedo numerį, kuris yra to paties SPS priedų sąraše. Kvazisubtiekėjo sutikimas būti įdarbintu ir ūkio subjektų deklaracijų priedėliai -
+#    priedo „Informacija apie ūkio subjektus, kurių pajėgumais remiamasi, subtiekėjus ir kvazisubtiekėjus“ („SPS 6 priedo 2 priedėlį
+#    (Kvazisubtiekėjo sutikimą ...)“, „pagal SPS 6 priedo formoje esančius priedėlius“, EN „Appendix 2 to Annex 6 to the SPC (the consent of the
+#    Quasi...“, „according to the appendixes attached to Annex 6 to the SPC“), forma „Konfidenciali informacija“ - savo eilutės numeriu („SPS 6 priedą
+#    „Konfidenciali informacija““). Numeris - pagal to paties šablono priedų sąrašą (LT ir EN eilutės atskirai); „X“ / „x“ vietos (pildo
+#    generatorius) ir teisingi numeriai nekeičiami; raudonas tekstas (sąlygų sluoksnis) keičiamas tik numeriu, žemėlapių tekstas ir raudoni
+#    fragmentai suderinami. Bendrų priedų antraštės (tas pats failas kelioms šeimoms) - generuojant, pagal paketo SPS sąrašą (PP-SALYGOS.html).
+_X_SAR = {'sub': _re.compile(r'^(\d+) priedas\s*[–-]\s*Informacija apie ūkio subjektus', _re.I),
+          'konf': _re.compile(r'^(\d+) priedas\s*[–-]\s*Konfidenciali informacija', _re.I),
+          'subEN': _re.compile(r'^Annex (\d+)\s*[–-]\s*Information about the economic entit', _re.I)}
+_X_NUORODOS = [('sub', r'SPS (\d+) priedo 2 priedėlį \(Kvazisubtiekėjo sutikimą'), ('sub', r'pagal SPS (\d+) priedo formoje esančius priedėlius'),
+               ('konf', r'SPS (\d+) priedą „Konfidenciali informacija“'),
+               ('subEN', r'Appendix 2 to Annex (\d+) to the SPC \(the consent of the Quasi'), ('subEN', r'according to the appendixes attached to Annex (\d+) to the SPC')]
+
+
+def _spc_nuorodos(taisyk):
+    import json as _json
+    print("\nNUORODOS Į SPS PRIEDUS (X, 2026-10-19):")
+    viso = 0
+    ZEM = Path(__file__).parent / 'zemelapiai'
+    for path in sorted(TPL.glob('*_SPS.docx')):
+        dx = zipfile.ZipFile(path).read('word/document.xml')
+        nr = {k: _sarasas(dx, rx) for k, rx in _X_SAR.items()}
+        poros = [(_re.compile(r), nr[k], 1) for k, r in _X_NUORODOS if nr[k]]
+        if not poros:
+            continue
+        viso += _su_zemelapiais(poros, [path.stem], 'nuorodos į priedus', taisyk)
+        # žemėlapių raudoni fragmentai (intarpų „raudonas“ - tik nuorodos atkarpa, pvz. „SPS 6 priedo 2 priedėlį“): numeris - kaip jau
+        # suderintame tos pačios pastraipos tekste (tik pastraipose su šiomis nuorodomis)
+        if not taisyk:
+            continue
+        visos = [_re.compile(r) for _, r in _X_NUORODOS]
+        for zf in sorted(ZEM.glob('*.json')):
+            try:
+                tekstas0 = zf.read_text(encoding='utf-8'); Z = _json.loads(tekstas0)
+            except Exception:
+                continue
+            if not (isinstance(Z, dict) and Path(str(Z.get('sablonas', ''))).stem == path.stem):
+                continue
+            k = 0
+            for x in Z.get('intarpai', []):
+                raud, tx = x.get('raudonas'), x.get('text', '')
+                if not (isinstance(raud, str) and _re.search(r'\d', raud) and any(rx.search(tx) for rx in visos)):
+                    continue
+                m = _re.compile(_re.sub(r'\d+', lambda _: r'\d+', _re.escape(raud))).search(tx)
+                if m and m.group(0) != raud:
+                    x['raudonas'] = m.group(0); k += 1
+            if k:
+                zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if tekstas0.endswith('\n') else ''), encoding='utf-8')
+                print(f"      {zf.name}: raudoni fragmentai suderinti {k}")
+    return viso
 
 
 def _vidine_riba(taisyk):
