@@ -51,6 +51,7 @@ laikomos tik atmintyje (?saugykla=testine). Paleidžiama per vietinį serverį r
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
 function grupe(pav){
+  salinkSenusRemelius();                       // atmintis: ankstesnių grupių rėmeliai (žr. žemiau)
   const d = document.createElement("div");
   d.className = "grupe"; d.innerHTML = "<h2>" + ekranuok(pav) + "</h2>";
   document.getElementById("rezultatai").appendChild(d);
@@ -81,9 +82,22 @@ function vrAtmintine(){ const d = {}; return { getItem: k => (k in d ? d[k] : nu
   key: i => Object.keys(d)[i] || null, get length(){ return Object.keys(d).length; }, raktai: () => Object.keys(d) }; }
 /* ---- Modulis rėmelyje. `const`/`let` kintamieji nėra window savybės - jiems W.eval(). ---- */
 let W = null, D = null;
+/* Ankstesnių grupių modulio rėmeliai pašalinami (2026-10-19): iki tol visi likdavo - per rinkinį jų susikaupdavo per 250, puslapio procesas
+   užimdavo iki 4,5 GB ir nulūždavo (Inspector.targetCrashed; paleidiklis rodė tik „timed out“). Šalinama tik naujos grupės pradžioje: grupės
+   testai naudoja ankstesnių rėmelių failus (pašalinto rėmelio Blob niekada neatsako); du naujausi paliekami, rėmelis su juodraščiu - taip pat
+   (jį uždarant juodraštis būtų perrašytas); modulisSuKortele() rėmelius šalina pats testas. */
+function salinkSenusRemelius(){
+  const visi = [...document.querySelectorAll("iframe[data-gp-modulis]")];
+  visi.slice(0, Math.max(0, visi.length - 2)).forEach(f => {
+    let jd = null;
+    try { jd = f.contentWindow && f.contentWindow.JD && f.contentWindow.JD.dabartinis(); } catch (e) { jd = null; }
+    if (!jd) f.remove();
+  });
+}
 function remelis(klase){
   return new Promise(res => {
     const f = document.createElement("iframe");
+    f.setAttribute("data-gp-modulis", "");
     if (klase) f.className = klase;
     f.addEventListener("load", () => res(f), { once: true });
     f.src = "PP-SALYGOS.html?cb=" + Date.now() + Math.random();
@@ -9111,7 +9125,7 @@ async function testaiDokumentai(){
     await kol(() => W.__K && !D.getElementById("step2").classList.contains("hid"), "2 žingsnis");
     const sa = () => (D.getElementById("lkSantrauka") || {}).textContent.replace(/\s+/g, " ");
     await kol(() => D.getElementById("lkTeiseAktai"), "netekę galios aktai santraukoje", 10000);
-    tiesa(/Patikrinkite teisės aktus \(1\).*Kvalifikaciniai reikalavimai\.pdf: Minimas teisės aktas \(aplinkos ministro 2015-05-08 įsakymas Nr\. D1-393\)/.test(sa()), "santrauka: " + sa());
+    tiesa(/Teisės aktai \(1\).*Kvalifikaciniai reikalavimai\.pdf: Minimas teisės aktas \(aplinkos ministro 2015-05-08 įsakymas Nr\. D1-393\)/.test(sa()), "santrauka: " + sa());
     tiesa(/1 žingsnio reikšmės, laukiančios patvirtinimo \(4\)/.test(sa()), "1 žingsnio reikšmės santraukoje: " + sa());
   });
   await testas("Neaiški paraiška nesiunčiama: PDF su tekstu be DocLogix požymių - priežastis ir mygtukas; su požymiais - iš karto; nepavykusi analizė - priežastis ir „Analizuoti iš naujo“", async () => {
@@ -9236,7 +9250,7 @@ async function testaiDokumentai(){
     lygu([ZAL_KORTELE().dataset.busena, ATS()[tsK], W.eval("DK.failai.length")], ["patvirtinta", false, 0], "atkurta (failų sąrašas neišsaugomas)");
     // atkurtų lentelių netekę galios aktai - ir be įkelto failo (kvalifikacijos lentelės 2 eilutė)
     await kol(() => D.getElementById("lkTeiseAktai"), "atkurtos lentelės netekęs galios aktas „Prieš generuojant“", 10000);
-    tiesa(/Patikrinkite teisės aktus \(1\)[\s\S]*D1-393/.test(D.getElementById("lkTeiseAktai").textContent), "santrauka po atkūrimo: " + D.getElementById("lkTeiseAktai").textContent);
+    tiesa(/Teisės aktai \(1\)[\s\S]*D1-393/.test(D.getElementById("lkTeiseAktai").textContent), "santrauka po atkūrimo: " + D.getElementById("lkTeiseAktai").textContent);
     // tas pats aktas abiejose to paties failo lentelėse - viena eilutė; žaliųjų lentelėje - irgi randamas
     const Z = W.eval("zalModelis()"), K = W.eval("kvlModelis()");
     Z.eilutes[0].reik = Z.eilutes[0].reik.concat([{ tekstas: "Pagal aplinkos ministro 2015 m. geguzes 8 d. isakyma Nr. D1-393." }]);
@@ -9295,6 +9309,7 @@ const sl = ms => new Promise(r => setTimeout(r, ms));
 async function modulisAdresu(paieska, klase){
   const f = await new Promise(res => {
     const f = document.createElement("iframe");
+    f.setAttribute("data-gp-modulis", "");
     if (klase) f.className = klase;
     f.addEventListener("load", () => res(f), { once: true });
     f.src = "PP-SALYGOS.html?" + paieska + "&cb=" + Date.now() + Math.random();
@@ -10627,6 +10642,342 @@ async function testaiEtapas0(){
   });
 }
 
+/* 1 etapas (2026-10-19, naudotojo sprendimai S1 ir S3): S1 trumpa informacinė skiltis, U1 „Nuo ko pradėti“, U3 žingsnių įžangos, U5 kitas veiksmas
+   ir skaitikliai, U6 būsenų paaiškinimas, U9 „Kas toliau“, K4 1 žingsnio trūkumai ir sutarties klaidų santrauka, K5 lygiai, K6 gyvas sąrašas. */
+const e1Visos = () => Object.entries(W.__K.grupes).forEach(([gid, g]) => { if (!g.nariai.some(n => ATS()[n.raktas] === true)) W.pasirinkGrupe(gid, g.nariai[g.nariai.length - 1].raktas); });
+const e1Tx = el => (el ? el.textContent : "").replace(/\s+/g, " ").trim();
+async function e1Generuok(){
+  D.getElementById("gen").click();
+  await kol(() => W.__R && !D.getElementById("step3").classList.contains("hid") && !D.getElementById("kasToliau").hidden, "sugeneruota", 120000);
+}
+/* D4a (2026-10-19): nuorodos tekste į to paties dokumento punktus („SPS 3.1 punkto 1 lentelė“, „9.9.1 ir/ar 9.9.2 punktuose“, „8.4.1-8.4.3
+   punktuose“). Išmatuota 7 rinkiniais (~150 nuorodų): SPS generuojant pakeičia 15-22 punktų numerius, bet jo 2-4 vidinės nuorodos rodo į punktus,
+   kurių numeris nesikeičia, BPS numerių nekeičia - automatinis perrašymas nereikalingas. Šis sargas krenta, jei nauja šablono redakcija tai pakeistų:
+   (a) nuoroda rodo į punktą, kurio dokumente nėra; (b) LT dokumente - į šablono punktą, kurio numeris sugeneruotame dokumente kitas. */
+const D4_NR = /^\s*(\d{1,2}(?:\.\d{1,3}){0,4})\.?(?=\s|$)/;
+const D4_REF = /(^|[^\d.])(\d{1,2}(?:\.\d{1,3}){1,4})\.?(?:\s*(?:[-–]|ir|ir\/ar|arba|,)\s*(\d{1,2}(?:\.\d{1,3}){1,4})\.?)?\s*(punkt\w*|papunk\w*|p\.(?=\s*[^\d]))/g;
+const D4_KITAS = /(BPS|Bendrųjų|bendrųjų|straipsn|įstatym|Įstatym|Sutarties|sutarties|Metodikos|aprašo|taisyklių|Taisyklių|Kodekso|kodekso|nutarim|įsakym|reglament|direktyv|EBVPD|Rules|Law|Article)/;
+const d4Pastraipa = t => { const m = D4_NR.exec(t); return { t, nr: m ? m[1] : null, k: t.replace(D4_NR, "").replace(/\s+/g, " ").trim().slice(0, 160) }; };
+function d4Radiniai(T0, T1, { forma = false, lt = true } = {}){
+  const poz = new Map(); T1.forEach((p, i) => { if (p.k) (poz.get(p.k) || poz.set(p.k, []).get(p.k)).push(i); });
+  let pask = -1; const map = new Map();
+  T0.forEach(p => {
+    if (!p.nr) return;
+    const j = (poz.get(p.k) || []).find(j => j > pask);
+    if (j != null && p.k.length > 8){ pask = j; if (!map.has(p.nr)) map.set(p.nr, T1[j].nr); }
+    else if (!map.has(p.nr)) map.set(p.nr, null);
+  });
+  const yra = new Set(T1.map(p => p.nr).filter(Boolean)), out = [];
+  let n = 0;
+  T1.forEach(p => {
+    for (const m of p.t.matchAll(D4_REF)){
+      const pries = p.t.slice(Math.max(0, m.index - 60), m.index + m[1].length);
+      if (D4_KITAS.test(pries)) continue;
+      if (forma && /(SPS|SPC|KPS)\s*$/.test(pries)) continue;          // formos nuoroda į SPS - kitas dokumentas
+      [m[2], m[3]].filter(Boolean).forEach(R => {
+        n++;
+        if (!yra.has(R)) out.push("nėra punkto " + R + ": " + p.t.slice(Math.max(0, m.index - 60), m.index + m[0].length));
+        else if (lt && map.get(R) && map.get(R) !== R) out.push("šablono " + R + " punktas tapo " + map.get(R) + ": " + p.t.slice(Math.max(0, m.index - 60), m.index + m[0].length));
+      });
+    }
+  });
+  return { n, out };
+}
+async function d4Paketas(docs){
+  const X = [];
+  for (const [kodas, x] of Object.entries(docs)){
+    if (x.statinis || !x.r.d || !x.r.d.buf) continue;
+    const GD = W.eval("GPDocx"), d0 = await GD.open(x.r.d.buf.slice(0));
+    GD.sulietiPunktai(d0);
+    const lten = x.r.d.zemelapis.kalba === "LTEN", forma = W.eval("yraForma")(x.r.d);
+    await W.eval("GPNum").sutvarkyti(d0, { dvikalbis: lten, forma });
+    const T0 = [...d0.parts["word/document.xml"].getElementsByTagNameNS(NSW, "p")].map(tekstasSuTab).map(d4Pastraipa);
+    const T1 = [...new W.DOMParser().parseFromString(x.xml, "application/xml").getElementsByTagNameNS(NSW, "p")].map(tekstasSuTab).map(d4Pastraipa);
+    const r = d4Radiniai(T0, T1, { forma, lt: !lten });
+    X.push({ kodas, n: r.n, out: r.out });
+  }
+  return X;
+}
+async function testaiEtapas1(){
+  dabartine = grupe("1 etapas (2026-10-19): pradžia, žingsnių įžangos, kitas veiksmas, būsenų paaiškinimas, lygiai, sutarties klaidos ir „Kas toliau“");
+
+  await testas("S1: informacinė skiltis - trys trumpi žingsniai ir trumpa pastaba (be numatytosios vertės, šablonų ir DI detalių); „Plačiau“ lange - išsami instrukcija (7 žingsniai) ir visa pastaba", async () => {
+    await modulis();
+    const p = D.getElementById("infoPanelMount");
+    const zz = p.querySelectorAll(".gpi-steps > *");
+    tiesa(/Trumpai/.test(e1Tx(p)) && zz.length === 3, "skiltyje žingsnių: " + zz.length);
+    tiesa(/DI teksto nerašo/.test(e1Tx(p)) && /tik jums leidus/.test(e1Tx(p)) && e1Tx(p).length < 1200, "skilties tekstas (" + e1Tx(p).length + "): " + e1Tx(p).slice(0, 200));
+    p.querySelector("[data-gpi-more]").click();
+    await kol(() => D.querySelector(".gpi-modal"), "langas");
+    const m = D.querySelector(".gpi-modal"), sek = [...m.querySelectorAll(".gpi-sec")];
+    const isam = sek.find(s => /Kaip naudotis - išsamiai/.test(e1Tx(s)));
+    tiesa(isam && isam.querySelectorAll(".gpi-steps > *").length === 7 && /Juodraščiai šioje naršyklėje/.test(e1Tx(isam)), "išsami instrukcija: " + (isam ? isam.querySelectorAll(".gpi-steps > *").length : "nėra"));
+    tiesa(sek.some(s => /Kas siunčiama ir kas saugoma/.test(e1Tx(s)) && /DI naudojamas tik pasiūlymams/.test(e1Tx(s))), "visa pastaba lange");
+    tiesa(sek.indexOf(isam) < sek.findIndex(s => /Darbo eiga/.test(e1Tx(s))), "instrukcija - prieš darbo eigą");
+    // kitų modulių skiltis (be details.steps) - kaip iki tol: langas be šių skilčių
+    const html = W.GProcureInfoPanel && W.GProcureInfoPanel.buildModalHtml ? W.GProcureInfoPanel.buildModalHtml({ title: "X", process: [{ title: "a", text: "b" }] }, "lt") : "";
+    if (html) tiesa(!/Kaip naudotis/.test(html), "langas be žingsnių neturi rodyti „Kaip naudotis“");
+  });
+
+  await testas("U1: „Nuo ko pradėti“ - pradžioje matoma su keliais (dokumentai pirmi, kortelė - tik kai yra, juodraštis - tik kai yra, ranka); mygtukai nuveda į vietą, failai ant mygtuko keliauja į dokumentų sąrašą; įrašius pavadinimą - paslepiama", async () => {
+    await modulis();
+    const pr = D.getElementById("pradzia");
+    W.pradziaAtnaujink();
+    tiesa(!pr.hidden, "pradžios kortelė paslėpta");
+    const k = [...pr.querySelectorAll("[data-pradzia]")].map(b => b.dataset.pradzia);
+    tiesa(k[0] === "dok" && k[k.length - 1] === "ranka" && pr.querySelector('[data-pradzia="dok"]').classList.contains("pradzia-b--pagr"), "keliai: " + k.join(","));
+    tiesa(k.includes("kortele") === [...D.querySelectorAll("#gpk-sel option")].some(o => o.value), "kortelės kelias pagal kortelių buvimą");
+    // „Pildyti ranka“ - fokusas pavadinime; „Įkelti“ - failų pasirinkimas
+    pr.querySelector('[data-pradzia="ranka"]').click();
+    tiesa(D.activeElement === D.getElementById("pavadinimas"), "ranka: fokusas " + (D.activeElement && D.activeElement.id));
+    let pasirinkta = 0; D.getElementById("dkFailai").click = () => { pasirinkta++; };
+    pr.querySelector('[data-pradzia="dok"]').click();
+    tiesa(pasirinkta === 1, "failų pasirinkimas neatvertas");
+    // įtempti failai - į dokumentų sąrašą
+    const dt = new W.DataTransfer(); dt.items.add(new W.File(["Techninė specifikacija. Reikalavimai prekėms."], "Techninė specifikacija.txt", { type: "text/plain" }));
+    pr.querySelector('[data-pradzia="dok"]').dispatchEvent(new W.DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    await kol(() => W.eval("DK.failai.length") === 1, "įtemptas failas sąraše");
+    await kol(() => pr.hidden, "įkėlus dokumentą - paslėpta");
+    // naujas puslapis: įrašius pavadinimą - paslepiama
+    await modulis(); W.pradziaAtnaujink();
+    tiesa(!D.getElementById("pradzia").hidden, "naujame puslapyje matoma");
+    ivesk1("pavadinimas", "Galios transformatorių"); W.zingsniuBusena();
+    tiesa(D.getElementById("pradzia").hidden, "įrašius pavadinimą turi būti paslėpta");
+  });
+
+  await testas("U2: „Ką verta įkelti“ - keturios eilutės su būsena ir nauda; įkėlus dokumentą jo eilutė pažymima iš karto (su failo vardu ir kas padaryta); neatpažintos rūšies failas - „Kas tai per dokumentas?“ su paaiškinimu; pakeitus rūšį - eilutė pasižymi", async () => {
+    await modulis();
+    const ks = () => D.getElementById("dkKontrolinis"), e = pav => ks().querySelector('[data-dk-ks="' + pav + '"]');
+    const pav = ["Pirkimo paraiška", "Techninė specifikacija", "Kvalifikacijos reikalavimai", "Žalieji reikalavimai"];
+    lygu([...ks().querySelectorAll("[data-dk-ks]")].map(x => x.dataset.dkKs), pav, "eilutės");
+    tiesa(pav.every(p => e(p).querySelector(".dk-ks-b").textContent === "nėra" && / - \S/.test(e1Tx(e(p)))), "pradžioje - „nėra“ ir nauda");
+    tiesa(/^Ką verta įkelti/.test(e1Tx(ks())) && ks().getAttribute("aria-labelledby") === "dkKsH", "antraštė");
+    await W.dkPridek([new W.File(["Techninė specifikacija\nPrekių reikalavimai."], "Techninė specifikacija.txt", { type: "text/plain" }),
+      new W.File(["Raštas be aiškios paskirties."], "Raštas.txt", { type: "text/plain" })]);
+    tiesa(e("Techninė specifikacija").classList.contains("dk-ks-e--yra") && /įkelta/.test(e1Tx(e("Techninė specifikacija"))) && /Techninė specifikacija\.txt/.test(e1Tx(e("Techninė specifikacija"))), "TS: " + e1Tx(e("Techninė specifikacija")));
+    tiesa(e("Pirkimo paraiška").querySelector(".dk-ks-b").textContent === "nėra", "paraiška neturi būti pažymėta");
+    const kita = W.eval("DK.failai").find(d => d.vardas === "Raštas.txt"), kid = "dk" + kita.raktas;
+    tiesa(kita.rusis === "kita" && /Kas tai per dokumentas\?/.test(e1Tx(D.querySelector("label[for=" + kid + "-r]"))) && /rūšies neatpažinome/.test(e1Tx(D.getElementById(kid))), "neatpažintas: " + e1Tx(D.getElementById(kid)).slice(0, 200));
+    const sel = D.getElementById(kid + "-r"); sel.value = "ts"; sel.dispatchEvent(new W.Event("change", { bubbles: true }));
+    tiesa(/Raštas\.txt/.test(e1Tx(e("Techninė specifikacija"))) && /Dokumento rūšis/.test(e1Tx(D.querySelector("label[for=" + kid + "-r]"))) && !/rūšies neatpažinome/.test(e1Tx(D.getElementById(kid))), "pakeitus rūšį");
+    // kvalifikacijos lentelė - perkeliamų reikalavimų skaičius
+    await W.dkPridek([await kvlFailas(KVL_PROP)]);
+    const kv = W.eval("DK.failai").find(d => d.rusis === "kvalifikacija"), n = kv.lent.lenteles.reduce((a, M) => a + M.eilutes.length, 0);
+    tiesa(n > 0 && e1Tx(e("Kvalifikacijos reikalavimai")).includes("perkeliama " + W.eval("lkSk")(n, "reikalavimas", "reikalavimai", "reikalavimų")), "kvalifikacija: " + e1Tx(e("Kvalifikacijos reikalavimai")));
+    // pašalinus - vėl „nėra“
+    D.querySelector('[data-dk-salinti="' + kv.raktas + '"]').click();
+    tiesa(e("Kvalifikacijos reikalavimai").querySelector(".dk-ks-b").textContent === "nėra", "pašalinus");
+  });
+
+  await testas("U3 + K4 (1 žingsnis): įžanga sako, ko dar neįrašyta (pavadinimas, sutarties klausimas) su nuoroda į lauką ir pasekme; viską įrašius - „Pagrindiniai duomenys įrašyti“; „Toliau“ nestabdo; 2 žingsnyje tas pats sąrašas įžangoje ir „Prieš generuojant“ (Patikrinkite), nuoroda grąžina į 1 žingsnį prie lauko", async () => {
+    await modulis(); W.zingsniuBusena();
+    const z = () => D.getElementById("zi1T");
+    tiesa(/Dar neįrašyta: Pirkimo pavadinimas\. Tęsti galima: dokumentuose liks tuščia pavadinimo vieta\./.test(e1Tx(z())), "be pavadinimo: " + e1Tx(z()));
+    z().querySelector("[data-z1-suolis]").click();
+    tiesa(D.activeElement === D.getElementById("pavadinimas"), "nuoroda: fokusas " + (D.activeElement && D.activeElement.id));
+    ivesk1("pavadinimas", "Galios transformatorių");
+    const sel = D.getElementById("budas"); sel.value = "T-AK"; sel.dispatchEvent(new W.Event("change"));
+    W.SUTARTIES_BLOKAS.atnaujink(); W.zingsniuBusena();
+    tiesa(D.getElementById("sbTaip") && /Dar neįrašyta: Atsakymas į klausimą „Ar taikomos tipinės LITGRID AB sutarties standartinės sąlygos\?“\. Tęsti galima: sutarties projektas nerengiamas/.test(e1Tx(z())), "sutarties klausimas: " + e1Tx(z()));
+    // „Toliau“ nestabdo; 2 žingsnio įžangoje ir santraukoje - tas pats trūkumas
+    W.__K = null; await W.iStep2();
+    await kol(() => W.__K && !D.getElementById("step2").classList.contains("hid"), "2 žingsnis");
+    tiesa(/1 žingsnyje neįrašyta: Atsakymas į klausimą/.test(e1Tx(D.getElementById("zi2"))), "2 žingsnio įžanga: " + e1Tx(D.getElementById("zi2")));
+    const t1 = D.getElementById("lkZ1Trukumai");
+    tiesa(t1 && t1.dataset.lygis === "patikr" && /^Patikrinkite 1 žingsnyje neįrašyta \(1\) - generuoti galima/.test(e1Tx(t1)), "santrauka: " + e1Tx(t1));
+    lygu(D.getElementById("s1T").textContent, "neįrašyta: 1", "žingsnių juosta");
+    t1.querySelector("[data-z1-suolis]").click();
+    tiesa(!D.getElementById("step1").classList.contains("hid") && D.activeElement === D.getElementById("sbTaip"), "nuoroda iš santraukos: " + (D.activeElement && D.activeElement.id));
+    D.getElementById("sbNe").click(); W.zingsniuBusena();
+    lygu([e1Tx(z()), D.getElementById("s1T").textContent], ["Pagrindiniai duomenys įrašyti - galite spausti „Toliau“.", "būdas, vertė, kalba, sutarties projektas"], "viskas įrašyta");
+    W.rodyk(2); W.klausimynas();
+    tiesa(!D.getElementById("lkZ1Trukumai") && !/1 žingsnyje neįrašyta/.test(e1Tx(D.getElementById("zi2"))), "atsakius - neturi likti");
+  });
+
+  await testas("U3 (2 žingsnis): įžangos skaičiai sutampa su klaidų santrauka ir eigos juosta (privalomi - kortelėmis, laukai ir siūlomos - vienetais, automatika - kaip skiltyje), lietuviški linksniai; „Pradėti nuo pirmo neatsakyto“ - į pirmą privalomą; atsakius - perskaičiuojama; viską atsakius - „Eiti į „Kas toliau?““ fokusuoja „Generuoti“", async () => {
+    await e0Pirkimas();
+    const S = W.__S2, nb = new Set(S.blokuojantys.map(u => u.kortele)).size, zi = () => e1Tx(D.getElementById("zi2"));
+    const L = W.eval("lkSk");
+    lygu([1, 2, 9, 10, 11, 12, 19, 20, 21, 22, 101, 111].map(n => L(n, "a", "b", "c")), ["1 a", "2 b", "9 b", "10 c", "11 c", "12 c", "19 c", "20 c", "21 a", "22 b", "101 a", "111 c"], "linksniai");
+    tiesa(zi().includes("Atsakykite į " + L(nb, "privalomą sprendimą", "privalomus sprendimus", "privalomų sprendimų") + " - kol jų neliks, generuoti negalima."), "privalomi: " + zi());
+    tiesa(zi().includes(L(S.neuzpildyti.length, "neužpildytą lauką", "neužpildytus laukus", "neužpildytų laukų")) && zi().includes(L(S.siulomi.length, "siūlomą reikšmę", "siūlomas reikšmes", "siūlomų reikšmių")), "peržiūrėkite: " + zi());
+    const auto = /Išspręsta automatiškai \((\d+)\)/.exec(e1Tx(D.querySelector("#lkAuto summary")));
+    tiesa(auto && zi().includes("Jau išspręsta automatiškai: " + auto[1] + " "), "automatika: " + zi());
+    lygu(D.getElementById("s2T").textContent, "liko " + L(nb, "privalomas sprendimas", "privalomi sprendimai", "privalomų sprendimų"), "žingsnių juosta");
+    // nuoroda į automatikos sąrašą atveria jį
+    D.querySelector("#zi2 [data-zi-auto]").click();
+    tiesa(D.getElementById("lkAuto").open, "automatikos sąrašas neatvertas");
+    // pirmas neatsakytas - pirmo privalomo sprendimo kortelė
+    D.querySelector("#zi2 [data-lk-suolis]").click();
+    const pirma = D.getElementById(S.blokuojantys[0].kortele);
+    tiesa(pirma.contains(D.activeElement) && D.activeElement.type === "radio", "pradėti nuo pirmo: " + (D.activeElement && D.activeElement.id));
+    D.activeElement.click();
+    await kol(() => e1Tx(D.getElementById("zi2")).includes("Atsakykite į " + L(nb - 1, "privalomą sprendimą", "privalomus sprendimus", "privalomų sprendimų")), "perskaičiuota po atsakymo");
+    e1Visos(); atsakykPrivalomus(); W.klausimynas();
+    tiesa(/Visi privalomi sprendimai atsakyti - galite generuoti\./.test(zi()) && /^galima generuoti/.test(D.getElementById("s2T").textContent), "visi atsakyti: " + zi());
+    const S3 = W.__S2, lauk = D.querySelector("#zi2 [data-lk-suolis]");
+    tiesa(S3.neuzpildyti.length ? lauk && lauk.dataset.lkSuolis === S3.neuzpildyti[0].id && /Eiti į pirmą neužpildytą lauką/.test(lauk.textContent) : !lauk, "laukų mygtukas");
+    D.querySelector("#zi2 [data-lk-pabaiga]").click();
+    tiesa(D.activeElement === D.getElementById("gen"), "fokusas ne ant „Generuoti“: " + (D.activeElement && D.activeElement.id));
+  });
+
+  await testas("U5 + K6: eigos mygtukas eina tik per įvardytos rūšies korteles (privalomi -> laukai -> siūlomos -> „Generuoti“), antras paspaudimas - kita kortelė; „Liko“ sąrašas - tos pačios nuorodos kaip klaidų santraukoje, atvertas lieka perpiešus; telefone - apatinė juosta su tuo pačiu mygtuku; skaičiaus pokytis pranešamas ekrano skaitytuvui po pauzės", async () => {
+    await e0Pirkimas();
+    const b = () => D.querySelector("#lkEiga [data-lk-kitas], #lkEiga [data-lk-pabaiga]");
+    const S = W.__S2, nb = new Set(S.blokuojantys.map(u => u.kortele)).size;
+    lygu([b().dataset.lkKitas, b().textContent], ["butina", "Kitas privalomas sprendimas (" + nb + ") ↓"], "pradžioje");
+    const tikslai = new Set(W.kitoTaikiniai(S, "butina"));
+    b().click(); const k1 = D.activeElement.closest(".lk");
+    b().click(); const k2 = D.activeElement.closest(".lk");
+    tiesa(k1 && k2 && k1 !== k2 && tikslai.has(k1.id) && tikslai.has(k2.id) && (k1.compareDocumentPosition(k2) & W.Node.DOCUMENT_POSITION_FOLLOWING), "šuoliai: " + (k1 && k1.id) + " -> " + (k2 && k2.id));
+    // „Liko“ sąrašas = klaidų santraukos nuorodos (ta pati klaiduSarasas)
+    const liko = D.querySelector("#lkEiga [data-lk-liko]");
+    const nuorL = [...liko.querySelectorAll("a[data-lk-suolis]")].map(a => a.dataset.lkSuolis);
+    W.alert = () => {}; D.getElementById("gen").click();
+    await kol(() => !D.getElementById("lkKlaidos").hidden, "klaidų santrauka");
+    lygu(nuorL, [...D.querySelectorAll("#lkKlaidos a[data-lk-suolis]")].map(a => a.dataset.lkSuolis), "„Liko“ ir klaidų santrauka");
+    tiesa(/^Liko: \d+ privalom/.test(e1Tx(liko.querySelector("summary"))), "„Liko“: " + e1Tx(liko.querySelector("summary")));
+    D.querySelector("#lkEiga [data-lk-liko]").open = true; await sl(30);
+    W.klausimynas();
+    tiesa(D.querySelector("#lkEiga [data-lk-liko]").open, "perpiešus „Liko“ turi likti atvertas");
+    // pranešimas ekrano skaitytuvui
+    D.getElementById("zbPranesimas").textContent = "";
+    e1Visos(); W.klausimynas();
+    await sl(400);
+    tiesa(D.getElementById("zbPranesimas").textContent === "", "pranešta be pauzės");
+    await kol(() => /^Pirkimo sąlygos: /.test(D.getElementById("zbPranesimas").textContent), "pranešimas po pauzės", 4000);
+    // privalomi atsakyti - laukai, tada siūlomos, tada „Generuoti“
+    atsakykPrivalomus(); W.klausimynas();
+    const S2 = W.__S2;
+    if (S2.neuzpildyti.length){
+      lygu([b().dataset.lkKitas, b().textContent], ["laukas", "Kitas neužpildytas laukas (" + S2.neuzpildyti.length + ") ↓"], "laukai");
+      b().click();
+      tiesa(new Set(W.kitoTaikiniai(S2, "laukas")).has(D.activeElement.closest(".lk").id), "lauko šuolis");
+    }
+    W.eval("(() => { formosSantrauka(window.__K).neuzpildyti.forEach(u => { if (u.raktai) u.raktai.forEach(r => { const m = /^(B_.*)#(\\d+)$/.exec(r); if (m) uAtsArr(m[1], +m[2], '1'); }); }); })()");
+    W.klausimynas();
+    if (!W.__S2.neuzpildyti.length && W.__S2.siulomi.length) lygu(b().dataset.lkKitas, "siuloma", "siūlomos");
+    W.eval("formosSantrauka(window.__K).siulomi.forEach(u => (u.raktai || []).forEach(r => PATV.add(r)))"); W.klausimynas();
+    if (!W.__S2.neuzpildyti.length && !W.__S2.siulomi.length){
+      tiesa(b().hasAttribute("data-lk-pabaiga") && /^Generuoti/.test(b().getAttribute("aria-label")), "„Generuoti“: " + b().outerHTML);
+      b().click();
+      tiesa(D.activeElement === D.getElementById("gen"), "„Generuoti“ fokusas");
+    }
+    // apatinė juosta: telefone matoma, plačiame ekrane - ne; tas pats mygtukas
+    const ap = D.getElementById("lkApacia");
+    tiesa(W.getComputedStyle(ap).display === "none", "plačiame ekrane apatinė juosta matoma");
+    const f = W.frameElement, buvo = f.style.width;
+    f.style.width = "375px"; await sl(100);
+    const st = W.getComputedStyle(ap);
+    tiesa(st.display === "flex" && st.position === "fixed" && /^Užpildyta \d+ iš \d+/.test(e1Tx(ap)) && ap.querySelector("[data-lk-kitas], [data-lk-pabaiga]"), "telefone: " + st.display + " " + e1Tx(ap));
+    tiesa(D.documentElement.scrollWidth <= W.innerWidth, "telefone slenka: " + D.documentElement.scrollWidth);
+    W.rodyk(1); await sl(30);
+    tiesa(W.getComputedStyle(ap).display === "none", "kitame žingsnyje apatinė juosta matoma");
+    f.style.width = buvo;
+  });
+
+  await testas("U6: būsenų paaiškinimas 2 žingsnio viršuje - visos keturios būsenos ir „Išspręsta automatiškai“ tekstu su tais pačiais ženkleliais; pagal numatymą atvertas, suskleistas lieka suskleistas ir juodraštyje", async () => {
+    await modulis();
+    await jdPirkimas();
+    const lg = D.getElementById("lkLegenda");
+    tiesa(lg.open && lg.compareDocumentPosition(D.getElementById("klausimai")) & W.Node.DOCUMENT_POSITION_FOLLOWING, "atvertas ir virš klausimų");
+    const zym = [...lg.querySelectorAll("dt")].map(e1Tx);
+    lygu(zym, [W.eval("BUSENOS").neuzpildyta, W.eval("BUSENOS").siuloma, W.eval("BUSENOS").patvirtinta, W.eval("BUSENOS").neprivaloma, "Išspręsta automatiškai"], "būsenos");
+    tiesa([...lg.querySelectorAll("dd")].every(d => e1Tx(d).length > 40) && /Patvirtinti/.test(e1Tx(lg)), "paaiškinimai");
+    lg.open = false; await sl(30);
+    lygu(W.surinkJuodrasti().legenda, false, "juodraštyje");
+    W.JD.issaugok({ priverstinai: true });
+    const id = W.JD.dabartinis();
+    await modulisAdresu("juodrastis=" + id);
+    await kol(() => W.JD.dabartinis() === id && W.__K, "atkurtas juodraštis", 60000);
+    tiesa(!D.getElementById("lkLegenda").open, "atkūrus turi likti suskleistas");
+    W.JD.trink && W.JD.trink(id);
+  });
+
+  await testas("K5: „Prieš generuojant“ - kiekviena grupė su lygiu tekstu (Būtina, Patikrinkite, Informacija), būtini visada pirmi, informacija - paskutinė", async () => {
+    await e0Pirkimas();
+    const gr = [...D.querySelectorAll("#lkSantrauka [data-lygis]")];
+    const ly = gr.map(g => g.dataset.lygis), eil = { butina: 0, patikr: 1, info: 2 };
+    tiesa(ly.length >= 3 && ly[0] === "butina" && ly.every((x, i) => !i || eil[ly[i - 1]] <= eil[x]), "eilė: " + ly.join(","));
+    tiesa(gr.every(g => { const s = g.querySelector(".lk-lyg"); return s && e1Tx(s) === { butina: "Būtina", patikr: "Patikrinkite", info: "Informacija" }[g.dataset.lygis] && e1Tx(g).startsWith(e1Tx(s) + " "); }), "lygio žymos");
+    e1Visos(); atsakykPrivalomus(); W.klausimynas();
+    tiesa(![...D.querySelectorAll("#lkSantrauka [data-lygis]")].some(g => g.dataset.lygis === "butina"), "atsakius - be „Būtina“");
+  });
+
+  await testas("U3 + K4 (sutarties žingsnis): įžanga su likusių klausimų skaičiumi; bandžius generuoti - santrauka žingsnio viršuje (fokusas), kiekvienas klausimas - nuoroda į jo kortelę, pranešimas prie mygtuko trumpas su „Rodyti sąrašą“; sugeneravus - santrauka dingsta", async () => {
+    await modulis();
+    await jdPirkimas();
+    W.rodyk("sutartis");
+    await kol(() => D.querySelector("#sutartiesForma #sf-kainodara"), "sutarties klausimai");
+    W.zingsniuBusena();
+    const F = W.SUTARTIES_FORMA.busena(), L = W.eval("lkSk");
+    tiesa(e1Tx(D.getElementById("ziSutT")).includes("Atsakykite į " + L(F.truksta.length, "sutarties klausimą", "sutarties klausimus", "sutarties klausimų")), "įžanga: " + e1Tx(D.getElementById("ziSutT")));
+    D.getElementById("genVisi").click();
+    const k = D.getElementById("sfKlaidos");
+    await kol(() => !k.hidden, "sutarties klaidų santrauka");
+    const a = [...k.querySelectorAll("a[data-sf-suolis]")];
+    tiesa(D.activeElement === k && a.length === F.truksta.length && k.querySelectorAll("li").length === F.truksta.length, "santrauka: " + a.length + " / " + F.truksta.length);
+    tiesa(a.every(x => D.getElementById(x.dataset.sfSuolis) && D.getElementById(x.dataset.sfSuolis).closest("#sutartiesForma")), "taikiniai");
+    const gb = D.getElementById("genVisiBusena");
+    tiesa(/Neatsakyti sutarties klausimai \(\d+\)\. Sąrašas su nuorodomis/.test(gb.textContent) && [...gb.querySelectorAll("button")].some(x => x.textContent === "Rodyti sąrašą") && gb.textContent.length < 400, "pranešimas: " + gb.textContent);
+    a[0].click();
+    tiesa(D.getElementById(a[0].dataset.sfSuolis).contains(D.activeElement), "šuolis: " + (D.activeElement && D.activeElement.id));
+    // atsakius vieną - sąrašas trumpėja
+    const kort = D.getElementById(a[0].dataset.sfSuolis), r = kort.querySelector("input[type=radio]");
+    if (r){ r.click(); await kol(() => k.querySelectorAll("li").length === F.truksta.length - 1 || W.SUTARTIES_FORMA.busena().truksta.length >= F.truksta.length, "po atsakymo"); W.zingsniuBusena();
+      lygu(k.querySelectorAll("li").length, W.SUTARTIES_FORMA.busena().truksta.length, "sąrašas = trūkstami"); }
+    // tik pirkimo sąlygos - sugeneravus santrauka dingsta
+    W.rodyk(2); await e1Generuok();
+    tiesa(k.hidden && !W.eval("SF_KLAIDOS"), "sugeneravus santrauka turi dingti");
+  });
+
+  await testas("D4a: nuorodos tekste į to paties dokumento punktus rodo į esamus punktus ir (LT) į tą patį šablono punktą - AK, TSD (pirmos alternatyvos), MVP, ND, DPS konkretus, AK LT/EN; sintetinis pakeisto numerio ir dingusio punkto atvejis", async () => {
+    // sintetinis: šablone 2.1 ir 2.2, sugeneruotame 2.1 pašalintas - buvęs 2.2 tapo 2.1, o nuoroda „2.2 punkte“ liko
+    const T0 = ["2.\tSKYRIUS", "2.1.\tPirmasis punktas apie terminus.", "2.2.\tAntrasis punktas apie kainą.", "Tekstas: kaip nurodyta 2.2 punkte."].map(d4Pastraipa);
+    const T1 = ["2.\tSKYRIUS", "2.1.\tAntrasis punktas apie kainą.", "Tekstas: kaip nurodyta 2.2 punkte."].map(d4Pastraipa);
+    const r = d4Radiniai(T0, T1);
+    tiesa(r.n === 1 && r.out.length === 1 && /^nėra punkto 2\.2/.test(r.out[0]), "sintetinis (dingęs): " + r.out.join(" | "));
+    const T2 = ["2.\tSKYRIUS", "2.1.\tAntrasis punktas apie kainą.", "2.2.\tKitas punktas.", "Tekstas: kaip nurodyta 2.2 punkte."].map(d4Pastraipa);
+    const r2 = d4Radiniai(T0, T2);
+    tiesa(r2.out.length === 1 && /^šablono 2\.2 punktas tapo 2\.1/.test(r2.out[0]), "sintetinis (pakeistas): " + r2.out.join(" | "));
+    lygu(d4Radiniai(T0, T0).out, [], "be pakeitimų");
+    let viso = 0;
+    for (const [budas, kalba, grupes] of [["T-AK", "LT", "pirmas"], ["T-SD", "LT", "pirmas"], ["MV-SAB", "LT", "pirmas"], ["S-ND", "LT", "paskutinis"], ["DPS-K", "LT", "paskutinis"], ["T-AK", "LT_EN", "paskutinis"]]){
+      const X = await d4Paketas(await generuokSu({ budas, kalba, grupes }));
+      const blogi = X.filter(x => x.out.length);
+      lygu(blogi.map(x => x.kodas + ": " + x.out.join(" | ")), [], budas + " " + kalba);
+      viso += X.reduce((a, x) => a + x.n, 0);
+    }
+    tiesa(viso >= 50, "nuorodų rasta per mažai (" + viso + ") - pasikeitė dokumentų tekstas ar paieška");
+  });
+
+  await testas("U9: 4 žingsnyje „Kas toliau“ - trys žingsniai; atsisiuntus ZIP pirmas pažymimas atliktu; vietų skaičius - kaip dokumentų lentelėje; „Patikrinkite“ vietos generuojant; pakeitus atsakymą - „Sugeneruokite iš naujo“; „Pradėti naują pirkimą“ - kaip antraštės mygtukas", async () => {
+    await modulis();
+    await jdPirkimas({ sutartis: "ne" });
+    const Sg = W.formosSantrauka(W.__K), lauktaPk = Sg.neuzpildyti.length + Sg.siulomi.length + Sg.zingsnis1.length + (Sg.teise || []).length + (Sg.kvl || []).length + W.z1Trukumai().length;
+    await e1Generuok();
+    const kt = D.getElementById("kasToliau"), li = () => [...kt.querySelectorAll("ol > li")];
+    lygu(li().length, 3, "žingsnių");
+    tiesa(!li()[0].classList.contains("atlikta") && /Atsisiųsti visus \(ZIP\)/.test(e1Tx(li()[0])), "pirmas: " + e1Tx(li()[0]));
+    const lent = [...D.querySelectorAll("#rezultatas .rz--warn")].reduce((a, x) => a + (+(/: (\d+)/.exec(x.textContent) || [0, 0])[1]), 0);
+    tiesa(lent ? e1Tx(li()[1]).includes("Liko užbaigti " + W.eval("lkSk")(lent, "vietą", "vietas", "vietų")) : /neužbaigtų vietų nerado/.test(e1Tx(li()[1])), "vietos: " + lent + " / " + e1Tx(li()[1]));
+    const pk = W.__GEN.patikrinkite;
+    tiesa(pk === lauktaPk && (pk ? e1Tx(li()[1]).includes("Generuojant dar buvo " + W.eval("lkSk")(pk, "vieta", "vietos", "vietų")) : !/Generuojant dar buvo/.test(e1Tx(li()[1]))), "„Patikrinkite“: " + pk + " / " + lauktaPk);
+    tiesa(kt.querySelector('a[href="#paketoPatikraH"]') && D.getElementById("paketoPatikraH") && kt.querySelector('a[href="#baigtumas"]') !== null === (lent > 0), "nuorodos");
+    // ZIP atsisiuntimas (pats parsisiuntimas - ne šio testo dalykas)
+    W.poAtsisiuntimo(W.GP_DARBAS.momentas());
+    tiesa(li()[0].classList.contains("atlikta") && /atsisiųsta/.test(e1Tx(li()[0])), "po atsisiuntimo: " + e1Tx(li()[0]));
+    // pakeitus atsakymą - pergeneruoti
+    W.rodyk(2);
+    const kl = Object.keys(W.__K.pavieniai)[0]; W.uAts(kl, !ATS()[kl]);
+    W.rodyk(3);
+    tiesa(/^Sugeneruokite iš naujo/.test(e1Tx(li()[0])) && !li()[0].classList.contains("atlikta"), "pakeitus: " + e1Tx(li()[0]));
+    let naujas = 0; D.getElementById("naujasPirkimas").click = () => { naujas++; };
+    kt.querySelector("[data-kt-naujas]").click();
+    lygu(naujas, 1, "„Pradėti naują pirkimą“");
+  });
+}
+
 (async function(){
   // Sutarties parinkimo stebėjimo įrašai (2026-10-08), nustatymai ir juodraščiai (2026-10-15, gprocure.salygos.juodrastis.*) - tikri įrašai atkuriami, testų sukurti šalinami
   const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0 || k.indexOf("gprocure.salygos") === 0);
@@ -10682,6 +11033,7 @@ async function testaiEtapas0(){
     await testaiPaketoPatikra();
     await testaiPriedoNuorodos();
     await testaiEtapas0();
+    await testaiEtapas1();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
