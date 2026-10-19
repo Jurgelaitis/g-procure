@@ -10363,6 +10363,100 @@ async function testaiPaketoPatikra(){
   });
 }
 
+/* Nuorodos į SPS priedus ir bendrų priedų antraštės (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“): šablonuose nuorodos į ūkio subjektų
+   informacijos priedo priedėlius ir „Konfidencialią informaciją“ - to paties SPS priedų sąrašo numeriais (sablonu-taisymai.py X); bendrų priedų
+   failų antraštės generuojant - šio paketo SPS priedų sąrašo numeriu (priedoAntrasciuNumeriai). */
+const PRIEDU_SAR_RE = { sub: /^(\d+) priedas\s*[–-]\s*Informacija apie ūkio subjektus/iu, konf: /^(\d+) priedas\s*[–-]\s*Konfidenciali informacija/iu, subEN: /^Annex (\d+)\s*[–-]\s*Information about the economic entit/iu };
+const PRIEDU_NUOR_RE = [["sub", /SPS (\d+) priedo 2 priedėlį \(Kvazisubtiekėjo sutikimą/g], ["sub", /pagal SPS (\d+) priedo formoje esančius priedėlius/g],
+  ["konf", /SPS (\d+) priedą „Konfidenciali informacija“/g], ["subEN", /Appendix 2 to Annex (\d+) to the SPC \(the consent of the Quasi/g],
+  ["subEN", /according to the appendixes attached to Annex (\d+) to the SPC/g]];
+function priedoNuorodos(pars){
+  const sar = {}, kl = [], rasta = [];
+  pars.forEach(t => Object.entries(PRIEDU_SAR_RE).forEach(([k, re]) => { const m = re.exec(t.replace(/^\s+/, "")); if (m && !sar[k]) sar[k] = m[1]; }));
+  pars.forEach(t => PRIEDU_NUOR_RE.forEach(([k, re]) => { re.lastIndex = 0; let m; while ((m = re.exec(t))){ rasta.push(k + "=" + m[1]); if (sar[k] !== m[1]) kl.push(k + ": " + m[1] + " (sąraše " + sar[k] + ") - " + m[0]); } }));
+  return { sar, kl, rasta };
+}
+async function testaiPriedoNuorodos(){
+  dabartine = grupe("Nuorodos į SPS priedus ir bendrų priedų antraštės (2026-10-19)");
+  await testas("Šablonų korekcija X: nuorodos į „Informacijos apie ūkio subjektus“ priedėlius ir „Konfidencialią informaciją“ - to paties SPS priedų sąrašo numeriais visuose 11 SPS šablonų (LT ir LT/EN), žemėlapių tekstas ir raudoni fragmentai - tie patys", async () => {
+    const kl = [], kiek = {};
+    for (const k of ["AK_LT_SPS", "AK_LTEN_SPS", "AKV_LT_SPS", "MVP_LT_SPS", "MVP_LTEN_SPS", "ND_LT_SPS", "ND_LTEN_SPS", "SSD_LT_SPS", "SSD_LTEN_SPS", "TSD_LT_SPS", "TSD_LTEN_SPS"]){
+      const x = await (await W.JSZip.loadAsync(await (await W.fetch("templates/" + k + ".docx")).arrayBuffer())).file("word/document.xml").async("string");
+      const r = priedoNuorodos(visosPastraipos(x).map(p => p.t));
+      r.kl.forEach(e => kl.push(k + " " + e)); kiek[k] = r.rasta.length;
+      const Z = await (await W.fetch("zemelapiai/" + k + ".json")).json();
+      priedoNuorodos(Object.values(Z.paras)).kl.forEach(e => kl.push(k + " žemėlapis " + e));
+      (Z.intarpai || []).forEach(n => { const m = /^(SPS|Appendix 2 to Annex|Annex) (\d+)/.exec((n.raudonas || "").trim());
+        if (m && PRIEDU_NUOR_RE.some(([, re]) => { re.lastIndex = 0; return re.test(n.text); }) && !(n.text || "").includes((n.raudonas || "").trim())) kl.push(k + " raudonas fragmentas: " + n.raudonas); });
+    }
+    lygu(kl, [], "neatitikimai");
+    lygu(kiek, { AK_LT_SPS: 2, AK_LTEN_SPS: 2, AKV_LT_SPS: 1, MVP_LT_SPS: 2, MVP_LTEN_SPS: 4, ND_LT_SPS: 3, ND_LTEN_SPS: 4, SSD_LT_SPS: 3, SSD_LTEN_SPS: 4, TSD_LT_SPS: 3, TSD_LTEN_SPS: 4 }, "rasta nuorodų");
+  });
+
+  await testas("Bendrų priedų antraštės generuojant - šio paketo SPS priedų sąrašo numeriu: AK LT („Konfidenciali informacija“ - 7), TSD LT (visi vienu didesni: 6, 8, 9, 10), AK LT/EN (ūkio subjektų priedas ir priedėliai - 5 abiem kalbomis); priedėlio numeris nekeičiamas, 4 žingsnis išvardija pakeitimus; SPS nuorodos sutampa su priedų antraštėmis", async () => {
+    const PR = ["KONFINFO", "SUBTIEKEJAI", "SPECIALISTAI", "SUTARTYS"];
+    const antrastes = async docs => {
+      const o = {};
+      for (const [tr, x] of Object.entries(docs)){
+        if (!/^PRIEDAI_/.test(tr) || !x.xml) continue;
+        const z = await W.JSZip.loadAsync(await x.r.blob.arrayBuffer()), hs = [];
+        for (const n of Object.keys(z.files).sort().filter(n => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n)))
+          visosPastraipos(await z.file(n).async("string")).map(p => p.t.replace(/\s+/g, " ").trim()).filter(t => /^SPS \d+ pried/.test(t) && t.length < 120).forEach(t => hs.push(t));
+        if (hs.length) o[tr.replace(/^PRIEDAI_(LT|LTEN)_/, "")] = hs;
+      }
+      return o;
+    };
+    let docs = await generuokSu({ budas: "T-AK", priedai: PR });
+    lygu(await antrastes(docs), { KONFINFO: ["SPS 7 priedas"], SUBTIEKEJAI: ["SPS 5 priedas", "SPS 5 priedo 1 priedėlis", "SPS 5 priedo 2 priedėlis"], SUTARTYS: ["SPS 8 priedas"], SPECIALISTAI: ["SPS 9 priedas"] }, "AK LT");
+    let sps = docs.AK_LT_SPS.pars, r = priedoNuorodos(sps);
+    lygu([r.kl, [...new Set(r.rasta)].sort()], [[], ["konf=7", "sub=5"]], "AK LT SPS nuorodos");
+    const bl = () => (D.getElementById("antrasciuNr") || { textContent: "" }).textContent.replace(/\s+/g, " ");
+    tiesa(/Priedų antraštės suderintos su SPS priedų sąrašu \(1\)/.test(bl()) && /„SPS 6 priedas“ → „SPS 7 priedas“/.test(bl()), "4 žingsnis AK: " + bl());
+
+    docs = await generuokSu({ budas: "T-SD", priedai: PR });
+    lygu(await antrastes(docs), { KONFINFO: ["SPS 8 priedas"], SUBTIEKEJAI: ["SPS 6 priedas", "SPS 6 priedo 1 priedėlis", "SPS 6 priedo 2 priedėlis"], SUTARTYS: ["SPS 9 priedas"], SPECIALISTAI: ["SPS 10 priedas"] }, "TSD LT");
+    r = priedoNuorodos(docs.TSD_LT_SPS.pars);
+    lygu([r.kl, [...new Set(r.rasta)].sort()], [[], ["konf=8", "sub=6"]], "TSD LT SPS nuorodos");
+    tiesa(/\(6\)/.test(bl()) && /„SPS 5 priedo 2 priedėlis“ → „SPS 6 priedo 2 priedėlis“/.test(bl()), "4 žingsnis TSD: " + bl());
+
+    docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", priedai: PR });
+    const a = await antrastes(docs);
+    lygu(a.SUBTIEKEJAI, ["SPS 5 priedo 1 priedėlis / Appendix 1 to Annex 5 to the SPC", "SPS 5 priedo 2 priedėlis / Appendix 2 to Annex 5 to the SPC", "SPS 5 priedas / Annex 5 to the SPC"], "AK LT/EN ūkio subjektai");
+    lygu([a.KONFINFO, a.SUTARTYS, a.SPECIALISTAI], [["SPS 7 priedas / Annex 7 to the SPC"], ["SPS 8 priedas / Annex 8 to the SPC"], ["SPS 9 priedas / Annex 9 to the SPC"]], "AK LT/EN kiti (jau sutapo)");
+    r = priedoNuorodos(docs.AK_LTEN_SPS.pars);
+    lygu(r.kl, [], "AK LT/EN SPS nuorodos");
+    tiesa(/\(3\)/.test(bl()) && /Appendix 1 to Annex 6 to the SPC“ → „SPS 5 priedo 1 priedėlis \/ Appendix 1 to Annex 5 to the SPC“/.test(bl()), "4 žingsnis LT/EN: " + bl());
+  });
+
+  await testas("Antraštės keitimas Word atkarpose: numeris per kelias atkarpas, formatavimas ir kiti tekstai nekeičiami; ne antraštė („Tiekėjas pildo SPS 6 priedą“, ilgas sakinys), kito dokumento numeris („6 priedas / Annex 6 of the Rules ...“) ir sąraše nesantis priedas - nekeičiami", async () => {
+    const X = new W.DOMParser().parseFromString('<w:document xmlns:w="' + NSW + '"><w:body>'
+      + '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>SPS </w:t></w:r><w:r><w:t>1</w:t></w:r><w:r><w:t>2 priedo 1 priedėlis / Appendix 1 to Annex 12 to the SPC</w:t></w:r></w:p>'
+      + '<w:p><w:r><w:t>Tiekėjas pildo SPS 6 priedą.</w:t></w:r></w:p>'
+      + '<w:p><w:r><w:t>6 priedas/ Annex 6 of the Rules of Procedure of the Coordination Commission</w:t></w:r></w:p></w:body></w:document>', "application/xml");
+    const ts = [...X.getElementsByTagNameNS(NSW, "t")].slice(0, 3);
+    const sj = ts.map(t => t.textContent).join(""), an = sj.indexOf("Annex 12") + 6;
+    W.keiskAtkarpas(ts, [[4, 6, "5"], [an, an + 2, "5"]]);
+    lygu(ts.map(t => t.textContent), ["SPS ", "5", " priedo 1 priedėlis / Appendix 1 to Annex 5 to the SPC"], "atkarpos");
+    tiesa(ts[1].getAttribute("xml:space") === "preserve" && X.getElementsByTagNameNS(NSW, "b").length === 1, "formatavimas ar tarpai");
+    const re = W.eval("PRIEDO_ANTRASTE");
+    lygu(["SPS 12 priedo 1 priedėlis / Appendix 1", "  SPS 5 priedas", "Tiekėjas pildo SPS 6 priedą.", "6 priedas/ Annex 6 of the Rules", "SPS 6 priedą", "SPS 6 priedams"].map(t => re.test(t)), [true, true, false, false, false, false], "antraštės atpažinimas");
+    // priedas, kurio SPS priedų sąraše nėra (nėra SPS dokumento) - nekeičiama
+    await modulis();
+    const d = { trumpas: "PRIEDAI_LT_KONFINFO" }, doc = await W.eval("GPDocx").open(await (await W.fetch("templates/PRIEDAI_LT_KONFINFO.docx")).arrayBuffer());
+    lygu(await W.priedoAntrasciuNumeriai(doc, d), [], "be SPS");
+    // su AK LT SPS (Konfidenciali informacija - 7): keičiama tik antraštė, ne sakinys, minintis SPS priedą, ir ne kitas priedas
+    await jdPirkimas();
+    const z = new W.JSZip();
+    z.file("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>');
+    z.file("word/document.xml", '<w:document xmlns:w="' + NSW + '"><w:body><w:p><w:r><w:t>SPS 6 priedas</w:t></w:r></w:p>'
+      + '<w:p><w:r><w:t>Tiekėjas pildo SPS 6 priedą „Konfidenciali informacija“.</w:t></w:r></w:p><w:p><w:r><w:t>SPS 6 priedo 1 priedėlis</w:t></w:r></w:p></w:body></w:document>');
+    const sd = await W.eval("GPDocx").open(await z.generateAsync({ type: "arraybuffer" }));
+    lygu(await W.priedoAntrasciuNumeriai(sd, d), [{ buvo: "SPS 6 priedas", tapo: "SPS 7 priedas" }, { buvo: "SPS 6 priedo 1 priedėlis", tapo: "SPS 7 priedo 1 priedėlis" }], "sintetinis");
+    lygu(await W.priedoAntrasciuNumeriai(sd, { trumpas: "AK_LT_SPS" }), [], "ne priedas");
+    lygu(await W.priedoAntrasciuNumeriai(sd, { trumpas: "PRIEDAI_LT_DERYBOS" }), [], "priedas be SPS priedų sąrašo eilutės");
+  });
+}
+
 (async function(){
   // Sutarties parinkimo stebėjimo įrašai (2026-10-08), nustatymai ir juodraščiai (2026-10-15, gprocure.salygos.juodrastis.*) - tikri įrašai atkuriami, testų sukurti šalinami
   const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0 || k.indexOf("gprocure.salygos") === 0);
@@ -10416,6 +10510,7 @@ async function testaiPaketoPatikra(){
     await testaiPastabos1016();
     await testaiSutartiesDI();
     await testaiPaketoPatikra();
+    await testaiPriedoNuorodos();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
