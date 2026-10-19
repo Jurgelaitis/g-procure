@@ -227,6 +227,10 @@ function zaliejiSalygose(){
   W.pasirinkGrupe(g[0], g[1].nariai.find(n => re.test(n.raktas)).raktas);
 }
 
+/* Bandomoji techninė specifikacija sako „Pirkimo objektas į dalis neskaidomas, nes ...“ - nuo 2026-10-19 (D1) šį klausimą išsprendžia taisyklė
+   (PP-salygos/dalys.js), ir DI jo nebeklausiamas. DI pasiūlymų testai jį naudoja kaip alternatyvų pavyzdį, todėl klausimas grąžinamas taip, kaip
+   tai padarytų žmogus - „Keisti - atsakysiu pats“. */
+const dalysKlausti = () => { W.eval("DALYS_KLAUSTI = true"); W.klausimynas(); };
 /* Visa eiga: 2 žingsnis, du dokumentai, analizė su standartiniu atsakymu. */
 async function suPasiulymais(){
   await modulis();
@@ -234,6 +238,7 @@ async function suPasiulymais(){
   zaliejiSalygose();
   D.getElementById("verte").value = "987 654";
   await W.aiPridek([await docx(TS[0], TS[1]), await docx(SUTARTIS[0], SUTARTIS[1])]);
+  dalysKlausti();
   const st = standartinisAtsakymas();
   AI.atsakymas = aiOk({ atsakymai: st.atsakymai, pastabos: st.pastabos });
   D.getElementById("aiGauti").click();
@@ -590,6 +595,7 @@ async function testaiEiga(){
   await testas("Telefone (375 px): juosta ir pasiūlymai neplatina puslapio", async () => {
     await modulis("siauras"); await zingsnis2("T-SD", "LT", "darbai"); zaliejiSalygose();
     await W.aiPridek([await docx(TS[0], TS[1]), await docx(SUTARTIS[0], SUTARTIS[1])]);
+    dalysKlausti();
     const st = standartinisAtsakymas();
     AI.atsakymas = aiOk({ atsakymai: st.atsakymai });
     D.getElementById("aiGauti").click();
@@ -10698,6 +10704,228 @@ async function d4Paketas(docs){
   }
   return X;
 }
+/* ---- D1 (2026-10-19): pirkimo objekto dalys iš pirkimo kortelės ir dokumentų (PP-salygos/dalys.js) ----
+   Išmatuota su 19 viešų LITGRID CVP IS paketų (13 neskaidytų, 6 skaidyti - 2-8 dalys): techninės specifikacijos dalių nemini, o skaidytuose
+   pirkimuose ji išskaidyta po failą kiekvienai daliai. Testų tekstai - tų paketų sandaros pavyzdžiai (be pirkimų numerių). */
+const ROMD = ["I", "II", "III", "IV"];
+const blk = eil => eil.map(t => ({ text: t }));
+const dalTS = (n, pav) => Promise.all(Array.from({ length: n }, (_, i) => docx(ROMD[i] + " dalis. Techninė specifikacija.docx",
+  ["SPS 2 priedas", "TECHNINĖ SPECIFIKACIJA", ROMD[i] + " pirkimo objekto dalis (toliau – POD)", (pav || [])[i] || ("Dalies " + (i + 1) + " prekės"),
+   "Informacija apie perkamą prekę:", "Perkama prekė: 1 vnt."])));
+const dalGrupe = () => Object.values(W.__K.grupes).find(g => g.nariai.some(n => /^Jei Pirkimo objektas į dalis neskaidomas/.test(n.tekstas)));
+const dalGid = () => Object.keys(W.__K.grupes).find(x => W.__K.grupes[x] === dalGrupe());
+const dalAuto = () => W.__K.automatika.filter(a => a.keisti === "dalys");
+const dalKortele = () => { const h = [...D.querySelectorAll("#klausimai .lk-kl")].find(x => /skaidomas į dalis\?/.test(x.textContent)); return h ? h.closest("section.lk") : null; };
+const dalIv = docs => W.GP_DALYS.ivertink({ dokumentai: docs.map(([v, e, ts]) => ({ vardas: v, blokai: blk(e), ts: ts !== false })) });
+async function testaiDalys(){
+  dabartine = grupe("D1 (2026-10-19): pirkimo objekto dalys iš pirkimo kortelės ir dokumentų");
+
+  await testas("Taisyklės: „skaidomas į N dalis“ (skaitmenimis, romėniškai, žodžiu) su dalių sąrašu (ir PDF eilutėmis), „neskaidomas, nes ...“ su priežastimi; sąlyginiai sakiniai, klausimai, BPS ir rinkos konsultacijos klausimas - ne sprendimas", async () => {
+    await modulis();
+    let r = dalIv([["Kvietimas.docx", ["2.3. Pirkimo objektas skaidomas į 3 Pirkimo objekto dalis:", "2.3.1. I Pirkimo objekto dalis – Galios transformatoriai;",
+      "2.3.2. II Pirkimo objekto dalis – Matavimo transformatoriai;", "2.3.3. III Pirkimo objekto dalis – Ribotuvai.", "2.4. Tiekėjas gali pateikti Pasiūlymą vienai ar visoms dalims."], false]]);
+    lygu([r.busena, r.skaidomas, r.skaicius, r.pavadinimai.map(p => p.tekstas)], ["isspresta", true, 3, ["Galios transformatoriai", "Matavimo transformatoriai", "Ribotuvai"]], "skaitmenimis ir sąrašas");
+    tiesa(/Pirkimo objektas skaidomas į 3 Pirkimo objekto dalis/.test(r.irodymai[0].citata) && /dokumentą „Kvietimas\.docx“/.test(r.irodymai[0].pagal), "citata ir kilmė: " + JSON.stringify(r.irodymai[0]));
+    r = dalIv([["Paraiška.pdf", ["Pirkimas skaidomas į III pirkimo objekto dalis (toliau – POD). I POD - Baterijų prietaisas; II POD - Monitoringo sistema; III POD - Apkrovos blokas. Informacija pridėtuose dokumentuose."], false]]);
+    lygu([r.skaicius, r.pavadinimai.map(p => p.tekstas)], [3, ["Baterijų prietaisas", "Monitoringo sistema", "Apkrovos blokas"]], "romėniškas skaičius ir POD");
+    r = dalIv([["Rinkos konsultacija.pdf", ["LITGRID AB planuoja skelbti pirkimą. Pirkimas bus skaidomas į dvi dalis: I dalis kavos aparatų nuoma; II dalis: Bakalėjos prekės ir indai"], false]]);
+    lygu([r.skaicius, r.pavadinimai.map(p => p.tekstas)], [2, ["kavos aparatų nuoma", "Bakalėjos prekės ir indai"]], "žodžiu");
+    r = dalIv([["Sąlygos.pdf", ["2.3. Pirkimo objektas skaidomas į 2 Pirkimo objekto dalis:", "2.3.1. I Pirkimo objekto dalis – Rezervinės apsaugos įranga, nurodyta Techninės specifikacijos 1",
+      "Pirkimo objekto daliai;", "2.3.2. II Pirkimo objekto dalis – Kita įranga.", "2.4. Tiekėjas gali pateikti Pasiūlymą vienai dalims."], false]]);
+    lygu(r.pavadinimai.map(p => p.tekstas), ["Rezervinės apsaugos įranga, nurodyta Techninės specifikacijos 1 Pirkimo objekto daliai", "Kita įranga"], "PDF pavadinimas per dvi eilutes");
+    r = dalIv([["Techninė specifikacija.docx", ["1. Pirkimo objektas - remonto darbai.", "2. Pirkimo objektas į dalis neskaidomas, nes darbai technologiškai susiję."]]]);
+    lygu([r.busena, r.skaidomas, r.priezastis && r.priezastis.tekstas], ["isspresta", false, "darbai technologiškai susiję"], "neskaidomas su priežastimi");
+    r = dalIv([["Bendrosios sąlygos.docx", ["Jeigu Pirkimo objektas į dalis neskaidomas, Tiekėjas turi pateikti vieną Pasiūlymą visai Pirkimo objekto apimčiai.",
+      "Jei SPS nurodyta, kad Pirkimo objektas skaidomas į 2 dalis – kiekvienai daliai sudaroma atskira Sutartis.", "Ar pirkimo objektas bus skaidomas į 3 dalis?",
+      "Ar sujungimas į vieną pirkimą ribotų konkurenciją? Jei taip - kurias grupes rekomenduotumėte išskirti į atskiras pirkimo dalis ir kodėl?"], false]]);
+    lygu(r.busena, "nera", "sąlyginiai ir klausimai: " + JSON.stringify(r.irodymai));
+  });
+
+  await testas("Taisyklės: techninė specifikacija po failą kiekvienai daliai - dalių skaičius (pavadinimai - tik skirtingi); vieno dokumento skyriai „I DALIS“, standartų „2 dalis:“, reglamento „I dalis – instrukcija“, „įrenginiai ir jų dalys“ - ne dalys; trūkstama dalis ar vienas failas - nepilna", async () => {
+    await modulis();
+    let r = dalIv([["Techninė užduotis.pdf", ["TECHNINĖ UŽDUOTIS PARENGTI STANDARTIZUOTIEMS PROJEKTINIAMS PASIŪLYMAMS. " + "Užduoties tekstas. ".repeat(40), "I DALIS. REIKALAVIMAI PRIJUNGIMUI", "II DALIS. BENDRIEJI REIKALAVIMAI", "III DALIS. TECHNINIAI REIKALAVIMAI"]],
+      ["Techninė specifikacija.docx", ["TECHNINĖ SPECIFIKACIJA", "LST EN 10025-2:2019 „Karštai valcuoti konstrukcinio plieno gaminiai. 2 dalis: Nelegiruotų plienų techninės tiekimo sąlygos“;", "I DALIS. BENDRIEJI REIKALAVIMAI", "1 dalis. Bendrosios tiekimo sąlygos"]],
+      ["Eksploatavimo reglamentas.docx", ["Jei instrukciją sudaro dvi atskiros dalys, jos vadinamos taip: I dalis – operatyvinės priežiūros instrukcija; II dalis – techninės priežiūros instrukcija."], false],
+      ["Kvietimas.docx", ["Telekomunikacijų ir valdymo įrenginiai ir jų dalys. Informacija pirkimo dokumentuose."], false]]);
+    lygu(r.busena, "nera", "spąstai: " + JSON.stringify(r.irodymai));
+    // dalies žyma - tik dokumento pradžioje (viso pirkimo techninė specifikacija, kurios tekste minimos dalys, - ne dalies dokumentas)
+    r = dalIv([1, 2].map(n => ["Techninė specifikacija " + ["A", "B"][n - 1] + ".docx", ["TECHNINĖ SPECIFIKACIJA", "Bendrieji reikalavimai visoms prekėms. ".repeat(20), "Prekės pristatomos kartu (" + n + " Pirkimo objekto dalis) ir montuojamos."]]));
+    lygu(r.busena, "nera", "žyma dokumento viduje: " + JSON.stringify(r.irodymai));
+    r = dalIv([["SPS 4 priedas. I dalis. 110 kV TS.pdf", ["SPS 4 priedas/Annex 4 to SPC\nI PIRKIMO OBJEKTO DALIS PART I OF THE PROCUREMENT OBJECT\nTECHNINĖ SPECIFIKACIJA TECHNICAL SPECIFICATION\n1. Informacija apie perkamas prekes:"]],
+      ["SPS 4 priedas. II dalis. 330 kV TS.pdf", ["SPS 4 priedas/Annex 4 to SPC\nII PIRKIMO OBJEKTO DALIS PART II OF THE PROCUREMENT OBJECT\nTECHNINĖ SPECIFIKACIJA TECHNICAL SPECIFICATION\n1. Informacija apie perkamas prekes:"]]]);
+    lygu([r.busena, r.skaidomas, r.skaicius, r.pavadinimai.length], ["isspresta", true, 2, 0], "PDF antraštės be pavadinimų");
+    tiesa(/techninę specifikaciją po failą kiekvienai daliai \(„SPS 4 priedas\. I dalis/.test(r.irodymai[0].pagal), "kilmė: " + r.irodymai[0].pagal);
+    r = dalIv([1, 2, 3].map(n => ["Techninė užduotis " + n + " dalis.pdf", ["TECHNINĖ UŽDUOTIS\nPERIMETRO APSAUGOS STIPRINIMAS\n" + ["Alytaus 330/110 kV TP", "Kauno TP", "Vilniaus TP ir SKS"][n - 1] + " (" + n + " Pirkimo objekto dalis)\nPROJEKTAS NR. 1"]]));
+    lygu([r.skaicius, r.pavadinimai.map(p => p.tekstas)], [3, ["Alytaus 330/110 kV TP", "Kauno TP", "Vilniaus TP ir SKS"]], "„(N Pirkimo objekto dalis)“ ir pavadinimas prieš ją");
+    r = dalIv([1, 2].map(n => ["Techninė užduotis " + ROMD[n - 1] + " pirkimo dalis (TU).pdf", [ROMD[n - 1] + " Pirkimo dalis\nTECHNINĖ UŽDUOTIS (PROJEKTAVIMO UŽDUOTIS)\nElektroninių saugos priemonių projektavimas Litgrid objektuose"]]));
+    lygu([r.skaicius, r.pavadinimai.length], [2, 0], "vienodas pavadinimas visose dalyse - nesiūlomas");
+    r = dalIv([1, 2].map(n => ["TS " + ROMD[n - 1] + " dalis.docx", ["TECHNINĖ SPECIFIKACIJA", ROMD[n - 1] + " pirkimo objekto dalis", "Pirkimo objekto dalies aprašymas: " + ["transformatoriai", "ribotuvai"][n - 1]]]));
+    lygu([r.skaicius, r.pavadinimai.length], [2, 0], "eilutė apie dalį - ne pavadinimas");
+    r = dalIv([1, 2].map(n => ["SPS 3 priedas. Techninė specifikacija " + n + " dalis.pdf", ["TECHNINĖ SPECIFIKACIJA\n" + n + " DALIS\n1. PIRKIMO OBJEKTAS IR KIEKIAI / APIMTYS:"]]));
+    lygu([r.busena, r.skaicius], ["isspresta", 2], "„1 DALIS“ antraštėje");
+    r = dalIv([1, 2].map(n => ["Techninė specifikacija " + n + " dalis.docx", ["TECHNINĖ SPECIFIKACIJA", "Perkamos prekės."]]));
+    lygu([r.busena, r.skaicius], ["isspresta", 2], "failų vardai");
+    r = dalIv([["TU 1 dalis.pdf", ["(1 Pirkimo objekto dalis)"]], ["TU 2 dalis.pdf", ["(2 Pirkimo objekto dalis)"]], ["TU 2 dalis AKTUALI.pdf", ["(2 Pirkimo objekto dalis)"]]]);
+    lygu(r.skaicius, 2, "ta pati dalis dviejuose failuose (aktuali redakcija)");
+    r = dalIv([["TU 1 dalis.pdf", ["(1 Pirkimo objekto dalis)"]], ["TU 3 dalis.pdf", ["(3 Pirkimo objekto dalis)"]]]);
+    lygu([r.busena, r.skaicius], ["dalinis", null], "trūksta 2 dalies");
+    lygu(dalIv([["TS I dalis.docx", ["I PIRKIMO OBJEKTO DALIS", "TECHNINĖ SPECIFIKACIJA"]]]).busena, "dalinis", "vienas failas");
+    lygu(dalIv([["Priedas 1 dalis.docx", ["Kainų lentelė"], false], ["Priedas 2 dalis.docx", ["Kainų lentelė"], false]]).busena, "nera", "ne techninės specifikacijos failų vardai");
+  });
+
+  await testas("Šaltiniai: pirkimo kortelė (neskaidomas, dalys su pavadinimais), DI iš paraiškos - tik siūloma, sutampantys - išspręsta, nesutampantys - prieštarauja, nepilna žyma dera tik su „skaidomas“; paraiškos DI atsakymas tikrinamas; juodraščio ištrauka duoda tą patį", async () => {
+    await modulis();
+    const G = W.GP_DALYS;
+    const TS3 = [1, 2, 3].map(n => ({ vardas: "TU " + n + " dalis.pdf", blokai: blk(["(" + n + " Pirkimo objekto dalis)"]), ts: true }));
+    let r = G.ivertink({ kortele: { dalys: [], numeris: "VPP-1", pavadinimas: "X" } });
+    lygu([r.busena, r.skaidomas], ["isspresta", false]);
+    tiesa(/pirkimo kortelę VPP-1 „X“/.test(r.irodymai[0].pagal), "kilmė: " + r.irodymai[0].pagal);
+    r = G.ivertink({ kortele: { dalys: [{ pavadinimas: "A" }, { pavadinimas: "" }, { pavadinimas: "C" }] } });
+    lygu([r.busena, r.skaicius, r.pavadinimai.map(p => p.nr + p.tekstas)], ["isspresta", 3, ["1A", "3C"]], "kortelės dalys");
+    lygu(G.ivertink({ kortele: { dalys: null } }).busena, "nera", "kortelė be dalių žymos");
+    lygu(G.ivertink({ kortele: { dalys: [{ pavadinimas: "Vienintelė" }] } }).skaidomas, false, "viena dalis - neskaidomas");
+    const di = { reiksme: "skaidomas", skaicius: 3, pavadinimai: ["D1", "D2", "D3"], citata: "Pirkimas skaidomas į 3 dalis", failas: "Paraiška.pdf" };
+    r = G.ivertink({ di });
+    lygu([r.busena, r.skaicius, r.pavadinimai.map(p => p.tekstas)], ["siuloma", 3, ["D1", "D2", "D3"]], "tik DI - siūloma");
+    lygu([G.ivertink({ di, dokumentai: TS3 }).busena, G.ivertink({ di, dokumentai: TS3 }).skaicius], ["isspresta", 3], "DI ir dokumentai sutampa");
+    lygu(G.ivertink({ di: Object.assign({}, di, { skaicius: 2 }), dokumentai: TS3 }).busena, "konfliktas", "DI - kitas skaičius");
+    lygu(G.ivertink({ di: { reiksme: "neskaidomas", citata: "c" }, dokumentai: TS3 }).busena, "konfliktas", "DI - neskaidomas");
+    lygu(G.ivertink({ kortele: { dalys: [] }, dokumentai: TS3 }).busena, "konfliktas", "kortelė neskaidomas, techninė specifikacija - 3 dalys");
+    lygu(G.ivertink({ kortele: { dalys: [{}, {}] }, dokumentai: TS3 }).busena, "konfliktas", "kortelė 2, techninė specifikacija 3");
+    const viena = [{ vardas: "TU 2 dalis.pdf", blokai: blk(["(2 Pirkimo objekto dalis)"]), ts: true }];
+    lygu(G.ivertink({ kortele: { dalys: [{}, {}, {}] }, dokumentai: viena }).busena, "isspresta", "nepilna žyma dera su kortelės 3 dalimis");
+    lygu(G.ivertink({ kortele: { dalys: [] }, dokumentai: viena }).busena, "konfliktas", "nepilna žyma ir „neskaidomas“");
+    const P = W.GP_PARAISKA.dalysIsAtsakymo;
+    lygu(P({ reiksme: "skaidomas", skaicius: "3", pavadinimai: ["a", "", 5, "b"], citata: "c" }), { reiksme: "skaidomas", skaicius: 3, pavadinimai: ["a", "b"], citata: "c" });
+    lygu([P({ reiksme: "skaidomas", skaicius: 1, citata: "c" }), P({ reiksme: "skaidomas", skaicius: 13, citata: "c" }), P({ reiksme: "skaidomas", skaicius: 2.5, citata: "c" }),
+          P({ reiksme: "neskaidomas", citata: " " }), P({ reiksme: "taip", citata: "c" }), P(null)].map(x => x.reiksme), Array(6).fill("nenustatyta"), "netinkami DI atsakymai");
+    const pr = W.GP_PARAISKA.systemPrompt();
+    tiesa(/8\. dalys:/.test(pr) && /"dalys":/.test(pr) && /NERA pirkimo dalys/.test(pr), "paraiškos DI užklausoje - dalių laukas ir taisyklė");
+    const mp = W.GP_PARAISKA.mapFields({ dalys: P({ reiksme: "skaidomas", skaicius: 2, pavadinimai: ["a"], citata: "c" }) });
+    tiesa(mp.dalys && mp.dalys.skaicius === 2 && mp.info.some(x => /dalys/.test(x.laukas) && /skaidomas į 2 dalis/.test(x.reiksme)), "paraiškos rezultate - dalys ir informacinė eilutė");
+    const docs = TS3.concat([{ vardas: "Kita.docx", blokai: blk(["Be dalių."]), ts: false }]);
+    const ist = G.atkurkIstraukas(JSON.parse(JSON.stringify(docs.map(G.istrauka).filter(Boolean))));
+    lygu(ist.length, 3, "ištraukos - tik dokumentai su radiniais");
+    lygu(G.ivertink({ dokumentai: ist }).skaicius, 3, "iš ištraukų - tas pats rezultatas");
+  });
+
+  await testas("Modulyje: trys techninės specifikacijos failai 1 žingsnyje - klausimas ir dalių skaičius išspręsti („Išspręsta automatiškai“ su citata ir „Keisti“), pavadinimai siūlomi su kilme; „Keisti - atsakysiu pats“ - klausimas su šaltiniais, fokusas į atsakymą; „Naudoti šį atsakymą“; kitoks žmogaus atsakymas - „Patikrinkite“; pašalinus failus - klausiama vėl", async () => {
+    await modulis();
+    await W.dkPridek(await dalTS(3, ["Baterijų prietaisas", "Monitoringo sistema", "Apkrovos blokas"]));
+    await zingsnis2("T-AK", "LT", "prekes");
+    tiesa(!dalKortele(), "klausimas neturi būti rodomas");
+    const a = dalAuto();
+    tiesa(a.length >= 1 && /paliekama „Jei Pirkimo objektas skaidomas į dalis/.test(a[0].veiksmas) && /pagal techninę specifikaciją po failą kiekvienai daliai/.test(a[0].kodel), "automatika: " + JSON.stringify(a));
+    lygu(W.formosModelis(W.__K).autoDal.map(x => x.reiksme), ["3"], "dalių skaičius");
+    const eil = D.querySelector("#lkAuto [data-auto-dal]");
+    tiesa(eil && /dalis: 3 pagal techninę specifikaciją/.test(e1Tx(eil)) && eil.querySelector("[data-nr-klausti]"), "eilutė skiltyje: " + e1Tx(eil));
+    lygu(W.daliuVardai().map(v => v.lt), ["Baterijų prietaisas", "Monitoringo sistema", "Apkrovos blokas"], "pavadinimai");
+    const S = W.formosSantrauka(W.__K);
+    tiesa(!S.blokuojantys.some(u => /skaidomas|Pirkimo objekto dal/i.test(u.pavadinimas || "")), "blokuojantys: " + S.blokuojantys.map(u => u.pavadinimas).join("; "));
+    const sp = S.siulomi.filter(u => /dalies pavadinimas|Pirkimo objekto dalis/i.test(u.pavadinimas || ""));
+    tiesa(sp.length === 3 && sp.some(u => /III dalis\. Techninė specifikacija/.test(u.saltinis || "")), "siūlomi pavadinimai: " + JSON.stringify(sp.map(u => [u.pavadinimas, u.saltinis])));
+    // „Keisti - atsakysiu pats“
+    D.querySelector('#lkAuto [data-dalys="klausti"]').click();
+    let k = dalKortele();
+    tiesa(k && /Pirkimo kortelė ar dokumentai rodo:.*skaidomas į 3 dalis/.test(e1Tx(k.querySelector("[data-dalys-irodymai]"))), "klausimas su šaltiniais: " + (k ? e1Tx(k) : "nėra"));
+    tiesa(D.activeElement && D.activeElement.type === "radio" && k.contains(D.activeElement), "fokusas: " + (D.activeElement && D.activeElement.outerHTML.slice(0, 80)));
+    lygu([W.formosModelis(W.__K).autoDal.length, (ATS()["B_T:i pirkimo objekto dalis"] || [])[0] || ""], [0, ""], "skaičius ir pavadinimai nebeįrašyti");
+    k.querySelector('[data-dalys="naudoti"]').click();
+    tiesa(!dalKortele() && dalAuto().length && W.formosModelis(W.__K).autoDal.length === 1, "grąžinta");
+    tiesa(D.activeElement && D.activeElement.dataset.dalys === "klausti", "fokusas į „Keisti“: " + (D.activeElement && D.activeElement.outerHTML.slice(0, 80)));
+    // kitoks žmogaus atsakymas
+    D.querySelector('#lkAuto [data-dalys="klausti"]').click();
+    W.pasirinkGrupe(dalGid(), dalGrupe().nariai.find(n => /neskaidomas/.test(n.tekstas)).raktas);
+    k = dalKortele();
+    tiesa(k.querySelector(".lk-dal--isp") && /Patikrinkite: jūsų atsakymas skiriasi/.test(e1Tx(k)) && k.querySelector('[data-dalys="naudoti"]'), "Patikrinkite: " + e1Tx(k).slice(0, 300));
+    lygu(k.dataset.busena, "patvirtinta", "žmogaus atsakymas lieka");
+    k.querySelector('[data-dalys="naudoti"]').click();
+    tiesa(!dalKortele() && dalAuto().length && dalGrupe() === undefined, "„Naudoti šaltinių atsakymą“ - vėl išspręsta");
+    // pašalinus failus - klausiama vėl, automatiniai atsakymai atšaukiami
+    for (const d of W.eval("DK.failai").slice()) W.dkSalink(d);
+    k = dalKortele();
+    tiesa(k && !k.querySelector("[data-dalys-irodymai]") && k.dataset.busena === "neuzpildyta", "be failų - neatsakytas klausimas: " + (k ? k.dataset.busena : "nėra"));
+    lygu([(ATS()["B_T:i pirkimo objekto dalis"] || [])[0] || "", ((ATS()["DALYS"] || [])[0] || {}).lt || ""], ["", ""], "siūlyti pavadinimai atšaukti");
+    // pirkimo sąlygų šablonas ar ankstesnio pirkimo SPS - ne šio pirkimo šaltinis
+    await W.dkPridek([await docx("Specialiosios pirkimo sąlygos.docx", ["SPECIALIOSIOS PIRKIMO SĄLYGOS", "Pirkimo objektas į Pirkimo objekto dalis neskaidomas."])]);
+    lygu([W.eval("DALYS_SPR.busena"), dalKortele().dataset.busena], ["nera", "neuzpildyta"], "SPS nenaudojamos");
+    // žmogus atsakė dar prieš įkeldamas dokumentus - jo atsakymas neperrašomas, tik parodoma, kad šaltiniai rodo kitaip
+    W.pasirinkGrupe(dalGid(), dalGrupe().nariai.find(n => /neskaidomas/.test(n.tekstas)).raktas);
+    await W.dkPridek(await dalTS(2));
+    k = dalKortele();
+    tiesa(k && k.dataset.busena === "patvirtinta" && /Patikrinkite: jūsų atsakymas skiriasi/.test(e1Tx(k)) && !dalAuto().length, "žmogaus atsakymas perrašytas: " + (k ? e1Tx(k).slice(0, 200) : "nėra kortelės"));
+  });
+
+  await testas("Modulyje: pirkimo kortelės dalys - išspręsta be dokumentų (neskaidomas; 3 dalys su pavadinimais); kortelė ir techninė specifikacija nesutaria - klausimas su abiem reikšmėmis; DI iš paraiškos - siūlomas atsakymas su „Patvirtinti“, skaičius siūlomas, „Grąžinti ankstesnes reikšmes“ jį atšaukia, juodraštyje išlieka", async () => {
+    const { f, W: W2, D: D2 } = await modulisSuKortele();
+    try {
+      W = W2; D = D2;
+      await kol(() => W.GP_PATAREJAS && W.GP_DOK && D.querySelector("#budas option"), "modulio skriptai");
+      if (W.GP_VIDAUS_RIBA) W.GP_VIDAUS_RIBA.naudokSaugykla(vrAtmintine());
+      perimkAI();
+      const k1 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia({ pavadinimas: "Matavimo prietaisų pirkimas", numeris: "VPP-9", dalys: [] })).kortele;
+      const api = W.eval("KORTELE"); api.atnaujink(); await api.pasirink(k1.id);
+      await zingsnis2("T-AK", "LT", "prekes");
+      tiesa(!dalKortele() && dalAuto().length && /pirkimo kortelę VPP-9/.test(dalAuto()[0].kodel) && /neskaidomas/.test(dalAuto()[0].veiksmas), "kortelė neskaidomas: " + JSON.stringify(dalAuto()));
+      const k2 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia({ pavadinimas: "Matavimo prietaisų pirkimas", numeris: "VPP-9", dalys: [{ pavadinimas: "Srovės transformatoriai" }, { pavadinimas: "Įtampos transformatoriai" }, { pavadinimas: "Ribotuvai" }] })).kortele;
+      api.atnaujink(); await api.pasirink(k2.id);
+      await kol(() => W.formosModelis(W.__K).autoDal.length === 1, "kortelės dalys pritaikytos");
+      lygu([W.formosModelis(W.__K).autoDal[0].reiksme, W.daliuVardai().map(v => v.lt)], ["3", ["Srovės transformatoriai", "Įtampos transformatoriai", "Ribotuvai"]], "kortelės 3 dalys");
+      tiesa(/pirkimo kortelė VPP-9/.test(W.eval("SIUL").get("B_T:i pirkimo objekto dalis#0").saltinis), "pavadinimo kilmė");
+      // nesutaria: kortelė - 3 dalys, techninė specifikacija - 2 failai
+      await W.dkPridek(await dalTS(2));
+      const k = dalKortele();
+      tiesa(k && k.dataset.busena === "neuzpildyta" && /Šaltiniai nesutaria/.test(e1Tx(k)) && /skaidomas į 3 dalis/.test(e1Tx(k)) && /skaidomas į 2 dalis/.test(e1Tx(k)), "prieštarauja: " + (k ? e1Tx(k).slice(0, 400) : "nėra"));
+      lygu(W.formosModelis(W.__K).autoDal.length, 0, "skaičius neįrašomas");
+    } finally { f.remove(); }
+    // DI iš paraiškos
+    await modulis();
+    const dalysDI = { reiksme: "skaidomas", skaicius: 2, pavadinimai: ["Pirma dalis", "Antra dalis"], citata: "Pirkimas skaidomas į 2 dalis" };
+    W.pzTaikyk({ siulymai: [{ id: "pavadinimas", laukas: "Pavadinimas", kortele: "Prietaisai", reiksme: "Prietaisų", ok: true }], info: [], dalys: dalysDI }, "", "Paraiška.pdf");
+    await zingsnis2("T-AK", "LT", "prekes");
+    let k = dalKortele();
+    tiesa(k && k.dataset.busena === "siuloma" && /Siūloma pagal DI perskaitytą paraišką/.test(e1Tx(k)) && k.querySelector("[data-lk-patv]"), "DI siūlymas: " + (k ? e1Tx(k).slice(0, 300) : "nėra"));
+    lygu(W.formosModelis(W.__K).autoDal.length, 0, "DI skaičius - ne automatiškai");
+    const sk = W.eval("SIUL"), skR = [...sk.keys()].find(r => /skaidomas i .*dali/.test(r));
+    tiesa(skR && sk.get(skR).reiksme === "2" && /DI iš paraiškos „Paraiška\.pdf“.*patikrinkite/.test(sk.get(skR).saltinis), "skaičiaus siūlymas: " + JSON.stringify(skR && sk.get(skR)));
+    D.querySelector("[data-pz-grazinti]").click();
+    k = dalKortele();
+    tiesa(k && k.dataset.busena === "neuzpildyta" && !k.querySelector("[data-dalys-irodymai]"), "grąžinus - neatsakyta: " + (k ? k.dataset.busena : "nėra"));
+    W.pzTaikyk({ siulymai: [], info: [], dalys: dalysDI }, "", "Paraiška.pdf");
+    dalKortele().querySelector("[data-lk-patv]").click();
+    lygu(dalKortele().dataset.busena, "patvirtinta", "patvirtinta");
+    const A = W.surinkJuodrasti();
+    lygu(A.pz.dalys.skaicius, 2, "juodraštyje");
+  });
+
+  await testas("Generavimas: SPS - „skaidomas į 3 Pirkimo objekto dalis“ ir trys dalių eilutės su pavadinimais iš techninės specifikacijos failų, be neskaidymo sakinio; techninėje specifikacijoje „neskaidomas“ - SPS „neskaidomas“ be dalių sakinio; juodraštis be failų atkuria tą patį; „Keisti“ išlieka", async () => {
+    let docs = await generuokSu({ budas: "T-AK", tipas: "prekes", po2: async () => { await W.dkPridek(await dalTS(3, ["Baterijų prietaisas", "Monitoringo sistema", "Apkrovos blokas"])); } });
+    let sps = docs["AK_LT_SPS"].pars.join("\n");
+    tiesa(/Pirkimo objektas skaidomas į 3 Pirkimo objekto dalis/.test(sps) && /I Pirkimo objekto dalis\s*[–-]\s*Baterijų prietaisas/.test(sps)
+      && /III Pirkimo objekto dalis\s*[–-]\s*Apkrovos blokas/.test(sps) && !/Pirkimo objektas į Pirkimo objekto dalis neskaidomas/.test(sps), "SPS: " + sps.split("\n").filter(x => /dal/.test(x)).slice(0, 8).join(" | "));
+    tiesa(D.getElementById("autoDalPatikra") && /skaidomas į 3 dalis/.test(e1Tx(D.getElementById("autoDalPatikra"))), "4 žingsnio eilutė");
+    docs = await generuokSu({ budas: "T-AK", tipas: "prekes", po2: async () => { await W.dkPridek([await docx("Techninė specifikacija.docx", ["Pirkimo objektas į dalis neskaidomas, nes darbai susiję."])]); } });
+    sps = docs["AK_LT_SPS"].pars.join("\n");
+    tiesa(/Pirkimo objektas į Pirkimo objekto dalis neskaidomas/.test(sps) && !/Pirkimo objektas skaidomas į/.test(sps), "SPS neskaidomas: " + sps.split("\n").filter(x => /skaidom/.test(x)).join(" | "));
+    // juodraštis
+    await modulis();
+    await W.dkPridek(await dalTS(3));
+    await zingsnis2("T-AK", "LT", "prekes");
+    let A = W.surinkJuodrasti();
+    lygu(A.s2.DALYS_DOK.length, 3, "ištraukos juodraštyje");
+    await modulis();
+    await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(A)) });
+    await kol(() => W.__K && dalAuto().length, "atkurta be failų", 60000);
+    lygu([W.eval("DK.failai.length"), W.formosModelis(W.__K).autoDal.map(x => x.reiksme)], [0, ["3"]], "atkurta");
+    D.querySelector('#lkAuto [data-dalys="klausti"]').click();
+    A = W.surinkJuodrasti();
+    await modulis();
+    await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(A)) });
+    await kol(() => W.__K && dalKortele(), "atkurtas „Keisti“", 60000);
+    tiesa(dalKortele().querySelector('[data-dalys="naudoti"]'), "po atkūrimo - klausimas su „Naudoti šį atsakymą“");
+  });
+}
+
 async function testaiEtapas1(){
   dabartine = grupe("1 etapas (2026-10-19): pradžia, žingsnių įžangos, kitas veiksmas, būsenų paaiškinimas, lygiai, sutarties klaidos ir „Kas toliau“");
 
@@ -11034,6 +11262,7 @@ async function testaiEtapas1(){
     await testaiPriedoNuorodos();
     await testaiEtapas0();
     await testaiEtapas1();
+    await testaiDalys();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

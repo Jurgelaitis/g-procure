@@ -242,6 +242,12 @@
       "   atitiks nacionaliniam saugumui svarbiu objektu apsaugos kriterijus",
       "   (pvz. minimas istatymo 13 str. 4 d.); \"ne\", jei aiskiai nurodyta",
       "   priesingai; kitaip \"nenustatyta\".",
+      "8. dalys: \"neskaidomas\", jei korteleje aiskiai parasyta, kad pirkimas",
+      "   (pirkimo objektas) i dalis neskaidomas; \"skaidomas\" - jei korteleje",
+      "   aiskiai nurodyta, kad pirkimas skaidomas i dalis: skaicius - daliu",
+      "   skaicius (sveikasis skaicius), pavadinimai - daliu pavadinimai kortele",
+      "   eiles tvarka (jei nurodyti); kitaip \"nenustatyta\". Prekiu grupes,",
+      "   sarasu eilutes ar objekto rusys NERA pirkimo dalys.",
       "",
       "JSON schema:",
       "{",
@@ -258,7 +264,8 @@
       "    \"dokumento_tipas\":          {\"reiksme\":\"...\"} | null,",
       "    \"dpa\":                      {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
       "    \"es_lesos\":                 {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
-      "    \"projekto_nr\":              {\"reiksme\":\"...\"} | null",
+      "    \"projekto_nr\":              {\"reiksme\":\"...\"} | null,",
+      "    \"dalys\":                    {\"reiksme\":\"neskaidomas|skaidomas|nenustatyta\", \"skaicius\": <skaicius> | null, \"pavadinimai\": [\"...\"], \"citata\":\"...\"}",
       "  },",
       "  \"pastabos\": \"<trumpa pastaba, jei reikia>\"",
       "}"
@@ -298,7 +305,21 @@
     if (L.objekto_tipas && !/^(prekes|paslaugos|darbai|nenustatyta)$/.test(L.objekto_tipas.reiksme || ""))
       L.objekto_tipas = { reiksme: "nenustatyta", citata: null };
     if (!Array.isArray(L.tipo_kandidatai)) L.tipo_kandidatai = [];
+    L.dalys = dalysIsAtsakymo(L.dalys);
     return { ok: true, laukai: L, pastabos: d.pastabos || "" };
+  }
+
+  /* Pirkimo objekto dalys (2026-10-19, tobulinimo planas D1): tik „neskaidomas“ arba „skaidomas“ su 2-12 dalių ir citata, kitaip -
+     nenustatyta (spėjimas NIEKADA netampa siūlymu). PP-salygos tai rodo 2 žingsnyje kaip siūlomą atsakymą („Siūloma (nepatvirtinta)“). */
+  function dalysIsAtsakymo(x) {
+    var nera = { reiksme: "nenustatyta", skaicius: null, pavadinimai: [], citata: null };
+    if (!x || typeof x !== "object" || typeof x.citata !== "string" || !x.citata.trim()) return nera;
+    if (x.reiksme === "neskaidomas") return { reiksme: "neskaidomas", skaicius: null, pavadinimai: [], citata: x.citata.trim() };
+    var n = typeof x.skaicius === "number" ? x.skaicius : parseInt(x.skaicius, 10);
+    if (x.reiksme !== "skaidomas" || !(n >= 2 && n <= 12 && Math.floor(n) === n)) return nera;
+    var pav = (Array.isArray(x.pavadinimai) ? x.pavadinimai : []).filter(function (s) { return typeof s === "string" && s.trim(); })
+      .slice(0, n).map(function (s) { return s.trim().slice(0, 200); });
+    return { reiksme: "skaidomas", skaicius: n, pavadinimai: pav, citata: x.citata.trim() };
   }
 
   /* ==== 4. DETERMINISTINIS ZEMELAPIS I MODULIO LAUKUS ===================== */
@@ -376,6 +397,11 @@
       });
     }
 
+    // Pirkimo objekto dalys - 2 žingsnio klausimui (siūlomas atsakymas, ne 1 žingsnio laukas)
+    out.dalys = L.dalys && L.dalys.reiksme !== "nenustatyta" ? L.dalys : null;
+    if (out.dalys) out.info.push({ laukas: "Pirkimo objekto dalys (2 žingsnis)",
+      reiksme: out.dalys.reiksme === "neskaidomas" ? "neskaidomas" : "skaidomas į " + out.dalys.skaicius + " dalis" });
+
     // Informaciniai laukai - pp-salygos ju neklausia, bet rengejui naudinga.
     [["registracijos_nr", "Registracijos Nr."], ["dokumento_tipas", "Dokumento tipas"],
      ["projekto_nr", "Projekto Nr."], ["dpa", "Asmens duomenų tvarkymo sutartis (DPA)"],
@@ -424,6 +450,7 @@
     jpegToPdf: jpegToPdf,
     parseResponse: parseResponse,
     mapFields: mapFields,
+    dalysIsAtsakymo: dalysIsAtsakymo,
     verteIsTeksto: verteIsTeksto,
     systemPrompt: systemPrompt,
     userText: userText

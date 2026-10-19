@@ -527,6 +527,13 @@
   .lk-pz-t{display:block;font-size:12px;font-weight:700;color:var(--color-graphite-50-strong);text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
   .lk-pz-t2{margin-top:6px}
   .lk-pz-k{display:block;color:var(--color-graphite-50-strong)}
+  /* pirkimo objekto dalių šaltiniai klausimo kortelėje (D1, 2026-10-19) */
+  .lk-dal{margin-top:10px;padding:9px 12px;background:var(--color-graphite-5);border-left:3px solid var(--color-graphite-30);border-radius:7px;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+  .lk-dal--isp{background:var(--color-warning-5);border-left-color:var(--color-warning)}
+  .lk-dal-t{font-weight:700;color:var(--color-graphite)}
+  .lk-dal ul{margin:4px 0 0;padding-left:18px}
+  .lk-dal .n{color:var(--color-graphite-50-strong)}
+  .lk-dal button{margin-top:8px}
   .lk-r{background:var(--color-green-15);color:var(--color-graphite);font-weight:700;border-radius:3px;padding:0 2px}
   .lk-t{background:var(--color-error-5);color:var(--color-error-strong);font-weight:700;border-radius:3px;padding:0 2px}
   .lk-s{color:var(--color-graphite-50-strong);text-decoration:line-through}
@@ -1142,6 +1149,7 @@
 <script src="../shared/docx-stiliai.js"></script>   <!-- įrašomas tekstas be ilgųjų brūkšnių (2026-10-02) -->
 <!-- 2 žingsnio laukų registras: klausimai, įvestys, neprivalomos nuorodos, priedų numerių siūlymai, pildymo planas -->
 <script src="laukai.js"></script>
+<script src="dalys.js"></script>   <!-- pirkimo objekto dalys iš kortelės ir dokumentų (2026-10-19, tobulinimo planas D1) -->
 <script src="variklis.js"></script>
 <script src="kvalifikacijos-lentele.js"></script>   <!-- kvalifikacijos reikalavimų lentelė iš įkelto DOCX į SPS 2 lentelę (2026-10-14) -->
 <script src="sutartys.js"></script>   <!-- sutarties projekto parinkimas (sutarčių planas S2, 2026-10-08) -->
@@ -1844,6 +1852,8 @@ function kontrolinisAtsakymas(k){
   if (KVL_TIKR.pilnai.has(k)) return { v: KVL_TIKR.pilnai.get(k), kvl: true, kodel: kvlTikrKodel() };   // 0 etapas D2
   const apz = apziurosAtsakymas(t, k);
   if (apz) return apz;
+  const dal = daliuAtsakymas(t);               // pirkimo objekto dalys - iš kortelės ar dokumentų (D1)
+  if (dal) return dal;
   if (/^jei vykdomos derybos/.test(t) || /^if negotiations are taking place/.test(t))       return { v:derybosTaip(), kodel:'derybų klausimas' };
   if (/^jei nevykdomos derybos/.test(t) || /^if negotiations are not taking place/.test(t)) return { v:!derybosTaip(), kodel:'derybų klausimas' };
   if (/^jeigu pirkimas susijes su nacionaliniu saugumu/.test(t))                            return { v:nacsaugTaip(), kodel:'nacionalinio saugumo klausimas' };
@@ -2429,6 +2439,156 @@ function kvlTikrinimasTaikyk(){
   return true;
 }
 const kvlTikrKodel = () => { const M = kvlModelis(); return `pagal įkeltą kvalifikacijos reikalavimų lentelę${M ? ` „${M.failas}“` : ''} - tikrinami pašalinimo pagrindai ir kvalifikacija`; };
+/* Pirkimo objekto dalys iš pirkimo kortelės ir dokumentų (tobulinimo planas D1, 2026-10-19; naudotojo sprendimai S3 ir S5). Naujų darbuotojų
+   testavimas: „Ar pirkimo objektas skaidomas į dalis?“ ir dalių skaičius klausti visada, nors atsakymą rodo kortelė ar techninė specifikacija.
+   Dabar (PP-salygos/dalys.js): kortelės dalys, dokumento sakinys („Pirkimo objektas skaidomas į 3 dalis“, „... neskaidomas“) ar techninė
+   specifikacija po failą kiekvienai daliai išsprendžia klausimą ir dalių skaičių be klausimo - skiltyje „Išspręsta automatiškai“ su citata ir
+   „Keisti“ (S3); dalių pavadinimai - „Siūloma (nepatvirtinta)“ (tai pirkimo dokumentų turinys); DI iš paraiškos - tik siūlomas atsakymas;
+   šaltiniams prieštaraujant ar radus ne visas dalis - klausimas, o kortelėje parodomos abi reikšmės (S5). Žmogaus atsakymas neperrašomas:
+   pasirinkus grupėje (PATV), dokumentai tik parodomi. Ta pati taisyklė - ir formų sąlygai „Jei Pirkimo objektas skaidomas į dalis“. */
+const DALYS_RE = /^jei pirkimo objektas (i dalis neskaidomas|skaidomas i dalis)/;
+const DALYS_NE_RE = /^jei pirkimo objektas i dalis neskaidomas/;
+let DALYS_KLAUSTI = false;          // žmogus paspaudė „Keisti - atsakysiu pats“
+let DALYS_SPR = null;               // paskutinis GP_DALYS.ivertink rezultatas
+let DALYS_ZMOGAUS = false;          // grupę ar formų sąlygą atsakė žmogus
+let DALYS_RAKTAI = [];              // šablonų sąlygų („Jei Pirkimo objektas ...“) raktai
+var DALYS_ATK = [];                 // atkurto juodraščio dokumentų ištraukos: [{ vardas, ts, blokai }]
+var PZ_DALYS = null;                // DI iš paraiškos: { reiksme, skaicius, pavadinimai, citata, failas } (var - pzTaikyk ir juodraštis gali būti anksčiau)
+function daliuDokumentai(){
+  const be = new Set(['sps', 'bps', 'skelbimas', 'ebvpd']), out = [];        // pirkimo sąlygų šablonai ir skelbimas - ne šio pirkimo šaltinis
+  const pridek = (vardas, blokai, rusis) => {
+    if (!blokai || !blokai.length) return;
+    let v = 'kita';
+    try { v = GP_PARENGTIS.vaidmuo({ name: vardas, blocks: blokai }); } catch (e) { v = 'kita'; }
+    if (!be.has(v)) out.push({ vardas, blokai, ts: rusis === 'ts' || v === 'ts' });
+  };
+  DK.failai.forEach(d => pridek(d.vardas, d.blokai, d.rusis));
+  AI.saltiniai.filter(x => !x.dk).forEach(x => pridek(x.vardas, x.blokai, null));
+  // atkurto juodraščio dokumentų ištraukos (failai nesaugomi) - kol to paties vardo failas neįkeltas iš naujo
+  DALYS_ATK.forEach(x => { if (!out.some(o => o.vardas === x.vardas)) out.push(x); });
+  return out;
+}
+function daliuVertinimas(){
+  let k = null;
+  try { k = KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta(); } catch (e) { k = null; }
+  if (!window.GP_DALYS) return { busena: 'nera', irodymai: [], pavadinimai: [] };
+  return GP_DALYS.ivertink({ kortele: k ? { dalys: k.dalys, pavadinimas: k.pavadinimas, numeris: k.numeris } : null, dokumentai: daliuDokumentai(), di: PZ_DALYS });
+}
+const daliuIrodymas = i => i.saltinis === 'dokumentas' && !i.zymos ? 'dokumentas „' + i.failas + '“' : i.failas;
+const trumpaCitata = t => { t = String(t || ''); return t.length > 220 ? t.slice(0, 217).replace(/\s+\S*$/, '') + ' ...' : t; };
+function daliuKodel(R){
+  return R.irodymai.filter(i => i.tvirtas).map(i => i.pagal + (i.saltinis === 'kortele' ? ' - ' + i.reiksme : ': „' + trumpaCitata(i.citata) + '“')).join('; ');
+}
+function daliuAtsakymas(t){
+  if (!DALYS_RE.test(t)) return null;
+  const R = DALYS_SPR;
+  if (!R || R.busena !== 'isspresta' || DALYS_KLAUSTI || DALYS_ZMOGAUS) return null;
+  return { v: DALYS_NE_RE.test(t) ? !R.skaidomas : R.skaidomas, dalys: true, kodel: 'pagal ' + daliuKodel(R) };
+}
+/* Papildomos (III+) dalies pavadinimo siūlymas: ATS['DALYS'][k].lt, būsena - 'DALYS#k#lt' (kaip DI vertimas angliškam pavadinimui). */
+function daliesSiulyk(idx, tekstas, kilme){
+  const rk = 'DALYS#' + idx + '#lt';
+  if (PATV.has(rk)) return;
+  const sena = SIUL.get(rk), a = ATS['DALYS'] || [];
+  if (!tekstas){
+    if (sena && a[idx] && a[idx].lt === sena.reiksme) a[idx].lt = '';
+    SIUL.delete(rk);
+    return;
+  }
+  const x = (ATS['DALYS'] ??= []);
+  x[idx] ??= { lt: '', en: '' };
+  if (!String(x[idx].lt || '').trim() || (sena && x[idx].lt === sena.reiksme)){ x[idx].lt = tekstas; SIUL.set(rk, { reiksme: tekstas, saltinis: kilme }); }
+}
+/* Nustatoma PRIEŠ skaičiuojant, kurios pastraipos ir laukai lieka (surinktiKlausimus): grupės ir formų sąlygos atsakymas, dalių pavadinimai.
+   Dalių skaičius - lauko klausime (DALIU_SK_RE šaka), nes jo raktas - šablono sakinys. Atsakymai, kuriuos įrašė ši taisyklė, žymimi
+   AUTO_SAKOS: šaltiniui dingus ar pasikeitus jie pašalinami (žmogaus atsakymas - PATV - lieka). */
+function daliuTaikyk(){
+  const R = DALYS_SPR = daliuVertinimas();
+  const raktai = [];
+  DOK.forEach(d => (d.zemelapis.vienetai || []).forEach(v => {
+    const r = salygosRaktas(v.tekstas);
+    if (DALYS_RE.test(norm(v.tekstas)) && !raktai.includes(r)) raktai.push(r);
+  }));
+  DALYS_RAKTAI = raktai;
+  DALYS_ZMOGAUS = raktai.some(r => PATV.has(r));
+  const siuloma = R.busena === 'siuloma' && !DALYS_KLAUSTI && !DALYS_ZMOGAUS;
+  raktai.forEach(r => {
+    const a = daliuAtsakymas(norm(r));
+    const v = a ? a.v : siuloma ? (DALYS_NE_RE.test(norm(r)) ? !R.skaidomas : R.skaidomas) : null;
+    if (v !== null){ ATS[r] = v; AUTO_SAKOS.add(r); }
+    else if (AUTO_SAKOS.has(r)){ AUTO_SAKOS.delete(r); if (!PATV.has(r)) delete ATS[r]; }
+  });
+  // neskaidymo priežastis (Atviras konkursas VPĮ: „... neskaidomas vadovaujantis VPĮ 28 straipsnio 2 dalimi, nes (įrašyti priežastis ...)“) -
+  // dokumento sakinys siūlomas, tvirtina žmogus (teisinis pagrindimas)
+  const prz = R.busena === 'isspresta' && R.skaidomas === false && R.priezastis && !DALYS_KLAUSTI ? R.priezastis : null;
+  DOK.forEach(d => (d.zemelapis.intarpai || []).forEach(n => {
+    if (/neskaidomas vadovaujantis vpi .*\bnes\b/.test(norm(n.text)))
+      siulyk('I_' + norm(n.text), null, prz ? prz.tekstas : null, prz ? prz.kilme + ' - pagrindimą patikrinkite' : null);
+  }));
+  const sp = (R.busena === 'isspresta' || R.busena === 'siuloma') && R.skaidomas && !DALYS_KLAUSTI ? R : null;
+  for (let n = 1; n <= GP_DALYS.MAX; n++){
+    const p = sp && n <= sp.skaicius ? sp.pavadinimai.find(x => x.nr === n) : null;
+    const kilme = p ? (p.di ? p.kilme + ' - patikrinkite' : p.kilme) : null;
+    if (n <= 2) siulyk('B_T:' + ['i', 'ii'][n - 1] + ' pirkimo objekto dalis', 0, p ? p.tekstas : null, kilme);
+    else daliesSiulyk(n - 3, p ? p.tekstas : null, kilme);
+  }
+  return R;
+}
+/* Dalių skaičiaus siūlymas (lauko „Pirkimo objektas skaidomas į __ Pirkimo objekto dalis:“ raktui): išspręsta - įrašoma be klausimo
+   (formosModelis -> skiltis „Išspręsta automatiškai“, `auto`), DI - siūloma. */
+function daliuSkaiciausSiulyk(raktas){
+  const R = DALYS_SPR, n = R && !DALYS_KLAUSTI && (R.busena === 'isspresta' || R.busena === 'siuloma') && R.skaidomas ? R.skaicius : null;
+  const di = n && R.busena === 'siuloma' ? R.irodymai.find(i => i.di) : null;
+  siulyk('B_' + raktas, 0, n ? String(n) : null, n ? (di ? `${di.failas}: „${trumpaCitata(di.citata)}“ - patikrinkite` : 'pagal ' + daliuKodel(R)) : null);
+  const x = SIUL.get(vRaktas('B_' + raktas, 0));
+  if (x) x.dalysAuto = !!n && R.busena === 'isspresta';
+}
+/* Dalių šaltiniai klausimo kortelėje: kai klausiama (prieštarauja, nepilna, DI siūlymas, „Keisti“) ar žmogaus atsakymas skiriasi. */
+function daliuBlokasHTML(c){
+  const R = DALYS_SPR;
+  if (!R || R.busena === 'nera' || !R.irodymai.length) return '';
+  const pas = c.q.nariai.find(n => ATS[n.raktas] === true);
+  const pasSkaid = pas ? !DALYS_NE_RE.test(norm(pas.raktas)) : null;
+  let antr, kl = '', myg = '';
+  if (R.busena === 'konfliktas') { antr = 'Šaltiniai nesutaria - pasirinkite patys:'; kl = ' lk-dal--isp'; }
+  else if (R.busena === 'dalinis') antr = 'Dokumentuose pažymėta pirkimo objekto dalis, bet ne visų dalių dokumentai įkelti - dalių skaičius nenustatytas:';
+  else if (R.busena === 'siuloma' && !DALYS_ZMOGAUS && !DALYS_KLAUSTI) {
+    antr = 'Siūloma pagal DI perskaitytą paraišką - patikrinkite:';
+    myg = patvirtinimoMygtukas(c.q.nariai.map(n => n.raktas), 'atsakymą, ar pirkimo objektas skaidomas į dalis');
+  }
+  else if (DALYS_ZMOGAUS && pasSkaid !== null && (R.busena === 'isspresta' || R.busena === 'siuloma')) {
+    if (pasSkaid === R.skaidomas) antr = 'Jūsų atsakymas sutampa su šaltiniais:';
+    else {
+      antr = 'Patikrinkite: jūsų atsakymas skiriasi nuo šaltinių:'; kl = ' lk-dal--isp';
+      if (R.busena === 'isspresta') myg = `<button type="button" class="sec" data-dalys="naudoti">Naudoti šaltinių atsakymą</button>`;
+    }
+  }
+  else if (R.busena === 'isspresta') {
+    antr = 'Pirkimo kortelė ar dokumentai rodo:';
+    myg = `<button type="button" class="sec" data-dalys="naudoti">Naudoti šį atsakymą</button>`;
+  }
+  else return '';
+  return `<div class="lk-dal${kl}" data-dalys-irodymai><div class="lk-dal-t">${esc(antr)}</div><ul>${R.irodymai.map(i => `<li><b>${esc(i.reiksme)}</b> - ${esc(daliuIrodymas(i))}${
+    i.citata && i.saltinis !== 'kortele' ? `: „${esc(trumpaCitata(i.citata))}“` : i.saltinis === 'kortele' ? `: ${esc(trumpaCitata(i.citata))}` : ''}${i.vieta ? ` <span class="n">(${esc(i.vieta)})</span>` : ''}</li>`).join('')}</ul>${myg}</div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-dalys]');
+  if (!b) return;
+  DALYS_KLAUSTI = b.dataset.dalys === 'klausti';
+  // „Naudoti šį atsakymą“ - žmogaus veiksmas: jo ankstesnis pasirinkimas šiose sąlygose atšaukiamas, kad galiotų šaltinių atsakymas
+  if (!DALYS_KLAUSTI) DALYS_RAKTAI.forEach(r => { PATV.delete(r); TOUCHED.delete(r); });
+  klausimynas();
+  if (window.JD) window.JD.pakeista();
+  if (DALYS_KLAUSTI){
+    const card = (document.querySelector('[data-dalys-irodymai]') || { closest: () => null }).closest('section.lk');
+    if (card){ card.scrollIntoView({ block: 'center' }); (card.querySelector('input[type=radio]') || card).focus(); }
+  } else {
+    const a = document.getElementById('lkAuto');
+    if (a) a.open = true;
+    const k = document.querySelector('[data-dalys="klausti"]');
+    if (k){ k.scrollIntoView({ block: 'center' }); k.focus(); }
+  }
+});
 /* Priedu saraso eilute, kurioje raudona ne visa pastraipa (sablone - „8 priedas – Konfidenciali informacija ...“ be raudono
    bruksnio, „13 priedas – Priimtinų bankų sąrašas.“ su raudonu tik pavadinimu): iki 2026-10-03 ji nesekdavo priedo pasirinkimo ir
    likdavo net isjungus prieda. Raudona pastaba skliaustuose („(jei Pasiūlymai vertinami ...)“) - ne eilute, o pastaba. */
@@ -2809,6 +2969,7 @@ function surinktiKlausimus(){
   const ZAL_NAUDOJAMA = zalTaikyk();
   const ZALM = ZAL_NAUDOJAMA ? zalModelis() : null;
   kvlTikrinimasTaikyk();             // kvalifikacijos klausimas pagal įkeltą lentelę - prieš kvalifikacijosLenteles() (0 etapas D2)
+  daliuTaikyk();                     // pirkimo objekto dalys iš kortelės ir dokumentų - prieš skaičiuojant, kurios pastraipos lieka (D1)
   // susietos grupės: sekančių grupių atsakymai nustatomi PRIEŠ skaičiuojant, kurios pastraipos ir laukai lieka
   const SUSIETOS = susietuGrupiuPlanas();
   SUSIETOS.forEach(({ sg, grupes }) => {
@@ -3070,6 +3231,7 @@ function surinktiKlausimus(){
       // Priedu numeriai (iki 2026-10-04 - „1“ ir „2“ pagal „iprasta numeracija“, nors TSD SPS EBVPD yra 3 priedas) -
       // dabar siulomi is to paties SPS priedu saraso (siulymuPasas), kaip ir „X“ vietose.
       if (DALIU_SK_RE.test(norm(n.text))){                    // daliu skaicius - su ispejimu
+        daliuSkaiciausSiulyk(raktas);                          // iš kortelės ar dokumentų (D1) - prieš skaitant įrašytą
         const eiluciu = (Z.tuscios||[]).filter(x => DALIES_EIL_RE.test(norm(x.text))).length;
         const irasyta = String((ATS['B_' + raktas] || [])[0] || '').trim();
         const ivesta = parseInt(irasyta, 10);
@@ -3481,7 +3643,7 @@ function surinktiKlausimus(){
   Object.entries(K.grupes).forEach(([gid, g]) => {
     const a = g.nariai.map(n => kontrolinisAtsakymas(n.raktas));
     const rusis = a.length && a.every(x => x && x.apziura) ? 'apziura' : a.length && a.every(x => x && x.zal) ? 'zal'
-      : a.length && a.every(x => x && x.kvl) ? 'kvl' : null;
+      : a.length && a.every(x => x && x.kvl) ? 'kvl' : a.length && a.every(x => x && x.dalys) ? 'dalys' : null;
     if (!rusis) return;
     const nar = g.nariai.find((n, j) => a[j].v);
     K.automatika.push({ dok: (g.dokumentai || []).join(', '), kas: g.nariai.map(n => n.tekstas).join(' / '),
@@ -3507,11 +3669,13 @@ function surinktiKlausimus(){
   Object.entries(K.pavieniai).forEach(([raktas, q]) => {
     const kontr = kontrolinisAtsakymas(raktas);
     const rez = kontr === null ? rezimoAtsakymas(raktas, REZ) : null;
-    if (kontr === null && AUTO_SAKOS.has(raktas)){ AUTO_SAKOS.delete(raktas); if (!PATV.has(raktas)) delete ATS[raktas]; }
+    // pirkimo objekto dalių atsakymus (ir DI siūlomus) prižiūri daliuTaikyk()
+    if (kontr === null && AUTO_SAKOS.has(raktas) && !DALYS_RE.test(norm(raktas))){ AUTO_SAKOS.delete(raktas); if (!PATV.has(raktas)) delete ATS[raktas]; }
     if (kontr !== null){
       ATS[raktas] = kontr.v;
-      if (kontr.apziura) AUTO_SAKOS.add(raktas);
-      K.autoSakos.push({ ...q, raktas, v:kontr.v, kodel:`pagal 1 žingsnio atsakymą (${kontr.kodel})`, keisti: kontr.apziura ? 'apziura' : null });
+      if (kontr.apziura || kontr.dalys) AUTO_SAKOS.add(raktas);
+      K.autoSakos.push({ ...q, raktas, v:kontr.v, kodel: kontr.dalys ? kontr.kodel : `pagal 1 žingsnio atsakymą (${kontr.kodel})`,
+        keisti: kontr.apziura ? 'apziura' : kontr.dalys ? 'dalys' : null });
       delete K.pavieniai[raktas];
     } else if (rez !== null){
       ATS[raktas] = rez;
@@ -3837,6 +4001,16 @@ function formosModelis(K){
     const a = autoPriedoNr(kort[i]);
     if (a){ autoNr.unshift(Object.assign({ raktas: kort[i].raktas, q: kort[i].q, dok: (kort[i].vieta || {}).dok || '' }, a)); kort.splice(i, 1); }
   }
+  // pirkimo objekto dalių skaičius iš kortelės ar dokumentų (D1) - ne klausimas, o skiltis „Išspręsta automatiškai“ su „Keisti“
+  const autoDal = [];
+  for (let i = kort.length - 1; i >= 0; i--){
+    const c = kort[i];
+    if (c.rusis !== 'laukas' || !c.q.lk || c.q.lk.tipas !== 'daliu-skaicius' || NR_KLAUSTI.has(c.raktas)) continue;
+    const key = 'B_' + c.raktas, x = SIUL.get(vRaktas(key, 0));
+    if (!x || !x.dalysAuto || TOUCHED.has(key) || PATV.has(key) || PATV.has(vRaktas(key, 0)) || (ATS[key] || [])[0] !== x.reiksme) continue;
+    autoDal.unshift({ raktas: c.raktas, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: x.reiksme, saltinis: x.saltinis });
+    kort.splice(i, 1);
+  }
   const autoSut = [];
   kort.forEach(c => {
     if (c.rusis !== 'laukas' || !c.q.lk) return;
@@ -3862,7 +4036,7 @@ function formosModelis(K){
   });
   const G = [...grupes.values()].sort((a, b) => a.dokIdx - b.dokIdx || (a.skyrius ? a.skyrius.i : -1) - (b.skyrius ? b.skyrius.i : -1));
   G.forEach(g => g.korteles.sort((a, b) => (a.vieta ? a.vieta.i : 0) - (b.vieta ? b.vieta.i : 0)));
-  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr, autoSut };
+  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr, autoSut, autoDal };
 }
 
 /* Vienetas = vienas atsakymas: { id (lauko id šuoliui), pavadinimas, busena, blokuoja, raktai (PATV), reiksme, saltinis } */
@@ -3947,7 +4121,9 @@ function kortelesVienetai(K, c){
   } else if (c.rusis === 'dalis'){
     const d = (ATS['DALYS'] || [])[q.k] || {};
     const b = (lauk, rk) => !String(d[lauk] || '').trim() ? 'neuzpildyta' : (PATV.has(rk) ? 'patvirtinta' : 'siuloma');
-    out.push({ id: c.id + '-lt', pavadinimas: q.nr + ' Pirkimo objekto dalies pavadinimas', busena: b('lt', 'DALYS#' + q.k + '#lt'), raktai: ['DALYS#' + q.k + '#lt'], reiksme: d.lt || '' });
+    const sl = SIUL.get('DALYS#' + q.k + '#lt');
+    out.push({ id: c.id + '-lt', pavadinimas: q.nr + ' Pirkimo objekto dalies pavadinimas', busena: b('lt', 'DALYS#' + q.k + '#lt'), raktai: ['DALYS#' + q.k + '#lt'], reiksme: d.lt || '',
+      saltinis: sl && sl.reiksme === d.lt ? sl.saltinis : '' });
     if ($('input[name=kalba]:checked').value === 'LT_EN'){
       const s = SIUL.get('DALYS#' + q.k + '#en');
       out.push({ id: c.id + '-en', pavadinimas: q.nr + ' dalies pavadinimas angliškai', busena: b('en', 'DALYS#' + q.k + '#en'), raktai: ['DALYS#' + q.k + '#en'],
@@ -4036,7 +4212,7 @@ function kortelesHTML(K, c){
         const tekst = blokoTekstas({ dok: n.dok, i: n.bi }, n.blokas);
         return `<label class="opt lk-opt"><input type="radio" id="${c.id}-o${k}" name="G_${esc(c.raktas)}" ${ATS[n.raktas] === true ? 'checked' : ''}
           onchange="pasirinkGrupe('${esc(c.raktas)}','${esc(n.raktas)}')"><span><span class="lk-opt-t">${esc(n.tekstas)}</span>${tekst ? `<span class="lk-opt-p">Dokumente lieka: ${ilgasTekstas(tekst, 200)}</span>` : ''}</span></label>`;
-      }).join('')}</div>${aiBlokas('G|' + c.raktas)}</section>`;
+      }).join('')}</div>${gk && gk.id === 'dalys' ? daliuBlokasHTML(c) : ''}${aiBlokas('G|' + c.raktas)}</section>`;
   }
   if (c.rusis === 'pavienis' || c.rusis === 'lentele'){
     const key = c.rusis === 'lentele' ? 'T_' + c.raktas : c.raktas;
@@ -4079,10 +4255,12 @@ function kortelesHTML(K, c){
     const dv = $('input[name=kalba]:checked').value === 'LT_EN';
     const pa = paaiskinimas({ vieta: kur, kas: `Šablone yra ${K.dalys.sablone} dalių eilutės - ši dalis sukuriama automatiškai pagal nurodytą dalių skaičių.`,
       tuscia: 'dalies eilutėje liks tuščia vieta, ir patikra ją parodys.' });
-    const enU = c.vienetai[1];
+    const enU = c.vienetai[1], ltU = c.vienetai[0], ltS = ltU && ltU.busena === 'siuloma';
     return `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, `${q.nr} Pirkimo objekto dalies pavadinimas`, pa)}
       <div class="lk-v"><label class="lk-v-l" for="${c.id}-lt">Pavadinimas</label>
-        <input type="text" class="lk-in" id="${c.id}-lt" value="${esc(d.lt || '')}" oninput="uDalis(${q.k},'lt',this.value);lkAtnaujink()" onchange="klausimynas()"></div>
+        <div class="lk-v-iv"><input type="text" class="lk-in${ltS ? ' lk-in--siuloma' : ''}" id="${c.id}-lt" value="${esc(d.lt || '')}" aria-describedby="${c.id}-lt-s"
+          oninput="uDalis(${q.k},'lt',this.value);lkAtnaujink()" onchange="klausimynas()">${ltS ? patvirtinimoMygtukas(ltU.raktai, ltU.pavadinimas) : ''}</div>
+        ${ltU ? kilmesEilute(c.id + '-lt-s', ltU) : ''}</div>
       ${dv ? `<div class="lk-v"><label class="lk-v-l" for="${c.id}-en">Pavadinimas angliškai (EN)</label>
         <div class="lk-v-iv"><input type="text" class="lk-in${enU && enU.busena === 'siuloma' ? ' lk-in--siuloma' : ''}" id="${c.id}-en" value="${esc(d.en || '')}" aria-describedby="${c.id}-en-s"
           oninput="uDalis(${q.k},'en',this.value);lkAtnaujink()">${enU && enU.busena === 'siuloma' ? patvirtinimoMygtukas(enU.raktai, enU.pavadinimas) : ''}</div>
@@ -4990,7 +5168,8 @@ function klaiduAtnaujink(S, fokusuoti){
    Privalomas sprendimas skaičiuojamas kortele (kaip klaidų santraukoje), neužpildyti laukai ir siūlomos reikšmės - vienetais (kaip eigos juostoje). */
 const lkSk = (n, f1, f2, f3) => { const d = n % 10, s = n % 100; return n + ' ' + (d === 1 && s !== 11 ? f1 : d >= 2 && d <= 9 && (s < 11 || s > 19) ? f2 : f3); };
 const privalomuSk = S => klaiduSarasas(S).reduce((a, g) => a + g.vv.length, 0);
-const autoSkaicius = (K, S) => K ? K.autoSakos.length + K.automatika.length + ((S && S.M && S.M.autoNr) || []).length + ((S && S.M && S.M.autoSut) || []).length : 0;
+const autoSkaicius = (K, S) => K ? K.autoSakos.length + K.automatika.length + ((S && S.M && S.M.autoNr) || []).length + ((S && S.M && S.M.autoSut) || []).length
+  + ((S && S.M && S.M.autoDal) || []).length : 0;
 /* 1 žingsnio neįrašyti duomenys (K4): ne kliūtis - generuoti galima, bet dokumentuose liks tuščia vieta. Sakoma 1 žingsnio įžangoje, 2 žingsnio
    įžangoje ir „Prieš generuojant“ su šuoliu į lauką. Būdas, kalba ir objekto tipas visada turi reikšmę. */
 function z1Trukumai(){
@@ -5273,14 +5452,15 @@ function klausimynas(){
   h += prieduHTML(K, S.M);
 
   /* Automatika - viskas matoma, nieko nenutylima (pilni tekstai; ilgi - sutraukiami žodžio riboje) */
-  const autoNr = (S && S.M && S.M.autoNr) || [], autoSut = (S && S.M && S.M.autoSut) || [];
-  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length + autoSut.length;
+  const autoNr = (S && S.M && S.M.autoNr) || [], autoSut = (S && S.M && S.M.autoSut) || [], autoDal = (S && S.M && S.M.autoDal) || [];
+  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length + autoSut.length + autoDal.length;
   if (autoSk){
     h += `<details class="auto" id="lkAuto"${autoAtverta ? ' open' : ''}><summary>Išspręsta automatiškai (${autoSk}) - peržiūrėti</summary><div class="auto-lst">`;
     // tai, ką galima pakeisti (objekto apžiūra), - sąrašo pradžioje ir su mygtuku
     const keiciama = x => x.keisti === 'apziura' ? ` <button type="button" class="sec lk-auto-k" data-apziura-klausti>Apžiūra planuojama - atsakysiu pats</button>`
       : x.keisti === 'zal' ? ` <button type="button" class="sec lk-auto-k" data-zal="perziureti">Peržiūrėti žaliųjų reikalavimų perkėlimą</button>`
       : x.keisti === 'kvl' ? ` <button type="button" class="sec lk-auto-k" data-kvl="perziureti">Peržiūrėti kvalifikacijos reikalavimų lentelę</button>`
+      : x.keisti === 'dalys' ? ` <button type="button" class="sec lk-auto-k" data-dalys="klausti" aria-label="Keisti - atsakysiu pats, ar pirkimo objektas skaidomas į dalis">Keisti - atsakysiu pats</button>`
       : x.keisti === 'ebvpd' ? (EBVPD_TRINTI ? ` <button type="button" class="sec lk-auto-k" data-ebvpd="palikti">Grąžinti pastabą</button>`
         : ` <button type="button" class="sec lk-auto-k" data-ebvpd="trinti">Kvalifikacijos dokumentai teikiami kartu su pasiūlymu - pastabą pašalinti</button>`) : '';
     const eile = arr => arr.filter(x => x.keisti).concat(arr.filter(x => !x.keisti));
@@ -5291,6 +5471,10 @@ function klausimynas(){
     eile(K.automatika).forEach(a => {
       h += `<div><span class="n">${esc(a.dok)}</span>${ilgasTekstas(a.kas, 200)}: <b>${esc(a.veiksmas)}</b>
         <span class="n">${esc(a.kodel)}</span>${keiciama(a)}</div>`;
+    });
+    autoDal.forEach(a => {
+      h += `<div data-auto-dal="${esc(a.raktas)}"><span class="n">${esc(a.dok)}</span>${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>${esc(a.reiksme)}</b>
+        <span class="n">${esc(a.saltinis)}</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(a.raktas)}" aria-label="Keisti dalių skaičių (${esc(a.reiksme)})">Keisti</button></div>`;
     });
     autoNr.forEach(a => {
       h += `<div data-auto-nr="${esc(a.raktas)}"><span class="n">${esc(a.dok)}</span>${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>SPS priedo Nr. ${esc(a.nr.join(', '))}</b>
@@ -6306,6 +6490,11 @@ function rodykRezultata(rez){
     const anr = (S.M && S.M.autoNr) || [];
     if (anr.length) h += `<div class="audit ok" id="autoNrPatikra" style="margin-top:10px"><b>SPS priedų numeriai įrašyti automatiškai (${anr.length}):</b> pagal to paties SPS priedų sąrašą -
       ${anr.map(a => esc('Nr. ' + a.nr.join(', '))).join('; ')}. Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
+    // pirkimo objekto dalys iš kortelės ar dokumentų (D1)
+    const KD = window.__K, adal = (S.M && S.M.autoDal) || [], dalA = KD && KD.automatika.find(a => a.keisti === 'dalys');
+    if (dalA && DALYS_SPR) h += `<div class="audit ok" id="autoDalPatikra" style="margin-top:10px"><b>Pirkimo objekto dalys nustatytos automatiškai:</b>
+      ${DALYS_SPR.skaidomas ? `skaidomas į ${esc(String(DALYS_SPR.skaicius))} dalis` : 'neskaidomas'}${adal.length ? ' (dalių skaičius įrašytas)' : ''} - ${esc(dalA.kodel)}.
+      Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
     const asut = (S.M && S.M.autoSut) || [];
     if (asut.length) h += `<div class="audit ok" id="autoSutPatikra" style="margin-top:10px"><b>Sutarties įvykdymo užtikrinimo reikalavimų vieta įrašyta automatiškai:</b>
       „Sutarties projekto ${asut.map(a => esc(GP_LAUKAI.sutartiesNuoroda(a.reiksme))).join('“; „')}“ (${esc(asut[0].saltinis)}). Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
@@ -7054,6 +7243,8 @@ function pzTaikyk(map, pastabos, vardas){
     if (pzIrasyk(s)){ R.uzpildyta.push(s); R.grazinti.push(b); }
   });
   PZ_REZ = R;
+  // pirkimo objekto dalys - 2 žingsnio klausimui siūlomas atsakymas (D1; GP_DALYS rodo kaip „Siūloma (nepatvirtinta)“)
+  PZ_DALYS = map.dalys ? Object.assign({}, map.dalys, { failas: vardas || '' }) : null;
   pzRodyk(map, pastabos);
   if (window.__K) klausimynas();
 }
@@ -7099,6 +7290,7 @@ document.addEventListener('click', e => {
     gr.slice().reverse().forEach(pzGrazink);
     R.uzpildyta = R.uzpildyta.filter(x => !gr.some(g => g.id === x.id)); R.grazinti = R.grazinti.filter(x => !gr.includes(x));
     pzRodyk(PZ_MAP, R.pastabos);
+    if (PZ_DALYS){ PZ_DALYS = null; if (window.__K) klausimynas(); }      // ir paraiškos siūlymas dėl pirkimo objekto dalių (D1)
     GP_BUSENA.rodyk('#pzBusena', { tipas: 'gerai', tekstas: `Grąžintos ankstesnės ${n} lauk${n === 1 ? 'o' : 'ų'} reikšmės - iš paraiškos neįrašyta nieko.` });
   } else {
     const k = R.konfliktai[+b.dataset.pzKonf];
@@ -7294,7 +7486,8 @@ function aiSalinkSaltini(raktas){
   if (dk){ dkSalink(dk); return; }
   AI.saltiniai = AI.saltiniai.filter(s => String(s.raktas) !== String(raktas));
   aiRodykSaltinius();
-  if (sal && KVL.kandidatai.some(M => M.failas === sal.vardas)){ kvlSalinkFaila(sal.vardas); kvlPranesk(); }
+  if (sal && KVL.kandidatai.some(M => M.failas === sal.vardas)) kvlSalinkFaila(sal.vardas);
+  kvlPranesk();                    // klausimynas iš naujo: ir lentelė, ir pirkimo objekto dalys (D1) gali priklausyti nuo šio dokumento
 }
 
 /* Ekrano skaitytuvui (klausimynas perpiestas, matomo pranesimo nereikia). */
@@ -7358,6 +7551,7 @@ async function aiPridek(files, busenosVieta){
   aiRodykSaltinius();
   // Kvalifikacijos reikalavimų lentelė DOCX faile - perkeliama į SPS 2 lentelę (DPS - į sąlygų 2 priedo 1 lentelę) be DI (kvalifikacijos-lentele.js)
   if (await kvlSkaityk(geri, false)) kvlPranesk();
+  else if (window.__K) klausimynas();     // pirkimo objekto dalys iš dokumento (D1)
 }
 function kvlPranesk(){ if (window.__K) klausimynas(); else kvlZinute(); }
 /* Pranešimas spartintuve - perpiešiamas kartu su klausimais (atmetus ar pašalinus failą dingsta). */
@@ -7633,6 +7827,7 @@ async function dkPridek(files){
 /* Pašalinti dokumentą visur: sąrašas, DI šaltiniai, perkeltos lentelės. */
 function dkSalink(d, tyliai){
   DK.failai = DK.failai.filter(x => x !== d);
+  if (PZ_DALYS && d.rusis === 'paraiska' && PZ_DALYS.failas === d.vardas) PZ_DALYS = null;    // paraiškos siūlymas dėl dalių (D1)
   AI.saltiniai = AI.saltiniai.filter(x => x.dk !== d.raktas);
   kvlSalinkFaila(d.vardas); zalSalinkFaila(d.vardas);
   if (!tyliai) dkPoPakeitimo();
@@ -7700,7 +7895,7 @@ function dkKontrolinisHTML(){
   const zlN = zl.reduce((a, d) => a + (d.lent ? d.lent.zaliuju.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
   return `<p class="dk-ks-h" id="dkKsH">Ką verta įkelti</p><ul>`
     + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą', parB)
-    + eil(kur('ts'), 'Techninė specifikacija', 'iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata', '')
+    + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata', '')
     + eil(kv, 'Kvalifikacijos reikalavimai', 'lentelė perkeliama į SPS 2 lentelę - šablono 2 lentelės klausimų nebelieka', kv.length ? (kvN ? 'perkeliama ' + reik(kvN) : 'lentelės nerasta') : '')
     + eil(zl, 'Žalieji reikalavimai', 'lentelė perkeliama į SPS 3 lentelę - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats', zl.length ? (zlN ? 'perkeliama ' + reik(zlN) : 'lentelės nerasta') : '')
     + `</ul>`;
@@ -7918,7 +8113,7 @@ function kortelesTaikoma(f){ PZ_TAIKOMA = true; try { f(); } finally { PZ_TAIKOM
 const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
   modulis: 'PP-salygos',
   klaustiKitoPirkimo: true,
-  onPasirinkta: () => { veiksmaiPirkimui(); GP_TIKRINIMAS.korteleKeista(); sutartisAtnaujink(); },   // rinkos apžvalgos veiksmai 2 žingsnyje; tikrinimas - su kortele (2026-10-06); kortelės BVPŽ - sutarties parinkimui
+  onPasirinkta: () => { veiksmaiPirkimui(); GP_TIKRINIMAS.korteleKeista(); sutartisAtnaujink(); if (window.__K) klausimynas(); },   // ir pirkimo objekto dalys iš kortelės (D1)   // rinkos apžvalgos veiksmai 2 žingsnyje; tikrinimas - su kortele (2026-10-06); kortelės BVPŽ - sutarties parinkimui
   laukai: [
     { kortele:'pavadinimas', el:'#pavadinimas',
       i: v => /\s+pirkimas\s*$/i.test(v) ? v.replace(/\s+pirkimas\s*$/i, '').trim() : null,
@@ -8417,11 +8612,13 @@ function surinkJuodrasti(){
   const k = KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta();
   return {
     z1: z1Laukai(), kortele: k ? k.id : null,
-    pz: { zymes: [...PZ_ZYMES_T.entries()], ranka: [...PZ_RANKA], enDi: PAV_EN_DI },
+    pz: { zymes: [...PZ_ZYMES_T.entries()], ranka: [...PZ_RANKA], enDi: PAV_EN_DI, dalys: PZ_DALYS },
     sb: window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.juodrastis ? window.SUTARTIES_BLOKAS.juodrastis() : null,
     s2: window.__K ? JSON.parse(JSON.stringify({
       ATS, TOUCHED: [...TOUCHED], PATV: [...PATV], SIUL: [...SIUL.entries()], ZURNALAS, PRIEDU_PASIRINKIMAS, PRIEDU_TOUCHED: [...PRIEDU_TOUCHED],
       APZIURA_KLAUSTI, EBVPD_TRINTI, AUTO_SAKOS: [...AUTO_SAKOS],
+      // pirkimo objekto dalys (D1): „Keisti - atsakysiu pats“ ir dokumentų ištraukos, iš kurių nustatytos (įkelti failai nesaugomi)
+      DALYS_KLAUSTI, DALYS_DOK: window.GP_DALYS ? daliuDokumentai().map(GP_DALYS.istrauka).filter(Boolean) : [],
       KVL: { kandidatai: KVL.kandidatai, pasirinkta: KVL.pasirinkta, pakeitimai: KVL.pakeitimai, atmesta: KVL.atmesta,
         // kvalifikacijos klausimas pagal lentelę (2026-10-19, 0 etapas D2): žmogaus atsakymai prieš automatinį (undefined - neatsakyta)
         auto: [...KVL_AUTO.entries()].map(([g, a]) => [g, ...['buvo', 'nustatyta'].map(k => a[k].map(([r, v]) => [r, v === undefined ? null : v, v === undefined]))]) },
@@ -8471,6 +8668,9 @@ async function atkurkJuodrasti(r){
   PZ_RANKA.clear(); ((D.pz || {}).ranka || []).forEach(x => PZ_RANKA.add(x));
   ((D.pz || {}).zymes || []).forEach(([id, t]) => pzUzdekZyme(id, t || undefined));
   PAV_EN_DI = (D.pz || {}).enDi || null;
+  PZ_DALYS = window.GP_PARAISKA && GP_PARAISKA.dalysIsAtsakymo && (D.pz || {}).dalys ? Object.assign(GP_PARAISKA.dalysIsAtsakymo(D.pz.dalys),
+    { failas: String(D.pz.dalys.failas || '').slice(0, 300) }) : null;
+  if (PZ_DALYS && PZ_DALYS.reiksme === 'nenustatyta') PZ_DALYS = null;
   DI_LEIDIMAS = D.di === 'taip' || D.di === 'ne' ? D.di : null;
   if (window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.atkurk) window.SUTARTIES_BLOKAS.atkurk(D.sb);
   const S2 = D.s2;
@@ -8486,6 +8686,8 @@ async function atkurkJuodrasti(r){
     ZURNALAS.length = 0; (S2.ZURNALAS || []).forEach(z => ZURNALAS.push(z));
     AUTO_SAKOS.clear(); (S2.AUTO_SAKOS || []).forEach(x => AUTO_SAKOS.add(x));
     APZIURA_KLAUSTI = !!S2.APZIURA_KLAUSTI; EBVPD_TRINTI = !!S2.EBVPD_TRINTI;
+    DALYS_KLAUSTI = !!S2.DALYS_KLAUSTI;
+    DALYS_ATK = window.GP_DALYS ? GP_DALYS.atkurkIstraukas(S2.DALYS_DOK) : [];
     const kv = S2.KVL || {};
     KVL.kandidatai = Array.isArray(kv.kandidatai) ? kv.kandidatai : []; KVL.pasirinkta = Number(kv.pasirinkta) || 0;
     KVL.pakeitimai = kv.pakeitimai && typeof kv.pakeitimai === 'object' ? kv.pakeitimai : {}; KVL.atmesta = !!kv.atmesta; KVL.klaida = '';
@@ -8751,7 +8953,7 @@ zingsniuBusena();
       // S1 (naudotojo sprendimas 2026-10-19): skiltyje - santrauka, išsamūs žingsniai ir pastaba - čia
       stepsTitle: "Kaip naudotis - išsamiai",
       steps: [
-      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
+      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje; abu be DI, perkėlimą patvirtinate jūs.",
       "<b>Sutarties projektas:</b> sutarties klausimai atskirame žingsnyje - galite juos atsakyti dabar arba vėliau. Ką atsako jūsų techninė specifikacija ar užduotis ir kiti įkelti dokumentai (terminai, objektas, pagrindiniai įrenginiai, garantiniai terminai, ES lėšos ir kt.), sutarties klausimuose įrašoma iš karto - su DI žyme, citata ir būsena „Siūloma (nepatvirtinta)“; jums lieka patikrinti ir patvirtinti. „Generuoti pirkimo sąlygas“ sugeneruoja sąlygas be sutarties (pakete ji pažymima „atidėta“, sąlygų tekstas nesikeičia), „Generuoti pirkimo sąlygas ir sutarties projektą“ - abu.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu. Pakeitus atsakymus po generavimo, rodoma „Reikia pergeneruoti“ ir kurie dokumentai paveikti.",
