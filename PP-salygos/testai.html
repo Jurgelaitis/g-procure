@@ -10297,6 +10297,72 @@ async function testaiSutartiesDI(){
   });
 }
 
+/* Sugeneruoto paketo patikra 4 žingsnyje ir kvalifikacijos reikalavimų proporcingumas 2 žingsnyje (2026-10-19, naudotojo „pradėkime nuo 2 ir 3 punktų“) */
+const KVL_PROP = ["Kvalifikacijos reikalavimai.docx", ["Kvalifikacijos reikalavimai", { lentele: [
+  ["Eil. Nr.", "Reikalavimai", "Pateikiami dokumentai"],
+  [KVL_NR, ["Tiekėjas turi turėti teisę vykdyti veiklą."], ["Išrašas."]],
+  [KVL_NR, ["Tiekėjas per paskutinius 5 (penkerius) metus yra tinkamai įvykdęs bent 1 panašią prekių tiekimo sutartį, kurios vertė ne mažesnė kaip 2 000 000 Eur be PVM."], ["Sutarčių sąrašas."]],
+  [KVL_NR, ["Tiekėjo vidutinės metinės pajamos per paskutinius 3 finansinius metus ne mažesnės kaip 5 000 000 Eur."], ["Finansinės ataskaitos."]]
+]}]];
+async function testaiPaketoPatikra(){
+  dabartine = grupe("Sugeneruoto paketo patikra ir kvalifikacijos reikalavimų proporcingumas (2026-10-19)");
+  await testas("Paketo patikra 4 žingsnyje - pati, be DI ir be įkėlimo: privalomi elementai (neužpildyti „Rengė:“ ir CPO pagrindimas), aiškumas; ko pakete nėra (TS, EBVPD) - atskirai, sugeneruoti priedai ir nekeičiamas PDF - rasti, skelbimo patikrų nėra, generuojamas priedas - nuoroda į 2 žingsnį; užpildžius ir sugeneravus iš naujo - pastaba dingsta; „Atverti išsamią patikrą“ - tikrinimo skirtukas su tais pačiais failais", async () => {
+    await modulis();
+    await jdPirkimas();
+    let rez = await W.generuoti({ sutartis: false });
+    W.rodykRezultata(rez);
+    await kol(() => D.getElementById("ppSantrauka"), "paketo patikra", 20000);
+    const tx = id => (D.getElementById(id) || { textContent: "" }).textContent.replace(/\s+/g, " ");
+    lygu(AI.kvietimai.length, 0, "užklausų į DI");
+    tiesa(/Patikrinta naršyklėje, be DI: \d+ patikr/.test(tx("ppSantrauka")) && /skirtuke „Tikrinti parengtus dokumentus“, kai turėsite CVP IS skelbimą/.test(tx("ppSantrauka")), "santrauka: " + tx("ppSantrauka"));
+    const t = tx("ppTikrinti"), pr = tx("ppPridek");
+    tiesa(/Patikrinkite Dokumente vieta yra, bet neužpildyta: Asmenys, įgalioti palaikyti tiesioginį ryšį su tiekėjais/.test(t) && /Rengė:/.test(t) && /PĮ 48 str\. 2 d\./.test(t)
+          && /centrinę perkančiąją organizaciją argumentai/.test(t), "peržiūrėkite: " + t.slice(0, 600));
+    tiesa(/3 priedas „Techninė specifikacija“/.test(pr) && /2 priedas „EBVPD“/.test(pr) && !/Sutarčių sąrašo forma|Specialistų sąrašo forma|Priimtinų bankų|Sandorio šalies|Pasiūlymo forma/.test(pr)
+          && /„Konfidencialumo įsipareigojimas“[^„]*Šį priedą generatorius gali parengti/.test(pr) && !/„Techninė specifikacija“[^„]*generatorius gali/.test(pr), "ko nėra: " + pr.slice(0, 900));
+    tiesa(!/Skelbimas apie pirkimą|nėra skelbimo/.test(tx("paketoPatikra")), "skelbimo patikros rodomos");
+    tiesa(!/Pirkimo būdas nežinomas/.test(tx("paketoPatikra")), "1 žingsnio duomenys (būdas) nepanaudoti");
+    // užpildžius „Rengė:“ ir sugeneravus iš naujo - pastaba dingsta
+    W.uAtsArr("B_rengejas", 0, "Vardenis Pavardenis, tel. +370 600 00000, el. p. vardenis.pavardenis@litgrid.eu");
+    rez = await W.generuoti({ sutartis: false });
+    W.rodykRezultata(rez);
+    await kol(() => D.getElementById("ppSantrauka"), "paketo patikra iš naujo", 20000);
+    tiesa(!/Asmenys, įgalioti palaikyti tiesioginį ryšį/.test(tx("ppTikrinti")) && /centrinę perkančiąją organizaciją/.test(tx("ppTikrinti")), "po „Rengė:“: " + tx("ppTikrinti").slice(0, 400));
+    // išsami patikra - tikrinimo skirtukas su tais pačiais failais
+    const n = W.__PP.failai.length;
+    D.getElementById("ppIssami").click();
+    await kol(() => W.GP_TIKRINIMAS.busena.docs && W.GP_TIKRINIMAS.busena.docs.length === n && !D.getElementById("tkRezultatai").hidden, "išsami patikra", 20000);
+    tiesa(n >= 5 && D.getElementById("tabTikrinti").getAttribute("aria-pressed") === "true" && W.GP_TIKRINIMAS.busena.docs.every(d => /\.docx$/.test(d.name)), "tikrinimo skirtukas: " + n);
+  });
+
+  await testas("Kvalifikacijos reikalavimų proporcingumas 2 žingsnyje (perkelta lentelė): laikotarpis, patirties vertė ir pajamos pagal VPT Metodiką - „Rekomendacija“ kortelėje su citata ir nuoroda, „Prieš generuojant“ - su šuoliu; vertė iš 1 žingsnio (pakeitus - perskaičiuojama), be vertės - nepatikrinta su priežastimi; tas pats - sugeneruoto paketo patikroje", async () => {
+    await modulis();
+    await W.dkPridek([await kvlFailas(KVL_PROP)]);
+    await jdPirkimas();
+    const pr = () => D.querySelector("[data-kvl-prop]"), tx = e => e ? e.textContent.replace(/\s+/g, " ") : "";
+    await kol(() => pr(), "proporcingumo blokas");
+    lygu(pr().dataset.kvlProp, "3", "rekomendacijų (1,5 mln. Eur, prekės)");
+    tiesa(/per paskutinius 5 metus, o Metodikoje prekėms ir paslaugoms - per paskutinius 3 metus/.test(tx(pr())) && /2 000 000 Eur \(133 % numatomos vertės 1 500 000 Eur\)/.test(tx(pr()))
+          && /metinės pajamos - 5 000 000 Eur/.test(tx(pr())) && /2 reikalavimas: „/.test(tx(pr())) && /Metodik/.test(tx(pr())) && /rekomendacija, ne kliūtis/.test(tx(pr())), "blokas: " + tx(pr()).slice(0, 900));
+    const sa = () => D.getElementById("lkKvlRek");
+    tiesa(sa() && /rekomendacijos pagal VPT Metodiką \(3\)/.test(tx(sa())) && sa().querySelector("[data-lk-suolis]"), "„Prieš generuojant“: " + tx(sa()));
+    // vertė 3 mln. - lieka tik laikotarpis
+    W.rodyk(1); ivesk1("verte", "3 000 000"); W.klausimynas();
+    await kol(() => pr() && pr().dataset.kvlProp === "1", "pakeitus vertę");
+    tiesa(/Rekomendacija|rekomendacija \(1\)/i.test(tx(pr())) && /3 metus/.test(tx(pr())) && !/numatomos vertės 3 000 000/.test(tx(pr())), "3 mln.: " + tx(pr()).slice(0, 500));
+    // be vertės - nepatikrinta su priežastimi (laikotarpis - patikrinamas)
+    ivesk1("verte", ""); W.klausimynas();
+    await kol(() => pr() && /įrašykite numatomą vertę 1 žingsnyje/.test(tx(pr())), "be vertės");
+    // sugeneruoto paketo patikroje - tas pats skaičiavimas iš SPS
+    ivesk1("verte", "1 500 000"); W.klausimynas();
+    const rez = await W.generuoti({ sutartis: false });
+    W.rodykRezultata(rez);
+    await kol(() => D.getElementById("ppSantrauka"), "paketo patikra", 20000);
+    const t = D.getElementById("ppTikrinti").textContent.replace(/\s+/g, " ");
+    tiesa(/Rekomendacija SPS reikalauja tiekėjo patirties per paskutinius 5 metus/.test(t) && /Rekomendacija SPS reikalaujamos metinės pajamos - 5 000 000 Eur/.test(t), "paketo patikra: " + t.slice(0, 900));
+  });
+}
+
 (async function(){
   // Sutarties parinkimo stebėjimo įrašai (2026-10-08), nustatymai ir juodraščiai (2026-10-15, gprocure.salygos.juodrastis.*) - tikri įrašai atkuriami, testų sukurti šalinami
   const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0 || k.indexOf("gprocure.salygos") === 0);
@@ -10349,6 +10415,7 @@ async function testaiSutartiesDI(){
     await testaiJuodrastis();
     await testaiPastabos1016();
     await testaiSutartiesDI();
+    await testaiPaketoPatikra();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

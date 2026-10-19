@@ -448,6 +448,17 @@
   .lk-en-t{display:block;font-size:13px;font-weight:700;color:var(--color-graphite);margin-bottom:4px}
   .lk-en-c{margin-top:8px}
   .lk-ai{margin-top:6px;padding:5px 12px;font-size:13px}
+  /* Sugeneruoto paketo patikra (2026-10-19) */
+  .pp-g{margin:10px 0;font-size:13px}
+  .pp-g ul{margin:6px 0;padding-left:18px}
+  #ppTikrinti ul,.pp-g details ul{list-style:none;padding-left:0}
+  .pp-g li{margin:6px 0}
+  .pp-g summary{cursor:pointer;font-weight:600}
+  /* Kvalifikacijos reikalavimų proporcingumas (2026-10-19) */
+  .kvl-prop{margin:10px 0;padding:10px 12px;border:1px solid var(--color-graphite-30);border-radius:8px;font-size:13px}
+  .kvl-prop--rek{border-left:3px solid var(--color-warning)}
+  .kvl-prop ul{margin:6px 0 4px;padding-left:18px}
+  .kvl-prop-v,.kvl-prop-t{color:var(--color-graphite-50-strong);margin-top:2px}
   /* Leidimas DI skaityti šio pirkimo dokumentus (2026-10-19) */
   .di-leid{margin:10px 0;padding:12px 14px;border:1px solid var(--color-graphite-30);border-left:3px solid var(--color-emerald);border-radius:8px;background:#fff}
   .di-leid-k{font-weight:600;font-size:14px;color:var(--color-graphite)}
@@ -3800,7 +3811,9 @@ function formosSantrauka(K){
     siulomi: visi.filter(u => u.busena === 'siuloma'),
     neprivalomi: visi.filter(u => u.busena === 'neprivaloma'),
     patvirtinti: visi.filter(u => u.busena === 'patvirtinta'),
-    zingsnis1: z1, teise: negaliojantysDokumentuose() };
+    zingsnis1: z1, teise: negaliojantysDokumentuose(),
+    // kvalifikacijos reikalavimų proporcingumo rekomendacijos (perkelta lentelė; 2026-10-19)
+    kvl: K.kvl && kvlModelis() ? ((kvlProporcingumas(kvlModelis()) || {}).radiniai || []) : [], kvlId: (M.korteles.find(c => c.q && c.q.M && c.rusis === 'kvl') || {}).id || '' };
 }
 /* Netekę galios teisės aktai visuose įkeltuose dokumentuose (1 žingsnio sąrašas, 2 žingsnio šaltiniai ir perkeltos lentelės, įkeltos kortelės
    mygtuku) - „Prieš generuojant“ (2026-10-18, naudotojo prašymas: kad nepraslystų). Registro neįkėlus - tuščia (prie dokumento tai pasakoma). */
@@ -3907,6 +3920,45 @@ function kortelesHTML(K, c){
 
 /* Kortelė „Kvalifikacijos reikalavimai (SPS 2 lentelė)“: be dokumento - pasiūlymas įkelti; su dokumentu - kas bus perkelta (grupės kaip
    dokumente, numeriai, specialistai 3.7 p.), siūlomi pasirinkimai su pagrindu, nuoseklumo pastabos ir patvirtinimas. */
+/* Kvalifikacijos reikalavimų proporcingumas jau rengiant (2026-10-19, naudotojo „pradėkime nuo 2 ir 3 punktų“): perkeltos lentelės tiekėjo
+   patirties ir pajamų reikalavimai lyginami su VPT Metodika tuo pačiu skaičiavimu kaip skirtuke „Tikrinti parengtus dokumentus“
+   (shared/kvalifikacija.js, shared/proporcingumas.js); vertė ir objekto tipas - 1 žingsnio, trukmė - pirkimo kortelės. Lygis - „Rekomendacija“
+   (Metodikos skaičiai - įprastos ribos, nukrypimas gali būti pagrįstas); be DI, nieko nesiunčiama. null - patikros moduliai neįkelti. */
+function kvlProporcingumas(M){
+  const KV = window.GP_KVALIFIKACIJA;
+  if (!M || !KV || !window.GP_PROPORCINGUMAS || !window.GP_PRIVALOMI || !window.GP_TEISE || !GP_TEISE.normos) return null;
+  const nr = []; GP_KVAL_LENTELE.numeriai(M, KVL.pakeitimai).forEach(e => { nr[e.i] = e.nr; });
+  const blocks = M.eilutes.map((r, i) => ({ text: GP_KVAL_LENTELE.pTekstas(r.reik), loc: { kvlNr: nr[i] || i + 1 } })).filter(b => b.text);
+  const k = (KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {};
+  const m = metodas();
+  const v = KV.vertink({ reikalavimai: KV.istrauk({ docs: [{ id: 'kvl', name: M.failas, parseStatus: 'parsed', blocks }] }),
+    verte: verteEUR() || null, objektas: ($('input[name=tipas]:checked') || {}).value || k.objektas || null, trukmeMen: k.trukmeMen || null,
+    rezimas: teisesRezimas(), mazosVertes: !!(m && m.procedura === 'mv_apklausa'), kalba: 'lt' });
+  // priežastys - šio puslapio žodžiais (bendrame tekste - kortelė ir skelbimas)
+  const T = KV.TXT.lt, PR = { [T.beVert]: 'įrašykite numatomą vertę 1 žingsnyje', [T.beObj]: 'pasirinkite pirkimo objekto tipą 1 žingsnyje',
+    [T.beReik]: 'perkeltoje lentelėje tiekėjo patirties ar pajamų reikalavimų su metais ar sumomis nerasta (specialistų reikalavimai netikrinami)' };
+  v.patikros.forEach(x => { if (PR[x.pastaba]) x.pastaba = PR[x.pastaba]; });
+  return v;
+}
+const KVL_PATIKROS = { kval_laikotarpis: 'patirties laikotarpis', kval_patirties_verte: 'patirties vertė', kval_pajamos: 'metinės pajamos' };
+function kvlProporcingumasHTML(M, id){
+  const v = kvlProporcingumas(M);
+  if (!v) return '';
+  const cit = r => (r.teise || []).map(raktas => { try { return GP_TEISE.cit(raktas, teisesRezimas()); } catch (e){ return null; } }).filter(Boolean);
+  const pat = v.patikros.filter(x => KVL_PATIKROS[x.id]);
+  const gerai = pat.filter(x => x.busena === 'gerai').map(x => KVL_PATIKROS[x.id]);
+  const nep = pat.filter(x => x.busena === 'nepatikrinta');
+  const nepT = [...new Set(nep.map(x => x.pastaba))];
+  let h = `<div class="kvl-prop${v.radiniai.length ? ' kvl-prop--rek' : ''}" id="${id}-prop" data-kvl-prop="${v.radiniai.length}">
+    <b>Proporcingumas pagal VPT Metodiką${v.radiniai.length ? ` - rekomendacij${v.radiniai.length === 1 ? 'a' : 'os'} (${v.radiniai.length})` : ''}</b>`;
+  if (v.radiniai.length) h += `<ul>${v.radiniai.map(r => `<li>${esc(r.tekstas)}
+      ${r.vietos.map(x => `<div class="kvl-prop-v">${x.b && x.b.loc ? esc(x.b.loc.kvlNr) + ' reikalavimas' : 'Reikalavimas'}: „${esc(x.citata)}“</div>`).join('')}
+      ${cit(r).length ? `<div class="kvl-prop-t">${esc(cit(r).join('; '))}</div>` : ''}</li>`).join('')}</ul>
+    <div class="cite">Tai rekomendacija, ne kliūtis: Metodikos skaičiai - įprastos ribos. Jei reikalavimą paliekate, turėkite jo motyvuotą pagrindimą.</div>`;
+  else if (gerai.length) h += `<div class="cite">Nukrypimų nuo įprastų Metodikos ribų nerasta (patikrinta: ${esc(gerai.join(', '))}).</div>`;
+  if (nepT.length) h += `<div class="cite">Nepatikrinta${gerai.length || v.radiniai.length ? ` (${esc(nep.map(x => KVL_PATIKROS[x.id]).join(', '))})` : ''}: ${esc(nepT.join('; '))}.</div>`;
+  return h + `<div class="cite">Tas pats skaičiavimas - ir skirtuke „Tikrinti parengtus dokumentus“; be DI, niekur nesiunčiama.</div></div>`;
+}
 function kvlHTML(K, c, klase, kur){
   const q = c.q, M = q.M, L = GP_KVAL_LENTELE;
   // lentelė dokumente: SPS 2 lentelė arba DPS sukūrimo sąlygų 2 priedo 1 lentelė (LT formoje grupių antraščių nėra - įrašomos; 3.7 p. - tik SPS)
@@ -3997,6 +4049,7 @@ function kvlHTML(K, c, klase, kur){
       ${nv ? `<li>${nv}</li>` : ''}
     </ul>
     ${past.length ? `<div class="kvl-past"><b>Patikrinkite:</b><ul>${past.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+    ${kvlProporcingumasHTML(M, c.id)}
     ${dvik ? kvlVertimoHTML(c, M, E, c.vienetai.find(u => u.raktai && u.raktai.includes('KVL_EN'))) : ''}
     <div class="actions kvl-veiksmai">${u0.busena === 'siuloma' ? '<button type="button" data-lk-patv="KVL">Patvirtinti perkėlimą</button>' : ''}
       <button type="button" class="sec" data-kvl="atmesti">Nenaudoti - pildysiu šablono laukus</button>${ikelti}</div>
@@ -4593,7 +4646,8 @@ function santraukosHTML(S){
       + `${tekst ? `<div class="lk-sa-tx">${ilgasTekstas(tekst, 130)}</div>` : ''}${f ? f(u) : ''}</li>`; }).join('')}</ul>`;
   let h = `<h3 class="lk-sa-t">Prieš generuojant</h3>`;
   const teise = S.teise || [];
-  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length && !teise.length)
+  const kvl = S.kvl || [];
+  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length && !teise.length && !kvl.length)
     return h + `<p class="lk-sa-ok">Visi klausimai atsakyti ir patvirtinti.</p>`;
   if (S.blokuojantys.length) h += `<div class="lk-sa lk-sa--kl"><b>Privalomi sprendimai (${S.blokuojantys.length}) - kol neatsakyta, generuoti neleidžiama:</b>${sar(S.blokuojantys)}</div>`;
   if (S.neuzpildyti.length) h += `<div class="lk-sa lk-sa--isp"><b>Neužpildyti laukai (${S.neuzpildyti.length})</b> - dokumente liks žyma (brūkšniai, nurodymas ar „X“), patikra ją parodys:${sar(S.neuzpildyti)}</div>`;
@@ -4603,6 +4657,9 @@ function santraukosHTML(S){
     - patvirtinkite ✓ prie lauko 1 žingsnyje.</div>`;
   if (teise.length) h += `<div class="lk-sa lk-sa--isp" id="lkTeiseAktai"><b>Patikrinkite teisės aktus (${teise.length})</b> - įkeltuose dokumentuose minimi netekę galios aktai; dokumentų tekstas nekeičiamas, reikalavimą patikrinkite su iniciatoriumi:
     <ul>${teise.map(x => `<li><b>${esc(x.vardas)}</b>: ${esc(x.tekstas)}</li>`).join('')}</ul></div>`;
+  if (kvl.length) h += `<div class="lk-sa lk-sa--siul" id="lkKvlRek"><b>Kvalifikacijos reikalavimai - rekomendacij${kvl.length === 1 ? 'a' : 'os'} pagal VPT Metodiką (${kvl.length})</b> - generuoti
+    galima; peržiūrėkite ${S.kvlId ? `<a href="#${S.kvlId}-prop" data-lk-suolis="${S.kvlId}">kortelėje „Kvalifikacijos reikalavimai“</a>` : 'kortelėje „Kvalifikacijos reikalavimai“'}:
+    <ul>${kvl.map(r => `<li>${esc(r.tekstas)}</li>`).join('')}</ul></div>`;
   if (S.neprivalomi.length) h += `<div class="lk-sa"><b>Neprivalomos nuorodos be numerio (${S.neprivalomi.length})</b> - bus pašalintos:${
     sar(S.neprivalomi, u => u.neprivaloma ? ` - <del class="lk-s">${esc(u.neprivaloma)}</del>` : '')}</div>`;
   return h;
@@ -5841,7 +5898,10 @@ function rodykRezultata(rez){
       automatiškai</b> - Word'e patikrinkite priedų numeraciją ir nuorodas į juos (pvz. „SPS N priedas“),
       kad numeris sąraše, tekste ir faile sutaptų.</div>`;
   }
+  // sugeneruoto paketo patikra pagal pirkimo dokumentų reikalavimus (2026-10-19) - pati, žr. paketoPatikra()
+  h += `<h3 id="paketoPatikraH">Paketo patikra pagal pirkimo dokumentų reikalavimus</h3><div id="paketoPatikra"><div id="paketoPatikraBusena" hidden></div><div id="paketoPatikraRez"></div></div>`;
   $('#rezultatas').innerHTML = h;
+  paketoPatikra(rez, vardai);
 
   /* Isejimo ispejimas (GP_DARBAS): atsakymai laikomi issaugotais tik atsisiuntus
      VISUS dokumentus - ZIP arba kiekviena atskirai. Po generavimo pakeisti
@@ -5883,6 +5943,117 @@ function rodykRezultata(rez){
     if (r.ok) poAtsisiuntimo(darboMomentas);
   };
   $('#zip').onclick = ruoskZip;
+}
+
+/* --- Sugeneruoto paketo patikra (2026-10-19, naudotojo „pradėkime nuo 2 ir 3 punktų“) ---------------------------------------------------
+   Po generavimo pati, be failų atsisiuntimo ir įkėlimo: tomis pačiomis taisyklėmis kaip skirtukas „Tikrinti parengtus dokumentus“
+   (shared/parengtis.js) - privalomi dokumentų elementai (PĮ 48 str. 2 d. / VPĮ 35 str. 2 d.), dokumentų aiškumas, SPS priedų sąrašas ir
+   paketas, kvalifikacijos reikalavimų proporcingumas, privalomi sutarties elementai, taisyklės pagal 1 žingsnio duomenis. Failai skaitomi
+   naršyklėje (GP_DOK), niekur nesiunčiami, DI nenaudojamas. Skelbimo patikros (skelbimas rengiamas CVP IS) čia nerodomos - jos atliekamos
+   tikrinimo skirtuke kartu su skelbimu. Palyginimas su forma - lentelėje virš (generavimo pasas). */
+var PP_EIGA = 0;
+/* Sugeneruoto priedo ar formos atitikmuo SPS priedų sąrašo eilutėje (pagal žodžius; numeriai skiriasi tarp šeimų) - kad patikra jį rastų */
+const PP_PRIEDAI = [[/_PASIULYMAS$/, /pasiulymo forma/], [/_PARAISKA$/, /paraiskos forma/], [/_SUTARTYS$/, /sutarciu saras/],
+  [/_SPECIALISTAI$/, /specialistu saras/], [/_SANDORIS$/, /sandorio salies/], [/_BANKAI$/, /priimtinu banku/], [/_NACSAUGUMAS(VPI)?$/, /nacionalinio saugumo/],
+  [/_KONFIDENCIALUMAS$/, /konfidencialumo isipareig/], [/_KONFINFO$/, /konfidenciali informacija/], [/_SUBTIEKEJAI$/, /ukio subjekt|subtiekej/],
+  [/_DERYBOS$/, /deretinu salyg/], [/_VALDYMAS$/, /valdymo ar prieziuros/], [/_METODIKA$/, /vertinimo metodika/]];
+function ppVaidmuo(r){
+  const t = String((r.d && r.d.trumpas) || ''), dk = String((r.d && r.d.dokumentas) || '');
+  if (r.sutartis) return /priedas/i.test(dk) ? 'priedas' : /BS$/.test(dk) ? 'sutartis_bendrosios' : /SS$/.test(dk) ? 'sutartis' : null;
+  if (/_SPS$|_SALYGOS$/.test(t)) return 'sps';
+  if (/_BPS$/.test(t)) return 'bps';
+  if (/_PASIULYMAS$/.test(t)) return 'pasiulymas';
+  if (/_PARAISKA$/.test(t)) return 'paraiska';
+  return /^PRIEDAI_|_GULSTI$|_METODIKA$/.test(t) ? 'priedas' : null;
+}
+async function paketoPatikra(rez, vardai){
+  const el = $('#paketoPatikraRez');
+  if (!el) return;
+  const mano = ++PP_EIGA;
+  el.innerHTML = '';
+  if (!window.GP_PARENGTIS || !window.GP_DOK){
+    GP_BUSENA.rodyk('#paketoPatikraBusena', { tipas: 'nezinoma', tekstas: 'Paketo patikros moduliai neįkelti - paketą patikrinkite skirtuke „Tikrinti parengtus dokumentus“.' });
+    return;
+  }
+  const v = await GP_BUSENA.vykdyk('#paketoPatikraBusena', { tipas: 'eiga', tekstas: 'Tikrinamas sugeneruotas paketas (naršyklėje, be DI)...',
+    klaidosPriesdelis: 'Sugeneruoto paketo patikrinti nepavyko', kartoti: () => paketoPatikra(rez, vardai),
+    veiksmas: async () => {
+      const failai = [], info = new Map();
+      rez.forEach((r, i) => {
+        if (!r.blob || r.statinis || !/\.docx$/i.test(vardai[i] || '')) return;
+        failai.push(new File([r.blob], vardai[i], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+        info.set(vardai[i], r);
+      });
+      if (!failai.length) throw new Error('pakete nėra Word dokumentų');
+      const out = await GP_DOK.apdorok(failai, null, 'lt');
+      const docs = out.docs || [], vaid = {};
+      // nekeičiami priedai (PDF, pvz. priimtinų bankų sąrašas) - tik kad SPS priedų sąraše būtų rasti; turinys netikrinamas
+      rez.forEach((r, i) => { if (r.blob && r.statinis && vardai[i]){ docs.push({ id: 'statinis-' + i, name: vardai[i], parseStatus: 'parsed', blocks: [] }); info.set(vardai[i], r); } });
+      docs.forEach(d => { const r = info.get(d.name), vv = r && ppVaidmuo(r); if (vv) vaid[d.id] = vv; });
+      // pirkimo duomenys - 1 žingsnio (ir pirkimo kortelės, jei pasirinkta)
+      const k = Object.assign({}, (KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {}), m = metodas();
+      Object.assign(k, { budas: m ? m.id : k.budas, verte: verteEUR() || k.verte || null, objektas: ($('input[name=tipas]:checked') || {}).value || k.objektas,
+        rezimas: teisesRezimas(), vykdytojas: k.vykdytojas || 'litgrid', pavadinimas: k.pavadinimas || pavClean($('#pavadinimas').value || '') });
+      let p = GP_PARENGTIS.patikrink({ docs, vaidmenys: vaid, kortele: k, kalba: 'lt' });
+      // sugeneruoti priedai ir formos pavadinami jų SPS priedų sąrašo numeriu (failo vardas - kaip atsisiunčiamo), kad patikra juos rastų
+      const sp = (p.faktai && p.faktai.sps && p.faktai.sps.priedai) || [], vardas = new Map();
+      docs.forEach(d => {
+        const r = info.get(d.name), t = String((r && r.d && r.d.trumpas) || '');
+        const rx = r && r.sutartis && !/priedas/i.test(String(r.d.dokumentas || '')) ? /sutarties projekt/ : (PP_PRIEDAI.find(([a]) => a.test(t)) || [])[1];
+        const pr = rx && sp.find(x => rx.test(norm(x.pav)));
+        if (pr){ const n = pr.n + ' priedas - ' + d.name; vardas.set(n, d.name); d.name = n; }
+      });
+      if (vardas.size) p = GP_PARENGTIS.patikrink({ docs, vaidmenys: vaid, kortele: k, kalba: 'lt' });
+      p.radiniai.forEach(r => (r.vietos || []).forEach(x => { if (vardas.has(x.failas)) x.failas = vardas.get(x.failas); }));
+      return { p, failai };
+    } });
+  if (mano !== PP_EIGA || !v.ok) return;
+  GP_BUSENA.slepk('#paketoPatikraBusena');
+  window.__PP = v.reiksme;
+  el.innerHTML = paketoPatikrosHTML(v.reiksme.p);
+  const b = $('#ppIssami');
+  if (b) b.onclick = () => {
+    if (window.GP_TIKRINIMAS && GP_TIKRINIMAS.darbas()){
+      GP_PRANESIMAS.rodyk('Skirtuke „Tikrinti parengtus dokumentus“ yra neišsaugotų sprendimų - pirmiau atsisiųskite jų ataskaitą.', { tipas: 'ispejimas' });
+      return;
+    }
+    $('#tabTikrinti').click();
+    if (window.GP_TIKRINIMAS) GP_TIKRINIMAS.skaityk(v.reiksme.failai);
+  };
+}
+const PP_LYGIAI = { kliutis: ['Kliūtis', 'kl'], tikrinti: ['Patikrinkite', 'warn'], rekomendacija: ['Rekomendacija', 'warn'], info: ['Informacija', 'info'] };
+/* SPS priedas, kurį generatorius gali parengti (registro priedas šiam būdui ir įstatymui), - pasakoma, kur jį pažymėti */
+function ppGeneruojamas(pav){
+  const n = norm(pav || '');
+  return (typeof prieduTinka === 'function' ? prieduTinka(seima()) : []).some(x => { const pr = PP_PRIEDAI.find(([a]) => a.test('_' + x.id)); return pr && pr[1].test(n); });
+}
+function paketoPatikrosHTML(p){
+  // skelbimas rengiamas CVP IS - jo patikros ir „nėra skelbimo“ čia nerodomos (žr. santraukos sakinį)
+  const rad = p.radiniai.filter(r => r.grupe !== 'skelbimas' && r.grupe !== 'kortele' && !(r.id === 'dokumentai' && /skelbim/i.test(r.tekstas)));
+  const pridek = rad.filter(r => r.grupe === 'paketas' && (r.id === 'priedai' || r.id === 'dokumentai'));
+  const tikr = rad.filter(r => !pridek.includes(r) && r.lygis !== 'info');
+  const inf = rad.filter(r => !pridek.includes(r) && r.lygis === 'info');
+  const pat = p.patikros.filter(x => x.grupe !== 'skelbimas' && x.grupe !== 'kortele');
+  const sk = b => pat.filter(x => x.busena === b).length, nep = pat.filter(x => x.busena === 'nepatikrinta');
+  const vietos = r => (r.vietos || []).map(x => `<div class="cite">${esc(x.failas)}${x.vieta ? ', ' + esc(x.vieta) : ''}${x.citata ? `: „${esc(x.citata)}“` : ''}</div>`).join('');
+  const teise = r => (r.teise || []).length ? `<div class="cite">${esc(r.teise.map(t => t.cit || t).filter(Boolean).join('; '))}</div>` : '';
+  const li = r => { const L = PP_LYGIAI[r.lygis] || PP_LYGIAI.info;
+    return `<li><span class="rz rz--${L[1]}">${L[0]}</span> ${esc(r.tekstas)}${vietos(r)}${teise(r)}</li>`; };
+  let h = `<p class="cite" id="ppSantrauka">Patikrinta naršyklėje, be DI: <b>${pat.length}</b> patikr${pat.length % 10 === 1 && pat.length % 100 !== 11 ? 'a' : 'os'} -
+    be pastabų ${sk('gerai')}, su pastabomis ${sk('radinys')}, nepatikrinta ${nep.length}. Skelbimo patikros (pavadinimas, terminai, būdas) - skirtuke
+    „Tikrinti parengtus dokumentus“, kai turėsite CVP IS skelbimą.</p>`;
+  if (tikr.length) h += `<div class="pp-g" id="ppTikrinti"><b>Prieš skelbiant peržiūrėkite (${tikr.length})</b><ul>${tikr.map(li).join('')}</ul></div>`;
+  else h += `<div class="audit ok" id="ppTikrinti"><b>Pastabų pagal privalomus elementus, aiškumą ir kvalifikacijos reikalavimus nerasta.</b> Tai nėra leidimas skelbti -
+    dokumentus vis tiek peržiūrėkite Word programoje.</div>`;
+  if (pridek.length) h += `<div class="pp-g" id="ppPridek"><b>Ko pakete dar nėra - pridėsite patys (${pridek.length})</b>
+    <div class="cite">SPS priedų sąraše ar pagal pirkimo būdą nurodyti dokumentai, kurių generatorius nerengia (pvz. techninė specifikacija, EBVPD).</div>
+    <ul>${pridek.map(r => `<li>${esc(r.tekstas)}${r.id === 'priedai' && ppGeneruojamas(r.pav)
+      ? ' <b>Šį priedą generatorius gali parengti</b> - pažymėkite jį žingsnio „2. Pirkimo sąlygos“ priedų sąraše ir sugeneruokite iš naujo.' : ''}</li>`).join('')}</ul></div>`;
+  if (inf.length) h += `<details class="pp-g"><summary>Informacija (${inf.length})</summary><ul>${inf.map(li).join('')}</ul></details>`;
+  if (nep.length) h += `<details class="pp-g" id="ppNepatikrinta"><summary>Nepatikrinta (${nep.length})</summary><ul>${nep.map(x =>
+    `<li><b>${esc(x.pav)}</b>${x.pastaba ? ' - ' + esc(x.pastaba) : ''}</li>`).join('')}</ul></details>`;
+  return h + `<div class="actions"><button type="button" class="sec" id="ppIssami">Atverti išsamią patikrą</button>
+    <span class="cite">skirtuke „Tikrinti parengtus dokumentus“ - su sprendimais ir Word ataskaita</span></div>`;
 }
 
 /* --- Navigacija ir paleidimas -------------------------------------------- */
@@ -7901,7 +8072,7 @@ zingsniuBusena();
       "<b>Tikrinti parengtus dokumentus</b> (skirtukas viršuje): įkelkite paketą ar atskirus failus - jie bus palyginti tarpusavyje, su pirkimo kortele ir su standartine LITGRID forma (šiuo moduliu sugeneruoti - pagal generavimo pasą), o įstatymo reikalaujamos pirkimo dokumentų informacijos (vertinimo kriterijų, terminų, kontaktinių asmenų ir kt.) bus ieškoma visame pakete ir parodoma, kur ji rasta. Kiekvienam radiniui įrašykite sprendimą ir atsisiųskite Word ataskaitą; kitą kartą įkelkite ją kartu su nauja paketo versija."
     ],
     noteTitle: "Kas siunčiama ir kas saugoma",
-    note: "Sąlygų tekstą kuria algoritmas iš šablonų - <b>DI teksto nerašo</b>. DI naudojamas tik pasiūlymams. Įkėlus pirmą dokumentą, kurį gali skaityti DI, paklausiama, ar leidžiate DI skaityti šio pirkimo dokumentus: „Taip“ - paraiškos kortelė siunčiama per G-Procure serverį į Claude API iškart (kai aišku, kad tai paraiška), o kai rengiamas sutarties projektas, įkeltų pirkimo dokumentų (ne paraiškos) tekstas automatiškai siunčiamas sutarties klausimams užpildyti; „Ne“ - automatiškai nesiunčiama nieko, DI paleidžiamas tik mygtukais. Pirkimo sąlygų atsakymų pasiūlymams - visada tik paspaudus „Gauti pasiūlymus“; kai pirkimo objektas susijęs su nacionaliniu saugumu, automatiškai nesiunčiama niekas (nei paraiška, nei dokumentai) - tik paspaudus mygtuką; kitais atvejais įkelti dokumentai niekur nesiunčiami. Nesiųskite įslaptintos informacijos. Jūsų atsakymai (ir numatoma vertė) automatiškai išsaugomi juodraštyje tik šioje naršyklėje - niekur nesiunčiami, patenka į atsarginę kopiją; juodraštį galite ištrinti ar atsisiųsti failu (jo neperduokite tiekėjams). Įkelti failai (paraiška, DI pasiūlymų dokumentai) ir sugeneruoti dokumentai juodraštyje nesaugomi; uždarant su neatsisiųstais dokumentais ar neišsaugotu juodraščiu naršyklė paklaus. Įrankis - bandomoji versija: dokumentai generuojami iš LITGRID šablonų ir tikrinami automatiškai, bet prieš skelbiant juos peržiūri rengėjas Word programoje; pastebėjimus praneškite įrankio rengėjui. Sutarties parinkimo stebėjimo įrašai: patvirtinus sutartį šioje naršyklėje įsimenama, ką siūlė sistema ir ką pasirinkote (su pirkimo pavadinimu), kad būtų galima tikslinti parinkimo taisykles; jie niekur nesiunčiami, juos galite atsisiųsti ar išvalyti bloke „Sutarties projektas“. Kvalifikacijos ir žaliųjų reikalavimų lentelės iš įkelto Word ar PDF failo perkeliamos naršyklėje (jų tekstas išsaugomas ir juodraštyje) - failas niekur nesiunčiamas, DI nenaudojamas; ar dokumente minimas teisės aktas netekęs galios, tikrinama pagal G-Procure teisės nuorodų registrą (iš svetainės). Tikrinant parengtus dokumentus failai skaitomi tik naršyklėje, niekur nesiunčiami, DI nenaudojamas; sugeneruotuose Word failuose įrašomas generavimo pasas (šablonas ir pastraipų maišos, be jūsų atsakymų ir numatomos vertės).",
+    note: "Sąlygų tekstą kuria algoritmas iš šablonų - <b>DI teksto nerašo</b>. DI naudojamas tik pasiūlymams. Įkėlus pirmą dokumentą, kurį gali skaityti DI, paklausiama, ar leidžiate DI skaityti šio pirkimo dokumentus: „Taip“ - paraiškos kortelė siunčiama per G-Procure serverį į Claude API iškart (kai aišku, kad tai paraiška), o kai rengiamas sutarties projektas, įkeltų pirkimo dokumentų (ne paraiškos) tekstas automatiškai siunčiamas sutarties klausimams užpildyti; „Ne“ - automatiškai nesiunčiama nieko, DI paleidžiamas tik mygtukais. Pirkimo sąlygų atsakymų pasiūlymams - visada tik paspaudus „Gauti pasiūlymus“; kai pirkimo objektas susijęs su nacionaliniu saugumu, automatiškai nesiunčiama niekas (nei paraiška, nei dokumentai) - tik paspaudus mygtuką; kitais atvejais įkelti dokumentai niekur nesiunčiami. Nesiųskite įslaptintos informacijos. Jūsų atsakymai (ir numatoma vertė) automatiškai išsaugomi juodraštyje tik šioje naršyklėje - niekur nesiunčiami, patenka į atsarginę kopiją; juodraštį galite ištrinti ar atsisiųsti failu (jo neperduokite tiekėjams). Įkelti failai (paraiška, DI pasiūlymų dokumentai) ir sugeneruoti dokumentai juodraštyje nesaugomi; uždarant su neatsisiųstais dokumentais ar neišsaugotu juodraščiu naršyklė paklaus. Įrankis - bandomoji versija: dokumentai generuojami iš LITGRID šablonų ir tikrinami automatiškai, bet prieš skelbiant juos peržiūri rengėjas Word programoje; pastebėjimus praneškite įrankio rengėjui. Sutarties parinkimo stebėjimo įrašai: patvirtinus sutartį šioje naršyklėje įsimenama, ką siūlė sistema ir ką pasirinkote (su pirkimo pavadinimu), kad būtų galima tikslinti parinkimo taisykles; jie niekur nesiunčiami, juos galite atsisiųsti ar išvalyti bloke „Sutarties projektas“. Kvalifikacijos ir žaliųjų reikalavimų lentelės iš įkelto Word ar PDF failo perkeliamos naršyklėje (jų tekstas išsaugomas ir juodraštyje) - failas niekur nesiunčiamas, DI nenaudojamas; ar dokumente minimas teisės aktas netekęs galios, tikrinama pagal G-Procure teisės nuorodų registrą (iš svetainės). Tikrinant parengtus dokumentus failai skaitomi tik naršyklėje, niekur nesiunčiami, DI nenaudojamas; sugeneruotas paketas tomis pačiomis taisyklėmis patikrinamas pats 4 žingsnyje (privalomi elementai, aiškumas, ko pakete dar nėra, kvalifikacijos reikalavimų proporcingumas), o perkeltos kvalifikacijos lentelės reikalavimai su VPT Metodika palyginami jau 2 žingsnyje; sugeneruotuose Word failuose įrašomas generavimo pasas (šablonas ir pastraipų maišos, be jūsų atsakymų ir numatomos vertės).",
     moreLabel: "Plačiau",
     details: {
       title: "Pirkimo sąlygų generatorius - išsami instrukcija",
