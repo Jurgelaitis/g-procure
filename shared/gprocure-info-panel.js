@@ -32,6 +32,8 @@
  *         moreLabel,                 // "Plačiau" (nebūtina)
  *         details: {                 // 2 lygis (nebūtina; nėra -> nerodomas "Plačiau")
  *           title, intro,
+ *           stepsTitle, steps:[...],    // nebūtina (2026-10-19): išsamūs žingsniai - kai 1 lygyje tik santrauka (PP-salygos)
+ *           noteTitle, note,            // nebūtina (2026-10-19): išsami pastaba (kas siunčiama ir saugoma)
  *           processTitle, process:[{title,text}],
  *           conceptsTitle, concepts:[{term,def,example}],
  *           faqTitle, faq:[{q,a}],
@@ -297,7 +299,14 @@
       return '<details><summary>' + esc(f.q) + '</summary><div class="gpi-a">' + f.a + '</div></details>';
     }).join("");
 
+    // išsamūs žingsniai ir pastaba (2026-10-19) - kai 1 lygyje rodoma tik santrauka; tie patys stiliai kaip 1 lygyje
+    var dsteps = (d.steps || []).map(function (s, i) {
+      return '<div class="gpi-step"><div class="gpi-num">' + (i + 1) + '</div><div class="gpi-step-tx">' + s + '</div></div>';
+    }).join("");
+
     var sections = "";
+    if (dsteps) sections += '<div class="gpi-sec"><div class="gpi-h3">' + ICON_FLOW + esc(d.stepsTitle || (ui === UI.en ? "How to use" : "Kaip naudotis")) + '</div><div class="gpi-steps">' + dsteps + '</div></div>';
+    if (d.note) sections += '<div class="gpi-sec"><div class="gpi-note">' + ICON_SHIELD + '<div>' + (d.noteTitle ? '<span class="gpi-note-title">' + esc(d.noteTitle) + '</span>' : "") + d.note + '</div></div></div>';
     if (process) sections += '<div class="gpi-sec"><div class="gpi-h3">' + ICON_FLOW + esc(d.processTitle || (ui === UI.en ? "How it works" : "Kaip vyksta procesas")) + '</div><div class="gpi-flow">' + process + '</div></div>';
     if (concepts) sections += '<div class="gpi-sec"><div class="gpi-h3">' + ICON_TAG + esc(d.conceptsTitle || (ui === UI.en ? "Key concepts" : "Pagrindinės sąvokos")) + '</div><div class="gpi-concepts">' + concepts + '</div></div>';
     if (faq) sections += '<div class="gpi-sec"><div class="gpi-h3">' + ICON_Q + esc(d.faqTitle || (ui === UI.en ? "FAQ" : "Dažniausi klausimai")) + '</div><div class="gpi-faq">' + faq + '</div></div>';
