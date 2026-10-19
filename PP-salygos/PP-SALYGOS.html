@@ -4869,6 +4869,55 @@ function pasoFormosMaisa(doc){
 function pasoInfo(sablonas, formosMaisa){
   return { sablonas, forma: formosMaisa, data: GP_EKSPORTAS.siandien(), modulis: 'PP-salygos' };
 }
+/* Bendrų priedų antraštės (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“): tas pats priedo failas (PRIEDAI_*) naudojamas
+   keliose šablonų šeimose, o jo antraštėje ar puslapio antraštėje įrašytas vienos šeimos numeris („SPS 5 priedo 1 priedėlis“, „SPS 6 priedas“,
+   „SPS 6 priedas / Annex 6 to the SPC“) - kitos šeimos SPS priedų sąraše tas priedas gali būti kitu numeriu (TSD - vienu didesniu,
+   „Konfidenciali informacija“ - 7, ne 6). Numeris pakeičiamas šio paketo SPS priedų sąrašo numeriu (tas pats priedas - pagal raktą, kaip
+   priedų numerių siūlymai, priedoEilute). Keičiamos tik antraštės pavidalo pastraipos („SPS N priedas“, „SPS N priedo K priedėlis“ ir jų
+   angliška dalis „Annex N to the SPC“); priedėlio numeris K ir kiti tekstai nekeičiami. Grąžina [{ buvo, tapo }]. */
+const PRIEDO_RAKTAS = { SUBTIEKEJAI: 'subtiekejai', KONFINFO: 'konfinfo', SPECIALISTAI: 'specialistai', SUTARTYS: 'sutartys', SANDORIS: 'sandoris',
+  VALDYMAS: 'valdymas', DERYBOS: 'derybos', KONFIDENCIALUMAS: 'konfidencialumas', NACSAUGUMAS: 'nacsaug', NACSAUGUMASVPI: 'nacsaug' };
+const PRIEDO_ANTRASTE = /^\s*SPS\s+\d+\s+pried(?:as|o\s+\d+\s+priedėlis)(?![\p{L}])/u;
+/* Atkarpų [pradžia, pabaiga, naujas] keitimas sujungto pastraipos teksto koordinatėmis - w:t mazguose, kitų mazgų formatavimas nekeičiamas */
+function keiskAtkarpas(ts, keitimai){
+  const rib = [0];
+  ts.forEach(t => rib.push(rib[rib.length - 1] + t.textContent.length));
+  const kur = poz => ts.findIndex((t, k) => rib[k] <= poz && poz < rib[k + 1]);
+  keitimai.slice().sort((a, b) => b[0] - a[0]).forEach(([s, e, naujas]) => {
+    const i = kur(s), j = kur(e - 1);
+    if (i < 0 || j < 0) return;
+    if (i === j){ const t = ts[i].textContent; ts[i].textContent = t.slice(0, s - rib[i]) + naujas + t.slice(e - rib[i]); }
+    else {
+      ts[i].textContent = ts[i].textContent.slice(0, s - rib[i]) + naujas;
+      for (let k = i + 1; k < j; k++) ts[k].textContent = '';
+      ts[j].textContent = ts[j].textContent.slice(e - rib[j]);
+    }
+    [ts[i], ts[j]].forEach(t => t.setAttribute('xml:space', 'preserve'));
+  });
+}
+async function priedoAntrasciuNumeriai(doc, d){
+  const m = /^PRIEDAI_(?:LT|LTEN)_([A-Z]+)$/.exec((d && d.trumpas) || ''), raktas = m && PRIEDO_RAKTAS[m[1]];
+  const e = raktas ? priedoEilute(null, raktas) : null;
+  if (!e || !/^\d+$/.test(String(e.nr))) return [];
+  const nr = String(e.nr), out = [];
+  for (const kel of Object.keys(doc.zip.files).filter(n => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n))){
+    const X = await GPDocx.part(doc, kel);
+    if (!X) continue;
+    GPDocx.els(X, 'p').forEach(p => {
+      const ts = GPDocx.els(p, 't'), sj = ts.map(t => t.textContent).join('');
+      if (sj.length > 160 || !PRIEDO_ANTRASTE.test(sj)) return;
+      const keitimai = [];
+      for (const rx of [/(SPS\s+)(\d+)(?=\s+pried)/g, /(Annex\s+)(\d+)(?=\s+(?:to|of)\s+(?:the\s+)?SPC)/g]){
+        let mm;
+        while ((mm = rx.exec(sj))) if (mm[2] !== nr) keitimai.push([mm.index + mm[1].length, mm.index + mm[0].length, nr]);
+      }
+      if (!keitimai.length) return;
+      keiskAtkarpas(ts, keitimai);
+      out.push({ buvo: sj.trim(), tapo: ts.map(t => t.textContent).join('').trim() });
+    });
+  }
+  return out;
+}
 async function generuotiViena(d, REZ){
   const Z = d.zemelapis;
   const forma = yraForma(d);
@@ -5407,6 +5456,10 @@ async function generuotiViena(d, REZ){
     GPDocx.replaceText(doc, SKYRIAUS_ZYMA, skyriausNr || '___');
   }
 
+  // 10c. Bendrų priedų antraštės (2026-10-19) - numeris pagal šio paketo SPS priedų sąrašą (žr. priedoAntrasciuNumeriai)
+  const antrasciuNr = await priedoAntrasciuNumeriai(doc, d);
+  antrasciuNr.forEach(x => doc.log.push('priedo antraštė: ' + x.buvo + ' -> ' + x.tapo));
+
   // 10b. Dvigubi tarpai (2026-10-05, naudotojo leidimas redakcinėms korekcijoms): šablonuose sutvarkyti (sablonu-taisymai.py J),
   //      o čia - galutiniame tekste, kur šablono raudonas tekstas tapo juodu; prieš lenteles, kad eilučių aukštis būtų galutinio teksto
   const dvigubiTarpai = GPDocx.dvigubiTarpai(doc);
@@ -5447,7 +5500,7 @@ async function generuotiViena(d, REZ){
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
-                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok } };
+                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr } };
 }
 
 /* DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“, naudotojo sprendimas 2026-10-04): { nr } arba null. */
@@ -5891,6 +5944,11 @@ function rodykRezultata(rez){
       : 'Numeriai šablone buvo iš eilės - pataisyti nereikėjo.'}
       Nuorodas tekste į punktus (pvz. „SPS 3.1 punkte“) prieš skelbiant patikrinkite Word'e.</div>`;
   }
+  // bendrų priedų antraštės suderintos su šio paketo SPS priedų sąrašu (2026-10-19) - pasakoma, ką pakeitė
+  const antrNr = rez.flatMap(r => (r.stats?.antrasciuNr || []).map(x => ({ d: r.d.pavadinimas, ...x })));
+  if (antrNr.length) h += `<div class="audit ok" id="antrasciuNr" style="margin-top:10px"><b>Priedų antraštės suderintos su SPS priedų sąrašu (${antrNr.length}):</b>
+    bendras priedo failas naudojamas keliose šablonų šeimose, todėl jo antraštės numeris pakeistas šio paketo SPS priedų sąrašo numeriu.
+    <ul>${antrNr.map(x => `<li>${esc(x.d)}: „${esc(x.buvo)}“ → „${esc(x.tapo)}“</li>`).join('')}</ul></div>`;
   const prieduIstr = rez.reduce((s,r) => s + (r.stats?.prieduIstrinta||0), 0);
   if (prieduIstr){
     h += `<div class="audit no" style="margin-top:10px"><b>Priedų numeracija (${prieduIstr}):</b>
