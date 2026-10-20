@@ -1189,6 +1189,7 @@
 <!-- 2 žingsnio laukų registras: klausimai, įvestys, neprivalomos nuorodos, priedų numerių siūlymai, pildymo planas -->
 <script src="laukai.js"></script>
 <script src="dalys.js"></script>   <!-- pirkimo objekto dalys iš kortelės ir dokumentų (2026-10-19, tobulinimo planas D1) -->
+<script src="metodika.js"></script>   <!-- pasiūlymų vertinimo metodika iš dokumentų (2026-10-20, tobulinimo planas D3) -->
 <script src="variklis.js"></script>
 <script src="kvalifikacijos-lentele.js"></script>   <!-- kvalifikacijos reikalavimų lentelė iš įkelto DOCX į SPS 2 lentelę (2026-10-14) -->
 <script src="sutartys.js"></script>   <!-- sutarties projekto parinkimas (sutarčių planas S2, 2026-10-08) -->
@@ -3025,6 +3026,9 @@ function surinktiKlausimus(){
     q.salyga = laukianciosPastraipos(d.zemelapis, rezimas()).get(n.i) || null;
     const sena = Array.isArray(ATS['B_' + raktas]) ? ATS['B_' + raktas] : [];
     if (sena.length !== lk.vietos.length) ATS['B_' + raktas] = Array.from({ length: lk.vietos.length }, (_, k) => sena[k] || '');
+    // vertinimo kriterijus pagal metodiką ar kitą dokumentą (2 etapas D3) - prieš skaičiuojant metodikos priedo eilutę ir užtikrinimo variantą
+    lk.vietos.forEach((v, k) => { if (v.ivestis === 'kriterijus') kriterijausSiulyk('B_' + raktas, k, v); });
+    if (taipNeLaukas(lk)) dpsKainosSiulyk(raktas);
     return q;
   };
 
@@ -3988,6 +3992,117 @@ function vietosBusena(key, k, klase){
 }
 const sprendimoBusena = (ats, raktas) => ats === undefined || ats === null ? 'neuzpildyta' : (PATV.has(raktas) ? 'patvirtinta' : 'siuloma');
 
+/* Pasiūlymų vertinimo metodika (2 etapas D3, 2026-10-20; naudotojų testavimas: kriterijų visada renka žmogus, metodikos failas į paketą
+   nepatenka). Įkelta metodika (1 žingsnio „Pirkimo dokumentai“ - rūšis „Pasiūlymų vertinimo metodika“) skaitoma naršyklėje
+   (PP-salygos/metodika.js, be DI): kriterijų sąrašas, svoriai ir vertinimo kriterijus su citata. Pagal naudotojo sprendimą S3 (taisyklėmis
+   su tikslia citata rastas sprendimas - be klausimo) SPS 8.1 p. kriterijus ir DPS „Ar vertinama tik pagal kainą?“ įrašomi automatiškai
+   („Įrašoma automatiškai“ su kilme ir „Keisti“), o failas pakete - SPS priedas be pakeitimų (numeris - iš SPS priedų sąrašo; DPS - vietoj
+   šablono priedo). Iš kito dokumento sakinio („Pasiūlymai bus vertinami pagal kainą“) - tik siūloma reikšmė, patvirtina žmogus.
+   Juodraštyje - metodikos analizė be failo (MET_ATK): atkūrus kriterijus lieka, o failą pakete reikia įkelti iš naujo (pasakoma). */
+const AUTO_MET_KILME = 'pagal vertinimo metodiką';
+var MET_ATK = null;                 // atkurto juodraščio metodikos analizė: { failas, kodas, pavadinimas, citata, kodel, kriterijai, suma, problemos }
+async function metAnalizuok(d){
+  try {
+    const el = /\.docx$/i.test(d.vardas) && d.failas ? await GP_METODIKA.skaityk(await d.failas.arrayBuffer()) : GP_METODIKA.isBloku(d.blokai);
+    d.met = GP_METODIKA.analizuok(el);
+  } catch (e){
+    d.met = { kriterijai: [], suma: null, kodas: null, pavadinimas: '', citata: '', kodel: '', problemos: ['metodikos perskaityti nepavyko (' + GP_BUSENA.klaidosTekstas(e) + ')'] };
+  }
+}
+/* Juodraščiui ir atkūrimui: tik žinomi laukai, tipai ir ribos (duomenys iš failo - nepatikimi) */
+function metIstrauka(m){
+  if (!m || typeof m !== 'object') return null;
+  const s = (x, n) => typeof x === 'string' ? x.slice(0, n) : '';
+  const kodas = window.GP_METODIKA && Object.prototype.hasOwnProperty.call(GP_METODIKA.KODAI, m.kodas) ? m.kodas : null;
+  const kriterijai = (Array.isArray(m.kriterijai) ? m.kriterijai : []).slice(0, 10).filter(q => q && typeof q === 'object')
+    .map(q => ({ nr: Number.isInteger(q.nr) ? q.nr : 0, pavadinimas: s(q.pavadinimas, 200), svoris: typeof q.svoris === 'number' && isFinite(q.svoris) ? q.svoris : null }));
+  const failas = s(m.failas, 300);
+  if (!failas || (!kodas && !kriterijai.length)) return null;
+  return { failas, kodas, pavadinimas: kodas ? GP_METODIKA.KODAI[kodas] : '', citata: s(m.citata, 300), kodel: s(m.kodel, 120), kriterijai,
+           suma: typeof m.suma === 'number' && isFinite(m.suma) ? m.suma : null,
+           problemos: (Array.isArray(m.problemos) ? m.problemos : []).filter(x => typeof x === 'string').slice(0, 10).map(x => x.slice(0, 300)) };
+}
+/* Dabartinė metodika: paskutinė įkelta (su failu) arba atkurta iš juodraščio (be failo) */
+function metodikosRez(){
+  const d = DK.failai.filter(x => x.rusis === 'metodika' && x.met).pop();
+  if (d) return Object.assign({}, d.met, { failas: d.vardas, dok: d });
+  return MET_ATK ? Object.assign({}, MET_ATK, { dok: null }) : null;
+}
+const metKilme = m => `${AUTO_MET_KILME} „${m.failas}“, ${m.kodel}: „${trumpaCitata(m.citata)}“`;
+/* Kriterijaus pavadinimas vardininku (sąsajos tekstams; 8.1 p. sakinyje - galininku, KRITERIJU_PAV) */
+const kritVard = kod => (window.GP_METODIKA && GP_METODIKA.KODAI[kod]) || KRITERIJU_PAV[kod] || kod || '';
+/* Kito įkelto dokumento (techninės specifikacijos) sakinys apie vertinimo kriterijų - tik siūlymui; pirkimo sąlygos ir skelbimas - ne šaltinis */
+function dokKriterijus(){
+  const be = new Set(['sps', 'bps', 'skelbimas', 'ebvpd']);
+  const sal = DK.failai.filter(d => d.rusis !== 'paraiska' && d.rusis !== 'metodika').map(d => ({ vardas: d.vardas, blokai: d.blokai }))
+    .concat(AI.saltiniai.filter(s => !s.dk).map(s => ({ vardas: s.vardas, blokai: s.blokai })));
+  for (const s of sal){
+    if (window.GP_PARENGTIS && be.has(GP_PARENGTIS.vaidmuo({ name: s.vardas, blocks: s.blokai || [] }))) continue;
+    const r = GP_METODIKA.sakinys(s.blokai);
+    if (r) return Object.assign(r, { failas: s.vardas });
+  }
+  return null;
+}
+/* SPS 8.1 p. kriterijaus vieta: metodika - įrašoma automatiškai (x.metodika), kitas dokumentas - siūloma (x.isDok); be šaltinio - mūsų siūlymas atšaukiamas */
+function kriterijausSiulyk(key, k, v){
+  const r = vRaktas(key, k), tinka = kod => kod && v.variantai && v.variantai[kod] != null;
+  const m = window.GP_METODIKA ? metodikosRez() : null;
+  if (m && tinka(m.kodas)){
+    siulyk(key, k, m.kodas, metKilme(m));
+    const x = SIUL.get(r); if (x){ x.metodika = true; x.isDok = false; }
+    return;
+  }
+  const t = window.GP_METODIKA ? dokKriterijus() : null;
+  if (t && tinka(t.kodas)){
+    siulyk(key, k, t.kodas, `pagal dokumentą „${t.failas}“: „${trumpaCitata(t.citata)}“ - patikrinkite`);
+    const x = SIUL.get(r); if (x){ x.isDok = true; x.metodika = false; }
+    return;
+  }
+  const x = SIUL.get(r);
+  if (x && (x.metodika || x.isDok)) siulyk(key, k, null, null);
+}
+/* DPS „Ar vertinama tik pagal kainą?“ (KR_): metodika - „Ne“ (kitas kriterijus nei kaina) arba „Taip“ (vien kaina) */
+function dpsKainosSiulyk(raktas){
+  const key = 'KR_' + raktas, m = window.GP_METODIKA ? metodikosRez() : null;
+  if (m && m.kodas){
+    siulyk(key, null, m.kodas === 'kaina', metKilme(m));
+    const x = SIUL.get(key); if (x) x.metodika = true;
+    return;
+  }
+  const x = SIUL.get(key);
+  if (x && x.metodika) siulyk(key, null, null, null);
+}
+/* Ar įrašyta automatiškai pagal metodiką (žmogus nekeitė, nepaprašė klausti) */
+function autoKrVieta(key, k, v){
+  if (!v || v.ivestis !== 'kriterijus') return null;
+  const r = vRaktas(key, k), x = SIUL.get(r);
+  if (NR_KLAUSTI.has(r) || PATV.has(r) || PATV.has(key) || !x || !x.metodika || (ATS[key] || [])[k] !== x.reiksme) return null;
+  return x;
+}
+function autoKrTaipNe(raktas){
+  const key = 'KR_' + raktas, x = SIUL.get(key);
+  if (NR_KLAUSTI.has(key) || PATV.has(key) || !x || !x.metodika || ATS[key] !== x.reiksme) return null;
+  return x;
+}
+/* Metodikos patikra „Prieš generuojant“ ir 4 žingsnyje: kriterijai, svorių suma, kitoks žmogaus kriterijus */
+function kriterijausKilmeHTML(key, k, u){
+  const x = SIUL.get(vRaktas(key, k)), kod = (ATS[key] || [])[k], mp = metodikosPastabos();
+  let h = '';
+  if (x && kod === x.reiksme && u && u.busena === 'siuloma')
+    h += `<div class="lk-kilme"><span class="lk-kilme-t">Siūloma: <b>${esc(kritVard(kod))}</b> - ${esc(x.saltinis)}.</span> ${patvirtinimoMygtukas(u.raktai, u.pavadinimas)}</div>`;
+  if (mp && mp.m.kodas && kod && kod !== mp.m.kodas)
+    h += `<p class="lk-dal lk-dal--isp" data-met-skiriasi>Patikrinkite: vertinimo metodikoje „${esc(mp.m.failas)}“ - „${esc(kritVard(mp.m.kodas))}“.</p>`;
+  return h;
+}
+function metodikosPastabos(){
+  const m = window.GP_METODIKA ? metodikosRez() : null;
+  if (!m) return null;
+  const out = (m.problemos || []).slice();
+  const K = window.__K, kv = K ? kriterijausVieta(K) : null, kod = kriterijus(K);
+  if (m.kodas && kv && kod && kod !== m.kodas) out.push(`8.1 punkte pasirinktas kriterijus „${kritVard(kod)}“, o metodikoje - „${kritVard(m.kodas)}“`);
+  return { m, pastabos: out };
+}
+
 /* Priedų numeriai (2026-10-15, naudotojo pastebėjimas: „Ką įrašyti vietoj „X“?“ - tas pats numeris klausiamas kelis kartus): kai visos lauko
    vietos - SPS priedo numeris ir kiekvienas rastas tame pačiame SPS priedų sąraše, numeris įrašomas be klausimo ir rodomas skiltyje
    „Išspręsta automatiškai“ su kilme ir „Keisti“. Žmogui pakeitus ar priedo sąraše neradus - klausimas kaip iki tol. */
@@ -4051,12 +4166,16 @@ function formosModelis(K){
     autoDal.unshift({ raktas: c.raktas, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: x.reiksme, saltinis: x.saltinis });
     kort.splice(i, 1);
   }
-  const autoSut = [];
+  const autoSut = [], autoKr = [];
   kort.forEach(c => {
     if (c.rusis !== 'laukas' || !c.q.lk) return;
+    const kr = taipNeLaukas(c.q.lk) && autoKrTaipNe(c.raktas);
+    if (kr) autoKr.push({ raktas: c.raktas, kr: true, kortele: c.id, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: kr.reiksme, saltinis: kr.saltinis });
     c.q.lk.vietos.forEach((v, k) => {
       const x = autoSutVieta('B_' + c.raktas, k, v);
       if (x) autoSut.push({ raktas: c.raktas, k, kortele: c.id, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: x.reiksme, saltinis: x.saltinis });
+      const y = autoKrVieta('B_' + c.raktas, k, v);
+      if (y) autoKr.push({ raktas: c.raktas, k, kortele: c.id, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: y.reiksme, saltinis: y.saltinis });
     });
   });
   kort.forEach(c => {
@@ -4076,7 +4195,7 @@ function formosModelis(K){
   });
   const G = [...grupes.values()].sort((a, b) => a.dokIdx - b.dokIdx || (a.skyrius ? a.skyrius.i : -1) - (b.skyrius ? b.skyrius.i : -1));
   G.forEach(g => g.korteles.sort((a, b) => (a.vieta ? a.vieta.i : 0) - (b.vieta ? b.vieta.i : 0)));
-  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr, autoSut, autoDal };
+  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr, autoSut, autoDal, autoKr };
 }
 
 /* Vienetas = vienas atsakymas: { id (lauko id šuoliui), pavadinimas, busena, blokuoja, raktai (PATV), reiksme, saltinis } */
@@ -4115,6 +4234,7 @@ function kortelesVienetai(K, c){
   } else if (c.rusis === 'laukas'){
     const key = 'B_' + c.raktas;
     if (taipNeLaukas(q.lk)){
+      if (autoKrTaipNe(c.raktas)) return out;     // įrašyta pagal vertinimo metodiką (D3) - ne klausimas
       const a = ATS['KR_' + c.raktas];
       out.push({ id: c.id + '-kr0', pavadinimas: q.lk.klausimas, busena: sprendimoBusena(a, 'KR_' + c.raktas), salyga: !!q.salyga,
         blokuoja: a === undefined && !q.salyga, raktai: ['KR_' + c.raktas],
@@ -4125,6 +4245,7 @@ function kortelesVienetai(K, c){
     (q.lk ? q.lk.vietos : []).forEach((v, k) => {
       if (v.kopija != null || salintos.has(k)) return;
       if (v.ivestis === 'kriterijus'){
+        if (autoKrVieta(key, k, v)) return;       // įrašyta pagal vertinimo metodiką (D3) - ne klausimas
         const kod = (ATS[key] || [])[k];
         out.push({ id: c.id + '-v' + k + '-o0', pavadinimas: 'Vertinimo kriterijus: ' + be1Nr(q.tekstas), busena: vietosBusena(key, k, 'a'), salyga: !!q.salyga,
           blokuoja: !kod && !q.salyga, raktai: [vRaktas(key, k)], reiksme: kod ? KRITERIJU_PAV[kod] : '' });
@@ -4789,12 +4910,14 @@ function laukoHTML(K, c, klase, kur, dokai){
   const pa = paaiskinimas({ vieta: kur, nurodymas: nurodymai, komentarai: q.komentarai,
     tuscia: b ? 'neprivaloma nuoroda „(SPS ___ priedas)“ bus pašalinta visa; kitos vietos lieka su žyma, ir patikra jas parodys.'
       : 'dokumente lieka žyma (brūkšniai, nurodymas ar „X“), ir baigtumo patikra ją parodys.', dokai });
-  const tn = taipNeLaukas(lk), tnA = tn ? ATS['KR_' + c.raktas] : null;
+  const tnAuto = taipNeLaukas(lk) ? autoKrTaipNe(c.raktas) : null, tn = taipNeLaukas(lk) && !tnAuto, tnA = tn ? ATS['KR_' + c.raktas] : null;
   let h = `<section class="${klase}" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${kortelesGalva(c, kl, pa)}
     ${uz ? `<p class="lk-uz" id="${c.id}-uz">${esc(uz)}</p>` : ''}${salyga}
     ${tn ? `<div class="opts lk-ops" role="radiogroup" aria-labelledby="${c.id}-kl"${uz ? ` aria-describedby="${c.id}-uz"` : ''}>
       <label class="opt"><input type="radio" id="${c.id}-kr0" name="KR_${esc(c.raktas)}" ${tnA === true ? 'checked' : ''} onchange="taipNe('${esc(c.raktas)}',true)"> Taip</label>
       <label class="opt"><input type="radio" id="${c.id}-kr1" name="KR_${esc(c.raktas)}" ${tnA === false ? 'checked' : ''} onchange="taipNe('${esc(c.raktas)}',false)"> Ne</label></div>` : ''}
+    ${tnAuto ? `<div class="lk-v lk-v--auto" id="${c.id}-kr-auto"><div class="lk-auto-r">Įrašoma automatiškai: <b>${tnAuto.reiksme ? 'Taip - nurodymas pašalinamas' : 'Ne - pridedamas vertinimo metodikos priedas'}</b>
+      <span class="lk-kilme-t">(${esc(tnAuto.saltinis)})</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="KR_${esc(c.raktas)}" aria-label="Keisti - ar vertinama tik pagal kainą">Keisti</button></div></div>` : ''}
     <div class="lk-pz"><span class="lk-pz-t">Taip atrodys dokumente</span> <span class="lk-pz-s" id="${c.id}-pz">${perziurosHTML(q.tekstas, lk.vietos, vals)}</span></div>`;
   // „Taip / Ne“ laukas: įvesties laukų nėra - „Taip“ nurodymas šalinamas, „Ne“ - nuoroda į papildomą priedą (pridedamas generuojant)
   if (tn){
@@ -4810,6 +4933,13 @@ function laukoHTML(K, c, klase, kur, dokai){
   const eil = {};
   lk.vietos.forEach((v, k) => {
     if (v.kopija != null || salintos.has(k)) return;
+    const kx = autoKrVieta(key, k, v);
+    if (kx){                                       // vertinimo kriterijus pagal metodiką (D3) - reikšmė su kilme ir „Keisti“
+      h += `<div class="lk-v lk-v--auto" id="${c.id}-v${k}-auto"><span class="lk-v-l">${esc(v.uzrasas || 'Vertinimo kriterijus')}</span>
+        <div class="lk-auto-r">Įrašoma automatiškai: <b>${esc(kritVard(kx.reiksme))}</b> <span class="lk-kilme-t">(${esc(kx.saltinis)})</span>
+        <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(vRaktas(key, k))}" aria-label="Keisti - vertinimo kriterijų">Keisti</button></div></div>`;
+      return;
+    }
     const ax = autoSutVieta(key, k, v);
     if (ax){                                       // įrašoma automatiškai pagal generuojamą sutartį - ne įvestis, o reikšmė su kilme ir „Keisti“
       h += `<div class="lk-v lk-v--auto" id="${c.id}-v${k}-auto"><span class="lk-v-l">${esc(v.uzrasas || 'Reikšmė')}</span>
@@ -4825,7 +4955,7 @@ function laukoHTML(K, c, klase, kur, dokai){
       h += `<div class="lk-v"><div class="opts lk-ops" role="radiogroup" aria-labelledby="${c.id}-kl"${uz ? ` aria-describedby="${c.id}-uz"` : ''}>
         ${GP_LAUKAI.KRITERIJU_PASIRINKIMAI.map(([kod, pav], j) => `<label class="opt"><input type="radio" id="${id}-o${j}" name="KRIT_${esc(c.raktas)}" ${val === kod ? 'checked' : ''}
           onchange="pasirinkKriteriju('${esc(c.raktas)}', ${k}, '${kod}')"> ${pav}</label>`).join('')}</div>
-        <div class="lk-v-iv">${busenosZyma(u.busena || 'neuzpildyta', id + '-o0-b')}</div></div>`;
+        <div class="lk-v-iv">${busenosZyma(u.busena || 'neuzpildyta', id + '-o0-b')}</div></div>${kriterijausKilmeHTML(key, k, u)}`;
       return;
     }
     const nr = kart[v.uzrasas] > 1 ? (eil[v.uzrasas] = (eil[v.uzrasas] || 0) + 1) : 0;
@@ -5060,6 +5190,9 @@ function santraukosHTML(S){
     sar(S.siulomi, u => u.reiksme ? ` - <span class="lk-sa-r">${esc(String(u.reiksme))}</span>` : '')}</div>`;
   if (S.zingsnis1.length) h += `<div class="lk-sa lk-sa--siul" data-lygis="patikr">${lyg('patikr')}<b>1 žingsnio reikšmės, laukiančios patvirtinimo (${S.zingsnis1.length}):</b> ${S.zingsnis1.map(z => esc(z.pavadinimas)).join(', ')}
     - patvirtinkite ✓ prie lauko 1 žingsnyje.</div>`;
+  const metP = metodikosPastabos();
+  if (metP && metP.pastabos.length) h += `<div class="lk-sa lk-sa--isp" id="lkMetodika" data-lygis="patikr">${lyg('patikr')}<b>Vertinimo metodika „${esc(metP.m.failas)}“</b> - patikrinkite:
+    <ul>${metP.pastabos.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
   if (teise.length) h += `<div class="lk-sa lk-sa--isp" id="lkTeiseAktai" data-lygis="patikr">${lyg('patikr')}<b>Teisės aktai (${teise.length})</b> - įkeltuose dokumentuose minimi netekę galios aktai; dokumentų tekstas nekeičiamas, reikalavimą patikrinkite su iniciatoriumi:
     <ul>${teise.map(x => `<li><b>${esc(x.vardas)}</b>: ${esc(x.tekstas)}</li>`).join('')}</ul></div>`;
   if (kvl.length) h += `<div class="lk-sa lk-sa--siul" id="lkKvlRek" data-lygis="patikr">${lyg('patikr')}<b>Kvalifikacijos reikalavimai - rekomendacij${kvl.length === 1 ? 'a' : 'os'} pagal VPT Metodiką (${kvl.length})</b> - generuoti
@@ -5212,7 +5345,7 @@ function klaiduAtnaujink(S, fokusuoti){
 const lkSk = (n, f1, f2, f3) => { const d = n % 10, s = n % 100; return n + ' ' + (d === 1 && s !== 11 ? f1 : d >= 2 && d <= 9 && (s < 11 || s > 19) ? f2 : f3); };
 const privalomuSk = S => klaiduSarasas(S).reduce((a, g) => a + g.vv.length, 0);
 const autoSkaicius = (K, S) => K ? K.autoSakos.length + K.automatika.length + ((S && S.M && S.M.autoNr) || []).length + ((S && S.M && S.M.autoSut) || []).length
-  + ((S && S.M && S.M.autoDal) || []).length : 0;
+  + ((S && S.M && S.M.autoDal) || []).length + ((S && S.M && S.M.autoKr) || []).length : 0;
 /* 1 žingsnio neįrašyti duomenys (K4): ne kliūtis - generuoti galima, bet dokumentuose liks tuščia vieta. Sakoma 1 žingsnio įžangoje, 2 žingsnio
    įžangoje ir „Prieš generuojant“ su šuoliu į lauką. Būdas, kalba ir objekto tipas visada turi reikšmę. */
 function z1Trukumai(){
@@ -5654,8 +5787,8 @@ function klausimynas(){
   h += `<nav class="lk-psl lk-psl--a" id="lkPslA" aria-label="Kitas ar ankstesnis skyrius" hidden></nav>`;
 
   /* Automatika - viskas matoma, nieko nenutylima (pilni tekstai; ilgi - sutraukiami žodžio riboje) */
-  const autoNr = (S && S.M && S.M.autoNr) || [], autoSut = (S && S.M && S.M.autoSut) || [], autoDal = (S && S.M && S.M.autoDal) || [];
-  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length + autoSut.length + autoDal.length;
+  const autoNr = (S && S.M && S.M.autoNr) || [], autoSut = (S && S.M && S.M.autoSut) || [], autoDal = (S && S.M && S.M.autoDal) || [], autoKr = (S && S.M && S.M.autoKr) || [];
+  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length + autoSut.length + autoDal.length + autoKr.length;
   if (autoSk){
     h += `<details class="auto" id="lkAuto"${autoAtverta ? ' open' : ''}><summary>Išspręsta automatiškai (${autoSk}) - peržiūrėti</summary><div class="auto-lst">`;
     // tai, ką galima pakeisti (objekto apžiūra), - sąrašo pradžioje ir su mygtuku
@@ -5681,6 +5814,12 @@ function klausimynas(){
     autoNr.forEach(a => {
       h += `<div data-auto-nr="${esc(a.raktas)}"><span class="n">${esc(a.dok)}</span>${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>SPS priedo Nr. ${esc(a.nr.join(', '))}</b>
         <span class="n">${esc(a.saltinis)}</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(a.raktas)}" aria-label="Keisti SPS priedo numerį (Nr. ${esc(a.nr.join(', '))})">Keisti</button></div>`;
+    });
+    autoKr.forEach(a => {
+      const r = a.kr ? 'KR_' + a.raktas : vRaktas('B_' + a.raktas, a.k);
+      h += `<div data-auto-kr="${esc(a.raktas)}"><span class="n">${esc(a.dok)}</span>${a.kr ? esc(a.q.lk.klausimas || 'Ar vertinama tik pagal kainą?') : 'Vertinimo kriterijus (8.1 punktas)'}:
+        <b>${a.kr ? (a.reiksme ? 'Taip' : 'Ne - pridedamas vertinimo metodikos priedas') : esc(kritVard(a.reiksme))}</b>
+        <span class="n">${esc(a.saltinis)}</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(r)}" aria-label="Keisti - vertinimo kriterijų">Keisti</button></div>`;
     });
     autoSut.forEach(a => {
       h += `<div data-auto-sut="${esc(a.raktas)}"><span class="n">${esc(a.dok)}</span>${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>${esc(GP_LAUKAI.sutartiesNuoroda(a.reiksme))}</b>
@@ -6456,6 +6595,38 @@ async function dpsMetodikosFailas(d, nr){
            blob, audit, forma: false, papildomas: true, stats: {} };
 }
 
+/* Įkelta vertinimo metodika pakete (2 etapas D3): failas be pakeitimų, pavadinimas - pagal SPS priedų sąrašo eilutę (numeris iš sąrašo);
+   DPS konkretaus pirkimo sąlygoms - vietoj šablono priedo su raudona pastaba. Be failo (atkurtas juodraštis), be priedų sąrašo eilutės (pvz.
+   vertinama pagal kainą) - nepridedama, 4 žingsnis pasako kodėl. */
+function metodikosFailas(rinkinys, dps){
+  const m = window.GP_METODIKA ? metodikosRez() : null;
+  if (!m || !m.dok) return null;
+  let nr = null, pref = 'SPS', trumpas = 'IKELTA_METODIKA';
+  if (dps){ nr = dps.nr; pref = 'Konkretaus pirkimo sąlygų'; trumpas = dps.d.trumpas.replace(/SALYGOS$/, 'METODIKA'); }
+  else {
+    const sps = rinkinys.find(d => dokTipas(d) === 'SPS'), e = sps && priedoEilute(sps, 'metodika');
+    if (!e) return null;                           // priedų sąraše metodikos eilutės nelieka (pvz. vertinama pagal kainą)
+    nr = e.nr;
+  }
+  if (!nr) return null;
+  const pletinys = (String(m.failas).match(/\.([a-z0-9]+)$/i) || [, 'docx'])[1].toLowerCase();
+  return { d: { trumpas, pavadinimas: `${pref} ${nr} priedas - Ekonomiškai naudingiausio pasiūlymo vertinimo metodika`, dokumentas: `${pref} ${nr} priedas Vertinimo metodika` },
+           blob: m.dok.failas, statinis: true, isDokumento: m.failas, pletinys, forma: true, stats: {},
+           audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } };
+}
+/* 4 žingsnio eilutė: kriterijus, metodikos failas pakete (ar kodėl ne), pastabos */
+function metodikosPatikraHTML(rez){
+  const mp = metodikosPastabos();
+  if (!mp) return '';
+  const m = mp.m, f = rez.find(r => r.isDokumento);
+  const kodel = f ? `pakete - <b>${esc(f.d.pavadinimas)}</b> (jūsų failas „${esc(m.failas)}“ be pakeitimų)`
+    : !m.dok ? 'failo pakete nėra - juodraštyje failai nesaugomi: įkelkite metodiką 1 žingsnyje iš naujo ir sugeneruokite paketą'
+    : 'failas į paketą neįdėtas - SPS priedų sąraše metodikos eilutės nėra (pvz. vertinama pagal kainą)';
+  return `<div class="audit ${f && !mp.pastabos.length ? 'ok' : 'no'}" id="metodikaPatikra" style="margin-top:10px"><b>Pasiūlymų vertinimo metodika:</b>
+    ${m.kodas ? `kriterijus - „${esc(kritVard(m.kodas))}“ (${esc(m.kodel)}), ` : ''}${m.kriterijai.length ? `kriterijų ${m.kriterijai.length}${m.suma != null ? ', svorių suma ' + esc(String(m.suma).replace('.', ',')) : ''}; ` : ''}${kodel}.
+    ${mp.pastabos.length ? `<br>Patikrinkite: ${mp.pastabos.map(esc).join('; ')}.` : ''}</div>`;
+}
+
 /* Skyriaus numeris galutiniame dokumente: LT - pastraipos pradzia („12.<tab>ESMINĖS ...“), dvikalbiame - pirmas eilutes
    langelis („14.“). null - skyriaus nera. */
 function skyriausNumeris(doc, re){
@@ -6491,7 +6662,9 @@ async function generuoti(o = {}){
   }
   // DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“): failas iš sąlygų šablono
   const dpsP = dpsMetodikosPriedas(), dpsD = dpsP && rinkinys.find(d => /^DPSP_.*_SALYGOS$/.test(d.trumpas));
-  if (dpsD) rez.push(await dpsMetodikosFailas(dpsD, dpsP.nr));
+  const met = metodikosFailas(rinkinys, dpsD ? { d: dpsD, nr: dpsP.nr } : null);   // įkelta vertinimo metodika (2 etapas D3)
+  if (met) rez.push(met);
+  else if (dpsD) rez.push(await dpsMetodikosFailas(dpsD, dpsP.nr));
   // Nekeiciami priedai (banku sarasas PDF): failas pridedamas kaip yra - jame nera ko pildyti ar tikrinti.
   for (const st of statiniai){
     const buf = await gaukBuf('templates/' + st.failas);
@@ -6603,7 +6776,7 @@ function rodykRezultata(rez){
       r.stats.zalIsDokumento && !r.stats.zalIsDokumento.klaida ? `žaliųjų reikalavimų iš dokumento ${r.stats.zalIsDokumento.eiluciu}` : '',
     ].filter(Boolean).join(' &middot; ');
     h += `<tr data-rez-tip="${r.statinis ? 'statinis' : r.sutartis || r.sutartiesPriedas ? 'sutartis' : 'salygos'}"><td><b>${esc(r.d.pavadinimas)}</b>
-        <div class="cite">${r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
+        <div class="cite">${r.isDokumento ? `jūsų įkeltas dokumentas „${esc(r.isDokumento)}“ - be pakeitimų` : r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
           : r.gulscias ? 'gulsčias puslapis - atskiras failas; tekstas kaip pagrindiniame dokumente'
           : r.sutartis ? (r.sutartis.pakeista.length ? `pasirinkta ir įrašyta ${r.sutartis.pakeista.length} vietų &middot; pašalinta pastraipų ${r.sutartis.pasalinta.length} &middot; pildoma sudarant ${r.sutartis.palikta.filter(p => p.kodel === 'sudarant').length}` : 'be pakeitimų (bendrosios sąlygos)')
           : r.forma
@@ -6699,6 +6872,7 @@ function rodykRezultata(rez){
     if (dalA && DALYS_SPR) h += `<div class="audit ok" id="autoDalPatikra" style="margin-top:10px"><b>Pirkimo objekto dalys nustatytos automatiškai:</b>
       ${DALYS_SPR.skaidomas ? `skaidomas į ${esc(String(DALYS_SPR.skaicius))} dalis` : 'neskaidomas'}${adal.length ? ' (dalių skaičius įrašytas)' : ''} - ${esc(dalA.kodel)}.
       Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
+    h += metodikosPatikraHTML(rez);                // vertinimo metodika (2 etapas D3)
     const asut = (S.M && S.M.autoSut) || [];
     if (asut.length) h += `<div class="audit ok" id="autoSutPatikra" style="margin-top:10px"><b>Sutarties įvykdymo užtikrinimo reikalavimų vieta įrašyta automatiškai:</b>
       „Sutarties projekto ${asut.map(a => esc(GP_LAUKAI.sutartiesNuoroda(a.reiksme))).join('“; „')}“ (${esc(asut[0].saltinis)}). Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
@@ -7894,7 +8068,7 @@ function aiPriimtuSantrauka(){
    Failai lieka tik atmintyje - juodraštyje neišsaugomi (perkeltos lentelės - KVL / ZAL - išsaugomos). */
 const DK = { failai: [], n: 0 };
 const DK_RUSYS = { paraiska: 'Pirkimo paraiška', kvalifikacija: 'Kvalifikacijos reikalavimai', zalieji: 'Žalieji (aplinkosaugos) reikalavimai',
-  ts: 'Techninė specifikacija', sutartis: 'Sutarties projektas', priedas: 'Sutarties priedas', kita: 'Kitas dokumentas' };
+  metodika: 'Pasiūlymų vertinimo metodika', ts: 'Techninė specifikacija', sutartis: 'Sutarties projektas', priedas: 'Sutarties priedas', kita: 'Kitas dokumentas' };
 const DK_TINKA = /\.(docx|pdf|odt|txt|md|jpe?g|png)$/i;
 const DK_PARAISKAI = /\.(pdf|jpe?g|png)$/i;                 // GP_PARAISKA skaito PDF ir paveikslėlius
 const DK_PAVEIKSLAS = /\.(jpe?g|png)$/i;
@@ -7973,6 +8147,8 @@ function dkRusis(d){
   if (d.lent && d.lent.lenteles.length) return 'kvalifikacija';
   if (d.lent && d.lent.zaliuju.length) return 'zalieji';
   const v = norm(d.vardas.replace(/\.[a-z0-9]+$/i, '')), pr = norm((d.blokai || []).slice(0, 15).map(b => b.text).join(' ')).slice(0, 2000);
+  // vertinimo metodika (2 etapas D3): pagal failo vardą ar pradžią; pirkimo sąlygos (jų priedų sąraše - ta pati eilutė) - ne
+  if (window.GP_METODIKA && (/metodik|methodology/.test(v) || (GP_METODIKA.atpazink('', pr) && !/specialiosios|bendrosios|salygos|conditions/.test(v)))) return 'metodika';
   if (/parai?sk/.test(v) && !/kvalifikac/.test(v)) return 'paraiska';
   if (/technin\w* (specifikacij|uzduot)|(^| )ts( |$)|technical specification/.test(v)) return 'ts';
   if (/sutart|contract/.test(v)) return 'sutartis';
@@ -8023,6 +8199,7 @@ async function dkPridek(files){
     const sen = DK.failai.find(x => x.vardas === f.name);
     if (sen) dkSalink(sen, true);
     d.rusis = d.auto = dkRusis(d);
+    if (d.rusis === 'metodika') await metAnalizuok(d);          // kriterijai ir svoriai (D3) - naršyklėje
     DK.failai.push(d);
     dkTaikyk(d);
   }
@@ -8077,6 +8254,16 @@ function dkPoveikis(d){
     else if (d.rusis === 'zalieji') out.push({ k: 'info', t: 'Žaliųjų reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome - kur nustatomi žalieji reikalavimai, atsakysite 2 žingsnyje.' });
     if ((kv.length || zl.length) && /\.pdf$/i.test(d.vardas)) out.push({ k: 'info', t: 'Iš PDF perkeliamas tik tekstas - pusjuodžio, kursyvo ir pabraukimo PDF faile nėra. Jei jų reikia, įkelkite Word failą.' });
   }
+  if (d.rusis === 'metodika'){
+    const m = d.met;
+    if (!m) out.push({ k: 'info', t: 'Metodika skaitoma...' });
+    else {
+      if (m.kodas) out.push({ k: 'ok', t: `Vertinimo kriterijus SPS 8.1 punkte įrašomas be klausimo - <b>${esc(kritVard(m.kodas))}</b> (${esc(m.kodel)}): ${esc(trumpaCitata(m.citata))}. Pakeisti galima 2 žingsnyje („Keisti“).` });
+      if (m.kriterijai.length) out.push({ k: m.suma === 100 ? 'ok' : 'isp', t: `Kriterijai ir lyginamieji svoriai (${m.kriterijai.length}): ${m.kriterijai.map(q => esc(q.pavadinimas) + (q.svoris != null ? ' - ' + esc(String(q.svoris).replace('.', ',')) : ' - svorio neradome')).join('; ')}${m.suma != null ? `; suma ${esc(String(m.suma).replace('.', ','))}` : ''}.` });
+      m.problemos.forEach(x => out.push({ k: 'isp', t: 'Patikrinkite: ' + esc(x) + '.' }));
+      out.push({ k: 'info', t: 'Failas įdedamas į paketą be pakeitimų kaip SPS priedas „Ekonomiškai naudingiausio pasiūlymo vertinimo metodika“ - numeris pagal SPS priedų sąrašą (DPS konkretaus pirkimo sąlygose - vietoj šablono priedo). Be DI, failas niekur nesiunčiamas.' });
+    }
+  }
   if (d.rusis === 'priedas') out.push({ k: 'info', t: 'Sutarties priedas - modulis jo nekeičia; pridėkite jį prie sutarties projekto kaip yra.' });
   if (d.rusis === 'kita' && d.auto === 'kita') out.push({ k: 'isp', t: 'Dokumento rūšies neatpažinome - pasirinkite ją lauke „Kas tai per dokumentas?“: nuo rūšies priklauso, kas iš dokumento padaroma.' });
   if (d.rusis !== 'paraiska'){
@@ -8092,8 +8279,8 @@ function dkPoveikis(d){
   }
   return out;
 }
-/* Ką verta įkelti (1 etapas U2): kiekvienai naudingai dokumento rūšiai - įkelta ar ne, kas iš jos padaroma ir kas padaryta. Vertinimo
-   metodikos eilutė atsiras kartu su jos perkėlimu (2 etapas D3). */
+/* Ką verta įkelti (1 etapas U2): kiekvienai naudingai dokumento rūšiai - įkelta ar ne, kas iš jos padaroma ir kas padaryta (vertinimo
+   metodika - nuo 2026-10-20, 2 etapas D3). */
 function dkKontrolinisHTML(){
   const F = DK.failai, kur = r => F.filter(d => d.rusis === r), vardai = dd => dd.map(d => esc(d.vardas)).join(', ');
   const eil = (dd, pav, nauda, busena) => `<li class="dk-ks-e${dd.length ? ' dk-ks-e--yra' : ''}" data-dk-ks="${pav}"><span class="dk-ks-b">${dd.length ? 'įkelta' : 'nėra'}</span>`
@@ -8105,11 +8292,14 @@ function dkKontrolinisHTML(){
   const kv = kur('kvalifikacija'), kvN = kv.reduce((a, d) => a + (d.lent ? d.lent.lenteles.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
   const zl = F.filter(d => d.rusis === 'zalieji' || (d.rusis === 'kvalifikacija' && d.lent && d.lent.zaliuju.length));
   const zlN = zl.reduce((a, d) => a + (d.lent ? d.lent.zaliuju.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
+  const mt = kur('metodika'), mm = mt.length ? mt[mt.length - 1].met : null;
+  const mtB = !mt.length ? '' : !mm ? 'skaitoma' : mm.kodas ? `kriterijus - ${kritVard(mm.kodas)}${mm.problemos.length ? '; patikrinkite - žr. prie failo' : ''}` : 'kriterijaus nustatyti nepavyko - žr. prie failo';
   return `<p class="dk-ks-h" id="dkKsH">Ką verta įkelti</p><ul>`
     + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą; ir sutarties klausimą apie ES lėšas', parB)
     + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata', '')
     + eil(kv, 'Kvalifikacijos reikalavimai', 'lentelė perkeliama į SPS 2 lentelę - šablono 2 lentelės klausimų nebelieka', kv.length ? (kvN ? 'perkeliama ' + reik(kvN) : 'lentelės nerasta') : '')
     + eil(zl, 'Žalieji reikalavimai', 'lentelė perkeliama į SPS 3 lentelę - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats', zl.length ? (zlN ? 'perkeliama ' + reik(zlN) : 'lentelės nerasta') : '')
+    + eil(mt, 'Vertinimo metodika', 'kai vertinama ne vien pagal kainą: vertinimo kriterijus įrašomas pats, failas pridedamas prie paketo kaip SPS priedas', mtB)
     + `</ul>`;
 }
 let DK_KS_HTML = '';
@@ -8198,7 +8388,7 @@ function negaliojantysEilutese(M, numeriai){
       (kitas || zona).focus();
     } else dkAnalizuok(d);
   });
-  $('#dkSarasas').addEventListener('change', e => {
+  $('#dkSarasas').addEventListener('change', async e => {
     const sel = e.target.closest('[data-dk-rusis]');
     if (!sel) return;
     const d = DK.failai.find(x => String(x.raktas) === sel.dataset.dkRusis);
@@ -8206,6 +8396,7 @@ function negaliojantysEilutese(M, numeriai){
     d.rusis = sel.value;
     if (d.rusis !== 'paraiska') d.analize = null;
     dkTaikyk(d);
+    if (d.rusis === 'metodika' && !d.met) await metAnalizuok(d);   // rūšį „metodika“ pasirinko žmogus (D3)
     dkPoPakeitimo();
     const nb = document.querySelector(`[data-dk-rusis="${d.raktas}"]`);
     if (nb) nb.focus();
@@ -8848,6 +9039,7 @@ function surinkJuodrasti(){
       APZIURA_KLAUSTI, EBVPD_TRINTI, AUTO_SAKOS: [...AUTO_SAKOS],
       // pirkimo objekto dalys (D1): „Keisti - atsakysiu pats“ ir dokumentų ištraukos, iš kurių nustatytos (įkelti failai nesaugomi)
       DALYS_KLAUSTI, DALYS_DOK: window.GP_DALYS ? daliuDokumentai().map(GP_DALYS.istrauka).filter(Boolean) : [],
+      MET: metIstrauka(window.GP_METODIKA ? metodikosRez() : null),
       KVL: { kandidatai: KVL.kandidatai, pasirinkta: KVL.pasirinkta, pakeitimai: KVL.pakeitimai, atmesta: KVL.atmesta,
         // kvalifikacijos klausimas pagal lentelę (2026-10-19, 0 etapas D2): žmogaus atsakymai prieš automatinį (undefined - neatsakyta)
         auto: [...KVL_AUTO.entries()].map(([g, a]) => [g, ...['buvo', 'nustatyta'].map(k => a[k].map(([r, v]) => [r, v === undefined ? null : v, v === undefined]))]) },
@@ -8921,6 +9113,7 @@ async function atkurkJuodrasti(r){
     APZIURA_KLAUSTI = !!S2.APZIURA_KLAUSTI; EBVPD_TRINTI = !!S2.EBVPD_TRINTI;
     DALYS_KLAUSTI = !!S2.DALYS_KLAUSTI;
     DALYS_ATK = window.GP_DALYS ? GP_DALYS.atkurkIstraukas(S2.DALYS_DOK) : [];
+    MET_ATK = metIstrauka(S2.MET);                // vertinimo metodikos analizė (D3) - tik žinomi laukai ir ribos
     const kv = S2.KVL || {};
     KVL.kandidatai = Array.isArray(kv.kandidatai) ? kv.kandidatai : []; KVL.pasirinkta = Number(kv.pasirinkta) || 0;
     KVL.pakeitimai = kv.pakeitimai && typeof kv.pakeitimai === 'object' ? kv.pakeitimai : {}; KVL.atmesta = !!kv.atmesta; KVL.klaida = '';
@@ -9018,12 +9211,14 @@ document.addEventListener('click', e => {
   const r = b.getAttribute('data-nr-klausti');
   NR_KLAUSTI.add(r); klausimynas();
   // lauko vieta („B_<raktas>#<k>“, sutarties projekto nuoroda) - jos įvestis; visas laukas (SPS priedų numeriai) - pirmoji įvestis
-  const j = /^B_.*#\d+$/.test(r) ? r.lastIndexOf('#') : -1;
-  const el = document.getElementById(lkId('laukas|' + (j > 0 ? r.slice(2, j) : r)));
+  const j = /^B_.*#\d+$/.test(r) ? r.lastIndexOf('#') : -1, kr = /^KR_/.test(r);
+  const el = document.getElementById(lkId('laukas|' + (kr ? r.slice(3) : j > 0 ? r.slice(2, j) : r)));
   if (el){
     rodykKortele(el);
     el.scrollIntoView({ block: 'center' });
-    const f = (j > 0 && document.getElementById(el.id + '-v' + r.slice(j + 1))) || el.querySelector('input, textarea');
+    // vertinimo kriterijus (D3) - pirmas radijo mygtukas; DPS „Ar vertinama tik pagal kainą?“ - pirmas kortelės valdiklis („Taip“)
+    const f = (j > 0 && (document.getElementById(el.id + '-v' + r.slice(j + 1)) || document.getElementById(el.id + '-v' + r.slice(j + 1) + '-o0')))
+      || el.querySelector('input, textarea');
     if (f) f.focus();
   }
 });
@@ -9187,7 +9382,7 @@ zingsniuBusena();
       // S1 (naudotojo sprendimas 2026-10-19): skiltyje - santrauka, išsamūs žingsniai ir pastaba - čia
       stepsTitle: "Kaip naudotis - išsamiai",
       steps: [
-      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
+      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; įkelta pasiūlymų vertinimo metodika (be DI) nustato vertinimo kriterijų SPS 8.1 punkte ir patikrina, ar kriterijų svorių suma - 100, o metodikos failas pridedamas prie paketo kaip SPS priedas be pakeitimų; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Klausimai rodomi po vieną dokumento skyrių - „Toliau“ ir „Atgal“ veda per skyrius, turinys šoninėje juostoje - į bet kurį skyrių, paskutinis puslapis - „Prieš generuojant“ ir „Kas toliau?“; patyrusiems - jungiklis „Rodyti visus klausimus“ (pasirinkimas įsimenamas šioje naršyklėje, jei leidžiate nustatymų įsiminimą). Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje; abu be DI, perkėlimą patvirtinate jūs.",
       "<b>Sutarties projektas:</b> sutarties klausimai atskirame žingsnyje - galite juos atsakyti dabar arba vėliau. Ką atsako jūsų techninė specifikacija ar užduotis ir kiti įkelti dokumentai (terminai, objektas, pagrindiniai įrenginiai, garantiniai terminai, ES lėšos ir kt.), sutarties klausimuose įrašoma iš karto - su DI žyme, citata ir būsena „Siūloma (nepatvirtinta)“; jums lieka patikrinti ir patvirtinti. „Generuoti pirkimo sąlygas“ sugeneruoja sąlygas be sutarties (pakete ji pažymima „atidėta“, sąlygų tekstas nesikeičia), „Generuoti pirkimo sąlygas ir sutarties projektą“ - abu.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu. Pakeitus atsakymus po generavimo, rodoma „Reikia pergeneruoti“ ir kurie dokumentai paveikti.",
