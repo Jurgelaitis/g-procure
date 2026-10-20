@@ -406,6 +406,7 @@ def taisymas_tekstas(taisyk):
     viso += _vidine_riba(taisyk)
     viso += _uztikrinimo_sakinys(taisyk)
     viso += _spc_nuorodos(taisyk)
+    viso += _tarpas_priede(taisyk)
     return viso
 
 
@@ -834,6 +835,21 @@ def _uztikrinimo_sakinys(taisyk):
     print("\nSUTARTIES ĮVYKDYMO UŽTIKRINIMO SAKINYS (W, 2026-10-16):")
     n = _su_zemelapiais(_be_raudono(_UZTIKRINIMO_SAKINYS, _W_RAUDONI), None, 'užtikrinimo sakinys', taisyk)
     for t in _W_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# Y. Tarpas prieš „priede“ (2026-10-20, rado PP-salygos D3 testai; redakcinė korekcija - naudotojo leidimas 2026-10-05): AK LT SPS 8.1 p.
+#    „... metodika pateikiama SPS ___priede.“ - po pildomos vietos nėra tarpo, todėl sugeneruotame SPS „SPS 10priede.“ (kitų SPS šablonų sakinys
+#    „SPS priede Nr.__.“ - tvarkingas). Įterpiamas tarpas; pildoma vieta „___“ ir raudonas tekstas nekeičiami.
+_TARPAS_PRIEDE = [(_re.compile(r'metodika pateikiama SPS ___()priede'), ' ', 1)]
+_Y_RAUDONI = []
+
+
+def _tarpas_priede(taisyk):
+    print("\nTARPAS PRIEŠ „PRIEDE“ (Y, 2026-10-20):")
+    n = _su_zemelapiais(_be_raudono(_TARPAS_PRIEDE, _Y_RAUDONI), None, 'tarpas prieš „priede“', taisyk)
+    for t in _Y_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 
