@@ -47,8 +47,9 @@
         sut_elementai: "Privalomi sutarties elementai", sut_turinys: "Elementų turinys", sut_tipines: "VPT tipinės sutarčių sąlygos"
       },
       trukstaDok: "Pakete neradau: {d}. Jei jis pateikiamas kitu pavadinimu, pakeiskite failo vaidmenį sąraše.",
+      trukstaDokPaketas: "Pakete neradau: {d}. Šį dokumentą pridėsite patys.",
       beBudo: "Pirkimo būdas nežinomas (nėra kortelės ir skelbimo) - tikrinami tik pagrindiniai dokumentai: SPS, techninė specifikacija ir sutartis.",
-      priedoNera: "SPS priedų sąraše nurodytas {n} priedas „{p}“, bet pakete tokio failo neradau. Jei jis teikiamas atskirai (pvz., tik pasirašius konfidencialumo įsipareigojimą), viskas gerai.",
+      priedoNera: "SPS priedų sąraše nurodytas {n} priedas „{p}“, bet pakete tokio failo neradau. Jei šis priedas teikiamas atskirai, viskas gerai, kitaip pridėkite jį prie paketo.",
       priedoPerdaug: "Failas „{f}“ pavadintas SPS {n} priedu, bet SPS priedų sąraše tokio numerio nėra.",
       neperskaitytas: "Neperskaityti failai ({n}): {s}. Jų turinys netikrintas.",
       versijos: "Pakete {n} skelbimo versijos - naudotas naujausias ({f}).",
@@ -123,8 +124,9 @@
         sut_elementai: "Required contract elements", sut_turinys: "Content of the elements", sut_tipines: "Standard contract terms of the Public Procurement Office"
       },
       trukstaDok: "Not found in the package: {d}. If it has another name, change the file's role in the list.",
+      trukstaDokPaketas: "Not found in the package: {d}. You will add this document yourself.",
       beBudo: "The procedure is unknown (no card and no notice) - only the main documents are checked: SPS, technical specification and contract.",
-      priedoNera: "The SPS list of annexes names annex {n} “{p}”, but no such file is in the package. If it is provided separately (e.g. only after a confidentiality undertaking), that is fine.",
+      priedoNera: "The SPS list of annexes names annex {n} “{p}”, but no such file is in the package. If this annex is provided separately, that is fine; otherwise add it to the package.",
       priedoPerdaug: "File “{f}” is named SPS annex {n}, but the SPS list of annexes has no such number.",
       neperskaitytas: "Files not read ({n}): {s}. Their content was not checked.",
       versijos: "The package has {n} notice versions - the latest was used ({f}).",
@@ -578,7 +580,7 @@
     truksta.forEach(function (d) {
       var re = PRIEDO_RE[d.id], dub = re && trukstaPriedai.filter(function (x) { return re.test(be(x.pav)); })[0];
       if (dub) { dub.teise = teise(d.teise ? [d.teise] : []); return; }
-      radinys({ id: "dokumentai", grupe: "paketas", lygis: "tikrinti", tekstas: sub(X.trukstaDok, { d: d.pav }), vietos: [], teise: teise(d.teise ? [d.teise] : []) });
+      radinys({ id: "dokumentai", grupe: "paketas", lygis: "tikrinti", tekstas: sub(o.sugeneruotas ? X.trukstaDokPaketas : X.trukstaDok, { d: d.pav }), vietos: [], teise: teise(d.teise ? [d.teise] : []) });
     });
     patikra("dokumentai", "paketas", truksta.length ? "radinys" : "gerai");
 
