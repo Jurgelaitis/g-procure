@@ -130,7 +130,7 @@
     { raktas: 'pasiulymas',      lt: /pasiūlymo forma/iu,                                en: /tender form/i },
     { raktas: 'ts',              lt: /techninė specifikacija/iu,                         en: /technical specification/i },
     { raktas: 'sutartis',        lt: /sutarties projektas/iu,                            en: /draft contract/i },
-    { raktas: 'bankai',          lt: /priimtinų bankų/iu,                                en: /eligible banks/i }
+    { raktas: 'bankai',          lt: /priimtinų bankų|banko,? nurodyto/iu,               en: /eligible banks|bank specified in/i }
   ];
   const PRIEDO_EIL_RE = /^\s*(\d+)\s*priedas\s*(?:[–-]\s*)?(.+)$/iu;
   const priedoRaktasIsTeksto = (t, kalba) => {
