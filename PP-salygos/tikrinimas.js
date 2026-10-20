@@ -237,6 +237,34 @@
       if (v1 && v1.rusis === "dropDownList") variantai[i] = v1.elementai.map(function (e) { return { t: String(e.tekstas).trim(), n: P_NORM(e.tekstas) }; });
 
     });
+    // „Punktas netaikomas“ be šablono trynimo nurodymo (prekių SS 14.3-14.4; naujo darbuotojo patikra 2026-10-20, generatoriaus 5b žingsnis):
+    // pasirinkus „Punktas ir N.N - N.N papunkčiai netaikomi.“ tie papunkčiai (toje pačioje langelio srityje, iš eilės po valdiklio) šalinami -
+    // pasirenkama dalis; pasirinkus „Punktas netaikomas:“ pastraipoje gali likti tik „Punktas netaikomas.“ (be punkto teksto)
+    var NT_RIBOS = /(\d+(?:\.\d+)+)\.?\s*[-\u2013]\s*(\d+(?:\.\d+)+)\.?\s+papunk(?:čiai|ciai) netaikomi/i, NT_DVITASKIS = /^(Punktas netaikomas|The clause does not apply)\s*:\s*$/i;
+    var nrDalys = function (t) { return t.split(".").map(Number); };
+    (Z.valdikliai || []).forEach(function (v) {
+      if (!v || v.lygis !== "eilute" || v.i == null || !P[v.i]) return;
+      var lt = v.stulpelis === "EN" ? (Z.valdikliai || []).filter(function (w) { return w.nr === v.pora; })[0] : v;
+      ((lt && lt.elementai) || []).forEach(function (e) {
+        var m = NT_RIBOS.exec(String(e.tekstas || "")); if (!m) return;
+        var a = nrDalys(m[1]), b = nrDalys(m[2]), pref = a.slice(0, -1).join(".");
+        if (pref !== b.slice(0, -1).join(".")) return;
+        var tc = tevas(P[v.i], "tc"), nuo = null, iki = null;
+        for (var j = v.i + 1; j < P.length && tevas(P[j], "tc") === tc; j++) {
+          var t = tekstas(P[j]); if (!t) continue;
+          var n = /^(\d+(?:\.\d+)+)\.?\s/.exec(t + " "), d = n && nrDalys(n[1]);
+          if (!d || d.slice(0, -1).join(".") !== pref || d[d.length - 1] < a[a.length - 1] || d[d.length - 1] > b[b.length - 1]) break;
+          if (nuo == null) nuo = j;
+          iki = j;
+        }
+        if (nuo != null) blokai.push({ blokas: { nuo: nuo, iki: iki } });
+      });
+      (v.elementai || []).forEach(function (e) {
+        var t = String(e.tekstas || "");
+        if (!NT_DVITASKIS.test(t) || !leidziami[v.i]) return;
+        try { leidziami[v.i] = new RegExp("(?:" + leidziami[v.i].source + ")|(?:^\\s*(?:\\d+(?:\\.\\d+)*\\.?\\s*)?" + re(t.replace(/\s*:\s*$/, ".")) + "\\s*$)"); } catch (x) { /* lieka šablono variantai */ }
+      });
+    });
     // Griežtos vietos (žemėlapio „grieztos_vietos“ - darbų pirkimo-pardavimo SS, 2026-10-12): pastraipa su pildomomis vietomis lyginama pagal
     // šabloną - nekintamas tekstas turi likti, o vietoje: „[A] / [B]“ - viena iš dviejų formuluočių, sakinys su vietomis (3.1 p. pratęsimas) -
     // yra (užpildytas) arba pašalintas, kita vieta - bet koks tekstas. Pastraipa, kurioje nekintamo teksto beveik nėra (antraštė, rekvizito

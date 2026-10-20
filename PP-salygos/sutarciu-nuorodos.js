@@ -104,6 +104,9 @@
           var bendr = /bendr|general/.test(kur), spec = /special/.test(kur);
           var aibe = bendr ? bs : spec ? ss : null;
           out.nuorodu++;
+          // „Punktas ir 14.4.1 - 14.4.4 papunkčiai netaikomi.“ / „... subparagraphs 14.4.1 - 14.4.4 do not apply.“ - pasirinkus šį variantą
+          // papunkčiai pašalinami (generatoriaus 5b žingsnis, 2026-10-20), todėl jų dokumente gali nebūti
+          if (/papunk|subparagraph|sub-paragraph/i.test(m[0]) && /^\s*(netaikom|do\s+not\s+apply)/i.test(t.slice(m.index + m[0].length, m.index + m[0].length + 20))) continue;
           (m[3].match(/\d+(?:\.\d+)*/g) || []).forEach(function (nr) {
             if (bendr || spec) {
               if (!aibe) { out.nepatikrinta.push({ dok: dok, nr: nr, priezastis: (bendr ? "bendrųjų" : "specialiųjų") + " sąlygų dokumento nėra" }); return; }

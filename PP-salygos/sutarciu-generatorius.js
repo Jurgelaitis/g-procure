@@ -890,6 +890,43 @@ const GP_SUTARCIU_GEN = (() => {
       else if (n) A.pakeista.push({ raktas: '', vieta: /header/.test(f.name) ? 'puslapio antraštė' : 'puslapio poraštė', ka: 'organizacija', buvo: IMONE, tapo: info.imone || 'LITGRID AB' });
     }
 
+    // 5b. „Punktas netaikomas“ be šablono trynimo nurodymo (naujo darbuotojo patikra 2026-10-20, prekių SS 14.3-14.4): pasirinkus
+    //     „Punktas ir 14.4.1 - 14.4.4 papunkčiai netaikomi.“ šalinami tie papunkčiai (toje pačioje lentelės langelio ar dokumento srityje,
+    //     iš eilės po valdiklio pastraipos), o „Punktas netaikomas: “ / „The clause does not apply:“ su punkto tekstu toje pačioje
+    //     pastraipoje - lieka „Punktas netaikomas.“ (tekstas po valdiklio šalinamas). Iki tol likdavo papunkčiai ir „netaikomas: ... turi atitikti“.
+    const NT_RIBOS = /(\d+(?:\.\d+)+)\.?\s*[-–]\s*(\d+(?:\.\d+)+)\.?\s+papunk(?:čiai|ciai) netaikomi/i;
+    const NT_DVITASKIS = /^(Punktas netaikomas|The clause does not apply)\s*:\s*$/i;
+    const nrDalys = t => t.split('.').map(Number);
+    for (const v of Z.valdikliai){
+      const s = vsp[v.nr];
+      if (!s || !s.netaikoma || v.lygis !== 'eilute') continue;
+      const i = v.i;
+      if (istrinti.has(i)) continue;
+      // šablono žodžiai su ribomis - lietuviškame valdiklyje; angliškam (pora) - tos pačios ribos
+      const lt = v.stulpelis === 'EN' ? Z.valdikliai.find(w => w.nr === v.pora) : v;
+      const m = lt && vsp[lt.nr] && NT_RIBOS.exec(vsp[lt.nr].tekstas || '');
+      if (m){
+        const [a, b] = [nrDalys(m[1]), nrDalys(m[2])], pref = a.slice(0, -1).join('.');
+        if (pref === b.slice(0, -1).join('.')){
+          const tc = tevas(P[i], 'tc');
+          for (let j = i + 1; j < P.length && tevas(P[j], 'tc') === tc; j++){
+            if (istrinti.has(j)) continue;
+            const t = tarpai(R[j] || '');
+            if (!t) continue;
+            const n = /^(\d+(?:\.\d+)+)\.?\s/.exec(t + ' '), d = n && nrDalys(n[1]);
+            if (!d || d.slice(0, -1).join('.') !== pref || d[d.length - 1] < a[a.length - 1] || d[d.length - 1] > b[b.length - 1]) break;
+            trinti(j, 'punktas ir papunkčiai netaikomi (jūsų atsakymas)');
+          }
+        }
+      }
+      if (NT_DVITASKIS.test(s.tekstas || '') && tarpai(R[i] || '')){
+        if (!keisk(P[i], 0, R[i].length, '')){ A.klaidos.push(`${vietaPagalI(Z, i)} p.: nepavyko pašalinti netaikomo punkto teksto`); continue; }
+        A.pasalinta.push({ vieta: vietaPagalI(Z, i), tekstas: R[i], kodel: 'punktas netaikomas (jūsų atsakymas)' });
+        R[i] = '';
+        s.tekstas = s.tekstas.replace(/\s*:\s*$/, '.');
+      }
+    }
+
     // 6. Valdikliai (DOM): eilutės valdiklio tekstas tampa pastraipos dalimi; blokinio - jo pastraipos tekstu
     for (const [nr, v] of Object.entries(vsp)){
       const sdt = SDT[+nr], vidinis = visi(vaikas(sdt, 'sdtContent'), 'p');
