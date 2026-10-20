@@ -344,11 +344,11 @@
       if (et === pask) return;
       f.grafikas.push({ etapas: et.trim(), data: pask, e: e });
     });
-    // Priedų sąrašas: „N priedas – Pavadinimas“
+    // Priedų sąrašas: „N priedas – Pavadinimas“ (ir be brūkšnio, kai pavadinimas didžiąja raide: LITGRID ND ir SSD SPS - „10 priedas Ekonomiškai ...“)
     f.priedai = [];
     E.forEach(function (e) {
       var t = lt(e.t);
-      var m = /^(\d{1,2})\s+priedas\s*[–-]\s*(.{3,})$/i.exec(t);
+      var m = /^(\d{1,2})\s+priedas\s*(?:[–-]\s*|(?=[A-ZĄČĘĖĮŠŲŪŽ„]))(.{3,})$/.exec(t);
       if (m && !f.priedai.some(function (p) { return p.n === +m[1]; })) f.priedai.push({ n: +m[1], pav: m[2].replace(/\s*\(.*$/, "").replace(/[.\s]+$/, ""), e: e });
     });
     return f;
