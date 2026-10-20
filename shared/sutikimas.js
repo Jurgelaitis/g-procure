@@ -16,7 +16,7 @@
  * KATEGORIJOS
  *   butini      - visada: darbo duomenys įrankiuose, šis sprendimas, darbo be interneto failai, apsauga nuo automatinių
  *                 užklausų (Turnstile). Sutikimo nereikia.
- *   nustatymai  - kalba, informacinių skilčių būsena, suvestinės rodiklis. Išimtis (VDAI 11 p.), todėl veikia ir iki
+ *   nustatymai  - kalba, informacinių skilčių būsena, suvestinės rodiklis, pirkimo sąlygų klausimų vaizdas. Išimtis (VDAI 11 p.), todėl veikia ir iki
  *                 sprendimo, bet naudotojas gali išjungti: tada šie įrašai ištrinami ir nebeįrašomi.
  *   tobulinimo  - PP-salygos sutarčių parinkimo stebėjimo įrašai (taisyklėms tikslinti - ne naudotojo užsakyta paslauga).
  *                 Tik su sutikimu; numatyta - išjungta. Atšaukus nauji nekaupiami, sukaupti lieka, kol naudotojas juos ištrina
@@ -55,6 +55,7 @@
     ["gprocure-lang", "nustatymai"], ["ppmarket.lang", "nustatymai"], ["ppnegotiation.lang", "nustatymai"],
     ["ppcarbon.lang", "nustatymai"], ["pptiekejams.lang", "nustatymai"], ["ppesg.lang", "nustatymai"],
     ["gprocure.infoPanel.", "nustatymai"], ["gprocure_help_collapsed", "nustatymai"], ["epsog_dash_metric", "nustatymai"],
+    ["gprocure.salygos.visiKlausimai", "nustatymai"],
     ["gprocure.sutartys.stebejimas", "tobulinimo"]
   ];
 
@@ -79,7 +80,7 @@
         "be interneto (programų bibliotekos, tiekėjų asistentas, teisės stebėsena) ir apsauga nuo automatinių užklausų (Cloudflare Turnstile - tik siunčiant " +
         "klausimą ar EPD failą). Be jų pasirinkta paslauga neveiktų, todėl sutikimo nereikia.",
       katNustatymai: "Nustatymų įsiminimas",
-      katNustatymaiT: "Pasirinkta kalba, informacinių skilčių būsena (atverta ar suskleista) ir planavimo suvestinės rodiklis. " +
+      katNustatymaiT: "Pasirinkta kalba, informacinių skilčių būsena (atverta ar suskleista), planavimo suvestinės rodiklis ir pirkimo sąlygų klausimų vaizdas (visi klausimai ar po vieną skyrių). " +
         "Išjungus įrašyti nustatymai ištrinami, o kalbą ir skiltis pasirinksite kiekvieną kartą.",
       katTobulinimo: "Tobulinimo įrašai",
       katTobulinimoT: "Pirkimo sąlygų įrankio (PP-salygos) sutarčių parinkimo stebėjimo įrašai: pirkimo pavadinimas ir tipas, ką siūlė " +
@@ -122,7 +123,7 @@
         "use (software libraries, supplier assistant, law monitoring) and protection against automated requests (Cloudflare Turnstile - only when you send a " +
         "question or an EPD file). The service you choose would not work without them, so no consent is needed.",
       katNustatymai: "Remember settings",
-      katNustatymaiT: "Your chosen language, the state of information panels (open or collapsed) and the planning dashboard measure. " +
+      katNustatymaiT: "Your chosen language, the state of information panels (open or collapsed), the planning dashboard measure and the procurement conditions question view (all questions or one section at a time). " +
         "If turned off, saved settings are deleted and you will choose the language and panels each time.",
       katTobulinimo: "Improvement records",
       katTobulinimoT: "Contract selection records of the procurement conditions tool (PP-salygos): procurement title and type, what the " +

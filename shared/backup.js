@@ -48,6 +48,7 @@
     ["gprocure.sutartys.stebejimas", "PP-salygos",  { lt: "Sutarčių parinkimo stebėjimo įrašai", en: "Contract selection observation records" }],
     ["gprocure.salygos.nustatymai", "PP-salygos",  { lt: "Nustatymai (jūsų įvesta vidaus taisyklių riba)", en: "Settings (internal-rule threshold you entered)" }],
     ["gprocure.salygos.juodrastis.", "PP-salygos", { lt: "Pirkimo sąlygų juodraštis (atsakymai, numatoma vertė)", en: "Procurement conditions draft (answers, estimated value)" }],
+    ["gprocure.salygos.visiKlausimai", "PP-salygos", { lt: "Klausimų vaizdas (visi klausimai ar po vieną skyrių)", en: "Question view (all questions or one section at a time)" }],
     ["gprocure_help_collapsed",  "-",               { lt: "Pagalbos bloko būsena", en: "Help panel state" }],
     ["gprocure.infoPanel.",      "-",               { lt: "Informacinės skilties būsena", en: "Information panel state" }],
     ["gprocure-lang",            "-",               { lt: "Pasirinkta kalba", en: "Chosen language" }],

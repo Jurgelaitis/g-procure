@@ -4656,6 +4656,27 @@ async function rinkosGrafikuBusena(w, d) {
   await rinkosBusena(w, d, "#rinkaGrafikai");
   if (!d.querySelector("#rinkaGrafikai .gpvr-mano")) throw new Error("be palyginimo su grafiku");
 }
+/* PP-salygos 2 etapas U4 (2026-10-20, naudotojo sprendimas S2): 2 žingsnis pagal numatymą rodo vieną skyrių, kiti paslėpti - telefono,
+   prieinamumo ir dydžių skalės patikra jų nematytų. Todėl ankstesnės 2 žingsnio būsenos tikrinamos „Rodyti visus klausimus“ vaizde (visos
+   kortelės, kaip iki tol; nustatymas neįrašomas), o vieno skyriaus vaizdas (skyriaus juosta su „Atgal“ / „Toliau“, apatinė juosta telefone,
+   paskutinis puslapis „Prieš generuojant“) - atskiromis būsenomis. */
+const SALYGOS_PSL = "../PP-salygos/PP-SALYGOS.html";
+const salygosVisi = b => b.map(([pav, fn, ...r]) => [pav, async (w, d) => { w.eval("RODYTI_VISUS = true"); return fn(w, d); }, ...r]);
+async function vienoSkyriausBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  const b = d.getElementById("budas"); b.value = "T-AK"; b.dispatchEvent(new w.Event("change"));
+  w.eval("RODYTI_VISUS = false");
+  await w.iStep2();
+  w.eikIPuslapi(w.eval("PSL")[1].id);
+  if (!d.querySelector('#lkPsl [aria-label^="Atgal"]') || !d.querySelector('#lkPsl [aria-label^="Toliau"]') || d.getElementById("lkPslA").hidden) throw new Error("skyriaus juostų nėra");
+}
+async function vienoSkyriausPabaigaBusena(w, d){
+  await vienoSkyriausBusena(w, d);
+  w.eikIPuslapi("lkSantrauka");
+  if (!d.querySelector("#lkPsl h3.lk-psl-pav") || d.getElementById("lkSantrauka").closest(".lk-paslepta")) throw new Error("paskutinio puslapio nėra");
+}
+const U4_BUSENOS = [["2 žingsnis po vieną skyrių: skyriaus juosta, „Atgal“ / „Toliau“ ir apatinė juosta (U4, 2026-10-20)", vienoSkyriausBusena],
+  ["2 žingsnis po vieną skyrių: paskutinis puslapis „Prieš generuojant“ (U4, 2026-10-20)", vienoSkyriausPabaigaBusena]];
 const TELEFONO_BUSENOS = {
   // Slapukų sutikimas (2026-10-16): juosta ir nustatymų langas (testų rėmelyje jie patys nerodomi - atveriami)
   "../index.html": [["slapukų sutikimo juosta", w => { w.GP_SUTIKIMAS.rodyk(); }], ["slapukų nustatymų langas", w => { w.GP_SUTIKIMAS.atverk(); }],
@@ -4695,6 +4716,7 @@ const TELEFONO_BUSENOS = {
     n("f-company", "litgrid"); n("f-budas", w.eval("Object.keys(METHODS)[0]")); w.onMethodChange(); n("f-pradzia", "2026-10-05"); w.refreshAll(); }],
     ["grafikas tiekėjams", (w, d) => d.querySelector('.preview-tab[data-tab="B"]').click()]]
 };
+TELEFONO_BUSENOS[SALYGOS_PSL] = salygosVisi(TELEFONO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS);
 /* Klasikinė slinkties juosta (2026-10-02): Mac'e ji permatoma ir vietos neužima, o Windows ir GitHub Actions (Linux) - 15-17 px.
    Pirmas GitHub paleidimas taip rado PP-qual ir PP-protocol 320 px, PP-market-KPI kategorijos kortelę ir PP-plan juostas 1000 px,
    kurių Mac'e nesimatė (ten 320 px puslapiui likdavo 320 px, ne 305). Todėl matavimo rėmeliuose juosta visada užima vietą - 17 px,
@@ -4928,6 +4950,7 @@ const PRIEINAMUMO_BUSENOS = {
     ["A4 forma", w => w.openProtocol("AK-1", "A4")],
     ["protokolo peržiūra", async w => { w.openProtocol("SD-1", "D6"); await w.previewProtocol(); }]]
 };
+PRIEINAMUMO_BUSENOS[SALYGOS_PSL] = salygosVisi(PRIEINAMUMO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS.slice(0, 1));   // planšetė 720 / 640 px - ir vienas skyrius
 // PP-protocol pirkimai įrašomi PRIEŠ įkeliant puslapį (jis juos skaito įsikeldamas); saugykla atkuriama testo pabaigoje
 const PRIEINAMUMO_PRIES = {
   "../PP-protocol/LITGRID_Generatorius_v3.html": () => {
@@ -7130,8 +7153,8 @@ async function testaiSutikimas(){
      Išimtis - modulio antraštės pavadinimas (19 px, nuo jo priklauso 79 px antraštė visuose moduliuose); em dydžiai (sup) leidžiami. */
   /* Moduliai dydžių skalėje (perkeltas modulis - viena eilutė): būsenos [pavadinimas, fn, ar spausti skirtukus pagal TELEFONO_PUSLAPIAI]. */
   const SKALES_PUSLAPIAI = {
-    "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis", () => {}], ["2 žingsnis", async w => { await w.iStep2(); }], ["sutarties žingsnis", sutartiesFormosBusena],
-      ["tikrinimo rezultatai", tikrinimoBusena]],
+    "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis", () => {}], ["2 žingsnis (visi klausimai)", async w => { w.eval("RODYTI_VISUS = true"); await w.iStep2(); }], ["sutarties žingsnis", sutartiesFormosBusena],
+      ["tikrinimo rezultatai", tikrinimoBusena]].concat(U4_BUSENOS),
     "../PP-qual/PP-QUAL.html": [["pradinis ir skirtukai", () => {}, true]],
     "../PP-ts/TS_Asistentas.html": [["pradinis ir skirtukai", () => {}, true]],
     "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html": [["pavyzdiniai duomenys ir skirtukai", w => { w.confirm = () => true; w.loadDemo(); }, true]],
