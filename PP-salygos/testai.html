@@ -10953,6 +10953,203 @@ function d4bSarasas(pars){
   });
   return { eil, nuor };
 }
+/* ---- 2 etapas D5 (2026-10-20, naudotojo sprendimas „su tuo pačiu leidimu“): skenuotus dokumentus perskaito DI ---- */
+const D5_LENT = [["Eil. Nr.", "Reikalavimai", "Pateikiami dokumentai"],
+  ["1.", "Tiekėjas turi turėti teisę verstis elektros įrenginių įrengimo veikla.", "Atestato kopija."],
+  ["2.", "Tiekėjas per paskutinius 5 metus turi būti įvykdęs bent 1 panašią sutartį.\nSutarties vertė - ne mažesnė kaip 100 000 Eur.", "Sutarčių sąrašas."]];
+const D5_ATS = (el, pastabos) => aiOk({ status: "ok", elementai: el || [{ p: "KVALIFIKACIJOS REIKALAVIMAI" }, { lentele: D5_LENT }], pastabos: pastabos || "" });
+const d5Pdf = vardas => pdfPoz(vardas || "Kvalifikacijos reikalavimai.pdf", [[]]);
+const d5Eil = vardas => [...D.querySelectorAll("#dkSarasas .dk-d")].find(e => e.querySelector(".dk-v b").textContent === vardas);
+const d5Tx = vardas => { const e = d5Eil(vardas); return e ? e.textContent.replace(/\s+/g, " ") : ""; };
+async function testaiD5(){
+  dabartine = grupe("2 etapas D5 (2026-10-20): skenuoti dokumentai - tekstą perskaito DI su tuo pačiu leidimu, lentelės ir kiti skaitytuvai - kaip Word failo");
+
+  await testas("skenuoti.js: užklausa (perrašyti pažodžiui, JSON, neįskaitoma), atsakymo patikra (nutrūkęs, neįskaitomas, be JSON, ne pagal schemą, tušti ir ne tekstiniai langeliai, ribos), blokai kaip GP_DOK, Word XML su ekranavimu, lentelė atpažįstama kvalifikacijos skaitytuvu, perskaityk - PDF per tarpinę", async () => {
+    await modulis();
+    const S = W.GP_SKENUOTI;
+    const sp = S.systemPrompt();
+    tiesa(/PERRASYTI jo teksta tiksliai taip, kaip parasyta/.test(sp) && /NIEKO nekeisk, netaisyk,\s+nepapildyk/.test(sp) && /\{"status":"neiskaitoma"/.test(sp) && /"lentele":\[\["langelis"/.test(sp), "užklausa");
+    lygu(S.issAtsakymo("{}", "max_tokens").ok, false, "nutrūkęs");
+    tiesa(/per ilgas perskaityti vienu kartu/.test(S.issAtsakymo('{"status":"ok","elementai":[{"p":"x"}]}', "max_tokens").error), "nutrūkęs - priežastis ir ką daryti");
+    tiesa(/neįskaitomas: blogai nuskenuota/.test(S.issAtsakymo('{"status":"neiskaitoma","pastabos":"blogai nuskenuota"}').error), "neįskaitomas");
+    lygu([S.issAtsakymo("ne JSON").error, S.issAtsakymo('{"status":"ok"}').error, S.issAtsakymo('{"status":"ok","elementai":[{"p":"  "},{"lentele":[["",""]]}]}').error],
+      ["DI atsakyme nėra JSON", "DI atsakymas neatitinka schemos", "DI teksto neatpažino"], "netinkami atsakymai");
+    const a = S.issAtsakymo('Štai: {"status":"ok","elementai":[{"p":"A & <b>"},{"lentele":[["1.",7,null,"x"],["",""],"ne eilutė"]},{"kita":1},5],"pastabos":"2 psl. neryškus"}');
+    lygu([a.ok, a.elementai, a.pastabos], [true, [{ p: "A & <b>" }, { lentele: [["1.", "", "", "x"]] }], "2 psl. neryškus"], "patikrintas atsakymas");
+    lygu(S.issAtsakymo(JSON.stringify({ status: "ok", elementai: [{ p: "x".repeat(5000) }] })).elementai[0].p.length, 4000, "pastraipos riba");
+    const el = [{ p: "  Pirma   pastraipa " }, { lentele: [["Reikalavimai", "Pateikiami dokumentai"], ["A\nB", ""]] }, { p: "Antra" }];
+    lygu(S.blokai(el), [{ loc: { para: 1 }, text: "Pirma pastraipa" }, { loc: { table: 1, row: 1 }, text: "Reikalavimai | Pateikiami dokumentai", cells: ["Reikalavimai", "Pateikiami dokumentai"] },
+      { loc: { table: 1, row: 2 }, text: "A B", cells: ["A B", ""] }, { loc: { para: 2 }, text: "Antra" }], "blokai");
+    const xml = S.docxXml([{ p: 'A & <b> "c"' }, { lentele: [["X\nY", ""]] }]);
+    tiesa(xml.includes("A &amp; &lt;b&gt; &quot;c&quot;") && xml.includes("<w:tc><w:p><w:r><w:t xml:space=\"preserve\">X</w:t></w:r></w:p><w:p><w:r><w:t xml:space=\"preserve\">Y</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc>"), "XML: " + xml.slice(0, 400));
+    const r = await W.GP_KVAL_LENTELE.skaityk(await S.docx([{ p: "KVALIFIKACIJOS REIKALAVIMAI" }, { lentele: D5_LENT }]), "Skenuotas.pdf");
+    lygu([r.lenteles.length, r.lenteles[0].eilutes.length, W.GP_KVAL_LENTELE.pTekstas(r.lenteles[0].eilutes[1].reik), r.lenteles[0].failas],
+      [1, 2, "Tiekėjas per paskutinius 5 metus turi būti įvykdęs bent 1 panašią sutartį.\nSutarties vertė - ne mažesnė kaip 100 000 Eur.", "Skenuotas.pdf"], "kvalifikacijos lentelė iš atpažinto teksto");
+    AI.atsakymas = D5_ATS();
+    const f = d5Pdf("Skenuotas.pdf"), g = await S.perskaityk(f);
+    const k = AI.kvietimai[0];
+    tiesa(AI.kvietimai.length === 1 && k.module === "pp-salygos" && k.maxTokens === 8000 && k.pdfBase64 && k.system === sp && /failas: Skenuotas\.pdf/.test(k.userMessage), "užklausa: " + JSON.stringify(Object.keys(k)));
+    lygu([g.blokai.length, g.elementai.length, typeof g.xml, g.docx instanceof W.ArrayBuffer || g.docx.byteLength > 0], [4, 2, "string", true], "rezultatas");
+    AI.atsakymas = () => ({ ok: false, status: 503, text: "", raw: null, error: "Serveris laikinai nepasiekiamas" });
+    let klaida = ""; try { await S.perskaityk(f); } catch (e){ klaida = e.message; }
+    lygu(klaida, "Serveris laikinai nepasiekiamas", "tarpinės klaida");
+    AI.atsakymas = () => ({ ok: true, status: 200, text: '{"status":"ok","elementai":[{"p":"x"}]}', raw: { stop_reason: "max_tokens" }, error: null });
+    klaida = ""; try { await S.perskaityk(f); } catch (e){ klaida = e.message; }
+    tiesa(/DI atsakymas nutrūko/.test(klaida), "nutrūkęs per perskaityk: " + klaida);
+  });
+
+  await testas("1 žingsnis: skenuotas PDF be leidimo - nesiunčiama, klausimas ir mygtukas; „Taip“ - DI perskaito iškart: lentelė perkeliama (kortelėje - DI žyma ir prašymas palyginti), tekstas - DI šaltinis su žyma, juodraštis išsaugo; Word faile - DI požymis", async () => {
+    await modulis();
+    await W.dkPridek([d5Pdf()]);
+    await sl(100);
+    const lk = D.querySelector("#dkDiLeidimas [data-di-leid-klausimas]");
+    tiesa(AI.kvietimai.length === 0 && lk && /skenuotas dokumentas be teksto - iškart, kad DI perskaitytų jo tekstą/.test(lk.textContent.replace(/\s+/g, " ")), "be leidimo: klausimas");
+    let tx = d5Tx("Kvalifikacijos reikalavimai.pdf");
+    tiesa(/Teksto nerasta - tikėtina, skenuotas dokumentas\. Jo tekstą \(lenteles ir sakinius\) gali perskaityti DI/.test(tx) && /Atsakius „Taip“ į klausimą/.test(tx)
+      && /siunčiamas per G-Procure serverį į Claude API/.test(tx) && d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]"), "eilutė be leidimo: " + tx);
+    lygu(d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]").getAttribute("aria-label"), "Perskaityti tekstą su DI: Kvalifikacijos reikalavimai.pdf", "mygtuko pavadinimas");
+    AI.atsakymas = D5_ATS(null, "Antras puslapis neryškus.");
+    lk.querySelector('[data-di-leidimas="taip"]').click();
+    await kol(() => W.eval("DK.failai[0].sken") === "atlikta", "atsakius „Taip“ - perskaityta", 15000);
+    lygu(AI.kvietimai.length, 1, "viena užklausa");
+    const d = W.eval("DK.failai[0]");
+    lygu([d.di, d.rusis, d.simboliai > 50, W.eval("KVL.kandidatai.length"), W.eval("KVL.kandidatai[0].di")], [true, "kvalifikacija", true, 1, true], "dokumentas ir lentelė");
+    tx = d5Tx("Kvalifikacijos reikalavimai.pdf");
+    const e = d5Eil("Kvalifikacijos reikalavimai.pdf");
+    tiesa(/DI atpažintas tekstas Tekstą DI \(Claude\) atpažino iš skenuoto dokumento - jame gali būti klaidų/.test(tx) && /DI pastaba: Antras puslapis neryškus\./.test(tx)
+      && /perkeliama į SPS 2 lentelę \(tekstą atpažino DI\)/.test(tx) && !/Teksto nerasta/.test(tx) && !e.querySelector("[data-dk-sken]") && e.querySelector('li[data-di="sugeneruota"] .gp-di-zyme'), "po skaitymo: " + tx);
+    tiesa(/DI perskaitė skenuotą dokumentą „Kvalifikacijos reikalavimai\.pdf“/.test(D.getElementById("dkSkenBusena").textContent), "būsena: " + D.getElementById("dkSkenBusena").textContent);
+    lygu(W.eval("AI.saltiniai.map(s => [s.vardas, s.di])"), [["Kvalifikacijos reikalavimai.pdf", true]], "DI šaltinis su žyma");
+    tiesa(/tekstą atpažino DI iš skenuoto dokumento/.test(D.getElementById("aiSaltiniai").textContent), "šaltinių sąraše");
+    tiesa(/Kvalifikacijos reikalavimai - .*perkeliama 2 reikalavimai/.test(D.getElementById("dkKontrolinis").textContent.replace(/\s+/g, " ")), "„Ką verta įkelti“");
+    // 2 žingsnis: kortelė su DI žyma
+    await zingsnis2("T-AK", "LT", "prekes");
+    const kort = D.getElementById(W.lkId("kvl|KVL"));
+    tiesa(kort && kort.querySelector("[data-kvl-di][data-di]") && /Lentelės tekstą DI \(Claude\) atpažino iš skenuoto dokumento „Kvalifikacijos reikalavimai\.pdf“ - jame gali būti klaidų/.test(kort.textContent.replace(/\s+/g, " ")), "kortelė");
+    // Word požymiai
+    const sav = W.diPozymiuSavybes();
+    const txs = JSON.stringify(sav);
+    tiesa(sav && /perkeltų reikalavimų lentelių tekstą DI atpažino iš skenuoto dokumento/.test(txs) && /DI_atpazintu_lenteliu/.test(txs) && /DI atpažintas tekstas \(sąlygų tekstas - iš šablonų/.test(txs), "DI požymiai: " + txs.slice(0, 500));
+    W.eval("KVL.atmesta = true");
+    tiesa(W.diPozymiuSavybes() === null, "lentelės nenaudojant - požymių nėra");
+    W.eval("KVL.atmesta = false");
+    // juodraštis: lentelės DI žyma išlieka
+    const J = W.surinkJuodrasti();
+    await modulis(); await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(J)) });
+    lygu([W.eval("KVL.kandidatai.length"), W.eval("KVL.kandidatai[0].di")], [1, true], "atkurta su DI žyma");
+    tiesa(/DI_atpazintu_lenteliu/.test(JSON.stringify(W.diPozymiuSavybes())), "atkurtame - DI požymis");
+  });
+
+  await testas("Nacionalinis saugumas - nesiunčiama ir leidus, tik mygtuku (fokusas lieka eilutėje); „Ne“ - mygtukas; klaida (nutrūkęs) - priežastis ir „Bandyti dar kartą“; atšaukimas; pašalintas skaitymo metu - rezultatas neįrašomas; nuotrauka - paraiška, pakeitus rūšį - skaitoma", async () => {
+    await modulis();
+    D.querySelector("input[name=nacsaug][value=taip]").click();
+    W.eval("DI_LEIDIMAS = 'taip'");
+    await W.dkPridek([d5Pdf()]);
+    await sl(100);
+    let tx = d5Tx("Kvalifikacijos reikalavimai.pdf");
+    tiesa(AI.kvietimai.length === 0 && /susijęs su nacionaliniu saugumu \(1 žingsnis\), todėl į DI automatiškai nesiunčiama/.test(tx) && !D.querySelector("#dkDiLeidimas [data-di-leid-klausimas]"), "nacionalinis saugumas: " + tx);
+    AI.atsakymas = D5_ATS();
+    d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]").click();
+    tiesa(D.activeElement && D.activeElement.matches("[data-dk-rusis]"), "fokusas - į dokumento rūšį: " + (D.activeElement && D.activeElement.outerHTML.slice(0, 80)));
+    await kol(() => W.eval("DK.failai[0].sken") === "atlikta", "mygtuku - perskaityta", 15000);
+    lygu(AI.kvietimai.length, 1, "mygtuku - viena užklausa");
+    // „Ne“
+    await modulis();
+    W.eval("DI_LEIDIMAS = 'ne'");
+    await W.dkPridek([d5Pdf()]);
+    await sl(100);
+    tiesa(AI.kvietimai.length === 0 && /Pasirinkote, kad DI automatiškai neskaitytų šio pirkimo dokumentų/.test(d5Tx("Kvalifikacijos reikalavimai.pdf")), "„Ne“");
+    // klaida ir kartojimas
+    AI.atsakymas = () => ({ ok: true, status: 200, text: '{"status":"ok","elementai":[{"p":"x"}]}', raw: { stop_reason: "max_tokens" }, error: null });
+    d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]").click();
+    await kol(() => W.eval("DK.failai[0].sken") === "nepavyko", "klaida", 15000);
+    tx = d5Tx("Kvalifikacijos reikalavimai.pdf");
+    const bus = D.getElementById("dkSkenBusena").textContent.replace(/\s+/g, " ");
+    tiesa(/Skenuoto dokumento „Kvalifikacijos reikalavimai\.pdf“ perskaityti nepavyko/.test(bus) && /Dokumentas per ilgas perskaityti vienu kartu/.test(bus)
+      && /perskaityti nepavyko - priežastis virš sąrašo/.test(tx) && /Bandyti dar kartą/.test(d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]").textContent)
+      && W.eval("KVL.kandidatai.length") === 0, "klaida: " + bus + " | " + tx);
+    AI.atsakymas = D5_ATS();
+    d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]").click();
+    await kol(() => W.eval("DK.failai[0].sken") === "atlikta", "pakartojus", 15000);
+    // atšaukimas
+    await modulis();
+    W.eval("DI_LEIDIMAS = 'taip'");
+    W.GP_AI_PROXY.call = o => { AI.kvietimai.push(o); return new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" })))); };
+    const p1 = W.dkPridek([d5Pdf()]);
+    await kol(() => D.querySelector("#dkSkenBusena button") && /Atšaukti/.test(D.getElementById("dkSkenBusena").textContent), "eiga su „Atšaukti“", 10000);
+    tiesa(/DI skaito skenuoto dokumento tekstą/.test(d5Tx("Kvalifikacijos reikalavimai.pdf")), "eilutė skaitant");
+    [...D.querySelectorAll("#dkSkenBusena button")].find(b => /Atšaukti/.test(b.textContent)).click();
+    await p1;
+    tiesa(W.eval("DK.failai[0].sken") === "atsaukta" && /Skaitymą atšaukėte/.test(d5Tx("Kvalifikacijos reikalavimai.pdf")) && d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]"), "atšaukta");
+    // pašalintas skaitymo metu
+    let paleisk;
+    W.GP_AI_PROXY.call = o => new Promise(ok => { paleisk = () => ok(D5_ATS()()); });
+    W.eval("DK.failai[0].sken = null");
+    W.dkSkenuok(W.eval("DK.failai[0]"));
+    await kol(() => paleisk, "užklausa išsiųsta", 10000);
+    W.dkSalink(W.eval("DK.failai[0]"));
+    paleisk();
+    await sl(300);
+    lygu([W.eval("DK.failai.length"), W.eval("KVL.kandidatai.length"), W.eval("AI.saltiniai.length")], [0, 0, 0], "pašalintas - neįrašyta");
+    // nuotrauka - paraiška; pakeitus rūšį į kvalifikaciją - skaitoma (paruošimas - netikras, kad nereikėtų tikros nuotraukos)
+    await modulis();
+    W.eval("DI_LEIDIMAS = 'taip'");
+    W.GP_PARAISKA.analizuoti = () => Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" });
+    const gauti = [];
+    W.GP_SKENUOTI.perskaityk = async f => { gauti.push(f.name); const el = [{ lentele: D5_LENT }]; return { elementai: el, blokai: W.GP_SKENUOTI.blokai(el), xml: W.GP_SKENUOTI.docxXml(el), docx: await W.GP_SKENUOTI.docx(el), pastabos: "" }; };
+    await W.dkPridek([new W.File([new Uint8Array([137, 80, 78, 71])], "Reikalavimai.png", { type: "image/png" })]);
+    lygu([W.eval("DK.failai[0].rusis"), gauti.length], ["paraiska", 0], "nuotrauka - paraiška");
+    const sel = D.querySelector("[data-dk-rusis]");
+    sel.value = "kvalifikacija"; sel.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await kol(() => W.eval("DK.failai[0].sken") === "atlikta", "nuotrauka perskaityta", 10000);
+    lygu([gauti, W.eval("DK.failai[0].rusis"), W.eval("KVL.kandidatai.length")], [["Reikalavimai.png"], "kvalifikacija", 1], "pakeitus rūšį");
+    // neatpažintos rūšies skenuotas PDF - rūšis nustatoma iš DI atpažinto teksto (lentelės), kaip Word failo
+    await modulis();
+    W.eval("DI_LEIDIMAS = 'taip'");
+    AI.atsakymas = D5_ATS();
+    await W.dkPridek([d5Pdf("Dokumentas_1.pdf")]);
+    lygu([W.eval("DK.failai[0].rusis"), W.eval("DK.failai[0].auto"), W.eval("KVL.kandidatai.length"), /rūšis atpažinta automatiškai/.test(d5Tx("Dokumentas_1.pdf"))], ["kvalifikacija", "kvalifikacija", 1, true], "rūšis iš atpažinto teksto");
+    // PDF su teksto sluoksniu - ne skenuotas: DI neskaito, mygtuko nėra
+    await modulis();
+    W.eval("DI_LEIDIMAS = 'taip'");
+    await W.dkPridek([pdf("Kvalifikacijos reikalavimai su tekstu.pdf", ["KVALIFIKACIJOS REIKALAVIMAI", "Tiekejas turi tureti teise verstis veikla."])]);
+    await sl(200);
+    tiesa(AI.kvietimai.length === 0 && !D.querySelector("#dkSarasas [data-dk-sken]") && !W.eval("DK.failai[0].sken") && W.eval("DK.failai[0].simboliai") > 0, "PDF su tekstu - nesiunčiamas");
+  });
+
+  await testas("Metodika ir pirkimo objekto dalys iš DI atpažinto teksto - tik siūloma (ne „Įrašoma automatiškai“), kilmė sako, kad tekstą atpažino DI; dalių ištrauka juodraštyje išlaiko žymą", async () => {
+    // dalys: ta pati citata DI atpažintame dokumente - siūloma, Word ar PDF tekste - išspręsta
+    await modulis();
+    const G = W.GP_DALYS, EIL = ["TECHNINĖ SPECIFIKACIJA", "2.3. Pirkimo objektas skaidomas į 2 Pirkimo objekto dalis:", "2.3.1. I Pirkimo objekto dalis – Kabeliai;", "2.3.2. II Pirkimo objekto dalis – Movos."];
+    const bl = EIL.map((t, i) => ({ loc: { para: i + 1 }, text: t }));
+    const be = G.ivertink({ dokumentai: [{ vardas: "TS.pdf", blokai: bl, ts: true }] }), su = G.ivertink({ dokumentai: [{ vardas: "TS.pdf", blokai: bl, ts: true, di: true }] });
+    lygu([be.busena, be.skaicius, su.busena, su.skaicius, su.irodymai[0].saltinis, su.irodymai[0].pagal], ["isspresta", 2, "siuloma", 2, "di", "DI atpažintą dokumento „TS.pdf“ tekstą"], "dalys");
+    lygu(su.pavadinimai.map(p => p.kilme), ["DI atpažintas dokumento „TS.pdf“", "DI atpažintas dokumento „TS.pdf“"], "pavadinimų kilmė");
+    const ist = G.istrauka({ vardas: "TS.pdf", blokai: bl, ts: true, di: true });
+    lygu([ist.di, G.atkurkIstraukas([ist])[0].di, G.atkurkIstraukas([Object.assign({}, ist, { di: "taip" })])[0].di], [true, true, false], "ištrauka");
+    // modulyje: skenuota TS - dalių klausimas siūlomas, ne išspręstas
+    W.eval("DI_LEIDIMAS = 'taip'");
+    AI.atsakymas = D5_ATS(EIL.map(t => ({ p: t })));
+    await W.dkPridek([d5Pdf("Techninė specifikacija.pdf")]);
+    lygu([W.eval("DK.failai[0].rusis"), W.daliuVertinimas().busena, W.daliuVertinimas().skaicius], ["ts", "siuloma", 2], "skenuota TS");
+    // metodika
+    await modulis();
+    W.eval("DI_LEIDIMAS = 'taip'");
+    AI.atsakymas = D5_ATS([{ p: "EKONOMIŠKAI NAUDINGIAUSIO PASIŪLYMO VERTINIMO METODIKA" }, { lentele: [["Vertinimo kriterijai", "Lyginamasis svoris"], ["I kriterijus – Pasiūlymo kaina (C)", "X = 80"], ["II kriterijus – Garantija (G)", "Y = 20"]] }]);
+    await W.dkPridek([d5Pdf("Vertinimo metodika.pdf")]);
+    const m = W.metodikosRez();
+    lygu([W.eval("DK.failai[0].rusis"), m && m.kodas, m && m.suma, m && m.di], ["metodika", "kks", 100, true], "metodika iš DI teksto");
+    const tx = d5Tx("Vertinimo metodika.pdf");
+    tiesa(/Vertinimo kriterijus SPS 8\.1 punkte siūlomas - Kainos ir kokybės santykis/.test(tx) && /Tekstą atpažino DI, todėl kriterijų patvirtinsite 2 žingsnyje/.test(tx)
+      && /Kriterijai ir svoriai nustatyti iš DI atpažinto teksto/.test(tx) && !/įrašomas be klausimo|Be DI, failas/.test(tx), "metodikos eilutė: " + tx);
+    tiesa(W.metIstrauka(Object.assign({}, m, { failas: "Vertinimo metodika.pdf" })).di === true && !("di" in W.metIstrauka(Object.assign({}, m, { failas: "x", di: "taip" }))), "metodikos ištrauka");
+    await zingsnis2("T-AK", "LT", "prekes");
+    await kol(() => metKort(), "kriterijaus kortelė");
+    const k = metKort();
+    tiesa(!k.querySelector(".lk-v--auto") && /Siūloma: Kainos ir kokybės santykis - pagal vertinimo metodiką „Vertinimo metodika\.pdf“ \(tekstą atpažino DI - patikrinkite\)/.test(e1Tx(k)) && !D.querySelector("#lkAuto [data-auto-kr]"), "kortelė: " + e1Tx(k).slice(0, 400));
+  });
+}
+
 async function testaiD4b(){
   dabartine = grupe("2 etapas D4 b (2026-10-20): išjungus priedą likę SPS priedai pernumeruojami iš eilės - sąrašas, nuorodos tekste, antraštės, vietos ir failų vardai");
 
@@ -11861,6 +12058,7 @@ async function testaiEtapas1(){
     await testaiD6();
     await testaiD3();
     await testaiD4b();
+    await testaiD5();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

@@ -201,15 +201,18 @@
     var zymos = [];
     (o.dokumentai || []).forEach(function (d) {
       var r = dokumentas(d);
+      // skenuotas dokumentas, kurio tekstą atpažino DI (2 etapas D5): įrodymas kaip DI - tik siūloma, ne „Išspręsta automatiškai“
+      var di = d.di === true, sal = di ? "di" : "dokumentas", kilme = (di ? "DI atpažintas dokumento „" : "dokumentas „") + d.vardas + "“";
+      var pagal = (di ? "DI atpažintą dokumento „" : "dokumentą „") + d.vardas + "“" + (di ? " tekstą" : "");
       r.skaidomas.forEach(function (x) {
-        ir.push({ saltinis: "dokumentas", failas: d.vardas, pagal: "dokumentą „" + d.vardas + "“", citata: x.citata, vieta: x.vieta, reiksme: REIKSME(true, x.skaicius), skaidomas: true, skaicius: x.skaicius, tvirtas: true });
-        x.pavadinimai.forEach(function (p) { pav.push({ nr: p.nr, tekstas: p.tekstas, kilme: "dokumentas „" + d.vardas + "“" }); });
+        ir.push({ saltinis: sal, failas: kilme, pagal: pagal, citata: x.citata, vieta: x.vieta, reiksme: REIKSME(true, x.skaicius), skaidomas: true, skaicius: x.skaicius, tvirtas: !di, di: di });
+        x.pavadinimai.forEach(function (p) { pav.push({ nr: p.nr, tekstas: p.tekstas, kilme: kilme, di: di }); });
       });
       r.neskaidomas.forEach(function (x) {
-        ir.push({ saltinis: "dokumentas", failas: d.vardas, pagal: "dokumentą „" + d.vardas + "“", citata: x.citata, vieta: x.vieta, reiksme: REIKSME(false), skaidomas: false, skaicius: null, tvirtas: true });
-        if (x.priezastis && !priez) priez = { tekstas: x.priezastis, kilme: "dokumentas „" + d.vardas + "“", citata: x.citata };
+        ir.push({ saltinis: sal, failas: kilme, pagal: pagal, citata: x.citata, vieta: x.vieta, reiksme: REIKSME(false), skaidomas: false, skaicius: null, tvirtas: !di, di: di });
+        if (x.priezastis && !priez) priez = { tekstas: x.priezastis, kilme: kilme, citata: x.citata };
       });
-      if (r.zyma && r.zyma.nr) zymos.push({ failas: d.vardas, z: r.zyma });
+      if (r.zyma && r.zyma.nr && !di) zymos.push({ failas: d.vardas, z: r.zyma });
     });
     // techninė specifikacija po failą kiekvienai daliai: bent du failai, numeriai iš eilės nuo 1 (tas pats numeris keliuose failuose - viena dalis)
     if (zymos.length) {
@@ -281,12 +284,12 @@
       if (pradzia || new RegExp(SKAIDOMAS_RE.source).test(n) || new RegExp(NESKAIDOMAS_RE.source).test(n))
         keli.push({ text: String(b.text).slice(0, 6000), loc: b.loc || null });
     });
-    return { vardas: String(doc.vardas || ""), ts: !!doc.ts, blokai: keli.slice(0, 40) };
+    return { vardas: String(doc.vardas || ""), ts: !!doc.ts, di: doc.di === true, blokai: keli.slice(0, 40) };
   }
   function atkurkIstraukas(a) {
     return (Array.isArray(a) ? a : []).filter(function (x) { return x && typeof x.vardas === "string" && Array.isArray(x.blokai); }).slice(0, 60)
       .map(function (x) {
-        return { vardas: x.vardas.slice(0, 300), ts: x.ts === true, blokai: x.blokai.filter(function (b) { return b && typeof b.text === "string"; }).slice(0, 40)
+        return { vardas: x.vardas.slice(0, 300), ts: x.ts === true, di: x.di === true, blokai: x.blokai.filter(function (b) { return b && typeof b.text === "string"; }).slice(0, 40)
           .map(function (b) { return { text: b.text.slice(0, 6000), loc: b.loc && typeof b.loc === "object" ? { page: +b.loc.page || undefined, para: b.loc.para != null ? +b.loc.para : undefined } : null }; }) };
       });
   }
