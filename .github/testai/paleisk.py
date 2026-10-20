@@ -171,7 +171,10 @@ LAUK = """(async () => {
     }
     await new Promise(r => setTimeout(r, 500));
   }
-  return { baigta: false, busena: 'nepasibaigė per laiką', gerai: false, krito: [] };
+  // nespėjus (2026-10-20): kiek testų baigta ir paskutinis baigtas - kad būtų matyti, kur rinkinys sulėtėjo ar užstrigo
+  const t = [...document.querySelectorAll('.t')], pask = t.length ? t[t.length - 1].textContent.replace(/\\s+/g, ' ').trim().slice(0, 300) : '';
+  return { baigta: false, busena: 'nepasibaigė per laiką' + (t.length ? ' (baigta testų: ' + t.length + '; paskutinis: ' + pask + ')' : ''), gerai: false,
+    krito: [...document.querySelectorAll('.t.krito, .t.blogai')].map(e => e.textContent.replace(/\\s+/g, ' ').trim().slice(0, 600)) };
 })()"""
 
 
