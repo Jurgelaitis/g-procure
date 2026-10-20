@@ -40,7 +40,7 @@
   var RUSIS = { nukrypimas: "Nukrypimas nuo formos", neprivaloma: "Neprivaloma formos dalis", uzpildyta: "Užpildyta vieta", techninis: "Techninis pakeitimas" };
   var PO_RUSIS = { raudonas: "užpildyta raudonai pažymėta vieta", vieta: "užpildyta tuščia vieta", pasalinta: "pašalinta sąlyginė dalis",
     pakeista: "pakeista sąlyginė dalis", lentele: "lentelės eilutė", turinys: "turinys", numeracija: "numeracija", skyryba: "skyryba",
-    priedu_sarasas: "priedų sąrašas", perkelta: "perkelta", antraste: "skyriaus antraštė", kita_versija: "ankstesnės oficialios formos tekstas",
+    priedu_sarasas: "priedų sąrašas", priedo_numeris: "SPS priedo numeris (likę priedai pernumeruoti)", perkelta: "perkelta", antraste: "skyriaus antraštė", kita_versija: "ankstesnės oficialios formos tekstas",
     po_generavimo: "pakeista po generavimo", pazymeta: "užpildyta pildoma sutarties vieta",
     nauja_redakcija: "formos taisymas, kurio dokumento redakcijoje nebuvo", pasirinkimas: "pasirinktas formos sąrašo variantas",
     ne_is_saraso: "pasirinkimo vietoje - tekstas, kurio formos sąraše nėra", salinama: "pašalintas šablono nurodymas ar pildymo vieta" };
