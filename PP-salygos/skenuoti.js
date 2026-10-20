@@ -105,6 +105,8 @@
     opts = opts || {};
     if (!root.GP_AI_PROXY || !root.GP_PARAISKA) return Promise.reject(new Error("DI jungtis neprijungta"));
     return root.GP_PARAISKA.paruostiFaila(file).then(function (pr) {
+      // atšaukta, kol failas ruoštas - į DI nesiunčiama
+      if (opts.signal && opts.signal.aborted) throw Object.assign(new Error("Atšaukta"), { name: "AbortError" });
       if (opts.onParuosta) opts.onParuosta(pr);
       return root.GP_AI_PROXY.call({ module: "pp-salygos", maxTokens: MAX_TOKENS, system: systemPrompt(), userMessage: userText(file && file.name), pdfBase64: pr.base64, signal: opts.signal });
     }).then(function (r) {

@@ -133,6 +133,9 @@ function perimkAI(){
   W.GP_AI_PROXY.call = opts => { AI.kvietimai.push(opts); return Promise.resolve(AI.atsakymas(opts)); };
 }
 const aiOk = obj => () => ({ ok: true, status: 200, text: JSON.stringify(obj), raw: { stop_reason: "end_turn" }, error: null });
+/* Netikram DI kvietimui: atšaukimas ir tada, kai signalas atšauktas dar prieš kvietimą (lėtoje aplinkoje „Atšaukti“ paspaudžiamas, kol failas
+   dar ruošiamas - „abort“ įvykis jau praėjęs; iki 2026-10-20 toks pažadas niekada nesibaigdavo ir GitHub Actions rinkinys užstrigdavo) */
+const kaiAtsaukta = (signal, f) => { if (signal.aborted) f(); else signal.addEventListener("abort", f, { once: true }); };
 
 /* ---- Bandomieji dokumentai ---- */
 const xmlEsc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -576,7 +579,7 @@ async function testaiEiga(){
   await testas("Atšaukus analizę - „niekas nepakeista“, mygtukas vėl veikia", async () => {
     await modulis(); await zingsnis2("T-SD", "LT");
     await W.aiPridek([await docx(TS[0], TS[1])]);
-    AI.atsakymas = opts => new Promise(res => opts.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })));
+    AI.atsakymas = opts => new Promise(res => kaiAtsaukta(opts.signal, () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })));
     D.getElementById("aiGauti").click();
     await kol(() => D.querySelector("#aiBusena [data-gpb-atsaukti]"), "atšaukimo mygtukas");
     tiesa(/DI analizuoja/.test(D.getElementById("aiBusena").textContent) && D.querySelector("#aiBusena [data-gpb-laikas]"), "AI eiga be laikmačio");
@@ -681,7 +684,7 @@ async function testaiBusenos(){
     const senas = new W.File(["a"], "senas.pdf", { type: "application/pdf" }), naujas = new W.File(["b"], "naujas.pdf", { type: "application/pdf" });
     let baigti;
     W.GP_PARAISKA.analizuoti = (f, o) => f.name === "senas.pdf"
-      ? new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))))
+      ? new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))))
       : new Promise(ok => { o.onParuosta && o.onParuosta(); baigti = () => ok({ map: { siulymai: [], info: [] }, pastabos: "" }); });
     const p1 = W.pzAnalizuoti(senas);
     await kol(() => D.querySelector("#pzBusena [data-gpb-atsaukti]") && /senas\.pdf/.test(D.getElementById("pzBusena").textContent), "seno failo eiga");
@@ -8890,7 +8893,7 @@ async function testaiKvalLentele(){
     AI.atsakymas = () => ({ ok: true, status: 200, text: '{"eilutes":[{"nr":1,"reikalavimas":["EN', raw: { stop_reason: "max_tokens" }, error: null });
     await verskIr();
     tiesa(/nutrūko/.test(st()) && kvlM().vertimas === null, "nutrūkęs: " + st());
-    AI.atsakymas = opts => new Promise(res => opts.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })));
+    AI.atsakymas = opts => new Promise(res => kaiAtsaukta(opts.signal, () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })));
     D.querySelector('[data-kvl="versti"]').click();
     await kol(() => D.querySelector("#kvlVertBusena [data-gpb-atsaukti]"), "atšaukimo mygtukas");
     D.querySelector("#kvlVertBusena [data-gpb-atsaukti]").click();
@@ -9169,7 +9172,7 @@ async function testaiDokumentai(){
     await kol(() => /Paraiškos perskaityti nepavyko/.test(e().textContent), "nepavykusi analizė", 10000);
     tiesa(/Analizuoti iš naujo \(DI\)/.test(e().querySelector("[data-dk-paraiska]").textContent) && /Atsakyme nėra JSON/.test(D.getElementById("pzBusena").textContent), "nesėkmė: " + D.getElementById("pzBusena").textContent);
     // atšaukta - ne nesėkmė; kol analizuojama - mygtuko nėra
-    W.GP_PARAISKA.analizuoti = (f, o) => new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    W.GP_PARAISKA.analizuoti = (f, o) => new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
     e().querySelector("[data-dk-paraiska]").click();
     await kol(() => D.querySelector("#pzBusena [data-gpb-atsaukti]"), "eiga su „Atšaukti“");
     tiesa(!e().querySelector("[data-dk-paraiska]") && /DI skaito paraišką/.test(e().textContent), "analizės metu - mygtukas ar ne ta būsena");
@@ -10207,7 +10210,7 @@ async function testaiSutartiesDI(){
     AI.atsakymas = () => ({ ok: true, status: 200, text: '{"atsakymai":[', raw: { stop_reason: "max_tokens" }, error: null });
     D.querySelector("#sfAiBusena [data-gpb-kartoti]").click();
     await kol(() => AI.kvietimai.length === 2 && /nutrūko/.test(D.getElementById("sfAiBusena").textContent), "nutrūkęs", 10000);
-    W.GP_AI_PROXY.call = o => new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    W.GP_AI_PROXY.call = o => new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
     D.querySelector("#sfAiBusena [data-gpb-kartoti]").click();
     await kol(() => D.querySelector("#sfAiBusena [data-gpb-atsaukti]"), "eiga su „Atšaukti“");
     D.querySelector("#sfAiBusena [data-gpb-atsaukti]").click();
@@ -11041,6 +11044,7 @@ async function testaiTestuotojas(){
       && !P.some(x => /lietuvių kalba\. ?\/ ?Pasiūlymo/.test(x)), "kalba: " + P.filter(x => /lietuvių kalba/.test(x)).join(" | ").slice(0, 400));
     tiesa(P.some(x => /bus lygi Sutarties projekte nurodytai sumai\.$/.test(x)) && !P.some(x => /kainai\s*\/\s*Sutarties/.test(x)), "kaina: " + P.filter(x => /bus lygi/.test(x)).join(" | "));
     lygu(docs.AK_LT_SPS.r.stats.juodosAlt.map(x => x.id).sort(), ["kaina", "kalba"], "ataskaita");
+    await kol(() => W.__PP && W.__PP.p, "paketo patikra", 90000);   // patikra vyksta fone - lėtesnėje aplinkoje (GitHub Actions) baigiasi vėliau
     tiesa(!W.__PP.p.radiniai.some(x => /dvi to paties turinio formuluotės/.test(x.tekstas)), "paketo patikra - formuluočių per „/“ neliko");
     const en = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "prekes", pries: async () => { altRaktai().filter(r => /kaina/.test(r)).forEach(r => W.uAts("JA_" + r, 1, false)); W.klausimynas(); } });
     const E = en.AK_LTEN_SPS.pars;
@@ -11315,7 +11319,7 @@ async function testaiD5(){
     // atšaukimas
     await modulis();
     W.eval("DI_LEIDIMAS = 'taip'");
-    W.GP_AI_PROXY.call = o => { AI.kvietimai.push(o); return new Promise((ok, ne) => o.signal.addEventListener("abort", () => ne(Object.assign(new Error("aborted"), { name: "AbortError" })))); };
+    W.GP_AI_PROXY.call = o => { AI.kvietimai.push(o); return new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" })))); };
     const p1 = W.dkPridek([d5Pdf()]);
     await kol(() => D.querySelector("#dkSkenBusena button") && /Atšaukti/.test(D.getElementById("dkSkenBusena").textContent), "eiga su „Atšaukti“", 10000);
     tiesa(/DI skaito skenuoto dokumento tekstą/.test(d5Tx("Kvalifikacijos reikalavimai.pdf")), "eilutė skaitant");
