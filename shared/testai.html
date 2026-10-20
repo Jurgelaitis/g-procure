@@ -4517,6 +4517,35 @@ async function kvalLentelesBusena(w, d, budas){
   await w.kvlSkaityk([new w.File([await z.generateAsync({ type: "blob" })], "Kvalifikacijos_reikalavimai_PP-qual_ilgas_failo_vardas_be_tarpu.docx")], true);
   w.klausimynas();
 }
+/* PP-salygos 1 žingsnis be numatytųjų reikšmių (2026-10-20, naudotojo sprendimas): ankstesnės būsenos matuojamos kaip iki tol - būdas T-SD,
+   objektas „Prekės“, nacionalinis saugumas „Ne“ (tik tušti laukai, be įvykių); kitiems puslapiams - nieko. */
+function salygosNumatytieji(w){
+  let d; try { d = w.document; } catch (e) { return; }
+  if (!d || !/PP-SALYGOS\.html$/.test(w.location.pathname) || !w.budasPagalPI) return;
+  const b = d.getElementById("budas");
+  if (b && !b.value){ b.value = "T-SD"; w.budasPagalPI(); }
+  const t = !d.querySelector("input[name=tipas]:checked") && d.getElementById("tipas-prekes"); if (t) t.checked = true;
+  const n = !d.querySelector("input[name=nacsaug]:checked") && d.getElementById("nacsaug-ne"); if (n){ n.checked = true; w.komisijaUI(); w.kraukPriedus(); }
+  w.rezimas(); w.zingsniuBusena();
+}
+/* PP-salygos (2026-10-20): „Toliau“ be būdo, objekto tipo ir atsakymo apie nacionalinį saugumą - klaida ir pažymėti klausimai */
+async function z1ButiniBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  d.getElementById("budas").value = ""; d.querySelectorAll("input[name=tipas], input[name=nacsaug]").forEach(r => { r.checked = false; });
+  w.budasPagalPI(); await w.iStep2();
+  for (let i = 0; i < 40 && d.getElementById("z1Klaida").hidden; i++) await new Promise(r => setTimeout(r, 50));
+}
+/* PP-salygos (2026-10-20): dokumentai įkelti, į nacionalinio saugumo klausimą neatsakyta - DI leidimo bloke pirma šis klausimas */
+async function diNacsaugBusena(w, d){
+  d.getElementById("tabRengti").click(); w.rodyk(1);
+  w.eval("DK.failai.slice().forEach(x => dkSalink(x, true)); DI_LEIDIMAS = null; dkPoPakeitimo();");
+  d.querySelectorAll("input[name=nacsaug]").forEach(r => { r.checked = false; });
+  w.GP_PARAISKA.analizuoti = () => new Promise(() => {});        // į serverį nieko nesiunčiama (ir neturi būti siunčiama - klausimas neatsakytas)
+  await w.dkPridek(await dokumentuFailai(w));
+  for (let i = 0; i < 100 && !d.querySelector("#dkDiLeidimas [data-di-nacsaug]"); i++) await new Promise(r => setTimeout(r, 50));
+  if (!d.querySelector("#dkDiLeidimas [data-di-nacsaug]")) throw new Error("nacionalinio saugumo klausimas DI leidimo bloke nepasiektas");
+  d.getElementById("dkJuosta").scrollIntoView();
+}
 /* Pirkimo dokumentai 1 žingsnyje (2026-10-18): paraiška (paveikslėlis), kvalifikacijos ir žaliųjų reikalavimų Word failas su ilgu vardu,
    sutarties priedas su netekusio galios akto nuoroda - kiekvienas su rūšimi, pasekmėmis ir mygtukais. */
 async function dokumentuFailai(w){
@@ -4679,6 +4708,8 @@ async function rinkosGrafikuBusena(w, d) {
    paskutinis puslapis „Prieš generuojant“) - atskiromis būsenomis. */
 const SALYGOS_PSL = "../PP-salygos/PP-SALYGOS.html";
 const salygosVisi = b => b.map(([pav, fn, ...r]) => [pav, async (w, d) => { w.eval("RODYTI_VISUS = true"); return fn(w, d); }, ...r]);
+// būsenos matuojamos tame pačiame lange: „Toliau“ be 1 žingsnio atsakymų (2026-10-20) juos išvalo - prieš kiekvieną būseną grąžinami numatytieji
+const salygosAtkurk = b => b.map(([pav, fn, ...r]) => [pav, async (w, d) => { salygosNumatytieji(w); return fn(w, d); }, ...r]);
 async function vienoSkyriausBusena(w, d){
   d.getElementById("tabRengti").click(); w.rodyk(1);
   const b = d.getElementById("budas"); b.value = "T-AK"; b.dispatchEvent(new w.Event("change"));
@@ -4703,6 +4734,8 @@ const TELEFONO_BUSENOS = {
   "../PP-ts/TS_Asistentas.html": RK_BUSENOS,
   "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": KPI_BUSENOS,
   "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis: sutarties projektas - klausimai ir rankinis pasirinkimas (2026-10-08)", sutartiesBusena],
+    ["1 žingsnis: „Toliau“ be būdo, objekto tipo ir nacionalinio saugumo atsakymo (2026-10-20)", z1ButiniBusena],
+    ["1 žingsnis: DI leidimo bloke - pirma klausimas apie nacionalinį saugumą (2026-10-20)", diNacsaugBusena],
     ["2 žingsnis", w => w.rodyk(2)], ["3 žingsnis (Dokumentai)", w => w.rodyk(3)],
     ["sutarties projekto žingsnis su klausimais (2026-10-15)", sutartiesFormosBusena],
     ["2 žingsnis: SPS užtikrinimo nuoroda į sutartį įrašyta automatiškai (2026-10-16)", uztikrinimoNuorodosBusena],
@@ -4734,7 +4767,7 @@ const TELEFONO_BUSENOS = {
     n("f-company", "litgrid"); n("f-budas", w.eval("Object.keys(METHODS)[0]")); w.onMethodChange(); n("f-pradzia", "2026-10-05"); w.refreshAll(); }],
     ["grafikas tiekėjams", (w, d) => d.querySelector('.preview-tab[data-tab="B"]').click()]]
 };
-TELEFONO_BUSENOS[SALYGOS_PSL] = salygosVisi(TELEFONO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS);
+TELEFONO_BUSENOS[SALYGOS_PSL] = salygosAtkurk(salygosVisi(TELEFONO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS));
 /* Klasikinė slinkties juosta (2026-10-02): Mac'e ji permatoma ir vietos neužima, o Windows ir GitHub Actions (Linux) - 15-17 px.
    Pirmas GitHub paleidimas taip rado PP-qual ir PP-protocol 320 px, PP-market-KPI kategorijos kortelę ir PP-plan juostas 1000 px,
    kurių Mac'e nesimatė (ten 320 px puslapiui likdavo 320 px, ne 305). Todėl matavimo rėmeliuose juosta visada užima vietą - 17 px,
@@ -4751,7 +4784,7 @@ function telefonoRemas(m){
     f.style.width = "375px"; f.style.height = "800px";
     f.addEventListener("load", async () => {
       const w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
-      const d = f.contentDocument; klasikineJuosta(d); if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 250)); res(f);
+      const d = f.contentDocument; klasikineJuosta(d); if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 250)); salygosNumatytieji(w); res(f);
     }, { once: true });
     f.src = m + (m.indexOf("?") < 0 ? "?" : "&") + "b=" + Date.now(); document.body.appendChild(f);
   });
@@ -4934,6 +4967,8 @@ const PRIEINAMUMO_BUSENOS = {
   "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": KPI_BUSENOS,
   // 2026-10-04: 2 žingsnis su tikrais klausimais (laukų registras, „?“ paaiškinimai, būsenos, eiga ir santrauka)
   "../PP-salygos/PP-SALYGOS.html": [["1 žingsnis: LT/EN sutarties projektas su redakcija ir vertimo įspėjimu (2026-10-08)", sutartiesLtenBusena],
+    ["1 žingsnis: „Toliau“ be būdo, objekto tipo ir nacionalinio saugumo atsakymo (2026-10-20)", z1ButiniBusena],
+    ["1 žingsnis: DI leidimo bloke - pirma klausimas apie nacionalinį saugumą (2026-10-20)", diNacsaugBusena],
     ["sutarties projekto žingsnis: klausimai su papildomais laukais (S4, 2026-10-08; atskiras žingsnis - 2026-10-15)", sutartiesFormosBusena],
     ["2 žingsnis: SPS užtikrinimo nuoroda į sutartį įrašyta automatiškai (2026-10-16)", uztikrinimoNuorodosBusena],
     ["sutarties projekto žingsnis: pastaba „Patikrinkite“ su mygtukais (2026-10-16)", sutartiesPastabuBusena],
@@ -4969,7 +5004,7 @@ const PRIEINAMUMO_BUSENOS = {
     ["A4 forma", w => w.openProtocol("AK-1", "A4")],
     ["protokolo peržiūra", async w => { w.openProtocol("SD-1", "D6"); await w.previewProtocol(); }]]
 };
-PRIEINAMUMO_BUSENOS[SALYGOS_PSL] = salygosVisi(PRIEINAMUMO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS.slice(0, 1));   // planšetė 720 / 640 px - ir vienas skyrius
+PRIEINAMUMO_BUSENOS[SALYGOS_PSL] = salygosAtkurk(salygosVisi(PRIEINAMUMO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS.slice(0, 1)));   // planšetė 720 / 640 px - ir vienas skyrius
 // PP-protocol pirkimai įrašomi PRIEŠ įkeliant puslapį (jis juos skaito įsikeldamas); saugykla atkuriama testo pabaigoje
 const PRIEINAMUMO_PRIES = {
   "../PP-protocol/LITGRID_Generatorius_v3.html": () => {
@@ -4989,7 +5024,7 @@ function prieinamumoRemas(m){
     f.style.width = "1280px"; f.style.height = "900px";
     f.addEventListener("load", async () => {
       const w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
-      const d = f.contentDocument; if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 300)); res(f);
+      const d = f.contentDocument; if (d.fonts) await d.fonts.ready; await new Promise(r => setTimeout(r, 300)); salygosNumatytieji(w); res(f);
     }, { once: true });
     f.src = m + (m.indexOf("?") < 0 ? "?" : "&") + "b=" + Date.now(); document.body.appendChild(f);
   });
@@ -7076,7 +7111,7 @@ async function testaiSutikimas(){
         await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = "../" + pg + "?saugykla=testine&b=" + Date.now(); document.body.appendChild(f); });
         try {
           const d = f.contentDocument, w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
-          klasikineJuosta(d); await d.fonts.ready; await lauk(250);
+          klasikineJuosta(d); await d.fonts.ready; await lauk(250); salygosNumatytieji(w);
           await fn(w, d); await lauk(400);
           const vis = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
           const vidus = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return [r.left + parseFloat(c.borderLeftWidth) + parseFloat(c.paddingLeft), r.right - parseFloat(c.borderRightWidth) - parseFloat(c.paddingRight)]; };
@@ -7140,7 +7175,7 @@ async function testaiSutikimas(){
         await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = pg + (pg.includes("?") ? "&" : "?saugykla=testine&") + "b=" + Date.now(); document.body.appendChild(f); });
         try {
           const d = f.contentDocument, w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
-          await d.fonts.ready; await lauk(250);
+          await d.fonts.ready; await lauk(250); salygosNumatytieji(w);
           const vis = el => { const r = el.getBoundingClientRect(), c = w.getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
           const savo = el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 1);
           const bs = w.getComputedStyle(d.body);
@@ -7216,7 +7251,7 @@ async function testaiSutikimas(){
         await new Promise(res => { f.addEventListener("load", res, { once: true }); f.src = pg + "?saugykla=testine&b=" + Date.now(); document.body.appendChild(f); });
         try {
           const d = f.contentDocument, w = f.contentWindow; w.alert = () => {}; w.confirm = () => false; w.prompt = () => null;
-          await d.fonts.ready; await lauk(250); await fn(w, d); await lauk(500);
+          await d.fonts.ready; await lauk(250); salygosNumatytieji(w); await fn(w, d); await lauk(500);
           const vardas = pg.split("/")[1] + " · " + pav + " · " + plotis + " px";
           const tikrink = kur => {
             const kiti = new Set();
