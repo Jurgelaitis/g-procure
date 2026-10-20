@@ -10928,6 +10928,117 @@ async function testaiDalys(){
   });
 }
 
+/* ---- 2 etapas D6 (2026-10-20): paraiškos ES lėšos ir projekto numeris - sutarties klausimų apie ES finansavimą siūloma reikšmė ---- */
+const D6_L = (es, nr, pav) => ({ es_lesos: es, projekto_nr: nr, projekto_pavadinimas: pav });
+async function testaiD6(){
+  dabartine = grupe("2 etapas D6 (2026-10-20): paraiškos ES lėšos ir projekto numeris - sutarties klausimams (siūloma reikšmė su DI žyme ir citata)");
+  // GP_PARAISKA ir GP_SUTARTIES_FORMA - dabartinio modulio rėmelio (po modulis() - naujo)
+  let P, F;
+  const Z = async k => (await (await W.fetch("zemelapiai/sutartys/" + k + ".json")).json());
+
+  await testas("Paraiškos skaitytuvas: taisyklė DI užklausoje, ES lėšos - tik „taip“ ar „ne“ su citata, projekto numeris - tik finansuojant ES lėšomis (iki 100 ženklų); mapFields grąžina es, informacinės eilutės pasako, kam", async () => {
+    await modulis(); P = W.GP_PARAISKA;
+    const sp = P.systemPrompt();
+    tiesa(/9\. es_lesos: "taip", jei korteleje aiskiai nurodyta/.test(sp) && /"projekto_nr": +\{"reiksme":"\.\.\.", "citata":"\.\.\."\}/.test(sp)
+      && /"projekto_pavadinimas": +\{"reiksme":"\.\.\.", "citata":"\.\.\."\}/.test(sp) && /projekto_pavadinimas - ES projekto\s+pavadinimas, jei nurodyti/.test(sp), "užklausos taisyklė ir schema");
+    lygu(P.esIsAtsakymo(D6_L({ reiksme: "taip", citata: " ES lėšos: Taip " }, { reiksme: " 02-001-K-0001 ", citata: "Projekto Nr. 02-001-K-0001" }, { reiksme: "Tinklo modernizavimas", citata: "Projektas: Tinklo modernizavimas" })),
+      { reiksme: "taip", citata: "ES lėšos: Taip", projektoNr: { reiksme: "02-001-K-0001", citata: "Projekto Nr. 02-001-K-0001" }, projektoPav: { reiksme: "Tinklo modernizavimas", citata: "Projektas: Tinklo modernizavimas" } }, "taip su numeriu ir pavadinimu");
+    lygu(P.esIsAtsakymo(D6_L({ reiksme: "ne", citata: "ES lėšos: Ne" }, { reiksme: "02-001" }, { reiksme: "X" })), { reiksme: "ne", citata: "ES lėšos: Ne", projektoNr: null, projektoPav: null }, "ne - be numerio ir pavadinimo");
+    lygu(P.esIsAtsakymo(D6_L({ reiksme: "taip", citata: "c" }, null, { reiksme: "x".repeat(301) })).projektoPav, null, "per ilgas pavadinimas");
+    lygu(P.esIsAtsakymo(D6_L({ reiksme: "taip", citata: "c" }, { reiksme: "x".repeat(101), citata: "c" })).projektoNr, null, "per ilgas numeris");
+    lygu(P.esIsAtsakymo(D6_L({ reiksme: "taip", citata: "c" }, { reiksme: "IP-1" })).projektoNr, { reiksme: "IP-1", citata: null }, "numeris be citatos");
+    [D6_L({ reiksme: "taip" }), D6_L({ reiksme: "taip", citata: "  " }), D6_L({ reiksme: "nenustatyta", citata: "x" }), D6_L({ reiksme: "gal", citata: "x" }), {}, null]
+      .forEach((x, i) => lygu(P.esIsAtsakymo(x), null, "netinkamas " + i));
+    const pr = P.parseResponse(JSON.stringify({ status: "ok", laukai: D6_L({ reiksme: "taip", citata: "Finansavimas: ES lėšos" }, { reiksme: "02-001", citata: "Projektas 02-001" }) }));
+    const m = P.mapFields(pr.laukai);
+    lygu(m.es, { reiksme: "taip", citata: "Finansavimas: ES lėšos", projektoNr: { reiksme: "02-001", citata: "Projektas 02-001" }, projektoPav: null }, "mapFields");
+    tiesa(m.info.some(i => i.laukas === "ES lėšos (sutarties projektui)" && i.reiksme === "taip") && m.info.some(i => i.laukas === "Projekto Nr. (sutarties projektui)"), "informacinės eilutės: " + JSON.stringify(m.info));
+    const blogas = P.mapFields(P.parseResponse(JSON.stringify({ status: "ok", laukai: D6_L({ reiksme: "galbūt", citata: "x" }) })).laukai);
+    tiesa(blogas.es === null && !blogas.info.some(i => /ES lėšos/.test(i.laukas)), "netinkama reikšmė - nenustatyta");
+  });
+
+  await testas("Sutarties forma visose šeimose su ES klausimu: paraiškos „taip“ - siūloma „Taip“ su DI žyme, citata ir projekto numeriu (prekės ir paslaugos), sprendimuose - tekstas; „ne“ - siūloma „Ne“; be paraiškos - klausiama kaip iki tol; paraiška pirmesnė už kitą dokumentą; žmogaus atsakymas neperrašomas", async () => {
+    await modulis(); F = W.GP_SUTARTIES_FORMA;
+    const taip = { reiksme: "taip", citata: "Finansavimo šaltinis: ES lėšos", projektoNr: { reiksme: "02-001-K-0001", citata: "Projekto Nr. 02-001-K-0001" },
+      projektoPav: { reiksme: "Elektros tinklo modernizavimas", citata: "Projektas: Elektros tinklo modernizavimas" }, failas: "Paraiska.pdf" };
+    const ctx = (c, es) => { W.eval("PZ_ES = " + JSON.stringify(es)); return Object.assign({}, c, { di: W.sutartiesDiAts() }); };
+    const SEIMOS = [["PREKES_LT_SS", SF_CTX, "es", SF_ATS], ["PASLAUGOS_LT_SS", Object.assign({}, SF_CTX, { seima: "PASLAUGOS" }), "es", SF_ATS],
+      ["PSR_LT_SS", PSR_CTX, "es_psr", PSR_A], ["SR_LT_SS", SR_CTX, "es_psr", SR_A], ["PPS_LT_SS", PPS_CTX, "pp_es", PPS_A]];
+    for (const [k, c0, id, A0] of SEIMOS){
+      const z = await Z(k);
+      let c = ctx(c0, taip), q = F.klausimai(z, c, {}).find(x => x.id === id);
+      tiesa(q && q.reiksme === "taip" && q.busena === "siuloma" && q.siuloma.di && q.siuloma.di.citata === taip.citata && q.siuloma.di.saltinis === "Paraiska.pdf", k + ": " + JSON.stringify(q && [q.reiksme, q.busena, q.siuloma]));
+      // siūloma reikšmė generuojant - tas pats, kaip žmogaus „Taip“ (ir projekto numeris)
+      const zm = Object.assign({ [id]: "taip" }, id === "es" ? { es_nr: "02-001-K-0001", es_pav: "Elektros tinklo modernizavimas" } : {});
+      const sDi = JSON.stringify(F.sprendimai(z, c, sfA(A0, { [id]: undefined, es_nr: undefined, es_pav: undefined })).S), sZm = JSON.stringify(F.sprendimai(z, ctx(c0, null), sfA(A0, zm)).S);
+      c = ctx(c0, taip);
+      tiesa(sDi === sZm && sDi !== JSON.stringify(F.sprendimai(z, ctx(c0, null), sfA(A0, { [id]: "ne" })).S), k + ": sprendimai kaip žmogaus „Taip“");
+      if (id === "es") tiesa(sDi.includes("02-001-K-0001") && sDi.includes("Elektros tinklo modernizavimas") && (q.laukai.find(l => l.id === "es_nr") || {}).reiksme === "02-001-K-0001"
+        && (q.laukai.find(l => l.id === "es_pav") || {}).reiksme === "Elektros tinklo modernizavimas", k + ": projekto numeris ir pavadinimas");
+      q = F.klausimai(z, ctx(c0, Object.assign({}, taip, { reiksme: "ne", projektoNr: null })), {}).find(x => x.id === id);
+      tiesa(q.reiksme === "ne" && q.busena === "siuloma" && (id !== "es" || !(q.laukai.find(l => l.id === "es_nr") || {}).reiksme), k + ": ne");
+      q = F.klausimai(z, ctx(c0, null), {}).find(x => x.id === id);
+      tiesa(q.reiksme == null && q.busena !== "siuloma", k + ": be paraiškos - klausiama: " + q.busena);
+      q = F.klausimai(z, ctx(c0, taip), sfA({ [id]: "ne" })).find(x => x.id === id);
+      tiesa(q.reiksme === "ne" && q.busena === "patvirtinta", k + ": žmogaus atsakymas");
+    }
+    // paraiška pirmesnė už kitą dokumentą (techninė specifikacija sako „ne“)
+    const senas = W.sfAiDi;
+    try {
+      W.sfAiDi = () => ({ es: { reiksme: "ne", saltinis: "TS.docx", vieta: "", citata: "Europos Sąjungos lėšomis nefinansuojama", laukai: {} },
+                          terminas: { reiksme: "3", saltinis: "TS.docx", vieta: "", citata: "per 3 mėnesius", laukai: {} } });
+      W.eval("PZ_ES = " + JSON.stringify(taip));
+      const di = W.sutartiesDiAts();
+      lygu([di.es.reiksme, di.es.saltinis, di.terminas.reiksme], ["taip", "Paraiska.pdf", "3"], "paraiška ir kiti dokumentai");
+    } finally { W.sfAiDi = senas; W.eval("PZ_ES = null"); }
+  });
+
+  await testas("Modulyje: paraiškos ES lėšos sutarties žingsnyje - siūloma su citata ir projekto numeriu, sutarties klausimas nebetrūksta, DI požymis; juodraštis išsaugo; „Grąžinti ankstesnes reikšmes“ ir paraiškos pašalinimas - nebėra", async () => {
+    await modulis(); P = W.GP_PARAISKA;
+    await jdPirkimas();
+    const map = (be) => W.GP_PARAISKA.mapFields(Object.assign({ nacionalinis_saugumas: { reiksme: "ne", citata: "Nacionaliniam saugumui svarbus: Ne" },
+      es_lesos: { reiksme: "taip", citata: "Finansavimo šaltinis: ES lėšos" }, projekto_nr: { reiksme: "02-001-K-0001", citata: "Projekto Nr. 02-001-K-0001" },
+      projekto_pavadinimas: { reiksme: "Elektros tinklo modernizavimas", citata: "Projektas: Elektros tinklo modernizavimas" } }, be ? { projekto_pavadinimas: null } : {}));
+    W.pzTaikyk(map(), "", "Paraiska_DocLogix.pdf");
+    W.rodyk("sutartis");
+    const kort = () => D.getElementById("sf-es");
+    await kol(() => kort() && kort().querySelector(".lk-kilme--di"), "ES klausimas su paraiškos reikšme", 15000);
+    const tx = kort().textContent.replace(/\s+/g, " ");
+    tiesa(/Siūloma: Taip - iš dokumento „Paraiska_DocLogix\.pdf“, pirkimo paraiška: Finansavimo šaltinis: ES lėšos/.test(tx) && kort().querySelector('[data-di="sugeneruota"]'), "kortelė: " + tx.slice(0, 400));
+    lygu([D.getElementById("sf-es_nr").value, D.getElementById("sf-es_pav").value], ["02-001-K-0001", "Elektros tinklo modernizavimas"], "projekto numeris ir pavadinimas");
+    let B = W.SUTARTIES_FORMA.busena();
+    tiesa(!B.truksta.some(x => /Europos Sąjungos/.test(x)) && B.di >= 1, "trūksta: " + JSON.stringify(B.truksta) + ", DI: " + B.di);
+    // paraiškoje be projekto pavadinimo - klausiama tik jo
+    W.pzTaikyk(map(true), "", "Paraiska_DocLogix.pdf");
+    await kol(() => D.getElementById("sf-es_pav") && !D.getElementById("sf-es_pav").value, "be pavadinimo", 10000);
+    B = W.SUTARTIES_FORMA.busena();
+    lygu(B.truksta.filter(x => /Europos Sąjungos/.test(x)), ["Ar pirkimas finansuojamas Europos Sąjungos lėšomis (3.3 punktas)? - Projekto pavadinimas"], "trūksta tik pavadinimo");
+    W.pzTaikyk(map(), "", "Paraiska_DocLogix.pdf");
+    tiesa(/ir sutarties klausimą apie ES lėšas/.test(D.getElementById("dkKontrolinis").textContent), "„Ką verta įkelti“");
+    // juodraštis
+    const J = W.surinkJuodrasti();
+    lygu([J.pz.es.reiksme, J.pz.es.projektoNr.reiksme, J.pz.es.failas], ["taip", "02-001-K-0001", "Paraiska_DocLogix.pdf"], "juodraštyje");
+    await modulis();
+    J.pz.es.reiksme = "<b>taip</b>"; await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(J)) });
+    lygu(W.eval("PZ_ES"), null, "suklastota reikšmė neatkuriama");
+    J.pz.es.reiksme = "taip";
+    await modulis(); await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(J)) });
+    lygu(W.eval("PZ_ES && PZ_ES.reiksme + '|' + PZ_ES.failas"), "taip|Paraiska_DocLogix.pdf", "atkurta");
+    // „Grąžinti ankstesnes reikšmes“ - ir paraiškos siūlymas sutarties klausimui dingsta
+    await modulis(); await jdPirkimas();
+    W.pzTaikyk(map(), "", "Paraiska_DocLogix.pdf");
+    W.rodyk("sutartis");
+    await kol(() => kort() && kort().querySelector(".lk-kilme--di"), "ES klausimas", 15000);
+    D.querySelector("[data-pz-grazinti]").click();
+    await kol(() => kort() && !kort().querySelector(".lk-kilme--di"), "po grąžinimo", 10000);
+    lygu(W.eval("PZ_ES"), null, "po grąžinimo");
+    // paraiškos pašalinimas
+    W.pzTaikyk(map(), "", "Paraiska_DocLogix.pdf");
+    W.dkSalink({ rusis: "paraiska", vardas: "Paraiska_DocLogix.pdf", raktas: "x" });
+    lygu(W.eval("PZ_ES"), null, "pašalinus paraišką");
+  });
+}
+
 /* ---- 2 etapas U4 (2026-10-20, naudotojo sprendimas S2): 2 žingsnis po vieną skyrių, „Rodyti visus klausimus“ - jungikliu ---- */
 const VISI_KL = "gprocure.salygos.visiKlausimai";
 const u4Psl = () => W.eval("PSL"), u4Dab = () => W.eval("SK_DABAR");
@@ -11449,6 +11560,7 @@ async function testaiEtapas1(){
     await testaiEtapas1();
     await testaiDalys();
     await testaiU4();
+    await testaiD6();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

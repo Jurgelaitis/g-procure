@@ -2493,6 +2493,7 @@ let DALYS_ZMOGAUS = false;          // grupę ar formų sąlygą atsakė žmogus
 let DALYS_RAKTAI = [];              // šablonų sąlygų („Jei Pirkimo objektas ...“) raktai
 var DALYS_ATK = [];                 // atkurto juodraščio dokumentų ištraukos: [{ vardas, ts, blokai }]
 var PZ_DALYS = null;                // DI iš paraiškos: { reiksme, skaicius, pavadinimai, citata, failas } (var - pzTaikyk ir juodraštis gali būti anksčiau)
+var PZ_ES = null;                   // DI iš paraiškos (D6): { reiksme: 'taip'|'ne', citata, projektoNr, failas } - sutarties klausimams apie ES lėšas
 function daliuDokumentai(){
   const be = new Set(['sps', 'bps', 'skelbimas', 'ebvpd']), out = [];        // pirkimo sąlygų šablonai ir skelbimas - ne šio pirkimo šaltinis
   const pridek = (vardas, blokai, rusis) => {
@@ -7448,6 +7449,8 @@ function pzTaikyk(map, pastabos, vardas){
   PZ_REZ = R;
   // pirkimo objekto dalys - 2 žingsnio klausimui siūlomas atsakymas (D1; GP_DALYS rodo kaip „Siūloma (nepatvirtinta)“)
   PZ_DALYS = map.dalys ? Object.assign({}, map.dalys, { failas: vardas || '' }) : null;
+  // ES lėšos ir projekto numeris - sutarties klausimams siūloma reikšmė su citata (2 etapas D6)
+  PZ_ES = map.es ? Object.assign({}, map.es, { failas: vardas || '' }) : null;
   pzRodyk(map, pastabos);
   if (window.__K) klausimynas();
 }
@@ -7493,7 +7496,9 @@ document.addEventListener('click', e => {
     gr.slice().reverse().forEach(pzGrazink);
     R.uzpildyta = R.uzpildyta.filter(x => !gr.some(g => g.id === x.id)); R.grazinti = R.grazinti.filter(x => !gr.includes(x));
     pzRodyk(PZ_MAP, R.pastabos);
-    if (PZ_DALYS){ PZ_DALYS = null; if (window.__K) klausimynas(); }      // ir paraiškos siūlymas dėl pirkimo objekto dalių (D1)
+    // ir paraiškos siūlymai dėl pirkimo objekto dalių (D1) ir ES lėšų sutarties klausimams (D6)
+    const buvoSiul = PZ_DALYS || PZ_ES; PZ_DALYS = null; PZ_ES = null;
+    if (buvoSiul && window.__K) klausimynas();       // sutarties forma atnaujinama klausimyne (ir atvėrus sutarties žingsnį)
     GP_BUSENA.rodyk('#pzBusena', { tipas: 'gerai', tekstas: `Grąžintos ankstesnės ${n} lauk${n === 1 ? 'o' : 'ų'} reikšmės - iš paraiškos neįrašyta nieko.` });
   } else {
     const k = R.konfliktai[+b.dataset.pzKonf];
@@ -8034,6 +8039,7 @@ async function dkPridek(files){
 function dkSalink(d, tyliai){
   DK.failai = DK.failai.filter(x => x !== d);
   if (PZ_DALYS && d.rusis === 'paraiska' && PZ_DALYS.failas === d.vardas) PZ_DALYS = null;    // paraiškos siūlymas dėl dalių (D1)
+  if (PZ_ES && d.rusis === 'paraiska' && PZ_ES.failas === d.vardas) PZ_ES = null;              // ir dėl ES lėšų (D6)
   AI.saltiniai = AI.saltiniai.filter(x => x.dk !== d.raktas);
   kvlSalinkFaila(d.vardas); zalSalinkFaila(d.vardas);
   if (!tyliai) dkPoPakeitimo();
@@ -8100,7 +8106,7 @@ function dkKontrolinisHTML(){
   const zl = F.filter(d => d.rusis === 'zalieji' || (d.rusis === 'kvalifikacija' && d.lent && d.lent.zaliuju.length));
   const zlN = zl.reduce((a, d) => a + (d.lent ? d.lent.zaliuju.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
   return `<p class="dk-ks-h" id="dkKsH">Ką verta įkelti</p><ul>`
-    + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą', parB)
+    + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą; ir sutarties klausimą apie ES lėšas', parB)
     + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata', '')
     + eil(kv, 'Kvalifikacijos reikalavimai', 'lentelė perkeliama į SPS 2 lentelę - šablono 2 lentelės klausimų nebelieka', kv.length ? (kvN ? 'perkeliama ' + reik(kvN) : 'lentelės nerasta') : '')
     + eil(zl, 'Žalieji reikalavimai', 'lentelė perkeliama į SPS 3 lentelę - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats', zl.length ? (zlN ? 'perkeliama ' + reik(zlN) : 'lentelės nerasta') : '')
@@ -8433,7 +8439,7 @@ function sutartiesKontekstas(){
            pavadinimas: pavClean(($('#pavadinimas').value || '').trim()), pavadinimasEN: (($('#pavadinimasEN') || {}).value || '').trim(),
            numeris: k.numeris || '', trukmeMen: k.trukmeMen || null, verte: verteEUR() || null,
            uztikrinimas: sutartiesUztikrinimas(), kriterijus: sutartiesKriterijus(), nacsaug: nacsaugTaip(), zaliejiSPS: spsZalieji(), tiesioginis: spsTiesioginis(),
-           socialiniaiSPS: spsSocialiniai(), di: sfAiDi() };
+           socialiniaiSPS: spsSocialiniai(), di: sutartiesDiAts() };
 }
 /* Šuoliai iš sutarties pastabų „Patikrinkite“ ir „Dėmesio“ (2026-10-16, naudotojo pastebėjimas: sunku suprasti, kurioje vietoje kas ne taip):
    sutarties klausimas - toje pačioje darbo srityje (sutarties-forma.js), SPS klausimas - 2 žingsnyje, nacionalinio saugumo - 1 žingsnyje.
@@ -8540,6 +8546,22 @@ function sfAiDi(){
   // silpna citata (tiesiogiai neįvardija klausimo dalyko) - nenaudojama: tikrame pakete taip pasiūlyta neteisinga apmokėjimo sąlyga (2026-10-18)
   SFAI.rez.forEach(s => { if (sfAiTinka(s)) o[s.d.raktas] = sfAiReiksme(s); });
   return o;
+}
+/* ctx.di su paraiškos duomenimis (2 etapas D6, 2026-10-20): ES lėšos ir projekto numeris iš paraiškos - sutarties klausimų apie ES finansavimą
+   (prekės ir paslaugos 3.3, projektavimo paslaugos 4.2, abi rangos sutartys) siūloma reikšmė su DI žyme ir citata, kaip iš kitų dokumentų;
+   paraiška pirmesnė už kitus dokumentus (finansavimo šaltinį nurodo iniciatorius). Patvirtina žmogus. */
+const PZ_ES_KLAUSIMAI = ['es', 'es_psr', 'pp_es'];
+function sutartiesDiAts(){
+  const o = Object.assign({}, sfAiDi() || {});
+  if (PZ_ES && (PZ_ES.reiksme === 'taip' || PZ_ES.reiksme === 'ne')){
+    const r = { reiksme: PZ_ES.reiksme, saltinis: PZ_ES.failas || 'pirkimo paraiška', vieta: 'pirkimo paraiška', citata: PZ_ES.citata, laukai: {} };
+    // prekių ir paslaugų 3.3 p. - ir projekto numeris bei pavadinimas (kai paraiškoje nurodyti)
+    const l = {};
+    if (PZ_ES.reiksme === 'taip' && PZ_ES.projektoNr) l.es_nr = PZ_ES.projektoNr.reiksme;
+    if (PZ_ES.reiksme === 'taip' && PZ_ES.projektoPav) l.es_pav = PZ_ES.projektoPav.reiksme;
+    PZ_ES_KLAUSIMAI.forEach(id => { o[id] = Object.assign({}, r, { laukai: l }); });   // laukai es_nr ir es_pav - tik prekių ir paslaugų klausime
+  }
+  return Object.keys(o).length ? o : null;
 }
 /* Analizės parašas: dokumentai, sutarties šablonas ir klausimų rinkinys (pasikeitus - analizuojama iš naujo) */
 const sfAiParasas = Q => aiSaltiniuParasas() + '#' + (window.SUTARTIES_FORMA.kodas() || '') + '#' + Q.map(q => q.raktas + ':' + q.rusis + ':' + (q.laukai || []).map(l => l.lid).join(',')).join('|');
@@ -8819,7 +8841,7 @@ function surinkJuodrasti(){
   const k = KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta();
   return {
     z1: z1Laukai(), kortele: k ? k.id : null,
-    pz: { zymes: [...PZ_ZYMES_T.entries()], ranka: [...PZ_RANKA], enDi: PAV_EN_DI, dalys: PZ_DALYS },
+    pz: { zymes: [...PZ_ZYMES_T.entries()], ranka: [...PZ_RANKA], enDi: PAV_EN_DI, dalys: PZ_DALYS, es: PZ_ES },
     sb: window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.juodrastis ? window.SUTARTIES_BLOKAS.juodrastis() : null,
     s2: window.__K ? JSON.parse(JSON.stringify({
       ATS, TOUCHED: [...TOUCHED], PATV: [...PATV], SIUL: [...SIUL.entries()], ZURNALAS, PRIEDU_PASIRINKIMAS, PRIEDU_TOUCHED: [...PRIEDU_TOUCHED],
@@ -8878,6 +8900,10 @@ async function atkurkJuodrasti(r){
   PZ_DALYS = window.GP_PARAISKA && GP_PARAISKA.dalysIsAtsakymo && (D.pz || {}).dalys ? Object.assign(GP_PARAISKA.dalysIsAtsakymo(D.pz.dalys),
     { failas: String(D.pz.dalys.failas || '').slice(0, 300) }) : null;
   if (PZ_DALYS && PZ_DALYS.reiksme === 'nenustatyta') PZ_DALYS = null;
+  const es = (D.pz || {}).es;      // ES lėšos iš paraiškos (D6) - tik žinomos reikšmės su citata
+  PZ_ES = window.GP_PARAISKA && GP_PARAISKA.esIsAtsakymo && es && typeof es === 'object'
+    ? GP_PARAISKA.esIsAtsakymo({ es_lesos: { reiksme: es.reiksme, citata: es.citata }, projekto_nr: es.projektoNr || null, projekto_pavadinimas: es.projektoPav || null }) : null;
+  if (PZ_ES) PZ_ES.failas = String(es.failas || '').slice(0, 300);
   DI_LEIDIMAS = D.di === 'taip' || D.di === 'ne' ? D.di : null;
   if (window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.atkurk) window.SUTARTIES_BLOKAS.atkurk(D.sb);
   const S2 = D.s2;
@@ -9161,7 +9187,7 @@ zingsniuBusena();
       // S1 (naudotojo sprendimas 2026-10-19): skiltyje - santrauka, išsamūs žingsniai ir pastaba - čia
       stepsTitle: "Kaip naudotis - išsamiai",
       steps: [
-      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
+      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Klausimai rodomi po vieną dokumento skyrių - „Toliau“ ir „Atgal“ veda per skyrius, turinys šoninėje juostoje - į bet kurį skyrių, paskutinis puslapis - „Prieš generuojant“ ir „Kas toliau?“; patyrusiems - jungiklis „Rodyti visus klausimus“ (pasirinkimas įsimenamas šioje naršyklėje, jei leidžiate nustatymų įsiminimą). Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje; abu be DI, perkėlimą patvirtinate jūs.",
       "<b>Sutarties projektas:</b> sutarties klausimai atskirame žingsnyje - galite juos atsakyti dabar arba vėliau. Ką atsako jūsų techninė specifikacija ar užduotis ir kiti įkelti dokumentai (terminai, objektas, pagrindiniai įrenginiai, garantiniai terminai, ES lėšos ir kt.), sutarties klausimuose įrašoma iš karto - su DI žyme, citata ir būsena „Siūloma (nepatvirtinta)“; jums lieka patikrinti ir patvirtinti. „Generuoti pirkimo sąlygas“ sugeneruoja sąlygas be sutarties (pakete ji pažymima „atidėta“, sąlygų tekstas nesikeičia), „Generuoti pirkimo sąlygas ir sutarties projektą“ - abu.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu. Pakeitus atsakymus po generavimo, rodoma „Reikia pergeneruoti“ ir kurie dokumentai paveikti.",

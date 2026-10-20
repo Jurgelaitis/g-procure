@@ -25,7 +25,7 @@
 (function (root) {
   "use strict";
 
-  var VERSION = "0.3";
+  var VERSION = "0.4";
   // Modelio cia NEnurodom: numatytasis gyvena VIENOJE vietoje -
   // shared/ai-proxy.js (DEFAULT_MODEL). Zr. CLAUDE.md 6 sk.
   var MAX_TOKENS = 2000;
@@ -248,6 +248,13 @@
       "   skaicius (sveikasis skaicius), pavadinimai - daliu pavadinimai kortele",
       "   eiles tvarka (jei nurodyti); kitaip \"nenustatyta\". Prekiu grupes,",
       "   sarasu eilutes ar objekto rusys NERA pirkimo dalys.",
+      "9. es_lesos: \"taip\", jei korteleje aiskiai nurodyta, kad pirkimas (sutartis)",
+      "   finansuojamas Europos Sajungos fondu ar programu lesomis (ES lesos, ES",
+      "   projektas, finansavimo saltinis - ES fondai); \"ne\", jei aiskiai nurodyta,",
+      "   kad ES lesomis nefinansuojamas (pvz. finansavimo saltinis - nuosavos",
+      "   lesos ir ES lesu laukas \"Ne\"); kitaip \"nenustatyta\". projekto_nr -",
+      "   ES projekto numeris ar kodas, projekto_pavadinimas - ES projekto",
+      "   pavadinimas, jei nurodyti (perrasyk tiksliai).",
       "",
       "JSON schema:",
       "{",
@@ -264,7 +271,8 @@
       "    \"dokumento_tipas\":          {\"reiksme\":\"...\"} | null,",
       "    \"dpa\":                      {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
       "    \"es_lesos\":                 {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
-      "    \"projekto_nr\":              {\"reiksme\":\"...\"} | null,",
+      "    \"projekto_nr\":              {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
+      "    \"projekto_pavadinimas\":     {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
       "    \"dalys\":                    {\"reiksme\":\"neskaidomas|skaidomas|nenustatyta\", \"skaicius\": <skaicius> | null, \"pavadinimai\": [\"...\"], \"citata\":\"...\"}",
       "  },",
       "  \"pastabos\": \"<trumpa pastaba, jei reikia>\"",
@@ -320,6 +328,18 @@
     var pav = (Array.isArray(x.pavadinimai) ? x.pavadinimai : []).filter(function (s) { return typeof s === "string" && s.trim(); })
       .slice(0, n).map(function (s) { return s.trim().slice(0, 200); });
     return { reiksme: "skaidomas", skaicius: n, pavadinimai: pav, citata: x.citata.trim() };
+  }
+
+  /* ES lėšos (2026-10-20, tobulinimo planas D6): tik „taip“ arba „ne“ su citata, kitaip - nenustatyta (null). Projekto numeris - tik
+     finansuojant ES lėšomis (numeris iki 100, pavadinimas iki 300 ženklų). PP-salygos sutarties klausimams apie ES finansavimą tai siūloma reikšmė su DI žyme ir citata. */
+  function esIsAtsakymo(L) {
+    var x = L && L.es_lesos;
+    if (!x || typeof x !== "object" || (x.reiksme !== "taip" && x.reiksme !== "ne") || typeof x.citata !== "string" || !x.citata.trim()) return null;
+    var lauk = function (p, ilgis) {
+      if (x.reiksme !== "taip" || !p || typeof p !== "object" || typeof p.reiksme !== "string" || !p.reiksme.trim() || p.reiksme.trim().length > ilgis) return null;
+      return { reiksme: p.reiksme.trim(), citata: typeof p.citata === "string" && p.citata.trim() ? p.citata.trim() : null };
+    };
+    return { reiksme: x.reiksme, citata: x.citata.trim(), projektoNr: lauk(L.projekto_nr, 100), projektoPav: lauk(L.projekto_pavadinimas, 300) };
   }
 
   /* ==== 4. DETERMINISTINIS ZEMELAPIS I MODULIO LAUKUS ===================== */
@@ -399,13 +419,16 @@
 
     // Pirkimo objekto dalys - 2 žingsnio klausimui (siūlomas atsakymas, ne 1 žingsnio laukas)
     out.dalys = L.dalys && L.dalys.reiksme !== "nenustatyta" ? L.dalys : null;
+    // ES lėšos ir projekto numeris - sutarties klausimams (D6, siūloma reikšmė su citata)
+    out.es = esIsAtsakymo(L);
     if (out.dalys) out.info.push({ laukas: "Pirkimo objekto dalys (2 žingsnis)",
       reiksme: out.dalys.reiksme === "neskaidomas" ? "neskaidomas" : "skaidomas į " + out.dalys.skaicius + " dalis" });
 
     // Informaciniai laukai - pp-salygos ju neklausia, bet rengejui naudinga.
     [["registracijos_nr", "Registracijos Nr."], ["dokumento_tipas", "Dokumento tipas"],
-     ["projekto_nr", "Projekto Nr."], ["dpa", "Asmens duomenų tvarkymo sutartis (DPA)"],
-     ["es_lesos", "ES lėšos"]].forEach(function (p) {
+     ["projekto_nr", out.es && out.es.projektoNr ? "Projekto Nr. (sutarties projektui)" : "Projekto Nr."],
+     ["projekto_pavadinimas", out.es && out.es.projektoPav ? "Projekto pavadinimas (sutarties projektui)" : "Projekto pavadinimas"], ["dpa", "Asmens duomenų tvarkymo sutartis (DPA)"],
+     ["es_lesos", out.es ? "ES lėšos (sutarties projektui)" : "ES lėšos"]].forEach(function (p) {
       var k = p[0], label = p[1];
       if (L[k] && L[k].reiksme && L[k].reiksme !== "nenustatyta")
         out.info.push({ laukas: label, reiksme: L[k].reiksme });
@@ -451,6 +474,7 @@
     parseResponse: parseResponse,
     mapFields: mapFields,
     dalysIsAtsakymo: dalysIsAtsakymo,
+    esIsAtsakymo: esIsAtsakymo,
     verteIsTeksto: verteIsTeksto,
     systemPrompt: systemPrompt,
     userText: userText
