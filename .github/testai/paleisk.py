@@ -24,7 +24,8 @@ RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
 # mažiau nei minutė, o likę pažymimi „nepaleista“ (iki 2026-09-28: 15 x 900 s; keli užstrigę rinkiniai nutraukdavo darbą be santraukos).
 # Vienam rinkiniui - 900 s (2026-10-14): PP-salygos (315 testų) GitHub Actions trunka beveik 600 s ir viename paleidime ribą viršijo
 # (vietoje - ~190 s); užstrigusius rinkinius vis tiek nutraukia bendra riba VISO_LAIKAS
-LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "900"))
+# 1300 s (2026-10-20): PP-salygos (458 testai, vietoje ~380 s) GitHub Actions viršijo 900 s; visas darbas buvo ~1500 s iš 2400
+LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "1300"))
 VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2400"))
 
 
