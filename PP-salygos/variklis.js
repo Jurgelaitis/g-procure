@@ -3020,7 +3020,64 @@ const GPLent = (() => {
     });
     return st;
   }
-  return { sutvarkyti, etiketesEilute, trumpa, bePusjuodzio, modelis, eilutesIvertis, parastesL, NUSTATYMAI, LYGIAVIMAS_ETIKETESE, LYGIAVIMAS_LENTELESE,
+  /* Antraščių ir poraščių lentelės (2026-10-20, naudotojo sprendimas): be fiksuoto išdėstymo ar platesnę už teksto plotį lentelę Word ir Pages
+     išdėsto skirtingai (LITGRID BPS antraštė - 12279 DXA, teksto plotis 9780, išlenda už lapo krašto). Lentelė gauna fiksuotą išdėstymą,
+     tblW = tblGrid suma ir langelių pločius; per plati - siaurinamas TUŠČIAS paskutinis stulpelis (logotipas pirmame stulpelyje lieka toje
+     pačioje vietoje), o jei jame yra turinio - visi stulpeliai proporcingai. Tekstas ir lentelės turinys nekeičiami; įdėtinės lentelės ir
+     teksto laukai - neliečiami. Teksto plotis - dokumento pagrindinio skyriaus (paskutinio sectPr). */
+  async function antrastes(doc){
+    const st = { lenteliu: 0, siaurinta: 0, fixed: 0, dalys: [] };
+    const D = doc.parts['word/document.xml'], body = D && D.getElementsByTagNameNS(W, 'body')[0];
+    if (!body || !doc.zip || !doc.zip.files) return st;
+    const sps = Array.from(body.getElementsByTagNameNS(W, 'sectPr')), sp = sps[sps.length - 1];
+    const tw = (+att(kid(sp, 'pgSz'), 'w') || 0) - (+att(kid(sp, 'pgMar'), 'left') || 0) - (+att(kid(sp, 'pgMar'), 'right') || 0);
+    if (!(tw > 0)) return st;
+    const keliai = Object.keys(doc.zip.files).filter(n => /^word\/(header|footer)\d*\.xml$/.test(n)).sort();
+    for (const kelias of keliai){
+      const h = doc.parts[kelias] || new DOMParser().parseFromString(await doc.zip.file(kelias).async('string'), 'application/xml');
+      let keista = false;
+      Array.from(h.getElementsByTagNameNS(W, 'tbl')).forEach(tbl => {
+        for (let u = tbl.parentNode; u; u = u.parentNode) if (u.localName === 'tc' || u.localName === 'txbxContent') return;
+        const tblPr = kid(tbl, 'tblPr'), grid = kid(tbl, 'tblGrid');
+        if (!tblPr || !grid) return;
+        const cols = kids(grid, 'gridCol');
+        let gc = cols.map(g => +att(g, 'w') || 0);
+        if (!gc.length || !gc.every(x => x > 0)) return;
+        st.lenteliu++;
+        const suma = gc.reduce((a, b) => a + b, 0), ind = Math.max(0, +att(kid(tblPr, 'tblInd'), 'w') || 0), riba = tw - ind;
+        if (att(kid(tblPr, 'tblLayout'), 'type') === 'fixed' && suma <= riba + 5) return;
+        if (suma > riba + 5){
+          const li = gc.length - 1, per = suma - riba;
+          const tuscias = tc => !tekstas(tc).trim() && !tc.getElementsByTagNameNS(W, 'drawing').length && !tc.getElementsByTagNameNS(W, 'pict').length && !tc.getElementsByTagNameNS(W, 'tbl').length;
+          const paskutinisTuscias = kids(tbl, 'tr').every(tr => {
+            let gi = +att(kid(kid(tr, 'trPr'), 'gridBefore'), 'val') || 0;
+            return kids(tr, 'tc').every(tc => { const span = +att(kid(kid(tc, 'tcPr'), 'gridSpan'), 'val') || 1, siekia = gi + span - 1 >= li; gi += span; return !siekia || tuscias(tc); });
+          });
+          if (paskutinisTuscias && gc[li] - per >= 200) gc[li] -= per;
+          else { const k = riba / suma; gc = gc.map(x => Math.max(1, Math.floor(x * k))); gc[li] += riba - gc.reduce((a, b) => a + b, 0); }
+          cols.forEach((g, i) => nustatyk(g, 'w', gc[i]));
+          st.siaurinta++;
+        }
+        const viso = gc.reduce((a, b) => a + b, 0);
+        const tW = vaikas(tblPr, 'tblW', TBLPR); nustatyk(tW, 'w', viso); nustatyk(tW, 'type', 'dxa');
+        const lay = vaikas(tblPr, 'tblLayout', TBLPR);
+        if (att(lay, 'type') !== 'fixed'){ nustatyk(lay, 'type', 'fixed'); st.fixed++; }
+        kids(tbl, 'tr').forEach(tr => {
+          let gi = +att(kid(kid(tr, 'trPr'), 'gridBefore'), 'val') || 0;
+          kids(tr, 'tc').forEach(tc => {
+            const tcPr = savybes(tc, 'tcPr', []), span = +att(kid(tcPr, 'gridSpan'), 'val') || 1;
+            if (gi + span <= gc.length){ const tcW = vaikas(tcPr, 'tcW', TCPR); nustatyk(tcW, 'w', gc.slice(gi, gi + span).reduce((a, b) => a + b, 0)); nustatyk(tcW, 'type', 'dxa'); }
+            gi += span;
+          });
+        });
+        keista = true;
+        st.dalys.push({ dalis: kelias.replace(/^word\//, ''), buvo: suma, tapo: viso });
+      });
+      if (keista) doc.parts[kelias] = h;
+    }
+    return st;
+  }
+  return { sutvarkyti, antrastes, etiketesEilute, trumpa, bePusjuodzio, modelis, eilutesIvertis, parastesL, NUSTATYMAI, LYGIAVIMAS_ETIKETESE, LYGIAVIMAS_LENTELESE,
            PUSJUODIS_ETIKETESE, BE_PUSJUODZIO, CANTSPLIT_RIBA, SKAIDYTI_NUO, DALIES_AUKSTIS };
 })();
 

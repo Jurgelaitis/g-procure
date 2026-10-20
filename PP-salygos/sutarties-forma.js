@@ -1482,6 +1482,8 @@
   }
   /* Sutarties pavadinimas (naudotojo sprendimas 2026-10-12): „{pirkimo pavadinimas} pirkimo sutartis“ - „Tvoros remonto pirkimo sutartis“
      (2026-10-11 - „... pirkimas“, iki tol - „... pirkimo-pardavimo sutartis“). Pirkimo pavadinimas kitose vietose (3.2 p., įžanga) - „... pirkimas“. */
+  // Antraštė didžiosiomis - matavimo vienetai lieka kaip parašyti („110 kV“; laukai.js, 2026-10-20)
+  function didziosiomis(t){ return global.GP_LAUKAI && global.GP_LAUKAI.antrasteDidziosiomis ? global.GP_LAUKAI.antrasteDidziosiomis(t) : String(t || '').toLocaleUpperCase('lt'); }
   function sutartiesPav(pav){ pav = String(pav || "").trim(); return pav ? pav + " pirkimo sutartis" : ""; }
   function uzsakovoRekvizitai(){ return global.GP_ORG && global.GP_ORG.rekvizitai ? global.GP_ORG.rekvizitai("litgrid") : null; }
   /* Kas įrašoma be klausimo - 2 žingsnio sąrašui „Įrašoma automatiškai“ (reikšmė ir jos kilmė; nieko tylaus) */
@@ -1492,7 +1494,7 @@
     var kn = kainaProjekte(R), knYra = !!(kn && !kn.klaida);
     var pirk = pav ? pav + " pirkimas" : "";
     if (DM(ctx)) {
-      out.push({ kas: "Sutarties pavadinimas (antraštė)", reiksme: sutartiesPav(pav).toUpperCase(), kilme: "pirkimo pavadinimas (1 žingsnis)", truksta: pav ? "" : "pirkimo pavadinimo" });
+      out.push({ kas: "Sutarties pavadinimas (antraštė)", reiksme: didziosiomis(sutartiesPav(pav)), kilme: "pirkimo pavadinimas (1 žingsnis)", truksta: pav ? "" : "pirkimo pavadinimo" });
       out.push({ kas: "Pirkimo pavadinimas ir numeris (sutarties įžanga)", reiksme: pav ? pav + " pirkimą" + (nr ? " (pirkimo Nr. " + nr + ")" : sud ? " (" + SUD_NR + ")" : "") : "",
                  kilme: "1 žingsnis" + (nrKilme ? "; numeris - " + nrKilme : ""), truksta: !pav ? "pirkimo pavadinimo" : !nr && !sud ? "pirkimo numerio" : "" });
       out.push({ kas: "Užsakovo rekvizitai (sutarties įžanga ir lentelė prieš parašus)",
@@ -1661,7 +1663,7 @@
     // atsakingi asmenys, Rangovo rekvizitai, pasirašantys asmenys
     V.filter(function (x) { return x.rusis === "pildoma" || x.rusis === "valdiklis"; }).forEach(function (x) { nust(x, { palikti: "sudarant" }); });
     // Žinoma iš pirkimo: sutarties pavadinimas (= pirkimo pavadinimas), pirkimo pavadinimas ir numeris, Užsakovo rekvizitai
-    irasyk(pild("", /^\[PERKAMI DARBAI\]$/), sutartiesPav(pav).toUpperCase());
+    irasyk(pild("", /^\[PERKAMI DARBAI\]$/), didziosiomis(sutartiesPav(pav)));
     irasyk(pild("", /^\[pirkimo pavadinimas\]$/), pav);
     nust(pild("", /^\[numeris\]$/), numerioSprendimas(ctx, R));
     var rek = uzsakovoRekvizitai(), reg = dmRegistras(Z);
