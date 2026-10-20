@@ -321,9 +321,16 @@
   // Sutartyje „SUTARTIES“ yra beveik kiekvienoje antraštėje - jautrios tik kaina, užtikrinimas, netesybos, nacionalinis saugumas, sankcijos
   var SVARBUS_SUTARTIES = /(KAIN|UŽTIKRINIM|NETESYB|NACIONALIN|SANKCIJ)/;
   function skyriai(ps) { var cur = "", out = []; ps.forEach(function (x) { if (x.antraste && !x.toc) cur = x.t.replace(/\s\d{1,3}$/, ""); out.push(cur); }); return out; }
+  /* SPS priedų numeriai nuorodose („SPS 7 priedą“, „SPS priede Nr. 7“, „Annex 7 to the SPC“) - PP-salygos generuojant pernumeruoja likusius
+     priedus (2026-10-20, D4 b), todėl vien jų pasikeitimas - techninis, ne nukrypimas nuo formos */
+  function beSpsPriedoNr(s) {
+    return String(s).replace(/(SPS\s*)\d+(?=\s*pried)/g, "$1#").replace(/(SPS\s+pried\S*\s+Nr\.\s*)\d+/g, "$1#")
+      .replace(/(Annex\s+(?:No\.\s*)?)\d+(?=\s+(?:to|of)\s+(?:the\s+)?SPC)/g, "$1#");
+  }
   function techninis(a, b) {
     if (TURINIO_EILUTE.test(a) || TURINIO_EILUTE.test(b)) return "turinys";
     a = beNr(a); b = beNr(b);
+    if (a !== b && beSpsPriedoNr(a) === beSpsPriedoNr(b)) return "priedo_numeris";
     if (a.replace(/\d/g, "#") === b.replace(/\d/g, "#")) return "numeracija";
     var PRIED = /^(\d+ (priedas|priedėlis)|annex \d+|appendix \d+)/;
     if (PRIED.test(norm(a)) && PRIED.test(norm(b))) return "priedu_sarasas";
@@ -593,5 +600,5 @@
   global.GP_PALYGINIMAS = { version: "1.0", NS_PASAS: NS_PASAS, norm: norm, maisa: maisa, pastraipos: pastraipos, skaityk: skaityk,
     formosMaisa: formosMaisa, pasoXml: pasoXml, skaitykPasa: skaitykPasa, sulygink: sulygink, zodziai: zodziai, panasumas: panasumas,
     neprivalomos: neprivalomos, lygink: lygink, pagalPasa: pagalPasa, atpazink: atpazink, identifikuok: identifikuok,
-    kitosVersijos: kitosVersijos, raktas: raktas };
+    kitosVersijos: kitosVersijos, raktas: raktas, techninis: techninis };
 })(typeof window !== "undefined" ? window : this);
