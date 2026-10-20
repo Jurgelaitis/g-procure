@@ -407,6 +407,7 @@ def taisymas_tekstas(taisyk):
     viso += _uztikrinimo_sakinys(taisyk)
     viso += _spc_nuorodos(taisyk)
     viso += _tarpas_priede(taisyk)
+    viso += _tarpas_antrasteje(taisyk)
     return viso
 
 
@@ -850,6 +851,21 @@ def _tarpas_priede(taisyk):
     print("\nTARPAS PRIEŠ „PRIEDE“ (Y, 2026-10-20):")
     n = _su_zemelapiais(_be_raudono(_TARPAS_PRIEDE, _Y_RAUDONI), None, 'tarpas prieš „priede“', taisyk)
     for t in _Y_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# Z. Tarpas formos antraštėje (2026-10-20, rado naujo darbuotojo patikra; redakcinė korekcija - naudotojo leidimas 2026-10-05): DPS konkretaus
+#    pirkimo LT pasiūlymo formos antraštė „Konkretaus pirkimo sąlygų1 priedas „Pasiūlymo forma““ - be tarpo prieš numerį (DPS sąlygų priedų
+#    sąraše - „1 priedas – Pasiūlymo forma;“, numeris teisingas). Įterpiamas tarpas; numeris ir raudonas tekstas nekeičiami.
+_TARPAS_ANTRASTEJE = [(_re.compile(r'Konkretaus pirkimo sąlygų()1 priedas „Pasiūlymo forma“'), ' ', 1)]
+_Z_RAUDONI = []
+
+
+def _tarpas_antrasteje(taisyk):
+    print("\nTARPAS FORMOS ANTRAŠTĖJE (Z, 2026-10-20):")
+    n = _su_zemelapiais(_be_raudono(_TARPAS_ANTRASTEJE, _Z_RAUDONI), None, 'tarpas formos antraštėje', taisyk)
+    for t in _Z_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 
