@@ -844,15 +844,16 @@
       <div class="dk-ks" id="dkKontrolinis" role="group" aria-labelledby="dkKsH"></div>
       <div class="pz" id="dkZona" role="button" tabindex="0" aria-describedby="dkPaaiskinimas">
         Įtempkite arba <b>pasirinkite</b> jau turimus dokumentus: pirkimo paraišką (DocLogix), techninę specifikaciją,
-        kvalifikacijos ir aplinkosaugos (žaliuosius) reikalavimus, sutarties projektą ar jo priedus - PDF, DOCX, ODT, TXT, paraišką ir JPG, PNG.
+        kvalifikacijos ir aplinkosaugos (žaliuosius) reikalavimus, sutarties projektą ar jo priedus - PDF (ir skenuotus), DOCX, ODT, TXT, paraišką ir JPG, PNG.
         <input type="file" id="dkFailai" multiple accept=".pdf,.docx,.odt,.txt,.md,.jpg,.jpeg,.png,application/pdf,image/*" hidden>
       </div>
       <div class="cite" id="dkPaaiskinimas">Dokumentai perskaitomi jūsų naršyklėje: kvalifikacijos ir žaliųjų reikalavimų lentelės perkeliamos į
         pirkimo sąlygų lenteles be DI (2 žingsnyje šių klausimų nebeklausiama). Įkėlus pirmą dokumentą, kurį gali skaityti DI (paraišką, techninę
-        specifikaciją), paklausime, ar leidžiate DI juos skaityti laukams užpildyti; be jūsų leidimo į DI automatiškai nesiunčiama nieko. Jei pirkimo objektas susijęs su nacionaliniu saugumu, pirma atsakykite „Taip“ į
+        specifikaciją, skenuotą dokumentą be teksto), paklausime, ar leidžiate DI juos skaityti laukams užpildyti; be jūsų leidimo į DI automatiškai nesiunčiama nieko. Jei pirkimo objektas susijęs su nacionaliniu saugumu, pirma atsakykite „Taip“ į
         <a href="#q-nacsaug">klausimą apie nacionalinį saugumą</a> - tada į DI automatiškai nesiunčiama niekas, tik jums paspaudus mygtuką.</div>
       <div id="dkDiLeidimas"></div>
       <div id="dkBusena" hidden></div>
+      <div id="dkSkenBusena" hidden></div>
       <div id="dkSarasas" class="dk-sarasas"></div>
       <div id="pzBusena" hidden></div>
       <div id="pzRez" style="display:none"></div>
@@ -1200,6 +1201,7 @@
 <script src="sutarties-forma.js"></script>   <!-- sutarties klausimai (žingsnis „Sutarties projektas“) ir sprendimai generatoriui (S4, 2026-10-08) -->
 <script src="juodrastis.js"></script>   <!-- pirkimo sąlygų juodraštis šioje naršyklėje: automatinis išsaugojimas, tęsimas, failas (2026-10-15) -->
 <script src="paraiska-extract.js"></script>
+<script src="skenuoti.js"></script>
 <!-- AI atsakymu pasiulymai 2 zingsnyje (A5): dokumentu tekstas - bendras su PP-tiekejams -->
 <script src="../shared/dokumentai.js"></script>
 <script src="../shared/pdf-darbininkas.js"></script>
@@ -2273,7 +2275,10 @@ function kvlTerminas(Z, sr){
   }
   return /^DPSK/.test(Z.seima || '') ? 'paraiska' : null;    // DPS sukūrimas: tiekėjai teikia paraiškas (LT formos tekste - ir „Pasiūlymą“)
 }
-const kvlKilme = (M, kv) => `iš įkelto dokumento „${M.failas}“ (${(kv && kv.lent && kv.lent.pav) || 'SPS 2 lentelė'})`;
+const kvlKilme = (M, kv) => `iš įkelto dokumento „${M.failas}“ (${(kv && kv.lent && kv.lent.pav) || 'SPS 2 lentelė'})${M.di ? ', tekstą atpažino DI iš skenuoto dokumento' : ''}`;
+/* Lentelė iš skenuoto dokumento (D5): tekstą atpažino DI - žymima ir prašoma palyginti su originalu */
+const kvlDiHTML = M => M && M.di ? `<p class="lk-dal lk-dal--isp" data-di="sugeneruota" data-kvl-di>${GP_DI.zyme({ tekstas: 'DI atpažintas tekstas' })} Lentelės tekstą DI (Claude) atpažino iš skenuoto dokumento „${esc(M.failas)}“ - jame gali būti klaidų. Palyginkite kiekvieną eilutę su originalu ir tik tada patvirtinkite; formatavimo (pusjuodžio, kursyvo, pabraukimo) nėra.</p>` : '';
+const kvlSkaitoma = M => M && M.di ? 'Šios lentelės tekstą DI atpažino iš skenuoto dokumento (jums leidus failas buvo siųstas per G-Procure serverį į Claude API); toliau lentelė tvarkoma jūsų naršyklėje.' : 'Dokumentas skaitomas tik jūsų naršyklėje - niekur nesiunčiamas, DI nenaudojamas.';
 /* Vieno failo reikalavimų lentelės: DOCX - su formatavimu, PDF (nuo 2026-10-18) - tekstas pagal teksto sluoksnio geometriją.
    Grąžina { lenteles, zaliuju, ispejimai } (kvalifikacijos ir žaliųjų lentelės - atskirai) arba meta klaidą. */
 const KVL_TINKA = /\.(docx|pdf)$/i;
@@ -2401,7 +2406,7 @@ function zalSritis(Z){
   const nr = Number((/^(\d+)/.exec(t(h)) || [])[1]) || 3;
   return { nuo: h, iki, nr, pav: `SPS ${nr} lentelė`, pavKa: `SPS ${nr} lentelę`, pavKur: `SPS ${nr} lentelėje` };
 }
-const zalKilme = M => `iš įkelto dokumento „${M.failas}“ (žaliųjų reikalavimų lentelė)`;
+const zalKilme = M => `iš įkelto dokumento „${M.failas}“ (žaliųjų reikalavimų lentelė)${M.di ? ', tekstą atpažino DI iš skenuoto dokumento' : ''}`;
 /* Ar žaliųjų klausimą atsako įkeltas dokumentas (kontrolinisAtsakymas). */
 function zalAtsakymas(t){
   if (!ZAL_AUTO.has(t) || !zalModelis()) return null;
@@ -2497,13 +2502,13 @@ var PZ_DALYS = null;                // DI iš paraiškos: { reiksme, skaicius, p
 var PZ_ES = null;                   // DI iš paraiškos (D6): { reiksme: 'taip'|'ne', citata, projektoNr, failas } - sutarties klausimams apie ES lėšas
 function daliuDokumentai(){
   const be = new Set(['sps', 'bps', 'skelbimas', 'ebvpd']), out = [];        // pirkimo sąlygų šablonai ir skelbimas - ne šio pirkimo šaltinis
-  const pridek = (vardas, blokai, rusis) => {
+  const pridek = (vardas, blokai, rusis, di) => {
     if (!blokai || !blokai.length) return;
     let v = 'kita';
     try { v = GP_PARENGTIS.vaidmuo({ name: vardas, blocks: blokai }); } catch (e) { v = 'kita'; }
-    if (!be.has(v)) out.push({ vardas, blokai, ts: rusis === 'ts' || v === 'ts' });
+    if (!be.has(v)) out.push(Object.assign({ vardas, blokai, ts: rusis === 'ts' || v === 'ts' }, di ? { di: true } : {}));
   };
-  DK.failai.forEach(d => pridek(d.vardas, d.blokai, d.rusis));
+  DK.failai.forEach(d => pridek(d.vardas, d.blokai, d.rusis, d.di));
   AI.saltiniai.filter(x => !x.dk).forEach(x => pridek(x.vardas, x.blokai, null));
   // atkurto juodraščio dokumentų ištraukos (failai nesaugomi) - kol to paties vardo failas neįkeltas iš naujo
   DALYS_ATK.forEach(x => { if (!out.some(o => o.vardas === x.vardas)) out.push(x); });
@@ -4103,7 +4108,8 @@ const AUTO_MET_KILME = 'pagal vertinimo metodiką';
 var MET_ATK = null;                 // atkurto juodraščio metodikos analizė: { failas, kodas, pavadinimas, citata, kodel, kriterijai, suma, problemos }
 async function metAnalizuok(d){
   try {
-    const el = /\.docx$/i.test(d.vardas) && d.failas ? await GP_METODIKA.skaityk(await d.failas.arrayBuffer()) : GP_METODIKA.isBloku(d.blokai);
+    const el = d.skenXml ? GP_METODIKA.skaitykXml(d.skenXml)            // skenuotas - DI atpažintas tekstas (D5)
+      : /\.docx$/i.test(d.vardas) && d.failas ? await GP_METODIKA.skaityk(await d.failas.arrayBuffer()) : GP_METODIKA.isBloku(d.blokai);
     d.met = GP_METODIKA.analizuok(el);
   } catch (e){
     d.met = { kriterijai: [], suma: null, kodas: null, pavadinimas: '', citata: '', kodel: '', problemos: ['metodikos perskaityti nepavyko (' + GP_BUSENA.klaidosTekstas(e) + ')'] };
@@ -4118,17 +4124,17 @@ function metIstrauka(m){
     .map(q => ({ nr: Number.isInteger(q.nr) ? q.nr : 0, pavadinimas: s(q.pavadinimas, 200), svoris: typeof q.svoris === 'number' && isFinite(q.svoris) ? q.svoris : null }));
   const failas = s(m.failas, 300);
   if (!failas || (!kodas && !kriterijai.length)) return null;
-  return { failas, kodas, pavadinimas: kodas ? GP_METODIKA.KODAI[kodas] : '', citata: s(m.citata, 300), kodel: s(m.kodel, 120), kriterijai,
+  return { failas, kodas, pavadinimas: kodas ? GP_METODIKA.KODAI[kodas] : '', citata: s(m.citata, 300), kodel: s(m.kodel, 120), kriterijai, ...(m.di === true ? { di: true } : {}),
            suma: typeof m.suma === 'number' && isFinite(m.suma) ? m.suma : null,
            problemos: (Array.isArray(m.problemos) ? m.problemos : []).filter(x => typeof x === 'string').slice(0, 10).map(x => x.slice(0, 300)) };
 }
 /* Dabartinė metodika: paskutinė įkelta (su failu) arba atkurta iš juodraščio (be failo) */
 function metodikosRez(){
   const d = DK.failai.filter(x => x.rusis === 'metodika' && x.met).pop();
-  if (d) return Object.assign({}, d.met, { failas: d.vardas, dok: d });
+  if (d) return Object.assign({}, d.met, { failas: d.vardas, dok: d, di: !!d.di });
   return MET_ATK ? Object.assign({}, MET_ATK, { dok: null }) : null;
 }
-const metKilme = m => `${AUTO_MET_KILME} „${m.failas}“, ${m.kodel}: „${trumpaCitata(m.citata)}“`;
+const metKilme = m => `${AUTO_MET_KILME} „${m.failas}“${m.di ? ' (tekstą atpažino DI - patikrinkite)' : ''}, ${m.kodel}: „${trumpaCitata(m.citata)}“`;
 /* Kriterijaus pavadinimas vardininku (sąsajos tekstams; 8.1 p. sakinyje - galininku, KRITERIJU_PAV) */
 const kritVard = kod => (window.GP_METODIKA && GP_METODIKA.KODAI[kod]) || KRITERIJU_PAV[kod] || kod || '';
 /* Kito įkelto dokumento (techninės specifikacijos) sakinys apie vertinimo kriterijų - tik siūlymui; pirkimo sąlygos ir skelbimas - ne šaltinis */
@@ -4149,7 +4155,7 @@ function kriterijausSiulyk(key, k, v){
   const m = window.GP_METODIKA ? metodikosRez() : null;
   if (m && tinka(m.kodas)){
     siulyk(key, k, m.kodas, metKilme(m));
-    const x = SIUL.get(r); if (x){ x.metodika = true; x.isDok = false; }
+    const x = SIUL.get(r); if (x){ x.metodika = !m.di; x.isDok = !!m.di; }     // DI atpažintas tekstas (D5) - tik siūloma
     return;
   }
   const t = window.GP_METODIKA ? dokKriterijus() : null;
@@ -4166,7 +4172,7 @@ function dpsKainosSiulyk(raktas){
   const key = 'KR_' + raktas, m = window.GP_METODIKA ? metodikosRez() : null;
   if (m && m.kodas){
     siulyk(key, null, m.kodas === 'kaina', metKilme(m));
-    const x = SIUL.get(key); if (x) x.metodika = true;
+    const x = SIUL.get(key); if (x){ x.metodika = !m.di; x.isDok = !!m.di; }
     return;
   }
   const x = SIUL.get(key);
@@ -4580,7 +4586,7 @@ function kvlHTML(K, c, klase, kur){
   const lt = q.lent || { pav: 'SPS 2 lentelė', pavKur: 'SPS 2 lentelėje', pavKa: 'SPS 2 lentelę', grupes: true, neVisa: true };
   const spec37 = !!q.spec;
   const pa = paaiskinimas({ vieta: kur,
-    kas: `Kvalifikacijos reikalavimai perkeliami iš jūsų dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) į ${lt.pavKa}: tekstas pažodžiui (iš Word - ir su pusjuodžiu, kursyvu ir pabraukimu; iš PDF - tik tekstas), eilučių tvarka kaip dokumente, numeriai iš eilės per visas grupes. ${lt.grupes ? 'Šablono tuščios eilutės ir grupės be reikalavimų pašalinamos.' : 'Formos tuščios eilutės pašalinamos; LITGRID formoje grupių antraščių nėra - jos įrašomos taip pat kaip SPS 2 lentelėje.'} Dokumentas skaitomas tik jūsų naršyklėje - niekur nesiunčiamas, DI nenaudojamas.`,
+    kas: `Kvalifikacijos reikalavimai perkeliami iš jūsų dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) į ${lt.pavKa}: tekstas pažodžiui (iš Word - ir su pusjuodžiu, kursyvu ir pabraukimu; iš PDF - tik tekstas), eilučių tvarka kaip dokumente, numeriai iš eilės per visas grupes. ${lt.grupes ? 'Šablono tuščios eilutės ir grupės be reikalavimų pašalinamos.' : 'Formos tuščios eilutės pašalinamos; LITGRID formoje grupių antraščių nėra - jos įrašomos taip pat kaip SPS 2 lentelėje.'} ${kvlSkaitoma(M)}`,
     pastaba: `Grupę (kai jūsų dokumente grupių antraščių nėra)${spec37 ? ' ir ar eilutė yra specialisto reikalavimas (SPS 3.7 p.)' : ''} modulis tik siūlo pagal žodžius tekste - patikrinkite ir prireikus pakeiskite.` });
   const ikelti = `<button type="button" class="sec" data-kvl="ikelti">${M ? 'Įkelti kitą dokumentą' : 'Įkelti kvalifikacijos reikalavimus (DOCX, PDF)'}</button>`;
   const klaida = KVL.klaida ? `<div class="kvl-klaida" role="alert">${esc(KVL.klaida)}</div>` : '';
@@ -4653,7 +4659,7 @@ function kvlHTML(K, c, klase, kur){
     <p class="lk-uz" id="${c.id}-uz">Iš „${esc(M.failas)}“ į ${esc(lt.pavKa)} perkeliam${E.length === 1 ? 'as 1 reikalavimas' : `i ${E.length} reikalavimai`} -
       tekstas pažodžiui, tvarka kaip jūsų dokumente, numeriai 1-${E.length}. ${lt.priedas ? 'Formos tuščios eilutės pašalinamos.' : 'Šablono eilutės „Tiekėjas turi teisę ...“ ir „PATEIKIAMOS ...“ nebeklausiamos.'}
       Patikrinkite grupes${spec37 ? ' ir specialistų reikalavimus' : ''}, tada patvirtinkite.</p>
-    ${kitos}${klaida}
+    ${kvlDiHTML(M)}${kitos}${klaida}
     <div class="kvl-lent" role="group" aria-label="Taip bus ${esc(lt.pavKur)}">${eil}</div>
     <ul class="kvl-info">
       ${spec37 ? `<li>SPS 3.7 punkte siūloma: ${spec.length ? `„SPS 2 lentelės <b>${esc(L.punktai(spec, 'ir'))}</b> punktų reikalavimams“ ir „<b>${esc(L.punktai(spec, 'ir/ar'))}</b> punktui“ - patvirtinkite lauke „Ką įrašyti vietoj „X“?“ žemiau.`
@@ -4674,7 +4680,7 @@ function kvlHTML(K, c, klase, kur){
 function zalHTML(K, c, klase, kur){
   const q = c.q, M = q.M, L = GP_KVAL_LENTELE, lt = q.lent;
   const pa = paaiskinimas({ vieta: kur,
-    kas: `Žalieji reikalavimai perkeliami iš jūsų dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) į ${lt.pavKa}: šablono eilutė (ISO 14001 / EMAS) pakeičiama jūsų eilutėmis - tekstas pažodžiui, tvarka kaip dokumente, numeriai 1-N. Klausimas „Kur nustatomi žalieji reikalavimai?“ tada atsakomas pats - „nurodomi pirkimo sąlygose“. Dokumentas skaitomas tik jūsų naršyklėje - niekur nesiunčiamas, DI nenaudojamas.`,
+    kas: `Žalieji reikalavimai perkeliami iš jūsų dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) į ${lt.pavKa}: šablono eilutė (ISO 14001 / EMAS) pakeičiama jūsų eilutėmis - tekstas pažodžiui, tvarka kaip dokumente, numeriai 1-N. Klausimas „Kur nustatomi žalieji reikalavimai?“ tada atsakomas pats - „nurodomi pirkimo sąlygose“. ${kvlSkaitoma(M)}`,
     pastaba: 'Kas turi atitikti žaliuosius reikalavimus (tiekėjas, tiekėjų grupės narys, ūkio subjektai), atsakote atskirame klausime - iš dokumento jis neatsakomas.' });
   const galva = kortelesGalva(c, `Žalieji reikalavimai (${lt.pav})`, pa);
   const ikelti = `<button type="button" class="sec" data-zal="ikelti">Įkelti kitą dokumentą</button>`;
@@ -4701,7 +4707,7 @@ function zalHTML(K, c, klase, kur){
   return `<section class="${klase} kvl" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${galva}
     <p class="lk-uz" id="${c.id}-uz">Iš „${esc(M.failas)}“ į ${esc(lt.pavKa)} perkeliam${M.eilutes.length === 1 ? 'as 1 reikalavimas' : `i ${M.eilutes.length} reikalavimai`} -
       tekstas pažodžiui, tvarka kaip jūsų dokumente. Patikrinkite tekstą, tada patvirtinkite.</p>
-    ${kitos}
+    ${kvlDiHTML(M)}${kitos}
     <div class="kvl-lent" role="group" aria-label="Taip bus ${esc(lt.pavKur)}">${eil}</div>
     <ul class="kvl-info">
       <li>Klausimas „Kur nustatomi žalieji reikalavimai?“ atsakytas: <b>nurodomi pirkimo sąlygose</b> (${esc(lt.pav)} paliekama) - matoma skiltyje „Išspręsta automatiškai“.</li>
@@ -7993,7 +7999,7 @@ const aiSaltiniuParasas = () => aiNaudojami().map(s => s.sha + ':' + s.simboliai
 
 function aiRodykSaltinius(){
   $('#aiSaltiniai').innerHTML = AI.saltiniai.map(s => `<div class="ai-sal"><span class="v"><b>${esc(s.vardas)}</b>
-      <span class="k">${s.dk ? 'įkelta 1 žingsnyje · ' : ''}${s.simboliai ? s.simboliai.toLocaleString('lt-LT') + ' simb. teksto' : 'teksto nerasta - nebus siunčiamas'}${
+      <span class="k">${s.dk ? 'įkelta 1 žingsnyje · ' : ''}${s.di ? 'tekstą atpažino DI iš skenuoto dokumento · ' : ''}${s.simboliai ? s.simboliai.toLocaleString('lt-LT') + ' simb. teksto' : 'teksto nerasta - nebus siunčiamas'}${
         s.ispejimai.length ? ' · ' + esc(s.ispejimai.join(' ')) : ''}</span></span>
       <button type="button" class="sec" data-ai-salinti="${s.raktas}" aria-label="Pašalinti ${esc(s.vardas)}">Pašalinti</button></div>`).join('');
   const nd = aiNaudojami();
@@ -8122,10 +8128,14 @@ function diPozymiuSavybes(){
   // EN pavadinimas: DI pasiūlymas lieka DI tekstu ir patvirtinus (✓ nuima tik žymę „nepatvirtinta“) - kol lauke DI pasiūlyta reikšmė
   const enDi = PZ_ZYMES.has('pavadinimasEN') || (PAV_EN_DI && (($('#pavadinimasEN') || {}).value || '').trim() === PAV_EN_DI);
   const v = [...SIUL.values()].filter(x => x && /^(DI|AI) vertimas - patikrinkite$/.test(x.saltinis)).length + (enDi ? 1 : 0) + lv;   // „AI ...“ - iki 2026-10-17 išsaugoti juodraščiai
-  if (!n && !v) return null;
-  return GP_DI.savybes({ modulis: 'Pirkimo sąlygos', turinys: lv ? 'Priimti DI pasiūlymai ir vertimai (sąlygų tekstas - iš šablonų, kvalifikacijos reikalavimų lentelės angliškas tekstas - DI vertimas)'
-    : 'Priimti DI pasiūlymai (sąlygų tekstas - iš šablonų)',
-    papildomai: [{ name: 'DI_pasiulymu_priimta', value: n }, { name: 'DI_vertimu', value: v }] });
+  // perkeltos kvalifikacijos ir žaliųjų reikalavimų lentelės, kurių tekstą DI atpažino iš skenuoto dokumento (2 etapas D5)
+  const at = [kvlModelis(), zalModelis()].filter(M => M && M.di).length;
+  if (!n && !v && !at) return null;
+  const sud = ['sąlygų tekstas - iš šablonų'];
+  if (lv) sud.push('kvalifikacijos reikalavimų lentelės angliškas tekstas - DI vertimas');
+  if (at) sud.push('perkeltų reikalavimų lentelių tekstą DI atpažino iš skenuoto dokumento');
+  return GP_DI.savybes({ modulis: 'Pirkimo sąlygos', turinys: (lv ? 'Priimti DI pasiūlymai ir vertimai' : n || v ? 'Priimti DI pasiūlymai' : 'DI atpažintas tekstas') + ' (' + sud.join(', ') + ')',
+    papildomai: [{ name: 'DI_pasiulymu_priimta', value: n }, { name: 'DI_vertimu', value: v }].concat(at ? [{ name: 'DI_atpazintu_lenteliu', value: at }] : []) });
 }
 function aiPriimtuSantrauka(){
   const p = [...AI.siulymai.values()].filter(s => s.busena === 'priimta' && aiSutampa(s, s.priimtaReiksme));
@@ -8191,6 +8201,64 @@ function dkParaiskaAiski(d){
   const pr = norm((d.blokai || []).slice(0, 40).map(b => b.text).join(' '));
   return DK_PARAISKOS_POZYMIAI.test(pr) || (!d.simboliai && /parai?sk/.test(norm(d.vardas)));
 }
+/* Skenuoti dokumentai (2 etapas D5, 2026-10-20; naujų darbuotojų testavimas: skenuota techninė specifikacija ar kvalifikacijos reikalavimai -
+   tik įspėjimas). PDF be teksto sluoksnio ar nuotrauka, kurios rūšis ne paraiška: tekstą perskaito DI (skenuoti.js) - pagal naudotojo
+   sprendimą su tuo pačiu leidimu „Leisti DI skaityti šio pirkimo dokumentus?“ (atsakius „Taip“ - iškart įkėlus; nacionalinio saugumo
+   pirkime ir atsakius „Ne“ - tik mygtuku). Atpažintas tekstas skaitomas tais pačiais skaitytuvais kaip Word failas (lentelės į SPS 2 ir 3,
+   metodika, pirkimo objekto dalys, sutarties klausimai), bet tai DI išvestis: sąraše ir kortelėse žymima, lentelių perkėlimą patvirtina
+   žmogus, metodikos kriterijus ir dalys - tik siūlomi (ne „Įrašoma automatiškai“), Word faile - DI požymiai. Vienu metu - vienas dokumentas. */
+const DK_SKENUOJAMAS = /\.(pdf|jpe?g|png)$/i;
+const dkSkenuotas = d => d.rusis !== 'paraiska' && DK_SKENUOJAMAS.test(d.vardas) && !d.simboliai && !d.di;
+let DK_SKEN_P = Promise.resolve();
+function dkSkenuok(d){
+  if (!window.GP_SKENUOTI || !DK.failai.includes(d) || !dkSkenuotas(d) || d.sken === 'laukia' || d.sken === 'vyksta') return DK_SKEN_P;
+  d.sken = 'laukia'; d.sulaikyta = null;
+  dkRodyk();
+  return DK_SKEN_P = DK_SKEN_P.then(() => dkSkenVienas(d)).catch(() => {});
+}
+async function dkSkenVienas(d){
+  if (d.sken !== 'laukia') return;
+  if (!DK.failai.includes(d) || !dkSkenuotas(d)){ d.sken = null; return; }          // pašalintas ar pakeista rūšis (paraiška)
+  d.sken = 'vyksta'; dkRodyk();
+  const r = await GP_BUSENA.vykdyk('#dkSkenBusena', { tipas: 'ai', atsaukiama: true,
+    tekstas: `Ruošiamas skenuotas dokumentas „${d.vardas}“`, klaidosPriesdelis: `Skenuoto dokumento „${d.vardas}“ perskaityti nepavyko`,
+    atsauktaTekstas: `Skenuoto dokumento „${d.vardas}“ skaitymas atšauktas - paleisti galite mygtuku prie dokumento.`,
+    sekme: () => `DI perskaitė skenuotą dokumentą „${d.vardas}“ - patikrinkite, kas iš jo perkelta.`,
+    kartoti: () => dkSkenuok(d),
+    veiksmas: (signal, h) => GP_SKENUOTI.perskaityk(d.failas, { signal, onParuosta: () => h.atnaujink(`DI skaito skenuotą dokumentą „${d.vardas}“ - tai gali užtrukti iki minutės`) }) });
+  if (!DK.failai.includes(d)) return;
+  if (!r.ok){ d.sken = r.atsaukta ? 'atsaukta' : 'nepavyko'; dkRodyk(); return; }
+  await dkSkenTaikyk(d, r.reiksme);
+  dkPoPakeitimo();
+}
+/* DI atpažintas tekstas -> tas pats dokumento įrašas kaip įkėlus Word failą (blokai, lentelės, rūšis, metodika) */
+async function dkSkenTaikyk(d, res){
+  Object.assign(d, { blokai: res.blokai, simboliai: GP_PATAREJAS.simboliai([{ blokai: res.blokai }]), di: true, sken: 'atlikta',
+    skenPastabos: res.pastabos || '', skenXml: res.xml, lent: null, lentKlaida: '' });
+  try {
+    d.lent = await GP_KVAL_LENTELE.skaityk(res.docx, d.vardas);
+    [...(d.lent.lenteles || []), ...(d.lent.zaliuju || [])].forEach(M => { M.di = true; });
+  } catch (e){ d.lentKlaida = GP_BUSENA.klaidosTekstas(e); }
+  if (d.rusis === d.auto) d.rusis = d.auto = dkRusis(d);        // žmogaus pasirinkta rūšis nekeičiama
+  if (d.rusis === 'metodika') await metAnalizuok(d);
+  dkTaikyk(d);
+  if (dkParaiskaAiski(d) && diAutomatiskai() && !d.analize) dkAnalizuok(d);
+}
+/* Kas vyksta su dar neperskaitytu skenuotu dokumentu - sąrašo eilutės */
+function dkSkenPoveikis(d){
+  const siunt = 'Failas siunčiamas per G-Procure serverį į Claude API; nei naršyklėje, nei serveryje jis nesaugomas.';
+  const ka = 'Teksto nerasta - tikėtina, skenuotas dokumentas. Jo tekstą (lenteles ir sakinius) gali perskaityti DI - tada lentelės perkeliamos, o tekstas naudojamas kaip Word failo.';
+  if (!window.GP_SKENUOTI) return [{ k: 'isp', t: 'Teksto nerasta (tikėtina, skenuotas dokumentas) - lentelių perkelti ir DI pasiūlymams naudoti negalima. Įkelkite Word failą ar PDF su tekstu.' }];
+  if (d.sken === 'vyksta') return [{ k: 'info', t: 'DI skaito skenuoto dokumento tekstą - eiga ir „Atšaukti“ - virš sąrašo. ' + siunt }];
+  if (d.sken === 'laukia') return [{ k: 'info', t: 'Laukia eilėje - DI skaito kitą skenuotą dokumentą.' }];
+  if (d.sken === 'nepavyko') return [{ k: 'isp', t: 'Skenuoto dokumento perskaityti nepavyko - priežastis virš sąrašo. Galite bandyti dar kartą arba įkelti Word failą ar PDF su tekstu.' }];
+  if (d.sken === 'atsaukta') return [{ k: 'info', t: 'Skaitymą atšaukėte. ' + ka + ' Paleisti galite mygtuku. ' + siunt }];
+  if (nacsaugTaip()) return [{ k: 'isp', t: ka + ' Pirkimo objektas susijęs su nacionaliniu saugumu (1 žingsnis), todėl į DI automatiškai nesiunčiama. Jei dokumente nėra įslaptintos ar riboto naudojimo informacijos, spauskite mygtuką. ' + siunt }];
+  if (d.sulaikyta === 'nacsaug') return [{ k: 'isp', t: ka + ' Dokumentas įkeltas, kai buvo atsakyta, kad pirkimo objektas susijęs su nacionaliniu saugumu, todėl į DI neišsiųstas. Jei norite, spauskite mygtuką. ' + siunt }];
+  if (DI_LEIDIMAS == null) return [{ k: 'info', t: ka + ' Atsakius „Taip“ į klausimą „Leisti DI skaityti šio pirkimo dokumentus?“ (aukščiau), dokumentas bus perskaitytas iškart; galite ir paspausti mygtuką. ' + siunt }];
+  if (DI_LEIDIMAS === 'ne') return [{ k: 'info', t: ka + ' Pasirinkote, kad DI automatiškai neskaitytų šio pirkimo dokumentų - jei norite, spauskite mygtuką. ' + siunt }];
+  return [{ k: 'info', t: ka + ' ' + siunt }];
+}
 /* Leidimas DI skaityti šio pirkimo dokumentus (2026-10-19, naudotojo sprendimas): klausiama vieną kartą pirkimui, kai įkeliamas pirmas
    dokumentas, kurį DI galėtų skaityti (paraiška PDF ar paveikslėliu, dokumentas su tekstu - 1 žingsnyje, pirkimo sąlygų ar sutarties žingsnyje).
    „Taip“ - aiški paraiška siunčiama iškart (ir jau įkelta), sutarties klausimams skirti dokumentai - automatiškai; „Ne“ - automatiškai
@@ -8201,14 +8269,14 @@ var DI_LEIDIMAS = null;
 const diAutomatiskai = () => DI_LEIDIMAS === 'taip' && !nacsaugTaip();
 function diYraKaSiusti(){
   // 1 žingsnio dokumentai su tekstu (ne paraiška) jau yra DI šaltinių sąraše (AI.saltiniai)
-  return DK.failai.some(d => d.rusis === 'paraiska' && DK_PARAISKAI.test(d.vardas)) || AI.saltiniai.some(s => s.simboliai > 0);
+  return DK.failai.some(d => d.rusis === 'paraiska' && DK_PARAISKAI.test(d.vardas)) || AI.saltiniai.some(s => s.simboliai > 0) || DK.failai.some(dkSkenuotas);
 }
 function diLeidimoHTML(vieta){
   if (nacsaugTaip() || !diYraKaSiusti()) return '';
   if (DI_LEIDIMAS == null) return `<div class="di-leid" role="group" aria-labelledby="diLeid-${vieta}" data-di-leid-klausimas>
       <div class="di-leid-k" id="diLeid-${vieta}">Leisti DI skaityti šio pirkimo dokumentus (paraišką, techninę specifikaciją), kad užpildytų laukus?</div>
       <div class="cite" id="diLeidP-${vieta}">„Taip“ - įkelta paraiška ir kitų dokumentų tekstas (ne lentelės, kurios perkeliamos be DI) siunčiami per G-Procure
-        serverį į Claude API, kai jų reikia laukams užpildyti: paraiška - iškart, 1 žingsnio laukams; kiti dokumentai - sutarties klausimams, kai
+        serverį į Claude API, kai jų reikia laukams užpildyti: paraiška - iškart, 1 žingsnio laukams; skenuotas dokumentas be teksto - iškart, kad DI perskaitytų jo tekstą; kiti dokumentai - sutarties klausimams, kai
         rengiamas sutarties projektas. Nei naršyklėje, nei serveryje jie nesaugomi; numatoma vertė iš 1 žingsnio nesiunčiama. „Ne“ -
         automatiškai nesiunčiama nieko, DI galėsite paleisti mygtukais. Atsakymas galioja šiam pirkimui. Nesiųskite įslaptintos informacijos.</div>
       <div class="actions"><button type="button" data-di-leidimas="taip" aria-describedby="diLeid-${vieta} diLeidP-${vieta}">Taip</button>
@@ -8235,6 +8303,8 @@ function diAtsakyk(v, is){
   if (diAutomatiskai()){
     const par = DK.failai.filter(d => dkParaiskaAiski(d) && !d.analize).pop();
     if (par) dkAnalizuok(par);
+    // skenuoti dokumentai (D5) - dar neperskaityti ir neįkelti nacionalinio saugumo pirkime
+    DK.failai.filter(d => dkSkenuotas(d) && !d.sken && d.sulaikyta !== 'nacsaug').forEach(dkSkenuok);
   }
 }
 document.addEventListener('click', e => {
@@ -8277,7 +8347,7 @@ function dkTaikyk(d){
   else { kvlSalinkFaila(d.vardas); zalSalinkFaila(d.vardas); }
   const ai = d.rusis !== 'paraiska' && d.simboliai > 0;
   const buvo = AI.saltiniai.findIndex(x => x.dk === d.raktas);
-  if (ai && buvo < 0) AI.saltiniai.push({ raktas: ++AI.n, vardas: d.vardas, sha: d.sha, blokai: d.blokai, simboliai: d.simboliai, ispejimai: d.ispejimai, dk: d.raktas });
+  if (ai && buvo < 0) AI.saltiniai.push({ raktas: ++AI.n, vardas: d.vardas, sha: d.sha, blokai: d.blokai, simboliai: d.simboliai, ispejimai: d.ispejimai, dk: d.raktas, di: !!d.di });
   if (!ai && buvo >= 0) AI.saltiniai.splice(buvo, 1);
 }
 async function dkPridek(files){
@@ -8320,6 +8390,12 @@ async function dkPridek(files){
   // tik leidus DI skaityti šio pirkimo dokumentus ir ne nacionalinio saugumo pirkime (2026-10-19, naudotojo sprendimai); kitaip - laukia
   // atsakymo ar mygtuko (įkelta pažymėjus nacionalinį saugumą - ir pakeitus atsakymą į „Ne“ pati neišsiunčiama)
   if (par){ if (diAutomatiskai()) await dkAnalizuok(par); else par.sulaikyta = nacsaugTaip() ? 'nacsaug' : 'leidimas'; }
+  // skenuoti dokumentai (D5): tekstą DI perskaito tik leidus ir ne nacionalinio saugumo pirkime; kitaip - mygtukas prie dokumento
+  const sken = DK.failai.filter(d => geri.includes(d.failas) && dkSkenuotas(d));
+  if (sken.length){
+    if (diAutomatiskai()) await Promise.all(sken.map(dkSkenuok));
+    else { sken.forEach(d => { d.sulaikyta = nacsaugTaip() ? 'nacsaug' : 'leidimas'; }); dkRodyk(); }
+  }
 }
 /* Pašalinti dokumentą visur: sąrašas, DI šaltiniai, perkeltos lentelės. */
 function dkSalink(d, tyliai){
@@ -8355,11 +8431,11 @@ function dkPoveikis(d){
     out.push({ k: 'info', t: 'Į 2 žingsnio DI pasiūlymų šaltinius neįtraukiama - paraiškoje yra numatoma vertė.' });
   }
   if (d.rusis === 'kvalifikacija'){
-    if (kv.length) kv.forEach(M => out.push({ k: 'ok', t: `Kvalifikacijos reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>SPS 2 lentelę</b> be DI - 2 žingsnyje šablono 2 lentelės laukų nebeklausiama; perkėlimą patvirtinsite kortelėje „Kvalifikacijos reikalavimai“.` }));
+    if (kv.length) kv.forEach(M => out.push({ k: 'ok', t: `Kvalifikacijos reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>SPS 2 lentelę</b> ${d.di ? '(tekstą atpažino DI)' : 'be DI'} - 2 žingsnyje šablono 2 lentelės laukų nebeklausiama; perkėlimą patvirtinsite kortelėje „Kvalifikacijos reikalavimai“.` }));
     else out.push({ k: 'info', t: 'Kvalifikacijos reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome - SPS 2 lentelę pildysite 2 žingsnyje.' });
   }
   if (d.rusis === 'kvalifikacija' || d.rusis === 'zalieji'){
-    if (zl.length) zl.forEach(M => out.push({ k: 'ok', t: `Žaliųjų reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>SPS 3 lentelę</b> be DI - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas: nurodomi pirkimo sąlygose.` }));
+    if (zl.length) zl.forEach(M => out.push({ k: 'ok', t: `Žaliųjų reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>SPS 3 lentelę</b> ${d.di ? '(tekstą atpažino DI)' : 'be DI'} - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas: nurodomi pirkimo sąlygose.` }));
     else if (d.rusis === 'zalieji') out.push({ k: 'info', t: 'Žaliųjų reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome - kur nustatomi žalieji reikalavimai, atsakysite 2 žingsnyje.' });
     if ((kv.length || zl.length) && /\.pdf$/i.test(d.vardas)) out.push({ k: 'info', t: 'Iš PDF perkeliamas tik tekstas - pusjuodžio, kursyvo ir pabraukimo PDF faile nėra. Jei jų reikia, įkelkite Word failą.' });
   }
@@ -8367,17 +8443,20 @@ function dkPoveikis(d){
     const m = d.met;
     if (!m) out.push({ k: 'info', t: 'Metodika skaitoma...' });
     else {
-      if (m.kodas) out.push({ k: 'ok', t: `Vertinimo kriterijus SPS 8.1 punkte įrašomas be klausimo - <b>${esc(kritVard(m.kodas))}</b> (${esc(m.kodel)}): ${esc(trumpaCitata(m.citata))}. Pakeisti galima 2 žingsnyje („Keisti“).` });
+      if (m.kodas) out.push(d.di ? { k: 'info', t: `Vertinimo kriterijus SPS 8.1 punkte siūlomas - <b>${esc(kritVard(m.kodas))}</b> (${esc(m.kodel)}): ${esc(trumpaCitata(m.citata))}. Tekstą atpažino DI, todėl kriterijų patvirtinsite 2 žingsnyje.` }
+        : { k: 'ok', t: `Vertinimo kriterijus SPS 8.1 punkte įrašomas be klausimo - <b>${esc(kritVard(m.kodas))}</b> (${esc(m.kodel)}): ${esc(trumpaCitata(m.citata))}. Pakeisti galima 2 žingsnyje („Keisti“).` });
       if (m.kriterijai.length) out.push({ k: m.suma === 100 ? 'ok' : 'isp', t: `Kriterijai ir lyginamieji svoriai (${m.kriterijai.length}): ${m.kriterijai.map(q => esc(q.pavadinimas) + (q.svoris != null ? ' - ' + esc(String(q.svoris).replace('.', ',')) : ' - svorio neradome')).join('; ')}${m.suma != null ? `; suma ${esc(String(m.suma).replace('.', ','))}` : ''}.` });
       m.problemos.forEach(x => out.push({ k: 'isp', t: 'Patikrinkite: ' + esc(x) + '.' }));
-      out.push({ k: 'info', t: 'Failas įdedamas į paketą be pakeitimų kaip SPS priedas „Ekonomiškai naudingiausio pasiūlymo vertinimo metodika“ - numeris pagal SPS priedų sąrašą (DPS konkretaus pirkimo sąlygose - vietoj šablono priedo). Be DI, failas niekur nesiunčiamas.' });
+      out.push({ k: 'info', t: 'Failas įdedamas į paketą be pakeitimų kaip SPS priedas „Ekonomiškai naudingiausio pasiūlymo vertinimo metodika“ - numeris pagal SPS priedų sąrašą (DPS konkretaus pirkimo sąlygose - vietoj šablono priedo). ' + (d.di ? 'Kriterijai ir svoriai nustatyti iš DI atpažinto teksto.' : 'Be DI, failas niekur nesiunčiamas.') });
     }
   }
   if (d.rusis === 'priedas') out.push({ k: 'info', t: 'Sutarties priedas - modulis jo nekeičia; pridėkite jį prie sutarties projekto kaip yra.' });
   if (d.rusis === 'kita' && d.auto === 'kita') out.push({ k: 'isp', t: 'Dokumento rūšies neatpažinome - pasirinkite ją lauke „Kas tai per dokumentas?“: nuo rūšies priklauso, kas iš dokumento padaroma.' });
   if (d.rusis !== 'paraiska'){
+    if (d.di) out.push({ k: 'isp', di: true, t: `${GP_DI.zyme({ tekstas: 'DI atpažintas tekstas' })} Tekstą DI (Claude) atpažino iš skenuoto dokumento - jame gali būti klaidų, formatavimo nėra. Prieš patvirtindami perkeltas lenteles ir siūlomas reikšmes, palyginkite jas su originalu.${d.skenPastabos ? ' DI pastaba: ' + esc(d.skenPastabos) : ''}` });
     if (d.simboliai > 0) out.push({ k: 'info', t: `Tekstas (${d.simboliai.toLocaleString('lt-LT')} simb.) - sutarties klausimams užpildyti (kai rengiamas sutarties projektas, ${diAutomatiskai() ? 'siunčiamas DI automatiškai - jūs leidote' : nacsaugTaip() ? 'dėl nacionalinio saugumo - tik paspaudus mygtuką' : DI_LEIDIMAS === 'ne' ? 'tik paspaudus mygtuką - pasirinkote „Ne“' : 'siunčiamas DI, jei leisite skaityti dokumentus'}) ir 2 žingsnio DI atsakymų pasiūlymams (tik paspaudus „Gauti pasiūlymus“).` });
-    else if (!DK_PAVEIKSLAS.test(d.vardas)) out.push({ k: 'isp', t: 'Teksto nerasta (tikėtina, skenuotas dokumentas) - lentelių perkelti ir DI pasiūlymams naudoti negalima. Įkelkite Word failą ar PDF su tekstu.' });
+    else if (DK_SKENUOJAMAS.test(d.vardas)) out.push(...dkSkenPoveikis(d));
+    else out.push({ k: 'isp', t: 'Teksto nerasta (tikėtina, skenuotas dokumentas) - lentelių perkelti ir DI pasiūlymams naudoti negalima. Įkelkite Word failą ar PDF su tekstu.' });
   }
   if (d.lentKlaida) out.push({ k: 'isp', t: 'Lentelių perskaityti nepavyko: ' + esc(d.lentKlaida) });
   (d.ispejimai || []).forEach(x => out.push({ k: 'isp', t: esc(x) }));
@@ -8429,8 +8508,9 @@ function dkRodyk(){
           .filter(([k]) => k !== 'paraiska' || DK_PARAISKAI.test(d.vardas) || d.rusis === 'paraiska')
           .map(([k, t]) => `<option value="${k}"${k === d.rusis ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></span>
         <button type="button" class="sec" data-dk-salinti="${d.raktas}" aria-label="Pašalinti ${esc(d.vardas)}">Pašalinti</button></div>
-      <ul class="dk-p">${pov.map(x => `<li class="dk-${x.k}">${x.t}</li>`).join('')}</ul>
+      <ul class="dk-p">${pov.map(x => `<li class="dk-${x.k}"${x.di ? ' data-di="sugeneruota"' : ''}>${x.t}</li>`).join('')}</ul>
       ${par && d.analize !== 'vyksta' ? `<div class="dk-ve"><button type="button" class="${d.analize === 'atlikta' ? 'sec ' : ''}lk-ai" data-dk-paraiska="${d.raktas}">${d.analize === 'atlikta' || d.analize === 'nepavyko' ? 'Analizuoti iš naujo (DI)' : 'Užpildyti laukus iš paraiškos (DI)'}</button></div>` : ''}
+      ${window.GP_SKENUOTI && dkSkenuotas(d) && d.sken !== 'vyksta' && d.sken !== 'laukia' ? `<div class="dk-ve"><button type="button" class="lk-ai" data-dk-sken="${d.raktas}" aria-label="${d.sken === 'nepavyko' ? 'Bandyti dar kartą' : 'Perskaityti tekstą su DI'}: ${esc(d.vardas)}">${d.sken === 'nepavyko' ? 'Bandyti dar kartą' : 'Perskaityti tekstą su DI'}</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -8488,13 +8568,16 @@ function negaliojantysEilutese(M, numeriai){
   $('#dkSarasas').addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
-    const d = DK.failai.find(x => String(x.raktas) === (b.dataset.dkSalinti || b.dataset.dkParaiska));
+    const d = DK.failai.find(x => String(x.raktas) === (b.dataset.dkSalinti || b.dataset.dkParaiska || b.dataset.dkSken));
     if (!d) return;
     if (b.dataset.dkSalinti){
       const i = DK.failai.indexOf(d);
       dkSalink(d);
       const kitas = $('#dkSarasas').querySelectorAll('[data-dk-salinti]')[Math.min(i, DK.failai.length - 1)];
       (kitas || zona).focus();
+    } else if (b.dataset.dkSken){
+      dkSkenuok(d);                                                    // mygtukas dingsta - fokusas į to dokumento rūšį
+      const s = document.getElementById('dk' + d.raktas + '-r'); if (s) s.focus();
     } else dkAnalizuok(d);
   });
   $('#dkSarasas').addEventListener('change', async e => {
@@ -8507,6 +8590,8 @@ function negaliojantysEilutese(M, numeriai){
     dkTaikyk(d);
     if (d.rusis === 'metodika' && !d.met) await metAnalizuok(d);   // rūšį „metodika“ pasirinko žmogus (D3)
     dkPoPakeitimo();
+    // skenuotas dokumentas, kurio rūšis nebe paraiška (pvz. nuotrauka - kvalifikacijos reikalavimai; D5)
+    if (dkSkenuotas(d) && !d.sken){ if (diAutomatiskai()) dkSkenuok(d); else { d.sulaikyta = nacsaugTaip() ? 'nacsaug' : 'leidimas'; dkRodyk(); } }
     const nb = document.querySelector(`[data-dk-rusis="${d.raktas}"]`);
     if (nb) nb.focus();
     if (d.rusis === 'paraiska' && dkParaiskaAiski(d)){                 // rūšį paraiška pasirinko pats žmogus
@@ -8874,7 +8959,7 @@ function sfAiRodyk(){
   if (!Q.length) return;
   const nd = aiNaudojami();
   $('#sfAiSaltiniai').innerHTML = AI.saltiniai.length ? AI.saltiniai.map(s => `<div class="ai-sal"><span class="v"><b>${esc(s.vardas)}</b>
-      <span class="k">${s.dk ? 'įkelta 1 žingsnyje · ' : ''}${s.simboliai ? s.simboliai.toLocaleString('lt-LT') + ' simb. teksto' : 'teksto nerasta - nebus siunčiamas'}</span></span>
+      <span class="k">${s.dk ? 'įkelta 1 žingsnyje · ' : ''}${s.di ? 'tekstą atpažino DI iš skenuoto dokumento · ' : ''}${s.simboliai ? s.simboliai.toLocaleString('lt-LT') + ' simb. teksto' : 'teksto nerasta - nebus siunčiamas'}</span></span>
       <button type="button" class="sec" data-ai-salinti="${s.raktas}" aria-label="Pašalinti ${esc(s.vardas)}">Pašalinti</button></div>`).join('')
     : '<div class="cite">Dokumentų dar neįkelta. Įkelkite techninę specifikaciją ar užduotį, sutarties priedus ar kitus pirkimo dokumentus (paraiškos - ne) - sutarties klausimai bus užpildyti iš jų.</div>';
   $('#sfAiSimb').textContent = `${GP_PATAREJAS.simboliai(nd.map(s => ({ blokai: s.blokai }))).toLocaleString('lt-LT')} simbolių iš ${nd.length} dok.`;
@@ -9491,7 +9576,7 @@ zingsniuBusena();
       // S1 (naudotojo sprendimas 2026-10-19): skiltyje - santrauka, išsamūs žingsniai ir pastaba - čia
       stepsTitle: "Kaip naudotis - išsamiai",
       steps: [
-      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; įkelta pasiūlymų vertinimo metodika (be DI) nustato vertinimo kriterijų SPS 8.1 punkte ir patikrina, ar kriterijų svorių suma - 100, o metodikos failas pridedamas prie paketo kaip SPS priedas be pakeitimų; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
+      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Skenuoto dokumento (PDF be teksto ar nuotraukos) tekstą, jums leidus, perskaito DI - atpažintas tekstas pažymimas DI žyma, iš jo perkeltas lenteles palyginkite su originalu. Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; įkelta pasiūlymų vertinimo metodika (be DI) nustato vertinimo kriterijų SPS 8.1 punkte ir patikrina, ar kriterijų svorių suma - 100, o metodikos failas pridedamas prie paketo kaip SPS priedas be pakeitimų; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Klausimai rodomi po vieną dokumento skyrių - „Toliau“ ir „Atgal“ veda per skyrius, turinys šoninėje juostoje - į bet kurį skyrių, paskutinis puslapis - „Prieš generuojant“ ir „Kas toliau?“; patyrusiems - jungiklis „Rodyti visus klausimus“ (pasirinkimas įsimenamas šioje naršyklėje, jei leidžiate nustatymų įsiminimą). Neprivalomas spartintuvas siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje; abu be DI, perkėlimą patvirtinate jūs.",
       "<b>Sutarties projektas:</b> sutarties klausimai atskirame žingsnyje - galite juos atsakyti dabar arba vėliau. Ką atsako jūsų techninė specifikacija ar užduotis ir kiti įkelti dokumentai (terminai, objektas, pagrindiniai įrenginiai, garantiniai terminai, ES lėšos ir kt.), sutarties klausimuose įrašoma iš karto - su DI žyme, citata ir būsena „Siūloma (nepatvirtinta)“; jums lieka patikrinti ir patvirtinti. „Generuoti pirkimo sąlygas“ sugeneruoja sąlygas be sutarties (pakete ji pažymima „atidėta“, sąlygų tekstas nesikeičia), „Generuoti pirkimo sąlygas ir sutarties projektą“ - abu.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu. Pakeitus atsakymus po generavimo, rodoma „Reikia pergeneruoti“ ir kurie dokumentai paveikti.",
@@ -9500,7 +9585,7 @@ zingsniuBusena();
       "<b>Tikrinti parengtus dokumentus</b> (skirtukas viršuje): įkelkite paketą ar atskirus failus - jie bus palyginti tarpusavyje, su pirkimo kortele ir su standartine LITGRID forma (šiuo moduliu sugeneruoti - pagal generavimo pasą), o įstatymo reikalaujamos pirkimo dokumentų informacijos (vertinimo kriterijų, terminų, kontaktinių asmenų ir kt.) bus ieškoma visame pakete ir parodoma, kur ji rasta. Kiekvienam radiniui įrašykite sprendimą ir atsisiųskite Word ataskaitą; kitą kartą įkelkite ją kartu su nauja paketo versija."
       ],
       noteTitle: "Kas siunčiama ir kas saugoma",
-      note: "Sąlygų tekstą kuria algoritmas iš šablonų - <b>DI teksto nerašo</b>. DI naudojamas tik pasiūlymams. Įkėlus pirmą dokumentą, kurį gali skaityti DI, paklausiama, ar leidžiate DI skaityti šio pirkimo dokumentus: „Taip“ - paraiškos kortelė siunčiama per G-Procure serverį į Claude API iškart (kai aišku, kad tai paraiška), o kai rengiamas sutarties projektas, įkeltų pirkimo dokumentų (ne paraiškos) tekstas automatiškai siunčiamas sutarties klausimams užpildyti; „Ne“ - automatiškai nesiunčiama nieko, DI paleidžiamas tik mygtukais. Pirkimo sąlygų atsakymų pasiūlymams - visada tik paspaudus „Gauti pasiūlymus“; kai pirkimo objektas susijęs su nacionaliniu saugumu, automatiškai nesiunčiama niekas (nei paraiška, nei dokumentai) - tik paspaudus mygtuką; kitais atvejais įkelti dokumentai niekur nesiunčiami. Nesiųskite įslaptintos informacijos. Jūsų atsakymai (ir numatoma vertė) automatiškai išsaugomi juodraštyje tik šioje naršyklėje - niekur nesiunčiami, patenka į atsarginę kopiją; juodraštį galite ištrinti ar atsisiųsti failu (jo neperduokite tiekėjams). Įkelti failai (paraiška, DI pasiūlymų dokumentai) ir sugeneruoti dokumentai juodraštyje nesaugomi; uždarant su neatsisiųstais dokumentais ar neišsaugotu juodraščiu naršyklė paklaus. Įrankis - bandomoji versija: dokumentai generuojami iš LITGRID šablonų ir tikrinami automatiškai, bet prieš skelbiant juos peržiūri rengėjas Word programoje; pastebėjimus praneškite įrankio rengėjui. Sutarties parinkimo stebėjimo įrašai: patvirtinus sutartį šioje naršyklėje įsimenama, ką siūlė sistema ir ką pasirinkote (su pirkimo pavadinimu), kad būtų galima tikslinti parinkimo taisykles; jie niekur nesiunčiami, juos galite atsisiųsti ar išvalyti bloke „Sutarties projektas“. Kvalifikacijos ir žaliųjų reikalavimų lentelės iš įkelto Word ar PDF failo perkeliamos naršyklėje (jų tekstas išsaugomas ir juodraštyje) - failas niekur nesiunčiamas, DI nenaudojamas; ar dokumente minimas teisės aktas netekęs galios, tikrinama pagal G-Procure teisės nuorodų registrą (iš svetainės). Tikrinant parengtus dokumentus failai skaitomi tik naršyklėje, niekur nesiunčiami, DI nenaudojamas; sugeneruotas paketas tomis pačiomis taisyklėmis patikrinamas pats 4 žingsnyje (privalomi elementai, aiškumas, ko pakete dar nėra, kvalifikacijos reikalavimų proporcingumas), o perkeltos kvalifikacijos lentelės reikalavimai su VPT Metodika palyginami jau 2 žingsnyje; sugeneruotuose Word failuose įrašomas generavimo pasas (šablonas ir pastraipų maišos, be jūsų atsakymų ir numatomos vertės).",
+      note: "Sąlygų tekstą kuria algoritmas iš šablonų - <b>DI teksto nerašo</b>. DI naudojamas tik pasiūlymams. Įkėlus pirmą dokumentą, kurį gali skaityti DI, paklausiama, ar leidžiate DI skaityti šio pirkimo dokumentus: „Taip“ - paraiškos kortelė siunčiama per G-Procure serverį į Claude API iškart (kai aišku, kad tai paraiška), skenuotas dokumentas be teksto - iškart, kad DI perskaitytų jo tekstą, o kai rengiamas sutarties projektas, įkeltų pirkimo dokumentų (ne paraiškos) tekstas automatiškai siunčiamas sutarties klausimams užpildyti; „Ne“ - automatiškai nesiunčiama nieko, DI paleidžiamas tik mygtukais. Pirkimo sąlygų atsakymų pasiūlymams - visada tik paspaudus „Gauti pasiūlymus“; kai pirkimo objektas susijęs su nacionaliniu saugumu, automatiškai nesiunčiama niekas (nei paraiška, nei dokumentai) - tik paspaudus mygtuką; kitais atvejais įkelti dokumentai niekur nesiunčiami. Nesiųskite įslaptintos informacijos. Jūsų atsakymai (ir numatoma vertė) automatiškai išsaugomi juodraštyje tik šioje naršyklėje - niekur nesiunčiami, patenka į atsarginę kopiją; juodraštį galite ištrinti ar atsisiųsti failu (jo neperduokite tiekėjams). Įkelti failai (paraiška, DI pasiūlymų dokumentai) ir sugeneruoti dokumentai juodraštyje nesaugomi; uždarant su neatsisiųstais dokumentais ar neišsaugotu juodraščiu naršyklė paklaus. Įrankis - bandomoji versija: dokumentai generuojami iš LITGRID šablonų ir tikrinami automatiškai, bet prieš skelbiant juos peržiūri rengėjas Word programoje; pastebėjimus praneškite įrankio rengėjui. Sutarties parinkimo stebėjimo įrašai: patvirtinus sutartį šioje naršyklėje įsimenama, ką siūlė sistema ir ką pasirinkote (su pirkimo pavadinimu), kad būtų galima tikslinti parinkimo taisykles; jie niekur nesiunčiami, juos galite atsisiųsti ar išvalyti bloke „Sutarties projektas“. Kvalifikacijos ir žaliųjų reikalavimų lentelės iš įkelto Word ar PDF failo perkeliamos naršyklėje (jų tekstas išsaugomas ir juodraštyje) - failas niekur nesiunčiamas, DI nenaudojamas; ar dokumente minimas teisės aktas netekęs galios, tikrinama pagal G-Procure teisės nuorodų registrą (iš svetainės). Tikrinant parengtus dokumentus failai skaitomi tik naršyklėje, niekur nesiunčiami, DI nenaudojamas; sugeneruotas paketas tomis pačiomis taisyklėmis patikrinamas pats 4 žingsnyje (privalomi elementai, aiškumas, ko pakete dar nėra, kvalifikacijos reikalavimų proporcingumas), o perkeltos kvalifikacijos lentelės reikalavimai su VPT Metodika palyginami jau 2 žingsnyje; sugeneruotuose Word failuose įrašomas generavimo pasas (šablonas ir pastraipų maišos, be jūsų atsakymų ir numatomos vertės).",
       processTitle: "Darbo eiga",
       process: [
         { title: "Klausimai", text: "Būdas, vertė, kalba, pirkimo duomenys." },
