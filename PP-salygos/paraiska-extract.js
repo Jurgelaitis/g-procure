@@ -357,6 +357,7 @@
   // Istraukti laukai -> siulymu sarasas UI perziurai. Kiekvienas siulymas:
   // { id, laukas, kortele, citata, reiksme, ok, pastaba }.
   // Budas kanonizuojamas DETERMINISTISKAI per GP_METHODS.fromText.
+  var TIPU_PAV = { prekes: "Prekės", paslaugos: "Paslaugos", darbai: "Darbai" };
   function mapFields(L) {
     var out = { siulymai: [], info: [] };
 
@@ -373,6 +374,10 @@
     if (L.pirkimo_budas && L.pirkimo_budas.reiksme) {
       var kanonas = root.GP_METHODS ? root.GP_METHODS.fromText(L.pirkimo_budas.reiksme) : null;
       var tinkamas = kanonas && root.GP_METHODS.toSalygos(kanonas.id);
+      // Bazinis būdas („Atviras konkursas“ be „tarptautinis“ / „supaprastintas“): šablonai yra variantams - pasakoma, ko trūksta, ne „šablonų nėra“
+      // (naujų darbuotojų testavimas D3, 2026-10-20). Variantas pagal vertę neparenkamas - renkasi žmogus.
+      var variantai = !tinkamas && kanonas && kanonas.statusas === "bazinis" ? root.GP_METHODS.LIST.filter(function (m) {
+        return m.procedura === kanonas.procedura && m.id !== kanonas.id && root.GP_METHODS.toSalygos(m.id); }) : [];
       out.siulymai.push({
         id: "budas", laukas: "Pirkimo būdas",
         kortele: L.pirkimo_budas.reiksme, citata: L.pirkimo_budas.citata || null,
@@ -382,8 +387,9 @@
         // Vartotojui rodoma pastaba - be vidiniu terminu. Kai budas atpazintas,
         // pastabos isvis nereikia: eilute jau rodo "Korteleje: X -> Bus irasyta: Y".
         pastaba: tinkamas ? null
-          : (kanonas ? "šiam būdui modulis dar neturi šablonų - pasirinkite kitą arba pildykite ranka"
-                     : "būdo atpažinti nepavyko - pasirinkite jį rankiniu būdu")
+          : (kanonas && variantai.length ? "paraiškoje nenurodyta, kuris tai būdas: " + variantai.map(function (m) { return m.label; }).join(" ar ") + " - pasirinkite 1 žingsnyje"
+          : kanonas ? "šiam būdui modulis dar neturi šablonų - pasirinkite kitą arba pildykite ranka"
+                    : "būdo atpažinti nepavyko - pasirinkite jį rankiniu būdu")
       });
     }
 
@@ -399,11 +405,13 @@
 
     if (L.objekto_tipas && L.objekto_tipas.reiksme && L.objekto_tipas.reiksme !== "nenustatyta") {
       var kand = (L.tipo_kandidatai || []).filter(function (t) { return t !== L.objekto_tipas.reiksme; });
+      // Žmogui - žodžiu („Prekės“), ne kodu („prekes“; naujų darbuotojų testavimas 2026-10-20)
+      var tipoPav = function (t) { return TIPU_PAV[t] || t; };
       out.siulymai.push({
         id: "tipas", laukas: "Pirkimo objekto tipas",
-        kortele: L.objekto_tipas.reiksme + (kand.length ? " (galimi: " + kand.join(", ") + ")" : ""),
+        kortele: tipoPav(L.objekto_tipas.reiksme) + (kand.length ? " (galimi: " + kand.map(function (t) { return tipoPav(t).toLowerCase(); }).join(", ") + ")" : ""),
         citata: L.objekto_tipas.citata || null,
-        reiksme: L.objekto_tipas.reiksme, ok: true,
+        reiksme: L.objekto_tipas.reiksme, rodoma: tipoPav(L.objekto_tipas.reiksme), ok: true,
         pastaba: kand.length ? "mišrus objektas - peržiūrėkite" : null
       });
     }

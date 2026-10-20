@@ -291,7 +291,12 @@
         // antraštės eilutė: vienas langelis per visą plotį (arba vienintelis su tekstu, apimantis kelis stulpelius) ir trumpas tekstas
         const t0 = sutekstu[0].tekstas, g0 = antrastesGrupe(t0);
         const plati = c.length === 1 || (sutekstu.length === 1 && sutekstu[0].iki - sutekstu[0].nuo >= 1);
-        if (plati && sutekstu.length === 1 && (neVisa || g0.grupe !== 'kita' || t0.length <= 120)){
+        // nesujungta antraštės eilutė (2026-10-20, naujo darbuotojo patikra): tekstas tik reikalavimų stulpelyje, numerio ir dokumentų langeliai
+        // tušti, o tekstas - atpažinta grupė arba trumpas be sakinio pabaigos (iniciatorių Word lentelėse antraštės dažnai nesujungtos)
+        const x0 = sutekstu.length === 1 && c.length > 1 ? sutekstu[0] : null;
+        const nesujungta = !!x0 && !neVisa && kurisLang(c, ltReik) === x0 && (!s.nr || kurisLang(c, s.nr) !== x0) && (!ltDok || kurisLang(c, ltDok) !== x0)
+          && (g0.grupe !== 'kita' || (t0.length <= 80 && !/[.;:]\s*$/.test(t0)));
+        if ((plati && sutekstu.length === 1 && (neVisa || g0.grupe !== 'kita' || t0.length <= 120)) || nesujungta){
           const t = t0, g = g0;
           if (g.grupe === 'neVisa'){ neVisa = true; continue; }
           if (neVisa){ const ps = skaidykKalbas(langelioPastraipos(sutekstu[0].tc, numer, st)); M.neVisa = M.neVisa || { lt: [], en: null }; M.neVisa.lt.push(...ps.lt); if (ps.en) (M.neVisa.en ??= []).push(...ps.en); continue; }
