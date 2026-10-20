@@ -1173,8 +1173,15 @@
       var n = skaicius(R.terminas), vnt = R.terminas_vnt || "men";
       var zod = vnt === "d" ? forma(n, "dieną.", "dienas.", "dienų.") : forma(n, "mėnesį.", "mėnesius.", "mėnesių.");
       var k = el(vVnt, new RegExp("^" + zod.replace(".", "\\.") + "$"));
-      if (k < 0) pastaba(perspejimai, "4.1 punkto vieneto sąraše nėra formos „" + zod + "“ - pasirinkite kitą terminą arba vienetą.", [{ q: "terminas" }]);
-      else { nust(pTerm, { tekstas: String(n), tekstasEN: String(n) }); nust(vVnt, { elementas: k }); }
+      // LITGRID prekių sutarties formos sąraše - tik „mėnesį.“ ir „mėnesius.“ (10-20, 30, 40 ... mėnesių ir dienų nėra): taisyklinga forma
+      // įrašoma tekstu valdiklio vietoje (kaip 11.1.2 p. „Kita formuluotė“) - terminas nekeičiamas, 4 žingsnis tai pasako (naujo darbuotojo patikra 2026-10-20)
+      var zodEN = vnt === "d" ? (n === 1 ? "day." : "days.") : (n === 1 ? "month." : "months.");
+      nust(pTerm, { tekstas: String(n), tekstasEN: String(n) });
+      if (k < 0) {
+        nust(vVnt, { laisvas: true, tekstas: zod, tekstasEN: zodEN });
+        pastaba(perspejimai, "4.1 punkto formos sąraše nėra žodžio „" + zod.replace(/\.$/, "") + "“ (yra tik „" + (vVnt ? vVnt.elementai.join("“, „") : "") + "“) - terminas „" + n + " " + zod.replace(/\.$/, "") + "“ įrašomas tekstu.", [{ q: "terminas" }]);
+      }
+      else nust(vVnt, { elementas: k });
     }
     if (vBendras) {
       var nb = R.bendras_taikomas === "taip" ? skaicius(R.bendras) : null;
