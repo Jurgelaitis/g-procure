@@ -48,6 +48,7 @@
       },
       trukstaDok: "Pakete neradau: {d}. Jei jis pateikiamas kitu pavadinimu, pakeiskite failo vaidmenį sąraše.",
       trukstaDokPaketas: "Pakete neradau: {d}. Šį dokumentą pridėsite patys.",
+      sutartisSps: "Sutarties projektas nepridedamas - esminės sutarties sąlygos išdėstytos pirkimo sąlygose (SPS).",
       beBudo: "Pirkimo būdas nežinomas (nėra kortelės ir skelbimo) - tikrinami tik pagrindiniai dokumentai: SPS, techninė specifikacija ir sutartis.",
       priedoNera: "SPS priedų sąraše nurodytas {n} priedas „{p}“, bet pakete tokio failo neradau. Jei šis priedas teikiamas atskirai, viskas gerai, kitaip pridėkite jį prie paketo.",
       priedoPerdaug: "Failas „{f}“ pavadintas SPS {n} priedu, bet SPS priedų sąraše tokio numerio nėra.",
@@ -125,6 +126,7 @@
       },
       trukstaDok: "Not found in the package: {d}. If it has another name, change the file's role in the list.",
       trukstaDokPaketas: "Not found in the package: {d}. You will add this document yourself.",
+      sutartisSps: "No draft contract is attached - the essential contract terms are set out in the special procurement conditions (SPC).",
       beBudo: "The procedure is unknown (no card and no notice) - only the main documents are checked: SPS, technical specification and contract.",
       priedoNera: "The SPS list of annexes names annex {n} “{p}”, but no such file is in the package. If this annex is provided separately, that is fine; otherwise add it to the package.",
       priedoPerdaug: "File “{f}” is named SPS annex {n}, but the SPS list of annexes has no such number.",
@@ -538,9 +540,12 @@
     }
     var truksta = reikia.filter(function (d) {
       var r = VAID[d.id] || d.id;
-      if (r === "sutartis") return !P.sutartis && !P.sutartis_bendrosios;
+      // Sutarties projektas nerengiamas, o esminės sutarties sąlygos - SPS dalyje (PP-salygos pasako pats)
+      if (r === "sutartis") return !P.sutartis && !P.sutartis_bendrosios && !(o.sutartisSps && P.sps);
       return !P[r];
     });
+    if (o.sutartisSps && P.sps && !P.sutartis && !P.sutartis_bendrosios)
+      radinys({ id: "dokumentai_sutartis_sps", grupe: "paketas", lygis: "info", tekstas: X.sutartisSps, vietos: [docVieta(P.sps, null, l)], teise: teise(["sutartis_dokumentuose"]) });
     var trukstaPriedai = [];                      // užpildoma žemiau; trūkstamo dokumento radinys - po priedų patikros
 
     // SPS priedų sąrašas ir failai
