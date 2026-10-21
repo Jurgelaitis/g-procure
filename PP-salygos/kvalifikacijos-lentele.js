@@ -983,12 +983,27 @@
      dokumente, numeriai 1-N; antraštės eilutės lieka ir laikomos su kita eilute. Dvikalbėje be anglų teksto - raudonas nurodymas įrašyti
      vertimą (kaip kvalifikacijos lentelėje). */
   const ZAL_LENT_RE = /reikalavimai zaliesiems pirkimams|(^|[^a-z])zalieji reikalavimai|requirements? for environmental procurement/;   // ND, MVP - „ŽALIEJI REIKALAVIMAI“
+  /* DPS sukūrimo sąlygos LT (2026-10-22): lentelės antraštėje žodžių nėra - prieš ją pavadinimas „2 priedo 2 lentelė „žalieji reikalavimai““. */
+  const ZAL_PAV_RE = /^\d+\s*priedo\s+\d+\s*lentel\S*\s.*zali/;
+  function zalPavadinimasPries(kunas, i){
+    for (let j = i - 1; j >= 0 && j >= i - 4; j--){
+      if (kunas[j].localName === 'tbl') return false;
+      if (kunas[j].localName !== 'p') continue;
+      const t = norm(tekstas(kunas[j]));
+      if (!t) continue;
+      return ZAL_PAV_RE.test(t);
+    }
+    return false;
+  }
   function raskZaliujuLentele(doc){
     const body = visi(doc, 'body')[0];
     if (!body) return null;
-    for (const tbl of vaikai(body, 'tbl')){
+    const kunas = vaikai(body);
+    for (let i = 0; i < kunas.length; i++){
+      const tbl = kunas[i];
+      if (tbl.localName !== 'tbl') continue;
       const eil = vaikai(tbl, 'tr');
-      if (!eil.length || !ZAL_LENT_RE.test(norm(tekstas(eil[0])))) continue;
+      if (!eil.length || !(ZAL_LENT_RE.test(norm(tekstas(eil[0]))) || zalPavadinimasPries(kunas, i))) continue;
       for (let k = 0; k < Math.min(3, eil.length); k++){
         const st = stulpeliai(langeliai(eil[k]));
         if (st.reik && (st.dok || st.dokLt)) return { tbl, k, st, nr: st.nr || stulpeliai(langeliai(eil[0])).nr || null };
