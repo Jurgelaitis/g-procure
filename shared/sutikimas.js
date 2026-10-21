@@ -55,7 +55,6 @@
     ["gprocure-lang", "nustatymai"], ["ppmarket.lang", "nustatymai"], ["ppnegotiation.lang", "nustatymai"],
     ["ppcarbon.lang", "nustatymai"], ["pptiekejams.lang", "nustatymai"], ["ppesg.lang", "nustatymai"],
     ["gprocure.infoPanel.", "nustatymai"], ["gprocure_help_collapsed", "nustatymai"], ["epsog_dash_metric", "nustatymai"],
-    ["gprocure.salygos.visiKlausimai", "nustatymai"],
     ["gprocure.sutartys.stebejimas", "tobulinimo"]
   ];
 
