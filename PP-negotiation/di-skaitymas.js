@@ -119,13 +119,16 @@
     return { ok: true, pozicijos: poz, viso: viso, visoSuPvm: visoSuPvm, tiekejas: tiekejas, valiuta: valiuta, kainosSuPvm: kainosSuPvm, ispejimai: ispejimai, atmesta: atmesta, pastabos: str(d.pastabos, MAX_CIT) };
   }
 
+  /* „1 poziciją“, „3 pozicijas“, „10 pozicijų“ (galininkas) */
+  function pozicijos(n) { var d = n % 10, s = n % 100; return n + (d === 1 && s !== 11 ? " poziciją" : d >= 2 && d <= 9 && (s < 12 || s > 19) ? " pozicijas" : " pozicijų"); }
+
   /* Patikrintas atsakymas -> to paties pavidalo rezultatas kaip įrankio skaitytuvų (positions / fixed), su žyme di ir įspėjimais */
   function iRezultata(a, fileName, kalba) {
     var k = kalba, bendri = { di: true, diIspejimai: a.ispejimai.slice(), diPastabos: a.pastabos, diViso: a.viso, diVisoSuPvm: a.visoSuPvm, fileName: fileName };
     if (a.pozicijos.length) {
       var total = a.pozicijos.reduce(function (s, p) { return s + p.total; }, 0), sp = a.pozicijos.filter(function (p) { return p.ispejimai.length; }).length;
       return Object.assign({ ok: true, positions: a.pozicijos, rowsFound: a.pozicijos.length, total: total,
-        message: L(k, "DI perskaitė " + a.pozicijos.length + " pozicijų" + (sp ? ", iš jų " + sp + " su įspėjimu" : "") + ". Patikrinkite su pasiūlymu ir pažymėkite failą.",
+        message: L(k, "DI perskaitė " + pozicijos(a.pozicijos.length) + (sp ? ", iš jų " + sp + " su įspėjimu" : "") + ". Patikrinkite su pasiūlymu ir pažymėkite failą.",
           "The AI read " + a.pozicijos.length + " items" + (sp ? ", " + sp + " of them with a warning" : "") + ". Check them against the offer and select the file.") }, bendri);
     }
     return Object.assign({ ok: true, fixed: { totalPrice: a.viso.reiksme }, total: a.viso.reiksme, rowsFound: 0, positions: [],

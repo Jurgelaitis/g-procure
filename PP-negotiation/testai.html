@@ -592,7 +592,10 @@ async function testaiEtapai(){
     D.getElementById("supSave").click();
     await iki(() => S().positions.length === 2, "pozicijos iš failo");
     const id = S().suppliers[0].id;
-    lygu(S().positions.map(p => [p.name, p.quantity, p.plannedUnitPrice]), [["Kabelis 110 kV", 100, 24.5], ["Mova", 10, 280]], "pozicijos");
+    // planuojamas įkainis - ne iš tiekėjo pasiūlymo (T3-K3, 2026-10-21): tuščias, kol neįrašo žmogus; planuojama vertė nesutampa su pasiūlymu
+    lygu(S().positions.map(p => [p.name, p.quantity, p.plannedUnitPrice]), [["Kabelis 110 kV", 100, null], ["Mova", 10, null]], "pozicijos be planuojamo įkainio");
+    lygu(W.eval("strategy.plannedTotal()"), 0, "planuojama vertė - ne pasiūlymo suma");
+    tiesa(D.querySelector('[data-pos-edit="' + S().positions[0].id + '"][data-pos-field="plannedUnitPrice"]').value === "", "plan. įkainio langelis tuščias");
     lygu([S().offers[id][S().positions[0].id].unitPrice, S().offers[id][S().positions[1].id].unitPrice], [24.5, 280], "įkainiai tiekėjui");
     D.getElementById("btnAddSupplier").click(); await lauk(50);
     D.getElementById("supName").value = "Beta"; D.getElementById("supFixed").value = "99000"; D.getElementById("supSave").click(); await lauk(80);
@@ -1028,7 +1031,7 @@ async function testaiDiSkaitymas(){
     lygu(N.issAtsakymo(DI_ATS({ tiekejas: { pavadinimas: "UAB Beta", kodas: "12-34" } }), "end_turn", "lt").tiekejas.kodas, "", "netinkamas įmonės kodas neperimamas");
     lygu(N.issAtsakymo(DI_ATS({ tiekejas: { kodas: "123456789" } }), "end_turn", "lt").tiekejas, null, "be pavadinimo - tiekėjo nėra");
     const r = N.iRezultata(a, "alfa.pdf", "lt");
-    lygu([r.ok, r.di, r.rowsFound, r.total, r.fixed, r.diViso.reiksme, /DI perskaitė 2 pozicijų/.test(r.message)], [true, true, 2, 5250, undefined, 5250, true], "rezultatas - pozicijos");
+    lygu([r.ok, r.di, r.rowsFound, r.total, r.fixed, r.diViso.reiksme, /DI perskaitė 2 pozicijas/.test(r.message)], [true, true, 2, 5250, undefined, 5250, true], "rezultatas - pozicijos");
     const f = N.iRezultata(N.issAtsakymo(DI_ATS({ pozicijos: [] }), "end_turn", "lt"), "alfa.pdf", "lt");
     lygu([f.ok, f.di, f.fixed, f.total, f.positions], [true, true, { totalPrice: 5250 }, 5250, []], "rezultatas - tik bendra suma");
     const sp = N.systemPrompt();
@@ -1073,7 +1076,7 @@ async function testaiDiSkaitymas(){
     await W.masinisImportas([skenas(), lentele, suma, csv]);
     lygu([...D.querySelectorAll("[data-imp-di-skaityti]")].map(b => b.dataset.impDiSkaityti), ["0", "2"], "mygtukas - skenuotam ir vien bendros sumos PDF");
     const pastaba = D.getElementById("impDiPastaba0");
-    tiesa(pastaba && /šis PDF failas \(\d+ KB\) per G-Procure serverį siunčiamas į Claude API \(Anthropic\)/.test(pastaba.textContent) && /Kiti projekto duomenys .* nesiunčiami/.test(pastaba.textContent) && /konfidencialus/.test(pastaba.textContent), "pastaba: " + (pastaba && pastaba.textContent));
+    tiesa(pastaba && /šis PDF failas \(\d+ KB\) su failo vardu per G-Procure serverį siunčiamas į Claude API \(Anthropic\)/.test(pastaba.textContent) && /Kiti projekto duomenys .* nesiunčiami/.test(pastaba.textContent) && /konfidencialus/.test(pastaba.textContent), "pastaba: " + (pastaba && pastaba.textContent));
     lygu(D.querySelector('[data-imp-di-skaityti="0"]').getAttribute("aria-describedby"), "impDiPastaba0", "mygtukas susietas su pastaba");
     lygu(kv.length, 0, "iki paspaudimo niekas nesiųsta");
     D.querySelector('[data-imp-di-skaityti="0"]').click();
@@ -1088,9 +1091,13 @@ async function testaiDiSkaitymas(){
     lygu([S().positions.length, Object.keys(S().offers).length], [0, 0], "iki priėmimo niekas neįrašyta");
     // kitų kortelių pasirinkimai išlieka po perpiešimo; priimamas tik pažymėtas DI failas
     ["1", "2", "3"].forEach(i => { const s = D.querySelector(`[data-imp-sup="${i}"]`); if (s) { s.value = ""; s.dispatchEvent(new W.Event("change", { bubbles: true })); } });
+    // nepažymėjus nė vieno failo - langas lieka, DI rezultatas neprarandamas (T3-V8)
+    ["1", "2", "3"].forEach(i => { const c = D.querySelector(`[data-imp-pasirinktas="${i}"]`); if (c && c.checked) c.click(); });
+    D.getElementById("impPriimti").click(); await lauk(60);
+    tiesa(D.getElementById("modalOverlay").classList.contains("open") && D.querySelector('[data-imp-kortele="0"][data-di]') && !S().positions.length, "be pažymėto failo langas neuždarytas");
     chk.click();
     D.getElementById("impPriimti").click(); await lauk(80);
-    lygu(S().positions.map(p => [p.name, p.unit, p.quantity]), [["Kabelis 110 kV", "m", 100], ["Mova", "vnt.", 10]], "pozicijos iš DI");
+    lygu(S().positions.map(p => [p.name, p.unit, p.quantity, p.plannedUnitPrice]), [["Kabelis 110 kV", "m", 100, null], ["Mova", "vnt.", 10, null]], "pozicijos iš DI - be planuojamo įkainio");
     const [p1, p2] = S().positions.map(p => p.id);
     lygu([S().offers.a1[p1], S().offers.a1[p2]], [{ unitPrice: 24.5, di: true }, { unitPrice: 280, di: true }], "įkainiai su DI žyme");
     W.go("suppliers"); W.eval("render.positionsTable()"); await lauk(30);
