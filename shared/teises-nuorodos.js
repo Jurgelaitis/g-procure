@@ -88,6 +88,13 @@
       patvirtintaEn: "Order No 4-72 of the Minister of the Economy and Innovation of 21 February 2003",
       redakcija: "suvestinė redakcija nuo 2024-02-07",
       url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.FC53446C3698/asr"
+    },
+    // Sandorių atitikties nacionalinio saugumo interesams patikra (13 str.) - į jos 4 d. 1 p. kriterijus nurodo PĮ 50 str. 8 d. ir
+    // VPĮ 37 str. 8 d. (perskaityta e-tar 2026-10-21).
+    NSOAI: {
+      trumpai: "Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymas",
+      pavadinimas: "Lietuvos Respublikos nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymas",
+      url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.57E0E8B29108/asr"
     }
   };
 
@@ -150,8 +157,13 @@
       PI: { a: "PI", s: 50, d: 4, p: 2 } },
     ts_zenklas: { apie: "negalima nurodyti modelio, šaltinio, prekės ženklo, patento, kilmės; išimtis - kai kitaip tiksliai apibūdinti neįmanoma, tada su žodžiais „arba lygiavertis“",
       PI: { a: "PI", s: 50, d: 5 } },
-    ts_nacsaugumas: { apie: "techninėje specifikacijoje reikalaujama, kad prekės, paslaugos ar darbai nekeltų grėsmės nacionaliniam saugumui",
-      PI: { a: "PI", s: 50, d: 8 } },
+    // 2026-10-21 - perskaityta iš naujo ir papildyta VPĮ (centralizuotiems pirkimams) ir 9 d. (BVPŽ sąrašas) - PP-salygos 1 žingsnio klausimui
+    ts_nacsaugumas: { tikrinta: "2026-10-21", apie: "techninėje specifikacijoje reikalaujama, kad prekės, paslaugos ar darbai nekeltų grėsmės nacionaliniam saugumui; subjektas, veikiantis nacionaliniam saugumui užtikrinti strategiškai svarbaus ūkio sektoriaus srityje ar esminis subjektas, šį reikalavimą kelia, kai sandorio pagrindu susidarytų Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo 13 str. 4 d. 1 p. nurodytos aplinkybės",
+      PI: { a: "PI", s: 50, d: 8 }, VPI: { a: "VPI", s: 37, d: 8 } },
+    nacsaugumo_bvpz: { tikrinta: "2026-10-21", apie: "subjektas gynybos ar nacionaliniam saugumui užtikrinti strategiškai svarbaus ūkio sektoriaus srityje, Saugiojo tinklo naudotojas ar esminis subjektas, pirkdamas prekes ar paslaugas, kurių BVPŽ kodai yra VPĮ 92 str. 13 d. sąraše, laiko, kad jos kelia grėsmę nacionaliniam saugumui, kai prekių gamintojas ar jį kontroliuojantis asmuo registruotas 92 str. 14 d. sąraše nurodytose valstybėse ar teritorijose arba paslaugos būtų teikiamos iš jų",
+      PI: { a: "PI", s: 50, d: 9 }, VPI: { a: "VPI", s: 37, d: 9 } },
+    sandorio_patikros_kriterijai: { tikrinta: "2026-10-21", apie: "sandorio patikros kriterijai: sandorio šaliai suteikiama teisė aptarnauti, gauti prieigą ar kitaip susipažinti su esminio subjekto ar įmonės reikšmingomis ryšių ir informacinėmis sistemomis, jų technologijomis, duomenų bazėmis ar duomenimis; teisė dalyvauti įgyvendinant ypatingos valstybinės svarbos ar valstybei svarbų projektą; teisė eksploatuoti ar valdyti nacionaliniam saugumui užtikrinti svarbius įrenginius ir turtą arba atlikti kitus reikšmingus veiksmus, galinčius turėti jiems įtakos",
+      bendra: { a: "NSOAI", s: 13, d: 4, p: 1 } },
 
     // ---- Planavimas, vertė, dalys (PĮ)
     // 2026-10-15 (PP-ts rinkos konsultacija): 39 str. perskaitytas e-tar visas - 1 d. 1 p. (konsultacijos ir kada privalomos),
@@ -561,6 +573,9 @@
       : (en ? "Green Procurement Rules (Order No D1-508)" : "Žaliųjų pirkimų tvarkos aprašas (įsakymas Nr. D1-508)");
     if (n.a === "CVA") return en ? "List of central government authorities (Order No 4-72)"
       : "Centrinės valdžios institucijų sąrašas (įsakymas Nr. 4-72)";
+    if (n.a === "NSOAI") return (en ? "Law on the Protection of Objects of Importance to Ensuring National Security, Art. " + n.s
+      + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "")
+      : "Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : ""));
     var akt = AKTAI[n.a];
     if (!akt || !n.s) klaida("netinkama nuoroda " + JSON.stringify(n));
     if (en) return akt.trumpai + " Art. " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "");
