@@ -453,6 +453,15 @@
       laukai: [{ id: "socialiniai_f", tipas: "formuluote", uzrasas: "Socialiniai kriterijai", kada: "taip",
                  siuloma: function (c) { return c.socialiniaiSPS === true ? { reiksme: SOC_LT, kilme: SOC_KILME } : null; } },
                Object.assign(en("socialiniai_fEN", "Kriterijai angliškai"), { siuloma: function (c, R) { return c.socialiniaiSPS === true && String(R.socialiniai_f || "").trim() === SOC_LT ? { reiksme: SOC_EN, kilme: "ta pati formuluotė angliškai" } : null; } })] },
+    // 14.3 (naujo darbuotojo patikra 2026-10-20; naudotojo sprendimas 2026-10-21): atskiras klausimas - iki tol atsakymas imtas iš 1 žingsnio
+    // klausimo apie nacionalinį saugumą, nors šis punktas apie darbuotojų patekimą prie Pirkėjo įrenginių; 1 žingsnio atsakymas tik parodomas
+    { id: "patekimas", grupe: "Kita", tipas: "taipne", privalomas: true,
+      klausimas: "Ar Tiekėjo ar subtiekėjų darbuotojams reikės teisės be palydos patekti prie Pirkėjo valdomų nacionaliniam saugumui užtikrinti svarbių įrenginių ar turto (14.3 punktas)?",
+      uzuomina: "„Taip“ - 14.3 punktas taikomas: tokie darbuotojai turi atitikti Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo kriterijus, o Tiekėjas sudaręs Sutartį pateikia jų sutikimus būti tikrinamiems. „Ne“ - „Punktas netaikomas.“",
+      pastaba: function (c) {
+        if (c.nacsaug !== true && c.nacsaug !== false) return "";
+        return "1 žingsnyje atsakyta, kad pirkimo objektas " + (c.nacsaug ? "susijęs" : "nesusijęs") + " su nacionaliniu saugumu. Tai kitas klausimas (apie pirkimo objektą), todėl į šį atsakykite atskirai.";
+      } },
     { id: "tinklo", grupe: "Kita", tipas: "taipne", privalomas: true,
       klausimas: "Ar tiekėjas dirbs veikiančiuose elektros perdavimo tinklo objektuose ar jų apsaugos zonoje (14.4 punktas)?",
       uzuomina: "„Taip“ - reikalingas Pirkėjo sutikimas dirbti (14.4.1-14.4.4) ir 9.10 bauda; „Ne“ - punktas ir bauda netaikomi." },
@@ -1307,9 +1316,9 @@
       nust(aSoc, { variantas: 1 }); nust(sSoc, { taikoma: true });
       if (String(R.socialiniai_f || "").trim()) nust(nSoc, { tekstas: R.socialiniai_f.trim(), tekstasEN: String(R.socialiniai_fEN || R.socialiniai_f).trim() });
     }
-    // 14. Nacionalinis saugumas (1 žingsnis), tinklo objektai
+    // 14. Darbuotojų patekimas prie nacionaliniam saugumui svarbių įrenginių (atskiras klausimas, 2026-10-21), tinklo objektai
     var v143 = rask("valdiklis", "14.3");
-    nust(v143, { elementas: ctx.nacsaug ? el(v143, /^Punktas taikomas/) : el(v143, /netaikomas/i) });
+    if (R.patekimas) nust(v143, { elementas: R.patekimas === "taip" ? el(v143, /^Punktas taikomas/) : el(v143, /netaikomas/i) });
     var v144 = rask("valdiklis", "14.4");
     if (R.tinklo) nust(v144, { elementas: R.tinklo === "taip" ? el(v144, /^Punktas taikomas/) : el(v144, /netaik/i) });
     // 15.2 pirkimo dokumentų adresas (paslaugos)
