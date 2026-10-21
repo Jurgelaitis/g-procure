@@ -454,7 +454,8 @@ async function testaiDI(){
     tiesa(/organizacijos patvirtintam DI įrankiui/.test(pa) && !/claude|llm/i.test(pa), "paantraštė: " + pa);
     const kopija = D.body.cloneNode(true);
     kopija.querySelectorAll("script, #aiIspejimas").forEach(x => x.remove());
-    const m = kopija.textContent.match(/.{0,60}(claude|chatgpt|llm).{0,40}/i);
+    // „Claude API“ - G-Procure serverio kelias „Skaityti su DI“ (C lygis, 2026-10-21), ne vartotojiškas DI; „Claude.ai“, ChatGPT ir LLM - draudžiami
+    const m = kopija.textContent.match(/.{0,60}(claude(?! API)|chatgpt|llm).{0,40}/i);
     tiesa(!m, "puslapis siūlo vartotojišką DI: " + (m && m[0]));
   });
 
@@ -972,6 +973,211 @@ async function testaiKalba(){
   });
 }
 
+/* DI skaitymas (C lygis, 2026-10-21; naudotojo sprendimas „PP-negotiation failų skaitymas su DI - taip“, tobulinimo planas 2.3): tik mygtuku prie
+   PDF, kurio įrankis pats neperskaitė; atsakymas tikrinamas prieš rodant; rezultatas - nepažymėtas DI pasiūlymas, priima žmogus. Serverio nėra:
+   GP_AI_PROXY.call pakeičiamas netikru (užklausa įsimenama, atsakymas - iš testo). */
+const DI_ATS = o => JSON.stringify(Object.assign({ status: "ok", valiuta: "EUR", kainos_su_pvm: false,
+  tiekejas: { pavadinimas: "UAB „Alfa“", kodas: "123456789", citata: "Tiekėjas: UAB „Alfa“, įm. k. 123456789", puslapis: 1 },
+  pozicijos: [{ pavadinimas: "Kabelis 110 kV", vienetas: "m", kiekis: 100, ikainis: 24.5, ikainis_tekstas: "24,50", suma: 2450, puslapis: 1 },
+              { pavadinimas: "Mova", vienetas: "vnt.", kiekis: 10, ikainis: 280, ikainis_tekstas: "280,00", suma: 2800, puslapis: 2 }],
+  viso_be_pvm: { reiksme: 5250, citata: "Iš viso be PVM: 5 250,00 Eur", puslapis: 2 }, viso_su_pvm: null, pastabos: "" }, o || {}));
+const diOk = (o, stop) => ({ ok: true, text: DI_ATS(o), raw: { stop_reason: stop || "end_turn" }, status: 200, error: null });
+function netikrasDi(atsakymai){
+  const kv = [];
+  W.GP_AI_PROXY.call = async opts => { kv.push(opts); const a = atsakymai.length > 1 ? atsakymai.shift() : atsakymai[0]; return typeof a === "function" ? a(opts) : a; };
+  return kv;
+}
+const skenas = vardas => new W.File([pdfSuStulpeliais([])], vardas || "alfa_skenuotas.pdf", { type: "application/pdf" });
+const kaiAtsaukta = opts => new Promise((res, rej) => { const f = () => rej(Object.assign(new Error("Aborted"), { name: "AbortError" })); if (opts.signal.aborted) f(); else opts.signal.addEventListener("abort", f); });
+const diBusena = i => (D.querySelector(`[data-imp-di-busena="${i}"]`) || {}).textContent || "";
+const diMygtukas = (i, tekstas) => [...D.querySelectorAll(`[data-imp-di-busena="${i}"] button`)].find(b => b.textContent.trim() === tekstas);
+
+async function testaiDiSkaitymas(){
+  grupe("DI skaitymas (C lygis): skenuotas ar be lentelės PDF - tik mygtuku, patikrinta, priima žmogus");
+
+  await testas("Atsakymo patikra prieš rodant: pozicijos, skaičiai tekstu, eilutės ir bendros sumos, įkainio tekstas, PVM ir valiuta, atmestos eilutės, klaidos, rezultato pavidalas", async () => {
+    await modulis();
+    const N = W.GP_NEG_DI;
+    tiesa(N && W.GP_AI_PROXY && W.GP_DI, "di-skaitymas.js, ai-proxy.js ar di-zymejimas.js neprijungti");
+    const a = N.issAtsakymo(DI_ATS(), "end_turn", "lt");
+    lygu([a.ok, a.pozicijos.map(p => [p.name, p.unit, p.qty, p.price, p.total, p.puslapis, p.ispejimai.length]), a.ispejimai, a.tiekejas.kodas, a.viso.reiksme],
+      [true, [["Kabelis 110 kV", "m", 100, 24.5, 2450, 1, 0], ["Mova", "vnt.", 10, 280, 2800, 2, 0]], [], "123456789", 5250], "tvarkingas atsakymas");
+    const sk = N.issAtsakymo(DI_ATS({ pozicijos: [{ pavadinimas: "X", kiekis: "1.500,5", ikainis: "2", puslapis: "3" }, { pavadinimas: "Y", kiekis: 1, ikainis: 1, puslapis: "x" }, { pavadinimas: "Z", kiekis: 1, ikainis: 1, puslapis: 1.5 }], viso_be_pvm: null }), "end_turn", "lt");
+    lygu(sk.pozicijos.map(p => [p.qty, p.price, p.puslapis]), [[1500.5, 2, 3], [1, 1, null], [1, 1, null]], "skaičiai tekstu - GP_MONEY; netinkamas puslapis - nenurodytas");
+    const eil = N.issAtsakymo(DI_ATS({ pozicijos: [{ pavadinimas: "Kabelis", kiekis: 100, ikainis: 24.5, ikainis_tekstas: "245,00", suma: 2000, puslapis: 1 },
+      { pavadinimas: "A", kiekis: 1, ikainis: 1500, ikainis_tekstas: "1.500" }, { pavadinimas: "B", kiekis: 1, ikainis: 1.5, ikainis_tekstas: "1.500" }], viso_be_pvm: { reiksme: 9000 } }), "end_turn", "lt");
+    const isp = eil.pozicijos.map(p => p.ispejimai.map(norm));
+    tiesa(/kiekis × įkainis = 2 450, o faile eilutės suma 2 000/.test(isp[0][0]) && /parašytas „245,00“, DI perskaitė 24,5/.test(isp[0][1]), "eilutės įspėjimai: " + JSON.stringify(isp[0]));
+    lygu([isp[1], isp[2]], [[], []], "„1.500“ tinka ir 1 500, ir 1,5");
+    tiesa(eil.ispejimai.some(x => /Pozicijų suma .* nesutampa su pasiūlymo suma be PVM \(9 000\)/.test(norm(x))), "bendra suma: " + JSON.stringify(eil.ispejimai));
+    const atm = N.issAtsakymo(DI_ATS({ pozicijos: [{ pavadinimas: "", kiekis: 1, ikainis: 1 }, { pavadinimas: "Y", kiekis: null, ikainis: 5 }, { pavadinimas: "Z", kiekis: -1, ikainis: 5 },
+      { pavadinimas: "Q", kiekis: 1, ikainis: "abc" }, { pavadinimas: "R", kiekis: 1, ikainis: 1e13 }, "x", { pavadinimas: "Gera", kiekis: 2, ikainis: 3 }], kainos_su_pvm: true, valiuta: "USD", viso_be_pvm: null }), "end_turn", "lt");
+    lygu([atm.pozicijos.map(p => p.name), atm.atmesta], [["Gera"], 6], "atmestos eilutės");
+    tiesa(atm.ispejimai.some(x => /Eilučių be pavadinimo, kiekio ar įkainio: 6/.test(x)) && atm.ispejimai.some(x => /su PVM/.test(x)) && atm.ispejimai.some(x => /USD, ne EUR/.test(x)), "įspėjimai: " + JSON.stringify(atm.ispejimai));
+    const daug = N.issAtsakymo(DI_ATS({ pozicijos: Array.from({ length: 501 }, (_, i) => ({ pavadinimas: "P" + i, kiekis: 1, ikainis: 1 })), viso_be_pvm: null }), "end_turn", "lt");
+    lygu([daug.pozicijos.length, daug.ispejimai.some(x => /daugiau kaip 500/.test(x))], [500, true], "riba 500");
+    const klaida = (t, s) => N.issAtsakymo(t, s || "end_turn", "lt").error || "OK";
+    tiesa(/nutrūko/.test(klaida(DI_ATS(), "max_tokens")), "nutrūkęs atsakymas - klaida, ne dalinis");
+    tiesa(/neįskaitomas: blogai matosi/.test(klaida('{"status":"neiskaitoma","pastabos":"blogai matosi"}')), "neįskaitomas");
+    tiesa(/kainų nerado/.test(klaida('{"status":"nera_kainu"}')), "kainų nėra");
+    tiesa(/schemos/.test(klaida('{"status":"kitas"}')) && /schemos/.test(klaida('{"status":"ok","pozicijos":{}}')), "schema");
+    tiesa(/nėra JSON/.test(klaida("Atsiprašau, negaliu.")), "be JSON");
+    tiesa(/nerado/.test(klaida(DI_ATS({ pozicijos: [], viso_be_pvm: null }))), "nei pozicijų, nei sumos");
+    const tais = N.issAtsakymo('Štai: {"status":"ok","pozicijos":[{"pavadinimas":"Mova „A" tipo","kiekis":1,"ikainis":2}]} Ačiū', "end_turn", "lt");
+    lygu(tais.ok && tais.pozicijos[0].name, "Mova „A\" tipo", "lietuviška kabutė su ASCII uždarymu - taisykJson");
+    lygu(N.issAtsakymo(DI_ATS({ tiekejas: { pavadinimas: "UAB Beta", kodas: "12-34" } }), "end_turn", "lt").tiekejas.kodas, "", "netinkamas įmonės kodas neperimamas");
+    lygu(N.issAtsakymo(DI_ATS({ tiekejas: { kodas: "123456789" } }), "end_turn", "lt").tiekejas, null, "be pavadinimo - tiekėjo nėra");
+    const r = N.iRezultata(a, "alfa.pdf", "lt");
+    lygu([r.ok, r.di, r.rowsFound, r.total, r.fixed, r.diViso.reiksme, /DI perskaitė 2 pozicijų/.test(r.message)], [true, true, 2, 5250, undefined, 5250, true], "rezultatas - pozicijos");
+    const f = N.iRezultata(N.issAtsakymo(DI_ATS({ pozicijos: [] }), "end_turn", "lt"), "alfa.pdf", "lt");
+    lygu([f.ok, f.di, f.fixed, f.total, f.positions], [true, true, { totalPrice: 5250 }, 5250, []], "rezultatas - tik bendra suma");
+    const sp = N.systemPrompt();
+    tiesa(/Nieko neskaiciuok/.test(sp) && /Pirkimo vykdytojas .* NE tiekejas/.test(sp) && /gryno JSON/.test(sp) && /kainos_su_pvm/.test(sp), "sistemos žinutė");
+    lygu(N.issAtsakymo(DI_ATS(), "max_tokens", "en").error, "The offer is too long to read at once - the AI response was cut off. Save only the pages with the price table and try again.", "EN klaida");
+  });
+
+  await testas("Užklausa: tik tas PDF per GP_AI_PROXY (modulis, 8000 ženklų, sistemos žinutė, failo baitai); ne PDF, per didelis ir atšauktas - nesiunčiama; serverio klaida ir nutrūkęs atsakymas - klaida", async () => {
+    await modulis();
+    tiesa(W.pdfjsLib, "pdf.js neįsikėlė");
+    const N = W.GP_NEG_DI;
+    let kv = netikrasDi([diOk()]);
+    const f = skenas();
+    const a = await N.perskaityk(f, { kalba: "lt" });
+    lygu([a.ok, kv.length, kv[0].module, kv[0].maxTokens, kv[0].system === N.systemPrompt(), /alfa_skenuotas\.pdf/.test(kv[0].userMessage)], [true, 1, "pp-negotiation", 8000, true, true], "užklausa");
+    const baitai = new Uint8Array(await f.arrayBuffer()), b64 = W.atob(kv[0].pdfBase64);
+    lygu([b64.length, b64.slice(0, 8), [...b64].every((c, i) => c.charCodeAt(0) === baitai[i])], [baitai.length, "%PDF-1.4", true], "siunčiami tikri failo baitai");
+    lygu(Object.keys(kv[0]).sort(), ["maxTokens", "module", "pdfBase64", "signal", "system", "userMessage"], "jokių kitų duomenų (projekto, tiekėjų) užklausoje");
+    const atmeta = async (p, re, ka) => { let e = null; try { await p; } catch (x) { e = x; } tiesa(e && (re.test(e.message) || re.test(e.name)), ka + ": " + (e && (e.name + " " + e.message))); };
+    await atmeta(N.perskaityk(new W.File(["x"], "a.xlsx"), { kalba: "lt" }), /tik PDF/, "ne PDF");
+    await atmeta(N.perskaityk({ name: "didelis.pdf", type: "application/pdf", size: W.GP_AI_PROXY.MAX_PDF_BAITU + 1, arrayBuffer: async () => new ArrayBuffer(1) }, { kalba: "lt" }), /per didelis DI skaitymui/, "per didelis");
+    const v = new W.AbortController(); v.abort();
+    await atmeta(N.perskaityk(skenas(), { signal: v.signal, kalba: "lt" }), /AbortError/, "atšaukta prieš siuntimą");
+    lygu(kv.length, 1, "ne PDF, per didelis ir atšauktas - nesiųsta");
+    kv = netikrasDi([{ ok: false, error: "Serverio klaida (503). Pabandykite po kelių minučių.", status: 503 }]);
+    await atmeta(N.perskaityk(skenas(), { kalba: "lt" }), /Serverio klaida \(503\)/, "serverio klaida");
+    kv = netikrasDi([diOk({}, "max_tokens")]);
+    await atmeta(N.perskaityk(skenas(), { kalba: "lt" }), /nutrūko/, "nutrūkęs");
+    const be = W.GP_AI_PROXY; W.GP_AI_PROXY = undefined;
+    await atmeta(N.perskaityk(skenas(), { kalba: "lt" }), /neprijungta/, "be DI jungties");
+    W.GP_AI_PROXY = be;
+  });
+
+  await testas("Masinis importas: „Skaityti su DI“ tik prie neperskaityto ar vien bendros sumos PDF, su pastaba, kas siunčiama; paspaudus - DI pasiūlymas su žyma, puslapiais ir tiekėju iš kodo, failas nepažymėtas ir fokusas į jį; priimtas - įkainiai su DI žyme lentelėje, pataisius - žymė dingsta", async () => {
+    await modulis();
+    tiesa(W.pdfjsLib && W.XLSX, "pdf.js ar SheetJS neįsikėlė");
+    W.eval("APP.state = defaultState(); APP.state.project.name = 'Pastotė'; APP.state.suppliers = [{ id: 'a1', name: 'Elektros tinklų paslaugos', code: '123456789' }]; render.all()"); W.go("suppliers");
+    const kv = netikrasDi([diOk()]);
+    const lentele = new W.File([pdfSuStulpeliais([[[40, "Pavadinimas"], [300, "Kiekis"], [400, "Vnt. kaina"]], [[40, "Kabelis 110 kV"], [300, "100"], [400, "26"]]])], "beta.pdf", { type: "application/pdf" });
+    const suma = new W.File([pdfSuStulpeliais([[[40, "Komercinis pasiulymas"]], [[40, "Is viso be PVM"], [300, "12 345,67"]]])], "gama.pdf", { type: "application/pdf" });
+    const csv = new W.File(['Pavadinimas,Kiekis,Kaina\nMova,10,280\n'], "delta.csv", { type: "text/csv" });
+    await W.masinisImportas([skenas(), lentele, suma, csv]);
+    lygu([...D.querySelectorAll("[data-imp-di-skaityti]")].map(b => b.dataset.impDiSkaityti), ["0", "2"], "mygtukas - skenuotam ir vien bendros sumos PDF");
+    const pastaba = D.getElementById("impDiPastaba0");
+    tiesa(pastaba && /šis PDF failas \(\d+ KB\) per G-Procure serverį siunčiamas į Claude API \(Anthropic\)/.test(pastaba.textContent) && /Kiti projekto duomenys .* nesiunčiami/.test(pastaba.textContent) && /konfidencialus/.test(pastaba.textContent), "pastaba: " + (pastaba && pastaba.textContent));
+    lygu(D.querySelector('[data-imp-di-skaityti="0"]').getAttribute("aria-describedby"), "impDiPastaba0", "mygtukas susietas su pastaba");
+    lygu(kv.length, 0, "iki paspaudimo niekas nesiųsta");
+    D.querySelector('[data-imp-di-skaityti="0"]').click();
+    await iki(() => D.querySelector('[data-imp-kortele="0"][data-di]'), "DI pasiūlymo kortelė");
+    lygu(kv.length, 1, "išsiųstas vienas failas");
+    const k0 = D.querySelector('[data-imp-kortele="0"]'), chk = k0.querySelector("[data-imp-pasirinktas]");
+    lygu([chk.checked, chk.disabled, D.activeElement === chk], [false, false, true], "failas nepažymėtas, fokusas į jį");
+    tiesa(k0.querySelector('.gp-di-zyme[data-di="sugeneruota"]') && /DI pasiūlymas/.test(k0.textContent), "DI žyma");
+    tiesa(/Psl\./.test(k0.textContent) && /Pasiūlymo suma be PVM faile \(psl\. 2\)/.test(norm(k0.textContent)), "puslapiai ir suma: " + k0.textContent.slice(0, 500));
+    lygu(k0.querySelector("[data-imp-sup]").value, "a1", "tiekėjas - pagal įmonės kodą (pavadinimas kitas)");
+    tiesa(/Siūloma \(nepatvirtinta\): sutampa su esamu tiekėju - iš DI perskaityto failo \(psl\. 1\): „Tiekėjas: UAB „Alfa“/.test(k0.textContent), "tiekėjo kilmė: " + k0.textContent.slice(0, 400));
+    lygu([S().positions.length, Object.keys(S().offers).length], [0, 0], "iki priėmimo niekas neįrašyta");
+    // kitų kortelių pasirinkimai išlieka po perpiešimo; priimamas tik pažymėtas DI failas
+    ["1", "2", "3"].forEach(i => { const s = D.querySelector(`[data-imp-sup="${i}"]`); if (s) { s.value = ""; s.dispatchEvent(new W.Event("change", { bubbles: true })); } });
+    chk.click();
+    D.getElementById("impPriimti").click(); await lauk(80);
+    lygu(S().positions.map(p => [p.name, p.unit, p.quantity]), [["Kabelis 110 kV", "m", 100], ["Mova", "vnt.", 10]], "pozicijos iš DI");
+    const [p1, p2] = S().positions.map(p => p.id);
+    lygu([S().offers.a1[p1], S().offers.a1[p2]], [{ unitPrice: 24.5, di: true }, { unitPrice: 280, di: true }], "įkainiai su DI žyme");
+    W.go("suppliers"); W.eval("render.positionsTable()"); await lauk(30);
+    const td = [...D.querySelectorAll("#positionsTable td.neg-di[data-di]")];
+    lygu(td.length, 2, "lentelėje - du DI langeliai");
+    tiesa(D.getElementById("negDiPaaiskinimas") && /perskaitytos su DI/.test(D.getElementById("negDiPaaiskinimas").textContent) && td[0].querySelector("input").getAttribute("aria-describedby") === "negDiPaaiskinimas", "paaiškinimas po lentele");
+    const inp = D.querySelector(`[data-offer="a1|${p1}"]`); inp.value = "25"; inp.dispatchEvent(new W.Event("input"));
+    lygu([S().offers.a1[p1], S().offers.a1[p2].di, inp.closest("td").hasAttribute("data-di"), inp.hasAttribute("aria-describedby")], [{ unitPrice: 25 }, true, false, false], "pataisius ranka - nebe DI");
+  });
+
+  await testas("Tiekėjo kortelėje įkeltas skenuotas PDF - peržiūra su tuo tiekėju (ne klaida pranešimu); DI radus kitą tiekėją - pasakoma; PDF su lentele - kaip iki šiol iškart; vien bendros sumos PDF - peržiūra, priimta suma be DI žymės", async () => {
+    await modulis();
+    tiesa(W.pdfjsLib, "pdf.js neįsikėlė");
+    W.eval("APP.state = defaultState(); APP.state.suppliers = [{ id: 'a1', name: 'Alfa' }]; render.all()"); W.go("suppliers");
+    const kv = netikrasDi([diOk({ tiekejas: { pavadinimas: "UAB Kitas", kodas: "", citata: "Tiekėjas: UAB Kitas", puslapis: 1 } })]);
+    await W.dropVeiksmas(D.querySelector('[data-drop="sup"][data-sup="a1"]'), [skenas()]);
+    await iki(() => D.getElementById("modalOverlay").classList.contains("open"), "peržiūros langas");
+    const k0 = () => D.querySelector('[data-imp-kortele="0"]');
+    lygu([D.getElementById("modalTitle").textContent, S().positions.length, kv.length], ["Pasiūlymų importo peržiūra", 0, 0], "peržiūra, niekas neįrašyta ir nesiųsta");
+    D.querySelector('[data-imp-di-skaityti="0"]').click();
+    await iki(() => k0() && k0().hasAttribute("data-di"), "DI rezultatas");
+    lygu(k0().querySelector("[data-imp-sup]").value, "a1", "tiekėjas lieka kortelės");
+    tiesa(/Failas įkeltas šio tiekėjo kortelėje\. DI faile rado tiekėją „UAB Kitas“ - patikrinkite, ar failas šio tiekėjo\./.test(k0().textContent), "kitas tiekėjas - pasakoma: " + k0().textContent.slice(0, 400));
+    k0().querySelector("[data-imp-pasirinktas]").click();
+    D.getElementById("impPriimti").click(); await lauk(80);
+    lygu(S().positions.length, 2, "priimta tiekėjui a1");
+    const lentele = new W.File([pdfSuStulpeliais([[[40, "Pavadinimas"], [300, "Kiekis"], [400, "Vnt. kaina"]], [[40, "Mova"], [300, "10"], [400, "250"]]])], "alfa2.pdf", { type: "application/pdf" });
+    await W.dropVeiksmas(D.querySelector('[data-drop="sup"][data-sup="a1"]'), [lentele]);
+    await iki(() => S().offers.a1[S().positions[1].id].unitPrice === 250, "PDF su lentele - iškart");
+    tiesa(!D.getElementById("modalOverlay").classList.contains("open") && !S().offers.a1[S().positions[1].id].di, "be peržiūros ir be DI žymės");
+    const suma = new W.File([pdfSuStulpeliais([[[40, "Komercinis pasiulymas"]], [[40, "Is viso be PVM"], [300, "12 345,67"]]])], "alfa3.pdf", { type: "application/pdf" });
+    await W.dropVeiksmas(D.querySelector('[data-drop="sup"][data-sup="a1"]'), [suma]);
+    await iki(() => D.getElementById("modalOverlay").classList.contains("open"), "vien sumos PDF - peržiūra");
+    tiesa(D.querySelector('[data-imp-di-skaityti="0"]') && k0().querySelector("[data-imp-pasirinktas]").checked && !(S().fixedOffers.a1 || {}).totalPrice, "suma pažymėta, bet neįrašyta; galima ir DI");
+    D.getElementById("impPriimti").click(); await lauk(80);
+    lygu(S().fixedOffers.a1, { totalPrice: 12345.67 }, "priimta suma be DI žymės");
+    lygu(kv.length, 1, "DI - tik paspaudus");
+    // DI pasiūlymas esamoms pozicijoms - sutapdinta ir pažymėta DI
+    await W.dropVeiksmas(D.querySelector('[data-drop="sup"][data-sup="a1"]'), [skenas("alfa4.pdf")]);
+    await iki(() => D.querySelector('[data-imp-di-skaityti="0"]'), "ketvirtas failas - peržiūra");
+    D.querySelector('[data-imp-di-skaityti="0"]').click();
+    await iki(() => k0() && k0().hasAttribute("data-di"), "DI rezultatas esamoms pozicijoms");
+    tiesa(/2 tikslūs, 0 tikėtini, 0 nerasta/.test(k0().textContent), "sutapdinimas: " + k0().textContent.slice(0, 300));
+    k0().querySelector("[data-imp-pasirinktas]").click();
+    D.getElementById("impPriimti").click(); await lauk(80);
+    lygu(S().positions.map(p => S().offers.a1[p.id]), [{ unitPrice: 24.5, di: true }, { unitPrice: 280, di: true }], "esamoms pozicijoms - įkainiai su DI žyme");
+  });
+
+  await testas("Klaida su priežastimi ir „Bandyti dar kartą“, atšaukimas („niekas nepakeista“), uždarius langą užklausa atšaukiama ir rezultatas neįrašomas; anglų kalba - be lietuviško teksto", async () => {
+    await modulis();
+    tiesa(W.pdfjsLib, "pdf.js neįsikėlė");
+    W.eval("APP.state = defaultState(); render.all()"); W.go("suppliers");
+    let kv = netikrasDi([{ ok: false, error: "Serverio klaida (503). Pabandykite po kelių minučių.", status: 503 }, diOk()]);
+    await W.masinisImportas([skenas()]);
+    D.querySelector('[data-imp-di-skaityti="0"]').click();
+    await iki(() => /DI pasiūlymo perskaityti nepavyko: Serverio klaida \(503\)/.test(diBusena(0)), "klaida su priežastimi");
+    tiesa(!D.querySelector('[data-imp-kortele="0"]').hasAttribute("data-di") && !D.querySelector('[data-imp-di-skaityti="0"]').disabled, "kortelė nepakeista, mygtukas vėl veikia");
+    diMygtukas(0, "Bandyti dar kartą").click();
+    await iki(() => D.querySelector('[data-imp-kortele="0"][data-di]'), "pakartojus - pavyko");
+    lygu(kv.length, 2, "du bandymai");
+    W.closeModal();
+    kv = netikrasDi([kaiAtsaukta]);
+    await W.masinisImportas([skenas()]);
+    D.querySelector('[data-imp-di-skaityti="0"]').click();
+    await iki(() => diMygtukas(0, "Atšaukti") && kv.length === 1, "„Atšaukti“ ir išsiųsta užklausa");
+    diMygtukas(0, "Atšaukti").click();
+    await iki(() => /Atšaukta - niekas nepakeista/.test(diBusena(0)), "atšaukta");
+    tiesa(kv[0].signal.aborted && !D.querySelector('[data-imp-kortele="0"]').hasAttribute("data-di"), "atšaukus - užklausa nutraukta, kortelė nepakeista");
+    D.querySelector('[data-imp-di-skaityti="0"]').click();
+    await iki(() => kv.length === 2, "antra užklausa");
+    W.closeModal();
+    tiesa(kv[1].signal.aborted, "uždarius langą - užklausa atšaukta");
+    await lauk(80);
+    lygu([S().positions.length, S().suppliers.length], [0, 0], "nieko neįrašyta");
+    // anglų kalba
+    W.setLang("en");
+    netikrasDi([diOk()]);
+    await W.masinisImportas([skenas()]);
+    const m = D.getElementById("modal");
+    tiesa(/Read with AI/.test(m.textContent) && /is sent via the G-Procure server to the Claude API \(Anthropic\)/.test(m.textContent), "EN mygtukas ir pastaba");
+    D.querySelector('[data-imp-di-skaityti="0"]').click();
+    await iki(() => D.querySelector('[data-imp-kortele="0"][data-di]'), "EN DI rezultatas");
+    tiesa(/AI suggestion/.test(m.textContent) && /The AI read 2 items/.test(m.textContent) && /Offer total excl\. VAT in the file \(p\. 2\)/.test(m.textContent), "EN rezultatas: " + m.textContent.slice(0, 500));
+    lygu(ltLikutis((m.innerText + "\n" + atributai(m)).replace(/Tiekėjas: UAB „Alfa“, įm\. k\. 123456789|Iš viso be PVM: 5 250,00 Eur|UAB „Alfa“|alfa_skenuotas\.pdf/g, "")), [], "lietuviškas tekstas lange (be failo citatų)");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -984,6 +1190,7 @@ async function testaiKalba(){
     await testaiDI();
     await testaiEtapai();
     await testaiKalba();
+    await testaiDiSkaitymas();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
