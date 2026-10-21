@@ -2687,7 +2687,7 @@ async function kvlSkaityk(failai, kortele){
       const r = await kvlLenteles(f);
       const x = kvlPriimk(f.name, r);
       nauju += x.nauju;
-      if (!r.lenteles.length && kortele) KVL.klaida = `Faile „${f.name}“ kvalifikacijos reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome${(r.zaliuju || []).length ? ' - yra tik žaliųjų reikalavimų lentelė (ji perkeliama į SPS 3 lentelę, žr. kortelę „Žalieji reikalavimai“)' : r.zalieji ? ' - yra tik žaliųjų reikalavimų lentelė' : ''}${(r.ispejimai || []).length ? '. ' + r.ispejimai.join(' ') : ''}.`;
+      if (!r.lenteles.length && kortele) KVL.klaida = `Faile „${f.name}“ kvalifikacijos reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome${(r.zaliuju || []).length ? ` - yra tik žaliųjų reikalavimų lentelė (ji perkeliama į ${(zalTikslas() || {}).pavKa || 'pirkimo sąlygas'}, žr. kortelę „Žalieji reikalavimai“)` : r.zalieji ? ' - yra tik žaliųjų reikalavimų lentelė' : ''}${(r.ispejimai || []).length ? '. ' + r.ispejimai.join(' ') : ''}.`;
     } catch (e){
       KVL.klaida = `Failo „${f.name}“ perskaityti nepavyko: ${GP_BUSENA.klaidosTekstas(e)}`;
     }
@@ -2766,20 +2766,48 @@ const ZAL = { kandidatai: [], pasirinkta: 0, atmesta: false };
 function zalModelis(){ return (!ZAL.atmesta && ZAL.kandidatai[ZAL.pasirinkta]) || null; }
 const ZAL_AUTO = new Map();                  // atsakymo raktas -> žmogaus reikšmė prieš automatinį atsakymą
 const ZAL_HEADER_RE = /^(REIKALAVIMAI ŽALIESIEMS PIRKIMAMS|ŽALIEJI REIKALAVIMAI)\b/i;
-/* Šablono žaliųjų lentelė: „N lentelė“, po jos (iki 3 pastraipų) - „REIKALAVIMAI ŽALIESIEMS PIRKIMAMS“ / „ŽALIEJI REIKALAVIMAI“; iki - 4.2 p. */
+/* Šablono žaliųjų lentelė: „N lentelė“, po jos (iki 3 pastraipų) - „REIKALAVIMAI ŽALIESIEMS PIRKIMAMS“ / „ŽALIEJI REIKALAVIMAI“; iki - 4.2 p.
+   DPS sukūrimo sąlygos (2026-10-22): LT - pavadinimas „2 priedo 2 lentelė „žalieji reikalavimai““ (antraštėje žodžių nėra), iki - kitas punktas
+   („7. Šio priedo 2 lentelėje ...“); LT/EN priede (atskiras 2 priedo failas) - kaip SPS, „3 lentelė/Table 3“. klausimas - ar dokumente yra SPS
+   klausimas „Kur nustatomi žalieji reikalavimai?“ (DPS LT sąlygose jo nėra - lentelė priede yra visada). */
 function zalSritis(Z){
   const P = Z.paras || {}, ks = Object.keys(P).map(Number).sort((a, b) => a - b), t = i => String(P[String(i)] || '').trim();
-  const h = ks.find(i => /^\d+\s*lentel/i.test(t(i)) && ks.some(j => j > i && j <= i + 3 && ZAL_HEADER_RE.test(t(j))));
-  if (h == null) return null;
-  const iki = ks.find(i => i > h && /^(\d+\.\d+\.?\s|[a-z]\))/.test(t(i))) ?? h + 40;
-  const nr = Number((/^(\d+)/.exec(t(h)) || [])[1]) || 3;
-  return { nuo: h, iki, nr, pav: `SPS ${nr} lentelė`, pavKa: `SPS ${nr} lentelę`, pavKur: `SPS ${nr} lentelėje` };
+  const klausimas = ks.some(i => t(i).startsWith(ZAL_SPS.salygose));
+  const dps = /^DPS/.test(Z.seima || '');
+  let h = ks.find(i => /^\d+\s*lentel/i.test(t(i)) && ks.some(j => j > i && j <= i + 3 && ZAL_HEADER_RE.test(t(j))));
+  let pr = null, iki;
+  if (h != null) iki = ks.find(i => i > h && /^(\d+\.\d+\.?\s|[a-z]\))/.test(t(i))) ?? h + 40;
+  else {
+    h = ks.find(i => /^\d+\s*priedo\s+\d+\s*lentel\S*\s.*žali/i.test(t(i)));
+    if (h == null) return null;
+    pr = Number(/^(\d+)/.exec(t(h))[1]);
+    iki = ks.find(i => i > h && /^(\d+\.\d+\.?\s|\d+\.\s+\S|[a-z]\))/.test(t(i))) ?? h + 40;
+  }
+  const nr = Number(((pr != null ? /priedo\s+(\d+)/i.exec(t(h)) : /^(\d+)/.exec(t(h))) || [])[1]) || 3;
+  if (dps && pr == null) pr = Number((/(\d+)\s*priedas/i.exec(Z.pavadinimas || '') || [])[1]) || null;   // LT/EN 2 priedo failas
+  const vardas = pr != null ? `DPS sąlygų ${pr} priedo ${nr} lentel` : `SPS ${nr} lentel`;
+  return { nuo: h, iki, nr, priedas: pr, klausimas, pav: vardas + 'ė', pavKa: vardas + 'ę', pavKur: vardas + 'ėje' };
+}
+/* Kur perkeliama žaliųjų lentelė (dokumentų sąrašui 1 žingsnyje ir patikroms): iš įkeltų šablonų, o kol jie neįkelti - pagal būdą ir kalbą
+   (testai tikrina, kad sutampa su zalSritis). null - šio būdo sąlygose žaliųjų lentelės nėra (DPS konkretus pirkimas). */
+const ZAL_TIKSLAS = { DPSK: { LT: { pr: 2, nr: 2, klausimas: false }, LT_EN: { pr: 2, nr: 3, klausimas: true } }, DPSP: null };
+function zalTikslas(){
+  const d = DOK.find(x => !yraForma(x) && zalSritis(x.zemelapis));
+  if (d) return zalSritis(d.zemelapis);
+  const sm = seima(), kalba = ($('input[name=kalba]:checked') || {}).value || 'LT';
+  if (sm && sm in ZAL_TIKSLAS){
+    const x = ZAL_TIKSLAS[sm] && ZAL_TIKSLAS[sm][kalba];
+    if (!x) return null;
+    const v = `DPS sąlygų ${x.pr} priedo ${x.nr} lentel`;
+    return { nr: x.nr, priedas: x.pr, klausimas: x.klausimas, pav: v + 'ė', pavKa: v + 'ę', pavKur: v + 'ėje' };
+  }
+  return { nr: 3, priedas: null, klausimas: true, pav: 'SPS 3 lentelė', pavKa: 'SPS 3 lentelę', pavKur: 'SPS 3 lentelėje' };
 }
 const zalKilme = M => `iš įkelto dokumento „${M.failas}“ (žaliųjų reikalavimų lentelė)${M.di ? ', tekstą atpažino DI iš skenuoto dokumento' : ''}`;
 /* Ar žaliųjų klausimą atsako įkeltas dokumentas (kontrolinisAtsakymas). */
 function zalAtsakymas(t){
   if (!ZAL_AUTO.has(t) || !zalModelis()) return null;
-  return { v: t === norm(ZAL_SPS.salygose), zal: true, kodel: `žalieji reikalavimai - ${zalKilme(zalModelis())}, perkeliami į SPS 3 lentelę` };
+  return { v: t === norm(ZAL_SPS.salygose), zal: true, kodel: `žalieji reikalavimai - ${zalKilme(zalModelis())}, perkeliami į ${(zalTikslas() || {}).pavKa || 'SPS 3 lentelę'}` };
 }
 function zalSalinkFaila(vardas){
   const buvo = zalModelis();
@@ -2798,6 +2826,15 @@ function zalTaikyk(){
     ZAL_AUTO.clear();
   }
   return naudoti;
+}
+/* DPS sukūrimo sąlygų 2.15 p. „DPS sukūrimui taikomi aplinkos apsaugos kriterijai nustatyti [...]“ (2026-10-22): kai įkelta žaliųjų
+   reikalavimų lentelė perkeliama į DPS sąlygų priedą, vieta siūloma - to priedo lentelė („Siūloma (nepatvirtinta)“, patvirtina žmogus).
+   Ar kriterijai DPS sukūrimui taikomi (2.15 p. variantai), sprendžia žmogus - iš lentelės tai neišvedama. */
+const DPS_APLINKOS_RE = /dps sukurimui taikomi aplinkos apsaugos kriterijai nustatyti/;     // norm() tekstas (LT - su „2 15“ priekyje)
+function zalDpsSiulyk(key, en, naudojama){
+  const t = naudojama ? zalTikslas() : null;
+  const v = t && t.priedas ? (en ? `Table ${t.nr} of Annex ${t.priedas} to these procurement conditions` : `šių pirkimo sąlygų ${t.priedas} priedo ${t.nr} lentelėje`) : null;
+  siulyk(key, null, v, v ? `įkelta žaliųjų reikalavimų lentelė „${zalModelis().failas}“ perkeliama į ${t.pavKa} - patikrinkite` : null);
 }
 /* Kvalifikacijos klausimas pagal įkeltą kvalifikacijos reikalavimų lentelę (0 etapas D2, 2026-10-19; naujų darbuotojų testavimas - įkėlus
    lentelę vis tiek klausta „Ar tikrinate tik pašalinimo pagrindus ar ir kvalifikaciją?“). Kai lentelė naudojama (perkeliama į SPS 2 lentelę),
@@ -3927,6 +3964,7 @@ function surinktiKlausimus(){
           if (tusEn.poraTipas === 'ai'){                      // laisvas tekstas - EN laukas prie LT klausimo
             ATS['I_' + raktas] ??= '';
             if (DPS_APIMTIS_RE.test(norm(ltInt.text))){ const a = dpsApimtis(true); siulyk('I_' + raktas, null, a, a ? DPS_APIMTIS_KILME : null); }
+            if (DPS_APLINKOS_RE.test(norm(ltInt.text))) zalDpsSiulyk('I_' + raktas, true, ZAL_NAUDOJAMA);
             K.enPoros.formuluotes['I|' + norm(ltInt.text)] = { enRaktas: raktas,
               ltTekstas: ltInt.text, enTekstas: n.text, kanalas: 'I', tipas: 'ai', dok: trumpas };
             return;
@@ -4006,6 +4044,8 @@ function surinktiKlausimus(){
       ATS['I_' + raktas] ??= '';
       // DPS sąlygų 3.5 p. (2026-10-05): maksimali numatoma apimtis - siūloma pagal 1 žingsnio numatomą vertę (patvirtina žmogus)
       if (DPS_APIMTIS_RE.test(nr)){ const a = dpsApimtis(false); siulyk('I_' + raktas, null, a, a ? DPS_APIMTIS_KILME : null); }
+      // DPS sąlygų 2.15 p. (2026-10-22): įkelta žaliųjų lentelė perkeliama į sąlygų priedą - vieta siūloma
+      if (DPS_APLINKOS_RE.test(nr)) zalDpsSiulyk('I_' + raktas, false, ZAL_NAUDOJAMA);
       // AKV 2.3 p. „... neskaidomas vadovaujantis VPĮ 28 straipsnio 2 dalimi, nes (įrašyti priežastis ...)“
       const neskaidymas = /neskaidomas[\s\S]*(^|[^\p{L}])nes\s*\(/iu.test(n.text);
       pridek('formuluotes', 'I|' + raktas, trumpas,
@@ -5425,14 +5465,15 @@ function kvlHTML(K, c, klase, kur){
 function zalHTML(K, c, klase, kur){
   const q = c.q, M = q.M, L = GP_KVAL_LENTELE, lt = q.lent;
   const pa = paaiskinimas({ vieta: kur,
-    kas: `Žalieji reikalavimai perkeliami iš jūsų dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) į ${lt.pavKa}: šablono eilutė (ISO 14001 / EMAS) pakeičiama jūsų eilutėmis - tekstas pažodžiui, tvarka kaip dokumente, numeriai 1-N. Klausimas „Kur nustatomi žalieji reikalavimai?“ tada atsakomas pats - „nurodomi pirkimo sąlygose“. ${kvlSkaitoma(M)}`,
-    pastaba: 'Kas turi atitikti žaliuosius reikalavimus (tiekėjas, tiekėjų grupės narys, ūkio subjektai), atsakote atskirame klausime - iš dokumento jis neatsakomas.' });
+    kas: `Žalieji reikalavimai perkeliami iš jūsų dokumento lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) į ${lt.pavKa}: šablono eilutė (ISO 14001 / EMAS) pakeičiama jūsų eilutėmis - tekstas pažodžiui, tvarka kaip dokumente, numeriai 1-N. ${lt.klausimas ? 'Klausimas „Kur nustatomi žalieji reikalavimai?“ tada atsakomas pats - „nurodomi pirkimo sąlygose“.' : `${lt.pav} šablone yra visada, todėl klausimo, kur nustatomi žalieji reikalavimai, nėra.`} ${kvlSkaitoma(M)}`,
+    pastaba: lt.klausimas ? 'Kas turi atitikti žaliuosius reikalavimus (tiekėjas, tiekėjų grupės narys, ūkio subjektai), atsakote atskirame klausime - iš dokumento jis neatsakomas.'
+      : 'Ar DPS sukūrimui taikomi aplinkos apsaugos kriterijai (sąlygų 2.15 punktas), atsakote atskirame klausime - iš lentelės tai neišvedama; pasirinkus, kad taikomi, vieta siūloma - ši lentelė.' });
   const galva = kortelesGalva(c, `Žalieji reikalavimai (${lt.pav})`, pa);
   const ikelti = `<button type="button" class="sec" data-zal="ikelti">Įkelti kitą dokumentą</button>`;
   if (!M){
     const atm = ZAL.kandidatai[ZAL.pasirinkta];
     return `<section class="${klase} kvl" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${galva}
-      <p class="lk-uz">Įkelta žaliųjų reikalavimų lentelė${atm ? ` iš „${esc(atm.failas)}“` : ''} nenaudojama - kur nustatomi žalieji reikalavimai, atsakote klausime „Kur nustatomi žalieji reikalavimai?“, o ${esc(lt.pav)} lieka kaip šablone.</p>
+      <p class="lk-uz">Įkelta žaliųjų reikalavimų lentelė${atm ? ` iš „${esc(atm.failas)}“` : ''} nenaudojama - ${lt.klausimas ? 'kur nustatomi žalieji reikalavimai, atsakote klausime „Kur nustatomi žalieji reikalavimai?“, o ' : ''}${esc(lt.pav)} lieka kaip šablone.</p>
       <div class="actions kvl-veiksmai"><button type="button" class="sec" data-zal="naudoti">Naudoti įkeltą lentelę</button>${ikelti}</div></section>`;
   }
   const u0 = c.vienetai[0] || {};
@@ -5455,14 +5496,15 @@ function zalHTML(K, c, klase, kur){
     ${kvlDiHTML(M)}${kitos}
     <div class="kvl-lent" role="group" aria-label="Taip bus ${esc(lt.pavKur)}">${eil}</div>
     <ul class="kvl-info">
-      <li>Klausimas „Kur nustatomi žalieji reikalavimai?“ atsakytas: <b>nurodomi pirkimo sąlygose</b> (${esc(lt.pav)} paliekama) - matoma skiltyje „Išspręsta automatiškai“.</li>
+      ${lt.klausimas ? `<li>Klausimas „Kur nustatomi žalieji reikalavimai?“ atsakytas: <b>nurodomi pirkimo sąlygose</b> (${esc(lt.pav)} paliekama) - matoma skiltyje „Išspręsta automatiškai“.</li>` : ''}
+      ${lt.priedas ? `<li>Sąlygų 2.15 punkte, pasirinkus, kad DPS sukūrimui taikomi aplinkos apsaugos kriterijai, vieta siūloma - „šių pirkimo sąlygų ${esc(lt.priedas)} priedo ${esc(lt.nr)} lentelėje“ (patvirtinate jūs).</li>` : ''}
       <li>Šablono eilutė (ISO 14001 / EMAS) pakeičiama jūsų eilutėmis, numeriai 1-${M.eilutes.length}.</li>
       ${M.pdf ? '<li>Iš PDF perkeliamas tik tekstas - pusjuodžio, kursyvo ir pabraukimo PDF faile nėra. Jei jų reikia, įkelkite Word failą.</li>' : ''}
       ${dvik ? '<li>Pirkimo sąlygos dvikalbės, o dokumente anglų teksto nėra - angliškuose langeliuose bus raudona pastaba „Įrašykite vertimą į anglų kalbą.“; vertimą įrašykite Word programoje.</li>' : ''}
     </ul>
     ${past.length ? `<div class="kvl-past"><b>Patikrinkite:</b><ul>${past.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
     <div class="actions kvl-veiksmai">${u0.busena === 'siuloma' ? '<button type="button" data-lk-patv="ZAL">Patvirtinti perkėlimą</button>' : ''}
-      <button type="button" class="sec" data-zal="atmesti">Nenaudoti - pasirinksiu, kur nustatomi žalieji reikalavimai</button>${ikelti}</div>
+      <button type="button" class="sec" data-zal="atmesti">${lt.klausimas ? 'Nenaudoti - pasirinksiu, kur nustatomi žalieji reikalavimai' : 'Nenaudoti - palikti šablono eilutę'}</button>${ikelti}</div>
   </section>`;
 }
 window.zalPasirink = v => { ZAL.pasirinkta = Number(v) || 0; PATV.delete('ZAL'); klausimynas(); };
@@ -7423,14 +7465,15 @@ async function generuotiViena(d, REZ){
     neVisaPasalinta = GP_KVAL_LENTELE.tusciaNeVisa(xd);
   }
   // 8a-z. ŽALIEJI REIKALAVIMAI IŠ ĮKELTO DOKUMENTO (2026-10-18): SPS 3 lentelės šablono eilutė pakeičiama dokumento eilutėmis (lentelė lieka
-  //       tik kai žalieji reikalavimai nustatomi pirkimo sąlygose - tą atsakymą duoda pati įkelta lentelė, zalTaikyk)
+  //       tik kai žalieji reikalavimai nustatomi pirkimo sąlygose - tą atsakymą duoda pati įkelta lentelė, zalTaikyk). DPS sukūrimo LT sąlygose
+  //       (2026-10-22) šio klausimo nėra - 2 priedo 2 lentelė yra visada.
   let zalIsDok = null;
   if (!forma && window.GP_KVAL_LENTELE){
-    const kz = window.__K && window.__K.zal;
-    if (kz && kz.M && kz.dokai.includes(d.trumpas) && sekaAtsakymas('zalieji')){
+    const kz = window.__K && window.__K.zal, zs = zalSritis(Z);
+    if (kz && kz.M && kz.dokai.includes(d.trumpas) && zs && (!zs.klausimas || sekaAtsakymas('zalieji'))){
       zalIsDok = GP_KVAL_LENTELE.irasykZaliuosius(doc.parts['word/document.xml'], kz.M);
-      if (zalIsDok) Object.assign(zalIsDok, { failas: kz.M.failas, pav: kz.lent.pav, patvirtinta: PATV.has('ZAL'), pdf: !!kz.M.pdf });
-      else zalIsDok = { klaida: true, failas: kz.M.failas, pav: kz.lent.pav };
+      if (zalIsDok) Object.assign(zalIsDok, { failas: kz.M.failas, pav: zs.pav, patvirtinta: PATV.has('ZAL'), pdf: !!kz.M.pdf });
+      else zalIsDok = { klaida: true, failas: kz.M.failas, pav: zs.pav };
     }
   }
 
@@ -9627,7 +9670,9 @@ function dkPoveikis(d){
     else out.push({ k: 'info', t: 'Kvalifikacijos reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome - SPS 2 lentelę pildysite 2 žingsnyje.' });
   }
   if (d.rusis === 'kvalifikacija' || d.rusis === 'zalieji'){
-    if (zl.length) zl.forEach(M => out.push({ k: 'ok', t: `Žaliųjų reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>SPS 3 lentelę</b> ${d.di ? '(tekstą atpažino DI)' : 'be DI'} - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas: nurodomi pirkimo sąlygose.` }));
+    const zt = zalTikslas();
+    if (zl.length && !zt) out.push({ k: 'isp', t: 'DPS konkretaus pirkimo sąlygų šablone žaliųjų reikalavimų lentelės nėra, todėl lentelė neperkeliama - dokumentas naudojamas tik kaip 2 žingsnio DI pasiūlymų šaltinis.' });
+    else if (zl.length) zl.forEach(M => out.push({ k: 'ok', t: `Žaliųjų reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>${esc(zt.pavKa)}</b> ${d.di ? '(tekstą atpažino DI)' : 'be DI'} - ${zt.klausimas ? 'klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas: nurodomi pirkimo sąlygose.' : 'šablono eilutė (ISO 14001 / EMAS) pakeičiama jūsų eilutėmis.'}` }));
     else if (d.rusis === 'zalieji') out.push({ k: 'info', t: 'Žaliųjų reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome - kur nustatomi žalieji reikalavimai, atsakysite 2 žingsnyje.' });
     if ((kv.length || zl.length) && /\.pdf$/i.test(d.vardas)) out.push({ k: 'info', t: 'Iš PDF perkeliamas tik tekstas - pusjuodžio, kursyvo ir pabraukimo PDF faile nėra. Jei jų reikia, įkelkite Word failą.' });
   }
@@ -9680,9 +9725,15 @@ function dkKontrolinisHTML(){
     + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą; ir sutarties klausimą apie ES lėšas', parB)
     + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata', '')
     + eil(kv, 'Kvalifikacijos reikalavimai', 'lentelė perkeliama į SPS 2 lentelę - šablono 2 lentelės klausimų nebelieka', kv.length ? (kvN ? perkeliamiReik(kvN) : 'lentelės nerasta') : '')
-    + eil(zl, 'Žalieji reikalavimai', 'lentelė perkeliama į SPS 3 lentelę - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats', zl.length ? (zlN ? perkeliamiReik(zlN) : 'lentelės nerasta') : '')
+    + eil(zl, 'Žalieji reikalavimai', zalKontrolinioNauda(), zl.length ? (zlN ? perkeliamiReik(zlN) : 'lentelės nerasta') : '')
     + eil(mt, 'Vertinimo metodika', 'kai vertinama ne vien pagal kainą: vertinimo kriterijus įrašomas pats, failas pridedamas prie paketo kaip SPS priedas', mtB)
     + `</ul>`;
+}
+/* „Ką verta įkelti“ - kas daroma su žaliųjų lentele pagal būdą ir kalbą (zalTikslas). */
+function zalKontrolinioNauda(){
+  const t = zalTikslas();
+  if (!t) return 'DPS konkretaus pirkimo sąlygų šablone žaliųjų lentelės nėra - dokumentas naudojamas tik kaip DI pasiūlymų šaltinis';
+  return `lentelė perkeliama į ${t.pavKa}` + (t.klausimas ? ' - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats' : ' - šablono eilutė pakeičiama jūsų eilutėmis');
 }
 let DK_KS_HTML = '';
 function dkRodyk(){
@@ -10258,6 +10309,8 @@ var SFAI = { rez: null, parasas: null, vykdomas: null, nepavyko: null, pastabos:
     else if (b.id === 'sfAiSiusti'){ SFAI.leista = aiSaltiniuParasas(); $('#sfAiLeidimas').hidden = true; sfAiGauti(); }
   });
   // pakeitus 1 žingsnio nacionalinio saugumo atsakymą - perpiešiama (ir paraiškos eilutė; suplanuotas siuntimas atšaukiamas)
+  // pakeitus būdą ar kalbą - kur perkeliama žaliųjų lentelė (DPS sąlygų priedas ar SPS 3 lentelė) keičiasi dokumentų sąraše
+  document.addEventListener('change', e => { if (e.target && (e.target.id === 'budas' || e.target.name === 'kalba') && DK.failai.length) dkRodyk(); });
   document.addEventListener('change', e => {
     if (!e.target || e.target.name !== 'nacsaug') return;
     if (e.target.value === 'ne') diPaleiskSulaikytus();
@@ -10794,8 +10847,8 @@ zingsniuBusena();
       // S1 (naudotojo sprendimas 2026-10-19): skiltyje - santrauka, išsamūs žingsniai ir pastaba - čia
       stepsTitle: "Kaip naudotis - išsamiai",
       steps: [
-      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Skenuoto dokumento (PDF be teksto ar nuotraukos) tekstą, jums leidus, perskaito DI - atpažintas tekstas pažymimas DI žyma, iš jo perkeltas lenteles palyginkite su originalu. Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę, o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; įkelta pasiūlymų vertinimo metodika (be DI) nustato vertinimo kriterijų SPS 8.1 punkte ir patikrina, ar kriterijų svorių suma - 100, o metodikos failas pridedamas prie paketo kaip SPS priedas be pakeitimų; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). <b>BVPŽ kodai</b> (iš kortelės, paraiškos ar dokumento, kuriame jie nurodyti, arba įrašyti jūsų) palyginami su Vyriausybės patvirtintu nacionalinio saugumo BVPŽ kodų sąrašu: kodui esant sąraše, klausimas „Ar pirkimo objektas susijęs su nacionaliniu saugumu?“ pažymimas „Taip“ su žyme „pagal BVPŽ sąrašą (nepatvirtinta)“ - patvirtinate jūs; atsakius „Taip“, klausiama, ar perkamos sąrašo BVPŽ kodų prekės ar paslaugos - nuo to priklauso SPS pašalinimo pagrindų punktas apie jas (be DI, kodai niekur nesiunčiami). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
-      "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Klausimai rodomi po vieną dokumento skyrių - „Toliau“ ir „Atgal“ veda per skyrius, turinys šoninėje juostoje - į bet kurį skyrių, paskutinis puslapis - „Prieš generuojant“ ir „Kas toliau?“; patyrusiems - jungiklis „Rodyti visus klausimus“ (pasirinkimas įsimenamas šioje naršyklėje, jei leidžiate nustatymų įsiminimą). Neprivaloma skiltis „DI atsakymų pasiūlymai“ siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje; abu be DI, perkėlimą patvirtinate jūs.",
+      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Skenuoto dokumento (PDF be teksto ar nuotraukos) tekstą, jums leidus, perskaito DI - atpažintas tekstas pažymimas DI žyma, iš jo perkeltas lenteles palyginkite su originalu. Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę (DPS sukūrimo sąlygose - į 2 priedo lenteles), o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; įkelta pasiūlymų vertinimo metodika (be DI) nustato vertinimo kriterijų SPS 8.1 punkte ir patikrina, ar kriterijų svorių suma - 100, o metodikos failas pridedamas prie paketo kaip SPS priedas be pakeitimų; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). <b>BVPŽ kodai</b> (iš kortelės, paraiškos ar dokumento, kuriame jie nurodyti, arba įrašyti jūsų) palyginami su Vyriausybės patvirtintu nacionalinio saugumo BVPŽ kodų sąrašu: kodui esant sąraše, klausimas „Ar pirkimo objektas susijęs su nacionaliniu saugumu?“ pažymimas „Taip“ su žyme „pagal BVPŽ sąrašą (nepatvirtinta)“ - patvirtinate jūs; atsakius „Taip“, klausiama, ar perkamos sąrašo BVPŽ kodų prekės ar paslaugos - nuo to priklauso SPS pašalinimo pagrindų punktas apie jas (be DI, kodai niekur nesiunčiami). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
+      "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Klausimai suskirstyti į dvi dalis - „Pirkimas ir reikalavimai tiekėjams“ ir „Pasiūlymai, vertinimas, sutartis ir priedai“: „Toliau“ ir „Atgal“ veda tarp dalių, turinys šoninėje juostoje - į bet kurį skyrių, antrosios dalies pabaigoje - „Prieš generuojant“ ir „Kas toliau?“. Neprivaloma skiltis „DI atsakymų pasiūlymai“ siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje (DPS sukūrimo - sąlygų 2 priedo žaliųjų reikalavimų lentelėje); abu be DI, perkėlimą patvirtinate jūs.",
       "<b>Sutarties projektas:</b> sutarties klausimai atskirame žingsnyje - galite juos atsakyti dabar arba vėliau. Ką atsako jūsų techninė specifikacija ar užduotis ir kiti įkelti dokumentai (terminai, objektas, pagrindiniai įrenginiai, garantiniai terminai, ES lėšos ir kt.), sutarties klausimuose įrašoma iš karto - su DI žyme, citata ir būsena „Siūloma (nepatvirtinta)“; jums lieka patikrinti ir patvirtinti. „Generuoti pirkimo sąlygas“ sugeneruoja sąlygas be sutarties (pakete ji pažymima „atidėta“, sąlygų tekstas nesikeičia), „Generuoti pirkimo sąlygas ir sutarties projektą“ - abu.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu. Pakeitus atsakymus po generavimo, rodoma „Reikia pergeneruoti“ ir kurie dokumentai paveikti.",
       "<b>Pauzė:</b> atsakymai automatiškai išsaugomi juodraštyje šioje naršyklėje; „Išsaugoti ir tęsti vėliau“ - bet kuriame žingsnyje. Grįžę į puslapį, juodraštį rasite sąraše „Juodraščiai šioje naršyklėje“; jį galima atsisiųsti failu ir įkelti kitoje naršyklėje.",
