@@ -1031,6 +1031,10 @@
     const E = numeriai(M, {}, opts && opts.vertimas);
     const nauji = E.map((e, i) => {
       const tr = proto.cloneNode(true);
+      // formos eilutės aukštis pritaikytas tuščiai pildymo vietai (DPS sukūrimo LT 2 priedo 2 lentelė - 3209 DXA, ~5,7 cm), o įrašius
+      // reikalavimą aukštis - pagal turinį (2026-10-22, Pages patikra: po tekstu likdavo tuščias plotas); SPS formose aukščio nėra
+      const trPr = vaikas(tr, 'trPr');
+      if (trPr) vaikai(trPr, 'trHeight').forEach(x => trPr.removeChild(x));
       const nrL = langelisPagal(tr, R.nr);
       if (nrL) pildykLangeli(doc, nrL.tc, [{ atk: [{ t: (i + 1) + '.' }] }], rPr0);
       const rl = langelisPagal(tr, ltReik), dl = langelisPagal(tr, ltDok);
