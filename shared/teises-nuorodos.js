@@ -504,6 +504,9 @@
       PI: { a: "PI", s: 95, d: 1, p: 5 }, VPI: { a: "VPI", s: 87, d: 2, p: 5 } },
     sut_uztikrinimas: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomas sutarties įvykdymo užtikrinimas",
       PI: { a: "PI", s: 95, d: 1, p: 6 }, VPI: { a: "VPI", s: 87, d: 2, p: 6 } },
+    // 2026-10-21 (trečioji naujo darbuotojo patikra T3-D3): PĮ 55 str. 1 d. ir VPĮ 42 str. 1 d. (abi - 2022-12-13 įstatymų redakcija) ir CK 6.70 str. 1 d.
+    sutarties_uztikrinimo_budai: { tikrinta: "2026-10-21", apie: "gali pareikalauti, kad pasiūlymų galiojimas būtų užtikrinamas, ir privalo pareikalauti, kad pirkimo sutarties įvykdymas būtų užtikrinamas Civilinio kodekso 6.70 straipsnyje nustatytais prievolių įvykdymo užtikrinimo būdais - netesybomis, įkeitimu (hipoteka), laidavimu, garantija, rankpinigiais ar kitais sutartyje numatytais būdais",
+      PI: { a: "PI", s: 55, d: 1 }, VPI: { a: "VPI", s: 42, d: 1 } },
     sut_perziura: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomos sutarties peržiūros sąlygos ar pasirinkimo galimybės, jeigu tai numatoma (VPĮ: trukmė su pratęsimu ilgesnė kaip 6 mėn. - privaloma su mokesčiais nesusijusi kainos peržiūros sąlyga, išskyrus kai perskaičiavimas negalimas, pvz. kintamo įkainio ar išlaidų atlyginimo kainodara)",
       PI: { a: "PI", s: 95, d: 1, p: 7 }, VPI: { a: "VPI", s: 87, d: 2, p: 7 } },
     sut_gincai: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatoma ginčų sprendimo tvarka",
