@@ -621,9 +621,13 @@
     ['Pasiūlymas', 'Tender'], ['Pirminis pasiūlymas', 'Initial Tender'], ['Paraiška', 'Application'], ['EBVPD', 'ESPD'], ['SPS', 'SPC'], ['BPS', 'GPC'],
     ['Kvalifikacijos reikalavimai', 'Qualification Requirements'], ['Komisija', 'Commission'], ['Ūkio subjektas', 'Economic entity'],
     ['Subtiekėjas', 'Sub-supplier'], ['Kvazisubtiekėjas', 'Quasi-Sub-supplier'], ['Sutartis', 'Contract'], ['Techninė specifikacija', 'Technical Specification'],
-    ['Rangovas', 'Contractor'], ['skaitmeninė kopija', 'digital copy'], ['CVP IS', 'CVP IS']];
-  const VERTIMO_SISTEMA = 'Esi teisinių pirkimo dokumentų vertėjas iš lietuvių į anglų kalbą. Verti LITGRID AB (Lietuvos elektros perdavimo sistemos operatoriaus) '
-    + 'pirkimo sąlygų kvalifikacijos reikalavimų lentelę dvikalbėms (LT / EN) pirkimo sąlygoms. Taisyklės: '
+    ['Rangovas', 'Contractor'], ['skaitmeninė kopija', 'digital copy'], ['CVP IS', 'CVP IS'],
+    // žaliųjų reikalavimų lentelė (2026-10-22) - LITGRID dvikalbių SPS 3 lentelės terminai
+    ['Žalieji reikalavimai', 'Environmental requirements'], ['aplinkos apsaugos vadybos sistema', 'environmental protection management system']];
+  /* Kokią lentelę verčia (2026-10-22: ir žaliųjų reikalavimų lentelę - modelis su zalieji: true). */
+  const VERTIMO_LENTELE = { kvl: 'kvalifikacijos reikalavimų lentelę', zal: 'žaliųjų (aplinkosaugos) reikalavimų lentelę' };
+  const vertimoSistema = rusis => 'Esi teisinių pirkimo dokumentų vertėjas iš lietuvių į anglų kalbą. Verti LITGRID AB (Lietuvos elektros perdavimo sistemos operatoriaus) '
+    + 'pirkimo sąlygų ' + (VERTIMO_LENTELE[rusis] || VERTIMO_LENTELE.kvl) + ' dvikalbėms (LT / EN) pirkimo sąlygoms. Taisyklės: '
     + '1) versk tiksliai ir pilnai - nieko nepridėk, nepraleisk ir neaiškink; '
     + '2) vartok šiuos terminus: ' + VERTIMO_TERMINAI.map(([a, b]) => a + ' - ' + b).join('; ') + '; '
     + '3) skaičius, sumas (ir jų skyrybą), datas, punktų numerius (pvz. „1.1.“), nuorodas, el. pašto adresus, matavimo vienetus (kV, MVA) '
@@ -631,6 +635,7 @@
     + '4) teisės aktų ir institucijų pavadinimus versk pažodžiui, santrumpų nesugalvok; '
     + '5) kiekvieną pastraipą versk atskirai: tiek pat pastraipų ir ta pačia tvarka, tuščia pastraipa lieka tuščia; '
     + '6) atsakyk TIK JSON objektu, be jokio kito teksto.';
+  const VERTIMO_SISTEMA = vertimoSistema('kvl');
   const VERTIMO_PARTIJA = 6000;   // lietuviško teksto ženklų vienai užklausai (atsakymas - panašaus ilgio)
   /* Eilutės, kurias reikia versti (be šaltinio angliško teksto ir be jau esamo vertimo), suskirstytos į partijas. */
   function vertimoPartijos(M, vertimas, opts){
@@ -654,7 +659,7 @@
     const duom = { eilutes: partija.eilutes.map(i => ({ nr: i + 1, reikalavimas: M.eilutes[i].reik.map(p => p.tekstas), dokumentai: M.eilutes[i].dok.map(p => p.tekstas) })) };
     if (partija.antrastes.length) duom.antrastes = partija.antrastes;
     if (partija.neVisa) duom.neVisa = partija.neVisa;
-    return { system: VERTIMO_SISTEMA, userMessage: 'Išversk į anglų kalbą. Grąžink JSON tokios pačios sandaros (tie patys raktai ir „nr“, vietoj lietuviško teksto - '
+    return { system: vertimoSistema(M.zalieji ? 'zal' : 'kvl'), userMessage: 'Išversk į anglų kalbą. Grąžink JSON tokios pačios sandaros (tie patys raktai ir „nr“, vietoj lietuviško teksto - '
       + 'angliškas):\n' + JSON.stringify(duom) };
   }
   const skaiciai = s => (String(s).match(/\d+/g) || []).sort().join(' ');
@@ -1011,7 +1016,8 @@
     }
     return null;
   }
-  function irasykZaliuosius(doc, M){
+  /* opts: { vertimas } - DI vertimas (2026-10-22), kai šaltinyje anglų teksto nėra; šaltinio angliškas tekstas visada pirmesnis (numeriai()). */
+  function irasykZaliuosius(doc, M, opts){
     const R = raskZaliujuLentele(doc);
     if (!R || !M || !M.eilutes.length) return null;
     const { tbl, k, st } = R;
@@ -1022,7 +1028,8 @@
     const enReik = st.reikEn && st.reikEn !== ltReik ? st.reikEn : null, enDok = st.dokEn && st.dokEn !== ltDok ? st.dokEn : null;
     const dvikalbis = !!(enReik || enDok);
     const rPr0 = baziniaiRPr(tbl);
-    const nauji = M.eilutes.map((e, i) => {
+    const E = numeriai(M, {}, opts && opts.vertimas);
+    const nauji = E.map((e, i) => {
       const tr = proto.cloneNode(true);
       const nrL = langelisPagal(tr, R.nr);
       if (nrL) pildykLangeli(doc, nrL.tc, [{ atk: [{ t: (i + 1) + '.' }] }], rPr0);
@@ -1036,7 +1043,7 @@
     duom.forEach(tr => tbl.removeChild(tr));
     nauji.forEach(tr => tbl.appendChild(tr));
     eil.slice(0, k + 1).forEach(tr => laikykSuKitu(doc, tr));
-    return { eiluciu: nauji.length, dvikalbis, beVertimo: dvikalbis ? M.eilutes.filter(e => !pTekstas(e.reikEN)).length : 0 };
+    return { eiluciu: nauji.length, dvikalbis, beVertimo: dvikalbis ? E.filter(e => !pTekstas(e.reikEN)).length : 0, diVertimu: dvikalbis ? E.filter(e => e.diVertimas).length : 0 };
   }
 
   /* Tiekėjo patirties (įvykdytų sutarčių) reikalavimai - ne specialistų. Formose būna nuoroda į konkretų lentelės punktą
@@ -1056,6 +1063,6 @@
   }
 
   root.GP_KVAL_LENTELE = { skaityk, skaitykXml, skaitykPdf, pdfLenteles, irasykZaliuosius, raskZaliujuLentele, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
-    vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos, VERTIMO_TERMINAI,
+    vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos, VERTIMO_TERMINAI, vertimoSistema,
     raskLentele, GRUPES, grupesPav, grupiuTvarka, pTekstas, VERTIMO_ZYMA, patirtiesEilutes, LENTELES_PAV };
 })(typeof window !== 'undefined' ? window : this);
