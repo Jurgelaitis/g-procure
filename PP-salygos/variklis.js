@@ -1467,7 +1467,48 @@ const GPGen = (() => {
      vietoje paliktu tuscias eilutes su remeliais, o cia salinama visa eilute.
      SAUGIKLIS: eilute, kuri KERTA riba (turi bent viena pastraipa uz [nuo,iki]),
      NEsalinama - kad neprarastume gretimo, ne salyginio turinio.               */
-  function trintiEilutese(paras, nuo, iki){
+  /* Tekstu įrašyti lentelės eilučių numeriai („5.“, „6.1.“) po eilučių pašalinimo (2026-10-21, DPS konkretaus pirkimo LT/EN sąlygų
+     nacionalinio saugumo lentelė: pašalinus BVPŽ punktą 6 ir 6.1-6.3 likdavo „5.“, „7.“). LT/EN dokumentas - viena didelė lentelė, kurioje ir
+     skyrių numeriai, todėl keičiami tik numeriai, einantys IŠKART po pašalintų eilučių ir tęsiantys jų seką (7, 8, 9 -> 6, 7, 8; jų
+     papunkčiai - kartu); kitas numeris (naujo skyriaus „5.“) sustabdo. Tik pirmo langelio tekstas, sudarytas vien iš numerio; eilutės su Word
+     automatine numeracija (tuščias tekstas) neliečiamos - Word jas pernumeruoja pats. */
+  const NR_LANGELYJE = /^(\s*)(\d+)(?:\.(\d+))?(\.?)(\s*)$/;
+  function langelioNumeris(tr){
+    const tc = Array.from(tr.childNodes).find(n => n.localName === 'tc');
+    if (!tc) return null;
+    const ts = GPDocx.els(tc, 't'), m = NR_LANGELYJE.exec(ts.map(x => x.textContent).join(''));
+    return m ? { ts, m, v0: +m[2], v1: m[3] == null ? null : +m[3] } : null;
+  }
+  function keiskLangelioNumeri(n, naujas){
+    const senas = n.m[2] + (n.m[3] != null ? '.' + n.m[3] : ''), s = n.m[1].length, e = s + senas.length;
+    let poz = 0, liko = naujas;
+    n.ts.forEach(x => {                                 // tekstas gali būti kelių atkarpų („6“ + „.“) - keičiama tik numerio sritis
+      const a = poz, b = poz + x.textContent.length; poz = b;
+      if (b <= s || a >= e) return;
+      const t0 = x.textContent, is = Math.max(s, a) - a, ie = Math.min(e, b) - a;
+      x.textContent = t0.slice(0, is) + liko + t0.slice(ie); liko = '';
+    });
+    return { buvo: senas, tapo: naujas };
+  }
+  function numeriaiPoPasalintu(eilutes, pasalintos, numeriai){
+    const pas = eilutes.map(tr => pasalintos.has(tr)), pask = pas.lastIndexOf(true);
+    if (pask < 0) return;
+    const p0 = eilutes.filter((tr, k) => pas[k]).map(langelioNumeris).filter(n => n && n.v1 == null).map(n => n.v0);
+    if (!p0.length) return;
+    let laukiama = Math.max(...p0) + 1, dabar = null;
+    for (let k = pask + 1; k < eilutes.length; k++){
+      if (pas[k]) continue;
+      const n = langelioNumeris(eilutes[k]);
+      if (!n) continue;
+      if (n.v1 == null){
+        if (n.v0 !== laukiama) break;
+        dabar = n.v0; numeriai.push(keiskLangelioNumeri(n, String(n.v0 - p0.length))); laukiama++;
+      } else if (dabar !== null && n.v0 === dabar) numeriai.push(keiskLangelioNumeri(n, (dabar - p0.length) + '.' + n.v1));
+      else break;
+    }
+  }
+
+  function trintiEilutese(paras, nuo, iki, numeriai){
     const eilutes = new Set();
     for (let i = nuo; i <= iki; i++){
       let cur = paras[i] ? paras[i].parentNode : null;
@@ -1475,12 +1516,15 @@ const GPGen = (() => {
       if (cur) eilutes.add(cur);
     }
     let n = 0;
+    const salinamos = new Set(), lent = new Map();
     for (const tr of eilutes){
       const idxs = GPDocx.els(tr, 'p').map(p => paras.indexOf(p)).filter(x => x >= 0);
       const visosViduje = idxs.length > 0 && idxs.every(x => x >= nuo && x <= iki);
       if (!visosViduje) continue;                       // eilute kerta riba - saugiai praleidziam
-      if (tr.parentNode){ tr.parentNode.removeChild(tr); n++; }
+      if (tr.parentNode){ salinamos.add(tr); if (!lent.has(tr.parentNode)) lent.set(tr.parentNode, Array.from(tr.parentNode.childNodes).filter(x => x.localName === 'tr')); }
     }
+    for (const tr of salinamos){ tr.parentNode.removeChild(tr); n++; }
+    if (numeriai) lent.forEach(eil => numeriaiPoPasalintu(eil, salinamos, numeriai));
     return n;
   }
 
@@ -2345,16 +2389,21 @@ const GPNum = (() => {
     // („2 priedo 1 lentelė“) ir skaicius be tasko („2026-10-05“) - ne punktai.
     const yraSkyriu = S.filter(e => e.lygis === 0 && e.skyrius).length >= 2;
     const plokscias = e => e.zy || (e.lit && e.lit.taskas === '.' && +e.lit.nr <= 99 && !/^\s*(priedo\s+\d+\s+)?lentel/i.test(e.t.slice(e.lit.ilgis)));
-    let sk = 0, cnt = [], alt = false;
+    let sk = 0, cnt = [], alt = false, skSenas = null, vietinis = null;
     for (const e of S){
       if (e.alternatyva){ alt = true; continue; }
       if (e.lygis === 0){
-        if (yraSkyriu ? !e.skyrius : !plokscias(e)) continue;
+        if (yraSkyriu ? !e.skyrius : !plokscias(e)){ if (yraSkyriu) vietinis = +e.senas; continue; }
         sk = (yraSkyriu || sk) ? sk + 1 : (+e.senas || 1);
+        skSenas = +e.senas; vietinis = null;
         cnt = []; alt = false; e.naujas = String(sk); continue;
       }
       const senas = e.senas.split('.').map(Number);
       if (!sk) continue;                                     // punktai pries pirma skyriu (titulinis) - nelieciami
+      // vietinio sąrašo papunktis (2026-10-21): DPS konkretaus pirkimo LT/EN sąlygų nacionalinio saugumo lentelėje po eilutės „6.“ - „6.1.“-„6.3.“;
+      // iki tol jie tapdavo 4 skyriaus punktais „4.2.“-„4.4.“. Papunktis, kurio pirmas skaičius - ką tik buvęs vietinio (ne skyriaus) sąrašo
+      // numeris, o ne skyriaus, - nekeičiamas.
+      if (vietinis != null && senas[0] === vietinis && senas[0] !== skSenas) continue;
       const L = e.lygis;
       while (cnt.length < L) cnt.push(0);
       cnt.length = L;

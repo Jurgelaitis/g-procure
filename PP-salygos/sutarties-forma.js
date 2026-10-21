@@ -1020,7 +1020,10 @@
     // užtikrinimo procentai - iš SPS sumos ir numatomos vertės (naudotojo sprendimas 2026-10-08)
     if (R.uztikrinimas === "taip" && (A.procentai == null || A.procentai.reiksme == null || A.procentai.reiksme === "") && ctx.uztikrinimas && ctx.uztikrinimas.eur > 0 && ctx.verte > 0) {
       R.procentai = skLT(apvalink(ctx.uztikrinimas.eur / ctx.verte * 100));
-      kilmes.procentai = { kilme: "SPS užtikrinimo suma " + ctx.uztikrinimas.eur + " Eur / numatoma vertė " + ctx.verte + " Eur" };
+      // SPS - suma eurais (numatoma vertė dažniausiai neskelbiama, todėl procento tiekėjai neapskaičiuotų), sutartyje - įprastai procentas nuo
+      // Sutarties vertės (naudotojo paaiškinimas 2026-10-21, T3-D2): suma pagal sutartį gali skirtis nuo SPS sumos - tai pasakoma, ne taisoma
+      kilmes.procentai = { kilme: "SPS užtikrinimo suma " + sumaLT(ctx.uztikrinimas.eur) + " Eur / numatoma vertė " + sumaLT(ctx.verte) +
+        " Eur; sutartyje procentas skaičiuojamas nuo Sutarties vertės, todėl suma gali skirtis nuo SPS sumos" };
     }
     // darbų pirkimo-pardavimo SS 6.3 p.: užtikrinimo suma - iš SPS atsakymo (siūloma, kol žmogus neįrašė)
     if (DM(ctx || {}) && R.dm_uztikrinimas === "taip" && (A.dm_uztikrinimo_suma == null || A.dm_uztikrinimo_suma.reiksme == null || A.dm_uztikrinimo_suma.reiksme === "") &&

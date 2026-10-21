@@ -1045,14 +1045,15 @@ async function testaiParaiska(){
 /* 2026-10-03: nauji LITGRID šablonai. „ĮMONĖS PAVADINIMAS“ visur = LITGRID AB; „Atviras konkursas VPĮ“ - tik centralizuotas
    pirkimas (LITGRID AB sau ir UAB „EPSO-G“); R2 (lentelės seka atsakymus), R3 (angliška režimo eilutė), punkto numeris iš
    sąlygos eilutės, pavyzdinės reikšmės nebejuodinamos, bankų sąrašas - nekeičiamas PDF. */
-async function generuokSu({ budas, kalba = "LT", centr = false, grupes = "paskutinis", priedai = [], verte, pav = PAVADINIMAS, pavEN, tipas, sdata, pries, be = [], sutartis, po2, nacsaug }){
+async function generuokSu({ budas, kalba = "LT", centr = false, grupes = "paskutinis", priedai = [], verte, pav = PAVADINIMAS, pavEN, tipas, sdata, pries, be = [], sutartis, po2, nacsaug, nsbvpz }){
   await modulis();
   const ivesk = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input")); e.dispatchEvent(new W.Event("change")); };
   ivesk("pavadinimas", pav);
   const sel = D.getElementById("budas"); sel.value = budas; sel.dispatchEvent(new W.Event("change"));
   if (centr){ const c = D.querySelector("input[name=centr][value=taip]"); c.checked = true; c.dispatchEvent(new W.Event("change")); }
   if (nacsaug){ const n = D.querySelector("input[name=nacsaug][value=taip]"); n.checked = true; n.dispatchEvent(new W.Event("change", { bubbles: true }));
-    const km = D.getElementById("komisija-ne"); if (km && !D.querySelector("input[name=komisija]:checked")) km.checked = true; }   // komisija - be numatytojo nuo 2026-10-21
+    const km = D.getElementById("komisija-ne"); if (km && !D.querySelector("input[name=komisija]:checked")) km.checked = true;   // komisija - be numatytojo nuo 2026-10-21
+    if (nsbvpz){ const r = D.getElementById("nsbvpz-" + nsbvpz); r.checked = true; r.dispatchEvent(new W.Event("change", { bubbles: true })); } }
   const k = D.querySelector("input[name=kalba][value=" + kalba + "]"); k.checked = true; k.dispatchEvent(new W.Event("change"));
   if (pavEN) ivesk("pavadinimasEN", pavEN);
   if (tipas){ const t = D.querySelector("input[name=tipas][value=" + tipas + "]"); t.checked = true; t.dispatchEvent(new W.Event("change")); }
@@ -1221,8 +1222,10 @@ async function testaiNaujiSablonai(){
     const K = kunas(docs.AK_LT_SPS.xml);
     const uzt = K.find(x => /^9\.1\. Kartu su Pasiūlymu Tiekėjas privalo pateikti/.test(x.t));
     tiesa(uzt && /25 000 Eur/.test(uzt.red), "9.1 p. pavyzdys: " + (uzt ? uzt.red : "nėra"));
-    tiesa(Object.values(W.__K.automatika).some(a => a.veiksmas === "paliekama raudona" && /pavyzdinė/.test(a.kodel)), "automatikoje nepaaiškinta");
+    // nuo 2026-10-21 (T3-V7): užtikrinimo dydis ir terminas - iš klausimo kortelės; neįrašius lieka raudoni, automatika tai sako
+    tiesa(Object.values(W.__K.automatika).some(a => /laukiama dydžio ir garantijos termino/.test(a.veiksmas) && /užtikrinimo dydis ir banko garantijos terminas/.test(a.kodel)), "automatikoje nepaaiškinta");
     const dps = await generuokSu({ budas: "DPS-K" });
+    tiesa(Object.values(W.__K.automatika).some(a => a.veiksmas === "paliekama raudona" && /pavyzdinė/.test(a.kodel)), "DPS: kitos pavyzdinės reikšmės - automatikoje");
     const p = kunas(dps.DPSP_LT_SALYGOS.xml).find(x => /atlieka konkretaus pirkimo/.test(x.t));
     tiesa(p && /2022-09-23/.test(p.red), "DPS pavyzdys pajuodintas: " + (p ? p.red : "nėra"));
   });
@@ -11267,6 +11270,131 @@ async function testaiSprendimai1020(){
    sankcijų eilutę, T3-K2 objekto apžiūros datos, T3-D1 Koordinavimo komisija be numatytojo, T3-V1 patvirtintas „Taip“ su kodu ne iš sąrašo,
    T3-V2 fokusas ir pavadinimas po ✓, T3-V3 angliškas pavadinimas, T3-V5 Tvarkos aprašo papunktis, T3-V6 atidėtas sutarties projektas,
    T3-M2 dokumentų pavadinimai 4 žingsnyje, T3-M4 pašalinamo punkto laukai. */
+/* Naudotojo sprendimai po trečiosios naujo darbuotojo patikros (2026-10-21): T3-V7 pasiūlymo galiojimo užtikrinimo dydis ir terminas tik
+   atsakius „Taip“, T3-V4 „Preliminary Contract“, DPS konkretaus pirkimo BVPŽ punktas (NAC5), T3-D3 įstatymo priminimas, T3-D2 kilmė. */
+async function testai1021b(){
+  dabartine = grupe("Naudotojo sprendimai 2026-10-21 (po trečiosios patikros): užtikrinimo dydis ir terminas, „Preliminary Contract“, DPS BVPŽ punktas, įstatymo priminimas");
+  const uztV = () => { const [gid, g] = Object.entries(W.__K.grupes).find(([, g]) => W.uztikrinimoSkaidomas(g));
+    return { gid, el: D.getElementById(W.lkId("grupe|" + gid)) }; };
+  const ivesk = (el, v) => { el.value = v; el.dispatchEvent(new W.Event("input")); el.dispatchEvent(new W.Event("change")); };
+  const vienetai = () => (W.formosSantrauka(W.__K).M.korteles.find(c => (c.vienetai || []).some(u => (u.raktai || []).includes("UZT_SUMA"))) || {}).vienetai || [];
+  await testas("T3-V7: pasiūlymo galiojimo užtikrinimo dydis ir banko garantijos terminas - tik atsakius „Taip“ (laukai, būsenos, neužpildyti laukai, garantija trumpesnė už pasiūlymo galiojimą, žodžio „diena“ formos)", async () => {
+    lygu([1, 2, 5, 10, 11, 15, 21, 105, 112, 120, 121].map(n => W.dienosForma(n, "g")), ["dieną", "dienas", "dienas", "dienų", "dienų", "dienų", "dieną", "dienas", "dienų", "dienų", "dieną"], "galininkas");
+    lygu([1, 5, 15, 21, 105, 120].map(n => W.dienosForma(n, "v")), ["diena", "dienos", "dienų", "diena", "dienos", "dienų"], "vardininkas");
+    await formosZingsnis("T-AK", "LT");
+    let { gid, el } = uztV();
+    W.eval("Object.keys(ATS).filter(k => /^jei (ne)?taikomas pasiulymo galiojimo uztikrinimas/.test(k)).forEach(k => delete ATS[k]); delete UZT_DALIS['" + gid + "']"); W.klausimynas();
+    el = uztV().el;
+    tiesa(!el.querySelector("[id$=-suma]") && !vienetai().some(u => (u.raktai || []).includes("UZT_SUMA")), "neatsakius - laukų nėra");
+    el.querySelector("input[id$=-o1]").click(); el = uztV().el;
+    tiesa(!el.querySelector("[id$=-suma]") && !vienetai().some(u => (u.raktai || []).includes("UZT_SUMA")), "„Ne“ - laukų nėra");
+    el.querySelector("input[id$=-o0]").click(); el = uztV().el;
+    const s = el.querySelector("[id$=-suma]"), d = el.querySelector("[id$=-dienos]");
+    tiesa(s && d && D.querySelector("label[for='" + s.id + "']").textContent === "Užtikrinimo dydis (Eur)" && /dienų po pasiūlymų pateikimo termino pabaigos/.test(D.querySelector("label[for='" + d.id + "']").textContent), "„Taip“ - du laukai su pavadinimais");
+    tiesa(/Koks pasiūlymo galiojimo užtikrinimo dydis ir kiek dienų turi galioti banko garantija\?/.test(el.textContent), "klausimas");
+    const S = W.formosSantrauka(W.__K);
+    tiesa(S.neuzpildyti.filter(u => /Pasiūlymo galiojimo užtikrinimo dydis|Banko garantijos galiojimas/.test(u.pavadinimas)).length === 2 && !S.blokuojantys.some(u => /Pasiūlymo galiojimo užtikrinimo dydis/.test(u.pavadinimas)), "neužpildyti laukai (ne privalomi sprendimai)");
+    ivesk(s, "30 abc"); el = uztV().el;
+    tiesa(/Įrašykite sumą skaičiais/.test(el.textContent) && el.querySelector("[id$=-suma]").getAttribute("aria-describedby").includes("-suma-k"), "netinkama suma - paaiškinimas");
+    ivesk(el.querySelector("[id$=-suma]"), "30000"); el = uztV().el;
+    ivesk(el.querySelector("[id$=-dienos]"), "60"); el = uztV().el;
+    lygu([W.eval("ATS.UZT_SUMA"), W.eval("ATS.UZT_DIENOS")], ["30000", "60"], "atsakymai");
+    tiesa(el.querySelector("[id$=-suma-b]").textContent === el.querySelector("[id$=-dienos-b]").textContent && el.querySelector("[id$=-suma-b]").className.includes("patvirtinta"), "būsena - patvirtinta");
+    W.uAts("I_pasiulymo galiojimo terminas", "90 kalendorinių dienų"); el = uztV().el;
+    tiesa(/Patikrinkite: Banko garantija \(60 dienų po pasiūlymų pateikimo termino pabaigos\) trumpesnė už pasiūlymo galiojimą \(90 kalendorinių dienų\)/.test(el.textContent), "garantija trumpesnė už galiojimą: " + el.textContent.slice(-260));
+    W.lkAtnaujink();
+    const sa = D.getElementById("lkUztTerminas");
+    tiesa(sa && sa.dataset.lygis === "patikr" && sa.querySelector("a[data-lk-suolis$='-dienos']"), "„Prieš generuojant“ - Patikrinkite su nuoroda į lauką");
+    W.uAts("I_pasiulymo galiojimo terminas", "3 mėnesius"); ivesk(uztV().el.querySelector("[id$=-dienos]"), "85"); el = uztV().el;
+    tiesa(/apie 90 dienų/.test(el.textContent), "mėnesiai - apytiksliai");
+    ivesk(el.querySelector("[id$=-dienos]"), "105"); el = uztV().el; W.lkAtnaujink();
+    tiesa(!/Patikrinkite: Banko garantija/.test(el.textContent) && !D.getElementById("lkUztTerminas"), "105 dienos - pastabos nėra");
+    W.uAts("I_pasiulymo galiojimo terminas", "", false);
+  });
+  await testas("T3-V7 generuojant: dydis ir terminas įrašomi visuose SPS (LT, LT/EN, MVP, ND), pastraipa pajuodinama; „Ne“ - pastraipos nėra; „Taip“ be reikšmių - pavyzdžiai lieka raudoni ir 4 žingsnis tai sako", async () => {
+    const taip = (suma, dienos) => () => { const { gid } = uztV(); W.pasirinkUztikrinima(gid, "taip"); W.uAts("UZT_SUMA", suma, false); W.uAts("UZT_DIENOS", dienos); };
+    const pastraipa = (xml, re) => { const d = new W.DOMParser().parseFromString(xml, "application/xml");
+      return [...d.getElementsByTagNameNS(NSW, "p")].find(p => re.test([...p.getElementsByTagNameNS(NSW, "t")].map(x => x.textContent).join(""))); };
+    const raudona = p => [...p.getElementsByTagNameNS(NSW, "color")].some(c => /^(FF0000|C00000|ED1C24)$/i.test(c.getAttribute("w:val")));
+    const ptekstas = p => [...p.getElementsByTagNameNS(NSW, "t")].map(x => x.textContent).join("");
+    let docs = await generuokSu({ budas: "T-AK", pries: taip("30000", "120") });
+    let p = pastraipa(docs.AK_LT_SPS.xml, /užtikrinimo dydis/);
+    tiesa(p && /užtikrinimo dydis – 30 000 Eur\. Banko garantija turi galioti ne trumpiau kaip 120 dienų po Pasiūlymų pateikimo termino pabaigos \(t\. y\. Pasiūlymo pateikimo diena plius 120 dienų\)/.test(ptekstas(p)) && !raudona(p), "AK LT: " + (p ? ptekstas(p).slice(-260) : "nėra"));
+    tiesa(!/25 000|105 dien/.test(ptekstas(p)), "pavyzdžių neliko");
+    const a = D.getElementById("uztSumaPatikra");
+    tiesa(a && a.classList.contains("ok") && /dydis – 30 000 Eur, banko garantija – ne trumpiau kaip 120 dienų/.test(a.textContent), "4 žingsnis: " + (a ? a.textContent : "nėra"));
+    const auto = (D.getElementById("lkAuto") || {}).textContent || "";
+    tiesa(/įrašoma: dydis – 30 000 Eur, banko garantija – ne trumpiau kaip 120 dienų/.test(auto), "automatika: " + auto.slice(0, 300));
+    docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", pavEN: "Power transformers", pries: taip("12 500,50", "21") });
+    const lt = pastraipa(docs.AK_LTEN_SPS.xml, /Pasiūlymo galiojimo užtikrinimo dydis/), en = pastraipa(docs.AK_LTEN_SPS.xml, /amount of Tender security/);
+    tiesa(lt && /dydis – 12 500,50 Eur\. Banko garantija turi galioti ne trumpiau kaip 21 dieną po/.test(ptekstas(lt)) && !raudona(lt), "AK LT/EN LT: " + (lt ? ptekstas(lt).slice(-200) : "nėra"));
+    tiesa(en && /security – 12 500,50 Eur\. The bank guarantee must be valid for at least 21 days after/.test(ptekstas(en)) && !raudona(en), "AK LT/EN EN: " + (en ? ptekstas(en).slice(-200) : "nėra"));
+    for (const [b, dok] of [["MV-SAB", "MVP_LT_SPS"], ["S-ND", "ND_LT_SPS"]]){
+      const dd = await generuokSu({ budas: b, pries: taip("8000", "95") }), x = dd[dok];
+      if (!x) tiesa(false, "LAIKINA " + b + " dokumentai: " + Object.keys(dd).join(", "));
+      const q = x && pastraipa(x.xml, /užtikrinimo dydis/);
+      tiesa(q && /dydis – 8000 Eur|dydis – 8 000 Eur/.test(ptekstas(q)) && /ne trumpiau kaip 95 dienas/.test(ptekstas(q)) && !raudona(q), b + ": " + (q ? ptekstas(q).slice(-220) : "nėra"));
+      if (b === "MV-SAB") tiesa(/plius 95 dienos\)/.test(ptekstas(q)), "MVP: „plius 95 dienos“ - vardininkas: " + ptekstas(q).slice(-120));
+    }
+    docs = await generuokSu({ budas: "T-AK", pries: () => { const { gid } = uztV(); W.pasirinkUztikrinima(gid, "ne"); } });
+    tiesa(!pastraipa(docs.AK_LT_SPS.xml, /užtikrinimo dydis/) && !D.getElementById("uztSumaPatikra"), "„Ne“ - pastraipos ir eilutės nėra");
+    tiesa(!/banko garantijos terminas - klausimo/.test((D.getElementById("lkAuto") || {}).textContent || ""), "„Ne“ - automatikos sąraše įrašo nėra");
+    docs = await generuokSu({ budas: "T-AK", pries: () => { const { gid } = uztV(); W.pasirinkUztikrinima(gid, "taip"); W.uAts("UZT_SUMA", "", false); W.uAts("UZT_DIENOS", ""); } });
+    p = pastraipa(docs.AK_LT_SPS.xml, /užtikrinimo dydis/);
+    const a2 = D.getElementById("uztSumaPatikra");
+    tiesa(p && raudona(p) && /25 000/.test(ptekstas(p)) && a2 && a2.classList.contains("no") && /neįrašyti/.test(a2.textContent), "be reikšmių - lieka raudona, 4 žingsnis sako");
+  });
+  await testas("T3-V4 (AB): dvikalbių SPS sakinys „... siekiant sudaryti Preliminariąją sutartį“ angliškai - „concluding a Preliminary Contract“ (BPS apibrėžta sąvoka), šablonuose ir žemėlapiuose", async () => {
+    for (const f of ["AK_LTEN_SPS", "SSD_LTEN_SPS", "TSD_LTEN_SPS"]){
+      const z = await W.JSZip.loadAsync(await (await W.fetch("templates/" + f + ".docx", { cache: "no-store" })).arrayBuffer());
+      const x = await z.file("word/document.xml").async("string");
+      tiesa(/for the purpose of concluding a Preliminary Contract\./.test(x) && !/concluding a Draft Contract/.test(x), f + ": šablonas");
+      const Z = await (await W.fetch("zemelapiai/" + f + ".json", { cache: "no-store" })).json();
+      tiesa(Object.values(Z.paras).some(v => /concluding a Preliminary Contract\./.test(v)) && !Object.values(Z.paras).some(v => /concluding a Draft Contract/.test(v)), f + ": žemėlapis");
+      const bps = await W.JSZip.loadAsync(await (await W.fetch("templates/" + f.replace("_SPS", "_BPS") + ".docx", { cache: "no-store" })).arrayBuffer());
+      tiesa(/Preliminary Contract/.test(await bps.file("word/document.xml").async("string")), f + ": BPS sąvoka „Preliminary Contract“");
+    }
+  });
+  await testas("DPS konkretaus pirkimo BVPŽ punktas (NAC5, naudotojo sprendimas 2026-10-21): 6 ir 6.1-6.3 eilutės - pagal atsakymą „Ar perkamos prekės ar paslaugos, kurių BVPŽ kodai yra Vyriausybės sąraše?“; kitos lentelės eilutės ir 8.2 p. lieka; LT ir LT/EN; 4 žingsnis", async () => {
+    const yra = (docs, d) => docs[d].pars.join("\n");
+    for (const [kalba, dok] of [["LT", "DPSP_LT_SALYGOS"], ["LT_EN", "DPSP_LTEN_SALYGOS"]]){
+      const ne = yra(await generuokSu({ budas: "DPS-K", kalba, pavEN: "Power transformers", nacsaug: true, nsbvpz: "ne" }), dok);
+      tiesa(!/Atsižvelgiant į tai, kad Pirkimo objektas apima VPĮ 92 straipsnio 13 dalyje/.test(ne) && !/siūlomų prekių gamintojas ar jį kontroliuojantis asmuo nėra registruoti/.test(ne) && !/paslaugų teikimas nebus vykdomas/.test(ne), kalba + " „Ne“ - eilutės pašalintos");
+      tiesa(/nevykdo veiklos VPĮ 92 straipsnio 15 dalyje/.test(ne) && /Pirkime negali dalyvauti Tiekėjai, Subtiekėjai/.test(ne) && /atlikdamas pirkimus, kurių objektas apima VPĮ 92 straipsnio 13 dalyje/.test(ne), kalba + " kitos eilutės ir 8.2 p. lieka");
+      const a = D.getElementById("nac5Patikra");
+      tiesa(a && /pašalintas/.test(a.textContent) && /DPS|konkretaus pirkimo|sąlygos/i.test(a.textContent), kalba + " 4 žingsnis: " + (a ? a.textContent.replace(/\s+/g, " ") : "nėra"));
+      const taip = yra(await generuokSu({ budas: "DPS-K", kalba, pavEN: "Power transformers", nacsaug: true, nsbvpz: "taip" }), dok);
+      tiesa(/Atsižvelgiant į tai, kad Pirkimo objektas apima VPĮ 92 straipsnio 13 dalyje/.test(taip) && /siūlomų prekių gamintojas ar jį kontroliuojantis asmuo nėra registruoti/.test(taip), kalba + " „Taip“ - lieka");
+      if (kalba === "LT_EN"){                      // šablono numeracija be spragos (korekcija AC: po „9.“ buvo „11.“)
+        const L = taip.split("\n"), i = L.findIndex(x => /^Šio punkto 1 lentelėje/.test(x)), nr = [];
+        for (let k = i; k < L.length && nr.length < 14; k++) if (/^\d+(\.\d+)?\.$/.test(L[k].trim())) nr.push(L[k].trim());
+        lygu(nr.slice(0, 13), ["1.", "2.", "3.", "4.", "5.", "6.", "6.1.", "6.2.", "6.3.", "7.", "8.", "9.", "10."], "„Taip“ - LT/EN numeriai");
+      }
+      const be = yra(await generuokSu({ budas: "DPS-K", kalba, pavEN: "Power transformers" }), dok);
+      tiesa(!/Atsižvelgiant į tai, kad Pirkimo objektas apima VPĮ 92 straipsnio 13 dalyje/.test(be), kalba + " nacionalinis saugumas „Ne“ - pašalinta");
+      if (kalba === "LT_EN"){
+        // tekstu įrašyti lentelės numeriai - iš eilės (iki tol „5.“, „7.“)
+        const L = ne.split("\n"), i = L.findIndex(x => /^Šio punkto 1 lentelėje/.test(x)), nr = [];
+        for (let k = i; k < L.length && nr.length < 12; k++) if (/^\d+\.$/.test(L[k].trim())) nr.push(L[k].trim());
+        lygu(nr.slice(0, 10), ["1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "5."], "LT/EN lentelės numeriai (po jų - 5 skyrius)");
+        const en = D.getElementById("eilNumeriai");
+        tiesa(en && /- 7 → 6, 8 → 7, 9 → 8, 10 → 9\./.test(en.textContent), "4 žingsnis (tik lentelės eilutės, ne kiti skyriai): " + (en ? en.textContent : "nėra"));
+        tiesa(L.some((x, k) => x.trim() === "5." && /^SOCIALINIAI REIKALAVIMAI/.test((L[k + 1] || "").trim())), "kito skyriaus numeris nekeistas");
+      }
+    }
+  });
+  await testas("T3-D3: priminimas prie SPS sutarties įvykdymo užtikrinimo klausimo sako, ką reikalauja įstatymas (CK 6.70 str. būdai, ir netesybos) - nuoroda iš registro (PĮ ir VPĮ); T3-D2: sutarties procento kilmė paaiškina skirtumą nuo SPS sumos", async () => {
+    const V = W.GP_VIDAUS_RIBA;
+    const h = r => { const x = D.createElement("div"); x.innerHTML = V.html(500000, { id: "t-vr", rezimas: r }); return x.querySelector("#t-vr-t2").textContent; };
+    tiesa(/Civilinio kodekso 6\.70 straipsnyje nustatytais būdais \(PĮ 55 str\. 1 d\.\); vienas jų - netesybos sutartyje\. Šiame klausime sprendžiama, ar reikalauti atskiro užtikrinimo dokumento/.test(h("PI")), "PĮ: " + h("PI"));
+    tiesa(/\(VPĮ 42 str\. 1 d\.\)/.test(h("VPI")), "VPĮ: " + h("VPI"));
+    lygu([W.GP_TEISE.cit("sutarties_uztikrinimo_budai", "PI"), W.GP_TEISE.cit("sutarties_uztikrinimo_budai", "VPI")], ["PĮ 55 str. 1 d.", "VPĮ 42 str. 1 d."], "registras");
+    const z = await (await W.fetch("zemelapiai/sutartys/PREKES_LT_SS.json")).json(), q = W.GP_SUTARTIES_FORMA.klausimai(z, SF_CTX, {});
+    const pr = q.find(x => x.id === "uztikrinimas").laukai.find(l => l.id === "procentai");
+    tiesa(pr.reiksme === "3,33" && /^SPS užtikrinimo suma 50 000 Eur \/ numatoma vertė 1 500 000 Eur; sutartyje procentas skaičiuojamas nuo Sutarties vertės, todėl suma gali skirtis nuo SPS sumos$/.test(pr.siuloma.kilme), "procento kilmė: " + JSON.stringify(pr.siuloma));
+  });
+}
+
 async function testaiTestuotojas3(){
   dabartine = grupe("Trečioji naujo darbuotojo patikra (2026-10-21): lentelės eilučių nuorodos, apžiūros datos, 1 žingsnis, nuorodos, „Kas toliau“");
   const ivesk = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); };
@@ -13249,6 +13377,7 @@ async function testaiEtapas1(){
     await testaiTestuotojas2();
     await testaiNacsaugBvpz();
     await testaiTestuotojas3();
+    await testai1021b();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
