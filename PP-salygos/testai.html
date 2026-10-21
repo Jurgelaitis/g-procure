@@ -11560,6 +11560,110 @@ async function testai1022a(){
   });
 }
 
+/* 2026-10-22: 2 darbas - DI vertimas žaliųjų reikalavimų lentelei (dvikalbės sąlygos, įkeltoje lentelėje anglų teksto nėra) */
+async function testai1022b(){
+  dabartine = grupe("Žaliųjų reikalavimų lentelės DI vertimas (2026-10-22): užklausa, kortelė, patvirtinimas ir taisymas, generavimas, DI požymiai, juodraštis");
+  const enT = t => t ? "EN " + String(t).normalize("NFD").replace(/[̀-ͯ]/g, "") : "";
+  const vertejas = () => opts => { const j = JSON.parse(opts.userMessage.slice(opts.userMessage.indexOf("{")));
+    const o = { eilutes: j.eilutes.map(e => ({ nr: e.nr, reikalavimas: e.reikalavimas.map(enT), dokumentai: e.dokumentai.map(enT) })) };
+    if (j.antrastes) o.antrastes = j.antrastes.map(enT); if (j.neVisa) o.neVisa = j.neVisa.map(enT);
+    return { ok: true, status: 200, text: JSON.stringify(o), raw: { stop_reason: "end_turn" }, error: null }; };
+  const zalM = () => W.eval("zalModelis()");
+  const zalVersk = async () => { ZAL_KORTELE().querySelector('[data-zal="versti"],[data-zal="versti-vel"]').click();
+    await kol(() => !D.querySelector("#zalVertBusena [data-gpb-atsaukti]") && zalM() && zalM().vertimas !== undefined && zalM().vertimas !== null, "žaliųjų vertimas", 20000); await sl(50); };
+
+  await testas("Užklausa: žaliųjų lentelės modelis verčiamas kaip „žaliųjų (aplinkosaugos) reikalavimų lentelė“, terminai - ir „Environmental requirements“, „environmental protection management system“; kvalifikacijos - kaip iki šiol", async () => {
+    await modulis();
+    const L = W.GP_KVAL_LENTELE, r = await W.kvlLenteles(KVPDF());
+    const z = L.vertimoUzklausa(r.zaliuju[0], L.vertimoPartijos(r.zaliuju[0], null)[0]);
+    const k = L.vertimoUzklausa(r.lenteles[0], L.vertimoPartijos(r.lenteles[0], null)[0]);
+    tiesa(/žaliųjų \(aplinkosaugos\) reikalavimų lentelę/.test(z.system) && !/kvalifikacijos reikalavimų lentelę/.test(z.system), "žaliųjų sistema: " + z.system.slice(0, 200));
+    tiesa(/kvalifikacijos reikalavimų lentelę/.test(k.system) && k.system === L.vertimoSistema("kvl"), "kvalifikacijos sistema");
+    tiesa(/Žalieji reikalavimai - Environmental requirements/.test(z.system) && /aplinkos apsaugos vadybos sistema - environmental protection management system/.test(z.system) && /Contracting Entity/.test(z.system), "terminai");
+    tiesa(/Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001/.test(z.userMessage) && !/Rangovas turi tureti/.test(z.userMessage), "žaliųjų užklausoje - kita lentelė: " + z.userMessage.slice(0, 200));
+  });
+
+  await testas("Kortelė LT/EN: „Pasiūlyti vertimą (DI)“ su tuo, kas siunčiama; be paspaudimo nesiunčiama; išvertus - DI žyma prie eilutės, „Siūloma“, patvirtinimas; taisymas ranka - „DI vertimas, taisytas“; būsenos elementai atskiri; „Atmesti vertimą“; lietuviškose sąlygose bloko nėra", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT_EN", "darbai");
+    await W.dkPridek([KVPDF()]);
+    await kol(() => ZAL_KORTELE(), "kortelė");
+    const c = () => ZAL_KORTELE(), ct = () => c().textContent.replace(/\s+/g, " ");
+    tiesa(c().querySelector('[data-zal="versti"]') && /per G-Procure serverį į Claude API \(Anthropic\) siunčiamas tik šios lentelės lietuviškas tekstas \(1 eil\./.test(ct()) && /Pasiūlykite vertimą \(DI\) žemiau/.test(ct()), "pasiūlymas versti: " + ct().slice(0, 600));
+    lygu(AI.kvietimai.length, 0, "siųsta be paspaudimo");
+    AI.atsakymas = vertejas();
+    await zalVersk();
+    lygu(AI.kvietimai.length, 1, "užklausų");
+    tiesa(/žaliųjų \(aplinkosaugos\)/.test(AI.kvietimai[0].system) && AI.kvietimai[0].maxTokens === 8000, "užklausa");
+    lygu([c().querySelectorAll(".kvl-en[data-zal-en]").length, c().querySelectorAll(".kvl-en[data-di] .gp-di-zyme, .kvl-en .gp-di-zyme").length], [1, 1], "DI žyma prie eilutės");
+    tiesa(/Išversta 1 iš 1 eilučių/.test(ct()) && c().querySelector('[data-lk-patv="ZAL_EN"]'), "santrauka ir patvirtinimas");
+    tiesa(c().querySelector("#zalVertBusena") && !c().querySelector("#kvlVertBusena") && (!D.getElementById("kvlVertBusena") || !c().contains(D.getElementById("kvlVertBusena"))), "būsenos elementas");
+    tiesa(W.formosSantrauka(W.__K).siulomi.some(u => /^Angliškas žaliųjų reikalavimų tekstas - DI vertimas \(1 eil\.\)$/.test(u.pavadinimas)), "vertimas ne „Siūloma“");
+    tiesa(!/Pirkimo sąlygos dvikalbės, o dokumente anglų teksto nėra/.test(ct()), "išvertus liko pastaba apie raudonus langelius");
+    // taisymas ranka
+    const ta = c().querySelector("[data-zal-en] textarea");
+    tiesa(ta && /Žaliasis reikalavimas angliškai/.test(c().querySelector("[data-zal-en]").textContent), "taisymo laukas");
+    ta.value = "The Supplier will apply ISO 14001."; ta.dispatchEvent(new W.Event("change"));
+    tiesa(/DI vertimas, taisytas/.test(c().querySelector("[data-zal-en]").textContent) && zalM().vertimas.eil[0].zmogus, "taisytas");
+    c().querySelector('[data-lk-patv="ZAL_EN"]').click();
+    tiesa(W.eval("PATV.has('ZAL_EN')") && !c().querySelector('[data-lk-patv="ZAL_EN"]'), "patvirtinta");
+    // kvalifikacijos lentelės vertimas - atskiras (jo nepaliečia)
+    tiesa(!W.eval("kvlModelis()").vertimas && !W.eval("PATV.has('KVL_EN')"), "kvalifikacijos lentelė paliesta");
+    // pasirinkus (kitą) lentelę - vertimo patvirtinimas negalioja
+    W.zalPasirink(0);
+    lygu(W.eval("PATV.has('ZAL_EN')"), false, "pasirinkus lentelę liko vertimo patvirtinimas");
+    // atmesti
+    c().querySelector('[data-zal="vertimas-atmesti"]').click();
+    lygu([zalM().vertimas, W.eval("PATV.has('ZAL_EN')")], [null, false], "atmesta");
+    tiesa(c().querySelector('[data-zal="versti"]'), "po atmetimo - vėl pasiūlymas");
+    // LT sąlygos - bloko nėra
+    await modulis(); await zingsnis2("T-AK", "LT", "darbai");
+    await W.dkPridek([KVPDF()]);
+    await kol(() => ZAL_KORTELE(), "LT kortelė");
+    tiesa(!ZAL_KORTELE().querySelector('[data-zal="versti"]') && !/angliškuose langeliuose/.test(ZAL_KORTELE().textContent), "LT - vertimo blokas");
+  });
+
+  await testas("Generavimas LT/EN: žaliųjų lentelės angliški langeliai - DI vertimas, raudono nurodymo nebėra; 4 žingsnis sako (nepatvirtintas - „no“, patvirtintas - „ok“); Word - DI_vertimu ir „žaliųjų reikalavimų lentelės angliškas tekstas - DI vertimas“", async () => {
+    let patv = false;
+    for (const tv of [false, true]){
+      const docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "darbai", po2: async () => {
+        await W.dkPridek([KVPDF()]); await kol(() => ZAL_KORTELE(), "kortelė");
+        ZAL_KORTELE().querySelector('[data-lk-patv="ZAL"]').click();
+        AI.atsakymas = vertejas(); await zalVersk();
+        if (tv) ZAL_KORTELE().querySelector('[data-lk-patv="ZAL_EN"]').click();
+      } });
+      const s = docs.AK_LTEN_SPS, R = W.GP_KVAL_LENTELE.raskZaliujuLentele(new W.DOMParser().parseFromString(s.xml, "application/xml")), T = R && R.tbl;
+      tiesa(T, "3 lentelės nėra");
+      const tt = eilTekstai(T).flat(2).join("\n");
+      tiesa(/EN Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001\./.test(tt) && /EN Nepriklausomos istaigos sertifikatas\./.test(tt), "angliški langeliai: " + tt.slice(0, 500));
+      tiesa(!eilTekstai(T).flat(2).includes(W.GP_KVAL_LENTELE.VERTIMO_ZYMA), "liko nurodymas įrašyti vertimą");
+      const p = D.getElementById("zalLentelePatikra"), pt = p.textContent.replace(/\s+/g, " ");
+      tiesa(/Angliškas tekstas 1 eilutėje - DI vertimas \(Claude\)/.test(pt) && (tv ? /jūsų patvirtintas/.test(pt) && p.classList.contains("ok") : /nepatvirtintas/.test(pt) && p.classList.contains("no")) && !/Angliškas tekstas 1 eilutėje neįrašytas/.test(pt), "4 žingsnis (" + tv + "): " + pt);
+      tiesa(/žaliųjų reikalavimų lentelės angliškas tekstas - DI vertimas/.test(D.getElementById("rezultatas").textContent), "bendra pastaba");
+      const r = W.__R.find(x => x.d.trumpas === "AK_LTEN_SPS"), z = await W.JSZip.loadAsync(await r.blob.arrayBuffer());
+      const cx = await z.file("docProps/custom.xml").async("string");
+      tiesa(/žaliųjų reikalavimų lentelės angliškas tekstas - DI vertimas/.test(cx) && /DI_vertimu[\s\S]*?>1</.test(cx), "DI požymiai: " + cx.slice(0, 500));
+      patv = tv;
+    }
+    tiesa(patv, "abu atvejai");
+  });
+
+  await testas("Juodraštis: žaliųjų lentelės vertimas, taisymas ir patvirtinimas išsaugomi ir atkuriami", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT_EN", "darbai");
+    await W.dkPridek([KVPDF()]); await kol(() => ZAL_KORTELE(), "kortelė");
+    AI.atsakymas = vertejas(); await zalVersk();
+    const ta = ZAL_KORTELE().querySelector("[data-zal-en] textarea");
+    ta.value = "Taisytas vertimas."; ta.dispatchEvent(new W.Event("change"));
+    ZAL_KORTELE().querySelector('[data-lk-patv="ZAL_EN"]').click();
+    const A = W.surinkJuodrasti();
+    await modulis();
+    await W.atkurkJuodrasti({ duomenys: JSON.parse(JSON.stringify(A)) });
+    await kol(() => W.__K && ZAL_KORTELE(), "atkurta kortelė", 60000);
+    const M = zalM();
+    lygu([M.vertimas && M.vertimas.eil[0].reik, M.vertimas && M.vertimas.eil[0].zmogus, W.eval("PATV.has('ZAL_EN')")], [["Taisytas vertimas."], true, true], "atkurta");
+    tiesa(/DI vertimas, taisytas/.test(ZAL_KORTELE().querySelector("[data-zal-en]").textContent), "kortelėje - taisytas vertimas");
+  });
+}
+
 async function testai1021b(){
   dabartine = grupe("Naudotojo sprendimai 2026-10-21 (po trečiosios patikros): užtikrinimo dydis ir terminas, „Preliminary Contract“, DPS BVPŽ punktas, įstatymo priminimas");
   const uztV = () => { const [gid, g] = Object.entries(W.__K.grupes).find(([, g]) => W.uztikrinimoSkaidomas(g));
@@ -13668,6 +13772,7 @@ async function testaiEtapas1(){
     await testai1021b();
     await testai1021c();
     await testai1022a();
+    await testai1022b();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
