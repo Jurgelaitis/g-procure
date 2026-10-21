@@ -7707,11 +7707,50 @@ function metodikosFailas(rinkinys, dps){
            blob: m.dok.failas, statinis: true, isDokumento: m.failas, pletinys, forma: true, stats: {},
            audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } };
 }
+/* Įkelti pirkimo dokumentai pakete (2026-10-22; kaip vertinimo metodika - failas be pakeitimų): techninė specifikacija - SPS priedas pagal SPS
+   priedų sąrašo eilutę „Techninė specifikacija“ (eilutės nėra - be numerio); sutarties priedas - „Sutarties priedas“ (jo numerį sutarties
+   priedų sąraše nurodo žmogus); sutarties projektas - tik kai jis pridedamas, o generatorius jo nekuria (SPS priedas „Sutarties projektas“).
+   Paraiška (joje numatoma vertė), kvalifikacijos ir žaliųjų reikalavimų dokumentai (jų lentelės perkeltos į sąlygas) ir kiti - ne.
+   Atkurtame juodraštyje failų nėra - nieko neįdedama. */
+const IKELTI_PAKETE = { ts: { raktas: 'ts', pav: 'Techninė specifikacija' }, priedas: { pav: 'Sutarties priedas' }, sutartis: { raktas: 'sutartis', pav: 'Sutarties projektas' } };
+function ikeltiDokumentai(rinkinys){
+  const sps = rinkinys.find(d => /^(SPS|SALYGOS)$/.test(dokTipas(d))), sp = sutartiesProjektas();
+  const kam = !sps ? '' : /^DPSP_/.test(sps.trumpas) ? 'Konkretaus pirkimo sąlygų' : dokTipas(sps) === 'SALYGOS' ? 'Pirkimo sąlygų' : 'SPS';
+  const R = {}, out = [];
+  DK.failai.forEach(d => { if (d.failas && IKELTI_PAKETE[d.rusis]) (R[d.rusis] ??= []).push(d); });
+  Object.keys(IKELTI_PAKETE).forEach(rusis => {
+    const dd = R[rusis];
+    if (!dd || (rusis === 'sutartis' && !(sp && sp.pridedamas && !sp.generuojamas))) return;
+    const x = IKELTI_PAKETE[rusis], e = x.raktas && sps ? priedoEilute(sps, x.raktas) : null;
+    const pref = e && e.nr ? `${kam} ${e.nr} priedas` : '';
+    dd.forEach(d => {
+      const stem = d.vardas.replace(/\.[a-z0-9]+$/i, ''), vardas = dd.length > 1 || rusis === 'priedas' ? ` (${stem})` : '';
+      out.push({ d: { trumpas: 'IKELTA_' + rusis.toUpperCase(), pavadinimas: (pref ? pref + ' - ' : '') + x.pav + vardas, dokumentas: (pref ? pref + ' ' : '') + x.pav + vardas },
+                 blob: d.failas, statinis: true, isDokumento: d.vardas, ikeltas: rusis, priedoNr: pref ? e.nr : null, blokai: d.blokai || [],
+                 pletinys: (String(d.vardas).match(/\.([a-z0-9]+)$/i) || [, 'pdf'])[1].toLowerCase(), forma: true, stats: {},
+                 audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } });
+    });
+  });
+  return out;
+}
+/* 4 žingsnio eilutė: kas iš įkeltų dokumentų įdėta į paketą ir kodėl kai kas - ne */
+function ikeltuPatikraHTML(rez){
+  const f = rez.filter(r => r.ikeltas);
+  const sp = sutartiesProjektas(), sut = DK.failai.filter(d => d.rusis === 'sutartis' && d.failas);
+  const neidetas = sut.length && !f.some(r => r.ikeltas === 'sutartis')
+    ? ` Įkeltas sutarties projektas („${sut.map(d => esc(d.vardas)).join('“, „')}“) į paketą neįdėtas - ${sp && sp.generuojamas ? 'sutarties projektą pakete parengia generatorius' : sp && !sp.pridedamas ? '1 žingsnyje atsakyta, kad sutarties projektas nerengiamas (esminės sąlygos - SPS)' : '1 žingsnyje neatsakyta, ar pridedamas sutarties projektas'}.` : '';
+  if (!f.length && !neidetas) return '';
+  const pr = f.filter(r => r.ikeltas === 'priedas'), beNr = f.filter(r => r.ikeltas !== 'priedas' && !r.priedoNr);
+  return `<div class="audit ${beNr.length || pr.length || neidetas ? 'no' : 'ok'}" id="ikeltiPakete" style="margin-top:10px"><b>Jūsų įkelti dokumentai pakete:</b>
+    ${f.length ? f.map(r => `<b>${esc(r.d.pavadinimas)}</b> („${esc(r.isDokumento)}“)`).join('; ') + ' - be pakeitimų.' : ''}${
+    beNr.length ? ` Pirkimo sąlygų priedų sąraše tokio priedo eilutės nėra, todėl failo pavadinime numerio nėra - patikrinkite, kuris tai priedas.` : ''}${
+    pr.length ? ` Sutarties prieduose jų numerių nežinome - sutarties projekto priedų sąraše įrašykite juos patys.` : ''}${neidetas}</div>`;
+}
 /* 4 žingsnio eilutė: kriterijus, metodikos failas pakete (ar kodėl ne), pastabos */
 function metodikosPatikraHTML(rez){
   const mp = metodikosPastabos();
   if (!mp) return '';
-  const m = mp.m, f = rez.find(r => r.isDokumento);
+  const m = mp.m, f = rez.find(r => r.isDokumento && /METODIKA$/.test(r.d.trumpas));
   const kodel = f ? `pakete - <b>${esc(f.d.pavadinimas)}</b> (jūsų failas „${esc(m.failas)}“ be pakeitimų)`
     : !m.dok ? 'failo pakete nėra - juodraštyje failai nesaugomi: įkelkite metodiką 1 žingsnyje iš naujo ir sugeneruokite paketą'
     : 'failas į paketą neįdėtas - SPS priedų sąraše metodikos eilutės nėra (pvz. vertinama pagal kainą)';
@@ -7760,6 +7799,7 @@ async function generuoti(o = {}){
   const met = metodikosFailas(rinkinys, dpsD ? { d: dpsD, nr: dpsP.nr } : null);   // įkelta vertinimo metodika (2 etapas D3)
   if (met) rez.push(met);
   else if (dpsD) rez.push(await dpsMetodikosFailas(dpsD, dpsP.nr));
+  rez.push(...ikeltiDokumentai(rinkinys));          // įkelta techninė specifikacija, sutarties priedai (2026-10-22)
   // Nekeiciami priedai (banku sarasas PDF): failas pridedamas kaip yra - jame nera ko pildyti ar tikrinti.
   for (const st of statiniai){
     const buf = await gaukBuf('templates/' + st.failas);
@@ -7971,6 +8011,7 @@ function rodykRezultata(rez){
       ${DALYS_SPR.skaidomas ? `skaidomas į ${esc(String(DALYS_SPR.skaicius))} dalis` : 'neskaidomas'}${adal.length ? ' (dalių skaičius įrašytas)' : ''} - ${esc(dalA.kodel)}.
       Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
     h += metodikosPatikraHTML(rez);                // vertinimo metodika (2 etapas D3)
+    h += ikeltuPatikraHTML(rez);                   // įkelti dokumentai pakete (2026-10-22)
     const asut = ((S.M && S.M.autoSut) || []).filter(a => a.reiksme !== ESMINIU_ZYMA);   // nuoroda į SPS dalį - eilutėje #esminesNuorodos
     if (asut.length) h += `<div class="audit ok" id="autoSutPatikra" style="margin-top:10px"><b>Sutarties įvykdymo užtikrinimo reikalavimų vieta įrašyta automatiškai:</b>
       „Sutarties projekto ${asut.map(a => esc(GP_LAUKAI.sutartiesNuoroda(a.reiksme))).join('“; „')}“ (${esc(asut[0].saltinis)}). Pakeisti galima 2 žingsnio skiltyje „Išspręsta automatiškai“.</div>`;
@@ -8213,6 +8254,7 @@ const PP_PRIEDAI = [[/_PASIULYMAS$/, /pasiulymo forma/], [/_PARAISKA$/, /paraisk
   [/_SPECIALISTAI$/, /specialistu saras/], [/_SANDORIS$/, /sandorio salies/], [/_BANKAI$/, /priimtinu banku/], [/_NACSAUGUMAS(VPI)?$/, /nacionalinio saugumo/],
   [/_KONFIDENCIALUMAS$/, /konfidencialumo isipareig/], [/_KONFINFO$/, /konfidenciali informacija/], [/_SUBTIEKEJAI$/, /ukio subjekt|subtiekej/],
   [/_DERYBOS$/, /deretinu salyg/], [/_VALDYMAS$/, /valdymo ar prieziuros/], [/_METODIKA$/, /vertinimo metodika/]];
+// įkelti dokumentai (IKELTA_*) - jų failo vardas jau prasideda SPS priedo numeriu ir pavadinimu, todėl atskirai nepervadinami
 function ppVaidmuo(r){
   const t = String((r.d && r.d.trumpas) || ''), dk = String((r.d && r.d.dokumentas) || '');
   if (r.sutartis) return /priedas/i.test(dk) ? 'priedas' : /BS$/.test(dk) ? 'sutartis_bendrosios' : /SS$/.test(dk) ? 'sutartis' : null;
@@ -8220,7 +8262,9 @@ function ppVaidmuo(r){
   if (/_BPS$/.test(t)) return 'bps';
   if (/_PASIULYMAS$/.test(t)) return 'pasiulymas';
   if (/_PARAISKA$/.test(t)) return 'paraiska';
-  return /^PRIEDAI_|_GULSTI$|_METODIKA$/.test(t) ? 'priedas' : null;
+  if (t === 'IKELTA_TS') return 'ts';                 // įkelti dokumentai pakete (2026-10-22)
+  if (t === 'IKELTA_SUTARTIS') return 'sutartis';
+  return /^PRIEDAI_|_GULSTI$|_METODIKA$|^IKELTA_PRIEDAS$/.test(t) ? 'priedas' : null;
 }
 /* D4 c (2026-10-20): nuorodos į to paties dokumento punktus („3.1 punkte“, „3.1-3.4 punktuose“, „9.2 p.“) - ar toks punktas dokumente yra.
    Numeriai sugeneruotame dokumente įrašyti tekstu (GPNum), todėl skaitoma kiekviena Word pastraipa (ir lentelių langeliuose). Nuorodos į kitus
@@ -8286,8 +8330,9 @@ async function paketoPatikra(rez, vardai){
       if (!failai.length) throw new Error('pakete nėra Word dokumentų');
       const out = await GP_DOK.apdorok(failai, null, 'lt');
       const docs = out.docs || [], vaid = {};
-      // nekeičiami priedai (PDF, pvz. priimtinų bankų sąrašas) - tik kad SPS priedų sąraše būtų rasti; turinys netikrinamas
-      rez.forEach((r, i) => { if (r.blob && r.statinis && vardai[i]){ docs.push({ id: 'statinis-' + i, name: vardai[i], parseStatus: 'parsed', blocks: [] }); info.set(vardai[i], r); } });
+      // nekeičiami priedai (PDF, pvz. priimtinų bankų sąrašas) - tik kad SPS priedų sąraše būtų rasti; turinys netikrinamas;
+      // įkelti dokumentai (techninė specifikacija, sutarties projektas) - su jų jau perskaitytu tekstu (2026-10-22)
+      rez.forEach((r, i) => { if (r.blob && r.statinis && vardai[i]){ docs.push({ id: 'statinis-' + i, name: vardai[i], parseStatus: 'parsed', blocks: r.blokai || [] }); info.set(vardai[i], r); } });
       docs.forEach(d => { const r = info.get(d.name), vv = r && ppVaidmuo(r); if (vv) vaid[d.id] = vv; });
       // pirkimo duomenys - 1 žingsnio (ir pirkimo kortelės, jei pasirinkta)
       const k = Object.assign({}, (KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {}), m = metodas();
@@ -9712,7 +9757,15 @@ function dkPoveikis(d){
       out.push({ k: 'info', t: 'Failas įdedamas į paketą be pakeitimų kaip SPS priedas „Ekonomiškai naudingiausio pasiūlymo vertinimo metodika“ - numeris pagal SPS priedų sąrašą (DPS konkretaus pirkimo sąlygose - vietoj šablono priedo). ' + (d.di ? 'Kriterijai ir svoriai nustatyti iš DI atpažinto teksto.' : 'Be DI, failas niekur nesiunčiamas.') });
     }
   }
-  if (d.rusis === 'priedas') out.push({ k: 'info', t: 'Sutarties priedas - modulis jo nekeičia; pridėkite jį prie sutarties projekto kaip yra.' });
+  if (d.rusis === 'priedas') out.push({ k: 'info', t: 'Sutarties priedas - failas įdedamas į paketą be pakeitimų („Sutarties priedas“); jo numerį sutarties projekto priedų sąraše įrašysite patys.' });
+  if (d.rusis === 'ts') out.push({ k: 'info', t: 'Techninė specifikacija įdedama į paketą be pakeitimų kaip SPS priedas - numeris pagal SPS priedų sąrašo eilutę „Techninė specifikacija“.' });
+  if (d.rusis === 'sutartis'){
+    const sp = sutartiesProjektas();
+    out.push({ k: 'info', t: sp && sp.pridedamas && !sp.generuojamas ? 'Sutarties projektas įdedamas į paketą be pakeitimų kaip SPS priedas „Sutarties projektas“.'
+      : sp && sp.generuojamas ? 'Sutarties projektą pakete parengia generatorius pagal LITGRID AB formą, todėl šis failas į paketą neįdedamas - jis naudojamas tik sutarties klausimams užpildyti.'
+      : sp ? '1 žingsnyje atsakyta, kad sutarties projektas nerengiamas, todėl šis failas į paketą neįdedamas.'
+      : 'Ar failas bus įdėtas į paketą, priklauso nuo 1 žingsnio atsakymo, ar pridedamas sutarties projektas.' });
+  }
   if (d.rusis === 'kita' && d.auto === 'kita') out.push({ k: 'isp', t: 'Dokumento rūšies neatpažinome - pasirinkite ją lauke „Kas tai per dokumentas?“: nuo rūšies priklauso, kas iš dokumento padaroma.' });
   if (d.rusis !== 'paraiska'){
     if (d.di) out.push({ k: 'isp', di: true, t: `${GP_DI.zyme({ tekstas: 'DI atpažintas tekstas' })} Tekstą DI (Claude) atpažino iš skenuoto dokumento - jame gali būti klaidų, formatavimo nėra. Prieš patvirtindami perkeltas lenteles ir siūlomas reikšmes, palyginkite jas su originalu.${d.skenPastabos ? ' DI pastaba: ' + esc(d.skenPastabos) : ''}` });
@@ -9748,7 +9801,7 @@ function dkKontrolinisHTML(){
   const mtB = !mt.length ? '' : !mm ? 'skaitoma' : mm.kodas ? `kriterijus - ${kritVard(mm.kodas)}${mm.problemos.length ? '; patikrinkite - žr. prie failo' : ''}` : 'kriterijaus nustatyti nepavyko - žr. prie failo';
   return `<p class="dk-ks-h" id="dkKsH">Ką verta įkelti</p><ul>`
     + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą; ir sutarties klausimą apie ES lėšas', parB)
-    + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata', '')
+    + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata; failas pridedamas prie paketo kaip SPS priedas', '')
     + eil(kv, 'Kvalifikacijos reikalavimai', 'lentelė perkeliama į SPS 2 lentelę - šablono 2 lentelės klausimų nebelieka', kv.length ? (kvN ? perkeliamiReik(kvN) : 'lentelės nerasta') : '')
     + eil(zl, 'Žalieji reikalavimai', zalKontrolinioNauda(), zl.length ? (zlN ? perkeliamiReik(zlN) : 'lentelės nerasta') : '')
     + eil(mt, 'Vertinimo metodika', 'kai vertinama ne vien pagal kainą: vertinimo kriterijus įrašomas pats, failas pridedamas prie paketo kaip SPS priedas', mtB)
@@ -10872,7 +10925,7 @@ zingsniuBusena();
       // S1 (naudotojo sprendimas 2026-10-19): skiltyje - santrauka, išsamūs žingsniai ir pastaba - čia
       stepsTitle: "Kaip naudotis - išsamiai",
       steps: [
-      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Skenuoto dokumento (PDF be teksto ar nuotraukos) tekstą, jums leidus, perskaito DI - atpažintas tekstas pažymimas DI žyma, iš jo perkeltas lenteles palyginkite su originalu. Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę (DPS sukūrimo sąlygose - į 2 priedo lenteles), o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; įkelta pasiūlymų vertinimo metodika (be DI) nustato vertinimo kriterijų SPS 8.1 punkte ir patikrina, ar kriterijų svorių suma - 100, o metodikos failas pridedamas prie paketo kaip SPS priedas be pakeitimų; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). <b>BVPŽ kodai</b> (iš kortelės, paraiškos ar dokumento, kuriame jie nurodyti, arba įrašyti jūsų) palyginami su Vyriausybės patvirtintu nacionalinio saugumo BVPŽ kodų sąrašu: kodui esant sąraše, klausimas „Ar pirkimo objektas susijęs su nacionaliniu saugumu?“ pažymimas „Taip“ su žyme „pagal BVPŽ sąrašą (nepatvirtinta)“ - patvirtinate jūs; atsakius „Taip“, klausiama, ar perkamos sąrašo BVPŽ kodų prekės ar paslaugos - nuo to priklauso SPS pašalinimo pagrindų punktas apie jas (be DI, kodai niekur nesiunčiami). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
+      "<b>Pirkimo duomenys:</b> pirkimo būdas, pavadinimas, vertė, kalba. Skiltyje „Pirkimo dokumentai“ iš karto įkelkite, ką jau turite: paraišką, techninę specifikaciją, kvalifikacijos ir žaliuosius (aplinkosaugos) reikalavimus, sutarties projektą ar jo priedus (PDF, DOCX). Skenuoto dokumento (PDF be teksto ar nuotraukos) tekstą, jums leidus, perskaito DI - atpažintas tekstas pažymimas DI žyma, iš jo perkeltas lenteles palyginkite su originalu. Modulis atpažįsta kiekvieno rūšį (galite pakeisti) ir parodo, kas iš jo bus padaryta: kvalifikacijos reikalavimų lentelė perkeliama į SPS 2 lentelę, žaliųjų - į SPS 3 lentelę (DPS sukūrimo sąlygose - į 2 priedo lenteles), o atitinkamų klausimų 2 žingsnyje nebeklausiama (be DI); ar pirkimo objektas skaidomas į dalis ir į kiek, nustatoma be klausimo, kai tai rodo pirkimo kortelė ar dokumentai (techninė specifikacija po failą kiekvienai daliai, sakinys „skaidomas į N dalis“ ar „neskaidomas“) - 2 žingsnyje sprendimas matomas skiltyje „Išspręsta automatiškai“ su citata ir „Keisti“, dalių pavadinimai siūlomi, o šaltiniams nesutariant klausiama su abiem reikšmėmis (be DI); paraišką (nuotrauką ar DocLogix PDF) DI perskaito iškart ją įkėlus ir tušti laukai užpildomi patys su žyme „iš paraiškos“ - patvirtinate jūs, o ranka įrašytų laukų neperrašo: parodo abi reikšmes ir renkatės jūs; jei paraiškoje nurodyta, ar pirkimas finansuojamas ES lėšomis (ir projekto numeris, pavadinimas), sutarties klausimas apie ES lėšas užpildomas pats - su DI žyme ir citata, patvirtinate jūs; įkelta pasiūlymų vertinimo metodika (be DI) nustato vertinimo kriterijų SPS 8.1 punkte ir patikrina, ar kriterijų svorių suma - 100, o metodikos failas pridedamas prie paketo kaip SPS priedas be pakeitimų; techninė specifikacija taip pat pridedama kaip SPS priedas (numeris - pagal SPS priedų sąrašą), sutarties priedai (pvz. aplinkosaugos reikalavimų aprašas) - kaip sutarties priedai, o sutarties projektas - tik kai jo nerengia generatorius; nuoroda į netekusį galios teisės aktą pasakoma prie dokumento ir prieš generuojant. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - būdas, pavadinimas, vertė ir objektas bus perimti (modulis kortelės nekeičia). <b>BVPŽ kodai</b> (iš kortelės, paraiškos ar dokumento, kuriame jie nurodyti, arba įrašyti jūsų) palyginami su Vyriausybės patvirtintu nacionalinio saugumo BVPŽ kodų sąrašu: kodui esant sąraše, klausimas „Ar pirkimo objektas susijęs su nacionaliniu saugumu?“ pažymimas „Taip“ su žyme „pagal BVPŽ sąrašą (nepatvirtinta)“ - patvirtinate jūs; atsakius „Taip“, klausiama, ar perkamos sąrašo BVPŽ kodų prekės ar paslaugos - nuo to priklauso SPS pašalinimo pagrindų punktas apie jas (be DI, kodai niekur nesiunčiami). Bloke „Sutarties projektas“ (bandomoji) sistema pagal objektą ir pavadinimą pasiūlo sutarties formą arba užduoda klausimą - patvirtinate ar pasirenkate kitą jūs. Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiranda sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).",
       "<b>Pirkimo sąlygos:</b> atsakykite tik į sprendimus, kurių šablonas nenustato (pvz. režimo formuluotė įrašoma pagal pirkimo būdą, objekto apžiūros klausiama tik perkant darbus). Klausimai suskirstyti į dvi dalis - „Pirkimas ir reikalavimai tiekėjams“ ir „Pasiūlymai, vertinimas, sutartis ir priedai“: „Toliau“ ir „Atgal“ veda tarp dalių, turinys šoninėje juostoje - į bet kurį skyrių, antrosios dalies pabaigoje - „Prieš generuojant“ ir „Kas toliau?“. Neprivaloma skiltis „DI atsakymų pasiūlymai“ siūlo atsakymus iš jūsų pirkimo dokumentų su citatomis (1 žingsnyje įkelti dokumentai jau čia). Įkėlę kvalifikacijos reikalavimų Word ar PDF failą (pvz. iš PP-qual), gausite SPS 2 lentelę (DPS sukūrimo - sąlygų 2 priedo 1 lentelę) su jūsų reikalavimais ir 3.7 punkto specialistų numeriais, žaliųjų reikalavimų lentelę - SPS 3 lentelėje (DPS sukūrimo - sąlygų 2 priedo žaliųjų reikalavimų lentelėje); abu be DI, perkėlimą patvirtinate jūs.",
       "<b>Sutarties projektas:</b> sutarties klausimai atskirame žingsnyje - galite juos atsakyti dabar arba vėliau. Ką atsako jūsų techninė specifikacija ar užduotis ir kiti įkelti dokumentai (terminai, objektas, pagrindiniai įrenginiai, garantiniai terminai, ES lėšos ir kt.), sutarties klausimuose įrašoma iš karto - su DI žyme, citata ir būsena „Siūloma (nepatvirtinta)“; jums lieka patikrinti ir patvirtinti. „Generuoti pirkimo sąlygas“ sugeneruoja sąlygas be sutarties (pakete ji pažymima „atidėta“, sąlygų tekstas nesikeičia), „Generuoti pirkimo sąlygas ir sutarties projektą“ - abu.",
       "<b>Dokumentai:</b> sugeneruokite, peržiūrėkite baigtumo patikrą (liko raudonų vietų ar tuščių laukų) ir atsisiųskite po vieną ar ZIP archyvu. Pakeitus atsakymus po generavimo, rodoma „Reikia pergeneruoti“ ir kurie dokumentai paveikti.",

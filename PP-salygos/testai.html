@@ -9129,7 +9129,7 @@ async function testaiDokumentai(){
     const e0 = D.querySelector("#dkSarasas .dk-d[data-rusis=paraiska]");
     tiesa(/Paraiška perskaityta: tušti 1 žingsnio laukai užpildyti/.test(e0.textContent) && /Analizuoti iš naujo \(DI\)/.test(e0.querySelector("[data-dk-paraiska]").textContent)
       && D.querySelectorAll("[data-dk-paraiska]").length === 1, "paraiškos būsena ir mygtukas - tik prie paraiškos: " + e0.textContent.replace(/\s+/g, " "));
-    tiesa(/Sutarties priedas - modulis jo nekeičia/.test(eil[3].textContent), "priedo poveikis");
+    tiesa(/Sutarties priedas - failas įdedamas į paketą be pakeitimų/.test(eil[3].textContent), "priedo poveikis");
     tiesa(eil.every(e => e.querySelector("label").htmlFor === e.querySelector("select").id), "rūšies laukas be pavadinimo");
     // analizė iš naujo - mygtuku
     e0.querySelector("[data-dk-paraiska]").click();
@@ -11716,6 +11716,85 @@ async function testai1022c(){
     lygu(docs.AK_LT_SPS.pars.filter(p => /^2 lentelė \((I|II) Pirkimo objekto dalis\)$/.test(p)).length, 2, "2 lentelės klonai (kontrolė)");
   });
 }
+/* 2026-10-22: 4 darbas - įkelti pirkimo dokumentai (techninė specifikacija, sutarties priedai, sutarties projektas) pakete be pakeitimų */
+async function testai1022d(){
+  dabartine = grupe("Įkelti dokumentai pakete (2026-10-22): techninė specifikacija - SPS priedas pagal priedų sąrašą, sutarties priedas, sutarties projektas tik kai jo nerengia generatorius; failai be pakeitimų, ZIP vardai, 4 žingsnis ir paketo patikra");
+  const tx = id => { const e = D.getElementById(id); return e ? e.textContent.replace(/\s+/g, " ") : ""; };
+  const ikelti = () => W.__R.filter(r => r.ikeltas);
+  const baitai = async b => Array.from(new Uint8Array(await b.arrayBuffer()));
+  const TS = () => docx("Techninė specifikacija.docx", ["TECHNINĖ SPECIFIKACIJA", "1. Pirkimo objektas - transformatorių alyvos analizės paslaugos.", "2. Paslaugos teikiamos 24 mėnesius."]);
+  const APL = () => docx("Aplinkosaugos reikalavimų aprašas.docx", ["APLINKOSAUGOS REIKALAVIMAI", "Rangovas tvarko atliekas pagal Atliekų tvarkymo taisykles."]);
+  const SUT = () => docx("Sutarties projektas.docx", ["PASLAUGŲ PIRKIMO-PARDAVIMO SUTARTIS", "1. Sutarties objektas.", "2. Sutarties kaina."]);
+
+  await testas("T-AK LT: įkelta techninė specifikacija - „SPS N priedas - Techninė specifikacija“ (N - SPS priedų sąrašo eilutė), aplinkosaugos aprašas - „Sutarties priedas (...)“, kvalifikacijos dokumentas - ne; failai be pakeitimų, ZIP vardai, 4 žingsnio eilutė, paketo patikra TS nebeprašo", async () => {
+    let ts, apl;
+    const docs = await generuokSu({ budas: "T-AK", tipas: "paslaugos", po2: async () => { ts = await TS(); apl = await APL(); await W.dkPridek([ts, apl, KVPDF()]); } });
+    const sps = docs.AK_LT_SPS, eil = sps.pars.find(p => /^\d+ priedas\s*[–-]\s*Techninė specifikacija/.test(p));
+    tiesa(eil, "SPS priedų sąraše nėra techninės specifikacijos eilutės");
+    const N = eil.match(/^(\d+)/)[1], I = ikelti();
+    lygu(I.map(r => r.d.trumpas).sort(), ["IKELTA_PRIEDAS", "IKELTA_TS"], "įkelti pakete");
+    const rt = I.find(r => r.ikeltas === "ts"), rp = I.find(r => r.ikeltas === "priedas");
+    lygu(rt.d.pavadinimas, `SPS ${N} priedas - Techninė specifikacija`, "TS pavadinimas");
+    lygu(rp.d.pavadinimas, "Sutarties priedas (Aplinkosaugos reikalavimų aprašas)", "priedo pavadinimas");
+    lygu(await baitai(rt.blob), await baitai(ts), "TS failas pakeistas");
+    lygu(await baitai(rp.blob), await baitai(apl), "priedo failas pakeistas");
+    tiesa(!W.__R.some(r => r.isDokumento === "kvalifikacija.pdf" || /kvalif/i.test(String(r.isDokumento || ""))), "kvalifikacijos dokumentas pakete");
+    const V = W.failuVardai(W.__R), vt = V[W.__R.indexOf(rt)], vp = V[W.__R.indexOf(rp)];
+    tiesa(new RegExp(`SPS_${N}_priedas_Techninė_specifikacija.*\\.docx$`).test(vt), "TS failo vardas: " + vt);
+    tiesa(/Sutarties_priedas_Aplinkosaugos_reikalavimų_aprašas.*\.docx$/.test(vp), "priedo failo vardas: " + vp);
+    const h = tx("ikeltiPakete");
+    tiesa(h.includes(`SPS ${N} priedas - Techninė specifikacija („Techninė specifikacija.docx“)`) && /be pakeitimų/.test(h) && /numerių nežinome/.test(h), "4 žingsnis: " + h);
+    tiesa(!/neįdėtas/.test(h), "4 žingsnis - sutarties projektas");
+    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
+    tiesa(!/„?Techninė specifikacija/.test(tx("ppPridek")), "paketo patikra vis dar prašo TS: " + tx("ppPridek").slice(0, 400));
+    const dk = W.eval("DK").failai.find(d => d.rusis === "ts"), pov = W.dkPoveikis(dk).map(x => x.t).join(" ");
+    tiesa(/įdedama į paketą be pakeitimų kaip SPS priedas/.test(pov), "1 žingsnis prie TS: " + pov);
+    tiesa(/įdedamas į paketą be pakeitimų/.test(W.dkPoveikis(W.eval("DK").failai.find(d => d.rusis === "priedas")).map(x => x.t).join(" ")), "1 žingsnis prie priedo");
+  });
+
+  await testas("Kontrolė be įkeltos TS: paketo patikra prašo techninės specifikacijos, 4 žingsnio eilutės nėra; dvi dalių techninės specifikacijos - du failai su failo vardais, skirtingi ZIP vardai", async () => {
+    await generuokSu({ budas: "T-AK", tipas: "paslaugos" });
+    lygu(ikelti().length, 0, "įkeltų");
+    tiesa(!D.getElementById("ikeltiPakete"), "4 žingsnio eilutė be įkeltų");
+    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
+    tiesa(/Techninė specifikacija/.test(tx("ppPridek")), "be TS - paketo patikra neprašo: " + tx("ppPridek").slice(0, 400));
+    await generuokSu({ budas: "T-AK", tipas: "paslaugos", po2: async () => { await W.dkPridek(await dalTS(2, ["Kabeliai", "Movos"])); } });
+    const I = ikelti(), V = W.failuVardai(W.__R);
+    lygu(I.length, 2, "dalių TS");
+    tiesa(I.every(r => /^SPS \d+ priedas - Techninė specifikacija \((I|II) dalis\. Techninė specifikacija\)$/.test(r.d.pavadinimas)), "pavadinimai: " + I.map(r => r.d.pavadinimas).join(" | "));
+    lygu(new Set(I.map(r => V[W.__R.indexOf(r)])).size, 2, "ZIP vardai sutampa");
+  });
+
+  await testas("Sutarties projektas: atsakius „Ne“ (esminės sąlygos SPS) ir kai sutartį parengia generatorius - įkeltas failas į paketą neįdedamas ir 4 žingsnis sako kodėl; 1 žingsnio paaiškinimas pagal atsakymą", async () => {
+    await generuokSu({ budas: "T-AK", tipas: "paslaugos", sutartis: "esmines", po2: async () => { await W.dkPridek([await SUT()]); } });
+    lygu(ikelti().length, 0, "„Ne“ - įdėta");
+    tiesa(/Sutarties projektas\.docx“\) į paketą neįdėtas - 1 žingsnyje atsakyta, kad sutarties projektas nerengiamas/.test(tx("ikeltiPakete")), "„Ne“ 4 žingsnis: " + tx("ikeltiPakete"));
+    tiesa(/nerengiamas, todėl šis failas į paketą neįdedamas/.test(W.dkPoveikis(W.eval("DK").failai.find(d => d.rusis === "sutartis")).map(x => x.t).join(" ")), "„Ne“ 1 žingsnis");
+    await generuokSu({ budas: "T-AK", tipas: "paslaugos", sutartis: "patvirtinti", po2: async () => { await W.dkPridek([await SUT()]); } });
+    lygu(ikelti().length, 0, "generuojama - įdėta");
+    tiesa(/neįdėtas - sutarties projektą pakete parengia generatorius/.test(tx("ikeltiPakete")), "generuojama 4 žingsnis: " + tx("ikeltiPakete"));
+    tiesa(/parengia generatorius pagal LITGRID AB formą/.test(W.dkPoveikis(W.eval("DK").failai.find(d => d.rusis === "sutartis")).map(x => x.t).join(" ")), "generuojama 1 žingsnis");
+  });
+
+  await testas("Sutarties projektas, kurio generatorius nerengia (centralizuotas VPĮ pirkimas): įkeltas failas - „SPS N priedas - Sutarties projektas“ be pakeitimų, paketo patikra jį randa kaip sutartį", async () => {
+    let sut;
+    const docs = await generuokSu({ budas: "T-AK", centr: true, tipas: "paslaugos", sutartis: "patvirtinti", po2: async () => { sut = await SUT(); await W.dkPridek([sut]); } });
+    const sp = W.sutartiesProjektas();
+    tiesa(sp && sp.pridedamas && !sp.generuojamas, "sutarties projektas: " + JSON.stringify(sp));
+    const sps = Object.values(docs).find(d => d.pars && /_SPS$/.test(d.r.d.trumpas)), eil = sps.pars.find(p => /^\d+ priedas\s*[–-]\s*Sutarties projektas/.test(p));
+    tiesa(eil, "SPS be sutarties projekto eilutės");
+    const I = ikelti();
+    lygu(I.map(r => r.d.pavadinimas), [`SPS ${eil.match(/^(\d+)/)[1]} priedas - Sutarties projektas`], "pavadinimas");
+    lygu(await baitai(I[0].blob), await baitai(sut), "failas pakeistas");
+    lygu(W.ppVaidmuo(I[0]), "sutartis", "vaidmuo");
+    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
+    tiesa(!/Sutarties projektas/.test(tx("ppPridek")), "paketo patikra prašo sutarties projekto: " + tx("ppPridek").slice(0, 400));
+    // privalomi sutarties elementai tikrinami įkelto failo tekste (ne „sutarties dokumento nėra“)
+    const sp2 = W.__PP.p.patikros.filter(x => /^sut_/.test(x.id));
+    tiesa(!sp2.some(x => x.id === "sut_elementai" && x.busena === "nepatikrinta") && sp2.some(x => !/^sut_(elementai|turinys|tipines)$/.test(x.id)),
+      "sutarties elementai netikrinti: " + sp2.map(x => x.id + ":" + x.busena).join(", "));
+  });
+}
 
 async function testai1021b(){
   dabartine = grupe("Naudotojo sprendimai 2026-10-21 (po trečiosios patikros): užtikrinimo dydis ir terminas, „Preliminary Contract“, DPS BVPŽ punktas, įstatymo priminimas");
@@ -13827,6 +13906,7 @@ async function testaiEtapas1(){
     await testai1022a();
     await testai1022b();
     await testai1022c();
+  await testai1022d();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
