@@ -1716,6 +1716,11 @@ async function testaiForma(){
           if (!D.querySelector('[data-auto-nr="' + W.CSS.escape(r) + '"]')) blogi.push(b + k + ": automatinio priedo numerio nėra skiltyje „Išspręsta automatiškai“: " + q.tekstas.slice(0, 60));
           return;
         }
+        // derybų formuluotės pagal 1 žingsnį (T3-V9, 2026-10-21) - be klausimo, skiltyje „Išspręsta automatiškai“
+        if ((W.__S2.M.autoDer || []).some(a => a.raktas === r)){
+          if (!D.querySelector('[data-auto-der="' + W.CSS.escape(r) + '"]')) blogi.push(b + k + ": derybų formuluotės nėra skiltyje „Išspręsta automatiškai“: " + q.tekstas.slice(0, 60));
+          return;
+        }
         const el = D.getElementById(W.lkId("laukas|" + r) + "-pz");
         if (!el){ blogi.push(b + k + ": nėra peržiūros: " + q.tekstas.slice(0, 60)); return; }
         const segs = L().planas(q.tekstas, q.lk.vietos, (ATS()["B_" + r] || []).map(x => x === W.eval("SKYRIAUS_ZYMA") ? "" : x));
@@ -11272,6 +11277,149 @@ async function testaiSprendimai1020(){
    T3-M2 dokumentų pavadinimai 4 žingsnyje, T3-M4 pašalinamo punkto laukai. */
 /* Naudotojo sprendimai po trečiosios naujo darbuotojo patikros (2026-10-21): T3-V7 pasiūlymo galiojimo užtikrinimo dydis ir terminas tik
    atsakius „Taip“, T3-V4 „Preliminary Contract“, DPS konkretaus pirkimo BVPŽ punktas (NAC5), T3-D3 įstatymo priminimas, T3-D2 kilmė. */
+async function testai1021c(){
+  dabartine = grupe("Naudotojo sprendimai 2026-10-21 (patikslinti T3-V9, T3-M5, T3-M16): derybų sąlygos ir minimalūs reikalavimai pagal 1 žingsnį, deklaracijos priedas - kai SPS ją mini, mažoji sutartis - tik mažos vertės darbams");
+  const ivesk = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input")); e.dispatchEvent(new W.Event("change")); };
+  async function zingsnis2(budas, ap, o = {}){
+    await modulis(null, { tusti: true });
+    ivesk("pavadinimas", PAVADINIMAS);
+    const sel = D.getElementById("budas"); sel.value = budas; sel.dispatchEvent(new W.Event("change"));
+    D.getElementById("tipas-" + (o.tipas || "prekes")).click(); D.getElementById("nacsaug-ne").click();
+    if (o.kalba){ const k = D.querySelector("input[name=kalba][value=" + o.kalba + "]"); k.checked = true; k.dispatchEvent(new W.Event("change")); }
+    if (o.pavEN) ivesk("pavadinimasEN", o.pavEN);
+    if (ap) D.getElementById("apimtis-" + ap).click();
+    W.__K = null; D.getElementById("toStep2").click();
+    await kol(() => W.__K && !D.getElementById("step2").classList.contains("hid"), "2 žingsnis");
+  }
+  const N = t => W.eval("norm")(t);
+  const RE_MIN = /^perkanciojo subjekto nustatyti minimalus reikalavimai/, RE_DER = /^perkantysis subjektas deresis del siu salygu/;
+  // [kortelė ar automatika] lietuviškam laukui: formuluotė (SSD, ND, TSD) - K.formuluotes ir K.automatika; laukas (MVP) - S2.M.autoDer ir kortelė
+  function vieta(re){
+    const K = W.__K, M = (W.__S2 && W.__S2.M) || {};
+    const f = Object.entries(K.formuluotes).find(([, q]) => re.test(N(q.tekstas)));
+    const a = K.automatika.find(x => x.keisti === "derybos" && re.test(N(x.kas)));
+    const t = Object.entries(K.tuscios).find(([, q]) => q.lk && re.test(N(q.tekstas)));
+    const ad = (M.autoDer || []).find(x => re.test(N(x.q.tekstas)));
+    const kortLauko = t && (M.korteles || []).some(c => c.rusis === "laukas" && c.raktas === t[0]);
+    return { f, a, t, ad, kortLauko, auto: a || ad, kort: f || kortLauko };
+  }
+  await testas("V9 derybų formuluotės pagal 1 žingsnį: „tik dėl Pasiūlymo kainos“ - abi vietos „Išspręsta automatiškai“ su „Keisti“ (SSD, ND, MVP, TSD); „dėl kainos ir kitų sąlygų“ - derybų sąlygos iš šablono nurodymo, minimalių reikalavimų klausiama be formuluotės „tik dėl kainos“; platesnė apimtis - abu klausiami", async () => {
+    for (const budas of ["S-SD", "S-ND", "MV-SAD", "T-SD"]){
+      await zingsnis2(budas, "kaina");
+      const m = vieta(RE_MIN), d = vieta(RE_DER);
+      tiesa(m.auto && d.auto && !m.kort && !d.kort, budas + " kaina: abi automatiškai, kortelių nėra " + JSON.stringify([!!m.auto, !!d.auto, !!m.kort, !!d.kort]));
+      const auto = D.getElementById("lkAuto"), at = auto ? auto.textContent.replace(/\s+/g, " ") : "";
+      tiesa(/Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai/.test(at) && /„?Pasiūlymo kainos/.test(at) && /Dėl ko bus deramasi\?“ - tik dėl Pasiūlymo kainos/.test(at), budas + " skiltis „Išspręsta automatiškai“: " + at.slice(0, 300));
+      const kb = auto.querySelectorAll(budas === "MV-SAD" ? "[data-auto-der] [data-nr-klausti]" : "[data-der-klausti]");
+      lygu([kb.length, kb[0] && /^Keisti/.test(kb[0].getAttribute("aria-label")) && kb[0].textContent.trim()], [2, "Keisti"], budas + " „Keisti“ mygtukai");
+      await zingsnis2(budas, "kaina_kitos");
+      const m2 = vieta(RE_MIN), d2 = vieta(RE_DER);
+      tiesa(d2.auto && !d2.kort && !m2.auto && m2.kort, budas + " kaina_kitos: derybų sąlygos automatiškai, minimalių reikalavimų - kortelė");
+      const tekstas = d2.a ? d2.a.veiksmas : d2.ad.reiksme;
+      lygu(tekstas.replace(/^įrašoma „|“$/g, ""), budas === "T-SD" ? "Pasiūlymo kainos, kitų pasiūlymo sąlygų" : "Pasiūlymo kainos, kitų Pasiūlymo sąlygų", budas + " - formuluotė iš paties šablono nurodymo");
+      if (m2.f){
+        lygu(m2.f[1].variantai.length, 0, budas + " formuluotė „tik dėl kainos“ nebesiūloma");
+        tiesa(/šablone formuluotės nėra - įrašykite minimalius reikalavimus patys/.test(m2.f[1].pastaba), budas + " pastaba: " + m2.f[1].pastaba);
+      } else lygu((ATS()["B_" + m2.t[0]] || [])[0] || "", "", budas + " MVP laukas nesiūlomas");
+      await zingsnis2(budas, "kita");
+      const m3 = vieta(RE_MIN), d3 = vieta(RE_DER);
+      tiesa(!m3.auto && !d3.auto && m3.kort && d3.kort, budas + " kita: abu klausiami");
+      if (d3.f) tiesa(d3.f[1].variantai.length === 0 && /Platesnei derybų apimčiai/.test(d3.f[1].pastaba), budas + " kita - derybų sąlygų pastaba");
+    }
+  });
+  await testas("V9: „Keisti“ - kortelė su ta pačia siūloma formuluote, fokusas jos valdiklyje; generuojant - įrašyta; „Patikrinkite“, kai įrašyta „tik dėl kainos“ formuluotė, o deramasi ir dėl kitų sąlygų; LT/EN - angliškos vietos klausiamos kaip iki tol", async () => {
+    await zingsnis2("S-SD", "kaina");
+    const kb = D.querySelector("#lkAuto [data-der-klausti]"), fk = kb.getAttribute("data-der-klausti");
+    kb.click();
+    await kol(() => vieta(RE_MIN).f || vieta(RE_DER).f, "kortelė po „Keisti“");
+    const kort = D.getElementById(W.lkId("formuluote|" + fk));
+    tiesa(kort && kort.contains(D.activeElement) && D.activeElement.checked, "fokusas pažymėtame variante: " + (D.activeElement && D.activeElement.outerHTML.slice(0, 120)));
+    lygu(D.querySelectorAll("#lkAuto [data-der-klausti]").length, 1, "automatiškai liko viena vieta");
+    // MVP laukas
+    await zingsnis2("MV-SAD", "kaina");
+    const kl = D.querySelector("#lkAuto [data-auto-der] [data-nr-klausti]"), r = kl.getAttribute("data-nr-klausti");
+    kl.click();
+    await kol(() => vieta(RE_MIN).kortLauko || vieta(RE_DER).kortLauko, "MVP kortelė po „Keisti“");
+    tiesa(D.getElementById(W.lkId("laukas|" + r)).contains(D.activeElement), "MVP fokusas kortelėje");
+    // generavimas: SSD kaina ir TSD kaina_kitos
+    let docs = await generuokSu({ budas: "S-SD", tipas: "prekes" });
+    let t = docs.SSD_LT_SPS.pars.join("\n");
+    tiesa(/Perkantysis subjektas derėsis dėl šių sąlygų: Pasiūlymo kainos(\.|\s*$)/m.test(t) && /minimalūs reikalavimai Pirkimo objektui yra šie: Techninėje specifikacijoje ir (Sutarties projekte|SPS \d+ dalyje „Esminės sutarties sąlygos“) nustatyti reikalavimai/.test(t) && !/jei deramasi tik dėl kainos/.test(t), "SSD tekstas: " + t.split("\n").filter(x => /derėsis dėl šių|minimalūs reikalavimai Pirkimo/.test(x)).join(" || "));
+    docs = await generuokSu({ budas: "T-SD", tipas: "prekes", pries: async () => { D.getElementById("apimtis-kaina_kitos").click(); await W.kraukPriedus(); W.klausimynas(); } });
+    t = docs.TSD_LT_SPS.pars.join("\n");
+    tiesa(/Perkantysis subjektas derėsis dėl šių sąlygų: Pasiūlymo kainos, kitų pasiūlymo sąlygų/.test(t), "TSD kaina_kitos tekstas");
+    // „Patikrinkite“
+    await zingsnis2("S-SD", "kaina_kitos");
+    const mf = vieta(RE_MIN).f;
+    W.nustatykFormuluote(mf[0], "Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai"); W.klausimynas();
+    const q = W.__K.formuluotes[mf[0]];
+    tiesa(/^Patikrinkite: „Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai“ - formuluotė, kai deramasi tik dėl kainos, o 1 žingsnyje pasirinkta - dėl kainos ir kitų pasiūlymo sąlygų/.test(q.pastaba), "pastaba: " + q.pastaba);
+    tiesa(/Patikrinkite: „Techninėje/.test(D.getElementById(W.lkId("formuluote|" + mf[0])).textContent), "pastaba kortelėje");
+    // LT/EN: lietuviškos vietos - automatiškai, angliškos - klausiama (šablone angliškos formuluotės nėra)
+    await zingsnis2("S-SD", "kaina", { kalba: "LT_EN", pavEN: "Power transformers" });
+    const en = Object.values(W.__K.tuscios).filter(x => x.lk && /^(the minimum requirements set by|the contracting entity will negotiate)/.test(N(x.tekstas)));
+    tiesa(vieta(RE_MIN).auto && vieta(RE_DER).auto && en.length === 2 && en.every(x => (W.__S2.M.korteles || []).some(c => c.rusis === "laukas" && c.q === x)), "LT/EN: LT automatiškai, EN - " + en.length + " kortelės");
+  });
+  await testas("M5 deklaracijos priedas - kai SPS ją mini: BVPŽ punktas pašalinamas - priedas, priedų sąrašo ir pasiūlymo dokumentų sąrašo eilutės pašalinamos (AK, AKV, DPS); punktas lieka - visi trys; nacionalinis saugumas „Ne“ - nė vieno; kilmė sako kodėl", async () => {
+    const dekl = t => (t.match(/Nacionalinio saugumo reikalavimų atitikties deklaracij/g) || []).length;
+    let docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true, nsbvpz: "ne" });
+    const kilme = (W.eval("SIUL").get("A|NACSAUGUMAS") || {}).saltinis || "";
+    lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS, dekl(docs.AK_LT_SPS.pars.join("\n"))], [false, false, 0], "„Taip“ + BVPŽ „Ne“: priedo ir nuorodų nėra");
+    tiesa(/SPS deklaraciją reikalauja tik nacionalinio saugumo BVPŽ punkte - jis pašalinamas/.test(kilme), "kilmė: " + kilme);
+    docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true, nsbvpz: "taip" });
+    lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS, dekl(docs.AK_LT_SPS.pars.join("\n"))], [true, true, 3], "BVPŽ „Taip“: priedas ir trys nuorodos");
+    docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true });
+    lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS], [true, true], "BVPŽ neatsakyta - punktas lieka, priedas lieka");
+    docs = await generuokSu({ budas: "T-AK", tipas: "prekes" });
+    lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS, dekl(docs.AK_LT_SPS.pars.join("\n"))], [false, false, 0], "nacionalinis saugumas „Ne“");
+    docs = await generuokSu({ budas: "S-AK", centr: true, tipas: "prekes", nacsaug: true, nsbvpz: "ne" });
+    lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMASVPI, !!docs.PRIEDAI_LT_NACSAUGUMASVPI, dekl(docs.AKV_LT_SPS.pars.join("\n"))], [false, false, 0], "AKV (VPĮ): BVPŽ „Ne“");
+    docs = await generuokSu({ budas: "DPS-K", nacsaug: true, nsbvpz: "ne" });
+    lygu(dekl(docs.DPSP_LT_SALYGOS.pars.join("\n")), 0, "DPS konkretaus pirkimo sąlygos: BVPŽ „Ne“ - priedų sąrašo eilutės nėra");
+    docs = await generuokSu({ budas: "DPS-K", nacsaug: true, nsbvpz: "taip" });
+    tiesa(dekl(docs.DPSP_LT_SALYGOS.pars.join("\n")) >= 1, "DPS: BVPŽ „Taip“ - eilutė lieka");
+  });
+  await testas("M16 mažoji sutartis - tik mažos vertės darbams: vertė ne mažesnė už ribą - klausimas K6 (mažoji ar statybos rangos), mažesnė - be klausimo; vertė nežinoma ar riba neįkelta - pasakoma; kitos taisyklės nepakito; 1 žingsnio blokas", async () => {
+    const G = W.GP_SUTARTYS, mv = W.GP_THRESHOLDS.PI.mv_works, kur = r => r.busena === "klausimas" ? "?" + r.klausimas.kodas : r.seima;
+    lygu([kur(G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai", verte: mv - 1 })), kur(G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai", verte: mv })),
+          kur(G.parink({ pavadinimas: "Pastato stogo remontas", objektas: "darbai", verte: 6000000 })),
+          kur(G.parink({ pavadinimas: "Kondicionierių keitimas", objektas: "darbai", verte: mv - 1 })), kur(G.parink({ pavadinimas: "Kondicionierių keitimas", objektas: "darbai", verte: mv }))],
+         ["DARBAI_MAZOJI", "?K6", "?K6", "DARBAI_MAZOJI", "?K6"], "riba (lygi - nebe mažos vertės); abi smulkių darbų taisyklės");
+    const r = G.parink({ pavadinimas: "Pastato stogo remontas", objektas: "darbai", verte: 6000000 });
+    lygu(r.klausimas.tekstas, "Kuri sutartis tinka šiems darbams?", "klausimas");
+    tiesa(r.priezastys.some(x => /^pastatas ar teritorija/.test(x)) && r.priezastys.some(x => /^numatoma vertė 6 000 000 Eur - ne mažesnė už mažos vertės darbų pirkimo ribą \(/.test(x)), "priežastys: " + r.priezastys.join(" | "));
+    lygu(r.klausimas.atsakymai.map(a => a.id), ["mazoji", "statybos"], "atsakymai");
+    lygu([kur(G.parink({ pavadinimas: "Pastato stogo remontas", objektas: "darbai", verte: 6000000, atsakymai: { K6: "statybos" } })),
+          kur(G.parink({ pavadinimas: "Pastato stogo remontas", objektas: "darbai", verte: 6000000, atsakymai: { K6: "mazoji" } }))], ["STATYBOS_RANGOS", "DARBAI_MAZOJI"], "atsakius");
+    const be = G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai" });
+    tiesa(be.seima === "DARBAI_MAZOJI" && be.pastabos.some(x => /Numatoma vertė neįrašyta/.test(x)), "be vertės - pasakoma: " + be.pastabos.join(" | "));
+    tiesa(!G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai", verte: 1000 }).pastabos.some(x => /vertė|ribų/.test(x)), "su verte - pastabos nėra");
+    // kitos taisyklės ir K2 / K3 žmogaus atsakymai „mažoji“ - vertė nekeičia
+    lygu([kur(G.parink({ pavadinimas: "110 kV Mažeikių skirstyklos rekonstravimas", objektas: "darbai", verte: 9000000 })),
+          kur(G.parink({ pavadinimas: "Administracinio pastato vėdinimo sistemų eksploatavimas", objektas: "darbai", verte: 9000000 })),
+          kur(G.parink({ pavadinimas: "Darbų pirkimas", objektas: "darbai", verte: 9000000, atsakymai: { K2: "mazoji" } }))], ["?K1", "DARBAI_MAZOJI", "DARBAI_MAZOJI"], "kitos taisyklės");
+    // riba - pagal režimą ir iš bendrų ribų (shared/thresholds.js)
+    const T = W.GP_THRESHOLDS;
+    try {
+      W.GP_THRESHOLDS = { PI: { mv_works: 500 }, VPI: { mv_works: 5000000 } };
+      lygu([kur(G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai", verte: 1000 })), kur(G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai", verte: 1000, rezimas: "VPI" }))],
+           ["?K6", "DARBAI_MAZOJI"], "PĮ ir VPĮ ribos");
+      W.GP_THRESHOLDS = undefined;
+      const nr = G.parink({ pavadinimas: "Tvoros remontas", objektas: "darbai", verte: 1000 });
+      tiesa(nr.seima === "DARBAI_MAZOJI" && nr.pastabos.some(x => /ribų įkelti nepavyko/.test(x)), "be ribų - pasakoma");
+    } finally { W.GP_THRESHOLDS = T; }
+    // 1 žingsnio blokas: vertė iš 1 žingsnio lauko
+    await modulis(null, { tusti: true });
+    ivesk("pavadinimas", "Pastato stogo remontas");
+    D.getElementById("tipas-darbai").click();
+    ivesk("verte", "6 000 000");
+    W.SUTARTIES_BLOKAS.atnaujink(); D.getElementById("sbTaip").click();
+    const leg = [...D.querySelectorAll("#sutartisQ fieldset.sb-kl legend")].map(x => x.textContent);
+    tiesa(leg.includes(G.KLAUSIMAI.K6.tekstas), "bloke - K6: " + leg.join(" | "));
+    ivesk("verte", "100 000"); W.SUTARTIES_BLOKAS.atnaujink();
+    lygu([W.SUTARTIES_BLOKAS.busena().sistema.seima, [...D.querySelectorAll("#sutartisQ fieldset.sb-kl legend")].some(x => x.textContent === G.KLAUSIMAI.K6.tekstas)], ["DARBAI_MAZOJI", false], "mažos vertės - be klausimo");
+  });
+}
 async function testai1021b(){
   dabartine = grupe("Naudotojo sprendimai 2026-10-21 (po trečiosios patikros): užtikrinimo dydis ir terminas, „Preliminary Contract“, DPS BVPŽ punktas, įstatymo priminimas");
   const uztV = () => { const [gid, g] = Object.entries(W.__K.grupes).find(([, g]) => W.uztikrinimoSkaidomas(g));
@@ -13378,6 +13526,7 @@ async function testaiEtapas1(){
     await testaiNacsaugBvpz();
     await testaiTestuotojas3();
     await testai1021b();
+    await testai1021c();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
