@@ -25,8 +25,7 @@
  *     target: '#infoPanelMount',
  *     moduleId: 'pp-esg',            // unikalus -> atskiras būsenos įsiminimas
  *     getLang: () => currentLang,    // funkcija -> 'lt' | 'en'
- *     defaultOpen: true,
- *     content: {
+ *     content: {                     // skiltis pagal numatymą suskleista (2026-10-21; defaultOpen: true - tik testams)
  *       lt: {
  *         title, purpose, stepsTitle, steps:[...], noteTitle, note,
  *         moreLabel,                 // "Plačiau" (nebūtina)
@@ -190,7 +189,9 @@
       if (v === "open") return true;
       if (v === "closed") return false;
     } catch (e) {}
-    return cfg.defaultOpen !== false;
+    // Vieningas principas visuose moduliuose (naudotojo sprendimas 2026-10-21): skiltis pagal numatymą suskleista, naudotojas išskleidžia pats;
+    // jo pasirinkimas įsimenamas (slapukų kategorija „nustatymai“). `defaultOpen: true` - tik testams.
+    return cfg.defaultOpen === true;
   }
   function setOpen(cfg, open) {
     // Skilties būsena - slapukų kategorija „nustatymai“ (shared/sutikimas.js): išjungus neįrašoma (2026-10-16)

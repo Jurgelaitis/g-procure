@@ -530,8 +530,29 @@ async function testaiSkydelis(){
       const id = (src.match(/moduleId:\s*"([^"]+)"/) || [])[1];
       if (!id) blogi.push(m + ": nėra moduleId"); else if (idai[id]) blogi.push(m + ": moduleId „" + id + "“ jau naudoja " + idai[id]); else idai[id] = m;
       if (/\.gpi-[a-z-]+\{/.test(src) || /class="gph-/.test(src)) blogi.push(m + ": savi skilties stiliai ar vietinė pagalbos kopija");
+      // vieningas principas (naudotojo sprendimas 2026-10-21): skiltis visuose moduliuose pagal numatymą užverta - atveria naudotojas
+      if (/defaultOpen\s*:\s*true/.test(src)) blogi.push(m + ": skiltis atveriama pagal numatymą (defaultOpen: true)");
     }
     lygu(blogi, [], "puslapiai");
+  });
+
+  await testas("Pagal numatymą skiltis užverta (2026-10-21, vieningas principas visiems moduliams): be defaultOpen - suskleista, išsaugota „open“ - atverta, „closed“ - suskleista", async ()=>{
+    const A = GP_TESTU_APSAUGA.pradek(k => k === "gprocure.infoPanel.gpi-numatyta");
+    try {
+      const atverta = async busena => {
+        if (busena) localStorage.setItem("gprocure.infoPanel.gpi-numatyta", busena); else localStorage.removeItem("gprocure.infoPanel.gpi-numatyta");
+        const f = document.createElement("iframe"); f.style.width = "1280px"; f.style.height = "600px";
+        const ok = new Promise(r => f.addEventListener("load", r));
+        f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"></head><body><div id="m"></div>'
+          + '<script src="gprocure-info-panel.js"><\/script><script>GProcureInfoPanel.mount({ target: "#m", moduleId: "gpi-numatyta", content: ' + JSON.stringify(SKYDELIO_TURINYS) + ' });<\/script></body></html>';
+        document.body.appendChild(f); await ok;
+        const d = f.contentDocument;
+        for (let i = 0; i < 40 && !d.querySelector(".gpi-head"); i++) await new Promise(r => setTimeout(r, 25));
+        const b = d.querySelector('button[data-gpi-toggle][aria-expanded]'), r = b && b.getAttribute("aria-expanded");
+        f.remove(); return r;
+      };
+      lygu([await atverta(null), await atverta("open"), await atverta("closed")], ["false", "true", "false"], "aria-expanded");
+    } finally { A.atkurk(); }
   });
 
   await testas("Skilties tekstai >= 4,5:1 abiejuose lygiuose (paskirtis, žingsniai, pastaba, sąvokų kodai ir pavyzdžiai, lango žyma ant gradiento)", async ()=>{
@@ -4703,10 +4724,10 @@ async function rinkosGrafikuBusena(w, d) {
   await rinkosBusena(w, d, "#rinkaGrafikai");
   if (!d.querySelector("#rinkaGrafikai .gpvr-mano")) throw new Error("be palyginimo su grafiku");
 }
-/* PP-salygos 2 etapas U4 (2026-10-20, naudotojo sprendimas S2): 2 žingsnis pagal numatymą rodo vieną skyrių, kiti paslėpti - telefono,
-   prieinamumo ir dydžių skalės patikra jų nematytų. Todėl ankstesnės 2 žingsnio būsenos tikrinamos „Rodyti visus klausimus“ vaizde (visos
-   kortelės, kaip iki tol; nustatymas neįrašomas), o vieno skyriaus vaizdas (skyriaus juosta su „Atgal“ / „Toliau“, apatinė juosta telefone,
-   paskutinis puslapis „Prieš generuojant“) - atskiromis būsenomis. */
+/* PP-salygos 2 žingsnis dviem dalimis (2026-10-21, naudotojo sprendimas S2; iki tol - 2026-10-20 U4 po vieną skyrių): pagal numatymą rodoma viena
+   dalis, kita paslėpta - telefono, prieinamumo ir dydžių skalės patikra jos nematytų. Todėl ankstesnės 2 žingsnio būsenos tikrinamos visų klausimų
+   vaizde (RODYTI_VISUS - tik testams, sąsajoje jungiklio nebėra), o dalių vaizdas (1 dalis su „Toliau“ ir apatine juosta, 2 dalis su „Atgal“,
+   priedais ir „Prieš generuojant“) - atskiromis būsenomis. */
 const SALYGOS_PSL = "../PP-salygos/PP-SALYGOS.html";
 const salygosVisi = b => b.map(([pav, fn, ...r]) => [pav, async (w, d) => { w.eval("RODYTI_VISUS = true"); return fn(w, d); }, ...r]);
 // būsenos matuojamos tame pačiame lange: „Toliau“ be 1 žingsnio atsakymų (2026-10-20) juos išvalo - prieš kiekvieną būseną grąžinami numatytieji
@@ -4716,16 +4737,16 @@ async function vienoSkyriausBusena(w, d){
   const b = d.getElementById("budas"); b.value = "T-AK"; b.dispatchEvent(new w.Event("change"));
   w.eval("RODYTI_VISUS = false");
   await w.iStep2();
-  w.eikIPuslapi(w.eval("PSL")[1].id);
-  if (!d.querySelector('#lkPsl [aria-label^="Atgal"]') || !d.querySelector('#lkPsl [aria-label^="Toliau"]') || d.getElementById("lkPslA").hidden) throw new Error("skyriaus juostų nėra");
+  w.eikIPuslapi("lk-d1");
+  if (d.querySelector('#lkPsl [aria-label^="Atgal"]') || !d.querySelector('#lkPsl [aria-label^="Toliau"]') || d.getElementById("lkPslA").hidden) throw new Error("1 dalies juostų nėra");
 }
 async function vienoSkyriausPabaigaBusena(w, d){
   await vienoSkyriausBusena(w, d);
-  w.eikIPuslapi("lkSantrauka");
-  if (!d.querySelector("#lkPsl h3.lk-psl-pav") || d.getElementById("lkSantrauka").closest(".lk-paslepta")) throw new Error("paskutinio puslapio nėra");
+  w.eikIPuslapi("lk-d2");
+  if (!d.querySelector('#lkPsl [aria-label^="Atgal"]') || !d.querySelector("#lkPsl h3.lk-psl-pav") || d.getElementById("lkSantrauka").closest(".lk-paslepta")) throw new Error("2 dalies nėra");
 }
-const U4_BUSENOS = [["2 žingsnis po vieną skyrių: skyriaus juosta, „Atgal“ / „Toliau“ ir apatinė juosta (U4, 2026-10-20)", vienoSkyriausBusena],
-  ["2 žingsnis po vieną skyrių: paskutinis puslapis „Prieš generuojant“ (U4, 2026-10-20)", vienoSkyriausPabaigaBusena]];
+const U4_BUSENOS = [["2 žingsnis dviem dalimis: 1 dalis, juosta su „Toliau“ ir apatinė juosta (2026-10-21)", vienoSkyriausBusena],
+  ["2 žingsnis dviem dalimis: 2 dalis su priedais ir „Prieš generuojant“ (2026-10-21)", vienoSkyriausPabaigaBusena]];
 const TELEFONO_BUSENOS = {
   // Slapukų sutikimas (2026-10-16): juosta ir nustatymų langas (testų rėmelyje jie patys nerodomi - atveriami)
   "../index.html": [["slapukų sutikimo juosta", w => { w.GP_SUTIKIMAS.rodyk(); }], ["slapukų nustatymų langas", w => { w.GP_SUTIKIMAS.atverk(); }],
@@ -5005,7 +5026,7 @@ const PRIEINAMUMO_BUSENOS = {
     ["A4 forma", w => w.openProtocol("AK-1", "A4")],
     ["protokolo peržiūra", async w => { w.openProtocol("SD-1", "D6"); await w.previewProtocol(); }]]
 };
-PRIEINAMUMO_BUSENOS[SALYGOS_PSL] = salygosAtkurk(salygosVisi(PRIEINAMUMO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS.slice(0, 1)));   // planšetė 720 / 640 px - ir vienas skyrius
+PRIEINAMUMO_BUSENOS[SALYGOS_PSL] = salygosAtkurk(salygosVisi(PRIEINAMUMO_BUSENOS[SALYGOS_PSL]).concat(U4_BUSENOS.slice(0, 1)));   // planšetė 720 / 640 px - ir dalių vaizdas
 // PP-protocol pirkimai įrašomi PRIEŠ įkeliant puslapį (jis juos skaito įsikeldamas); saugykla atkuriama testo pabaigoje
 const PRIEINAMUMO_PRIES = {
   "../PP-protocol/LITGRID_Generatorius_v3.html": () => {
