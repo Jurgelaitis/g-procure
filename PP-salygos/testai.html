@@ -11664,6 +11664,59 @@ async function testai1022b(){
   });
 }
 
+/* 2026-10-22: 3 darbas - žaliųjų reikalavimų 3 lentelė kiekvienai pirkimo objekto daliai (šablono nurodymas, kaip 2 lentelei) */
+async function testai1022c(){
+  dabartine = grupe("Žaliųjų reikalavimų lentelė kiekvienai pirkimo objekto daliai (2026-10-22): klonai su antraštėmis, iš įkelto dokumento ir šablono, LT/EN, neskaidomas ir žalieji ne pirkimo sąlygose - be klonų");
+  const xd = xml => new W.DOMParser().parseFromString(xml, "application/xml");
+  const tt = el => Array.from(el.getElementsByTagNameNS(NSW, "t")).map(t => t.textContent).join("");
+  /* kūno žaliųjų lentelės (pirmoje eilutėje - antraštė, prieš lentelę - pavadinimas „N lentelė ...“) su pavadinimais */
+  function zaliosios(xml){
+    const body = xd(xml).getElementsByTagNameNS(NSW, "body")[0], k = Array.from(body.childNodes).filter(n => n.nodeType === 1);
+    const out = [];
+    k.forEach((n, i) => {
+      if (n.localName !== "tbl") return;
+      const tr0 = n.getElementsByTagNameNS(NSW, "tr")[0];
+      if (!tr0 || !/REIKALAVIMAI ŽALIESIEMS PIRKIMAMS|ŽALIEJI REIKALAVIMAI/.test(tt(tr0))) return;
+      let pav = null;
+      for (let j = i - 1; j >= 0; j--){ if (k[j].localName === "tbl") break; const t = tt(k[j]).trim(); if (t){ pav = t; break; } }
+      if (pav && /^\d+\s*lentel/.test(pav)) out.push({ pav, tekstas: tt(n) });
+    });
+    return out;
+  }
+  const salygose = g => g.nariai.find(n => n.raktas === W.GP_LAUKAI.norm("Jei žalieji reikalavimai nurodomi pirkimo sąlygose")) || null;
+  const tsSutartis = g => g.nariai.find(n => n.raktas === W.GP_LAUKAI.norm("Jei žalieji reikalavimai nurodyti Techninėje specifikacijoje ir (ar) Sutarties projekte")) || null;
+
+  await testas("Skaidomas į 3 dalis, žaliųjų lentelė iš įkelto dokumento (T-AK LT): trys 3 lentelės su antraštėmis „3 lentelė (I/II/III Pirkimo objekto dalis)“, kiekvienoje - dokumento eilutė; 2 lentelė - irgi trys; 4 žingsnis sako", async () => {
+    const docs = await generuokSu({ budas: "T-AK", tipas: "prekes", po2: async () => { await W.dkPridek((await dalTS(3, ["Baterijos", "Monitoringas", "Apkrova"])).concat([KVPDF()])); } });
+    const s = docs.AK_LT_SPS, Z = zaliosios(s.xml);
+    lygu(Z.map(x => x.pav), ["3 lentelė (I Pirkimo objekto dalis)", "3 lentelė (II Pirkimo objekto dalis)", "3 lentelė (III Pirkimo objekto dalis)"], "antraštės");
+    tiesa(Z.every(x => /Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001\./.test(x.tekstas)), "dokumento eilutės ne visose");
+    lygu(s.pars.filter(p => /^2 lentelė \((I|II|III) Pirkimo objekto dalis\)$/.test(p)).length, 3, "2 lentelės klonai");
+    tiesa(/žaliųjų reikalavimų lentelių dalims \+2/.test(D.getElementById("rezultatas").textContent), "4 žingsnis: " + (D.getElementById("rezultatas").textContent.match(/[^·]*lentelių dalims[^·]*/g) || []).join(" | "));
+    tiesa(s.pars.some(p => /Žaliuosius reikalavimus pagal SPS 3 lentelės reikalavimą turi atitikti/.test(p)), "4.2 p. dingo");
+  });
+
+  await testas("Be įkelto dokumento: žalieji nurodomi pirkimo sąlygose, 2 dalys (MVP LT) - šablono 3 lentelė dviem dalims; LT/EN (T-AK) - dvikalbės antraštės; neskaidomas - viena lentelė be dalies žymos; žalieji TS ir sutartyje - lentelės nėra, klonų nėra", async () => {
+    let docs = await generuokSu({ budas: "MV-SAB", tipas: "prekes", grupes: g => salygose(g), po2: async () => { await W.dkPridek(await dalTS(2, ["Kabeliai", "Movos"])); } });
+    let Z = zaliosios(docs.MVP_LT_SPS.xml);
+    lygu(Z.map(x => x.pav), ["3 lentelė (I Pirkimo objekto dalis)", "3 lentelė (II Pirkimo objekto dalis)"], "MVP antraštės");
+    tiesa(Z.every(x => /Tiekėjas Sutarties vykdymo laikotarpiu teikiamoms paslaugoms/.test(x.tekstas)), "MVP šablono eilutės");
+    // ND - antraštė „ŽALIEJI REIKALAVIMAI“
+    docs = await generuokSu({ budas: "S-ND", tipas: "prekes", grupes: g => salygose(g), po2: async () => { await W.dkPridek(await dalTS(2, ["Kabeliai", "Movos"])); } });
+    lygu(zaliosios(docs.ND_LT_SPS.xml).map(x => x.pav), ["3 lentelė (I Pirkimo objekto dalis)", "3 lentelė (II Pirkimo objekto dalis)"], "ND antraštės");
+    docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "prekes", grupes: g => salygose(g), po2: async () => { await W.dkPridek(await dalTS(2, ["Kabeliai", "Movos"])); } });
+    Z = zaliosios(docs.AK_LTEN_SPS.xml);
+    lygu(Z.map(x => x.pav), ["3 lentelė (I Pirkimo objekto dalis)/Table 3 (Part I of the object of Procurement)", "3 lentelė (II Pirkimo objekto dalis)/Table 3 (Part II of the object of Procurement)"], "LT/EN antraštės");
+    docs = await generuokSu({ budas: "T-AK", tipas: "prekes", grupes: g => salygose(g) || g.nariai.find(n => /neskaidom/.test(n.raktas)) || null });
+    Z = zaliosios(docs.AK_LT_SPS.xml);
+    lygu(Z.map(x => x.pav), ["3 lentelė"], "neskaidomas");
+    tiesa(!/žaliųjų reikalavimų lentelių dalims/.test(D.getElementById("rezultatas").textContent), "neskaidomas - 4 žingsnis sako apie klonus");
+    docs = await generuokSu({ budas: "T-AK", tipas: "prekes", grupes: g => tsSutartis(g), po2: async () => { await W.dkPridek(await dalTS(2, ["Kabeliai", "Movos"])); } });
+    lygu(zaliosios(docs.AK_LT_SPS.xml).length, 0, "žalieji ne pirkimo sąlygose - lentelė liko");
+    lygu(docs.AK_LT_SPS.pars.filter(p => /^2 lentelė \((I|II) Pirkimo objekto dalis\)$/.test(p)).length, 2, "2 lentelės klonai (kontrolė)");
+  });
+}
+
 async function testai1021b(){
   dabartine = grupe("Naudotojo sprendimai 2026-10-21 (po trečiosios patikros): užtikrinimo dydis ir terminas, „Preliminary Contract“, DPS BVPŽ punktas, įstatymo priminimas");
   const uztV = () => { const [gid, g] = Object.entries(W.__K.grupes).find(([, g]) => W.uztikrinimoSkaidomas(g));
@@ -13773,6 +13826,7 @@ async function testaiEtapas1(){
     await testai1021c();
     await testai1022a();
     await testai1022b();
+    await testai1022c();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

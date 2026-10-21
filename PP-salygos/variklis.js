@@ -1751,7 +1751,12 @@ const GPGen = (() => {
     }
   }
 
-  function dautiKvalifLenteles(doc){
+  function dautiKvalifLenteles(doc){ return dautiLentelesDalims(doc, /kvalifikacijos reikalavim/i); }
+  /* Žaliųjų reikalavimų 3 lentelė kiekvienai daliai (2026-10-22): šablono nurodymas „Jei pirkimo objektas skaidomas į dalis, žaliuosius
+     reikalavimus pateikti kiekvienai pirkimo objekto daliai“ - tas pats principas kaip 2 lentelei (antraštė „3 lentelė (I Pirkimo objekto dalis)“).
+     Lentelė lieka tik kai žalieji reikalavimai nustatomi pirkimo sąlygose - kitaip ji jau ištrinta ir klonų nėra. */
+  function dautiZaliujuLenteles(doc){ return dautiLentelesDalims(doc, /REIKALAVIMAI ŽALIESIEMS PIRKIMAMS|ŽALIEJI REIKALAVIMAI/i); }
+  function dautiLentelesDalims(doc, antrRe){
     const d = doc.parts['word/document.xml'];
     const body = d.getElementsByTagNameNS(W,'body')[0];
     if (!body) return 0;
@@ -1784,8 +1789,9 @@ const GPGen = (() => {
     for (let i = 0; i < vaikai.length; i++){
       if (vaikai[i].localName !== 'tbl') continue;
       const eil = Array.from(vaikai[i].getElementsByTagNameNS(W,'tr'));
-      const antr = eil.length ? GPDocx.els(eil[0],'t').map(t => t.textContent).join(' ') : '';
-      if (!/kvalifikacijos reikalavim/i.test(antr)) continue;
+      const ts = eil.length ? GPDocx.els(eil[0],'t').map(t => t.textContent) : [];
+      // tekstas gali būti suskaidytas į kelias atkarpas žodžio viduryje („ŽALIE“ + „SIEMS“) - tikrinama ir be tarpų tarp jų
+      if (!antrRe.test(ts.join(' ')) && !antrRe.test(ts.join(''))) continue;
       const cap = antrastePries(i);
       if (cap){ tbl = vaikai[i]; caption = cap; break; }
     }
@@ -2182,7 +2188,7 @@ const GPGen = (() => {
     return true;
   }
 
-  return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, keisti, dautiDalis, dautiKvalifLenteles, dautiKainuLenteles, romeniskas,
+  return { snapshot, juodinti, trinti, perkeltiNumeri, idetiNumeri, trintiEilutese, pildyti, vietos, keisti, dautiDalis, dautiKvalifLenteles, dautiZaliujuLenteles, dautiKainuLenteles, romeniskas,
            raudoniRunai, trintiRaudonusRunus,
            keistiRaudonaTeksta, keistiRaudonaGrupe, irasykRengeja, keistiDaliuSarasa, keistiRezimoEilute, taisytiTitulTarpa, vienodasTitulas, taisytiSakinioGala, valytiPastraipuZenklus, taisytiSkliaustus };
 })();
