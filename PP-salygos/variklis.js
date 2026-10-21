@@ -3085,6 +3085,7 @@ const GPAudit = (() => {
   const W = GPDocx.NS_W;
   /* Baigtumo kriterijus: raudonos = 0, tuscios vietos = 0, komentarai = 0.
      Kas lieka - parodoma zmogui pastraipu tikslumu. Nieko nenutylima.       */
+  const RENGEJO_FORMOJE = /3 mėnesius|90 calendar days|ARBA SĄNAUDOS|arba sąnaudos|ar sąnaudos|OR COSTS|or costs|Paslaugų teikimo\/Prekių tiekimo|Service provision\/ supply of|Koreguojama pagal poreikį|To be revised in accordance with the need/;
   function check(doc, imone, forma){
     const d = doc.parts['word/document.xml'];
     const body = d.getElementsByTagNameNS(W,'body')[0];
@@ -3095,17 +3096,17 @@ const GPAudit = (() => {
       if (!txt) return;
       // TIK matoma raudona: run'as, kuris turi teksta. Pastraipos zenklo (¶)
       // spalva vartotojui nematoma - ja valom atskirai, bet nekaltinam punkto.
-      let red = false;
+      let red = false, raud = '';
       for (const r of GPDocx.els(p,'r')){
         const rt = GPDocx.els(r,'t').map(x => x.textContent).join('');
         if (!rt.trim()) continue;
         for (const c of GPDocx.els(r,'color')){
           const v = (c.getAttributeNS(W,'val')||'').toUpperCase();
-          if (['FF0000','C00000','ED1C24'].includes(v)) red = true;
+          if (['FF0000','C00000','ED1C24'].includes(v)){ red = true; raud += rt; break; }
         }
       }
       // Visas pastraipos tekstas (iki 2026-10-04 - 110 ženklų, kirpta ir žodžio viduryje); sutraukia rodymas.
-      if (red) raudonos.push({ i, text: txt });
+      if (red) raudonos.push({ i, text: txt, raud });
       // Betekste bruksniu linija - dokumento pabaigos skirtukas, ne pildomas laukas.
       const vienBruksniai = txt.replace(/[_\s]/g,'') === '';
       if (!vienBruksniai && GPGen.vietos(txt).length) tuscios.push({ i, text: txt });
@@ -3156,13 +3157,16 @@ const GPAudit = (() => {
     // TIEKEJO FORMOS: tuscios vietos ir raudonos pastabos jose yra pasiulymu
     // pateikimo etapo dalykas - tiekejas jas pildys pats. Tai ne klaidos, o
     // informacija; formos svara lemia tik komentarai ir imones zymos.
+    // Rengėjo vietos formose (naujo darbuotojo patikra 2026-10-20, D-1): pasiūlymo galiojimo terminas, kaina ar sąnaudos, rūšis ir kainų
+    // lentelės nurodymas „Koreguojama pagal poreikį:“ - ne tiekėjo laukai; likusios raudonos forma nebaigta („spręsti Word'e“)
     if (forma){
-      const tiekejo = [...raudonos.map(x => ({...x, rusis:'raudona'})),
+      const rengejo = raudonos.filter(x => RENGEJO_FORMOJE.test(x.raud || ''));
+      const tiekejo = [...raudonos.filter(x => !rengejo.includes(x)).map(x => ({...x, rusis:'raudona'})),
                        ...tuscios.map(x => ({...x, rusis:'tuscia'}))];
       const zymos = patikrinti.filter(x => /ĮMONĖS PAVADINIMAS/.test(x.text));
       return {
-        raudonos: [], tuscios: [], komentarai, patikrinti: zymos, tiekejo,
-        svarus: komentarai === 0 && zymos.length === 0
+        raudonos: rengejo, tuscios: [], komentarai, patikrinti: zymos, tiekejo,
+        svarus: komentarai === 0 && zymos.length === 0 && rengejo.length === 0
       };
     }
     return {

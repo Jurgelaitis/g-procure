@@ -265,6 +265,12 @@
       uzuomina: 'Šablono nurodymai: insert specific category name(s), insert value excluding VAT.',
       vietos: vs => vs.map((v, k) => [{ ivestis: 'tekstas', uzrasas: 'DPS kategorija (-os) anglų kalba', pvz: '1 and 2' },
         { ivestis: 'tekstas', uzrasas: 'Maksimali numatoma apimtis anglų kalba', pvz: '500 000 EUR excluding VAT' }][k] || { ivestis: 'tekstas', uzrasas: 'Reikšmė ' + (k + 1) }) },
+    // Pasiūlymo formos galiojimo terminas (naujo darbuotojo patikra D-1; naudotojo sprendimas 2026-10-21): šablone raudonai „3 mėnesius/90 kalendorinių dienų“
+    { id: 'pasiulymo-galiojimas', formuluote: true, re: /^pasiulymas galioja 3 menesius 90 kalendoriniu dienu/,
+      klausimas: 'Kiek laiko turi galioti pasiūlymas?',
+      uzuomina: 'Pasiūlymo formoje: „Pasiūlymas galioja ... nuo Pasiūlymo pateikimo termino pabaigos.“ Pasirinkite šablono variantą arba įrašykite kitą terminą galininku.',
+      uzrasas: 'Kitas terminas', pvz: '6 mėnesius',
+      vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Galiojimo terminas' })) },
     { id: 'cpo-pagrindimas', formuluote: true, re: /centralizuotu pirkimu katalogu pagrindimas|centralized procurement directory/,
       klausimas: 'Kodėl pirkimas vykdomas ne per CPO LT katalogą?', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pagrindimas' })) },
     { id: 'esminiu-salygu-dalis', re: /esmines sutarties salygos isdestytos sps|terms of the contract are laid down|conditions of the contract are established/,
