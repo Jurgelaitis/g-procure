@@ -29,7 +29,8 @@
   // priedo numeris - ir dviejų lygių (rangos SS priedų sąrašas: „priede Nr. 1.1“, 2026-10-10)
   var PRIED = /(\d+)\s*pried[a-ząčęėįšųūž]*|pried[a-ząčęėįšųūž]*\s*Nr\.\s*(\d+(?:\.\d+)?)|Annex(?:es)?\s*(?:No\.\s*)?(\d+)/gi;
   // teisės akto struktūra prieš numerį: „VPĮ 90 straipsnio 1 dalies 7 punkte“, „Article 45(2) point 3“ - ne sutarties punktas
-  var TEISES_AKTAS = /(straipsn[a-ząčęėįšųūž]*|Article|įstatym[a-ząčęėįšųūž]*|kodeks[a-ząčęėįšųūž]*|Law|LPP|LP|VPĮ|PĮ|aprašo|reglament[a-ząčęėįšųūž]*|Regulation|Directive|direktyv[a-ząčęėįšųūž]*|dal(?:ies|yje|is)\s*(?:\d+\s*)?|paragraph\s*\(\d+\)|\(\d+\))\s*$/i;
+  var TEISES_AKTAS = /(straipsn[a-ząčęėįšųūž]*|Article|įstatym[a-ząčęėįšųūž]*|kodeks[a-ząčęėįšųūž]*|Law|LPP|LP|VPĮ|PĮ|aprašo|reglament[a-ząčęėįšųūž]*|Regulation|Directive|direktyv[a-ząčęėįšųūž]*|dal(?:ies|yje|is)\s*(?:\d+\s*)?|paragraph\s*\(\d+\)|\(\d+\)|\((?:toliau|hereinafter)[^)]{0,40}(?:aprašas|taisyklės|metodika|tvarka|nutarimas|įsakymas|Description|Rules|Procedure|Methodology)\))\s*$/i;
+  // „... tvarkos aprašo ... (toliau – Tvarkos aprašas) 4.4.4 papunkčiu“ - kito teisės akto punktas, ne sutarties (T3-V5, 2026-10-21)
   var PAVYZDYS = /(pavyzdžiui|pvz\.|e\.\s*g\.|for example)[\s,:]*$/i;
 
   function numeriai(T) {
@@ -84,6 +85,13 @@
     });
     return { tekstai: T, wordNumeriu: n };
   }
+  /* Citata - nuo žodžio pradžios iki žodžio pabaigos (T3-V5: iki tol prasidėdavo žodžio viduryje - „o“ (toliau ...“) */
+  function citata(t, a, b) {
+    var s = Math.max(0, a), e = Math.min(t.length, b);
+    while (s > 0 && s > a - 20 && /\S/.test(t.charAt(s - 1))) s--;
+    while (e < t.length && e < b + 20 && /\S/.test(t.charAt(e))) e++;
+    return t.slice(s, e).trim();
+  }
   function tikrink(o) {
     var bs = o.bs ? numeriai(o.bs) : null, ss = o.ss ? numeriai(o.ss) : null, pr = o.ss ? priedai(o.ss) : null;
     var out = { nuorodu: 0, radiniai: [], nepatikrinta: [] };
@@ -110,13 +118,13 @@
           (m[3].match(/\d+(?:\.\d+)*/g) || []).forEach(function (nr) {
             if (bendr || spec) {
               if (!aibe) { out.nepatikrinta.push({ dok: dok, nr: nr, priezastis: (bendr ? "bendrųjų" : "specialiųjų") + " sąlygų dokumento nėra" }); return; }
-              if (!aibe[nr]) out.radiniai.push({ dok: dok, i: i, nr: nr, rusis: "punktas", citata: t.slice(Math.max(0, m.index - 30), m.index + m[0].length + 20).trim() });
+              if (!aibe[nr]) out.radiniai.push({ dok: dok, i: i, nr: nr, rusis: "punktas", citata: citata(t, m.index - 30, m.index + m[0].length + 20) });
               return;
             }
             var savo = dok === "BS" ? bs : ss, kito = dok === "BS" ? ss : bs;
             if ((savo && savo[nr]) || (kito && kito[nr])) return;
             if (!kito) { out.nepatikrinta.push({ dok: dok, nr: nr, priezastis: "nuoroda be dokumento nurodymo, o kito sutarties dokumento nėra" }); return; }
-            out.radiniai.push({ dok: dok, i: i, nr: nr, rusis: "punktas", citata: t.slice(Math.max(0, m.index - 30), m.index + m[0].length + 20).trim() });
+            out.radiniai.push({ dok: dok, i: i, nr: nr, rusis: "punktas", citata: citata(t, m.index - 30, m.index + m[0].length + 20) });
           });
         }
         PRIED.lastIndex = 0;
@@ -126,10 +134,10 @@
           if ((/^\s*\d+\.\d+\.?\s*(Priedas|Annex)/i.test(t) && m.index <= 12) || (/^\s*\d+\s+priedas\.\s/i.test(t) && m.index <= 4)) continue;   // pats priedų sąrašo įrašas
           out.nuorodu++;
           if (!pr) { out.nepatikrinta.push({ dok: dok, nr: nrp, priezastis: "specialiųjų sąlygų (priedų sąrašo) nėra" }); continue; }
-          if (!pr[nrp]) out.radiniai.push({ dok: dok, i: i, nr: nrp, rusis: "priedas", citata: t.slice(Math.max(0, m.index - 30), m.index + m[0].length + 20).trim() });
+          if (!pr[nrp]) out.radiniai.push({ dok: dok, i: i, nr: nrp, rusis: "priedas", citata: citata(t, m.index - 30, m.index + m[0].length + 20) });
           // priedas priedų sąraše pažymėtas kaip netaikomas, o specialiosios sąlygos į jį nurodo (bendrųjų sąlygų nuorodos - sąlyginės:
           // jos galioja tik tada, kai priedas pridedamas, todėl nežymimos)
-          else if (pr[nrp] === "netaikomas" && dok === "SS") out.radiniai.push({ dok: dok, i: i, nr: nrp, rusis: "priedas", netaikomas: true, citata: t.slice(Math.max(0, m.index - 30), m.index + m[0].length + 20).trim() });
+          else if (pr[nrp] === "netaikomas" && dok === "SS") out.radiniai.push({ dok: dok, i: i, nr: nrp, rusis: "priedas", netaikomas: true, citata: citata(t, m.index - 30, m.index + m[0].length + 20) });
         }
       });
     });
