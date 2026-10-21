@@ -90,10 +90,19 @@
     return "Numatoma pirkimo vertė (" + eur(r.verte) + " be PVM) neviršija jūsų įvestos vidaus taisyklių ribos (" + eur(r.riba) +
       ") - užtikrinimas taikomas atsižvelgus į įsipareigojimų nevykdymo riziką.";
   }
+  /* Įstatymas reikalauja užtikrinti sutarties įvykdymą CK 6.70 str. būdais - ir netesybomis sutartyje (trečioji naujo darbuotojo patikra T3-D3, 2026-10-21;
+     naudotojo sprendimas - remtis PP-salygos principu): čia sprendžiama, ar reikalauti ATSKIRO užtikrinimo dokumento. Nuoroda - iš registro. */
+  function istatymas(rezimas) {
+    var cit = "";
+    try { if (global.GP_TEISE) cit = global.GP_TEISE.cit("sutarties_uztikrinimo_budai", rezimas === "VPI" ? "VPI" : "PI"); } catch (e) { cit = ""; }
+    return "Pirkimo vykdytojas privalo pareikalauti, kad sutarties įvykdymas būtų užtikrintas Civilinio kodekso 6.70 straipsnyje nustatytais būdais" +
+      (cit ? " (" + cit + ")" : "") + "; vienas jų - netesybos sutartyje. Šiame klausime sprendžiama, ar reikalauti atskiro užtikrinimo dokumento (banko garantijos ar draudimo bendrovės laidavimo).";
+  }
   function html(verte, o) {
     var id = (o && o.id) || "vr", r = vertink(verte), yra = !!r.riba, atv = atvertas === id;
     var h = '<div class="vr vr--' + r.kodas + '" id="' + esc(id) + '" data-vr-blokas data-darbas-ne>' +
-      '<p class="vr-t" id="' + esc(id) + '-t"><b>Vidaus taisyklės.</b> ' + esc(tekstas(verte)) + "</p>";
+      '<p class="vr-t" id="' + esc(id) + '-t"><b>Vidaus taisyklės.</b> ' + esc(tekstas(verte)) + "</p>" +
+      '<p class="vr-t" id="' + esc(id) + '-t2"><b>Įstatymas.</b> ' + esc(istatymas(o && o.rezimas)) + "</p>";
     if (r.kodas !== "neperskaitoma") h += '<button type="button" class="sec vr-b" id="' + esc(id) + '-b" data-vr="keisti" aria-expanded="' + (atv ? "true" : "false") +
       '" aria-controls="' + esc(id) + '-red">' + (yra ? "Keisti ribą" : "Įvesti ribą") + "</button>";
     if (atv && r.kodas !== "neperskaitoma") {

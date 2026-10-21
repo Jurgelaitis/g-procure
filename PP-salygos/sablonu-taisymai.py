@@ -409,6 +409,8 @@ def taisymas_tekstas(taisyk):
     viso += _tarpas_priede(taisyk)
     viso += _tarpas_antrasteje(taisyk)
     viso += _vyriausybes_sakinys(taisyk)
+    viso += _preliminarioji_sutartis(taisyk)
+    viso += _dps_eilute_10(taisyk)
     return viso
 
 
@@ -891,6 +893,58 @@ def _vyriausybes_sakinys(taisyk):
     for t in _AA_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
+
+
+# AB. „Preliminarioji sutartis“ angliškai (2026-10-21, rado trečioji naujo darbuotojo patikra; naudotojo sprendimas „Pataisykite.“): dvikalbių SPS
+#    (AK, SSD, TSD) 1 skyriaus sakinys „Pirkimas vykdomas siekiant sudaryti Preliminariąją sutartį.“ angliškai - „... for the purpose of concluding
+#    a Draft Contract.“, o „Draft Contract“ tame pačiame pakete reiškia sutarties projektą. To paties paketo BPS sąvoką „Preliminarioji sutartis“
+#    verčia „Preliminary Contract“ (1 skyrius ir 9.29 / 11.28 / 14.29 p.), todėl angliškas sakinys - BPS apibrėžta sąvoka. Raudonas tekstas nekeičiamas.
+_PRELIMINARIOJI = [(_re.compile(r'for the purpose of concluding a (Draft Contract)\.'), 'Preliminary Contract', 1)]
+_AB_RAUDONI = []
+
+
+def _preliminarioji_sutartis(taisyk):
+    print("\n„PRELIMINARIOJI SUTARTIS“ ANGLIŠKAI (AB, 2026-10-21):")
+    n = _su_zemelapiais(_be_raudono(_PRELIMINARIOJI, _AB_RAUDONI), None, 'EN „Preliminary Contract“', taisyk)
+    for t in _AB_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# AC. DPS konkretaus pirkimo LT/EN sąlygų nacionalinio saugumo reikalavimų lentelė (2026-10-21, rasta modeliuojant BVPŽ punktą - naudotojo sprendimas
+#    „Taip, prašau įtraukti“; redakcinė korekcija - naudotojo leidimas 2026-10-05): eilutės numeruotos tekstu 1-9, o paskutinė - „11.“ (praleistas
+#    „10.“; LT šablone eilutės numeruoja Word, ten 10). Nuorodų į šios lentelės 10 ar 11 punktą šablone nėra. Keičiamas tik tos eilutės numeris
+#    (pirmas langelis, po kurio - „Ekonomiškai naudingiausią pasiūlymą pateikęs Tiekėjas/ Tiekėjų grupės nariai privalo užpildyti ...“); kiti „11.“
+#    (skyriaus numeris) nekeičiami; žemėlapio tekstas - pagal tą patį pastraipos indeksą.
+def _dps_eilute_10(taisyk):
+    import json as _json
+    print("\nDPS LT/EN NACIONALINIO SAUGUMO LENTELĖS EILUTĖ „11.“ -> „10.“ (AC, 2026-10-21):")
+    f = 'DPSP_LTEN_SALYGOS'
+    path = TPL / (f + '.docx')
+    with zipfile.ZipFile(path) as zin:
+        infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+    xml = items['word/document.xml']
+    segs = list(_VISOS_P_RE.finditer(xml))
+    T = [_pastraipos_tekstas(m.group(0)).strip() for m in segs]
+    kur = [k for k, x in enumerate(T) if x == '11.' and next((y for y in T[k + 1:k + 4] if y), '').startswith('Ekonomiškai naudingiausią pasiūlymą pateikęs Tiekėjas/ Tiekėjų grupės nariai privalo užpil')]
+    if not kur:
+        return 0
+    k = kur[0]; m = segs[k]
+    s0 = _pastraipos_tekstas(m.group(0)).index('11')
+    seg2 = _keisk_pastraipa(m.group(0), [(s0, s0 + 2, '10')])
+    print(f"  {f}.docx: pastraipa {k} „11.“ -> „10.“")
+    if taisyk:
+        items['word/document.xml'] = xml[:m.start()] + seg2 + xml[m.end():]
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for info in infos:
+                zout.writestr(info, items[info.filename])
+        zf = Path(__file__).parent / 'zemelapiai' / (f + '.json')
+        raw = zf.read_text(encoding='utf-8'); Z = _json.loads(raw)
+        if str(Z['paras'].get(str(k), '')).strip() == '11.':
+            Z['paras'][str(k)] = Z['paras'][str(k)].replace('11', '10', 1)
+            zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+            print(f"      {zf.name}: pastraipa {k} suderinta")
+    return 1
 
 
 # X. Nuorodos į SPS priedus (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“; rado sugeneruoto paketo patikra): tekstas nurodo ne

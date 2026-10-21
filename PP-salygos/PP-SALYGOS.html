@@ -991,7 +991,7 @@
         <label class="opt"><input type="radio" name="nsbvpz" value="ne" id="nsbvpz-ne" onchange="bvpzAtnaujink()"> Ne</label>
       </div>
       <div class="nsb" id="nsbvpzInfo" hidden></div>
-      <div class="cite" id="nsbvpzUz">Nuo atsakymo priklauso SPS pašalinimo pagrindų lentelės punktas „Atsižvelgiant į tai, kad Pirkimo objektas apima ...
+      <div class="cite" id="nsbvpzUz">Nuo atsakymo priklauso SPS pašalinimo pagrindų lentelės (DPS konkretaus pirkimo sąlygose - nacionalinio saugumo reikalavimų lentelės) punktas „Atsižvelgiant į tai, kad Pirkimo objektas apima ...
         BVPŽ kodų prekes ar paslaugas“: „Taip“ - punktas paliekamas, „Ne“ - pašalinamas. Neatsakius punktas paliekamas.</div>
     </div>
 
@@ -3047,6 +3047,66 @@ function uztikrinimasTaikomas(){                                        // true 
   const raktai = Object.keys(ATS).filter(k => /^jei (ne)?taikomas pasiulymo galiojimo uztikrinimas/.test(k) && ATS[k] === true);
   return raktai.length ? raktai.some(k => /^jei taikomas/.test(k)) : null;
 }
+/* Pasiūlymo galiojimo užtikrinimo dydis ir banko garantijos terminas (trečioji naujo darbuotojo patikra T3-V7; naudotojo sprendimas 2026-10-21:
+   pirma klausiama, ar užtikrinimas taikomas, ir tik atsakius „Taip“ - dydis ir terminas). Visuose SPS šablonuose (LT ir LT/EN) jie - raudoni
+   pavyzdžiai: „Pasiūlymo galiojimo užtikrinimo dydis – 25 000 Eur. Banko garantija turi galioti ne trumpiau kaip 105 dienas po Pasiūlymų
+   pateikimo termino pabaigos (t. y. ... plius 105 dienos)“, EN „The amount of Tender security – 25 000 Eur. The bank guarantee must be valid for
+   at least 165 days ...“. Iki tol jų niekas neklausė, jie likdavo raudoni, o garantija, trumpesnė už pasiūlymo galiojimą, niekur nebuvo sakoma.
+   Atsakymai - ATS.UZT_SUMA ir ATS.UZT_DIENOS (žmogaus įvestis; juodraštyje - kartu su ATS). Įrašant keičiami tik skaičiai ir žodžio „diena“
+   forma, visa pastraipa pajuodinama (kitas raudonas jos tekstas - nuorodos į SPS priedą ir punktą, ne nurodymai). */
+const UZT_SUMOS_RE = /(užtikrinimo dydis|amount of Tender security)\s*[–-]\s*\d/i;
+function uztSuma(){                                                     // tik suma skaičiais (su „Eur“ ar be) - „30 abc“ netinka
+  const s = String(ATS.UZT_SUMA || '').trim();
+  if (!/^\d[\d \u00a0.,]*(\s*(Eur|EUR|€))?$/.test(s)) return null;
+  const v = GP_MONEY.parseEUR(s); return v > 0 ? v : null;
+}
+function uztDienos(){ const s = String(ATS.UZT_DIENOS || '').trim(); return /^\d{1,4}$/.test(s) && +s > 0 ? +s : null; }
+/* „diena“ su skaitvardžiu: galininkas („ne trumpiau kaip 105 dienas / 120 dienų / 21 dieną“), vardininkas („plius 105 dienos / 120 dienų“) */
+function dienosForma(n, linksnis){
+  const d = n % 10, s = n % 100;
+  if (d === 0 || (s >= 11 && s <= 19)) return 'dienų';
+  if (d === 1) return linksnis === 'v' ? 'diena' : 'dieną';
+  return linksnis === 'v' ? 'dienos' : 'dienas';
+}
+/* Pasiūlymo galiojimas (pasiūlymo formos klausimas „Kiek laiko turi galioti pasiūlymas?“) dienomis: { dienos, apytiksliai } arba null */
+function pasiulymoGaliojimoDienos(){
+  const v = String(ATS['I_' + GALIOJIMO_RAKTAS] || '').trim().toLowerCase();
+  let m = /(\d+)\s*(?:kalendorin\S*\s*)?(?:dien|d\.|days?)/.exec(v);
+  if (m) return { dienos: +m[1], apytiksliai: false, tekstas: v };
+  m = /(\d+)\s*(?:mėn|men|months?)/.exec(v);
+  return m ? { dienos: +m[1] * 30, apytiksliai: true, tekstas: v } : null;
+}
+/* Pastaba, kai banko garantija trumpesnė už pasiūlymo galiojimą (tik įspėjimas - terminą nustato rengėjas) */
+function uztTerminoPastaba(){
+  const d = uztDienos(), g = pasiulymoGaliojimoDienos();
+  if (!d || !g || d >= g.dienos) return null;
+  return `Banko garantija (${d} ${dienosForma(d, 'g')} po pasiūlymų pateikimo termino pabaigos) trumpesnė už pasiūlymo galiojimą (${g.tekstas}${g.apytiksliai ? ', apie ' + g.dienos + ' dienų' : ''}) - užtikrinimas pasibaigtų anksčiau nei pasiūlymas.`;
+}
+/* Įrašo dydį ir dienas į pastraipą (visi skaičiai „ne trumpiau kaip / plius / for at least N“ ir žodžio „diena“ forma). null - nėra ką įrašyti. */
+function uztSumaIrasyk(p){
+  const suma = uztSuma(), d = uztDienos();
+  if (!p || !suma || !d) return null;
+  const ts = GPDocx.els(p, 't'), t = ts.map(x => x.textContent).join(''), k = [];
+  const m = /((?:užtikrinimo dydis|amount of Tender security)\s*[–-]\s*)(\d(?:[\d \u00a0.,]*\d)?)(?=\s*Eur)/i.exec(t);
+  if (!m) return null;
+  const sumaT = GP_MONEY.formatEUR(suma);
+  k.push([m.index + m[1].length, m.index + m[0].length, sumaT]);
+  const rd = /((?:ne trumpiau kaip|plius|for at least)\s*)(\d+)(\s*)(dienas|dienos|dienų|dieną|diena|days|day)(?=[\s).,;]|$)/gi;
+  let x, nd = 0;
+  while ((x = rd.exec(t))){
+    const en = /^day/i.test(x[4]), v = /^plius/i.test(x[1]);
+    k.push([x.index + x[1].length, x.index + x[0].length, d + (x[3] || ' ') + (en ? (d === 1 ? 'day' : 'days') : dienosForma(d, v ? 'v' : 'g'))]);
+    nd++;
+  }
+  if (!nd) return null;
+  keiskAtkarpas(ts, k);
+  return { suma: sumaT, dienos: d, vietu: nd };
+}
+/* Ar pakete yra užtikrinimo dydžio sakinys (visi SPS šablonai) */
+function uztSumosYra(){
+  return (typeof DOK !== 'undefined' ? DOK : []).some(d => Object.values((d.zemelapis || {}).paras || {}).some(x => UZT_SUMOS_RE.test(String(x || ''))));
+}
+
 /* Vietos pagal teksta: T - normalizuoti pastraipu tekstai indekso tvarka (tinka zemelapiui ir dokumentui). */
 function uztikrinimoVietos(T){
   const a = T.findIndex(t => UZT_NE_RE.test(t || ''));
@@ -3793,6 +3853,17 @@ function surinktiKlausimus(){
         }
         return;
       }
+      // pasiūlymo galiojimo užtikrinimo dydis ir garantijos terminas - iš klausimo „Ar taikomas ...?“ kortelės (T3-V7)
+      if (kat === 'pavyzdys' && UZT_SUMOS_RE.test(n.text || '')){
+        const ut = uztikrinimasTaikomas();
+        if (ut === false) return;                                    // pastraipa pašalinama kartu su variantu „privalo pateikti“
+        const s = uztSuma(), dd = uztDienos();
+        auto(trumpas, n.text, ut === null ? 'laukiama atsakymo apie pasiūlymo galiojimo užtikrinimą'
+             : s && dd ? `įrašoma: dydis – ${GP_MONEY.formatEUR(s)} Eur, banko garantija – ne trumpiau kaip ${dd} ${dienosForma(dd, 'g')}`
+             : 'laukiama dydžio ir garantijos termino - kol neįrašyta, pavyzdžiai lieka raudoni',
+             'pasiūlymo galiojimo užtikrinimo dydis ir banko garantijos terminas - klausimo „Ar taikomas pasiūlymo galiojimo užtikrinimas?“ kortelėje');
+        return;
+      }
       if (kat === 'pavyzdys'){
         auto(trumpas, n.text, 'paliekama raudona',
              'šablono pavyzdinė reikšmė (data, suma ar trukmė) - įrašykite tikrą Word\'e; kol neįrašyta, baigtumo patikra ją rodo');
@@ -4176,7 +4247,7 @@ function surinktiKlausimus(){
      sprendžiamas 1 žingsnyje, todėl čia - tik matomas („Keisti“ nėra: klausimas - 1 žingsnyje) */
   if (nacsaugTaip()) DOK.filter(d => (d.zemelapis.blokai || []).some(b => b.id === 'NAC5')).forEach(d => {
     const a5 = nac5Atsakymas();
-    auto(d.trumpas, 'SPS punktas „Atsižvelgiant į tai, kad Pirkimo objektas apima ... BVPŽ kodų prekes ar paslaugas“',
+    auto(d.trumpas, 'Punktas „Atsižvelgiant į tai, kad Pirkimo objektas apima ... BVPŽ kodų prekes ar paslaugas“',
       a5.v ? 'paliekamas' : 'pašalinamas visas (lentelės eilutės)', 'pagal 1 žingsnio atsakymą (' + a5.kodel + ')');
   });
 
@@ -4910,6 +4981,15 @@ function kortelesVienetai(K, c){
     out.push({ id: c.id + '-o0', pavadinimas: 'Variantai: ' + q.nariai.map(n => n.tekstas).join(' / '),
       busena: ats ? (q.nariai.some(n => PATV.has(n.raktas)) ? 'patvirtinta' : 'siuloma') : 'neuzpildyta', blokuoja: !ats, grupe: true,
       raktai: q.nariai.map(n => n.raktas), reiksme: ats ? ats.tekstas : '' });
+    // pasiūlymo galiojimo užtikrinimo dydis ir garantijos terminas - laukai tik atsakius „Taip“ (T3-V7)
+    const gk = GP_LAUKAI.grupesKlausimas(q.nariai);
+    if (gk && gk.id === 'uztikrinimas' && uztikrinimoAtsakymas(c.raktas, q) === 'taip' && uztSumosYra()){
+      const s = uztSuma(), d = uztDienos();
+      out.push({ id: c.id + '-suma', pavadinimas: 'Pasiūlymo galiojimo užtikrinimo dydis (Eur)', busena: s ? 'patvirtinta' : 'neuzpildyta',
+        raktai: ['UZT_SUMA'], reiksme: s ? GP_MONEY.formatEUR(s) + ' Eur' : '' });
+      out.push({ id: c.id + '-dienos', pavadinimas: 'Banko garantijos galiojimas (dienų po pasiūlymų pateikimo termino pabaigos)', busena: d ? 'patvirtinta' : 'neuzpildyta',
+        raktai: ['UZT_DIENOS'], reiksme: d ? d + ' ' + dienosForma(d, 'g') : '' });
+    }
   } else if (c.rusis === 'pavienis'){
     out.push({ id: c.id + '-o0', pavadinimas: 'Sąlyga: ' + q.tekstas, busena: sprendimoBusena(ATS[c.raktas], c.raktas),
       blokuoja: ATS[c.raktas] === undefined, raktai: [c.raktas], reiksme: ATS[c.raktas] === true ? 'Taip' : ATS[c.raktas] === false ? 'Ne' : '' });
@@ -5109,7 +5189,7 @@ function kortelesHTML(K, c){
         <label class="opt"><input type="radio" id="${c.id}-o1" name="P_${esc(key)}" ${neZym ? 'checked' : ''} onchange="uAts('${esc(key)}',${neV})"> ${ne}</label>
       </div>
       ${tekst ? `<div class="lk-pz"><span class="lk-pz-t">Kas įtraukiama pasirinkus „Taip“</span> <span class="lk-pz-s">${ilgasTekstas(esminiuRodyti(tekst), 260)}</span></div>` : ''}
-      ${c.rusis !== 'lentele' && SUT_UZT_SALYGA.test(norm(key)) && window.GP_VIDAUS_RIBA ? GP_VIDAUS_RIBA.html(verteEUR(), { id: c.id + '-vr' }) : ''}
+      ${c.rusis !== 'lentele' && SUT_UZT_SALYGA.test(norm(key)) && window.GP_VIDAUS_RIBA ? GP_VIDAUS_RIBA.html(verteEUR(), { id: c.id + '-vr', rezimas: centralizuotas() ? 'VPI' : 'PI' }) : ''}
       ${c.rusis === 'pavienis' ? aiBlokas('P|' + c.raktas) : ''}</section>`;
   }
   if (c.rusis === 'pastaba'){
@@ -5537,6 +5617,8 @@ function uztikrinimoHTML(c, klase, pa, gk){
       <label class="opt"><input type="radio" id="${c.id}-o0" name="GU_${nm}" ${ats === 'taip' ? 'checked' : ''} onchange="pasirinkUztikrinima('${nm}','taip')"> Taip</label>
       <label class="opt"><input type="radio" id="${c.id}-o1" name="GU_${nm}" ${ats === 'ne' ? 'checked' : ''} onchange="pasirinkUztikrinima('${nm}','ne')"> Ne</label>
     </div>`;
+  // dydis ir banko garantijos terminas - tik atsakius „Taip“ (naudotojo sprendimas 2026-10-21, T3-V7)
+  if (ats === 'taip' && uztSumosYra()) h += uztSumosHTML(c);
   if (ats === 'ne' && !kr.pagal){
     if (kr.laukia === 'zmogus'){
       const ne = V.filter(x => x.v !== 'taikomas');
@@ -5552,6 +5634,18 @@ function uztikrinimoHTML(c, klase, pa, gk){
       ? `<span class="lk-pz-t lk-pz-t2">Dokumente lieka</span> <span class="lk-pz-k">${ilgasTekstas(tekst, 200)}</span>` : ''}</div>`;
   }
   return h + aiBlokas('G|' + gid) + `</section>`;
+}
+function uztSumosHTML(c){
+  const sv = String(ATS.UZT_SUMA || ''), dv = String(ATS.UZT_DIENOS || ''), past = uztTerminoPastaba();
+  const lauk = (id, uzr, v, ok, rakt, pvz, im, klaida) => `<div class="lk-v"><label class="lk-v-l" for="${c.id}-${id}">${uzr}</label>
+      <div class="lk-v-iv"><input type="text" class="lk-in" id="${c.id}-${id}" inputmode="${im}" value="${esc(v)}" placeholder="Pvz.: ${pvz}"
+        aria-describedby="${c.id}-uz3${v.trim() && !ok ? ` ${c.id}-${id}-k` : ''}" oninput="uAts('${rakt}', this.value, false);lkAtnaujink()" onchange="klausimynas()">${busenosZyma(ok ? 'patvirtinta' : 'neuzpildyta', c.id + '-' + id + '-b')}</div>
+      ${v.trim() && !ok ? `<p class="lk-salyga" id="${c.id}-${id}-k">${klaida}</p>` : ''}</div>`;
+  return `<p class="lk-kl lk-kl2" id="${c.id}-kl3">Koks pasiūlymo galiojimo užtikrinimo dydis ir kiek dienų turi galioti banko garantija?</p>
+    <p class="lk-uz" id="${c.id}-uz3">Įrašoma į SPS: „Pasiūlymo galiojimo užtikrinimo dydis – ... Eur. Banko garantija turi galioti ne trumpiau kaip ... dienas po Pasiūlymų pateikimo termino pabaigos“ (šablone - pavyzdžiai). Garantija turi galioti ne trumpiau, nei galioja pasiūlymas.</p>
+    ${lauk('suma', 'Užtikrinimo dydis (Eur)', sv, !!uztSuma(), 'UZT_SUMA', '25 000', 'decimal', 'Įrašykite sumą skaičiais, pvz. 25 000.')}
+    ${lauk('dienos', 'Banko garantija galioja (dienų po pasiūlymų pateikimo termino pabaigos)', dv, !!uztDienos(), 'UZT_DIENOS', '105', 'numeric', 'Įrašykite dienų skaičių, pvz. 105.')}
+    ${past ? `<p class="lk-ispejimas" id="${c.id}-uztp">Patikrinkite: ${esc(past)}</p>` : ''}`;
 }
 window.pasirinkUztikrinima = (gid, ats) => {
   const g = window.__K.grupes[gid], V = uztikrinimoVariantai(g);
@@ -5931,7 +6025,10 @@ function santraukosHTML(S){
   const teise = S.teise || [];
   const kvl = S.kvl || [];
   const z1 = z1Trukumai(), nsb = S.nsb || [];
-  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length && !teise.length && !kvl.length && !z1.length && !nsb.length)
+  // banko garantija trumpesnė už pasiūlymo galiojimą (T3-V7) - tik kai užtikrinimas taikomas
+  const uztK = ((S.M && S.M.korteles) || []).find(c => (c.vienetai || []).some(u => (u.raktai || []).includes('UZT_DIENOS')));
+  const uztP = uztK ? uztTerminoPastaba() : null;
+  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length && !teise.length && !kvl.length && !z1.length && !nsb.length && !uztP)
     return h + `<p class="lk-sa-ok">Visi klausimai atsakyti ir patvirtinti.</p>`;
   if (S.blokuojantys.length) h += `<div class="lk-sa lk-sa--kl" data-lygis="butina">${lyg('butina')}<b>Privalomi sprendimai (${S.blokuojantys.length}) - kol neatsakyta, generuoti neleidžiama:</b>${sar(S.blokuojantys)}</div>`;
   if (S.neuzpildyti.length) h += `<div class="lk-sa lk-sa--isp" data-lygis="patikr">${lyg('patikr')}<b>Neužpildyti laukai (${S.neuzpildyti.length})</b> - dokumente liks žyma (brūkšniai, nurodymas ar „X“), patikra ją parodys:${sar(S.neuzpildyti)}</div>`;
@@ -5940,6 +6037,8 @@ function santraukosHTML(S){
   // nacionalinis saugumas ir Vyriausybės BVPŽ kodų sąrašas (2026-10-21)
   if (nsb.length) h += `<div class="lk-sa lk-sa--isp" id="lkNacsaugBvpz" data-lygis="patikr">${lyg('patikr')}<b>Nacionalinis saugumas ir BVPŽ kodų sąrašas (${nsb.length})</b> - generuoti galima:
     <ul>${nsb.map(x => `<li><a href="#${esc(x.id)}" data-z1-suolis="${esc(x.id)}">${esc(x.nuoroda)}</a> - ${esc(x.tekstas)}</li>`).join('')}</ul></div>`;
+  if (uztP) h += `<div class="lk-sa lk-sa--isp" id="lkUztTerminas" data-lygis="patikr">${lyg('patikr')}<b>Pasiūlymo galiojimo užtikrinimas</b> - generuoti galima:
+    <ul><li><a href="#${uztK.id}-dienos" data-lk-suolis="${uztK.id}-dienos">Banko garantijos galiojimas</a> - ${esc(uztP)}</li></ul></div>`;
   if (S.siulomi.length) h += `<div class="lk-sa lk-sa--siul" data-lygis="patikr">${lyg('patikr')}<b>Siūlomos reikšmės, laukiančios patvirtinimo (${S.siulomi.length})</b> - į dokumentą pateks siūloma reikšmė, patikra jas išvardys:${
     sar(S.siulomi, u => u.reiksme ? ` - <span class="lk-sa-r">${esc(String(u.reiksme))}</span>` : '')}</div>`;
   if (S.zingsnis1.length) h += `<div class="lk-sa lk-sa--siul" data-lygis="patikr">${lyg('patikr')}<b>1 žingsnio reikšmės, laukiančios patvirtinimo (${S.zingsnis1.length}):</b> ${S.zingsnis1.map(z => esc(z.pavadinimas)).join(', ')}
@@ -6994,6 +7093,7 @@ async function generuotiViena(d, REZ){
   // 6. Raudoni intarpai. Formose - tik konfidencialumo priedo pirkimo aprasas.
   let intTrinta = 0, intTeksto = 0, rezimoEnTarpt = false;
   const eilNuorodos = [];
+  const uztIrasyta = [];                                       // pasiūlymo galiojimo užtikrinimo dydis ir terminas (T3-V7)
   const sulietuIdx = new Set((Z.blokai||[]).filter(b => b.sulieta).map(b => b.i));
   (Z.intarpai||[]).forEach(n => {
     if (trinti.has(n.i) || sulietuIdx.has(n.i)) return;
@@ -7135,6 +7235,11 @@ async function generuotiViena(d, REZ){
       const v = igaliojusiosTekstas();                 // be reiksmes nurodymas lieka raudonas - patikra ji rodo
       if (v && GPGen.keistiRaudonaTeksta(paras, n.i, v)) intTeksto++;
     } else if (kat === 'pavyzdys'){
+      // pasiūlymo galiojimo užtikrinimo dydis ir garantijos terminas - iš klausimo kortelės (T3-V7); kitos pavyzdinės reikšmės lieka raudonos
+      if (UZT_SUMOS_RE.test(n.text || '') && uztikrinimasTaikomas() === true){
+        const r = uztSumaIrasyk(paras[n.i]);
+        if (r){ juodinti.add(n.i); uztIrasyta.push(r); intTeksto++; }
+      }
       // pavyzdine reiksme lieka raudona - rengejas iraso tikra (patikra rodo kaip neisspresta)
     } else juodinti.add(n.i);
   });
@@ -7206,7 +7311,9 @@ async function generuotiViena(d, REZ){
   // R1: dvikalbiu eiluciu anglu kalbos naslaiciai (lietuviska dalis istrinta visa)
   if (!forma && Z.kalba === 'LTEN') angliskiNasliaciai(paras, trinti, trintiEiluciu);
   let ntEil = 0;
-  trintiEiluciu.forEach(r => ntEil += GPGen.trintiEilutese(paras, r.nuo, r.iki));   // salyginiai lenteles blokai
+  // tekstu įrašyti eilučių numeriai po pašalintų eilučių - iš eilės (DPS konkretaus pirkimo LT/EN: pašalinus 6 ir 6.1-6.3 likdavo „5.“, „7.“)
+  const eilNumeriai = [];
+  trintiEiluciu.forEach(r => ntEil += GPGen.trintiEilutese(paras, r.nuo, r.iki, eilNumeriai));   // salyginiai lenteles blokai
   // R1: atmestos dvikalbes alternatyvos - visa lentele (be eiluciu lentele Word laiko sugadinta)
   trintiLenteliu.forEach(t => { if (t && t.parentNode) t.parentNode.removeChild(t); });
   // R1: LT SPS 4.2 - pasirinkus 2 ar 3 varianta, antrastes „4.2.“ numeris pereina i ji (antraste trinama)
@@ -7386,7 +7493,7 @@ async function generuotiViena(d, REZ){
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, prieduNr: prNr, juodosAlt, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
-                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, spec37, antrastesLent: antrLent.dalys, eilNuorodos, apzDatos,
+                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, spec37, antrastesLent: antrLent.dalys, eilNuorodos, apzDatos, uztIrasyta, eilNumeriai,
                    esminiuNuorodos: esminiuNuor.map(x => ({ buvo: x.buvo, tapo: skyriausNr ? x.tapo.split(SKYRIAUS_ZYMA).join(skyriausNr) : x.tapo.split(SKYRIAUS_ZYMA).join('___') })) } };
 }
 
@@ -7809,14 +7916,25 @@ function rodykRezultata(rez){
   if (ad.length) h += `<div class="audit no" id="apziurosDatos" style="margin-top:10px"><b>Objekto apžiūros datos - įrašykite savo:</b> ${ad.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.apzDatos.map(x => `„${esc(x)}“`).join(', ')}`).join('; ')}.
     Tai šablono pavyzdinės datos; dokumente jos paliktos raudonos - Word programoje įrašykite, iki kada tiekėjai turi kreiptis dėl apžiūros ir kada ji vyks.</div>`;
   // SPS lentelės eilutės nuorodos, perskaičiuotos pašalinus ankstesnes eilutes (T3-K1, 2026-10-21)
+  // pasiūlymo galiojimo užtikrinimas (T3-V7): įrašyta iš klausimo arba - atsakius „Taip“ be reikšmių - lieka raudoni pavyzdžiai
+  const uzs = rez.filter(r => r.stats && r.stats.uztIrasyta && r.stats.uztIrasyta.length);
+  if (uzs.length){ const x = uzs[0].stats.uztIrasyta[0];
+    h += `<div class="audit ok" id="uztSumaPatikra" style="margin-top:10px"><b>Pasiūlymo galiojimo užtikrinimas:</b> dydis – ${esc(x.suma)} Eur, banko garantija – ne trumpiau kaip ${x.dienos} ${dienosForma(x.dienos, 'g')} po pasiūlymų pateikimo termino pabaigos (${uzs.map(r => esc(dokumentoPavadinimas(r.d))).join(', ')}).${uztTerminoPastaba() ? ' <span class="lk-ispejimas">Patikrinkite: ' + esc(uztTerminoPastaba()) + '</span>' : ''}</div>`; }
+  else if (uztikrinimasTaikomas() === true && uztSumosYra())
+    h += `<div class="audit no" id="uztSumaPatikra" style="margin-top:10px"><b>Pasiūlymo galiojimo užtikrinimas:</b> dydis ir banko garantijos terminas neįrašyti - SPS liko raudoni pavyzdžiai („25 000 Eur“, „105 dienas“). Įrašykite juos 2 žingsnyje (klausimas „Ar taikomas pasiūlymo galiojimo užtikrinimas?“) ir sugeneruokite iš naujo.</div>`;
+  const enr = rez.filter(r => r.stats && r.stats.eilNumeriai && r.stats.eilNumeriai.length);
+  if (enr.length) h += `<div class="audit ok" id="eilNumeriai" style="margin-top:10px"><b>Lentelės eilučių numeriai:</b> ${enr.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.eilNumeriai.map(x => `${esc(x.buvo)} → ${esc(x.tapo)}`).join(', ')}`).join('; ')}.
+    Pašalinus sąlygines eilutes, tekstu įrašyti numeriai perskaičiuoti iš eilės.</div>`;
   const en = rez.filter(r => r.stats && r.stats.eilNuorodos && r.stats.eilNuorodos.length);
   if (en.length) h += `<div class="audit ok" id="eilNuorodos" style="margin-top:10px"><b>Nuorodos į lentelės eilutes:</b> ${en.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.eilNuorodos.map(x => `„${esc(x.buvo)}“ → „${esc(x.tapo)}“`).join('; ')}`).join('; ')}.
     Šablone numeris parašytas pilnai lentelei; pašalinus ankstesnę eilutę (pvz. nacionalinio saugumo BVPŽ punktą) Word eilutes pernumeruoja, todėl nuoroda pataisyta, kad rodytų į tą pačią eilutę.</div>`;
   // SPS pašalinimo pagrindų punktas apie Vyriausybės sąrašo BVPŽ kodų prekes ar paslaugas (NAC5, 2026-10-21) - tik nacionalinio saugumo pirkime
-  if (nacsaugTaip() && DOK.some(d => (d.zemelapis.blokai || []).some(b => b.id === 'NAC5'))){
+  // ir DPS konkretaus pirkimo sąlygų 6 punktas (naudotojo sprendimas 2026-10-21 „Taip, prašau įtraukti“)
+  const nac5D = DOK.filter(d => (d.zemelapis.blokai || []).some(b => b.id === 'NAC5'));
+  if (nacsaugTaip() && nac5D.length){
     const a = nac5Atsakymas();
-    h += `<div class="audit ${$('input[name=nsbvpz]:checked') ? 'ok' : 'no'}" id="nac5Patikra" style="margin-top:10px"><b>SPS punktas „Atsižvelgiant į tai, kad Pirkimo objektas apima
-      VPĮ 92 straipsnio 13 dalyje ... BVPŽ kodų prekes ar paslaugas“:</b> ${a.v ? 'paliktas' : 'pašalintas'} - ${esc(a.kodel)}. Pakeisti galima 1 žingsnyje.</div>`;
+    h += `<div class="audit ${$('input[name=nsbvpz]:checked') ? 'ok' : 'no'}" id="nac5Patikra" style="margin-top:10px"><b>Punktas „Atsižvelgiant į tai, kad Pirkimo objektas apima
+      VPĮ 92 straipsnio 13 dalyje ... BVPŽ kodų prekes ar paslaugas“ (${nac5D.map(d => esc(dokumentoPavadinimas(d))).join(', ')}):</b> ${a.v ? 'paliktas' : 'pašalintas'} - ${esc(a.kodel)}. Pakeisti galima 1 žingsnyje.</div>`;
   }
   // Gulsti priedai - atskiras failas (Pages visam dokumentui taiko pirmojo skyriaus orientaciją): kas iškelta ir kas pašalinta iš turinio
   rez.filter(r => r.stats && r.stats.sulietiPunktai && r.stats.sulietiPunktai.length).forEach(r => {
