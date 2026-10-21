@@ -25,7 +25,7 @@
 (function (root) {
   "use strict";
 
-  var VERSION = "0.4";
+  var VERSION = "0.5";
   // Modelio cia NEnurodom: numatytasis gyvena VIENOJE vietoje -
   // shared/ai-proxy.js (DEFAULT_MODEL). Zr. CLAUDE.md 6 sk.
   var MAX_TOKENS = 2000;
@@ -255,6 +255,10 @@
       "   lesos ir ES lesu laukas \"Ne\"); kitaip \"nenustatyta\". projekto_nr -",
       "   ES projekto numeris ar kodas, projekto_pavadinimas - ES projekto",
       "   pavadinimas, jei nurodyti (perrasyk tiksliai).",
+      "10. bvpz_kodai - visi korteleje nurodyti pirkimo objekto BVPZ (CPV) kodai,",
+      "   perrasyti tiksliai (8 skaitmenys, bruksnys, kontrolinis skaitmuo, pvz.",
+      "   \"48000000-8\"); citata - fragmentas, kuriame jie parasyti. Jei kodu",
+      "   korteleje nera - null.",
       "",
       "JSON schema:",
       "{",
@@ -273,7 +277,8 @@
       "    \"es_lesos\":                 {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
       "    \"projekto_nr\":              {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
       "    \"projekto_pavadinimas\":     {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
-      "    \"dalys\":                    {\"reiksme\":\"neskaidomas|skaidomas|nenustatyta\", \"skaicius\": <skaicius> | null, \"pavadinimai\": [\"...\"], \"citata\":\"...\"}",
+      "    \"dalys\":                    {\"reiksme\":\"neskaidomas|skaidomas|nenustatyta\", \"skaicius\": <skaicius> | null, \"pavadinimai\": [\"...\"], \"citata\":\"...\"},",
+      "    \"bvpz_kodai\":               {\"reiksme\":[\"48000000-8\"], \"citata\":\"...\"} | null",
       "  },",
       "  \"pastabos\": \"<trumpa pastaba, jei reikia>\"",
       "}"
@@ -314,7 +319,22 @@
       L.objekto_tipas = { reiksme: "nenustatyta", citata: null };
     if (!Array.isArray(L.tipo_kandidatai)) L.tipo_kandidatai = [];
     L.dalys = dalysIsAtsakymo(L.dalys);
+    L.bvpz_kodai = bvpzIsAtsakymo(L.bvpz_kodai);
     return { ok: true, laukai: L, pastabos: d.pastabos || "" };
+  }
+
+  /* BVPŽ kodai (2026-10-21, nacionalinio saugumo sąrašo patikrai PP-salygos 1 žingsnyje): tik 8 skaitmenų kodai (su kontroliniu ar be jo),
+     kurių skaitmenys yra citatoje - kitaip DI spėjimas niekada netampa siūlymu; nepasikartojantys, iki 20. */
+  function bvpzIsAtsakymo(x) {
+    if (!x || typeof x !== "object" || !Array.isArray(x.reiksme) || typeof x.citata !== "string" || !x.citata.trim()) return null;
+    var cit = x.citata.replace(/[\s-]/g, ""), out = [];
+    x.reiksme.forEach(function (k) {
+      if (typeof k !== "string") return;
+      var m = /^\s*(\d{8})(?:\s*-\s*(\d))?\s*$/.exec(k);
+      if (!m || cit.indexOf(m[1]) < 0 || out.some(function (y) { return y.slice(0, 8) === m[1]; })) return;
+      out.push(m[1] + (m[2] ? "-" + m[2] : ""));
+    });
+    return out.length ? { reiksme: out.slice(0, 20), citata: x.citata.trim().slice(0, 300) } : null;
   }
 
   /* Pirkimo objekto dalys (2026-10-19, tobulinimo planas D1): tik „neskaidomas“ arba „skaidomas“ su 2-12 dalių ir citata, kitaip -
@@ -416,6 +436,15 @@
       });
     }
 
+    // BVPŽ kodai - prieš nacionalinio saugumo atsakymą: PP-salygos juos palygina su Vyriausybės sąrašu (2026-10-21)
+    if (L.bvpz_kodai && L.bvpz_kodai.reiksme && L.bvpz_kodai.reiksme.length) {
+      out.siulymai.push({
+        id: "bvpz", laukas: "BVPŽ kodai",
+        kortele: L.bvpz_kodai.reiksme.join(", "), citata: L.bvpz_kodai.citata || null,
+        reiksme: L.bvpz_kodai.reiksme.join(", "), ok: true
+      });
+    }
+
     if (L.nacionalinis_saugumas && L.nacionalinis_saugumas.reiksme !== "nenustatyta") {
       out.siulymai.push({
         id: "nacsaug", laukas: "Susijęs su nacionaliniu saugumu",
@@ -483,6 +512,7 @@
     mapFields: mapFields,
     dalysIsAtsakymo: dalysIsAtsakymo,
     esIsAtsakymo: esIsAtsakymo,
+    bvpzIsAtsakymo: bvpzIsAtsakymo,
     verteIsTeksto: verteIsTeksto,
     systemPrompt: systemPrompt,
     userText: userText
