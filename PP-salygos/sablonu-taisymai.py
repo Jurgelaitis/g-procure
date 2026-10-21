@@ -408,6 +408,7 @@ def taisymas_tekstas(taisyk):
     viso += _spc_nuorodos(taisyk)
     viso += _tarpas_priede(taisyk)
     viso += _tarpas_antrasteje(taisyk)
+    viso += _vyriausybes_sakinys(taisyk)
     return viso
 
 
@@ -866,6 +867,28 @@ def _tarpas_antrasteje(taisyk):
     print("\nTARPAS FORMOS ANTRAŠTĖJE (Z, 2026-10-20):")
     n = _su_zemelapiais(_be_raudono(_TARPAS_ANTRASTEJE, _Z_RAUDONI), None, 'tarpas formos antraštėje', taisyk)
     for t in _Z_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# AA. Angliškas SPS lentelės sakinys priešingos prasmės (2026-10-21, rado naujo darbuotojo patikra; naudotojo sprendimas „Prašau ištaisyti anglišką
+#    sakinį pagal lietuvišką ir įtraukti tai į laišką LITGRID“): dvikalbių SPS ir DPS konkretaus pirkimo sąlygų lentelėje apie nacionalinio saugumo
+#    deklaraciją lietuviškai - Vyriausybė „nėra priėmusi sprendimo, patvirtinančio, kad šios lentelės 1 ir 2 punktuose nurodyti subjektai ar su jais
+#    ketinamas sudaryti (sudarytas) sandoris neatitinka nacionalinio saugumo interesų“, o angliškai - „has adopted a decision confirming that the
+#    entities specified in Clauses 1 and / or 2 of this table do not meet national security interests“ (priešinga prasmė ir be sandorio). Angliškas
+#    sakinys verčiamas pagal lietuvišką; sakinio pabaiga (kabliataškis ar taškas) ir raudonas tekstas nekeičiami. AK, MVP, ND, SSD, TSD LT/EN SPS,
+#    DPS konkretaus pirkimo LT/EN sąlygos ir sena TPS forma. BPS ir formų sakiniai „has adopted a decision confirming that ... do not meet“ yra
+#    atmetimo pagrindai („priėmė sprendimą“) - teisingi, nekeičiami.
+_VYRIAUSYBES_SAKINYS = [(_re.compile(r'(has adopted a decision confirming that the entities specified in Clauses 1 and / or 2\s+of this table) do not meet national security interests'),
+                         'has not adopted a decision confirming that the entities specified in Clauses 1 and 2 of this table, or the transaction intended '
+                         'to be concluded (concluded) with them,', 1)]
+_AA_RAUDONI = []
+
+
+def _vyriausybes_sakinys(taisyk):
+    print("\nANGLIŠKAS VYRIAUSYBĖS SPRENDIMO SAKINYS (AA, 2026-10-21):")
+    n = _su_zemelapiais(_be_raudono(_VYRIAUSYBES_SAKINYS, _AA_RAUDONI), None, 'EN „has not adopted a decision“', taisyk)
+    for t in _AA_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 
