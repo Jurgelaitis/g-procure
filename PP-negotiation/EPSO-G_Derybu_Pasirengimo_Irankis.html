@@ -48,6 +48,10 @@
 <script src="../shared/eksportas.js"></script>
 <script src="../shared/organizacijos.js"></script>
 <script src="../shared/pirkimo-kortele.js"></script>
+<!-- Tiekėjo pasiūlymo skaitymas su DI (C lygis, 2026-10-21): tik mygtuku prie konkretaus failo, per G-Procure serverį (ai-proxy.js) -->
+<script src="../shared/ai-proxy.js"></script>
+<script src="../shared/di-zymejimas.js"></script>
+<script src="di-skaitymas.js"></script>
 
 <style>
 /* ==========================================================================
@@ -359,6 +363,7 @@ a:hover { text-decoration: underline; }
 .pill--error { background: var(--color-error-5); color: var(--color-error-strong); }
 .pill--info { background: var(--color-cyan-5); color: var(--color-blue); }
 .pill--neutral { background: var(--color-graphite-5); color: var(--color-graphite); }
+.neg-di input { text-decoration: underline dotted var(--color-graphite); text-underline-offset: 3px; }   /* DI perskaitytas ir priimtas įkainis (C lygis) */
 .pill--emerald { background: var(--color-green-5); color: var(--color-emerald-strong); }
 
 /* KPI tile ------------------------------------------------------------- */
@@ -838,7 +843,7 @@ a:hover { text-decoration: underline; }
           </div>
           <div>
             <h4 class="text-emerald" data-en="🔒 Secure and private">🔒 Saugu ir privatu</h4>
-            <p class="muted" style="font-size: 13px; margin-top: 4px;" data-en="The whole workspace stays in your browser, no data are sent to anyone, projects are exported as JSON files.">100% nuolatinė darbo aplinka jūsų naršyklėje, duomenys nesiunčiami niekam, projektai eksportuojami JSON failais.</p>
+            <p class="muted" style="font-size: 13px; margin-top: 4px;" data-en="The workspace stays in your browser and projects are exported as JSON files. Only when you click “Read with AI” for an offer PDF the tool could not read itself is that one file sent via the G-Procure server to the Claude API.">Darbo aplinka jūsų naršyklėje, projektai eksportuojami JSON failais. Tik paspaudus „Skaityti su DI“ prie PDF pasiūlymo, kurio įrankis pats neperskaitė, tas vienas failas siunčiamas per G-Procure serverį į Claude API.</p>
           </div>
         </div>
       </div>
@@ -934,12 +939,14 @@ function toast(msg, type = 'info') { GP_PRANESIMAS.rodyk(msg, { tipas: type }); 
 
 function openModal({ title = '', body = '', footer = '', size = '' }) {
   $('#modalTitle').textContent = title;
+  if (typeof impDiAtsaukti === 'function') impDiAtsaukti();   // ankstesnio importo lango DI užklausa nebereikalinga
   $('#modalBody').innerHTML = body;
+  $('#modalBody').onclick = $('#modalBody').onchange = null;   // lango įvykiai (importo peržiūra) nelieka kitam langui
   $('#modalFooter').innerHTML = footer;
   $('#modal').className = 'modal' + (size === 'lg' ? ' modal--lg' : '');
   $('#modalOverlay').classList.add('open');
 }
-function closeModal() { $('#modalOverlay').classList.remove('open'); }
+function closeModal() { $('#modalOverlay').classList.remove('open'); if (typeof impDiAtsaukti === 'function') impDiAtsaukti(); }
 
 function confirmModal(title, message, onYes) {
   openModal({
@@ -1597,11 +1604,11 @@ const views = {
         <summary style="cursor: pointer; font-weight: 700; color: var(--color-graphite);">${L('Patarimai failų importui', 'Tips for importing files')}</summary>
         ${L(`<p class="mt-1"><strong>XLSX / CSV (geriausias rezultatas):</strong> lentelės antraštėje turi būti „Pavadinimas“ (arba „Pozicija“), „Kiekis“ ir „Kaina“ (arba „Įkainis“); skaičiai gali būti ir tekstu (1 500,50 arba 1,500.50).</p>
         <p class="mt-1"><strong>DOCX / ODT:</strong> skaitomos dokumento lentelės su tokia pačia antrašte.</p>
-        <p class="mt-1"><strong>PDF:</strong> tekstinio PDF lentelės skaitomos pagal stulpelių padėtį; skenuoto (vaizdinio) PDF įrankis neperskaito - paprašykite tiekėjo Excel versijos arba įveskite ranka.</p>
+        <p class="mt-1"><strong>PDF:</strong> tekstinio PDF lentelės skaitomos pagal stulpelių padėtį. Skenuoto (vaizdinio) PDF ar PDF, kuriame lentelės nerasta, įrankis pats neperskaito - importo peržiūroje prie jo yra mygtukas „Skaityti su DI“ (failas siunčiamas per G-Procure serverį į Claude API, tik paspaudus; rezultatas - pasiūlymas, kurį patikrinate ir priimate) arba paprašykite tiekėjo Excel versijos, arba įveskite ranka.</p>
         <p class="mt-1"><strong>Be lentelės:</strong> jei faile randama tik bendra suma, ji įrašoma į „Bendras pasiūlymas“. Visada peržiūrėkite išgautus duomenis.</p>`,
         `<p class="mt-1"><strong>XLSX / CSV (best result):</strong> the table header must include “Name” (or “Item”), “Quantity” and “Price” (or “Unit price”); numbers may also be text (1 500,50 or 1,500.50).</p>
         <p class="mt-1"><strong>DOCX / ODT:</strong> document tables with the same header are read.</p>
-        <p class="mt-1"><strong>PDF:</strong> tables in a text PDF are read by column position; the tool cannot read a scanned (image) PDF - ask the supplier for an Excel version or enter the data manually.</p>
+        <p class="mt-1"><strong>PDF:</strong> tables in a text PDF are read by column position. The tool cannot read a scanned (image) PDF or a PDF without a recognisable table by itself - in the import review there is a “Read with AI” button next to it (the file is sent via the G-Procure server to the Claude API, only when you click; the result is a suggestion that you check and accept), or ask the supplier for an Excel version, or enter the data manually.</p>
         <p class="mt-1"><strong>Without a table:</strong> if only a total amount is found in the file, it is entered in “Total offer”. Always review the extracted data.</p>`)}
       </details>
     </div>
@@ -1885,7 +1892,7 @@ const views = {
 
     <div class="card card--accent">
       <div class="card__title">${L('💡 Privatumo principas', '💡 Privacy principle')}</div>
-      <p class="mt-1" style="font-size: 13px;">${L('Šis įrankis veikia jūsų naršyklėje ir į DI nieko nesiunčia. Užklausa užkoduojama: tiekėjai - kodais, sumos - procentais nuo planuojamos vertės, asmenų duomenys neįtraukiami. Ją įklijuokite tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą), ne į asmenines ar vartotojiškas DI paskyras.', 'This tool runs in your browser and sends nothing to AI. The prompt is encoded: suppliers as codes, amounts as a percentage of the planned value, personal data are not included. Paste it only into an AI tool approved by your organisation (e.g. VPT Ekspertas), not into personal or consumer AI accounts.')}</p>
+      <p class="mt-1" style="font-size: 13px;">${L('Šios užklausos įrankis į DI nesiunčia. Ji užkoduojama: tiekėjai - kodais, sumos - procentais nuo planuojamos vertės, asmenų duomenys neįtraukiami. Ją įklijuokite tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą), ne į asmenines ar vartotojiškas DI paskyras.', 'The tool does not send this prompt to AI. It is encoded: suppliers as codes, amounts as a percentage of the planned value, personal data are not included. Paste it only into an AI tool approved by your organisation (e.g. VPT Ekspertas), not into personal or consumer AI accounts.')}</p>
     </div>
   `,
 
@@ -1985,9 +1992,9 @@ const views = {
       <h3>🔒 Privacy and security</h3>
       <ul style="font-size: 13px; line-height: 1.7;">
         <li>All data are stored only in your browser (<code>localStorage</code>).</li>
-        <li>The data are NOT sent to any server.</li>
+        <li>The project data are NOT sent to any server. The only exception is “Read with AI” in the offer import review: when the tool cannot read an offer PDF itself (scanned, no table), that one file is sent - only after you click - via the G-Procure server to the Claude API (Anthropic), and the result is shown as a suggestion that you accept.</li>
         <li>AI prompts are prepared in the browser and encoded (suppliers as codes, amounts as a percentage of the planned value, personal data are not included). Paste them only into an AI tool approved by your organisation, not into personal or consumer AI accounts.</li>
-        <li>Files are imported in your browser (PDF.js, SheetJS, mammoth.js).</li>
+        <li>Files are imported in your browser (PDF.js, SheetJS, mammoth.js); “Read with AI” - see above.</li>
         <li>Export a JSON copy regularly as a backup.</li>
       </ul>
     </div>
@@ -2055,9 +2062,9 @@ const views = {
       <h3>🔒 Privatumas ir saugumas</h3>
       <ul style="font-size: 13px; line-height: 1.7;">
         <li>Visi duomenys saugomi išskirtinai jūsų naršyklėje (<code>localStorage</code>).</li>
-        <li>Duomenys NEPERDUODAMI į jokius serverius.</li>
+        <li>Projekto duomenys NEPERDUODAMI į jokius serverius. Vienintelė išimtis - „Skaityti su DI“ pasiūlymų importo peržiūroje: kai įrankis pats PDF pasiūlymo neperskaito (skenuotas, be lentelės), tas vienas failas tik paspaudus siunčiamas per G-Procure serverį į Claude API (Anthropic), o rezultatas rodomas kaip pasiūlymas, kurį priimate jūs.</li>
         <li>DI užklausos rengiamos naršyklėje ir užkoduojamos (tiekėjai - kodais, sumos - procentais nuo planuojamos vertės, asmenų duomenys neįtraukiami). Įklijuokite jas tik į jūsų organizacijos patvirtintą DI įrankį, ne į asmenines ar vartotojiškas DI paskyras.</li>
-        <li>Failų importas vykdomas jūsų naršyklėje (PDF.js, SheetJS, mammoth.js).</li>
+        <li>Failų importas vykdomas jūsų naršyklėje (PDF.js, SheetJS, mammoth.js); „Skaityti su DI“ - žr. aukščiau.</li>
         <li>Reguliariai eksportuokite JSON kopiją kaip atsarginę.</li>
       </ul>
     </div>
@@ -2255,7 +2262,7 @@ const render = {
     const head = ['#', L('Pavadinimas', 'Name'), L('Vnt.', 'Unit'), L('Kiekis', 'Quantity'), L('Plan. įkainis', 'Planned unit price')].concat(sup.map(s => s.name)).concat(['']);
     const totalsBySupplier = {};
     sup.forEach(s => totalsBySupplier[s.id] = 0);
-    let planTotal = 0;
+    let planTotal = 0, yraDi = false;
 
     const rows = s.positions.map((p, idx) => {
       const offers = sup.map(supp => {
@@ -2276,9 +2283,10 @@ const render = {
         <td class="num" style="width:80px;"><input class="inline num" type="number" step="0.01" value="${p.quantity ?? ''}" data-pos-edit="${p.id}" data-pos-field="quantity"></td>
         <td class="num" style="width:110px;"><input class="inline num" type="number" step="0.01" value="${p.plannedUnitPrice ?? ''}" data-pos-edit="${p.id}" data-pos-field="plannedUnitPrice"></td>
         ${sup.map((supp, i) => {
-          const v = offers[i];
+          const v = offers[i], off = (s.offers[supp.id] || {})[p.id], di = !!(off && off.di && v != null);
           const cls = v != null ? (v === minOff ? 'min' : v === maxOff ? 'max' : '') : '';
-          return `<td class="num ${cls}" style="width:110px;"><input class="inline num" type="number" step="0.01" value="${v ?? ''}" data-offer="${supp.id}|${p.id}"></td>`;
+          if (di) yraDi = true;
+          return `<td class="num ${cls}${di ? ' neg-di' : ''}" style="width:110px;"${di ? ' data-di="sugeneruota"' : ''}><input class="inline num" type="number" step="0.01" value="${v ?? ''}" data-offer="${supp.id}|${p.id}"${di ? ' aria-describedby="negDiPaaiskinimas"' : ''}></td>`;
         }).join('')}
         <td style="width:32px;"><button class="btn btn--ghost btn--icon btn--sm" data-del-pos="${p.id}" title="${L('Trinti', 'Delete')}" aria-label="${L('Trinti', 'Delete')}">×</button></td>
       </tr>`;
@@ -2291,7 +2299,7 @@ const render = {
       <td></td>
     </tr>`;
 
-    c.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr>${head.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows}${totalsRow}</tbody></table></div>`;
+    c.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr>${head.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows}${totalsRow}</tbody></table></div>` + diLenteles(yraDi);
 
     $$('[data-pos-edit]').forEach(inp => inp.oninput = () => {
       const p = s.positions.find(x => x.id === inp.dataset.posEdit);
@@ -2305,6 +2313,7 @@ const render = {
       if (!s.offers[supId]) s.offers[supId] = {};
       if (!s.offers[supId][posId]) s.offers[supId][posId] = {};
       s.offers[supId][posId].unitPrice = Number(inp.value);
+      if (s.offers[supId][posId].di) { delete s.offers[supId][posId].di; const td = inp.closest('td'); if (td) { td.classList.remove('neg-di'); td.removeAttribute('data-di'); } inp.removeAttribute('aria-describedby'); }   // pataisyta ranka - nebe DI
       storage.save();
     });
     $$('[data-del-pos]').forEach(b => b.onclick = () => {
@@ -2318,22 +2327,25 @@ const render = {
     if (!c) return;
     const s = APP.state;
     if (!s.suppliers.length) { c.innerHTML = '<p class="muted">' + L('Pirmiausia pridėkite tiekėjus skyriuje „Tiekėjai".', 'Add suppliers first in the “Suppliers” section.') + '</p>'; return; }
+    let yraDi = false;
     const rows = s.suppliers.map(sup => {
-      const fo = s.fixedOffers[sup.id] || {};
+      const fo = s.fixedOffers[sup.id] || {}, di = !!(fo.di && fo.totalPrice);
+      if (di) yraDi = true;
       return `<tr>
         <td>${escapeHtml(sup.name)}</td>
-        <td class="num"><input class="inline num" type="number" step="0.01" value="${fo.totalPrice ?? ''}" data-fixed="${sup.id}|totalPrice"></td>
+        <td class="num${di ? ' neg-di' : ''}"${di ? ' data-di="sugeneruota"' : ''}><input class="inline num" type="number" step="0.01" value="${fo.totalPrice ?? ''}" data-fixed="${sup.id}|totalPrice"${di ? ' aria-describedby="negDiPaaiskinimasF"' : ''}></td>
         <td><input class="inline" type="date" value="${fo.validity ?? ''}" data-fixed="${sup.id}|validity"></td>
         <td><input class="inline" value="${escapeHtml(fo.paymentTerms ?? '')}" data-fixed="${sup.id}|paymentTerms"></td>
         <td class="num"><input class="inline num" type="number" value="${fo.deliveryDays ?? ''}" data-fixed="${sup.id}|deliveryDays"></td>
         <td><input class="inline" value="${escapeHtml(fo.comment ?? '')}" data-fixed="${sup.id}|comment"></td>
       </tr>`;
     }).join('');
-    c.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>${L('Tiekėjas', 'Supplier')}</th><th>${L('Bendra kaina', 'Total price')} (${s.project.currency})</th><th>${L('Galiojimas iki', 'Valid until')}</th><th>${L('Mokėjimo sąlygos', 'Payment terms')}</th><th>${L('Pristatymas (d.)', 'Delivery (days)')}</th><th>${L('Komentaras', 'Comment')}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    c.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>${L('Tiekėjas', 'Supplier')}</th><th>${L('Bendra kaina', 'Total price')} (${s.project.currency})</th><th>${L('Galiojimas iki', 'Valid until')}</th><th>${L('Mokėjimo sąlygos', 'Payment terms')}</th><th>${L('Pristatymas (d.)', 'Delivery (days)')}</th><th>${L('Komentaras', 'Comment')}</th></tr></thead><tbody>${rows}</tbody></table></div>` + diLenteles(yraDi, 'F');
     $$('[data-fixed]').forEach(inp => inp.oninput = () => {
       const [id, field] = inp.dataset.fixed.split('|');
       if (!s.fixedOffers[id]) s.fixedOffers[id] = {};
       s.fixedOffers[id][field] = (field === 'totalPrice' || field === 'deliveryDays') ? Number(inp.value) : inp.value;
+      if (field === 'totalPrice' && s.fixedOffers[id].di) { delete s.fixedOffers[id].di; const td = inp.closest('td'); if (td) { td.classList.remove('neg-di'); td.removeAttribute('data-di'); } inp.removeAttribute('aria-describedby'); }
       storage.save();
     });
   },
@@ -2993,6 +3005,13 @@ function renderSessionLog() {
     }).join('')}</tbody></table></div>`;
 }
 
+/* DI perskaityti ir žmogaus priimti įkainiai (C lygis): langelis pabrauktas taškais ir pažymėtas data-di, po lentele - paaiškinimas;
+   pataisius ranka žymė nuimama. */
+function diLenteles(yra, priesaga) {
+  if (!yra) return '';
+  return `<p class="muted mt-1" style="font-size:12px;" id="negDiPaaiskinimas${priesaga || ''}">${window.GP_DI ? GP_DI.zyme({ tekstas: L('DI', 'AI') }) + ' ' : ''}${L('Taškais pabrauktos reikšmės perskaitytos su DI iš tiekėjo PDF ir priimtos peržiūroje - prieš derybas dar kartą sulyginkite su pasiūlymu. Pataisius reikšmę žymė dingsta.', 'Values underlined with dots were read by AI from the supplier’s PDF and accepted in the review - compare them with the offer again before negotiating. The mark disappears when you correct the value.')}</p>`;
+}
+
 // =================================================================
 // 8. FILE PARSERS
 // =================================================================
@@ -3042,7 +3061,7 @@ async function parsePDF(file, supplierId) {
     r.forEach(x => rows.push(x));
   }
   if (pdf.numPages && beTeksto === pdf.numPages)
-    return { ok: false, skenuotas: true, error: L('PDF be teksto sluoksnio (tikėtina, skenuotas) - įrankis jo neperskaito. Paprašykite tiekėjo Excel versijos arba įveskite įkainius ranka.', 'The PDF has no text layer (probably scanned) - the tool cannot read it. Ask the supplier for an Excel version or enter the unit prices manually.') };
+    return { ok: false, skenuotas: true, error: L('PDF be teksto sluoksnio (tikėtina, skenuotas) - įrankis pats jo neperskaito. Galite jį perskaityti su DI („Skaityti su DI“ importo peržiūroje), paprašyti tiekėjo Excel versijos arba įvesti įkainius ranka.', 'The PDF has no text layer (probably scanned) - the tool cannot read it by itself. You can read it with AI (“Read with AI” in the import review), ask the supplier for an Excel version or enter the unit prices manually.') };
   return extractFromRows(rows, supplierId, file.name);
 }
 function pdfEilutesStulpeliais(items) {
@@ -3187,6 +3206,7 @@ function pritaikykImporta(result, supplierId) {
   if (result.fixed) {
     if (!s.fixedOffers[supplierId]) s.fixedOffers[supplierId] = {};
     s.fixedOffers[supplierId].totalPrice = result.fixed.totalPrice;
+    if (result.di) s.fixedOffers[supplierId].di = true; else delete s.fixedOffers[supplierId].di;   // DI perskaityta, žmogaus priimta - žymima lentelėje
     storage.save();
     return result;
   }
@@ -3196,7 +3216,7 @@ function pritaikykImporta(result, supplierId) {
       const pos = { id: uid(), name: p.name, unit: p.unit || VNT(), quantity: p.qty, plannedUnitPrice: p.price, weight: 1 };
       s.positions.push(pos);
       if (!s.offers[supplierId]) s.offers[supplierId] = {};
-      s.offers[supplierId][pos.id] = { unitPrice: p.price };
+      s.offers[supplierId][pos.id] = result.di ? { unitPrice: p.price, di: true } : { unitPrice: p.price };
       sut.naujos++;
     });
     result.message = L(`Importuota ${result.positions.length} naujų pozicijų; planuojamas įkainis kol kas = šio pasiūlymo įkainis - patikslinkite lentelėje.`,
@@ -3206,7 +3226,7 @@ function pritaikykImporta(result, supplierId) {
       const m = sutapdinkPozicija(rp.name, s.positions);
       if (m) {
         if (!s.offers[supplierId]) s.offers[supplierId] = {};
-        s.offers[supplierId][m.pos.id] = { unitPrice: rp.price };
+        s.offers[supplierId][m.pos.id] = result.di ? { unitPrice: rp.price, di: true } : { unitPrice: rp.price };
         sut[m.lygis]++;
       } else sut.nerasta++;
     });
@@ -3269,13 +3289,17 @@ async function atpazinkFaila(file) {
   const it = { file, vardas: file.name, rez: null, tiekejas: null, sutapdinimas: null, pasirinktas: true };
   it.rez = await parseFile(file, null);
   it.tiekejas = atpazinkTiekeja(file.name, it.rez && it.rez.rows ? it.rez.rows : [], APP.state.suppliers);
+  impSutapdink(it);
+  if (!it.rez || !it.rez.ok) it.pasirinktas = false;
+  return it;
+}
+function impSutapdink(it) {
+  it.sutapdinimas = null; it.sut = null;
   if (it.rez && it.rez.ok && !it.rez.fixed) {
     const P = APP.state.positions, sut = { tikslus: 0, tiketinas: 0, nerasta: 0 };
     it.sutapdinimas = it.rez.positions.map(rp => { const m = P.length ? sutapdinkPozicija(rp.name, P) : null; if (m) sut[m.lygis]++; else sut.nerasta++; return { rp, m }; });
     it.sut = sut;
   }
-  if (!it.rez || !it.rez.ok) it.pasirinktas = false;
-  return it;
 }
 
 async function masinisImportas(files) {
@@ -3287,24 +3311,58 @@ async function masinisImportas(files) {
   importoPerziura(items);
 }
 
+/* DI skaitymas (C lygis, naudotojo sprendimas 2026-10-21; tobulinimo planas 2.3): tik PDF, kurio įrankis pats neperskaitė (skenuotas, be lentelės)
+   arba kuriame rado tik bendrą sumą; tik paspaudus „Skaityti su DI“ prie šio failo. Siunčiamas tik šis failas per G-Procure serverį į Claude API. */
+const diSkaitymasGalimas = it => !!(window.GP_NEG_DI && window.GP_AI_PROXY && it && it.file && GP_NEG_DI.arPdf(it.file) && it.rez && !it.rez.di && (!it.rez.ok || it.rez.fixed));
+const diSiuntimoPastaba = it => L(`Paspaudus „Skaityti su DI“ šis PDF failas (${Math.max(1, Math.round(((it.file && it.file.size) || 0) / 1024))} KB) per G-Procure serverį siunčiamas į Claude API (Anthropic), kad DI perrašytų įkainių lentelę, sumas ir tiekėjo pavadinimą. Kiti projekto duomenys (planuojama vertė, kiti tiekėjai) nesiunčiami. Tiekėjo pasiūlymas iki sutarties sudarymo konfidencialus - siųskite tik jei tai leidžia jūsų organizacijos tvarka; kitaip paprašykite tiekėjo Excel versijos arba įveskite įkainius ranka. DI rezultatas - pasiūlymas: patikrinkite su failu ir tik tada pažymėkite.`,
+  `When you click “Read with AI”, this PDF file (${Math.max(1, Math.round(((it.file && it.file.size) || 0) / 1024))} KB) is sent via the G-Procure server to the Claude API (Anthropic) so that the AI transcribes the price table, totals and supplier name. Other project data (planned value, other suppliers) is not sent. A supplier’s offer is confidential until the contract is concluded - send it only if your organisation’s rules allow it; otherwise ask the supplier for an Excel version or enter the unit prices manually. The AI result is a suggestion: check it against the file and only then select it.`);
+/* DI grąžintas tiekėjas -> siūlomas esamas (pagal kodą ar pavadinimą) arba naujas; citata - iš DI (patikrinama tik žmogaus, failas vaizdinis) */
+function tiekejasIsDi(t, suppliers) {
+  if (!t || !t.pavadinimas) return null;
+  let esamas = null, pasitikejimas = 'tiketinas';
+  if (t.kodas) { esamas = suppliers.find(x => String(x.code || '').replace(/\D/g, '') === t.kodas); if (esamas) pasitikejimas = 'tikslus'; }
+  const n = tiekejoVardoNorm(t.pavadinimas);
+  if (!esamas && n.length >= 3) {
+    esamas = suppliers.find(x => tiekejoVardoNorm(x.name) === n);
+    if (esamas) pasitikejimas = 'tikslus';
+    else { esamas = suppliers.find(x => { const xn = tiekejoVardoNorm(x.name); return xn.length >= 4 && n.length >= 4 && (xn.includes(n) || n.includes(xn)); }) || null; }
+  }
+  return { pavadinimas: isvalykPav(t.pavadinimas), kodas: t.kodas || '', citata: t.citata || t.pavadinimas, saltinis: 'DI', puslapis: t.puslapis, esamasId: esamas ? esamas.id : null, pasitikejimas, kandidatai: [] };
+}
+var IMP_SESIJA = null;   // var, ne let: openModal() jį liečia ir prieš šią eilutę (TDZ). Dabartinis peržiūros langas: DI rezultatas į uždarytą ar kitą langą nebeįrašomas
+function impDiAtsaukti() { if (IMP_SESIJA) { IMP_SESIJA.valdikliai.forEach(v => { try { v.abort(); } catch (e) {} }); IMP_SESIJA = null; } }
+
 /* Peržiūros langas: kiekvienam failui - tiekėjas (siūlomas / esamas / naujas), sutapdinimo santrauka, pozicijos su citata,
    klaida; „Priimti pažymėtus“ pritaiko tik pažymėtus su priskirtu tiekėju. */
 function importoPerziura(items) {
   const s = APP.state, cur = s.project.currency;
   const supOpt = (sel) => s.suppliers.map(x => `<option value="${x.id}"${sel === x.id ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('');
-  const SALTINIS = { 'dokumentas': L('dokumento', 'the document'), 'failo vardas': L('failo vardo', 'the file name') };
+  const SALTINIS = { 'dokumentas': L('dokumento', 'the document'), 'failo vardas': L('failo vardo', 'the file name'), 'DI': L('DI perskaityto failo', 'the file read by AI') };
+  const psl = n => n ? L('psl. ' + n, 'p. ' + n) : '';
   const kortele = (it, i) => {
-    const t = it.tiekejas || {}, r = it.rez || {}, ok = r.ok;
+    const t = it.tiekejas || {}, r = it.rez || {}, ok = r.ok, di = !!r.di;
     const naujas = !t.esamasId && t.pavadinimas;
     const busena = !ok ? `<span class="pill pill--error">${L('neperskaityta', 'not read')}</span>` : r.fixed ? `<span class="pill pill--neutral">${L('tik bendra suma', 'total only')}</span>` : `<span class="pill pill--success">${r.rowsFound} ${L('pozicijos', 'items')}</span>`;
+    const diZyme = di && window.GP_DI ? ' ' + GP_DI.zyme({ tekstas: L('DI pasiūlymas', 'AI suggestion') }) : '';
     const sut = it.sut ? (s.positions.length
       ? L(`Sutapdinimas su projekto lentele: ${it.sut.tikslus} tikslūs, ${it.sut.tiketinas} tikėtini, ${it.sut.nerasta} nerasta.`, `Matching with the project table: ${it.sut.tikslus} exact, ${it.sut.tiketinas} probable, ${it.sut.nerasta} not found.`)
       : L('Projekte pozicijų dar nėra: pirmas priimtas failas jas sukurs, kiti bus sutapdinti su jomis.', 'The project has no items yet: the first accepted file will create them, the others will be matched to them.')) : '';
     const siuloma = t.esamasId ? (t.pasitikejimas === 'tikslus' ? L('sutampa su esamu tiekėju', 'matches an existing supplier') : L('panašus į esamą tiekėją', 'similar to an existing supplier')) : L('naujas tiekėjas', 'new supplier');
-    return `<div class="card" style="margin: 0 0 10px;" data-imp-kortele="${i}">
+    const supHint = it.fiksuotas
+      ? L('Failas įkeltas šio tiekėjo kortelėje.', 'The file was uploaded on this supplier’s card.') + (it.diTiekejas && it.diTiekejas.pavadinimas && !(it.diTiekejas.esamasId === it.fiksuotas)
+          ? ' ' + L('DI faile rado tiekėją ', 'The AI found the supplier ') + kab(escapeHtml(it.diTiekejas.pavadinimas)) + L(' - patikrinkite, ar failas šio tiekėjo.', ' in the file - check that the file belongs to this supplier.') : '')
+      : t.pavadinimas ? L('Siūloma (nepatvirtinta): ', 'Suggested (not confirmed): ') + siuloma + L(' - iš ', ' - from ') + escapeHtml(SALTINIS[t.saltinis] || t.saltinis) + (t.puslapis ? ' (' + psl(t.puslapis) + ')' : '') + ': ' + kab(escapeHtml(t.citata))
+      : L('Tiekėjo faile atpažinti nepavyko - pasirinkite.', 'The supplier could not be recognised in the file - select one.');
+    const diIsp = di && r.diIspejimai && r.diIspejimai.length ? `<div class="card card--warning mt-1" style="margin:0; font-size:13px;" role="note"><strong>${L('Patikrinkite:', 'Check:')}</strong><ul style="margin:4px 0 0 18px; padding:0;">${r.diIspejimai.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul></div>` : '';
+    const diSuma = di && r.diViso ? `<p class="muted" style="font-size: 12px; margin: 6px 0 0;">${L('Pasiūlymo suma be PVM faile', 'Offer total excl. VAT in the file')}${r.diViso.puslapis ? ' (' + psl(r.diViso.puslapis) + ')' : ''}: <strong>${fmtMoney(r.diViso.reiksme, cur)}</strong>${r.diViso.citata ? ' - ' + kab(escapeHtml(r.diViso.citata)) : ''}</p>` : '';
+    const diBlokas = diSkaitymasGalimas(it) ? `<div class="mt-1" data-imp-di="${i}">
+        <p class="muted" style="font-size: 12px; margin: 0 0 6px;" id="impDiPastaba${i}">${escapeHtml(diSiuntimoPastaba(it))}</p>
+        <button class="btn btn--secondary btn--sm" type="button" data-imp-di-skaityti="${i}" aria-describedby="impDiPastaba${i}">${L('Skaityti su DI', 'Read with AI')}</button>
+        <div data-imp-di-busena="${i}" class="mt-1"></div></div>` : '';
+    return `<div class="card" style="margin: 0 0 10px;" data-imp-kortele="${i}"${di ? ' data-di="sugeneruota"' : ''}>
       <div class="flex justify-between items-center flex-wrap gap-1">
         <label style="font-weight:700; display:flex; gap:8px; align-items:center;"><input type="checkbox" data-imp-pasirinktas="${i}"${it.pasirinktas ? ' checked' : ''}${ok ? '' : ' disabled'}> ${escapeHtml(it.vardas)}</label>
-        <span>${busena}${ok && r.total ? ' <strong style="margin-left:8px;">' + fmtMoney(r.total, cur) + '</strong>' : ''}</span>
+        <span>${busena}${diZyme}${ok && r.total ? ' <strong style="margin-left:8px;">' + fmtMoney(r.total, cur) + '</strong>' : ''}</span>
       </div>
       ${ok ? `<div class="grid grid--2 mt-1">
         <div class="field"><label class="field__label" for="impSup${i}">${L('Tiekėjas', 'Supplier')}</label>
@@ -3313,7 +3371,7 @@ function importoPerziura(items) {
             ${supOpt(t.esamasId)}
             <option value=""${!naujas && !t.esamasId ? ' selected' : ''}>${L('Nepriskirti (praleisti)', 'Do not assign (skip)')}</option>
           </select>
-          <span class="field__hint">${t.pavadinimas ? L('Siūloma (nepatvirtinta): ', 'Suggested (not confirmed): ') + siuloma + L(' - iš ', ' - from ') + escapeHtml(SALTINIS[t.saltinis] || t.saltinis) + ': ' + kab(escapeHtml(t.citata)) : L('Tiekėjo faile atpažinti nepavyko - pasirinkite.', 'The supplier could not be recognised in the file - select one.')}</span>
+          <span class="field__hint">${supHint}</span>
         </div>
         <div class="field" ${naujas ? '' : 'style="display:none"'} data-imp-naujas-laukas="${i}"><label class="field__label" for="impNaujas${i}">${L('Naujo tiekėjo pavadinimas', 'New supplier name')}</label>
           <input class="input" id="impNaujas${i}" data-imp-naujas="${i}" value="${escapeHtml(t.pavadinimas || '')}">
@@ -3321,11 +3379,12 @@ function importoPerziura(items) {
         </div>
       </div>
       <p class="muted" style="font-size: 12px; margin: 6px 0 0;">${escapeHtml(r.message || sut)}${r.message && sut ? ' ' + escapeHtml(sut) : ''}</p>
-      ${!r.fixed && it.sutapdinimas ? `<details class="mt-1"><summary style="cursor:pointer; font-size:13px;">${L('Pozicijos', 'Items')} (${it.sutapdinimas.length})</summary>
-        <div class="table-wrap mt-1"><table class="table"><thead><tr><th>${L('Faile', 'In the file')}</th><th class="num">${L('Kiekis', 'Quantity')}</th><th class="num">${L('Įkainis', 'Unit price')}</th><th>${L('Projekto pozicija', 'Project item')}</th></tr></thead><tbody>
-        ${it.sutapdinimas.map(x => `<tr><td>${escapeHtml(x.rp.name)}</td><td class="num">${fmtNum(x.rp.qty, 2)}</td><td class="num">${fmtMoney(x.rp.price, cur)}</td><td>${x.m ? escapeHtml(x.m.pos.name) + (x.m.lygis === 'tiketinas' ? ` <span class="pill pill--warning">${L('tikėtina', 'probable')}</span>` : '') : (s.positions.length ? `<span class="pill pill--neutral">${L('nerasta', 'not found')}</span>` : `<span class="pill pill--info">${L('bus sukurta', 'will be created')}</span>`)}</td></tr>`).join('')}
-        </tbody></table></div></details>` : ''}`
-      : `<div class="card card--warning mt-1" style="margin:0;"><strong>${L('Neperskaityta:', 'Not read:')}</strong> ${escapeHtml(r.error || L('nežinoma klaida', 'unknown error'))}</div>`}
+      ${diSuma}${diIsp}
+      ${!r.fixed && it.sutapdinimas ? `<details class="mt-1"${di ? ' open' : ''}><summary style="cursor:pointer; font-size:13px;">${L('Pozicijos', 'Items')} (${it.sutapdinimas.length})</summary>
+        <div class="table-wrap mt-1"><table class="table"><thead><tr><th>${L('Faile', 'In the file')}</th>${di ? `<th>${L('Psl.', 'Page')}</th>` : ''}<th class="num">${L('Kiekis', 'Quantity')}</th><th class="num">${L('Įkainis', 'Unit price')}</th><th>${L('Projekto pozicija', 'Project item')}</th></tr></thead><tbody>
+        ${it.sutapdinimas.map(x => `<tr><td>${escapeHtml(x.rp.name)}${x.rp.ispejimai && x.rp.ispejimai.length ? `<div style="font-size:12px;"><span class="pill pill--warning">${L('patikrinkite', 'check')}</span> ${escapeHtml(x.rp.ispejimai.join('; '))}</div>` : ''}</td>${di ? `<td>${x.rp.puslapis || '–'}</td>` : ''}<td class="num">${fmtNum(x.rp.qty, 2)}</td><td class="num">${fmtMoney(x.rp.price, cur)}</td><td>${x.m ? escapeHtml(x.m.pos.name) + (x.m.lygis === 'tiketinas' ? ` <span class="pill pill--warning">${L('tikėtina', 'probable')}</span>` : '') : (s.positions.length ? `<span class="pill pill--neutral">${L('nerasta', 'not found')}</span>` : `<span class="pill pill--info">${L('bus sukurta', 'will be created')}</span>`)}</td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}${diBlokas}`
+      : `<div class="card card--warning mt-1" style="margin:0;"><strong>${L('Neperskaityta:', 'Not read:')}</strong> ${escapeHtml(r.error || L('nežinoma klaida', 'unknown error'))}</div>${diBlokas}`}
     </div>`;
   };
   openModal({
@@ -3334,9 +3393,48 @@ function importoPerziura(items) {
     body: `<p style="font-size:13px;" class="mb-2">${L('Patikrinkite, kam priskiriamas kiekvienas failas. Tiekėjai ir įkainiai įrašomi tik paspaudus „Priimti pažymėtus“.', 'Check which supplier each file is assigned to. Suppliers and unit prices are saved only when you click “Accept selected”.')}</p>${items.map(kortele).join('')}`,
     footer: `<button class="btn btn--ghost" data-modal-close>${L('Atšaukti', 'Cancel')}</button><button class="btn btn--primary" id="impPriimti">${L('Priimti pažymėtus', 'Accept selected')}</button>`
   });
-  $$('[data-imp-sup]').forEach(sel => sel.onchange = () => { const l = $(`[data-imp-naujas-laukas="${sel.dataset.impSup}"]`); if (l) l.style.display = sel.value === '__naujas__' ? '' : 'none'; });
+  const sesija = IMP_SESIJA = { items, valdikliai: new Set() };   // po openModal(): jis ankstesnę sesiją atšaukia
+  const kunas = $('#modalBody');
+  kunas.onchange = e => {
+    const sel = e.target.closest('[data-imp-sup]');
+    if (sel) { const l = $(`[data-imp-naujas-laukas="${sel.dataset.impSup}"]`); if (l) l.style.display = sel.value === '__naujas__' ? '' : 'none'; }
+  };
+  kunas.onclick = e => { const b = e.target.closest('[data-imp-di-skaityti]'); if (b) diSkaityk(Number(b.dataset.impDiSkaityti)); };
+  /* „Skaityti su DI“: eiga su „Atšaukti“, klaida su priežastimi ir „Bandyti dar kartą“; rezultatas - kortelė perpiešiama su DI pasiūlymu
+     (failas nepažymėtas - pažymi žmogus, patikrinęs), fokusas - į failo žymimąjį langelį. Langą uždarius užklausa atšaukiama. */
+  function diSkaityk(i) {
+    const it = items[i], vieta = $(`[data-imp-di-busena="${i}"]`), mygt = $(`[data-imp-di-skaityti="${i}"]`);
+    if (!it || !vieta || IMP_SESIJA !== sesija) return;
+    const valdiklis = new AbortController();
+    sesija.valdikliai.add(valdiklis);
+    if (mygt) mygt.disabled = true;
+    GP_BUSENA.vykdyk(vieta, {
+      tipas: 'ai', laikmatis: true, valdiklis, tekstas: L('DI skaito pasiūlymą: ', 'The AI is reading the offer: ') + it.vardas,
+      klaidosPriesdelis: L('DI pasiūlymo perskaityti nepavyko', 'The AI could not read the offer'),
+      kartoti: () => diSkaityk(i),
+      veiksmas: signal => GP_NEG_DI.perskaityk(it.file, { signal, kalba: LANG })
+    }).then(rez => {
+      sesija.valdikliai.delete(valdiklis);
+      if (IMP_SESIJA !== sesija) return;
+      const mg = $(`[data-imp-di-skaityti="${i}"]`); if (mg) mg.disabled = false;
+      if (!rez.ok) return;
+      const a = rez.reiksme;
+      it.rez = GP_NEG_DI.iRezultata(a, it.vardas, LANG);
+      const dt = tiekejasIsDi(a.tiekejas, s.suppliers);
+      if (it.fiksuotas) it.diTiekejas = dt;
+      else if (dt) it.tiekejas = dt;
+      impSutapdink(it);
+      it.pasirinktas = false;   // DI pasiūlymas: pažymi žmogus, patikrinęs su failu
+      const sena = $(`[data-imp-kortele="${i}"]`);
+      if (!sena) return;
+      sena.outerHTML = kortele(it, i);
+      const chk = $(`[data-imp-pasirinktas="${i}"]`); if (chk) chk.focus();
+      toast(it.vardas + ': ' + it.rez.message, 'info');
+    });
+  }
   $('#impPriimti').onclick = () => {
     let priimta = 0, praleista = 0, naujuTiekeju = 0;
+    impDiAtsaukti();
     items.forEach((it, i) => {
       const chk = $(`[data-imp-pasirinktas="${i}"]`);
       if (!it.rez || !it.rez.ok || !chk || !chk.checked) { praleista++; return; }
@@ -4044,13 +4142,26 @@ async function importuokIrPranesk(files, supId) {
   const sup = APP.state.suppliers.find(x => x.id === supId);
   if (!sup) { toast(L('Tiekėjas nerastas', 'Supplier not found'), 'error'); return; }
   let kiek = 0;
+  const perziurai = [];
   for (const file of Array.from(files || [])) {
+    // PDF, kurio įrankis neperskaitė arba kuriame rado tik bendrą sumą, - į peržiūrą (ten galima „Skaityti su DI“), ne iškart į projektą
+    if (window.GP_NEG_DI && GP_NEG_DI.arPdf(file)) {
+      const r0 = await parseFile(file, null);
+      const it = { file, vardas: file.name, rez: r0, fiksuotas: supId, pasirinktas: !!(r0 && r0.ok),
+        tiekejas: { pavadinimas: sup.name, kodas: sup.code || '', citata: '', saltinis: 'pasirinktas', esamasId: supId, pasitikejimas: 'tikslus', kandidatai: [] } };
+      if (diSkaitymasGalimas(it)) { impSutapdink(it); perziurai.push(it); continue; }
+      if (!r0 || !r0.ok) { toast(sup.name + ', ' + file.name + ': ' + ((r0 && r0.error) || L('failo perskaityti nepavyko', 'the file could not be read')), 'error'); continue; }
+      const res = pritaikykImporta(Object.assign({}, r0), supId);
+      kiek++; toast(sup.name + ': ' + (res.message || (L('rasta ' + res.rowsFound + ' pozicijų', res.rowsFound + ' items found'))), 'success');
+      continue;
+    }
     const res = await parseFile(file, supId);
     if (!res.ok) toast(sup.name + ', ' + file.name + ': ' + res.error, 'error');
     else { kiek++; toast(sup.name + ': ' + (res.message || (L('rasta ' + res.rowsFound + ' pozicijų', res.rowsFound + ' items found'))), 'success'); }
   }
   if (kiek) window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'pasiulymai_ikelti', failai: Math.min(99, kiek) });   // statistika (tik su sutikimu)
   render.all();
+  if (perziurai.length) importoPerziura(perziurai);
 }
 /* Visos įkėlimo zonos: data-drop="sup" (tiekėjo kortelė), "modal" (tiekėjo langas), "bulk" (visi tiekėjai iš karto). */
 async function dropVeiksmas(el, files) {
@@ -4291,7 +4402,7 @@ document.addEventListener('DOMContentLoaded', init);
       "<b>Eksportas:</b> Excel analizė ir spausdinama ataskaita (PDF)."
     ],
     noteTitle: "Duomenys",
-    note: "Pirkimo ir derybų duomenys saugomi <b>tik šioje naršyklėje</b> ir niekur nesiunčiami. Išvalius naršyklę jie dingsta - darykite atsarginę kopiją (portalo poraštėje - „Atsarginė kopija“).",
+    note: "Pirkimo ir derybų duomenys saugomi <b>tik šioje naršyklėje</b> ir niekur nesiunčiami. Išimtis - tik paspaudus „Skaityti su DI“ prie PDF pasiūlymo, kurio įrankis pats neperskaitė: tas vienas failas siunčiamas per G-Procure serverį į Claude API (Anthropic), o rezultatą priimate jūs. Išvalius naršyklę duomenys dingsta - darykite atsarginę kopiją (portalo poraštėje - „Atsarginė kopija“).",
     moreLabel: "Pagalba ir teisės"
   }, en: {
     title: "What it is and how to use it",
@@ -4304,7 +4415,7 @@ document.addEventListener('DOMContentLoaded', init);
       "<b>Export:</b> Excel analysis and a printable report (PDF)."
     ],
     noteTitle: "Data",
-    note: "Procurement and negotiation data are stored <b>only in this browser</b> and are not sent anywhere. Clearing the browser deletes them - make a backup (portal footer - “Backup”).",
+    note: "Procurement and negotiation data are stored <b>only in this browser</b> and are not sent anywhere. The exception is only when you click “Read with AI” for an offer PDF the tool could not read itself: that one file is sent via the G-Procure server to the Claude API (Anthropic), and you accept the result. Clearing the browser deletes the data - make a backup (portal footer - “Backup”).",
     moreLabel: "Help and legal basis"
   } };
   GProcureInfoPanel.mount({

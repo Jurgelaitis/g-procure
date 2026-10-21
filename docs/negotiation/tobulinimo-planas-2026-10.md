@@ -212,5 +212,15 @@ Ribos, kurias reikia žinoti:
 - Portalo kortelė, „Apie G-Procure“ aprašymas ir modulio `meta description` - naudotojo patvirtintas tekstas (2026-10-06):
   „Nuo tiekėjų pasiūlymų iki derybų plano: įkainių matrica, derybų ribos ir rekomendacijos kiekvienam tiekėjui.“
 
-Neįgyvendinta: 4 etapas (C lygis) - laukia sprendimo; pozicijų pavadinimų sutapdinimas DI pagalba - taip pat C lygio klausimas.
+Neįgyvendinta: pozicijų pavadinimų sutapdinimas DI pagalba (C lygio klausimas, nedaryta).
+
+## 7. C lygis - DI skaitymas (2026-10-21)
+
+Naudotojo sprendimas 2026-10-21: „PP-negotiation failų skaitymas su DI - taip“. Įgyvendinta pagal 2.3 p. taisykles (`PP-negotiation/di-skaitymas.js`):
+- mygtukas „Skaityti su DI“ - tik importo peržiūroje prie PDF, kurio įrankis pats neperskaitė (skenuotas, be lentelės) arba kuriame rado tik bendrą
+  sumą; prie jo - kas siunčiama (tik tas failas) ir kur (G-Procure serveris -> Claude API); tiekėjo kortelėje įkeltas toks PDF atveria peržiūrą;
+- DI perrašo pozicijas, kiekius, įkainius, sumas, puslapius ir tiekėją su citata, nieko neskaičiuoja; programa patikrina skaičius ir sumas,
+  nesutapimus parodo įspėjimais;
+- rezultatas - „DI pasiūlymas“ (`data-di`), failas nepažymėtas, priima žmogus; priimti įkainiai lentelėje pažymėti, kol nepataisyti ranka;
+- privatumo pranešimas modulyje, `privatumas.html` ir `ai-valdymas.html` atnaujinti (LT / EN).
 
