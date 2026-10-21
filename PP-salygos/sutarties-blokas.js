@@ -3,7 +3,8 @@
  * docs/salygos/sutartys-planas-2026-10.md 3.3). Parinkimą daro GP_SUTARTYS (sutartys.js), čia - tik sąsaja.
  *
  *   GP_SUTARTIES_BLOKAS.mount({ vieta, duomenys, onKeista }) -> { atnaujink, busena, atstatyk, zurnalas, naudokSaugykla }
- *     duomenys() -> { pavadinimas, objektas, bvpz, kalba, rezimas, salyguSeima, budas }   (1 žingsnio ir kortelės reikšmės)
+ *     duomenys() -> { pavadinimas, objektas, bvpz, kalba, rezimas, salyguSeima, budas, verte }   (1 žingsnio ir kortelės reikšmės;
+ *                    verte - numatoma vertė Eur be PVM: smulkių darbų sutartis be klausimo - tik mažos vertės darbams, nuo 2026-10-21)
  *     busena()   -> { rodoma, laukia, atsakymas, sistema, pasirinkta, zmogaus, patvirtinta, buvoPatvirtinta, sablonai, kalba, stebejimas }
  *     atsakyk("taip" | "ne") - tas pats, kas pažymėti atsakymą (testams)
  *     juodrastis() / atkurk(x) - žmogaus sprendimai pirkimo sąlygų juodraščiui (2026-10-15, juodrastis.js)
@@ -171,7 +172,7 @@
       var d = o.duomenys() || {};
       S.d = d;
       S.sistema = G.parink({ pavadinimas: d.pavadinimas, objektas: d.objektas, bvpz: d.bvpz, kalba: d.kalba, rezimas: d.rezimas,
-                             vykdytojas: "LITGRID AB", atsakymai: S.ats });
+                             verte: d.verte, vykdytojas: "LITGRID AB", atsakymai: S.ats });
       var sis = S.sistema.busena === "klausimas" ? null
         : { seima: S.sistema.seima, variantas: S.sistema.variantas || null,
             nerengiama: S.sistema.busena === "nerengiama" ? { id: "sistema", tekstas: S.sistema.nerengiama } : null };

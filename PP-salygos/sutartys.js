@@ -2,7 +2,7 @@
  * PP-salygos: sutarties projekto parinkimas pagal pirkimą (GP_SUTARTYS, sutarčių planas S2, 2026-10-08;
  * docs/salygos/sutartys-planas-2026-10.md 2.3-2.4 ir 3.1).
  *
- *   GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, rezimas, atsakymai })
+ *   GP_SUTARTYS.parink({ pavadinimas, objektas, bvpz, kalba, vykdytojas, rezimas, verte, atsakymai })
  *     -> { busena, seima, variantas, pavadinimas, priezastys, klausimas, sablonai, kalba, pastabos, atsakyta, nerengiama }
  *        busena: "parinkta"   - šeima ir paruošti šablonai (sablonai.BS / sablonai.SS - templates/sutartys/<kodas>.docx);
  *                "neparuosta" - šeima žinoma, bet jos šablonas generatoriui dar neparuoštas (S1 - tik prekės ir paslaugos);
@@ -14,6 +14,9 @@
  *   rezimas: "VPI" (centralizuotas LITGRID ir EPSO-G pirkimas) - šeima parenkama, bet „neparuošta“: šablonai parengti PĮ pirkimams,
  *            VPĮ pirkimų sutarties forma dar nenuspręsta (plano 6.2 ir 8 sk. 5 p.).
  *
+ * verte - numatoma pirkimo vertė Eur be PVM (nuo 2026-10-21, naudotojo sprendimas T3-M16): pastato ar teritorijos smulkių darbų
+ * darbų pirkimo-pardavimo („mažoji“) sutartis be klausimo parenkama tik tada, kai vertė mažesnė už mažos vertės darbų pirkimo ribą
+ * (GP_THRESHOLDS mv_works - kaip GP_TAISYKLES: lygi riba - nebe mažos vertės); kitaip klausiama K6 - mažoji ar statybos rangos.
  * Taisyklės - deterministinės, iš kalibravimo prototipo (277 LITGRID sutartys: 202 automatiškai be klaidų, 52 po vieno klausimo,
  * 23 po dviejų - imtis ta pati, iš kurios taisyklės sudarytos) ir naudotojo sprendimų 2026-10-08: transformatorių pastotės teritorijos
  * pastatų ir teritorijos smulkūs darbai - mažoji sutartis be klausimo; ekspertizė ir statinio statybos techninė priežiūra -
@@ -107,6 +110,12 @@
           paaiskinimas: "Licencijos (prekės) - prekių pirkimo-pardavimo sutartis; palaikymo paslaugos - paslaugų pirkimo-pardavimo sutartis.",
           atsakymai: [{ id: "licencijos", tekstas: "Licencijos (prekės)", seima: "PREKES" },
                       { id: "palaikymas", tekstas: "Palaikymo paslaugos", seima: "PASLAUGOS" }] },
+    // nuo 2026-10-21 (naudotojo sprendimas T3-M16): smulkių darbų taisyklė, kai numatoma vertė ne mažesnė už mažos vertės darbų ribą
+    K6: { tekstas: "Kuri sutartis tinka šiems darbams?",
+          paaiskinimas: "Pagal pavadinimą tai pastato ar teritorijos darbai, kuriems įprastai tinka darbų pirkimo-pardavimo („mažoji“) sutartis, " +
+                        "bet numatoma vertė ne mažesnė už mažos vertės darbų pirkimo ribą, todėl sutartį pasirenkate jūs.",
+          atsakymai: [{ id: "mazoji", tekstas: "Darbų pirkimo-pardavimo („mažoji“) sutartis - smulkūs darbai be statinio projekto", seima: "DARBAI_MAZOJI" },
+                      { id: "statybos", tekstas: "Statybos rangos sutartis - darbai pagal Užsakovo parengtą projektą", seima: "STATYBOS_RANGOS" }] },
     CPO: { tekstas: "Ar ši paslauga perkama per CPO LT (centralizuotų pirkimų katalogą ar jo dinaminę pirkimo sistemą)?",
            paaiskinimas: "Ekspertizės ir statinio statybos techninės priežiūros paslaugos LITGRID dažnai perkamos per CPO LT - tada naudojama " +
                          "CPO LT sutarties forma ir LITGRID sutarties projektas nerengiamas. Perkant LITGRID pirkimu - paslaugų pirkimo-pardavimo sutartis.",
@@ -117,6 +126,8 @@
   /* Kai sutarties projektas nerengiamas - žmogaus atsakymas „Ne“ į klausimą „Ar taikomos tipinės LITGRID AB sutarties standartinės sąlygos?“
      (naudotojo sprendimas 2026-10-12: „Ne“ - pridedamos esminės sutarties sąlygos; iki tol „Pakeisti“ sąraše buvo ir „CPO LT forma“ bei
      „tiekėjo forma“). Sistemos išvada „perkama per CPO LT“ (klausimas CPO) - atskirai, žr. KLAUSIMAI. */
+  var PASTABA_VERTE = "Numatoma vertė neįrašyta - ar darbų vertė mažesnė už mažos vertės darbų pirkimo ribą, nepatikrinta.";
+  var PASTABA_RIBA = "Mažos vertės pirkimų ribų įkelti nepavyko - ar darbų vertė mažesnė už ribą, nepatikrinta.";
   var NERENGIAMA = [
     { id: "esmines", tekstas: "Sutarties projektas nepridedamas - esminės sutarties sąlygos išdėstomos SPS" }
   ];
@@ -220,14 +231,14 @@
       }
       var projektuoja = yra("projektas"), eso = yra("eso"), statyba = yra("statyba"), smulkus = yra("smulkus");
       if (yra("pagalbTvirtas") && smulkus && !projektuoja && !statyba && !eso)
-        return { seima: "DARBAI_MAZOJI", priezastys: [zyme("pagalbTvirtas"), zyme("smulkus"), "nėra statybos veiksmo ir projektavimo" +
+        return { seima: "DARBAI_MAZOJI", smulkus: true, priezastys: [zyme("pagalbTvirtas"), zyme("smulkus"), "nėra statybos veiksmo ir projektavimo" +
                  (tinklas ? " (ir perdavimo tinklo objekto teritorijoje - darbų pirkimo-pardavimo sutartis)" : "")] };
       if (projektuoja && yra("rangosDarbai") && !eso)
         return { seima: "PROJEKTAVIMO_STATYBOS", priezastys: [zyme("projektas"), zyme("rangosDarbai")] };
       if (tinklas && (statyba || projektuoja))
         return { klausimas: "K1", priezastys: [zyme("tinklas"), statyba ? zyme("statyba") : zyme("projektas")].concat(eso ? [zyme("eso") + " - projektą gali rengti ar apmokėti kita šalis"] : []) };
       if (!tinklas && yra("pagalb") && smulkus && !projektuoja && !/rekonstrav|(^|[^a-z])statyb|kapitalin/.test(t))
-        return { seima: "DARBAI_MAZOJI", priezastys: [zyme("pagalb"), zyme("smulkus")] };
+        return { seima: "DARBAI_MAZOJI", smulkus: true, priezastys: [zyme("pagalb"), zyme("smulkus")] };
       return { klausimas: "K2", priezastys: ["aiškių darbų rūšies požymių pavadinime nėra"] };
     }
     return { klausimas: "K0", priezastys: [rusis === "misrus" ? "mišrus pirkimas" : "pirkimo objekto rūšis nenurodyta"] };
@@ -238,6 +249,13 @@
     return { kodas: kodas, tekstas: k.tekstas, paaiskinimas: k.paaiskinimas,
              atsakymai: k.atsakymai.map(function (a) { return { id: a.id, tekstas: a.tekstas }; }) };
   }
+
+  /* Mažos vertės darbų pirkimo riba pagal režimą (GP_THRESHOLDS) arba null - neįkelta */
+  function mvDarbu(rezimas) {
+    var T = global.GP_THRESHOLDS, R = T && T[rezimas === "VPI" ? "VPI" : "PI"];
+    return R && R.mv_works > 0 ? R.mv_works : null;
+  }
+  function eur(v) { return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " Eur"; }
 
   function parink(duom) {
     duom = duom || {};
@@ -250,6 +268,14 @@
     var priezastys = [], r, i = 0;
     while (i++ < 6) {
       r = medis(t, rusis, duom.bvpz, ats, tarpai(duom.pavadinimas));
+      if (r.smulkus) {
+        // smulkių darbų taisyklė - tik mažos vertės darbams (T3-M16); vertė nežinoma ar riba neįkelta - pasakoma
+        var verte = Number(duom.verte) || 0, mv = mvDarbu(duom.rezimas);
+        if (verte > 0 && mv && verte >= mv)
+          r = { klausimas: "K6", priezastys: r.priezastys.concat(["numatoma vertė " + eur(verte) + " - ne mažesnė už mažos vertės darbų pirkimo ribą (" + eur(mv) + ")"]) };
+        else if (!(verte > 0)) { if (pastabos.indexOf(PASTABA_VERTE) < 0) pastabos.push(PASTABA_VERTE); }
+        else if (!mv) { if (pastabos.indexOf(PASTABA_RIBA) < 0) pastabos.push(PASTABA_RIBA); }
+      }
       priezastys = priezastys.concat(r.priezastys || []);
       if (!r.klausimas) break;
       var a = ats[r.klausimas], def = a && KLAUSIMAI[r.klausimas].atsakymai.filter(function (x) { return x.id === a; })[0];
@@ -299,6 +325,6 @@
              sutampa: !!(rez && rez.seima === seima && (rez.variantas || null) === (variantas || null)) };
   }
 
-  global.GP_SUTARTYS = { versija: "S4-EKS-2026-10-13", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, kodai: kodai, normalizuok: be,
+  global.GP_SUTARTYS = { versija: "S4-K6-2026-10-21", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, kodai: kodai, normalizuok: be,
                          UZTIKRINIMO_VIETA: UZTIKRINIMO_VIETA, uztikrinimoVieta: uztikrinimoVieta };
 })(typeof window !== "undefined" ? window : this);

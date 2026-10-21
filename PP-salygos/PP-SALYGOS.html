@@ -2191,6 +2191,15 @@ function nac5Atsakymas(){
   if (a) return { v: a === 'taip', kodel:`klausimas „Ar perkamos prekės ar paslaugos, kurių BVPŽ kodai yra Vyriausybės sąraše?“ - „${a === 'taip' ? 'Taip' : 'Ne'}“` };
   return { v:true, kodel:'neatsakyta, ar perkamos Vyriausybės sąrašo BVPŽ kodų prekės ar paslaugos - punktas paliekamas' };
 }
+/* Nacionalinio saugumo reikalavimų atitikties deklaracija (naudotojo sprendimas T3-M5, 2026-10-21 - „kai SPS ją mini“): SPS ją reikalauja
+   tik BVPŽ punkte („Su Pasiūlymu teikiama ... deklaracija (SPS X priedas)“, blokas NAC5), todėl priedas, jo SPS priedų sąrašo eilutė ir
+   pasiūlymo dokumentų sąrašo eilutė „Tinkamai užpildytą ... deklaraciją“ seka BVPŽ punkto sprendimą (iki tol - vien nacionalinio saugumo
+   atsakymą: punktą pašalinus, priedas likdavo pakete, nors SPS jo nebereikalavo). -> { v, kodel } */
+function deklaracijaReikalinga(){
+  const a = nac5Atsakymas();
+  if (!nacsaugTaip()) return { v:false, kodel:'pagal 1 žingsnio atsakymą apie nacionalinį saugumą' };
+  return { v:a.v, kodel:`SPS deklaraciją reikalauja tik nacionalinio saugumo BVPŽ punkte - ${a.v ? 'jis lieka' : 'jis pašalinamas'} (${a.kodel})` };
+}
 function rezimoAtsakymas(k, rez){
   const t = norm(k);
   if (!rez) return null;
@@ -2373,16 +2382,33 @@ const yraFormaT = t => { const d = DOK.find(x => x.trumpas === t); return d ? yr
 const APIMTIS_FORMULES = [
   { re:/^perkanciojo subjekto nustatyti minimalus reikalavimai/,
     variantai:[
-      { kada:'kaina', tekstas:'Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai',
+      { kada:'kaina', tekstas:'Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai', nurodymas:true,
         kodel:'šablono nurodymas: „jei deramasi tik dėl kainos, rašome: ..."' },
-    ]},
+    ],
+    be:'Kai deramasi ne tik dėl kainos, šablone formuluotės nėra - įrašykite minimalius reikalavimus patys.' },
   { re:/^perkantysis subjektas deresis del siu salygu/,
     variantai:[
       { kada:'kaina', tekstas:'Pasiūlymo kainos', kodel:'derybos tik dėl kainos' },
-      { kada:'kaina_kitos', tekstas:'Pasiūlymo kainos, kitų pasiūlymo sąlygų',
+      { kada:'kaina_kitos', tekstas:'Pasiūlymo kainos, kitų pasiūlymo sąlygų', nurodymas:true,
         kodel:'šablono nurodymas: „jei deramasi tik dėl kainos ir kitų pasiūlymo sąlygų, rašome: ..."' },
-    ]},
+    ],
+    be:'Platesnei derybų apimčiai šablone formuluotės nėra - įrašykite, dėl kokių sąlygų bus deramasi.' },
 ];
+/* Derybų formuluotės pagal 1 žingsnį (naudotojo sprendimas T3-V9, 2026-10-21): kai 1 žingsnio atsakymas „Dėl ko bus deramasi?“ turi šablono
+   formuluotę, ji įrašoma be klausimo („Išspręsta automatiškai“ su „Keisti“); be jos (minimalūs reikalavimai, kai deramasi ne tik dėl kainos;
+   platesnė apimtis) - klausiama, o formuluotė „tik dėl kainos“ nebesiūloma (iki tol ją buvo galima pasirinkti ir derantis dėl kitų sąlygų).
+   Nurodymo formuluotė imama iš PATIES šablono nurodymo „[... rašome: X]“ - SPS rašo „kitų Pasiūlymo sąlygų“, TSD LT - „kitų pasiūlymo sąlygų“. */
+const APIMTIS_VARD = { kaina:'tik dėl Pasiūlymo kainos', kaina_kitos:'dėl kainos ir kitų pasiūlymo sąlygų', kita:'kita (platesnė) apimtis' };
+function apimtiesFormule(tekstas){
+  const f = APIMTIS_FORMULES.find(x => x.re.test(norm(tekstas)));
+  if (!f) return null;
+  const m = /rašome:\s*([^\]]+)\]/i.exec(String(tekstas || '')), is = m && m[1].replace(/\s+/g, ' ').trim();
+  const vs = f.variantai.map(v => v.nurodymas && is ? Object.assign({}, v, { tekstas: is }) : v), ap = apimtis();
+  return { f, ap, vs, v: vs.find(x => x.kada === ap) || null, kaina: vs.find(x => x.kada === 'kaina') || null };
+}
+const apimtiesKodel = (ap, v) => `pagal 1 žingsnio atsakymą „Dėl ko bus deramasi?“ - ${APIMTIS_VARD[ap] || ap} (${v.kodel}); pakeitus atsakymą, pasikeis ir formuluotė`;
+/* „Patikrinkite“: įrašyta formuluotė „tik dėl kainos“, o 1 žingsnyje - kitokia apimtis (pvz. ankstesnio juodraščio ar įrašyta ranka) */
+const apimtiesNetinka = (apX, reiksme) => !!(apX && apX.ap && apX.ap !== 'kaina' && apX.kaina && String(reiksme || '').trim() && norm(reiksme) === norm(apX.kaina.tekstas));
 
 /* Rezimo eilute "Vykdomas [Pasirinkite]." (AK ir kt. seimos) - formuluotes
    PAZODZIUI is TSD/SSD sablonu 1.2 punktu, parenkama pagal REZIMO POZYMI.     */
@@ -2513,8 +2539,8 @@ const SEKIMO = [
     kodel:'punktas taikomas tik kai žalieji reikalavimai nustatomi pirkimo sąlygose' },
   { re:/^nepriklausomos istaigos isduota sertifikata/, seka:'zalieji',
     kodel:'dokumentas prašomas tik kai žalieji reikalavimai nustatomi pirkimo sąlygose' },
-  { re:/^tinkamai uzpildyta ir pasirasyta nacionalinio saugumo/, seka:'nacsaug',
-    kodel:'seka atsakymą apie nacionalinį saugumą (' + GP_TEISE.cit('nacsaugumo_sarasas') + ')' },
+  { re:/^tinkamai uzpildyta ir pasirasyta nacionalinio saugumo/, seka:'deklaracija',
+    kodel:'SPS deklaraciją reikalauja tik nacionalinio saugumo BVPŽ punkte - eilutė seka jo sprendimą (' + GP_TEISE.cit('nacsaugumo_sarasas') + ')' },
   { re:/koordinavimo komisij|coordinat\w* commission/, seka:'komisija',
     kodel:'punktas taikomas tik kai pirkime kreipiamasi į Koordinavimo komisiją' },
   { re:/^uzpildyta tiekejo pasiulymu del deretinu salygu forma/, seka:'derybos-placiau',
@@ -2538,6 +2564,7 @@ function titulinioRiba(Z){
 function sekaAtsakymas(kodas){
   if (kodas === 'zalieji')  return ATS[norm('Jei žalieji reikalavimai nurodomi pirkimo sąlygose')] === true;
   if (kodas === 'nacsaug')  return nacsaugTaip();
+  if (kodas === 'deklaracija') return deklaracijaReikalinga().v;   // T3-M5 (2026-10-21)
   if (kodas === 'komisija') return komisijaTaip();
   if (kodas === 'derybos-placiau') return derybosTaip() && apimtis() !== 'kaina';
   if (kodas === 'be-projekto'){ const sp = sutartiesProjektas(); return sp ? !sp.pridedamas : ATS[norm('Jei Pirkimo metu nėra rengiamas Sutarties projektas')] === true; }
@@ -3001,7 +3028,7 @@ const RINKOS_KONS_KL = 'Ar buvo vykdyta rinkos konsultacija?';
 function priedoEilutesNumatyta(tekstas){
   const t = norm(tekstas);
   if (METODIKOS_EIL_RE.test(t)) return metodikosEiluteLieka();
-  if (/nacionalinio saugumo/.test(t)) return nacsaugTaip();
+  if (/nacionalinio saugumo/.test(t)) return deklaracijaReikalinga().v;   // T3-M5: kai SPS ją mini (BVPŽ punktas)
   if (/deretinu salygu/.test(t))      return derybosTaip() && apimtis() !== 'kaina';
   // Atsakymai į rinkos konsultacijos klausimus (naudotojo sprendimas 2026-10-21): ar konsultacija vyko, žino tik rengėjas - be numatytojo
   if (RINKOS_KONS_RE.test(t)) return null;
@@ -3906,16 +3933,20 @@ function surinktiKlausimus(){
           }
         }
       }
-      const apF = APIMTIS_FORMULES.find(f => f.re.test(nr));
-      if (apF){                                               // derybu formuluotes (Nr. 3, 8)
-        const ap = apimtis();
-        const variantas = apF.variantai.find(v => v.kada === ap);
-        siulyk('I_' + raktas, null, variantas ? variantas.tekstas : null, 'pagal derybų apimtį (1 žingsnis): ' + (variantas ? variantas.kodel : ''));
-        pridek('formuluotes', 'I|' + raktas, trumpas,
+      const apX = apimtiesFormule(n.text);
+      if (apX){                                               // derybu formuluotes (Nr. 3, 8; T3-V9 - pagal 1 žingsnį, 2026-10-21)
+        const { ap, vs, v } = apX, fk = 'I|' + raktas;
+        siulyk('I_' + raktas, null, v ? v.tekstas : null, v ? apimtiesKodel(ap, v) : null);
+        if (v && !NR_KLAUSTI.has('DER|' + fk) && !PATV.has('I_' + raktas) && !TOUCHED.has('I_' + raktas)){
+          K.automatika.push({ dok: trumpas, kas: n.text, veiksmas: `įrašoma „${v.tekstas}“`, kodel: apimtiesKodel(ap, v), keisti: 'derybos', derKey: fk });
+          return;
+        }
+        const rodomi = ap ? vs.filter(x => x.kada === ap) : vs;
+        pridek('formuluotes', fk, trumpas,
           { tekstas:n.text, tipas:'intarpas', raktas, raudonas:n.raudonas, vieta:{ dok:d.trumpas, i:n.i },
-            variantai:apF.variantai.map(v => ({ tekstas:v.tekstas, kodel:v.kodel })),
-            pastaba:variantas ? `Parinkta automatiškai pagal derybų apimtį (${variantas.kodel}).`
-                              : 'Derybų apimčiai formuluotės šablonas nenumato - įrašykite savo.',
+            variantai:rodomi.map(x => ({ tekstas:x.tekstas, kodel:x.kodel })),
+            pastaba:(apimtiesNetinka(apX, ATS['I_' + raktas]) ? `Patikrinkite: „${apX.kaina.tekstas}“ - formuluotė, kai deramasi tik dėl kainos, o 1 žingsnyje pasirinkta - ${APIMTIS_VARD[ap] || ap}. ` : '')
+              + (v ? `Siūloma pagal derybų apimtį (${v.kodel}).` : ap ? apX.f.be : 'Pasirinkite, dėl ko bus deramasi (1 žingsnis), arba įrašykite formuluotę.'),
             komentarai:komentaraiTies(Z, n.i) });
         return;
       }
@@ -4329,7 +4360,7 @@ function spec37Salink(Z, trinti, trintiEiluciu){
 function priedoEilutesKilme(t){
   const n = norm(t);
   if (METODIKOS_EIL_RE.test(n) && kriterijus()) return `pagal vertinimo kriterijų „${KRITERIJU_PAV[kriterijus()]}“ (8.1 p.)`;
-  if (/nacionalinio saugumo/.test(n)) return 'pagal 1 žingsnio atsakymą apie nacionalinį saugumą';
+  if (/nacionalinio saugumo/.test(n)) return deklaracijaReikalinga().kodel;
   if (/deretinu salygu/.test(n)) return 'pagal 1 žingsnio derybų apimtį';
   if (/priimtinu banku/.test(n)) return bankuSarasasReikalingas() ? 'SPS reikalaujama pasiūlymo galiojimo ar sutarties įvykdymo užtikrinimo'
     : (uztikrinimasTaikomas() === null && sutartiesUztikrinimas().taikomas === null ? 'kol neatsakyta, ar SPS reikalaujama užtikrinimo, - nesiūlomas'
@@ -4565,9 +4596,11 @@ function siulymuPasas(K){
         const p = pavClean($('#pavadinimas').value);
         siulyk(key, k, p || null, p ? '1 žingsnio pirkimo pavadinimas' : null);
       } else if (q.lk.tipas === 'min-reikalavimai' || q.lk.tipas === 'derybu-salygos'){
-        const f = APIMTIS_FORMULES.find(x => x.re.test(norm(q.tekstas)));
-        const vr = f && f.variantai.find(x => x.kada === apimtis());
-        siulyk(key, k, vr ? vr.tekstas : null, vr ? 'pagal derybų apimtį (1 žingsnis): ' + vr.kodel : null);
+        // T3-V9 (2026-10-21): su šablono formuluote - „Išspręsta automatiškai“ (formosModelis autoDer), kitaip - klausimas
+        const apX = apimtiesFormule(q.tekstas), vr = apX && apX.v;
+        siulyk(key, k, vr ? vr.tekstas : null, vr ? apimtiesKodel(apX.ap, vr) : null);
+        const x = SIUL.get(vRaktas(key, k));
+        if (x) x.derybosAuto = !!vr;
       }
     });
     q.lk.vietos.forEach((v, k) => { if (v.kopija != null && Array.isArray(ATS[key])) ATS[key][k] = ATS[key][v.kopija]; });
@@ -4941,6 +4974,16 @@ function formosModelis(K){
     autoDal.unshift({ raktas: c.raktas, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: x.reiksme, saltinis: x.saltinis });
     kort.splice(i, 1);
   }
+  // derybų sąlygos ir minimalūs reikalavimai pagal 1 žingsnį (T3-V9, 2026-10-21) - laukai (MVP SPS); formuluotės (kitų SPS) - K.automatika
+  const autoDer = [];
+  for (let i = kort.length - 1; i >= 0; i--){
+    const c = kort[i];
+    if (c.rusis !== 'laukas' || !c.q.lk || !/^(min-reikalavimai|derybu-salygos)$/.test(c.q.lk.tipas) || NR_KLAUSTI.has(c.raktas)) continue;
+    const key = 'B_' + c.raktas, x = SIUL.get(vRaktas(key, 0));
+    if (!x || !x.derybosAuto || TOUCHED.has(key) || PATV.has(key) || PATV.has(vRaktas(key, 0)) || (ATS[key] || [])[0] !== x.reiksme) continue;
+    autoDer.unshift({ raktas: c.raktas, q: c.q, dok: (c.vieta || {}).dok || '', reiksme: x.reiksme, saltinis: x.saltinis });
+    kort.splice(i, 1);
+  }
   const autoSut = [], autoKr = [];
   kort.forEach(c => {
     if (c.rusis !== 'laukas' || !c.q.lk) return;
@@ -4970,7 +5013,7 @@ function formosModelis(K){
   });
   const G = [...grupes.values()].sort((a, b) => a.dokIdx - b.dokIdx || (a.skyrius ? a.skyrius.i : -1) - (b.skyrius ? b.skyrius.i : -1));
   G.forEach(g => g.korteles.sort((a, b) => (a.vieta ? a.vieta.i : 0) - (b.vieta ? b.vieta.i : 0)));
-  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr, autoSut, autoDal, autoKr };
+  return { korteles: kort, grupes: G, priedai: prieduVienetai(K), autoNr, autoSut, autoDal, autoKr, autoDer };
 }
 
 /* Vienetas = vienas atsakymas: { id (lauko id šuoliui), pavadinimas, busena, blokuoja, raktai (PATV), reiksme, saltinis } */
@@ -6204,7 +6247,7 @@ const lkForma = (n, f1, f2, f3) => { const d = n % 10, s = n % 100; return d ===
 const perkeliamiReik = n => lkForma(n, 'perkeliamas', 'perkeliami', 'perkeliama') + ' ' + lkSk(n, 'reikalavimas', 'reikalavimai', 'reikalavimų');
 const privalomuSk = S => klaiduSarasas(S).reduce((a, g) => a + g.vv.length, 0);
 const autoSkaicius = (K, S) => K ? K.autoSakos.length + K.automatika.length + ((S && S.M && S.M.autoNr) || []).length + ((S && S.M && S.M.autoSut) || []).length
-  + ((S && S.M && S.M.autoDal) || []).length + ((S && S.M && S.M.autoKr) || []).length : 0;
+  + ((S && S.M && S.M.autoDal) || []).length + ((S && S.M && S.M.autoKr) || []).length + ((S && S.M && S.M.autoDer) || []).length : 0;
 /* 1 žingsnio neįrašyti duomenys (K4): ne kliūtis - generuoti galima, bet dokumentuose liks tuščia vieta. Sakoma 1 žingsnio įžangoje, 2 žingsnio
    įžangoje ir „Prieš generuojant“ su šuoliu į lauką. Būdas, kalba ir objekto tipas visada turi reikšmę. */
 function z1Trukumai(){
@@ -6687,7 +6730,8 @@ function klausimynas(){
 
   /* Automatika - viskas matoma, nieko nenutylima (pilni tekstai; ilgi - sutraukiami žodžio riboje) */
   const autoNr = (S && S.M && S.M.autoNr) || [], autoSut = (S && S.M && S.M.autoSut) || [], autoDal = (S && S.M && S.M.autoDal) || [], autoKr = (S && S.M && S.M.autoKr) || [];
-  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length + autoSut.length + autoDal.length + autoKr.length;
+  const autoDer = (S && S.M && S.M.autoDer) || [];
+  const autoSk = K.autoSakos.length + K.automatika.length + autoNr.length + autoSut.length + autoDal.length + autoKr.length + autoDer.length;
   if (autoSk){
     h += `<details class="auto" id="lkAuto"${autoAtverta ? ' open' : ''}><summary>Išspręsta automatiškai (${autoSk}) - peržiūrėti</summary><div class="auto-lst">`;
     // tai, ką galima pakeisti (objekto apžiūra), - sąrašo pradžioje ir su mygtuku
@@ -6695,6 +6739,7 @@ function klausimynas(){
       : x.keisti === 'zal' ? ` <button type="button" class="sec lk-auto-k" data-zal="perziureti">Peržiūrėti žaliųjų reikalavimų perkėlimą</button>`
       : x.keisti === 'kvl' ? ` <button type="button" class="sec lk-auto-k" data-kvl="perziureti">Peržiūrėti kvalifikacijos reikalavimų lentelę</button>`
       : x.keisti === 'dalys' ? ` <button type="button" class="sec lk-auto-k" data-dalys="klausti" aria-label="Keisti - atsakysiu pats, ar pirkimo objektas skaidomas į dalis">Keisti - atsakysiu pats</button>`
+      : x.keisti === 'derybos' ? ` <button type="button" class="sec lk-auto-k" data-der-klausti="${esc(x.derKey)}" aria-label="Keisti - įrašysiu formuluotę pats">Keisti</button>`
       : x.keisti === 'ebvpd' ? (EBVPD_TRINTI ? ` <button type="button" class="sec lk-auto-k" data-ebvpd="palikti">Grąžinti pastabą</button>`
         : ` <button type="button" class="sec lk-auto-k" data-ebvpd="trinti">Kvalifikacijos dokumentai teikiami kartu su pasiūlymu - pastabą pašalinti</button>`) : '';
     const eile = arr => arr.filter(x => x.keisti).concat(arr.filter(x => !x.keisti));
@@ -6706,8 +6751,12 @@ function klausimynas(){
       h += `<div><span class="n">${esc(dokTrumpas(a.dok))}</span> ${ilgasTekstas(a.kas, 200)}: <b>${esc(a.veiksmas)}</b>
         <span class="n">${esc(a.kodel)}</span>${keiciama(a)}</div>`;
     });
+    autoDer.forEach(a => {
+      h += `<div data-auto-der="${esc(a.raktas)}"><span class="n">${esc(dokTrumpas(a.dok))}</span> ${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>${esc(a.reiksme)}</b>
+        <span class="n">${esc(a.saltinis)}</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(a.raktas)}" aria-label="Keisti - įrašysiu formuluotę pats (${esc(a.reiksme)})">Keisti</button></div>`;
+    });
     autoDal.forEach(a => {
-      h += `<div data-auto-dal="${esc(a.raktas)}"><span class="n">${esc(dokTrumpas(a.dok))}</span> ${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>${esc(a.reiksme)}</b>
+      h += `<div data-auto-dal=""${esc(a.raktas)}"><span class="n">${esc(dokTrumpas(a.dok))}</span> ${ilgasTekstas(String(a.q.tekstas).replace(/[\s.;:]+$/, ''), 200)}: <b>${esc(a.reiksme)}</b>
         <span class="n">${esc(a.saltinis)}</span> <button type="button" class="sec lk-auto-k" data-nr-klausti="${esc(a.raktas)}" aria-label="Keisti dalių skaičių (${esc(a.reiksme)})">Keisti</button></div>`;
     });
     autoNr.forEach(a => {
@@ -8335,7 +8384,7 @@ async function gaukBuf(url){
 const prieduTinka = budas => PRIEDAI.filter(p => (p.seimos.includes('*') || p.seimos.includes(budas))
   && (!p.rezimas || p.rezimas === teisesRezimas()));
 function prieduNumatyta(p){
-  if (p.id === 'NACSAUGUMAS' || p.id === 'NACSAUGUMASVPI') return nacsaugTaip();
+  if (p.id === 'NACSAUGUMAS' || p.id === 'NACSAUGUMASVPI') return deklaracijaReikalinga().v;
   if (p.id === 'DERYBOS')     return derybosTaip() && apimtis() !== 'kaina';
   return !!p.numatytas;
 }
@@ -8405,7 +8454,7 @@ function prieduNumatytujuDerink(){
   if (PRIEDU_DERINIMAS) return PRIEDU_DERINIMAS;
   if (PRIEDU_KRAUNAMA || !DOK.length) return Promise.resolve(false);
   const eil = prieduEiluciuTekstai();
-  const keisti = ['SUTARTYS', 'SPECIALISTAI', 'BANKAI'].some(id => {
+  const keisti = ['SUTARTYS', 'SPECIALISTAI', 'BANKAI', 'NACSAUGUMAS', 'NACSAUGUMASVPI'].some(id => {
     if (PRIEDU_TOUCHED.has(id) || !Object.prototype.hasOwnProperty.call(PRIEDU_PASIRINKIMAS, id)) return false;
     const m = PRIEDO_ATITIKMUO.find(a => a.id === id), e = m && eil.find(t => m.re.test(norm(t)));
     return !!e && priedoEilutesNumatyta(e) !== !!PRIEDU_PASIRINKIMAS[id];
@@ -8447,7 +8496,7 @@ async function kraukDokumentus(){
       // Siūloma (nepatvirtinta), kol žmogus nepažymės ar nepatvirtins
       SIUL.set('A|' + p.id, { reiksme: PRIEDU_PASIRINKIMAS[p.id], saltinis: eilute ? priedoEilutesKilme(eilute)
         : juoda ? 'SPS priedų sąraše šis priedas nurodytas visada'
-        : (p.id === 'NACSAUGUMAS' || p.id === 'NACSAUGUMASVPI') ? 'pagal 1 žingsnio atsakymą apie nacionalinį saugumą'
+        : (p.id === 'NACSAUGUMAS' || p.id === 'NACSAUGUMASVPI') ? deklaracijaReikalinga().kodel
         : p.id === 'DERYBOS' ? 'pagal 1 žingsnio derybų apimtį' : (p.numatytas ? 'priedų registre - numatytasis' : 'priedų registre - nenumatytas') });
     }
     if (PRIEDU_PASIRINKIMAS[p.id]){
@@ -9908,7 +9957,8 @@ window.SUTARTIES_BLOKAS = window.GP_SUTARTIES_BLOKAS ? GP_SUTARTIES_BLOKAS.mount
     kalba: $('input[name=kalba]:checked').value,
     rezimas: teisesRezimas(),
     salyguSeima: seima(),
-    budas: $('#budas').value
+    budas: $('#budas').value,
+    verte: verteEUR()   // smulkių darbų sutartis be klausimo - tik mažos vertės darbams (T3-M16, 2026-10-21)
   })
 }) : null;
 
@@ -10558,6 +10608,15 @@ function kontekstas(){
   el.hidden = false;
 }
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#ktKeisti')) rodyk(1); });
+/* Derybų formuluotė (T3-V9): „Keisti“ - klausiama kortele, siūloma ta pati formuluotė */
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-der-klausti]');
+  if (!b) return;
+  const fk = b.getAttribute('data-der-klausti');
+  NR_KLAUSTI.add('DER|' + fk); klausimynas();
+  const el = document.getElementById(lkId('formuluote|' + fk));
+  if (el){ rodykKortele(el); el.scrollIntoView({ block: 'center' }); const f = el.querySelector('input, textarea'); if (f) f.focus(); }
+});
 document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('[data-nr-klausti]');
   if (!b) return;
