@@ -678,17 +678,35 @@ async function testaiEtapai(){
     lygu(W.eval("strategy.suggestTargets('c')").eiluciuTikslas, 0, "su bendra kaina eilučių tikslo nėra");
   });
 
-  await testas("Įkainių matrica ekrane: žymos tekstu ir spalva, rodymas procentais, filtras „tik anomalijos“, rikiavimas pagal svertą, langelio detalės, slenksčių langas įrašo nustatymus", async () => {
+  await testas("Įkainių matrica ekrane (2026-10-21): langelyje įkainis, ženklas ir nuokrypis procentais be žodinių žymų, žyma - mygtuko pavadinime ir legendoje, procentų pagrindas (mediana, planuojamas, mažiausias), filtras „tik anomalijos“, rikiavimas pagal svertą, langelio detalės, slenksčių langas įrašo nustatymus", async () => {
     analitikosProjektas();
     W.eval("APP.state.offers.b.p4 = { unitPrice: 450 }; APP.state.offers.c.p4 = { unitPrice: 450 }; render.all();");
     W.go("analysis"); await iki(() => D.querySelector("#ikainiuMatrica .mc__table"), "matrica");
     const td = k => D.querySelector(`[data-mc="${k}"]`).closest("td");
     lygu([td("b|p1").classList.contains("mc--brangiausias"), td("b|p3").classList.contains("mc--zemas"), td("a|p1").classList.contains("mc--min"), td("a|p4").classList.contains("mc--min")],
       [true, true, true, true], "langelių klasės");
-    lygu([norm(td("b|p1").textContent), td("b|p3").querySelector("small").textContent], ["26,00 €brangiausias", "rizikingai žemas"], "žyma tekstu");
+    const btn = k => D.querySelector(`[data-mc="${k}"]`), tekstas = k => norm(btn(k).textContent);
+    lygu(["b|p1", "b|p3", "a|p1", "c|p1", "a|p4"].map(tekstas), ["26,00 €▲+23,8%", "3 000,00 €!-40,0%", "20,00 €▼-4,8%", "21,00 €0,0%", "450,00 €▼0,0%"],
+      "langelyje - įkainis, ženklas ir nuokrypis nuo medianos (numatyta), be žodžių");
+    tiesa(!D.querySelector("#ikainiuMatrica .mc__btn small") && ![...D.querySelectorAll("#ikainiuMatrica .mc__btn")].some(b => /[a-ząčęėįšųūž]{3}/i.test(b.textContent)), "langeliuose nėra žodinių žymų");
+    lygu(["b|p1", "b|p3", "c|p1"].map(k => norm(btn(k).getAttribute("aria-label"))),
+      ["Beta, Kabelis: 26,00 €, +23,8% nuo medianos, brangiausias", "Beta, Montavimas: 3 000,00 €, -40,0% nuo medianos, rizikingai žemas", "Gama, Kabelis: 21,00 €, 0,0% nuo medianos"],
+      "žyma žodžiu - mygtuko pavadinime");
+    lygu([btn("b|p1").querySelector(".mc__p").getAttribute("aria-hidden"), btn("c|p1").querySelector(".mc__p").classList.contains("mc__p--tylus"), btn("b|p1").querySelector(".mc__p").classList.contains("mc__p--tylus")],
+      ["true", true, false], "procentų eilutė - tik akims, įprastas - pritildytas");
     lygu(D.querySelectorAll("#ikainiuMatrica tbody tr").length, 4, "eilučių");
-    const sel = D.getElementById("matricaRodymas"); sel.value = "med"; sel.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
-    tiesa(/\+23,8%/.test(td("b|p1").textContent), "procentai nuo medianos: " + td("b|p1").textContent);
+    const sel = D.getElementById("matricaRodymas");
+    lygu([sel.value, [...sel.options].map(x => x.value), D.querySelector('label[for="matricaRodymas"]').textContent], ["med", ["med", "plan", "min"], "Nuokrypis nuo"], "procentų pagrindas - matomas pavadinimas, numatyta mediana");
+    sel.value = "plan"; sel.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
+    lygu(["b|p1", "a|p1", "b|p3"].map(tekstas), ["26,00 €▲+30,0%", "20,00 €▼0,0%", "3 000,00 €!-40,0%"], "nuo planuojamo");
+    tiesa(/\+30,0% nuo planuojamo/.test(norm(btn("b|p1").getAttribute("aria-label"))), "pavadinime - pagrindas");
+    sel.value = "min"; sel.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
+    lygu(["b|p1", "b|p3", "c|p3"].map(tekstas), ["26,00 €▲+30,0%", "3 000,00 €!0,0%", "5 200,00 €▲+73,3%"], "nuo mažiausio");
+    sel.value = "med"; sel.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
+    const leg = [...D.querySelectorAll("#ikainiuMatrica .mc-leg li")];
+    lygu(leg.map(li => li.querySelector(".mc-leg__s").className.replace("mc-leg__s", "").trim() + " " + li.querySelector(".mc-leg__s").textContent),
+      ["mc--min ▼", "mc--brangiausias ▲", "mc--aukstas △", "mc--zemas !", "mc--vienintelis ○", "mc--truksta -"], "legenda: tos pačios spalvos ir ženklai kaip langeliuose");
+    tiesa(/bent 15 % virš pasiūlymų medianos arba 15 % virš planuojamo/.test(leg[2].textContent) && /Po įkainiu - nuokrypis nuo medianos/.test(D.getElementById("ikainiuMatrica").textContent), "legendos tekstai");
     const chk = D.getElementById("matricaTikAnomalijos"); chk.checked = true; chk.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
     lygu(D.querySelectorAll("#ikainiuMatrica tbody tr").length, 3, "tik anomalijos - be „Mokymai“");
     const rik = D.getElementById("matricaRikiuoti"); rik.value = "svertas"; rik.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
@@ -704,6 +722,83 @@ async function testaiEtapai(){
     lygu([S().settings.anomalijos.zemasMediana, S().settings.anomalijos.zemasPlanas], [50, 50], "įrašyta");
     tiesa(td("b|p3").classList.contains("mc--min"), "po slenksčio - mažiausias");
     tiesa(/bent 50 % žemiau medianos/.test(D.getElementById("ikainiuMatrica").textContent), "legenda su naujais slenksčiais");
+  });
+
+  await testas("Matricos langelis, kai žymą nustatė kitas palyginimas (2026-10-21): aukštas pagal planuojamą - rodomas nuokrypis nuo planuojamo su raide P, rizikingai žemas pagal medianą pasirinkus planuojamą - su raide M; variklis sako, kas nustatė žymą; paaiškinime - priežastis su slenksčiu", async () => {
+    analitikosProjektas();
+    W.eval(`APP.state.positions[1].plannedUnitPrice = 250;
+      APP.state.positions.push({ id: 'p6', name: 'Jungtys', unit: 'vnt', quantity: 10, plannedUnitPrice: 900 });
+      APP.state.offers.a.p6 = { unitPrice: 1000 }; APP.state.offers.b.p6 = { unitPrice: 700 }; APP.state.offers.c.p6 = { unitPrice: 1000 }; render.all();`);
+    const M = W.eval("analitika.matrica(APP.state)"), l = (p, t) => M.pozicijos.find(x => x.id === p).langeliai[t];
+    lygu([l("p2", "a").zyma, l("p2", "a").pagal, l("p6", "b").zyma, l("p6", "b").pagal, l("p3", "b").pagal, l("p1", "b").pagal, l("p1", "a").pagal],
+      ["aukstas", ["plan"], "zemas", ["med"], ["med", "plan"], [], []], "kas nustatė žymą");
+    W.go("analysis"); await iki(() => D.querySelector("#ikainiuMatrica .mc__table"), "matrica"); await lauk(120);
+    const btn = k => D.querySelector(`[data-mc="${k}"]`), tekstas = k => norm(btn(k).textContent), sel = D.getElementById("matricaRodymas");
+    const rodyk = async v => { sel.value = v; sel.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30); };
+    lygu(["a|p2", "b|p6", "b|p3", "c|p1"].map(tekstas), ["300,00 €△+20,0%P", "700,00 €!-30,0%", "3 000,00 €!-40,0%", "21,00 €0,0%"], "nuo medianos: aukštas pagal planuojamą - su P");
+    tiesa(/: 300,00 €, \+20,0% nuo planuojamo, aukštas$/.test(norm(btn("a|p2").getAttribute("aria-label"))) && btn("a|p2").querySelector(".mc__b").textContent === "P", "pavadinime - rodomo nuokrypio pagrindas");
+    await rodyk("plan");
+    lygu(["a|p2", "b|p6", "b|p3"].map(tekstas), ["300,00 €△+20,0%", "700,00 €!-30,0%M", "3 000,00 €!-40,0%"], "nuo planuojamo: rizikingai žemas pagal medianą - su M");
+    tiesa(/-30,0% nuo medianos, rizikingai žemas$/.test(norm(btn("b|p6").getAttribute("aria-label"))), "M pavadinime");
+    await rodyk("min");
+    lygu(["a|p2", "b|p6"].map(tekstas), ["300,00 €△+3,4%", "700,00 €!0,0%"], "nuo mažiausio - visada pasirinktas pagrindas, be raidžių");
+    tiesa(!D.querySelector("#ikainiuMatrica .mc__b"), "raidžių nėra");
+    await rodyk("med");
+    btn("a|p2").dispatchEvent(new W.MouseEvent("mouseover", { bubbles: true }));
+    tiesa(/Žymą nustatė: nuo planuojamo \+20,0% \(slenkstis 15 %\)/.test(norm(D.getElementById("mcTip").textContent)), "priežastis: " + D.getElementById("mcTip").textContent);
+    btn("b|p3").dispatchEvent(new W.MouseEvent("mouseover", { bubbles: true }));
+    tiesa(/Žymą nustatė: nuo medianos -40,0% \(slenkstis 25 %\) ir nuo planuojamo -40,0% \(slenkstis 30 %\)/.test(norm(D.getElementById("mcTip").textContent)), "dvi priežastys");
+    btn("b|p1").dispatchEvent(new W.MouseEvent("mouseover", { bubbles: true }));
+    tiesa(!/Žymą nustatė/.test(D.getElementById("mcTip").textContent), "brangiausias - be slenksčio priežasties");
+    tiesa(/P - nuo planuojamo įkainio, M - nuo pasiūlymų medianos/.test(D.getElementById("ikainiuMatrica").textContent), "legenda paaiškina raides");
+  });
+
+  await testas("Matricos langelio iššokantis paaiškinimas (2026-10-21): užvedus pelę - žyma, nuokrypiai nuo medianos, planuojamo ir mažiausio, svertas ir ką daryti; ant jo galima užvesti pelę, Esc, slinkus ir perpiešus - paslepiamas; vienintelis ir trūkstamas įkainis, ekranavimas, fokusas po paspaudimo, EN", async () => {
+    analitikosProjektas();
+    W.eval("APP.state.suppliers[1].name = '<b>Beta</b>'; render.all();");
+    W.go("analysis"); await iki(() => D.querySelector("#ikainiuMatrica .mc__table"), "matrica"); await lauk(120);   // go() perpiešia analizę po 60 ms
+    const btn = k => D.querySelector(`[data-mc="${k}"]`), tip = () => D.getElementById("mcTip");
+    const uzvesk = b => b.dispatchEvent(new W.MouseEvent("mouseover", { bubbles: true }));
+    const nuvesk = (b, kur) => b.dispatchEvent(new W.MouseEvent("mouseout", { bubbles: true, relatedTarget: kur || D.body }));
+    tiesa(!tip() || tip().hidden, "iš pradžių nerodomas");
+    uzvesk(btn("b|p1"));
+    const t = tip();
+    tiesa(t && !t.hidden && t.getAttribute("role") === "tooltip", "užvedus - rodomas");
+    const tx = norm(t.textContent);
+    ["Brangiausias įkainis tarp tiekėjų", "Įkainis26,00 €", "Nuo pasiūlymų medianos (21,00 €)+23,8%", "Nuo planuojamo (20,00 €)+30,0%", "Nuo mažiausio (20,00 €)+30,0%", "Derybų svertas600,00 €", "Akcentuoti derybose"]
+      .forEach(x => tiesa(tx.includes(x), "paaiškinime nėra „" + x + "“: " + tx));
+    tiesa(t.innerHTML.includes("&lt;b&gt;Beta&lt;/b&gt;") && !t.querySelector("b"), "tiekėjo pavadinimas - tekstas");
+    const r = t.getBoundingClientRect();
+    tiesa(r.left >= 0 && r.top >= 0 && r.right <= W.innerWidth + 1 && getComputedStyle(t).position === "fixed", "lange, fixed: " + JSON.stringify(r));
+    nuvesk(btn("b|p1"), t); await lauk(220);
+    tiesa(!t.hidden, "pelę perkėlus ant paaiškinimo - lieka");
+    t.dispatchEvent(new W.MouseEvent("mouseleave")); await lauk(220);
+    tiesa(t.hidden, "nuvedus nuo paaiškinimo - paslepiamas");
+    uzvesk(btn("b|p3")); nuvesk(btn("b|p3")); await lauk(40);
+    tiesa(!t.hidden, "paslepiama ne iškart (galima perkelti pelę)"); await lauk(200); tiesa(t.hidden, "po pauzės - paslepiama");
+    uzvesk(btn("b|p3")); nuvesk(btn("b|p3")); await lauk(40); uzvesk(btn("b|p3")); await lauk(220);
+    tiesa(!t.hidden, "pelę greitai grąžinus ant to paties langelio - lieka"); nuvesk(btn("b|p3")); await lauk(220);
+    uzvesk(btn("b|p3"));
+    tiesa(/Rizikingai žemas įkainis - patikrinti apimtį/.test(t.textContent) && /Prašyti pagrįsti įkainį/.test(t.textContent) && !/Derybų svertas/.test(t.textContent), "rizikingai žemas, be sverto");
+    D.dispatchEvent(new W.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); tiesa(t.hidden, "Esc - paslepia");
+    uzvesk(btn("a|p4"));
+    lygu([norm(btn("a|p4").textContent), /Įkainojo vienas tiekėjas - palyginimo nėra/.test(t.textContent), /Nuo pasiūlymų medianosPalyginimo nėra|Nuo pasiūlymų medianospalyginimo nėra/.test(norm(t.textContent)), /Nuo mažiausio/.test(t.textContent)],
+      ["450,00 €○", true, true, false], "vienintelis - be procento nuo medianos");
+    uzvesk(btn("b|p4"));
+    lygu([norm(btn("b|p4").textContent), /Įkainio nėra/.test(t.textContent), /Prašyti pateikti įkainį/.test(t.textContent), /Įkainis/.test(t.textContent.replace("Įkainio nėra", ""))], ["-", true, true, false], "trūksta");
+    W.dispatchEvent(new W.Event("scroll")); tiesa(t.hidden, "slinkus - paslepiamas");
+    uzvesk(btn("b|p1")); W.matricosPatarimas.rodyk(btn("b|p1")); btn("b|p1").dispatchEvent(new W.FocusEvent("focusout", { bubbles: true })); tiesa(t.hidden, "praradus fokusą - paslepiamas");
+    uzvesk(btn("b|p1")); btn("b|p1").click(); await lauk(30);
+    lygu([D.activeElement && D.activeElement.dataset.mc, btn("b|p1").getAttribute("aria-pressed")], ["b|p1", "true"], "paspaudus fokusas lieka tame pačiame langelyje");
+    uzvesk(btn("c|p1")); W.eval("renderMatrica()"); tiesa(t.hidden, "perpiešus - paslepiamas");
+    tiesa([...D.styleSheets].some(sh => [...sh.cssRules].some(rl => rl.media && /print/.test(rl.media.mediaText) && /\.mc-tip/.test(rl.cssText) && /none/.test(rl.cssText))), "spausdinant nerodomas");
+    W.setLang("en"); await lauk(60); W.go("analysis"); await lauk(60);
+    lygu(norm(btn("b|p1").getAttribute("aria-label")), "<b>Beta</b>, Kabelis: €26.00, +23.8% vs median, highest", "EN pavadinimas");
+    uzvesk(btn("b|p1"));
+    const te = norm(tip().textContent);
+    tiesa(/The highest unit price among suppliers/.test(te) && /Vs the median of the offers \(€21.00\)\+23.8%/.test(te) && /Push on it in the negotiation/.test(te), "EN paaiškinimas: " + te);
+    tiesa(/Below the unit price - the deviation vs median/.test(D.getElementById("ikainiuMatrica").textContent) && D.querySelector('label[for="matricaRodymas"]').textContent === "Deviation from", "EN legenda ir laukas");
+    W.setLang("lt"); await lauk(60); localStorage.removeItem("ppnegotiation.lang");   // kiti testai šiame rėmelyje - lietuviškai
   });
 
   await testas("Rekomendacijos strategijos vaizde: skirtukai tiekėjams, keturios kortelės, „Į užkoduotą DI užklausą“ - tiekėjo šablonas su įkainių analize procentais, be sumų; Excel - lapai „Įkainių matrica“ ir „Rekomendacijos“", async () => {
