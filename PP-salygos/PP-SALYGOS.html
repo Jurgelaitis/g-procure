@@ -2153,6 +2153,38 @@ function apziurosDatos(paras, Z, REZ){
   });
   return out;
 }
+/* Šablono raudonos pavyzdinės reikšmės (PAVYZDYS_RE ir trukmė žodžiu LT ir EN - „8 (aštuoni) metai“, „8 (eight)“) - 2026-10-22, T4-K1: DPS
+   sąlygų 3.4 p. įtraukus šaką visa pastraipa būdavo pajuodinama ir pavyzdys tapdavo DPS galiojimo terminu (neklausta, patikra nerodė).
+   Užfiksuojama PRIEŠ pildant vietas (gretimi raudoni runai - viena atkarpa); po pajuodinimo ta pati atkarpa vėl raudona, jei jos tekstas
+   nepakeistas (įrašyta reikšmė ar užtikrinimo dydis - nedažoma). */
+const TRUKME_PAVYZDYS = /^\s*\d+\s*\([a-ząčęėįšųūž]+\)\s*(metai|metų|mėn\S*|dien\S*|years?|months?|days?)?\s*$/i;
+function raudoniPavyzdziai(paras){
+  const out = [], W = GPDocx.NS_W;
+  const raud = r => GPDocx.els(r, 'color').some(c => /^(FF0000|C00000|ED1C24)$/i.test(c.getAttributeNS(W, 'val') || c.getAttribute('w:val') || ''));
+  paras.forEach((p, i) => {
+    if (!p) return;
+    let pos = 0, seg = null;
+    const baik = () => { if (seg && seg.t.trim() && (TRUKME_PAVYZDYS.test(seg.t) || arPavyzdys(seg.t.trim()))) out.push({ i, nuo: seg.nuo, iki: seg.nuo + seg.t.length, t: seg.t }); seg = null; };
+    for (const r of GPDocx.els(p, 'r')){
+      const t = GPDocx.els(r, 't').map(x => x.textContent).join('');
+      if (!t) continue;
+      if (raud(r)){ if (!seg) seg = { nuo: pos, t: '' }; seg.t += t; } else baik();
+      pos += t.length;
+    }
+    baik();
+  });
+  return out;
+}
+function pavyzdziaiRaudoni(paras, P, juodintos, nedazyti){
+  const out = [];
+  P.forEach(x => {
+    const p = paras[x.i];
+    if (!p || !p.parentNode || !juodintos.has(x.i) || nedazyti.has(x.i)) return;
+    if (GPDocx.els(p, 't').map(t => t.textContent).join('').slice(x.nuo, x.iki) !== x.t) return;   // tekstas pakeistas - reikšmė įrašyta
+    if (nudazykRaudonai(p, x.nuo, x.iki)) out.push(x.t.replace(/\s+/g, ' ').trim());
+  });
+  return out;
+}
 /* Teksto atkarpa [start, end) pastraipoje - raudonai (runai skaidomi ties ribomis; jau raudoni neliečiami). Spalva įterpiama rPr
    elementų tvarka (prieš w:spacing ... w:lang), kaip reikalauja Word schema. */
 const RPR_PO_SPALVOS = ['spacing', 'w', 'kern', 'position', 'sz', 'szCs', 'highlight', 'u', 'effect', 'bdr', 'shd', 'fitText', 'vertAlign', 'rtl', 'cs', 'em', 'lang', 'eastAsianLayout', 'specVanish', 'oMath'];
@@ -7106,6 +7138,8 @@ async function generuotiViena(d, REZ){
   // 4d. Juodos alternatyvos „A / B“ (K3): lieka pasirinktasis variantas; neatsakius - kaip šablone (patikra jas parodys)
   const juodosAlt = juoduAlternatyvuTaikymas(paras, d, trinti);
 
+  // 4e. Šablono raudonos pavyzdinės reikšmės - prieš pildymą (T4-K1; po pajuodinimo jos vėl dažomos raudonai)
+  const pavyzdziai = forma ? [] : raudoniPavyzdziai(paras), pavyzdziuNedazyti = new Set();
   // 5. Tuscios vietos. Formose pildome TIK pirkimo pavadinima antrasteje -
   //    kitos vietos priklauso tiekejui.
   let pildyta = 0;
@@ -7345,7 +7379,7 @@ async function generuotiViena(d, REZ){
       // pasiūlymo galiojimo užtikrinimo dydis ir garantijos terminas - iš klausimo kortelės (T3-V7); kitos pavyzdinės reikšmės lieka raudonos
       if (UZT_SUMOS_RE.test(n.text || '') && uztikrinimasTaikomas() === true){
         const r = uztSumaIrasyk(paras[n.i]);
-        if (r){ juodinti.add(n.i); uztIrasyta.push(r); intTeksto++; }
+        if (r){ juodinti.add(n.i); uztIrasyta.push(r); intTeksto++; pavyzdziuNedazyti.add(n.i); }
       }
       // pavyzdine reiksme lieka raudona - rengejas iraso tikra (patikra rodo kaip neisspresta)
     } else juodinti.add(n.i);
@@ -7395,7 +7429,9 @@ async function generuotiViena(d, REZ){
   });
   // Neužpildytas laužtinis nurodymas įtrauktos šakos pastraipoje iki 2026-10-05 būdavo pajuodinamas kartu su šaka (DPS sąlygų 2.15 p.)
   // ir dokumente likdavo kaip tekstas, o patikra jo nematė - dabar lieka raudonas.
-  const nj = GPGen.juodinti(paras, [...juodinti].filter(i => !trinti.has(i) && !likoNurodymas.has(i)));
+  const juodintos = new Set([...juodinti].filter(i => !trinti.has(i) && !likoNurodymas.has(i)));
+  const nj = GPGen.juodinti(paras, [...juodintos]);
+  const pavyzdziaiLiko = pavyzdziaiRaudoni(paras, pavyzdziai, juodintos, pavyzdziuNedazyti);   // T4-K1
   const apzDatos = forma ? [] : apziurosDatos(paras, Z, REZ);   // PO pajuodinimo: pavyzdinės apžiūros datos - raudonos (T3-K2)
   lenteles.forEach(l => GPDocx.deleteTableAfter(doc, paras[l.i], l.kiek, l.numeriai));
   lenteles2.forEach(l => GPDocx.deleteNumberedTable(doc, paras[l.i], l.numeris));
@@ -7602,7 +7638,7 @@ async function generuotiViena(d, REZ){
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, prieduNr: prNr, juodosAlt, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaZal, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
-                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, spec37, antrastesLent: antrLent.dalys, eilNuorodos, apzDatos, uztIrasyta, eilNumeriai,
+                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, spec37, antrastesLent: antrLent.dalys, eilNuorodos, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
                    esminiuNuorodos: esminiuNuor.map(x => ({ buvo: x.buvo, tapo: skyriausNr ? x.tapo.split(SKYRIAUS_ZYMA).join(skyriausNr) : x.tapo.split(SKYRIAUS_ZYMA).join('___') })) } };
 }
 
@@ -8070,6 +8106,10 @@ function rodykRezultata(rez){
   const ad = rez.filter(r => r.stats && r.stats.apzDatos && r.stats.apzDatos.length);
   if (ad.length) h += `<div class="audit no" id="apziurosDatos" style="margin-top:10px"><b>Objekto apžiūros datos - įrašykite savo:</b> ${ad.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.apzDatos.map(x => `„${esc(x)}“`).join(', ')}`).join('; ')}.
     Tai šablono pavyzdinės datos; dokumente jos paliktos raudonos - Word programoje įrašykite, iki kada tiekėjai turi kreiptis dėl apžiūros ir kada ji vyks.</div>`;
+  // šablono pavyzdinės reikšmės pasirinktoje šakoje (T4-K1, 2026-10-22) - paliktos raudonos
+  const pvz = rez.filter(r => r.stats && r.stats.pavyzdziaiLiko && r.stats.pavyzdziaiLiko.length);
+  if (pvz.length) h += `<div class="audit no" id="pavyzdziaiPatikra" style="margin-top:10px"><b>Šablono pavyzdinės reikšmės - įrašykite savo:</b> ${pvz.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.pavyzdziaiLiko.map(x => `„${esc(x)}“`).join(', ')}`).join('; ')}.
+    Tai pavyzdžiai iš šablono (pvz. DPS galiojimo terminas); dokumente jie palikti raudoni - Word programoje įrašykite šio pirkimo reikšmes.</div>`;
   // SPS lentelės eilutės nuorodos, perskaičiuotos pašalinus ankstesnes eilutes (T3-K1, 2026-10-21)
   // pasiūlymo galiojimo užtikrinimas (T3-V7): įrašyta iš klausimo arba - atsakius „Taip“ be reikšmių - lieka raudoni pavyzdžiai
   const uzs = rez.filter(r => r.stats && r.stats.uztIrasyta && r.stats.uztIrasyta.length);
