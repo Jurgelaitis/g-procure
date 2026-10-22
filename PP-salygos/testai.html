@@ -11802,6 +11802,59 @@ async function testai1022d(){
       "sutarties elementai netikrinti: " + sp2.map(x => x.id + ":" + x.busena).join(", "));
   });
 }
+/* 2026-10-22: tabuliacija po numerio - numeris platesnis už pastraipos tabuliavimo žymą (Pages patikra: TSD SPS 2.10-2.12 p.) */
+async function testai1022e(){
+  dabartine = grupe("Tabuliacija po numerio (2026-10-22): numeris, platesnis už pastraipos tabuliavimo žymą ar kabantį atitraukimą („2.10.“), gauna žymą už savęs; trumpesnių numerių ir pastraipų be žymų išdėstymas nekeičiamas");
+  const xd = xml => new W.DOMParser().parseFromString(xml, "application/xml");
+  const A = (el, n) => el ? (el.getAttributeNS(NSW, n) || el.getAttribute("w:" + n)) : null;
+  const vaik = (el, n) => el ? [...el.childNodes].filter(c => c.nodeType === 1 && c.localName === n) : [];
+  /* nepriklausoma patikra: kūno pastraipos „N.N.<tab>“ - numerio plotis Arial matais, pradžia iš atitraukimo, žymos */
+  function pastraipos(xml){
+    const out = [];
+    for (const p of xd(xml).getElementsByTagNameNS(NSW, "p")){
+      const ppr = vaik(p, "pPr")[0];
+      let s = "", r0 = null;
+      for (const el of p.getElementsByTagNameNS(NSW, "*")){
+        if (ppr && ppr.contains(el)) continue;
+        if (el.localName === "t"){ if (!r0 && el.textContent) r0 = el.parentNode; s += el.textContent; }
+        else if (el.localName === "tab"){ s += "\t"; break; }
+        else if (/^(br|cr|drawing|pict|object|sym)$/.test(el.localName)) break;
+        if (s.length > 20) break;
+      }
+      const m = /^(\d+(?:\.\d+)*\.?)\t$/.exec(s);
+      if (!m || !ppr) continue;
+      const szE = (r0 && vaik(vaik(r0, "rPr")[0], "sz")[0]) || vaik(vaik(ppr, "rPr")[0], "sz")[0];
+      const sz = +(A(szE, "val") || 20);
+      const w = [...m[1]].reduce((a, c) => a + (c === "." ? 278 : 556), 0) * sz / 100;
+      const ind = vaik(ppr, "ind")[0], left = +(A(ind, "left") || A(ind, "start") || 0), hang = +(A(ind, "hanging") || 0), first = +(A(ind, "firstLine") || 0);
+      const zymos = vaik(vaik(ppr, "tabs")[0], "tab").filter(t => A(t, "val") !== "clear").map(t => +A(t, "pos"));
+      out.push({ nr: m[1], galas: left - hang + first + w, zymos, hang, left });
+    }
+    return out;
+  }
+  const isaugo = x => (x.zymos.length || x.hang) && !x.zymos.some(z => z > x.galas) && !(x.hang && x.left > x.galas);
+
+  await testas("TSD LT SPS (darbai): 2.10-2.12 p. - žyma 567 už numerio (šablone 426), 2.9 p. žymos kaip šablone; nė vienoje pastraipoje numeris nebeišauga už žymų", async () => {
+    const docs = await generuokSu({ budas: "T-SD", tipas: "darbai" });
+    const P = pastraipos(docs.TSD_LT_SPS.xml);
+    const dvi = P.filter(x => /^2\.1[0-2]\.$/.test(x.nr));
+    tiesa(dvi.length >= 2 && dvi.every(x => x.zymos.includes(567) && x.zymos.includes(426)), "2.10-2.12: " + JSON.stringify(dvi));
+    const p29 = P.find(x => x.nr === "2.9.");
+    tiesa(p29 && JSON.stringify(p29.zymos) === JSON.stringify([0, 567]), "2.9 p. žymos pakeistos: " + JSON.stringify(p29));
+    lygu(P.filter(isaugo).map(x => x.nr), [], "numeris už žymų");
+  });
+
+  await testas("Kiti paketai (AK LT ir LT/EN, MVP LT, ND LT, DPS LT): numeris už žymų nebelieka nė vienoje pastraipoje; pastraipų tekstas nepakito", async () => {
+    for (const [o, dok] of [[{ budas: "T-AK" }, "AK_LT_SPS"], [{ budas: "T-AK", kalba: "LT_EN" }, "AK_LTEN_SPS"], [{ budas: "MV-SAB" }, "MVP_LT_SPS"], [{ budas: "S-ND" }, "ND_LT_SPS"], [{ budas: "DPS" }, "DPSK_LT_SALYGOS"]]){
+      const docs = await generuokSu(o);
+      for (const [k, d] of Object.entries(docs)){
+        if (!d.xml) continue;
+        lygu(pastraipos(d.xml).filter(isaugo).map(x => x.nr), [], k + ": numeris už žymų");
+      }
+      tiesa(docs[dok], "nėra " + dok);
+    }
+  });
+}
 
 async function testai1021b(){
   dabartine = grupe("Naudotojo sprendimai 2026-10-21 (po trečiosios patikros): užtikrinimo dydis ir terminas, „Preliminary Contract“, DPS BVPŽ punktas, įstatymo priminimas");
@@ -13914,6 +13967,7 @@ async function testaiEtapas1(){
     await testai1022b();
     await testai1022c();
     await testai1022d();
+    await testai1022e();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
