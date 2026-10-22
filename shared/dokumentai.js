@@ -667,7 +667,7 @@
       // failo perskaityti nepavyko (pvz. debesyje esantis, neatsisiųstas failas) - tik šis failas pažymimas, kiti skaitomi toliau (2026-10-22, T4-V5;
       // iki tol klaida nutraukdavo viso įkėlimo skaitymą)
       var buf;
-      try { buf = await f.arrayBuffer(); } catch (err) { klaida(f, pran(ctx.lang, "neperskaityta", { e: (err && err.message ? err.message : String(err)) })); continue; }
+      try { buf = await f.arrayBuffer(); } catch (err) { klaida(f, pran(ctx.lang, "neperskaityta", { e: (err && err.message ? err.message : String(err)) })); docs[docs.length - 1].neperskaitytas = true; continue; }   // failo nepavyko paimti (pvz. debesyje, neatsisiųstas; PP-salygos T4-V5) - ne „teksto nėra“
       ctx.failu++; ctx.darbo += buf.byteLength;
       if (arch) docs = docs.concat(await isZip(f.name, buf, ctx, 0, onProgress, KONTEINERIAI[e] ? e : null));
       else { ctx.baitu += buf.byteLength; if (onProgress) onProgress(f.name); docs.push(await apdorokFaila(f.name, buf, ctx)); }
