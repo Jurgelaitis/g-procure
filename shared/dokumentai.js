@@ -190,7 +190,8 @@
   // ---------------------------------------------------------------------------
   function versijosPozymiai(name) {
     var n = String(name || "");
-    var out = { aktualiRedakcija: /aktuali\s*redakcij/i.test(n), paaiskinimas: /atsakym|paaiškin|paaiskin|patikslin|klausim/i.test(n),
+    // „aktuali versija“ - irgi aktuali redakcija (2026-10-22, Amber Grid paketas: „Pirkimo dokumentai (aktuali versija 10.12)“)
+    var out = { aktualiRedakcija: /aktuali\s*(redakcij|versij)/i.test(n), paaiskinimas: /atsakym|paaiškin|paaiskin|patikslin|klausim/i.test(n),
                 pratesimas: /prat[eę]s/i.test(n), pakeitimas: /pakeit|pakeis/i.test(n), data: null };
     var d = /(20\d{2})[ ._-]?(\d{2})[ ._-]?(\d{2})/.exec(n);
     if (d) out.data = d[1] + "-" + d[2] + "-" + d[3];
@@ -203,14 +204,25 @@
   // CVP IS paketais. Sutarties sąlygos (BSS/SSS) atskiriamos nuo pirkimo sąlygų (BPS/SPS):
   // tiekėjui tai skirtingi dalykai, o metaduomenims - skirtingi šaltiniai.
   function rusis(name) {
-    var n = String(name || "").split(" \u203a ").pop().split("/").pop().toLowerCase();
+    // apatiniai brūkšniai - kaip tarpai („0_Bendrosios_sutarties_sąlygos.docx“; 2026-10-22, B4 - Amber Grid paketas)
+    var n = String(name || "").split(" \u203a ").pop().split("/").pop().toLowerCase().replace(/_+/g, " ");
+    // SPS ar BPS priedo failas („SPS 3 priedas Techninė specifikacija.docx“, „SPS 1 priedas Pirminio_Galutinio pasiūlymo forma.docx“ -
+    // Amber Grid 2026-10-22): rūšis pagal likusį pavadinimą, ne „SPS“ (iki tol techninė specifikacija, formos ir sutarties projektas
+    // tapdavo pirkimo sąlygomis ir metaduomenims svėrė kaip SPS); be kitų požymių - priedas
+    var pr = /^(?:sps|bps)\s*\d+(?:\.\d+)?\s*pried\S*\s*/.exec(n);
+    if (pr) { var r = rusisPagal(n.slice(pr[0].length)); return r === "Kita" ? "Priedas" : r; }
+    return rusisPagal(n);
+  }
+  function rusisPagal(n) {
     if (/ebvpd|espd/.test(n)) return "EBVPD";
     // CVP IS skelbimo failas pirmiau u\u017e kitas taisykles: perkan\u010di\u0173j\u0173 organizacij\u0173 skelbimai vadinasi
     // \u201e... skelbimas apie pirkim\u0105 ... - bendroji direktyva ...\u201c (2026-09-24, EPSO-G 9281765, Energy cells
     // 9614756), ir \u017eodis \u201ebendroji\u201c juos paversdavo BPS - tada pirk\u0117jas ir re\u017eimas i\u0161 skelbimo neatpa\u017e\u012fstami
     if (/skelbimas\s+apie|contract\s+notice|contest\s+notice/.test(n)) return "Skelbimas";
-    if (/sutarties\s*(specialiosios|bendrosios)?\s*s[aą]lyg|(specialiosios|bendrosios)\s+sutarties\s+s[aą]lyg|\b(bss|sss)\b/.test(n)) return "Sutartis";
-    if (/special|sps\b|sps[ _.]/.test(n)) return "SPS";
+    // sutarties sąlygos ir be žodžio „sutarties“: „Paslaugu pirkimo-pardavimo bendrosios sąlygos“ (Energy cells 2026-10-22), rangos
+    if (/sutarties\s*(specialiosios|bendrosios)?\s*s[aą]lyg|(specialiosios|bendrosios)\s+sutarties\s+s[aą]lyg|\b(bss|sss)\b|pardavimo\s+(bendrosios|specialiosios)\s+s[aą]lyg|rangos\s+(bendrosios|specialiosios)\s+s[aą]lyg/.test(n)) return "Sutartis";
+    // „special“ - tik specialiosios sąlygos (ne „Specialistų sąrašo forma“; 2026-10-22, Amber Grid)
+    if (/specialios|special\s+(conditions|terms|part)|sps\b|sps[ _.]/.test(n)) return "SPS";
     if (/bendr|bps\b|bps[ _.]/.test(n)) return "BPS";
     if (/technin|specifik|\bts\b|u[žz]duot/.test(n)) return "TS";
     if (/sutart/.test(n)) return "Sutartis";
