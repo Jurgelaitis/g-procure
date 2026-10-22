@@ -2488,6 +2488,45 @@ const GPNum = (() => {
     for (const [el, os] of pagal) el.textContent = el.textContent.split('').filter((c, i) => !os.has(i)).join('');   // indeksai - kaip vietos (UTF-16)
     return del.length;
   }
+  /* Tabuliacija po numerio (2026-10-22, Pages patikra: TSD SPS 2.10-2.12 p. tekstas prasidėdavo toliau nei 2.9 p.): šablone pastraipos
+     tabuliavimo žyma (426 DXA) ar kabantis atitraukimas skirti trumpesniam numeriui, o „2.10.“ platesnis - tabuliacija nušoka iki kitos
+     numatytosios žymos (taip ir Word programoje). Kai numerio pabaiga už visų pastraipos žymų ir kabančio atitraukimo, pridedama žyma
+     už numerio 0,5 cm (283,5 DXA) žingsniu: „2.10.“ -> 567, kaip kaimyniniuose punktuose. Pastraipa be savo žymų ir be kabančio
+     atitraukimo nekeičiama (ten numatytųjų žymų tvarką pasirinko šablonas). Plotis - Arial matais (skaitmuo 556, taškas 278
+     tūkstantųjų em), dydis - pirmo teksto runo (numatyta 10 pt). Tekstas nekeičiamas. */
+  const PLOTIS = { skaitmuo: 556, taskas: 278 };
+  function tabPoNumerio(p){
+    const ppr = kid(p, 'pPr');
+    if (!ppr) return 0;
+    let s = '', r0 = null;
+    for (const el of Array.from(p.getElementsByTagNameNS(W, '*'))){
+      if (ppr.contains(el)) continue;
+      const ln = el.localName;
+      if (ln === 't'){ if (!r0 && el.textContent) r0 = el.parentNode; s += el.textContent; }
+      else if (ln === 'tab'){ s += '\t'; break; }
+      else if (SUSTOK_PRADZIOJE.has(ln)) break;
+      if (s.length > 20) break;
+    }
+    const m = /^(\d+(?:\.\d+)*\.?)\t$/.exec(s);
+    if (!m) return 0;
+    const sz = +(val(r0 && kid(r0, 'rPr'), 'sz') || val(kid(ppr, 'rPr'), 'sz') || 20);
+    const galas0 = [...m[1]].reduce((a, c) => a + (c === '.' ? PLOTIS.taskas : PLOTIS.skaitmuo), 0) * sz / 100;   // tūkst. em × sz·10 DXA
+    const ind = kid(ppr, 'ind');
+    const left = +(attr(ind, 'left') || attr(ind, 'start') || 0), hang = +(attr(ind, 'hanging') || 0), first = +(attr(ind, 'firstLine') || 0);
+    const galas = left - hang + first + galas0;
+    const tabsEl = kid(ppr, 'tabs');
+    const zymos = kids(tabsEl, 'tab').filter(t => attr(t, 'val') !== 'clear').map(t => +attr(t, 'pos'));
+    if (!zymos.length && !hang) return 0;
+    if (zymos.some(x => x > galas) || (hang && left > galas)) return 0;
+    const d = p.ownerDocument, pos = Math.round(Math.ceil((galas + 57) / 283.5) * 283.5);
+    let te = tabsEl;
+    if (!te){ te = d.createElementNS(W, 'w:tabs'); idek(ppr, te); }
+    const t = d.createElementNS(W, 'w:tab');
+    t.setAttributeNS(W, 'w:val', 'left'); t.setAttributeNS(W, 'w:pos', String(pos));
+    const po = kids(te, 'tab').find(x => +attr(x, 'pos') > pos);
+    te.insertBefore(t, po || null);
+    return 1;
+  }
   /* Ranka irasyto numerio keitimas: istrinami „ilgis“ simboliai nuo pirmo ne tarpo, ju vietoje - naujas numeris. */
   function keiskPradzia(p, ilgis, naujas, tarpas){
     const ts = Array.from(p.getElementsByTagNameNS(W, 't'));
@@ -2563,7 +2602,7 @@ const GPNum = (() => {
     const pagr = sritys[0].forma ? uzfiksuok(sritys[0].S) : perskaiciuok(sritys[0].S);
     const S = pagr.concat(...sritys.slice(1).map(x => x.forma ? uzfiksuok(x.S) : perskaiciuok(x.S)));
     const pak = [];
-    let tarpu = 0;
+    let tarpu = 0, tabu = 0;
     for (const e of S){
       const tarpas = e.lit && e.t.length > e.lit.ilgis && !/[\s ]/.test(e.t.charAt(e.lit.ilgis));   // „1.5.Tekstas“
       let keista = true;
@@ -2576,13 +2615,14 @@ const GPNum = (() => {
         keiskPradzia(e.p, e.lit.ilgis, e.naujas + e.lit.taskas, tarpas);
       } else keista = false;
       tarpu += tarpaiPoNumerio(e.p);
+      tabu += tabPoNumerio(e.p);
       if (keista && e.senas !== e.naujas) pak.push({ buvo: e.senas, tapo: e.naujas, tekstas: (e.kont === 'kunas' ? e.t : e.ltTekstas) });
     }
     const toc = turinys(M, d, pagr.filter(e => e.lygis === 0 && e.skyrius));
-    doc.log.push('numeracija: ' + S.length + ' numeriu - tekstu, pakeista ' + pak.length + '; tarpu po numerio pasalinta ' + tarpu +
+    doc.log.push('numeracija: ' + S.length + ' numeriu - tekstu, pakeista ' + pak.length + '; tarpu po numerio pasalinta ' + tarpu + '; tabuliavimo zymu uz numerio prideta ' + tabu +
                  '; tusciu eiluciu istrinta ' + sr.tuscios.length +
                  '; TURINYS: pakeista ' + toc.pakeista + ', istrinta ' + toc.istrinta + ', nurodymu pasalinta ' + toc.nurodymu);
-    return { numeriu: S.length, pakeitimai: pak, tarpuPoNumerio: tarpu, tusciuEiluciu: sr.tuscios.length, turinys: toc };
+    return { numeriu: S.length, pakeitimai: pak, tarpuPoNumerio: tarpu, tabPoNumerio: tabu, tusciuEiluciu: sr.tuscios.length, turinys: toc };
   }
 
   return { sutvarkyti, wordZymes, modelis };
