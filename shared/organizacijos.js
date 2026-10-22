@@ -52,12 +52,25 @@
                     bankas: "OP Corporate Bank plc Lietuvos filialas", bankoKodas: "21500", telefonas: "+370 707 02171", elPastas: "info@litgrid.eu",
                     saltinis: "LITGRID AB sutarčių formos (prekių, paslaugų ir rangos sutarčių specialiosios sąlygos)", patikrinta: "2026-10-11" },
       patikrinta: PATIKRINTA },
+    // Amber Grid (2026-10-22): svetainės „Viešieji pirkimai“ nuoroda „Mažos vertės pirkimų tvarkos aprašas“ veda į nebeveikiantį seną
+    // CVP IS adresą (mw.eviesiejipirkimai.lt neatsako), todėl taisyklės neįrašytos - tik pirkimų puslapis
     { id: "amber-grid", pavadinimas: "AB Amber Grid", atpazinimas: /\bamber\s*grid\b/i, cvpisPaieska: "Amber Grid", rezimasTiketinas: "PI", centrinesValdzios: false,
-      nuorodos: {}, taisykles: null, patikrinta: PATIKRINTA },
+      nuorodos: { pirkimai: "https://ambergrid.lt/viesieji-pirkimai/10" }, taisykles: null, patikrinta: "2026-10-22" },
+    // EPSO-G (2026-10-22): svetainėje - EPSO-G įmonių grupės pirkimų politika (valdyba 2021-12-21, galioja nuo 2022-02-21; taikoma visoms
+    // grupės įmonėms) ir 5 metų reikšmingų pirkimų planas; mažos vertės pirkimų tvarkos aprašo svetainėje nėra
     { id: "epso-g", pavadinimas: "UAB EPSO-G", atpazinimas: /\bepso[\s­‐‑-]*g\b/i, cvpisPaieska: "EPSO-G", rezimasTiketinas: "VPI", centrinesValdzios: false,
-      nuorodos: {}, taisykles: null, patikrinta: PATIKRINTA },
+      nuorodos: { pirkimai: "https://epsog.lt/informacija-partneriams", taisykles: "https://epsog.lt/wp-content/uploads/2026/08/20211221_Grupes_Pirkimu_politika.pdf",
+                  planas5: "https://epsog.lt/wp-content/uploads/2026/08/EPSO-G_pirkimu_planas.pdf" },
+      taisykles: { saltinis: "S11", patikrinta: "2026-10-22", pav: { lt: "grupės pirkimų politika", en: "group procurement policy" },
+                   pastaba: { lt: "EPSO-G įmonių grupės pirkimų politika - principai, planavimas, centralizuoti pirkimai (taikoma visoms grupės įmonėms).", en: "EPSO-G group procurement policy - principles, planning, centralised procurement (applies to all group companies)." } },
+      patikrinta: "2026-10-22" },
+    // Energy cells (2026-10-22): mažos vertės pirkimų tvarkos aprašas (vadovo 2024-07-10 įsak. Nr. 24BV-37) parengtas pagal PĮ
+    // („Įstatymas“ - perkančiųjų subjektų įstatymas), todėl ir tikėtinas režimas - PĮ; principus nustato EPSO-G grupės pirkimų politika
     { id: "energy-cells", pavadinimas: "UAB Energy cells", atpazinimas: /\benergy[\s­‐‑-]*cells\b/i, cvpisPaieska: "Energy cells", rezimasTiketinas: "PI", centrinesValdzios: false,
-      nuorodos: {}, taisykles: null, patikrinta: PATIKRINTA }
+      nuorodos: { pirkimai: "https://energy-cells.eu/viesieji-pirkimai/", taisykles: "https://energy-cells.eu/wp-content/uploads/2024/07/24BV-37_MVPTA_tvirtinimas.pdf" },
+      taisykles: { saltinis: "S12", patikrinta: "2026-10-22", pav: { lt: "mažos vertės pirkimų tvarkos aprašas", en: "low-value procurement rules" },
+                   pastaba: { lt: "Mažos vertės pirkimų tvarkos aprašas (2024-07-10 įsak. Nr. 24BV-37), pagal PĮ.", en: "Low-value procurement rules (order No. 24BV-37 of 2024-07-10), under the Utilities Procurement Law (PĮ)." } },
+      patikrinta: "2026-10-22" }
   ];
 
   var REZIMAI = {
@@ -76,5 +89,5 @@
   // Sutarties šalies rekvizitai pagal organizacijos id arba pavadinimą; nežinomai ar be rekvizitų - null (nespėjama)
   function rekvizitai(kas) { var o = pagalId(kas) || rask(kas); return o && o.rekvizitai ? o.rekvizitai : null; }
 
-  global.GP_ORG = { version: "0.3.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl, rekvizitai: rekvizitai };
+  global.GP_ORG = { version: "0.4.0", PATIKRINTA: PATIKRINTA, ORGANIZACIJOS: ORGANIZACIJOS, REZIMAI: REZIMAI, rask: rask, pagalId: pagalId, sarasoUrl: sarasoUrl, rekvizitai: rekvizitai };
 })(typeof window !== "undefined" ? window : this);

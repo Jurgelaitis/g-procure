@@ -21,7 +21,9 @@
  * aktuali redakcija). `atsakymas(tema, rezimas)` grąžina tinkamą; nenustačius
  * režimo sąsaja rodo abu. PĮ ir VPĮ normos viename atsakyme nemaišomos.
  * Organizacijos taisyklių šaltinis (tipas „perkanciojo_taisykles“) turi
- * `organizacija` (id iš shared/organizacijos.js); šiandien - tik LITGRID.
+ * `organizacija` (id iš shared/organizacijos.js): LITGRID (S3), EPSO-G grupės
+ * pirkimų politika (S11) ir Energy cells mažos vertės pirkimų tvarkos aprašas
+ * (S12; 2026-10-22). Amber Grid aprašo nuoroda jos svetainėje neveikia.
  * ==========================================================================*/
 ;(function (global) {
   "use strict";
@@ -71,7 +73,15 @@
     { id: "S10", tipas: "teises_aktas", kalba: "lt", patikrinta: "2026-10-21", redakcija: "aktuali suvestinė redakcija (e-tar), perskaityta 2026-10-21", galiojaIki: "2026-12-31",
       title: { lt: "Civilinis kodeksas (6.70 straipsnis - prievolių įvykdymo užtikrinimo būdai)", en: "Civil Code (Article 6.70 - means of securing the performance of obligations)" },
       url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.8A39C83848CB/asr",
-      pastaba: { lt: "Prievolių įvykdymas gali būti užtikrinamas netesybomis, įkeitimu (hipoteka), laidavimu, garantija, rankpinigiais ar kitais sutartyje numatytais būdais.", en: "Performance of obligations may be secured by liquidated damages, pledge (mortgage), suretyship, guarantee, earnest money or other means provided for in the contract." } }
+      pastaba: { lt: "Prievolių įvykdymas gali būti užtikrinamas netesybomis, įkeitimu (hipoteka), laidavimu, garantija, rankpinigiais ar kitais sutartyje numatytais būdais.", en: "Performance of obligations may be secured by liquidated damages, pledge (mortgage), suretyship, guarantee, earnest money or other means provided for in the contract." } },
+    { id: "S11", tipas: "perkanciojo_taisykles", organizacija: "epso-g", kalba: "lt", patikrinta: "2026-10-22", redakcija: "patvirtinta EPSO-G valdybos 2021-12-21, galioja nuo 2022-02-21",
+      title: { lt: "EPSO-G įmonių grupės pirkimų politika", en: "EPSO-G group procurement policy" },
+      url: "https://epsog.lt/wp-content/uploads/2026/08/20211221_Grupes_Pirkimu_politika.pdf",
+      pastaba: { lt: "Taikoma visoms grupės įmonėms (pagal VPĮ ir PĮ perkančioms - visa apimtimi): pirkimų principai, planavimas, centralizuoti pirkimai. EPSO-G svetainėje (Informacija partneriams) - ir 5 metų reikšmingų pirkimų planas. EN versijos nėra.", en: "Applies to all group companies (in full to those procuring under VPĮ or PĮ): procurement principles, planning, centralised procurement. The EPSO-G website (Information for partners) also has the 5-year significant procurement plan. No EN version." } },
+    { id: "S12", tipas: "perkanciojo_taisykles", organizacija: "energy-cells", kalba: "lt", patikrinta: "2026-10-22", redakcija: "patvirtinta vadovo 2024-07-10 įsak. Nr. 24BV-37",
+      title: { lt: "Energy cells: mažos vertės pirkimų tvarkos aprašas", en: "Energy cells: low-value procurement rules" },
+      url: "https://energy-cells.eu/wp-content/uploads/2024/07/24BV-37_MVPTA_tvirtinimas.pdf",
+      pastaba: { lt: "Mažos vertės pirkimų būdai ir tvarka pagal PĮ; svetainės skiltyje „Viešieji pirkimai“ - ir planuojamų pirkimų suvestinės, pirkimų ataskaitos. EN versijos nėra.", en: "Low-value procurement methods and procedure under the Utilities Procurement Law (PĮ); the website's “Viešieji pirkimai” section also has planned procurement summaries and procurement reports. No EN version." } }
   ];
 
   // Bendrasis priminimas prie kiekvieno bendro atsakymo
@@ -90,8 +100,10 @@
       veiksmai: { lt: ["Atidarykite CVP IS išplėstinę paiešką ir pirkimo vykdytojo lauke įrašykite organizacijos pavadinimą (arba naudokite žinomų organizacijų nuorodas žemiau).", "Patikrinkite organizacijos svetainėje, ar skelbiamas metinis pirkimų planas - kada planuojamas jus dominantis pirkimas.", "Užsiprenumeruokite pranešimus pagal BVPŽ kodus (žr. atskirą temą)."],
                  en: ["Open the CVP IS advanced search and enter the organisation's name in the contracting entity field (or use the links of known organisations below).", "Check on the organisation's website whether an annual procurement plan is published - when a procurement of interest is planned.", "Subscribe to notifications by CPV codes (see separate topic)."] },
       saltiniai: [{ id: "S1", cit: { lt: "„Paieškos vykdymas per CVP IS (tiekėjai)“, 2026-05-20, 3-8 skaidrės", en: "“Searching via CVP IS (suppliers)”, 2026-05-20, slides 3-8" } },
-                  { id: "S3", cit: { lt: "Litgrid pirkimai / Pirkimai: informacija skelbiama CVP IS; 2026 m. planuojamų vykdyti pirkimų sąrašas (LT/EN); DPS sąrašas (LITGRID pavyzdys)", en: "Litgrid procurement pages: published in CVP IS; 2026 planned procurement list (LT/EN); DPS list (LITGRID example)" } }],
-      spraga: { lt: "CVP IS sąrašo adresas su organizacijos filtru turi sistemos generuojamą puslapiavimo parametrą - jei nuoroda nustotų veikti, naudokite išplėstinę paiešką. Kitų organizacijų (ne LITGRID) planų ir taisyklių nuorodos registre dar nepatikrintos.", en: "The CVP IS list URL with the organisation filter contains a system-generated paging parameter - if it stops working, use the advanced search. Plan and rules links of organisations other than LITGRID are not yet verified in the registry." } },
+                  { id: "S3", cit: { lt: "Litgrid pirkimai / Pirkimai: informacija skelbiama CVP IS; 2026 m. planuojamų vykdyti pirkimų sąrašas (LT/EN); DPS sąrašas (LITGRID pavyzdys)", en: "Litgrid procurement pages: published in CVP IS; 2026 planned procurement list (LT/EN); DPS list (LITGRID example)" } },
+                  { id: "S11", cit: { lt: "EPSO-G grupės pirkimų politika: principai ir centralizuoti pirkimai; svetainėje - 5 metų reikšmingų pirkimų planas", en: "EPSO-G group procurement policy: principles and centralised procurement; the website has the 5-year significant procurement plan" } },
+                  { id: "S12", cit: { lt: "Energy cells mažos vertės pirkimų tvarkos aprašas; svetainėje - planuojamų pirkimų suvestinės", en: "Energy cells low-value procurement rules; the website has planned procurement summaries" } }],
+      spraga: { lt: "CVP IS sąrašo adresas su organizacijos filtru turi sistemos generuojamą puslapiavimo parametrą - jei nuoroda nustotų veikti, naudokite išplėstinę paiešką. Amber Grid svetainės nuoroda į mažos vertės pirkimų tvarkos aprašą neveikia (veda į seną CVP IS adresą) - jo registre nėra; EPSO-G svetainėje skelbiama grupės pirkimų politika, o ne mažos vertės pirkimų tvarkos aprašas.", en: "The CVP IS list URL with the organisation filter contains a system-generated paging parameter - if it stops working, use the advanced search. Amber Grid's website link to its low-value procurement rules does not work (it points to an old CVP IS address) - they are not in the registry; the EPSO-G website publishes the group procurement policy, not low-value procurement rules." } },
 
     { id: "bvpz", zymos: ["cvpis", "prenumerata"], rezimas: ["PI", "VPI"],
       q: { lt: "Kaip užsiprenumeruoti pirkimus pagal BVPŽ kodus?", en: "How do I subscribe to procurements by CPV codes?" },
