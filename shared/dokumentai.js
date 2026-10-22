@@ -664,7 +664,10 @@
       if (f.size > riba) { klaida(f, pran(ctx.lang, "perDidelis", { mb: Math.round(riba / 1048576) })); continue; }
       if (ctx.failu >= MAX_FAILU) { klaida(f, pran(ctx.lang, "failuLimitas", { n: MAX_FAILU })); continue; }
       if (ctx.darbo + f.size > MAX_DARBO_B || (!arch && ctx.baitu + f.size > MAX_ISSKLEISTA_B)) { klaida(f, pran(ctx.lang, "bendrasLimitas")); continue; }
-      var buf = await f.arrayBuffer();
+      // failo perskaityti nepavyko (pvz. debesyje esantis, neatsisiųstas failas) - tik šis failas pažymimas, kiti skaitomi toliau (2026-10-22, T4-V5;
+      // iki tol klaida nutraukdavo viso įkėlimo skaitymą)
+      var buf;
+      try { buf = await f.arrayBuffer(); } catch (err) { klaida(f, pran(ctx.lang, "neperskaityta", { e: (err && err.message ? err.message : String(err)) })); continue; }
       ctx.failu++; ctx.darbo += buf.byteLength;
       if (arch) docs = docs.concat(await isZip(f.name, buf, ctx, 0, onProgress, KONTEINERIAI[e] ? e : null));
       else { ctx.baitu += buf.byteLength; if (onProgress) onProgress(f.name); docs.push(await apdorokFaila(f.name, buf, ctx)); }

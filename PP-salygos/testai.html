@@ -11880,6 +11880,48 @@ async function testai1022f(){
     lygu([raudonaAtkarpa(en.xml, /DPS galiojimo terminas ‒ 8 \(aštuoni\) metai/), (raudonaAtkarpa(en.xml, /The DPS validity period is 8 \(eight\)/) || "").trim()], ["8 (aštuoni) metai", "8 (eight)"], "LT/EN");
     tiesa(!/galiojimas gali būti keičiamas/.test(raudonaAtkarpa(en.xml, /DPS galiojimo terminas ‒ 8/) || ""), "šakos tekstas - juodas");
   });
+
+  const ZL = [["Eil. Nr.", "Reikalavimas", "Pateikiami dokumentai"], ["1.", "Tiekėjas taikys aplinkos apsaugos vadybos sistemą pagal LST EN ISO 14001.", "Sertifikato kopija."]];
+  await testas("T4-K2: žaliųjų lentelė be žodžio „žalieji“ antraštėje - pagal pavadinimą virš lentelės, antraštę „APLINKOS APSAUGOS REIKALAVIMAI“ ar failo vardą - SPS 3 lentelė, ne 2; kvalifikacijos failas - kaip iki tol; pakeitus rūšį į „Žalieji“ - lentelė perkeliama kaip žaliųjų", async () => {
+    await modulis(); await zingsnis2("T-AK", "LT", "paslaugos");
+    const vienas = async (f) => { const n0 = W.eval("DK.failai.length"); await W.dkPridek([f]); await kol(() => W.eval("DK.failai.length") > n0, "įkelta"); return W.eval("DK.failai[DK.failai.length - 1]"); };
+    let d = await vienas(await docx("Reikalavimai A.docx", ["ŽALIŲJŲ PIRKIMŲ REIKALAVIMAI", { lentele: ZL }]));
+    lygu([d.rusis, d.lent.zaliuju.length, d.lent.lenteles.length], ["zalieji", 1, 0], "pavadinimas virš lentelės");
+    d = await vienas(await docx("Reikalavimai B.docx", [{ lentele: [["APLINKOS APSAUGOS REIKALAVIMAI", "", ""]].concat(ZL) }]));
+    lygu([d.rusis, d.lent.zaliuju.length], ["zalieji", 1], "antraštė „APLINKOS APSAUGOS REIKALAVIMAI“");
+    d = await vienas(await docx("Žaliųjų pirkimų reikalavimai.docx", [{ lentele: ZL }]));
+    lygu([d.rusis, d.lent.zaliuju.length], ["zalieji", 1], "failo vardas");
+    d = await vienas(await docx("Kvalifikacijos reikalavimai.docx", [{ lentele: [["Eil. Nr.", "Reikalavimas", "Pateikiami dokumentai"], ["1.", "Tiekėjas per paskutinius 3 metus įvykdė bent vieną panašią sutartį.", "Sutarčių sąrašas."]] }]));
+    lygu([d.rusis, d.lent.lenteles.length, d.lent.zaliuju.length], ["kvalifikacija", 1, 0], "kvalifikacijos failas");
+    d = await vienas(await docx("Reikalavimai C.docx", [{ lentele: ZL }]));
+    lygu(d.rusis, "kvalifikacija", "be požymių - kvalifikacija (kaip iki tol)");
+    const z0 = W.eval("ZAL.kandidatai.length");
+    const sel = D.querySelector(`[data-dk-rusis="${d.raktas}"]`); sel.value = "zalieji"; sel.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await kol(() => W.eval("ZAL.kandidatai.length") > z0, "žaliųjų kandidatas");
+    tiesa(!W.eval("KVL.kandidatai").some(M => M.failas === "Reikalavimai C.docx"), "liko kvalifikacijos kandidatu");
+    const eil = [...D.querySelectorAll("#dkSarasas li, .dk-eil, [data-dk]")].map(x => x.textContent).join(" ");
+    tiesa(!/Žaliųjų reikalavimų lentelės \(stulpeliai/.test(W.dkPoveikis(W.eval("DK.failai").find(x => x.vardas === "Reikalavimai C.docx")).map(x => x.t).join(" ")), "vis dar „lentelės neradome“");
+  });
+
+  await testas("T4-D6: kito pirkimo „SPS N priedas ...“ (deklaracija, konfidenciali informacija) - ne sutarties priedas ir į paketą nededamas; „SPS 3 priedas Techninė specifikacija“ - TS; „SS 5 priedas“ - sutarties priedas", async () => {
+    await modulis();
+    const f = await Promise.all([docx("SPS 6  priedas Nacionalinio saugumo reikalavimų atitikties deklaracija.docx", ["DEKLARACIJA", "Tekstas."]), docx("SPS 7 priedas Konfidenciali informacija.docx", ["KONFIDENCIALI INFORMACIJA", "Tekstas."]),
+      docx("SPS 3 priedas Techninė specifikacija.docx", ["TECHNINĖ SPECIFIKACIJA", "Tekstas."]), docx("SS 5 priedas. Kainų perskaičiavimo tvarka.docx", ["KAINŲ PERSKAIČIAVIMAS", "Tekstas."])]);
+    await W.dkPridek(f);
+    lygu(W.eval("DK.failai").map(d => d.rusis), ["kita", "kita", "ts", "priedas"], "rūšys");
+  });
+
+  await testas("T4-V5: neperskaitytas failas (pvz. neatsisiųstas iš debesies) - pažymimas tik jis, kiti skaitomi; pranešimas - ne „tikėtina, skenuotas“, rūšis - „kita“, į paketą nededamas", async () => {
+    await modulis();
+    const blogas = new W.File(["x"], "Kvalifikacijos ir žalieji reikalavimai.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    Object.defineProperty(blogas, "arrayBuffer", { value: () => W.Promise.reject(new W.DOMException("The requested file could not be read", "NotReadableError")) });
+    await W.dkPridek([blogas, await docx("Techninė specifikacija.docx", ["TECHNINĖ SPECIFIKACIJA", "Tekstas."])]);
+    const F = W.eval("DK.failai"), b = F.find(d => d.vardas === blogas.name), ts = F.find(d => d.vardas === "Techninė specifikacija.docx");
+    lygu([b && b.neperskaitytas, b && b.rusis, ts && ts.rusis, ts && ts.simboliai > 0], [true, "kita", "ts", true], "failai");
+    const t = W.dkPoveikis(b).map(x => x.t).join(" ");
+    tiesa(/Failo perskaityti nepavyko/.test(t) && !/skenuotas/.test(t), "pranešimas: " + t);
+    lygu(W.ikeltiDokumentai([]).map(r => r.isDokumento), ["Techninė specifikacija.docx"], "į paketą - tik perskaitytas");
+  });
 }
 
 async function testai1021b(){

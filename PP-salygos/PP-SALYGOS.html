@@ -7753,7 +7753,7 @@ function ikeltiDokumentai(rinkinys){
   const sps = rinkinys.find(d => /^(SPS|SALYGOS)$/.test(dokTipas(d))), sp = sutartiesProjektas();
   const kam = !sps ? '' : /^DPSP_/.test(sps.trumpas) ? 'Konkretaus pirkimo sąlygų' : dokTipas(sps) === 'SALYGOS' ? 'Pirkimo sąlygų' : 'SPS';
   const R = {}, out = [];
-  DK.failai.forEach(d => { if (d.failas && IKELTI_PAKETE[d.rusis]) (R[d.rusis] ??= []).push(d); });
+  DK.failai.forEach(d => { if (d.failas && !d.neperskaitytas && IKELTI_PAKETE[d.rusis]) (R[d.rusis] ??= []).push(d); });
   Object.keys(IKELTI_PAKETE).forEach(rusis => {
     const dd = R[rusis];
     if (!dd || (rusis === 'sutartis' && !(sp && sp.pridedamas && !sp.generuojamas))) return;
@@ -9499,7 +9499,7 @@ function dkParaiskaAiski(d){
    metodika, pirkimo objekto dalys, sutarties klausimai), bet tai DI išvestis: sąraše ir kortelėse žymima, lentelių perkėlimą patvirtina
    žmogus, metodikos kriterijus ir dalys - tik siūlomi (ne „Įrašoma automatiškai“), Word faile - DI požymiai. Vienu metu - vienas dokumentas. */
 const DK_SKENUOJAMAS = /\.(pdf|jpe?g|png)$/i;
-const dkSkenuotas = d => d.rusis !== 'paraiska' && DK_SKENUOJAMAS.test(d.vardas) && !d.simboliai && !d.di;
+const dkSkenuotas = d => d.rusis !== 'paraiska' && DK_SKENUOJAMAS.test(d.vardas) && !d.simboliai && !d.di && !d.neperskaitytas;
 let DK_SKEN_P = Promise.resolve();
 function dkSkenuok(d){
   if (!window.GP_SKENUOTI || !DK.failai.includes(d) || !dkSkenuotas(d) || d.sken === 'laukia' || d.sken === 'vyksta') return DK_SKEN_P;
@@ -9645,6 +9645,7 @@ async function dkAnalizuok(d){
 }
 /* Rūšis: lentelės pirmiau už vardą (kvalifikacijos ir žaliųjų lentelės - pagal stulpelius), vardas - pirmiau už tekstą. */
 function dkRusis(d){
+  if (d.neperskaitytas) return 'kita';                 // T4-V5: pagal vardą nespėjama - failo turinio nėra
   if (DK_PAVEIKSLAS.test(d.vardas)) return 'paraiska';
   if (d.lent && d.lent.lenteles.length) return 'kvalifikacija';
   if (d.lent && d.lent.zaliuju.length) return 'zalieji';
@@ -9653,6 +9654,9 @@ function dkRusis(d){
   if (window.GP_METODIKA && (/metodik|methodology/.test(v) || (GP_METODIKA.atpazink('', pr) && !/specialiosios|bendrosios|salygos|conditions/.test(v)))) return 'metodika';
   if (/parai?sk/.test(v) && !/kvalifikac/.test(v)) return 'paraiska';
   if (/technin\w* (specifikacij|uzduot)|(^| )ts( |$)|technical specification/.test(v)) return 'ts';
+  // kito pirkimo SPS priedas („SPS 6 priedas Nacionalinio saugumo ... deklaracija“, „SPS 7 priedas Konfidenciali informacija“; T4-D6) - ne
+  // sutarties priedas: šio paketo formas generatorius parengia pats; techninė specifikacija atpažinta aukščiau
+  if (/^(sps|bps)( \d+)+ pried/.test(v)) return 'kita';
   if (/sutart|contract/.test(v)) return 'sutartis';
   if (/(^| )priedas|(^| )priedo|annex|^\d{1,2} /.test(v) || /aplinkosaug/.test(v)) return 'priedas';
   if (/pirkimo paraiska|paraiskos kortele|doclogix/.test(pr)) return 'paraiska';
@@ -9664,9 +9668,16 @@ function dkRusis(d){
 }
 /* Dokumento rūšis lemia, kas iš jo padaroma: lentelės perkeliamos tik iš kvalifikacijos ar žaliųjų reikalavimų dokumento, paraiška - ne DI
    šaltinis 2 žingsnyje. Taikoma ir pakeitus rūšį ranka. */
+/* Lentelės pagal žmogaus pasirinktą rūšį (2026-10-22, T4-K2): pasirinkus „Žalieji reikalavimai“, o lentelė atpažinta kaip kvalifikacijos
+   (antraštėje žodžio „žalieji“ nėra), - ji laikoma žaliųjų; iki tol modulis sakydavo „lentelės neradome“ */
+function dkLent(d){
+  const L = d.lent;
+  if (L && d.rusis === 'zalieji' && !L.zaliuju.length && L.lenteles.length) return Object.assign({}, L, { zaliuju: L.lenteles.map(M => Object.assign({}, M, { zalieji: true })), lenteles: [] });
+  return L;
+}
 function dkTaikyk(d){
   const kval = d.rusis === 'kvalifikacija', zal = d.rusis === 'kvalifikacija' || d.rusis === 'zalieji';
-  if (d.lent) kvlPriimk(d.vardas, d.lent, { kval, zal });
+  if (d.lent) kvlPriimk(d.vardas, dkLent(d), { kval, zal });
   else { kvlSalinkFaila(d.vardas); zalSalinkFaila(d.vardas); }
   const ai = d.rusis !== 'paraiska' && d.simboliai > 0;
   const buvo = AI.saltiniai.findIndex(x => x.dk === d.raktas);
@@ -9693,7 +9704,9 @@ async function dkPridek(files){
     const g = DK_PAVEIKSLAS.test(f.name) ? null : r.docs.find(x => x.name === f.name);
     const blokai = g ? (g.blocks || []).filter(b => String(b.text || '').trim()) : [];
     const d = { raktas: ++DK.n, vardas: f.name, failas: f, dydis: f.size, sha: (g && g.sha256) || (f.name + ':' + f.size), blokai,
-      simboliai: GP_PATAREJAS.simboliai([{ blokai }]), ispejimai: g ? (g.warnings || []) : [], lent: null, lentKlaida: '' };
+      simboliai: GP_PATAREJAS.simboliai([{ blokai }]), ispejimai: g ? (g.warnings || []) : [], lent: null, lentKlaida: '',
+      // failo perskaityti nepavyko (pvz. debesyje esantis, neatsisiųstas failas; T4-V5) - ne skenuotas dokumentas, į paketą nededamas
+      neperskaitytas: !DK_PAVEIKSLAS.test(f.name) && (!g || (g.parseStatus === 'failed' && !blokai.length)) };
     if (KVL_TINKA.test(f.name) && (pdfYra || !/\.pdf$/i.test(f.name))){
       try { d.lent = await kvlLenteles(f); } catch (e){ d.lentKlaida = GP_BUSENA.klaidosTekstas(e); }
     }
@@ -9760,7 +9773,10 @@ function bvpzIsDokumentu(){
 /* Kas iš dokumento padaroma - eilutės: { t: tekstas (HTML), k: 'ok' | 'info' | 'isp' } */
 function dkPoveikis(d){
   const out = [], L = GP_KVAL_LENTELE;
-  const kv = d.lent ? d.lent.lenteles : [], zl = d.lent ? d.lent.zaliuju : [];
+  // T4-V5: failo perskaityti nepavyko - ne „tikėtina, skenuotas“ ir ne rūšis pagal vardą
+  if (d.neperskaitytas) return [{ k: 'isp', t: 'Failo perskaityti nepavyko, todėl modulis jo nenaudoja ir į paketą nededa. Jei failas debesyje (OneDrive, iCloud ar kt.), pirma atsisiųskite jį į kompiuterį ir įkelkite iš naujo.' }]
+    .concat((d.ispejimai || []).map(x => ({ k: 'info', t: esc(x) })));
+  const LL = dkLent(d), kv = LL ? LL.lenteles : [], zl = LL ? LL.zaliuju : [];
   const reik = n => `${n} reikalavim${n % 10 === 1 && n % 100 !== 11 ? 'as' : n % 10 === 0 || (n % 100 > 10 && n % 100 < 20) ? 'ų' : 'ai'}`;
   if (d.rusis === 'paraiska'){
     const siunt = 'Failas siunčiamas per G-Procure serverį į Claude API; nei naršyklėje, nei serveryje jis nesaugomas.';
@@ -9836,9 +9852,9 @@ function dkKontrolinisHTML(){
   const par = kur('paraiska'), pp = par[par.length - 1];
   const parB = !pp ? '' : pp.analize === 'atlikta' ? 'laukai užpildyti - patikrinkite juos žemiau' : pp.analize === 'vyksta' ? 'DI skaito paraišką'
     : pp.analize === 'nepavyko' ? 'perskaityti nepavyko - žr. prie failo' : 'laukia - žr. prie failo';
-  const kv = kur('kvalifikacija'), kvN = kv.reduce((a, d) => a + (d.lent ? d.lent.lenteles.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
+  const kv = kur('kvalifikacija'), kvN = kv.reduce((a, d) => a + (d.lent ? dkLent(d).lenteles.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
   const zl = F.filter(d => d.rusis === 'zalieji' || (d.rusis === 'kvalifikacija' && d.lent && d.lent.zaliuju.length));
-  const zlN = zl.reduce((a, d) => a + (d.lent ? d.lent.zaliuju.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
+  const zlN = zl.reduce((a, d) => a + (d.lent ? dkLent(d).zaliuju.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
   const mt = kur('metodika'), mm = mt.length ? mt[mt.length - 1].met : null;
   const mtB = !mt.length ? '' : !mm ? 'skaitoma' : mm.kodas ? `kriterijus - ${kritVard(mm.kodas)}${mm.problemos.length ? '; patikrinkite - žr. prie failo' : ''}` : 'kriterijaus nustatyti nepavyko - žr. prie failo';
   return `<p class="dk-ks-h" id="dkKsH">Ką verta įkelti</p><ul>`
