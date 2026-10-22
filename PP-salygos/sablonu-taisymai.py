@@ -411,6 +411,7 @@ def taisymas_tekstas(taisyk):
     viso += _vyriausybes_sakinys(taisyk)
     viso += _preliminarioji_sutartis(taisyk)
     viso += _dps_eilute_10(taisyk)
+    viso += _dps_paraiskos_forma(taisyk)
     return viso
 
 
@@ -945,6 +946,86 @@ def _dps_eilute_10(taisyk):
             zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
             print(f"      {zf.name}: pastraipa {k} suderinta")
     return 1
+
+
+# AD. DPS sukūrimo paraiškos forma (2026-10-23, rado ketvirtoji naujo darbuotojo patikra T4-D1; redakcinė korekcija - naudotojo leidimas 2026-10-05,
+#    nuoroda į priedėlius - kaip to paties šablono nuorodos, ištaisytos 2026-10-05 naudotojo prašymu): DPS LT sąlygų 4 priedo ir LT/EN paraiškos formos
+#    pateikiamų dokumentų lentelės eilutės numeruotos tekstu 1, 2, 3, 4, 6, 7 (praleistas 5) - po 4 eilutės „6.“ -> „5.“, „7.“ -> „6.“; 4 eilutės tekstas
+#    prasideda neuždarytu skliaustu „(Užpildyti sutikimai ...“ (ir EN „(Completed consents ...“) - skliaustas pašalinamas; LT sąlygose sutikimų
+#    priedėliai - 6 priedo („Pirkimo sąlygų 6 priedo priedėlis Nr. 1 / Nr. 2“), todėl „5 priedo 1-2 priedėliai“ -> „6 priedo 1-2 priedėliai“ (LT/EN
+#    pakete jie - 5 priedo, naudotojo sprendimas 2026-10-05, nekeičiama). Nuorodų į šios lentelės eilučių numerius šablonuose nėra; raudonas tekstas
+#    nekeičiamas; pakartotinai - 0.
+_PARAISKOS_FORMA = {'DPSK_LT_SALYGOS': True, 'DPSK_LTEN_PARAISKA': False}      # True - ir priedėlių priedo numeris
+
+
+def _dps_paraiskos_forma(taisyk):
+    import json as _json
+    print("\nDPS SUKŪRIMO PARAIŠKOS FORMOS EILUTĖS (AD, 2026-10-23):")
+    viso = 0
+    for f, priedelis in _PARAISKOS_FORMA.items():
+        path = TPL / (f + '.docx')
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+        xml = items['word/document.xml']
+        segs = list(_VISOS_P_RE.finditer(xml))
+        T = [_pastraipos_tekstas(m.group(0)) for m in segs]
+        k4 = next((k for k, t in enumerate(T) if t.startswith('(Užpildyti sutikimai būti')), None)
+        if k4 is None or _RAUD_RE.search(segs[k4].group(0)):
+            continue
+        kei = {k4: [(0, 1, '')]}
+        m5 = _re.search(r'5 priedo 1-2 priedėliai', T[k4])
+        if priedelis and m5:
+            kei[k4].append((m5.start(), m5.start() + 1, '6'))
+        ken = next((k for k in range(k4 + 1, min(k4 + 3, len(T))) if T[k].startswith('(Completed consents')), None)
+        if ken is not None and not _RAUD_RE.search(segs[ken].group(0)):
+            kei[ken] = [(0, 1, '')]
+        nr = [k for k in range(k4 + 1, min(k4 + 20, len(T))) if _re.fullmatch(r'\d\.', T[k].strip())]
+        if [T[k].strip() for k in nr[:2]] == ['6.', '7.']:
+            for k, naujas in zip(nr[:2], ['5', '6']):
+                s0 = T[k].index(T[k].strip()[0]); kei[k] = [(s0, s0 + 1, naujas)]
+        nauji = {k: _keisk_pastraipa(segs[k].group(0), v) for k, v in kei.items()}
+        for k in sorted(kei):
+            print(f"  {f}.docx: pastraipa {k} „{T[k].strip()[:60]}“ -> „{_pastraipos_tekstas(nauji[k]).strip()[:60]}“")
+        viso += len(kei)
+        if not taisyk:
+            continue
+        for k in sorted(kei, reverse=True):
+            m = segs[k]; xml = xml[:m.start()] + nauji[k] + xml[m.end():]
+        items['word/document.xml'] = xml
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for info in infos:
+                zout.writestr(info, items[info.filename])
+        # tekstas - pagal reikšmę (sakiniai unikalūs), eilučių numeriai („6.“) - tik pagal pastraipos indeksą (kitaip pakistų ir kiti „6.“)
+        pak, nrK = {}, [k for k in kei if _re.fullmatch(r'\d\.', T[k].strip())]
+        for k in kei:
+            if k in nrK:
+                continue
+            a, b = T[k], _pastraipos_tekstas(nauji[k]); pak[a] = b; pak[a.strip()] = b.strip()
+        for zf in sorted((Path(__file__).parent / 'zemelapiai').glob('*.json')):
+            raw = zf.read_text(encoding='utf-8')
+            try:
+                Z = _json.loads(raw)
+            except Exception:
+                continue
+            if not isinstance(Z, dict) or Path(str(Z.get('sablonas', ''))).stem != f:
+                continue
+            n = [0]
+            def keisk(v):
+                if isinstance(v, str):
+                    if v in pak: n[0] += 1; return pak[v]
+                    return v
+                if isinstance(v, list): return [keisk(x) for x in v]
+                if isinstance(v, dict): return {a: keisk(b) for a, b in v.items()}
+                return v
+            Z = keisk(Z)
+            for k in nrK:
+                v = Z.get('paras', {}).get(str(k))
+                if isinstance(v, str) and v.strip() == T[k].strip():
+                    Z['paras'][str(k)] = _pastraipos_tekstas(nauji[k]) if v == T[k] else _pastraipos_tekstas(nauji[k]).strip(); n[0] += 1
+            if n[0]:
+                zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+                print(f"      {zf.name}: suderinta {n[0]} reiksmiu")
+    return viso
 
 
 # X. Nuorodos į SPS priedus (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“; rado sugeneruoto paketo patikra): tekstas nurodo ne
