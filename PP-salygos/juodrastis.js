@@ -162,6 +162,12 @@
         : "";
     }
     function etapoTekstas(m) { return m && m.etapoPav ? m.etapoPav : ""; }
+    // būdas ir kalba - kad to paties pavadinimo juodraščiai būtų atskiriami (T4-V9); iš saugyklos - tik tekstas
+    function budasKalba(m) {
+      if (!m) return "";
+      var b = typeof m.budas === "string" ? m.budas.slice(0, 120) : "", k = m.kalba === "LT/EN" || m.kalba === "LT" ? m.kalba : "";
+      return esc([b, k].filter(Boolean).join(", "));
+    }
     function pieskSarasa() {
       if (!sarEl) return;
       var S = sarasas(), kiti = S.juodrasciai.filter(function (x) { return x.id !== dabar; });
@@ -179,7 +185,7 @@
       if (dabar) {
         var md = (irasas && irasas.meta) || {};
         dab = '<li class="jd-e jd-e--dabar"><span class="jd-e-t"><b>' + (md.pavadinimas ? esc(md.pavadinimas) : "<i>be pavadinimo</i>") + '</b> <span class="jd-e-z">šis pirkimas</span>' +
-          '<span class="jd-e-m">' + [md.numeris ? "Nr. " + esc(md.numeris) : "", irasas && irasas.keista ? (busena.kodas === "klaida" || busena.kodas === "kitas-skirtukas" ? "neišsaugota" : "išsaugota " + esc(laikas(irasas.keista))) : ""].filter(Boolean).join(" · ") +
+          '<span class="jd-e-m">' + [md.numeris ? "Nr. " + esc(md.numeris) : "", budasKalba(md), irasas && irasas.keista ? (busena.kodas === "klaida" || busena.kodas === "kitas-skirtukas" ? "neišsaugota" : "išsaugota " + esc(laikas(irasas.keista))) : ""].filter(Boolean).join(" · ") +
           "</span></span><span class=\"jd-v\"><button type=\"button\" class=\"sec jd-mz\" data-jd=\"atsisiusti\">Atsisiųsti</button>" +
           (klausti === "trinti-dabar"
             ? ' <span class="jd-kl-t">Ištrinti šį juodraštį? Atsakymai liks tik šiame lange.</span> <button type="button" class="sec jd-mz" data-jd="trinti-dabar-taip">Taip, ištrinti</button>' +
@@ -197,7 +203,7 @@
               : ' <span class="jd-v"><button type="button" class="sec jd-mz" data-jd="trinti" data-id="' + esc(x.id) + '">Ištrinti</button></span>') + "</li>";
         var pav = m.pavadinimas ? esc(m.pavadinimas) : "<i>be pavadinimo</i>";
         return '<li class="jd-e' + (sios(x) ? " jd-e--sios" : "") + '"><span class="jd-e-t"><b>' + pav + "</b>" + (sios(x) ? ' <span class="jd-e-z">šio pirkimo kortelė</span>' : "") + '<span class="jd-e-m">' +
-          [m.numeris ? "Nr. " + esc(m.numeris) : "", esc(etapoTekstas(m)), "išsaugota " + esc(laikas(r.keista))].filter(Boolean).join(" · ") + "</span></span>" +
+          [m.numeris ? "Nr. " + esc(m.numeris) : "", budasKalba(m), esc(etapoTekstas(m)), "išsaugota " + esc(laikas(r.keista))].filter(Boolean).join(" · ") + "</span></span>" +
           '<span class="jd-v"><button type="button" class="jd-mz" data-jd="testi" data-id="' + esc(x.id) + '" aria-label="Tęsti - ' + (m.pavadinimas ? esc(m.pavadinimas) : "juodraštis be pavadinimo") + '">Tęsti</button>' +
           ' <button type="button" class="sec jd-mz" data-jd="atsisiusti" data-id="' + esc(x.id) + '">Atsisiųsti</button>' +
           (klausti === "trinti:" + x.id

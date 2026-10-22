@@ -3235,13 +3235,18 @@ const GPAudit = (() => {
     // per EBVPD), tad zmogus turi ivertinti - ar ideti reikalavima, ar palikti.
     const kids = (el, ln) => Array.from(el.children).filter(c => c.localName === ln);
     const cellTxt = c => GPDocx.els(c,'t').map(t => t.textContent).join('').trim();
+    // Antraštės eilutė - viena iš pirmųjų trijų (DPS LT/EN priede virš jos - pavadinimo eilutė), su stulpeliais „Kvalifikacijos reikalavimas“ ir
+    // „Pateikiami dokumentai“; tiekėjo formos („Kvalifikacijos reikalavimas, kuriam atitikti ...“, „... punktas iš SPS ...“) - ne (T4-V7, 2026-10-23)
     for (const tbl of GPDocx.els(d,'tbl')){
       const eil = kids(tbl,'tr');
       if (eil.length < 2) continue;
-      const antr = kids(eil[0],'tc').map(cellTxt);
-      let stulp = antr.findIndex(x => /kvalifikacijos reikalavim/i.test(x));
-      if (stulp < 0) continue;                          // ne kvalifikacijos lentele
-      for (let ri = 1; ri < eil.length; ri++){
+      let hi = -1, stulp = -1;
+      for (let k = 0; k < Math.min(3, eil.length - 1) && hi < 0; k++){
+        const a = kids(eil[k],'tc').map(cellTxt), s = a.findIndex(x => /^kvalifikacijos reikalavima[si]$/i.test(x));
+        if (s >= 0 && a.some(x => /pateikiam\S*\s+dokument/i.test(x))){ hi = k; stulp = s; }
+      }
+      if (hi < 0) continue;                             // ne kvalifikacijos lentele
+      for (let ri = hi + 1; ri < eil.length; ri++){
         const c = kids(eil[ri],'tc');
         if (c.length < 3) continue;                     // kategorijos antraste (1 langelis)
         if (!cellTxt(c[stulp] || c[1]))

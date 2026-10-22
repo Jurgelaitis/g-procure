@@ -2140,14 +2140,25 @@ function pasalintuNumeruotuPries(paras, i, blokai){
    nematė ir įtraukus apžiūrą dokumente likdavo praeities data. Įtraukus apžiūros sąlygą jos nudažomos raudonai (kaip pavyzdinės reikšmės
    kitur) - 4 žingsnis jas rodo, įrašoma Word programoje. Kviečiama PO pajuodinimo (kitaip šakos pajuodinimas jas vėl pajuodintų). */
 const APZ_DATA_RE = /(19|20)\d{2}\s*m\.\s*[a-ząčęėįšųūž]+\s*\d{1,2}\s*d\s*\.(\s*\d{1,2}\s*[.:]\s*\d{2})?/gi;
+// angliškas atitikmuo LT/EN SPS (T4-M4, 2026-10-23): „___ _________ 2025 (inclusive)“, „__________, 2023 (inclusive)“, „2 PM on 17 February 2020 (inclusively)“
+const APZ_DATA_EN_RE = /(?:\d{1,2}\s*(?:AM|PM)\s+on\s+)?(?:\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+)?(?:19|20)\d{2}(?=,?\s*\(inclusive)/g;
 function apziurosDatos(paras, Z, REZ){
   const out = [];
   (Z.blokai || []).filter(b => b.tipas === 'saka' && b.blokas && /objekto apžiūr/i.test(b.klausimas || '') && sakaItraukiama(Z, b, REZ)).forEach(b => {
+    // LT/EN: bloko ribos - lietuviškos pastraipos; angliškos - toje pačioje lentelės eilutėje (MVP LT/EN; T4-M4)
+    const P = [];
     for (let i = Math.min(b.i, b.blokas.nuo); i <= b.blokas.iki; i++){
       const p = paras[i]; if (!p || !p.parentNode) continue;
+      let tr = p.parentNode; while (tr && tr.localName !== 'tr') tr = tr.parentNode;
+      (tr ? GPDocx.els(tr, 'p') : [p]).forEach(x => { if (!P.includes(x)) P.push(x); });
+    }
+    for (const p of P){
       const s = GPDocx.els(p, 't').map(x => x.textContent).join(''), sritys = [];
-      let m; APZ_DATA_RE.lastIndex = 0;
-      while ((m = APZ_DATA_RE.exec(s))) sritys.push([m.index, m.index + m[0].length, m[0].replace(/\s+/g, ' ').trim()]);
+      for (const re of [APZ_DATA_RE, APZ_DATA_EN_RE]){
+        let m; re.lastIndex = 0;
+        while ((m = re.exec(s))) sritys.push([m.index, m.index + m[0].length, m[0].replace(/\s+/g, ' ').trim()]);
+      }
+      sritys.sort((a, b) => a[0] - b[0]);
       sritys.reverse().forEach(([a, e, x]) => { if (nudazykRaudonai(p, a, e)) out.unshift(x); });
     }
   });
@@ -2802,6 +2813,13 @@ function kvlSalinkFaila(vardas){
    Perkėlimą patvirtina žmogus (PATV 'ZAL'); „Nenaudoti“ - klausimas grįžta. DPS sąlygų žaliųjų lentelės (2 priedo 2 lentelė) - dar ne. */
 const ZAL = { kandidatai: [], pasirinkta: 0, atmesta: false };
 function zalModelis(){ return (!ZAL.atmesta && ZAL.kandidatai[ZAL.pasirinkta]) || null; }
+/* DI vertimo perspėjimai lentelės eilutėms (skaičiai, lietuviškos raidės) - „Prieš generuojant“ ir 4 žingsniui, ne tik kortelei (T4-V4) */
+function vertimoPerspejimai(M){
+  const P = (M && M.vertimas && M.vertimas.perspejimai) || {};
+  if (!Object.keys(P).length) return [];
+  return GP_KVAL_LENTELE.numeriai(M, M === kvlModelis() ? KVL.pakeitimai : {}, M.vertimas).filter(e => (P[e.i] || []).length).map(e => ({ nr: e.nr, p: P[e.i] }));
+}
+const vertimoPerspejimuTekstas = V => V.map(x => `${x.nr} eil. - ${x.p.join('; ')}`).join('; ');
 const ZAL_AUTO = new Map();                  // atsakymo raktas -> žmogaus reikšmė prieš automatinį atsakymą
 const ZAL_HEADER_RE = /^(REIKALAVIMAI ŽALIESIEMS PIRKIMAMS|ŽALIEJI REIKALAVIMAI)\b/i;
 /* Šablono žaliųjų lentelė: „N lentelė“, po jos (iki 3 pastraipų) - „REIKALAVIMAI ŽALIESIEMS PIRKIMAMS“ / „ŽALIEJI REIKALAVIMAI“; iki - 4.2 p.
@@ -2841,6 +2859,15 @@ function zalTikslas(){
   }
   return { nr: 3, priedas: null, klausimas: true, pav: 'SPS 3 lentelė', pavKa: 'SPS 3 lentelę', pavKur: 'SPS 3 lentelėje' };
 }
+/* Kur perkeliama kvalifikacijos reikalavimų lentelė - 1 žingsnio tekstams (T4-V2, 2026-10-23): DPS sukūrimo sąlygose - 2 priedo 1 lentelė,
+   DPS konkretaus pirkimo sąlygose lentelės nėra (null), kitur - SPS 2 lentelė. */
+function kvalTikslas(){
+  const sm = seima();
+  return sm === 'DPSP' ? null : sm === 'DPSK' ? { pav: 'DPS sąlygų 2 priedo 1 lentelė', pavKa: 'DPS sąlygų 2 priedo 1 lentelę' } : { pav: 'SPS 2 lentelė', pavKa: 'SPS 2 lentelę' };
+}
+/* Pirkimo sąlygų priedas - kaip vadinamas 1 žingsnio tekstuose: DPS sąlygos - ne SPS (T4-V2) */
+const dpsBudas = () => /^DPS[KP]$/.test(seima() || '');
+const salyguPriedas = () => dpsBudas() ? 'pirkimo sąlygų priedas' : 'SPS priedas';
 const zalKilme = M => `iš įkelto dokumento „${M.failas}“ (žaliųjų reikalavimų lentelė)${M.di ? ', tekstą atpažino DI iš skenuoto dokumento' : ''}`;
 /* Ar žaliųjų klausimą atsako įkeltas dokumentas (kontrolinisAtsakymas). */
 function zalAtsakymas(t){
@@ -2869,6 +2896,14 @@ function zalTaikyk(){
    reikalavimų lentelė perkeliama į DPS sąlygų priedą, vieta siūloma - to priedo lentelė („Siūloma (nepatvirtinta)“, patvirtina žmogus).
    Ar kriterijai DPS sukūrimui taikomi (2.15 p. variantai), sprendžia žmogus - iš lentelės tai neišvedama. */
 const DPS_APLINKOS_RE = /dps sukurimui taikomi aplinkos apsaugos kriterijai nustatyti/;     // norm() tekstas (LT - su „2 15“ priekyje)
+/* DPS sukūrimo 2.15 p.: pasirinkta, kad aplinkos apsaugos kriterijai netaikomi (T4-V10, 2026-10-23) - su įkelta žaliųjų lentele
+   „Patikrinkite“ (2 priedo lentelė šablone yra visada, todėl tai gali būti teisinga - bet 2.15 p. ir lentelė turi derėti) */
+function dps215Netaikomi(){
+  const k = Object.keys(ATS).find(k => /^jeigu dps sukurimui netaikomi aplinkos apsaugos kriterijai/.test(k));
+  const t = Object.keys(ATS).find(k => /^jeigu dps sukurimui taikomi aplinkos apsaugos kriterijai/.test(k));
+  return (k && ATS[k] === true) || (t && ATS[t] === false);
+}
+const DPS215_PASTABA = 'Sąlygų 2.15 punkte pasirinkta, kad DPS sukūrimui aplinkos apsaugos kriterijai netaikomi, o įkelta žaliųjų reikalavimų lentelė perkeliama į sąlygų priedą - 2.15 punktas ir lentelė turi derėti: arba pasirinkite, kad kriterijai taikomi, arba nenaudokite lentelės.';
 function zalDpsSiulyk(key, en, naudojama){
   const t = naudojama ? zalTikslas() : null;
   const v = t && t.priedas ? (en ? `Table ${t.nr} of Annex ${t.priedas} to these procurement conditions` : `šių pirkimo sąlygų ${t.priedas} priedo ${t.nr} lentelėje`) : null;
@@ -4286,7 +4321,7 @@ function surinktiKlausimus(){
     const x = lt ? { lent: Number(lt[1]), nr: Number(lt[2]), tekstas: lt[0] } : en ? { lent: Number(en[2]), nr: Number(en[1]), tekstas: en[0] } : null;
     if (x) x.tekstas = x.tekstas.replace(/\s+/g, ' ');
     if (!x || x.lent !== K.kvl.lent.nr) return;
-    const dok = d.pavadinimas || d.trumpas;
+    const dok = /^PRIEDAI_/.test(d.trumpas) ? dokumentoPavadinimas(d) : dokTrumpas(d.trumpas);   // ne vidinis „Bendri priedai - LT - ...“ (T4-M2)
     if (!K.kvl.nuorodos.some(y => y.dok === dok && y.tekstas === x.tekstas)) K.kvl.nuorodos.push({ dok, nr: x.nr, tekstas: x.tekstas });
   }));
 
@@ -5198,7 +5233,8 @@ function kortelesVienetai(K, c){
       saltinis: `įkeltas dokumentas - patikrinkite grupes${q.spec ? ' ir specialistus' : ''}` });
     const nDI = q.dvikalbis && !q.M.dvikalbe ? GP_KVAL_LENTELE.diVertimuSk(q.M, q.M.vertimas) : 0;
     if (nDI) out.push({ id: c.id + '-en', pavadinimas: `Angliškas kvalifikacijos reikalavimų tekstas - DI vertimas (${nDI} eil.)`,
-      busena: PATV.has('KVL_EN') ? 'patvirtinta' : 'siuloma', raktai: ['KVL_EN'], reiksme: `${nDI} eilučių`, saltinis: 'DI vertimas - patikrinkite' });
+      busena: PATV.has('KVL_EN') ? 'patvirtinta' : 'siuloma', raktai: ['KVL_EN'], reiksme: `${nDI} eilučių`,
+      saltinis: 'DI vertimas - patikrinkite' + (vertimoPerspejimai(q.M).length ? '; ' + vertimoPerspejimuTekstas(vertimoPerspejimai(q.M)) : '') });
   } else if (c.rusis === 'zal'){
     if (!q.M) return out;                         // lentelė nenaudojama - tik pasiūlymas ją naudoti
     const n = q.M.eilutes.length;
@@ -5207,7 +5243,8 @@ function kortelesVienetai(K, c){
       saltinis: 'įkeltas dokumentas - patikrinkite tekstą' });
     const nDI = q.dvikalbis && !q.M.dvikalbe ? GP_KVAL_LENTELE.diVertimuSk(q.M, q.M.vertimas) : 0;
     if (nDI) out.push({ id: c.id + '-en', pavadinimas: `Angliškas žaliųjų reikalavimų tekstas - DI vertimas (${nDI} eil.)`,
-      busena: PATV.has('ZAL_EN') ? 'patvirtinta' : 'siuloma', raktai: ['ZAL_EN'], reiksme: `${nDI} eilučių`, saltinis: 'DI vertimas - patikrinkite' });
+      busena: PATV.has('ZAL_EN') ? 'patvirtinta' : 'siuloma', raktai: ['ZAL_EN'], reiksme: `${nDI} eilučių`,
+      saltinis: 'DI vertimas - patikrinkite' + (vertimoPerspejimai(q.M).length ? '; ' + vertimoPerspejimuTekstas(vertimoPerspejimai(q.M)) : '') });
   } else if (c.rusis === 'dalis'){
     const d = (ATS['DALYS'] || [])[q.k] || {};
     const b = (lauk, rk) => !String(d[lauk] || '').trim() ? 'neuzpildyta' : (PATV.has(rk) ? 'patvirtinta' : 'siuloma');
@@ -5241,7 +5278,7 @@ function prieduVienetai(K){
         reiksme: a === true ? 'Taip - eilutė lieka' : a === false ? 'Ne - eilutė pašalinama' : '', saltinis: '' });
       return;
     }
-    out.push({ rusis: 'eilute', raktas, q, id: lkId('A_' + raktas), pavadinimas: 'SPS priedų sąrašo eilutė: ' + sarasoEiluteRodyti(q.tekstas),
+    out.push({ rusis: 'eilute', raktas, q, id: lkId('A_' + raktas), pavadinimas: (dpsBudas() ? 'Pirkimo sąlygų priedų sąrašo eilutė: ' : 'SPS priedų sąrašo eilutė: ') + sarasoEiluteRodyti(q.tekstas),
       busena: PATV.has('A_' + raktas) ? 'patvirtinta' : 'siuloma', raktai: ['A_' + raktas],
       reiksme: ATS['A_' + raktas] ? 'paliekama' : 'ištrinama', saltinis: s ? s.saltinis : '' });
   });
@@ -5550,6 +5587,7 @@ function zalHTML(K, c, klase, kur){
     <select class="lk-in" id="${c.id}-k" onchange="zalPasirink(this.value)">${ZAL.kandidatai.map((x, j) =>
       opt(String(j), `„${x.failas}“, ${x.lentele}-oji lentelė (${x.eilutes.length} eil.)`, j === ZAL.pasirinkta)).join('')}</select></div>` : '';
   const past = negaliojantysEilutese(M);
+  if (lt.priedas && dps215Netaikomi()) past.push(DPS215_PASTABA);
   return `<section class="${klase} kvl" id="${c.id}" data-busena="${c.busena}" aria-labelledby="${c.id}-kl">${galva}
     <p class="lk-uz" id="${c.id}-uz">Iš „${esc(M.failas)}“ į ${esc(lt.pavKa)} ${perkeliamiReik(M.eilutes.length)} -
       tekstas pažodžiui, tvarka kaip jūsų dokumente. Patikrinkite tekstą, tada patvirtinkite.</p>
@@ -6178,7 +6216,9 @@ function santraukosHTML(S){
   // banko garantija trumpesnė už pasiūlymo galiojimą (T3-V7) - tik kai užtikrinimas taikomas
   const uztK = ((S.M && S.M.korteles) || []).find(c => (c.vienetai || []).some(u => (u.raktai || []).includes('UZT_DIENOS')));
   const uztP = uztK ? uztTerminoPastaba() : null;
-  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length && !teise.length && !kvl.length && !z1.length && !nsb.length && !uztP)
+  const zalK = ((S.M && S.M.korteles) || []).find(c => c.rusis === 'zal' && c.q && c.q.M && c.q.lent && c.q.lent.priedas);
+  const d215 = zalK && dps215Netaikomi();
+  if (!S.blokuojantys.length && !S.neuzpildyti.length && !S.siulomi.length && !S.neprivalomi.length && !S.zingsnis1.length && !teise.length && !kvl.length && !z1.length && !nsb.length && !uztP && !d215)
     return h + `<p class="lk-sa-ok">Visi klausimai atsakyti ir patvirtinti.</p>`;
   if (S.blokuojantys.length) h += `<div class="lk-sa lk-sa--kl" data-lygis="butina">${lyg('butina')}<b>Privalomi sprendimai (${S.blokuojantys.length}) - kol neatsakyta, generuoti neleidžiama:</b>${sar(S.blokuojantys)}</div>`;
   if (S.neuzpildyti.length) h += `<div class="lk-sa lk-sa--isp" data-lygis="patikr">${lyg('patikr')}<b>Neužpildyti laukai (${S.neuzpildyti.length})</b> - dokumente liks žyma (brūkšniai, nurodymas ar „X“), patikra ją parodys:${sar(S.neuzpildyti)}</div>`;
@@ -6187,6 +6227,8 @@ function santraukosHTML(S){
   // nacionalinis saugumas ir Vyriausybės BVPŽ kodų sąrašas (2026-10-21)
   if (nsb.length) h += `<div class="lk-sa lk-sa--isp" id="lkNacsaugBvpz" data-lygis="patikr">${lyg('patikr')}<b>Nacionalinis saugumas ir BVPŽ kodų sąrašas (${nsb.length})</b> - generuoti galima:
     <ul>${nsb.map(x => `<li><a href="#${esc(x.id)}" data-z1-suolis="${esc(x.id)}">${esc(x.nuoroda)}</a> - ${esc(x.tekstas)}</li>`).join('')}</ul></div>`;
+  if (d215) h += `<div class="lk-sa lk-sa--isp" id="lkDps215" data-lygis="patikr">${lyg('patikr')}<b>Aplinkos apsaugos kriterijai (2.15 p.)</b> - generuoti galima:
+    <ul><li><a href="#${zalK.id}" data-lk-suolis="${zalK.id}">Žalieji reikalavimai</a> - ${esc(DPS215_PASTABA)}</li></ul></div>`;
   if (uztP) h += `<div class="lk-sa lk-sa--isp" id="lkUztTerminas" data-lygis="patikr">${lyg('patikr')}<b>Pasiūlymo galiojimo užtikrinimas</b> - generuoti galima:
     <ul><li><a href="#${uztK.id}-dienos" data-lk-suolis="${uztK.id}-dienos">Banko garantijos galiojimas</a> - ${esc(uztP)}</li></ul></div>`;
   if (S.siulomi.length) h += `<div class="lk-sa lk-sa--siul" data-lygis="patikr">${lyg('patikr')}<b>Siūlomos reikšmės, laukiančios patvirtinimo (${S.siulomi.length})</b> - į dokumentą pateks siūloma reikšmė, patikra jas išvardys:${
@@ -7774,6 +7816,7 @@ function ikeltiDokumentai(rinkinys){
   Object.keys(IKELTI_PAKETE).forEach(rusis => {
     const dd = R[rusis];
     if (!dd || (rusis === 'sutartis' && !(sp && sp.pridedamas && !sp.generuojamas))) return;
+    if (rusis === 'priedas' && sp && !sp.pridedamas) return;     // sutarties projektas nerengiamas - priedas neįdedamas (T4-D5)
     const x = IKELTI_PAKETE[rusis], e = x.raktas && sps ? priedoEilute(sps, x.raktas) : null;
     const pref = e && e.nr ? `${kam} ${e.nr} priedas` : '';
     dd.forEach(d => {
@@ -7781,12 +7824,22 @@ function ikeltiDokumentai(rinkinys){
       const stem = d.vardas.replace(/\.[a-z0-9]+$/i, ''), be = stem.replace(new RegExp(x.pav, 'i'), '').replace(/^[\s.,;:_–-]+|[\s.,;:_–-]+$/g, '');
       const vardas = dd.length > 1 || rusis === 'priedas' ? ` (${be || stem})` : '';
       out.push({ d: { trumpas: 'IKELTA_' + rusis.toUpperCase(), pavadinimas: (pref ? pref + ' - ' : '') + x.pav + vardas, dokumentas: (pref ? pref + ' ' : '') + x.pav + vardas },
-                 blob: d.failas, statinis: true, isDokumento: d.vardas, ikeltas: rusis, priedoNr: pref ? e.nr : null, blokai: d.blokai || [],
+                 blob: d.failas, statinis: true, isDokumento: d.vardas, ikeltas: rusis, priedoNr: pref ? e.nr : null, blokai: d.blokai || [], antrNr: antrastesPriedoNr(d.blokai),
                  pletinys: (String(d.vardas).match(/\.([a-z0-9]+)$/i) || [, 'pdf'])[1].toLowerCase(), forma: true, stats: {},
                  audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } });
     });
   });
   return out;
+}
+/* Įkelto dokumento antraštėje įrašytas priedo numeris („SPS 2 priedas“, „Pirkimo sąlygų 2 priedas“) - pirmuose blokuose (T4-D4, 2026-10-23) */
+function antrastesPriedoNr(blokai){
+  for (const b of (blokai || []).slice(0, 8)){
+    for (const l of String(b.text || '').split('\n').slice(0, 3)){
+      const m = /^(?:SPS|SPC|(?:konkretaus\s+)?pirkimo\s+sąlygų)?\s*(\d{1,2})\s*priedas(?![\p{L}])/iu.exec(l.trim());
+      if (m) return +m[1];
+    }
+  }
+  return null;
 }
 /* 4 žingsnio eilutė: kas iš įkeltų dokumentų įdėta į paketą ir kodėl kai kas - ne */
 function ikeltuPatikraHTML(rez){
@@ -7794,12 +7847,21 @@ function ikeltuPatikraHTML(rez){
   const sp = sutartiesProjektas(), sut = DK.failai.filter(d => d.rusis === 'sutartis' && d.failas);
   const neidetas = sut.length && !f.some(r => r.ikeltas === 'sutartis')
     ? ` Įkeltas sutarties projektas („${sut.map(d => esc(d.vardas)).join('“, „')}“) į paketą neįdėtas - ${sp && sp.generuojamas ? 'sutarties projektą pakete parengia generatorius' : sp && !sp.pridedamas ? '1 žingsnyje atsakyta, kad sutarties projektas nerengiamas (esminės sąlygos - SPS)' : '1 žingsnyje neatsakyta, ar pridedamas sutarties projektas'}.` : '';
-  if (!f.length && !neidetas) return '';
+  // sutarties priedai, kai sutarties projektas nerengiamas (T4-D5): į paketą neįdedami - nurodymo „įrašykite sutarties priedų sąraše“ įvykdyti negalima
+  const sPr = sp && !sp.pridedamas ? DK.failai.filter(d => d.rusis === 'priedas' && d.failas && !d.neperskaitytas) : [];
+  const neidetiPr = sPr.length ? ` Sutarties priedai („${sPr.map(d => esc(d.vardas)).join('“, „')}“) į paketą neįdėti - 1 žingsnyje atsakyta, kad sutarties projektas nerengiamas (esminės sąlygos - SPS). Jei šis dokumentas turi būti pirkimo dokumentų dalis, pridėkite jį kaip SPS priedą ir įrašykite į SPS priedų sąrašą.` : '';
+  // įkelto failo antraštėje - kitas priedo numeris nei šiame pakete (T4-D4): failas nekeičiamas, todėl numerį pataiso žmogus
+  const kitasNr = f.filter(r => r.priedoNr && r.antrNr && r.antrNr !== +r.priedoNr);
+  // atkurtas juodraštis: anksčiau įkelti paketo failai, kurių dabar nėra (T4-V3)
+  const jd = jdTrukstaIkelti().filter(x => IKELTI_PAKETE[x.rusis]);
+  const jdT = jd.length ? ` <span data-jd-truksta>Iš juodraščio: anksčiau įkelt${jd.length > 1 ? 'ų paketo failų' : 'o paketo failo'} ${jd.map(x => `„${esc(x.vardas)}“`).join(', ')} šiame pakete nėra - įkelkite ${jd.length > 1 ? 'juos' : 'jį'} 1 žingsnyje ir sugeneruokite iš naujo.</span>` : '';
+  if (!f.length && !neidetas && !neidetiPr && !jdT) return '';
   const pr = f.filter(r => r.ikeltas === 'priedas'), beNr = f.filter(r => r.ikeltas !== 'priedas' && !r.priedoNr);
-  return `<div class="audit ${beNr.length || pr.length || neidetas ? 'no' : 'ok'}" id="ikeltiPakete" style="margin-top:10px"><b>Jūsų įkelti dokumentai pakete:</b>
+  return `<div class="audit ${beNr.length || pr.length || neidetas || neidetiPr || kitasNr.length || jdT ? 'no' : 'ok'}" id="ikeltiPakete" style="margin-top:10px"><b>Jūsų įkelti dokumentai pakete:</b>
     ${f.length ? f.map(r => `<b>${esc(r.d.pavadinimas)}</b> („${esc(r.isDokumento)}“)`).join('; ') + ' - be pakeitimų.' : ''}${
+    kitasNr.map(r => ` <span data-ikelta-nr>Patikrinkite: „${esc(r.isDokumento)}“ antraštėje įrašytas ${r.antrNr} priedas, o šiame pakete tai ${esc(String(r.priedoNr))} priedas - pataisykite numerį faile (modulis įkeltų failų nekeičia).</span>`).join('')}${
     beNr.length ? ` Pirkimo sąlygų priedų sąraše tokio priedo eilutės nėra, todėl failo pavadinime numerio nėra - patikrinkite, kuris tai priedas.` : ''}${
-    pr.length ? ` Sutarties prieduose jų numerių nežinome - sutarties projekto priedų sąraše įrašykite juos patys.` : ''}${neidetas}</div>`;
+    pr.length ? ` Sutarties priedų (${pr.map(r => `„${esc(r.isDokumento)}“`).join(', ')}) numerių nežinome - sutarties projekto priedų sąraše įrašykite juos patys.` : ''}${neidetas}${neidetiPr}${jdT}</div>`;
 }
 /* 4 žingsnio eilutė: kriterijus, metodikos failas pakete (ar kodėl ne), pastabos */
 function metodikosPatikraHTML(rez){
@@ -7887,10 +7949,11 @@ function failuVardai(rez){
                    pavadinimas: pavClean($('#pavadinimas').value), data: $('#sdata').value || undefined };
   const naudoti = new Set();
   return rez.map(r => {
-    const dok = (r.d.dokumentas || DOK_VARDAI[r.d.trumpas.split('_').pop()] || r.d.trumpas) + kalba;
+    // įkelti ir nekeičiami failai (techninė specifikacija, bankų sąrašas) - be „LT-EN“: jų kalba ta, kuria parengti (T4-M1)
+    const dok = (r.d.dokumentas || DOK_VARDAI[r.d.trumpas.split('_').pop()] || r.d.trumpas) + (r.ikeltas || r.statinis ? '' : kalba);
     let v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok, pletinys: r.pletinys || 'docx' });
-    // ta pati rūšis du kartus (pvz. DPS sutarčių sąrašas ir bendras priedas) - pridedamas šablono kodas
-    if (naudoti.has(v)) v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok + ' ' + r.d.trumpas, pletinys: r.pletinys || 'docx' });
+    // ta pati rūšis du kartus - eilės numeris (ne šablono kodas)
+    for (let n = 2; naudoti.has(v); n++) v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok + ' ' + n, pletinys: r.pletinys || 'docx' });
     naudoti.add(v);
     return v;
   });
@@ -7983,7 +8046,7 @@ function rodykRezultata(rez){
 
   h += `<h3 id="baigtumas">Baigtumo patikra</h3>`;
   const blogi = rez.filter(r => !r.audit.svarus);
-  const X = rez.filter(r => !r.sutartis).flatMap(r => (r.audit.patikrinti||[]).map(x => ({...x, d:r.d.trumpas})));   // sutarties vietos - atskirai žemiau
+  const X = rez.filter(r => !r.sutartis).flatMap(r => (r.audit.patikrinti||[]).map(x => ({...x, d:r.d.trumpas, dok: r.gulscias ? r.d.dokumentas : null})));   // sutarties vietos - atskirai žemiau
   if (!blogi.length){
     // yra peržiūrėtinų vietų (pvz. tuščias kvalifikacijos reikalavimo langelis) - antraštė jų nepaneigia (naujo darbuotojo patikra 2026-10-20)
     h += `<div class="audit ${X.length ? 'no' : 'ok'}"><b>Automatinė patikra: raudonų vietų ir komentarų neliko${X.length ? `, bet ${X.length} viet${X.length % 10 === 1 && X.length % 100 !== 11 ? 'ą' : 'as'} reikia peržiūrėti - žr. „Papildomai patikrinkite“ žemiau` : ', tuščių laukų - taip pat'}.</b>
@@ -8005,7 +8068,7 @@ function rodykRezultata(rez){
   if (X.length){
     h += `<div class="audit no" style="margin-top:10px"><b>Papildomai patikrinkite (${X.length}):</b>
       liko „X" vietoj skaičiaus arba neužpildytas vietos rezervas:
-      <div class="lst">${X.map(x=>`<div><span class="n">${esc(dokTrumpas(x.d))}</span> ${ilgasTekstas(x.text, 220)}</div>`).join('')}</div></div>`;
+      <div class="lst">${X.map(x=>`<div><span class="n">${esc(x.dok || dokTrumpas(x.d))}</span> ${ilgasTekstas(x.text, 220)}</div>`).join('')}</div></div>`;
   }
   /* Sutarties projektas (S3 parinkimas, S4 generavimas, 2026-10-08): kas pasirinkta, ar įtraukta į paketą, kas palikta sudarant ar Word */
   // Vidaus taisyklių riba (įvesta naudotojo, saugoma tik jo naršyklėje - vidaus-riba.js): primenama, kai numatoma vertė ją viršija, o
@@ -8160,12 +8223,14 @@ function rodykRezultata(rez){
     const pav = k.pav || 'SPS 2 lentelė';
     if (k.klaida){ h += `<div class="audit no" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai neperkelti:</b> ${esc(dokumentoPavadinimas(r.d))} - ${esc(pav.replace(/lentelė$/, 'lentelės'))}
       dokumente neradome, todėl „${esc(k.failas)}“ reikalavimų įrašyti nepavyko. Lentelė palikta kaip šablone - užpildykite ją Word programoje.</div>`; return; }
-    h += `<div class="audit ${k.patvirtinta && !k.beVertimo && (!k.diVertimu || k.vertimasPatvirtintas) ? 'ok' : 'no'}" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai (${esc(pav)}):</b> ${esc(dokumentoPavadinimas(r.d))} -
+    const vpK = k.diVertimu ? vertimoPerspejimai(kvlModelis()) : [];
+    h += `<div class="audit ${k.patvirtinta && !k.beVertimo && (!k.diVertimu || k.vertimasPatvirtintas) && !vpK.length ? 'ok' : 'no'}" id="kvalLentelePatikra" style="margin-top:10px"><b>Kvalifikacijos reikalavimai (${esc(pav)}):</b> ${esc(dokumentoPavadinimas(r.d))} -
       iš „${esc(k.failas)}“ perkelta ${k.eiluciu} (${k.grupes.map(g => esc(g.pav) + ' ' + g.kiek).join(', ')}), numeriai 1-${k.eiluciu}${k.pasalintos.length ? `; pašalintos grupės be reikalavimų: ${esc(k.pasalintos.join(', '))}` : ''}${
       k.antrastesIrasytos ? '; grupių antraštės įrašytos (LITGRID formoje jų nėra)' : ''}${
       k.neVisa ? '; „ne visa apimtimi“ - iš jūsų dokumento' : ''}${k.neVisaNeperkelta ? '; jūsų dokumento „ne visa apimtimi“ nuostata neperkelta - formoje tokios eilutės nėra' : ''}${k.specialistai.length && k.spec37 ? `; specialistų reikalavimai (3.7 p.): ${esc(L.punktai(k.specialistai, 'ir'))}` : ''}.${
       k.patvirtinta ? '' : ' <b>Perkėlimas nepatvirtintas</b> - grupės ir specialistai buvo tik siūlomi; peržiūrėkite lentelę Word programoje.'}${
       k.diVertimu ? ` Angliškas tekstas ${k.diVertimu} eilutėse - <b>DI vertimas (Claude)</b>${k.vertimasPatvirtintas ? ', jūsų patvirtintas' : ', <b>nepatvirtintas</b>'}; vertėjas netikrino, Word faile įrašytas DI požymis.` : ''}${
+      vpK.length ? ` <b>Patikrinkite vertimą:</b> ${esc(vertimoPerspejimuTekstas(vpK))}.` : ''}${
       k.beVertimo ? ` <b>Angliškas tekstas</b> ${k.beVertimo} eilutėse neįrašytas - langeliuose raudonas nurodymas „${esc(L.VERTIMO_ZYMA)}“.` : ''}${
       (k.priedoNuorodos || []).length ? ` Nuorodos į SPS priedus lentelėje: ${(k.priedoNuorodos).map(x => x.tapo ? `SPS ${esc(x.buvo)} → ${esc(x.tapo)} priedas` : `<b>Patikrinkite</b> SPS ${esc(x.buvo)} priedą („${esc(x.tekstas)}“) - neatpažinta, kuriam priedui`).join('; ')}.` : ''}</div>`;
   });
@@ -8173,10 +8238,12 @@ function rodykRezultata(rez){
     const k = r.stats.zalIsDokumento, L = GP_KVAL_LENTELE;
     if (k.klaida){ h += `<div class="audit no" id="zalLentelePatikra" style="margin-top:10px"><b>Žalieji reikalavimai neperkelti:</b> ${esc(dokumentoPavadinimas(r.d))} - ${esc(k.pav.replace(/lentelė$/, 'lentelės'))}
       dokumente neradome, todėl „${esc(k.failas)}“ reikalavimų įrašyti nepavyko. Lentelė palikta kaip šablone - užpildykite ją Word programoje.</div>`; return; }
-    h += `<div class="audit ${k.patvirtinta && !k.beVertimo && (!k.diVertimu || k.vertimasPatvirtintas) ? 'ok' : 'no'}" id="zalLentelePatikra" style="margin-top:10px"><b>Žalieji reikalavimai (${esc(k.pav)}):</b> ${esc(dokumentoPavadinimas(r.d))} -
+    const vpZ = k.diVertimu ? vertimoPerspejimai(zalModelis()) : [];
+    h += `<div class="audit ${k.patvirtinta && !k.beVertimo && (!k.diVertimu || k.vertimasPatvirtintas) && !vpZ.length ? 'ok' : 'no'}" id="zalLentelePatikra" style="margin-top:10px"><b>Žalieji reikalavimai (${esc(k.pav)}):</b> ${esc(dokumentoPavadinimas(r.d))} -
       iš „${esc(k.failas)}“ perkelta ${k.eiluciu} eil., numeriai 1-${k.eiluciu}, šablono eilutė (ISO 14001 / EMAS) pakeista${k.pdf ? '; iš PDF - tik tekstas, be pusjuodžio ir kursyvo' : ''}.${
       k.patvirtinta ? '' : ' <b>Perkėlimas nepatvirtintas</b> - peržiūrėkite lentelę Word programoje.'}${
       k.diVertimu ? ` Angliškas tekstas ${k.diVertimu} eilut${k.diVertimu === 1 ? 'ėje' : 'ėse'} - <b>DI vertimas (Claude)</b>${k.vertimasPatvirtintas ? ', jūsų patvirtintas' : ', <b>nepatvirtintas</b>'}; vertėjas netikrino, Word faile įrašytas DI požymis.` : ''}${
+      vpZ.length ? ` <b>Patikrinkite vertimą:</b> ${esc(vertimoPerspejimuTekstas(vpZ))}.` : ''}${
       k.beVertimo ? ` <b>Angliškas tekstas</b> ${k.beVertimo} eilut${k.beVertimo === 1 ? 'ėje' : 'ėse'} neįrašytas - langeliuose raudonas nurodymas „${esc(L.VERTIMO_ZYMA)}“.` : ''}</div>`;
   });
   const nvp = rez.filter(r => r.stats && r.stats.neVisaPasalinta);
@@ -8312,7 +8379,9 @@ var PP_EIGA = 0;
 const PP_PRIEDAI = [[/_PASIULYMAS$/, /pasiulymo forma/], [/_PARAISKA$/, /paraiskos forma/], [/_SUTARTYS$/, /sutarciu saras/],
   [/_SPECIALISTAI$/, /specialistu saras/], [/_SANDORIS$/, /sandorio salies/], [/_BANKAI$/, /priimtinu banku/], [/_NACSAUGUMAS(VPI)?$/, /nacionalinio saugumo/],
   [/_KONFIDENCIALUMAS$/, /konfidencialumo isipareig/], [/_KONFINFO$/, /konfidenciali informacija/], [/_SUBTIEKEJAI$/, /ukio subjekt|subtiekej/],
-  [/_DERYBOS$/, /deretinu salyg/], [/_VALDYMAS$/, /valdymo ar prieziuros/], [/_METODIKA$/, /vertinimo metodika/]];
+  [/_DERYBOS$/, /deretinu salyg/], [/_VALDYMAS$/, /valdymo ar prieziuros/], [/_METODIKA$/, /vertinimo metodika/],
+  // DPS sukūrimo LT/EN priedai - atskiri failai (T4-D7: paketo patikra jų nerasdavo)
+  [/_PASALINIMAS$/, /pasalinimo pagrind/], [/_KVALIFIKACIJA$/, /kvalifikacijos reikalavim/]];
 // įkelti dokumentai (IKELTA_*) - jų failo vardas jau prasideda SPS priedo numeriu ir pavadinimu, todėl atskirai nepervadinami
 function ppVaidmuo(r){
   const t = String((r.d && r.d.trumpas) || ''), dk = String((r.d && r.d.dokumentas) || '');
@@ -8323,7 +8392,7 @@ function ppVaidmuo(r){
   if (/_PARAISKA$/.test(t)) return 'paraiska';
   if (t === 'IKELTA_TS') return 'ts';                 // įkelti dokumentai pakete (2026-10-22)
   if (t === 'IKELTA_SUTARTIS') return 'sutartis';
-  return /^PRIEDAI_|_GULSTI$|_METODIKA$|^IKELTA_PRIEDAS$/.test(t) ? 'priedas' : null;
+  return /^PRIEDAI_|_GULSTI$|_METODIKA$|^IKELTA_PRIEDAS$|^DPS[KP]_LTEN_(PASALINIMAS|KVALIFIKACIJA|SUTARTYS|SPECIALISTAI|SUBTIEKEJAS|IDARBINTAS)$/.test(t) ? 'priedas' : null;
 }
 /* D4 c (2026-10-20): nuorodos į to paties dokumento punktus („3.1 punkte“, „3.1-3.4 punktuose“, „9.2 p.“) - ar toks punktas dokumente yra.
    Numeriai sugeneruotame dokumente įrašyti tekstu (GPNum), todėl skaitoma kiekviena Word pastraipa (ir lentelių langeliuose). Nuorodos į kitus
@@ -8576,18 +8645,19 @@ const PRIEDO_ATITIKMUO = [
 ];
 /* Priedo numeris sąsajoje - tik galutinis (po pernumeravimo, D4 b; naujų darbuotojų testavimas V3): registro pavadinime „(9 priedas)“ ir bendro
    priedo žemėlapio pavadinime „5 priedas. Sutarčių sąrašas“ - kitų šablonų numeriai, todėl jie nerodomi */
-const priedoPavRodyti = p => String(p.pavadinimas || '').replace(/\s*\((\d+\s+priedas|PDF)\)\s*$/, m => /PDF/.test(m) ? m : '');
+// DPS sąlygose SPS nėra - registro pavadinimo pradžia „SPS priedas.“ nerodoma (T4-V6, 2026-10-23)
+const priedoPavRodyti = p => String(p.pavadinimas || '').replace(/\s*\((\d+\s+priedas|PDF)\)\s*$/, m => /PDF/.test(m) ? m : '').replace(/^SPS priedas\.\s*/, m => dpsBudas() ? '' : m);
 function priedoNrTekstas(id){
   const r = PRIEDO_RAKTAS[id], d = r && prieduSavininkas(), e = d && priedoEilute(d, r);
   if (!e || !e.nr) return '';
-  return `SPS priedų sąraše - ${e.nr} priedas${e.nrSablone && String(e.nrSablone) !== String(e.nr) ? ` (šablone - ${e.nrSablone}; likę priedai pernumeruojami)` : ''}`;
+  return `${dpsBudas() ? 'Pirkimo sąlygų' : 'SPS'} priedų sąraše - ${e.nr} priedas${e.nrSablone && String(e.nrSablone) !== String(e.nr) ? ` (šablone - ${e.nrSablone}; likę priedai pernumeruojami)` : ''}`;
 }
 function dokumentoPavadinimas(d){
   const t = String(d.pavadinimas || d.trumpas);
   if (!/^PRIEDAI_/.test(d.trumpas)) return t;
   const id = Object.keys(PRIEDO_RAKTAS).find(k => new RegExp('_' + k + '$').test(d.trumpas));
   const e = id && prieduSavininkas() && priedoEilute(prieduSavininkas(), PRIEDO_RAKTAS[id]);
-  return `SPS ${e && e.nr ? e.nr + ' ' : ''}priedas. ` + priedoPavRodyti({ pavadinimas: t.replace(/^Bendri priedai - (LT\/EN|LT) - /, '').replace(/^(SPS\s+)?(\d+\s+)?priedas\.\s*/, '') });
+  return `${dpsBudas() ? 'Pirkimo sąlygų' : 'SPS'} ${e && e.nr ? e.nr + ' ' : ''}priedas. ` + priedoPavRodyti({ pavadinimas: t.replace(/^Bendri priedai - (LT\/EN|LT) - /, '').replace(/^(SPS\s+)?(\d+\s+)?priedas\.\s*/, '') });
 }
 /* Dokumento vardas sąsajoje vietoj šablono kodo („AK_LT_SPS“ -> „Specialiosios pirkimo sąlygos (SPS)“; naujo darbuotojo patikra 2026-10-20) */
 function dokTrumpas(t){
@@ -8823,12 +8893,8 @@ async function iStep2(kur){
     return;
   }
   klausimynas();
-  if (budas === 'DPSK' && kalba === 'LT'){
-    $('#mapWarn').classList.remove('hid');
-    $('#mapWarn').innerHTML += `<div style="margin-top:6px"><b>Pastaba.</b> LITGRID šablonų rinkinyje
-      lietuviškas DPS sukūrimo šablonas pateiktas <b>be priedų</b> (dvikalbis turi 7).
-      Priedus reikėtų paimti iš dvikalbio rinkinio arba paprašyti LITGRID komandos.</div>`;
-  }
+  // Iki 2026-10-23 čia buvo pastaba, kad lietuviškas DPS sukūrimo šablonas „be priedų“ - pasenusi: 1-6 priedai ir priedėliai yra pačiame
+  // sąlygų faile (5-6 priedai - gulsčiais puslapiais, atskirame faile; T4-V1)
   rodykSuFokusu(kur === 'sutartis' ? 'sutartis' : 2);
   return true;
 }
@@ -9497,6 +9563,12 @@ function aiPriimtuSantrauka(){
      šaltinis; tekstas nekeičiamas).
    Failai lieka tik atmintyje - juodraštyje neišsaugomi (perkeltos lentelės - KVL / ZAL - išsaugomos). */
 const DK = { failai: [], n: 0 };
+/* Juodraštyje - tik įkeltų failų vardai ir rūšys (failai nesaugomi): atkūrus pasakoma, kuriuos įkelti iš naujo, o 4 žingsnis - kurių paketo
+   failų (techninė specifikacija, sutarties priedai) pakete nėra (T4-V3, 2026-10-23) */
+let JD_IKELTA = [];
+const jdIkeltaVisi = () => DK.failai.filter(d => !d.neperskaitytas).map(d => ({ vardas: String(d.vardas).slice(0, 200), rusis: d.rusis }))
+  .concat(JD_IKELTA.filter(x => !DK.failai.some(d => d.vardas === x.vardas))).slice(0, 60);
+const jdTrukstaIkelti = () => JD_IKELTA.filter(x => !DK.failai.some(d => d.vardas === x.vardas));
 const DK_RUSYS = { paraiska: 'Pirkimo paraiška', kvalifikacija: 'Kvalifikacijos reikalavimai', zalieji: 'Žalieji (aplinkosaugos) reikalavimai',
   metodika: 'Pasiūlymų vertinimo metodika', ts: 'Techninė specifikacija', sutartis: 'Sutarties projektas', priedas: 'Sutarties priedas', kita: 'Kitas dokumentas' };
 const DK_TINKA = /\.(docx|pdf|odt|txt|md|jpe?g|png)$/i;
@@ -9602,7 +9674,7 @@ function diLeidimoHTML(vieta){
       <div class="di-leid-k" id="diLeid-${vieta}">Leisti DI skaityti šio pirkimo dokumentus (paraišką, techninę specifikaciją), kad užpildytų laukus?</div>
       <div class="cite" id="diLeidP-${vieta}">„Taip“ - įkelta paraiška ir kitų dokumentų tekstas (ne lentelės, kurios perkeliamos be DI) siunčiami per G-Procure
         serverį į Claude API, kai jų reikia laukams užpildyti: paraiška - iškart, 1 žingsnio laukams; skenuotas dokumentas be teksto - iškart, kad DI perskaitytų jo tekstą; kiti dokumentai - sutarties klausimams, kai
-        rengiamas sutarties projektas. Nei naršyklėje, nei serveryje jie nesaugomi; numatoma vertė iš 1 žingsnio nesiunčiama. „Ne“ -
+        rengiamas sutarties projektas. Nei naršyklėje, nei serveryje jie nesaugomi. Jūsų įrašyta numatoma vertė atskirai nesiunčiama, bet paraiškoje ji paprastai yra - ji keliauja kartu su paraiška. „Ne“ -
         automatiškai nesiunčiama nieko, DI galėsite paleisti mygtukais. Atsakymas galioja šiam pirkimui. Nesiųskite įslaptintos informacijos.</div>
       <div class="actions"><button type="button" data-di-leidimas="taip" aria-describedby="diLeid-${vieta} diLeidP-${vieta}">Taip</button>
         <button type="button" class="sec" data-di-leidimas="ne" aria-describedby="diLeid-${vieta} diLeidP-${vieta}">Ne</button></div></div>`;
@@ -9814,8 +9886,10 @@ function dkPoveikis(d){
     out.push({ k: 'info', t: 'Į 2 žingsnio DI pasiūlymų šaltinius neįtraukiama - paraiškoje yra numatoma vertė.' });
   }
   if (d.rusis === 'kvalifikacija'){
-    if (kv.length) kv.forEach(M => out.push({ k: 'ok', t: `Kvalifikacijos reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>SPS 2 lentelę</b> ${d.di ? '(tekstą atpažino DI)' : 'be DI'} - 2 žingsnyje šablono 2 lentelės laukų nebeklausiama; perkėlimą patvirtinsite kortelėje „Kvalifikacijos reikalavimai“.` }));
-    else out.push({ k: 'info', t: 'Kvalifikacijos reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome - SPS 2 lentelę pildysite 2 žingsnyje.' });
+    const kt = kvalTikslas();
+    if (kv.length && !kt) out.push({ k: 'isp', t: 'DPS konkretaus pirkimo sąlygų šablone kvalifikacijos reikalavimų lentelės nėra (jie - DPS sukūrimo sąlygose), todėl lentelė neperkeliama - dokumentas naudojamas tik kaip 2 žingsnio DI pasiūlymų šaltinis.' });
+    else if (kv.length) kv.forEach(M => out.push({ k: 'ok', t: `Kvalifikacijos reikalavimų lentelė (${reik(M.eilutes.length)}) perkeliama į <b>${kt.pavKa}</b> ${d.di ? '(tekstą atpažino DI)' : 'be DI'} - 2 žingsnyje šablono lentelės laukų nebeklausiama; perkėlimą patvirtinsite kortelėje „Kvalifikacijos reikalavimai“.` }));
+    else out.push({ k: 'info', t: `Kvalifikacijos reikalavimų lentelės (stulpeliai „Reikalavimas“ ir „Pateikiami dokumentai“) neradome${kt ? ` - ${kt.pavKa} pildysite 2 žingsnyje` : ''}.` });
   }
   if (d.rusis === 'kvalifikacija' || d.rusis === 'zalieji'){
     const zt = zalTikslas();
@@ -9835,8 +9909,13 @@ function dkPoveikis(d){
       out.push({ k: 'info', t: 'Failas įdedamas į paketą be pakeitimų kaip SPS priedas „Ekonomiškai naudingiausio pasiūlymo vertinimo metodika“ - numeris pagal SPS priedų sąrašą (DPS konkretaus pirkimo sąlygose - vietoj šablono priedo). ' + (d.di ? 'Kriterijai ir svoriai nustatyti iš DI atpažinto teksto.' : 'Be DI, failas niekur nesiunčiamas.') });
     }
   }
-  if (d.rusis === 'priedas') out.push({ k: 'info', t: 'Sutarties priedas - failas įdedamas į paketą be pakeitimų („Sutarties priedas“); jo numerį sutarties projekto priedų sąraše įrašysite patys.' });
-  if (d.rusis === 'ts') out.push({ k: 'info', t: 'Techninė specifikacija įdedama į paketą be pakeitimų kaip SPS priedas - numeris pagal SPS priedų sąrašo eilutę „Techninė specifikacija“.' });
+  if (d.rusis === 'priedas'){
+    const sp = sutartiesProjektas();
+    out.push({ k: 'info', t: sp && !sp.pridedamas ? '1 žingsnyje atsakyta, kad sutarties projektas nerengiamas (esminės sąlygos - SPS), todėl sutarties priedas į paketą neįdedamas. Jei šis dokumentas turi būti pirkimo dokumentų dalis, pakeiskite jo rūšį arba pridėkite jį kaip SPS priedą.'
+      : 'Sutarties priedas - failas įdedamas į paketą be pakeitimų („Sutarties priedas“); jo numerį sutarties projekto priedų sąraše įrašysite patys.' });
+  }
+  if (d.rusis === 'ts') out.push({ k: 'info', t: dpsBudas() ? 'Techninė specifikacija įdedama į paketą be pakeitimų kaip pirkimo sąlygų priedas - numeris pagal sąlygų priedų sąrašo eilutę „Techninė specifikacija“, o jei tokios eilutės nėra - be numerio.'
+    : 'Techninė specifikacija įdedama į paketą be pakeitimų kaip SPS priedas - numeris pagal SPS priedų sąrašo eilutę „Techninė specifikacija“.' });
   if (d.rusis === 'sutartis'){
     const sp = sutartiesProjektas();
     out.push({ k: 'info', t: sp && sp.pridedamas && !sp.generuojamas ? 'Sutarties projektas įdedamas į paketą be pakeitimų kaip SPS priedas „Sutarties projektas“.'
@@ -9847,7 +9926,8 @@ function dkPoveikis(d){
   if (d.rusis === 'kita' && d.auto === 'kita') out.push({ k: 'isp', t: 'Dokumento rūšies neatpažinome - pasirinkite ją lauke „Kas tai per dokumentas?“: nuo rūšies priklauso, kas iš dokumento padaroma.' });
   if (d.rusis !== 'paraiska'){
     if (d.di) out.push({ k: 'isp', di: true, t: `${GP_DI.zyme({ tekstas: 'DI atpažintas tekstas' })} Tekstą DI (Claude) atpažino iš skenuoto dokumento - jame gali būti klaidų, formatavimo nėra. Prieš patvirtindami perkeltas lenteles ir siūlomas reikšmes, palyginkite jas su originalu.${d.skenPastabos ? ' DI pastaba: ' + esc(d.skenPastabos) : ''}` });
-    if (d.simboliai > 0) out.push({ k: 'info', t: `Tekstas (${d.simboliai.toLocaleString('lt-LT')} simb.) - sutarties klausimams užpildyti (kai rengiamas sutarties projektas, ${diAutomatiskai() ? 'siunčiamas DI automatiškai - jūs leidote' : nacsaugTaip() ? 'dėl nacionalinio saugumo - tik paspaudus mygtuką' : !nacsaugAtsakyta() ? 'siunčiamas DI tik atsakius, kad pirkimas nesusijęs su nacionaliniu saugumu, ir leidus' : DI_LEIDIMAS === 'ne' ? 'tik paspaudus mygtuką - pasirinkote „Ne“' : 'siunčiamas DI, jei leisite skaityti dokumentus'}) ir 2 žingsnio DI atsakymų pasiūlymams (tik paspaudus „Gauti pasiūlymus“).` });
+    if (d.simboliai > 0 && seima() === 'DPSK') out.push({ k: 'info', t: `Tekstas (${d.simboliai.toLocaleString('lt-LT')} simb.) - 2 žingsnio DI atsakymų pasiūlymams (tik paspaudus „Gauti pasiūlymus“). DPS sukūrimo sąlygose sutarties projekto nėra.` });
+    else if (d.simboliai > 0) out.push({ k: 'info', t: `Tekstas (${d.simboliai.toLocaleString('lt-LT')} simb.) - sutarties klausimams užpildyti (kai rengiamas sutarties projektas, ${diAutomatiskai() ? 'siunčiamas DI automatiškai - jūs leidote' : nacsaugTaip() ? 'dėl nacionalinio saugumo - tik paspaudus mygtuką' : !nacsaugAtsakyta() ? 'siunčiamas DI tik atsakius, kad pirkimas nesusijęs su nacionaliniu saugumu, ir leidus' : DI_LEIDIMAS === 'ne' ? 'tik paspaudus mygtuką - pasirinkote „Ne“' : 'siunčiamas DI, jei leisite skaityti dokumentus'}) ir 2 žingsnio DI atsakymų pasiūlymams (tik paspaudus „Gauti pasiūlymus“).` });
     else if (DK_SKENUOJAMAS.test(d.vardas)) out.push(...dkSkenPoveikis(d));
     else out.push({ k: 'isp', t: 'Teksto nerasta (tikėtina, skenuotas dokumentas) - lentelių perkelti ir DI pasiūlymams naudoti negalima. Įkelkite Word failą ar PDF su tekstu.' });
   }
@@ -9878,11 +9958,13 @@ function dkKontrolinisHTML(){
   const mt = kur('metodika'), mm = mt.length ? mt[mt.length - 1].met : null;
   const mtB = !mt.length ? '' : !mm ? 'skaitoma' : mm.kodas ? `kriterijus - ${kritVard(mm.kodas)}${mm.problemos.length ? '; patikrinkite - žr. prie failo' : ''}` : 'kriterijaus nustatyti nepavyko - žr. prie failo';
   return `<p class="dk-ks-h" id="dkKsH">Ką verta įkelti</p><ul>`
-    + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą; ir sutarties klausimą apie ES lėšas', parB)
-    + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), iš jos užpildomi sutarties projekto klausimai, 2 žingsnyje - atsakymų pasiūlymai su citata; failas pridedamas prie paketo kaip SPS priedas', '')
-    + eil(kv, 'Kvalifikacijos reikalavimai', 'lentelė perkeliama į SPS 2 lentelę - šablono 2 lentelės klausimų nebelieka', kv.length ? (kvN ? perkeliamiReik(kvN) : 'lentelės nerasta') : '')
+    + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą' + (seima() === 'DPSK' ? '' : '; ir sutarties klausimą apie ES lėšas'), parB)
+    + eil(kur('ts'), 'Techninė specifikacija', 'pirkimo objekto dalys nustatomos be klausimo (kai kiekvienai daliai - atskiras failas ar parašyta, kad skaidoma ar neskaidoma), '
+      + (seima() === 'DPSK' ? '' : 'iš jos užpildomi sutarties projekto klausimai, ') + '2 žingsnyje - atsakymų pasiūlymai su citata; failas pridedamas prie paketo kaip ' + salyguPriedas(), '')
+    + eil(kv, 'Kvalifikacijos reikalavimai', kvalTikslas() ? `lentelė perkeliama į ${kvalTikslas().pavKa} - šablono lentelės klausimų nebelieka` : 'DPS konkretaus pirkimo sąlygų šablone kvalifikacijos lentelės nėra - dokumentas naudojamas tik kaip DI pasiūlymų šaltinis', kv.length ? (kvN ? perkeliamiReik(kvN) : 'lentelės nerasta') : '')
     + eil(zl, 'Žalieji reikalavimai', zalKontrolinioNauda(), zl.length ? (zlN ? perkeliamiReik(zlN) : 'lentelės nerasta') : '')
-    + eil(mt, 'Vertinimo metodika', 'kai vertinama ne vien pagal kainą: vertinimo kriterijus įrašomas pats, failas pridedamas prie paketo kaip SPS priedas', mtB)
+    // DPS sukūrime pasiūlymai nevertinami (vertinama konkretaus pirkimo metu) - metodikos eilutės nėra (T4-V2)
+    + (seima() === 'DPSK' && !mt.length ? '' : eil(mt, 'Vertinimo metodika', 'kai vertinama ne vien pagal kainą: vertinimo kriterijus įrašomas pats, failas pridedamas prie paketo kaip ' + (seima() === 'DPSP' ? 'pirkimo sąlygų priedas (vietoj šablono priedo)' : 'SPS priedas'), mtB))
     + `</ul>`;
 }
 /* „Ką verta įkelti“ - kas daroma su žaliųjų lentele pagal būdą ir kalbą (zalTikslas). */
@@ -10156,7 +10238,8 @@ const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
    taisyklėms tikslinti (naudotojo sprendimas 2026-10-08); tai vienintelis šio modulio darbo įrašas saugykloje. */
 window.SUTARTIES_BLOKAS = window.GP_SUTARTIES_BLOKAS ? GP_SUTARTIES_BLOKAS.mount({
   vieta: '#sutartisQ',
-  onKeista: () => { if (window.SUTARTIES_FORMA) window.SUTARTIES_FORMA.atnaujink(); if (typeof zingsniuBusenaVeliau === 'function') zingsniuBusenaVeliau(); },
+  onKeista: () => { if (window.SUTARTIES_FORMA) window.SUTARTIES_FORMA.atnaujink(); if (typeof zingsniuBusenaVeliau === 'function') zingsniuBusenaVeliau();
+    if (DK.failai.length) dkRodyk(); },   // prie sutarties projekto failo - ar jis bus pakete (T4-V8)
   duomenys: () => ({
     pavadinimas: pavClean(($('#pavadinimas').value || '').trim()),
     objektas: (document.querySelector('input[name=tipas]:checked') || {}).value || '',
@@ -10657,14 +10740,18 @@ function surinkJuodrasti(){
     etapas: ETAPAS === '3' ? ((window.__GEN && window.__GEN.is) || '2') : ETAPAS,
     skyrius: SKYRIUS,
     legenda: $('#lkLegenda') ? $('#lkLegenda').open : true,   // būsenų paaiškinimas suskleistas - lieka suskleistas (1 etapas U6)
-    di: DI_LEIDIMAS || null             // leidimas DI skaityti šio pirkimo dokumentus (2026-10-19)
+    di: DI_LEIDIMAS || null,            // leidimas DI skaityti šio pirkimo dokumentus (2026-10-19)
+    ikelta: jdIkeltaVisi()              // įkeltų failų vardai ir rūšys (ne failai; T4-V3)
   };
 }
 function juodrascioMeta(){
   const k = KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta();
   const et = ETAPAS === '3' ? ((window.__GEN && window.__GEN.is) || '2') : ETAPAS;
+  const m = metodas(), kalba = ($('input[name=kalba]:checked') || {}).value;
   return { pavadinimas: pavClean(($('#pavadinimas').value || '').trim()), numeris: (k && k.numeris) || '', kortele: k ? k.id : null,
-           etapas: et, etapoPav: 'tęsti nuo „' + ZINGSNIU_PAV[et] + '“' };
+           etapas: et, etapoPav: 'tęsti nuo „' + ZINGSNIU_PAV[et] + '“',
+           // sąraše atskirti to paties pavadinimo juodraščius (T4-V9, 2026-10-23)
+           budas: m && window.GP_METHODS ? GP_METHODS.label(m.id) : '', kalba: kalba === 'LT_EN' ? 'LT/EN' : kalba === 'LT' ? 'LT' : '' };
 }
 // Atkūrimas švariame puslapyje (adresas ?juodrastis=<id>): 1 žingsnio laukai (būdas pirmas - nuo jo priklauso kiti), kortelė, sutarties
 // blokas; jei juodraštis buvo toliau nei 1 žingsnis - šablonai įkeliami iš naujo ir atkuriami atsakymai su būsenomis.
@@ -10706,6 +10793,8 @@ async function atkurkJuodrasti(r){
     ? GP_PARAISKA.esIsAtsakymo({ es_lesos: { reiksme: es.reiksme, citata: es.citata }, projekto_nr: es.projektoNr || null, projekto_pavadinimas: es.projektoPav || null }) : null;
   if (PZ_ES) PZ_ES.failas = String(es.failas || '').slice(0, 300);
   DI_LEIDIMAS = D.di === 'taip' || D.di === 'ne' ? D.di : null;
+  JD_IKELTA = Array.isArray(D.ikelta) ? D.ikelta.filter(x => x && typeof x.vardas === 'string' && x.vardas.trim() && Object.prototype.hasOwnProperty.call(DK_RUSYS, x.rusis))
+    .slice(0, 60).map(x => ({ vardas: x.vardas.slice(0, 200), rusis: x.rusis })) : [];
   if (window.SUTARTIES_BLOKAS && window.SUTARTIES_BLOKAS.atkurk) window.SUTARTIES_BLOKAS.atkurk(D.sb);
   const S2 = D.s2;
   if (S2){
@@ -10976,7 +11065,9 @@ zingsniuBusena();
   window.JD.atkurtas(r.reiksme);
   GP_DARBAS.atskaita();
   GP_BUSENA.juosta({ raktas: 'juodrastis', tipas: 'gerai', tekstas: `Tęsiamas juodraštis${r.reiksme.meta && r.reiksme.meta.pavadinimas ? ' „' + r.reiksme.meta.pavadinimas + '“' : ''}. `
-    + 'Atsakymai ir jų būsenos atkurti; įkelti failai (DI pasiūlymų dokumentai, paraiška) ir sugeneruoti dokumentai juodraštyje nesaugomi - dokumentus sugeneruokite iš naujo.' });
+    + (JD_IKELTA.length ? 'Atsakymai ir jų būsenos atkurti. Įkelti failai juodraštyje nesaugomi - įkelkite juos 1 žingsnyje skiltyje „Pirkimo dokumentai“ iš naujo: '
+        + JD_IKELTA.map(x => `„${x.vardas}“ (${DK_RUSYS[x.rusis].toLowerCase()}${IKELTI_PAKETE[x.rusis] ? ' - paketo dalis' : ''})`).join(', ') + '. Sugeneruoti dokumentai taip pat nesaugomi - sugeneruokite juos iš naujo.'
+      : 'Atsakymai ir jų būsenos atkurti; įkelti failai (DI pasiūlymų dokumentai, paraiška) ir sugeneruoti dokumentai juodraštyje nesaugomi - dokumentus sugeneruokite iš naujo.') });
 })();
 </script>
 <!-- Q4 (2026-09-26): informacinė skiltis „Kas tai ir kaip naudotis“ - bendras komponentas

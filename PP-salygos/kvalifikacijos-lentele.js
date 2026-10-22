@@ -681,8 +681,15 @@
     return { system: vertimoSistema(M.zalieji ? 'zal' : 'kvl'), userMessage: 'Išversk į anglų kalbą. Grąžink JSON tokios pačios sandaros (tie patys raktai ir „nr“, vietoj lietuviško teksto - '
       + 'angliškas):\n' + JSON.stringify(duom) };
   }
-  const skaiciai = s => (String(s).match(/\d+/g) || []).sort().join(' ');
   const LT_RAIDES = /[ąčęėįšųūž]/i;
+  /* Kurie skaičiai skiriasi (T4-V4, 2026-10-23): „lietuviškai 14001, vertime 14000“; sutampa - null */
+  function skaiciuSkirtumas(lt, en){
+    const a = String(lt).match(/\d+/g) || [], b = String(en).match(/\d+/g) || [];
+    const liko = b.slice(), truksta = [];
+    a.forEach(x => { const k = liko.indexOf(x); if (k >= 0) liko.splice(k, 1); else truksta.push(x); });
+    if (!truksta.length && !liko.length) return null;
+    return (truksta.length ? 'lietuviškai ' + truksta.join(', ') : 'lietuviškai to nėra') + (liko.length ? ', vertime ' + liko.join(', ') : ', vertime nėra');
+  }
   /* Atsakymo patikra prieš rodant: kiekviena eilutė - su savo numeriu, tiek pat netuščių pastraipų kaip lietuviškai; skaičiai, kurių
      vertime nėra, ar likusios lietuviškos raidės - perspėjimas (vertimas rodomas, bet „Patikrinkite“). Neatpažintas atsakymas - klaida. */
   function vertimoAtsakymas(tekstas, M, partija, taisyk){
@@ -703,7 +710,8 @@
         nepavyko.push({ i, priezastis: 'pastraipų skaičius nesutampa su lietuvišku tekstu' }); return; }
       const reik = x.reikalavimas.map(z => String(z == null ? '' : z).trim()), dok = x.dokumentai.map(z => String(z == null ? '' : z).trim());
       const p = [];
-      if (skaiciai(pTekstas(e.reik) + ' ' + pTekstas(e.dok)) !== skaiciai(reik.join(' ') + ' ' + dok.join(' '))) p.push('skaičiai vertime ne tokie patys kaip lietuviškai');
+      const sk = skaiciuSkirtumas(pTekstas(e.reik) + ' ' + pTekstas(e.dok), reik.join(' ') + ' ' + dok.join(' '));
+      if (sk) p.push('skaičiai vertime ne tokie patys kaip lietuviškai (' + sk + ')');
       if (LT_RAIDES.test(reik.join(' ') + dok.join(' '))) p.push('vertime liko lietuviškų raidžių');
       eil[i] = { reik, dok };
       if (p.length) perspejimai[i] = p;
