@@ -255,7 +255,21 @@
     }
     return null;
   }
-  const ZALIEJI_RE = /zali(eji|uju|esiems|ems|ieji)|green (procurement|requirement)/;
+  // „aplinkos apsaugos reikalavimai“ - irgi žaliųjų lentelės antraštė (2026-10-22, T4-K2: iki tol tokia lentelė virsdavo SPS 2 lentele)
+  const ZALIEJI_RE = /zali(eji|uju|esiems|ems|ieji)|green (procurement|requirement)|aplinkos apsaugos reikalavim|aplinkosaugos reikalavim|environmental (procurement|requirement)/;
+  /* Pavadinimas virš lentelės (iki 3 teksto pastraipų, be kitos lentelės tarp jų): „ŽALIŲJŲ PIRKIMŲ REIKALAVIMAI“ virš „Eil. Nr. | Reikalavimas |
+     Pateikiami dokumentai“ - žaliųjų lentelė (2026-10-22, T4-K2) */
+  function pavadinimasVirs(tbl){
+    const out = [];
+    for (let n = tbl.previousSibling; n && out.length < 3; n = n.previousSibling){
+      if (n.nodeType !== 1) continue;
+      if (n.localName === 'tbl') break;
+      if (n.localName !== 'p') continue;
+      const t = visi(n, 't').map(x => x.textContent).join('').trim();
+      if (t) out.push(t);
+    }
+    return norm(out.join(' '));
+  }
   const ATITIKTIES_RE = /\batitinka\b|complies|\bkat\.|\bcat\./;
 
   function skaitykXml(xml, numXml, vardas){
@@ -273,7 +287,10 @@
       // žaliųjų reikalavimų lentelė - pagal antraštės eilutes (iki 2026-10-18 - ir pirmą duomenų eilutę: kvalifikacijos reikalavimas,
       // kuriame minimi „žalieji“, lentelę paversdavo žaliųjų)
       const virsus = eil.slice(0, a.k + 1).map(tr => norm(langeliai(tr).map(c => c.tekstas).join(' '))).join(' ');
-      const zalia = ZALIEJI_RE.test(virsus);
+      // antraštė; kitaip - pavadinimas virš lentelės; kitaip - failo vardas („Žaliųjų pirkimų reikalavimai.docx“), jei nei antraštė, nei
+      // pavadinimas, nei vardas nesako „kvalifikacijos“ (T4-K2)
+      const virs = pavadinimasVirs(tbl), fv = norm(vardas || ''), kvalif = /kvalifikac|qualification/.test(virsus + ' ' + virs);
+      const zalia = ZALIEJI_RE.test(virsus) || (!kvalif && (ZALIEJI_RE.test(virs) || (ZALIEJI_RE.test(fv) && !/kvalifikac|qualification/.test(fv))));
       if (zalia) out.zalieji++;
       if (ATITIKTIES_RE.test(norm(a.c.map(c => c.tekstas).join(' ')))) return;
       const st = { isnasos: 0, idetines: 0, raudona: false };
@@ -425,7 +442,7 @@
     const xR = Math.min(...inkarai.filter(a => /^reik/.test(a.k)).map(a => a.x)), xD = Math.min(...inkarai.filter(a => /^dok/.test(a.k)).map(a => a.x));
     if (xR >= xD) return null;                                                      // reikalavimų stulpelis - prieš dokumentų
     const virsT = norm(virsus.map(eilTekstas).concat(eilTekstas(l)).join(' '));
-    return { inkarai: inkarai.sort((a, b) => a.x - b.x), pradzia: k - virsus.length, zalia: ZALIEJI_RE.test(virsT) || /environmental procurement/.test(virsT), p: l.p };
+    return { inkarai: inkarai.sort((a, b) => a.x - b.x), pradzia: k - virsus.length, zalia: ZALIEJI_RE.test(virsT), kvalif: /kvalifikac|qualification/.test(virsT), p: l.p };
   }
   /* Stulpelių ribos: tarp gretimų inkarų - plačiausia vieta, kurią kerta mažiausiai kūno eilučių (paprastai - nė viena). Eilutės per visą
      plotį (tekstas po lentele, grupės antraštė) kerta visą tarpą vienodai, todėl ribos nekeičia. */
@@ -554,7 +571,9 @@
       }
       uzdaryk();
       if (M.eilutes.length){
-        if (A.zalia){ M.zalieji = true; out.zalieji++; out.zaliuju.push(M); } else out.lenteles.push(M);
+        // failo vardas („Žaliųjų pirkimų reikalavimai.pdf“), kai antraštė nesako „kvalifikacijos“ (T4-K2)
+        const fv = norm(vardas || ''), failasZalias = ZALIEJI_RE.test(fv) && !/kvalifikac|qualification/.test(fv) && !A.kvalif;
+        if (A.zalia || failasZalias){ M.zalieji = true; out.zalieji++; out.zaliuju.push(M); } else out.lenteles.push(M);
       }
       k = Math.max(kitaPradzia, k + 1);
     }
