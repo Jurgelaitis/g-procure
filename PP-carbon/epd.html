@@ -137,7 +137,8 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-3) var(-
       <span class="hint" id="fileHint"></span>
     </div>
 
-    <div class="field">
+    <p class="hint" id="vietine" hidden data-i18n="f.local">Vietinė versija: PDF ir įvesti laukai siunčiami per G-Procure serverį (api.g-procure.com) į Claude API (Anthropic), kaip PP-carbon modulyje; patikros „nesu robotas“ nereikia.</p>
+    <div class="field" id="patikraLaukas">
       <label data-i18n="f.verify">Patvirtinkite, kad nesate robotas</label>
       <div class="cf-turnstile" data-sitekey="0x4AAAAAADve0yTQB_YeYzsY"></div>
       <script>
@@ -163,7 +164,7 @@ footer{max-width:var(--container-max);margin:0 auto;padding:var(--space-3) var(-
 </footer>
 
 <!-- EPD analizės logika -> window.GP_EPD_EXTRACT -->
-<!-- Tik modelio JSON taisymui (GP_AI_PROXY.taisykJson, 2026-09-28): užklausa ir ribos - Worker'io, ne shared/ (CLAUDE.md 6 sk.) -->
+<!-- Modelio JSON taisymui (GP_AI_PROXY.taisykJson, 2026-09-28); gyvoje svetainėje užklausa ir ribos - Worker'io, ne shared/ (CLAUDE.md 6 sk.); vietoje (localhost, nuo 2026-10-22) - GP_AI_PROXY.call, kaip PP-carbon modulyje (žr. VIETINE) -->
 <script src="../shared/ai-proxy.js"></script>
 <!-- Kopijavimas į iškarpinę su tikru rezultatu (GP_KOPIJA) -->
 <script src="../shared/kopija.js"></script>
@@ -185,6 +186,7 @@ var I18N = {
     "f.unit": "Deklaruotas vienetas",
     "f.file": "EPD dokumentas (PDF, iki {mb} MB)",
     "f.verify": "Patvirtinkite, kad nesate robotas",
+    "f.local": "Vietinė versija: PDF ir įvesti laukai siunčiami per G-Procure serverį (api.g-procure.com) į Claude API (Anthropic), kaip PP-carbon modulyje; patikros „nesu robotas“ nereikia.",
     "f.analyze": "Analizuoti",
     "st.analyzing": "Analizuojama... (gali trukti kelias sekundes)",
     "err.noPdf": "Įkelkite EPD dokumentą (PDF).",
@@ -214,6 +216,7 @@ var I18N = {
     "f.unit": "Declared unit",
     "f.file": "EPD document (PDF, up to {mb} MB)",
     "f.verify": "Confirm you are not a robot",
+    "f.local": "Local version: the PDF and the fields you entered are sent via the G-Procure server (api.g-procure.com) to the Claude API (Anthropic), as in the PP-carbon module; no 'I am not a robot' check is needed.",
     "f.analyze": "Analyze",
     "st.analyzing": "Analyzing... (this can take a few seconds)",
     "err.noPdf": "Please upload an EPD document (PDF).",
@@ -321,12 +324,26 @@ function getTurnstileToken(){
 
 function setBusy(b){ var btn = document.getElementById("analyzeBtn"); if (btn) btn.disabled = b; }
 
+/* Vietinė versija (2026-10-22: svetainė neviešai, darbas tęsiamas http://localhost:8000). Worker'is priima tik g-procure.com, o
+   produkcinis Turnstile raktas vietoje neveikia (Cloudflare nerekomenduoja jam leisti localhost). Todėl vietoje - tas pats kelias
+   kaip PP-carbon modulyje: per G-Procure serverį (shared/ai-proxy.js, api.g-procure.com; jis priima localhost) su epd-extract.js
+   užklausa ir be Turnstile; patikros laukas paslepiamas, pastaba sako, kur siunčiama. Gyvoje svetainėje - Worker'is, kaip iki tol.
+   ?epd=worker - Worker'io kelias ir vietoje (testams). */
+var VIETINE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !/[?&]epd=worker(&|$)/.test(location.search);
+function vietineSasaja(){
+  if (!VIETINE) return;
+  var p = document.getElementById("patikraLaukas"), n = document.getElementById("vietine");
+  if (p) p.hidden = true;
+  if (n) n.hidden = false;
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", vietineSasaja); else vietineSasaja();
+
 async function analyze(){
   setResult("");
   if (!window.GP_EPD_EXTRACT) { setStatus(msgErr(t("err.lib"))); return; }
   if (!_pdfBase64) { setStatus(msgErr(t("err.noPdf"))); return; }
-  var token = getTurnstileToken();
-  if (!token) { setStatus(msgErr(t("err.turnstile"))); return; }
+  var token = VIETINE ? "" : getTurnstileToken();
+  if (!VIETINE && !token) { setStatus(msgErr(t("err.turnstile"))); return; }
 
   var factorLabel = document.getElementById("prodName").value.trim();
   var expectedUnit = document.getElementById("unit").value;
@@ -335,6 +352,15 @@ async function analyze(){
   setStatus('<div class="analyzing"><span class="spin"></span>' + esc(t("st.analyzing")) + '</div>');
 
   var res, data;
+  if (VIETINE) {
+    if (!window.GP_AI_PROXY || !GP_AI_PROXY.call) { setBusy(false); setStatus(msgErr(t("err.lib"))); return; }
+    var v = await GP_AI_PROXY.call({ system: GP_EPD_EXTRACT.systemPrompt(), userMessage: GP_EPD_EXTRACT.userText(factorLabel, expectedUnit),
+                                     pdfBase64: _pdfBase64, maxTokens: 1500 });
+    setBusy(false); setStatus("");
+    if (!v || !v.ok) { setStatus(msgErr((v && v.error) ? String(v.error) : t("err.network"))); return; }
+    renderResult(GP_EPD_EXTRACT.parseResponse(v.raw), factorLabel, expectedUnit);
+    return;
+  }
   try {
     res = await fetch("https://epd-api.g-procure.com/analyze", {
       method: "POST",
