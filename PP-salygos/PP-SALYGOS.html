@@ -3100,8 +3100,23 @@ const metodikosEiluteLieka = () => { const kr = kriterijus(); return kr ? kr !==
 function bankuSarasasReikalingas(){ return uztikrinimasTaikomas() === true || sutartiesUztikrinimas().taikomas === true; }
 const RINKOS_KONS_RE = /^\d+\s*priedas\s*[–-]?\s*atsakymai i rinkos konsultacijos/;
 const RINKOS_KONS_KL = 'Ar buvo vykdyta rinkos konsultacija?';
+/* SPS (DPS) priedų sąrašo eilutė apie konkretaus tipo sutarties sąlygas („3 priedas – Projektavimo ir statybos darbų pirkimo sutarties bendrosios
+   sąlygos“ - DPS konkretaus pirkimo šablone; 2026-10-22, T4-K4: paslaugų pirkimui ji būdavo siūloma palikti). Tipas - iš eilutės žodžių: lieka, kai 1 žingsnyje
+   pasirinkta to tipo sutartis, nelieka - kito tipo ar „Ne“ (esminės sąlygos SPS); sutartis nepasirinkta ar tipas neaiškus („darbų“) - klausiama. */
+function sutartiesTipoEilute(t){
+  const m = /^(?:\d+ priedas )?(.*?)\s*(?:pirkimo pardavimo |pirkimo )?sutarties (?:bendrosios|specialiosios) salygos/.exec(t);
+  if (!m || !m[1]) return { tipas: null };
+  const x = m[1];
+  const tipas = /projektavimo/.test(x) && /statybos|rangos/.test(x) ? 'PROJEKTAVIMO_STATYBOS' : /projektavimo/.test(x) && /paslaug/.test(x) ? 'PROJEKTAVIMO_PASLAUGOS'
+    : /statybos|rangos/.test(x) ? 'STATYBOS_RANGOS' : /eksploatavimo/.test(x) ? 'EKSPLOATAVIMO' : /prekiu/.test(x) ? 'PREKES' : /paslaugu/.test(x) ? 'PASLAUGOS' : null;
+  if (!tipas) return { tipas: null };
+  const sp = sutartiesProjektas();
+  return { tipas, lieka: !sp ? null : !sp.pridedamas ? false : sp.seima ? sp.seima === tipas : null };
+}
 function priedoEilutesNumatyta(tekstas){
   const t = norm(tekstas);
+  const st = sutartiesTipoEilute(t);
+  if (st.tipas) return st.lieka;
   if (METODIKOS_EIL_RE.test(t)) return metodikosEiluteLieka();
   if (/nacionalinio saugumo/.test(t)) return deklaracijaReikalinga().v;   // T3-M5: kai SPS ją mini (BVPŽ punktas)
   if (/deretinu salygu/.test(t))      return derybosTaip() && apimtis() !== 'kaina';
@@ -4437,6 +4452,8 @@ function spec37Salink(Z, trinti, trintiEiluciu){
 }
 function priedoEilutesKilme(t){
   const n = norm(t);
+  const st = sutartiesTipoEilute(n);
+  if (st.tipas) return st.lieka == null ? 'kol 1 žingsnyje nepasirinkta sutartis, - nesiūloma' : st.lieka ? 'pagal 1 žingsnyje pasirinktą sutartį' : 'pagal 1 žingsnio atsakymą apie sutarties projektą - kitokia sutartis ar esminės sąlygos SPS';
   if (METODIKOS_EIL_RE.test(n) && kriterijus()) return `pagal vertinimo kriterijų „${KRITERIJU_PAV[kriterijus()]}“ (8.1 p.)`;
   if (/nacionalinio saugumo/.test(n)) return deklaracijaReikalinga().kodel;
   if (/deretinu salygu/.test(n)) return 'pagal 1 žingsnio derybų apimtį';
@@ -8532,8 +8549,11 @@ async function gaukBuf(url){
 }
 /* Priedas tinka seimai ir taikomam istatymui: PĮ ir VPĮ priedu tekstas remiasi skirtingais straipsniais (pvz. nacionalinio
    saugumo deklaracija, konfidenciali informacija), tad centralizuotam (VPĮ) pirkimui PĮ priedai nesiulomi ir atvirksciai. */
+// Šeima turi savo tos rūšies formą (DPS sukūrimo LT/EN - DPSK_LTEN_SUTARTYS, DPSK_LTEN_SPECIALISTAI) - bendras SPS priedas nesiūlomas
+// (2026-10-22, T4-K3: pakete buvo du „5 priedas. Sutarčių sąrašas“, bendrajame - nuoroda į neesamą SPS)
+const savosFormos = budas => { const k = ($('input[name=kalba]:checked') || {}).value || 'LT'; return (SEIMOS[budas] || {})[k] || []; };
 const prieduTinka = budas => PRIEDAI.filter(p => (p.seimos.includes('*') || p.seimos.includes(budas))
-  && (!p.rezimas || p.rezimas === teisesRezimas()));
+  && (!p.rezimas || p.rezimas === teisesRezimas()) && !savosFormos(budas).some(f => f.endsWith('_' + p.id)));
 function prieduNumatyta(p){
   if (p.id === 'NACSAUGUMAS' || p.id === 'NACSAUGUMASVPI') return deklaracijaReikalinga().v;
   if (p.id === 'DERYBOS')     return derybosTaip() && apimtis() !== 'kaina';
