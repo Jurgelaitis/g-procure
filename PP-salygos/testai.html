@@ -11922,6 +11922,72 @@ async function testai1022f(){
     tiesa(/Failo perskaityti nepavyko/.test(t) && !/skenuotas/.test(t), "pranešimas: " + t);
     lygu(W.ikeltiDokumentai([]).map(r => r.isDokumento), ["Techninė specifikacija.docx"], "į paketą - tik perskaitytas");
   });
+
+  await testas("T4-K3: DPS sukūrimo LT/EN - savos sutarčių ir specialistų sąrašo formos, bendrieji SPS priedai (PRIEDAI_LTEN_SUTARTYS, _SPECIALISTAI) nesiūlomi ir į paketą nededami; kitose šeimose - kaip iki tol", async () => {
+    const docs = await generuokSu({ budas: "DPS", kalba: "LT_EN", tipas: "paslaugos" });
+    const k = Object.keys(docs);
+    tiesa(k.includes("DPSK_LTEN_SUTARTYS") && k.includes("DPSK_LTEN_SPECIALISTAI") && !k.includes("PRIEDAI_LTEN_SUTARTYS") && !k.includes("PRIEDAI_LTEN_SPECIALISTAI"), "paketas: " + k.join(", "));
+    lygu([W.eval("prieduTinka")("DPSK").some(p => p.id === "SUTARTYS"), W.eval("prieduTinka")("DPSK").some(p => p.id === "SPECIALISTAI")], [false, false], "DPS LT/EN registras");
+    await modulis(); await zingsnis2("T-AK", "LT", "paslaugos");
+    lygu([W.eval("prieduTinka")("AK").some(p => p.id === "SUTARTYS"), W.eval("prieduTinka")("AK").some(p => p.id === "SPECIALISTAI")], [true, true], "AK - lieka");
+  });
+
+  await testas("T4-K4: DPS konkretaus pirkimo priedų sąrašo eilutės „Projektavimo ir statybos darbų pirkimo sutarties ... sąlygos“ - pagal 1 žingsnio sutartį: nepasirinkta - klausiama, paslaugų sutartis - pašalinamos, projektavimo ir statybos - lieka", async () => {
+    const BS = "4 priedas – Projektavimo ir statybos darbų pirkimo sutarties bendrosios sąlygos;", SS = "5 priedas – Projektavimo ir statybos darbų pirkimo sutarties specialiosios sąlygos;";
+    await modulis(); await zingsnis2("DPS-K", "LT", "paslaugos");
+    lygu([W.priedoEilutesNumatyta(BS), W.priedoEilutesNumatyta(SS)], [null, null], "nepasirinkta - be numatytojo");
+    const sena = W.sutartiesProjektas;
+    try {
+      W.sutartiesProjektas = () => ({ pridedamas: true, generuojamas: true, seima: "PROJEKTAVIMO_STATYBOS" });
+      lygu(W.priedoEilutesNumatyta(BS), true, "projektavimo ir statybos - lieka");
+      W.sutartiesProjektas = () => ({ pridedamas: false });
+      lygu([W.priedoEilutesNumatyta(BS), /esminės sąlygos SPS/.test(W.priedoEilutesKilme(BS))], [false, true], "„Ne“");
+    } finally { W.sutartiesProjektas = sena; }
+    const docs = await generuokSu({ budas: "DPS-K", tipas: "paslaugos", sutartis: "patvirtinti" });
+    const P = docs.DPSP_LT_SALYGOS.pars;
+    tiesa(!P.some(x => /Projektavimo ir statybos darbų pirkimo sutarties (bendrosios|specialiosios) sąlygos;/.test(x)), "paslaugų sutartis - eilutės liko");
+  });
+
+  await testas("T4-K1 apsauga: įrašyta reikšmė pavyzdžio vietoje vėl raudonai nedažoma - dvikalbio SPS titulinio data (kita reikšmė, tas pats ilgis) ir užtikrinimas su šablono pavyzdžio reikšmėmis (25 000 Eur, 105 dienos)", async () => {
+    let docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", pavEN: "Autotransformer maintenance services", sdata: "2026-11-03" });
+    const tit = visosPastraipos(docs.AK_LTEN_SPS.xml).find(x => x.t === "2026-11-03");
+    tiesa(tit && !tit.red, "titulinio data: " + (tit ? "raudona „" + tit.red + "“" : "nėra"));
+    const uztGid = () => Object.entries(W.__K.grupes).find(([, g]) => W.uztikrinimoSkaidomas(g))[0];
+    docs = await generuokSu({ budas: "T-AK", pries: () => { W.pasirinkUztikrinima(uztGid(), "taip"); W.uAts("UZT_SUMA", "25000", false); W.uAts("UZT_DIENOS", "105"); } });
+    const p = visosPastraipos(docs.AK_LT_SPS.xml).find(x => /užtikrinimo dydis – 25 000 Eur/.test(x.t));
+    tiesa(p && !p.red, "užtikrinimo pastraipa: " + (p ? "raudona „" + p.red + "“" : "nėra"));
+    // sintetinė pastraipa: pavyzdys pakeistas kita reikšme - nedažoma; nepakeistas - vėl raudonas
+    const sint = (tekstas) => {
+      const d = new W.DOMParser().parseFromString('<w:document xmlns:w="' + NSW + '"><w:body><w:p><w:r><w:t xml:space="preserve">DPS galiojimo terminas ‒ </w:t></w:r>'
+        + '<w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>8 (aštuoni) metai</w:t></w:r><w:r><w:t>.</w:t></w:r></w:p></w:body></w:document>', "application/xml");
+      const paras = [...d.getElementsByTagNameNS(NSW, "p")], P = W.raudoniPavyzdziai(paras);
+      const r = paras[0].getElementsByTagNameNS(NSW, "r")[1];
+      r.getElementsByTagNameNS(NSW, "color")[0].setAttribute("w:val", "000000");
+      if (tekstas) r.getElementsByTagNameNS(NSW, "t")[0].textContent = tekstas;
+      const liko = W.pavyzdziaiRaudoni(paras, P, new W.Set([0]), new W.Set());
+      return [P.length, liko.length, [...paras[0].getElementsByTagNameNS(NSW, "color")].some(c => c.getAttribute("w:val") === "FF0000")];
+    };
+    lygu(sint(null), [1, 1, true], "nepakeistas pavyzdys - vėl raudonas");
+    lygu(sint("5 (penkeri) metai"), [1, 0, false], "įrašyta kita reikšmė - nedažoma");
+  });
+
+  await testas("T4-V5 ir T4-K2 papildomai: neperskaitytas failas, kuriam rūšis pakeista ranka, į paketą nededamas; žaliųjų PDF lentelė be žodžio „žalieji“ - pagal failo vardą, kvalifikacijos PDF - kaip iki tol", async () => {
+    await modulis();
+    const blogas = new W.File(["x"], "Techninė specifikacija (debesyje).docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    Object.defineProperty(blogas, "arrayBuffer", { value: () => W.Promise.reject(new W.DOMException("The requested file could not be read", "NotReadableError")) });
+    await W.dkPridek([blogas]);
+    const b = W.eval("DK.failai").find(d => d.vardas === blogas.name);
+    const sel = D.querySelector(`[data-dk-rusis="${b.raktas}"]`); sel.value = "ts"; sel.dispatchEvent(new W.Event("change", { bubbles: true }));
+    lygu([b.rusis, W.ikeltiDokumentai([]).length], ["ts", 0], "rūšis ranka - į paketą vis tiek nededamas");
+    await W.aiPdfBiblioteka();
+    const lent = [[[91, 790, "Eil. Nr."], [209, 760, "Reikalavimas"], [403, 760, "Pateikiami dokumentai"],
+      [91, 742, "1."], [139, 742, "Tiekejas taikys vadybos sistema"], [353, 742, "Nepriklausomos istaigos sertifikatas."],
+      [139, 730, "pagal LST EN ISO 14001."], [353, 718, "."]]];
+    let r = await W.kvlLenteles(pdfPoz("Žaliųjų pirkimų reikalavimai.pdf", lent));
+    lygu([r.zaliuju.length, r.lenteles.length], [1, 0], "žaliųjų failo vardas");
+    r = await W.kvlLenteles(pdfPoz("Kvalifikacijos ir žaliųjų reikalavimai.pdf", lent));
+    lygu([r.zaliuju.length, r.lenteles.length], [0, 1], "kvalifikacijos failo vardas - kvalifikacija");
+  });
 }
 
 async function testai1021b(){
