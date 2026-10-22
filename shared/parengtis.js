@@ -51,6 +51,7 @@
       sutartisSps: "Sutarties projektas nepridedamas - esminės sutarties sąlygos išdėstytos pirkimo sąlygose (SPS).",
       beBudo: "Pirkimo būdas nežinomas (nėra kortelės ir skelbimo) - tikrinami tik pagrindiniai dokumentai: SPS, techninė specifikacija ir sutartis.",
       priedoNera: "SPS priedų sąraše nurodytas {n} priedas „{p}“, bet pakete tokio failo neradau. Jei šis priedas teikiamas atskirai, viskas gerai, kitaip pridėkite jį prie paketo.",
+      priedoNeraDps: "Pirkimo sąlygų priedų sąraše nurodytas {n} priedas „{p}“, bet nei pakete, nei pačiose sąlygose tokio priedo neradau. Jei šis priedas teikiamas atskirai, viskas gerai, kitaip pridėkite jį prie paketo.",
       priedoPerdaug: "Failas „{f}“ pavadintas SPS {n} priedu, bet SPS priedų sąraše tokio numerio nėra.",
       neperskaitytas: "Neperskaityti failai ({n}): {s}. Jų turinys netikrintas.",
       versijos: "Pakete {n} skelbimo versijos - naudotas naujausias ({f}).",
@@ -129,6 +130,7 @@
       sutartisSps: "No draft contract is attached - the essential contract terms are set out in the special procurement conditions (SPC).",
       beBudo: "The procedure is unknown (no card and no notice) - only the main documents are checked: SPS, technical specification and contract.",
       priedoNera: "The SPS list of annexes names annex {n} “{p}”, but no such file is in the package. If this annex is provided separately, that is fine; otherwise add it to the package.",
+      priedoNeraDps: "The procurement conditions' list of annexes names annex {n} “{p}”, but no such annex is in the package or in the conditions themselves. If this annex is provided separately, that is fine; otherwise add it to the package.",
       priedoPerdaug: "File “{f}” is named SPS annex {n}, but the SPS list of annexes has no such number.",
       neperskaitytas: "Files not read ({n}): {s}. Their content was not checked.",
       versijos: "The package has {n} notice versions - the latest was used ({f}).",
@@ -220,6 +222,15 @@
       });
     });
     return out;
+  }
+  /* Priedo antraštė tame pačiame faile („Pirkimo sąlygų 2 priedas „...““, „SPS 5 priedas / Annex 5 to the SPC“, „Annex 3 to ...“, „6 priedo priedėlis Nr. 1“):
+     DPS sąlygų priedai yra pačiame sąlygų faile (2026-10-22, T4-D7). Sąrašo eilutė („2 priedas – ...;“) ir turinio eilutė su puslapio numeriu - ne antraštė. */
+  var PRIEDO_ANTR = /^(?:(?:(?:konkretaus\s+)?pirkimo\s+s[aą]lyg\S*|dps\s+s[aą]lyg\S*|sps)\s+)?(\d{1,2})\s*pried(?:as|o\s+(?:\d+\s*)?pried[eė]lis(?:\s+nr\.?\s*\d+)?)\s*(?:\/\s*(?:annex|appendix)\b.*|\([^)]*\)\s*)?(?:[„"][^“"]*[“"]\s*(?:\([^)]*\))?)?\s*$|^(?:annex|appendix)\s+(?:no\.\s*)?(\d{1,2})\s+(?:to|of)\s+(?:the\s+)?(?:spc|procurement\s+conditions|these\s+conditions)\s*$/i;
+  function priedoAntraste(t) {
+    var x = String(t || "").replace(/\s+/g, " ").trim();
+    if (x.length > 250) return null;
+    var m = PRIEDO_ANTR.exec(x);
+    return m ? +(m[1] || m[2]) : null;
   }
   function docVieta(doc, e, l) { return { dok: doc.id, failas: trumpas(doc.name), vieta: e ? vieta(e.loc, l) : "", citata: e ? iskarpa(e.t) : "" }; }
 
@@ -355,6 +366,10 @@
       var m = /^(\d{1,2})\s+priedas\s*(?:[–-]\s*|(?=[A-ZĄČĘĖĮŠŲŪŽ„]))(.{3,})$/.exec(t);
       if (m && !f.priedai.some(function (p) { return p.n === +m[1]; })) f.priedai.push({ n: +m[1], pav: m[2].replace(/\s*\(.*$/, "").replace(/[.\s]+$/, ""), e: e });
     });
+    // Priedai tame pačiame faile (DPS sąlygos): jų antraštės dokumento tekste
+    f.vidiniai = {};
+    E.forEach(function (e) { if (e.loc && e.loc.table) return; var n = priedoAntraste(lt(e.t)); if (n) f.vidiniai[n] = f.vidiniai[n] || e; });
+    f.dps = !!(global.GP_PRIVALOMI && global.GP_PRIVALOMI.dpsDokumentas(doc));
     return f;
   }
 
@@ -380,15 +395,18 @@
     var E = eilutes(doc), docx = /^(docx|odt)$/i.test(doc.ext || "");
     // Pasikartojantys punktų numeriai (tik DOCX: PDF eilutėse numeriai lūžta kartu su stulpeliais)
     if (docx) {
-      var pagal = {};
+      // Kiekvienas priedas tame pačiame faile turi savo numeraciją (DPS sąlygų 2 priedo „3.1.“ - ne pagrindinio teksto alternatyva; T4-D7)
+      var pagal = {}, sritis = 0;
       (doc.blocks || []).forEach(function (b) {
         var t = String(b.text || "").split("\n")[0].split(" | ")[0].trim();
+        if (!(b.loc && b.loc.table) && priedoAntraste(lt(t))) { sritis++; return; }
         var m = PUNKTAS.exec(t);
         if (!m) return;
-        (pagal[m[1]] = pagal[m[1]] || []).push({ b: b, tekstas: m[2] });
+        var raktas = sritis + "|" + m[1];
+        (pagal[raktas] = pagal[raktas] || []).push({ b: b, tekstas: m[2], n: m[1] });
       });
-      Object.keys(pagal).forEach(function (n) {
-        var g = pagal[n];
+      Object.keys(pagal).forEach(function (raktas) {
+        var g = pagal[raktas], n = g[0].n;
         if (g.length < 2) return;
         var skirtingi = g.filter(function (x, i) { return g.findIndex(function (y) { return be(y.tekstas) === be(x.tekstas); }) === i; });
         if (skirtingi.length < 2) return;
@@ -538,8 +556,18 @@
       reikia = [{ id: "sps", pav: X.vaidmuo.sps }, { id: "ts", pav: X.vaidmuo.ts, teise: "ts_dokumentuose" }, { id: "sutartis", pav: X.vaidmuo.sutartis, teise: "sutartis_dokumentuose" }];
       radinys({ id: "dokumentai_budas", grupe: "paketas", lygis: "info", tekstas: X.beBudo, vietos: [], teise: [] });
     }
+    var PRIEDO_RE = { ts: /techni\w+\s+(specifikacij|uzduot)/, sutartis: /sutart/, pasiulymas: /pasiulym/, paraiska: /paraisk/, ebvpd: /ebvpd|espd/ };
+    // dokumentas - priedas tame pačiame sąlygų faile (DPS sukūrimo LT: 4 priedas „Paraiškos forma“; T4-D7)
+    // DPS LT sąlygose priedų sąrašo nėra (tik turinys) - tada pagal pačią priedo antraštę; EBVPD antraštė - tik vieta (jis rengiamas CVP IS)
+    var vidinis = function (id) {
+      var re = PRIEDO_RE[id];
+      if (!re || !sps || id === "ebvpd") return false;
+      return sps.priedai.some(function (p) { return re.test(be(p.pav)) && sps.vidiniai[p.n]; })
+        || Object.keys(sps.vidiniai).some(function (n) { return re.test(be(lt(sps.vidiniai[n].t))); });
+    };
     var truksta = reikia.filter(function (d) {
       var r = VAID[d.id] || d.id;
+      if (!P[r] && vidinis(d.id)) return false;
       // Sutarties projektas nerengiamas, o esminės sutarties sąlygos - SPS dalyje (PP-salygos pasako pats)
       if (r === "sutartis") return !P.sutartis && !P.sutartis_bendrosios && !(o.sutartisSps && P.sps);
       return !P[r];
@@ -566,9 +594,10 @@
           var bendri = pz.filter(function (x) { return fz.indexOf(x) >= 0; }).length;
           return pz.length >= 2 && bendri >= Math.max(2, Math.ceil(pz.length * 0.75));
         });
+        if (!yra && sps.vidiniai[p.n]) yra = true;
         if (!yra) {
           trukstaP++;
-          var rp = { id: "priedai", grupe: "paketas", lygis: "tikrinti", tekstas: sub(X.priedoNera, { n: p.n, p: p.pav }), vietos: [docVieta(P.sps, p.e, l)], teise: [], pav: p.pav };
+          var rp = { id: "priedai", grupe: "paketas", lygis: "tikrinti", tekstas: sub(sps.dps ? X.priedoNeraDps : X.priedoNera, { n: p.n, p: p.pav }), vietos: [docVieta(P.sps, p.e, l)], teise: [], pav: p.pav };
           trukstaPriedai.push(rp); radinys(rp);
         }
       });
@@ -581,7 +610,6 @@
     } else patikra("priedai", "paketas", "nepatikrinta", sps ? X.bePriedu : X.beSps);
     // Trūkstami dokumentai pagal būdą. Jei tas pats dokumentas jau įvardytas kaip trūkstamas SPS priedas (pvz. techninė
     // specifikacija), lieka vienas - priedo - radinys su dokumento teisės nuoroda.
-    var PRIEDO_RE = { ts: /techni\w+\s+(specifikacij|uzduot)/, sutartis: /sutart/, pasiulymas: /pasiulym/, paraiska: /paraisk/, ebvpd: /ebvpd|espd/ };
     truksta.forEach(function (d) {
       var re = PRIEDO_RE[d.id], dub = re && trukstaPriedai.filter(function (x) { return re.test(be(x.pav)); })[0];
       if (dub) { dub.teise = teise(d.teise ? [d.teise] : []); return; }
