@@ -3137,7 +3137,8 @@ const RINKOS_KONS_RE = /^\d+\s*priedas\s*[–-]?\s*atsakymai i rinkos konsultaci
 const RINKOS_KONS_KL = 'Ar buvo vykdyta rinkos konsultacija?';
 /* SPS (DPS) priedų sąrašo eilutė apie konkretaus tipo sutarties sąlygas („3 priedas – Projektavimo ir statybos darbų pirkimo sutarties bendrosios
    sąlygos“ - DPS konkretaus pirkimo šablone; 2026-10-22, T4-K4: paslaugų pirkimui ji būdavo siūloma palikti). Tipas - iš eilutės žodžių: lieka, kai 1 žingsnyje
-   pasirinkta to tipo sutartis, nelieka - kito tipo ar „Ne“ (esminės sąlygos SPS); sutartis nepasirinkta ar tipas neaiškus („darbų“) - klausiama. */
+   pasirinkta to tipo sutartis, nelieka - kito tipo ar „Ne“ (esminės sąlygos SPS); sutartis dar nepasirinkta ar jos šeima nežinoma - lieka kaip šablone
+   (kaip eilutė „Sutarties projektas“; be atsakymo eilutė būtų pašalinta tyliai); tipas neaiškus („darbų“) - kaip kitos eilutės. */
 function sutartiesTipoEilute(t){
   const m = /^(?:\d+ priedas )?(.*?)\s*(?:pirkimo pardavimo |pirkimo )?sutarties (?:bendrosios|specialiosios) salygos/.exec(t);
   if (!m || !m[1]) return { tipas: null };
@@ -3146,7 +3147,7 @@ function sutartiesTipoEilute(t){
     : /statybos|rangos/.test(x) ? 'STATYBOS_RANGOS' : /eksploatavimo/.test(x) ? 'EKSPLOATAVIMO' : /prekiu/.test(x) ? 'PREKES' : /paslaugu/.test(x) ? 'PASLAUGOS' : null;
   if (!tipas) return { tipas: null };
   const sp = sutartiesProjektas();
-  return { tipas, lieka: !sp ? null : !sp.pridedamas ? false : sp.seima ? sp.seima === tipas : null };
+  return { tipas, lieka: !sp ? true : !sp.pridedamas ? false : sp.seima ? sp.seima === tipas : true, zinoma: !!(sp && (!sp.pridedamas || sp.seima)) };
 }
 function priedoEilutesNumatyta(tekstas){
   const t = norm(tekstas);
@@ -4488,7 +4489,7 @@ function spec37Salink(Z, trinti, trintiEiluciu){
 function priedoEilutesKilme(t){
   const n = norm(t);
   const st = sutartiesTipoEilute(n);
-  if (st.tipas) return st.lieka == null ? 'kol 1 žingsnyje nepasirinkta sutartis, - nesiūloma' : st.lieka ? 'pagal 1 žingsnyje pasirinktą sutartį' : 'pagal 1 žingsnio atsakymą apie sutarties projektą - kitokia sutartis ar esminės sąlygos SPS';
+  if (st.tipas) return !st.zinoma ? 'kaip šablone - 1 žingsnyje sutartis dar nepasirinkta' : st.lieka ? 'pagal 1 žingsnyje pasirinktą sutartį' : 'pagal 1 žingsnio atsakymą apie sutarties projektą - kitokia sutartis ar esminės sąlygos SPS';
   if (METODIKOS_EIL_RE.test(n) && kriterijus()) return `pagal vertinimo kriterijų „${KRITERIJU_PAV[kriterijus()]}“ (8.1 p.)`;
   if (/nacionalinio saugumo/.test(n)) return deklaracijaReikalinga().kodel;
   if (/deretinu salygu/.test(n)) return 'pagal 1 žingsnio derybų apimtį';
@@ -9798,7 +9799,8 @@ async function dkPridek(files){
     const d = { raktas: ++DK.n, vardas: f.name, failas: f, dydis: f.size, sha: (g && g.sha256) || (f.name + ':' + f.size), blokai,
       simboliai: GP_PATAREJAS.simboliai([{ blokai }]), ispejimai: g ? (g.warnings || []) : [], lent: null, lentKlaida: '',
       // failo perskaityti nepavyko (pvz. debesyje esantis, neatsisiųstas failas; T4-V5) - ne skenuotas dokumentas, į paketą nededamas
-      neperskaitytas: !DK_PAVEIKSLAS.test(f.name) && (!g || (g.parseStatus === 'failed' && !blokai.length)) };
+      // (GP_DOK požymis `neperskaitytas` - failo nepavyko paimti iš disko; PDF be teksto ar jo pdf.js neperskaito - ne, jį perskaito DI, 2026-10-23)
+      neperskaitytas: !DK_PAVEIKSLAS.test(f.name) && (!g || !!g.neperskaitytas) };
     if (KVL_TINKA.test(f.name) && (pdfYra || !/\.pdf$/i.test(f.name))){
       try { d.lent = await kvlLenteles(f); } catch (e){ d.lentKlaida = GP_BUSENA.klaidosTekstas(e); }
     }
