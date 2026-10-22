@@ -200,6 +200,51 @@ async function testaiEpd(){
     } finally { f.remove(); }
   });
 
+  /* Vietinė versija (2026-10-22): svetainė neviešai, darbas tęsiamas http://localhost:8000 - Worker'is ir Turnstile vietoje neveikia,
+     todėl localhost / 127.0.0.1 - G-Procure serverio kelias (GP_AI_PROXY.call), kaip PP-carbon modulyje; ?epd=worker - kaip gyvai */
+  const ATS_EPD = { content: [{ type: "text", text: '{"status":"found","value":7.5,"unit":"kg CO2e","declaredUnit":"1 t","quote":"GWP A1-A3 7,5 kg CO2e","page":3}' }] };
+  function epdSekimas(w){
+    const s = { kvietimai: [], fetch: [] };
+    w.GP_AI_PROXY.call = o => { s.kvietimai.push(o); return w.Promise.resolve(s.atsakymas || { ok: true, raw: ATS_EPD }); };
+    w.fetch = (u, o) => { s.fetch.push([String(u), o]); return w.Promise.resolve(new w.Response(JSON.stringify(ATS_EPD), { status: 200 })); };
+    w._pdfBase64 = "JVBERi0xLjQK";
+    return s;
+  }
+  await testas("Vietoje (127.0.0.1): patikros laukas paslėptas, pastaba sako, kad siunčiama per G-Procure serverį; „Analizuoti“ - GP_AI_PROXY.call su epd-extract.js užklausa ir PDF, į Worker'į nesiunčiama, rezultatas rodomas; klaida - su priežastimi; EN pastaba", async ()=>{
+    let { f, d } = await puslapis("epd.html?lang=lt", 1280);
+    try {
+      const w = f.contentWindow;
+      lygu([w.VIETINE, d.getElementById("patikraLaukas").hidden, d.getElementById("vietine").hidden], [true, true, false], "vietinė sąsaja");
+      tiesa(/per G-Procure serverį \(api\.g-procure\.com\) į Claude API/.test(d.getElementById("vietine").textContent), "pastaba: " + d.getElementById("vietine").textContent);
+      const s = epdSekimas(w);
+      d.getElementById("prodName").value = "Gelžbetoninė atrama";
+      await w.analyze();
+      lygu([s.kvietimai.length, s.fetch.filter(x => /epd-api/.test(x[0])).length], [1, 0], "kelias");
+      const k = s.kvietimai[0];
+      lygu([k.system === w.GP_EPD_EXTRACT.systemPrompt(), k.pdfBase64, k.maxTokens, /Gelžbetoninė atrama/.test(k.userMessage)], [true, "JVBERi0xLjQK", 1500, true], "užklausa");
+      tiesa(/7,5 kg CO2e|7.5 kg CO2e/.test(d.getElementById("result").textContent), "rezultatas: " + d.getElementById("result").textContent.slice(0, 200));
+      s.atsakymas = { ok: false, status: 413, error: "Failas per didelis serveriui." };
+      await w.analyze();
+      tiesa(/Failas per didelis serveriui/.test(d.getElementById("status").textContent) && !d.getElementById("analyzeBtn").disabled, "klaida: " + d.getElementById("status").textContent);
+    } finally { f.remove(); }
+    ({ f, d } = await puslapis("epd.html?lang=en", 1280));
+    try { tiesa(/via the G-Procure server \(api\.g-procure\.com\) to the Claude API/.test(d.getElementById("vietine").textContent), "EN: " + d.getElementById("vietine").textContent); } finally { f.remove(); }
+  });
+
+  await testas("?epd=worker (kaip gyvai): patikros laukas matomas, be patikros - „Pažymėkite patikrą“ ir niekas nesiunčiama; su patikra - Worker'is (epd-api.g-procure.com) su žetonu, GP_AI_PROXY.call nekviečiamas", async ()=>{
+    const { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 1280);
+    try {
+      const w = f.contentWindow, s = epdSekimas(w);
+      lygu([w.VIETINE, d.getElementById("patikraLaukas").hidden, d.getElementById("vietine").hidden], [false, false, true], "sąsaja");
+      w.turnstile = { getResponse: () => "", reset: () => {} };
+      await w.analyze();
+      lygu([s.kvietimai.length, s.fetch.length, /Pažymėkite patikrą/.test(d.getElementById("status").textContent)], [0, 0, true], "be patikros");
+      w.turnstile = { getResponse: () => "zetonas", reset: () => {} };
+      await w.analyze();
+      lygu([s.kvietimai.length, s.fetch.length, s.fetch[0] && s.fetch[0][0], s.fetch[0] && JSON.parse(s.fetch[0][1].body).turnstileToken], [0, 1, "https://epd-api.g-procure.com/analyze", "zetonas"], "Worker'is");
+    } finally { f.remove(); }
+  });
+
   await testas("Viešas EPD įrankis irgi taiso modelio JSON su lietuviška kabute citatoje (iki 2026-09-28 - tik index.html)", async ()=>{
     const { f } = await puslapis("epd.html?lang=lt", 1280);
     try {
