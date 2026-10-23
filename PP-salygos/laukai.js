@@ -132,9 +132,16 @@
     { raktas: 'sutartis',        lt: /sutarties projektas/iu,                            en: /draft contract/i },
     { raktas: 'bankai',          lt: /priimtinų bankų|banko,? nurodyto/iu,               en: /eligible banks|bank specified in/i }
   ];
+  /* Priedai, atpažįstami tik pagal pavadinimą (sąrašo eilutė, pavadinimas kabutėse; D2, 2026-10-23): DPS sukūrimo sąlygų
+     „1 priedas – Tiekėjų pašalinimo pagrindai“, „2 priedas – Tiekėjų kvalifikacijos reikalavimai ...“ (jų failai - šeimos priedai).
+     Artimiausio žodžio paieškoje (nuorodosPriedas) jų nėra: SPS tekste šie žodžiai dažni ir nurodo ne priedą. */
+  const PRIEDU_RAKTAI_PAV = PRIEDU_RAKTAI.concat([
+    { raktas: 'pasalinimas',     lt: /pašalinimo pagrind/iu,                             en: /grounds for (the )?(supplier )?exclusion|exclusion grounds/i },
+    { raktas: 'kvalifikacija',   lt: /kvalifikacijos reikalavim/iu,                      en: /qualification requirements/i }
+  ]);
   const PRIEDO_EIL_RE = /^\s*(\d+)\s*priedas\s*(?:[–-]\s*)?(.+)$/iu;
   const priedoRaktasIsTeksto = (t, kalba) => {
-    const r = PRIEDU_RAKTAI.find(p => (kalba === 'en' ? p.en : p.lt).test(t));
+    const r = PRIEDU_RAKTAI_PAV.find(p => (kalba === 'en' ? p.en : p.lt).test(t));
     return r ? r.raktas : null;
   };
   /* Sąrašas iš žemėlapio pastraipų: [{ nr, tekstas, raktas, i }] (lietuviškos eilutės). */

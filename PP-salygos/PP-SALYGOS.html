@@ -2846,7 +2846,7 @@ function zalSritis(Z){
 }
 /* Kur perkeliama žaliųjų lentelė (dokumentų sąrašui 1 žingsnyje ir patikroms): iš įkeltų šablonų, o kol jie neįkelti - pagal būdą ir kalbą
    (testai tikrina, kad sutampa su zalSritis). null - šio būdo sąlygose žaliųjų lentelės nėra (DPS konkretus pirkimas). */
-const ZAL_TIKSLAS = { DPSK: { LT: { pr: 2, nr: 2, klausimas: false }, LT_EN: { pr: 2, nr: 3, klausimas: true } }, DPSP: null };
+const ZAL_TIKSLAS = { DPSK: { LT: { pr: 2, nr: 2, klausimas: false }, LT_EN: { pr: 2, nr: 2, klausimas: true } }, DPSP: null };   // LT/EN - nuo 2026-10-23 (šablonų taisymas AF) 2, ne 3
 function zalTikslas(){
   const d = DOK.find(x => !yraForma(x) && zalSritis(x.zemelapis));
   if (d) return zalSritis(d.zemelapis);
@@ -3186,8 +3186,9 @@ function priedoEilutesNumatyta(tekstas){
 const UZT_NE_RE = /^(\d+( \d+)* )?(sio pirkimo metu nereikalaujama pateikti pasiulymo galiojimo uztikrinimo|tender security is not required)/;
 const UZT_TAIP_RE = /^(\d+( \d+)* )?(kartu su (pirminiu |galutiniu )?pasiulymu tiekejas privalo pateikti|together with the (initial |final )?tender the supplier must provide)/;
 // ND sablonuose - be alternatyvu: „4.2. Žaliuosius reikalavimus turi atitikti: a) ... b) ... c) ...“
-const ZAL_ANTR_RE = /^(\d+( \d+)* )?zaliuosius reikalavimus (pagal sps 3 lenteles reikalavima )?turi atitikti$/;
-const ZAL_V2_RE = /^zaliuosius reikalavimus pagal sps 3 lenteles reikalavima turi atitikti tiekejas/;
+// DPS sukūrimo LT/EN 2 priede - „pagal šio priedo 2 lentelės reikalavimą“ (nuo 2026-10-23, šablonų taisymas AF; iki tol - „pagal SPS 3 lentelės“)
+const ZAL_ANTR_RE = /^(\d+( \d+)* )?zaliuosius reikalavimus (pagal (sps 3|sio priedo 2) lenteles reikalavima )?turi atitikti$/;
+const ZAL_V2_RE = /^zaliuosius reikalavimus pagal (sps 3|sio priedo 2) lenteles reikalavima turi atitikti tiekejas/;
 const ZAL_V3_RE = /^suformuluoti atitikimo taisykle$/;
 const ZAL_V3_EN_RE = /^suformuluoti atitikimo taisykle angliskai$/;
 const ZAL_RAKTAS = 'T:suformuluoti atitikimo taisykle';                 // tusciaRaktas() - bendras visiems dokumentams
@@ -3297,7 +3298,8 @@ function zaliujuSprendimas(Z){
   const ats = String(((ATS['B_' + ZAL_RAKTAS] || [])[0]) || '').trim();
   if (!ats) return null;
   const v = zaliujuVariantai(Z) || {};
-  return ats === v.v1 ? 1 : ats === v.v2 ? 2 : 3;
+  // ankstesnio juodraščio DPS LT/EN 2 variantas - su „pagal SPS 3 lentelės“ (šablonų taisymas AF, 2026-10-23)
+  return ats === v.v1 ? 1 : ats === v.v2 || (v.v2 && ats === v.v2.replace('pagal šio priedo 2 lentelės', 'pagal SPS 3 lentelės')) ? 2 : 3;
 }
 /* Kuriai alternatyvai priklauso raudona pastaba i (klausimynui): 'uztikrinimas', 'zalieji' arba null. */
 function alternatyvosTema(Z, i){
@@ -3697,6 +3699,10 @@ function surinktiKlausimus(){
     (Z.blokai||[]).filter(b => b.tipas === 'lentele').forEach(b => {
       const k = b.klausimasLT || b.klausimas, key = norm(k);
       const tais = lentelesTaisykle(k);
+      // kurių numerių lenteles taisyklė valdo (D2, 2026-10-23): „3 ir 4 lentelės paliekamos ... Jei nustatomi tik kiti reikalavimai, paliekama
+      // atitinkama lentelė“ - tik 3 (žemėlapio „lenteliu“); antraštė seka tik savo lentelę (iki tol trinta ir paliekamos 4 lentelės antraštė)
+      const valdo = [...String(k).matchAll(/(\d+)\s*(?:ir\s*(\d+)\s*)?lentel/gi)].flatMap(m => [m[1], m[2]]).filter(Boolean);
+      if (valdo.length) (K.lenteliuNr ??= {})[key] = valdo.slice(0, b.lenteliu || 1);
       // R2 (2026-10-03): lenteles, kurias lemia jau duotas atsakymas, nebeklausiamos atskirai.
       if (tais === 'zalieji'){
         ATS['T_' + key] = sekaAtsakymas('zalieji') === true;
@@ -4215,7 +4221,7 @@ function surinktiKlausimus(){
           // 3 lentele (ar "3 ir 4 lenteles") - ju antrastes irgi trinamos.
           const nr = (r.match(/^(\d+) lentele( table \d+)?$/) || [])[1];
           const taisykle = nr && [...Object.keys(K.lenteles), ...Object.keys(K.autoLenteles)]
-            .find(k => k.includes(nr + ' lentel') || k.includes(nr + ' ir '));
+            .find(k => (K.lenteliuNr || {})[k] ? K.lenteliuNr[k].includes(nr) : (k.includes(nr + ' lentel') || k.includes(nr + ' ir ')));
           const ats = taisykle ? ATS['T_' + taisykle] : undefined;
           const trinama = ats === false || (ats === 'tik1' && nr === '2');   // R2: „tik pašalinimo pagrindai“ - trinama 2
           ATS['N_' + r] = trinama ? 'trinti' : 'palikti';
@@ -4536,6 +4542,43 @@ function sarasoEiluteLieka(Z, p){
   if (ip && prieduEiluteIntarpas(ip)) return !!ATS['A_' + norm(ip.text)];
   return true;
 }
+/* Šeimos priedo failas ir jo eilutė priedų sąraše (D2, 2026-10-23). DPS sukūrimo LT/EN sąlygų sąrašo eilutės raudonos - jas sprendžia
+   rengėjas; iki tol pakete likdavo ir failas, kurio eilutė pašalinta (pvz. „6 priedas – Specialistų sąrašo forma“: pakete specialistų sąrašo
+   failas su antrašte „6 priedas“, o sąraše 6 priedas - techninė specifikacija). Dabar failas seka eilutę: „Ne“ - failo pakete nėra;
+   lieka - failas yra, o jo antraštėje galutinis numeris (priedoAntrasciuNumeriai). Neatsakyta eilutė failo nepašalina. */
+function seimosPriedoEilute(d, sav){
+  const r = d && sav && d !== sav && !/^PRIEDAI_/.test(d.trumpas) && SEIMOS_PRIEDO_RAKTAS[dokTipas(d)];
+  return r ? prieduSarasasZ(sav.zemelapis).find(p => p.raktas === r) || null : null;
+}
+function seimosPriedasNereikalingas(d, sav){
+  const e = seimosPriedoEilute(d, sav);
+  if (!e) return false;
+  const rp = (sav.zemelapis.raudonosPastabos || []).find(x => x.i === e.i);
+  return rp ? ATS['A_' + norm(rp.text)] === false : sutartiesEiluteSalinama(sav.zemelapis, e);
+}
+/* Sąrašo eilutė (raktas - norm(tekstas)), kurią seka šeimos priedo failas: { failas, pavadinimas } arba null */
+function seimosFailasEilutei(raktas){
+  const sav = prieduSavininkas(), e = sav && prieduSarasasZ(sav.zemelapis).find(p => norm(p.tekstas) === raktas);
+  if (!e || !e.raktas) return null;
+  const k = ($('input[name=kalba]:checked') || {}).value || 'LT', tipas = Object.keys(SEIMOS_PRIEDO_RAKTAS).find(t => SEIMOS_PRIEDO_RAKTAS[t] === e.raktas);
+  const f = tipas && ((SEIMOS[seima()] || {})[k] || []).find(x => x !== sav.trumpas && x.split('_').pop() === tipas);
+  return f ? { failas: f, pavadinimas: DOK_VARDAI[tipas] || tipas } : null;
+}
+/* Ar šeimos priedų failai pakete sutampa su sąrašo eilutėmis (generuojant ir pasikeitus siūlymui - perkraunama) */
+function seimosPriedaiNesutampa(){
+  const sav = prieduSavininkas();
+  if (!sav) return false;
+  const k = ($('input[name=kalba]:checked') || {}).value || 'LT';
+  return ((SEIMOS[seima()] || {})[k] || []).some(f => {
+    const tipas = f.split('_').pop(), r = SEIMOS_PRIEDO_RAKTAS[tipas];
+    if (!r || f === sav.trumpas) return false;
+    const yra = DOK.some(d => d.trumpas === f), e = prieduSarasasZ(sav.zemelapis).find(p => p.raktas === r);
+    if (!e) return false;
+    const rp = (sav.zemelapis.raudonosPastabos || []).find(x => x.i === e.i);
+    const reikia = !(rp ? ATS['A_' + norm(rp.text)] === false : sutartiesEiluteSalinama(sav.zemelapis, e));
+    return yra !== reikia;
+  });
+}
 function prieduNumeracija(){
   const d = prieduSavininkas();
   if (!d) return null;
@@ -4573,8 +4616,13 @@ function naujasPriedoNr(N, senas, t, v){
 const PRIEDU_NUORODOS = [/(SPS\s*)(\d+)(?=\s*pried)/g, /(SPS\s+pried\p{L}*\s+Nr\.\s*)(\d+)/gu, /(Annex\s+(?:No\.\s*)?)(\d+)(?=\s+(?:to|of)\s+(?:the\s+)?SPC)/g];
 /* DPS sąlygose (sąrašo savininkas - SALYGOS): „Konkretaus pirkimo sąlygų 3 priedą“, „šių sąlygų 1 priede“, „(2 priedas)“, EN „Annex 1 of these
    conditions“, „(Annex 2)“; kitų dokumentų priedai („sutarties specialiųjų sąlygų 14 priede“, „DPS sukūrimo sąlygų 1 priede“) - ne */
-const PRIEDU_NUORODOS_DPS = [/((?:konkretaus pirkimo|šių|šio konkretaus pirkimo)\s+sąlygų\s+)(\d+)(?=\s*pried)/giu, /(\(\s*)(\d+)(?=\s+priedas\s*\))/g,
-  /(Annex\s+)(\d+)(?=\s+(?:of|to)\s+these\s+conditions)/g, /(\(\s*Annex\s+)(\d+)(?=\s*\))/g];
+/* D2 (2026-10-23): DPS sukūrimo sąlygos (sąrašo savininkas - LT/EN sąlygos) ir jų priedai savo priedus vadina „Pirkimo sąlygų N priedas“,
+   „Pirkimo dokumentų N priede“, „Annex N of the Procurement conditions / documents“, priedėlius - „Pirkimo sąlygų N priedo 1-2 priedėliai“,
+   „Appendices 1-2 of Annex N to the Procurement conditions“ (N - priedo, kuriam priedėliai priklauso, numeris; pernumeruojamas kaip priedas).
+   „DPS sukūrimo sąlygų“, „Special Conditions of the ... Contract“ - kito dokumento - ne. */
+const PRIEDU_NUORODOS_DPS = [/((?:pirkimo|konkretaus pirkimo|šių|šio konkretaus pirkimo)\s+(?:sąlygų|dokumentų)\s+)(\d+)(?=\s*pried)/giu, /(\(\s*)(\d+)(?=\s+priedas\s*\))/g,
+  /(Annex\s+(?:No\.\s*)?)(\d+)(?=\s+(?:of|to)\s+(?:these\s+conditions|the\s+Procurement\s+(?:conditions|documents)|the\s+specific\s+procurement))/gi,
+  /((?:Appendix|Appendices)\s+\d+(?:\s*(?:and|-|–)\s*\d+)?\s+(?:to|of)\s+(?:the\s+)?Annex\s+(?:No\.\s*)?)(\d+)/gi, /(\(\s*Annex\s+)(\d+)(?=\s*\))/g];
 /* Generuojant (prieš pildant vietas - įrašytos vietos jau galutinėmis reikšmėmis): sąrašo eilučių ir nuorodų „SPS N priedas“, „SPS priede
    Nr. N“, „Annex N to the SPC“ numeriai. Nuoroda į pašalintą priedą nekeičiama ir grąžinama „Patikrinkite“. */
 /* Generuojant (4d): juodos alternatyvos - lieka pasirinktasis variantas; angliškas sakinys - tas pats variantas kaip k-tojo lietuviško */
@@ -6133,7 +6181,7 @@ function prieduHTML(K, M){
   let h = `<div class="lk-dok" id="lk-priedai"><div class="lk-dok-gal"><h3 class="lk-dok-t">Priedų pasirinkimas${PRIEDU_KLAIDA ? '' : ` (${registras.length + laisvosEil.length})`}</h3>
     ${siul.length ? `<button type="button" class="sec lk-sk-patv" data-lk-patv="${esc(siul.flatMap(u => u.raktai).join('\n'))}" data-lk-skyrius="Priedai">Patvirtinti visas siūlomas (${siul.length})</button>` : ''}</div>
     ${PRIEDU_KLAIDA ? '<div id="prieduBusena"></div>' : ''}
-    <p class="lk-uz">Visi priedai vienoje vietoje. Pažymėjus - pridedamas priedo failas ir (kur yra) paliekama jo eilutė SPS pabaigos priedų sąraše;
+    <p class="lk-uz">Visi priedai vienoje vietoje. Pažymėjus - pridedamas priedo failas ir (kur yra) paliekama jo eilutė ${dpsBudas() ? 'pirkimo sąlygų' : 'SPS'} pabaigos priedų sąraše;
       atžymėjus - failas nepridedamas, eilutė ištrinama, o likę priedai generuojant pernumeruojami iš eilės (ir nuorodos į juos tekste).</p>`;
   M.priedai.forEach(u => {
     if (u.rusis === 'registras'){
@@ -6160,11 +6208,13 @@ function prieduHTML(K, M){
         </div>
         <div class="lk-pr-b">${busenosZyma(u.busena)}</div></div>`;
     } else {
-      const r = u.raktas, q = u.q, checked = !!ATS['A_' + r];
-      h += `<div class="q lk lk-pr lk--${u.busena}" id="${u.id}" data-busena="${u.busena}">
+      const r = u.raktas, q = u.q, checked = !!ATS['A_' + r], fam = seimosFailasEilutei(r);
+      // eilutė su šeimos priedo failu (D2): failas seka eilutę - pažymėjus pridedamas, atžymėjus - pašalinamas kartu su eilute
+      h += `<div class="q lk lk-pr lk--${u.busena}" id="${u.id}" data-busena="${u.busena}"${fam ? ` data-seimos-priedas="${esc(fam.failas)}"` : ''}>
         <label class="lk-pr-l" for="${u.id}-c"><input type="checkbox" id="${u.id}-c" ${checked ? 'checked' : ''} aria-describedby="${u.id}-s"
-          onchange="uAts('A_${esc(r)}',this.checked,false);klausimynas()"><span class="lk-pr-t">${esc(sarasoEiluteRodyti(q.tekstas))}
-          <span class="cite">Sąrašo eilutė be atskiro failo šiame rinkinyje (dokumentas rengiamas atskirai arba pridedamas jūsų).</span></span></label>
+          onchange="${fam ? `perjunkSeimosPrieda('${esc(r)}',this.checked)` : `uAts('A_${esc(r)}',this.checked,false);klausimynas()`}"><span class="lk-pr-t">${esc(sarasoEiluteRodyti(q.tekstas))}
+          <span class="cite">${fam ? `Pažymėjus - eilutė lieka ir pridedamas šio priedo failas („${esc(fam.pavadinimas)}“); atžymėjus - failas nepridedamas, eilutė ištrinama, likę priedai pernumeruojami.`
+            : 'Sąrašo eilutė be atskiro failo šiame rinkinyje (dokumentas rengiamas atskirai arba pridedamas jūsų).'}</span></span></label>
         <div class="lk-pr-b">${busenosZyma(u.busena)}${u.busena === 'siuloma' ? patvirtinimoMygtukas(u.raktai, u.pavadinimas) : ''}</div>
         ${u.busena === 'siuloma' && u.saltinis ? `<div class="lk-kilme lk-pr-k" id="${u.id}-s">Siūloma: ${checked ? 'paliekama' : 'ištrinama'} - ${esc(u.saltinis)}</div>` : `<div id="${u.id}-s" hidden></div>`}</div>`;
     }
@@ -6986,7 +7036,35 @@ function pasoInfo(sablonas, formosMaisa){
    angliška dalis „Annex N to the SPC“); priedėlio numeris K ir kiti tekstai nekeičiami. Grąžina [{ buvo, tapo }]. */
 const PRIEDO_RAKTAS = { SUBTIEKEJAI: 'subtiekejai', KONFINFO: 'konfinfo', SPECIALISTAI: 'specialistai', SUTARTYS: 'sutartys', SANDORIS: 'sandoris', BANKAI: 'bankai',
   VALDYMAS: 'valdymas', DERYBOS: 'derybos', KONFIDENCIALUMAS: 'konfidencialumas', NACSAUGUMAS: 'nacsaug', NACSAUGUMASVPI: 'nacsaug' };
-const PRIEDO_ANTRASTE = /^\s*SPS\s+\d+\s+pried(?:as|o\s+\d+\s+priedėlis)(?![\p{L}])/u;
+/* Šeimos priedų failai (D2, 2026-10-23): DPS sukūrimo LT/EN rinkinyje priedai - atskiri šeimos failai (pašalinimo pagrindai, kvalifikacijos
+   reikalavimai, paraiškos, sutarčių ir specialistų sąrašų formos), formų failai - ir kitose šeimose (pasiūlymo, paraiškos forma). Raktas - kaip
+   SPS / pirkimo sąlygų priedų sąrašo eilutės (GP_LAUKAI.priedoRaktasIsTeksto). Priedėliai (sutikimai būti subtiekėju, įdarbintu) - savo rakto
+   neturi: jų antraštėje - priedo, kuriam jie priklauso, numeris (šablono numeris -> galutinis, prieduNumeracija). */
+const SEIMOS_PRIEDO_RAKTAS = { PASIULYMAS: 'pasiulymas', PARAISKA: 'paraiska', PASALINIMAS: 'pasalinimas', KVALIFIKACIJA: 'kvalifikacija',
+  SUTARTYS: 'sutartys', SPECIALISTAI: 'specialistai' };
+const PRIEDELIO_TIPAS = /^(SUBTIEKEJAS|IDARBINTAS)$/;
+function priedoFailoRaktas(d){
+  const t = (d && d.trumpas) || '', m = /^PRIEDAI_(?:LT|LTEN)_([A-Z]+)$/.exec(t);
+  if (m) return PRIEDO_RAKTAS[m[1]] || null;
+  if (/^PRIEDAI_/.test(t) || !d.zemelapis || /^(SPS|SALYGOS|BPS)$/.test(dokTipas(d))) return null;
+  return SEIMOS_PRIEDO_RAKTAS[dokTipas(d)] || null;
+}
+/* Priedų antraščių žyma (D2): DPS dokumentuose SPS nėra - bendrų priedų ir šeimos failų antraštėse „SPS N priedas“ / „Annex N to the SPC“
+   tampa „Pirkimo sąlygų N priedas“ / „Annex N to the Procurement Conditions“ (DPS sukūrimas) ir „Konkretaus pirkimo sąlygų N priedas“ /
+   „Annex N to the Specific Procurement Conditions“ (konkretus pirkimas) - kaip to paties paketo šeimos priedų antraštėse. */
+function priedoZymos(){
+  const s = seima();
+  return s === 'DPSK' ? { lt: 'Pirkimo sąlygų', en: 'the Procurement Conditions' } : s === 'DPSP' ? { lt: 'Konkretaus pirkimo sąlygų', en: 'the Specific Procurement Conditions' } : null;
+}
+// Antraštės pavidalo pastraipa (iki 200 ženklų): lietuviška dalis ir (ar) angliška dalis. Numeris - skaičius arba neįrašytas „x“ / „X“
+// (šablone - rengėjo vieta: derėtinų sąlygų forma, nacionalinio saugumo deklaracija); „__“ vietas užpildo formosAntrastesNumeris.
+const PRIEDO_ANTRASTE = /^\s*(?:SPS|Pirkimo sąlygų|Konkretaus pirkimo sąlygų)\s+(?:\d+|[xX])\s*pried(?:as|o\s+(?:\d+\s+)?priedėlis)(?![\p{L}])|^\s*(?:Annex\s+(?:No\.\s*)?(?:\d+|[xX])|Appendix\s+\d+\s+to\s+(?:the\s+)?Annex\s+(?:No\.\s*)?(?:\d+|[xX]))\s+(?:to|of)\s/u;
+const PRIEDO_ANTR_LT = /((SPS|Pirkimo sąlygų|Konkretaus pirkimo sąlygų)\s+)(\d+|[xX])(?=\s*pried(?:as|o\s))/gu;
+const PRIEDO_ANTR_EN = /((?:Appendix\s+\d+\s+to\s+(?:the\s+)?)?Annex\s+(?:No\.\s*)?)(\d+|[xX])(\s+(?:to|of)\s+)((?:the\s+)?SPC|the\s+Procurement\s+[Cc]onditions|the\s+[Ss]pecific\s+[Pp]rocurement(?:\s+[Cc]onditions)?)/g;
+// Priedo nuorodos į savo priedėlius tekste (bendras ūkio subjektų priedas: „užpildant Pirkimo sąlygų 6 priedo 1 priedėlį ir 2 priedėlį“,
+// „Appendix 1 and Appendix 2 of Annex 6 to the Procurement Conditions“) - šablono numeris (iš antraštės) -> šio paketo numeris
+const SAVO_PRIEDELIAI = [/((?:SPS|Pirkimo sąlygų|Konkretaus pirkimo sąlygų)\s+)(\d+)(?=\s*priedo\s+(?:\d+(?:\s*(?:ir|-|–)\s*\d+)?\s+)?pried[eė]l)/gu,
+  /((?:Appendix|Appendices)\s+\d+(?:\s+(?:and|-|–)\s+(?:Appendix\s+)?\d+)?\s+(?:to|of)\s+(?:the\s+)?Annex\s+(?:No\.\s*)?)(\d+)/g];
 /* Atkarpų [pradžia, pabaiga, naujas] keitimas sujungto pastraipos teksto koordinatėmis - w:t mazguose, kitų mazgų formatavimas nekeičiamas */
 function keiskAtkarpas(ts, keitimai){
   const rib = [0];
@@ -7005,31 +7083,291 @@ function keiskAtkarpas(ts, keitimai){
   });
 }
 async function priedoAntrasciuNumeriai(doc, d){
-  const m = /^PRIEDAI_(?:LT|LTEN)_([A-Z]+)$/.exec((d && d.trumpas) || ''), raktas = m && PRIEDO_RAKTAS[m[1]];
-  const e = raktas ? priedoEilute(null, raktas) : null;
-  if (!e || !/^\d+$/.test(String(e.nr))) return [];
-  const nr = String(e.nr), out = [];
+  const raktas = priedoFailoRaktas(d), priedelis = !raktas && d && d.zemelapis && PRIEDELIO_TIPAS.test(dokTipas(d)) && !/^PRIEDAI_/.test(d.trumpas);
+  if (!raktas && !priedelis) return [];
+  const e = raktas ? priedoEilute(null, raktas) : null, N = prieduNumeracija(), zym = priedoZymos(), out = [];
+  const savas = e && /^\d+$/.test(String(e.nr)) ? String(e.nr) : null;
+  if (raktas && !savas && !zym) return out;
+  // šablono numeris -> galutinis: priedo faile - jo paties numeris, priedėlio faile - priedo, kuriam jis priklauso (pagal šablono sąrašą)
+  const tikslas = senas => raktas ? savas : (N && N.unik.has(String(senas)) ? N.unik.get(String(senas)) : null);
+  const dalys = [];
   for (const kel of Object.keys(doc.zip.files).filter(n => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n))){
     const X = await GPDocx.part(doc, kel);
-    if (!X) continue;
-    GPDocx.els(X, 'p').forEach(p => {
-      const ts = GPDocx.els(p, 't'), sj = ts.map(t => t.textContent).join('');
-      if (sj.length > 160 || !PRIEDO_ANTRASTE.test(sj)) return;
-      const keitimai = [];
-      let rasta = false;
-      for (const rx of [/(SPS\s+)(\d+)(?=\s+pried)/g, /(Annex\s+)(\d+)(?=\s+(?:to|of)\s+(?:the\s+)?SPC)/g]){
-        let mm;
-        while ((mm = rx.exec(sj))){ rasta = true; if (mm[2] !== nr) keitimai.push([mm.index + mm[1].length, mm.index + mm[0].length, nr]); }
-      }
-      if (!rasta) return;
-      // numeris - šio paketo SPS priedų sąrašo: raudona (rengėjo vieta numeriui) nuimama ir tada, kai šablono numeris jau teisingas
-      // (naujo darbuotojo patikra 2026-10-20: „Konfidenciali informacija“ - „SPS 6 priedas“ likdavo raudonai, o patikra rodė „baigta“)
-      GPDocx.els(p, 'color').forEach(c => { if (/^FF0000$/i.test(c.getAttributeNS(GPDocx.NS_W, 'val') || '')) c.parentNode.removeChild(c); });
-      if (!keitimai.length) return;
-      keiskAtkarpas(ts, keitimai);
-      out.push({ buvo: sj.trim(), tapo: ts.map(t => t.textContent).join('').trim() });
-    });
+    if (X) GPDocx.els(X, 'p').forEach(p => dalys.push({ p, kunas: kel === 'word/document.xml' }));
   }
+  let sablono = null;                                  // šio priedo numeris šablone (pirmoji antraštė) - savo priedėlių nuorodoms
+  dalys.forEach(({ p }) => {
+    const ts = GPDocx.els(p, 't'), sj = ts.map(t => t.textContent).join('');
+    if (sj.length > 200 || !PRIEDO_ANTRASTE.test(sj)) return;
+    const keitimai = [];
+    let rasta = false;
+    let mm;
+    PRIEDO_ANTR_LT.lastIndex = 0;
+    while ((mm = PRIEDO_ANTR_LT.exec(sj))){
+      rasta = true;
+      if (sablono == null && /^\d+$/.test(mm[3])) sablono = mm[3];
+      const nr = /^\d+$/.test(mm[3]) ? tikslas(mm[3]) : (savas || null);
+      if (zym && mm[2] === 'SPS') keitimai.push([mm.index, mm.index + mm[2].length, zym.lt]);
+      if (nr && nr !== mm[3]) keitimai.push([mm.index + mm[1].length, mm.index + mm[1].length + mm[3].length, nr]);
+    }
+    PRIEDO_ANTR_EN.lastIndex = 0;
+    while ((mm = PRIEDO_ANTR_EN.exec(sj))){
+      rasta = true;
+      const s0 = mm.index + mm[1].length, nr = /^\d+$/.test(mm[2]) ? tikslas(mm[2]) : (savas || null);
+      if (nr && nr !== mm[2]) keitimai.push([s0, s0 + mm[2].length, nr]);
+      if (zym && /SPC$/.test(mm[4])){ const s1 = s0 + mm[2].length + mm[3].length; keitimai.push([s1, s1 + mm[4].length, zym.en]); }
+    }
+    if (!rasta) return;
+    // numeris - šio paketo priedų sąrašo: raudona (rengėjo vieta numeriui) nuimama ir tada, kai šablono numeris jau teisingas
+    // (naujo darbuotojo patikra 2026-10-20: „Konfidenciali informacija“ - „SPS 6 priedas“ likdavo raudonai, o patikra rodė „baigta“)
+    GPDocx.els(p, 'color').forEach(c => { if (/^FF0000$/i.test(c.getAttributeNS(GPDocx.NS_W, 'val') || '')) c.parentNode.removeChild(c); });
+    if (!keitimai.length) return;
+    keiskAtkarpas(ts, keitimai);
+    out.push({ buvo: sj.trim(), tapo: ts.map(t => t.textContent).join('').trim() });
+  });
+  // priedėlio failas, kurio priedo eilutės pakete nebeliko - numeris nekeičiamas, 4 žingsnyje „Patikrinkite“
+  if (priedelis && sablono && !tikslas(sablono)) out.tevoNera = sablono;
+  // savo priedėlių nuorodos tekste (tik priedo failuose, kurių antraštėje rastas šablono numeris)
+  if (raktas && savas && sablono && sablono !== savas) dalys.filter(x => x.kunas).forEach(({ p }) => {
+    const ts = GPDocx.els(p, 't'), sj = ts.map(t => t.textContent).join('');
+    if (PRIEDO_ANTRASTE.test(sj) && sj.length <= 200) return;
+    const keitimai = [];
+    SAVO_PRIEDELIAI.forEach(rx => { rx.lastIndex = 0; let mm; while ((mm = rx.exec(sj))) if (mm[2] === sablono) keitimai.push([mm.index + mm[1].length, mm.index + mm[0].length, savas]); });
+    if (!keitimai.length) return;
+    keiskAtkarpas(ts, keitimai);
+    // ištrauka aplink pakeistą vietą - ilgos pastabos pradžia abiem atvejais vienoda
+    const k0 = Math.min(...keitimai.map(k => k[0])), apie = t => (k0 > 70 ? '…' : '') + t.slice(Math.max(0, k0 - 70), k0 + 60).trim() + (t.length > k0 + 60 ? '…' : '');
+    out.push({ buvo: apie(sj), tapo: apie(ts.map(t => t.textContent).join('')), nuoroda: true });
+  });
+  return out;
+}
+/* SPS (DPS sąlygų) lentelių numeracija (D2, 2026-10-23, naudotojo užduotis - numeracija automatiškai pagal pateiktą informaciją ir pirkimo būdą).
+   Pašalinus lentelę (tikrinami tik pašalinimo pagrindai - 2 lentelė, žalieji reikalavimai ne SPS - 3, socialinių nėra - 4) likusios lentelės
+   likdavo su šablono numeriais (1, 4, 5). Šablonų autoriai pernumeravimą numatė: MVP ir ND SPS variante be žaliųjų lentelės - „kiti
+   reikalavimai, nurodyti 3 lentelėje“ (antraštė - „4 lentelė“), nuorodų į lenteles numeriai šablone - raudoni. Likusios lentelės numeruojamos
+   iš eilės (tos lentelės kopijos pirkimo objekto dalims - tas pats numeris), antraštės ir nuorodos savininko tekste perrašomos: numeris
+   pakeičiamas pagal eilę, o nuoroda į pašalintą lentelę (šablono variantas, parašytas jau pernumeruotai lentelei) - pagal tos pačios
+   pastraipos žodžius prieš ją (kiti, žalieji, socialiniai, kvalifikacijos, pašalinimo pagrindai, nacionalinis saugumas). Neatpažinta -
+   nekeičiama, 4 žingsnyje „Patikrinkite“. Formų ir priedų nuorodos - punktuNuorodosFormoje pagal LENTELIU_NR. */
+let LENTELIU_NR = null;
+const LN_PABAIGA = /^(Pirkimo sąlygų|Konkretaus pirkimo sąlygų|Pirkimo dokumentų|SPS)\s+\d+\s+(priedas|priedo\s+priedėlis)(?![\p{L}])/u;
+const LN_ANTRASTE = /^(\d+)\s*lentelė(?![\p{L}])|^Table\s+(?:No\.\s*)?(\d+)(?=\s*$|\s*\(|\.\s|\.$)/u;   // ne „Table 1 of this clause sets out ...“
+const LN_LT = /(^|[^\d.\p{L}])((?:\d+\s*(?:,\s*|\s+ir\s+|\s+arba\s+))*\d+)(\s*lentel\p{L}*)/gu;
+const LN_EN = /(^|[^\p{L}\d])([Tt]ables?\s+(?:No\.\s*)?)((?:\d+\s*(?:,\s*|\s+and\s+|\s+or\s+))*\d+)(?![\d.\p{L}])/gu;
+const LN_TIPAI = [['zal', /žali|environment/iu], ['soc', /socialin|social/iu], ['kiti', /(^|[^\p{L}])kit(i|ų|iems|us|ais)\s+reikalavim|other requirements/iu],
+  ['kval', /kvalifikacij|qualification/iu], ['pas', /pašalinimo|exclusion/iu], ['nac', /nacionalinio saugumo|national security/iu]];
+// lentelės rūšis - pirmas tekste rūšies žodis (antraštė „KITI REIKALAVIMAI“, „Tiekėjo pašalinimo pagrindai“ ...)
+const lnTipas = t => { let k = null, min = Infinity; for (const [r, re] of LN_TIPAI){ const i = String(t).search(re); if (i >= 0 && i < min){ min = i; k = r; } } return k; };
+const lnToc = p => /^toc/i.test(((GPDocx.els(p, 'pStyle')[0] || { getAttributeNS: () => '' }).getAttributeNS(GPDocx.NS_W, 'val')) || '');
+async function lenteliuNumeracija(doc, d){
+  if (!d || !d.zemelapis || !/^(SPS|SALYGOS)$/.test(dokTipas(d))) return null;
+  const X = await GPDocx.part(doc, 'word/document.xml');
+  if (!X) return null;
+  // šablono lentelių numeriai savininko pagrindinėje dalyje (iki pirmo priedo; turinio eilutė baigiasi puslapio numeriu)
+  const P = d.zemelapis.paras || {}, sab = [];
+  for (const k of Object.keys(P).map(Number).sort((a, b) => a - b)){
+    const t = String(P[k] || '').trim();
+    if (LN_PABAIGA.test(t) && !/\d$/.test(t)) break;
+    const m = t.length <= 200 && LN_ANTRASTE.exec(t);
+    if (m && !sab.includes(m[1] || m[2])) sab.push(m[1] || m[2]);
+  }
+  if (!sab.length) return null;
+  const ps = GPDocx.els(X, 'p'), tekstas = p => GPDocx.els(p, 't').map(x => x.textContent).join(''), dom = [];
+  for (const p of ps){ const t = tekstas(p).trim(); if (!lnToc(p) && LN_PABAIGA.test(t) && !/\d$/.test(t)) break; dom.push(p); }
+  // likusios lentelės dokumento tvarka ir jų rūšis (pagal antraštę ir kelias pastraipas po jos)
+  const liko = [], tipas = {};
+  dom.forEach((p, i) => {
+    const t = tekstas(p).trim(), m = t.length <= 200 && LN_ANTRASTE.exec(t), n = m && (m[1] || m[2]);
+    if (!n || !sab.includes(n)) return;
+    if (!liko.includes(n)) liko.push(n);
+    if (!tipas[n]){
+      const po = [];
+      for (let j = i + 1; j < Math.min(dom.length, i + 8); j++){ const x = tekstas(dom[j]).trim(); if (x.length <= 200 && LN_ANTRASTE.test(x)) break; po.push(x); }
+      tipas[n] = lnTipas(po.join(' '));
+    }
+  });
+  const map = {}, pasalintos = sab.filter(n => !liko.includes(n)), pagalTipa = {};
+  liko.forEach((n, i) => { map[n] = String(i + 1); if (tipas[n] && !pagalTipa[tipas[n]]) pagalTipa[tipas[n]] = String(i + 1); });
+  const R = { sablone: sab, liko, map, pasalintos, pakeista: [], pasalintu: [] };
+  if (!liko.some(n => map[n] !== n) && !pasalintos.length) return R;
+  for (const p of dom){
+    const ts = GPDocx.els(p, 't'), t = ts.map(x => x.textContent).join('');
+    if (!/\d/.test(t) || !/lentel|table/i.test(t)) continue;
+    const keit = [], zodziai = [];
+    LN_TIPAI.forEach(([k, re]) => { const g = new RegExp(re.source, 'giu'); let z; while ((z = g.exec(t))) zodziai.push([z.index, k]); });
+    const tipasPries = poz => { const z = zodziai.filter(x => x[0] < poz).sort((a, b) => b[0] - a[0])[0]; return z ? z[1] : null; };
+    const sk = (grupe, s0, sarasas) => {
+      const rx = /\d+/g; let x;
+      while ((x = rx.exec(grupe))){
+        const n = x[0], a = s0 + x.index;
+        let nn = map[n];
+        if (!nn && pasalintos.includes(n)){
+          const tp = sarasas ? null : tipasPries(a);
+          nn = tp && pagalTipa[tp];
+          if (!nn){ R.pasalintu.push({ nuoroda: t.slice(Math.max(0, a - 50), a + 30).trim(), lentele: n }); continue; }
+        }
+        if (nn && nn !== n) keit.push([a, a + n.length, nn]);
+      }
+    };
+    let m;
+    LN_LT.lastIndex = 0;
+    while ((m = LN_LT.exec(t))){
+      const s0 = m.index + m[1].length;
+      if (/priedo\s*$/u.test(t.slice(Math.max(0, s0 - 12), s0))) continue;   // priedo lentelė - kita numeracija
+      sk(m[2], s0, /\d\D+\d/.test(m[2]));
+    }
+    LN_EN.lastIndex = 0;
+    while ((m = LN_EN.exec(t))){
+      const s0 = m.index + m[1].length + m[2].length;
+      if (/^\s+(?:of|to)\s+(?:the\s+)?Annex/i.test(t.slice(s0 + m[3].length))) continue;
+      if (keit.some(k => k[0] >= s0 && k[0] < s0 + m[3].length)) continue;
+      sk(m[3], s0, /\d\D+\d/.test(m[3]));
+    }
+    if (!keit.length) continue;
+    keiskAtkarpas(ts, keit);
+    R.pakeista.push({ buvo: t.trim().slice(0, 160), tapo: ts.map(x => x.textContent).join('').trim().slice(0, 160) });
+  }
+  return R;
+}
+/* Formų nuorodos į savininko lentelę: šablono numeris -> galutinis (null - lentelė pašalinta) */
+const lnPasalinta = n => `šablono ${n} lentelė šiame pakete pašalinta` + (LENTELIU_NR && Object.values(LENTELIU_NR.map).includes(String(n))
+  ? `, o ${n} numerį dabar turi kita lentelė - Word programoje nuorodą pataisykite arba pašalinkite` : '');
+const lnGalutinis = n => { const L = LENTELIU_NR; if (!L) return n; if (L.map[n]) return L.map[n]; return L.pasalintos.includes(n) ? null : n; };
+/* Nuorodos iš formų ir priedų į sąrašo savininko punktus ir lenteles (D2, 2026-10-23, naudotojo prašymas patikrinti priedų ir pirkimo
+   sąlygų punktų numeraciją). Formose ir bendruose prieduose įrašyti kitos šeimos ar ankstesnės šablono redakcijos numeriai: DPS konkretaus
+   pirkimo pasiūlymo formoje „KPS 4.1 p. 2 lentelėje nurodytą socialinį reikalavimą“ (socialiniai reikalavimai - 5.1 p.), nacionalinio
+   saugumo deklaracijoje „(SPS 4.1 punkto 4 lentelės 5.2 p. reikalavimas)“ (AK - 6.1 p. 5 lentelės 6.2 eilutė, DPS - 4.1 p. 1 lentelės),
+   derėtinų sąlygų formoje „pagal SPS 2.9 punkte nustatytą derybų apimtį“. Sugeneravus savininką (SPS, DPS sąlygas) sudaroma jo rodyklė -
+   kuriame punkte kiekviena lentelė ir jos eilutės (galutiniai numeriai, po GPNum), ir pagal ją nuorodos perrašomos. Lentelės pakete
+   nėra - nuoroda nekeičiama, 4 žingsnyje „Patikrinkite“. */
+let SAVININKO_RODYKLE = null;
+const RD_PUNKTAS = /^(\d+(?:\.\d+)+)\.?(?=$|[\s\u00a0]|[^\d.\s)])/, RD_SKYRIUS = /^(\d+)\.?\s*(?=\p{Lu})/u, RD_LENTELE = /^(\d+)\s*lentelė(?![\p{L}])|^Table\s+(?:No\.\s*)?(\d+)(?=\s*$|\s*\(|\.\s|\.$)/u;
+const rdDidz = t => { const r = String(t || '').replace(/\([^)]*\)/g, '').replace(/[^\p{L}]/gu, ''); return r.length >= 4 && [...r].filter(c => c !== c.toLocaleLowerCase('lt')).length >= 0.6 * r.length; };
+async function savininkoRodykle(doc){
+  const X = await GPDocx.part(doc, 'word/document.xml');
+  const NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main', tx = el => GPDocx.els(el, 't').map(t => t.textContent).join('').trim();
+  const vaikai = (n, v) => Array.from(n.children).filter(x => x.localName === v);
+  const R = { lenteles: {}, punktai: [], eilutes: [] };
+  // lentelių eilučių numeriai dvikalbiuose SPS - Word automatiniai (tekste jų nėra; GPNum „Eil. Nr.“ lentelių nepernumeruoja) - emuliuojami
+  let zy = null;
+  try { zy = GPNum.wordZymes(GPNum.modelis(await GPDocx.part(doc, 'word/numbering.xml'), await GPDocx.part(doc, 'word/styles.xml')), GPDocx.els(X, 'p')); } catch (e) { zy = null; }
+  const nrTekstas = tc => { const t = tx(tc); if (t || !zy) return t; const p = GPDocx.els(tc, 'p')[0], z = p && zy.get(p); return z && z.desimt ? z.label : ''; };
+  let cur = null, lent = null, stulp = 0, paskutine = null;
+  const lentele = k => { if (!R.lenteles[k]) R.lenteles[k] = { punktas: cur, eil: [] }; lent = R.lenteles[k]; stulp = 0; paskutine = k; };
+  const punktas = (nr, t) => { cur = nr; lent = null; R.punktai.push({ nr, tekstas: t }); };
+  const eik = n => { for (const c of Array.from(n.children)){
+    if (c.localName === 'p'){
+      const t = tx(c), cp = RD_LENTELE.exec(t);
+      if (cp){ lentele(cp[1] || cp[2]); continue; }
+      const m = RD_PUNKTAS.exec(t), sk = !m && RD_SKYRIUS.exec(t);
+      if (m) punktas(m[1], t.slice(m[0].length).trim());
+      else if (sk && rdDidz(t.slice(sk[0].length))){ cur = null; lent = null; }   // skyriaus antraštė - ankstesnio punkto lentelės nebėra
+    } else if (c.localName === 'sdt'){ const sc = c.getElementsByTagNameNS(NS, 'sdtContent')[0]; if (sc) eik(sc); }
+    else if (c.localName === 'tbl'){
+      for (const r of vaikai(c, 'tr')){
+        const tcs = vaikai(r, 'tc');
+        if (!tcs.length) continue;
+        const f = nrTekstas(tcs[0]), kiti = tcs.slice(1).map(tx).filter(Boolean), cp = RD_LENTELE.exec(f);
+        if (cp && kiti.length <= 1){ lentele(cp[1] || cp[2]); continue; }
+        if (/^eil\.?\s*nr|^eil\.$/i.test(f)){ if (lent) stulp = tcs.length; continue; }
+        const nr = /^(\d+(?:\.\d+)*)\.?$/.exec(f);
+        // visos lentelių eilutės su numeriu - pagal paskutinę lentelės antraštę (deklaracijos papunkčiams)
+        // (LT dokumentuose eilučių numeriai dažnai - Word automatiniai, langelyje teksto nėra: nr - tuščias)
+        if (paskutine && kiti.length) R.eilutes.push({ nr: nr ? nr[1] : '', tekstas: kiti.join(' '), lentele: paskutine });
+        if (lent && nr && (!stulp || tcs.length === stulp) && !(nr[1].indexOf('.') < 0 && rdDidz(kiti[0]))){ lent.eil.push({ nr: nr[1], tekstas: kiti.join(' ') }); continue; }
+        if (nr && nr[1].indexOf('.') > 0) punktas(nr[1], kiti[0] || '');
+        else if (nr && rdDidz(kiti[0])){ cur = null; lent = null; }
+        else if (lent && !stulp){ const x = /^(\d+(?:\.\d+)*)\.?\s+(.+)$/.exec(f); if (x) lent.eil.push({ nr: x[1], tekstas: x[2] }); }
+      }
+    } } };
+  eik(X.getElementsByTagNameNS(NS, 'body')[0]);
+  return R;
+}
+/* Nacionalinio saugumo deklaracijos punktai (prekės, paslaugos, tiekėjo interesai) - tie patys reikalavimai, kurie savininko lentelėje yra
+   BVPŽ punkto („Atsižvelgiant į tai, kad Pirkimo objektas apima VPĮ 92 straipsnio 13 dalyje ...“) papunkčiai ta pačia tvarka (N.1-N.3);
+   deklaracija pakete - tik kai šis punktas lieka (T3-M5). k-tasis deklaracijos punktas -> k-tasis papunktis. */
+function rdBvpzPapunkciai(R){
+  const i = R.eilutes.findIndex(x => /^Atsižvelgiant\s+į\s+tai,\s+kad\s+Pirkimo\s+objektas\s+apima/i.test(x.tekstas));
+  if (i < 0) return null;
+  // papunkčiai - iškart po punkto, numeriai tekstu „6.1.“ (paties punkto numeris gali būti Word automatinis - pagal papunkčių pradžią)
+  const e = R.eilutes[i], L = R.lenteles[e.lentele], out = [];
+  let pr = e.nr || null;
+  for (let j = i + 1; j < R.eilutes.length; j++){
+    const x = R.eilutes[j], m = /^(\d+)\.\d+$/.exec(x.nr);
+    if (x.lentele !== e.lentele) break;
+    if (!x.nr) continue;                                  // papunkčio tęsinys („Jeigu prekių gamintojas ...“) - be numerio
+    if (!m || (pr && m[1] !== pr)) break;
+    pr = m[1];
+    out.push({ lentele: e.lentele, punktas: L && L.punktas, eil: x.nr });
+  }
+  return out;
+}
+/* Nuorodų formose ir prieduose perrašymas pagal savininko rodyklę. Grąžina [{ buvo, tapo }] ir out.nerasta - nuorodos, kurių lentelės nėra. */
+async function punktuNuorodosFormoje(doc, d){
+  const R = SAVININKO_RODYKLE, out = [];
+  out.nerasta = [];
+  if (!R || !d || /^(SPS|SALYGOS|BPS)$/.test(dokTipas(d))) return out;
+  const X = await GPDocx.part(doc, 'word/document.xml');
+  if (!X) return out;
+  const dps = seima() === 'DPSP', bvpz = rdBvpzPapunkciai(R), dklK = { lt: 0, en: 0 };
+  const ps = GPDocx.els(X, 'p');
+  ps.forEach((p, i) => {
+    const ts = GPDocx.els(p, 't'), t = ts.map(x => x.textContent).join('');
+    if (!/\d/.test(t)) return;
+    const keit = [];
+    let m;
+    // (1) nacionalinio saugumo deklaracija: „(SPS 4.1 punkto 4 lentelės 5.2 p. reikalavimas)“ ir angliškai „(requirement of clause 4.1
+    //     of Table 4, p. 5.2 of SPC)“ - k-tasis tos kalbos punktas -> k-tasis BVPŽ punkto papunktis savininke
+    const DKL = /(\(\s*)(SPS|KPS)(\s+)(\d+(?:\.\d+)*)(\s+punkto\s+)(\d+)(\s+lentelės\s+)(\d+(?:\.\d+)*)(?=\s+p\.\s+reikalavimas)/gu;
+    const DKL_EN = /(\(requirement\s+of\s+clause\s+)(\d+(?:\.\d+)*)(\s+of\s+Table\s+)(\d+)(,\s*p\.\s+)(\d+(?:\.\d+)*)/g;
+    const DKL_EN2 = /(\(SPC\s+clause\s+)(\d+(?:\.\d+)*)(\s+table\s+)(\d+)(\s+p\.\s+)(\d+(?:\.\d+)*)(?=\s+requirement)/gi;   // ankstesnė angliška forma
+    [[DKL, 'lt'], [DKL_EN, 'en'], [DKL_EN2, 'en']].forEach(([rx, kalba]) => {
+      while ((m = rx.exec(t))){
+        const e = (bvpz || [])[dklK[kalba]++];
+        if (!e){ out.nerasta.push({ dok: d.trumpas, nuoroda: m[0].replace(/^\(\s*/, '').trim(), kodel: 'savininko lentelėje nėra atitinkamo BVPŽ punkto papunkčio' }); continue; }
+        let s0 = m.index + m[1].length;
+        const dalys = kalba === 'lt' ? [[m[2], dps ? 'KPS' : m[2]], [m[3], m[3]], [m[4], e.punktas], [m[5], m[5]], [m[6], e.lentele], [m[7], m[7]], [m[8], e.eil]]
+          : [[m[2], e.punktas], [m[3], m[3]], [m[4], e.lentele], [m[5], m[5]], [m[6], e.eil]];
+        dalys.forEach(([senas, naujas]) => { if (naujas && senas !== naujas) keit.push([s0, s0 + senas.length, naujas]); s0 += senas.length; });
+      }
+    });
+    // (2) „SPS 5.1 p. 4 lentelėje“, „SPS 3.1 punkto 2 lentelės“, „KPS 4.1 p. 2 lentelėje“ - punktas pagal lentelės vietą savininke
+    const LT = /((?:SPS|KPS)\s+)(\d+(?:\.\d+)+)(\.?\s*(?:p\.|punkto)\s+)(\d+)(?=\s*lentel)/gu;
+    while ((m = LT.exec(t))){
+      const s0 = m.index + m[1].length;
+      if (keit.some(x => x[0] < s0 + m[2].length && s0 < x[1]) || /^\s+lentelės\s+\d+(?:\.\d+)*\s+p\.\s+reikalavimas/.test(t.slice(m.index + m[0].length))) continue;
+      const nn = lnGalutinis(m[4]), L = nn && R.lenteles[nn];
+      if (!L || !L.punktas){ out.nerasta.push({ dok: d.trumpas, nuoroda: m[0].trim() + ' lentel…', kodel: nn ? `savininke ${m[4]} lentelės nėra` : lnPasalinta(m[4]) }); continue; }
+      if (L.punktas !== m[2]) keit.push([s0, s0 + m[2].length, L.punktas]);
+      if (nn !== m[4]){ const s4 = m.index + m[0].length - m[4].length; keit.push([s4, s4 + m[4].length, nn]); }
+    }
+    // „iš SPS 2 lentelės“ (be punkto) - tik lentelės numeris
+    const LT0 = /((?:SPS|KPS)\s+)(\d+)(?=\s*lentel)/gu;
+    while ((m = LT0.exec(t))){
+      const s0 = m.index + m[1].length;
+      if (keit.some(x => x[0] < s0 + m[2].length && s0 < x[1])) continue;
+      const nn = lnGalutinis(m[2]);
+      if (!nn){ out.nerasta.push({ dok: d.trumpas, nuoroda: m[0].trim() + ' lentel…', kodel: lnPasalinta(m[2]) }); continue; }
+      if (nn !== m[2]) keit.push([s0, s0 + m[2].length, nn]);
+    }
+    const EN = /([Tt]able\s+)(\d+)(\s+of\s+(?:the\s+)?[Cc]lause\s+)(\d+(?:\.\d+)+)(?=\.?\s+of\s+the\s+SPC)/g;
+    while ((m = EN.exec(t))){
+      const nn = lnGalutinis(m[2]), L = nn && R.lenteles[nn], s0 = m.index + m[1].length + m[2].length + m[3].length;
+      if (!L || !L.punktas){ out.nerasta.push({ dok: d.trumpas, nuoroda: m[0].trim(), kodel: nn ? `savininke ${m[2]} lentelės nėra` : lnPasalinta(m[2]) }); continue; }
+      if (L.punktas !== m[4]) keit.push([s0, s0 + m[4].length, L.punktas]);
+      if (nn !== m[2]){ const s2 = m.index + m[1].length; keit.push([s2, s2 + m[2].length, nn]); }
+    }
+    // (3) derėtinų sąlygų forma: „pagal SPS 2.9 punkte nustatytą derybų apimtį“ - punktas, kuriame „derėsis dėl šių sąlygų“
+    const DER = /((?:SPS|KPS)\s+)(\d+(?:\.\d+)+)(?=\.?\s+punkte\s+nustatytą\s+derybų\s+apimt)/gu;
+    while ((m = DER.exec(t))){
+      const pt = R.punktai.find(x => /derėsis dėl šių sąlygų|deramasi dėl šių sąlygų/i.test(x.tekstas)), s0 = m.index + m[1].length;
+      if (!pt){ out.nerasta.push({ dok: d.trumpas, nuoroda: m[0].trim() + ' punkte', kodel: 'savininke derybų apimties punkto nėra' }); continue; }
+      if (pt.nr !== m[2]) keit.push([s0, s0 + m[2].length, pt.nr]);
+    }
+    if (!keit.length) return;
+    keiskAtkarpas(ts, keit);
+    out.push({ buvo: t.trim().slice(0, 200), tapo: ts.map(x => x.textContent).join('').trim().slice(0, 200) });
+  });
   return out;
 }
 /* Pasiūlymo ir paraiškos formos antraštė „SPS __priedas“, „SPS priedas Nr. _____“, „Annex No. ___ to the SPC“ (2026-10-20, naujo darbuotojo
@@ -7642,6 +7980,15 @@ async function generuotiViena(d, REZ){
   const esminiuNuor = forma ? [] : await esminiuNuorodos(doc, d);
   esminiuNuor.forEach(x => doc.log.push('esminės sąlygos: ' + x.tapo));
   const numeracija = await GPNum.sutvarkyti(doc, { dvikalbis: Z.kalba === 'LTEN', forma });
+  // 10e. SPS (DPS sąlygų) lentelės - iš eilės, kai dalis pašalinta (D2); prieš rodyklę, kad ji būtų su galutiniais numeriais
+  let lentNr = null;
+  if (!SAVININKO_RODYKLE && /^(SPS|SALYGOS)$/.test(dokTipas(d))){
+    lentNr = await lenteliuNumeracija(doc, d);
+    LENTELIU_NR = lentNr;
+    (lentNr ? lentNr.pakeista : []).forEach(x => doc.log.push('lentelės numeris: ' + x.buvo + ' -> ' + x.tapo));
+  }
+  // savininko rodyklė (punktai, lentelės ir jų eilutės) - formų ir priedų nuorodoms (D2)
+  if (!SAVININKO_RODYKLE && /^(SPS|SALYGOS)$/.test(dokTipas(d))) SAVININKO_RODYKLE = await savininkoRodykle(doc);
   // „Esminės sutarties sąlygos išdėstytos SPS __ dalyje“: skyriaus numeris - pagal GALUTINĘ numeraciją (GPNum ką tik įrašė)
   let skyriausNr = null;
   if (skyriausZyma || esminiuNuor.length){
@@ -7654,6 +8001,9 @@ async function generuotiViena(d, REZ){
   antrasciuNr.forEach(x => doc.log.push('priedo antraštė: ' + x.buvo + ' -> ' + x.tapo));
   const formosNr = await formosAntrastesNumeris(doc, d);
   if (formosNr) doc.log.push('formos antraštė: ' + formosNr.buvo + ' -> ' + formosNr.tapo);
+  // 10d. Formų ir priedų nuorodos į savininko punktus ir lenteles (D2) - pagal galutinę savininko numeraciją
+  const punktuNuor = await punktuNuorodosFormoje(doc, d);
+  punktuNuor.forEach(x => doc.log.push('nuoroda į punktą: ' + x.buvo + ' -> ' + x.tapo));
 
   // 10b. Dvigubi tarpai (2026-10-05, naudotojo leidimas redakcinėms korekcijoms): šablonuose sutvarkyti (sablonu-taisymai.py J),
   //      o čia - galutiniame tekste, kur šablono raudonas tekstas tapo juodu; prieš lenteles, kad eilučių aukštis būtų galutinio teksto
@@ -7698,7 +8048,7 @@ async function generuotiViena(d, REZ){
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, prieduNr: prNr, juodosAlt, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaZal, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
-                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, spec37, antrastesLent: antrLent.dalys, eilNuorodos, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
+                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, punktuNuorodos: punktuNuor, lenteliuNr: lentNr, spec37, antrastesLent: antrLent.dalys, eilNuorodos, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
                    esminiuNuorodos: esminiuNuor.map(x => ({ buvo: x.buvo, tapo: skyriausNr ? x.tapo.split(SKYRIAUS_ZYMA).join(skyriausNr) : x.tapo.split(SKYRIAUS_ZYMA).join('___') })) } };
 }
 
@@ -7907,8 +8257,13 @@ async function generuoti(o = {}){
   const rinkinys = [...DOK], statiniai = [...STATINIAI];   // uzrakinam sarasus
   const rez = [];
   rez.prieduNr = prieduNumeracija();                    // SPS priedų galutinė numeracija (D4 b) - 4 žingsnio ataskaitai
+  // Sąrašo savininkas (SPS, DPS sąlygos) generuojamas pirmas: formų ir priedų nuorodos į jo punktus ir lenteles - pagal galutinę jo
+  // numeraciją (SAVININKO_RODYKLE, D2 2026-10-23); rezultatų tvarka - kaip rinkinyje
+  SAVININKO_RODYKLE = null; LENTELIU_NR = null;
+  const savininkas = rinkinys.find(d => dokTipas(d) === 'SPS') || rinkinys.find(d => dokTipas(d) === 'SALYGOS'), pirmas = new Map();
+  if (savininkas) pirmas.set(savininkas, await generuotiViena(savininkas, REZ));
   for (const d of rinkinys){
-    const r = await generuotiViena(d, REZ);
+    const r = pirmas.get(d) || await generuotiViena(d, REZ);
     rez.push(r);
     if (r.gulsciasPriedas) rez.push(r.gulsciasPriedas);        // gulsti priedai - atskiras failas iškart po savo dokumento
   }
@@ -8300,9 +8655,35 @@ function rodykRezultata(rez){
   }
   // bendrų priedų antraštės suderintos su šio paketo SPS priedų sąrašu (2026-10-19) - pasakoma, ką pakeitė
   const antrNr = rez.flatMap(r => (r.stats?.antrasciuNr || []).map(x => ({ d: dokumentoPavadinimas(r.d), ...x })));
-  if (antrNr.length) h += `<div class="audit ok" id="antrasciuNr" style="margin-top:10px"><b>Priedų antraštės suderintos su SPS priedų sąrašu (${antrNr.length}):</b>
-    bendras priedo failas naudojamas keliose šablonų šeimose, todėl jo antraštės numeris pakeistas šio paketo SPS priedų sąrašo numeriu.
+  const sarPav = dpsBudas() ? 'pirkimo sąlygų' : 'SPS';
+  if (antrNr.length) h += `<div class="audit ok" id="antrasciuNr" style="margin-top:10px"><b>Priedų antraštės suderintos su ${sarPav} priedų sąrašu (${antrNr.length}):</b>
+    priedo antraštėje (ir priedėlių antraštėse bei nuorodose į juos) - šio paketo ${sarPav} priedų sąrašo numeris${dpsBudas() ? '; DPS dokumentuose vietoj „SPS“ - pirkimo sąlygų pavadinimas' : ''}.
     <ul>${antrNr.map(x => `<li>${esc(x.d)}: „${esc(x.buvo)}“ → „${esc(x.tapo)}“</li>`).join('')}</ul></div>`;
+  // D2: priedėlis, kurio priedo eilutė priedų sąraše pašalinta - numeris nekeičiamas
+  const tevo = rez.filter(r => r.stats && r.stats.antrasciuNr && r.stats.antrasciuNr.tevoNera);
+  if (tevo.length) h += `<div class="audit warn" id="priedeliuTevas" style="margin-top:10px"><b>Patikrinkite priedėlius (${tevo.length}):</b>
+    <ul>${tevo.map(r => `<li>${esc(dokumentoPavadinimas(r.d))} - šablone ${esc(r.stats.antrasciuNr.tevoNera)} priedo priedėlis, o šio priedo eilutė ${sarPav} priedų sąraše pašalinta.
+      Grąžinkite priedo eilutę (žingsnis „2. Pirkimo sąlygos“, priedų pasirinkimas) arba Word programoje nurodykite, kuriam priedui priedėlis priklauso.</li>`).join('')}</ul></div>`;
+  // D2: SPS (DPS sąlygų) lentelių numeracija - likusios lentelės iš eilės
+  const lnR = rez.map(r => r.stats && r.stats.lenteliuNr).find(Boolean);
+  if (lnR && lnR.liko.some(n => lnR.map[n] !== n)){
+    const per = lnR.liko.filter(n => lnR.map[n] !== n);
+    h += `<div class="audit ${lnR.pasalintu.length ? 'warn' : 'ok'}" id="lenteliuNumeracija" style="margin-top:10px"><b>${dpsBudas() ? 'Pirkimo sąlygų' : 'SPS'} lentelių numeracija:</b>
+      pašalintos lentelės - ${lnR.pasalintos.map(esc).join(', ')}; likusios pernumeruotos iš eilės: ${per.map(n => esc(n + ' → ' + lnR.map[n])).join(', ')};
+      lentelių antraštės ir nuorodos į jas tekste${lnR.pakeista.length ? ` atnaujintos (pakeista pastraipų - ${lnR.pakeista.length})` : ''}, formų ir priedų nuorodos - taip pat.
+      ${lnR.pasalintu.length ? `<br>Patikrinkite - nuorodos į pašalintas lenteles (${lnR.pasalintu.length}): ${lnR.pasalintu.map(x => `„${esc(x.nuoroda)}“`).join('; ')}. Nuoroda nekeičiama.` : ''}</div>`;
+  } else if (lnR && lnR.pasalintu.length){
+    h += `<div class="audit warn" id="lenteliuNumeracija" style="margin-top:10px"><b>Patikrinkite nuorodas į pašalintas lenteles (${lnR.pasalintu.length}):</b>
+      ${lnR.pasalintu.map(x => `„${esc(x.nuoroda)}“`).join('; ')}. Nuoroda nekeičiama.</div>`;
+  }
+  // D2: formų ir priedų nuorodos į savininko punktus ir lenteles
+  const ptN = rez.flatMap(r => ((r.stats && r.stats.punktuNuorodos) || []).map(x => ({ d: dokumentoPavadinimas(r.d), ...x })));
+  const ptNer = rez.flatMap(r => ((r.stats && r.stats.punktuNuorodos && r.stats.punktuNuorodos.nerasta) || []).map(x => ({ d: dokumentoPavadinimas(r.d), ...x })));
+  if (ptN.length) h += `<div class="audit ok" id="punktuNuorodosFormose" style="margin-top:10px"><b>Nuorodos į ${sarPav} punktus ir lenteles suderintos (${ptN.length}):</b>
+    formose ir prieduose nurodyti punktų, lentelių ir jų eilučių numeriai - pagal šio paketo ${sarPav} galutinę numeraciją.
+    <ul>${ptN.map(x => `<li>${esc(x.d)}: „${esc(x.buvo)}“ → „${esc(x.tapo)}“</li>`).join('')}</ul></div>`;
+  if (ptNer.length) h += `<div class="audit warn" id="punktuNuorodosNerasta" style="margin-top:10px"><b>Patikrinkite nuorodas į ${sarPav} punktus ir lenteles (${ptNer.length}):</b>
+    <ul>${ptNer.map(x => `<li>${esc(x.d)}: „${esc(x.nuoroda)}“ - ${esc(x.kodel)}. Nuoroda nekeičiama.</li>`).join('')}</ul></div>`;
   // sutarties projektas nerengiamas (2026-10-20): nuorodos į SPS dalį „Esminės sutarties sąlygos“
   const esmN = rez.flatMap(r => ((r.stats && r.stats.esminiuNuorodos) || []).map(x => ({ d: dokumentoPavadinimas(r.d), ...x })));
   if (esmN.length) h += `<div class="audit ok" id="esminesNuorodos" style="margin-top:10px"><b>Sutarties projektas nerengiamas - nuorodos nukreiptos į SPS dalį „Esminės sutarties sąlygos“ (${esmN.length}):</b>
@@ -8701,7 +9082,7 @@ function prieduNumatytujuDerink(){
     const m = PRIEDO_ATITIKMUO.find(a => a.id === id), e = m && eil.find(t => m.re.test(norm(t)));
     return !!e && priedoEilutesNumatyta(e) !== !!PRIEDU_PASIRINKIMAS[id];
   });
-  if (!keisti) return Promise.resolve(false);
+  if (!keisti && !seimosPriedaiNesutampa()) return Promise.resolve(false);
   PRIEDU_KRAUNAMA = true;            // kaip perjungiant priedą ranka - kol kraunama, kitas perjungimas laukia
   PRIEDU_DERINIMAS = (async () => { try { await kraukDokumentus(); return true; } finally { PRIEDU_DERINIMAS = null; PRIEDU_KRAUNAMA = false; } })();
   return PRIEDU_DERINIMAS;
@@ -8753,6 +9134,8 @@ async function kraukDokumentus(){
     const buf = await gaukBuf(Z.sablonas);
     DOK.push({ trumpas:f, pavadinimas:Z.pavadinimas, zemelapis:Z, buf });
   }
+  // šeimos priedo failas, kurio eilutė priedų sąraše pašalinta, - nededamas (D2)
+  { const sav = prieduSavininkas(); if (sav) DOK = DOK.filter(d => !seimosPriedasNereikalingas(d, sav)); }
   for (const d of DOK) if (d.zemelapis.kalba === 'LTEN' && !yraForma(d)) d.zemelapis.dvyniai = await raudonuDvyniai(d);
   // „X“ vietos rengejo dokumentuose (pastraipos be „___“ - tos jau yra tusciu vietu sarase) ir ju angliski dvyniai
   for (const d of DOK){
@@ -8860,6 +9243,16 @@ window.perjunkPrieda = async (id, eilRaktas, checked) => {
   PRIEDU_TOUCHED.add(id); PATV.add('A|' + id);
   PRIEDU_PASIRINKIMAS[id] = checked;
   if (eilRaktas){ TOUCHED.add('A_' + eilRaktas); PATV.add('A_' + eilRaktas); ATS['A_' + eilRaktas] = checked; }
+  try { await kraukDokumentus(); } finally { PRIEDU_KRAUNAMA = false; }
+  klausimynas();
+};
+
+/* Sąrašo eilutė su šeimos priedo failu (D2): pažymėjus - eilutė lieka ir failas pridedamas, atžymėjus - abu pašalinami (dokumentai perkraunami) */
+window.perjunkSeimosPrieda = async (raktas, checked) => {
+  if (PRIEDU_DERINIMAS) await PRIEDU_DERINIMAS;
+  if (PRIEDU_KRAUNAMA) return;
+  PRIEDU_KRAUNAMA = true;
+  TOUCHED.add('A_' + raktas); PATV.add('A_' + raktas); ATS['A_' + raktas] = checked;
   try { await kraukDokumentus(); } finally { PRIEDU_KRAUNAMA = false; }
   klausimynas();
 };
