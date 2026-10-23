@@ -318,6 +318,8 @@
   var SVARBUS_SKYRIUS = /(PAŠALINIMO|KVALIFIKACIJ|VERTINIM|UŽTIKRINIM|SUTARTIES|NACIONALIN|SANKCIJ|ŽALI|KAINA)/;
   var SVARBUS_TURINYS = /(sankcij|Rusijos|Baltarusijos|nacionalinio saugumo|reglament\S* \(ES\)|negali dalyvauti)/i;
   var KVALIF_SKYRIUS = /(PAŠALINIMO|KVALIFIKACIJ|ŽALI)/;
+  var KVAL_NETIKRINAMA = /kvalifikacija nėra tikrinama|qualification (of suppliers )?is not (being )?(checked|verified)/i;
+  var KVAL_PUNKTAI = /nedraudžiama remtis sutartimi, kurią jie vykdė ne vieni|^(\d+(\.\d+)*\.?\s*)?Kvalifikacija turi būti įgyta iki|užpildo ir pasirašo atskirą EBVPD|shall not be prohibited from relying on a contract|qualification must be obtained before|shall complete and sign a separate ESPD/i;
   // Sutartyje „SUTARTIES“ yra beveik kiekvienoje antraštėje - jautrios tik kaina, užtikrinimas, netesybos, nacionalinis saugumas, sankcijos
   var SVARBUS_SUTARTIES = /(KAIN|UŽTIKRINIM|NETESYB|NACIONALIN|SANKCIJ)/;
   function skyriai(ps) { var cur = "", out = []; ps.forEach(function (x) { if (x.antraste && !x.toc) cur = x.t.replace(/\s\d{1,3}$/, ""); out.push(cur); }); return out; }
@@ -453,6 +455,10 @@
     // ankstesnė redakcija - bent 2 ilgesnės jos pastraipos, kurių formoje nėra (trumpi pasirinkimai, pvz. „Punktas netaikomas.“, - ne požymis)
     var sena = !!kitos && dok.filter(function (y) { return y.n.length > 40 && !formoje[y.n] && kitos[maisa(y.n)]; }).length >= 2;
     var nepriv = neprivalomos(forma, o.zemelapis, sut), skF = skyriai(forma), skD = skyriai(dok);
+    // Tikrinami tik pašalinimo pagrindai („Tiekėjų kvalifikacija nėra tikrinama šiame Pirkime“, 2026-10-23): kvalifikacijos reikalavimų atitikimo
+    // taisyklės (SPS 3.4-3.6 p.) netaikomos - jų pašalinimas yra pasirinkimas (PP-salygos juos pašalina kartu su 2 lentele, kaip LITGRID paketuose)
+    if (!sut && dok.some(function (y) { return KVAL_NETIKRINAMA.test(y.t); }))
+      forma.forEach(function (y) { if (KVAL_PUNKTAI.test(y.t)) nepriv["i" + y.i] = 1; });
     var st = { vienodos: 0, nukrypimas: 0, neprivaloma: 0, uzpildyta: 0, techninis: 0 }, pak = [], ankst = null, liko = null;
     // sutartis: tarpe (gretimi pakeitimai tarp sutampančių pastraipų) pašalintų pasirenkamų dalių pastraipų skaičius - tiek pridėtų žymų
     // „Punktas netaikomas.“ tame tarpe yra pasirinkimas (pridėtos pastraipos tarpe rašomos po visų formos pastraipų, todėl kaimynė netinka)
