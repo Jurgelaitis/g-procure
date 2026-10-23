@@ -107,7 +107,7 @@ class Chrome:
     def __init__(self):
         self.portas = laisvas_portas(); self.profilis = tempfile.mkdtemp(prefix="gp-testai-")
         self.p = subprocess.Popen([chrome_kelias(), "--headless=new", "--remote-debugging-port=%d" % self.portas, "--user-data-dir=" + self.profilis,
-                                   "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--lang=en-GB",
+                                   "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--lang=en-GB", "--js-flags=--expose-gc",
                                    "--window-size=1280,1000", "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             for _ in range(150):
