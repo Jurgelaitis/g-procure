@@ -59,6 +59,12 @@ function grupe(pav){
 }
 let dabartine = null;
 async function testas(pav, fn){
+  // atmintis (2026-10-23): grupėse su daug generavimų rėmelių susikaupdavo iki ~20 ir puslapis nulūždavo (Inspector.targetCrashed, ~1 GB JS) -
+  // prieš testą, kai jų daugiau nei 8, senesni pašalinami (du naujausi lieka - ankstesnio testo būsena, kaip grupės pradžioje)
+  if (document.querySelectorAll("iframe[data-gp-modulis]").length > 8) salinkSenusRemelius();
+  // pašalintų rėmelių atmintį naršyklė surenka neskubėdama - rinkinys nulūždavo ties ~1,1 GB, o su surinkimu laikosi 30-130 MB (išmatuota
+  // 2026-10-23); gc() yra tik paleidiklyje (.github/testai/paleisk.py --js-flags=--expose-gc), įprastoje naršyklėje - kaip iki tol
+  if (typeof window.gc === "function" && performance.memory && performance.memory.usedJSHeapSize > 4e8) window.gc();
   const eil = document.createElement("div");
   try { await fn(); eil.className = "t geras"; eil.innerHTML = '<span class="zyma">GERAI</span><span>' + ekranuok(pav) + '</span>'; R.ok++; }
   catch (e) { eil.className = "t krito";
@@ -289,7 +295,9 @@ async function suPasiulymais(){
 function atsakykPrivalomus(){
   for (let r = 0; r < 8; r++){
     const K = W.__K; let n = 0;
-    Object.keys(K.pavieniai).forEach(k => { if (ATS()[k] === undefined){ W.uAts(k, true, false); n++; } });
+    // „Jei Pirkimo metu nėra rengiamas Sutarties projektas“ - „Ne“ (projektas rengiamas, kaip SPS priedų sąraše; nuo 2026-10-23 „Taip“ pašalina
+    // sąrašo eilutę „Sutarties projektas“ - T5-D4), kitos sąlygos - „Taip“
+    Object.keys(K.pavieniai).forEach(k => { if (ATS()[k] === undefined){ W.uAts(k, !k.startsWith(V2), false); n++; } });
     Object.values(K.tuscios).forEach(q => { if (q.pastabaTipas && ATS()["N_" + q.raktas] === undefined){ W.uAts("N_" + q.raktas, "palikti", false); n++; } });
     Object.keys(K.lenteles).forEach(k => { if (ATS()["T_" + k] === undefined){ W.uAts("T_" + k, true, false); n++; } });
     // juodos šablono alternatyvos „A / B“ (K3, 2026-10-20) - pirmasis variantas
@@ -925,11 +933,12 @@ async function testaiBendras(){
    Čia - visas generavimas be AI dviem būdais: žymės, režimo eilutė, vienas taškas, pastraipų ženklai, švarumo patikra ir
    tikslūs variklio veiksmų skaičiai (pasikeitus šablonams - skaičiai atnaujinami sąmoningai). */
 const PAVADINIMAS = "Autotransformatorių 400/110 kV priežiūros paslaugos";
-async function generuok(budas){
+async function generuok(budas, o){
   await modulis();
   const pv = D.getElementById("pavadinimas"); pv.value = PAVADINIMAS; pv.dispatchEvent(new W.Event("input"));
   await zingsnis2(budas, "LT");
   Object.entries(W.__K.grupes).forEach(([gid, g]) => { if (!g.nariai.some(n => ATS()[n.raktas] === true)) W.pasirinkGrupe(gid, g.nariai[g.nariai.length - 1].raktas); });
+  if (o && o.v2 != null) W.uAts(V2, o.v2, false);   // „Jei Pirkimo metu nėra rengiamas Sutarties projektas“ (be jo - „Ne“, žr. atsakykPrivalomus)
   atsakykPrivalomus();
   W.alert = () => {};
   D.getElementById("gen").click();
@@ -958,7 +967,7 @@ function bendraPatikra(docs){
 async function testaiGeneravimas(){
   dabartine = grupe("Generavimas be AI (variklis.js)");
   await testas("T-AK: režimo eilutė „Vykdomas Tarptautinis pirkimas.“ (iki 2026-09-28 - du taškai), pavadinimas, švarus BPS, SPS pastraipų ženklai nebe raudoni, veiksmų skaičiai", async () => {
-    const docs = await generuok("T-AK"), sps = docs.AK_LT_SPS, bps = docs.AK_LT_BPS;
+    const docs = await generuok("T-AK", { v2: true }), sps = docs.AK_LT_SPS, bps = docs.AK_LT_BPS;
     tiesa(sps && bps, "nėra SPS ar BPS: " + Object.keys(docs).join(", "));
     lygu(bendraPatikra(docs), [], "visi dokumentai");
     // nuo 2026-10-03 punktų numeriai - tekstas (GPNum): „1.2.“ + tabuliacija
@@ -981,13 +990,15 @@ async function testaiGeneravimas(){
     // „Esminės sutarties sąlygos“ (užpildyta 12 -> 13); skyriaus numeris - galutinis
     // 2026-10-21: nacionalinio saugumo 5 punkto blokas (NAC5) baigiasi prieš sankcijų eilutę - ji nebetrinama (eilučių 6 -> 5)
     // pajuodinta 199 -> 188 (2026-10-21, T3-K1): 5 lentelės eilučių nuorodos („8 eilutės“ -> „7 eilutės“) įrašomos, ne pajuodinamos
-    lygu(skaiciai(sps.r), [57, 188, 13, 8, 1, 5], "SPS: ištrinta, pajuodinta, užpildyta, intarpų, priedų, eilučių");
+    // 2026-10-23 (T5-D4): sutarties projektas nerengiamas - priedų sąraše nebelieka eilutės „Sutarties projektas“ (ištrinta 57 -> 58, priedų 1 -> 2)
+    lygu(skaiciai(sps.r), [58, 188, 13, 8, 2, 5], "SPS: ištrinta, pajuodinta, užpildyta, intarpų, priedų, eilučių");
+    tiesa(!sps.pars.some(p => /^\d+ priedas\s*[–-]\s*Sutarties projektas/.test(p)), "„Sutarties projektas“ eilutė liko");
     const esmNr = (sps.pars.find(p => /^\d+\.\s*ESMINĖS SUTARTIES SĄLYGOS/.test(p)) || "").match(/^(\d+)/);
     tiesa(esmNr && sps.pars.some(p => p.endsWith("užtikrinimui nurodyti SPS " + esmNr[1] + " dalyje „Esminės sutarties sąlygos“.")) && !/⟦/.test(sps.xml),
       "užtikrinimo nuoroda į esmines sąlygas: " + sps.pars.filter(p => /užtikrinimui nurodyti/.test(p)).join(" / "));
   });
   await testas("S-ND: režimo eilutė be žymos („Vykdomas Pasirinkti“) - supaprastinto pirkimo formuluotė, vienas taškas, veiksmų skaičiai", async () => {
-    const docs = await generuok("S-ND"), sps = docs.ND_LT_SPS;
+    const docs = await generuok("S-ND", { v2: true }), sps = docs.ND_LT_SPS;
     tiesa(sps, "nėra SPS: " + Object.keys(docs).join(", "));
     lygu(bendraPatikra(docs), [], "visi dokumentai");
     tiesa(sps.pars.map(beNr).includes("Vykdomas Supaprastintas pirkimas, kurio vertė viršija mažos vertės pirkimų ribą."), "režimo eilutė: " + sps.pars.filter(p => /Vykdomas/.test(p)).join(" / "));
@@ -1006,7 +1017,9 @@ async function testaiGeneravimas(){
     // nebetikrinama (patikrinti 2 -> 1); užtikrinimo reikalavimų vieta - nuoroda į SPS dalį „Esminės sutarties sąlygos“ (užpildyta 11 -> 12)
     // 2026-10-21: sankcijų eilutė už NAC5 bloko - nebetrinama (eilučių 6 -> 5)
     // pajuodinta 159 -> 150 (2026-10-21, T3-K1): 4 lentelės eilučių nuorodos įrašomos, ne pajuodinamos
-    lygu([svarumas(sps.r), skaiciai(sps.r)], [[2, 5, 1], [51, 150, 12, 11, 4, 5]], "švarumo patikra ir veiksmų skaičiai");
+    // 2026-10-23 (T5-D4): sutarties projektas nerengiamas - be eilutės „Sutarties projektas“ (ištrinta 51 -> 52, priedų 4 -> 5)
+    lygu([svarumas(sps.r), skaiciai(sps.r)], [[2, 5, 1], [52, 150, 12, 11, 5, 5]], "švarumo patikra ir veiksmų skaičiai");
+    tiesa(sps.pars.some(p => /^Tiekėjams neleidžiama pateikti alternatyvių pasiūlymų\.$/.test(beNr(p))), "alternatyvių pasiūlymų punktas („visada turi būti“)");
     tiesa(!sps.pars.some(p => /kvalifikaciją pagrindžiančius dokumentus, su kvalifikacijos dokumentais turi pateikti įrodymus/.test(p)) && sps.r.stats.spec37 === 1, "3.7 p. pašalintas");
   });
   await testas("Dalių sąrašas nepažinto šablono eilutėje: pavadinimas su „$&“, „$'“ ir „$$“ įrašomas pažodžiui (String.replace šablonai netaikomi)", async () => {
@@ -1829,6 +1842,7 @@ async function testaiForma(){
   await testas("Generavimas: be numerio neprivaloma nuoroda pašalinama ir išvardijama patikroje; priedų numeriai ir „X“ - iš SPS priedų sąrašo (TSD EBVPD - 3 priedas); skyriaus „Esminės sutarties sąlygos“ numeris - galutinis; užpildžius visus laukus „___“ ir „X“ nelieka", async () => {
     const PRIEDAS = "ebvpd";
     const docs = await generuokSu({ budas: "T-SD", pries: () => {
+      W.uAts(V2, true, false);                   // sutarties projektas nerengiamas - dalis „Esminės sutarties sąlygos“ lieka (jos skyriaus numeris tikrinamas)
       const K = W.__K;
       // visi laukai užpildomi (siūlomi - patvirtinami), formuluotės - pirmas variantas ar tekstas; vienos neprivalomos nuorodos numeris ištrinamas
       Object.entries(K.tuscios).forEach(([r, q]) => {
@@ -6949,7 +6963,7 @@ async function testaiSutartisSPS(){
     const pt = D.getElementById("esminiuPatikra");
     tiesa(pt && pt.classList.contains("no") && /Įrašykite esmines sutarties sąlygas/.test(pt.textContent), "3 žingsnis: " + (pt && pt.textContent));
     let K2 = null;
-    await generuokSu({ budas: "T-AK", tipas: "prekes", pav: "Galios transformatorių", pries: async () => { K2 = W.__K; } });
+    await generuokSu({ budas: "T-AK", tipas: "prekes", pav: "Galios transformatorių", pries: async () => { K2 = W.__K; W.uAts(V2, true); } });
     tiesa(K2.pavieniai[V2] && !K2.autoSakos.some(x => x.raktas === V2), "nepatvirtinta - turi būti klausiama");
     // atsakyta „Taip“ (projektas nerengiamas) - dalis lieka ir primenama, kaip „nerengiama“
     tiesa(ATS()[V2] === true && /Įrašykite esmines sutarties sąlygas/.test((D.getElementById("esminiuPatikra") || {}).textContent || ""), "atsakius „Taip“ - nėra priminimo");
@@ -11320,14 +11334,14 @@ async function testai1021c(){
   }
   await testas("V9 derybų formuluotės pagal 1 žingsnį: „tik dėl Pasiūlymo kainos“ - abi vietos „Išspręsta automatiškai“ su „Keisti“ (SSD, ND, MVP, TSD); „dėl kainos ir kitų sąlygų“ - derybų sąlygos iš šablono nurodymo, minimalių reikalavimų klausiama be formuluotės „tik dėl kainos“; platesnė apimtis - abu klausiami", async () => {
     for (const budas of ["S-SD", "S-ND", "MV-SAD", "T-SD"]){
-      await zingsnis2(budas, "kaina");
+      salinkSenusRemelius(); await zingsnis2(budas, "kaina");
       const m = vieta(RE_MIN), d = vieta(RE_DER);
       tiesa(m.auto && d.auto && !m.kort && !d.kort, budas + " kaina: abi automatiškai, kortelių nėra " + JSON.stringify([!!m.auto, !!d.auto, !!m.kort, !!d.kort]));
       const auto = D.getElementById("lkAuto"), at = auto ? auto.textContent.replace(/\s+/g, " ") : "";
       tiesa(/Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai/.test(at) && /„?Pasiūlymo kainos/.test(at) && /Dėl ko bus deramasi\?“ - tik dėl Pasiūlymo kainos/.test(at), budas + " skiltis „Išspręsta automatiškai“: " + at.slice(0, 300));
       const kb = auto.querySelectorAll(budas === "MV-SAD" ? "[data-auto-der] [data-nr-klausti]" : "[data-der-klausti]");
       lygu([kb.length, kb[0] && /^Keisti/.test(kb[0].getAttribute("aria-label")) && kb[0].textContent.trim()], [2, "Keisti"], budas + " „Keisti“ mygtukai");
-      await zingsnis2(budas, "kaina_kitos");
+      salinkSenusRemelius(); await zingsnis2(budas, "kaina_kitos");
       const m2 = vieta(RE_MIN), d2 = vieta(RE_DER);
       tiesa(d2.auto && !d2.kort && !m2.auto && m2.kort, budas + " kaina_kitos: derybų sąlygos automatiškai, minimalių reikalavimų - kortelė");
       const tekstas = d2.a ? d2.a.veiksmas : d2.ad.reiksme;
@@ -11336,14 +11350,14 @@ async function testai1021c(){
         lygu(m2.f[1].variantai.length, 0, budas + " formuluotė „tik dėl kainos“ nebesiūloma");
         tiesa(/šablone formuluotės nėra - įrašykite minimalius reikalavimus patys/.test(m2.f[1].pastaba), budas + " pastaba: " + m2.f[1].pastaba);
       } else lygu((ATS()["B_" + m2.t[0]] || [])[0] || "", "", budas + " MVP laukas nesiūlomas");
-      await zingsnis2(budas, "kita");
+      salinkSenusRemelius(); await zingsnis2(budas, "kita");
       const m3 = vieta(RE_MIN), d3 = vieta(RE_DER);
       tiesa(!m3.auto && !d3.auto && m3.kort && d3.kort, budas + " kita: abu klausiami");
       if (d3.f) tiesa(d3.f[1].variantai.length === 0 && /Platesnei derybų apimčiai/.test(d3.f[1].pastaba), budas + " kita - derybų sąlygų pastaba");
     }
   });
   await testas("V9: „Keisti“ - kortelė su ta pačia siūloma formuluote, fokusas jos valdiklyje; generuojant - įrašyta; „Patikrinkite“, kai įrašyta „tik dėl kainos“ formuluotė, o deramasi ir dėl kitų sąlygų; LT/EN - angliškos vietos klausiamos kaip iki tol", async () => {
-    await zingsnis2("S-SD", "kaina");
+    salinkSenusRemelius(); await zingsnis2("S-SD", "kaina");
     const kb = D.querySelector("#lkAuto [data-der-klausti]"), fk = kb.getAttribute("data-der-klausti");
     kb.click();
     await kol(() => vieta(RE_MIN).f || vieta(RE_DER).f, "kortelė po „Keisti“");
@@ -11351,47 +11365,47 @@ async function testai1021c(){
     tiesa(kort && kort.contains(D.activeElement) && D.activeElement.checked, "fokusas pažymėtame variante: " + (D.activeElement && D.activeElement.outerHTML.slice(0, 120)));
     lygu(D.querySelectorAll("#lkAuto [data-der-klausti]").length, 1, "automatiškai liko viena vieta");
     // MVP laukas
-    await zingsnis2("MV-SAD", "kaina");
+    salinkSenusRemelius(); await zingsnis2("MV-SAD", "kaina");
     const kl = D.querySelector("#lkAuto [data-auto-der] [data-nr-klausti]"), r = kl.getAttribute("data-nr-klausti");
     kl.click();
     await kol(() => vieta(RE_MIN).kortLauko || vieta(RE_DER).kortLauko, "MVP kortelė po „Keisti“");
     tiesa(D.getElementById(W.lkId("laukas|" + r)).contains(D.activeElement), "MVP fokusas kortelėje");
     // generavimas: SSD kaina ir TSD kaina_kitos
-    let docs = await generuokSu({ budas: "S-SD", tipas: "prekes" });
+    salinkSenusRemelius(); let docs = await generuokSu({ budas: "S-SD", tipas: "prekes" });
     let t = docs.SSD_LT_SPS.pars.join("\n");
     tiesa(/Perkantysis subjektas derėsis dėl šių sąlygų: Pasiūlymo kainos(\.|\s*$)/m.test(t) && /minimalūs reikalavimai Pirkimo objektui yra šie: Techninėje specifikacijoje ir (Sutarties projekte|SPS \d+ dalyje „Esminės sutarties sąlygos“) nustatyti reikalavimai/.test(t) && !/jei deramasi tik dėl kainos/.test(t), "SSD tekstas: " + t.split("\n").filter(x => /derėsis dėl šių|minimalūs reikalavimai Pirkimo/.test(x)).join(" || "));
-    docs = await generuokSu({ budas: "T-SD", tipas: "prekes", pries: async () => { D.getElementById("apimtis-kaina_kitos").click(); await W.kraukPriedus(); W.klausimynas(); } });
+    salinkSenusRemelius(); docs = await generuokSu({ budas: "T-SD", tipas: "prekes", pries: async () => { D.getElementById("apimtis-kaina_kitos").click(); await W.kraukPriedus(); W.klausimynas(); } });
     t = docs.TSD_LT_SPS.pars.join("\n");
     tiesa(/Perkantysis subjektas derėsis dėl šių sąlygų: Pasiūlymo kainos, kitų pasiūlymo sąlygų/.test(t), "TSD kaina_kitos tekstas");
     // „Patikrinkite“
-    await zingsnis2("S-SD", "kaina_kitos");
+    salinkSenusRemelius(); await zingsnis2("S-SD", "kaina_kitos");
     const mf = vieta(RE_MIN).f;
     W.nustatykFormuluote(mf[0], "Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai"); W.klausimynas();
     const q = W.__K.formuluotes[mf[0]];
     tiesa(/^Patikrinkite: „Techninėje specifikacijoje ir Sutarties projekte nustatyti reikalavimai“ - formuluotė, kai deramasi tik dėl kainos, o 1 žingsnyje pasirinkta - dėl kainos ir kitų pasiūlymo sąlygų/.test(q.pastaba), "pastaba: " + q.pastaba);
     tiesa(/Patikrinkite: „Techninėje/.test(D.getElementById(W.lkId("formuluote|" + mf[0])).textContent), "pastaba kortelėje");
     // LT/EN: lietuviškos vietos - automatiškai, angliškos - klausiama (šablone angliškos formuluotės nėra)
-    await zingsnis2("S-SD", "kaina", { kalba: "LT_EN", pavEN: "Power transformers" });
+    salinkSenusRemelius(); await zingsnis2("S-SD", "kaina", { kalba: "LT_EN", pavEN: "Power transformers" });
     const en = Object.values(W.__K.tuscios).filter(x => x.lk && /^(the minimum requirements set by|the contracting entity will negotiate)/.test(N(x.tekstas)));
     tiesa(vieta(RE_MIN).auto && vieta(RE_DER).auto && en.length === 2 && en.every(x => (W.__S2.M.korteles || []).some(c => c.rusis === "laukas" && c.q === x)), "LT/EN: LT automatiškai, EN - " + en.length + " kortelės");
   });
   await testas("M5 deklaracijos priedas - kai SPS ją mini: BVPŽ punktas pašalinamas - priedas, priedų sąrašo ir pasiūlymo dokumentų sąrašo eilutės pašalinamos (AK, AKV, DPS); punktas lieka - visi trys; nacionalinis saugumas „Ne“ - nė vieno; kilmė sako kodėl", async () => {
     const dekl = t => (t.match(/Nacionalinio saugumo reikalavimų atitikties deklaracij/g) || []).length;
-    let docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true, nsbvpz: "ne" });
+    salinkSenusRemelius(); let docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true, nsbvpz: "ne" });
     const kilme = (W.eval("SIUL").get("A|NACSAUGUMAS") || {}).saltinis || "";
     lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS, dekl(docs.AK_LT_SPS.pars.join("\n"))], [false, false, 0], "„Taip“ + BVPŽ „Ne“: priedo ir nuorodų nėra");
     tiesa(/SPS deklaraciją reikalauja tik nacionalinio saugumo BVPŽ punkte - jis pašalinamas/.test(kilme), "kilmė: " + kilme);
-    docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true, nsbvpz: "taip" });
+    salinkSenusRemelius(); docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true, nsbvpz: "taip" });
     lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS, dekl(docs.AK_LT_SPS.pars.join("\n"))], [true, true, 3], "BVPŽ „Taip“: priedas ir trys nuorodos");
-    docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true });
+    salinkSenusRemelius(); docs = await generuokSu({ budas: "T-AK", tipas: "prekes", nacsaug: true });
     lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS], [true, true], "BVPŽ neatsakyta - punktas lieka, priedas lieka");
-    docs = await generuokSu({ budas: "T-AK", tipas: "prekes" });
+    salinkSenusRemelius(); docs = await generuokSu({ budas: "T-AK", tipas: "prekes" });
     lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMAS, !!docs.PRIEDAI_LT_NACSAUGUMAS, dekl(docs.AK_LT_SPS.pars.join("\n"))], [false, false, 0], "nacionalinis saugumas „Ne“");
-    docs = await generuokSu({ budas: "S-AK", centr: true, tipas: "prekes", nacsaug: true, nsbvpz: "ne" });
+    salinkSenusRemelius(); docs = await generuokSu({ budas: "S-AK", centr: true, tipas: "prekes", nacsaug: true, nsbvpz: "ne" });
     lygu([W.eval("PRIEDU_PASIRINKIMAS").NACSAUGUMASVPI, !!docs.PRIEDAI_LT_NACSAUGUMASVPI, dekl(docs.AKV_LT_SPS.pars.join("\n"))], [false, false, 0], "AKV (VPĮ): BVPŽ „Ne“");
-    docs = await generuokSu({ budas: "DPS-K", nacsaug: true, nsbvpz: "ne" });
+    salinkSenusRemelius(); docs = await generuokSu({ budas: "DPS-K", nacsaug: true, nsbvpz: "ne" });
     lygu(dekl(docs.DPSP_LT_SALYGOS.pars.join("\n")), 0, "DPS konkretaus pirkimo sąlygos: BVPŽ „Ne“ - priedų sąrašo eilutės nėra");
-    docs = await generuokSu({ budas: "DPS-K", nacsaug: true, nsbvpz: "taip" });
+    salinkSenusRemelius(); docs = await generuokSu({ budas: "DPS-K", nacsaug: true, nsbvpz: "taip" });
     tiesa(dekl(docs.DPSP_LT_SALYGOS.pars.join("\n")) >= 1, "DPS: BVPŽ „Taip“ - eilutė lieka");
   });
   await testas("M16 mažoji sutartis - tik mažos vertės darbams: vertė ne mažesnė už ribą - klausimas K6 (mažoji ar statybos rangos), mažesnė - be klausimo; vertė nežinoma ar riba neįkelta - pasakoma; kitos taisyklės nepakito; 1 žingsnio blokas", async () => {
@@ -12342,7 +12356,7 @@ async function testaiD2(){
     lygu([ln.map, ln.pasalintos, ln.pasalintu], [{ 1: "1", 4: "2", 5: "3" }, ["2", "3"], []], "numeracija");
     const l4 = D.getElementById("lenteliuNumeracija");
     tiesa(l4 && l4.classList.contains("ok") && /pašalintos lentelės - 2, 3; likusios pernumeruotos iš eilės: 4 → 2, 5 → 3/.test(tx("lenteliuNumeracija")), "4 žingsnis: " + tx("lenteliuNumeracija"));
-    tiesa(/„SPS 2 lentel…“ - šablono 2 lentelė šiame pakete pašalinta, o 2 numerį dabar turi kita lentelė/.test(tx("punktuNuorodosNerasta")), "Patikrinkite: " + tx("punktuNuorodosNerasta"));
+    tiesa(/„[^“]*SPS 2 lentel[^“]*“ - šablono 2 lentelė šiame pakete pašalinta, o 2 numerį dabar turi kita lentelė/.test(tx("punktuNuorodosNerasta")), "Patikrinkite (citata - sakinys aplink nuorodą, T5-M1): " + tx("punktuNuorodosNerasta"));
   });
 
   await testas("Generavimas AK LT/EN su visomis lentelėmis - numeriai nekeičiami (4 žingsnyje bloko nėra); be kvalifikacijos - angliška pasiūlymo formos nuoroda „table 2 of Clause 5.1 of the SPC“, „Table 2/Table 3“ antraštės", async () => {
@@ -12442,6 +12456,278 @@ async function testaiD2(){
   }
 }
 
+/* 2026-10-23: privalomos nuostatos ir besąlyginis šablono tekstas (naudotojo „Pradėkime nuo 1 ir 2 punktų“ - žemėlapių taisyklės nepašalina daugiau,
+   nei leidžia šablono nurodymai). Rasta: MVP ir ND be žaliųjų SPS trindavo ir „KITI REIKALAVIMAI“ lentelę (sankcijos, nacionalinis saugumas),
+   DPS sukūrimo pakete atsirasdavo nacionalinio saugumo deklaracija „Pirkimo sąlygų X priedas“, nors sąlygos jos nemini. */
+const PRV_N = t => String(t || "").replace(/\/?ĮMONĖS PAVADINIMAS\/?/g, "LITGRID AB").toLowerCase().replace(/[^a-ząčęėįšųūž]+/g, " ").trim();
+const PRV_Z = t => PRV_N(t).split(" ").filter(w => w.length >= 3);
+// besąlyginės (ne žemėlapio bloke) privalomos nuostatos - kiek jų šablone, tiek turi būti dokumente
+const PRV_INKARAI = [["pašalinimo pagrindų lentelė", /^(Tiekėjo|Tiekėjų) pašalinimo pagrindai$/], ["sankcijos", /^Pirkime negali dalyvauti Tiekėjai, Subtiekėjai/],
+  ["Rusijos subjektai", /^Tiekėjas \(arba bent vienas iš Tiekėjų grupės narių\)/], ["Vyriausybės sprendimas", /^Lietuvos Respublikos Vyriausybė, vadovaudamasi Nacionaliniam/],
+  ["prekių kilmė", /^Prekių kilmė nėra ir paslaugos nėra teikiamos/], ["kitų reikalavimų lentelė", /^KITI REIKALAVIMAI/]];
+/* Šablone pažymėta „(šis punktas visada turi būti)“ - tikrinama ir sąlyginiuose blokuose (žemėlapio blokas gali klysti: 2026-10-23 MVP, ND, SSD,
+   TSD sąlygos „Jei Pirkimo metu nėra rengiamas Sutarties projektas“ blokas apėmė ir alternatyvių pasiūlymų punktą) */
+const PRV_VISADA = [["alternatyvūs pasiūlymai", /^(Tiekėjams neleidžiama pateikti alternatyvių|Suppliers are not allowed to submit alternative)/]];
+const PRV_VISADA_ZYMA = /\s*\(\s*[šŠ]is punktas visada turi būti\s*\)/;
+/* Dingusios juodos šablono pastraipos su priežastimi (pagrįsti šalinimai - pagal atsakymus ir sprendimus, žr. CLAUDE.md); „NEŽINOMA“ - klaida. */
+function prvPriezastis(t, lentTekstas){
+  if (/^Vykdomas (\[Pasirinkite\]|Pasirinkti)|^Pasirinkti is being carried out/.test(t)) return "režimo formuluotė";
+  if (/^ESMINĖS SUTARTIES SĄLYGOS|\(koreguojama pagal poreikį\)/.test(t)) return "esminės sąlygos ar nurodymas antraštėje";
+  if (/\((įrašomas|fill in)|\(Pirkimo objektas\)|„(PIRKIMO )?PAVADINIMAS“|TITLE OF THE SPECIFIC PROCUREMENT|^DĖL KONKRETAUS PIRKIMO|ĮMONĖS PAVADINIMAS/.test(t)) return "pildoma vieta";
+  if (/kaina arba sąnaudos|kaina ar sąnaudos nurodoma|KAINA ARBA SĄNAUDOS|PRICE OR COSTS|PREKIŲ \/ PASLAUGŲ \/ DARBŲ|Paslaugų teikimo\/Prekių tiekimo\/Darbų atlikimo|Service provision\/ supply of Goods/.test(t)) return "pasiūlymo formos pasirinkimas";
+  if (/^\d+\s*priedas\s*[–-]|^Annex \d+\s*[–-]/.test(t)) return "priedų sąrašo eilutė (priedas nepridedamas)";
+  if (/^\d+\s*lentelė(?![\p{L}])/u.test(t)) return "lentelės antraštė (lentelė pašalinta arba pernumeruota)";
+  if (/Nacionalinio saugumo reikalavimų atitikties deklaracij|Tender price or costs/.test(t)) return "deklaracija arba pasiūlymo formos pasirinkimas";
+  if (/\[[^\]]{3,}\]/.test(t)) return "pildoma vieta";
+  if (/^ESSENTIAL CONDITIONS OF THE CONTRACT|Coordination Commission/.test(t)) return "esminės sąlygos ar Koordinavimo komisija";
+  if (/kvalifikaciją pagrindžiančius dokumentus, su kvalifikacijos dokumentais|^When asked to provide/.test(t)) return "3.7 p. (tik pašalinimo pagrindai)";
+  if (/atsisako ją sudaryti|refuses to conclude it by e/.test(t)) return "užtikrinimas";
+  if (/^3\.7\. Tiekėjas, kurio bus prašoma pateikti kvalifikaciją/.test(t)) return "3.7 p. (tik pašalinimo pagrindai)";
+  if (/^(KONKRETAUS PIRKIMO|SPS X priedas|Pirkimo sąlygų X priedas)/.test(t)) return "antraštė";
+  if (/The term Tender in this Procurement means|Pasiūlymo sąvoka šiame Pirkime/.test(t)) return "derybos";
+  if (/Kvalifikacijos reikalavimas|Teisė verstis veikla/.test(lentTekstas) || /ne visa apimtimi/.test(t)) return "kvalifikacijos lentelė";
+  if (/ŽALIESIEMS|ŽALIEJI REIKALAVIMAI/.test(lentTekstas)) return "žaliųjų lentelė";
+  if (/^Jei Pasiūlymą pateikia Tiekėjų grupė|Environmental requirements according to|if the Tender is submitted by a group of Suppliers|^(a|b|c)\)(\s|$)|Tiekėjas gali pasitelkti kitų ūkio subjektų pajėgumus|the Supplier may use the capacities of other economic entities only if|Žaliuosius reikalavimus|šis reikalavimas nekeliamas/.test(t)) return "žaliųjų 4.2";
+  if (/galiojimo užtikrinim|Pasiūlymo galiojimo laikotarpiu|aritmetinių klaidų|nepasirašo Sutarties|atitiktį pašalinimo pagrindų nebuvimo ir\/ar Kvalifikaci|atitiktį Kvalifikacijos ir\/ar kitiems|Tender security|after the deadline for submission of Tenders|does not sign the Contract|did not correct the arithmetical errors|potential winner does not submit the documents/.test(t)) return "užtikrinimas";
+  if (/Koordinavimo komisij|Coordinating Commission/.test(t)) return "Koordinavimo komisija";
+  if (/vertinami pagal|lietuvių kalba|anglų kalba/.test(t)) return "alternatyva";
+  return "NEŽINOMA";
+}
+async function prvDokumentas(r, zr){                // zr - Set indeksų, kurių sprendimai grąžinami (testo derinimui)
+  const d = r.d, Z = d.zemelapis;
+  if (!Z || !Z.paras || r.statinis || !r.blob) return null;
+  const tz = await W.JSZip.loadAsync(await (await W.fetch("templates/" + d.trumpas + ".docx")).arrayBuffer());
+  const tx = new W.DOMParser().parseFromString(await tz.file("word/document.xml").async("string"), "application/xml");
+  const TP = Array.from(tx.getElementsByTagNameNS(NSW, "p")), idx = new Map(TP.map((p, i) => [p, i]));
+  // nurodymas „(šis punktas visada turi būti)“ - raudonas, generuojant pašalinamas: lyginama be jo
+  const tekstas = p => Array.from(p.getElementsByTagNameNS(NSW, "t")).map(t => t.textContent).join("").replace(PRV_VISADA_ZYMA, "").trim();
+  // visa raudona pastraipa (nurodymas rengėjui); pastraipa su raudona vieta ar skaičiumi viduryje - tikrinama
+  const raudR = r => Array.from(r.getElementsByTagNameNS(NSW, "color")).some(c => /^(FF0000|C00000|ED1C24)$/i.test(c.getAttribute("w:val") || ""));
+  const raud = p => { const rs = Array.from(p.getElementsByTagNameNS(NSW, "r")).filter(r => Array.from(r.getElementsByTagNameNS(NSW, "t")).some(t => t.textContent.trim())); return rs.length > 0 && rs.every(raudR); };
+  const toc = p => { const st = p.getElementsByTagNameNS(NSW, "pStyle")[0]; return (st && /^toc/i.test(st.getAttribute("w:val") || "")) || Array.from(p.getElementsByTagNameNS(NSW, "instrText")).some(x => /PAGEREF|TOC/.test(x.textContent)); };
+  // žemėlapio sąlyginės sritys ir lentelių taisyklių valdomos lentelės (pirmi „lenteliu“ numeriai iš taisyklės teksto)
+  const C = new Set(), valdomi = new Set();
+  (Z.blokai || []).forEach(b => { C.add(b.i); if (b.blokas) for (let k = b.blokas.nuo; k <= b.blokas.iki; k++) C.add(k); });
+  const CB = new Set(C);                       // privalomoms nuostatoms - tik sąlyginiai blokai; lentelių taisyklės jų pašalinti negali (žemėlapis gali klysti)
+  (Z.blokai || []).filter(b => b.tipas === "lentele").forEach(b => [...String(b.klausimasLT || b.klausimas).matchAll(/(\d+)\s*(?:ir\s*(\d+)\s*)?lentel/gi)]
+    .flatMap(m => [m[1], m[2]]).filter(Boolean).slice(0, b.lenteliu || 1).forEach(n => valdomi.add(n)));
+  let nr = null;
+  Array.from(tx.getElementsByTagNameNS(NSW, "body")[0].children).forEach(n => {
+    if (n.localName === "p"){ const t = tekstas(n), m = /^(\d+)\s*lentelė/.exec(t); if (m) nr = m[1]; else if (t && !/lentel/.test(t)) nr = null; }
+    if (n.localName === "tbl"){ if (nr && valdomi.has(nr)) Array.from(n.getElementsByTagNameNS(NSW, "p")).forEach(p => C.add(idx.get(p))); nr = null; }
+  });
+  // to paties šablono išvestis (ir gulsčių priedų failas)
+  const GP = [];
+  for (const q of W.__R.filter(q => q.d && String(q.d.trumpas || "").indexOf(d.trumpas) === 0 && q.blob && !q.statinis)){
+    const gx = new W.DOMParser().parseFromString(await (await W.JSZip.loadAsync(await q.blob.arrayBuffer())).file("word/document.xml").async("string"), "application/xml");
+    Array.from(gx.getElementsByTagNameNS(NSW, "p")).filter(p => !toc(p)).map(tekstas).filter(Boolean).forEach(t => GP.push(t));   // be turinio eilučių
+  }
+  // palyginimas žodžių poromis iš eilės (vien žodžių rinkinys per atlaidus - teisiniuose sakiniuose žodynas panašus)
+  const poros = w => { const o = new Set(); for (let k = 0; k + 1 < w.length; k++) o.add(w[k] + " " + w[k + 1]); return o; };
+  const gs = new Set(GP.map(PRV_N)), gz = GP.map(t => poros(PRV_Z(t))), gn = GP.map(t => " " + PRV_Z(t).join(" ") + " "), lt = new Map();
+  const lentTekstas = p => { let n = p; while (n && n.localName !== "tbl") n = n.parentNode; if (!n) return ""; if (!lt.has(n)) lt.set(n, n.textContent.slice(0, 600)); return lt.get(n); };
+  const dingo = [], inkarai = [], pagristi = [];
+  const beNr = t => String(t).replace(/^\s*(\d+(\.\d+)*\.?|[a-z]\))\s*/, "");      // sugeneruotame numeriai įrašyti tekstu (GPNum)
+  PRV_INKARAI.forEach(([pav, re]) => {
+    const sab = TP.filter((p, i) => !CB.has(i) && !toc(p) && re.test(beNr(tekstas(p)))).length, yra = GP.filter(t => re.test(beNr(t))).length;
+    if (yra < sab) inkarai.push(`${d.trumpas}: ${pav} - šablone ${sab}, dokumente ${yra}`);
+  });
+  PRV_VISADA.forEach(([pav, re]) => {
+    const sab = TP.filter(p => !toc(p) && re.test(beNr(tekstas(p)))).length, yra = GP.filter(t => re.test(beNr(t))).length;
+    if (yra < sab) inkarai.push(`${d.trumpas}: ${pav} („visada turi būti“) - šablone ${sab}, dokumente ${yra}`);
+  });
+  // trumpi tekstai („SOCIALINIAI REIKALAVIMAI“, „Eil. Nr.“) kartojasi - lyginamas pasikartojimų skaičius: trūkumas, kurio nepaaiškina
+  // pagrįstai šalinamos tos pačios pastraipos (kvalifikacijos, žaliųjų lentelė ir pan.), - klaida
+  const kiek = new Map(); GP.forEach(t => { const n = PRV_N(t); kiek.set(n, (kiek.get(n) || 0) + 1); });
+  const trumpi = new Map();
+  const sprendimai = [];
+  TP.forEach((p, i) => {
+    const t = tekstas(p);
+    if (zr && zr.has(i)) sprendimai.push(i + " C=" + C.has(i) + " raud=" + raud(p) + " toc=" + toc(p) + " gs=" + gs.has(PRV_N(t)) + " | " + t.slice(0, 60));
+    if (!t || C.has(i) || raud(p) || toc(p)) return;
+    const n = PRV_N(t);
+    if (!n) return;
+    const w = PRV_Z(t), pr = w.slice(0, 6);
+    if (w.length <= 3 && !/_{3,}|\((title|pavadinimas)\)/.test(t)){ (trumpi.get(n) || trumpi.set(n, []).get(n)).push({ i, t, pz: prvPriezastis(t, lentTekstas(p)) }); return; }
+    if (gs.has(n)) return;
+    const wp = [...poros(w)], pradzia = " " + pr.join(" ") + " ";
+    // pakeista pastraipa (įrašyta vieta, numeris): bent 80 % žodžių porų toje pačioje pastraipoje; sutrumpinta (alternatyva) - ta pati pradžia ir pusė porų
+    if (wp.length && gz.some(z => wp.filter(x => z.has(x)).length >= Math.ceil(wp.length * 0.8))) return;
+    if (pr.length >= 4 && gn.some((g, k) => g.includes(pradzia) && wp.filter(x => gz[k].has(x)).length >= wp.length * 0.5)) return;
+    const pz = /_{3,}|\((title|pavadinimas)\)/.test(t) ? "pildoma vieta" : prvPriezastis(t, lentTekstas(p));
+    if (pz === "NEŽINOMA") dingo.push(`${d.trumpas} ${i}: ${t.slice(0, 120)}`);
+    else pagristi.push(pz + " | " + i + ": " + t.slice(0, 80));
+  });
+  trumpi.forEach((v, n) => {
+    const truksta = v.length - (kiek.get(n) || 0), pagristi = v.filter(x => x.pz !== "NEŽINOMA").length;
+    if (truksta > pagristi) dingo.push(`${d.trumpas} ${v[0].i}: ${v[0].t.slice(0, 80)} - šablone ${v.length}, dokumente ${kiek.get(n) || 0} (pagrįstai šalinamų ${pagristi})`);
+  });
+  return { dingo, inkarai, pagristi, sprendimai };
+}
+async function testaiPrivalomos(){
+  dabartine = grupe("Privalomos nuostatos (2026-10-23): pašalinimo pagrindai, sankcijos, nacionalinis saugumas ir kitų reikalavimų lentelė lieka; juodas šablono tekstas dingsta tik dėl žinomos priežasties; DPS sukūrimo pakete - be nacionalinio saugumo deklaracijos");
+  const tx = id => ((D.getElementById(id) || {}).textContent || "").replace(/\s+/g, " ");
+  const atsitiktinis = s => { let x = s; const rnd = () => { x = (x * 16807) % 2147483647; return x / 2147483647; }; return g => g.nariai[Math.floor(rnd() * g.nariai.length)]; };
+  const NS = { nacsaug: true, nsbvpz: "taip" };
+  const RINK = [
+    { budas: "T-AK", kalba: "LT", grupes: "pirmas" }, { budas: "T-AK", kalba: "LT_EN", grupes: "paskutinis", ...NS }, { budas: "S-AK", kalba: "LT", centr: true, grupes: "pirmas" },
+    { budas: "T-SD", kalba: "LT", grupes: 7 }, { budas: "T-SD", kalba: "LT_EN", grupes: "pirmas" }, { budas: "S-SD", kalba: "LT", grupes: "paskutinis", ...NS },
+    { budas: "S-SD", kalba: "LT_EN", grupes: 42, ...NS }, { budas: "S-ND", kalba: "LT", grupes: "paskutinis", ...NS }, { budas: "S-ND", kalba: "LT_EN", grupes: "pirmas" },
+    { budas: "MV-SAB", kalba: "LT", grupes: "pirmas" }, { budas: "MV-SAB", kalba: "LT_EN", grupes: "paskutinis", ...NS },
+    { budas: "DPS", kalba: "LT", grupes: "paskutinis", ...NS }, { budas: "DPS", kalba: "LT_EN", grupes: "pirmas" },
+    { budas: "DPS-K", kalba: "LT", grupes: 7 }, { budas: "DPS-K", kalba: "LT_EN", grupes: "paskutinis", ...NS }];
+  for (const o of RINK){
+    await testas("Privalomos nuostatos: " + JSON.stringify(o), async () => {
+      salinkSenusRemelius();                     // atmintis: grupėje daug generavimų
+      await generuokSu(Object.assign({}, o, { grupes: typeof o.grupes === "number" ? atsitiktinis(o.grupes) : o.grupes }));
+      const dingo = [], inkarai = [];
+      for (const r of W.__R){ const x = await prvDokumentas(r); if (x){ dingo.push(...x.dingo); inkarai.push(...x.inkarai); } }
+      lygu(inkarai, [], "privalomos nuostatos");
+      lygu(dingo, [], "dingusios juodos pastraipos be žinomos priežasties");
+      if (o.budas === "DPS" && o.nacsaug) lygu(W.__R.filter(r => /NACSAUGUMAS/.test(r.d.trumpas)).map(r => r.d.trumpas), [], "DPS sukūrimas: deklaracija pakete");
+      if (o.budas === "DPS-K" && o.nacsaug) tiesa(W.__R.some(r => /NACSAUGUMAS/.test(r.d.trumpas)), "DPS konkretus pirkimas: deklaracijos nėra (sąlygos ją mini)");
+    });
+  }
+  await testas("DPS sukūrimas, pirkimas susijęs su nacionaliniu saugumu: deklaracija nesiūloma - priežastis priedų puslapyje", async () => {
+    salinkSenusRemelius();
+    await generuokSu({ budas: "DPS", ...NS, pries: async () => {
+      lygu(W.eval("deklaracijaReikalinga()"), { v: false, kodel: "šio būdo pirkimo sąlygos nacionalinio saugumo reikalavimų atitikties deklaracijos nemini" }, "sprendimas");
+      lygu(W.eval("deklaracijaMinima()"), false, "sąlygos deklaraciją mini");
+    } });
+    salinkSenusRemelius();
+    await generuokSu({ budas: "T-AK", ...NS, pries: async () => { lygu(W.eval("deklaracijaMinima()"), true, "AK SPS deklaracijos nemini"); } });
+    tiesa(W.__R.some(r => /NACSAUGUMAS/.test(r.d.trumpas)), "AK su nacionaliniu saugumu - deklaracijos nėra");
+  });
+}
+
+/* ---- Penktoji naujo darbuotojo patikra (2026-10-23, po D2 numeracijos): angliška lentelės nuoroda sakinio gale, DPS priedo antraštė
+   vieną kartą, privalomas DPS pašalinimo pagrindų priedas, „Sutarties projektas“ pagal SPS sąlygą, derybų formos angliška nuoroda,
+   ištraukos aplink pakeitimą, DPS failų pavadinimai, nuorodos pašalinamose eilutėse, nepridedamas priedas, raktų perkėlimas. ---- */
+async function testaiTestuotojas5(){
+  dabartine = grupe("Penktoji naujo darbuotojo patikra (2026-10-23): DPS pašalinimo pagrindų priedas, sutarties projekto eilutė, derybų forma EN, ištraukos, DPS pavadinimai, nepridedamas priedas, juodraščio raktai");
+  const tx = id => ((D.getElementById(id) || {}).textContent || "").replace(/\s+/g, " ");
+  const suApimtimi = async (ap, o) => {
+    const orig = modulis;
+    modulis = async (...a) => { const f = await orig(...a); const r = D.getElementById("apimtis-" + ap); r.checked = true; r.dispatchEvent(new W.Event("change")); return f; };
+    try { return await generuokSu(o); } finally { modulis = orig; }
+  };
+  const PAS = "1 priedas – Tiekėjų pašalinimo pagrindai.";
+
+  await testas("T5-D3: DPS sukūrimo LT/EN - priedas „Tiekėjų pašalinimo pagrindai“ privalomas: klausimo ir žymimojo langelio nėra, „Išspręsta automatiškai“ su priežastimi, eilutė ir failas pakete; atsakymas „Ne“ (pvz. iš juodraščio) jų nepašalina", async () => {
+    salinkSenusRemelius();
+    let K = null;
+    const docs = await generuokSu({ budas: "DPS", kalba: "LT_EN", pries: async () => { K = W.__K; } });
+    const r = W.eval("norm")(PAS);
+    tiesa(!W.formosSantrauka(K).M.priedai.some(u => u.raktas === r), "priedų pasirinkime yra klausimas: " + W.formosSantrauka(K).M.priedai.map(u => u.raktas).join(" | "));
+    const a = K.automatika.find(x => /Tiekėjų pašalinimo pagrindai/.test(x.kas));
+    tiesa(a && /pridedamas/.test(a.veiksmas) && /nurodo šį priedą/.test(a.kodel), "automatika: " + JSON.stringify(a));
+    tiesa(!D.querySelector('[data-seimos-priedas="DPSK_LTEN_PASALINIMAS"]'), "žymimasis langelis rodomas");
+    tiesa(docs.DPSK_LTEN_PASALINIMAS && docs.DPSK_LTEN_SALYGOS.pars.some(t => /^1 priedas\s*[–-]\s*Tiekėjų pašalinimo pagrindai/.test(t)) && docs.DPSK_LTEN_SALYGOS.pars.some(t => /^Annex 1\s*[–-]\s*Grounds for supplier exclusion/.test(t)),
+      "failas ir eilutės pakete: " + Object.keys(docs).join(", "));
+    tiesa(W.privalomasSeimosPriedas(PAS) && !W.privalomasSeimosPriedas("4 priedas – Paraiškos forma."), "kuris priedas privalomas");
+    // apsaugos: atsakymas „Ne“ eilutės ir failo nepašalina, perjungimas neveikia
+    const sav = W.prieduSavininkas(), p = W.prieduSarasasZ(sav.zemelapis).find(x => x.raktas === "pasalinimas"), DOK = W.eval("DOK");
+    ATS()["A_" + r] = false;
+    tiesa(W.sarasoEiluteLieka(sav.zemelapis, p) && W.priedoEiluteLieka(sav.zemelapis, p) && !W.seimosPriedasNereikalingas(DOK.find(d => d.trumpas === "DPSK_LTEN_PASALINIMAS"), sav) && !W.seimosPriedaiNesutampa(),
+      "„Ne“ pašalintų eilutę ar failą");
+    await W.perjunkSeimosPrieda(r, false);
+    tiesa(DOK.some(d => d.trumpas === "DPSK_LTEN_PASALINIMAS"), "perjungus failas pašalintas");
+    ATS()["A_" + r] = true;
+    // DPS LT - priedas tame pačiame faile, eilutė juoda: taisyklė netaikoma
+    await generuokSu({ budas: "DPS", kalba: "LT", pries: async () => { tiesa(!W.privalomasSeimosPriedas(PAS), "DPS LT - be šeimos failo"); } });
+  });
+
+  await testas("T5-D4: 1 žingsnyje neatsakyta, o SPS sąlyga „Jei Pirkimo metu nėra rengiamas Sutarties projektas“ - „Taip“: priedų sąraše nebelieka „Sutarties projektas“, likę iš eilės; „Ne“ - eilutė lieka", async () => {
+    salinkSenusRemelius();
+    const docs = await generuokSu({ budas: "T-AK", tipas: "prekes", pries: async () => { W.uAts(V2, true); } });
+    const P = docs.AK_LT_SPS.pars, nr = P.map(t => /^(\d+) priedas\s*[–-]/.exec(t)).filter(Boolean).map(m => +m[1]);
+    tiesa(!P.some(t => /^\d+ priedas\s*[–-]\s*Sutarties projektas/.test(t)), "eilutė liko: " + P.filter(t => /Sutarties projektas\./.test(t)).join(" | "));
+    lygu(nr, nr.map((_, i) => nr[0] + i), "sąrašas iš eilės");
+    tiesa(P.some(t => /Šio Pirkimo metu nėra parengtas Sutarties projektas/.test(t)), "sąlygos punktas lieka");
+    tiesa(/Sutarties projektas/.test(tx("prieduNumeracija")) || /pašalinta priedų sąrašo eilučių/.test(tx("prieduNumeracija")), "4 žingsnis: " + tx("prieduNumeracija"));
+    const d2 = await generuokSu({ budas: "T-AK", tipas: "prekes", pries: async () => { W.uAts(V2, false); } });
+    tiesa(d2.AK_LT_SPS.pars.some(t => /^\d+ priedas\s*[–-]\s*Sutarties projektas/.test(t)), "rengiamas - eilutė turi likti");
+  });
+
+  await testas("T5-D1, V3, M1: derybų forma LT/EN - angliška „Clause N of the SPC“ suderinta su SPS derybų apimties punktu (kaip lietuviška, pagal galutinę SPS numeraciją); 4 žingsnyje ištrauka aplink pakeitimą, ne vienodi tekstai", async () => {
+    const nrai = [];
+    for (const budas of ["S-ND", "T-SD"]){
+      salinkSenusRemelius();
+      const docs = await suApimtimi("kaina_kitos", { budas, kalba: "LT_EN", tipas: "paslaugos" });
+      const pt = (W.eval("SAVININKO_RODYKLE").punktai || []).find(x => /derėsis dėl šių sąlygų/.test(x.tekstas)), nr = pt && pt.nr;
+      nrai.push(nr);
+      const P = (docs.PRIEDAI_LTEN_DERYBOS || {}).pars || [];
+      const lt = P.find(t => /pagal SPS [\d.]+ punkte nustatytą derybų apimtį/.test(t)), en = P.find(t => /scope of negotiations established in Clause/.test(t));
+      tiesa(lt && lt.includes("SPS " + nr + " punkte") && en && en.includes("Clause " + nr + " of the SPC"), budas + ": " + lt + " | " + en);
+      const pn = (docs.PRIEDAI_LTEN_DERYBOS.r.stats.punktuNuorodos || []).find(x => /Clause/.test(x.buvo));
+      if (nr !== "2.9") tiesa(pn && pn.buvo !== pn.tapo && /Clause 2\.9/.test(pn.buvo) && pn.tapo.includes("Clause " + nr), budas + " ištrauka: " + JSON.stringify(pn));
+    }
+    tiesa(nrai.some(n => n && n !== "2.9"), "bent viename pakete punktas ne 2.9 (kitaip testas nieko netikrina): " + nrai.join(", "));
+    // V3 sugeneruotame pakete: nacionalinio saugumo deklaracijos nuorodos - toli pastraipoje (po 200 ženklų)
+    salinkSenusRemelius();
+    const dn = await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "prekes", nacsaug: true, nsbvpz: "taip" });
+    const dk = ((dn.PRIEDAI_LT_NACSAUGUMAS || {}).r || { stats: {} }).stats.punktuNuorodos || [];
+    tiesa(dk.length && dk.every(x => x.buvo !== x.tapo && /reikalavimas/.test(x.tapo)), "deklaracijos ištraukos: " + JSON.stringify(dk).slice(0, 600));
+    // V3: ištrauka - aplink pakeitimą ir tolimoje pastraipos vietoje (iki tol rodyti pirmi 200 ženklų - abu tekstai atrodė vienodi)
+    const ilgas = "Pradžia " + "žodis ".repeat(50) + "pagal SPS 2.9 punkte nustatytą derybų apimtį gali siūlyti korekcijas.";
+    const k0 = ilgas.indexOf("2.9"), ist = W.nuorodosIstrauka(ilgas, ilgas.replace("2.9", "2.10"), [[k0, k0 + 3, "2.10"]]);
+    tiesa(ist.buvo.includes("SPS 2.9 punkte") && ist.tapo.includes("SPS 2.10 punkte") && ist.buvo.startsWith("…") && !/^…\S*[^ ]žodis/.test(ist.buvo.replace(/^…/, "x")), "ištrauka: " + JSON.stringify(ist));
+    // M1: priežastys - be vidinių žodžių („savininke“, „savininko lentelėje“)
+    const src = await (await fetch("PP-SALYGOS.html?ci=" + Date.now())).text();
+    tiesa(!/kodel: [^\n]*savinink/.test(src), "priežastyje liko „savininke“");
+  });
+
+  await testas("T5-V4: DPS sukūrimo LT/EN šeimos failų pavadinimai sąsajoje - galutiniu priedo numeriu (pašalinus 3 priedo eilutę sutarčių sąrašas - 4 priedas)", async () => {
+    salinkSenusRemelius();
+    await generuokSu({ budas: "DPS", kalba: "LT_EN", pries: async () => {
+      const r3 = W.eval("norm")("3 priedas – EBVPD forma.");
+      W.uAts("A_" + r3, false, false); W.klausimynas();
+      if (W.prieduNumatytujuDerink) await W.prieduNumatytujuDerink();
+      lygu(W.dokTrumpas("DPSK_LTEN_SUTARTYS"), "4 priedas. Sutarčių sąrašas (LT/EN)", "trumpas pavadinimas");
+      tiesa(/ - 4 priedas\. Sutarčių sąrašas$/.test(W.dokumentoPavadinimas(W.eval("DOK").find(d => d.trumpas === "DPSK_LTEN_SUTARTYS"))), "pilnas pavadinimas");
+      lygu(W.dokTrumpas("DPSK_LTEN_PASALINIMAS"), "1 priedas. Tiekėjų pašalinimo pagrindai (LT/EN)", "nepasikeitęs numeris");
+    } });
+  });
+
+  await testas("T5-V5: DPS konkretaus pirkimo LT be nacionalinio saugumo - nuorodos pašalinamose lentelės eilutėse (BVPŽ punktas) nevardijamos kaip nuorodos į pašalintą priedą", async () => {
+    salinkSenusRemelius();
+    for (const kalba of ["LT", "LT_EN"]){
+      const docs = await generuokSu({ budas: "DPS-K", kalba });
+      const sal = Object.values(docs).find(x => x.r && /^DPSP_.*SALYGOS$/.test(x.r.d.trumpas));
+      const pas = (sal.r.stats.prieduNr || {}).pasalintu || [];
+      const ps = sal.pars.map(t => t.replace(/\s+/g, " "));
+      const blogi = pas.filter(x => !ps.some(t => t.startsWith(String(x.tekstas).replace(/\s+/g, " ").slice(0, 60))));
+      lygu(blogi.map(x => x.nuoroda), [], kalba + ": nuorodos pastraipose, kurių dokumente nebėra");
+    }
+  });
+
+  await testas("T5-V2: AK LT/EN be „Konfidenciali informacija“ - kortelė ir 4 žingsnis sako, kad sakinys nurodo nepridedamą priedą; be „Konfidencialumo įsipareigojimo“ - angliškame sakinyje vienas taškas", async () => {
+    salinkSenusRemelius();
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", be: ["KONFINFO", "KONFIDENCIALUMAS"] });
+    tiesa([...D.querySelectorAll("[data-priedo-nera]")].some(e => /„Konfidenciali informacija“ šiame pakete nepridedamas/.test(e.textContent)), "kortelės pastaba");
+    tiesa(/Konfidenciali informacija/.test(tx("prieduNumeracija")) && /SPS x priedą|Annex x/.test(tx("prieduNumeracija")), "4 žingsnis: " + tx("prieduNumeracija"));
+    const P = docs.AK_LTEN_SPS.pars;
+    tiesa(P.some(t => /signed Commitment of Confidentiality via CPP IS\.$/.test(t)) && !P.some(t => /CPP IS\.\./.test(t)), "angliškas sakinys: " + P.filter(t => /Commitment of Confidentiality/.test(t)).join(" | "));
+    tiesa(P.some(t => /pasirašytą Konfidencialumo įsipareigojimą\.$/.test(t)), "lietuviškas sakinys");
+    // priedas, kurio šablono sąraše nėra visai (ne pašalintas), - pastabos nėra (tai šablono klausimas, ne jūsų pasirinkimas)
+    const qq = { vieta: { dok: "AK_LTEN_SPS" }, tekstas: "x", lk: { vietos: [] } };
+    tiesa(W.priedoNeraPakete(qq, { ivestis: "priedo-nr", priedas: "konfinfo" }) && !W.priedoNeraPakete(qq, { ivestis: "priedo-nr", priedas: "irangos" }), "pastaba tik pašalintam priedui");
+    // su priedu - pastabos nėra
+    await generuokSu({ budas: "T-AK", kalba: "LT_EN" });
+    tiesa(!D.querySelector("[data-priedo-nera]") && !/SPS x priedą/.test(tx("prieduNumeracija")), "su priedu pastaba rodoma");
+  });
+
+  await testas("T5: juodraščio raktai po šablonų taisymo AH - TSD 3.7 p. „SPS 5 priede“ -> „SPS 6 priede“ (LT ir EN) perkeliami tik TSD šeimoje", async () => {
+    await modulis();
+    const nr = W.eval("naujasRaktas"), kl = "jeigu tiekejas sps 5 priede nebus nurodes kad sps 2 lenteles x ir ar x", en = "as indicated in annex 5 of the spc submitted by the supplier that";
+    const b = D.getElementById("budas");
+    b.value = "T-SD"; b.dispatchEvent(new W.Event("change"));
+    lygu([W.eval("seima()"), nr("B_" + kl), nr("B_" + en)], ["TSD", "B_" + kl.replace("sps 5", "sps 6"), "B_" + en.replace("annex 5", "annex 6")], "TSD");
+    b.value = "T-AK"; b.dispatchEvent(new W.Event("change"));
+    lygu([W.eval("seima()"), nr("B_" + kl)], ["AK", "B_" + kl], "AK - nekeičiama");
+    lygu(nr("x sutarties uztikrinimo ivykdymo uztikrinima y"), "x sutarties ivykdymo uztikrinima y", "ankstesnis pervadinimas - visoms šeimoms");
+  });
+}
 async function testai1023(){
   dabartine = grupe("Ketvirtosios patikros taisymai (2026-10-23, T4): DPS paketo patikra, 1 žingsnio DPS tekstai, juodraščio failai, įkeltų failų numeriai ir vardai, vertimo skaičiai, apžiūros datos angliškai, paraiškos formos eilutės");
   const tx = id => ((D.getElementById(id) || {}).textContent || "").replace(/\s+/g, " ");
@@ -14743,6 +15029,8 @@ async function testaiEtapas1(){
     await testai1022f();
     await testai1023();
     await testaiD2();
+    await testaiPrivalomos();
+    await testaiTestuotojas5();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

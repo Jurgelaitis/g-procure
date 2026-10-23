@@ -209,9 +209,10 @@
       let m;
       while ((m = re.exec(t))){
         if (m.index <= v.start && m.index + m[0].length >= v.end){
-          let s = m.index;
+          let s = m.index, e = m.index + m[0].length;
           if (s > 0 && /[  ]/.test(t[s - 1])) s--;
-          return { start: s, end: m.index + m[0].length };
+          if (t[e] === '.' && /[.!?]/.test(t[s - 1] || '')) e++;    // „... via CPP IS. (Annex X of SPC).“ - kitaip liktų du taškai (T5)
+          return { start: s, end: e };
         }
       }
     }

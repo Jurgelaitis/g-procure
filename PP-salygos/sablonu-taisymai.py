@@ -415,6 +415,8 @@ def taisymas_tekstas(taisyk):
     viso += _nd_lten_11131(taisyk)
     viso += _lenteliu_numeriai(taisyk)
     viso += _priedeli(taisyk)
+    viso += _nuorodos_37(taisyk)
+    viso += _akv_37(taisyk)
     return viso
 
 
@@ -1231,6 +1233,77 @@ def _priedeli(taisyk):
         for f in ('PRIEDAI_LT_SUBTIEKEJAI', 'PRIEDAI_LTEN_SUBTIEKEJAI'):
             _zemelapio_raudoni(f, [('priedelį', 'priedėlį')])
     return n
+
+
+# AH. Nuorodos 3.7 punkte ir BPS 11.9.4 punkte (2026-10-23, rado penktoji naujo darbuotojo patikra T5-K3, T5-V1; nuorodų taisymas - kaip X,
+#    naujo darbuotojo užduotis patikrinti numeraciją): TSD LT ir LT/EN SPS 3.7 p. „(jeigu Tiekėjas SPS 5 priede nebus nurodęs ...“ / „as indicated
+#    in Annex 5 of the SPC“ - TSD priedų sąraše 5 yra Sutarties projektas, ūkio subjektų informacija - 6 (to paties punkto „SPS 6 priedo 2
+#    priedėlį“); SSD LT BPS 11.9.4 p. „BPS 14.9.1 ir/ar 14.9.2 punktuose“ - SSD bendrųjų sąlygų skyrius 11 (11.9.5 p. ir SSD LT/EN BPS -
+#    „11.9.1 ir/ar 11.9.2“). Pakartotinai - 0.
+_NUORODOS_37 = {
+    'TSD_LT_SPS': [(_re.compile(r'SPS (5) priede nebus nurodęs'), '6', 1)],
+    'TSD_LTEN_SPS': [(_re.compile(r'SPS (5) priede nebus nurodęs'), '6', 1), (_re.compile(r'as indicated in Annex (5) of the SPC'), '6', 1)],
+    'SSD_LT_BPS': [(_re.compile(r'patvirtinantį, kad BPS (14)\.9\.1 ir/ar (?:14)\.9\.2 punktuose'), '11', 1),
+                   (_re.compile(r'patvirtinantį, kad BPS (?:11|14)\.9\.1 ir/ar (14)\.9\.2 punktuose'), '11', 1)],
+}
+
+
+def _nuorodos_37(taisyk):
+    print("\nNUORODOS 3.7 P. IR BPS 11.9.4 P. (AH, 2026-10-23):")
+    return sum(_su_zemelapiais(_regex_pakeitimai(*poros), [f], 'nuoroda', taisyk) for f, poros in _NUORODOS_37.items())
+
+
+# AH (tęsinys). AKV LT SPS 3.7 p. (T5-K4): visa pastraipa raudona (nurodymas rengėjui), o geltonai pažymėtos koreguotinos vietos - kito pirkimo
+#    reikšmės („SPS 2 lentelės 2, 3, 4 ir 6 punktų“, „SPS 4 priede“ - AKV sąraše 4 yra Sutarties projektas, „SPS 1 lentelės 1 ir/ar 2 punktui“ -
+#    1 lentelė yra pašalinimo pagrindai); palikus punktą jos tapdavo juodu galutiniu tekstu. Pastraipa - kaip AK LT SPS 3.7 p. (tas pats LITGRID
+#    šablono sakinys): juodas tekstas, raudonos pildomos vietos „X“, „SPS 5 priede“ (AKV sąraše 5 - ūkio subjektų informacija), „SPS 2 lentelės“;
+#    pastraipos savybės, komentaras ir runų savybės (be spalvos ir žymėjimo) - AKV. Žemėlapyje - pildomų vietų pastraipa (intarpai), ne nurodymas.
+def _akv_37(taisyk):
+    import json as _json
+    print("\nAKV LT SPS 3.7 P. (AH, 2026-10-23):")
+    f = 'AKV_LT_SPS'
+    path = TPL / (f + '.docx')
+    with zipfile.ZipFile(path) as zin:
+        infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+    xml = items['word/document.xml']
+    segs = list(_VISOS_P_RE.finditer(xml))
+    T = [_pastraipos_tekstas(m.group(0)) for m in segs]
+    k = next((j for j, t in enumerate(T) if t.startswith('3.7.') and 'SPS 2 lentelės 2, 3, 4 ir 6 punktų' in t and 'SPS 4 priede nebus nurodęs' in t), None)
+    if k is None:
+        return 0
+    seg = segs[k].group(0)
+    pp = _re.search(rb'<w:pPr>.*?</w:pPr>', seg, _re.S).group(0)
+    rpr = _re.search(rb'<w:r(?:\s[^>]*)?>\s*(<w:rPr>.*?</w:rPr>)', seg[len(pp):], _re.S).group(1)
+    juod = _re.sub(rb'<w:color [^>]*/>|<w:highlight [^>]*/>', b'', rpr)
+    raud = juod.replace(b'</w:rPr>', b'<w:color w:val="FF0000"/></w:rPr>')
+    ra = lambda t, r: b'<w:r>' + r + b'<w:t xml:space="preserve">' + _esc(t).encode('utf-8') + b'</w:t></w:r>'
+    cs = _re.search(rb'<w:commentRangeStart [^>]*/>', seg).group(0); ce = _re.search(rb'<w:commentRangeEnd [^>]*/>', seg).group(0)
+    cr = _re.search(rb'<w:r(?:\s[^>]*)?>(?:(?!</w:r>).)*<w:commentReference [^>]*/>\s*</w:r>', seg, _re.S).group(0)
+    D = [('3.7. ', 0), ('Tiekėjas, kurio bus prašoma pateikti kvalifikaciją pagrindžiančius dokumentus, su kvalifikacijos dokumentais turi pateikti įrodymus '
+          '(išrašus iš darbo sutarčių ar pan., kuriuose matytųsi vardas, pavardė, sutarties data), jog SPS 2 lentelės ', 0), ('X, X, X ', 1), ('ir ', 0), ('X', 1),
+         (' punktų reikalavimams pagrįsti siūlomi specialistai yra Tiekėjo/Tiekėjų grupės nario arba Ūkio subjekto, kurio pajėgumais remiamasi grindžiant '
+          'atitiktį Kvalifikacijos reikalavimams, darbuotojai (jeigu Tiekėjas SPS 5 priede nebus nurodęs, kad SPS 2 lentelės ', 0), ('X', 1), (' ir/ar ', 0),
+         ('X', 1), (' ir/ar ', 0), ('X', 1), (' ir/ar ', 0), ('X', 1), (' punktui pagrįsti pasitelkia Kvazisubtiekėjus).', 0)]
+    pradzia = _re.match(rb'<w:p(?:\s[^>]*)?>', seg).group(0)
+    kunas = ra(*D[0][:1], juod) + cs + b''.join(ra(t, raud if r else juod) for t, r in D[1:]) + ce + cr
+    nauja = pradzia + pp + kunas + b'</w:p>'
+    naujas_t = _pastraipos_tekstas(nauja)
+    print(f"  {f}.docx: pastraipa {k} -> „{naujas_t[:90]}...“")
+    if not taisyk:
+        return 1
+    m = segs[k]
+    items['word/document.xml'] = xml[:m.start()] + nauja + xml[m.end():]
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for info in infos:
+            zout.writestr(info, items[info.filename])
+    zf = Path(__file__).parent / 'zemelapiai' / (f + '.json')
+    raw = zf.read_text(encoding='utf-8'); Z = _json.loads(raw)
+    Z['paras'][str(k)] = naujas_t.strip()
+    Z['raudonosPastabos'] = [e for e in Z.get('raudonosPastabos', []) if e.get('i') != k]
+    Z['intarpai'] = sorted([e for e in Z.get('intarpai', []) if e.get('i') != k] + [{'i': k, 'text': naujas_t.strip(), 'raudonas': 'X, X, X XXXXX'}], key=lambda e: e['i'])
+    zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+    print(f"      {zf.name}: pastraipa {k} - pildomų vietų (intarpai), ne nurodymas")
+    return 1
 
 
 # X. Nuorodos į SPS priedus (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“; rado sugeneruoto paketo patikra): tekstas nurodo ne
