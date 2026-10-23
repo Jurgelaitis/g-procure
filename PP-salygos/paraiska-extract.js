@@ -259,6 +259,11 @@
       "   perrasyti tiksliai (8 skaitmenys, bruksnys, kontrolinis skaitmuo, pvz.",
       "   \"48000000-8\"); citata - fragmentas, kuriame jie parasyti. Jei kodu",
       "   korteleje nera - null.",
+      "11. energetikos_projektas: \"taip\", jei korteleje aiskiai nurodyta, kad pirkimas",
+      "   priskiriamas Lietuvoje igyvendinamam energetikos sistemos infrastrukturos",
+      "   pletros projektui (pvz. toks laukas pazymetas \"Taip\"); \"ne\", jei aiskiai",
+      "   nurodyta, kad nepriskiriamas; kitaip \"nenustatyta\". Citata - fragmentas,",
+      "   kuriame tai parasyta.",
       "",
       "JSON schema:",
       "{",
@@ -278,7 +283,8 @@
       "    \"projekto_nr\":              {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
       "    \"projekto_pavadinimas\":     {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
       "    \"dalys\":                    {\"reiksme\":\"neskaidomas|skaidomas|nenustatyta\", \"skaicius\": <skaicius> | null, \"pavadinimai\": [\"...\"], \"citata\":\"...\"},",
-      "    \"bvpz_kodai\":               {\"reiksme\":[\"48000000-8\"], \"citata\":\"...\"} | null",
+      "    \"bvpz_kodai\":               {\"reiksme\":[\"48000000-8\"], \"citata\":\"...\"} | null,",
+      "    \"energetikos_projektas\":    {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"}",
       "  },",
       "  \"pastabos\": \"<trumpa pastaba, jei reikia>\"",
       "}"
@@ -312,7 +318,7 @@
       return { ok: false, error: "Atsakymas neatitinka schemos (status/laukai)" };
     var L = d.laukai;
     // Grieztos pasirinkimu reiksmes - kitaip atmetam i "nenustatyta".
-    ["nacionalinis_saugumas", "dpa", "es_lesos"].forEach(function (k) {
+    ["nacionalinis_saugumas", "dpa", "es_lesos", "energetikos_projektas"].forEach(function (k) {
       if (L[k] && !isTrijuVienas(L[k].reiksme)) L[k] = { reiksme: "nenustatyta", citata: null };
     });
     if (L.objekto_tipas && !/^(prekes|paslaugos|darbai|nenustatyta)$/.test(L.objekto_tipas.reiksme || ""))
@@ -451,6 +457,16 @@
         kortele: L.nacionalinis_saugumas.reiksme,
         citata: L.nacionalinis_saugumas.citata || null,
         reiksme: L.nacionalinis_saugumas.reiksme, ok: true
+      });
+    }
+
+    // Energetikos sistemos infrastruktūros plėtros projektas (2026-10-23) - 1 žingsnio klausimui (nuo jo priklauso pasiūlymo ir paraiškos formų
+    // punktai apie nesaugias branduolines elektrines): tik su citata - be jos DI spėjimas netampa siūlymu; siūloma, patvirtina žmogus
+    var ep = L.energetikos_projektas;
+    if (ep && ep.reiksme !== "nenustatyta" && typeof ep.citata === "string" && ep.citata.trim()) {
+      out.siulymai.push({
+        id: "energ", laukas: "Energetikos sistemos infrastruktūros plėtros projektas",
+        kortele: ep.reiksme, citata: ep.citata.trim(), reiksme: ep.reiksme, ok: true
       });
     }
 
