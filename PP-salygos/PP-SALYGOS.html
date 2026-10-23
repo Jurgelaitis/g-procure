@@ -8896,6 +8896,24 @@ async function punktuNuorodos(rez, vardai){
   return { radiniai, patikra: { id: 'punkto_nuorodos', grupe: 'aiskumas', pav: 'Nuorodos į punktus (SPS ir BPS)', busena: !dok ? 'nepatikrinta' : radiniai.length ? 'radinys' : 'gerai',
     pastaba: !dok ? 'pakete nėra SPS ar BPS' : `patikrinta nuorodų - ${n}` } };
 }
+/* Word failų struktūra (2026-10-23, naudotojo sprendimas): kiekvienas sugeneruotas Word failas tikrinamas taip, kaip jį skaitytų Word
+   (GPDocx.wordPatikra: elementų tvarka pagal ECMA-376, ryšiai, unikalūs identifikatoriai, A4). Įkelti naudotojo dokumentai - ne
+   (jie pridedami be pakeitimų). Radinys reiškia generatoriaus klaidą - pasakoma, kad apie ją reikia pranešti. */
+async function wordStruktura(rez, vardai){
+  const radiniai = [];
+  let n = 0;
+  for (let i = 0; i < rez.length; i++){
+    const r = rez[i];
+    if (!r || !r.blob || r.statinis || r.isDokumento || !/\.docx$/i.test(vardai[i] || '')) continue;
+    n++;
+    const w = await GPDocx.wordPatikra(r.blob);
+    if (w.radiniai.length) radiniai.push({ id: 'word_struktura', grupe: 'word', lygis: 'tikrinti',
+      tekstas: `Word failo struktūra: ${w.radiniai.length} ${w.radiniai.length === 1 ? 'radinys' : 'radiniai'} - Word gali pranešti apie neįskaitomą turinį. Dokumentą parengė generatorius - praneškite G-Procure rengėjui.`,
+      vietos: w.radiniai.slice(0, 5).map(x => ({ failas: vardai[i], vieta: x, citata: '' })) });
+  }
+  return { radiniai, patikra: { id: 'word_struktura', grupe: 'word', pav: 'Word failų struktūra (elementų tvarka, identifikatoriai, ryšiai, A4)',
+    busena: !n ? 'nepatikrinta' : radiniai.length ? 'radinys' : 'gerai', pastaba: !n ? 'pakete nėra sugeneruotų Word dokumentų' : `patikrinta dokumentų - ${n}` } };
+}
 async function paketoPatikra(rez, vardai){
   const el = $('#paketoPatikraRez');
   if (!el) return;
@@ -8939,6 +8957,9 @@ async function paketoPatikra(rez, vardai){
       // nuorodos į punktus (D4 c) - kad kiekviena rodytų į esamą punktą
       const pn = await punktuNuorodos(rez, vardai);
       p.radiniai.push(...pn.radiniai); p.patikros.push(pn.patikra);
+      // Word failų struktūra (2026-10-23) - kaip ją skaitytų Word
+      const ws = await wordStruktura(rez, vardai);
+      p.radiniai.push(...ws.radiniai); p.patikros.push(ws.patikra);
       return { p, failai };
     } });
   if (mano !== PP_EIGA || !v.ok) return;

@@ -966,6 +966,74 @@ const GPDocx = (() => {
     return ps.length;
   }
 
+  /* ---------- WORD FAILO STRUKTŪRA (2026-10-23, naudotojo sprendimas - patikra kiekviename sugeneruotame pakete) ----------
+     Word kompiuteryje nėra, todėl tikrinama tai, ko Word griežtai reikalauja (ECMA-376) ir ką kitaip pamatytų tik naudotojas: savybių
+     elementų tvarka (pPr, rPr, tblPr, tcPr, sectPr, rėmeliai), XML gerai suformuotas, ryšių (r:id) taikiniai, unikalūs w14:paraId, žymės
+     ir piešinių wp:docPr id, puslapio dydis A4 (abi orientacijos). wordRadiniai(dalys) - { kelias: XML tekstas arba null (dvejetainis) };
+     wordPatikra(blob) - tas pats Word failui. Grąžina { radiniai: [tekstas], psl: [[w, h]] }; nieko nekeičia. */
+  const WORD_TVARKA = {
+    pPr: 'pStyle keepNext keepLines pageBreakBefore framePr widowControl numPr suppressLineNumbers pBdr shd tabs suppressAutoHyphens kinsoku wordWrap overflowPunct topLinePunct autoSpaceDE autoSpaceDN bidi adjustRightInd snapToGrid spacing ind contextualSpacing mirrorIndents suppressOverlap jc textDirection textAlignment textboxTightWrap outlineLvl divId cnfStyle rPr sectPr pPrChange',
+    rPr: 'ins del moveFrom moveTo rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange',
+    tblPr: 'tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange',
+    tcPr: 'cnfStyle tcW gridSpan hMerge vMerge tcBorders shd noWrap tcMar textDirection tcFitText vAlign hideMark headers cellIns cellDel cellMerge tcPrChange',
+    sectPr: 'headerReference/footerReference footnotePr endnotePr type pgSz pgMar paperSrc pgBorders lnNumType pgNumType cols formProt vAlign noEndnote titlePg textDirection bidi rtlGutter docGrid printerSettings sectPrChange',
+    tblBorders: 'top left start bottom right end insideH insideV', tcBorders: 'top left start bottom right end insideH insideV tl2br tr2bl', pBdr: 'top left bottom right between bar'
+  };
+  const WORD_EIL = Object.fromEntries(Object.entries(WORD_TVARKA).map(([k, v]) => [k, Object.fromEntries(v.split(' ').flatMap((x, i) => x.split('/').map(y => [y, i])))]));
+  const A4 = [11906, 16838];
+  const yraA4 = ([w, h]) => [w, h].sort((x, y) => x - y).every((x, i) => Math.abs(x - A4[i]) <= 10);
+  function wordRadiniai(dalys){
+    const out = [], piesiniai = {}, psl = [];
+    const suMedia = Object.keys(dalys).some(k => /^word\/media\//.test(k));   // be paveikslų sąrašo (tik XML) jų taikiniai netikrinami
+    for (const [n, s] of Object.entries(dalys)){
+      if (!/^word\/[^/]+\.xml$/.test(n) || typeof s !== 'string') continue;
+      let d;
+      try { d = parseXml(s); } catch (e){ out.push(n + ': XML klaida'); continue; }
+      const visi = Array.from(d.getElementsByTagName('*'));
+      const rels = dalys['word/_rels/' + n.slice(5) + '.rels'], ids = new Set();
+      let relD = null;
+      try { relD = rels && parseXml(rels); } catch (e){ out.push(n + '.rels: XML klaida'); }
+      if (relD) Array.from(relD.getElementsByTagName('Relationship')).forEach(r => {
+        ids.add(r.getAttribute('Id'));
+        if (r.getAttribute('TargetMode') === 'External') return;
+        const t = ('word/' + r.getAttribute('Target')).replace(/[^/]+\/\.\.\//g, '');
+        if (!(t in dalys) && (suMedia || !/^word\/media\//.test(t))) out.push(n + ': ryšio ' + r.getAttribute('Id') + ' taikinio nėra ' + t);
+      });
+      const tv = {}, pid = {}, zv = {}, zid = {}, kart = k => { tv[k] = (tv[k] || 0) + 1; };
+      visi.forEach(el => {
+        Array.from(el.attributes).forEach(a => { if (a.namespaceURI === NS_R && !ids.has(a.value)) tv[n + ': nuoroda į nesamą ryšį ' + a.value] = 1; });
+        if (el.namespaceURI === NS_W && WORD_EIL[el.localName]){
+          let pask = -1, paskV = '';
+          Array.from(el.children).filter(c => c.namespaceURI === NS_W).forEach(c => {
+            const i = WORD_EIL[el.localName][c.localName];
+            if (i === undefined){ kart(n + ': nežinomas ' + el.localName + '/' + c.localName); return; }
+            if (i < pask) kart(n + ': ' + el.localName + ' tvarka ' + c.localName + ' po ' + paskV);
+            else { pask = i; paskV = c.localName; }
+          });
+        }
+        const p = el.getAttributeNS(NS_W14, 'paraId'); if (p) pid[p] = (pid[p] || 0) + 1;
+        if (el.namespaceURI === NS_W && el.localName === 'bookmarkStart'){
+          const v = el.getAttributeNS(NS_W, 'name'), i = el.getAttributeNS(NS_W, 'id'); zv[v] = (zv[v] || 0) + 1; zid[i] = (zid[i] || 0) + 1;
+        }
+        if (el.localName === 'docPr' && el.getAttribute('id')) (piesiniai[el.getAttribute('id')] = piesiniai[el.getAttribute('id')] || []).push(n);
+        if (el.namespaceURI === NS_W && el.localName === 'pgSz'){
+          const x = [+el.getAttributeNS(NS_W, 'w'), +el.getAttributeNS(NS_W, 'h')]; psl.push(x);
+          if (!yraA4(x)) kart(n + ': puslapis ne A4 (' + x.join(' x ') + ')');
+        }
+      });
+      Object.entries(tv).forEach(([k, c]) => out.push(k + ' (' + c + ')'));
+      const dub = (o, ka) => { const d2 = Object.keys(o).filter(k => o[k] > 1 && k !== '_GoBack'); if (d2.length) out.push(n + ': pasikartojantys ' + ka + ' ' + d2.length + ' (pvz. ' + d2[0] + ')'); };
+      dub(pid, 'w14:paraId'); dub(zv, 'žymių vardai'); dub(zid, 'žymių id');
+    }
+    Object.entries(piesiniai).filter(([, l]) => l.length > 1).forEach(([id, l]) => out.push('piešinio id ' + id + ' pasikartoja: ' + l.join(', ')));
+    return { radiniai: out, psl };
+  }
+  async function wordPatikra(blob){
+    const z = await JSZip.loadAsync(blob instanceof ArrayBuffer ? blob : await blob.arrayBuffer()), dalys = {};
+    for (const n of Object.keys(z.files)) if (!z.files[n].dir) dalys[n] = /\.(xml|rels)$/.test(n) ? await z.file(n).async('string') : null;
+    return wordRadiniai(dalys);
+  }
+
   /* ---------- KRYŽMINĖS NUORODOS Į PUNKTUS - TEKSTU (2026-10-23, Word patikra) ----------
      BPS nuorodos į punktus - Word laukai „REF _Ref... \r“ (punkto numeris). Sugeneruotame dokumente numeriai įrašyti tekstu (GPNum),
      o atveriant Word paprašoma atnaujinti laukus (setUpdateFields - turiniui): atnaujintas laukas numerį skaičiuotų iš žymės pastraipos
@@ -1077,7 +1145,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai, diPozymiai, pasas, unikalusId, nuorodosTekstu,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai, diPozymiai, pasas, unikalusId, nuorodosTekstu, wordRadiniai, wordPatikra,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 

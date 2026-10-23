@@ -12608,54 +12608,10 @@ async function testaiPrivalomos(){
 /* 2026-10-23 (naudotojo užduotis - sugeneruotų dokumentų patikra Pages ir Word programose po pernumeravimo): Word kompiuteryje nėra, todėl
    tikrinama tai, ko Word griežtai reikalauja: elementų tvarka pagal ECMA-376 (pPr, rPr, tblPr, tcPr, sectPr, rėmeliai), ryšių taikiniai,
    unikalūs w14:paraId, žymės ir piešinių id; ir A4 puslapis visuose dokumentuose. Pages - atskirai PDF eksportu (79 dokumentai). */
-const WORD_TVARKA = {
-  pPr: "pStyle keepNext keepLines pageBreakBefore framePr widowControl numPr suppressLineNumbers pBdr shd tabs suppressAutoHyphens kinsoku wordWrap overflowPunct topLinePunct autoSpaceDE autoSpaceDN bidi adjustRightInd snapToGrid spacing ind contextualSpacing mirrorIndents suppressOverlap jc textDirection textAlignment textboxTightWrap outlineLvl divId cnfStyle rPr sectPr pPrChange",
-  rPr: "ins del moveFrom moveTo rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange",
-  tblPr: "tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange",
-  tcPr: "cnfStyle tcW gridSpan hMerge vMerge tcBorders shd noWrap tcMar textDirection tcFitText vAlign hideMark headers cellIns cellDel cellMerge tcPrChange",
-  sectPr: "headerReference/footerReference footnotePr endnotePr type pgSz pgMar paperSrc pgBorders lnNumType pgNumType cols formProt vAlign noEndnote titlePg textDirection bidi rtlGutter docGrid printerSettings sectPrChange",
-  tblBorders: "top left start bottom right end insideH insideV", tcBorders: "top left start bottom right end insideH insideV tl2br tr2bl", pBdr: "top left bottom right between bar"
-};
-const WORD_EIL = Object.fromEntries(Object.entries(WORD_TVARKA).map(([k, v]) => [k, Object.fromEntries(v.split(" ").flatMap((x, i) => x.split("/").map(y => [y, i])))]));
-const NSW14 = "http://schemas.microsoft.com/office/word/2010/wordml", NSREL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-/* dalys - { kelias: xml tekstas }; grąžina radinių sąrašą ir puslapių dydžius (twips) */
-function wordRadiniai(dalys){
-  const out = [], piesiniai = {}, psl = [];
-  const suMedia = Object.keys(dalys).some(k => /^word\/media\//.test(k));   // šablonų rinkinyje (sablonuFailai) paveikslų nėra - jų taikiniai netikrinami
-  for (const [n, s] of Object.entries(dalys)){
-    if (!/^word\/[^/]+\.xml$/.test(n)) continue;
-    const d = new W.DOMParser().parseFromString(s, "application/xml");
-    if (d.getElementsByTagName("parsererror").length){ out.push(n + ": XML klaida"); continue; }
-    const visi = Array.from(d.getElementsByTagName("*"));
-    const rels = dalys["word/_rels/" + n.slice(5) + ".rels"], ids = new Set();
-    if (rels) Array.from(new W.DOMParser().parseFromString(rels, "application/xml").getElementsByTagName("Relationship")).forEach(r => {
-      ids.add(r.getAttribute("Id"));
-      if (r.getAttribute("TargetMode") !== "External"){ const t = ("word/" + r.getAttribute("Target")).replace(/[^/]+\/\.\.\//g, ""); if (!(t in dalys) && (suMedia || !/^word\/media\//.test(t))) out.push(n + ": ryšio " + r.getAttribute("Id") + " taikinio nėra " + t); }
-    });
-    const tv = {}, pid = {}, zv = {}, zid = {};
-    visi.forEach(el => {
-      Array.from(el.attributes).forEach(a => { if (a.namespaceURI === NSREL && !ids.has(a.value)) tv[n + ": nuoroda į nesamą ryšį " + a.value] = 1; });
-      if (el.namespaceURI === NSW && WORD_EIL[el.localName]){
-        let pask = -1, paskV = "";
-        Array.from(el.children).filter(c => c.namespaceURI === NSW).forEach(c => {
-          const i = WORD_EIL[el.localName][c.localName];
-          if (i === undefined){ tv[n + ": nežinomas " + el.localName + "/" + c.localName] = (tv[n + ": nežinomas " + el.localName + "/" + c.localName] || 0) + 1; return; }
-          if (i < pask){ const k = n + ": " + el.localName + " tvarka " + c.localName + " po " + paskV; tv[k] = (tv[k] || 0) + 1; }
-          if (i >= pask){ pask = i; paskV = c.localName; }
-        });
-      }
-      const p = el.getAttributeNS(NSW14, "paraId"); if (p) pid[p] = (pid[p] || 0) + 1;
-      if (el.namespaceURI === NSW && el.localName === "bookmarkStart"){ const v = el.getAttributeNS(NSW, "name"), i = el.getAttributeNS(NSW, "id"); zv[v] = (zv[v] || 0) + 1; zid[i] = (zid[i] || 0) + 1; }
-      if (el.localName === "docPr" && el.getAttribute("id")) (piesiniai[el.getAttribute("id")] = piesiniai[el.getAttribute("id")] || []).push(n);
-      if (el.namespaceURI === NSW && el.localName === "pgSz") psl.push([+el.getAttributeNS(NSW, "w"), +el.getAttributeNS(NSW, "h")]);
-    });
-    Object.entries(tv).forEach(([k, c]) => out.push(k + " (" + c + ")"));
-    const dub = (o, ka) => { const d2 = Object.keys(o).filter(k => o[k] > 1 && k !== "_GoBack"); if (d2.length) out.push(n + ": pasikartojantys " + ka + " " + d2.length + " (pvz. " + d2[0] + ")"); };
-    dub(pid, "w14:paraId"); dub(zv, "žymių vardai"); dub(zid, "žymių id");
-  }
-  Object.entries(piesiniai).filter(([, l]) => l.length > 1).forEach(([id, l]) => out.push("piešinio id " + id + " pasikartoja: " + l.join(", ")));
-  return { radiniai: out, psl };
-}
+/* Word failų struktūros patikra - modulio (GPDocx.wordRadiniai / wordPatikra, ta pati, kurią 4 žingsnis taiko kiekvienam paketui);
+   jos taisyklės tikrinamos atskirai sintetiniais defektais (testas „GPDocx.wordRadiniai“). */
+const NSW14 = "http://schemas.microsoft.com/office/word/2010/wordml";
+const wordRadiniai = dalys => W.eval("GPDocx").wordRadiniai(dalys);
 const a4 = ([w, h]) => [w, h].sort((x, y) => x - y).every((x, i) => Math.abs(x - [11906, 16838][i]) <= 10);
 async function blobDalys(blob){
   const z = await W.JSZip.loadAsync(await blob.arrayBuffer()), dalys = {};
@@ -12752,6 +12708,56 @@ async function testaiWord(){
     lygu(Array.from(d.getElementsByTagName("*")).filter(x => x.localName === "docPr").map(x => x.getAttribute("id")), ["2", "3", "4"], "piešinių id (1 - antraštėje)");
     tiesa(dalys["word/header1.xml"].includes('id="1"') && dalys["word/header1.xml"].includes("0000000E"), "neįkelta antraštė pakeista");
     tiesa(doc.log.some(x => /unikalūs identifikatoriai: paraId 2, žymės 2, piešiniai 2/.test(x)), "žurnalas: " + doc.log.join(" | "));
+  });
+
+  await testas("GPDocx.wordRadiniai: kiekvienas defektas randamas (pPr ir rPr tvarka, tblPr, nežinomas elementas, XML klaida, nesamas ryšio taikinys ir nuoroda į nesamą ryšį, pasikartojantys paraId, žymių vardai ir id, piešinio id tarp dalių, ne A4); tvarkingas dokumentas - be radinių", async () => {
+    const GD = W.eval("GPDocx"), ns = 'xmlns:w="' + NSW + '" xmlns:w14="' + NSW14 + '" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
+    const dok = kunas => '<?xml version="1.0" encoding="UTF-8"?><w:document ' + ns + '><w:body>' + kunas + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1" w:right="1" w:bottom="1" w:left="1"/></w:sectPr></w:body></w:document>';
+    const gera = dok('<w:p w14:paraId="00000001"><w:pPr><w:spacing w:after="0"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FF0000"/><w:sz w:val="20"/></w:rPr><w:t>a</w:t></w:r></w:p>');
+    lygu(GD.wordRadiniai({ "word/document.xml": gera }).radiniai, [], "tvarkingas");
+    const R = (kunas, kitos = {}) => GD.wordRadiniai(Object.assign({ "word/document.xml": typeof kunas === "string" && kunas.startsWith("<?xml") ? kunas : dok(kunas) }, kitos)).radiniai.join(" | ");
+    const atv = [
+      ['<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr></w:p>', /pPr tvarka spacing po jc/],
+      ['<w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="FF0000"/></w:rPr><w:t>a</w:t></w:r></w:p>', /rPr tvarka color po sz/],
+      ['<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblW w:w="1" w:type="dxa"/></w:tblPr></w:tbl>', /tblPr tvarka tblW po tblLayout/],
+      ['<w:p><w:pPr><w:nesamas/></w:pPr></w:p>', /nežinomas pPr\/nesamas/],
+      ['<w:p w14:paraId="0000000A"/><w:p w14:paraId="0000000A"/>', /pasikartojantys w14:paraId 1/],
+      ['<w:bookmarkStart w:id="1" w:name="A"/><w:bookmarkEnd w:id="1"/><w:bookmarkStart w:id="2" w:name="A"/><w:bookmarkEnd w:id="2"/>', /pasikartojantys žymių vardai 1/],
+      ['<w:bookmarkStart w:id="3" w:name="A"/><w:bookmarkEnd w:id="3"/><w:bookmarkStart w:id="3" w:name="B"/><w:bookmarkEnd w:id="3"/>', /pasikartojantys žymių id 1/],
+      ['<w:p><w:r><w:drawing><wp:inline><wp:docPr id="5" name="x"/></wp:inline></w:drawing></w:r></w:p>', /piešinio id 5 pasikartoja/, { "word/header1.xml": '<w:hdr ' + ns + '><w:p><w:r><w:drawing><wp:inline><wp:docPr id="5" name="y"/></wp:inline></w:drawing></w:r></w:p></w:hdr>' }],
+      ['<w:p><w:hyperlink r:id="rId9"><w:r><w:t>x</w:t></w:r></w:hyperlink></w:p>', /nuoroda į nesamą ryšį rId9/],
+      ['<w:p/>', /ryšio rId1 taikinio nėra word\/styles\.xml/, { "word/_rels/document.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="x" Target="styles.xml"/></Relationships>' }],
+      ['<?xml version="1.0"?><w:document ' + ns + '><w:body><w:p></w:body></w:document>', /XML klaida/],
+      ['<?xml version="1.0"?><w:document ' + ns + '><w:body><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:body></w:document>', /puslapis ne A4 \(12240 x 15840\)/],
+    ];
+    atv.forEach(([k, re, kitos], i) => { const r = R(k, kitos); tiesa(re.test(r), i + ": " + re + " -> " + r); });
+    // gulsčias A4 ir paveikslų taikiniai be media sąrašo - ne radiniai
+    lygu(R('<?xml version="1.0"?><w:document ' + ns + '><w:body><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/></w:sectPr></w:body></w:document>',
+      { "word/_rels/document.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="x" Target="media/image1.png"/></Relationships>' }), "", "gulsčias A4 ir paveikslas");
+  });
+
+  await testas("4 žingsnis: kiekvieno sugeneruoto Word failo struktūra tikrinama pati (patikra „Word failų struktūra“ - be pastabų, su dokumentų skaičiumi); sugadintas failas - „Patikrinkite“ su failo vardu ir radiniu, kad reikia pranešti", async () => {
+    salinkSenusRemelius();
+    await generuokSu({ budas: "T-AK", tipas: "prekes" });
+    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 90000);
+    const pt = W.__PP.p.patikros.find(x => x.id === "word_struktura"), sk = W.__R.filter(r => r.blob && !r.statinis).length;
+    tiesa(pt && pt.busena === "gerai" && pt.pastaba === "patikrinta dokumentų - " + sk, "patikra: " + JSON.stringify(pt) + " (dokumentų " + sk + ")");
+    tiesa(!W.__PP.p.radiniai.some(x => x.id === "word_struktura"), "radinys tvarkingame pakete");
+    // sugadintas SPS: pirmoje pastraipoje jc prieš spacing
+    const rez = W.__R.slice(), i = rez.findIndex(r => /_SPS$/.test(r.d.trumpas)), z = await W.JSZip.loadAsync(await rez[i].blob.arrayBuffer());
+    let x = await z.file("word/document.xml").async("string");
+    x = x.replace(/<w:pPr>/, '<w:pPr><w:jc w:val="left"/><w:spacing w:after="0"/>');
+    z.file("word/document.xml", x);
+    rez[i] = Object.assign({}, rez[i], { blob: await z.generateAsync({ type: "blob" }) });
+    const vardai = W.failuVardai(rez);
+    W.__PP = null;
+    await W.paketoPatikra(rez, vardai);
+    await kol(() => W.__PP, "paketo patikra su sugadintu failu", 90000);
+    const r = W.__PP.p.radiniai.find(y => y.id === "word_struktura");
+    tiesa(r && r.vietos[0].failas === vardai[i] && /pPr tvarka/.test(r.vietos.map(v => v.vieta).join(" ")) && /praneškite G-Procure rengėjui/.test(r.tekstas), "radinys: " + JSON.stringify(r));
+    const t = D.getElementById("ppTikrinti").textContent;
+    tiesa(/Word failo struktūra/.test(t) && t.includes(vardai[i]), "4 žingsnyje nerodoma: " + t.slice(0, 300));
+    tiesa(W.__PP.p.patikros.find(y => y.id === "word_struktura").busena === "radinys", "patikros būsena");
   });
 }
 
