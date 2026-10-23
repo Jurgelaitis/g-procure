@@ -412,6 +412,9 @@ def taisymas_tekstas(taisyk):
     viso += _preliminarioji_sutartis(taisyk)
     viso += _dps_eilute_10(taisyk)
     viso += _dps_paraiskos_forma(taisyk)
+    viso += _nd_lten_11131(taisyk)
+    viso += _lenteliu_numeriai(taisyk)
+    viso += _priedeli(taisyk)
     return viso
 
 
@@ -1026,6 +1029,208 @@ def _dps_paraiskos_forma(taisyk):
                 zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
                 print(f"      {zf.name}: suderinta {n[0]} reiksmiu")
     return viso
+
+
+# AE. ND LT/EN BPS eilutė „11.13.1.“ (2026-10-23, rado D2 numeracijos auditas - naudotojo užduotis „Prašau sutvarkyti ... numeracija ...
+#    patikrinti, ar teisinga“): po „11.13. Jeigu Tiekėjas neatitinka ... kai yra abi šios sąlygos kartu:“ iškart eina „11.13.1.1.“ - trūksta
+#    „11.13.1. Tiekėjas pateikė Perkančiajam subjektui informaciją apie tai, kad ėmėsi šių priemonių:“, nors 11.13.2 p. nurodo „BPS 11.13.1
+#    punktą“, o ND LT BPS ši eilutė yra. Įterpiama to paties šablono 9.7.1 eilutės kopija (tas pats sakinys LT ir EN, kaip ND LT BPS 11.13.1 p.)
+#    su numeriu „11.13.1.“; „11.13.2“ -> „11.13.2.“ (kaip kiti numeriai). Žemėlapio pastraipų indeksai po įterpimo - pastumiami; pakartotinai - 0.
+_TR_RE = _re.compile(rb'<w:tr[ >](?:(?!<w:tr[ >]).)*?</w:tr>', _re.S)
+_TC_RE = _re.compile(rb'<w:tc[ >].*?</w:tc>', _re.S)
+
+
+def _nd_lten_11131(taisyk):
+    import json as _json
+    print("\nND LT/EN BPS EILUTĖ „11.13.1.“ (AE, 2026-10-23):")
+    f = 'ND_LTEN_BPS'
+    path = TPL / (f + '.docx')
+    with zipfile.ZipFile(path) as zin:
+        infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+    xml = items['word/document.xml']
+    rows = list(_TR_RE.finditer(xml))
+    L = [[_pastraipos_tekstas(c).strip() for c in _TC_RE.findall(r.group(0))] for r in rows]
+    if any(x and x[0] == '11.13.1.' for x in L):
+        return 0
+    k97 = next((k for k, x in enumerate(L) if x[:2] == ['9.7.1.', 'Tiekėjas pateikė Perkančiajam subjektui informaciją apie tai, kad ėmėsi šių priemonių:']), None)
+    k = next((k for k, x in enumerate(L) if x and x[0] == '11.13.1.1.'), None)
+    if k97 is None or k is None or not (L[k - 1] and L[k - 1][0] == '11.13.'):
+        print("  ND_LTEN_BPS.docx: eilučių nerasta - nekeičiama")
+        return 0
+    seg = _re.sub(rb'\sw14:(?:paraId|textId)="[^"]*"', b'', rows[k97].group(0))
+    p0 = _P_RE.search(seg)
+    t0 = _pastraipos_tekstas(p0.group(0)); s0 = t0.index('9.7.1')
+    nauja = seg[:p0.start()] + _keisk_pastraipa(p0.group(0), [(s0, s0 + len('9.7.1'), '11.13.1')]) + seg[p0.end():]
+    if _RAUD_RE.search(nauja):
+        print("  ND_LTEN_BPS.docx: 9.7.1 eilutėje raudonas tekstas - nekeičiama")
+        return 0
+    # „11.13.2“ be taško
+    k2 = next((j for j, x in enumerate(L) if x and x[0] == '11.13.2'), None)
+    ins = len(_VISOS_P_RE.findall(xml[:rows[k].start()]))
+    nauji = [_pastraipos_tekstas(m.group(0)).strip() for m in _VISOS_P_RE.finditer(nauja)]
+    print(f"  {f}.docx: prieš „11.13.1.1.“ įterpta eilutė „11.13.1. {L[k97][1][:50]}...“ ({len(nauji)} pastraipos nuo {ins})")
+    pak = 1
+    if k2 is not None:
+        r2 = rows[k2]; p2 = _P_RE.search(r2.group(0)); t2 = _pastraipos_tekstas(p2.group(0)); j2 = t2.index('11.13.2') + len('11.13.2')
+        seg2 = r2.group(0)[:p2.start()] + _keisk_pastraipa(p2.group(0), [(j2, j2, '.')]) + r2.group(0)[p2.end():]
+        k2p = len(_VISOS_P_RE.findall(xml[:r2.start()]))
+        print(f"  {f}.docx: „11.13.2“ -> „11.13.2.“")
+        pak += 1
+    if not taisyk:
+        return pak
+    out = xml
+    if k2 is not None:
+        out = out[:r2.start()] + seg2 + out[r2.end():]
+    out = out[:rows[k].start()] + nauja + out[rows[k].start():]
+    items['word/document.xml'] = out
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for info in infos:
+            zout.writestr(info, items[info.filename])
+    zf = Path(__file__).parent / 'zemelapiai' / (f + '.json')
+    raw = zf.read_text(encoding='utf-8'); Z = _json.loads(raw)
+    for kk in ('blokai', 'vienetai', 'raudonosPastabos', 'intarpai'):
+        if Z.get(kk):
+            raise SystemExit(f"{zf.name}: {kk} netuščias - indeksų pastūmimas neįgyvendintas")
+    P = Z['paras']; n = len(nauji); NP = {}
+    for a, v in P.items():
+        a = int(a)
+        if k2 is not None and a == k2p:
+            v = v + '.' if v == '11.13.2' else v
+        NP[str(a + n if a >= ins else a)] = v
+    for j, v in enumerate(nauji):
+        NP[str(ins + j)] = v
+    Z['paras'] = {str(a): NP[str(a)] for a in sorted(map(int, NP))}
+    for e in Z.get('tuscios', []):
+        if e.get('i', -1) >= ins:
+            e['i'] += n
+    zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+    print(f"      {zf.name}: pastraipų indeksai nuo {ins} pastumti +{n}, įrašytos naujos pastraipos")
+    return pak
+
+
+# AF. Lentelių numeriai (2026-10-23, D2 numeracijos auditas; redakcinės korekcijos - naudotojo leidimas 2026-10-05 ir užduotis patikrinti numeraciją):
+#    1) SSD LT SPS - antra antraštė „4 lentelė“ (kitų reikalavimų lentelė, 6.1 p. „... nurodyti 5 lentelėje“) -> „5 lentelė“ (kaip kituose SPS);
+#       antraštė raudona - generatorius ją palieka ar trina kartu su lentele (SEKIMO), tekstas ten ne raktas;
+#    2) DPS konkretaus pirkimo LT pasiūlymo forma: lentelės 1, 2, 3, 5 (praleistas 4; LT/EN formoje - 4) - „5 lentelė“ ir „6.2. Mums žinoma, kad
+#       5 lentelėje ...“ -> 4;
+#    3) DPS sukūrimo LT/EN sąlygų 2 priedas (KVALIFIKACIJA): lentelės 1 ir 3 (praleista 2; LT sąlygų 2 priede - 1 ir 2), o 4.2 p. nurodo
+#       „SPS 3 lentelės“ - DPS pakete SPS nėra: „3 lentelė/Table 3“ -> „2 lentelė/Table 2“, „nurodyti 3 lentelėje“ / „specified in Table 3“ -> 2,
+#       „pagal SPS 3 lentelės reikalavimą“ -> „pagal šio priedo 2 lentelės reikalavimą“ (kaip LT sąlygų 2 priedo 7 p. „Šio priedo 2 lentelėje“),
+#       „set out in SPC Table 3“ -> „set out in Table 2 of this Annex“. Raudonas tekstas keičiamas tik šiais žodžiais (spalva lieka), žemėlapiuose -
+#       pastraipų tekstai ir raudonos dalys. Pakartotinai - 0.
+_LENT_NR = {
+    'SSD_LT_SPS': [(_re.compile(r'^(4) lentelė$'), '5', 1, lambda T, k: next((t for t in reversed(T[max(0, k - 4):k]) if t), '').startswith('6.1. Pirkime taikomi kiti reikalavimai, nurodyti 5 lentelėje'))],
+    'DPSP_LT_PASIULYMAS': [(_re.compile(r'^(5) lentelė$'), '4', 1, None), (_re.compile(r'^6\.2\. Mums žinoma, kad (5) lentelėje nurodyta'), '4', 1, None)],
+    'DPSK_LTEN_KVALIFIKACIJA': [(_re.compile(r'^(3 lentelė/Table 3)$'), '2 lentelė/Table 2', 1, None),
+                                (_re.compile(r'žalieji reikalavimai, nurodyti (3) lentelėje'), '2', 1, None),
+                                (_re.compile(r'environmental requirements specified in Table (3)\.'), '2', 1, None),
+                                (_re.compile(r'Žaliuosius reikalavimus pagal (SPS 3) lentelės reikalavimą'), 'šio priedo 2', 1, None),
+                                (_re.compile(r'according to the requirement set out in (SPC Table 3) (?:shall|must)'), 'Table 2 of this Annex', 1, None)],
+}
+_LENT_NR_RAUDONI = {'DPSK_LTEN_KVALIFIKACIJA': [('3 lentelė/Table 3', '2 lentelė/Table 2'), ('3 lentelėje', '2 lentelėje'), ('Table 3', 'Table 2'),
+                                                ('pagal SPS 3 lentelės', 'pagal šio priedo 2 lentelės'), ('SPC Table 3', 'Table 2 of this Annex')]}
+
+
+def _zemelapio_raudoni(f, poros):
+    """Žemėlapio raudonų dalių (intarpai[].raudonas) tekstas - tie patys žodžiai kaip šablone (pastraipų tekstus suderina _su_zemelapiais)."""
+    import json as _json
+    for zf in sorted((Path(__file__).parent / 'zemelapiai').glob('*.json')):
+        raw = zf.read_text(encoding='utf-8')
+        try:
+            Z = _json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(Z, dict) or Path(str(Z.get('sablonas', ''))).stem != f:
+            continue
+        n = 0
+        for e in Z.get('intarpai', []):
+            r = e.get('raudonas')
+            if not isinstance(r, str):
+                continue
+            r2 = r
+            for a, b in poros:
+                r2 = r2.replace(a, b)
+            if r2 != r:
+                e['raudonas'] = r2; n += 1
+        if n:
+            zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+            print(f"      {zf.name}: raudonų dalių suderinta {n}")
+
+
+def _lenteliu_numeriai(taisyk):
+    import json as _json
+    print("\nLENTELIŲ NUMERIAI (AF, 2026-10-23):")
+    viso = 0
+    for f, taisykles in _LENT_NR.items():
+        path = TPL / (f + '.docx')
+        with zipfile.ZipFile(path) as zin:
+            T = [_pastraipos_tekstas(m.group(0)).strip() for m in _VISOS_P_RE.finditer(zin.read('word/document.xml'))]
+        # leidžiama - kelintas to paties teksto pasikartojimas (SSD: tik antra „4 lentelė“; fn indekso negauna)
+        leisti, matyta = {}, {}
+        for j, (rx, naujas, g, salyga) in enumerate(taisykles):
+            leisti[j] = {(t, sum(1 for x in T[:k] if x == t)) for k, t in enumerate(T) if rx.search(t) and (salyga is None or salyga(T, k))}
+        def fn(tekstas, seg, taisykles=taisykles, leisti=leisti, matyta=matyta):
+            t = tekstas.strip()
+            kelintas = matyta.get(t, 0); matyta[t] = kelintas + 1
+            pak = []
+            for j, (rx, naujas, g, salyga) in enumerate(taisykles):
+                m = rx.search(t)
+                if not m or (t, kelintas) not in leisti[j]:
+                    continue
+                o = len(tekstas) - len(tekstas.lstrip())
+                s, e = m.span(g)
+                pak.append((s + o, e + o, naujas))
+            return pak
+        # žemėlapis derinamas pagal pastraipos indeksą (ne pagal tekstą - SSD abi antraštės „4 lentelė“ vienodos)
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {nm: zin.read(nm) for nm in zin.namelist()}
+        items['word/document.xml'], n = _redaguok(items['word/document.xml'], fn)
+        if not n:
+            continue
+        T2 = [_pastraipos_tekstas(m.group(0)).strip() for m in _VISOS_P_RE.finditer(items['word/document.xml'])]
+        kur = [k for k in range(min(len(T), len(T2))) if T[k] != T2[k]]
+        print(f"  {f}.docx: lentelės numeris - {n} (pastraipos {', '.join(map(str, kur))})")
+        viso += n
+        if not taisyk or len(T) != len(T2):
+            continue
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for info in infos:
+                zout.writestr(info, items[info.filename])
+        for zf in sorted((Path(__file__).parent / 'zemelapiai').glob('*.json')):
+            raw = zf.read_text(encoding='utf-8')
+            try:
+                Z = _json.loads(raw)
+            except Exception:
+                continue
+            if not isinstance(Z, dict) or Path(str(Z.get('sablonas', ''))).stem != f:
+                continue
+            c = 0
+            for k in kur:
+                if Z['paras'].get(str(k)) == T[k]:
+                    Z['paras'][str(k)] = T2[k]; c += 1
+            for v in Z.values():
+                for e in (v if isinstance(v, list) else []):
+                    if isinstance(e, dict) and e.get('i') in kur and e.get('text') == T[e['i']]:
+                        e['text'] = T2[e['i']]; c += 1
+            zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+            print(f"      {zf.name}: suderinta {c} reiksmiu")
+        if f in _LENT_NR_RAUDONI:
+            _zemelapio_raudoni(f, _LENT_NR_RAUDONI[f])
+    return viso
+
+
+# AG. „priedelį“ -> „priedėlį“ (2026-10-23, D2 numeracijos auditas; rašybos klaida, naudotojo leidimas 2026-10-05): bendrų ūkio subjektų priedų
+#    (LT ir LT/EN) pastaboje „... užpildant Pirkimo sąlygų N priedo 1 priedelį ir 2 priedelį.“ (dalis raudona - tik raidė keičiama, spalva lieka).
+_PRIEDELI = [(_re.compile(r'pried(e)lį'), 'ė', 1)]
+
+
+def _priedeli(taisyk):
+    print("\n„PRIEDELĮ“ -> „PRIEDĖLĮ“ (AG, 2026-10-23):")
+    n = _su_zemelapiais(_regex_pakeitimai(*_PRIEDELI), ['PRIEDAI_LT_SUBTIEKEJAI', 'PRIEDAI_LTEN_SUBTIEKEJAI'], '„priedėlį“', taisyk)
+    if n and taisyk:
+        for f in ('PRIEDAI_LT_SUBTIEKEJAI', 'PRIEDAI_LTEN_SUBTIEKEJAI'):
+            _zemelapio_raudoni(f, [('priedelį', 'priedėlį')])
+    return n
 
 
 # X. Nuorodos į SPS priedus (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“; rado sugeneruoto paketo patikra): tekstas nurodo ne
