@@ -2,6 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
+<meta name="gp-testu-dalys" content="2">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>shared/ regresijos testai</title>
 <link rel="stylesheet" href="epso-g.css">
@@ -10,6 +11,7 @@
 <script src="teises-nuorodos.js"></script>
 <script src="saugykla.js"></script>
 <script src="testu-apsauga.js"></script>
+<script src="testu-dalys.js"></script>
 <script src="money.js"></script>
 <script src="uzkodavimas.js"></script>
 <style>
@@ -6185,7 +6187,7 @@ function kodoFailai(){
   return Object.keys(TELEFONO_PUSLAPIAI).map(m => m.replace(/\?.*$/, "")).concat(["ai-proxy.js", "backup.js", "busena.js",
     "docx-stiliai.js", "dokumentai.js", "eksportas.js", "gprocure-info-panel.js", "lang-detect.js", "mano-pirkimai.js", "money.js", "neissaugotas-darbas.js", "pdf-darbininkas.js", "bibliotekos.js", "kopija.js",
     "organizacijos.js", "paaiskinimas.js", "parengtis.js", "pirkimo-kortele.js", "portal-link.js", "pranesimas.js", "prieinamumas.js", "procurement-methods.js", "saugykla.js",
-    "skelbimas.js", "taisykles.js", "teise-stebesena.js", "teises-nuorodos.js", "testu-apsauga.js", "thresholds.js", "workdays.js",
+    "skelbimas.js", "taisykles.js", "teise-stebesena.js", "teises-nuorodos.js", "testu-apsauga.js", "testu-dalys.js", "thresholds.js", "workdays.js",
     "../PP-carbon/carbon-factors.js", "../PP-carbon/epd-extract.js", "../PP-carbon/esg-export.js", "../PP-carbon/evaluation.js", "../PP-carbon/reports.js",
     "../PP-carbon/taxonomy.js", "../PP-market-KPI/osp.js", "../PP-market-KPI/rinka.js", "../PP-salygos/ai-patarejas.js", "../PP-salygos/paraiska-extract.js",
     "../PP-salygos/variklis.js", "../PP-salygos/laukai.js", "../PP-tiekejams/asistentas.js", "../PP-tiekejams/cvpis.js", "../PP-tiekejams/paieska.js", "../PP-tiekejams/zinios.js",
@@ -6420,6 +6422,59 @@ async function testaiDatos(){
     const dt = await saltinis("../PP-ts/TS_Asistentas.html");
     if (/Date\.now\(\) \+ '\.doc'|\$\{Date\.now\(\)\}/.test(dt)) blogi.push("PP-ts: failo varde vis dar laiko žymė");
     tiesa(!blogi.length, blogi.join("\n  "));
+  });
+}
+
+/* ==========================================================================
+   Testų rinkinio dalys (testu-dalys.js, 2026-10-23). Ilgi rinkiniai (PP-salygos, shared) paleidžiami dalimis
+   (?dalis=k/n, kiekviena - švaria naršykle; .github/testai/paleisk.py skaito <meta name="gp-testu-dalys">):
+   iki tol PP-salygos rinkinys vienoje naršyklėje truko ~10 min., o atminties trūkumas jį du kartus nutraukė.
+   ========================================================================== */
+async function testaiDalys(){
+  dabartine = grupe("Testų rinkinio dalys (testu-dalys.js)");
+  const SINT = '<meta name="gp-testu-dalys" content="3"><script src="testu-dalys.js"><\/script>'
+    + '<script>async function testaiA(){}\nasync function testaiB(){}\n  async function testaiC(){}\nfunction testaiD(){}\nfunction pagalbine(){}<\/script>';
+  const { f, d, w } = await ramas(SINT);
+  try {
+    const G = w.GP_TESTU_DALYS, [A, B, C, D] = ["testaiA", "testaiB", "testaiC", "testaiD"].map(v => w[v]);
+    const vardai = l => l.map(x => x.name).join(",");
+    const klaida = (fn, re, ka) => { let e = null; try { fn(); } catch (x) { e = x; } tiesa(e && re.test(e.message), ka + ": " + (e ? e.message : "klaidos nėra")); };
+    await testas("Be ?dalis - visos grupės iš eilės; ?dalis=k/n - tik k-oji dalis (ir tarp kitų parametrų); puslapio pavadinimas sako dalį; apibrėžtos grupės randamos ir su įtrauka, ir be async", async () => {
+      lygu(vardai(G.grupes([[A], [B, C], [D]], { paieska: "" })), "testaiA,testaiB,testaiC,testaiD", "visos");
+      lygu(vardai(G.grupes([[A], [B, C], [D]], { paieska: "?dalis=2/3" })), "testaiB,testaiC", "2 dalis");
+      lygu(vardai(G.grupes([[A], [B, C], [D]], { paieska: "?ci=17&dalis=3/3" })), "testaiD", "3 dalis");
+      lygu([G.parametras("?dalis=1/2&x=1"), G.parametras("?dalis=12"), G.parametras("")], [{ k: 1, n: 2 }, null, null], "parametras");
+      lygu(G.apibreztos(d), ["testaiA", "testaiB", "testaiC", "testaiD"], "apibrėžtos");
+      tiesa(/\(3 dalis iš 3\)$/.test(d.title), "pavadinimas: " + d.title);
+    });
+    await testas("Klaidos, ne tylus praleidimas: <meta> ir dalių skaičius nesutampa, ta pati grupė dviejose dalyse, apibrėžta grupė neįrašyta, netinkama dalis, ne funkcija", async () => {
+      klaida(() => G.grupes([[A, B], [C, D]], { paieska: "" }), /nesutampa su dalių sąrašu \(2\)/, "dalių skaičius");
+      klaida(() => G.grupes([[A], [B, C], [D, A]], { paieska: "" }), /keliose dalyse: testaiA/, "dublis");
+      klaida(() => G.grupes([[A], [B], [D]], { paieska: "" }), /neįrašyta į jokią dalį: testaiC/, "neįrašyta");
+      klaida(() => G.grupes([[A], [B, C], [D]], { paieska: "?dalis=4/3" }), /netinkama dalis \?dalis=4\/3/, "per didelė dalis");
+      klaida(() => G.grupes([[A], [B, C], [D]], { paieska: "?dalis=1/2" }), /netinkama dalis/, "kitas dalių skaičius");
+      klaida(() => G.grupes([[A], [B, C], [D, undefined]], { paieska: "" }), /ne funkcija/, "ne funkcija");
+      const be = new w.DOMParser().parseFromString("<html><head></head><body></body></html>", "text/html");
+      klaida(() => G.grupes([[A]], { dokumentas: be, paieska: "" }), /\(nėra\)/, "be <meta>");
+    });
+  } finally { f.remove(); }
+
+  await testas("Tikri rinkiniai (PP-salygos, shared): <meta> - paleidiklio skaitoma forma, dalių tiek pat, kiekviena apibrėžta grupė - lygiai vienoje dalyje, tuščių dalių nėra, pagrindinis blokas grupių nekviečia pats", async () => {
+    for (const kelias of ["../PP-salygos/testai.html", "testai.html"]){
+      const src = await (await fetch(kelias + "?ci=" + Date.now())).text();
+      const m = /<meta\s+name="gp-testu-dalys"\s+content="(\d+)">/.exec(src);
+      tiesa(m && +m[1] > 1, kelias + ": <meta name=\"gp-testu-dalys\">");
+      tiesa(/<script src="[^"]*testu-dalys\.js"><\/script>/.test(src.slice(0, src.indexOf("</head>"))), kelias + ": testu-dalys.js neprijungtas <head>");
+      const pg = src.slice(src.lastIndexOf("(async function(){"));
+      const lit = /GP_TESTU_DALYS\.grupes\(\[\s*([\s\S]*?)\]\s*\)/.exec(pg);
+      tiesa(lit, kelias + ": GP_TESTU_DALYS.grupes([...]) pagrindiniame bloke");
+      const dalys = lit[1].split(/\]\s*,\s*\[/).map(x => (x.match(/testai\w+/g) || []));
+      lygu(dalys.length, +m[1], kelias + ": dalių skaičius");
+      tiesa(dalys.every(x => x.length), kelias + ": tuščia dalis");
+      const visos = [].concat(...dalys), apib = [...src.matchAll(/^[ \t]*(?:async[ \t]+)?function[ \t]+(testai\w+)[ \t]*\(/gm)].map(x => x[1]);
+      lygu([...visos].sort(), [...apib].sort(), kelias + ": grupės dalyse ir apibrėžtos");
+      tiesa(!/await testai\w+\(\)/.test(pg), kelias + ": pagrindinis blokas grupes kviečia pats");
+    }
   });
 }
 
@@ -7767,41 +7822,17 @@ async function testaiNacsaugBvpz(){
   // PP-salygos juodraščiai (2026-10-15): moduliuose rašant tikrais įvykiais sukuriamas juodraštis - testų sukurti šalinami, tikri atkuriami
   const JD_APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.salygos.juodrastis.") === 0);
   try {
-  await testaiJuosta();
-  await testaiKopija();
-  await testaiPinigai();
-  await testaiUzkodavimas();
-  await testaiPranesimai();
-  await testaiPaaiskinimas();
-  await testaiBibliotekos();
-  await testaiKopijavimas();
-  await testaiDatos();
-  await testaiBudai();
-  await testaiAiProxy();
-  await testaiDocxStiliai();
-  await testaiSkydelis();
-  await testaiAntraste();
-  await testaiDarbas();
-  await testaiTeise();
-  await testaiNacsaugBvpz();
-  await testaiBusena();
-  await testaiSaugykla();
-  await testaiKortele();
-  await testaiSkelbimasDarbastalis();
-  await testaiKortele2();
-  await testaiTaisykles();
-  await testaiParengtis();
-  await testaiPrivalomi();
-  await testaiKvalifikacija();
-  await testaiSutartiesElementai();
-  await testaiPalyginimas();
-  await testaiDi();
-  await testaiSutikimas();
-  await testaiAnalitika();
-  await testaiSaugumas();
-  await testaiVendor();
-  await testaiTelefonas();
-  await testaiPrieinamumas();
+  // Grupės dalimis (2026-10-23, shared/testu-dalys.js): paleidiklis kiekvieną dalį atveria atskira naršykle (?dalis=k/n),
+  // be parametro - visos iš eilės. Nauja grupė - į paskutinę dalį (arba trumpiausią); dalių skaičius - ir <meta name="gp-testu-dalys">
+  const GRUPES = GP_TESTU_DALYS.grupes([
+    [testaiJuosta, testaiKopija, testaiPinigai, testaiUzkodavimas, testaiPranesimai, testaiPaaiskinimas, testaiBibliotekos, testaiKopijavimas,
+     testaiDatos, testaiDalys, testaiBudai, testaiAiProxy, testaiDocxStiliai, testaiSkydelis, testaiAntraste, testaiDarbas, testaiTeise,
+     testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
+     testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
+     testaiVendor],
+    [testaiTelefonas, testaiPrieinamumas]
+  ]);
+  for (const g of GRUPES) await g();
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

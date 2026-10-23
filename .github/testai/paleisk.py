@@ -12,8 +12,12 @@ testai (00:30 Lietuvos laiku) prasmingi tik rytinėje laiko juostoje.
 Testų puslapiai pranešimą apie pabaigą duoda dvejopai: #busena („praėjo“ / „krito“ / „Nepavyko“) arba
 document.title („OK ...“ / „KRITO ...“) su #santrauka (PP-market-KPI, PP-cost-benefit).
 Išėjimo kodas 1, jei bent vienas testas krito ar rinkinys nepasibaigė.
+Rinkinio dalys (2026-10-23): testai.html su <meta name="gp-testu-dalys" content="n"> (PP-salygos, shared) paleidžiamas n kartų
+su ?dalis=k/n - kiekviena dalis atskira švaria naršykle (shared/testu-dalys.js parenka jos grupes), rezultatas - eilutė dalies.
+GP_TESTU_LYGIAGRECIAI=<n> - vienu metu iki n dalių ar rinkinių (numatyta 1; sunkūs rinkiniai kartu su kitais gali sulėtėti ar
+užstrigti - PP-tiekejams, todėl numatyta eilė nekeičiama).
 """
-import base64, http.server, json, os, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request
+import base64, concurrent.futures, http.server, json, os, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request
 
 SAKNIS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 # Rinkiniai randami patys: kiekvienas <katalogas>/testai.html (naujas modulis su testais įtraukiamas be šio failo keitimo)
@@ -27,6 +31,14 @@ RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
 # 1300 s (2026-10-20): PP-salygos (458 testai, vietoje ~380 s) GitHub Actions viršijo 900 s; visas darbas buvo ~1500 s iš 2400
 LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "1300"))
 VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2400"))
+LYGIAGRECIAI = max(1, int(os.environ.get("GP_TESTU_LYGIAGRECIAI", "1")))
+
+
+def dalys(rinkinys):
+    # <meta name="gp-testu-dalys" content="n"> - rinkinys paleidžiamas dalimis (?dalis=k/n); be jos - vienas paleidimas
+    m = re.search(r'<meta\s+name="gp-testu-dalys"\s+content="(\d+)"', open(os.path.join(SAKNIS, rinkinys), encoding="utf-8").read())
+    n = int(m.group(1)) if m else 1
+    return [(rinkinys, "")] if n <= 1 else [(rinkinys, "%d/%d" % (k, n)) for k in range(1, n + 1)]
 
 
 # ---------- statinis serveris (didelė eilė: puslapiai vienu metu krauna daug failų) ----------
@@ -187,26 +199,30 @@ def anotacija(tekstas, pavadinimas=False):
 def main():
     filtrai = sys.argv[1:]
     rinkiniai = [r for r in RINKINIAI if not filtrai or any(f in r for f in filtrai)]
+    vienetai = [v for r in rinkiniai for v in dalys(r)]
     portas = laisvas_portas()
     srv = Serveris(("127.0.0.1", portas), Tylus)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     rezultatai = []
     pradzia = time.time()
     santrauka = os.environ.get("GITHUB_STEP_SUMMARY")
+    spausdinti = threading.Lock()
     def rasyk_santrauka(tekstas):
         # Kiekviena eilutė - iškart: jei darbas nutrūktų, jau paleistų rinkinių rezultatai lieka santraukoje
         if santrauka:
             with open(santrauka, "a", encoding="utf-8") as f: f.write(tekstas)
     rasyk_santrauka("## G-Procure testai\n\n| Rinkinys | Būsena | Laikas |\n|---|---|---|\n")
-    for r in rinkiniai:
+    def paleisk(vienetas):
+        r, dalis = vienetas
+        vardas = r + (" (%s dalis)" % dalis if dalis else "")
         liko = VISO_LAIKAS - (time.time() - pradzia)
         if liko < 60:
-            x = {"baigta": False, "busena": "nepaleista - baigėsi bendras laikas (%d s)" % VISO_LAIKAS, "gerai": False, "krito": [], "rinkinys": r, "sek": 0}
+            x = {"baigta": False, "busena": "nepaleista - baigėsi bendras laikas (%d s)" % VISO_LAIKAS, "gerai": False, "krito": [], "sek": 0}
         else:
             pr = time.time(); ch = None
             try:
-                ch = Chrome()   # kiekvienam rinkiniui - švari naršyklė (tikra saugykla nesidalijama)
-                ch.komanda("Page.navigate", {"url": "http://127.0.0.1:%d/%s?ci=%d" % (portas, r, time.time())})
+                ch = Chrome()   # kiekvienam rinkiniui ir jo daliai - švari naršyklė (tikra saugykla nesidalijama, atmintis nesikaupia)
+                ch.komanda("Page.navigate", {"url": "http://127.0.0.1:%d/%s?ci=%d%s" % (portas, r, time.time(), "&dalis=" + dalis if dalis else "")})
                 time.sleep(2)
                 x = ch.vykdyk(LAUK % int(min(LAIKAS, liko - 30)))
                 if ch.csp:
@@ -216,16 +232,23 @@ def main():
                 x = {"baigta": False, "busena": "klaida: " + str(e)[:300], "gerai": False, "krito": []}
             finally:
                 if ch: ch.uzdaryk()
-            x["rinkinys"] = r; x["sek"] = round(time.time() - pr)
-        rezultatai.append(x)
-        print(("GERAI " if x["gerai"] else "KRITO ") + r + " | " + x["busena"] + " | " + str(x["sek"]) + " s", flush=True)
-        for k in x["krito"]: print("    - " + k, flush=True)
-        # GitHub: kritę testai - ir anotacijomis paleidimo puslapio viršuje. Žurnalas ir santrauka matomi tik prisijungus,
-        # o anotacijos - ir be prisijungimo (API check-runs/<id>/annotations); 2026-10-02 pirmo paleidimo priežasties neprisijungus nebuvo matyti
-        if os.environ.get("GITHUB_ACTIONS") == "true" and not x["gerai"]:
-            for k in (x["krito"] or [x["busena"]]):
-                print("::error title=%s::%s" % (anotacija(r, True), anotacija(k)), flush=True)
-        rasyk_santrauka("| %s %s | %s | %s s |\n" % ("✅" if x["gerai"] else "❌", r, x["busena"].replace("|", "/"), x["sek"]))
+            x["sek"] = round(time.time() - pr)
+        x["rinkinys"] = vardas
+        with spausdinti:
+            rezultatai.append(x)
+            print(("GERAI " if x["gerai"] else "KRITO ") + vardas + " | " + x["busena"] + " | " + str(x["sek"]) + " s", flush=True)
+            for k in x["krito"]: print("    - " + k, flush=True)
+            # GitHub: kritę testai - ir anotacijomis paleidimo puslapio viršuje. Žurnalas ir santrauka matomi tik prisijungus,
+            # o anotacijos - ir be prisijungimo (API check-runs/<id>/annotations); 2026-10-02 pirmo paleidimo priežasties neprisijungus nebuvo matyti
+            if os.environ.get("GITHUB_ACTIONS") == "true" and not x["gerai"]:
+                for k in (x["krito"] or [x["busena"]]):
+                    print("::error title=%s::%s" % (anotacija(vardas, True), anotacija(k)), flush=True)
+            rasyk_santrauka("| %s %s | %s | %s s |\n" % ("✅" if x["gerai"] else "❌", vardas, x["busena"].replace("|", "/"), x["sek"]))
+    if LYGIAGRECIAI == 1:
+        for v in vienetai: paleisk(v)
+    else:
+        with concurrent.futures.ThreadPoolExecutor(LYGIAGRECIAI) as ex:
+            list(ex.map(paleisk, vienetai))
     srv.shutdown()
     # Saugumo patikra (2026-10-06): bibliotekų spragos (OSV), paslaptys saugykloje, security.txt galiojimas - be naršyklės.
     # Workflow failo keisti nereikia: paleidžiama kartu su testais (be filtrų arba su žodžiu „saugumas“)
@@ -249,7 +272,7 @@ def main():
                         + "".join("\n- ⚠️ %s" % k.replace("|", "/") for k in x["ispejimai"]))
     blogi = [x for x in rezultatai if not x["gerai"]]
     rasyk_santrauka("".join("\n- **%s**: %s" % (x["rinkinys"], k.replace("|", "/")) for x in blogi for k in x["krito"]) + "\n")
-    print("\n%d rinkinių, kritusių: %d" % (len(rezultatai), len(blogi)))
+    print("\n%d rinkinių ir jų dalių, kritusių: %d" % (len(rezultatai), len(blogi)))
     sys.exit(1 if blogi else 0)
 
 
