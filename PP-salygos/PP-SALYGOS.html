@@ -2592,7 +2592,8 @@ const SEKIMO = [
     kodel:'SPS deklaraciją reikalauja tik nacionalinio saugumo BVPŽ punkte - eilutė seka jo sprendimą (' + GP_TEISE.cit('nacsaugumo_sarasas') + ')' },
   { re:/koordinavimo komisij|coordinat\w* commission/, seka:'komisija',
     kodel:'punktas taikomas tik kai pirkime kreipiamasi į Koordinavimo komisiją' },
-  { re:/^uzpildyta tiekejo pasiulymu del deretinu salygu forma/, seka:'derybos-placiau',
+  // MVP SPS: „Užpildytą pasiūlymų dėl derėtinų sąlygų formą (SPS priedą Nr. X)“ (be žodžio „tiekėjo“) - iki 2026-10-23 likdavo ir be derybų
+  { re:/^uzpildyta (tiekejo )?pasiulymu del deretinu salygu forma/, seka:'derybos-placiau',
     kodel:'forma reikalinga tik kai derybų apimtis platesnė nei kaina' },
   // PĮ sablonuose „pagal PĮ ... straipsnio“, AKV (VPĮ) - „12.1. ... pagal VPĮ ... straipsnio“ (numeris - sablono tekstas)
   { re:/^(\d+( \d+)* )?sioje dalyje pateikiama visa informacija kuri pagal v?pi \d+ straipsn/, seka:'be-projekto',
@@ -3526,6 +3527,8 @@ function isjungtosPastraipos(Z, REZ){
     if (!sakaItraukiama(Z, b, REZ) && !(rezimoAtsakymas(blokoRaktas(Z, b), REZ) === null && sakaLaukia(Z, b)))
       for (let i = b.blokas.nuo; i <= b.blokas.iki; i++) out.add(i);
   });
+  // SPS 3.3-3.6 p., kai tikrinami tik pašalinimo pagrindai (T5-M3, 2026-10-23) - jų laukų neklausiama
+  if (kvalifikacijosLenteles().tik1){ const S = kvalPunktuSritis(Z); if (S) S.pastraipos.forEach(i => out.add(i)); }
   return out;
 }
 /* Pastraipos neatsakytų sąlygų šakose: indeksas -> sąlygos tekstas (kortelės pastabai). */
@@ -3583,6 +3586,78 @@ const JUODOS_ALT = [
   { id: 'kaina', en: true, re: /^([\s\S]*?)(the price of the Tender of the Successful Supplier\s*\/\s*the amount specified in the draft Contract)([\s\S]*)$/,
     skaidyk: x => x.split(/\s*\/\s*/) }
 ];
+/* Raudonos šablono alternatyvos ir neprivalomi sąrašo nariai, kuriuos nulemia jau žinomi atsakymai (palyginimas su LITGRID paskelbtais
+   paketais, 2026-10-23). Iki tol intarpoKat juos tik pajuodindavo: dokumente likdavo abu variantai („Pasiūlyme/Pirminiame pasiūlyme“,
+   „CVP IS priemonėmis/El. paštu“), mažos vertės pirkime be derybų - „Galutinis pasiūlymas“, prekių pirkime - „projektuotojo civilinės
+   atsakomybės ... draudimo liudijimo (poliso) kopijos“. LITGRID paskelbtuose paketuose šios vietos pritaikytos pirkimui. Taisyklė gauna
+   raudoną atkarpą (vientisą raudonų runų grupę) ir grąžina naują jos tekstą, tą patį (nieko nekeisti) arba null (nežinoma - atkarpa
+   apdorojama kaip iki tol ir 4 žingsnis tai sako). `yra` - atpažinimas žemėlapio intarpo tekste (2 žingsnio „Išspręsta automatiškai“). */
+const kanaloElPastas = () => { const k = Object.keys(ATS).find(x => x.startsWith('I_pirkimas vykdomas pasirinkti')); return !!k && /pa[sš]t/i.test(String(ATS[k] || '')); };
+function projektuotojoDraudimas(){                     // true - reikia, false - nereikia, null - nežinoma
+  const sp = sutartiesProjektas();
+  if (sp && sp.seima) return /^PROJEKTAVIMO_/.test(sp.seima);
+  return objektoTipas() === 'prekes' ? false : null;
+}
+/* Iš laimėtojo prašomų dokumentų sąrašas („... nepateiks pašalinimo pagrindų nebuvimą ir/ar kvalifikaciją ir/ar kitus reikalavimus
+   pagrindžiančių dokumentų, Sutarties įvykdymo užtikrinimo originalo, projektuotojo ... (poliso) kopijos, nepaaiškins ...“, EN atitikmuo):
+   lieka tik tai, kas šiame pirkime prašoma - kvalifikacija (netikrinama - pašalinama), užtikrinimas (SPS sąlygos atsakymas „Ne“ - pašalinama),
+   projektuotojo draudimas (tik projektavimo sutartims; prekėms - pašalinama). Nežinoma - lieka. */
+function laimetojoDokumentai(g){
+  let t = g;
+  if (kvalifikacijosLenteles().tik1) t = t.replace(/\s*ir\/ar kvalifikaciją,?(?=\s*ir\/\s*ar\s)/u, '').replace(/^nepateiks kvalifikaciją ir\/ar /u, 'nepateiks ')
+    .replace(/(?:,\s*|\s+and\/o[rt]\s*)(?:the\s*)?qualification,\s*(?=and\/or other)/, ' ').replace(/grounds,\s+and\/or other/, 'grounds and/or other');
+  if (sutartiesUztikrinimas().taikomas === false)
+    t = t.replace(/\s*Sutarties įvykdymo užtikrinimo originalo,/u, '').replace(/\s*the original of Contract performance guarantee,/, '');
+  if (projektuotojoDraudimas() === false)
+    t = t.replace(/\s*projektuotojo civilinės atsakomybės privalomojo draudimo liudijimo \(poliso\) kopijos(?: bei vadovų sąrašo)?,/u, '')
+      .replace(/\s*a copy of the designer's compulsory civil liability insurance certificate \(policy\) and the list of managers,?\s*/, ' ');
+  return t === g ? g : t.replace(/,(?=[^\s\d])/gu, ', ').replace(/ {2,}/g, ' ');
+}
+const RAUDONOS_ALT = [
+  { id: 'pirminis', re: /^(Pasiūlyme\s*\/\s*Pirminiame pasiūlyme|Pasiūlymu\s*\/\s*Pirminiu pasiūlymu|Tender\s*\/\s*Initial Tender)\s*$/u,
+    yra: /Pasiūlyme\s*\/\s*Pirminiame pasiūlyme|Pasiūlymu\s*\/\s*Pirminiu pasiūlymu|Tender\s*\/\s*Initial Tender/u,
+    tapo: g => g.trim().split(/\s*\/\s*/)[derybosTaip() ? 1 : 0] + (/\s$/.test(g) ? ' ' : ''),
+    veiksmas: () => derybosTaip() ? 'lieka „Pirminiame pasiūlyme“ (EN „Initial Tender“)' : 'lieka „Pasiūlyme“ (EN „Tender“)',
+    kodel: () => derybosTaip() ? 'derybos vykdomos (1 žingsnis) - teikiami pirminiai ir galutiniai pasiūlymai' : 'derybos nevykdomos (1 žingsnis) - teikiamas vienas pasiūlymas' },
+  { id: 'galutinis', re: /^\s*Galutin(is|io)\s*$/u, yra: /^\s*Galutin(is|io)/u,
+    tapo: g => derybosTaip() ? g : '',
+    veiksmas: () => derybosTaip() ? 'žodis „Galutinis“ („Galutinio“) lieka' : 'žodis „Galutinis“ („Galutinio“) pašalinamas',
+    kodel: () => derybosTaip() ? 'derybos vykdomos (1 žingsnis)' : 'derybos nevykdomos (1 žingsnis) - galutinių pasiūlymų nėra' },
+  { id: 'pateikimas', re: /^CVP IS priemonėmis į elektroninių pasiūlymų dėžutę\s*\/\s*El\. paštu\s+ne vėliau kaip iki CVP IS nurodyto termino pabaigos\s*\/\s*El\.\s*paštu\s+ne vėliau kaip iki[\s\S]*$/u,
+    yra: /CVP IS priemonėmis į elektroninių pasiūlymų dėžutę\s*\/\s*El\. paštu/u,
+    tapo: () => kanaloElPastas() ? null : 'CVP IS priemonėmis į elektroninių pasiūlymų dėžutę ne vėliau kaip iki CVP IS nurodyto termino pabaigos',
+    veiksmas: () => kanaloElPastas() ? 'palikti abu variantai - pasirinkite Word programoje' : 'lieka „CVP IS priemonėmis ... ne vėliau kaip iki CVP IS nurodyto termino pabaigos“',
+    kodel: () => 'pasiūlymų pateikimo būdas - kaip SPS 1.3 punkte (komunikacijos kanalas)' },
+  { id: 'kanalas', re: /CVP IS priemonėmis\s*\/\s*[Ee]l\. paštu/u, yra: /CVP IS priemonėmis\s*\/\s*[Ee]l\. paštu/u,
+    tapo: g => g.replace(/CVP IS priemonėmis\s*\/\s*([Ee])l\. paštu/u, (m, e) => kanaloElPastas() ? e + 'l. paštu' : 'CVP IS priemonėmis'),
+    veiksmas: () => kanaloElPastas() ? 'lieka „el. paštu“' : 'lieka „CVP IS priemonėmis“',
+    kodel: () => 'komunikacijos kanalas - kaip SPS 1.3 punkte' },
+  { id: 'laimetojo_dok', re: /pagrindžiančių dokumentų|documents substantiating/u, yra: /pagrindžiančių dokumentų|documents substantiating/u,
+    tapo: g => laimetojoDokumentai(g),
+    veiksmas: () => [kvalifikacijosLenteles().tik1 ? 'be kvalifikacijos dokumentų' : '', sutartiesUztikrinimas().taikomas === false ? 'be sutarties įvykdymo užtikrinimo originalo' : '',
+      projektuotojoDraudimas() === false ? 'be projektuotojo civilinės atsakomybės draudimo liudijimo' : projektuotojoDraudimas() == null ? 'projektuotojo draudimo liudijimas - palikta (patikrinkite)' : ''].filter(Boolean).join('; ') || 'sąrašas lieka visas',
+    kodel: () => 'iš laimėtojo prašomi tik šiame pirkime reikalaujami dokumentai (kvalifikacija, sutarties įvykdymo užtikrinimas, projektavimo sutartis)' },
+];
+/* Raudonas fragmentas, kuris baigiasi skyryba už laužtinių skliaustų („Choose. [by means of CPP IS / by e-mail]. “): įrašoma reikšmė gauna tą
+   skyrybą ir tarpą - kitaip „by means of CPP ISAny information“ (MVP LT/EN 1.3 p., iki 2026-10-23) */
+const suSkyryba = (v, raud) => { const m = /\]([.;:,])(\s*)$/.exec(raud || ''); return m && !/[.;:,]\s*$/.test(v) ? v + m[1] + (m[2] ? ' ' : '') : v; };
+const SALYGA_PRADZIA_RE = /^(jei|jeigu|kai|if|where|when|in case)\b[^:]{3,}:$/i;
+/* Paragrafo raudonų atkarpų keitimas pagal RAUDONOS_ALT; -> [{ id, buvo, tapo }] (tapo null - nežinoma, atkarpa nekeista) */
+function raudonosAlternatyvos(paras, i){
+  const out = [], grupes = [];
+  GPGen.keistiRaudonaGrupe(paras, i, (pirma, g) => { grupes.push(g); return false; }, '');
+  grupes.forEach(g => {
+    const a = RAUDONOS_ALT.find(x => x.re.test(g));
+    if (!a) return;
+    const tapo = a.tapo(g);
+    if (tapo == null){ out.push({ id: a.id, buvo: g, tapo: null }); return; }
+    if (tapo !== g && GPGen.keistiRaudonaGrupe(paras, i, (pirma, x) => x === g, tapo)) out.push({ id: a.id, buvo: g, tapo });
+    // projektuotojo draudimo liudijimas, kai nežinoma, ar perkamas projektavimas - lieka, 4 žingsnis prašo patikrinti
+    if (a.id === 'laimetojo_dok' && projektuotojoDraudimas() == null && /projektuotojo civilinės|designer's compulsory/u.test(tapo))
+      out.push({ id: 'projektuotojo', buvo: g, tapo: null });
+  });
+  return out;
+}
 function juodaAlternatyva(t){
   t = String(t || '');
   for (const a of JUODOS_ALT){
@@ -3663,6 +3738,9 @@ function surinktiKlausimus(){
     const forma = yraForma(d);
     const isjungta = isjungtosPastraipos(Z, REZ);
     const laukia = laukianciosPastraipos(Z, REZ);
+    if (!forma && KVAL.tik1 && kvalPunktuSritis(Z))                 // T5-M3 (2026-10-23): SPS 3.3-3.6 p. - kartu su 2 lentele
+      auto(trumpas, 'Kvalifikacijos reikalavimų atitikimo taisyklės (SPS 3.3-3.6 p.)', 'punktai pašalinami',
+           'tikrinami tik pašalinimo pagrindai - kvalifikacijos reikalavimų pirkime nėra (kaip LITGRID paskelbtuose paketuose)');
     const kvs = !forma && !KVAL.tik1 ? kvalSritis(Z) : null;   // 2 lentelė trinama („tik pašalinimo pagrindai“) - nieko neperkeliama
     if (kvs){
       if (!K.kvl) K.kvl = { vieta: { dok: d.trumpas, i: kvs.grupe }, dokumentai: [], dokai: [], M: KVLM, terminas: kvlTerminas(Z, kvs),
@@ -3983,7 +4061,9 @@ function surinktiKlausimus(){
     (Z.intarpai||[]).forEach(n => {
       const kat = intarpoKat(n);
       if (isjungta.has(n.i)) return;
-      if (zalSrityje(n.i)){                                   // SPS 3 lentelės šablono eilutė - pakeičiama dokumento eilutėmis
+      // raudonos alternatyvos pagal žinomus atsakymus (RAUDONOS_ALT, 2026-10-23) - neklausiama, rodoma „Išspręsta automatiškai“
+      if (!forma) RAUDONOS_ALT.filter(a => a.yra.test(n.raudonas || '')).forEach(a => auto(trumpas, n.text, a.veiksmas(), a.kodel()));
+      if (zalSrityje(n.i)){                                  // SPS 3 lentelės šablono eilutė - pakeičiama dokumento eilutėmis
         auto(trumpas, n.text, 'pakeičiama įkelto dokumento žaliaisiais reikalavimais', zalKilme(ZALM));
         return;
       }
@@ -4244,6 +4324,14 @@ function surinktiKlausimus(){
         }
         return;
       }
+      // Bloko turinys, šablone parašytas raudonai (rankinis blokas su raudonasTurinys: 'palikti' - MVP derybų 5.3-5.4 p., 2026-10-23): jį lemia bloko
+      // sąlyga (derybos), todėl atskirai neklausiama - įtrauktame bloke paliekamas (juodai), neįtrauktame pašalinamas su bloku
+      const turinioBlokas = (Z.blokai || []).find(b => b.raudonasTurinys === 'palikti' && b.blokas && n.i >= b.blokas.nuo && n.i <= b.blokas.iki);
+      if (turinioBlokas && !/^(\d+(\.\d+)*\.?\s*)?(pasirinkti|nurodyti|suformuluoti)\b/i.test(n.text.trim())){
+        ATS['N_' + r] = 'palikti';
+        auto(trumpas, n.text, 'paliekama (juodai)', `bloko „${turinioBlokas.klausimas}“ turinys - sprendžia ta pati sąlyga`);
+        return;
+      }
       if (EBVPD_PASTABA.test(r)){                             // informacija tiekėjui - lieka (2026-10-14)
         ATS['N_' + r] = EBVPD_TRINTI ? 'trinti' : 'palikti';
         K.ebvpd = { tekstas: n.text, trinti: EBVPD_TRINTI };
@@ -4498,6 +4586,44 @@ function spec37Salink(Z, trinti, trintiEiluciu){
     if (/^when asked/.test(norm(Z.paras[i]))) return;
     trintiEiluciu.push({ nuo: nr != null ? nr : i, iki: en != null ? en : i });
   });
+  return n;
+}
+/* SPS 3.3-3.6 p. - kvalifikacijos reikalavimų atitikimo taisyklės („Reikalavimai Kvalifikacijos reikalavimų atitikimui:“, „Jei keliamas ...“ su a)-c),
+   „... nedraudžiama remtis sutartimi ...“, „Kvalifikacija turi būti įgyta ...“, „... užpildo ir pasirašo atskirą EBVPD ...“): tikrinant tik
+   pašalinimo pagrindus jie netaikomi - pašalinami kartu su 2 lentele ir 3.7 p. (naudotojo sprendimas 2026-10-23, naujo darbuotojo patikra
+   T5-M3; LITGRID paskelbtuose paketuose be kvalifikacijos taip ir yra). Sritis - nuo antraštės iki 3.7 p. (be jo - jį šalina spec37Salink);
+   pastraipos, kurias valdo žemėlapio sąlyga (MVP 3.6 p. „Jeigu keliami pašalinimo pagrindai ir prašoma EBVPD“), - pagal tą sąlygą.
+   Dvikalbiuose - visos eilutės su numerių langeliais. -> { nuo, iki, pastraipos: Set } arba null. */
+const KVAL_PUNKTU_PRADZIA = /^(\d+ )*reikalavimai kvalifikacijos reikalavimu atitikimui/;
+function kvalPunktuSritis(Z){
+  const P = Z.paras || {}, ks = Object.keys(P).map(Number).sort((a, b) => a - b);
+  const h = ks.find(i => KVAL_PUNKTU_PRADZIA.test(norm(P[i])));
+  if (h == null) return null;
+  const s37 = ks.find(i => i > h && SPEC37_RE.test(norm(P[i])));
+  if (s37 == null) return null;
+  let iki = s37 - 1;
+  if (Z.kalba === 'LTEN' && /^\s*\d+(\.\d+)*\.?\s*$/.test(P[iki] || '')) iki--;         // 3.7 eilutės numerio langelis
+  let nuo = h;
+  if (Z.kalba === 'LTEN') while (nuo > 0 && /^\s*(\d+(\.\d+)*\.?)?\s*$/.test(P[nuo - 1] || '')) nuo--;
+  const blokuose = new Set();
+  (Z.blokai || []).forEach(b => { if (b.blokas && b.i >= nuo && b.i <= iki){ blokuose.add(b.i); for (let i = b.blokas.nuo; i <= b.blokas.iki; i++) blokuose.add(i); } });
+  const pastraipos = new Set();
+  for (let i = nuo; i <= iki; i++) if (!blokuose.has(i)) pastraipos.add(i);
+  return { nuo, iki, pastraipos, blokuose };
+}
+function kvalPunktaiSalink(Z, trinti, trintiEiluciu){
+  const S = kvalPunktuSritis(Z);
+  if (!S) return 0;
+  let n = 0;
+  S.pastraipos.forEach(i => { if (!trinti.has(i)){ trinti.add(i); if (String((Z.paras || {})[i] || '').trim()) n++; } });
+  if (Z.kalba === 'LTEN'){
+    // eilutės, kurios visos sritį sudaro (be sąlygos valdomų) - šalinamos visos
+    let a = null;
+    for (let i = S.nuo; i <= S.iki + 1; i++){
+      if (i <= S.iki && S.pastraipos.has(i)){ if (a == null) a = i; continue; }
+      if (a != null){ trintiEiluciu.push({ nuo: a, iki: i - 1 }); a = null; }
+    }
+  }
   return n;
 }
 function priedoEilutesKilme(t){
@@ -7602,6 +7728,8 @@ async function generuotiViena(d, REZ){
   if (!forma) prieduSarasasZ(Z).forEach(x => { if (sutartiesEiluteSalinama(Z, x) && !trinti.has(x.i)){ trinti.add(x.i); prieduIstrinta++; } });
   // 3.7 p. - kai tikrinami tik pašalinimo pagrindai (2 lentelės nėra)
   const spec37 = !forma && (kvalifikacijosLenteles().tik1 || kvlBeSpecialistu()) ? spec37Salink(Z, trinti, trintiEiluciu) : 0;
+  // 3.3-3.6 p. - kvalifikacijos reikalavimų atitikimo taisyklės, kai tikrinami tik pašalinimo pagrindai (T5-M3, 2026-10-23)
+  const kvalPunktai = !forma && kvalifikacijosLenteles().tik1 ? kvalPunktaiSalink(Z, trinti, trintiEiluciu) : 0;
   // 4c. SPS priedų pernumeravimas (2 etapas D4 b): sąrašo eilutės ir nuorodos - prieš pildant vietas (jos įrašomos galutiniais numeriais)
   const prNr = priedoNumeriuKeitimas(paras, d, trinti, prieduNumeracija(), trintiEiluciu);
   // 4d. Juodos alternatyvos „A / B“ (K3): lieka pasirinktasis variantas; neatsakius - kaip šablone (patikra jas parodys)
@@ -7704,6 +7832,7 @@ async function generuotiViena(d, REZ){
   let intTrinta = 0, intTeksto = 0, rezimoEnTarpt = false;
   const eilNuorodos = [];
   const uztIrasyta = [];                                       // pasiūlymo galiojimo užtikrinimo dydis ir terminas (T3-V7)
+  const raudAlt = [];                                          // raudonos alternatyvos pagal žinomus atsakymus (RAUDONOS_ALT, 2026-10-23)
   const sulietuIdx = new Set((Z.blokai||[]).filter(b => b.sulieta).map(b => b.i));
   (Z.intarpai||[]).forEach(n => {
     if (trinti.has(n.i) || sulietuIdx.has(n.i)) return;
@@ -7832,6 +7961,8 @@ async function generuotiViena(d, REZ){
         intTeksto++; return;
       }
     }
+    // raudonos alternatyvos ir neprivalomi sąrašo nariai pagal žinomus atsakymus (2026-10-23) - pakeista atkarpa juoda, kitos - kaip iki tol
+    if (!forma) raudonosAlternatyvos(paras, n.i).forEach(x => raudAlt.push(Object.assign({ i: n.i }, x)));
     const kat = intarpoKat(n);
     if (kat === 'trinti') intTrinta += GPGen.trintiRaudonusRunus(paras, n.i);
     else if (kat === 'teksto'){
@@ -7839,7 +7970,7 @@ async function generuotiViena(d, REZ){
       const v = (ATS['I_' + norm(n.text)] || '').trim();
       if (v === '__NETAIKYTI__') trinti.add(n.i);
       else if (v && irasykNurodyma(paras, n.i, v)){ juodinti.add(n.i); intTeksto++; }   // likę raudoni ženklai („. “) - sakinio dalis
-      else if (v && GPGen.keistiRaudonaTeksta(paras, n.i, v)) intTeksto++;
+      else if (v && GPGen.keistiRaudonaTeksta(paras, n.i, suSkyryba(v, raudonasTekstas(paras[n.i])))) intTeksto++;
       else if (!v) likoNurodymas.add(n.i);           // neužpildytas lieka raudonas ir įtrauktoje šakoje (patikra rodo)
     } else if (kat === 'igaliojusios'){
       const v = igaliojusiosTekstas();                 // be reiksmes nurodymas lieka raudonas - patikra ji rodo
@@ -7886,7 +8017,20 @@ async function generuotiViena(d, REZ){
     const p = paras[i], visas = GPDocx.paraText(p).trim();
     const raud = GPGen.raudoniRunai(p).map(r => GPDocx.els(r, 't').map(t => t.textContent).join('')).join('').trim();
     const m = raud === visas && visas.match(/^((jei|jeigu|kai|if|where|when|in case)\b[^:]{3,}:)\s*(\S.*)$/i);
-    if (m && GPGen.keistiRaudonaTeksta(paras, i, m[3])) intTrinta++;
+    // Raudona sąlyga „Jei ...:“ - pirma iš kelių raudonų atkarpų (MVP LT/EN 1.7 p. „Jei Pirkimo metu nėra rengiamas Sutarties projektas:“ ir
+    // raudonas antras sakinys „Perkantysis subjektas atskiru pranešimu ...“, 2026-10-23): trinama tik sąlyga, kitos atkarpos lieka savo sprendimams
+    const grupes = [];
+    GPGen.keistiRaudonaGrupe(paras, i, (pirma, g) => { grupes.push(g); return false; }, '');
+    if (!m && grupes.length > 1 && SALYGA_PRADZIA_RE.test(grupes[0].trim())
+        && GPGen.keistiRaudonaGrupe(paras, i, (pirma, g) => g === grupes[0], '')){
+      intTrinta++;
+      const pirmas = GPDocx.els(p, 't').find(t => t.textContent !== '');
+      if (pirmas && /^ +/.test(GPDocx.paraText(p))) pirmas.textContent = pirmas.textContent.replace(/^ +/, '');
+      if (!forma) raudonosAlternatyvos(paras, i).forEach(x => raudAlt.push(Object.assign({ i }, x)));
+    } else if (m && GPGen.keistiRaudonaTeksta(paras, i, m[3])) intTrinta++;
+    // pastraipoje sąlygos teksto nėra (rankiniai blokai be sąlygos: MVP derybų 5.3-5.4 p. - visa pastraipa raudona, nacionalinio saugumo punktas,
+    // 2026-10-23) - nieko netrinama: raudonas turinys pajuodinamas kaip įtrauktos šakos
+    else if (!SALYGOS_RE.test(raud)) return;
     else {
       const n = GPGen.trintiRaudonusRunus(paras, i);
       intTrinta += n;
@@ -8122,7 +8266,7 @@ async function generuotiViena(d, REZ){
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, prieduNr: prNr, juodosAlt, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaZal, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, nuorodosTekstu, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
-                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, punktuNuorodos: punktuNuor, lenteliuNr: lentNr, spec37, antrastesLent: antrLent.dalys, eilNuorodos, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
+                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, punktuNuorodos: punktuNuor, lenteliuNr: lentNr, spec37, kvalPunktai, antrastesLent: antrLent.dalys, eilNuorodos, raudAlt, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
                    esminiuNuorodos: esminiuNuor.map(x => ({ buvo: x.buvo, tapo: skyriausNr ? x.tapo.split(SKYRIAUS_ZYMA).join(skyriausNr) : x.tapo.split(SKYRIAUS_ZYMA).join('___') })) } };
 }
 
@@ -8614,6 +8758,23 @@ function rodykRezultata(rez){
   if (s37.length) h += `<div class="audit ok" id="spec37Patikra" style="margin-top:10px"><b>Pašalintas SPS punktas apie specialistų įrodymus pagal 2 lentelę</b> (${s37.map(r => esc(dokumentoPavadinimas(r.d))).join(', ')}):
     ${kvalifikacijosLenteles().tik1 ? 'tikrinami tik pašalinimo pagrindai, todėl kvalifikacijos reikalavimų 2 lentelės, kuria jis remiasi, nėra'
       : 'įkeltoje kvalifikacijos reikalavimų lentelėje specialistų reikalavimų nepažymėta'}. Kiti punktai pernumeruoti.</div>`;
+  // 3.3-3.6 p. - kvalifikacijos reikalavimų atitikimo taisyklės, kai tikrinami tik pašalinimo pagrindai (T5-M3, 2026-10-23)
+  const kp = rez.filter(r => r.stats && r.stats.kvalPunktai);
+  if (kp.length) h += `<div class="audit ok" id="kvalPunktaiPatikra" style="margin-top:10px"><b>Pašalintos kvalifikacijos reikalavimų atitikimo taisyklės</b> (SPS 3.3-3.6 p.; ${kp.map(r => esc(dokumentoPavadinimas(r.d))).join(', ')}):
+    tikrinami tik pašalinimo pagrindai, todėl taisyklių, kaip tiekėjų grupė, ūkio subjektai ir subtiekėjai atitinka kvalifikacijos reikalavimus, ir punktų apie kvalifikacijos įgijimo laiką ir atskirą EBVPD nelieka. Kiti punktai pernumeruoti.</div>`;
+  // raudonos šablono alternatyvos pagal žinomus atsakymus (RAUDONOS_ALT, 2026-10-23)
+  const ra = rez.filter(r => r.stats && r.stats.raudAlt && r.stats.raudAlt.length);
+  const raP = ra.flatMap(r => r.stats.raudAlt.filter(x => x.tapo != null).map(x => ({ d: dokumentoPavadinimas(r.d), ...x })));
+  const raN = ra.flatMap(r => r.stats.raudAlt.filter(x => x.tapo == null).map(x => ({ d: dokumentoPavadinimas(r.d), ...x })));
+  const iskarpa = t => { t = String(t).replace(/\s+/g, ' ').trim(); return t.length > 90 ? t.slice(0, 87).replace(/\s+\S*$/, '') + '...' : t; };
+  if (raP.length) h += `<div class="audit ok" id="raudAltPatikra" style="margin-top:10px"><b>Šablono variantai pagal jūsų atsakymus:</b> ${raP.map(x => `${esc(x.d)} - „${esc(iskarpa(x.buvo))}“ → ${x.tapo.trim() ? '„' + esc(iskarpa(x.tapo)) + '“' : 'pašalinta'}`).join('; ')}.
+    Šablone šios vietos raudonos (pasirenkama pagal pirkimą); iki tol dokumente likdavo visi variantai.</div>`;
+  const raNP = raN.filter(x => x.id === 'pateikimas'), raNJ = raN.filter(x => x.id === 'projektuotojo');
+  if (raNP.length) h += `<div class="audit no" id="raudAltNepasirinkta" style="margin-top:10px"><b>Patikrinkite - palikti abu šablono variantai:</b> ${raNP.map(x => `${esc(x.d)} - „${esc(iskarpa(x.buvo))}“`).join('; ')}.
+    Pasiūlymai teikiami el. paštu (SPS 1.3 p.) - Word programoje palikite tik tinkamą variantą ir įrašykite terminą.</div>`;
+  if (raNJ.length) h += `<div class="audit no" id="projektuotojoPatikra" style="margin-top:10px"><b>Patikrinkite - iš laimėtojo prašomi dokumentai:</b> ${[...new Set(raNJ.map(x => esc(x.d)))].join(', ')} -
+    paliktas „projektuotojo civilinės atsakomybės privalomojo draudimo liudijimas (polisas)“. Jis reikalingas, kai perkamos projektavimo paslaugos; jei ne - pašalinkite Word programoje
+    (arba 1 žingsnyje pasirinkite sutarties projektą - tada sprendžiama pagal sutarties rūšį).</div>`;
   // Objekto apžiūros datos - šablono pavyzdžiai, paliekami raudoni (T3-K2, 2026-10-21)
   const ad = rez.filter(r => r.stats && r.stats.apzDatos && r.stats.apzDatos.length);
   if (ad.length) h += `<div class="audit no" id="apziurosDatos" style="margin-top:10px"><b>Objekto apžiūros datos - įrašykite savo:</b> ${ad.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.apzDatos.map(x => `„${esc(x)}“`).join(', ')}`).join('; ')}.

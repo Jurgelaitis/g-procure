@@ -129,6 +129,14 @@ def isvesk(auto_dir, galutinis_dir):
         for bid in ab:
             if bid not in gb:
                 p.append({'rusis': 'blokas-', 'inkaras': T.inkaras(ab[bid]['i']), 'klausimas': norm(ab[bid].get('klausimas'))})
+        # vienetai (klausimai, kuriems priklauso blokai): pagal id - pridėtas ar pakeistas įrašomas visas (indeksų jame nėra)
+        av = {v['id']: v for v in A.get('vienetai', [])}
+        for v in G.get('vienetai', []):
+            if av.get(v['id']) != v:
+                p.append({'rusis': 'vienetas+', 'vienetas': v})
+        for vid in av:
+            if vid not in {v['id'] for v in G.get('vienetai', [])}:
+                p.append({'rusis': 'vienetas-', 'id': vid})
         for lst in SARASAI:
             ae = {e['i']: e for e in A.get(lst, [])}
             ge = {e['i']: e for e in G.get(lst, [])}
@@ -199,6 +207,23 @@ def pritaikyk(vardas, Z, pataisymai=None):
                 for k in x.get('pasalinti', []):
                     cur[i].pop(k, None)
             Z[x['sarasas']] = [cur[k] for k in sorted(cur)]
+        elif x['rusis'] == 'vienetas+':
+            v = copy.deepcopy(x['vienetas'])
+            ids = {y['id'] for y in Z.get('blokai', [])}
+            truksta = [bid for bid in v.get('blokai', []) if bid not in ids]
+            if truksta:
+                klaidos.append('%s: vieneto %s blokų nėra: %s' % (kur, v['id'], ', '.join(truksta)))
+            vs = Z.setdefault('vienetai', [])
+            k = next((n for n, y in enumerate(vs) if y['id'] == v['id']), None)
+            if k is None:
+                vs.append(v)
+            else:
+                vs[k] = v
+        elif x['rusis'] == 'vienetas-':
+            vs = Z.get('vienetai', [])
+            if not any(y['id'] == x['id'] for y in vs):
+                klaidos.append('%s: salintino vieneto %s nera' % (kur, x['id']))
+            Z['vienetai'] = [y for y in vs if y['id'] != x['id']]
         elif x['rusis'] == 'laukas':
             Z[x['raktas']] = x['reiksme']
     return klaidos
