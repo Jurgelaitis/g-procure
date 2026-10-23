@@ -2,6 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
+<meta name="gp-testu-dalys" content="3">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PP-salygos regresijos testai</title>
 <meta name="robots" content="noindex">
@@ -28,6 +29,7 @@
   iframe{position:absolute;left:-9999px;top:0;width:1280px;height:900px;border:0}
   iframe.siauras{width:375px;height:812px}
 </style>
+<script src="../shared/testu-dalys.js"></script>
 </head>
 <body>
 
@@ -12603,6 +12605,156 @@ async function testaiPrivalomos(){
 /* ---- Penktoji naujo darbuotojo patikra (2026-10-23, po D2 numeracijos): angliška lentelės nuoroda sakinio gale, DPS priedo antraštė
    vieną kartą, privalomas DPS pašalinimo pagrindų priedas, „Sutarties projektas“ pagal SPS sąlygą, derybų formos angliška nuoroda,
    ištraukos aplink pakeitimą, DPS failų pavadinimai, nuorodos pašalinamose eilutėse, nepridedamas priedas, raktų perkėlimas. ---- */
+/* 2026-10-23 (naudotojo užduotis - sugeneruotų dokumentų patikra Pages ir Word programose po pernumeravimo): Word kompiuteryje nėra, todėl
+   tikrinama tai, ko Word griežtai reikalauja: elementų tvarka pagal ECMA-376 (pPr, rPr, tblPr, tcPr, sectPr, rėmeliai), ryšių taikiniai,
+   unikalūs w14:paraId, žymės ir piešinių id; ir A4 puslapis visuose dokumentuose. Pages - atskirai PDF eksportu (79 dokumentai). */
+const WORD_TVARKA = {
+  pPr: "pStyle keepNext keepLines pageBreakBefore framePr widowControl numPr suppressLineNumbers pBdr shd tabs suppressAutoHyphens kinsoku wordWrap overflowPunct topLinePunct autoSpaceDE autoSpaceDN bidi adjustRightInd snapToGrid spacing ind contextualSpacing mirrorIndents suppressOverlap jc textDirection textAlignment textboxTightWrap outlineLvl divId cnfStyle rPr sectPr pPrChange",
+  rPr: "ins del moveFrom moveTo rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange",
+  tblPr: "tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange",
+  tcPr: "cnfStyle tcW gridSpan hMerge vMerge tcBorders shd noWrap tcMar textDirection tcFitText vAlign hideMark headers cellIns cellDel cellMerge tcPrChange",
+  sectPr: "headerReference/footerReference footnotePr endnotePr type pgSz pgMar paperSrc pgBorders lnNumType pgNumType cols formProt vAlign noEndnote titlePg textDirection bidi rtlGutter docGrid printerSettings sectPrChange",
+  tblBorders: "top left start bottom right end insideH insideV", tcBorders: "top left start bottom right end insideH insideV tl2br tr2bl", pBdr: "top left bottom right between bar"
+};
+const WORD_EIL = Object.fromEntries(Object.entries(WORD_TVARKA).map(([k, v]) => [k, Object.fromEntries(v.split(" ").flatMap((x, i) => x.split("/").map(y => [y, i])))]));
+const NSW14 = "http://schemas.microsoft.com/office/word/2010/wordml", NSREL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+/* dalys - { kelias: xml tekstas }; grąžina radinių sąrašą ir puslapių dydžius (twips) */
+function wordRadiniai(dalys){
+  const out = [], piesiniai = {}, psl = [];
+  const suMedia = Object.keys(dalys).some(k => /^word\/media\//.test(k));   // šablonų rinkinyje (sablonuFailai) paveikslų nėra - jų taikiniai netikrinami
+  for (const [n, s] of Object.entries(dalys)){
+    if (!/^word\/[^/]+\.xml$/.test(n)) continue;
+    const d = new W.DOMParser().parseFromString(s, "application/xml");
+    if (d.getElementsByTagName("parsererror").length){ out.push(n + ": XML klaida"); continue; }
+    const visi = Array.from(d.getElementsByTagName("*"));
+    const rels = dalys["word/_rels/" + n.slice(5) + ".rels"], ids = new Set();
+    if (rels) Array.from(new W.DOMParser().parseFromString(rels, "application/xml").getElementsByTagName("Relationship")).forEach(r => {
+      ids.add(r.getAttribute("Id"));
+      if (r.getAttribute("TargetMode") !== "External"){ const t = ("word/" + r.getAttribute("Target")).replace(/[^/]+\/\.\.\//g, ""); if (!(t in dalys) && (suMedia || !/^word\/media\//.test(t))) out.push(n + ": ryšio " + r.getAttribute("Id") + " taikinio nėra " + t); }
+    });
+    const tv = {}, pid = {}, zv = {}, zid = {};
+    visi.forEach(el => {
+      Array.from(el.attributes).forEach(a => { if (a.namespaceURI === NSREL && !ids.has(a.value)) tv[n + ": nuoroda į nesamą ryšį " + a.value] = 1; });
+      if (el.namespaceURI === NSW && WORD_EIL[el.localName]){
+        let pask = -1, paskV = "";
+        Array.from(el.children).filter(c => c.namespaceURI === NSW).forEach(c => {
+          const i = WORD_EIL[el.localName][c.localName];
+          if (i === undefined){ tv[n + ": nežinomas " + el.localName + "/" + c.localName] = (tv[n + ": nežinomas " + el.localName + "/" + c.localName] || 0) + 1; return; }
+          if (i < pask){ const k = n + ": " + el.localName + " tvarka " + c.localName + " po " + paskV; tv[k] = (tv[k] || 0) + 1; }
+          if (i >= pask){ pask = i; paskV = c.localName; }
+        });
+      }
+      const p = el.getAttributeNS(NSW14, "paraId"); if (p) pid[p] = (pid[p] || 0) + 1;
+      if (el.namespaceURI === NSW && el.localName === "bookmarkStart"){ const v = el.getAttributeNS(NSW, "name"), i = el.getAttributeNS(NSW, "id"); zv[v] = (zv[v] || 0) + 1; zid[i] = (zid[i] || 0) + 1; }
+      if (el.localName === "docPr" && el.getAttribute("id")) (piesiniai[el.getAttribute("id")] = piesiniai[el.getAttribute("id")] || []).push(n);
+      if (el.namespaceURI === NSW && el.localName === "pgSz") psl.push([+el.getAttributeNS(NSW, "w"), +el.getAttributeNS(NSW, "h")]);
+    });
+    Object.entries(tv).forEach(([k, c]) => out.push(k + " (" + c + ")"));
+    const dub = (o, ka) => { const d2 = Object.keys(o).filter(k => o[k] > 1 && k !== "_GoBack"); if (d2.length) out.push(n + ": pasikartojantys " + ka + " " + d2.length + " (pvz. " + d2[0] + ")"); };
+    dub(pid, "w14:paraId"); dub(zv, "žymių vardai"); dub(zid, "žymių id");
+  }
+  Object.entries(piesiniai).filter(([, l]) => l.length > 1).forEach(([id, l]) => out.push("piešinio id " + id + " pasikartoja: " + l.join(", ")));
+  return { radiniai: out, psl };
+}
+const a4 = ([w, h]) => [w, h].sort((x, y) => x - y).every((x, i) => Math.abs(x - [11906, 16838][i]) <= 10);
+async function blobDalys(blob){
+  const z = await W.JSZip.loadAsync(await blob.arrayBuffer()), dalys = {};
+  for (const n of Object.keys(z.files)) dalys[n] = /\.(xml|rels)$/.test(n) ? await z.file(n).async("string") : null;
+  return dalys;
+}
+
+async function testaiWord(){
+  dabartine = grupe("Word griežtumas (2026-10-23): elementų tvarka pagal ECMA-376, ryšiai, unikalūs paraId, žymės ir piešinių id, A4 - šablonuose ir sugeneruotuose paketuose");
+
+  await testas("Šablonai: elementų tvarka, ryšių taikiniai, unikalūs paraId, žymės ir piešinių id, visi puslapiai A4 (AI: AKV LT SPS 3.7 p. rPr tvarka, ND LT/EN BPS 11.13.1 eilutės žymė, deklaracijų „Letter“)", async () => {
+    const F = await sablonuFailai(), blogi = [], neA4 = [];
+    Object.entries(F).forEach(([v, dalys]) => {
+      const r = wordRadiniai(dalys);
+      r.radiniai.forEach(x => blogi.push(v + " " + x));
+      r.psl.filter(x => !a4(x)).forEach(x => neA4.push(v + " " + x.join("x")));
+    });
+    tiesa(Object.keys(F).length > 50, "šablonų: " + Object.keys(F).length);
+    lygu(blogi, [], "radiniai");
+    lygu(neA4, [], "ne A4");
+  });
+
+  await testas("Sugeneruoti paketai (AK LT su dalimis ir nacionaliniu saugumu, AKV, DPS konkretus LT su įterptu logotipu, ND LT/EN): Word radinių nėra, visi puslapiai A4; lentelių kopijos dalims - be pasikartojančių paraId", async () => {
+    const rinkiniai = [{ budas: "T-AK", tipas: "prekes", nacsaug: true, nsbvpz: "taip" }, { budas: "T-AK", centr: true, tipas: "prekes" },
+                       { budas: "DPS-K", tipas: "prekes", nacsaug: true, nsbvpz: "taip" }, { budas: "S-ND", kalba: "LT_EN", tipas: "paslaugos", pavEN: "Maintenance of autotransformers" }];
+    let dalimis = 0, logo = 0, refTekstu = 0;
+    for (const o of rinkiniai){
+      salinkSenusRemelius();
+      const docs = await generuokSu(o), blogi = [], neA4 = [];
+      for (const [k, x] of Object.entries(docs)){
+        if (x.statinis) continue;
+        const dalys = await blobDalys(x.r.blob), r = wordRadiniai(dalys);
+        r.radiniai.forEach(y => blogi.push(k + " " + y)); r.psl.filter(y => !a4(y)).forEach(y => neA4.push(k + " " + y.join("x")));
+        if (/\(II Pirkimo objekto dalis\)/.test(x.pars.join("\n"))) dalimis++;
+        const refNr = Object.entries(dalys).filter(([n, v]) => v && /^word\/[^/]+\.xml$/.test(n)).flatMap(([n, v]) => (v.match(/<w:instrText[^>]*>\s*REF [^<]*\\[rnw][^<]*</g) || []).map(t => k + " " + n + " " + t));
+        lygu(refNr, [], o.budas + ": likę REF numerio laukai");
+        if (/_BPS$/.test(k)) refTekstu += x.r.stats.nuorodosTekstu || 0;
+        if (/LITGRID logo/.test(dalys["word/document.xml"])) logo++;
+      }
+      lygu(blogi, [], o.budas + " radiniai");
+      lygu(neA4, [], o.budas + " ne A4");
+    }
+    tiesa(dalimis > 0, "nė viename pakete nėra lentelių kopijų dalims - testas jų netikrina");
+    tiesa(logo > 0, "nė viename pakete nėra modulio įterpto logotipo - testas jo netikrina");
+    tiesa(refTekstu >= 7, "BPS kryžminių nuorodų tekstu (AK LT 3, ND LT/EN 6): " + refTekstu);
+  });
+
+  await testas("GPDocx.nuorodosTekstu: REF laukas su \\r / \\n / \\w (punkto numeris) - jo rodomas tekstas (ir paprastas fldSimple), REF be numerio jungiklio, PAGEREF, HYPERLINK ir REF kito lauko kode - lieka laukai; pastraipos tekstas nepakinta", async () => {
+    const z = new W.JSZip(), r = t => '<w:r><w:t xml:space="preserve">' + t + '</w:t></w:r>';
+    const lauk = (instr, rez) => '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ' + instr + ' </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>' + r(rez) + '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    z.file("word/document.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="' + NSW + '"><w:body>'
+      + '<w:p>' + r("pagal BPS ") + lauk("REF _Ref487464639 \\r \\h  \\* MERGEFORMAT", "9.3") + r(" papunktį ir ") + lauk("REF _Ref1 \\w \\h", "11.13.1") + r(" punktą") + '</w:p>'
+      + '<w:p>' + r("žr. ") + lauk("REF _Ref2 \\h", "pavadinimą") + r(", psl. ") + lauk("PAGEREF _Toc1 \\h", "7") + '</w:p>'
+      + '<w:p><w:fldSimple w:instr=" REF _Ref3 \\n "><w:r><w:t>4.2</w:t></w:r></w:fldSimple><w:fldSimple w:instr=" HYPERLINK \\l _Ref4 "><w:r><w:t>čia</w:t></w:r></w:fldSimple></w:p>'
+      // įdėtinis REF kito lauko kode (IF) - nekeičiamas: pašalinus pasikeistų išorinio lauko kodas
+      + '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> IF </w:instrText></w:r>' + lauk("REF _Ref5 \\r", "1")
+      + '<w:r><w:instrText xml:space="preserve"> = "1" "taip" "ne" </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>' + r("taip") + '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+      + '</w:body></w:document>');
+    const GD = W.eval("GPDocx"), doc = await GD.open(await z.generateAsync({ type: "arraybuffer" }));
+    const d = doc.parts["word/document.xml"], tx = () => wel(d, "p").map(p => wel(p, "t").map(t => t.textContent).join(""));
+    const pries = tx();
+    lygu(GD.nuorodosTekstu(doc), 3, "paversta");
+    lygu(tx(), pries, "tekstas nepakito");
+    const instr = wel(d, "instrText").map(t => t.textContent.trim()), fs = wel(d, "fldSimple").map(f => f.getAttributeNS(NSW, "instr").trim());
+    lygu(instr, ["REF _Ref2 \\h", "PAGEREF _Toc1 \\h", "IF", "REF _Ref5 \\r", '= "1" "taip" "ne"'], "likę laukai");
+    lygu(fs, ["HYPERLINK \\l _Ref4"], "likę fldSimple");
+    lygu(wel(d, "fldChar").length, 12, "lauko ženklai (4 laukai po 3)");
+    tiesa(!wel(d, "r").some(x => !Array.from(x.childNodes).some(c => c.nodeType === 1 && c.localName !== "rPr")), "liko tuščių runų");
+    lygu(GD.nuorodosTekstu(doc), 0, "pakartotinai");
+  });
+
+  await testas("GPDocx.unikalusId (įrašant): pasikartojantis paraId pašalinamas su textId, pasikartojančio vardo žymė - su savo pabaiga, pasikartojantis žymės id - kitu numeriu (su pabaiga), piešinio id - kitu laisvu (ir pagal neįkeltą antraštę); pirmi egzemplioriai ir tekstas nekeičiami", async () => {
+    const z = new W.JSZip();
+    const ns = 'xmlns:w="' + NSW + '" xmlns:w14="' + NSW14 + '" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
+    const p = (id, t, pr = "") => '<w:p w14:paraId="' + id + '" w14:textId="77777777">' + pr + '<w:r><w:t>' + t + '</w:t></w:r></w:p>';
+    const dp = id => '<w:p><w:r><w:drawing><wp:inline><wp:docPr id="' + id + '" name="x"/></wp:inline></w:drawing></w:r></w:p>';
+    z.file("word/document.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ' + ns + '><w:body>'
+      + p("0000000A", "pirma") + p("0000000A", "kopija") + p("0000000B", "kita")
+      + '<w:bookmarkStart w:id="5" w:name="_Hlk1"/>' + p("0000000C", "žyma") + '<w:bookmarkEnd w:id="5"/>'
+      + '<w:bookmarkStart w:id="5" w:name="_Hlk1"/>' + p("0000000C", "žymos kopija") + '<w:bookmarkEnd w:id="5"/>'
+      + '<w:bookmarkStart w:id="7" w:name="A"/><w:bookmarkEnd w:id="7"/><w:bookmarkStart w:id="7" w:name="B"/>' + p("0000000D", "kitas vardas") + '<w:bookmarkEnd w:id="7"/>'
+      + dp(1) + dp(3) + dp(3) + '</w:body></w:document>');
+    z.file("word/header1.xml", '<?xml version="1.0" encoding="UTF-8"?><w:hdr ' + ns + '>' + dp(1) + p("0000000E", "antraštė") + '</w:hdr>');
+    const GD = W.eval("GPDocx"), doc = await GD.open(await z.generateAsync({ type: "arraybuffer" }));
+    const blob = await GD.save(doc, "blob"), dalys = await blobDalys(blob);
+    lygu(wordRadiniai(dalys).radiniai, [], "po įrašymo radiniai");
+    const d = new W.DOMParser().parseFromString(dalys["word/document.xml"], "application/xml"), P = wel(d, "p");
+    const tekst = P.map(x => wel(x, "t").map(t => t.textContent).join("")).filter(Boolean);
+    lygu(tekst, ["pirma", "kopija", "kita", "žyma", "žymos kopija", "kitas vardas"], "tekstas");
+    lygu(P.slice(0, 3).map(x => [x.getAttributeNS(NSW14, "paraId"), x.getAttributeNS(NSW14, "textId")]), [["0000000A", "77777777"], [null, null], ["0000000B", "77777777"]], "paraId");
+    const z1 = wel(d, "bookmarkStart").map(x => wattr(x, "name") + ":" + wattr(x, "id")), z2 = wel(d, "bookmarkEnd").map(x => wattr(x, "id"));
+    lygu(z1, ["_Hlk1:5", "A:7", "B:8"], "žymių pradžios");
+    lygu(z2, ["5", "7", "8"], "žymių pabaigos");
+    lygu(Array.from(d.getElementsByTagName("*")).filter(x => x.localName === "docPr").map(x => x.getAttribute("id")), ["2", "3", "4"], "piešinių id (1 - antraštėje)");
+    tiesa(dalys["word/header1.xml"].includes('id="1"') && dalys["word/header1.xml"].includes("0000000E"), "neįkelta antraštė pakeista");
+    tiesa(doc.log.some(x => /unikalūs identifikatoriai: paraId 2, žymės 2, piešiniai 2/.test(x)), "žurnalas: " + doc.log.join(" | "));
+  });
+}
+
 async function testaiTestuotojas5(){
   dabartine = grupe("Penktoji naujo darbuotojo patikra (2026-10-23): DPS pašalinimo pagrindų priedas, sutarties projekto eilutė, derybų forma EN, ištraukos, DPS pavadinimai, nepridedamas priedas, juodraščio raktai");
   const tx = id => ((D.getElementById(id) || {}).textContent || "").replace(/\s+/g, " ");
@@ -14954,83 +15106,23 @@ async function testaiEtapas1(){
   const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0 || k.indexOf("gprocure.salygos") === 0);
   try {
     await modulis();
-    await testaiLogika();
-    await testaiParaiska();
-    await testaiKlausimai();
-    await testaiEiga();
-    await testaiBusenos();
-    await testaiBendras();
-    await testaiKortele();
-    await testaiVeiksmai();
-    await testaiGeneravimas();
-    await testaiNaujiSablonai();
-    await testaiSablonuTaisymai();
-    await testaiNumeracija();
-    await testaiForma();
-    await testaiKriterijus();
-    await testaiLenteles();
-    await testaiTeise();
-    await testaiTikrinimas();
-    await testaiSutartys();
-    await testaiRangosSablonai();
-    await testaiProjektavimoSablonai();
-    await testaiDarbuSablonai();
-    await testaiStatybosRangosSablonai();
-    await testaiEksploatavimoSablonai();
-    await testaiParinkimas();
-    await testaiSutartiesBlokas();
-    await testaiSutarciuGeneravimas();
-    await testaiSutartiesForma();
-    await testaiSutartisSPS();
-    await testaiSutarciuTikrinimas();
-    await testaiRangosGeneravimas();
-    await testaiRangosPages();
-    await testaiStatybosRangosGeneravimas();
-    await testaiProjektavimoGeneravimas();
-    await testaiDarbuGeneravimas();
-    await testaiEksploatavimoGeneravimas();
-    await testaiVidausRiba();
-    await testaiSutartysPages();
-    await testaiSutarciuNuorodos();
-    await testaiPataisos();
-    await testaiPrieduSarasas();
-    await testaiEtapuLentele();
-    await testaiKvalLentele();
-    await testaiKvalDps();
-    await testaiDokumentai();
-    await testaiJuodrastis();
-    await testaiPastabos1016();
-    await testaiSutartiesDI();
-    await testaiPaketoPatikra();
-    await testaiPriedoNuorodos();
-    await testaiEtapas0();
-    await testaiEtapas1();
-    await testaiDalys();
-    await testaiU4();
-    await testai1021();
-    await testaiD6();
-    await testaiD3();
-    await testaiD4b();
-    await testaiD5();
-    await testaiU8();
-    await testaiD4c();
-    await testaiTestuotojas();
-    await testaiSprendimai1020();
-    await testaiTestuotojas2();
-    await testaiNacsaugBvpz();
-    await testaiTestuotojas3();
-    await testai1021b();
-    await testai1021c();
-    await testai1022a();
-    await testai1022b();
-    await testai1022c();
-    await testai1022d();
-    await testai1022e();
-    await testai1022f();
-    await testai1023();
-    await testaiD2();
-    await testaiPrivalomos();
-    await testaiTestuotojas5();
+    // Grupės dalimis (2026-10-23, shared/testu-dalys.js): paleidiklis kiekvieną dalį atveria atskira naršykle (?dalis=k/n),
+    // be parametro - visos iš eilės. Nauja grupė - į paskutinę dalį (arba trumpiausią); dalių skaičius - ir <meta name="gp-testu-dalys">
+    const GRUPES = GP_TESTU_DALYS.grupes([
+      [testaiLogika, testaiParaiska, testaiKlausimai, testaiEiga, testaiBusenos, testaiBendras, testaiKortele, testaiVeiksmai, testaiGeneravimas,
+       testaiNaujiSablonai, testaiSablonuTaisymai, testaiNumeracija, testaiForma, testaiKriterijus, testaiLenteles, testaiTeise, testaiTikrinimas,
+       testaiSutartys, testaiRangosSablonai, testaiProjektavimoSablonai, testaiDarbuSablonai, testaiStatybosRangosSablonai,
+       testaiEksploatavimoSablonai, testaiParinkimas, testaiSutartiesBlokas, testaiSutarciuGeneravimas, testaiSutartiesForma, testaiSutartisSPS,
+       testaiWord],
+      [testaiSutarciuTikrinimas, testaiRangosGeneravimas, testaiRangosPages, testaiStatybosRangosGeneravimas, testaiProjektavimoGeneravimas,
+       testaiDarbuGeneravimas, testaiEksploatavimoGeneravimas, testaiVidausRiba, testaiSutartysPages, testaiSutarciuNuorodos, testaiPataisos,
+       testaiPrieduSarasas, testaiEtapuLentele, testaiKvalLentele, testaiKvalDps, testaiDokumentai, testaiJuodrastis, testaiPastabos1016,
+       testaiSutartiesDI, testaiPaketoPatikra, testaiPriedoNuorodos, testaiEtapas0, testaiEtapas1, testaiDalys, testaiU4, testai1021, testaiD6,
+       testaiD3, testaiD4b, testaiD5, testaiU8, testaiD4c],
+      [testaiTestuotojas, testaiSprendimai1020, testaiTestuotojas2, testaiNacsaugBvpz, testaiTestuotojas3, testai1021b, testai1021c, testai1022a,
+       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiPrivalomos, testaiTestuotojas5]
+    ]);
+    for (const g of GRUPES) await g();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

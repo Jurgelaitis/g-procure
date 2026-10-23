@@ -315,7 +315,7 @@ const GPDocx = (() => {
 
   function logoParaXml(rId, cx, cy){
     return `<w:p xmlns:w="${NS_W}" xmlns:wp="${NS_WP}" xmlns:a="${NS_A}" xmlns:pic="${NS_PIC}" xmlns:r="${NS_R}">`
-      + `<w:pPr><w:jc w:val="center"/><w:spacing w:after="120"/></w:pPr>`
+      + `<w:pPr><w:spacing w:after="120"/><w:jc w:val="center"/></w:pPr>`   // ECMA-376 tvarka: spacing prieš jc (Word griežtas)
       + `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">`
       + `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>`
       + `<wp:docPr id="1" name="LITGRID logo"/>`
@@ -966,7 +966,108 @@ const GPDocx = (() => {
     return ps.length;
   }
 
+  /* ---------- KRYŽMINĖS NUORODOS Į PUNKTUS - TEKSTU (2026-10-23, Word patikra) ----------
+     BPS nuorodos į punktus - Word laukai „REF _Ref... \r“ (punkto numeris). Sugeneruotame dokumente numeriai įrašyti tekstu (GPNum),
+     o atveriant Word paprašoma atnaujinti laukus (setUpdateFields - turiniui): atnaujintas laukas numerį skaičiuotų iš žymės pastraipos
+     Word numeracijos, kurios nebėra, o LITGRID šablone dalis žymių ne tose eilutėse (ND LT/EN BPS: „11.13.1“ žymė - 11.10.4 eilutėje,
+     „9.7.1“ žymės nėra - Word rodytų „11.10.4“ ir „Klaida! Nuorodos šaltinis nerastas“). Todėl REF laukas su \r, \n ar \w (numeris)
+     paverčiamas jo rodomu tekstu - tuo pačiu, kurį rodo Pages ir rodė šablonas (patikrinta: visur sutampa su tikslinio punkto numeriu).
+     Kiti laukai (TOC, PAGEREF, HYPERLINK) nekeičiami. Grąžina paverstų laukų skaičių. */
+  const REF_NR = /^\s*REF\s+\S+[\s\S]*\\[rnw](?![A-Za-z])/i;
+  function nuorodosTekstu(doc){
+    let n = 0;
+    for (const [kelias, d] of Object.entries(doc.parts)){
+      if (!/^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(kelias)) continue;
+      for (const fs of els(d, 'fldSimple').filter(f => REF_NR.test(f.getAttributeNS(NS_W, 'instr') || ''))){
+        while (fs.firstChild) fs.parentNode.insertBefore(fs.firstChild, fs);
+        fs.parentNode.removeChild(fs); n++;
+      }
+      for (const p of els(d, 'p')){
+        const stekas = [], salinti = [];
+        for (const r of els(p, 'r')) for (const c of Array.from(r.childNodes)){
+          if (c.localName === 'fldChar'){
+            const t = c.getAttributeNS(NS_W, 'fldCharType');
+            if (t === 'begin') stekas.push({ instr: '', kodai: [c], sep: null });
+            else if (t === 'separate' && stekas.length) stekas[stekas.length - 1].sep = c;
+            else if (t === 'end' && stekas.length){
+              const f = stekas.pop();
+              if (!stekas.length && f.sep && REF_NR.test(f.instr)){ salinti.push(...f.kodai, f.sep, c); n++; }
+            }
+          } else if (c.localName === 'instrText' && stekas.length && !stekas[stekas.length - 1].sep){
+            stekas[stekas.length - 1].instr += c.textContent; stekas[stekas.length - 1].kodai.push(c);
+          }
+        }
+        salinti.forEach(c => {
+          const r = c.parentNode; r.removeChild(c);
+          if (!Array.from(r.childNodes).some(x => x.nodeType === 1 && x.localName !== 'rPr')) r.parentNode.removeChild(r);
+        });
+      }
+    }
+    if (n) note(doc, `kryžminės nuorodos į punktus - tekstu: ${n}`);
+    return n;
+  }
+
+  /* ---------- UNIKALŪS IDENTIFIKATORIAI (2026-10-23, Word patikra be Word: elementų tvarka, ryšiai, identifikatoriai) ----------
+     Klonuojant lenteles ir eilutes (lentelės kiekvienai pirkimo objekto daliai, perkelti reikalavimai) nukopijuojami ir w14:paraId,
+     žymės ir piešinių wp:docPr id. MS-DOCX reikalauja unikalių paraId, o Word pasikartojančias žymes ir piešinių id gali laikyti
+     sugadinimu (išmatuota: SPS su lentelėmis dalims - iki 57 pasikartojančių paraId). Įrašant: pasikartojantis paraId pašalinamas
+     kartu su textId (Word priskiria naują), pasikartojančio vardo žymė pašalinama su savo pabaiga, pasikartojantis žymės id ar
+     piešinio id - kitu laisvu numeriu. Pirmas egzempliorius nekeičiamas, tekstas nekeičiamas. Neįkeltos antraštės ir poraštės
+     įkeliamos tik tada, kai jose yra pasikartojančių paraId. Grąžina pakeitimų skaičių (ir doc.log). */
+  const NS_W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+  async function unikalusId(doc){
+    const dalys = Object.keys(doc.zip.files).filter(n => /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(n));
+    for (const n of dalys){
+      if (doc.parts[n]) continue;
+      const s = await doc.zip.file(n).async('string'), ids = s.match(/w14:paraId="[^"]*"/g) || [];
+      if (new Set(ids).size < ids.length) await part(doc, n);
+    }
+    const isvisu = (d) => Array.from(d.getElementsByTagName('*'));
+    const p = { paraId: 0, zymes: 0, piesiniai: 0 }, matyti = new Set(), piesiniai = new Set();
+    for (const n of dalys.filter(n => !doc.parts[n]))   // neįkeltų dalių piešinių id - užimti (jos nekeičiamos)
+      ((await doc.zip.file(n).async('string')).match(/<wp:docPr [^>]*\bid="(\d+)"/g) || []).forEach(x => piesiniai.add(x.match(/id="(\d+)"/)[1]));
+    for (const n of dalys.filter(n => doc.parts[n])){
+      const d = doc.parts[n], visi = isvisu(d);
+      visi.forEach(el => {
+        const v = el.getAttributeNS && el.getAttributeNS(NS_W14, 'paraId');
+        if (!v) return;
+        if (matyti.has(v)){ el.removeAttributeNS(NS_W14, 'paraId'); el.removeAttributeNS(NS_W14, 'textId'); p.paraId++; }
+        else matyti.add(v);
+      });
+      // žymės: dokumento tvarka; pabaiga - pirma tos pačios id pabaiga po pradžios
+      const zymes = visi.filter(el => el.namespaceURI === NS_W && (el.localName === 'bookmarkStart' || el.localName === 'bookmarkEnd'));
+      const vardai = new Set(), zid = new Set(zymes.map(el => el.getAttributeNS(NS_W, 'id')));
+      let kitasId = Math.max(0, ...Array.from(zid).map(Number).filter(Number.isFinite)) + 1;
+      const laukia = new Map();   // senas id -> { salinti } arba { naujas }
+      zymes.forEach(el => {
+        const id = el.getAttributeNS(NS_W, 'id');
+        if (el.localName === 'bookmarkStart'){
+          const vardas = el.getAttributeNS(NS_W, 'name');
+          if (vardas && vardai.has(vardas)){ el.parentNode.removeChild(el); laukia.set(id, { salinti: true }); p.zymes++; return; }
+          vardai.add(vardas);
+          if (laukia.has('#' + id)){ const naujas = String(kitasId++); el.setAttributeNS(NS_W, 'w:id', naujas); laukia.set(id, { naujas }); p.zymes++; }
+          else laukia.set('#' + id, true);
+        } else {
+          const l = laukia.get(id);
+          if (!l || l === true) return;
+          if (l.salinti) el.parentNode.removeChild(el); else el.setAttributeNS(NS_W, 'w:id', l.naujas);
+          laukia.delete(id);
+        }
+      });
+      visi.filter(el => el.localName === 'docPr' && el.getAttribute('id')).forEach(el => {
+        const id = el.getAttribute('id');
+        if (!piesiniai.has(id)){ piesiniai.add(id); return; }
+        let k = 1; while (piesiniai.has(String(k))) k++;
+        el.setAttribute('id', String(k)); piesiniai.add(String(k)); p.piesiniai++;
+      });
+    }
+    const viso = p.paraId + p.zymes + p.piesiniai;
+    if (viso) note(doc, `unikalūs identifikatoriai: paraId ${p.paraId}, žymės ${p.zymes}, piešiniai ${p.piesiniai}`);
+    return viso;
+  }
+
   async function save(doc, type='blob'){
+    await unikalusId(doc);
     for (const [path, xml] of Object.entries(doc.parts)){
       // createFolders:false - kitaip JSZip prideda kataloginius irasus ("word/"),
       // kuriu Word'o pakuoteje nera ir kuriems nera Content_Types irašo.
@@ -976,7 +1077,7 @@ const GPDocx = (() => {
   }
 
   return { open, part, save, stripComments, fillTags, deleteParagraphs, replaceText, deleteNumberedTable, deleteTableByCaption,
-           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai, diPozymiai, pasas,
+           setUpdateFields, deleteTableAfter, tables, cleanOrphanBookmarks, replaceRegex, insertLogo, antrastejePaveikslas, antrastesLogotipas, pirmoPuslapioAntraste, atskirkGulsciusPriedus, pertekliniaiLuziai, turinioSpragos, sulietiPunktai, dvigubiTarpai, diPozymiai, pasas, unikalusId, nuorodosTekstu,
            NUSTATYMAI, paraText, els, NS_W };
 })();
 
