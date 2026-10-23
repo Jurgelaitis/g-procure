@@ -418,6 +418,7 @@ def taisymas_tekstas(taisyk):
     viso += _nuorodos_37(taisyk)
     viso += _akv_37(taisyk)
     viso += _word_tvarka(taisyk)
+    viso += _formu_numeriai(taisyk)
     return viso
 
 
@@ -1306,6 +1307,30 @@ def _akv_37(taisyk):
     zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
     print(f"      {zf.name}: pastraipa {k} - pildomų vietų (intarpai), ne nurodymas")
     return 1
+
+
+# AJ. Pasiūlymo ir paraiškos formų numeracija (2026-10-23, naudotojo užduotis „automatizuokite formų taisykles visoms formoms“ - formų punktai
+#    pernumeruojami generuojant, todėl šablono numeriai ir nuorodos turi būti teisingi; redakcinės korekcijos - naudotojo leidimas 2026-10-05):
+#    AK, MVP, ND, TSD LT/EN pasiūlymo formų lentelės antraštė „1.4.1. lentelė / Table 1.4.1.“ - po 1.5.1 punkto „Detali informacija pateikiama
+#    lentelėje“ (pasiūlymo formoje nesaugių elektrinių punktas - 1.5; paraiškos formoje - 1.4, ten antraštė teisinga); TSD LT paraiškos (b)
+#    papunktyje „Paraoškos 1.8 punkto“ - rašybos klaida; DPSP LT pasiūlymo formos „b) mano atstovaujamas ...“ - be skliausto (kiti papunkčiai
+#    „(a)“, „(c)“, „(d)“); MVP LT/EN numerio langelyje „1.10“ - be taško (kiti „1.9.“, „1.11.“); AKV LT pasiūlymo formos (b) papunktis
+#    „Pasiūlymo 1.8 punkto a) papunktyje“ - Rusijos dalyvavimo punktas yra 1.9 (to paties šablono (c), (d) ir AK forma - „1.9“). Pakartotinai - 0.
+_FORMU_NUMERIAI = {
+    'AK_LTEN_PASIULYMAS': [(_re.compile(r'^(1\.4\.1)\. lentelė / Table (?:1\.4\.1)\.$'), '1.5.1', 1), (_re.compile(r'^1\.[45]\.1\. lentelė / Table (1\.4\.1)\.$'), '1.5.1', 1)],
+    'MVP_LTEN_PASIULYMAS': [(_re.compile(r'^(1\.4\.1)\. lentelė / Table (?:1\.4\.1)\.$'), '1.5.1', 1), (_re.compile(r'^1\.[45]\.1\. lentelė / Table (1\.4\.1)\.$'), '1.5.1', 1),
+                            (_re.compile(r'^1\.10()$'), '.', 1)],
+    'ND_LTEN_PASIULYMAS': [(_re.compile(r'^(1\.4\.1)\. lentelė / Table (?:1\.4\.1)\.$'), '1.5.1', 1), (_re.compile(r'^1\.[45]\.1\. lentelė / Table (1\.4\.1)\.$'), '1.5.1', 1)],
+    'TSD_LTEN_PASIULYMAS': [(_re.compile(r'^(1\.4\.1)\. lentelė / Table (?:1\.4\.1)\.$'), '1.5.1', 1), (_re.compile(r'^1\.[45]\.1\. lentelė / Table (1\.4\.1)\.$'), '1.5.1', 1)],
+    'TSD_LT_PARAISKA': [(_re.compile(r'Para(o)škos 1\.\d punkto'), 'i', 1)],
+    'DPSP_LT_PASIULYMAS': [(_re.compile(r'^\t*()b\) mano atstovaujamas Tiekėjas'), '(', 1)],
+    'AKV_LT_PASIULYMAS': [(_re.compile(r'priklauso Pasiūlymo 1\.(8) punkto a\) papunktyje'), '9', 1)],
+}
+
+
+def _formu_numeriai(taisyk):
+    print("\nFORMŲ NUMERACIJA (AJ, 2026-10-23):")
+    return sum(_su_zemelapiais(_regex_pakeitimai(*poros), [f], 'formos numeris', taisyk) for f, poros in _FORMU_NUMERIAI.items())
 
 
 # AI. Word griežtumas (2026-10-23, naudotojo užduotis - sugeneruotų dokumentų patikra Pages ir Word programose po pernumeravimo; Word
