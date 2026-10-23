@@ -417,6 +417,7 @@ def taisymas_tekstas(taisyk):
     viso += _priedeli(taisyk)
     viso += _nuorodos_37(taisyk)
     viso += _akv_37(taisyk)
+    viso += _word_tvarka(taisyk)
     return viso
 
 
@@ -1060,6 +1061,7 @@ def _nd_lten_11131(taisyk):
         print("  ND_LTEN_BPS.docx: eilučių nerasta - nekeičiama")
         return 0
     seg = _re.sub(rb'\sw14:(?:paraId|textId)="[^"]*"', b'', rows[k97].group(0))
+    seg = _re.sub(rb'<w:bookmark(?:Start|End) [^>]*/>', b'', seg)   # žymės - originalo (kopijoje pasikartotų; AI)
     p0 = _P_RE.search(seg)
     t0 = _pastraipos_tekstas(p0.group(0)); s0 = t0.index('9.7.1')
     nauja = seg[:p0.start()] + _keisk_pastraipa(p0.group(0), [(s0, s0 + len('9.7.1'), '11.13.1')]) + seg[p0.end():]
@@ -1275,7 +1277,7 @@ def _akv_37(taisyk):
     pp = _re.search(rb'<w:pPr>.*?</w:pPr>', seg, _re.S).group(0)
     rpr = _re.search(rb'<w:r(?:\s[^>]*)?>\s*(<w:rPr>.*?</w:rPr>)', seg[len(pp):], _re.S).group(1)
     juod = _re.sub(rb'<w:color [^>]*/>|<w:highlight [^>]*/>', b'', rpr)
-    raud = juod.replace(b'</w:rPr>', b'<w:color w:val="FF0000"/></w:rPr>')
+    raud = _rpr_tvarka(juod.replace(b'</w:rPr>', b'<w:color w:val="FF0000"/></w:rPr>'))   # ECMA-376 tvarka (AI)
     ra = lambda t, r: b'<w:r>' + r + b'<w:t xml:space="preserve">' + _esc(t).encode('utf-8') + b'</w:t></w:r>'
     cs = _re.search(rb'<w:commentRangeStart [^>]*/>', seg).group(0); ce = _re.search(rb'<w:commentRangeEnd [^>]*/>', seg).group(0)
     cr = _re.search(rb'<w:r(?:\s[^>]*)?>(?:(?!</w:r>).)*<w:commentReference [^>]*/>\s*</w:r>', seg, _re.S).group(0)
@@ -1304,6 +1306,84 @@ def _akv_37(taisyk):
     zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
     print(f"      {zf.name}: pastraipa {k} - pildomų vietų (intarpai), ne nurodymas")
     return 1
+
+
+# AI. Word griežtumas (2026-10-23, naudotojo užduotis - sugeneruotų dokumentų patikra Pages ir Word programose po pernumeravimo; Word
+#    kompiuteryje nėra, todėl tikrinta struktūra pagal ECMA-376): (1) runo savybių (w:rPr) elementų tvarka - AKV LT SPS 3.7 p. (AH) spalva
+#    buvo įrašyta po šrifto dydžio (6 runai), o Word schemos sekos nesilaikantį XML gali laikyti sugadintu; (2) pasikartojančio vardo žymė -
+#    ND LT/EN BPS 11.13.1 eilutė (AE) nukopijuota su 9.7.1 eilutės žyme „_Hlk...“ (tas pats vardas ir id) - kopijos žymė pašalinama;
+#    (3) nacionalinio saugumo reikalavimų atitikties deklaracijos (PRIEDAI_LT / LTEN_NACSAUGUMAS, VPĮ - PRIEDAI_LT_NACSAUGUMASVPI) - LITGRID
+#    šablonuose JAV „Letter“ puslapis (12240 x 15840), visi kiti pirkimo dokumentai - A4 (Pages PDF - 612 x 792 taškų); puslapis -> A4 ta pačia orientacija,
+#    paraštės ir tekstas tie patys (per plati lentelė generuojant siaurinama iki teksto pločio - GPLent). Tekstas nekeičiamas, žemėlapių
+#    ir formų rodyklės derinti nereikia; pakartotinai - 0.
+_RPR_TVARKA = ('ins del moveFrom moveTo rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof '
+               'snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang '
+               'eastAsianLayout specVanish oMath').split()
+_RPR_RE = _re.compile(rb'<w:rPr>((?:(?!</?w:rPr).)*)</w:rPr>', _re.S)
+_RPR_VAIKAS_RE = _re.compile(rb'<w:([A-Za-z]+)(?:\s[^>]*)?/>')
+_LETTER = {b'<w:pgSz w:w="12240" w:h="15840"/>': b'<w:pgSz w:w="11906" w:h="16838" w:code="9"/>',
+           b'<w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>': b'<w:pgSz w:w="16838" w:h="11906" w:orient="landscape" w:code="9"/>'}
+
+
+def _rpr_tvarka(seg):
+    """Vieno ar kelių <w:rPr> elementų vaikai - ECMA-376 tvarka; tik kai visi vaikai - paprasti žinomi w: elementai (kitaip nekeičiama)."""
+    def tvarkyk(m):
+        kunas = m.group(1)
+        vaikai = list(_RPR_VAIKAS_RE.finditer(kunas))
+        if b''.join(v.group(0) for v in vaikai) != kunas or not all(v.group(1).decode() in _RPR_TVARKA for v in vaikai):
+            return m.group(0)
+        eile = sorted(vaikai, key=lambda v: _RPR_TVARKA.index(v.group(1).decode()))
+        return b'<w:rPr>' + b''.join(v.group(0) for v in eile) + b'</w:rPr>'
+    return _RPR_RE.sub(tvarkyk, seg)
+
+
+def _zymiu_dublikatai(xml):
+    """Pasikartojančio vardo žymės pradžia ir jos pabaiga (pirma to paties id po jos) - pašalinamos; grąžina (xml, kiek)."""
+    vardai, salinti, n = set(), [], 0
+    for m in _re.finditer(rb'<w:bookmarkStart [^>]*/>', xml):
+        vardas = _re.search(rb'w:name="([^"]*)"', m.group(0)); zid = _re.search(rb'w:id="([^"]*)"', m.group(0))
+        if not vardas or not zid:
+            continue
+        if vardas.group(1) not in vardai:
+            vardai.add(vardas.group(1)); continue
+        pab = _re.compile(rb'<w:bookmarkEnd w:id="' + _re.escape(zid.group(1)) + rb'"/>').search(xml, m.end())
+        salinti.append((m.start(), m.end())); n += 1
+        if pab:
+            salinti.append((pab.start(), pab.end()))
+    for a, b in sorted(salinti, reverse=True):
+        xml = xml[:a] + xml[b:]
+    return xml, n
+
+
+def _word_tvarka(taisyk):
+    print("\nWORD GRIEŽTUMAS: rPr TVARKA, ŽYMĖS, A4 (AI, 2026-10-23):")
+    viso = 0
+    for path in sorted(TPL.glob('*.docx')):
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}; dalys = _dokumento_dalys(zin)
+        pak = []
+        for d in dalys:
+            x0 = items[d]
+            x = _rpr_tvarka(x0)
+            if x != x0:
+                pak.append(f"{d}: rPr tvarka {sum(1 for a, b in zip(_RPR_RE.findall(x0), _RPR_RE.findall(x)) if a != b)}")
+            x, nz = _zymiu_dublikatai(x)
+            if nz:
+                pak.append(f"{d}: pasikartojančių žymių pašalinta {nz}")
+            if d == 'word/document.xml':
+                for sen, nauj in _LETTER.items():
+                    if sen in x:
+                        x = x.replace(sen, nauj); pak.append(f"{d}: Letter -> A4 ({'gulsčias' if b'landscape' in sen else 'stačias'})")
+            items[d] = x
+        if not pak:
+            continue
+        print(f"  {path.name}: " + "; ".join(pak))
+        viso += len(pak)
+        if taisyk:
+            with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                for info in infos:
+                    zout.writestr(info, items[info.filename])
+    return viso
 
 
 # X. Nuorodos į SPS priedus (2026-10-19, naudotojo „Taip, ištaisykite šablonų nuorodas“; rado sugeneruoto paketo patikra): tekstas nurodo ne
