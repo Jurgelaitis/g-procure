@@ -14,8 +14,9 @@ document.title („OK ...“ / „KRITO ...“) su #santrauka (PP-market-KPI, PP
 Išėjimo kodas 1, jei bent vienas testas krito ar rinkinys nepasibaigė.
 Rinkinio dalys (2026-10-23): testai.html su <meta name="gp-testu-dalys" content="n"> (PP-salygos, shared) paleidžiamas n kartų
 su ?dalis=k/n - kiekviena dalis atskira švaria naršykle (shared/testu-dalys.js parenka jos grupes), rezultatas - eilutė dalies.
-GP_TESTU_LYGIAGRECIAI=<n> - vienu metu iki n dalių ar rinkinių (numatyta 1; sunkūs rinkiniai kartu su kitais gali sulėtėti ar
-užstrigti - PP-tiekejams, todėl numatyta eilė nekeičiama).
+GP_TESTU_LYGIAGRECIAI=<n> - vienu metu iki n dalių ar rinkinių (vietoje numatyta 1). GitHub Actions - 2 (2026-10-24: eilė priartėjo
+prie bendros 2400 s ribos ir 4cc3e44 paleidimas ją viršijo; vykdyklėje 4 branduoliai). Rinkiniai iš VIENI kartu su kitais sulėtėja ar
+užstringa (PP-tiekejams) - jie paleidžiami po kitų, po vieną.
 """
 import base64, concurrent.futures, http.server, json, os, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request
 
@@ -31,7 +32,8 @@ RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
 # 1300 s (2026-10-20): PP-salygos (458 testai, vietoje ~380 s) GitHub Actions viršijo 900 s; visas darbas buvo ~1500 s iš 2400
 LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "1300"))
 VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2400"))
-LYGIAGRECIAI = max(1, int(os.environ.get("GP_TESTU_LYGIAGRECIAI", "1")))
+LYGIAGRECIAI = max(1, int(os.environ.get("GP_TESTU_LYGIAGRECIAI", "2" if os.environ.get("GITHUB_ACTIONS") == "true" else "1")))
+VIENI = {"PP-tiekejams/testai.html"}
 
 
 def dalys(rinkinys):
@@ -248,7 +250,9 @@ def main():
         for v in vienetai: paleisk(v)
     else:
         with concurrent.futures.ThreadPoolExecutor(LYGIAGRECIAI) as ex:
-            list(ex.map(paleisk, vienetai))
+            list(ex.map(paleisk, [v for v in vienetai if v[0] not in VIENI]))
+        for v in vienetai:
+            if v[0] in VIENI: paleisk(v)
     srv.shutdown()
     # Saugumo patikra (2026-10-06): bibliotekų spragos (OSV), paslaptys saugykloje, security.txt galiojimas - be naršyklės.
     # Workflow failo keisti nereikia: paleidžiama kartu su testais (be filtrų arba su žodžiu „saugumas“)
