@@ -1391,8 +1391,9 @@ const SEIMOS = {
   // Supaprastintos SD - "be paraisku"; priedai imami is skelbiamu derybu (TSD) rinkinio.
   SSD: { LT:    ['SSD_LT_BPS','SSD_LT_SPS','TSD_LT_PASIULYMAS'],
          LT_EN: ['SSD_LTEN_BPS','SSD_LTEN_SPS','TSD_LTEN_PASIULYMAS'] },
-  ND:  { LT:    ['ND_LT_BPS','ND_LT_SPS'],
-         LT_EN: ['ND_LTEN_BPS','ND_LTEN_SPS'] },
+  // ND pasiūlymo formos (2026-10-23, naudotojo užduotis) - iš LITGRID TSD formų be socialinių reikalavimų skyriaus (nd-formos.py)
+  ND:  { LT:    ['ND_LT_BPS','ND_LT_SPS','ND_LT_PASIULYMAS'],
+         LT_EN: ['ND_LTEN_BPS','ND_LTEN_SPS','ND_LTEN_PASIULYMAS'] },
   MVP: { LT:    ['MVP_LT_BPS','MVP_LT_SPS','MVP_LT_PASIULYMAS'],
          LT_EN: ['MVP_LTEN_BPS','MVP_LTEN_SPS','MVP_LTEN_PASIULYMAS'] },
   // DPS - dvieju etapu seima; be BPS/SPS skirstymo, su savo priedu rinkiniu.
@@ -2340,8 +2341,21 @@ function pastraiposTekstas(p, re, naujas){
   if (k.length) keiskAtkarpas(ts, k);
   return k.length;
 }
+/* Formos nuoroda į SPS priedą pagal pavadinimą kabutėse (2026-10-23, ND formos): „SPS x priedą „Konfidenciali informacija““ ir „Annex No. x of the SPC
+   “Confidential Information”“ - TSD ir ND LT/EN formose numeris „x“ (iki tol jis likdavo), LT formose - raudonas kito šablono skaičius („SPS 7 priedą“).
+   Numeris - šio paketo SPS priedų sąrašo eilutės (galutinis); priedo sąraše nėra - nr null. -> { tekstas, nr, pav } | null */
+const FORMOS_PRIEDO_NUOR = /^(?:(SPS)\s+(?:\d+|[xX])\s+priedą|Annex\s+No\.\s+(?:\d+|[xX])\s+of\s+the\s+SPC)$/;
+function formosPriedoNuoroda(d, n){
+  const raud = String(n.raudonas || '').trim(), m = FORMOS_PRIEDO_NUOR.exec(raud);
+  if (!m) return null;
+  const t = String(n.text || ''), k = t.indexOf(raud), pav = k >= 0 && PRIEDO_PAVADINIMAS.exec(t.slice(k + raud.length, k + raud.length + 160));
+  const raktas = pav && GP_LAUKAI.priedoRaktasIsTeksto(pav[1], m[1] ? 'lt' : 'en');
+  if (!raktas) return null;
+  const e = priedoEilute(d, raktas), nr = e ? String(e.nr) : null;
+  return { nr, pav: pav[1], tekstas: nr ? (m[1] ? `SPS ${nr} priedą` : `Annex No. ${nr} of the SPC`) : raud };
+}
 /* Generuojant: 'ok' - įrašyta, 'juodinti' - raudoni likučiai pajuodinami, false - lieka raudona (neatsakyta) */
-function formosRengejoVieta(paras, n){
+function formosRengejoVieta(paras, n, d){
   const t = String(n.text || '').replace(FORMOS_NR, ''), p = paras[n.i];
   if (!p) return false;
   if (FORMOS_KAINA_RE.test(t)){
@@ -2366,6 +2380,8 @@ function formosRengejoVieta(paras, n){
     const val = GALIOJA_EN_RE.test(t) ? (GALIOJIMO_VARIANTAI.find(x => x.lt === v) || {}).en : v;
     return val && GPGen.keistiRaudonaTeksta(paras, n.i, val + ' ') ? 'ok' : false;   // savas terminas angliškai - Word programoje (lieka raudona)
   }
+  const pn = d && formosPriedoNuoroda(d, n);
+  if (pn) return pn.nr && GPGen.keistiRaudonaTeksta(paras, n.i, pn.tekstas + ' ') ? 'ok' : false;
   return false;
 }
 const TIPAI_EN = { prekes:'GOODS', paslaugos:'SERVICES', darbai:'WORKS' };
@@ -2380,6 +2396,13 @@ const baigiasiRusimi = (pavU, tip) => {
   return !!tip && (be === tip || be.endsWith(' ' + tip));
 };
 const suRusimiPav = (pavU, tip) => (!tip || baigiasiRusimi(pavU, tip)) ? pavU : pavU + ' ' + tip;
+/* Pavadinimas, užrašytas vardininku ir besibaigiantis objekto rūšimi („... priežiūros paslaugos“), formos antraštėje - kilmininku: „LITGRID AB
+   ... PRIEŽIŪROS PASLAUGŲ PIRKIMUI“ (iki 2026-10-23 - „... PRIEŽIŪROS PASLAUGOS PASLAUGŲ PIRKIMUI“; redakcinė korekcija). */
+const RUSIS_VARDININKU = { PASLAUGŲ: 'PASLAUGOS', PREKIŲ: 'PREKĖS', DARBŲ: 'DARBAI' };
+const rusiesKilmininku = (pavU, tip) => {
+  const v = RUSIS_VARDININKU[tip], m = v && new RegExp('(^|\\s)' + v + '(\\s*\\([^)]*\\))?$', 'u').exec(pavU);
+  return m ? pavU.slice(0, m.index + m[1].length) + tip + (m[2] || '') : pavU;
+};
 
 /* Skaidymas i dalis. Sablonuose FIZISKAI yra tik dvi daliu eilutes (I ir II),
    o variklis naujo turinio nekuria. Jei rengejas nurodo daugiau daliu, apie tai
@@ -3836,6 +3859,11 @@ function surinktiKlausimus(){
           const v = FORMOS_LAIKOTARPIS[($('input[name=tipas]:checked') || {}).value];
           auto(trumpas, n.text, v ? `įrašoma „${v[0]} laikotarpiu“` : 'laukiama objekto tipo (1 žingsnis) - kol nenurodytas, lieka raudona', 'pagal pirkimo objekto tipą (1 žingsnis)');
         }
+      });
+      (Z.intarpai || []).forEach(n => {
+        const pn = !isjungta.has(n.i) && formosPriedoNuoroda(d, n);
+        if (pn) auto(trumpas, n.text, pn.nr ? `įrašoma „${pn.tekstas}“` : 'lieka raudona - šio priedo SPS priedų sąraše nėra (pataisykite Word programoje)',
+          `nuoroda į SPS priedą „${pn.pav}“ - jo numeris SPS priedų sąraše`);
       });
       if ((Z.raudonosPastabos || []).some(n => KOREGUOJAMA_RE.test(n.text || '') && !isjungta.has(n.i)))
         auto(trumpas, 'Koreguojama pagal poreikį: (kainų lentelė)', 'lieka raudona - 4 žingsnis ją rodo',
@@ -7903,7 +7931,7 @@ async function generuotiViena(d, REZ){
       // PIRKIMUI"), o pavadinimas, jau besibaigiantis rusimi („... paslaugų“), jos nebekartoja.
       const raudT = (n.raudonas||'').trim();
       const tipLT = TIPAI_LT[$('input[name=tipas]:checked').value] || '';
-      const PAVU = GP_LAUKAI.antrasteDidziosiomis(pav);          // matavimo vienetai lieka kaip parašyti („110 kV“; 2026-10-20)
+      const PAVU = rusiesKilmininku(GP_LAUKAI.antrasteDidziosiomis(pav), tipLT);   // matavimo vienetai lieka kaip parašyti („110 kV“; 2026-10-20)
       if (/^\(pirkimo objektas\)/i.test(raudT)){
         const suRusimi = TIPU_SARASAS_RE.test(raudT);
         // gale paliekamas tarpas - uz raudono fragmento juodas tekstas ("PIRKIMUI") prasideda be tarpo
@@ -7927,7 +7955,7 @@ async function generuotiViena(d, REZ){
         if (GPGen.keistiDaliuSarasa(paras, n.i, daliuSkaicius())) intTeksto++;
       }
       // pasiūlymo formos rengėjo pasirinkimai (D-1, 2026-10-21): kaina ar sąnaudos, rūšis, galiojimo terminas
-      const fr = formosRengejoVieta(paras, n);
+      const fr = formosRengejoVieta(paras, n, d);
       if (fr){ intTeksto++; if (fr === 'juodinti') juodinti.add(n.i); }
       return;                                        // kiti formos intarpai - tiekejo
     }

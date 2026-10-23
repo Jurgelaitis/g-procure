@@ -3349,7 +3349,7 @@ const GPAudit = (() => {
   const W = GPDocx.NS_W;
   /* Baigtumo kriterijus: raudonos = 0, tuscios vietos = 0, komentarai = 0.
      Kas lieka - parodoma zmogui pastraipu tikslumu. Nieko nenutylima.       */
-  const RENGEJO_FORMOJE = /3 mėnesius|90 calendar days|ARBA SĄNAUDOS|arba sąnaudos|ar sąnaudos|OR COSTS|or costs|Paslaugų teikimo\/Prekių tiekimo|Service provision\/ supply of|Koreguojama pagal poreikį|To be revised in accordance with the need/;
+  const RENGEJO_FORMOJE = /3 mėnesius|90 calendar days|ARBA SĄNAUDOS|arba sąnaudos|ar sąnaudos|OR COSTS|or costs|Paslaugų teikimo\/Prekių tiekimo|Service provision\/ supply of|Koreguojama pagal poreikį|To be revised in accordance with the need|SPS (\d+|[xX]) priedą|Annex No\. (\d+|[xX]) of the SPC/;   // ir nuoroda į SPS priedą (2026-10-23)
   function check(doc, imone, forma){
     const d = doc.parts['word/document.xml'];
     const body = d.getElementsByTagNameNS(W,'body')[0];
