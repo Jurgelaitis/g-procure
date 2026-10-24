@@ -421,6 +421,7 @@ def taisymas_tekstas(taisyk):
     viso += _formu_numeriai(taisyk)
     viso += _ssd_paraiska(taisyk)
     viso += _contracting_entity(taisyk)
+    viso += _t6_korekcijos(taisyk)
     return viso
 
 
@@ -1359,6 +1360,26 @@ def _contracting_entity(taisyk):
     print("\nPĮ šablonuose „Contracting Authority“ -> „Contracting Entity“ (AL, 2026-10-24):")
     n = _su_zemelapiais(_be_raudono(_CONTRACTING, _AL_RAUDONI), ['MVP_LTEN_BPS', 'DPSP_LTEN_SALYGOS'], '„Contracting Entity“', taisyk)
     for t in _AL_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# AM. Šeštoji naujo darbuotojo patikra (2026-10-24; redakcinės korekcijos - naudotojo leidimas 2026-10-05):
+#    (1) TSD ir ND LT/EN pasiūlymo formų c) papunktyje „Tender’’s section 1.9.“ - dvi kabutės (a ir b papunkčiuose - viena), todėl formos
+#        pernumeravimas šios nuorodos nerasdavo (T6-K1; generatoriaus taisyklė priima ir abi formas);
+#    (2) AL tęsinys - PĮ šablonų anglų tekste mažąja raide „contracting authority / authorities“ (AK, SSD, ND LT/EN SPS pastaba apie pažymas,
+#        MVP LT/EN BPS sutarties sąvoka) -> „contracting entity / entities“, kaip kitur tuose pačiuose šablonuose (T6-V2). Raudonas tekstas nekeičiamas.
+_T6_KABUTES = [(_re.compile(r'Tender’(’)s section'), '', 1)]
+_T6_AUTHORITY = [(_re.compile(r'contracting (authorit(?:y|ies))'), lambda m: 'entities' if m.group(1).endswith('ies') else 'entity', 1)]
+_AM_RAUDONI = []
+
+
+def _t6_korekcijos(taisyk):
+    print("\nŠeštoji patikra: „Tender’’s“ ir „contracting authority“ (AM, 2026-10-24):")
+    n = _su_zemelapiais(_be_raudono(_T6_KABUTES, _AM_RAUDONI), ['TSD_LTEN_PASIULYMAS', 'ND_LTEN_PASIULYMAS'], '„Tender’s“', taisyk)
+    n += _su_zemelapiais(_be_raudono(_T6_AUTHORITY, _AM_RAUDONI), ['AK_LTEN_SPS', 'SSD_LTEN_SPS', 'ND_LTEN_SPS', 'TSD_LTEN_SPS', 'MVP_LTEN_SPS',
+        'AK_LTEN_BPS', 'SSD_LTEN_BPS', 'ND_LTEN_BPS', 'TSD_LTEN_BPS', 'MVP_LTEN_BPS', 'DPSK_LTEN_SALYGOS', 'DPSP_LTEN_SALYGOS'], '„contracting entity“', taisyk)
+    for t in _AM_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 
