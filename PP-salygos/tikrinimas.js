@@ -1044,24 +1044,32 @@
     var BUS = { gerai: "patikrinta - be pastabų", radinys: "yra radinių", nepatikrinta: "nepatikrinta", netaikoma: "netaikoma" };
     body += wlent([3500, 1800, 1700, 2638], [["Patikra", "Grupė", "Būsena", "Pastaba"]].concat(pt.map(function (p) { return [p.pav, p.grupe, BUS[p.busena] || p.busena, p.pastaba || ""]; })));
     body += wp(wr("Ataskaita galioja tik šiai paketo versijai (žr. kontrolines sumas). „Patikrinta“ reiškia, kad apibrėžtos patikros praėjo - tai ne teisinis patvirtinimas. Šiame faile įrašyti ir mašinai skaitomi sprendimai: įkėlus jį kartu su nauja paketo versija, sprendimai parodomi prie tų pačių radinių, o dokumentų pakeitimai nuo šios patikros suskaičiuojami.", { i: true, sz: 18 }), { pr: 240 });
+    return wordPaketas(body, "Pirkimo dokumentų patikros ataskaita", { ns: NS_ATASKAITA, xml: '<ataskaita xmlns="' + NS_ATASKAITA + '" versija="1"><duomenys>' + esc(JSON.stringify(ataskaitosDuomenys())) + "</duomenys></ataskaita>" });
+  }
+  /* Word paketas iš document.xml kūno (oficialus stilius, A4): ataskaita ir PP-salygos santrauka tvirtintojui (2026-10-24) - vienas kūrėjas.
+     custom - { ns, xml } mašinai skaitomiems duomenims customXml dalyje (nebūtina). */
+  function wordPaketas(body, pavadinimas, custom) {
+    if (!global.JSZip) throw new Error("JSZip neįkeltas - Word dokumento sukurti negalima");
     var doc = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>' + body +
       '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>';
     var stiliai = GP_DOCX_STILIAI.xml({ font: "Arial", size: 20, oficialus: true, stiliai: [
       { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", run: { size: 30, bold: true, color: "000000" }, paragraph: { spacing: { before: 0, after: 200 } } },
       { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", run: { size: 24, bold: true, color: "000000" }, paragraph: { spacing: { before: 240, after: 120 } } }] });
-    var duom = esc(JSON.stringify(ataskaitosDuomenys()));
     var z = new global.JSZip(), NF = { createFolders: false };   // be katalogų įrašų (kaip GPDocx.save) - Word pakuotėje jų nėra
     z.file("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
-      '<Override PartName="/customXml/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>');
+      (custom ? '<Override PartName="/customXml/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>' : "") + '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>');
     z.file("_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>', NF);
-    z.file("docProps/core.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Pirkimo dokumentų patikros ataskaita</dc:title><dc:creator>G-Procure</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + new Date().toISOString().replace(/\.\d+Z$/, "Z") + "</dcterms:created></cp:coreProperties>", NF);
+    z.file("docProps/core.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>' + esc(pavadinimas) + '</dc:title><dc:creator>G-Procure</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + new Date().toISOString().replace(/\.\d+Z$/, "Z") + "</dcterms:created></cp:coreProperties>", NF);
     z.file("word/document.xml", doc, NF);
     z.file("word/styles.xml", stiliai, NF);
-    z.file("word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/></Relationships>', NF);
-    z.file("customXml/item1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<ataskaita xmlns="' + NS_ATASKAITA + '" versija="1"><duomenys>' + duom + "</duomenys></ataskaita>", NF);
-    z.file("customXml/itemProps1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<ds:datastoreItem ds:itemID="{6B1C2F8E-3D4A-4E5B-9C7D-0A1B2C3D4E5F}" xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"><ds:schemaRefs><ds:schemaRef ds:uri="' + NS_ATASKAITA + '"/></ds:schemaRefs></ds:datastoreItem>', NF);
-    z.file("customXml/_rels/item1.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps1.xml"/></Relationships>', NF);
+    z.file("word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      (custom ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/>' : "") + "</Relationships>", NF);
+    if (custom) {
+      z.file("customXml/item1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + custom.xml, NF);
+      z.file("customXml/itemProps1.xml", '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<ds:datastoreItem ds:itemID="{6B1C2F8E-3D4A-4E5B-9C7D-0A1B2C3D4E5F}" xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"><ds:schemaRefs><ds:schemaRef ds:uri="' + custom.ns + '"/></ds:schemaRefs></ds:datastoreItem>', NF);
+      z.file("customXml/_rels/item1.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps1.xml"/></Relationships>', NF);
+    }
     return z.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", compression: "DEFLATE" });
   }
   async function atsisiuskAtaskaita() {
@@ -1085,6 +1093,7 @@
     korteleKeista: function () { if (!B.docs) return; tikrinkParengti(); surinkRadinius(); piesk(); },
     darbas: function () { var s = JSON.stringify(B.sprendimai); return s === B.atsisiusta ? "" : s; },
     ataskaita: ataskaita,
+    word: { wr: wr, wp: wp, wlent: wlent, paketas: wordPaketas },
     formosPav: formosPav,
     get busena() { return B; }
   };

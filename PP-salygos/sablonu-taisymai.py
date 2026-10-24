@@ -419,6 +419,8 @@ def taisymas_tekstas(taisyk):
     viso += _akv_37(taisyk)
     viso += _word_tvarka(taisyk)
     viso += _formu_numeriai(taisyk)
+    viso += _ssd_paraiska(taisyk)
+    viso += _contracting_entity(taisyk)
     return viso
 
 
@@ -1309,6 +1311,23 @@ def _akv_37(taisyk):
     return 1
 
 
+# AK. S-SD SPS nacionalinio saugumo lentelės eilutė (2026-10-24, išorinio testavimo radinys - „S-SD paketuose lieka paraiškos sąvoka“; redakcinė
+#    korekcija - naudotojo leidimas 2026-10-05): SSD LT SPS „Atitikimas reikalavimui turi būti deklaruojamas Paraiškoje ir Pasiūlyme (SPS 1 priedas).“ -
+#    supaprastintose skelbiamose derybose paraiškų etapo nėra (SSD BPS sąvokos „Paraiška“ neturi), o visos kitos tos pačios lentelės eilutės ir SSD LT/EN
+#    SPS (lietuviškas ir angliškas stulpelis) - „... deklaruojamas Pasiūlyme (SPS 1 priedas).“. TSD SPS sakinys teisingas (paraiškų etapas yra) - nekeičiamas.
+#    Raudonas „SPS 1 priedas“ nekeičiamas; lauko raktas pervadinamas modulyje (RAKTU_PERVADINIMAI). Pakartotinai - 0.
+_SSD_PARAISKA = [(_re.compile(r'deklaruojamas (Paraiškoje ir )Pasiūlyme \('), '', 1)]
+_AK_RAUDONI = []
+
+
+def _ssd_paraiska(taisyk):
+    print("\nS-SD SPS „Paraiškoje ir Pasiūlyme“ -> „Pasiūlyme“ (AK, 2026-10-24):")
+    n = _su_zemelapiais(_be_raudono(_SSD_PARAISKA, _AK_RAUDONI), ['SSD_LT_SPS'], 'S-SD „Pasiūlyme“', taisyk)
+    for t in _AK_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
 # AJ. Pasiūlymo ir paraiškos formų numeracija (2026-10-23, naudotojo užduotis „automatizuokite formų taisykles visoms formoms“ - formų punktai
 #    pernumeruojami generuojant, todėl šablono numeriai ir nuorodos turi būti teisingi; redakcinės korekcijos - naudotojo leidimas 2026-10-05):
 #    AK, MVP, ND, TSD LT/EN pasiūlymo formų lentelės antraštė „1.4.1. lentelė / Table 1.4.1.“ - po 1.5.1 punkto „Detali informacija pateikiama
@@ -1326,6 +1345,22 @@ _FORMU_NUMERIAI = {
     'DPSP_LT_PASIULYMAS': [(_re.compile(r'^\t*()b\) mano atstovaujamas Tiekėjas'), '(', 1)],
     'AKV_LT_PASIULYMAS': [(_re.compile(r'priklauso Pasiūlymo 1\.(8) punkto a\) papunktyje'), '9', 1)],
 }
+
+
+# AL. „Contracting Authority“ PĮ šablonų anglų tekste (2026-10-24, naudotojo „tęskime visus kitus tobulinimus“ - pritarta siūlymui; paketo patikra
+#    `rezimo_savokos` rado 6 pastraipas): MVP LT/EN BPS (5 sąvokų apibrėžimai) ir DPS konkretaus pirkimo LT/EN sąlygos (subtiekėjų pastraipa) -
+#    lietuviškai tose pačiose vietose „Perkantysis subjektas“, o kitur tuose pačiuose šablonuose angliškai - „Contracting Entity“ (PĮ terminas;
+#    „Contracting Authority“ - VPĮ perkančioji organizacija). Raudonas tekstas nekeičiamas. Pakartotinai - 0.
+_CONTRACTING = [(_re.compile(r'Contracting (Authority)'), 'Entity', 1)]
+_AL_RAUDONI = []
+
+
+def _contracting_entity(taisyk):
+    print("\nPĮ šablonuose „Contracting Authority“ -> „Contracting Entity“ (AL, 2026-10-24):")
+    n = _su_zemelapiais(_be_raudono(_CONTRACTING, _AL_RAUDONI), ['MVP_LTEN_BPS', 'DPSP_LTEN_SALYGOS'], '„Contracting Entity“', taisyk)
+    for t in _AL_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
 
 
 def _formu_numeriai(taisyk):

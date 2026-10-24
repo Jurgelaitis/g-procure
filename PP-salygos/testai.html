@@ -456,10 +456,11 @@ async function testaiKlausimai(){
     const pastabos = Object.entries(W.__K.tuscios).filter(([, q]) => q.pastabaTipas).map(([r]) => "B|" + r);
     tiesa(pastabos.length && !Q.some(q => pastabos.includes(q.raktas)), "redagavimo pastaba (N|) klausiama arba jų nėra");
   });
-  await testas("Mažos vertės skelbiama apklausa: derybų alternatyva (seka būdą) AI neklausiama", async () => {
+  await testas("Mažos vertės skelbiama apklausa: derybų alternatyva (seka būdą) AI neklausiama - nuo 2026-10-24 ji išsprendžiama pagal 1 žingsnį ir žmogaus neklausiama", async () => {
     await zingsnis2("MV-SAB", "LT");
     const derybu = Object.values(W.__K.grupes).filter(g => g.nariai.every(n => /\bderybos\b/i.test(n.tekstas)));
-    tiesa(derybu.length, "šablone nėra derybų alternatyvos - testas nebetikrina nieko");
+    lygu(derybu.length, 0, "derybų alternatyva liko klausimu");
+    tiesa(W.__K.automatika.some(x => /Jei nevykdomos Derybos/i.test(x.kas)), "šablone nėra derybų alternatyvos - testas nebetikrina nieko");
     tiesa(!klausimai().some(q => q.variantai && q.variantai.some(v => /\bderybos\b/i.test(v))), "derybų alternatyva klausiama");
   });
   await testas("Dvikalbės sąlygos: angliški dvyniai AI neklausiami (teisinio teksto AI neverčia)", async () => {
@@ -12520,6 +12521,7 @@ const PRV_VISADA_ZYMA = /\s*\(\s*[šŠ]is punktas visada turi būti\s*\)/;
 /* Dingusios juodos šablono pastraipos su priežastimi (pagrįsti šalinimai - pagal atsakymus ir sprendimus, žr. CLAUDE.md); „NEŽINOMA“ - klaida. */
 function prvPriezastis(t, lentTekstas){
   if (/^(PIRMINIS\s*\/\s*GALUTINIS|INITIAL\s*\/\s*FINAL)\s+(PASIŪLYMAS|TENDER)$/.test(t)) return "MVP formos antraštė be derybų (formų autorių taisyklė)";
+  if (/^(Su Paraiška\/Pasiūlymu pateikiama informacija|Užpildyta Paraiškos\/Pasiūlymo forma|Information provided in the Application \/ Tender|Filled in form of the Application \/ Tender)$/.test(t)) return "S-SD forma be paraiškos (paraiškų etapo nėra)";
   if (/^Vykdomas (\[Pasirinkite\]|Pasirinkti)|^Pasirinkti is being carried out/.test(t)) return "režimo formuluotė";
   if (/^ESMINĖS SUTARTIES SĄLYGOS|\(koreguojama pagal poreikį\)/.test(t)) return "esminės sąlygos ar nurodymas antraštėje";
   if (/\((įrašomas|fill in)|\(Pirkimo objektas\)|\(object of procurement\)|„(PIRKIMO )?PAVADINIMAS“|TITLE OF THE SPECIFIC PROCUREMENT|^DĖL KONKRETAUS PIRKIMO|ĮMONĖS PAVADINIMAS/.test(t)) return "pildoma vieta";
@@ -15214,6 +15216,322 @@ function ftNuorodos(pars){
   return { out, sal, rus, eng };
 }
 const ftRaudonas = (x, re) => (x || []).filter(p => re.test(p.t)).map(p => p.red);
+/* 2026-10-24 - išorinio testavimo (PP-SALYGOS v2.0 auditas) pritaikyti pasiūlymai: S-SD be paraiškos sąvokos, taikomo įstatymo sąvokų patikra
+   pakete, 2 žingsnio filtras „Rodyti“, santrauka tvirtintojui, 1 žingsnis trimis dalimis */
+async function testaiAuditas1024(){
+  dabartine = grupe("Išorinio testavimo pasiūlymai (2026-10-24): S-SD be paraiškos sąvokos, įstatymo sąvokos pakete, filtras „Rodyti“, santrauka tvirtintojui, 1 žingsnis trimis dalimis");
+  const tekstas = async kelias => visosPastraipos(await (await W.JSZip.loadAsync(await (await W.fetch(kelias)).arrayBuffer())).file("word/document.xml").async("string")).map(p => p.t).join("\n");
+  const keisk = (el, v) => { el.value = v; el.dispatchEvent(new W.Event("input", { bubbles: true })); el.dispatchEvent(new W.Event("change", { bubbles: true })); };
+
+  await testas("S-SD šablonas (taisymas AK): SPS lentelės eilutė „... deklaruojamas Pasiūlyme (SPS 1 priedas)“ kaip kitos ir LT/EN, žemėlapis suderintas; TSD SPS - su paraiška; ankstesnio juodraščio raktas pervadinamas tik S-SD", async () => {
+    await modulis();
+    const ssd = await tekstas("templates/SSD_LT_SPS.docx"), Z = JSON.stringify(await (await W.fetch("zemelapiai/SSD_LT_SPS.json")).json());
+    tiesa(!/Paraiškoje ir Pasiūlyme/.test(ssd) && !/Paraiškoje ir Pasiūlyme/.test(Z) && /deklaruojamas Pasiūlyme \(SPS 1 priedas\)/.test(ssd), "SSD LT SPS ir žemėlapis");
+    tiesa(/Paraiškoje ir Pasiūlyme/.test(await tekstas("templates/TSD_LT_SPS.docx")), "TSD SPS nepakitęs");
+    const sena = "atitikimas reikalavimui turi buti deklaruojamas paraiskoje ir pasiulyme sps 1 priedas", b = D.getElementById("budas");
+    keisk(b, "S-SD");
+    lygu(W.eval("naujasRaktas")(sena), "atitikimas reikalavimui turi buti deklaruojamas pasiulyme sps 1 priedas", "S-SD");
+    keisk(b, "T-SD");
+    lygu(W.eval("naujasRaktas")(sena), sena, "T-SD - nekeičiamas");
+  });
+
+  await testas("S-SD paketo pasiūlymo forma (TSD forma): konfidencialios informacijos lentelėje - tik pasiūlymas (LT ir LT/EN), SPS - be „Paraiškoje“; T-SD forma - su paraiška", async () => {
+    salinkSenusRemelius();
+    const s = await generuokSu({ budas: "S-SD", kalba: "LT", tipas: "paslaugos", energ: "ne", apimtis: "kaina" });
+    const f = s.TSD_LT_PASIULYMAS.pars.join("\n");
+    tiesa(/Su Pasiūlymu pateikiama informacija/.test(f) && /Užpildyta Pasiūlymo forma/.test(f) && !/Paraišk/i.test(f), "SSD LT forma: " + (f.match(/.{0,40}Paraišk.{0,40}/i) || [""])[0]);
+    tiesa(!/Paraiškoje/.test(s.SSD_LT_SPS.pars.join("\n")), "SSD LT SPS");
+    tiesa(s.TSD_LT_PASIULYMAS.r.d && W.eval("ssdBeParaiskos") && true, "funkcija");
+    salinkSenusRemelius();
+    const se = await generuokSu({ budas: "S-SD", kalba: "LT_EN", tipas: "paslaugos", energ: "ne", apimtis: "kaina" });
+    const fe = se.TSD_LTEN_PASIULYMAS.pars.join("\n");
+    tiesa(/Information provided in the Tender/.test(fe) && /Filled in form of the Tender/.test(fe) && !/Application\s*\/\s*Tender|Paraišk/i.test(fe), "SSD LT/EN forma");
+    salinkSenusRemelius();
+    const t = await generuokSu({ budas: "T-SD", kalba: "LT", tipas: "paslaugos", energ: "ne", apimtis: "kaina" });
+    tiesa(/Su Paraiška\/Pasiūlymu pateikiama informacija/.test(t.TSD_LT_PASIULYMAS.pars.join("\n")), "T-SD forma - su paraiška");
+  });
+
+  await testas("Paketo patikra (4 žingsnis): taikomo įstatymo sąvokos - centralizuotame VPĮ pakete PĮ sąvokų nėra; MVP LT/EN paketas - radinys „Contracting Authority“ tik tada, kai jis yra šablone (ir priešingai); AL - PĮ šablonuose „Contracting Authority“ nebėra", async () => {
+    // AL (2026-10-24): MVP LT/EN BPS ir DPS konkretaus pirkimo LT/EN sąlygos - „Contracting Entity“, kaip kitur tuose pačiuose šablonuose
+    for (const f of ["MVP_LTEN_BPS", "DPSP_LTEN_SALYGOS"]) {
+      const t = await tekstas("templates/" + f + ".docx");
+      tiesa(!/Contracting Authorit/.test(t) && /Contracting Entity/.test(t), f + ": be „Contracting Authority“");
+      const Z = await (await fetch("zemelapiai/" + f + ".json", { cache: "no-store" })).json();
+      tiesa(!/Contracting Authorit/.test(JSON.stringify(Z)), f + ".json: be „Contracting Authority“");
+    }
+    salinkSenusRemelius();
+    await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "paslaugos", centr: true, energ: "ne" });
+    await kol(() => W.__PP, "paketo patikra", 120000);
+    const p = W.__PP.p, pt = p.patikros.find(x => x.id === "rezimo_savokos");
+    lygu([pt && pt.busena, p.radiniai.filter(r => r.id === "rezimo_savokos").length], ["gerai", 0], "AKV: " + JSON.stringify(pt) + " " + JSON.stringify(p.radiniai.filter(r => r.id === "rezimo_savokos").map(r => r.tekstas)));
+    salinkSenusRemelius();
+    await generuokSu({ budas: "MV-SAB", kalba: "LT_EN", tipas: "paslaugos", energ: "ne" });
+    await kol(() => W.__PP, "paketo patikra", 120000);
+    const sab = /Contracting Authorit/.test(await tekstas("templates/MVP_LTEN_BPS.docx"));
+    const rr = W.__PP.p.radiniai.filter(r => r.id === "rezimo_savokos");
+    lygu(rr.some(r => /„Contracting Authority“/.test(r.tekstas) && /Pirkimui taikomas PĮ/.test(r.tekstas)), sab, "MVP LT/EN (šablone „Contracting Authority“: " + sab + "): " + JSON.stringify(rr.map(r => r.tekstas)));
+    tiesa(!rr.some(r => /„Perkančioji organizacija“/.test(r.tekstas)), "lietuviškai - kito įstatymo sąvokos nėra");
+  });
+
+  await testas("2 žingsnio filtras „Rodyti“: skaičiai pagal dabartinę dalį, „Reikia sprendimo“ - tik neatsakyti, atsakytas lieka matomas iki naujo pasirinkimo, tuščia - pranešimas, perpiešus ir pakeitus dalį - išlieka, šuolis į paslėptą kortelę filtrą nuima", async () => {
+    await modulis();
+    keisk(D.getElementById("pavadinimas"), PAVADINIMAS);
+    await zingsnis2("T-AK", "LT", "prekes");
+    const F = D.getElementById("lkFiltras"), mygt = id => F.querySelector('[data-lk-filtras="' + id + '"]');
+    tiesa(F && F.querySelectorAll("button[data-lk-filtras]").length === 4 && F.getAttribute("role") === "group" && D.getElementById("lkFiltrasT"), "grupė ir 4 mygtukai");
+    const sk = id => +F.querySelector('[data-lk-filtras-n="' + id + '"]').textContent;
+    const dk = () => W.eval("lkDaliesKorteles")(), bs = el => W.eval("lkKortelesBusena")(el), mat = () => dk().filter(el => el.getClientRects().length);
+    lygu([sk("visi"), sk("sprendimo"), sk("siuloma"), sk("patvirtinta")], [dk().length, dk().filter(e => bs(e) === "neuzpildyta").length, dk().filter(e => bs(e) === "siuloma").length,
+      dk().filter(e => bs(e) === "patvirtinta").length], "skaičiai");
+    tiesa(sk("sprendimo") > 1 && mygt("visi").getAttribute("aria-pressed") === "true", "pradžioje - visi, neatsakytų yra");
+    mygt("sprendimo").click();
+    tiesa(mygt("sprendimo").getAttribute("aria-pressed") === "true" && mygt("visi").getAttribute("aria-pressed") === "false", "pasirinkta");
+    lygu([mat().length, mat().every(e => bs(e) === "neuzpildyta")], [sk("sprendimo"), true], "tik neatsakyti");
+    const skyr = [...D.querySelectorAll("#klausimai .lk-sk:not(.lk-paslepta)")];
+    tiesa(skyr.every(x => !!x.getClientRects().length === [...x.querySelectorAll(".lk[data-busena]")].some(e => e.getClientRects().length)), "skyrius rodomas tik su rodoma kortele");
+    // atsakytas lieka matomas
+    const k1 = mat().find(e => e.querySelector("input[type=radio]:not([disabled])")), id = k1.id;
+    const r1 = k1.querySelector("input[type=radio]:not([disabled])"); r1.click();
+    const po = D.getElementById(id);
+    tiesa(po && po.getClientRects().length && bs(po) !== "neuzpildyta", "atsakytas lieka matomas: " + (po && bs(po)));
+    lygu(W.eval("LK_FILTRAS"), "sprendimo", "filtras išliko");
+    W.klausimynas();
+    tiesa(D.getElementById(id).getClientRects().length && D.getElementById("lkFiltras").querySelector('[data-lk-filtras="sprendimo"]').getAttribute("aria-pressed") === "true", "perpiešus - išlieka");
+    D.getElementById("lkFiltras").querySelector('[data-lk-filtras="sprendimo"]').click();
+    tiesa(!D.getElementById(id).getClientRects().length, "pasirinkus iš naujo - atsakytas paslėptas");
+    // tuščias pasirinkimas - pranešimas
+    const F2 = D.getElementById("lkFiltras"), tusc = ["patvirtinta", "siuloma", "sprendimo"].find(x => +F2.querySelector('[data-lk-filtras-n="' + x + '"]').textContent === 0);
+    if (tusc){
+      F2.querySelector('[data-lk-filtras="' + tusc + '"]').click();
+      const pr = D.getElementById("lkFiltrasPr");
+      tiesa(!pr.hidden && /klausimų su būsena .* nėra/.test(pr.textContent) && !mat().length, "pranešimas: " + pr.textContent);
+    }
+    // šuolis į paslėptą kortelę (klaidų santrauka, „Kitas“) - filtras nuimamas
+    D.getElementById("lkFiltras").querySelector('[data-lk-filtras="patvirtinta"]').click();
+    const pasl = dk().find(e => !e.getClientRects().length && bs(e) === "neuzpildyta");
+    tiesa(pasl, "yra paslėptų neatsakytų");
+    W.lkSuolis(pasl.id);
+    lygu([W.eval("LK_FILTRAS"), !!D.getElementById(pasl.id).getClientRects().length, D.getElementById("lkFiltras").querySelector('[data-lk-filtras="visi"]').getAttribute("aria-pressed")], ["visi", true, "true"], "šuolis nuima filtrą");
+    // dalies pakeitimas - filtras išlieka, skaičiai - naujos dalies
+    D.getElementById("lkFiltras").querySelector('[data-lk-filtras="sprendimo"]').click();
+    const toliau = D.querySelector('#lkPsl [data-lk-psl]:not(.sec)');
+    if (toliau){
+      toliau.click();
+      lygu([W.eval("LK_FILTRAS"), D.getElementById("lkFiltras").querySelector('[data-lk-filtras="sprendimo"]').getAttribute("aria-pressed")], ["sprendimo", "true"], "kita dalis - filtras išlieka");
+      lygu(+D.getElementById("lkFiltras").querySelector('[data-lk-filtras-n="visi"]').textContent, dk().length, "kitos dalies skaičius");
+      tiesa(dk().filter(e => e.getClientRects().length).every(e => bs(e) === "neuzpildyta"), "kitoje dalyje - tik neatsakyti");
+    }
+  });
+
+  await testas("Santrauka tvirtintojui (4 žingsnis): mygtukas su pastaba, į ZIP neįdedama; duomenys iš atsakymų ir paketo (priedai iš eilės, dokumentų būsenos, paketo patikra); Word - oficialus stilius, A4, be Word struktūros radinių; pakeitus atsakymus - įspėjimas", async () => {
+    salinkSenusRemelius();
+    await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "prekes", energ: "ne", verte: "1 500 000" });
+    await kol(() => W.__PP, "paketo patikra", 120000);
+    const btn = D.getElementById("santraukaT");
+    tiesa(btn && /Į ZIP neįdedamas ir į CVP IS neįkeliamas/.test(btn.parentNode.textContent.replace(/\s+/g, " ")), "mygtukas ir pastaba");
+    const S = W.santraukosDuomenys(), m = Object.fromEntries(S.pirkimas), sp = Object.fromEntries(S.sprendimai);
+    lygu([m["Pirkimo pavadinimas"], m["Pirkimo būdas"], m["Numatoma pirkimo vertė"], m["Taikomas įstatymas"], m["Pirkimo objekto tipas"], m["Sąlygų kalba"], m["Susijęs su nacionaliniu saugumu"]],
+      [W.pavClean(PAVADINIMAS) + " pirkimas", W.GP_METHODS.label("T-AK"), W.GP_MONEY.formatEUR(1500000) + " Eur be PVM", "Pirkimų įstatymas (PĮ)", "Prekės", "lietuvių", "ne"], "pirkimo duomenys");
+    tiesa(sp["Pasiūlymų vertinimo kriterijus"] && sp["Pasiūlymų vertinimo kriterijus"] !== "neatsakyta" && sp["Sutarties projektas"], "sprendimai: " + JSON.stringify(sp));
+    const nr = S.priedai.map(t => parseInt(t, 10));
+    tiesa(nr.length >= 3 && nr.every((x, i) => x === i + 1), "priedai iš eilės: " + S.priedai.join(" | "));
+    lygu(S.dokumentai.length, W.__R.length, "dokumentai");
+    tiesa(S.perziura[0] && /^Paketo patikra/.test(S.perziura[0].antraste) && !S.pergeneruoti, "paketo patikra: " + JSON.stringify(S.perziura.map(x => x.antraste)));
+    const blob = await W.santraukaTvirtintojui(), z = await W.JSZip.loadAsync(await blob.arrayBuffer()), xml = await z.file("word/document.xml").async("string");
+    const t = visosPastraipos(xml).map(p => p.t).join("\n");
+    tiesa(/^Pirkimo sąlygų santrauka tvirtintojui/.test(t) && /Vidaus dokumentas - į CVP IS neįkeliamas/.test(t) && t.includes(W.GP_MONEY.formatEUR(1500000) + " Eur be PVM") && /SPS priedai/.test(t) && /Prieš tvirtinant peržiūrėkite/.test(t), "tekstas");
+    tiesa(!/[\u2013\u2014]/.test(t) && /<w:tblLayout w:type="fixed"\/>/.test(xml) && /w:w="11906" w:h="16838"/.test(xml) && !/w:color w:val="00A072"/i.test(xml), "oficialus stilius, A4, fiksuotos lentelės");
+    const wr = await W.eval("GPDocx").wordPatikra(blob);
+    lygu(wr.radiniai, [], "Word struktūra");
+    tiesa(!W.__R.some(r => /santrauk/i.test(String((r.d && r.d.trumpas) || ""))), "pakete santraukos nėra");
+    // pakeitus atsakymus po generavimo - įspėjimas
+    keisk(D.getElementById("verte"), "2 000 000");
+    const S2 = W.santraukosDuomenys(), t2 = visosPastraipos(await (await W.JSZip.loadAsync(await (await W.santraukaTvirtintojui()).arrayBuffer())).file("word/document.xml").async("string")).map(p => p.t).join("\n");
+    tiesa(S2.pergeneruoti && /Po generavimo atsakymai pakeisti/.test(t2) && Object.fromEntries(S2.pirkimas)["Numatoma pirkimo vertė"] === W.GP_MONEY.formatEUR(2000000) + " Eur be PVM", "įspėjimas po pakeitimų");
+  });
+
+  await testas("1 žingsnis trimis dalimis („Ką perkame“, „Kaip perkame“, „Nacionalinis saugumas ir kiti duomenys“): antraštės ir laukų tvarka, skiltys - kortelės vaikai; taikomo įstatymo žyma prie perkančiojo subjekto (PĮ, centralizuotam - VPĮ)", async () => {
+    await modulis(null, { tusti: true });
+    const s1 = D.getElementById("step1");
+    const seka = ["z1g1", "pavadinimas", "tipas-prekes", "verte", "z1g2", "budas", "centrQ", "derybosQ", "paraiskosQ", "pavEN", "sutartisQ", "z1g3", "bvpz", "nacsaug-ne", "nsbvpzQ", "komisijaQ", "energQ", "sdata"].map(id => D.getElementById(id));
+    tiesa(seka.every(Boolean), "visi elementai");
+    const bl = seka.slice(1).map((e, i) => (seka[i].compareDocumentPosition(e) & W.Node.DOCUMENT_POSITION_FOLLOWING) ? "" : seka[i].id + ">" + e.id).filter(Boolean);
+    lygu(bl, [], "tvarka");
+    const kalba = D.querySelector("input[name=kalba]");
+    tiesa((D.getElementById("paraiskosQ").compareDocumentPosition(kalba) & W.Node.DOCUMENT_POSITION_FOLLOWING) && (kalba.compareDocumentPosition(D.getElementById("pavEN")) & W.Node.DOCUMENT_POSITION_FOLLOWING), "kalba - prieš angl. pavadinimą");
+    lygu([...s1.querySelectorAll("h3.z1-gr")].map(h => [h.parentNode === s1, h.textContent]), [[true, "Ką perkame"], [true, "Kaip perkame"], [true, "Nacionalinis saugumas ir kiti duomenys"]], "antraštės");
+    tiesa(["q-pavadinimas", "q-tipas", "q-verte", "q-budas", "q-kalba", "q-bvpz", "q-nacsaug", "q-sdata"].every(id => D.getElementById(id).closest(".q").parentNode === s1), "skiltys - tiesioginiai kortelės vaikai");
+    const zi = D.getElementById("z1Istatymas");
+    keisk(D.getElementById("budas"), "T-AK");
+    lygu(zi.textContent, "· Pirkimų įstatymas (PĮ)", "PĮ");
+    const c = D.querySelector("input[name=centr][value=taip]"); c.checked = true; c.dispatchEvent(new W.Event("change", { bubbles: true }));
+    lygu(zi.textContent, "· Viešųjų pirkimų įstatymas (VPĮ) - centralizuotas pirkimas", "centralizuotas");
+  });
+}
+
+async function testaiTobulinimai1024(){
+  dabartine = grupe("Išorinio testavimo pasiūlymai, 2 dalis (2026-10-24): neskelbiamų derybų pagrindas (PĮ 79 str.), mažos vertės greitasis kelias ir derybų alternatyvos, CVP IS pildymo atmintinė");
+  const keisk = (el, v) => { el.value = v; el.dispatchEvent(new W.Event("input", { bubbles: true })); el.dispatchEvent(new W.Event("change", { bubbles: true })); };
+  const spausk = id => { const e = D.getElementById(id); e.checked = true; e.dispatchEvent(new W.Event("change", { bubbles: true })); };
+
+  await testas("Neskelbiamų derybų pagrindas 1 žingsnyje: tik S-ND ir T-ND, pagrindai ir citatos iš registro (PĮ 79 str., 80 str. 2 d.), objekto tipas, sąlygos ir supaprastinimas pagal pirkimo rūšį, netinkamas ankstesnis atsakymas, juodraštis ir santrauka", async () => {
+    await modulis();
+    keisk(D.getElementById("pavadinimas"), PAVADINIMAS);
+    const b = D.getElementById("budas"), q = D.getElementById("ndPagrindasQ"), opt = () => [...q.querySelectorAll("input[name=ndpag]")], info = () => D.getElementById("ndPagrindasInfo").textContent.replace(/\s+/g, " ");
+    // registras - perskaityta e-tar 2026-10-24
+    const T = W.GP_TEISE;
+    [["nd_neivykes", "PĮ 79 str. 1 d. 1 p."], ["nd_tyrimai", "PĮ 79 str. 1 d. 2 p."], ["nd_vienas_tiekejas", "PĮ 79 str. 1 d. 3 p."], ["nd_skuba", "PĮ 79 str. 1 d. 4 p."],
+     ["nd_alternatyva", "PĮ 79 str. 2 d."], ["nd_prekes", "PĮ 79 str. 3 d."], ["nd_projekto_konkursas", "PĮ 79 str. 4 d."], ["nd_pakartotinis", "PĮ 79 str. 5 d."],
+     ["nd_supaprastinti", "PĮ 79 str. 6 d."], ["nd_po_skelbiamu", "PĮ 79 str. 6 d. 10 p."], ["nd_supaprastinimas", "PĮ 80 str. 2 d."]].forEach(([k, c]) => {
+      lygu(T.cit(k, "PI"), c, k);
+      let vpi = null; try { vpi = T.cit(k, "VPI"); } catch (e) { vpi = "klaida"; }
+      lygu(vpi, "klaida", k + " - VPĮ normos nėra (nemaišoma)");
+    });
+    keisk(b, "T-AK"); tiesa(q.classList.contains("hid"), "atviram konkursui - nerodomas");
+    keisk(b, "S-ND"); tiesa(!q.classList.contains("hid"), "S-ND - rodomas");
+    lygu(opt().map(x => x.value), ["nd_neivykes", "nd_po_skelbiamu", "nd_vienas_tiekejas", "nd_skuba", "nd_tyrimai", "nd_prekes", "nd_projekto_konkursas", "nd_pakartotinis", "nd_supaprastinti"], "S-ND pagrindai");
+    tiesa(!opt().some(x => x.checked) && D.getElementById("ndPagrindasInfo").hidden, "be numatytojo");
+    lygu(q.querySelector("[role=radiogroup]").getAttribute("aria-labelledby"), "q-ndpag", "grupės pavadinimas");
+    tiesa(/\(PĮ 79 str\. 1 d\. 3 p\.\)/.test(D.querySelector("label[for=ndpag-nd_vienas_tiekejas], #ndpag-nd_vienas_tiekejas").closest("label").textContent), "citata prie varianto");
+    // objekto tipas
+    const dis = () => opt().filter(x => x.disabled).map(x => x.value);
+    spausk("tipas-prekes"); lygu(dis(), ["nd_projekto_konkursas", "nd_pakartotinis"], "prekės");
+    spausk("tipas-paslaugos"); lygu(dis(), ["nd_prekes"], "paslaugos");
+    spausk("tipas-darbai"); lygu(dis(), ["nd_prekes", "nd_projekto_konkursas"], "darbai");
+    spausk("tipas-prekes"); spausk("ndpag-nd_prekes");
+    tiesa(/papildomai iš ankstesnio tiekėjo/.test(info()), "prekių pagrindas: " + info());
+    spausk("tipas-paslaugos");
+    tiesa(!opt().some(x => x.checked) && /Ankstesnis atsakymas netinka\. .*tik prekėms/.test(info()), "netinkamas ankstesnis atsakymas: " + info());
+    // sąlygos ir supaprastinimas
+    spausk("ndpag-nd_neivykes");
+    tiesa(/Sąlyga\. .*pirminės pirkimo sąlygos iš esmės nekeičiamos.*\(PĮ 79 str\. 1 d\. 1 p\.\)/.test(info()) && /praneškite ankstesnio pirkimo kandidatams ir dalyviams/.test(info()), "po neįvykusio pirkimo: " + info());
+    tiesa(/galima nesilaikyti įstatyme pirkimo dokumentams nustatytų turinio reikalavimų.*\(PĮ 80 str\. 2 d\.\)/.test(info()), "kitais pagrindais - dokumentų reikalavimai: " + info());
+    spausk("ndpag-nd_skuba");
+    tiesa(/Supaprastinto pirkimo atveju šiuo pagrindu pirkimo sutartį galima sudaryti nesilaikant/.test(info()) && !/praneškite/.test(info()), "S-ND skuba: " + info());
+    spausk("ndpag-nd_po_skelbiamu");
+    tiesa(/\(PĮ 79 str\. 6 d\. 10 p\.\)/.test(info()) && /praneškite ankstesnio pirkimo kandidatams ir dalyviams/.test(info()) && /Supaprastinto pirkimo atveju/.test(info()), "po skelbiamų derybų: " + info());
+    // CVP IS atmintinės eilutė prieš generavimą: pagrindas ir neatsakyti duomenys - be reikšmės, su pastaba
+    const ca = W.eval("cvpisAtmintinesEilutes")([], []), caM = Object.fromEntries(ca.map(x => [x.laukas, x]));
+    tiesa(/Supaprastintam pirkimui: skelbiamoms deryboms/.test(caM["Neskelbiamų derybų pagrindas"].reiksme), "atmintinėje - pagrindas");
+    lygu([caM["Įkeliami pirkimo dokumentai"].reiksme, caM["Pagrindinis klasifikacijos kodas (cpv)"].reiksme], ["", ""], "neįrašyta - tuščia");
+    tiesa(ca.every(x => !/^(neįrašyt|nepasirinkt|nenurodyt|neatsakyta|šablone nėra)/.test(x.reiksme)), "„neatsakyta“ ar „nenurodyta“ nerodoma kaip reikšmė: " + JSON.stringify(ca.filter(x => /^(ne|šablone)/.test(x.reiksme)).map(x => x.laukas)));
+    spausk("ndpag-nd_vienas_tiekejas");
+    tiesa(/Svarbu\. Techninių priežasčių ir išimtinių teisių pagrindai.*\(PĮ 79 str\. 2 d\.\)/.test(info()), "79 str. 2 d.: " + info());
+    keisk(b, "T-ND");
+    lygu(opt().length, 7, "T-ND - be 6 dalies pagrindų");
+    tiesa(D.getElementById("ndpag-nd_vienas_tiekejas").checked && /išskyrus reikalavimą sutartį pasirašyti raštu/.test(info()), "T-ND vienas tiekėjas: " + info());
+    spausk("ndpag-nd_skuba");
+    tiesa(/galima nesilaikyti įstatyme pirkimo dokumentams nustatytų turinio reikalavimų/.test(info()) && !/Supaprastinto/.test(info()), "T-ND skuba - kitais pagrindais: " + info());
+    // juodraštis ir santrauka
+    lygu(W.eval("z1Laukai")()["r:ndpag"], "nd_skuba", "juodraštyje");
+    const sr = W.eval("santraukosDuomenys")().pirkimas.find(x => x[0] === "Neskelbiamų derybų pagrindas");
+    tiesa(sr && /Ypatinga skuba/.test(sr[1]) && /PĮ 79 str\. 1 d\. 4 p\./.test(sr[1]), "santraukoje: " + JSON.stringify(sr));
+    tiesa(D.getElementById("derybosQ").compareDocumentPosition(q) & W.Node.DOCUMENT_POSITION_FOLLOWING, "po derybų klausimo („Kaip perkame“)");
+    keisk(b, "S-AK");
+    tiesa(q.classList.contains("hid") && !W.eval("santraukosDuomenys")().pirkimas.some(x => x[0] === "Neskelbiamų derybų pagrindas"), "kitam būdui - nerodomas ir santraukoje nėra");
+  });
+
+  await testas("Neskelbiamos derybos 4 žingsnyje: „Kas toliau“ - pranešti ankstesnio pirkimo dalyviams (tik po neįvykusio pirkimo); paketo patikra - privalomų dokumentų elementų trūkumas informacija (PĮ 80 str. 2 d.), kitam būdui - „Patikrinkite“", async () => {
+    salinkSenusRemelius();
+    await generuokSu({ budas: "S-ND", kalba: "LT", tipas: "paslaugos", energ: "ne", apimtis: "kaina", pries: async () => { spausk("ndpag-nd_neivykes"); } });
+    await kol(() => W.__PP, "paketo patikra", 120000);
+    const kt = () => D.getElementById("kasToliau").textContent.replace(/\s+/g, " ");
+    tiesa(/praneškite ankstesnio pirkimo kandidatams ir dalyviams/.test(kt()) && /PĮ 79 str\. 1 d\. 1 p\./.test(kt()) && /pakvieskite pasirinktus tiekėjus/.test(kt()), "Kas toliau: " + kt());
+    tiesa(D.querySelector('#kasToliau a[href="#cvpisAtmH"]'), "nuoroda į atmintinę");
+    lygu(W.__PP.p.radiniai.filter(r => /^privalomi/.test(r.id) && r.lygis === "tikrinti").map(r => r.tekstas), [], "neskelbiamose derybose privalomi - ne „Patikrinkite“");
+    // be BPS - apibendrintas radinys: neskelbiamose derybose informacija su nuoroda, skelbiamose - „Patikrinkite“
+    const out = await W.GP_DOK.apdorok(W.__PP.failai.filter(f => !/BPS/.test(f.name)), null, "lt");
+    const pr = budas => W.GP_PARENGTIS.patikrink({ docs: out.docs, kortele: { budas, rezimas: "PI", vykdytojas: "litgrid" }, kalba: "lt" }).radiniai.find(r => r.id === "privalomi_be_bps");
+    const nd = pr("S-ND"), sd = pr("S-SD");
+    tiesa(nd && nd.lygis === "info" && /Neskelbiamose derybose įstatyme pirkimo dokumentams nustatytų turinio reikalavimų galima nesilaikyti/.test(nd.tekstas) && nd.teise.some(t => t.raktas === "nd_supaprastinimas"), "S-ND: " + JSON.stringify(nd && [nd.lygis, nd.tekstas]));
+    tiesa(sd && sd.lygis === "tikrinti" && !/Neskelbiamose/.test(sd.tekstas), "S-SD: " + JSON.stringify(sd && [sd.lygis, sd.tekstas]));
+    // kitas pagrindas - be pranešimo žingsnio
+    D.getElementById("ndpag-nd_skuba").checked = true;
+    W.eval("KT_HTML = ''"); W.eval("kasToliau")();
+    tiesa(!/praneškite ankstesnio pirkimo/.test(kt()), "skubos pagrindu - be pranešimo žingsnio");
+  });
+
+  await testas("Mažos vertės pirkimas: derybų alternatyvos („Jei nevykdomos / Jei vykdomos Derybos“) - pagal 1 žingsnį, 2 žingsnyje neklausiama; greitasis kelias - skaičiai kaip eigoje, „Rodyti tik neatsakytus“ / „Rodyti siūlomas reikšmes“ / „Rodyti visus“; kitiems būdams - nėra", async () => {
+    await modulis();
+    keisk(D.getElementById("pavadinimas"), PAVADINIMAS);
+    await zingsnis2("MV-NR", "LT", "prekes");
+    const K = () => W.__K, deryb = g => g.nariai.some(n => /^jei (ne)?vykdomos derybos/.test(n.raktas));
+    tiesa(!Object.values(K().grupes).some(deryb), "grupės nebeklausiama");
+    const a = K().automatika.find(x => /Jei nevykdomos Derybos/i.test(x.kas));
+    tiesa(a && /paliekama „Jei nevykdomos Derybos/i.test(a.veiksmas) && a.kodel === "1 žingsnio derybų klausimas - derybos nevykdomos" && !a.keisti, "automatika: " + JSON.stringify(a));
+    const S = W.eval("formosSantrauka")(K()), g = D.getElementById("lkGreitas");
+    tiesa(g, "skydelis");
+    const t = g.textContent.replace(/\s+/g, " "), nb = W.eval("privalomuSk")(S);
+    tiesa(t.includes("privaloma atsakyti " + W.eval("lkSk")(nb, "klausimą", "klausimus", "klausimų")) && t.includes("pasiūlyta - " + S.siulomi.length) && t.includes("Išspręsta automatiškai pagal 1 žingsnį ir įkeltus dokumentus - " + W.eval("autoSkaicius")(K(), S)), "skaičiai: " + t);
+    g.querySelector('[data-lk-greitas="sprendimo"]').click();
+    lygu([W.eval("LK_FILTRAS"), D.querySelector('#lkFiltras [data-lk-filtras="sprendimo"]').getAttribute("aria-pressed")], ["sprendimo", "true"], "tik neatsakyti");
+    tiesa(W.eval("lkDaliesKorteles")().filter(el => !el.classList.contains("lk-filtras-ne")).every(el => /lk--neuzpildyta/.test(el.className)), "rodomi tik neatsakyti");
+    const visi = D.querySelector('#lkGreitas [data-lk-greitas="visi"]');
+    tiesa(visi, "„Rodyti visus“"); visi.click();
+    lygu([W.eval("LK_FILTRAS"), !!D.querySelector('#lkGreitas [data-lk-greitas="visi"]'), D.activeElement && D.activeElement.dataset.lkFiltras], ["visi", false, "visi"], "grąžinta, fokusas - filtre");
+    if (S.siulomi.length){ D.querySelector('#lkGreitas [data-lk-greitas="siuloma"]').click(); lygu(W.eval("LK_FILTRAS"), "siuloma", "siūlomos"); W.eval("lkFiltrasNuimk")(); }
+    // mažos vertės su derybomis - „Jei vykdomos“
+    D.getElementById("apimtis-kaina").checked = true;            // su derybomis - derybų apimtis privaloma 1 žingsnyje
+    await zingsnis2("MV-SAD", "LT", "prekes");
+    const a2 = K().automatika.find(x => /Jei nevykdomos Derybos/i.test(x.kas));
+    tiesa(a2 && /paliekama „Jei vykdomos Derybos/i.test(a2.veiksmas) && /derybos vykdomos$/.test(a2.kodel), "MV-SAD: " + JSON.stringify(a2));
+    await zingsnis2("T-AK", "LT", "prekes");
+    tiesa(!D.getElementById("lkGreitas"), "atviram konkursui - skydelio nėra");
+  });
+
+  await testas("Mažos vertės pirkimo SPS sugeneruojamas pagal 1 žingsnio derybų atsakymą (be derybų - nėra „bus vykdomos Derybos“)", async () => {
+    salinkSenusRemelius();
+    const s = await generuokSu({ budas: "MV-NR", kalba: "LT", tipas: "prekes", energ: "ne" });
+    const t = s.MVP_LT_SPS.pars.join("\n");
+    tiesa(!/Šio Pirkimo metu bus vykdomos Derybos/.test(t), "be derybų teiginio");
+  });
+
+  await testas("CVP IS pildymo atmintinė (4 žingsnis): eilutės iš atsakymų (tos pačios kaip santraukoje), skirsniai - tik žinomi, neįrašyta - be kopijavimo, „Kopijuoti“ ir „Kopijuoti viską“, LT/EN pavadinimas, telpa siaurame ekrane", async () => {
+    salinkSenusRemelius();
+    await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "prekes", verte: "150000", energ: "ne" });
+    const el = D.getElementById("cvpisAtm");
+    tiesa(el && D.getElementById("cvpisAtmH"), "skiltis");
+    const E = el._eil, m = Object.fromEntries(E.map(x => [x.laukas, x]));
+    lygu(E.slice(0, 7).map(x => [x.sk, x.laukas]), [["2.1", "Pavadinimas"], ["2.1", "Pirkimo būdas"], ["2.1.1", "Sutarties objektas"], ["2.1.1", "Pagrindinis klasifikacijos kodas (cpv)"],
+      ["2.1.3", "Numatoma vertė be PVM"], ["5.1", "Pirkimo dalys"], ["5.1", "Galiojimas"]], "pirmos eilutės");
+    lygu(m["Pavadinimas"].reiksme, W.eval("pavClean")(PAVADINIMAS) + " pirkimas", "pavadinimas");
+    lygu(m["Pirkimo būdas"].reiksme, W.GP_METHODS.byId("T-AK").label, "būdas");
+    lygu(m["Sutarties objektas"].reiksme, "Prekės", "objektas");
+    lygu(m["Numatoma vertė be PVM"].reiksme, W.GP_MONEY.formatEUR(150000) + " Eur", "vertė");
+    tiesa(/jei numatomą vertę skelbiate/.test(m["Numatoma vertė be PVM"].pastaba), "vertės pastaba");
+    tiesa(!m["Pagrindinis klasifikacijos kodas (cpv)"].reiksme && /BVPŽ kodai neįrašyti/.test(m["Pagrindinis klasifikacijos kodas (cpv)"].pastaba), "BVPŽ neįrašyta");
+    const kal = m["Kalbos, kuriomis galima pateikti pasiūlymus"], ja = W.eval("juodosPasirinkimas")("kalba");
+    lygu([kal.sk, kal.reiksme], ["5.1.12", ja ? (/angl/i.test(ja) ? "lietuvių, anglų" : "lietuvių") : ""], "kalbos: " + ja);
+    tiesa(m["Sutarties skyrimo kriterijai"].reiksme && m["Įkeliami pirkimo dokumentai"].reiksme, "kriterijus ir failai");
+    tiesa(E.filter(x => !x.sk).every(x => x.laukas), "kiti - be skirsnio");
+    // neįrašyta - be mygtuko
+    const eil = [...el.querySelectorAll(".ca-r")];
+    lygu(eil.length, E.length, "eilutės ekrane");
+    const cpvR = eil[E.indexOf(m["Pagrindinis klasifikacijos kodas (cpv)"])];
+    tiesa(/neįrašyta/.test(cpvR.textContent) && !cpvR.querySelector("button"), "neįrašyta - be „Kopijuoti“");
+    // kopijavimas
+    const log = [], sena = W.GP_KOPIJA.kopijuok;
+    W.GP_KOPIJA.kopijuok = (t, o) => { log.push([t, o && o.sekme]); return Promise.resolve(true); };
+    try {
+      const b0 = eil[0].querySelector("button");
+      tiesa(b0.getAttribute("aria-label") === "Kopijuoti: Pavadinimas" && b0.textContent === "Kopijuoti", "mygtuko pavadinimas prasideda matomu tekstu");
+      b0.click();
+      el.querySelector("[data-cvpis-visi]").click();
+      eil[E.indexOf(m["Sutarties objektas"])].querySelector("button").click();
+      lygu(log[0], [m["Pavadinimas"].reiksme, "Nukopijuota: Pavadinimas"], "viena eilutė");
+      lygu(log[2], ["Prekės", "Nukopijuota: Sutarties objektas"], "kita eilutė - jos reikšmė");
+      tiesa(/^2\.1 Pavadinimas: /.test(log[1][0]) && /\n2\.1\.1 Pagrindinis klasifikacijos kodas \(cpv\): neįrašyta \(BVPŽ kodai neįrašyti/.test(log[1][0]) && log[1][1] === "Atmintinė nukopijuota", "visa: " + log[1][0].slice(0, 300));
+    } finally { W.GP_KOPIJA.kopijuok = sena; }
+    // siaurame ekrane: eilutė neperžengia savo pločio
+    tiesa(eil.every(r => r.scrollWidth <= r.clientWidth + 1), "telpa");
+    // LT/EN - angliškas pavadinimas
+    salinkSenusRemelius();
+    await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "prekes", pavEN: "Supply of transformers", energ: "ne" });
+    const en = D.getElementById("cvpisAtm")._eil.find(x => x.laukas === "Pavadinimas anglų kalba");
+    lygu(en && [en.sk, en.reiksme], ["2.1", "Procurement of Supply of transformers"], "EN pavadinimas");
+  });
+}
+
 async function testaiFormuTaisykles(){
   dabartine = grupe("Pasiūlymo ir paraiškos formų autorių taisyklės (2026-10-23): punktai pagal 1 žingsnio atsakymus, pašalinus - pernumeruojami, nuorodos atnaujinamos; šablonų taisymas AJ");
 
@@ -15642,7 +15960,7 @@ async function testaiPaskelbti(){
        testaiSutartiesDI, testaiPaketoPatikra, testaiPriedoNuorodos, testaiEtapas0, testaiEtapas1, testaiDalys, testaiU4, testai1021, testaiD6,
        testaiD3, testaiD4b, testaiD5, testaiU8, testaiD4c, testaiFormuTaisykles],
       [testaiTestuotojas, testaiSprendimai1020, testaiTestuotojas2, testaiNacsaugBvpz, testaiTestuotojas3, testai1021b, testai1021c, testai1022a,
-       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiPrivalomos, testaiTestuotojas5, testaiPaskelbti, testaiNdFormos]
+       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiPrivalomos, testaiTestuotojas5, testaiPaskelbti, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024]
     ]);
     for (const g of GRUPES) await g();
     document.getElementById("busena").textContent =
