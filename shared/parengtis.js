@@ -88,7 +88,8 @@
       priedu_nuorodos: "Nuoroda į SPS {n} priedą, bet SPS priedų sąraše tokio numerio nėra.",
       grafikas: "SPS grafiko datos ne iš eilės: „{a}“ ({ad}) po „{b}“ ({bd}).",
       netaikoma: "netaikoma", nepatikrinta: "nepatikrinta", beSkelbimo: "nėra skelbimo", beSps: "nėra SPS", beSutarties: "nėra sutarties",
-      beKorteles: "kortelė nepasirinkta", beDuomenu: "dokumente nerasta", beGrafiko: "SPS grafiko nerasta", bePriedu: "SPS priedų sąrašo nerasta",
+      beKorteles: "kortelė nepasirinkta", beDuomenu: "dokumente nerasta", beGrafiko: "SPS grafiko nerasta",
+      grafikasPavyzdys: "sugeneruotame SPS grafiko datos - šablono pavyzdžiai; įrašykite tikras datas Word programoje", bePriedu: "SPS priedų sąrašo nerasta",
       pakeitimoData: "įkeltas skelbimo pakeitimas - pirminio paskelbimo datos jame nėra",
       privNerasta: "Neradau: {e}. Ieškota: {kur}. Jei tai parašyta kitais žodžiais ar kitame dokumente, viskas gerai - nurodykite vietą sprendimo pagrindime.",
       privNerastaJei: "Neradau: {e}. Tai nurodoma, jeigu taikytina - patikrinkite, ar šiam pirkimui taikoma.",
@@ -176,7 +177,8 @@
       priedu_nuorodos: "Reference to SPS annex {n}, but the SPS list of annexes has no such number.",
       grafikas: "SPS schedule dates are out of order: “{a}” ({ad}) after “{b}” ({bd}).",
       netaikoma: "not applicable", nepatikrinta: "not checked", beSkelbimo: "no notice", beSps: "no SPS", beSutarties: "no contract",
-      beKorteles: "no card selected", beDuomenu: "not found in the document", beGrafiko: "no SPS schedule found", bePriedu: "no SPS list of annexes found",
+      beKorteles: "no card selected", beDuomenu: "not found in the document", beGrafiko: "no SPS schedule found",
+      grafikasPavyzdys: "in the generated SPS the schedule dates are template examples; enter the real dates in Word", bePriedu: "no SPS list of annexes found",
       pakeitimoData: "a change notice was loaded - it does not contain the original publication date",
       privNerasta: "Not found: {e}. Searched: {kur}. If it is worded differently or is in another document, that is fine - give the location in the decision note.",
       privNerastaJei: "Not found: {e}. This is stated where applicable - check whether it applies to this procurement.",
@@ -805,6 +807,8 @@
             !sps ? X.beSps : !sps.priedai.length ? X.bePriedu : "");
     // SPS grafiko datų tvarka
     if (!sps || sps.grafikas.length < 2) patikra("grafikas", "aiskumas", "nepatikrinta", !sps ? X.beSps : X.beGrafiko);
+    // PP-salygos sugeneruotame pakete grafiko datos - šablono pavyzdžiai (raudonos, įrašomos Word programoje) - jų tvarka nieko nepasako (T6-M6)
+    else if (o.sugeneruotas) patikra("grafikas", "aiskumas", "nepatikrinta", X.grafikasPavyzdys);
     else {
       var blogai = null;
       for (var gi = 1; gi < sps.grafikas.length && !blogai; gi++) if (sps.grafikas[gi].data < sps.grafikas[gi - 1].data) blogai = [sps.grafikas[gi - 1], sps.grafikas[gi]];
@@ -833,10 +837,10 @@
     // subjektų, įstatymas“ - ne), santrumpa „PĮ“ VPĮ pirkime - be sutarties (LITGRID sutarčių formose nuorodos „VPĮ / PĮ“ - sąmoningai abu).
     var RZ = {
       VPI: [{ re: /Perkan(?:tysis|čiojo|čiajam|tįjį|čiuoju|čiajame) subjekt/g, pav: X.rezimoPavPI },
-            { re: /Contracting Entit(?:y|ies)/g, pav: X.rezimoPavPIen },
+            { re: /Contracting Entit(?:y|ies)/gi, pav: X.rezimoPavPIen },          // ir mažąja raide (T6-V2, 2026-10-24: „one or more contracting entities“)
             { re: /(^|[^A-Za-z0-9ąčęėįšųūžĄČĘĖĮŠŲŪŽ])PĮ(?=$|[^A-Za-z0-9ąčęėįšųūžĄČĘĖĮŠŲŪŽ])/g, pav: X.rezimoPavPIsant, beSutarties: true }],
       PI: [{ re: /Perkanči(?:oji|osios|ajai|ąją|ąja|ojoje) organizacij/g, pav: X.rezimoPavVPI },
-           { re: /Contracting Authorit(?:y|ies)/g, pav: X.rezimoPavVPIen }]
+           { re: /Contracting Authorit(?:y|ies)/gi, pav: X.rezimoPavVPIen }]
     };
     var RZ_VAID = { sps: 1, bps: 1, pasiulymas: 1, paraiska: 1, priedas: 1, sutartis: 1, sutartis_bendrosios: 1 };
     var rzDocs = docs.filter(function (d) { return RZ_VAID[vaid[d.id]]; });
