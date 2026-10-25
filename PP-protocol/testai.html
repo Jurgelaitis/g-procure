@@ -1903,6 +1903,81 @@ async function testaiPatikra1025c(){
     tiesa((await protTekstas("TEST-P-A", "A1")).indexOf("(aktuali redakcija Pirkimo paskelbimo dieną)") >= 0, "A1 redakcija");
   });
 
+  await testas("Vienas dalyvis (naudotojo pastaba T8, PĮ 94 str. 8 d. 1 p.): be pasiūlymų eilės, atidėjimo terminas netaikomas tik pažymėjus ir kai tiekėjas vienas; neskelbiamose derybose - pažymėta iš anksto", async () => {
+    await patModulis();
+    const P = W.eval("PN_TEMPLATES"), cit = W.GP_TEISE.cit("atidejimas_netaikomas_vienas", "PI").replace(/^PĮ /, "Pirkimų įstatymo ");
+    W.openProtocol("TEST-P-N", "N8");
+    const z = D.getElementById("pf-be-atid");
+    tiesa(z && z.checked && D.querySelector('label[for="pf-be-atid"]') && D.getElementById("pf-be-atid-uz").textContent.indexOf(W.GP_TEISE.cit("atidejimas_netaikomas_vienas", "PI")) >= 0, "N8 žyma");
+    pildyk(eil(".d8-row", 0), { ".d8-name": TA, ".d8-ex": "470000", ".d8-vieta": "1", ".d8-vk": "laimetojas" });
+    isvalyk(".d8-row:nth-child(n+2)");
+    let T = await protTekstas("TEST-P-N", "N8");
+    tiesa(T.indexOf("pasiūlymų eilę") < 0 && T.indexOf("Pasiūlymų eilė") < 0, "eilė su vienu tiekėju:\n" + T.slice(T.indexOf("2. SPRENDIMAS")));
+    tiesa(T.indexOf("Atidėjimo termino netaikyti - vienintelis suinteresuotas dalyvis yra tas, su kuriuo sudaroma pirkimo sutartis, suinteresuotų kandidatų nėra (" + cit + ").") >= 0
+      && T.indexOf("Pakviesti laimėjusį tiekėją sudaryti sutartį.") >= 0 && T.indexOf("pasibaigus atidėjimo terminui") < 0, "N8 sprendimai:\n" + T.slice(T.indexOf("2. SPRENDIMAS")));
+    let pl = W.pranesimuPlanas("N8", W.getProcurement("TEST-P-N"));
+    const k9 = pl.kurti.find(k => /^9/.test(k.tId));
+    tiesa(k9 && k9.data.be_atidejimo === true && !pl.kurti.some(k => /^1[01]_/.test(k.tId)), "planas: " + JSON.stringify(pl.kurti));
+    const b = { imone: "LITGRID AB", pirkimo_budas: "neskelbiamų derybų būdu", pirkimo_budas_en: "by negotiated procedure", pirkimas: "„X“", kaina_be: 470000, kaina_su: 568700, atidejimas: "5 darbo dienas", atidejimo_pabaiga: "2026 m. lapkričio 3 d." };
+    let r = W.pnTekstas(P[k9.tId], Object.assign({}, b, k9.data));
+    tiesa(r.lt.indexOf("Komisija įvertino Jūsų pasiūlymą.\n" + TA + " pasiūlymas pripažintas laimėjusiu.") >= 0 && r.lt.indexOf("Atidėjimo terminas netaikomas, nes Jūs esate vienintelis suinteresuotas dalyvis (" + cit + ").") >= 0
+      && !/eilę|Atidėjimo terminas baigiasi|praėjus/.test(r.lt), "9 LT:\n" + r.lt);
+    tiesa(r.en.indexOf("The Commission has evaluated your bid.\nThe bid of " + TA) >= 0 && /The standstill period does not apply, as you are the only interested participant \(Article 94\(8\)\(1\) of the Law on Procurement\)\./.test(r.en) && !/ranking/.test(r.en), "9 EN:\n" + r.en);
+    r = W.pnTekstas(P["9_1_laimetojui_ekonom"], Object.assign({}, b, k9.data));
+    tiesa(r.lt.indexOf("[LENTELĖ") < 0 && r.lt.indexOf("vienintelis suinteresuotas dalyvis") >= 0, "9.1:\n" + r.lt);
+    // visas kelias: sukurtas raštas (duomenys iš plano)
+    await W.autoGenerateNotification(k9.tId, "N8", W.getProcurement("TEST-P-N"), k9);
+    const sukurtas = (W.loadNotifStore()["TEST-P-N"] || []).filter(n => n.templateId === k9.tId).pop();
+    tiesa(sukurtas && sukurtas.bodyLt.indexOf("vienintelis suinteresuotas dalyvis") >= 0 && sukurtas.bodyLt.indexOf("Atidėjimo terminas baigiasi") < 0, "sukurtas raštas: " + (sukurtas && sukurtas.bodyLt));
+    // du tiekėjai - eilė ir atidėjimas lieka, forma sako kodėl
+    pridek("#pf-d8-list"); pildyk(eil(".d8-row", 1), { ".d8-name": TB, ".d8-ex": "490000", ".d8-vieta": "2", ".d8-vk": "vertinti" });
+    eil(".d8-row", 1).querySelector(".d8-name").dispatchEvent(new Event("input", { bubbles: true }));
+    tiesa(/tiekėjų daugiau nei vienas \(2\) - atidėjimo terminas taikomas/.test(D.getElementById("pf-be-atid-pastaba").textContent), "įspėjimas");
+    T = await protTekstas("TEST-P-N", "N8");
+    tiesa(T.indexOf("Sudaryti tokią pasiūlymų eilę") >= 0 && T.indexOf("Pakviesti laimėjusį tiekėją sudaryti sutartį pasibaigus atidėjimo terminui.") >= 0 && T.indexOf("Atidėjimo termino netaikyti") < 0, "N8 su dviem");
+    pl = W.pranesimuPlanas("N8", W.getProcurement("TEST-P-N"));
+    tiesa(pl.kurti.find(k => /^9/.test(k.tId)).data.be_atidejimo === false, "du - planas");
+    // D8: žyma nepažymėta; vienas tiekėjas - eilės nėra, atidėjimas lieka
+    W.openProtocol("TEST-P-D", "D8");
+    tiesa(!D.getElementById("pf-be-atid").checked, "D8 nepažymėta");
+    pildyk(eil(".d8-row", 0), { ".d8-name": TA, ".d8-ex": "470000", ".d8-vieta": "1", ".d8-vk": "laimetojas" }); isvalyk(".d8-row:nth-child(n+2)");
+    T = await protTekstas("TEST-P-D", "D8");
+    tiesa(T.indexOf("pasiūlymų eilę") < 0 && T.indexOf("pasibaigus atidėjimo terminui") >= 0, "D8 vienas be žymos:\n" + T.slice(T.indexOf("2. SPRENDIMAS")));
+    // N9 po N8 su dviem tiekėjais - taikomas, nors pažymėta
+    const pk = W.getProcurement("TEST-P-N"); pk.protocols = { N8: { done: true, eile: [{ tiekejas: TA, kaina: 470000 }, { tiekejas: TB, kaina: 490000 }] } }; W.saveProcurementData("TEST-P-N", pk);
+    W.openProtocol("TEST-P-N", "N9"); eil(".kv-name", 0).value = TA; D.getElementById("pf-winner").value = TA; D.getElementById("pf-winner-ex").value = "470000";
+    tiesa(D.getElementById("pf-be-atid").checked, "N9 pažymėta");
+    T = await protTekstas("TEST-P-N", "N9");
+    tiesa(T.indexOf("Pasibaigus atidėjimo terminui, pakviesti " + TA) >= 0 && T.indexOf("Atidėjimo termino netaikyti") < 0, "N9 po dviejų:\n" + T.slice(T.indexOf("2. SPRENDIMAS")));
+    pk.protocols = {}; W.saveProcurementData("TEST-P-N", pk);
+    W.openProtocol("TEST-P-N", "N9"); eil(".kv-name", 0).value = TA; D.getElementById("pf-winner").value = TA; D.getElementById("pf-winner-ex").value = "470000";
+    T = await protTekstas("TEST-P-N", "N9");
+    tiesa(T.indexOf("Atidėjimo termino netaikyti") >= 0 && T.indexOf("Pakviesti " + TA + " sudaryti sutartį per") >= 0, "N9 vienas:\n" + T.slice(T.indexOf("2. SPRENDIMAS")));
+    ["A1", "A4", "D6"].forEach(id => { W.openProtocol(id === "D6" ? "TEST-P-D" : "TEST-P-A", id); tiesa(!D.getElementById("pf-be-atid"), id + " žyma"); });
+  });
+
+  await testas("Raštas Nr. 14.1 (naudotojo sprendimas T7): siūlomas tik kai atmesti visi pasiūlymai; kitaip - priežastis, be mygtukų, rankiniame kūrime - įspėjimas", async () => {
+    await patModulis();
+    const PN = "14_1_pretenzija_atm_pabaiga", kodel = W.eval("pn141Kodel()");
+    tiesa(kodel.indexOf(W.GP_TEISE.cit("pabaiga_visi_atmesti", "PI").replace(/^PĮ /, "Pirkimų įstatymo ")) >= 0 && /Dėl pretenzijos atmetimo ir pirkimo procedūrų tęsimo/.test(kodel), "priežastis: " + kodel);
+    let h = W.renderProtocolDocuments("TEST-P-A", "A5");
+    tiesa(h.indexOf(W.hx ? W.hx(kodel) : kodel.replace(/„/g, "„")) >= 0 || h.indexOf("Siūlomas tik tada, kai atmesti visi pasiūlymai") >= 0, "statusas");
+    tiesa(h.indexOf("openInlinePnGenerator('" + PN) < 0 && h.indexOf("openInlinePnGenerator('14_2_pretenzija_atm_tesimas") >= 0, "mygtukai");
+    W.openProtocol("TEST-P-A", "A5");
+    const pries = D.querySelectorAll(".epso-modal.show").length;
+    W.openInlinePnGenerator(PN, "A5");
+    lygu(D.querySelectorAll(".epso-modal.show").length, pries, "langas atsivėrė");
+    W.eval("currentPnPkId = 'TEST-P-A'");
+    W.renderPnFields(PN);
+    tiesa(D.getElementById("pn-141-pastaba"), "pranešimų puslapis");
+    const pk = W.getProcurement("TEST-P-A"); pk.protocols = { A4: { done: true, pranesimai: { data: "2026-10-25", sukurta: [{ tId: "12_1_visi_atmesti", gavejai: [TA, TB] }], nekurta: [] } } };
+    W.saveProcurementData("TEST-P-A", pk);
+    h = W.renderProtocolDocuments("TEST-P-A", "A5");
+    tiesa(h.indexOf("Siūlomas tik tada, kai atmesti visi pasiūlymai") < 0 && h.indexOf("openInlinePnGenerator('" + PN) >= 0, "visi atmesti");
+    W.renderPnFields(PN);
+    tiesa(!D.getElementById("pn-141-pastaba") && D.getElementById("pn-f-pretenzijos_motyvas"), "laukai");
+  });
+
   await testas("Kabutės, Skype ir VPT Ekspertas (M5, M9, V12): lietuviška kabutė nebeuždaroma ASCII kabute; atributai nenutrūksta; be Skype; vidinės priemonės paaiškinimas", async () => {
     await patModulis();
     const src = await (await fetch("LITGRID_Generatorius_v3.html?cb=" + Date.now())).text();
