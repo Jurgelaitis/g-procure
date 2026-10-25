@@ -4163,6 +4163,14 @@ function surinktiKlausimus(){
       if ((Z.raudonosPastabos || []).some(n => KOREGUOJAMA_RE.test(n.text || '') && !isjungta.has(n.i)))
         auto(trumpas, 'Koreguojama pagal poreikį: (kainų lentelė)', 'lieka raudona - 4 žingsnis ją rodo',
              'pasiūlymo formos kainų lentelę (pirkimo objekto pozicijas, matavimo vienetus, kiekius) pritaikykite Word programoje ir nurodymą pašalinkite');
+      // Rengėjo pildoma vieta formoje (naudotojo sprendimas 2026-10-25): derybų formos sutarties specialiųjų sąlygų punktai - klausimas,
+      // angliška vieta (LT/EN) - laukas prie lietuviško klausimo
+      (Z.tuscios || []).filter(n => !isjungta.has(n.i) && formosRengejoLaukas(Z, n)).forEach(n => {
+        const raktas = tusciaRaktas(n, d.trumpas), lt = n.pora !== undefined && (Z.tuscios || []).find(x => x.i === n.pora);
+        if (!lt){ laukoKlausimas(d, trumpas, raktas, n); return; }
+        if (!Array.isArray(ATS['B_' + raktas])) ATS['B_' + raktas] = new Array(vietuSk(n.text)).fill('');
+        K.enPoros.tuscios[tusciaRaktas(lt, d.trumpas)] = { enRaktas: raktas, vietos: vietuSk(n.text), tekstas: n.text };
+      });
       auto(trumpas, 'tiekėjo pildomos vietos ir formos nurodymai', 'paliekama kaip šablone',
            'tai pasiūlymų pateikimo etapo laukai - rengėjas jų nepildo');
       return;
@@ -8076,6 +8084,38 @@ const FORMOS_NUORODOS = [
   // TSD ir ND LT/EN pasiūlymo formose c) papunktyje - „Tender’’s“ su dviem kabutėmis (šablonas, AM taiso; T6-K1, 2026-10-24): kabutės - 1 ar 2
   { re: /(Tender[’']{1,2}s|Application[’']{1,2}s)(\s+section\s+)(\d+\.\d+(?:\.\d+)*)/g, nr: [3] }
 ];
+/* 10h. Mažos vertės pirkimas be derybų (naudotojo sprendimas 2026-10-25): SPS juodame tekste „Pirminis pasiūlymas“ -> „Pasiūlymas“ (LT/EN -
+   ir „Initial Tender“ -> „Tender“) - be derybų teikiamas vienas pasiūlymas; raudoni šablono variantai jau parinkti (RAUDONOS_ALT). Pastraipa,
+   kurioje lieka „Galutinis“ / „Final“, nekeičiama - 4 žingsnis prašo ją patikrinti. -> { pakeista: [{ buvo, tapo }], liko: [tekstas] } */
+/* Rengėjo pildoma vieta formoje (naudotojo sprendimas 2026-10-25): derybų formos „... Specialiųjų Sutarties sąlygų ___ punktams“ - 2 žingsnio
+   klausimas (GP_LAUKAI.TIPAI „deretinu-punktai“), ne tiekėjo laukas; LT/EN angliška vieta - su lietuviška pora („ai“) */
+const DERETINU_RE = /gali siulyti korekcijas techninei specifikacijai bei specialiuju sutarties salygu/;
+function formosRengejoLaukas(Z, n){
+  if (DERETINU_RE.test(GP_LAUKAI.norm(n.text))) return true;
+  const lt = n.pora !== undefined && n.poraTipas === 'ai' && (Z.tuscios || []).find(x => x.i === n.pora);
+  return !!(lt && DERETINU_RE.test(GP_LAUKAI.norm(lt.text)));
+}
+const MVP_PIRMINIS_LT = /(^|[^\p{L}])(?:Pirmin|PIRMIN)(?:is|io|iam|į|iu|iame|ių|iams|ius|iais|iuose|IS|IO|IAM|Į|IU|IAME|IŲ|IAMS|IUS|IAIS|IUOSE)\s+([pP]asiūlym|PASIŪLYM)(\p{L}*)(?:\s*\/\s*[pP]asiūlym\p{L}*)?/gu;
+const MVP_PIRMINIS_EN = /(^|[^\p{L}])(?:Initial|INITIAL)\s+(Tender|TENDER)/gu;
+const MVP_GALUTINIS = /Galutin|GALUTIN|(^|[^\p{L}])(?:Final|FINAL)(?![\p{L}])/u;
+async function mvpBePirminio(doc){
+  const out = { pakeista: [], liko: [] }, X = await GPDocx.part(doc, 'word/document.xml');
+  if (!X) return out;
+  GPDocx.els(X, 'p').forEach(p => {
+    const ts = GPDocx.els(p, 't'), t = ts.map(x => x.textContent).join(''), keit = [];
+    [MVP_PIRMINIS_LT, MVP_PIRMINIS_EN].forEach(re => {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(t))) keit.push([m.index + m[1].length, m.index + m[0].length,
+        re === MVP_PIRMINIS_LT ? (m[2] === 'PASIŪLYM' ? 'PASIŪLYM' : 'Pasiūlym') + m[3] : m[2]]);
+    });
+    if (!keit.length) return;
+    if (MVP_GALUTINIS.test(t)){ out.liko.push(t.replace(/\s+/g, ' ').trim()); return; }
+    keiskAtkarpas(ts, keit);
+    out.pakeista.push({ buvo: t, tapo: ts.map(x => x.textContent).join('') });
+  });
+  return out;
+}
 function formosPernumeravimas(doc, pre, dvikalbis){
   const W = GPDocx.NS_W, X = doc.parts['word/document.xml'];
   const P = GPDocx.els(X, 'p');                                       // tik likusios (pašalintos - ne dokumento medyje)
@@ -8339,6 +8379,10 @@ async function generuotiViena(d, REZ){
     if (OBJ_SAKINYS_RE.test(n.text) || PAV_EN_RE.test(n.text)) objIdx.add(n.i);
     if (forma){
       if (PAV_RE.test(n.text) && pav) pildyta += GPGen.pildyti(paras, n.i, [pav]);
+      else if (formosRengejoLaukas(Z, n)){                   // derybų formos sutarties punktai (2026-10-25) - rengėjo atsakymas
+        const v = ATS['B_' + tusciaRaktas(n, d.trumpas)];
+        if (Array.isArray(v) && v.some(x => String(x || '').trim())) pildyta += pildykLauka(n.i, v, false);
+      }
       return;
     }
     if (tekstoIdx.has(n.i)) return;                 // tvarko intarpu logika
@@ -8779,6 +8823,9 @@ async function generuotiViena(d, REZ){
   const formosNum = formosSabNr ? formosPernumeravimas(doc, formosSabNr, Z.kalba === 'LTEN') : null;
   if (formosNum) formosNum.pakeista.forEach(x => doc.log.push('formos punktas: ' + x.buvo + ' -> ' + x.tapo));
   const formosTaisykles = forma && yraTaisykliuForma(d) ? formosTaisykliuSprendimai(Z, REZ) : [];
+  // 10h. Mažos vertės pirkimas be derybų - „Pirminis pasiūlymas“ -> „Pasiūlymas“ (naudotojo sprendimas 2026-10-25)
+  const mvpPirm = !forma && Z.seima === 'MVP' && Z.tipas === 'SPS' && $('input[name=derybos]:checked')?.value === 'ne' ? await mvpBePirminio(doc) : null;
+  if (mvpPirm) mvpPirm.pakeista.forEach(x => doc.log.push('pasiūlymas be derybų: ' + x.tapo.slice(0, 80)));
   // 10f. Kryžminės nuorodos į punktus (BPS „REF ... \r“) - tekstu: numeriai jau tekstas, o Word, atnaujinęs laukus, skaičiuotų juos iš
   //     žymių (LITGRID šablone dalis ne tose eilutėse) - GPDocx.nuorodosTekstu; rodomas tekstas nesikeičia (2026-10-23)
   const nuorodosTekstu = GPDocx.nuorodosTekstu(doc);
@@ -8853,7 +8900,7 @@ async function generuotiViena(d, REZ){
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, prieduNr: prNr, juodosAlt, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaZal, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, nuorodosTekstu, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
                    kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, punktuNuorodos: punktuNuor, lenteliuNr: lentNr, spec37, kvalPunktai, antrastesLent: antrLent.dalys, eilNuorodos, raudAlt, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
-                   formosNumeracija: formosNum, formosTaisykles,
+                   formosNumeracija: formosNum, formosTaisykles, mvpPirminis: mvpPirm,
                    esminiuNuorodos: esminiuNuor.map(x => ({ buvo: x.buvo, tapo: skyriausNr ? x.tapo.split(SKYRIAUS_ZYMA).join(skyriausNr) : x.tapo.split(SKYRIAUS_ZYMA).join('___') })) } };
 }
 
@@ -9373,6 +9420,14 @@ function rodykRezultata(rez){
   const ad = rez.filter(r => r.stats && r.stats.apzDatos && r.stats.apzDatos.length);
   if (ad.length) h += `<div class="audit no" id="apziurosDatos" style="margin-top:10px"><b>Objekto apžiūros datos - įrašykite savo:</b> ${ad.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.apzDatos.map(x => `„${esc(x)}“`).join(', ')}`).join('; ')}.
     Tai šablono pavyzdinės datos; dokumente jos paliktos raudonos - Word programoje įrašykite, iki kada tiekėjai turi kreiptis dėl apžiūros ir kada ji vyks.</div>`;
+  // Mažos vertės pirkimas be derybų - „Pirminis pasiūlymas“ -> „Pasiūlymas“ (naudotojo sprendimas 2026-10-25)
+  const mp = rez.filter(r => r.stats && r.stats.mvpPirminis);
+  const mpP = mp.flatMap(r => r.stats.mvpPirminis.pakeista.map(x => ({ d: dokumentoPavadinimas(r.d), ...x })));
+  const mpL = mp.flatMap(r => r.stats.mvpPirminis.liko.map(x => ({ d: dokumentoPavadinimas(r.d), t: x })));
+  if (mpP.length) h += `<div class="audit ok" id="mvpPirminis" style="margin-top:10px"><b>Derybos nevykdomos - „Pirminis pasiūlymas“ pakeistas į „Pasiūlymas“${mpP.some(x => /Tender/.test(x.tapo)) ? ' (angliškai „Initial Tender“ - „Tender“)' : ''}:</b>
+    ${mpP.map(x => { const ii = raIs(x); return `${esc(x.d)} - „${esc(ii.buvo)}“ → „${esc(ii.tapo)}“`; }).join('; ')}. Be derybų teikiamas vienas pasiūlymas.</div>`;
+  if (mpL.length) h += `<div class="audit no" id="mvpPirminisLiko" style="margin-top:10px"><b>Patikrinkite - derybos nevykdomos, bet pastraipoje minimas ir galutinis pasiūlymas:</b>
+    ${mpL.map(x => `${esc(x.d)} - „${esc(iskarpa(x.t))}“`).join('; ')}. Ji palikta kaip šablone - Word programoje sutvarkykite arba pašalinkite.</div>`;
   // šablono pavyzdinės reikšmės pasirinktoje šakoje (T4-K1, 2026-10-22) - paliktos raudonos
   const pvz = rez.filter(r => r.stats && r.stats.pavyzdziaiLiko && r.stats.pavyzdziaiLiko.length);
   if (pvz.length) h += `<div class="audit no" id="pavyzdziaiPatikra" style="margin-top:10px"><b>Šablono pavyzdinės reikšmės - įrašykite savo:</b> ${pvz.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.pavyzdziaiLiko.map(x => `„${esc(x)}“`).join(', ')}`).join('; ')}.
@@ -12253,13 +12308,14 @@ const RAKTU_PERVADINIMAI = [['sutarties uztikrinimo ivykdymo uztikrinima', 'suta
   ['tiekejas sps 5 priede nebus nurodes kad sps 2 lenteles', 'tiekejas sps 6 priede nebus nurodes kad sps 2 lenteles', ['TSD']],
   ['as indicated in annex 5 of the spc submitted by the supplier', 'as indicated in annex 6 of the spc submitted by the supplier', ['TSD']],
   ['deklaruojamas paraiskoje ir pasiulyme', 'deklaruojamas pasiulyme', ['SSD']],
-  // ND SPS 7.1 p. - pasiūlymo galiojimo užtikrinimas kartu su Pirminiu pasiūlymu (šablonų taisymas AO, naudotojo sprendimas 2026-10-25)
-  ['kartu su galutiniu pasiulymu tiekejas privalo pateikti', 'kartu su pirminiu pasiulymu tiekejas privalo pateikti', ['ND']],
-  ['voke iki galutiniu pasiulymu pateikimo termino pabaigos', 'voke iki pirminiu pasiulymu pateikimo termino pabaigos', ['ND']],
-  ['dienas po galutiniu pasiulymu pateikimo termino pabaigos ir joje turi buti nurodytas garantijos galiojimo terminas', 'dienas po pirminiu pasiulymu pateikimo termino pabaigos ir joje turi buti nurodytas garantijos galiojimo terminas jeigu bus prasoma pateikti galutini pasiulyma banko garantija turi galioti tiek pat dienu po galutiniu pasiulymu pateikimo termino pabaigos prireikus tiekejas ja pratesia ir pratesima pateikia kartu su galutiniu pasiulymu', ['ND']],
-  ['together with the final tender the supplier must provide', 'together with the initial tender the supplier must provide', ['ND']],
-  ['before the deadline for submission of final tenders to address', 'before the deadline for submission of initial tenders to address', ['ND']],
-  ['after the deadline for submission of final tenders and must specify the term of validity of the guarantee', 'after the deadline for submission of initial tenders and must specify the term of validity of the guarantee if the final tender is requested the bank guarantee must remain valid for the same number of days after the deadline for submission of final tenders if necessary the supplier shall extend it and submit the extension together with the final tender', ['ND']]];
+  // ND SPS 7.1 p. - pasiūlymo galiojimo užtikrinimas kartu su Pirminiu pasiūlymu (šablonų taisymas AO, naudotojo sprendimas 2026-10-25);
+  // SSD ir TSD SPS - tas pats (AP, naudotojo sprendimas 2026-10-25)
+  ['kartu su galutiniu pasiulymu tiekejas privalo pateikti', 'kartu su pirminiu pasiulymu tiekejas privalo pateikti', ['ND', 'SSD', 'TSD']],
+  ['voke iki galutiniu pasiulymu pateikimo termino pabaigos', 'voke iki pirminiu pasiulymu pateikimo termino pabaigos', ['ND', 'SSD', 'TSD']],
+  ['dienas po galutiniu pasiulymu pateikimo termino pabaigos ir joje turi buti nurodytas garantijos galiojimo terminas', 'dienas po pirminiu pasiulymu pateikimo termino pabaigos ir joje turi buti nurodytas garantijos galiojimo terminas jeigu bus prasoma pateikti galutini pasiulyma banko garantija turi galioti tiek pat dienu po galutiniu pasiulymu pateikimo termino pabaigos prireikus tiekejas ja pratesia ir pratesima pateikia kartu su galutiniu pasiulymu', ['ND', 'SSD', 'TSD']],
+  ['together with the final tender the supplier must provide', 'together with the initial tender the supplier must provide', ['ND', 'SSD', 'TSD']],
+  ['before the deadline for submission of final tenders to address', 'before the deadline for submission of initial tenders to address', ['ND', 'SSD', 'TSD']],
+  ['after the deadline for submission of final tenders and must specify the term of validity of the guarantee', 'after the deadline for submission of initial tenders and must specify the term of validity of the guarantee if the final tender is requested the bank guarantee must remain valid for the same number of days after the deadline for submission of final tenders if necessary the supplier shall extend it and submit the extension together with the final tender', ['ND', 'SSD', 'TSD']]];
 const naujasRaktas = k => RAKTU_PERVADINIMAI.reduce((a, [sena, nauja, seimos]) => !seimos || seimos.includes(seima()) ? a.split(sena).join(nauja) : a, String(k));
 async function atkurkJuodrasti(r){
   const D = r.duomenys || {}, L = D.z1 || {};

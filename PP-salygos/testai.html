@@ -15215,7 +15215,7 @@ function ftNuorodos(pars){
   const out = [], sal = ftPunktas(pars, /kad teikiant (Pasiūlymą|Paraišką) nėra n(ė|ei) vienos iš šių sąlygų/),
     rus = ftPunktas(pars, /sudėtyje nėra Rusijos dalyvavimo/), eng = ftPunktas(pars, /nedalyvavo|nedalyvavome/);
   pars.forEach(t => {
-    for (const m of t.matchAll(/šios dalies (\d+\.\d+\.\d+)\.? ir (\d+\.\d+\.\d+)|Clauses (\d+\.\d+\.\d+)\.? and \/ or (\d+\.\d+\.\d+)/g)){
+    for (const m of t.matchAll(/šios dalies (\d+\.\d+\.\d+)\.? ir (\d+\.\d+\.\d+)|Clauses (\d+\.\d+\.\d+)\.? and (?:\/ or )?(\d+\.\d+\.\d+)/g)){
       const [a, b] = [m[1] || m[3], m[2] || m[4]];
       if (a !== sal + ".1" || b !== sal + ".2") out.push("sąlygos " + sal + ": " + m[0]);
     }
@@ -15773,8 +15773,7 @@ async function testaiSprendimai1025(){
     }
     const e = le.find(x => /^Together with the Initial Tender, the Supplier must provide Tender security/.test(x)) || "";
     tiesa(/before the deadline for submission of Initial Tenders to address/.test(e) && /at least 105 days after the deadline for submission of Initial Tenders/.test(e) && /If the Final Tender is requested, the bank guarantee must remain valid for the same number of days/.test(e), "ND LT/EN 7.1 p. EN");
-    // SSD ir TSD 7.1 p. nekeičiami (naudotojo sprendimas - tik neskelbiamos derybos)
-    tiesa((await tekstas("templates/SSD_LT_SPS.docx")).some(x => /Kartu su Galutiniu pasiūlymu Tiekėjas privalo/.test(x)), "SSD nepakito");
+    // SSD ir TSD 7.1 p. - nuo 2026-10-25 taip pat (AP, testaiSprendimai1025b)
   });
 
   await testas("AO generatorius: x.2.4 p. EN pagal užtikrinimą ir projektavimą (atsisakoDokumentai), x.2 p. EN be vadovų sąrašo (laimetojoDokumentai); senų juodraščių ND 7.1 p. raktai perkeliami tik ND šeimai", async () => {
@@ -15794,8 +15793,8 @@ async function testaiSprendimai1025(){
     sel.value = "S-ND"; sel.dispatchEvent(new W.Event("change"));
     const n = nr(SENAS);
     tiesa(/kartu su pirminiu pasiulymu/.test(n) && /voke iki pirminiu/.test(n) && /po pirminiu pasiulymu pateikimo termino pabaigos ir joje turi buti nurodytas garantijos galiojimo terminas jeigu bus prasoma pateikti galutini pasiulyma/.test(n), "ND - perkeliama: " + n);
-    sel.value = "S-SD"; sel.dispatchEvent(new W.Event("change"));
-    lygu(nr(SENAS), SENAS, "SSD - nekeičiama");
+    sel.value = "S-AK"; sel.dispatchEvent(new W.Event("change"));
+    lygu(nr(SENAS), SENAS, "AK - nekeičiama (SSD ir TSD - nuo 2026-10-25, AP)");
   });
 
   await testas("AO generavimas: ND LT ir LT/EN su pasiūlymo galiojimo užtikrinimu - 7.1 p. su Pirminiu pasiūlymu, įrašytos dienos abiejuose sakiniuose nekartojamos, 5.3 p. išlyga, 1.7 p. „request“, x.2.4 p. EN", async () => {
@@ -15818,6 +15817,129 @@ async function testaiSprendimai1025(){
         tiesa(!t.some(x => /list of managers|copy of the Procurement Contract security/.test(x)), k + ": EN be senų žodžių");
       }
     }
+  });
+}
+async function testaiSprendimai1025b(){
+  dabartine = grupe("Naudotojo sprendimai 2026-10-25 (AP): LT/EN formų „Clauses ... of this section“, SSD ir TSD 7.1 p. užtikrinimas su Pirminiu pasiūlymu, mažos vertės be derybų - „Pasiūlymas“, derybų formos sutarties punktai - pildomas laukas");
+  const tekstas = async kelias => visosPastraipos(await (await W.JSZip.loadAsync(await (await W.fetch(kelias)).arrayBuffer())).file("word/document.xml").async("string")).map(p => p.t);
+  const zem = async f => (await fetch("zemelapiai/" + f + ".json", { cache: "no-store" })).json();
+  const PRIEDAS_71 = "Jeigu bus prašoma pateikti Galutinį pasiūlymą, banko garantija turi galioti tiek pat dienų po Galutinių pasiūlymų pateikimo termino pabaigos; prireikus Tiekėjas ją pratęsia ir pratęsimą pateikia kartu su Galutiniu pasiūlymu.";
+
+  await testas("AP šablonai ir žemėlapiai: LT/EN pasiūlymo ir paraiškos formose „Clauses 1.8.1 and 1.8.2 of this section“ (be „GPC“), SSD ir TSD 7.1 p. kaip ND (LT ir LT/EN), derybų formoje - pildoma vieta „___“ (LT/EN - angliška pora prie lietuviškos)", async () => {
+    await modulis();
+    for (const [f, a, b] of [["AK_LTEN_PASIULYMAS", "1.8.1", "1.8.2"], ["MVP_LTEN_PASIULYMAS", "1.8.1", "1.8.2"], ["ND_LTEN_PASIULYMAS", "1.8.1", "1.8.2"], ["TSD_LTEN_PASIULYMAS", "1.8.1", "1.8.2"], ["TSD_LTEN_PARAISKA", "1.7.1", "1.7.2"], ["DPSP_LTEN_PASIULYMAS", "1.5.1", "1.5.2"]]) {
+      const t = await tekstas("templates/" + f + ".docx"), Z = JSON.stringify(await zem(f)), S = "entities specified in Clauses " + a + " and " + b + " of this section";
+      tiesa(t.some(p => p.includes(S)) && Z.includes(S), f + ": „" + S + "“");
+      tiesa(!t.some(p => /of the GPC/.test(p)) && !/of the GPC/.test(Z), f + ": „of the GPC“ nebėra");
+      tiesa(t.some(p => p.includes("šios dalies " + a + " ir " + b + " punktuose")), f + ": lietuviškas sakinys nepakito");
+    }
+    for (const f of ["SSD_LT_SPS", "SSD_LTEN_SPS", "TSD_LT_SPS", "TSD_LTEN_SPS"]) {
+      const t = await tekstas("templates/" + f + ".docx"), Z = JSON.stringify(await zem(f));
+      const p = t.find(x => /Kartu su Pirminiu pasiūlymu Tiekėjas privalo pateikti/.test(x)) || "";
+      tiesa(/užklijuotame voke iki Pirminių pasiūlymų pateikimo termino pabaigos/.test(p) && /ne trumpiau kaip 105 dienas po Pirminių pasiūlymų pateikimo termino pabaigos/.test(p) && p.endsWith(PRIEDAS_71), f + ": 7.1 p.: " + p.slice(-260));
+      tiesa(!t.some(x => /Kartu su Galutiniu pasiūlymu Tiekėjas privalo/.test(x)) && !/Kartu su Galutiniu pasiūlymu Tiekėjas privalo/.test(Z) && Z.includes(PRIEDAS_71), f + ": sena redakcija - nei šablone, nei žemėlapyje");
+      if (/LTEN/.test(f)) {
+        const e = t.find(x => /^Together with the Initial Tender, the Supplier must provide Tender security/.test(x)) || "";
+        tiesa(/before the deadline for submission of Initial Tenders to address/.test(e) && /at least 105 days after the deadline for submission of Initial Tenders/.test(e) && /If the Final Tender is requested, the bank guarantee must remain valid for the same number of days/.test(e), f + ": EN");
+      }
+    }
+    const lt = await tekstas("templates/PRIEDAI_LT_DERYBOS.docx"), le = await tekstas("templates/PRIEDAI_LTEN_DERYBOS.docx");
+    tiesa(lt.some(p => /Specialiųjų Sutarties sąlygų ___ punktams/.test(p)) && !lt.some(p => /9\.4\.-9\.6\./.test(p)), "LT forma: pildoma vieta");
+    tiesa(le.some(p => /Specialiųjų Sutarties sąlygų ___ punktams/.test(p)) && le.some(p => /Technical Specification and Clauses ___ of the Special Conditions of the Contract/.test(p)) && !le.some(p => /9\.4\.-9\.6\./.test(p)), "LT/EN forma: pildomos vietos");
+    const ZL = await zem("PRIEDAI_LT_DERYBOS"), ZE = await zem("PRIEDAI_LTEN_DERYBOS");
+    const tl = ZL.tuscios.find(e => /Specialiųjų Sutarties sąlygų ___ punktams/.test(e.text)), te = ZE.tuscios.find(e => /Specialiųjų Sutarties sąlygų ___ punktams/.test(e.text)), ee = ZE.tuscios.find(e => /Clauses ___ of the Special/.test(e.text));
+    tiesa(tl && ZL.paras[String(tl.i)] === tl.text, "LT žemėlapis: vieta");
+    tiesa(te && ee && ee.pora === te.i && ee.poraTipas === "ai" && te.pora === undefined && ZE.paras[String(ee.i)] === ee.text, "LT/EN žemėlapis: angliška vieta su lietuviška pora: " + JSON.stringify([te, ee]));
+  });
+
+  await testas("AP generatorius: juodraščių 7.1 p. raktai perkeliami ir SSD bei TSD (AK - ne); derybų forma - klausimas „Kurių sutarties specialiųjų sąlygų punktų ...“, įrašyta reikšmė LT ir LT/EN (EN laukas prie lietuviško klausimo), neatsakius forma nebaigta", async () => {
+    await modulis();
+    const sel = D.getElementById("budas"), nr = W.eval("naujasRaktas");
+    const SENAS = "9 1 kartu su galutiniu pasiulymu tiekejas privalo pateikti ... voke iki galutiniu pasiulymu pateikimo termino pabaigos adresu ... ne trumpiau kaip 105 dienas po galutiniu pasiulymu pateikimo termino pabaigos ir joje turi buti nurodytas garantijos galiojimo terminas";
+    for (const [b, keisti] of [["S-SD", true], ["T-SD", true], ["S-ND", true], ["T-AK", false]]) {
+      sel.value = b; sel.dispatchEvent(new W.Event("change"));
+      const n = nr(SENAS);
+      lygu([/kartu su pirminiu pasiulymu/.test(n), /voke iki pirminiu/.test(n), /po pirminiu pasiulymu pateikimo termino pabaigos ir joje turi buti nurodytas garantijos galiojimo terminas jeigu bus prasoma pateikti galutini pasiulyma/.test(n)],
+        [keisti, keisti, keisti], b + ": " + n);
+    }
+    const deretinu = () => Object.entries(W.__K.tuscios).find(([, q]) => q.lk && q.lk.tipas === "deretinu-punktai");
+    for (const [budas, kalba, kodas, verte] of [["S-SD", "LT", "PRIEDAI_LT_DERYBOS", "2.3-2.8 ir 10.1"], ["T-SD", "LT_EN", "PRIEDAI_LTEN_DERYBOS", "2.3-2.8 ir 10.1"]]) {
+      for (const pildyti of [true, false]) {
+        salinkSenusRemelius();
+        let klausimas = null;
+        const docs = await generuokSu({ budas, kalba, tipas: "paslaugos", energ: "ne", apimtis: "kaina_kitos", pavEN: kalba === "LT_EN" ? "Maintenance services" : undefined, pries: () => {
+          const e = deretinu();
+          klausimas = e && e[1];
+          if (e && pildyti) {
+            W.uAtsArr("B_" + e[0], 0, verte);
+            const en = W.__K.enPoros.tuscios[e[0]];
+            if (en) W.uAtsArr("B_" + en.enRaktas, 0, "2.3-2.8 and 10.1");
+          }
+        } });
+        const k = budas + " " + kalba + (pildyti ? "" : " (neatsakyta)");
+        tiesa(klausimas && klausimas.lk.klausimas === "Kurių sutarties specialiųjų sąlygų punktų korekcijas tiekėjai gali siūlyti derybose?" && klausimas.lk.vietos.length === 1, k + ": klausimas: "
+          + JSON.stringify(Object.values(W.__K.tuscios).filter(q => /korekcij/.test(q.tekstas || "")).map(q => [q.lk && q.lk.tipas, q.tekstas])) + " DOK: " + W.eval("DOK").map(x => x.trumpas).join(","));
+        if (kalba === "LT_EN") tiesa(W.__K.enPoros.tuscios[deretinu()[0]], k + ": angliškas laukas prie lietuviško klausimo");
+        const f = docs[kodas];
+        tiesa(f && f.pars, k + ": derybų forma pakete");
+        if (pildyti) {
+          tiesa(f.pars.some(p => p.includes("Specialiųjų Sutarties sąlygų " + verte + " punktams")), k + ": įrašyta: " + f.pars.filter(p => /Specialiųjų Sutarties/.test(p)).join(" | "));
+          if (kalba === "LT_EN") tiesa(f.pars.some(p => p.includes("Technical Specification and Clauses 2.3-2.8 and 10.1 of the Special Conditions")), k + ": EN įrašyta");
+          tiesa(!(f.r.audit.tuscios || []).length, k + ": rengėjo vietų neliko");
+        } else {
+          tiesa(f.pars.some(p => /Specialiųjų Sutarties sąlygų _+ punktams/.test(p)), k + ": vieta lieka");
+          tiesa(!f.r.audit.svarus && f.r.audit.tuscios.some(x => /Specialiųjų Sutarties sąlygų _+ punktams/.test(x.text)), k + ": forma nebaigta");
+        }
+      }
+    }
+  });
+
+  await testas("AP generavimas: SSD ir TSD (LT ir LT/EN) su pasiūlymo galiojimo užtikrinimu - užtikrinimas su Pirminiu pasiūlymu, įrašytos dienos abiejuose sakiniuose", async () => {
+    const uzt = async () => {
+      const gid = Object.entries(W.__K.grupes).find(([, g]) => W.uztikrinimoSkaidomas(g))[0];
+      W.pasirinkUztikrinima(gid, "taip"); W.uAts("UZT_SUMA", "20000", false); W.uAts("UZT_DIENOS", "120");
+    };
+    for (const [budas, kalba, kodas] of [["S-SD", "LT", "SSD_LT_SPS"], ["T-SD", "LT_EN", "TSD_LTEN_SPS"]]) {
+      salinkSenusRemelius();
+      const d = await generuokSu({ budas, kalba, tipas: "paslaugos", energ: "ne", apimtis: "kaina", pavEN: kalba === "LT_EN" ? "Maintenance services" : undefined, pries: uzt });
+      const t = d[kodas].pars, k = budas + " " + kalba;
+      const p = t.find(x => /Kartu su Pirminiu pasiūlymu Tiekėjas privalo pateikti/.test(x)) || "";
+      tiesa(/ne trumpiau kaip 120 dienų po Pirminių pasiūlymų pateikimo termino pabaigos/.test(p) && /banko garantija turi galioti tiek pat dienų po Galutinių pasiūlymų/.test(p) && /20 000 Eur/.test(p), k + ": 7.1 p.: " + p.slice(-420));
+      if (kalba === "LT_EN") {
+        const e = t.find(x => /^Together with the Initial Tender/.test(x)) || "";
+        tiesa(/for at least 120 days after the deadline for submission of Initial Tenders/.test(e) && /same number of days after the deadline for submission of Final Tenders/.test(e), k + ": EN: " + e.slice(-300));
+      }
+    }
+  });
+
+  await testas("AP mažos vertės pirkimas: be derybų SPS „Pirminis pasiūlymas“ -> „Pasiūlymas“ (LT/EN - ir „Initial Tender“ -> „Tender“), 4 žingsnis tai sako; su derybomis - nekeičiama", async () => {
+    for (const [budas, kalba, kodas] of [["MV-SAB", "LT", "MVP_LT_SPS"], ["MV-SAB", "LT_EN", "MVP_LTEN_SPS"], ["MV-SAD", "LT", "MVP_LT_SPS"]]) {
+      salinkSenusRemelius();
+      const d = await generuokSu({ budas, kalba, tipas: "paslaugos", energ: "ne", apimtis: "kaina", pavEN: kalba === "LT_EN" ? "Maintenance services" : undefined });
+      const f = d[kodas], t = f.pars, s = f.r.stats.mvpPirminis, k = budas + " " + kalba, b = D.getElementById("mvpPirminis");
+      if (budas === "MV-SAD") {
+        tiesa(s === null && !b, k + ": su derybomis nekeičiama");
+        tiesa(t.some(x => /Pirmin/.test(x)), k + ": pirminis pasiūlymas lieka");
+        continue;
+      }
+      tiesa(s && s.pakeista.length > 0, k + ": pakeista: " + JSON.stringify(s && s.pakeista.length));
+      lygu(s.liko, [], k + ": paliktų pastraipų su galutiniu pasiūlymu nėra");
+      tiesa(!t.some(x => /Pirmin|PIRMIN/.test(x)), k + ": „Pirmin...“ neliko: " + t.filter(x => /Pirmin|PIRMIN/.test(x)).join(" | ").slice(0, 300));
+      if (kalba === "LT_EN") tiesa(!t.some(x => /Initial Tender|INITIAL TENDER/.test(x)), k + ": „Initial Tender“ neliko: " + t.filter(x => /Initial Tender/.test(x)).join(" | ").slice(0, 300));
+      tiesa(t.some(x => /su Pasiūlymu/.test(x)), k + ": „su Pasiūlymu“");
+      tiesa(b && /„Pirminis pasiūlymas“ pakeistas į „Pasiūlymas“/.test(b.textContent) && b.textContent.includes(W.dokumentoPavadinimas(f.r.d)), k + ": 4 žingsnis: " + (b && b.textContent.slice(0, 200)));
+    }
+    // sintetinė pastraipa: linksniai, didžiosios, „/Pasiūlymu“ ir pastraipa su galutiniu pasiūlymu
+    const X = new W.DOMParser().parseFromString('<w:document xmlns:w="' + NSW + '"><w:body>'
+      + ['SU PIRMINIU PASIŪLYMU PATEIKIAMA:', 'Tiekėjai privalo pateikti su Pirminiu pasiūlymu. Pirminių Pasiūlymų terminas.', 'turi būti pateikti su Pirminiu pasiūlymu/Pasiūlymu.',
+         'with the Initial Tender. INITIAL TENDER', 'Pasiūlymas reiškia Pirminį pasiūlymą ir Galutinį pasiūlymą.', 'Pirmininkas pasirašo.']
+        .map(x => '<w:p><w:r><w:t xml:space="preserve">' + x + '</w:t></w:r></w:p>').join('') + '</w:body></w:document>', "application/xml");
+    const G = W.eval("GPDocx"), dok = { zip: { files: {} } }, senas = G.part;
+    G.part = async () => X;
+    let r;
+    try { r = await W.eval("mvpBePirminio")(dok); } finally { G.part = senas; }
+    lygu(r.pakeista.map(x => x.tapo), ["SU PASIŪLYMU PATEIKIAMA:", "Tiekėjai privalo pateikti su Pasiūlymu. Pasiūlymų terminas.", "turi būti pateikti su Pasiūlymu.", "with the Tender. TENDER"], "sintetinė: pakeitimai");
+    lygu(r.liko, ["Pasiūlymas reiškia Pirminį pasiūlymą ir Galutinį pasiūlymą."], "sintetinė: su galutiniu - palikta");
   });
 }
 async function testaiTobulinimai1024(){
@@ -16081,7 +16203,7 @@ async function testaiFormuTaisykles(){
       const N = ftNumeriai(F.pars), R = ftNuorodos(F.pars);
       lygu([N.bl, R.out], [[], []], kodas + " numeriai " + N.L.join(" ") + " ir nuorodos");
       lygu(F.r.stats.formosTaisykles.filter(x => x.palikta).map(x => x.taisykle), ["RUS"], kodas + " - palikta tik Rusijos deklaracija");
-      tiesa(/Clauses 1\.(\d)\.1\. and \/ or 1\.\1\.2\./.test(ft) && /šios dalies 1\.(\d)\.1 ir 1\.\1\.2/.test(ft), kodas + " LT ir EN nuoroda į sąlygų papunkčius");
+      tiesa(/Clauses 1\.(\d)\.1 and 1\.\1\.2 of this section/.test(ft) && /šios dalies 1\.(\d)\.1 ir 1\.\1\.2/.test(ft) && !/of the GPC/.test(ft), kodas + " LT ir EN nuoroda į sąlygų papunkčius");
       lygu([...new W.DOMParser().parseFromString(F.xml, "application/xml").getElementsByTagNameNS(NSW, "tbl")].filter(t => !t.getElementsByTagNameNS(NSW, "tr").length).length, 0, kodas + " tuščių lentelių nėra");
       const D4 = (await d4Paketas({ [kodas]: F }))[0];
       tiesa(D4.n >= 3 && !D4.out.length, kodas + " D4 sargas: " + D4.n + " nuorodų, " + D4.out.join(" | "));
@@ -16411,7 +16533,7 @@ async function testaiPaskelbti(){
        testaiSutartiesDI, testaiPaketoPatikra, testaiPriedoNuorodos, testaiEtapas0, testaiEtapas1, testaiDalys, testaiU4, testai1021, testaiD6,
        testaiD3, testaiD4b, testaiD5, testaiU8, testaiD4c, testaiFormuTaisykles, testaiTestuotojas7, testaiSprendimai1025],
       [testaiTestuotojas, testaiSprendimai1020, testaiTestuotojas2, testaiNacsaugBvpz, testaiTestuotojas3, testai1021b, testai1021c, testai1022a,
-       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiPrivalomos, testaiTestuotojas5, testaiPaskelbti, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6]
+       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiPrivalomos, testaiTestuotojas5, testaiPaskelbti, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b]
     ]);
     for (const g of GRUPES) await g();
     document.getElementById("busena").textContent =
