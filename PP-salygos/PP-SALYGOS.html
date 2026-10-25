@@ -8063,6 +8063,50 @@ function beParaiskos(doc, d){
   GPDocx.els(doc.parts['word/document.xml'], 'p').forEach(p => BE_PARAISKOS.forEach(re => { n += pastraiposTekstas(p, re, ''); }));
   return n;
 }
+/* Ūkio subjektų forma, kai tikrinami tik pašalinimo pagrindai (naudotojo sprendimas 2026-10-25 „Pašalinti nereikalingas dalis“): remtis kitų
+   ūkio subjektų pajėgumais galima tik kvalifikacijos reikalavimams (PĮ 62 str. 1 d., e-tar 2026-10-25), kvazisubtiekėjas - specialistas, kurio
+   kvalifikacija remiamasi (Metodikos 2.4 p.), todėl be SPS 2 lentelės formoje nereikia 3 lentelės „Kvazisubtiekėjai“ ir 2 priedėlio „Sutikimas
+   būti įdarbintu“, o 1 lentelės „Ūkio subjektai, kurių pajėgumais remiamasi“ - kai ir žalieji (vadybos standartų) reikalavimai pirkimo sąlygose
+   nenustatomi; tada „2 lentelė. Subtiekėjai“ tampa 1 lentele. Kitas formos tekstas nekeičiamas. -> { lentele1, lentele3, priedelis2, numeris } | null */
+const UKIO_FORMA_DOK = /^PRIEDAI_(LT|LTEN)_SUBTIEKEJAI$/;
+function ukioSubjektaiBeKvalifikacijos(doc, d){
+  const kv = kvalifikacijosLenteles();
+  if (!UKIO_FORMA_DOK.test(String((d && d.trumpas) || '')) || !kv.atsakyta || !kv.tik1) return null;
+  const body = GPDocx.els(doc.parts['word/document.xml'], 'body')[0];
+  if (!body) return null;
+  const vaikai = () => [...body.childNodes].filter(n => n.nodeType === 1);
+  const tekstas = n => norm(GPDocx.els(n, 't').map(t => t.textContent).join(''));
+  const tuscia = n => n && n.localName === 'p' && !tekstas(n) && !GPDocx.els(n, 'sectPr').length;
+  const sal = n => n.parentNode.removeChild(n);
+  // antraštė, po jos - lentelė ir tuščia pastraipa
+  const lentele = re => {
+    const V = vaikai(), k = V.findIndex(n => n.localName === 'p' && re.test(tekstas(n)));
+    if (k < 0 || !V[k + 1] || V[k + 1].localName !== 'tbl') return false;
+    const po = tuscia(V[k + 2]) ? V[k + 2] : null;
+    sal(V[k]); sal(V[k + 1]); if (po) sal(po);
+    return true;
+  };
+  const out = { lentele1: false, lentele3: false, priedelis2: false, numeris: false };
+  out.lentele3 = lentele(/^\d+ lentele kvazisubtiekejai/);
+  if (!sekaAtsakymas('zalieji')) out.lentele1 = lentele(/^\d+ lentele ukio subjektai kuriu pajegumais remiamasi/);
+  if (out.lentele1){
+    const p = vaikai().find(n => n.localName === 'p' && /^2 lentele subtiekejai/.test(tekstas(n)));
+    if (p) out.numeris = pastraiposTekstas(p, /2(?= lentelė\.\s*Subtiekėjai)/g, '1') + pastraiposTekstas(p, /2(?=\.\s*Sub-suppliers)/g, '1') > 0;
+  }
+  // 2 priedėlis - nuo jo antraštės (ir prieš ją esančių tuščių pastraipų su puslapio lūžiu) iki dokumento pabaigos; skyriaus lūžio nėra
+  const V = vaikai(), h = V.findIndex(n => n.localName === 'p' && /^sps \d+ priedo 2 priedelis/.test(tekstas(n)));
+  if (h > 0){
+    let s = h;
+    while (s > 0 && tuscia(V[s - 1])) s--;
+    const iki = V.length - (V[V.length - 1].localName === 'sectPr' ? 1 : 0), R = V.slice(s, iki);
+    if (R.length && !R.some(n => GPDocx.els(n, 'sectPr').length)){ R.forEach(sal); out.priedelis2 = true; }
+  }
+  // formos pastaba „... užpildant Pirkimo sąlygų N priedo 1 priedėlį ir 2 priedėlį.“ (EN „Appendix 1 and Appendix 2 of Annex N“) - be 2 priedėlio
+  if (out.priedelis2) vaikai().filter(n => n.localName === 'p' && /^(pastaba|note) /.test(tekstas(n))).forEach(p => {
+    out.pastaba = (out.pastaba || 0) + pastraiposTekstas(p, /\s+ir 2 priedėlį(?=\.)/g, '') + pastraiposTekstas(p, /\s+and Appendix 2(?= of Annex)/g, '');
+  });
+  return out.lentele1 || out.lentele3 || out.priedelis2 ? out : null;
+}
 async function formosNumeriai(doc){
   const X = doc.parts['word/document.xml'];
   const M = GPNum.modelis(await GPDocx.part(doc, 'word/numbering.xml'), await GPDocx.part(doc, 'word/styles.xml'));
@@ -8852,6 +8896,8 @@ async function generuotiViena(d, REZ){
   if (formosNr) doc.log.push('formos antraštė: ' + formosNr.buvo + ' -> ' + formosNr.tapo);
   const bePar = beParaiskos(doc, d);
   if (bePar) doc.log.push('forma be paraiškos: ' + bePar);
+  const ukioForma = ukioSubjektaiBeKvalifikacijos(doc, d);
+  if (ukioForma) doc.log.push('ūkio subjektų forma be kvalifikacijos dalių: ' + JSON.stringify(ukioForma));
   // 10d. Formų ir priedų nuorodos į savininko punktus ir lenteles (D2) - pagal galutinę savininko numeraciją
   const punktuNuor = await punktuNuorodosFormoje(doc, d);
   punktuNuor.forEach(x => doc.log.push('nuoroda į punktą: ' + x.buvo + ' -> ' + x.tapo));
@@ -8900,7 +8946,7 @@ async function generuotiViena(d, REZ){
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, prieduNr: prNr, juodosAlt, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaZal, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, nuorodosTekstu, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
                    kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, antrasciuNr, formosAntraste: formosNr, punktuNuorodos: punktuNuor, lenteliuNr: lentNr, spec37, kvalPunktai, antrastesLent: antrLent.dalys, eilNuorodos, raudAlt, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
-                   formosNumeracija: formosNum, formosTaisykles, mvpPirminis: mvpPirm,
+                   formosNumeracija: formosNum, formosTaisykles, mvpPirminis: mvpPirm, ukioForma,
                    esminiuNuorodos: esminiuNuor.map(x => ({ buvo: x.buvo, tapo: skyriausNr ? x.tapo.split(SKYRIAUS_ZYMA).join(skyriausNr) : x.tapo.split(SKYRIAUS_ZYMA).join('___') })) } };
 }
 
@@ -9428,6 +9474,13 @@ function rodykRezultata(rez){
     ${mpP.map(x => { const ii = raIs(x); return `${esc(x.d)} - „${esc(ii.buvo)}“ → „${esc(ii.tapo)}“`; }).join('; ')}. Be derybų teikiamas vienas pasiūlymas.</div>`;
   if (mpL.length) h += `<div class="audit no" id="mvpPirminisLiko" style="margin-top:10px"><b>Patikrinkite - derybos nevykdomos, bet pastraipoje minimas ir galutinis pasiūlymas:</b>
     ${mpL.map(x => `${esc(x.d)} - „${esc(iskarpa(x.t))}“`).join('; ')}. Ji palikta kaip šablone - Word programoje sutvarkykite arba pašalinkite.</div>`;
+  // Ūkio subjektų forma, kai tikrinami tik pašalinimo pagrindai (naudotojo sprendimas 2026-10-25)
+  const uf = rez.filter(r => r.stats && r.stats.ukioForma);
+  if (uf.length) h += `<div class="audit ok" id="ukioForma" style="margin-top:10px"><b>Tikrinami tik pašalinimo pagrindai - ūkio subjektų formoje pašalinta, kas susiję su kvalifikacija:</b>
+    ${uf.map(r => { const u = r.stats.ukioForma;
+      return esc(dokumentoPavadinimas(r.d)) + ' - ' + [u.lentele1 ? 'lentelė „Ūkio subjektai, kurių pajėgumais remiamasi“' : '', u.lentele3 ? 'lentelė „Kvazisubtiekėjai“' : '',
+        u.priedelis2 ? '2 priedėlis „Sutikimas būti įdarbintu“' : '', u.numeris ? 'lentelė „Subtiekėjai“ - dabar 1 lentelė' : ''].filter(Boolean).join(', '); }).join('; ')}.
+    Kitų ūkio subjektų pajėgumais remiamasi tik kvalifikacijos reikalavimams, kvazisubtiekėjai - kvalifikacijos specialistai.${uf.some(r => !r.stats.ukioForma.lentele1) ? ' Lentelė „Ūkio subjektai, kurių pajėgumais remiamasi“ palikta - pirkimo sąlygose nustatyti žalieji reikalavimai.' : ''}</div>`;
   // šablono pavyzdinės reikšmės pasirinktoje šakoje (T4-K1, 2026-10-22) - paliktos raudonos
   const pvz = rez.filter(r => r.stats && r.stats.pavyzdziaiLiko && r.stats.pavyzdziaiLiko.length);
   if (pvz.length) h += `<div class="audit no" id="pavyzdziaiPatikra" style="margin-top:10px"><b>Šablono pavyzdinės reikšmės - įrašykite savo:</b> ${pvz.map(r => `${esc(dokumentoPavadinimas(r.d))} - ${r.stats.pavyzdziaiLiko.map(x => `„${esc(x)}“`).join(', ')}`).join('; ')}.
