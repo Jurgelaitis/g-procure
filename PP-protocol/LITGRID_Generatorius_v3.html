@@ -5033,6 +5033,33 @@ function renderInlinePnFields(templateId){
   }, 50);
 }
 
+// Privalomi rankiniu būdu kuriamo pranešimo duomenys (2026-10-25, naujo darbuotojo patikra D8): iki tol laukai neprivalomi - NMK rašte
+// be skaičių buvo „30 %“ ir vidurkis „0,00 Eur“, pretenzijos rašte - „Informuojame, jog  buvo gauta tiekėjo  pretenzija“
+const PN_PRIVALOMI = {
+  '0_atsakymai': ['klausimai_atsakymai'], '1_kvietimas_pasiulymui': ['terminas'], '3_aritm_klaidos': ['klaidu_sarasas'],
+  '6_kvietimas_derybu': ['derybu_data', 'derybu_laikas'], '7_1_kvietimas_gp': ['terminas'], '8_1_kitiems_galimas': ['galimas_laimetojas'],
+  '9_1_laimetojui_ekonom': ['vertinimo_lentele'], '11_kitiems_ekonom': ['vertinimo_lentele'], '12_1_visi_atmesti': ['atmetimo_motyvas'],
+  '14_pretenzija_sustabdymas': ['pretenzijos_data', 'pretenzijos_tiekejas'], '14_1_pretenzija_atm_pabaiga': ['pretenzijos_motyvas'],
+  '14_2_pretenzija_atm_tesimas': ['pretenzijos_motyvas'], '14_3_pretenzija_tenkinta': ['veiksmai'], '15_nmk': ['vidurkis', 'skirtumas'],
+  '16_galiojimas': ['prasomas_terminas', 'priezastis']
+};
+const PN_SU_KAINA = ['4_per_didele_kaina', '9_laimetojui_kaina', '9_1_laimetojui_ekonom', '15_nmk'];
+const PN_LAUKU_PAV = { klausimai_atsakymai: 'klausimai ir atsakymai', terminas: 'terminas', klaidu_sarasas: 'aritmetinių klaidų sąrašas', derybu_data: 'derybų data',
+  derybu_laikas: 'derybų laikas', galimas_laimetojas: 'galimas laimėtojas', vertinimo_lentele: 'vertinimo lentelė', atmetimo_motyvas: 'atmetimo motyvas',
+  pretenzijos_data: 'pretenzijos gavimo data', pretenzijos_tiekejas: 'pretenziją pateikęs tiekėjas', pretenzijos_motyvas: 'pretenzijos atmetimo motyvas',
+  veiksmai: 'komisijos veiksmai', vidurkis: 'kainų vidurkis', skirtumas: 'skirtumas nuo vidurkio (%)', prasomas_terminas: 'pratęsti galiojimą iki', priezastis: 'pratęsimo priežastis' };
+function pnTrukstami(tId, fdata, tiekejai, prefiksas){
+  const out = (PN_PRIVALOMI[tId] || []).filter(k => !String((fdata || {})[k] || '').trim() && document.getElementById(prefiksas + k)).map(k => ({ id: prefiksas + k, pav: PN_LAUKU_PAV[k] || k }));
+  if (PN_SU_KAINA.includes(tId)) (tiekejai || []).filter(x => !(parseFloat(x.kaina) > 0) && !(parseFloat((fdata || {}).kaina_be) > 0))
+    .forEach(x => out.push({ pav: 'kaina be PVM - ' + (x.pavadinimas || 'tiekėjas') }));
+  return out;
+}
+function pnTrukstamiPranesk(tr){
+  if (!tr.length) return false;
+  toast('Užpildykite: ' + tr.map(x => x.pav).join('; '), 'error');
+  const el = tr[0].id && document.getElementById(tr[0].id); if (el) el.focus();
+  return true;
+}
 function getInlinePnFieldValues(){
   const fields=['kaina_be','kaina_su','biudzetas','vidurkis','skirtumas','motyvas','atmetimo_motyvas','pretenzijos_motyvas','veiksmai','klaidu_sarasas','rasto_data','termino_pabaiga','pretenzijos_data','pretenzijos_tiekejas','galimas_laimetojas','prasomas_terminas','priezastis','vertinimo_lentele','atidejimas','eile','laimetojas'];
   const data={};
@@ -5062,11 +5089,12 @@ function buildInlinePnNotifs(templateId, protoId){
       pirkimo_budas_en: pnPirkimoBudasEn(pk.type),
       pirkimo_nr: pk.cvp_nr||'',
       tiekejas: r._group?'Tiekėjams, dalyvaujantiems Pirkime':r.pavadinimas,
-      kaina_be: parseFloat(fdata.kaina_be||r.kaina)||0,
-      kaina_su: parseFloat(fdata.kaina_su)||suPvm(parseFloat(fdata.kaina_be||r.kaina)||0),
+      // kiekvieno tiekėjo savo kaina (2026-10-25, D8: iki tol lauko kaina - visiems pažymėtiems); lauke - kai tiekėjo kainos nėra
+      kaina_be: parseFloat(r.kaina||fdata.kaina_be)||0,
+      kaina_su: (r.kaina ? null : parseFloat(fdata.kaina_su)) || suPvm(parseFloat(r.kaina||fdata.kaina_be)||0),
       biudzetas: parseFloat(fdata.biudzetas)||pk.val_ex||0,
       vidurkis: parseFloat(fdata.vidurkis)||0,
-      skirtumas: fdata.skirtumas||'30',
+      skirtumas: fdata.skirtumas||'',
       motyvas: fdata.motyvas||'',
       atmetimo_motyvas: fdata.atmetimo_motyvas||'',
       pretenzijos_motyvas: fdata.pretenzijos_motyvas||'',
@@ -5121,6 +5149,7 @@ function generateInlinePnPreview(templateId, protoId){
 }
 
 async function saveInlinePnAndExport(templateId, protoId){
+  if (pnTrukstamiPranesk(pnTrukstami(templateId, getInlinePnFieldValues(), inlinePnTiekejai.filter(x => x.selected && String(x.pavadinimas || '').trim()), 'ipn-'))) return;
   const notifs = buildInlinePnNotifs(templateId, protoId);
   if(notifs.length === 0){ toast('Pažymėkite bent vieną tiekėją','error'); return; }
   const store = loadNotifStore();
@@ -5594,6 +5623,7 @@ function generatePranesimai(){
   const pk = getProcurement(currentPnPkId);
   const tpl = PN_TEMPLATES[tId];
   const fdata = getPnFieldValues();
+  if (pnTrukstamiPranesk(pnTrukstami(tId, fdata, selected, 'pn-f-'))) return;
 
   const sortedT = [...selected].sort((a,b)=>Number(a.vieta||99)-Number(b.vieta||99));
   const eile = sortedT.map(t=>({tiekejas:t.pavadinimas, kaina:parseFloat(t.kaina)||0}));
@@ -5611,11 +5641,12 @@ function generatePranesimai(){
       pirkimo_budas_en: pnPirkimoBudasEn(pk.type),
       pirkimo_nr: pk.cvp_nr||'',
       tiekejas: r._group?'Tiekėjams, dalyvaujantiems Pirkime':r.pavadinimas,
-      kaina_be: parseFloat(fdata.kaina_be||r.kaina)||0,
-      kaina_su: parseFloat(fdata.kaina_su)||suPvm(parseFloat(fdata.kaina_be||r.kaina)||0),
+      // kiekvieno tiekėjo savo kaina (2026-10-25, D8: iki tol lauko kaina - visiems pažymėtiems); lauke - kai tiekėjo kainos nėra
+      kaina_be: parseFloat(r.kaina||fdata.kaina_be)||0,
+      kaina_su: (r.kaina ? null : parseFloat(fdata.kaina_su)) || suPvm(parseFloat(r.kaina||fdata.kaina_be)||0),
       biudzetas: parseFloat(fdata.biudzetas)||pk.val_ex||0,
       vidurkis: parseFloat(fdata.vidurkis)||0,
-      skirtumas: fdata.skirtumas||'30',
+      skirtumas: fdata.skirtumas||'',
       motyvas: fdata.motyvas||'',
       atmetimo_motyvas: fdata.atmetimo_motyvas||'',
       pretenzijos_motyvas: fdata.pretenzijos_motyvas||'',
