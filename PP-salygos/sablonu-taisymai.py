@@ -422,6 +422,7 @@ def taisymas_tekstas(taisyk):
     viso += _ssd_paraiska(taisyk)
     viso += _contracting_entity(taisyk)
     viso += _t6_korekcijos(taisyk)
+    viso += _t7_korekcijos(taisyk)
     return viso
 
 
@@ -1380,6 +1381,59 @@ def _t6_korekcijos(taisyk):
     n += _su_zemelapiais(_be_raudono(_T6_AUTHORITY, _AM_RAUDONI), ['AK_LTEN_SPS', 'SSD_LTEN_SPS', 'ND_LTEN_SPS', 'TSD_LTEN_SPS', 'MVP_LTEN_SPS',
         'AK_LTEN_BPS', 'SSD_LTEN_BPS', 'ND_LTEN_BPS', 'TSD_LTEN_BPS', 'MVP_LTEN_BPS', 'DPSK_LTEN_SALYGOS', 'DPSP_LTEN_SALYGOS'], '„contracting entity“', taisyk)
     for t in _AM_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# AN. Septintoji naujo darbuotojo patikra (2026-10-24; redakcinės korekcijos - naudotojo leidimas 2026-10-05):
+#    (1) „..., ar/ar Kvazisubtiekėjo sutikimą būti įdarbintu“ -> „ir/ar“, kaip AK LT SPS (9 šablonai ir sena TPS forma);
+#    (2) „and/ot the qualification“ -> „and/or“ (TSD LT/EN SPS, TPS forma); (3) ND LT SPS 5.3 p. „(jeigu bus vykdomas Derybos ... Galutinį
+#    pasiūlymą.“ - neuždarytas skliaustas ir derinimas -> „(jeigu bus vykdomos Derybos ... Galutinį pasiūlymą).“; (4) ND LT/EN SPS 1.5 ir 1.6 p.
+#    „In accordance with to Article“, „Regarding to Article“ -> „In accordance with Article“ (LT abiejuose - „Vadovaujantis“); (5) tarpas prieš
+#    tašką „Tenders .“ (ND LT/EN SPS, AK ir SSD LT/EN BPS) ir AK LT/EN BPS „submission ofr Tenders“; (6) nacionalinio saugumo deklaracijos
+#    sakinys angliškai „in accordance with the SPS Annex C form“ (AK, MVP, SSD, TSD LT/EN SPS, sena TPS forma): „C“ - ne pildoma vieta, todėl dokumente
+#    likdavo „Annex C“, nors lietuviškai įrašomas tikras priedo numeris -> „in accordance with the form of Annex N to the SPC“ (N - to paties
+#    šablono SPS priedų sąrašo deklaracijos eilutė; generuojant perrašo priedų pernumeravimas, kaip kitas „Annex N to the SPC“ nuorodas);
+#    ND LT/EN - „the SPS Annex X form“ -> „the form of Annex X to the SPC“ (X lieka pildoma vieta, kaip lietuviškai); (7) rasta tikrinant:
+#    MVP LT/EN pasiūlymo formos „nacionaliniam saugumui,  , kai“ ir TSD LT/EN paraiškos formos „konfidenciali, , atitinkamus“, „visą. Paraiškos“ -
+#    perteklinis kablelis ir taškas (kaip AK ir TSD pasiūlymo formose). Raudonas tekstas keičiamas tik (2) ir (6) - jie keičia ne sąlygų ar
+#    nurodymų žodžius, pagal kuriuos generatorius randa vietas.
+_AN_AR = [(_re.compile(r'Pirkime, (ar)/ar Kvazisubtiekėjo sutikimą'), 'ir', 1)]
+_AN_AND = [(_re.compile(r'and/o(t) the qualification'), 'r', 1)]
+_AN_ND53 = [(_re.compile(r'\(jeigu bus (vykdomas) Derybos'), 'vykdomos', 1),
+            (_re.compile(r'\(jeigu bus vykdom(?:as|os) Derybos ir po Derybų bus prašoma pateikti Galutinį pasiūlymą()\.'), ')', 1)]
+_AN_ND15 = [(_re.compile(r'^In accordance with( to) Article 80'), '', 1), (_re.compile(r'^(Regarding to) Article 80'), 'In accordance with', 1)]
+_AN_TASKAS = [(_re.compile(r'submission of(r)? Tenders( )\.'), '', 2), (_re.compile(r'submission (ofr) Tenders'), 'of', 1)]
+_AN_FORMOS = {'MVP_LTEN_PASIULYMAS': [(_re.compile(r'nacionaliniam saugumui,(\s+,) kai sandorio'), '', 1)],
+               'TSD_LTEN_PARAISKA': [(_re.compile(r'konfidenciali,( ,) atitinkamus'), '', 1), (_re.compile(r'Bet kokiu atveju, visą(\.) Paraiškos'), '', 1)]}
+_AN_DEKL = {'AK_LTEN_SPS': '6', 'MVP_LTEN_SPS': '6', 'SSD_LTEN_SPS': '6', 'TSD_LTEN_SPS': '7', 'TPS_forma': '7'}
+_AN_RAUDONI = []
+
+
+def _t7_korekcijos(taisyk):
+    print("\nSeptintoji patikra: rašyba ir deklaracijos priedas angliškai (AN, 2026-10-24):")
+    n = _su_zemelapiais(_be_raudono(_AN_AR, _AN_RAUDONI), ['AK_LTEN_SPS', 'MVP_LTEN_SPS', 'ND_LTEN_SPS', 'ND_LT_SPS', 'SSD_LTEN_SPS',
+        'SSD_LT_SPS', 'TSD_LTEN_SPS', 'TSD_LT_SPS', 'TPS_forma'], '„ir/ar Kvazisubtiekėjo“', taisyk)
+    n += _su_zemelapiais(_regex_pakeitimai(*_AN_AND), ['TSD_LTEN_SPS', 'TPS_forma'], '„and/or“', taisyk)
+    if taisyk:
+        for f in ['TSD_LTEN_SPS', 'TPS_forma']:
+            _zemelapio_raudoni(f, [('and/ot the qualification', 'and/or the qualification')])
+    n += _su_zemelapiais(_be_raudono(_AN_ND53, _AN_RAUDONI), ['ND_LT_SPS'], 'ND 5.3 skliaustas', taisyk)
+    n += _su_zemelapiais(_be_raudono(_AN_ND15, _AN_RAUDONI), ['ND_LTEN_SPS'], 'ND 1.5-1.6 „In accordance with“', taisyk)
+    n += _su_zemelapiais(_be_raudono(_AN_TASKAS, _AN_RAUDONI), ['ND_LTEN_SPS', 'AK_LTEN_BPS', 'SSD_LTEN_BPS'], '„Tenders.“', taisyk)
+    for f, nr in _AN_DEKL.items():
+        poros = [(_re.compile(r'Requirements in accordance with (the SPS Annex C form)\.'), 'the form of Annex ' + nr + ' to the SPC', 1)]
+        n += _su_zemelapiais(_regex_pakeitimai(*poros), [f], 'deklaracijos priedas', taisyk)
+        if taisyk:
+            _zemelapio_raudoni(f, [('the SPS Annex C form', 'the form of Annex ' + nr + ' to the SPC')])
+    for f, poros in _AN_FORMOS.items():
+        n += _su_zemelapiais(_be_raudono(poros, _AN_RAUDONI), [f], 'skyryba', taisyk)
+    nd = [(_re.compile(r'Requirements in accordance with (the SPS Annex )X form'), 'the form of Annex ', 1),
+          (_re.compile(r'Requirements in accordance with the SPS Annex X( form)'), ' to the SPC', 1)]
+    n += _su_zemelapiais(_regex_pakeitimai(*nd), ['ND_LTEN_SPS'], 'deklaracijos priedas', taisyk)
+    if taisyk:
+        _zemelapio_raudoni('ND_LTEN_SPS', [('the SPS Annex X form', 'the form of Annex X to the SPC')])
+    for t in _AN_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 
