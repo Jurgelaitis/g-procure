@@ -269,6 +269,8 @@
       PI: { a: "PI", s: 58, d: 1, p: 1 } },
     kaina_virsija_lesas: { tikrinta: "2026-09-27", apie: "laimėjusiu gali būti nustatytas tik pasiūlymas, kurio kaina neviršija pirkimui skirtų lėšų, nustatytų prieš pradedant pirkimo procedūrą",
       PI: { a: "PI", s: 58, d: 1, p: 5 } },
+    papildomos_informacijos_terminas: { tikrinta: "2026-10-25", apie: "laiku paprašyta papildoma su pirkimo dokumentais susijusi informacija pateikiama visiems tiekėjams ne vėliau kaip likus 6 dienoms (supaprastinto pirkimo - 4 dienoms) iki pasiūlymų pateikimo termino pabaigos; atviro konkurso pagreitintų procedūrų ir DPS pagrindu atliekamo pirkimo atveju - 4 dienoms, supaprastinto pirkimo pagreitintų procedūrų - 3 dienoms",
+      PI: { a: "PI", s: 49, d: 5 } },
     pabaiga_visi_atmesti: { tikrinta: "2026-09-27", apie: "pirkimo procedūros baigiasi, kai atmetamos visos paraiškos ar pasiūlymai",
       PI: { a: "PI", s: 41, d: 2, p: 2 } },
     galiojimo_pratesimas: { tikrinta: "2026-09-27", apie: "pirkimo procedūros metu galima prašyti tiekėjų pratęsti pasiūlymų galiojimą iki konkrečiai nurodyto termino; tiekėjas gali atsisakyti neprarasdamas teisės į galiojimo užtikrinimą",
