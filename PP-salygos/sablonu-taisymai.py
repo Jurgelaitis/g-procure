@@ -391,6 +391,7 @@ def taisymas_tekstas(taisyk):
                     for info in infos:
                         zout.writestr(info, items[info.filename])
         viso += pak
+    viso += _aq_dps_pasalinimas(taisyk)
     viso += _dvigubi_tarpai(taisyk)
     viso += _skyryba(taisyk)
     viso += _dps_61(taisyk)
@@ -1594,6 +1595,59 @@ def _ap_sprendimai(taisyk):
         _ap_tuscios('PRIEDAI_LT_DERYBOS', 'LT')
         _ap_tuscios('PRIEDAI_LTEN_DERYBOS', 'LTEN')
     return n
+
+
+# AQ. DPS sukūrimo sąlygų 8.2-8.5 p. (2026-10-25, naudotojo sprendimas „Palikti visada“): LITGRID šablone pašalinimo taisyklės
+#    parašytos raudonai be paaiškinimo, todėl generatorius kiekvienam pirkimui klausdavo „Ar palikti šią šablono nuostatą?“.
+#    PĮ 59 str. 1 d. (e-tar 2026-10-25) perkančiajam subjektui, kuris nėra perkančioji organizacija, VPĮ 46 str. 1, 3 ir 4 d.
+#    sąlygų neprivalo, bet tas pats „įsteigtas vietoj kito asmens“ pagrindas AK ir TSD SPS bei DPS 1 priede juodas (LITGRID jį
+#    taiko), 8.4 p. atkartoja PĮ 62 str. 4 d. (privaloma), savarankiškas apsivalymas - ir 7.2 p. Todėl 8.2-8.5 p. (LT ir LT/EN,
+#    lietuviškas ir angliškas langelis) - juodu tekstu: raudona spalva nuimama, tekstas nekeičiamas, iš žemėlapio pašalinami
+#    `raudonosPastabos` įrašai. Kviečiama PRIEŠ dvigubų tarpų taisymą (J), kad juodu tapęs tekstas būtų sutvarkytas tame pačiame
+#    paleidime. Pakartotinai - 0.
+_AQ_RE = [_re.compile(r) for r in (
+    r'^(8\.2\.)?\s*Pirkimo vykdytojas tiekėją pašalina iš pirkimo procedūros, jeigu paaiškėja',
+    r'^(8\.3\.)?\s*Pirkimo vykdytojas pašalina tiekėją iš pirkimo procedūros pagal VPĮ 46',
+    r'^(8\.4\.)?\s*Pirkimo vykdytojas taip pat patikrina, ar dėl ūkio subjektų',
+    r'^(8\.5\.)?\s*Nepaisant 8\.2\. ir 8\.3\. punktų nuostatų',
+    r'^The procurement agent excludes the supplier from the procurement procedure if it is found',
+    r'^The Procurement agent excludes the supplier from the procurement procedure according to Article 46',
+    r'^The procurement agent also checks whether the Economic entities',
+    r'^Despite the provisions of clauses 8\.2 and 8\.3')]
+_AQ_SPALVA = _re.compile(rb'<w:color w:val="(?:FF0000|C00000|ED1C24)"[^>]*/>', _re.I)
+
+
+def _aq_dps_pasalinimas(taisyk):
+    import json as _json
+    print("\nDPS sukūrimo sąlygų 8.2-8.5 p. - juodu tekstu (AQ, 2026-10-25):")
+    viso = 0
+    for f in ('DPSK_LT_SALYGOS', 'DPSK_LTEN_SALYGOS'):
+        path = TPL / (f + '.docx')
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+        xml = items['word/document.xml']
+        segs = list(_VISOS_P_RE.finditer(xml))
+        kur = [k for k, m in enumerate(segs)
+               if _RAUD_RE.search(m.group(0)) and any(r.search(_pastraipos_tekstas(m.group(0)).strip()) for r in _AQ_RE)]
+        if not kur:
+            continue
+        for k in reversed(kur):
+            m = segs[k]
+            xml = xml[:m.start()] + _AQ_SPALVA.sub(b'', m.group(0)) + xml[m.end():]
+        print(f"  {f}.docx: pastraipos {kur} - raudona spalva nuimta")
+        viso += len(kur)
+        if not taisyk:
+            continue
+        items['word/document.xml'] = xml
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for info in infos:
+                zout.writestr(info, items[info.filename])
+        zf = Path(__file__).parent / 'zemelapiai' / (f + '.json')
+        raw = zf.read_text(encoding='utf-8'); Z = _json.loads(raw)
+        Z['raudonosPastabos'] = [e for e in Z.get('raudonosPastabos', []) if e.get('i') not in kur]
+        zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+        print(f"      {zf.name}: raudonosPastabos be {kur}")
+    return viso
 
 
 def _formu_numeriai(taisyk):
