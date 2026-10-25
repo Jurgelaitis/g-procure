@@ -89,6 +89,12 @@
       redakcija: "suvestinė redakcija nuo 2024-02-07",
       url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.FC53446C3698/asr"
     },
+    // Civilinis kodeksas - terminų skaičiavimas (1.121 str., perskaityta e-tar 2026-10-25; PĮ savos terminų pabaigos taisyklės neturi)
+    CK: {
+      trumpai: "CK",
+      pavadinimas: "Lietuvos Respublikos civilinis kodeksas",
+      url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.8A39C83848CB/asr"
+    },
     // Sandorių atitikties nacionalinio saugumo interesams patikra (13 str.) - į jos 4 d. 1 p. kriterijus nurodo PĮ 50 str. 8 d. ir
     // VPĮ 37 str. 8 d. (perskaityta e-tar 2026-10-21).
     NSOAI: {
@@ -279,6 +285,8 @@
       PI: { a: "PI", s: 108, d: 1, p: 1 } },
     pretenzija_sutarties_atidejimas: { tikrinta: "2026-09-27", apie: "gavus pretenziją, sutartis sudaroma ne anksčiau kaip po 10 dienų (supaprastintų - 5 darbo dienų; ne elektroninėmis priemonėmis - 15 dienų) nuo pranešimo apie sprendimą išsiuntimo; pirkimo procedūros sustabdyti nereikalaujama (2017 m. redakcijos „nedelsdamas sustabdo“ pakeista 2022-12-13 įstatymu Nr. XIV-1672)",
       PI: { a: "PI", s: 109, d: 2 } },
+    termino_pabaiga_ne_darbo: { tikrinta: "2026-10-25", apie: "ne darbo ir oficialių švenčių dienos įskaitomos į terminą; jeigu paskutinė termino diena tenka ne darbo ar oficialios šventės dienai, termino pabaigos diena laikoma po jos einanti darbo diena",
+      bendra: { a: "CK", s: "1.121", d: 2 } },
     // DPS sukūrimas (perskaityta e-tar 2026-10-25): paraiškų tikrinimo terminas, leidimas dalyvauti visiems atitinkantiems, pranešimas per 3 d. d.
     dps_paraisku_tikrinimas: { tikrinta: "2026-10-25", apie: "dinaminėje pirkimo sistemoje gautos kandidatų paraiškos patikrinamos per ne ilgesnį kaip 10 darbo dienų terminą nuo gavimo; pagrįstais atvejais - iki 15 darbo dienų",
       PI: { a: "PI", s: 87, d: 5, p: 2 } },
