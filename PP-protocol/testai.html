@@ -387,8 +387,8 @@ async function testaiWordTekstas(){
     yra("A2", "(klausimo / prašymo turinys - žr. priedą)", "(atsakymo turinys - žr. priedą)", "Bendrųjų Pirkimo sąlygų 19.3 punkto");
     yra("A2 (tuščias)", "mažiau nei 6 (šešios) dienos");
     yra("A3", "1. Susipažinti su pasiūlymų kainų informacija.");
-    yra("A4", "☐ Neatitinka sąlygų. EBVPD: netaikoma. Veiksmas: tikslinti neatitikimus.", "(BPS 9.26 p.)", "3. Paprašyti potencialaus laimėtojo pateikti kvalifikacijos dokumentus.");
-    yra("A5", "pašalinimo pagrindų nėra; kvalifikacija atitinka reikalavimus. Sprendimas: priimti.", "1. Nustatyti, kad Pirkimą laimėjo " + TA);
+    yra("A4", "☐ Neatitinka sąlygų. EBVPD: netaikoma. Veiksmas: tikslinti neatitikimus.", "(BPS 9.26 p.)", "4. Paprašyti potencialaus laimėtojo pateikti kvalifikacijos dokumentus.");   // 2026-10-25 (K3): ir tikslinimo sprendimas
+    yra("A5", "pašalinimo pagrindų nėra; kvalifikacija atitinka reikalavimus. Sprendimas: priimti.", "2. Nustatyti, kad Pirkimą laimėjo " + TA);   // 2026-10-25: pirmas - atmetimo sprendimas
     nera("A5", "lai mėjo");
     yra("D3", "1. Pripažinti, kad paraiškas pateikė šie tiekėjai: " + TA + "; " + TC + ".", "2. Perduoti paraiškas vertinti pagal");
     yra("D4", "neatitikimas: Nepateiktas EBVPD. Siūloma prašyti patikslinti / papildyti paraišką (BPS 14.5 p.).",
@@ -628,7 +628,7 @@ async function testaiNuorodos(){
     tiesa(D.querySelector('label[for="pf-bps193"]').textContent.indexOf("BPS 19.3 p.") >= 0, "A2 formoje - 19.3 p.");
   });
 
-  await testas("Visi 23 šablonai visiems būdams: pranešime - tik tie BPS punktai, kuriuos cituoja to būdo protokolai, ir Komisijos įrašytas atmetimo punktas", async () => {
+  await testas("Visi 24 šablonai visiems būdams (2026-10-25 - ir „Dėl leidimo dalyvauti DPS“): pranešime - tik tie BPS punktai, kuriuos cituoja to būdo protokolai, ir Komisijos įrašytas atmetimo punktas", async () => {
     const blogi = [], leidziami = tipas => Object.values(W.protokoloBps({ type: tipas }));
     for (const tipas of ["atviras_tarptautinis", "derybos_supaprastintas", "neskelbiamos_supaprastintas", "dps_konkretus"]) {
       for (const [tiekejas, papild] of [[{ pavadinimas: TA }, []], [{ pavadinimas: TC, atmetimoPunktas: "9.7.1" }, ["9.7.1"]]]) {
@@ -640,7 +640,7 @@ async function testaiNuorodos(){
       }
     }
     tiesa(!blogi.length, blogi.slice(0, 20).join("\n"));
-    lygu(Object.keys(W.eval("PN_TEMPLATES")).length, 23, "šablonų");
+    lygu(Object.keys(W.eval("PN_TEMPLATES")).length, 24, "šablonų");
   });
 
   await testas("Konkrečiai: eilė - 9.26 tik atvirame konkurse; kvietimas į derybas - 13.2.1 tik skelbiamose derybose; atmetimas - protokolo punktu „Pirkimo sąlygų N“", async () => {
@@ -1367,6 +1367,258 @@ async function testaiDI(){
   });
 }
 
+/* Naujo darbuotojo patikra 2026-10-25 (radiniai K1-K7, D12): pranešimai pagal protokolo sprendimus, formos būsena, DPS sukūrimas,
+   neįprastai maža kaina ir balsavimas protokole, A4 atmetimo sprendimai */
+function patPirkimas(id, tipas, papild){ return kalbosPirkimas(id, tipas, papild); }
+async function patModulis(){
+  await modulis();
+  W.saveProcurementData("TEST-P-A", patPirkimas("TEST-P-A", "atviras_tarptautinis"));
+  W.saveProcurementData("TEST-P-K", patPirkimas("TEST-P-K", "atviras_tarptautinis", { eval_criteria: "kainą" }));
+  W.saveProcurementData("TEST-P-D", patPirkimas("TEST-P-D", "derybos_tarptautinis", { eval_criteria: "kainą" }));
+  W.saveProcurementData("TEST-P-N", patPirkimas("TEST-P-N", "neskelbiamos_supaprastintas"));
+  W.saveProcurementData("TEST-P-S", patPirkimas("TEST-P-S", "dps_steigimas"));
+}
+const planoGavejai = pl => pl.kurti.map(k => k.tId + ": " + k.gavejai.map(g => g.pavadinimas).join(", "));
+function a4Pildyk(atmB){
+  W.addEvalRow(); W.addRankRow();
+  pildyk(eil(".eval-row", 0), { ".e-name": TA, ".e-action": "vertinti" });
+  pildyk(eil(".eval-row", 1), { ".e-name": TB, ".e-eval": "neatitinka", ".e-action": atmB ? "atmesti" : "tikslinti" });
+  pildyk(eil(".eval-row", 2), { ".e-name": TC, ".e-action": "vertinti" });
+  W.toggleEvalDetail(eil(".eval-row", 1).querySelector(".e-action"));
+  pildyk(eil(".eval-row", 1), { ".e-neat": "Nepateikta CE deklaracija.", ".e-pp": "9.7.1" });
+  pildyk(eil(".rank-row", 0), { ".r-name": TA, ".r-ex": "480000" });
+  pildyk(eil(".rank-row", 1), { ".r-name": TC, ".r-ex": "495000" });
+  isvalyk(".rank-row:nth-child(n+3)");
+}
+async function testaiPatikra1025(){
+  grupe("Naujo darbuotojo patikra 2026-10-25: pranešimai pagal sprendimus, formos būsena, DPS sukūrimas, neįprastai maža kaina ir balsavimas");
+
+  await testas("Pranešimų planas pagal sprendimus: A4 - atmestam atmetimo, geriausiam - galimo laimėtojo, kitiems - apie galimą laimėtoją; visi atmesti - 12.1 kiekvienam; nesukurti - su priežastimi", async () => {
+    await patModulis();
+    W.openProtocol("TEST-P-A", "A4"); a4Pildyk(true);
+    let pl = W.pranesimuPlanas("A4", W.getProcurement("TEST-P-A"));
+    lygu(planoGavejai(pl), ["12_atmetimas: " + TB, "8_galimas_laimetojas: " + TA, "8_1_kitiems_galimas: " + TC], "A4 planas");
+    lygu(pl.kurti.find(k => k.tId === "8_1_kitiems_galimas").data.galimas_laimetojas, TA, "galimas laimėtojas 8.1 pranešime");
+    const ne = pl.nekurti.map(k => k.tId);
+    tiesa(["16_galiojimas", "4_per_didele_kaina", "5_pasiulymas_ok", "12_2_kitiems_pabaiga"].every(x => ne.includes(x)) && !pl.kurti.some(k => /^12_1|^12_2|^16|^3_/.test(k.tId)), "nesukurti: " + JSON.stringify(pl.nekurti));
+    tiesa(pl.nekurti.every(k => k.kodel && k.kodel.length > 20), "priežastys");
+    // be kvalifikacijos dokumentų reikalavimo - galimo laimėtojo pranešimų nėra
+    D.getElementById("pf-kval-reikalinga").checked = false;
+    lygu(planoGavejai(W.pranesimuPlanas("A4", W.getProcurement("TEST-P-A"))), ["12_atmetimas: " + TB], "be kvalifikacijos dokumentų");
+    // tikslinimas - nekuriamas, pasakoma
+    W.openProtocol("TEST-P-A", "A4"); a4Pildyk(false);
+    pl = W.pranesimuPlanas("A4", W.getProcurement("TEST-P-A"));
+    tiesa(!pl.kurti.some(k => k.tId === "12_atmetimas") && pl.nekurti.some(k => k.tId === "3_aritm_klaidos" && k.kodel.indexOf(TB) >= 0), "tikslinimas: " + JSON.stringify(pl));
+    // visi atmesti
+    W.openProtocol("TEST-P-A", "A4");
+    pildyk(eil(".eval-row", 0), { ".e-name": TA, ".e-action": "atmesti" }); pildyk(eil(".eval-row", 1), { ".e-name": TB, ".e-action": "atmesti" });
+    lygu(planoGavejai(W.pranesimuPlanas("A4", W.getProcurement("TEST-P-A"))), ["12_1_visi_atmesti: " + TA + ", " + TB], "visi atmesti");
+  });
+
+  await testas("Pranešimų planas A5 / D8 / D9 / N9: laimėtojui - 9 (kaina) arba 9.1 (kainos ir kokybės santykis), kitiems neatmestiems - 10 arba 11, atmestiems (ir dėl neįprastai mažos kainos) - 12; eilė - iš A4 protokolo", async () => {
+    await patModulis();
+    const pk = W.getProcurement("TEST-P-A"); pk.protocols = { A4: { done: true, eile: [{ tiekejas: TA, kaina: 480000 }, { tiekejas: TB, kaina: 470000 }, { tiekejas: TC, kaina: 495000 }] } };
+    W.saveProcurementData("TEST-P-A", pk);
+    W.openProtocol("TEST-P-A", "A5"); W.addKvalRow(); W.addKvalRow();
+    [TA, TB, TC].forEach((x, i) => eil(".kv-name", i).value = x);
+    D.getElementById("pf-nmp-check").checked = true; D.getElementById("pf-nmp-check").dispatchEvent(new Event("change", { bubbles: true }));
+    pildyk(eil("#pf-nmp-tbody tr", 0), { ".nmp-name": TB, ".nmp-pagr": "nepagrinde", ".nmp-sp": "atmesti" });
+    D.getElementById("pf-winner").value = TA; D.getElementById("pf-winner-ex").value = "480000";
+    let pl = W.pranesimuPlanas("A5", W.getProcurement("TEST-P-A"));
+    lygu(planoGavejai(pl), ["12_atmetimas: " + TB, "9_1_laimetojui_ekonom: " + TA, "11_kitiems_ekonom: " + TC], "A5 planas (kainos ir kokybės santykis)");
+    lygu(pl.kurti.find(k => k.tId === "9_1_laimetojui_ekonom").data.eile, [{ tiekejas: TA, kaina: 480000 }, { tiekejas: TC, kaina: 495000 }], "eilė be atmesto");
+    tiesa(/neįprastai maža kaina \(PĮ 66 str\.\)/.test(pl.kurti[0].gavejai[0].motyvas), "atmetimo motyvas: " + pl.kurti[0].gavejai[0].motyvas);
+    tiesa(["13_kvietimas_sutarti", "15_nmk", "14_pretenzija_sustabdymas"].every(x => pl.nekurti.some(k => k.tId === x)), "nesukurti A5: " + JSON.stringify(pl.nekurti));
+    // kainos kriterijus - 9 ir 10
+    W.openProtocol("TEST-P-K", "A5"); W.addKvalRow(); eil(".kv-name", 0).value = TA; eil(".kv-name", 1).value = TC;
+    D.getElementById("pf-winner").value = TA; D.getElementById("pf-winner-ex").value = "480000";
+    lygu(planoGavejai(W.pranesimuPlanas("A5", W.getProcurement("TEST-P-K"))), ["9_laimetojui_kaina: " + TA, "10_kitiems_eile: " + TC], "A5 kainos kriterijus");
+    // N9 sekoje tik kainos šablonai - ir kainos ir kokybės santykiui naudojamas 9
+    W.openProtocol("TEST-P-N", "N9"); eil(".kv-name", 0).value = TA; D.getElementById("pf-winner").value = TA;
+    lygu(planoGavejai(W.pranesimuPlanas("N9", W.getProcurement("TEST-P-N"))), ["9_laimetojui_kaina: " + TA], "N9");
+    // D8: atmestas, laimėtojas, kitas
+    W.openProtocol("TEST-P-D", "D8");
+    pridek("#pf-d8-list");
+    pildyk(eil(".d8-row", 0), { ".d8-name": TA, ".d8-ex": "470000", ".d8-vieta": "1", ".d8-vk": "laimetojas" });
+    pildyk(eil(".d8-row", 1), { ".d8-name": TB, ".d8-ex": "490000", ".d8-vieta": "2", ".d8-vk": "vertinti" });
+    pildyk(eil(".d8-row", 2), { ".d8-name": TC, ".d8-vk": "atmesti", ".d8-motyvas": "Nepateiktas galutinis pasiūlymas", ".d8-atm-pp": "9.7.1" });
+    pl = W.pranesimuPlanas("D8", W.getProcurement("TEST-P-D"));
+    lygu(planoGavejai(pl), ["12_atmetimas: " + TC, "9_laimetojui_kaina: " + TA, "10_kitiems_eile: " + TB], "D8 planas");
+    lygu(W.protokoloEile("D8"), [{ tiekejas: TA, kaina: 470000 }, { tiekejas: TB, kaina: 490000 }], "D8 eilė įrašymui");
+  });
+
+  await testas("Pranešimų planas D4 ir D6: kviečiamiems - kvietimas, atmestiems - paraiškos (D4) ar pasiūlymo atmetimas, tikslinimui - nekuriama; D6 kvietimas - su to tiekėjo derybų data ir laiku", async () => {
+    await patModulis();
+    W.openProtocol("TEST-P-D", "D4"); pridek("#pf-d4-list");
+    pildyk(eil(".d4-row", 0), { ".d4-name": TA, ".d4-vk": "kviesti" });
+    pildyk(eil(".d4-row", 1), { ".d4-name": TB, ".d4-vk": "patikslinti", ".d4-neat-aprasymas": "Nepateiktas EBVPD" });
+    pildyk(eil(".d4-row", 2), { ".d4-name": TC, ".d4-vk": "atmesti", ".d4-atm-pp": "14.7.1", ".d4-neat-aprasymas": "Paraiška pateikta pavėluotai" });
+    let pl = W.pranesimuPlanas("D4", W.getProcurement("TEST-P-D"));
+    lygu(planoGavejai(pl), ["1_kvietimas_pasiulymui: " + TA, "12_atmetimas: " + TC], "D4 planas");
+    tiesa(pl.kurti[1].data.paraiska && pl.nekurti.some(k => k.kodel.indexOf(TB) >= 0), "paraiška ir tikslinimas");
+    W.openProtocol("TEST-P-D", "D6");
+    pildyk(eil(".d6-row", 0), { ".d6-name": TA, ".d6-vk": "derybos", ".d6-der-data": "2026-11-03", ".d6-der-laikas": "10:00", ".d6-der-budas": "teams" });
+    pildyk(eil(".d6-row", 1), { ".d6-name": TB, ".d6-vk": "derybos", ".d6-der-data": "2026-11-04", ".d6-der-laikas": "13:30", ".d6-der-budas": "gyvas", ".d6-derderfor": "kita", ".d6-derderfor-kita": "techninių sprendinių" });
+    pl = W.pranesimuPlanas("D6", W.getProcurement("TEST-P-D"));
+    lygu(planoGavejai(pl), ["6_kvietimas_derybu: " + TA + ", " + TB], "D6 planas");
+    const tikras = W.saveAs; W.saveAs = () => {};
+    try {
+      await W.autoGenerateNotification("6_kvietimas_derybu", "D6", W.getProcurement("TEST-P-D"), pl.kurti[0]);
+      const n = (W.loadNotifStore()["TEST-P-D"] || []).filter(x => x.templateId === "6_kvietimas_derybu");
+      const b = n.find(x => x.tiekejas === TB);
+      tiesa(n.length === 2 && b && b.data.derybu_data === "2026-11-04" && b.data.derybu_laikas === "13:30" && b.data.derybu_budas === "gyvas" && /techninių sprendinių/.test(b.bodyLt), "B kvietimas: " + JSON.stringify(b && b.data && [b.data.derybu_data, b.data.derybu_laikas, b.data.derybu_budas]));
+      tiesa(n.find(x => x.tiekejas === TA).data.derybu_data === "2026-11-03", "A kvietimas - savo data");
+    } finally { W.saveAs = tikras; }
+  });
+
+  await testas("Atmetimo šablonas (12): be rašto datos - be tikslinimo pastraipos, niekada „Pirkimas laikomas pasibaigusiu“ (tam - 12.1); paraiškai - „paraiška atmesta“ ir antraštė „DĖL PARAIŠKOS ATMETIMO“; eilė be kainos - „___“, ne „0,00“", async () => {
+    await patModulis();
+    const T = W.eval("PN_TEMPLATES")["12_atmetimas"];
+    const d = { imone: "LITGRID AB", pirkimas: "„Testinis“", pirkimo_budas: "atviro konkurso būdu", pirkimo_budas_en: "by way of an open tender", motyvas: "Nepateikta CE deklaracija", bps_atmetimo: "9.7.1" };
+    let b = T.body(d);
+    tiesa(!/Komisija prašė jūsų|laikomas pasibaigusiu|deemed terminated/.test(b.lt + b.en), "be tikslinimo ir pabaigos:\n" + b.lt);
+    tiesa(/58 straipsnio 1 dalies 1 punktu ir Pirkimo sąlygų 9\.7\.1 punktu, jūsų pasiūlymas atmestas\.\nAtmetimo motyvas: Nepateikta CE deklaracija/.test(b.lt) && /your bid is rejected\.\nReason for rejection/.test(b.en), b.lt);
+    b = T.body(Object.assign({}, d, { paraiska: true }));
+    tiesa(/įvertino jūsų pateiktą paraišką/.test(b.lt) && /jūsų paraiška atmesta\./.test(b.lt) && /your application is rejected/.test(b.en), b.lt);
+    lygu(W.pnAntraste(T, { paraiska: true }), { lt: "DĖL PARAIŠKOS ATMETIMO", en: "REGARDING REJECTION OF THE APPLICATION" }, "paraiškos antraštė");
+    lygu(W.pnAntraste(T, {}).lt, "DĖL PASIŪLYMO ATMETIMO", "pasiūlymo antraštė");
+    tiesa(/Komisija prašė jūsų/.test(T.body(Object.assign({}, d, { rasto_data: "2026-10-01", termino_pabaiga: "2026-10-06" })).lt), "su rašto data - tikslinimo pastraipa");
+    tiesa(/laikomas pasibaigusiu/.test(W.eval("PN_TEMPLATES")["12_1_visi_atmesti"].body(Object.assign({ atmetimo_motyvas: "x" }, d)).lt), "12.1 - su pabaiga");
+    lygu(W.fmtEile([{ tiekejas: TA, kaina: 1000 }, { tiekejas: TB, kaina: 0 }]).replace(/\u00a0/g, " "), "        1. " + TA + "    1 000,00 Eur be PVM;\n        2. " + TB + "    ___ Eur be PVM.", "eilė be kainos");
+  });
+
+  await testas("„Sukurti visus dokumentus“ (A4): sukuriami tik plano pranešimai, kas sukurta ir kodėl kas ne - dokumentų sąraše; po kūrimo forma ta pati (atkurta)", async () => {
+    await patModulis();
+    const tikras = W.saveAs, tikrasT = W.setTimeout; W.saveAs = () => {};
+    try {
+      W.openProtocol("TEST-P-A", "A4"); a4Pildyk(true);
+      await W.generateAllDocuments("A4");
+      const n = (W.loadNotifStore()["TEST-P-A"] || []).filter(x => x.sourceProtocolId === "A4");
+      lygu(n.map(x => x.templateId + ": " + (x.tiekejas || (x.tiekejaiGroup || []).join(", "))).sort(),
+        ["12_atmetimas: " + TB, "8_1_kitiems_galimas: " + TC, "8_galimas_laimetojas: " + TA].sort(), "sukurti pranešimai");
+      const atm = n.find(x => x.templateId === "12_atmetimas");
+      tiesa(atm.title === "DĖL PASIŪLYMO ATMETIMO" && /Atmetimo motyvas: Nepateikta CE deklaracija\./.test(atm.bodyLt) && /Pirkimo sąlygų 9\.7\.1 punktu/.test(atm.bodyLt), atm.bodyLt);
+      tiesa(/Komisija nustatė galimą Pirkimo laimėtoją - UAB „Tiekėjas A“/.test(n.find(x => x.templateId === "8_1_kitiems_galimas").bodyLt), "8.1 galimas laimėtojas");
+      const pr = W.getProcurement("TEST-P-A").protocols.A4;
+      tiesa(pr.done && pr.pranesimai && pr.pranesimai.sukurta.length === 3 && pr.pranesimai.nekurta.some(k => k.tId === "16_galiojimas"), "įrašas: " + JSON.stringify(pr.pranesimai));
+      lygu(pr.eile, [{ tiekejas: TA, kaina: 480000 }, { tiekejas: TC, kaina: 495000 }], "eilė įrašyta");
+      const txt = D.getElementById("proto-form-content").textContent;
+      tiesa(/Visi dokumentai sukurti/.test(txt) && /Nesukurtas: prašymas pratęsti pasiūlymų galiojimą/.test(txt) && /✓ Sukurta 1 pranešimas: UAB „Tiekėjas B“/.test(txt), "dokumentų sąrašas: " + txt.slice(txt.indexOf("Dokumentų sąrašas"), txt.indexOf("Dokumentų sąrašas") + 900));
+      lygu([...D.querySelectorAll(".e-name")].map(x => x.value), [TA, TB, TC], "forma po kūrimo");
+      lygu([eil(".e-action", 1).value, eil(".e-pp", 1).value, getComputedStyle(eil(".e-detail", 1)).display], ["atmesti", "9.7.1", "block"], "atmetimo eilutė ir detalės");
+      tiesa(/Atkurti anksčiau įvesti šio protokolo duomenys/.test(txt), "pastaba apie atkurtus duomenis");
+    } finally { W.saveAs = tikras; }
+  });
+
+  await testas("Formos būsena (K6): įrašoma, atkuriama su pridėtomis eilutėmis, priklausomomis dalimis ir balsavimu; „Išvalyti formą“; netinkami duomenys - be klaidų ir be HTML", async () => {
+    await patModulis();
+    W.openProtocol("TEST-P-A", "A5"); W.addKvalRow(); W.addKvalRow();
+    [TA, TB, TC].forEach((x, i) => eil(".kv-name", i).value = x); eil(".kv-sp", 1).value = "atmesti";
+    const cb = D.getElementById("pf-nmp-check"); cb.checked = true; cb.dispatchEvent(new Event("change", { bubbles: true }));
+    eil(".nmp-name", 0).value = TC; eil(".nmp-pagr", 0).value = "nepagrinde";
+    const vb = D.getElementById("pf-vienbalsiai"); vb.checked = false; W.togglePfVote(vb);
+    D.querySelector('input[name="pf-vote-2"][value="pries"]').checked = true; D.getElementById("pf-atskira").value = "Narys balsavo prieš.";
+    D.getElementById("pf-winner").value = TA;
+    W.irasykForma();
+    W.openProtocol("TEST-P-A", "A5");
+    lygu([...D.querySelectorAll(".kv-name")].map(x => x.value), [TA, TB, TC], "eilutės");
+    lygu([eil(".kv-sp", 1).value, D.getElementById("pf-nmp-check").checked, getComputedStyle(D.getElementById("pf-nmp-section")).display, eil(".nmp-name", 0).value, eil(".nmp-pagr", 0).value],
+      ["atmesti", true, "block", TC, "nepagrinde"], "priklausoma dalis");
+    lygu([D.getElementById("pf-vienbalsiai").checked, getComputedStyle(D.getElementById("pf-vote-section")).display, D.querySelector('input[name="pf-vote-2"][value="pries"]').checked, D.getElementById("pf-atskira").value],
+      [false, "block", true, "Narys balsavo prieš."], "balsavimas");
+    // kitas protokolas - savo forma
+    W.openProtocol("TEST-P-A", "A4");
+    tiesa(![...D.querySelectorAll(".e-name")].some(x => x.value) && !/Atkurti anksčiau/.test(D.getElementById("proto-form-content").textContent), "A4 tuščia");
+    // išvalyti
+    W.openProtocol("TEST-P-A", "A5");
+    const tikras = W.confirm; W.confirm = () => true;
+    try { D.querySelector(".forma-atkurta button").click(); } finally { W.confirm = tikras; }
+    tiesa(![...D.querySelectorAll(".kv-name")].some(x => x.value) && !W.getProcurement("TEST-P-A").protocols.A5.forma, "išvalyta");
+    // netinkami duomenys: per daug eilučių, ne tekstas, HTML
+    const pk = W.getProcurement("TEST-P-A");
+    pk.protocols.A5.forma = { v: 1, data: "x", sarasai: { "pf-kval-tbody": 1e6, "nera": 3 }, laukai: { ".kv-name:0": "<img src=x onerror=window.__xss=1>", ".kv-sp:0": 5, "#pf-nmp-check": "taip" } };
+    W.saveProcurementData("TEST-P-A", pk);
+    W.openProtocol("TEST-P-A", "A5");
+    lygu([D.querySelectorAll("#pf-kval-tbody tr").length <= 200, eil(".kv-name", 0).value, eil(".kv-sp", 0).value, D.getElementById("pf-nmp-check").checked, !!D.querySelector("#proto-form-content img"), W.__xss],
+      [true, "<img src=x onerror=window.__xss=1>", "priimti", false, false, undefined], "netinkami duomenys");
+    pk.protocols.A5.forma = { v: 99, laukai: { ".kv-name:0": "x" } }; W.saveProcurementData("TEST-P-A", pk);
+    W.openProtocol("TEST-P-A", "A5");
+    lygu(eil(".kv-name", 0).value, "", "kita versija neatkuriama");
+  });
+
+  await testas("A5 protokole - neįprastai mažos kainos vertinimas ir atmetimas (Pirkimų įstatymo 66 str.), sprendimų numeriai iš eilės; A4 - atmetimo ir tikslinimo sprendimai", async () => {
+    await patModulis();
+    const pk = W.getProcurement("TEST-P-A");
+    W.openProtocol("TEST-P-A", "A5"); W.addKvalRow(); W.addKvalRow();
+    [TA, TB, TC].forEach((x, i) => eil(".kv-name", i).value = x); eil(".kv-kval", 2).value = "neatitinka"; eil(".kv-sp", 2).value = "atmesti";
+    const cb = D.getElementById("pf-nmp-check"); cb.checked = true; cb.dispatchEvent(new Event("change", { bubbles: true }));
+    pildyk(eil("#pf-nmp-tbody tr", 0), { ".nmp-name": TB, ".nmp-pagr": "nepagrinde", ".nmp-sp": "atmesti" });
+    D.getElementById("pf-winner").value = TA; D.getElementById("pf-winner-ex").value = "480000";
+    let T = await dokTekstas(await W.buildDocx(pk, W.getSequence(pk.type).find(x => x.id === "A5"), "2026-10-25", "P-1", true));
+    yraTekste({ T }, "T", TB + ": pašalinimo pagrindų nėra; kvalifikacija atitinka reikalavimus; neįprastai maža kaina nepagrįsta. Sprendimas: atmesti.",
+      "Neįprastai mažos kainos vertinimas:", TB + ": kainą nepagrindė. Sprendimas: atmesti.",
+      "1. Vadovaujantis Pirkimų įstatymo 59 str. 1 d. ir Pirkimo sąlygų nuostatomis, atmesti šių tiekėjų pasiūlymus: " + TC + ".",
+      "2. Vadovaujantis Pirkimų įstatymo 66 str., atmesti šių tiekėjų pasiūlymus, kurių neįprastai maža kaina nepagrįsta: " + TB + ".",
+      "3. Nustatyti, kad Pirkimą laimėjo " + TA, "5. Informuoti visus tiekėjus");
+    lygu(sprendimuNumeriai(T), [1, 2, 3, 4, 5], "A5 numeriai");
+    W.openProtocol("TEST-P-A", "A4"); a4Pildyk(true);
+    T = await dokTekstas(await W.buildDocx(pk, W.getSequence(pk.type).find(x => x.id === "A4"), "2026-10-25", "P-1", true));
+    yraTekste({ T }, "T", TB + ": ☐ Neatitinka sąlygų. EBVPD: ☑ Atitinka. Neatitikimas: Nepateikta CE deklaracija. Veiksmas: atmesti.",
+      "2. Vadovaujantis Pirkimų įstatymo 58 str. ir Bendrųjų Pirkimo sąlygų nuostatomis, atmesti šių tiekėjų pasiūlymus: " + TB + " (Pirkimo sąlygų 9.7.1 p., neatitikimas: Nepateikta CE deklaracija).");
+    lygu(sprendimuNumeriai(T), [1, 2, 3, 4], "A4 numeriai");
+  });
+
+  await testas("Balsavimas ne vienbalsiai - protokole balsų skaičius su vardais ir atskirosios nuomonės; vardai lentelėje - tekstu; CPO žyma antraštėje pagal pirkimą", async () => {
+    await patModulis();
+    const pk = W.getProcurement("TEST-P-A"); pk.komisija.members = ["Petras <b>Petraitis</b>", "Asta Astaitė"]; pk.cpo_applicable = true; W.saveProcurementData("TEST-P-A", pk);
+    W.openProtocol("TEST-P-A", "A3");
+    const vb = D.getElementById("pf-vienbalsiai"); vb.checked = false; W.togglePfVote(vb);
+    tiesa(!D.querySelector("#pf-vote-tbody b") && /Petras <b>Petraitis<\/b>/.test(D.getElementById("pf-vote-tbody").textContent), "vardas tekstu");
+    tiesa(D.querySelector('input[name="pf-vote-2"]').getAttribute("aria-label").indexOf("Petras <b>Petraitis</b> - už") === 0, "radijo pavadinimas");
+    D.querySelector('input[name="pf-vote-3"][value="pries"]').checked = true; D.getElementById("pf-atskira").value = "Asta Astaitė nesutinka su sprendimu.";
+    const T = await dokTekstas(await W.buildDocx(W.getProcurement("TEST-P-A"), W.getSequence(pk.type).find(x => x.id === "A3"), "2026-10-25", "P-1", false));
+    yraTekste({ T }, "T", "Balsavimo rezultatai: už - 3 (Jonas Jonaitis, Rasa Rasaitė, Petras <b>Petraitis</b>); prieš - 1 (Asta Astaitė).",
+      "Atskirosios nuomonės: Asta Astaitė nesutinka su sprendimu.", "Pirkimo objektas atitinka CPO katalogą, tačiau pirkimas vykdomas ne per CPO.");
+    tiesa(T.indexOf("Pirkimo objektas nėra įtrauktas į CPO katalogą.") < 0, "CPO prieštaravimas");
+  });
+
+  await testas("DPS sukūrimas (K7): 3 protokolas - paraiškų forma, 4 - paraiškų vertinimas ir leidimas dalyvauti DPS (Pirkimų įstatymo 87 str. 4 ir 8 d.), pranešimai - leidimas ir paraiškos atmetimas; kiti būdai nepakito", async () => {
+    await patModulis();
+    const pk = W.getProcurement("TEST-P-S");
+    W.openProtocol("TEST-P-S", "A3");
+    tiesa(D.getElementById("pf-par-tbody") && !D.querySelector(".tiek-row"), "A3 - paraiškų forma");
+    W.openProtocol("TEST-P-S", "A4");
+    const c = D.getElementById("proto-form-content");
+    tiesa(D.getElementById("pf-d4-list") && !D.querySelector(".eval-row") && /Paraiškų vertinimas ir tiekėjų įtraukimas į DPS/.test(c.textContent)
+      && /PĮ 87 str\. 4 d\./.test(c.textContent) && /PĮ 87 str\. 5 d\. 2 p\./.test(c.textContent) && /PĮ 87 str\. 8 d\./.test(c.textContent), "A4 forma: " + c.textContent.slice(0, 600));
+    tiesa(eil(".d4-vk", 0).options[0].textContent === "Leisti dalyvauti dinaminėje pirkimo sistemoje", "veiksmas");
+    pridek("#pf-d4-list");
+    pildyk(eil(".d4-row", 0), { ".d4-name": TA, ".d4-vk": "kviesti" });
+    pildyk(eil(".d4-row", 1), { ".d4-name": TB, ".d4-vk": "kviesti" });
+    pildyk(eil(".d4-row", 2), { ".d4-name": TC, ".d4-vk": "atmesti", ".d4-atm-pp": "8.2", ".d4-neat-aprasymas": "Neatitinka kvalifikacijos reikalavimų" });
+    const T = await dokTekstas(await W.buildDocx(pk, W.getSequence(pk.type).find(x => x.id === "A4"), "2026-10-25", "P-4", true));
+    yraTekste({ T }, "T", "Siūloma leisti dalyvauti dinaminėje pirkimo sistemoje.",
+      "Vadovaujantis Pirkimų įstatymo 87 str. 4 d., leisti šiems tiekėjams dalyvauti dinaminėje pirkimo sistemoje: " + TA + "; " + TB + ".",
+      "Vadovaujantis Pirkimų įstatymo 87 str. 8 d., ne vėliau kaip per 3 darbo dienas nuo šio sprendimo priėmimo dienos CVP IS priemonėmis pranešti tiekėjams apie leidimą dalyvauti dinaminėje pirkimo sistemoje arba apie paraiškos atmetimą.",
+      "Dinaminės pirkimo sistemos sukūrimas");
+    tiesa(!/pirminį pasiūlymą|pirminius pasiūlymus|per 1 darbo dieną/.test(T), "atviro konkurso ar derybų tekstas DPS");
+    lygu([W.getProtocolNotifications("A4", pk), W.getProtocolNotifications("A3", pk), W.getProtocolNotifications("A4", W.getProcurement("TEST-P-A")).length], [["dps_leidimas", "12_atmetimas"], [], 9], "šablonai");
+    const pl = W.pranesimuPlanas("A4", pk);
+    lygu(planoGavejai(pl), ["dps_leidimas: " + TA + ", " + TB, "12_atmetimas: " + TC], "DPS planas");
+    const tikras = W.saveAs; W.saveAs = () => {};
+    try {
+      await W.generateAllDocuments("A4");
+      const n = (W.loadNotifStore()["TEST-P-S"] || []).filter(x => x.sourceProtocolId === "A4");
+      const l = n.find(x => x.templateId === "dps_leidimas"), a = n.find(x => x.templateId === "12_atmetimas");
+      tiesa(n.length === 3 && l && /leisti Jums dalyvauti DPS/.test(l.bodyLt) && /admit you to the DPS/.test(l.bodyEn), "leidimas: " + (l && l.bodyLt));
+      tiesa(a && a.tiekejas === TC && a.title === "DĖL PARAIŠKOS ATMETIMO" && /jūsų paraiška atmesta/.test(a.bodyLt) && /Pirkimo sąlygų 8\.2 punktu/.test(a.bodyLt), "atmetimas: " + (a && a.title + " | " + a.bodyLt));
+    } finally { W.saveAs = tikras; }
+    // kiti būdai: atviro konkurso A4 - pasiūlymų forma; derybų D4 - kvietimas teikti pirminį pasiūlymą
+    W.openProtocol("TEST-P-A", "A4"); tiesa(D.querySelector(".eval-row") && !D.getElementById("pf-d4-list"), "atviro konkurso A4");
+    W.openProtocol("TEST-P-D", "D4"); tiesa(eil(".d4-vk", 0).options[0].textContent === "Kviesti teikti pirminį pasiūlymą", "derybų D4");
+  });
+}
+
 (async function(){
   try {
     localStorage.removeItem(RAKTAS);
@@ -1387,6 +1639,7 @@ async function testaiDI(){
     await testaiImportas();
     await testaiPvm();
     await testaiDI();
+    await testaiPatikra1025();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
