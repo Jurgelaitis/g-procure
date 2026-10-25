@@ -3350,6 +3350,8 @@ const GPAudit = (() => {
   /* Baigtumo kriterijus: raudonos = 0, tuscios vietos = 0, komentarai = 0.
      Kas lieka - parodoma zmogui pastraipu tikslumu. Nieko nenutylima.       */
   const RENGEJO_FORMOJE = /3 mėnesius|90 calendar days|ARBA SĄNAUDOS|arba sąnaudos|ar sąnaudos|OR COSTS|or costs|Paslaugų teikimo\/Prekių tiekimo|Service provision\/ supply of|Koreguojama pagal poreikį|To be revised in accordance with the need|SPS (\d+|[xX]) priedą|Annex No\. (\d+|[xX]) of the SPC/;   // ir nuoroda į SPS priedą (2026-10-23)
+  // Rengėjo pildoma vieta „___“ formoje (2026-10-25): derybų formos sutarties specialiųjų sąlygų punktai - ne tiekėjo laukas
+  const RENGEJO_VIETA_FORMOJE = /Specialiųjų Sutarties sąlygų _+ punktams|Clauses _+ of the Special Conditions/;
   function check(doc, imone, forma){
     const d = doc.parts['word/document.xml'];
     const body = d.getElementsByTagNameNS(W,'body')[0];
@@ -3430,12 +3432,13 @@ const GPAudit = (() => {
     // lentelės nurodymas „Koreguojama pagal poreikį:“ - ne tiekėjo laukai; likusios raudonos forma nebaigta („spręsti Word'e“)
     if (forma){
       const rengejo = raudonos.filter(x => RENGEJO_FORMOJE.test(x.raud || ''));
+      const rengejoT = tuscios.filter(x => RENGEJO_VIETA_FORMOJE.test(x.text));
       const tiekejo = [...raudonos.filter(x => !rengejo.includes(x)).map(x => ({...x, rusis:'raudona'})),
-                       ...tuscios.map(x => ({...x, rusis:'tuscia'}))];
+                       ...tuscios.filter(x => !rengejoT.includes(x)).map(x => ({...x, rusis:'tuscia'}))];
       const zymos = patikrinti.filter(x => /ĮMONĖS PAVADINIMAS/.test(x.text));
       return {
-        raudonos: rengejo, tuscios: [], komentarai, patikrinti: zymos, tiekejo,
-        svarus: komentarai === 0 && zymos.length === 0 && rengejo.length === 0
+        raudonos: rengejo, tuscios: rengejoT, komentarai, patikrinti: zymos, tiekejo,
+        svarus: komentarai === 0 && zymos.length === 0 && rengejo.length === 0 && rengejoT.length === 0
       };
     }
     return {

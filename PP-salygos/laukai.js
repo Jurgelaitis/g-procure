@@ -279,6 +279,12 @@
       uzuomina: 'Pasiūlymo formoje: „Pasiūlymas galioja ... nuo Pasiūlymo pateikimo termino pabaigos.“ Pasirinkite šablono variantą arba įrašykite kitą terminą galininku.',
       uzrasas: 'Kitas terminas', pvz: '6 mėnesius',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Galiojimo terminas' })) },
+    // Derybų forma (derėtinos sąlygos; naudotojo sprendimas 2026-10-25): šablone buvo juodai įrašyti kito pirkimo sutarties punktai - pildoma vieta
+    { id: 'deretinu-punktai', re: /gali siulyti korekcijas techninei specifikacijai bei specialiuju sutarties salygu/,
+      klausimas: 'Kurių sutarties specialiųjų sąlygų punktų korekcijas tiekėjai gali siūlyti derybose?',
+      uzuomina: 'Derybų formoje: „Tiekėjai, pagal SPS ... punkte nustatytą derybų apimtį gali siūlyti korekcijas Techninei specifikacijai bei Specialiųjų Sutarties sąlygų ... punktams.“ Įrašykite sutarties specialiųjų sąlygų punktų, dėl kurių deramasi, numerius.',
+      uzrasas: 'Punktų numeriai', pvz: '2.3-2.8, 3.1 ir 10.1',
+      vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Punktų numeriai' })) },
     { id: 'cpo-pagrindimas', formuluote: true, re: /centralizuotu pirkimu katalogu pagrindimas|centralized procurement directory/,
       klausimas: 'Kodėl pirkimas vykdomas ne per CPO LT katalogą?', uzuomina: '', vietos: vs => vs.map(() => ({ ivestis: 'tekstas-ilgas', uzrasas: 'Pagrindimas' })) },
     { id: 'esminiu-salygu-dalis', re: /esmines sutarties salygos isdestytos sps|terms of the contract are laid down|conditions of the contract are established/,

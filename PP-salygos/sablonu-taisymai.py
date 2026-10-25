@@ -424,6 +424,7 @@ def taisymas_tekstas(taisyk):
     viso += _t6_korekcijos(taisyk)
     viso += _t7_korekcijos(taisyk)
     viso += _ao_sprendimai(taisyk)
+    viso += _ap_sprendimai(taisyk)
     return viso
 
 
@@ -1529,6 +1530,69 @@ def _ao_sprendimai(taisyk):
                 (_re.compile(r'Together with the Final Tender, the Supplier'), 'Together with the Initial Tender, the Supplier'),
                 (_re.compile(r'before the deadline for submission of Final Tenders to address'), 'before the deadline for submission of Initial Tenders to address'),
                 (_re.compile(r'(at least \d+ days after the deadline for submission of )Final( Tenders and must specify the term of validity of the guarantee\.)'), r'\1Initial\2' + _AO_71_PRIEDAS_EN)])
+    return n
+
+
+# AP. Naudotojo sprendimai 2026-10-25 (po AO; atsakymai į likusius klausimus):
+#    1) „vadovaujamės pagal LT variantą“ (T7-D3 principas) - LT/EN pasiūlymo formų nacionalinio saugumo atmetimo pagrindas: lietuviškai
+#       „... šios dalies 1.8.1 ir 1.8.2 punktuose nurodyti subjektai ...“, angliškai buvo „... specified in Clauses 1.8.1. and / or 1.8.2. of the GPC“
+#       (GPC - bendrosios pirkimo sąlygos, ne ši forma; „ir“, ne „ir / arba“) -> „... specified in Clauses 1.8.1 and 1.8.2 of this section“
+#       (DPSP - 1.5.1 ir 1.5.2); formų pernumeravimas (10g) „Clauses N and M“ atpažįsta.
+#    2) SSD ir TSD SPS (LT ir LT/EN) pasiūlymo galiojimo užtikrinimas - kaip ND (AO): tų pačių šablonų BPS „Tiekėjo, ... nepateikusio Galutinio
+#       pasiūlymo, pateiktas Pirminis pasiūlymas bus vertinamas kaip Galutinis“ - su Galutiniu pateiktas užtikrinimas tada nebūtų pateiktas niekada.
+#    3) Derybų forma (derėtinos sąlygos, LT ir LT/EN): juodai įrašyti kito pirkimo sutarties punktai „2.3 – 2.8, 3.1., 9.4.-9.6. bei 10.1“
+#       (EN „2.3 - 2.8, 3.1., 9.4.-9.6. and 10.1“) -> pildoma vieta „___“ (2 žingsnio klausimas, GP_LAUKAI.TIPAI „deretinu-punktai“; EN - laukas
+#       prie lietuviško klausimo). Pakartotinai - 0.
+def _ap_gpc(m):
+    return m.group(1) + ' and ' + m.group(3) + ' of this section'
+
+
+_AP_GPC = [(_re.compile(r'(entities specified in Clauses \d+(?:\.\d+)+)\.?( and\s*/\s*or )(\d+(?:\.\d+)+)\.?( of the GPC)'), _ap_gpc, 0)]
+_AP_71 = [(_re.compile(r'^(?:\d+\.1\. )?Kartu su (Galutiniu) pasiūlymu Tiekėjas privalo pateikti'), 'Pirminiu', 1)] + _AO_71[1:]
+_AP_DER = [(_re.compile(r'Specialiųjų Sutarties sąlygų (2\.3 – 2\.8, 3\.1\., 9\.4\.-9\.6\. bei 10\.1) punktams'), '___', 1),
+           (_re.compile(r'Technical Specification and Clauses (2\.3 - 2\.8, 3\.1\., 9\.4\.-9\.6\. and 10\.1) of the Special Conditions'), '___', 1)]
+_AP_DER_LT = 'Specialiųjų Sutarties sąlygų ___ punktams'
+_AP_DER_EN = 'Technical Specification and Clauses ___ of the Special Conditions'
+
+
+def _ap_tuscios(f, kalba):
+    """Derybų formos žemėlapis: nauja pildoma vieta „___“ (tuscios); LT/EN - angliška vieta su lietuviška pora (EN laukas prie LT klausimo)."""
+    import json as _json
+    zf = Path(__file__).parent / 'zemelapiai' / (f + '.json')
+    raw = zf.read_text(encoding='utf-8'); Z = _json.loads(raw)
+    P = {int(k): v for k, v in Z['paras'].items()}
+    lt = next((i for i, t in P.items() if _AP_DER_LT in t), None)
+    en = next((i for i, t in P.items() if _AP_DER_EN in t), None) if kalba == 'LTEN' else None
+    if lt is None or (kalba == 'LTEN' and en is None):
+        sys.exit(f'{f}: derybų formos pastraipos nerastos')
+    T = [e for e in Z.get('tuscios', []) if e.get('i') not in (lt, en)]
+    T.append({'i': lt, 'text': P[lt]})
+    if en is not None:
+        T.append({'i': en, 'text': P[en], 'pora': lt, 'poraTipas': 'ai'})
+    T.sort(key=lambda e: e['i'])
+    if T != Z.get('tuscios', []):
+        Z['tuscios'] = T
+        zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+        print(f"      {zf.name}: pildoma vieta - pastraipa {lt}" + (f", angliška - {en}" if en is not None else ''))
+
+
+def _ap_sprendimai(taisyk):
+    print("\nNaudotojo sprendimai 2026-10-25 (AP):")
+    n = _su_zemelapiais(_regex_pakeitimai(*_AP_GPC), ['AK_LTEN_PASIULYMAS', 'DPSP_LTEN_PASIULYMAS', 'MVP_LTEN_PASIULYMAS', 'ND_LTEN_PASIULYMAS', 'TSD_LTEN_PASIULYMAS', 'TSD_LTEN_PARAISKA'],
+                        'EN „Clauses ... of this section“ (kaip LT „šios dalies ... punktuose“)', taisyk)
+    sd = ['SSD_LT_SPS', 'SSD_LTEN_SPS', 'TSD_LT_SPS', 'TSD_LTEN_SPS']
+    n += _su_zemelapiais(_regex_pakeitimai(*_AP_71), sd, 'SSD ir TSD pasiūlymo galiojimo užtikrinimas su Pirminiu pasiūlymu (kaip ND)', taisyk)
+    n += _su_zemelapiais(_regex_pakeitimai(*_AP_DER), ['PRIEDAI_LT_DERYBOS', 'PRIEDAI_LTEN_DERYBOS'], 'derybų formos sutarties punktai - pildoma vieta', taisyk)
+    if taisyk:
+        for f in sd:
+            _ao_zemelapiu_raudoni(f, [(_re.compile(r'Kartu su Galutiniu pasiūlymu Tiekėjas'), 'Kartu su Pirminiu pasiūlymu Tiekėjas'),
+                (_re.compile(r'iki Galutinių pasiūlymų pateikimo termino pabaigos adresu'), 'iki Pirminių pasiūlymų pateikimo termino pabaigos adresu'),
+                (_re.compile(r'(ne trumpiau kaip \d+ dienas po )Galutinių( pasiūlymų pateikimo termino pabaigos ir joje turi būti nurodytas garantijos galiojimo terminas\.)(?! Jeigu)'), r'\1Pirminių\2' + _AO_71_PRIEDAS_LT),
+                (_re.compile(r'Together with the Final Tender, the Supplier'), 'Together with the Initial Tender, the Supplier'),
+                (_re.compile(r'before the deadline for submission of Final Tenders to address'), 'before the deadline for submission of Initial Tenders to address'),
+                (_re.compile(r'(at least \d+ days after the deadline for submission of )Final( Tenders and must specify the term of validity of the guarantee\.)(?! If)'), r'\1Initial\2' + _AO_71_PRIEDAS_EN)])
+        _ap_tuscios('PRIEDAI_LT_DERYBOS', 'LT')
+        _ap_tuscios('PRIEDAI_LTEN_DERYBOS', 'LTEN')
     return n
 
 
