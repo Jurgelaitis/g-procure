@@ -2363,7 +2363,7 @@ function openProtocol(pkId, protoId) {
   content.innerHTML = buildProtoForm(pk, proto);
   const issaugota = ((pk.protocols || {})[protoId] || {}).forma;
   if (issaugota) atkurkForma(content, issaugota);
-  terminoPatikra(); dalyviaiPasikeite();   // užuominos pagal atkurtas reikšmes (V7, V4)
+  terminoPatikra(); dalyviaiPasikeite(); atidejimoPatikra();   // užuominos pagal atkurtas reikšmes (V7, V4, T8)
   formosPastaba(content, issaugota);
   showPage('page-proto');
 }
@@ -2487,6 +2487,7 @@ function buildProtoForm(pk, proto) {
   else html += `<div class="card"><div class="card-body"><div class="warn-box">Šio protokolo forma dar kuriama.</div></div></div>`;
 
   if (EKSPERTU_PROTOKOLAI.includes(id)) html += ekspertuZyma();
+  if (ATIDEJIMO_PROTOKOLAI.includes(id)) html += atidejimoZyma(id);
   if (VTEK_PROTOKOLAI.includes(id)) html += vtekZyma();
   // FAZĖ 1C: Sugeneruotų dokumentų skiltis (protokolas + pranešimai)
   html += renderProtocolDocuments(pk.id, proto.id);
@@ -3425,6 +3426,37 @@ function ekspertuZyma(){
     <div class="hint" id="pf-ekspertai-uz" style="font-size:13px;color:var(--color-graphite-50-strong);margin-top:4px">Pažymėkite, jei vertinime dalyvavo ekspertai. Nepažymėjus, priedo „Ekspertų išvados“ protokolo priedų sąraše nebus.</div>
   </div></div>`;
 }
+/* Vienintelis suinteresuotas dalyvis (naudotojo pastaba 2026-10-25, T8: „neskelbiamos derybos įprastai su vienu tiekėju - apie atidėjimo
+   laikotarpį ar pasiūlymų eilę nėra kalbama“; PĮ 94 str. 8 d. 1 p. - atidėjimo terminas gali būti netaikomas). Su vienu tiekėju eilė
+   nesudaroma; atidėjimo terminas netaikomas tik pažymėjus žymą (neskelbiamose derybose - pažymėta iš anksto) ir tik kai tiekėjas protokole
+   ir ankstesnio protokolo eilėje vienas - kitaip taikomas ir forma tai sako. */
+const ATIDEJIMO_PROTOKOLAI = ['A5', 'D9', 'N9', 'D8', 'N8'];
+function protokoloTiekejuSk(pk, id){
+  const vardai = new Set();
+  const sel = (id === 'D8' || id === 'N8') ? '#proto-form-content .d8-name' : '#proto-form-content .kv-name';
+  document.querySelectorAll(sel).forEach(i => { const v = String(i.value || '').trim(); if (v) vardai.add(v); });
+  const anks = { A5: 'A4', D9: 'D8', N9: 'N8', D8: 'D6', N8: 'N6' }[id];
+  const e = (((pk && pk.protocols) || {})[anks] || {}).eile;
+  if (Array.isArray(e)) e.forEach(x => { if (x && x.tiekejas) vardai.add(String(x.tiekejas).trim()); });
+  return vardai.size;
+}
+const vienasDalyvis = (pk, id) => protokoloTiekejuSk(pk, id) === 1;
+const beAtidejimo = (pk, id) => ATIDEJIMO_PROTOKOLAI.includes(id) && !!document.getElementById('pf-be-atid')?.checked && vienasDalyvis(pk, id);
+function atidejimoZyma(id){
+  const nd = /^N/.test(id);
+  return `<div class="card"><div class="card-body">
+    <div class="chk-row"><input type="checkbox" id="pf-be-atid"${nd ? ' checked' : ''} aria-describedby="pf-be-atid-uz" onchange="atidejimoPatikra()"><label for="pf-be-atid">Atidėjimo terminas netaikomas - vienintelis suinteresuotas dalyvis yra tas, su kuriuo sudaroma sutartis</label></div>
+    <div class="hint" id="pf-be-atid-uz" style="font-size:13px;color:var(--color-graphite-50-strong);margin-top:4px">Pagal ${hx(teise('atidejimas_netaikomas_vienas'))} atidėjimo terminas gali būti netaikomas, kai vienintelis suinteresuotas dalyvis yra tas, su kuriuo sudaroma pirkimo sutartis, ir nėra suinteresuotų kandidatų. Taikoma tik kai tiekėjas vienas; kai jų daugiau - atidėjimo terminas lieka.${nd ? ' Neskelbiamose derybose pažymėta iš anksto.' : ''}</div>
+    <div id="pf-be-atid-pastaba" role="status" aria-live="polite"></div>
+  </div></div>`;
+}
+function atidejimoPatikra(){
+  const el = document.getElementById('pf-be-atid-pastaba'); if (!el) return;
+  const pk = getProcurement(currentPkId), sk = protokoloTiekejuSk(pk, protokoloForma(pk, currentProtoId));
+  el.innerHTML = document.getElementById('pf-be-atid')?.checked && sk > 1
+    ? `<div class="warn-box" style="margin-top:8px">Protokole tiekėjų daugiau nei vienas (${sk}) - atidėjimo terminas taikomas.</div>` : '';
+}
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#proto-form-content')) atidejimoPatikra(); });
 function prieduEilutes(pavadinimai){
   const p = pavadinimai.filter(Boolean);
   return p.length ? p.map((x, i) => `\u2611 ${i + 1} priedas. ${x}.`) : ['Priedų nėra.'];
@@ -3854,8 +3886,14 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
     if (nmkAtm.size) a5s(`Vadovaujantis ${ilgaForma(teise('nmk'))}, atmesti šių tiekėjų pasiūlymus, kurių neįprastai maža kaina nepagrįsta: ${[...nmkAtm].join('; ')}.`);
     a5s(`Nustatyti, kad Pirkimą laimėjo ${winner}, pasiūlymo kaina ${formatMoney(parseFloat(winnerEx)||0)} EUR be PVM.`);
     // Kaip D8 (2026-10-25, D10): pranešimas su tiksliu atidėjimo terminu (PĮ 68 str. 1 d. - iš registro), kvietimas - pasibaigus jam
-    a5s(`Vadovaujantis ${ilgaForma(teise('informavimas_rezultatai'))} nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą.`);
-    a5s(`Pasibaigus atidėjimo terminui, pakviesti ${winner} sudaryti sutartį per ${document.getElementById('pf-contract-days')?.value||15} darbo dienų.`);
+    if (beAtidejimo(pk, id)){
+      a5s(`Atidėjimo termino netaikyti - vienintelis suinteresuotas dalyvis yra tas, su kuriuo sudaroma pirkimo sutartis, suinteresuotų kandidatų nėra (${ilgaForma(teise('atidejimas_netaikomas_vienas'))}).`);
+      a5s(`Vadovaujantis ${ilgaForma(teise('informavimas_rezultatai'))} nustatyta tvarka pranešti tiekėjui apie priimtą sprendimą.`);
+      a5s(`Pakviesti ${winner} sudaryti sutartį per ${document.getElementById('pf-contract-days')?.value||15} darbo dienų.`);
+    } else {
+      a5s(`Vadovaujantis ${ilgaForma(teise('informavimas_rezultatai'))} nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą.`);
+      a5s(`Pasibaigus atidėjimo terminui, pakviesti ${winner} sudaryti sutartį per ${document.getElementById('pf-contract-days')?.value||15} darbo dienų.`);
+    }
     rows.push(new TableRow({children:[cl(a5dec,{w:CW})]}));
     rows.push(hdr1('3. PRIEDAS (-AI)'));
     rows.push(new TableRow({children:[cl(prieduEilutes([ekspertuIsvados() && 'Ekspertų išvados', 'Kvietimas sudaryti sutartį']).map(t => pr([n(t)])),{w:CW})]}));
@@ -4180,7 +4218,8 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
     let d8nr = 0;
     const d8sprendimas = t => d8dec.push(`${++d8nr}. ${t}`);
     if (vtekPatikrinta()) d8sprendimas(VTEK_SPRENDIMAS);
-    if(eileLines.length>0){
+    const vienasD8 = vienasDalyvis(pk, id), beAtidD8 = beAtidejimo(pk, id);
+    if(eileLines.length>0 && !vienasD8){
       d8sprendimas('Sudaryti tokią pasiūlymų eilę ekonominio naudingumo mažėjimo tvarka:');
       eileLines.forEach((l,i) => d8dec.push('    ' + l + (i < eileLines.length-1 ? ';' : '.')));
     }
@@ -4190,12 +4229,18 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
     }
     d8sprendimas(`Pripažinti ${winner} pasiūlymą laimėjusiu. Sutarties kaina - ${formatMoney(winnerEx)} Eur be PVM.`);
     // PĮ 68 str. 1 d.: per 3 darbo dienas pranešama apie laimėjusį pasiūlymą, pasiūlymų eilę ir tikslų atidėjimo terminą (iki 2026-10-02 - „68 str.“)
-    d8sprendimas(`Vadovaujantis ${ilgaForma(teise('informavimas_rezultatai'))} nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą.`);
-    d8sprendimas('Pakviesti laimėjusį tiekėją sudaryti sutartį pasibaigus atidėjimo terminui.');
+    if (beAtidD8){
+      d8sprendimas(`Atidėjimo termino netaikyti - vienintelis suinteresuotas dalyvis yra tas, su kuriuo sudaroma pirkimo sutartis, suinteresuotų kandidatų nėra (${ilgaForma(teise('atidejimas_netaikomas_vienas'))}).`);
+      d8sprendimas(`Vadovaujantis ${ilgaForma(teise('informavimas_rezultatai'))} nustatyta tvarka pranešti tiekėjui apie priimtą sprendimą.`);
+      d8sprendimas('Pakviesti laimėjusį tiekėją sudaryti sutartį.');
+    } else {
+      d8sprendimas(`Vadovaujantis ${ilgaForma(teise('informavimas_rezultatai'))} nustatyta tvarka pranešti tiekėjams apie priimtus sprendimus ir tikslų atidėjimo terminą.`);
+      d8sprendimas('Pakviesti laimėjusį tiekėją sudaryti sutartį pasibaigus atidėjimo terminui.');
+    }
     rows.push(new TableRow({children:[cl(d8dec.map(t => pr([n(t)])),{w:CW})]}));
 
     rows.push(hdr1('3. PRIEDAS (-AI)'));
-    rows.push(new TableRow({children:[cl(prieduEilutes([ekspertuIsvados() && 'Ekspertų išvados', 'Pasiūlymų eilė', 'Rašto (-ų) tiekėjams (-ui) projektas (-ai)']).map(t => pr([n(t)])),{w:CW})]}));
+    rows.push(new TableRow({children:[cl(prieduEilutes([ekspertuIsvados() && 'Ekspertų išvados', !vienasD8 && 'Pasiūlymų eilė', 'Rašto (-ų) tiekėjams (-ui) projektas (-ai)']).map(t => pr([n(t)])),{w:CW})]}));
   }
   else {
     // Protokolas be šablono (sekose tokių nebeliko): darbotvarkė - protokolo pavadinimas, turinys pildomas ranka
@@ -4229,6 +4274,10 @@ let pnTiekejai = [];
 // ─────────────────────────────────────────────────────────
 // 1. PRANEŠIMŲ ŠABLONŲ KATALOGAS
 // ─────────────────────────────────────────────────────────
+// T8 (2026-10-25): rašte Nr. 9 ir 9.1 - be pasiūlymų eilės, kai tiekėjas vienas, ir be atidėjimo termino, kai jis netaikomas (PĮ 94 str. 8 d. 1 p.)
+const pnVienas = d => !Array.isArray(d.eile) || d.eile.filter(x => x && x.tiekejas).length <= 1;
+const pnBeAtidLt = () => `Atidėjimo terminas netaikomas, nes Jūs esate vienintelis suinteresuotas dalyvis (${ilgaForma(teise('atidejimas_netaikomas_vienas'))}).`;
+const pnBeAtidEn = () => `The standstill period does not apply, as you are the only interested participant (${GP_TEISE.cit('atidejimas_netaikomas_vienas', 'PI', 'en').replace(/^PĮ Art\. (\S+)/, 'Article $1 of the Law on Procurement')}).`;
 const PN_TEMPLATES = {
   // Angliškas tekstas - toks pat kaip lietuviškas (2026-10-25, V9: iki tol 3, 4, 8, 8.1, 12.1, 12.2, 13, 14.1-14.3, 15 ir 16 EN - sutrumpinti)
   // 9 ir 10 - su pirkimo pavadinimu ir būdu, kaip kiti raštai (2026-10-25, D7: iki tol prasidėdavo „Komisija nustatė ...“)
@@ -4239,8 +4288,8 @@ const PN_TEMPLATES = {
     fields: ['kaina_be','kaina_su','atidejimas','laimetojas','eile'],
     body(d){
       return {
-        lt: `${d.imone} pirkimų komisija (toliau - Komisija) ${d.pirkimo_budas} vykdo ${d.pirkimas} pirkimą (toliau - Pirkimas).\nKomisija nustatė šią pasiūlymų eilę ekonominio naudingumo mažėjimo tvarka:\n${fmtEile(d.eile)}\n${bpsPagal(d.bps_eile)}${d.laimetojas} pasiūlymas pripažintas laimėjusiu.\nPrašome CVP IS elektroninėmis priemonėmis ne vėliau kaip per 3 darbo dienas nuo šio pranešimo išsiuntimo dienos pateikti užpildytą ir pasirašytą Specialiųjų Pirkimo sąlygų priedą „Konfidenciali informacija“ bei konfidencialumą įrodančius dokumentus (tik jei nurodote konfidencialią informaciją). Jeigu per Perkančiojo subjekto nustatytą terminą Tiekėjas nepateikia užpildyto priedo „Konfidenciali informacija", laikoma, kad konfidencialios informacijos nėra, išskyrus informaciją, kurios atskleidimas negalimas pagal Asmens duomenų teisinės apsaugos įstatymą.\nPirkimo sutartis su laimėjusį pasiūlymą pateikusiu tiekėju bus sudaroma ne anksčiau kaip praėjus ${pnAtidLt(d.atidejimas)} Pirkimo Sutarties sudarymo atidėjimo terminui, skaičiuojamam nuo šio pranešimo išsiuntimo dienos.${d.atidejimo_pabaiga ? ' Atidėjimo terminas baigiasi ' + d.atidejimo_pabaiga + '.' : ''} Atskiru pranešimu pakviesime Pirkimo Sutartį sudaryti per 3 darbo dienas nuo kvietimo išsiuntimo CVP IS elektroninėmis priemonėmis dienos. Pirkimo Sutarties kaina - ${pnMoney(d.kaina_be)} Eur be PVM (${pnMoney(d.kaina_su)} Eur su PVM).`,
-        en: `${d.imone} procurement commission (the Commission) is conducting the procurement of ${d.pirkimas} (the Procurement) ${d.pirkimo_budas_en}.\nThe Commission has established the following ranking of bids in descending order of economic advantage:\n${fmtEile(d.eile,true)}\n${d.bps_eile ? 'Pursuant to clause ' + d.bps_eile + ' of the General Procurement Terms, the' : 'The'} bid of ${d.laimetojas} has been declared the winning bid.\nPlease submit through CVP IS electronic means, no later than within 3 working days from the date of dispatch of this notice, the completed and signed annex “Confidential information” of the Special Procurement Terms along with documents proving confidentiality (only if you indicate confidential information).\nThe Procurement Contract with the supplier who submitted the winning bid will be concluded no earlier than after the lapse of the standstill period of ${pnAtidEn(d.atidejimas)}, calculated from the date of dispatch of this notice.${d.atidejimo_pabaiga_en ? ' The standstill period ends on ' + d.atidejimo_pabaiga_en + '.' : ''} By a separate notice, we will invite you to conclude the Procurement Contract within 3 working days from the date of dispatch of the invitation through CVP IS. The Contract price is ${pnMoney(d.kaina_be)} EUR excl. VAT (${pnMoney(d.kaina_su)} EUR incl. VAT).`
+        lt: `${d.imone} pirkimų komisija (toliau - Komisija) ${d.pirkimo_budas} vykdo ${d.pirkimas} pirkimą (toliau - Pirkimas).\n${pnVienas(d) ? 'Komisija įvertino Jūsų pasiūlymą.\n' : `Komisija nustatė šią pasiūlymų eilę ekonominio naudingumo mažėjimo tvarka:\n${fmtEile(d.eile)}\n${bpsPagal(d.bps_eile)}`}${d.laimetojas} pasiūlymas pripažintas laimėjusiu.\nPrašome CVP IS elektroninėmis priemonėmis ne vėliau kaip per 3 darbo dienas nuo šio pranešimo išsiuntimo dienos pateikti užpildytą ir pasirašytą Specialiųjų Pirkimo sąlygų priedą „Konfidenciali informacija“ bei konfidencialumą įrodančius dokumentus (tik jei nurodote konfidencialią informaciją). Jeigu per Perkančiojo subjekto nustatytą terminą Tiekėjas nepateikia užpildyto priedo „Konfidenciali informacija", laikoma, kad konfidencialios informacijos nėra, išskyrus informaciją, kurios atskleidimas negalimas pagal Asmens duomenų teisinės apsaugos įstatymą.\n${d.be_atidejimo ? pnBeAtidLt() : `Pirkimo sutartis su laimėjusį pasiūlymą pateikusiu tiekėju bus sudaroma ne anksčiau kaip praėjus ${pnAtidLt(d.atidejimas)} Pirkimo Sutarties sudarymo atidėjimo terminui, skaičiuojamam nuo šio pranešimo išsiuntimo dienos.${d.atidejimo_pabaiga ? ' Atidėjimo terminas baigiasi ' + d.atidejimo_pabaiga + '.' : ''}`} Atskiru pranešimu pakviesime Pirkimo Sutartį sudaryti per 3 darbo dienas nuo kvietimo išsiuntimo CVP IS elektroninėmis priemonėmis dienos. Pirkimo Sutarties kaina - ${pnMoney(d.kaina_be)} Eur be PVM (${pnMoney(d.kaina_su)} Eur su PVM).`,
+        en: `${d.imone} procurement commission (the Commission) is conducting the procurement of ${d.pirkimas} (the Procurement) ${d.pirkimo_budas_en}.\n${pnVienas(d) ? 'The Commission has evaluated your bid.\nThe' : `The Commission has established the following ranking of bids in descending order of economic advantage:\n${fmtEile(d.eile,true)}\n${d.bps_eile ? 'Pursuant to clause ' + d.bps_eile + ' of the General Procurement Terms, the' : 'The'}`} bid of ${d.laimetojas} has been declared the winning bid.\nPlease submit through CVP IS electronic means, no later than within 3 working days from the date of dispatch of this notice, the completed and signed annex “Confidential information” of the Special Procurement Terms along with documents proving confidentiality (only if you indicate confidential information).\n${d.be_atidejimo ? pnBeAtidEn() : `The Procurement Contract with the supplier who submitted the winning bid will be concluded no earlier than after the lapse of the standstill period of ${pnAtidEn(d.atidejimas)}, calculated from the date of dispatch of this notice.${d.atidejimo_pabaiga_en ? ' The standstill period ends on ' + d.atidejimo_pabaiga_en + '.' : ''}`} By a separate notice, we will invite you to conclude the Procurement Contract within 3 working days from the date of dispatch of the invitation through CVP IS. The Contract price is ${pnMoney(d.kaina_be)} EUR excl. VAT (${pnMoney(d.kaina_su)} EUR incl. VAT).`
       };
     }
   },
@@ -4369,8 +4418,8 @@ const PN_TEMPLATES = {
     fields:['vertinimo_lentele','kaina_be','kaina_su','atidejimas','laimetojas'],
     body(d){
       return {
-        lt:`${d.imone} pirkimų komisija ${d.pirkimo_budas} vykdo ${d.pirkimas} pirkimą.\nKomisija nustatė šią pasiūlymų eilę ekonominio naudingumo (S = C + T) mažėjimo tvarka:\n[LENTELĖ:vertinimo_lentele]\n${bpsPagal(d.bps_eile)}${d.laimetojas} pasiūlymas pripažintas laimėjusiu.\nPirkimo sutartis bus sudaryta ne anksčiau kaip praėjus ${pnAtidLt(d.atidejimas)} atidėjimo terminui.${d.atidejimo_pabaiga ? ' Atidėjimo terminas baigiasi ' + d.atidejimo_pabaiga + '.' : ''} Sutarties kaina - ${pnMoney(d.kaina_be)} Eur be PVM (${pnMoney(d.kaina_su)} Eur su PVM).`,
-        en:`${d.imone} procurement commission is conducting the procurement of ${d.pirkimas} ${d.pirkimo_budas_en}.\nThe Commission has established the following ranking of bids in descending order of economic advantage (S = C + T):\n[LENTELĖ:vertinimo_lentele]\n${d.bps_eile ? 'Pursuant to clause ' + d.bps_eile + ' of the General Procurement Terms, the' : 'The'} bid of ${d.laimetojas} has been declared the winning bid.\nThe procurement contract will be concluded no earlier than after the lapse of the standstill period of ${pnAtidEn(d.atidejimas)}.${d.atidejimo_pabaiga_en ? ' The standstill period ends on ' + d.atidejimo_pabaiga_en + '.' : ''} The Contract price is ${pnMoney(d.kaina_be)} EUR excl. VAT (${pnMoney(d.kaina_su)} EUR incl. VAT).`
+        lt:`${d.imone} pirkimų komisija ${d.pirkimo_budas} vykdo ${d.pirkimas} pirkimą.\n${pnVienas(d) ? 'Komisija įvertino Jūsų pasiūlymą.\n' : `Komisija nustatė šią pasiūlymų eilę ekonominio naudingumo (S = C + T) mažėjimo tvarka:\n[LENTELĖ:vertinimo_lentele]\n${bpsPagal(d.bps_eile)}`}${d.laimetojas} pasiūlymas pripažintas laimėjusiu.\n${d.be_atidejimo ? pnBeAtidLt() : `Pirkimo sutartis bus sudaryta ne anksčiau kaip praėjus ${pnAtidLt(d.atidejimas)} atidėjimo terminui.${d.atidejimo_pabaiga ? ' Atidėjimo terminas baigiasi ' + d.atidejimo_pabaiga + '.' : ''}`} Sutarties kaina - ${pnMoney(d.kaina_be)} Eur be PVM (${pnMoney(d.kaina_su)} Eur su PVM).`,
+        en:`${d.imone} procurement commission is conducting the procurement of ${d.pirkimas} ${d.pirkimo_budas_en}.\n${pnVienas(d) ? 'The Commission has evaluated your bid.\nThe' : `The Commission has established the following ranking of bids in descending order of economic advantage (S = C + T):\n[LENTELĖ:vertinimo_lentele]\n${d.bps_eile ? 'Pursuant to clause ' + d.bps_eile + ' of the General Procurement Terms, the' : 'The'}`} bid of ${d.laimetojas} has been declared the winning bid.\n${d.be_atidejimo ? pnBeAtidEn() : `The procurement contract will be concluded no earlier than after the lapse of the standstill period of ${pnAtidEn(d.atidejimas)}.${d.atidejimo_pabaiga_en ? ' The standstill period ends on ' + d.atidejimo_pabaiga_en + '.' : ''}`} The Contract price is ${pnMoney(d.kaina_be)} EUR excl. VAT (${pnMoney(d.kaina_su)} EUR incl. VAT).`
       };
     }
   },
@@ -4549,6 +4598,14 @@ function getProtocolNotifications(protoId, pk){
   return PROTOCOL_NOTIFICATIONS[protoId] || [];
 }
 
+// Raštas Nr. 14.1 (naudotojo sprendimas 2026-10-25, T7): jame remiamasi PĮ 41 str. 2 d. 2 p. (atmesti visi pasiūlymai), todėl siūlomas
+// tik pirkime, kurio protokolu atmesti visi pasiūlymai (sukurti pranešimai Nr. 12.1); kitu atveju - Nr. 14.2 (procedūros tęsiamos)
+const PN_141 = '14_1_pretenzija_atm_pabaiga';
+function visiAtmesti(pk){
+  return Object.values((pk && pk.protocols) || {}).some(p => p && p.pranesimai && (p.pranesimai.sukurta || []).some(k => k && k.tId === '12_1_visi_atmesti'));
+}
+const pn141Kodel = () => `Siūlomas tik tada, kai atmesti visi pasiūlymai (${ilgaForma(teise('pabaiga_visi_atmesti'))}); kitu atveju naudokite raštą „Dėl pretenzijos atmetimo ir pirkimo procedūrų tęsimo“.`;
+const pn141Galima = (tId, pk) => tId !== PN_141 || visiAtmesti(pk);
 function getNotifsForProtocol(pkId, protoId){
   // Visi sukurti pranešimai, susieti su konkrečiu protokolu
   const store = loadNotifStore();
@@ -4634,11 +4691,12 @@ function renderProtocolDocuments(pkId, protoId){
       const created = notifsByTpl[tId];
       const hasCreated = created.length > 0;
       const isLast = idx === availableNotifs.length - 1;
+      const galima = pn141Galima(tId, pk);
       html += `<div style="display:flex;align-items:center;gap:14px;padding:14px 4px;${isLast?'':'border-bottom:1px solid var(--epso-graphite-15)'}">
         <div style="font-size:24px;flex-shrink:0">${hasCreated ? '✅' : '📧'}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px;color:var(--epso-graphite)">${tpl.title}</div>
-          <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:2px">${pnBusenosTekstas(tId, created, planas)}</div>
+          <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:2px">${galima || hasCreated ? pnBusenosTekstas(tId, created, planas) : hx(pn141Kodel())}</div>
         </div>
         ${hasCreated ? `
           <button class="btn btn-secondary btn-sm" onclick="viewProtocolNotifs('${protoId}','${tId}')" title="Peržiūra" aria-label="Peržiūra">👁</button>
@@ -4656,7 +4714,7 @@ function renderProtocolDocuments(pkId, protoId){
         ${!isDone ? '<button class="btn btn-secondary btn-sm" onclick="generateCurrentProtocol()">📄 Tik protokolas</button>' : ''}
         ${availableNotifs.map(tId => {
           const tpl = PN_TEMPLATES[tId];
-          if(!tpl) return '';
+          if(!tpl || !pn141Galima(tId, pk)) return '';
           const t = tpl.title.length > 50 ? tpl.title.substring(0, 47) + '...' : tpl.title;
           return `<button class="btn btn-secondary btn-sm" onclick="openInlinePnGenerator('${tId}','${protoId}')" title="${tpl.title.replace(/"/g,'&quot;')}">📧 ${t}</button>`;
         }).join('')}
@@ -4708,7 +4766,7 @@ function pranesimuPlanas(protoId0, pk){
   const rezultatai = (laim, eile) => {
     const w = T.find(x => x.pavadinimas === laim) || { pavadinimas: laim, kontaktas:'', kalba:'lt', kaina:'', vieta:'1' };
     const kiti = lik.filter(x => x.pavadinimas !== laim);
-    const d = { laimetojas: laim, eile };
+    const d = { laimetojas: laim, eile, be_atidejimo: beAtidejimo(pk, protoId) };
     // Šablonas pagal kriterijų; kai sekoje jo nėra (N8, N9 turi tik kainos šablonus) - kitas
     const pagal = (kainos, ekon) => { const pirm = kainosKrit ? kainos : ekon, kitas = kainosKrit ? ekon : kainos;
       return sab.includes(pirm) ? pirm : kitas; };
@@ -4912,6 +4970,7 @@ async function autoGenerateNotification(templateId, protoId, pk, planas){
       atidejimas: getAtidejimoTerminas(pk.val_cat).tekstas,
       eile, laimetojas: pd.laimetojas || (eile[0]?eile[0].tiekejas:''),
       paraiska: !!pd.paraiska,
+      be_atidejimo: !!pd.be_atidejimo,   // T8: vienintelis suinteresuotas dalyvis - be atidėjimo termino
       klausimai_atsakymai: fdata.klausimai_atsakymai||'',
       naujas_terminas: fdata.naujas_terminas||'',
       terminas:'',
@@ -4972,6 +5031,7 @@ function openInlinePnGenerator(templateId, protoId){
   const pk = getProcurement(currentPkId);
   const tpl = PN_TEMPLATES[templateId];
   if(!tpl){ toast('Šablonas nerastas','error'); return; }
+  if(!pn141Galima(templateId, pk)){ toast(pn141Kodel(), 'warn'); return; }
 
   // Tiekėjus pasiimame iš protokolo lentelės (priklauso nuo protokolo tipo)
   const protoTiekejai = collectTiekejaiFromProtocol(protoId);
@@ -5819,6 +5879,7 @@ function renderPnFields(tId){
 
   const t = PN_TEMPLATES[tId];
   const pk = getProcurement(currentPnPkId);
+  if(!pn141Galima(tId, pk)){ body.innerHTML = `<div class="warn-box" id="pn-141-pastaba">${hx(pn141Kodel())}</div>`; return; }
   const fields = t.fields;
   let html = '<div class="epso-form-grid">';
 
@@ -5890,6 +5951,7 @@ function getPnFieldValues(){
 function generatePranesimai(){
   const tId = document.getElementById('pn-template-id').value;
   if(!tId||!PN_TEMPLATES[tId]){ toast('Pasirinkite pranešimo tipą','error'); return; }
+  if(!pn141Galima(tId, getProcurement(currentPnPkId))){ toast(pn141Kodel(), 'warn'); return; }
   const lang = document.querySelector('input[name="pn-lang"]:checked').value;
   const selected = pnTiekejai.filter(t=>t.selected && (t.pavadinimas||'').trim());
   if(selected.length===0){ toast('Pažymėkite bent vieną tiekėją','error'); return; }

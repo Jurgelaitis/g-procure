@@ -202,6 +202,8 @@
       PI: { a: "PI", s: 97 } },
     perziuros_salygos: { apie: "keisti be naujos procedūros galima, kai pakeitimas iš anksto aiškiai, tiksliai ir nedviprasmiškai numatytas peržiūros sąlygose",
       PI: { a: "PI", s: 97, d: 1, p: 1 } },
+    atidejimas_netaikomas_vienas: { tikrinta: "2026-10-25", apie: "atidėjimo terminas gali būti netaikomas, kai vienintelis suinteresuotas dalyvis yra tas, su kuriuo sudaroma pirkimo sutartis ar preliminarioji sutartis, ir nėra suinteresuotų kandidatų",
+      PI: { a: "PI", s: 94, d: 8, p: 1 } },
     atidejimo_terminas: { apie: "sutartis sudaroma ne anksčiau nei po atidėjimo termino: ne trumpesnio kaip 10 dienų (supaprastintuose - 5 darbo dienų; ne elektroninėmis priemonėmis - 15 dienų)",
       PI: { a: "PI", s: 94, d: 8 } },
     pretenzijos_terminai: { apie: "pretenzijos, prašymo ir ieškinio pateikimo terminai",
