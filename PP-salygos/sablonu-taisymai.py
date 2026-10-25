@@ -423,6 +423,7 @@ def taisymas_tekstas(taisyk):
     viso += _contracting_entity(taisyk)
     viso += _t6_korekcijos(taisyk)
     viso += _t7_korekcijos(taisyk)
+    viso += _ao_sprendimai(taisyk)
     return viso
 
 
@@ -1435,6 +1436,99 @@ def _t7_korekcijos(taisyk):
         _zemelapio_raudoni('ND_LTEN_SPS', [('the SPS Annex X form', 'the form of Annex X to the SPC')])
     for t in _AN_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# AO. Naudotojo sprendimai po septintosios naujo darbuotojo patikros (2026-10-25: „vadovaujamės pagal LT variantą“, „taip, reikia tokios
+#    išlygos“, 7.1 p. - „laukiu jūsų logiškos rekomendacijos“):
+#    (1) dvikalbių SPS užtikrinimo pareikalavimo pagrindas (x.2.4 p.) angliškai - kaip lietuviškai („nepateikia ... Sutarties įvykdymo
+#        užtikrinimo originalo ir projektuotojo ... (poliso) kopijos“): „the original of the Procurement Contract security and a copy of the
+#        designer’s ... (policy) specified in the Procurement documents“ (buvo „a copy of the Procurement Contract security and the designer’s ...
+#        and the list of managers“); iš laimėtojo prašomų dokumentų sąraše (x.2 p.) angliškai be „and the list of managers“ (lietuviškai vadovų
+#        sąrašo nėra), DPS konkretaus pirkimo LT/EN sąlygose - ir be pašalinimo pagrindų ir kvalifikacijos dokumentų (lietuviškai jų nėra);
+#    (2) „The application must be submitted by means of CPP IS.“ -> „The request must be submitted ...“ (lietuviškai - „Prašymas turi būti
+#        pateiktas CVP IS priemonėmis.“; AK, ND, SSD, TSD LT/EN BPS ir ND LT/EN SPS 1.7 p.);
+#    (3) ND SPS 5.3 p. (LT ir LT/EN) - PĮ 75 str. 3 d. išlyga: „Vadovaujantis Pirkimų įstatymo 75 str. 3 dalimi, Perkantysis subjektas gali
+#        nesiderėti ir sudaryti Sutartį su Pirminį pasiūlymą pateikusiu Tiekėju.“ (e-tar 2026-10-24: tokia galimybė - jei nurodyta pirkimo
+#        dokumentuose; BPS jau nustato, kad neatvykusio ar galutinio nepateikusio tiekėjo pirminis pasiūlymas vertinamas kaip galutinis);
+#    (4) ND SPS 7.1 p. (LT ir LT/EN) pasiūlymo galiojimo užtikrinimas - kartu su Pirminiu pasiūlymu (kaip LITGRID MVP LT SPS su derybomis):
+#        neskelbiamose derybose pirminis pasiūlymas gali tapti galutiniu (1.5 p., 5.3 p. išlyga, BPS), o užtikrinimas su galutiniu pasiūlymu
+#        tada nebūtų pateiktas niekada; originalas - iki Pirminių pasiūlymų termino, galiojimas - nuo Pirminių pasiūlymų termino, o jei bus
+#        prašoma Galutinio pasiūlymo - tiek pat dienų po Galutinių pasiūlymų termino (prireikus pratęsiama ir pateikiama su Galutiniu).
+_AO_X24 = [(_re.compile(r'(a copy of the Procurement Contract security and the designer)([’\'])s compulsory civil liability insurance certificate \(policy\) specified in the Procurement documents( and the list of managers)'),
+            None, 0)]
+_AO_SAR = [(_re.compile(r'certificate \(policy\)( and the list of managers)(?=,| fails)'), '', 1)]
+_AO_DPSP = [(_re.compile(r'does not submit (the documents substantiating the absence of exclusion grounds and/ o r qualification, and / or other requirements, )the original of Contract performance guarantee'), '', 1)]
+_AO_PRASYMAS = [(_re.compile(r'The (application) must be submitted by means of CPP IS\.'), 'request', 1)]
+_AO_53 = [(_re.compile(r'bus prašoma (?:pateikti Galutinį pasiūlymą|Galutinio pasiūlymo)\)\.()(?! Vadovaujantis Pirkimų įstatymo 75)'), ' Vadovaujantis Pirkimų įstatymo 75 str. 3 dalimi, Perkantysis subjektas gali nesiderėti ir sudaryti Sutartį su Pirminį pasiūlymą pateikusiu Tiekėju.', 1),
+          (_re.compile(r'the Final Tender will be requested after the Negotiations\)\.()(?! In accordance with Article 75)'), ' In accordance with Article 75 (3) of the Procurement Law, the Contracting Entity may decide not to negotiate and conclude the Contract with the Supplier who submitted the Initial Tender.', 1)]
+_AO_71_PRIEDAS_LT = ' Jeigu bus prašoma pateikti Galutinį pasiūlymą, banko garantija turi galioti tiek pat dienų po Galutinių pasiūlymų pateikimo termino pabaigos; prireikus Tiekėjas ją pratęsia ir pratęsimą pateikia kartu su Galutiniu pasiūlymu.'
+_AO_71_PRIEDAS_EN = ' If the Final Tender is requested, the bank guarantee must remain valid for the same number of days after the deadline for submission of Final Tenders; if necessary, the Supplier shall extend it and submit the extension together with the Final Tender.'
+_AO_71 = [(_re.compile(r'^(?:7\.1\. )?Kartu su (Galutiniu) pasiūlymu Tiekėjas privalo pateikti'), 'Pirminiu', 1),
+          (_re.compile(r'Pasiūlymo galiojimo užtikrinimo originalą privalo pateikti užklijuotame voke iki (Galutinių) pasiūlymų pateikimo termino pabaigos'), 'Pirminių', 1),
+          (_re.compile(r'Banko garantija turi galioti ne trumpiau kaip \d+ dienas po (Galutinių) pasiūlymų pateikimo termino pabaigos'), 'Pirminių', 1),
+          (_re.compile(r'Banko garantija turi galioti ne trumpiau kaip \d+ dienas po Galutinių pasiūlymų pateikimo termino pabaigos ir joje turi būti nurodytas garantijos galiojimo terminas\.()(?! Jeigu bus prašoma)'), _AO_71_PRIEDAS_LT, 1),
+          (_re.compile(r'Jeigu bus prašoma pateikti Galutinį pasiūlymą, (B)anko garantija turi galioti tiek pat'), 'b', 1),
+          (_re.compile(r'^Together with the (Final) Tender, the Supplier must provide Tender security'), 'Initial', 1),
+          (_re.compile(r'Tender security in a sealed envelope before the deadline for submission of (Final) Tenders'), 'Initial', 1),
+          (_re.compile(r'must be valid for at least \d+ days after the deadline for submission of (Final) Tenders'), 'Initial', 1),
+          (_re.compile(r'must be valid for at least \d+ days after the deadline for submission of Final Tenders and must specify the term of validity of the guarantee\.()(?! If the Final Tender)'), _AO_71_PRIEDAS_EN, 1)]
+
+
+def _ao_x24(m):
+    return 'the original of the Procurement Contract security and a copy of the designer' + m.group(2) + 's compulsory civil liability insurance certificate (policy) specified in the Procurement documents'
+
+
+def _ao_zemelapiu_raudoni(f, poros):
+    """Žemėlapio raudonų dalių tekstas - reguliariosiomis išraiškomis (kaip _zemelapio_raudoni, bet ir tarpams tarp raudonų atkarpų)."""
+    import json as _json
+    for zf in sorted((Path(__file__).parent / 'zemelapiai').glob('*.json')):
+        raw = zf.read_text(encoding='utf-8')
+        try:
+            Z = _json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(Z, dict) or Path(str(Z.get('sablonas', ''))).stem != f:
+            continue
+        n = 0
+        for e in Z.get('intarpai', []):
+            r = e.get('raudonas')
+            if not isinstance(r, str):
+                continue
+            r2 = r
+            for rx, b in poros:
+                r2 = rx.sub(b, r2)
+            if r2 != r:
+                e['raudonas'] = r2; n += 1
+        if n:
+            zf.write_text(_json.dumps(Z, ensure_ascii=False, indent=1) + ('\n' if raw.endswith('\n') else ''), encoding='utf-8')
+            print(f"      {zf.name}: raudonų dalių suderinta {n}")
+
+
+def _ao_sprendimai(taisyk):
+    print("\nNaudotojo sprendimai po septintosios patikros (AO, 2026-10-25):")
+    sps = ['AK_LTEN_SPS', 'MVP_LTEN_SPS', 'ND_LTEN_SPS', 'SSD_LTEN_SPS', 'TSD_LTEN_SPS']
+    x24 = [(_AO_X24[0][0], _ao_x24, 0)]
+    n = _su_zemelapiais(_regex_pakeitimai(*x24), sps, 'x.2.4 p. EN kaip LT', taisyk)
+    n += _su_zemelapiais(_regex_pakeitimai(*_AO_SAR), sps + ['DPSP_LTEN_SALYGOS'], 'x.2 p. EN be vadovų sąrašo', taisyk)
+    n += _su_zemelapiais(_regex_pakeitimai(*_AO_DPSP), ['DPSP_LTEN_SALYGOS'], 'DPS x.2 p. EN kaip LT', taisyk)
+    n += _su_zemelapiais(_regex_pakeitimai(*_AO_PRASYMAS), ['AK_LTEN_BPS', 'ND_LTEN_BPS', 'SSD_LTEN_BPS', 'TSD_LTEN_BPS', 'ND_LTEN_SPS'], '„The request must be submitted“', taisyk)
+    n += _su_zemelapiais(_regex_pakeitimai(*_AO_53), ['ND_LT_SPS', 'ND_LTEN_SPS'], 'ND 5.3 p. - PĮ 75 str. 3 d. išlyga', taisyk)
+    n += _su_zemelapiais(_regex_pakeitimai(*_AO_71), ['ND_LT_SPS', 'ND_LTEN_SPS'], 'ND 7.1 p. - užtikrinimas su Pirminiu pasiūlymu', taisyk)
+    if taisyk:
+        for f in sps:
+            _ao_zemelapiu_raudoni(f, [(_AO_X24[0][0], _ao_x24), (_re.compile(r'certificate \(policy\) and the list of managers'), 'certificate (policy)')])
+        _ao_zemelapiu_raudoni('DPSP_LTEN_SALYGOS', [(_re.compile(r'certificate \(policy\) and the list of managers'), 'certificate (policy)'),
+            (_re.compile(r'does not submit the documents substantiating the absence of exclusion grounds and/\s*o\s*r qualification, and\s*/\s*or other requirements, the original'), 'does not submit the original')])
+        for f in ['AK_LTEN_BPS', 'ND_LTEN_BPS', 'SSD_LTEN_BPS', 'TSD_LTEN_BPS', 'ND_LTEN_SPS']:
+            _ao_zemelapiu_raudoni(f, [(_re.compile(r'The application must be submitted by means of CPP IS'), 'The request must be submitted by means of CPP IS')])
+        for f in ['ND_LT_SPS', 'ND_LTEN_SPS']:
+            _ao_zemelapiu_raudoni(f, [(_re.compile(r'Kartu su Galutiniu pasiūlymu Tiekėjas'), 'Kartu su Pirminiu pasiūlymu Tiekėjas'),
+                (_re.compile(r'iki Galutinių pasiūlymų pateikimo termino pabaigos adresu'), 'iki Pirminių pasiūlymų pateikimo termino pabaigos adresu'),
+                (_re.compile(r'(ne trumpiau kaip \d+ dienas po )Galutinių( pasiūlymų pateikimo termino pabaigos ir joje turi būti nurodytas garantijos galiojimo terminas\.)'), r'\1Pirminių\2' + _AO_71_PRIEDAS_LT),
+                (_re.compile(r'Together with the Final Tender, the Supplier'), 'Together with the Initial Tender, the Supplier'),
+                (_re.compile(r'before the deadline for submission of Final Tenders to address'), 'before the deadline for submission of Initial Tenders to address'),
+                (_re.compile(r'(at least \d+ days after the deadline for submission of )Final( Tenders and must specify the term of validity of the guarantee\.)'), r'\1Initial\2' + _AO_71_PRIEDAS_EN)])
     return n
 
 
