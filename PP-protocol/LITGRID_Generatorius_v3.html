@@ -1123,6 +1123,14 @@ const STORE_KEY = 'litgrid_procurements_v2';
 const teise = k => GP_TEISE.cit(k, 'PI');
 // Protokolų sprendimuose - ilgoji forma: ilgaForma(teise('vertinimo_principai')) -> „Pirkimų įstatymo 58 str.“ (numeris - vis tiek iš registro).
 const ilgaForma = c => c.replace(/^PĮ /, 'Pirkimų įstatymo ');
+// DPS sukūrimas (2026-10-25, naujo darbuotojo patikra K7): 3 ir 4 protokolai - paraiškos ir tiekėjų įtraukimas į DPS (PĮ 87 str.),
+// todėl forma, Word tekstas ir pranešimai - paraiškų (D3, D4), ne atviro konkurso pasiūlymų (iki tol - kainos, eilė, laimėtojas).
+// Protokolų id sekoje lieka A3 / A4 (išsaugoti įrašai nekeičiami).
+function protokoloForma(pk, id){
+  if (pk && pk.type === 'dps_steigimas'){ if (id === 'A3') return 'D3'; if (id === 'A4') return 'D4'; }
+  return id;
+}
+const dpsSukurimas = pk => !!(pk && pk.type === 'dps_steigimas');
 
 // ════════════════════════════════════════════════════════
 // SAVE STATE INDIKATORIUS
@@ -1815,7 +1823,8 @@ function togglePfVote(cb){
       const nariai = [pk.komisija.chair, pk.komisija.secretary, ...(pk.komisija.members||[])].filter(n=>n);
       const tbody = document.getElementById('pf-vote-tbody');
       if(tbody){
-        tbody.innerHTML = nariai.map((n,i)=>`<tr><td>${n}</td><td><input type="radio" name="pf-vote-${i}" value="uz" checked></td><td><input type="radio" name="pf-vote-${i}" value="pries"></td></tr>`).join('');
+        // vardai - per hx(): jie gali atkeliauti iš Excel importo ar kopijos failo (2026-10-25, naujo darbuotojo patikra D12)
+        tbody.innerHTML = nariai.map((n,i)=>`<tr><td>${hx(n)}</td><td><input type="radio" name="pf-vote-${i}" value="uz" checked aria-label="${hx(n)} - už"></td><td><input type="radio" name="pf-vote-${i}" value="pries" aria-label="${hx(n)} - prieš"></td></tr>`).join('');
       }
     }
   } else {
@@ -2159,11 +2168,100 @@ function openProtocol(pkId, protoId) {
   document.getElementById('proto-back-btn2').onclick = () => showPage('page-detail');
   const content = document.getElementById('proto-form-content');
   content.innerHTML = buildProtoForm(pk, proto);
+  const issaugota = ((pk.protocols || {})[protoId] || {}).forma;
+  if (issaugota) atkurkForma(content, issaugota);
+  formosPastaba(content, issaugota);
   showPage('page-proto');
 }
 
+// Protokolo formos būsena (2026-10-25, naujo darbuotojo patikra K6). Iki tol forma niekur nebuvo įrašoma: po „Sukurti visus
+// dokumentus“ protokolas perpiešiamas tuščias, o vėl atvėrus nebelikdavo nei tiekėjų, nei sprendimų - nepavykusio pranešimo ar
+// protokolo pataisyti nebuvo iš ko. Dabar įvesti duomenys įrašomi prie pirkimo (pk.protocols[id].forma, tik šioje naršyklėje) po
+// kiekvieno pakeitimo ir generuojant, atvėrus - atkuriami. Įrašomos tik laukų reikšmės (ne HTML) ir eilučių skaičius sąrašuose;
+// atkuriant reikšmės dedamos per .value / .checked, eilutės pridedamos pačios formos mygtukais „+ Pridėti“.
+const FORMOS_VERSIJA = 1, FORMOS_MAX_EIL = 200, FORMOS_MAX_ILGIS = 20000;
+const FORMOS_SARASAI = 'tbody[id], div[id$="-list"]';
+function formosLaukai(c){
+  return [...c.querySelectorAll('input, select, textarea')].filter(el => !['file', 'button', 'submit'].includes(el.type) && !el.closest('[data-forma-ne]'));
+}
+function formosRaktai(c){
+  const sk = {};
+  return formosLaukai(c).map(el => {
+    if (el.id) return ['#' + el.id, el];
+    const k = el.classList[0] ? '.' + el.classList[0] : el.name ? '@' + el.name : el.tagName.toLowerCase();
+    const i = sk[k] = (sk[k] || 0) + 1;
+    return [k + ':' + (i - 1), el];
+  });
+}
+function formosBusena(c){
+  const sarasai = {}, laukai = {};
+  c.querySelectorAll(FORMOS_SARASAI).forEach(l => { if (sarasoMygtukas(l)) sarasai[l.id] = l.children.length; });
+  formosRaktai(c).forEach(([k, el]) => { laukai[k] = (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked : String(el.value).slice(0, FORMOS_MAX_ILGIS); });
+  return { v: FORMOS_VERSIJA, data: new Date().toISOString(), sarasai, laukai };
+}
+// „+ Pridėti“ mygtukas po sąrašu (lentelės ar sąrašo bloko sesuo); be jo sąrašas nekeičiamas (pvz. balsavimo lentelė kuriama pati)
+function sarasoMygtukas(l){
+  const el = l.closest('table') || l;
+  for (let s = el.nextElementSibling; s; s = s.nextElementSibling){
+    if (s.matches('.btn-add')) return s;
+    if (s.matches(FORMOS_SARASAI) || s.querySelector(FORMOS_SARASAI)) return null;
+  }
+  return null;
+}
+function atkurkForma(c, s){
+  if (!s || typeof s !== 'object' || s.v !== FORMOS_VERSIJA || !s.laukai || typeof s.laukai !== 'object') return false;
+  try {
+    Object.keys(s.sarasai || {}).forEach(id => {
+      const l = c.querySelector('#' + CSS.escape(id)), n = Number(s.sarasai[id]);
+      if (!l || !Number.isInteger(n) || n < 0 || n > FORMOS_MAX_EIL) return;
+      const b = sarasoMygtukas(l); if (!b) return;
+      for (let k = 0; l.children.length < n && k < FORMOS_MAX_EIL; k++) b.click();
+      while (l.children.length > n && l.lastElementChild) l.lastElementChild.remove();
+    });
+    const dek = (su) => formosRaktai(c).forEach(([k, el]) => {
+      if (!Object.prototype.hasOwnProperty.call(s.laukai, k)) return;
+      const v = s.laukai[k];
+      if (el.type === 'checkbox' || el.type === 'radio'){ if (typeof v !== 'boolean' || el.checked === v) return; el.checked = v; }
+      else { if (typeof v !== 'string' || el.value === v) return; el.value = v; }
+      if (su && (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'radio')) el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // Pirmas kartas - su „change“ (atsiveria priklausomos dalys, kuriama balsavimo lentelė), antras - jų laukams
+    dek(true); dek(false);
+    return true;
+  } catch (e) { console.error('Formos atkūrimas:', e); return false; }
+}
+function formosPastaba(c, s){
+  const kort = c.querySelector('.card .card-body'); if (!kort || !s || !s.data) return;
+  const d = new Date(s.data), kada = isNaN(d) ? '' : `${GP_WORKDAYS.fmtDate(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const el = document.createElement('div');
+  el.className = 'forma-atkurta'; el.setAttribute('data-forma-ne', '');
+  el.style.cssText = 'margin-top:10px;font-size:13px;color:var(--color-graphite-50-strong);display:flex;gap:10px;flex-wrap:wrap;align-items:center';
+  el.innerHTML = `<span>Atkurti anksčiau įvesti šio protokolo duomenys${kada ? ' (įrašyta ' + hx(kada) + ')' : ''}.</span><button class="btn btn-secondary btn-sm" type="button" onclick="isvalykForma()">Išvalyti formą</button>`;
+  kort.appendChild(el);
+}
+function isvalykForma(){
+  if (!confirm('Išvalyti šio protokolo formą? Įvesti duomenys bus pašalinti (sugeneruoti dokumentai lieka).')) return;
+  const pk = getProcurement(currentPkId); if (!pk) return;
+  const pr = (pk.protocols || {})[currentProtoId];
+  if (pr && pr.forma){ delete pr.forma; saveProcurementData(pk.id, pk); }
+  openProtocol(currentPkId, currentProtoId);
+}
+let formosLaikmatis = null;
+function irasykForma(){
+  const c = document.getElementById('proto-form-content'), pk = currentPkId && getProcurement(currentPkId);
+  if (!c || !pk || !currentProtoId || !document.getElementById('page-proto')?.classList.contains('active')) return;
+  if (!pk.protocols) pk.protocols = {};
+  pk.protocols[currentProtoId] = Object.assign({}, pk.protocols[currentProtoId] || {}, { forma: formosBusena(c) });
+  saveProcurementData(pk.id, pk);
+}
+['input', 'change'].forEach(ev => document.addEventListener(ev, e => {
+  const c = document.getElementById('proto-form-content');
+  if (!c || !c.contains(e.target) || !e.isTrusted || e.target.closest('[data-forma-ne]')) return;
+  clearTimeout(formosLaikmatis); formosLaikmatis = setTimeout(irasykForma, 700);
+}));
+
 function buildProtoForm(pk, proto) {
-  const id = proto.id;
+  const id = protokoloForma(pk, proto.id);
   // All protocols: show posedis date + nr
   let html = `<div class="card"><div class="card-header">Posėdžio duomenys</div><div class="card-body">
     <div class="form-grid">
@@ -2459,12 +2557,23 @@ function buildForm_ProtoA4(pk) {
   </div>`;
 }
 let evalCount=2, rankCount=2;
+// A4: atmetimo ar tikslinimo motyvas ir atmetimo punktas (2026-10-25, naujo darbuotojo patikra K3) - kaip D6 / D8 eilutėse
+function toggleEvalDetail(sel){
+  const d = sel.closest('tr').querySelector('.e-detail');
+  if (!d) return;
+  d.style.display = sel.value === 'vertinti' ? 'none' : 'block';
+  const pp = d.querySelector('.e-pp'); if (pp) pp.style.display = sel.value === 'atmesti' ? '' : 'none';
+}
 function buildEvalRow(n) {
   return `<tr class="eval-row"><td>${n}</td>
     <td><input type="text" class="e-name" placeholder="UAB „...“"></td>
     <td><select class="e-eval"><option value="atitinka">Atitinka</option><option value="neatitinka">Neatitinka</option></select></td>
     <td><select class="e-ebvpd"><option value="atitinka">Atitinka</option><option value="neatitinka">Neatitinka</option><option value="netaikoma">Netaikoma</option></select></td>
-    <td><select class="e-action"><option value="vertinti">Vertinti toliau</option><option value="atmesti">Atmesti</option><option value="tikslinti">Tikslinti</option></select></td>
+    <td><select class="e-action" onchange="toggleEvalDetail(this)"><option value="vertinti">Vertinti toliau</option><option value="atmesti">Atmesti</option><option value="tikslinti">Tikslinti</option></select>
+      <div class="e-detail" style="display:none;margin-top:6px">
+        <textarea class="e-neat" rows="2" aria-label="Neatitikimas ar atmetimo motyvas" placeholder="Neatitikimas ar atmetimo motyvas"></textarea>
+        <input type="text" class="e-pp" aria-label="Pirkimo sąlygų punktas (atmetimui)" placeholder="Pirkimo sąlygų p. (atmetimui), pvz.: 9.7.1" style="margin-top:4px">
+      </div></td>
     </tr>`;
 }
 function buildRankRow(n) {
@@ -2588,7 +2697,7 @@ function buildD4Row(n){
     <div class="form-grid full" style="margin-top:8px">
       <div class="fg"><label>Veiksmas</label>
         <select class="d4-vk" onchange="toggleD4Action(this)">
-          <option value="kviesti">Kviesti teikti pirminį pasiūlymą</option>
+          <option value="kviesti">${dpsSukurimas(getProcurement(currentPkId)) ? 'Leisti dalyvauti dinaminėje pirkimo sistemoje' : 'Kviesti teikti pirminį pasiūlymą'}</option>
           <option value="patikslinti">Prašyti patikslinti / papildyti paraišką${protokoloBps().tikslinimas ? ' (BPS ' + protokoloBps().tikslinimas + ' p.)' : ''}</option>
           <option value="atmesti">Atmesti paraišką</option>
         </select>
@@ -2609,8 +2718,10 @@ function toggleD4Action(sel){
 }
 
 function buildForm_ProtoD4(pk) {
-  return `<div class="card"><div class="card-header" onclick="toggleCard(this)" aria-expanded="true">Paraiškų vertinimas <span class="arrow" aria-hidden="true">▼</span></div>
+  const dps = dpsSukurimas(pk);
+  return `<div class="card"><div class="card-header" onclick="toggleCard(this)" aria-expanded="true">${dps ? 'Paraiškų vertinimas ir tiekėjų įtraukimas į DPS' : 'Paraiškų vertinimas'} <span class="arrow" aria-hidden="true">▼</span></div>
   <div class="card-body">
+    ${dps ? `<div class="info-box">Dinaminėje pirkimo sistemoje leidžiama dalyvauti visiems kandidatams, kurie atitinka kvalifikacinius reikalavimus (${hx(teise('dps_dalyvavimas'))}). Paraiškos patikrinamos per 10 darbo dienų nuo gavimo, pagrįstais atvejais - per 15 (${hx(teise('dps_paraisku_tikrinimas'))}); apie leidimą dalyvauti ar paraiškos atmetimą pranešama per 3 darbo dienas nuo sprendimo (${hx(teise('dps_pranesimas'))}).</div>` : ''}
     <div style="background:var(--epso-cyan-5);padding:10px 14px;border-radius:6px;border-left:3px solid var(--epso-cyan);margin-bottom:14px;font-size:13px">
       <strong>📋 Šablonas pagal Litgrid AB pavyzdį:</strong> kiekvienai paraiškai pildoma atitiktis, motyvas (jei neatitinka), siūlomas veiksmas.
     </div>
@@ -2958,7 +3069,10 @@ async function generateCurrentProtocol() {
 
     // Mark as done
     if (!pk.protocols) pk.protocols = {};
-    pk.protocols[currentProtoId] = { done: true, date: posDate, filename: fileName };
+    const c = document.getElementById('proto-form-content');
+    clearTimeout(formosLaikmatis);
+    pk.protocols[currentProtoId] = Object.assign({}, pk.protocols[currentProtoId] || {},
+      { done: true, date: posDate, filename: fileName, forma: c ? formosBusena(c) : undefined, eile: protokoloEile(currentProtoId) });
     saveProcurementData(pk.id, pk);
     toast('Protokolas sugeneruotas: ' + fileName, 'ok');
     statistika('protokolas_sukurtas', proto.num);
@@ -2981,7 +3095,25 @@ function pirkimoBudoPavadinimas(type){
   return 'Atviras konkursas';
 }
 
+// Pasiūlymų eilė iš A4 / D8 / N8 formos - vėlesnio protokolo (A5, D9, N9) pranešimams apie rezultatus
+function protokoloEile(id){
+  if (id === 'A4') return [...document.querySelectorAll('.rank-row')].map(r => ({ tiekejas: String(r.querySelector('.r-name')?.value || '').trim(),
+    kaina: parseFloat(r.querySelector('.r-ex')?.value) || 0 })).filter(x => x.tiekejas);
+  if (id === 'D8' || id === 'N8') return [...document.querySelectorAll('#pf-d8-list .d8-row')].filter(r => r.querySelector('.d8-vk')?.value !== 'atmesti')
+    .map(r => ({ tiekejas: String(r.querySelector('.d8-name')?.value || '').trim(), kaina: parseFloat(r.querySelector('.d8-ex')?.value) || 0,
+      vieta: Number(r.querySelector('.d8-vieta')?.value) || 99 })).filter(x => x.tiekejas).sort((a, b) => a.vieta - b.vieta).map(({ tiekejas, kaina }) => ({ tiekejas, kaina }));
+  return undefined;
+}
 // ─── DOCX BUILDER ───
+/* Balsavimas, kai sprendimai priimti ne vienbalsiai: { uz: [vardai], pries: [vardai], atskira } iš formos (#pf-vote-tbody, #pf-atskira) */
+function balsavimas(){
+  const uz = [], pries = [];
+  document.querySelectorAll('#pf-vote-tbody tr').forEach((tr, i) => {
+    const vardas = (tr.cells[0] ? tr.cells[0].textContent : '').trim(), v = (tr.querySelector(`input[name="pf-vote-${i}"]:checked`) || {}).value;
+    if (vardas && v === 'uz') uz.push(vardas); else if (vardas && v === 'pries') pries.push(vardas);
+  });
+  return { uz, pries, atskira: String((document.getElementById('pf-atskira') || {}).value || '').trim() };
+}
 async function buildDocx(pk, proto, posDate, posNr, vienbalsiai) {
   // Oficialus dokumentas (shared/docx-stiliai.js, 2026-10-02): TextRun ir Paragraph tekste ilgieji brūkšniai (U+2013, U+2014) virsta „-“,
   // fonai - tik šviesiai pilki CLEAR, tekstas - grafito ar juodas (iki tol antraštės šviesiai mėlynos, puslapio viršus pilkas su mėlyna linija)
@@ -3031,7 +3163,8 @@ async function buildDocx(pk, proto, posDate, posNr, vienbalsiai) {
       pr([b(`${chk(d.parts_enabled)} Pirkimo objektas skaidomas į dalis:`)]),
       ...(d.parts_enabled&&d.parts?d.parts.map((p,i)=>pr([b(`${i+1} dalis: ${p.name} - ${formatMoney(p.ex)} EUR be PVM; ${formatMoney(p.inc)} EUR su PVM.`)])):[] ),
       pr([b(`${chk(!d.parts_enabled)} Pirkimo objektas neskaidomas į dalis.`)]),
-      pr([n('Pirkimo objektas nėra įtrauktas į CPO katalogą.')])
+      // pagal pirkimo žymą (2026-10-25, K4): iki tol visada „nėra įtrauktas“, o SVARSTYTA pažymėjus žymą sakė „atitinka CPO katalogą“
+      pr([n(d.cpo_applicable ? 'Pirkimo objektas atitinka CPO katalogą, tačiau pirkimas vykdomas ne per CPO.' : 'Pirkimo objektas nėra įtrauktas į CPO katalogą.')])
     ],{w:CW,cs:2})]}),
     hdr('2. INICIATORIUS'),
     new TableRow({children:[cl([pr([b(`Padalinys: ___. `)])],{w:LC}),cl([pr([b('LITGRID AB atstovas (-ė): ___, ___.')])],{w:RC})]}),
@@ -3065,8 +3198,15 @@ async function buildDocx(pk, proto, posDate, posNr, vienbalsiai) {
 
   // ── SIGNATURE ──
   const SL=Math.round(CW*.55), SR=CW-SL;
+  // Balsavimas ir atskirosios nuomonės (2026-10-25, naujo darbuotojo patikra K2): iki tol formoje įvesti balsai ir atskiroji nuomonė
+  // į protokolą nepatekdavo - liko tik „☐ ... vienbalsiai“, nors komisijos sprendimų protokole nurodomos ir atskirosios nuomonės (registras)
+  const bals = vienbalsiai ? null : balsavimas();
   const sigRows=[
     new TableRow({children:[cl([pr([b(`${chk(vienbalsiai)} Komisijos sprendimai priimti vienbalsiai.`)])],{w:CW,cs:2,b:NBC})]}),
+    ...(bals ? [
+      new TableRow({children:[cl([pr([b('Balsavimo rezultatai: '),n(`už - ${bals.uz.length}${bals.uz.length ? ' (' + bals.uz.join(', ') + ')' : ''}; prieš - ${bals.pries.length}${bals.pries.length ? ' (' + bals.pries.join(', ') + ')' : ''}.`)])],{w:CW,cs:2,b:NBC})]}),
+      ...(bals.atskira || bals.pries.length ? [new TableRow({children:[cl([pr([b('Atskirosios nuomonės: '),n(bals.atskira || '___')])],{w:CW,cs:2,b:NBC})]})] : [])
+    ] : []),
     new TableRow({children:[cl([ep()],{w:CW,cs:2,b:NBC})]}),
     new TableRow({children:[cl([pr([n('Komisijos pirmininkas (-ė)')])],{w:SL,b:NBC}),cl([pr([n(kom.chair)])],{w:SR,b:NBC})]}),
     new TableRow({children:[cl([pr([n('Posėdžio sekretorius (-ė)')])],{w:SL,b:NBC}),cl([pr([n(kom.secretary)])],{w:SR,b:NBC})]}),
@@ -3105,7 +3245,7 @@ async function buildDocx(pk, proto, posDate, posNr, vienbalsiai) {
 
 // ── BUILD AGENDA ROWS for each protocol ──
 function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, CW, TableRow, WidthType, vienbalsiai) {
-  const id = proto.id;
+  const id = protokoloForma(pk, proto.id), dps = dpsSukurimas(pk);
   const rows = [];
   // Naudotojo tekstas prieš sakinio tašką - be savo taško gale (kitaip „EBVPD..“, „4.2 p..“); taškas dedamas vienas.
   const beTasko = s => String(s || '').trim().replace(/[\s.;,]+$/, '');
@@ -3263,22 +3403,28 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
   }
 
   else if (id==='A4') {
-    const evalData=[...document.querySelectorAll('.eval-row')].map(r=>({name:r.querySelector('.e-name')?.value||'___',eval:r.querySelector('.e-eval')?.value||'atitinka',ebvpd:r.querySelector('.e-ebvpd')?.value||'atitinka',action:r.querySelector('.e-action')?.value||'vertinti'}));
+    const evalData=[...document.querySelectorAll('.eval-row')].map(r=>({name:r.querySelector('.e-name')?.value||'___',eval:r.querySelector('.e-eval')?.value||'atitinka',ebvpd:r.querySelector('.e-ebvpd')?.value||'atitinka',action:r.querySelector('.e-action')?.value||'vertinti',
+      neat:beTasko(r.querySelector('.e-neat')?.value),pp:atmetimoPunktas(r,'.e-pp')}));
+    const bpsA4 = protokoloBps(pk);
     const rankData=[...document.querySelectorAll('.rank-row')].map((r,i)=>({pos:i+1,name:r.querySelector('.r-name')?.value||'___',ex:r.querySelector('.r-ex')?.value||'0',inc:r.querySelector('.r-inc')?.value||'0'}));
     rows.push(new TableRow({children:[cl([pr([b('Pasiūlymų vertinimas ir laimėtojo nustatymas.')])],{w:CW})]}));
     rows.push(hdr1('1. SVARSTYTA'));
     rows.push(new TableRow({children:[cl([
       pr([b('Pasiūlymų vertinimo rezultatai (1 lentelė):')]),ep(),
-      ...evalData.map(e=>pr([n(`${e.name}: ${e.eval==='atitinka'?'\u2611 Atitinka sąlygas':'\u2610 Neatitinka sąlygų'}. EBVPD: ${e.ebvpd==='atitinka'?'\u2611 Atitinka':e.ebvpd==='netaikoma'?'netaikoma':'\u2610 Neatitinka'}. Veiksmas: ${e.action==='atmesti'?'atmesti':e.action==='tikslinti'?'tikslinti neatitikimus':'vertinti toliau'}.`)])),
+      ...evalData.map(e=>pr([n(`${e.name}: ${e.eval==='atitinka'?'\u2611 Atitinka sąlygas':'\u2610 Neatitinka sąlygų'}. EBVPD: ${e.ebvpd==='atitinka'?'\u2611 Atitinka':e.ebvpd==='netaikoma'?'netaikoma':'\u2610 Neatitinka'}.${e.neat && e.action!=='vertinti' ? ` Neatitikimas: ${e.neat}.` : ''} Veiksmas: ${e.action==='atmesti'?'atmesti':e.action==='tikslinti'?'tikslinti neatitikimus':'vertinti toliau'}.`)])),
       ep(),pr([b('Pasiūlymų eilė:')]),ep(),
       ...rankData.map(r=>pr([n(`${r.pos}. ${r.name} - ${formatMoney(r.ex)} EUR be PVM.`)])),
     ],{w:CW})]}));
     rows.push(hdr1('2. SPRENDIMAS (-AI)'));
-    rows.push(new TableRow({children:[cl([
-      pr([b('1. Patvirtinti pasiūlymų vertinimo rezultatus.')]),
-      pr([b(`2. Nustatyti pasiūlymų eilę${protokoloBps(pk).eile ? ` (BPS ${protokoloBps(pk).eile} p.)` : ''}.`)]),
-      ...(document.getElementById('pf-kval-reikalinga')?.checked?[pr([b('3. Paprašyti potencialaus laimėtojo pateikti kvalifikacijos dokumentus.')])]:[]),
-    ],{w:CW})]}));
+    // Sprendimai - su atmetimo ir tikslinimo eilutėmis (K3; iki tol atmestas pasiūlymas sprendime neminėtas), numeris - skaitikliu
+    const a4dec = []; let a4nr = 0; const a4s = t => a4dec.push(pr([b(`${++a4nr}. ${t}`)]));
+    a4s('Patvirtinti pasiūlymų vertinimo rezultatus.');
+    const atmA4 = evalData.filter(e => e.action === 'atmesti'), tikslA4 = evalData.filter(e => e.action === 'tikslinti');
+    if (atmA4.length) a4s(`Vadovaujantis ${ilgaForma(teise('vertinimo_principai'))} ir Bendrųjų Pirkimo sąlygų nuostatomis, atmesti šių tiekėjų pasiūlymus: ${atmA4.map(e => `${e.name} (Pirkimo sąlygų ${e.pp || '___'} p.${e.neat ? ', neatitikimas: ' + e.neat : ''})`).join('; ')}.`);
+    if (tikslA4.length) a4s(`Vadovaujantis Bendrųjų Pirkimo sąlygų ${bpsA4.tikslinimas ? bpsA4.tikslinimas + ' punkto ' : ''}nuostatomis, prašyti šių tiekėjų ne vėliau kaip per 3 darbo dienas nuo rašto išsiuntimo dienos patikslinti pasiūlymą: ${tikslA4.map(e => e.name + (e.neat ? ' (' + e.neat + ')' : '')).join('; ')}.`);
+    a4s(`Nustatyti pasiūlymų eilę${bpsA4.eile ? ` (BPS ${bpsA4.eile} p.)` : ''}.`);
+    if (document.getElementById('pf-kval-reikalinga')?.checked) a4s('Paprašyti potencialaus laimėtojo pateikti kvalifikacijos dokumentus.');
+    rows.push(new TableRow({children:[cl(a4dec,{w:CW})]}));
     rows.push(hdr1('3. PRIEDAS (-AI)'));
     rows.push(new TableRow({children:[cl([pr([n('\u2611 1 priedas. Ekspertų išvados.')])],{w:CW})]}));
   }
@@ -3289,17 +3435,29 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
     const winnerEx=document.getElementById('pf-winner-ex')?.value||'___';
     rows.push(new TableRow({children:[cl([pr([b('Kvalifikacijos vertinimas ir laimėtojo nustatymas.')])],{w:CW})]}));
     rows.push(hdr1('1. SVARSTYTA'));
+    // Neįprastai maža kaina (2026-10-25, naujo darbuotojo patikra K5): iki tol NMK lentelė į protokolą nepatekdavo, o dėl nepagrįstos kainos
+    // atmestas tiekėjas protokole būdavo „Sprendimas: priimti“ (kvalifikacijos eilutės numatytoji reikšmė)
+    const nmkTikrinta = !!document.getElementById('pf-nmp-check')?.checked;
+    const nmkData = nmkTikrinta ? [...document.querySelectorAll('#pf-nmp-tbody tr')].map(r => ({ name: String(r.querySelector('.nmp-name')?.value || '').trim(),
+      pagr: r.querySelector('.nmp-pagr')?.value || '', sp: r.querySelector('.nmp-sp')?.value || '' })).filter(x => x.name) : [];
+    const nmkAtm = new Set(nmkData.filter(x => x.sp === 'atmesti').map(x => x.name));
+    const kvSp = k => k.sp === 'atmesti' || nmkAtm.has(k.name) ? 'atmesti' : 'priimti';
     rows.push(new TableRow({children:[cl([
       pr([b('Kvalifikacijos vertinimo rezultatai:')]),ep(),
-      ...kvalData.map(k=>pr([n(`${k.name}: pašalinimo pagrindų ${k.pal==='nera'?'nėra':'yra'}; kvalifikacija ${k.kval==='atitinka'?'atitinka reikalavimus':'neatitinka reikalavimų'}. Sprendimas: ${k.sp==='priimti'?'priimti':'atmesti'}.`)])),
+      ...kvalData.map(k=>pr([n(`${k.name}: pašalinimo pagrindų ${k.pal==='nera'?'nėra':'yra'}; kvalifikacija ${k.kval==='atitinka'?'atitinka reikalavimus':'neatitinka reikalavimų'}${nmkAtm.has(k.name) ? '; neįprastai maža kaina nepagrįsta' : ''}. Sprendimas: ${kvSp(k)}.`)])),
+      ...(nmkData.length ? [ep(), pr([b('Neįprastai mažos kainos vertinimas:')]),
+        ...nmkData.map(x => pr([n(`${x.name}: kainą ${x.pagr === 'nepagrinde' ? 'nepagrindė' : 'pagrindė'}. Sprendimas: ${x.sp === 'atmesti' ? 'atmesti' : 'priimti'}.`)]))] : []),
       ep(),pr([b(`Potencialus laimėtojas: ${winner}.`)]),
     ],{w:CW})]}));
     rows.push(hdr1('2. SPRENDIMAS (-AI)'));
-    rows.push(new TableRow({children:[cl([
-      pr([b(`1. Nustatyti, kad Pirkimą laimėjo ${winner}, pasiūlymo kaina ${formatMoney(parseFloat(winnerEx)||0)} EUR be PVM.`)]),
-      pr([b(`2. Pakviesti ${winner} sudaryti sutartį per ${document.getElementById('pf-contract-days')?.value||15} darbo dienų.`)]),
-      pr([b('3. Informuoti visus tiekėjus apie priimtus sprendimus per 3 darbo dienas.')]),
-    ],{w:CW})]}));
+    const a5dec = []; let a5nr = 0; const a5s = t => a5dec.push(pr([b(`${++a5nr}. ${t}`)]));
+    const atmKval = kvalData.filter(k => k.sp === 'atmesti' && !nmkAtm.has(k.name)).map(k => k.name);
+    if (atmKval.length) a5s(`Vadovaujantis ${ilgaForma(teise('pasalinimas_ir_kvalifikacija'))} ir Pirkimo sąlygų nuostatomis, atmesti šių tiekėjų pasiūlymus: ${atmKval.join('; ')}.`);
+    if (nmkAtm.size) a5s(`Vadovaujantis ${ilgaForma(teise('nmk'))}, atmesti šių tiekėjų pasiūlymus, kurių neįprastai maža kaina nepagrįsta: ${[...nmkAtm].join('; ')}.`);
+    a5s(`Nustatyti, kad Pirkimą laimėjo ${winner}, pasiūlymo kaina ${formatMoney(parseFloat(winnerEx)||0)} EUR be PVM.`);
+    a5s(`Pakviesti ${winner} sudaryti sutartį per ${document.getElementById('pf-contract-days')?.value||15} darbo dienų.`);
+    a5s('Informuoti visus tiekėjus apie priimtus sprendimus per 3 darbo dienas.');
+    rows.push(new TableRow({children:[cl(a5dec,{w:CW})]}));
     rows.push(hdr1('3. PRIEDAS (-AI)'));
     rows.push(new TableRow({children:[cl([pr([n('\u2611 1 priedas. Ekspertų išvados.')]),pr([n('\u2611 2 priedas. Kvietimas sudaryti sutartį.')])],{w:CW})]}));
   }
@@ -3353,7 +3511,7 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
       const neat = r.querySelector('.d4-neat-aprasymas')?.value || '';
       const atmpp = r.querySelector('.d4-atm-pp')?.value || '';
       const atitText = atit==='taip' ? 'atitinka Pirkimo sąlygas' : 'neatitinka Pirkimo sąlygų';
-      const vkText = vk==='kviesti' ? 'kviesti teikti pirminį pasiūlymą' : (vk==='patikslinti' ? `prašyti patikslinti / papildyti paraišką${bpsD4.tikslinimas ? ` (BPS ${bpsD4.tikslinimas} p.)` : ''}` : `atmesti paraišką${atmpp?' (Pirkimo sąlygų '+atmpp+' p.)':''}`);
+      const vkText = vk==='kviesti' ? (dps ? 'leisti dalyvauti dinaminėje pirkimo sistemoje' : 'kviesti teikti pirminį pasiūlymą') : (vk==='patikslinti' ? `prašyti patikslinti / papildyti paraišką${bpsD4.tikslinimas ? ` (BPS ${bpsD4.tikslinimas} p.)` : ''}` : `atmesti paraišką${atmpp?' (Pirkimo sąlygų '+atmpp+' p.)':''}`);
       let line = `${i+1}. ${name} - paraiška ${atitText}`;
       if (neat) line += `, neatitikimas: ${beTasko(neat)}`;
       line += `. Siūloma ${vkText}.`;
@@ -3370,7 +3528,9 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
     const inviteD4 = d4rows.filter(r => r.querySelector('.d4-vk')?.value==='kviesti').map(r => r.querySelector('.d4-name')?.value || '___');
     const patkslD4 = d4rows.filter(r => r.querySelector('.d4-vk')?.value==='patikslinti').map(r => ({name:r.querySelector('.d4-name')?.value||'___', neat:r.querySelector('.d4-neat-aprasymas')?.value||''}));
     const atmD4 = d4rows.filter(r => r.querySelector('.d4-vk')?.value==='atmesti').map(r => ({name:r.querySelector('.d4-name')?.value||'___', pp:r.querySelector('.d4-atm-pp')?.value||'___'}));
-    if(inviteD4.length>0) d4decisions.push(`${d4decisions.length+1}. Kviesti šiuos tiekėjus pateikti pirminius pasiūlymus: ${inviteD4.join('; ')}.`);
+    if(inviteD4.length>0) d4decisions.push(dps
+      ? `${d4decisions.length+1}. Vadovaujantis ${ilgaForma(teise('dps_dalyvavimas'))}, leisti šiems tiekėjams dalyvauti dinaminėje pirkimo sistemoje: ${inviteD4.join('; ')}.`
+      : `${d4decisions.length+1}. Kviesti šiuos tiekėjus pateikti pirminius pasiūlymus: ${inviteD4.join('; ')}.`);
     if(patkslD4.length>0){
       const lines = patkslD4.map(p => `${p.name}${p.neat?' (neatitikimas: '+p.neat+')':''}`);
       d4decisions.push(`${d4decisions.length+1}. Vadovaujantis Bendrųjų Pirkimo sąlygų ${bpsD4.tikslinimas ? bpsD4.tikslinimas + ' p.' : 'nuostatomis'}, prašyti per 3 darbo dienas patikslinti / papildyti paraiškas: ${lines.join('; ')}.`);
@@ -3379,7 +3539,9 @@ function buildAgendaRows(pk, proto, posDate, chk, b, n, pr, ep, cl, hdr, hdr1, C
       const lines = atmD4.map(a => `${a.name} (Pirkimo sąlygų ${a.pp} p.)`);
       d4decisions.push(`${d4decisions.length+1}. Vadovaujantis ${ilgaForma(teise('vertinimo_principai'))} ir Bendrųjų Pirkimo sąlygų nuostatomis, atmesti paraiškas: ${lines.join('; ')}.`);
     }
-    d4decisions.push(`${d4decisions.length+1}. Ne vėliau kaip per 1 darbo dieną CVP IS priemonėmis informuoti tiekėjus apie priimtus sprendimus.`);
+    d4decisions.push(dps
+      ? `${d4decisions.length+1}. Vadovaujantis ${ilgaForma(teise('dps_pranesimas'))}, ne vėliau kaip per 3 darbo dienas nuo šio sprendimo priėmimo dienos CVP IS priemonėmis pranešti tiekėjams apie leidimą dalyvauti dinaminėje pirkimo sistemoje arba apie paraiškos atmetimą.`
+      : `${d4decisions.length+1}. Ne vėliau kaip per 1 darbo dieną CVP IS priemonėmis informuoti tiekėjus apie priimtus sprendimus.`);
     rows.push(new TableRow({children:[cl(d4decisions.map(t => pr([n(t)])),{w:CW})]}));
     rows.push(hdr1('3. PRIEDAS (-AI)'));
     rows.push(new TableRow({children:[cl([
@@ -3700,14 +3862,26 @@ const PN_TEMPLATES = {
       };
     }
   },
+  // 12: vieno tiekėjo pasiūlymo (D4 - paraiškos) atmetimas (2026-10-25, naujo darbuotojo patikra K1). Iki tol šablonas visada teigė,
+  // kad tiekėjo buvo prašyta patikslinti dokumentus ir kad „atmetus visus ... pasiūlymus, Pirkimas laikomas pasibaigusiu“ - ir tada,
+  // kai atmestas vienas iš kelių. Visų atmetimui - 12.1; tikslinimo pastraipa - tik įrašius rašto datą.
   '12_atmetimas': {
-    title:'DĖL PASIŪLYMO ATMETIMO IR PIRKIMO PABAIGOS', titleEn:'REGARDING REJECTION OF THE BID AND TERMINATION OF THE PROCUREMENT',
-    addressee:'individual', psi:['pasiulymas_atitinka','pabaiga_visi_atmesti'],
+    title:'DĖL PASIŪLYMO ATMETIMO', titleEn:'REGARDING REJECTION OF THE BID',
+    antraste(d){ return d.paraiska ? { lt:'DĖL PARAIŠKOS ATMETIMO', en:'REGARDING REJECTION OF THE APPLICATION' } : null; },
+    addressee:'individual', psi:['pasiulymas_atitinka'],
     fields:['rasto_data','termino_pabaiga','motyvas'],
     body(d){
+      const ka = d.paraiska ? 'paraišką' : 'pasiūlymą', kas = d.paraiska ? 'paraiška' : 'pasiūlymas';
+      const ke = d.paraiska ? 'application' : 'bid';
+      const tiksl = d.rasto_data
+        ? `${bpsPagal(d.bps_tikslinimo)}Komisija prašė jūsų CVP IS elektroninėmis priemonėmis ne vėliau kaip per 3 darbo dienas nuo rašto išsiuntimo dienos patikslinti pateiktus netikslius ir neišsamius dokumentus ar duomenis. Raštas Jums išsiųstas ${d.rasto_data}. Terminas iki kada turėjote patikslinti dokumentus ar duomenis baigėsi ${d.termino_pabaiga || '___'} (imtinai).\nPirkimo sąlygose nurodyta, kad jei Tiekėjas per nurodytą terminą neištaiso aritmetinių klaidų ir (ar) nepaaiškina pasiūlymo, jo pasiūlymas laikomas neatitinkančiu Pirkimo dokumentuose nustatytų reikalavimų.\n`
+        : '';
+      const tikslEn = d.rasto_data
+        ? `${d.bps_tikslinimo ? 'Pursuant to clause ' + d.bps_tikslinimo + ' of the General Procurement Terms, the' : 'The'} Commission requested you, no later than within 3 working days from the date of dispatch of the notice, to clarify the submitted inaccurate or incomplete documents or data. The notice was sent on ${d.rasto_data}. The deadline expired on ${d.termino_pabaiga || '___'} (inclusive).\nThe Procurement Terms provide that if the Supplier fails to correct arithmetic errors and/or explain the bid within the time limit set, its bid shall be deemed not to comply with the requirements.\n`
+        : '';
       return {
-        lt:`${d.imone} pirkimų komisija (toliau - Komisija) ${d.pirkimo_budas} vykdo ${d.pirkimas} pirkimą (toliau - Pirkimas) ir įvertino jūsų pateiktą pasiūlymą.\n${bpsPagal(d.bps_tikslinimo)}Komisija prašė jūsų CVP IS elektroninėmis priemonėmis ne vėliau kaip per 3 darbo dienas nuo rašto išsiuntimo dienos patikslinti pateiktus netikslius ir neišsamius dokumentus ar duomenis. Raštas Jums išsiųstas ${d.rasto_data}. Terminas iki kada turėjote patikslinti dokumentus ar duomenis baigėsi ${d.termino_pabaiga} (imtinai).\nPirkimo sąlygose nurodyta, kad jei Tiekėjas per nurodytą terminą neištaiso aritmetinių klaidų ir (ar) nepaaiškina pasiūlymo, jo pasiūlymas laikomas neatitinkančiu Pirkimo dokumentuose nustatytų reikalavimų.\nInformuojame, jog vadovaujantis Lietuvos Respublikos pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymo 58 straipsnio 1 dalies 1 punktu${d.bps_atmetimo ? ' ir Pirkimo sąlygų ' + d.bps_atmetimo + ' punktu' : ''}, jūsų pasiūlymas atmestas.${d.motyvas?'\nPapildomas motyvas: '+d.motyvas:''}\nVadovaujantis Pirkimų įstatymo 41 straipsnio 2 dalies 2 punktu, atmetus visus Pirkimui pateiktus pasiūlymus, Pirkimas laikomas pasibaigusiu.\nDėkojame už dalyvavimą Pirkimo procedūrose ir tikimės tolimesnio bendradarbiavimo.`,
-        en:`${d.imone} procurement commission is conducting the procurement of ${d.pirkimas} (the Procurement) ${d.pirkimo_budas_en} and has evaluated the bid you submitted.\n${d.bps_tikslinimo ? 'Pursuant to clause ' + d.bps_tikslinimo + ' of the General Procurement Terms, the' : 'The'} Commission requested you, no later than within 3 working days from the date of dispatch of the notice, to clarify the submitted inaccurate or incomplete documents or data. The notice was sent on ${d.rasto_data}. The deadline expired on ${d.termino_pabaiga} (inclusive).\nThe Procurement Terms provide that if the Supplier fails to correct arithmetic errors and/or explain the bid within the time limit set, its bid shall be deemed not to comply with the requirements.\nWe inform you that, pursuant to Article 58(1)(1) of the Law on Procurement${d.bps_atmetimo ? ' and clause ' + d.bps_atmetimo + ' of the Procurement Terms' : ''}, your bid is rejected.\nPursuant to Article 41(2)(2), upon rejection of all bids, the Procurement is deemed terminated.\nThank you for your participation.`
+        lt:`${d.imone} pirkimų komisija (toliau - Komisija) ${d.pirkimo_budas} vykdo ${d.pirkimas} pirkimą (toliau - Pirkimas) ir įvertino jūsų pateiktą ${ka}.\n${tiksl}Informuojame, jog vadovaujantis Lietuvos Respublikos pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymo 58 straipsnio 1 dalies 1 punktu${d.bps_atmetimo ? ' ir Pirkimo sąlygų ' + d.bps_atmetimo + ' punktu' : ''}, jūsų ${kas} atmesta${d.paraiska ? '' : 's'}.${d.motyvas ? '\nAtmetimo motyvas: ' + d.motyvas : ''}\nDėkojame už dalyvavimą Pirkimo procedūrose ir tikimės tolimesnio bendradarbiavimo.`,
+        en:`${d.imone} procurement commission is conducting the procurement of ${d.pirkimas} (the Procurement) ${d.pirkimo_budas_en} and has evaluated the ${ke} you submitted.\n${tikslEn}We inform you that, pursuant to Article 58(1)(1) of the Law on Procurement${d.bps_atmetimo ? ' and clause ' + d.bps_atmetimo + ' of the Procurement Terms' : ''}, your ${ke} is rejected.${d.motyvas ? '\nReason for rejection: ' + d.motyvas : ''}\nThank you for your participation.`
       };
     }
   },
@@ -3893,6 +4067,18 @@ const PN_TEMPLATES = {
       };
     }
   },
+  // DPS sukūrimas (2026-10-25, K7): leidimas dalyvauti dinaminėje pirkimo sistemoje - PĮ 87 str. 8 d.
+  'dps_leidimas': {
+    title:'DĖL LEIDIMO DALYVAUTI DINAMINĖJE PIRKIMO SISTEMOJE',
+    titleEn:'REGARDING ADMISSION TO THE DYNAMIC PURCHASING SYSTEM',
+    addressee:'individual', psi:['dps_dalyvavimas','dps_pranesimas'], fields:[],
+    body(d){
+      return {
+        lt:`${d.imone} pirkimų komisija (toliau - Komisija) vykdo ${d.pirkimas} pirkimą, kuriuo kuriama dinaminė pirkimo sistema (toliau - DPS).\nĮvertinusi Jūsų pateiktą paraišką, Komisija nustatė, kad ji atitinka Pirkimo dokumentuose nustatytus reikalavimus, ir priėmė sprendimą leisti Jums dalyvauti DPS.\nKvietimus pateikti pasiūlymus dėl konkrečių pirkimų pagal DPS gausite CVP IS priemonėmis.\nDėkojame už dalyvavimą.`,
+        en:`${d.imone} procurement commission (the Commission) is conducting the procurement of ${d.pirkimas}, establishing a dynamic purchasing system (the DPS).\nAfter evaluating your application, the Commission has established that it complies with the requirements of the Procurement documents and has decided to admit you to the DPS.\nInvitations to submit tenders for specific procurements under the DPS will be sent to you by means of CVP IS.\nThank you for your participation.`
+      };
+    }
+  },
   '1_kvietimas_pasiulymui': {
     title:'DĖL KVIETIMO TEIKTI PIRMINĮ PASIŪLYMĄ',
     titleEn:'REGARDING INVITATION TO SUBMIT INITIAL BID',
@@ -3959,8 +4145,10 @@ const PROTOCOL_NOTIFICATIONS = {
   'N9': ['9_laimetojui_kaina','13_kvietimas_sutarti','15_nmk']
 };
 
-function getProtocolNotifications(protoId){
-  // Normalizuojam ID (D6_1 → D6_1, D5a1 → D5a1)
+function getProtocolNotifications(protoId, pk){
+  // DPS sukūrimo 4 protokolas - leidimas dalyvauti DPS ir paraiškos atmetimas (PĮ 87 str. 8 d.); 3 - pranešimų nėra
+  const p = pk || getProcurement(currentPkId);
+  if (dpsSukurimas(p) && (protoId === 'A3' || protoId === 'A4')) return protoId === 'A4' ? ['dps_leidimas', '12_atmetimas'] : [];
   return PROTOCOL_NOTIFICATIONS[protoId] || [];
 }
 
@@ -3970,6 +4158,17 @@ function getNotifsForProtocol(pkId, protoId){
   return (store[pkId]||[]).filter(n => n.sourceProtocolId === protoId);
 }
 
+// Pranešimo šablono būsena dokumentų sąraše: sukurta, nesukurta su priežastimi (planas), nereikalinga pagal sprendimus
+function pnBusenosTekstas(tId, created, planas){
+  const n = created.length;
+  const sk = n ? `✓ Sukurta ${n} ${n === 1 ? 'pranešimas' : 'pranešimai (-ų)'}` : '';
+  if (!planas) return sk || 'Bus sukurtas, jei jo reikia pagal protokolo sprendimus';
+  const s = (planas.sukurta || []).find(k => k.tId === tId), ne = (planas.nekurta || []).find(k => k.tId === tId);
+  if (s && n) return sk + (s.gavejai && s.gavejai.length ? ': ' + hx(s.gavejai.join(', ')) : '');
+  if (sk) return sk;
+  if (ne) return 'Nesukurtas: ' + hx(ne.kodel);
+  return 'Pagal protokolo sprendimus nereikalingas';
+}
 function renderProtocolDocuments(pkId, protoId){
   // Apple-style: vienas pagrindinis mygtukas „Sukurti visus dokumentus",
   // aiškūs statusai, jokio techninio žargono.
@@ -3979,13 +4178,14 @@ function renderProtocolDocuments(pkId, protoId){
   const seq = getSequence(pk.type);
   const protoInfo = seq.find(p=>p.id===protoId) || {num:'?', name:protoId};
   const isDone = !!proto.done;
-  const availableNotifs = getProtocolNotifications(protoId);
+  const availableNotifs = getProtocolNotifications(protoId, pk);
   const createdNotifs = getNotifsForProtocol(pkId, protoId);
 
   const notifsByTpl = {};
   availableNotifs.forEach(tId => { notifsByTpl[tId] = createdNotifs.filter(n => n.templateId === tId); });
-  const generatedCount = Object.values(notifsByTpl).filter(arr => arr.length > 0).length;
-  const allReady = isDone && (availableNotifs.length === 0 || generatedCount === availableNotifs.length);
+  // Pranešimai kuriami pagal protokolo sprendimus (pranesimuPlanas) - ne visi šablonai; po kūrimo įrašyta, kas sukurta ir kodėl kas ne
+  const planas = proto.pranesimai || null;
+  const allReady = isDone && (availableNotifs.length === 0 || !!planas);
 
   let html = `<div class="card" style="margin-top:20px;border:1px solid var(--epso-graphite-15);box-shadow:0 4px 12px rgba(46,54,65,.06)">
     <div class="card-header" style="cursor:default;padding:14px 22px">
@@ -4001,14 +4201,12 @@ function renderProtocolDocuments(pkId, protoId){
       <div style="font-size:13px;color:var(--color-graphite-50-strong)">Galite atsisiųsti dar kartą arba peržiūrėti pranešimus žemiau</div>
     </div>`;
   } else {
-    const totalDocs = 1 + availableNotifs.length;
-    const remainingDocs = (isDone ? 0 : 1) + (availableNotifs.length - generatedCount);
     html += `<div style="text-align:center;padding:24px;background:linear-gradient(135deg, var(--epso-cyan-5) 0%, #fff 100%);border-radius:14px;margin-bottom:24px;border:1px solid var(--epso-cyan)">
-      <div style="font-size:14px;color:var(--epso-graphite);margin-bottom:14px;line-height:1.5">${remainingDocs === totalDocs ? 'Užpildę formą sukurkite visus dokumentus vienu paspaudimu' : `Liko sukurti: <strong>${remainingDocs}</strong> dokumentų`}</div>
+      <div style="font-size:14px;color:var(--epso-graphite);margin-bottom:14px;line-height:1.5">Užpildę formą sukurkite protokolą ir pranešimus tiekėjams vienu paspaudimu</div>
       <button class="btn btn-primary" style="font-size:14px;padding:14px 36px;box-shadow:0 4px 12px rgba(0,160,114,.3)" onclick="generateAllDocuments('${protoId}')">
         ✨ Sukurti visus dokumentus
       </button>
-      <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:10px">Sukurs ${totalDocs} dokument${totalDocs===1?'ą':'us'} ir atsisius kaip .docx failus</div>
+      <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:10px">${availableNotifs.length ? 'Sukurs protokolą ir tik tuos pranešimus, kurių reikia pagal protokolo sprendimus kiekvienam tiekėjui, ir atsisius .docx failus' : 'Sukurs protokolą ir atsisius .docx failą'}</div>
     </div>`;
   }
 
@@ -4042,7 +4240,7 @@ function renderProtocolDocuments(pkId, protoId){
         <div style="font-size:24px;flex-shrink:0">${hasCreated ? '✅' : '📧'}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px;color:var(--epso-graphite)">${tpl.title}</div>
-          <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:2px">${hasCreated ? `✓ Sukurta ${created.length} pranešimas${created.length>1?'(-ai)':''}` : 'Bus sukurtas auto-pildant iš protokolo duomenų'}</div>
+          <div style="font-size:12px;color:var(--color-graphite-50-strong);margin-top:2px">${pnBusenosTekstas(tId, created, planas)}</div>
         </div>
         ${hasCreated ? `
           <button class="btn btn-secondary btn-sm" onclick="viewProtocolNotifs('${protoId}','${tId}')" title="Peržiūra" aria-label="Peržiūra">👁</button>
@@ -4075,6 +4273,113 @@ function renderProtocolDocuments(pkId, protoId){
 // ════════════════════════════════════════════════════════
 // AUTO-GENERAVIMAS - visi dokumentai vienu paspaudimu
 // ════════════════════════════════════════════════════════
+// Pranešimai pagal protokolo sprendimus (2026-10-25, naujo darbuotojo patikra K1). Iki tol „Sukurti visus dokumentus“ kūrė VISUS
+// protokolui priskirtus šablonus VISIEMS tiekėjams: A4 - devynis (ir atmetimo, „visi pasiūlymai atmesti“ bei pasiūlymo galiojimo
+// pratęsimo laišką tam pačiam tiekėjui), A5 - vienuolika (ir apie pretenziją, kurios nebuvo). Dabar kiekvienam tiekėjui - tik pagal
+// jo sprendimą formoje; kas pagal sprendimus nereikalinga ar priklauso nuo vėlesnių aplinkybių - nekuriama ir pasakoma, kodėl.
+// Grąžina { kurti: [{ tId, gavejai, data }], nekurti: [{ tId, kodel }] }; tiekėjai - collectTiekejaiFromProtocol().
+const PN_VELIAU = {
+  '13_kvietimas_sutarti': 'kvietimas pasirašyti sutartį siunčiamas pasibaigus atidėjimo terminui',
+  '15_nmk': 'prašymas pagrįsti neįprastai mažą kainą siunčiamas prieš priimant sprendimą - sukurkite jį, kai to reikia',
+  '16_galiojimas': 'prašymas pratęsti pasiūlymų galiojimą siunčiamas tik tada, kai to reikia',
+  '3_aritm_klaidos': 'aritmetinių klaidų taisymo raštas kuriamas tik tada, kai klaidų nustatyta',
+  '4_per_didele_kaina': 'pasiūlymo, kurio kaina viršija pirkimui skirtas lėšas, atmetimo raštas kuriamas pasirinkus šį šabloną',
+  '5_pasiulymas_ok': 'pranešimas apie atitinkantį pasiūlymą neprivalomas - sukurkite jį, jei reikia',
+  '12_2_kitiems_pabaiga': 'kai atmesti visi pasiūlymai, kiekvienas tiekėjas gauna atmetimo ir pirkimo pabaigos pranešimą',
+  '14_pretenzija_sustabdymas': 'pranešimai dėl pretenzijos kuriami tik gavus pretenziją',
+  '14_1_pretenzija_atm_pabaiga': 'pranešimai dėl pretenzijos kuriami tik gavus pretenziją',
+  '14_2_pretenzija_atm_tesimas': 'pranešimai dėl pretenzijos kuriami tik gavus pretenziją',
+  '14_3_pretenzija_tenkinta': 'pranešimai dėl pretenzijos kuriami tik gavus pretenziją'
+};
+function pranesimuPlanas(protoId0, pk){
+  const sab = getProtocolNotifications(protoId0, pk);
+  const protoId = protokoloForma(pk, protoId0), dps = dpsSukurimas(pk);
+  const T = collectTiekejaiFromProtocol(protoId);
+  const kurti = [], nekurti = [];
+  const kur = (tId, gavejai, data) => { if (sab.includes(tId) && gavejai.length) kurti.push({ tId, gavejai, data: data || {} }); };
+  const vardai = a => a.map(x => x.pavadinimas).join(', ');
+  const kainosKrit = /^(kainą|sąnaudas)$/.test(String((pk || {}).eval_criteria || '').trim());
+  const atm = T.filter(x => x.sprendimas === 'atmesti'), lik = T.filter(x => x.sprendimas !== 'atmesti');
+  const atmetimai = (paraiska) => {
+    if (!atm.length) return;
+    // Visi atmesti - kiekvienam atmetimo ir pirkimo pabaigos pranešimas (12.1); kitaip - atmetimo (12)
+    if (!lik.length && sab.includes('12_1_visi_atmesti') && !paraiska) kur('12_1_visi_atmesti', atm);
+    else kur('12_atmetimas', atm, paraiska ? { paraiska: true } : {});
+  };
+  // Sutarties sudarymo rezultatai: laimėtojui - 9 arba 9.1 (pagal vertinimo kriterijų), kitiems neatmestiems - 10 arba 11
+  const rezultatai = (laim, eile) => {
+    const w = T.find(x => x.pavadinimas === laim) || { pavadinimas: laim, kontaktas:'', kalba:'lt', kaina:'', vieta:'1' };
+    const kiti = lik.filter(x => x.pavadinimas !== laim);
+    const d = { laimetojas: laim, eile };
+    // Šablonas pagal kriterijų; kai sekoje jo nėra (N8, N9 turi tik kainos šablonus) - kitas
+    const pagal = (kainos, ekon) => { const pirm = kainosKrit ? kainos : ekon, kitas = kainosKrit ? ekon : kainos;
+      return sab.includes(pirm) ? pirm : kitas; };
+    kur(pagal('9_laimetojui_kaina', '9_1_laimetojui_ekonom'), [w], d);
+    kur(pagal('10_kitiems_eile', '11_kitiems_ekonom'), kiti, d);
+  };
+  const eileIs = (k) => {
+    const e = ((pk && pk.protocols && pk.protocols[k]) || {}).eile;
+    return Array.isArray(e) ? e.filter(x => x && x.tiekejas) : [];
+  };
+
+  if (/^[ADN]2$/.test(protoId)) {
+    const kl = [...document.querySelectorAll('#klausimai-list .klausimas-row')].some(r => String(r.querySelector('.k-turinys')?.value || '').trim());
+    const term = String(document.getElementById('pf-new-term')?.value || '').trim();
+    if (kl || term) kur('0_atsakymai', [{ pavadinimas:'', kontaktas:'', kalba:'lt', kaina:'', vieta:'' }]);
+    else nekurti.push({ tId: '0_atsakymai', kodel: 'formoje nėra nei klausimų, nei naujo pasiūlymų termino' });
+  } else if (protoId === 'A4') {
+    atmetimai(false);
+    const tiksl = T.filter(x => x.sprendimas === 'tikslinti');
+    if (tiksl.length) nekurti.push({ tId: '3_aritm_klaidos', kodel: `prašymas patikslinti pasiūlymą (${vardai(tiksl)}) automatiškai nekuriamas - kai taisomos aritmetinės klaidos, pasirinkite šabloną „Dėl aritmetinių klaidų taisymo“, kitu atveju raštą parenkite patys` });
+    const pirmas = [...lik].filter(x => x.vieta).sort((a, b) => Number(a.vieta) - Number(b.vieta))[0];
+    if (document.getElementById('pf-kval-reikalinga')?.checked) {
+      if (pirmas) {
+        kur('8_galimas_laimetojas', [pirmas]);
+        kur('8_1_kitiems_galimas', lik.filter(x => x !== pirmas), { galimas_laimetojas: pirmas.pavadinimas });
+      } else if (lik.length) nekurti.push({ tId: '8_galimas_laimetojas', kodel: 'pasiūlymų eilėje nėra neatmesto tiekėjo - galimo laimėtojo nustatyti negalima' });
+    }
+  } else if (protoId === 'A5' || protoId === 'D9' || protoId === 'N9') {
+    atmetimai(false);
+    const laim = String(document.getElementById('pf-winner')?.value || '').trim();
+    if (laim) {
+      const atmV = new Set(atm.map(x => x.pavadinimas));
+      let eile = eileIs(protoId === 'A5' ? 'A4' : protoId === 'D9' ? 'D8' : 'N8').filter(x => !atmV.has(x.tiekejas));
+      const wEx = parseFloat(document.getElementById('pf-winner-ex')?.value) || 0;
+      if (!eile.length) eile = [{ tiekejas: laim, kaina: wEx }, ...lik.filter(x => x.pavadinimas !== laim).map(x => ({ tiekejas: x.pavadinimas, kaina: 0 }))];
+      else if (!eile.some(x => x.tiekejas === laim)) eile = [{ tiekejas: laim, kaina: wEx }, ...eile];
+      rezultatai(laim, eile);
+    } else if (lik.length) nekurti.push({ tId: '9_laimetojui_kaina', kodel: 'neįrašytas laimėtojas - rezultatų pranešimai nekuriami' });
+  } else if (protoId === 'D4') {
+    kur(dps ? 'dps_leidimas' : '1_kvietimas_pasiulymui', T.filter(x => x.sprendimas === 'kviesti'));
+    atmetimai(true);
+    const ps = T.filter(x => x.sprendimas === 'patikslinti');
+    if (ps.length) nekurti.push({ tId: dps ? 'dps_leidimas' : '1_kvietimas_pasiulymui', kodel: `prašymas patikslinti paraišką (${vardai(ps)}) automatiškai nekuriamas - parenkite raštą patys` });
+  } else if (protoId === 'D6' || protoId === 'N6') {
+    kur('6_kvietimas_derybu', T.filter(x => x.sprendimas === 'derybos'));
+    atmetimai(false);
+    const sal = T.filter(x => x.sprendimas === 'salinti');
+    if (sal.length) nekurti.push({ tId: '6_kvietimas_derybu', kodel: `prašymas pašalinti neatitikimą (${vardai(sal)}) automatiškai nekuriamas - parenkite raštą patys` });
+  } else if (protoId === 'D7' || protoId === 'N6_1') {
+    kur('7_1_kvietimas_gp', T);
+  } else if (protoId === 'D8' || protoId === 'N8') {
+    atmetimai(false);
+    const laimF = String(document.getElementById('pf-winner-d8')?.value || '').trim();
+    const laimR = T.find(x => x.sprendimas === 'laimetojas');
+    const laim = laimF || (laimR && laimR.pavadinimas) || '';
+    const eile = [...lik].sort((a, b) => Number(a.vieta || 99) - Number(b.vieta || 99)).map(x => ({ tiekejas: x.pavadinimas, kaina: parseFloat(x.kaina) || 0 }));
+    if (laim) rezultatai(laim, eile);
+    else {
+      const pirmas = [...lik].filter(x => x.vieta).sort((a, b) => Number(a.vieta) - Number(b.vieta))[0];
+      if (pirmas) kur('8_galimas_laimetojas', [pirmas]);
+    }
+  } else {
+    sab.forEach(tId => kur(tId, T.length ? T : (PN_TEMPLATES[tId] && PN_TEMPLATES[tId].addressee === 'group' ? [{ pavadinimas:'', kontaktas:'', kalba:'lt', kaina:'', vieta:'' }] : [])));
+  }
+  const yra = new Set(kurti.map(k => k.tId)), jauNe = new Set(nekurti.map(k => k.tId));
+  sab.forEach(tId => { if (!yra.has(tId) && !jauNe.has(tId) && PN_VELIAU[tId]) nekurti.push({ tId, kodel: PN_VELIAU[tId] }); });
+  return { kurti, nekurti };
+}
+
 async function generateAllDocuments(protoId){
   if(!currentPkId || !protoId){ toast('Klaida: nėra aktyvaus pirkimo','error'); return; }
   setSaveState('saving');
@@ -4085,22 +4390,31 @@ async function generateAllDocuments(protoId){
     // Trumpas atokvėpis tarp parsisiuntimų (kad naršyklė spėtų)
     await new Promise(r => setTimeout(r, 400));
 
-    // 2. Auto-generuojam pranešimus iš protokolo duomenų
+    // 2. Pranešimai - tik pagal protokolo sprendimus (pranesimuPlanas). Formos būsena jau įrašyta generuojant protokolą,
+    //    todėl ir po perpiešimo planas skaitomas iš tų pačių duomenų.
     const pk = getProcurement(currentPkId);
-    const notifTpls = getProtocolNotifications(protoId);
+    const planas = pranesimuPlanas(protoId, pk);
     let notifsCreated = 0, failuNepavyko = 0, priezastis = '';
 
-    for(const tId of notifTpls){
-      const tpl = PN_TEMPLATES[tId];
-      if(!tpl) continue;
-      const result = await autoGenerateNotification(tId, protoId, pk);
+    for(const it of planas.kurti){
+      const tId = it.tId;
+      if(!PN_TEMPLATES[tId]) continue;
+      const result = await autoGenerateNotification(tId, protoId, pk, it);
       if(result && result.sukurta) notifsCreated++;
       if(result && result.failuNepavyko){ failuNepavyko += result.failuNepavyko; priezastis = priezastis || result.priezastis; }
       if(result && result.klaida){ failuNepavyko++; priezastis = priezastis || result.klaida; }
       await new Promise(r => setTimeout(r, 400));
     }
 
-    const totalMsg = `✨ Sukurta: protokolas` + (notifsCreated > 0 ? ` + ${notifsCreated} pranešimas${notifsCreated>1?'(-ai)':''}` : '');
+    const totalMsg = `Sukurta: protokolas` + (notifsCreated > 0 ? ` ir ${notifsCreated} ${notifsCreated === 1 ? 'pranešimas' : 'pranešimai (-ų)'}` : '');
+    // Kas sukurta ir kas pagal sprendimus nesukurta - prie protokolo (rodoma dokumentų sąraše)
+    const pkp = getProcurement(currentPkId);
+    if (pkp && pkp.protocols && pkp.protocols[protoId]) {
+      pkp.protocols[protoId].pranesimai = { data: new Date().toISOString(),
+        sukurta: planas.kurti.map(k => ({ tId: k.tId, gavejai: k.gavejai.map(g => g.pavadinimas).filter(Boolean) })),
+        nekurta: planas.nekurti };
+      saveProcurementData(pkp.id, pkp);
+    }
     if(failuNepavyko){
       // Anksčiau nepavykęs pranešimo Word failas buvo tik konsolėje, o žinutė skelbė visus sukurtus.
       setSaveState('error');
@@ -4124,15 +4438,16 @@ async function generateAllDocuments(protoId){
   }
 }
 
-async function autoGenerateNotification(templateId, protoId, pk){
-  // Sukuria pranešimą be modalo, auto-pildant duomenis iš protokolo formos
+async function autoGenerateNotification(templateId, protoId, pk, planas){
+  // Sukuria pranešimą be modalo, auto-pildant duomenis iš protokolo formos; planas (pranesimuPlanas) - kam ir su kokiais duomenimis
   const tpl = PN_TEMPLATES[templateId];
   if(!tpl || !pk) return false;
   const D = window.docx;
   if(!D) return { klaida: 'Word (docx) biblioteka neįsikėlė - reikia interneto ryšio' };
 
-  // Surenkam tiekėjus iš protokolo formos
-  let tiekejai = collectTiekejaiFromProtocol(protoId);
+  // Gavėjai - pagal planą; be plano (seni kvietimai) - visi protokolo tiekėjai
+  let tiekejai = planas ? planas.gavejai.map(g => ({ ...g })) : collectTiekejaiFromProtocol(protoId);
+  const pd = (planas && planas.data) || {};
   if(tiekejai.length === 0 && tpl.addressee === 'group'){
     // Group pranešimai gali apsieti be konkrečių tiekėjų - adresuojamas visiems
     tiekejai = [{selected:true, pavadinimas:'', kontaktas:'', kalba:'lt', kaina:'', vieta:''}];
@@ -4170,7 +4485,7 @@ async function autoGenerateNotification(templateId, protoId, pk){
   }
 
   const sortedT = [...tiekejai].sort((a,b)=>Number(a.vieta||99)-Number(b.vieta||99));
-  const eile = sortedT.map(t=>({tiekejas:t.pavadinimas, kaina:parseFloat(t.kaina)||0}));
+  const eile = pd.eile || sortedT.map(t=>({tiekejas:t.pavadinimas, kaina:parseFloat(t.kaina)||0}));
   const recipients = (tpl.addressee==='group')
     ? [{...tiekejai[0], _group:true, _all:tiekejai}]
     : tiekejai;
@@ -4188,22 +4503,23 @@ async function autoGenerateNotification(templateId, protoId, pk){
       kaina_su: suPvm(parseFloat(r.kaina)||0),
       biudzetas: pk.val_ex||0,
       vidurkis: 0, skirtumas: '30',
-      motyvas:'', atmetimo_motyvas:'', pretenzijos_motyvas:'',
+      motyvas: r._group ? '' : (r.motyvas||''), atmetimo_motyvas: r._group ? '' : (r.motyvas||''), pretenzijos_motyvas:'',
       veiksmai:'', klaidu_sarasas:'',
       rasto_data:'', termino_pabaiga:'',
       pretenzijos_data:'', pretenzijos_tiekejas:'',
-      galimas_laimetojas:'', prasomas_terminas:'',
+      galimas_laimetojas: pd.galimas_laimetojas||'', prasomas_terminas:'',
       priezastis: fdata.priezastis||'',
       vertinimo_lentele:'',
       atidejimas: getAtidejimoTerminas(pk.val_cat).tekstas,
-      eile, laimetojas: eile[0]?eile[0].tiekejas:'',
+      eile, laimetojas: pd.laimetojas || (eile[0]?eile[0].tiekejas:''),
+      paraiska: !!pd.paraiska,
       klausimai_atsakymai: fdata.klausimai_atsakymai||'',
       naujas_terminas: fdata.naujas_terminas||'',
       terminas:'',
-      derybu_data: fdata.derybu_data||'',
-      derybu_laikas: fdata.derybu_laikas||'',
-      derybu_budas: fdata.derybu_budas||'',
-      derybu_objektas: fdata.derybu_objektas||'',
+      derybu_data: r.derybu_data||fdata.derybu_data||'',
+      derybu_laikas: r.derybu_laikas||fdata.derybu_laikas||'',
+      derybu_budas: r.derybu_budas||fdata.derybu_budas||'',
+      derybu_objektas: r.derybu_objektas||fdata.derybu_objektas||'',
       ...pnBpsDuomenys(pk, r)   // BPS nuorodos - tik iš protokolų (PROTOKOLU_BPS ir tiekėjo eilutės)
     };
     const body = tpl.body(data);
@@ -4213,7 +4529,7 @@ async function autoGenerateNotification(templateId, protoId, pk){
       tiekejas: r._group ? null : r.pavadinimas,
       tiekejaiGroup: r._group ? r._all.map(t=>t.pavadinimas) : null,
       kontaktas: r.kontaktas||'', lang: 'lt',
-      title: tpl.title, titleEn: tpl.titleEn,
+      title: pnAntraste(tpl, data).lt, titleEn: pnAntraste(tpl, data).en,
       data, bodyLt: body.lt, bodyEn: body.en,
       createdAt: new Date().toISOString(), status:'draft',
       tiekejai: tiekejai.map(t=>({...t})),
@@ -4335,21 +4651,29 @@ function openInlinePnGenerator(templateId, protoId){
 }
 
 function collectTiekejaiFromProtocol(protoId){
-  // Surenkam tiekėjus iš atitinkamos protokolo formos
+  // Surenkam tiekėjus iš atitinkamos protokolo formos (DPS sukūrimo 4 protokolas - D4 forma)
+  protoId = protokoloForma(getProcurement(currentPkId), protoId);
   const tiekejai = [];
   // N protokolai naudoja derybų formas (N6 - D6, N8 - D8, N9 - D9); iki 2026-09-27 jiems ir D7 tiekėjų nesurinkdavo.
   // Atmestiems - Komisijos protokole įrašytas atmetimo punktas (pranešime nuoroda griežtai pagal protokolą).
   if(protoId === 'D6' || protoId === 'N6'){
     [...document.querySelectorAll('#pf-d6-list .d6-row')].forEach(r => {
-      const name = r.querySelector('.d6-name')?.value;
-      const atm = r.querySelector('.d6-vk')?.value === 'atmesti' ? atmetimoPunktas(r, '.d6-atmesti-pp') : '';
-      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:'',atmetimoPunktas:atm});
+      const name = r.querySelector('.d6-name')?.value, vk = r.querySelector('.d6-vk')?.value || 'derybos';
+      const atm = vk === 'atmesti' ? atmetimoPunktas(r, '.d6-atmesti-pp') : '';
+      // Derybų data, laikas ir būdas - kiekvieno tiekėjo eilutės (iki 2026-10-25 visiems kvietimams imta pirmo tiekėjo)
+      const derfor = r.querySelector('.d6-derderfor')?.value || 'kaina';
+      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:'',atmetimoPunktas:atm,sprendimas:vk,
+        motyvas:String(r.querySelector('.d6-neat-aprasymas')?.value||'').trim(),
+        derybu_data:r.querySelector('.d6-der-data')?.value||'', derybu_laikas:r.querySelector('.d6-der-laikas')?.value||'',
+        derybu_budas:r.querySelector('.d6-der-budas')?.value||'',
+        derybu_objektas: derfor === 'kita' ? (String(r.querySelector('.d6-derderfor-kita')?.value||'').trim() || 'kita') : derfor});
     });
   } else if(protoId === 'D4'){
     [...document.querySelectorAll('#pf-d4-list .d4-row')].forEach(r => {
-      const name = r.querySelector('.d4-name')?.value;
-      const atm = r.querySelector('.d4-vk')?.value === 'atmesti' ? atmetimoPunktas(r, '.d4-atm-pp') : '';
-      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:'',atmetimoPunktas:atm});
+      const name = r.querySelector('.d4-name')?.value, vk = r.querySelector('.d4-vk')?.value || 'kviesti';
+      const atm = vk === 'atmesti' ? atmetimoPunktas(r, '.d4-atm-pp') : '';
+      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:'',atmetimoPunktas:atm,sprendimas:vk,
+        motyvas:String(r.querySelector('.d4-neat-aprasymas')?.value||'').trim()});
     });
   } else if(protoId === 'D7'){
     [...document.querySelectorAll('#pf-gp-inv-list .gp-inv-name')].forEach(inp => {
@@ -4366,13 +4690,17 @@ function collectTiekejaiFromProtocol(protoId){
       const name = r.querySelector('.d8-name')?.value;
       const kaina = r.querySelector('.d8-ex')?.value || '';
       const vieta = r.querySelector('.d8-vieta')?.value || '';
-      const atm = r.querySelector('.d8-vk')?.value === 'atmesti' ? atmetimoPunktas(r, '.d8-atm-pp') : '';
-      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:kaina,vieta:vieta,atmetimoPunktas:atm});
+      const vk = r.querySelector('.d8-vk')?.value || 'vertinti';
+      const atm = vk === 'atmesti' ? atmetimoPunktas(r, '.d8-atm-pp') : '';
+      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:kaina,vieta:vieta,atmetimoPunktas:atm,sprendimas:vk,
+        motyvas:String(r.querySelector('.d8-motyvas')?.value||'').trim()});
     });
   } else if(protoId === 'A4'){
     [...document.querySelectorAll('.eval-row')].forEach(r => {
       const name = r.querySelector('.e-name')?.value;
-      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:''});
+      const vk = r.querySelector('.e-action')?.value || 'vertinti';
+      const atm = vk === 'atmesti' ? atmetimoPunktas(r, '.e-pp') : '';
+      if(name) tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:'',atmetimoPunktas:atm,sprendimas:vk,motyvas:String(r.querySelector('.e-neat')?.value||'').trim()});
     });
     [...document.querySelectorAll('.rank-row')].forEach((r,i) => {
       const name = r.querySelector('.r-name')?.value;
@@ -4384,9 +4712,21 @@ function collectTiekejaiFromProtocol(protoId){
       }
     });
   } else if(protoId === 'A5' || protoId === 'D9' || protoId === 'N9'){
-    [...document.querySelectorAll('.kv-name')].forEach((inp,i) => {
-      if(inp.value) tiekejai.push({pavadinimas:inp.value,kontaktas:'',kalba:'lt',kaina:'',vieta:''});
+    // Sprendimas - kvalifikacijos lentelės ir neįprastai mažos kainos vertinimo (pranešimų planui)
+    const nmkAtm = document.getElementById('pf-nmp-check')?.checked
+      ? new Set([...document.querySelectorAll('#pf-nmp-tbody tr')].filter(r => r.querySelector('.nmp-sp')?.value === 'atmesti')
+          .map(r => String(r.querySelector('.nmp-name')?.value || '').trim()).filter(Boolean)) : new Set();
+    [...document.querySelectorAll('#pf-kval-tbody tr')].forEach(r => {
+      const name = String(r.querySelector('.kv-name')?.value || '').trim();
+      if(!name) return;
+      const pal = r.querySelector('.kv-pal')?.value === 'yra', kval = r.querySelector('.kv-kval')?.value === 'neatitinka';
+      const atm = r.querySelector('.kv-sp')?.value === 'atmesti' || nmkAtm.has(name);
+      const mot = [pal ? 'nustatyti pašalinimo pagrindai' : '', kval ? 'tiekėjo kvalifikacija neatitinka reikalavimų' : '',
+        nmkAtm.has(name) ? `nepagrįsta neįprastai maža kaina (${teise('nmk')})` : ''].filter(Boolean).join('; ');
+      tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:'',sprendimas: atm ? 'atmesti' : 'priimti', motyvas: atm ? mot : ''});
     });
+    nmkAtm.forEach(name => { if (!tiekejai.some(t => t.pavadinimas === name))
+      tiekejai.push({pavadinimas:name,kontaktas:'',kalba:'lt',kaina:'',vieta:'',sprendimas:'atmesti',motyvas:`nepagrįsta neįprastai maža kaina (${teise('nmk')})`}); });
     const winner = document.getElementById('pf-winner')?.value;
     const winnerEx = document.getElementById('pf-winner-ex')?.value;
     if(winner){
@@ -4566,6 +4906,7 @@ function buildInlinePnNotifs(templateId, protoId){
       derybu_objektas: fdata.derybu_objektas||'',
       ...pnBpsDuomenys(pk, r)   // BPS nuorodos - tik iš protokolų (PROTOKOLU_BPS ir tiekėjo eilutės)
     };
+    if (protokoloForma(pk, protoId) === 'D4') data.paraiska = true;   // D4 (ir DPS sukūrimo 4 protokolas) - paraiškų vertinimas
     const body = tpl.body(data);
     const useLang = (r.kalba==='lt-en'||lang==='lt-en')?'lt-en':'lt';
     notifs.push({
@@ -4574,7 +4915,7 @@ function buildInlinePnNotifs(templateId, protoId){
       tiekejas: r._group?null:r.pavadinimas,
       tiekejaiGroup: r._group?r._all.map(t=>t.pavadinimas):null,
       kontaktas: r.kontaktas, lang: useLang,
-      title: tpl.title, titleEn: tpl.titleEn,
+      title: pnAntraste(tpl, data).lt, titleEn: pnAntraste(tpl, data).en,
       data, bodyLt: body.lt, bodyEn: body.en,
       createdAt: new Date().toISOString(), status:'draft',
       tiekejai: inlinePnTiekejai.map(t=>({...t})),
@@ -4731,10 +5072,15 @@ function pnMoney(amount){
   return Number(amount).toLocaleString('lt-LT',{minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
+// Pranešimo antraštė: šablonas gali ją keisti pagal duomenis (12 - paraiškos atmetimas)
+function pnAntraste(tpl, d){
+  const k = typeof tpl.antraste === 'function' ? tpl.antraste(d || {}) : null;
+  return { lt: (k && k.lt) || tpl.title, en: (k && k.en) || tpl.titleEn };
+}
 function fmtEile(eile, en){
   if(!Array.isArray(eile)||eile.length===0) return '___';
   return eile.map((e,i)=>{
-    const name=e.tiekejas||'___', k=pnMoney(e.kaina);
+    const name=e.tiekejas||'___', k=e.kaina ? pnMoney(e.kaina) : '___';  // be kainos - vieta pildyti, ne „0,00“
     return en?`        ${i+1}. ${name}    ${k} EUR excl. VAT`:`        ${i+1}. ${name}    ${k} Eur be PVM`;
   }).join(';\n')+'.';
 }
@@ -5112,7 +5458,7 @@ function generatePranesimai(){
       tiekejas: r._group?null:r.pavadinimas,
       tiekejaiGroup: r._group?r._all.map(t=>t.pavadinimas):null,
       kontaktas: r.kontaktas, lang: useLang,
-      title: tpl.title, titleEn: tpl.titleEn,
+      title: pnAntraste(tpl, data).lt, titleEn: pnAntraste(tpl, data).en,
       data: data, bodyLt: body.lt, bodyEn: body.en,
       createdAt: new Date().toISOString(), status:'draft',
       tiekejai: pnTiekejai.map(t=>({...t})),
