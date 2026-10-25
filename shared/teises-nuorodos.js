@@ -137,6 +137,12 @@
     vadybos_standartai: { apie: "nepriklausomos įstaigos sertifikatas dėl kokybės vadybos sistemos (Europos standartų serijos) ar aplinkos apsaugos vadybos sistemos (EMAS ar kita); lygiaverčiai sertifikatai pripažįstami",
       PI: { a: "PI", s: 60 }, VPI: { a: "VPI", s: 48 } },
 
+    // Rėmimasis kitų ūkio subjektų pajėgumais (PĮ 62 str., perskaityta e-tar 2026-10-25; PP-salygos ūkio subjektų forma ir DPS 8.4 p.)
+    remimasis_pajegumais: { tikrinta: "2026-10-25", apie: "tiekėjas gali remtis kitų ūkio subjektų pajėgumais, kad atitiktų specialaus leidimo ar narystės, finansinio ir ekonominio ar techninio ir profesinio pajėgumo (kvalifikacijos) reikalavimus",
+      PI: { a: "PI", s: 62, d: 1 } },
+    remimosi_subjektu_patikra: { tikrinta: "2026-10-25", apie: "perkantysis subjektas patikrina, ar ūkio subjektai, kurių pajėgumais remiamasi, tenkina jiems keliamus kvalifikacijos reikalavimus ir ar nėra jų pašalinimo pagrindų; netenkinantį - reikalauja pakeisti",
+      PI: { a: "PI", s: 62, d: 4 } },
+
     // ---- Pirkimo dokumentai ir techninė specifikacija (PĮ)
     dokumentu_aiskumas: { apie: "pirkimo dokumentai turi būti tikslūs, aiškūs, be dviprasmybių",
       PI: { a: "PI", s: 48, d: 4 } },
@@ -273,6 +279,13 @@
       PI: { a: "PI", s: 108, d: 1, p: 1 } },
     pretenzija_sutarties_atidejimas: { tikrinta: "2026-09-27", apie: "gavus pretenziją, sutartis sudaroma ne anksčiau kaip po 10 dienų (supaprastintų - 5 darbo dienų; ne elektroninėmis priemonėmis - 15 dienų) nuo pranešimo apie sprendimą išsiuntimo; pirkimo procedūros sustabdyti nereikalaujama (2017 m. redakcijos „nedelsdamas sustabdo“ pakeista 2022-12-13 įstatymu Nr. XIV-1672)",
       PI: { a: "PI", s: 109, d: 2 } },
+    // DPS sukūrimas (perskaityta e-tar 2026-10-25): paraiškų tikrinimo terminas, leidimas dalyvauti visiems atitinkantiems, pranešimas per 3 d. d.
+    dps_paraisku_tikrinimas: { tikrinta: "2026-10-25", apie: "dinaminėje pirkimo sistemoje gautos kandidatų paraiškos patikrinamos per ne ilgesnį kaip 10 darbo dienų terminą nuo gavimo; pagrįstais atvejais - iki 15 darbo dienų",
+      PI: { a: "PI", s: 87, d: 5, p: 2 } },
+    dps_dalyvavimas: { tikrinta: "2026-10-25", apie: "dinaminėje pirkimo sistemoje leidžiama dalyvauti visiems kandidatams, atitinkantiems nustatytus kvalifikacinius reikalavimus; kandidatų skaičius neribojamas",
+      PI: { a: "PI", s: 87, d: 4 } },
+    dps_pranesimas: { tikrinta: "2026-10-25", apie: "ne vėliau kaip per 3 darbo dienas nuo sprendimo priėmimo tiekėjui pranešama apie leidimą dalyvauti dinaminėje pirkimo sistemoje arba apie paraiškos atmetimą",
+      PI: { a: "PI", s: 87, d: 8 } },
     pretenzijos_nagrinejimas: { tikrinta: "2026-09-27", apie: "pretenzija išnagrinėjama, priimamas motyvuotas sprendimas ir apie jį bei pasikeitusius procedūros terminus raštu pranešama ne vėliau kaip per 6 darbo dienas nuo gavimo",
       PI: { a: "PI", s: 109, d: 3 } },
 
