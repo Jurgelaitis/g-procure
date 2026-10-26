@@ -281,6 +281,13 @@
       PI: { a: "PI", s: 107, d: 3 } },
     pabaiga_visi_atmesti: { tikrinta: "2026-09-27", apie: "pirkimo procedūros baigiasi, kai atmetamos visos paraiškos ar pasiūlymai",
       PI: { a: "PI", s: 41, d: 2, p: 2 } },
+    // Perskaityta e-tar 2026-10-26 (PP-report: pažymos sprendimai ir raštai tiekėjams; nacionalinio saugumo dokumentai - Aprašo 31.4 p.)
+    pabaiga_nutraukta: { tikrinta: "2026-10-26", apie: "pirkimo procedūros baigiasi, kai nutraukiamos pirkimo procedūros",
+      PI: { a: "PI", s: 41, d: 2, p: 3 } },
+    pabaiga_negauta: { tikrinta: "2026-10-26", apie: "pirkimo procedūros baigiasi, kai per nustatytą terminą nepateikiama nė vienos paraiškos ar pasiūlymo",
+      PI: { a: "PI", s: 41, d: 2, p: 4 } },
+    nacsaugumo_dokumentai: { tikrinta: "2026-10-26", apie: "tikrindamas atitiktį nacionalinio saugumo reikalavimams, iš tiekėjo reikalaujama VPT nustatytos formos atitikties deklaracijos, o iš ekonomiškai naudingiausią pasiūlymą pateikusio tiekėjo - steigimo dokumentų, Juridinių asmenų registro išrašo, dalyvių informacinės sistemos išrašo ar kitų dokumentų",
+      PI: { a: "PI", s: 52, d: 3 }, VPI: { a: "VPI", s: 51, d: 12 } },
     galiojimo_pratesimas: { tikrinta: "2026-09-27", apie: "pirkimo procedūros metu galima prašyti tiekėjų pratęsti pasiūlymų galiojimą iki konkrečiai nurodyto termino; tiekėjas gali atsisakyti neprarasdamas teisės į galiojimo užtikrinimą",
       PI: { a: "PI", s: 54, d: 2 } },
     nmk_riba: { tikrinta: "2026-09-27", apie: "neįprastai mažą kainą privaloma prašyti pagrįsti; ji visada laikoma neįprastai maža, jei 30 ir daugiau proc. mažesnė už neatmestų ir pirkimui skirtų lėšų neviršijančių pasiūlymų kainų aritmetinį vidurkį",
