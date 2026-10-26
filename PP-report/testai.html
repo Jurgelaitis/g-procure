@@ -302,6 +302,7 @@ async function paleisk() {
     paruoskDalis([{ pav: 'A', be: 20000, su: 24200 }],
                  { 'A': [['Laimi', 5000, 'Atitinka'], ['Atmestas', 4000, 'Neatitinka', 'Netinka techniškai']] });
     scenarijus('sutartis');
+    ivesk('atmetimoPagrindas', 'Pirkimo sąlygų 5.3 p.');   // be jo rašte - „____“ (D4, 2026-10-26)
     const d = W.gatherFormData();
     const l = laiskas(d, 'Atmestas', 'A');
     lygu(l.notif.type, 'rejected', 'pranešimo tipas');
@@ -607,7 +608,9 @@ async function paleisk() {
     const isp = D.getElementById('lesu-ispejimas');
     tiesa(isp && isp.style.display !== 'none', 'įspėjimas turi būti rodomas');
     turi(isp.textContent, 'viršija pirkimui skirtas lėšas', 'įspėjimas');
-    lygu(laukas('lesuAtitiktis').value, 'viršija-didinta', 'siūloma atitiktis');
+    // K2 (2026-10-26): pasirinkimo modulis pats nebeparenka (iki tol - „Viršija, lėšos padidintos“ be žmogaus sprendimo)
+    lygu(laukas('lesuAtitiktis').value, '', 'atitiktis nepasirinkta automatiškai');
+    turi(isp.textContent, 'pasirinkite atsakymą', 'įspėjimas prašo pasirinkti');
   }, 'Aprašo 30.15 p.');
 
   await testas('P10: kaina telpa į lėšas - patvirtinimas', () => {
@@ -617,7 +620,7 @@ async function paleisk() {
     ivesk('lesosBePvm', '5000');
     const isp = D.getElementById('lesu-ispejimas');
     turi(isp.textContent, 'neviršija pirkimui skirtų lėšų', 'įspėjimas');
-    lygu(laukas('lesuAtitiktis').value, 'neviršija', 'siūloma atitiktis');
+    lygu(laukas('lesuAtitiktis').value, '', 'atitiktis nepasirinkta automatiškai');
   });
 
   await testas('P10: lėšų sakinys patenka į pažymą', () => {
@@ -625,6 +628,7 @@ async function paleisk() {
     paruoskBeDaliu([['Pigus', 3000, 'Atitinka']]);
     scenarijus('sutartis');
     ivesk('lesosBePvm', '5000');
+    ivesk('lesuAtitiktis', 'neviršija');
     const d = W.gatherFormData();
     const sak = W.lesuSakinys(d.fields);
     turi(sak, 'Pirkimui skirtos lėšos: 5 000,00 Eur be PVM', 'lėšų sakinys');
@@ -687,12 +691,13 @@ async function paleisk() {
     neturi(spr, 'vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti', 'sprendimai (bendra formuluotė turi dingti)');
   }, 'kolegė prašė nurodyti konkrečius punktus');
 
-  await testas('P8: nenurodžius pagrindo lieka bendra formuluotė', () => {
+  await testas('P8: nenurodžius pagrindo - „____“, ne neišspręsta alternatyva „Aprašu / Pirkimo sąlygomis“ (D4, 2026-10-26)', () => {
     svariForma();
     paruoskBeDaliu([['Geras', 5000, 'Atitinka'], ['Blogas', 3000, 'Neatitinka', 'Netinka']]);
     scenarijus('sutartis');
     const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
-    turi(spr, 'vadovaujantis Aprašu / Pirkimo sąlygomis, atmesti', 'sprendimai');
+    turi(spr, 'vadovaujantis ____, atmesti', 'sprendimai');
+    neturi(spr, 'Aprašu / Pirkimo sąlygomis', 'sprendimai');
   });
 
   /* ---------------- NAUJA PARTIJA (3 dokumentai) ---------------- */
@@ -766,6 +771,7 @@ async function paleisk() {
     checkbox('pasalTikrinamas', true);
     checkbox('kvalNetikrinama', true);
     scenarijus('sutartis');
+    nustatykKvalif('', 0, 'vertinimas', 'Atitinka');   // K1: sakinys - tik įvertinus galimą laimėtoją
     const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
     turi(spr, 'Pripažinti, kad X neturi pašalinimo pagrindų.', 'sprendimai');
     neturi(spr, 'atitinka Pirkimo sąlygose nustatytus kvalifikacijos', 'sprendimai');
@@ -781,7 +787,7 @@ async function paleisk() {
     ivesk('nimKaina', 'pagrista');
     ivesk('nimPastabos', 'pagrindimas gautas 07-25');
     spr = W.generateSprendimai(W.gatherFormData()).join('\n');
-    turi(spr, 'Įstatymo 66 str.', 'sprendimai');
+    turi(spr, 'Pirkimų įstatymo 66 str. nustatyta tvarka', 'sprendimai (straipsnis - iš registro)');
     turi(spr, 'pagrindimas gautas 07-25', 'sprendimai');
   }, 'Aprašo 30.15/31.3 p. reikalauja vertinti');
 
@@ -889,17 +895,21 @@ async function paleisk() {
   await testas('Vertės įspėjimai: 1 priedas - virš 15 000 Eur ir iki 5 000 Eur; 2 priedas - iki 15 000 Eur (ribos imtinai)', () => {
     const isp = () => { const w = D.getElementById('value-warning'); return w.style.display === 'none' ? '' : w.textContent; };
     const kai = (forma, v) => { W.selectForm(forma); ivesk('verteBePvm', String(v)); return isp(); };
-    const r = { f1_15000: kai(1, 15000), f1_15001: kai(1, 15001), f1_5000: kai(1, 5000), f1_4999: kai(1, 4999), f2_15000: kai(2, 15000), f2_15001: kai(2, 15001) };
-    lygu([r.f1_15000, r.f1_5000, r.f2_15001], ['', '', ''], 'be įspėjimo');
-    turi(r.f1_15001, 'virš 15 000 Eur', '1 priedas, 15 001'); turi(r.f1_4999, 'Iki 5 000 Eur', '1 priedas, 4 999'); turi(r.f2_15000, 'neviršija 15 000 Eur', '2 priedas, 15 000');
+    const r = { f1_15000: kai(1, 15000), f1_15001: kai(1, 15001), f1_5000: kai(1, 5000), f1_5001: kai(1, 5001), f1_4999: kai(1, 4999), f2_15000: kai(2, 15000), f2_15001: kai(2, 15001) };
+    lygu([r.f1_15000, r.f1_5001, r.f2_15001], ['', '', ''], 'be įspėjimo');
+    // M1 (2026-10-26): Aprašo 12 p. - pažyma nepildoma, kai vertė NEVIRŠIJA 5 000 Eur (5 000,00 - irgi)
+    turi(r.f1_15001, 'virš 15 000 Eur', '1 priedas, 15 001'); turi(r.f1_5000, 'neviršija 5 000 Eur', '1 priedas, 5 000'); turi(r.f1_4999, 'neviršija 5 000 Eur', '1 priedas, 4 999'); turi(r.f2_15000, 'neviršija 15 000 Eur', '2 priedas, 15 000');
   });
 
   await testas('PVM: įvedus sumą su PVM, suma be PVM apskaičiuojama atgal (1 210 -> 1 000,00), ir atvirkščiai', () => {
-    svariForma();
+    W.selectForm(2);
     ivesk('verteSuPvm', '1210');
     lygu(laukas('verteBePvm').value, '1000.00', 'be PVM');
+    W.selectForm(2);
     ivesk('verteBePvm', '2500');
     lygu(laukas('verteSuPvm').value, '3025.00', 'su PVM');
+    ivesk('verteBePvm', '3000');
+    lygu(laukas('verteSuPvm').value, '3630.00', 'pakeitus be PVM - automatinė suma su PVM atnaujinama');
   });
 
   await testas('PVM tarifas - iš shared/thresholds.js (2026-10-14): modulyje savo tarifo nėra; perskaičiavimas ir užuomina „Auto: ×1.21 (21% PVM)“ - pagal bendrą tarifą (ir pakeitus jį); tarifo neįkėlus - neperskaičiuojama, užuomina tai sako', async () => {
@@ -909,12 +919,12 @@ async function paleisk() {
     const uz = () => [...new Set([...D.querySelectorAll('.hint')].map(h => h.textContent.trim()).filter(t => /^Auto: ×|PVM tarifas/.test(t)))];
     try {
       svariForma(1);
-      lygu(uz(), ['Auto: ×1.21 (21% PVM)'], '1 priedo užuomina');
+      lygu(uz(), ['Auto: ×1.21 (21% PVM). Įrašius abi sumas ranka (pvz., tiekėjas - ne PVM mokėtojas), jos nebeperskaičiuojamos.'], '1 priedo užuomina');
       svariForma(2);
-      lygu(uz(), ['Auto: ×1.21 (21% PVM)'], '2 priedo užuomina');
+      lygu(uz(), ['Auto: ×1.21 (21% PVM). Įrašius abi sumas ranka (pvz., tiekėjas - ne PVM mokėtojas), jos nebeperskaičiuojamos.'], '2 priedo užuomina');
       M.pvmStandartinis = 0.09; svariForma(1);
       ivesk('verteBePvm', '1000');
-      lygu([laukas('verteSuPvm').value, uz()], ['1090.00', ['Auto: ×1.09 (9% PVM)']], 'pakeistas bendras tarifas');
+      lygu([laukas('verteSuPvm').value, uz()], ['1090.00', ['Auto: ×1.09 (9% PVM). Įrašius abi sumas ranka (pvz., tiekėjas - ne PVM mokėtojas), jos nebeperskaičiuojamos.']], 'pakeistas bendras tarifas');
       delete M.pvmStandartinis; svariForma(1);
       ivesk('verteBePvm', '2000');
       lygu([laukas('verteSuPvm').value, uz()], ['', ['PVM tarifas neįkeltas - sumą įrašykite ranka']], 'be tarifo');
@@ -1425,6 +1435,355 @@ async function paleisk() {
       KW.resetForm();
       lygu([KD.getElementById('verte-be-pvm').value, KD.getElementById('gpk-sel').value, KW.KORTELE.pasirinkta()], ['', '', null], 'išvalyta forma - be kortelės');
     } finally { f.remove(); APS.atkurk(); }
+  });
+
+  /* ---------------- NAUJO DARBUOTOJO PATIKRA 2026-10-26 ---------------- */
+  grupe('Naujo darbuotojo patikra 2026-10-26 (K1-K6, D1-D10, V, M)');
+
+  /* Word paketas: { failai, pazyma (tekstas), xml, notif: { vardas: tekstas } } - saveAs perimamas. */
+  async function wordPaketas() {
+    if (!W.docx || !W.JSZip) throw new Error('docx/JSZip biblioteka nepasikrovė');
+    const orig = W.saveAs; const pagauta = [];
+    W.saveAs = (b, n) => pagauta.push({ b, n });
+    try { await W.buildDocx(W.gatherFormData()); } finally { W.saveAs = orig; }
+    tiesa(pagauta.length === 1, 'atsisiųstų failų: ' + pagauta.length);
+    const NSW = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const tekstas = (xml) => {
+      const dp = new DOMParser().parseFromString(xml, 'application/xml');
+      return Array.from(dp.getElementsByTagNameNS(NSW, 'p')).map(p => Array.from(p.getElementsByTagNameNS(NSW, 't')).map(t => t.textContent).join('')).join('\n');
+    };
+    const out = { vardas: pagauta[0].n, failai: [], notif: {}, xml: '', pazyma: '', antraste: null };
+    const zip = await W.JSZip.loadAsync(pagauta[0].b);
+    const docx = /\.zip$/.test(pagauta[0].n) ? null : zip;
+    const imk = async (z) => ({ xml: await z.file('word/document.xml').async('string'), z });
+    if (docx) { const p = await imk(docx); out.xml = p.xml; out.pazyma = tekstas(p.xml); out.zip = docx; out.failai = [pagauta[0].n]; return out; }
+    out.failai = Object.keys(zip.files);
+    for (const n of out.failai) {
+      const z = await W.JSZip.loadAsync(await zip.file(n).async('blob'));
+      const p = await imk(z);
+      if (/^.*Pažyma/.test(n) || /Pirkimo_pazyma/.test(n)) { out.xml = p.xml; out.pazyma = tekstas(p.xml); out.zip = z; }
+      else out.notif[n] = { tekstas: tekstas(p.xml), xml: p.xml };
+    }
+    return out;
+  }
+  const rastas = (pak, re) => Object.keys(pak.notif).find(n => re.test(n));
+
+  await testas('K1: galimo laimėtojo vertinimas neįrašytas - sakinio „neturi pašalinimo pagrindų ir atitinka ...“ nėra, prieš generuojant pasakoma; įrašius „Atitinka“ - yra', () => {
+    svariForma(2);
+    paruoskBeDaliu([['UAB Pirmas', 35000, 'Atitinka'], ['UAB Antras', 36000, 'Atitinka']]);
+    scenarijus('sutartis');
+    let d = W.gatherFormData();
+    let spr = W.generateSprendimai(d).join('\n');
+    neturi(spr, 'neturi pašalinimo pagrindų', 'neįvertinus');
+    tiesa(W.patikraPriesGeneruojant(d).some(x => /Galimo laimėtojo UAB Pirmas .*vertinimas neįrašytas/.test(x)), 'patikra: ' + W.patikraPriesGeneruojant(d).join(' | '));
+    nustatykKvalif('', 0, 'vertinimas', 'Atitinka');
+    d = W.gatherFormData();
+    spr = W.generateSprendimai(d).join('\n');
+    turi(spr, 'Pripažinti, kad UAB Pirmas neturi pašalinimo pagrindų ir atitinka Pirkimo sąlygose nustatytus kvalifikacijos ir (ar) kitus reikalavimus.', 'įvertinus');
+    tiesa(!W.patikraPriesGeneruojant(d).some(x => /vertinimas neįrašytas/.test(x)), 'įvertinus - patikros pastabos nebėra');
+    nustatykKvalif('', 0, 'vertinimas', 'Netaikomi');
+    neturi(W.generateSprendimai(W.gatherFormData()).join('\n'), 'neturi pašalinimo pagrindų', '„Netaikomi“ - ne patvirtinimas');
+  });
+
+  await testas('K2: lėšų atitiktis nepasirenkama pati; pasirinkimas, prieštaraujantis sumoms, pasakomas ekrane ir prieš generuojant', () => {
+    svariForma(1);
+    paruoskBeDaliu([['UAB Kėdės', 7000, 'Atitinka']]);
+    scenarijus('sutartis');
+    ivesk('lesosBePvm', '6000');
+    lygu(laukas('lesuAtitiktis').value, '', 'nepasirinkta');
+    lygu(W.lesuSakinys(W.gatherFormData().fields), 'Pirkimui skirtos lėšos: 6 000,00 Eur be PVM (Aprašo 10 p.).', 'pažymoje - tik faktas');
+    tiesa(W.patikraPriesGeneruojant(W.gatherFormData()).some(x => /Nepasirinkta, ar kaina neviršija/.test(x)), 'patikra - nepasirinkta');
+    ivesk('lesuAtitiktis', 'neviršija');
+    const isp = D.getElementById('lesu-ispejimas');
+    turi(isp.textContent, 'Pasirinkta „Neviršija skirtų lėšų“, bet kaina viršija lėšas', 'ekrane');
+    tiesa(W.patikraPriesGeneruojant(W.gatherFormData()).some(x => /^Lėšos: Pasirinkta „Neviršija/.test(x)), 'patikra - prieštarauja');
+    ivesk('lesuAtitiktis', 'viršija-didinta');
+    ivesk('lesosBePvm', '8000');
+    turi(D.getElementById('lesu-ispejimas').textContent, 'Pasirinkta, kad kaina viršija lėšas, bet sumos rodo, kad neviršija', 'padidinus lėšas');
+    lygu(laukas('lesuAtitiktis').value, 'viršija-didinta', 'žmogaus pasirinkimas nekeičiamas');
+    turi(D.querySelector('#lesu-atitiktis').closest('.field').textContent, 'PĮ 58 str. 1 d. 5 p.', 'užuomina - registro nuoroda');
+  });
+
+  await testas('K3: vienas tiekėjas - laimėtojas ir sutarties kaina užpildomi, sprendimai be alternatyvų, raštas - laimėtojui', () => {
+    svariForma(1);
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa raštu');
+    paruoskBeDaliu([['UAB Vienintelis', 12000, 'Atitinka']]);
+    scenarijus('vienas-tiekejas');
+    lygu([laukas('laimetojas').value, D.getElementById('sutarties-be-pvm').value], ['UAB Vienintelis', '12000'], 'laimėtojas ir kaina');
+    let d = W.gatherFormData();
+    let spr = W.generateSprendimai(d).join('\n');
+    turi(spr, 'Pripažinti UAB Vienintelis pasiūlymą laimėjusiu', 'sprendimai');
+    turi(spr, 'Atsižvelgiant į tai, kad pasiūlymą pateikė tik vienas tiekėjas, pasiūlymų eilė nesudaroma (Aprašo 30.17 p.).', 'priežastis');
+    neturi(spr, ' / ', 'be neišspręstų alternatyvų');
+    neturi(spr, '<Tiekėjo pavadinimas>', 'be žymos');
+    lygu(W.generateNotificationList(d).map(n => n.type), ['winner'], 'raštas');
+    // Laukas išvalytas (pvz. senas juodraštis) - laimėtojas vis tiek iš atitinkančių pasiūlymų
+    ivesk('laimetojas', '');
+    const dTuscias = W.gatherFormData();
+    lygu([W.laimetojasIsData(dTuscias), W.generateNotificationList(dTuscias).map(n => n.type)], ['UAB Vienintelis', ['winner']], 'be lauko');
+    ivesk('kviestaSkaicius', '1');
+    turi(W.generateSprendimai(W.gatherFormData()).join('\n'), 'pasiūlymą pateikti buvo kviečiamas tik vienas tiekėjas', 'kviestas vienas');
+    // Liko vienas: kitas atmestas
+    svariForma(1);
+    paruoskBeDaliu([['UAB Likęs', 9000, 'Atitinka'], ['UAB Atmestas', 8000, 'Neatitinka', 'Neatitinka TS']]);
+    ivesk('atmetimoPagrindas', 'Aprašo 31.3 p.');
+    scenarijus('vienas-tiekejas');
+    d = W.gatherFormData();
+    spr = W.generateSprendimai(d).join('\n');
+    turi(spr, 'įvertinus pasiūlymus liko tik vienas tiekėjas', 'liko vienas');
+    turi(spr, 'vadovaujantis Aprašo 31.3 p., atmesti toliau nurodyto (-ų) tiekėjo (-ų) pasiūlymą (-us): UAB Atmestas', 'atmetimas fiksuojamas');
+    lygu(W.generateNotificationList(d).map(n => n.recipient + ':' + n.type).sort(), ['UAB Atmestas:rejected', 'UAB Likęs:winner'], 'raštai');
+  });
+
+  await testas('K4: ne PVM mokėtojo kaina - abi sumos ranka nebeperskaičiuojamos; nesutampančios - patikra', () => {
+    svariForma(1);
+    paruoskBeDaliu([['MB Ne PVM', 7500, 'Atitinka']]);
+    const tr = pasiulymuLentele().children[0];
+    lygu(laukas('kainaSuPvm', tr).value, '9075.00', 'automatinis su PVM');
+    ivesk('kainaSuPvm', '7500', tr);
+    lygu([laukas('kainaBePvm', tr).value, laukas('kainaSuPvm', tr).value], ['7500', '7500'], 'abi ranka - lygios');
+    tiesa(!W.patikraPriesGeneruojant(W.gatherFormData()).some(x => /MB Ne PVM: kaina be PVM/.test(x)), 'lygios sumos - be pastabos');
+    ivesk('kainaSuPvm', '8000', tr);
+    tiesa(W.patikraPriesGeneruojant(W.gatherFormData()).some(x => /MB Ne PVM: kaina be PVM \(7 500,00\) ir su PVM \(8 000,00\) nesutampa/.test(x)), 'nesutampa - pastaba');
+    // programinis kvietimas lauko ranka įrašytu nežymi
+    W.selectForm(2);
+    const be = D.getElementById('verte-be-pvm'); be.value = '1000'; W.calcPvm(be, { auto: true });
+    lygu(be.dataset.ranka, undefined, 'programinis - ne ranka');
+    ivesk('verteSuPvm', '1210');
+    lygu(be.value, '1000.00', 'automatinis laukas perskaičiuojamas');
+  });
+
+  await testas('K5: neatsakyti CPO, nacionalinio saugumo, derybų ir sutarties formos klausimai - pažymoje tušti, ne teiginiai; patikra juos išvardija', () => {
+    for (const forma of [1, 2]) {
+      W.selectForm(forma);
+      ivesk('pirkimoPavadinimas', 'TUŠČIA');
+      const d = W.gatherFormData();
+      lygu(laukas('cpoBusena').value, '', forma + ' priedas: CPO');
+      lygu(W.cpoSakinys(d.fields), 'CPO katalogas: ____ (nenurodyta, ar pirkimo objektas yra CPO kataloge).', forma + ' priedas: CPO sakinys');
+      lygu(D.querySelector('input[name="natSaug"]:checked'), null, forma + ' priedas: nacionalinis saugumas');
+      const p = W.patikraPriesGeneruojant(d).join('\n');
+      ['CPO kataloge', 'nacionalinio saugumo', 'pirkimo būdas', 'kaip pirkimas atliekamas', 'eigos scenarijus', 'nepažymėta, kas tikrinama'].forEach(x => turi(p.toLowerCase(), x.toLowerCase(), forma + ' priedas: patikra'));
+      if (forma === 2) { lygu(D.querySelector('input[name="derybos"]:checked'), null, 'derybos'); turi(p, 'ar vykdomos derybos', 'patikra'); }
+      else { lygu(D.querySelector('input[name="sutartisRastu"]:checked'), null, 'sutarties forma'); turi(p, 'žodžiu, ar raštu', 'patikra'); }
+      const pr = W.buildPreviewHtml(d);
+      turi(pr, '☐ Taip ☐ Ne', forma + ' priedas: peržiūra');
+      neturi(pr, 'nėra įtrauktas į CPO katalogą', forma + ' priedas: peržiūra');
+    }
+    tiesa(D.querySelector('input[name="derybos"][value="Nevykdomos"]') && W.taipNeZymes('Ne') === '☐ Taip ☒ Ne' && W.taipNeZymes('') === '☐ Taip ☐ Ne', 'langeliai');
+  });
+
+  await testas('K6, D4, D9, V7: raštai - „priimti sprendimai“, atmetimo pagrindas, eilė atmestam, pretenzija pagal registrą', () => {
+    svariForma(2);
+    ivesk('pirkimoBudas', 'Skelbiama apklausa');
+    paruoskBeDaliu([['UAB Laimi', 30000, 'Atitinka'], ['UAB Antras', 31000, 'Atitinka'], ['UAB Atmestas', 29000, 'Neatitinka', 'Netinka']]);
+    ivesk('atmetimoPagrindas', 'Pirkimo sąlygų 5.3 p.');
+    scenarijus('sutartis');
+    nustatykKvalif('', 0, 'vertinimas', 'Atitinka');
+    const d = W.gatherFormData();
+    const visi = W.generateNotificationList(d).map(n => ({ n, t: laiskoEilutes(d, n).join('\n') }));
+    visi.forEach(({ n, t }) => {
+      neturi(t, 'procedūros baigtos', n.type);
+      turi(t, 'informuojame apie pirkimo „TESTAS“ (toliau - Pirkimas) metu priimtus sprendimus', n.type);
+      turi(t, 'vadovaujantis Pirkimų įstatymo ' + W.teise('pretenzija_pirmiausia', 'inag') + ', norėdami ginčyti', n.type);
+      neturi(t, '109', n.type);
+      neturi(t, '–', n.type + ' (oficialus dokumentas - be U+2013)');
+    });
+    lygu(W.teise('pretenzija_pirmiausia', 'inag'), '107 straipsnio 3 dalimi', 'registras');
+    const atm = visi.find(x => x.n.recipient === 'UAB Atmestas').t;
+    turi(atm, 'Vadovaujantis Pirkimo sąlygų 5.3 p., Jūsų pateiktas pasiūlymas atmestas.', 'atmetimo pagrindas');
+    turi(atm, 'Nustatyta pasiūlymų eilė ekonominio naudingumo mažėjimo tvarka:', 'eilė atmestam (V7)');
+    turi(atm, '4. Laimėjusiu pripažintas UAB Laimi pasiūlymas.', 'numeracija');
+    // visi atmesti ir nutraukta - procedūrų pabaiga su registro numeriu
+    scenarijus('atmesta');
+    const d2 = W.gatherFormData();
+    const n2 = W.generateNotificationList(d2)[0];
+    turi(laiskoEilutes(d2, n2).join('\n'), 'Pirkimas baigtas nesudarant sutarties (Pirkimų įstatymo 41 straipsnio 2 dalies 2 punktas).', 'visi atmesti');
+    scenarijus('nutraukta');
+    ivesk('nutraukimoPriezastis', 'Pasikeitė poreikis.');
+    const d3 = W.gatherFormData();
+    const t3 = laiskoEilutes(d3, W.generateNotificationList(d3)[0]).join('\n');
+    turi(t3, 'Nutraukimo priežastys: Pasikeitė poreikis.', 'priežastis - be dvigubo taško');
+    turi(t3, 'Vadovaujantis Pirkimų įstatymo 41 straipsnio 2 dalies 3 punktu, Pirkimas laikomas pasibaigusiu.', 'nutraukta');
+    const s3 = W.generateSprendimai(d3).join('\n');
+    turi(s3, 'Vadovaujantis Aprašo 8 punktu, nutraukti Pirkimo procedūras. Nutraukimo priežastys: Pasikeitė poreikis.', 'M6');
+    turi(s3, 'įstatymo 41 straipsnio 2 dalies 3 punkto nuostatomis', 'pažyma');
+  });
+
+  await testas('D1, M1: mažos vertės pirkimo riba iš shared/thresholds.js', () => {
+    const isp = () => { const w = D.getElementById('value-warning'); return w.style.display === 'none' ? '' : w.textContent; };
+    W.selectForm(2);
+    ivesk('verteBePvm', '69999.99'); lygu(isp(), '', 'mažiau už prekių ribą');
+    ivesk('verteBePvm', '70000'); turi(isp(), 'prekių ir paslaugų mažos vertės pirkimo ribą (70 000,00 Eur)', 'lygi prekių ribai');
+    ivesk('verteBePvm', '250000'); turi(isp(), 'ir darbams (174 000,00 Eur)', 'virš darbų ribos');
+    tiesa(W.patikraPriesGeneruojant(W.gatherFormData()).some(x => /ne mažos vertės pirkimas/.test(x)), 'patikroje');
+  });
+
+  await testas('D2: prieš generuojant - sąrašas ir klausimas; atsisakius negeneruojama; raštų nėra - pasakoma kodėl', async () => {
+    svariForma(2);
+    const buvo = { c: W.confirm, b: W.buildDocx };
+    let klausta = '', kviesta = 0;
+    W.confirm = (m) => { klausta = m; return false; };
+    W.buildDocx = () => { kviesta++; };
+    try {
+      W.generateDocx();
+      await laukti(100);
+      turi(klausta, 'Prieš generuojant patikrinkite', 'klausimas');
+      turi(klausta, 'Nepasirinktas pirkimo būdas', 'sąrašas');
+      lygu(kviesta, 0, 'atsisakius - negeneruojama');
+    } finally { W.confirm = buvo.c; W.buildDocx = buvo.b; }
+    lygu(W.pranesimuPriezastis(W.gatherFormData()).slice(0, 25), 'nepažymėta, kaip pirkimas', 'be „Pirkimas atliekamas“');
+    W.selectForm(1);
+    zymek('sutartisRastu', 'Žodžiu');
+    zymek('atliekamas', 'El. paštu');
+    turi(W.pranesimuPriezastis(W.gatherFormData()), 'sutartis sudaroma žodžiu (Aprašo 30.20 ir 31.9 p.)', 'sutartis žodžiu');
+    zymek('atliekamas', 'Žodžiu');
+    turi(W.pranesimuPriezastis(W.gatherFormData()), 'pirkimas atliekamas žodžiu', 'pirkimas žodžiu');
+    zymek('atliekamas', 'El. paštu');
+    if (W.docx) {
+      ivesk('pirkimoPavadinimas', 'Žodžiu sudaroma'); ivesk('pirkimoBudas', 'Neskelbiama apklausa raštu');
+      zymek('sutartisRastu', 'Žodžiu');
+      paruoskBeDaliu([['UAB A', 900, 'Atitinka']]); scenarijus('sutartis');
+      await wordPaketas();
+      const j = D.querySelector('#gpb-juostos [data-gpb-raktas="paketas"]');
+      tiesa(j && /Pranešimai tiekėjams nesukurti: sutartis sudaroma žodžiu/.test(j.textContent), 'juosta: ' + (j && j.textContent));
+      W.GP_BUSENA.juostaSlepk('paketas');
+    }
+  });
+
+  await testas('D3: neskelbiamos apklausos pagrindas - siūlomas, ne pasirenkamas; „Pasirinkti 29.1“ - žmogaus veiksmas', () => {
+    W.selectForm(1);
+    ivesk('verteBePvm', '8000');
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa raštu');
+    lygu(laukas('aprasoPagrindas').value, '', 'nepasirinkta');
+    const s = D.getElementById('apraso-siulymas');
+    turi(s.textContent, 'Siūloma (nepatvirtinta): 29.1', 'siūlymas');
+    s.querySelector('button').click();
+    lygu(laukas('aprasoPagrindas').value, '29.1', 'pasirinkta paspaudus');
+    lygu(s.textContent, '', 'siūlymo nebėra');
+    lygu(D.activeElement && D.activeElement.id, 'apraso-pagrindas', 'fokusas');
+  });
+
+  await testas('D5: skaidomame pirkime - dalies pasiūlymų eilė; dalis be kandidatų - be tuščio galimo laimėtojo bloko', async () => {
+    svariForma(2);
+    paruoskDalis([{ pav: 'Tvora A', be: 20000, su: 24200 }, { pav: 'Tvora B', be: 10000, su: 12100 }],
+      { 'Tvora A': [['UAB Pigi', 9000, 'Atitinka'], ['UAB Brangi', 9500, 'Atitinka']], 'Tvora B': [['UAB Bloga', 5000, 'Neatitinka', 'Netinka']] });
+    scenarijus('sutartis');
+    nustatykKvalif('Tvora A', 0, 'vertinimas', 'Atitinka');
+    const spr = W.generateSprendimai(W.gatherFormData()).join('\n');
+    turi(spr, 'Nustatyti šios pirkimo objekto dalies pasiūlymų eilę ekonominio naudingumo mažėjimo tvarka: 1. UAB Pigi - 9 000,00 Eur be PVM; 2. UAB Brangi - 9 500,00 Eur be PVM.', 'dalies eilė');
+    if (W.docx) {
+      ivesk('pirkimoBudas', 'Skelbiama apklausa');
+      const pak = await wordPaketas();
+      neturi(pak.pazyma, '1 eilėje: ____', 'tuščias galimo laimėtojo blokas');
+      turi(pak.pazyma, '1 eilėje: UAB Pigi', 'A dalies grandinė');
+    }
+  });
+
+  await testas('D6: dalies pavadinimas su kabutėmis - mygtukas veikia, atributas neįterpiamas', () => {
+    svariForma(2);
+    paruoskDalis([{ pav: 'Pastotė "Alytus"', be: 20000, su: 24200 }, { pav: 'x" onmouseover="window.__XSS=1" data-a="', be: 1000, su: 1210 }], {});
+    const mygt = Array.from(D.querySelectorAll('#pasiulymai-block .dalis-subblock .add-row-btn'));
+    tiesa(mygt.length === 2 && mygt.every(b => !b.hasAttribute('onmouseover') && !b.hasAttribute('data-a')), 'atributai: ' + mygt.map(b => b.outerHTML).join(' '));
+    const pries = pasiulymuLentele('Pastotė "Alytus"').children.length;
+    mygt[0].click();
+    lygu(pasiulymuLentele('Pastotė "Alytus"').children.length, pries + 1, 'eilutė pridėta');
+    mygt[1].dispatchEvent(new W.MouseEvent('mouseover', { bubbles: true }));
+    lygu(W.__XSS, undefined, 'kodas neįvykdytas');
+  });
+
+  await testas('D7: kviestų skaičius be numatytojo; mažesnis už pasiūlymų - įspėjimas', () => {
+    svariForma(1);
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa raštu');
+    lygu(laukas('kviestaSkaicius').value, '', 'tuščia');
+    paruoskBeDaliu([['UAB A', 900, 'Atitinka'], ['UAB B', 950, 'Atitinka']]);
+    ivesk('kviestaSkaicius', '1');
+    const isp = D.getElementById('kviesta-ispejimas');
+    tiesa(isp.style.display !== 'none' && /kviesta 1, bet lentelėje - 2/.test(isp.textContent), isp.textContent);
+    ivesk('kviestaSkaicius', '3');
+    lygu(isp.style.display, 'none', 'pataisius');
+  });
+
+  await testas('D8: apklausa žodžiu su nacionalinio saugumo aplinkybe virš 5 000 Eur - įspėjimas (Aprašo 27.2.3 p.)', () => {
+    W.selectForm(1);
+    ivesk('verteBePvm', '10000');
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa žodžiu');
+    zymek('natSaug', 'Taip');
+    turi(D.getElementById('atliekamas-hint').textContent, 'atliekama raštu el. paštu (Aprašo 27.2.3 p.)', 'įspėjimas');
+    tiesa(W.patikraPriesGeneruojant(W.gatherFormData()).some(x => /27\.2\.3/.test(x)), 'patikroje');
+    zymek('natSaug', 'Ne');
+    turi(D.getElementById('atliekamas-hint').textContent, 'Parinkta automatiškai: neskelbiama apklausa žodžiu', 'be aplinkybės');
+  });
+
+  await testas('D10: scenarijus prieštarauja lentelei - įspėjimas po scenarijumi ir patikroje', () => {
+    svariForma(1);
+    paruoskBeDaliu([['UAB A', 900, 'Atitinka'], ['UAB B', 950, 'Atitinka']]);
+    scenarijus('atmesta');
+    const isp = D.getElementById('scenarijaus-ispejimas');
+    tiesa(isp.style.display !== 'none' && /2 pasiūlymai lentelėje pažymėti „Atitinka“/.test(isp.textContent), isp.textContent);
+    scenarijus('negauta');
+    turi(isp.textContent, 'lentelėje yra 2 pasiūlymai', 'negauta');
+    scenarijus('vienas-tiekejas');
+    turi(isp.textContent, 'reikalavimus atitinka 2', 'vienas');
+    scenarijus('sutartis');
+    lygu(isp.style.display, 'none', 'sutampa');
+  });
+
+  await testas('V1, M2: straipsnių numerių modulyje nėra - tik registras; nacionalinio saugumo dokumentų stulpelis su PĮ ir VPĮ', async () => {
+    const src = await (await W.fetch('PP-report.html?b=' + Date.now())).text();
+    tiesa(src.includes('<script src="../shared/teises-nuorodos.js"><\/script>'), 'registras prijungtas');
+    tiesa(!/Įstatymo \d+ str\.|\d+ str\. \d+d\./.test(src), 'liko įrašytų numerių');
+    W.selectForm(1);
+    zymek('natSaug', 'Taip');
+    turi(D.getElementById('natsaug-table').textContent, '(PĮ 52 str. 3 d.; VPĮ 51 str. 12 d.)', 'stulpelis');
+  });
+
+  await testas('V3, V10, V11, M4, M9, V4: Word - Aprašo pavadinimas ir redakcija, rikiuota lentelė, 5 skyrius, failų vardai, tabuliacija, MONO logotipas', async () => {
+    if (!W.docx) throw new Error('docx biblioteka nepasikrovė');
+    svariForma(1);
+    ivesk('docNr', 'P-7');
+    ivesk('pirkimoBudas', 'Neskelbiama apklausa raštu');
+    paruoskBeDaliu([['UAB Brangesnis', 3600, 'Atitinka'], ['UAB Pigiausias', 3300, 'Atitinka'], ['UAB Vidutinis', 3500, 'Atitinka']]);
+    zymek('atliekamas', 'El. paštu'); zymek('sutartisRastu', 'Raštu');
+    scenarijus('sutartis');
+    const pak = await wordPaketas();
+    turi(pak.vardas, 'P-7_Pažyma-ir-pranešimai_TESTAS', 'ZIP vardas');
+    tiesa(pak.failai.some(n => /^P-7_Pažyma_TESTAS_.*\.docx$/.test(n)) && pak.failai.some(n => /^P-7_Pranešimas-laimėtojui_UAB_Pigiausias/.test(n)), 'failai: ' + pak.failai.join(', '));
+    turi(pak.pazyma, 'LITGRID AB mažos vertės pirkimų vykdymo tvarkos aprašo (aktuali redakcija kreipimosi į tiekėjus dieną)', 'Aprašas');
+    const i1 = pak.pazyma.indexOf('UAB Pigiausias'), i2 = pak.pazyma.indexOf('UAB Vidutinis'), i3 = pak.pazyma.indexOf('UAB Brangesnis');
+    tiesa(i1 > 0 && i1 < i2 && i2 < i3, 'lentelė - kainos didėjimo tvarka');
+    turi(pak.pazyma, '5. KITA INFORMACIJA\nNėra.', '5 skyrius');
+    tiesa(/<w:tab\/>/.test(pak.xml) && !/<w:t[^>]*>\t/.test(pak.xml), 'tabuliacija - w:tab, ne TAB ženklas');
+    const laim = pak.notif[rastas(pak, /laimėtojui/)];
+    tiesa(laim && /DĖL PIRKIMO „TESTAS“ REZULTATŲ/.test(laim.tekstas), 'rašto antraštė');
+    const img = Object.keys(pak.zip.files).find(n => /^word\/media\/.+\.png$/.test(n));
+    tiesa(img, 'antraštėje nėra paveikslo');
+    const baitai = new Uint8Array(await pak.zip.file(img).async('arraybuffer'));
+    const mono = W.GP_LOGO.bytes();
+    tiesa(baitai.length === mono.length && baitai.every((b, i) => b === mono[i]), 'logotipas - ne MONO (' + baitai.length + ' / ' + mono.length + ')');
+    const src = await (await W.fetch('PP-report.html?b=' + Date.now())).text();
+    tiesa(!/LITGRID_LOGO_BASE64/.test(src) && src.includes('<script src="../shared/img/logo-data.js"><\/script>'), 'logotipo kopija liko');
+  });
+
+  await testas('V6: įspėjimas uždarant - GP_DARBAS prijungtas; atsisiuntus ar išsaugojus juodraštį - nėra ko prarasti', async () => {
+    const src = await (await W.fetch('PP-report.html?b=' + Date.now())).text();
+    tiesa(src.includes('<script src="../shared/neissaugotas-darbas.js"><\/script>') && !/beforeunload/.test(src), 'GP_DARBAS');
+    svariForma(2);
+    lygu(W.GP_DARBAS.pakeista(), false, 'ką tik atverta forma');
+  });
+
+  await testas('Juodraščių sąrašas: id ir forma iš saugyklos ekranuojami', () => {
+    const APS = GP_TESTU_APSAUGA.pradek(k => k === 'litgrid_pirkimo_drafts');
+    try {
+      const blogas = "x');window.__JD=1;('";
+      W.localStorage.setItem('litgrid_pirkimo_drafts', JSON.stringify({ [blogas]: { name: '<b>Juodraštis</b>', data: { formNum: '<img src=x onerror="window.__JD2=1">' }, savedAt: '2026-10-26T08:00:00Z' } }));
+      W.openDraftsList();
+      const li = D.querySelector('#drafts-list li');
+      tiesa(li && !li.querySelector('img') && !li.querySelector('b'), 'HTML iš saugyklos');
+      const b = li.querySelector('.btn-small');
+      tiesa(/loadDraft\("x'\);window.__JD=1;\('"\)/.test(b.getAttribute('onclick')), 'onclick: ' + b.getAttribute('onclick'));
+      lygu([W.__JD, W.__JD2], [undefined, undefined], 'kodas neįvykdytas');
+      W.closeModal('drafts-modal');
+    } finally { APS.atkurk(); }
   });
 
   /* ---------------- pabaiga ---------------- */
