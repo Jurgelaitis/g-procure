@@ -30,8 +30,10 @@ RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
 # Vienam rinkiniui - 900 s (2026-10-14): PP-salygos (315 testų) GitHub Actions trunka beveik 600 s ir viename paleidime ribą viršijo
 # (vietoje - ~190 s); užstrigusius rinkinius vis tiek nutraukia bendra riba VISO_LAIKAS
 # 1300 s (2026-10-20): PP-salygos (458 testai, vietoje ~380 s) GitHub Actions viršijo 900 s; visas darbas buvo ~1500 s iš 2400
-LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "1300"))
-VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2400"))
+# 1500 s (2026-10-26): privačios saugyklos vykdyklėje (2 branduoliai) PP-salygos dalis lygiagrečiai trunka iki ~1240 s
+LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "1500"))
+# 2580 s (2026-10-26): darbo riba - 45 min., paruošimas (checkout, Chrome) trunka ~10 s - lieka ~2 min. santraukai
+VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2580"))
 LYGIAGRECIAI = max(1, int(os.environ.get("GP_TESTU_LYGIAGRECIAI", "2" if os.environ.get("GITHUB_ACTIONS") == "true" else "1")))
 VIENI = {"PP-tiekejams/testai.html"}
 
@@ -202,6 +204,12 @@ def main():
     filtrai = sys.argv[1:]
     rinkiniai = [r for r in RINKINIAI if not filtrai or any(f in r for f in filtrai)]
     vienetai = [v for r in rinkiniai for v in dalys(r)]
+    # Lygiagrečiai - ilgiausi pirmi (2026-10-26): rinkinių su dalimis dalys (PP-salygos 3, shared 2) pradedamos iš karto, trumpi rinkiniai
+    # užpildo laisvą vykdyklę. Privačios saugyklos vykdyklėje (2 branduoliai) PP-salygos dalis trunka ~1200 s; anksčiau trečioji dalis
+    # pradėta po ~1700 s ir nespėdavo iki bendros ribos (954ea09 - du kartus iš eilės). Vietoje (po vieną) eilė nekinta.
+    if LYGIAGRECIAI > 1:
+        kiek = {r: len(dalys(r)) for r in rinkiniai}
+        vienetai.sort(key=lambda v: -kiek[v[0]])
     portas = laisvas_portas()
     srv = Serveris(("127.0.0.1", portas), Tylus)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
