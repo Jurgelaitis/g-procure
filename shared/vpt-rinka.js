@@ -11,7 +11,7 @@
  *     -> { rodyk(), isvalyk(), perpiesk(), vieta }   // užklausa - tik paspaudus mygtuką (ar rodyk()); perpiesk() - be užklausos
  *   GP_VPT_RINKA.pradzia(bvpz) - reikšminga BVPŽ kodo pradžia („45231000-5“ -> „45231“, „45000000-7“ -> „45“)
  *
- * TAISYKLĖS: į G-Procure serverį siunčiama tik BVPŽ kodo pradžia, objektas ir data (GP_VPT.statistika); jei panašių pirkimų
+ * TAISYKLĖS: į G-Procure serverį siunčiama tik BVPŽ kodo pradžia, objektas (jei modulis jį perduoda) ir data (GP_VPT.statistika); jei panašių pirkimų
  * mažiau kaip 20 - grupė praplečiama (kodo pradžia trumpinama iki 2 skaitmenų) ir tai pasakoma; kvantiliai - tik nuo 5 reikšmių
  * (serveris); ryšys ar neįkeltas sąrašas - klaida su „Bandyti dar kartą“, niekada „pirkimų nėra“. Tai faktai, ne teisės normos:
  * trumpiausius terminus nustato įstatymas (shared/taisykles.js). Visi tekstai - per textContent. Nieko nesaugo.
@@ -25,7 +25,7 @@
   var T = {
     lt: {
       mygtukas: "Rodyti rinkos duomenis (CVP IS)", siauriau: "Siauresnė BVPŽ grupė", placiau: "Platesnė BVPŽ grupė",
-      pag: "Pagal BVPŽ kodą - panašūs CVP IS pirkimai per {m} mėn. iš viešų VPT duomenų (atnaujinami kas 6 val.). Į G-Procure serverį siunčiama tik BVPŽ kodo pradžia ir objektas.",
+      pag: "Pagal BVPŽ kodą - panašūs CVP IS pirkimai per {m} mėn. iš viešų VPT duomenų (atnaujinami kas 6 val.). Į G-Procure serverį siunčiama tik BVPŽ kodo pradžia, objektas (jei nurodytas) ir laikotarpio pradžios data.",
       beBvpz: "Įrašykite BVPŽ kodą (pvz. 45231000-5) - pagal jį ieškosime panašių pirkimų.", kraunama: "Gaunami rinkos duomenys iš VPT CVP IS...",
       nepavyko: "Rinkos duomenų gauti nepavyko", rysys: "G-Procure serveris neatsakė arba VPT sąrašas dar neįkeltas - bandykite vėliau.",
       nera: "Panašių pirkimų pagal BVPŽ {k} VPT duomenyse per {m} mėn. nėra (sąrašas atnaujintas {t}).",
@@ -49,7 +49,7 @@
     },
     en: {
       mygtukas: "Show market data (CVP IS)", siauriau: "Narrower CPV group", placiau: "Wider CPV group",
-      pag: "By CPV code - similar CVP IS procurements over {m} months from public VPT data (refreshed every 6 hours). Only the start of the CPV code and the subject are sent to the G-Procure server.",
+      pag: "By CPV code - similar CVP IS procurements over {m} months from public VPT data (refreshed every 6 hours). Only the start of the CPV code, the subject (if given) and the start date of the period are sent to the G-Procure server.",
       beBvpz: "Enter a CPV code (e.g. 45231000-5) - we will look for similar procurements by it.", kraunama: "Fetching market data from VPT CVP IS...",
       nepavyko: "Could not get the market data", rysys: "The G-Procure server did not respond or the VPT list is not loaded yet - try again later.",
       nera: "There are no similar procurements by CPV {k} in the VPT data over {m} months (list updated {t}).",
