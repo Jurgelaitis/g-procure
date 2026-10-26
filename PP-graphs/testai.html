@@ -55,12 +55,15 @@ async function testas(pav, fn){
 function tiesa(s, ka){ if (!s) throw new Error(ka || "sąlyga netenkinama"); }
 function lygu(g, t, ka){ if (JSON.stringify(g) !== JSON.stringify(t)) throw new Error((ka || "reikšmė") + "\n  tikėtasi: " + JSON.stringify(t) + "\n  gauta:    " + JSON.stringify(g)); }
 
-/* Modulis rėmelyje. `const`/`let` (state, els, METHODS) nėra window savybės - jiems W.eval(). */
+/* Modulis rėmelyje. `const`/`let` (state, els, METHODS) nėra window savybės - jiems W.eval().
+   Naršyklės dialogai rėmelyje sustabdytų visą rinkinį (paleidiklis jų neuždaro), todėl confirm / alert pakeičiami: užrašomi
+   (w.__dialogai) ir confirm atsakomas „Atšaukti“; testas, kuriam reikia „Gerai“, pakeičia confirm pats. */
+function dialogai(w){ w.__dialogai = []; w.confirm = m => { w.__dialogai.push(String(m)); return false; }; w.alert = m => { w.__dialogai.push(String(m)); }; }
 let W = null, D = null;
 function modulis(){
   return new Promise(res => {
     const f = document.createElement("iframe");
-    f.addEventListener("load", () => { W = f.contentWindow; D = f.contentDocument; res(); }, { once: true });
+    f.addEventListener("load", () => { W = f.contentWindow; D = f.contentDocument; dialogai(W); res(); }, { once: true });
     f.src = "Litgrid_Pirkimu_grafiku_generatorius.html?cb=" + Date.now();
     document.body.appendChild(f);
   });
@@ -135,15 +138,15 @@ async function testaiGeneratorius(){
 
 async function testaiSkaiciuokle(){
   grupe("Trukmių skaičiuoklė");
-  await testas("Visa trukmė: sutarties data = inicijavimas + (paruošimas + vykdymas) darbo dienų; atgalinė - grąžina tą pačią inicijavimo datą", async () => {
+  await testas("Visa trukmė: nuo inicijavimo dienos (įskaitant) iki sutarties - paruošimas + vykdymas darbo dienų, kaip generatoriuje; atgalinė - grąžina tą pačią inicijavimo datą", async () => {
     W.switchView("calculator");
     const m = W.eval("CALC_METHODS.find(x => METHODS[x.code])");
     nustatyk("c1-method", m.code);
     nustatyk("c1-init", "2026-10-05");
     const sutartis = (D.getElementById("c1-t-end").textContent.match(/\d{4}-\d{2}-\d{2}/) || [])[0];
     tiesa(sutartis, "sutarties data neparodyta: " + D.getElementById("c1-t-end").textContent);
-    const nuo = new Date(2026, 9, 6), iki = new Date(sutartis + "T00:00:00");
-    lygu(darboDienuImtinai(nuo, iki), m.prep + m.exec, "darbo dienų po inicijavimo iki sutarties");
+    const nuo = new Date(2026, 9, 5), iki = new Date(sutartis + "T00:00:00");
+    lygu(darboDienuImtinai(nuo, iki), m.prep + m.exec, "darbo dienų nuo inicijavimo (įskaitant) iki sutarties");
     tiesa(dd(iki), "sutarties data - ne darbo diena");
     nustatyk("c2-method", m.code);
     nustatyk("c2-contract", sutartis);
@@ -165,7 +168,7 @@ async function testaiSkaiciuokle(){
 function modulisSuKortele(){
   return new Promise(res => {
     const f = document.createElement("iframe");
-    f.addEventListener("load", () => res({ f: f, W: f.contentWindow, D: f.contentDocument }), { once: true });
+    f.addEventListener("load", () => { dialogai(f.contentWindow); res({ f: f, W: f.contentWindow, D: f.contentDocument }); }, { once: true });
     f.src = "Litgrid_Pirkimu_grafiku_generatorius.html?saugykla=testine&cb=" + Date.now();
     document.body.appendChild(f);
   });
@@ -294,7 +297,8 @@ async function testaiRinka(){
       set("f-pradzia", "");
       tiesa(/„Pasiūlymų gavimas“ - 15 d\. d\. \(kalendorines dienas matysite įrašę pradžios datą\)/.test(vieta.querySelector(".gpvr-mano").textContent), vieta.querySelector(".gpvr-mano").textContent);
       // Kitas būdas: tarptautinis atviras - kitas eilutės žymėjimas
-      set("f-budas", "T-AK"); w.onMethodChange(); set("f-pradzia", "2026-11-02");
+      w.confirm = m => { w.__dialogai.push(m); return true; };      // grafikas pakeistas - keičiant būdą paklausiama
+      set("f-budas", "T-AK"); tiesa(/Pakeitus pirkimo būdą/.test(w.__dialogai.slice(-1)[0] || ""), "būdo keitimas pakeistame grafike paklausė"); set("f-pradzia", "2026-11-02");
       tiesa(/Atviras konkursas - tarptautinis/.test(vieta.querySelector("tr.gpvr-jusu").textContent) && /Panašių CVP IS pirkimų, vykdytų jūsų būdu, mediana - 35 kal\. d\./.test(vieta.querySelector(".gpvr-mano").textContent), vieta.querySelector(".gpvr-mano").textContent);
       // Įmonės įstatymas - derybų eilutė: EPSO-G (VPĮ) ir LITGRID (PĮ)
       const derybos = rinkosStat(40); derybos.terminai = [{ budas: "Negotiated with prior call for competition", tarptautinis: true, n: 20, p10: 30, p25: 40, mediana: 55, p75: 70, p90: 90 },
@@ -320,7 +324,7 @@ async function testaiRinka(){
       const kd = (a, b) => Math.round((b - a) / 864e5);
       set("f-budas", "MV-NR"); w.onMethodChange();
       let s = w.computeSchedule(), g = s.find(x => /gavimas/.test(x.group.name));
-      lygu(w.pasiulymuLaikotarpis(), { pavadinimas: "Skelbimas apie pirkimą ir pasiūlymų gavimas", dd: 7, kd: kd(g.start, g.end) });
+      lygu(w.pasiulymuLaikotarpis(), { pavadinimas: "Kvietimas pateikti pasiūlymus ir pasiūlymų gavimas", dd: 7, kd: kd(g.start, g.end) });
       set("f-budas", "S-ND"); w.onMethodChange();
       s = w.computeSchedule(); g = s.find(x => /gavimas/.test(x.group.name));
       lygu(w.pasiulymuLaikotarpis(), { pavadinimas: "Pirminių pasiūlymų gavimas", dd: 10, kd: kd(g.start, g.end) });
@@ -363,11 +367,11 @@ async function testaiEtapai(){
     nustatyk("f-company", "litgrid"); nustatyk("f-budas", b.kodas); W.onMethodChange(); nustatyk("f-pradzia", "2026-10-05"); W.refreshAll();
     lygu([W.isLegalViolation(b.code, b.min - 1), W.isLegalViolation(b.code, b.min)], [true, false], "pažeidimo riba");
     const trukme = '.duration-input[data-group="' + b.gi + '"]' + (b.si === null ? ':not([data-sub])' : '[data-sub="' + b.si + '"]');
-    ivesk(trukme, b.min - 1);
+    ivesk(trukme, b.min - 1, "change");
     const pastaba = () => W.eval("state").notes[b.code] || "";
     tiesa(/^⚠ PĮ NUKRYPIMAS/.test(pastaba()), "įspėjimas nepridėtas: " + pastaba().slice(0, 80));
     ivesk('.notes-input[data-note="' + b.code + '"]', pastaba() + "Mano pagrindimas");
-    ivesk(trukme, b.min);
+    ivesk(trukme, b.min, "change");
     lygu(pastaba(), "Mano pagrindimas", "pakėlus iki minimumo - lieka tik naudotojo tekstas");
   });
 
@@ -397,16 +401,15 @@ async function testaiEtapai(){
     } finally { W.confirm = tikras; }
   });
 
-  await testas("Skaičiuoklės: „tik vykdymas“ - sutartis = pradžia + vykdymas darbo dienų; atgalinė - pirkimo pradžia = sutartis - vykdymas darbo dienų", async () => {
+  await testas("Skaičiuoklės: „tik vykdymas“ - nuo pradžios (įskaitant) iki sutarties vykdymo darbo dienų; atgalinė - pirkimo pradžia tokia pati", async () => {
     W.switchView("calculator");
     const m = W.eval("CALC_METHODS.find(x => METHODS[x.code])"), data = sel => (D.getElementById(sel).textContent.match(/\d{4}-\d{2}-\d{2}/) || [])[0];
     nustatyk("c3-method", m.code); nustatyk("c3-start", "2026-10-05");
     const sut = data("c3-t-end"); tiesa(sut, "sutarties data neparodyta");
-    lygu(darboDienuImtinai(new Date(2026, 9, 6), new Date(sut + "T00:00:00")), m.exec, "vykdymo darbo dienos");
+    lygu(darboDienuImtinai(new Date(2026, 9, 5), new Date(sut + "T00:00:00")), m.exec, "vykdymo darbo dienos");
     nustatyk("c2-method", m.code); nustatyk("c2-contract", "2026-12-15");
     const pr = data("c2-t-mid"); tiesa(pr, "pirkimo pradžia neparodyta");
-    const nuo = new Date(pr + "T00:00:00"); nuo.setDate(nuo.getDate() + 1);
-    lygu(darboDienuImtinai(nuo, new Date(2026, 11, 15)), m.exec, "nuo pradžios iki sutarties darbo dienų");
+    lygu(darboDienuImtinai(new Date(pr + "T00:00:00"), new Date(2026, 11, 15)), m.exec, "nuo pradžios (įskaitant) iki sutarties darbo dienų");
   });
 
   await testas("„Išvalyti“: pavadinimas, iniciatorius, organizatorius, būdas ir įmonė tušti, grafikas paslėptas", async () => {
@@ -416,6 +419,258 @@ async function testaiEtapai(){
     try { W.resetForm(); } finally { W.confirm = tikras; }
     lygu(["f-pavadinimas", "f-iniciatorius", "f-organizatorius", "f-budas", "f-company"].map(id => (D.getElementById(id) || { value: "" }).value), ["", "", "", "", ""], "laukai");
     tiesa(D.getElementById("phases-empty").style.display === "block", "grafikas neišvalytas");
+  });
+}
+
+
+/* Naujo darbuotojo patikra (2026-10-26, gp-testuotojas: K1-K3, D1-D5, V1-V3, V6-V8, M1, M3, M5, M7-M10): atidėjimo terminas
+   supaprastintuose pirkimuose, sub-etapo pridėjimas, taikomas įstatymas pagal įmonę, įvedimas klaviatūra, skaičiuoklė = generatorius,
+   pradžios data, įstatymo etapų šalinimas, pakeitimų praradimas, spausdinimo patikros. Kiekvienas testas - savame rėmelyje. */
+async function rinkinys(budas, pradzia, imone){
+  const r = await modulisSuKortele();
+  const set = (id, v, iv) => { const e = r.D.getElementById(id); e.value = v; e.dispatchEvent(new r.W.Event(iv || "change", { bubbles: true })); };
+  if (imone !== null) set("f-company", imone || "litgrid");
+  if (budas) set("f-budas", budas);
+  if (pradzia) set("f-pradzia", pradzia);
+  r.set = set;
+  r.st = () => r.W.eval("state");
+  r.sub = (grupe, sub) => { const s = r.W.computeSchedule().find(x => x.group.code === grupe); return sub ? s.subResults.find(x => x.phase.code === sub) : s; };
+  return r;
+}
+async function testaiPatikra1026(){
+  grupe("Naujo darbuotojo patikra (2026-10-26)");
+  await testas("K1: supaprastintuose pirkimuose atidėjimo terminas - 5 darbo dienos (PĮ 94 str. 8 d.), tarptautiniuose - 8 d. d. (≥ 10 d.); 5 d. d. - ne pratęsimas, 4 - pažeidimas su nuoroda", async () => {
+    const r = await rinkinys("S-AK", "2026-12-21");
+    try {
+      const M = r.W.eval("METHODS");
+      [["S-AK", "1.6", "1.6.2"], ["S-SD", "1.10", "1.10.2"], ["S-ND", "1.9", "1.9.2"]].forEach(([b, g, k]) => {
+        const sp = M[b].groups.find(x => x.code === g).subPhases.find(x => x.code === k);
+        lygu([sp.duration, sp.legalMinDD, sp.legalMinKD, sp.teise], [5, 5, null, ["atidejimo_terminas"]], b + " atidėjimas");
+      });
+      [["T-AK", "1.6", "1.6.2"], ["T-SD", "1.13", "1.13.2"], ["T-ND", "1.9", "1.9.2"]].forEach(([b, g, k]) => {
+        const sp = M[b].groups.find(x => x.code === g).subPhases.find(x => x.code === k);
+        lygu([sp.duration, sp.legalMinDD, sp.legalMinKD], [8, 8, 10], b + " atidėjimas");
+      });
+      // Nepriklausomai: atidėjimas - 5 darbo dienos po komisijos sprendimo; vizavimas prasideda kitą darbo dieną
+      const sp = r.sub("1.6", "1.6.2"), vpk = r.sub("1.6", "1.6.1"), viz = r.sub("1.6", "1.6.3");
+      lygu(darboDienuImtinai(sp.start, sp.end), 5, "atidėjimo darbo dienos");
+      tiesa(sp.start > vpk.end && viz.start > sp.end, "seka: sprendimas, atidėjimas, vizavimas");
+      lygu(r.W.isLegalViolation("1.6.2", 5), false, "5 d. d. - ne pažeidimas");
+      lygu(r.W.isLegalViolation("1.6.2", 4), true, "4 d. d. - pažeidimas");
+      const gi = r.st().groups.findIndex(g => g.code === "1.6"), si = r.st().groups[gi].subPhases.findIndex(x => x.code === "1.6.2");
+      const sel = '.duration-input[data-group="' + gi + '"][data-sub="' + si + '"]';
+      const el = r.D.querySelector(sel); el.value = "4"; el.dispatchEvent(new r.W.Event("change", { bubbles: true }));
+      const tr = r.D.querySelector(sel).closest("tr");
+      tiesa(/PĮ min: 5 d\.d\. · PĮ 94 str\. 8 d\./.test(tr.textContent), tr.textContent);
+      tiesa(/^⚠ PĮ NUKRYPIMAS: nurodytas 4 d\.d\. terminas trumpesnis nei PĮ 94 str\. 8 d\. nustatytas minimumas \(5 d\.d\.\)/.test(r.st().notes["1.6.2"]), r.st().notes["1.6.2"]);
+      // standartinės sumos sutampa su etapais, skaičiuoklės - su generatoriumi
+      const C = r.W.eval("CALC_METHODS"), bl = [];
+      Object.values(M).forEach(m => {
+        const suma = st => m.groups.filter(g => g.stage === st).reduce((a, g) => a + (g.subPhases && g.subPhases.length ? g.subPhases.reduce((b, x) => b + x.duration, 0) : g.duration), 0);
+        const c = C.find(x => x.code === m.code);
+        if (suma("pasirengimas") !== m.prepStd || suma("vykdymas") !== m.execStd || m.prepStd + m.execStd !== m.totalStd) bl.push(m.code + " sumos");
+        if (!c || c.prep !== m.prepStd || c.exec !== m.execStd) bl.push(m.code + " skaičiuoklė");
+      });
+      tiesa(!bl.length, bl.join(", "));
+    } finally { r.f.remove(); }
+  });
+
+  await testas("K2: sub-etapas prie etapo be sub-etapų - etapo trukmė lieka pirmuoju sub-etapu (25 + 2), įstatymo minimumo patikra veikia", async () => {
+    const r = await rinkinys("T-AK", "2026-12-21");
+    try {
+      const pries = r.W.computeSchedule().slice(-1)[0];
+      r.W.showAddPhaseForm();
+      r.D.querySelector('#add-mode-toggle button[data-mode="sub"]').click();
+      r.D.getElementById("add-sub-parent").value = "1.4";
+      r.D.getElementById("add-sub-name").value = "Papildomas aiškinimas tiekėjams";
+      r.D.getElementById("add-sub-duration").value = "2";
+      r.W.confirmAddPhase();
+      const g = r.st().groups.find(x => x.code === "1.4");
+      lygu(g.subPhases.map(x => [x.code === "1.4", x.name, x.duration]), [[true, "Pasiūlymų gavimas", 25], [false, "Papildomas aiškinimas tiekėjams", 2]], "sub-etapai");
+      lygu(r.sub("1.4").groupDuration, 27, "etapo trukmė");
+      const total = r.st().groups.reduce((a, x) => a + (x.subPhases && x.subPhases.length ? x.subPhases.reduce((b, y) => b + (Number(y.duration) || 0), 0) : (Number(x.duration) || 0)), 0);
+      lygu(total, r.W.eval("METHODS['T-AK'].totalStd") + 2, "bendra trukmė +2");
+      tiesa(r.W.computeSchedule().slice(-1)[0].subResults.slice(-1)[0].end > pries.subResults.slice(-1)[0].end, "pabaiga vėlesnė, ne ankstesnė");
+      const gi = r.st().groups.indexOf(g);
+      const el = r.D.querySelector('.duration-input[data-group="' + gi + '"][data-sub="0"]'); el.value = "15"; el.dispatchEvent(new r.W.Event("change", { bubbles: true }));
+      tiesa(r.W.isLegalViolation("1.4", 15) && /PĮ min: 30 k\.d\. ≈ 22 d\.d\./.test(r.D.querySelector('.duration-input[data-group="' + gi + '"][data-sub="0"]').closest("tr").textContent), "minimumas sub-etapui");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("K3: EPSO-G - VPĮ įspėjimas ir nuoroda; pakeitus įmonę į LITGRID - perrašoma PĮ; įmonė nepasirinkta - įstatymas neįvardijamas", async () => {
+    const r = await rinkinys("T-AK", "2027-03-15", "epsog");
+    try {
+      const gi = r.st().groups.findIndex(g => g.code === "1.4");
+      const sel = '.duration-input[data-group="' + gi + '"]:not([data-sub])';
+      const el = r.D.querySelector(sel); el.value = "15"; el.dispatchEvent(new r.W.Event("change", { bubbles: true }));
+      const n = () => r.st().notes["1.4"] || "";
+      tiesa(/^⚠ VPĮ NUKRYPIMAS: .*VPĮ 60 str\. 1 d\.; VPĮ 60 str\. 4 d\. nustatytas minimumas \(30 k\.d\. ≈ 22 d\.d\.\)/.test(n()) && !/\bPĮ\b/.test(n().replace(/VPĮ/g, "")), n());
+      tiesa(/VPĮ min: 30 k\.d\./.test(r.D.querySelector(sel).closest("tr").textContent), "žyma - VPĮ");
+      r.set("f-company", "litgrid");
+      tiesa(/^⚠ PĮ NUKRYPIMAS: .*PĮ 70 str\. 1 d\.; PĮ 70 str\. 4 d\./.test(n()), "perrašyta PĮ: " + n());
+      r.set("f-company", "");
+      tiesa(/^⚠ ĮSTATYMO NUKRYPIMAS: .*įstatymo nustatytas minimumas/.test(n()), "be įmonės: " + n());
+    } finally { r.f.remove(); }
+  });
+
+  await testas("D1 ir M3: įvedant „15“ fokusas lieka lauke, lentelė neperpiešiama, datos atsinaujina; baigus - įspėjimas ir fokusas grąžinamas; trupmena - sveikas skaičius", async () => {
+    const r = await rinkinys("S-AK", "2026-12-21");
+    try {
+      const gi = r.st().groups.findIndex(g => g.code === "1.4"), sel = '.duration-input[data-group="' + gi + '"]:not([data-sub])';
+      const el = r.D.querySelector(sel); el.focus();
+      el.value = "1"; el.dispatchEvent(new r.W.Event("input", { bubbles: true }));
+      tiesa(r.D.activeElement === el && r.D.querySelector(sel) === el, "po pirmo skaitmens - tas pats laukas su fokusu");
+      lygu(r.st().notes["1.4"] || "", "", "įvedant - pastaba dar nepildoma");
+      el.value = "15"; el.dispatchEvent(new r.W.Event("input", { bubbles: true }));
+      lygu([r.st().groups[gi].duration, r.D.activeElement === el], [15, true], "15 ir fokusas");
+      const s = r.sub("1.4"); lygu(r.D.querySelector('tr[data-row="' + gi + '"] .col-end').textContent, ISO(s.end), "data eilutėje atsinaujino");
+      el.value = "2.5"; el.dispatchEvent(new r.W.Event("change", { bubbles: true }));
+      const naujas = r.D.querySelector(sel);
+      lygu([r.st().groups[gi].duration, naujas.value, r.D.activeElement === naujas], [3, "3", true], "suapvalinta, fokusas grąžintas");
+      tiesa(/^⚠ PĮ NUKRYPIMAS/.test(r.st().notes["1.4"]), "baigus - įspėjimas");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("D2: skaičiuoklė ir generatorius - ta pati sutarties data visiems būdams; atgalinė - ta pati inicijavimo data", async () => {
+    const r = await rinkinys(null, null);
+    try {
+      const bl = [];
+      for (const pradzia of ["2026-12-21", "2027-03-15", "2026-12-26"]) {
+        for (const kodas of Object.keys(r.W.eval("METHODS"))) {
+          r.W.confirm = () => true;
+          r.set("f-budas", kodas); r.set("f-pradzia", pradzia);
+          const s = r.W.computeSchedule().slice(-1)[0], gen = ISO(s.end || s.subResults.slice(-1)[0].end);
+          r.set("c1-method", kodas); r.set("c1-init", pradzia);
+          const calc = (r.D.getElementById("c1-t-end").textContent.match(/\d{4}-\d{2}-\d{2}/) || [])[0];
+          if (calc !== gen) bl.push(pradzia + " " + kodas + ": skaičiuoklė " + calc + ", generatorius " + gen);
+          r.set("c2-method", kodas); r.set("c2-contract", gen);
+          const init = (r.D.getElementById("c2-t-start").textContent.match(/\d{4}-\d{2}-\d{2}/) || [])[0];
+          const pirmaDarbo = (() => { const d = new Date(pradzia + "T00:00:00"); while (!dd(d)) d.setDate(d.getDate() + 1); return ISO(d); })();
+          if (init !== pirmaDarbo) bl.push(pradzia + " " + kodas + ": atgalinė " + init);
+        }
+      }
+      tiesa(!bl.length, bl.slice(0, 6).join("\n"));
+    } finally { r.f.remove(); }
+  });
+
+  await testas("D3 ir M8: pradžios data iš anksto nepildoma (spausdinant paprašoma); ne darbo diena - spausdinama faktinė pirmo etapo data", async () => {
+    const r = await rinkinys("S-AK", null);
+    try {
+      lygu(r.D.getElementById("f-pradzia").value, "", "pradžios data tuščia");
+      tiesa(r.D.getElementById("phases-be-datos").style.display === "block", "užuomina be datos");
+      r.W.printSchedule();
+      tiesa(/Įveskite pirkimo pradžios datą/.test(r.W.__dialogai.slice(-1)[0] || ""), "spausdinant paprašyta datos");
+      r.set("f-pradzia", "2026-12-26");                 // šeštadienis, šventė
+      tiesa(/Pirkimo pradžios data:\s*2026-12-28/.test(r.D.getElementById("preview-A").textContent), "faktinė pradžia");
+      tiesa(r.D.getElementById("phases-be-datos").style.display === "none", "su data - užuominos nėra");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("D4: įstatymo nustatytą etapą šalinant - nuoroda ir išimtis; pašalintas - įspėjimas sumose ir spausdinant", async () => {
+    const r = await rinkinys("S-AK", "2026-12-21");
+    try {
+      r.W.deleteSubPhase("1.6", "1.6.2");
+      const q = r.W.__dialogai.slice(-1)[0] || "";
+      tiesa(/PĮ 94 str\. 8 d\./.test(q) && /vienintelis suinteresuotas dalyvis/.test(q) && /PĮ 94 str\. 8 d\. 1 p\./.test(q) && !/pasirengimo etapo trukmę/.test(q), q);
+      tiesa(r.st().groups.find(g => g.code === "1.6").subPhases.some(x => x.code === "1.6.2"), "atšaukus - nepašalinta");
+      r.W.confirm = m => { r.W.__dialogai.push(m); return true; };
+      r.W.deleteSubPhase("1.6", "1.6.2");
+      tiesa(/pašalintas įstatymo nustatytas etapas: 1/.test(r.D.getElementById("t-deviation").textContent), r.D.getElementById("t-deviation").textContent);
+      r.W.print = () => {};
+      ["f-pavadinimas", "f-iniciatorius", "f-organizatorius"].forEach(id => r.set(id, "X", "input"));
+      r.W.printSchedule();
+      tiesa(r.W.__dialogai.some(m => /Sutarties atidėjimo terminas, pretenzijų laukimas - pašalintas \(įstatymo minimumas 5 d\.d\., PĮ 94 str\. 8 d\.\)/.test(m)), r.W.__dialogai.slice(-1)[0]);
+    } finally { r.f.remove(); }
+  });
+
+  await testas("D5: pakeistame grafike keičiant būdą ar perkeliant iš skaičiuoklės - paklausiama; atšaukus pakeitimai lieka", async () => {
+    const r = await rinkinys("S-AK", "2026-12-21");
+    try {
+      const gi = r.st().groups.findIndex(g => g.code === "1.4");
+      const el = r.D.querySelector('.duration-input[data-group="' + gi + '"]:not([data-sub])'); el.value = "12"; el.dispatchEvent(new r.W.Event("change", { bubbles: true }));
+      r.set("f-budas", "T-AK");
+      lygu([r.W.eval("state.methodCode"), r.D.getElementById("f-budas").value, r.st().groups[gi].duration], ["S-AK", "S-AK", 12], "atšaukta - nekeista");
+      r.set("c1-method", "T-AK"); r.set("c1-init", "2026-12-21");
+      const n = r.W.__dialogai.length; r.W.calcTransfer(1);
+      lygu([r.W.__dialogai.length - n, r.W.eval("state.methodCode")], [1, "S-AK"], "perkėlimas paklausė vieną kartą, atšaukus nekeista");
+      r.W.confirm = m => { r.W.__dialogai.push(m); return true; };
+      const n2 = r.W.__dialogai.length; r.W.calcTransfer(1);
+      lygu([r.W.__dialogai.length - n2, r.W.eval("state.methodCode")], [1, "T-AK"], "patvirtinus - vienas klausimas, perkelta");
+      r.set("f-budas", "S-SD");
+      lygu(r.W.__dialogai.length - n2, 1, "nepakeistame grafike nebeklausiama");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("V2, M2, M9, M10: neskelbiamos apklausos etapas - kvietimas; DPS sąvokos; įmonių kabutės; papildomi etapai ir pretenzijos trukmė", async () => {
+    const r = await rinkinys("MV-NR", "2026-12-21");
+    try {
+      const M = r.W.eval("METHODS");
+      lygu(M["MV-NR"].groups.find(g => g.code === "1.3").name, "Kvietimas pateikti pasiūlymus ir pasiūlymų gavimas", "MV-NR 1.3");
+      lygu([M.DPS.name, M["DPS-K"].name], ["Dinaminės pirkimo sistemos sukūrimas", "Konkretus pirkimas pagal dinaminę pirkimo sistemą"], "DPS");
+      tiesa(!/Skelbimas apie pirkimą/.test(r.D.getElementById("preview-B").textContent), "grafike tiekėjams - be skelbimo");
+      r.set("f-company", "ambergrid");
+      tiesa(/AB „Amber Grid“/.test(r.D.getElementById("preview-A").textContent), "kabutės");
+      const opt = [...r.D.querySelectorAll("#add-phase-name option")].map(o => o.value);
+      tiesa(opt.includes("Visuotinio akcininkų susirinkimo sprendimas") && opt.includes("Koordinavimo komisijos sprendimas (nacionalinis saugumas)") && !opt.some(v => /Visuotinis akcininkų|Nacionalinio saugumo komisijos/.test(v)), opt.join(" | "));
+      r.W.showAddPhaseForm(); r.set("add-phase-name", "Nagrinėjama pretenzija");
+      lygu(r.D.getElementById("add-phase-duration").value, "6", "pretenzija - 6 d. d.");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("V1: įstatymo nuorodos iš registro (visi raktai išsprendžiami PĮ ir VPĮ); DPS užuominos PĮ subjektui; neskelbiamose derybose - atidėjimo išimtis", async () => {
+    const r = await rinkinys("DPS", "2026-12-21");
+    try {
+      const M = r.W.eval("METHODS"), T = r.W.GP_TEISE, bl = [];
+      Object.values(M).forEach(m => m.groups.forEach(g => [g].concat(g.subPhases || []).forEach(x => {
+        (x.teise || []).forEach(k => ["PI", "VPI"].forEach(rz => { try { T.cit(k, rz); } catch (e) { bl.push(m.code + " " + x.code + " " + k + " " + rz); } }));
+        if (x.info) { try { T.cit(x.info, "PI"); } catch (e) { bl.push(m.code + " " + x.code + " info " + x.info); } }
+        if (x.legalMinDD && !(x.teise || []).length) bl.push(m.code + " " + x.code + " be nuorodos");
+      })));
+      tiesa(!bl.length, bl.join(", "));
+      const tx = r.D.getElementById("phases-tbody").textContent;
+      tiesa(/PĮ 87 str\. 5 d\. 1 p\./.test(tx) && /PĮ 87 str\. 5 d\. 2 p\./.test(tx) && /PĮ 87 str\. 8 d\./.test(tx), "DPS užuominos");
+      r.set("f-company", "epsog");
+      tiesa(!/87 str\./.test(r.D.getElementById("phases-tbody").textContent), "VPĮ subjektui - PĮ nuorodų nėra");
+      r.set("f-company", "litgrid"); r.set("f-budas", "S-ND");
+      tiesa(/vienintelis suinteresuotas dalyvis.*PĮ 94 str\. 8 d\. 1 p\./.test(r.D.getElementById("phases-tbody").textContent), "S-ND atidėjimo išimtis");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("V3, V7, V8: išvalius kortelė atsiejama; pažeidimas - ne „atitinka standartą“; spausdinant be „*“ laukų paklausiama; Cmd+P neparengto grafiko nespausdina", async () => {
+    const r = await rinkinys("S-AK", "2026-12-21");
+    try {
+      const k = r.W.GP_KORTELE.issaugok(r.W.GP_KORTELE.tuscia({ pavadinimas: "Išgalvotas kabelių pirkimas", vykdytojas: "litgrid", rezimas: "PI", budas: "S-AK" })).kortele;
+      const api = r.W.eval("KORTELE"); api.atnaujink(); await api.pasirink(k.id);
+      const gi = r.st().groups.findIndex(g => g.code === "1.4");
+      const el = r.D.querySelector('.duration-input[data-group="' + gi + '"]:not([data-sub])'); el.value = "4"; el.dispatchEvent(new r.W.Event("change", { bubbles: true }));
+      const dv = r.D.getElementById("t-deviation");
+      tiesa(/Trumpiau už įstatymo minimumą/.test(dv.textContent) && !/Atitinka/.test(dv.textContent), dv.textContent);
+      tiesa(/išskyrus įstatymo nustatytus minimumus/.test(r.D.querySelector(".phases-info").textContent), "patarimas");
+      r.set("f-iniciatorius", "", "input"); r.set("f-organizatorius", "", "input");
+      r.W.print = () => {}; r.W.printSchedule();
+      tiesa(r.W.__dialogai.some(m => /Neužpildyta: pirkimo iniciatorius, pirkimo organizatorius/.test(m)), r.W.__dialogai.join(" | "));
+      r.set("f-company", "");
+      r.W.dispatchEvent(new r.W.Event("beforeprint"));
+      tiesa(r.D.body.classList.contains("gp-neparengta"), "be įmonės - neparengta");
+      r.W.dispatchEvent(new r.W.Event("afterprint"));
+      tiesa(!r.D.body.classList.contains("gp-neparengta"), "po spausdinimo nuimta");
+      r.W.confirm = () => true; r.W.resetForm();
+      lygu([api.pasirinkta(), r.D.getElementById("gpk-sel").value], [null, ""], "kortelė atsieta");
+    } finally { r.f.remove(); }
+  });
+
+  await testas("M1, M5, M7: EN pastaba - contracting entity (PĮ) ir authority (VPĮ); pastaba su HTML lieka tekstu; perjungikliai su aria-pressed", async () => {
+    const r = await rinkinys("S-AK", "2026-12-21");
+    try {
+      r.D.querySelector('#lang-toggle button[data-lang="en"]').click();
+      tiesa(/contracting entity reserves/.test(r.D.getElementById("preview-B").textContent) && /Procurement procedure:/.test(r.D.getElementById("preview-A").textContent), "PĮ - entity");
+      r.set("f-company", "epsog");
+      tiesa(/contracting authority reserves/.test(r.D.getElementById("preview-B").textContent), "VPĮ - authority");
+      lygu([...r.D.querySelectorAll("#lang-toggle button")].map(b => b.getAttribute("aria-pressed")), ["false", "true"], "kalbos jungiklis");
+      lygu([...r.D.querySelectorAll("#view-switcher button")].map(b => b.getAttribute("aria-pressed")), ["true", "false"], "režimo jungiklis");
+      r.W.eval("state").notes["1.4"] = "</textarea><b id=\"isp\">x</b>"; r.W.refreshAll();
+      tiesa(!r.D.getElementById("isp") && r.D.querySelector('[data-note="1.4"]').value === "</textarea><b id=\"isp\">x</b>", "pastaba - tekstas");
+    } finally { r.f.remove(); }
   });
 }
 
@@ -429,6 +684,7 @@ async function testaiEtapai(){
     await testaiKortele();
     await testaiRinka();
     await testaiEtapai();
+    await testaiPatikra1026();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
