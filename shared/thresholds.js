@@ -18,6 +18,9 @@ window.GP_THRESHOLDS = {
   // Pirkimo sutarties turinio reikalavimų išimtis (PĮ 95 str. 4 d. / VPĮ 87 str. 5 d., GP_TEISE "sut_isimtis"; perskaityta e-tar
   // 2026-10-09): reikalavimai gali būti netaikomi raštu sudaromai sutarčiai, kurios numatoma vertė mažesnė už šią sumą. Įrašyta įstatyme.
   SUTARTIS: { reikalavimaiNuo: 15000 },
+  // Pirkimų tik pagal kainą metinės vertės riba, procentais nuo bendros pirkimų vertės (PĮ 64 str. 2 d. / VPĮ 55 str. 2 d.,
+  // GP_TEISE "en_tik_kaina_riba"; perskaityta e-tar 2026-10-26). Įrašyta įstatyme; VPĮ riba 50 proc. - 2021-09-30 įstatymo Nr. XIV-545 redakcija.
+  TIK_KAINA: { PI: 70, VPI: 50 },
   // Standartinis PVM tarifas (Pridėtinės vertės mokesčio įstatymo 2 straipsnio 32 dalis: „Standartinis PVM tarifas - 21 procento PVM
   // tarifas“; 19 straipsnio 1 dalis - kada jis taikomas; perskaityta e-tar aktualioje redakcijoje 2026-10-13). Naudoja PP-salygos sutarties
   // projekto kainos eilutės (PVM ir suma su PVM apskaičiuojami iš rengėjo įrašytos sumos be PVM) ir PP-report bei PP-protocol (sumos su ir be PVM, nuo 2026-10-14).
