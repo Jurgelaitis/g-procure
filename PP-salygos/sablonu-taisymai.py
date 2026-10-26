@@ -426,6 +426,7 @@ def taisymas_tekstas(taisyk):
     viso += _t7_korekcijos(taisyk)
     viso += _ao_sprendimai(taisyk)
     viso += _ap_sprendimai(taisyk)
+    viso += _autoriai(taisyk)
     return viso
 
 
@@ -1615,6 +1616,53 @@ _AQ_RE = [_re.compile(r) for r in (
     r'^The procurement agent also checks whether the Economic entities',
     r'^Despite the provisions of clauses 8\.2 and 8\.3')]
 _AQ_SPALVA = _re.compile(rb'<w:color w:val="(?:FF0000|C00000|ED1C24)"[^>]*/>', _re.I)
+
+
+# AR. Asmenų duomenys šablonų metaduomenyse (2026-10-26, naudotojo sprendimas po PP-plan naujo darbuotojo patikros): ND LT/EN SPS
+#    komentarų autoriai, jų inicialai, people.xml darbo el. pašto adresai ir prisijungimo ID bei failo savybių autorius ir paskutinis
+#    taisęs - trijų LITGRID darbuotojų vardai (kituose šablonuose - „Author“, „A“ ir tuščia). Komentarai iš sugeneruotų dokumentų
+#    pašalinami, bet failo savybės (docProps/core.xml) liko - į CVP IS skelbiamą ND LT/EN SPS būtų patekę vardai. Dabar visuose
+#    šablonuose: komentaro autorius - „Author“, inicialai - „A“, people.xml - „Author“ be presenceInfo, dc:creator ir cp:lastModifiedBy -
+#    tušti, žemėlapių „author“ - „Author“. Tekstas nekeičiamas (formų rodyklė - pastraipų maišos - nepakinta); pakartotinai - 0.
+_AR_POROS = [
+    ('word/comments.xml', _re.compile(rb'w:author="(?!Author")[^"]*"'), b'w:author="Author"'),
+    ('word/comments.xml', _re.compile(rb'w:initials="(?!A")[^"]*"'), b'w:initials="A"'),
+    ('word/people.xml', _re.compile(rb'w15:author="(?!Author")[^"]*"'), b'w15:author="Author"'),
+    ('word/people.xml', _re.compile(rb'<w15:presenceInfo\b[^>]*/>'), b''),
+    ('docProps/core.xml', _re.compile(rb'<dc:creator>[^<]+</dc:creator>'), b'<dc:creator></dc:creator>'),
+    ('docProps/core.xml', _re.compile(rb'<cp:lastModifiedBy>[^<]+</cp:lastModifiedBy>'), b'<cp:lastModifiedBy></cp:lastModifiedBy>'),
+]
+
+
+def _autoriai(taisyk):
+    import json as _json
+    print("\nASMENŲ DUOMENYS ŠABLONŲ METADUOMENYSE (AR, 2026-10-26):")
+    viso = 0
+    for path in sorted(TPL.glob('*.docx')):
+        with zipfile.ZipFile(path) as zin:
+            infos = zin.infolist(); items = {n: zin.read(n) for n in zin.namelist()}
+        n = 0
+        for dalis, rx, i in _AR_POROS:
+            if dalis in items:
+                items[dalis], k = rx.subn(i, items[dalis])
+                n += k
+        if not n:
+            continue
+        print(f"  {path.name}: {n} pakeitimai")
+        viso += n
+        if not taisyk:
+            continue
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for info in infos:
+                zout.writestr(info, items[info.filename])
+        zf = Path(__file__).parent / 'zemelapiai' / (path.stem + '.json')
+        if zf.exists():
+            raw = zf.read_text(encoding='utf-8')
+            pakeista = _re.sub(r'"author": "(?!Author")[^"]*"', '"author": "Author"', raw)
+            if pakeista != raw:
+                zf.write_text(pakeista, encoding='utf-8')
+                print(f"      {zf.name}: „author“ - „Author“")
+    return viso
 
 
 def _aq_dps_pasalinimas(taisyk):
