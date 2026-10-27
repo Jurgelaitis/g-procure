@@ -62,11 +62,14 @@ async function laukTol(f, iki = 6000){ const t0 = Date.now(); while (Date.now() 
 
 /* Modulis rėmelyje (kaskart naujas). `const`/`let` (DATA, METHODS) nėra window savybės - jiems W.eval(). */
 let W = null, D = null, remas = null;
+/* Standartinių trukmių metai priklauso nuo šiandienos (iki 2026-12-31 - 2026 m., vėliau - 2027 m.) - testai nuo jos nepriklauso */
+const TESTU_DIENA = "2026-10-27";
+function fiksuokDiena(w){ if (w.trukmiuPradzia) w.trukmiuPradzia(TESTU_DIENA); }
 function modulis(){
   if (remas) remas.remove();
   return new Promise(res => {
     const f = remas = document.createElement("iframe");
-    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(200); res(); }, { once: true });
+    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(200); fiksuokDiena(W); res(); }, { once: true });
     f.src = "EPSO-G_pirkimu_planavimas_MVP.html?cb=" + Date.now();
     document.body.appendChild(f);
   });
@@ -349,7 +352,7 @@ function modulisSuKortele(){
   if (remas) remas.remove();
   return new Promise(res => {
     const f = remas = document.createElement("iframe");
-    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(200); res(); }, { once: true });
+    f.addEventListener("load", async () => { W = f.contentWindow; D = f.contentDocument; await lauk(200); fiksuokDiena(W); res(); }, { once: true });
     f.src = "EPSO-G_pirkimu_planavimas_MVP.html?saugykla=testine&cb=" + Date.now();
     document.body.appendChild(f);
   });
@@ -730,6 +733,100 @@ async function testaiPatikra1026(){
   });
 }
 
+const LENTELE = {   // nepriklausomai nuo modulio - naudotojo lentelė: [pasirengimas, vykdymas]
+  2026: { "CPO": [0, 20], "MV-NZ": [0, 3], "MV-NR": [5, 25], "MV-SAB": [10, 35], "MV-SAD": [10, 50], "S-ND": [5, 45], "S-AK": [15, 60], "S-SD": [20, 75],
+          "T-ND": [10, 65], "T-AK": [15, 75], "T-SD": [25, 110], "DPS": [10, 50], "DPS-K": [7, 45] },
+  2027: { "CPO": [0, 20], "MV-NZ": [0, 3], "MV-NR": [5, 25], "MV-SAB": [10, 35], "MV-SAD": [10, 50], "S-ND": [5, 45], "S-AK": [15, 55], "S-SD": [20, 65],
+          "T-ND": [10, 65], "T-AK": [15, 80], "T-SD": [25, 115], "DPS": [10, 50], "DPS-K": [10, 55] }
+};
+async function testaiTrukmes1027(){
+  grupe("Standartinės trukmės pagal metus (2026 ir 2027 m., 2026-10-27)");
+  const metodai = () => { const M = W.eval("METHODS"); return Object.fromEntries(Object.keys(M).map(k => [k, [M[k].prep, M[k].exec, M[k].total]])); };
+  const lentele = y => Object.fromEntries(Object.entries(LENTELE[y]).map(([k, [p, e]]) => [k, [p, e, p + e]]));
+  const eilute = kodas => [...D.querySelectorAll("#methodCatalog tbody tr")].find(tr => tr.cells[0].textContent.trim() === kodas);
+
+  await testas("Paleidus be fiksuotos dienos: taikomos šiandien numatytų metų trukmės - ir neatvėrus terminų skaičiuoklės", async () => {
+    const f = document.createElement("iframe");
+    await new Promise(r => { f.onload = r; f.src = "EPSO-G_pirkimu_planavimas_MVP.html?saugykla=testine&cb=" + Date.now(); document.body.appendChild(f); });
+    try {
+      const fw = f.contentWindow, y = fw.GP_TRUKMES.numatyta().metai, M = fw.eval("METHODS");
+      lygu(fw.eval("TRUKMIU_METAI"), y, "metai");
+      lygu(Object.fromEntries(Object.keys(M).map(k => [k, [M[k].prep, M[k].exec, M[k].total]])), lentele(y), "trukmės");
+    } finally { f.remove(); }
+  });
+
+  await testas("Iki 2026-12-31 - pasirinkimas 2026 / 2027 m. (numatyta 2026 m.); visų būdų trukmės kaip lentelėje (ir CPO, MV-NZ - be pasirengimo); katalogas su kitų metų suma; paaiškinimas su pokyčiais", async () => {
+    W.goTab("duration");
+    const sel = D.getElementById("durMetai");
+    const mat = e => e.checkVisibility();
+    lygu([mat(sel), mat(D.getElementById("durMetaiTxt")), sel.value, [...sel.options].map(o => o.textContent)], [true, false, "2026", ["2026 m.", "2027 m. (galios nuo 2027-01-01)"]], "pasirinkimas");
+    tiesa(D.querySelector('label[for="durMetai"]') && sel.getAttribute("aria-describedby") === "durMetaiPag", "pavadinimas ir aprašas");
+    lygu(metodai(), lentele(2026), "2026 m. trukmės");
+    lygu(D.getElementById("katalogoMetai").textContent, " - 2026 m.", "katalogo antraštė");
+    lygu([eilute("S-AK").cells[4].textContent, eilute("T-SD").cells[4].textContent, eilute("S-ND").cells[4].textContent], ["752027 m.: 70", "1352027 m.: 140", "50"], "katalogas");
+    lygu([...D.getElementById("durMethod").options].find(o => o.value === "DPS-K").textContent, "DPS-K - DPS konkretus (52 d.d.)", "būdo pasirinkimas");
+    const pag = D.getElementById("durMetaiPag").textContent;
+    tiesa(/Iki 2026-12-31 galima rinktis; nuo 2027-01-01 taikomos tik 2027 m\. trukmės\. 2027 m\. pasikeitė \(d\.d\.\): S-AK 75 → 70, S-SD 95 → 85, T-AK 90 → 95, T-SD 135 → 140, DPS-K 52 → 65\./.test(pag), "paaiškinimas: " + pag);
+    tiesa(/ne teisės aktų terminai/.test(pag) && /Perskaičiuoti datas/.test(pag), "kur taikoma: " + pag);
+  });
+
+  await testas("Pasirinkus 2027 m. - trukmės, katalogas, būdo pasirinkimas (lieka tas pats), jau parodytas skaičiavimas ir pirkimo būdo analizės rezultatas perskaičiuojami be naujo paspaudimo", async () => {
+    D.getElementById("durMethod").value = "S-AK"; D.getElementById("durType").value = "A"; D.getElementById("durContract").value = "2027-06-30";
+    W.runDuration();
+    tiesa(/Bendra trukmė\s*75 d\.d\./.test(D.getElementById("durResult").textContent), "2026 m.: " + D.getElementById("durResult").textContent);
+    D.getElementById("qtValue").value = "100000"; D.getElementById("qtType").value = "Prekės"; D.getElementById("qtLaw").value = "PI"; W.runMethodTest();
+    const sel = D.getElementById("durMetai"); sel.value = "2027"; sel.dispatchEvent(new Event("change"));
+    lygu(metodai(), lentele(2027), "2027 m. trukmės");
+    lygu([D.getElementById("durMethod").value, [...D.getElementById("durMethod").options].find(o => o.value === "S-AK").textContent], ["S-AK", "S-AK - Supaprastintas - atviras konkursas (70 d.d.)"], "būdas");
+    const r = D.getElementById("durResult").textContent;
+    tiesa(/Bendra trukmė\s*70 d\.d\./.test(r) && /2027 m\. standartinės trukmės/.test(r), "skaičiavimas: " + r);
+    const dC = W.eval("parseDate")("2027-06-30"), f = W.eval("fmtDate"), a = W.GP_WORKDAYS.addWorkdays;
+    tiesa(r.includes(f(a(dC, -70))) && r.includes(f(a(dC, -55))), "datos: " + r);
+    lygu([eilute("S-AK").cells[4].textContent, eilute("S-ND").cells[4].textContent, D.getElementById("katalogoMetai").textContent], ["702026 m.: 75", "50", " - 2027 m."], "katalogas");
+    const mr = D.getElementById("methodResult").textContent;
+    tiesa(/2027 m\. standartas/.test(mr), "analizė: " + mr);
+    // B grafikas - nuo pasirinktų metų trukmių
+    D.getElementById("durType").value = "B"; W.runDuration();
+    tiesa(new RegExp("Bendra trukmė\\s*" + (Math.ceil(15 * 1.2) + Math.ceil(55 * 1.2)) + " d\\.d\\.").test(D.getElementById("durResult").textContent), "B grafikas");
+    lygu(W.pasirinkMetus(2030), false, "nesiūlomi metai");
+    lygu(W.eval("TRUKMIU_METAI"), 2027, "liko");
+  });
+
+  await testas("„Perskaičiuoti datas“ - pagal pasirinktų metų trukmes; klausime pasakyta, kurių metų ir kur juos pakeisti", async () => {
+    svarus();
+    W.eval(`DATA.procurements = [{ id: "T1", nr: "T1", imone: "LITGRID", objektas: "Bandomasis", budas: "Supaprastintas pirkimas - atviras konkursas", sutarciesData: "2027-06-30", verte: 100000, rusis: "Prekės" }]`);
+    let kl = ""; W.confirm = k => { kl = k; return true; }; let pr = ""; W.alert = k => { pr = k; };
+    const dC = W.eval("parseDate")("2027-06-30"), f = W.eval("fmtDate"), a = W.GP_WORKDAYS.addWorkdays;
+    W.recalcAll();
+    tiesa(/pagal 2027 m\. standartines pirkimų trukmes/.test(kl) && /skirtuke „Terminų skaičiuoklė“/.test(kl), "klausimas: " + kl);
+    lygu([W.eval("DATA.procurements[0].pirkimoData"), W.eval("DATA.procurements[0].inicData")], [f(a(dC, -55)), f(a(dC, -70))], "2027 m. datos");
+    tiesa(/2027 m\. standartinės trukmės/.test(pr), "pranešimas: " + pr);
+    W.pasirinkMetus(2026); W.recalcAll();
+    lygu([W.eval("DATA.procurements[0].pirkimoData"), W.eval("DATA.procurements[0].inicData")], [f(a(dC, -60)), f(a(dC, -75))], "2026 m. datos");
+    tiesa(/pagal 2026 m\./.test(kl), "klausimas: " + kl);
+    svarus();
+  });
+
+  await testas("Nuo 2027-01-01 lieka tik 2027 m. trukmės: pasirinkimo nėra, taikoma pati, kataloge - be 2026 m. sumų, klausime - be „galite pakeisti“", async () => {
+    try {
+      W.trukmiuPradzia("2027-01-02");
+      W.goTab("duration");
+      const sel = D.getElementById("durMetai"), txt = D.getElementById("durMetaiTxt");
+      lygu([sel.checkVisibility(), txt.checkVisibility(), txt.textContent, [...sel.options].map(o => o.value)], [false, true, "2027 m.", ["2027"]], "pasirinkimas");
+      tiesa(/^Taikomos 2027 m\. standartinės pirkimų trukmės \(nuo 2027-01-01\)\./.test(D.getElementById("durMetaiPag").textContent), "paaiškinimas: " + D.getElementById("durMetaiPag").textContent);
+      lygu(metodai(), lentele(2027), "2027 m. trukmės");
+      lygu(D.querySelectorAll("#methodCatalog .metai-kita").length, 0, "kitų metų sumų nėra");
+      svarus();
+      W.eval(`DATA.procurements = [{ id: "T1", nr: "T1", imone: "LITGRID", objektas: "Bandomasis", budas: "Tarptautinis pirkimas - skelbiamos derybos", sutarciesData: "2027-09-30", verte: 900000, rusis: "Paslaugos" }]`);
+      let kl = ""; W.confirm = k => { kl = k; return false; };
+      W.recalcAll();
+      tiesa(/pagal 2027 m\./.test(kl) && !/galite pakeisti/.test(kl), "klausimas: " + kl);
+      lygu(W.eval("DATA.procurements[0].inicData || ''"), "", "atsisakius - nekeista");
+    } finally { W.trukmiuPradzia(TESTU_DIENA); svarus(); }
+    lygu(W.eval("TRUKMIU_METAI"), 2026, "grąžinta");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -741,6 +838,8 @@ async function testaiPatikra1026(){
     await testaiAnalize();
     await modulis();
     await testaiPatikra1026();
+    await modulis();
+    await testaiTrukmes1027();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
