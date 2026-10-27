@@ -640,7 +640,8 @@
   .lk-ispejimas{color:var(--color-warning-strong);font-weight:600}
   .lk-salyga{margin:2px 0 8px;font-size:13px;color:var(--color-graphite-50-strong);border-left:3px solid var(--color-graphite-30);padding-left:8px}
   .lk-pr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:10px 14px}
-  .lk-pr > .ai-siul,.lk-pr > .ai-priimta,.lk-pr-k{grid-column:1 / -1}
+  .lk-pr > .ai-siul,.lk-pr > .ai-priimta,.lk-pr-k,.lk-pr--kl > .lk-uz,.lk-pr--kl > .lk-var{grid-column:1 / -1}
+  .lk-pr--kl > .lk-pr-b{padding-left:0}
   .lk-pr-b{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
   .lk-pr-k{margin-top:0;padding-left:26px}
   .lk-pr-l{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px}
@@ -2123,17 +2124,61 @@ function sutartisAtnaujink(){
   clearTimeout(SUTARTIES_LAIKAS);
   SUTARTIES_LAIKAS = setTimeout(() => { if (window.SUTARTIES_BLOKAS) window.SUTARTIES_BLOKAS.atnaujink(); }, 250);
 }
+/* Pavadinimas kilmininku (2026-10-27, naudotojo pastaba: pasiūlymo formos antraštė „LITGRID AB DARBO DRABUŽIAI PREKIŲ PIRKIMUI“). Laukas prašo
+   kilmininko, bet įrašius vardininku („Darbo drabužiai“) dokumentuose būdavo „Darbo drabužiai pirkimas“, o įspėjimas „Patikrinkite linksnį“ -
+   tik rašant ir be pasiūlymo. Siūlomas kilmininkas: nuo pavadinimo galo keičiami tik žodžiai su vienareikšme vardininko galūne (daiktavardis ir jį
+   derinantys būdvardžiai, ir per „ir“ / „bei“ / „arba“); pirmas žodis be tokios galūnės (kilmininkas „darbo“, „galios“, „elektros“) sustabdo.
+   Galūnės „-os“ ir „-ės“ (vardininko daugiskaita ir kilmininko vienaskaita) neaiškios - keičiamos tik rūšies žodžiams „paslaugos“, „prekės“.
+   Techninis galas („110 kV“, „(II etapas)“) paliekamas. Grąžina siūlomą tekstą arba null; pavadinimo nekeičia - jį keičia tik žmogus („Naudoti“). */
+const KILM_GALUNES = [['asis', 'ojo'], ['oji', 'osios'], ['iai', 'ių'], ['ai', 'ų'], ['ius', 'iaus'], ['us', 'aus'], ['as', 'o'], ['is', 'io'], ['ys', 'io'], ['ė', 'ės'], ['a', 'os']];
+const KILM_RUSYS = { paslaugos: 'paslaugų', prekės: 'prekių' };
+const KILM_JUNGTUKAI = /^(ir|bei|arba)$/i;
+function kilmininkoSiulymas(v){
+  const t = String(v || '').trim(); if (!t) return null;
+  const galas = (/\s*\([^)]*\)\s*$/.exec(t) || [''])[0];
+  const zod = t.slice(0, t.length - galas.length).split(/(\s+)/);
+  let i = zod.length - 1;
+  const techninis = w => /\d/.test(w) || (w.length <= 4 && /[A-ZĄČĘĖĮŠŲŪŽ]/.test(w.slice(1)));   // „110“, „kV“, „MVA“, „IT“
+  while (i >= 0 && (/^\s*$/.test(zod[i]) || techninis(zod[i]))) i--;
+  let keista = 0, galva = true;
+  for (; i >= 0; i--){
+    if (/^\s+$/.test(zod[i])) continue;
+    if (!galva && KILM_JUNGTUKAI.test(zod[i])){ galva = true; continue; }
+    const kab = /,$/.test(zod[i]), w = zod[i].replace(/,$/, '');   // sąrašas „Darbo drabužiai, avalynė“ - kablelis skiria vienarūšius
+    if (kab && !galva) galva = true;
+    if (!/^[A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž-]+$/.test(w)) break;
+    const lw = w.toLowerCase(), didz = w === w.toUpperCase() && w !== lw;
+    if (/(ieji|ysis)$/.test(lw)) return null;   // „mobilieji“, „didysis“ - kamieno kaita (mobiliųjų, didžiojo): pasiūlymo nėra
+    let n = KILM_RUSYS[lw] || null;
+    if (!n){
+      const g = KILM_GALUNES.find(([a]) => lw.length > a.length + 1 && lw.endsWith(a));
+      if (!g && !galva && lw.length > 2 && lw.endsWith('i')) n = lw.slice(0, -1) + 'ų';     // būdvardis daugiskaita: „nauji“ -> „naujų“
+      else if (g) n = lw.slice(0, lw.length - g[0].length) + g[1];
+    }
+    if (!n) break;
+    const sk = didz ? n.toUpperCase() : (w[0] === w[0].toUpperCase() ? n[0].toUpperCase() + n.slice(1) : n);
+    zod[i] = sk + (kab ? ',' : ''); keista++; galva = false;
+  }
+  if (!keista) return null;
+  const s = zod.join('') + galas;
+  return s === t ? null : s;
+}
 function pavPreview(){
   sutartisAtnaujink();
   const raw = ($('#pavadinimas').value||'').trim();
   const v = pavClean(raw);
   const el = $('#pavPreviewEl');
   if (v){
-    const nom = /(iai|ai|as|ys|is|us|a|ė)$/.test(v) && !/(ių|ų|os|ės|io|aus)$/.test(v);
-    const nukirpta = raw !== v ? ` <span class="cite">(perteklinį „pirkimas" nukirpome - šablonas jį prideda pats)</span>` : '';
-    el.innerHTML = `Dokumentuose: <b>„${esc(v)} pirkimas"</b>.${nukirpta}`
-      + (nom ? ` <span style="color:var(--color-warning-strong)">Patikrinkite linksnį - turi būti kilmininkas (pvz. „Autotransformatorių", ne „Autotransformatoriai").</span>`
-             : ` Rašoma visur automatiškai.`);
+    const kilm = kilmininkoSiulymas(v);
+    const nom = kilm || (/(iai|ai|as|ys|is|us|a|ė)$/.test(v) && !/(ių|ų|os|ės|io|aus)$/.test(v));
+    const nukirpta = raw !== v ? ` <span class="cite">(perteklinį „pirkimas“ nukirpome - šablonas jį prideda pats)</span>` : '';
+    el.innerHTML = `Dokumentuose: <b>„${esc(v)} pirkimas“</b>.${nukirpta}`
+      + (kilm ? ` <span class="pav-kilm" style="color:var(--color-warning-strong)">Pavadinimas įrašytas vardininku - turi būti kilmininkas, kitaip antraštėse bus „${esc(v)} pirkimas“ ir „... ${esc(v.toUpperCase())} PIRKIMUI“.
+          Siūloma: <b>„${esc(kilm)}“</b>.</span> <button type="button" class="sec" id="pavKilmNaudoti">Naudoti „${esc(kilm)}“</button>`
+        : nom ? ` <span style="color:var(--color-warning-strong)">Patikrinkite linksnį - turi būti kilmininkas (pvz. „Autotransformatorių“, ne „Autotransformatoriai“).</span>`
+        : ` Rašoma visur automatiškai.`);
+    const b = $('#pavKilmNaudoti');
+    if (b) b.onclick = () => { const f = $('#pavadinimas'); f.value = kilm; f.dispatchEvent(new Event('input', { bubbles: true })); f.focus(); };
   } else {
     el.innerHTML = 'Rašykite <b>kilmininko linksniu</b> vien objekto pavadinimą (be žodžio „pirkimas" - jį prideda šablonas).';
   }
@@ -6712,15 +6757,17 @@ function prieduHTML(K, M){
       const r = u.raktas, q = u.q, a = ATS['A_' + r], nm = u.id + '-r';
       const pa = paaiskinimas({ kas: 'Ar rinkos konsultacija vyko, žinote tik jūs, todėl numatytojo atsakymo nėra. „Taip“ - SPS priedų sąraše lieka eilutė apie atsakymus į rinkos konsultacijos dalyvių klausimus, o patį priedą pridėsite patys. „Ne“ - eilutė pašalinama, likę priedai pernumeruojami iš eilės ir kartu pakeičiamos nuorodos į juos.',
         dokai: [(DOK.find(d => /^(SPS|SALYGOS)$/.test(dokTipas(d))) || {}).trumpas].filter(Boolean) });
-      h += `<div class="q lk lk-pr lk--${u.busena}" id="${u.id}" data-busena="${u.busena}">
+      // klausimas su būsena viršuje, paaiškinimas ir atsakymai - per visą kortelės plotį (2026-10-27, naudotojo pastaba: priedų eilutės tinklelyje
+      // paaiškinimas užimdavo antrą stulpelį, o klausimas ir atsakymai likdavo kelių raidžių pločio stulpelyje)
+      h += `<div class="q lk lk-pr lk-pr--kl lk--${u.busena}" id="${u.id}" data-busena="${u.busena}">
         <div class="lk-gal"><div class="lk-kl" id="${u.id}-k">${esc(RINKOS_KONS_KL)}</div>${GP_PAAISKINIMAS.html({ id: u.id + '-pa', etikete: RINKOS_KONS_KL, turinys: pa })}</div>
+        <div class="lk-pr-b">${busenosZyma(u.busena)}</div>
         <p class="lk-uz" id="${u.id}-u">Nuo atsakymo priklauso SPS priedų sąrašo eilutė „${esc(sarasoEiluteRodyti(q.tekstas))}“. Atsakymus į rinkos konsultacijos
           klausimus pridėsite patys (viešą suvestinę galima parengti Techninių specifikacijų asistento skirtuke „Rinkos konsultacija“).</p>
         <div class="lk-var" role="radiogroup" aria-labelledby="${u.id}-k" aria-describedby="${u.id}-u ${u.id}-pa">
           <label class="opt lk-opt"><input type="radio" id="${u.id}-o0" name="${nm}" ${a === true ? 'checked' : ''} onchange="uAts('A_${esc(r)}',true)"><span><span class="lk-opt-t">Taip - eilutė lieka, atsakymus pridėsiu</span></span></label>
           <label class="opt lk-opt"><input type="radio" id="${u.id}-o1" name="${nm}" ${a === false ? 'checked' : ''} onchange="uAts('A_${esc(r)}',false)"><span><span class="lk-opt-t">Ne - eilutė pašalinama, likę priedai pernumeruojami</span></span></label>
-        </div>
-        <div class="lk-pr-b">${busenosZyma(u.busena)}</div></div>`;
+        </div></div>`;
     } else {
       const r = u.raktas, q = u.q, checked = !!ATS['A_' + r], fam = seimosFailasEilutei(r);
       // eilutė su šeimos priedo failu (D2): failas seka eilutę - pažymėjus pridedamas, atžymėjus - pašalinamas kartu su eilute
@@ -6969,6 +7016,10 @@ function z1Trukumai(){
   const out = [];
   if (!String(($('#pavadinimas') || {}).value || '').trim())
     out.push({ id: 'pavadinimas', tekstas: 'Pirkimo pavadinimas', pasekme: 'dokumentuose liks tuščia pavadinimo vieta' });
+  else {   // vardininkas vietoj kilmininko (2026-10-27) - generuoti galima, bet dokumente bus „Darbo drabužiai pirkimas“
+    const pv = pavClean($('#pavadinimas').value), pk = kilmininkoSiulymas(pv);
+    if (pk) out.push({ id: 'pavadinimas', tekstas: 'Pirkimo pavadinimas kilmininku', pasekme: `dokumentuose bus „${pv} pirkimas“ - siūloma „${pk}“` });
+  }
   if (($('input[name=kalba]:checked') || {}).value === 'LT_EN' && String(($('#pavadinimas') || {}).value || '').trim() && !String(($('#pavadinimasEN') || {}).value || '').trim())
     out.push({ id: 'pavadinimasEN', tekstas: 'Pirkimo pavadinimas anglų kalba', pasekme: 'angliškose dokumentų vietose bus įrašytas lietuviškas pavadinimas' });
   const sb = [...document.querySelectorAll('#sutartisQ input[name="sb-tip"]')];
