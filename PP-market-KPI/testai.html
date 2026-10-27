@@ -88,7 +88,7 @@ function paruosk(){
   M('LANG = "lt"; applyI18n(); DATA = loadData(); renderAll();');
   // Pirkimo kortele gyvena uz renderAll ribu (FOCUS + #focusResult), o pavadinimas
   // atsikartoja ir profiliu tinklelyje - be sito jis persikeltu i kita testa.
-  M('FOCUS.name = ""; FOCUS.last = null; FOCUS.rusis = null; document.getElementById("focusName").value = ""; document.getElementById("focusResult").innerHTML = ""; renderAll();');
+  M('FOCUS.name = ""; FOCUS.last = null; FOCUS.rusis = null; FOCUS.rusisKilme = null; FOCUS.catRanka = false; FOCUS.veiksmai = {}; FOCUS.veiksmaiIs = null; document.getElementById("focusName").value = ""; document.getElementById("focusResult").innerHTML = ""; renderAll();');
   return w;
 }
 
@@ -430,6 +430,7 @@ testas("Laikotarpiai", "Šviežiems duomenims dabartinio laikotarpio pasirinkimo
 
 testas("Įvedimas", "Peršokus į dabartinį laikotarpį praleisti stebėjimai lieka NEŽINOMI", ()=>{
   paruosk();
+  M('metricById("brent").demo = false');   // tikri duomenys: iliustracinio rodiklio eilutė pirmu įvedimu išvaloma (K2)
   pasenkRodikli("brent", 8);
   const r = M(`(function(){
     document.getElementById("btnEdit").click();
@@ -596,7 +597,7 @@ testas("Duomenų būsena", "Atnaujinus vieną rodiklį juosta NEDINGSTA, o parod
 testas("Duomenų būsena", "Juosta dingsta tik atnaujinus visus rodiklius", ()=>{
   paruosk();
   M(`document.getElementById('btnEdit').click();
-     document.querySelectorAll('input[data-edit]').forEach((inp, i)=>{ inp.value = String(50 + i); });
+     document.querySelectorAll('input[data-edit]').forEach((inp, i)=>{ inp.value = String(+(metricById(inp.dataset.edit).series.filter(x=>x!==null).pop() * (1 + i / 100)).toFixed(2)); });
      document.getElementById('btnEdit').click();`);
   lygu(M("DATA.metrics.filter(m=>m.demo).length"), 0);
   lygu(M("DATA.meta.demo"), false, "bendra žyma išvedama iš rodiklių");
@@ -854,7 +855,7 @@ testas("Antraštė", "Demonstracinių duomenų ženklas matomas prie skalės ir 
   lygu(M("document.getElementById('demoZenklas').hidden"), false, "dalis dar demonstracinių");
   lygu(M("document.getElementById('demoZenklas').textContent"), "Dalis demonstracinių");
   M(`document.getElementById('btnEdit').click();
-     document.querySelectorAll('input[data-edit]').forEach((i, n)=>{ i.value = String(60 + n); });
+     document.querySelectorAll('input[data-edit]').forEach((i, n)=>{ i.value = String(+(metricById(i.dataset.edit).series.filter(x=>x!==null).pop() * (1 + n / 100)).toFixed(2)); });
      document.getElementById('btnEdit').click();`);
   lygu(M("document.getElementById('demoZenklas').hidden"), true, "atnaujinus visus ženklas turi dingti");
 });
@@ -974,6 +975,7 @@ testas("OSP jungtis", "Senesnė OSP reikšmė NEPERRAŠO naujesnės turimos", ()
   paruosk();
   const r = M(`(function(){
     const m = metricById("vmdu");
+    m.demo = false;   // iliustracinio rodiklio laikotarpis šaltinio reikšmės neblokuoja (K2) - čia tikras naujesnis stebėjimas
     m.laikotarpis = "2026-07-01"; m.series = m.series.slice(); m.series[m.series.length-1] = 2902;
     const b = taikykOSP(m, { id:"vmdu", laikotarpis:"2026-06-01", reiksme: 2616, eilute: null });
     return { busena: b, lt: m.laikotarpis, pask: latest(m), tikrinta: !!m.tikrintaOsp };
@@ -1355,7 +1357,8 @@ const LT_BE_DIAKRITIKU = ["augimas","kritimas","lygis","pokytis","nuo","iki","pr
 // Grazina lietuviskus likucius: ir diakritikas, ir zodzius be jos.
 function ltLikutis(w, ignoruoti){
   const zodziai = JSON.stringify(LT_BE_DIAKRITIKU);
-  const ign = JSON.stringify(ignoruoti || []);
+  // Įstatymų santrumpos (VPĮ, PĮ) EN tekste lieka lietuviškos - modulio taisyklė (teisės nuorodos - GP_TEISE.cit(..., "en"))
+  const ign = JSON.stringify((ignoruoti || []).concat(["VPĮ", "PĮ"]));
   return w.eval(`(function(){
     const zod = ${zodziai}, ign = ${ign}, out = [];
     document.querySelectorAll("body *").forEach(el=>{
@@ -1469,8 +1472,8 @@ testas("Rezultato langas", "Kiekvienas rodiklis rodomas vieną kartą: VKI reik�
   })()`);
   lygu(r.kartu, 1, "VKI reikšmė „" + r.reiksme + "“ turi būti tekste vieną kartą");
   lygu(r.korteles, 3, "režimo kortelė + du veiksniai");
-  lygu(r.pavadinimai, ["Rinkos režimas", "VKI (vartotojų kainos)", "VMDU (IRT sektorius)"], "kortelių pavadinimai");
-  tiesa(r.verdiktas.indexOf("Indeksavimo gairės (VDA):") === 0 && r.verdiktas.indexOf("VKI (vartotojų kainos)") > 0 && r.verdiktas.indexOf("VMDU (IRT sektorius) - rinkos signalas") > 0, "verdiktas: " + r.verdiktas.slice(0, 160));
+  lygu(r.pavadinimai, ["Rinkos režimas", "VKI (vartotojų kainos)", "VMDU (šalies ūkis)"], "kortelių pavadinimai");
+  tiesa(r.verdiktas.indexOf("Indeksavimo gairės (VDA):") === 0 && r.verdiktas.indexOf("VKI (vartotojų kainos)") > 0 && r.verdiktas.indexOf("VMDU (šalies ūkis) - rinkos signalas") > 0, "verdiktas: " + r.verdiktas.slice(0, 160));
   tiesa(r.riba.indexOf("riba 3 %") > 0 && r.riba.indexOf("riba 5 %") > 0, "VKI ribų juosta 3 % / 5 %, gauta: " + r.riba);
   lygu(r.zingsniu, 5, "indeksavimo sąlygos žingsniai");
   const tc = M('document.getElementById("focusResult").textContent');
@@ -1565,7 +1568,11 @@ testas("Rezultato langas", "Indeksavimo sąlyga: penki žingsniai iš VPT 5.3.3 
              ph: [...document.querySelectorAll("#fvc2 .ph")].map(x => x.textContent), pries2: document.querySelectorAll("#focusResult details.fv-step")[1].querySelector(".muted-note").textContent };
   })()`);
   lygu(r.zingsniai, ["Indeksas ir šaltinis", "Peržiūros teisė ir slenkstis", "Kam taikoma", "Formulė ir apvalinimas", "Procedūra"], "žingsniai");
-  tiesa(r.c1.indexOf("Valstybės duomenų agentūros") > 0 && r.c1.indexOf("VKI (vartotojų kainos), rodiklis S7R260") > 0 && r.c1.indexOf("GKI") < 0, "1 sąlyga su VKI, be GKI: " + r.c1.slice(0, 200));
+  // K3 (2026-10-27): kodas - iš to paties dataflow, iš kurio ateina reikšmės (osp.js), su oficialiu pavadinimu ir pjūviu
+  const vkiKodas = M('GP_OSP.RODIKLIAI.vki.flow.split("_")[0]');
+  lygu(M('GP_OSP.APRASAI.vki.kodas'), vkiKodas, "aprašo kodas = dataflow kodas");
+  tiesa(r.c1.indexOf("Valstybės duomenų agentūros") > 0 && r.c1.indexOf("Vartotojų kainų indeksai (2025 m. = 100), rodiklis " + vkiKodas + ", pjūvis: „Visos vartojimo prekės ir paslaugos“") > 0
+        && r.c1.indexOf("Gamintojų") < 0 && r.c1.indexOf("S7R260") < 0, "1 sąlyga su VKI, be GKI: " + r.c1.slice(0, 260));
   lygu(r.ph, ["[12 (dvylikos) mėnesių]", "[Sutarties įsigaliojimo dienos]", "[formulės punkte]", "[5]", "[12 (dvylika)]"], "2 sąlygos pildomos vietos");
   tiesa(r.c3.indexOf("prekėms, kurios nėra priimtos ir apmokėtos") > 0, "3 sąlyga pagal rūšį: " + r.c3.slice(0, 120));
   tiesa(r.c4.indexOf("a1 = a × (1 + k / 100)") > 0 && r.c4.indexOf("keturių skaitmenų") > 0, "4 sąlyga formulė ir apvalinimas");
@@ -1581,7 +1588,14 @@ testas("Rezultato langas", "Darbams - SSKI dedamųjų ir VMDU pastaba, prekėms 
   apzvalga("Pastočių rekonstrukcijos darbai", "darbai");
   const d = M(`(function(){ const b = document.querySelectorAll("#focusResult details.fv-step")[3].querySelector(".fv-clause-foot .muted-note").textContent; return { po: b, c1: document.getElementById("fvc1").innerText }; })()`);
   tiesa(d.po.indexOf("SSKI dedamąją") > 0 && d.po.indexOf("VMDU") > 0, "darbų 4 žingsnis: " + d.po.slice(0, 160));
-  tiesa(d.c1.indexOf("šiais indeksais:") > 0 && d.c1.indexOf("[nurodykite, kuri kainos dalis") > 0, "kelių indeksų sąlyga: " + d.c1.slice(0, 160));
+  // D1: keli kandidatai - pasirinkimas (a), (b), ...; bendras SSKI ir jo dedamosios - atskiros galimybės
+  tiesa(d.c1.indexOf("[pasirinkite] (a) Statybos sąnaudų elementų kainų indeksai (2021 m. = 100), rodiklis S7R287, pjūvis: statinių tipas „Inžineriniai statiniai“") > 0
+        && d.c1.indexOf("(b) Statybos sąnaudų elementų kainų indeksai (2021 m. = 100), rodiklis S7R287, pagrindinės statybos sąnaudų grupės „Medžiagos ir gaminiai“, „Mašinų ir mechanizmų darbas“ ir „Darbo užmokestis ir pridėtinės išlaidos“ - kiekvienai kainos daliai pagal jos grupę") > 0
+        && d.c1.indexOf("[jei taikomi keli - nurodykite, kuri kainos dalis") > 0 && d.c1.indexOf("šiais indeksais") < 0
+        && d.c1.split("pagrindinės statybos sąnaudų grupės").length === 2, "kelių indeksų sąlyga: " + d.c1.slice(0, 900));
+  apzvalga("Transformatorių keitimo darbai", "darbai");
+  const c1t = M('document.getElementById("fvc1").textContent');
+  tiesa(c1t.split("pagrindinės statybos sąnaudų grupės").length === 2 && c1t.indexOf("(c) Gamintojų parduotos pramonės produkcijos kainų indeksai") > 0 && c1t.indexOf("(d)") < 0, "pastočių darbai - SSKI, dedamosios ir GKI: " + c1t.slice(150, 900));
   apzvalga("110 kV transformatoriaus pirkimas", "prekes");
   const p = M(`document.querySelectorAll("#focusResult details.fv-step")[3].querySelector(".fv-clause-foot .muted-note").textContent`);
   tiesa(p.indexOf("pagal deklaruotą kiekį") > 0, "žaliavos pastaba prekėms: " + p.slice(0, 160));
@@ -1899,25 +1913,516 @@ testas("Du skirtukai", "Kitam skirtukui pakeitus rodiklius, šio skirtuko įraš
 });
 
 /* =========================================================================
+   13. NAUJO DARBUOTOJO PATIKRA (2026-10-27): K1-K4, D1-D8, V1-V9, M1-M5
+   ========================================================================= */
+const lauk = ms => new Promise(r => setTimeout(r, ms));
+async function laukIki(f, ms){ const t0 = Date.now(); while(Date.now() - t0 < (ms || 3000)){ if(f()) return true; await lauk(25); } return false; }
+/* Netikra kortelių saugykla ir kortelės juosta (tikros kortelės nenaudojamos). */
+function kortelesPakaitalas(korteleObj){
+  M(`window.__T = { tikra: KORTELE, saug: (function(){ const d = {}; return { get length(){ return Object.keys(d).length; }, key: i => Object.keys(d)[i] || null,
+      getItem: k => Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null, setItem: (k, v) => { d[k] = String(v); }, removeItem: k => { delete d[k]; } }; })() };
+    GP_KORTELE.naudokSaugykla(__T.saug);
+    __T.k = GP_KORTELE.issaugok(${JSON.stringify(korteleObj)}).kortele;
+    KORTELE = { pasirinkta: () => __T.k ? GP_KORTELE.gauk(__T.k.id) : null, atnaujink: () => {}, pasirink: () => Promise.resolve(true), atsiek: () => {},
+                skirtumai: () => { __T.skirtumai = (__T.skirtumai || 0) + 1; return null; }, pritaikyk: () => null };`);
+}
+function kortelesAtkurk(){ M('if(window.__T){ KORTELE = __T.tikra; GP_KORTELE.naudokSaugykla(null); delete window.__T; }'); }
+/* Visi rodikliai - tikri ir šio laikotarpio (be iliustracinių ir be ankstesnio laikotarpio). */
+function visiTikri(){
+  M(`DATA.metrics.forEach(m => { m.demo = false; m.laikotarpis = dabartinisLaikotarpis(m); }); DATA.meta.demo = false; renderAll();`);
+}
+function kopijuok(f){
+  return M(`(function(){ let tekstas = ""; const o = GP_KOPIJA.kopijuok; GP_KOPIJA.kopijuok = v => { tekstas = v; return Promise.resolve(true); };
+    try { ${f}; } finally { GP_KOPIJA.kopijuok = o; } return tekstas; })()`);
+}
+
+testas("Patikra 2026-10-27", "K1: iliustraciniai duomenys pažymėti apžvalgoje, kopijoje ir kortelės kontekste; „Parengta“ - šiandien, duomenų data atskirai", ()=>{
+  paruosk();
+  apzvalga("Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)");
+  const r = M(`(function(){
+    const fr = document.getElementById("focusResult");
+    return { zymos: fr.querySelectorAll(".fk .kpi-zyma.demo").length, kortelės: fr.querySelectorAll(".fk[data-fk]").length,
+             busena: (fr.querySelector(".fk-busena") || {}).textContent || "", foot: fr.querySelector(".focus-out-foot").textContent };
+  })()`);
+  tiesa(r.zymos > 0 && r.zymos === r.kortelės, "kiekvienoje rodiklio kortelėje - žyma „iliustracinė“: " + r.zymos + " iš " + r.kortelės);
+  tiesa(r.busena.indexOf("Duomenų būklė:") === 0 && r.busena.indexOf("iliustracin") > 0 && r.busena.indexOf("LME varis") > 0, "duomenų būklė: " + r.busena.slice(0, 200));
+  const siandien = M("fmtDate(todayLocal())");
+  tiesa(r.foot.indexOf("Parengta: " + siandien) >= 0 && r.foot.indexOf("Rodiklių duomenys: demonstraciniai (") >= 0, "apačia: " + r.foot);
+  const txt = kopijuok("copyFocus()");
+  tiesa(/LME varis \([^\n]*\) \[iliustracinė reikšmė\]/.test(txt), "veiksnys kopijoje pažymėtas: " + (txt.match(/Pagrindiniai veiksniai:[^\n]*/) || [""])[0].slice(0, 200));
+  tiesa(txt.indexOf("Duomenų būklė: ") > 0 && txt.indexOf("iliustracin") > 0, "kopijoje - duomenų būklė");
+  tiesa(txt.indexOf("Parengta: " + siandien) > 0 && txt.indexOf("Rodiklių duomenys: demonstraciniai (") > 0 && txt.indexOf("tikslinami rankiniu") < 0, "kopijos datos");
+  kortelesPakaitalas({ pavadinimas: "Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)", objektas: "prekes" });
+  try {
+    const k = M(`(function(){ irasykVeiksmus(); return GP_KORTELE.gauk(__T.k.id).veiksmai; })()`);
+    tiesa(k.length > 0 && k[0].kontekstas.indexOf("iliustracinių rodiklių: ") > 0 && k[0].kontekstas.indexOf("režimas") > 0, "kortelės kontekstas: " + (k[0] || {}).kontekstas);
+  } finally { kortelesAtkurk(); }
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "K1: ankstesnio laikotarpio duomenys pažymėti; tikri ir nauji - be įspėjimo, kopijoje „tikri ir naujausi“", ()=>{
+  paruosk();
+  M(`DATA.metrics.forEach(m => { m.demo = false; m.laikotarpis = slinktiLaikotarpi(dabartinisLaikotarpis(m), m.zingsnis, -(m.zingsnis === "mėn." ? 6 : 16)); }); DATA.meta.demo = false; renderAll();`);
+  apzvalga("Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)");
+  const r = M(`({ sena: document.querySelectorAll("#focusResult .fk .kpi-zyma.sena").length, busena: (document.querySelector("#focusResult .fk-busena") || {}).textContent || "" })`);
+  tiesa(r.sena > 0 && r.busena.indexOf("ankstesnio laikotarpio") > 0 && r.busena.indexOf("prieš 16 savaičių") > 0, "ankstesnio laikotarpio: " + r.sena + " / " + r.busena.slice(0, 200));
+  const txt = kopijuok("copyFocus()");
+  tiesa(/\[ankstesnio laikotarpio - prieš 16 savaičių\]/.test(txt), "kopija: " + (txt.match(/Pagrindiniai veiksniai:[^\n]*/) || [""])[0].slice(0, 200));
+  paruosk();
+  visiTikri();
+  apzvalga("Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)");
+  lygu(M(`document.querySelectorAll("#focusResult .fk-busena, #focusResult .kpi-zyma").length`), 0, "tikri ir šio laikotarpio duomenys - be žymų");
+  const t2 = kopijuok("copyFocus()");
+  tiesa(/Duomenų būklė: visų \d+ apžvalgos rodiklių duomenys tikri ir naujausi/.test(t2) && /Rodiklių duomenys: išsaugoti \d{4} m\./.test(t2), "kopija be problemų: " + (t2.match(/Duomenų būklė:[^\n]*/) || [""])[0] + " / " + (t2.match(/Rodiklių duomenys:[^\n]*/) || [""])[0]);
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "K2: VMDU - ketvirčių istorija iš OSP, pokytis nuo tikros reikšmės, pavadinimas pagal pjūvį, ketvirtis rodomas ketvirčiu", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("vmdu");
+    const b = taikykOSP(m, { id:"vmdu", laikotarpis:"2026-06-01", reiksme: 2350, ketvirtine: [
+      { laikotarpis:"2025-06-01", reiksme: 2100 }, { laikotarpis:"2025-09-01", reiksme: 2150 }, { laikotarpis:"2025-12-01", reiksme: 2300 },
+      { laikotarpis:"2026-03-01", reiksme: 2250 }, { laikotarpis:"2026-04-01", reiksme: 9999 }, { laikotarpis:"2026-06-01", reiksme: 2350 } ] });
+    renderAll();
+    const kortele = document.querySelector('.kpi[data-id="vmdu"]');
+    return { b, s: m.series, pc: +pctChange(m).toFixed(2), demo: m.demo, pav: m.name, data: kortele.querySelector(".kpi-src").textContent,
+             linija: (kortele.querySelector("svg.spark path[stroke]").getAttribute("d").match(/L/g) || []).length };
+  })()`);
+  lygu(r.b, "atnaujinta");
+  lygu(r.s, [2100, null, null, 2150, null, null, 2300, null, null, 2250, null, null, 2350], "ketvirčiai - jų paskutinių mėnesių vietose");
+  lygu(r.pc, +((2350 - 2100) / 2100 * 100).toFixed(2), "12 mėn. pokytis nuo tikros 2025 m. II ketv. reikšmės");
+  lygu([r.demo, r.pav], [false, "VMDU (šalies ūkis)"]);
+  tiesa(r.data.indexOf("2026 m. II ketv.") >= 0, "laikotarpis - ketvirtis: " + r.data);
+  tiesa(r.linija >= 4, "ketvirčių taškai sujungti linija");
+  // Tik viena reikšmė iliustraciniam rodikliui: iliustracinės reikšmės nėra istorija - pokytis neskaičiuojamas
+  paruosk();
+  const v = M(`(function(){ const m = metricById("vmdu"); taikykOSP(m, { id:"vmdu", laikotarpis:"2026-06-01", reiksme: 2350, ketvirtine: [{ laikotarpis:"2026-06-01", reiksme: 2350 }] });
+    return { s: m.series.filter(x => x !== null), pc: String(pctChange(m)) }; })()`);
+  lygu(v, { s: [2350], pc: "NaN" }, "be istorijos - pokytis neskaičiuojamas, ne nuo iliustracinės");
+  const v1 = M(`(function(){ const m = metricById("gki"); taikykOSP(m, { id:"gki", laikotarpis:"2026-06-01", reiksme: 114 });
+    return { s: m.series.filter(x => x !== null), pc: String(pctChange(m)) }; })()`);
+  lygu(v1, { s: [114], pc: "NaN" }, "viena reikšmė be eilutės iliustraciniam rodikliui");
+  // Senesnės versijos eilutė: ketvirtis prirašytas prie iliustracinių mėnesinių - lieka tik tikra naujausia
+  const n = M(`normalizuokDuomenis((function(){ const d = JSON.parse(JSON.stringify(DATA)); const m = d.metrics.find(x => x.id === "vmdu");
+    m.demo = false; m.laikotarpis = "2026-06-01"; m.series = [2666,2682,2700,2718,2737,2757,2778,2800,2822,2848,2875,2902,2350]; return d; })()).duomenys.metrics.find(x => x.id === "vmdu").series`);
+  lygu(n.filter(x => x !== null), [2350], "užteršta eilutė išvalyta");
+  // osp.js grąžina ketvirčių istoriją (5 ketvirčiai), mėnesiniams - eilutę
+  const o = M(`(function(){
+    const d = { structure: { dimensions: { observation: [ { name:"Tipas", values:[{name:"Bruto"}] }, { name:"Laikotarpis", values: ["2025K1","2025K2","2025K3","2025K4","2026K1","2026K2"].map(n => ({name:n})) } ] } },
+      dataSets: [{ observations: { "0:0":[2000], "0:1":[2100], "0:2":[2150], "0:3":[2300], "0:4":[2250], "0:5":[2350] } }] };
+    return GP_OSP.istraukEilute(d, ["Bruto"]).map(x => x.laikotarpis + "=" + x.reiksme).join(",");
+  })()`);
+  lygu(o, "2025K1=2000,2025K2=2100,2025K3=2150,2025K4=2300,2026K1=2250,2026K2=2350");
+  const ne = M(`(function(){ const d = { structure: { dimensions: { observation: [ { name:"Tipas", values:[{name:"Bruto"}] }, { name:"Laikotarpis", values:[{name:"2026K2"}] } ] } },
+      dataSets: [{ observations: { "0:0":["2350"] } }] };
+    try { GP_OSP.istraukEilute(d, ["Bruto"]); return "nemetė"; } catch(e){ return e.message + " | " + priezastisZmogui(e.message); } })()`);
+  lygu(ne, "šaltinio reikšmės ne skaičiai | šaltinis grąžino ne skaičių", "pjūvis rastas, bet reikšmės ne skaičiai - ne „pjūvis nerastas“");
+  tiesa(M("GP_OSP.RODIKLIAI.vmdu.ketvirtinis === true && GP_OSP.APRASAI.vmdu.pjuvis.indexOf('šalies ūkis') >= 0"), "VMDU aprašas - šalies ūkio pjūvis");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "K2: pirma tikra reikšmė iliustraciniam rodikliui (ranka, rinka) - be iliustracinės istorijos", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const cu = metricById("lme_cu");
+    taikykRinka(cu, { id:"lme_cu", laikotarpis:"2026-06-01", reiksme: 9820, daznis:"mėn.", saltinis:"FRED" });   // 2 sav. po iliustracinio laikotarpio
+    return { s: cu.series.filter(x => x !== null), pc: String(pctChange(cu)), lt: cu.laikotarpis, demo: cu.demo };
+  })()`);
+  lygu(r, { s: [9820], pc: "NaN", lt: "2026-06-01", demo: false }, "mėnesinė rinkos reikšmė");
+  M(`document.getElementById('btnEdit').click(); document.querySelector('select[data-edit-per="brent"]').value = "naujas"; document.querySelector('input[data-edit="brent"]').value = "86"; document.getElementById('btnEdit').click();`);
+  lygu(M(`metricById("brent").series.filter(x => x !== null)`), [86], "rankinė reikšmė iliustraciniam rodikliui");
+  lygu(M(`String(pctChange(metricById("brent")))`), "NaN");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "K3: sąlyga, diagnozė ir kopija - tas pats OSP rodiklis, iš kurio ateina reikšmės (visi 72 deriniai), su oficialiu pavadinimu", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const blogi = [], kodai = new Set();
+    Object.keys(GP_OSP.RODIKLIAI).forEach(id => { if(INDEKSO_SALTINIS[id].kodas !== GP_OSP.RODIKLIAI[id].flow.split("_")[0]) blogi.push("kodas " + id); });
+    DATA.categories.forEach(c => ["darbai","prekes","paslaugos"].forEach(rus => {
+      FOCUS.rusis = rus; FOCUS.rusisKilme = "ranka"; FOCUS.catRanka = true;
+      renderFocusCard("Bandomasis pirkimas", c.id);
+      const c1 = (document.getElementById("fvc1") || {}).textContent || "";
+      if(c1.indexOf("S7R260") >= 0) blogi.push("S7R260 " + c.id + "/" + rus);
+      (c1.match(/rodiklis (S\\w+)/g) || []).forEach(x => kodai.add(x.slice(9)));
+      if(/šiais indeksais/.test(c1)) blogi.push("„šiais indeksais“ " + c.id + "/" + rus);
+      const n = (c1.match(/\\([a-h]\\) /g) || []).length;
+      if(n === 1) blogi.push("viena galimybė su raide " + c.id + "/" + rus);
+    }));
+    const leidziami = Object.keys(GP_OSP.APRASAI).map(k => GP_OSP.APRASAI[k].kodas);
+    return { blogi, svetimi: [...kodai].filter(k => leidziami.indexOf(k) < 0), vki: fkSaltinis(metricById("vki")) };
+  })()`);
+  lygu(r.blogi, [], "netinkami deriniai");
+  lygu(r.svetimi, [], "sąlygoje - tik osp.js rodiklių kodai");
+  lygu(r.vki, "VDA · OSP " + M('GP_OSP.RODIKLIAI.vki.flow.split("_")[0]') + " · mėnesinis");
+  paruosk();
+  apzvalga("Projektavimo paslaugos", "paslaugos");
+  const c1 = M('document.getElementById("fvc1").textContent');
+  tiesa(c1.indexOf("Paslaugų kainų indeksai (2021 m. = 100), rodiklis S7R290, ekonominės veiklos rūšis [nurodykite") > 0
+        && c1.indexOf("Darbo užmokestis (mėnesinis), rodiklis S3R0050, pjūvis: bruto") > 0 && c1.indexOf("(skelbiama kas ketvirtį)") > 0, "paslaugų indeksai: " + c1.slice(150, 700));
+  const c4 = M('document.getElementById("fvc4").textContent');
+  tiesa(c4.indexOf("Kai taikomi keli indeksai, k apskaičiuojamas atskirai") > 0 && c4.indexOf("(ketvirtinio indekso - ketvirčio)") > 0, "4 žingsnis keliems ir ketvirtiniams: " + c4.slice(0, 400));
+  const kop = kopijuok("copyFocus()");
+  tiesa(kop.indexOf("Vartotojų kainų indeksai (2025 m. = 100), OSP S7R330, „Visos vartojimo prekės ir paslaugos“") > 0, "kopijos kandidatai su oficialiais pavadinimais");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "K4 ir D6: duomenų normalizavimas - aprašai iš DEFAULT_DATA, netinkami laukai atmetami, trumpa eilutė - pokytis neskaičiuojamas", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const d = JSON.parse(JSON.stringify(DATA));
+    const b = d.metrics.find(m => m.id === "brent");
+    b.thr.yellow = '<img src=x onerror="window.__xss=(window.__xss||0)+1">'; b.type = "level"; b.decimals = "du"; b.name = "<b>X</b>";
+    d.categories[0].act.red = "ne masyvas";
+    const n = normalizuokDuomenis(d).duomenys, nb = n.metrics.find(m => m.id === "brent");
+    const blogaEil = JSON.parse(JSON.stringify(DATA)); blogaEil.metrics[0].series = [1, "2", 3];
+    const blogaData = JSON.parse(JSON.stringify(DATA)); blogaData.metrics[3].laikotarpis = "2026-02-30";
+    const blogaZyma = JSON.parse(JSON.stringify(DATA)); blogaZyma.metrics[2].demo = "taip";
+    const trumpa = JSON.parse(JSON.stringify(DATA)); trumpa.metrics.forEach(m => { m.series = [1]; m.demo = false; });
+    const tn = normalizuokDuomenis(trumpa).duomenys;
+    const url = JSON.parse(JSON.stringify(DATA)); url.metrics[0].srcAuto = { name: "x", url: "javascript:alert(1)" };
+    return { thr: nb.thr.yellow, type: nb.type, dec: nb.decimals, name: nb.name, act: Array.isArray(n.categories[0].act.red),
+             eil: normalizuokDuomenis(blogaEil).klaida, data: normalizuokDuomenis(blogaData).klaida, zyma: normalizuokDuomenis(blogaZyma).klaida,
+             trumpaPc: tn.metrics.map(m => String((DATA = tn, pctChange(m)))).filter(x => x !== "NaN").length,
+             url: normalizuokDuomenis(url).duomenys.metrics[0].srcAuto.url, nieko: normalizuokDuomenis({ metrics: [] }).klaida };
+  })()`);
+  lygu([r.thr, r.type, r.dec, r.name, r.act], [5, "change", 1, "Brent nafta", true], "aprašai - iš DEFAULT_DATA");
+  lygu([r.eil, r.data, r.zyma], [{ k:"eilute", id:"brent" }, { k:"laikotarpis", id:"lme_cu" }, { k:"zyma", id:"lme_al" }], "netinkami laukai");
+  lygu(r.trumpaPc, 0, "trumpa eilutė: pokytis neskaičiuojamas (ne 0 %)");
+  lygu(r.url, "", "nuoroda - tik https");
+  lygu(r.nieko, { k: "rodikliai" });
+  // Išsaugotas kenkėjiškas įrašas: perkrovus kodas nevykdomas, ribos - iš DEFAULT_DATA
+  paruosk();
+  const k = M(`(function(){
+    const d = JSON.parse(JSON.stringify(DATA)); d.metrics[0].thr.red = '<img src=x onerror="window.__xss=(window.__xss||0)+1">'; d.metrics[1].type = "level";
+    localStorage.setItem(STORE_KEY, JSON.stringify(d));
+    DATA = loadData(); renderAll();
+    return { xss: window.__xss || 0, imgs: document.querySelectorAll("img[src='x']").length, skaitymas: !!KPI_SKAITYMAS, red: metricById("brent").thr.red, type: metricById("wti").type };
+  })()`);
+  lygu([k.xss, k.imgs, k.skaitymas, k.red, k.type], [0, 0, false, 12, "change"], "kodas nevykdomas, aprašai - numatytieji");
+  const k2 = M(`(function(){
+    const d = JSON.parse(JSON.stringify(DATA)); d.metrics[1].series[d.metrics[1].series.length - 1] = '<img src=x onerror="window.__xss=1">';
+    localStorage.setItem(STORE_KEY, JSON.stringify(d));
+    DATA = loadData(); renderAll();
+    const o = { xss: window.__xss || 0, skaitymas: !!KPI_SKAITYMAS }; KPI_SKAITYMAS = null; return o;
+  })()`);
+  lygu(k2, { xss: 0, skaitymas: true }, "eilutė su tekstu - įrašas neperskaitomas (juosta „būsena nežinoma“), ne tylūs iliustraciniai duomenys");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "D6: importas - netinkamas failas atmetamas su priežastimi ir neišsaugomas; tinkamas - išsaugomas tik nupiešus", async ()=>{
+  await lauk(50);   // ankstesnių (sinchroninių) testų pranešimai - prieš perimant showToast
+  const w = paruosk();
+  const zin = [];
+  const o = w.showToast;
+  w.showToast = x => { zin.push(x); };
+  const importuok = async (obj) => {
+    zin.length = 0;
+    const dt = new w.DataTransfer();
+    dt.items.add(new w.File([typeof obj === "string" ? obj : JSON.stringify(obj)], "kopija.json", { type: "application/json" }));
+    const fi = w.document.getElementById("fileInput");
+    fi.files = dt.files;
+    fi.dispatchEvent(new w.Event("change"));
+    await laukIki(() => zin.length > 0, 3000);
+    return zin[0] || "";
+  };
+  try {
+    M("saveData()");
+    const pries = localStorage.getItem(M("STORE_KEY"));
+    const blogas = M("JSON.parse(JSON.stringify(DATA))"); blogas.metrics[0].series = ["<img>"];
+    const z1 = await importuok(blogas);
+    tiesa(z1.indexOf("Netinkamas failas:") === 0 && z1.indexOf("„Brent nafta“") > 0 && z1.indexOf("Duomenys nepakeisti") > 0, "priežastis: " + z1);
+    lygu(localStorage.getItem(M("STORE_KEY")) === pries, true, "netinkamas failas neišsaugotas");
+    const z2 = await importuok("{ne json");
+    tiesa(z2.indexOf("Klaida skaitant failą") === 0, "ne JSON: " + z2);
+    const geras = M("JSON.parse(JSON.stringify(DATA))"); geras.metrics[0].series[geras.metrics[0].series.length - 1] = 99; geras.metrics[0].demo = false;
+    geras.metrics[0].decimals = "du";   // aprašas - ignoruojamas, imamas iš DEFAULT_DATA
+    const z3 = await importuok(geras);
+    lygu(z3, "Duomenys įkelti");
+    lygu([M("latest(metricById('brent'))"), M("document.querySelectorAll('#gridA .kpi').length")], [99, 5], "įkelta ir nupiešta");
+    lygu(JSON.parse(localStorage.getItem(M("STORE_KEY"))).metrics[0].decimals, 1, "išsaugotas su DEFAULT_DATA aprašu");
+    // Nepavykęs piešimas: duomenys grąžinami, failas neišsaugomas
+    const pries2 = localStorage.getItem(M("STORE_KEY")), ra = w.renderAll;
+    w.renderAll = () => { throw new Error("bandomasis piešimo lūžis"); };
+    let z4;
+    try { const kitas = M("JSON.parse(JSON.stringify(DATA))"); kitas.metrics[0].series[kitas.metrics[0].series.length - 1] = 77; z4 = await importuok(kitas); }
+    finally { w.renderAll = ra; }
+    tiesa(z4.indexOf("Klaida skaitant failą") === 0, "piešimo klaida: " + z4);
+    lygu([localStorage.getItem(M("STORE_KEY")) === pries2, M("latest(metricById('brent'))")], [true, 99], "neišsaugota, ankstesni duomenys");
+  } finally { w.showToast = o; }
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "D3: spausdinant apžvalga nepaslepiama ir visi sąlygos žingsniai atveriami, po to - kaip buvo", ()=>{
+  paruosk();
+  apzvalga("Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)");
+  const r = M(`(function(){
+    let taisykle = "";
+    for(const ss of document.styleSheets){ let rs; try { rs = ss.cssRules; } catch(e){ continue; }
+      for(const x of rs) if(x.media && /print/.test(x.media.mediaText)) for(const y of x.cssRules) if(/#focusSec/.test(y.selectorText || "")) taisykle = y.selectorText; }
+    const atv = () => [...document.querySelectorAll("#focusResult details.fv-step")].map(d => d.open);
+    const pries = atv(); window.dispatchEvent(new Event("beforeprint")); const spaudai = atv(); window.dispatchEvent(new Event("afterprint"));
+    return { taisykle, pries, spaudai, po: atv(), atitinka: !!document.querySelector("#focusSec .fk-sec") && document.querySelector("#focusSec").matches(taisykle.replace(/^#focusSec/, "#focusSec")) };
+  })()`);
+  tiesa(r.taisykle.indexOf(".fk-sec") > 0 && r.taisykle.indexOf("focus-out") < 0, "spausdinimo taisyklė: " + r.taisykle);
+  lygu(r.atitinka, false, "su rezultatu apžvalga spausdinant nepaslepiama");
+  lygu(r.spaudai.every(Boolean), true, "spausdinant atverti visi žingsniai");
+  lygu(r.po, r.pries, "po spausdinimo - kaip buvo");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "D4: kitas pirkimas nei kortelėje - klausiama prieš įrašant („Neįrašyti“ / „Įrašyti vis tiek“), juosta nebesako „užpildyta“", ()=>{
+  paruosk();
+  kortelesPakaitalas({ pavadinimas: "Kabelių ir movų tiekimas", objektas: "prekes" });
+  try {
+    const r = M(`(function(){
+      document.getElementById("focusName").value = "Biuro kompiuterių pirkimas"; runFocus();
+      const skirt = __T.skirtumai || 0;
+      irasykVeiksmus();
+      const klausimas = document.getElementById("fvKortele").textContent, fok = document.activeElement.id;
+      const pries = (GP_KORTELE.gauk(__T.k.id).veiksmai || []).length;
+      document.getElementById("fvKitasNe").click();
+      const poNe = (GP_KORTELE.gauk(__T.k.id).veiksmai || []).length;
+      irasykVeiksmus(); document.getElementById("fvKitasTaip").click();
+      const poTaip = (GP_KORTELE.gauk(__T.k.id).veiksmai || []).length;
+      // Tas pats pirkimas - be klausimo
+      document.getElementById("focusName").value = "Kabelių ir movų tiekimas"; runFocus();
+      const k2 = (GP_KORTELE.gauk(__T.k.id).veiksmai || []).length; irasykVeiksmus();
+      return { skirt, klausimas, fok, pries, poNe, poTaip, k2, po2: (GP_KORTELE.gauk(__T.k.id).veiksmai || []).length };
+    })()`);
+    tiesa(r.skirt > 0, "kortelės juosta perskaičiuoja skirtumus (pavadinimas skiriasi)");
+    tiesa(r.klausimas.indexOf("„Biuro kompiuterių pirkimas“") > 0 && r.klausimas.indexOf("„Kabelių ir movų tiekimas“") > 0, "klausimas: " + r.klausimas);
+    lygu(r.fok, "fvKitasTaip", "fokusas - į atsakymą");
+    lygu([r.pries, r.poNe], [0, 0], "neatsakius ir „Neįrašyti“ - niekas neįrašyta");
+    tiesa(r.poTaip > 0, "„Įrašyti vis tiek“ - įrašyta");
+    tiesa(r.po2 > r.k2, "tas pats pirkimas - įrašoma be klausimo");
+  } finally { kortelesAtkurk(); }
+  const src = (function(){ const x = new XMLHttpRequest(); x.open("GET", "./EPSO-G_Rinkos_KPI_skydelis.html?s=" + Date.now(), false); x.send(); return x.responseText; })();
+  tiesa(/klaustiKitoPirkimo:\s*true/.test(src), "kortelės juosta klausia, kai apžvalgoje kitas pirkimas");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "D5: spėtas profilis ir rūšis - „nustatyta automatiškai“ ir po perpiešimo; mišriam - rūšis nespėjama; į naują kortelę - tik žmogaus rūšis", async ()=>{
+  paruosk();
+  apzvalga("Skirstyklos įrangos modernizavimas");
+  const k1 = M('document.getElementById("focusKilme").textContent');
+  M("renderAll()");
+  const k2 = M('document.getElementById("focusKilme").textContent');
+  tiesa(k1.indexOf("Profilis nustatytas automatiškai") === 0 && k1.indexOf("rūšis nustatyta automatiškai") > 0 && k1.indexOf("patikrinkite") > 0, "pirmas: " + k1);
+  lygu(k2, k1, "perpiešus - vis tiek automatiškai (iki 2026-10-27 - „pasirinkta rankiniu būdu“)");
+  M('changeFocusRusi("prekes")');
+  tiesa(M('document.getElementById("focusKilme").textContent').indexOf("rūšį pasirinkote patys") > 0, "rūšis ranka");
+  lygu(M("document.activeElement.id"), "focusRusisSel", "fokusas - grįžo į rūšies pasirinkimą");
+  tiesa(M('document.getElementById("focusStatus").textContent').indexOf("Apžvalga sudaryta:") === 0, "pranešimas ekrano skaitytuvui");
+  M('changeFocusCat("statyba")');
+  tiesa(M('document.getElementById("focusKilme").textContent').indexOf("Profilį pasirinkote patys; rūšį pasirinkote patys.") === 0, "abu ranka");
+  lygu(M("document.activeElement.id"), "focusCatSel");
+  // Į naują kortelę: spėta rūšis neperduodama, žmogaus - perduodama
+  const lauk2 = M(`(async function(){ const o = GP_KORTELE.kurkLange, out = []; GP_KORTELE.kurkLange = l => { out.push(l); return Promise.resolve(null); };
+    try { FOCUS.rusisKilme = null; await kurkKorteleIsApzvalgos(); FOCUS.rusisKilme = "ranka"; await kurkKorteleIsApzvalgos(); } finally { GP_KORTELE.kurkLange = o; }
+    return out; })()`);
+  const lk = await lauk2;
+  lygu([("objektas" in lk[0]), lk[1].objektas], [false, "prekes"], "kortelei - tik žmogaus pasirinkta rūšis");
+  // Mišrus kortelės pirkimas - rūšis nepasirinkta, kol žmogus nepasirenka
+  paruosk();
+  kortelesPakaitalas({ pavadinimas: "110 kV transformatorių tiekimas ir montavimas", objektas: "misrus" });
+  try {
+    const m = M(`(function(){ document.getElementById("focusName").value = "110 kV transformatorių tiekimas ir montavimas"; runFocus();
+      return { rus: document.getElementById("focusRusisSel").value, kilme: document.getElementById("focusKilme").textContent,
+               modelis: document.querySelector("#focusResult .fv-cols .fv-col:last-child").textContent, sal: !!document.getElementById("fvc1"), last: FOCUS.last.rusis }; })()`);
+    lygu([m.rus, m.last, m.sal], ["", "", false], "mišriam - rūšis nepasirinkta, sąlygos nėra");
+    tiesa(m.kilme.indexOf("mišrus pirkimas") > 0 && m.modelis.indexOf("Pasirinkite pirkimo rūšį") >= 0, "paaiškinta: " + m.kilme + " / " + m.modelis.slice(0, 120));
+    M('changeFocusRusi("darbai")');
+    tiesa(M('!!document.getElementById("fvc1")'), "pasirinkus - sąlyga sudaroma");
+  } finally { kortelesAtkurk(); }
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "D7: reikšmės įvedimas - lietuviški ir angliški skyrikliai, netinkama ir neigiama reikšmė - klaida, labai besiskirianti - patvirtinama antru paspaudimu", ()=>{
+  paruosk();
+  const ived = (id, v) => M(`(function(){ const b = document.getElementById("btnEdit"); if(!document.body.classList.contains("editing")) b.click();
+    document.querySelector('select[data-edit-per="${id}"]').value = "dabartinis";
+    document.querySelector('input[data-edit="${id}"]').value = ${JSON.stringify(v)}; b.click();
+    const inp = document.querySelector('input[data-edit="${id}"]');
+    return { editing: document.body.classList.contains("editing"), v: latest(metricById("${id}")), inv: inp ? inp.getAttribute("aria-invalid") : null,
+             kl: inp ? document.getElementById("ek-${id}").textContent : "", fok: document.activeElement === inp, aria: inp ? inp.getAttribute("aria-label") : "" }; })()`);
+  M('metricById("lme_al").demo = false; metricById("lme_cu").demo = false; metricById("brent").demo = false; renderAll();');
+  let r = ived("lme_al", "2.950,50");
+  lygu([r.editing, r.v], [false, 2950.5], "„2.950,50“ - 2 950,5");
+  r = ived("lme_al", "3,010.25");
+  lygu([r.editing, r.v], [false, 3010.25], "„3,010.25“ - 3 010,25");
+  r = ived("lme_cu", "9.820");
+  tiesa(r.editing && r.inv === "true" && r.kl.indexOf("labai skiriasi") > 0 && r.fok, "„9.820“ (9,82 prieš 10 050) - įspėjimas: " + r.kl);
+  lygu(r.v, 10050, "dar neišsaugota");
+  tiesa(r.aria.indexOf("LME varis") === 0, "lauko pavadinimas su rodikliu: " + r.aria);
+  r = M(`(function(){ document.getElementById("btnEdit").click(); return { editing: document.body.classList.contains("editing"), v: latest(metricById("lme_cu")) }; })()`);
+  lygu([r.editing, r.v], [false, 9.82], "antras paspaudimas - patvirtinta");
+  ["-5", "0", "abc", "1e300"].forEach(x => {
+    const q = ived("brent", x);
+    tiesa(q.editing && q.inv === "true" && q.kl.length > 10 && q.v === 85, "„" + x + "“ - klaida ir neišsaugota: " + JSON.stringify(q));
+    M('document.getElementById("btnCancel").click()');
+  });
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "D8 ir V7: tekstai pagal pirkimo vykdytojo įstatymą, teisės nuorodos - iš registro, be „LITGRID (PĮ)“, „teisinis pagrindas“ ir „VPT metodika 53.2 p.“", ()=>{
+  paruosk();
+  const tekstai = rez => {
+    kortelesPakaitalas({ pavadinimas: "Grupės IT sistemų priežiūros paslaugos", objektas: "paslaugos_it", vykdytojas: rez === "VPI" ? "epso-g" : "litgrid", rezimas: rez });
+    try { return M(`(function(){ document.getElementById("focusName").value = "Grupės IT sistemų priežiūros paslaugos"; runFocus();
+      return { p: document.querySelector("#focusResult .fv-cols .fv-col:last-child .fv-p").textContent,
+               s2: document.querySelectorAll("#focusResult details.fv-step")[1].querySelector(".muted-note").textContent }; })()`); }
+    finally { kortelesAtkurk(); }
+  };
+  const v = tekstai("VPI"), p = tekstai("PI");
+  tiesa(v.p.indexOf("tipinės pirkimo sutarčių sąlygos taikomos") > 0 && v.p.indexOf(M('GP_TEISE.cit("sut_tipines","VPI")')) > 0 && v.p.indexOf(M('GP_TEISE.cit("ktm_perziuros_taisykles","PI")')) > 0, "VPĮ: " + v.p);
+  tiesa(p.p.indexOf("orientyras") > 0 && p.p.indexOf("LITGRID") < 0, "PĮ: " + p.p);
+  tiesa(v.s2.indexOf(M('GP_TEISE.cit("ktm_perziura_privaloma","PI")')) > 0 && v.s2.indexOf(M('GP_TEISE.cit("sut_perziura","VPI")')) > 0, "VPĮ privalomumas: " + v.s2);
+  tiesa(p.s2.indexOf("Kainodaros taisyklių nustatymo metodikos 54 p.") > 0 && p.s2.indexOf("VPĮ 87") < 0 && p.s2.indexOf("VPT tipinėse sąlygose (VPĮ)") < 0, "PĮ privalomumas: " + p.s2);
+  paruosk();
+  const t = M(`(function(){ const v = []; ["lt","en"].forEach(l => { setLang(l); v.push(document.getElementById("footAbout").innerText, document.querySelector('[data-i18n="sec.c.p"]').textContent); }); setLang("lt");
+    return { v: v.join(" "), warn: I18N.lt["idx.vmdu.warn"] + I18N.en["idx.vmdu.warn"], legal: I18N.lt["sum.p6.legal"] + I18N.en["sum.p6.legal"] }; })()`);
+  tiesa(!/PSĮ|Litgrid rizikų|visiškai lokaliai|be interneto|teisinis pagrindas|legal basis|entirely locally|no internet/.test(t.v + t.legal), "poraštė ir C lygmuo: " + t.v.slice(0, 300));
+  tiesa(t.v.indexOf("Iliustracinių reikšmių lieka: 15 iš 15") >= 0 && t.v.indexOf("per G-Procure serverį") > 0, "poraštė su iliustracinėmis ir duomenų keliu");
+  tiesa(!/53\.2/.test(t.warn), "VMDU įspėjimas be išgalvotos nuorodos");
+  visiTikri();
+  tiesa(M('document.getElementById("footAbout").innerText').indexOf("Iliustracinių") < 0, "be iliustracinių - sakinio nėra");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "D2: 2 žingsnio užuomina nurodo rodiklį, kuris yra 1 bloke (visi 72 deriniai), ir sako, kai reikšmė iliustracinė", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const blogi = [];
+    DATA.categories.forEach(c => ["darbai","prekes","paslaugos"].forEach(rus => {
+      FOCUS.rusis = rus; FOCUS.rusisKilme = "ranka"; renderFocusCard("Bandomasis pirkimas", c.id);
+      const st = document.querySelectorAll("#focusResult details.fv-step")[1];
+      if(!st) return;
+      const pr = st.querySelector(".muted-note").textContent;
+      const vda = vdaIndeksai(c.id, rus);
+      if(!vda.length) return;
+      if(!document.querySelector('#focusResult .fk[data-fk="' + vda[0].id + '"]')) blogi.push(c.id + "/" + rus);
+      if(pr.indexOf("Šiandien") >= 0 || pr.indexOf("Dėmesio: iliustracinė reikšmė") < 0) blogi.push("tekstas " + c.id + "/" + rus + ": " + pr.slice(0, 80));
+    }));
+    return blogi;
+  })()`);
+  lygu(r, [], "deriniai be rodiklio 1 bloke ar be žymos");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "V3 ir M5: atnaujinimo klaidos - juosta su rodikliais ir priežastimis žmogui, „Bandyti dar kartą“; pritaikyti išsaugomi; mygtukai užimti", async ()=>{
+  const w = paruosk();
+  const r = M(`(function(){
+    window.__T2 = { osp: GP_OSP.atnaujink, rin: GP_RINKA.atnaujink };
+    GP_OSP.atnaujink = () => Promise.resolve({ ok: [
+        { id:"sski", laikotarpis:"2026-09-01", reiksme: 133.4, eilute: [124,124.4,124.9,125.3,125.8,126.2,126.7,127.1,127.6,128.1,128.5,128.9,133.4] },
+        { id:"gki", laikotarpis:"rugsėjis", reiksme: 111 } ],
+      klaidos: [ { id:"vki", priezastis:"Failed to fetch" }, { id:"vmdu", priezastis:"Failed to execute 'json' on 'Response': Unexpected end of JSON input" } ] });
+    GP_RINKA.atnaujink = () => Promise.resolve({ ok: [ { id:"lme_cu", laikotarpis:"2026-09-01", reiksme:"9820", daznis:"mėn." } ], klaidos: [ { id:"brent", priezastis:"HTTP 500" } ] });
+    atnaujinkIsOSP();
+    const b = document.getElementById("btnOsp");
+    return { uzimta: b.disabled && b.getAttribute("aria-busy") === "true" && b.textContent === "Atnaujinama..." };
+  })()`);
+  tiesa(r.uzimta, "atnaujinant mygtukas užimtas");
+  await laukIki(() => M("!document.getElementById('btnOsp').disabled"), 3000);
+  try {
+    const p = M(`(function(){ const j = document.querySelector('[data-gpb-raktas="osp"]');
+      return { j: j ? j.textContent : "", kartoti: !!(j && j.querySelector("[data-gpb-kartoti]")), sski: latest(metricById("sski")), gki: metricById("gki").demo,
+               saug: JSON.parse(localStorage.getItem(STORE_KEY)).metrics.find(m => m.id === "sski").series.slice(-1)[0], mygt: document.getElementById("btnOsp").textContent }; })()`);
+    tiesa(p.j.indexOf("Atnaujinta rodiklių: 1") === 0, "juosta: " + p.j);
+    ["VKI (vartotojų kainos) - nepavyko pasiekti šaltinio (ryšys)", "VMDU (šalies ūkis) - šaltinis grąžino netinkamą atsakymą", "Brent nafta - šaltinis laikinai neatsako (HTTP 500)",
+     "GKI (gamintojų kainos) - šaltinis grąžino netinkamą laikotarpį", "LME varis - šaltinis grąžino ne skaičių"].forEach(x => tiesa(p.j.indexOf(x) > 0, "juostoje: " + x));
+    tiesa(p.kartoti, "„Bandyti dar kartą“");
+    lygu([p.sski, p.saug, p.gki], [133.4, 133.4, true], "tinkamas pritaikytas ir išsaugotas, netinkamas - nepaliestas");
+    lygu(p.mygt, "Atnaujinti duomenis iš šaltinių", "mygtuko tekstas grąžintas");
+  } finally {
+    M("GP_OSP.atnaujink = __T2.osp; GP_RINKA.atnaujink = __T2.rin; delete window.__T2; GP_BUSENA.juostaSlepk('osp');");
+  }
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "V1, V5, V8, V9: pažymėjimai lieka pasirinkus kortelę be veiksmų, meniu be „menu“ vaidmens, kopijoje „Ind(naujausias)“, IT paslaugos = paslaugos", async ()=>{
+  paruosk();
+  apzvalga("Microsoft licencijos");
+  M(`document.querySelectorAll("#fvList [data-veiksmas]")[0].click(); document.querySelectorAll("#fvList [data-veiksmas]")[2].click();`);
+  kortelesPakaitalas({ pavadinimas: "Microsoft licencijos", objektas: "prekes" });
+  try {
+    const v = M(`(function(){ FOCUS.veiksmaiIs = null; renderFocusCard(FOCUS.last.name, FOCUS.last.catId); return [...document.querySelectorAll("#fvList [data-veiksmas]")].map(c => c.checked); })()`);
+    lygu([v[0], v[1], v[2]], [true, false, true], "pažymėjimai liko (V1)");
+  } finally { kortelesAtkurk(); }
+  lygu(M(`[document.querySelectorAll('[role="menu"], [role="menuitem"]').length, document.getElementById("btnDuomenys").hasAttribute("aria-haspopup")]`), [0, false], "meniu - atskleidžiamas mygtukų sąrašas");
+  apzvalga("Microsoft licencijos", "prekes");
+  const c4 = M('salygosTekstas("fvc4")');
+  tiesa(c4.indexOf("k = (Ind(naujausias) − Ind(pradžia)) / Ind(pradžia) × 100") > 0 && c4.indexOf("Indnaujausias") < 0, "kopijos formulė: " + c4.slice(0, 300));
+  // V9: kortelės objektas „Paslaugos (IT / IS)“ ir modulio „Paslaugos“ - ta pati reikšmė (tikra juosta su testine saugykla)
+  M('document.getElementById("focusName").value = ""; FOCUS.rusis = null; FOCUS.rusisKilme = null;');   // tušti laukai: juosta užpildo (kitaip paklaustų „kitas pirkimas?“)
+  const r = M(`(async function(){
+    const saug = (function(){ const d = {}; return { get length(){ return Object.keys(d).length; }, key: i => Object.keys(d)[i] || null,
+      getItem: k => Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null, setItem: (k, v) => { d[k] = String(v); }, removeItem: k => { delete d[k]; } }; })();
+    GP_KORTELE.naudokSaugykla(saug);
+    try {
+      const k = GP_KORTELE.issaugok({ pavadinimas: "IT sistemų priežiūros paslaugos", objektas: "paslaugos_it" }).kortele;
+      KORTELE.atnaujink();
+      await KORTELE.pasirink(k.id);
+      await new Promise(r => setTimeout(r, 50));
+      KORTELE.skirtumai();   // perskaičiavus (kaip po apžvalgos perpiešimo) - vis tiek sutampa
+      const t = document.getElementById("gpk").textContent;
+      KORTELE.atsiek();
+      return { t, rus: FOCUS.rusis, kilme: FOCUS.rusisKilme };
+    } finally { GP_KORTELE.naudokSaugykla(null); KORTELE.atnaujink(); }
+  })()`);
+  const v9 = await r;
+  tiesa(v9.t.indexOf("Skiriasi nuo kortelės") < 0, "juosta: " + v9.t.slice(0, 300));
+  lygu([v9.rus, v9.kilme], ["paslaugos", "kortele"], "rūšis iš kortelės");
+  paruosk();
+});
+
+testas("Patikra 2026-10-27", "V4, V6, M1, M2, M3: telefono meniu, EN tekstai, linksniai, klasifikatorius, atsarginės kopijos vardas", ()=>{
+  paruosk();
+  const css = M(`(function(){ for(const ss of document.styleSheets){ let rs; try { rs = ss.cssRules; } catch(e){ continue; }
+      for(const x of rs) if(x.media && /max-width:\\s*640px/.test(x.media.mediaText)) for(const y of x.cssRules) if(y.selectorText === ".meniu-sarasas") return y.style.left + "|" + y.style.right; } return ""; })()`);
+  lygu(css, "0px|auto", "telefone meniu - nuo kairės (V4)");
+  const en = M(`(function(){ setLang("en"); const o = { drv: [...document.querySelectorAll("#gridCat .cat-drivers")].map(x => x.textContent.slice(0, 13)), title: document.querySelector(".ai-badge").title };
+    setLang("lt"); return o; })()`);
+  tiesa(en.drv.every(x => /^(Main drivers:|No indicators)/.test(x)) && en.title.indexOf("no AI") > 0, "EN: " + JSON.stringify(en));
+  const lt = M(`(function(){ const G = globalMetrics(), n = s => G.filter(m => severity(m) === s).length;
+    return { pills: [...document.querySelectorAll("#aiText .ai-lead .pill")].map(x => x.textContent),
+             laukta: [n(2) + " " + daugiskaita(n(2), "raudonas","raudoni","raudonų"), n(1) + " " + daugiskaita(n(1), "geltonas","geltoni","geltonų"), n(0) + " " + daugiskaita(n(0), "žalias","žali","žalių")] }; })()`);
+  lygu(lt.pills, lt.laukta, "santraukos ženkleliai (M1)");
+  lygu(M('[daugiskaita(2, "raudonas","raudoni","raudonų"), daugiskaita(1, "žalias","žali","žalių")]'), ["raudoni", "žalias"]);
+  apzvalga("Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)");
+  tiesa(/^(Raudonas|Geltonas|Žalias)$/.test(M('document.querySelector("#focusResult .fk--mode .badge").textContent')), "režimo kortelė - vyr. g.");
+  lygu(M(`["Darbuotojų mokymai apie kabelių montavimą", "Transformatorių pastočių techninės priežiūros paslaugos", "Medžių kirtimo trasose paslaugos", "110 kV linijos rekonstrukcijos darbai"].map(classifyProcurement)`),
+       ["", "eksploatacija", "eksploatacija", "statyba"], "klasifikatorius (M2)");
+  const vardas = M(`(function(){ let v = ""; const o = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function(){ v = this.download; };
+    try { document.getElementById("btnExport").click(); } finally { HTMLAnchorElement.prototype.click = o; } return v; })()`);
+  lygu(vardas, "Rinkos-rodikliai_atsargine-kopija_" + M("todayLocal()") + ".json", "atsarginės kopijos failo vardas (M3)");
+  paruosk();
+});
+
+/* =========================================================================
    PALEIDIMAS
    ========================================================================= */
-function paleisk(){
+// Testas gali grąžinti Promise (nuo 2026-10-27 - importas, atnaujinimas iš šaltinių, kortelės juosta): laukiama jo pabaigos.
+async function paleisk(){
   const host = document.getElementById("rezultatai");
   const grupes = [];
   TESTAI.forEach(t=>{ if(grupes.indexOf(t.grupe) < 0) grupes.push(t.grupe); });
 
   let ok = 0, krito = 0;
   host.innerHTML = "";
-  grupes.forEach(g=>{
+  for(const g of grupes){
     const h = document.createElement("h2");
     h.textContent = g;
     host.appendChild(h);
     const lentele = document.createElement("table");
     host.appendChild(lentele);
-    TESTAI.filter(t=>t.grupe === g).forEach(t=>{
+    for(const t of TESTAI.filter(x=>x.grupe === g)){
       const t0 = performance.now();
       let klaida = null;
-      try{ t.fn(); }catch(e){ klaida = e && e.message ? e.message : String(e); }
+      try{ const rez = t.fn(); if(rez && typeof rez.then === "function") await rez; }catch(e){ klaida = e && e.message ? e.message : String(e); }
       const ms = Math.round(performance.now() - t0);
       if(klaida) krito++; else ok++;
       const tr = document.createElement("tr");
@@ -1928,8 +2433,8 @@ function paleisk(){
         (klaida ? '<div class="klaida">' + klaida.replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</div>" : "") +
         '</td><td class="laikas">' + ms + " ms</td>";
       lentele.appendChild(tr);
-    });
-  });
+    }
+  }
 
   const s = document.getElementById("santrauka");
   s.innerHTML =
