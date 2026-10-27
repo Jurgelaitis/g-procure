@@ -12,14 +12,21 @@
                                                   vienas žodis - tiksliai ir didžiosiomis, keli - nepaisant raidžių dydžio
      GP_UZKODAVIMAS.linksniai(variantai)       -> [[variantas, tikslus]]: lietuviški paskutinio žodžio linksniai (kilmininkas, naudininkas,
                                                   galininkas, vietininkas) - „Voltera“: „Volteros“, „Volterai“, „Volterą“, „Volteroje“; 2026-10-27
-     GP_UZKODAVIMAS.poros(sarasas)             -> [[ka, kuo, tikslus]] ilgiausi pirmi; sarasas: [{ vardas, kodas, kiti: [[tekstas, kuo]] }]
+     GP_UZKODAVIMAS.vardoFormos(vardas)        -> [[variantas, tikslus]]: vardoVariantai + linksniai + prekinis žodis (pirmas pavadinimo žodis,
+                                                  kai jis ne kilmininkas ir ne bendrinis: „Kappa sprendimai“ - „Kappa“, „Kappos“...); 2026-10-27
+     GP_UZKODAVIMAS.poros(sarasas, o)          -> [[ka, kuo, tikslus]] ilgiausi pirmi; sarasas: [{ vardas, kodas, kiti: [[tekstas, kuo]] }];
+                                                  o.formos: true - vardai visomis vardoFormos formomis (PP-ts rinkos konsultacija)
      GP_UZKODAVIMAS.slepk(tekstas, o)          -> užkoduotas tekstas; o: { poros, sumos: [žinomos sumos], pv, pvPavadinimas, kalba, imones,
                                                   asmenys, naudoti }
                                                   sumos su valiuta (ar lygios žinomai >= 1000) - „[x % PV]“ (pvPavadinimas - vietoj „PV“, pvz.
                                                   PP-protocol „numatomos vertės“), be PV - „[suma neįtraukta]“; naudoti (Set) - į jį įrašomi
                                                   panaudoti porų pakaitai (PP-protocol kodų raktui);
                                                   imones: true - ir kiti įmonių pavadinimai su teisine forma (UAB „X“, „X“, UAB, X OÜ);
-                                                  asmenys: true - vardas ir pavardė po etikečių („Kontaktinis asmuo:“, „Pagarbiai,“, „Direktorius“)
+                                                  asmenys: true - vardas ir pavardė po etikečių („Kontaktinis asmuo:“, „Pagarbiai,“ - ir kitoje eilutėje, „Direktorius“);
+                                                  rasta (masyvas) - į jį įrašoma, kas pakeista: { rusis, tekstas, kodas } (rusis: el, svetaine, tel, pavadinimas,
+                                                  suma, kodas, imone, asmuo) - PP-ts viešos suvestinės patikrai
+                                                  Visada: el. paštai, svetainės (www.x.lt, x-y.lt, https://...), telefonai (+370..., po etiketės ir
+                                                  „8 612 34567“ - 9 skaitmenys nuo 8), 9 ir 11 skaitmenų kodai; „41 tūkst.“ be valiutos ir be vieneto po jo - suma
      GP_UZKODAVIMAS.sumos(tekstas)             -> [{ suma, citata, pozicija, pvm: "be" | "su" | null }] - sumos su valiuta tekste
    Kitų duomenų (asmenų vardų, adresų) sistema neatpažįsta - modulis tai sako prie DI mygtuko. Nieko nesaugo ir nesiunčia.
    ========================================================================== */
@@ -27,8 +34,8 @@
   "use strict";
 
   var PAKAITAI = {
-    lt: { el: "[el. paštas neįtrauktas]", tel: "[telefonas neįtrauktas]", kodas: "[kodas neįtrauktas]", suma: "[suma neįtraukta]", imone: "[įmonė neįtraukta]", asmuo: "[asmuo neįtrauktas]" },
-    en: { el: "[email removed]", tel: "[phone removed]", kodas: "[code removed]", suma: "[amount removed]", imone: "[company removed]", asmuo: "[person removed]" }
+    lt: { el: "[el. paštas neįtrauktas]", svetaine: "[svetainė neįtraukta]", tel: "[telefonas neįtrauktas]", kodas: "[kodas neįtrauktas]", suma: "[suma neįtraukta]", imone: "[įmonė neįtraukta]", asmuo: "[asmuo neįtrauktas]" },
+    en: { el: "[email removed]", svetaine: "[website removed]", tel: "[phone removed]", kodas: "[code removed]", suma: "[amount removed]", imone: "[company removed]", asmuo: "[person removed]" }
   };
   /* Suma tekste: valiuta prieš arba po skaičiaus (ir „mln.“, „tūkst.“, „million“, „thousand“) - kaip PP-negotiation DI_SUMA */
   var SUMA = /(^|[^\p{L}\p{N}.,])((?:EUR|€)[ \u00a0]*)?(\d{1,3}(?:[ \u00a0\u202f.,']\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)([ \u00a0]*(?:mln|million|tūkst|thousand)\.?)?([ \u00a0]*(?:eurų|eurai|eurus|euros|euro|eur|€)(?!\p{L}))?/giu;
@@ -42,7 +49,16 @@
   ];
   /* Asmuo po etiketės: vardas ir pavardė didžiosiomis raidėmis (kitų vardų sistema neatpažįsta) */
   // be vėliavos i: su ja \p{Lu} atitiktų ir mažąsias raides - etiketės pirma raidė abiem dydžiais rašoma klase
-  var ASMUO = /(^|[^\p{L}])((?:[Kk]ontaktinis asmuo|[Kk]ontaktinis|[Aa]tsakingas asmuo|[Aa]tstovas|[Vv]adovas|[Dd]irektorius|[Dd]irektor\u0117|[Vv]adybinink\S*|[Pp]agarbiai|[Cc]ontact person|[Rr]egards)[:,]?[ \u00a0]+)(\p{Lu}\p{Ll}+(?:[ \u00a0-]\p{Lu}\p{Ll}+){0,2})/gu;
+  // vardas gali būti ir kitoje eilutėje (laiško parašas „Pagarbiai,⏎Vardas Pavardė“ - 2026-10-27, PP-ts patikra K3)
+  var ASMUO = /(^|[^\p{L}])((?:[Kk]ontaktinis asmuo|[Kk]ontaktinis|[Aa]tsakingas asmuo|[Aa]tstovas|[Vv]adovas|[Dd]irektorius|[Dd]irektor\u0117|[Vv]adybinink\S*|[Pp]agarbiai|[Cc]ontact person|[Rr]egards)[:,]?(?:[ \u00a0]*\r?\n[ \u00a0]*|[ \u00a0]+))(\p{Lu}\p{Ll}+(?:[ \u00a0-]\p{Lu}\p{Ll}+){0,2})/gu;
+  /* Svetainės (2026-10-27): adresas su protokolu arba domenas su žinoma pabaiga (www.beta.ee, kappa-sprendimai.lt); failų vardai (.pdf, .docx) - ne */
+  var SVETAINE_URL = /(^|[^\p{L}\p{N}@])(https?:\/\/[^\s<>"„“”]+[^\s<>"„“”.,;:!?)])/giu;
+  var SVETAINE = /(^|[^\p{L}\p{N}@.\/-])((?:www\.)?(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?\.)+(?:lt|lv|ee|eu|com|net|org|info|biz|de|pl|fi|se|no|dk|uk|io|co|fr|it|nl|be|at|ch|cz|es)(?![\p{L}\p{N}-])(?:\/[^\s<>"„“”]*[^\s<>"„“”.,;:!?)])?)/giu;
+  /* Lietuviškas telefonas be „+“: 8 ir dar 8 skaitmenys su tarpais ar skliaustais („8 612 34567“, „(8 5) 278 2222“); 2026-10-27 */
+  var TEL_LT = /(^|[^\p{L}\p{N}+.,\/-])(\(?8(?:[ \u00a0()-]*\d){8})(?![\p{N}]|[ \u00a0]*(?:eur|€|proc|%))/giu;
+  /* Prekinis žodis: pirmas kelių žodžių pavadinimo žodis, jei jis ne kilmininkas („Elektros“, „Vilniaus“) ir ne bendrinis būdvardis */
+  var NE_PREKINIS = /(?:os|ės|ių|ų|aus|io|ios|ojo|inis|inė|iškas|iška|asis|oji|ieji)$/i;
+  var BENDRINIAI = /^(?:baltic|nordic|european|global|international|power|energy|group|grupė|naujas|nauja|naujoji|pirmas|pirmoji|didysis|didžioji|nacionalinis|tarptautinis|valstybinis|lietuva|vilnius|kaunas|klaipėda)$/i;
   function kalbos(o) { return (o && o.kalba === "en") ? "en" : "lt"; }
   function re(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
   function procentai(n, kalba) {
@@ -105,11 +121,24 @@
     return out;
   }
 
-  function poros(sarasas) {
+  function vardoFormos(vardas) {
+    var vv = vardoVariantai(vardas), r = vv.concat(linksniai(vv));
+    var zodziai = String(vardas || "").replace(/[„“”"«»]/g, " ").replace(/^\s*(UAB|AB|MB|IĮ|VšĮ|VĮ|TŪB|KŪB|SIA|AS|OÜ|Oy|SA|GmbH|Ltd\.?)\s+/i, "").trim().split(/\s+/);
+    var w = zodziai[0] || "";
+    if (zodziai.length >= 2 && /^\p{Lu}\p{L}{3,}$/u.test(w) && !NE_PREKINIS.test(w) && !BENDRINIAI.test(w)) {
+      var pr = [[w, true], [w.toUpperCase(), true]];
+      r = r.concat(pr, linksniai(pr));
+    }
     var out = [];
+    r.forEach(function (x) { if (!out.some(function (z) { return z[0] === x[0]; })) out.push(x); });
+    return out;
+  }
+
+  function poros(sarasas, o) {
+    var out = [], formos = !!(o && o.formos);
     var prid = function (ka, kuo, tikslus) { ka = String(ka || "").trim(); if (ka.length >= 3 && !out.some(function (p) { return p[0] === ka; })) out.push([ka, kuo, tikslus]); };
     (sarasas || []).forEach(function (x) {
-      vardoVariantai(x.vardas).forEach(function (v) { prid(v[0], x.kodas, v[1]); });
+      (formos ? vardoFormos(x.vardas) : vardoVariantai(x.vardas)).forEach(function (v) { prid(v[0], x.kodas, v[1]); });
       (x.kiti || []).forEach(function (k) { prid(k[0], k[1], false); });
     });
     return out.sort(function (a, b) { return b[0].length - a[0].length; });
@@ -121,27 +150,39 @@
     var k = kalbos(o), P = PAKAITAI[k], t = String(tekstas == null ? "" : tekstas);
     if (!t.trim()) return "";
     var zymes = [], zyme = function (p) { zymes.push(p); return "\ue000" + String.fromCharCode(0xE100 + zymes.length - 1) + "\ue001"; };
-    t = t.replace(/[^\s@<>()"„“,;:]+@[^\s@<>()"„“,;:]+\.\p{L}{2,}/gu, function () { return zyme(P.el); });
-    t = t.replace(/(^|[^\p{L}\p{N}+])(\+\d[\d ()-]{6,}\d)/gu, function (m, pr) { return pr + zyme(P.tel); });
+    var rasta = Array.isArray(o.rasta) ? o.rasta : null, ras = function (rusis, tx, kodas) { if (rasta) rasta.push({ rusis: rusis, tekstas: String(tx).trim(), kodas: kodas || null }); };
+    t = t.replace(/[^\s@<>()"„“,;:]+@[^\s@<>()"„“,;:]+\.\p{L}{2,}/gu, function (m) { ras("el", m); return zyme(P.el); });
+    t = t.replace(SVETAINE_URL, function (m, pr, a) { ras("svetaine", a); return pr + zyme(P.svetaine); });
+    t = t.replace(SVETAINE, function (m, pr, a) { ras("svetaine", a); return pr + zyme(P.svetaine); });
+    t = t.replace(/(^|[^\p{L}\p{N}+])(\+\d[\d ()-]{6,}\d)/gu, function (m, pr, a) { ras("tel", a); return pr + zyme(P.tel); });
     t = t.replace(/(^|[^\p{L}])((?:tel|telefonas|telefono nr|mob|telephone|phone|mobile)\.?[ \u00a0]*(?:nr\.?|no\.?)?[ \u00a0]*[:.]?[ \u00a0]*)(\(?\d[\d ()-]{5,}\d)/giu,
-      function (m, pr, pav) { return pr + pav + zyme(P.tel); });
+      function (m, pr, pav, a) { ras("tel", a); return pr + pav + zyme(P.tel); });
+    t = t.replace(TEL_LT, function (m, pr, a) { ras("tel", a); return pr + zyme(P.tel); });
     (o.poros || []).forEach(function (p) {
       var r = new RegExp("(^|[^\\p{L}\\p{N}])" + re(p[0]) + "(?=[^\\p{L}\\p{N}]|$)", p[2] ? "gu" : "giu");
-      t = t.replace(r, function (m, pr) { if (o.naudoti && typeof o.naudoti.add === "function") o.naudoti.add(p[1]); return pr + zyme(p[1]); });
+      t = t.replace(r, function (m, pr) { if (o.naudoti && typeof o.naudoti.add === "function") o.naudoti.add(p[1]); ras("pavadinimas", m.slice(pr.length), p[1]); return pr + zyme(p[1]); });
     });
     var sumos = o.sumos || [], pv = Number(o.pv) || 0, pvPav = String(o.pvPavadinimas || "PV");
-    t = t.replace(SUMA, function (m, pr, pries, sk, daug, po) {
+    t = t.replace(SUMA, function (m, pr, pries, sk, daug, po, poz, visas) {
       var v = skaicius(sk);
       if (v == null || !isFinite(v)) return m;
       if (daug) v *= /mln|million/i.test(daug) ? 1e6 : 1e3;
       var zinoma = v >= 1000 && sumos.some(function (x) { return Math.abs(x - v) < 0.005; });
-      if (!pries && !po && !zinoma) return m;
-      return pr + zyme(pv > 0 ? "[" + procentai(v / pv * 100, k) + " % " + pvPav + "]" : P.suma);
+      // „41 tūkst.“ be valiutos - suma, kai po jo ne vienetas: skyryba, eilutės ar teksto pabaiga arba naujas sakinys
+      // („5 tūkst. vnt.“, „1,2 mln. kWh“, „2 mln. MWh“ - ne)
+      var liko = String(visas).slice(poz + m.length);
+      var beVieneto = daug && !po && (/^[ \u00a0]*(?:$|[,;:)!?\n])/.test(liko)
+        || (/\.$/.test(m) && /^[ \u00a0]+\p{Lu}/u.test(liko) && !/^[ \u00a0]+(?:[kMGT]W|[kMGT]Wh|MVA|kV|Nm)/.test(liko)));
+      if (!pries && !po && !zinoma && !beVieneto) return m;
+      ras("suma", m.slice(pr.length));
+      // santrumpos taškas, kuris kartu baigė sakinį („... apie 41 tūkst. Kitas“), paliekamas
+      var taskas = beVieneto && /\.$/.test(m) && /^(?:[ \u00a0]*$|[ \u00a0]*\n|[ \u00a0]+\p{Lu})/u.test(liko) ? "." : "";
+      return pr + zyme(pv > 0 ? "[" + procentai(v / pv * 100, k) + " % " + pvPav + "]" : P.suma) + taskas;
     });
     // įmonės kodas (9 skaitmenys) ir 11 skaitmenų kodas (Latvijos registracijos numeris, asmens kodas) - 2026-10-27
-    t = t.replace(/(^|[^\p{N}])(?:\d{11}|\d{9})(?=[^\p{N}]|$)/gu, function (m, pr) { return pr + zyme(P.kodas); });
-    if (o.imones) IMONES.forEach(function (r) { t = t.replace(r, function (m, pr) { return pr + zyme(P.imone); }); });
-    if (o.asmenys) t = t.replace(ASMUO, function (m, pr, et) { return pr + et + zyme(P.asmuo); });
+    t = t.replace(/(^|[^\p{N}])(\d{11}|\d{9})(?=[^\p{N}]|$)/gu, function (m, pr, a) { ras("kodas", a); return pr + zyme(P.kodas); });
+    if (o.imones) IMONES.forEach(function (r) { t = t.replace(r, function (m, pr) { ras("imone", m.slice(pr.length)); return pr + zyme(P.imone); }); });
+    if (o.asmenys) t = t.replace(ASMUO, function (m, pr, et, a) { ras("asmuo", a); return pr + et + zyme(P.asmuo); });
     return t.replace(/\ue000([\ue100-\uf8ff])\ue001/g, function (m, z) { return zymes[z.charCodeAt(0) - 0xE100]; });
   }
 
@@ -167,5 +208,5 @@
     return out;
   }
 
-  window.GP_UZKODAVIMAS = { version: "1.2", kodas: kodas, vardoVariantai: vardoVariantai, linksniai: linksniai, poros: poros, slepk: slepk, sumos: sumos, PAKAITAI: PAKAITAI };
+  window.GP_UZKODAVIMAS = { version: "1.3", kodas: kodas, vardoVariantai: vardoVariantai, linksniai: linksniai, vardoFormos: vardoFormos, poros: poros, slepk: slepk, sumos: sumos, PAKAITAI: PAKAITAI };
 })();

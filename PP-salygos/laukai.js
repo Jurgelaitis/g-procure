@@ -633,18 +633,8 @@
   const arTiekejoVieta = t => /^[\s_]*Nr\.[\s_]*$/.test(String(t || '').trim()) || /^20\d_-_+-_+$/.test(String(t || '').trim());
 
   /* Tekstas didžiosiomis antraštei (2026-10-20, naudotojo sprendimas): matavimo vienetai po skaičiaus lieka, kaip parašyti - „110/10 kV“, ne
-     „110/10 KV“ (kV, kW ir kilovoltai, megavoltamperai - skirtingi dalykai). Vienetas - tik po skaičiaus ir ne žodžio dalis. */
-  const VIENETAI = /(\d(?:[\d.,]*\d)?(?:\s*[\/×x–-]\s*\d(?:[\d.,]*\d)?)*[\s\u00A0]*)(kVAr|kVA|kV|kvar|Mvar|MVAr|MVA|kWh|kW|MWh|MW|GWh|GW|TWh|mm²|mm2|mm|cm|km|m²|m³|m2|m3|kg|kN|MPa|kPa|kHz|MHz|GHz|Hz|kA|mA|mV|ha|ml|m|t|l)(?![\p{L}\p{N}])/gu;
-  function antrasteDidziosiomis(t){
-    t = String(t == null ? '' : t);
-    let out = '', p = 0, m;
-    VIENETAI.lastIndex = 0;
-    while ((m = VIENETAI.exec(t))){
-      out += t.slice(p, m.index).toLocaleUpperCase('lt') + m[1] + m[2];      // ir skaičius su „x“ („2x25 MVA“) - kaip parašytas
-      p = m.index + m[0].length;
-    }
-    return out + t.slice(p).toLocaleUpperCase('lt');
-  }
+     „110/10 KV“. Nuo 2026-10-27 - bendras shared/docx-stiliai.js (GP_DOCX_STILIAI.didziosiomis; naudoja ir PP-ts rinkos konsultacija). */
+  function antrasteDidziosiomis(t){ return root.GP_DOCX_STILIAI.didziosiomis(t); }
 
   root.GP_LAUKAI = { antrasteDidziosiomis, norm, arTiekejoVieta, tusciosVietos, xVietos, laukas, planas, keitimai, tekstasIsPlano, gramatika, sutrauk,
     prieduSarasas, nuorodosPriedas, priedoRaktasIsTeksto, PRIEDU_PAV, EN_MENESIAI, skyriai, skyrius, arAntraste, TIPAI,
