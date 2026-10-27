@@ -150,25 +150,27 @@
       PI: { a: "PI", s: 62, d: 4 } },
 
     // ---- Pirkimo dokumentai ir techninė specifikacija (PĮ)
+    // VPĮ 35 str. 4 d. ir 2 d. 8 p. perskaityti e-tar 2026-10-27 (PP-ts T1).
     dokumentu_aiskumas: { apie: "pirkimo dokumentai turi būti tikslūs, aiškūs, be dviprasmybių",
-      PI: { a: "PI", s: 48, d: 4 } },
+      PI: { a: "PI", s: 48, d: 4 }, VPI: { a: "VPI", s: 35, d: 4 } },
     kiekis: { apie: "pirkimo dokumentuose nurodomas objekto pavadinimas, kiekis (apimtis) ir terminai",
-      PI: { a: "PI", s: 48, d: 2, p: 8 } },
+      PI: { a: "PI", s: 48, d: 2, p: 8 }, VPI: { a: "VPI", s: 35, d: 2, p: 8 } },
     // VPĮ - 2026-10-03 (centralizuotas LITGRID AB ir UAB „EPSO-G“ pirkimas, PP-salygos); PĮ dalis tą pačią dieną perskaityta iš naujo.
     cpo_argumentai: { tikrinta: "2026-10-03", apie: "pirkimo dokumentuose nurodomi sprendimo nepirkti per CPO argumentai",
       PI: { a: "PI", s: 48, d: 2, p: 34 }, VPI: { a: "VPI", s: 35, d: 2, p: 34 } },
+    // VPĮ 37 str. (techninė specifikacija) perskaitytas e-tar 2026-10-27 (PP-ts T1 - ir UAB EPSO-G pagal VPĮ): dalys sutampa su PĮ 50 str.
     ts: { apie: "techninė specifikacija",
-      PI: { a: "PI", s: 50 } },
+      PI: { a: "PI", s: 50 }, VPI: { a: "VPI", s: 37 } },
     ts_proporcingumas: { apie: "ypatybės turi būti susijusios su pirkimo objektu ir proporcingos jo vertei ir tikslams",
-      PI: { a: "PI", s: 50, d: 1 } },
+      PI: { a: "PI", s: 50, d: 1 }, VPI: { a: "VPI", s: 37, d: 1 } },
     ts_konkurencija: { apie: "techninė specifikacija turi užtikrinti konkurenciją ir nediskriminuoti tiekėjų",
-      PI: { a: "PI", s: 50, d: 3 } },
+      PI: { a: "PI", s: 50, d: 3 }, VPI: { a: "VPI", s: 37, d: 3 } },
     ts_funkciniai: { apie: "funkciniai reikalavimai turi būti tikslūs, kad tiekėjai galėtų parengti pasiūlymus",
-      PI: { a: "PI", s: 50, d: 4, p: 1 } },
+      PI: { a: "PI", s: 50, d: 4, p: 1 }, VPI: { a: "VPI", s: 37, d: 4, p: 1 } },
     ts_standartai: { apie: "kiekviena nuoroda į standartą pateikiama su žodžiais „arba lygiavertis“",
-      PI: { a: "PI", s: 50, d: 4, p: 2 } },
+      PI: { a: "PI", s: 50, d: 4, p: 2 }, VPI: { a: "VPI", s: 37, d: 4, p: 2 } },
     ts_zenklas: { apie: "negalima nurodyti modelio, šaltinio, prekės ženklo, patento, kilmės; išimtis - kai kitaip tiksliai apibūdinti neįmanoma, tada su žodžiais „arba lygiavertis“",
-      PI: { a: "PI", s: 50, d: 5 } },
+      PI: { a: "PI", s: 50, d: 5 }, VPI: { a: "VPI", s: 37, d: 5 } },
     // 2026-10-21 - perskaityta iš naujo ir papildyta VPĮ (centralizuotiems pirkimams) ir 9 d. (BVPŽ sąrašas) - PP-salygos 1 žingsnio klausimui
     ts_nacsaugumas: { tikrinta: "2026-10-21", apie: "techninėje specifikacijoje reikalaujama, kad prekės, paslaugos ar darbai nekeltų grėsmės nacionaliniam saugumui; subjektas, veikiantis nacionaliniam saugumui užtikrinti strategiškai svarbaus ūkio sektoriaus srityje ar esminis subjektas, šį reikalavimą kelia, kai sandorio pagrindu susidarytų Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo 13 str. 4 d. 1 p. nurodytos aplinkybės",
       PI: { a: "PI", s: 50, d: 8 }, VPI: { a: "VPI", s: 37, d: 8 } },
@@ -180,16 +182,18 @@
     // ---- Planavimas, vertė, dalys (PĮ)
     // 2026-10-15 (PP-ts rinkos konsultacija): 39 str. perskaitytas e-tar visas - 1 d. 1 p. (konsultacijos ir kada privalomos),
     // 3 d. (priemonės, kad padėjęs pasirengti nepažeistų konkurencijos) ir 4 d. (atmetimas tik be pagrindimo); 5 d. neteko galios 2022-04-01
+    // VPĮ 27 str. 1 d. 1 p., 3 ir 4 d. (rinkos konsultacijos), 28 str. (dalys), 5 str. (vertė) - perskaityta e-tar 2026-10-27 (PP-ts T1);
+    // „apie“ - be „perkantysis subjektas“, kad tiktų abiem įstatymams
     rinkos_konsultacijos: { tikrinta: "2026-10-15", apie: "rengiantis pirkimui galima konsultuotis su rinkos dalyviais; kvietimas ir susijusi informacija skelbiami CVP IS VPT nustatyta tvarka; skelbiamam pirkimui konsultacija privaloma, jeigu per paskutinius 12 mėnesių paskutiniame tokių pačių ar panašių prekių, paslaugų ar darbų skelbiamame pirkime negauta nė vienos arba gauta tik viena tinkama paraiška ar pasiūlymas",
-      PI: { a: "PI", s: 39, d: 1, p: 1 } },
-    rinkos_konsultacijos_informacija: { tikrinta: "2026-10-15", apie: "kai kandidatas ar dalyvis padėjo pasirengti pirkimui, perkantysis subjektas imasi priemonių, kad nebūtų pažeista konkurencija: jų gautą informaciją pateikia kitiems kandidatams ir dalyviams ir paskelbia CVP IS, nustato pakankamus pasiūlymų terminus",
-      PI: { a: "PI", s: 39, d: 3 } },
+      PI: { a: "PI", s: 39, d: 1, p: 1 }, VPI: { a: "VPI", s: 27, d: 1, p: 1 } },
+    rinkos_konsultacijos_informacija: { tikrinta: "2026-10-15", apie: "kai kandidatas ar dalyvis padėjo pasirengti pirkimui, imamasi priemonių, kad nebūtų pažeista konkurencija: jų gauta informacija pateikiama kitiems kandidatams ir dalyviams ir skelbiama CVP IS, nustatomi pakankami pasiūlymų terminai",
+      PI: { a: "PI", s: 39, d: 3 }, VPI: { a: "VPI", s: 27, d: 3 } },
     rinkos_konsultacijos_dalyvavimas: { tikrinta: "2026-10-15", apie: "padėjusio pasirengti pirkimui kandidato ar dalyvio paraiška ar pasiūlymas atmetamas tik jeigu jis raštu nepagrindžia, kad išankstinės konsultacijos negalėjo pažeisti konkurencijos",
-      PI: { a: "PI", s: 39, d: 4 } },
+      PI: { a: "PI", s: 39, d: 4 }, VPI: { a: "VPI", s: 27, d: 4 } },
     dalys: { apie: "pirkimo objekto skaidymas į dalis",
-      PI: { a: "PI", s: 40 } },
+      PI: { a: "PI", s: 40 }, VPI: { a: "VPI", s: 28 } },
     verte: { apie: "numatomos pirkimo vertės skaičiavimas",
-      PI: { a: "PI", s: 13 } },
+      PI: { a: "PI", s: 13 }, VPI: { a: "VPI", s: 5 } },
 
     // ---- Vertinimas
     vertinimas: { apie: "pasiūlymų vertinimas ir palyginimas",
@@ -224,10 +228,11 @@
       PI: { a: "PI", s: 80, d: 2 }, VPI: { a: "VPI", s: 72, d: 3 } },
 
     // ---- Sutartis (PĮ)
+    // VPĮ 89 str. 1 d. 1 p. - perskaityta e-tar 2026-10-27 (PP-ts T1)
     sutarties_keitimas: { apie: "pirkimo sutarties keitimas jos galiojimo laikotarpiu",
-      PI: { a: "PI", s: 97 } },
+      PI: { a: "PI", s: 97 }, VPI: { a: "VPI", s: 89 } },
     perziuros_salygos: { apie: "keisti be naujos procedūros galima, kai pakeitimas iš anksto aiškiai, tiksliai ir nedviprasmiškai numatytas peržiūros sąlygose",
-      PI: { a: "PI", s: 97, d: 1, p: 1 } },
+      PI: { a: "PI", s: 97, d: 1, p: 1 }, VPI: { a: "VPI", s: 89, d: 1, p: 1 } },
     atidejimas_netaikomas_vienas: { tikrinta: "2026-10-26", apie: "atidėjimo terminas gali būti netaikomas, kai vienintelis suinteresuotas dalyvis yra tas, su kuriuo sudaroma pirkimo sutartis ar preliminarioji sutartis, ir nėra suinteresuotų kandidatų",
       PI: { a: "PI", s: 94, d: 8, p: 1 }, VPI: { a: "VPI", s: 86, d: 8, p: 1 } },
     // VPĮ 86 str. 8 d. - tie patys terminai (perskaityta e-tar 2026-10-26, PP-graphs grafikas EPSO-G)
