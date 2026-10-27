@@ -163,6 +163,10 @@ textarea{min-height:60px;resize:vertical}
 .risk-num b{color:var(--color-error-strong);font-size:14px}
 .risk-item.ok .risk-num b{color:var(--color-emerald-strong)}
 .muted{color:var(--color-graphite-50-strong);font-size:12px}
+.metai-pas{max-width:320px}
+.metai-txt:not([hidden]){display:block}
+.metai-txt{font-size:14px;font-weight:600;color:var(--grafitas)}
+.metai-kita{display:block;font-size:12px;font-weight:400;color:var(--color-graphite-50-strong)}
 .divider{height:1px;background:var(--grafitas-15);margin:18px 0}
 .hint{background:var(--zalia-5);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--grafitas);border-left:3px solid var(--smaragdas)}
 .hint a{color:var(--color-emerald-strong)}
@@ -479,6 +483,15 @@ footer{text-align:center;padding:20px;font-size:12px;color:var(--color-graphite-
 
 <section class="section" id="sec-duration">
   <h2>Terminų skaičiuoklė<span class="h2-sub">Atgalinis terminų skaičiavimas pagal A/B grafiko tipus su LR darbo dienomis</span></h2>
+  <div class="card">
+    <h3>Standartinės pirkimų trukmės</h3>
+    <div class="metai-pas">
+      <label for="durMetai">Taikomi metai</label>
+      <select id="durMetai" aria-describedby="durMetaiPag"></select>
+      <span class="metai-txt" id="durMetaiTxt" hidden></span>
+    </div>
+    <p class="muted" id="durMetaiPag" style="margin-top:8px"></p>
+  </div>
   <div class="grid grid-2">
     <div class="card">
       <h3>Atgalinis skaičiavimas (nuo sutarties datos)</h3>
@@ -491,7 +504,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:var(--color-graphite-
       <div id="durResult" style="margin-top:14px"></div>
     </div>
     <div class="card">
-      <h3>Pirkimo būdų terminų katalogas</h3>
+      <h3>Pirkimo būdų terminų katalogas<span id="katalogoMetai"></span></h3>
       <div class="table-wrap" style="max-height:420px">
         <table id="methodCatalog">
           <thead><tr><th>Kodas</th><th>Pavadinimas</th><th>Pasirengimas (d.d.)</th><th>Procedūros (d.d.)</th><th>Iš viso (d.d.)</th></tr></thead>
@@ -594,6 +607,8 @@ footer{text-align:center;padding:20px;font-size:12px;color:var(--color-graphite-
 <script src="../shared/procurement-methods.js"></script>
 <!-- Darbo dienų / LR švenčių logika - bendras failas (Velykos per computus, kalendorius nepasensta) -->
 <script src="../shared/workdays.js"></script>
+<!-- Standartinės pirkimų trukmės pagal metus (2026 ir 2027 m.; pasibaigę metai nebesiūlomi) -->
+<script src="../shared/trukmes.js"></script>
 <!-- Taisyklių variklis (A3): dalių išimtis ir vertės ribos su teisės nuorodomis iš registro -->
 <script src="../shared/teises-nuorodos.js"></script>
 <script src="../shared/taisykles.js"></script>
@@ -703,8 +718,8 @@ function normalizuokIrasa(p){
 }
 
 const METHODS = {
-  "CPO":    {name:"CPO",                                              full:"Pirkimas per CPO katalogą",                            prep:2,  exec:18,  total:20,  cat:"cpo"},
-  "MV-NZ":  {name:"MV - neskelbiama apklausa žodžiu",                 full:"Mažos vertės pirkimas - neskelbiama apklausa žodžiu",  prep:1,  exec:2,   total:3,   cat:"mv"},
+  "CPO":    {name:"CPO",                                              full:"Pirkimas per CPO katalogą",                            prep:0,  exec:20,  total:20,  cat:"cpo"},
+  "MV-NZ":  {name:"MV - neskelbiama apklausa žodžiu",                 full:"Mažos vertės pirkimas - neskelbiama apklausa žodžiu",  prep:0,  exec:3,   total:3,   cat:"mv"},
   "MV-NR":  {name:"MV - neskelbiama apklausa raštu",                  full:"Mažos vertės pirkimas - neskelbiama apklausa raštu",   prep:5,  exec:25,  total:30,  cat:"mv"},
   "MV-SAB": {name:"MV - skelbiama apklausa be derybų",                full:"Mažos vertės pirkimas - skelbiama apklausa be derybų", prep:10, exec:35,  total:45,  cat:"mv"},
   "MV-SAD": {name:"MV - skelbiama apklausa su derybomis",             full:"Mažos vertės pirkimas - skelbiama apklausa su derybomis",prep:10,exec:50, total:60,  cat:"mv"},
@@ -717,6 +732,18 @@ const METHODS = {
   "DPS":    {name:"DPS pagrindinis",                                  full:"Dinaminė pirkimo sistema - sukūrimas",                 prep:10, exec:50,  total:60,  cat:"dps"},
   "DPS-K":  {name:"DPS konkretus",                                    full:"Konkretus pirkimas DPS sistemoje",                     prep:7,  exec:45,  total:52,  cat:"dps"}
 };
+/* Standartinės pirkimų trukmės pagal metus (2026-10-27): prep / exec / total - iš ../shared/trukmes.js pagal pasirinktus metus
+   (iki 2026-12-31 - 2026 arba 2027 m., nuo 2027-01-01 - tik 2027 m.); be jo - aukščiau įrašytos 2026 m. reikšmės.
+   Taikoma terminų skaičiuoklėje, kataloge, pirkimo būdo analizėje ir „Perskaičiuoti datas“. var - kviečiama init metu. */
+var TRUKMIU_DIENA = null;
+var TRUKMIU_METAI = window.GP_TRUKMES ? GP_TRUKMES.numatyta().metai : 2026;
+function taikykTrukmes(metai){
+  Object.keys(METHODS).forEach(k => {
+    const t = window.GP_TRUKMES ? GP_TRUKMES.trukme(k, metai) : null;
+    if(t){ METHODS[k].prep = t.prep; METHODS[k].exec = t.exec; METHODS[k].total = t.total; }
+  });
+}
+taikykTrukmes(TRUKMIU_METAI);
 
 // VPT vertės ribos iškeltos į ../shared/thresholds.js (galioja nuo 2026-01-01).
 // Naudojam globalų objektą; elgsena nepakitusi.
@@ -1543,7 +1570,7 @@ function planoKortele(id){
   });
 }
 
-/* Inicijavimo ir pirkimo datos atgal nuo sutarties datos pagal būdo trukmę (METHODS - modulio įverčiai, ne teisės aktų terminai).
+/* Inicijavimo ir pirkimo datos atgal nuo sutarties datos pagal būdo trukmę (METHODS - pasirinktų metų standartinės pirkimų trukmės, ne teisės aktų terminai).
    D4 (2026-10-26): iki tol „Perskaičiuoti datas“ be klausimo perrašydavo visų pirkimų jau įrašytas datas (pvz. iš DocLogix). */
 function perskaiciuokDatas(procs){
   let updated = 0;
@@ -1561,12 +1588,13 @@ function recalcAll(){
   const tinka = DATA.procurements.filter(p => p.sutarciesData && parseDate(p.sutarciesData) && mapMethodNameToCode(p.budas));
   if(!tinka.length){ alert("Nėra pirkimų, kuriems būtų galima apskaičiuoti datas: reikia sutarties datos ir atpažinto pirkimo būdo."); return; }
   const suDatomis = tinka.filter(p => p.inicData || p.pirkimoData).length;
-  const kl = `Apskaičiuoti inicijavimo ir pirkimo datas ${tinka.length} pirkimams atgal nuo sutarties datos pagal būdo trukmę (modulio įvertis, ne teisės aktų terminai)?`
+  const kl = `Apskaičiuoti inicijavimo ir pirkimo datas ${tinka.length} pirkimams atgal nuo sutarties datos pagal ${TRUKMIU_METAI} m. standartines pirkimų trukmes (ne teisės aktų terminai)?`
+    + (metuVersijos().length > 1 ? `\n\nStandartinių trukmių metus galite pakeisti skirtuke „Terminų skaičiuoklė“.` : "")
     + (suDatomis ? `\n\n${suDatomis} iš jų datos jau įrašytos - jos bus pakeistos apskaičiuotomis. Šio veiksmo atšaukti negalima.` : "");
   if(!confirm(kl)) return;
   const updated = perskaiciuokDatas(tinka);
   save(); renderRegister();
-  alert(`Perskaičiuotos datos: ${updated} pirkimuose.`);
+  alert(`Perskaičiuotos datos: ${updated} pirkimuose (${TRUKMIU_METAI} m. standartinės trukmės).`);
 }
 
 /* ==================== VALIDATION VIEW ==================== */
@@ -1654,7 +1682,7 @@ function runMethodTest(){
         <div class="grid grid-3" style="margin-top:8px">
           <div class="kpi cool"><span class="kpi-label">Tarpt. riba</span><span class="kpi-value" style="font-size:18px">${fmtMoney(r.intlThreshold)}</span></div>
           <div class="kpi"><span class="kpi-label">MV riba</span><span class="kpi-value" style="font-size:18px">${fmtMoney(r.mvThreshold)}</span></div>
-          ${m?`<div class="kpi warn"><span class="kpi-label">Procedūros trukmė</span><span class="kpi-value" style="font-size:18px">${m.total} d.d.</span><span class="kpi-sub">${m.prep}+${m.exec} d.d.</span></div>`:""}
+          ${m?`<div class="kpi warn"><span class="kpi-label">Procedūros trukmė</span><span class="kpi-value" style="font-size:18px">${m.total} d.d.</span><span class="kpi-sub">${m.prep}+${m.exec} d.d. · ${TRUKMIU_METAI} m. standartas</span></div>`:""}
         </div>
         ${r.rule20.applies?`<div class="hint" style="margin-top:10px">📌 ${r.rule20.note}</div>`:""}
       </div></div>`;
@@ -1819,19 +1847,71 @@ function renderMethodAudit(){
 
 /* ==================== DURATION ==================== */
 function populateDurationOptions(){
-  const sel=document.getElementById("durMethod");
-  if(sel.options.length>1) return;
+  const sel=document.getElementById("durMethod"), buvo=sel.value;
+  sel.innerHTML="";
   Object.entries(METHODS).forEach(([k,v])=>{
     const o=document.createElement("option");
     o.value=k; o.textContent=`${k} - ${v.name} (${v.total} d.d.)`;
     sel.appendChild(o);
   });
+  if(buvo && METHODS[buvo]) sel.value=buvo;
   const tbody=document.querySelector("#methodCatalog tbody");
   tbody.innerHTML=Object.entries(METHODS).map(([k,v])=>`
     <tr><td><strong style="color:var(--color-emerald-strong)">${k}</strong></td><td>${v.full}</td>
     <td style="text-align:center">${v.prep}</td><td style="text-align:center">${v.exec}</td>
-    <td style="text-align:center"><strong>${v.total}</strong></td></tr>`).join("");
+    <td style="text-align:center"><strong>${v.total}</strong>${kitiMetai(k)}</td></tr>`).join("");
+  trukmiuUI();
 }
+
+/* Standartinių trukmių metai: kol galioja ir ateinančių metų trukmės - pasirenkama, pasibaigę metai nebesiūlomi */
+function metuVersijos(){ return window.GP_TRUKMES ? GP_TRUKMES.pasirenkamos(TRUKMIU_DIENA || undefined) : []; }
+/* Kataloge - kitų galimų metų suma, kai skiriasi */
+function kitiMetai(k){
+  return metuVersijos().filter(v => v.metai !== TRUKMIU_METAI).map(v => {
+    const x = GP_TRUKMES.trukme(k, v.metai);
+    return x && x.total !== METHODS[k].total ? `<span class="metai-kita">${v.metai} m.: ${x.total}</span>` : "";
+  }).join("");
+}
+function trukmiuUI(){
+  const sel = document.getElementById("durMetai"), txt = document.getElementById("durMetaiTxt"), pag = document.getElementById("durMetaiPag");
+  const km = document.getElementById("katalogoMetai");
+  if(km) km.textContent = window.GP_TRUKMES ? ` - ${TRUKMIU_METAI} m.` : "";
+  if(!sel) return;
+  const vs = metuVersijos(), kelios = vs.length > 1, dien = TRUKMIU_DIENA || (window.GP_TRUKMES ? GP_TRUKMES.diena() : "");
+  sel.innerHTML = vs.map(v => `<option value="${v.metai}">${v.metai} m.${v.nuo > dien ? " (galios nuo " + v.nuo + ")" : ""}</option>`).join("");
+  sel.value = String(TRUKMIU_METAI);
+  sel.hidden = !kelios;
+  txt.hidden = kelios || !vs.length;
+  txt.textContent = TRUKMIU_METAI + " m.";
+  let h = "";
+  if(vs.length === 1) h = `Taikomos ${vs[0].metai} m. standartinės pirkimų trukmės (nuo ${vs[0].nuo}).`;
+  else if(kelios){
+    const dab = vs[0], kita = vs[vs.length - 1];
+    const pok = GP_TRUKMES.pokyciai(dab.metai, kita.metai).map(x => `${x.budas} ${x.is.total} → ${x.i.total}`);
+    h = `Iki ${dab.iki} galima rinktis; nuo ${kita.nuo} taikomos tik ${kita.metai} m. trukmės.`
+      + (pok.length ? ` ${kita.metai} m. pasikeitė (d.d.): ${pok.join(", ")}.` : "");
+  }
+  if(h) h += " Taikoma skaičiuoklėje, kataloge, pirkimo būdo analizėje ir registro „Perskaičiuoti datas“. Trukmės - pirkimų organizavimo standartas, ne teisės aktų terminai.";
+  pag.textContent = h;
+}
+function pasirinkMetus(metai){
+  metai = Number(metai);
+  if(metai === TRUKMIU_METAI || !metuVersijos().some(v => v.metai === metai)){ trukmiuUI(); return false; }
+  TRUKMIU_METAI = metai;
+  taikykTrukmes(metai);
+  populateDurationOptions();
+  if(document.getElementById("durResult").innerHTML.trim()) runDuration();
+  if(document.getElementById("methodResult").innerHTML.trim()) runMethodTest();
+  return true;
+}
+/* Testams: kita „šiandien“ - numatytieji metai ir pasirinkimai pagal ją */
+function trukmiuPradzia(dabar){
+  TRUKMIU_DIENA = dabar || null;
+  TRUKMIU_METAI = GP_TRUKMES.numatyta(TRUKMIU_DIENA || undefined).metai;
+  taikykTrukmes(TRUKMIU_METAI);
+  populateDurationOptions();
+}
+document.getElementById("durMetai").addEventListener("change", e => pasirinkMetus(e.target.value));
 
 function runDuration(){
   const code=document.getElementById("durMethod").value;
@@ -1848,7 +1928,7 @@ function runDuration(){
   document.getElementById("durResult").innerHTML = `
     <div class="alert"><span class="alert-icon">⏱️</span>
       <div class="alert-body">
-        <div class="alert-title">${m.full} · Grafikas ${type}</div>
+        <div class="alert-title">${m.full} · Grafikas ${type} · ${TRUKMIU_METAI} m. standartinės trukmės</div>
         <div class="timeline" style="margin-top:10px">
           <div class="timeline-row"><div><strong>Inicijavimas</strong></div><div>${fmtDate(dInit)}</div><div class="timeline-bar prep" style="width:${(prep/total*100).toFixed(0)}%">Pasirengimas ${prep} d.d.</div><div class="muted">${prep} d.d.</div></div>
           <div class="timeline-row"><div><strong>Pirkimo pradžia</strong></div><div>${fmtDate(dProc)}</div><div class="timeline-bar exec" style="width:100%">Procedūra ${exec} d.d.</div><div class="muted">${exec} d.d.</div></div>
@@ -2994,7 +3074,7 @@ renderDashboard();
       "<b>Įkelkite arba įveskite.</b> Importuokite Doclogix DVS Excel failą (skirtukas „Importas“) arba pridėkite pirkimus „Pirkimų registre“.",
       "<b>Patikrinkite.</b> „Validacija“ pažymi trūkstamus laukus, datų neatitikimus ir vertei netinkantį pirkimo būdą; mažos vertės dalis ir 20 % dalių išimtį tikrina „Pirkimo būdo analizė“ ir Perspėjimų centras.",
       "<b>Parinkite būdą.</b> „Pirkimo būdo analizė“ siūlo būdą pagal galiojančias VPT vertės ribas ir 20 % taisyklę - sprendžiate jūs.",
-      "<b>Suskaičiuokite terminus.</b> „Terminų skaičiuoklė“ skaičiuoja atgal nuo sutarties datos darbo dienomis su LR šventėmis (A arba B grafikas).",
+      "<b>Suskaičiuokite terminus.</b> „Terminų skaičiuoklė“ skaičiuoja atgal nuo sutarties datos darbo dienomis su LR šventėmis (A arba B grafikas) pagal standartines pirkimų trukmes: kol galioja ir ateinančių metų trukmės, galite pasirinkti, kurių metų taikyti; pasibaigusių metų trukmės nebesiūlomos.",
       "<b>Centralizuokite.</b> Skirtukai „Centralizavimo galimybės“ ir „Pajėgumai“ rodo, kuriuos kelių įmonių pirkimus verta jungti ir kaip pasiskirsto komandos krūvis.",
       "<b>Eksportuokite.</b> Excel arba PDF ataskaita - skirtukas „Eksportas“.",
       "<b>Pradėkite pirkimą.</b> „Pirkimų registre“ prie pirkimo - „+ Kortelė“: plano duomenys perkeliami į bendrą pirkimo kortelę (patikrinate ir išsaugote čia pat), kurią perima kiti įrankiai."
@@ -3020,7 +3100,7 @@ renderDashboard();
         { code: "MV", term: "Mažos vertės pirkimas", def: "Supaprastinta tvarka, kai numatoma vertė mažesnė už mažos vertės pirkimo ribą.", example: "Dabartinės ribos: " + MV + "." },
         { code: "CPV5", term: "BVPŽ kodas ir CPV5", def: "Bendrasis viešųjų pirkimų žodynas - pirkimo objekto kodas. CPV5 - pirmi 5 skaitmenys, pagal juos grupuojami panašūs pirkimai. Kodą rasti padeda BVPŽ kodų paieška (antraštėje).", example: "30232130-4 - CPV5 „30232“." },
         { code: "20 %", term: "20 % dalių išimtis", def: "Net pasiekus tarptautinio pirkimo ribą, atskiroms mažesnėms dalims galima atlikti supaprastintus pirkimus, jei tokių dalių bendra vertė ne didesnė kaip 20 % visų dalių vertės (" + (window.GP_TEISE ? GP_TEISE.cit("dalys_supaprastintai", "PI") + "; " + GP_TEISE.cit("dalys_supaprastintai", "VPI") : "") + "). Modulis tai tikrina „Pirkimo būdo analizėje“." },
-        { term: "A ir B grafikas", def: "Terminų skaičiavimo režimai: A - modulio procedūrų trukmių įverčiai be rezervo; B - su +20 % atsarga deryboms ir nenumatytiems delsimams. Trukmės - ne teisės aktų terminai: įstatymas nustato tik trumpiausius paraiškų ir pasiūlymų terminus.", example: "Rizikingam pirkimui rinkitės B, kad liktų laiko atsakymams į tiekėjų klausimus." },
+        { term: "A ir B grafikas", def: "Terminų skaičiavimo režimai: A - pasirinktų metų standartinės pirkimų trukmės be rezervo; B - su +20 % atsarga deryboms ir nenumatytiems delsimams. Trukmės - ne teisės aktų terminai: įstatymas nustato tik trumpiausius paraiškų ir pasiūlymų terminus.", example: "Rizikingam pirkimui rinkitės B, kad liktų laiko atsakymams į tiekėjų klausimus." },
         { term: "Centralizavimas (CPV5 ir Jaccard)", def: "Algoritmas jungia kelių įmonių panašius pirkimus: CPV5 atrenka tą pačią objekto sritį, Jaccard panašumas lygina pavadinimus, vertinamos ir sutarčių datos.", example: "Trijų įmonių IT licencijų pirkimai - vienas grupinis pirkimas." }
       ],
       faqTitle: "Dažniausi klausimai",
@@ -3028,7 +3108,7 @@ renderDashboard();
         { q: "Kur saugomi mano duomenys?", a: "Tik šioje naršyklėje (localStorage), niekur nesiunčiami. Išvalius naršyklės duomenis planas dingsta - darykite atsarginę kopiją (portalo poraštė, „Atsarginė kopija“) arba eksportuokite Excel. Jei išsaugoto plano perskaityti nepavyksta, modulis tai pasako ir neperrašo jo tuščiu." },
         { q: "Ar „Centralizavimo galimybės“ siunčia duomenis dirbtiniam intelektui?", a: "Ne. Tai algoritmas naršyklėje: grupuoja pagal BVPŽ (CPV5), lygina pavadinimus ir sutarčių datas. Niekas nesiunčiama." },
         { q: "Iš kur imamos VPT vertės ribos?", a: "Iš bendro G-Procure ribų failo (galioja nuo 2026-01-01). VPT ribas peržiūri paprastai kas 2 metus - tada jos atnaujinamos vienoje vietoje visiems moduliams." },
-        { q: "Kuo skiriasi A ir B grafikas?", a: "A naudoja modulio procedūrų trukmių įverčius be rezervo. B prideda +20 % atsargą deryboms, atsakymams į tiekėjų klausimus ir nenumatytiems delsimams. Tikslų pirkimo grafiką sudarykite Pirkimų grafikų generatoriuje." },
+        { q: "Kuo skiriasi A ir B grafikas?", a: "A naudoja pasirinktų metų standartines pirkimų trukmes be rezervo. B prideda +20 % atsargą deryboms, atsakymams į tiekėjų klausimus ir nenumatytiems delsimams. Tikslų pirkimo grafiką sudarykite Pirkimų grafikų generatoriuje." },
         { q: "Ar įrankis pakeičia Doclogix ar CVP IS?", a: "Ne. Tiesioginės jungties su Doclogix ir CVP IS nėra - duomenys keliauja Excel failais. Tai planavimo ir analizės įrankis." }
       ],
       closeLabel: "Uždaryti ir grįžti"
