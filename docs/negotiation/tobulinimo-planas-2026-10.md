@@ -179,7 +179,7 @@ rekomendacijomis - be pavadinimų ir sumų (R4 testai plečiami).
 | 3 | B lygis: masinis įkėlimas, tiekėjo atpažinimas, PDF stulpelių geometrija, peržiūros ekranas | vidutinė-didelė | 1 |
 | 4 | C lygis: DI skaitymas pasirinktam failui | maža techniškai, bet keičia privatumo teiginius | naudotojo sprendimas po 3 etapo matavimų |
 
-Kiekvienas etapas - atskiri commit'ai, testai, 375 px, gyva patikra; PROJECT_CONTEXT.md ir CLAUDE.md atnaujinami.
+Kiekvienas etapas - atskiri commit'ai, testai, 375 px, gyva patikra; CLAUDE.md atnaujinamas (modulio PROJECT_CONTEXT.md nuo 2026-10-27 - privačiame aplanke).
 
 ## 5. Sprendimai, kurių reikia prieš pradedant
 

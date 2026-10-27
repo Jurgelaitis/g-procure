@@ -449,6 +449,9 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   („False positive“) uždaryti su priežastimi komentare, 12 ištaisyta kode (tarp jų tikra klaida - `shared/skelbimas.js` pakeitimo priežastis). Radinius mato
   tik prisijungęs savininkas (Security > Code scanning; filtras `path:**/testai.html` - testų failai). Naujas radinys - pirma taisyk; uždaryk tik su priežastimi.
 - Po darbo - commit ir push į vieną `g-procure` repo. Jokio rankinio failų kėlimo.
+- Modulių `PROJECT_CONTEXT.md` (seni konteksto failai naujoms Claude paskyroms; PP-cost-benefit, PP-market-KPI, PP-negotiation, PP-protocol, PP-report, PP-ts) - nuo 2026-10-27
+  privačiame aplanke `~/Documents/g-procure-privatu/<modulis>/PROJECT_CONTEXT.md` (naudotojo sprendimas: tai seni, nebeatnaujinami darbo užrašai - PP-negotiation faile
+  aprašytas jau pakeistas veikimas). Viešoje saugykloje tokių failų nekurk - modulio aprašas ir sprendimai gyvena šiame faile.
 - **Svetainė vėl vieša (nuo 2026-10-23, naudotojo sprendimas):** saugykla vieša, GitHub Pages įjungtas, „Enforce HTTPS“ - `http://` nukreipiama į `https://`;
   2026-10-22 - 2026-10-23 svetainė buvo nevieša (saugykla privati, Pages išjungtas - dėl teisinių klausimų). Po push'o tikrink gyvai (g-procure.com), kaip iki 2026-10-22;
   vietinė peržiūra - `http://localhost:8000` (`python3 -m http.server 8000 --bind 127.0.0.1` saugyklos šaknyje; serveris priima ir `http://localhost:8000` bei
