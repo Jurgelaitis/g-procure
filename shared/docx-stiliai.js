@@ -100,6 +100,21 @@
 
   function bruksniai(s) { return String(s == null ? "" : s).replace(/[\u2013\u2014]/g, "-"); }
 
+  /* Tekstas didžiosiomis antraštei (2026-10-20 PP-salygos, naudotojo sprendimas; bendras nuo 2026-10-27 - ir PP-ts rinkos konsultacija):
+     matavimo vienetai po skaičiaus lieka, kaip parašyti - „110/10 kV“, ne „110/10 KV“ (kV, kW ir kilovoltai, megavoltamperai - skirtingi dalykai).
+     Vienetas - tik po skaičiaus ir ne žodžio dalis. */
+  var VIENETAI = /(\d(?:[\d.,]*\d)?(?:\s*[\/×x–-]\s*\d(?:[\d.,]*\d)?)*[\s\u00A0]*)(kVAr|kVA|kV|kvar|Mvar|MVAr|MVA|kWh|kW|MWh|MW|GWh|GW|TWh|mm²|mm2|mm|cm|km|m²|m³|m2|m3|kg|kN|MPa|kPa|kHz|MHz|GHz|Hz|kA|mA|mV|ha|ml|m|t|l)(?![\p{L}\p{N}])/gu;
+  function didziosiomis(t) {
+    t = String(t == null ? "" : t);
+    var out = "", p = 0, m;
+    VIENETAI.lastIndex = 0;
+    while ((m = VIENETAI.exec(t))) {
+      out += t.slice(p, m.index).toLocaleUpperCase("lt") + m[1] + m[2];      // ir skaičius su „x“ („2x25 MVA“) - kaip parašytas
+      p = m.index + m[0].length;
+    }
+    return out + t.slice(p).toLocaleUpperCase("lt");
+  }
+
   // Fonas: { type: CLEAR, color: auto, fill } - Word ir Pages piešia fill (SOLID - rašto spalvą)
   function fonas(D, fill) { return { type: D.ShadingType.CLEAR, color: "auto", fill: fill || OFICIALUS.fonas }; }
 
@@ -171,5 +186,5 @@
       numatytieji + baze + mano + "</w:styles>";
   }
 
-  global.GP_DOCX_STILIAI = { version: "1.1", xml: xml, OFICIALUS: OFICIALUS, fonas: fonas, bruksniai: bruksniai, oficialus: oficialus };
+  global.GP_DOCX_STILIAI = { version: "1.2", xml: xml, OFICIALUS: OFICIALUS, fonas: fonas, bruksniai: bruksniai, didziosiomis: didziosiomis, oficialus: oficialus };
 })(typeof window !== "undefined" ? window : this);
