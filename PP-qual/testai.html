@@ -823,7 +823,8 @@ async function testaiPenktas(){
     W.eval("PPQ.exportPaskirtis = 'tiekejams'");
     let t = await wordas("lt");
     tiesa(!/Numatoma vertė/.test(t) && !/Vertės kategorija/.test(t) && !/Proporcingumo pagrindimas/.test(t) && !/G-Procure kvalifikacinių reikalavimų modulį/.test(t) && !/200\s000/.test(t), "tiekėjų dokumente liko vidinė informacija");
-    tiesa(/Kvalifikacija-tiekejams/.test(paskutinisVardas) && /3\. Kvalifikaciniai reikalavimai/.test(t) && /atitikties lentelė/.test(t), "tiekėjų dokumente trūksta reikalavimų ar priedo, arba žymos varde: " + paskutinisVardas);
+    // tiekėjams - reikalavimai 2 skyriuje (be „Bendrų nuostatų“; naudotojo sprendimas 2026-10-27)
+    tiesa(/Kvalifikacija-tiekejams/.test(paskutinisVardas) && /2\. Kvalifikaciniai reikalavimai/.test(t) && /atitikties lentelė/.test(t), "tiekėjų dokumente trūksta reikalavimų ar priedo, arba žymos varde: " + paskutinisVardas);
     W.eval("PPQ.exportPaskirtis = 'vidinis'");
     t = await wordas("lt");
     tiesa(/Numatoma vertė/.test(t) && /Proporcingumo pagrindimas/.test(t) && /G-Procure kvalifikacinių reikalavimų modulį/.test(t) && !/_tiekejams_/.test(paskutinisVardas), "vidiniame dokumente trūksta dalių");
@@ -1124,6 +1125,36 @@ const K_LG = { pavadinimas: "Autotransformatorių pirkimas", vykdytojas: "litgri
                dalys: [{ pavadinimas: "Autotransformatoriai", verte: 950000 }, { pavadinimas: "Montavimo priežiūra", verte: 300000 }] };
 function korteles(V){ const K = V.GP_KORTELE; return [K_AMBER, K_IT, K_LG].map(x => K.issaugok(K.tuscia(x)).kortele.id); }
 const juostosZinute = V => V.document.getElementById("gpk-zin").textContent;
+
+/* 2026-10-27 - naudotojo sprendimai po patikros (T1-T3). */
+async function testaiSprendimai1027(){
+  grupe("Naudotojo sprendimai 2026-10-27: kategorija E, tiekėjų Word - tik reikalavimai, patirties laikotarpis abiem kryptimis");
+  await modulis();
+  await testas("T1: kategorija E - „Aplinkos apsaugos vadybos priemonės“ (Metodikos 22 p.), be „socialinės atsakomybės“; DI užklausoje - taip pat", async ()=>{
+    lygu([W.eval("CATS.E"), W.eval("CATS_EN.E")], ["Aplinkos apsaugos vadybos priemonės", "Environmental management measures"], "pavadinimai");
+    const h = await (await fetch("PP-QUAL.html?nc=" + Date.now())).text();
+    tiesa(!/socialin(ė|ės) atsakomyb|aplinkosauga\/socialiniai|social responsibility/i.test(h), "liko „socialinė atsakomybė“");
+  });
+  await testas("T2: tiekėjams skirtas Word - be pirkimo konteksto, žaliojo pirkimo, „Bendrų nuostatų“ ir „Atitinka (Taip/Ne)“; reikalavimai - 2 skyrius; DI poraštė be „Prieš skelbiant turi būti peržiūrėta“; vidinis - kaip iki tol", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    rinkinys(RINKINYS_100);
+    W.eval("PPQ.settings.green = false; PPQ.exportPaskirtis = 'tiekejams'");
+    let t = await wordas("lt");
+    tiesa(!/Pirkimo kontekstas|Žaliasis pirkimas|Bendros nuostatos|Atitinka \(Taip\/Ne\)|Prieš skelbiant turi būti peržiūrėta/.test(t), "tiekėjų dokumente liko: " + (t.match(/Pirkimo kontekstas|Žaliasis pirkimas|Bendros nuostatos|Atitinka \(Taip\/Ne\)|Prieš skelbiant turi būti peržiūrėta/) || [""])[0]);
+    tiesa(/2\. Kvalifikaciniai reikalavimai/.test(t) && !/3\. Kvalifikaciniai reikalavimai/.test(t) && /Dalis teksto parengta naudojant DI \(Claude\)\./.test(t) && /Pateikti dokumentai/.test(t), "reikalavimai, priedas ir DI poraštė");
+    W.eval("PPQ.exportPaskirtis = 'vidinis'");
+    t = await wordas("lt");
+    tiesa(/Pirkimo kontekstas/.test(t) && /Žaliasis pirkimas/.test(t) && /2\. Bendros nuostatos/.test(t) && /3\. Kvalifikaciniai reikalavimai/.test(t) && /Atitinka \(Taip\/Ne\)/.test(t) && /Prieš skelbiant turi būti peržiūrėta/.test(t), "vidinis dokumentas pakeistas");
+    lygu([W.GP_DI.poraste("lt", { skelbiamas: true }), W.GP_DI.poraste("en", { skelbiamas: true })], ["Dalis teksto parengta naudojant DI (Claude).", "Part of the text was prepared using AI (Claude)."], "bendra poraštė");
+  });
+  await testas("T3: patirties laikotarpis - trumpesnis už Metodikos - „med“, ilgesnis - „low“ (informacija), lygus - be pastabos", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    const r = t => rasti(taisykles(t), "R12").map(x => [x.sev, x.title]);
+    lygu(r("Tiekėjas per paskutinius 2 metus yra patiekęs panašių prekių."), [["med", "Patirties laikotarpis trumpesnis nei Metodikoje"]], "2 m.");
+    lygu(r("Tiekėjas per paskutinius 5 metus yra patiekęs panašių prekių."), [["low", "Patirties laikotarpis ilgesnis nei Metodikoje"]], "5 m.");
+    lygu(r("Tiekėjas per paskutinius 3 metus yra patiekęs panašių prekių."), [], "3 m.");
+  });
+}
 
 /* 2026-10-26 - naujo darbuotojo patikra (K1-K4, D1-D3, V1-V10, M1-M10). DI atsakymai imituojami (W.callAI) - į serverį nieko nesiunčiama. */
 async function testaiPatikra1026(){
@@ -1432,6 +1463,7 @@ async function testaiKortele(){
     await testaiIsejimas();
     await testaiKortele();
   await testaiPatikra1026();
+  await testaiSprendimai1027();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

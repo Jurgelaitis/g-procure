@@ -101,7 +101,8 @@
 
   var TXT = {
     lt: {
-      laikotarpis: "SPS reikalauja tiekėjo patirties per paskutinius {n} metus, o Metodikoje {obj} - per paskutinius {norma} metus. Ilgesnis laikotarpis galimas, jei to reikia tinkamai konkurencijai užtikrinti (pvz., panašūs objektai įsigyjami retai ir per {norma} metus patenka itin mažai tiekėjų) - tada turėkite tokį pagrindimą.",
+      laikotarpis: "SPS reikalauja tiekėjo patirties per paskutinius {n} metus, o Metodikoje {obj} - per paskutinius {norma} metus. Ilgesnis laikotarpis galimas, jei to reikia tinkamai konkurencijai užtikrinti (pvz., panašūs objektai įsigyjami retai ir per {norma} metus patenka itin mažai tiekėjų) - tada turėkite tokį pagrindimą ir įvertinkite, ar ankstesnė patirtis išlieka aktuali.",
+      laikotarpisTrumpas: "SPS reikalauja tiekėjo patirties per paskutinius {n} metus, o Metodikoje {obj} - per paskutinius {norma} metus. Trumpesnis laikotarpis mažina tiekėjų, galinčių įrodyti patirtį, skaičių.",
       verte: "SPS reikalaujamos patirties vertė - {x} Eur ({proc} % numatomos vertės {v} Eur), o Metodikoje paprastai ne daugiau kaip {koef} numatomos vertės ({riba} Eur).",
       pajamos: "SPS reikalaujamos metinės pajamos - {x} Eur, o Metodikoje - ne daugiau kaip 2 kartus {kokios} ({riba} Eur).",
       pajamosMv: "SPS reikalaujamos metinės pajamos ({x} Eur), o mažos vertės sutarčiai Metodikoje pajamų reikalavimas paprastai nenustatomas.",
@@ -112,7 +113,8 @@
       beSps: "nėra SPS", beSumos: "reikalavime neradau sumos", rasta: "rasta: {s}", patirtis: "patirtis per {n} m.", pajamosR: "pajamos", eur: "Eur"
     },
     en: {
-      laikotarpis: "The SPS requires the supplier's experience over the last {n} years, while the Methodology sets the last {norma} years {obj}. A longer period is possible where needed to ensure adequate competition (e.g. similar objects are procured rarely and very few suppliers fall within {norma} years) - keep that justification.",
+      laikotarpis: "The SPS requires the supplier's experience over the last {n} years, while the Methodology sets the last {norma} years {obj}. A longer period is possible where needed to ensure adequate competition (e.g. similar objects are procured rarely and very few suppliers fall within {norma} years) - keep that justification and assess whether the older experience remains relevant.",
+      laikotarpisTrumpas: "The SPS requires the supplier's experience over the last {n} years, while the Methodology sets the last {norma} years {obj}. A shorter period reduces the number of suppliers able to prove their experience.",
       verte: "The value of experience required in the SPS is EUR {x} ({proc}% of the estimated value of EUR {v}), while the Methodology normally sets no more than {koef} of the estimated value (EUR {riba}).",
       pajamos: "The SPS requires annual turnover of EUR {x}, while the Methodology sets no more than 2 times the {kokios} (EUR {riba}).",
       pajamosMv: "The SPS requires annual turnover (EUR {x}), while for a low-value contract the Methodology normally sets no turnover requirement.",
@@ -145,15 +147,18 @@
     else if (!c || !objTipas) pt.push({ id: "kval_laikotarpis", busena: "nepatikrinta", pastaba: X.beObj });
     else if (c.laikotarpis.metai == null) pt.push({ id: "kval_laikotarpis", busena: "nepatikrinta", pastaba: X.misrus });
     else {
-      var ilgi = pat.filter(function (r) { return r.metai > c.laikotarpis.metai; });
+      // Naudotojo sprendimas 2026-10-27 (Metodikos 16.1 p., e-tar): trumpesnis už normą - „Patikrinkite“ (mažina tiekėjų, galinčių įrodyti
+      // patirtį, skaičių), ilgesnis - informacija (galimas, jei to reikia konkurencijai užtikrinti). Iki tol - tik ilgesnis, „Rekomendacija“
+      var kiti = pat.filter(function (r) { return r.metai !== c.laikotarpis.metai; });
       // Keli reikalavimai su tuo pačiu laikotarpiu (tikrame SPS - 1.1 ir 2.1 p. po 5 metus) - vienas radinys su visomis vietomis
-      ilgi.forEach(function (r) {
+      kiti.forEach(function (r) {
         var yra = rad.filter(function (x) { return x.id === "kval_laikotarpis" && x.metai === r.metai; })[0];
         if (yra) { yra.vietos = yra.vietos.concat(vieta(r)); return; }
-        rad.push({ id: "kval_laikotarpis", lygis: "rekomendacija", metai: r.metai, vietos: vieta(r), teise: [c.laikotarpis.raktas, "met_pagrindimas"].concat(mv),
-          tekstas: sub(X.laikotarpis, { n: r.metai, norma: c.laikotarpis.metai, obj: c.laikotarpis.raktas === "met_patirtis_darbai" ? X.objDarbai : X.objPrekes }) });
+        var trumpas = r.metai < c.laikotarpis.metai;
+        rad.push({ id: "kval_laikotarpis", lygis: trumpas ? "tikrinti" : "info", metai: r.metai, vietos: vieta(r), teise: [c.laikotarpis.raktas, "met_pagrindimas"].concat(mv),
+          tekstas: sub(trumpas ? X.laikotarpisTrumpas : X.laikotarpis, { n: r.metai, norma: c.laikotarpis.metai, obj: c.laikotarpis.raktas === "met_patirtis_darbai" ? X.objDarbai : X.objPrekes }) });
       });
-      pt.push({ id: "kval_laikotarpis", busena: ilgi.length ? "radinys" : "gerai", pastaba: "" });
+      pt.push({ id: "kval_laikotarpis", busena: kiti.length ? "radinys" : "gerai", pastaba: "" });
     }
     // 2. Patirties vertė - ne daugiau kaip 0,7 numatomos vertės (paprastai)
     var suSuma = pat.filter(function (r) { return r.suma > 0; });
