@@ -253,7 +253,7 @@ a:hover { text-decoration: underline; }
   .grid--3, .grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
-  .grid--2, .grid--3, .grid--4 { grid-template-columns: 1fr; }
+  .grid--2, .grid--3, .grid--4 { grid-template-columns: minmax(0, 1fr); }   /* ne 1fr: lentelė stulpelio neišplečia (V7, MEAT telefone) */
 }
 
 /* Buttons -------------------------------------------------------------- */
@@ -654,8 +654,9 @@ a:hover { text-decoration: underline; }
   body { background: white; }
   .card { box-shadow: none; page-break-inside: avoid; }
   .layout { grid-template-columns: 1fr; }
-  .view { display: block !important; page-break-after: always; }
-  .view:not(.active) { opacity: 0.95; }
+  /* be fadeIn animacijos (D7, 2026-10-27: spausdinimo metu neaktyvūs vaizdai likdavo permatomi - 27 tušti puslapiai iš 29) */
+  .view { display: block !important; page-break-after: always; animation: none !important; opacity: 1 !important; transform: none !important; }
+  .view[data-view="export"], .view[data-view="ai"], .view[data-view="help"] { display: none !important; }
 }
 
 /* Responsive ------------------------------------------------------------- */
@@ -795,7 +796,7 @@ a:hover { text-decoration: underline; }
     <section class="view active" data-view="dashboard">
       <div id="infoPanelMount"></div>
       <div class="hero">
-        <p style="opacity: 0.9; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 6px;" data-en="EPSO-G group negotiation preparation tool">EPSO-G grupės derybų pasirengimo įrankis</p>
+        <p style="opacity: 0.9; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 6px;" data-en="G-Procure negotiation preparation tool">G-Procure derybų pasirengimo įrankis</p>
         <h2 data-en="From supplier offers to a negotiation plan.">Nuo tiekėjų pasiūlymų iki derybų plano.</h2>
         <p data-en="Upload the offers and the tool will build a unit price matrix, negotiation limits and recommendations for each supplier.">Įkelkite pasiūlymus, o įrankis sudarys įkainių matricą, derybų ribas ir rekomendacijas kiekvienam tiekėjui.</p>
         <p style="font-size: 12px; opacity: 0.9; margin-top: 6px;" data-en="Works under PĮ and VPĮ: legal references from the shared register, the data stay in your browser.">Veikia pagal PĮ ir VPĮ: teisės nuorodos iš bendro registro, duomenys lieka jūsų naršyklėje.</p>
@@ -843,11 +844,11 @@ a:hover { text-decoration: underline; }
         <div class="grid grid--3">
           <div>
             <h4 class="text-emerald" data-en="📊 Multi-dimensional analysis">📊 Daugiamatė analizė</h4>
-            <p class="muted" style="font-size: 13px; margin-top: 4px;" data-en="Comparison by lowest, average and median price, comparison with PV, Z-score outlier detection, aggregated ranking of offers.">Lyginimas pagal mažiausią, vidutinę, medianinę kainą, palyginimas su PV, Z-score išskirčių aptikimas, agreguotas pasiūlymų reitingavimas.</p>
+            <p class="muted" style="font-size: 13px; margin-top: 4px;" data-en="Comparison by lowest, average and median price, comparison with PV, outlier detection, ranking of complete offers by price.">Lyginimas pagal mažiausią, vidutinę, medianinę kainą, palyginimas su PV, išskirčių aptikimas, pilnų pasiūlymų rikiavimas pagal kainą.</p>
           </div>
           <div>
-            <h4 class="text-emerald" data-en="🎯 BATNA / ZOPA modelling">🎯 BATNA / ZOPA modeliavimas</h4>
-            <p class="muted" style="font-size: 13px; margin-top: 4px;" data-en="Automatic calculation of the target, reservation price and negotiation zone for each supplier, based on the offers received and PV.">Automatinis tikslo, rezervinės ir derybų zonos skaičiavimas kiekvienam tiekėjui, paremtas rinkos duomenimis ir PV.</p>
+            <h4 class="text-emerald" data-en="🎯 Negotiation limits">🎯 Derybų ribos</h4>
+            <p class="muted" style="font-size: 13px; margin-top: 4px;" data-en="Suggested opening offer, target and reservation price for each supplier - from the offers received, PV and the tool’s assumptions (92 and 88 %); you decide the final limits.">Siūlomi atidarymo siūlymas, tikslas ir rezervinė riba kiekvienam tiekėjui - pagal gautus pasiūlymus, PV ir įrankio prielaidas (92 ir 88 %); galutines ribas nusprendžiate jūs.</p>
           </div>
           <div>
             <h4 class="text-emerald" data-en="⚖️ MEAT evaluation">⚖️ MEAT vertinimas</h4>
@@ -951,6 +952,19 @@ const fmtPct = (n, dec = 1) => {
     minimumFractionDigits: 0, maximumFractionDigits: dec
   }).format(n) + '%';
 };
+/* Rankinis skaičiaus įvedimas (K3, naujo darbuotojo patikra 2026-10-27): laukas - tekstas, ne type="number" (jis „2.950.000,00“ paversdavo
+   2,95, o „14.900“ - 14,9), skaitoma kaip importe ir kituose moduliuose - GP_MONEY.parseEUR („14.900“ = 14 900, „1.500,50“ = „1,500.50“ =
+   1 500,5, „0,125“ = 0,125); tuščias - null (ištrintas įkainis - „trūksta“, ne 0 €). Neperskaitomas ar neigiamas - null ir aria-invalid
+   (V10). Išėjus iš lauko reikšmė parodoma taip, kaip perskaityta (data-skaicius), kad žmogus matytų, ką įrankis įrašė. */
+function skaiciusIsLauko(inp, o) {
+  const t = String(inp.value || '').trim();
+  if (!t) { inp.removeAttribute('aria-invalid'); return null; }
+  // minuso ženklas - neigiama reikšmė (GP_MONEY.parseEUR jį praleidžia, todėl tikrinama čia; V10)
+  const v = /^[-−–]/.test(t) ? null : GP_MONEY.parseEUR(t), ok = v != null && isFinite(v) && v >= 0 && (!o || o.max == null || v <= o.max);
+  if (ok) inp.removeAttribute('aria-invalid'); else inp.setAttribute('aria-invalid', 'true');
+  return ok ? v : null;
+}
+const laukoSkaicius = v => v == null || v === '' || !isFinite(Number(v)) ? '' : new Intl.NumberFormat(LOKALE(), { maximumFractionDigits: 6 }).format(Number(v));
 const escapeHtml = s => (s ?? '').toString().replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -997,7 +1011,7 @@ const APP = {
    į kanoninį būdą (shared/procurement-methods.js). Reikšmės NEkeičiamos. */
 (function tikrintiDerybuBudus(){
   if(!window.GP_METHODS){ console.warn('GP_METHODS neįkelta - pp-negotiation būdai netikrinami'); return; }
-  ['derybos_skelb','derybos_neskelb','konkurencinis_dialogas','inovaciju_partneryste','atviras','ribotas'].forEach(code => {
+  ['derybos_skelb','derybos_neskelb','konkurencinis_dialogas','inovaciju_partneryste','atviras','ribotas','mv_derybos'].forEach(code => {
     if(!GP_METHODS.fromLegacy('pp-negotiation', code))
       console.warn('pp-negotiation procedūros kodas nerastas taksonomijoje:', code);
   });
@@ -1090,6 +1104,65 @@ function suNumatytosiomis(d) {
     st[k] = st[k] && typeof st[k] === 'object' && !Array.isArray(st[k]) && d[k] && typeof d[k] === 'object' && !Array.isArray(d[k])
       ? Object.assign(st[k], d[k]) : d[k];
   });
+  return normalizuokProjekta(st);
+}
+
+/* Projekto laukų tipai (K5, naujo darbuotojo patikra 2026-10-27): projekto kopija gali būti suklastota (įrankis siūlo ja dalintis su
+   komanda), o kiekiai, kainos, svoriai, skalė, spalva ir identifikatoriai įdedami į HTML ir atributus. Iki tol tikrinta tik sandara -
+   kriterijaus svoris ar tiekėjo spalva „"><img onerror=...>“ vykdė kodą g-procure.com kilmėje, kur pasiekiami visų modulių duomenys.
+   Dabar: skaičiai - skaičiai (kitaip numatytoji ar null), spalva - tik #RRGGBB, identifikatoriai - tik saugūs ženklai (kitaip naujas, o jo
+   įkainiai ir balai perkeliami), sąrašų reikšmės - tik žinomos, tekstai - eilutės. Šablonuose - ir escapeHtml (dviguba apsauga). */
+const SAUGUS_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const PROCEDUROS = ['derybos_skelb', 'derybos_neskelb', 'konkurencinis_dialogas', 'inovaciju_partneryste', 'atviras', 'ribotas', 'mv_derybos'];
+function normalizuokProjekta(st) {
+  const obj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const sk = (v, d, min, max) => { const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? GP_MONEY.parseSkaicius(v) : null;
+    return n != null && isFinite(n) && (min == null || n >= min) && (max == null || n <= max) ? n : d; };
+  const tx = (v, d) => typeof v === 'string' ? v : typeof v === 'number' && isFinite(v) ? String(v) : (d == null ? '' : d);
+  const saugusId = v => typeof v === 'string' && SAUGUS_ID.test(v) ? { id: v } : {};
+  const tarp = {}, idOf = (v, sritis) => { if (typeof v === 'string' && SAUGUS_ID.test(v)) return v; const k = sritis + '|' + String(v); return tarp[k] || (tarp[k] = uid()); };
+  const D = defaultState(), P = obj(st.project) ? st.project : D.project;
+  st.project = Object.assign({}, D.project, {
+    id: tx(P.id, D.project.id), name: tx(P.name), contractingEntity: tx(P.contractingEntity, D.project.contractingEntity),
+    procedureType: PROCEDUROS.includes(P.procedureType) ? P.procedureType : D.project.procedureType, law: P.law === 'VPI' ? 'VPI' : 'PSI',
+    plannedValue: sk(P.plannedValue, 0, 0), currency: /^[A-Z]{3}$/.test(P.currency) ? P.currency : 'EUR', vatIncluded: P.vatIncluded === true,
+    criteriaModel: P.criteriaModel === 'meat' ? 'meat' : 'price', priceWeight: sk(P.priceWeight, 100, 0, 100), qualityWeight: sk(P.qualityWeight, 0, 0, 100),
+    contractTermMonths: sk(P.contractTermMonths, null, 0, 1200), objective: tx(P.objective), backgroundNotes: tx(P.backgroundNotes),
+    createdAt: tx(P.createdAt, D.project.createdAt), updatedAt: tx(P.updatedAt, D.project.updatedAt) });
+  const PALETE = ['#00A072', '#00667D', '#00A5C4', '#85BC28', '#459D54', '#FAB03B', '#DB354A', '#737483'];
+  // be identifikatoriaus - kiekvienam savas (ne vienas bendras visiems)
+  st.suppliers = (Array.isArray(st.suppliers) ? st.suppliers : []).filter(obj).map((x, i) => ({ id: idOf(x.id, x.id == null ? 's#' + i : 's'), name: tx(x.name), code: tx(x.code),
+    contact: tx(x.contact), country: tx(x.country), notes: tx(x.notes), color: /^#[0-9a-fA-F]{6}$/.test(x.color) ? x.color : PALETE[i % PALETE.length],
+    riskLevel: ['low', 'med', 'high'].includes(x.riskLevel) ? x.riskLevel : '' }));
+  st.positions = (Array.isArray(st.positions) ? st.positions : []).filter(obj).map((x, i) => {
+    const r = { id: idOf(x.id, x.id == null ? 'p#' + i : 'p'), code: tx(x.code), name: tx(x.name), unit: tx(x.unit), quantity: sk(x.quantity, 0, 0), plannedUnitPrice: sk(x.plannedUnitPrice, null, 0), weight: sk(x.weight, 1, 0) };
+    if (x.demo === true) r.demo = true;
+    return r;
+  });
+  const supIds = new Set(st.suppliers.map(x => x.id)), posIds = new Set(st.positions.map(x => x.id));
+  const pagalTiekeja = (src, f) => { const out = {}; if (obj(src)) Object.keys(src).forEach(k => { const id = idOf(k, 's'); if (supIds.has(id) && obj(src[k])) out[id] = f(src[k]); }); return out; };
+  st.offers = pagalTiekeja(st.offers, o => { const out = {}; Object.keys(o).forEach(k => { const id = idOf(k, 'p'), v = o[k]; if (!posIds.has(id) || !obj(v)) return;
+    const r = { unitPrice: sk(v.unitPrice, null, 0) }; if (v.leadTime != null) r.leadTime = tx(v.leadTime); if (v.comment != null) r.comment = tx(v.comment); if (v.di === true) r.di = true; out[id] = r; }); return out; });
+  st.fixedOffers = pagalTiekeja(st.fixedOffers, v => { const r = { totalPrice: sk(v.totalPrice, null, 0), validity: /^\d{4}-\d{2}-\d{2}$/.test(v.validity) ? v.validity : '',
+    paymentTerms: tx(v.paymentTerms), deliveryDays: sk(v.deliveryDays, null, 0), comment: tx(v.comment) }; if (v.di === true) r.di = true; return r; });
+  const Q = obj(st.quality) ? st.quality : D.quality;
+  const kriterijai = (Array.isArray(Q.criteria) ? Q.criteria : []).filter(obj).map((c, i) => ({ id: idOf(c.id, c.id == null ? 'c#' + i : 'c'), name: tx(c.name), weight: sk(c.weight, 0, 0, 100), scale: [5, 10, 100].includes(Number(c.scale)) ? Number(c.scale) : 10 }));
+  const kIds = new Set(kriterijai.map(c => c.id));
+  st.quality = { criteria: kriterijai, scores: pagalTiekeja(Q.scores, o => { const out = {}; Object.keys(o).forEach(k => { const id = idOf(k, 'c'), v = sk(o[k], null, 0); if (kIds.has(id) && v != null) out[id] = v; }); return out; }) };
+  const S = obj(st.strategy) ? st.strategy : D.strategy, txs = a => (Array.isArray(a) ? a : []).map(v => tx(v));
+  st.strategy = { targets: pagalTiekeja(S.targets, t => ({ target: sk(t.target, null, 0), reservation: sk(t.reservation, null, 0), opener: sk(t.opener, null, 0) })),
+    walkaway: sk(S.walkaway, 0, 0), stretchGoal: sk(S.stretchGoal, 0, 0), mustHaves: txs(S.mustHaves), niceToHaves: txs(S.niceToHaves),
+    // nuolaidos ir rizikos - pagal eilę (identifikatorius naudojamas tik jei buvo ir saugus)
+    concessions: (Array.isArray(S.concessions) ? S.concessions : []).filter(obj).map(c => Object.assign(saugusId(c.id), { label: tx(c.label), weCanGive: tx(c.weCanGive), weWant: tx(c.weWant), value: sk(c.value, null) })),
+    risks: (Array.isArray(S.risks) ? S.risks : []).filter(obj).map(r => Object.assign(saugusId(r.id), { area: tx(r.area), description: tx(r.description), likelihood: sk(r.likelihood, 3, 1, 5), impact: sk(r.impact, 3, 1, 5), mitigation: tx(r.mitigation) })) };
+  const SE = obj(st.session) ? st.session : D.session;
+  st.session = { status: ['not_started', 'active', 'completed'].includes(SE.status) ? SE.status : 'not_started', currentRound: sk(SE.currentRound, 0, 0),
+    rounds: (Array.isArray(SE.rounds) ? SE.rounds : []).filter(obj).map((r, i) => ({ id: idOf(r.id, 'n' + i), supplierId: idOf(r.supplierId, 's'), startedAt: tx(r.startedAt), endedAt: tx(r.endedAt) || null,
+      offer: sk(r.offer, null, 0), notes: tx(r.notes), decisions: (Array.isArray(r.decisions) ? r.decisions : []).filter(obj).map(d => ({ at: tx(d.at), offer: sk(d.offer, null, 0), notes: tx(d.notes) })) })),
+    decisions: Array.isArray(SE.decisions) ? SE.decisions.filter(obj) : [] };
+  const SET = obj(st.settings) ? st.settings : D.settings, A = obj(SET.anomalijos) ? SET.anomalijos : {};
+  st.settings = { currency: /^[A-Z]{3}$/.test(SET.currency) ? SET.currency : 'EUR', outlierMethod: SET.outlierMethod === 'zscore' ? 'zscore' : 'iqr', zThreshold: sk(SET.zThreshold, 2, 0.1, 10),
+    anomalijos: Object.keys(D.settings.anomalijos).reduce((o, k) => (o[k] = sk(A[k], D.settings.anomalijos[k], 0, 1000), o), {}) };
   return st;
 }
 
@@ -1218,38 +1291,46 @@ const strategy = {
     if (s.fixedOffers[supId] && s.fixedOffers[supId].totalPrice) {
       return Number(s.fixedOffers[supId].totalPrice) || 0;
     }
-    // Iš įkainių lentelės
+    // Iš įkainių lentelės (tik įkainotos pozicijos; ar pasiūlymas pilnas - pilnumas())
     let t = 0;
     s.positions.forEach(p => {
-      const off = s.offers[supId] && s.offers[supId][p.id];
-      const q = Number(p.quantity) || 0;
-      const u = off && Number(off.unitPrice);
-      if (u != null && !isNaN(u)) t += q * u;
+      const u = analitika.kaina(s, supId, p.id);
+      if (u != null) t += (Number(p.quantity) || 0) * u;
     });
     return t;
+  },
+  /* Pasiūlymo pilnumas (K2, naujo darbuotojo patikra 2026-10-27): bendra kaina - pilnas; įkainių lentelė - pilnas, kai įkainotos visos
+     pozicijos. Nepilno pasiūlymo suma - tik įkainotų pozicijų, todėl jis nepalyginamas su kitais: nerikiuojamas kaip pirmaujantis,
+     netampa kitų tiekėjų tikslu ir statistikos dalimi (iki tol 13 iš 15 pozicijų pasiūlymas buvo „Pirmaujantis“). */
+  pilnumas(supId) {
+    const s = APP.state;
+    if (s.fixedOffers[supId] && s.fixedOffers[supId].totalPrice) return { pilnas: true, fiksuota: true, viso: 0, ikainota: 0, truksta: 0 };
+    const viso = s.positions.length, ikainota = s.positions.filter(p => analitika.kaina(s, supId, p.id) != null).length;
+    return { pilnas: viso > 0 && ikainota === viso, fiksuota: false, viso, ikainota, truksta: viso - ikainota };
+  },
+  /* Palyginamos sumos: tik pilni pasiūlymai su suma > 0 (statistikai, MEAT kainos balui, tikslams) */
+  palyginamosSumos() {
+    return APP.state.suppliers.filter(x => strategy.pilnumas(x.id).pilnas).map(x => strategy.totalForSupplier(x.id)).filter(v => v > 0);
   },
   plannedTotal() {
     const s = APP.state;
     if (s.project.plannedValue) return Number(s.project.plannedValue) || 0;
-    // Skaičiuojama iš pozicijų plan. įkainių
+    // Skaičiuojama iš pozicijų plan. įkainių (demonstracinės - ne, V6)
     return s.positions.reduce((sum, p) =>
-      sum + (Number(p.quantity) || 0) * (Number(p.plannedUnitPrice) || 0), 0);
+      sum + (p.demo ? 0 : (Number(p.quantity) || 0) * (Number(p.plannedUnitPrice) || 0)), 0);
   },
+  /* Rikiavimas: pilni pasiūlymai pagal kainą, po jų - nepilni (pažymėti); rizikingai žemų įkainių skaičius - iš įkainių matricos (K4) */
   supplierRanking() {
-    const s = APP.state;
+    const s = APP.state, pv = strategy.plannedTotal(), M = s.positions.length ? analitika.matrica(s) : null;
     return s.suppliers
-      .map(sup => ({
-        id: sup.id, name: sup.name,
-        total: strategy.totalForSupplier(sup.id),
-        deviation: 0,
-        quality: strategy.qualityScore(sup.id),
-        meat: 0,
-      }))
-      .map(r => {
-        const pv = strategy.plannedTotal();
-        r.deviation = pv ? ((r.total - pv) / pv) * 100 : 0;
-        return r;
+      .map(sup => {
+        const total = strategy.totalForSupplier(sup.id), pl = strategy.pilnumas(sup.id), T = M && !pl.fiksuota ? M.tiekejai[sup.id] : null;
+        return { id: sup.id, name: sup.name, total, deviation: pv ? ((total - pv) / pv) * 100 : 0, quality: strategy.qualityScore(sup.id), meat: 0,
+                 pilnas: pl.pilnas, truksta: pl.truksta, rizikingi: T ? (T.zymos.zemas || 0) : 0 };
       });
+  },
+  rikiuotas() {
+    return strategy.supplierRanking().filter(r => r.total > 0).sort((a, b) => (b.pilnas - a.pilnas) || (a.total - b.total));
   },
   qualityScore(supId) {
     const q = APP.state.quality;
@@ -1270,8 +1351,9 @@ const strategy = {
     const s = APP.state;
     const pw = Number(s.project.priceWeight) || 0;
     const qw = Number(s.project.qualityWeight) || 0;
-    if (pw + qw === 0) return 0;
-    const totals = s.suppliers.map(sup => strategy.totalForSupplier(sup.id)).filter(v => v > 0);
+    if (Math.abs(pw + qw - 100) > 0.001) return 0;   // svoriai turi sudaryti 100 % (V3: iki tol 80 / 30 duodavo balą 108,5 iš 100)
+    if (!strategy.pilnumas(supId).pilnas) return 0;   // nepilnas pasiūlymas MEAT reitinge nevertinamas (K2)
+    const totals = strategy.palyginamosSumos();
     const minTotal = totals.length ? Math.min(...totals) : 0;
     const myTotal = strategy.totalForSupplier(supId);
     const priceScore = myTotal > 0 && minTotal > 0 ? (minTotal / myTotal) * pw : 0;
@@ -1284,9 +1366,12 @@ const strategy = {
     const s = APP.state;
     const total = strategy.totalForSupplier(supId);
     const pv = strategy.plannedTotal();
-    const allTotals = s.suppliers
-      .map(sup => strategy.totalForSupplier(sup.id))
-      .filter(v => v > 0);
+    // Tikslo pagrindas - tik pilni pasiūlymai be rizikingai žemų įkainių (K2, K4, 2026-10-27): nepilno pasiūlymo suma mažesnė, nes jame
+    // trūksta pozicijų, o rizikingai žemą įkainį tas pats įrankis prašo pagrįsti - jie kitų tiekėjų tikslu netampa (pasakoma `nenaudoti`)
+    const R = strategy.supplierRanking();
+    const tinka = R.filter(r => r.total > 0 && r.pilnas && !r.rizikingi);
+    const nenaudoti = R.filter(r => r.id !== supId && r.total > 0 && (!r.pilnas || r.rizikingi) && r.total < total);
+    const allTotals = tinka.map(r => r.total);
     const minOffer = allTotals.length ? Math.min(...allTotals) : total;
     const avgOffer = stats.mean(allTotals) || total;
 
@@ -1296,8 +1381,9 @@ const strategy = {
     const eiluciuTikslas = !(s.fixedOffers[supId] && s.fixedOffers[supId].totalPrice) && eil.ikainota ? eil.idealiSuma : 0;
     let target = Math.min(minOffer, total * 0.92, pv || total * 0.92);
     if (eiluciuTikslas > 0 && eiluciuTikslas < target) target = eiluciuTikslas;
-    // Rezervinė - nesutiksime daugiau kaip 102% PV arba dabartinis pasiūlymas - 3%
-    const reservation = Math.min(total * 0.98, pv ? pv * 1.02 : total * 0.98);
+    // Rezervinė (naudotojo sprendimas 2026-10-27, T2) - didžiausia kaina, kurią priimtume: dabartinis pasiūlymas (pirminį pasiūlymą galima
+    // priimti), bet ne daugiau už PV. Iki tol - 98 % pasiūlymo ar 102 % PV: riba būdavo žemiau paties pasiūlymo
+    const reservation = pv ? Math.min(total, pv) : total;
     // Atidarymas - 88-90% nuo dabartinio
     const opener = Math.min(total * 0.88, target * 0.96);
 
@@ -1312,6 +1398,7 @@ const strategy = {
       potentialSavings: total - target,
       potentialSavingsPct: total ? ((total - target) / total) * 100 : 0,
       eiluciuTikslas,
+      nenaudoti,
     };
   },
   // Generuoja 3 scenarijus deryboms: agresyvus / realus / atsargus
@@ -1387,7 +1474,15 @@ const analitika = {
       const kainos = tiek.map(id => analitika.kaina(st, id, p.id)), valid = kainos.filter(v => v != null), n = valid.length;
       const min = n ? Math.min(...valid) : null, max = n ? Math.max(...valid) : null;
       const med = n ? stats.median(valid) : null, mean = n ? stats.mean(valid) : null, cv = n > 1 ? stats.cv(valid) : null;
-      const langeliai = {};
+      const langeliai = {}, zemi = new Set();
+      // pirmas ėjimas - kurie įkainiai rizikingai žemi; svertas ir eilučių tikslas skaičiuojami nuo mažiausio IŠ KITŲ (K4, 2026-10-27:
+      // iki tol nuo rizikingai žemo - kitiems tiekėjams tikslas -20-25 %, o žemą įkainį tas pats įrankis prašo pagrįsti)
+      tiek.forEach((id, i) => {
+        const v = kainos[i]; if (v == null) return;
+        const nuoMed = med ? (v - med) / med * 100 : 0, nuoPlan = plan ? (v - plan) / plan * 100 : null;
+        if ((n >= S.minTiekeju && nuoMed <= -S.zemasMediana) || (nuoPlan != null && nuoPlan <= -S.zemasPlanas)) zemi.add(i);
+      });
+      const patikimos = kainos.filter((v, i) => v != null && !zemi.has(i)), minP = patikimos.length ? Math.min(...patikimos) : null;
       tiek.forEach((id, i) => {
         const v = kainos[i], T = tiekejai[id];
         if (v == null) { langeliai[id] = { kaina: null, zyma: 'truksta', svertas: 0 }; T.truksta++; T.zymos.truksta = (T.zymos.truksta || 0) + 1; return; }
@@ -1401,21 +1496,22 @@ const analitika = {
         else if (aukstas) zyma = 'aukstas';
         else if (n === 1) zyma = 'vienintelis';
         else if (v === min) zyma = 'min';
-        const svertas = min != null ? q * (v - min) : 0;
+        const svertas = minP != null && v > minP ? q * (v - minP) : 0;
+        const nuoMinP = minP ? (v - minP) / minP * 100 : null;
         // kurie palyginimai nustatė aukštą ar rizikingai žemą (2026-10-21): 'med' - pasiūlymų mediana, 'plan' - planuojamas įkainis
         const pagal = zyma === 'zemas' ? [zemasMed && 'med', zemasPlan && 'plan'].filter(Boolean) : zyma === 'aukstas' ? [aukstasMed && 'med', aukstasPlan && 'plan'].filter(Boolean) : [];
-        langeliai[id] = { kaina: v, nuoMin, nuoMed, nuoPlan, zyma, pagal, svertas, vieta: valid.filter(x => x < v).length + 1 };
-        T.suma += q * v; T.idealiSuma += q * (min != null ? min : v); T.planSuma += q * plan; T.svertas += svertas; T.ikainota++;
+        langeliai[id] = { kaina: v, nuoMin, nuoMinP, nuoMed, nuoPlan, zyma, pagal, svertas, vieta: valid.filter(x => x < v).length + 1 };
+        T.suma += q * v; T.idealiSuma += q * (minP != null ? Math.min(v, minP) : v); T.planSuma += q * plan; T.svertas += svertas; T.ikainota++;
         T.zymos[zyma] = (T.zymos[zyma] || 0) + 1;
       });
       const verte = q * (med != null ? med : plan);
       verteViso += verte;
-      return { id: p.id, name: p.name, unit: p.unit, quantity: q, plan, n, min, max, med, mean, cv, verte, langeliai,
+      return { id: p.id, name: p.name, unit: p.unit, quantity: q, plan, n, min, minP, minZemas: min != null && minP !== min, max, med, mean, cv, verte, langeliai,
                svertas: Object.values(langeliai).reduce((a, l) => a + (l.svertas || 0), 0) };
     });
     pozicijos.forEach(p => { p.vertesDalis = verteViso ? p.verte / verteViso * 100 : 0; });
     Object.values(tiekejai).forEach(T => { T.anomalijos = ANOMALIJOS.reduce((a, z) => a + (T.zymos[z] || 0), 0); });
-    return { pozicijos, tiekejai, slenksciai: S, verteViso, idealiSuma: pozicijos.reduce((a, p) => a + p.quantity * (p.min != null ? p.min : 0), 0) };
+    return { pozicijos, tiekejai, slenksciai: S, verteViso, idealiSuma: pozicijos.reduce((a, p) => a + p.quantity * (p.minP != null ? p.minP : p.min != null ? p.min : 0), 0) };
   },
   tiekejoEilutes(st, supId) {
     const T = analitika.matrica(st || APP.state).tiekejai[supId];
@@ -1431,7 +1527,7 @@ const analitika = {
     const eil = M.pozicijos.map(p => Object.assign({ pos: p }, p.langeliai[supId] || { kaina: null, zyma: 'truksta', svertas: 0 }));
     const su = eil.filter(l => l.kaina != null), q = l => kab(l.pos.name);
     const akcentuoti = su.filter(l => l.svertas > 0 && l.zyma !== 'zemas').sort((a, b) => b.svertas - a.svertas).slice(0, 5).map(l => Object.assign({}, l, {
-      tekstas: q(l) + ': ' + fmtMoney(l.kaina, cur) + ' - ' + fmtPct(l.nuoMed) + L(' nuo pasiūlymų medianos, ', ' vs the median of the offers, ') + fmtPct(l.nuoMin) + L(' nuo mažiausio įkainio; derybų svertas ', ' vs the lowest unit price; negotiation leverage ') + fmtMoney(l.svertas, cur) + (l.zyma === 'brangiausias' ? L(' (brangiausias tarp tiekėjų)', ' (the highest among suppliers)') : '') + '.' }));
+      tekstas: q(l) + ': ' + fmtMoney(l.kaina, cur) + ' - ' + fmtPct(l.nuoMed) + L(' nuo pasiūlymų medianos, ', ' vs the median of the offers, ') + fmtPct(l.nuoMinP) + (l.pos.minZemas ? L(' nuo mažiausio ne rizikingai žemo įkainio', ' vs the lowest unit price that is not suspiciously low') : L(' nuo mažiausio įkainio', ' vs the lowest unit price')) + L('; derybų svertas ', '; negotiation leverage ') + fmtMoney(l.svertas, cur) + (l.zyma === 'brangiausias' ? L(' (brangiausias tarp tiekėjų)', ' (the highest among suppliers)') : '') + '.' }));
     const pagristi = su.filter(l => l.zyma === 'zemas').sort((a, b) => a.nuoMed - b.nuoMed).map(l => Object.assign({}, l, {
       tekstas: q(l) + ': ' + fmtMoney(l.kaina, cur) + ' - ' + fmtPct(l.nuoMed) + L(' nuo pasiūlymų medianos', ' vs the median of the offers') + (l.nuoPlan != null ? ', ' + fmtPct(l.nuoPlan) + L(' nuo planuojamo', ' vs planned') : '') + L('; galima neįvertinta apimtis - prašyti pagrįsti įkainį ir patvirtinti, kad apimtis pilna.', '; the scope may be underestimated - ask the supplier to justify the unit price and confirm that the scope is complete.') }));
     const nespausti = su.filter(l => l.zyma === 'min' && l.pos.n >= 2).map(l => Object.assign({}, l, {
@@ -1473,23 +1569,22 @@ const views = {
           <input class="input" data-pf="name" placeholder="${L('Pvz. 110 kV transformatorių pirkimas 2026 m.', 'E.g. Procurement of 110 kV transformers, 2026')}" />
         </div>
         <div class="field">
-          <label class="field__label">${L('Perkančioji organizacija', 'Contracting entity')}</label>
+          <label class="field__label">${L('Pirkimo vykdytojas', 'Contracting authority or entity')}</label>
           <select class="select" data-pf="contractingEntity">
             <option>AB „Litgrid"</option>
             <option>AB „Amber Grid"</option>
             <option>UAB „EPSO-G"</option>
             <option>UAB „Energy cells"</option>
-            <option>UAB „Baltpool"</option>
-            <option>UAB „Gas Exchange"</option>
             <option value="Kita EPSO-G grupės įmonė">${L('Kita EPSO-G grupės įmonė', 'Other EPSO-G group company')}</option>
           </select>
         </div>
         <div class="field">
           <label class="field__label">${L('Taikomas įstatymas', 'Applicable law')}</label>
           <select class="select" data-pf="law">
-            <option value="PSI">${L('PĮ: Pirkimų sektorinis įstatymas (komunaliniai pirkimai)', 'PĮ: Law on Procurement by Contracting Entities in the Water, Energy, Transport or Postal Services Sectors (utilities)')}</option>
+            <option value="PSI">${L('PĮ: Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymas', 'PĮ: Law on Procurement by Contracting Entities in the Water, Energy, Transport or Postal Services Sectors (utilities)')}</option>
             <option value="VPI">${L('VPĮ: Viešųjų pirkimų įstatymas', 'VPĮ: Law on Public Procurement')}</option>
           </select>
+          <span class="field__hint" id="istatymoPastaba" role="note"></span>
         </div>
         <div class="field">
           <label class="field__label">${L('Procedūros tipas', 'Procedure type')}</label>
@@ -1498,8 +1593,9 @@ const views = {
             <option value="derybos_neskelb">${L('Neskelbiamos derybos', 'Negotiated procedure without publication')}</option>
             <option value="konkurencinis_dialogas">${L('Konkurencinis dialogas', 'Competitive dialogue')}</option>
             <option value="inovaciju_partneryste">${L('Inovacijų partnerystė', 'Innovation partnership')}</option>
-            <option value="atviras">${L('Atviras konkursas (su derybų galimybe)', 'Open procedure (with the option to negotiate)')}</option>
-            <option value="ribotas">${L('Ribotas konkursas', 'Restricted procedure')}</option>
+            <option value="mv_derybos">${L('Mažos vertės pirkimas (su derybomis)', 'Low-value procurement (with negotiation)')}</option>
+            <option value="atviras">${L('Atviras konkursas (derybos draudžiamos - tik pasiūlymų analizė)', 'Open procedure (negotiation prohibited - offer analysis only)')}</option>
+            <option value="ribotas">${L('Ribotas konkursas (derybos draudžiamos - tik pasiūlymų analizė)', 'Restricted procedure (negotiation prohibited - offer analysis only)')}</option>
           </select>
         </div>
       </div>
@@ -1515,7 +1611,7 @@ const views = {
       <div class="grid grid--3">
         <div class="field">
           <label class="field__label">${L('Planuojama pirkimo vertė (PV) *', 'Planned procurement value (PV) *')}</label>
-          <input type="number" step="0.01" class="input input--money" data-pf="plannedValue" placeholder="${L('0,00', '0.00')}" />
+          <input type="text" inputmode="decimal" data-skaicius class="input input--money" data-pf="plannedValue" placeholder="${L('pvz. 2 950 000,00', 'e.g. 2,950,000.00')}" />
           <span class="field__hint">${L('Pinigine išraiška, be PVM (rekomenduojama)', 'In money, excl. VAT (recommended)')}</span>
         </div>
         <div class="field">
@@ -1526,7 +1622,7 @@ const views = {
         </div>
         <div class="field">
           <label class="field__label">${L('Sutarties trukmė (mėn.)', 'Contract duration (months)')}</label>
-          <input type="number" class="input" data-pf="contractTermMonths" placeholder="12" />
+          <input type="text" inputmode="numeric" data-skaicius class="input" data-pf="contractTermMonths" placeholder="12" />
         </div>
         <div class="field">
           <label class="field__label">${L('PVM įtraukta?', 'VAT included?')}</label>
@@ -1545,9 +1641,9 @@ const views = {
         <div class="field" data-meat-only>
           <label class="field__label">${L('Kainos / kokybės svoriai', 'Price / quality weights')}</label>
           <div class="flex gap-1 items-center">
-            <input type="number" min="0" max="100" class="input" data-pf="priceWeight" placeholder="80" style="flex: 1;" />
+            <input type="text" inputmode="decimal" data-skaicius data-max="100" class="input" data-pf="priceWeight" placeholder="80" style="flex: 1;" aria-label="${L('Kainos svoris, %', 'Price weight, %')}" />
             <span class="muted">/</span>
-            <input type="number" min="0" max="100" class="input" data-pf="qualityWeight" placeholder="20" style="flex: 1;" />
+            <input type="text" inputmode="decimal" data-skaicius data-max="100" class="input" data-pf="qualityWeight" placeholder="20" style="flex: 1;" aria-label="${L('Kokybės svoris, %', 'Quality weight, %')}" />
           </div>
           <span class="field__hint">${L('Pvz. 70/30 = 70% kaina, 30% kokybė', 'E.g. 70/30 = 70% price, 30% quality')}</span>
         </div>
@@ -1567,7 +1663,8 @@ const views = {
       </div>
       <div class="field">
         <label class="field__label">${L('Kontekstas, ankstesnė patirtis su tiekėjais, rinkos sąlygos', 'Background, previous experience with suppliers, market conditions')}</label>
-        <textarea class="textarea" data-pf="backgroundNotes" placeholder="${L('Bet kokia informacija, kuri pravers strateguojant derybas', 'Any information that will help in planning the negotiation')}"></textarea>
+        <textarea class="textarea" data-pf="backgroundNotes" placeholder="${L('Bet kokia informacija, kuri pravers strateguojant derybas', 'Any information that will help in planning the negotiation')}" aria-describedby="diLaukoPastabaProj"></textarea>
+        <span class="field__hint" id="diLaukoPastabaProj">${L('Tikslas ir kontekstas įtraukiami į DI užklausą. ', 'The objective and background are included in the AI prompt. ')}${DI_LAUKO_PASTABA()}</span>
       </div>
     </div>
 
@@ -1812,7 +1909,7 @@ const views = {
     <div class="card mt-3">
       <div class="card__header">
         <div class="card__title">${L('Individualios derybų ribos kiekvienam tiekėjui', 'Individual negotiation limits for each supplier')}</div>
-        <p class="card__subtitle">${L('Atidarymas / Tikslas / Rezervinė riba - iš gautų pasiūlymų ir planuojamos vertės. Eilučių tikslas - suma, kai kiekviena tiekėjo įkainota eilutė lygi mažiausiam įkainiui tarp tiekėjų (kai jis žemesnis, tampa tikslu).', 'Opening / Target / Reservation price - from the offers received and the planned value. Line target - the total if each line priced by the supplier equalled the lowest unit price among suppliers (when lower, it becomes the target).')}</p>
+        <p class="card__subtitle">${L('Siūlomos ribos (ne skaičiavimas, o įrankio prielaidos): tikslas - mažiausias iš kito pilno pasiūlymo be rizikingai žemų įkainių, 92 % dabartinio ir PV; atidarymas - 88 % dabartinio arba 96 % tikslo; rezervinė - dabartinis pasiūlymas, bet ne daugiau už PV. Eilučių tikslas - suma, kai kiekviena tiekėjo įkainota eilutė lygi mažiausiam ne rizikingai žemam įkainiui (kai jis žemesnis, tampa tikslu). Galutines ribas nusprendžiate jūs.', 'Suggested limits (not a calculation but the tool’s assumptions): target - the lowest of another complete offer without suspiciously low unit prices, 92% of the current offer and PV; opening - 88% of the current offer or 96% of the target; reservation - the current offer, but not more than PV. Line target - the total if each line priced by the supplier equalled the lowest unit price that is not suspiciously low (when lower, it becomes the target). You decide the final limits.')}</p>
       </div>
       <div id="targetsTable"></div>
     </div>
@@ -1975,7 +2072,7 @@ const views = {
           <li><strong>Suppliers and offers:</strong> add suppliers and their offers in one step: drop the file (XLSX, CSV, DOCX, PDF) onto the supplier card, enter the unit prices in the table or paste them from Excel (Ctrl+V).</li>
           <li><strong>Analysis:</strong> review the automatic statistical analysis.</li>
           <li><strong>MEAT</strong> (if applicable): score the quality.</li>
-          <li><strong>Strategy:</strong> review BATNA/ZOPA and the scenarios.</li>
+          <li><strong>Strategy:</strong> review the negotiation limits and the scenarios.</li>
           <li><strong>Session:</strong> use it in real time during the negotiation.</li>
           <li><strong>AI assistant:</strong> prepare an encoded prompt for an AI tool approved by your organisation (e.g. VPT Ekspertas).</li>
         </ol>
@@ -1993,7 +2090,7 @@ const views = {
           <dt class="mt-1"><strong>Target</strong></dt>
           <dd class="muted">The optimal result we aim for.</dd>
           <dt class="mt-1"><strong>Reservation price</strong></dt>
-          <dd class="muted">The maximum acceptable outcome; beyond it we walk away.</dd>
+          <dd class="muted">The highest price we would accept: the supplier’s current offer, but not more than PV.</dd>
           <dt class="mt-1"><strong>MEAT:</strong> Most Economically Advantageous Tender</dt>
           <dd class="muted">Evaluation of economic advantage (price + quality).</dd>
           <dt class="mt-1"><strong>Z-score / IQR</strong></dt>
@@ -2025,7 +2122,7 @@ const views = {
 
     <div class="card card--accent mt-3">
       <h3>📞 Help</h3>
-      <p class="mt-1" style="font-size: 13px;">For questions, suggestions or bug reports, contact the EPSO-G group procurement department.</p>
+      <p class="mt-1" style="font-size: 13px;">For questions, suggestions or bug reports, write to the G-Procure author: arunas.jurgelaitis@gmail.com. G-Procure is a personal project by Arūnas Jurgelaitis, not an official service of LITGRID AB, UAB “EPSO-G” or other EPSO-G group companies.</p>
       <p class="muted mt-1" style="font-size: 12px;">Version ${APP.version} · Built to the EPSO-G 2026 brand guidelines</p>
     </div>
   ` : `
@@ -2045,7 +2142,7 @@ const views = {
           <li><strong>Tiekėjai ir pasiūlymai:</strong> pridėkite tiekėjus ir jų pasiūlymus viename žingsnyje: failą (XLSX, CSV, DOCX, PDF) numeskite ant tiekėjo kortelės, įkainius įveskite lentelėje arba įklijuokite iš Excel (Ctrl+V).</li>
           <li><strong>Analizė:</strong> peržiūrėkite automatinę statistinę analizę.</li>
           <li><strong>MEAT</strong> (jei taikoma), įvertinkite kokybę.</li>
-          <li><strong>Strategija:</strong> peržiūrėkite BATNA/ZOPA ir scenarijus.</li>
+          <li><strong>Strategija:</strong> peržiūrėkite derybų ribas ir scenarijus.</li>
           <li><strong>Sesija:</strong> naudokite derybų metu realiu laiku.</li>
           <li><strong>DI asistentas:</strong> parenkite užkoduotą užklausą organizacijos patvirtintam DI įrankiui (pvz. VPT Ekspertui).</li>
         </ol>
@@ -2063,7 +2160,7 @@ const views = {
           <dt class="mt-1"><strong>Tikslas (Target)</strong></dt>
           <dd class="muted">Optimalus rezultatas, kurio siekiame.</dd>
           <dt class="mt-1"><strong>Rezervinė riba (Reservation price)</strong></dt>
-          <dd class="muted">Maksimalus priimtinas variantas, toliau einame walk-away.</dd>
+          <dd class="muted">Didžiausia kaina, kurią priimtume: dabartinis tiekėjo pasiūlymas, bet ne daugiau už PV.</dd>
           <dt class="mt-1"><strong>MEAT:</strong> Most Economically Advantageous Tender</dt>
           <dd class="muted">Ekonominio naudingumo vertinimas (kaina + kokybė).</dd>
           <dt class="mt-1"><strong>Z-score / IQR</strong></dt>
@@ -2095,7 +2192,7 @@ const views = {
 
     <div class="card card--accent mt-3">
       <h3>📞 Pagalba</h3>
-      <p class="mt-1" style="font-size: 13px;">Klausimai, pasiūlymai ar pranešimai apie klaidas, kreipkitės į EPSO-G grupės pirkimų skyrių.</p>
+      <p class="mt-1" style="font-size: 13px;">Klausimai, pasiūlymai ar pranešimai apie klaidas - rašykite G-Procure rengėjui: arunas.jurgelaitis@gmail.com. G-Procure yra asmeninis Arūno Jurgelaičio projektas, ne oficiali LITGRID AB, UAB „EPSO-G“ ar kitų EPSO-G grupės įmonių paslauga.</p>
       <p class="muted mt-1" style="font-size: 12px;">Versija ${APP.version} · Sukurta pagal EPSO-G 2026 brandbook'o gaires</p>
     </div>
   `,
@@ -2117,9 +2214,11 @@ const render = {
     const s = APP.state;
     const pv = strategy.plannedTotal();
     const totals = s.suppliers.map(sup => strategy.totalForSupplier(sup.id)).filter(v => v > 0);
-    const minT = stats.min(totals);
-    const avgT = stats.mean(totals);
-    const cv = stats.cv(totals);
+    // statistika ir ekonomija - tik iš pilnų pasiūlymų (K2): nepilno suma mažesnė, nes trūksta pozicijų
+    const pilnos = strategy.palyginamosSumos(), nepilnu = totals.length - pilnos.length;
+    const minT = stats.min(pilnos);
+    const avgT = stats.mean(pilnos);
+    const cv = stats.cv(pilnos);
     const potential = pv && minT ? pv - minT : 0;
     const potentialPct = pv ? (potential / pv) * 100 : 0;
 
@@ -2127,7 +2226,7 @@ const render = {
       <div class="kpi ${s.suppliers.length ? '' : 'kpi--accent'}">
         <div class="kpi__label">${L('Tiekėjai', 'Suppliers')}</div>
         <div class="kpi__value">${s.suppliers.length}</div>
-        <div class="kpi__hint">${s.suppliers.length ? L('pateikė pirminius pasiūlymus', 'submitted initial offers') : L('pridėkite tiekėjus', 'add suppliers')}</div>
+        <div class="kpi__hint">${s.suppliers.length ? L(`pasiūlymus pateikė: ${totals.length}`, `offers submitted: ${totals.length}`) + (nepilnu ? L(`, iš jų nepilnų: ${nepilnu}`, `, incomplete: ${nepilnu}`) : '') : L('pridėkite tiekėjus', 'add suppliers')}</div>
       </div>
       <div class="kpi">
         <div class="kpi__label">${L('Planuojama vertė', 'Planned value')}</div>
@@ -2144,7 +2243,7 @@ const render = {
       <div class="kpi ${potential > 0 ? 'kpi--accent' : ''}">
         <div class="kpi__label">${L('Potenciali ekonomija', 'Potential savings')}</div>
         <div class="kpi__value">${potential > 0 ? fmtMoney(potential, s.project.currency) : '–'}</div>
-        <div class="kpi__hint">${potential > 0 ? fmtPct(potentialPct) + L(' nuo PV', ' vs PV') : ''}</div>
+        <div class="kpi__hint">${potential > 0 ? fmtPct(-potentialPct) + L(' nuo PV', ' vs PV') : ''}</div>
       </div>
     `;
 
@@ -2173,17 +2272,18 @@ const render = {
     if (!s.project.name) status = '<p class="muted">' + L('Pradėkite užpildydami pirkimo informaciją.', 'Start by filling in the procurement details.') + '</p>';
     else if (s.suppliers.length === 0) status = L('<p>Pirkimas <strong>' + escapeHtml(s.project.name) + '</strong> sukurtas, bet dar nepridėti tiekėjai.</p>', '<p>The procurement <strong>' + escapeHtml(s.project.name) + '</strong> has been created, but no suppliers have been added yet.</p>');
     else if (totals.length === 0) status = '<p>' + L('Tiekėjai pridėti, bet pasiūlymai dar neimportuoti.', 'Suppliers have been added, but no offers have been imported yet.') + '</p>';
-    else status = L(`<p>Analizė paruošta: <strong>${totals.length}</strong> tiekėjų pasiūlymai. Vidutinė kaina <strong>${fmtMoney(avgT, s.project.currency)}</strong>, CV ${fmtNum(cv, 1)}%.</p>`,
-      `<p>Analysis ready: <strong>${totals.length}</strong> supplier offers. Average price <strong>${fmtMoney(avgT, s.project.currency)}</strong>, CV ${fmtNum(cv, 1)}%.</p>`);
+    else status = L(`<p>Analizė paruošta: <strong>${totals.length}</strong> tiekėjų pasiūlymai${nepilnu ? ` (nepilnų: ${nepilnu} - į statistiką neįskaičiuoti)` : ''}. Vidutinė kaina <strong>${fmtMoney(avgT, s.project.currency)}</strong>, CV ${fmtNum(cv, 1)}%.</p>`,
+      `<p>Analysis ready: <strong>${totals.length}</strong> supplier offers${nepilnu ? ` (incomplete: ${nepilnu} - not included in the statistics)` : ''}. Average price <strong>${fmtMoney(avgT, s.project.currency)}</strong>, CV ${fmtNum(cv, 1)}%.</p>`);
     $('#dashStatus').innerHTML = status;
 
     if (totals.length >= 2) {
       const insights = [];
       if (cv > 30) insights.push(L(`<li><strong>Didelis kainos išsibarstymas</strong> (CV ${fmtNum(cv, 1)}%), galimas tiekėjų konkurencijos potencialas.</li>`, `<li><strong>Wide price dispersion</strong> (CV ${fmtNum(cv, 1)}%), possible room for competition between suppliers.</li>`));
-      if (potentialPct > 10) insights.push(L(`<li><strong>Aukšta potenciali ekonomija</strong> nuo PV: ${fmtPct(potentialPct)} (${fmtMoney(potential, s.project.currency)}).</li>`, `<li><strong>High potential savings</strong> against PV: ${fmtPct(potentialPct)} (${fmtMoney(potential, s.project.currency)}).</li>`));
-      const ranking = strategy.supplierRanking().sort((a, b) => a.total - b.total);
-      if (ranking[0]) insights.push(L(`<li><strong>Pirmaujantis tiekėjas pagal kainą:</strong> ${escapeHtml(ranking[0].name)}, ${fmtMoney(ranking[0].total, s.project.currency)} (${fmtPct(ranking[0].deviation)} nuo PV).</li>`, `<li><strong>Leading supplier on price:</strong> ${escapeHtml(ranking[0].name)}, ${fmtMoney(ranking[0].total, s.project.currency)} (${fmtPct(ranking[0].deviation)} vs PV).</li>`));
-      const outIdx = stats.outliers(totals, s.settings.outlierMethod, s.settings.zThreshold);
+      if (potentialPct > 10) insights.push(L(`<li><strong>Aukšta potenciali ekonomija</strong> nuo PV: ${fmtPct(-potentialPct)} (${fmtMoney(potential, s.project.currency)}).</li>`, `<li><strong>High potential savings</strong> against PV: ${fmtPct(-potentialPct)} (${fmtMoney(potential, s.project.currency)}).</li>`));
+      const ranking = strategy.rikiuotas(), lyderis = ranking.find(r => r.pilnas);
+      if (lyderis) insights.push(L(`<li><strong>Pirmaujantis tiekėjas pagal kainą:</strong> ${escapeHtml(lyderis.name)}, ${fmtMoney(lyderis.total, s.project.currency)} (${fmtPct(lyderis.deviation)} nuo PV)${lyderis.rizikingi ? `; rizikingai žemų įkainių: ${lyderis.rizikingi} - patikrinkite apimtį` : ''}.</li>`, `<li><strong>Leading supplier on price:</strong> ${escapeHtml(lyderis.name)}, ${fmtMoney(lyderis.total, s.project.currency)} (${fmtPct(lyderis.deviation)} vs PV)${lyderis.rizikingi ? `; suspiciously low unit prices: ${lyderis.rizikingi} - check the scope` : ''}.</li>`));
+      if (nepilnu) insights.push(L(`<li><strong>Nepilni pasiūlymai:</strong> ${ranking.filter(r => !r.pilnas).map(r => escapeHtml(r.name) + ` (trūksta ${r.truksta} poz.)`).join(', ')} - jų sumos nepalyginamos, kol trūksta įkainių.</li>`, `<li><strong>Incomplete offers:</strong> ${ranking.filter(r => !r.pilnas).map(r => escapeHtml(r.name) + ` (${r.truksta} items missing)`).join(', ')} - their totals are not comparable until the missing prices are added.</li>`));
+      const outIdx = stats.outliers(pilnos, s.settings.outlierMethod, s.settings.zThreshold);
       if (outIdx.length) insights.push(L(`<li><strong>Aptikta išskirčių:</strong> ${outIdx.length} pasiūlymas(-ai) statistiškai išsiskiria, peržiūrėkite analizėje.</li>`, `<li><strong>Outliers found:</strong> ${outIdx.length} offer(s) stand out statistically, review them in the analysis.</li>`));
       if (s.positions.length) {
         const M = analitika.matrica(s), top = Object.values(M.tiekejai).filter(t => t.svertas > 0).sort((a, b) => b.svertas - a.svertas)[0];
@@ -2201,10 +2301,11 @@ const render = {
     const p = APP.state.project;
     $$('[data-pf]').forEach(el => {
       const f = el.dataset.pf;
-      if (f in p) el.value = p[f] ?? '';
+      if (f in p) el.value = el.hasAttribute('data-skaicius') ? laukoSkaicius(p[f] || (p[f] === 0 && f !== 'plannedValue' ? 0 : null)) : (p[f] ?? '');
     });
     const isMeat = p.criteriaModel === 'meat';
     $$('[data-meat-only]').forEach(el => el.style.display = isMeat ? '' : 'none');
+    renderIstatymoPastaba();
   },
 
   suppliers() {
@@ -2231,12 +2332,12 @@ const render = {
         <div class="card">
           <div class="card__header">
             <div class="card__title">
-              <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:${s.color || 'var(--color-emerald)'};"></span>
+              <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:${/^#[0-9a-fA-F]{6}$/.test(s.color || '') ? s.color : 'var(--color-emerald)'};"></span>
               ${escapeHtml(s.name)}
             </div>
             <div class="flex gap-1">
-              <button class="btn btn--ghost btn--sm" data-edit-supplier="${s.id}">${L('Redaguoti', 'Edit')}</button>
-              <button class="btn btn--danger btn--sm" data-del-supplier="${s.id}" aria-label="${L('Pašalinti tiekėją', 'Remove supplier')} ${escapeHtml(s.name || '')}" title="${L('Pašalinti', 'Remove')}">×</button>
+              <button class="btn btn--ghost btn--sm" data-edit-supplier="${escapeHtml(s.id)}">${L('Redaguoti', 'Edit')}</button>
+              <button class="btn btn--danger btn--sm" data-del-supplier="${escapeHtml(s.id)}" aria-label="${L('Pašalinti tiekėją', 'Remove supplier')} ${escapeHtml(s.name || '')}" title="${L('Pašalinti', 'Remove')}">×</button>
             </div>
           </div>
           <div class="grid grid--2" style="gap: 12px;">
@@ -2247,7 +2348,7 @@ const render = {
           </div>
           <div class="mt-2" style="padding-top: 12px; border-top: 1px solid var(--color-graphite-15);">
             ${pasiulymoBusenaHtml(s.id, total, dev)}
-            <div class="dropzone dropzone--sm mt-1" data-drop="sup" data-sup="${s.id}" role="button" tabindex="0" aria-label="${L('Įkelti pasiūlymo failą', 'Upload offer file')}: ${escapeHtml(s.name)}">
+            <div class="dropzone dropzone--sm mt-1" data-drop="sup" data-sup="${escapeHtml(s.id)}" role="button" tabindex="0" aria-label="${L('Įkelti pasiūlymo failą', 'Upload offer file')}: ${escapeHtml(s.name)}">
               ${total ? L('Įkelti kitą pasiūlymo failą', 'Upload another offer file') : L('Įkelti pasiūlymo failą', 'Upload offer file')}${L(' - vilkite čia arba spustelėkite (XLSX, CSV, DOCX, PDF)', ' - drag here or click (XLSX, CSV, DOCX, PDF)')}
             </div>
           </div>
@@ -2302,17 +2403,17 @@ const render = {
       planTotal += (Number(p.plannedUnitPrice) || 0) * (Number(p.quantity) || 0);
       return `<tr>
         <td>${idx + 1}</td>
-        <td><input class="inline" value="${escapeHtml(p.name)}" data-pos-edit="${p.id}" data-pos-field="name"></td>
-        <td style="width:60px;"><input class="inline" value="${escapeHtml(p.unit || '')}" data-pos-edit="${p.id}" data-pos-field="unit"></td>
-        <td class="num" style="width:80px;"><input class="inline num" type="number" step="0.01" value="${p.quantity ?? ''}" data-pos-edit="${p.id}" data-pos-field="quantity"></td>
-        <td class="num" style="width:110px;"><input class="inline num" type="number" step="0.01" value="${p.plannedUnitPrice ?? ''}" data-pos-edit="${p.id}" data-pos-field="plannedUnitPrice"></td>
+        <td><input class="inline" value="${escapeHtml(p.name)}" data-pos-edit="${escapeHtml(p.id)}" data-pos-field="name" aria-label="${L('Pozicijos pavadinimas', 'Item name')} ${idx + 1}">${p.demo ? ` <span class="pill pill--neutral">${L('Demonstracinis', 'Demonstration')}</span>` : ''}</td>
+        <td style="width:60px;"><input class="inline" value="${escapeHtml(p.unit || '')}" data-pos-edit="${escapeHtml(p.id)}" data-pos-field="unit" aria-label="${L('Matas', 'Unit')}: ${escapeHtml(p.name || '')}"></td>
+        <td class="num" style="width:80px;"><input class="inline num" type="text" inputmode="decimal" data-skaicius value="${laukoSkaicius(p.quantity)}" data-pos-edit="${escapeHtml(p.id)}" data-pos-field="quantity" aria-label="${L('Kiekis', 'Quantity')}: ${escapeHtml(p.name || '')}"></td>
+        <td class="num" style="width:110px;"><input class="inline num" type="text" inputmode="decimal" data-skaicius value="${laukoSkaicius(p.plannedUnitPrice)}" data-pos-edit="${escapeHtml(p.id)}" data-pos-field="plannedUnitPrice" aria-label="${L('Plan. įkainis', 'Planned unit price')}: ${escapeHtml(p.name || '')}"></td>
         ${sup.map((supp, i) => {
           const v = offers[i], off = (s.offers[supp.id] || {})[p.id], di = !!(off && off.di && v != null);
           const cls = v != null ? (v === minOff ? 'min' : v === maxOff ? 'max' : '') : '';
           if (di) yraDi = true;
-          return `<td class="num ${cls}${di ? ' neg-di' : ''}" style="width:110px;"${di ? ' data-di="sugeneruota"' : ''}><input class="inline num" type="number" step="0.01" value="${v ?? ''}" data-offer="${supp.id}|${p.id}"${di ? ' aria-describedby="negDiPaaiskinimas"' : ''}></td>`;
+          return `<td class="num ${cls}${di ? ' neg-di' : ''}" style="width:110px;"${di ? ' data-di="sugeneruota"' : ''}><input class="inline num" type="text" inputmode="decimal" data-skaicius value="${laukoSkaicius(v)}" data-offer="${escapeHtml(supp.id)}|${escapeHtml(p.id)}" aria-label="${escapeHtml(supp.name || '')}: ${escapeHtml(p.name || '')}"${di ? ' aria-describedby="negDiPaaiskinimas"' : ''}></td>`;
         }).join('')}
-        <td style="width:32px;"><button class="btn btn--ghost btn--icon btn--sm" data-del-pos="${p.id}" title="${L('Trinti', 'Delete')}" aria-label="${L('Trinti', 'Delete')}">×</button></td>
+        <td style="width:32px;"><button class="btn btn--ghost btn--icon btn--sm" data-del-pos="${escapeHtml(p.id)}" title="${L('Trinti', 'Delete')}" aria-label="${L('Trinti poziciją', 'Delete item')} ${escapeHtml(p.name || '')}">×</button></td>
       </tr>`;
     }).join('');
 
@@ -2329,20 +2430,27 @@ const render = {
       const p = s.positions.find(x => x.id === inp.dataset.posEdit);
       if (!p) return;
       const f = inp.dataset.posField;
-      p[f] = (f === 'quantity' || f === 'plannedUnitPrice') ? Number(inp.value) : inp.value;
+      p[f] = (f === 'quantity' || f === 'plannedUnitPrice') ? skaiciusIsLauko(inp) : inp.value;
+      if (p.demo) delete p.demo;   // pakeista žmogaus - nebe pavyzdys (V6)
       storage.save();
     });
     $$('[data-offer]').forEach(inp => inp.oninput = () => {
       const [supId, posId] = inp.dataset.offer.split('|');
       if (!s.offers[supId]) s.offers[supId] = {};
       if (!s.offers[supId][posId]) s.offers[supId][posId] = {};
-      s.offers[supId][posId].unitPrice = Number(inp.value);
+      s.offers[supId][posId].unitPrice = skaiciusIsLauko(inp);   // ištrintas - null, „trūksta“ (K3; iki tol 0 € - „rizikingai žemas“)
       if (s.offers[supId][posId].di) { delete s.offers[supId][posId].di; const td = inp.closest('td'); if (td) { td.classList.remove('neg-di'); td.removeAttribute('data-di'); } inp.removeAttribute('aria-describedby'); }   // pataisyta ranka - nebe DI
       storage.save();
     });
     $$('[data-del-pos]').forEach(b => b.onclick = () => {
-      s.positions = s.positions.filter(x => x.id !== b.dataset.delPos);
-      storage.save(); render.positionsTable();
+      const pos = s.positions.find(x => x.id === b.dataset.delPos);
+      if (!pos) return;
+      // su patvirtinimu (M3): kartu dingsta visų tiekėjų šios pozicijos įkainiai
+      confirmModal(L('Trinti poziciją', 'Delete item'), L(`Ištrinti poziciją ${kab(pos.name || '(be pavadinimo)')} ir visų tiekėjų jos įkainius?`, `Delete the item ${kab(pos.name || '(untitled)')} and all suppliers’ unit prices for it?`), () => {
+        s.positions = s.positions.filter(x => x.id !== pos.id);
+        Object.values(s.offers || {}).forEach(o => { if (o) delete o[pos.id]; });
+        storage.save(); render.all();
+      });
     });
   },
 
@@ -2357,18 +2465,18 @@ const render = {
       if (di) yraDi = true;
       return `<tr>
         <td>${escapeHtml(sup.name)}</td>
-        <td class="num${di ? ' neg-di' : ''}"${di ? ' data-di="sugeneruota"' : ''}><input class="inline num" type="number" step="0.01" value="${fo.totalPrice ?? ''}" data-fixed="${sup.id}|totalPrice"${di ? ' aria-describedby="negDiPaaiskinimasF"' : ''}></td>
-        <td><input class="inline" type="date" value="${fo.validity ?? ''}" data-fixed="${sup.id}|validity"></td>
-        <td><input class="inline" value="${escapeHtml(fo.paymentTerms ?? '')}" data-fixed="${sup.id}|paymentTerms"></td>
-        <td class="num"><input class="inline num" type="number" value="${fo.deliveryDays ?? ''}" data-fixed="${sup.id}|deliveryDays"></td>
-        <td><input class="inline" value="${escapeHtml(fo.comment ?? '')}" data-fixed="${sup.id}|comment"></td>
+        <td class="num${di ? ' neg-di' : ''}"${di ? ' data-di="sugeneruota"' : ''}><input class="inline num" type="text" inputmode="decimal" data-skaicius value="${laukoSkaicius(fo.totalPrice)}" data-fixed="${escapeHtml(sup.id)}|totalPrice" aria-label="${L('Bendra kaina', 'Total price')}: ${escapeHtml(sup.name || '')}"${di ? ' aria-describedby="negDiPaaiskinimasF"' : ''}></td>
+        <td><input class="inline" type="date" value="${escapeHtml(fo.validity ?? '')}" data-fixed="${escapeHtml(sup.id)}|validity" aria-label="${L('Galiojimas iki', 'Valid until')}: ${escapeHtml(sup.name || '')}"></td>
+        <td><input class="inline" value="${escapeHtml(fo.paymentTerms ?? '')}" data-fixed="${escapeHtml(sup.id)}|paymentTerms" aria-label="${L('Mokėjimo sąlygos', 'Payment terms')}: ${escapeHtml(sup.name || '')}"></td>
+        <td class="num"><input class="inline num" type="text" inputmode="numeric" data-skaicius value="${laukoSkaicius(fo.deliveryDays)}" data-fixed="${escapeHtml(sup.id)}|deliveryDays" aria-label="${L('Pristatymas (d.)', 'Delivery (days)')}: ${escapeHtml(sup.name || '')}"></td>
+        <td><input class="inline" value="${escapeHtml(fo.comment ?? '')}" data-fixed="${escapeHtml(sup.id)}|comment" aria-label="${L('Komentaras', 'Comment')}: ${escapeHtml(sup.name || '')}"></td>
       </tr>`;
     }).join('');
     c.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>${L('Tiekėjas', 'Supplier')}</th><th>${L('Bendra kaina', 'Total price')} (${s.project.currency})</th><th>${L('Galiojimas iki', 'Valid until')}</th><th>${L('Mokėjimo sąlygos', 'Payment terms')}</th><th>${L('Pristatymas (d.)', 'Delivery (days)')}</th><th>${L('Komentaras', 'Comment')}</th></tr></thead><tbody>${rows}</tbody></table></div>` + diLenteles(yraDi, 'F');
     $$('[data-fixed]').forEach(inp => inp.oninput = () => {
       const [id, field] = inp.dataset.fixed.split('|');
       if (!s.fixedOffers[id]) s.fixedOffers[id] = {};
-      s.fixedOffers[id][field] = (field === 'totalPrice' || field === 'deliveryDays') ? Number(inp.value) : inp.value;
+      s.fixedOffers[id][field] = (field === 'totalPrice' || field === 'deliveryDays') ? skaiciusIsLauko(inp) : inp.value;
       if (field === 'totalPrice' && s.fixedOffers[id].di) { delete s.fixedOffers[id].di; const td = inp.closest('td'); if (td) { td.classList.remove('neg-di'); td.removeAttribute('data-di'); } inp.removeAttribute('aria-describedby'); }
       storage.save();
     });
@@ -2378,7 +2486,8 @@ const render = {
     const s = APP.state;
     const totals = s.suppliers.map(sup => ({ id: sup.id, name: sup.name, total: strategy.totalForSupplier(sup.id) })).filter(t => t.total > 0);
     const pv = strategy.plannedTotal();
-    const arr = totals.map(t => t.total);
+    const visos = totals.map(t => t.total), pilnos = strategy.palyginamosSumos();
+    const arr = pilnos.length ? pilnos : visos;   // statistika - iš pilnų pasiūlymų (K2); jei pilnų nėra - iš visų (pažymėta lentelėje)
 
     if (!arr.length) {
       $('#analysisKpis').innerHTML = `<div class="empty" style="grid-column: 1/-1;"><h3>${L('Pasiūlymų dar nėra', 'No offers yet')}</h3><p>${L('Įveskite tiekėjų įkainius arba bendras pasiūlymo kainas.', 'Enter the suppliers’ unit prices or total offer prices.')}</p><button class="btn btn--primary" data-go="import">${L('Eiti į importą', 'Go to suppliers and offers')}</button></div>`;
@@ -2397,24 +2506,30 @@ const render = {
       <div class="kpi"><div class="kpi__label">Max</div><div class="kpi__value">${fmtMoney(maxT, s.project.currency)}</div><div class="kpi__hint">${nuoPV(maxT)}</div></div>
     `;
 
-    const ranking = strategy.supplierRanking().filter(r => r.total > 0).sort((a, b) => a.total - b.total);
-    const totalsForZ = ranking.map(r => r.total);
-    const zArr = stats.zScores(totalsForZ);
+    const ranking = strategy.rikiuotas();
+    const pilniR = ranking.filter(r => r.pilnas), zPilnu = stats.zScores(pilniR.map(r => r.total));
+    // išskirtys - tuo pačiu metodu kaip įžvalgose (V4, 2026-10-27: lentelė - z >= 2, įžvalga - IQR, todėl prieštaravo)
+    const outIdx = stats.outliers(pilniR.map(r => r.total), s.settings.outlierMethod, s.settings.zThreshold), isskirtys = new Set(outIdx.map(i => pilniR[i].id));
     $('#rankingTable').innerHTML = `
       <div class="table-wrap"><table class="table">
         <thead><tr><th>#</th><th>${L('Tiekėjas', 'Supplier')}</th><th class="num">${L('Bendra kaina', 'Total price')}</th><th class="num">${L('Nuokr. nuo PV', 'Dev. vs PV')}</th><th class="num">${L('Nuokr. nuo min', 'Dev. vs min')}</th><th class="num">Z-score</th><th>${L('Statusas', 'Status')}</th></tr></thead>
         <tbody>${ranking.map((r, i) => {
           const fromMin = ((r.total - minT) / minT) * 100;
-          const z = zArr[i];
-          const isOutlier = z != null && Math.abs(z) >= s.settings.zThreshold;
+          const pi = pilniR.indexOf(r), z = pi >= 0 ? zPilnu[pi] : null;
+          const isOutlier = isskirtys.has(r.id);
+          const busena = !r.pilnas ? `<span class="pill pill--neutral">${L(`Nepilnas: trūksta ${r.truksta} poz.`, `Incomplete: ${r.truksta} items missing`)}</span>`
+            : (pi === 0 ? `<span class="pill pill--success">🏆 ${L('Pirmaujantis', 'Leading')}</span>` : '')
+              + (isOutlier ? ` <span class="pill pill--warning">⚠ ${L('Išskirtis', 'Outlier')}</span>` : '')
+              + (r.rizikingi ? ` <span class="pill pill--warning">${L(`Rizikingai žemų įkainių: ${r.rizikingi}`, `Suspiciously low unit prices: ${r.rizikingi}`)}</span>` : '')
+              || `<span class="pill pill--neutral">${L('Įprastas', 'Normal')}</span>`;
           return `<tr ${isOutlier ? 'class="outlier"' : ''}>
-            <td><strong>${i + 1}</strong></td>
+            <td><strong>${r.pilnas ? pi + 1 : '–'}</strong></td>
             <td>${escapeHtml(r.name)}</td>
             <td class="num"><strong>${fmtMoney(r.total, s.project.currency)}</strong></td>
             <td class="num ${r.deviation >= 0 ? 'text-error' : 'text-success'}">${fmtPct(r.deviation)}</td>
             <td class="num">${fmtPct(fromMin)}</td>
             <td class="num">${z != null ? fmtNum(z, 2) : '–'}</td>
-            <td>${i === 0 ? `<span class="pill pill--success">🏆 ${L('Pirmaujantis', 'Leading')}</span>` : isOutlier ? `<span class="pill pill--warning">⚠ ${L('Išskirtis', 'Outlier')}</span>` : `<span class="pill pill--neutral">${L('Įprastas', 'Normal')}</span>`}</td>
+            <td>${busena}</td>
           </tr>`;
         }).join('')}</tbody>
       </table></div>`;
@@ -2422,13 +2537,23 @@ const render = {
     renderMatrica();
 
     const insights = [];
-    if (cv > 30) insights.push({ type: 'info', text: L(`Didelis kainų išsibarstymas (CV ${fmtNum(cv, 1)}%) rodo, kad tiekėjų konkurencija stipri. Naudokite žemiausius pasiūlymus kaip atskaitos taškus deryboms.`, `Wide price dispersion (CV ${fmtNum(cv, 1)}%) shows strong competition between suppliers. Use the lowest offers as reference points for the negotiation.`) });
+    if (cv > 30) insights.push({ type: 'info', text: L(`Didelis kainų išsibarstymas (CV ${fmtNum(cv, 1)}%) rodo, kad tiekėjų konkurencija stipri. Žemiausi pasiūlymai - atskaitos taškas jūsų pasirengimui; kitų tiekėjų kainų tiekėjui neatskleiskite (${GP_TEISE.cit('derybos_neatskleisti', s.project.law === 'PSI' ? 'PI' : 'VPI')}).`, `Wide price dispersion (CV ${fmtNum(cv, 1)}%) shows strong competition between suppliers. The lowest offers are a reference point for your preparation; do not disclose other suppliers’ prices to a supplier (${GP_TEISE.cit('derybos_neatskleisti', s.project.law === 'PSI' ? 'PI' : 'VPI', 'en')}).`) });
+    if (s.project.vatIncluded) insights.push({ type: 'warning', text: L('PV nurodyta su PVM, o tiekėjų kainos įrankyje laikomos be PVM - nuokrypiai nuo PV ir ekonomija nepalyginami, kol abu nėra vienodai (pakeiskite „PVM įtraukta?“ arba PV).', 'PV is stated incl. VAT, while the suppliers’ prices are treated as excl. VAT - the deviations from PV and the savings are not comparable until both are on the same basis (change “VAT included?” or PV).') });
+    const nepilni = ranking.filter(r => !r.pilnas);
+    if (nepilni.length) insights.push({ type: 'warning', text: L(`Nepilni pasiūlymai (${nepilni.map(r => r.name + ' - trūksta ' + r.truksta + ' poz.').join('; ')}): jų sumos - tik įkainotų pozicijų, todėl į statistiką ir rikiavimą neįskaičiuoti. Paprašykite tiekėjų pateikti trūkstamus įkainius.`, `Incomplete offers (${nepilni.map(r => r.name + ' - ' + r.truksta + ' items missing').join('; ')}): their totals cover only the priced items, so they are not included in the statistics and the ranking. Ask the suppliers for the missing unit prices.`) });
     if (cv < 5) insights.push({ type: 'warning', text: L(`Mažas kainų išsibarstymas (CV ${fmtNum(cv, 1)}%), tiekėjų pasiūlymai labai panašūs. Galimas rinkos koncentracijos signalas, verta papildomai išanalizuoti.`, `Narrow price dispersion (CV ${fmtNum(cv, 1)}%): the offers are very similar. This may signal market concentration and is worth a closer look.`) });
     const above110 = arr.filter(v => pv && v > pv * 1.1).length;
     if (above110) insights.push({ type: 'warning', text: L(`${above110} pasiūlymas(-ai) viršija PV daugiau kaip 10%, gali tekti svarstyti pirkimo nutraukimą arba esminį techninės specifikacijos peržiūrėjimą.`, `${above110} offer(s) exceed PV by more than 10%; terminating the procurement or substantially revising the technical specification may need to be considered.`) });
-    const below70 = arr.filter(v => pv && v < pv * 0.7).length;
-    if (below70) insights.push({ type: 'warning', text: L(`${below70} pasiūlymas(-ai) yra mažesnė nei 70% PV, verta įvertinti, ar tai nepagrįstai maža kaina (${GP_TEISE.cit('nmk', s.project.law === 'PSI' ? 'PI' : 'VPI')}).`, `${below70} offer(s) are below 70% of PV; assess whether the price is abnormally low (${GP_TEISE.cit('nmk', s.project.law === 'PSI' ? 'PI' : 'VPI', 'en')}).`) });
-    const outIdx = stats.outliers(arr, s.settings.outlierMethod, s.settings.zThreshold);
+    // Neįprastai maža kaina (D9, naudotojo patikra 2026-10-27; PĮ ir VPĮ tekstas - e-tar): įstatymo nustatytas atvejis - kaina 30 ir daugiau
+    // proc. mažesnė už neatmestų ir pirkimui skirtų lėšų neviršijančių pasiūlymų kainų aritmetinį vidurkį. Atmestų pasiūlymų ir lėšų įrankis
+    // nežino: vidurkis - iš pilnų pasiūlymų, neviršijančių PV (be PV - iš visų), ir tai pasakoma. PV orientyras (70 %) - modulio, ne įstatymo
+    const rez = s.project.law === 'PSI' ? 'PI' : 'VPI', cur = s.project.currency;
+    const vidPagal = pv ? pilniR.filter(r => r.total <= pv) : pilniR, vid = vidPagal.length >= 2 ? stats.mean(vidPagal.map(r => r.total)) : null;
+    const nmk = vid ? pilniR.filter(r => r.total <= vid * 0.7) : [];
+    if (nmk.length) insights.push({ type: 'warning', text: L(`${nmk.map(r => r.name).join(', ')}: kaina 30 % ir daugiau mažesnė už pasiūlymų kainų vidurkį (${fmtMoney(vid, cur)}; ${pv ? 'iš pasiūlymų, neviršijančių PV' : 'iš visų pilnų pasiūlymų'}). Įstatymo nustatytu atveju tokia kaina laikoma neįprastai maža - ją privaloma prašyti pagrįsti (${GP_TEISE.cit('nmk_riba', rez)}). Įrankis nežino, kurie pasiūlymai atmesti dėl kitų priežasčių ir kokios pirkimui skirtos lėšos - jei tokių yra, vidurkį perskaičiuokite be jų.`,
+      `${nmk.map(r => r.name).join(', ')}: the price is 30% or more below the average of the offered prices (${fmtMoney(vid, cur)}; ${pv ? 'from the offers not exceeding PV' : 'from all complete offers'}). In the case set by law such a price is regarded as abnormally low - the tenderer must be asked to justify it (${GP_TEISE.cit('nmk_riba', rez, 'en')}). The tool does not know which offers were rejected for other reasons or what funds are allocated to the procurement - if there are such offers, recalculate the average without them.`) });
+    const below70 = pilniR.filter(r => pv && r.total < pv * 0.7 && !nmk.includes(r)).length;
+    if (below70) insights.push({ type: 'info', text: L(`${below70} pasiūlymas(-ai) mažesnis nei 70 % PV (modulio orientyras, ne įstatymo riba) - verta įvertinti, ar PV ir pasiūlymo apimtis sutampa.`, `${below70} offer(s) below 70% of PV (a tool reference, not a legal threshold) - check that PV and the scope of the offer match.`) });
     if (outIdx.length) insights.push({ type: 'warning', text: L(`Aptiktos statistinės išskirtys (${outIdx.length} pasiūlymas-ai). Patikrinkite, ar tai techninės klaidos ar realūs rinkos signalai.`, `Statistical outliers found (${outIdx.length} offer(s)). Check whether they are technical errors or real market signals.`) });
     if (insights.length === 0) insights.push({ type: 'success', text: L('Pasiūlymai pasiskirstę darniai, didelių anomalijų neaptikta.', 'The offers are evenly distributed, no major anomalies found.') });
     $('#autoInsights').innerHTML = '<ul style="padding-left: 18px; line-height: 1.8; font-size: 14px;">' + insights.map(i => `<li class="${i.type === 'warning' ? 'text-warning' : i.type === 'success' ? 'text-success' : ''}">${escapeHtml(i.text)}</li>`).join('') + '</ul>';
@@ -2440,9 +2565,13 @@ const render = {
   meatView() {
     const s = APP.state;
     const isMeat = s.project.criteriaModel === 'meat';
-    $('#meatModeBanner').innerHTML = isMeat
-      ? `<div class="card card--accent" style="margin-bottom: var(--space-2);"><strong>${L('MEAT režimas aktyvus', 'MEAT mode active')}</strong> · ${L('Kainos svoris', 'Price weight')}: ${s.project.priceWeight}%, ${L('kokybės', 'quality')}: ${s.project.qualityWeight}%</div>`
-      : `<div class="card card--warning" style="margin-bottom: var(--space-2);"><strong>${L('Mažiausios kainos kriterijus', 'Lowest price criterion')}</strong> · ${L('Šis pirkimas vykdomas pagal mažiausios kainos kriterijų. MEAT vertinimas nebus taikomas sprendimuose, bet galite jį naudoti vidaus analizei.', 'This procurement uses the lowest price criterion. The MEAT evaluation will not be applied in decisions, but you can use it for internal analysis.')} <button class="btn btn--ghost btn--sm" data-go="project">${L('Keisti', 'Change')}</button></div>`;
+    const pw = Number(s.project.priceWeight) || 0, qw = Number(s.project.qualityWeight) || 0, svoriaiOk = Math.abs(pw + qw - 100) <= 0.001;
+    const nepilni = s.suppliers.filter(x => strategy.totalForSupplier(x.id) > 0 && !strategy.pilnumas(x.id).pilnas);
+    $('#meatModeBanner').innerHTML = (isMeat
+      ? `<div class="card card--accent" style="margin-bottom: var(--space-2);"><strong>${L('MEAT režimas aktyvus', 'MEAT mode active')}</strong> · ${L('Kainos svoris', 'Price weight')}: ${fmtNum(pw, 1)}%, ${L('kokybės', 'quality')}: ${fmtNum(qw, 1)}%</div>`
+      : `<div class="card card--warning" style="margin-bottom: var(--space-2);"><strong>${L('Mažiausios kainos kriterijus', 'Lowest price criterion')}</strong> · ${L('Šis pirkimas vykdomas pagal mažiausios kainos kriterijų. MEAT vertinimas nebus taikomas sprendimuose, bet galite jį naudoti vidaus analizei.', 'This procurement uses the lowest price criterion. The MEAT evaluation will not be applied in decisions, but you can use it for internal analysis.')} <button class="btn btn--ghost btn--sm" data-go="project">${L('Keisti', 'Change')}</button></div>`)
+      + (svoriaiOk ? '' : `<div class="card card--warning" style="margin-bottom: var(--space-2);" role="alert"><strong>${L('Kainos ir kokybės svoriai turi sudaryti 100 %', 'The price and quality weights must add up to 100%')}</strong> · ${L(`dabar ${fmtNum(pw + qw, 1)} % - MEAT balai neskaičiuojami.`, `now ${fmtNum(pw + qw, 1)}% - MEAT scores are not calculated.`)} <button class="btn btn--ghost btn--sm" data-go="project">${L('Keisti', 'Change')}</button></div>`)
+      + (nepilni.length ? `<p class="muted" style="font-size:13px;" role="note">${L('MEAT reitinge nevertinami nepilni pasiūlymai: ', 'Incomplete offers are not scored in the MEAT ranking: ')}${nepilni.map(x => escapeHtml(x.name)).join(', ')}.</p>` : '');
 
     const crit = s.quality.criteria;
     const suma = stats.sum(crit.map(c => c.weight));
@@ -2451,21 +2580,24 @@ const render = {
       : `<div class="table-wrap"><table class="table">
           <thead><tr><th>${L('Kriterijus', 'Criterion')}</th><th class="num">${L('Svoris (%)', 'Weight (%)')}</th><th>${L('Skalė', 'Scale')}</th><th></th></tr></thead>
           <tbody>${crit.map(c => `<tr>
-            <td><input class="inline" value="${escapeHtml(c.name)}" data-crit="${c.id}|name"></td>
-            <td class="num"><input class="inline num" type="number" min="0" max="100" value="${c.weight}" data-crit="${c.id}|weight"></td>
-            <td><select class="inline" data-crit="${c.id}|scale">
+            <td><input class="inline" value="${escapeHtml(c.name)}" data-crit="${escapeHtml(c.id)}|name" aria-label="${L('Kriterijus', 'Criterion')}"></td>
+            <td class="num"><input class="inline num" type="text" inputmode="decimal" data-skaicius data-max="100" value="${laukoSkaicius(c.weight)}" data-crit="${escapeHtml(c.id)}|weight" aria-label="${L('Svoris (%)', 'Weight (%)')}: ${escapeHtml(c.name || '')}"></td>
+            <td><select class="inline" data-crit="${escapeHtml(c.id)}|scale" aria-label="${L('Skalė', 'Scale')}: ${escapeHtml(c.name || '')}">
               <option value="5" ${c.scale==5?'selected':''}>1-5</option>
               <option value="10" ${c.scale==10?'selected':''}>1-10</option>
               <option value="100" ${c.scale==100?'selected':''}>0-100</option>
             </select></td>
-            <td><button class="btn btn--ghost btn--icon btn--sm" data-del-crit="${c.id}" aria-label="${L('Pašalinti kriterijų', 'Remove criterion')}" title="${L('Pašalinti', 'Remove')}">×</button></td>
+            <td><button class="btn btn--ghost btn--icon btn--sm" data-del-crit="${escapeHtml(c.id)}" aria-label="${L('Pašalinti kriterijų', 'Remove criterion')} ${escapeHtml(c.name || '')}" title="${L('Pašalinti', 'Remove')}">×</button></td>
           </tr>`).join('')}
           <tr style="font-weight:700; background: var(--color-green-5);"><td>${L('SVORIŲ SUMA', 'TOTAL WEIGHT')}</td><td class="num ${suma === 100 ? 'text-success' : 'text-error'}">${suma}%</td><td colspan="2">${suma === 100 ? L('✓ Tinkama', '✓ Correct') : L('⚠ Turi būti 100%', '⚠ Must be 100%')}</td></tr>
           </tbody></table></div>`;
     $$('[data-crit]').forEach(inp => inp.oninput = () => {
       const [id, field] = inp.dataset.crit.split('|');
       const c = s.quality.criteria.find(x => x.id === id);
-      if (c) { c[field] = (field === 'weight' || field === 'scale') ? Number(inp.value) : inp.value; storage.save(); }
+      if (!c) return;
+      if (field === 'weight') { const v = skaiciusIsLauko(inp, { max: 100 }); if (v == null && String(inp.value).trim()) return; c.weight = v || 0; }
+      else c[field] = field === 'scale' ? ([5, 10, 100].includes(Number(inp.value)) ? Number(inp.value) : 10) : inp.value;
+      storage.save();
     });
     $$('[data-del-crit]').forEach(b => b.onclick = () => {
       s.quality.criteria = s.quality.criteria.filter(c => c.id !== b.dataset.delCrit);
@@ -2476,10 +2608,11 @@ const render = {
       $('#qualityScores').innerHTML = `<div class="table-wrap"><table class="table">
         <thead><tr><th>${L('Kriterijus', 'Criterion')}</th>${s.suppliers.map(sup => `<th class="num">${escapeHtml(sup.name)}</th>`).join('')}</tr></thead>
         <tbody>${crit.map(c => `<tr>
-          <td><strong>${escapeHtml(c.name)}</strong> <span class="muted">(${c.weight}%, ${c.scale}${L('-balų', '-point')})</span></td>
+          <td><strong>${escapeHtml(c.name)}</strong> <span class="muted">(${fmtNum(Number(c.weight) || 0, 1)}%, ${Number(c.scale) || 10}${L('-balų', '-point')})</span></td>
           ${s.suppliers.map(sup => {
             const v = (s.quality.scores[sup.id] || {})[c.id];
-            return `<td class="num"><input class="inline num" type="number" min="0" max="${c.scale}" step="0.1" value="${v ?? ''}" data-score="${sup.id}|${c.id}|${c.scale}"></td>`;
+            const sc = Number(c.scale) || 10;
+            return `<td class="num"><input class="inline num" type="text" inputmode="decimal" data-skaicius data-max="${sc}" value="${laukoSkaicius(v)}" data-score="${escapeHtml(sup.id)}|${escapeHtml(c.id)}|${sc}" aria-label="${escapeHtml(c.name || '')}: ${escapeHtml(sup.name || '')} (0-${sc})"></td>`;
           }).join('')}
         </tr>`).join('')}
         <tr style="background: var(--color-green-5); font-weight: 700;">
@@ -2490,11 +2623,15 @@ const render = {
           }).join('')}
         </tr>
         </tbody></table></div>`;
+      $$('[data-score]').forEach(inp => inp.onchange = () => render.meatView());
       $$('[data-score]').forEach(inp => inp.oninput = () => {
         const [supId, critId] = inp.dataset.score.split('|');
         if (!s.quality.scores[supId]) s.quality.scores[supId] = {};
-        s.quality.scores[supId][critId] = Number(inp.value);
-        storage.save(); render.meatView();
+        // balas - nuo 0 iki skalės (V3: iki tol 12 iš 10 priimta - kokybė 110 %); neperskaitomas - neįrašomas
+        const v = skaiciusIsLauko(inp, { max: Number(inp.dataset.score.split('|')[2]) || 10 });
+        if (v == null && String(inp.value).trim()) return;
+        if (v == null) delete s.quality.scores[supId][critId]; else s.quality.scores[supId][critId] = v;
+        storage.save();
       });
     } else {
       $('#qualityScores').innerHTML = '<p class="muted">' + L('Pridėkite tiekėjus ir kriterijus.', 'Add suppliers and criteria.') + '</p>';
@@ -2511,9 +2648,10 @@ const render = {
     renderChartMeat(meatRank);
 
     if ($('#sensSlider')) {
-      $('#sensSlider').value = s.project.priceWeight || 70;
-      $('#sensPriceLabel').textContent = s.project.priceWeight || 70;
-      updateSensitivityTable(s.project.priceWeight || 70);
+      const pwS = s.project.priceWeight != null && isFinite(Number(s.project.priceWeight)) && s.project.priceWeight !== '' ? Number(s.project.priceWeight) : 70;
+      $('#sensSlider').value = pwS;
+      $('#sensPriceLabel').textContent = pwS;
+      updateSensitivityTable(pwS);
     }
   },
 
@@ -2530,14 +2668,14 @@ const render = {
   sessionView() {
     const s = APP.state;
     const sel = $('#sessionSupplier');
-    if (sel) sel.innerHTML = s.suppliers.length ? s.suppliers.map(sup => `<option value="${sup.id}">${escapeHtml(sup.name)}</option>`).join('') : '<option value="">' + L('Pridėkite tiekėjų', 'Add suppliers') + '</option>';
+    if (sel) sel.innerHTML = s.suppliers.length ? s.suppliers.map(sup => `<option value="${escapeHtml(sup.id)}">${escapeHtml(sup.name)}</option>`).join('') : '<option value="">' + L('Pridėkite tiekėjų', 'Add suppliers') + '</option>';
     renderSessionHud(); renderSessionRound(); renderSessionLog();
   },
 
   aiView() {
     const s = APP.state;
     const sel = $('#aiSupplier');
-    if (sel) sel.innerHTML = s.suppliers.map(sup => `<option value="${sup.id}">${escapeHtml(sup.name)}</option>`).join('');
+    if (sel) sel.innerHTML = s.suppliers.map(sup => `<option value="${escapeHtml(sup.id)}">${escapeHtml(sup.name)}</option>`).join('');
     if ($('#aiTemplate')) {
       $('#aiTemplate').onchange = () => {
         $('#aiSupplierField').style.display = ['supplier', 'response'].includes($('#aiTemplate').value) ? '' : 'none';
@@ -2547,6 +2685,7 @@ const render = {
   },
 
   all() {
+    renderDerybuDraudimas();
     render.topbar();
     render.dashboard();
     render.project();
@@ -2559,6 +2698,40 @@ const render = {
     render.aiView();
   },
 };
+
+/* Atviras ir ribotas konkursas (D1, naujo darbuotojo patikra 2026-10-27; PĮ ir VPĮ tekstas - e-tar): derybos tarp pirkimo vykdytojo ir
+   tiekėjų draudžiamos. Iki tol sąraše buvo „Atviras konkursas (su derybų galimybe)“, o DI užklausa siūlė derybų strategiją. Dabar - aiškiai
+   pasakoma pirkimo informacijos, strategijos, sesijos ir DI vaizduose; įrankiu galima naudotis pasiūlymų analizei. */
+const DERYBOS_DRAUDZIAMOS = { atviras: 'ak_derybos_draudziamos', ribotas: 'ribotas_derybos_draudziamos' };
+function derybuDraudimasTekstas(kalba) {
+  const p = APP.state.project, raktas = DERYBOS_DRAUDZIAMOS[p.procedureType];
+  if (!raktas) return '';
+  const nuor = GP_TEISE.cit(raktas, p.law === 'PSI' ? 'PI' : 'VPI', kalba === 'en' ? 'en' : undefined);
+  return kalba === 'en'
+    ? (p.procedureType === 'atviras' ? 'In an open procedure' : 'In a restricted procedure') + ` negotiation between the contracting authority or entity and the suppliers is prohibited (${nuor}). Use the tool to analyse the offers; the negotiation strategy, session and AI negotiation templates do not apply to this procedure.`
+    : (p.procedureType === 'atviras' ? 'Atvirame konkurse' : 'Ribotame konkurse') + ` derybos tarp pirkimo vykdytojo ir tiekėjų draudžiamos (${nuor}). Įrankiu galite naudotis pasiūlymų analizei; derybų strategija, sesija ir DI derybų šablonai šiam pirkimo būdui netaikomi.`;
+}
+/* Įstatymas pagal pirkimo vykdytoją (D4): registras shared/organizacijos.js (rezimasTiketinas); konkretaus pirkimo įstatymą lemia
+   skelbimas ir pirkimo dokumentai - todėl žmogaus pasirinkimas nekeičiamas, tik nesutampantis įvardijamas (iki tol UAB „EPSO-G“ likdavo
+   PĮ be pastabos, o DI užklausa ją vadino perkančiąja organizacija pagal PĮ). Registre nesančiai - nieko nesiūloma. */
+function vykdytojoOrg(pav) {
+  pav = String(pav || '');
+  if (/^kita /i.test(pav)) return null;   // „Kita EPSO-G grupės įmonė“ - ne UAB „EPSO-G“
+  return window.GP_ORG && typeof GP_ORG.rask === 'function' ? GP_ORG.rask(pav.replace(/["“”„]/g, '')) : null;
+}
+function istatymasPagalVykdytoja(pav) { const o = vykdytojoOrg(pav); return o && o.rezimasTiketinas ? (o.rezimasTiketinas === 'VPI' ? 'VPI' : 'PSI') : null; }
+function renderIstatymoPastaba() {
+  const el = $('#istatymoPastaba');
+  if (!el) return;
+  const p = APP.state.project, L0 = istatymasPagalVykdytoja(p.contractingEntity);
+  el.textContent = !L0 ? L('Šio pirkimo vykdytojo organizacijų sąraše nėra - įstatymą pasirinkite pagal skelbimą ir pirkimo dokumentus.', 'This contracting authority or entity is not in the organisation list - choose the law according to the notice and procurement documents.')
+    : L0 !== p.law ? L(`Pasirinkta ${p.law === 'PSI' ? 'PĮ' : 'VPĮ'}, o ši organizacija paprastai perka pagal ${L0 === 'PSI' ? 'PĮ' : 'VPĮ'} - patikrinkite skelbime ir pirkimo dokumentuose.`, `${p.law === 'PSI' ? 'PĮ' : 'VPĮ'} is selected, but this organisation usually procures under ${L0 === 'PSI' ? 'PĮ' : 'VPĮ'} - check the notice and procurement documents.`)
+    : L(`Pagal organizacijų sąrašą ši organizacija paprastai perka pagal ${L0 === 'PSI' ? 'PĮ' : 'VPĮ'}; konkretaus pirkimo įstatymą lemia skelbimas.`, `According to the organisation list, this organisation usually procures under ${L0 === 'PSI' ? 'PĮ' : 'VPĮ'}; the law of a specific procurement is set by the notice.`);
+}
+function renderDerybuDraudimas() {
+  const t = derybuDraudimasTekstas(LANG);
+  $$('[data-derybu-draudimas]').forEach(el => { el.innerHTML = t ? `<div class="card card--warning" role="note" style="margin-bottom: var(--space-2);"><strong>${L('Derybos draudžiamos', 'Negotiation prohibited')}</strong> · ${escapeHtml(t)}</div>` : ''; });
+}
 
 /* Tiekėjo pasiūlymo būsena kortelėje: įkainotos pozicijos, tik bendra kaina arba nieko. */
 function pasiulymoBusena(supId) {
@@ -2645,11 +2818,10 @@ function renderChartMeat(ranking) {
 function updateSensitivityTable(pw) {
   const s = APP.state;
   const qw = 100 - pw;
-  const result = s.suppliers.map(sup => {
+  const totals = strategy.palyginamosSumos(), minT = totals.length ? Math.min(...totals) : 0;   // tik pilni pasiūlymai (K2)
+  const result = s.suppliers.filter(sup => strategy.pilnumas(sup.id).pilnas).map(sup => {
     const total = strategy.totalForSupplier(sup.id);
     const q = strategy.qualityScore(sup.id);
-    const totals = s.suppliers.map(s2 => strategy.totalForSupplier(s2.id)).filter(v => v > 0);
-    const minT = totals.length ? Math.min(...totals) : 0;
     const priceScore = total > 0 ? (minT / total) * pw : 0;
     const qScore = q != null ? (q / 100) * qw : 0;
     return { name: sup.name, meat: priceScore + qScore, p: priceScore, q: qScore };
@@ -2664,8 +2836,8 @@ function renderList(elId, arr, key) {
   if (!c) return;
   c.innerHTML = !arr.length ? `<p class="muted" style="font-size:13px;">${L('Tuščia. Pridėkite punktą.', 'Empty. Add an item.')}</p>` : arr.map((item, i) => `
     <div class="flex gap-1 items-center mb-1" style="background: var(--color-graphite-5); padding: 8px; border-radius: 6px;">
-      <input class="inline" value="${escapeHtml(item)}" data-list="${key}|${i}" style="flex:1; border: 1px solid var(--color-graphite-15); background: var(--color-white); padding: 4px 8px;">
-      <button class="btn btn--ghost btn--icon btn--sm" data-del-list="${key}|${i}" aria-label="${L('Pašalinti eilutę', 'Remove line')}" title="${L('Pašalinti', 'Remove')}">×</button>
+      <input class="inline" value="${escapeHtml(item)}" data-list="${key}|${i}" aria-label="${key === 'mustHaves' ? L('Privalo turėti', 'Must-have') : L('Pageidaujama', 'Nice-to-have')} ${i + 1}" style="flex:1; border: 1px solid var(--color-graphite-15); background: var(--color-white); padding: 4px 8px;">
+      <button class="btn btn--ghost btn--icon btn--sm" data-del-list="${key}|${i}" aria-label="${L('Pašalinti eilutę', 'Remove line')} ${i + 1}" title="${L('Pašalinti', 'Remove')}">×</button>
     </div>`).join('');
   $$('[data-list]', c).forEach(inp => inp.oninput = () => {
     const [k, i] = inp.dataset.list.split('|');
@@ -2908,8 +3080,10 @@ function slenksciuLangas() {
   });
   $('#slNumatyti').onclick = () => { APP.state.settings.anomalijos = Object.assign({}, defaultState().settings.anomalijos); storage.save(); closeModal(); renderMatrica(); renderRekomendacijos(); toast(L('Grąžinti numatytieji slenksčiai', 'Default thresholds restored'), 'success'); };
   $('#slIrasyti').onclick = () => {
-    const n = id => Math.max(0, Number($('#' + id).value) || 0);
-    APP.state.settings.anomalijos = { aukstasMediana: n('slAukstasMed'), aukstasPlanas: n('slAukstasPlan'), zemasMediana: n('slZemasMed'), zemasPlanas: n('slZemasPlan'), minTiekeju: Math.max(2, n('slMinTiek')) };
+    // išvalytas ar neperskaitomas laukas - numatytoji reikšmė (V9: iki tol 0 - ir 28 langeliai „rizikingai žemi“)
+    const NUM = defaultState().settings.anomalijos;
+    const n = (id, k) => { const v = GP_MONEY.parseSkaicius($('#' + id).value); return v != null && v >= 0 ? v : NUM[k]; };
+    APP.state.settings.anomalijos = { aukstasMediana: n('slAukstasMed', 'aukstasMediana'), aukstasPlanas: n('slAukstasPlan', 'aukstasPlanas'), zemasMediana: n('slZemasMed', 'zemasMediana'), zemasPlanas: n('slZemasPlan', 'zemasPlanas'), minTiekeju: Math.max(2, Math.round(n('slMinTiek', 'minTiekeju'))) };
     storage.save(); closeModal(); renderMatrica(); renderRekomendacijos(); renderTargetsTable(); toast(L('Slenksčiai įrašyti', 'Thresholds saved'), 'success');
   };
 }
@@ -2942,7 +3116,8 @@ function renderRekomendacijos() {
       <button class="btn btn--secondary btn--sm" id="btnRekUzklausa">${L('Į užkoduotą DI užklausą', 'To an encoded AI prompt')}</button>
       <button class="btn btn--ghost btn--sm" id="btnRekExcel">${L('Į Excel', 'To Excel')}</button>
       <span class="muted" style="font-size:12px; align-self:center;">${L('Nuokrypiai - nuo gautų pasiūlymų medianos ir planuojamo įkainio; rinkos įkainių duomenų modulis neturi.', 'Deviations are from the median of the offers received and the planned unit price; the tool has no market price data.')}</span>
-    </div>`;
+    </div>
+    <p class="card card--warning mt-2" style="margin-bottom:0; font-size:13px;" role="note" id="rekPastaba"><strong>${L('Tik jūsų pasirengimui.', 'For your preparation only.')}</strong> ${L(`Palyginimai su kitais tiekėjais („brangiausias“, „+X % nuo mažiausio“, svertas) - iš kitų tiekėjų pasiūlymų: derybose tiekėjui jų neatskleiskite (${GP_TEISE.cit('derybos_neatskleisti', s.project.law === 'PSI' ? 'PI' : 'VPI')}). Argumentuokite šio tiekėjo pasiūlymu, pirkimo dokumentais ir planuojama verte.`, `Comparisons with other suppliers (“highest”, “+X% vs the lowest”, leverage) come from the other suppliers’ offers: do not disclose them to a supplier in the negotiation (${GP_TEISE.cit('derybos_neatskleisti', s.project.law === 'PSI' ? 'PI' : 'VPI', 'en')}). Argue from this supplier’s offer, the procurement documents and the planned value.`)}</p>`;
   $$('[data-rek-sup]', c).forEach(b => b.onclick = () => { APP.rek.supId = b.dataset.rekSup; renderRekomendacijos(); });
   $('#btnRekUzklausa').onclick = () => { go('ai'); const t = $('#aiTemplate'), sup = $('#aiSupplier'); if (t) { t.value = 'supplier'; t.onchange && t.onchange(); } if (sup) sup.value = APP.rek.supId; diRodyk(); toast(L('Užkoduota užklausa su įkainių analize paruošta', 'Encoded prompt with the unit price analysis ready'), 'success'); };
   $('#btnRekExcel').onclick = () => exportXlsx();
@@ -2966,7 +3141,10 @@ function renderTargetsTable() {
         <td class="num text-error">${fmtMoney(t.reservation, s.project.currency)}</td>
         <td class="num"><strong>${fmtMoney(t.potentialSavings, s.project.currency)}</strong> (${fmtPct(-t.potentialSavingsPct)})</td>
       </tr>`;
-    }).join('') + '</tbody></table></div>';
+    }).join('') + '</tbody></table></div>' + (() => {
+      const R = strategy.supplierRanking().filter(r => r.total > 0 && (!r.pilnas || r.rizikingi));
+      return R.length ? `<p class="muted mt-1" style="font-size:12px;" role="note">${L('Tikslu nenaudojami:', 'Not used as a target:')} ${R.map(r => escapeHtml(r.name) + ' (' + (!r.pilnas ? L(`nepilnas - trūksta ${r.truksta} poz.`, `incomplete - ${r.truksta} items missing`) : L(`rizikingai žemų įkainių: ${r.rizikingi}`, `suspiciously low unit prices: ${r.rizikingi}`)) + ')').join('; ')}. ${L('Jų pasiūlymai mažesni dėl trūkstamų pozicijų ar neįvertintos apimties - pirmiau paprašykite papildyti ar pagrįsti.', 'Their offers are lower because of missing items or an underestimated scope - first ask for the missing prices or a justification.')}</p>` : '';
+    })();
 }
 
 function renderScenarios() {
@@ -2987,7 +3165,7 @@ function renderScenarios() {
             <div style="margin-top: 10px; font-size: 13px;">
               <div class="flex justify-between mb-1"><span class="muted">${L('Atidarymas:', 'Opening:')}</span><strong>${fmtMoney(sc.opener, s.project.currency)}</strong></div>
               <div class="flex justify-between mb-1"><span class="muted">${L('Tikslas:', 'Target:')}</span><strong class="text-emerald">${fmtMoney(sc.target, s.project.currency)}</strong></div>
-              <div class="flex justify-between mb-1"><span class="muted">${L('Tikimybė:', 'Likelihood:')}</span><span>${sc.chance}</span></div>
+              <div class="flex justify-between mb-1"><span class="muted">${L('Tikimybė (bendras įvertis, ne skaičiavimas):', 'Likelihood (general estimate, not a calculation):')}</span><span>${sc.chance}</span></div>
             </div>
             <p style="font-size: 12px; line-height: 1.5; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-graphite-15);">${escapeHtml(sc.narrative)}</p>
           </div>
@@ -3066,7 +3244,7 @@ function renderSessionRound() {
       <div>
         <div class="field">
           <label class="field__label">${L('Naujausias tiekėjo siūlymas', 'Supplier’s latest offer')}</label>
-          <input type="number" step="0.01" class="input input--money" id="roundOffer" value="${currentOffer}">
+          <input type="text" inputmode="decimal" data-skaicius class="input input--money" id="roundOffer" value="${laukoSkaicius(currentOffer)}">
         </div>
         <div class="meter mt-2">
           <div class="meter__label"><span>${fmtMoney(t.target, s.project.currency)} (${L('tikslas', 'target')})</span><span>${fmtMoney(t.currentOffer, s.project.currency)} (${L('pradinis', 'initial')})</span></div>
@@ -3102,7 +3280,9 @@ function renderSessionRound() {
     </div>
   `;
   $('#btnLogOffer').onclick = () => {
-    round.offer = Number($('#roundOffer').value);
+    const pas = skaiciusIsLauko($('#roundOffer'));
+    if (pas == null) { toast(L('Įveskite tiekėjo siūlymą (sumą) - tuščias ar neperskaitomas neįrašomas.', 'Enter the supplier’s offer (amount) - an empty or unreadable one is not recorded.'), 'warn'); $('#roundOffer').focus(); return; }
+    round.offer = pas;
     round.notes = $('#roundNotes').value;
     round.decisions = round.decisions || [];
     round.decisions.push({ at: new Date().toISOString(), offer: round.offer, notes: round.notes });
@@ -3112,7 +3292,8 @@ function renderSessionRound() {
   };
   $('#btnEndRound').onclick = () => {
     round.endedAt = new Date().toISOString();
-    round.offer = Number($('#roundOffer').value);
+    const pas = skaiciusIsLauko($('#roundOffer'));
+    if (pas != null) round.offer = pas;
     round.notes = $('#roundNotes').value;
     storage.save();
     toast(L('Raundas baigtas', 'Round ended'), 'success');
@@ -3255,58 +3436,148 @@ function istraukIsEiluciu0(rows, fileName) {
   const result = { ok: true, rowsFound: 0, positions: [], fileName, total: 0 };
   if (!rows || !rows.length) return { ok: false, error: L('Failas tuščias.', 'The file is empty.') };
 
-  let headerIdx = -1, nameCol = -1, qtyCol = -1, priceCol = -1;
-  for (let i = 0; i < Math.min(15, rows.length); i++) {
-    const r = (rows[i] || []).map(c => (c || '').toString().toLowerCase());
-    const has = (kw) => r.findIndex(c => kw.some(k => c.includes(k)));
-    const ni = has(['pavadinimas', 'pozicij', 'preke', 'paslauga', 'darbas', 'item', 'description', 'aprašym', 'name']);
-    const qi = has(['kiekis', 'qty', 'quantity', 'vnt.']);
-    const pi = has(['įkainis', 'ikainis', 'vnt. kaina', 'unit price', 'kaina', 'price', 'vnt kaina']);
+  // Antraštė - bet kurioje iš pirmų 300 eilučių (iki 2026-10-27 - pirmose 15: Word laiške su ilgesne įžanga lentelė nerasta, o
+  // „bendra suma“ imta iš viso failo). Stulpeliai (D2): kiekis - „Kiekis“ / „Qty“, „Vnt.“ - tik kai kiekio stulpelio nėra; „Mato vnt.“,
+  // „Matas“, „Unit“ - matas (iki tol „Mato vnt.“ prieš „Kiekis“ tapdavo kiekiu ir eilutės nerasdavo); įkainis - pirmiau vieneto kaina,
+  // ne „Suma“ / „Iš viso“
+  let headerIdx = -1, nameCol = -1, qtyCol = -1, priceCol = -1, unitCol = -1, vienameLangelyje = false;
+  const idx = (r, f) => r.findIndex(f);
+  for (let i = 0; i < Math.min(300, rows.length); i++) {
+    const r = (rows[i] || []).map(c => (c == null ? '' : c).toString().toLowerCase().replace(/\s+/g, ' ').trim());
+    const has = (kw) => idx(r, c => kw.some(k => c.includes(k)));
+    const ni = has(['pavadinimas', 'pozicij', 'preke', 'prekė', 'paslauga', 'darbas', 'item', 'description', 'aprašym', 'name']);
+    const ui = idx(r, c => /mato vnt|mato vienet|mat\. ?vnt|^matas$|^mat\.$|unit of measure|^uom$|^unit$|^measure$/.test(c));
+    let qi = has(['kiekis', 'qty', 'quantity', 'kiek.']), ui2 = ui;
+    if (qi < 0) qi = idx(r, (c, j) => j !== ui && /^vnt\.?$|^vnt\.? sk/.test(c));
+    else if (ui2 < 0) ui2 = idx(r, (c, j) => j !== qi && /^vnt\.?$/.test(c));   // „Vnt.“ greta „Kiekis“ - matas
+    let pi = has(['įkainis', 'ikainis', 'vnt. kaina', 'vnt kaina', 'vieneto kaina', 'kaina už vnt', 'kaina už vienet', 'unit price', 'unit rate', 'price per unit']);
+    if (pi < 0) pi = idx(r, c => /kain|price|rate/.test(c) && !/suma|i[šs] viso|total|bendra|amount/.test(c));
     if (ni >= 0 && (qi >= 0 || pi >= 0)) {
       // PDF eilutė - vienas langelis („Pavadinimas Kiekis Kaina“): stulpelių nėra, tad pozicijų atskirti negalima. Iki 2026-09-28
-      // tolesnės eilutės buvo skaitomos kaip pozicijos (kiekis ir kaina - ta pati eilutė) ir perrašydavo įvestus pasiūlymus
-      if ((qi < 0 || qi === ni) && (pi < 0 || pi === ni))
-        return { ok: false, error: L('Aptikta antraštė, bet pavadinimas, kiekis ir kaina - viename langelyje (tikėtina, PDF eilutės), tad pozicijų atskirti negalima. Įveskite jas ranka arba įkelkite Excel ar CSV.', 'A header was found, but the name, quantity and price are in one cell (probably PDF lines), so the items cannot be separated. Enter them manually or upload Excel or CSV.') };
-      headerIdx = i; nameCol = ni; qtyCol = qi === ni ? -1 : qi; priceCol = pi === ni ? -1 : pi; break;
+      // tolesnės eilutės buvo skaitomos kaip pozicijos (kiekis ir kaina - ta pati eilutė) ir perrašydavo įvestus pasiūlymus.
+      // Tik trumpas langelis - antraštė; ilgas sakinys („Pirkimo pavadinimas ..., kaina ...“) - ne (ieškoma toliau)
+      if ((qi < 0 || qi === ni) && (pi < 0 || pi === ni)) { if (r[ni].length <= 120) vienameLangelyje = true; continue; }
+      headerIdx = i; nameCol = ni; qtyCol = qi === ni ? -1 : qi; priceCol = pi === ni ? -1 : pi; unitCol = ui2 === ni ? -1 : ui2; break;
     }
   }
+  if (headerIdx < 0 && vienameLangelyje)
+    return { ok: false, error: L('Aptikta antraštė, bet pavadinimas, kiekis ir kaina - viename langelyje (tikėtina, PDF eilutės), tad pozicijų atskirti negalima. Įveskite jas ranka arba įkelkite Excel ar CSV.', 'A header was found, but the name, quantity and price are in one cell (probably PDF lines), so the items cannot be separated. Enter them manually or upload Excel or CSV.') };
 
-  if (headerIdx < 0) {
-    // Bendras pasiūlymas be lentelės: skaitinis langelis - jau skaičius, tekstas - sumos iš jo (12 345,67; 1.500,50; 1,500.50).
-    // Suma nesiplečia per skyrybą ar tarpą į kitą skaičių: iki 2026-09-28 „12 345,67, PVM“ virsdavo 1 234 567, „14 938,26 2 lapas“ -
-    // 14 938 262, o Excel skaičius 12396.685950413223 - 12 396 685 950 413 223
-    const sumos = [];
-    rows.flat().forEach(v => {
-      if (typeof v === 'number') { if (isFinite(v)) sumos.push(v); return; }
-      if (v == null) return;
-      (String(v).match(/\d{1,3}(?:[\s.,]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+(?:[.,]\d+)?/g) || [])
-        .forEach(t => { const n = GP_MONEY.parseEUR(t); if (n != null) sumos.push(n); });   // pinigai: 1.500,50 ir 1,500.50
-    });
-    const numbers = sumos.filter(n => n > 100);
-    if (numbers.length) {
-      const maxNum = Math.max(...numbers);
-      return { ok: true, fixed: { totalPrice: maxNum }, total: maxNum, fileName, message: L('Aptiktas tikėtinas bendras pasiūlymas (be detalių pozicijų). Įrašyta į „Bendras pasiūlymas" lentelę.', 'A probable total offer was found (no line items). Entered in the “Total offer” table.') };
-    }
-    return { ok: false, error: L('Nepavyko aptikti lentelės. Patikrinkite, ar failas turi antraštes „Pavadinimas", „Kiekis", „Kaina".', 'No table was found. Check that the file has the headers “Name” (or “Item”), “Quantity” and “Price”.') };
-  }
+  if (headerIdx < 0) return bendraSumaIsEiluciu(rows, fileName);
 
-  let total = 0;
+  let total = 0, neigiamos = 0;
+  const dviprasmiai = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i] || [];
     const name = (r[nameCol] || '').toString().trim();
     // Kiekis ir įkainis - skaičiai LT ir EN formatais (įkainis gali būti 0,125 EUR/vnt., todėl ne pinigų taisyklė „1.500 = 1500“);
     // iki 2026-09-28 tekstinis langelis „1.500,50“ virsdavo 1,5, „1,500.50“ - 1,5
-    const qty = GP_MONEY.parseSkaicius(r[qtyCol] != null ? r[qtyCol] : '');
-    const price = GP_MONEY.parseSkaicius(r[priceCol] != null ? r[priceCol] : '');
+    const qRaw = r[qtyCol] != null ? r[qtyCol] : '', pRaw = r[priceCol] != null ? r[priceCol] : '';
+    const qty = GP_MONEY.parseSkaicius(qRaw);
+    const price = GP_MONEY.parseSkaicius(pRaw);
     if (!name || qty == null || price == null) continue;
-    result.positions.push({ name, qty, price, total: qty * price });
+    // Neigiamas kiekis ar įkainis (nuolaida, grąžinimas) - ne pozicija (V10; DI kelyje taip pat atmetama), suskaičiuojama ir pasakoma
+    if (qty < 0 || price < 0) { neigiamos++; continue; }
+    // „3.876“, „1,200“: vienas skyriklis ir 3 skaitmenys - dešimtainis ar tūkstančiai? Skaitoma kaip dešimtainis, bet pasakoma (V2)
+    const ispejimai = [];
+    [[qRaw, qty, L('kiekis', 'quantity')], [pRaw, price, L('įkainis', 'unit price')]].forEach(([raw, v, ka]) => {
+      if (typeof raw === 'string' && /^\s*\d{1,3}[.,]\d{3}\s*$/.test(raw))
+        ispejimai.push(L(`${ka} „${raw.trim()}“ perskaitytas kaip ${fmtNum(v, 3)} - jei tai ${fmtNum(v * 1000, 0)}, pataisykite`, `${ka} “${raw.trim()}” read as ${fmtNum(v, 3)} - if it is ${fmtNum(v * 1000, 0)}, correct it`));
+    });
+    const unit = unitCol >= 0 && r[unitCol] != null ? String(r[unitCol]).trim().slice(0, 20) : '';
+    const poz = { name, qty, price, total: qty * price, unit };
+    if (ispejimai.length) { poz.ispejimai = ispejimai; dviprasmiai.push(name); }
+    result.positions.push(poz);
     total += qty * price;
   }
   result.total = total;
   result.rowsFound = result.positions.length;
 
-  if (!result.rowsFound) return { ok: false, error: L('Aptikta antraštė, bet duomenų eilučių nerasta.', 'A header was found, but no data rows.') };
+  if (!result.rowsFound) return { ok: false, error: L('Aptikta antraštė, bet duomenų eilučių nerasta.', 'A header was found, but no data rows.') + (neigiamos ? ' ' + L(`Eilučių su neigiamu kiekiu ar įkainiu: ${neigiamos} - jos nėra pozicijos.`, `Rows with a negative quantity or unit price: ${neigiamos} - they are not items.`) : '') };
+  const pastabos = [];
+  if (neigiamos) pastabos.push(L(`Praleista eilučių su neigiamu kiekiu ar įkainiu (pvz. nuolaida): ${neigiamos} - įrašykite jas ranka, jei jos keičia sumą.`, `Rows with a negative quantity or unit price (e.g. a discount) skipped: ${neigiamos} - enter them manually if they change the total.`));
+  if (dviprasmiai.length) pastabos.push(L(`Dviprasmiški skaičiai ${dviprasmiai.length} eilutėse (pvz. „${dviprasmiai[0]}“) - patikrinkite.`, `Ambiguous numbers in ${dviprasmiai.length} rows (e.g. “${dviprasmiai[0]}”) - check them.`));
+  if (pastabos.length) result.pastabos = pastabos;
   return result;
+}
+
+/* Bendras pasiūlymas be lentelės (K1, naujo darbuotojo patikra 2026-10-27): suma - tik su kontekstu toje pačioje eilutėje: valiuta
+   prie skaičiaus („EUR“, „Eur“, „eurų“, „€“) arba kainos žodis prieš jį („kaina“, „suma“, „vertė“, „iš viso“, „total“, „price“).
+   Iki tol imtas didžiausias skaičius faile: įmonės kodas 305 999 000, PVM mokėtojo kodas, telefonas, pirkimo numeris ar kaina su PVM
+   tapdavo pasiūlymo kaina. PVM suma („PVM: 2 592,59“) - ne kaina. Pirmiau - kaina be PVM (projekto PV su PVM - su PVM); kelios skirtingos
+   to paties lygio sumos - neaišku: failas neperskaitomas, sumos ir citatos pasakomos, kainą įrašo žmogus. Skaitinis Excel langelis -
+   jau skaičius, kontekstas - kiti tos eilutės langeliai. Suma nesiplečia per skyrybą ar tarpą į kitą skaičių („12 345,67, PVM“,
+   „14 938,26 2 lapas“; 2026-09-28). */
+const BS_SKAICIUS = /\d{1,3}(?:[ \u00a0\u202f.,]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+(?:[.,]\d+)?/g;
+const BS_VALIUTA_PO = /^[ \u00a0]*(?:(?:mln|tūkst)\.?[ \u00a0]*)?(?:eurų|eurai|eurus|euros|euro|eur|€)(?![\p{L}])/iu;
+const BS_VALIUTA_PRIES = /(?:^|[^\p{L}])(?:eur|€)[ \u00a0]*$/iu;
+const BS_ZODIS = /(?:^|[^\p{L}])(kain(?:a|ą|os|ų|oje)|sum(?:a|ą|os|ų)|vert(?:ė|ę|ės)|i[šs][ \u00a0]+viso|bendr(?:a|ą|oji|os)|total|price|amount)(?![\p{L}])/iu;
+const BS_BE = /(?:^|[^\p{L}])(?:be|neįskaitant|excl\.?|excluding|exclusive of|without)[ \u00a0]+(?:pvm|vat)(?![\p{L}])/giu;
+const BS_SU = /(?:^|[^\p{L}])(?:su|įskaitant|incl\.?|including|inclusive of|with)[ \u00a0]+(?:pvm|vat)(?![\p{L}])/giu;
+const BS_NE_KAINA = /^[ \u00a0]*(?:dien|d\.|darbo|kalendor|mėn|men\.|met|m\.|proc|%|val|vnt|psl|lap|kart|day|month|year|pcs|hour|page)/iu;   // „30 dienų“, „21 %“, „2 lapas“
+const bsYra = (re, t) => { re.lastIndex = 0; return re.test(t); };
+const bsPaskutinis = (re, t) => { re.lastIndex = 0; let m, i = -1; while ((m = re.exec(t))) i = m.index; return i; };
+function bendraSumaIsEiluciu(rows, fileName) {
+  const kand = [];
+  // PVM - po skaičiaus (iki kito skaičiaus, ne toliau kaip 40 ženklų) arba prieš jį (vėliausias iš „be PVM“ / „su PVM“)
+  const pvmPo = t => { const x = t.slice(0, 40).split(/[;\n]/)[0]; return bsYra(BS_BE, x) ? 'be' : bsYra(BS_SU, x) ? 'su' : null; };
+  const pvmPries = t => { const x = t.slice(-40), i = bsPaskutinis(BS_BE, x), j = bsPaskutinis(BS_SU, x); return i < 0 && j < 0 ? null : i > j ? 'be' : 'su'; };
+  rows.forEach(row => {
+    const cells = Array.isArray(row) ? row : [row];
+    const tekstai = cells.map(c => typeof c === 'string' ? c.replace(/\s+/g, ' ').trim() : '');
+    cells.forEach((c, ci) => {
+      const kiti = tekstai.filter((x, j) => j !== ci && x).join(' ');
+      if (typeof c === 'number') {
+        if (!isFinite(c) || c <= 0 || !(BS_ZODIS.test(kiti) || /(?:^|[^\p{L}])(?:eur|€)(?![\p{L}])/iu.test(kiti))) return;
+        const pv = pvmPries(kiti);
+        if (!pv && /(?:^|[^\p{L}])(pvm|vat)(?:[ \u00a0]*(?:suma|sum|amount))?[ \u00a0]*[:\-–(]?[ \u00a0]*$/iu.test(kiti)) return;
+        kand.push({ v: c, pvm: pv, zodis: BS_ZODIS.test(kiti), citata: (kiti + ' ' + fmtNum(c, 2)).slice(0, 140) });
+        return;
+      }
+      const t = tekstai[ci];
+      if (!t) return;
+      const ms = [...t.matchAll(BS_SKAICIUS)];
+      ms.forEach((m, k) => {
+        const pr = m.index, pab = pr + m[0].length;
+        const pries = t.slice(k ? ms[k - 1].index + ms[k - 1][0].length : 0, pr), po = t.slice(pab, k + 1 < ms.length ? ms[k + 1].index : t.length);
+        const v = GP_MONEY.parseEUR(m[0]);
+        if (v == null || !(v > 0)) return;
+        const valiuta = BS_VALIUTA_PO.test(po) || BS_VALIUTA_PRIES.test(pries);
+        // kainos žodis - prieš skaičių toje pačioje eilutėje (ar kitame jos langelyje), ne toliau kaip 40 ženklų
+        const savas = BS_ZODIS.test(pries.slice(-40)), zodis = savas || (!k && BS_ZODIS.test(kiti));
+        if (!valiuta && !zodis) return;
+        let pvm = pvmPo(po) || pvmPries(pries);
+        // „PVM: 2 592,59“, „PVM suma 21 %“ - mokesčio suma, ne kaina
+        if (!pvm && /(?:^|[^\p{L}])(pvm|vat)(?:[ \u00a0]*(?:suma|sum|amount))?[ \u00a0]*[:\-–(]?[ \u00a0]*$/iu.test(pries)) return;
+        if (BS_NE_KAINA.test(po) && !valiuta) return;
+        if (!valiuta && /(?:\bnr|kod|code|tel|phone)\.?[ \u00a0:]*$/i.test(pries)) return;
+        let a = pr, b = pab;
+        while (a > 0 && !/[.!?;]\s/.test(t.slice(a - 2, a))) a--;
+        while (b < t.length && !/[!?;]/.test(t[b]) && !(t[b] === '.' && /\s|$/.test(t[b + 1] || ''))) b++;
+        const ist = t.slice(a, Math.min(t.length, b + 1)).trim();
+        kand.push({ v, pvm, zodis, citata: ((zodis && !savas && !valiuta ? kiti + ' ' : '') + ist).slice(0, 140) });
+      });
+    });
+  });
+  const norim = APP.state && APP.state.project && APP.state.project.vatIncluded ? 'su' : 'be';
+  const skirtingos = arr => [...new Map(arr.map(x => [x.v, x])).values()];
+  const grupes = [kand.filter(x => x.pvm === norim), kand.filter(x => !x.pvm && x.zodis), kand.filter(x => !x.pvm && !x.zodis)];
+  const pvmTekstas = norim === 'be' ? L('be PVM', 'excl. VAT') : L('su PVM', 'incl. VAT');
+  for (let g = 0; g < grupes.length; g++) {
+    const r = skirtingos(grupes[g]);
+    if (!r.length) continue;
+    if (r.length > 1) {
+      const sar = r.slice(0, 4).map(x => fmtNum(x.v, 2) + ' (' + kab(x.citata) + ')').join('; ');
+      return { ok: false, kandidatai: r, error: L(`Pozicijų lentelės faile nėra, o bendrų sumų rasta kelios: ${sar}. Kuri iš jų - pasiūlymo kaina, įrankis nusprendžia ne pats: įrašykite ją lentelėje „Bendras pasiūlymas“.`, `The file has no item table and several totals were found: ${sar}. The tool does not decide which one is the offer price: enter it in the “Total offer” table.`) };
+    }
+    const x = r[0];
+    const pastaba = g === 0 ? '' : ' ' + L(`PVM prie sumos nenurodytas - patikrinkite, ar tai kaina ${pvmTekstas}.`, `VAT is not stated next to the amount - check that it is the price ${pvmTekstas}.`);
+    return { ok: true, fixed: { totalPrice: x.v }, total: x.v, fileName, citata: x.citata,
+      message: L(`Pozicijų lentelės faile nėra; rasta bendra kaina${g === 0 ? ' ' + pvmTekstas : ''}: ${kab(x.citata)}.`, `The file has no item table; total price found${g === 0 ? ' ' + pvmTekstas : ''}: ${kab(x.citata)}.`) + pastaba };
+  }
+  const kita = skirtingos(kand.filter(x => x.pvm && x.pvm !== norim));
+  if (kita.length) return { ok: false, kandidatai: kita, error: L(`Pozicijų lentelės faile nėra; rasta tik kaina ${norim === 'be' ? 'su PVM' : 'be PVM'}: ${kab(kita[0].citata)}. Įrašykite kainą ${pvmTekstas} lentelėje „Bendras pasiūlymas“.`, `The file has no item table; only a price ${norim === 'be' ? 'incl. VAT' : 'excl. VAT'} was found: ${kab(kita[0].citata)}. Enter the price ${pvmTekstas} in the “Total offer” table.`) };
+  return { ok: false, error: L('Nepavyko aptikti lentelės ir bendros kainos. Patikrinkite, ar failas turi antraštes „Pavadinimas", „Kiekis", „Kaina" arba sumą su „EUR“ ar žodžiu „kaina“.', 'Neither a table nor a total price was found. Check that the file has the headers “Name” (or “Item”), “Quantity” and “Price”, or an amount with “EUR” or the word “price”.') };
 }
 
 /* Pozicijos sutapdinimas su projekto pozicija: normalizuotas tekstas (mažosios, be diakritikų, be skyrybos), tikslus
@@ -3334,9 +3605,14 @@ function sutapdinkPozicija(name, positions) {
 }
 
 /* Ištraukto rezultato pritaikymas tiekėjui: bendra kaina -> fixedOffers; pozicijos - kai projekte jų nėra, sukuriamos
-   (planuojamas įkainis = pirmo pasiūlymo įkainis, kol jo neįrašo žmogus), kitaip sutapdinamos ir priskiriami įkainiai.
+   (planuojamo įkainio nėra - jį įrašo žmogus), kitaip sutapdinamos ir priskiriami įkainiai.
+   o.kurtiNerastas - nesutapdintos eilutės tampa naujomis pozicijomis (masinis įkėlimas, kai peržiūroje pozicijų dar nebuvo: projekte -
+   visų priimtų failų pozicijų sąjunga); o.priskyrimai - { eilutės indeksas: pozicijos id | '__naujas__' | '' } iš peržiūros.
+   Nesutapdintos ir nepriskirtos eilutės įvardijamos (K2, 2026-10-27: iki tol jų įkainiai dingdavo tyliai, o tiekėjo pasiūlymas be jų
+   atrodė pilnas). Kiekio ar mato skirtumas tarp failo ir projekto - pasakomas (V1).
    Grąžina tą patį rezultatą su `message` ir `sutapdinimas` (kiek tikslių, tikėtinų, nerastų, naujų). */
-function pritaikykImporta(result, supplierId) {
+function pritaikykImporta(result, supplierId, o) {
+  o = o || {};
   const s = APP.state;
   if (result.fixed) {
     if (!s.fixedOffers[supplierId]) s.fixedOffers[supplierId] = {};
@@ -3350,7 +3626,7 @@ function pritaikykImporta(result, supplierId) {
     result.positions.forEach(p => {
       // Planuojamas įkainis - ne iš tiekėjo pasiūlymo (T3-K3, trečioji naujo darbuotojo patikra 2026-10-21): iki tol pirmojo failo įkainis
       // tyliai tapdavo planuojamu, todėl planuojama vertė sutapdavo su pasiūlymu („0 % nuo PV“). Dabar tuščias - įrašo žmogus.
-      const pos = { id: uid(), name: p.name, unit: p.unit || VNT(), quantity: p.qty, plannedUnitPrice: null, weight: 1 };
+      const pos = { id: uid(), name: p.name, unit: p.unit || '', quantity: p.qty, plannedUnitPrice: null, weight: 1 };   // matas - iš failo, ne „vnt.“ (D3)
       s.positions.push(pos);
       if (!s.offers[supplierId]) s.offers[supplierId] = {};
       s.offers[supplierId][pos.id] = result.di ? { unitPrice: p.price, di: true } : { unitPrice: p.price };
@@ -3360,18 +3636,38 @@ function pritaikykImporta(result, supplierId) {
       `New items imported: ${result.positions.length}. The offer has no planned unit prices - enter them in the “Planned unit price” column of the table (until they or the planned value are entered, the deviation from it is not calculated).`);
     result.naujosPozicijos = result.positions.length;
   } else if (s.positions.length) {
-    result.positions.forEach(rp => {
-      const m = sutapdinkPozicija(rp.name, s.positions);
-      if (m) {
-        if (!s.offers[supplierId]) s.offers[supplierId] = {};
-        s.offers[supplierId][m.pos.id] = result.di ? { unitPrice: rp.price, di: true } : { unitPrice: rp.price };
-        sut[m.lygis]++;
-      } else sut.nerasta++;
+    const nerastos = [], skirtumai = [];
+    const irasyk = (pos, rp) => {
+      if (!s.offers[supplierId]) s.offers[supplierId] = {};
+      s.offers[supplierId][pos.id] = result.di ? { unitPrice: rp.price, di: true } : { unitPrice: rp.price };
+    };
+    const nauja = rp => {
+      const pos = { id: uid(), name: rp.name, unit: rp.unit || '', quantity: rp.qty, plannedUnitPrice: null, weight: 1 };
+      s.positions.push(pos); irasyk(pos, rp); sut.naujos++;
+    };
+    result.positions.forEach((rp, j) => {
+      const pr = o.priskyrimai && Object.prototype.hasOwnProperty.call(o.priskyrimai, j) ? o.priskyrimai[j] : undefined;
+      const m = pr === undefined ? sutapdinkPozicija(rp.name, s.positions) : null;
+      const pos = m ? m.pos : pr && pr !== '__naujas__' ? s.positions.find(x => x.id === pr) : null;
+      if (pos) {
+        irasyk(pos, rp);
+        if (m) sut[m.lygis]++; else sut.tikslus++;
+        const qp = Number(pos.quantity) || 0, un = x => normTekstas(x).replace(/\s+/g, '');
+        if (rp.qty > 0 && qp > 0 && Math.abs(rp.qty - qp) / qp > 0.005) skirtumai.push(L(`„${rp.name}“: kiekis faile ${fmtNum(rp.qty, 3)}${rp.unit ? ' ' + rp.unit : ''}, projekte ${fmtNum(qp, 3)}${pos.unit ? ' ' + pos.unit : ''}`, `“${rp.name}”: quantity ${fmtNum(rp.qty, 3)}${rp.unit ? ' ' + rp.unit : ''} in the file, ${fmtNum(qp, 3)}${pos.unit ? ' ' + pos.unit : ''} in the project`));
+        else if (rp.unit && pos.unit && un(rp.unit) !== un(pos.unit)) skirtumai.push(L(`„${rp.name}“: matas faile „${rp.unit}“, projekte „${pos.unit}“`, `“${rp.name}”: unit “${rp.unit}” in the file, “${pos.unit}” in the project`));
+      } else if (pr === '__naujas__' || (pr === undefined && o.kurtiNerastas)) nauja(rp);
+      else { sut.nerasta++; nerastos.push(rp.name); }
     });
     const priskirta = sut.tikslus + sut.tiketinas;
-    result.message = L(`Priskirta ${priskirta} iš ${result.positions.length} pozicijų tiekėjui.` + (sut.nerasta ? ` Nerasta: ${sut.nerasta} (patikrinkite lentelėje).` : ''),
-      `${priskirta} of ${result.positions.length} items assigned to the supplier.` + (sut.nerasta ? ` Not matched: ${sut.nerasta} (check the table).` : ''));
+    const sar = a => a.slice(0, 3).map(x => kab(x)).join(', ') + (a.length > 3 ? L(` ir dar ${a.length - 3}`, ` and ${a.length - 3} more`) : '');
+    result.message = L(`Priskirta ${priskirta} iš ${result.positions.length} pozicijų tiekėjui.`, `${priskirta} of ${result.positions.length} items assigned to the supplier.`)
+      + (sut.naujos ? ' ' + L(`Sukurta naujų pozicijų: ${sut.naujos} - kitiems tiekėjams jos dar neįkainotos.`, `New items created: ${sut.naujos} - not yet priced for the other suppliers.`) : '')
+      + (nerastos.length ? ' ' + L(`Nesutapdinta su projekto pozicijomis ir neįrašyta: ${nerastos.length} (${sar(nerastos)}) - įrašykite jų įkainius lentelėje arba įkelkite failą dar kartą ir peržiūroje pasirinkite poziciją.`, `Not matched with the project items and not saved: ${nerastos.length} (${sar(nerastos)}) - enter their unit prices in the table or upload the file again and choose the item in the review.`) : '')
+      + (skirtumai.length ? ' ' + L(`Kiekis ar matas skiriasi (${skirtumai.length}): ${skirtumai.slice(0, 2).join('; ')}${skirtumai.length > 2 ? '…' : ''} - patikrinkite, ar įkainis to paties mato.`, `Quantity or unit differs (${skirtumai.length}): ${skirtumai.slice(0, 2).join('; ')}${skirtumai.length > 2 ? '…' : ''} - check that the unit price is for the same unit.`) : '');
+    result.nesutapdinta = nerastos; result.kiekioSkirtumai = skirtumai;
+    if (nerastos.length || skirtumai.length) result.ispejimas = true;
   }
+  if (result.pastabos && result.pastabos.length) { result.message = (result.message || '') + ' ' + result.pastabos.join(' '); result.ispejimas = true; }
   result.sutapdinimas = sut;
   storage.save();
   return result;
@@ -3389,6 +3685,20 @@ const FORMA_RE = '(?:' + TEISINES_FORMOS.map(f => f.replace(/[.*+?^${}()|[\]\\]/
 const FORMA_PRIES = '(^|[^\\p{L}\\p{N}])', FORMA_PO = '(?![\\p{L}\\p{N}])';
 const tiekejoVardoNorm = t => normTekstas(String(t || '').replace(new RegExp(FORMA_PRIES + FORMA_RE + '\\.?' + FORMA_PO, 'giu'), '$1').replace(/[„“”"«»]/g, ' ')).replace(/\s+/g, ' ').trim();
 function isvalykPav(t) { return String(t || '').replace(/[„“”"«»]/g, '').replace(/\s+/g, ' ').replace(/[\s,;:.|-]+$/g, '').trim(); }
+/* Pavadinimas, kaip parašytas dokumente (M2, 2026-10-27): kabutės lieka („UAB „Elektros tinklų sprendimai““, ne „UAB Elektros tinklų
+   sprendimai“), tiesios kabutės - lietuviškos, įmonės kodas ir kas po jo nukerpama („..., įmonės kodas 300111222“) */
+function tvarkingasPav(t) {
+  t = String(t || '').split(/\s{2,}/)[0].replace(/[,;]\s*(?:įmonės kodas|imones kodas|į\.\s?k\.|juridinio asmens kodas|kodas|company code|reg(?:istration)?\.?\s*(?:no|nr)).*$/i, '');
+  t = t.replace(/"([^"]{1,80})"/g, '„$1“').replace(/“([^“”„]{1,80})”/g, '„$1“').replace(/\s+/g, ' ').replace(/[\s,;:.|-]+$/g, '').trim();
+  const atidaryta = (t.match(/„/g) || []).length, uzdaryta = (t.match(/[“”]/g) || []).length;
+  return atidaryta > uzdaryta ? t + '“' : t;
+}
+/* Lietuviškas daugiskaitos linksnis (M1): 1 pozicija, 2 pozicijos, 15 pozicijų */
+function pozSk(n) {
+  if (LANG === 'en') return n === 1 ? 'item' : 'items';
+  const d = n % 10, s2 = n % 100;
+  return d === 1 && s2 !== 11 ? 'pozicija' : d >= 2 && d <= 9 && !(s2 >= 12 && s2 <= 19) ? 'pozicijos' : 'pozicijų';
+}
 function atpazinkTiekeja(fileName, rows, suppliers) {
   suppliers = suppliers || APP.state.suppliers;
   const kand = [];
@@ -3397,12 +3707,13 @@ function atpazinkTiekeja(fileName, rows, suppliers) {
   const formuRe = new RegExp(FORMA_PRIES + '(' + FORMA_RE + ')\\.?\\s*[„“"]?([A-ZĄČĘĖĮŠŲŪŽ][^\\n„“”"|;:]{1,60}?)[“”"]?(?=\\s{2,}|[,;|]|$)', 'mu');
   const atvRe = new RegExp('[„“"]([^„“”"\\n|]{2,60})[“”"],?\\s*(' + FORMA_RE + ')' + FORMA_PO, 'mu');
   let m = tekstas.match(/(?:tiek[ėe]jas|tiek[ėe]jo pavadinimas|pasi[ūu]lym[ąa]\s+teikia|pasi[ūu]lym[ąa]\s+pateik[ėe]|supplier|tenderer|bidder)\s*[:\-]\s*([^\n|;]{3,80})/i);
-  if (m) kand.push({ pavadinimas: isvalykPav(m[1].split(/\s{2,}/)[0]), citata: m[0].trim().slice(0, 120), saltinis: 'dokumentas' });
+  if (m) kand.push({ pavadinimas: tvarkingasPav(m[1]), citata: m[0].trim().slice(0, 120), saltinis: 'dokumentas' });
   m = tekstas.match(atvRe);
-  if (m) kand.push({ pavadinimas: isvalykPav(m[2] + ' ' + m[1]), citata: m[0].trim().slice(0, 120), saltinis: 'dokumentas' });
+  if (m) kand.push({ pavadinimas: m[2] + ' „' + isvalykPav(m[1]) + '“', citata: m[0].trim().slice(0, 120), saltinis: 'dokumentas' });
   m = tekstas.match(formuRe);
-  if (m) kand.push({ pavadinimas: isvalykPav(m[2] + ' ' + m[3]), citata: m[0].trim().slice(0, 120), saltinis: 'dokumentas' });
-  const kodasM = tekstas.match(/(?:įmonės kodas|imones kodas|juridinio asmens kodas|į\.\s?k\.|company code|reg(?:istration)?\.?\s*(?:no|nr)\.?)\s*[:\-]?\s*(\d{9})\b/i);
+  if (m) kand.push({ pavadinimas: /[„“"]/.test(m[0]) ? m[2] + ' „' + isvalykPav(m[3]) + '“' : isvalykPav(m[2] + ' ' + m[3]), citata: m[0].trim().slice(0, 120), saltinis: 'dokumentas' });
+  // įmonės kodas - 9 skaitmenys (Lietuva) arba 11 (Latvijos registracijos numeris; M2)
+  const kodasM = tekstas.match(/(?:įmonės kodas|imones kodas|juridinio asmens kodas|į\.\s?k\.|company code|reg(?:istration)?\.?\s*(?:no|nr)\.?|reģ\.?\s*nr\.?)\s*[:\-]?\s*(\d{11}|\d{9})(?!\d)/i);
   const kodas = kodasM ? kodasM[1] : null;
   const isVardo = fileName ? isvalykPav(fileName.replace(/\.[a-z0-9]+$/i, '').replace(/[_\-.]+/g, ' ')
     .replace(/\b(pasi[ūu]lymas|pasiulymas|komercinis|komercinis pasi[ūu]lymas|offer|proposal|quotation|quote|tender|bid|kainos|kaina|[įi]kainiai|final|galutinis|v\d+|\d{4}-?\d{2}-?\d{2}|\d+)\b/gi, ' ')) : '';
@@ -3435,6 +3746,7 @@ function impSutapdink(it) {
   it.sutapdinimas = null; it.sut = null;
   if (it.rez && it.rez.ok && !it.rez.fixed) {
     const P = APP.state.positions, sut = { tikslus: 0, tiketinas: 0, nerasta: 0 };
+    it.kurti = !P.length;   // peržiūroje pozicijų nebuvo - priėmus kuriama visų failų pozicijų sąjunga
     it.sutapdinimas = it.rez.positions.map(rp => { const m = P.length ? sutapdinkPozicija(rp.name, P) : null; if (m) sut[m.lygis]++; else sut.nerasta++; return { rp, m }; });
     it.sut = sut;
   }
@@ -3465,7 +3777,7 @@ function tiekejasIsDi(t, suppliers) {
     if (esamas) pasitikejimas = 'tikslus';
     else { esamas = suppliers.find(x => { const xn = tiekejoVardoNorm(x.name); return xn.length >= 4 && n.length >= 4 && (xn.includes(n) || n.includes(xn)); }) || null; }
   }
-  return { pavadinimas: isvalykPav(t.pavadinimas), kodas: t.kodas || '', citata: t.citata || t.pavadinimas, saltinis: 'DI', puslapis: t.puslapis, esamasId: esamas ? esamas.id : null, pasitikejimas, kandidatai: [] };
+  return { pavadinimas: tvarkingasPav(t.pavadinimas), kodas: t.kodas || '', citata: t.citata || t.pavadinimas, saltinis: 'DI', puslapis: t.puslapis, esamasId: esamas ? esamas.id : null, pasitikejimas, kandidatai: [] };
 }
 var IMP_SESIJA = null;   // var, ne let: openModal() jį liečia ir prieš šią eilutę (TDZ). Dabartinis peržiūros langas: DI rezultatas į uždarytą ar kitą langą nebeįrašomas
 function impDiAtsaukti() { if (IMP_SESIJA) { IMP_SESIJA.valdikliai.forEach(v => { try { v.abort(); } catch (e) {} }); IMP_SESIJA = null; } }
@@ -3474,17 +3786,19 @@ function impDiAtsaukti() { if (IMP_SESIJA) { IMP_SESIJA.valdikliai.forEach(v => 
    klaida; „Priimti pažymėtus“ pritaiko tik pažymėtus su priskirtu tiekėju. */
 function importoPerziura(items) {
   const s = APP.state, cur = s.project.currency;
-  const supOpt = (sel) => s.suppliers.map(x => `<option value="${x.id}"${sel === x.id ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('');
+  const supOpt = (sel) => s.suppliers.map(x => `<option value="${escapeHtml(x.id)}"${sel === x.id ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('');
   const SALTINIS = { 'dokumentas': L('dokumento', 'the document'), 'failo vardas': L('failo vardo', 'the file name'), 'DI': L('DI perskaityto failo', 'the file read by AI') };
   const psl = n => n ? L('psl. ' + n, 'p. ' + n) : '';
   const kortele = (it, i) => {
     const t = it.tiekejas || {}, r = it.rez || {}, ok = r.ok, di = !!r.di;
     const naujas = !t.esamasId && t.pavadinimas;
-    const busena = !ok ? `<span class="pill pill--error">${L('neperskaityta', 'not read')}</span>` : r.fixed ? `<span class="pill pill--neutral">${L('tik bendra suma', 'total only')}</span>` : `<span class="pill pill--success">${r.rowsFound} ${L('pozicijos', 'items')}</span>`;
+    const busena = !ok ? `<span class="pill pill--error">${L('neperskaityta', 'not read')}</span>` : r.fixed ? `<span class="pill pill--neutral">${L('tik bendra suma', 'total only')}</span>` : `<span class="pill pill--success">${r.rowsFound} ${pozSk(r.rowsFound)}</span>`;
     const diZyme = di && window.GP_DI ? ' ' + GP_DI.zyme({ tekstas: L('DI pasiūlymas', 'AI suggestion') }) : '';
     const sut = it.sut ? (s.positions.length
       ? L(`Sutapdinimas su projekto lentele: ${it.sut.tikslus} tikslūs, ${it.sut.tiketinas} tikėtini, ${it.sut.nerasta} nerasta.`, `Matching with the project table: ${it.sut.tikslus} exact, ${it.sut.tiketinas} probable, ${it.sut.nerasta} not found.`)
-      : L('Projekte pozicijų dar nėra: pirmas priimtas failas jas sukurs (planuojamų įkainių - ne, juos įrašysite lentelėje), kiti bus sutapdinti su jomis.', 'The project has no items yet: the first accepted file will create them (without planned unit prices - you will enter them in the table), the others will be matched to them.')) : '';
+      : L('Projekte pozicijų dar nėra: priimti failai jas sukurs - visų failų pozicijas, sutapdintas tarpusavyje (planuojamų įkainių - ne, juos įrašysite lentelėje).', 'The project has no items yet: the accepted files will create them - the items of all files, matched with each other (without planned unit prices - you will enter them in the table).')) : '';
+    const nesut = it.sut && s.positions.length && it.sut.nerasta ? `<div class="card card--warning mt-1" style="margin:0; font-size:13px;" role="note">${L(`Nesutapdinta eilučių: ${it.sut.nerasta}. Pasirinkite projekto poziciją arba „Sukurti naują poziciją“ lentelėje „Pozicijos“ - kitaip šių eilučių įkainiai neįrašomi.`, `Rows not matched: ${it.sut.nerasta}. Choose a project item or “Create a new item” in the “Items” table - otherwise the unit prices of these rows are not saved.`)}</div>` : '';
+    const pozPasirinkimas = (j, x) => `<select class="select" style="min-width:180px;" data-imp-poz="${i}|${j}" aria-label="${L('Projekto pozicija eilutei', 'Project item for the row')} ${escapeHtml(x.rp.name)}"><option value="">${L('Nepriskirti', 'Do not assign')}</option><option value="__naujas__">${L('Sukurti naują poziciją', 'Create a new item')}</option>${s.positions.map(pp => `<option value="${escapeHtml(pp.id)}">${escapeHtml(pp.name)}</option>`).join('')}</select>`;
     const siuloma = t.esamasId ? (t.pasitikejimas === 'tikslus' ? L('sutampa su esamu tiekėju', 'matches an existing supplier') : L('panašus į esamą tiekėją', 'similar to an existing supplier')) : L('naujas tiekėjas', 'new supplier');
     const supHint = it.fiksuotas
       ? L('Failas įkeltas šio tiekėjo kortelėje.', 'The file was uploaded on this supplier’s card.') + (it.diTiekejas && it.diTiekejas.pavadinimas && !(it.diTiekejas.esamasId === it.fiksuotas)
@@ -3517,10 +3831,10 @@ function importoPerziura(items) {
         </div>
       </div>
       <p class="muted" style="font-size: 12px; margin: 6px 0 0;">${escapeHtml(r.message || sut)}${r.message && sut ? ' ' + escapeHtml(sut) : ''}</p>
-      ${diSuma}${diIsp}
-      ${!r.fixed && it.sutapdinimas ? `<details class="mt-1"${di ? ' open' : ''}><summary style="cursor:pointer; font-size:13px;">${L('Pozicijos', 'Items')} (${it.sutapdinimas.length})</summary>
+      ${diSuma}${diIsp}${nesut}
+      ${!r.fixed && it.sutapdinimas ? `<details class="mt-1"${di || (it.sut && s.positions.length && it.sut.nerasta) ? ' open' : ''}><summary style="cursor:pointer; font-size:13px;">${L('Pozicijos', 'Items')} (${it.sutapdinimas.length})</summary>
         <div class="table-wrap mt-1"><table class="table"><thead><tr><th>${L('Faile', 'In the file')}</th>${di ? `<th>${L('Psl.', 'Page')}</th>` : ''}<th class="num">${L('Kiekis', 'Quantity')}</th><th class="num">${L('Įkainis', 'Unit price')}</th><th>${L('Projekto pozicija', 'Project item')}</th></tr></thead><tbody>
-        ${it.sutapdinimas.map(x => `<tr><td>${escapeHtml(x.rp.name)}${x.rp.ispejimai && x.rp.ispejimai.length ? `<div style="font-size:12px;"><span class="pill pill--warning">${L('patikrinkite', 'check')}</span> ${escapeHtml(x.rp.ispejimai.join('; '))}</div>` : ''}</td>${di ? `<td>${x.rp.puslapis || '–'}</td>` : ''}<td class="num">${fmtNum(x.rp.qty, 2)}</td><td class="num">${fmtMoney(x.rp.price, cur)}</td><td>${x.m ? escapeHtml(x.m.pos.name) + (x.m.lygis === 'tiketinas' ? ` <span class="pill pill--warning">${L('tikėtina', 'probable')}</span>` : '') : (s.positions.length ? `<span class="pill pill--neutral">${L('nerasta', 'not found')}</span>` : `<span class="pill pill--info">${L('bus sukurta', 'will be created')}</span>`)}</td></tr>`).join('')}
+        ${it.sutapdinimas.map((x, j) => `<tr><td>${escapeHtml(x.rp.name)}${x.rp.ispejimai && x.rp.ispejimai.length ? `<div style="font-size:12px;"><span class="pill pill--warning">${L('patikrinkite', 'check')}</span> ${escapeHtml(x.rp.ispejimai.join('; '))}</div>` : ''}</td>${di ? `<td>${x.rp.puslapis || '–'}</td>` : ''}<td class="num">${fmtNum(x.rp.qty, 2)}${x.rp.unit ? ' ' + escapeHtml(x.rp.unit) : ''}</td><td class="num">${fmtMoney(x.rp.price, cur)}</td><td>${x.m ? escapeHtml(x.m.pos.name) + (x.m.lygis === 'tiketinas' ? ` <span class="pill pill--warning">${L('tikėtina', 'probable')}</span>` : '') : (s.positions.length ? pozPasirinkimas(j, x) : `<span class="pill pill--info">${L('bus sukurta', 'will be created')}</span>`)}</td></tr>`).join('')}
         </tbody></table></div></details>` : ''}${diBlokas}`
       : `<div class="card card--warning mt-1" style="margin:0;"><strong>${L('Neperskaityta:', 'Not read:')}</strong> ${escapeHtml(r.error || L('nežinoma klaida', 'unknown error'))}</div>${diBlokas}`}
     </div>`;
@@ -3571,7 +3885,7 @@ function importoPerziura(items) {
     });
   }
   $('#impPriimti').onclick = () => {
-    let priimta = 0, praleista = 0, naujuTiekeju = 0, naujuPoz = 0;
+    let priimta = 0, praleista = 0, naujuTiekeju = 0, naujuPoz = 0, nepriskirta = 0, skirtumu = 0;
     // nepažymėjus nė vieno failo langas neuždaromas (T3-V8): kitaip DI perskaitytas rezultatas dingtų ir DI tektų kviesti iš naujo
     if (!items.some((it, i) => { const c = $(`[data-imp-pasirinktas="${i}"]`); return it.rez && it.rez.ok && c && c.checked; })) {
       toast(L('Nepažymėtas nė vienas failas. Pažymėkite failus, kuriuos priimate, arba spauskite „Atšaukti“.', 'No file is selected. Select the files you accept or click “Cancel”.'), 'warn');
@@ -3588,18 +3902,26 @@ function importoPerziura(items) {
         if (!name || !name.trim()) { praleista++; return; }
         supId = uid();
         const palette = ['#00A072', '#00667D', '#00A5C4', '#85BC28', '#459D54', '#FAB03B', '#DB354A', '#737483'];
-        s.suppliers.push({ id: supId, name: name.trim(), code: it.tiekejas.kodas || '', country: L('Lietuva', 'Lithuania'), contact: '', riskLevel: '', color: palette[s.suppliers.length % palette.length], notes: '' });
+        // šalis - tuščia: faile jos nėra (D3, 2026-10-27; iki tol visada „Lietuva“ - ir Latvijos SIA)
+        s.suppliers.push({ id: supId, name: name.trim(), code: it.tiekejas.kodas || '', country: '', contact: '', riskLevel: '', color: palette[s.suppliers.length % palette.length], notes: '' });
         naujuTiekeju++;
       }
       if (!supId) { praleista++; return; }
-      const pr = pritaikykImporta(Object.assign({}, it.rez), supId);
+      const priskyrimai = {};
+      $$(`[data-imp-poz^="${i}|"]`).forEach(sel => { priskyrimai[Number(sel.dataset.impPoz.split('|')[1])] = sel.value; });
+      const pr = pritaikykImporta(Object.assign({}, it.rez), supId, { kurtiNerastas: !!it.kurti, priskyrimai: Object.keys(priskyrimai).length ? priskyrimai : null });
       if (pr && pr.naujosPozicijos) naujuPoz += pr.naujosPozicijos;
+      if (pr && pr.sutapdinimas) naujuPoz += pr.sutapdinimas.naujos && !pr.naujosPozicijos ? pr.sutapdinimas.naujos : 0;
+      if (pr && pr.nesutapdinta && pr.nesutapdinta.length) nepriskirta += pr.nesutapdinta.length;
+      if (pr && pr.kiekioSkirtumai && pr.kiekioSkirtumai.length) skirtumu += pr.kiekioSkirtumai.length;
       priimta++;
     });
     storage.save(); render.all(); closeModal();
     if (priimta) window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'pasiulymai_ikelti', failai: Math.min(99, priimta) });   // statistika (tik su sutikimu)
-    toast(L('Priimta failų: ' + priimta + (naujuTiekeju ? ', naujų tiekėjų: ' + naujuTiekeju : '') + (praleista ? ', praleista: ' + praleista : '') + (naujuPoz ? '. Sukurta pozicijų: ' + naujuPoz + ' - įrašykite jų planuojamus įkainius lentelėje „Plan. įkainis“.' : ''),
-      'Files accepted: ' + priimta + (naujuTiekeju ? ', new suppliers: ' + naujuTiekeju : '') + (praleista ? ', skipped: ' + praleista : '') + (naujuPoz ? '. Items created: ' + naujuPoz + ' - enter their planned unit prices in the “Planned unit price” column.' : '')), priimta ? 'success' : 'warn');
+    toast(L('Priimta failų: ' + priimta + (naujuTiekeju ? ', naujų tiekėjų: ' + naujuTiekeju : '') + (praleista ? ', praleista: ' + praleista : '') + (naujuPoz ? '. Sukurta pozicijų: ' + naujuPoz + ' - įrašykite jų planuojamus įkainius lentelėje „Plan. įkainis“.' : '')
+        + (nepriskirta ? ' Nepriskirta eilučių: ' + nepriskirta + ' - jų įkainiai neįrašyti.' : '') + (skirtumu ? ' Kiekis ar matas skiriasi: ' + skirtumu + ' - patikrinkite lentelėje.' : ''),
+      'Files accepted: ' + priimta + (naujuTiekeju ? ', new suppliers: ' + naujuTiekeju : '') + (praleista ? ', skipped: ' + praleista : '') + (naujuPoz ? '. Items created: ' + naujuPoz + ' - enter their planned unit prices in the “Planned unit price” column.' : '')
+        + (nepriskirta ? ' Rows not assigned: ' + nepriskirta + ' - their unit prices were not saved.' : '') + (skirtumu ? ' Quantity or unit differs: ' + skirtumu + ' - check the table.' : '')), priimta && !nepriskirta && !skirtumu ? 'success' : 'warn');
   };
 }
 
@@ -3617,10 +3939,10 @@ function importoPerziura(items) {
    - pavadinimas paliekamas (projekte objekto rūšies nėra, pavadinimas paprastai viešas), bet per tą patį diSlepk().
    Kodų raktas rodomas tik ekrane (į užklausą nepatenka). Keitimo logika - shared/uzkodavimas.js (bendra su PP-protocol ir PP-ts, nuo 2026-10-16);
    čia - tik šio modulio kontekstas (kodai, keičiami tekstai, žinomos sumos). */
-const DI_ISPEJIMAS = () => L('Užklausa užkoduota: tiekėjų pavadinimai pakeisti kodais (Tiekėjas A, B, C), sumos - procentiniais skirtumais nuo planuotos (numatomos) vertės, pati vertė, pirkimo numeris ir asmenų duomenys neįtraukti. Įklijuokite ją tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą). Nenaudokite asmeninių ar vartotojiškų DI paskyrų (pvz. ChatGPT, Claude.ai) pirkimo duomenims - jų sąlygos neužtikrina pirkimo konfidencialumo.',
-  'The prompt is encoded: supplier names are replaced with codes (Supplier A, B, C), amounts with percentage differences from the planned (estimated) value; the value itself, the procurement number and personal data are not included. Paste it only into an AI tool approved by your organisation (e.g. the VPT Ekspertas assistant of the Public Procurement Office). Do not use personal or consumer AI accounts (e.g. ChatGPT, Claude.ai) for procurement data - their terms do not ensure the confidentiality of the procurement.');
-const DI_LAUKO_PASTABA = () => L('Nerašykite čia tiekėjų pavadinimų, sumų ar asmens duomenų. Tekstas įtraukiamas į užklausą; automatiškai pakeičiami tik šio projekto tiekėjų pavadinimai, sumos su „Eur“ (procentais nuo PV), el. paštai ir telefonai - kitų duomenų sistema neatpažįsta.',
-  'Do not enter supplier names, amounts or personal data here. The text is included in the prompt; only this project’s supplier names, amounts with “EUR” (as a percentage of PV), emails and phone numbers are replaced automatically - the tool does not recognise other data.');
+const DI_ISPEJIMAS = () => L('Užklausa užkoduota: šio projekto tiekėjų pavadinimai (ir linksniais) pakeisti kodais (Tiekėjas A, B, C), sumos - procentiniais skirtumais nuo planuotos (numatomos) vertės; pati vertė ir pirkimo numeris neįtraukti; kitos įmonės su teisine forma, asmenys po etikečių („atstovas“, „Kontaktinis asmuo:“), el. paštai, telefonai ir įmonių kodai pakeisti. Kitų duomenų (sutrumpintų pavadinimų, asmenų be etikečių) sistema neatpažįsta - prieš kopijuodami peržiūrėkite užklausą. Įklijuokite ją tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą). Nenaudokite asmeninių ar vartotojiškų DI paskyrų (pvz. ChatGPT, Claude.ai) pirkimo duomenims - jų sąlygos neužtikrina pirkimo konfidencialumo.',
+  'The prompt is encoded: this project’s supplier names (also inflected) are replaced with codes (Supplier A, B, C), amounts with percentage differences from the planned (estimated) value; the value itself and the procurement number are not included; other companies with a legal form, persons after labels (“representative”, “Contact person:”), emails, phone numbers and company codes are replaced. The tool does not recognise other data (shortened names, persons without labels) - review the prompt before copying it. Paste it only into an AI tool approved by your organisation (e.g. the VPT Ekspertas assistant of the Public Procurement Office). Do not use personal or consumer AI accounts (e.g. ChatGPT, Claude.ai) for procurement data - their terms do not ensure the confidentiality of the procurement.');
+const DI_LAUKO_PASTABA = () => L('Nerašykite čia tiekėjų pavadinimų, sumų ar asmens duomenų. Tekstas įtraukiamas į DI užklausą; automatiškai pakeičiami šio projekto tiekėjų pavadinimai (ir linksniais), kitos įmonės su teisine forma, asmenys po etikečių, sumos su „Eur“ (procentais nuo PV), el. paštai, telefonai ir įmonių kodai - kitų duomenų sistema neatpažįsta.',
+  'Do not enter supplier names, amounts or personal data here. The text is included in the AI prompt; this project’s supplier names (also inflected), other companies with a legal form, persons after labels, amounts with “EUR” (as a percentage of PV), emails, phone numbers and company codes are replaced automatically - the tool does not recognise other data.');
 
 function diTiekejoKodas(i) { return GP_UZKODAVIMAS.kodas(i, L('Tiekėjas ', 'Supplier ')); }
 const diSk = n => new Intl.NumberFormat(LOKALE(), { maximumFractionDigits: 1 }).format(Math.abs(Math.round(n * 10) / 10));
@@ -3633,7 +3955,8 @@ function diKontekstas() {
   s.suppliers.forEach((sup, i) => {
     const kodas = diTiekejoKodas(i);
     kodai[sup.id] = kodas; raktas.push([kodas, sup.name || L('(be pavadinimo)', '(untitled)')]);
-    GP_UZKODAVIMAS.vardoVariantai(sup.name).forEach(([v, tikslus]) => pridek(v, kodas, tikslus));
+    const vv = GP_UZKODAVIMAS.vardoVariantai(sup.name);   // ir linksniais („Volteros“, „UAB „Galios įrangos““ - D5, 2026-10-27)
+    vv.concat(GP_UZKODAVIMAS.linksniai ? GP_UZKODAVIMAS.linksniai(vv) : []).forEach(([v, tikslus]) => pridek(v, kodas, tikslus));
     pridek(sup.code, L('[įmonės kodas neįtrauktas]', '[company code removed]'), true);
     const kont = String(sup.contact || '');
     [kont].concat(kont.split(/[,;\/\n]/)).forEach(x => pridek(x, L('[kontaktas neįtrauktas]', '[contact removed]'), false));
@@ -3658,7 +3981,8 @@ function diKontekstas() {
 /* Laisvo teksto keitimas - shared/uzkodavimas.js: el. paštai, telefonai, šio projekto poros (tiekėjai, kodai, kontaktai, kortelė),
    sumos (su valiuta arba lygios projekto sumai) - procentais nuo PV, 9 skaitmenų kodai; pakaitai - sąsajos kalba. */
 function diSlepk(tekstas, c) {
-  return GP_UZKODAVIMAS.slepk(tekstas, { poros: c.poros, sumos: c.sumos, pv: c.pv, kalba: LANG === 'en' ? 'en' : 'lt' });
+  // imones, asmenys (D5, 2026-10-27): ir kitos įmonės su teisine forma, asmenys po etikečių („atstovas“, „Kontaktinis asmuo:“)
+  return GP_UZKODAVIMAS.slepk(tekstas, { poros: c.poros, sumos: c.sumos, pv: c.pv, kalba: LANG === 'en' ? 'en' : 'lt', imones: true, asmenys: true });
 }
 
 function generatePrompt(template) {
@@ -3666,8 +3990,9 @@ function generatePrompt(template) {
   const p = s.project;
   const c = diKontekstas(), pv = c.pv, sl = t => diSlepk(t, c), kodas = id => c.kodai[id] || L('Tiekėjas ?', 'Supplier ?');
   const suma = v => diPV(v, pv);   // tik kai pv > 0
-  const ranking = strategy.supplierRanking().filter(r => r.total > 0).sort((a, b) => a.total - b.total);
-  const arr = ranking.map(r => r.total);
+  // pilni pasiūlymai - pagal kainą, nepilni - apačioje su žyma; statistika - iš pilnų (K2)
+  const ranking = strategy.rikiuotas();
+  const arr = ranking.filter(r => r.pilnas).map(r => r.total);
   const minT = stats.min(arr), avgT = stats.mean(arr), cv = stats.cv(arr);
   const extra = sl($('#aiExtra') ? $('#aiExtra').value : '');
   const supId = $('#aiSupplier') ? $('#aiSupplier').value : '';
@@ -3676,21 +4001,26 @@ function generatePrompt(template) {
   const ikainiuSantrauka = diIkainiuSantrauka(c);
   if (LANG === 'en') return generatePromptEn(template, { s, p, c, pv, sl, kodas, suma, ranking, arr, minT, avgT, cv, extra, sup, metodas, ikainiuSantrauka });
 
-  const koduotas = pv > 0
+  // K6 (naujo darbuotojo patikra 2026-10-27; e-tar): derybų metu negalima atskleisti iš tiekėjo gautos informacijos be jo sutikimo
+  const neatskleisti = GP_TEISE.cit('derybos_neatskleisti', p.law === 'PSI' ? 'PI' : 'VPI');
+  const taisykle = `\n\n## DERYBŲ TAISYKLĖ
+- Kitų tiekėjų duomenys čia pateikti tik pasirengimui. Derybų metu tiekėjui negalima atskleisti jokios iš kitų tiekėjų gautos informacijos (jų kainų, sąlygų, palyginimo su jais ar jų pagrindu apskaičiuotų skaičių) be jų sutikimo (${neatskleisti}) - siūlydamas argumentus ar tekstą tiekėjui, jų nenaudok.
+- Teisės aktų straipsnių numerių iš atminties nenurodyk: jei remiesi norma, įvardyk ją žodžiais ir pažymėk, kad numerį reikia patikrinti teisės aktų registre.`;
+  const koduotas = (pv > 0
     ? `## DUOMENŲ UŽKODAVIMAS
-- Tiekėjai pažymėti kodais (Tiekėjas A, B, C...); jų pavadinimai, kontaktai ir asmenų duomenys neįtraukti.
+- Tiekėjai pažymėti kodais (Tiekėjas A, B, C...).
 - Sumos pateiktos procentais nuo planuojamos vertės (PV = 100 %); absoliučios sumos neįtrauktos.
 - Atsakyme vartok tuos pačius kodus, sumas nurodyk procentais nuo PV.`
     : `## DUOMENŲ UŽKODAVIMAS
-- Tiekėjai pažymėti kodais (Tiekėjas A, B, C...); jų pavadinimai, kontaktai ir asmenų duomenys neįtraukti.
+- Tiekėjai pažymėti kodais (Tiekėjas A, B, C...).
 - Sumos neįtrauktos, nes nenurodyta planuojama vertė (PV).
-- Atsakyme vartok tuos pačius kodus, konkrečių sumų nenurodyk.`;
+- Atsakyme vartok tuos pačius kodus, konkrečių sumų nenurodyk.`) + taisykle;
 
   const ctxBlock = `
 ## PIRKIMO KONTEKSTAS
 - Pavadinimas: ${sl(p.name) || '-'}
-- Perkančioji organizacija: ${p.contractingEntity}
-- Taikomas įstatymas: ${p.law === 'PSI' ? 'PĮ (Pirkimų sektorinis įstatymas, komunaliniai pirkimai)' : 'VPĮ (Viešųjų pirkimų įstatymas)'}
+- ${p.law === 'PSI' ? 'Perkantysis subjektas' : 'Perkančioji organizacija'}: ${p.contractingEntity}
+- Taikomas įstatymas: ${p.law === 'PSI' ? 'PĮ (Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymas)' : 'VPĮ (Viešųjų pirkimų įstatymas)'}${derybuDraudimasTekstas('lt') ? '\n- DĖMESIO: ' + derybuDraudimasTekstas('lt') + ' Derybų taktikos nesiūlyk.' : ''}
 - Procedūra: ${(metodas && metodas.label) || p.procedureType}
 - Vertinimo kriterijus: ${p.criteriaModel === 'meat' ? 'MEAT (kaina ' + p.priceWeight + '% / kokybė ' + p.qualityWeight + '%)' : 'Mažiausia kaina'}
 - Planuojama vertė (PV): ${pv > 0 ? '100 % (absoliuti suma neįtraukta; ' + (p.vatIncluded ? 'su PVM' : 'be PVM') + ')' : 'nenurodyta'}
@@ -3699,11 +4029,11 @@ function generatePrompt(template) {
 ${p.backgroundNotes ? '- Kontekstas: ' + sl(p.backgroundNotes) : ''}
 
 ## RINKOS ANALIZĖ (pirminiai pasiūlymai)
-- Gauta pasiūlymų: ${arr.length}
+- Gauta pasiūlymų: ${ranking.length}${ranking.length > arr.length ? ` (pilnų: ${arr.length}; statistika - iš pilnų)` : ''}
 ${pv > 0 && arr.length ? '- Mažiausias: ' + suma(minT) + '\n- Vidurkis: ' + suma(avgT) + '\n' : ''}- Variacijos koeficientas (CV): ${fmtNum(cv, 1)} %
 
-## TIEKĖJŲ RIKIAVIMAS (nuo mažiausios kainos)
-${ranking.map((r, i) => `${i + 1}. ${kodas(r.id)}${pv > 0 ? ': ' + suma(r.total) : ''}`).join('\n') || '-'}
+## TIEKĖJŲ RIKIAVIMAS (pilni pasiūlymai nuo mažiausios kainos; nepilni - nepalyginami)
+${ranking.map((r, i) => `${r.pilnas ? (i + 1) + '.' : '-'} ${kodas(r.id)}${pv > 0 ? ': ' + suma(r.total) : ''}${r.pilnas ? '' : ' (nepilnas: trūksta ' + r.truksta + ' poz. - suma tik įkainotų)'}${r.rizikingi ? ' (rizikingai žemų įkainių: ' + r.rizikingi + ')' : ''}`).join('\n') || '-'}
 
 ${koduotas}
   `.trim();
@@ -3733,7 +4063,7 @@ ${diIkainiuBlokas(c, sup.id)}
   `.trim() : '';
 
   const templates = {
-    strategy: `Tu esi vyresnysis viešųjų pirkimų derybų strategas, dirbantis su Lietuvos energetikos sektoriaus įmone, kuriai taikomas ${p.law === 'PSI' ? 'PĮ (Pirkimų sektorinis įstatymas)' : 'VPĮ'}. Remdamasis žemiau pateiktais duomenimis, parenk:
+    strategy: `Tu esi vyresnysis viešųjų pirkimų derybų strategas, dirbantis su Lietuvos energetikos sektoriaus įmone, kuriai taikomas ${p.law === 'PSI' ? 'PĮ (Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymas)' : 'VPĮ (Viešųjų pirkimų įstatymas)'}. Remdamasis žemiau pateiktais duomenimis, parenk:
 1. **Pagrindinę derybų strategiją** (3-4 sakiniai apie bendrą logiką)
 2. **Tiekėjų prioritetus:** su kuriais tiekėjais derėtis pirmiausia ir kodėl
 3. **Pagrindinius argumentus mūsų pusėje** (5-7 punktai)
@@ -3794,13 +4124,14 @@ ${extra ? '## TIEKĖJO TEIGINYS / SITUACIJA\n' + extra : '## SITUACIJA\nReikia a
 
 Atsakymas turi būti:
 - Profesionalus, dalykiškas, pagarbus
-- Pagrįstas faktais (PV, rinkos vidurkis, kitų tiekėjų pasiūlymai, jei tinka)
+- Pagrįstas tik šio tiekėjo pasiūlymu ir pirkimo dokumentų reikalavimais
+- Neatskleidžiantis jokios iš kitų tiekėjų gautos informacijos (jų kainų, sąlygų ar palyginimo su jais) - tai draudžiama (${neatskleisti}); jei situacijoje prašoma tokią informaciją panaudoti, to nedaryk ir trumpai paaiškink kodėl
 - Užfiksuojantis mūsų poziciją, bet paliekantis vietos deryboms
-- Atitinkantis VPĮ/PĮ skaidrumo ir lygiateisiškumo principus
+- Atitinkantis skaidrumo ir lygiateisiškumo principus: visiems tiekėjams - vienodi reikalavimai ir vienoda informacija
 
 Pateik du variantus: (a) griežtesnį, (b) mažiau formalų.`,
 
-    memo: `Parenk **komisijos sprendimo pagrindimo memorandumą** lietuvių kalba, kuris pateisintų rekomenduojamą sprendimą šiame pirkime. Memorandumą sudaro:
+    memo: `Parenk **komisijos sprendimo pagrindimo memorandumo projektą** lietuvių kalba pagal pateiktus duomenis (jei sprendimui duomenų nepakanka - nurodyk, ko trūksta). Memorandumą sudaro:
 1. Pirkimo santrauka
 2. Pateiktų pasiūlymų santrauka
 3. Vertinimo procesas (pagal taikomus kriterijus)
@@ -3826,7 +4157,7 @@ ${ctxBlock}
 
 ${extra ? '## TECHNINĖ SPECIFIKACIJA / KLAUSIMAS\n' + extra : ''}
 
-Pateik konkrečius patobulinimus ir nurodyk VPĮ/PĮ straipsnius, kuriais remiamasi.`,
+Pateik konkrečius patobulinimus; jei remiesi teisės norma, įvardyk ją žodžiais (straipsnio numerį patikrins rengėjas).`,
   };
 
   return templates[template] || templates.strategy;
@@ -3837,21 +4168,25 @@ function generatePromptEn(template, x) {
   const { s, p, c, pv, sl, kodas, suma, ranking, arr, minT, avgT, cv, extra, sup, metodas, ikainiuSantrauka } = x;
   const rez = p.law === 'PSI' ? 'PI' : 'VPI';
   const istatymas = p.law === 'PSI' ? 'PĮ (Law on Procurement by Contracting Entities in the Water, Energy, Transport or Postal Services Sectors; utilities procurement)' : 'VPĮ (Law on Public Procurement)';
-  const koduotas = pv > 0
+  const neatskleisti = GP_TEISE.cit('derybos_neatskleisti', rez, 'en');
+  const taisykle = `\n\n## NEGOTIATION RULE
+- The other suppliers’ data are given here for preparation only. During the negotiation, no information received from other suppliers (their prices, terms, a comparison with them or figures calculated from them) may be disclosed to a supplier without their consent (${neatskleisti}) - do not use it in arguments or text for a supplier.
+- Do not cite article numbers of legal acts from memory: if you rely on a rule, describe it in words and note that the number must be checked in the register of legal acts.`;
+  const koduotas = (pv > 0
     ? `## DATA ENCODING
-- Suppliers are identified by codes (Supplier A, B, C...); their names, contacts and personal data are not included.
+- Suppliers are identified by codes (Supplier A, B, C...).
 - Amounts are given as a percentage of the planned value (PV = 100 %); absolute amounts are not included.
 - Use the same codes in your answer and state amounts as a percentage of PV.`
     : `## DATA ENCODING
-- Suppliers are identified by codes (Supplier A, B, C...); their names, contacts and personal data are not included.
+- Suppliers are identified by codes (Supplier A, B, C...).
 - Amounts are not included because the planned value (PV) is not specified.
-- Use the same codes in your answer and do not state specific amounts.`;
+- Use the same codes in your answer and do not state specific amounts.`) + taisykle;
 
   const ctxBlock = `
 ## PROCUREMENT CONTEXT
 - Title: ${sl(p.name) || '-'}
-- Contracting entity: ${p.contractingEntity}
-- Applicable law: ${istatymas}
+- ${p.law === 'PSI' ? 'Contracting entity' : 'Contracting authority'}: ${p.contractingEntity}
+- Applicable law: ${istatymas}${derybuDraudimasTekstas('en') ? '\n- NOTE: ' + derybuDraudimasTekstas('en') + ' Do not suggest negotiation tactics.' : ''}
 - Procedure: ${(metodas && (GP_METHODS.label(metodas.id, { kalba: 'en' }) || metodas.label)) || p.procedureType}
 - Award criterion: ${p.criteriaModel === 'meat' ? 'MEAT (price ' + p.priceWeight + '% / quality ' + p.qualityWeight + '%)' : 'Lowest price'}
 - Planned value (PV): ${pv > 0 ? '100 % (absolute amount not included; ' + (p.vatIncluded ? 'incl. VAT' : 'excl. VAT') + ')' : 'not specified'}
@@ -3860,11 +4195,11 @@ function generatePromptEn(template, x) {
 ${p.backgroundNotes ? '- Background: ' + sl(p.backgroundNotes) : ''}
 
 ## MARKET ANALYSIS (initial offers)
-- Offers received: ${arr.length}
+- Offers received: ${ranking.length}${ranking.length > arr.length ? ` (complete: ${arr.length}; statistics from the complete ones)` : ''}
 ${pv > 0 && arr.length ? '- Lowest: ' + suma(minT) + '\n- Average: ' + suma(avgT) + '\n' : ''}- Coefficient of variation (CV): ${fmtNum(cv, 1)} %
 
-## SUPPLIER RANKING (lowest price first)
-${ranking.map((r, i) => `${i + 1}. ${kodas(r.id)}${pv > 0 ? ': ' + suma(r.total) : ''}`).join('\n') || '-'}
+## SUPPLIER RANKING (complete offers, lowest price first; incomplete ones are not comparable)
+${ranking.map((r, i) => `${r.pilnas ? (i + 1) + '.' : '-'} ${kodas(r.id)}${pv > 0 ? ': ' + suma(r.total) : ''}${r.pilnas ? '' : ' (incomplete: ' + r.truksta + ' items missing - total of the priced items only)'}${r.rizikingi ? ' (suspiciously low unit prices: ' + r.rizikingi + ')' : ''}`).join('\n') || '-'}
 
 ${koduotas}
   `.trim();
@@ -3956,13 +4291,14 @@ ${extra ? '## SUPPLIER’S STATEMENT / SITUATION\n' + extra : '## SITUATION\nA g
 
 The reply must be:
 - Professional, factual and respectful
-- Based on facts (PV, market average, other suppliers’ offers where appropriate)
+- Based only on this supplier’s offer and the requirements of the procurement documents
+- Not disclosing any information received from other suppliers (their prices, terms or a comparison with them) - this is prohibited (${neatskleisti}); if the situation asks you to use such information, do not do it and briefly explain why
 - Firm on our position while leaving room for negotiation
-- Consistent with the VPĮ/PĮ principles of transparency and equal treatment
+- Consistent with the principles of transparency and equal treatment: the same requirements and the same information for all suppliers
 
 Give two versions: (a) firmer, (b) less formal.`,
 
-    memo: `Prepare a **memorandum justifying the evaluation commission’s decision** in English, supporting the recommended decision in this procurement. The memorandum consists of:
+    memo: `Prepare a **draft memorandum justifying the evaluation commission’s decision** in English, based on the data provided (if the data are not sufficient for a decision, state what is missing). The memorandum consists of:
 1. Procurement summary
 2. Summary of the offers received
 3. Evaluation process (according to the applicable criteria)
@@ -3988,7 +4324,7 @@ ${ctxBlock}
 
 ${extra ? '## TECHNICAL SPECIFICATION / QUESTION\n' + extra : ''}
 
-Give concrete improvements and state the VPĮ/PĮ articles relied on.`,
+Give concrete improvements; if you rely on a legal rule, describe it in words (the author will check the article number).`,
   };
 
   return templates[template] || templates.strategy;
@@ -4002,17 +4338,17 @@ function diIkainiuBlokas(c, supId) {
   const R = analitika.tiekejui(s, supId);
   if (!R || !R.santrauka.ikainota) return '';
   const pv = c.pv, sl = t => diSlepk(t, c), proc = v => diSk(v / pv * 100) + ' % PV';
-  const eil = l => kab(sl(l.pos.name)) + ' ' + fmtPct(l.nuoMed) + L(' nuo medianos', ' vs median') + (l.nuoMin > 0 ? ', ' + fmtPct(l.nuoMin) + L(' nuo mažiausio', ' vs lowest') : '') + (pv > 0 && l.svertas ? L(', svertas ', ', leverage ') + proc(l.svertas) : '');
+  const eil = l => kab(sl(l.pos.name)) + ' ' + fmtPct(l.nuoMed) + L(' nuo medianos', ' vs median') + (l.nuoMinP > 0 ? ', ' + fmtPct(l.nuoMinP) + (l.pos.minZemas ? L(' nuo mažiausio ne rizikingai žemo', ' vs lowest not suspiciously low') : L(' nuo mažiausio', ' vs lowest')) : '') + (pv > 0 && l.svertas ? L(', svertas ', ', leverage ') + proc(l.svertas) : '');
   if (LANG === 'en') return `## UNIT PRICE ANALYSIS (line level; deviations as a percentage of the median of the offers received${pv > 0 ? ', leverage as a percentage of PV' : ''})
 - Items: ${R.santrauka.viso}; priced by the supplier: ${R.santrauka.ikainota}; missing: ${R.truksta.length}
-- Negotiation leverage (if every line matched the lowest unit price): ${fmtPct(-R.santrauka.svertasPct)} of the supplier’s total${pv > 0 ? ' (' + proc(R.santrauka.svertas) + ')' : ''}
+- Negotiation leverage (if every line matched the lowest unit price that is not suspiciously low): ${fmtPct(-R.santrauka.svertasPct)} of the supplier’s total${pv > 0 ? ' (' + proc(R.santrauka.svertas) + ')' : ''}
 - Push on: ${R.akcentuoti.map(eil).join('; ') || '-'}
 - Ask to justify (suspiciously low): ${R.pagristi.map(l => kab(sl(l.pos.name)) + ' ' + fmtPct(l.nuoMed) + ' vs median').join('; ') || '-'}
 - Do not push (the supplier is the cheapest): ${R.nespausti.map(l => kab(sl(l.pos.name))).join(', ') || '-'}
 - Missing: ${R.truksta.map(l => kab(sl(l.pos.name))).join(', ') || '-'}`;
   return `## ĮKAINIŲ ANALIZĖ (eilučių lygis; nuokrypiai procentais nuo gautų pasiūlymų medianos${pv > 0 ? ', svertas - procentais nuo PV' : ''})
 - Pozicijų: ${R.santrauka.viso}; tiekėjas įkainojo: ${R.santrauka.ikainota}; trūksta: ${R.truksta.length}
-- Derybų svertas (jei kiekviena eilutė sutaptų su mažiausiu įkainiu): ${fmtPct(-R.santrauka.svertasPct)} nuo tiekėjo sumos${pv > 0 ? ' (' + proc(R.santrauka.svertas) + ')' : ''}
+- Derybų svertas (jei kiekviena eilutė sutaptų su mažiausiu ne rizikingai žemu įkainiu): ${fmtPct(-R.santrauka.svertasPct)} nuo tiekėjo sumos${pv > 0 ? ' (' + proc(R.santrauka.svertas) + ')' : ''}
 - Akcentuoti: ${R.akcentuoti.map(eil).join('; ') || '-'}
 - Prašyti pagrįsti (rizikingai žemi): ${R.pagristi.map(l => '„' + sl(l.pos.name) + '“ ' + fmtPct(l.nuoMed) + ' nuo medianos').join('; ') || '-'}
 - Nespausti (tiekėjas pigiausias): ${R.nespausti.map(l => '„' + sl(l.pos.name) + '“').join(', ') || '-'}
@@ -4056,7 +4392,7 @@ function addSupplierModal(editId = null) {
       <div class="grid grid--2">
         <div class="field"><label class="field__label">${L('Pavadinimas *', 'Name *')}</label><input class="input" id="supName" value="${escapeHtml(sup?.name || '')}"></div>
         <div class="field"><label class="field__label">${L('Įmonės kodas', 'Company code')}</label><input class="input" id="supCode" value="${escapeHtml(sup?.code || '')}"></div>
-        <div class="field"><label class="field__label">${L('Šalis', 'Country')}</label><input class="input" id="supCountry" value="${escapeHtml(sup?.country || L('Lietuva', 'Lithuania'))}"></div>
+        <div class="field"><label class="field__label">${L('Šalis', 'Country')}</label><input class="input" id="supCountry" value="${escapeHtml(sup?.country || '')}" placeholder="${L('pvz. Lietuva', 'e.g. Lithuania')}"></div>
         <div class="field"><label class="field__label">${L('Kontaktas (asmuo / el. paštas)', 'Contact (person / email)')}</label><input class="input" id="supContact" value="${escapeHtml(sup?.contact || '')}"></div>
         <div class="field"><label class="field__label">${L('Rizikos lygis', 'Risk level')}</label>
           <select class="select" id="supRisk">
@@ -4077,7 +4413,7 @@ function addSupplierModal(editId = null) {
         <input type="file" id="supFiles" multiple accept=".xlsx,.xls,.csv,.pdf,.docx,.odt" style="display:none" aria-hidden="true" tabindex="-1">
         <div id="supFilesList" class="field__hint" aria-live="polite"></div>
         <div class="grid grid--2 mt-1">
-          <div class="field"><label class="field__label" for="supFixed">${L('Arba bendra kaina be PVM, kai pozicijų nėra', 'Or a total price excl. VAT, when there are no items')}</label><input class="input" type="number" step="0.01" id="supFixed" value="${editId && APP.state.fixedOffers[editId] && APP.state.fixedOffers[editId].totalPrice ? APP.state.fixedOffers[editId].totalPrice : ''}"></div>
+          <div class="field"><label class="field__label" for="supFixed">${L('Arba bendra kaina be PVM, kai pozicijų nėra', 'Or a total price excl. VAT, when there are no items')}</label><input class="input" type="text" inputmode="decimal" data-skaicius id="supFixed" value="${editId && APP.state.fixedOffers[editId] && APP.state.fixedOffers[editId].totalPrice ? laukoSkaicius(APP.state.fixedOffers[editId].totalPrice) : ''}"></div>
         </div>
       </div>
     `,
@@ -4108,7 +4444,7 @@ function addSupplierModal(editId = null) {
     let id = editId;
     if (editId) Object.assign(sup, data);
     else { id = uid(); APP.state.suppliers.push(Object.assign({ id }, data)); }
-    const fixed = GP_MONEY.parseSkaicius($('#supFixed').value);
+    const fixed = skaiciusIsLauko($('#supFixed'));   // pinigai - kaip kituose laukuose (K3)
     if (fixed != null && fixed > 0) { if (!APP.state.fixedOffers[id]) APP.state.fixedOffers[id] = {}; APP.state.fixedOffers[id].totalPrice = fixed; }
     else if (editId && APP.state.fixedOffers[id] && !$('#supFixed').value.trim()) delete APP.state.fixedOffers[id].totalPrice;
     const failai = modaloFailai.slice();
@@ -4143,9 +4479,10 @@ function addSamplePositions() {
     { name: 'Atsarginės dalys', unit: 'kompl.', quantity: 1, plannedUnitPrice: 45000 },
     { name: 'Mokymai', unit: 'sesija', quantity: 2, plannedUnitPrice: 3500 },
   ];
-  samples.forEach(s => APP.state.positions.push(Object.assign({ id: uid(), weight: 1 }, s)));
-  storage.save(); render.positionsTable();
-  toast(L('Pridėtos 5 pavyzdinės pozicijos', '5 sample items added'), 'success');
+  // demonstracinės (V6, 2026-10-27): pažymėtos, į planuojamą vertę neįskaičiuojamos; pakeitus - tampa žmogaus pozicija
+  samples.forEach(s => APP.state.positions.push(Object.assign({ id: uid(), weight: 1, demo: true }, s)));
+  storage.save(); render.all();
+  toast(L('Pridėtos 5 pavyzdinės pozicijos (demonstracinės) - pakeiskite jas savo pirkimo pozicijomis arba ištrinkite.', '5 sample items added (demonstration) - replace them with your procurement items or delete them.'), 'info');
 }
 
 /* Lapų ir stulpelių pavadinimai - su lietuviškomis raidėmis (iki 2026-09-28 dalis buvo be jų: „Tiekejai“, „Pradzia“), EN režimu - angliški.
@@ -4155,8 +4492,19 @@ function exportXlsx() {
   const s = APP.state;
   const wb = XLSX.utils.book_new();
 
-  const projData = [[L('Laukas', 'Field'), L('Reikšmė', 'Value')]];
-  Object.entries(s.project).forEach(([k, v]) => projData.push([k, v]));
+  // laukų pavadinimai ir reikšmės žmogui (V13, 2026-10-27: iki tol vidiniai raktai - „law | PSI“, „procedureType | derybos_skelb“)
+  const pr = s.project, metodas = window.GP_METHODS ? GP_METHODS.fromLegacy('pp-negotiation', pr.procedureType) : null;
+  const vietinis = t => { const d = t ? new Date(t) : null; return d && !isNaN(d) ? GP_WORKDAYS.fmtDate(d) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : ''; };
+  const projData = [[L('Laukas', 'Field'), L('Reikšmė', 'Value')],
+    [L('Pirkimo pavadinimas', 'Procurement title'), pr.name], [L('Pirkimo vykdytojas', 'Contracting authority or entity'), pr.contractingEntity],
+    [L('Taikomas įstatymas', 'Applicable law'), pr.law === 'PSI' ? 'PĮ' : 'VPĮ'],
+    [L('Procedūros tipas', 'Procedure type'), metodas ? (LANG === 'en' && GP_METHODS.label(metodas.id, { kalba: 'en' })) || metodas.label : pr.procedureType],
+    [L('Planuojama vertė (PV)', 'Planned value (PV)'), pr.plannedValue || null], [L('Valiuta', 'Currency'), pr.currency],
+    [L('PV su PVM', 'PV incl. VAT'), pr.vatIncluded ? L('Taip', 'Yes') : L('Ne', 'No')],
+    [L('Vertinimo kriterijus', 'Award criterion'), pr.criteriaModel === 'meat' ? L('MEAT (kaina ir kokybė)', 'MEAT (price and quality)') : L('Mažiausia kaina', 'Lowest price')],
+    [L('Kainos svoris (%)', 'Price weight (%)'), pr.priceWeight], [L('Kokybės svoris (%)', 'Quality weight (%)'), pr.qualityWeight],
+    [L('Sutarties trukmė (mėn.)', 'Contract duration (months)'), pr.contractTermMonths], [L('Tikslas', 'Objective'), pr.objective],
+    [L('Kontekstas', 'Background'), pr.backgroundNotes], [L('Sukurta', 'Created'), vietinis(pr.createdAt)], [L('Atnaujinta', 'Updated'), vietinis(pr.updatedAt)]];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(projData), L('Pirkimas', 'Procurement'));
 
   const supHead = [L('Pavadinimas', 'Name'), L('Kodas', 'Code'), L('Šalis', 'Country'), L('Kontaktas', 'Contact'), L('Rizika', 'Risk'), L('Pastabos', 'Notes'), L('Bendra kaina', 'Total price')];
@@ -4188,15 +4536,16 @@ function exportXlsx() {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(md), L('Įkainių matrica', 'Unit price matrix'));
     const rd2 = [[L('Tiekėjas', 'Supplier'), L('Grupė', 'Group'), L('Pozicija', 'Item'), L('Įkainis', 'Unit price'), L('Nuo medianos (%)', 'Vs median (%)'), L('Nuo mažiausio (%)', 'Vs lowest (%)'), L('Derybų svertas', 'Negotiation leverage'), L('Rekomendacija', 'Recommendation')]];
+    // svertas, kai mažiausias įkainis 0 ar rizikingai žemas, - nuo mažiausio patikimo (K4); procentų be pagrindo nerodoma (V13)
     s.suppliers.forEach(x => { const R = analitika.tiekejui(s, x.id); if (!R || !R.santrauka.ikainota) return;
       [[L('Akcentuoti', 'Push on'), R.akcentuoti], [L('Prašyti pagrįsti', 'Ask to justify'), R.pagristi], [L('Nespausti', 'Do not push'), R.nespausti], [L('Trūksta', 'Missing'), R.truksta], [L('Vienintelis', 'Single offer'), R.vieninteliai]].forEach(([g, items]) =>
-        items.forEach(l => rd2.push([x.name, g, l.pos.name, l.kaina, l.kaina != null ? Math.round(l.nuoMed * 10) / 10 : null, l.kaina != null ? Math.round(l.nuoMin * 10) / 10 : null, l.svertas || null, l.tekstas]))); });
+        items.forEach(l => rd2.push([x.name, g, l.pos.name, l.kaina, l.kaina != null && l.pos.med ? Math.round(l.nuoMed * 10) / 10 : null, l.kaina != null && l.nuoMinP != null && isFinite(l.nuoMinP) ? Math.round(l.nuoMinP * 10) / 10 : null, l.svertas || null, l.tekstas]))); });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rd2), L('Rekomendacijos', 'Recommendations'));
   }
 
-  const ranking = strategy.supplierRanking().filter(r => r.total > 0).sort((a, b) => a.total - b.total);
-  const rd = [[L('Vieta', 'Rank'), L('Tiekėjas', 'Supplier'), L('Bendra kaina', 'Total price'), L('Nuokrypis nuo PV (%)', 'Deviation from PV (%)'), L('MEAT balas', 'MEAT score')]];
-  ranking.forEach((r, i) => rd.push([i + 1, r.name, r.total, r.deviation, strategy.meatScore(r.id)]));
+  const rd = [[L('Vieta', 'Rank'), L('Tiekėjas', 'Supplier'), L('Bendra kaina', 'Total price'), L('Nuokrypis nuo PV (%)', 'Deviation from PV (%)'), L('MEAT balas', 'MEAT score'), L('Pasiūlymas', 'Offer')]];
+  // pilni - pagal kainą, nepilni - apačioje be vietos (K2)
+  strategy.rikiuotas().forEach((r, i) => rd.push([r.pilnas ? i + 1 : null, r.name, r.total, r.deviation, r.pilnas ? strategy.meatScore(r.id) : null, r.pilnas ? L('pilnas', 'complete') : L(`nepilnas: trūksta ${r.truksta} poz.`, `incomplete: ${r.truksta} items missing`)]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rd), L('Reitingas', 'Ranking'));
 
   if (s.suppliers.length) {
@@ -4214,7 +4563,7 @@ function exportXlsx() {
     const rData = [rHead];
     s.session.rounds.forEach((r, i) => {
       const sup = s.suppliers.find(x => x.id === r.supplierId);
-      rData.push([i + 1, sup ? sup.name : '', r.startedAt, r.endedAt || L('Aktyvus', 'Active'), r.offer, r.notes]);
+      rData.push([i + 1, sup ? sup.name : '', vietinis(r.startedAt), r.endedAt ? vietinis(r.endedAt) : L('Aktyvus', 'Active'), r.offer, r.notes]);
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rData), L('Sesijos protokolas', 'Session log'));
   }
@@ -4241,7 +4590,7 @@ function go(view) {
 
 function buildViews() {
   const slots = ['project', 'suppliers', 'analysis', 'meat', 'strategy', 'session', 'ai', 'export', 'help'];
-  $('#otherViews').innerHTML = slots.map(v => `<section class="view" data-view="${v}">${views[v]()}</section>`).join('');
+  $('#otherViews').innerHTML = slots.map(v => `<section class="view" data-view="${v}">${['project', 'strategy', 'session', 'ai'].includes(v) ? '<div data-derybu-draudimas></div>' : ''}${views[v]()}</section>`).join('');
 }
 
 /* Statinis puslapio tekstas (antraštė, navigacija, apžvalga, langas): data-en - angliškas tekstas, lietuviškas įsimenamas
@@ -4288,20 +4637,15 @@ async function importuokIrPranesk(files, supId) {
   let kiek = 0;
   const perziurai = [];
   for (const file of Array.from(files || [])) {
-    // PDF, kurio įrankis neperskaitė arba kuriame rado tik bendrą sumą, - į peržiūrą (ten galima „Skaityti su DI“), ne iškart į projektą
-    if (window.GP_NEG_DI && GP_NEG_DI.arPdf(file)) {
-      const r0 = await parseFile(file, null);
-      const it = { file, vardas: file.name, rez: r0, fiksuotas: supId, pasirinktas: !!(r0 && r0.ok),
-        tiekejas: { pavadinimas: sup.name, kodas: sup.code || '', citata: '', saltinis: 'pasirinktas', esamasId: supId, pasitikejimas: 'tikslus', kandidatai: [] } };
-      if (diSkaitymasGalimas(it)) { impSutapdink(it); perziurai.push(it); continue; }
-      if (!r0 || !r0.ok) { toast(sup.name + ', ' + file.name + ': ' + ((r0 && r0.error) || L('failo perskaityti nepavyko', 'the file could not be read')), 'error'); continue; }
-      const res = pritaikykImporta(Object.assign({}, r0), supId);
-      kiek++; toast(sup.name + ': ' + (res.message || (L('rasta ' + res.rowsFound + ' pozicijų', res.rowsFound + ' items found'))), 'success');
-      continue;
-    }
-    const res = await parseFile(file, supId);
-    if (!res.ok) toast(sup.name + ', ' + file.name + ': ' + res.error, 'error');
-    else { kiek++; toast(sup.name + ': ' + (res.message || (L('rasta ' + res.rowsFound + ' pozicijų', res.rowsFound + ' items found'))), 'success'); }
+    // Į peržiūrą, ne iškart į projektą: PDF, kurio įrankis neperskaitė (ten galima „Skaityti su DI“), ir bet kuris failas, kuriame rasta
+    // tik bendra suma (K1, 2026-10-27: iki tol DOCX ar Excel „bendra suma“ įrašoma be peržiūros - ir įmonės kodas 305 999 000 €)
+    const r0 = await parseFile(file, null);
+    const it = { file, vardas: file.name, rez: r0, fiksuotas: supId, pasirinktas: !!(r0 && r0.ok),
+      tiekejas: { pavadinimas: sup.name, kodas: sup.code || '', citata: '', saltinis: 'pasirinktas', esamasId: supId, pasitikejimas: 'tikslus', kandidatai: [] } };
+    if (diSkaitymasGalimas(it) || (r0 && r0.ok && r0.fixed)) { impSutapdink(it); perziurai.push(it); continue; }
+    if (!r0 || !r0.ok) { toast(sup.name + ', ' + file.name + ': ' + ((r0 && r0.error) || L('failo perskaityti nepavyko', 'the file could not be read')), 'error'); continue; }
+    const res = pritaikykImporta(Object.assign({}, r0), supId);
+    kiek++; toast(sup.name + ': ' + (res.message || (L('rasta ' + res.rowsFound + ' pozicijų', res.rowsFound + ' items found'))), res.ispejimas ? 'warn' : 'success');
   }
   if (kiek) window.GP_ANALITIKA && GP_ANALITIKA.ivykis('modulio_veiksmas', { veiksmas: 'pasiulymai_ikelti', failai: Math.min(99, kiek) });   // statistika (tik su sutikimu)
   render.all();
@@ -4330,7 +4674,7 @@ function bindGlobalEvents() {
   $('#btnLoad').onclick = () => {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = '.json';
-    input.onchange = () => { if (input.files[0]) storage.importJSON(input.files[0], ok => { if (ok) { render.all(); toast(L('Projektas atidarytas', 'Project opened'), 'success'); }}); };
+    input.onchange = () => { if (input.files[0]) atidarykProjekta(input.files[0]); };
     input.click();
   };
   $('#btnNew').onclick = () => {
@@ -4343,18 +4687,39 @@ function bindGlobalEvents() {
   document.addEventListener('input', (e) => {
     const f = e.target.dataset && e.target.dataset.pf;
     if (!f) return;
-    const v = e.target.type === 'number' ? Number(e.target.value)
+    const sk = e.target.hasAttribute('data-skaicius');
+    const v = sk ? skaiciusIsLauko(e.target, { max: e.target.dataset.max ? Number(e.target.dataset.max) : null })
             : e.target.value === 'true' ? true
             : e.target.value === 'false' ? false
             : e.target.value;
-    APP.state.project[f] = v;
+    // neperskaitytas skaičius neįrašomas (laukas pažymėtas aria-invalid); tuščias PV - 0 (nenurodyta)
+    if (sk && v == null && String(e.target.value || '').trim()) return;
+    APP.state.project[f] = sk && v == null ? (f === 'plannedValue' ? 0 : null) : v;
+    // pirkimo vykdytojas - ir įstatymas pagal organizacijų registrą (D4; žmogus gali pakeisti - pasakoma, jei nesutampa)
+    if (f === 'contractingEntity') { const L0 = istatymasPagalVykdytoja(v); if (L0) { APP.state.project.law = L0; const sel = $('[data-pf="law"]'); if (sel) sel.value = L0; } }
     storage.save();
     render.topbar();
+    if (f === 'procedureType' || f === 'law' || f === 'contractingEntity') { renderDerybuDraudimas(); renderIstatymoPastaba(); }
     if (f === 'criteriaModel') render.project();
   });
 }
 
+/* Projekto atidarymas iš failo (V11, 2026-10-27): kai dabartiniame projekte yra duomenų - klausiama (iki tol perrašydavo be klausimo) */
+function projektasTuscias() { const s = APP.state; return !s.project.name && !s.suppliers.length && !s.positions.length && !Object.keys(s.fixedOffers || {}).length; }
+function atidarykProjekta(file) {
+  const vykdyk = () => storage.importJSON(file, ok => { if (ok) { render.all(); toast(L('Projektas atidarytas', 'Project opened'), 'success'); } });
+  if (projektasTuscias()) { vykdyk(); return; }
+  confirmModal(L('Atidaryti projektą', 'Open project'), L(`Atidaryti ${kab(file.name)}? Dabartinis projektas ${kab(APP.state.project.name || '(be pavadinimo)')} bus pakeistas - jei jo reikia, pirma išsaugokite kopiją („Eksportas“).`, `Open ${kab(file.name)}? The current project ${kab(APP.state.project.name || '(untitled)')} will be replaced - if you need it, save a copy first (“Export”).`), vykdyk);
+}
+
 function bindViewEvents() {
+  document.addEventListener('change', (e) => {
+    const el = e.target;
+    if (!el || !el.hasAttribute || !el.hasAttribute('data-skaicius')) return;
+    const v = skaiciusIsLauko(el, { max: el.dataset.max ? Number(el.dataset.max) : null });
+    if (v != null) el.value = laukoSkaicius(v);
+    else if (String(el.value || '').trim()) toast(L(`Reikšmės „${el.value}“ perskaityti nepavyko (skaičius ne mažesnis už 0${el.dataset.max ? ' ir ne didesnis už ' + el.dataset.max : ''}) - ji neįrašyta.`, `The value “${el.value}” could not be read (a number not below 0${el.dataset.max ? ' and not above ' + el.dataset.max : ''}) - it was not saved.`), 'warn');
+  });
   document.addEventListener('click', (e) => {
     if (e.target.id === 'btnAddSupplier') addSupplierModal();
     if (e.target.id === 'btnAddPosition') addPosition();
@@ -4386,6 +4751,8 @@ function bindViewEvents() {
     if (e.target.id === 'btnStartRound') {
       const supId = $('#sessionSupplier').value;
       if (!supId) { toast(L('Pasirinkite tiekėją', 'Select a supplier'), 'error'); return; }
+      // ankstesnis nebaigtas raundas užbaigiamas (V8: iki tol protokole likdavo keli „Aktyvus“)
+      APP.state.session.rounds.forEach(r => { if (!r.endedAt) r.endedAt = new Date().toISOString(); });
       APP.state.session.rounds.push({ id: uid(), supplierId: supId, startedAt: new Date().toISOString(), offer: null, notes: '' });
       APP.state.session.status = 'active';
       storage.save();
@@ -4410,7 +4777,7 @@ function bindViewEvents() {
       const blob = new Blob([$('#aiPromptOutput').value], { type: 'text/plain' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'prompt_' + todayISO() + '.txt';
+      a.download = GP_EKSPORTAS.failoVardas({ dokumentas: L('DI-uzklausa', 'AI-prompt'), pavadinimas: APP.state.project.name || '', pletinys: 'txt' });
       a.click();
     }
     if (e.target.id === 'btnExportProject') storage.exportJSON();
@@ -4435,9 +4802,7 @@ function bindViewEvents() {
     if (e.target.id === 'matricaRodymas') { APP.matrica.rodymas = e.target.value; renderMatrica(); }
     if (e.target.id === 'matricaRikiuoti') { APP.matrica.rikiuoti = e.target.value; renderMatrica(); }
     if (e.target.id === 'matricaTikAnomalijos') { APP.matrica.tikAnomalijos = e.target.checked; renderMatrica(); }
-    if (e.target.id === 'importProjectInput' && e.target.files[0]) {
-      storage.importJSON(e.target.files[0], ok => { if (ok) { render.all(); toast(L('Projektas įkeltas', 'Project loaded'), 'success'); }});
-    }
+    if (e.target.id === 'importProjectInput' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; atidarykProjekta(f); }
     if (e.target.id === 'supFileInput' && e.target.files.length) { const id = e.target.dataset.sup; const f = Array.from(e.target.files); e.target.value = ''; importuokIrPranesk(f, id); }
     if (e.target.id === 'supFiles' && e.target.files.length) { modaloFailai = modaloFailai.concat(Array.from(e.target.files)); e.target.value = ''; modaloFailaiRodyk(); }
     if (e.target.id === 'bulkFileInput' && e.target.files.length) { const f = Array.from(e.target.files); e.target.value = ''; if (typeof masinisImportas === 'function') masinisImportas(f); }
