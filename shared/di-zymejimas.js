@@ -17,7 +17,8 @@
      GP_DI.customXml(savybes)                        -> docProps/custom.xml tekstas (moduliams, kurie Word failą kuria patys)
      GP_DI.wordHtml({ modulis, modelis })            -> <meta> ir <xml> požymiai Word HTML (.doc) failo <head>
      GP_DI.metaHtml({ modulis, modelis })            -> tik <meta> požymiai (.html failui - <xml> naršyklė rodytų kaip tekstą)
-     GP_DI.poraste(kalba)                            -> matomos poraštės sakinys
+     GP_DI.poraste(kalba, o)                         -> matomos poraštės sakinys; o.skelbiamas - be „Prieš skelbiant turi būti peržiūrėta“
+                                                        (tiekėjams skirtas dokumentas skelbiamas jau peržiūrėtas; naudotojo sprendimas 2026-10-27)
      GP_DI.zyme({ tekstas, kalba })                  -> HTML žyma (<span class="gp-di-zyme" data-di="sugeneruota">)
      GP_DI.pazymek(el, { modulis, modelis, zyme })   -> pažymi ekrano elementą (data-di, data-di-modelis), nebūtinai su žyma
      GP_DI.POZYMIS, GP_DI.ZYME, GP_DI.PORASTE        -> tekstai (LT / EN)
@@ -104,7 +105,8 @@
       '</o:CustomDocumentProperties></xml>';
   }
 
-  function poraste(k) { return PORASTE[kalba(k)]; }
+  var PORASTE_SKELBIAMAS = { lt: "Dalis teksto parengta naudojant DI (Claude).", en: "Part of the text was prepared using AI (Claude)." };
+  function poraste(k, o) { return (o && o.skelbiamas ? PORASTE_SKELBIAMAS : PORASTE)[kalba(k)]; }
 
   var STILIUS = ".gp-di-zyme{display:inline-flex;align-items:center;gap:4px;font:600 12px/1.4 var(--font-base,inherit);" +
     "color:var(--color-graphite,#2E3641);background:var(--color-graphite-5,#EFF1F1);border:1px solid var(--color-emerald,#00A072);" +

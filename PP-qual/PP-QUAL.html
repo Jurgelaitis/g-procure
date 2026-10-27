@@ -562,7 +562,7 @@ const CATS = {
   B:'Ekonominė ir finansinė padėtis',
   C:'Profesinė ir techninė kompetencija',
   D:'Kokybės ir aplinkos apsaugos vadybos standartai',
-  E:'Aplinkosauga ir socialinė atsakomybė'
+  E:'Aplinkos apsaugos vadybos priemonės'   // Metodikos 22 p. (naudotojo sprendimas 2026-10-27; iki tol pavadinime buvo ir socialiniai dalykai)
 };
 /* EN kategorijų pavadinimai (dvikalbiam eksportui) */
 const CATS_EN = {
@@ -570,7 +570,7 @@ const CATS_EN = {
   B:'Economic and financial standing',
   C:'Technical and professional capacity',
   D:'Quality and environmental management standards',
-  E:'Environmental and social responsibility'
+  E:'Environmental management measures'
 };
 
 /* ---------------- Utilities ---------------- */
@@ -2152,7 +2152,7 @@ function isAiReikalavimu(data, statusas, info, tuscioZinute){
 }
 
 async function parseRequirementsFromText(txt){
-  const prompt=`Iš pateikto teksto išskirk atskirus kvalifikacinius reikalavimus. Kiekvieną priskirk kategorijai A-E (A teisė verstis veikla, B finansai, C techninė/profesinė kompetencija, D kokybės standartai, E aplinkosauga/socialiniai).
+  const prompt=`Iš pateikto teksto išskirk atskirus kvalifikacinius reikalavimus. Kiekvieną priskirk kategorijai A-E (A teisė verstis veikla, B finansai, C techninė/profesinė kompetencija, D kokybės ir aplinkos apsaugos vadybos standartai, E aplinkos apsaugos vadybos priemonės).
 Reikalavimo ir įrodymų tekstą perrašyk PAŽODŽIUI iš pateikto teksto: nekeisk žodžių ir skaičių, nieko nepridėk ir nesujunk. Reikalavimų, kurių tekste nėra, nekurk.
 
 Grąžink TIK JSON masyvą:
@@ -2291,6 +2291,11 @@ function rulesEngine0(r){
         issues.push({sev:'med',rule:'R12',title:'Patirties laikotarpis trumpesnis nei Metodikoje',
           body:`Nustatyta ${laikM[1]} m., o ${M(c.laikotarpis.raktas)} - ${c.laikotarpis.metai} m. Trumpesnis laikotarpis mažina tiekėjų, galinčių įrodyti patirtį, skaičių; Metodika numato tik galimybę laikotarpį ilginti, kai to reikia konkurencijai užtikrinti.`,
           ref:M(c.laikotarpis.raktas), fix:`Nustatyti ${c.laikotarpis.metai} m. laikotarpį (ar ilgesnį, jei reikia konkurencijai).`});
+      // ilgesnis už Metodikos - informacija (naudotojo sprendimas 2026-10-27; Metodikos 16.1 p.: galima, jei to reikia konkurencijai užtikrinti)
+      if(laikM && c.laikotarpis.metai && !/finansin/i.test(sak) && parseInt(laikM[1],10)>c.laikotarpis.metai)
+        issues.push({sev:'low',rule:'R12',title:'Patirties laikotarpis ilgesnis nei Metodikoje',
+          body:`Nustatyta ${laikM[1]} m., o ${M(c.laikotarpis.raktas)} - ${c.laikotarpis.metai} m. Ilgesnis laikotarpis galimas, jei to reikia tinkamai konkurencijai užtikrinti (pvz. panašūs objektai įsigyjami retai); įvertinkite, ar ankstesnė patirtis išlieka aktuali, ir turėkite pagrindimą.`,
+          ref:M(c.laikotarpis.raktas), fix:`Jei ilgesnio laikotarpio konkurencijai nereikia - nustatyti ${c.laikotarpis.metai} m.`});
     }
   }
   // R10: finansiniai santykiai (Metodikos 13.1-13.3 p.)
@@ -3037,7 +3042,7 @@ async function exportDocx(){
   // žodžio viduryje („Pateikti dokumentai“, „Atitinka“), - daugiau vietos.
   const reqColsW=dxaCols([8,46,46]);
   const propCols=dxaCols([38,20,42]);
-  const compCols=dxaCols([6,35,8,20,16,15]);
+  const compCols=PPQ.exportPaskirtis==='tiekejams' ? dxaCols([6,38,8,24,24]) : dxaCols([6,35,8,20,16,15]);   // tiekėjams - be „Atitinka (Taip/Ne)“
 
   const bi=(lt,en)=>(bilingual && en && en!==lt)?(lt+' / '+en):lt;   // sumos abiem kalbom vienodos - nedubliuojam
   // Lentelės tekstas: Arial 10 (size = 20 pusinių punktų)
@@ -3063,8 +3068,9 @@ async function exportDocx(){
     ...((p.mokejimai||p.avansas) ? [['Apmokėjimo sąlygos','Payment terms',
       bi([MOKEJIMAI[p.mokejimai],p.avansas?'numatomas avansas':''].filter(Boolean).join('; '), [MOKEJIMAI_EN[p.mokejimai],p.avansas?'advance payment':''].filter(Boolean).join('; ')),'vidinis']] : []),
     ...(p.dalys ? [['Pirkimo dalys','Lots',p.dalys,'vidinis']] : []),
-    ['Pirkimo kontekstas','Procurement regime',PPQ.settings.context==='sektorinis'?bi('Sektorinis (PĮ)','Utilities (PĮ)'):bi('Bendrasis (VPĮ)','Classic (VPĮ)')],
-    ['Žaliasis pirkimas','Green procurement',PPQ.settings.green===true?bi('Taip','Yes'):PPQ.settings.green===false?bi('Ne','No'):bi('Nenurodyta','Not specified')],
+    // pirkimo kontekstas ir žaliojo pirkimo žyma - vidiniai (tiekėjams - tik reikalavimai; naudotojo sprendimas 2026-10-27)
+    ['Pirkimo kontekstas','Procurement regime',PPQ.settings.context==='sektorinis'?bi('Sektorinis (PĮ)','Utilities (PĮ)'):bi('Bendrasis (VPĮ)','Classic (VPĮ)'),'vidinis'],
+    ['Žaliasis pirkimas','Green procurement',PPQ.settings.green===true?bi('Taip','Yes'):PPQ.settings.green===false?bi('Ne','No'):bi('Nenurodyta','Not specified'),'vidinis'],
     ['Data','Date',today()]
   ].filter(r=>!(tiekejams && r[3]==='vidinis'));
 
@@ -3088,7 +3094,9 @@ async function exportDocx(){
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun({text:bi('1. Pirkimo informacija','Procurement information'),color:EM,bold:true})]}));
   children.push(new Table({columnWidths:infoCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:infoRows.map(r=>new TableRow({children:[cell(bi(r[0],r[1]),{width:infoCols[0],head:true}),cell(r[2],{width:infoCols[1]})]}))}));
 
-  // Bendros nuostatos
+  // Bendros nuostatos - vidiniame dokumente (rengimo aprašas); tiekėjams - tik reikalavimai (naudotojo sprendimas 2026-10-27)
+  const SK = tiekejams ? { reik: 2 } : { reik: 3 };
+  if(!tiekejams){
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('2. Bendros nuostatos','General provisions'),color:EM,bold:true})]}));
   // Nuorodos - pagal pirkimo kontekstą (PĮ arba VPĮ) iš shared/teises-nuorodos.js.
   const met=GP_TEISE.aktas('MET');
@@ -3105,9 +3113,10 @@ async function exportDocx(){
     if(bilingual) runs.push(new TextRun({text:t[1],size:19,italics:true,color:'737483',break:1}));
     children.push(new Paragraph({bullet:{level:0},spacing:{after:60},children:runs}));
   });
+  }
 
-  // 3. Kvalifikaciniai reikalavimai - lentelė (dvikalbė pagal pavyzdį)
-  children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi('3. Kvalifikaciniai reikalavimai','Qualification requirements'),color:EM,bold:true})]}));
+  // 3. (tiekėjams - 2.) Kvalifikaciniai reikalavimai - lentelė (dvikalbė pagal pavyzdį)
+  children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi(SK.reik+'. Kvalifikaciniai reikalavimai','Qualification requirements'),color:EM,bold:true})]}));
   const reqCols=3;
   const dvi=(lt,en)=>bilingual ? [para(lt), para(en||'',{italics:true,color:'737483'})] : lt;   // LT, po juo EN
   const reqHead=[cell(bi('Eil. Nr.','No.'),{head:true,width:reqColsW[0],align:AlignmentType.CENTER}),
@@ -3162,7 +3171,9 @@ async function exportDocx(){
   const headRow=new TableRow({tableHeader:true,children:[
     cell(bi('Nr.','No.'),{head:true,width:compCols[0]}),cell(bi('Kvalifikacijos reikalavimas','Qualification requirement'),{head:true,width:compCols[1]}),
     cell(bi('Kat.','Cat.'),{head:true,width:compCols[2]}),cell(bi('Tiekėjo pateikiami įrodymai','Evidence submitted by supplier'),{head:true,width:compCols[3]}),
-    cell(bi('Pateikti dokumentai','Documents provided'),{head:true,width:compCols[4]}),cell(bi('Atitinka (Taip/Ne)','Complies (Yes/No)'),{head:true,width:compCols[5]})
+    cell(bi('Pateikti dokumentai','Documents provided'),{head:true,width:compCols[4]}),
+    // „Atitinka (Taip/Ne)“ - komisijos vertinimo stulpelis, tiekėjams skirtame dokumente jo nėra (naudotojo sprendimas 2026-10-27)
+    ...(tiekejams ? [] : [cell(bi('Atitinka (Taip/Ne)','Complies (Yes/No)'),{head:true,width:compCols[5]})])
   ]});
   const dataRows=[];
   let n=0;
@@ -3175,7 +3186,7 @@ async function exportDocx(){
       const evCell=bilingual
         ? cell([para(r.evidence||''),para(r.evidence_en||'',{italics:true,color:'737483'})],{width:compCols[3]})
         : cell(r.evidence||'',{width:compCols[3]});
-      dataRows.push(new TableRow({children:[cell(n,{width:compCols[0]}),reqCell,cell(k,{width:compCols[2]}),evCell,cell('',{width:compCols[4]}),cell('',{width:compCols[5]})]}));
+      dataRows.push(new TableRow({children:[cell(n,{width:compCols[0]}),reqCell,cell(k,{width:compCols[2]}),evCell,cell('',{width:compCols[4]}),...(tiekejams ? [] : [cell('',{width:compCols[5]})])]}));
     });
   }
   children.push(new Table({columnWidths:compCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:[headRow,...dataRows]}));
@@ -3193,8 +3204,9 @@ async function exportDocx(){
   // DI turinio žymėjimas (DI akto 50 str. 2 d.; shared/di-zymejimas.js, naudotojo sprendimas 2026-10-05) - abiejose versijose:
   // matoma pastaba ir požymiai faile (reikalavimus ir jų patikrą parengė DI, tvirtino žmogus)
   const diZ=GP_DI.docx({modulis:'Kvalifikacijos reikalavimai'});
-  const diRuns=[new TextRun({text:GP_DI.poraste('lt'),size:16,italics:true,color:'737483'})];
-  if(bilingual) diRuns.push(new TextRun({text:GP_DI.poraste('en'),size:16,italics:true,color:'737483',break:1}));
+  // tiekėjams skirtas dokumentas skelbiamas jau peržiūrėtas - be „Prieš skelbiant turi būti peržiūrėta“ (naudotojo sprendimas 2026-10-27)
+  const diRuns=[new TextRun({text:GP_DI.poraste('lt',{skelbiamas:tiekejams}),size:16,italics:true,color:'737483'})];
+  if(bilingual) diRuns.push(new TextRun({text:GP_DI.poraste('en',{skelbiamas:tiekejams}),size:16,italics:true,color:'737483',break:1}));
   children.push(new Paragraph({spacing:{before:tiekejams?400:120},children:diRuns}));
 
   const doc=new Document({

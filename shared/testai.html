@@ -3907,7 +3907,10 @@ async function testaiKvalifikacija(){
       const v = (ids, o) => KV.vertink(Object.assign({ reikalavimai: KV.istrauk({ docs: [kvSps(ids)] }), kalba: "lt", rezimas: "PI" }, o));
       const a = v(["paslaugos5"], { objektas: "paslaugos" });
       lygu([a.radiniai.map(x => [x.id, x.lygis, x.teise[0]]), /per paskutinius 5 metus, o Metodikoje prekėms ir paslaugoms - per paskutinius 3/.test(a.radiniai[0].tekstas)],
-           [[["kval_laikotarpis", "rekomendacija", "met_patirtis_prekes_paslaugos"]], true], "paslaugos 5 m.");
+           [[["kval_laikotarpis", "info", "met_patirtis_prekes_paslaugos"]], true], "paslaugos 5 m. - ilgesnis: informacija (naudotojo sprendimas 2026-10-27)");
+      const tr = v(["po"], { objektas: "darbai" });
+      lygu([tr.radiniai.map(x => [x.id, x.lygis]), /per paskutinius 3 metus, o Metodikoje darbams - per paskutinius 5 metus\. Trumpesnis laikotarpis mažina tiekėjų/.test((tr.radiniai[0] || {}).tekstas)],
+           [[["kval_laikotarpis", "tikrinti"]], true], "darbai 3 m. - trumpesnis: „Patikrinkite“: " + JSON.stringify(tr.radiniai.map(x => x.tekstas)));
       lygu(v(["darbai"], { objektas: "darbai" }).radiniai, [], "darbai 5 m. - be radinio");
       const b = v(["darbai"], { objektas: "darbai", verte: 400000 });
       lygu([b.radiniai.map(x => x.id), /300 000 Eur \(75 % numatomos vertės 400 000 Eur\).*0,7.*280 000 Eur/.test(b.radiniai[0].tekstas)], [["kval_patirties_verte"], true], "patirtis 0,75 vertės: " + b.radiniai[0].tekstas);
@@ -3933,9 +3936,9 @@ async function testaiKvalifikacija(){
       const r = P.patikrink({ docs: docs, kortele: { pavadinimas: "X", rezimas: "PI", budas: "S-SD", objektas: "paslaugos", verte: 100000 }, kalba: "lt" });
       const kr = r.radiniai.filter(x => x.grupe === "kvalifikacija");
       // Du reikalavimai po 5 metus - vienas laikotarpio radinys su abiem vietomis (kaip tikrame LITGRID SPS), vertės - atskirai
-      lygu(kr.map(x => [x.id, x.lygis, x.vietos.length]), [["kval_laikotarpis", "rekomendacija", 2], ["kval_patirties_verte", "rekomendacija", 1], ["kval_patirties_verte", "rekomendacija", 1]], "radiniai");
+      lygu(kr.map(x => [x.id, x.lygis, x.vietos.length]), [["kval_laikotarpis", "info", 2], ["kval_patirties_verte", "rekomendacija", 1], ["kval_patirties_verte", "rekomendacija", 1]], "radiniai (ilgesnis laikotarpis - informacija, 2026-10-27)");
       tiesa(kr[0].teise[0].cit.indexOf("Metodikos") === 0 && kr[0].vietos[0].failas === "Specialiosios pirkimo sąlygos.docx", JSON.stringify(kr[0].teise) + JSON.stringify(kr[0].vietos));
-      lygu([r.santrauka.rekomendacijos, P.grupesPav("kvalifikacija", "lt"), r.patikros.filter(x => x.grupe === "kvalifikacija").length], [3, "Kvalifikacijos reikalavimai (Metodika)", 4], "santrauka ir patikros");
+      lygu([r.santrauka.rekomendacijos, P.grupesPav("kvalifikacija", "lt"), r.patikros.filter(x => x.grupe === "kvalifikacija").length], [2, "Kvalifikacijos reikalavimai (Metodika)", 4], "santrauka ir patikros");
       lygu(P.patikrink({ docs: [docs[0]], kalba: "lt" }).patikros.filter(x => x.grupe === "kvalifikacija").map(x => [x.id, x.busena, x.pastaba]), [["kval_reikalavimai", "nepatikrinta", "nėra SPS"]], "be SPS");
       // Mažos vertės pirkimas - dar ir Metodikos taikymo mažos vertės pirkimams nuoroda
       const mv = P.patikrink({ docs: [docs[0], kvSps(["pajamos"])], kortele: { pavadinimas: "X", rezimas: "PI", budas: "MV-SAB", objektas: "paslaugos", verte: 10000 }, kalba: "lt" });
@@ -5964,9 +5967,6 @@ async function testaiUzkodavimas(){
     lygu(U.slepk("Contact person: John Smith, john@x.com, EUR 5 000. Regards, Ann Lee", { kalba: "en", asmenys: true }), "Contact person: [person removed], [email removed], [amount removed]. Regards, [person removed]");
     lygu(U.slepk("Dalyvis A ir UAB „Alfa“: info@alfa.lt", { poros, imones: true }), "Dalyvis A ir Dalyvis A: [el. paštas neįtrauktas]", "kodas ir el. paštas - nepakeisti dar kartą");
   });
-  await testas("sumos: suma, sakinys citatai ir PVM (be / su / nenurodyta) pagal žodžius šalia; skaičiai be valiutos - ne sumos; PP-ts jungia šį failą", async ()=>{
-    lygu(U.sumos("Kaina 1 250 000 Eur be PVM. Su PVM - 1.512.500,00 EUR. Apie 2 mln. eurų (su PVM). EUR 900 000 neįskaitant PVM; 4 vnt. 150 Eur.").map(x => [x.suma, x.citata, x.pvm]),
-      [[1250000, "Kaina 1 250 000 Eur be PVM.", "be"], [1512500, "Su PVM - 1.512.500,00 EUR.", "su"], [2000000, "Apie 2 mln. eurų (su PVM).", "su"], [900000, "EUR 900 000 neįskaitant PVM;", "be"], [150, "150 Eur.", null]], "citata - sakinys (santrumpos taškas laikomas sakinio pabaiga)");
   await testas("linksniai (2026-10-27, PP-negotiation D5): paskutinio žodžio kilmininkas, naudininkas, galininkas, vietininkas - ir kabutėse bei didžiosiomis; ne lietuviški žodžiai - ne; slepk su linksniais ir 11 skaitmenų kodai", async ()=>{
     lygu(U.linksniai([["Voltera", true]]), [["Volteros", true], ["Volterai", true], ["Volterą", true], ["Volteroje", true]], "a");
     lygu(U.linksniai([["Elektros tinklų sprendimai", false]]).map(x => x[0]), ["Elektros tinklų sprendimų", "Elektros tinklų sprendimams", "Elektros tinklų sprendimus", "Elektros tinklų sprendimuose"], "ai");
@@ -5976,6 +5976,9 @@ async function testaiUzkodavimas(){
     const pr = U.poros([{ vardas: "AB „Voltera“", kodas: "Tiekėjas A" }]).concat(U.linksniai(U.vardoVariantai("AB „Voltera“")).map(v => [v[0], "Tiekėjas A", v[1]]));
     lygu(U.slepk("Volterai pasakyti; AB „Volteros“ pasiūlymas; reg. Nr. 40003999888.", { poros: pr.sort((a, b) => b[0].length - a[0].length) }), "Tiekėjas A pasakyti; Tiekėjas A pasiūlymas; reg. Nr. [kodas neįtrauktas].");
   });
+  await testas("sumos: suma, sakinys citatai ir PVM (be / su / nenurodyta) pagal žodžius šalia; skaičiai be valiutos - ne sumos; PP-ts jungia šį failą", async ()=>{
+    lygu(U.sumos("Kaina 1 250 000 Eur be PVM. Su PVM - 1.512.500,00 EUR. Apie 2 mln. eurų (su PVM). EUR 900 000 neįskaitant PVM; 4 vnt. 150 Eur.").map(x => [x.suma, x.citata, x.pvm]),
+      [[1250000, "Kaina 1 250 000 Eur be PVM.", "be"], [1512500, "Su PVM - 1.512.500,00 EUR.", "su"], [2000000, "Apie 2 mln. eurų (su PVM).", "su"], [900000, "EUR 900 000 neįskaitant PVM;", "be"], [150, "150 Eur.", null]], "citata - sakinys (santrumpos taškas laikomas sakinio pabaiga)");
     lygu(U.sumos("4 vnt., 110 kV, 2024 m."), []);
   });
   await testas("Parinktys: pvPavadinimas (PP-protocol „[x % numatomos vertės]“), naudoti - panaudoti porų pakaitai (kodų raktui); moduliai (PP-ts, PP-negotiation, PP-protocol) jungia šį failą ir savų užkodavimo kopijų neturi", async ()=>{
