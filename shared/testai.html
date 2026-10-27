@@ -634,6 +634,7 @@ const TEISE_FAILAI = [
   "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html",
   "../PP-report/PP-report.html",
   "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
+  "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
   "../CLAUDE.md"
 ];
 // Moduliai, kurie kviečia registrą, ir režimai, kuriais kviečia.
@@ -646,7 +647,8 @@ const TEISE_MODULIAI = {
   "../PP-protocol/LITGRID_Generatorius_v3.html": ["PI"],
   "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html": ["PI", "VPI"],  // įstatymo minimumai pagal įmonę (2026-10-26)
   "../PP-report/PP-report.html": ["PI", "VPI"],  // LITGRID AB pažyma (PĮ); nacionalinio saugumo dokumentai - ir VPĮ (Aprašo 31.4 p.), 2026-10-26
-  "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html": ["PI", "VPI"]   // vertinimo straipsnio dalys pagal pirkimo režimą (2026-10-26)
+  "../PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html": ["PI", "VPI"],   // vertinimo straipsnio dalys pagal pirkimo režimą (2026-10-26)
+  "../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html": ["PI", "VPI"]   // Kainodaros taisyklių metodika, VPĮ tipinės sąlygos ir peržiūra (2026-10-27)
 };
 /* Ilgoji forma laiškų šablonuose („58 straipsnio 1 dalies 1 punktu“, „Pirkimų įstatymo 58 str.“, „Article 58(1)(1)“) - tik
    failuose, kurie cituoja vieną įstatymą, todėl numeris priskiriamas jam (PP-protocol - PĮ; iki 2026-09-27 ten buvo 6
@@ -732,6 +734,17 @@ async function testaiTeise(){
     lygu(GP_TEISE.cit("nacsaugumo_sarasas"), "VPĮ 92 str. 13 d.", "sąrašas");
     lygu(["nacsaugumo_bvpz", "ts_nacsaugumas", "sandorio_patikros_kriterijai"].map(GP_TEISE.tikrinta), ["2026-10-21", "2026-10-21", "2026-10-21"], "patikros data");
     lygu(GP_TEISE.url("sandorio_patikros_kriterijai"), "https://www.e-tar.lt/portal/lt/legalAct/TAR.57E0E8B29108/asr", "aktas");
+  });
+
+  await testas("Kainodaros taisyklių nustatymo metodika (2026-10-27, e-tar): 1, 53, 53.2 ir 54 p. - bendri PĮ ir VPĮ, LT ir EN", async ()=>{
+    lygu(["ktm_taikymas", "ktm_perziuros_taisykles", "ktm_formule", "ktm_perziura_privaloma"].map(k => GP_TEISE.cit(k)),
+      ["Kainodaros taisyklių nustatymo metodikos 1 p.", "Kainodaros taisyklių nustatymo metodikos 53 p.", "Kainodaros taisyklių nustatymo metodikos 53.2 p.", "Kainodaros taisyklių nustatymo metodikos 54 p."], "punktai");
+    lygu(GP_TEISE.cit("ktm_perziura_privaloma", "VPI", "en"), "Pricing Rules Methodology, point 54", "EN");
+    lygu(["PI", "VPI"].map(r => GP_TEISE.cit("ktm_perziura_privaloma", r)), ["Kainodaros taisyklių nustatymo metodikos 54 p.", "Kainodaros taisyklių nustatymo metodikos 54 p."], "taikoma abiem režimams");
+    tiesa(/6 mėnesi/.test(GP_TEISE.apie("ktm_perziura_privaloma")) && /kintamo įkainio/.test(GP_TEISE.apie("ktm_perziura_privaloma")), "54 p.: 6 mėn. ir išimtis");
+    tiesa(/perkantieji subjektai/.test(GP_TEISE.apie("ktm_taikymas")) && /mažos vertės/.test(GP_TEISE.apie("ktm_taikymas")), "1 p.: ir PĮ subjektai, mažos vertės - rekomenduojama");
+    lygu(GP_TEISE.url("ktm_formule"), "https://www.e-tar.lt/portal/lt/legalAct/04cbd4205bd811e79198ffdb108a3753/asr", "aktas");
+    lygu(GP_TEISE.tikrinta("ktm_perziura_privaloma"), "2026-10-27", "patikros data");
   });
 
   await testas("PĮ subjektams VPĮ 47 str. nurodomas per PĮ 59 str. 1 d. (pagrindas PĮ, turinys VPĮ)", async ()=>{
@@ -846,7 +859,12 @@ async function testaiTeise(){
       });
       const met = /[Mm]etodik\w*\s+(\d+(?:\.\d+)*)\s*p\./g; let m;
       const punktai = new Set(GP_TEISE.visos().filter(n => n.a === "MET").map(n => n.p));
-      while ((m = met.exec(t))) if (!punktai.has(m[1])) blogi.push(f + ":" + eil(m.index) + " Metodikos punktas ne iš registro: „" + m[0] + "“");
+      // Kainodaros taisyklių nustatymo metodika (KTM, 2026-10-27) - kitas aktas, jos punktai tikrinami pagal savo įrašus
+      const ktm = new Set(GP_TEISE.visos().filter(n => n.a === "KTM").map(n => n.p));
+      while ((m = met.exec(t))) {
+        const kainodaros = /Kainodaros taisykli[ųu] nustatymo\s+$/.test(t.slice(Math.max(0, m.index - 40), m.index));
+        if (!(kainodaros ? ktm : punktai).has(m[1])) blogi.push(f + ":" + eil(m.index) + " " + (kainodaros ? "Kainodaros taisyklių nustatymo metodikos" : "Metodikos") + " punktas ne iš registro: „" + m[0] + "“");
+      }
     }
     tiesa(!blogi.length, blogi.join("\n  "));
   });
@@ -4398,7 +4416,10 @@ const NEG_EN_BUSENOS = [["angliškai: įkainių matrica", w => { negProjektas(w)
   ["angliškai: rekomendacijos ir derybų ribos", w => { negProjektas(w); w.setLang("en"); w.go("strategy"); }],
   ["angliškai: užkoduota DI užklausa", (w, d) => { negProjektas(w); w.setLang("en"); w.go("ai"); d.getElementById("btnGenPrompt").click(); }]];
 const KPI_BUSENOS = [["pirkimo rinkos apžvalga su veiksmais ir sąlygomis", (w, d) => { d.getElementById("focusName").value = "Microsoft licencijos"; w.runFocus();
-  d.querySelectorAll("#focusResult details.fv-step").forEach(x => { x.open = true; }); }]];   // 2026-10-06: Diagnozė / Veiksmai, visi žingsniai atverti
+  d.querySelectorAll("#focusResult details.fv-step").forEach(x => { x.open = true; }); }],   // 2026-10-06: Diagnozė / Veiksmai, visi žingsniai atverti
+  // 2026-10-27 (patikra V4): atvertas „Duomenys“ meniu - telefone iki tol išlįsdavo už kairio krašto; apžvalga su duomenų būkle ir sąlygos pasirinkimu (a), (b)
+  ["atvertas „Duomenys“ meniu ir darbų apžvalga su duomenų būkle", (w, d) => { d.getElementById("focusName").value = "Transformatorių keitimo darbai"; w.runFocus();
+    d.querySelectorAll("#focusResult details.fv-step").forEach(x => { x.open = true; }); d.getElementById("btnDuomenys").click(); }]];
 /* PP-salygos „Tikrinti parengtus dokumentus“ su rezultatais (2026-10-06): tikras BPS šablonas su trimis pakeitimais (žodis, pašalinta ir
    pridėta pastraipa) - nukrypimų kortelės su žodžių skirtumu, sprendimo laukas, visi keturi vaizdai. */
 async function tikrinimoBusena(w, d){
@@ -5031,6 +5052,13 @@ async function telefonoMatuok(f, kur, blogi, plociai){
     const k = kur + " (" + p + " px)", s = telefonoSlinktis(d);
     if (s) blogi.push(k + ": " + s);
     [...karpo()].filter(e => !placiai.has(e)).slice(0, 2).forEach(e => blogi.push(k + ": nukirpta " + (e.scrollWidth - e.clientWidth) + " px - " + pav(e) + " „" + e.innerText.trim().replace(/\s+/g, " ").slice(0, 40) + "“"));
+    // Atverti iššokantys sąrašai (mygtukas su aria-expanded="true" ir aria-controls) - ekrano ribose: už kairio krašto
+    // išlindęs meniu puslapio neslenka, todėl slinkties patikra jo nemato (2026-10-27, PP-market-KPI „Duomenys“ 320 px - -104 px)
+    d.querySelectorAll('[aria-expanded="true"][aria-controls]').forEach(b => {
+      const e = d.getElementById(b.getAttribute("aria-controls")); if (!e || !e.getClientRects().length) return;
+      const r = e.getBoundingClientRect();
+      if (r.left < -1 || r.right > w.innerWidth + 1) blogi.push(k + ": iššokantis sąrašas už ekrano - " + pav(e) + " (" + Math.round(r.left) + "-" + Math.round(r.right) + " px)");
+    });
   }
   f.style.width = "375px"; await kadras();
   return n;

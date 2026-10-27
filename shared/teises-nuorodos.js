@@ -101,6 +101,16 @@
       trumpai: "Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymas",
       pavadinimas: "Lietuvos Respublikos nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymas",
       url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.57E0E8B29108/asr"
+    },
+    // Kainodaros taisyklių nustatymo metodika (perskaityta e-tar 2026-10-27, PP-market-KPI): ją taiko ir perkančiosios
+    // organizacijos, ir perkantieji subjektai (1 p.; mažos vertės pirkime - rekomenduojama), priimta pagal VPĮ ir PĮ.
+    KTM: {
+      trumpai: "Kainodaros taisyklių nustatymo metodika",
+      pavadinimas: "Kainodaros taisyklių nustatymo metodika",
+      patvirtinta: "VPT direktoriaus 2017-06-28 įsakymas Nr. 1S-95 (2019-01-24 įsakymo Nr. 1S-13 redakcija)",
+      patvirtintaEn: "PPO Director's Order No 1S-95 of 28 June 2017 (as worded by Order No 1S-13 of 24 January 2019)",
+      redakcija: "suvestinė redakcija nuo 2022-12-31",
+      url: "https://www.e-tar.lt/portal/lt/legalAct/04cbd4205bd811e79198ffdb108a3753/asr"
     }
   };
 
@@ -627,7 +637,17 @@
     sut_isimtis: { tikrinta: "2026-10-09", apie: "sutarties turinio reikalavimai gali būti netaikomi raštu sudaromai sutarčiai, kai numatoma vertė mažesnė kaip 15 000 Eur be PVM arba sutarties turinys vienodas visiems tokių prekių, paslaugų ar darbų gavėjams",
       PI: { a: "PI", s: 95, d: 4 }, VPI: { a: "VPI", s: 87, d: 5 } },
     sut_tipines: { tikrinta: "2026-10-09", apie: "pirkimo sutartys sudaromos taikant VPT patvirtintas tipines pirkimo sutarčių sąlygas, išskyrus kai jos netaikytinos ar nepritaikomos (pagrindimas - ataskaitoje)",
-      VPI: { a: "VPI", s: 87, d: 1 } }
+      VPI: { a: "VPI", s: 87, d: 1 } },
+
+    // ---- Kainodaros taisyklių nustatymo metodika (VPT 1S-95; perskaityta e-tar 2026-10-27, PP-market-KPI)
+    ktm_taikymas: { tikrinta: "2026-10-27", apie: "Metodika vadovaujasi (mažos vertės pirkimo atveju - rekomenduojama vadovautis) perkančiosios organizacijos ir perkantieji subjektai, nustatydami kainodaros taisykles pirkimo dokumentuose ir sutartyse",
+      bendra: { a: "KTM", p: "1" } },
+    ktm_perziuros_taisykles: { tikrinta: "2026-10-27", apie: "peržiūros taisyklės negali iš esmės pakeisti sutarties pobūdžio ir turi būti iš anksto aiškiai, tiksliai ir nedviprasmiškai suformuluotos pirkimo dokumentuose ir sutartyje: aplinkybės ir statistinių ar kitų rodiklių šaltiniai, perskaičiavimo formulė, peržiūros momentas ir dažnumas, pakeistų kainų įsigaliojimo momentas, prireikus - skirtingos taisyklės skirtingoms sutarties objekto sudėtinėms dalims",
+      bendra: { a: "KTM", p: "53" } },
+    ktm_formule: { tikrinta: "2026-10-27", apie: "perskaičiavimo formulė (simboliais arba žodžiais); peržiūrint antrą ir vėlesnį kartą ji taikoma tik neišpirktiems kiekiams; formulė gali būti nurodyta ir kainos sudedamosioms dalims, tada pasiūlymo formoje tiekėjai nurodo jų reikšmes ir svarbumą",
+      bendra: { a: "KTM", p: "53.2" } },
+    ktm_perziura_privaloma: { tikrinta: "2026-10-27", apie: "privaloma numatyti su mokesčių pasikeitimu nesusijusią sutarties kainos peržiūros sąlygą, kai prekių tiekimo, paslaugų teikimo ar darbų atlikimo trukmė kartu su numatytu sutarties pratęsimu ilgesnė negu 6 mėnesiai; netaikoma, kai dėl kainos apskaičiavimo būdo perskaičiavimas negalimas (pvz. kintamo įkainio ar išlaidų atlyginimo kainodara)",
+      bendra: { a: "KTM", p: "54" } }
   };
   /* VPĮ atitikmenys (2026-09-26) esamiems PĮ raktams: aiškumas ir objekto kiekis - VPĮ 35 str. */
   N.dokumentu_aiskumas.VPI = { a: "VPI", s: 35, d: 4 };
@@ -674,6 +694,7 @@
   function formatas(n, kalba) {
     var en = kalba === "en";
     if (n.a === "MET") return en ? "Methodology, point " + n.p : "Metodikos " + n.p + " p.";
+    if (n.a === "KTM") return en ? "Pricing Rules Methodology, point " + n.p : "Kainodaros taisyklių nustatymo metodikos " + n.p + " p.";
     if (n.a === "ZALIEJI") return n.p
       ? (en ? "Green Procurement Rules, point " + n.p : "Žaliųjų pirkimų tvarkos aprašo " + n.p + " p.")
       : (en ? "Green Procurement Rules (Order No D1-508)" : "Žaliųjų pirkimų tvarkos aprašas (įsakymas Nr. D1-508)");
