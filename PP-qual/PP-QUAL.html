@@ -83,7 +83,7 @@ main{padding:var(--space-4) 0 var(--space-6);min-height:50vh;}
 .card{
   background:var(--color-white);border:1px solid var(--color-graphite-15);
   border-radius:var(--radius-md);padding:var(--space-3);box-shadow:var(--shadow-subtle);
-  margin-bottom:var(--space-3);
+  margin-bottom:var(--space-3);overflow-wrap:break-word;   /* ilgas pavadinimas ar dokumento vardas be tarpų telefone neplečia puslapio */
 }
 .card-pad-lg{padding:var(--space-4);}
 .card h2{margin-bottom:var(--space-1);}
@@ -199,7 +199,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.5;}
 .req-meta{font-size:13px;color:var(--color-graphite-50-strong);margin-top:8px;}
 .req-evidence{font-size:13px;color:var(--color-graphite-50-strong);margin-top:6px;}
 .req-actions{display:flex;gap:6px;margin-top:10px;}
-.icon-btn{border:1px solid var(--color-graphite-15);background:#fff;border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--color-graphite-50-strong);transition:var(--transition-fast);}
+.icon-btn{border:1px solid var(--color-graphite-15);background:#fff;border-radius:6px;width:30px;height:30px;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--color-graphite-50-strong);transition:var(--transition-fast);}
 .icon-btn:hover{border-color:var(--color-emerald);color:var(--color-emerald-strong);}
 .icon-btn svg{width:15px;height:15px;}
 
@@ -477,9 +477,9 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
         </select>
         <div class="hint" id="set-vykdytojas"></div>
       </div>
-      <div class="check-row">
-        <input type="checkbox" id="set-green" checked>
-        <label>Žaliasis pirkimas (įjungta pagal numatymą)</label>
+      <div class="field">
+        <label for="set-green">Žaliasis pirkimas</label>
+        <select id="set-green"><option value="">- nenurodyta -</option><option value="taip">Taip</option><option value="ne">Ne</option></select>
       </div>
       <div class="check-row">
         <input type="checkbox" id="set-it" checked>
@@ -505,7 +505,7 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
       <p class="muted" style="margin-top:8px;font-size:13px">Modulis duomenų nesaugo: pradėjus naują pirkimą, dabartinio pirkimo informacija, atsakymai, įkeltas tekstas, reikalavimai ir patikra išvalomi. Jei jų reikia - pirma parsisiųskite Word dokumentą.</p>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-secondary" onclick="uzdarykPasirinkima();testiPirkima()">Tęsti šį pirkimą</button>
+      <button class="btn btn-secondary" id="naujas-testi" onclick="uzdarykPasirinkima();testiPirkima()">Tęsti šį pirkimą</button>
       <button class="btn btn-primary" id="naujas-pradeti">Pradėti naują</button>
     </div>
   </div>
@@ -523,7 +523,7 @@ footer .container{display:flex;justify-content:space-between;gap:var(--space-2);
 const PPQ = {
   settings:{
     context:'sektorinis',
-    green:true,
+    green:null,     // žaliasis pirkimas: true / false / null - nenurodyta (K3, 2026-10-26: iki tol pagal numatymą „Taip“)
     it:true,
     rezimasIs:''    // kas nustatė režimą: '' - numatytasis, 'nustatymai' - žmogus, 'kortele' - pirkimo kortelė
   },
@@ -612,7 +612,11 @@ function switchView(v){
 }
 
 /* ---------------- Settings ---------------- */
+function zaliasReiksme(v){ return v==='taip' ? true : v==='ne' ? false : null; }
+function zaliasLaukui(g){ return g===true ? 'taip' : g===false ? 'ne' : ''; }
 function openSettings(){
+  // Langas rodo dabartinę būseną (iki 2026-10-26 žaliasis visada „įjungta“, todėl išsaugojus pakeistą režimą vėl tapdavo „Taip“)
+  $('set-context').value=PPQ.settings.context; $('set-green').value=zaliasLaukui(PPQ.settings.green);
   const V=vykdytojas();
   $('set-vykdytojas').textContent='Pirkimo vykdytojas: '+V.pavadinimas+(PPQ.procurement.vykdytojas ? ' (iš pirkimo kortelės).' : ' (numatytasis šiam kontekstui; kitą vykdytoją nurodo pirkimo kortelė).');
   $('settings-modal').classList.add('open');
@@ -621,11 +625,11 @@ function closeSettings(){ $('settings-modal').classList.remove('open'); }
 function saveSettings(){
   PPQ.settings.context  = $('set-context').value;
   PPQ.settings.rezimasIs = 'nustatymai';
-  PPQ.settings.green    = $('set-green').checked;
+  PPQ.settings.green    = zaliasReiksme($('set-green').value);
   PPQ.settings.it       = $('set-it').checked;
   rodykTeisinesNuorodas();
   closeSettings();
-  toast('Nustatymai išsaugoti');
+  toast('Nustatymai pritaikyti šiam darbui (puslapį perkrovus grįžta numatytieji)');
 }
 
 /* ---------------- Teisės nuorodos ----------------
@@ -765,7 +769,7 @@ function pirkimoKontekstas(){
     trukme:p.duration||'', men:c.men, ilgalaike:c.ilgalaike, metine:(c.ilgalaike && c.verte) ? Math.round(c.pajamos.metine) : null,
     mokejimai:p.mokejimai||'', avansas:!!p.avansas, priklausomybe:p.priklausomybe||'', dalys:p.dalys||'',
     aprasymas:p.desc||'', papildoma:p.extra||'',
-    zaliasis:!!PPQ.settings.green, it:itPirkimas(),
+    zaliasis:PPQ.settings.green, it:itPirkimas(),
     atsakymai:PPQ.questions.filter(q=>PPQ.answers[q.id]!=null && PPQ.answers[q.id]!=='')
       .map(q=>({ klausimas:q.question, atsakymas:PPQ.answers[q.id]==='__na' ? 'Neaktualu' : PPQ.answers[q.id] }))
   };
@@ -783,7 +787,7 @@ function kontekstoTekstas(k, suAtsakymais){
     'Pirkimo dalys: '+(k.dalys ? k.dalys+' ('+M('met_dalims')+': '+GP_TEISE.apie('met_dalims')+')' : 'neskaidoma arba nenurodyta'),
     'Aprašymas: '+(k.aprasymas||'-'),
     k.papildoma ? 'Iš techninės specifikacijos: '+k.papildoma : null,
-    'Žaliasis pirkimas: '+(k.zaliasis?'taip':'ne'),
+    'Žaliasis pirkimas: '+(k.zaliasis===true?'taip':k.zaliasis===false?'ne':'nenurodyta'),
     'VPT IT gairės: '+(k.it?'taikomos (IT/IS pirkimas)':'netaikomos')
   ].filter(Boolean);
   if(suAtsakymais) eil.push('Patikslinimo atsakymai: '+(k.atsakymai.length ? k.atsakymai.map(a=>a.klausimas+' => '+a.atsakymas).join('; ') : 'nepateikta'));
@@ -1043,6 +1047,7 @@ function naujasPirkimas(){
   PPQ.questions=[]; PPQ.answers={}; PPQ.requirements=[]; PPQ.sourceText='';
   PPQ.audit=naujasAuditas(); PPQ.generavimas={ nutruko:false }; PPQ.vertimoKlaida='';
   PPQ.ui.pagrindimasId=null; PPQ.ui.zaliasPatvirtintas=false;
+  PPQ.settings.green=null;   // žaliasis - pirkimo savybė, ne nustatymas
   PPQ.step=1;
   const ab=$('audit-body'); ab.innerHTML=''; delete ab.dataset.init;
   $('wizard-body').innerHTML=''; $('export-body').innerHTML='';
@@ -1053,6 +1058,7 @@ function rodykPasirinkima(mode){
   const p=PPQ.procurement, n=PPQ.requirements.length;
   $('naujas-tekstas').textContent='Jau dirbate su pirkimu'+(p.name?' „'+p.name+'“':'')+(n?' ('+n+' '+reikalavimuVard(n)+')':'')+'. Tęsti jį ar pradėti naują?';
   $('naujas-pradeti').onclick=()=>{ uzdarykPasirinkima(); startEntry(mode,'naujas'); };
+  $('naujas-testi').onclick=()=>{ uzdarykPasirinkima(); testiPirkima(mode); };
   $('naujas-modal').classList.add('open');
 }
 let kortelesAtsakymas=null;   // laukiamas atsakymas, ar kortelė - naujas pirkimas (klauskDelKorteles)
@@ -1060,14 +1066,26 @@ function uzdarykPasirinkima(){
   $('naujas-modal').classList.remove('open');
   if(kortelesAtsakymas){ const f=kortelesAtsakymas; kortelesAtsakymas=null; f(false); }   // uždaryta - kortelė nepasirenkama
 }
-function testiPirkima(){
-  if(PPQ.entry==='check'){ switchView('audit'); return; }
+/* D1 (2026-10-26): „Tęsti“ atveria PASIRINKTĄ įėjimą su tais pačiais duomenimis (iki tol 2 ir 3 įėjimai atverdavo 1-ąjį),
+   vien pirkimo kortelės duomenys - ne pradėtas darbas (įėjimas atveriamas su jais, be klausimo), o „Pradėti naują“
+   atsieja ir kortelę (iki tol juosta toliau sakė „Iš kortelės užpildyta ...“, o laukai buvo tušti, režimas - PĮ). */
+function testiPirkima(mode){
+  if(mode) PPQ.entry=mode;
+  if(PPQ.entry==='check'){
+    switchView('audit');
+    if(!PPQ.requirements.length) renderAuditInput();
+    return;
+  }
   switchView('wizard'); renderWizard();
 }
 function startEntry(mode, kaip){
-  if(!kaip && pradetasDarbas()){ rodykPasirinkima(mode); return; }
-  if(kaip==='testi'){ testiPirkima(); return; }
-  naujasPirkimas();
+  const tikKortele = pradetasDarbas() && tikKortelesDuomenys();
+  if(!kaip && pradetasDarbas() && !tikKortele){ rodykPasirinkima(mode); return; }
+  if(kaip==='testi'){ testiPirkima(mode); return; }
+  if(kaip==='naujas' || !tikKortele){
+    naujasPirkimas();
+    if(kaip==='naujas' && KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) KORTELE.atsiek();
+  }
   PPQ.entry=mode;
   if(mode==='check'){
     switchView('audit');
@@ -1277,9 +1295,9 @@ function renderStep1(){
       <label>Trumpas pirkimo objekto aprašymas</label>
       <textarea id="p-desc" placeholder="Ką perka, koks sudėtingumas, specialūs reikalavimai...">${esc(p.desc)}</textarea>
     </div>
-    <div class="check-row">
-      <input type="checkbox" id="p-green" ${PPQ.settings.green?'checked':''}>
-      <label>Žaliasis pirkimas</label>
+    <div class="field">
+      <label for="p-green">Ar pirkimas žaliasis? *</label>
+      <select id="p-green"><option value="">- pasirinkite -</option><option value="taip"${PPQ.settings.green===true?' selected':''}>Taip</option><option value="ne"${PPQ.settings.green===false?' selected':''}>Ne</option></select>
     </div>
     <div class="hint" style="margin:-4px 0 10px 28px">Pagal ${esc(GP_TEISE.cit('zal_zaliasis'))} pirkimas žaliasis, kai tenkinamas bent vienas iš ten nurodytų būdų. Tai savaime nereiškia kvalifikacijos reikalavimų: produkto aplinkosaugos savybės yra techninės specifikacijos dalis (${esc(teise('ts_savoka'))}).</div>
     <div class="btn-row" style="margin-top:var(--space-2)">
@@ -1304,12 +1322,13 @@ function collectStep1(){
   p.duration=$('p-duration').value.trim();
   p.desc=$('p-desc').value.trim();
   surinkKonteksta('p');
-  PPQ.settings.green=$('p-green').checked;
+  PPQ.settings.green=zaliasReiksme($('p-green').value);
 }
 
 async function submitStep1(){
   collectStep1();
   if(!PPQ.procurement.name){ toast('Įveskite pirkimo pavadinimą',true); return; }
+  if(PPQ.settings.green===null){ toast('Nurodykite, ar pirkimas žaliasis',true); $('p-green').focus(); return; }
   if(!PPQ.procurement.objectType){ toast('Pasirinkite pirkimo objekto tipą.',true); return; }
   if(!PPQ.procurement.value || PPQ.procurement.value<=0){ toast(parseFloat($('p-value').value)<0 ? 'Pirkimo vertė negali būti neigiama.' : 'Įveskite pirkimo vertę.',true); return; }
   const btn=$('step1-next');
@@ -1379,21 +1398,47 @@ TS TEKSTAS:
   }
   {
     const data = smartParseJson(resp);
-    const p=PPQ.procurement;
-    p.name=noDash(data.name||p.name);
-    if(OBJECT_TYPES.includes(data.objectType)) p.objectType=data.objectType; // validuojam - AI gali grazinti ne sarase esancia reiksme; kitaip lieka '' -> placeholder
-    const v=parseFloat(data.value); if(v>0) p.value=v;   // neigiama ar ne skaičius - nekeičiama
-    p.koefRankinis=false;   // koeficientas - pagal Metodikos vertės kategoriją (kategorijaNumatyta)
-    p.duration=noDash(data.duration||'');
-    p.desc=noDash(data.desc||'');
-    // Metodikos 7.2, 11.2 p. duomenys - struktūriškai, ne tik laisvame tekste
-    if(MOKEJIMAI[data.mokejimai]) p.mokejimai=data.mokejimai;
-    p.avansas=data.avansas===true;
-    p.dalys=noDash(String(data.dalys||'').trim());
+    // D3 (2026-10-26): DI pildo tik tuščius laukus; ranka įvesta kitokia reikšmė lieka, o DI reikšmė - tik pasiūlymas
+    // (iki tol DI perrašydavo pavadinimą, tipą, vertę, aprašymą, o trukmę ir avanso žymę - ištrindavo)
+    if($('p-name')) collectStep1();
+    const p=PPQ.procurement, irasyta=[], skiriasi=[];
+    const siulyk=(laukas, pav, di, dabar, taikyk)=>{
+      if(di==null || di==='' || di===false) return;
+      if(dabar==null || dabar==='' || dabar===false){ taikyk(); irasyta.push(pav); }
+      else if(String(dabar)!==String(di)) skiriasi.push({ laukas, pav, di, dabar });
+    };
+    siulyk('name','pavadinimas', noDash(String(data.name||'').trim()), p.name, ()=>{ p.name=noDash(String(data.name).trim()); });
+    if(OBJECT_TYPES.includes(data.objectType)) siulyk('objectType','objekto tipas', data.objectType, p.objectType, ()=>{ p.objectType=data.objectType; });
+    const v=parseFloat(data.value);
+    if(v>0) siulyk('value','numatoma vertė', v, p.value, ()=>{ p.value=v; p.koefRankinis=false; });
+    siulyk('duration','sutarties trukmė', noDash(String(data.duration||'').trim()), p.duration, ()=>{ p.duration=noDash(String(data.duration).trim()); });
+    siulyk('desc','aprašymas', noDash(String(data.desc||'').trim()), p.desc, ()=>{ p.desc=noDash(String(data.desc).trim()); });
+    if(MOKEJIMAI[data.mokejimai]) siulyk('mokejimai','apmokėjimas', data.mokejimai, p.mokejimai, ()=>{ p.mokejimai=data.mokejimai; });
+    siulyk('avansas','avansas', data.avansas===true, p.avansas, ()=>{ p.avansas=true; });
+    siulyk('dalys','pirkimo dalys', noDash(String(data.dalys||'').trim()), p.dalys, ()=>{ p.dalys=noDash(String(data.dalys).trim()); });
     p.extra='Technologijos: '+((data.technologies||[]).join(', ')||'-')+'\nSpecialūs reikalavimai: '+((data.specialRequirements||[]).join(', ')||'-');
+    PPQ.ui.diSiulymai=skiriasi; PPQ.ui.diIrasyta=irasyta;
     renderStep1();
-    GP_BUSENA.rodyk('#extract-status', { tipas:'gerai', tekstas:'Kontekstas ištrauktas. Patikrinkite laukus ir spauskite „Toliau“.' });
+    rodykDiSiulymus();
   }
+}
+const DI_LAUKO_REIKSME={ value:v=>fmtEur(v), objectType:v=>v, mokejimai:v=>MOKEJIMAI[v]||v, avansas:v=>v?'numatomas':'nenurodytas' };
+function rodykDiSiulymus(){
+  const irasyta=PPQ.ui.diIrasyta||[], sk=PPQ.ui.diSiulymai||[], R=(l,v)=>(DI_LAUKO_REIKSME[l]||(x=>String(x)))(v);
+  GP_BUSENA.rodyk('#extract-status', { tipas:'gerai', tekstas:'Kontekstas ištrauktas. '+(irasyta.length?'Iš TS (DI) įrašyta į tuščius laukus: '+irasyta.join(', ')+'. ':'Tuščių laukų, kuriuos būtų galima užpildyti, nebuvo. ')
+    +(sk.length?'Kai kurie įvesti laukai skiriasi nuo TS - palikta jūsų reikšmė (žr. žemiau). ':'')+'Patikrinkite laukus ir spauskite „Toliau“.' });
+  let el=$('extract-siulymai');
+  if(!el){ el=document.createElement('div'); el.id='extract-siulymai'; const st=$('extract-status'); if(st) st.after(el); else return; }
+  el.innerHTML=sk.length ? `<div class="warn-block" style="margin-top:8px" data-di="sugeneruota"><strong>DI siūloma kitaip nei įvesta:</strong><ul>${sk.map((s,i)=>`<li>${esc(s.pav)}: įvesta „${esc(R(s.laukas,s.dabar))}“, TS (DI) - „${esc(R(s.laukas,s.di))}“ <button class="btn btn-secondary btn-sm" onclick="naudokDiSiulyma(${i})">Naudoti DI reikšmę</button></li>`).join('')}</ul></div>` : '';
+}
+function naudokDiSiulyma(i){
+  const s=(PPQ.ui.diSiulymai||[])[i]; if(!s) return;
+  if($('p-name')) collectStep1();
+  const p=PPQ.procurement;
+  p[s.laukas]=s.di; if(s.laukas==='value') p.koefRankinis=false;
+  PPQ.ui.diSiulymai.splice(i,1);
+  (PPQ.ui.diIrasyta=PPQ.ui.diIrasyta||[]).push(s.pav);
+  renderStep1(); rodykDiSiulymus();
 }
 
 /* ---------- Step 2: clarifying questions ---------- */
@@ -1413,8 +1458,13 @@ Modulio patirties koeficientas: ${kbl(proporcingumas(p).patirtis.koef)}`;
   const resp=await callAI(prompt,{maxTokens:2000});
   let data=smartParseJson(resp);
   if(!data) throw new Error('Nepavyko nuskaityti klausimų.');
-  if(!Array.isArray(data)) data=data.questions||[];
-  PPQ.questions=data.map((q,i)=>({id:q.id||('q'+i),question:noDash(q.question||''),type:q.type==='choice'?'choice':'text',options:(q.options||[]).map(noDash),hint:noDash(q.hint||'')}));
+  // M1 (2026-10-26): atsakymas be klausimų sąrašo - klaida, ne „Klausimų nesugeneruota“; id - savas (DI id buvo dedamas į elemento id)
+  if(!Array.isArray(data)){
+    if(!data || !Array.isArray(data.questions)) throw new Error('DI atsakymas neatpažintas: jame nėra klausimų sąrašo.');
+    data=data.questions;
+  }
+  PPQ.questions=data.filter(q=>q && typeof q==='object' && String(q.question||'').trim())
+    .map((q,i)=>({id:'q'+i,question:noDash(q.question||''),type:q.type==='choice'?'choice':'text',options:(Array.isArray(q.options)?q.options:[]).map(noDash),hint:noDash(q.hint||'')}));
 }
 
 function renderStep2(){
@@ -1430,8 +1480,8 @@ function renderStep2(){
     }else{
       input=`<input type="text" id="ans-${q.id}" value="${esc(PPQ.answers[q.id]||'')}" placeholder="Jūsų atsakymas...">`;
     }
-    return `<div class="field">
-      <label>${esc(q.question)}</label>
+    return `<div class="field" data-di="sugeneruota">
+      <label for="ans-${q.id}">${esc(q.question)}</label>
       ${input}
       ${q.hint?`<div class="hint">${esc(q.hint)}</div>`:''}
     </div>`;
@@ -1452,7 +1502,7 @@ function renderStep2(){
 /* Žaliasis pirkimas įjungtas, o į aplinkosaugos klausimą atsakyta „Neaktualu“ - sprendžia žmogus PRIEŠ
    generavimą (iki 2026-09-23 prieštaravimas palikdavo DI nuožiūrai, ir atsirasdavo ISO 14001). */
 function zaliasPriestarauja(){
-  if(!PPQ.settings.green) return null;
+  if(PPQ.settings.green!==true) return null;
   return PPQ.questions.find(q=>/aplink|žali|ekolog|tvarum|14001|EMAS/i.test(q.question+' '+(q.hint||''))
     && /^(__na|neaktualu|netaikoma|ne|nėra)$/i.test(String(PPQ.answers[q.id]||'').trim().replace(/[.!]+$/,''))) || null;
 }
@@ -1476,6 +1526,7 @@ async function submitStep2(){
   const zq=zaliasPriestarauja();
   if(zq && !PPQ.ui.zaliasPatvirtintas){ rodykZaliaKonflikta(zq); return; }
   $('zalias-konfliktas').innerHTML='';
+  if(!perrasytiLeista()) return;
   const btn=$('step2-next');
   btn.disabled=true;
   const r = await aiVeiksmas('#wizBusena', 'DI rengia kvalifikacijos reikalavimų rinkinį', 'Reikalavimų sugeneruoti nepavyko', submitStep2, () => generateRequirements());
@@ -1506,10 +1557,10 @@ Grąžink TIK JSON masyvą be papildomo teksto:
 ]
 
 Apskaičiuotos reikšmės pagal Metodiką (naudok jas; nuorodas rašyk tik taip, kaip čia):
-${proporcingumoEilutes(calc,'lt').map(e=>`- ${e.rodiklis}: ${e.reiksme} (${e.pagrindimas})`).join('\n')}
+${proporcingumoEilutes(calc,'lt').map(e=>`- ${e.rodiklis}: ${e.reiksme} (${e.pagrindimas})`).join('\n')}${daliuEilutes('lt').length ? '\nKiekvienai pirkimo daliai (reikalavimus dalims nustatyk pagal dalies vertę):\n'+daliuEilutes('lt').map(e=>`- ${e.rodiklis}: ${e.reiksme} (${e.pagrindimas})`).join('\n') : ''}
 
 ${kontekstoTekstas(pirkimoKontekstas(), true)}
-Žaliasis pirkimas: ${PPQ.settings.green ? 'TAIP. '+zaliojoInstrukcija() : 'ne'}
+Žaliasis pirkimas: ${PPQ.settings.green===true ? 'TAIP. '+zaliojoInstrukcija() : PPQ.settings.green===false ? 'ne' : 'nenurodyta - aplinkosaugos kvalifikacijos reikalavimų vien dėl žaliojo pirkimo nesiūlyk'}
 ${itPirkimas()?'Taikomos VPT IT pirkimų gairės.':''}`;
   const info={};
   const resp=await callAI(prompt,{maxTokens:6000, info});
@@ -1548,6 +1599,7 @@ function naujaRedakcija(r, pakeitimai, kodel){
   r.rev=(r.rev||1)+1;
   r.patvirtinta=null;
   r.status='edited';
+  r.nesutampa=false;   // žmogus pakeitė tekstą - jis jau ne DI išskaidymo
 }
 /* Rimtos (high) ŠIOS redakcijos patikros pastabos - patvirtinti galima tik su pagrindimu. */
 function rimtosPastabos(r){
@@ -1578,14 +1630,19 @@ function skirtumas(senas, naujas){
 function kortelesZymos(r){
   const st=STATUS[r.status]||STATUS.ai;
   // data-di (DI akto 50 str. 2 d.; shared/di-zymejimas.js): reikalavimą pasiūlė DI - ir patvirtintą ar redaguotą žmogaus
-  let h=`<span class="badge ${st.cls}" data-di="sugeneruota" data-di-busena="${esc(r.status||'ai')}">${st.icon} ${st.label}</span>`
+  let h=r.zmogaus ? `<span class="badge badge-human">👤 Parašė žmogus${r.status==='review'?' - reikia peržiūros':''}</span>`
+    : `<span class="badge ${st.cls}" data-di="sugeneruota" data-di-busena="${esc(r.status||'ai')}">${st.icon} ${st.label}</span>`
     +`<span class="badge badge-cat">${esc(r.category)} - ${esc(CATS[r.category]||'')}</span>`;
   if((r.rev||1)>1) h+=`<span class="badge badge-cat" title="Teksto redakcija">${r.rev} red.</span>`;
   if(r.auditoRev && r.auditoRev!==(r.rev||1)) h+=`<span class="badge badge-edit">Pakeista po patikros</span>`;
   return h;
 }
 function kortelesIspejimas(r){
-  if(!r.warning) return '';
+  const ns=r.nesutampa ? `<div class="warn-block"><strong>🟡 Tekstas nesutampa su įklijuotu:</strong> DI išskaidytas reikalavimas įklijuotame tekste pažodžiui nerastas - DI galėjo pakeisti žodžius ar skaičius arba pridėti reikalavimą. Palyginkite su originalu ir pataisykite arba pašalinkite.</div>` : '';
+  if(!r.warning) return ns;
+  return ns+kortelesIspejimas0(r);
+}
+function kortelesIspejimas0(r){
   const senas=r.warningRev!=null && r.warningRev!==(r.rev||1);
   return `<div class="warn-block"><strong>🟡 Įspėjimas${senas?' ankstesnei redakcijai':''}:</strong> ${esc(r.warning)}${senas?' <em>Tekstas pakeistas - pakartokite patikrą.</em>':''}</div>`;
 }
@@ -1655,7 +1712,7 @@ function renderStep34(){
   <div class="card card-pad-lg">
     <h2>${PPQ.step} žingsnis. ${PPQ.step===3?'Pasiūlytas kvalifikacijos rinkinys':'Peržiūra ir redagavimas'}</h2>
     <p class="muted" style="margin-bottom:var(--space-2)">${PPQ.step===3
-      ? 'DI pasiūlė '+PPQ.requirements.length+' reikalavimų '+ (warnCount?('('+warnCount+' su įspėjimais). '):'. ') +'Peržiūrėkite ir spauskite "Toliau" redagavimui.'
+      ? 'DI pasiūlė '+PPQ.requirements.length+' '+(n=>(n%10===1 && n%100!==11) ? 'reikalavimą' : (n%10>=2 && (n%100<10 || n%100>=20)) ? 'reikalavimus' : 'reikalavimų')(PPQ.requirements.length)+' '+ (warnCount?('('+warnCount+' su įspėjimais). '):'. ') +'Peržiūrėkite ir spauskite "Toliau" redagavimui.'
       : 'Redaguokite tekstą tiesiogiai, keiskite kategoriją ir būsenas, šalinkite ar pridėkite reikalavimus. Patvirtinimas (✓) galioja tai redakcijai, kurią patvirtinote: pakeitus tekstą, jį reikės patvirtinti iš naujo. Atlikus pakeitimus paleiskite audito patikrą.'}</p>
     ${nutruko}
     ${summary}
@@ -1668,6 +1725,7 @@ function renderStep34(){
         : `<button class="btn btn-secondary" onclick="runFullAudit();">Paleisti audito patikrą</button>
            <button class="btn btn-primary" onclick="PPQ.step=5;renderWizard();">Toliau - eksportas</button>`}
     </div>
+    ${PPQ.step===3?'':`<div class="cite-ai">Patikrinant reikalavimų tekstas ir pirkimo kontekstas (su numatoma verte) siunčiami per G-Procure serverį į Claude API. Nesiųskite įslaptintos informacijos.</div>`}
   </div>`;
 }
 
@@ -1740,6 +1798,7 @@ function removeReq(id){
 function addReq(cat){
   // „Reikia peržiūros“, ne „žmogus tvirtino“: tuščias tekstas eksportą stabdo, kol neįrašytas.
   const r=reikalavimas({ category:cat, text:'' },'review');
+  r.zmogaus=true;   // M2 (2026-10-26): parašė žmogus - ne DI turinys
   PPQ.requirements.push(r);
   perpiesk();
   setTimeout(()=>{ const el=document.querySelector('.view.active .req-item[data-id="'+r.id+'"] .req-text'); if(el) el.focus(); },50);
@@ -1787,6 +1846,42 @@ function trukmeMen(tekstas){ return GP_PROPORCINGUMAS.trukmeMen(tekstas); }
 function vertesRibos(objectType, rez){ return GP_PROPORCINGUMAS.vertesRibos(objectType, rez || rezimas()); }
 /* p = { value, valueCat, objectType, duration } - skaičiuoklė, AI užklausa, taisyklės ir Word priedas naudoja tą patį. */
 function proporcingumas(p, rez){ return GP_PROPORCINGUMAS.skaiciuok(p, rez || rezimas()); }
+/* Pirkimo dalys su vertėmis (K4, 2026-10-26): iš lauko „Pirkimo dalys“ (pirkimo kortelė - „1 dalis - X (120 000 EUR); 2 dalis - Y (60 000 EUR)“).
+   Metodikos 7.2 p. ir VPĮ 47 str. 4 d. (GP_TEISE met_dalims, kvalifikacija_dalims): reikalavimai nustatomi kiekvienai daliai atskirai -
+   ribos skaičiuojamos dalies vertei. Iki tol visa pirkimo vertė: 100 000 EUR patirtis 60 000 EUR daliai gavo tik žemiausią pastabą,
+   o Word 4 skyriuje - visos vertės ribos. Dalys atpažįstamos tik kai kiekviena turi vertę (kitaip - kaip iki tol, su pastaba). */
+const ROMENISKI={I:1,II:2,III:3,IV:4,V:5,VI:6,VII:7,VIII:8,IX:9,X:10,XI:11,XII:12};
+function dalNr(x){ return /^\d+$/.test(x) ? parseInt(x,10) : ROMENISKI[String(x).toUpperCase()]||null; }
+function daliuVertes(p){
+  const s=String((p||{}).dalys||'');
+  if(!s.trim()) return [];
+  const D=s.split(/;|\n/).map(x=>x.trim()).filter(Boolean).map((x,i)=>{
+    const m=x.match(/^(\d+|[IVX]+)\s*(?:-?(?:oji|ji|a))?\s*dal/i);
+    const v=parseEur(x)[0];
+    return { nr:(m && dalNr(m[1]))||i+1, pav:x.replace(/\s*\([^)]*(?:EUR|€)[^)]*\)\s*$/i,'').trim(), verte:v>0 ? v : null };
+  });
+  return D.length>=2 && D.every(d=>d.verte) ? D : [];
+}
+/* Kuriai daliai skirtas reikalavimas: „2 daliai“, „II dalies“, „1-ajai daliai“ - tik vienintelis paminėtas numeris. */
+function reikalavimoDalis(tekstas, D){
+  if(!D.length) return null;
+  const nr=new Set(); let m; const re=/(?:^|[^\p{L}\p{N}])(\d{1,2}|[IVX]{1,4})\s*(?:-?(?:osios|ajai|ajai|oji|osios))?\s*dal(?:iai|ies|is|yje|į)(?![\p{L}])/giu;
+  while((m=re.exec(String(tekstas||'')))){ const n=dalNr(m[1]); if(n) nr.add(n); }
+  if(nr.size!==1) return null;
+  return D.find(d=>d.nr===[...nr][0])||null;
+}
+/* Proporcingumo ribos kiekvienai daliai - DI užklausai ir Word 4 skyriui. */
+function daliuEilutes(kalba){
+  const en=kalba==='en', L=(lt,e)=>en?e:lt, p=PPQ.procurement, D=daliuVertes(p);
+  const T=k=>GP_TEISE.cit(k, rezimas(), en?'en':'lt');
+  return D.map(d=>{
+    const c=proporcingumas(Object.assign({}, p, { value:d.verte }));
+    const paj=c.pajamos.nenustatomos ? L('paprastai nenustatomos','normally not set') : L('iki ','up to ')+fmtEur(c.ilgalaike ? c.pajamos.metodikosRiba : c.pajamos.istatymoRiba);
+    return { id:'dalis'+d.nr, rodiklis:d.pav+' ('+fmtEur(d.verte)+')',
+      reiksme:(c.kategorija ? (en?KATEGORIJA_EN:KATEGORIJA_LT)[c.kategorija.kodas]+'; ' : '')+L('įvykdytų sutarčių vertė iki ','performed contracts up to ')+fmtEur(c.patirtis.riba)+'; '+L('metinės pajamos ','annual turnover ')+paj,
+      pagrindimas:`${T('met_dalims')}; ${T('kvalifikacija_dalims')}` };
+  });
+}
 
 /* Proporcingumo eilutės (LT arba EN) - tas pats turinys skaičiuoklėje, AI užklausoje ir Word priede. */
 function proporcingumoEilutes(c, kalba){
@@ -1799,6 +1894,8 @@ function proporcingumoEilutes(c, kalba){
     reiksme:(en?KATEGORIJA_EN:KATEGORIJA_LT)[c.kategorija.kodas],
     pagrindimas:`${T(c.kategorija.raktas)} (${L('ribos','thresholds')} ${fmtEur(c.ribos.maza)} / ${fmtEur(c.ribos.tarptautine)})`
       + (c.misrus?L('; mišriam pirkimui - pagal prekių ir paslaugų ribas, patikslinkite pagal pagrindinį objektą','; mixed procurement - goods and services thresholds, check the main object'):'') });
+  else if(c.verte>0) rows.push({ id:'kategorija', rodiklis:L('Vertės kategorija','Contract value category'),
+    reiksme:L('nežinoma','unknown'), pagrindimas:L('pasirinkite objekto tipą - darbų ir prekių bei paslaugų ribos skiriasi','select the object type - the thresholds for works and for goods and services differ') });
   if(c.kategorija && c.kategorija.kodas==='maza') rows.push({ id:'mvp', rodiklis:L('Metodikos taikymas','Methodology application'),
     reiksme:L('Neprivaloma','Not mandatory'), pagrindimas:`${T('met_mvp')}: ${L('rekomenduojama laikytis jos principų','its principles are recommended')}` });
   rows.push({ id:'trukme', rodiklis:L('Sutarties trukmė','Contract duration'),
@@ -1855,7 +1952,7 @@ function kategorijaNumatyta(pr){
   const c=proporcingumas(Object.assign(formosPirkimas(pr),{valueCat:''}));
   if(sel && !sel.dataset.rankinis && c.kategorija) sel.value=MODULIO_KOEF[c.kategorija.kodas];
   if(!info) return;
-  if(!c.kategorija){ info.textContent=''; return; }
+  if(!c.kategorija){ info.textContent=c.verte>0 ? 'Vertės kategorija nustatoma pasirinkus objekto tipą: darbų ir prekių bei paslaugų ribos skiriasi.' : ''; return; }
   const e=proporcingumoEilutes(c,'lt'), rasti=id=>e.find(x=>x.id===id);
   info.textContent='Pagal Metodiką: '+rasti('kategorija').reiksme+' vertė - '+rasti('kategorija').pagrindimas
     +'. Trukmė: '+rasti('trukme').reiksme+(c.trukme?' ('+(c.ilgalaike?'ilgalaikė':'trumpalaikė')+')':'')+'.';
@@ -1979,17 +2076,24 @@ async function handleAuditFile(file){
   }catch(e){ toast('Nepavyko: '+e.message,true); }
 }
 
+/* V7 (2026-10-26): naujas rinkinys pakeičia esamą - kai jame yra patvirtintų ar redaguotų reikalavimų, klausiama (iki tol be klausimo). */
+function perrasytiLeista(){
+  const n=PPQ.requirements.filter(r=>patvirtintas(r) || (r.rev||1)>1 || r.zmogaus).length;
+  return !n || confirm('Rinkinyje yra '+n+' patvirtintų ar redaguotų reikalavimų. Naujas rinkinys juos pakeis - tęsti?');
+}
 async function startAudit(){
   const raw=($('a-paste').value||'').trim();
   if(!raw){ toast('Įklijuokite reikalavimus',true); return; }
+  if(!perrasytiLeista()) return;
   const r = ribotiTeksta(raw);
   const txt = r.tekstas;
   rodykKirpima('aud-kirpimas', r);
   const verte=parseFloat($('a-value').value);
   if($('a-value').value!=='' && !(verte>0)){ toast('Numatoma vertė turi būti teigiama (EUR be PVM) arba palikite lauką tuščią.',true); return; }
   PPQ.procurement.name=$('a-name').value.trim()||PPQ.procurement.name;
-  PPQ.procurement.value=verte>0 ? verte : PPQ.procurement.value;
-  PPQ.procurement.objectType=$('a-type').value||PPQ.procurement.objectType;
+  // Išvalytas laukas - nenurodyta (V6, 2026-10-26: iki tol patikra naudodavo paslėptą seną vertę ir tipą)
+  PPQ.procurement.value=verte>0 ? verte : null;
+  PPQ.procurement.objectType=$('a-type').value||'';
   PPQ.procurement.duration=$('a-duration').value.trim();
   PPQ.procurement.valueCat=$('a-valuecat').value;
   PPQ.procurement.koefRankinis=!!$('a-valuecat').dataset.rankinis;
@@ -2049,6 +2153,7 @@ function isAiReikalavimu(data, statusas, info, tuscioZinute){
 
 async function parseRequirementsFromText(txt){
   const prompt=`Iš pateikto teksto išskirk atskirus kvalifikacinius reikalavimus. Kiekvieną priskirk kategorijai A-E (A teisė verstis veikla, B finansai, C techninė/profesinė kompetencija, D kokybės standartai, E aplinkosauga/socialiniai).
+Reikalavimo ir įrodymų tekstą perrašyk PAŽODŽIUI iš pateikto teksto: nekeisk žodžių ir skaičių, nieko nepridėk ir nesujunk. Reikalavimų, kurių tekste nėra, nekurk.
 
 Grąžink TIK JSON masyvą:
 [{"category":"A|B|C|D|E","text":"reikalavimo tekstas","evidence":"įrodymai jei nurodyta, kitaip tuščia"}]
@@ -2060,11 +2165,19 @@ TEKSTAS:
   const data=smartParseJson(resp);
   if(!data) throw new Error('Nepavyko išskirti reikalavimų.'+(info.nutruko?' DI atsakymas nutrūko ties ilgio riba.':''));
   PPQ.requirements=isAiReikalavimu(data,'review',info,'Tekste nerasta reikalavimų: DI neišskyrė nė vieno.');
+  // K2 (2026-10-26): DI išskaidytas tekstas turi būti įklijuotame tekste - kitaip DI galėjo pakeisti žodžius ar skaičius
+  // (imituotas atsakymas 900 000 EUR pavertė 90 000 EUR ir pridėjo nebuvusį ISO 14001 reikalavimą)
+  const S=saltinioForma(txt);
+  PPQ.requirements.forEach(r=>{ if(!S.includes(saltinioForma(r.text).replace(/^\d+(?:\.\d+)*[.)]\s*/,''))){ r.nesutampa=true; r.status='review'; } });
   PPQ.generavimas={ nutruko:!!info.nutruko };
   PPQ.audit=naujasAuditas();
   PPQ.vertimoKlaida='';
 }
 
+/* Palyginimui su įklijuotu tekstu: kabutės, brūkšniai, tarpai ir raidžių dydis nesvarbūs */
+function saltinioForma(s){
+  return String(s||'').normalize('NFC').replace(/[„“”«»]/g,'"').replace(/[‘’]/g,"'").replace(/[–—]/g,'-').replace(/\s+/g,' ').trim().toLowerCase();
+}
 /* ---------- TAISYKLIŲ VARIKLIS (deterministinis) ---------- */
 function parseEur(text){
   // Randa EUR sumas tekste; skaičių skaito shared/money.js (1 000 000,00 / 1,000,000.00 / 1.000.000).
@@ -2077,6 +2190,12 @@ function parseEur(text){
   while((m=re.exec(text))){
     let v=GP_MONEY.parseEUR(m[1]);
     if(v!=null && m[2]) v*= /^(mln|milijon)/i.test(m[2]) ? 1e6 : 1e3;
+    if(v!=null && v>0) out.push(Math.round(v*100)/100);
+  }
+  // Valiuta prieš sumą: „EUR 900 000“, „€900,000“ (V3, 2026-10-26: iki tol tokia suma neatpažinta - R1 ir R9 tylėjo)
+  const re2=/(?:^|[^\p{L}])(?:eur|€)\s*(\d{1,3}(?:[ \u00a0\u202f.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?)(?!\s*(?:eur|€))/giu;
+  while((m=re2.exec(text))){
+    const v=GP_MONEY.parseEUR(m[1]);
     if(v!=null && v>0) out.push(Math.round(v*100)/100);
   }
   return out;
@@ -2104,9 +2223,22 @@ function sakiniai(t){
 }
 
 function rulesEngine(r){
+  const issues=rulesEngine0(r);
+  const D=daliuVertes(PPQ.procurement);
+  if(!D.length) return issues;
+  const dal=reikalavimoDalis(r.text, D);
+  if(dal) issues.forEach(x=>{ x.body=`Pagal ${dal.pav} vertę ${fmtEur(dal.verte)} (${GP_TEISE.cit('met_dalims')}). `+x.body; });
+  else if(/(?:\d|\.)\s*(?:eur|€)/i.test(r.text) && /pajam|apyvart|sutart|įvykd|patiek|suteik|atlik|patirt/i.test(r.text))
+    issues.push({ sev:'low', rule:'R16', title:'Pirkimas skaidomas į dalis - dalis nenurodyta',
+      body:`Pirkimas skaidomas į dalis (${D.map(d=>d.pav+' - '+fmtEur(d.verte)).join('; ')}), o reikalavime dalis nenurodyta, todėl jis patikrintas pagal visą pirkimo vertę. ${GP_TEISE.cit('met_dalims')}: reikalavimai nustatomi kiekvienai daliai atskirai.`,
+      ref:`${GP_TEISE.cit('met_dalims')}; ${GP_TEISE.cit('kvalifikacija_dalims', rezimas())}`, fix:'Nurodykite, kuriai daliai reikalavimas taikomas, ir jo reikšmę pagal tos dalies vertę.' });
+  return issues;
+}
+function rulesEngine0(r){
   const issues=[];
   const t=r.text.toLowerCase();
-  const p=PPQ.procurement;
+  const D0=daliuVertes(PPQ.procurement), dal0=reikalavimoDalis(r.text, D0);
+  const p=dal0 ? Object.assign({}, PPQ.procurement, { value:dal0.verte }) : PPQ.procurement;   // dalies reikalavimas - pagal dalies vertę
   const N=GP_TEISE.normos, M=k=>GP_TEISE.cit(k);
   const c=proporcingumas(p);
   const koef=c.patirtis.koef;
@@ -2126,7 +2258,8 @@ function rulesEngine(r){
         issues.push({sev:'high',rule:'R9',title:'Pajamų reikalavimas viršija dvigubą pirkimo vertę',
           body:`Reikalaujama ${fmtEur(virsIst)} - daugiau nei ${N.pajamuKartai.reiksme} kartus numatomos pirkimo vertės (${fmtEur(c.pajamos.istatymoRiba)}). Tai galima tik pagrįstais atvejais, o pagrindinės priežastys nurodomos pirkimo dokumentuose ar pirkimo procedūrų ataskaitoje.`,
           ref:`${teise('apyvarta')}; ${M('met_apyvarta')}`,
-          fix:`Sumažinti iki ne daugiau kaip ${fmtEur(c.pajamos.istatymoRiba)} arba pirkimo dokumentuose nurodyti priežastis.`});
+          // ilgalaikei - iškart Metodikos riba pagal didžiausią metinę vertę (V2: iki tol siūlyta įstatymo riba, kurią kita taisyklė vėl žymėjo)
+          fix:`Sumažinti iki ne daugiau kaip ${fmtEur(c.ilgalaike ? Math.min(c.pajamos.istatymoRiba, c.pajamos.metodikosRiba) : c.pajamos.istatymoRiba)}${c.ilgalaike ? ' (ilgalaikė sutartis - pagal didžiausią metinę vertę)' : ''} arba pirkimo dokumentuose nurodyti priežastis.`});
       else if(virsMet)
         issues.push({sev:'med',rule:'R9',title:'Ilgalaikei sutarčiai - pagal metinę vertę',
           body:`Sutartis ilgalaikė (${kbl(c.men)} mėn., ${M('met_ilgalaike')}). ${M('met_apyvarta_bendros')}: pajamų reikalavimas - ne daugiau kaip ${N.pajamuKartai.reiksme} kartus didžiausios metinės vertės (${fmtEur(c.pajamos.metodikosRiba)}, kai kasmet vykdoma tolygiai)`
@@ -2291,6 +2424,20 @@ const VEIKSMAI=['replace','delete','keep','review'];
    Iki 2026-09-23 bet koks ilgesnis nei 25 simbolių „fix“ buvo laikomas nauju reikalavimo
    tekstu, ir sakinys „Įvertinkite, ar šis reikalavimas apskritai būtinas“ pakeisdavo patį
    reikalavimą. „fix“ dabar - tik rekomendacija, ji niekada nepritaikoma. */
+/* DI pateiktos teisės nuorodos (V4, 2026-10-26): rodomos tik tos, kurios yra sistemos instrukcijoje (ji sudaryta iš G-Procure registro,
+   shared/teises-nuorodos.js). Kitokia straipsnio ar punkto nuoroda nerodoma ir tai pasakoma - iki tol DI nurodytas PĮ straipsnis, kuris reguliuoja
+   pirkimo skelbimo rengimą, buvo rodomas kaip pagrindas. */
+const NUOR_RE=/(?:PĮ|VPĮ)\s+\d+\s+str\.(?:\s+\d+\s+d\.)?(?:\s+\d+\s+p\.)?|Metodikos\s+\d+(?:\.\d+)*\s+p\./g;
+function tikraDiNuoroda(ref){
+  const r=String(ref||'').trim();
+  if(!r) return '';
+  const rastos=r.match(NUOR_RE)||[];
+  if(!rastos.length) return /\d/.test(r) && /str\.|straipsn|punkt|\bp\./i.test(r) ? '' : r;
+  const sis=systemPrompt();
+  // Nuoroda turi būti instrukcijoje kaip atskira nuoroda: PĮ straipsnis nėra to paties numerio VPĮ straipsnio dalis (prieš ją - ne raidė)
+  const yra=x=>new RegExp('(?:^|[^\\p{L}])'+x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'u').test(sis);
+  return rastos.every(yra) ? r : '';
+}
 function aiPastaba(f, revs){
   if(!f || typeof f!=='object') return null;
   const reqId=String(f.reqId==null?'':f.reqId).replace(/^\[|\]$/g,'').trim();
@@ -2300,7 +2447,8 @@ function aiPastaba(f, revs){
   if(action==='replace' && !proposedText) action='review';
   return { reqId, reqRev:Object.prototype.hasOwnProperty.call(revs,reqId) ? revs[reqId] : null, source:'ai',
     sev:SEV_AI[String(f.sev||'').toLowerCase().trim()]||'med',
-    title:noDash(f.title||''), body:noDash(f.body||''), ref:noDash(f.ref||''),
+    title:noDash(f.title||''), body:noDash(f.body||''), ref:tikraDiNuoroda(noDash(f.ref||'')),
+    refAtmesta:!!String(f.ref||'').trim() && !tikraDiNuoroda(noDash(f.ref||'')),
     action, proposedText, fix:noDash(f.fix||'') };
 }
 
@@ -2337,6 +2485,15 @@ async function vykdykAudita(A){
       issues.forEach(is=> ruleFindings.push(Object.assign({reqId:r.id, reqRev:revs[r.id], source:'rule'},is)));
       r.ruleIssues=issues;
     });
+    // K2: reikalavimai išskaidyti DI iš įklijuoto teksto - taisyklės ir pačiam tekstui; radinys, kurio reikalavimuose nėra
+    // (DI galėjo pakeisti skaičių), - „Įklijuotame tekste“
+    if(PPQ.requirements.some(r=>r.nesutampa) && PPQ.sourceText){
+      const zinomi=new Set(ruleFindings.map(f=>f.rule+'|'+f.title));
+      rulesEngine({ id:'saltinis', text:PPQ.sourceText, category:'C' }).forEach(is=>{
+        if(zinomi.has(is.rule+'|'+is.title)) return;
+        ruleFindings.push(Object.assign({ reqId:'visuma', reqRev:null, source:'rule' }, is, { title:'Įklijuotame tekste: '+is.title }));
+      });
+    }
   }catch(e){
     Object.assign(A,{ busena:'nepavyko', klaida:'taisyklių variklio klaida: '+(e.message||e), findings:[], summary:null, parasas, laikas:new Date().toISOString() });
     return;
@@ -2462,11 +2619,11 @@ function pastabosHtml(f, kiek, grupeje){
   }else if(f.action==='delete'){
     veiksmas=`<div class="finding-fix"><strong>DI siūlo reikalavimą pašalinti.</strong> Jei sutinkate, pašalinkite jį reikalavimo kortelėje (🗑).</div>`;
   }
-  return `<div class="finding ${sevCls[f.sev]||'sev-low'}">
+  return `<div class="finding ${sevCls[f.sev]||'sev-low'}"${f.source==='ai'?' data-di="sugeneruota"':''}>
     <div class="finding-title">${sevLabel[f.sev]||''} ${esc(f.title)} <span class="badge ${f.source==='rule'?'badge-cat':'badge-ai'}" style="margin-left:auto">${f.source==='rule'?'Taisyklė '+(f.rule||''):'DI'}</span></div>
     ${kam}
     <div class="finding-body">${esc(f.body)}</div>
-    ${f.ref?`<div class="finding-ref">${esc(f.ref)}</div>`:''}
+    ${f.ref?`<div class="finding-ref">${esc(f.ref)}</div>`:''}${f.refAtmesta?`<div class="finding-ref">DI nurodė teisės nuorodą, kurios nėra G-Procure teisės nuorodų registre - nerodoma.</div>`:''}
     ${f.fix?`<div class="finding-fix"><strong>Rekomendacija:</strong> ${esc(f.fix)}</div>`:''}
     ${veiksmas}
   </div>`;
@@ -2505,6 +2662,7 @@ function renderAuditResults(){
         <button class="btn btn-secondary btn-sm" onclick="renderAuditInput()">Nauja patikra</button>
       </div>
     </div>
+    <div class="cite-ai" style="margin-top:0">„${paleisti}“: Patikrinant reikalavimų tekstas ir pirkimo kontekstas (su numatoma verte) siunčiami per G-Procure serverį į Claude API. Nesiųskite įslaptintos informacijos.</div>
     <div class="gyva" data-f="auditoBusenosHtml">${auditoBusenosHtml()}</div>
     ${yra?`<div class="audit-summary" style="margin-top:var(--space-2)">
       <div class="stat neutral"><div class="num">${s.total||R.length}</div><div class="lbl">Iš viso reikalavimų</div></div>
@@ -2567,8 +2725,13 @@ async function extractFileText(file){
   if(name.endsWith('.pdf')){
     return await readPdf(file);
   }
-  // fallback
-  return await file.text();
+  // V9 (2026-10-26): kitas failas skaitomas kaip tekstas tik jei tai tekstas - senas .doc, .xls ar paveikslas („Failas perskaitytas“ su
+  // šiukšlėmis, kurios būtų išsiųstos DI) - klaida su priežastimi
+  const s=await file.text();
+  const blogi=(s.slice(0,4000).match(/[\u0000-\u0008\u000E-\u001F\uFFFD]/g)||[]).length;
+  if(!s.trim() || blogi > Math.max(5, s.slice(0,4000).length*0.02))
+    throw new Error('šio formato failo perskaityti negalima - išsaugokite jį kaip DOCX, PDF arba TXT');
+  return s;
 }
 
 async function readPdf(file){
@@ -2643,6 +2806,17 @@ function eksportoPatikra(){
     if(ab!=='atlikta') juod.push({ lt:AUDITO_BUSENOS[ab].juodr, en:AUDITO_BUSENOS[ab].juodrEn });
     if(PPQ.generavimas.nutruko) juod.push({ lt:'DI atsakymas rengiant rinkinį nutrūko ties ilgio riba - rinkinys gali būti nepilnas.',
                                             en:'The AI response was cut off at the length limit while preparing the set - the set may be incomplete.' });
+    const ns=R.filter(r=>r.nesutampa).length;
+    if(ns) juod.push({ lt:'DI išskaidyto teksto, nesutampančio su įklijuotu, liko: '+ns+' iš '+vis+' '+reikalavimuKilm(vis)+' - palyginkite su originalu.',
+                       en:'Requirements split by AI that do not match the pasted text: '+ns+' of '+vis+' - compare with the original.' });
+    if(PPQ.exportLang==='lten'){
+      const su=R.filter(r=>vertimasGalioja(r));
+      const blogi=su.filter(r=>vertimoPastabos(r).length && !vertimasPatvirtintas(r)).length;
+      const nepatv=su.filter(r=>!vertimasPatvirtintas(r)).length;
+      if(blogi) blok.push({ lt:'EN vertimas: '+blogi+' iš '+vis+' '+reikalavimuKilm(vis)+' vertimas turi pastabų (skaičiai nesutampa ar liko lietuviško teksto) - pataisykite arba patvirtinkite jį žemiau.' });
+      else if(nepatv) juod.push({ lt:'EN vertimą parengė DI, žmogus jo nepatvirtino: '+nepatv+' iš '+vis+' '+reikalavimuKilm(vis)+'.',
+                                  en:'The English translation was prepared by AI and has not been approved: '+nepatv+' of '+vis+' requirement(s).' });
+    }
   }
   return { blok, juod };
 }
@@ -2678,8 +2852,9 @@ function exportButtonsHtml(){
       <button class="lang-opt seg-btn${L==='lt'?' active':''}" data-lang="lt" onclick="setExportLang('lt')">LT</button>
       <button class="lang-opt seg-btn${L==='lten'?' active':''}" data-lang="lten" onclick="setExportLang('lten')">LT / EN</button>
     </div>
-    <div class="hint" style="margin-top:6px">LT / EN parengia dvikalbę lentelę (reikalavimas ir pateikiami dokumentai abiem kalbomis). EN vertimą atlieka DI; jei jis nepilnas, dvikalbis dokumentas negeneruojamas.</div>
+    <div class="hint" style="margin-top:6px">LT / EN parengia dvikalbę lentelę (reikalavimas ir pateikiami dokumentai abiem kalbomis). EN vertimą atlieka DI: paspaudus DOCX lietuviškas reikalavimų ir dokumentų tekstas siunčiamas per G-Procure serverį į Claude API. Vertimas parodomas peržiūrėti ir patvirtinti; jei jis nepilnas ar su pastabomis, dvikalbis dokumentas negeneruojamas.</div>
   </div>
+  ${vertimuPerziuraHtml()}
   <div class="lang-select" style="margin-bottom:var(--space-3)">
     <div class="lbl" style="font-weight:700;font-size:13px;color:var(--color-graphite);margin-bottom:6px">Dokumento paskirtis</div>
     <div class="seg">
@@ -2733,9 +2908,81 @@ INPUT:
     const te=noDash(String(d.text_en||'').trim()), ee=noDash(String(d.evidence_en||'').trim());
     if(!te || (r.evidence && !ee)) return;
     r.text_en=te; r.evidence_en=r.evidence?ee:''; r.vertimoRev=r.rev||1;
+    r.vertimoDi=true; r.vertimoPatvirtintas=null;   // naujas DI vertimas - dar nepatvirtintas (K1)
   });
   const truksta=vertimoTruksta();
   return { ok:!truksta, truksta };
+}
+
+/* ---------- EN vertimo patikra ir peržiūra (K1, 2026-10-26) ----------
+   DI vertimas tikrinamas: skaičiai turi sutapti su lietuvišku tekstu, lietuviškų raidžių neturi likti, vertimas - ne lietuviškas
+   tekstas („EN: ...“). Vertimas rodomas šalia lietuviško, žmogus gali pataisyti ir patvirtina (vertimoPatvirtintas - tai redakcijai
+   ir tam tekstui). Su pastabomis ir nepatvirtintas - dvikalbis dokumentas negeneruojamas; be pastabų, bet nepatvirtintas -
+   JUODRAŠTIS. Iki tol DI vertimas į tiekėjams skirtą dokumentą keliaudavo neparodytas ir nepatikrintas: imituotas atsakymas
+   „360 000 EUR per 3 metus“ pavertė „EUR 3 600 000 in the last 5 years“, o lietuviškas tekstas buvo priimtas kaip vertimas. */
+function skaiciaiTekste(s){
+  return (String(s||'')
+    .replace(/(\d)[\s\u00A0\u202F](?=\d{3}(?!\d))/g,'$1')      // tūkstančių tarpas: 360 000
+    .replace(/(\d)[.,](?=\d{3}(?!\d))/g,'$1')                    // tūkstančių skyriklis: 360,000 / 360.000
+    .match(/\d+(?:[.,]\d+)?/g)||[]).map(x=>String(parseFloat(x.replace(',','.')))).sort();
+}
+function vertimoPastabos(r){
+  const out=[];
+  const poros=[[r.text,r.text_en,'reikalavime']].concat(r.evidence?[[r.evidence,r.evidence_en,'dokumentuose']]:[]);
+  poros.forEach(([lt,en,kur])=>{
+    lt=String(lt||''); en=String(en||'');
+    if(!en.trim()) return;
+    if(/^\s*EN\s*:/i.test(en) || en.trim()===lt.trim()) out.push('Vertimas '+kur+' - lietuviškas tekstas, ne vertimas.');
+    else if(/[ąčęėįšųūž]/i.test(en)) out.push('Vertime '+kur+' liko lietuviškų raidžių - patikrinkite, ar viskas išversta.');
+    const a=skaiciaiTekste(lt), b=skaiciaiTekste(en);
+    if(a.join(' ')!==b.join(' ')) out.push('Skaičiai '+kur+' nesutampa: lietuviškai '+(a.join(', ')||'nėra')+', vertime '+(b.join(', ')||'nėra')+'.');
+  });
+  return out;
+}
+function vertimasPatvirtintas(r){
+  const v=r.vertimoPatvirtintas;
+  return !!(v && v.rev===(r.rev||1) && v.text_en===r.text_en && v.evidence_en===(r.evidence_en||''));
+}
+function vertimuPerziuraHtml(){
+  if(PPQ.exportLang!=='lten') return '';
+  const R=PPQ.requirements.filter(r=>vertimasGalioja(r));
+  if(!R.length) return '';
+  return `<div class="vertimai" style="margin-bottom:var(--space-3)">
+    <h3 style="color:var(--color-graphite)">Anglų kalbos vertimas - peržiūrėkite ir patvirtinkite</h3>
+    <p class="hint" style="margin-bottom:10px">Vertimą parengė DI (Claude). Patikrinkite skaičius, terminus ir prasmę, prireikus pataisykite ir paspauskite „Patvirtinti vertimą“. Kol vertimas nepatvirtintas, dvikalbis dokumentas pažymimas JUODRAŠČIU, o vertimas su pastabomis - negeneruojamas.</p>
+    ${R.map(r=>`<div class="card" style="padding:12px;margin-bottom:10px" id="vert-${r.id}">
+      <div style="font-size:13px;margin-bottom:6px"><strong>${esc(r.category)}.</strong> ${esc(r.text)}</div>
+      <label for="vert-t-${r.id}" style="font-size:13px">Vertimas</label>
+      <textarea id="vert-t-${r.id}" data-di="sugeneruota" rows="2" oninput="vertimoTaisymas('${r.id}')">${esc(r.text_en)}</textarea>
+      ${r.evidence?`<div class="hint" style="margin-top:6px">Pateikiami dokumentai: ${esc(r.evidence)}</div>
+      <label for="vert-e-${r.id}" style="font-size:13px">Dokumentų vertimas</label>
+      <textarea id="vert-e-${r.id}" data-di="sugeneruota" rows="2" oninput="vertimoTaisymas('${r.id}')">${esc(r.evidence_en)}</textarea>`:''}
+      <div id="vert-b-${r.id}">${vertimoBusenaHtml(r)}</div>
+    </div>`).join('')}
+  </div>`;
+}
+function vertimoBusenaHtml(r){
+  const past=vertimoPastabos(r), ok=vertimasPatvirtintas(r);
+  return (past.length?`<div class="warn-block" style="margin:8px 0 0"><strong>Patikrinkite:</strong><ul>${past.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div>`:'')
+    +`<div class="btn-row" style="margin-top:8px;align-items:center">${ok
+      ?`<span class="badge badge-human">✓ Vertimas patvirtintas</span>`
+      :`<span class="badge badge-review">${r.vertimoTaisytas?'DI vertimas, taisytas - nepatvirtintas':'DI vertimas - nepatvirtintas'}</span><button class="btn btn-secondary btn-sm" onclick="patvirtinkVertima('${r.id}')">Patvirtinti vertimą</button>`}</div>`;
+}
+function vertimoTaisymas(id){
+  const r=PPQ.requirements.find(x=>x.id===id); if(!r) return;
+  const t=$('vert-t-'+id), e=$('vert-e-'+id);
+  r.text_en=noDash(t.value); if(e) r.evidence_en=noDash(e.value);
+  r.vertimoTaisytas=true;
+  $('vert-b-'+id).innerHTML=vertimoBusenaHtml(r);
+  atnaujinkGyvas();
+}
+function patvirtinkVertima(id){
+  const r=PPQ.requirements.find(x=>x.id===id); if(!r) return;
+  if(!String(r.text_en||'').trim() || (r.evidence && !String(r.evidence_en||'').trim())){ toast('Vertimas tuščias - įrašykite jį',true); return; }
+  r.vertimoPatvirtintas={ rev:r.rev||1, text_en:r.text_en, evidence_en:r.evidence_en||'' };
+  $('vert-b-'+id).innerHTML=vertimoBusenaHtml(r);
+  atnaujinkGyvas();
+  const k=$('vert-b-'+id).querySelector('.badge'); if(k){ k.setAttribute('tabindex','-1'); k.focus(); }
 }
 
 /* ---------- DOCX ---------- */
@@ -2763,13 +3010,20 @@ async function exportDocx(){
   } else {
     toast('Generuojamas DOCX...');
   }
-  const juodrastis=vartai.juod;
-  const D=window.docx;
+  // Po vertimo - vartai iš naujo: vertimas su pastabomis stabdo, nepatvirtintas - juodraštis (K1)
+  const vartai2=eksportoPatikra();
+  if(vartai2.blok.length){ toast('Dokumentas negeneruojamas: '+vartai2.blok[0].lt,true); perpiesk(); return; }
+  const juodrastis=vartai2.juod;
+  const tiekejams=PPQ.exportPaskirtis==='tiekejams';   // be numatomos vertės ir vidinio pagrindimo
+  // Tiekėjams - oficialus pirkimo dokumentas (CLAUDE.md 5 sk., D2 2026-10-26): be žalios, antraštės grafito, lentelių antraštės
+  // F2F2F2 (CLEAR), be U+2013 ir U+2014; vidinis dokumentas - kaip iki tol
+  const D=tiekejams ? GP_DOCX_STILIAI.oficialus(window.docx) : window.docx;
   const {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,AlignmentType,BorderStyle,ShadingType,PageBreak,TableLayoutType,Header}=D;
   const p=PPQ.procurement;
   const calc=proporcingumas(p);
   const coef=calc.patirtis.koef;
-  const EM='00A072';
+  const EM=tiekejams ? GP_DOCX_STILIAI.OFICIALUS.tekstas : '00A072';
+  const FON=tiekejams ? { head:GP_DOCX_STILIAI.OFICIALUS.fonas, cat:GP_DOCX_STILIAI.OFICIALUS.fonas } : { head:'D7EEDB', cat:'EFF9F1' };
 
   // --- Lenteliu stulpeliu plociai realiais DXA (Pages gerbia tblGrid pazodziui) ---
   // usable skaiciuojamas is realiu puslapio konstantu, ne uzkoduotas.
@@ -2784,7 +3038,6 @@ async function exportDocx(){
   const reqColsW=dxaCols([8,46,46]);
   const propCols=dxaCols([38,20,42]);
   const compCols=dxaCols([6,35,8,20,16,15]);
-  const tiekejams=PPQ.exportPaskirtis==='tiekejams';   // be numatomos vertės ir vidinio pagrindimo
 
   const bi=(lt,en)=>(bilingual && en && en!==lt)?(lt+' / '+en):lt;   // sumos abiem kalbom vienodos - nedubliuojam
   // Lentelės tekstas: Arial 10 (size = 20 pusinių punktų)
@@ -2794,7 +3047,7 @@ async function exportDocx(){
     width:o.width?{size:o.width,type:WidthType.DXA}:undefined,
     columnSpan:o.span||undefined,
     verticalAlign:o.valign,
-    shading:(o.head||o.catHead)?{fill:o.catHead?'EFF9F1':'D7EEDB',type:ShadingType.CLEAR,color:'auto'}:undefined,
+    shading:(o.head||o.catHead)?{fill:o.catHead?FON.cat:FON.head,type:ShadingType.CLEAR,color:'auto'}:undefined,
     children:Array.isArray(content)?content:[para(content,{bold:o.head||o.bold,size:o.size,color:o.color,align:o.align})]
   });
 
@@ -2811,7 +3064,7 @@ async function exportDocx(){
       bi([MOKEJIMAI[p.mokejimai],p.avansas?'numatomas avansas':''].filter(Boolean).join('; '), [MOKEJIMAI_EN[p.mokejimai],p.avansas?'advance payment':''].filter(Boolean).join('; ')),'vidinis']] : []),
     ...(p.dalys ? [['Pirkimo dalys','Lots',p.dalys,'vidinis']] : []),
     ['Pirkimo kontekstas','Procurement regime',PPQ.settings.context==='sektorinis'?bi('Sektorinis (PĮ)','Utilities (PĮ)'):bi('Bendrasis (VPĮ)','Classic (VPĮ)')],
-    ['Žaliasis pirkimas','Green procurement',PPQ.settings.green?bi('Taip','Yes'):bi('Ne','No')],
+    ['Žaliasis pirkimas','Green procurement',PPQ.settings.green===true?bi('Taip','Yes'):PPQ.settings.green===false?bi('Ne','No'):bi('Nenurodyta','Not specified')],
     ['Data','Date',today()]
   ].filter(r=>!(tiekejams && r[3]==='vidinis'));
 
@@ -2884,7 +3137,8 @@ async function exportDocx(){
     // Sis teiginys ("apskaiciuotos pagal ... verte") tvirtinamas TIK kai verte yra - kad dokumentas neteigtu netiesos.
     children.push(new Paragraph({children:[new TextRun({text:bi(`Metodikos atskaitos reikšmės, apskaičiuotos pagal pirkimo vertę, objekto tipą ir sutarties trukmę. Tai ne nustatyti reikalavimai - jie pateikti 3 skyriuje. Patirties koeficientas ${kbl(coef)}${coef<GP_TEISE.normos.patirtiesRiba.reiksme?' - modulio rekomendacija, Metodikos riba - '+kbl(GP_TEISE.normos.patirtiesRiba.reiksme):' - Metodikos riba'}.`,`Reference values under the Methodology, calculated from the procurement value, object type and contract duration. They are not the requirements themselves, which are set out in Section 3. Experience coefficient ${coef}${coef<GP_TEISE.normos.patirtiesRiba.reiksme?' - module recommendation, the Methodology limit is '+GP_TEISE.normos.patirtiesRiba.reiksme:' - the Methodology limit'}.`),size:20})]}));
     // Tos pačios eilutės kaip skaičiuoklėje ir AI užklausoje (proporcingumoEilutes).
-    const eLT=proporcingumoEilutes(calc,'lt'), eEN=proporcingumoEilutes(calc,'en');
+    // Dalims - ribos kiekvienai daliai (K4, 2026-10-26)
+    const eLT=proporcingumoEilutes(calc,'lt').concat(daliuEilutes('lt')), eEN=proporcingumoEilutes(calc,'en').concat(daliuEilutes('en'));
     const propRows=[[bi('Rodiklis','Indicator'),bi('Reikšmė','Value'),bi('Pagrindimas','Basis')]]
       .concat(eLT.map((e,i)=>[bi(e.rodiklis,eEN[i].rodiklis),bi(e.reiksme,eEN[i].reiksme),bi(e.pagrindimas,eEN[i].pagrindimas)]));
     children.push(new Table({columnWidths:propCols,width:{size:usable,type:WidthType.DXA},layout:TableLayoutType.FIXED,rows:propRows.map((r,i)=>new TableRow({children:r.map((c,ci)=>cell(c,{head:i===0,width:propCols[ci]}))}))}));
@@ -2945,7 +3199,7 @@ async function exportDocx(){
 
   const doc=new Document({
     description: diZ.description, keywords: diZ.keywords, customProperties: diZ.customProperties,
-    externalStyles: GP_DOCX_STILIAI.xml({ font: 'Nunito Sans', size: 21, stiliai: [
+    externalStyles: GP_DOCX_STILIAI.xml({ font: 'Nunito Sans', size: 21, oficialus: tiekejams, stiliai: [
       { id: 'Heading1', name: 'Heading 1', run: { size: 28, bold: true, color: EM, font: 'Nunito Sans' }, paragraph: { spacing: { before: 240, after: 120 } } },
       { id: 'Heading2', name: 'Heading 2', run: { size: 24, bold: true, color: '2E3641', font: 'Nunito Sans' }, paragraph: { spacing: { before: 160, after: 80 } } }
     ] }),
@@ -2955,7 +3209,9 @@ async function exportDocx(){
       children}]
   });
   const blob=await Packer.toBlob(doc);
-  download(blob,safeName()+'_kvalifikacija_'+(tiekejams?'tiekejams_':'')+(juodrastis.length?'JUODRASTIS_':'')+today()+'.docx');
+  // Failo vardas - GP_EKSPORTAS (M10, 2026-10-26): su pirkimo kortelės numeriu, kai pasirinkta
+  const kNr=(PPQ.kortele && window.GP_KORTELE && (GP_KORTELE.gauk(PPQ.kortele)||{}).numeris)||'';
+  download(blob,GP_EKSPORTAS.failoVardas({ numeris:kNr, dokumentas:'Kvalifikacija'+(tiekejams?'-tiekejams':'')+(juodrastis.length?'-JUODRASTIS':''), pavadinimas:PPQ.procurement.name||'kvalifikaciniai reikalavimai', pletinys:'docx' }));
   GP_DARBAS.atskaita();   // atsisiųsta - uždarant klausiama tik apie vėlesnius pakeitimus
   toast(juodrastis.length ? 'DOCX paruoštas - pažymėtas JUODRAŠČIU (priežastys dokumento pradžioje)' : 'DOCX paruoštas');
 }

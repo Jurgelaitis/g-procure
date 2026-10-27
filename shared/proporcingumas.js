@@ -37,7 +37,9 @@
   /* Vertės ribos Metodikos kategorijai: darbams - darbų, prekėms, paslaugoms ir mišriam - prekių ir paslaugų. */
   function vertesRibos(objectType, rezimas) {
     var T = (global.GP_THRESHOLDS || {})[rezimas];
-    if (!T) return null;
+    // Objekto tipas nežinomas - ribos (ir vertės kategorija) nežinomos: darbų ir prekių bei paslaugų ribos skiriasi
+    // (2026-10-26, PP-qual patikra V1: iki tol be tipo tyliai taikytos prekių ir paslaugų ribos - 1 000 000 EUR darbams „didelė vertė“)
+    if (!T || !objectType) return null;
     var darbai = objectType === "Darbai (statyba)";
     return { maza: darbai ? T.mv_works : T.mv_goods, tarptautine: darbai ? T.intl_works : T.intl_goods,
              darbai: darbai, misrus: objectType === "Mišrus" };

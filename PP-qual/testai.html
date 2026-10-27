@@ -653,15 +653,20 @@ async function testaiPenktas(){
     tiesa(!W.document.getElementById("p-name").value && !W.document.getElementById("ts-paste").value, "vediklio laukai turi būti tušti");
   });
 
-  await testas("„Tęsti šį pirkimą“ nieko neišvalo ir grąžina į darbą", async ()=>{
+  // D1 (2026-10-26): „Tęsti“ atveria pasirinktą įėjimą su tais pačiais duomenimis (iki tol 2 ir 3 įėjimai atverdavo 1-ąjį)
+  await testas("„Tęsti šį pirkimą“ nieko neišvalo: pasirinkus vediklį - grįžtama į jo žingsnį, pasirinkus patikrą - patikra su tais pačiais reikalavimais", async ()=>{
     pirkimas({ value: 200000, objectType: "Prekės" });
     rinkinys(RINKINYS_100);
     W.eval("PPQ.step = 4; PPQ.entry = 'info';");
-    W.startEntry("check");
+    W.startEntry("info");
     tiesa(W.document.getElementById("naujas-modal").classList.contains("open"), "turi atsidaryti pasirinkimo langas");
     [...W.document.querySelectorAll("#naujas-modal button")].find(b => /Tęsti/.test(b.textContent)).click();
     lygu([W.eval("PPQ.requirements.length"), W.eval("PPQ.procurement.name")], [1, "Bandymas"], "duomenys liko");
     tiesa(W.document.getElementById("view-wizard").classList.contains("active") && /4 žingsnis/.test(W.document.getElementById("wizard-body").textContent), "turi grįžti į vediklio 4 žingsnį");
+    W.startEntry("check");
+    [...W.document.querySelectorAll("#naujas-modal button")].find(b => /Tęsti/.test(b.textContent)).click();
+    lygu([W.eval("PPQ.entry"), W.eval("PPQ.requirements.length"), W.eval("PPQ.procurement.name")], ["check", 1, "Bandymas"], "patikra su tais pačiais duomenimis");
+    tiesa(W.document.getElementById("view-audit").classList.contains("active"), "turi atsidaryti patikra");
   });
 
   await testas("Skirtukas „Generavimo vediklis“ švariame puslapyje - 1 žingsnis, ne tuščias langas", async ()=>{
@@ -818,7 +823,7 @@ async function testaiPenktas(){
     W.eval("PPQ.exportPaskirtis = 'tiekejams'");
     let t = await wordas("lt");
     tiesa(!/Numatoma vertė/.test(t) && !/Vertės kategorija/.test(t) && !/Proporcingumo pagrindimas/.test(t) && !/G-Procure kvalifikacinių reikalavimų modulį/.test(t) && !/200\s000/.test(t), "tiekėjų dokumente liko vidinė informacija");
-    tiesa(/_tiekejams_/.test(paskutinisVardas) && /3\. Kvalifikaciniai reikalavimai/.test(t) && /atitikties lentelė/.test(t), "tiekėjų dokumente trūksta reikalavimų ar priedo, arba žymos varde: " + paskutinisVardas);
+    tiesa(/Kvalifikacija-tiekejams/.test(paskutinisVardas) && /3\. Kvalifikaciniai reikalavimai/.test(t) && /atitikties lentelė/.test(t), "tiekėjų dokumente trūksta reikalavimų ar priedo, arba žymos varde: " + paskutinisVardas);
     W.eval("PPQ.exportPaskirtis = 'vidinis'");
     t = await wordas("lt");
     tiesa(/Numatoma vertė/.test(t) && /Proporcingumo pagrindimas/.test(t) && /G-Procure kvalifikacinių reikalavimų modulį/.test(t) && !/_tiekejams_/.test(paskutinisVardas), "vidiniame dokumente trūksta dalių");
@@ -917,9 +922,13 @@ async function testaiKontekstas(){
     const p = W.eval("PPQ.procurement");
     lygu([p.mokejimai, p.avansas, p.dalys], ["etapais", true, "1 dalis - Vilnius; 2 dalis - Kaunas"], "ištraukta");
     lygu([d.getElementById("p-mokejimai").value, d.getElementById("p-avansas").checked, d.getElementById("p-dalys").value], ["etapais", true, "1 dalis - Vilnius; 2 dalis - Kaunas"], "laukai vediklyje");
+    // D3 (2026-10-26): DI pildo tik tuščius laukus, kitokia DI reikšmė - pasiūlymas; „gal“ - ne avansas
+    d.getElementById("p-avansas").checked = false;
     W.callAI = async () => JSON.stringify({ name: "X", objectType: "Prekės", value: 100, mokejimai: "kas savaitę", avansas: "gal" });
     await W.extractContextFromTs();
-    lygu([W.eval("PPQ.procurement.mokejimai"), W.eval("PPQ.procurement.avansas")], ["etapais", false], "nežinomas kodas - nekeičiama, ne true - ne avansas");
+    lygu([W.eval("PPQ.procurement.mokejimai"), W.eval("PPQ.procurement.avansas"), W.eval("PPQ.procurement.name"), W.eval("PPQ.procurement.value")],
+      ["etapais", false, "Bandymas", 100000], "nežinomas kodas - nekeičiama, ne true - ne avansas, įvesti laukai neperrašyti");
+    tiesa(/DI siūloma kitaip nei įvesta/.test(d.getElementById("extract-siulymai").textContent) && /„X“/.test(d.getElementById("extract-siulymai").textContent), "pasiūlymas: " + d.getElementById("extract-siulymai").textContent);
     d.getElementById("p-priklausomybe").value = "ne"; W.collectStep1();
     lygu(W.eval("PPQ.procurement.priklausomybe"), "ne", "surinkta iš vediklio");
     W.switchView("audit"); W.renderAuditInput();
@@ -1014,7 +1023,9 @@ async function testaiBusenos(){
       W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null,
         text: JSON.stringify({ name: "Pastotės įrangos priežiūra", objectType: "Paslaugos (kita)", value: 50000, duration: "24 mėn.", desc: "Priežiūra." }) });
       b.querySelector("[data-gpb-kartoti]").click();
-      tiesa(await laukTol(() => W.eval("PPQ.procurement.name") === "Pastotės įrangos priežiūra"), "pakartojus laukai neužpildyti");
+      // tušti laukai užpildomi, ranka įvestas pavadinimas lieka (D3, 2026-10-26)
+      tiesa(await laukTol(() => W.eval("PPQ.procurement.value") === 50000), "pakartojus laukai neužpildyti");
+      lygu(W.eval("PPQ.procurement.name"), "Senas pavadinimas", "ranka įvestas pavadinimas perrašytas");
       const b2 = d.getElementById("extract-status");
       tiesa(b2 && b2.classList.contains("gpb--gerai") && /Kontekstas ištrauktas/.test(b2.textContent), "po pakartojimo: " + (b2 && b2.textContent));
     } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
@@ -1113,6 +1124,191 @@ const K_LG = { pavadinimas: "Autotransformatorių pirkimas", vykdytojas: "litgri
                dalys: [{ pavadinimas: "Autotransformatoriai", verte: 950000 }, { pavadinimas: "Montavimo priežiūra", verte: 300000 }] };
 function korteles(V){ const K = V.GP_KORTELE; return [K_AMBER, K_IT, K_LG].map(x => K.issaugok(K.tuscia(x)).kortele.id); }
 const juostosZinute = V => V.document.getElementById("gpk-zin").textContent;
+
+/* 2026-10-26 - naujo darbuotojo patikra (K1-K4, D1-D3, V1-V10, M1-M10). DI atsakymai imituojami (W.callAI) - į serverį nieko nesiunčiama. */
+async function testaiPatikra1026(){
+  dabartine = grupe("Naujo darbuotojo patikra 2026-10-26: DI vertimas ir išskaidymas, žaliasis, dalys, kortelė, oficialus Word");
+
+  await testas("K1: DI EN vertimas tikrinamas ir rodomas - nesutampantys skaičiai ar lietuviškas tekstas stabdo, pataisius ir patvirtinus - galutinis; nepatvirtintas - JUODRAŠTIS", async ()=>{
+    pirkimas({ value: 1200000, objectType: "Prekės", duration: "24 mėn." });
+    const ids = rinkinys([{ category: "C", text: "Tiekėjas per paskutinius 3 metus yra įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 360 000 EUR be PVM.", evidence: "Sutarčių sąrašas" },
+                          { category: "A", text: "Tiekėjas turi teisę verstis atitinkama veikla.", evidence: "Išrašas" }]);
+    W.callAI = async () => "[]";
+    await W.runFullAudit();
+    ids.forEach(id => W.patvirtinti(id));
+    W.callAI = async () => JSON.stringify([{ id: ids[0], text_en: "The supplier has performed at least one contract worth not less than EUR 3 600 000 excluding VAT in the last 5 years.", evidence_en: "List of contracts" },
+                                           { id: ids[1], text_en: "EN: Tiekėjas turi teisę verstis atitinkama veikla.", evidence_en: "Extract" }]);
+    W.switchView("export"); W.renderExport();
+    let blob = null; W.download = (b, v) => { blob = b; paskutinisVardas = v; };
+    W.eval("PPQ.exportLang = 'lten'");
+    await W.exportDocx();
+    tiesa(!blob, "dokumentas su nepatikrintu vertimu sugeneruotas");
+    const t = W.document.getElementById("export-body").textContent.replace(/\s+/g, " ");
+    tiesa(/Skaičiai reikalavime nesutampa: lietuviškai 3, 360000, vertime 3600000, 5/.test(t) && /Vertimas reikalavime - lietuviškas tekstas/.test(t), "pastabos: " + t.slice(0, 500));
+    tiesa(/Anglų kalbos vertimas - peržiūrėkite ir patvirtinkite/.test(t) && W.document.querySelector("#vert-t-" + ids[0] + "[data-di]"), "peržiūra nerodoma");
+    // pataisius pirmą ir patvirtinus abu - galutinis dokumentas su pataisytu vertimu
+    const d = W.document, ta = d.getElementById("vert-t-" + ids[0]);
+    ta.value = "The supplier has performed at least one contract worth not less than EUR 360 000 excluding VAT in the last 3 years.";
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    const tb = d.getElementById("vert-t-" + ids[1]);
+    tb.value = "The supplier must have the right to pursue the relevant activity."; tb.dispatchEvent(new Event("input", { bubbles: true }));
+    tiesa(/DI vertimas, taisytas - nepatvirtintas/.test(d.getElementById("vert-b-" + ids[0]).textContent), "taisyto vertimo būsena");
+    ids.forEach(id => W.patvirtinkVertima(id));
+    tiesa(/Vertimas patvirtintas/.test(d.getElementById("vert-b-" + ids[1]).textContent), "patvirtinimas");
+    // patvirtintą vertimą pataisius - patvirtinimas nebegalioja, kol žmogus nepatvirtina vėl
+    tb.value = "The supplier must have the right to pursue the relevant activities."; tb.dispatchEvent(new Event("input", { bubbles: true }));
+    tiesa(/nepatvirtintas/.test(d.getElementById("vert-b-" + ids[1]).textContent) && W.eksportoPatikra().juod.some(j => /žmogus jo nepatvirtino: 1 iš 2/.test(j.lt)), "pataisytas po patvirtinimo liko patvirtintas");
+    W.patvirtinkVertima(ids[1]);
+    const w = await wordas("lten");
+    tiesa(!/JUODRAŠTIS/.test(w) && /EUR 360 000 excluding VAT in the last 3 years/.test(w) && !/3 600 000/.test(w), "galutinis: " + w.slice(0, 300));
+    // naujas DI vertimas (pakeitus tekstą) - nepatvirtintas, dokumentas JUODRAŠTIS
+    W.eval("naujaRedakcija(rast(" + JSON.stringify(ids[1]) + "), { text:'Tiekėjas turi teisę verstis veikla.' }, 'testas'); patvirtinti(" + JSON.stringify(ids[1]) + ");");
+    W.callAI = async () => JSON.stringify([{ id: ids[1], text_en: "The supplier must have the right to pursue the activity.", evidence_en: "Extract" }]);
+    const w2 = await wordas("lten");
+    tiesa(/JUODRAŠTIS/.test(w2) && /EN vertimą parengė DI, žmogus jo nepatvirtino: 1 iš 2/.test(w2), "nepatvirtintas vertimas - ne juodraštis: " + w2.slice(0, 300));
+    W.eval("PPQ.exportLang = 'lt'"); W.callAI = ORIG.callAI;
+  });
+
+  await testas("K2: DI išskaidytas tekstas lyginamas su įklijuotu - pakeistas ar pridėtas pažymimas, taisyklės vertina ir įklijuotą tekstą, dokumentas - JUODRAŠTIS", async ()=>{
+    pirkimas({ value: 1000000, objectType: "Darbai (statyba)", duration: "18 mėn." });
+    W.eval("PPQ.entry = 'check'; PPQ.requirements = [];");
+    const src = "1. Tiekėjas per paskutinius 5 metus yra įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 900 000 EUR be PVM.\n2. Tiekėjo vidutinės metinės pajamos ne mažesnės kaip 2 000 000 EUR.";
+    W.eval("PPQ.sourceText = " + JSON.stringify(src));
+    W.callAI = async (prompt) => /PAŽODŽIUI/.test(prompt)
+      ? JSON.stringify([{ category: "C", text: "Tiekėjas per paskutinius 5 metus yra įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 90 000 EUR be PVM." },
+                        { category: "B", text: "Tiekėjo vidutinės metinės pajamos ne mažesnės kaip 2 000 000 EUR." },
+                        { category: "D", text: "Tiekėjas taiko ISO 14001 aplinkos vadybos sistemą." }])
+      : "[]";
+    await W.parseRequirementsFromText(src);
+    lygu(W.eval("PPQ.requirements.map(r => !!r.nesutampa)"), [true, false, true], "nesutampa");
+    await W.runFullAudit();
+    const f = W.eval("PPQ.audit.findings").filter(x => /^Įklijuotame tekste: Patirties vertė viršija Metodikos ribą/.test(x.title));
+    tiesa(f.length === 1 && f[0].sev === "high", "įklijuoto teksto R1: " + JSON.stringify(W.eval("PPQ.audit.findings").map(x => x.title)));
+    tiesa(/Tekstas nesutampa su įklijuotu/.test(auditoTekstas()), "kortelėje nėra įspėjimo");
+    tiesa(W.eksportoPatikra().juod.some(j => /nesutampančio su įklijuotu, liko: 2 iš 3/.test(j.lt)), "eksportas ne juodraštis");
+    // žmogus pataiso tekstą - žyma dingsta
+    W.eval("naujaRedakcija(PPQ.requirements[0], { text:'Tiekėjas per paskutinius 5 metus yra įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 900 000 EUR be PVM.' }, 'pataisyta')");
+    lygu(W.eval("PPQ.requirements[0].nesutampa"), false, "pataisius");
+    W.callAI = ORIG.callAI; W.eval("PPQ.entry = null; PPQ.sourceText = '';");
+  });
+
+  await testas("K3: žaliasis pirkimas be numatytojo „Taip“ - privaloma pasirinkti; Word „Nenurodyta“, DI - „nenurodyta“; Nustatymų langas rodo esamą būseną", async ()=>{
+    W.naujasPirkimas();
+    lygu(W.eval("PPQ.settings.green"), null, "naujas pirkimas");
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    pirmasZingsnis("info");
+    const d = W.document;
+    lygu(d.getElementById("p-green").value, "", "1 žingsnyje nepažymėta");
+    await W.submitStep1();
+    lygu([W.eval("PPQ.step"), d.activeElement && d.activeElement.id], [1, "p-green"], "be atsakymo - netęsiama, fokusas į klausimą");
+    rinkinys(RINKINYS_100);
+    tiesa(/Žaliasis pirkimas\s*Nenurodyta/.test(await wordas("lt")), "Word nesako „Nenurodyta“");
+    tiesa(/Žaliasis pirkimas: nenurodyta/.test(W.kontekstoTekstas(W.pirkimoKontekstas(), false)), "DI kontekste");
+    W.eval("PPQ.settings.green = false"); W.openSettings();
+    lygu(d.getElementById("set-green").value, "ne", "Nustatymų langas");
+    d.getElementById("set-green").value = "taip"; W.saveSettings();
+    lygu(W.eval("PPQ.settings.green"), true, "išsaugota");
+    W.openSettings(); d.getElementById("set-green").value = ""; W.saveSettings();
+    lygu(W.eval("PPQ.settings.green"), null, "nenurodyta");
+    const src = await (await fetch("PP-QUAL.html?b=" + Date.now())).text();
+    tiesa(!/id="set-green" checked/.test(src) && !/green:true/.test(src), "numatytasis „Taip“ liko");
+  });
+
+  await testas("K4: dalys su vertėmis - dalies reikalavimas tikrinamas pagal dalies vertę, be nurodytos dalies - pastaba; Word ir DI - ribos kiekvienai daliai", async ()=>{
+    pirkimas({ value: 180000, objectType: "Paslaugos (IT/IS)", duration: "36 mėn.", dalys: "1 dalis - Programavimas (120 000 EUR); 2 dalis - Priežiūra (60 000 EUR)" }, "bendrasis");
+    lygu(W.eval("daliuVertes(PPQ.procurement)").map(x => [x.nr, x.pav, x.verte]), [[1, "1 dalis - Programavimas", 120000], [2, "2 dalis - Priežiūra", 60000]], "dalys");
+    const is = taisykles("2 daliai: tiekėjas per paskutinius 3 metus yra suteikęs panašių paslaugų, kurių vertė ne mažesnė kaip 100 000 EUR be PVM.");
+    tiesa(rasti(is, "R1").some(i => i.sev === "high" && /^Pagal 2 dalis - Priežiūra vertę/.test(i.body)), "dalies R1: " + JSON.stringify(is.map(i => i.rule + ":" + i.sev)));
+    const be = taisykles("Tiekėjas per paskutinius 3 metus yra suteikęs panašių paslaugų, kurių vertė ne mažesnė kaip 100 000 EUR be PVM.");
+    tiesa(rasti(be, "R16").length === 1 && !rasti(be, "R1").some(i => i.sev === "high"), "be dalies: " + JSON.stringify(be.map(i => i.rule + ":" + i.sev)));
+    tiesa(!rasti(taisykles("Tiekėjas turi teisę verstis veikla."), "R16").length, "R16 ne finansiniam reikalavimui");
+    rinkinys(RINKINYS_100);
+    const w = await wordas("lt");
+    tiesa(/2 dalis - Priežiūra \(60[\s\u00a0]000/.test(w) && /įvykdytų sutarčių vertė iki 42[\s\u00a0]000/.test(w), "Word 4 skyrius: " + (w.match(/Proporcingumo pagrindimas[\s\S]{0,900}/) || [""])[0]);
+    lygu(W.eval("daliuVertes({ dalys:'1 dalis - Vilnius; 2 dalis - Kaunas' })"), [], "dalys be verčių - kaip iki tol");
+  });
+
+  await testas("D1: tik kortelės duomenys - ne pradėtas darbas (įėjimas atveriamas su jais); „Pradėti naują“ atsieja kortelę", async ()=>{
+    const { f, V } = await modulisSuKortele();
+    try {
+      const [, it] = korteles(V);
+      const api = V.eval("KORTELE"); api.atnaujink();
+      await api.pasirink(it);
+      V.startEntry("check");
+      tiesa(!V.document.getElementById("naujas-modal").classList.contains("open"), "klausiama, nors yra tik kortelės duomenys");
+      lygu([V.eval("PPQ.entry"), V.eval("PPQ.procurement.name"), V.eval("PPQ.settings.context"), V.eval("PPQ.kortele")], ["check", K_IT.pavadinimas, "bendrasis", it], "įėjimas su kortelės duomenimis");
+      V.eval("PPQ.requirements = [reikalavimas({ category:'C', text:'Tiekėjas per 3 metus yra suteikęs paslaugų už 50 000 EUR.' }, 'ai')]");
+      V.startEntry("info");
+      tiesa(V.document.getElementById("naujas-modal").classList.contains("open"), "su darbu - klausiama");
+      V.document.getElementById("naujas-pradeti").click();
+      lygu([V.eval("PPQ.kortele"), !!api.pasirinkta(), V.eval("PPQ.procurement.name"), V.eval("PPQ.requirements.length")], [null, false, "", 0], "pradėtas naujas - kortelė atsieta");
+    } finally { f.remove(); }
+  });
+
+  await testas("D2, M10: tiekėjams skirtas Word - be žalios (antraštės grafito, F2F2F2), vidinis - kaip iki tol; failo vardas per GP_EKSPORTAS", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    rinkinys(RINKINYS_100);
+    W.eval("PPQ.exportPaskirtis = 'tiekejams'");
+    await wordas("lt");
+    const xml = await docxTekstas(paskutinisFailas, /^word\/(document|styles)\.xml$/, true);
+    tiesa(!/00A072|D7EEDB|EFF9F1/.test(xml) && /w:fill="F2F2F2"/.test(xml) && !/2E74B5|1F4D78/.test(xml), "tiekėjų dokumente žalia ar mėlyna");
+    tiesa(/^Kvalifikacija-tiekejams-JUODRASTIS_Bandymas_\d{4}-\d{2}-\d{2}\.docx$/.test(paskutinisVardas), "failo vardas: " + paskutinisVardas);
+    W.eval("PPQ.exportPaskirtis = 'vidinis'");
+    await wordas("lt");
+    tiesa(/00A072/.test(await docxTekstas(paskutinisFailas, /^word\/document\.xml$/, true)), "vidinis dokumentas pakeistas");
+  });
+
+  await testas("V1-V4, V6, V9: be tipo kategorija nežinoma; ilgalaikei - Metodikos riba; „EUR 900 000“; DI teisės nuoroda be registro nerodoma; išvalyta vertė; dvejetainis failas", async ()=>{
+    lygu(P({ value: 1000000, objectType: "" }).kategorija, null, "be tipo");
+    tiesa(/Vertės kategorija.*nežinoma/.test(W.eval("proporcingumoEilutes(proporcingumas(PPQ.procurement),'lt')").map(e => e.rodiklis + " " + e.reiksme).join("; ")), "eilutė „nežinoma“");
+    P({ value: 1000000, objectType: "Darbai (statyba)", duration: "18 mėn." });
+    const r9 = rasti(taisykles("Tiekėjo vidutinės metinės pajamos ne mažesnės kaip 2 500 000 EUR."), "R9").find(i => i.sev === "high");
+    tiesa(r9 && /1[\s\u00a0]333[\s\u00a0]333/.test(r9.fix) && /ilgalaikė/.test(r9.fix), "R9 pataisa: " + (r9 && r9.fix));
+    lygu(W.parseEur("EUR 900 000 ir €900,000 bei 5 000 EUR"), [5000, 900000, 900000], "valiuta prieš sumą");
+    lygu(W.tikraDiNuoroda("PĮ 47 str."), "", "neregistro nuoroda");
+    const ok = (W.systemPrompt().match(W.eval("NUOR_RE")) || [])[0];
+    tiesa(ok && W.tikraDiNuoroda(ok) === ok, "registro nuoroda: " + ok);
+    lygu(W.tikraDiNuoroda("LAT praktika"), "LAT praktika", "be numerių");
+    W.switchView("audit"); W.renderAuditInput();
+    const d = W.document;
+    W.eval("PPQ.procurement.value = 500000; PPQ.procurement.objectType = 'Darbai (statyba)'");
+    d.getElementById("a-value").value = ""; d.getElementById("a-type").value = ""; d.getElementById("a-paste").value = "1. Tiekėjas per 5 metus yra įvykdęs sutartį už 400 000 EUR.";
+    W.callAI = async () => "[]";
+    await W.startAudit();
+    lygu([W.eval("PPQ.procurement.value"), W.eval("PPQ.procurement.objectType")], [null, ""], "išvalyti laukai");
+    W.callAI = ORIG.callAI;
+    let klaida = "";
+    try { await W.extractFileText(new W.File([new Uint8Array([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 254, 255, 9, 0, 6, 0])], "senas.doc")); } catch (e) { klaida = e.message; }
+    tiesa(/išsaugokite jį kaip DOCX, PDF arba TXT/.test(klaida), "dvejetainis failas: " + klaida);
+    lygu(await W.extractFileText(new W.File(["Paprastas tekstas"], "a.csv")), "Paprastas tekstas", "tekstinis failas");
+  });
+
+  await testas("V7, M1, M2, M5: klausiama prieš perrašant patvirtintą rinkinį; DI atsakymas be klausimų - klaida; ranka parašytas - ne DI; „1 reikalavimą“", async ()=>{
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    const [id] = rinkinys(RINKINYS_100);
+    W.patvirtinti(id);
+    const tikras = W.confirm; let klausta = 0;
+    W.confirm = () => { klausta++; return false; };
+    try {
+      W.switchView("audit"); W.renderAuditInput();
+      W.document.getElementById("a-paste").value = "1. Kitas reikalavimas.";
+      await W.startAudit();
+      lygu([klausta, W.eval("PPQ.requirements.length"), W.eval("PPQ.requirements[0].id")], [1, 1, id], "atsisakius - rinkinys nepakeistas");
+    } finally { W.confirm = tikras; }
+    W.callAI = async () => JSON.stringify({ pastaba: "Klausimų nėra" });
+    let klaida = ""; try { await W.generateQuestions(); } catch (e) { klaida = e.message; }
+    tiesa(/nėra klausimų sąrašo/.test(klaida), "M1: " + klaida);
+    W.callAI = ORIG.callAI;
+    pirkimas({ value: 200000, objectType: "Prekės" });
+    W.eval("PPQ.step = 4"); W.switchView("wizard"); W.renderWizard();
+    W.addReq("C");
+    const r = W.eval("PPQ.requirements[PPQ.requirements.length - 1]");
+    const kort = W.document.querySelector('.req-item[data-id="' + r.id + '"]');
+    tiesa(kort && /Parašė žmogus/.test(kort.textContent) && !kort.querySelector(".req-badges [data-di]"), "ranka parašytas: " + (kort && kort.querySelector(".req-badges").innerHTML));
+    rinkinys(RINKINYS_100); W.eval("PPQ.step = 3"); W.renderWizard();
+    tiesa(/DI pasiūlė 1 reikalavimą/.test(W.document.getElementById("wizard-body").textContent), "linksnis");
+  });
+}
 
 async function testaiKortele(){
   dabartine = grupe("Bendra pirkimo kortelė (A1): modulis kortelę tik skaito");
@@ -1235,6 +1431,7 @@ async function testaiKortele(){
     await testaiBusenos();
     await testaiIsejimas();
     await testaiKortele();
+  await testaiPatikra1026();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
