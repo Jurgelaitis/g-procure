@@ -316,8 +316,9 @@
       PI: { a: "PI", s: 52, d: 3 }, VPI: { a: "VPI", s: 51, d: 12 } },
     galiojimo_pratesimas: { tikrinta: "2026-09-27", apie: "pirkimo procedūros metu galima prašyti tiekėjų pratęsti pasiūlymų galiojimą iki konkrečiai nurodyto termino; tiekėjas gali atsisakyti neprarasdamas teisės į galiojimo užtikrinimą",
       PI: { a: "PI", s: 54, d: 2 } },
-    nmk_riba: { tikrinta: "2026-09-27", apie: "neįprastai mažą kainą privaloma prašyti pagrįsti; ji visada laikoma neįprastai maža, jei 30 ir daugiau proc. mažesnė už neatmestų ir pirkimui skirtų lėšų neviršijančių pasiūlymų kainų aritmetinį vidurkį",
-      PI: { a: "PI", s: 66, d: 1 } },
+    // VPĮ dalis perskaityta e-tar 2026-10-27 (PP-negotiation naujo darbuotojo patikra, D9) - tekstas sutampa su PĮ
+    nmk_riba: { tikrinta: "2026-10-27", apie: "neįprastai mažą kainą privaloma prašyti pagrįsti; ji visada laikoma neįprastai maža, jei 30 ir daugiau proc. mažesnė už neatmestų ir pirkimui skirtų lėšų neviršijančių pasiūlymų kainų aritmetinį vidurkį",
+      PI: { a: "PI", s: 66, d: 1 }, VPI: { a: "VPI", s: 57, d: 1 } },
     informavimas_rezultatai: { tikrinta: "2026-09-27", apie: "per 3 darbo dienas raštu pranešama apie sprendimą nustatyti laimėjusį pasiūlymą, nurodant pasiūlymų eilę, laimėjusį pasiūlymą ir tikslų atidėjimo terminą",
       PI: { a: "PI", s: 68, d: 1 } },
     kvietimas_sudaryti_sutarti: { tikrinta: "2026-09-27", apie: "laimėjęs dalyvis sudaryti sutarties kviečiamas raštu, nurodant laiką, iki kada ją sudaryti",
@@ -517,6 +518,11 @@
       PI: { a: "PI", s: 75, d: 3 } },
     ak_derybos_draudziamos: { tikrinta: "2026-10-20", apie: "atliekant pirkimą atviro konkurso būdu, derybos tarp pirkimo vykdytojo ir tiekėjų draudžiamos",
       PI: { a: "PI", s: 69, d: 5 }, VPI: { a: "VPI", s: 59, d: 5 } },
+    // Perskaityta e-tar 2026-10-27 (PP-negotiation naujo darbuotojo patikra, K6 ir D1)
+    ribotas_derybos_draudziamos: { tikrinta: "2026-10-27", apie: "ribotame konkurse derybos tarp pirkimo vykdytojo ir tiekėjų draudžiamos",
+      PI: { a: "PI", s: 71, d: 5 }, VPI: { a: "VPI", s: 61, d: 5 } },
+    derybos_neatskleisti: { tikrinta: "2026-10-27", apie: "derybų metu tretiesiems asmenims negalima atskleisti jokios iš tiekėjo gautos informacijos be tiekėjo sutikimo, kuriame nurodyta, kokią informaciją leidžiama atskleisti",
+      PI: { a: "PI", s: 75, d: 1, p: 1 }, VPI: { a: "VPI", s: 66, d: 1, p: 1 } },
     terminas_kd: { tikrinta: "2026-09-26", apie: "konkurencinio dialogo paraiškų terminas - ne trumpesnis kaip 30 dienų (tarptautinis pirkimas) ar 10 dienų (supaprastintas pirkimas)",
       PI: { a: "PI", s: 77, d: 2 }, VPI: { a: "VPI", s: 69, d: 2 } },
     terminas_kd_trumpinimas: { tikrinta: "2026-09-26", apie: "konkurencinio dialogo paraiškų terminą perkančiojo subjekto vertinimu pagrįstais atvejais galima sutrumpinti iki 15 dienų (tarptautinis) ar 7 dienų (supaprastintas)",

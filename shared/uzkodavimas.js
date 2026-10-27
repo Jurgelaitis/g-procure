@@ -10,6 +10,8 @@
      GP_UZKODAVIMAS.kodas(i, priesdelis)       -> „Dalyvis A“, ..., „Dalyvis Z“, „Dalyvis AA“ (i nuo 0)
      GP_UZKODAVIMAS.vardoVariantai(vardas)     -> [[variantas, tikslus]]: kaip įrašyta, be kabučių, be teisinės formos;
                                                   vienas žodis - tiksliai ir didžiosiomis, keli - nepaisant raidžių dydžio
+     GP_UZKODAVIMAS.linksniai(variantai)       -> [[variantas, tikslus]]: lietuviški paskutinio žodžio linksniai (kilmininkas, naudininkas,
+                                                  galininkas, vietininkas) - „Voltera“: „Volteros“, „Volterai“, „Volterą“, „Volteroje“; 2026-10-27
      GP_UZKODAVIMAS.poros(sarasas)             -> [[ka, kuo, tikslus]] ilgiausi pirmi; sarasas: [{ vardas, kodas, kiti: [[tekstas, kuo]] }]
      GP_UZKODAVIMAS.slepk(tekstas, o)          -> užkoduotas tekstas; o: { poros, sumos: [žinomos sumos], pv, pvPavadinimas, kalba, imones,
                                                   asmenys, naudoti }
@@ -72,6 +74,37 @@
     return r;
   }
 
+  /* Lietuviški linksniai (2026-10-27, PP-negotiation naujo darbuotojo patikra D5: „Volteros pasiūlymas“, „UAB „Galios įrangos“ kainos“
+     likdavo užklausoje): paskutinis žodis su lietuviška galūne (bent 4 raidės) - kilmininkas, naudininkas, galininkas, vietininkas;
+     kiti žodžiai ir kabutės - kaip įrašyti; didžiosiomis rašytas - didžiosiomis. Kitų linksnių ir kamieno kaitos sistema nemoka. */
+  var GALUNES = [["iai", ["ių", "iams", "ius", "iuose"]], ["ai", ["ų", "ams", "us", "uose"]], ["ys", ["io", "iui", "į", "yje"]],
+    ["as", ["o", "ui", "ą", "e"]], ["is", ["io", "iui", "į", "yje"]], ["us", ["aus", "ui", "ų", "uje"]], ["a", ["os", "ai", "ą", "oje"]],
+    ["ė", ["ės", "ei", "ę", "ėje"]]];
+  function linksniuok(z) {
+    var lz = z.toLowerCase(), did = z === z.toUpperCase() && z !== lz;
+    if (z.length < 4 || !/^\p{L}+$/u.test(z)) return [];
+    for (var i = 0; i < GALUNES.length; i++) {
+      var g = GALUNES[i][0];
+      if (lz.slice(-g.length) === g) {
+        var kam = z.slice(0, z.length - g.length);
+        return GALUNES[i][1].map(function (f) { return kam + (did ? f.toUpperCase() : f); });
+      }
+    }
+    return [];
+  }
+  function linksniai(variantai) {
+    var out = [];
+    (variantai || []).forEach(function (v) {
+      var m = /^([\s\S]*?)(\p{L}+)([^\p{L}]*)$/u.exec(String(v[0] || ""));
+      if (!m) return;
+      linksniuok(m[2]).forEach(function (f) {
+        var x = m[1] + f + m[3];
+        if (x !== v[0] && !out.some(function (z) { return z[0] === x; })) out.push([x, v[1]]);
+      });
+    });
+    return out;
+  }
+
   function poros(sarasas) {
     var out = [];
     var prid = function (ka, kuo, tikslus) { ka = String(ka || "").trim(); if (ka.length >= 3 && !out.some(function (p) { return p[0] === ka; })) out.push([ka, kuo, tikslus]); };
@@ -105,7 +138,8 @@
       if (!pries && !po && !zinoma) return m;
       return pr + zyme(pv > 0 ? "[" + procentai(v / pv * 100, k) + " % " + pvPav + "]" : P.suma);
     });
-    t = t.replace(/(^|[^\p{N}])\d{9}(?=[^\p{N}]|$)/gu, function (m, pr) { return pr + zyme(P.kodas); });
+    // įmonės kodas (9 skaitmenys) ir 11 skaitmenų kodas (Latvijos registracijos numeris, asmens kodas) - 2026-10-27
+    t = t.replace(/(^|[^\p{N}])(?:\d{11}|\d{9})(?=[^\p{N}]|$)/gu, function (m, pr) { return pr + zyme(P.kodas); });
     if (o.imones) IMONES.forEach(function (r) { t = t.replace(r, function (m, pr) { return pr + zyme(P.imone); }); });
     if (o.asmenys) t = t.replace(ASMUO, function (m, pr, et) { return pr + et + zyme(P.asmuo); });
     return t.replace(/\ue000([\ue100-\uf8ff])\ue001/g, function (m, z) { return zymes[z.charCodeAt(0) - 0xE100]; });
@@ -133,5 +167,5 @@
     return out;
   }
 
-  window.GP_UZKODAVIMAS = { version: "1.1", kodas: kodas, vardoVariantai: vardoVariantai, poros: poros, slepk: slepk, sumos: sumos, PAKAITAI: PAKAITAI };
+  window.GP_UZKODAVIMAS = { version: "1.2", kodas: kodas, vardoVariantai: vardoVariantai, linksniai: linksniai, poros: poros, slepk: slepk, sumos: sumos, PAKAITAI: PAKAITAI };
 })();

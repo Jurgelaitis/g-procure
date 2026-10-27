@@ -126,13 +126,13 @@ async function testaiLogika(){
     arti(W.eval("strategy.meatScore('c')"), (90000 / 100000) * 60 + 0.8 * 40, "Gama");
   });
 
-  await testas("Derybų ribos: atidarymas < tikslas <= mažiausias pasiūlymas; rezervinė riba ne didesnė už 98 % pasiūlymo", async () => {
+  await testas("Derybų ribos: atidarymas < tikslas <= mažiausias pasiūlymas; rezervinė riba - dabartinis pasiūlymas, bet ne daugiau už PV (naudotojo sprendimas 2026-10-27)", async () => {
     projektas();
     ["a", "b", "c"].forEach(id => {
       const t = W.eval("strategy.suggestTargets('" + id + "')");
       tiesa(t.opener < t.target, id + ": atidarymas " + t.opener + " >= tikslas " + t.target);
       tiesa(t.target <= t.minOffer + 1e-6 && t.target <= t.currentOffer * 0.92 + 1e-6, id + ": tikslas " + t.target);
-      tiesa(t.reservation <= t.currentOffer * 0.98 + 1e-6, id + ": rezervinė " + t.reservation);
+      arti(t.reservation, Math.min(t.currentOffer, 100000), id + ": rezervinė");
       tiesa(t.potentialSavings >= 0, id + ": ekonomija");
     });
     const sc = W.eval("strategy.scenariosFor('b')").map(x => x.type);
@@ -159,7 +159,7 @@ async function testaiLogika(){
     W.XLSX.writeFile = (wb, vardas) => { gauta = { lapai: wb.SheetNames, vardas, reit: W.XLSX.utils.sheet_to_json(wb.Sheets["Reitingas"], { header: 1 }) }; };
     try { W.exportXlsx(); } finally { W.XLSX.writeFile = tikras; }
     tiesa(gauta && ["Pirkimas", "Tiekėjai", "Įkainių lentelė", "Reitingas", "Derybų ribos"].every(l => gauta.lapai.includes(l)), "lapai: " + (gauta && gauta.lapai));
-    lygu(gauta.reit[0], ["Vieta", "Tiekėjas", "Bendra kaina", "Nuokrypis nuo PV (%)", "MEAT balas"], "reitingo stulpeliai su lietuviškomis raidėmis");
+    lygu(gauta.reit[0], ["Vieta", "Tiekėjas", "Bendra kaina", "Nuokrypis nuo PV (%)", "MEAT balas", "Pasiūlymas"], "reitingo stulpeliai su lietuviškomis raidėmis");
     tiesa(/^Derybu_analize_Testas_\d{4}-\d{2}-\d{2}\.xlsx$/.test(gauta.vardas), "vardas: " + gauta.vardas);
     lygu(gauta.reit[1].slice(0, 2), [1, "Beta"], "pigiausias pirmas");
   });
@@ -287,8 +287,9 @@ async function testaiSkaiciai(){
 
   await testas("Bendras pasiūlymas be lentelės: suma nesiplečia per skyrybą ar tarpą į kitą skaičių, skaitinis langelis lieka skaičiumi („12 345,67, PVM“ nevirsta 1 234 567)", async () => {
     projektas();
+    // K1 (2026-10-27): kaina be PVM (projektas be PVM), ne „iš viso“ su PVM ir ne PVM suma; iki tol - didžiausias skaičius (14 938,26)
     const t = W.extractFromRows([["Kaina be PVM: 12 345,67, PVM: 2 592,59, iš viso: 14 938,26."]], "a", "alfa.pdf");
-    tiesa(t.ok && t.total === 14938.26, "skyryba po sumos: " + JSON.stringify(t).slice(0, 200));
+    tiesa(t.ok && t.total === 12345.67, "skyryba po sumos: " + JSON.stringify(t).slice(0, 200));
     const p = W.extractFromRows([["Iš viso 14 938,26 2 lapas"], ["Pasiūlymas galioja 90 dienų"]], "b", "beta.pdf");
     tiesa(p.ok && p.total === 14938.26, "kitas skaičius toje pačioje eilutėje: " + JSON.stringify(p).slice(0, 200));
     const x = W.extractFromRows([["Komercinis pasiūlymas", null], ["Iš viso", 14999.99 / 1.21]], "c", "gama.xlsx");
@@ -443,8 +444,9 @@ async function testaiDI(){
     const btn = D.getElementById("btnCopyPrompt"), isp = D.getElementById("aiIspejimas");
     lygu(btn.textContent.trim(), "📋 Kopijuoti užkoduotą užklausą", "kopijavimo mygtukas");
     tiesa(isp && isp.getBoundingClientRect().height > 0 && W.getComputedStyle(isp).display !== "none", "įspėjimas nematomas");
-    ["Užklausa užkoduota: tiekėjų pavadinimai pakeisti kodais (Tiekėjas A, B, C)", "procentiniais skirtumais nuo planuotos (numatomos) vertės",
-     "pati vertė, pirkimo numeris ir asmenų duomenys neįtraukti", "tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą)",
+    // D5 (2026-10-27): įspėjimas sako, ką sistema pakeičia ir ko neatpažįsta (iki tol - „asmenų duomenys neįtraukti“ visada)
+    ["Užklausa užkoduota: šio projekto tiekėjų pavadinimai (ir linksniais) pakeisti kodais (Tiekėjas A, B, C)", "procentiniais skirtumais nuo planuotos (numatomos) vertės",
+     "pati vertė ir pirkimo numeris neįtraukti", "asmenys po etikečių", "Kitų duomenų (sutrumpintų pavadinimų, asmenų be etikečių) sistema neatpažįsta", "tik į jūsų organizacijos patvirtintą DI įrankį (pvz. VPT Ekspertą)",
      "Nenaudokite asmeninių ar vartotojiškų DI paskyrų (pvz. ChatGPT, Claude.ai)", "neužtikrina pirkimo konfidencialumo"].forEach(f => tiesa(isp.textContent.indexOf(f) >= 0, "įspėjime nėra „" + f + "“"));
     tiesa(btn.parentElement.previousElementSibling === isp && btn.getAttribute("aria-describedby") === "aiIspejimas", "įspėjimas - ne šalia mygtuko");
     const pst = D.getElementById("aiExtraPastaba");
@@ -639,7 +641,7 @@ async function testaiEtapai(){
     lygu([sut("Kabelis", "kabelis"), sut("Transformatorius 40 MVA", "Transformatorius 25 MVA"), sut("Montavimo darbai", "Montavimas")], ["tikslus", null, null], "sutapdinimo ribos");
   });
 
-  await testas("Analitika: žymos (mažiausias, brangiausias, aukštas, rizikingai žemas, vienintelis, trūksta), derybų svertas = kiekis × (įkainis - min), slenksčiai keičia žymą", async () => {
+  await testas("Analitika: žymos (mažiausias, brangiausias, aukštas, rizikingai žemas, vienintelis, trūksta), derybų svertas = kiekis × (įkainis - mažiausias ne rizikingai žemas), slenksčiai keičia žymą", async () => {
     analitikosProjektas();
     const M = W.eval("analitika.matrica(APP.state)");
     const z = (p, t) => M.pozicijos.find(x => x.id === p).langeliai[t].zyma;
@@ -647,8 +649,10 @@ async function testaiEtapai(){
     lygu([z("p2", "a"), z("p2", "b"), z("p2", "c")], ["iprastas", "min", "brangiausias"], "p2: 300 / 290 / 400");
     lygu([z("p3", "a"), z("p3", "b"), z("p3", "c")], ["iprastas", "zemas", "brangiausias"], "p3: 5000 / 3000 (-40 % nuo medianos) / 5200");
     lygu([z("p4", "a"), z("p4", "b"), z("p4", "c")], ["vienintelis", "truksta", "truksta"], "p4: tik Alfa");
-    lygu([M.tiekejai.a.svertas, M.tiekejai.b.svertas, M.tiekejai.c.svertas], [2100, 600, 3400], "svertas");
-    lygu([M.tiekejai.a.ikainota, M.tiekejai.b.truksta, M.tiekejai.c.anomalijos, M.idealiSuma], [4, 1, 2, 100 * 20 + 10 * 290 + 3000 + 2 * 450], "skaičiai");
+    // K4 (2026-10-27): p3 Beta 3000 - rizikingai žemas, todėl kitų svertas skaičiuojamas nuo 5000 (iki tol - nuo 3000: Alfa 2100, Gama 3400)
+    lygu([M.tiekejai.a.svertas, M.tiekejai.b.svertas, M.tiekejai.c.svertas], [100, 600, 1400], "svertas");
+    lygu([M.tiekejai.a.ikainota, M.tiekejai.b.truksta, M.tiekejai.c.anomalijos, M.idealiSuma], [4, 1, 2, 100 * 20 + 10 * 290 + 5000 + 2 * 450], "skaičiai");
+    lygu([M.pozicijos.find(x => x.id === "p3").minP, M.pozicijos.find(x => x.id === "p3").minZemas, M.pozicijos.find(x => x.id === "p1").minZemas], [5000, true, false], "mažiausias patikimas įkainis");
     arti(M.pozicijos.find(x => x.id === "p1").langeliai.b.nuoMed, (26 - 21) / 21 * 100, "nuokrypis nuo medianos");
     W.eval("APP.state.settings.anomalijos.zemasMediana = 50; APP.state.settings.anomalijos.zemasPlanas = 50");
     lygu(W.eval("analitika.matrica(APP.state).pozicijos.find(x => x.id === 'p3').langeliai.b.zyma"), "min", "pakėlus slenkstį - mažiausias, ne rizikingai žemas");
@@ -663,17 +667,21 @@ async function testaiEtapai(){
   await testas("Rekomendacijos tiekėjui: akcentuoti pagal svertą, prašyti pagrįsti rizikingai žemus, nespausti kur pigiausias, trūksta ir vieninteliai; tekstai su skaičiais; derybų ribos gauna eilučių tikslą", async () => {
     analitikosProjektas();
     const R = W.eval("analitika.tiekejui(APP.state, 'c')");
-    lygu(R.akcentuoti.map(l => l.pos.name), ["Montavimas", "Mova", "Kabelis"], "akcentuoti pagal svertą");
-    tiesa(/„Montavimas“: 5 200,00 € - \+4% nuo pasiūlymų medianos, \+73,3% nuo mažiausio įkainio; derybų svertas 2 200,00 € \(brangiausias tarp tiekėjų\)\./.test(norm(R.akcentuoti[0].tekstas)), "tekstas: " + R.akcentuoti[0].tekstas);
+    lygu(R.akcentuoti.map(l => l.pos.name), ["Mova", "Montavimas", "Kabelis"], "akcentuoti pagal svertą");
+    // K4: Montavimo mažiausias (Beta 3000) - rizikingai žemas, todėl lyginama su mažiausiu iš kitų (5000), ne +73,3 % ir 2 200 €
+    tiesa(/„Montavimas“: 5 200,00 € - \+4% nuo pasiūlymų medianos, \+4% nuo mažiausio ne rizikingai žemo įkainio; derybų svertas 200,00 € \(brangiausias tarp tiekėjų\)\./.test(norm(R.akcentuoti[1].tekstas)), "tekstas: " + R.akcentuoti[1].tekstas);
+    tiesa(/„Mova“: 400,00 € - \+33,3% nuo pasiūlymų medianos, \+37,9% nuo mažiausio įkainio; derybų svertas 1 100,00 €/.test(norm(R.akcentuoti[0].tekstas)), "tekstas: " + R.akcentuoti[0].tekstas);
     lygu([R.pagristi.length, R.nespausti.length, R.truksta.map(l => l.pos.name), R.vieninteliai.length], [0, 0, ["Mokymai"], 0], "Gama");
-    lygu([Math.round(R.santrauka.suma), Math.round(R.santrauka.idealiSuma), Math.round(R.santrauka.svertas), Math.round(R.santrauka.svertasPct * 10) / 10, R.santrauka.anomalijos], [11300, 7900, 3400, 30.1, 2], "Gamos santrauka");
+    lygu([Math.round(R.santrauka.suma), Math.round(R.santrauka.idealiSuma), Math.round(R.santrauka.svertas), Math.round(R.santrauka.svertasPct * 10) / 10, R.santrauka.anomalijos], [11300, 9900, 1400, 12.4, 2], "Gamos santrauka");
     const B = W.eval("analitika.tiekejui(APP.state, 'b')");
     lygu([B.pagristi.map(l => l.pos.name), B.nespausti.map(l => l.pos.name), B.truksta.map(l => l.pos.name), B.akcentuoti.map(l => l.pos.name)], [["Montavimas"], ["Mova"], ["Mokymai"], ["Kabelis"]], "Beta");
     tiesa(/-40% nuo pasiūlymų medianos, -40% nuo planuojamo; galima neįvertinta apimtis/.test(norm(B.pagristi[0].tekstas)), "pagrįsti: " + B.pagristi[0].tekstas);
     const A = W.eval("analitika.tiekejui(APP.state, 'a')");
     lygu([A.vieninteliai.map(l => l.pos.name), A.nespausti.map(l => l.pos.name)], [["Mokymai"], ["Kabelis"]], "Alfa");
     const t = W.eval("strategy.suggestTargets('c')"), tb = W.eval("strategy.suggestTargets('b')");
-    lygu([t.eiluciuTikslas, t.target, tb.eiluciuTikslas, Math.round(tb.target)], [7900, 7900, 7900, 7820], "eilučių tikslas tampa tikslu tik kai žemesnis");
+    lygu([t.eiluciuTikslas, t.target, tb.eiluciuTikslas, Math.round(tb.target)], [9900, 9900, 7900, 7820], "eilučių tikslas tampa tikslu tik kai žemesnis");
+    // K2, K4: Beta (rizikingai žemas, nepilnas) ir Gama (nepilna) - ne kitų tikslas; Alfa pilna - pagrindas
+    lygu([t.minOffer, t.nenaudoti.map(r => r.id)], [10900, ["b"]], "tikslo pagrindas - pilnas pasiūlymas be rizikingai žemų");
     W.eval("APP.state.fixedOffers = { c: { totalPrice: 12000 } }");
     lygu(W.eval("strategy.suggestTargets('c')").eiluciuTikslas, 0, "su bendra kaina eilučių tikslo nėra");
   });
@@ -710,7 +718,7 @@ async function testaiEtapai(){
     const chk = D.getElementById("matricaTikAnomalijos"); chk.checked = true; chk.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
     lygu(D.querySelectorAll("#ikainiuMatrica tbody tr").length, 3, "tik anomalijos - be „Mokymai“");
     const rik = D.getElementById("matricaRikiuoti"); rik.value = "svertas"; rik.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
-    lygu([...D.querySelectorAll("#ikainiuMatrica tbody th.mc__poz span")].map(e => e.textContent), ["Montavimas", "Mova", "Kabelis"], "pagal svertą");
+    lygu([...D.querySelectorAll("#ikainiuMatrica tbody th.mc__poz span")].map(e => e.textContent), ["Mova", "Kabelis", "Montavimas"], "pagal svertą (nuo mažiausio ne rizikingai žemo, K4)");
     chk.checked = false; chk.dispatchEvent(new W.Event("change", { bubbles: true })); await lauk(30);
     D.querySelector('[data-mc="b|p3"]').click(); await lauk(30);
     const det = D.getElementById("matricosDetales").textContent;
@@ -809,13 +817,13 @@ async function testaiEtapai(){
     const r = D.getElementById("rekomendacijos");
     lygu([...r.querySelectorAll(".card .card__title")].map(e => e.textContent.replace(/\s*\d+$/, "").trim()), ["Akcentuoti derybose", "Prašyti pagrįsti", "Nespausti (tiekėjo argumentas)", "Trūksta arba nepalyginama"], "kortelės");
     lygu(r.querySelectorAll(".card")[0].querySelectorAll("li").length, 3, "akcentuoti - 3 eilutės");
-    tiesa(/Derybų svertas/.test(r.textContent) && /3 400,00/.test(norm(r.textContent)), "svertas kortelėje");
+    tiesa(/Derybų svertas/.test(r.textContent) && /1 400,00/.test(norm(r.textContent)), "svertas kortelėje (K4 - nuo mažiausio ne rizikingai žemo)");
     D.getElementById("btnRekUzklausa").click(); await lauk(80);
     lygu([W.eval("APP.currentView"), D.getElementById("aiTemplate").value, D.getElementById("aiSupplier").value], ["ai", "supplier", "c"], "užklausos vaizdas");
     const u = norm(D.getElementById("aiPromptOutput").value);
-    tiesa(/## ĮKAINIŲ ANALIZĖ/.test(u) && /Akcentuoti: „Montavimas“ \+4% nuo medianos, \+73,3% nuo mažiausio/.test(u) && /Trūksta: „Mokymai“/.test(u), "užklausoje nėra įkainių analizės:\n" + u.slice(0, 600));
+    tiesa(/## ĮKAINIŲ ANALIZĖ/.test(u) && /Akcentuoti: „Mova“ \+33,3% nuo medianos, \+37,9% nuo mažiausio/.test(u) && /„Montavimas“ \+4% nuo medianos, \+4% nuo mažiausio ne rizikingai žemo/.test(u) && /Trūksta: „Mokymai“/.test(u), "užklausoje nėra įkainių analizės:\n" + u.slice(0, 600));
     const glaustai = u.replace(/[\s  .,']/g, "");
-    ["5200", "11300", "3400", "7900"].forEach(x => tiesa(glaustai.indexOf(x) < 0, "užklausoje absoliuti suma " + x));
+    ["5200", "11300", "1400", "9900"].forEach(x => tiesa(glaustai.indexOf(x) < 0, "užklausoje absoliuti suma " + x));
     tiesa(!/€|(^|[^A-Za-z])(EUR|Eur)([^A-Za-z]|$)/.test(u) && !/Alfa|Beta|Gama/.test(u.replace(/Tiekėjas [A-C]/g, "")), "valiuta ar tiekėjo vardas užklausoje");
     tiesa(/ĮKAINIŲ ANALIZĖ \(santrauka pagal tiekėjus/.test(W.generatePrompt("strategy")), "bendra strategija - santrauka pagal tiekėjus");
     tiesa(W.XLSX, "Excel biblioteka neįsikėlė (reikia interneto)");
@@ -845,7 +853,11 @@ async function testaiEtapai(){
   await testas("Tiekėjo atpažinimas iš dokumento ir failo vardo: „Tiekėjas:“, teisinė forma, įmonės kodas; esamas tiekėjas pagal kodą ar pavadinimą, kitaip - naujas; visada su citata", async () => {
     await modulis();
     const A = W.atpazinkTiekeja("UAB_Alfa_pasiulymas.xlsx", [["Komercinis pasiūlymas"], ["Tiekėjas: UAB „Alfa“"], ["Įmonės kodas: 123456789"], ["Pavadinimas", "Kiekis", "Kaina"]], []);
-    lygu([A.pavadinimas, A.kodas, A.saltinis, A.esamasId, A.pasitikejimas, /Tiekėjas: UAB „Alfa“/.test(A.citata)], ["UAB Alfa", "123456789", "dokumentas", null, "tiketinas", true], "iš dokumento");
+    lygu([A.pavadinimas, A.kodas, A.saltinis, A.esamasId, A.pasitikejimas, /Tiekėjas: UAB „Alfa“/.test(A.citata)], ["UAB „Alfa“", "123456789", "dokumentas", null, "tiketinas", true], "iš dokumento (kabutės lieka - M2, 2026-10-27)");
+    const M2 = W.atpazinkTiekeja("x.pdf", [["Tiekėjas: UAB \"Elektros tinklų sprendimai\", įmonės kodas 300111222"]], []);
+    lygu([M2.pavadinimas, M2.kodas], ["UAB „Elektros tinklų sprendimai“", "300111222"], "tiesios kabutės - lietuviškos, kodas nukerpamas");
+    const LV = W.atpazinkTiekeja("x.pdf", [["SIA „Baltic Grid Supply“"], ["Reg. Nr. 40003999888"]], []);
+    lygu([LV.pavadinimas, LV.kodas], ["SIA „Baltic Grid Supply“", "40003999888"], "11 skaitmenų Latvijos kodas");
     const B = W.atpazinkTiekeja("x.xlsx", [["Tiekėjas: UAB „Alfa“"]], [{ id: "a1", name: "UAB „Alfa“" }]);
     lygu([B.esamasId, B.pasitikejimas], ["a1", "tikslus"], "esamas pagal pavadinimą");
     const K = W.atpazinkTiekeja("x.xlsx", [["Įmonės kodas 123456789"]], [{ id: "k1", name: "Visai kitas", code: "123456789" }]);
@@ -853,7 +865,7 @@ async function testaiEtapai(){
     const V = W.atpazinkTiekeja("Beta_komercinis_pasiulymas_2026-09-01.xlsx", [["Pavadinimas", "Kiekis", "Kaina"]], [{ id: "b", name: "Betatechnika OÜ" }]);
     lygu([V.pavadinimas, V.saltinis, V.esamasId, V.pasitikejimas], ["Beta", "failo vardas", "b", "tiketinas"], "iš failo vardo - panašus į esamą");
     const F = W.atpazinkTiekeja("x.xlsx", [["„Gamatronas“, AB", "Pasiūlymas"]], []);
-    lygu([F.pavadinimas, F.pasitikejimas], ["AB Gamatronas", "tiketinas"], "forma po pavadinimo");
+    lygu([F.pavadinimas, F.pasitikejimas], ["AB „Gamatronas“", "tiketinas"], "forma po pavadinimo");
     const N = W.atpazinkTiekeja("pasiulymas.xlsx", [["Pavadinimas", "Kiekis", "Kaina"]], []);
     lygu([N.pavadinimas, N.esamasId, N.pasitikejimas], ["", null, "nezinomas"], "neatpažinta - sakoma");
     // formos su lietuviškomis raidėmis ir „Ü“: JS `\b` po jų ribos nemato - forma liktų pavadinime ir esamas tiekėjas nebūtų rastas
@@ -861,7 +873,7 @@ async function testaiEtapai(){
     const U = W.atpazinkTiekeja("x.xlsx", [["Tiekėjas: VšĮ „Centras“"]], [{ id: "c1", name: "Centras, VšĮ" }]);
     lygu([U.esamasId, U.pasitikejimas], ["c1", "tikslus"], "VšĮ - esamas tiekėjas");
     const O = W.atpazinkTiekeja("x.xlsx", [["„Nordtech“, OÜ", "Pasiūlymas"]], []);
-    lygu(O.pavadinimas, "OÜ Nordtech", "forma OÜ po pavadinimo");
+    lygu(O.pavadinimas, "OÜ „Nordtech“", "forma OÜ po pavadinimo");
   });
 
   await testas("Masinis importas: keli failai -> peržiūros langas (tiekėjas siūlomas su citata, sutapdinimas; CSV UTF-8 be BOM ir windows-1257), niekas neįrašoma iki „Priimti“; priimant kuriami nauji tiekėjai, „Nepriskirti“ praleidžiamas", async () => {
@@ -881,7 +893,7 @@ async function testaiEtapai(){
     lygu([...D.querySelectorAll("[data-imp-sup]")].map(s => s.value), ["__naujas__", "__naujas__", "__naujas__"], "siūlomi nauji tiekėjai");
     lygu([...D.querySelectorAll("[data-imp-naujas]")].map(i => i.value), ["UAB Alfa", "Betatechnika OÜ", "UAB Ąžuolas"], "pavadinimai (UTF-8 be BOM ir windows-1257)");
     tiesa(/Siūloma \(nepatvirtinta\)/.test(D.getElementById("modalBody").textContent) && /„Tiekėjas: Betatechnika OÜ/.test(D.getElementById("modalBody").textContent), "citata");
-    tiesa(/pirmas priimtas failas jas sukurs/.test(D.getElementById("modalBody").textContent), "pozicijų dar nėra - pasakoma");
+    tiesa(/priimti failai jas sukurs - visų failų pozicijas/.test(D.getElementById("modalBody").textContent), "pozicijų dar nėra - pasakoma");
     const s3 = D.querySelector('[data-imp-sup="2"]'); s3.value = ""; s3.dispatchEvent(new W.Event("change"));
     D.getElementById("impPriimti").click(); await lauk(80);
     lygu(S().suppliers.map(x => x.name), ["UAB Alfa", "Betatechnika OÜ"], "priimti du, trečias praleistas");
@@ -894,8 +906,11 @@ async function testaiEtapai(){
     await W.masinisImportas([f4]);
     lygu(D.querySelector("[data-imp-sup]").value, a, "esamas tiekėjas parinktas");
     tiesa(/1 tikslūs, 0 tikėtini, 1 nerasta/.test(D.getElementById("modalBody").textContent), "sutapdinimo santrauka: " + D.getElementById("modalBody").textContent.slice(0, 400));
+    // K2: nesutapdinta eilutė - pasirinkimas (numatyta „Nepriskirti“) ir pastaba, kad neįrašoma
+    const sel = D.querySelector('[data-imp-poz="0|1"]');
+    tiesa(sel && sel.value === "" && /Nesutapdinta eilučių: 1/.test(D.getElementById("modalBody").textContent), "nesutapdintos eilutės pasirinkimas");
     D.getElementById("impPriimti").click(); await lauk(80);
-    lygu([S().suppliers.length, S().offers[a][p2].unitPrice], [2, 270], "esamam tiekėjui - naujas įkainis");
+    lygu([S().suppliers.length, S().offers[a][p2].unitPrice, S().positions.length], [2, 270, 2], "esamam tiekėjui - naujas įkainis; nepriskirta eilutė - neįrašyta");
   });
 }
 
@@ -903,7 +918,7 @@ async function testaiEtapai(){
    režimas nepakito (palyginta su ankstesne versija tais pačiais duomenimis - vaizdai, užklausos, Excel); čia tikrinamas EN. */
 const LT_RAIDES = /[ąčęėįšųūžĄČĘĖĮŠŲŪŽ„]/;
 /* Kas lieka lietuviškai ir anglų režime: įstatymų santrumpos PĮ / VPĮ ir įmonių pavadinimai (duomenys). */
-const ltLikutis = s => String(s || '').replace(/V?PĮ/g, '').replace(/U?AB „[^"“”]+["“”]/g, '').split('\n').filter(x => LT_RAIDES.test(x));
+const ltLikutis = s => String(s || '').replace(/V?PĮ/g, '').replace(/U?AB „[^"“”]+["“”]/g, '').replace(/Arūno|Arūnas/g, '').split('\n').filter(x => LT_RAIDES.test(x));   // ir rengėjo vardas pagalboje (2026-10-27)
 function enProjektas(){
   W.eval(`APP.state = defaultState();
     Object.assign(APP.state.project, { name: 'Substation upgrade', plannedValue: 100000, criteriaModel: 'meat', priceWeight: 70, qualityWeight: 30, objective: 'Upgrade', backgroundNotes: 'Previous tender failed' });
@@ -1033,16 +1048,16 @@ async function testaiKalba(){
     tiesa(/^Negotiation_project_Substation_upgrade_\d{4}-\d{2}-\d{2}\.json$/.test(json), "JSON failo vardas: " + json);
   });
 
-  await testas("Importas angliškai: anglų antraštės („Name“, „Qty“, „Unit price“) atpažįstamos, klaidos ir pranešimai angliškai, peržiūros langas angliškai; naujas tiekėjas - „Lithuania“, numatytasis matas - „pcs“", async () => {
+  await testas("Importas angliškai: anglų antraštės („Name“, „Qty“, „Unit price“) atpažįstamos, klaidos ir pranešimai angliškai, peržiūros langas angliškai; naujo tiekėjo šalis ir importuotos pozicijos matas - tušti, rankinė pozicija - „pcs“", async () => {
     await modulis();
     W.setLang("en"); W.eval("APP.state = defaultState(); storage.save = () => {}; render.all()"); W.go("suppliers");
     const r = W.istraukIsEiluciu([["Name", "Qty", "Unit price"], ["Cable 110 kV", "100", "24.50"], ["Joint", 10, 280]], "offer.xlsx");
     lygu([r.ok, r.rowsFound, r.positions.map(p => p.price)], [true, 2, [24.5, 280]], "anglų antraštė");
     const kl = [W.istraukIsEiluciu([], "a.xlsx").error, W.istraukIsEiluciu([["x"]], "a.xlsx").error, W.istraukIsEiluciu([["Name Qty Price"]], "a.xlsx").error,
       W.istraukIsEiluciu([["Name", "Qty", "Price"]], "a.xlsx").error, W.istraukIsEiluciu([["Total", "12 345,67"]], "a.xlsx").message];
-    lygu(kl, ["The file is empty.", "No table was found. Check that the file has the headers “Name” (or “Item”), “Quantity” and “Price”.",
+    lygu(kl, ["The file is empty.", "Neither a table nor a total price was found. Check that the file has the headers “Name” (or “Item”), “Quantity” and “Price”, or an amount with “EUR” or the word “price”.",
       "A header was found, but the name, quantity and price are in one cell (probably PDF lines), so the items cannot be separated. Enter them manually or upload Excel or CSV.",
-      "A header was found, but no data rows.", "A probable total offer was found (no line items). Entered in the “Total offer” table."], "klaidos");
+      "A header was found, but no data rows.", "The file has no item table; total price found: “Total 12 345,67”. VAT is not stated next to the amount - check that it is the price excl. VAT."], "klaidos");
     lygu((await W.parseFile(new W.File(["x"], "a.txt"), null)).error, "Unsupported file format (txt). Use XLSX, XLS, CSV, PDF, DOCX or ODT.", "formatas");
     const f = new W.File(["Supplier: Nordic Cables Ltd,,\nName,Qty,Unit price\nCable 110 kV,100,24.5\nJoint,10,280\n"], "nordic.csv", { type: "text/csv" });
     await W.masinisImportas([f]);
@@ -1051,7 +1066,8 @@ async function testaiKalba(){
     lygu(ltLikutis(m.innerText + "\n" + atributai(m)), [], "lietuviškas tekstas lange");
     tiesa(/Suggested \(not confirmed\): new supplier - from the document: “Supplier: Nordic Cables Ltd/.test(m.textContent), "siūlymas su citata: " + m.textContent.slice(0, 300));
     D.getElementById("impPriimti").click(); await lauk(60);
-    lygu([S().suppliers.map(x => [x.name, x.country]), S().positions.map(p => p.unit)], [[["Nordic Cables Ltd", "Lithuania"]], ["pcs", "pcs"]], "priimta");
+    // D3 (2026-10-27): šalies ir mato faile nėra - tušti (iki tol „Lithuania“ ir „pcs“ visada)
+    lygu([S().suppliers.map(x => [x.name, x.country]), S().positions.map(p => p.unit)], [[["Nordic Cables Ltd", ""]], ["", ""]], "priimta");
     W.addPosition(); W.addSamplePositions();
     lygu([S().positions[2].unit, S().positions[3].name, S().positions[4].unit], ["pcs", "110 kV power transformer 40 MVA", "set"], "nauja ir pavyzdinės pozicijos");
   });
@@ -1280,6 +1296,390 @@ async function testaiDiSkaitymas(){
   });
 }
 
+/* ==========================================================================
+   Naujo darbuotojo patikra (2026-10-27): K1 bendra suma be lentelės - tik su kontekstu ir per peržiūrą, K2 visų failų pozicijų sąjunga ir
+   nepilni pasiūlymai, K3 rankinis skaičių įvedimas, K4 svertas ir tikslai be rizikingai žemų įkainių, K5 suklastotas projekto failas,
+   K6 DI šablonai be kitų tiekėjų informacijos; D1-D9, V1-V14, M1-M7.
+   ========================================================================== */
+async function docxPastraipos(pastraipos, vardas){
+  const z = new W.JSZip();
+  const ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const p = t => '<w:p><w:r><w:t xml:space="preserve">' + t.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</w:t></w:r></w:p>';
+  z.file('word/document.xml', '<?xml version="1.0" encoding="UTF-8"?><w:document ' + ns + '><w:body>' + pastraipos.map(p).join('') + '</w:body></w:document>');
+  return new W.File([await z.generateAsync({ type: 'blob' })], vardas, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+const csvFailas = (eilutes, vardas) => new W.File([eilutes.join("\n") + "\n"], vardas, { type: "text/csv" });
+const ivesk = (el, v, ivykis) => { el.value = v; el.dispatchEvent(new W.Event(ivykis || "input", { bubbles: true })); };
+
+async function testaiPatikra1027(){
+  grupe("Naujo darbuotojo patikra (2026-10-27): bendra suma, pozicijų sąjunga ir nepilni pasiūlymai, skaičių įvedimas, rizikingai žemi įkainiai, projekto failas, DI šablonai");
+  await modulis();
+
+  await testas("K1: bendra suma be lentelės - tik su valiuta ar kainos žodžiu; įmonės ir PVM kodai, telefonai, pirkimo numeriai, dienos - ne kaina; kaina be PVM pirmiau; kelios sumos - neaišku; lentelė po ilgos įžangos randama", async () => {
+    W.eval("APP.state = defaultState(); render.all();");
+    const E = r => W.istraukIsEiluciu(r, "laiskas.docx");
+    const a = E([["Dėl pirkimo Nr. 900001"], ["UAB „Teisės partneriai“, įmonės kodas 305999000, tel. +370 612 34567"], ["Pasiūlymo kaina - 52.000,00 Eur be PVM."]]);
+    lygu([a.ok, a.total, a.fixed && a.fixed.totalPrice], [true, 52000, 52000], "kaina, ne įmonės kodas (iki tol - 305 999 000)");
+    tiesa(/rasta bendra kaina be PVM: „Pasiūlymo kaina - 52\.000,00 Eur be PVM\.“/.test(a.message), "citata: " + a.message);
+    lygu(E([["Įmonės kodas 302777888"], ["Kaina 48 500,00 EUR be PVM (58 685,00 EUR su PVM)"]]).total, 48500, "be PVM, ne su PVM");
+    const c = E([["PVM mokėtojo kodas LT100011122233"], ["Tel. 8 612 34567"], ["Pasiūlymas galioja 90 dienų"]]);
+    tiesa(!c.ok && /Nepavyko aptikti lentelės ir bendros kainos/.test(c.error), "be kainos - neperskaityta: " + JSON.stringify(c));
+    const d = E([["Kaina 48 500,00 EUR be PVM"], ["Alternatyva: 52 000,00 EUR be PVM"]]);
+    tiesa(!d.ok && d.kandidatai.length === 2 && /bendrų sumų rasta kelios/.test(d.error) && /įrašykite ją lentelėje „Bendras pasiūlymas“/.test(d.error), "kelios - žmogus: " + d.error);
+    const e = E([["Bendra kaina su PVM: 58 685,00 EUR"]]);
+    tiesa(!e.ok && /rasta tik kaina su PVM/.test(e.error), "tik su PVM: " + e.error);
+    lygu(E([["Mokėjimas per 30 dienų, kaina sumokama dalimis"], ["Iš viso: 12 000,00 EUR be PVM"]]).total, 12000, "dienos - ne kaina");
+    lygu(E([["Pasiūlymo kaina galioja 90 dienų"], ["Kaina: 12 000,00"]]).total, 12000, "kainos žodis prieš dienų skaičių - ne kaina");
+    const ivadas = Array.from({ length: 18 }, (_, i) => ["Įžangos pastraipa " + (i + 1)]);
+    const l = E(ivadas.concat([["Pavadinimas", "Kiekis", "Kaina"], ["Kabelis", "100", "24,50"]]));
+    lygu([l.ok, l.rowsFound, l.fixed], [true, 1, undefined], "lentelė po 18 pastraipų (iki tol - tik pirmose 15)");
+    lygu(E([["Pirkimo pavadinimas: Teisinės konsultacijos; pasiūlymo kaina nurodyta žemiau ir galioja 90 dienų nuo pateikimo dienos, kaip nurodyta pirkimo sąlygose, kurios skelbiamos CVP IS."], ["Kaina 52 000,00 EUR be PVM"]]).total, 52000, "ilgas sakinys - ne PDF antraštė");
+    lygu(E([["Iš viso", 14999.99], ["PVM", 3149.99]]).total, 14999.99, "Excel: skaitinis langelis su žodžiu, PVM suma - ne kaina");
+    lygu(E([["Iš viso", 14999.99], ["Telefonas", 37061234567]]).total, 14999.99, "skaitinis langelis be kainos žodžio - ne kaina");
+    W.eval("APP.state.project.vatIncluded = true");
+    lygu(E([["Kaina 48 500,00 EUR be PVM (58 685,00 EUR su PVM)"]]).total, 58685, "PV su PVM - kaina su PVM");
+    W.eval("APP.state.project.vatIncluded = false");
+  });
+
+  await testas("K1: tiekėjo kortelėje įkeltas laiškas su bendra kaina - per peržiūrą, ne iškart; priėmus - įrašoma", async () => {
+    tiesa(W.JSZip, "JSZip neįsikėlė");
+    W.eval("APP.state = defaultState(); APP.state.project.name = 'Konsultacijos'; APP.state.project.plannedValue = 60000; APP.state.suppliers = [{ id:'a', name:'UAB „Teisės partneriai“' }]; render.all();");
+    const f = await docxPastraipos(["UAB „Teisės partneriai“, įmonės kodas 305999000", "Pasiūlymo kaina - 52.000,00 Eur be PVM."], "Teises_partneriai.docx");
+    await W.importuokIrPranesk([f], "a"); await lauk(60);
+    tiesa(D.getElementById("modalOverlay").classList.contains("open"), "peržiūros langas neatsivėrė");
+    tiesa(!S().fixedOffers.a, "įrašyta be peržiūros: " + JSON.stringify(S().fixedOffers));
+    const body = norm(D.getElementById("modalBody").textContent);
+    tiesa(/tik bendra suma/.test(body) && /52 000,00/.test(body) && /Pasiūlymo kaina - 52\.000,00 Eur be PVM/.test(body), "peržiūra: " + body.slice(0, 400));
+    D.getElementById("impPriimti").click(); await lauk(60);
+    lygu(S().fixedOffers.a.totalPrice, 52000, "priimta");
+  });
+
+  await testas("K2: keli failai - visų failų pozicijų sąjunga; nepilnas pasiūlymas - ne pirmaujantis, ne kitų tikslas, ne statistikos dalis; DI užklausoje pažymėtas", async () => {
+    tiesa(W.XLSX, "Excel biblioteka neįsikėlė");
+    W.eval("APP.state = defaultState(); APP.state.project.name = 'Pastotė'; APP.state.project.plannedValue = 100000; render.all();"); W.go("suppliers");
+    const f1 = csvFailas(["Tiekėjas: UAB Alfa,,", "Pavadinimas,Kiekis,Kaina", "Kabelis,100,20", "Mova,10,300"], "alfa.csv");
+    const f2 = csvFailas(["Tiekėjas: UAB Beta,,", "Pavadinimas,Kiekis,Kaina", "Kabelis,100,26", "Mova,10,290", "Paleidimo darbai,1,30000"], "beta.csv");
+    const f3 = csvFailas(["Tiekėjas: UAB Gama,,", "Pavadinimas,Kiekis,Kaina", "Kabelis,100,21", "Mova,10,400", "Paleidimo darbai,1,32000"], "gama.csv");
+    await W.masinisImportas([f1, f2, f3]);
+    D.getElementById("impPriimti").click(); await lauk(80);
+    lygu(S().positions.map(p => p.name), ["Kabelis", "Mova", "Paleidimo darbai"], "pozicijos - visų failų (iki tol - tik pirmo, kitų įkainiai dingdavo)");
+    const [a, b, c] = S().suppliers.map(x => x.id), pal = S().positions[2].id;
+    lygu([S().offers[b][pal].unitPrice, S().offers[c][pal].unitPrice, W.eval(`strategy.pilnumas('${a}')`)], [30000, 32000, { pilnas: false, fiksuota: false, viso: 3, ikainota: 2, truksta: 1 }], "įkainiai ir pilnumas");
+    lygu(W.eval("strategy.rikiuotas()").map(r => [r.name, r.pilnas]), [["UAB Beta", true], ["UAB Gama", true], ["UAB Alfa", false]], "pilni pirmi, nepilnas apačioje");
+    const t = W.eval(`strategy.suggestTargets('${c}')`);
+    lygu([t.minOffer, t.nenaudoti.map(r => r.id)], [W.eval(`strategy.totalForSupplier('${b}')`), [a]], "nepilnas - ne tikslo pagrindas");
+    W.go("analysis"); await lauk(120);
+    const rk = norm(D.getElementById("rankingTable").textContent).replace(/\s+/g, " ");
+    tiesa(/UAB Beta.*Pirmaujantis/.test(rk) && /UAB Alfa.*Nepilnas: trūksta 1 poz\./.test(rk) && !/UAB Alfa[^U]*Pirmaujantis/.test(rk), "rikiavimas: " + rk);
+    tiesa(/Nepilni pasiūlymai \(UAB Alfa - trūksta 1 poz\.\)/.test(D.getElementById("autoInsights").textContent), "įžvalga");
+    W.go("dashboard"); await lauk(120);
+    tiesa(/Pirmaujantis tiekėjas pagal kainą: UAB Beta/.test(D.getElementById("dashInsights").textContent) && /iš jų nepilnų: 1/.test(D.getElementById("dashKpis").textContent), "apžvalga");
+    const u = W.generatePrompt("strategy");
+    tiesa(/- Tiekėjas A: .*\(nepilnas: trūksta 1 poz\./.test(u) && /1\. Tiekėjas B/.test(u), "DI užklausa:\n" + u.slice(u.indexOf("## TIEKĖJŲ RIKIAVIMAS"), u.indexOf("## TIEKĖJŲ RIKIAVIMAS") + 300));
+  });
+
+  await testas("K2: kai projekte pozicijų jau yra - nesutapdinta eilutė priskiriama pasirinkta pozicija arba nauja; nepriskirta - įvardijama", async () => {
+    analitikosProjektas();
+    const r = W.extractFromRows([["Pavadinimas", "Kiekis", "Kaina"], ["Kabelis", "100", "22"], ["Visiškai kita prekė", "1", "999"], ["Dar viena", "2", "5"]], null, "x.xlsx");
+    const pr = W.eval("pritaikykImporta")(r, "c", { priskyrimai: { 1: "p4", 2: "__naujas__" } });
+    lygu([S().offers.c.p1.unitPrice, S().offers.c.p4.unitPrice, S().positions.length, S().positions[4].name, S().positions[4].plannedUnitPrice], [22, 999, 5, "Dar viena", null], "pasirinkta pozicija ir nauja");
+    tiesa(/Sukurta naujų pozicijų: 1/.test(pr.message), "pranešimas: " + pr.message);
+    const r2 = W.extractFromRows([["Pavadinimas", "Kiekis", "Kaina"], ["Nežinoma pozicija", "1", "7"]], "b", "x.xlsx");
+    tiesa(r2.ispejimas && /Nesutapdinta su projekto pozicijomis ir neįrašyta: 1 \(„Nežinoma pozicija“\)/.test(r2.message), "nepriskirta: " + r2.message);
+  });
+
+  await testas("K3: rankinis įvedimas - tuščias įkainis „trūksta“, ne 0 €; „2.950.000,00“, „14.900“, „1,500.50“ - kaip pinigai; neigiamas ar neperskaitomas neįrašomas; išėjus - rodoma perskaityta reikšmė", async () => {
+    analitikosProjektas(); W.go("suppliers"); await lauk(30);
+    const of = D.querySelector('[data-offer="a|p1"]');
+    tiesa(of.type === "text" && of.getAttribute("inputmode") === "decimal", "laukas - tekstas");
+    ivesk(of, "");
+    lygu([S().offers.a.p1.unitPrice, W.eval("analitika.kaina(APP.state, 'a', 'p1')"), W.eval("strategy.pilnumas('a')").truksta], [null, null, 1], "ištrintas - trūksta (iki tol 0 - „rizikingai žemas“)");
+    ivesk(of, "1.500,50"); lygu(S().offers.a.p1.unitPrice, 1500.5, "įkainis LT formatu");
+    W.go("project"); await lauk(30);
+    const pv = D.querySelector('[data-pf="plannedValue"]');
+    for (const [t, v] of [["2.950.000,00", 2950000], ["14.900", 14900], ["1,500.50", 1500.5], ["2 950 000", 2950000]]) { ivesk(pv, t); lygu(S().project.plannedValue, v, "PV " + t); }
+    ivesk(pv, "-5000");
+    lygu([S().project.plannedValue, pv.getAttribute("aria-invalid")], [2950000, "true"], "neigiama PV neįrašyta (V10)");
+    ivesk(pv, "14.900"); pv.dispatchEvent(new W.Event("change", { bubbles: true }));
+    lygu(norm(pv.value), "14 900", "išėjus - perskaityta reikšmė");
+    W.go("suppliers"); await lauk(30);
+    const q = D.querySelector('[data-pos-edit="p1"][data-pos-field="quantity"]');
+    ivesk(q, "1.200"); lygu(S().positions[0].quantity, 1200, "kiekis");
+  });
+
+  await testas("K4: rizikingai žemas įkainis - ne kitų tiekėjų tikslas ir ne sverto pagrindas; pirmaujantis su rizikingai žemu - pažymėtas; tikslų lentelėje - kas nenaudota", async () => {
+    analitikosProjektas();
+    W.eval("APP.state.offers.b.p4 = { unitPrice: 450 }; APP.state.offers.c.p4 = { unitPrice: 450 }; render.all();");
+    const t = W.eval("strategy.suggestTargets('c')");
+    lygu([t.minOffer, t.nenaudoti.map(r => r.id)], [10900, ["b"]], "Gamos tikslas - nuo Alfos (pilnas, be rizikingai žemų), ne Betos 9 400 su rizikingai žemu");
+    W.go("strategy"); await lauk(60);
+    tiesa(/Tikslu nenaudojami: Beta \(rizikingai žemų įkainių: 1\)/.test(D.getElementById("targetsTable").textContent), "tikslų lentelė: " + D.getElementById("targetsTable").textContent.slice(-300));
+    W.go("analysis"); await lauk(120);
+    tiesa(/Beta.*Pirmaujantis.*Rizikingai žemų įkainių: 1/.test(norm(D.getElementById("rankingTable").textContent).replace(/\s+/g, " ")), "rikiavimas");
+  });
+
+  await testas("K5: suklastotas projekto failas - kodas nevykdomas nė viename vaizde, skaičiai - skaičiai, spalva - iš paletės, identifikatoriai - saugūs (įkainiai perkelti)", async () => {
+    await modulis();
+    const X = '"><img src=x onerror="window.__xss=(window.__xss||0)+1">';
+    const d = { project: { name: "Testas" + X, plannedValue: X, priceWeight: X, qualityWeight: 20, criteriaModel: "meat", procedureType: X, law: X, currency: X, contractTermMonths: X },
+      suppliers: [{ id: X, name: "Alfa", color: "red;" + X, riskLevel: X }, { id: "b", name: "Beta" + X }],
+      positions: [{ id: "p1", name: "Kabelis" + X, unit: X, quantity: X, plannedUnitPrice: X }],
+      offers: { [X]: { p1: { unitPrice: 20 } }, b: { p1: { unitPrice: X } } },
+      fixedOffers: { b: { totalPrice: X, validity: X, deliveryDays: X, paymentTerms: X } },
+      quality: { criteria: [{ id: X, name: "Patirtis" + X, weight: X, scale: X }], scores: { b: { [X]: X } } },
+      strategy: { mustHaves: [X], niceToHaves: [], concessions: [{ label: X, value: X }], risks: [{ area: X, likelihood: X, impact: X }], targets: {} },
+      session: { status: X, rounds: [{ supplierId: "b", offer: X, notes: X }], decisions: [] }, settings: { zThreshold: X, anomalijos: { zemasMediana: X } } };
+    const ok = await new Promise(res => W.eval("storage").importJSON(new W.File([JSON.stringify(d)], "projektas.json"), res));
+    tiesa(ok, "projektas neatidarytas");
+    W.eval("render.all()");
+    for (const v of ["dashboard", "project", "suppliers", "analysis", "meat", "strategy", "session", "ai", "export"]) { W.go(v); await lauk(140); }
+    lygu([W.__xss, D.querySelectorAll("img[onerror]").length], [undefined, 0], "kodas įvykdytas");
+    const st = S(), sup = st.suppliers[0];
+    lygu([st.project.plannedValue, st.project.priceWeight, st.project.procedureType, st.project.law, st.project.currency, st.positions[0].quantity, st.positions[0].plannedUnitPrice,
+      st.quality.criteria[0].weight, st.quality.criteria[0].scale, st.fixedOffers.b.totalPrice, st.fixedOffers.b.validity, st.session.rounds[0].offer, st.settings.anomalijos.zemasMediana],
+      [0, 100, "derybos_skelb", "PSI", "EUR", 0, null, 0, 10, null, "", null, 25], "skaičiai ir sąrašų reikšmės");
+    tiesa(/^id_/.test(sup.id) && /^#[0-9a-f]{6}$/i.test(sup.color) && st.offers[sup.id] && st.offers[sup.id].p1.unitPrice === 20 && !st.offers[X], "identifikatorius ir spalva: " + JSON.stringify([sup.id, sup.color, Object.keys(st.offers)]));
+    tiesa(st.project.name.indexOf("<img") > 0 && D.getElementById("projectChipName").textContent.indexOf("<img") > 0, "tekstas lieka tekstu (rodomas ekranuotas)");
+  });
+
+  await testas("K6, V5: DI šablonai - atsakymas tiekėjui be kitų tiekėjų informacijos su teisės nuoroda, visuose - derybų taisyklė, be straipsnių iš atminties; LT, VPĮ ir EN", async () => {
+    await modulis(); projektas(); W.eval("render.all()"); W.go("ai"); await lauk(40);
+    D.getElementById("aiSupplier").value = "a";
+    const cit = W.GP_TEISE.cit("derybos_neatskleisti", "PI");
+    lygu(cit, "PĮ 75 str. 1 d. 1 p.", "registro nuoroda");
+    const r = W.generatePrompt("response");
+    tiesa(/Pagrįstas tik šio tiekėjo pasiūlymu ir pirkimo dokumentų reikalavimais/.test(r) && r.indexOf("tai draudžiama (" + cit + ")") > 0 && !/kitų tiekėjų pasiūlymai, jei tinka|rinkos vidurkis/.test(r), "atsakymas tiekėjui:\n" + r.slice(-900));
+    for (const t of ["strategy", "supplier", "risk", "response", "memo", "techspec"]) { const u = W.generatePrompt(t); tiesa(/## DERYBŲ TAISYKLĖ/.test(u) && /numerių iš atminties nenurodyk/.test(u), t + ": be derybų taisyklės"); }
+    tiesa(!/nurodyk VPĮ\/PĮ straipsnius/.test(W.generatePrompt("techspec")) && /projektą/.test(W.generatePrompt("memo")) && /ko trūksta/.test(W.generatePrompt("memo")) && !/pateisintų/.test(W.generatePrompt("memo")), "techspec ir memo");
+    W.eval("APP.state.project.law = 'VPI'");
+    tiesa(W.generatePrompt("response").indexOf("VPĮ 66 str. 1 d. 1 p.") > 0, "VPĮ nuoroda");
+    W.setLang("en"); await lauk(40);
+    const en = W.generatePrompt("response");
+    tiesa(/Based only on this supplier’s offer/.test(en) && /## NEGOTIATION RULE/.test(en) && en.indexOf(W.GP_TEISE.cit("derybos_neatskleisti", "VPI", "en")) > 0 && !/market average/.test(en), "EN:\n" + en.slice(-700));
+    W.setLang("lt"); await lauk(40); localStorage.removeItem("ppnegotiation.lang");
+  });
+
+  await testas("D1: atviras ir ribotas konkursas - derybos draudžiamos: pavadinimas sąraše, pastaba vaizduose ir DI užklausoje su registro nuoroda (PĮ ir VPĮ)", async () => {
+    await modulis(); projektas(); W.eval("render.all()"); W.go("project"); await lauk(30);
+    const sel = D.querySelector('[data-pf="procedureType"]');
+    tiesa(/derybos draudžiamos/.test(sel.querySelector('option[value="atviras"]').textContent) && /derybos draudžiamos/.test(sel.querySelector('option[value="ribotas"]').textContent) && !/su derybų galimybe/.test(sel.innerHTML), "sąrašas");
+    ivesk(sel, "atviras");
+    const b = () => [...D.querySelectorAll("[data-derybu-draudimas]")].map(x => norm(x.textContent));
+    tiesa(b().length === 4 && b().every(x => /Atvirame konkurse derybos tarp pirkimo vykdytojo ir tiekėjų draudžiamos \(PĮ 69 str\. 5 d\.\)/.test(x)), "pastaba: " + b()[0]);
+    tiesa(/DĖMESIO: Atvirame konkurse/.test(W.generatePrompt("strategy")) && /Derybų taktikos nesiūlyk/.test(W.generatePrompt("strategy")), "DI užklausa");
+    ivesk(sel, "ribotas"); tiesa(/\(PĮ 71 str\. 5 d\.\)/.test(b()[0]), "ribotas: " + b()[0]);
+    ivesk(D.querySelector('[data-pf="law"]'), "VPI"); tiesa(/\(VPĮ 61 str\. 5 d\.\)/.test(b()[0]), "VPĮ: " + b()[0]);
+    ivesk(sel, "derybos_skelb"); tiesa(b().every(x => !x), "skelbiamos derybos - be pastabos");
+  });
+
+  await testas("Naudotojo sprendimai 2026-10-27: rekomendacijos - tik pasirengimui (T1), rezervinė riba - pasiūlymas, bet ne virš PV (T2), mažos vertės pirkimas su derybomis (T3), keturios grupės įmonės (T5)", async () => {
+    analitikosProjektas(); W.go("strategy"); await lauk(60);
+    const pst = D.getElementById("rekPastaba");
+    tiesa(pst && /Tik jūsų pasirengimui\./.test(pst.textContent) && /derybose tiekėjui jų neatskleiskite \(PĮ 75 str\. 1 d\. 1 p\.\)/.test(pst.textContent), "rekomendacijų pastaba: " + (pst && pst.textContent));
+    projektas(); W.eval("render.all()");
+    lygu(["a", "b", "c"].map(id => W.eval(`strategy.suggestTargets('${id}')`).reservation), [90000, 100000, 100000], "rezervinė - pasiūlymas, bet ne virš PV (iki tol 88 200, 102 000, 98 000)");
+    W.eval("APP.state.project.plannedValue = 0"); lygu(W.eval("strategy.suggestTargets('b')").reservation, 110000, "be PV - pasiūlymas");
+    W.go("project"); await lauk(30);
+    const sel = D.querySelector('[data-pf="procedureType"]'), org = D.querySelector('[data-pf="contractingEntity"]');
+    tiesa(sel.querySelector('option[value="mv_derybos"]') && /Mažos vertės pirkimas \(su derybomis\)/.test(sel.querySelector('option[value="mv_derybos"]').textContent), "MV su derybomis sąraše");
+    lygu([W.GP_METHODS.fromLegacy("pp-negotiation", "mv_derybos").id, W.GP_METHODS.toModule("pp-negotiation", "MV-SAD")], ["MV-SAD", "mv_derybos"], "klasifikatorius");
+    ivesk(sel, "mv_derybos"); lygu([S().project.procedureType, [...D.querySelectorAll("[data-derybu-draudimas]")].every(x => !x.textContent)], ["mv_derybos", true], "MV su derybomis - be draudimo pastabos");
+    tiesa(/Procedūra: Mažos vertės pirkimas - skelbiama apklausa su derybomis/.test(W.generatePrompt("strategy")), "DI užklausoje");
+    lygu([...org.options].map(o => o.textContent), ['AB „Litgrid"', 'AB „Amber Grid"', 'UAB „EPSO-G"', 'UAB „Energy cells"', "Kita EPSO-G grupės įmonė"], "pirkimo vykdytojai - keturios įmonės ir kita");
+  });
+
+  await testas("D2, D3, V2, V10: antraštė su „Mato vnt.“ / „Vnt.“ prieš „Kiekis“, matas iš failo, dviprasmiški skaičiai ir neigiamos eilutės - pasakoma", async () => {
+    W.eval("APP.state = defaultState(); render.all();");
+    const r = W.istraukIsEiluciu([["Eil. Nr.", "Pavadinimas", "Mato vnt.", "Kiekis", "Vnt. kaina, EUR be PVM", "Suma"], ["1", "Kabelis 110 kV", "m", "1200", "24,50", "29400"],
+      ["2", "Movos", "vnt.", "12", "3.876", ""], ["3", "Nuolaida", "kompl.", "1", "-500", ""]], "x.csv");
+    lygu([r.ok, r.rowsFound, r.positions.map(p => [p.unit, p.qty, p.price])], [true, 2, [["m", 1200, 24.5], ["vnt.", 12, 3.876]]], "stulpeliai (iki tol „Mato vnt.“ - kiekis, eilučių nerasta)");
+    tiesa(/įkainis „3\.876“ perskaitytas kaip 3,876 - jei tai 3 876, pataisykite/.test(norm(r.positions[1].ispejimai.join(" "))), "dviprasmis: " + r.positions[1].ispejimai);
+    tiesa(r.pastabos.some(x => /neigiamu kiekiu ar įkainiu \(pvz\. nuolaida\): 1/.test(x)), "neigiama eilutė: " + r.pastabos);
+    const v = W.istraukIsEiluciu([["Nr.", "Prekės pavadinimas", "Vnt.", "Kiekis", "Kaina"], ["1", "Mova", "vnt.", "3", "10"]], "x.csv");
+    lygu(v.positions.map(p => [p.unit, p.qty]), [["vnt.", 3]], "„Vnt.“ prieš „Kiekis“ - matas");
+    lygu(W.istraukIsEiluciu([["Pavadinimas", "Vnt.", "Kaina"], ["Mova", "3", "10"]], "x.csv").positions.map(p => p.qty), [3], "be „Kiekis“ - „Vnt.“ yra kiekis");
+    W.eval("APP.state = defaultState(); APP.state.suppliers = [{ id: 'a', name: 'Alfa' }]");
+    W.extractFromRows([["Pavadinimas", "Mato vnt.", "Kiekis", "Kaina"], ["Kabelis", "m", "100", "20"]], "a", "a.csv");
+    lygu(S().positions.map(p => p.unit), ["m"], "nauja pozicija - matas iš failo, ne „vnt.“");
+    await W.masinisImportas([csvFailas(["Tiekėjas: SIA Baltic Grid Supply,,", "Pavadinimas,Kiekis,Kaina", "Kabelis,100,21"], "lv.csv")]);
+    D.getElementById("impPriimti").click(); await lauk(60);
+    lygu(S().suppliers.find(x => /Baltic/.test(x.name)).country, "", "šalis - tuščia (iki tol visada „Lietuva“)");
+    W.addSupplierModal(); await lauk(20);
+    lygu([D.getElementById("supCountry").value, D.getElementById("supCountry").placeholder], ["", "pvz. Lietuva"], "tiekėjo lange šalis be numatytosios");
+    W.closeModal();
+  });
+
+  await testas("D4: pirkimo vykdytojas - įstatymas pagal organizacijų sąrašą, nesutapimas pasakomas; DI užklausoje - perkantysis subjektas ar perkančioji organizacija ir tikras įstatymo pavadinimas", async () => {
+    await modulis(); projektas(); W.eval("render.all()"); W.go("project"); await lauk(30);
+    const org = D.querySelector('[data-pf="contractingEntity"]'), law = D.querySelector('[data-pf="law"]'), pst = () => D.getElementById("istatymoPastaba").textContent;
+    tiesa(/Pirkimo vykdytojas/.test(org.closest(".field").textContent), "lauko pavadinimas");
+    ivesk(org, 'UAB „EPSO-G"');
+    lygu([S().project.law, law.value], ["VPI", "VPI"], "EPSO-G - VPĮ (iki tol likdavo PĮ)");
+    tiesa(/paprastai perka pagal VPĮ/.test(pst()), "pastaba: " + pst());
+    tiesa(/- Perkančioji organizacija: UAB „EPSO-G"/.test(W.generatePrompt("strategy")) && /kuriai taikomas VPĮ \(Viešųjų pirkimų įstatymas\)/.test(W.generatePrompt("strategy")), "VPĮ užklausa");
+    ivesk(law, "PSI");
+    tiesa(/Pasirinkta PĮ, o ši organizacija paprastai perka pagal VPĮ/.test(pst()), "nesutapimas: " + pst());
+    ivesk(org, 'AB „Litgrid"');
+    const u = W.generatePrompt("strategy");
+    tiesa(/- Perkantysis subjektas: AB „Litgrid"/.test(u) && /Pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymas/.test(u) && !/Pirkimų sektorinis/.test(u), "PĮ užklausa");
+    ivesk(org, "Kita EPSO-G grupės įmonė");
+    tiesa(S().project.law === "PSI" && /sąraše nėra/.test(pst()), "kita įmonė - nekeičiama: " + pst());
+    tiesa(!/Pirkimų sektorinis/.test(law.innerHTML), "įstatymo pavadinimas sąraše");
+  });
+
+  await testas("D5: DI užklausoje tiekėjų pavadinimai ir linksniais, kitos įmonės, asmenys po etikečių ir 11 skaitmenų kodai pakeisti", async () => {
+    const U = W.GP_UZKODAVIMAS;
+    lygu(U.linksniai([["Voltera", true]]).map(x => x[0]), ["Volteros", "Volterai", "Volterą", "Volteroje"], "linksniai");
+    tiesa(U.linksniai([["UAB „Galios įranga“", false]]).some(x => x[0] === "UAB „Galios įrangos“") && U.linksniai([["Elektros tinklų sprendimai", false]]).some(x => x[0] === "Elektros tinklų sprendimų"), "kabutėse ir daugiskaita");
+    lygu(U.linksniai([["Baltic Grid Supply", false], ["IT", true]]), [], "ne lietuviški žodžiai - nelinksniuojami");
+    W.eval(`APP.state = defaultState(); APP.state.project.plannedValue = 100000;
+      APP.state.suppliers = [{ id:'a', name:'AB „Voltera“' }, { id:'b', name:'UAB „Galios įranga“' }, { id:'c', name:'SIA „Baltic Grid Supply“' }];
+      APP.state.fixedOffers = { a: { totalPrice: 90000 }, b: { totalPrice: 95000 }, c: { totalPrice: 99000 } }; render.all();`);
+    W.go("ai"); await lauk(30);
+    D.getElementById("aiExtra").value = "Volterai pasakyti, kad UAB „Galios įrangos“ kainos mažesnės; Volteros pasiūlymas geras. ETS atstovas Petras Išgalvotas, reg. Nr. 40003999888; UAB „Kitas tiekėjas“ - irgi.";
+    const u = W.generatePrompt("strategy");
+    tiesa(!/Volter|Galios įrang|Petras|40003999888|Kitas tiekėjas/.test(u) && /Tiekėjas A/.test(u), "užklausa:\n" + u.slice(u.indexOf("PAPILDOMAS"), u.indexOf("PAPILDOMAS") + 300));
+    tiesa(/Kitų duomenų \(sutrumpintų pavadinimų, asmenų be etikečių\) sistema neatpažįsta/.test(D.getElementById("aiIspejimas").textContent), "įspėjimas sako, ko neatpažįsta");
+    W.go("project"); await lauk(30);
+    tiesa(/Tikslas ir kontekstas įtraukiami į DI užklausą/.test(D.getElementById("diLaukoPastabaProj").textContent) && D.querySelector('[data-pf="backgroundNotes"]').getAttribute("aria-describedby") === "diLaukoPastabaProj", "pastaba prie tikslo ir konteksto");
+  });
+
+  await testas("D6, D8, M4: derybų ribos - įrankio prielaidos (be „BATNA / ZOPA modeliavimo“), pagalbos kontaktas - asmeninis projektas, ekonomija su minusu, tiekėjų skaičius - tik pateikę", async () => {
+    await modulis(); projektas(); W.eval("APP.state.suppliers.push({ id: 'd', name: 'Delta' }); render.all();");
+    W.go("dashboard"); await lauk(120);
+    const dash = D.querySelector('section[data-view="dashboard"]').textContent;
+    tiesa(!/BATNA \/ ZOPA modeliavimas/.test(dash) && /Derybų ribos/.test(dash) && /įrankio prielaidas \(92 ir 88 %\)/.test(dash) && !/agreguotas/.test(dash), "galimybės");
+    tiesa(/pasiūlymus pateikė: 3/.test(D.getElementById("dashKpis").textContent), "tiekėjai: " + D.getElementById("dashKpis").textContent.slice(0, 120));
+    W.go("strategy"); await lauk(60);
+    tiesa(/įrankio prielaidos/.test(D.querySelector('section[data-view="strategy"]').textContent) && /Tikimybė \(bendras įvertis, ne skaičiavimas\)/.test(D.getElementById("scenariosBlock").textContent), "ribų ir scenarijų paaiškinimai");
+    W.go("help"); await lauk(30);
+    const h = D.querySelector('section[data-view="help"]').textContent;
+    tiesa(/arunas\.jurgelaitis@gmail\.com/.test(h) && /asmeninis Arūno Jurgelaičio projektas/.test(h) && !/EPSO-G grupės pirkimų skyri/.test(h), "pagalba");
+    tiesa(!/EPSO-G grupės derybų pasirengimo įrankis/.test(D.body.textContent), "antraštė");
+    W.eval("APP.state.project.plannedValue = 200000; render.all();"); W.go("dashboard"); await lauk(120);
+    tiesa(/Aukšta potenciali ekonomija nuo PV: -55%/.test(norm(D.getElementById("dashInsights").textContent)), "ekonomija su minusu: " + D.getElementById("dashInsights").textContent.slice(0, 200));
+  });
+
+  await testas("D7: spausdinant - be animacijos ir permatomumo, be eksporto, DI ir pagalbos vaizdų", async () => {
+    // spausdinimo taisyklės iš puslapio stilių (CSSOM): print media bloke - .view be animacijos ir permatomumo, trys vaizdai paslėpti
+    const taisykles = [];
+    [...D.styleSheets].forEach(sh => { try { [...sh.cssRules].forEach(r => { if (r.media && /print/.test(r.media.mediaText)) [...r.cssRules].forEach(x => taisykles.push(x)); }); } catch (e) {} });
+    const view = taisykles.find(x => x.selectorText === ".view");
+    tiesa(view && /none/.test(view.style.getPropertyValue("animation-name") || view.style.getPropertyValue("animation")) && view.style.getPropertyPriority("opacity") === "important" && view.style.getPropertyValue("opacity") === "1", "animacija ir permatomumas: " + (view && view.cssText));
+    const slep = taisykles.find(x => /data-view="export"/.test(x.selectorText || ""));
+    tiesa(slep && /data-view="ai"/.test(slep.selectorText) && /data-view="help"/.test(slep.selectorText) && slep.style.getPropertyValue("display") === "none", "slepiami vaizdai: " + (slep && slep.cssText));
+  });
+
+  await testas("D9: neįprastai maža kaina - pagal įstatymą (30 % mažiau už pasiūlymų vidurkį) su registro nuoroda; PV orientyras - modulio, ne įstatymo", async () => {
+    await modulis();
+    W.eval(`APP.state = defaultState(); APP.state.project.name = 'NMK'; APP.state.project.plannedValue = 120000;
+      APP.state.suppliers = [{ id:'a', name:'Alfa' }, { id:'b', name:'Beta' }, { id:'c', name:'Gama' }];
+      APP.state.fixedOffers = { a: { totalPrice: 100000 }, b: { totalPrice: 100000 }, c: { totalPrice: 60000 } }; render.all();`);
+    W.go("analysis"); await lauk(140);
+    const t = norm(D.getElementById("autoInsights").textContent);
+    tiesa(/Gama: kaina 30 % ir daugiau mažesnė už pasiūlymų kainų vidurkį \(86 666,67 €; iš pasiūlymų, neviršijančių PV\)/.test(t) && /\(PĮ 66 str\. 1 d\.\)/.test(t) && !/nepagrįstai maža/.test(t), "įžvalga: " + t);
+    W.eval("APP.state.project.law = 'VPI'"); W.eval("render.analysis()");
+    tiesa(/\(VPĮ 57 str\. 1 d\.\)/.test(D.getElementById("autoInsights").textContent), "VPĮ");
+    W.eval("APP.state.fixedOffers.c.totalPrice = 80000"); W.eval("render.analysis()");
+    tiesa(!/30 % ir daugiau/.test(D.getElementById("autoInsights").textContent) && /modulio orientyras, ne įstatymo riba/.test(D.getElementById("autoInsights").textContent), "80 000 - tik PV orientyras");
+  });
+
+  await testas("V1: kiekio ar mato skirtumas tarp failo ir projekto - pasakomas", async () => {
+    analitikosProjektas();
+    const r = W.extractFromRows([["Pavadinimas", "Mato vnt.", "Kiekis", "Kaina"], ["Kabelis", "km", "0,1", "20000"], ["Mova", "kompl.", "10", "300"]], "a", "a.xlsx");
+    tiesa(r.ispejimas && /Kiekis ar matas skiriasi \(2\)/.test(r.message) && /„Kabelis“: kiekis faile 0,1 km, projekte 100 m/.test(norm(r.message)) && /„Mova“: matas faile „kompl\.“, projekte „vnt“/.test(r.message), "pranešimas: " + r.message);
+  });
+
+  await testas("V3, M7: MEAT - svoriai turi sudaryti 100 % (kitaip balai neskaičiuojami), balas - nuo 0 iki skalės; jautrumo slankiklis su 0 % - 0", async () => {
+    await modulis(); projektas();
+    W.eval(`Object.assign(APP.state.project, { criteriaModel: 'meat', priceWeight: 80, qualityWeight: 30 }); APP.state.quality.criteria = [{ id: 'k1', name: 'Patirtis', weight: 100, scale: 10 }];
+      APP.state.quality.scores = { a: { k1: 5 }, b: { k1: 10 }, c: { k1: 8 } }; render.all();`);
+    lygu(W.eval("strategy.meatScore('a')"), 0, "80 + 30 - balas neskaičiuojamas (iki tol 108,5 iš 100)");
+    W.go("meat"); await lauk(120);
+    tiesa(/turi sudaryti 100 %/.test(D.getElementById("meatModeBanner").textContent) && D.querySelector('#meatModeBanner [role="alert"]'), "pastaba");
+    const sc = D.querySelector('[data-score="a|k1|10"]');
+    ivesk(sc, "12"); lygu([S().quality.scores.a.k1, sc.getAttribute("aria-invalid")], [5, "true"], "12 iš 10 - neįrašyta");
+    ivesk(sc, "8"); lygu(S().quality.scores.a.k1, 8, "8 iš 10");
+    W.eval("APP.state.project.priceWeight = 0; APP.state.project.qualityWeight = 100;"); W.eval("render.meatView()");
+    lygu(D.getElementById("sensSlider").value, "0", "slankiklis (iki tol 70)");
+    tiesa(D.querySelector('[data-pf="priceWeight"]').getAttribute("aria-label") === "Kainos svoris, %", "svorio lauko pavadinimas (M3)");
+  });
+
+  await testas("V4: išskirtys rikiavime ir įžvalgose - tuo pačiu metodu", async () => {
+    W.eval(`APP.state = defaultState(); APP.state.project.name = 'X'; APP.state.project.plannedValue = 120;
+      APP.state.suppliers = [1,2,3,4,5,6,7,8].map(i => ({ id: 's' + i, name: 'T' + i }));
+      APP.state.fixedOffers = { s1: { totalPrice: 100 }, s2: { totalPrice: 100 }, s3: { totalPrice: 100 }, s4: { totalPrice: 100 }, s5: { totalPrice: 100 }, s6: { totalPrice: 100 }, s7: { totalPrice: 110 }, s8: { totalPrice: 111 } }; render.all();`);
+    W.go("analysis"); await lauk(140);
+    // IQR (numatytasis metodas) - 110 ir 111 išskirtys, z (|z| >= 2) - ne: iki tol lentelė rodė z, įžvalga - IQR
+    const out = [...D.querySelectorAll("#rankingTable tr.outlier")].map(tr => tr.children[1].textContent);
+    lygu(out, ["T7", "T8"], "lentelėje");
+    tiesa(/Aptiktos statistinės išskirtys \(2 /.test(D.getElementById("autoInsights").textContent), "įžvalgoje tas pats skaičius");
+  });
+
+  await testas("V6, V8, V9, V11: pavyzdinės pozicijos demonstracinės ir ne PV; sesija - tuščias siūlymas neįrašomas, naujas raundas užbaigia ankstesnį; slenksčiai be 0; atidarant - klausiama", async () => {
+    await modulis(); W.eval("APP.state = defaultState(); render.all();"); W.go("suppliers"); await lauk(30);
+    W.addSamplePositions(); await lauk(30);
+    lygu([S().positions.every(p => p.demo), W.eval("strategy.plannedTotal()")], [true, 0], "demonstracinės - ne PV (iki tol 1 912 000)");
+    tiesa(/Demonstracinis/.test(D.getElementById("positionsTable").textContent), "žyma lentelėje");
+    ivesk(D.querySelector(`[data-pos-edit="${S().positions[0].id}"][data-pos-field="name"]`), "Mano transformatorius");
+    tiesa(!S().positions[0].demo && W.eval("strategy.plannedTotal()") === 2 * 850000, "pakeista - žmogaus pozicija");
+    projektas(); W.eval("render.all()"); W.go("session"); await lauk(40);
+    D.getElementById("sessionSupplier").value = "a"; D.getElementById("btnStartRound").click(); await lauk(40);
+    ivesk(D.getElementById("roundOffer"), ""); D.getElementById("btnLogOffer").click(); await lauk(30);
+    lygu([S().session.rounds[0].offer, (S().session.rounds[0].decisions || []).length], [null, 0], "tuščias siūlymas neįrašytas (iki tol 0)");
+    D.getElementById("sessionSupplier").value = "b"; D.getElementById("btnStartRound").click(); await lauk(40);
+    tiesa(S().session.rounds[0].endedAt && !S().session.rounds[1].endedAt, "ankstesnis raundas užbaigtas");
+    W.go("analysis"); await lauk(140); W.slenksciuLangas(); await lauk(20);
+    ivesk(D.getElementById("slZemasMed"), ""); D.getElementById("slIrasyti").click(); await lauk(40);
+    lygu(S().settings.anomalijos.zemasMediana, 25, "išvalytas - numatytasis (iki tol 0)");
+    W.eval("APP.state.project.name = 'Dabartinis'");
+    W.atidarykProjekta(new W.File([JSON.stringify({ project: { name: "Kitas" }, suppliers: [] })], "kitas.json")); await lauk(30);
+    tiesa(D.getElementById("modalOverlay").classList.contains("open") && /bus pakeistas/.test(D.getElementById("modalBody").textContent) && S().project.name === "Dabartinis", "klausiama prieš pakeičiant");
+    D.getElementById("confirmYes").click(); await iki(() => S().project.name === "Kitas", "atidaryta");
+  });
+
+  await testas("V13, V14, M1, M3, M6: Excel - laukų pavadinimai ir vietinis laikas; PV su PVM - įspėjimas; linksniai; pozicijos trynimas - su patvirtinimu; DI užklausos failo vardas", async () => {
+    analitikosProjektas();
+    W.eval("APP.state.session.rounds = [{ id: 'r1', supplierId: 'a', startedAt: '2026-10-26T22:30:59.416Z', offer: 100, notes: '' }]");
+    let wb = null; const orig = W.XLSX.writeFile; W.XLSX.writeFile = w => { wb = w; };
+    try { W.exportXlsx(); } finally { W.XLSX.writeFile = orig; }
+    const pr = W.XLSX.utils.sheet_to_json(wb.Sheets["Pirkimas"], { header: 1 });
+    tiesa(pr.some(r => r[0] === "Taikomas įstatymas" && r[1] === "PĮ") && pr.some(r => r[0] === "Procedūros tipas" && r[1] === "Skelbiamos derybos") && !pr.some(r => r[0] === "law" || r[0] === "procedureType"), "Pirkimas: " + JSON.stringify(pr.slice(0, 6)));
+    const ses = W.XLSX.utils.sheet_to_json(wb.Sheets["Sesijos protokolas"], { header: 1 });
+    lygu(ses[1][2], "2026-10-27 00:30", "vietinis laikas (iki tol UTC „2026-10-26T22:30:59.416Z“)");
+    W.eval("APP.state.project.vatIncluded = true"); W.go("analysis"); await lauk(140);
+    tiesa(/PV nurodyta su PVM, o tiekėjų kainos įrankyje laikomos be PVM/.test(D.getElementById("autoInsights").textContent), "PVM įspėjimas");
+    lygu([1, 2, 5, 10, 11, 14, 15, 21, 22, 112].map(n => W.pozSk(n)), ["pozicija", "pozicijos", "pozicijos", "pozicijų", "pozicijų", "pozicijų", "pozicijų", "pozicija", "pozicijos", "pozicijų"], "linksniai (iki tol „14 pozicijos“)");
+    W.go("suppliers"); await lauk(30);
+    const del = D.querySelector('[data-del-pos="p1"]');
+    tiesa(/Trinti poziciją Kabelis/.test(del.getAttribute("aria-label")), "trynimo mygtuko pavadinimas");
+    del.click(); await lauk(30);
+    tiesa(D.getElementById("modalOverlay").classList.contains("open") && S().positions.length === 4, "klausiama");
+    D.getElementById("confirmYes").click(); await lauk(30);
+    tiesa(S().positions.length === 3 && !("p1" in (S().offers.a || {})), "ištrinta su įkainiais");
+    W.go("ai"); await lauk(30);
+    const click = W.HTMLAnchorElement.prototype.click; let vardas = "";
+    W.HTMLAnchorElement.prototype.click = function () { vardas = this.download; };
+    try { D.getElementById("btnDownloadPrompt").click(); } finally { W.HTMLAnchorElement.prototype.click = click; }
+    tiesa(/^DI-uzklausa_Pastotė_\d{4}-\d{2}-\d{2}\.txt$/.test(vardas), "failo vardas: " + vardas);
+  });
+
+  await testas("EN: derybų draudimas, įstatymo pastaba, bendra suma ir nepilni pasiūlymai - angliškai", async () => {
+    await modulis(); W.setLang("en"); projektas();
+    W.eval("APP.state.project.procedureType = 'ribotas'; APP.state.positions = [{ id: 'p1', name: 'Cable', quantity: 1 }, { id: 'p2', name: 'Joint', quantity: 1 }]; APP.state.suppliers.push({ id: 'd', name: 'Delta' }); APP.state.offers = { d: { p1: { unitPrice: 5 } } }; render.all();");
+    W.go("strategy"); await lauk(60);
+    const b = D.querySelector('section[data-view="strategy"] [data-derybu-draudimas]').textContent;
+    tiesa(/In a restricted procedure negotiation between the contracting authority or entity and the suppliers is prohibited/.test(b) && !LT_RAIDES.test(b.replace(/V?PĮ/g, "")), "EN: " + b);
+    W.go("project"); await lauk(30);
+    tiesa(/This contracting authority or entity is not in the organisation list|usually procures under/.test(D.getElementById("istatymoPastaba").textContent) || /AB/.test(D.querySelector('[data-pf="contractingEntity"]').value), "EN pastaba");
+    const r = W.istraukIsEiluciu([["Price excl. VAT: EUR 48,500.00"]], "x.docx");
+    tiesa(r.ok && r.total === 48500 && /total price found excl\. VAT/.test(r.message), "EN suma: " + r.message);
+    W.go("analysis"); await lauk(140);
+    tiesa(/Incomplete offers \(Delta - 1 items missing\)/.test(D.getElementById("autoInsights").textContent), "EN nepilni: " + D.getElementById("autoInsights").textContent.slice(0, 300));
+    W.setLang("lt"); await lauk(40); localStorage.removeItem("ppnegotiation.lang");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1293,6 +1693,7 @@ async function testaiDiSkaitymas(){
     await testaiEtapai();
     await testaiKalba();
     await testaiDiSkaitymas();
+    await testaiPatikra1027();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

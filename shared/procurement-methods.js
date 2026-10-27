@@ -187,6 +187,7 @@
     'pp-negotiation': {   // procedureType (be rezimo) -> baziniai / instrumentai
       derybos_skelb:'SD', derybos_neskelb:'ND', konkurencinis_dialogas:'KD',
       inovaciju_partneryste:'IP', atviras:'AK', ribotas:'RK',
+      mv_derybos:'MV-SAD',   // mažos vertės pirkimas su derybomis (2026-10-27, naudotojo sprendimas)
     },
     'pp-ts': {            // EN (be rezimo; rezima paduoda opts.international)
       open:'AK', restricted:'RK', negotiated_with_publication:'SD',
@@ -212,6 +213,7 @@
       'ND':'derybos_neskelb','S-ND':'derybos_neskelb','T-ND':'derybos_neskelb',
       'KD':'konkurencinis_dialogas','IP':'inovaciju_partneryste',
       'AK':'atviras','S-AK':'atviras','T-AK':'atviras','RK':'ribotas',
+      'MV-SAD':'mv_derybos',
     },
     'pp-ts': {
       'AK':'open','S-AK':'open','T-AK':'open','RK':'restricted',
