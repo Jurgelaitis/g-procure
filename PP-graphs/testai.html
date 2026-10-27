@@ -342,11 +342,43 @@ async function testaiRinka(){
       const api = w.eval("KORTELE"); api.atnaujink();
       await api.pasirink(k.id);
       lygu(d.getElementById("f-bvpz").value, "45342000-6", "iš kortelės");
+      // skiltis neatsiveria pati, kortelės BVPŽ kodas matomas jos santraukoje (2026-10-27)
+      lygu([d.getElementById("rinkaSkiltis").open, d.getElementById("rinkaSantrauka").hidden, d.getElementById("rinkaSantrauka").textContent], [false, false, "BVPŽ 45342000-6"], "kortelės kodas santraukoje");
       api.atsiek && api.atsiek();
       const bv = d.getElementById("f-bvpz"); bv.value = "45000000-7"; bv.dispatchEvent(new w.Event("input", { bubbles: true }));
       await api.pasirink(k.id);
       lygu(bv.value, "45000000-7", "ranka įrašytas neperrašytas");
       tiesa(/Skiriasi nuo kortelės/.test(d.getElementById("gpk-zin").textContent), d.getElementById("gpk-zin").textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas("Papildoma skiltis (naudotojo pasiūlymas 2026-10-27): BVPŽ laukas ir rinkos duomenys - suskleistoje skiltyje „Palyginti su panašiais CVP IS pirkimais“ su žyma „neprivaloma“; atveria žmogus, įrašytas kodas matomas santraukoje, „Išvalyti“ suskleidžia; grafiko forma be jos pilna", async () => {
+    const { f, W: w, D: d } = await modulisSuKortele();
+    try {
+      const sk = d.getElementById("rinkaSkiltis"), sum = sk && sk.querySelector(":scope > summary"), chip = d.getElementById("rinkaSantrauka"), bv = d.getElementById("f-bvpz");
+      tiesa(sk && sk.tagName === "DETAILS" && !sk.open && sk.contains(bv) && sk.contains(d.getElementById("rinkaGrafikai")) && sk.closest("#section-info"), "skiltis suskleista, joje laukas ir rinkos duomenys, spausdinant nerodoma");
+      const st = sum.textContent.replace(/\s+/g, " ");
+      tiesa(/^Palyginti su panašiais CVP IS pirkimais\s*neprivaloma$/.test(st) && chip.hidden, "santrauka: " + st);
+      lygu([d.querySelector('label[for="f-bvpz"]').textContent, bv.getAttribute("aria-describedby"), /grafikui sudaryti nereikalinga/.test(d.getElementById("f-bvpz-pag").textContent)], ["BVPŽ kodas", "f-bvpz-pag", true], "laukas ir paaiškinimas");
+      const matomas = e => e.checkVisibility ? e.checkVisibility() : !!e.offsetParent;
+      lygu([matomas(bv), matomas(sk.querySelector(".gpvr-btn"))], [false, false], "suskleistoje - nerodoma");
+      // forma pilna be skilties: įmonė, būdas ir data - grafikas sudaromas
+      const set = (id, v, iv) => { const e = d.getElementById(id); e.value = v; e.dispatchEvent(new w.Event(iv || "change", { bubbles: true })); };
+      set("f-company", "litgrid"); set("f-budas", "S-AK"); set("f-pradzia", "2026-11-02");
+      tiesa(w.computeSchedule().length > 0 && !sk.open, "grafikas sudarytas, skiltis neatsivėrė");
+      // atveria žmogus
+      sum.click();
+      tiesa(sk.open && matomas(bv) && matomas(sk.querySelector(".gpvr-btn")), "atverta - laukas ir mygtukas matomi");
+      set("f-bvpz", "45231000-5", "input");
+      lygu([chip.hidden, chip.textContent], [false, "BVPŽ 45231000-5"], "įrašytas kodas santraukoje");
+      sum.click(); tiesa(!sk.open && !chip.hidden, "suskleidus kodas lieka matomas santraukoje");
+      // „Išvalyti“ - suskleidžia ir išvalo
+      sum.click();
+      const tikrasC = w.confirm; w.confirm = () => true;
+      try { w.resetForm(); } finally { w.confirm = tikrasC; }
+      lygu([sk.open, chip.hidden, bv.value], [false, true, ""], "po „Išvalyti“");
+      // telefone santrauka telpa
+      lygu(d.documentElement.scrollWidth <= w.innerWidth + 1, true, "puslapis neplatėja");
     } finally { f.remove(); }
   });
 }
