@@ -520,8 +520,11 @@
       PI: { a: "PI", s: 74, d: 2 }, VPI: { a: "VPI", s: 65, d: 2 } },
     terminas_sd_trumpinimas: { tikrinta: "2026-09-26", apie: "skelbiamų derybų paraiškų terminą galima sutrumpinti iki 15 dienų (tarptautinis) ar 7 dienų (supaprastintas): PĮ - pagrįstais atvejais, VPĮ - taikant riboto konkurso nuostatas (skubos atveju)",
       PI: { a: "PI", s: 74, d: 3 }, VPI: { a: "VPI", s: 65, d: 4 } },
-    terminas_sd_pirminiai: { tikrinta: "2026-09-26", apie: "pirminių pasiūlymų terminas skaičiuojamas nuo kvietimo išsiuntimo: PĮ - susiderinus su kandidatais arba ne trumpiau kaip 10 dienų (tarptautinis) ar 7 dienos (supaprastintas); VPĮ - ne trumpiau kaip 30 ar 10 dienų",
-      PI: { a: "PI", s: 74, d: 4 }, VPI: { a: "VPI", s: 65, d: 3 } },
+    // PĮ ir VPĮ normos skiriasi - kiekvienam režimui savas aprašas (perskaityta e-tar 2026-10-28; iki tol vienas tekstas apie abu
+    // įstatymus, todėl PĮ subjektui PP-graphs rodė ir VPĮ terminus su PĮ nuoroda)
+    terminas_sd_pirminiai: { tikrinta: "2026-10-28", apie: "pirminių pasiūlymų pateikimo terminas skaičiuojamas nuo kvietimų pateikti pasiūlymus išsiuntimo; trumpiausias terminas priklauso nuo įstatymo ir pirkimo rūšies",
+      PI: { a: "PI", s: 74, d: 4, apie: "pirminių pasiūlymų pateikimo terminą perkantysis subjektas gali susiderinti su atrinktais kandidatais, jeigu visi jie turės tiek pat laiko pasiūlymams parengti ir pateikti; nesusiderinus - ne trumpesnis kaip 10 dienų (tarptautinis pirkimas) ar 7 dienos (supaprastintas pirkimas) nuo kvietimų pateikti pasiūlymus išsiuntimo" },
+      VPI: { a: "VPI", s: 65, d: 3, apie: "pirminių pasiūlymų pateikimo terminas - ne trumpesnis kaip 30 dienų (tarptautinis pirkimas) ar 10 dienų (supaprastintas pirkimas) nuo kvietimų pateikti pasiūlymus išsiuntimo" } },
     sd_be_paraisku: { tikrinta: "2026-09-26", apie: "atlikdamas supaprastintą pirkimą skelbiamų derybų būdu, perkantysis subjektas gali neprašyti paraiškų ir leisti visiems tiekėjams pateikti pirminius pasiūlymus",
       PI: { a: "PI", s: 73, d: 2 } },
     // Perskaityta e-tar 2026-10-20 (PP-salygos 1 žingsnio teiginiai apie paraiškų etapą ir derybas; naudotojo sprendimas - patikrinti)
@@ -732,9 +735,10 @@
     return raktai.map(function (r) { return cit(r, rezimas, kalba); }).join("; ");
   }
 
+  // Režimo įrašas gali turėti savą aprašą (kai PĮ ir VPĮ normos skiriasi) - tada rodomas tik taikomo įstatymo tekstas.
   function apie(raktas, rezimas) {
-    irasas(raktas, rezimas);
-    return N[raktas].apie;
+    var n = irasas(raktas, rezimas);
+    return n.apie || N[raktas].apie;
   }
 
   // Kada įrašas perskaitytas e-tar: savo data (įrašai nuo 2026-09-26) arba bendra TIKRINTA.
