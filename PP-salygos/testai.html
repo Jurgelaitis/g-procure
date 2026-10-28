@@ -12673,7 +12673,12 @@ async function testaiPrivalomos(){
   for (const o of RINK){
     await testas("Privalomos nuostatos: " + JSON.stringify(o), async () => {
       salinkSenusRemelius();                     // atmintis: grupėje daug generavimų
-      await generuokSu(Object.assign({}, o, { grupes: typeof o.grupes === "number" ? atsitiktinis(o.grupes) : o.grupes }));
+      const docs = await generuokSu(Object.assign({}, o, { grupes: typeof o.grupes === "number" ? atsitiktinis(o.grupes) : o.grupes }));
+      // pasiūlymo galiojimas visose formose - 90 kalendorinių dienų be klausimo (naudotojo sprendimas 2026-10-28), ne raudonas, be „3 mėnesius“
+      Object.keys(docs).filter(k => /_PASIULYMAS$/.test(k) && !/^DPSP_/.test(k)).forEach(k => {        // DPS - sąlygų 2.2 p. (atskiras testas)
+        const G = visosPastraipos(docs[k].xml).filter(x => /Pasiūlymas galioja|The Tender is valid for/.test(x.t + x.red));
+        tiesa(G.length && G.every(x => /(galioja 90 kalendorinių dienų|valid for 90 calendar days) /.test(x.t) && !x.red && !/mėnesius|months/.test(x.t)) && G.length === (/LTEN/.test(k) ? 2 : 1), k + " galiojimas: " + G.map(x => x.t + " [" + x.red + "]").join(" | "));
+      });
       const dingo = [], inkarai = [];
       for (const r of W.__R){ const x = await prvDokumentas(r); if (x){ dingo.push(...x.dingo); inkarai.push(...x.inkarai); } }
       lygu(inkarai, [], "privalomos nuostatos");
@@ -14832,7 +14837,7 @@ async function testai1021(){
     tiesa(W.__K.automatika.some(a => a.kas === "Pasiūlymo galiojimo terminas" && /\(angliškai - „90 calendar days“\)$/.test(a.veiksmas)), "LT/EN automatika - ir angliškai");
   });
 
-  await testas("Pasiūlymo galiojimas DPS konkrečiame pirkime: sąlygų 2.2 p. - 90 kalendorinių dienų be klausimo (LT ir LT/EN, angliškai - tas pats skaičius), „Išspręsta automatiškai“; kitose formose (MVP, TSD, ND) - tas pats terminas", async () => {
+  await testas("Pasiūlymo galiojimas DPS konkrečiame pirkime: sąlygų 2.2 p. - 90 kalendorinių dienų be klausimo (LT ir LT/EN, angliškai - tas pats skaičius), „Išspręsta automatiškai“", async () => {
     let docs = await generuokSu({ budas: "DPS-K" });
     tiesa(![...D.querySelectorAll("#klausimai .lk")].some(k => /turi galioti konkretūs pasiūlymai|Kiek laiko turi galioti/.test(k.textContent)), "DPS galiojimo klausimas 2 žingsnyje");
     tiesa(W.__K.automatika.some(a => /Konkretūs pasiūlymai turi galioti/.test(a.kas) && a.veiksmas === "įrašoma „90“ - konkretūs pasiūlymai galioja 90 kalendorinių dienų" && !a.keisti), "DPS automatika: " + JSON.stringify(W.__K.automatika.filter(a => /galioti/.test(a.kas))));
@@ -14841,11 +14846,7 @@ async function testai1021(){
     docs = await generuokSu({ budas: "DPS-K", kalba: "LT_EN" });
     t = docs.DPSP_LTEN_SALYGOS.pars.join("\n");
     tiesa(/Konkretūs pasiūlymai turi galioti ne trumpiau kaip 90 kalendorinių dienų\./.test(t) && /Specific tenders must remain valid for not less than 90 calendar days\./.test(t) && !/number of calendar days or months indicated/.test(t), "DPS LT/EN 2.2 p.: " + (t.match(/(Konkretūs pasiūlymai turi galioti|Specific tenders must remain)[^\n]{0,80}/g) || []).join(" | "));
-    for (const [budas, kod] of [["MV-NR", "MVP_LT_PASIULYMAS"], ["T-SD", "TSD_LT_PASIULYMAS"], ["S-ND", "ND_LT_PASIULYMAS"]]){
-      docs = await generuokSu({ budas, tipas: "prekes" });
-      const X = visosPastraipos(docs[kod].xml);
-      tiesa(X.some(x => /Pasiūlymas galioja 90 kalendorinių dienų nuo/.test(x.t) && !x.red) && !X.some(x => /3 mėnesius/.test(x.t + x.red)), kod + ": " + X.filter(x => /galioja/.test(x.t)).map(x => x.t + " [" + x.red + "]").join(" | "));
-    }
+    // kitų būdų formos (MVP, TSD, ND, AKV; LT ir LT/EN) - tikrinama privalomų nuostatų grupėje, kuri tuos paketus jau generuoja
   });
 
   await testas("D-6: rinkos konsultacijos atsakymų priedas - klausimas „Ar buvo vykdyta rinkos konsultacija?“ be numatytojo atsakymo; kol neatsakyta - generuoti neleidžiama ir jis klaidų santraukoje; „Taip“ - eilutė lieka, „Ne“ - pašalinama, likę priedai pernumeruojami", async () => {
