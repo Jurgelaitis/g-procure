@@ -349,6 +349,8 @@ Stulpelis „Siūlomas klausimas“ - **Code pasiūlymas, nepatvirtinta** (naudo
 
 ### dps-galiojimas (2 šablono variantai)
 
+> Nuo 2026-10-28 (naudotojo sprendimas) - ne klausimas: visiems pirkimams 90 kalendorinių dienų, kaip pasiūlymo formose (`PP-SALYGOS.html` `GALIOJIMAS`), rodoma skiltyje „Išspręsta automatiškai“.
+
 - Įvesties tipas (pasiūlymas): skaičius (kalendorinių dienų)
 - Siūlomas klausimas (Code pasiūlymas, nepatvirtinta): „Kiek kalendorinių dienų turi galioti konkretūs pasiūlymai?“
 - Dabar formoje: klausimo vietoje - pats šablono sakinys; laukai `<input type="text">` su užuomina „reikšmė 1“, „reikšmė 2“... (be pavadinimo); privalomumo nėra.

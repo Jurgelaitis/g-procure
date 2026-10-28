@@ -273,12 +273,7 @@
       uzuomina: 'Šablono nurodymai: insert specific category name(s), insert value excluding VAT.',
       vietos: vs => vs.map((v, k) => [{ ivestis: 'tekstas', uzrasas: 'DPS kategorija (-os) anglų kalba', pvz: '1 and 2' },
         { ivestis: 'tekstas', uzrasas: 'Maksimali numatoma apimtis anglų kalba', pvz: '500 000 EUR excluding VAT' }][k] || { ivestis: 'tekstas', uzrasas: 'Reikšmė ' + (k + 1) }) },
-    // Pasiūlymo formos galiojimo terminas (naujo darbuotojo patikra D-1; naudotojo sprendimas 2026-10-21): šablone raudonai „3 mėnesius/90 kalendorinių dienų“
-    { id: 'pasiulymo-galiojimas', formuluote: true, re: /^pasiulymas galioja 3 menesius 90 kalendoriniu dienu/,
-      klausimas: 'Kiek laiko turi galioti pasiūlymas?',
-      uzuomina: 'Pasiūlymo formoje: „Pasiūlymas galioja ... nuo Pasiūlymo pateikimo termino pabaigos.“ Pasirinkite šablono variantą arba įrašykite kitą terminą galininku.',
-      uzrasas: 'Kitas terminas', pvz: '6 mėnesius',
-      vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Galiojimo terminas' })) },
+    // Pasiūlymo formos galiojimo terminas - nuo 2026-10-28 ne klausimas (naudotojo sprendimas): visiems pirkimams 90 kalendorinių dienų (PP-SALYGOS.html GALIOJIMAS)
     // Derybų forma (derėtinos sąlygos; naudotojo sprendimas 2026-10-25): šablone buvo juodai įrašyti kito pirkimo sutarties punktai - pildoma vieta
     { id: 'deretinu-punktai', re: /gali siulyti korekcijas techninei specifikacijai bei specialiuju sutarties salygu/,
       klausimas: 'Kurių sutarties specialiųjų sąlygų punktų korekcijas tiekėjai gali siūlyti derybose?',
@@ -360,6 +355,7 @@
       klausimas: 'Konkretaus pirkimo pavadinimas',
       uzuomina: 'Gali būti imamas iš 1 žingsnio pirkimo pavadinimo.',
       vietos: vs => vs.map(() => ({ ivestis: 'tekstas', uzrasas: 'Konkretaus pirkimo pavadinimas' })) },
+    // Vietos aprašas generavimui; klausimas nerodomas - reikšmė įrašoma be klausimo (GALIOJIMAS, naudotojo sprendimas 2026-10-28)
     { id: 'dps-galiojimas', re: /konkretus pasiulymai turi galioti/,
       klausimas: 'Kiek kalendorinių dienų turi galioti konkretūs pasiūlymai?', uzuomina: '',
       vietos: vs => vs.map(() => ({ ivestis: 'skaicius', uzrasas: 'Kalendorinių dienų skaičius', pvz: '90' })) },
