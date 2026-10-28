@@ -2610,16 +2610,21 @@ const OBJEKTAS_EN_RE = /^\(object of procurement\)/i;                // formu an
 /* Pasiūlymo formos rengėjo pasirinkimai (naujo darbuotojo patikra D-1, 2026-10-20; naudotojo sprendimas 2026-10-21): šablone raudonai -
    „ARBA SĄNAUDOS“ / „arba sąnaudos“ / „nurodoma / os“ (EN „OR COSTS“), „Paslaugų teikimo/Prekių tiekimo/Darbų atlikimo“ (EN „Service provision/
    supply of Goods/ Work execution“) ir „3 mėnesius/90 kalendorinių dienų“ (EN „3 months / 90 calendar days“). Kaina ar sąnaudos - pagal
-   vertinimo kriterijų (SPS 8.1 p.), rūšis - pagal objekto tipą (1 žingsnis), galiojimo terminas - 2 žingsnio klausimas (šablono variantai arba
-   savas terminas). Iki tol jie likdavo raudoni, o 4 žingsnis formą rodė „baigta“ (GPAudit formose šias vietas laiko rengėjo, ne tiekėjo). */
+   vertinimo kriterijų (SPS 8.1 p.), rūšis - pagal objekto tipą (1 žingsnis), galiojimo terminas - GALIOJIMAS (iki 2026-10-28 - 2 žingsnio
+   klausimas). Iki tol jie likdavo raudoni, o 4 žingsnis formą rodė „baigta“ (GPAudit formose šias vietas laiko rengėjo, ne tiekėjo). */
 const FORMOS_NR = /^\d+(\.\d+)*\.?\s*/;
 const FORMOS_KAINA_RE = /^(PASIŪLYMO KAINA ARBA SĄNAUDOS|TENDER PRICE OR COSTS|Pasiūlymo kaina ar(ba)? sąnaudos nurodoma|Tender price or costs to be indicated)/;
 const FORMOS_LAIKOTARPIS_LT = /^Paslaugų teikimo\/Prekių tiekimo\/Darbų atlikimo\s+laikotarpiu/;
 const FORMOS_LAIKOTARPIS_EN = /^During Service provision\/ supply of Goods\/ Work execution\s+period/;
 const FORMOS_LAIKOTARPIS = { prekes: ['Prekių tiekimo', 'During supply of Goods'], paslaugos: ['Paslaugų teikimo', 'During Service provision'], darbai: ['Darbų atlikimo', 'During Work execution'] };
 const GALIOJA_LT_RE = /^Pasiūlymas galioja /, GALIOJA_EN_RE = /^The Tender is valid for /;
-const GALIOJIMO_RAKTAS = 'pasiulymo galiojimo terminas';
-const GALIOJIMO_VARIANTAI = [{ lt: '3 mėnesius', en: '3 months' }, { lt: '90 kalendorinių dienų', en: '90 calendar days' }];
+/* Pasiūlymo galiojimo terminas (naudotojo sprendimas 2026-10-28: viena forma visiems pirkimams, klausimas nerodomas; iki tol - 2 žingsnio
+   klausimas „Kiek laiko turi galioti pasiūlymas?“ su šablono variantais „3 mėnesius“ / „90 kalendorinių dienų“). Dienomis - kaip SPS banko
+   garantijos terminas (šablono pavyzdys „ne trumpiau kaip 105 dienas po pasiūlymų pateikimo termino pabaigos“), todėl jie palyginami tiksliai.
+   Ta pati reikšmė - DPS konkretaus pirkimo sąlygų 2.2 p. („Konkretūs pasiūlymai turi galioti ne trumpiau kaip ... kalendorinių dienų“). */
+const GALIOJIMAS = { lt: '90 kalendorinių dienų', en: '90 calendar days', dienos: 90 };
+const GALIOJIMO_KODEL = 'vienas terminas visiems pirkimams - dienomis, kaip SPS banko garantijos terminas';
+const DPS_GALIOJA_RE = /konkretus pasiulymai turi galioti/;
 const KOREGUOJAMA_RE = /^Koreguojama pagal poreikį:/;
 // kaina - kai vertinama pagal kainą ar kainos ir kokybės santykį; sąnaudos - pagal sąnaudas ar sąnaudų ir kokybės santykį; null - neatsakyta
 function formosKainosBudas(){ const k = kriterijus(); return !k ? null : (k === 'kaina' || k === 'kks') ? 'kaina' : 'sanaudos'; }
@@ -2664,12 +2669,8 @@ function formosRengejoVieta(paras, n, d){
     const v = FORMOS_LAIKOTARPIS[($('input[name=tipas]:checked') || {}).value];
     return v && GPGen.keistiRaudonaTeksta(paras, n.i, (FORMOS_LAIKOTARPIS_EN.test(t) ? v[1] : v[0]) + ' ') ? 'ok' : false;
   }
-  if (GALIOJA_LT_RE.test(t) || GALIOJA_EN_RE.test(t)){
-    const v = String(ATS['I_' + GALIOJIMO_RAKTAS] || '').trim();
-    if (!v || v === '__NETAIKYTI__') return false;
-    const val = GALIOJA_EN_RE.test(t) ? (GALIOJIMO_VARIANTAI.find(x => x.lt === v) || {}).en : v;
-    return val && GPGen.keistiRaudonaTeksta(paras, n.i, val + ' ') ? 'ok' : false;   // savas terminas angliškai - Word programoje (lieka raudona)
-  }
+  if (GALIOJA_LT_RE.test(t) || GALIOJA_EN_RE.test(t))
+    return GPGen.keistiRaudonaTeksta(paras, n.i, (GALIOJA_EN_RE.test(t) ? GALIOJIMAS.en : GALIOJIMAS.lt) + ' ') ? 'ok' : false;
   const pn = d && formosPriedoNuoroda(d, n);
   if (pn) return pn.nr && GPGen.keistiRaudonaTeksta(paras, n.i, pn.tekstas + ' ') ? 'ok' : false;
   return false;
@@ -3548,14 +3549,8 @@ function dienosForma(n, linksnis){
   if (d === 1) return linksnis === 'v' ? 'diena' : 'dieną';
   return linksnis === 'v' ? 'dienos' : 'dienas';
 }
-/* Pasiūlymo galiojimas (pasiūlymo formos klausimas „Kiek laiko turi galioti pasiūlymas?“) dienomis: { dienos, apytiksliai } arba null */
-function pasiulymoGaliojimoDienos(){
-  const v = String(ATS['I_' + GALIOJIMO_RAKTAS] || '').trim().toLowerCase();
-  let m = /(\d+)\s*(?:kalendorin\S*\s*)?(?:dien|d\.|days?)/.exec(v);
-  if (m) return { dienos: +m[1], apytiksliai: false, tekstas: v };
-  m = /(\d+)\s*(?:mėn|men|months?)/.exec(v);
-  return m ? { dienos: +m[1] * 30, apytiksliai: true, tekstas: v } : null;
-}
+/* Pasiūlymo galiojimas (pasiūlymo formoje - GALIOJIMAS) dienomis */
+function pasiulymoGaliojimoDienos(){ return { dienos: GALIOJIMAS.dienos, apytiksliai: false, tekstas: GALIOJIMAS.lt }; }
 /* Pastaba, kai banko garantija trumpesnė už pasiūlymo galiojimą (tik įspėjimas - terminą nustato rengėjas) */
 function uztTerminoPastaba(){
   const d = uztDienos(), g = pasiulymoGaliojimoDienos();
@@ -4179,16 +4174,14 @@ function surinktiKlausimus(){
         auto(trumpas, 'angliška antraštė (object of procurement)', 'įrašoma automatiškai', 'iš 1 žingsnio - be pakartotinės įvesties');
       if ((Z.intarpai||[]).some(n => /nurodyti pirkimo būdą ir pirkimo pavadinimą/i.test(n.raudonas||n.text)))
         auto(trumpas, 'pirkimo būdas ir pavadinimas konfidencialumo tekste', 'įrašomas automatiškai', 'iš 1 žingsnio');
-      // Pasiūlymo formos rengėjo pasirinkimai (D-1, 2026-10-21): galiojimo terminas - klausimas, kaina ar sąnaudos ir rūšis - pagal atsakymus,
-      // kainų lentelę („Koreguojama pagal poreikį:“) rengėjas pritaiko Word programoje
+      // Pasiūlymo formos rengėjo pasirinkimai (D-1, 2026-10-21): galiojimo terminas - GALIOJIMAS be klausimo (2026-10-28), kaina ar sąnaudos ir
+      // rūšis - pagal atsakymus, kainų lentelę („Koreguojama pagal poreikį:“) rengėjas pritaiko Word programoje
       (Z.intarpai || []).forEach(n => {
         if (isjungta.has(n.i)) return;
         const ft = String(n.text || '').replace(FORMOS_NR, '');
         if (GALIOJA_LT_RE.test(ft) && /3 mėnesius/.test(n.raudonas || '')){
-          pridek('formuluotes', 'I|' + GALIOJIMO_RAKTAS, trumpas, { tekstas: n.text, tipas: 'intarpas', raktas: GALIOJIMO_RAKTAS, raudonas: n.raudonas,
-            vieta: { dok: d.trumpas, i: n.i }, variantai: GALIOJIMO_VARIANTAI.map(v => ({ tekstas: v.lt, kodel: 'šablono variantas' })),
-            pastaba: 'Įrašoma vietoj raudono „3 mėnesius/90 kalendorinių dienų“. Dvikalbėje formoje šablono variantas įrašomas ir angliškai; savą terminą angliškai įrašykite Word programoje.',
-            komentarai: komentaraiTies(Z, n.i) });
+          const en = (Z.intarpai || []).some(x => !isjungta.has(x.i) && GALIOJA_EN_RE.test(String(x.text || '').replace(FORMOS_NR, '')));
+          auto(trumpas, 'Pasiūlymo galiojimo terminas', `įrašoma „Pasiūlymas galioja ${GALIOJIMAS.lt}“` + (en ? ` (angliškai - „${GALIOJIMAS.en}“)` : ''), GALIOJIMO_KODEL);
         } else if (FORMOS_KAINA_RE.test(ft) && !K.automatika.some(x => x.dok === trumpas && x.forma === 'kaina')){
           const b = formosKainosBudas();
           K.automatika.push({ dok: trumpas, forma: 'kaina', kas: 'Pasiūlymo kaina arba sąnaudos (pasiūlymo forma)',
@@ -4275,6 +4268,12 @@ function surinktiKlausimus(){
         return;
       }
       const raktas = tusciaRaktas(n, d.trumpas);
+      if (DPS_GALIOJA_RE.test(norm(n.text))){                // DPS konkretaus pirkimo 2.2 p. - GALIOJIMAS be klausimo (2026-10-28)
+        ATS['B_' + raktas] = new Array(vietuSk(n.text)).fill(String(GALIOJIMAS.dienos));
+        auto(trumpas, n.text, `įrašoma „${GALIOJIMAS.dienos}“ - konkretūs pasiūlymai galioja ${GALIOJIMAS.lt}`, GALIOJIMO_KODEL);
+        pildomuIdx.add(n.i);
+        return;
+      }
       /* LT->EN pora (dvikalbiai dokumentai): EN dvynys atskirai neklausiamas -
          reiksme ateina is lietuvisko atsakymo (zemelapio pora/poraTipas).
          Saugiklis: LT ir EN vietu skaicius turi sutapti - kitaip krentama
@@ -6440,7 +6439,7 @@ function uztSumosHTML(c){
         aria-describedby="${c.id}-uz3${v.trim() && !ok ? ` ${c.id}-${id}-k` : ''}" oninput="uAts('${rakt}', this.value, false);lkAtnaujink()" onchange="klausimynas()">${busenosZyma(ok ? 'patvirtinta' : 'neuzpildyta', c.id + '-' + id + '-b')}</div>
       ${v.trim() && !ok ? `<p class="lk-salyga" id="${c.id}-${id}-k">${klaida}</p>` : ''}</div>`;
   return `<p class="lk-kl lk-kl2" id="${c.id}-kl3">Koks pasiūlymo galiojimo užtikrinimo dydis ir kiek dienų turi galioti banko garantija?</p>
-    <p class="lk-uz" id="${c.id}-uz3">Įrašoma į SPS: „Pasiūlymo galiojimo užtikrinimo dydis – ... Eur. Banko garantija turi galioti ne trumpiau kaip ... dienas po Pasiūlymų pateikimo termino pabaigos“ (šablone - pavyzdžiai). Garantija turi galioti ne trumpiau, nei galioja pasiūlymas.</p>
+    <p class="lk-uz" id="${c.id}-uz3">Įrašoma į SPS: „Pasiūlymo galiojimo užtikrinimo dydis – ... Eur. Banko garantija turi galioti ne trumpiau kaip ... dienas po Pasiūlymų pateikimo termino pabaigos“ (šablone - pavyzdžiai). Garantija turi galioti ne trumpiau, nei galioja pasiūlymas, - pasiūlymo formoje jis galioja ${GALIOJIMAS.lt}.</p>
     ${lauk('suma', 'Užtikrinimo dydis (Eur)', sv, !!uztSuma(), 'UZT_SUMA', '25 000', 'decimal', 'Įrašykite sumą skaičiais, pvz. 25 000.')}
     ${lauk('dienos', 'Banko garantija galioja (dienų po pasiūlymų pateikimo termino pabaigos)', dv, !!uztDienos(), 'UZT_DIENOS', '105', 'numeric', 'Įrašykite dienų skaičių, pvz. 105.')}
     ${past ? `<p class="lk-ispejimas" id="${c.id}-uztp">Patikrinkite: ${esc(past)}</p>` : ''}`;
