@@ -42,7 +42,16 @@ const SERIJOS = {
   brent:  { serija: 'DCOILBRENTEU', daznis: 'd.',   saltinis: 'FRED / EIA - Brent (Europe), $/bbl' },
   wti:    { serija: 'DCOILWTICO',   daznis: 'd.',   saltinis: 'FRED / EIA - WTI (Cushing), $/bbl' },
   lme_al: { serija: 'PALUMUSDM',    daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Aluminum, $/t' },
-  lme_cu: { serija: 'PCOPPUSDM',    daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Copper, $/t' }
+  lme_cu: { serija: 'PCOPPUSDM',    daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Copper, $/t' },
+  /* 2026-10-29 - rinkos profiliams kitoms EPSO-G grupės įmonėms (dujų perdavimas, energijos kaupimas). Pavadinimai
+     patikrinti FRED kataloge 2026-10-29; JAV gamintojų kainų indeksai (WPU) - pasaulinių kainų pakaitalas, kur nemokamos
+     pasaulinės serijos nėra. */
+  dujos_eu:         { serija: 'PNGASEUUSDM', daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Natural gas, EU, $/MMBtu' },
+  plienas:          { serija: 'WPU1017',     daznis: 'mėn.', saltinis: 'FRED / BLS - PPI by Commodity: Steel Mill Products (JAV), indeksas' },
+  plieno_vamzdziai: { serija: 'WPU101706',   daznis: 'mėn.', saltinis: 'FRED / BLS - PPI by Commodity: Steel Pipe and Tube (JAV), indeksas' },
+  gelezies_ruda:    { serija: 'PIORECRUSDM', daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Iron Ore, $/t' },
+  nikelis:          { serija: 'PNICKUSDM',   daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Nickel, $/t' },
+  cinkas:           { serija: 'PZINCUSDM',   daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Zinc, $/t' }
 };
 
 const limiter = rateLimit
@@ -91,7 +100,10 @@ router.get('/', limiter, async (req, res) => {
         daznis: SERIJOS[id].daznis,
         saltinis: SERIJOS[id].saltinis,
         // Kasdienei serijai atiduodam ir istoriją - modulis is jos atkuria savaitinę seriją.
-        eilute: SERIJOS[id].daznis === 'd.' ? eil : null
+        eilute: SERIJOS[id].daznis === 'd.' ? eil : null,
+        // Mėnesinei serijai (2026-10-29) - iki 24 paskutinių mėnesių: modulis iš jų skaičiuoja metinį pokytį.
+        // Atskiras laukas, kad ankstesnė modulio versija (skaito tik `eilute`) elgtųsi kaip iki tol.
+        menesine: SERIJOS[id].daznis === 'mėn.' ? eil.slice(-24) : null
       });
     } catch (e) {
       klaidos.push({ id: id, priezastis: (e && e.message) || String(e) });
