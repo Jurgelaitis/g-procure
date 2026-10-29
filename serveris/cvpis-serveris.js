@@ -28,8 +28,10 @@ const VPT_URL = "https://viesiejipirkimai.lt/epps-integration/api/cft-details-ex
 const NAUDOTOJO_AGENTAS = "G-Procure CVP IS duomenu paslauga (https://g-procure.com/saugumas.html)";
 const PORTAS = Number(process.env.PORT || 3001);
 const ATNAUJINIMAS_VAL = Math.min(Math.max(Number(process.env.ATNAUJINIMAS_VAL || 6), 1), 48);
-const PUSLAPIS = 5000;
-const MAX_PUSLAPIU = 100;              // 500 000 įrašų - apsauga nuo begalinio ciklo
+// VPT nuo 2026-10-23 leidžia ne daugiau kaip 1000 įrašų puslapyje (didesnis - 400 „page size must not exceed 1000“;
+// iki tol imta po 5000 ir sąrašas nuo tos dienos nebeatsinaujino)
+const PUSLAPIS = 1000;
+const MAX_PUSLAPIU = 500;              // 500 000 įrašų - apsauga nuo begalinio ciklo
 const MAX_PUSLAPIO_BAITU = 40 * 1048576;
 const PAUZE_MS = 2000;                 // tarp puslapių - VPT serverio neapkrauname
 const KATALOGAS = process.env.STATE_DIRECTORY || process.env.DUOMENU_KATALOGAS || "/var/lib/g-procure-cvpis";
@@ -181,10 +183,113 @@ function leidziama(ip) {
 }
 setInterval(() => { const dabar = Date.now(); for (const [ip, k] of kibirai) if (dabar - k.nuo > 120000) kibirai.delete(ip); }, 600000).unref();
 
+/* ---------------------------------------------------------------------------
+ * Pirkimo dokumentų paketas iš CVP IS (2026-10-29): /api/cvpis/dokumentai/<nr>.
+ * Trys užklausos kaip naršyklėje be prisijungimo (pirkimo puslapis -> atsisiuntimo paruošimas -> ZIP) su tuo pačiu
+ * seanso slapuku; ZIP perduodamas srautu, į diską ir žurnalą nerašomas. Peradresavimas į prisijungimą - dokumentai
+ * ne vieši (pvz. konkretus pirkimas pagal DPS). Ribos: 250 MB, 3 vienu metu, 10 per 10 min. vienam IP, 180 s.
+ * ------------------------------------------------------------------------- */
+const DOK_VIENU_METU = 3;
+const DOK_IP_10MIN = 10;
+const DOK_LAIKAS_MS = 180000;
+let dokVyksta = 0;
+const dokKibirai = new Map();
+function dokLeidziama(ip) {
+  const dabar = Date.now();
+  let k = dokKibirai.get(ip);
+  if (!k || dabar - k.nuo > 600000) { k = { nuo: dabar, n: 0 }; dokKibirai.set(ip, k); }
+  k.n++;
+  return k.n <= DOK_IP_10MIN;
+}
+setInterval(() => { const dabar = Date.now(); for (const [ip, k] of dokKibirai) if (dabar - k.nuo > 1200000) dokKibirai.delete(ip); }, 600000).unref();
+
+function slapukai(res, kur) {
+  let eil = [];
+  if (typeof res.headers.getSetCookie === "function") eil = res.headers.getSetCookie();
+  else { const v = res.headers.get("set-cookie"); if (v) eil = v.split(/,(?=\s*[A-Za-z0-9_.-]+=)/); }
+  for (const c of eil) { const m = /^\s*([A-Za-z0-9_.-]{1,64})=([^;]{0,512})/.exec(c); if (m && kur.size < 20) kur.set(m[1], m[2]); }
+}
+async function cvpisGet(adresas, kur, signalas) {
+  const h = { "User-Agent": NAUDOTOJO_AGENTAS, "Accept": "*/*" };
+  if (kur.size) h.Cookie = Array.from(kur, ([k, v]) => k + "=" + v).join("; ");
+  const res = await fetch(adresas, { method: "GET", redirect: "manual", signal: signalas, headers: h });
+  slapukai(res, kur);
+  return res;
+}
+async function ismesk(res) { try { if (res.body) for await (const d of res.body) { void d; } } catch (e) { /* nesvarbu */ } }
+class DokKlaida extends Error { constructor(rusis) { super(rusis); this.rusis = rusis; } }
+
+async function siuskDokumentus(id, req, res, kilme) {
+  const valdiklis = new AbortController();
+  const laikas = setTimeout(() => valdiklis.abort(), DOK_LAIKAS_MS);
+  const nutrauk = () => valdiklis.abort();
+  req.on("close", nutrauk);
+  const kur = new Map(), a = L.dokumentuAdresai(id);
+  let issiusta = 0, pradeta = false;
+  try {
+    for (const [zingsnis, adresas] of [["perziura", a.perziura], ["paruosimas", a.paruosimas]]) {
+      let r;
+      try { r = await cvpisGet(adresas, kur, valdiklis.signal); } catch (e) { throw new DokKlaida("rysys"); }
+      if (r.status >= 300 && r.status < 400) { await ismesk(r); throw new DokKlaida(L.peradresavimoRusis(r.headers.get("location"))); }
+      if (r.status === 404) { await ismesk(r); throw new DokKlaida("nera"); }
+      if (r.status !== 200) { await ismesk(r); throw new DokKlaida("rysys"); }
+      await ismesk(r);
+      void zingsnis;
+    }
+    let r;
+    try { r = await cvpisGet(a.atsisiuntimas, kur, valdiklis.signal); } catch (e) { throw new DokKlaida("rysys"); }
+    if (r.status >= 300 && r.status < 400) { await ismesk(r); throw new DokKlaida(L.peradresavimoRusis(r.headers.get("location"))); }
+    if (r.status === 404) { await ismesk(r); throw new DokKlaida("nera"); }
+    if (r.status !== 200 || !r.body) { await ismesk(r); throw new DokKlaida("rysys"); }
+    const ilgis = Number(r.headers.get("content-length"));
+    if (isFinite(ilgis) && ilgis > L.DOK_MAX_BAITU) { await ismesk(r); throw new DokKlaida("per_didelis"); }
+    const it = r.body[Symbol.asyncIterator]();
+    let pirmas;
+    try { pirmas = await it.next(); } catch (e) { throw new DokKlaida("rysys"); }
+    const b0 = pirmas.done ? null : Buffer.from(pirmas.value);
+    if (!L.arZip(b0)) { try { await it.return(); } catch (e) { /* nesvarbu */ } throw new DokKlaida("ne_zip"); }
+    res.writeHead(200, L.dokumentuAntrastes(id, kilme, isFinite(ilgis) && ilgis > 0 ? ilgis : undefined));
+    pradeta = true;
+    let d = b0;
+    while (d) {
+      issiusta += d.length;
+      if (issiusta > L.DOK_MAX_BAITU) throw new DokKlaida("per_didelis");
+      if (!res.write(d)) await new Promise(p => { res.once("drain", p); res.once("close", p); });
+      if (res.destroyed) throw new DokKlaida("rysys");
+      const kitas = await it.next();
+      d = kitas.done ? null : Buffer.from(kitas.value);
+    }
+    res.end();
+    zurnalas("dokumentai", { baitai: issiusta });
+  } catch (e) {
+    const rusis = e instanceof DokKlaida ? e.rusis : (valdiklis.signal.aborted ? "rysys" : "vidine");
+    if (!pradeta) {
+      const k = L.dokumentuKlaida(rusis === "vidine" ? "rysys" : rusis, kilme);
+      if (!res.headersSent) res.writeHead(k.status, k.antrastes);
+      res.end(k.kunas);
+    } else res.destroy();   // pradėtas srautas nutraukiamas - naršyklė gauna nepilną failą ir jo neskaito
+    if (rusis !== "prisijungimas" && rusis !== "nera") zurnalas("dokumentu-nepavyko", { rusis: rusis });
+  } finally {
+    clearTimeout(laikas);
+    req.removeListener("close", nutrauk);
+    dokVyksta--;
+  }
+}
+
 const serveris = http.createServer((req, res) => {
   try {
     const vietinis = req.socket.remoteAddress === "127.0.0.1" || req.socket.remoteAddress === "::1" || req.socket.remoteAddress === "::ffff:127.0.0.1";
     const ip = vietinis && typeof req.headers["x-real-ip"] === "string" ? req.headers["x-real-ip"].slice(0, 64) : String(req.socket.remoteAddress);
+    const dok = L.dokumentuUzklausa(req.method, req.url);
+    if (dok) {
+      let rusis = dok.klaida || null;
+      if (!rusis && !L.kilmesAntraste(req.headers.origin)) rusis = "kilme";
+      if (!rusis && (!dokLeidziama(ip) || dokVyksta >= DOK_VIENU_METU)) rusis = "uzimta";
+      if (rusis) { const k = L.dokumentuKlaida(rusis, req.headers.origin); res.writeHead(k.status, k.antrastes); res.end(k.kunas); return; }
+      dokVyksta++;
+      siuskDokumentus(dok.id, req, res, req.headers.origin);
+      return;
+    }
     let r;
     if (!leidziama(ip)) {
       const ah = { "Content-Type": "application/json; charset=utf-8", "Retry-After": "60", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Vary": "Origin" };

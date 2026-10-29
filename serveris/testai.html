@@ -297,6 +297,54 @@ async function testaiFiltrai(){
   });
 }
 
+async function testaiDokumentai(){
+  grupe("CVP IS dokumentų paketas (2026-10-29)");
+  await testas("Kelias: tik GET /api/cvpis/dokumentai/<5-9 skaitmenys>; kiti metodai - 405, netinkamas numeris - 400, OPTIONS ir kiti keliai - bendram atsakymui", () => {
+    lygu(L.dokumentuUzklausa("GET", "/api/cvpis/dokumentai/10127967"), { id: 10127967 });
+    lygu(L.dokumentuUzklausa("get", "/api/cvpis/dokumentai/10127967?x=1"), { id: 10127967 }, "parametrai nesvarbūs");
+    lygu(L.dokumentuUzklausa("POST", "/api/cvpis/dokumentai/10127967"), { klaida: "metodas" });
+    lygu(L.dokumentuUzklausa("HEAD", "/api/cvpis/dokumentai/10127967"), { klaida: "metodas" });
+    ["12ab", "1234", "1234567890", "-12345", "123456.7"].forEach(n => lygu(L.dokumentuUzklausa("GET", "/api/cvpis/dokumentai/" + n), { klaida: "numeris" }, n));
+    lygu(L.dokumentuUzklausa("OPTIONS", "/api/cvpis/dokumentai/10127967"), null, "OPTIONS");
+    ["/api/cvpis/pirkimas/10127967", "/api/cvpis/dokumentai/", "/api/cvpis/dokumentai/1234567/x", "/api/cvpis/dokumentaix/1234567"].forEach(k => lygu(L.dokumentuUzklausa("GET", k), null, k));
+    lygu(L.dokumentuUzklausa("GET", "/api/cvpis/dokumentai/" + "1".repeat(400)), null, "per ilgas adresas");
+    lygu(L.dokumentuUzklausa("GET", "/api/cvpis/dokumentai/%2e%2e"), null, "taškų segmentas - ne dokumentų kelias (URL jį sutraukia)");
+  });
+  await testas("CVP IS adresai - fiksuoti, tik numeris; nukreipimas į prisijungimą - „prisijungimas“, kitur - „nėra“; ZIP pagal pirmus baitus", () => {
+    const a = L.dokumentuAdresai(10127967);
+    lygu(Object.keys(a), ["perziura", "paruosimas", "atsisiuntimas"]);
+    Object.values(a).forEach(u => tiesa(u.indexOf("https://viesiejipirkimai.lt/epps/cft/") === 0 && /resourceId=10127967(&|$)/.test(u), u));
+    tiesa(/downloadCftResourceItems\.do\?resourceId=10127967&resourceType=ContractDocument&isContract=null$/.test(a.atsisiuntimas), "atsisiuntimo adresas");
+    tiesa(L.dokumentuAdresai("123456&x=1").perziura.indexOf("&x=") < 0, "numeris - tik skaičius");
+    lygu(L.peradresavimoRusis("https://viesiejipirkimai.lt/cas/login?service=https%3A%2F%2Fviesiejipirkimai.lt"), "prisijungimas");
+    lygu(L.peradresavimoRusis("https://viesiejipirkimai.lt/epps/authenticate/login?callback=true"), "prisijungimas");
+    lygu(L.peradresavimoRusis("/epps/home.do"), "nera");
+    lygu(L.peradresavimoRusis(null), "nera");
+    tiesa(L.arZip([0x50, 0x4B, 3, 4, 20]) && L.arZip(new Uint8Array([0x50, 0x4B, 5, 6])), "ZIP");
+    tiesa(!L.arZip([0x3C, 0x68, 0x74, 0x6D]) && !L.arZip([0x50, 0x4B]) && !L.arZip([0x00, 0x4B, 3, 4]) && !L.arZip([0x50, 0x4B, 3, 9]) && !L.arZip(null), "ne ZIP");
+  });
+  await testas("Klaidos: būsena ir kodas, paaiškinimas žmogui, CORS tik G-Procure; paketo antraštės - ZIP, failas, nosniff, nekešuojama", () => {
+    const lauk = { prisijungimas: 403, nera: 404, rysys: 502, per_didelis: 413, ne_zip: 502, uzimta: 429, kilme: 403, numeris: 400, metodas: 405 };
+    Object.keys(lauk).forEach(k => {
+      const r = L.dokumentuKlaida(k, "https://g-procure.com"), j = JSON.parse(r.kunas);
+      lygu(r.status, lauk[k], k); lygu(j.kodas, k, k + " kodas"); tiesa(typeof j.klaida === "string" && j.klaida.length > 20, k + " tekstas");
+      lygu(r.antrastes["Access-Control-Allow-Origin"], "https://g-procure.com", k + " CORS");
+      lygu(r.antrastes["Cache-Control"], "no-store", k + " nekešuojama");
+    });
+    tiesa(/prisijungus/.test(L.DOK_KLAIDOS.prisijungimas) && /DPS/.test(L.DOK_KLAIDOS.prisijungimas) && /įkelkite/.test(L.DOK_KLAIDOS.prisijungimas), "prisijungimo paaiškinimas");
+    lygu(L.dokumentuKlaida("uzimta", null).antrastes["Retry-After"], "60");
+    lygu(L.dokumentuKlaida("nezinoma", null).status, 502, "nežinoma rūšis - ryšio klaida");
+    lygu(L.dokumentuKlaida("prisijungimas", "https://kitas.example").antrastes["Access-Control-Allow-Origin"], undefined, "kita kilmė - be CORS");
+    const h = L.dokumentuAntrastes(10127967, "https://g-procure.com", 3084832);
+    lygu(h["Content-Type"], "application/zip"); lygu(h["Content-Disposition"], 'attachment; filename="cvpis-10127967.zip"');
+    lygu(h["Content-Length"], "3084832"); lygu(h["X-Content-Type-Options"], "nosniff"); lygu(h["Cache-Control"], "no-store");
+    lygu(h["Access-Control-Allow-Origin"], "https://g-procure.com"); lygu(h["Access-Control-Expose-Headers"], "Content-Length");
+    const h2 = L.dokumentuAntrastes(10127967, "https://kitas.example");
+    lygu(h2["Access-Control-Allow-Origin"], undefined, "kita kilmė"); lygu(h2["Content-Length"], undefined, "be ilgio");
+    lygu(L.DOK_MAX_BAITU, 250 * 1048576, "riba kaip shared/dokumentai.js");
+  });
+}
+
 async function testaiSargai(){
   grupe("Serverio failas, systemd ir nginx - sargai");
   const srv = await tekstas("cvpis-serveris.js");
@@ -310,8 +358,25 @@ async function testaiSargai(){
   });
   await testas("VPT adresas - viena konstanta https://viesiejipirkimai.lt/; fetch tik į ją, be nukreipimų, su laiko riba", () => {
     lygu([...srv.matchAll(/https:\/\/[^"'\s)]+/g)].map(m => m[0]).filter(u => !/^https:\/\/g-procure\.com\//.test(u)), ["https://viesiejipirkimai.lt/epps-integration/api/cft-details-export"]);
-    lygu([...srv.matchAll(/fetch\(\s*([A-Za-z_]+)/g)].map(m => m[1]), ["VPT_URL"]);
+    // Antras fetch (2026-10-29) - tik CVP IS dokumentų paketui, adresai - iš L.dokumentuAdresai (fiksuoti, tik numeris)
+    lygu([...srv.matchAll(/fetch\(\s*([A-Za-z_]+)/g)].map(m => m[1]), ["VPT_URL", "adresas"]);
+    lygu([...srv.matchAll(/cvpisGet\(\s*([^,]+),/g)].map(m => m[1].trim()), ["adresas", "adresas", "a.atsisiuntimas"], "cvpisGet - apibrėžimas ir tik dokumentų adresai");
+    tiesa(/for \(const \[zingsnis, adresas\] of \[\["perziura", a\.perziura\], \["paruosimas", a\.paruosimas\]\]\)/.test(srv) && /const kur = new Map\(\), a = L\.dokumentuAdresai\(id\)/.test(srv), "dokumentų adresai - iš logikos");
     tiesa(/redirect:\s*"error"/.test(srv) && /AbortSignal\.timeout\(/.test(srv) && /MAX_PUSLAPIO_BAITU/.test(srv), "redirect, laikas, dydis");
+    // VPT nuo 2026-10-23 leidžia ne daugiau kaip 1000 įrašų puslapyje (5000 - 400, sąrašas nebeatsinaujino)
+    const ps = +(/const PUSLAPIS = (\d+);/.exec(srv) || [])[1];
+    tiesa(ps > 0 && ps <= 1000, "puslapio dydis " + ps + " <= 1000");
+    tiesa(+(/const MAX_PUSLAPIU = (\d+);/.exec(srv) || [])[1] * ps >= 300000, "puslapių riba - bent 300 000 įrašų");
+  });
+  await testas("Dokumentų paketas: kilmė tikrinama prieš siunčiant, ribos (3 vienu metu, 10 per 10 min., 180 s, 250 MB), nukreipimai neseka, ZIP tikrinamas, į diską nerašoma", () => {
+    tiesa(/if \(!rusis && !L\.kilmesAntraste\(req\.headers\.origin\)\) rusis = "kilme";/.test(srv), "be G-Procure kilmės - nesiunčiama");
+    tiesa(/const DOK_VIENU_METU = 3;/.test(srv) && /const DOK_IP_10MIN = 10;/.test(srv) && /const DOK_LAIKAS_MS = 180000;/.test(srv), "ribos");
+    tiesa(/redirect: "manual"/.test(srv) && /L\.peradresavimoRusis\(/.test(srv), "nukreipimai - tik atpažįstami, nesekami");
+    tiesa(/L\.arZip\(b0\)/.test(srv) && /issiusta > L\.DOK_MAX_BAITU/.test(srv) && /ilgis > L\.DOK_MAX_BAITU/.test(srv), "ZIP ir dydis");
+    const dok = srv.slice(srv.indexOf("async function siuskDokumentus"), srv.indexOf("const serveris = http.createServer"));
+    tiesa(dok.length > 500 && !/fs\.|writeFile|createWriteStream/.test(dok), "dokumentų paketas į diską nerašomas");
+    tiesa(!/zurnalas\([^)]*(id|adresas|origin|ip)\b/.test(dok), "žurnale - be numerio, adreso ir IP");
+    tiesa(/req\.on\("close", nutrauk\)/.test(dok) && /res\.once\("close", p\)/.test(dok), "naršyklei nutraukus - nutraukiama ir CVP IS užklausa");
   });
   await testas("Raktas - tik iš systemd kredencialų failo; į žurnalą, atsakymus ir aplinkos kintamuosius nepatenka", () => {
     tiesa(/CREDENTIALS_DIRECTORY/.test(srv) && /"vpt_api_key"/.test(srv), "kredencialų failas");
@@ -355,6 +420,7 @@ async function testaiSargai(){
     await testaiNormalizavimas();
     await testaiAtsakymai();
     await testaiFiltrai();
+    await testaiDokumentai();
     await testaiSargai();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

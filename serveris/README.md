@@ -11,9 +11,11 @@ Naudotojo sprendimas 2026-10-18: VPT CVP IS API naudoti per G-Procure serverį (
   (`/epps-integration/v3/api-docs`). Užklausos parametrai - tik `pageSize` ir `pageNum`: paieškos pagal pirkimo numerį,
   datą ar vykdytoją nėra.
 - API nepriima naršyklės užklausų (nėra CORS), o raktas negali būti naršyklės kode.
-- Išmatuota 2026-10-18: apie 80 400 pirkimų, iki 5 000 įrašų per puslapį (~7 MB, ~1 s), tvarka neapibrėžta.
+- Išmatuota 2026-10-18: apie 80 400 pirkimų, iki 5 000 įrašų per puslapį (~7 MB, ~1 s), tvarka neapibrėžta. Nuo 2026-10-23 VPT
+  leidžia ne daugiau kaip 1 000 įrašų puslapyje (didesnis - 400 „page size must not exceed 1000“): iki 2026-10-29 paslauga prašė
+  5 000 ir sąrašas nuo spalio 23 d. nebeatsinaujino (rodyta paskutinė kopija ir jos laikas) - dabar `PUSLAPIS` 1000.
 
-Todėl paslauga kas 6 valandas (`ATNAUJINIMAS_VAL`) parsisiunčia visą sąrašą (~17 užklausų su 2 s pauzėmis), laiko jį
+Todėl paslauga kas 6 valandas (`ATNAUJINIMAS_VAL`) parsisiunčia visą sąrašą (~82 užklausos su 2 s pauzėmis), laiko jį
 atmintyje ir disko kopijoje (`/var/lib/g-procure-cvpis/cvpis.ndjson.gz`) ir atsako iš jos. Saugomi tik **vieši pirkimų
 duomenys**; naudotojų duomenų paslauga nesaugo. Antrasis VPT API maršrutas (`cft-details-participants-info-export`) -
 dalyvių informacija - nenaudojamas (duomenų mažinimas).
@@ -25,6 +27,7 @@ dalyvių informacija - nenaudojamas (duomenų mažinimas).
 | `/api/cvpis/pirkimas/<5-9 skaitmenys>` | 200 - pirkimo duomenys, CVP IS nuoroda, sąrašo laikas; 404 - sąraše nėra (su sąrašo laiku); 503 - sąrašas dar neįkeltas |
 | `/api/cvpis/paieska?...` | pirkimai pagal filtrus (bent vienas): `q` (žodžiai pavadinime, vykdytojo pavadinime ar numeryje, 3-100 ženklų), `vykdytojas` (žodžiai vykdytojo pavadinime), `ca` (vykdytojo kodas), `cpv` (BVPŽ pradžia, 2-8 skaitmenys, iki 5 per kablelį), `tipas` (Supplies / Services / Works), `budas` ir `busena` (VPT kodai; `busena=aktyvus` - terminas nepraėjęs, nenutrauktas), `nuo` / `iki` (paskelbimo data), `rikiuoti` (naujausi / terminas), `psl` (1-50, po 20); su bendru skaičiumi (nuo 2026-10-18b; iki tol - tik `q`) |
 | `/api/cvpis/statistika?...` | tie patys filtrai: kiekiai pagal būdą, būseną, objektą, vertinimo kriterijų, direktyvą, kalbą; tarptautiniai, ES lėšos, dalimis, e. aukcionai, nutraukti, rinkos konsultacijos, aktyvūs; pasiūlymų teikimo laikotarpis (dienomis) pagal būdą ir tarptautinę vertę, dienos nuo termino iki sprendimo ir sutarties, numatoma vertė, trukmė mėnesiais - kvantiliai (tik nuo 5 reikšmių); paskelbimai pagal mėnesį (36), dažniausi vykdytojai (10); kešuojama iki naujo sąrašo |
+| `/api/cvpis/dokumentai/<5-9 skaitmenys>` | nuo 2026-10-29: viešas pirkimo dokumentų paketas (ZIP) iš CVP IS, kaip jį atsisiunčia naršyklė be prisijungimo (pirkimo puslapis -> atsisiuntimo paruošimas -> ZIP su tuo pačiu seanso slapuku), perduodamas srautu; tik su G-Procure kilme (kitaip 403 `kilme`); 403 `prisijungimas` - CVP IS reikalauja prisijungti (pvz. konkretus pirkimas pagal DPS - tik DPS dalyviams), 404 `nera`, 413 `per_didelis` (> 250 MB), 502 `rysys` / `ne_zip`, 429 `uzimta` (3 vienu metu, 10 per 10 min. vienam IP); 180 s; į diską ir žurnalą (numeris, IP) nerašoma |
 | `/api/cvpis/busena` | ar sąrašas įkeltas, kada atnaujintas, kiek įrašų, paskutinės klaidos laikas ir rūšis, kitas atnaujinimas |
 
 Visi 38 OpenAPI aprašo laukai (`AbstractCftDetailsDTO`) laikomi; atsakyme laukai - tik išvardyti `cvpis-logika.js` (`TEKSTAI`, `DATOS`, `LOGINIAI` ir keli kiti). Datos VPT pateikiamos be laiko juostos
