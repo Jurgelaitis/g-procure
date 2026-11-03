@@ -128,6 +128,8 @@
     var d = (docs || []).filter(function (a) { return a.id === x.docId; })[0] || {};
     var c = normTarpai(x.snippet || "");
     if (/^[„“"]?[a-ząčęėįšųūž]/.test(c)) c = c.replace(/^\S*\s+/, "");
+    // Ištrauka prasidėjo kabučių viduryje („terminą“, pasiūlymų ...) - nuo to, kas po jų
+    c = c.replace(/^[^„“]{1,40}“[,;:]?\s+/, "");
     // Po sakinio prilipusi parašo eilutė („... 15:00 val. Vardas Pavardė“) - ne citatos dalis
     var parasas = /^(.*[.!?])\s+(?:\p{Lu}[\p{L}-]+\s*){2,4}$/u.exec(c);
     if (parasas) c = parasas[1];
