@@ -1109,6 +1109,8 @@ const GP_SUTARCIU_GEN = (() => {
       if (n) A.tarpuPastraipos = n;
       if (tekstai() !== pries) A.klaidos.push('tarpo pastraipos pakeitė tekstą');
     }
+    // Pirkimo vykdytojo duomenys (2026-11-03, org-sablonai.js): kita įmonė nei LITGRID AB - po visų patikrų prieš LITGRID formą
+    if (info.org && window.GP_ORG_SABLONAI){ A.organizacija = await GP_ORG_SABLONAI.pritaikyk(doc, info.org); }
     // DI požymiai (DI akto 50 str. 2 d.; shared/di-zymejimas.js): LT/EN sutarčių anglų tekstas suredaguotas naudojant DI rengiant šabloną
     if (info.di && info.di.length) await GPDocx.diPozymiai(doc, info.di);
     // 10a. Gulsčias priedas stačiame dokumente (rangos SS etapų priedas): Pages visam dokumentui taiko pirmojo skyriaus orientaciją -

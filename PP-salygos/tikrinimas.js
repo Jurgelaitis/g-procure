@@ -377,7 +377,13 @@
           if (d.buf) {
             var at = await skaitykAtaskaita(d.buf);
             if (at && !at.klaida) { ankstesne = at; ankstesne.vardas = bazinis(d.name); d.buf = null; continue; }
-            try { var pr = await P().skaityk(d.buf); palyg[d.id] = { ps: pr.pastraipos, pasas: pr.pasas }; }
+            try {
+              var pr = await P().skaityk(d.buf);
+              // Kitos įmonės (AB „Amber Grid“) duomenys parengtame dokumente - ne nukrypimas nuo formos (2026-11-03, org-sablonai.js)
+              if (!pr.pasas && window.GP_ORG_SABLONAI && pr.pastraipos.some(function (p) { return GP_ORG_SABLONAI.atpazink(p.t); }))
+                pr.pastraipos.forEach(function (p) { var t = GP_ORG_SABLONAI.atgal(p.t, "amber-grid"); if (t !== p.t) { p.t = t; p.n = P().norm(t); } });
+              palyg[d.id] = { ps: pr.pastraipos, pasas: pr.pasas };
+            }
             catch (e) { palyg[d.id] = { klaida: e.message }; }
             // Word automatinės numeracijos punktai (rangos sutartys, 2026-10-10) - nuorodų patikrai tekstai su emuliuotais numeriais
             if (palyg[d.id].ps && global.GP_SUTARCIU_NUORODOS && global.GP_SUTARCIU_NUORODOS.tekstai) {

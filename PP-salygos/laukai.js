@@ -616,7 +616,7 @@
      Vienas laukas visiems paketo dokumentams; dvikalbiame - ta pati reikšmė (vardas ir kontaktai nesiverčia). */
   const RENGEJAS = { klausimas: 'Kas parengė pirkimo sąlygas ir palaikys ryšį su tiekėjais?',
     uzuomina: 'Įrašoma SPS pabaigoje po „Rengė:“: vardas, pavardė, telefonas ir el. paštas. Šis asmuo pirkimo dokumentuose nurodomas kaip įgaliotas palaikyti tiesioginį ryšį su tiekėjais.',
-    uzrasas: 'Vardas, pavardė, telefonas, el. paštas', pvz: 'Vardenis Pavardenis, tel. +370 600 00000, el. p. vardenis.pavardenis@litgrid.eu' };
+    uzrasas: 'Vardas, pavardė, telefonas, el. paštas', pvz: 'Vardenis Pavardenis, tel. +370 600 00000, el. p. vardenis.pavardenis@imone.lt' };
   const RENGEJO_RE = /^\s*Rengė(\s*\/\s*Prepared by)?\s*:\s*(Choose an item\.?|Pasirinkite elementą\.?)?\s*$/;
   const arRengejoEilute = t => RENGEJO_RE.test(String(t || ''));
   function rengejoLaukas(t){

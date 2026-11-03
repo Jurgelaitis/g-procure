@@ -83,7 +83,8 @@
      TS, kvalifikacija, sąlygos, grafikas ir skelbimo parengties patikra, paskelbus - protokolai, vertinant - protokolai arba mažos vertės pažyma,
      vertinimas ir derybos (tik būdui su derybomis). Pirmas - pagrindinis. Įrankiai, kurie rengia tik LITGRID AB
      dokumentus pagal PĮ (litgrid), kitos organizacijos ar VPĮ pirkimui nesiūlomi; nežinomas vykdytojas - siūlomi
-     (numatytasis kontekstas - LITGRID). Kas padaryta, įrankiai nežino - tai tik pagal kortelės būseną. */
+     (numatytasis kontekstas - LITGRID). Sąlygos - ir AB „Amber Grid“ (nuo 2026-11-03, tas pats modelis su jos duomenimis - `vykdytojai`).
+     Kas padaryta, įrankiai nežino - tai tik pagal kortelės būseną. */
   var IRANKIAI = {
     grafikas: { kelias: "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html" },
     kna: { kelias: "PP-cost-benefit/kastu_naudos_analize.html", litgrid: true, salyga: function (k) {
@@ -92,7 +93,7 @@
     } },
     ts: { kelias: "PP-ts/TS_Asistentas.html", litgrid: true },
     kvalifikacija: { kelias: "PP-qual/PP-QUAL.html" },
-    salygos: { kelias: "PP-salygos/PP-SALYGOS.html", litgrid: true, salyga: function (k) {
+    salygos: { kelias: "PP-salygos/PP-SALYGOS.html", litgrid: true, vykdytojai: ["litgrid", "amber-grid"], salyga: function (k) {
       return !k.budas || !global.GP_METHODS || !!global.GP_METHODS.toSalygos(k.budas);   // būdas, kuriam šablonų nėra - nesiūloma
     } },
     protokolai: { kelias: "PP-protocol/LITGRID_Generatorius_v3.html", litgrid: true, salyga: function (k) { return !mazosVertes(k); } },
@@ -123,7 +124,7 @@
   function irankiai(k) {
     return (PAGAL_BUSENA[k.busena] || []).filter(function (r) {
       var x = IRANKIAI[r];
-      if (x.litgrid && ((k.vykdytojas && k.vykdytojas !== "litgrid") || (k.rezimas && k.rezimas !== "PI"))) return false;
+      if (x.litgrid && ((k.vykdytojas && (x.vykdytojai || ["litgrid"]).indexOf(k.vykdytojas) < 0) || (k.rezimas && k.rezimas !== "PI"))) return false;
       return !x.salyga || x.salyga(k);
     });
   }

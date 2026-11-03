@@ -64,7 +64,9 @@
     if (!G || !vieta) return null;
     var S = { ats: {}, taip: false, zmogaus: null, patvirtinta: null, buvo: null, keiciama: false, sistema: null, galut: null, d: {} };
     var ESM = G.NERENGIAMA.filter(function (n) { return n.id === "esmines"; })[0];
-    var KLAUSIMAS = "Ar taikomos tipinės LITGRID AB sutarties standartinės sąlygos?";
+    // Klausimas ir tekstai - pagal pasirinktą pirkimo vykdytoją (2026-11-03)
+    function imone() { return global.GP_ORG_SABLONAI ? global.GP_ORG_SABLONAI.dabartine() : { vardas: "LITGRID AB", sutartys: null }; }
+    function klausimas() { return "Ar taikomos tipinės " + imone().vardas + " sutarties standartinės sąlygos?"; }
     function kopija(x) { return JSON.parse(JSON.stringify(x)); }
     function esmines(g) { return !!(g && g.nerengiama && g.nerengiama.id === "esmines"); }
     /* Atsakymas į pagrindinį klausimą: „ne“ - žmogus pasirinko esmines sąlygas; „taip“ - atsakyta „Taip“ (sutartis patvirtinta arba dar
@@ -172,7 +174,7 @@
       var d = o.duomenys() || {};
       S.d = d;
       S.sistema = G.parink({ pavadinimas: d.pavadinimas, objektas: d.objektas, bvpz: d.bvpz, kalba: d.kalba, rezimas: d.rezimas,
-                             verte: d.verte, vykdytojas: "LITGRID AB", atsakymai: S.ats });
+                             verte: d.verte, vykdytojas: imone().vardas, atsakymai: S.ats });
       var sis = S.sistema.busena === "klausimas" ? null
         : { seima: S.sistema.seima, variantas: S.sistema.variantas || null,
             nerengiama: S.sistema.busena === "nerengiama" ? { id: "sistema", tekstas: S.sistema.nerengiama } : null };
@@ -195,6 +197,7 @@
     function sablonai() {
       var g = S.galut;
       if (!g || g.nerengiama || !G.SEIMOS[g.seima] || S.d.rezimas === "VPI") return null;
+      if (imone().sutartys && imone().sutartys.indexOf(g.seima) < 0) return null;   // šiai įmonei formos nėra (AB „Amber Grid“ - rangos)
       // šablonų kodai pagal šeimą, variantą (eksploatavimo darbų sutartis - specialiosios sąlygos pagal darbų rūšį) ir kalbą
       return G.kodai(g.seima, g.variantas || null, S.sistema.kalba === "LTEN" ? "LTEN" : "LT");
     }
@@ -212,8 +215,10 @@
 
     function rankinisHtml() {
       var opt = [];
+      var leid = imone().sutartys;   // įmonė, kuriai paruoštos tik kai kurios šeimos (AB „Amber Grid“ - prekės ir paslaugos)
       Object.keys(G.SEIMOS).forEach(function (k) {
         var s = G.SEIMOS[k];
+        if (leid && leid.indexOf(k) < 0) return;
         if (s.variantai) Object.keys(s.variantai).forEach(function (v) { opt.push(['s:' + k + ':' + v, s.pav + " - " + s.variantai[v]]); });
         else opt.push(['s:' + k + ':', s.pav + (s.sablonai ? "" : " (šablonas dar neparuoštas)")]);
       });
@@ -231,15 +236,15 @@
     /* Pagrindinis klausimas - radijo grupė be numatytojo atsakymo */
     function pagrindinisHtml(ats) {
       return '<fieldset class="sb-kl sb-pagr" aria-describedby="sb-tip-pa">' +
-        '<legend class="sb-kl-t" id="sbKlausimas">' + esc(KLAUSIMAS) + "</legend>" +
-        GP_PAAISKINIMAS.html({ id: "sb-tip-pa", etikete: KLAUSIMAS, turinys:
-          "<p>„Taip“ - prie pirkimo sąlygų pridedamos LITGRID AB sutarties bendrosios ir specialiosios sąlygos. Kuri sutartis - nustatoma pagal " +
+        '<legend class="sb-kl-t" id="sbKlausimas">' + esc(klausimas()) + "</legend>" +
+        GP_PAAISKINIMAS.html({ id: "sb-tip-pa", etikete: klausimas(), turinys:
+          "<p>„Taip“ - prie pirkimo sąlygų pridedamos " + esc(imone().vardas) + " sutarties bendrosios ir specialiosios sąlygos. Kuri sutartis - nustatoma pagal " +
           "pirkimo tipą (objekto tipą ir pavadinimą) taisyklėmis, DI nenaudojamas; ji parodoma prieš atsakant. Kai požymiai nevienareikšmiai, " +
           "po „Taip“ užduodamas patikslinantis klausimas - sistema nespėja. Kitą sutartį galite pasirinkti patys („Pakeisti sutartį“).</p>" +
           "<p>„Ne“ - sutarties projektas nerengiamas: pirkimo sąlygose (SPS) lieka dalis „Esminės sutarties sąlygos“.</p>" }) +
         '<div class="opts sb-opts">' +
         '<label class="opt"><input type="radio" name="sb-tip" id="sbTaip" value="taip" data-sb-tip' + (ats === "taip" ? " checked" : "") + "> " +
-        "Taip - pridedamos LITGRID AB sutarties bendrosios ir specialiosios sąlygos pagal pirkimo tipą</label>" +
+        "Taip - pridedamos " + esc(imone().vardas) + " sutarties bendrosios ir specialiosios sąlygos pagal pirkimo tipą</label>" +
         '<label class="opt"><input type="radio" name="sb-tip" id="sbNe" value="ne" data-sb-tip' + (ats === "ne" ? " checked" : "") + "> " +
         "Ne - pridedamos esminės sutarties sąlygos (pirkimo sąlygų dalis „Esminės sutarties sąlygos“)</label>" +
         "</div></fieldset>";
@@ -280,23 +285,23 @@
       var aktyvus = doc.activeElement && vieta.contains(doc.activeElement) ? doc.activeElement.id : "";
       var h = '<div class="t sb-gal"><span id="q-sutartis">Sutarties projektas</span> <span class="pz-nepriv">bandomoji</span>' +
         GP_PAAISKINIMAS.html({ id: "sb-pa", etikete: "Sutarties projektas", turinys:
-          "<p>Atsakote į vieną klausimą - ar šiam pirkimui taikomos tipinės LITGRID AB sutarties standartinės sąlygos. „Taip“ - prie pirkimo sąlygų " +
+          "<p>Atsakote į vieną klausimą - ar šiam pirkimui taikomos tipinės " + esc(imone().vardas) + " sutarties standartinės sąlygos. „Taip“ - prie pirkimo sąlygų " +
           "pridedamos sutarties bendrosios ir specialiosios sąlygos pagal pirkimo tipą; „Ne“ - pirkimo sąlygose lieka esminės sutarties sąlygos.</p>" +
           "<p>Sutartis pagal pirkimo tipą parenkama taisyklėmis iš objekto tipo ir pavadinimo (DI nenaudojamas); kai požymiai nevienareikšmiai, " +
           "užduodamas klausimas - sistema nespėja. Generatoriui paruošti prekių, paslaugų ir darbų pirkimo-pardavimo, projektavimo ir statybos rangos, " +
           "statybos rangos, projektavimo paslaugų ir eksploatavimo darbų (oro linijų, transformatorių pastočių, trasų valymo) sutarčių šablonai.</p>" }) + "</div>";
       if (!rodoma()) {
-        vieta.innerHTML = h + '<div class="cite">LITGRID DPS sukūrimo sąlygose sutarties projekto priedo nėra - sutarties projektas parenkamas konkrečiam pirkimui pagal DPS.</div>';
+        vieta.innerHTML = h + '<div class="cite">DPS sukūrimo sąlygose sutarties projekto priedo nėra - sutarties projektas parenkamas konkrečiam pirkimui pagal DPS.</div>';
         return;
       }
       if (laukia()) {
-        vieta.innerHTML = h + '<div class="cite">Įrašykite pirkimo pavadinimą ir pasirinkite objekto tipą - tada atsakysite, ar taikomos tipinės LITGRID AB sutarties standartinės sąlygos.</div>';
+        vieta.innerHTML = h + '<div class="cite">Įrašykite pirkimo pavadinimą ir pasirinkite objekto tipą - tada atsakysite, ar taikomos tipinės ' + esc(imone().vardas) + ' sutarties standartinės sąlygos.</div>';
         return;
       }
       var r = S.sistema, ats = atsakymas(), g = S.galut;
       h += '<div class="sb" role="group" aria-labelledby="q-sutartis">';
       h += pagrindinisHtml(ats);
-      // patikslinantys klausimai - tik atsakius „Taip“ (jie nustato, kuri LITGRID sutartis atitinka pirkimo tipą)
+      // patikslinantys klausimai - tik atsakius „Taip“ (jie nustato, kuri sutartis atitinka pirkimo tipą)
       if (ats === "taip") {
         (r.atsakyta || []).forEach(function (a) { h += klausimoHtml(a.kodas, a.atsakymas); });
         if (r.busena === "klausimas" && !S.zmogaus) {
@@ -315,7 +320,7 @@
           h += '<div class="sb-kodel">Pridedamos esminės sutarties sąlygos: pirkimo sąlygose (SPS) lieka dalis „Esminės sutarties sąlygos“ - ją užpildote parengtame dokumente.</div>' +
                '<div class="sb-kodel">Sistema siūlytų: ' + esc(sistemosSiulymas(r)) + ".</div>";
         } else if (g.nerengiama) {
-          h += '<div class="sb-kodel">' + esc(g.nerengiama.tekstas) + " - LITGRID AB sutarties standartinės sąlygos nepridedamos.</div>";
+          h += '<div class="sb-kodel">' + esc(g.nerengiama.tekstas) + " - " + esc(imone().vardas) + " sutarties standartinės sąlygos nepridedamos.</div>";
         } else if (S.zmogaus) {
           h += '<div class="sb-kodel">Jūsų pasirinkimas.' + (lygios(S.zmogaus, { seima: r.seima, variantas: r.variantas, nerengiama: r.busena === "nerengiama" ? { id: "sistema" } : null })
               ? " Sistema siūlo tą pačią." : " Sistema siūlytų: " + esc(sistemosSiulymas(r)) + ".") + "</div>";
@@ -344,7 +349,7 @@
       if (g) h += '<div class="cite">' + (esmines(g) || g.nerengiama ? 'Sutarties projektas į pirkimo sąlygų paketą neįtraukiamas.'
         : sablonai() ? (S.patvirtinta ? 'Žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai (galite juos atsakyti ir vėliau), o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).'
                                       : 'Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).')
-        : 'Šios sutarties dokumentų generatorius dar nekuria - LITGRID AB standartines sąlygas prie pirkimo sąlygų pridėsite patys; pirkimo sąlygų paketas nuo to nesikeičia.') + '</div>';
+        : 'Šios sutarties dokumentų generatorius dar nekuria - ' + esc(imone().vardas) + ' standartines sąlygas prie pirkimo sąlygų pridėsite patys; pirkimo sąlygų paketas nuo to nesikeičia.') + '</div>';
       h += stebejimoHtml();
       h += "</div>";
       vieta.innerHTML = h;
@@ -427,7 +432,7 @@
       naudokSaugykla: function (s) { SAUG = s || null; skaiciuok(); irasyk(); piesk(); },
       busena: function () {
         var g = S.galut, sb = sablonai();
-        return { rodoma: rodoma(), laukia: laukia(), atsakymas: atsakymas(), klausimas: KLAUSIMAS, sistema: S.sistema, pasirinkta: g ? JSON.parse(JSON.stringify(g)) : null,
+        return { rodoma: rodoma(), laukia: laukia(), atsakymas: atsakymas(), klausimas: klausimas(), sistema: S.sistema, pasirinkta: g ? JSON.parse(JSON.stringify(g)) : null,
                  pavadinimas: pavadinimas(g), zmogaus: !!S.zmogaus, patvirtinta: !!S.patvirtinta,
                  buvoPatvirtinta: S.buvo ? pavadinimas(S.buvo) : null, sablonai: sb ? sb.kodai : null, kalba: sb ? sb.kalba : null,
                  stebejimas: g ? G.palygink(S.sistema, g.seima, g.variantas) : null };

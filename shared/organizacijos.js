@@ -55,7 +55,12 @@
     // Amber Grid (2026-10-22): svetainės „Viešieji pirkimai“ nuoroda „Mažos vertės pirkimų tvarkos aprašas“ veda į nebeveikiantį seną
     // CVP IS adresą (mw.eviesiejipirkimai.lt neatsako), todėl taisyklės neįrašytos - tik pirkimų puslapis
     { id: "amber-grid", pavadinimas: "AB Amber Grid", atpazinimas: /\bamber\s*grid\b/i, cvpisPaieska: "Amber Grid", rezimasTiketinas: "PI", centrinesValdzios: false,
-      nuorodos: { pirkimai: "https://ambergrid.lt/viesieji-pirkimai/10" }, taisykles: null, patikrinta: "2026-10-22" },
+      nuorodos: { pirkimai: "https://ambergrid.lt/viesieji-pirkimai/10" }, taisykles: null,
+      // Rekvizitai (2026-11-03): iš įmonės paskelbtų CVP IS sutarčių projektų (specialiosios sąlygos) ir bendrųjų pirkimo sąlygų
+      rekvizitai: { kodas: "303090867", adresas: "Laisvės pr. 10, LT-04215 Vilnius", gatve: "Laisvės pr. 10", pastoKodas: "LT-04215", pvmKodas: "LT100007844014", saskaita: "LT71 7044 0600 0790 5969",
+                    bankas: "AB SEB bankas", bankoKodas: "70440", telefonas: "+370 5 236 0855", elPastas: "info@ambergrid.lt", incidentuPastas: "cyber@ambergrid.lt",
+                    saltinis: "AB „Amber Grid“ paskelbti CVP IS sutarčių projektai ir pirkimo sąlygos", patikrinta: "2026-11-03" },
+      patikrinta: "2026-10-22" },
     // EPSO-G (2026-10-22): svetainėje - EPSO-G įmonių grupės pirkimų politika (valdyba 2021-12-21, galioja nuo 2022-02-21; taikoma visoms
     // grupės įmonėms) ir 5 metų reikšmingų pirkimų planas; mažos vertės pirkimų tvarkos aprašo svetainėje nėra
     { id: "epso-g", pavadinimas: "UAB EPSO-G", atpazinimas: /\bepso[\s­‐‑-]*g\b/i, cvpisPaieska: "EPSO-G", rezimasTiketinas: "VPI", centrinesValdzios: false,

@@ -3395,7 +3395,7 @@ const GPAudit = (() => {
       // Dalis sablonu (pvz. konfidencialumo priedas) LITGRID rekvizitus rašo
       // TIESIOGIAI, ne per zyma: pavadinima, el. pasta. Perkant kitai imonei
       // jie liktu dokumente kaip svetimi duomenys.
-      if (imone && !/litgrid/i.test(imone) && /litgrid/i.test(t))
+      if (imone && !/litgrid/i.test(imone) && /litgrid|manerheim|302564383|707\s*02171/i.test(t))
         patikrinti.push({ i, text: t, svetimas: true });
     });
     // TUSTI KVALIFIKACIJOS LANGELIAI: kvalifikacijos lenteleje (antraste turi
