@@ -15,7 +15,7 @@ Išėjimo kodas 1, jei bent vienas testas krito ar rinkinys nepasibaigė.
 Rinkinio dalys (2026-10-23): testai.html su <meta name="gp-testu-dalys" content="n"> (PP-salygos, shared) paleidžiamas n kartų
 su ?dalis=k/n - kiekviena dalis atskira švaria naršykle (shared/testu-dalys.js parenka jos grupes), rezultatas - eilutė dalies.
 GP_TESTU_LYGIAGRECIAI=<n> - vienu metu iki n dalių ar rinkinių (vietoje numatyta 1). GitHub Actions - 2 (2026-10-24: eilė priartėjo
-prie bendros 2400 s ribos ir 4cc3e44 paleidimas ją viršijo; vykdyklėje 4 branduoliai). Rinkiniai iš VIENI kartu su kitais sulėtėja ar
+prie bendros 2400 s ribos ir 4cc3e44 paleidimas ją viršijo; vykdyklėje 4 branduoliai). 2026-11-03 - 3: su dviem 478a456 ir 4db1303 viršijo 2580 s (PP-salygos 3 dalis pradėta po 1120 s, viešos saugyklos vykdyklėje - 4 branduoliai). Rinkiniai iš VIENI kartu su kitais sulėtėja ar
 užstringa (PP-tiekejams) - jie paleidžiami po kitų, po vieną.
 """
 import base64, concurrent.futures, http.server, json, os, re, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request
@@ -31,10 +31,11 @@ RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
 # (vietoje - ~190 s); užstrigusius rinkinius vis tiek nutraukia bendra riba VISO_LAIKAS
 # 1300 s (2026-10-20): PP-salygos (458 testai, vietoje ~380 s) GitHub Actions viršijo 900 s; visas darbas buvo ~1500 s iš 2400
 # 1500 s (2026-10-26): privačios saugyklos vykdyklėje (2 branduoliai) PP-salygos dalis lygiagrečiai trunka iki ~1240 s
-LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "1500"))
+# 2000 s (2026-11-03): trys PP-salygos dalys lygiagrečiai - viena gali trukti ilgiau; bendrą laiką saugo VISO_LAIKAS
+LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "2000"))
 # 2580 s (2026-10-26): darbo riba - 45 min., paruošimas (checkout, Chrome) trunka ~10 s - lieka ~2 min. santraukai
 VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2580"))
-LYGIAGRECIAI = max(1, int(os.environ.get("GP_TESTU_LYGIAGRECIAI", "2" if os.environ.get("GITHUB_ACTIONS") == "true" else "1")))
+LYGIAGRECIAI = max(1, int(os.environ.get("GP_TESTU_LYGIAGRECIAI", "3" if os.environ.get("GITHUB_ACTIONS") == "true" else "1")))
 VIENI = {"PP-tiekejams/testai.html"}
 
 
