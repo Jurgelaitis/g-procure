@@ -85,7 +85,7 @@ function paruosk(){
   }catch(e){}
   // Kalba TAIP PAT gyvena localStorage, tad ji reikia grąžinti kaip ir duomenis -
   // kitaip testai priklausytų nuo to, kurią kalbą paskutinį kartą buvai pasirinkęs.
-  M('LANG = "lt"; applyI18n(); DATA = loadData(); renderAll();');
+  M('LANG = "lt"; ORG_PASIRINKTA = null; applyI18n(); DATA = loadData(); renderAll();');
   // Pirkimo kortele gyvena uz renderAll ribu (FOCUS + #focusResult), o pavadinimas
   // atsikartoja ir profiliu tinklelyje - be sito jis persikeltu i kita testa.
   M('FOCUS.name = ""; FOCUS.last = null; FOCUS.rusis = null; FOCUS.rusisKilme = null; FOCUS.catRanka = false; FOCUS.veiksmai = {}; FOCUS.veiksmaiIs = null; document.getElementById("focusName").value = ""; document.getElementById("focusResult").innerHTML = ""; renderAll();');
@@ -436,7 +436,7 @@ testas("Įvedimas", "Peršokus į dabartinį laikotarpį praleisti stebėjimai l
     document.getElementById("btnEdit").click();
     document.querySelector('input[data-edit="brent"]').value = "92.5";
     document.querySelector('select[data-edit-per="brent"]').value = "siandien";
-    document.getElementById("btnEdit").click();
+    document.getElementById("btnSave").click();
     const m = metricById("brent");
     return { serija: m.series, amzius: laikotarpioAmzius(m), dabar: latest(m),
              tuscios: m.series.filter(v=>v === null).length };
@@ -484,7 +484,7 @@ testas("Sąžiningumo žymos", "Atnaujinus visus rodiklius demonstracinių duome
 testas("Įvedimas", "Išsaugojus nieko neįvedus duomenys ir data nekeičiami", ()=>{
   paruosk();
   const pries = M("JSON.stringify({d:DATA.meta.demo, u:DATA.meta.updated, s:metricById('sski').series})");
-  M("document.getElementById('btnEdit').click(); document.getElementById('btnEdit').click();");
+  M("document.getElementById('btnEdit').click(); document.getElementById('btnSave').click();");
   const po = M("JSON.stringify({d:DATA.meta.demo, u:DATA.meta.updated, s:metricById('sski').series})");
   lygu(po, pries, "būsena po tuščio išsaugojimo");
 });
@@ -495,7 +495,7 @@ testas("Įvedimas", "Naujas laikotarpis pastumia bazinį tašką", ()=>{
   M(`document.getElementById('btnEdit').click();
      document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
-     document.getElementById('btnEdit').click();`);
+     document.getElementById('btnSave').click();`);
   const po = M("({baz: baseVal(metricById('sski')), lt: metricById('sski').laikotarpis, n: metricById('sski').series.length})");
   tiesa(po.baz !== pries.baz, "bazinė reikšmė turi pajudėti (buvo " + pries.baz + ")");
   lygu(po.n, pries.n, "serijos ilgis (slenkantis langas)");
@@ -507,7 +507,7 @@ testas("Įvedimas", "Dabartinio laikotarpio taisymas jo nepastumia", ()=>{
   M(`document.getElementById('btnEdit').click();
      document.querySelector('select[data-edit-per="sski"]').value = "dabartinis";
      document.querySelector('input[data-edit="sski"]').value = "131";
-     document.getElementById('btnEdit').click();`);
+     document.getElementById('btnSave').click();`);
   const po = M("({v: latest(metricById('sski')), lt: metricById('sski').laikotarpis, n: metricById('sski').series.length})");
   lygu(po.v, 131, "reikšmė");
   lygu(po.lt, "2026-05-01", "laikotarpis neturi pasikeisti");
@@ -521,7 +521,7 @@ testas("Įvedimas", "Po 20 mėnesių įvedimų palyginimo langas vis dar 12 mėn
       document.getElementById('btnEdit').click();
       document.querySelector('select[data-edit-per="sski"]').value = "naujas";
       document.querySelector('input[data-edit="sski"]').value = String(130 + i);
-      document.getElementById('btnEdit').click();
+      document.getElementById('btnSave').click();
     }
   })()`);
   const m = M("({lt: metricById('sski').laikotarpis, n: metricById('sski').series.length, baz: baziniLaikotarpis(metricById('sski'))})");
@@ -576,7 +576,7 @@ testas("Sąžiningumas", "Demonstracinių duomenų juosta rodoma, kol duomenys n
    ========================================================================= */
 testas("Duomenų būsena", "Pradžioje visi 15 rodiklių pažymėti kaip iliustraciniai", ()=>{
   paruosk();
-  lygu(M("DATA.metrics.filter(m=>m.demo).length"), 15);
+  lygu(M("demoRodikliai().length"), 15);
   lygu(M("document.querySelectorAll('.kpi-zyma.demo').length"), 15, "žymos kortelėse");
 });
 
@@ -585,8 +585,8 @@ testas("Duomenų būsena", "Atnaujinus vieną rodiklį juosta NEDINGSTA, o parod
   M(`document.getElementById('btnEdit').click();
      document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
-     document.getElementById('btnEdit').click();`);
-  lygu(M("DATA.metrics.filter(m=>m.demo).length"), 14, "likę iliustraciniai");
+     document.getElementById('btnSave').click();`);
+  lygu(M("demoRodikliai().length"), 14, "likę iliustraciniai");
   lygu(M('metricById("sski").demo'), false, "atnaujintas rodiklis");
   lygu(M('metricById("brent").demo'), true, "neliestas rodiklis");
   lygu(M("getComputedStyle(document.getElementById('demoBanner')).display"), "flex", "juosta turi likti");
@@ -596,10 +596,12 @@ testas("Duomenų būsena", "Atnaujinus vieną rodiklį juosta NEDINGSTA, o parod
 
 testas("Duomenų būsena", "Juosta dingsta tik atnaujinus visus rodiklius", ()=>{
   paruosk();
-  M(`document.getElementById('btnEdit').click();
+  // Ketvirtinis rodiklis įvedamas tik kitam ketvirčiui: be šios datos testas priklausytų nuo šiandienos (nuo 2026-11 - „ankstesnio laikotarpio“)
+  M(`metricById('vmdu').laikotarpis = dabartinisLaikotarpis(metricById('vmdu')); renderAll();
+     document.getElementById('btnEdit').click();
      document.querySelectorAll('input[data-edit]').forEach((inp, i)=>{ inp.value = String(+(metricById(inp.dataset.edit).series.filter(x=>x!==null).pop() * (1 + i / 100)).toFixed(2)); });
-     document.getElementById('btnEdit').click();`);
-  lygu(M("DATA.metrics.filter(m=>m.demo).length"), 0);
+     document.getElementById('btnSave').click();`);
+  lygu(M("demoRodikliai().length"), 0);
   lygu(M("DATA.meta.demo"), false, "bendra žyma išvedama iš rodiklių");
   lygu(M("getComputedStyle(document.getElementById('demoBanner')).display"), "none");
 });
@@ -622,7 +624,7 @@ testas("Duomenų būsena", "Pasenę duomenys turi savo įspėjimą, net kai iliu
   paruosk();
   pasenkVisus(8);
   lygu(M("demoRodikliai().length"), 0, "iliustracinių neturi likti");
-  lygu(M("DATA.metrics.filter(arPasenes).length"), 15, "visi pasenę");
+  lygu(M("aktyvusRodikliai().filter(arPasenes).length"), 15, "visi pasenę");
   tiesa(M("getComputedStyle(document.getElementById('demoBanner')).display") !== "none",
         "juosta turi matytis ir be iliustracinių reikšmių");
   const t = M("document.getElementById('demoTekstas').textContent");
@@ -661,7 +663,7 @@ testas("Duomenų būsena", "Šviežiems duomenims jokio įspėjimo nėra", ()=>{
 testas("Duomenų būsena", "Nieko neįvedus prie pasenusių duomenų pasakoma, ką daryti", ()=>{
   paruosk();
   pasenkVisus(8);
-  M(`document.getElementById('btnEdit').click(); document.getElementById('btnEdit').click();`);
+  M(`document.getElementById('btnEdit').click(); document.getElementById('btnSave').click();`);
   const t = M('(function(){ const x = document.querySelectorAll(".gp-pranesimai .gp-pranesimas__tekstas"); return x.length ? x[x.length - 1].textContent : ""; })()');
   tiesa(t.indexOf("ankstesnio laikotarpio") >= 0 && t.indexOf("Išsaugoti") >= 0,
         "pranešimas turi paaiškinti veiksmą, gauta: " + t);
@@ -702,21 +704,21 @@ testas("Duomenų būsena", "Juosta įvardija tą mygtuką, kuris šiuo atveju pa
   const paslėptas = ()=> M("document.getElementById('btnOspJuosta').hidden");
   pasenkVisus(8);
   let t = tekstas();
-  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Redaguoti reikšmes") >= 0,
+  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Įvesti reikšmę") >= 0,
         "visi ankstesni - abu keliai, gauta: " + t.slice(-130));
   lygu(paslėptas(), false, "visi ankstesni - jungties mygtukas rodomas");
   pasenkDali("rankiniai", 8);
   t = tekstas();
-  tiesa(t.indexOf("Redaguoti reikšmes") >= 0 && t.indexOf("Atnaujinti iš šaltinių") < 0,
+  tiesa(t.indexOf("Įvesti reikšmę") >= 0 && t.indexOf("Atnaujinti iš šaltinių") < 0,
         "tik rankiniai - tik redagavimas, gauta: " + t.slice(-130));
   lygu(paslėptas(), true, "tik rankiniai - jungties mygtuko nėra, tad jo ir nesiūlom");
   lygu(M("DATA.metrics.filter(arPasenes).length"), 4, "rankinių rodiklių yra keturi");
   pasenkDali("auto", 8);
   t = tekstas();
-  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Redaguoti reikšmes") < 0,
+  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Įvesti reikšmę") < 0,
         "tik automatiniai - tik jungtis, gauta: " + t.slice(-130));
   lygu(paslėptas(), false, "tik automatiniai - jungties mygtukas rodomas");
-  lygu(M("DATA.metrics.filter(arPasenes).length"), 11, "automatinių rodiklių yra vienuolika");
+  lygu(M("aktyvusRodikliai().filter(arPasenes).length"), 11, "automatinių rodiklių yra vienuolika");
   paruosk();
 });
 
@@ -831,7 +833,7 @@ testas("Antraštė", "Data sako, kada duomenys išsaugoti, o ne „sugeneruota a
   M(`document.getElementById('btnEdit').click();
      document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
-     document.getElementById('btnEdit').click();`);
+     document.getElementById('btnSave').click();`);
   const po = M("document.getElementById('updatedWhen').textContent");
   tiesa(po.indexOf("Duomenys išsaugoti:") === 0, "po išsaugojimo, gauta: " + po);
   tiesa(/\d{2}:\d{2}/.test(po), "turi būti ir laikas, gauta: " + po);
@@ -851,12 +853,12 @@ testas("Antraštė", "Demonstracinių duomenų ženklas matomas prie skalės ir 
   M(`document.getElementById('btnEdit').click();
      document.querySelector('select[data-edit-per="sski"]').value = "naujas";
      document.querySelector('input[data-edit="sski"]').value = "130";
-     document.getElementById('btnEdit').click();`);
+     document.getElementById('btnSave').click();`);
   lygu(M("document.getElementById('demoZenklas').hidden"), false, "dalis dar demonstracinių");
   lygu(M("document.getElementById('demoZenklas').textContent"), "Dalis demonstracinių");
   M(`document.getElementById('btnEdit').click();
      document.querySelectorAll('input[data-edit]').forEach((i, n)=>{ i.value = String(+(metricById(i.dataset.edit).series.filter(x=>x!==null).pop() * (1 + n / 100)).toFixed(2)); });
-     document.getElementById('btnEdit').click();`);
+     document.getElementById('btnSave').click();`);
   lygu(M("document.getElementById('demoZenklas').hidden"), true, "atnaujinus visus ženklas turi dingti");
 });
 
@@ -899,20 +901,24 @@ testas("Skalė", "Skaičius ir spalva dera: „3 raudoni“, ne „3 raudona“"
   tiesa(/raudona\b|geltona\b/.test(d) === false, "liko moteriškoji vienaskaita: " + d);
 });
 
-testas("Įrankiai", "Pagrindinėje juostoje tik redagavimas ir spausdinimas", ()=>{
+testas("Įrankiai", "Pagrindinėje juostoje tik spausdinimas - rankinis įvedimas meniu", ()=>{
   paruosk();
   const r = M(`[...document.querySelectorAll(".toolbar > .btn-header")]
     .filter(b=>getComputedStyle(b).display !== "none").map(b=>b.textContent.trim())`);
-  lygu(r, ["Redaguoti reikšmes", "Spausdinti / PDF"]);
+  lygu(r, ["Spausdinti / PDF"]);
 });
 
-testas("Įrankiai", "Mygtukas sako, ką daro: redaguoti / išsaugoti", ()=>{
+testas("Įrankiai", "Rankinis įvedimas - meniu, juosta su Išsaugoti ir Atšaukti, antraštėje mygtuko nėra", ()=>{
   paruosk();
-  lygu(M("document.getElementById('btnEdit').textContent"), "Redaguoti reikšmes");
+  lygu(M("document.getElementById('btnEdit').textContent"), "Įvesti reikšmes ranka");
+  lygu(M("!!document.querySelector('.app-header .header-right > #btnEdit')"), false, "antraštėje nėra");
+  lygu(M("document.getElementById('btnEdit').closest('#duomenuMeniu') !== null"), true, "meniu");
+  lygu(M("document.getElementById('editBar').hidden"), true, "juosta paslėpta");
   M("document.getElementById('btnEdit').click()");
-  lygu(M("document.getElementById('btnEdit').textContent"), "Išsaugoti");
+  lygu(M("document.getElementById('editBar').hidden"), false, "juosta rodoma");
+  tiesa(M("document.getElementById('editBarT').textContent").indexOf("tušti laukai nekeičiami") >= 0, "juostos tekstas");
   M("document.getElementById('btnCancel').click()");
-  lygu(M("document.getElementById('btnEdit').textContent"), "Redaguoti reikšmes");
+  lygu(M("document.getElementById('editBar').hidden"), true, "atšaukus paslėpta");
 });
 
 testas("Įrankiai", "„Duomenys“ meniu užvertas, atsidaro ir užsiveria per Escape", ()=>{
@@ -922,7 +928,7 @@ testas("Įrankiai", "„Duomenys“ meniu užvertas, atsidaro ir užsiveria per 
   lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display") !== "none", true, "atidarius");
   lygu(M("document.getElementById('btnDuomenys').getAttribute('aria-expanded')"), "true");
   lygu(M(`[...document.querySelectorAll("#duomenuMeniu .meniu-el")].map(x=>x.textContent)`),
-       ["Atnaujinti duomenis iš šaltinių", "Atsarginė kopija (JSON)", "Atkurti iš kopijos", "Atstatyti pradinius duomenis"]);
+       ["Atnaujinti duomenis iš šaltinių", "Įvesti reikšmes ranka", "Atsarginė kopija (JSON)", "Atkurti iš kopijos", "Atstatyti pradinius duomenis"]);
   M(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`);
   lygu(M("getComputedStyle(document.getElementById('duomenuMeniu')).display"), "none", "po Escape");
 });
@@ -1150,7 +1156,7 @@ testas("Kalba", "Perjungus į EN pasikeičia sąsaja, pavadinimas ir html lang",
   lygu(M("document.documentElement.lang"), "en");
   lygu(M("document.title"), "Market indicators monitoring · G-Procure");
   lygu(M("document.querySelector('.gauge-cap').textContent"), "Market climate");
-  lygu(M("document.getElementById('btnEdit').textContent"), "Edit values");
+  lygu(M("document.getElementById('btnEdit').textContent"), "Enter values manually");
   lygu(M("document.getElementById('btnDuomenys').textContent"), "Data ▾");
   paruosk();
   lygu(M("document.querySelector('.gauge-cap').textContent"), "Rinkos klimatas", "grįžus į LT");
@@ -1679,12 +1685,12 @@ testas("Migracija", "v4 įrašas: reikšmės išlieka, laikotarpiai priskiriami"
   lygu(r.sskiLt, "2026-08-01", "mėnesinio rodiklio laikotarpis");
   lygu(r.brentLt, "2026-08-14", "savaitinio rodiklio laikotarpis");
   lygu(r.demo, false, "žyma „duomenys atnaujinti“ turi išlikti");
-  lygu(r.profiliu, 8, "profilių skaičius");
+  lygu(r.profiliu, 17, "profilių skaičius (8 LITGRID ir 9 kitų įmonių)");
   lygu(r.senasLiko, false, "senas įrašas turi būti pašalintas");
   paruosk();
 });
 
-testas("Migracija", "v3 įrašas su senomis kategorijomis pertvarkomas į aštuonis profilius", ()=>{
+testas("Migracija", "v3 įrašas su senomis kategorijomis pertvarkomas į dabartinius profilius", ()=>{
   paruosk();
   const r = M(`(function(){
     const senas = JSON.parse(JSON.stringify(DEFAULT_DATA));
@@ -1699,7 +1705,7 @@ testas("Migracija", "v3 įrašas su senomis kategorijomis pertvarkomas į aštuo
     return { profiliu: po.categories.length, pirmas: po.categories[0].id, demo: po.meta.demo,
              turiLaikotarpi: po.metrics.every(m=>!!m.laikotarpis) };
   })()`);
-  lygu(r.profiliu, 8);
+  lygu(r.profiliu, 17);
   lygu(r.pirmas, "pastociu_iranga");
   lygu(r.demo, true, "nekeisti duomenys lieka demonstraciniai");
   lygu(r.turiLaikotarpi, true);
@@ -1750,7 +1756,7 @@ testas("Tiekimo rizikos lygmuo pašalintas", "Hormūzo ir sankcijų nebėra nei 
     };
   })()`);
   lygu(r.grupes, ["A","B","C"], "grupės");
-  lygu(r.kiek, 15, "rodiklių");
+  lygu(r.kiek, 21, "rodiklių (15 LITGRID ir 6 kitų įmonių rinkų)");
   lygu(r.globalus, 8, "klimatas iš 8 A/B rodiklių");
   lygu(r.vda, 7, "VDA rodiklių");
   lygu(r.sekcijaC, 7, "sekcijoje #groupC - septynios VDA kortelės");
@@ -1766,7 +1772,7 @@ testas("Tiekimo rizikos lygmuo pašalintas", "Profilių svoriai be C: šeši pro
   paruosk();
   const r = M(`(function(){
     const grupes = {};
-    DATA.categories.forEach(c=>{ grupes[c.id] = Object.keys(c.weights).map(id=>metricById(id).group).sort().join(""); });
+    aktyvusProfiliai().forEach(c=>{ grupes[c.id] = Object.keys(c.weights).map(id=>metricById(id).group).sort().join(""); });
     return { grupes,
              projektavimas: Object.keys(DATA.categories.find(c=>c.id==="projektavimas").weights).sort(),
              programine: Object.keys(DATA.categories.find(c=>c.id==="programine").weights).sort() };
@@ -1836,7 +1842,7 @@ testas("Tiekimo rizikos lygmuo pašalintas", "Migracija v6 -> v7: C rodikliai i�
       balas: climateScore()
     };
   })()`);
-  lygu(r.kiek, 15, "rodiklių po migracijos");
+  lygu(r.kiek, 21, "rodiklių po migracijos");
   lygu(r.grupes, ["A","B","C"], "tiekimo rizikos rodiklių neturi likti, VDA - C");
   lygu(r.vda, 7, "VDA rodiklių po migracijos");
   lygu(r.schema, 7, "schema");
@@ -2030,7 +2036,7 @@ testas("Patikra 2026-10-27", "K2: pirma tikra reikšmė iliustraciniam rodikliui
     return { s: cu.series.filter(x => x !== null), pc: String(pctChange(cu)), lt: cu.laikotarpis, demo: cu.demo };
   })()`);
   lygu(r, { s: [9820], pc: "NaN", lt: "2026-06-01", demo: false }, "mėnesinė rinkos reikšmė");
-  M(`document.getElementById('btnEdit').click(); document.querySelector('select[data-edit-per="brent"]').value = "naujas"; document.querySelector('input[data-edit="brent"]').value = "86"; document.getElementById('btnEdit').click();`);
+  M(`document.getElementById('btnEdit').click(); document.querySelector('select[data-edit-per="brent"]').value = "naujas"; document.querySelector('input[data-edit="brent"]').value = "86"; document.getElementById('btnSave').click();`);
   lygu(M(`metricById("brent").series.filter(x => x !== null)`), [86], "rankinė reikšmė iliustraciniam rodikliui");
   lygu(M(`String(pctChange(metricById("brent")))`), "NaN");
   paruosk();
@@ -2244,7 +2250,7 @@ testas("Patikra 2026-10-27", "D7: reikšmės įvedimas - lietuviški ir anglišk
   paruosk();
   const ived = (id, v) => M(`(function(){ const b = document.getElementById("btnEdit"); if(!document.body.classList.contains("editing")) b.click();
     document.querySelector('select[data-edit-per="${id}"]').value = "dabartinis";
-    document.querySelector('input[data-edit="${id}"]').value = ${JSON.stringify(v)}; b.click();
+    document.querySelector('input[data-edit="${id}"]').value = ${JSON.stringify(v)}; document.getElementById("btnSave").click();
     const inp = document.querySelector('input[data-edit="${id}"]');
     return { editing: document.body.classList.contains("editing"), v: latest(metricById("${id}")), inv: inp ? inp.getAttribute("aria-invalid") : null,
              kl: inp ? document.getElementById("ek-${id}").textContent : "", fok: document.activeElement === inp, aria: inp ? inp.getAttribute("aria-label") : "" }; })()`);
@@ -2257,7 +2263,7 @@ testas("Patikra 2026-10-27", "D7: reikšmės įvedimas - lietuviški ir anglišk
   tiesa(r.editing && r.inv === "true" && r.kl.indexOf("labai skiriasi") > 0 && r.fok, "„9.820“ (9,82 prieš 10 050) - įspėjimas: " + r.kl);
   lygu(r.v, 10050, "dar neišsaugota");
   tiesa(r.aria.indexOf("LME varis") === 0, "lauko pavadinimas su rodikliu: " + r.aria);
-  r = M(`(function(){ document.getElementById("btnEdit").click(); return { editing: document.body.classList.contains("editing"), v: latest(metricById("lme_cu")) }; })()`);
+  r = M(`(function(){ document.getElementById("btnSave").click(); return { editing: document.body.classList.contains("editing"), v: latest(metricById("lme_cu")) }; })()`);
   lygu([r.editing, r.v], [false, 9.82], "antras paspaudimas - patvirtinta");
   ["-5", "0", "abc", "1e300"].forEach(x => {
     const q = ived("brent", x);
@@ -2561,7 +2567,8 @@ testas("Sprendimai 2026-10-28", "T5: VDA indeksų verdiktas - iš žinomų; visi
 
 testas("Sprendimai 2026-10-28", "T6: modulis visai EPSO-G grupei - LITGRID AB strateginiai projektai profilio aprašyme tik LITGRID kortelei; kituose tekstuose LITGRID nėra", async ()=>{
   paruosk();
-  const statyba = () => M(`(function(){ const i = DATA.categories.findIndex(c => c.id === "statyba"); return document.querySelectorAll("#gridCat .cat")[i].querySelector(".cat-spend").textContent; })()`);
+  const statyba = () => M(`(function(){ const i = aktyvusProfiliai().findIndex(c => c.id === "statyba"); return i < 0 ? "" : document.querySelectorAll("#gridCat .cat")[i].querySelector(".cat-spend").textContent; })()`);
+  const tinklelis = () => M(`document.getElementById("gridCat").textContent`);
   lygu(statyba(), "Didžioji CAPEX dalis · rangos darbai · strateginiai projektai", "be kortelės");
   const tekstas = M(`(function(){ const d = [...document.querySelectorAll("main, #gridCat, #aiText, footer")].map(x => x.textContent).join(" "); return d; })()`);
   tiesa(!/litgrid|harmony|litpol|gižai|rsvdc/i.test(tekstas), "puslapyje be kortelės LITGRID specifikos nėra: " + (tekstas.match(/.{60}(litgrid|harmony|litpol|gižai|rsvdc).{60}/i) || [""])[0]);
@@ -2572,10 +2579,11 @@ testas("Sprendimai 2026-10-28", "T6: modulis visai EPSO-G grupei - LITGRID AB st
       M("renderCategories()");
       const s = statyba();
       kitos[v] = s;
-      tiesa((s.indexOf("Harmony Link, LitPol Link, Gižai TS, RSVDC") > 0) === yra, v + ": " + s);
+      tiesa((tinklelis().indexOf("Harmony Link, LitPol Link, Gižai TS, RSVDC") >= 0) === yra, v + ": " + s);
       M('setLang("en"); renderCategories();');
       const en = statyba();
-      tiesa((en.indexOf("Harmony Link") > 0) === yra && en.indexOf("The bulk of CAPEX") === 0, v + " EN: " + en);
+      tiesa((tinklelis().indexOf("Harmony Link") >= 0) === yra, v + " EN: " + en);
+      if(yra) tiesa(en.indexOf("The bulk of CAPEX") === 0, v + " EN aprašas: " + en);
       M('setLang("lt"); renderCategories();');
     } finally { kortelesAtkurk(); }
   });
@@ -2606,6 +2614,324 @@ testas("Sprendimai 2026-10-28", "T6: modulis visai EPSO-G grupei - LITGRID AB st
    PALEIDIMAS
    ========================================================================= */
 // Testas gali grąžinti Promise (nuo 2026-10-27 - importas, atnaujinimas iš šaltinių, kortelės juosta): laukiama jo pabaigos.
+
+/* ===== Patobulinimai 2026-11-03: tvarka, rankinis įvedimas, automatinis atnaujinimas, mėnesinė istorija, kitos įmonės ===== */
+const P1103 = "Patobulinimai 2026-11-03";
+testas(P1103, "Tvarka: pirkimo apžvalga pirma, bendra rinkos situacija - atskira dalis; antraščių lygiai", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const bd = document.getElementById("bendraDalis"), f = document.getElementById("focusSec");
+    return { pirma: !!(f.compareDocumentPosition(document.querySelector(".klimatas")) & Node.DOCUMENT_POSITION_FOLLOWING), uz: !bd.contains(f),
+      viduje: ["#demoBanner",".klimatas","#editBar","#summarySec","#groupA","#groupB","#groupC","#catSec","#trigSec","#helpSec"].filter(x => !bd.contains(document.querySelector(x))),
+      h2: [...document.querySelectorAll(".wrap h2")].map(x => x.textContent.trim()),
+      h3: [...document.querySelectorAll(".sec-head h3")].length, tag: document.querySelector("#focusSec .tag").textContent,
+      nav: [...document.querySelectorAll(".secnav a")].map(a => a.getAttribute("href"))[0],
+      aukstis: f.querySelector("#focusName").getBoundingClientRect().top < document.querySelector(".klimatas").getBoundingClientRect().top };
+  })()`);
+  lygu([r.pirma, r.uz, r.viduje, r.aukstis], [true, true, [], true]);
+  lygu(r.h2, ["Pirkimo rinkos apžvalga", "Bendra rinkos situacija"]);
+  lygu([r.h3, r.tag, r.nav], [6, "Jūsų pirkimas", "#focusSec"]);
+});
+testas(P1103, "Rankinis įvedimas: „Įvesti reikšmę“ - tik rodikliams be šaltinio, tik jų eilutė; išsaugojus ir atšaukus fokusas grįžta", ()=>{
+  paruosk();
+  lygu(M(`[...document.querySelectorAll("[data-ivesti]")].map(b => b.dataset.ivesti)`), ["polymers","bdi","container","aircargo"]);
+  const eilutes = () => M(`[...document.querySelectorAll(".editrow")].filter(e => getComputedStyle(e).display !== "none").map(e => e.closest(".kpi").dataset.id)`);
+  lygu(eilutes(), [], "pradžioje paslėpta");
+  M(`document.querySelector('[data-ivesti="bdi"]').click()`);
+  lygu(eilutes(), ["bdi"], "tik vieno rodiklio eilutė");
+  tiesa(M(`document.getElementById("editBarT").textContent`).indexOf("Baltic Dry Index") >= 0, "juosta įvardija rodiklį");
+  lygu(M(`document.activeElement === document.querySelector('input[data-edit="bdi"]')`), true, "fokusas - laukas");
+  lygu(M(`getComputedStyle(document.querySelector('[data-ivesti="polymers"]')).display`), "none", "mygtukai įvedant paslėpti");
+  M(`document.querySelector('input[data-edit="bdi"]').value = "1700"; document.getElementById("btnSave").click()`);
+  lygu(M(`latest(metricById("bdi"))`), 1700);
+  lygu([M(`document.getElementById("editBar").hidden`), M(`document.body.className.indexOf("editing") >= 0`)], [true, false]);
+  lygu(M(`document.activeElement === document.querySelector('[data-ivesti="bdi"]')`), true, "fokusas grįžta į mygtuką");
+  M(`document.querySelector('[data-ivesti="aircargo"]').click(); document.querySelector('input[data-edit="aircargo"]').value = "9"; document.getElementById("btnCancel").click()`);
+  tiesa(M(`latest(metricById("aircargo"))`) !== 9, "atšaukus nekeičiama");
+  lygu(M(`document.activeElement === document.querySelector('[data-ivesti="aircargo"]')`), true, "atšaukus - fokusas į mygtuką");
+  // Visi rodikliai - iš meniu
+  M(`document.getElementById("btnEdit").click()`);
+  lygu(eilutes().length, 15, "meniu - visų eilutės");
+  M(`document.getElementById("btnCancel").click()`);
+  lygu(M(`document.activeElement === document.getElementById("btnDuomenys")`), true, "iš meniu - fokusas į meniu mygtuką");
+  // Vieno rodiklio įvedimas po visų įvedimo (būsena neužsilieka)
+  M(`document.querySelector('[data-ivesti="polymers"]').click()`);
+  lygu(eilutes(), ["polymers"]);
+  M(`document.getElementById("btnCancel").click()`);
+  paruosk();
+});
+testas(P1103, "Automatinis atnaujinimas: tik viršutiniame lange, senesnė nei 12 val. patikra; rėmelyje neklausiama", ()=>{
+  paruosk();
+  lygu(M("reikiaAutoAtnaujinti()"), false, "testų rėmelyje - niekada");
+  const dabar = "Date.now()";
+  M("delete DATA.meta.tikrinta");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "nebuvo tikrinta");
+  M("DATA.meta.tikrinta = new Date(Date.now() - 3600000).toISOString()");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), false, "prieš valandą");
+  M("DATA.meta.tikrinta = new Date(Date.now() - 13 * 3600000).toISOString()");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "prieš 13 val.");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", false)"), false, "ne viršutinis langas");
+  M("KPI_SKAITYMAS = { busena: 'sugadinta' }");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), false, "neperskaitoma saugykla - neklausiama");
+  M("KPI_SKAITYMAS = null; delete DATA.meta.tikrinta");
+});
+testas(P1103, "Automatinis atnaujinimas: be „Kreipiamasi“, pranešama tik kai reikšmės pasikeitė; klaida - juosta; įvedant ranka laukai nedingsta", async ()=>{
+  paruosk();
+  const toastai = () => M(`[...document.querySelectorAll(".gp-pranesimai .gp-pranesimas__tekstas")].map(x => x.textContent)`);
+  M(`window.__T3 = { osp: GP_OSP.atnaujink, rin: GP_RINKA.atnaujink };
+     GP_OSP.atnaujink = () => Promise.resolve({ ok: [], klaidos: [] });
+     GP_RINKA.atnaujink = () => Promise.resolve({ ok: [ { id:"lme_cu", laikotarpis:"2026-09-01", reiksme:9900, daznis:"mėn.", saltinis:"FRED", menesine:[{laikotarpis:"2026-06-01",reiksme:9000},{laikotarpis:"2026-09-01",reiksme:9900}] } ], klaidos: [] });
+     document.querySelectorAll(".gp-pranesimai > *").forEach(x => x.remove());
+     delete DATA.meta.tikrinta;`);
+  try {
+    M("atnaujinkIsOSP({ auto: true })");
+    await new Promise(r => setTimeout(r, 60));
+    let tt = toastai();
+    tiesa(!tt.some(x => x.indexOf("Kreipiamasi") >= 0), "be „Kreipiamasi“: " + tt.join(" | "));
+    tiesa(tt.some(x => x.indexOf("atnaujinti iš šaltinių") >= 0), "pakeitus - pranešama: " + tt.join(" | "));
+    tiesa(!!M("DATA.meta.tikrinta"), "patikros laikas įrašytas");
+    tiesa(!!JSON.parse(M("localStorage.getItem(STORE_KEY)")).meta.tikrinta, "ir išsaugotas");
+    // Tos pačios reikšmės: nieko nesakoma
+    M(`document.querySelectorAll(".gp-pranesimai > *").forEach(x => x.remove()); atnaujinkIsOSP({ auto: true })`);
+    await new Promise(r => setTimeout(r, 60));
+    lygu(toastai().filter(x => x.indexOf("atnaujinti") >= 0), [], "be pokyčių - tylu");
+    // Paprašius - sakoma, kad naujesnių nėra
+    M(`atnaujinkIsOSP()`);
+    await new Promise(r => setTimeout(r, 60));
+    tiesa(toastai().some(x => x.indexOf("Kreipiamasi") >= 0), "paprašius - sakoma");
+    // Įvedant ranka perpiešti negalima
+    M(`document.getElementById("btnEdit").click(); document.querySelector('input[data-edit="brent"]').value = "77"; atnaujinkIsOSP({ auto: true })`);
+    await new Promise(r => setTimeout(r, 60));
+    lygu(M(`document.querySelector('input[data-edit="brent"]').value`), "77", "įvestis lieka");
+    M(`document.getElementById("btnCancel").click()`);
+    // Klaida: juosta su priežastimi, patikros laikas nekeičiamas
+    M(`delete DATA.meta.tikrinta; GP_RINKA.atnaujink = () => Promise.resolve({ ok: [], klaidos: [ { id:"brent", priezastis:"HTTP 500" } ] }); atnaujinkIsOSP({ auto: true })`);
+    await new Promise(r => setTimeout(r, 60));
+    tiesa(!M("DATA.meta.tikrinta"), "nepavykus - bus bandoma kitą kartą");
+    tiesa(M("document.body.textContent").indexOf("HTTP 500") >= 0 || M("document.body.textContent").indexOf("500") >= 0, "juosta sako priežastį");
+  } finally {
+    M("GP_OSP.atnaujink = __T3.osp; GP_RINKA.atnaujink = __T3.rin; delete window.__T3; GP_BUSENA.juostaSlepk('osp');");
+    paruosk();
+  }
+});
+testas(P1103, "Mėnesinė istorija: eilutė pagal paskelbtus mėnesius, pokytis žinomas iškart, netinkamos reikšmės - nežinomos", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const m = metricById("lme_cu");
+    const men = []; for(let k = 23; k >= 0; k--){ const iso = slinktiLaikotarpi("2026-09-01", "mėn.", -k); if(iso !== "2026-02-01") men.push({ laikotarpis: iso, reiksme: iso === "2026-03-01" ? "9000" : iso === "2026-04-01" ? NaN : 100 + (23 - k) }); }
+    const rez = taikykRinka(m, { id:"lme_cu", laikotarpis:"2026-09-01", reiksme:500, daznis:"mėn.", saltinis:"FRED / IMF", saltinioUrl:"https://fred.stlouisfed.org/series/PCOPPUSDM", menesine: men });
+    return { rez, ilgis: m.series.length, paskutine: latest(m), baze: baseVal(m), demo: m.demo, per: m.laikotarpis, saltinis: m.srcAuto.name, vas: m.series[m.series.length - 8], kov: m.series[m.series.length - 7], bal: m.series[m.series.length - 6], pc: pctChange(m) };
+  })()`);
+  lygu([r.rez, r.ilgis, r.paskutine, r.demo, r.per, r.saltinis], ["atnaujinta", 13, 500, false, "2026-09-01", "FRED / IMF"]);
+  lygu(r.baze, 120, "prieš 3 mėn. - tikra reikšmė iš istorijos");
+  lygu(r.vas, null, "mėnuo be reikšmės - nežinoma, neišgalvota");
+  lygu(r.kov, null, "tekstas vietoj skaičiaus - nežinoma");
+  tiesa(r.bal === null, "ne skaičius - nežinoma: " + r.bal);
+  tiesa(r.pc > 300, "pokytis skaičiuojamas iškart: " + r.pc);
+  // Be istorijos - kaip iki tol (vienas taškas)
+  const b = M(`(function(){ const m = metricById("lme_al"); taikykRinka(m, { id:"lme_al", laikotarpis:"2026-09-01", reiksme:2500, daznis:"mėn." }); return { paskutine: latest(m), zinomas: pokytisZinomas(m) }; })()`);
+  lygu([b.paskutine, b.zinomas], [2500, false]);
+  paruosk();
+});
+testas(P1103, "Išsaugoti duomenys: iliustraciniai savaitiniai metalai - nauji mėnesiniai, tikri lieka; įmonė ir patikros laikas išlieka, 8 profilių įrašas tinka", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const senas = JSON.parse(JSON.stringify(DEFAULT_DATA)); senas.schemaVersion = SCHEMA_VERSION;
+    senas.categories = senas.categories.slice(0, 8);
+    const al = senas.metrics.find(m => m.id === "lme_al"); al.zingsnis = "sav."; al.series = [1,2,3,4,5,6,7,8,9,10,11,12]; al.demo = true;
+    const cu = senas.metrics.find(m => m.id === "lme_cu"); cu.zingsnis = "sav."; cu.series = [null,null,null,null,null,null,null,null,null,null,null,11000]; cu.demo = false; cu.laikotarpis = "2026-09-01";
+    senas.metrics = senas.metrics.filter(m => m.id !== "nikelis");
+    senas.meta.org = "amber-grid"; senas.meta.tikrinta = "2026-11-03T05:00:00.000Z";
+    const tinka = isValidData(senas);
+    const n = normalizuokDuomenis(senas).duomenys;
+    const blogas = JSON.parse(JSON.stringify(senas)); blogas.meta.org = "<img src=x>";
+    return { tinka, alIlgis: n.metrics.find(m => m.id === "lme_al").series.length, alPask: n.metrics.find(m => m.id === "lme_al").series.slice(-1)[0],
+      cu: n.metrics.find(m => m.id === "lme_cu").series.slice(-1)[0], nikelis: n.metrics.find(m => m.id === "nikelis").demo,
+      profiliu: n.categories.length, org: n.meta.org, tikr: n.meta.tikrinta, blogas: normalizuokDuomenis(blogas).duomenys.meta.org };
+  })()`);
+  lygu([r.tinka, r.alIlgis, r.alPask, r.cu, r.nikelis, r.profiliu, r.org, r.tikr, r.blogas], [true, 13, 2980, 11000, true, 17, "amber-grid", "2026-11-03T05:00:00.000Z", undefined]);
+});
+testas(P1103, "Kitos įmonės: profiliai, rodikliai ir pavadinimų priskyrimas pagal pasirinktą įmonę; LITGRID nepakito", ()=>{
+  paruosk();
+  const b = () => M(`({ org: aktyviOrg(), sel: document.getElementById("focusOrg").value, kat: [...document.querySelectorAll("#gridCat .cat")].length,
+    a: [...document.querySelectorAll("#gridA .kpi")].map(k => k.dataset.id), bb: [...document.querySelectorAll("#gridB .kpi")].map(k => k.dataset.id), c: document.querySelectorAll("#gridC .kpi").length,
+    tr: document.querySelectorAll("#trigBody tr").length, hint: document.getElementById("focusOrgHint").textContent, opt: [...document.getElementById("focusOrg").options].map(o => o.textContent) })`);
+  let x = b();
+  lygu([x.org, x.sel, x.kat, x.a, x.bb, x.c, x.tr], ["litgrid", "litgrid", 8, ["brent","wti","lme_al","lme_cu","polymers"], ["bdi","container","aircargo"], 7, 15]);
+  lygu(x.opt, ["LITGRID AB", "AB Amber Grid", "UAB Energy cells", "UAB EPSO-G"]);
+  tiesa(x.hint.indexOf("elektros perdavimo") >= 0, x.hint);
+  M(`keiskOrg("amber-grid")`);
+  x = b();
+  lygu([x.org, x.sel, x.kat, x.a, x.bb], ["amber-grid", "amber-grid", 10, ["brent","wti","lme_cu","polymers","dujos_eu","plienas","plieno_vamzdziai","gelezies_ruda","nikelis"], ["bdi","container","aircargo"]]);
+  tiesa(x.hint.indexOf("dujų perdavimo") >= 0, x.hint);
+  lygu(M(`JSON.parse(localStorage.getItem(STORE_KEY)).meta.org`), "amber-grid", "išsaugota");
+  lygu(M(`document.activeElement === document.getElementById("focusOrg")`), true, "fokusas lieka");
+  lygu(M(`globalMetrics().every(aktyvusRodiklis)`), true, "klimatas - tik aktyvūs");
+  M(`keiskOrg("energy-cells")`);
+  x = b();
+  lygu([x.kat, x.a.indexOf("nikelis") >= 0, x.a.indexOf("cinkas") >= 0, x.a.indexOf("plieno_vamzdziai") >= 0], [10, true, true, false]);
+  M(`keiskOrg("epso-g")`);
+  x = b();
+  lygu([x.kat, x.a, x.bb], [4, ["brent","lme_cu","polymers"], ["container","aircargo"]]);
+  const pr = (org, pav) => M(`(function(){ ORG_PASIRINKTA = ${JSON.stringify(org)}; return classifyProcurement(${JSON.stringify(pav)}); })()`);
+  [["amber-grid","Izoliuoti plieniniai vamzdžiai","duj_vamzdziai"],["amber-grid","Panevėžio DKS rekonstrukcija","duj_statyba"],["amber-grid","Suskystintos gamtinės dujos, jų atvežimo ir išdujinimo paslaugos","duj_technologines"],
+   ["amber-grid","Telemetrijos valdiklių programavimo paslaugos","duj_apskaita"],["amber-grid","Magistralinio dujotiekio vamzdynų inspektavimo paslaugos apskrendant","duj_eksploatacija"],["amber-grid","Kuro dujų įleidimo vožtuvai","duj_vamzdziai"],
+   ["amber-grid","Techninio projekto parengimo paslaugos","projektavimas"],["amber-grid","Privilegijuotos prieigos programinės įrangos licencijos","programine"],["amber-grid","Klientų pasitenkinimo tyrimo paslaugos","konsultacijos"],
+   ["energy-cells","Baterijų modulių pirkimas","kaup_baterijos"],["energy-cells","Naujų įvažiavimų įrengimo darbai","kaup_statyba"],["energy-cells","Patalpų valymo ir priežiūros paslaugos","administravimas"],["energy-cells","110 kV jungtuvo pirkimas","pastociu_iranga"],
+   ["epso-g","Vidaus audito paslaugų pirkimas","konsultacijos"],["epso-g","Atlassian licencijų nuomos pirkimas","programine"],["epso-g","Techninio projekto parengimas","konsultacijos"],["epso-g","110 kV jungtuvo pirkimas",""],
+   ["litgrid","110 kV jungtuvo pirkimas","pastociu_iranga"],["litgrid","Izoliuoti plieniniai vamzdžiai",""],["litgrid","Oro linijos rekonstrukcijos darbai","statyba"],["litgrid","Vidaus audito paslaugų pirkimas",""]
+  ].forEach(([o, pav, laukta]) => lygu(pr(o, pav), laukta, o + ": " + pav));
+  paruosk();
+});
+testas(P1103, "Pakeitus įmonę įvestas pirkimas įvertinamas iš naujo; rankinis profilis lieka, jei yra; kortelės įmonė tampa pasirinkta", async ()=>{
+  paruosk();
+  M(`document.getElementById("focusName").value = "Izoliuoti plieniniai vamzdžiai"; runFocus()`);
+  tiesa(M(`document.getElementById("focusResult").textContent`).indexOf("neatitiko") >= 0, "LITGRID rinkose neatpažinta");
+  lygu(M(`document.querySelectorAll("#focusCatSel option").length`), 9, "pasirinkimas - tik LITGRID profiliai");
+  M(`keiskOrg("epso-g")`);
+  lygu(M(`document.querySelectorAll("#focusCatSel option").length`), 5, "pasirinkimas - tik EPSO-G profiliai");
+  M(`keiskOrg("amber-grid")`);
+  lygu(M(`FOCUS.last && FOCUS.last.catId`), "duj_vamzdziai");
+  tiesa(M(`document.getElementById("focusResult").textContent`).indexOf("Plieno vamzdžių") >= 0, "rodiklis apžvalgoje");
+  M(`changeFocusCat("programine")`);
+  M(`keiskOrg("energy-cells")`);
+  lygu(M(`FOCUS.last.catId`), "programine", "rankinis profilis yra ir ten");
+  lygu([M(`FOCUS.catRanka`), M(`document.getElementById("focusResult").textContent.indexOf("neatitiko") >= 0`)], [true, false], "ir lieka rezultate");
+  M(`changeFocusCat("kaup_statyba"); keiskOrg("epso-g")`);
+  lygu(M(`document.getElementById("focusResult").textContent.indexOf("neatitiko") >= 0`), true, "rankinio profilio nėra - iš naujo");
+  // Tikra kortelės juosta
+  paruosk();
+  const juosta = await M(`(async function(){
+    const saug = (function(){ const d = {}; return { get length(){ return Object.keys(d).length; }, key: i => Object.keys(d)[i] || null,
+      getItem: k => Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null, setItem: (k, v) => { d[k] = String(v); }, removeItem: k => { delete d[k]; } }; })();
+    GP_KORTELE.naudokSaugykla(saug);
+    try {
+      const k = GP_KORTELE.issaugok({ pavadinimas: "Dujotiekio rekonstrukcija", objektas: "darbai", vykdytojas: "amber-grid" }).kortele;
+      KORTELE.atnaujink();
+      await KORTELE.pasirink(k.id);
+      await new Promise(r => setTimeout(r, 50));
+      const su = { org: aktyviOrg(), sel: document.getElementById("focusOrg").value, kat: document.querySelectorAll("#gridCat .cat").length };
+      KORTELE.atsiek();
+      await new Promise(r => setTimeout(r, 50));
+      return { su, be: { org: aktyviOrg(), sel: document.getElementById("focusOrg").value, kat: document.querySelectorAll("#gridCat .cat").length } };
+    } finally { GP_KORTELE.naudokSaugykla(null); }
+  })()`);
+  lygu(juosta.su, { org: "amber-grid", sel: "amber-grid", kat: 10 });
+  lygu(juosta.be, { org: "litgrid", sel: "litgrid", kat: 8 });
+  // Žmogaus anksčiau pasirinkta įmonė: kortelė ją pakeičia, atsiejus - grąžinama
+  paruosk();
+  M(`keiskOrg("epso-g")`);
+  const j2 = await M(`(async function(){
+    const saug = (function(){ const d = {}; return { get length(){ return Object.keys(d).length; }, key: i => Object.keys(d)[i] || null,
+      getItem: k => Object.prototype.hasOwnProperty.call(d, k) ? d[k] : null, setItem: (k, v) => { d[k] = String(v); }, removeItem: k => { delete d[k]; } }; })();
+    GP_KORTELE.naudokSaugykla(saug);
+    try {
+      const k = GP_KORTELE.issaugok({ pavadinimas: "Baterijų moduliai", objektas: "prekes", vykdytojas: "energy-cells" }).kortele;
+      KORTELE.atnaujink();
+      await KORTELE.pasirink(k.id);
+      await new Promise(r => setTimeout(r, 50));
+      const su = aktyviOrg();
+      KORTELE.atsiek();
+      await new Promise(r => setTimeout(r, 50));
+      return [su, aktyviOrg()];
+    } finally { GP_KORTELE.naudokSaugykla(null); }
+  })()`);
+  lygu(j2, ["energy-cells", "epso-g"]);
+  paruosk();
+});
+testas(P1103, "Santrauka remiasi tik pasirinktos įmonės rodikliais: EPSO-G nerodomas jūros frachto signalas", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const dek = (id, a, b) => { const m = metricById(id); m.series = m.series.map(() => a); m.series[m.series.length - 1] = b; m.demo = false; };
+    dek("brent", 50, 90); dek("bdi", 1000, 3000); dek("container", 100, 100);
+    renderAll();
+    const lit = document.getElementById("aiText").textContent.indexOf("Energija ir logistika") >= 0;
+    ORG_PASIRINKTA = "epso-g"; renderAll();
+    return { lit, epso: document.getElementById("aiText").textContent.indexOf("Energija ir logistika") >= 0 };
+  })()`);
+  lygu(r, { lit: true, epso: false });
+  paruosk();
+});
+testas(P1103, "Nauji profiliai ir rodikliai pilni: veiksmai, kodėl, EN, svoriai, raktažodžiai, indeksavimas, serverio serijos", async ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const blogi = [];
+    const ids = new Set(); Object.keys(PROFILIU_RINKINIAI).forEach(o => PROFILIU_RINKINIAI[o].forEach(id => ids.add(id)));
+    ids.forEach(id => {
+      const c = DATA.categories.find(x => x.id === id);
+      if(!c){ blogi.push("nėra profilio " + id); return; }
+      const suma = Object.keys(c.weights).reduce((a, k) => a + c.weights[k], 0);
+      if(Math.abs(suma - 1) > 0.011) blogi.push(id + " svoriai " + suma);
+      Object.keys(c.weights).forEach(k => { if(!metricById(k)) blogi.push(id + " be rodiklio " + k); });
+      if(!CAT_KEYWORDS[id] || !CAT_KEYWORDS[id].length) blogi.push(id + " be raktažodžių");
+      if(!PROFILIO_YPATUMAI[id]) blogi.push(id + " be indeksavimo");
+      const en = DUOMENU_EN.categories[id];
+      if(!en || !en.name || !en.spend) blogi.push(id + " be EN");
+      ["green","yellow","red"].forEach(sk => {
+        const n = c.act[sk].length;
+        if(!n) blogi.push(id + " be veiksmų " + sk);
+        if(!en || !en.act || en.act[sk].length !== n) blogi.push(id + " EN veiksmų " + sk);
+        ["lt","en"].forEach(l => { const z = VEIKSMU_KODEL[l][id]; if(!z || !z[sk] || z[sk].length !== n || !z[sk].every(x => x && x.length > 20)) blogi.push(id + " kodėl " + l + " " + sk); });
+      });
+      ["darbai","prekes","paslaugos"].forEach(ru => { const mod = indeksavimoModelis(id, ru); if(!mod || !mod.kandidatai.length) blogi.push(id + " be kandidatų " + ru); });
+    });
+    DATA.metrics.filter(m => m.group !== "C").forEach(m => {
+      const en = DUOMENU_EN.metrics[m.id];
+      if(!en || !en.name || !en.unit || !en.plain || !en.impact || !en.act) blogi.push(m.id + " be EN");
+      if(m.series.length !== MAX_TASKU[m.zingsnis] && m.series.length !== 12) blogi.push(m.id + " eilutė " + m.series.length);
+      if(!aktyvusVienam(m.id)) blogi.push(m.id + " nenaudojamas jokiame profilyje");
+    });
+    function aktyvusVienam(id){ return DATA.categories.some(c => c.weights[id] != null); }
+    return { blogi, rodikliai: Object.keys(GP_RINKA.RODIKLIAI), nuorodos: Object.keys(GP_RINKA.SERIJU_NUORODOS) };
+  })()`);
+  lygu(r.blogi, []);
+  lygu(r.rodikliai, r.nuorodos, "kiekvienam rodikliui - nuoroda");
+  const be = await (await fetch("backend-rinka-routes.js")).text();
+  r.rodikliai.forEach(id => tiesa(new RegExp("\\b" + id + ":\\s*\\{ serija").test(be), "serveryje nėra serijos " + id));
+});
+testas(P1103, "Kiekvienas naujas profilis: apžvalga sudaroma LT ir EN, be lietuviško teksto angliškai, sąlygoje - to profilio indeksai, veiksmai įrašomi", ()=>{
+  const w = paruosk();
+  const r = M(`(function(){
+    const o = [];
+    visi: for(const org of ["amber-grid","energy-cells","epso-g"]){
+      ORG_PASIRINKTA = org; renderAll();
+      for(const id of PROFILIU_RINKINIAI[org]){
+        DATA.metrics.forEach(m => { m.demo = false; });
+        FOCUS.rusis = "prekes"; FOCUS.name = "Bandomasis pirkimas"; FOCUS.catRanka = true;
+        renderFocusCard("Bandomasis pirkimas", id);
+        const t0 = document.getElementById("focusResult").textContent;
+        if(t0.length < 300) o.push(id + " trumpas rezultatas");
+        if(/undefined|\\[object|NaN/.test(t0)) o.push(id + " blogas tekstas: " + (t0.match(/.{40}(undefined|\\[object|NaN).{20}/) || [""])[0]);
+      }
+    }
+    return o;
+  })()`);
+  lygu(r, []);
+  const sal = M(`(function(){ ORG_PASIRINKTA = "amber-grid"; renderAll(); FOCUS.rusis = "prekes"; renderFocusCard("Vamzdžiai", "duj_vamzdziai"); return document.getElementById("focusResult").textContent; })()`);
+  tiesa(sal.indexOf("Plieno vamzdžių kainų indeksas") >= 0 && sal.indexOf("LME varis") < 0, "vamzdžių sąlyga - plienas, ne varis");
+  const baterijos = M(`(function(){ ORG_PASIRINKTA = "energy-cells"; renderAll(); FOCUS.rusis = "prekes"; renderFocusCard("Baterijos", "kaup_baterijos"); return document.getElementById("focusResult").textContent; })()`);
+  tiesa(baterijos.indexOf("Nikelis") >= 0 && baterijos.indexOf("ličio") >= 0, "baterijos - nikelis ir pastaba apie litį");
+  M(`setLang("en"); document.getElementById("focusStatus").textContent = ""; ORG_PASIRINKTA = "amber-grid"; renderAll(); FOCUS.rusis = "darbai"; renderFocusCard("Pipeline", "duj_statyba");`);
+  lygu(ltLikutis(w, ["Bandomasis", "Vamzdžiai", "Baterijos"]), [], "Amber Grid EN");
+  M(`ORG_PASIRINKTA = "energy-cells"; renderAll(); FOCUS.rusis = "prekes"; renderFocusCard("Battery", "kaup_baterijos");`);
+  lygu(ltLikutis(w, ["Bandomasis", "Vamzdžiai", "Baterijos"]), [], "Energy cells EN");
+  M(`ORG_PASIRINKTA = "epso-g"; renderAll(); FOCUS.rusis = "paslaugos"; renderFocusCard("Audit", "konsultacijos");`);
+  lygu(ltLikutis(w, ["Bandomasis", "Vamzdžiai", "Baterijos"]), [], "EPSO-G EN");
+  M(`setLang("lt"); ORG_PASIRINKTA = null;`);
+  paruosk();
+});
+testas(P1103, "Šaltiniai: mygtuko „Redaguoti reikšmes“ tekstuose nebėra; LITGRID specifika - tik pasirinkus LITGRID", ()=>{
+  paruosk();
+  tiesa(M("document.querySelector('.wrap').textContent + document.querySelector('.app-header').textContent").indexOf("Redaguoti reikšmes") < 0, "LT");
+  lygu(M(`Object.keys(I18N.lt).filter(k => /Redaguoti reikšmes/.test(I18N.lt[k]))`), []);
+  lygu(M(`Object.keys(I18N.en).filter(k => /Edit values/.test(I18N.en[k]))`), []);
+  lygu(M(`zinomaOrg()`), null);
+  M(`keiskOrg("litgrid")`);
+  tiesa(M(`document.getElementById("gridCat").textContent`).indexOf("Harmony Link") >= 0, "pasirinkus LITGRID - strateginiai projektai");
+  paruosk();
+  tiesa(M(`document.getElementById("gridCat").textContent`).indexOf("Harmony Link") < 0, "nepasirinkus - nėra");
+});
+
 async function paleisk(){
   const host = document.getElementById("rezultatai");
   const grupes = [];

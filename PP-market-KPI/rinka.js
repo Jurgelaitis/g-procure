@@ -13,15 +13,15 @@
  * rodiklio žingsnį ir slenkantį langą.
  *
  * DAŽNIS - NE MŪSŲ PASIRINKIMAS. Brent ir WTI skelbiami kasdien, tad savaitinę
- * seriją atkuriam pilnai. Aliuminio ir vario NEMOKAMAI skelbiamos tik mėnesinės
- * kainos (LME dienos kainos mokamos), todėl jiems grąžinam vieną naujausią tašką
- * ir pažymim `daznis:"mėn."` - modulis tada neapsimeta turįs savaitinę istoriją.
+ * seriją atkuriam pilnai. Metalų, plieno ir dujų NEMOKAMAI skelbiamos tik mėnesinės
+ * kainos (LME dienos kainos mokamos), todėl jie mėnesiniai: `daznis:"mėn."` ir
+ * `menesine` - 24 mėn. istorija; modulis iš jos atkuria mėnesinę eilutę.
  * ==========================================================================*/
 ;(function (global) {
   "use strict";
 
   var BAZE = "https://api.g-procure.com/api/rinka";
-  var RODIKLIAI = { brent: 1, wti: 1, lme_al: 1, lme_cu: 1 };
+  var RODIKLIAI = { brent: 1, wti: 1, lme_al: 1, lme_cu: 1, dujos_eu: 1, plienas: 1, plieno_vamzdziai: 1, gelezies_ruda: 1, nikelis: 1, cinkas: 1 };
 
   /* TIK NUORODAI kortelėje, kad naudotojas galėtų pats pasitikrinti reikšmę prie šaltinio.
      Autoritetinga serijų lentelė (pagal kurią klausiama FRED) gyvena `backend-rinka-routes.js` -
@@ -32,7 +32,13 @@
     brent:  "https://fred.stlouisfed.org/series/DCOILBRENTEU",
     wti:    "https://fred.stlouisfed.org/series/DCOILWTICO",
     lme_al: "https://fred.stlouisfed.org/series/PALUMUSDM",
-    lme_cu: "https://fred.stlouisfed.org/series/PCOPPUSDM"
+    lme_cu: "https://fred.stlouisfed.org/series/PCOPPUSDM",
+    dujos_eu: "https://fred.stlouisfed.org/series/PNGASEUUSDM",
+    plienas: "https://fred.stlouisfed.org/series/WPU1017",
+    plieno_vamzdziai: "https://fred.stlouisfed.org/series/WPU101706",
+    gelezies_ruda: "https://fred.stlouisfed.org/series/PIORECRUSDM",
+    nikelis: "https://fred.stlouisfed.org/series/PNICKUSDM",
+    cinkas: "https://fred.stlouisfed.org/series/PZINCUSDM"
   };
 
   /* Is kasdienes serijos atrenka reiksmes rodiklio SAVAITINIAM tinkleliui: kiekvienam
