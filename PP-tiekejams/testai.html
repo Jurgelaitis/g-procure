@@ -54,7 +54,8 @@ async function testas(pav, fn, pastaba) {
   document.getElementById("n-ok").textContent = R.ok; document.getElementById("n-blogai").textContent = R.blogai;
 }
 function tiesa(c, m) { if (!c) throw new Error(m || "tikėtasi true"); }
-function lygu(a, b, m) { const sa = JSON.stringify(a), sb = JSON.stringify(b); if (sa !== sb) throw new Error((m || "") + "\n  tikėtasi: " + sb + "\n  gauta:    " + sa); }
+// DOM elementai - pagal tapatybę: JSON.stringify bet kurį elementą paverčia „{}“, todėl fokuso patikros niekada nekristų
+function lygu(a, b, m) { if ((a && a.nodeType) || (b && b.nodeType)) { if (a !== b) throw new Error((m || "") + "\n  tikėtasi elemento: " + ((b && (b.id || b.tagName)) || b) + "\n  gauta: " + ((a && (a.id || a.tagName)) || a)); return; } const sa = JSON.stringify(a), sb = JSON.stringify(b); if (sa !== sb) throw new Error((m || "") + "\n  tikėtasi: " + sb + "\n  gauta:    " + sa); }
 function turi(s, frag, m) { if (String(s).indexOf(frag) === -1) throw new Error((m || "") + " neturi \"" + frag + "\"\n  gauta: " + String(s).slice(0, 300)); }
 function neturi(s, frag, m) { if (String(s).indexOf(frag) !== -1) throw new Error((m || "") + " NETURĖTŲ turėti \"" + frag + "\""); }
 
@@ -1649,7 +1650,7 @@ async function paleisk() {
     tiesa(!D.getElementById("askBtn").disabled, "po atsakymo aktyvus");
   });
   await testas("Tuščias klausimas ir nenurodytas pirkimas: pasakoma ko trūksta, siūlomi veiksmai; pasirinkus siūlomą - pastaba dingsta", async () => {
-    await isvalyk();
+    await isvalyk(); W.setView("pirkimas");   // mygtukas matomas tik šiame vaizde; paslėptame fokusas neįmanomas
     D.getElementById("askBtn").click();
     turi(askNote().textContent, "Įrašykite klausimą"); lygu(D.activeElement, askInput(), "fokusas į lauką");
     D.querySelector("#askChips .chip").click();
@@ -2145,6 +2146,309 @@ async function paleisk() {
       W.fb(pora.children[1], 0);
       lygu(gauta.map(x => [/Ačiū/.test(x[0]), /įskaitėme/.test(x[0]), /nepavyko/.test(x[0]), x[1]]), [[true, false, true, "ispejimas"], [true, true, false, ""]], "pranešimai: " + JSON.stringify(gauta));
     } finally { W.GP_PRANESIMAS.rodyk = rodyk; pora.remove(); }
+  });
+
+  /* ---- Klausimai pagal konkretų pirkimą (klausimai.js, 2026-11-03) ---- */
+  const kd = (id, name, rusis, tekstai) => ({ id, name, rusis, parseStatus: "parsed", chunks: tekstai.map((text, i) => ({ id: id + "#" + i, docId: id, loc: { paragraph: i + 1 }, text })) });
+  const KL = (docs, meta, kalba, dabar) => W.GP_KLAUSIMAI.siulyk({ docs, meta: meta || {}, kalba: kalba || "lt", dabar: dabar || new Date(2026, 5, 1) });
+  const kq = (r, id) => (r.klausimai.filter(x => x.id === id)[0] || {}).q;
+  const kids = r => r.klausimai.map(x => x.id);
+  const fids = r => r.faktai.map(x => x.id);
+  const SPS = (...t) => kd("D1", "Specialiosios pirkimo sąlygos.docx", "SPS", t);
+  const SUT = (...t) => kd("D2", "4 priedas Specialiosios sutarties sąlygos.docx", "Sutartis", t);
+
+  await testas("Klausimai: pasiūlymo užtikrinimas - sprendimo sakinys, ne žodžio buvimas (faktas, suma, sąlyginis, atsakymų raštas, nežinoma)", async () => {
+    let r = KL([SPS("9.1. Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo.")]);
+    lygu(fids(r), ["uztikrinimas"]); tiesa(kids(r).indexOf("uztikrinimas") < 0, "į ką atsakyta - neklausiama");
+    lygu(r.faktai[0].atsakymas, "Ne."); turi(r.faktai[0].kodel.citata, "nereikalaujama pateikti"); lygu(r.faktai[0].kodel.docId, "D1"); lygu(r.faktai[0].fragmentai, ["D1#0"]);
+    r = KL([SPS("7.1. Tiekėjas privalo pateikti Pasiūlymo galiojimo užtikrinimą, kurio suma 25 000 Eur.")]);
+    lygu(fids(r), []); lygu(kq(r, "uztikrinimas"), "Kaip ir kada pateikti 25 000 Eur pasiūlymo galiojimo užtikrinimą?");
+    r = KL([SPS("7.1. Tiekėjas turi pateikti Pasiūlymo galiojimo užtikrinimą kartu su pasiūlymu.")]);
+    turi(kq(r, "uztikrinimas"), "Kokio dydžio");
+    // Sąlyginis sakinys - ne šio pirkimo sprendimas
+    r = KL([SPS("Jei taikoma, nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo.")]);
+    lygu(fids(r), [], "sąlyginis - ne faktas");
+    // Atsakymų raštas apie tą temą gali sąlygą pakeisti - faktas virsta neutraliu klausimu
+    r = KL([SPS("Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo."), kd("D9", "3_Atsakymai į klausimus.pdf", "Paaiškinimas", ["Atsakome: pasiūlymo galiojimo užtikrinimas taikomas."])]);
+    lygu(fids(r), []); lygu(kq(r, "uztikrinimas"), "Ar šiame pirkime reikia pasiūlymo galiojimo užtikrinimo?");
+    // Ir „nereikalaujama“, ir „privalo pateikti“ - ne faktas: klausiama, kiek ir kaip
+    r = KL([SPS("Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo.", "Tiekėjas privalo pateikti Pasiūlymo galiojimo užtikrinimą, kurio suma 25 000 Eur.")]);
+    lygu(fids(r), [], "abu sakiniai - ne faktas"); turi(kq(r, "uztikrinimas"), "25 000 Eur");
+    // SPS priedas (rūšis ta pati, pavadinimas - priedas) sprendimo nesako
+    r = KL([SPS("Bendra."), kd("D6", "SPS 9 priedas Sutarties įvykdymo tvarka.docx", "SPS", ["Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo."])]);
+    lygu(fids(r), [], "SPS priedas - ne sprendimo šaltinis");
+    // Tik antraštė - nežinoma: klausimas be prielaidų
+    r = KL([kd("D3", "AK sąlygos.docx", "Kita", ["8. PASIŪLYMŲ GALIOJIMO UŽTIKRINIMAS"])]);
+    lygu(kq(r, "uztikrinimas"), "Ar šiame pirkime reikia pasiūlymo galiojimo užtikrinimo?"); lygu(fids(r), []);
+    // Bendrosios sąlygos („jei jo buvo reikalaujama“) sprendimo nesako
+    r = KL([kd("D4", "Bendrosios pirkimo sąlygos.docx", "BPS", ["Tiekėjas privalo pateikti Pasiūlymo galiojimo užtikrinimą, kurio suma 5 Eur."])]);
+    tiesa(kids(r).indexOf("uztikrinimas") < 0, "BPS - ne sprendimo šaltinis");
+    // Be sąlygų - klausimo nėra
+    r = KL([kd("D5", "Skelbimas.pdf", "Skelbimas", ["Pasiūlymo galiojimo užtikrinimas nereikalaujamas."])]);
+    lygu(r.faktai.length, 0);
+  });
+  await testas("Klausimai: kvalifikacija - netikrinama (faktas ir pašalinimo pagrindai), konkretūs reikalavimai sąlygų žodžiais, patirtis su metais", async () => {
+    let r = KL([SPS("3.1. Tiekėjų kvalifikacija nėra tikrinama šiame Pirkime. Tiekėjų pašalinimo pagrindų nebuvimas yra tikrinamas.")]);
+    lygu(fids(r), ["kvalifikacija"]); turi(r.faktai[0].kodel.citata, "kvalifikacija nėra tikrinama"); turi(kq(r, "pasalinimas"), "pašalinimo pagrindai");
+    tiesa(!kids(r).some(x => /reikalavimas|patirtis|teises|specialistai/.test(x)), "reikalavimų klausimų nėra");
+    r = KL([SPS("1. Tiekėjas turi turėti bent 1 (vieną) ypatingojo statinio projekto vadovą, kuris laimėjimo atveju vykdys sutartį.", "2. Tiekėjas turi turėti teisę verstis pavojingųjų atliekų surinkimo ir vežimo veikla ir turi būti įregistruotas.",
+      "3. Tiekėjas per paskutinius 5* metus iki pasiūlymų pateikimo termino pabaigos pagal vieną ar daugiau sutarčių yra savo jėgomis atlikęs darbus.")]);
+    lygu(r.klausimai.filter(x => /^reikalavimas/.test(x.id)).map(x => x.q), ["Kaip įrodyti reikalavimą turėti ypatingojo statinio projekto vadovą?", "Kaip įrodyti reikalavimą turėti teisę verstis pavojingųjų atliekų surinkimo ir vežimo veikla?"]);
+    turi(kq(r, "patirtis"), "per paskutinius 5 m."); lygu(fids(r), []);
+    // „teisę atlikti šiuos ...“ - sakinys nebaigtas, klausiama bendrai; ir ne daugiau kaip du reikalavimai
+    r = KL([SPS("Tiekėjas turi turėti teisę atlikti šiuos (Energetikos įstatymo 22 str.): skirstyklų darbus.", "Tiekėjas turi turėti A specialistą, kuris dirba.", "Tiekėjas turi turėti B specialistą, kuris dirba.", "Tiekėjas turi turėti C specialistą, kuris dirba.")]);
+    tiesa(kids(r).indexOf("teises") >= 0); lygu(r.klausimai.filter(x => /^reikalavimas/.test(x.id)).length, 2);
+    tiesa(!kids(KL([SPS("Jei tiekėjas per paskutinius 3 metus įvykdė sutartį, jis gali.")])).some(x => x === "patirtis"), "sąlyginis - ne reikalavimas");
+    r = KL([SPS("Tiekėjas turi turėti X specialistą.", "Specialistai nurodomi formoje."), kd("D7", "SPS 9 priedas Specialistų sąrašo forma.docx", "Forma", ["Specialistų sąrašas"])]);
+    tiesa(kids(r).indexOf("specialistai") < 0, "kai reikalavimai įvardyti - forma nekartojama");
+    tiesa(kids(KL([SPS("Bendra."), kd("D7", "SPS 9 priedas Specialistų sąrašo forma.docx", "Forma", ["Specialistų sąrašas"])])).indexOf("specialistai") >= 0);
+    tiesa(kids(KL([SPS("Kvalifikacija nėra tikrinama."), kd("D7", "SPS 9 priedas Specialistų sąrašo forma.docx", "Forma", ["Specialistų sąrašas"])])).indexOf("specialistai") < 0, "kvalifikacija netikrinama - apie specialistus neklausiama");
+  });
+  await testas("Klausimai: derybos ir ką teikti - pagal sąlygų sakinį; skelbimo „Dalyvavimo prašymų“ laukas nieko nelemia", async () => {
+    let r = KL([SPS("1.5. Šio Pirkimo metu bus vykdomos Derybos, daugiau informacijos BPS 13 skyriuje.", "Tiekėjai privalo pateikti Paraišką su priedais (SPS 1 priedas).")], { deadline: { value: "01/10/2026 13:00", rusis: "paraiskos" } });
+    tiesa(kids(r).indexOf("derybos") >= 0); lygu(fids(r), []); lygu(kq(r, "dokumentai"), "Kokius dokumentus turiu pateikti su paraiška?"); tiesa(kids(r).indexOf("etapai") >= 0);
+    r = KL([SPS("Šio Pirkimo metu Derybos nebus vykdomos.", "Tiekėjai privalo pateikti Pasiūlymą (SPS 1 priedas).")], { deadline: { value: "01/10/2026 13:00", rusis: "paraiskos" } });
+    lygu(fids(r), ["derybos"]); lygu(kq(r, "dokumentai"), "Kokius dokumentus turiu pateikti su pasiūlymu?"); tiesa(kids(r).indexOf("etapai") < 0, "be paraiškų etapo, nors skelbimo laukas - dalyvavimo prašymai");
+    r = KL([SPS("Šio Pirkimo metu bus vykdomos Derybos.", "Tiekėjai privalo pateikti Pirminį pasiūlymą su priedais.")]);
+    lygu(kq(r, "dokumentai"), "Kokius dokumentus turiu pateikti su pirminiu pasiūlymu?");
+    // Sakinio nėra (dviejų stulpelių PDF): sprendžia žodžių kiekis
+    const daug = (z, n) => Array(n).fill(z).join(" ");
+    r = KL([SPS("Tiekėjai privalo pateikti", daug("Pirminių pasiūlymų pateikimo terminas.", 12))]);
+    lygu(kq(r, "dokumentai"), "Kokius dokumentus turiu pateikti su pirminiu pasiūlymu?");
+    r = KL([SPS("Tiekėjai privalo pateikti", daug("Paraiškų pateikimo terminas.", 12))]);
+    lygu(kq(r, "dokumentai"), "Kokius dokumentus turiu pateikti su paraiška?");
+    r = KL([SPS("Tiekėjas turi pateikti dokumentus.")]);
+    lygu(kq(r, "dokumentai"), "Kokius dokumentus turiu pateikti su pasiūlymu?");
+    // Be sakinio „privalo pateikti“ paraiškų etapą rodo formos pavadinimas - bet ne bet koks žodis „paraiška“ jame
+    const DOK = "Tiekėjas turi pateikti dokumentus.";
+    lygu(kq(KL([SPS(DOK), kd("D8", "2 priedas Paraiškos forma.docx", "Forma", ["Forma"])]), "dokumentai"), "Kokius dokumentus turiu pateikti su paraiška?");
+    lygu(kq(KL([SPS(DOK), kd("D8", "2 priedas Application form.docx", "Forma", ["Forma"])]), "dokumentai"), "Kokius dokumentus turiu pateikti su paraiška?");
+    lygu(kq(KL([SPS(DOK), kd("D8", "1 priedas Pasiūlymo forma (be paraiškų).docx", "Forma", ["Forma"])]), "dokumentai"), "Kokius dokumentus turiu pateikti su pasiūlymu?");
+    // „be paraiškų“ formos pavadinime - ne paraiškos forma
+    r = KL([SPS("Tiekėjai privalo pateikti Pirminį pasiūlymą."), kd("D8", "1 priedas Pirminio pasiūlymo forma (be paraiškų).docx", "Forma", ["Forma"])]);
+    tiesa(kids(r).indexOf("etapai") < 0);
+    // Skelbiamų derybų antraštė be sprendimo - nieko
+    tiesa(kids(KL([kd("D3", "AK sąlygos.docx", "Kita", ["14. ELEKTRONINIS AUKCIONAS ARBA DERYBOS"])])).indexOf("derybos") < 0);
+    lygu(fids(KL([kd("D3", "AK sąlygos.docx", "Kita", ["Ginčai sprendžiami derybų būdu."])])), []);
+  });
+  await testas("Klausimai: objekto apžiūra - su data ir per eilutes, praėjusi nesiūloma, „nerengs“ - faktas", async () => {
+    let r = KL([SPS("2.7. Dėl Pirkimo objekto bus vykdoma apžiūra. Tiekėjai, norintys apžiūrėti statybvietę, turi iki 2026 m. rugsėjo 2 d. 13.00 val. kreiptis.")], {}, "lt", new Date(2026, 7, 1));
+    lygu(kq(r, "apziura"), "Kaip užsiregistruoti objekto apžiūrai (iki 2026 m. rugsėjo 2 d.)?");
+    turi(r.klausimai.filter(x => x.id === "apziura")[0].kodel.citata, "rugsėjo 2 d.");
+    r = KL([SPS("Dėl Pirkimo objekto bus vykdoma apžiūra. Tiekėjai, norintys apžiūrėti, turi iki 2026 m.\nrugsėjo 2 d. kreiptis.")], {}, "lt", new Date(2026, 7, 1));
+    turi(kq(r, "apziura"), "iki 2026 m. rugsėjo 2 d.", "data per dvi eilutes");
+    r = KL([SPS("Dėl Pirkimo objekto bus vykdoma apžiūra. Tiekėjai, norintys apžiūrėti, turi iki 2026 m. rugsėjo 2 d. kreiptis.")], {}, "lt", new Date(2026, 8, 3));
+    tiesa(kids(r).indexOf("apziura") < 0, "terminas praėjęs");
+    r = KL([SPS("Dėl Pirkimo objekto bus vykdoma apžiūra. Terminą suderinkite su pirkimo vykdytoju.")], {}, "lt", new Date(2026, 8, 3));
+    lygu(kq(r, "apziura"), "Kada ir kaip vyks objekto apžiūra?");
+    r = KL([kd("D3", "Skelbiamos apklausos sąlygos.docx", "Kita", ["11.10. Perkančioji organizacija nerengs pirkimo objekto apžiūros."])]);
+    lygu(fids(r), ["apziura"]); tiesa(kids(r).indexOf("apziura") < 0);
+    lygu(kids(KL([kd("D6", "Techninė specifikacija.docx", "TS", ["Darbo tipas (apžiūra, remontas ir pan.)"])])).indexOf("apziura"), -1, "žodis specifikacijoje - ne pirkimo objekto apžiūra");
+  });
+  await testas("Klausimai: santraukos duomenys - pratęsimas, skirtingos reikšmės, dalys, trukmė, DPS; ištrauka nuo sveiko žodžio", async () => {
+    const d = [SPS("Bendra."), kd("D5", "Skelbimas.pdf", "Skelbimas", ["x"])];
+    let r = KL(d, { deadline: { value: "02/07/2026 13:00", docId: "D5", loc: {}, snippet: "audžiamos Dalyvavimo prašymų priėmimo terminas: 02/07/2026 13:00", pratestas: true, alt: [{ value: "25/06/2026 13:00" }] } });
+    lygu(kq(r, "pratesimas"), "Kodėl terminas pratęstas iki 2026-07-02 13:00 ir ar pakeistos kitos sąlygos?");
+    const pr = r.klausimai.filter(x => x.id === "pratesimas")[0];
+    lygu(pr.kodel.citata, "Dalyvavimo prašymų priėmimo terminas: 02/07/2026 13:00", "be nukirsto žodžio"); lygu(pr.kodel.name, "Skelbimas.pdf");
+    tiesa(kids(KL(d, { deadline: { value: "02/07/2026 13:00", docId: "D5", loc: {}, snippet: "x", alt: [] } })).indexOf("pratesimas") < 0);
+    tiesa(kids(KL(d, { deadline: { value: "02/07/2026 13:00", docId: "D5", loc: {}, snippet: "x", alt: [{ value: "y" }] } })).indexOf("pratesimas") < 0, "skirtingos datos be pratęsimo - ne pratęsimas");
+    r = KL(d, { duration: { value: "24 mėn.", docId: "D5", loc: {}, snippet: "x", alt: [{ value: "48 mėn." }] } });
+    turi(kq(r, "skirtinga-duration"), "(24 mėn. ir 48 mėn.)"); tiesa(kids(r).indexOf("trukme") < 0, "skiriasi - trukmės klausimas nekartojamas");
+    r = KL(d, { duration: { value: "48 mėn.", docId: "D5", loc: {}, snippet: "x" } });
+    turi(kq(r, "trukme"), "48 mėn. sutarties trukmė");
+    r = KL(d, { lots: { value: "3", docId: "D5", loc: {}, snippet: "x" } }); turi(kq(r, "dalys"), "iš 3 pirkimo dalių");
+    tiesa(kids(KL(d, { lots: { value: "1", docId: "D5", loc: {}, snippet: "x" } })).indexOf("dalys") < 0);
+    // DPS: galiojimas - sistemos, ne sutarties
+    r = KL([kd("D1", "DPS sukūrimo sąlygos.docx", "Kita", ["Kuriama dinaminė pirkimo sistema."])], { duration: { value: "7 m.", docId: "D1", loc: {}, snippet: "x" } });
+    tiesa(kids(r).indexOf("dps") >= 0); tiesa(kids(r).indexOf("trukme") < 0, "DPS - ne sutarties trukmė");
+    tiesa(kids(KL([kd("D1", "DPS sukūrimo sąlygos.docx", "Kita", ["Kuriama dinaminė pirkimo sistema."])], { procedure: { value: "x" } })).indexOf("dps") < 0, "būdas žinomas");
+    // Vertinimas
+    r = KL([SPS("8.1. Pasiūlymų vertinimo kriterijus: kainos ir kokybės santykis.")], { evaluation: { value: "ekonominis naudingumas (ne vien kaina)" } });
+    tiesa(kids(r).indexOf("vertinimas") >= 0);
+    tiesa(kids(KL([SPS("8.1. Vertinimo kriterijus - kaina.")], { evaluation: { value: "mažiausia kaina" } })).indexOf("vertinimas") < 0);
+  });
+  await testas("Klausimai: sutarties sąlygos - lentelės eilutės, dvikalbė antraštė, užtikrinimas, delspinigiai pagal tai, kas moka, garantija", async () => {
+    let r = KL([SUT("5.6. Avansas | Netaikoma")]); lygu(fids(r), ["avansas"]);
+    r = KL([SUT("5.6. Avansas | Punktas netaikomas.")]); lygu(fids(r), ["avansas"]);
+    r = KL([SUT("5.6. Avansas | 5.6. Advance Payment\nNetaikoma | Not applicable")]); lygu(fids(r), ["avansas"], "dvikalbė lentelė");
+    r = KL([SUT("5.6. Avansas | 5.6. Advance Payment\nAvansas mokamas pagal sąskaitą.")]); lygu(fids(r), []);
+    r = KL([SUT("5.6. Avansas | Mokamas per 10 dienų.")]); tiesa(kids(r).indexOf("avansas") >= 0); lygu(fids(r), []);
+    r = KL([SUT("5.3. Rangovui avansu gali būti sumokama iki 10 % Sutarties kainos.")]); turi(kq(r, "avansas"), "iki 10 %");
+    r = KL([SUT("5.3. Sutarties kainos / įkainių perskaičiavimas taikant peržiūros taisykles | Netaikoma")]); lygu(fids(r), ["perskaiciavimas"]);
+    r = KL([SUT("5.3. Sutarties kainos / įkainių perskaičiavimas taikant peržiūros taisykles | 5.3.1. Sutarties kaina / įkainiai bus perskaičiuojami dėl PVM.")]); tiesa(kids(r).indexOf("perskaiciavimas") >= 0); lygu(fids(r), []);
+    // Sutarties užtikrinimas
+    lygu(kq(KL([SPS("11.3. Sutarčiai taikomas Sutarties įvykdymo užtikrinimas, kurio dydis – 10 (dešimt) procentų nuo vertės.")]), "sut-uztikrinimas"), "Kaip ir kada pateikti 10 % sutarties įvykdymo užtikrinimą?");
+    lygu(kq(KL([SPS("11.3. Sutarčiai taikomas Sutarties įvykdymo užtikrinimas - 5,5% dydžio banko garantija.")]), "sut-uztikrinimas"), "Kaip ir kada pateikti 5,5 % sutarties įvykdymo užtikrinimą?");
+    turi(kq(KL([SPS("11.3. Sutarčiai taikomas Sutarties įvykdymo užtikrinimas.")]), "sut-uztikrinimas"), "Kokio sutarties įvykdymo užtikrinimo");
+    // Bendrosios sąlygos: nuostata sąlyginė - klausimas neutralus, be dydžio
+    r = KL([kd("D2", "Sutarties BS.docx", "Sutartis", ["Sutarties įvykdymo užtikrinimo dydis turi būti ne mažesnis kaip 10% nuo kainos."])]);
+    lygu(kq(r, "sut-uztikrinimas"), "Ar reikia sutarties įvykdymo užtikrinimo ir kokio dydžio?");
+    r = KL([kd("D3", "Pirkimo dokumentai.pdf", "Kita", ["9. Sutarties įvykdymo užtikrinimas – nenumatytas."])]); lygu(fids(r), ["sut-uztikrinimas"]);
+    // Delspinigiai: pirkimo vykdytojo už vėluojantį apmokėjimą - ne tiekėjo netesybos
+    r = KL([SUT("Užsakovui neatlikus mokėjimo Sutartyje nustatytais terminais, Rangovas turi teisę reikalauti 0,04 % dydžio delspinigių.")]);
+    tiesa(!/0,04/.test(r.klausimai.map(x => x.q).join(" ")), "užsakovo delspinigiai"); 
+    r = KL([SUT("Pirkėjas uždelsia atsiskaityti, ir Tiekėjas nuo kitos dienos skaičiuoja Pirkėjui 0,02 (dvi šimtosios) procento dydžio delspinigius.")]);
+    tiesa(!/0,02/.test(r.klausimai.map(x => x.q).join(" ")), "tiekėjas skaičiuoja pirkėjui");
+    r = KL([SUT("Rangovui neįvykdžius Darbų per Sutartyje nustatytą terminą, Užsakovas turi teisę reikalauti 0,04 % dydžio delspinigių.")]);
+    lygu(kq(r, "delspinigiai"), "Už ką ir kaip tiekėjui skaičiuojami 0,04 % delspinigiai?");
+    r = KL([SUT("Nesilaikant terminų Pirkėjas Tiekėjui skaičiuoja 0,02 (dvi šimtosios) procento dydžio delspinigius.")]);
+    turi(kq(r, "delspinigiai"), "0,02 %");
+    // Sakinyje ir tiekėjo, ir pirkėjo vėlavimas: dydis - apie pirkėjo mokėjimą, tiekėjui nepriskiriamas
+    r = KL([SUT("Rangovui neįvykdžius Darbų, Užsakovas turi teisę reikalauti baudos; Užsakovui neatlikus mokėjimo, Rangovas skaičiuoja 0,04 % dydžio delspinigius.")]);
+    tiesa(!/0,04/.test(r.klausimai.map(x => x.q).join(" ")), "abu sakinyje - dydis tiekėjui nepriskiriamas");
+    // Nepasakyta, kas moka - dydis klausime neteigiamas
+    lygu(kq(KL([SUT("Sutartyje taikomi 0,04 % dydžio delspinigiai.")]), "delspinigiai"), "Kokios netesybos taikomos tiekėjui už sutarties nevykdymą ar vėlavimą?");
+    r = KL([SUT("8.1. Prievolių pagal Sutartį įvykdymas užtikrinamas: netesybos.")]);
+    lygu(kq(r, "delspinigiai"), "Kokios netesybos taikomos tiekėjui už sutarties nevykdymą ar vėlavimą?");
+    tiesa(r.klausimai.filter(x => x.id === "delspinigiai")[0].kodel.citata.length > 20, "trumpa citata pratęsiama");
+    tiesa(kids(KL([kd("D1", "DPS sąlygos.docx", "Kita", ["Tiekėjams, pasitraukusiems iš DPS, netaikomos jokios baudos."])])).indexOf("delspinigiai") < 0, "be sutarties - apie netesybas neklausiama");
+    // Garantija
+    lygu(kq(KL([SUT("Paslaugoms taikomas 24 mėnesių garantinis terminas.")]), "garantija"), "Nuo kada skaičiuojamas 24 mėn. garantinis terminas ir kam jis taikomas?");
+    turi(kq(KL([SUT("Prekėms taikomas ne trumpesnis kaip 24 (dvidešimt keturių) mėnesių garantinis terminas.")]), "garantija"), "24 mėn.");
+    turi(kq(KL([kd("D6", "Techninė specifikacija.docx", "TS", ["10.6.5. Įrangai taikomas garantinis terminas – 5 metai."])]), "garantija"), "5 m.");
+    r = KL([SUT("6.1. Garantinis terminas | Netaikoma")]); lygu(fids(r), ["garantija"]);
+    turi(kq(KL([SUT("6.1. Garantinis terminas | Tiekėjas suteikia kokybės garantiją pagal pasiūlymą.")]), "garantija"), "Koks garantinis terminas");
+  });
+  await testas("Klausimai: vadybos sistemų standartai, formos pakete, rinkos konsultacija, vienas failas; švarūs dokumentų vardai", async () => {
+    let r = KL([SPS("Tiekėjas taikys aplinkos apsaugos vadybos sistemos reikalavimus pagal standartą LST EN ISO 14001 arba EMAS.")]);
+    lygu(kq(r, "standartas-14001"), "Kaip įrodyti atitiktį standartui LST EN ISO 14001?");
+    r = KL([SPS("Dažai pagal LST EN ISO 12944-1 ir ISO 1182.")]); tiesa(!kids(r).some(x => /^standartas/.test(x)), "gaminių standartai - ne tiekėjo reikalavimas");
+    r = KL([SPS("Jei tiekėjas turi ISO 9001 sertifikatą, jis jį nurodo.")]); tiesa(!kids(r).some(x => /^standartas/.test(x)), "sąlyginis");
+    r = KL([SPS("ISO 9001, ISO 27001 ir ISO 45001 sertifikatai privalomi.")]); lygu(r.klausimai.filter(x => /^standartas/.test(x.id)).length, 2, "ne daugiau kaip du");
+    const f = (n, t) => kd("F" + n.length, n, "Forma", t || ["Forma"]);
+    r = KL([SPS("Bendra."), f("SPS 6 priedas. Nacionalinio saugumo reikalavimų atitikties deklaracija.docx"), f("SPS 13 priedas Tiekėjo pasiūlymų dėl derėtinų sąlygų forma.docx"), f("1 priedo 1 priedas Įkainių lentelė.xlsx")]);
+    tiesa(kids(r).indexOf("nacsaugumas") >= 0); tiesa(kids(r).indexOf("deretinos") >= 0); lygu(kq(r, "kainos"), "Kaip užpildyti „Įkainių lentelė“ ir ką įskaičiuoti į kainą?");
+    tiesa(kids(KL([SPS("Bendra."), f("SS 23. Preliminarių įkainių sudėtis.docx")])).indexOf("kainos") < 0, "sutarties priedas - ne pildoma forma");
+    r = KL([SPS("Bendra."), kd("K1", "3_Elektros darbų kiekių sąrašas.xlsx", "Kita", ["Kiekiai"])]); turi(kq(r, "kainos"), "„Elektros darbų kiekių sąrašas“");
+    // Vardai: numeriai ir „SPS N priedas“ žmogui nieko nesako, dvikalbis vardas - lietuviška dalis
+    const sv = n => W.GP_KLAUSIMAI.svarusVardas({ name: "paketas.zip › " + n });
+    lygu(sv("3_Kainos lentelė.xlsx"), "Kainos lentelė"); lygu(sv("1 priedo 1 priedas Įkainių lentelė.xlsx"), "Įkainių lentelė"); lygu(sv("SPS 9 priedas Kainų forma_ Annex 9 to SPC Price form.docx"), "Kainų forma"); lygu(sv("SS 23. Sudėtis.docx"), "Sudėtis");
+    // Rinkos konsultacijos atsakymai - ne šio pirkimo paaiškinimai
+    r = KL([SPS("Bendra."), kd("R1", "SPS 11 priedas. Atsakymai į rinkos konsultacijos klausimus.docx", "Paaiškinimas", ["Atsakymai"])]);
+    tiesa(kids(r).indexOf("paaiskinimai") < 0); tiesa(kids(r).indexOf("rinkos") >= 0);
+    r = KL([SPS("Bendra."), kd("P1", "3_Atsakymas į klausimą.pdf", "Paaiškinimas", ["A", "B", "C"]), kd("P2", "6_Atsakymai.pdf", "Paaiškinimas", ["D"])]);
+    const pa = r.klausimai.filter(x => x.id === "paaiskinimai")[0]; lygu(pa.fragmentai, ["P1#0", "P1#1", "P2#0"], "visų raštų pradžia pasiekia DI"); lygu(pa.kodel.name, "6_Atsakymai.pdf", "naujausias raštas");
+    lygu(r.klausimai[0].id, "paaiskinimai", "pirmas");
+    // Vienas failas: kitų pirkimo vykdytojų „Pirkimo sąlygos“ - tie patys sakiniai
+    lygu(fids(KL([kd("D3", "1__AK salygos_Mikroskopas.docx", "Kita", ["9.1. Pasiūlymo galiojimo užtikrinimas nereikalaujamas."])])), ["uztikrinimas"]);
+    // Sąlygos nepavadintos atpažįstamai - imamas didelis dokumentas
+    lygu(fids(KL([kd("D3", "Kvieciame_dalyvauti.docx", "Kita", Array(10).fill("Šio Pirkimo metu Derybos nebus vykdomos."))])), ["derybos"]);
+    lygu(fids(KL([kd("D3", "Kvieciame_dalyvauti.docx", "Kita", ["Šio Pirkimo metu Derybos nebus vykdomos."])])), [], "trumpas nežinomas failas - ne sąlygos");
+    // Neperskaityti dokumentai (be fragmentų) nieko nesiūlo ir nelūžta
+    lygu(KL([{ id: "D1", name: "Sąlygos.doc", rusis: "Kita", parseStatus: "unsupported", chunks: [] }]).klausimai.length, 0);
+    lygu(W.GP_KLAUSIMAI.siulyk({}).klausimai.length, 0);
+  });
+  await testas("Klausimai: kiekvienas su tikru šaltiniu, tvarka pagal svarbą, angliškai - be lietuviškų žodžių (citatos lieka originalios)", async () => {
+    const pilnas = [SPS("1.5. Šio Pirkimo metu bus vykdomos Derybos.", "Tiekėjai privalo pateikti Paraišką su priedais.", "Tiekėjas privalo pateikti Pasiūlymo galiojimo užtikrinimą, kurio suma 5 000 Eur.", "Dėl Pirkimo objekto bus vykdoma apžiūra. Norintys apžiūrėti turi iki 2027 m. sausio 5 d. kreiptis.",
+      "Tiekėjas turi turėti bent 1 (vieną) projekto vadovą, kuris dirba.", "Tiekėjas per paskutinius 3 metus įvykdė sutartį.", "Tiekėjas taikys reikalavimus pagal standartą ISO 14001.", "Sutarčiai taikomas Sutarties įvykdymo užtikrinimas - 10% banko garantija.", "Pasiūlymo dokumentai.", "Tiekėjas turi pateikti subtiekėjų sąrašą.", "Pagal kalbą: dokumentai turi būti pateikiami lietuvių kalba.", "Kainos ir kokybės santykis."),
+      kd("D2", "Specialiosios sutarties sąlygos.docx", "Sutartis", ["5.6. Avansas | 10 % avansas.", "5.3. Sutarties kainos / įkainių perskaičiavimas taikant peržiūros taisykles | Bus perskaičiuojami.", "Rangovui neįvykdžius Darbų, Užsakovas turi teisę reikalauti 0,04 % dydžio delspinigių.", "6.1. Garantinis terminas | 24 mėnesių garantinis terminas."]),
+      kd("D3", "Bendrosios sutarties sąlygos.docx", "Sutartis", ["Bendra."]), kd("P1", "3_Atsakymas.pdf", "Paaiškinimas", ["Atsakymas."]), kd("R1", "Atsakymai į rinkos konsultacijos klausimus.pdf", "Forma", ["RK"]), kd("T1", "Techninė specifikacija.docx", "TS", ["TS"]), kd("E1", "espd-request.pdf", "EBVPD", ["ESPD"]),
+      kd("F1", "Nacionalinio saugumo deklaracija.docx", "Forma", ["F"]), kd("F2", "Tiekėjo pasiūlymų dėl derėtinų sąlygų forma.docx", "Forma", ["F"]), kd("F3", "Specialistų sąrašo forma.docx", "Forma", ["F"]), kd("F4", "Trišalės sutarties projektas.docx", "Sutartis", ["F"]), kd("F5", "Tiekėjo deklaracija žaliesiems reikalavimams.docx", "Forma", ["F"]), kd("F6", "Įkainių lentelė.xlsx", "Forma", ["F"])];
+    const meta = { deadline: { value: "02/07/2026 13:00", docId: "D1", loc: {}, snippet: "x", pratestas: true, alt: [{ value: "y" }] }, evaluation: { value: "ekonominis naudingumas" }, duration: { value: "48 mėn.", docId: "D1", loc: {}, snippet: "z" }, lots: { value: "2", docId: "D1", loc: {}, snippet: "w" } };
+    const lt = KL(pilnas, meta, "lt", new Date(2026, 5, 1)), en = KL(pilnas, meta, "en", new Date(2026, 5, 1));
+    tiesa(lt.klausimai.length >= 20, "viso " + lt.klausimai.length);
+    const pp = lt.klausimai.map(x => x.p); lygu(pp, pp.slice().sort((a, b) => a - b), "tvarka pagal prioritetą");
+    lygu(lt.klausimai.slice(0, 3).map(x => x.id), ["paaiskinimai", "pratesimas", "derybos"]);
+    lt.klausimai.forEach(x => { tiesa(!!x.q && /\?$/.test(x.q), "klausimas: " + x.id); tiesa(!!x.kodel, "šaltinis: " + x.id); tiesa(!!(x.kodel.citata || "").trim(), "citata: " + x.id); tiesa(pilnas.some(d => d.id === x.kodel.docId), "dokumentas: " + x.id);
+      x.fragmentai.forEach(f => tiesa(pilnas.some(d => d.chunks.some(c => c.id === f)), "fragmentas: " + f)); });
+    lygu(lt.klausimai.map(x => x.id).length, new Set(lt.klausimai.map(x => x.id)).size, "be pasikartojimų");
+    lygu(new Set(lt.klausimai.map(x => x.q)).size, lt.klausimai.length, "tekstai skirtingi");
+    tiesa(en.klausimai.length === lt.klausimai.length + 1, "angliškai - ir kalbos klausimas");
+    tiesa(en.klausimai.some(x => x.id === "kalba")); tiesa(!lt.klausimai.some(x => x.id === "kalba"));
+    en.klausimai.forEach(x => { tiesa(/\?$/.test(x.q), x.id); const beKabuciu = x.q.replace(/“[^”]*”/g, ""); tiesa(!/[ąčęėįšųūž]/i.test(beKabuciu), "lietuviškas tekstas EN: " + x.q); });
+    const fen = KL([SPS("Šio Pirkimo metu Derybos nebus vykdomos.", "Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo.")], {}, "en").faktai;
+    lygu(fen.map(x => x.atsakymas), ["No.", "No."]); turi(fen[0].q, "negotiations"); turi(fen[0].kodel.citata, "nebus vykdomos", "citata originalo kalba");
+    // Pirkimo vykdytojo sąvoka klausimuose neutrali: ir PĮ, ir VPĮ
+    tiesa(!/perkant|perkanč/i.test(lt.klausimai.map(x => x.q).join(" ")), "be perkančiojo subjekto ar organizacijos");
+    // Nematomų simbolių ir ilgų brūkšnių tekstuose nėra
+    tiesa(!/[— ​]/.test(lt.klausimai.concat(en.klausimai).map(x => x.q).join(" ")));
+  });
+  await testas("Puslapis: be dokumentų - dažni klausimai ir pažadas; perskaičius - šio pirkimo klausimai, faktai, šaltinis, DI gauna tą vietą", async () => {
+    const mm0 = W.matchMedia; W.matchMedia = () => ({ matches: false });   // rėmelis siauras - kompiuterio plotis
+    await svarus(); W.setView("pirkimas"); askInput().value = ""; W.__PPT.S.siulPasirinktas = null; W.__PPT.renderAskNote("");
+    D.getElementById("askChips").__raktas = null; W.__PPT.renderSiulymai();
+    const T = () => D.getElementById("askSiulT").textContent, C = () => [...D.querySelectorAll("#askChips .chip")], F = () => D.getElementById("askFaktai"), K = () => D.getElementById("askKodel");
+    turi(T(), "Perskaitę dokumentus pasiūlysime"); lygu(C().length, 7); turi(C()[0].textContent, "Kokius dokumentus"); tiesa(F().hidden, "faktų nėra"); tiesa(K().hidden);
+    const PAK = { "Specialiosios pirkimo sąlygos.txt": "1.5. Šio Pirkimo metu Derybos nebus vykdomos.\n\n9.1. Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo.\n\nTiekėjai privalo pateikti Pasiūlymą (SPS 1 priedas).\n\n3. Tiekėjas turi turėti bent 1 (vieną) projekto vadovą, kuris vadovaus darbams.\n\nDėl Pirkimo objekto bus vykdoma apžiūra.\n\nTiekėjas per paskutinius 3 metus yra įvykdęs sutartį.\n\nSutarčiai taikomas Sutarties įvykdymo užtikrinimas - 10% banko garantija.\n\nPagal standartą ISO 9001 tiekėjas taikys kokybės valdymą.\n\nTiekėjas turi pateikti subtiekėjų sąrašą.", "Sutarties sąlygos sutartis.txt": "5.6. Avansas | Netaikoma\n\n5.3. Sutarties kainos / įkainių perskaičiavimas | Sutarties kaina bus perskaičiuojama.\n\n6.1. Garantinis terminas | Taikomas 24 mėnesių garantinis terminas." };
+    await ikelk(PAK, "Sprendimai.zip");
+    turi(T(), "pagal perskaitytus jo dokumentus");
+    const tekstai = () => C().map(b => b.textContent);
+    tiesa(tekstai().some(x => /projekto vadovą/.test(x)), "reikalavimas iš dokumento: " + tekstai().join(" | "));
+    tiesa(!tekstai().some(x => /Ar reikalaujamas pasiūlymo užtikrinimas/.test(x)), "bendro klausimo nebėra");
+    tiesa(!F().hidden); F().open = true;
+    turi(D.getElementById("askFaktaiS").textContent, "dokumentai jau atsako (3)");
+    const ft = D.getElementById("askFaktaiT").textContent; turi(ft, "Ar reikia pasiūlymo galiojimo užtikrinimo? Ne."); turi(ft, "nereikalaujama pateikti"); turi(ft, "Specialiosios pirkimo sąlygos.txt"); turi(ft, "Ar numatytas avansas? Ne.");
+    // Pasirinkus: tekstas lauke, fokusas, šaltinis; pastaba nuimama
+    W.__PPT.renderAskNote("empty");
+    const rq = W.__PPT.S.siul.rez.klausimai.filter(x => /^reikalavimas/.test(x.id))[0], mg = C().filter(b => b.textContent === rq.q)[0];
+    mg.click();
+    lygu(askInput().value, rq.q); lygu(D.activeElement, askInput()); lygu(askNote().textContent, "", "pastaba nuimta");
+    lygu(D.getElementById("askChips").getAttribute("role"), "group"); lygu(D.getElementById("askChips").getAttribute("aria-labelledby"), "askSiulT"); lygu(askInput().getAttribute("aria-describedby"), "askKodel", "šaltinis susietas su lauku");
+    tiesa(!K().hidden); turi(K().textContent, "Siūloma dėl šios vietos"); turi(K().textContent, "projekto vadovą");
+    // DI gauna tą vietą pirmiausia - ir kai paieška jos nerastų
+    const fr = W.__PPT.parinkFragmentus(rq.q, "").map(c => c.id); lygu(fr[0], rq.fragmentai[0], "šaltinio fragmentas pirmas");
+    const kita = W.__PPT.siulymoFragmentai(rq.q + " x"); lygu(kita.length, 0, "pakeistas klausimas - be jo");
+    // Vieta, kurios paieška pagal klausimo žodžius nerastų, vis tiek pasiekia DI
+    const rezK = W.__PPT.S.siul.rez.klausimai, tolima = rq.fragmentai[0], beZodziu = "Xyzzy qwfp?";
+    lygu(W.__PPT.parinkFragmentus("Xyzzy qwfq?", "").length, 0, "paieška šių žodžių neranda");
+    rezK.push({ id: "bandymas", q: beZodziu, kodel: rq.kodel, fragmentai: [tolima] });
+    lygu(W.__PPT.parinkFragmentus(beZodziu, "").map(c => c.id), [tolima], "šaltinis pasiekia DI"); rezK.pop();
+    // Pakeitus - šaltinio nebėra, atkūrus nepasirodo
+    askInput().value = rq.q + " (mano)"; W.askIvestis(); tiesa(K().hidden); lygu(K().innerHTML, ""); lygu(askInput().getAttribute("aria-describedby"), null, "be šaltinio - be aprašo");
+    // Perpiešimas nesunaikina: fokusas ir atverti faktai lieka
+    mg.click(); C()[0].focus(); const buvo = D.activeElement; F().open = true;
+    W.__PPT.renderSiulymai(); lygu(D.activeElement, buvo, "fokusas liko"); tiesa(F().open, "faktai atverti"); tiesa(!K().hidden);
+    // Kalba: klausimai iš naujo
+    W.setLang("en"); turi(T(), "based on its documents"); tiesa(tekstai().some(x => /How do I prove/.test(x)), "EN: " + tekstai().join(" | ")); turi(D.getElementById("askFaktaiS").textContent, "already answer"); turi(D.getElementById("askFaktaiT").textContent, "Is bid security required? No."); turi(K().textContent, "Suggested because", "šaltinio užrašas - ta pačia kalba"); W.setLang("lt"); turi(K().textContent, "Siūloma dėl");
+    // Informacinė skiltis tai sako abiem kalbomis
+    turi(W.eval("INFO_CONTENT.lt.steps[1]"), "siūlomi šio pirkimo klausimai"); turi(W.eval("INFO_CONTENT.lt.steps[1]"), "DI čia nedalyvauja"); turi(W.eval("INFO_CONTENT.en.steps[1]"), "questions for this procurement"); turi(W.eval("INFO_CONTENT.en.steps[1]"), "no AI involved");
+    turi(T(), "pagal perskaitytus");
+    // Išvalius - vėl dažni, šaltinio nebėra
+    W.isvalykDokumentus(); turi(T(), "Perskaitę dokumentus"); tiesa(F().hidden); tiesa(K().hidden); lygu(C().length, 7);
+    W.matchMedia = mm0; D.getElementById("askChips").__raktas = null; W.__PPT.renderSiulymai();
+  });
+  await testas("Puslapis: „Dar N“ atveria visus ir perkelia fokusą, telefone rodoma mažiau; mažai rasta - papildoma dažnais; taisyklių klaida - dažni klausimai", async () => {
+    const C = () => [...D.querySelectorAll("#askChips .chip")], T = () => D.getElementById("askSiulT").textContent;
+    const PAK = { "Specialiosios pirkimo sąlygos.txt": "Šio Pirkimo metu bus vykdomos Derybos.\n\nTiekėjai privalo pateikti Pasiūlymą.\n\nDėl Pirkimo objekto bus vykdoma apžiūra.\n\nTiekėjas turi turėti bent 1 (vieną) projekto vadovą, kuris dirba.\n\nTiekėjas per paskutinius 3 metus įvykdė sutartį.\n\nPagal standartą ISO 9001.\n\nSutarčiai taikomas Sutarties įvykdymo užtikrinimas - 10% garantija.\n\nTiekėjas turi pateikti subtiekėjų sąrašą.", "Sutarties sąlygos sutartis.txt": "5.6. Avansas | 10 % avansas.\n\n6.1. Garantinis terminas | 24 mėnesių garantinis terminas.\n\n5.3. Sutarties kainos perskaičiavimas | Sutarties kaina bus perskaičiuojama.\n\nRangovui neįvykdžius Darbų, Užsakovas turi teisę reikalauti 0,04 % dydžio delspinigių." };
+    const mm0 = W.matchMedia; W.matchMedia = () => ({ matches: false });
+    await ikelk(PAK, "Daug.zip");
+    const viso = W.__PPT.S.siul.rez.klausimai.length; tiesa(viso > 7, "viso " + viso);
+    lygu(C().length, 8, "7 ir mygtukas"); const dg = D.getElementById("askDaugiau"); lygu(dg.textContent, "Dar " + (viso - 7)); lygu(dg.getAttribute("aria-expanded"), "false");
+    dg.click(); lygu(C().length, viso + 1); lygu(D.activeElement, C()[7], "fokusas į pirmą naują"); const ma = D.getElementById("askDaugiau"); lygu(ma.textContent, "Mažiau"); lygu(ma.getAttribute("aria-expanded"), "true");
+    W.__PPT.renderSiulymai(); lygu(C().length, viso + 1, "lieka atverta");
+    ma.click(); lygu(C().length, 8); lygu(D.activeElement, D.getElementById("askDaugiau"), "fokusas - mygtuke");
+    // Pasirinkus iš papildomų - tas pats klausimas
+    D.getElementById("askDaugiau").click(); const pask = C()[viso - 1]; const q = pask.textContent; pask.click(); lygu(askInput().value, q);
+    // Telefone rodoma 4
+    W.matchMedia = () => ({ matches: true });
+    W.__PPT.S.siul = null; W.__PPT.renderSiulymai(); lygu(C().length, 5, "4 ir mygtukas"); lygu(D.getElementById("askDaugiau").textContent, "Dar " + (viso - 4));
+    W.matchMedia = () => ({ matches: false }); W.__PPT.S.siul = null; W.__PPT.renderSiulymai();
+    // Mažai rasta: papildoma dažnais, bet ne daugiau kaip 5, be šaltinio
+    await ikelk({ "Specialiosios pirkimo sąlygos.txt": "Šio Pirkimo metu bus vykdomos Derybos." }, "Mazai.zip");
+    lygu(W.__PPT.S.siul.rez.klausimai.length, 1); lygu(C().length, 5); turi(T(), "pagal perskaitytus"); turi(C()[0].textContent, "Dėl ko bus deramasi");
+    C()[1].click(); tiesa(D.getElementById("askKodel").hidden, "dažnas klausimas - be šaltinio");
+    // Nieko nerasta: dažni, ir pasakoma
+    await ikelk({ "pastabos.txt": "Niekas." }, "Nieko.zip"); lygu(W.__PPT.S.siul.rez.klausimai.length, 0); turi(T(), "parinkti nepavyko"); lygu(C().length, 5);
+    // Taisyklių klaida neatima galimybės klausti
+    const tikra = W.GP_KLAUSIMAI.siulyk; W.GP_KLAUSIMAI.siulyk = () => { throw new Error("x"); };
+    try { await ikelk({ "Specialiosios pirkimo sąlygos.txt": "Šio Pirkimo metu bus vykdomos Derybos." }, "Klaida.zip"); tiesa(C().length >= 5, "dažni klausimai"); lygu(W.__PPT.S.siul.rez, null); lygu(W.__PPT.siulymoFragmentai("x").length, 0); }
+    finally { W.GP_KLAUSIMAI.siulyk = tikra; await svarus(); W.matchMedia = mm0; D.getElementById("askChips").__raktas = null; W.__PPT.renderSiulymai(); }
+  });
+  await testas("Puslapis: tekstas iš dokumentų - tik tekstas (klausimuose, faktuose, šaltinyje), failas talpykloje", async () => {
+    const BLOGA = "<img src=x onerror=window.__xss=1>";
+    await ikelk({ ["Specialiosios pirkimo sąlygos " + "x.txt"]: "Tiekėjas turi turėti " + BLOGA + " projekto vadovą, kuris dirba.\n\nŠio Pirkimo metu Derybos nebus vykdomos. " + BLOGA + "\n\nTiekėjai privalo pateikti Pasiūlymą." }, "XSS.zip");
+    const chips = [...D.querySelectorAll("#askChips .chip")]; const tb = chips.filter(b => b.textContent.indexOf("<img") >= 0)[0];
+    tiesa(!!tb, "tekstas parodytas kaip tekstas"); lygu(D.querySelectorAll("#askChips img, #askFaktaiT img").length, 0);
+    tb.click(); lygu(D.querySelectorAll("#askKodel img").length, 0); turi(askInput().value, "<img");
+    // Faktas ir jo atsakymas taip pat: šiandien jų tekstas pastovus, bet taisyklės gali įdėti dokumento žodžių (kaip klausimuose)
+    const rez = W.__PPT.S.siul.rez;
+    rez.faktai = [{ id: "x", q: BLOGA + "?", atsakymas: BLOGA, kodel: { docId: "D", name: BLOGA, loc: {}, citata: BLOGA }, fragmentai: [] }];
+    D.getElementById("askChips").__raktas = null; W.__PPT.renderSiulymai();
+    lygu(D.querySelectorAll("#askFaktaiT img").length, 0, "faktas - tekstu"); turi(D.getElementById("askFaktaiT").textContent, BLOGA + "? " + BLOGA);
+    await laukti(30); tiesa(!W.__xss, "kodas nevykdytas");
+    const sw = await (await W.fetch("sw.js?b=" + Date.now())).text(); turi(sw, '"./klausimai.js"');
+    askInput().value = ""; W.askIvestis(); await svarus();
   });
 
   grazinkKalba();

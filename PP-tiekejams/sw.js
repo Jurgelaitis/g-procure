@@ -23,12 +23,13 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppt-2026-11-03-1";
+var VERSIJA = "ppt-2026-11-03-2";
 
 var SAVI = [
   "./",
   "./index.html",
   "./asistentas.js",
+  "./klausimai.js",
   "./cvpis.js",
   "./paieska.js",
   "./zinios.js",
