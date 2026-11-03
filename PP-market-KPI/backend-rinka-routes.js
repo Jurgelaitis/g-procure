@@ -12,9 +12,10 @@
  *   4. pm2 restart g-procure
  *
  * KODĖL PER SERVERĮ, O NE TIESIAI IŠ NARŠYKLĖS. FRED reikalauja rakto, o raktas
- * kliento JavaScript'e matomas visiems - CLAUDE.md tai draudžia. OSP (VDA) rakto
- * nereikalauja, todėl VDA rodikliai imami TIESIAI iš naršyklės (žr. osp.js), ir
- * šio maršruto jiems nereikia.
+ * kliento JavaScript'e matomas visiems - CLAUDE.md tai draudžia. NY Fed rakto nereikalauja,
+ * bet jo failo naršyklė tiesiai negauna (atsakyme nėra CORS antraštės). OSP (VDA) ir Eurostat
+ * rakto nereikalauja ir kreiptis iš naršyklės leidžia, todėl tie rodikliai imami TIESIAI
+ * (žr. osp.js, rinka.js), ir šio maršruto jiems nereikia.
  *
  * KĄ GRĄŽINA: { rodikliai: [{ id, laikotarpis, reiksme, daznis, saltinis }], klaidos: [] }
  *   `laikotarpis` - ISO data (YYYY-MM-DD), tas, kurį paskelbė šaltinis.
@@ -36,6 +37,7 @@ try { rateLimit = require('express-rate-limit'); } catch (_) { rateLimit = null;
 
 const FRED_API_KEY = process.env.FRED_API_KEY;
 const FRED_URL = 'https://api.stlouisfed.org/fred/series/observations';
+const GSCPI_URL = 'https://www.newyorkfed.org/medialibrary/research/interactives/data/gscpi/gscpi_interactive_data.csv';
 
 /* Rodiklio ID modulyje -> FRED serija. Pavadinimai ir dažniai patikrinti FRED kataloge. */
 const SERIJOS = {
@@ -51,7 +53,13 @@ const SERIJOS = {
   plieno_vamzdziai: { serija: 'WPU101706',   daznis: 'mėn.', saltinis: 'FRED / BLS - PPI by Commodity: Steel Pipe and Tube (JAV), indeksas' },
   gelezies_ruda:    { serija: 'PIORECRUSDM', daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Iron Ore, $/t' },
   nikelis:          { serija: 'PNICKUSDM',   daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Nickel, $/t' },
-  cinkas:           { serija: 'PZINCUSDM',   daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Zinc, $/t' }
+  cinkas:           { serija: 'PZINCUSDM',   daznis: 'mėn.', saltinis: 'FRED / IMF - Global price of Zinc, $/t' },
+  /* 2026-11-03 - krovinių kainos (iki tol vestos ranka). Baltic Exchange, Drewry ir TAC rodiklių skelbti be licencijos negalima,
+     nemokamų ES mėnesinių indeksų nėra, todėl - JAV kainų indeksai kaip krypties ženklas (BLS duomenys vieši). Pavadinimai patikrinti FRED 2026-11-03. */
+  container: { serija: 'PCU483111483111', daznis: 'mėn.', saltinis: 'FRED / BLS - PPI by Industry: Deep Sea Freight Transportation (JAV), indeksas' },
+  aircargo:  { serija: 'IC131',           daznis: 'mėn.', saltinis: 'FRED / BLS - Inbound Price Index (International Services): Air Freight (JAV), indeksas' },
+  /* Ne FRED: Niujorko federalinio rezervo banko failas. Standartiniai nuokrypiai nuo istorinio vidurkio, gali būti neigiami. */
+  gscpi:     { imk: imkGscpi, daznis: 'mėn.', saltinis: 'Federal Reserve Bank of New York - Global Supply Chain Pressure Index' }
 };
 
 const limiter = rateLimit
@@ -82,6 +90,46 @@ async function imkSerija(id) {
   return svarus;
 }
 
+/* NY Fed CSV: pirma eilutė „Date,Jan-22,...,Oct-26“ - kiekvienas stulpelis yra atskiro mėnesio paskelbta versija (senesnės reikšmės
+   vėliau patikslinamos), todėl imam paskutinį stulpelį su reikšmėmis. Eilutė - „30-Sep-2026,...“, nesamas stebėjimas - „#N/A“ arba tuščia.
+   Sandarai pasikeitus - klaida su priežastimi, ne tuščias ar svetimas rezultatas. */
+const MENESIAI = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+function skaitykGscpi(csv) {
+  const eil = String(csv || '').replace(/^\uFEFF/, '').split(/\r?\n/).map(l => l.split(','));
+  if (String(eil[0][0]).trim() !== 'Date') throw new Error('GSCPI: netikėta failo sandara');
+  for (let st = eil[0].length - 1; st > 0; st--) {
+    const rez = [];
+    eil.slice(1).forEach(e => {
+      const d = /^(\d{1,2})-([A-Z][a-z]{2})-(\d{4})$/.exec(String(e[0] || '').trim());
+      const v = String(e[st] === undefined ? '' : e[st]).trim();
+      if (d && MENESIAI[d[2]] && v !== '' && isFinite(Number(v))) rez.push({ laikotarpis: d[3] + '-' + MENESIAI[d[2]] + '-01', reiksme: Number(v) });
+    });
+    if (rez.length) {
+      if (rez.length < 12) throw new Error('GSCPI: per mažai stebėjimų');
+      return rez.sort((a, b) => (a.laikotarpis < b.laikotarpis ? -1 : 1));
+    }
+  }
+  throw new Error('GSCPI: stebėjimų nėra');
+}
+
+/* Indeksas skelbiamas kartą per mėnesį, todėl failo kiekvienai užklausai neklausiam: kopija atmintyje 6 val.,
+   o nepavykus - paskutinė sėkminga (ji tikra, tik gal senesnė; modulis rodo jos laikotarpį). */
+const GSCPI_KESAS_MS = 6 * 3600 * 1000;
+let gscpiKesas = null;
+async function imkGscpi() {
+  if (gscpiKesas && Date.now() - gscpiKesas.laikas < GSCPI_KESAS_MS) return gscpiKesas.eil;
+  try {
+    const r = await fetch(GSCPI_URL, { headers: { 'User-Agent': 'G-Procure (+https://g-procure.com)' }, signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error('NY Fed HTTP ' + r.status);
+    const eil = skaitykGscpi(await r.text());
+    gscpiKesas = { laikas: Date.now(), eil };
+    return eil;
+  } catch (e) {
+    if (gscpiKesas) return gscpiKesas.eil;
+    throw e;
+  }
+}
+
 router.get('/', limiter, async (req, res) => {
   if (!FRED_API_KEY) {
     return res.status(503).json({ rodikliai: [], klaidos: [{ id: '*', priezastis: 'FRED_API_KEY nenustatytas serveryje' }] });
@@ -91,7 +139,7 @@ router.get('/', limiter, async (req, res) => {
   const rodikliai = [], klaidos = [];
   await Promise.all(ids.map(async id => {
     try {
-      const eil = await imkSerija(id);
+      const eil = await (SERIJOS[id].imk ? SERIJOS[id].imk() : imkSerija(id));
       const pask = eil[eil.length - 1];
       rodikliai.push({
         id: id,
@@ -115,3 +163,4 @@ router.get('/', limiter, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.skaitykGscpi = skaitykGscpi;
