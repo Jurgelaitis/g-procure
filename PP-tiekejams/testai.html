@@ -2745,6 +2745,209 @@ async function paleisk() {
     askInput().value = ""; W.askIvestis(); await svarus();
   });
 
+  grupe("Klausimų terminas: iki kada pateikti klausimą pirkimo vykdytojui (2026-11-03)");
+  const KT = () => D.getElementById("klTerminas");
+  const KLT = (o) => W.GP_KLAUSIMAI.terminas(Object.assign({ docs: [], parse: W.GP_CVPIS.parseData, dabar: new Date("2026-06-01T09:00:00Z") }, o));
+  const sal = (txt, rusis, vardas) => ({ id: "D", name: vardas || "Sąlygos.docx", rusis: rusis || "SPS", chunks: [{ id: "D#1", docId: "D", loc: { para: 3 }, text: txt }] });
+  await testas("Skaičiavimas: CVP IS laukas, likęs laikas, greit, praėjęs, sutampa su pasiūlymų terminu", () => {
+    const p = (k, g, o) => Object.assign({ clarificationPeriodEnd: k, tenderSubmissionDeadline: g, status: "Bid submission" }, o || {});
+    let k = KLT({ pirkimas: p("2026-06-06T14:00:00", "2026-06-20T14:00:00") });
+    lygu([k.aktyvus, k.saltinis, k.praejes, k.greit, k.suTerminu], [true, "cvpis", false, false, false]);
+    lygu(k.liko.dienos, 5); lygu(k.liko.valandos, 2);
+    k = KLT({ pirkimas: p("2026-06-04T12:00:00", "2026-06-20T14:00:00") }); lygu(k.greit, true, "per 3 d."); lygu(k.liko.dienos, 3);
+    k = KLT({ pirkimas: p("2026-06-04T12:01:00", "2026-06-20T14:00:00") }); lygu(k.greit, false, "ilgiau nei 3 d.");
+    k = KLT({ pirkimas: p("2026-05-30T14:00:00", "2026-06-20T14:00:00") }); lygu([k.praejes, k.liko, k.aktyvus], [true, null, true]);
+    k = KLT({ pirkimas: p("2026-06-20T14:00:00", "2026-06-20T14:00:00") }); lygu(k.suTerminu, true);
+    k = KLT({ pirkimas: p("2026-06-20T13:59:30", "2026-06-20T14:00:00") }); lygu(k.suTerminu, true, "minutės ribose");
+    k = KLT({ pirkimas: p("2026-06-20T13:58:00", "2026-06-20T14:00:00") }); lygu(k.suTerminu, false);
+  });
+  await testas("Pirkimas neaktyvus (pasiūlymų terminas praėjo, vertinimas, nutrauktas) - neberodoma; rinkos konsultacija be lauko - nieko", () => {
+    const p = (o) => Object.assign({ clarificationPeriodEnd: "2026-06-06T14:00:00", tenderSubmissionDeadline: "2026-06-20T14:00:00", status: "Bid submission" }, o);
+    lygu(KLT({ pirkimas: p({}) }).aktyvus, true);
+    ["Cancelled", "Evaluation", "Proposal Submission Closed", "Awaiting bid opening", "Awarded"].forEach(s => lygu(KLT({ pirkimas: p({ status: s }) }).aktyvus, false, s));
+    lygu(KLT({ pirkimas: p({ tenderSubmissionDeadline: "2026-05-20T14:00:00" }) }).aktyvus, false, "terminas praėjo");
+    lygu(KLT({ pirkimas: { clarificationPeriodEnd: null, tenderSubmissionDeadline: "2026-06-20T14:00:00", status: "Proposal Submission" } }), null);
+    lygu(KLT({}), null);
+  });
+  await testas("Sąlygų sakinys: tiekėjo prašymo terminas atpažįstamas, pirkimo vykdytojo atsakymo terminas - ne; darbo dienos, EN, tekstas su lietuviškomis raidėmis", () => {
+    const S = W.GP_KLAUSIMAI.prasymoSalyga;
+    let s = S([sal("9.1. Prašymai paaiškinti konkurso sąlygas gali būti pateikiami perkančiajai organizacijai CVP IS susirašinėjimo priemonėmis ne vėliau kaip likus 8 dienoms iki pasiūlymų pateikimo termino pabaigos.")]);
+    lygu([s.dienu, s.darbo], [8, false]); lygu(s.baze, "pasiūlymų pateikimo termino pabaigos"); turi(s.kodel.citata, "Prašymai paaiškinti"); lygu(s.kodel.docId, "D");
+    s = S([sal("Prašymai paaiškinti Pirkimo sąlygas turi būti pateikiami CVP IS ne vėliau kaip likus: 10 dienų iki pirminių paraiškų (kurios teikiamos per Pirkimo dokumentuose nustatytą terminą) pateikimo termino pabaigos.")]);
+    lygu(s.dienu, 10); lygu(s.baze, "pirminių paraiškų pateikimo termino pabaigos", "be skliaustų");
+    s = S([sal("Prašymai paaiškinti sąlygas pateikiami ne vėliau kaip likus 3 (trims) darbo dienoms iki pasiūlymų pateikimo termino.")]);
+    lygu([s.dienu, s.darbo], [3, true]);
+    s = S([sal("Requests to clarify the Procurement conditions must be submitted via CPP IS no later than 10 days prior to the deadline for the submission of tenders.")]);
+    lygu(s.dienu, 10); lygu(s.baze, "the deadline for the submission of tenders");
+    // Pirkimo vykdytojo atsakymas ir kiti sakiniai - ne
+    lygu(S([sal("Prašymai paaiškinti sąlygas gali būti pateikiami ne vėliau kaip likus 6 dienoms iki pasiūlymų pateikimo termino pabaigos.", "BPS", "Bendrosios sąlygos.docx")]).dienu, 6, "bendrosiose sąlygose");
+    lygu(S([sal("Paaiškinimai ar patikslinimai turi būti pateikiami likus ne mažiau kaip 1 darbo dienai iki Pasiūlymų pateikimo termino pabaigos.")]), null);
+    lygu(S([sal("Pirkimo dokumentų paaiškinimai ar patikslinimai Perkančiojo subjekto iniciatyva siunčiami visiems Tiekėjams ne vėliau kaip likus 4 dienoms iki Pasiūlymų pateikimo termino pabaigos.")]), null);
+    lygu(S([sal("Atsakymai į Rangovų pateiktus klausimus pateikiami ne vėliau kaip likus 3 dienoms iki pasiūlymų pateikimo termino.")]), null);
+    lygu(S([sal("Kiekviena Šalis į kitos Šalies paklausimą ar prašymą įsipareigoja atsakyti ne vėliau kaip per 5 darbo dienas nuo jo gavimo.")]), null);
+    lygu(S([]), null);
+  });
+  await testas("Sąlygos ir CVP IS: anksčiau reikalaujančios sąlygos pirmesnės, ±1 d. - CVP IS; be CVP IS - apskaičiuojama; kelių etapų, sistemos ir darbo dienų - tik taisyklė", () => {
+    const d = [sal("Prašymai paaiškinti sąlygas gali būti pateikiami ne vėliau kaip likus 8 dienoms iki pasiūlymų pateikimo termino pabaigos.")];
+    const p = (k) => ({ clarificationPeriodEnd: k, tenderSubmissionDeadline: "2026-06-20T14:00:00", status: "Bid submission" });
+    let k = KLT({ docs: d, pirkimas: p("2026-06-11T23:45:00") });   // 8 d. iki - 06-12 14:00: CVP IS anksčiau
+    lygu(k.saltinis, "cvpis");
+    k = KLT({ docs: d, pirkimas: p("2026-06-12T23:45:00") });       // sutampa dienos tikslumu
+    lygu(k.saltinis, "cvpis");
+    k = KLT({ docs: d, pirkimas: p("2026-06-13T15:00:00") });       // daugiau nei diena vėliau už sąlygas
+    lygu(k.saltinis, "salyga"); lygu(k.data.getTime(), W.GP_CVPIS.parseData("2026-06-12T14:00:00").getTime()); lygu(k.cvp.getTime(), W.GP_CVPIS.parseData("2026-06-13T15:00:00").getTime());
+    k = KLT({ docs: d, pirkimas: p("2026-06-20T14:00:00") });       // CVP IS sutampa su pasiūlymų terminu, sąlygos reikalauja anksčiau
+    lygu([k.saltinis, k.suTerminu], ["salyga", false]);
+    k = KLT({ docs: d, galutinis: W.GP_CVPIS.parseData("2026-06-20T14:00:00") });
+    lygu(k.saltinis, "salyga"); tiesa(!!k.data, "apskaičiuota be CVP IS");
+    k = KLT({ docs: d, galutinis: W.GP_CVPIS.parseData("2026-06-20T14:00:00"), kelietapis: true });
+    lygu([k.saltinis, k.data, k.salyga.dienu], [null, null, 8], "kelių etapų");
+    k = KLT({ docs: [sal("Prašymai paaiškinti sąlygas pateikiami ne vėliau kaip likus 3 darbo dienoms iki pasiūlymų pateikimo termino.")], galutinis: W.GP_CVPIS.parseData("2026-06-20T14:00:00") });
+    lygu([k.data, k.salyga.darbo], [null, true], "darbo dienos");
+    k = KLT({ docs: d, sistema: true, pirkimas: { clarificationPeriodEnd: "2033-09-21T11:00:00", tenderSubmissionDeadline: "2033-09-21T11:00:00", status: "Bid submission" } });
+    lygu([k.data, k.salyga.dienu, k.suTerminu], [null, 8, false], "sistema: ne 2033 m.");
+    lygu(KLT({ sistema: true, pirkimas: { clarificationPeriodEnd: "2033-09-21T11:00:00", tenderSubmissionDeadline: "2033-09-21T11:00:00", status: "Bid submission" } }), null, "sistema be sakinio");
+  });
+  await testas("Sąsaja: juosta su data ir likusiu laiku; greit - gintarinė, praėjęs - pasakoma pasekmė, sutampa - pranešama; VPT eilutė su žyma; EN", async () => {
+    await isvalyk();
+    const nuo = (val) => { const d = new Date(Date.now() + val * 3600000), z = n => String(n).padStart(2, "0");
+      const v = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Vilnius", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(d).replace(" ", "T"); return v + ":00"; };
+    VPT_ATS = vptOk({ clarificationPeriodEnd: nuo(5 * 24 + 3), tenderSubmissionDeadline: nuo(20 * 24) });
+    await nustatyk("1234501");
+    let b = KT(); tiesa(!b.hidden, "matoma");
+    turi(b.textContent, "Klausimą pirkimo vykdytojui pateikite iki"); turi(b.textContent, nuo(5 * 24 + 3).slice(0, 10)); neturi(b.textContent, "GMT");
+    turi(b.querySelector(".tag.green").textContent, "liko 5 d."); turi(b.textContent, "CVP IS nurodytas klausimų terminas");
+    tiesa(!b.querySelector(".kl-term--greit"), "be gintarinės");
+    turi(D.getElementById("vptBox").textContent, "Klausimų terminas"); tiesa(!!D.querySelector("#vptBox .tag.green"), "VPT eilutėje žyma");
+    // Nuoroda veda į temą
+    b.querySelector("button").click(); await laukti(30);
+    tiesa(!!D.getElementById("tema-klausimas"), "tema"); W.setView("pirkimas");
+
+    VPT_ATS = vptOk(Object.assign({ id: 1234502 }, { clarificationPeriodEnd: nuo(30), tenderSubmissionDeadline: nuo(20 * 24) })); await nustatyk("1234502");
+    b = KT(); tiesa(!!b.querySelector(".kl-term--greit"), "greit"); tiesa(!!b.querySelector(".tag.amber"), "gintarinė žyma"); turi(b.textContent, "liko 1 d.");
+
+    VPT_ATS = vptOk(Object.assign({ id: 1234503 }, { clarificationPeriodEnd: nuo(5), tenderSubmissionDeadline: nuo(20 * 24) })); await nustatyk("1234503");
+    b = KT(); turi(b.querySelector(".tag").textContent, "liko 4 val."); neturi(b.querySelector(".tag").textContent, " d.");
+
+    VPT_ATS = vptOk(Object.assign({ id: 1234504 }, { clarificationPeriodEnd: nuo(0.5), tenderSubmissionDeadline: nuo(20 * 24) })); await nustatyk("1234504");
+    turi(KT().querySelector(".tag").textContent, "mažiau nei valanda");
+
+    VPT_ATS = vptOk(Object.assign({ id: 1234505 }, { clarificationPeriodEnd: nuo(-24), tenderSubmissionDeadline: nuo(20 * 24) })); await nustatyk("1234505");
+    b = KT(); tiesa(!!b.querySelector(".kl-term--praejes"), "praėjęs"); turi(b.textContent, "Klausimų terminas baigėsi"); turi(b.textContent, "terminas praėjęs");
+    turi(b.textContent, "Pasiūlymų terminas - " + nuo(20 * 24).slice(0, 10)); turi(b.textContent, "gali nespėti atsakyti"); turi(b.textContent, "gali būti nepratęstas");
+    tiesa(!!D.querySelector("#vptBox .tag.red"), "VPT eilutėje");
+
+    const lyg = nuo(4 * 24);
+    VPT_ATS = vptOk(Object.assign({ id: 1234506 }, { clarificationPeriodEnd: lyg, tenderSubmissionDeadline: lyg })); await nustatyk("1234506");
+    b = KT(); turi(b.textContent, "kuo anksčiau"); turi(b.textContent, "sutampa su pasiūlymų terminu"); turi(b.textContent, "gali būti nurodytas ankstesnis"); tiesa(!!b.querySelector(".kl-term--greit"), "pabrėžta");
+
+    VPT_ATS = vptOk(Object.assign({ id: 1234507 }, { status: "Cancelled", clarificationPeriodEnd: nuo(50), tenderSubmissionDeadline: nuo(100) })); await nustatyk("1234507");
+    tiesa(KT().hidden, "nutrauktas - nerodoma");
+    const eil = [...D.querySelectorAll("#vptBox li")].filter(x => /Klausimų terminas/.test(x.textContent))[0];
+    tiesa(!!eil, "VPT eilutė lieka"); tiesa(!eil.querySelector(".tag"), "be likusio laiko");
+
+    VPT_ATS = vptOk(Object.assign({ id: 1234508 }, { procedure: "Dynamic Purchasing System", clarificationPeriodEnd: "2099-01-01T00:00:00", tenderSubmissionDeadline: "2099-01-01T00:00:00" })); await nustatyk("1234508");
+    tiesa(KT().hidden, "DPS be sakinio - nerodoma");
+
+    // Sąlygos reikalauja paklausti gerokai anksčiau, nei rodo CVP IS: viršuje ankstesnė data, sakoma abi, citata
+    await ikelk({ "SPS.txt": "Prašymai paaiškinti konkurso sąlygas gali būti pateikiami CVP IS priemonėmis ne vėliau kaip likus 8 dienoms iki pasiūlymų pateikimo termino pabaigos." });
+    VPT_ATS = vptOk(Object.assign({ id: 1234510 }, { clarificationPeriodEnd: nuo(19 * 24), tenderSubmissionDeadline: nuo(20 * 24) })); await nustatyk("1234510");
+    b = KT(); turi(b.querySelector("b").textContent, nuo(12 * 24).slice(0, 10)); turi(b.textContent, "CVP IS nurodyta " + nuo(19 * 24).slice(0, 10)); turi(b.textContent, "reikalauja paklausti anksčiau"); tiesa(!!b.querySelector(".src"), "citata");
+    // Kelių etapų pirkime iš sąlygų data neskaičiuojama: nežinoma, kurio etapo terminas
+    VPT_ATS = vptOk(Object.assign({ id: 1234512 }, { procedure: "Negotiated with prior call for competition", clarificationPeriodEnd: nuo(19 * 24), tenderSubmissionDeadline: nuo(20 * 24) })); await nustatyk("1234512");
+    b = KT(); turi(b.querySelector("b").textContent, nuo(19 * 24).slice(0, 10)); neturi(b.textContent, "reikalauja paklausti anksčiau");
+    // VPT duomenys pasikeitė: juosta perpiešiama su jais
+    W.__PPT.VPT.rez.pirkimas.clarificationPeriodEnd = nuo(10 * 24); W.__PPT.renderVpt();
+    turi(KT().querySelector("b").textContent, nuo(10 * 24).slice(0, 10));
+    // Ir jau praėjusi
+    VPT_ATS = vptOk(Object.assign({ id: 1234511 }, { clarificationPeriodEnd: nuo(5 * 24), tenderSubmissionDeadline: nuo(7 * 24) })); await nustatyk("1234511");
+    b = KT(); turi(b.textContent, "Klausimų terminas baigėsi"); turi(b.textContent, "reikalauja paklausti anksčiau"); turi(b.textContent, "gali nespėti atsakyti");
+    await svarus();
+
+    VPT_ATS = vptOk(Object.assign({ id: 1234509 }, { clarificationPeriodEnd: nuo(5 * 24 + 3), tenderSubmissionDeadline: nuo(20 * 24) })); await nustatyk("1234509");
+    W.setLang("en"); b = KT();
+    turi(b.textContent, "Submit your question to the contracting entity by"); turi(b.querySelector(".tag").textContent, "left"); neturi(b.textContent, "pateikite");
+    W.setLang("lt"); await svarus();
+  });
+  await testas("Klausimo projektas: terminas lange; be CVP IS duomenų - kur jį rasti; įrašas į HTML - tekstu", async () => {
+    await isvalyk(); W.__PPT.VPT.id = null; W.__PPT.VPT.rez = null; W.__PPT.renderVpt();
+    W.klausimoProjektas({ klausimas: "K" }); turi(D.querySelector(".modal-body").textContent, "Prašymų pateikti paaiškinimus termino pabaiga"); W.closeModal();
+    VPT_ATS = vptOk({ clarificationPeriodEnd: "2099-10-14T15:00:00" }); await nustatyk("1234501");
+    W.klausimoProjektas({ klausimas: "K" });
+    turi(D.querySelector(".modal-body .kl-term").textContent, "Klausimą pirkimo vykdytojui pateikite iki"); tiesa(!D.querySelector(".modal-body .kl-term button"), "lange be nuorodos");
+    W.closeModal();
+    await isvalyk(); W.__PPT.VPT.id = null; W.__PPT.VPT.rez = null; W.__PPT.renderVpt();
+    const BLOGA = '<img src=x onerror="__xss=1">';   // be taško: sakinio ribos
+    const zip = { "SPS.txt": "Prašymai paaiškinti " + BLOGA + " sąlygas gali būti pateikiami ne vėliau kaip likus 8 dienoms iki " + BLOGA + " pasiūlymų pateikimo termino pabaigos." };
+    await ikelk(zip); await laukti(40);
+    tiesa(!KT().hidden, "sakinys rastas be CVP IS"); turi(KT().textContent, "Pirkimo sąlygose - ne vėliau kaip likus 8 d. iki"); tiesa(!!KT().querySelector(".src"), "citata"); lygu(KT().querySelectorAll("img").length, 0, "tekstu"); tiesa(!W.__xss, "nevykdyta");
+    await svarus();
+  });
+  await isvalyk(); VPT_ATS = null;
+
+  grupe("Lietuviško ir angliško teksto sutikrinimas modulyje (shared/kalbu-sutikrinimas.js, 2026-11-03)");
+  const KB = () => D.getElementById("kalbuBox");
+  const DX_LT = "Tiekėjas per šį terminą ir su šiomis sąlygomis privalo pateikti ", DX_EN = "The Supplier shall within this period and on these terms submit ";
+  await testas("Skirtumas: abi citatos su pažymėta reikšme, dokumentas ir vieta, „Paruošti klausimą“ užpildo projektą; kuriai kalbai viršenybė - iš dokumentų", async () => {
+    const dx = await docxBaitai(["Įžanga"], [["2.1.", DX_LT + "per 5 (penkias) darbo dienas užtikrinimą.", DX_EN + "the security within 5 (five) days."], ["2.2.", DX_LT + "100 000 Eur.", DX_EN + "EUR 100,000."]]);
+    await ikelk({ "SPS.docx": dx, "BPS.txt": "Jei yra neatitikimų ir/ar prieštaravimų tarp lietuvių kalba surašyto teksto ir anglų kalba surašyto teksto, viršenybė suteiktina lietuvių kalba surašytam tekstui. If there are discrepancies and/or contradictions between the text in Lithuanian language and the text in English language, preference is to be given to the text in Lithuanian language.\n\nKitos nuostatos." });
+    await laukti(40);
+    const b = KB(); tiesa(!b.hidden, "matoma");
+    turi(b.textContent, "Lietuviškas ir angliškas tekstas skiriasi (1)");
+    lygu(b.querySelectorAll(".kalbos-r").length, 1);
+    lygu([...b.querySelectorAll("mark")].map(x => x.textContent), ["5 (penkias) darbo dienas", "5 (five) days"]);
+    turi(b.querySelector(".kalbos-v").textContent, "Terminas"); turi(b.querySelector(".kalbos-v").textContent, "SPS.docx"); turi(b.querySelector(".kalbos-v").textContent, "2.1");
+    turi(b.textContent, "Dokumentuose dėl skirtumų nustatyta:"); turi(b.textContent, "viršenybė suteiktina lietuvių kalba surašytam tekstui");
+    b.querySelector("button").click();
+    lygu(D.getElementById("qDoc").value, "SPS.docx"); lygu(D.getElementById("qPunktas").value, "2.1");
+    turi(D.getElementById("qCit").value, "Lietuviškai:"); turi(D.getElementById("qCit").value, "Angliškai:"); turi(D.getElementById("qCit").value, "5 (five) days");
+    lygu(D.getElementById("qNeaisk").value, "Lietuviškame tekste nurodyta „5 (penkias) darbo dienas“, angliškame - „5 (five) days“.");
+    lygu(D.getElementById("qKlaus").value, "Prašome patikslinti, kuri reikšmė galioja.");
+    turi(D.getElementById("qOut").textContent, "5 (five) days");
+    W.closeModal();
+    W.setLang("en"); await laukti(20);
+    turi(KB().textContent, "The Lithuanian and English texts differ (1)"); turi(KB().querySelector(".kalbos-v").textContent, "Period");
+    turi(KB().textContent, "preference is to be given to the text in Lithuanian"); neturi(KB().textContent, "viršenybė suteiktina");
+    W.setLang("lt");
+    await svarus();
+    // Tas pats skirtumas kitoje redakcijoje - viena pastaba su abiem vietomis
+    const r2 = [["2.1.", DX_LT + "100 000 Eur.", DX_EN + "EUR 10,000."]];
+    await ikelk({ "SPS.docx": await docxBaitai(["Įžanga"], r2), "SPS patikslinta.docx": await docxBaitai(["Įžanga"], r2) }); await laukti(40);
+    lygu(KB().querySelectorAll(".kalbos-r").length, 1); turi(KB().textContent, "Tas pats skirtumas ir kitur:"); turi(KB().textContent, "SPS patikslinta.docx");
+    await svarus();
+  });
+  await testas("Be skirtumų: tyli pastaba su vietų skaičiumi ir ribomis, ne „viskas gerai“; be dvikalbių dokumentų - nieko; dokumentus išvalius - dingsta", async () => {
+    const dx = await docxBaitai(["Įžanga"], [["2.1.", DX_LT + "100 000 Eur.", DX_EN + "EUR 100,000."]]);
+    await ikelk({ "SPS.docx": dx }); await laukti(40);
+    let b = KB(); tiesa(!b.hidden, "pastaba"); tiesa(!b.querySelector(".kalbos"), "ne radinys");
+    turi(b.textContent, "suporuotų vietų: 1"); turi(b.textContent, "skirtumų neradome"); turi(b.textContent, "Žodžiais parašytų reikšmių"); turi(b.textContent, "atskirų lietuviško ir angliško failo nelyginame");
+    await ikelk({ "SPS.txt": "Tik lietuviškas tekstas per 30 dienų." }); await laukti(40);
+    tiesa(KB().hidden, "vienos kalbos paketas - nieko");
+    await isvalyk(); tiesa(KB().hidden, "išvalius"); lygu(KB().textContent, "");
+  });
+  await testas("Tekstas iš dokumento į HTML - tik tekstu, ir citata, ir vardas, ir klausimo projektas", async () => {
+    const BLOGA = '&lt;img src=x onerror=&quot;window.__xss2=1&quot;&gt;';
+    const dx = await docxBaitai(["Įžanga"], [["2.1.", DX_LT + BLOGA + " 100 000 Eur.", DX_EN + BLOGA + " EUR 10,000."]]);
+    await ikelk({ "SPS.docx": dx }); await laukti(40);
+    const b = KB(); lygu(b.querySelectorAll("img").length, 0); turi(b.textContent, "<img"); lygu(b.querySelectorAll("mark").length, 2);
+    b.querySelector("button").click(); turi(D.getElementById("qCit").value, "<img"); W.closeModal();
+    await laukti(30); tiesa(!W.__xss2, "nevykdyta");
+    await svarus();
+  });
+  await testas("Be GP_MONEY ar modulio klaidos atveju - klausti vis tiek galima, klaidingų pastabų nėra; failai - sw.js sąraše", async () => {
+    const dx = await docxBaitai(["Įžanga"], [["2.1.", DX_LT + "100 000 Eur.", DX_EN + "EUR 10,000."]]);
+    await ikelk({ "SPS.docx": dx }); await laukti(40);
+    const senas = W.GP_KALBU_SUTIKRINIMAS.tikrink; W.GP_KALBU_SUTIKRINIMAS.tikrink = () => { throw new Error("x"); };
+    W.__PPT.S.kalb = null; W.__PPT.renderAskState();
+    tiesa(KB().hidden, "be pastabos"); lygu(KB().textContent, "");
+    tiesa(!D.getElementById("askBtn").disabled, "klausti galima");
+    W.GP_KALBU_SUTIKRINIMAS.tikrink = senas;
+    await svarus();
+    const sw = await (await W.fetch("sw.js?b=" + Date.now())).text();
+    turi(sw, '"../shared/kalbu-sutikrinimas.js"'); turi(sw, '"../shared/money.js"');
+    neturi(sw, "ppt-2026-11-03-5");
+  });
+
   grazinkKalba();
   APSAUGA.atkurk();
   document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
