@@ -23,7 +23,7 @@
  */
 (function (global) {
   "use strict";
-  var LITGRID = "LITGRID standartas";
+  var LITGRID = "formos standartas";
 
   /* ---------------------------------------------------------------- pagalbinės */
   function vieta(V, rusis, v, re){
@@ -215,7 +215,7 @@
       else if (EKS(ctx || {}) && /^Sutarties įvykdymo užtikrinimas/.test(p.tekstas)) { valdo = "pagal atsakymą apie Sutarties įvykdymo užtikrinimą"; yra = R.ek_uztikrinimas !== "ne"; }
       else if (PPS(ctx || {}) && /Apmokėjimo tvarka pagal etapus/.test(p.tekstas)) valdo = "generuojamas kartu su specialiosiomis sąlygomis";
       else if (kitas[p.i] != null) { valdo = "pagal atsakymą į kitą šios sutarties klausimą"; yra = kitoAts[kitas[p.i]] !== "ne"; }
-      out.push({ nr: p.nr, rodomas: rod, tekstas: String(p.tekstas || "").replace(/ĮMONĖS PAVADINIMAS/g, "LITGRID AB"), valdo: valdo, pridedamas: valdo ? yra : !be[p.nr] });
+      out.push({ nr: p.nr, rodomas: rod, tekstas: String(p.tekstas || "").replace(/ĮMONĖS PAVADINIMAS/g, global.GP_ORG_SABLONAI ? global.GP_ORG_SABLONAI.dabartine().vardas : "LITGRID AB"), valdo: valdo, pridedamas: valdo ? yra : !be[p.nr] });
     });
     return out;
   }
@@ -224,8 +224,8 @@
     var pas = prieduSarasas(Z, c, R).filter(function (p) { return !p.valdo; });
     if (!pas.length) return null;
     var be = c && c.tiesioginis === false ? pas.filter(function (p) { return PR_TRISALE.test(p.tekstas); }) : [];
-    return be.length ? { reiksme: "be:" + be.map(function (p) { return p.nr; }).join(","), kilme: "SPS: tiesioginis atsiskaitymas su subtiekėjais netaikomas - trišalės sutarties projekto nereikia; kiti - kaip LITGRID formoje" }
-                     : { reiksme: "visi", kilme: "kaip LITGRID formoje" + (pas.some(function (p) { return PR_TRISALE.test(p.tekstas); }) && c && c.tiesioginis === true ? " (SPS: taikomas tiesioginis atsiskaitymas - trišalės sutarties projektas reikalingas)" : "") };
+    return be.length ? { reiksme: "be:" + be.map(function (p) { return p.nr; }).join(","), kilme: "SPS: tiesioginis atsiskaitymas su subtiekėjais netaikomas - trišalės sutarties projekto nereikia; kiti - kaip formoje" }
+                     : { reiksme: "visi", kilme: "kaip formoje" + (pas.some(function (p) { return PR_TRISALE.test(p.tekstas); }) && c && c.tiesioginis === true ? " (SPS: taikomas tiesioginis atsiskaitymas - trišalės sutarties projektas reikalingas)" : "") };
   }
   var KL_PRIEDAI = function (grupe) { return { id: "priedai_sar", grupe: grupe, tipas: "priedai", privalomas: true,
     klausimas: "Kurie pasirenkami priedai pridedami prie šios Sutarties?",
@@ -395,7 +395,7 @@
       siuloma: function () { return { reiksme: "sablono", kilme: LITGRID }; } },
     { id: "bauda_nutraukus", grupe: "Užtikrinimas ir atsakomybė", tipas: "variantai", privalomas: true,
       klausimas: "Bauda nutraukus sutartį dėl Tiekėjo kaltės (9.3 punktas)",
-      variantai: [{ id: "litgrid", tekstas: "LITGRID: 5 proc. Pradinės sutarties vertės, ne mažiau kaip 3000 Eur" }, { id: "kita", tekstas: "Kitas šablono (VPT) variantas - pildysiu Word programoje" }],
+      variantai: [{ id: "litgrid", tekstas: "Formos variantas: 5 proc. Pradinės sutarties vertės, ne mažiau kaip 3000 Eur" }, { id: "kita", tekstas: "Kitas šablono (VPT) variantas - pildysiu Word programoje" }],
       siuloma: function () { return { reiksme: "litgrid", kilme: LITGRID }; } },
     { id: "velavimas", grupe: "Užtikrinimas ir atsakomybė", tipas: "tekstas", privalomas: false, rodoma: paslaugos,
       klausimas: "Po kiek laiko vėlavimo sutartį galima nutraukti (12.2.4 punktas)?",
@@ -441,11 +441,11 @@
                  siuloma: function (c) { var z = zalSiulymas(c); return z && z.p ? { reiksme: z.p, kilme: z.kodel } : null; } }],
       pastaba: function (c) { var z = c.zaliejiSPS; return z ? "SPS žaliųjų reikalavimų dalyje pasirinkta: " + z.map(function (k) { return "„" + ZAL_SPS[k] + "“"; }).join(", ") + "." : ""; } },
     { id: "pakavimas", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true, rodoma: prekes,
-      klausimas: "Ar taikomas LITGRID kriterijus dėl prekių pakuočių (13.2 punktas - pakavimo lapas)?" },
+      klausimas: "Ar taikomas formos kriterijus dėl prekių pakuočių (13.2 punktas - pakavimo lapas)?" },
     { id: "pristatymas", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true, rodoma: prekes,
-      klausimas: "Ar taikomi LITGRID kriterijai dėl prekių pristatymo (13.3 punktas - pristatymo laikas, netaršios transporto priemonės)?" },
+      klausimas: "Ar taikomi formos kriterijai dėl prekių pristatymo (13.3 punktas - pristatymo laikas, netaršios transporto priemonės)?" },
     { id: "montavimas", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true, rodoma: prekes,
-      klausimas: "Ar taikomas LITGRID kriterijus dėl su prekėmis susijusių paslaugų (13.4 punktas - atliekų rūšiavimas montuojant)?" },
+      klausimas: "Ar taikomas formos kriterijus dėl su prekėmis susijusių paslaugų (13.4 punktas - atliekų rūšiavimas montuojant)?" },
     { id: "socialiniai", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true,
       klausimas: "Ar sutarties vykdymui nustatomi socialiniai kriterijai?",
       uzuomina: "„Taip“ - įrašykite kriterijus (šablono rekomendacija - Socialiai atsakingų pirkimų gairių pavyzdžiai). Kai SPS yra socialinių reikalavimų dalis (tiekėjas jų atitiktį deklaruoja pasiūlyme), siūloma ta pati formuluotė kaip paskelbtuose LITGRID projektuose.",
@@ -463,7 +463,7 @@
         return "1 žingsnyje atsakyta, kad pirkimo objektas " + (c.nacsaug ? "susijęs" : "nesusijęs") + " su nacionaliniu saugumu. Tai kitas klausimas (apie pirkimo objektą), todėl į šį atsakykite atskirai.";
       } },
     { id: "tinklo", grupe: "Kita", tipas: "taipne", privalomas: true,
-      klausimas: "Ar tiekėjas dirbs veikiančiuose elektros perdavimo tinklo objektuose ar jų apsaugos zonoje (14.4 punktas)?",
+      get klausimas() { var I = global.GP_ORG_SABLONAI && global.GP_ORG_SABLONAI.dabartine(); return "Ar tiekėjas dirbs veikiančiuose " + (I && I.objektai ? I.objektai.lt : "elektros perdavimo tinklo") + " objektuose ar jų apsaugos zonoje (14.4 punktas)?"; },
       uzuomina: "„Taip“ - reikalingas Pirkėjo sutikimas dirbti (14.4.1-14.4.4) ir 9.10 bauda; „Ne“ - punktas ir bauda netaikomi." },
     // 2.1 Pirkėjo kontaktiniai asmenys - nebeklausiama (2026-10-16, naudotojo sprendimas): paaiškėja tik po pirkimo, pildoma sudarant sutartį
     { id: "cvp_adresas", grupe: "Kita", tipas: "tekstas", privalomas: false, rodoma: paslaugos,

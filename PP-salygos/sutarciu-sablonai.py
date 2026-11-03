@@ -906,6 +906,10 @@ def eilutes(t):
     return out
 
 
+# Failo savybių hipersaitų sąrašas (docProps/app.xml <HLinks>) - Word podėlis: jame likdavo senos nuorodos ir asmens el. paštas (2026-11-03)
+HLINKS_RE = re.compile(r'<HLinks>.*?</HLinks>', re.S)
+
+
 def paruosk(b, kodas=None):
     zi = zipfile.ZipFile(io.BytesIO(b))
     infos = zi.infolist()
@@ -924,6 +928,8 @@ def paruosk(b, kodas=None):
             pk.append(kas)
     kom += vid
     dalys['word/document.xml'] = x.encode('utf-8')
+    if 'docProps/app.xml' in dalys:
+        dalys['docProps/app.xml'] = HLINKS_RE.sub('', dalys['docProps/app.xml'].decode('utf-8')).encode('utf-8')
     if len(kom) > len(vid):
         pk.insert(0, 'pašalinta komentarų: %d' % (len(kom) - len(vid)))
     if vid:

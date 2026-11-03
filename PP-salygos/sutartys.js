@@ -263,8 +263,19 @@
     var kalba = duom.kalba === "LT_EN" || duom.kalba === "LTEN" ? "LTEN" : "LT";
     var rusis = objektoRusis(duom.objektas);
     if (!t) pastabos.push("Pirkimo pavadinimas tuščias - parenkama tik pagal objekto rūšį ir atsakymus.");
-    if (duom.vykdytojas && !/litgrid/i.test(duom.vykdytojas))
-      pastabos.push("Sutarčių šablonai - LITGRID AB; kitos organizacijos sutarčių formų generatoriuje nėra.");
+    if (duom.vykdytojas && !/litgrid/i.test(duom.vykdytojas) && !/amber\s*grid/i.test(duom.vykdytojas))
+      pastabos.push("Sutarčių šablonai - LITGRID AB ir AB „Amber Grid“; kitos organizacijos sutarčių formų generatoriuje nėra.");
+    /* AB „Amber Grid“ (2026-11-03): paskelbtose jos prekių ir paslaugų sutartyse - tos pačios bendrosios sąlygos; rangos ir kitų darbų formos
+       kitos, jų generatoriuje nėra. Parinkimas - tik pagal objekto rūšį (LITGRID klausimai apie pastotes, linijas ir CPO LT jai netinka). */
+    if (duom.vykdytojas && /amber\s*grid/i.test(duom.vykdytojas)) {
+      var ag = rusis === "prekes" ? "PREKES" : rusis === "paslaugos" ? "PASLAUGOS" : null;
+      if (!ag) return { busena: "neparuosta", seima: rusis === "darbai" ? "STATYBOS_RANGOS" : null, variantas: null, pavadinimas: rusis === "darbai" ? "Rangos sutartis" : "",
+        priezastys: rusis ? ["pirkimo objektas - " + (rusis === "darbai" ? "darbai" : "mišrus")] : [], kalba: kalba, atsakyta: [], sablonai: null,
+        pastabos: pastabos.concat([rusis ? "AB „Amber Grid“ rangos sutarties formos generatoriuje dar nėra - sutarties projektą prie pirkimo sąlygų pridėsite patys." : "Pasirinkite objekto tipą."]) };
+      var sbA = kodai(ag, null, kalba);
+      return { busena: "parinkta", seima: ag, variantas: null, pavadinimas: SEIMOS[ag].pav, priezastys: ["pirkimo objektas - " + (ag === "PREKES" ? "prekės" : "paslaugos")],
+        kalba: kalba, pastabos: pastabos, atsakyta: [], sablonai: sbA.kodai };
+    }
     var priezastys = [], r, i = 0;
     while (i++ < 6) {
       r = medis(t, rusis, duom.bvpz, ats, tarpai(duom.pavadinimas));

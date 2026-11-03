@@ -156,8 +156,8 @@
   /* Ivadas pagal rezima: SPS (2 zingsnis) arba sutarties projektas (2026-10-18). Taisykles bendros. */
   var IVADAS = {
     sps: [
-      "Tu padedi LITGRID AB pirkimu organizatoriui rengti specialiasias pirkimo salygas (SPS)",
-      "is LITGRID sablonu (sektorinis pirkimas pagal PI). Salygos dar RENGIAMOS: klausimai - tai",
+      "Tu padedi {IMONE} pirkimu organizatoriui rengti specialiasias pirkimo salygas (SPS)",
+      "is standartiniu sablonu (sektorinis pirkimas pagal PI). Salygos dar RENGIAMOS: klausimai - tai",
       "sprendimai, kuriuos rengejas priima sablone, o visi galimi atsakymai isvardyti prie",
       "klausimo (paties sablono tau nereikia). Saltiniai S1, S2, ... - KITI to paties pirkimo",
       "dokumentai: technine specifikacija, sutarties projektas, kvalifikacijos reikalavimai ir pan.",
@@ -167,8 +167,8 @@
       "ivykdymas; technine specifikacija ar sutarties projektas nustato aplinkosauginius (zaliuosius)",
       "reikalavimus; nurodyta, ar objektas skaidomas i dalis; nurodytas laimetoju skaicius."],
     sutartis: [
-      "Tu padedi LITGRID AB pirkimu organizatoriui rengti pirkimo sutarties projekto specialiasias",
-      "salygas (SS) is LITGRID sutarties sablono. Sutarties projektas rengiamas PRIES pirkima: tiekejas",
+      "Tu padedi {IMONE} pirkimu organizatoriui rengti pirkimo sutarties projekto specialiasias",
+      "salygas (SS) is standartinio sutarties sablono. Sutarties projektas rengiamas PRIES pirkima: tiekejas",
       "dar nezinomas, todel jo duomenu, kainos ir asmenu neklausiama. Klausimai - tai sprendimai sutarties",
       "sablone, o visi galimi atsakymai isvardyti prie klausimo (paties sablono tau nereikia). Saltiniai",
       "S1, S2, ... - KITI to paties pirkimo dokumentai: technine specifikacija ar technine uzduotis,",
@@ -181,7 +181,8 @@
       "pavadinimas), brigadu skaiciu, reagavimo i avarija laika, ar taikomas BIM."]
   };
   function systemPrompt(rezimas) {
-    return (IVADAS[rezimas] || IVADAS.sps).concat([
+    var vykd = window.GP_ORG_SABLONAI ? window.GP_ORG_SABLONAI.dabartine().vardas : "LITGRID AB";
+    return (IVADAS[rezimas] || IVADAS.sps).map(function (e) { return e.replace("{IMONE}", vykd); }).concat([
       "",
       "GRIEZTOS TAISYKLES:",
       "1. Atsakyk TIK grynu JSON, be markdown ir be jokio kito teksto.",
