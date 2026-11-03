@@ -263,7 +263,7 @@
     }
     return s;
   }
-  function pdfTekstas(items) {
+  function pdfEilutes(items) {
     var lines = [];
     (items || []).forEach(function (it) {
       if (!it || !it.str) return;
@@ -275,10 +275,242 @@
         if (Math.abs(lines[i].y - y) <= Math.max(2, 0.35 * fs)) { line = lines[i]; break; }
       }
       if (!line) { line = { y: y, items: [] }; lines.push(line); }
-      line.items.push({ x: x, w: it.width || 0, fs: fs, s: it.str });
+      line.items.push({ x: x, w: it.width || 0, fs: fs, s: it.str, pasuktas: Math.abs(tr[1]) > 0.01, it: it });
     });
     lines.sort(function (a, b) { return b.y - a.y; });
-    return lines.map(function (l) { return sujunkEilute(l.items); }).join("\n");
+    return lines;
+  }
+  function pdfTekstas(items) {
+    return pdfEilutes(items).map(function (l) { return sujunkEilute(l.items); }).join("\n");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dvikalbis PDF: stulpeliai, kiekvienas sava kalba (LITGRID sąlygos ir sutartys; lentelėse - ir LT | EN | LT | EN).
+  // Skaitant eilutėmis kalbos persipina: paieška sakinio neranda, o DI citatos nepatvirtinamos. Tame pačiame puslapyje išdėstymas
+  // keičiasi (tekstas dviem stulpeliais, po jo lentelė keturiais), todėl puslapis dalijamas į zonas: eilutės jungiamos, kol jas
+  // visas kerta bent vienas vertikalus tarpas. Kiekvienos zonos stulpelio kalba nustatoma atskirai, o gretimi tos pačios kalbos
+  // stulpeliai lieka kartu ir skaitomi eilutėmis. Puslapio kalbos atskiriamos, tik jei atskirtos jos tikrai skirtingos -
+  // paprasta lentelė (visuose stulpeliuose ta pati kalba) skaitoma kaip anksčiau.
+  // ---------------------------------------------------------------------------
+  var STULP_LT = /(?:^|[^\p{L}])(?:ir|kad|yra|su|iš|į|arba|pagal|šio|šios|šis|kaip|kuris|kurie|dėl|bei|turi|nėra|apie|jei|jeigu|tiekėjas|pirkimo|sutarties)(?=[^\p{L}]|$)/giu;
+  var STULP_EN = /(?:^|[^\p{L}])(?:the|of|and|for|shall|with|by|or|is|are|this|that|in|to)(?=[^\p{L}]|$)/giu;
+  var STULP_DIAKRITIKAI = /[ąčęėįšųūž]/giu;
+  var STULP_ZODZIU = 20;       // tiek žodžių - kalbą galima spręsti patikimai
+  var STULP_TARPAS = 2;        // siauresnis tarpas (pt) stulpelių neskiria
+  var STULP_EILUCIU = 3;       // tiek eilučių - zona pati turi stulpelius
+  var STULP_KRASTAS = 40;      // tiek pt nuo zonos krašto stulpelio ribos nebūna
+  var STULP_DOKUMENTUI = 3;    // dvikalbis - bent kas trečias puslapis su tekstu
+  function stulpProfilis(t) {
+    var z = (t.match(/\p{L}[\p{L}\p{N}-]*/gu) || []).length, raid = (t.match(/\p{L}/gu) || []).length;
+    return {
+      z: z,
+      lt: (t.match(STULP_LT) || []).length / (z || 1),
+      en: (t.match(STULP_EN) || []).length / (z || 1),
+      d: (t.match(STULP_DIAKRITIKAI) || []).length / (raid || 1)
+    };
+  }
+  function stulpKalba(p) {
+    if (p.z < STULP_ZODZIU) return null;
+    if (p.d >= 0.015 && p.lt >= p.en) return "lt";
+    if (p.d <= 0.006 && p.en >= 0.12 && p.en >= 3 * p.lt) return "en";
+    return null;
+  }
+  // Trumpas stulpelis (lentelės antraštė, viena eilutė): tik aiškūs požymiai, kitaip nežinoma
+  function stulpKalbaTrumpo(p, maziausiai) {
+    if (p.z < (maziausiai || 3)) return null;
+    if (p.d >= 0.02) return "lt";
+    if (p.d === 0 && p.en >= 0.1) return "en";
+    return null;
+  }
+  // Eilutės tarpai: tarp gabalų ir abu kraštai (nuo -begalybės iki pirmo gabalo, nuo paskutinio iki +begalybės)
+  function stulpEilutesTarpai(l) {
+    var v = l.items.filter(function (e) { return e.s.trim() && !e.pasuktas; }).sort(function (a, b) { return a.x - b.x; });
+    if (!v.length) return null;
+    var tarpai = [], gal = -Infinity;
+    v.forEach(function (e) {
+      if (e.x - gal >= STULP_TARPAS) tarpai.push([gal, e.x]);
+      gal = Math.max(gal, e.x + e.w);
+    });
+    tarpai.push([gal, Infinity]);
+    return { tarpai: tarpai, nuo: v[0].x, iki: gal };
+  }
+  function stulpSankirta(a, b) {
+    var out = [], i = 0, j = 0;
+    while (i < a.length && j < b.length) {
+      var nuo = Math.max(a[i][0], b[j][0]), iki = Math.min(a[i][1], b[j][1]);
+      // Trečias narys - kiek eilučių tarpas jau išsilaikė
+      if (iki - nuo >= STULP_TARPAS) out.push([nuo, iki, (a[i][2] || 1) + 1]);
+      if (a[i][1] < b[j][1]) i++; else j++;
+    }
+    return out;
+  }
+  // Tarpas stulpelius skiria, tik kai abipus jo yra teksto: numerių stulpelis prie krašto - ne riba
+  function stulpVidiniai(tarpai, nuo, iki) {
+    return tarpai.filter(function (t) { return t[0] > nuo + STULP_KRASTAS && t[1] < iki - STULP_KRASTAS; });
+  }
+  // Tarpas lieka, jei eilutė jo neužstoja: ji gali siekti vieną jo kraštą (eilutės pabaiga), bet žodžių tarpas per vidurį - ne tarpas
+  function stulpLieka(t, tarpai) {
+    return tarpai.some(function (v) { return v[0] < t[1] && v[1] > t[0] && (v[0] <= t[0] + 0.01 || v[1] >= t[1] - 0.01); });
+  }
+  function stulpZonos(eilutes) {
+    var zonos = [], z = null, gt = eilutes.map(stulpEilutesTarpai);
+    eilutes.forEach(function (l, i) {
+      var g = gt[i];
+      if (!g) {   // tik tarpai ar pasuktas tekstas - lieka toje vietoje, kur yra
+        if (!z) { z = { eilutes: [], tarpai: [[-Infinity, Infinity]], nuo: Infinity, iki: -Infinity }; zonos.push(z); }
+        z.eilutes.push(l);
+        return;
+      }
+      if (z) {
+        var nuo = Math.min(z.nuo, g.nuo), iki = Math.max(z.iki, g.iki), bendri = stulpSankirta(z.tarpai, g.tarpai);
+        var lieka = stulpVidiniai(bendri, nuo, iki);
+        // Dingo tarpas, kuris jau išsilaikė kelias eilutes (stulpelis, ne žodžių tarpai) - šioje eilutėje išdėstymas kitas
+        var dingo = stulpVidiniai(z.tarpai, z.nuo, z.iki).filter(function (t) {
+          return (t[2] || 1) >= STULP_EILUCIU && !stulpLieka(t, lieka);
+        });
+        if (lieka.length && !dingo.length) {
+          z.eilutes.push(l); z.tarpai = bendri; z.nuo = nuo; z.iki = iki;
+          return;
+        }
+        // Viena eilutė per visą plotį (antraštė): kitoje eilutėje tarpas vėl yra, todėl ji - atskirai
+        var kita = gt[i + 1];
+        if (kita && dingo.some(function (t) { return stulpLieka(t, kita.tarpai); })) {
+          zonos.push({ eilutes: [l], tarpai: g.tarpai, nuo: g.nuo, iki: g.iki });
+          z = null;
+          return;
+        }
+      }
+      z = { eilutes: [l], tarpai: g.tarpai, nuo: g.nuo, iki: g.iki };
+      zonos.push(z);
+    });
+    return zonos;
+  }
+  function stulpTekstas(d) { return d.filter(function (e) { return !e.pasuktas; }).map(function (e) { return e.s; }).join(" "); }
+  function stulpDalys(z, ribos) {
+    var dalys = ribos.concat([null]).map(function () { return []; });
+    z.eilutes.forEach(function (l) {
+      l.items.forEach(function (e) {
+        var xc = e.pasuktas ? e.x : e.x + e.w / 2, k = 0;
+        while (k < ribos.length && xc >= ribos[k]) k++;
+        dalys[k].push(e);
+      });
+    });
+    return dalys;
+  }
+  // Zona bent iš tiek eilučių: jos tarpai - stulpeliai, ne žodžiai, kuriuos skiria sutapęs tarpas
+  function stulpStipri(z) { return z.eilutes.length >= STULP_EILUCIU; }
+  // Stiprios zonos stulpeliai pagal kalbą: ribos tarp kalbų ir kalbos. Nežinomos kalbos stulpelis tęsia kairėje esantį, pirmas - dešinėje.
+  function stulpZonosKalbos(z) {
+    var ribos = stulpVidiniai(z.tarpai, z.nuo, z.iki).map(function (t) { return (t[0] + t[1]) / 2; });
+    var neaisku = false;
+    var kalbos = stulpDalys(z, ribos).map(function (d) {
+      // Ir vienas žodis: zonoje gali būti ir žodžių tarpų, tada stulpelis - keli gabalai
+      var p = stulpProfilis(stulpTekstas(d)), l = stulpKalba(p) || stulpKalbaTrumpo(p, 1);
+      if (!l && p.z) neaisku = true;
+      return l;
+    });
+    for (var i = 1; i < kalbos.length; i++) if (!kalbos[i]) kalbos[i] = kalbos[i - 1];
+    for (var j = kalbos.length - 2; j >= 0; j--) if (!kalbos[j]) kalbos[j] = kalbos[j + 1];
+    var kr = [], kk = [kalbos[0]];
+    ribos.forEach(function (r, k) { if (kalbos[k + 1] !== kalbos[k]) { kr.push(r); kk.push(kalbos[k + 1]); } });
+    return { ribos: kr, kalbos: kk, neaisku: neaisku };
+  }
+  // Trumpa zona (1-2 eilutės) savo tarpų neturi, o kai kurio stulpelio kalba neaiški (trumpi sakiniai be požymių), jos nepakanka:
+  // tokia zona perima gretimos dvikalbės zonos ribas, jei jų nekerta ir kalbos neprieštarauja
+  function stulpTinka(z, kl) {
+    if (!kl || kl.ribos.length === 0) return false;
+    var kerta = z.eilutes.some(function (l) {
+      return l.items.some(function (e) {
+        return e.s.trim() && kl.ribos.some(function (r) { return e.x < r - 0.5 && e.x + e.w > r + 0.5; });
+      });
+    });
+    if (kerta) return false;
+    return stulpDalys(z, kl.ribos).every(function (d, k) {
+      var p = stulpProfilis(stulpTekstas(d)), l = stulpKalba(p) || stulpKalbaTrumpo(p);
+      return !l || l === kl.kalbos[k];
+    });
+  }
+  // Kiekvienam puslapiui: zonos su ribomis pagal kalbą. Zona be ribų - viena kalba arba nežinoma.
+  function stulpZonuKalbos(puslapiai) {
+    var pz = puslapiai.map(function (items) { return stulpZonos(pdfEilutes(items)); });
+    pz.forEach(function (zonos) {
+      zonos.forEach(function (z) { z.kl = stulpStipri(z) ? stulpZonosKalbos(z) : null; });
+    });
+    function dvikalbe(z) { return z.kl && !z.perimta && z.kl.ribos.length; }
+    function tvirta(z) { return dvikalbe(z) && !z.kl.neaisku; }
+    pz.forEach(function (zonos, pi) {
+      zonos.forEach(function (z, i) {
+        // Zona su savomis ribomis arba aiškia viena kalba lieka tokia
+        if (z.kl && (!z.kl.neaisku || z.kl.ribos.length)) return;
+        // Artimiausia dvikalbė zona: šiame puslapyje aukščiau, žemiau, tada gretimuose puslapiuose; pirma - kur kalbos aiškios
+        function kandidatai(tinka) {
+          var kand = [];
+          for (var a = i - 1; a >= 0; a--) if (tinka(zonos[a])) { kand.push(zonos[a].kl); break; }
+          for (var b = i + 1; b < zonos.length; b++) if (tinka(zonos[b])) { kand.push(zonos[b].kl); break; }
+          [pz[pi - 1], pz[pi + 1]].forEach(function (kita, ki) {
+            if (!kita) return;
+            var eile = ki === 0 ? kita.slice().reverse() : kita;
+            for (var c = 0; c < eile.length; c++) if (tinka(eile[c])) { kand.push(eile[c].kl); break; }
+          });
+          return kand;
+        }
+        var kand = kandidatai(tvirta);
+        if (!z.kl) kand = kand.concat(kandidatai(dvikalbe));
+        for (var k = 0; k < kand.length; k++) if (stulpTinka(z, kand[k])) { z.kl = kand[k]; z.perimta = true; return; }
+      });
+    });
+    return pz;
+  }
+  function stulpPuslapis(zonos) {
+    var srautai = { lt: [], en: [] }, grupes = [], pirma = null, dvik = 0, visi = 0;
+    zonos.forEach(function (z) {
+      var kl = z.kl || { ribos: [], kalbos: [null] }, dalys = stulpDalys(z, kl.ribos);
+      dalys.forEach(function (d, k) {
+        var p = stulpProfilis(stulpTekstas(d));
+        var kalba = kl.ribos.length ? kl.kalbos[k] : (kl.kalbos[0] || stulpKalba(p) || stulpKalbaTrumpo(p));
+        if (kalba && !pirma) pirma = kalba;
+        visi += p.z; if (kl.ribos.length) dvik += p.z;
+        grupes.push({ kalba: kalba, items: d });
+      });
+    });
+    if (!pirma) return null;
+    grupes.forEach(function (g) { srautai[g.kalba || pirma].push(g); });
+    var teks = {}, prof = {};
+    ["lt", "en"].forEach(function (k) {
+      prof[k] = stulpProfilis(srautai[k].filter(function (g) { return g.kalba; }).map(function (g) { return stulpTekstas(g.items); }).join(" "));
+      teks[k] = srautai[k].map(function (g) { return pdfTekstas(g.items.map(function (e) { return e.it; })); }).join("\n");
+    });
+    // Tekstas sava kalba vienas po kito (ne stulpeliais) nepersipina - jo tvarka nekeičiama
+    var stulpeliais = visi > 0 && dvik * 2 >= visi;
+    return {
+      pirma: pirma, lt: teks.lt, en: teks.en,
+      griezta: stulpeliais && stulpKalba(prof.lt) === "lt" && stulpKalba(prof.en) === "en",
+      // Puslapis su mažai žodžių dvikalbiame dokumente
+      tikima: stulpeliais && prof.lt.z >= 3 && prof.en.z >= 3 && prof.lt.d >= 0.015 && prof.en.d <= 0.006
+    };
+  }
+  // Kiekvienam puslapiui - { pirma, lt, en } arba null (vienos kalbos, skaitoma eilutėmis). Dvikalbis - dokumentas, kurio bent
+  // trečdalis puslapių dviem kalbomis: atsakymų rašte, kur tik vienas kitas klausimas angliškai, klausimas nuo atsakymo neatskiriamas.
+  function dvikalbiaiStulpeliai(puslapiai) {
+    var sp = stulpZonuKalbos(puslapiai || []).map(stulpPuslapis);
+    var griezti = sp.filter(function (s) { return s && s.griezta; }).length;
+    var su = (puslapiai || []).filter(function (items) { return items.some(function (it) { return it && it.str && it.str.trim(); }); }).length;
+    if (!griezti || griezti * STULP_DOKUMENTUI < su) return sp.map(function () { return null; });
+    return sp.map(function (s) { return s && (s.griezta || s.tikima) ? s : null; });
+  }
+  // Blokai: pirmos kalbos stulpeliai ir vienos kalbos puslapiai - puslapių tvarka, antros kalbos - po jų, kad sakinys,
+  // tęsiamas kitame puslapyje, liktų vientisas. Dokumentui be dvikalbių puslapių - kaip visada, po bloką puslapiui.
+  function pdfBlokai(puslapiai) {
+    var sp = dvikalbiaiStulpeliai(puslapiai), pirma = null, antra = [], blocks = [];
+    sp.forEach(function (s) { if (s && !pirma) pirma = s.pirma; });
+    var kita = pirma === "lt" ? "en" : "lt";
+    puslapiai.forEach(function (items, i) {
+      var s = sp[i], pn = i + 1;
+      if (!s) { blocks.push({ loc: { page: pn }, text: norm(pdfTekstas(items)) }); return; }
+      blocks.push({ loc: { page: pn, stulpelis: pirma }, text: norm(s[pirma]) });
+      antra.push({ loc: { page: pn, stulpelis: kita }, text: norm(s[kita]) });
+    });
+    return blocks.concat(antra);
   }
 
   async function isPdf(buf, lang) {
@@ -288,14 +520,14 @@
     // Darbininkas - iš svetainės (shared/pdf-darbininkas.js); be jo pdf.js darbininko adreso neturėtų
     if (global.GP_PDF_DARBININKAS) await global.GP_PDF_DARBININKAS.nustatyk();
     var pdf = await global.pdfjsLib.getDocument({ data: buf, isEvalSupported: false }).promise;
-    var blocks = [], warnings = [], tuscių = 0;
+    var puslapiai = [], warnings = [], tuscių = 0;
     for (var pn = 1; pn <= pdf.numPages; pn++) {
       var page = await pdf.getPage(pn);
       var tc = await page.getTextContent();
-      var txt = norm(pdfTekstas(tc.items));
-      if (!txt) tuscių++;
-      blocks.push({ loc: { page: pn }, text: txt });
+      if (!norm(pdfTekstas(tc.items))) tuscių++;
+      puslapiai.push(tc.items);
     }
+    var blocks = pdfBlokai(puslapiai);
     if (pdf.numPages && tuscių === pdf.numPages) warnings.push(pran(lang, "skenuotas"));
     else if (tuscių > 0) warnings.push(pran(lang, "beTeksto", { n: tuscių }));
     return { blocks: blocks, warnings: warnings, pages: pdf.numPages };
@@ -553,7 +785,12 @@
       var tail = z.join(" ");
       buf = tail ? [tail] : []; zod = z.length; simb = tail.length; naujo = false; bufPunktas = null;
     }
+    var stulpDabar = null;
     doc.blocks.forEach(function (b) {
+      // Dvikalbis PDF: antra kalba - naujas fragmentas be persidengimo su pirma (citata rodo jos stulpelį)
+      var st = b.loc && b.loc.stulpelis;
+      if (st && stulpDabar && st !== stulpDabar) { flush(); buf = []; zod = 0; simb = 0; }
+      if (st) stulpDabar = st;
       // labai ilgas blokas (pvz. visas PDF puslapis) skaidomas į gabalus
       gabalai(b.text, maxZ, maxS).forEach(function (g, j) {
         var w = zodziuSk(g);
@@ -589,7 +826,9 @@
       doc.blocks = r.blocks; doc.warnings = doc.warnings.concat(r.warnings || []);
       if (!doc.blocks.length) doc.parseStatus = (doc.warnings.length ? "partial" : "failed");
       else if (doc.warnings.length) doc.parseStatus = "partial";
-      doc.language = kalba(doc.blocks.map(function (b) { return b.text; }).join(" ").slice(0, 6000));
+      var stulp = doc.blocks.filter(function (b) { return b.loc && b.loc.stulpelis; });
+      doc.dvikalbis = stulp.length > 0;
+      doc.language = stulp.length ? stulp[0].loc.stulpelis : kalba(doc.blocks.map(function (b) { return b.text; }).join(" ").slice(0, 6000));
       doc.chunks = fragmentai(doc);
       doc.words = doc.blocks.reduce(function (a, b) { return a + b.text.split(/\s+/).length; }, 0);
     } catch (err) {
@@ -682,7 +921,7 @@
   function vieta(loc, lang) {
     if (!loc) return "";
     var L = lang === "en";
-    if (loc.page) return (L ? "p. " : "psl. ") + loc.page;
+    if (loc.page) return (L ? "p. " : "psl. ") + loc.page + (loc.stulpelis ? ", " + loc.stulpelis.toUpperCase() + (L ? " column" : " stulpelis") : "");
     if (loc.table) return (L ? "table " : "lentelė ") + loc.table + (L ? ", row " : ", eil. ") + loc.row;
     if (loc.sheet) return (L ? "sheet " : "lapas ") + loc.sheet + (L ? ", row " : ", eil. ") + loc.row;
     if (loc.para) return (L ? "para. " : "pastr. ") + loc.para;
@@ -698,6 +937,8 @@
     versijosPozymiai: versijosPozymiai,
     rusis: rusis,
     pdfTekstas: pdfTekstas,
+    pdfBlokai: pdfBlokai,
+    dvikalbiaiStulpeliai: dvikalbiaiStulpeliai,
     punktas: punktas,
     limits: { MAX_FAILO_B: MAX_FAILO_B, MAX_ISSKLEISTA_B: MAX_ISSKLEISTA_B, MAX_DARBO_B: MAX_DARBO_B, MAX_FAILU: MAX_FAILU, GYLIS: GYLIS, CHUNK_ZODZIU: CHUNK_ZODZIU, CHUNK_SIMBOLIU: CHUNK_SIMBOLIU },
     _internal: { isDocx: isDocx, isXml: isXml, isHtml: isHtml, isTxt: isTxt, isXlsx: isXlsx, saugusKelias: saugusKelias, decodeFileName: decodeFileName, kalba: kalba, issklekRibotai: issklekRibotai, konteinerioDydis: konteinerioDydis, pran: pran }
