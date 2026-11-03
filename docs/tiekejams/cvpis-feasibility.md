@@ -2,6 +2,13 @@
 
 Patikrinta: **2026-09-02** (curl iš macOS ir WebFetch iš kitos infrastruktūros, viešos užklausos be prisijungimo; papildomai - kritiko patikra tą pačią dieną). Visi teiginiai žemiau turi HTTP būseną arba pažymėti kaip nepatikrinti.
 
+## Atnaujinimas 2026-10-29 (dokumentai per G-Procure serverį)
+
+Vieši dokumentai gaunami tuo pačiu keliu, kaip naršyklėje be prisijungimo: `prepareViewCfTWS.do` (slapukas), `prepareAnonymousDownload.do`,
+`downloadCftResourceItems.do` - G-Procure serverio maršrutas `/api/cvpis/dokumentai/<nr>` (`serveris/README.md`), ZIP perduodamas srautu ir neišsaugomas;
+PP-tiekejams jį parsisiunčia pasirinkus pirkimą (`GP_VPT.dokumentai`). Konkretus pirkimas pagal DPS nukreipiamas į CAS prisijungimą - dokumentus mato tik
+DPS dalyviai (403 `prisijungimas`): modulis tai pasako ir siūlo įkelti. Žemiau esantys 2026-10-17 ir 2026-10-18 teiginiai, kad dokumentų jungties nėra, nebegalioja.
+
 ## Atnaujinimas 2026-10-18 (VPT API per G-Procure serverį)
 
 Naudotojo sprendimu VPT API naudojama per G-Procure serverį (`serveris/README.md`): viešas OpenAPI aprašas
