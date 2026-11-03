@@ -17,6 +17,8 @@
  *    patikrinti 2026-10-18 su 7 žinomais pirkimais (LITGRID, Amber Grid, EPSO-G, Energy cells); neaiškus - nesiūlomas.
  *  - paieska(filtrai) / statistika(filtrai) - /api/cvpis/paieska ir /statistika (q, vykdytojas, ca, cpv, tipas, budas, busena,
  *    nuo, iki, rikiuoti, psl - serveris/README.md); parametrų klaida - „parametrai“, ryšys ir neįkelta - ne „nieko nerasta“.
+ *  - dokumentai(nr, { eiga, signal }) - /api/cvpis/dokumentai/<nr> (nuo 2026-10-29): viešas pirkimo dokumentų ZIP iš CVP IS per serverį
+ *    (srautu, serveris nieko nesaugo) -> { ok: true, blob, baitai, vardas } arba { ok: false, rusis }; dokumentuKlaida(rusis, kalba).
  *  - skirtumai(kortele, pirkimas) - kortelės pasiūlymų termino, paskelbimo datos ir būsenos skirtumai nuo VPT duomenų
  *    („Mano pirkimai“ patikra „Patikrinti CVP IS duomenis“, kortelių puslapio ?vpt=1).
  *
@@ -52,6 +54,93 @@
     }, function () {
       return baik({ ok: false, rusis: opts.signal && opts.signal.aborted ? "atsaukta" : "rysys" });
     });
+  }
+
+  /* Pirkimo dokumentų ZIP iš CVP IS per G-Procure serverį (nuo 2026-10-29; serveris/README.md): GET /api/cvpis/dokumentai/<nr>.
+     Serveris dokumentus perduoda srautu, kaip CVP IS juos atiduoda be prisijungimo, ir nieko neišsaugo. Grąžina
+     { ok: true, blob, baitai, vardas } arba { ok: false, rusis }: "prisijungimas" (CVP IS dokumentus rodo tik prisijungusiems -
+     pvz. konkretus pirkimas pagal DPS), "nera", "per_didelis", "ne_zip", "uzimta" (užklausų riba), "rysys", "numeris", "atsaukta".
+     opts.eiga(gauta, viso) - eigai (viso - iš Content-Length, gali būti 0). Tekstai žmogui - dokumentuKlaida(rusis, kalba). */
+  var DOK_RUSYS = ["prisijungimas", "nera", "rysys", "per_didelis", "ne_zip", "uzimta", "kilme", "numeris", "metodas"];
+  var DOK_MAX = 250 * 1048576;
+  var DOK_TEKSTAI = {
+    lt: {
+      prisijungimas: "CVP IS šio pirkimo dokumentus rodo tik prisijungusiems (pvz. konkretus pirkimas pagal DPS - tik DPS dalyviams). Prisijunkite prie CVP IS, atsisiųskite dokumentus ir įkelkite juos čia.",
+      nera: "CVP IS šio pirkimo dokumentų nepateikė - galbūt jie dar neskelbti. Patikrinkite pirkimo puslapį CVP IS.",
+      per_didelis: "Dokumentų paketas didesnis nei 250 MB - atsisiųskite jį iš CVP IS ir įkelkite čia.",
+      ne_zip: "CVP IS grąžino ne dokumentų paketą - atsisiųskite dokumentus iš CVP IS ir įkelkite čia.",
+      uzimta: "Šiuo metu siunčiama per daug dokumentų paketų - pabandykite po minutės.",
+      numeris: "Netinkamas pirkimo numeris.",
+      rysys: "CVP IS dokumentų gauti nepavyko (ryšys ar CVP IS klaida). Bandykite dar kartą arba atsisiųskite dokumentus iš CVP IS ir įkelkite čia."
+    },
+    en: {
+      prisijungimas: "CVP IS shows the documents of this procurement only to signed-in users (e.g. a specific contract under a DPS - only to DPS participants). Sign in to CVP IS, download the documents and upload them here.",
+      nera: "CVP IS returned no documents for this procurement - they may not be published yet. Check the procurement page in CVP IS.",
+      per_didelis: "The document package is larger than 250 MB - download it from CVP IS and upload it here.",
+      ne_zip: "CVP IS did not return a document package - download the documents from CVP IS and upload them here.",
+      uzimta: "Too many document packages are being downloaded right now - try again in a minute.",
+      numeris: "Invalid procurement number.",
+      rysys: "Could not get the documents from CVP IS (connection or CVP IS error). Try again, or download the documents from CVP IS and upload them here."
+    }
+  };
+  function dokumentuKlaida(rusis, kalba) {
+    var T = DOK_TEKSTAI[kalba === "en" ? "en" : "lt"];
+    return T[rusis] || T.rysys;
+  }
+  function dokumentai(id, opts) {
+    opts = opts || {};
+    id = String(id == null ? "" : id).trim();
+    if (!/^\d{5,9}$/.test(id)) return Promise.resolve({ ok: false, rusis: "numeris" });
+    var f = opts.fetch || global.fetch;
+    if (typeof f !== "function") return Promise.resolve({ ok: false, rusis: "rysys" });
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var laik = ctl ? setTimeout(function () { ctl.abort(); }, opts.laikas || 200000) : null;   // serveris - 180 s
+    if (ctl && opts.signal) { if (opts.signal.aborted) ctl.abort(); else opts.signal.addEventListener("abort", function () { ctl.abort(); }); }
+    var baik = function (x) { if (laik) clearTimeout(laik); return x; };
+    var nutrauktas = function () { return { ok: false, rusis: opts.signal && opts.signal.aborted ? "atsaukta" : "rysys" }; };
+    return Promise.resolve().then(function () {
+      return f(API_BAZE + "/dokumentai/" + id, { method: "GET", credentials: "omit", referrerPolicy: "no-referrer", headers: { "Accept": "application/zip, application/json" }, signal: ctl ? ctl.signal : undefined });
+    }).then(function (r) {
+      if (r.status !== 200) {
+        return r.json().catch(function () { return null; }).then(function (j) {
+          var k = j && typeof j.kodas === "string" && DOK_RUSYS.indexOf(j.kodas) !== -1 ? j.kodas : "rysys";
+          if (k === "kilme" || k === "metodas") k = "rysys";
+          return baik({ ok: false, rusis: k, status: r.status });
+        });
+      }
+      var viso = +(r.headers && r.headers.get ? r.headers.get("Content-Length") : 0) || 0;
+      if (viso > DOK_MAX) return baik({ ok: false, rusis: "per_didelis" });
+      var tikrink = function (buf) {
+        var b = new Uint8Array(buf.slice ? buf.slice(0, 4) : buf);
+        if (!(b.length >= 4 && b[0] === 0x50 && b[1] === 0x4B && ((b[2] === 3 && b[3] === 4) || (b[2] === 5 && b[3] === 6)))) return null;
+        return true;
+      };
+      var eiga = typeof opts.eiga === "function" ? opts.eiga : function () {};
+      var skaitytuvas = r.body && r.body.getReader ? r.body.getReader() : null;
+      if (!skaitytuvas) {
+        return r.arrayBuffer().then(function (buf) {
+          if (buf.byteLength > DOK_MAX) return baik({ ok: false, rusis: "per_didelis" });
+          if (!tikrink(buf)) return baik({ ok: false, rusis: "ne_zip" });
+          eiga(buf.byteLength, viso || buf.byteLength);
+          return baik({ ok: true, blob: new Blob([buf], { type: "application/zip" }), baitai: buf.byteLength, vardas: "CVP IS " + id + ".zip" });
+        });
+      }
+      var dalys = [], gauta = 0;
+      var skaityk = function () {
+        return skaitytuvas.read().then(function (x) {
+          if (x.done) {
+            if (!dalys.length || !tikrink(dalys[0])) return baik({ ok: false, rusis: "ne_zip" });
+            return baik({ ok: true, blob: new Blob(dalys, { type: "application/zip" }), baitai: gauta, vardas: "CVP IS " + id + ".zip" });
+          }
+          gauta += x.value.byteLength;
+          if (gauta > DOK_MAX) { try { skaitytuvas.cancel(); } catch (e) {} return baik({ ok: false, rusis: "per_didelis" }); }
+          dalys.push(x.value);
+          eiga(gauta, viso);
+          return skaityk();
+        });
+      };
+      return skaityk();
+    }).catch(function () { return baik(nutrauktas()); });
   }
 
   /* Paieška ir statistika (serveris 2026-10-18b; serveris/README.md). Tik žinomi parametrai, reikšmės - per URLSearchParams
@@ -364,6 +453,7 @@
   global.GP_VPT = {
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, ted: ted, atnaujinta: atnaujinta,
     PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai,
-    paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas
+    paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas,
+    dokumentai: dokumentai, dokumentuKlaida: dokumentuKlaida
   };
 })(typeof window !== "undefined" ? window : this);

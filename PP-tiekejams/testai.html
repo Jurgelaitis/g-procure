@@ -85,11 +85,26 @@ function docxBaitai(paragrafai, lentele) {
 /* VPT CVP IS API per G-Procure serverį (2026-10-18): testuose tikras serveris nekviečiamas - api.g-procure.com/api/cvpis
    užklausos atsakomos iš VPT_ATS (numatyta - 503), kitos eina į tikrą fetch. */
 let VPT_ATS = null; const VPT_UZKL = [];
+/* Dokumentų ZIP (/api/cvpis/dokumentai/<nr>, 2026-10-29) - atskirai: numatyta 403 „prisijungimas“; { zip: ArrayBuffer } - tikras ZIP atsakymas */
+let DOK_ATS = null; const DOK_UZKL = [];
+const dokPrisijungimas = () => ({ status: 403, body: { klaida: "CVP IS reikalauja prisijungti.", kodas: "prisijungimas" } });
 function vptStub() {
   const tikras = W.fetch.bind(W);
   W.fetch = async (url, o) => {
     const u = String(url);
     if (u.indexOf("https://api.g-procure.com/api/cvpis/") !== 0) return tikras(url, o);
+    if (u.indexOf("/api/cvpis/dokumentai/") !== -1) {
+      DOK_UZKL.push({ url: u, o: o || {} });
+      const a = typeof DOK_ATS === "function" ? DOK_ATS(u) : (DOK_ATS || dokPrisijungimas());
+      if (a.delsa) await new Promise((res, rej) => {
+        const sg = o && o.signal, l = setTimeout(res, a.delsa);
+        if (sg && sg.aborted) { clearTimeout(l); rej(Object.assign(new Error("Aborted"), { name: "AbortError" })); return; }
+        if (sg) sg.addEventListener("abort", () => { clearTimeout(l); rej(Object.assign(new Error("Aborted"), { name: "AbortError" })); });
+      });
+      if (a.tinklas) throw new TypeError("Failed to fetch");
+      if (a.zip) return new W.Response(a.zip, { status: 200, headers: Object.assign({ "Content-Type": "application/zip" }, a.antrastes || {}) });
+      return new W.Response(a.tekstas !== undefined ? a.tekstas : JSON.stringify(a.body), { status: a.status, headers: { "Content-Type": "application/json" } });
+    }
     VPT_UZKL.push({ url: u, o: o || {} });
     const a = typeof VPT_ATS === "function" ? VPT_ATS(u) : (VPT_ATS || { status: 503, body: { klaida: "neįkelta" } });
     if (a.delsa) await laukti(a.delsa);
@@ -358,7 +373,8 @@ async function paleisk() {
   });
   await testas("CVP IS būsena: duomenys - VPT API per G-Procure serverį, dokumentų jungties nėra (neimituojama)", () => {
     lygu([C.status().live, C.status().vpt], [false, true]); turi(D.getElementById("liveTag").textContent, "VPT API");
-    turi(C.status().lt, "Dokumentų API nėra"); turi(C.status().en, "There is no document API");
+    neturi(C.status().lt, "Dokumentų API nėra"); neturi(C.status().en, "There is no document API");
+    turi(C.status().lt, "jų neišsaugo"); turi(C.status().lt, "tik prisijungusiems"); turi(C.status().en, "does not store them"); turi(C.status().en, "only to signed-in users");
   });
 
   /* 2026-10-17 (PP-TIEKEJAMS technologinė analizė): CVP IS visų dokumentų ZIP turi dokumentų sąrašą „List of Contract Documents“.
@@ -501,9 +517,10 @@ async function paleisk() {
   });
 
   grupe("Sąsaja: kalbos, prieinamumas, būsenos");
-  await testas("Be dokumentų klausti negalima - mygtukas išjungtas su paaiškinimu", async () => {
+  await testas("Be dokumentų „Klausti“ aktyvus, o užuomina sako, ko reikia (iki 2026-10-29 mygtukas būdavo išjungtas)", async () => {
     await svarus();
-    tiesa(D.getElementById("askBtn").disabled, "išjungtas"); turi(D.getElementById("askHint").textContent, "įkelkite dokumentus");
+    tiesa(!D.getElementById("askBtn").disabled, "aktyvus"); tiesa(!D.getElementById("chkBtn").disabled, "kontrolinis aktyvus");
+    turi(D.getElementById("askHint").textContent, "įkelkite juos patys");
   });
   await testas("EN kalba: antraštės, kontrolinio sąrašo būsenos ir disclaimer išversti", async () => {
     W.setLang("en");
@@ -1507,7 +1524,7 @@ async function paleisk() {
   await testas("Paketas be skelbimo: kontekstas nenustatytas, promptas neteigia įstatymo; pirkėjo vardas iš SPS teksto neimamas", async () => {
     const S = await ikelk({ "dok/SPS.txt": SPS_SENAS + "\n\nOficialus pavadinimas: UAB Kita" });
     lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], [null, null, false]);
-    turi(D.getElementById("kontekstasBox").textContent, "Nenustatyta"); turi(D.getElementById("askHint").textContent, "dar nepatvirtinti");
+    turi(D.getElementById("kontekstasBox").textContent, "Teisinis režimasnenustatyta"); turi(D.getElementById("askHint").textContent, "dar nepatvirtinti");
     turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NEPATVIRTINTI");
   });
   await testas("Bendri klausimai: kiekviena tema pažymėta režimu (PĮ arba CVP IS tvarka), klausimuose nebėra LITGRID, tema „rasti“ rodo žinomų organizacijų nuorodas", () => {
@@ -1543,6 +1560,336 @@ async function paleisk() {
     const be = W.__PPT.renderBeAI("x", [], "offline");
     tiesa(!/data-di=/.test(be), "be DI - be žymos");
   });
+
+  grupe("Dokumentai iš CVP IS ir aktyvus „Klausti“ (2026-10-29)");
+  const dokZip = async (failai) => { const z = new W.JSZip(); Object.keys(failai).forEach(k => z.file(k, failai[k])); return z.generateAsync({ type: "arraybuffer" }); };
+  const PD = { "1_SPS.txt": SPS_SENAS };
+  const CV = () => W.__PPT.CVPD;
+  const dokBusena = () => D.getElementById("cvpDokBusena");
+  const dokPanel = () => D.getElementById("cvpDok");
+  const askNote = () => D.getElementById("askNote");
+  const askInput = () => D.getElementById("askInput");
+  const vardai = () => W.__PPT.S.docs.map(d => d.name.split(" › ").pop());
+  const isvalyk = async () => {
+    W.__PPT.atsaukDokumentus(); const c = CV(); c.id = null; c.isCvp = null; c.data = null; c.klaida = null; c.laukia = null;
+    W.__PPT.S.ref = null; D.getElementById("refInput").value = ""; askInput().value = ""; W.__PPT.renderAskNote(""); W.GP_BUSENA.slepk("#cvpDokBusena");
+    await svarus(); W.__PPT.VPT.ctxRez = null; W.__PPT.VPT.ctxId = null; W.__PPT.atstatykKonteksta(); W.__PPT.renderCvpDok(); DOK_UZKL.length = 0; DOK_ATS = null;
+  };
+  const kol = async (f, ms) => { const pr = Date.now(); while (!f()) { if (Date.now() - pr > (ms || 6000)) throw new Error("nesulaukta: " + f); await laukti(20); } };
+  const suAi = async (atsakymas, fn) => {
+    const orig = W.GP_AI_PROXY.call, kvietimai = [];
+    W.GP_AI_PROXY.call = (u) => { kvietimai.push(u); return Promise.resolve(atsakymas || { ok: false, status: 500, error: "bandomasis DI atsakymas" }); };
+    try { await fn(kvietimai); } finally { W.GP_AI_PROXY.call = orig; }
+  };
+  await testas("Klientas: numeris, užklausa be slapukų ir serverio klaidų rūšys (prisijungimas, nėra, užimta, per didelis, ne ZIP, ryšys, atšaukimas)", async () => {
+    const V = W.GP_VPT;
+    lygu(await V.dokumentai("12a45"), { ok: false, rusis: "numeris" }); lygu(await V.dokumentai("1234"), { ok: false, rusis: "numeris" }); lygu(await V.dokumentai("../busena"), { ok: false, rusis: "numeris" });
+    const atv = async (a) => { DOK_ATS = a; return V.dokumentai("1234501"); };
+    DOK_UZKL.length = 0;
+    lygu((await atv(dokPrisijungimas())).rusis, "prisijungimas");
+    lygu(DOK_UZKL[0].url, "https://api.g-procure.com/api/cvpis/dokumentai/1234501");
+    lygu([DOK_UZKL[0].o.credentials, DOK_UZKL[0].o.referrerPolicy, DOK_UZKL[0].o.method], ["omit", "no-referrer", "GET"]);
+    lygu((await atv({ status: 404, body: { kodas: "nera" } })).rusis, "nera");
+    lygu((await atv({ status: 429, body: { kodas: "uzimta" } })).rusis, "uzimta");
+    lygu((await atv({ status: 413, body: { kodas: "per_didelis" } })).rusis, "per_didelis");
+    lygu((await atv({ status: 403, body: { kodas: "kilme" } })).rusis, "rysys", "kilmė žmogui - ryšio klaida");
+    lygu((await atv({ status: 500, tekstas: "<html>" })).rusis, "rysys", "ne JSON");
+    lygu((await atv({ tinklas: true })).rusis, "rysys");
+    lygu((await atv({ status: 200, body: { pirkimas: 1 } })).rusis, "ne_zip", "200, bet ne ZIP");
+    const zip = await dokZip(PD);
+    lygu((await atv({ zip, antrastes: { "Content-Length": String(300 * 1048576) } })).rusis, "per_didelis", "Content-Length virš ribos");
+    DOK_ATS = { zip };
+    const eiga = []; const ok = await V.dokumentai("1234501", { eiga: (g, v) => eiga.push(g) });
+    lygu([ok.ok, ok.vardas, ok.baitai === zip.byteLength, ok.blob.size === zip.byteLength], [true, "CVP IS 1234501.zip", true, true]);
+    lygu(eiga[eiga.length - 1], zip.byteLength, "eiga pasiekia visą dydį");
+    const ctl = new W.AbortController(); DOK_ATS = { delsa: 5000, zip };
+    const pr = V.dokumentai("1234501", { signal: ctl.signal }); ctl.abort();
+    lygu((await pr).rusis, "atsaukta");
+    turi(V.dokumentuKlaida("prisijungimas", "lt"), "tik prisijungusiems"); turi(V.dokumentuKlaida("prisijungimas", "en"), "only to signed-in users");
+    turi(V.dokumentuKlaida("nezinoma"), "gauti nepavyko", "nežinoma rūšis - ryšio tekstas");
+    DOK_ATS = null;
+  });
+  await testas("Pasirinkus pirkimą dokumentai parsisiunčiami patys, perskaitomi ir pasakoma, iš kur", async () => {
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { zip: await dokZip(PD) };
+    await nustatyk("1234501");
+    await kol(() => W.__PPT.S.docs.length > 0 && !CV().vyksta);
+    lygu(DOK_UZKL.map(x => x.url), ["https://api.g-procure.com/api/cvpis/dokumentai/1234501"]);
+    lygu(W.__PPT.S.docs[0].name.indexOf("SPS") !== -1, true, "failas iš ZIP");
+    tiesa(!!W.__PPT.S.idx, "indeksas");
+    await kol(() => /Dokumentai gauti iš CVP IS/.test(dokPanel().textContent));
+    tiesa(dokBusena().hidden, "būsena paslėpta");
+    turi(D.getElementById("askHint").textContent, "Atsakoma tik iš įkeltų dokumentų");
+    // antras tas pats pasirinkimas nekartoja
+    DOK_UZKL.length = 0; await nustatyk("1234501"); await laukti(50);
+    lygu(DOK_UZKL.length, 0, "jau gauti - nekartojama");
+  });
+  await testas("CVP IS rodo tik prisijungusiems: paaiškinimas ir kelias įkelti, be „Bandyti dar kartą“; „Klausti“ aktyvus, įkėlus - atsako pats", async () => {
+    await isvalyk(); VPT_ATS = vptOk({ id: 10145682, title: "Viršuliškių TP elektroninių saugos priemonių diegimo darbai", caName: "LITGRID AB (PV)", procedure: "DPS Specific Contract", directive: "prompt.directive.utilities" });
+    await nustatyk("10145682");
+    await kol(() => CV().klaida === "prisijungimas");
+    turi(dokPanel().textContent, "tik prisijungusiems"); turi(dokPanel().textContent, "Dokumentų sąrašas CVP IS");
+    lygu(dokPanel().querySelector("a").getAttribute("href"), W.__PPT.S.ref.links.documents);
+    lygu(dokPanel().querySelectorAll("button").length, 0, "kartoti neverta");
+    tiesa(dokBusena().hidden || !/Bandyti/.test(dokBusena().textContent), "be kartojimo");
+    // siūlomas klausimas: mygtukas aktyvus, paspaudus - paaiškinimas su veiksmais, nauja užklausa nesiunčiama
+    D.querySelector("#askChips .chip").click();
+    tiesa(!!askInput().value, "klausimas įrašytas"); tiesa(!D.getElementById("askBtn").disabled, "aktyvus");
+    const n = DOK_UZKL.length; D.getElementById("askBtn").click(); await laukti(30);
+    lygu(DOK_UZKL.length, n, "nebandoma dar kartą");
+    turi(askNote().textContent, "tik prisijungusiems"); turi(askNote().textContent, "Įkelti dokumentus");
+    lygu(D.getElementById("chat").children.length, 0, "klausimas dar nerodomas kaip atsakomas");
+    await suAi({ ok: false, status: 500, error: "bandomas" }, async (kv) => {
+      await W.__PPT.onFiles([await paketas(PD)]);
+      await kol(() => kv.length === 1);
+      turi(kv[0].userMessage, askInput().value.split(" ")[0]);
+      lygu(askNote().textContent, "", "pastaba nuimta");
+      tiesa(D.getElementById("chat").children.length >= 1, "klausimas užduotas");
+      lygu(CV().laukia, null);
+    });
+    tiesa(!D.getElementById("askBtn").disabled, "po atsakymo aktyvus");
+  });
+  await testas("Tuščias klausimas ir nenurodytas pirkimas: pasakoma ko trūksta, siūlomi veiksmai; pasirinkus siūlomą - pastaba dingsta", async () => {
+    await isvalyk();
+    D.getElementById("askBtn").click();
+    turi(askNote().textContent, "Įrašykite klausimą"); lygu(D.activeElement, askInput(), "fokusas į lauką");
+    D.querySelector("#askChips .chip").click();
+    lygu(askNote().textContent, "", "pasirinkus siūlomą");
+    D.getElementById("askBtn").click();
+    turi(askNote().textContent, "Atsakymui reikia šio pirkimo dokumentų");
+    const my = [...askNote().querySelectorAll("button")].map(b => b.textContent); lygu(my, ["Rasti pirkimą", "Įkelti dokumentus"]);
+    lygu(DOK_UZKL.length, 0, "be pirkimo nesiunčiama");
+    askNote().querySelector("button").click();
+    tiesa(D.getElementById("view-home").classList.contains("active"), "pradžios puslapis"); lygu(D.activeElement, D.getElementById("homeSearch"));
+    W.setView("pirkimas");
+    W.setLang("en"); turi(askNote().textContent, "An answer needs"); turi(askNote().textContent, "Find a procurement"); W.setLang("lt");
+    await isvalyk();
+    W.__PPT.kontrolinis(); turi(askNote().textContent, "Atsakymui reikia šio pirkimo dokumentų"); lygu(CV().laukia, "kontrolinis");
+    W.__PPT.renderAskNote(""); CV().laukia = null;
+  });
+  await testas("Klausimas parsisiuntimo metu palaukia ir atsakomas perskaičius; kontrolinis sąrašas - taip pat", async () => {
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { delsa: 120, zip: await dokZip(PD) };
+    await suAi({ ok: false, status: 500, error: "bandomas" }, async (kv) => {
+      D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+      tiesa(CV().vyksta, "vyksta"); turi(dokBusena().textContent, "Parsisiunčiami pirkimo dokumentai"); turi(dokBusena().textContent, "Atšaukti");
+      turi(D.getElementById("askHint").textContent, "Parsisiunčiami");
+      askInput().value = "Kokia pasiūlymo galiojimo trukmė?"; D.getElementById("askBtn").click();
+      turi(askNote().textContent, "Klausimas bus atsakytas"); lygu(kv.length, 0, "dar nekviesta");
+      await kol(() => DOK_UZKL.length === 1);
+      await kol(() => kv.length === 1);
+      lygu(DOK_UZKL.length, 1, "viena užklausa");
+      turi(kv[0].userMessage, "Kokia pasiūlymo galiojimo trukmė?");
+      lygu(askNote().textContent, "");
+    });
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { delsa: 60, zip: await dokZip(PD) };
+    await suAi({ ok: false, status: 500, error: "bandomas" }, async (kv) => {
+      D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+      W.__PPT.kontrolinis(); turi(askNote().textContent, "Klausimas bus atsakytas");
+      await kol(() => kv.length === 1);
+      turi(kv[0].system + kv[0].userMessage, "kontrolin");
+    });
+  });
+  await testas("Grįžus prie pirkimo (be dokumentų): mygtukas, o „Klausti“ parsisiunčia ir atsako", async () => {
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { zip: await dokZip(PD) };
+    W.__PPT.S.ref = C.resolve("1234501"); W.__PPT.renderCvpDok(); W.__PPT.perindeksuok();
+    turi(dokPanel().textContent, "Parsisiųsti dokumentus iš CVP IS"); turi(dokPanel().textContent, "tik pirkimo numeris");
+    lygu(DOK_UZKL.length, 0, "pats nesiunčia");
+    turi(D.getElementById("askHint").textContent, "paspaudus „Klausti“");
+    await suAi(null, async (kv) => {
+      askInput().value = "Kokia pasiūlymo galiojimo trukmė?"; D.getElementById("askBtn").click();
+      turi(askNote().textContent, "Klausimas bus atsakytas");
+      await kol(() => kv.length === 1);
+      lygu(DOK_UZKL.length, 1);
+    });
+    // Panelės mygtukas
+    await isvalyk(); DOK_ATS = { zip: await dokZip(PD) };
+    W.__PPT.S.ref = C.resolve("1234501"); W.__PPT.renderCvpDok();
+    dokPanel().querySelector("button").click();
+    await kol(() => W.__PPT.S.docs.length > 0 && !CV().vyksta);
+    lygu(DOK_UZKL.length, 1);
+  });
+  await testas("Ryšio klaida: priežastis ir „Bandyti dar kartą“, pakartojus - gaunama; užimta - savas tekstas; klausimas lieka laukti", async () => {
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { tinklas: true };
+    await nustatyk("1234501");
+    await kol(() => CV().klaida === "rysys");
+    turi(dokBusena().textContent, "Dokumentų gauti nepavyko"); turi(dokBusena().textContent, "ryšys ar CVP IS klaida");
+    const k = dokBusena().querySelector("[data-gpb-kartoti]"); tiesa(!!k, "kartoti");
+    turi(dokPanel().textContent, "Dokumentų sąrašas CVP IS");
+    askInput().value = "Kokia pasiūlymo galiojimo trukmė?";
+    await suAi(null, async (kv) => {
+      // klausimas po klaidos - dar vienas bandymas
+      DOK_ATS = { status: 429, body: { kodas: "uzimta" } };
+      D.getElementById("askBtn").click();
+      await kol(() => /per daug dokumentų paketų/.test(dokBusena().textContent));
+      turi(askNote().textContent, "gauti nepavyko", "pastaba su keliu");
+      DOK_ATS = { zip: await dokZip(PD) };
+      dokBusena().querySelector("[data-gpb-kartoti]").click();
+      await kol(() => kv.length === 1);
+      lygu(askNote().textContent, "");
+    });
+  });
+  await testas("Atšaukti: niekas nepakeista, klausimui - „Parsisiųsti dokumentus ir atsakyti“", async () => {
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { delsa: 4000, zip: await dokZip(PD) };
+    D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+    askInput().value = "Kokia pasiūlymo galiojimo trukmė?"; D.getElementById("askBtn").click();
+    dokBusena().querySelector("[data-gpb-atsaukti]").click();
+    await kol(() => !CV().vyksta);
+    turi(dokBusena().textContent, "Atšaukta"); lygu(W.__PPT.S.docs.length, 0);
+    turi(askNote().textContent, "Parsisiųsti dokumentus ir atsakyti"); turi(dokPanel().textContent, "Parsisiųsti dokumentus iš CVP IS");
+    DOK_ATS = { zip: await dokZip(PD) };
+    await suAi(null, async (kv) => {
+      askNote().querySelector("button").click();
+      await kol(() => kv.length === 1);
+    });
+  });
+  await testas("Jau įkelti kiti dokumentai tyliai nekeičiami; „Pakeisti“ pakeičia ir atsakymus išvalo", async () => {
+    await isvalyk(); await W.__PPT.onFiles([await paketas({ "kitas.txt": "4.1. Kito pirkimo sąlygos." })]);
+    VPT_ATS = vptOk(); DOK_ATS = { zip: await dokZip(PD) };
+    await nustatyk("1234501"); await laukti(30);
+    lygu(DOK_UZKL.length, 0, "nesiunčiama"); turi(dokPanel().textContent, "ne šio pirkimo");
+    lygu(vardai(), ["kitas.txt"]);
+    W.__PPT.S.chat.push({ q: "x", status: "nera_saltinio", ispejimai: [], at: "2026-10-29" });
+    dokPanel().querySelector("button").click();
+    await kol(() => vardai().indexOf("1_SPS.txt") !== -1 && !CV().vyksta);
+    tiesa(vardai().indexOf("kitas.txt") === -1, "senieji pašalinti"); lygu(W.__PPT.S.chat.length, 0, "atsakymai išvalyti");
+    await kol(() => /Dokumentai gauti/.test(dokPanel().textContent));
+  });
+  await testas("Pakete tas pats pirkimas: papildomas parsisiuntimas nesiūlomas; žmogaus įkėlimas nutraukia vykstantį parsisiuntimą", async () => {
+    await isvalyk(); VPT_ATS = vptOk();
+    await W.__PPT.onFiles([await paketas({ "1362_1234501.pdf": "x", "SPS.txt": SPS_SENAS })]); await laukiVpt();
+    lygu(W.__PPT.S.ref && W.__PPT.S.ref.resourceId, "1234501", "numeris iš paketo"); lygu(dokPanel().textContent, ""); lygu(DOK_UZKL.length, 0);
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { delsa: 3000, zip: await dokZip(PD) };
+    D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+    tiesa(CV().vyksta);
+    await W.__PPT.onFiles([await paketas({ "mano.txt": "4.1. Mano dokumentas." })]);
+    tiesa(!CV().vyksta, "nutraukta"); tiesa(dokBusena().hidden, "be „Atšaukta“");
+    await laukti(30);
+    lygu(vardai(), ["mano.txt"], "nesimaišo");
+  });
+  await testas("Vėlesnis pasirinkimas ankstesnio neperrašo: A atšaukiamas, gaunami B dokumentai; nežinomas ar tekstinis pirkimas nutraukia", async () => {
+    await isvalyk(); VPT_ATS = (u) => vptOk({ id: +u.split("/").pop() });
+    const a = await dokZip({ "A_SPS.txt": SPS_SENAS }), b = await dokZip({ "B_SPS.txt": SPS_NAUJAS });
+    DOK_ATS = (u) => /1234501$/.test(u) ? { delsa: 400, zip: a } : { delsa: 20, zip: b };
+    D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+    D.getElementById("refInput").value = "1234502"; W.__PPT.nustatykRef();
+    await kol(() => W.__PPT.S.docs.length > 0 && !CV().vyksta);
+    await laukti(450);
+    lygu(vardai(), ["B_SPS.txt"]);
+    await isvalyk(); DOK_ATS = { delsa: 300, zip: a };
+    D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef(); tiesa(CV().vyksta);
+    D.getElementById("refInput").value = "transformatoriai"; W.__PPT.nustatykRef();
+    tiesa(!CV().vyksta, "nutraukta"); await laukti(350); lygu(W.__PPT.S.docs.length, 0); lygu(dokPanel().textContent, "");
+    await isvalyk(); DOK_ATS = { delsa: 300, zip: a };
+    D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+    D.getElementById("refInput").value = "https://viesiejipirkimai.lt/epps/kita"; W.__PPT.nustatykRef();
+    tiesa(!CV().vyksta, "bloga nuoroda nutraukia"); lygu(CV().laukia, null);
+  });
+  await testas("Naujas pirkimas: ankstesnis klausimas pats neišsiunčiamas", async () => {
+    await isvalyk(); VPT_ATS = vptOk(); DOK_ATS = { delsa: 100, zip: await dokZip(PD) };
+    await suAi(null, async (kv) => {
+      D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
+      askInput().value = "Klausimas?"; D.getElementById("askBtn").click(); lygu(CV().laukia, "klausk");
+      D.getElementById("refInput").value = "1234502"; W.__PPT.nustatykRef();
+      lygu(CV().laukia, null); lygu(askNote().textContent, "");
+      await kol(() => W.__PPT.S.docs.length > 0 && !CV().vyksta); await laukti(30);
+      lygu(kv.length, 0, "DI nekviestas");
+    });
+  });
+  await testas("Vykdytojas ir režimas iš VPT, kai dokumentų nėra: nepatvirtinta, su šaltiniu; patvirtinimas galioja, DI gauna tik patvirtinus", async () => {
+    await isvalyk(); VPT_ATS = vptOk({ id: 10145682, caName: "LITGRID AB (PV)", directive: "prompt.directive.utilities" });
+    await nustatyk("10145682"); await kol(() => CV().klaida === "prisijungimas");
+    const k = W.__PPT.S.kontekstas, box = () => D.getElementById("kontekstasBox").textContent;
+    lygu([k.organizacija, k.rezimas, k.patvirtinta, k.isVpt, k.isRegistro], ["LITGRID AB", "PI", false, true, false]);
+    turi(box(), "iš CVP IS duomenų (VPT)"); turi(box(), "LITGRID AB (PV)"); turi(box(), "2014/25/ES"); turi(box(), "Atpažinta iš CVP IS duomenų (VPT), dar nepatvirtinta");
+    lygu([...D.querySelectorAll("#kontekstasBox .meta-list .v")].filter(v => /nenustatyta/i.test(v.textContent)).length, 0, box());
+    lygu(W.__PPT.promptoKontekstas().patvirtinta, false);
+    tiesa(!!D.getElementById("ctxConfirm"), "Patvirtinti"); D.getElementById("ctxConfirm").click();
+    lygu(W.__PPT.promptoKontekstas(), { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: true });
+    // tas pats pirkimas iš naujo - patvirtinimas lieka; EN
+    await nustatyk("10145682"); await kol(() => CV().klaida === "prisijungimas"); await laukti(30);
+    lygu(W.__PPT.S.kontekstas.patvirtinta, true, "ta pati reikšmė");
+    W.setLang("en"); turi(box(), "Contracting"); W.setLang("lt");
+    // kitas pirkimas: nebe to pirkimo vykdytojas
+    VPT_ATS = { status: 404, body: { klaida: "nėra", meta: VPT_META } };
+    D.getElementById("refInput").value = "1234599"; W.__PPT.nustatykRef();
+    lygu(W.__PPT.S.kontekstas.organizacija, null, "kitas pirkimas - išvalyta iškart"); lygu(W.__PPT.S.kontekstas.patvirtinta, false);
+    await laukti(30); W.GP_BUSENA.slepk("#vptBusena");
+  });
+  await testas("VPT kontekstas: nežinoma organizacija - be priesagos; klasikinė - VPĮ; be direktyvos - pagal organizacijų sąrašą; be nieko - nenustatyta; ranka įrašyta lieka", async () => {
+    const su = async (o) => { await isvalyk(); VPT_ATS = vptOk(Object.assign({ id: 1234501 }, o)); DOK_ATS = dokPrisijungimas(); await nustatyk("1234501"); await kol(() => CV().klaida === "prisijungimas"); return W.__PPT.S.kontekstas; };
+    let k = await su({ caName: "Bandomoji organizacija (PV)", directive: "prompt.directive.classic" });
+    lygu([k.organizacija, k.rezimas, k.isRegistro], ["Bandomoji organizacija", "VPI", false]);
+    k = await su({ caName: "UAB Energy cells (PS)", directive: "prompt.directive.none" });
+    lygu([k.organizacija, k.rezimas, k.isRegistro, k.isVpt], ["UAB Energy cells", "PI", true, true]);
+    turi(D.getElementById("kontekstasBox").textContent, "pagal organizacijų sąrašą"); turi(D.getElementById("kontekstasBox").textContent, "ES direktyva nenurodyta");
+    k = await su({ caName: "Nežinoma įmonė", directive: "prompt.directive.none" });
+    lygu([k.organizacija, k.rezimas], ["Nežinoma įmonė", null], "nežinomai - režimo nespėjame");
+    turi(D.getElementById("kontekstasBox").textContent, "Teisinis režimasnenustatyta");
+    k = await su({ caName: "", directive: "prompt.directive.none" });
+    lygu([k.organizacija, k.rezimas, k.isVpt], [null, null, false]);
+    W.__PPT.issaugokKonteksta("Mano org", "PI");
+    W.__PPT.atnaujinkKonteksta(); lygu([W.__PPT.S.kontekstas.organizacija, W.__PPT.S.kontekstas.rankinis], ["Mano org", true], "ranka įrašyta lieka");
+  });
+  await testas("VPT kontekstas: skelbimas pirmesnis už VPT, VPT pildo tik trūkstamą", async () => {
+    await isvalyk(); VPT_ATS = vptOk({ caName: "Kita organizacija (PV)", directive: "prompt.directive.classic" }); DOK_ATS = dokPrisijungimas();
+    await nustatyk("1234501"); await kol(() => CV().klaida === "prisijungimas");
+    lygu(W.__PPT.S.kontekstas.organizacija, "Kita organizacija");
+    const SKELBIMAS = "Skelbimas apie pirkimą\n1.1 Pirkėjas\nOficialus pavadinimas: LITGRID AB\nPerkančiojo subjekto rūšis: viešosios paslaugos\nTeisinis pagrindas: Direktyva (ES) 2014/25/ES\n";
+    await W.__PPT.onFiles([new W.File([SKELBIMAS], "Skelbimas apie pirkimą.txt")]);
+    await kol(() => W.__PPT.S.docs.length > 0);
+    const m = W.__PPT.S.meta || {}, k = W.__PPT.S.kontekstas;
+    if (m.buyer) { lygu(k.organizacija, m.buyer.value, "skelbimo vykdytojas"); neturi(k.organizacija, "Kita"); tiesa(!k.saltiniai.org.vpt, "ne VPT"); }
+    if (m.regime && !(m.regime.alt && m.regime.alt.length)) { lygu(k.rezimas, m.regime.value); tiesa(!k.saltiniai.rezimas.vpt, "ne VPT"); }
+    tiesa(!!(m.buyer || m.regime), "skelbimas atpažintas");
+  });
+  await testas("VPT kontekstas: skelbimo režimas, skelbimas be direktyvos ir neaiškus skelbimas VPT režimo nepriima", async () => {
+    const su = async (tekstas, vardas) => {
+      await isvalyk(); VPT_ATS = vptOk({ caName: "Kita organizacija (PV)", directive: "prompt.directive.classic" }); DOK_ATS = dokPrisijungimas();
+      await nustatyk("1234501"); await kol(() => CV().klaida === "prisijungimas");
+      await W.__PPT.onFiles([new W.File([tekstas], vardas)]); await kol(() => W.__PPT.S.docs.length > 0);
+      return W.__PPT.S.kontekstas;
+    };
+    let k = await su(SK_LITGRID, V_PI);
+    lygu(k.rezimas, "PI", "skelbimas PĮ, VPT - klasikinė: galioja skelbimas"); tiesa(!k.saltiniai.rezimas.vpt, "ne VPT"); lygu(k.organizacija, "LITGRID AB"); tiesa(!k.saltiniai.org.vpt, "vykdytojas - ne VPT");
+    k = await su(SK_NEAISKUS, V_PI);
+    lygu(k.rezimas, null, "neaiškus skelbimas: VPT režimo neperima"); tiesa(!(k.saltiniai.rezimas && k.saltiniai.rezimas.vpt), "ne VPT");
+    k = await su(SK_EPSOG, V_VPI);
+    lygu(k.rezimas, "VPI", "skelbimas be direktyvos - pagal organizacijų sąrašą"); tiesa(k.saltiniai.rezimas.registras && !k.saltiniai.rezimas.vpt, "registras, ne VPT");
+  });
+  await testas("Tas pats pirkimas pasirinktas dar kartą parsisiuntimo metu - viena užklausa; pakeitus pirkimą senas rezultatas būsenos neperrašo", async () => {
+    await isvalyk(); VPT_ATS = vptOk(); const zip = await dokZip(PD);
+    DOK_ATS = { zip, delsa: 250 };
+    await nustatyk("1234501"); await kol(() => CV().vyksta);
+    W.dokumentaiPasirinkus("1234501");
+    await laukti(30); lygu(DOK_UZKL.length, 1, "antra užklausa nesiunčiama");
+    DOK_ATS = { zip, delsa: 300 };
+    const pr = W.__PPT.parsisiuskDokumentus("1234502");
+    await laukti(80);
+    lygu([CV().vyksta, CV().id, !!CV().ctl], [true, "1234502", true], "atšaukto pirkimo rezultatas naujo parsisiuntimo būsenos neperrašė");
+    await pr;
+    lygu(CV().isCvp, "1234502");
+  });
+  await testas("Paketas be perskaitomų dokumentų: laukiantis klausimas parsisiuntimo nekartoja be galo, DI neklausiamas, pasakoma kodėl", async () => {
+    await isvalyk();
+    await suAi({ ok: true, text: "{}" }, async (kvietimai) => {
+      VPT_ATS = vptOk(); DOK_ATS = { zip: await dokZip({}), delsa: 150 };
+      await nustatyk("1234501"); await kol(() => CV().vyksta);
+      askInput().value = "Koks terminas?"; W.klausk();
+      await kol(() => !CV().vyksta); await laukti(150);
+      lygu(DOK_UZKL.length, 1, "viena užklausa"); lygu(kvietimai.length, 0, "DI neklausiamas");
+      tiesa(!W.__PPT.S.idx, "neindeksuota"); tiesa(/warn/.test(askNote().innerHTML), "pasakoma"); tiesa(!!CV().laukia, "klausimas lieka");
+    });
+  });
+  await testas("Užrašai ir privatumo tekstai sako, kad vieši dokumentai - iš CVP IS per serverį, jų neišsaugant", async () => {
+    await isvalyk();
+    turi(D.getElementById("liveTag").textContent, "CVP IS arba jūsų");
+    turi(D.querySelector("[data-i18n='p.sub']").textContent, "parsisiųsime iš CVP IS");
+    W.setLang("en"); turi(D.getElementById("liveTag").textContent, "CVP IS or yours"); W.setLang("lt");
+    const h = await (await fetch("index.html")).text();
+    neturi(h, "Dokumentų API nėra"); neturi(h, "There is no document API"); neturi(h, "Dokumentų per API gauti negalima");
+    turi(h, "tik prisijungusiems"); turi(h, "only to signed-in users");
+    const sw = await (await fetch("sw.js")).text(); neturi(sw, "ppt-2026-10-21-4");
+  });
+  await isvalyk(); VPT_ATS = null; DOK_ATS = null;
 
   grupe("VPT CVP IS duomenys per G-Procure serverį (2026-10-18)");
   await testas("Nurodžius pirkimą - viena užklausa tik į api.g-procure.com/api/cvpis/pirkimas/<nr> be slapukų; duomenys su VPT kodais, terminu, verte ir atnaujinimo laiku", async () => {
