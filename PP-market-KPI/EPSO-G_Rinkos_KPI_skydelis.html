@@ -2,7 +2,7 @@
 <html lang="lt">
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob: https://osp-rs.stat.gov.lt">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; connect-src 'self' https://api.g-procure.com https://eu.i.posthog.com data: blob: https://osp-rs.stat.gov.lt https://ec.europa.eu">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
@@ -727,8 +727,8 @@
       </div>
       <div>
         <h4 data-i18n="help.prr.h">Ryšys su rizikų registru (PRR)</h4>
-        <p data-i18n-html="help.prr.p1">Kiekvienas rodiklis yra parengtas kaip <b>pagrindinio rizikos rodiklio (PRR)</b> kandidatas mėnesiniam „Rizikų registro“ pildymui - pvz., „Brent volatilumas“, „BDI 4 sav. pokytis“, „LME Al 3 mėn. pokytis“.</p>
-        <p data-i18n="help.prr.p2">Rodikliai su šaltiniu atnaujinami patys, atvėrus puslapį. Kitų reikšmę įveskite kortelėje („Įvesti reikšmę“) arba „Duomenys ▾ → Įvesti reikšmes ranka“ - kas savaitę ar prieš mėnesinį rizikų pildymą.</p>
+        <p data-i18n-html="help.prr.p1">Kiekvienas rodiklis yra parengtas kaip <b>pagrindinio rizikos rodiklio (PRR)</b> kandidatas mėnesiniam „Rizikų registro“ pildymui - pvz., „Brent volatilumas“, „Jūrų krovinių 3 mėn. pokytis“, „LME Al 3 mėn. pokytis“.</p>
+        <p data-i18n="help.prr.p2">Rodikliai atnaujinami patys, atvėrus puslapį, jei paskutinė patikra senesnė nei 12 val. Vesti ranka nereikia; „Duomenys ▾ → Įvesti reikšmes ranka“ - atsarginis kelias, kai šaltinis ilgesnį laiką nepasiekiamas.</p>
       </div>
     </div>
   </section>
@@ -807,13 +807,15 @@ const DEFAULT_DATA = {
            red:"Vario indeksavimas + kainos peržiūros mechanizmas; ankstesnis pirkimas; dvigubas tiekimas (dual sourcing)."}
     },
     {
-      id:"polymers", group:"A", zingsnis:"sav.", laikotarpis:"2026-05-15", demo:true,
-      name:"Polimerai (HDPE/PP/PET)",
-      plain:"Plastikų kaina - kabelių izoliacija, vamzdžiai, apsaugos, IT komponentai.",
-      unit:"€/t", decimals:0, type:"change",
-      invert:false, thr:{yellow:6, red:14},
-      series:[1280,1275,1270,1265,1260,1255,1250,1248,1245,1240,1238,1235],
-      src:{name:"S&P Global Polymers", url:"https://www.spglobal.com/energy/en/commodity/chemicals/polymers"},
+      /* 2026-11-03: iki tol - S&P Global kaina €/t, vedama ranka; dabar - Eurostat indeksas (rinka.js). Ribos - modulio orientyras
+         pagal 2015-2026 m. 3 mėn. pokyčius (trečias kvartilis ~3,8 %, 95-as procentilis ~10,9 %). */
+      id:"polymers", group:"A", zingsnis:"mėn.", lookback:3, laikotarpis:"2026-05-01", demo:true,
+      name:"Polimerų kainos (ES indeksas)",
+      plain:"ES gamintojų kainų indeksas (2021 m. = 100): plastikai pirminėmis formomis - žaliava kabelių izoliacijai, vamzdžiams, apsaugoms ir IT korpusams.",
+      unit:"indeksas", decimals:1, type:"change",
+      invert:false, thr:{yellow:4, red:10},
+      series:[99.5, 99.2, 98.8, 98.6, 98.4, 98.2, 98.0, 97.9, 99.1, 99.0, 101.5, 112.8, 118.9],
+      src:{name:"Eurostat (sts_inpp_m, C2016)", url:"https://ec.europa.eu/eurostat/databrowser/view/sts_inpp_m/default/table?lang=en"},
       impact:"veikia kabelių izoliaciją, vamzdžius ir IT korpusus; krytis žemyn - palanku pirkimams",
       act:{green:"Fiksuota kaina priimtina; geras momentas ilgesnėms sutartims.",
            yellow:"Stebėti kartu su Brent (polimerai seka naftą su atsilikimu).",
@@ -901,39 +903,46 @@ const DEFAULT_DATA = {
     },
     /* ---------- B: PRISTATYMO TERMINAI / PAJEGUMAI ---------- */
     {
-      id:"bdi", group:"B", zingsnis:"sav.", laikotarpis:"2026-05-15", demo:true,
-      name:"Baltic Dry Index",
-      plain:"Sausakrūvių jūrų pervežimų kainos indeksas - biriųjų ir stambių krovinių logistika.",
-      unit:"taškai", decimals:0, type:"change",
-      invert:false, thr:{yellow:12, red:25},
-      series:[1450,1480,1520,1500,1550,1600,1620,1650,1780,1950,2150,2320],
-      src:{name:"Baltic Exchange", url:"https://www.balticexchange.com/en/data-services/market-information0/indices.html"},
-      impact:"brangsta ir lėtėja stambių krovinių (metalo, įrangos, statybinių medžiagų) pristatymas jūra",
+      /* 2026-11-03: vietoj Baltic Dry Index (Baltic Exchange duomenų skelbti be licencijos negalima; vesta ranka). GSCPI - Niujorko federalinio
+         rezervo banko indeksas, jungiantis transporto kainas ir gamintojų apklausas. Vertinamas LYGIS, ne pokytis: 0 - istorinis vidurkis, gali būti neigiamas.
+         Ribos - modulio orientyras: vienas ir du standartiniai nuokrypiai virš vidurkio. */
+      id:"gscpi", group:"B", zingsnis:"mėn.", lookback:3, laikotarpis:"2026-05-01", demo:true,
+      name:"Tiekimo grandinių spaudimas (GSCPI)",
+      plain:"Niujorko federalinio rezervo banko indeksas, jungiantis pasaulines transporto kainas ir gamintojų apklausas: 0 - istorinis vidurkis, 1 - vienu standartiniu nuokrypiu daugiau už vidurkį.",
+      unit:"st. nuokr.", decimals:2, type:"level",
+      invert:false, thr:{yellow:1, red:2},
+      series:[0.2, 0.1, 0.03, -0.08, -0.04, -0.15, -0.21, 0.47, 0.36, 0.49, 0.63, 1.78, 1.81],
+      src:{name:"NY Fed GSCPI", url:"https://www.newyorkfed.org/research/policy/gscpi"},
+      impact:"ilgėja pristatymo terminai ir brangsta logistika - poveikis metalo, įrangos ir statybinių medžiagų pristatymui",
       act:{green:"Standartiniai pristatymo terminai sutartyje.",
            yellow:"Prašyti tiekėjo patvirtinti pristatymo terminą raštu; numatyti rezervinį pristatymo langą.",
            red:"Ilginti sutartinius terminus; numatyti force majeure ir tiekimo garantijas; peržiūrėti delspinigius."}
     },
     {
-      id:"container", group:"B", zingsnis:"sav.", laikotarpis:"2026-05-15", demo:true,
-      name:"Konteinerių frachtas",
-      plain:"Konteinerinių pervežimų kaina (Drewry WCI) - IT, įrangos, smulkesnių krovinių logistika.",
-      unit:"$/40ft", decimals:0, type:"change",
-      invert:false, thr:{yellow:8, red:18},
-      series:[2600,2620,2650,2680,2700,2750,2780,2820,2900,2950,3000,3050],
-      src:{name:"Drewry WCI", url:"https://www.drewry.co.uk/supply-chain-advisors/supply-chain-expertise/world-container-index-assessed-by-drewry"},
+      /* 2026-11-03: iki tol - Drewry WCI, vedama ranka (Drewry duomenys - mokami). JAV indeksas - krypties ženklas, ne kaina Europoje.
+         Ribos - modulio orientyras pagal 3 mėn. pokyčių istoriją (trečias kvartilis ~5,2 %, 95-as procentilis ~10,6 %). */
+      id:"container", group:"B", zingsnis:"mėn.", lookback:3, laikotarpis:"2026-05-01", demo:true,
+      name:"Jūrų krovinių kainos (JAV indeksas)",
+      plain:"JAV gamintojų kainų indeksas: krovinių gabenimas jūra (1988 m. birželis = 100). Krypties ženklas importuojamos įrangos ir komponentų logistikai, ne kaina Europoje.",
+      unit:"indeksas", decimals:1, type:"change",
+      invert:false, thr:{yellow:5, red:11},
+      series:[505, 508, 512, 510, 514, 518, 520, 522, 525, 528, 530, 532, 534],
+      src:{name:"FRED / BLS (PCU483111483111)", url:"https://fred.stlouisfed.org/series/PCU483111483111"},
       impact:"brangsta importuojamos įrangos ir komponentų pristatymas - poveikis IT ir atsarginių dalių kategorijoms",
       act:{green:"Standartiniai pristatymo terminai.",
            yellow:"Numatyti pristatymo kainos buferį; tikrinti tiekėjų maršrutus.",
            red:"Ilginti terminus; svarstyti regioninius (ES) tiekėjus; didinti saugos atsargas."}
     },
     {
-      id:"aircargo", group:"B", zingsnis:"sav.", laikotarpis:"2026-05-15", demo:true,
-      name:"Oro krovinių indeksas (TAC)",
-      plain:"Oro pervežimų kaina/pajėgumai - kritinės dalys ir skubūs „incidentų“ pristatymai.",
-      unit:"$/kg", decimals:2, type:"change",
-      invert:false, thr:{yellow:6, red:16},
-      series:[2.30,2.32,2.35,2.34,2.38,2.40,2.42,2.45,2.50,2.55,2.60,2.62],
-      src:{name:"TAC Index", url:"https://www.tacindex.com/"},
+      /* 2026-11-03: iki tol - TAC Index, vedamas ranka (duomenys - mokami). Tarptautinių oro krovinių kainos į JAV - krypties ženklas.
+         Ribos - modulio orientyras pagal 3 mėn. pokyčių istoriją (trečias kvartilis ~7,2 %, 95-as procentilis ~16,4 %). */
+      id:"aircargo", group:"B", zingsnis:"mėn.", lookback:3, laikotarpis:"2026-05-01", demo:true,
+      name:"Oro krovinių kainos (JAV indeksas)",
+      plain:"JAV importo kainų indeksas: tarptautiniai oro kroviniai (2000 m. = 100). Krypties ženklas kritinių dalių ir skubių pristatymų kainai, ne kaina Europoje.",
+      unit:"indeksas", decimals:1, type:"change",
+      invert:false, thr:{yellow:7, red:16},
+      series:[205, 206, 207, 206, 208, 209, 210, 211, 212, 213, 215, 216, 218],
+      src:{name:"FRED / BLS (IC131)", url:"https://fred.stlouisfed.org/series/IC131"},
       impact:"brangsta skubūs pristatymai - rizika kritinėms dalims ir avarinėms atsargoms (OPEX/maintenance)",
       act:{green:"Skubūs pristatymai įprasta kaina.",
            yellow:"Peržiūrėti kritinių dalių saugos atsargas; sutartyse numatyti skubaus pristatymo sąlygas.",
@@ -1049,7 +1058,7 @@ const DEFAULT_DATA = {
     {
       id:"pastociu_iranga", name:"Transformatoriai, jungtuvai ir kita pastočių įranga", icon:"⚡",
       spend:"Didelė vieneto vertė · ilgi gamybos terminai · varis ir elektrotechninis plienas",
-      weights:{ lme_cu:.33, lme_al:.15, bdi:.17, container:.15, aircargo:.12, polymers:.08 },
+      weights:{ lme_cu:.33, lme_al:.15, gscpi:.17, container:.15, aircargo:.12, polymers:.08 },
       act:{
         green:["Standartinės procedūros naujai įrangai","Įprasti gamybos ir pristatymo terminai","Standartinės kritinių dalių saugos atsargos"],
         yellow:["Indeksavimo sąlyga (varis ir elektrotechnika) naujos įrangos sutartyse","Ankstyvas rinkos konsultavimasis dėl gamybos langų","Sutartyse numatyti skubaus pristatymo sąlygas"],
@@ -1059,7 +1068,7 @@ const DEFAULT_DATA = {
     {
       id:"kabeliai_ol", name:"Kabeliai, laidai ir oro linijų medžiagos", icon:"🔌",
       spend:"Didelė apimtis · kaina tiesiogiai seka varį ir aliuminį",
-      weights:{ lme_cu:.30, lme_al:.26, polymers:.13, bdi:.13, container:.08, brent:.10 },
+      weights:{ lme_cu:.30, lme_al:.26, polymers:.13, gscpi:.13, container:.08, brent:.10 },
       act:{
         green:["Standartinės procedūros, fiksuotos kainos priimtinos","Įprasti pristatymo terminai"],
         yellow:["Vario ir aliuminio indeksavimo formulė","Prašyti kainos išskaidymo (žaliava ir darbas atskirai)","Tiekėjas patvirtina pristatymo terminą raštu"],
@@ -1071,7 +1080,7 @@ const DEFAULT_DATA = {
       // LITGRID AB strateginiai projektai - tik LITGRID vykdytojui (naudotojo sprendimas 2026-10-28, T6: modulis visai grupei)
       spend:"Didžioji CAPEX dalis · rangos darbai · strateginiai projektai",
       spendLitgrid:"Didžioji CAPEX dalis · rangos darbai · strateginiai projektai (Harmony Link, LitPol Link, Gižai TS, RSVDC)",
-      weights:{ brent:.19, wti:.11, lme_al:.17, lme_cu:.15, polymers:.08, bdi:.17, container:.13 },
+      weights:{ brent:.19, wti:.11, lme_al:.17, lme_cu:.15, polymers:.08, gscpi:.17, container:.13 },
       act:{
         green:["Standartinės rangos procedūros","Fiksuotos kainos priimtinos trumpoms sutartims","CAPEX grafikai be papildomų rezervų"],
         yellow:["Degalų ir medžiagų indeksavimo sąlyga ilgesnėms sutartims","Strateginiams projektams - ankstyvas rinkos konsultavimasis","Rangos grafiko buferiai","SSKI dedamųjų indeksavimas (medžiagos, mašinos, DU)"],
@@ -1121,7 +1130,7 @@ const DEFAULT_DATA = {
     {
       id:"eksploatacija", name:"Tinklo eksploatavimas, remontas ir kritinės atsarginės dalys", icon:"🔧",
       spend:"Nuolatinis OPEX · kritiška tinklo patikimumui · dalis pirkimų skubūs",
-      weights:{ brent:.25, aircargo:.21, lme_cu:.16, container:.14, bdi:.12, polymers:.12 },
+      weights:{ brent:.25, aircargo:.21, lme_cu:.16, container:.14, gscpi:.12, polymers:.12 },
       act:{
         green:["Standartinės eksploatavimo ir remonto sutartys","Įprastos kritinių dalių saugos atsargos"],
         yellow:["Peržiūrėti kritinių atsarginių dalių saugos atsargas","Degalų ir medžiagų indeksavimo sąlyga ilgesnėms sutartims","Sutartyse - reagavimo terminai avarijų atveju"],
@@ -1131,7 +1140,7 @@ const DEFAULT_DATA = {
     {
       id:"duj_vamzdziai", name:"Dujotiekio vamzdžiai, armatūra ir stočių įranga", icon:"🛢️",
       spend:"Didelė vieneto vertė · kainą ir terminą lemia plienas ir gamybos langai",
-      weights:{ plieno_vamzdziai:.35, plienas:.2, gelezies_ruda:.1, nikelis:.05, bdi:.15, container:.15 },
+      weights:{ plieno_vamzdziai:.35, plienas:.2, gelezies_ruda:.1, nikelis:.05, gscpi:.15, container:.15 },
       act:{
         green:["Standartinės procedūros, fiksuotos kainos priimtinos", "Įprasti gamybos ir pristatymo terminai"],
         yellow:["Plieno indeksavimo sąlyga naujų vamzdžių ir armatūros sutartyse", "Prašyti kainos išskaidymo (plienas ir darbas atskirai)", "Ankstyva rinkos konsultacija dėl gamybos langų"],
@@ -1141,7 +1150,7 @@ const DEFAULT_DATA = {
     {
       id:"duj_statyba", name:"Dujotiekių ir stočių statyba, rekonstrukcija", icon:"🏗️",
       spend:"Didžioji CAPEX dalis · rangos darbai · plienas, degalai ir darbo jėga",
-      weights:{ brent:.2, wti:.08, plieno_vamzdziai:.22, plienas:.1, polymers:.1, bdi:.15, container:.15 },
+      weights:{ brent:.2, wti:.08, plieno_vamzdziai:.22, plienas:.1, polymers:.1, gscpi:.15, container:.15 },
       act:{
         green:["Standartinės rangos procedūros", "Fiksuotos kainos priimtinos trumpoms sutartims"],
         yellow:["SSKI dedamųjų indeksavimas ilgesnėms sutartims (medžiagos, mašinos, DU)", "Atskira nuostata vamzdžiams, jei juos tiekia rangovas", "Rangos grafiko buferiai"],
@@ -1171,7 +1180,7 @@ const DEFAULT_DATA = {
     {
       id:"duj_eksploatacija", name:"Dujotiekio eksploatavimas, diagnostika ir atsarginės dalys", icon:"🔧",
       spend:"Nuolatinis OPEX · kritiška sistemos patikimumui · dalis pirkimų skubūs",
-      weights:{ brent:.25, plieno_vamzdziai:.18, aircargo:.2, container:.14, bdi:.11, polymers:.12 },
+      weights:{ brent:.25, plieno_vamzdziai:.18, aircargo:.2, container:.14, gscpi:.11, polymers:.12 },
       act:{
         green:["Standartinės eksploatavimo ir remonto sutartys", "Įprastos kritinių dalių saugos atsargos"],
         yellow:["Peržiūrėti kritinių atsarginių dalių saugos atsargas", "Degalų ir medžiagų indeksavimo sąlyga ilgesnėms sutartims", "Sutartyse - reagavimo terminai avarijų atveju"],
@@ -1181,7 +1190,7 @@ const DEFAULT_DATA = {
     {
       id:"kaup_baterijos", name:"Baterijų moduliai ir energijos kaupimo sistemos", icon:"🔋",
       spend:"Didelė vieneto vertė · ilga tiekimo grandinė · metalai ir jūros frachtas (ličio kaina nestebima - nemokamo šaltinio nėra)",
-      weights:{ nikelis:.25, lme_cu:.2, lme_al:.15, container:.2, aircargo:.1, bdi:.1 },
+      weights:{ nikelis:.25, lme_cu:.2, lme_al:.15, container:.2, aircargo:.1, gscpi:.1 },
       act:{
         green:["Standartinės procedūros naujai įrangai", "Įprasti gamybos ir pristatymo terminai"],
         yellow:["Kainos peržiūros sąlyga pagal metalus ir elementus", "Ankstyva rinkos konsultacija dėl gamybos langų", "Komponentų kilmės ir tiekėjų patikra"],
@@ -1191,7 +1200,7 @@ const DEFAULT_DATA = {
     {
       id:"kaup_statyba", name:"Baterijų parkų statyba, įvažiavimai ir prijungimas", icon:"🏗️",
       spend:"CAPEX · rangos darbai · plienas, kabeliai ir degalai",
-      weights:{ brent:.2, plienas:.15, cinkas:.05, lme_cu:.15, lme_al:.08, polymers:.07, bdi:.15, container:.15 },
+      weights:{ brent:.2, plienas:.15, cinkas:.05, lme_cu:.15, lme_al:.08, polymers:.07, gscpi:.15, container:.15 },
       act:{
         green:["Standartinės rangos procedūros", "Fiksuotos kainos priimtinos trumpoms sutartims"],
         yellow:["SSKI dedamųjų indeksavimas ilgesnėms sutartims (medžiagos, mašinos, DU)", "Rangos grafiko buferiai", "Ankstyvas prijungimo terminų suderinimas"],
@@ -1251,11 +1260,24 @@ function ketvirtinisTinklelis(s){
   const L = s.length;
   return s.some((v, i) => v !== null && (L - 1 - i) % 3 !== 0) ? s.map((v, i) => i === L - 1 ? v : null) : s;
 }
+/* Ranka įvestos reikšmės, kurių su dabartiniu rodikliu lyginti negalima (2026-11-03: polimerai, kroviniai ir Baltic Dry vesti €/t, $/40ft ir taškais,
+   dabar - šaltinių indeksai). Eilutėje jų nelieka, bet duomenys neišmetami: lieka įraše ir atsarginėje kopijoje (meta.senosReiksmes), niekur nerodomi. */
+const SENU_ID = /^[a-z0-9_]{1,40}$/;
+function senaEilute(x){
+  return !!x && Array.isArray(x.reiksmes) && x.reiksmes.length > 0 && x.reiksmes.length <= NORM_MAX_TASKU
+    && x.reiksmes.every(v => v === null || (typeof v === "number" && isFinite(v))) && galiojantiData(x.laikotarpis);
+}
 function normalizuokDuomenis(d){
   if(!d || typeof d !== "object" || !Array.isArray(d.metrics)) return { klaida: { k: "rodikliai" } };
   const n = JSON.parse(JSON.stringify(DEFAULT_DATA));
   n.schemaVersion = SCHEMA_VERSION;
   let rasta = 0;
+  const senos = {};
+  const issaugok = sm => { senos[sm.id] = { vienetas: typeof sm.unit === "string" ? sm.unit.slice(0, 30) : "", laikotarpis: sm.laikotarpis, reiksmes: sm.series.slice() }; };
+  d.metrics.forEach(sm => {   // rodiklio nebėra (Baltic Dry Index): tikros reikšmės išsaugomos
+    if(sm && typeof sm.id === "string" && SENU_ID.test(sm.id) && sm.demo === false && !n.metrics.some(m => m.id === sm.id)
+       && senaEilute({ reiksmes: sm.series, laikotarpis: sm.laikotarpis })) issaugok(sm);
+  });
   for(const m of n.metrics){
     const sm = d.metrics.find(x => x && x.id === m.id);
     if(!sm) continue;                                   // trūkstamas rodiklis - numatytasis (iliustracinis)
@@ -1264,6 +1286,7 @@ function normalizuokDuomenis(d){
        || !sm.series.every(v => v === null || (typeof v === "number" && isFinite(v)))) return { klaida: { k: "eilute", id: m.id } };
     if(!galiojantiData(sm.laikotarpis)) return { klaida: { k: "laikotarpis", id: m.id } };
     if(typeof sm.demo !== "boolean") return { klaida: { k: "zyma", id: m.id } };
+    if(typeof sm.unit === "string" && sm.unit !== m.unit){ if(!sm.demo) issaugok(sm); continue; }   // kitas vienetas - nepalyginama
     if(m.ketvirtinis && sm.demo) continue;              // VMDU iliustracinės reikšmės - naujos numatytosios (ketvirčių tinklelis)
     if(sm.demo && sm.zingsnis && sm.zingsnis !== m.zingsnis) continue;   // kitas tinklelis (metalai iki 2026-11-03 - savaitiniai)
     m.series = m.ketvirtinis ? ketvirtinisTinklelis(sm.series.slice()) : sm.series.slice();
@@ -1279,6 +1302,11 @@ function normalizuokDuomenis(d){
   if(typeof meta.issaugota === "string" && !isNaN(new Date(meta.issaugota).getTime())) n.meta.issaugota = meta.issaugota;
   if(typeof meta.tikrinta === "string" && !isNaN(new Date(meta.tikrinta).getTime())) n.meta.tikrinta = meta.tikrinta;
   if(typeof meta.org === "string" && /^[a-z-]{2,20}$/.test(meta.org)) n.meta.org = meta.org;
+  if(meta.senosReiksmes && typeof meta.senosReiksmes === "object") Object.keys(meta.senosReiksmes).forEach(id => {
+    const x = meta.senosReiksmes[id];
+    if(SENU_ID.test(id) && !senos[id] && senaEilute(x)) senos[id] = { vienetas: typeof x.vienetas === "string" ? x.vienetas.slice(0, 30) : "", laikotarpis: x.laikotarpis, reiksmes: x.reiksmes.slice() };
+  });
+  if(Object.keys(senos).length) n.meta.senosReiksmes = senos;
   // Bendra žyma - kaip įraše (suderinamumui su senais įrašais), o jos nesant - išvedama iš rodiklių
   n.meta.demo = typeof meta.demo === "boolean" ? meta.demo : n.metrics.some(m => m.demo);
   return { duomenys: n };
@@ -1330,6 +1358,7 @@ function migruotiIsSeno(senas){
   naujas.metrics.forEach(m=>{
     const sm = senas.metrics.find(x=>x && x.id===m.id);
     if(!sm) return;
+    if(typeof sm.unit === "string" && sm.unit !== m.unit) return;   // kitas vienetas (2026-11-03) - reikšmių su šiuo rodikliu lyginti negalima
     if(Array.isArray(sm.series) && sm.series.length){ m.series = sm.series.slice(); perkelta++; }
     if(sm.laikotarpis) m.laikotarpis = sm.laikotarpis;            // jau v5+ formatas
     else if(naudotojasKeite){
@@ -1437,26 +1466,26 @@ const DUOMENU_EN = {
       act:{ green:"A fixed price is acceptable.",
             yellow:"A copper indexation clause is essential in cable and transformer procurements.",
             red:"Copper indexation plus a price review mechanism; bring the purchase forward; dual sourcing." } },
-    polymers: { name:"Polymers (HDPE/PP/PET)", unit:"€/t", src:"S&P Global Polymers",
-      plain:"The plastics price - cable insulation, ducts, protective covers, IT components.",
+    polymers: { name:"Polymer prices (EU index)", unit:"index", src:"Eurostat (sts_inpp_m, C2016)",
+      plain:"EU producer price index (2021 = 100): plastics in primary forms - raw material for cable insulation, ducts, protective covers and IT enclosures.",
       impact:"affects cable insulation, ducts and IT enclosures; a downward move is favourable for procurement",
       act:{ green:"A fixed price is acceptable; a good moment for longer contracts.",
             yellow:"Monitor alongside Brent (polymers follow oil with a lag).",
             red:"Include raw material indexation in plastics-heavy contracts." } },
-    bdi: { name:"Baltic Dry Index", unit:"points", src:"Baltic Exchange",
-      plain:"The dry bulk shipping price index - logistics for bulk and oversized cargo.",
-      impact:"delivery of bulk cargo by sea (metal, equipment, construction materials) becomes slower and more expensive",
+    gscpi: { name:"Supply chain pressure (GSCPI)", unit:"std. dev.", src:"NY Fed GSCPI",
+      plain:"A Federal Reserve Bank of New York index combining global transportation costs and manufacturing surveys: 0 is the historical average, 1 is one standard deviation above it.",
+      impact:"delivery times get longer and logistics more expensive - affecting deliveries of metal, equipment and construction materials",
       act:{ green:"Standard delivery times in the contract.",
             yellow:"Ask the supplier to confirm the delivery date in writing; provide for a reserve delivery window.",
             red:"Extend contractual deadlines; provide for force majeure and supply guarantees; review late-delivery penalties." } },
-    container: { name:"Container freight", unit:"$/40ft", src:"Drewry WCI",
-      plain:"The container shipping price (Drewry WCI) - logistics for IT, equipment and smaller cargo.",
+    container: { name:"Sea freight prices (US index)", unit:"index", src:"FRED / BLS (PCU483111483111)",
+      plain:"US producer price index: deep sea freight transportation (June 1988 = 100). A direction signal for the logistics of imported equipment and components, not a price in Europe.",
       impact:"delivery of imported equipment and components becomes more expensive - affects IT and spare parts categories",
       act:{ green:"Standard delivery times.",
             yellow:"Provide a buffer for the delivery price; check supplier routes.",
             red:"Extend deadlines; consider regional (EU) suppliers; increase safety stock." } },
-    aircargo: { name:"Air cargo index (TAC)", unit:"$/kg", src:"TAC Index",
-      plain:"Air freight price and capacity - critical parts and urgent deliveries during incidents.",
+    aircargo: { name:"Air freight prices (US index)", unit:"index", src:"FRED / BLS (IC131)",
+      plain:"US import price index: international air freight (2000 = 100). A direction signal for the price of critical parts and urgent deliveries, not a price in Europe.",
       impact:"urgent deliveries become more expensive - a risk for critical parts and emergency stock (OPEX/maintenance)",
       act:{ green:"Urgent deliveries at the usual price.",
             yellow:"Review safety stock of critical parts; provide for expedited delivery terms in contracts.",
@@ -1774,16 +1803,17 @@ const I18N = {
     "help.numbers.p1":"Didelis skaičius kortelėje - naujausia rodiklio reikšmė. Šalia - <b>pokytis</b>: savaitiniams globaliems rodikliams per 4 savaites, mėnesiniams (metalai, plienas, dujos) per 3 mėnesius, LT/VDA rodikliams per 12 mėnesių. Raudonai, kai pokytis nepalankus pirkimams.",
     "help.numbers.p2":"Mažas grafikas rodo tendenciją (savaitiniai - 12 savaičių, mėnesiniai ir LT/VDA - 13 mėnesių).",
     "help.prr.h":"Ryšys su rizikų registru (PRR)",
-    "help.prr.p1":"Kiekvienas rodiklis yra parengtas kaip <b>pagrindinio rizikos rodiklio (PRR)</b> kandidatas mėnesiniam „Rizikų registro“ pildymui - pvz., „Brent volatilumas“, „BDI 4 sav. pokytis“, „LME Al 3 mėn. pokytis“.",
-    "help.prr.p2":"Rodikliai su šaltiniu atnaujinami patys, atvėrus puslapį. Kitų reikšmę įveskite kortelėje („Įvesti reikšmę“) arba „Duomenys ▾ → Įvesti reikšmes ranka“ - kas savaitę ar prieš mėnesinį rizikų pildymą.",
+    "help.prr.p1":"Kiekvienas rodiklis yra parengtas kaip <b>pagrindinio rizikos rodiklio (PRR)</b> kandidatas mėnesiniam „Rizikų registro“ pildymui - pvz., „Brent volatilumas“, „Jūrų krovinių 3 mėn. pokytis“, „LME Al 3 mėn. pokytis“.",
+    "help.prr.p2":"Rodikliai atnaujinami patys, atvėrus puslapį, jei paskutinė patikra senesnė nei 12 val. Vesti ranka nereikia; „Duomenys ▾ → Įvesti reikšmes ranka“ - atsarginis kelias, kai šaltinis ilgesnį laiką nepasiekiamas.",
 
     "foot.about":"<b>Apie šį įrankį.</b> Įrankis skirtas pirkimų iniciatoriams, organizatoriams ir dalyviams EPSO-G įmonių grupėje - kad per kelias sekundes būtų suprantami rinkos pokyčiai, svarbūs pirkimams ir sutarčių indeksavimui. Ribinės reikšmės ir sutartiniai veiksmai yra rekomendacinio pobūdžio - galutinis sprendimas priimamas pagal konkrečios procedūros teisinį vertinimą ir pirkimo vykdytojo rizikų valdymo tvarką.",
-    "foot.demo":" Iliustracinių reikšmių lieka: <b>{n} iš {viso}</b> - prieš naudojant sprendimams jas pakeiskite faktinėmis (mygtukas „Atnaujinti iš šaltinių“ arba „Įvesti reikšmę“ kortelėje).",
-    "foot.data":" Įvestos reikšmės saugomos tik šioje naršyklėje. Atnaujinant iš šaltinių VDA rodikliai gaunami tiesiai iš Oficialiosios statistikos portalo, naftos, metalų, plieno ir dujų kainos - per G-Procure serverį iš FRED duomenų bazės; jūsų pirkimų duomenys nesiunčiami. Atvėrus puslapį šaltiniai patikrinami patys, jei paskutinė patikra senesnė nei 12 val.",
+    "foot.demo":" Iliustracinių reikšmių lieka: <b>{n} iš {viso}</b> - prieš naudojant sprendimams jas pakeiskite faktinėmis (mygtukas „Atnaujinti iš šaltinių“).",
+    "foot.data":" Reikšmės saugomos tik šioje naršyklėje. Atnaujinant iš šaltinių VDA rodikliai gaunami tiesiai iš Oficialiosios statistikos portalo, polimerų kainos - tiesiai iš Eurostat, naftos, metalų, plieno, dujų ir krovinių kainos - per G-Procure serverį iš FRED duomenų bazės, tiekimo grandinių spaudimas - per G-Procure serverį iš Niujorko federalinio rezervo banko; jūsų pirkimų duomenys nesiunčiami. Atvėrus puslapį šaltiniai patikrinami patys, jei paskutinė patikra senesnė nei 12 val.",
+    "foot.teises":" Šaltinių pastabos: ",
     "foot.sources":"Šaltiniai:",
     "lbl.growth":"augimas",
     "lbl.fall":"kritimas",
-    "lbl.level":"naujausias lygis",
+    "lbl.lygis":"lygis",
     "lbl.data":"Duomenys:",
     "lbl.source":"šaltinis:",
     "lbl.illustrative":"iliustracinė",
@@ -1805,7 +1835,7 @@ const I18N = {
     "kind.works":"Darbai",
     "kind.goods":"Prekės",
     "kind.services":"Paslaugos",
-    "sum.chg.level":"lygis {v} {vnt}/mėn.",
+    "sum.chg.level":"lygis {v} {vnt}",
     "sum.chg.na":"pokytis neskaičiuojamas (nepakanka duomenų)",
     "sum.stale.h":"Išvados remiasi ankstesnio laikotarpio duomenimis.",
     "sum.stale.p":"Naujausi stebėjimai įvesti {amzius}, tad žemiau aprašyta tuometinė rinkos padėtis, o ne šiandienos. Ankstesnio laikotarpio reikšmes turi {n} iš {viso} rodiklių.",
@@ -1970,7 +2000,6 @@ const I18N = {
     "cat.na.p":"Veiksmų nesiūlome: rodiklių, kurių pokytis nežinomas (nepakanka istorijos), dalis šio profilio svoryje - {dalis} % ({sarasas}). Atnaujinkite jų reikšmes - režimas bus nustatytas iš žinomų rodiklių.",
     "cat.drivers":"Pagrindiniai veiksniai:",
     "cat.nodrivers":"Spaudimą keliančių rodiklių nėra - visi šio profilio rodikliai žali.",
-    "src.bdi.wiki":"Baltic Dry Index - apžvalga (Wikipedia)",
     "focus.chg.level":"lygis {v} {vnt}",
     "lbl.since":"nuo",
     "edit.ph":"reikšmė",
@@ -2107,16 +2136,17 @@ const I18N = {
     "help.numbers.p1":"The large number on a card is the indicator's latest value. Next to it is the <b>change</b>: over 4 weeks for weekly global indicators, over 3 months for monthly ones (metals, steel, gas), over 12 months for Lithuanian indices. Shown in red when the change is unfavourable for procurement.",
     "help.numbers.p2":"The small chart shows the trend (weekly indicators - 12 weeks; monthly ones and Lithuanian indices - 13 months).",
     "help.prr.h":"Link to the risk register (KRI)",
-    "help.prr.p1":"Every indicator is prepared as a <b>key risk indicator (KRI)</b> candidate for the monthly risk register - for example “Brent volatility”, “BDI 4-week change”, “LME Al 3-month change”.",
-    "help.prr.p2":"Indicators with a source update on their own when the page opens. Enter the others on the card (“Enter value”) or via “Data ▾ → Enter values manually” - weekly or before the monthly risk register update.",
+    "help.prr.p1":"Every indicator is prepared as a <b>key risk indicator (KRI)</b> candidate for the monthly risk register - for example “Brent volatility”, “sea freight 3-month change”, “LME Al 3-month change”.",
+    "help.prr.p2":"Indicators update on their own when the page opens, if the last check is older than 12 hours. There is no need to enter them by hand; “Data ▾ → Enter values manually” is a fallback for when a source is unavailable for a longer time.",
 
     "foot.about":"<b>About this tool.</b> The tool is intended for procurement initiators, organisers and participants across the EPSO-G group, so that market changes relevant to procurement and contract indexation can be understood in seconds. Threshold values and contractual actions are advisory - the final decision is taken on the basis of the legal assessment of the specific procedure and the risk management procedure of the contracting entity or authority.",
-    "foot.demo":" Illustrative values remaining: <b>{n} of {viso}</b> - replace them with actual values before using them for decisions (the “Update from sources” button or “Enter value” on the card).",
-    "foot.data":" Entered values are stored only in this browser. When updating from sources, the State Data Agency indicators are fetched directly from the Official Statistics Portal, and oil, metal, steel and gas prices via the G-Procure server from the FRED database; your procurement data is not sent. When the page opens, the sources are checked automatically if the last check is older than 12 hours.",
+    "foot.demo":" Illustrative values remaining: <b>{n} of {viso}</b> - replace them with actual values before using them for decisions (the “Update from sources” button).",
+    "foot.data":" Values are stored only in this browser. When updating from sources, the State Data Agency indicators are fetched directly from the Official Statistics Portal, polymer prices directly from Eurostat, oil, metal, steel, gas and freight prices via the G-Procure server from the FRED database, and supply chain pressure via the G-Procure server from the Federal Reserve Bank of New York; your procurement data is not sent. When the page opens, the sources are checked automatically if the last check is older than 12 hours.",
+    "foot.teises":" Source notices: ",
     "foot.sources":"Sources:",
     "lbl.growth":"rise",
     "lbl.fall":"fall",
-    "lbl.level":"latest level",
+    "lbl.lygis":"level",
     "lbl.data":"Data:",
     "lbl.source":"source:",
     "lbl.illustrative":"illustrative",
@@ -2138,7 +2168,7 @@ const I18N = {
     "kind.works":"Works",
     "kind.goods":"Goods",
     "kind.services":"Services",
-    "sum.chg.level":"level {v} {vnt}/month",
+    "sum.chg.level":"level {v} {vnt}",
     "sum.chg.na":"the change cannot be calculated (insufficient data)",
     "sum.stale.h":"These conclusions rest on values from an earlier period.",
     "sum.stale.p":"The latest observations were entered {amzius}, so what follows describes the market as it was then, not today. {n} of {viso} indicators hold values from an earlier period.",
@@ -2303,7 +2333,6 @@ const I18N = {
     "cat.na.p":"No actions are suggested: indicators with an unknown change (insufficient history) make up {dalis} % of this profile's weight ({sarasas}). Update their values - the mode will be set from the known indicators.",
     "cat.drivers":"Main drivers:",
     "cat.nodrivers":"No indicators are creating pressure - all indicators of this profile are green.",
-    "src.bdi.wiki":"Baltic Dry Index - overview (Wikipedia)",
     "focus.chg.level":"level {v} {vnt}",
     "lbl.since":"since",
     "edit.ph":"value",
@@ -2752,7 +2781,7 @@ function trigLabels(m){
   const y = esc(m.thr.yellow), rd = esc(m.thr.red);
   if(m.type==="level"){
     return {
-      g:`&lt; ${y}`,
+      g:`${esc(t("lbl.lygis"))} &lt; ${y}`,
       y:`${y}-&lt;${rd}`,
       r:`≥ ${rd}`
     };
@@ -2816,9 +2845,11 @@ function kpiCard(m){
 
   // pokytis rodomas: spalva pagal tai, ar palanku pirkimams
   let chgClass, chgArrow;
+  // Lygio rodiklis (GSCPI): reikšmė jau rodoma kairėje, todėl čia - skirtumas per tą patį laikotarpį (vienetais; procentai nuo artimo nuliui skaičiaus beprasmiai)
+  const lygioPokytis = m.type==="level" && typeof baseVal(m) === "number" && typeof l === "number" ? l - baseVal(m) : NaN;
   if(m.type==="level"){
-    chgClass = sev===0?"chg-down":sev===1?"chg-flat":"chg-up";
-    chgArrow = "";
+    chgClass = lygioPokytis>0.05?"chg-up":lygioPokytis<-0.05?"chg-down":"chg-flat";
+    chgArrow = !isFinite(lygioPokytis) ? "" : lygioPokytis>0.05?"▲":lygioPokytis<-0.05?"▼":"▬";
   } else {
     const adverseBad = adverse > 0.4;
     const adverseGood = adverse < -0.4;
@@ -2827,7 +2858,7 @@ function kpiCard(m){
   }
   const tl = trigLabels(m);
   const chgText = m.type==="level"
-    ? `${fmt(l, m.decimals)} ${esc(dt(m,"unit","metrics").split("/")[0])}`
+    ? (!isFinite(lygioPokytis) ? "–" : `${chgArrow} ${fmtSigned(lygioPokytis, m.decimals)}`)
     : (!isFinite(pc) ? "–" : `${chgArrow} ${fmtSigned(pc,1)}%`);
 
   return `<div class="kpi s-${sk}" data-id="${esc(m.id)}">
@@ -2843,7 +2874,7 @@ function kpiCard(m){
       <div class="kpi-val mono">${fmt(l,m.decimals)}<span class="kpi-unit">${esc(dt(m,"unit","metrics"))}</span></div>
       <div class="kpi-chg ${chgClass}">
         <span class="big mono">${chgText}</span>
-        <span class="chg-cap">${m.type==="level"?esc(t("lbl.level")):esc(palyginimoEtikete(m))}</span>
+        <span class="chg-cap">${esc(palyginimoEtikete(m))}</span>
       </div>
     </div>
     ${sparkline(m,color)}
@@ -3079,7 +3110,7 @@ function generateSummary(){
   // TSO interpretacija
   const signalas = id => { const m = metricById(id); return aktyvusRodiklis(m) && severity(m) >= 1; };   // tik pasirinktos įmonės rodikliai
   const energyUp = signalas("brent") || signalas("wti");
-  const logiUp = signalas("bdi") || signalas("container");
+  const logiUp = signalas("gscpi") || signalas("container");
   const airUp = signalas("aircargo");
   if(energyUp && logiUp){
     p5 += t("sum.p5.energy");
@@ -3150,7 +3181,6 @@ function renderSources(){
     const u = srcUrl(m);
     if(u && !seen[u]){ seen[u]=1; links.push({name: dtSrc(m), url: u}); }
   });
-  links.push({name: t("src.bdi.wiki"), url:"https://en.wikipedia.org/wiki/Baltic_Dry_Index"});
   document.getElementById("srcList").innerHTML =
     "<b style='color:var(--muted)'>" + esc(t("foot.sources")) + "</b> " +
     links.map(l=>`<a href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">${esc(l.name)}</a>`).join(" · ");
@@ -3913,7 +3943,7 @@ function fkRodiklis(m){
   const sv = severity(m), sk = statusKey(sv);
   let val, sub;
   if(m.type === "level"){
-    val = esc(latest(m) + " " + dt(m, "unit", "metrics").split("/")[0]); sub = esc(t("fk.level"));
+    val = esc(fmt(latest(m), m.decimals) + " " + dt(m, "unit", "metrics").split("/")[0]); sub = esc(t("fk.level"));
   } else {
     const pc = pctChange(m);
     val = isFinite(pc) ? esc(fmtSigned(pc, 1) + " %") : esc(t("sum.chg.na"));
@@ -4432,11 +4462,16 @@ document.querySelectorAll(".lang-switch__btn").forEach(b=>{
 });
 /* Poraštė (2026-10-27, M4 / T7): sakinys apie iliustracines reikšmes - tik kai jų yra, o duomenų kelias aprašytas tiksliai
    (iki tol visada sakė „reikšmės iliustracinės“ ir „veikia visiškai lokaliai, be interneto“, nors jungiasi prie OSP ir serverio). */
+/* Šaltinių reikalaujami užrašai - pažodžiui, todėl abiem kalbomis angliškai (Eurostat ir NY Fed naudojimo sąlygos, FRED API sąlygos). */
+function saltiniuPastabos(){
+  return "Source: Eurostat. This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis. © "
+    + new Date().getFullYear() + " Federal Reserve Bank of New York. Content from the New York Fed subject to the Terms of Use at newyorkfed.org.";
+}
 function renderFooter(){
   const el = document.getElementById("footAbout");
   if(!el) return;
   const demo = demoRodikliai().length;
-  el.innerHTML = t("foot.about") + (demo ? t("foot.demo", {n: demo, viso: aktyvusRodikliai().length}) : "") + t("foot.data");
+  el.innerHTML = t("foot.about") + (demo ? t("foot.demo", {n: demo, viso: aktyvusRodikliai().length}) : "") + t("foot.data") + t("foot.teises") + saltiniuPastabos();
 }
 function renderAll(){
   orgSelectPiesk();
@@ -4493,9 +4528,9 @@ function showToast(msg){ GP_PRANESIMAS.rodyk(msg); }
 const btnEdit = document.getElementById("btnEdit");
 const btnSave = document.getElementById("btnSave");
 const btnCancel = document.getElementById("btnCancel");
-/* Rankinis įvedimas (2026-11-03, naudotojo pastaba: puslapio švara ir patogumas): rodikliai su šaltiniu atnaujinami patys,
-   todėl pagrindinio „Redaguoti reikšmes“ antraštėje nebėra. Rodikliui be šaltinio - „Įvesti reikšmę“ kortelėje (tik jo eilutė),
-   visiems - „Duomenys ▾ → Įvesti reikšmes ranka“; Išsaugoti ir Atšaukti - juostoje virš kortelių. */
+/* Rankinis įvedimas (2026-11-03, naudotojo pastabos: puslapio švara ir „kad neliktų rankinio įvedimo“): visi rodikliai turi šaltinį ir atnaujinami patys,
+   todėl „Redaguoti reikšmes“ antraštėje nebėra, o „Įvesti reikšmę“ kortelėje rodoma tik neįsikėlus jungties failui (beSaltinio).
+   „Duomenys ▾ → Įvesti reikšmes ranka“ - atsarginis kelias, kai šaltinis ilgesnį laiką nepasiekiamas; Išsaugoti ir Atšaukti - juostoje virš kortelių. */
 let EDIT_VIENAS = null;
 function beSaltinio(m){ return !((window.GP_OSP && GP_OSP.RODIKLIAI[m.id]) || (window.GP_RINKA && GP_RINKA.RODIKLIAI[m.id])); }
 function editBarTekstas(){
@@ -4540,9 +4575,10 @@ function tikrinkRedagavima(){
     if(!m || raw === ""){ rodyk(""); return; }
     const v = window.GP_MONEY ? GP_MONEY.parseSkaicius(raw) : Number(raw.replace(",", "."));
     if(typeof v !== "number" || !isFinite(v) || Math.abs(v) > 1e9){ rodyk(t("edit.bad")); blogu++; pirmas = pirmas || inp; return; }
-    if(v <= 0){ rodyk(t("edit.neg")); blogu++; pirmas = pirmas || inp; return; }
+    // Lygio rodiklis (GSCPI) gali būti neigiamas ar artimas nuliui - ir santykio su ankstesne reikšme ten nėra prasmės tikrinti
+    if(m.type !== "level" && v <= 0){ rodyk(t("edit.neg")); blogu++; pirmas = pirmas || inp; return; }
     const pr = m.series.slice().reverse().find(x => typeof x === "number" && isFinite(x));
-    if(typeof pr === "number" && pr > 0 && (v / pr > 5 || pr / v > 5) && inp.dataset.patvirtinta !== raw){
+    if(m.type !== "level" && typeof pr === "number" && pr > 0 && (v / pr > 5 || pr / v > 5) && inp.dataset.patvirtinta !== raw){
       rodyk(t("edit.big", {v: fmt(v, m.decimals), pr: fmt(pr, m.decimals)}));
       inp.dataset.patvirtinta = raw; itartinu++; pirmas = pirmas || inp; return;
     }
@@ -4624,10 +4660,9 @@ btnSave.addEventListener("click", ()=>{
       : t(aktyvusRodikliai().some(arPasenes) ? "toast.nochange.stale" : "toast.nochange"));
 });
 /* ---------- GYVA VDA JUNGTIS (osp.js) --------------------------------------
-   Vienintele vieta modulyje, kur duomenys ateina NE is naudotojo pirstu. Septyni D
-   lygmens rodikliai pasiimami tiesiai is statistikos departamento; likusieji desimt
-   (Brent, LME, BDI ir kt.) nemokamo saltinio, i kuri butu galima kreiptis is
-   narsykles, neturi, tad lieka rankiniai.
+   Septyni VDA rodikliai pasiimami tiesiai is statistikos departamento, polimeru kainos -
+   tiesiai is Eurostat, kiti (nafta, metalai, kroviniai, tiekimo grandines) - per G-Procure
+   serveri (rinka.js): ju saltiniai raktu reikalauja arba kreiptis is narsykles neleidzia.
 
    Reiksme rasoma i TA laikotarpi, kuriuo ja paskelbe departamentas, o ne i siandiena:
    oficiali statistika velina 1-2 menesius, ir apsimesti, kad liepos skaicius yra
@@ -4820,7 +4855,9 @@ const AUTO_KAS_VAL = 12;
 function reikiaAutoAtnaujinti(dabar, virsutinis){
   if(!(virsutinis === undefined ? window.top === window : virsutinis) || KPI_SKAITYMAS) return false;
   const buvo = DATA.meta.tikrinta ? new Date(DATA.meta.tikrinta).getTime() : NaN;
-  if(isFinite(buvo) && (dabar || Date.now()) - buvo < AUTO_KAS_VAL * 3600000) return false;
+  // Rodiklis su šaltiniu, kuris dar iliustracinis (naujas šaltinis ar ankstesnis nepavyko), laukti 12 val. neverčia
+  const liko = DATA.metrics.some(m => m.demo && !beSaltinio(m));
+  if(!liko && isFinite(buvo) && (dabar || Date.now()) - buvo < AUTO_KAS_VAL * 3600000) return false;
   return DATA.metrics.some(m => !beSaltinio(m));
 }
 

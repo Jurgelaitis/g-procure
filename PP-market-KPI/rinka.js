@@ -1,12 +1,15 @@
 /* ============================================================================
  * PP-market-KPI  rinka.js
  * ----------------------------------------------------------------------------
- * Globalūs rinkos rodikliai (nafta, metalai) per g-procure backend proxy.
+ * Globalūs rinkos rodikliai (nafta, metalai, krovinių kainos, tiekimo grandinės) per
+ * g-procure backend proxy ir polimerų kainos - tiesiai iš Eurostat.
  *
  * KODĖL PER PROXY, o VDA rodikliai (osp.js) - tiesiai iš naršyklės. OSP rakto
  * nereikalauja ir leidžia mūsų kilmę, tad ten tarpininko nereikia. FRED reikalauja
  * rakto, o raktas kliento JavaScript'e matomas visiems - CLAUDE.md tai draudžia.
- * Todėl raktas lieka serveryje, o naršyklė kviečia /api/rinka.
+ * Todėl raktas lieka serveryje, o naršyklė kviečia /api/rinka. Eurostat rakto nereikalauja
+ * ir leidžia bet kokią kilmę (`Access-Control-Allow-Origin: *`, patikrinta 2026-11-03), todėl
+ * polimerai veikia ir be serverio.
  *
  * KĄ ŠITAS SLUOKSNIS DARO IR KO NEDARO. Jis tik parsineša ir sutvarko duomenis.
  * Sprendimą, kur reikšmę įrašyti, priima modulis (`taikykRinka`), nes tik jis žino
@@ -21,7 +24,16 @@
   "use strict";
 
   var BAZE = "https://api.g-procure.com/api/rinka";
-  var RODIKLIAI = { brent: 1, wti: 1, lme_al: 1, lme_cu: 1, dujos_eu: 1, plienas: 1, plieno_vamzdziai: 1, gelezies_ruda: 1, nikelis: 1, cinkas: 1 };
+  var RODIKLIAI = { brent: 1, wti: 1, lme_al: 1, lme_cu: 1, dujos_eu: 1, plienas: 1, plieno_vamzdziai: 1, gelezies_ruda: 1, nikelis: 1, cinkas: 1,
+                    container: 1, aircargo: 1, gscpi: 1, polymers: 1 };
+  /* Eurostat: gamintojų kainos (visa rinka), NACE C2016 „plastikai pirminėmis formomis“, ES, 2021 = 100, nekoreguota. Atvirieji duomenys:
+     naudoti galima nurodant šaltinį. Mėnesinis, naujausias - maždaug prieš 2-3 mėn. Pjūviai patikrinti 2026-11-03. */
+  var EUROSTAT = {
+    polymers: {
+      url: "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_inpp_m?format=JSON&lang=EN&geo=EU27_2020&nace_r2=C2016&s_adj=NSA&unit=I21&indic_bt=PRC_PRR",
+      saltinis: "Eurostat - Producer prices in industry: plastics in primary forms (NACE C2016), EU, 2021 = 100"
+    }
+  };
 
   /* TIK NUORODAI kortelėje, kad naudotojas galėtų pats pasitikrinti reikšmę prie šaltinio.
      Autoritetinga serijų lentelė (pagal kurią klausiama FRED) gyvena `backend-rinka-routes.js` -
@@ -38,7 +50,11 @@
     plieno_vamzdziai: "https://fred.stlouisfed.org/series/WPU101706",
     gelezies_ruda: "https://fred.stlouisfed.org/series/PIORECRUSDM",
     nikelis: "https://fred.stlouisfed.org/series/PNICKUSDM",
-    cinkas: "https://fred.stlouisfed.org/series/PZINCUSDM"
+    cinkas: "https://fred.stlouisfed.org/series/PZINCUSDM",
+    container: "https://fred.stlouisfed.org/series/PCU483111483111",
+    aircargo: "https://fred.stlouisfed.org/series/IC131",
+    gscpi: "https://www.newyorkfed.org/research/policy/gscpi",
+    polymers: "https://ec.europa.eu/eurostat/databrowser/view/sts_inpp_m/default/table?lang=en"
   };
 
   /* Is kasdienes serijos atrenka reiksmes rodiklio SAVAITINIAM tinkleliui: kiekvienam
@@ -67,15 +83,57 @@
     return res;
   }
 
-  // Grazina Promise: { ok:[{id, laikotarpis, reiksme, daznis, eilute}], klaidos:[{id, priezastis}] }
-  function atnaujink(ids) {
-    ids = (ids && ids.length ? ids : Object.keys(RODIKLIAI)).filter(function (x) { return RODIKLIAI[x]; });
-    var u = BAZE + "?ids=" + encodeURIComponent(ids.join(","));
+  /* JSON-stat atsakymas -> [{ laikotarpis:"2026-08-01", reiksme }] pagal laiką. Visi pjūviai parinkti adrese, todėl vienintelė
+     dimensija su keliomis reikšmėmis - laikas; kitokia sandara - klaida, ne svetimi skaičiai. */
+  function skaitykEurostat(d) {
+    var dim = d && d.dimension, ids = d && d.id, dydziai = d && d.size;
+    var laikas = dim && dim.time && dim.time.category && dim.time.category.index;
+    if (!laikas || !d.value || !Array.isArray(ids) || !Array.isArray(dydziai)) throw new Error("Eurostat: netikėta dimensijų sandara");
+    ids.forEach(function (id, i) { if (id !== "time" && dydziai[i] !== 1) throw new Error("Eurostat: netikėta dimensijų sandara"); });
+    var rez = [];
+    Object.keys(laikas).forEach(function (per) {
+      var v = d.value[laikas[per]];
+      if (/^\d{4}-\d{2}$/.test(per) && typeof v === "number" && isFinite(v)) rez.push({ laikotarpis: per + "-01", reiksme: v });
+    });
+    if (!rez.length) throw new Error("Eurostat: tuščias atsakymas");
+    return rez.sort(function (a, b) { return a.laikotarpis < b.laikotarpis ? -1 : 1; });
+  }
+
+  function imkEurostat(id) {
+    var nuo = new Date();
+    nuo.setMonth(nuo.getMonth() - 30);
+    var u = EUROSTAT[id].url + "&sinceTimePeriod=" + nuo.getFullYear() + "-" + ("0" + (nuo.getMonth() + 1)).slice(-2);
     return fetch(u, { credentials: "omit" }).then(function (r) {
-      if (r.status === 404) throw new Error("maršrutas neįdiegtas serveryje");
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
-    }).then(function (d) { return uzbaik(ids, d); });
+    }).then(function (d) {
+      var eil = skaitykEurostat(d), pask = eil[eil.length - 1];
+      return { id: id, laikotarpis: pask.laikotarpis, reiksme: pask.reiksme, daznis: "mėn.", saltinis: EUROSTAT[id].saltinis,
+               saltinioUrl: SERIJU_NUORODOS[id], menesine: eil.slice(-24) };
+    });
+  }
+
+  /* Grazina Promise: { ok:[{id, laikotarpis, reiksme, daznis, eilute}], klaidos:[{id, priezastis}] }.
+     Šaltiniai nepriklausomi: Eurostat klaida nestabdo serverio rodiklių ir atvirkščiai (serverio klaida - vienas įrašas „globalūs“). */
+  function atnaujink(ids) {
+    ids = (ids && ids.length ? ids : Object.keys(RODIKLIAI)).filter(function (x) { return RODIKLIAI[x]; });
+    var tiesiai = ids.filter(function (x) { return EUROSTAT[x]; }), serveriui = ids.filter(function (x) { return !EUROSTAT[x]; });
+    var rez = { ok: [], klaidos: [] };
+    var darbai = tiesiai.map(function (id) {
+      return imkEurostat(id).then(function (r) { rez.ok.push(r); }, function (e) { rez.klaidos.push({ id: id, priezastis: (e && e.message) || String(e) }); });
+    });
+    if (serveriui.length) {
+      var u = BAZE + "?ids=" + encodeURIComponent(serveriui.join(","));
+      darbai.push(fetch(u, { credentials: "omit" }).then(function (r) {
+        if (r.status === 404) throw new Error("maršrutas neįdiegtas serveryje");
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }).then(function (d) {
+        var g = uzbaik(serveriui, d);
+        rez.ok = rez.ok.concat(g.ok); rez.klaidos = rez.klaidos.concat(g.klaidos);
+      }).catch(function (e) { rez.klaidos.push({ id: "globalūs", priezastis: (e && e.message) || String(e) }); }));
+    }
+    return Promise.all(darbai).then(function () { return rez; });
   }
 
   /* Serverio atsakymas -> { ok, klaidos }. Kiekvienas prašytas rodiklis - arba reikšmė, arba
@@ -94,6 +152,6 @@
     return { ok: ok, klaidos: klaidos };
   }
 
-  global.GP_RINKA = { atnaujink: atnaujink, uzbaik: uzbaik, iSavaitini: iSavaitini, RODIKLIAI: RODIKLIAI,
-                      SERIJU_NUORODOS: SERIJU_NUORODOS, BAZE: BAZE };
+  global.GP_RINKA = { atnaujink: atnaujink, uzbaik: uzbaik, iSavaitini: iSavaitini, skaitykEurostat: skaitykEurostat, RODIKLIAI: RODIKLIAI,
+                      EUROSTAT: EUROSTAT, SERIJU_NUORODOS: SERIJU_NUORODOS, BAZE: BAZE };
 })(typeof window !== "undefined" ? window : this);

@@ -681,8 +681,8 @@ testas("Duomenų būsena", "Naudotojui rodomuose tekstuose nėra žodžio pasen�
   lygu(en, [], "EN raktai su senu žodžiu");
 });
 
-/* Sendinam tik dalį rodiklių: „auto" - tuos, kuriuos atnaujina jungtis (OSP + proxy),
-   „rankiniai" - likusius keturis, kuriems nemokamo šaltinio nėra. */
+/* Sendinam tik dalį rodiklių: „auto" - tuos, kuriuos atnaujina jungtis (OSP, serveris, Eurostat),
+   „rankiniai" - tuos, kuriems jungties nėra (nuo 2026-11-03 šaltinį turi visi, tad testas juos atjungia pats). */
 function pasenkDali(kuriuos, zingsniu){
   M(`(function(){
     const auto = m => !!((window.GP_OSP && GP_OSP.RODIKLIAI[m.id]) || (window.GP_RINKA && GP_RINKA.RODIKLIAI[m.id]));
@@ -704,9 +704,13 @@ testas("Duomenų būsena", "Juosta įvardija tą mygtuką, kuris šiuo atveju pa
   const paslėptas = ()=> M("document.getElementById('btnOspJuosta').hidden");
   pasenkVisus(8);
   let t = tekstas();
-  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Įvesti reikšmę") >= 0,
-        "visi ankstesni - abu keliai, gauta: " + t.slice(-130));
+  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Įvesti reikšmę") < 0, "visi turi šaltinį - tik jungtis, gauta: " + t.slice(-130));
   lygu(paslėptas(), false, "visi ankstesni - jungties mygtukas rodomas");
+  // Keturiems rodikliams jungties nėra (pvz. neįsikėlė failas) - tada ir rankinis kelias
+  M(`window.__RS = {}; ["polymers","gscpi","container","aircargo"].forEach(id => { __RS[id] = GP_RINKA.RODIKLIAI[id]; delete GP_RINKA.RODIKLIAI[id]; })`);
+  pasenkVisus(8);
+  t = tekstas();
+  tiesa(t.indexOf("Atnaujinti iš šaltinių") >= 0 && t.indexOf("Įvesti reikšmę") >= 0, "dalis be jungties - abu keliai, gauta: " + t.slice(-130));
   pasenkDali("rankiniai", 8);
   t = tekstas();
   tiesa(t.indexOf("Įvesti reikšmę") >= 0 && t.indexOf("Atnaujinti iš šaltinių") < 0,
@@ -719,6 +723,7 @@ testas("Duomenų būsena", "Juosta įvardija tą mygtuką, kuris šiuo atveju pa
         "tik automatiniai - tik jungtis, gauta: " + t.slice(-130));
   lygu(paslėptas(), false, "tik automatiniai - jungties mygtukas rodomas");
   lygu(M("aktyvusRodikliai().filter(arPasenes).length"), 11, "automatinių rodiklių yra vienuolika");
+  M(`Object.keys(__RS).forEach(id => { GP_RINKA.RODIKLIAI[id] = __RS[id]; }); delete window.__RS;`);
   paruosk();
 });
 
@@ -1789,7 +1794,7 @@ testas("Tiekimo rizikos lygmuo pašalintas", "Klimato balas tik iš A/B: raudoni
   paruosk();
   const r = M(`(function(){
     const buvo = DATA.metrics.map(m=>m.series.slice());
-    DATA.metrics.forEach(m=>{ m.series = m.series.map(()=>100); });
+    DATA.metrics.forEach(m=>{ m.series = m.series.map(()=> m.type === "level" ? 0 : 100); });   // lygio rodiklis vertinamas pagal reikšmę, ne pokytį
     const zalia = climateScore();
     vdaMetrics().forEach(m=>{ m.series = m.series.map((v,i,a)=> i === a.length-1 ? 1000 : 1); });
     const dRaudona = climateScore();
@@ -1971,9 +1976,9 @@ testas("Patikra 2026-10-27", "K1: ankstesnio laikotarpio duomenys pažymėti; ti
   M(`DATA.metrics.forEach(m => { m.demo = false; m.laikotarpis = slinktiLaikotarpi(dabartinisLaikotarpis(m), m.zingsnis, -(m.zingsnis === "mėn." ? 6 : 16)); }); DATA.meta.demo = false; renderAll();`);
   apzvalga("Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)");
   const r = M(`({ sena: document.querySelectorAll("#focusResult .fk .kpi-zyma.sena").length, busena: (document.querySelector("#focusResult .fk-busena") || {}).textContent || "" })`);
-  tiesa(r.sena > 0 && r.busena.indexOf("ankstesnio laikotarpio") > 0 && r.busena.indexOf("prieš 16 savaičių") > 0, "ankstesnio laikotarpio: " + r.sena + " / " + r.busena.slice(0, 200));
+  tiesa(r.sena > 0 && r.busena.indexOf("ankstesnio laikotarpio") > 0 && r.busena.indexOf("prieš 6 mėnesius") > 0, "ankstesnio laikotarpio: " + r.sena + " / " + r.busena.slice(0, 200));
   const txt = kopijuok("copyFocus()");
-  tiesa(/\[ankstesnio laikotarpio - prieš 16 savaičių\]/.test(txt), "kopija: " + (txt.match(/Pagrindiniai veiksniai:[^\n]*/) || [""])[0].slice(0, 200));
+  tiesa(/\[ankstesnio laikotarpio - prieš 6 mėnesius\]/.test(txt), "kopija: " + (txt.match(/Pagrindiniai veiksniai:[^\n]*/) || [""])[0].slice(0, 200));
   paruosk();
   visiTikri();
   apzvalga("Vidutinės įtampos kabelių ir movų tiekimas (36 mėn.)");
@@ -2632,33 +2637,49 @@ testas(P1103, "Tvarka: pirkimo apžvalga pirma, bendra rinkos situacija - atskir
   lygu(r.h2, ["Pirkimo rinkos apžvalga", "Bendra rinkos situacija"]);
   lygu([r.h3, r.tag, r.nav], [6, "Jūsų pirkimas", "#focusSec"]);
 });
-testas(P1103, "Rankinis įvedimas: „Įvesti reikšmę“ - tik rodikliams be šaltinio, tik jų eilutė; išsaugojus ir atšaukus fokusas grįžta", ()=>{
+testas(P1103, "Rankinis įvedimas: visi rodikliai turi šaltinį - kortelėse mygtukų nėra; be jungties - „Įvesti reikšmę“, tik to rodiklio eilutė; fokusas grįžta", ()=>{
   paruosk();
-  lygu(M(`[...document.querySelectorAll("[data-ivesti]")].map(b => b.dataset.ivesti)`), ["polymers","bdi","container","aircargo"]);
-  const eilutes = () => M(`[...document.querySelectorAll(".editrow")].filter(e => getComputedStyle(e).display !== "none").map(e => e.closest(".kpi").dataset.id)`);
-  lygu(eilutes(), [], "pradžioje paslėpta");
-  M(`document.querySelector('[data-ivesti="bdi"]').click()`);
-  lygu(eilutes(), ["bdi"], "tik vieno rodiklio eilutė");
-  tiesa(M(`document.getElementById("editBarT").textContent`).indexOf("Baltic Dry Index") >= 0, "juosta įvardija rodiklį");
-  lygu(M(`document.activeElement === document.querySelector('input[data-edit="bdi"]')`), true, "fokusas - laukas");
-  lygu(M(`getComputedStyle(document.querySelector('[data-ivesti="polymers"]')).display`), "none", "mygtukai įvedant paslėpti");
-  M(`document.querySelector('input[data-edit="bdi"]').value = "1700"; document.getElementById("btnSave").click()`);
-  lygu(M(`latest(metricById("bdi"))`), 1700);
-  lygu([M(`document.getElementById("editBar").hidden`), M(`document.body.className.indexOf("editing") >= 0`)], [true, false]);
-  lygu(M(`document.activeElement === document.querySelector('[data-ivesti="bdi"]')`), true, "fokusas grįžta į mygtuką");
-  M(`document.querySelector('[data-ivesti="aircargo"]').click(); document.querySelector('input[data-edit="aircargo"]').value = "9"; document.getElementById("btnCancel").click()`);
-  tiesa(M(`latest(metricById("aircargo"))`) !== 9, "atšaukus nekeičiama");
-  lygu(M(`document.activeElement === document.querySelector('[data-ivesti="aircargo"]')`), true, "atšaukus - fokusas į mygtuką");
-  // Visi rodikliai - iš meniu
-  M(`document.getElementById("btnEdit").click()`);
-  lygu(eilutes().length, 15, "meniu - visų eilutės");
-  M(`document.getElementById("btnCancel").click()`);
-  lygu(M(`document.activeElement === document.getElementById("btnDuomenys")`), true, "iš meniu - fokusas į meniu mygtuką");
-  // Vieno rodiklio įvedimas po visų įvedimo (būsena neužsilieka)
-  M(`document.querySelector('[data-ivesti="polymers"]').click()`);
-  lygu(eilutes(), ["polymers"]);
-  M(`document.getElementById("btnCancel").click()`);
-  paruosk();
+  const mygtukai = () => M(`[...document.querySelectorAll("[data-ivesti]")].map(b => b.dataset.ivesti)`);
+  lygu(mygtukai(), [], "visi su šaltiniu - kortelėse mygtukų nėra");
+  lygu(M(`DATA.metrics.filter(beSaltinio).map(m => m.id)`), [], "nė vieno rodiklio be šaltinio");
+  M(`window.__RS = {}; ["polymers","gscpi","container","aircargo"].forEach(id => { __RS[id] = GP_RINKA.RODIKLIAI[id]; delete GP_RINKA.RODIKLIAI[id]; }); renderAll();`);
+  try {
+    lygu(mygtukai(), ["polymers","gscpi","container","aircargo"]);
+    const eilutes = () => M(`[...document.querySelectorAll(".editrow")].filter(e => getComputedStyle(e).display !== "none").map(e => e.closest(".kpi").dataset.id)`);
+    lygu(eilutes(), [], "pradžioje paslėpta");
+    M(`document.querySelector('[data-ivesti="container"]').click()`);
+    lygu(eilutes(), ["container"], "tik vieno rodiklio eilutė");
+    tiesa(M(`document.getElementById("editBarT").textContent`).indexOf("Jūrų krovinių kainos") >= 0, "juosta įvardija rodiklį");
+    lygu(M(`document.activeElement === document.querySelector('input[data-edit="container"]')`), true, "fokusas - laukas");
+    lygu(M(`getComputedStyle(document.querySelector('[data-ivesti="polymers"]')).display`), "none", "mygtukai įvedant paslėpti");
+    M(`document.querySelector('input[data-edit="container"]').value = "1700"; document.getElementById("btnSave").click()`);
+    lygu(M(`latest(metricById("container"))`), 1700);
+    lygu([M(`document.getElementById("editBar").hidden`), M(`document.body.className.indexOf("editing") >= 0`)], [true, false]);
+    lygu(M(`document.activeElement === document.querySelector('[data-ivesti="container"]')`), true, "fokusas grįžta į mygtuką");
+    M(`document.querySelector('[data-ivesti="aircargo"]').click(); document.querySelector('input[data-edit="aircargo"]').value = "9"; document.getElementById("btnCancel").click()`);
+    tiesa(M(`latest(metricById("aircargo"))`) !== 9, "atšaukus nekeičiama");
+    lygu(M(`document.activeElement === document.querySelector('[data-ivesti="aircargo"]')`), true, "atšaukus - fokusas į mygtuką");
+    // Lygio rodiklis gali būti neigiamas, kainos indeksas - ne
+    M(`document.querySelector('[data-ivesti="gscpi"]').click(); document.querySelector('input[data-edit="gscpi"]').value = "-0,4"; document.getElementById("btnSave").click()`);
+    lygu(M(`latest(metricById("gscpi"))`), -0.4, "GSCPI priima neigiamą");
+    M(`metricById("gscpi").series[metricById("gscpi").series.length - 1] = 1.81; renderAll(); document.querySelector('[data-ivesti="gscpi"]').click(); document.querySelector('input[data-edit="gscpi"]').value = "0,1"; document.getElementById("btnSave").click()`);
+    lygu(M(`latest(metricById("gscpi"))`), 0.1, "lygio rodikliui „daugiau nei 5 kartus“ patikros nėra");
+    M(`document.querySelector('[data-ivesti="polymers"]').click(); document.querySelector('input[data-edit="polymers"]').value = "-4"; document.getElementById("btnSave").click()`);
+    tiesa(M(`document.body.className.indexOf("editing") >= 0`), "kainos indeksas - neigiama reikšmė neišsaugoma");
+    M(`document.getElementById("btnCancel").click()`);
+    // Visi rodikliai - iš meniu
+    M(`document.getElementById("btnEdit").click()`);
+    lygu(eilutes().length, 15, "meniu - visų eilutės");
+    M(`document.getElementById("btnCancel").click()`);
+    lygu(M(`document.activeElement === document.getElementById("btnDuomenys")`), true, "iš meniu - fokusas į meniu mygtuką");
+    // Vieno rodiklio įvedimas po visų įvedimo (būsena neužsilieka)
+    M(`document.querySelector('[data-ivesti="polymers"]').click()`);
+    lygu(eilutes(), ["polymers"]);
+    M(`document.getElementById("btnCancel").click()`);
+  } finally {
+    M(`Object.keys(__RS).forEach(id => { GP_RINKA.RODIKLIAI[id] = __RS[id]; }); delete window.__RS;`);
+    paruosk();
+  }
 });
 testas(P1103, "Automatinis atnaujinimas: tik viršutiniame lange, senesnė nei 12 val. patikra; rėmelyje neklausiama", ()=>{
   paruosk();
@@ -2667,7 +2688,9 @@ testas(P1103, "Automatinis atnaujinimas: tik viršutiniame lange, senesnė nei 1
   M("delete DATA.meta.tikrinta");
   lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "nebuvo tikrinta");
   M("DATA.meta.tikrinta = new Date(Date.now() - 3600000).toISOString()");
-  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), false, "prieš valandą");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "prieš valandą, bet liko iliustracinių su šaltiniu");
+  M("DATA.metrics.forEach(m => { m.demo = false; })");
+  lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), false, "prieš valandą, visi tikri");
   M("DATA.meta.tikrinta = new Date(Date.now() - 13 * 3600000).toISOString()");
   lygu(M("reikiaAutoAtnaujinti(" + dabar + ", true)"), true, "prieš 13 val.");
   lygu(M("reikiaAutoAtnaujinti(" + dabar + ", false)"), false, "ne viršutinis langas");
@@ -2757,12 +2780,12 @@ testas(P1103, "Kitos įmonės: profiliai, rodikliai ir pavadinimų priskyrimas p
     a: [...document.querySelectorAll("#gridA .kpi")].map(k => k.dataset.id), bb: [...document.querySelectorAll("#gridB .kpi")].map(k => k.dataset.id), c: document.querySelectorAll("#gridC .kpi").length,
     tr: document.querySelectorAll("#trigBody tr").length, hint: document.getElementById("focusOrgHint").textContent, opt: [...document.getElementById("focusOrg").options].map(o => o.textContent) })`);
   let x = b();
-  lygu([x.org, x.sel, x.kat, x.a, x.bb, x.c, x.tr], ["litgrid", "litgrid", 8, ["brent","wti","lme_al","lme_cu","polymers"], ["bdi","container","aircargo"], 7, 15]);
+  lygu([x.org, x.sel, x.kat, x.a, x.bb, x.c, x.tr], ["litgrid", "litgrid", 8, ["brent","wti","lme_al","lme_cu","polymers"], ["gscpi","container","aircargo"], 7, 15]);
   lygu(x.opt, ["LITGRID AB", "AB Amber Grid", "UAB Energy cells", "UAB EPSO-G"]);
   tiesa(x.hint.indexOf("elektros perdavimo") >= 0, x.hint);
   M(`keiskOrg("amber-grid")`);
   x = b();
-  lygu([x.org, x.sel, x.kat, x.a, x.bb], ["amber-grid", "amber-grid", 10, ["brent","wti","lme_cu","polymers","dujos_eu","plienas","plieno_vamzdziai","gelezies_ruda","nikelis"], ["bdi","container","aircargo"]]);
+  lygu([x.org, x.sel, x.kat, x.a, x.bb], ["amber-grid", "amber-grid", 10, ["brent","wti","lme_cu","polymers","dujos_eu","plienas","plieno_vamzdziai","gelezies_ruda","nikelis"], ["gscpi","container","aircargo"]]);
   tiesa(x.hint.indexOf("dujų perdavimo") >= 0, x.hint);
   lygu(M(`JSON.parse(localStorage.getItem(STORE_KEY)).meta.org`), "amber-grid", "išsaugota");
   lygu(M(`document.activeElement === document.getElementById("focusOrg")`), true, "fokusas lieka");
@@ -2843,7 +2866,7 @@ testas(P1103, "Santrauka remiasi tik pasirinktos įmonės rodikliais: EPSO-G ner
   paruosk();
   const r = M(`(function(){
     const dek = (id, a, b) => { const m = metricById(id); m.series = m.series.map(() => a); m.series[m.series.length - 1] = b; m.demo = false; };
-    dek("brent", 50, 90); dek("bdi", 1000, 3000); dek("container", 100, 100);
+    dek("brent", 50, 90); dek("gscpi", 0, 3); dek("container", 100, 100);
     renderAll();
     const lit = document.getElementById("aiText").textContent.indexOf("Energija ir logistika") >= 0;
     ORG_PASIRINKTA = "epso-g"; renderAll();
@@ -2885,9 +2908,313 @@ testas(P1103, "Nauji profiliai ir rodikliai pilni: veiksmai, kodėl, EN, svoriai
     return { blogi, rodikliai: Object.keys(GP_RINKA.RODIKLIAI), nuorodos: Object.keys(GP_RINKA.SERIJU_NUORODOS) };
   })()`);
   lygu(r.blogi, []);
-  lygu(r.rodikliai, r.nuorodos, "kiekvienam rodikliui - nuoroda");
+  lygu(r.rodikliai.slice().sort(), r.nuorodos.slice().sort(), "kiekvienam rodikliui - nuoroda");
   const be = await (await fetch("backend-rinka-routes.js")).text();
-  r.rodikliai.forEach(id => tiesa(new RegExp("\\b" + id + ":\\s*\\{ serija").test(be), "serveryje nėra serijos " + id));
+  r.rodikliai.filter(id => !M("GP_RINKA.EUROSTAT")[id]).forEach(id => tiesa(new RegExp("\\b" + id + ":\\s*\\{ (serija|imk)").test(be), "serveryje nėra serijos " + id));
+});
+/* ---------- Šaltiniai vietoj rankinio įvedimo (2026-11-03) ---------- */
+const S1103 = "Šaltiniai 2026-11-03";
+const GSCPI_CSV = "Date,Jan-22,Feb-22,Oct-26,\n" + ["30-Sep-2025","31-Oct-2025","30-Nov-2025","31-Dec-2025","31-Jan-2026","28-Feb-2026","31-Mar-2026","30-Apr-2026","31-May-2026","30-Jun-2026","31-Jul-2026","31-Aug-2026","30-Sep-2026"]
+  .map((d, i) => d + ",9,9," + (i === 2 ? "#N/A" : i === 12 ? "1.28" : (i % 2 ? "-" : "") + "0." + (i + 10)) + ",").join("\r\n") + "\n,,,,\n";
+function eurostatJson(reiksmes, papildoma){
+  const index = {}; Object.keys(reiksmes).forEach((p, i) => { index[p] = i; });
+  const value = {}; Object.keys(reiksmes).forEach((p, i) => { if(reiksmes[p] !== null) value[i] = reiksmes[p]; });
+  return Object.assign({ id: ["freq","nace_r2","geo","time"], size: [1,1,1,Object.keys(reiksmes).length], value, dimension: { time: { category: { index } } } }, papildoma || {});
+}
+/* Serverio maršrutas - tikras failas, tik express, process ir fetch pakeisti: taip tikrinama ta pati logika, kuri diegiama į serverį. */
+async function serveris(fetchas, env, laikas){
+  const src = await (await fetch("backend-rinka-routes.js")).text();
+  const marsrutai = {}, router = { get: (kelias, ...f) => { marsrutai[kelias] = f[f.length - 1]; } }, modulis = { exports: {} };
+  const reikia = v => { if(v === "express") return { Router: () => router }; throw new Error("nėra " + v); };
+  const LaikasD = laikas ? class extends Date { static now(){ return laikas.dabar; } } : Date;
+  new Function("require", "module", "process", "fetch", "AbortSignal", "Date", src)(reikia, modulis, { env: env || { FRED_API_KEY: "raktas" } }, fetchas, { timeout: () => null }, LaikasD);
+  return { eksportai: modulis.exports, kviesk: async ids => { const res = { set(){}, status(c){ this.kodas = c; return this; }, json(o){ this.o = o; } }; await marsrutai["/"]({ query: { ids } }, res); return res; } };
+}
+function netikrasFred(kvietimai, csv){
+  return async (u, o) => {
+    kvietimai.push({ u: String(u), o });
+    if(/stlouisfed/.test(u)) return { ok: true, status: 200, json: async () => ({ observations: [ { date: "2026-08-01", value: "100" }, { date: "2026-09-01", value: "." }, { date: "2026-10-01", value: "103" } ] }) };
+    if(/newyorkfed/.test(u)){ if(csv === null) return { ok: false, status: 500 }; return { ok: true, status: 200, text: async () => csv === undefined ? GSCPI_CSV : csv }; }
+    throw new Error("netikėtas adresas " + u);
+  };
+}
+testas(S1103, "Visi rodikliai turi šaltinį; ne iš licencijuotų šaltinių: sąsajoje nėra Baltic Dry, Drewry, TAC ir S&P; nuorodos - https", ()=>{
+  paruosk();
+  lygu(M(`DATA.metrics.filter(beSaltinio).map(m => m.id)`), []);
+  lygu(M(`DATA.metrics.filter(m => !/^https:/.test(m.src.url)).map(m => m.id)`), []);
+  const tekstas = () => M(`(function(){ const c = document.body.cloneNode(true); c.querySelectorAll("script,style").forEach(x => x.remove()); return c.textContent; })()`);
+  ["Baltic Dry", "Baltic Exchange", "Drewry", "TAC Index", "S&P Global", "BDI", "HDPE", "$/40ft"].forEach(z => tiesa(tekstas().indexOf(z) < 0, "LT: " + z));
+  M(`LANG = "en"; applyI18n(); renderAll();`);
+  ["Baltic Dry", "Baltic Exchange", "Drewry", "TAC Index", "S&P Global", "BDI", "HDPE", "$/40ft"].forEach(z => tiesa(tekstas().indexOf(z) < 0, "EN: " + z));
+  paruosk();
+});
+testas(S1103, "Eurostat atsakymas: tik laiko dimensija, datos, trūkstami praleidžiami, kitokia sandara ar tuščias - klaida", ()=>{
+  paruosk();
+  const sk = d => M(`GP_RINKA.skaitykEurostat(${JSON.stringify(d)})`);
+  lygu(sk(eurostatJson({ "2026-06": 118.5, "2026-07": null, "2026-08": 113.5 })), [{ laikotarpis: "2026-06-01", reiksme: 118.5 }, { laikotarpis: "2026-08-01", reiksme: 113.5 }]);
+  const blogi = [eurostatJson({ "2026-06": 1 }, { size: [2,1,1,1] }), eurostatJson({ "2026-06": null }), {}, { id: ["time"], size: [1], value: {} }, eurostatJson({ "2026": 5 })];
+  blogi.forEach((d, i) => { let k = ""; try { sk(d); } catch(e){ k = e.message; } tiesa(/Eurostat/.test(k), "blogas " + i + ": " + k); });
+});
+testas(S1103, "atnaujink: polimerai - tiesiai iš Eurostat, kiti - per serverį; vieno šaltinio klaida nestabdo kito", async ()=>{
+  const w = paruosk(), orig = w.fetch;
+  const kviest = [];
+  let eurostat = () => Promise.resolve({ ok: true, status: 200, json: async () => eurostatJson({ "2026-07": 114.5, "2026-08": 113.5 }) });
+  let serv = () => Promise.resolve({ ok: true, status: 200, json: async () => ({ rodikliai: [{ id: "gscpi", laikotarpis: "2026-09-01", reiksme: 1.28, daznis: "mėn." }, { id: "container", laikotarpis: "2026-09-01", reiksme: 534, daznis: "mėn." }, { id: "aircargo", laikotarpis: "2026-09-01", reiksme: 218, daznis: "mėn." }], klaidos: [] }) });
+  w.fetch = (u, o) => { kviest.push({ u: String(u), o }); return /eurostat/.test(u) ? eurostat() : serv(); };
+  try {
+    const ids = ["polymers", "gscpi", "container", "aircargo"];
+    let r = await w.GP_RINKA.atnaujink(ids);
+    const es = kviest.filter(k => /eurostat/.test(k.u)), sv = kviest.filter(k => !/eurostat/.test(k.u));
+    lygu([es.length, sv.length], [1, 1]);
+    tiesa(/^https:\/\/ec\.europa\.eu\/eurostat\/api\/dissemination\/statistics\/1\.0\/data\/sts_inpp_m\?/.test(es[0].u) && /[?&]nace_r2=C2016(&|$)/.test(es[0].u) && /[?&]geo=EU27_2020(&|$)/.test(es[0].u) && /[?&]unit=I21(&|$)/.test(es[0].u) && /[?&]indic_bt=PRC_PRR(&|$)/.test(es[0].u) && /[?&]sinceTimePeriod=\d{4}-\d{2}$/.test(es[0].u), es[0].u);
+    lygu(es[0].o.credentials, "omit", "be slapukų");
+    const nuo = /sinceTimePeriod=(\d{4})-(\d{2})$/.exec(es[0].u), dd = new Date();
+    tiesa((dd.getFullYear() - Number(nuo[1])) * 12 + dd.getMonth() + 1 - Number(nuo[2]) >= 26, "istorijos pakanka 13 mėn. eilutei ir vėlavimui: " + nuo[0]);
+    lygu(decodeURIComponent(sv[0].u.split("ids=")[1]), "gscpi,container,aircargo", "polimerų serveris neklausiamas");
+    lygu(r.klaidos, []);
+    lygu(r.ok.map(x => x.id).sort(), ["aircargo", "container", "gscpi", "polymers"]);
+    const p = r.ok.find(x => x.id === "polymers");
+    lygu([p.laikotarpis, p.reiksme, p.daznis, p.menesine.length], ["2026-08-01", 113.5, "mėn.", 2]);
+    tiesa(/Eurostat/.test(p.saltinis) && /databrowser/.test(p.saltinioUrl), "polimerų šaltinis");
+    lygu(r.ok.find(x => x.id === "gscpi").saltinioUrl, "https://www.newyorkfed.org/research/policy/gscpi");
+    lygu(r.ok.find(x => x.id === "aircargo").saltinioUrl, "https://fred.stlouisfed.org/series/IC131");
+    // Ilga istorija - ne daugiau 24 mėn.
+    const ilga = {}; for(let i = 1; i <= 30; i++){ ilga[(2024 + Math.floor((i - 1) / 12)) + "-" + ("0" + ((i - 1) % 12 + 1)).slice(-2)] = 100 + i; }
+    eurostat = () => Promise.resolve({ ok: true, status: 200, json: async () => eurostatJson(ilga) });
+    r = await w.GP_RINKA.atnaujink(["polymers"]);
+    lygu([r.ok[0].menesine.length, r.ok[0].reiksme, r.ok[0].laikotarpis], [24, 130, "2026-06-01"]);
+    // Eurostat neveikia - serverio rodikliai lieka
+    eurostat = () => Promise.resolve({ ok: false, status: 500 });
+    r = await w.GP_RINKA.atnaujink(ids);
+    lygu(r.klaidos, [{ id: "polymers", priezastis: "HTTP 500" }]);
+    lygu(r.ok.length, 3);
+    // Eurostat ryšio klaida
+    eurostat = () => Promise.reject(new Error("Failed to fetch"));
+    r = await w.GP_RINKA.atnaujink(["polymers"]);
+    lygu(r.klaidos, [{ id: "polymers", priezastis: "Failed to fetch" }]);
+    // Serveris neveikia - polimerai lieka
+    eurostat = () => Promise.resolve({ ok: true, status: 200, json: async () => eurostatJson({ "2026-08": 113.5 }) });
+    serv = () => Promise.resolve({ ok: false, status: 404 });
+    r = await w.GP_RINKA.atnaujink(ids);
+    lygu(r.ok.map(x => x.id), ["polymers"]);
+    lygu(r.klaidos, [{ id: "globalūs", priezastis: "maršrutas neįdiegtas serveryje" }]);
+    // Senas serveris šio rodiklio dar nežino - priežastis, ne tylus praleidimas
+    serv = () => Promise.resolve({ ok: true, status: 200, json: async () => ({ rodikliai: [], klaidos: [] }) });
+    r = await w.GP_RINKA.atnaujink(["gscpi"]);
+    lygu(r.klaidos, [{ id: "gscpi", priezastis: "serveris šio rodiklio reikšmės negrąžino" }]);
+    // Be polimerų Eurostat neklausiamas, be serverio rodiklių - serveris
+    kviest.length = 0;
+    await w.GP_RINKA.atnaujink(["gscpi"]);
+    lygu(kviest.filter(k => /eurostat/.test(k.u)).length, 0);
+    kviest.length = 0;
+    await w.GP_RINKA.atnaujink(["polymers"]);
+    lygu(kviest.filter(k => !/eurostat/.test(k.u)).length, 0);
+  } finally { w.fetch = orig; }
+});
+testas(S1103, "Serveris: GSCPI failo skaitymas - naujausia versija, #N/A, datos, trumpas ir kitoks failas - klaida", async ()=>{
+  const { eksportai } = await serveris(netikrasFred([]));
+  const r = eksportai.skaitykGscpi(GSCPI_CSV);
+  lygu(r.length, 12, "be #N/A ir tuščių eilučių");
+  lygu(r[r.length - 1], { laikotarpis: "2026-09-01", reiksme: 1.28 });
+  lygu(r[0], { laikotarpis: "2025-09-01", reiksme: 0.1 });
+  lygu(r[1], { laikotarpis: "2025-10-01", reiksme: -0.11 }, "neigiama reikšmė");
+  tiesa(r.every(x => x.laikotarpis.slice(-3) === "-01"), "mėnesio pirma diena - kaip FRED");
+  lygu(eksportai.skaitykGscpi("\uFEFF" + GSCPI_CSV).length, 12, "su BOM");
+  const eil = GSCPI_CSV.split("\r\n"), atv = eil[0].split("\n")[0] + "\n" + [eil[0].split("\n")[1]].concat(eil.slice(1, 13)).reverse().join("\n");
+  lygu(eksportai.skaitykGscpi(atv)[11].laikotarpis, "2026-09-01", "kita eilučių tvarka - vis tiek pagal laiką");
+  // Sekantis mėnuo dar be reikšmių - imamas ankstesnis stulpelis
+  const naujas = "Date,Sep-26,Oct-26\n" + Array.from({ length: 13 }, (_, i) => "28-Feb-" + (2010 + i) + "," + (i + 1) + ",").join("\n");
+  lygu(eksportai.skaitykGscpi(naujas)[12].reiksme, 13);
+  const kitaAntraste = "Period,Oct-26\n" + Array.from({ length: 13 }, (_, i) => "28-Feb-" + (2010 + i) + "," + i).join("\n");
+  ["", "<html>Access denied</html>", "Date\n", "Date,Oct-26\n30-Sep-2026,1\n", "Date,Oct-26\n30-Sep-2026,#N/A\n", kitaAntraste].forEach(c => {
+    let k = ""; try { eksportai.skaitykGscpi(c); } catch(e){ k = e.message; } tiesa(/GSCPI/.test(k), "„" + c.slice(0, 20) + "“: " + k);
+  });
+});
+testas(S1103, "Serveris: FRED serijos ir GSCPI - menesine, šaltinis, NY Fed be rakto, kopija; klaida - tik to rodiklio; be rakto - 503", async ()=>{
+  const kv = [];
+  const { kviesk } = await serveris(netikrasFred(kv));
+  let res = await kviesk("container,aircargo,gscpi,nezinomas");
+  lygu(res.o.klaidos, []);
+  lygu(res.o.rodikliai.map(x => x.id).sort(), ["aircargo", "container", "gscpi"]);
+  const id = x => res.o.rodikliai.find(r => r.id === x);
+  lygu([id("container").daznis, id("container").reiksme, id("container").laikotarpis, id("container").menesine.length], ["mėn.", 103, "2026-10-01", 2], "FRED taškas „.“ praleidžiamas");
+  lygu([id("gscpi").daznis, id("gscpi").reiksme, id("gscpi").laikotarpis, id("gscpi").menesine.length, id("gscpi").eilute], ["mėn.", 1.28, "2026-09-01", 12, null]);
+  tiesa(/Federal Reserve Bank of New York/.test(id("gscpi").saltinis) && /Deep Sea Freight/.test(id("container").saltinis) && /Air Freight/.test(id("aircargo").saltinis), "šaltiniai");
+  tiesa(kv.some(k => /series_id=PCU483111483111&/.test(k.u)) && kv.some(k => /series_id=IC131&/.test(k.u)), "FRED serijos");
+  const ny = kv.filter(k => /newyorkfed/.test(k.u));
+  lygu(ny.length, 1);
+  tiesa(ny[0].u.indexOf("raktas") < 0 && /G-Procure/.test(ny[0].o.headers["User-Agent"]), "be rakto, su pavadinimu");
+  await kviesk("gscpi");
+  lygu(kv.filter(k => /newyorkfed/.test(k.u)).length, 1, "failas neparsisiunčiamas antrą kartą");
+  // Kopija pasibaigus: nauja užklausa; nepavykus - paskutinė sėkminga
+  const laikas = { dabar: 1000 }, kvL = [];
+  let csvL = GSCPI_CSV;
+  const sL = await serveris(async (u, o) => { kvL.push(String(u)); if(/newyorkfed/.test(u)) return csvL === null ? { ok: false, status: 503 } : { ok: true, status: 200, text: async () => csvL }; throw new Error("x"); }, null, laikas);
+  await sL.kviesk("gscpi");
+  laikas.dabar += 5 * 3600 * 1000;
+  await sL.kviesk("gscpi");
+  lygu(kvL.length, 1, "po 5 val. - iš kopijos");
+  laikas.dabar += 2 * 3600 * 1000;
+  csvL = null;
+  res = await sL.kviesk("gscpi");
+  lygu(kvL.length, 2, "po 7 val. - klausiama");
+  lygu([res.o.klaidos, res.o.rodikliai[0].reiksme], [[], 1.28], "nepavykus - paskutinė sėkminga kopija");
+  // NY Fed neveikia: kiti lieka, priežastis - gscpi
+  const kv2 = [];
+  const s2 = await serveris(netikrasFred(kv2, null));
+  res = await s2.kviesk("container,gscpi");
+  lygu(res.o.rodikliai.map(x => x.id), ["container"]);
+  lygu(res.o.klaidos, [{ id: "gscpi", priezastis: "NY Fed HTTP 500" }]);
+  // Sugadintas failas
+  const s3 = await serveris(netikrasFred([], "<html></html>"));
+  res = await s3.kviesk("gscpi");
+  tiesa(/GSCPI/.test(res.o.klaidos[0].priezastis), res.o.klaidos[0].priezastis);
+  // Be rakto
+  const s4 = await serveris(netikrasFred([]), {});
+  res = await s4.kviesk("gscpi");
+  lygu(res.kodas, 503);
+  // Klientas ir serveris - tos pačios serijos
+  const be = await (await fetch("backend-rinka-routes.js")).text();
+  const nuor = M("GP_RINKA.SERIJU_NUORODOS"), rod = M("GP_RINKA.RODIKLIAI"), es = M("GP_RINKA.EUROSTAT");
+  Object.keys(rod).filter(x => !es[x] && x !== "gscpi").forEach(x => {
+    const m = new RegExp("\\b" + x + ":\\s*\\{ serija: '([A-Z0-9]+)'").exec(be);
+    tiesa(m && nuor[x] === "https://fred.stlouisfed.org/series/" + m[1], "nuoroda ir serija: " + x);
+  });
+});
+testas(S1103, "Reikšmių taikymas: indeksai ir neigiamas GSCPI, būsena pagal lygį ir ribas, kortelė, apžvalga, kopija, santrauka LT ir EN", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const men = (a) => a.map((v, i) => ({ laikotarpis: slinktiLaikotarpi("2026-09-01", "mėn.", i - a.length + 1), reiksme: v }));
+    const taik = (id, a) => taikykRinka(metricById(id), { id, laikotarpis: "2026-09-01", reiksme: a[a.length - 1], daznis: "mėn.", saltinis: "Š-" + id, saltinioUrl: "https://x.example/" + id, menesine: men(a) });
+    const o = {};
+    o.rez = taik("gscpi", [-0.2, 0.1, 0.5, 1.28]);
+    const g = metricById("gscpi");
+    o.g = [g.demo, g.laikotarpis, g.series.length, latest(g), g.series.slice(-4), g.srcAuto.name];
+    o.lv = [[-0.5, 0], [0.99, 0], [1, 1], [1.99, 1], [2, 2], [4.3, 2]].map(x => { g.series[g.series.length - 1] = x[0]; return severity(g) === x[1]; });
+    g.series[g.series.length - 1] = 1.28;
+    taik("polymers", [99, 99, 100, 101, 113.5]);
+    const p = metricById("polymers");
+    o.p = [p.demo, latest(p), Math.round(pctChange(p) * 10) / 10, severity(p)];
+    ORG_PASIRINKTA = "litgrid"; renderAll();
+    const kort = document.querySelector('.kpi[data-id="gscpi"]');
+    o.kort = kort.textContent.replace(/\\s+/g, " ");
+    o.chg = kort.querySelector(".chg-cap").parentElement.textContent.replace(/\\s+/g, " ");
+    o.klase = !!kort.querySelector(".chg-up");
+    o.pkort = document.querySelector('.kpi[data-id="polymers"]').textContent.replace(/\\s+/g, " ");
+    o.trig = [...document.querySelectorAll("#trigBody tr")].map(x => x.textContent.replace(/\\s+/g, " ")).find(x => x.indexOf("GSCPI") >= 0);
+    o.fc = focusChg(g);
+    const korte = () => document.querySelector('.kpi[data-id="gscpi"]').textContent.replace(/\\s+/g, " ");
+    const pask = g.series.slice();
+    g.series = g.series.slice(); g.series[g.series.length - 4] = 3; renderAll(); o.zemyn = /▼ .1,72/.test(korte());
+    g.series[g.series.length - 4] = 1.28; renderAll(); o.lygu = korte().indexOf("▬") >= 0;
+    g.series[g.series.length - 4] = null; renderAll(); o.nez = korte().indexOf("–") >= 0;
+    g.series = pask; renderAll();
+    o.fk = fkRodiklis(g);
+    o.klaida = /NaN|undefined/.test(document.getElementById("gridB").textContent);
+    return o;
+  })()`);
+  lygu(r.rez, "atnaujinta");
+  lygu(r.g, [false, "2026-09-01", 13, 1.28, [-0.2, 0.1, 0.5, 1.28], "Š-gscpi"]);
+  lygu(r.lv, [true, true, true, true, true, true]);
+  lygu([r.zemyn, r.lygu, r.nez], [true, true, true], "skirtumas per 3 mėn.: žemyn, be pokyčio, nežinomas");
+  lygu(r.klase, true, "kylantis - nepalankiu pokyčio stiliumi");
+  lygu(r.p, [false, 113.5, 14.6, 2]);
+  tiesa(r.kort.indexOf("1,28") >= 0 && r.kort.indexOf("st. nuokr.") >= 0 && r.kort.indexOf("▲ +1,48") >= 0 && r.kort.indexOf("per 3 mėn.") >= 0 && r.kort.indexOf("lygis < 1") >= 0 && r.kort.indexOf("%") < 0, r.kort.slice(0, 400));
+  tiesa(r.chg.indexOf("1,28") < 0 && r.chg.indexOf("+1,48") >= 0, "dešinėje - skirtumas, ne ta pati reikšmė: " + r.chg);
+  tiesa(r.kort.indexOf("Tiekimo grandinių spaudimas (GSCPI)") >= 0, "pavadinimas");
+  tiesa(r.pkort.indexOf("Polimerų kainos (ES indeksas)") >= 0 && r.pkort.indexOf("Š-polymers") >= 0, r.pkort.slice(0, 200));
+  tiesa(r.trig && r.trig.indexOf("vertinama pagal lygį") >= 0 && r.trig.indexOf("≥ 2") >= 0, r.trig);
+  lygu(r.fc.indexOf("lygis 1,28 st. nuokr."), 0, r.fc);
+  tiesa(r.fk.indexOf("1,28 st. nuokr.") >= 0, "apžvalgos rodiklis - skaičius su kableliu");
+  lygu(r.klaida, false);
+  const santr = M(`(function(){ const m = metricById("gscpi"); m.series = m.series.map(() => 3); generateSummary(); return document.getElementById("aiText").textContent; })()`);
+  tiesa(santr.indexOf("/mėn") < 0, "santraukoje be „/mėn.“: " + santr.slice(0, 300));
+  M(`LANG = "en"; applyI18n(); renderAll();`);
+  const en = M(`document.querySelector('.kpi[data-id="gscpi"]').textContent.replace(/\\s+/g, " ")`);
+  tiesa(en.indexOf("std. dev.") >= 0 && en.indexOf("Supply chain pressure (GSCPI)") >= 0 && en.indexOf("level < 1") >= 0, en.slice(0, 300));
+  tiesa(M(`document.getElementById("aiText").textContent`).indexOf("/month") < 0, "EN santraukoje be „/month“");
+  paruosk();
+});
+testas(S1103, "Atnaujinimas iš šaltinių: po jo nė vieno iliustracinio iš šių keturių, kortelė be „Įvesti reikšmę“, klaidos atveju - juosta su rodikliu", async ()=>{
+  const w = paruosk();
+  M(`window.__T4 = { osp: GP_OSP.atnaujink, rin: GP_RINKA.atnaujink }; GP_OSP.atnaujink = () => Promise.resolve({ ok: [], klaidos: [] });
+     const men = (a) => a.map((v, i) => ({ laikotarpis: slinktiLaikotarpi("2026-09-01", "mėn.", i - a.length + 1), reiksme: v }));
+     GP_RINKA.atnaujink = () => Promise.resolve({ ok: ["polymers","gscpi","container","aircargo"].map(id => ({ id, laikotarpis: "2026-09-01", reiksme: 5, daznis: "mėn.", saltinis: "Š", menesine: men([1,2,3,4,5]) })), klaidos: [] });
+     atnaujinkIsOSP();`);
+  await new Promise(r => setTimeout(r, 30));
+  lygu(M(`["polymers","gscpi","container","aircargo"].filter(id => metricById(id).demo)`), []);
+  lygu(M(`[...document.querySelectorAll("[data-ivesti]")].length`), 0);
+  M(`GP_RINKA.atnaujink = () => Promise.resolve({ ok: [], klaidos: [{ id: "gscpi", priezastis: "NY Fed HTTP 500" }] }); atnaujinkIsOSP();`);
+  await new Promise(r => setTimeout(r, 30));
+  const j = M(`document.getElementById("gpb-juostos").textContent`);
+  tiesa(j.indexOf("Tiekimo grandinių spaudimas") >= 0 && j.indexOf("500") >= 0, "juosta: " + j.slice(0, 200));
+  M(`GP_OSP.atnaujink = __T4.osp; GP_RINKA.atnaujink = __T4.rin; delete window.__T4; GP_BUSENA.juostaSlepk('osp');`);
+  paruosk();
+});
+testas(S1103, "Išsaugoti duomenys: kito vieneto ir nebesantis rodiklis - ne į eilutę, ranka įvestos reikšmės lieka meta.senosReiksmes; kiti rodikliai nepakitę", ()=>{
+  paruosk();
+  const r = M(`(function(){
+    const sen = JSON.parse(JSON.stringify(DEFAULT_DATA)); sen.schemaVersion = SCHEMA_VERSION;
+    const dek = (id, vnt, ser, demo, zing) => { const m = sen.metrics.find(x => x.id === id); m.unit = vnt; m.series = ser; m.demo = demo; m.laikotarpis = "2026-05-15"; m.zingsnis = zing || "sav."; return m; };
+    dek("polymers", "€/t", [1280, 1275, 1270], false);
+    dek("container", "$/40ft", [2600, 2620], true);
+    sen.metrics.push({ id: "bdi", group: "B", unit: "taškai", series: [1450, 2320], demo: false, laikotarpis: "2026-05-15", zingsnis: "sav." });
+    sen.metrics.push({ id: "senas_demo", group: "B", unit: "x", series: [1], demo: true, laikotarpis: "2026-05-15", zingsnis: "sav." });
+    sen.metrics.push({ id: "<img src=x>", group: "B", unit: "x", series: [1], demo: false, laikotarpis: "2026-05-15", zingsnis: "sav." });
+    const br = sen.metrics.find(x => x.id === "brent"); br.series = br.series.map(v => v + 1); br.demo = false;
+    const n = normalizuokDuomenis(sen);
+    const d = n.duomenys, m = id => d.metrics.find(x => x.id === id), base = id => DEFAULT_DATA.metrics.find(x => x.id === id);
+    const o = {
+      pol: [m("polymers").unit, m("polymers").demo, JSON.stringify(m("polymers").series) === JSON.stringify(base("polymers").series)],
+      con: [m("container").demo, JSON.stringify(m("container").series) === JSON.stringify(base("container").series)],
+      gs: [!!m("gscpi"), m("gscpi").demo, !d.metrics.some(x => x.id === "bdi")],
+      br: [latest(m("brent")) === latest(base("brent")) + 1, m("brent").demo],
+      senos: d.meta.senosReiksmes
+    };
+    // Antras įkėlimas (ir kopijos failas) - saugoma toliau
+    const antras = normalizuokDuomenis(JSON.parse(JSON.stringify(d))).duomenys;
+    o.antras = antras.meta.senosReiksmes;
+    // Sugadinti įrašai į kopiją nepatenka
+    const bl = JSON.parse(JSON.stringify(d));
+    bl.meta.senosReiksmes = { gerai: { vienetas: "x", laikotarpis: "2026-01-01", reiksmes: [1] }, blogas: { vienetas: "x", laikotarpis: "ne data", reiksmes: [1] }, tekstas: { laikotarpis: "2026-01-01", reiksmes: ["<b>"] }, "<i>": { laikotarpis: "2026-01-01", reiksmes: [1] }, ilgas: { laikotarpis: "2026-01-01", reiksmes: new Array(99).fill(1) } };
+    o.valyta = Object.keys(normalizuokDuomenis(bl).duomenys.meta.senosReiksmes).sort();
+    // Be pakeitimų - jokio lauko
+    o.svarus = "senosReiksmes" in normalizuokDuomenis(JSON.parse(JSON.stringify(Object.assign({}, DEFAULT_DATA, { schemaVersion: SCHEMA_VERSION })))).duomenys.meta;
+    // Senos schemos įrašas (migracija): €/t eilutė į indeksą nepatenka, Brent lieka
+    const v6 = JSON.parse(JSON.stringify(sen)); v6.metrics = v6.metrics.filter(x => x.id === "polymers" || x.id === "brent");
+    const mig = migruotiIsSeno(v6), mm = id => mig.metrics.find(x => x.id === id);
+    o.mig = [JSON.stringify(mm("polymers").series) === JSON.stringify(base("polymers").series), mm("polymers").unit, latest(mm("brent")) === latest(base("brent")) + 1];
+    return o;
+  })()`);
+  lygu(r.pol, ["indeksas", true, true]);
+  lygu(r.con, [true, true], "iliustracinė kitu vienetu - nauja");
+  lygu(r.gs, [true, true, true]);
+  lygu(r.br, [true, false], "tikras Brent nepakito");
+  lygu(Object.keys(r.senos).sort(), ["bdi", "polymers"], "iliustracinės ir netinkamas id - neišsaugomi");
+  lygu(r.senos.polymers, { vienetas: "€/t", laikotarpis: "2026-05-15", reiksmes: [1280, 1275, 1270] });
+  lygu(r.senos.bdi, { vienetas: "taškai", laikotarpis: "2026-05-15", reiksmes: [1450, 2320] });
+  lygu(r.antras, r.senos, "antras įkėlimas");
+  lygu(r.valyta, ["gerai"], "tik tinkami");
+  lygu(r.svarus, false);
+  lygu(r.mig, [true, "indeksas", true]);
+});
+testas(S1103, "Poraštė ir šaltiniai: reikalaujami užrašai LT ir EN, CSP, privatumo politika", async ()=>{
+  paruosk();
+  const po = () => M(`document.getElementById("footAbout").textContent`);
+  const dalys = ["Source: Eurostat.", "This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.", "Federal Reserve Bank of New York. Content from the New York Fed subject to the Terms of Use at newyorkfed.org."];
+  dalys.forEach(z => tiesa(po().indexOf(z) >= 0, "LT: " + z));
+  tiesa(po().indexOf("© " + new Date().getFullYear()) >= 0, "metai");
+  tiesa(po().indexOf("tiesiai iš Eurostat") >= 0 && po().indexOf("Niujorko federalinio rezervo banko") >= 0 && po().indexOf("Šaltinių pastabos:") >= 0, po());
+  tiesa(po().indexOf("Įvesti reikšmę") < 0, "poraštė neprašo vesti ranka");
+  M(`LANG = "en"; applyI18n(); renderAll();`);
+  dalys.forEach(z => tiesa(po().indexOf(z) >= 0, "EN: " + z));
+  tiesa(po().indexOf("directly from Eurostat") >= 0 && po().indexOf("Source notices:") >= 0, po());
+  paruosk();
+  const src = await (await fetch("EPSO-G_Rinkos_KPI_skydelis.html")).text();
+  tiesa(/connect-src [^"]*https:\/\/ec\.europa\.eu/.test(src), "CSP");
+  const pr = await (await fetch("../privatumas.html")).text();
+  tiesa((pr.match(/<th scope="row">Eurostat/g) || []).length === 2, "gavėjai LT ir EN");
+  tiesa(pr.indexOf("Niujorko federalinio rezervo") >= 0 && pr.indexOf("Federal Reserve Bank of New York") >= 0, "NY Fed - šaltinis");
 });
 testas(P1103, "Kiekvienas naujas profilis: apžvalga sudaroma LT ir EN, be lietuviško teksto angliškai, sąlygoje - to profilio indeksai, veiksmai įrašomi", ()=>{
   const w = paruosk();
