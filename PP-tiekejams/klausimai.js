@@ -18,7 +18,8 @@
  *    mini atsakymų raštas ar paaiškinimas (jis gali sąlygas pakeisti).
  *  - Tekstas iš dokumentų į HTML - tik per modulio esc().
  *
- * Grynos funkcijos: siulyk({ docs, meta, kalba, dabar }) -> { klausimai, faktai }.
+ * Grynos funkcijos: siulyk({ docs, meta, kalba, dabar }) -> { klausimai, faktai };
+ * terminas({ docs, pirkimas, galutinis, parse, kelietapis, dabar }) - iki kada pateikti klausimą.
  * Vieta dokumente - shared/dokumentai.js fragmentai (d.chunks), jų ID paduodami į paiešką,
  * kad DI gautų tą vietą, dėl kurios klausimas pasiūlytas.
  * ==========================================================================*/
@@ -441,5 +442,46 @@
     return { klausimai: Q, faktai: F };
   }
 
-  global.GP_KLAUSIMAI = { siulyk: siulyk, fold: fold, grupes: grupes, svarusVardas: svarusVardas };
+  /* ---------------- Iki kada pateikti klausimą ----------------
+     Pagrindinis šaltinis - CVP IS laukas „Prašymų pateikti paaiškinimus termino pabaiga“ (VPT clarificationPeriodEnd):
+     2026-11-03 jis buvo visuose 89 iš 89 tikrinamų aktyvių pirkimų, išskyrus rinkos konsultacijas; 7 iš jų sutapo su
+     pasiūlymų terminu. Sąlygų tekstas dažniausiai sako tik, kada ATSAKO pirkimo vykdytojas („Paaiškinimai ... pateikiami
+     likus ...“) - tai ne tiekėjo terminas; tiekėjo sakinys („Prašymai paaiškinti ... ne vėliau kaip likus 8 dienoms“)
+     buvo 2 iš 27 paketų. Jis pirmesnis tik kai reikalauja paklausti gerokai anksčiau, arba kai CVP IS duomenų nėra. */
+  var PRASYMAS = /(prasym[a-z]*\s+(?:paaiskinti|patikslinti)|prasym[a-z]*\s+del\s+[^.]{0,40}paaiskin|klausim[a-z]*\s+(?:del\s+[^.]{0,60})?(?:gali|galima|turi|pateik)|requests?\s+(?:to\s+clarify|for\s+clarification)|questions?\s+[^.]{0,40}(?:must|may|shall)\s+be\s+submitted)[^.]{0,200}?(?:likus|no\s+later\s+than)[:\s]+(?:ne\s+maziau\s+kaip\s+|ne\s+mazesniam\s+kaip\s+)?(\d{1,2})\s*(?:\([^)]{0,30}\)\s*)?(darbo\s+|working\s+|business\s+)?(?:dien[a-z]*|days?)\s+(?:iki|prior\s+to|before)\s+([^.\n]{0,120})/;
+  var ATSAKYMAS = /atsakym|atsako|answers?(?![a-z])|repl(?:y|ies)/;
+  function prasymoSalyga(docs) {
+    var g = grupes(docs);
+    var r = rask(g.sprendimai.concat(g.bps, g.kita), PRASYMAS, { ir_salyga: true });
+    if (!r || ATSAKYMAS.test(r.f.slice(Math.max(0, r.m.index - 80), r.m.index))) return null;
+    return { dienu: +r.m[2], darbo: !!r.m[3], baze: normTarpai(r.orig(4).replace(/\([^)]*\)?/g, " ")), kodel: kodel(r) };
+  }
+  // Pasibaigęs pasiūlymų etapas ar nutrauktas pirkimas: klausti nebėra ko
+  var NEAKTYVIOS = /cancel|evaluat|closed|award|awaiting|conclud|complet|terminat|unsuccess|suspend/i;
+  var PRIES_ATSAKYMA_D = 3;    // tiek dienų iki termino žyma tampa ryškesnė
+  function terminas(o) {
+    o = o || {};
+    var dabar = o.dabar || new Date(), p = o.pirkimas || null, parse = o.parse;
+    var cvp = p && p.clarificationPeriodEnd ? parse(p.clarificationPeriodEnd) : null;
+    var galutinis = (p && p.tenderSubmissionDeadline ? parse(p.tenderSubmissionDeadline) : null) || o.galutinis || null;
+    // Dinaminė pirkimo sistema ir kvalifikacijos sistema: CVP IS terminas - sistemos galiojimo pabaiga (2033 m.), ne klausimų terminas
+    if (o.sistema) { cvp = null; galutinis = null; }
+    var salyga = o.salyga !== undefined ? o.salyga : prasymoSalyga(o.docs || []);
+    var aktyvus = !(p && typeof p.status === "string" && NEAKTYVIOS.test(p.status)) && !(galutinis && galutinis < dabar);
+    // Datą iš sąlygų galima apskaičiuoti tik vieno etapo pirkime (kitaip nežinoma, kurio etapo terminas) ir kalendorinėmis dienomis
+    var isSalygos = salyga && !salyga.darbo && !o.kelietapis && galutinis ? new Date(galutinis.getTime() - salyga.dienu * 86400000) : null;
+    var DIENA = 86400000, data = cvp, saltinis = cvp ? "cvpis" : null;
+    if (isSalygos && (!cvp || isSalygos.getTime() < cvp.getTime() - DIENA)) { data = isSalygos; saltinis = "salyga"; }
+    if (!data && !salyga) return null;
+    var ms = data ? data.getTime() - dabar.getTime() : null, praejes = data ? ms < 0 : false;
+    return {
+      aktyvus: aktyvus, data: data, saltinis: saltinis, cvp: cvp, galutinis: galutinis, salyga: salyga,
+      praejes: praejes,
+      liko: data && !praejes ? { dienos: Math.floor(ms / DIENA), valandos: Math.floor((ms % DIENA) / 3600000), minutes: Math.floor(ms / 60000) } : null,
+      greit: !!(data && !praejes && ms <= PRIES_ATSAKYMA_D * DIENA),
+      suTerminu: !!(saltinis === "cvpis" && galutinis && Math.abs(cvp.getTime() - galutinis.getTime()) <= 60000)
+    };
+  }
+
+  global.GP_KLAUSIMAI = { siulyk: siulyk, terminas: terminas, prasymoSalyga: prasymoSalyga, fold: fold, grupes: grupes, svarusVardas: svarusVardas };
 })(typeof window !== "undefined" ? window : this);
