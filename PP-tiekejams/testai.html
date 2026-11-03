@@ -828,6 +828,287 @@ async function paleisk() {
     lygu(W.GP_DOK.pdfTekstas([]), "");
   });
 
+  grupe("Dvikalbis PDF: stulpeliai kalbomis (shared/dokumentai.js)");
+  // Gabalai kaip iš pdf.js: po žodį, plotis pagal ženklų skaičių
+  const dvZod = (tekstas, x, y) => { let c = x; return tekstas.split(" ").map(s => { const w = s.length * 5, it = { str: s, transform: [10, 0, 0, 10, c, y], width: w }; c += w + 3; return it; }); };
+  const DV_LT = ["Tiekėjas privalo pateikti pasiūlymo galiojimo", "užtikrinimą kartu su pasiūlymu ir kaip", "nurodyta sąlygose, jei tiekėjas yra pirkimo", "dalyvis, kuris dėl šios sutarties turi", "pateikti dokumentus pagal šio pirkimo tvarką"];
+  const DV_EN = ["The Supplier shall provide the tender security", "together with the tender and as specified", "in the conditions, if the Supplier is a", "participant of the procurement and that is", "required by the procedure of this contract"];
+  const dvStulpelis = (eil, x, y, zingsnis) => eil.flatMap((e, i) => dvZod(e, x, y - i * (zingsnis || 12)));
+  const dvPuslapis = (o) => { o = o || {}; const k = o.kaireje || DV_LT, d = o.desineje || DV_EN; return dvStulpelis(k, 62, 700).concat(dvStulpelis(d, 330, 700 + (o.poslinkis || 0))); };
+  const dvTekstas = b => b.text.replace(/\s+/g, " ");
+  const dvBlokai = (...psl) => W.GP_DOK.pdfBlokai(psl);
+  await testas("Du stulpeliai: kalbos atskiriamos, sakinys per kelias eilutes lieka vientisas ir randamas", () => {
+    const p = dvPuslapis(), senas = W.GP_DOK.pdfTekstas(p), b = dvBlokai(p);
+    lygu(b.map(x => [x.loc.page, x.loc.stulpelis]), [[1, "lt"], [1, "en"]]);
+    lygu(dvTekstas(b[0]), DV_LT.join(" ")); lygu(dvTekstas(b[1]), DV_EN.join(" "));
+    const sakinys = "pasiūlymo galiojimo užtikrinimą kartu su pasiūlymu";
+    tiesa(W.GP_PAIESKA.citataYra(sakinys, b[0].text), "LT sakinys randamas");
+    tiesa(W.GP_PAIESKA.citataYra("tender security together with the tender", b[1].text), "EN sakinys randamas");
+    tiesa(!W.GP_PAIESKA.citataYra(sakinys, senas), "skaitant eilutėmis - nerandamas (dėl to ir daroma)");
+  }, "be šito DI citatos dvikalbėse sąlygose nepatvirtinamos ir atsakymas virsta „nėra šaltinio“");
+  await testas("Stulpelių eilutės skirtinguose aukščiuose (LT 700, EN 702,5 ir 706) - rezultatas tas pats", () => {
+    [2.5, 6, -4].forEach(pos => {
+      const b = dvBlokai(dvPuslapis({ poslinkis: pos }));
+      lygu(b.map(x => x.loc.stulpelis), ["lt", "en"], "poslinkis " + pos);
+      lygu(dvTekstas(b[0]), DV_LT.join(" ")); lygu(dvTekstas(b[1]), DV_EN.join(" "));
+    });
+  });
+  await testas("Kairėje angliškai, dešinėje lietuviškai: pirma - kairysis stulpelis, vieta ir kalba teisingos", () => {
+    const b = dvBlokai(dvPuslapis({ kaireje: DV_EN, desineje: DV_LT }));
+    lygu(b.map(x => x.loc.stulpelis), ["en", "lt"]);
+    lygu(dvTekstas(b[0]), DV_EN.join(" ")); lygu(dvTekstas(b[1]), DV_LT.join(" "));
+  });
+  await testas("Lentelė LT | EN | LT | EN: kiekviena kalba atskirai, skaitoma stulpeliais, numerių stulpelis - prie teksto", () => {
+    const dok = ["Pateikiama: išrašas iš registro ir kitas", "dokumentas, kuris yra išduotas pagal šio", "pirkimo sąlygas ir turi galioti iki termino"];
+    const docEn = ["Submitted: an extract from the register", "and other document that is issued by the", "authority in accordance with the conditions"];
+    const lt = DV_LT.map(s => s.split(" ").slice(0, 3).join(" ")), en = DV_EN.map(s => s.split(" ").slice(0, 3).join(" "));
+    const p = dvZod("1.", 40, 700).concat(dvStulpelis(lt, 62, 700), dvStulpelis(en, 240, 700), dvStulpelis(dok, 400, 700), dvStulpelis(docEn, 640, 700));
+    const b = dvBlokai(p);
+    lygu(b.map(x => x.loc.stulpelis), ["lt", "en"]);
+    tiesa(dvTekstas(b[0]).includes(dok.join(" ")), "LT dokumentų stulpelis vientisas: " + dvTekstas(b[0]));
+    tiesa(dvTekstas(b[0]).includes(lt[0]) && !/Supplier|Submitted/.test(dvTekstas(b[0])), "be anglų kalbos LT sraute");
+    tiesa(dvTekstas(b[1]).includes(docEn.join(" ")), "EN dokumentų stulpelis vientisas");
+    tiesa(!/Tiekėjas|Pateikiama/.test(dvTekstas(b[1])), "be lietuvių kalbos EN sraute");
+    tiesa(/^1\. /.test(dvTekstas(b[0])), "numeris prie pirmo stulpelio: " + dvTekstas(b[0]).slice(0, 30));
+  });
+  await testas("Gretimi tos pačios kalbos stulpeliai (terminas ir apibrėžimas) kalbos sraute skaitomi eilutėmis, pasuktas tekstas tarpo neužstoja", () => {
+    const term = ["1.1. Tiekėjas", "1.2. Pasiūlymas", "1.3. Sąlygos", "1.4. Sutartis", "1.5. Pirkimas"];
+    const defi = DV_LT.map(s => s.split(" ").slice(0, 4).join(" "));
+    const p = term.flatMap((e, i) => dvZod(e, 62, 700 - i * 12).concat(dvZod(defi[i], 190, 700 - i * 12), dvZod(DV_EN[i], 420, 700 - i * 12)));
+    // Tarp eilučių, o jo „plotis“ (iš tikrųjų aukštis) kertantų visus stulpelius; ir pirmas puslapio gabalas
+    p.push({ str: "Pasukta žyma per visą aukštį", transform: [0, 10, -10, 0, 100, 682], width: 800 });
+    p.push({ str: "Antra pasukta žyma", transform: [0, 10, -10, 0, 100, 658], width: 800 });
+    p.push({ str: "Šoninė žyma lietuviškai šalia angliško stulpelio", transform: [0, 10, -10, 0, 480, 600], width: 500 });
+    p.push({ str: "Viršuje pasukta žyma", transform: [0, 10, -10, 0, 30, 760], width: 800 });
+    const b = dvBlokai(p);
+    lygu(b.map(x => x.loc.stulpelis), ["lt", "en"]);
+    term.forEach((e, i) => tiesa(b[0].text.split("\n").includes(e + " " + defi[i]), "eilutė: " + e + " | " + b[0].text));
+    tiesa(b[0].text.includes("Pasukta žyma") && b[1].text.includes("Šoninė žyma"), "pasuktas tekstas neprarandamas, lieka savo vietos stulpelyje");
+    tiesa(b[0].text.includes("Viršuje pasukta žyma"), "pirmas puslapio gabalas neprarandamas");
+  });
+  await testas("Išdėstymas puslapyje keičiasi (tekstas dviem stulpeliais, po jo lentelė keturiais) - abi dalys atskiriamos", () => {
+    const zonaA = dvStulpelis(DV_LT, 62, 700).concat(dvStulpelis(DV_EN, 330, 700));
+    const lt2 = DV_LT.map(s => s.split(" ").slice(0, 3).join(" ")), en2 = DV_EN.map(s => s.split(" ").slice(0, 4).join(" "));
+    const zonaB = dvStulpelis(lt2, 62, 620).concat(dvStulpelis(en2, 245, 620), dvStulpelis(DV_LT, 425, 620), dvStulpelis(DV_EN, 695, 620));
+    const b = dvBlokai(zonaA.concat(zonaB));
+    lygu(b.map(x => x.loc.stulpelis), ["lt", "en"]);
+    tiesa(dvTekstas(b[0]).includes(DV_LT.join(" ")), "LT tekstas vientisas: " + b[0].text); tiesa(dvTekstas(b[1]).includes(DV_EN.join(" ")), "EN tekstas vientisas");
+    tiesa(!/Supplier/.test(dvTekstas(b[0])), "LT sraute nėra anglų kalbos: " + dvTekstas(b[0]));
+    tiesa(!/Tiekėjas/.test(dvTekstas(b[1])), "EN sraute nėra lietuvių kalbos: " + dvTekstas(b[1]));
+  });
+  await testas("Eilutė per visą plotį (antraštė) lieka visa ir neužstoja stulpelių žemiau", () => {
+    const antraste = { str: "BENDROSIOS PIRKIMO SĄLYGOS IR REIKALAVIMAI TIEKĖJAMS BEI KITIEMS DALYVIAMS PIRKIME", transform: [10, 0, 0, 10, 62, 730], width: 480 };
+    const vidury = { str: "PIRKIMO OBJEKTO DALYS IR KITI SĄLYGŲ PRIEDAI, KURIUOS PATEIKIA TIEKĖJAS KARTU", transform: [10, 0, 0, 10, 62, 640], width: 470 };
+    const p = [antraste].concat(dvStulpelis(DV_LT, 62, 715), dvStulpelis(DV_EN, 330, 715), [vidury], dvStulpelis(DV_LT, 62, 625), dvStulpelis(DV_EN, 330, 625));
+    const b = dvBlokai(p);
+    lygu(b.map(x => x.loc.stulpelis), ["lt", "en"]);
+    tiesa(b[0].text.includes(antraste.str) && b[0].text.includes(vidury.str), "antraštės LT sraute visos");
+    lygu(b[1].text.includes("BENDROSIOS"), false);
+    lygu((dvTekstas(b[0]).match(/Tiekėjas privalo pateikti pasiūlymo galiojimo užtikrinimą/g) || []).length, 2, "abiejų zonų sakiniai vientisi");
+    lygu((dvTekstas(b[1]).match(/tender security together with/g) || []).length, 2);
+  });
+  await testas("Trumpos eilutės ir eilutės be kalbos požymių perima gretimos zonos stulpelius (viena - dviejų eilučių zona prieš pagrindinę)", () => {
+    const virs = [["1.1. Vykdomas tarptautinis pirkimas", "1.1. International Procurement is carried out"], ["1.2. Pirkimas vykdomas CVP IS", "1.2. The procurement of the goods"]];
+    const p = virs.flatMap((e, i) => dvZod(e[0], 62, 730 - i * 12).concat(dvZod(e[1], 330, 730 - i * 12))).concat(dvStulpelis(DV_LT, 62, 700), dvStulpelis(DV_EN, 330, 700));
+    const b = dvBlokai(p);
+    tiesa(dvTekstas(b[0]).startsWith("1.1. Vykdomas tarptautinis pirkimas 1.2. Pirkimas vykdomas CVP IS Tiekėjas"), "LT: " + dvTekstas(b[0]).slice(0, 80));
+    tiesa(dvTekstas(b[1]).startsWith("1.1. International Procurement is carried out 1.2. The procurement of the goods The Supplier"), "EN: " + dvTekstas(b[1]).slice(0, 80));
+  });
+  await testas("Paprasta lentelė lieka skaitoma eilutėmis: LT | LT, LT | skaičiai, LT po EN be stulpelių - blokas puslapiui, tekstas kaip buvo", () => {
+    const kitoks = DV_LT.map(s => s.split(" ").reverse().join(" "));
+    const skaiciai = DV_LT.map((s, i) => "12 500,00 EUR " + (i + 1));
+    const seka = dvStulpelis(DV_LT.map(s => s + " " + s), 62, 700).concat(dvStulpelis(DV_EN.map(s => s + " " + s), 62, 640));
+    [dvPuslapis({ desineje: kitoks }), dvPuslapis({ desineje: skaiciai }), seka].forEach((p, i) => {
+      const b = dvBlokai(p);
+      lygu(b.map(x => [x.loc.page, x.loc.stulpelis]), [[1, null]].map(x => [x[0], undefined]), "atvejis " + i);
+      lygu(b[0].text, W.GP_DOK.pdfTekstas(p).replace(/[ \t]{2,}/g, " ").trim(), "tekstas nepakito, atvejis " + i);
+    });
+  }, "kvalifikacijos ir kainų lentelių eilutės neturi būti išardytos");
+  await testas("Dvikalbis - tik kai bent kas trečias puslapis su tekstu: atsakymų raštas su vienu kitu klausimu angliškai neardomas", () => {
+    const lt = () => dvStulpelis(DV_LT, 62, 700), dv = () => dvPuslapis();
+    const b1 = dvBlokai(dv(), lt(), lt(), lt());
+    tiesa(b1.every(x => x.loc.stulpelis === undefined), "1 iš 4 - neskaidoma"); lygu(b1.length, 4);
+    const b2 = dvBlokai(dv(), lt(), lt());
+    lygu(b2.map(x => [x.loc.page, x.loc.stulpelis || ""]), [[1, "lt"], [2, ""], [3, ""], [1, "en"]], "1 iš 3 - skaidoma, tuščias puslapis nesiskaito");
+    const b3 = dvBlokai(dv(), [], lt(), [{ str: " ", transform: [10, 0, 0, 10, 62, 700], width: 3 }]);
+    lygu(b3.filter(x => x.loc.stulpelis).length, 2, "puslapiai be teksto į trečdalį neįskaičiuojami");
+  });
+  await testas("Blokų tvarka: pirma kalba ir vienos kalbos puslapiai - iš eilės, antra - po jų; trumpas puslapis dvikalbiame dokumente taip pat atskiriamas", () => {
+    const trumpas = dvZod("Pasiūlymų pateikimo terminas baigiasi", 62, 700).concat(dvZod("The deadline of the tenders is over", 330, 700));
+    const b = dvBlokai(dvPuslapis(), dvStulpelis(DV_LT, 62, 700), dvPuslapis(), trumpas);
+    lygu(b.map(x => [x.loc.page, x.loc.stulpelis || ""]), [[1, "lt"], [2, ""], [3, "lt"], [4, "lt"], [1, "en"], [3, "en"], [4, "en"]]);
+    lygu(b[3].text, "Pasiūlymų pateikimo terminas baigiasi"); lygu(b[6].text, "The deadline of the tenders is over");
+    const tikLt = dvBlokai(dvPuslapis(), dvPuslapis(), dvZod("Pasiūlymų pateikimo terminas baigiasi rytoj", 62, 700));
+    lygu(tikLt.filter(x => x.loc.page === 3).map(x => x.loc.stulpelis), [undefined], "viena kalba - blokas kaip buvo");
+  });
+  await testas("Tekstas neprarandamas: tie patys ženklai puslapyje, ir tarpai, pasuktas gabalas, gabalas be pločio", () => {
+    const pasuktas = { str: "Pasukta žyma", transform: [0, 10, -10, 0, 20, 500], width: 60 };
+    const tarpas = { str: " ", transform: [10, 0, 0, 10, 300, 700], width: 3 }, bePlocio = { str: "Priedas", transform: [10, 0, 0, 10, 62, 600] };
+    const p = dvPuslapis().concat([pasuktas, tarpas, bePlocio]);
+    const b = dvBlokai(p);
+    lygu(b.length, 2, "dvikalbis");
+    const z = s => [...s.replace(/\s+/g, "")].sort().join("");
+    lygu(z(b.map(x => x.text).join("")), z(W.GP_DOK.pdfTekstas(p)));
+  });
+  const dvVisas = (tekstas, y, x, w) => ({ str: tekstas, transform: [10, 0, 0, 10, x || 62, y], width: w || 500 });
+  const DV_ANTR = "PIRKIMO OBJEKTO DALYS IR KITI SĄLYGŲ PRIEDAI";
+  const DV_MISR = ["Tiekėjas The Supplier and the tender of the", "Pasiūlymas The tender and the security of the", "Sąlygos The conditions and the terms of the", "Sutartis The contract and the price of the", "Pirkimas The procurement and the rules of the"];
+  const dvNeskaidoma = (p, kas) => lygu(dvBlokai(p).map(x => x.loc.stulpelis), [undefined], kas);
+  await testas("Stulpelis, kuriame abi kalbos arba nėra žodžių su kalbos požymiais, kalbos neįrodo - puslapis neardomas", () => {
+    dvNeskaidoma(dvStulpelis(DV_MISR, 62, 700).concat(dvStulpelis(DV_EN, 330, 700)), "abi kalbos kairėje");
+    dvNeskaidoma(dvStulpelis(DV_LT, 62, 700).concat(dvStulpelis(DV_MISR, 330, 700)), "abi kalbos dešinėje");
+    // Nevienodo ilgio: vienodų kodų tarpai sutaptų ir atrodytų kaip dar keli stulpeliai
+    const kodai = ["KODAS ABCDEF GH IJKLMN", "OP QRSTUV WX YZABCD", "EFGHIJ KL MNOPQR ST", "UVWXYZ AB CDEFGH IJ", "KL MNOPQR STUVWX YZ"];
+    dvNeskaidoma(dvStulpelis(DV_LT, 62, 700).concat(dvStulpelis(kodai, 330, 700)), "kodų stulpelis be kalbos požymių");
+  }, "kitaip dvikalbiu laikomas dokumentas, kuriame kalbos ir taip vienoje eilutėje, o kodų stulpelis tampa „angliškas“");
+  await testas("Mažiau kaip 20 žodžių vienam stulpeliui kalbos neįrodo: vienas trumpas puslapis dokumento dvikalbiu nedaro", () => {
+    const lt = ["Tiekėjas turi pateikti", "pasiūlymą kartu su", "užtikrinimu ir dokumentais"], en = ["The Supplier shall", "provide the tender", "with the security"];
+    dvNeskaidoma(dvStulpelis(lt, 62, 700).concat(dvStulpelis(en, 330, 700)));
+  });
+  await testas("Siauras tarpas tarp stulpelių (4 pt) - stulpeliai vis tiek atskiriami", () => {
+    const kaire = dvStulpelis(DV_LT, 62, 700), gal = Math.max(...kaire.map(e => e.transform[4] + e.width));
+    const b = dvBlokai(kaire.concat(dvStulpelis(DV_EN, gal + 4, 700)));
+    lygu(b.map(x => x.loc.stulpelis), ["lt", "en"]); lygu(dvTekstas(b[1]), DV_EN.join(" "));
+  });
+  await testas("Eilutė su ženkleliu per visą plotį nutraukia zoną: siauras tarpas prie krašto - ne stulpelių riba", () => {
+    const pirmos = dvStulpelis(DV_LT.slice(0, 2), 62, 730).concat(dvStulpelis(DV_EN.slice(0, 2), 330, 730));
+    const zenklelis = [dvVisas("1.", 706, 62 - 12, 6), dvVisas(DV_ANTR, 706, 62, 480)];
+    const b = dvBlokai(pirmos.concat(zenklelis, dvStulpelis(DV_LT, 62, 690), dvStulpelis(DV_EN, 330, 690)));
+    lygu(b.map(x => x.loc.stulpelis), ["lt", "en"]);
+    tiesa(dvTekstas(b[1]).startsWith(DV_EN.slice(0, 2).join(" ")), "virš eilutės - angliškai atskirai: " + dvTekstas(b[1]).slice(0, 70));
+    tiesa(!/Supplier/.test(dvTekstas(b[0])), "LT sraute nėra anglų kalbos");
+  });
+  await testas("Puslapis, kuriame dvi kalbos ne stulpeliais, o eilutėmis, dvikalbiame dokumente neardomas", () => {
+    const eil = DV_LT.flatMap((e, i) => [dvVisas(e, 700 - i * 24), dvVisas(DV_EN[i], 688 - i * 24)]);
+    const b = dvBlokai(dvPuslapis(), dvPuslapis(), eil);
+    lygu(b.filter(x => x.loc.page === 3).map(x => x.loc.stulpelis), [undefined]);
+    tiesa(b.filter(x => x.loc.page === 3)[0].text.includes(DV_LT[0] + "\n" + DV_EN[0]), "klausimas lieka prie atsakymo");
+  }, "atsakymų raštuose klausimas ir atsakymas neturi būti išskirti");
+  await testas("Trumpas puslapis dvikalbiame dokumente atskiriamas, tik jei kalbos tikrai skirtingos", () => {
+    const zona = (k, d, y) => dvStulpelis(k, 62, y).concat(dvStulpelis(d, 330, y));
+    const beZymiu = dvBlokai(dvPuslapis(), dvPuslapis(), zona(["Data", "Numeris", "Vieta"], ["Date", "Number", "Place"], 700));
+    lygu(beZymiu.filter(x => x.loc.page === 3).map(x => x.loc.stulpelis), [undefined], "be lietuviškų raidžių - lieka eilutėmis");
+    const abu = zona(["Šalis", "Žymė"], ["Šalis", "Žymė"], 700).concat([dvVisas("Pastaba", 670, 62, 480)], zona(["Šalis", "Žymė"], ["Šalis", "Žymė"], 650));
+    const lt = dvBlokai(dvPuslapis(), dvPuslapis(), abu);
+    lygu(lt.filter(x => x.loc.page === 3).map(x => x.loc.stulpelis), [undefined], "abiejuose stulpeliuose lietuviškai - lieka eilutėmis");
+  });
+  await testas("Zona be kalbos požymių perima kitos zonos ribas, o zona su savo ribomis - ne", () => {
+    const pagr = dvPuslapis();
+    const kita = [dvVisas(DV_ANTR, 630, 62, 480)].concat(dvStulpelis(["Pirkimo data", "Pirkimo numeris", "Pirkimo vieta"], 62, 615), dvStulpelis(["Procurement date", "Procurement number", "Procurement place"], 330, 615));
+    const b = dvBlokai(pagr.concat(kita));
+    tiesa(b[1].text.includes("Procurement date\nProcurement number\nProcurement place"), "EN: " + b[1].text); tiesa(b[0].text.includes("Pirkimo data\nPirkimo numeris\nPirkimo vieta"), "LT: " + b[0].text);
+    // Savos ribos: LT | be kalbos | EN, o kitos zonos riba - tarp LT ir stulpelio be kalbos
+    const lt4 = DV_LT.map(e => e.split(" ").slice(0, 4).join(" "));
+    const a = dvStulpelis(lt4, 62, 730).concat(dvStulpelis(DV_EN, 262, 730));
+    const zyme = ["Data", "Vieta", "Kodas", "Tipas", "Suma"].map((e, i) => dvZod(e, 262, 660 - i * 12)).flat();
+    const c = dvBlokai(a.concat([dvVisas(DV_ANTR, 675, 62, 480)], dvStulpelis(lt4, 62, 660), zyme, dvStulpelis(DV_EN, 340, 660)));
+    tiesa(c[0].text.split("\n").includes(lt4[0] + " Data"), "stulpelis be kalbos lieka prie LT: " + c[0].text);
+    tiesa(!/Kodas/.test(c[1].text), "ne EN sraute");
+  }, "ankstesnė klaida: zona su savo ribomis perimdavo keturių stulpelių zonos ribą");
+  await testas("Eilutė, kertanti kitos zonos ribą, ir zona su sukeistomis kalbomis ribos neperima", () => {
+    const skaicius = dvVisas("12 345,00", 610, 250, 150);
+    const b = dvBlokai(dvPuslapis().concat([skaicius]));
+    tiesa(b[0].text.includes("12 345,00"), "kertanti eilutė - pirmos kalbos sraute, ne dalijama pagal centrą");
+    const sukeista = [dvVisas(DV_ANTR, 630, 62, 480)].concat(dvZod(DV_EN[0], 62, 615), dvZod(DV_LT[0], 330, 615), dvZod(DV_EN[1], 62, 603), dvZod(DV_LT[1], 330, 603));
+    const c = dvBlokai(dvPuslapis().concat(sukeista));
+    lygu(c.map(x => x.loc.stulpelis), ["lt", "en"], "pagrindinė zona lieka atskirta");
+    tiesa(c[0].text.split("\n").includes(DV_EN[0] + " " + DV_LT[0]), "lieka eilute, kalbos neišmaišomos: " + c[0].text);
+  });
+  await testas("Platus numerių stulpelis - prie pirmo stulpelio; tekstas be kalbos - pirmos kalbos sraute", () => {
+    const nr = DV_LT.map((e, i) => "10.10.10." + i);
+    const b = dvBlokai(dvStulpelis(nr, 62, 700).concat(dvStulpelis(DV_LT, 140, 700), dvStulpelis(DV_EN, 440, 700)));
+    lygu(b.map(x => x.loc.stulpelis), ["lt", "en"]);
+    tiesa(b[0].text.split("\n").includes(nr[0] + " " + DV_LT[0]), "numeris prie teksto: " + b[0].text);
+    const c = dvBlokai(dvPuslapis({ kaireje: DV_EN, desineje: DV_LT }).concat([dvVisas("12 345,00", 610, 250, 200)]));
+    lygu(c[0].loc.stulpelis, "en"); tiesa(c[0].text.includes("12 345,00"), "pirma kalba - angliška: " + c[0].text);
+    const kodai = Array.from({ length: 8 }, (x, i) => dvVisas(Array.from({ length: 8 }, (y, j) => "ABCDEFGHIJKL" + i + j).join(" "), 620 - i * 12));
+    lygu(dvBlokai(dvPuslapis().concat(kodai)).map(x => x.loc.stulpelis), ["lt", "en"], "tekstas be kalbos kalbos įvertinimo neiškreipia");
+  });
+  await testas("Lietuviškas stulpelis su „to“ ir viena lietuviška raide nelaikomas angliškas", () => {
+    const zema = ["to paties pirkimo vieta nurodyta dokumente", "to paties pirkimo data nurodyta skelbime", "to paties pirkimo kaina nurodyta Šakiuose"];
+    const kaire = ["Pirkimo sąlygų", "Sutarties šalių", "Tiekėjų sąrašas"];
+    const z = kaire.flatMap((e, i) => dvZod(e, 62, 620 - i * 12).concat([dvVisas(zema[i], 620 - i * 12, 210, 300)]));
+    const b = dvBlokai(dvPuslapis().concat([dvVisas(DV_ANTR, 635, 62, 480)], z));
+    tiesa(b[0].text.split("\n").includes(kaire[0] + " " + zema[0]), "eilute: " + b[0].text);
+    tiesa(!b[1].text.includes("to paties"), "ne EN sraute");
+  });
+  await testas("Trumpa zona virš pagrindinės perima jos ribas, tuščio puslapio ribos - iš artimiausios gretimo puslapio zonos", () => {
+    const virs = dvStulpelis(DV_LT.slice(0, 2), 62, 740).concat(dvStulpelis(DV_EN.slice(0, 2), 330, 740));
+    const b = dvBlokai(virs.concat([dvVisas(DV_ANTR, 712, 62, 480)], dvPuslapis()));
+    tiesa(dvTekstas(b[1]).startsWith(DV_EN.slice(0, 2).join(" ")), "EN: " + dvTekstas(b[1]).slice(0, 80));
+    tiesa(!/Supplier/.test(dvTekstas(b[0])), "LT sraute nėra anglų kalbos");
+    const lt4 = DV_LT.map(e => e.split(" ").slice(0, 4).join(" ")), lt8 = DV_LT.map(e => e + " " + e);
+    const psl1 = dvStulpelis(lt4, 62, 730).concat(dvStulpelis(DV_EN, 262, 730), [dvVisas(DV_ANTR, 670, 62, 700)], dvStulpelis(lt8, 62, 655), dvStulpelis(DV_EN, 560, 655));
+    const psl2 = dvZod("Tiekėjas turi pateikti", 62, 700).concat(dvZod("Kodas", 400, 700), dvZod("The Supplier shall provide", 560, 700));
+    const c = dvBlokai(psl1, psl2);
+    const lt2 = c.filter(x => x.loc.page === 2 && x.loc.stulpelis === "lt")[0];
+    tiesa(lt2 && lt2.text === "Tiekėjas turi pateikti Kodas", "riba iš apatinės zonos: " + (lt2 && lt2.text));
+  });
+  await testas("Vieta šaltinyje sako stulpelį LT ir EN, kitur - kaip buvo", () => {
+    lygu(W.GP_DOK.vieta({ page: 3, stulpelis: "lt" }, "lt"), "psl. 3, LT stulpelis");
+    lygu(W.GP_DOK.vieta({ page: 3, stulpelis: "en" }, "lt"), "psl. 3, EN stulpelis");
+    lygu(W.GP_DOK.vieta({ page: 3, stulpelis: "en" }, "en"), "p. 3, EN column");
+    lygu(W.GP_DOK.vieta({ page: 3 }, "lt"), "psl. 3"); lygu(W.GP_DOK.vieta({ page: 3 }, "en"), "p. 3");
+  });
+  await testas("Fragmentai: antra kalba - naujas fragmentas be persidengimo; dokumentas be stulpelių skaidomas kaip buvo", () => {
+    const ilgas = (kas, n) => Array.from({ length: n }, (x, i) => kas + i).join(" ");
+    const doc = { id: "D1", blocks: [{ loc: { page: 1, stulpelis: "lt" }, text: ilgas("lt", 50) }, { loc: { page: 2 }, text: ilgas("vl", 50) }, { loc: { page: 1, stulpelis: "en" }, text: ilgas("en", 50) }] };
+    const ch = W.GP_DOK.fragmentai(doc);
+    const su = ch.filter(c => /en\d/.test(c.text));
+    tiesa(su.length && su.every(c => !/lt\d|vl\d/.test(c.text)), "EN fragmentas be LT teksto");
+    lygu(su[0].loc, { page: 1, stulpelis: "en" }, "ir vieta - angliško stulpelio");
+    tiesa(ch.some(c => /lt\d/.test(c.text) && /vl\d/.test(c.text)), "pirma kalba ir vienos kalbos puslapis - vienas srautas");
+    const vienas = { id: "D2", blocks: Array.from({ length: 6 }, (x, i) => ({ loc: { page: i + 1 }, text: ilgas("p" + i + "z", 60) })) };
+    const f = W.GP_DOK.fragmentai(vienas);
+    tiesa(f.length > 1 && f.every((c, i) => !i || f[i - 1].text.includes(c.text.split(/\s+/)[0])), "persidengimas lieka");
+  });
+  // Tikras PDF per pdf.js: Helvetica su lietuviškomis raidėmis (kodas 128-136 -> glifas)
+  const DV_RAID = "ąčęėįšųūž", DV_GLIF = "aogonek ccaron eogonek edotaccent iogonek scaron uogonek umacron zcaron";
+  const dvPdf = (puslapiai) => {
+    const hex = s => "<" + [...s].map(c => { const i = DV_RAID.indexOf(c); return (i >= 0 ? 128 + i : c.charCodeAt(0)).toString(16).padStart(2, "0"); }).join("") + ">";
+    const n = puslapiai.length, obj = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [" + puslapiai.map((p, i) => (4 + i * 2) + " 0 R").join(" ") + "] /Count " + n + " >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [128 " + DV_GLIF.split(" ").map(g => "/" + g).join(" ") + "] >> >>"];
+    puslapiai.forEach((p, i) => {
+      const turinys = p.map(e => "BT /F1 10 Tf " + e[0] + " " + e[1] + " Td " + hex(e[2]) + " Tj ET").join("\n");
+      obj.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents " + (5 + i * 2) + " 0 R /Resources << /Font << /F1 3 0 R >> >> >>");
+      obj.push("<< /Length " + turinys.length + " >>\nstream\n" + turinys + "\nendstream");
+    });
+    let s = "%PDF-1.4\n"; const pos = [];
+    obj.forEach((o, i) => { pos.push(s.length); s += (i + 1) + " 0 obj\n" + o + "\nendobj\n"; });
+    const xref = s.length;
+    s += "xref\n0 " + (obj.length + 1) + "\n0000000000 65535 f \n" + pos.map(p => String(p).padStart(10, "0") + " 00000 n \n").join("");
+    s += "trailer\n<< /Size " + (obj.length + 1) + " /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n";
+    return new Uint8Array([...s].map(c => c.charCodeAt(0)));
+  };
+  const dvLinijos = (eil, x, y) => eil.map((e, i) => [x, y - i * 12, e]);
+  const dvPdfFailas = (vardas, ...psl) => new W.File([dvPdf(psl)], vardas, { type: "application/pdf" });
+  await testas("Tikras PDF per pdf.js: dvikalbės sąlygos atskiriamos, puslapis be teksto įspėjamas, paieška ir citata randa sakinį", async () => {
+    await svarus();
+    const psl = () => dvLinijos(DV_LT, 40, 780).concat(dvLinijos(DV_EN, 320, 780));
+    await W.__PPT.onFiles([dvPdfFailas("Pirkimo sąlygos_Conditions.pdf", psl(), [], psl())]);
+    const S = W.__PPT.S, d = S.docs[0];
+    lygu(d.parseStatus, "partial", d.warnings.join(" | ")); lygu(d.pages, 3);
+    tiesa(d.warnings.join(" ").includes("1"), "puslapis be teksto įvardytas: " + d.warnings.join(" | "));
+    lygu(d.blocks.map(b => [b.loc.page, b.loc.stulpelis || ""]), [[1, "lt"], [2, ""], [3, "lt"], [1, "en"], [3, "en"]]);
+    lygu([d.dvikalbis, d.language], [true, "lt"]);
+    tiesa(D.querySelector(".doc .meta").textContent.includes("LT / EN"), "dokumentų sąraše: " + D.querySelector(".doc .meta").textContent);
+    lygu(d.chunks.map(c => S.chunksById[c.id].lang), d.chunks.map(c => c.loc.stulpelis || "lt"), "fragmento kalba - jo stulpelio");
+    const ch = d.chunks.find(c => c.loc.stulpelis === "lt");
+    tiesa(W.GP_PAIESKA.citataYra("pasiūlymo galiojimo užtikrinimą kartu su pasiūlymu", ch.text), "citata LT fragmente: " + ch.text.slice(0, 120));
+    tiesa(d.chunks.some(c => c.loc.stulpelis === "en" && W.GP_PAIESKA.citataYra("tender security together with the tender", c.text)), "citata EN fragmente");
+    const v = A.validuokQA({ status: "atsakyta", trumpas: "Kartu su pasiūlymu", patikimumas: "aukstas", saltiniai: [{ id: ch.id, citata: "pasiūlymo galiojimo užtikrinimą kartu su pasiūlymu" }] }, S.chunksById);
+    lygu(v.status, "atsakyta", "šaltinis patvirtintas"); lygu(v.saltiniai.length, 1);
+    lygu(W.GP_DOK.vieta(v.saltiniai[0].loc, "lt"), "psl. 1, LT stulpelis");
+  });
+  await testas("Tikras PDF per pdf.js: paprasta LT lentelė ir angliškas dokumentas - po bloką puslapiui", async () => {
+    await svarus();
+    const lt = dvLinijos(DV_LT, 40, 780).concat(dvLinijos(DV_LT, 320, 780));
+    await W.__PPT.onFiles([dvPdfFailas("Lentele.pdf", lt), dvPdfFailas("Annex.pdf", dvLinijos(DV_EN, 40, 780))]);
+    const S = W.__PPT.S;
+    lygu(S.docs.flatMap(d => d.blocks.map(b => b.loc)), [{ page: 1 }, { page: 1 }]);
+    lygu(S.docs.map(d => d.dvikalbis), [false, false]);
+  });
+
   grupe("Dokumentų zona ir pradinė kalba");
   await testas("Įkėlimo zona (label) yra blokinis elementas - brūkšninis rėmelis neskyla per eilutes", () => {
     lygu(W.getComputedStyle(D.getElementById("drop")).display, "block");
