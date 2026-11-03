@@ -39,7 +39,7 @@
         terminas: "Terminas: skelbimas ir SPS grafikas", skelbimo_data: "Paskelbimo data: skelbimas ir SPS grafikas",
         trukme: "Sutarties trukmė: skelbimas ir sutartis", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
         kortele: "Kortelė ir skelbimas", punktai: "Pasikartojantys punktų numeriai", alternatyvos: "Paliktos šablono alternatyvos",
-        laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", grafikas: "SPS grafiko datų tvarka",
+        laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", kalbu_sutapimas: "Sumos, procentai, datos ir terminai lietuviškai ir angliškai", grafikas: "SPS grafiko datų tvarka",
         vykdytojo_savoka: "Pirkimo vykdytojo sąvoka: BPS ir SPS", rezimas_salygos: "Režimas: skelbimas ir pirkimo sąlygos",
         rezimo_savokos: "Taikomo įstatymo sąvokos visuose dokumentuose",
         privalomi: "Privalomi dokumentų elementai", privalomi_kiti: "Kiti įstatyme išvardyti elementai",
@@ -86,6 +86,8 @@
       laukai: "Neužpildytas pasirinkimo laukas („{t}“). Jei jį pildo tiekėjas ar jis pildomas pasirašant sutartį, viskas gerai.",
       lenteles: "Nuoroda į {n} lentelę, bet šiame dokumente tokios lentelės antraštės nėra.",
       priedu_nuorodos: "Nuoroda į SPS {n} priedą, bet SPS priedų sąraše tokio numerio nėra.",
+      kalbuSutapimas: "{r} skiriasi: lietuviškai „{a}“, angliškai „{b}“.{k}",
+      kalbuKitur: " Tas pats ir kitur (dar vietų: {n}).",
       grafikas: "SPS grafiko datos ne iš eilės: „{a}“ ({ad}) po „{b}“ ({bd}).",
       netaikoma: "netaikoma", nepatikrinta: "nepatikrinta", beSkelbimo: "nėra skelbimo", beSps: "nėra SPS", beSutarties: "nėra sutarties",
       beKorteles: "kortelė nepasirinkta", beDuomenu: "dokumente nerasta", beGrafiko: "SPS grafiko nerasta",
@@ -128,7 +130,7 @@
         terminas: "Deadline: notice and SPS schedule", skelbimo_data: "Publication date: notice and SPS schedule",
         trukme: "Contract duration: notice and contract", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
         kortele: "Card and notice", punktai: "Repeated clause numbers", alternatyvos: "Template alternatives left in",
-        laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", grafikas: "Order of SPS schedule dates",
+        laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", kalbu_sutapimas: "Amounts, percentages, dates and periods in Lithuanian and English", grafikas: "Order of SPS schedule dates",
         vykdytojo_savoka: "Contracting body term: BPS and SPS", rezimas_salygos: "Regime: notice and procurement conditions",
         rezimo_savokos: "Terms of the applicable law in all documents",
         privalomi: "Required document elements", privalomi_kiti: "Other elements listed in the law",
@@ -175,6 +177,8 @@
       laukai: "An unfilled choice field (“{t}”). If the supplier fills it in or it is completed at signature, that is fine.",
       lenteles: "Reference to table {n}, but this document has no table with that caption.",
       priedu_nuorodos: "Reference to SPS annex {n}, but the SPS list of annexes has no such number.",
+      kalbuSutapimas: "{r} differs: Lithuanian “{a}”, English “{b}”.{k}",
+      kalbuKitur: " The same elsewhere (more places: {n}).",
       grafikas: "SPS schedule dates are out of order: “{a}” ({ad}) after “{b}” ({bd}).",
       netaikoma: "not applicable", nepatikrinta: "not checked", beSkelbimo: "no notice", beSps: "no SPS", beSutarties: "no contract",
       beKorteles: "no card selected", beDuomenu: "not found in the document", beGrafiko: "no SPS schedule found",
@@ -805,6 +809,19 @@
     });
     patikra("priedu_nuorodos", "aiskumas", !sps ? "nepatikrinta" : !sps.priedai.length ? "nepatikrinta" : sum.priedu_nuorodos.length ? "radinys" : "gerai",
             !sps ? X.beSps : !sps.priedai.length ? X.bePriedu : "");
+    // Dvikalbiai dokumentai: sumos, procentai, datos ir terminai lietuviškai ir angliškai (2026-11-03; be dvikalbių - patikros nėra)
+    var KS = global.GP_KALBU_SUTIKRINIMAS;
+    if (KS && global.GP_MONEY) {
+      var kalbos = KS.tikrink(docs);
+      kalbos.radiniai.forEach(function (x) {
+        var v0 = x.vietos[0], d0 = docs.filter(function (d) { return d.id === v0.docId; })[0];
+        var pora = function (y, loc) { return { dok: d0.id, failas: trumpas(d0.name), vieta: vieta(loc, l), citata: y.citata }; };
+        radinys({ id: "kalbu_sutapimas", grupe: "aiskumas", lygis: "tikrinti",
+          tekstas: sub(X.kalbuSutapimas, { r: KS.rusiesPav(x.rusis, l), a: x.lt.map(function (y) { return y.tekstas; }).join(", "), b: x.en.map(function (y) { return y.tekstas; }).join(", "), k: x.vietos.length > 1 ? sub(X.kalbuKitur, { n: x.vietos.length - 1 }) : "" }),
+          vietos: [pora(x.lt[0], v0.loc), pora(x.en[0], v0.enLoc)], teise: teise(AISK) });
+      });
+      if (kalbos.dokumentu) patikra("kalbu_sutapimas", "aiskumas", kalbos.radiniai.length ? "radinys" : "gerai", "");
+    }
     // SPS grafiko datų tvarka
     if (!sps || sps.grafikas.length < 2) patikra("grafikas", "aiskumas", "nepatikrinta", !sps ? X.beSps : X.beGrafiko);
     // PP-salygos sugeneruotame pakete grafiko datos - šablono pavyzdžiai (raudonos, įrašomos Word programoje) - jų tvarka nieko nepasako (T6-M6)

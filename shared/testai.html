@@ -13,6 +13,7 @@
 <script src="testu-apsauga.js"></script>
 <script src="testu-dalys.js"></script>
 <script src="money.js"></script>
+<script src="kalbu-sutikrinimas.js"></script>
 <script src="uzkodavimas.js"></script>
 <style>
   body{margin:0;padding:24px;font-family:var(--font-base);color:var(--color-graphite);
@@ -3678,6 +3679,165 @@ async function testaiParengtis(){
 }
 
 /* ==========================================================================
+   Lietuviško ir angliško teksto sutikrinimas (kalbu-sutikrinimas.js, 2026-11-03)
+   ========================================================================== */
+function kalbuDok(id, vardas, eil, kita) {
+  return Object.assign({ id, name: "paketas.zip › " + vardas, rusis: "SPS", blocks: eil.map((c, i) => ({ text: c.join(" | "), cells: c, loc: { table: 1, row: i + 1 } })) }, kita || {});
+}
+function kalbuStulp(id, vardas, lt, en) {
+  return { id, name: vardas, rusis: "SPS", dvikalbis: true, blocks: lt.map((x, i) => ({ text: x, loc: { page: i + 1, stulpelis: "lt" } })).concat(en.map((x, i) => ({ text: x, loc: { page: i + 1, stulpelis: "en" } }))) };
+}
+async function testaiKalbuSutikrinimas() {
+  dabartine = grupe("Lietuviško ir angliško teksto sutikrinimas (kalbu-sutikrinimas.js, 2026-11-03)");
+  const K = window.GP_KALBU_SUTIKRINIMAS;
+  const turi = (a, b) => tiesa(String(a).indexOf(b) >= 0, "turi „" + b + "“, gauta: " + String(a).slice(0, 200));
+  const LT = "Tiekėjas per šį terminą ir su šiomis sąlygomis privalo pateikti ";
+  const EN = "The Supplier shall within this period and on these terms submit ";
+  const rak = (t, r) => Object.keys(K.reiksmes(t)[r]).sort();
+  await testas("Reikšmės: sumos, procentai, terminai ir datos skaitomi abiem kalbomis ir tuo pačiu raktu", () => {
+    [["100 000 Eur", "EUR 100,000"], ["100 000,50 eurų", "100,000.50 euros"], ["3000 (trys tūkstančiai) Eur", "3,000 (three thousand) Euros"], ["1,5 mln. Eur", "EUR 1.5 million"], ["25 tūkst. EUR", "EUR 25 thousand"], ["5 000 €", "€5,000"]]
+      .forEach(([a, b]) => { lygu(rak(a, "suma"), rak(b, "suma"), a); lygu(rak(a, "suma").length, 1, a); });
+    lygu(rak("1,5 mln. Eur", "suma"), ["1500000"]); lygu(rak("25 tūkst. EUR", "suma"), ["25000"]);
+    lygu(rak("2 mlrd. Eur", "suma"), ["2000000000"]); lygu(rak("1,500 mln. Eur", "suma"), ["1500000"], "su daugikliu - dešimtainis");
+    [["7,5 proc.", "7.5 percent"], ["0,02 (dvi šimtosios) procento", "0.02 (two hundredths) per cent"], ["5 %", "5%"], ["10 procentų", "10 per cent"]]
+      .forEach(([a, b]) => { lygu(rak(a, "proc"), rak(b, "proc"), a); lygu(rak(a, "proc").length, 1, a); });
+    [["30 (trisdešimt) dienų", "30 (thirty) days"], ["10 darbo dienų", "10 working days"], ["5 (penkias) darbo dienas", "5 business days"], ["7 kalendorines dienas", "7 calendar days"], ["3 mėnesius", "3 months"], ["2 metus", "24 months"], ["1 metų", "1 year"], ["2 savaites", "14 days"], ["24 valandas", "24 hours"], ["12-os mėnesių", "12-month"]]
+      .forEach(([a, b]) => { lygu(rak(a, "trukme"), rak(b, "trukme"), a); lygu(rak(a, "trukme").length, 1, a); });
+    [["2026 m. rugsėjo 2 d.", "2 September 2026"], ["2026 m. lapkričio 15 d.", "November 15, 2026"], ["2026-09-02", "2 September 2026"], ["2026.09.02", "02/09/2026"], ["2022 m. balandžio 8 d.", "8th of April 2022"]]
+      .forEach(([a, b]) => { lygu(rak(a, "data"), rak(b, "data"), a); lygu(rak(a, "data").length, 1, a); });
+    // Ne reikšmės: punktų numeriai, metodai, metai, vien skaičius
+    lygu(rak("žr. 5.3 punktą ir 3 metodus, 2026 metais, 12 vienetų", "trukme"), []);
+    lygu(rak("žr. 5.3 punktą, 12 vienetų, 100 000", "suma"), []);
+    lygu(rak("2 lentelė, 5 priedas", "proc"), []);
+    lygu(rak("kitas 45 dienų terminas, kai yra 2 metodai", "trukme"), ["d:45"]);
+    // Darbo dienos - ne kalendorinės; mėnesiai skiriasi nuo dienų
+    tiesa(rak("10 darbo dienų", "trukme")[0] !== rak("10 days", "trukme")[0], "darbo dienos");
+    tiesa(rak("10 kalendorinių dienų", "trukme")[0] === rak("10 days", "trukme")[0], "kalendorinės");
+    tiesa(rak("1 mėnesį", "trukme")[0] !== rak("30 days", "trukme")[0], "mėnuo");
+    tiesa(rak("24 valandas", "trukme")[0] !== rak("24 days", "trukme")[0], "valandos");
+  });
+  await testas("Kalbos atpažinimas: langelis pagal žodžius, trumpas - pagal vienetą, be požymių - nežinoma", () => {
+    lygu(K.kalbaTeksto("Tiekėjas privalo pateikti pasiūlymą ir dokumentus per nustatytą terminą"), "lt");
+    lygu(K.kalbaTeksto("The Supplier shall submit the tender and the documents within the period"), "en");
+    lygu(K.kalbaTeksto("5 darbo dienos"), "lt"); lygu(K.kalbaTeksto("3 months"), "en");
+    lygu(K.kalbaTeksto("Tiekėjas privalo pateikti pasiulyma ir dokumentus per nustatyta termina bei kita informacija"), "lt", "mažai diakritikų");
+    lygu(K.kalbaTeksto("100 000 Eur"), null); lygu(K.kalbaTeksto("1.1."), null); lygu(K.kalbaTeksto(""), null);
+  });
+  await testas("Lentelės eilutė: radinys tik kai abi kalbos turi skirtingą reikšmę; vienoje kalboje esanti reikšmė - ne radinys", () => {
+    const t = (a, b) => K.tikrink([kalbuDok("d", "SPS.docx", [[LT + a, EN + b]])]);
+    let r = t("100 000 Eur užtikrinimą.", "a security of EUR 10,000.");
+    lygu(r.radiniai.length, 1); lygu(r.radiniai[0].rusis, "suma");
+    lygu([r.radiniai[0].lt[0].raktas, r.radiniai[0].en[0].raktas], ["100000", "10000"]);
+    turi(r.radiniai[0].lt[0].citata, "100 000 Eur"); turi(r.radiniai[0].en[0].citata, "EUR 10,000");
+    lygu(r.radiniai[0].lt[0].tekstas, "100 000 Eur");
+    lygu([r.dokumentu, r.vietu], [1, 1]); tiesa(r.reiksmiu === 2, "reikšmių");
+    lygu(t("100 000 Eur užtikrinimą.", "a security of EUR 100,000.").radiniai, []);
+    lygu(t("5 (penkias) darbo dienas.", "the notice within 5 (five) days.").radiniai.length, 1, "darbo dienos ir dienos");
+    lygu(t("5 (penkias) darbo dienas.", "the notice within 5 (five) working days.").radiniai, []);
+    lygu(t("7,5 proc. užtikrinimą.", "a security of 7.5 percent.").radiniai, []);
+    lygu(t("10 proc. užtikrinimą.", "a security of 1 percent.").radiniai.length, 1);
+    lygu(t("iki 2026 m. rugsėjo 2 d.", "by 3 September 2026.").radiniai.length, 1);
+    lygu(t("iki 2026 m. rugsėjo 2 d.", "by 2 September 2026.").radiniai, []);
+    // Tik vienoje kalboje: reglamento data, žodžiais parašyta reikšmė
+    lygu(t("pagal 2022 m. balandžio 8 d. reglamentą.", "under the Regulation of 31 July 2014 as amended on 8 April 2022.").radiniai, [], "papildoma data");
+    lygu(t("dešimt dienų.", "within 10 days.").radiniai, [], "žodžiais");
+    // Pasikartojimai: du kartus lietuviškai ir po vieną angliškai - vienas skirtumas
+    lygu(t("per 5 darbo dienas ir dar per 5 darbo dienas.", "within 5 working days and then within 5 days.").radiniai.length, 1, "kartojimas");
+    lygu(t("per 5 darbo dienas ir dar per 5 darbo dienas.", "within 5 working days.").radiniai, [], "paminėta rečiau");
+    lygu(t("per 5 dienas ir dar per 5 darbo dienas.", "within 5 days and then within 5 days.").radiniai.length, 1, "kartojimas angliškai");
+    // Citata: nuo žodžio pradžios, su daugtaškiu, reikšmė viduje
+    const ilg = "Pirmas sakinys su daugybe žodžių, kurie niekaip nesusiję su reikšme ir užima daug vietos prieš ją, todėl citata prasideda vėliau, nes ";
+    const cit = t(ilg + "100 000 Eur.", "a security of EUR 10,000.").radiniai[0].lt[0].citata;
+    tiesa(cit.indexOf("...") === 0, "daugtaškis: " + cit); tiesa(/^\.\.\.[A-ZĄČĘĖĮŠŲŪŽa-ząčęėįšųūž]+ /.test(cit), "visas žodis: " + cit); turi(cit, "100 000 Eur");
+    tiesa((" " + ilg).indexOf(" " + cit.slice(3).split(" ")[0] + " ") >= 0, "žodis nenukirptas: " + cit);
+  });
+  await testas("Eilutės sandara: numerio langelis, keli tos pačios kalbos langeliai, langelis be kalbos - prie kalbos prieš jį; vienos kalbos eilutė - nelyginama", () => {
+    let r = K.tikrink([kalbuDok("d", "x.docx", [["1.2.", LT + "30 dienų terminą.", EN + "a period of 60 days."]])]);
+    lygu(r.radiniai.length, 1); lygu(r.radiniai[0].vietos[0].punktas, "1.2");
+    r = K.tikrink([kalbuDok("d", "x.docx", [["Pasiūlymo galiojimo užtikrinimo suma pasiūlymui", "100 000 Eur", "Amount of the tender security for the tender", "EUR 10,000"]])]);
+    lygu(r.radiniai.length, 1, "keturi langeliai");
+    r = K.tikrink([kalbuDok("d", "x.docx", [[LT + "30 dienų terminą.", "Reikalavimai ir sąlygos pagal 60 dienų terminą ir kita."]])]);
+    lygu([r.dokumentu, r.radiniai.length], [0, 0], "viena kalba");
+    r = K.tikrink([{ id: "p", name: "p.docx", blocks: [{ text: LT + "30 dienų.", loc: { para: 1 } }, { text: EN + "60 days.", loc: { para: 2 } }] }]);
+    lygu([r.dokumentu, r.radiniai.length], [0, 0], "atskiros pastraipos nesiejamos");
+    lygu(K.tikrink([null, {}, { id: "x" }]).dokumentu, 0);
+    lygu(K.tikrink(null).radiniai, []);
+  });
+  await testas("Dviejų stulpelių PDF: tas pats punktas abiejuose srautuose, tęsinys kitame puslapyje, pasikartojantis numeris - k-tas su k-tuoju", () => {
+    const d = kalbuStulp("s", "SPS.pdf",
+      ["2.1. Tiekėjas pateikia užtikrinimą\nper 10 dienų nuo kvietimo.\n2.2. Kaina nurodoma eurais.", "tęsinys be numerio 100 000\nEur sumai.\n3.1. Terminas - 2 mėnesiai."],
+      ["2.1. The Supplier shall provide security\nwithin 10 days of the invitation.\n2.2. The price is stated in euros.", "continuation without a number EUR\n90 000 for the amount.\n3.1. The period is 2 months."]);
+    const v = K.stulpeliuVietos(d);
+    lygu(v.map(x => x.punktas), ["2.1", "2.2", "3.1"]);
+    const r = K.tikrink([d]);
+    lygu(r.radiniai.length, 1); lygu(r.radiniai[0].rusis, "suma"); lygu(r.radiniai[0].vietos[0].punktas, "2.2");
+    lygu(r.radiniai[0].vietos[0].loc.page, 1, "punkto pradžia");
+    // Numeris pasikartoja (priede iš naujo)
+    const d2 = kalbuStulp("s2", "SPS.pdf", ["1.1. Pirmas per 10 dienų.\n1.1. Antras per 20 dienų."], ["1.1. First within 10 days.\n1.1. Second within 30 days."]);
+    const r2 = K.tikrink([d2]);
+    lygu(r2.radiniai.length, 1); lygu([r2.radiniai[0].lt[0].raktas, r2.radiniai[0].en[0].raktas], ["d:20", "d:30"]);
+    // Pasikartojimų skaičius nesutampa - poros nėra, klaidingo radinio irgi
+    const d3 = kalbuStulp("s3", "SPS.pdf", ["1.1. Pirmas per 10 dienų.\n1.1. Antras per 20 dienų."], ["1.1. First within 15 days."]);
+    lygu(K.tikrink([d3]).radiniai, []);
+    // Vienas numeris tik vienoje kalboje - poros nėra
+    const d4 = kalbuStulp("s4", "SPS.pdf", ["7.1. Per 10 dienų."], ["8.1. Within 15 days."]);
+    lygu(K.tikrink([d4]).dokumentu, 0);
+  });
+  await testas("Tas pats skirtumas kitoje dokumento redakcijoje - viena pastaba su keliomis vietomis; skirtingi - atskiros", () => {
+    const e = [[LT + "100 000 Eur.", EN + "EUR 10,000."]];
+    const r = K.tikrink([kalbuDok("a", "SPS.docx", e), kalbuDok("b", "Patikslinta SPS.docx", e)]);
+    lygu(r.radiniai.length, 1); lygu(r.radiniai[0].vietos.map(x => x.docId), ["a", "b"]);
+    const r2 = K.tikrink([kalbuDok("a", "SPS.docx", e.concat([[LT + "30 dienų.", EN + "60 days."]]))]);
+    lygu(r2.radiniai.length, 2);
+  });
+  await testas("Kuriai kalbai teikiama viršenybė: sąlygos ir sutartis atskirai, sakinys pažodžiui, pagal sąsajos kalbą", () => {
+    const LTS = "Pirkimo dokumentai parengti anglų kalba. Jei yra neatitikimų ir/ar prieštaravimų tarp lietuvių kalba surašyto teksto ir anglų kalba surašyto teksto, viršenybė suteiktina lietuvių kalba surašytam tekstui. Kitas sakinys.";
+    const ENS = "If there are discrepancies and/or contradictions between the text in Lithuanian language and the text in English language, preference is to be given to the text in Lithuanian language.";
+    const SUT = "Sutartis sudaroma lietuvių kalba. Jeigu Sutartis sudaroma kita kalba, visais atvejais autentišku laikomas tik lietuvių kalba parengtas Sutarties tekstas (jei yra neatitikimų, pirmenybė teikiama lietuvių kalba parengtam tekstui). Toliau.";
+    const docs = [{ id: "b", name: "BPS.docx", rusis: "BPS", blocks: [{ text: "Nieko.", loc: { para: 1 } }, { text: LTS + " " + ENS, loc: { para: 2 } }] },
+                  { id: "s", name: "Sutarties sąlygos.docx", rusis: "Sutartis", blocks: [{ text: SUT, loc: { para: 7 } }] }];
+    const p = K.pirmumas(docs, "lt");
+    lygu(p.salygos.citata, "Jei yra neatitikimų ir/ar prieštaravimų tarp lietuvių kalba surašyto teksto ir anglų kalba surašyto teksto, viršenybė suteiktina lietuvių kalba surašytam tekstui.");
+    lygu(p.salygos.loc.para, 2); lygu(p.salygos.docId, "b");
+    turi(p.sutartis.citata, "autentišku laikomas"); lygu(p.sutartis.docId, "s");
+    turi(K.pirmumas(docs, "en").salygos.citata, "preference is to be given");
+    lygu(K.pirmumas([{ id: "x", name: "x", blocks: [{ text: "Lietuvių kalba yra valstybinė.", loc: {} }] }], "lt"), { salygos: null, sutartis: null });
+    lygu(K.pirmumas([docs[0], { id: "c", name: "Kitos sąlygos.docx", rusis: "BPS", blocks: [{ text: LTS, loc: { para: 9 } }] }], "lt").salygos.docId, "b", "pirmas dokumentas");
+    lygu(K.rusiesPav("suma", "lt"), "Suma"); lygu(K.rusiesPav("trukme", "en"), "Period");
+  });
+  await testas("Parengties patikra: radinys su abiem vietomis, „Patikrinkite“, EN, be dvikalbių dokumentų - patikros nėra; prijungta PP-salygos ir PP-tiekejams", async () => {
+    const { P } = await (async () => { const r = await ramas(PARENGTIES_FAILAI.replace('<script src="parengtis.js">', '<script src="kalbu-sutikrinimas.js"><\/script><script src="parengtis.js">')); return { P: r.w.GP_PARENGTIS }; })();
+    const d = (e) => Object.assign(kalbuDok("d", "Specialiosios sąlygos.docx", e), { ext: "docx", parseStatus: "parsed", sha256: "ab" });
+    let r = P.patikrink({ docs: [d([[LT + "100 000 Eur užtikrinimą.", EN + "a security of EUR 10,000."]])], kortele: { id: "k", pavadinimas: "X", rezimas: "PI" }, kalba: "lt" });
+    const x = r.radiniai.filter(q => q.id === "kalbu_sutapimas");
+    lygu(x.length, 1); lygu(x[0].lygis, "tikrinti"); lygu(x[0].grupe, "aiskumas");
+    turi(x[0].tekstas, "lietuviškai „100 000 Eur“"); turi(x[0].tekstas, "angliškai „EUR 10,000“");
+    lygu(x[0].vietos.length, 2); turi(x[0].vietos[0].citata, "100 000 Eur"); turi(x[0].vietos[1].citata, "EUR 10,000");
+    turi(x[0].vietos[0].vieta, "lentelė 1"); tiesa(x[0].teise.length > 0, "teisės nuoroda");
+    const pat = r.patikros.filter(q => q.id === "kalbu_sutapimas")[0];
+    lygu(pat.busena, "radinys"); turi(pat.pav, "lietuviškai ir angliškai");
+    r = P.patikrink({ docs: [d([[LT + "100 000 Eur užtikrinimą.", EN + "a security of EUR 10,000."]])], kalba: "en" });
+    turi(r.radiniai.filter(q => q.id === "kalbu_sutapimas")[0].tekstas, "Lithuanian “100 000 Eur”");
+    const d2 = Object.assign(kalbuDok("d2", "Patikslintos sąlygos.docx", [[LT + "100 000 Eur užtikrinimą.", EN + "a security of EUR 10,000."]]), { ext: "docx", parseStatus: "parsed", sha256: "cd" });
+    r = P.patikrink({ docs: [d([[LT + "100 000 Eur užtikrinimą.", EN + "a security of EUR 10,000."]]), d2], kalba: "lt" });
+    turi(r.radiniai.filter(q => q.id === "kalbu_sutapimas")[0].tekstas, "Tas pats ir kitur (dar vietų: 1).");
+    r = P.patikrink({ docs: [d([[LT + "100 000 Eur užtikrinimą.", EN + "a security of EUR 100,000."]])], kalba: "lt" });
+    lygu(r.radiniai.filter(q => q.id === "kalbu_sutapimas"), []);
+    lygu(r.patikros.filter(q => q.id === "kalbu_sutapimas")[0].busena, "gerai");
+    r = P.patikrink({ docs: [{ id: "l", name: "Sąlygos.docx", ext: "docx", parseStatus: "parsed", sha256: "ab", blocks: [{ text: "Tik lietuviškas tekstas per 30 dienų ir kita.", loc: { para: 1 } }] }], kalba: "lt" });
+    lygu(r.patikros.filter(q => q.id === "kalbu_sutapimas"), [], "lietuviškam paketui patikros nėra");
+    for (const kelias of ["../PP-salygos/PP-SALYGOS.html", "../PP-tiekejams/index.html"]) {
+      const h = await (await fetch(kelias)).text(), sk = f => h.indexOf('<script src="../shared/' + f + '"');
+      tiesa(sk("money.js") >= 0 && sk("kalbu-sutikrinimas.js") > sk("money.js"), kelias + ": po money.js");
+    }
+    const hs = await (await fetch("../PP-salygos/PP-SALYGOS.html")).text();
+    tiesa(hs.indexOf('<script src="../shared/kalbu-sutikrinimas.js"') < hs.indexOf('<script src="../shared/parengtis.js"'), "PP-salygos: prieš parengtis.js");
+    const sw = await (await fetch("../PP-tiekejams/sw.js")).text();
+    turi(sw, '"../shared/kalbu-sutikrinimas.js"'); turi(sw, '"../shared/money.js"');
+  });
+}
+
+/* ==========================================================================
    Privalomi pirkimo dokumentų elementai (privalomi-elementai.js, 2026-10-07; pirkimo sąlygų tikrinimo 4 etapas):
    katalogas - PĮ 48 str. 2 d. / VPĮ 35 str. 2 d. per registrą, paieška visame pakete, „rasta (kur)“ / „neužpildyta“ /
    „nerasta“, taikymas pagal būdą. Sintetinis paketas - kiekvienam elementui vienas sakinys, parašytas kaip LITGRID
@@ -4885,7 +5045,31 @@ async function tiekejuSiulymaiBusena(w, d) {
   d.getElementById("askDaugiau").click(); d.getElementById("askFaktai").open = true;
   d.querySelector("#askChips .chip").click();
 }
-const TIEKEJU_BUSENOS = [["klausimai pagal konkretų pirkimą: atverti visi, faktai ir šaltinis (2026-11-03)", tiekejuSiulymaiBusena],
+async function tiekejuKalbosBusena(w, d) {
+  tiekejuFetch(w);
+  const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const c = s => "<w:tc><w:p><w:r><w:t>" + s + "</w:t></w:r></w:p></w:tc>";
+  const dx = new w.JSZip();
+  dx.file("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  dx.file("word/document.xml", '<?xml version="1.0" encoding="UTF-8"?><w:document ' + NS + '><w:body><w:tbl><w:tr>' +
+    c("Tiekėjas per šį terminą ir su šiomis sąlygomis privalo pateikti 100 000 Eur užtikrinimą pagal labai ilgą pavadinimą_be_tarpų_su_pabraukimais_ir_dar_ilgesne_dalimi.") +
+    c("The Supplier shall within this period and on these terms submit a security of EUR 10,000 under a very long name_without_spaces_with_underscores_and_an_even_longer_part.") + '</w:tr></w:tbl></w:body></w:document>');
+  const zip = new w.JSZip();
+  zip.file("Specialiosios pirkimo sąlygos ir labai ilgas failo pavadinimas be tarpų_su_pabraukimais_ir_dar_ilgesne_dalimi.docx", await dx.generateAsync({ type: "uint8array" }));
+  zip.file("Bendrosios sąlygos.txt", "Jei yra neatitikimų ir/ar prieštaravimų tarp lietuvių kalba surašyto teksto ir anglų kalba surašyto teksto, viršenybė suteiktina lietuvių kalba surašytam tekstui.\n\nPirkimo sąlygos ir kitos nuostatos.");
+  await w.__PPT.onFiles([new w.File([await zip.generateAsync({ type: "blob" })], "Pirkimas.zip")]);
+  await tiekejuLauk(() => d.querySelector("#kalbuBox .kalbos"));
+  w.__PPT.VPT.id = "1234501"; w.__PPT.VPT.rez = { ok: true, meta: {}, nuoroda: "https://viesiejipirkimai.lt/x", pirkimas: { id: 1234501, title: "Pirkimas", caName: "LITGRID AB", procedure: "Open", status: "Bid submission", tenderSubmissionDeadline: "2099-10-20T15:00:00", clarificationPeriodEnd: "2099-10-14T15:00:00" } };
+  w.__PPT.renderVpt();
+}
+async function tiekejuKlTerminoBusena(w, d) {
+  tiekejuFetch(w);
+  w.__PPT.VPT.id = "1234501"; w.__PPT.VPT.rez = { ok: true, meta: {}, nuoroda: "https://viesiejipirkimai.lt/x", pirkimas: { id: 1234501, title: "Pirkimas", caName: "LITGRID AB", procedure: "Open", status: "Bid submission", tenderSubmissionDeadline: "2099-10-20T15:00:00", clarificationPeriodEnd: "2020-10-14T15:00:00" } };
+  w.__PPT.renderVpt();
+}
+const TIEKEJU_BUSENOS = [["LT ir EN tekstas skiriasi, klausimų terminas (2026-11-03)", tiekejuKalbosBusena],
+  ["klausimų terminas baigėsi (2026-11-03)", tiekejuKlTerminoBusena],
+  ["klausimai pagal konkretų pirkimą: atverti visi, faktai ir šaltinis (2026-11-03)", tiekejuSiulymaiBusena],
   ["konkretus pirkimas: CVP IS dokumentus rodo tik prisijungusiems, „Klausti“ paaiškina (2026-10-29)", tiekejuPrisijungimasBusena],
   ["konkretus pirkimas: dokumentai parsisiunčiami, klausimas laukia (2026-10-29)", tiekejuEigaBusena],
   ["konkretus pirkimas: įkelti kito pirkimo dokumentai - pakeisti (2026-10-29)", tiekejuKitasBusena]];
@@ -8075,7 +8259,7 @@ async function testaiNacsaugBvpz(){
     [testaiJuosta, testaiKopija, testaiPinigai, testaiUzkodavimas, testaiPranesimai, testaiPaaiskinimas, testaiBibliotekos, testaiKopijavimas,
      testaiDatos, testaiDalys, testaiBudai, testaiAiProxy, testaiDocxStiliai, testaiSkydelis, testaiAntraste, testaiDarbas, testaiTeise,
      testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
-     testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
+     testaiKalbuSutikrinimas, testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
      testaiVendor],
     [testaiTelefonas, testaiPrieinamumas]
   ]);
