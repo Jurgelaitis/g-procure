@@ -353,7 +353,7 @@
   }
   function trumpas(o) {
     return { id: o.id, title: o.title, caName: o.caName, caNumber: o.caNumber, procedure: o.procedure, status: o.status,
-      procurementType: o.procurementType, cpvCodes: o.cpvCodes.slice(0, 5), estimatedValue: o.estimatedValue, aboveThreshold: o.aboveThreshold,
+      procurementType: o.procurementType, cpvCodes: o.cpvCodes.slice(0, 5), estimatedValue: o.estimatedValue, aboveThreshold: o.aboveThreshold, activeCycle: o.activeCycle,
       datePublished: o.datePublished, tenderSubmissionDeadline: o.tenderSubmissionDeadline, nuoroda: CVP_IS_NUORODA + o.id };
   }
 
@@ -432,7 +432,9 @@
   function dokumentuAdresai(id) {
     var n = String(Math.floor(Math.abs(+id)));
     return {
-      perziura: DOK_BAZE + "prepareViewCfTWS.do?resourceId=" + n,
+      // Dokumentų sąrašas, ne pirkimo puslapis: rinkos konsultacijos puslapis prašo prisijungti, dinaminės sistemos - nukreipia,
+      // nors jų dokumentai vieši; konkretus pirkimas pagal DPS - į prisijungimą ir čia (patikrinta 2026-11-04)
+      perziura: DOK_BAZE + "listContractDocuments.do?resourceId=" + n,
       paruosimas: DOK_BAZE + "prepareAnonymousDownload.do?resourceId=" + n + "&isContract=null",
       atsisiuntimas: DOK_BAZE + "downloadCftResourceItems.do?resourceId=" + n + "&resourceType=ContractDocument&isContract=null"
     };
