@@ -1,6 +1,6 @@
 # Pirkimų teisės stebėsena - šaltinių registras ir prieigos tyrimas
 
-Būsena 2026-09-24. Mašininis šaltinių registras - `PP-teise/duomenys/saltiniai.json`
+Būsena 2026-11-04. Mašininis šaltinių registras - `PP-teise/duomenys/saltiniai.json`
 (jį rodo stebėsenos puslapio skiltis „Šaltinių registras ir patikrų žurnalas“). Šis dokumentas
 paaiškina, KAS buvo patikrinta ir KODĖL modulis veikia rankiniu importu.
 
@@ -8,36 +8,37 @@ paaiškina, KAS buvo patikrinta ir KODĖL modulis veikia rankiniu importu.
 
 Naršyklė (g-procure.com) prie nė vieno oficialaus šaltinio automatiškai prisijungti negali:
 
-| Šaltinis | Kas patikrinta 2026-09-24 | Rezultatas |
+| Šaltinis | Kas patikrinta 2026-11-04 | Rezultatas |
 |---|---|---|
 | e-tar.lt (TAR) | Akto puslapis `curl -sI` | HTTP 200, **be `Access-Control-Allow-Origin`** - `fetch` iš naršyklės neįmanomas |
-| e-tar.lt RSS | Spėtas RSS adresas | 404 - oficialaus RSS aprašo nerasta |
+| e-tar.lt RSS | Spėtas RSS adresas (2026-09-24) | 404 - oficialaus RSS aprašo nerasta |
 | e-seimas.lrs.lt (projektai) | `curl` | 403; turinys kraunamas JavaScript; API nerasta |
-| vpt.lrv.lt naujienos | Spėtas adresas `/lt/naujienos/` | 404 |
+| vpt.lrv.lt naujienos | `https://vpt.lrv.lt/lt/naujienos-3/` | HTTP 200, **be `Access-Control-Allow-Origin`**; spėtas `/lt/naujienos/` - 404 |
 | klausk.vpt.lt | Zendesk pagalbos centro API (`/api/v2/help_center/lt/articles/<id>.json`) | Veikia be prisijungimo iš prižiūrėtojo aplinkos (2026-09-23); CORS naršyklei nepatikrinta |
-| liteko.teismai.lt | Svetainė; paieškos rezultatuose matomas `liteko-api-pub.teismas.lt/v1/decisions/<id>` | Adresas nepatikrintas |
+| liteko.teismai.lt | Svetainė HTTP 200, be CORS antraštės; paieškos rezultatuose matomas `liteko-api-pub.teismas.lt/v1/decisions/<id>` | Adresas nepatikrintas |
 | lat.lt | `curl` | 200; API nerasta |
 | Teisora | - | **Sąmoningai nenaudojama**: duomenų bazė nekopijuojama, priklausomybė nuo prenumeratos nekuriama |
 
 Todėl registras `PP-teise/duomenys/registras.json` pildomas **rankiniu / administratoriaus importu**,
 o puslapis apie tai sako aiškiai („Automatinė patikra NEĮDIEGTA - rankinis režimas“). Nepavykusi
-patikra (pvz. RSS 404) žurnale rodoma kaip nepavykusi, ne kaip „pokyčių nėra“.
+patikra (pvz. e-seimas 403) žurnale rodoma kaip nepavykusi, ne kaip „pokyčių nėra“.
 
 ## 2. Kaip surinktas pradinis registras
 
 Prižiūrėtojo aplinkoje (Claude Code sesija) naudota **Lietuvos viešųjų duomenų jungtis** - ji
-grąžina e-tar ir Liteko dokumentų tekstus pagal paiešką. Kiekvienas iš 13 įrašų:
+grąžina e-tar ir Liteko dokumentų tekstus pagal paiešką. Kiekvienas įrašas:
 
 - perskaitytas iš pirminio šaltinio (įstatymo, įsakymo, nutarimo ar nutarties teksto), ne iš
   antrinių apžvalgų;
 - turi tikslią vietą šaltinyje (straipsnis, dalis, punktas arba nutarties punktai), nuorodą į
   e-tar / Liteko ir dokumento identifikatorius (akto Nr., e-tar id, versija, bylos Nr.);
-- turi atskirai saugomas datas: priėmimo, paskelbimo (dažnai nenurodyta - ji NEspėjama),
+- turi atskirai saugomas datas: priėmimo, paskelbimo TAR (iš e-tar puslapio, trūkstama NEspėjama),
   įsigaliojimo, taikymo pradžios ir aptikimo sistemoje;
 - yra būsenoje „Laukia peržiūros“ - **nė vienas nepatvirtintas teisės specialisto**.
 
-Ko šis rinkinys NEapima: TAR paskelbimo datų (jungtis grąžina priėmimo datą), įstatymų projektų
-eigos Seime (e-seimas neprieinamas), VPT gairių ir rekomendacijų be įsakymo formos, ES teisės.
+Ko šis rinkinys NEapima: visų pirkimus liečiančių teisės aktų (registras - parinkti įrašai, puslapis tai
+sako), įstatymų projektų eigos Seime po programos patvirtinimo (e-seimas neprieinamas, eiga - iš Seimo
+programos e-tar), VPT gairių ir rekomendacijų be įsakymo formos, ES teisės.
 
 ## 3. Sąlygos, licencijos, ribos
 
