@@ -57,6 +57,59 @@ function validateAssessmentBody(body) {
   return { lang, supplier, context };
 }
 
+/* Modelio JSON taisymas - tos pačios taisyklės kaip shared/ai-proxy.js taisykJson (serveris shared/ importuoti negali).
+   Neekranuota kabutė ar eilutės lūžis eilutėje taisomi; nutrūkęs JSON netaisomas - tada klaida. */
+const REIKSME_PO_KABLELIO = /^(?:true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*(?:[,\]}]|$)/;
+function taisykJson(s) {
+  let out = '', i = 0, expect = 'value';
+  const n = s.length, stack = [];
+  const top = () => stack[stack.length - 1];
+  const praleisk = (k) => { while (k < n && /\s/.test(s.charAt(k))) k++; return k; };
+  while (i < n) {
+    const ch = s.charAt(i);
+    if (ch === '"') {
+      let j = i + 1, str = '"', uzdaryta = false;
+      while (j < n) {
+        const c = s.charAt(j);
+        if (c === '\\') { str += c + s.charAt(j + 1); j += 2; continue; }
+        if (c === '\n') { str += '\\n'; j++; continue; }
+        if (c === '\r') { str += '\\r'; j++; continue; }
+        if (c === '\t') { str += '\\t'; j++; continue; }
+        if (c !== '"') { str += c; j++; continue; }
+        const k = praleisk(j + 1), nx = s.charAt(k);
+        let closes;
+        if (expect === 'key') closes = nx === ':';
+        else if (nx === ',') {
+          const kk = praleisk(k + 1), nn = s.charAt(kk);
+          closes = top() === 'o' ? nn === '"' : (/["{\[]/.test(nn) || REIKSME_PO_KABLELIO.test(s.slice(kk, kk + 40)));
+        }
+        else if (nx === '}') closes = top() === 'o';
+        else if (nx === ']') closes = top() === 'a';
+        else closes = k >= n;
+        if (closes) { str += '"'; j++; uzdaryta = true; break; }
+        str += '\\"'; j++;
+      }
+      out += str; i = j;
+      if (!uzdaryta) return out;
+      expect = expect === 'key' ? 'colon' : 'end';
+      continue;
+    }
+    if (ch === '{') { stack.push('o'); expect = 'key'; }
+    else if (ch === '[') { stack.push('a'); expect = 'value'; }
+    else if (ch === '}' || ch === ']') { stack.pop(); expect = 'end'; }
+    else if (ch === ':') expect = 'value';
+    else if (ch === ',') expect = top() === 'o' ? 'key' : 'value';
+    out += ch; i++;
+  }
+  return out;
+}
+function skaitykJson(text) {
+  const match = String(text || '').match(/\{[\s\S]*\}/);
+  const t = match ? match[0] : String(text || '');
+  try { return JSON.parse(t); } catch (_) { /* taisoma žemiau */ }
+  try { return JSON.parse(taisykJson(t)); } catch (_) { return null; }
+}
+
 /* ============================================================================
  * 1) POST /api/esg/sanctions-assessment
  *    AI PRELIMINARUS sankcijų rizikos vertinimas per Claude API proxy.
@@ -74,14 +127,16 @@ router.post('/sanctions-assessment', assessmentLimiter, async (req, res) => {
     ? `You are a procurement compliance assistant for EPSO-G, a Lithuanian electricity transmission group operating under the utilities procurement law (PSĮ). You produce a PRELIMINARY, NON-FINAL sanctions-risk assessment to help a procurement officer decide what to investigate next.
 HARD RULES:
 - You NEVER issue a final "clean" or "blocked" verdict. That decision belongs to the responsible officer using official EU, OFAC, UN and national sanctions lists.
-- You do not claim a supplier is or is not on any sanctions list; you only flag risk indicators worth verifying.
+- You did not check any list and you do not claim a supplier is or is not on any sanctions list; you only flag risk indicators worth verifying.
+- Do not cite legal acts or their numbers (regulations, directives, laws, articles), and do not name any law as a legal basis.
 - Be concise, factual, and avoid speculation presented as fact.
 Return ONLY valid JSON, no prose, matching exactly:
 {"level":"low|medium|high","factors":["..."],"actions":["..."]}`
     : `Esi EPSO-G (Lietuvos elektros perdavimo grupės, veikiančios pagal PSĮ) pirkimų atitikties asistentas. Tu rengi PRELIMINARŲ, NEGALUTINĮ sankcijų rizikos vertinimą, kuris padeda pirkimų specialistui nuspręsti, ką toliau tikrinti.
 GRIEŽTOS TAISYKLĖS:
 - NIEKADA nepateiki galutinio „švarus" ar „blokuotas" verdikto. Šį sprendimą priima atsakingas asmuo, naudodamas oficialius ES, OFAC, JT ir nacionalinius sankcijų sąrašus.
-- Neteigi, kad tiekėjas yra ar nėra kuriame nors sąraše; tik nurodai rizikos požymius, kuriuos verta patikrinti.
+- Sąrašų netikrinai ir neteigi, kad tiekėjas yra ar nėra kuriame nors sąraše; tik nurodai rizikos požymius, kuriuos verta patikrinti.
+- Necituok teisės aktų ir jų numerių (reglamentų, direktyvų, įstatymų, straipsnių) ir nenurodyk jokio įstatymo kaip teisinio pagrindo.
 - Būk glaustas, faktiškas, nepateik spėlionių kaip faktų.
 Grąžink TIK galiojantį JSON, be jokio papildomo teksto, tiksliai tokios formos:
 {"level":"low|medium|high","factors":["..."],"actions":["..."]}`;
@@ -102,7 +157,7 @@ Grąžink TIK galiojantį JSON, be jokio papildomo teksto, tiksliai tokios formo
       },
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
-        max_tokens: 700,
+        max_tokens: 1500,   // iki 2026-11-04 - 700: lietuviškas atsakymas nutrūkdavo, o klientas rodydavo taisyklių įvertį
         temperature: 0.2,
         system: sys,
         messages: [{ role: 'user', content: userMsg }],
@@ -118,18 +173,15 @@ Grąžink TIK galiojantį JSON, be jokio papildomo teksto, tiksliai tokios formo
     const data = await aiRes.json();
     const text = (data.content && data.content[0] && data.content[0].text) || '';
 
-    // Robustiškai ištraukiam JSON (modelis turėtų grąžinti gryną JSON)
-    let parsed;
-    try {
-      const match = text.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(match ? match[0] : text);
-    } catch (_) {
+    // Robustiškai ištraukiam JSON (modelis turėtų grąžinti gryną JSON); lietuvišką „ jis dažnai uždaro ASCII kabute - taisoma
+    const parsed = skaitykJson(text);
+    const allowed = ['low', 'medium', 'high'];
+    // Nepavyko arba nėra tinkamo lygio - klaida, ne numatytasis „medium“: rizikos lygis be DI atsakymo nerodomas
+    if (!parsed || !allowed.includes(parsed.level)) {
       return res.status(502).json({ error: 'Nepavyko apdoroti AI atsakymo / Could not parse AI response.' });
     }
-
-    const allowed = ['low', 'medium', 'high'];
     const out = {
-      level: allowed.includes(parsed.level) ? parsed.level : 'medium',
+      level: parsed.level,
       factors: Array.isArray(parsed.factors) ? parsed.factors.slice(0, 8).map(String) : [],
       actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 8).map(String) : [],
       disclaimer: lang === 'en'
@@ -162,25 +214,6 @@ router.post('/csrd-export', express.json({ limit: '1mb' }), (req, res) => {
 });
 
 /* ============================================================================
- * 3) Integracijos endpoint'ai KITIEMS MODULIAMS (viena tiesos versija).
- *    MVP etape duomenys gyvena naršyklės LocalStorage, todėl šie endpoint'ai
- *    pateikiami kaip kontraktas (stub). Migravus į DB, jie grąžins realius
- *    duomenis iš centrinės saugyklos.
- *
- *    GET /api/esg/supplier/:id/risk             -> { id, esgRisk, riskScore }
- *    GET /api/esg/supplier/:id/sanctions-status -> { id, status, lastCheck }
- * ==========================================================================*/
-router.get('/supplier/:id/risk', (req, res) => {
-  // TODO (DB etapas): const s = await db.suppliers.findById(req.params.id);
-  return res.json({ id: req.params.id, esgRisk: null, riskScore: null,
-    note: 'Stub. Įjungus DB, grąžins realų rizikos lygį iš centrinio registro.' });
-});
-router.get('/supplier/:id/sanctions-status', (req, res) => {
-  return res.json({ id: req.params.id, status: null, lastCheck: null,
-    note: 'Stub. Įjungus DB, grąžins realų sankcijų statusą iš audito žurnalo.' });
-});
-
-/* ============================================================================
  * 4) GET /api/esg/cvpis-suppliers - automatinis tiekėjų APTIKIMAS iš data.gov.lt
  *    TIKRI LAUKAI patvirtinti iš gyvų duomenų (Arūnas, 2026-06):
  *      Rinkinys:  gov/vpt/new  ("Pirkimų, vykdytų po 2017-07-01 duomenys")
@@ -190,12 +223,11 @@ router.get('/supplier/:id/sanctions-status', (req, res) => {
  *         atn1._id (nuoroda į ataskaitą), selected_tenderer ("kodas;pavadinimas"),
  *         total_value_of_part, conclusion_date, expiry_date, part_number ...
  *    Spinta sintaksė suderinta su jūsų /api/price: _limit=N, _sort=, select(), filtras laukas="val".
- *    Litgrid filtruojamas pagal authority_org_nr = 302564383. AI nenaudojamas.
+ *    Perkantysis subjektas filtruojamas pagal authority_org_nr (užklausos parametras buyer, privalomas). AI nenaudojamas.
  * ==========================================================================*/
 
 const DATAGOV = {
   base: process.env.DATAGOV_BASE || 'https://get.data.gov.lt/datasets/gov/vpt/new',
-  litgridCode: process.env.ESG_LITGRID_CODE || '302564383',
 };
 
 function parseValue(v) {
@@ -243,8 +275,9 @@ router.get('/cvpis-suppliers', cvpisLimiter, async (req, res) => {
   const minValue = req.query.minValue != null ? Math.max(parseFloat(req.query.minValue) || 0, 0) : 0;
   let from = clampStr(req.query.from, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { const d = new Date(); d.setMonth(d.getMonth() - 36); from = d.toISOString().slice(0, 10); }
-  const raw = clampStr(req.query.buyer, 60);
-  const authCode = /^\d{6,12}$/.test(raw) ? raw : DATAGOV.litgridCode;
+  // Netinkamas ar nenurodytas kodas - klaida (iki 2026-11-04 tyliai grąžinti LITGRID AB tiekėjai, tarsi tai būtų prašytos organizacijos)
+  const authCode = clampStr(req.query.buyer, 60);
+  if (!/^\d{6,12}$/.test(authCode)) return res.status(400).json({ error: 'Netinkamas perkančiojo subjekto kodas / Invalid contracting entity code.' });
 
   const cacheKey = JSON.stringify({ from, minValue, authCode, limit });
   const cached = _cvpisCache.get(cacheKey);
@@ -289,7 +322,8 @@ router.get('/cvpis-suppliers', cvpisLimiter, async (req, res) => {
       const val = parseValue(c.total_value_of_part);
       const key = t.code || t.name.toLowerCase();
       let agg = bySupplier.get(key);
-      if (!agg) { agg = { name: t.name || t.code, code: t.code, country: 'Lietuva', contractCount: 0, totalValue: 0, lastAward: '' }; bySupplier.set(key, agg); }
+      // Šalies šaltinyje nėra: jos nespėjame (iki 2026-11-04 visiems - „Lietuva“)
+      if (!agg) { agg = { name: t.name || t.code, code: t.code, contractCount: 0, totalValue: 0, lastAward: '' }; bySupplier.set(key, agg); }
       agg.contractCount += 1;
       agg.totalValue += val;
       if (date > agg.lastAward) agg.lastAward = date;
