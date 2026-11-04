@@ -600,6 +600,8 @@ async function testaiPatikra1104(){
     ({ f } = await puslapis("index.html?lang=lt", 1280));
     try {
       lygu([f.contentWindow.eval("Store.getEvalOffers()").length, "evalOffers" in JSON.parse(localStorage.getItem("pp_carbon_data"))], [0, false], "senas pavyzdys - neįvestas");
+      localStorage.setItem("pp_carbon_data", JSON.stringify(senas("950000")));
+      lygu(f.contentWindow.eval("Store.getEvalOffers()").length, 0, "atvertame puslapyje - irgi neįvestas");
     } finally { f.remove(); }
     localStorage.setItem("pp_carbon_data", JSON.stringify(senas("950001")));
     ({ f } = await puslapis("index.html?lang=lt", 1280));
@@ -661,6 +663,7 @@ async function testaiPatikra1104(){
       const c = X.citataDokumente;
       lygu([c("GWP-total, net kg CO2 -eq 9.96E+01", DOK), c("GWP-total net  kg  CO2-eq 9.96E+01", DOK), c("GWP-total, net A1-A3 9,96E+01", DOK + "\nIndicator Unit A1-A3"), c("Visai kitas sakinys", DOK), c("GWP-total, net 99,31", DOK), c("bet kas", ""), c("", DOK)],
            [true, true, true, false, false, null, false], "citata");
+      lygu(c("GWP-total, net kg CO2 -eq 9.96E+01", "GWP - total , net kg CO 2 -eq 9.96E+01"), true, "tas pats tekstas, kiti tarpai");
       lygu(X.patikrink({ value: 99.6, quote: "Visai kitas sakinys 99,6" }, DOK).galima, false, "sugalvota citata su skaičiumi");
       lygu(X.patikrink({ value: 99.6, quote: "kitas 99,6" }, "").citataRasta, null, "be teksto");
       lygu(X.patikrink({ value: 99.31, quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, DOK).citatojeYra, false, "99,31");
@@ -682,6 +685,8 @@ async function testaiPatikra1104(){
       const s = X.parseResponse(ats({ status: "found", value: null, unit: "kg CO2e", declaredUnit: "1 vnt", modules: moduliai, validUntil: "2030-01-01", indicator: "GWP-total", basis: "gross" }));
       lygu([s.status, s.value, s.sumaPrograma, s.moduliai.length, s.validUntil, s.indicator, s.basis], ["found", 99.62, true, 3, "2030-01-01", "GWP-total", "gross"], "suma");
       lygu(X.patikrink(s, "A1 8,19E+01 A2 1,36E+01 A3 4,12E+00").galima, true, "moduliai patikrinti");
+      lygu(X.parseResponse(ats({ status: "found", value: null, unit: "kg CO2e", declaredUnit: "1 kg", modules: [{ module: "A1", value: 0.1, quote: "A1 0,1" }, { module: "A2", value: 0.2, quote: "A2 0,2" }, { module: "A3", value: 0.4, quote: "A3 0,4" }] })).value, 0.7, "suma be slankaus kablelio triukšmo");
+      lygu((({ galima, citataRasta }) => [galima, citataRasta])(X.patikrink(s, "A1 8,19E+01 A2 1,36E+01")), [false, false], "A3 citatos dokumente nėra");
       lygu(X.patikrink(Object.assign({}, s, { moduliai: [s.moduliai[0], Object.assign({}, s.moduliai[1], { value: 13 }), s.moduliai[2]] }), "").citatojeYra, false, "modulio skaičiaus nėra");
       lygu(X.parseResponse(ats({ status: "found", value: null, modules: moduliai.slice(0, 2) })).status, "error", "trūksta modulio");
     } finally { f.remove(); }
@@ -739,6 +744,8 @@ async function testaiPatikra1104(){
       lygu([r.length, r.filter(x => x.checked).length, r.map(x => x.disabled)], [4, 0, [false, false, true, true]], "radijo mygtukai");
       tiesa(box.querySelectorAll(".epd-quote").length >= 3 && /kg CO2e/.test(box.textContent), "citatos");
       lygu(d.getElementById("epdKandBtn").disabled, true, "kol nepasirinkta");
+      W.confirmEpdCandidate();
+      lygu(W.eval("Store").getCalc().manual["substationEquipment.breaker"], undefined, "nepasirinkus nieko neįrašoma");
       r[1].checked = true; r[1].dispatchEvent(new Event("change", { bubbles: true }));
       lygu(d.getElementById("epdKandBtn").disabled, false, "pasirinkus");
       d.getElementById("epdKandBtn").click();
@@ -833,8 +840,11 @@ async function testaiPatikra1104(){
     const W = f.contentWindow, St = W.eval("Store");
     try {
       kiekis(d, "construction.concrete", "10"); kiekis(d, "substationEquipment.breaker", "2");
-      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB Slaptas", bidPrice: "1000", embodiedCarbon: "2" }, { id: "B", name: "UAB Kitas", bidPrice: "2000", embodiedCarbon: "" }); });
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB Slaptas", bidPrice: "1000", embodiedCarbon: "2" }, { id: "B", name: "UAB Kitas", bidPrice: "2000", embodiedCarbon: "" }, { id: "C", name: "UAB Atmestas", bidPrice: "", embodiedCarbon: "1" }); });
       const x = tekstaiModelio(W.GP_REPORTS.build("public", W.buildReportData()));
+      tiesa(/Į reitingą neįtraukta: nenurodyta kaina/.test(x) && !/UAB Atmestas/.test(x), "neįtraukta eilutė be vardo: " + x);
+      tiesa(/Į reitingą neįtraukta: UAB Atmestas - nenurodyta kaina/.test(tekstaiModelio(W.GP_REPORTS.build("internal", W.buildReportData()))), "vidiniame - su vardu");
+      St.updateEvalOffers(l => { l.pop(); });
       tiesa(/Kas neįtraukta ir prielaidos/.test(x) && /Laukia gamintojo EPD ir į sumą neįtraukta \(1\): Jungtuvai/.test(x) && /Dalis taršos faktorių dar tikslinama/.test(x) && /rezultatai preliminarūs/i.test(x), x);
       tiesa(/nenurodyta; vertinime taikyta 2 t CO2e/.test(x) && !/UAB Slaptas|UAB Kitas|1000|2000|EUR/.test(x.replace(/2026-\d\d-\d\d/g, "")), x);
       St.updateEvalOffers(l => { l[0].embodiedCarbon = ""; });
@@ -884,6 +894,8 @@ async function testaiPatikra1104(){
       lygu(W.buildReportData().diReiksmes, 0, "pakeista - nebe DI reikšmė");
       ivesk("99.6");
       tiesa(/iš EPD/.test(Z().textContent), "grąžinus");
+      ivesk("abc");
+      lygu([Z().textContent, eil() || null], ["", null], "neperskaitoma - nei žymos, nei šaltinio eilutės");
       ivesk("");
       lygu([Z().textContent, eil() || null, St.getCalc().epdSource[K], W.buildReportData().pendingEpd.length], ["", null, undefined, 1], "išvalius");
       St.updateCalc(c => { c.manual[K] = "12"; c.epdSource[K] = { fileName: "senas.pdf", page: 1, quote: "12 kg" }; });
@@ -1366,6 +1378,10 @@ async function testaiPatikra1104(){
       lygu(W.eval("istorijosData")("2026-01-15"), "2026-01-15", "jau data");
       const src = await (await fetch("index.html")).text();
       tiesa(/date: GP_WORKDAYS\.siandien\(\)/.test(src) && !/slice\(0, 10\)\) \+ '<\/td>'/.test(src), "šaltinis");
+      W.GP_WORKDAYS.siandien = () => "2031-02-03";
+      await epdKelias(W, d, { status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, DOK);
+      d.getElementById("epdPatvirtinti").click();
+      lygu(St.getEpdHistory().pop().date, "2031-02-03", "nauja eilutė - vietinė data");
       // M3
       const pries = St.getEpdHistory().length;
       d.querySelector("#epdHistoryBox tbody button").click();
@@ -1405,6 +1421,10 @@ async function testaiPatikra1104(){
       kiekis(d, "construction.concrete", "100");
       St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB A su ilgu pavadinimu", bidPrice: "1000000", embodiedCarbon: "800" }, { id: "B", name: "UAB B", bidPrice: "950000", embodiedCarbon: "" }); });
       W.renderBids();
+      await plotis(f, 768);
+      W.setView("bids");
+      await new Promise(r => requestAnimationFrame(r));
+      tiesa(!slenka(d), "768 px pasiūlymai: slenka (" + d.documentElement.scrollWidth + ")");
       for (const px of [375, 320]) {
         await plotis(f, px);
         for (const v of ["calc", "bids", "reports", "overview"]) {
@@ -1414,6 +1434,8 @@ async function testaiPatikra1104(){
         }
         W.setView("calc");
         await new Promise(r => requestAnimationFrame(r));
+        const lent = d.querySelector("table.calc--kort");
+        tiesa(Math.abs(rect(lent).width - lent.parentElement.clientWidth) <= 1, px + " px lentelė per visą plotį: " + rect(lent).width + " / " + lent.parentElement.clientWidth);
         const c = d.getElementById("sesd_construction_concrete"), r = rect(c);
         tiesa(r.width > 0 && r.right <= d.documentElement.clientWidth + 1, px + " px ŠESD už krašto: " + r.right);
         tiesa(/ŠESD/.test(getComputedStyle(c, "::before").content), px + " px stulpelio pavadinimas");
