@@ -39,7 +39,7 @@
         terminas: "Terminas: skelbimas ir SPS grafikas", skelbimo_data: "Paskelbimo data: skelbimas ir SPS grafikas",
         trukme: "Sutarties trukmė: skelbimas ir sutartis", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
         kortele: "Kortelė ir skelbimas", punktai: "Pasikartojantys punktų numeriai", alternatyvos: "Paliktos šablono alternatyvos",
-        laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", kalbu_sutapimas: "Sumos, procentai, datos ir terminai lietuviškai ir angliškai", grafikas: "SPS grafiko datų tvarka",
+        laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", kalbu_sutapimas: "Sumos, procentai, datos ir terminai lietuviškai ir angliškai", skaiciai_zodziai: "Skaičiai ir žodžiai", grafikas: "SPS grafiko datų tvarka",
         vykdytojo_savoka: "Pirkimo vykdytojo sąvoka: BPS ir SPS", rezimas_salygos: "Režimas: skelbimas ir pirkimo sąlygos",
         rezimo_savokos: "Taikomo įstatymo sąvokos visuose dokumentuose",
         privalomi: "Privalomi dokumentų elementai", privalomi_kiti: "Kiti įstatyme išvardyti elementai",
@@ -88,6 +88,8 @@
       priedu_nuorodos: "Nuoroda į SPS {n} priedą, bet SPS priedų sąraše tokio numerio nėra.",
       kalbuSutapimas: "{r} skiriasi: lietuviškai „{a}“, angliškai „{b}“.{k}",
       kalbuKitur: " Tas pats ir kitur (dar vietų: {n}).",
+      skaiciaiZodziai: "Skaičius ir žodžiai skiriasi: „{s}“ ir „{z}“.{k}",
+      skaiciaiKitur: " Kitur ta pati nuostata parašyta vienodai - patikrinkite, kuri redakcija galioja.",
       grafikas: "SPS grafiko datos ne iš eilės: „{a}“ ({ad}) po „{b}“ ({bd}).",
       netaikoma: "netaikoma", nepatikrinta: "nepatikrinta", beSkelbimo: "nėra skelbimo", beSps: "nėra SPS", beSutarties: "nėra sutarties",
       beKorteles: "kortelė nepasirinkta", beDuomenu: "dokumente nerasta", beGrafiko: "SPS grafiko nerasta",
@@ -130,7 +132,7 @@
         terminas: "Deadline: notice and SPS schedule", skelbimo_data: "Publication date: notice and SPS schedule",
         trukme: "Contract duration: notice and contract", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
         kortele: "Card and notice", punktai: "Repeated clause numbers", alternatyvos: "Template alternatives left in",
-        laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", kalbu_sutapimas: "Amounts, percentages, dates and periods in Lithuanian and English", grafikas: "Order of SPS schedule dates",
+        laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", kalbu_sutapimas: "Amounts, percentages, dates and periods in Lithuanian and English", skaiciai_zodziai: "Numbers and words", grafikas: "Order of SPS schedule dates",
         vykdytojo_savoka: "Contracting body term: BPS and SPS", rezimas_salygos: "Regime: notice and procurement conditions",
         rezimo_savokos: "Terms of the applicable law in all documents",
         privalomi: "Required document elements", privalomi_kiti: "Other elements listed in the law",
@@ -179,6 +181,8 @@
       priedu_nuorodos: "Reference to SPS annex {n}, but the SPS list of annexes has no such number.",
       kalbuSutapimas: "{r} differs: Lithuanian “{a}”, English “{b}”.{k}",
       kalbuKitur: " The same elsewhere (more places: {n}).",
+      skaiciaiZodziai: "The number and the words differ: “{s}” and “{z}”.{k}",
+      skaiciaiKitur: " Elsewhere the same provision is written consistently - check which version applies.",
       grafikas: "SPS schedule dates are out of order: “{a}” ({ad}) after “{b}” ({bd}).",
       netaikoma: "not applicable", nepatikrinta: "not checked", beSkelbimo: "no notice", beSps: "no SPS", beSutarties: "no contract",
       beKorteles: "no card selected", beDuomenu: "not found in the document", beGrafiko: "no SPS schedule found",
@@ -821,6 +825,17 @@
           vietos: [pora(x.lt[0], v0.loc), pora(x.en[0], v0.enLoc)], teise: teise(AISK) });
       });
       if (kalbos.dokumentu) patikra("kalbu_sutapimas", "aiskumas", kalbos.radiniai.length ? "radinys" : "gerai", "");
+    }
+    // Skaičius ir žodžiai toje pačioje vietoje (2026-11-04): LITGRID sutartyse skiriantis vadovaujamasi žodžiais
+    if (KS && global.GP_MONEY) {
+      var zod = KS.skaiciaiZodziai(docs);
+      zod.radiniai.forEach(function (x) {
+        var v0 = x.vietos[0], d0 = docs.filter(function (d) { return d.id === v0.docId; })[0];
+        radinys({ id: "skaiciai_zodziai", grupe: "aiskumas", lygis: "tikrinti",
+          tekstas: sub(X.skaiciaiZodziai, { s: x.skaicius, z: x.zodziai, k: x.vietos.length > 1 ? sub(X.kalbuKitur, { n: x.vietos.length - 1 }) : "" }) + (x.kitur ? X.skaiciaiKitur : ""),
+          vietos: [{ dok: d0.id, failas: trumpas(d0.name), vieta: vieta(v0.loc, l), citata: x.citata }].concat(x.kitur ? [{ dok: x.kitur.docId, failas: trumpas(x.kitur.dokumentas), vieta: vieta(x.kitur.loc, l), citata: x.kitur.citata }] : []), teise: teise(AISK) });
+      });
+      if (zod.poru) patikra("skaiciai_zodziai", "aiskumas", zod.radiniai.length ? "radinys" : "gerai", "");
     }
     // SPS grafiko datų tvarka
     if (!sps || sps.grafikas.length < 2) patikra("grafikas", "aiskumas", "nepatikrinta", !sps ? X.beSps : X.beGrafiko);

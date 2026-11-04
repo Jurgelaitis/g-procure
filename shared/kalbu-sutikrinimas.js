@@ -22,6 +22,9 @@
  * Reikia shared/money.js. Grynos funkcijos, nieko nesaugo ir nesiunčia:
  *  - tikrink(docs) -> { radiniai, dokumentu, vietu, reiksmiu };
  *  - pirmumas(docs, kalba) -> { salygos, sutartis }: sakinys, kuriai kalbai dokumentuose teikiama viršenybė;
+ *  - skaiciaiZodziai(docs) -> { radiniai, dokumentu, poru }: skaičius ir žodžiai toje pačioje vietoje („30 (dvidešimt) dienų“), ir vienkalbiuose dokumentuose.
+ *    Išmatuota 2026-11-04: 27 tikri paketai, 128 dokumentai, 1 862 poros - viena tikra klaida, klaidingų radinių nėra; 88 šablonai - radinių nėra;
+ *  - zodziuVirsenybe(docs, kalba): sutarties sakinys, kad skiriantis vadovaujamasi žodžiais;
  *  - rusiesPav(rusis, kalba).
  * Tekstas iš dokumentų į HTML - tik per modulio ekranavimą.
  * ==========================================================================*/
@@ -270,5 +273,163 @@
     return out;
   }
 
-  global.GP_KALBU_SUTIKRINIMAS = { version: "1.0.0", tikrink: tikrink, pirmumas: pirmumas, rusiesPav: rusiesPav, reiksmes: reiksmes, kalbaTeksto: kalbaTeksto, palygink: palygink, eilutes: eilutes, stulpeliuVietos: stulpeliuVietos };
+  /* ---------------- Skaičius ir žodžiai toje pačioje kalboje ----------------
+     „30 (dvidešimt) dienų“: LITGRID sutartyse, kai skaičius ir žodžiai skiriasi, vadovaujamasi žodžiais, todėl tokia klaida keičia sąlygą.
+     Žodžiai skaitomi griežtai: bent vienas nežinomas žodis („pirmas“, „su puse“) - reikšmė nežinoma, ne radinys. */
+  function lentele(eil) {
+    var z = Object.create(null);
+    eil.forEach(function (x) { x[1].split(" ").forEach(function (f) { z[f] = x[0]; }); });
+    return z;
+  }
+  var ZODZIAI_LT = lentele([
+    [0, "nulis"],
+    [1, "vienas viena vieno vienos vienam vienai vienu vieneri vienerius vieneriu vieneriems vieneriais vieneriuose"],
+    [2, "du dvi dvieju dviem dvejus dveji dveju dvejiems dvejais dvejuose"],
+    [3, "trys triju trims tris trimis treji trejus treju trejiems trejais trejuose"],
+    [4, "keturi keturios keturiu keturiems keturioms keturis keturias keturiais keturiomis ketveri ketverius ketveriu ketveriems"],
+    [5, "penki penkios penkiu penkiems penkioms penkis penkias penkiais penkiomis penkeri penkerius penkeriu penkeriems"],
+    [6, "sesi sesios sesiu sesiems sesioms sesis sesias sesiais sesiomis seseri seserius seseriu seseriems"],
+    [7, "septyni septynios septyniu septyniems septynioms septynis septynias septyniais septyniomis"],
+    [8, "astuoni astuonios astuoniu astuoniems astuonioms astuonis astuonias astuoniais astuoniomis"],
+    [9, "devyni devynios devyniu devyniems devynioms devynis devynias devyniais devyniomis"],
+    [10, "desimt desimties desimciai desimcia"],
+    [100, "simtas simto simtui simta simtu simtai simtus simtams simtais"],
+    [1000, "tukstantis tukstancio tukstanciui tukstanti tukstanciu tukstanciai tukstancius tukstanciams tukstanciais"],
+    [1000000, "milijonas milijono milijonui milijona milijonu milijonai milijonus milijonams milijonais"]
+  ]);
+  // 11-19 ir 20-90 - kamienas ir galūnė
+  [["vienuo", 11], ["dvy", 12], ["try", 13], ["keturio", 14], ["penkio", 15], ["sesio", 16], ["septynio", 17], ["astuonio", 18], ["devynio", 19]].forEach(function (x) {
+    ["lika", "likos", "likai", "likoje"].forEach(function (g) { ZODZIAI_LT[x[0] + g] = x[1]; });
+  });
+  [["dvi", 20], ["tris", 30], ["keturias", 40], ["penkias", 50], ["sesias", 60], ["septynias", 70], ["astuonias", 80], ["devynias", 90]].forEach(function (x) {
+    ["desimt", "desimties", "desimciai", "desimcia"].forEach(function (g) { ZODZIAI_LT[x[0] + g] = x[1]; });
+  });
+  var ZODZIAI_EN = lentele([
+    [0, "zero"], [1, "one"], [2, "two"], [3, "three"], [4, "four"], [5, "five"], [6, "six"], [7, "seven"], [8, "eight"], [9, "nine"], [10, "ten"], [11, "eleven"], [12, "twelve"],
+    [13, "thirteen"], [14, "fourteen"], [15, "fifteen"], [16, "sixteen"], [17, "seventeen"], [18, "eighteen"], [19, "nineteen"], [20, "twenty"], [30, "thirty"], [40, "forty fourty"],
+    [50, "fifty"], [60, "sixty"], [70, "seventy"], [80, "eighty"], [90, "ninety"], [100, "hundred"], [1000, "thousand"], [1000000, "million"]
+  ]);
+  var DALYS_LT = lentele([[10, "desimtoji desimtosios desimtuju desimtaja desimtasias desimtoji"], [100, "simtoji simtosios simtuju simtaja simtasias"], [1000, "tukstantoji tukstantosios tukstantuju"]]);
+  var DALYS_EN = lentele([[10, "tenth tenths"], [100, "hundredth hundredths"], [1000, "thousandth thousandths"]]);
+  // Žodžiai po skaitvardžio, kurie reikšmės nekeičia: vienetai skliaustuose
+  var VIENETAI = /^(eur[a-z]*|procent[a-z]*|proc|dien[a-z]*|darbo|kalendorin[a-z]*|menes[a-z]*|metu|metai|metus|savait[a-z]*|percent|per|cent|of|and|days?|working|calendar|business|months?|years?|weeks?)$/;
+
+  /* Skaitvardis žodžiais -> skaičius; bet koks nežinomas žodis ar neįmanoma seka - null. */
+  function skaicius_is_zodziu(tekstas) {
+    var f = fold(tekstas).replace(/one-(tenth|hundredth|thousandth)/g, "$1");
+    var z = f.match(/[a-z]+/g);
+    if (!z || !z.length || /[^a-z\s,-]/.test(f.replace(/[()]/g, ""))) return null;
+    var rez = null;
+    [[ZODZIAI_LT, DALYS_LT, ["kablelis"]], [ZODZIAI_EN, DALYS_EN, ["point"]]].forEach(function (L) {
+      if (rez !== null) return;
+      var viso = 0, cur = 0, buvo = false, dalis = 1, po = false, kab = null;
+      for (var i = 0; i < z.length; i++) {
+        var w = z[i];
+        if (L[2].indexOf(w) >= 0) { if (!buvo || cur || viso || kab !== null) return; kab = ""; continue; }
+        if (kab !== null) { var d = L[0][w]; if (d === undefined || d > 9) { if (VIENETAI.test(w) && kab) { po = true; continue; } return; } if (po) return; kab += d; continue; }
+        // „one hundred and twenty“: „and“ tarp skaitvardžio žodžių reikšmės nekeičia
+        if (w === "and" && buvo && !po) continue;
+        var v = L[0][w];
+        if (v !== undefined && !po) {
+          buvo = true;
+          if (v === 1000000 || v === 1000) { viso += (cur || 1) * v; cur = 0; }
+          else if (v === 100) { if (cur >= 10) return; cur = (cur || 1) * 100; }
+          else {
+            if (cur % 100 !== 0 && (v >= 20 || cur % 10 !== 0 || cur % 100 < 20)) return;
+            cur += v;
+          }
+          continue;
+        }
+        if (L[1][w] !== undefined && buvo && dalis === 1 && !po) { dalis = L[1][w]; po = true; continue; }
+        if (VIENETAI.test(w) && buvo) { po = true; continue; }
+        return;
+      }
+      if (kab !== null) { if (kab) rez = parseFloat("0." + kab); return; }
+      rez = (viso + cur) / dalis;
+    });
+    return rez;
+  }
+
+  var SK_NUM = "\\d{1,3}(?:[ .,'’]\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?";
+  var SK_VIENETAS = "(?:\\s*(?:eur[a-z]*|€|proc\\.?|%|dien[a-z]*|menes[a-z]*|metu|metai|metus|days?|months?|years?|percent))?";
+  var SK_PRIES = new RegExp("(^|[^\\d.,])(" + SK_NUM + ")" + SK_VIENETAS + "\\s*\\(([^()\\d]{2,160})\\)", "g");
+  var SK_PO = new RegExp("\\(\\s*(" + SK_NUM + ")\\s*\\)", "g");
+
+  // Skaičiai ir žodžiai viename tekste: [{ skaicius, zodziai, verte, zodziuVerte, i, ilg }]
+  function poros(tekstas) {
+    var s = String(tekstas == null ? "" : tekstas), f = fold(s), out = [], m;
+    SK_PRIES.lastIndex = 0;
+    while ((m = SK_PRIES.exec(f))) {
+      var w = skaicius_is_zodziu(m[3]);
+      if (w === null) continue;
+      var i = m.index + m[1].length, sk = s.substr(i, m[2].length), z = s.substr(m.index + m[0].length - 1 - m[3].length, m[3].length);
+      out.push({ skaicius: sk, zodziai: z.replace(/\s+/g, " ").trim(), verte: global.GP_MONEY.parseEUR(m[2]), zodziuVerte: w, i: i, ilg: m[0].length - m[1].length });
+    }
+    // „trisdešimt (30) dienų“: prieš skliaustus - tik skaitvardžio žodžiai
+    SK_PO.lastIndex = 0;
+    while ((m = SK_PO.exec(f))) {
+      var pr = f.slice(Math.max(0, m.index - 120), m.index).match(/[a-z-]+/g);
+      if (!pr) continue;
+      var zod = [], k = pr.length - 1;
+      while (k >= 0 && zod.length < 9 && skaicius_is_zodziu(pr[k]) !== null && !VIENETAI.test(pr[k])) { zod.unshift(pr[k]); k--; }
+      if (!zod.length) continue;
+      var w2 = skaicius_is_zodziu(zod.join(" "));
+      if (w2 === null) continue;
+      var pradz = f.lastIndexOf(zod[0], m.index);
+      out.push({ skaicius: s.substr(m.index + m[0].indexOf(m[1]), m[1].length), zodziai: s.slice(pradz, m.index).replace(/\s+/g, " ").trim(), verte: global.GP_MONEY.parseEUR(m[1]), zodziuVerte: w2, i: pradz, ilg: m.index + m[0].length - pradz });
+    }
+    return out;
+  }
+
+  /* Visuose dokumentuose: { radiniai: [{ skaicius, zodziai, citata, vietos }], dokumentu, poru }. Tas pats skirtumas kitur - viena pastaba su keliomis vietomis. */
+  function skaiciaiZodziai(docs) {
+    var radiniai = [], pagal = Object.create(null), tinkami = Object.create(null), dokumentu = 0, kiek = 0;
+    (docs || []).forEach(function (d) {
+      if (!d || !d.blocks) return;
+      var turi = false;
+      d.blocks.forEach(function (b) {
+        var pirminis = b.cells && b.cells.length ? b.cells : [b.text];
+        pirminis.forEach(function (t) {
+          poros(t).forEach(function (p) {
+            turi = true; kiek++;
+            if (p.verte === null || !isFinite(p.verte)) return;
+            var tekstas = String(t).substr(p.i, p.ilg).replace(/\s+/g, " ").trim();
+            var pries = fold(String(t).slice(Math.max(0, p.i - 40), p.i)).replace(/\s+/g, " ").trim();
+            if (Math.abs(p.verte - p.zodziuVerte) < 1e-9) {
+              var gk = pries + "|" + p.verte;
+              if (!tinkami[gk]) tinkami[gk] = { docId: d.id, dokumentas: d.name, loc: b.loc, citata: citata(t, p.i, p.ilg), tekstas: tekstas };
+              return;
+            }
+            // Ta pati klaida kita kalba ar kitoje redakcijoje („1 000 000 (one million five hundred thousand)“) - viena pastaba
+            var r = p.verte + "|" + p.zodziuVerte, m = PUNKTAS.exec(pirminis[0] || ""), vt = { docId: d.id, dokumentas: d.name, loc: b.loc, punktas: m ? m[1] : null };
+            if (pagal[r]) { pagal[r].vietos.push(vt); pagal[r].pries.push(pries); return; }
+            var x = { skaicius: p.skaicius, zodziai: p.zodziai, verte: p.verte, zodziuVerte: p.zodziuVerte, citata: citata(t, p.i, p.ilg), tekstas: tekstas, vietos: [vt], pries: [pries] };
+            pagal[r] = x; radiniai.push(x);
+          });
+        });
+      });
+      if (turi) dokumentu++;
+    });
+    // Ta pati nuostata kitur parašyta vienodai (dažniausiai - patikslinta redakcija, tikrame pakete tiekėjas apie tai klausė, o SPS vėliau pataisyta)
+    radiniai.forEach(function (x) {
+      x.pries.forEach(function (pr) {
+        if (!x.kitur) x.kitur = tinkami[pr + "|" + x.verte] || tinkami[pr + "|" + x.zodziuVerte] || null;
+      });
+      delete x.pries;
+    });
+    return { radiniai: radiniai, dokumentu: dokumentu, poru: kiek };
+  }
+
+  // Sutarties taisyklė „Jeigu ... skaičiais ir žodžiais skiriasi, vadovaujamasi žodžiais“ (LITGRID bendrosios sąlygos 1.2.11)
+  function zodziuVirsenybe(docs, kalba) {
+    var pirma = kalba === "en" ? /numerical and verbal[^.]{0,200}/ : /skaiciais ir zodziais[^.]{0,80}(skiriasi|nesutampa)[^.]{0,120}zodziais/;
+    var antra = kalba === "en" ? /skaiciais ir zodziais[^.]{0,80}(skiriasi|nesutampa)[^.]{0,120}zodziais/ : /numerical and verbal[^.]{0,200}/;
+    var rez = null;
+    [pirma, antra].forEach(function (re) {
+      (docs || []).forEach(function (d) { if (!rez && d && d.blocks) rez = pirmumoSakinys(d, re); });
+    });
+    return rez;
+  }
+
+  global.GP_KALBU_SUTIKRINIMAS = { version: "1.1.0", tikrink: tikrink, skaiciaiZodziai: skaiciaiZodziai, skaiciusIsZodziu: skaicius_is_zodziu, zodziuVirsenybe: zodziuVirsenybe, poros: poros, pirmumas: pirmumas, rusiesPav: rusiesPav, reiksmes: reiksmes, kalbaTeksto: kalbaTeksto, palygink: palygink, eilutes: eilutes, stulpeliuVietos: stulpeliuVietos };
 })(typeof window !== "undefined" ? window : this);
