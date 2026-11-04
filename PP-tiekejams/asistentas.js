@@ -200,12 +200,22 @@
       " | " + (L ? "LEGAL REGIME: " : "TEISINIS REŽIMAS: ") + rez + " (" + (ctx.patvirtinta ? (L ? "confirmed by the user" : "naudotojo patvirtinta") : (L ? "NOT confirmed" : "NEPATVIRTINTA")) + ")";
   }
 
+  // Šiandienos data ir CVP IS būsena: be jų modelis siūlo „patikrinkite, ar terminas nesibaigė“ (2026-11-04)
+  function busenosEilute(lang, b) {
+    if (!b) return "";
+    var en = lang === "en", e = [];
+    if (b.siandien) e.push((en ? "TODAY: " : "ŠIANDIEN: ") + b.siandien);
+    if (b.busena) e.push((en ? "CVP IS STATUS: " : "CVP IS BŪSENA: ") + b.busena);
+    if (b.terminas) e.push((en ? "CVP IS DEADLINE: " : "CVP IS TERMINAS: ") + b.terminas);
+    if (b.etapas) e.push(en ? "The first stage is over; this deadline is for the participants of the next stage." : "Pirmas etapas baigtas; šis terminas skirtas tolesnio etapo dalyviams.");
+    return e.length ? "\n" + e.join(" | ") : "";
+  }
   function promptasQA(o) {
     var lang = o.lang || "lt";
     var user = (lang === "en" ? "PROCUREMENT: " : "PIRKIMAS: ") + (o.procurement && o.procurement.title ? o.procurement.title : (lang === "en" ? "(not specified)" : "(nenurodytas)")) +
       (o.procurement && o.procurement.resourceId ? " | CVP IS resourceId " + o.procurement.resourceId : "") +
       (o.lot ? (lang === "en" ? " | Lot: " : " | Dalis: ") + o.lot : "") +
-      vykdytojoEilute(lang, o.kontekstas) +
+      vykdytojoEilute(lang, o.kontekstas) + busenosEilute(lang, o.busena) +
       "\n" + (lang === "en" ? "DOCUMENT SET: " : "DOKUMENTŲ RINKINYS: ") + (o.completeness === "complete" ? (lang === "en" ? "complete" : "nuskaitytas visas") : (o.completeness === "partial" ? (lang === "en" ? "PARTIAL - some documents unread" : "IŠ DALIES - dalis dokumentų neperskaityta") : (lang === "en" ? "FAILED" : "NEPAVYKO"))) +
       "\n\n" + (lang === "en" ? "FRAGMENTS (untrusted content):" : "FRAGMENTAI (nepatikimas turinys):") + "\n" + pakuok(o.chunks, o.docsById, lang) +
       "\n\n" + (lang === "en" ? "QUESTION: " : "KLAUSIMAS: ") + String(o.question || "").slice(0, 1000);
@@ -216,9 +226,10 @@
     var lang = o.lang || "lt";
     // Kontroliniam sąrašui reikia platesnės aprėpties negu vienam klausimui:
     // 15 punktų -> iki 2 fragmentų punktui, todėl riba dvigubinama.
-    var sarasas = CHECKLIST.map(function (c) { return "- " + c.id + ": " + (lang === "en" ? c.en : c.lt); }).join("\n");
+    // ids - tik punktai, į kuriuos dokumentai tiesiogiai neatsako (kitus užpildė GP_KLAUSIMAI.kontrolinis)
+    var sarasas = CHECKLIST.filter(function (c) { return !o.ids || o.ids.indexOf(c.id) >= 0; }).map(function (c) { return "- " + c.id + ": " + (lang === "en" ? c.en : c.lt); }).join("\n");
     var user = (lang === "en" ? "PROCUREMENT: " : "PIRKIMAS: ") + (o.procurement && o.procurement.title ? o.procurement.title : "-") +
-      vykdytojoEilute(lang, o.kontekstas) +
+      vykdytojoEilute(lang, o.kontekstas) + busenosEilute(lang, o.busena) +
       "\n" + (lang === "en" ? "CHECKLIST ITEMS: " : "KONTROLINIO SĄRAŠO PUNKTAI:") + "\n" + sarasas +
       "\n\n" + (lang === "en" ? "FRAGMENTS (untrusted content):" : "FRAGMENTAI (nepatikimas turinys):") + "\n" + pakuok(o.chunks, o.docsById, lang, MAX_CHUNKS * 2) +
       "\n\n" + (lang === "en" ? "Fill in EVERY item. If nothing in the fragments covers an item - busena \"nerasta\"." : "Užpildyk KIEKVIENĄ punktą. Jei fragmentuose punkto nedengia niekas - busena \"nerasta\".");
@@ -253,6 +264,15 @@
     var c = chunksById[key];
     return (c && typeof c.text === "string") ? c : null;
   }
+  // Fragmente būna keli punktai: numeris - artimiausias prieš citatą, ne fragmento pradžios (2026-11-04: rodė „p. 10.1“ prie 11.1 punkto).
+  // Citatos tiksliai neradus - jokio numerio, ne spėjimas.
+  function punktasPrieCitatos(tekstas, citata) {
+    var t = String(tekstas || ""), i = t.indexOf(String(citata || "").trim());
+    if (i < 0) return null;
+    var re = /(?:^|\n|\|\s*)(\d{1,3}(?:\.\d{1,3})+)\.?\s/g, m, nr = null, pr = t.slice(0, i + 1 + String(citata).match(/^\s*/)[0].length + 12);
+    while ((m = re.exec(pr))) { if (m.index <= i + 12) nr = m[1]; if (re.lastIndex === m.index) re.lastIndex++; }
+    return nr;
+  }
   function tikrinkSaltinius(saltiniai, chunksById) {
     var ok = [], atmesti = [], matyta = Object.create(null);
     (Array.isArray(saltiniai) ? saltiniai : []).forEach(function (s) {
@@ -266,7 +286,7 @@
       var raktas = c.docId + "|" + global.GP_PAIESKA.normCit(q);
       if (matyta[raktas]) return;
       matyta[raktas] = 1;
-      ok.push({ id: s.id, citata: q.slice(0, 240), teiginys: proza(s.teiginys), docId: c.docId, loc: c.loc, punktas: c.punktas, apytiksle: !at.tikslus });
+      ok.push({ id: s.id, citata: q.slice(0, 240), teiginys: proza(s.teiginys), docId: c.docId, loc: c.loc, punktas: punktasPrieCitatos(c.text, q), apytiksle: !at.tikslus });
     });
     return { ok: ok, atmesti: atmesti };
   }
@@ -306,14 +326,14 @@
     else if (out.status === "konfliktas") out.status = out.saltiniai.length ? "atsakyta" : "nera_saltinio";
     return out;
   }
-  function validuokChecklist(ans, chunksById, lang) {
+  function validuokChecklist(ans, chunksById, lang, ids) {
     lang = lang === "en" ? "en" : "lt";
     // Neperskaitytas ar tuščias atsakymas NEGALI virsti "15 x nerasta" - tai
     // atrodytų kaip išvada, kad reikalavimų nėra. Grąžinam null, sąsaja rodo klaidą.
     if (!ans || typeof ans !== "object" || !Array.isArray(ans.punktai) || !ans.punktai.length) return null;
     var byId = Object.create(null);
     ans.punktai.forEach(function (p) { if (p && p.id) byId[String(p.id).trim().toLowerCase()] = p; });
-    var punktai = CHECKLIST.map(function (c) {
+    var punktai = CHECKLIST.filter(function (c) { return !ids || ids.indexOf(c.id) >= 0; }).map(function (c) {
       var p = byId[c.id];
       var neivertinta = !p;
       p = p || {};
@@ -388,6 +408,8 @@
     var groups = Object.create(null);
     docs.filter(function (d) {
       if (d.parseStatus === "unsupported" || !d.blocks || !d.blocks.length) return false;
+      // CVP IS techniniai failai - ne pirkimo dokumentų redakcijos (2026-11-04: 26 iš 35 paketų rodė XML ir PDF kaip „pakeitimus“)
+      if (/(^|[\/ ›])(readme\.txt|espd-request\.\w+)$/i.test(String(d.name || ""))) return false;
       // Serijiniai paaiškinimai / atsakymai (be žymos AKTUALI REDAKCIJA ar pakeitimo) -
       // tai skirtingi dokumentai, ne redakcijos: jų neporuojam (anksčiau "Atsakymas
       // 08-01" ir "Atsakymas 08-10" rodėsi kaip "pašalinta / pridėta").
@@ -395,7 +417,8 @@
       if (v.paaiskinimas && !v.aktualiRedakcija && !v.pakeitimas) return false;
       return true;
     }).forEach(function (d) {
-      var k = bazinisVardas(d.name); if (!k) return; (groups[k] = groups[k] || []).push(d);
+      // Tik to paties formato: ištrauktas PDF ir Word tekstas skiriasi ir tada, kai dokumentas tas pats
+      var k = bazinisVardas(d.name); if (!k) return; k += "|" + String(d.name || "").split(".").pop().toLowerCase(); (groups[k] = groups[k] || []).push(d);
     });
     var poros = [];
     Object.keys(groups).forEach(function (k) {
@@ -411,7 +434,9 @@
       for (var i = 0; i + 1 < g.length; i++) {
         var a = g[i], b = g[i + 1];
         var neaiski = rk(a) === rk(b) && (((a.versija || {}).data || "") === ((b.versija || {}).data || ""));
-        poros.push({ senas: a, naujas: b, neaiski: neaiski, diff: palygink(a, b) });
+        var dif = palygink(a, b);
+        if (!dif.changed.length && !dif.added.length && !dif.removed.length) continue;     // ta pati kopija - ne redakcija
+        poros.push({ senas: a, naujas: b, neaiski: neaiski, diff: dif });
       }
     });
     return poros;

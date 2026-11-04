@@ -1531,7 +1531,7 @@ async function paleisk() {
     } finally { W.GP_AI_PROXY.call = aiOrig; }
   });
 
-  await testas("Be interneto kontrolinis sąrašas: visi punktai „neįvertinta“, su vieta dokumentuose, AI nekviečiamas", async () => {
+  await testas("Be interneto kontrolinis sąrašas: likę punktai „neįvertinta“, su vieta dokumentuose, AI nekviečiamas", async () => {
     await paketasKlausimams();
     const aiOrig = W.GP_AI_PROXY.call; let kviesta = 0;
     W.GP_AI_PROXY.call = () => { kviesta++; return Promise.resolve({ ok: false, status: 500 }); };
@@ -1540,7 +1540,8 @@ async function paleisk() {
       await W.__PPT.kontrolinis();
       const box = D.getElementById("checklistBox");
       lygu(kviesta, 0, "AI kvietimų");
-      lygu(box.querySelectorAll(".st-neivertinta").length, A.CHECKLIST.length, "neįvertintų punktų");
+      lygu(box.querySelectorAll(".st-neivertinta").length, W.__PPT.chkSarasas().filter(p => !p.kilme).length, "neįvertintų punktų");
+      tiesa(box.querySelectorAll(".st-neivertinta").length > 0, "yra neįvertintų");
       turi(box.innerHTML, "būseną nustatykite patys");
     } finally { suTinklu(); W.GP_AI_PROXY.call = aiOrig; }
   });
@@ -1900,7 +1901,7 @@ async function paleisk() {
     tiesa(!!W.__PPT.S.idx, "indeksas");
     await kol(() => /Dokumentai gauti iš CVP IS/.test(dokPanel().textContent));
     tiesa(dokBusena().hidden, "būsena paslėpta");
-    turi(D.getElementById("askHint").textContent, "Atsakoma tik iš įkeltų dokumentų");
+    turi(D.getElementById("askHint").textContent, "Atsakoma tik iš šio pirkimo dokumentų");
     // antras tas pats pasirinkimas nekartoja
     DOK_UZKL.length = 0; await nustatyk("1234501"); await laukti(50);
     lygu(DOK_UZKL.length, 0, "jau gauti - nekartojama");
@@ -2232,7 +2233,7 @@ async function paleisk() {
     tiesa(/VPT duomenimis terminas - 2099-10-20 15:00.*įkeltame pakete - 2099-10-13 15:00.*Galioja CVP IS/.test(pst), "pastaba: " + pst);
     await svarus();
   });
-  await testas("Pirkimo numeris iš įkelto paketo: nenurodžius - nustatomas ir užklausiamas; nurodžius kitą - pastaba, nurodytas nekeičiamas", async () => {
+  await testas("Pirkimo numeris iš įkelto paketo: nenurodžius - nustatomas ir užklausiamas; nurodžius kitą - pirkimas pagal paketą", async () => {
     W.__PPT.S.ref = null; D.getElementById("refInput").value = ""; await W.__PPT.gaukVpt(null);
     VPT_UZKL.length = 0; VPT_ATS = (u) => vptOk({ id: +u.split("/").pop() });
     await ikelk({ "1_Pirkimo dokumentai.txt": SPS_SENAS }, "1159_1234502.zip"); await laukiVpt();
@@ -2240,8 +2241,11 @@ async function paleisk() {
     turi(D.getElementById("vptBox").textContent, "Pirkimo numeris atpažintas iš įkelto paketo.");
     await nustatyk("1234501");
     await ikelk({ "1_Pirkimo dokumentai.txt": SPS_SENAS }, "1159_1234503.zip");
-    lygu(W.__PPT.S.ref.resourceId, "1234501", "nurodytas nekeičiamas");
-    turi(D.getElementById("vptBox").textContent, "Įkeltas paketas yra kito pirkimo (Nr. 1234503), o nurodytas pirkimas - Nr. 1234501.");
+    await laukiVpt();
+    // Žmogus įkėlė kito pirkimo paketą: kortelė ir dokumentai turi būti to paties pirkimo (2026-11-04, tiekėjo patikra)
+    lygu([W.__PPT.S.ref.resourceId, D.getElementById("refInput").value], ["1234503", "1234503"], "pirkimas - pagal paketą");
+    turi(D.getElementById("vptBox").textContent, "Pirkimo numeris atpažintas iš įkelto paketo.");
+    neturi(D.getElementById("vptBox").textContent, "yra kito pirkimo");
     lygu([C.paketoId([{ name: "9_1234504.zip › x.txt" }, { name: "1234504_National Contract notice_0.pdf" }]), C.paketoId([{ name: "1_1234504.zip" }, { name: "1_1234505.zip" }]), C.paketoId([{ name: "Pirkimo dokumentai.zip › SPS.docx" }])],
       ["1234504", null, null], "vienas numeris - taip; keli ar nė vieno - ne");
     await svarus();
@@ -2301,7 +2305,7 @@ async function paleisk() {
     tiesa(el.length === 2 && !box.querySelector("img") && W.__pXss === undefined, "2 tinkami įrašai, HTML - tekstu");
     turi(el[0].textContent, '<img src=x onerror="window.__pXss=1">Transformatorių remontas'); turi(el[0].textContent, "LITGRID AB (PV) · Atviras konkursas · Pasiūlymų teikimas");
     tiesa(/Terminas: 2099-10-20 15:00 \(liko \d+ d\.\) · BVPŽ: 50532000-3, 45310000-3 · ID 1234501/.test(el[0].textContent), el[0].textContent);
-    turi(el[1].textContent, "Kita · Supaprastintas atviras konkursas · Paskelbtas"); neturi(el[1].textContent, "Terminas:");
+    turi(el[1].textContent, "Kita · Skelbiama apklausa · Paskelbtas"); neturi(el[1].textContent, "Terminas:");
     lygu(el[0].querySelector("a").getAttribute("href"), "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=1234501", "ne serverio „nuoroda“");
     const cvp = [...box.querySelectorAll(".vpt-rez-veiksmai a")].find(a => /Ieškoti CVP IS svetainėje/.test(a.textContent));
     tiesa(cvp && /^https:\/\/viesiejipirkimai\.lt\//.test(cvp.href) && cvp.target === "_blank", "CVP IS paieška - šalia");
@@ -2990,6 +2994,305 @@ async function paleisk() {
     const sw = await (await W.fetch("sw.js?b=" + Date.now())).text();
     turi(sw, '"../shared/kalbu-sutikrinimas.js"'); turi(sw, '"../shared/money.js"');
     neturi(sw, "ppt-2026-11-03-5");
+  });
+
+  grupe("Kontrolinis sąrašas iš dokumentų (klausimai.js, 2026-11-04)");
+  const KK = (docs, meta, kalba, dabar, o) => W.GP_KLAUSIMAI.kontrolinis(Object.assign({ docs, meta: meta || {}, kalba: kalba || "lt", dabar: dabar || new Date(2026, 5, 1) }, o));
+  const SK_T = kd("D9", "Skelbimas.pdf", "Skelbimas", ["Pasiūlymų priėmimo terminas: 20/10/2026 15:00 +03:00"]);
+  const M_T = (x) => ({ deadline: Object.assign({ value: "20/10/2026 15:00", docId: "D9", loc: { page: 1 }, snippet: "Pasiūlymų priėmimo terminas: 20/10/2026 15:00 +03:00", alt: [] }, x) });
+  const FO = (id, name, ...tx) => kd(id, name, "Forma", tx.length ? tx : ["Forma " + name]);
+  const CVP_S = "7.1. Pasiūlymą reikia pateikti CVP IS priemonėmis į elektroninių pasiūlymų dėžutę ne vėliau kaip iki CVP IS nurodyto termino pabaigos.";
+
+  await testas("Terminas ir pateikimas: citata iš skelbimo ir sąlygų; pratęstas, skirtingi, praėjęs, kelių etapų", () => {
+    let P = KK([SK_T, SPS(CVP_S)], M_T());
+    lygu([P.terminas.busena, P.terminas.santrauka, P.terminas.pastaba], ["privaloma", "Terminas: 2026-10-20 15:00.", ""]);
+    turi(P.terminas.saltiniai[0].citata, "20/10/2026 15:00 +03:00"); lygu(P.terminas.saltiniai[0].docId, "D9");
+    lygu([P.registracija.busena, P.patikra.busena], ["privaloma", "privaloma"]); turi(P.registracija.saltiniai[0].citata, "CVP IS priemonėmis"); lygu(P.patikra.santrauka, "Pateikite per CVP IS iki 2026-10-20 15:00.");
+    lygu(KK([SK_T, SPS(CVP_S)], M_T({ pratestas: true, alt: [{ value: "01/10/2026 15:00" }] })).terminas.pastaba, "Terminas pratęstas.");
+    P = KK([SK_T, SPS(CVP_S)], M_T({ alt: [{ value: "01/10/2026 15:00" }] }));
+    lygu(P.terminas.busena, "patikslinti"); turi(P.terminas.santrauka, "20/10/2026 15:00, 01/10/2026 15:00"); lygu(P.patikra, undefined, "kol neaišku - patikra neužpildoma");
+    P = KK([SK_T, SPS(CVP_S)], M_T(), "lt", new Date(2026, 10, 1));
+    turi(P.terminas.pastaba, "jau praėjo"); turi(P.patikra.pastaba, "jau praėjo"); lygu(P.patikra.santrauka, "Teikiama per CVP IS iki termino.");
+    turi(KK([SK_T, SPS(CVP_S)], M_T(), "lt", null, { kelietapis: true }).terminas.pastaba, "Vėlesnio etapo terminą");
+    lygu(KK([SK_T], { deadline: { value: "kitokia", docId: "D9", alt: [] } }).terminas.santrauka, "Terminas: kitokia.", "neatpažinta data - kaip dokumente");
+    lygu(KK([SPS("Jei pasiūlymą reikia pateikti CVP IS priemonėmis, tai daroma taip.")]).registracija, undefined, "sąlyginis sakinys - ne sprendimas");
+    lygu(KK([SPS("Vėliau gauti pasiūlymai pateikti CVP IS priemonėmis nebus nagrinėjami.")]).registracija, undefined, "atmetimo sakinys - ne tvarka");
+    turi(KK([SK_T, SPS(CVP_S)], M_T(), "en").terminas.santrauka, "Deadline: 2026-10-20 15:00."); turi(KK([SPS(CVP_S)], {}, "en").registracija.santrauka, "Submitted through CVP IS");
+  });
+  await testas("Formos pakete: pasiūlymas, paraiška ir vėlesnis etapas, kaina (failas ir formos antraštė), subtiekėjai, konfidenciali informacija; panašūs vardai - ne", () => {
+    let P = KK([SPS("x"), FO("F1", "SPS 1 priedas Pasiūlymo forma.docx")]);
+    lygu(P.forma.santrauka, "Užpildykite: Pasiūlymo forma."); lygu(P.forma.saltiniai[0].docId, "F1");
+    P = KK([SPS("x"), FO("F1", "SPS 1 priedas Paraiškos forma_ Application form.docx"), FO("F2", "SPS 2 priedas Pirminio_Galutinio pasiūlymo forma_Initial_Final tender.docx")]);
+    lygu(P.forma.santrauka, "Užpildykite: Paraiškos forma. Vėliau, kai būsite pakviesti, - Pirminio Galutinio pasiūlymo forma."); lygu(P.forma.saltiniai.length, 2);
+    lygu(KK([SPS("x"), FO("F1", "1 priedas - Pasiūlymo forma.docx")]).forma.santrauka, "Užpildykite: Pasiūlymo forma.", "brūkšnys vardo pradžioje");
+    P = KK([SPS("x"), FO("F1", "Pasiūlymo forma.docx", "Tekstas tiekėjas atsako. 3. PASIŪLYMO KAINA | lentelė")]);
+    lygu(P.kaina.santrauka, "Kainą nurodykite formoje: Pasiūlymo forma."); lygu(P.kaina.saltiniai[0].citata.indexOf("PASIŪLYMO KAINA"), 0, "citata - nuo antraštės");
+    P = KK([SPS("x"), FO("F1", "Pasiūlymo forma.docx", "3. PASIŪLYMO KAINA"), FO("F2", "1 priedo 1 priedas Įkainių lentelė.xlsx")]);
+    lygu(P.kaina.santrauka, "Užpildykite: Įkainių lentelė."); lygu(KK([SPS("x")]).kaina, undefined);
+    P = KK([SPS("x"), FO("F1", "SPS 12 priedas Sandorio šalies ir (ar) subtiekėjo anketa.docx")]); lygu(P.subjektai, undefined, "sandorio šalies anketa - ne subtiekėjų forma");
+    P = KK([SPS("x"), FO("F1", "SPS 5 priedas Informacija apie ūkio subjektus.docx")]); lygu(P.subjektai.busena, "su_salyga"); turi(P.subjektai.santrauka, "Jei remiatės");
+    P = KK([SPS("x"), FO("F1", "SPS 11 Konfidencialumo įsipareigojimas.docx")]); lygu(P.konfidencialumas, undefined, "įsipareigojimas - kitas dokumentas");
+    P = KK([SPS("x"), FO("F1", "SPS 6 priedas Konfidenciali informacija.docx", "KONFIDENCIALI INFORMACIJA (šį priedą bus prašoma užpildyti tik galimo laimėtojo/laimėtojo) Atkreipiame dėmesį")]);
+    lygu(P.konfidencialumas.busena, "su_salyga"); turi(P.konfidencialumas.santrauka, "tik iš galimo laimėtojo");
+    P = KK([SPS("x"), FO("F1", "SPS 6 priedas Konfidenciali informacija.docx", "KONFIDENCIALI INFORMACIJA Atkreipiame dėmesį")]); turi(P.konfidencialumas.santrauka, "Jei pasiūlyme yra konfidencialios informacijos");
+    turi(KK([SPS("x"), FO("F1", "SPS 6 priedas Konfidenciali informacija.docx", "KONFIDENCIALI INFORMACIJA")], {}, "en").konfidencialumas.santrauka, "If your bid contains confidential information");
+  });
+  await testas("Galiojimas, EBVPD, kvalifikacija, užtikrinimas, parašas: sprendimo sakinys; atsakymų raštas apie temą - palieka neįvertintą", () => {
+    let P = KK([SPS("x"), FO("F1", "Pasiūlymo forma.docx", "PASIŪLYMO GALIOJIMO TERMINAS Pasiūlymas galioja 90 (devyniasdešimt) kalendorinių dienų nuo Pasiūlymo pateikimo termino pabaigos.")]);
+    lygu(P.galiojimas.santrauka, "Pasiūlymas galioja 90 (devyniasdešimt) kalendorinių dienų nuo Pasiūlymo pateikimo termino pabaigos.");
+    lygu(KK([SPS("Pasiūlymas turi galioti ne trumpiau kaip 3 mėnesius nuo termino.")]).galiojimas.santrauka, "Pasiūlymas galioja 3 mėnesius nuo termino.");
+    lygu(KK([SPS("Pasiūlymas galioja pirkimo sąlygų 8 punkte nurodytą terminą.")]).galiojimas, undefined, "be skaičiaus iškart - ne");
+    lygu(KK([SK_T], { validity: { value: "30 d.", docId: "D9", alt: [] } }).galiojimas.santrauka, "Pasiūlymo galiojimas: 30 d.", "be dvigubo taško");
+    P = KK([SK_T], { validity: { value: "30 d.", docId: "D9", alt: [{ value: "90 d." }] } }); lygu(P.galiojimas.busena, "patikslinti"); turi(P.galiojimas.santrauka, "30 d., 90 d.");
+    const ATS = (tx) => kd("A1", "Atsakymai į klausimus.pdf", "Paaiškinimas", [tx]);
+    lygu(KK([SPS("Pasiūlymas galioja 90 dienų."), ATS("Pasiūlymo galiojimo terminas pakeistas.")]).galiojimas, undefined, "atsakymų raštas");
+
+    P = KK([SPS("Tiekėjai privalo pateikti Pasiūlymą ir Europos bendrąjį viešųjų pirkimų dokumentą (toliau – EBVPD).")]); lygu(P.ebvpd.busena, "privaloma"); turi(P.ebvpd.saltiniai[0].citata, "EBVPD");
+    lygu(KK([SPS("Šiame pirkime EBVPD nereikalaujamas.")]).ebvpd.busena, "netaikoma");
+    P = KK([SPS("Pasiūlyme įrašoma deklaracija ir kiti dokumentai.")]); lygu([P.ebvpd.busena, P.ebvpd.saltiniai.length], ["nerasta", 0]); turi(P.ebvpd.santrauka, "EBVPD neminimas");
+    lygu(KK([SPS("Pasiūlyme įrašoma deklaracija."), kd("E1", "espd-request.pdf", "EBVPD", ["EBVPD forma"])]).ebvpd, undefined, "failas yra, sakinio nėra - DI");
+    lygu(KK([SPS("EBVPD PATEIKIMO TVARKA IR EBVPD PATEIKIAMOS INFORMACIJOS PATVIRTINIMO PRIEMONĖS")]).ebvpd, undefined, "skyriaus antraštė - ne reikalavimas");
+    lygu(KK([SPS("Tiekėjai privalo pateikti EBVPD."), ATS("Dėl EBVPD: paaiškiname.")]).ebvpd, undefined, "atsakymų raštas");
+    lygu(KK([kd("B1", "Bendrosios sąlygos.pdf", "BPS", ["Tiekėjas pateikia EBVPD."])]).ebvpd, undefined, "be sąlygų - nesakome „neminimas“");
+
+    P = KK([SPS("Šiame pirkime kvalifikacija nėra tikrinama.")]); lygu(P.kvalifikacija.busena, "netaikoma");
+    lygu(KK([SPS("Šiame pirkime kvalifikacija nėra tikrinama."), ATS("Dėl kvalifikacijos atsakome.")]).kvalifikacija, undefined);
+    lygu(KK([SPS("Tiekėjas turi turėti patirties.")]).kvalifikacija, undefined, "reikalavimų sąrašo be DI nepildome");
+
+    lygu(KK([SPS("Šio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo.")]).uztikrinimas.busena, "netaikoma");
+    lygu(KK([SPS("Tiekėjai neprivalo pateikti banko ar draudimo kompanijos išduoto pasiūlymo galiojimo užtikrinimo.")]).uztikrinimas.busena, "netaikoma", "neprivalo - ne „privalo“");
+    P = KK([SPS("Tiekėjas privalo pateikti pasiūlymo galiojimo užtikrinimą, kurio suma 10 000 Eur.")]); lygu(P.uztikrinimas.busena, "privaloma"); lygu(P.uztikrinimas.santrauka, "Reikia pasiūlymo galiojimo užtikrinimo: 10 000 Eur.", "jungiamasis tarpas sumoje");
+    P = KK([SPS("Kartu su Galutiniu pasiūlymu Tiekėjas privalo pateikti Pasiūlymo galiojimo užtikrinimą.")]); turi(P.uztikrinimas.santrauka, "dydis ir tvarka citatoje");
+    lygu(KK([SPS("Jei tiekėjas privalo pateikti pasiūlymo galiojimo užtikrinimą, jis tai daro.")]).uztikrinimas, undefined, "sąlyginis");
+    lygu(KK([SPS("Nereikalaujama pateikti pasiūlymo galiojimo užtikrinimo."), ATS("Dėl pasiūlymo galiojimo užtikrinimo atsakome.")]).uztikrinimas, undefined);
+
+    lygu(KK([SPS("Pasiūlymai privalo būti pasirašyti fiziniu arba kvalifikuotu elektroniniu parašu.")]).parasas.santrauka, "Pasirašykite fiziniu arba kvalifikuotu elektroniniu parašu.");
+    lygu(KK([SPS("Pasiūlymai privalo būti pasirašyti fiziniu ir (arba) kvalifikuotu elektroniniu parašu.")]).parasas.santrauka, "Pasirašykite fiziniu arba kvalifikuotu elektroniniu parašu.");
+    lygu(KK([SPS("Pasiūlymas turi būti pasirašytas kvalifikuotu elektroniniu parašu.")]).parasas.santrauka, "Pasirašykite kvalifikuotu elektroniniu parašu.");
+    lygu(KK([SPS("Pasiūlymas turi būti pasirašytas elektroniniu parašu.")]).parasas.santrauka, "Pasirašymo reikalavimas - citatoje.");
+    lygu(KK([SPS("Pasiūlymas atmetamas, pasiūlymas nepasirašytas elektroniniu parašu, jeigu to buvo reikalaujama ir pan.")]).parasas, undefined, "atmetimo pagrindas - ne reikalavimas");
+    lygu(Object.keys(KK([])).length, 0); lygu(Object.keys(W.GP_KLAUSIMAI.kontrolinis()).length, 0);
+  });
+  await testas("Modulyje: lentelė iškart ir be DI; DI tik likusiems punktams ir tik paspaudus; DI žyma - tik jo eilutėms; klaida ir be interneto lentelės neprarandama; kiti dokumentai - iš naujo", async () => {
+    const box = () => D.getElementById("checklistBox"), mygt = () => D.getElementById("chkDiBtn");
+    const FAILAI = { "Specialiosios pirkimo sąlygos.txt": CVP_S + "\n\nŠio Pirkimo metu nereikalaujama pateikti Pasiūlymo galiojimo užtikrinimo.\n\nTiekėjai privalo pateikti Pasiūlymą ir EBVPD.", "SPS 1 priedas Pasiūlymo forma.txt": "PASIŪLYMAS\n\nPasiūlymas galioja 90 kalendorinių dienų nuo termino pabaigos.\n\nPASIŪLYMO KAINA" };
+    await isvalyk(); VPT_ATS = null;
+    let S;
+    await suAi({ ok: false, status: 500, error: "bandomas" }, async (kv) => {
+      S = await ikelk(FAILAI); await laukti(40);
+      lygu(kv.length, 0, "įkėlus į DI nesiunčiama");
+      const sar = W.__PPT.chkSarasas(), dok = sar.filter(p => p.kilme === "dok"), liko = sar.filter(p => !p.kilme);
+      lygu(sar.length, A.CHECKLIST.length); tiesa(dok.length >= 5, "užpildyta " + dok.length);
+      turi(box().textContent, "Iš dokumentų užpildyta iškart: " + dok.length + " iš " + sar.length + ".");
+      turi(box().textContent, "Pasiūlymo galiojimo užtikrinimo nereikalaujama."); turi(box().textContent, "iš dokumento, be DI"); turi(box().textContent, "Dar neįvertinta");
+      lygu(box().querySelectorAll("tr[data-di]").length, 0, "DI eilučių dar nėra");
+      lygu(mygt().textContent, "Įvertinti likusius punktus su DI (" + liko.length + ")"); lygu(D.getElementById("chkBtn").style.display, "none", "antro mygtuko nėra");
+      turi(box().textContent, "Tikėtinos vietos dokumentuose");
+      // DI: tik likę punktai
+      mygt().click(); turi(box().textContent, "Sudaromas kontrolinis sąrašas"); await kol(() => kv.length === 1); await kol(() => !W.__PPT.S.tikrinama);
+      liko.forEach(p => turi(kv[0].userMessage, "- " + p.id + ":")); dok.forEach(p => neturi(kv[0].userMessage, "- " + p.id + ":"));
+      turi(kv[0].userMessage, "ŠIANDIEN: 20");
+      // Klaida - lentelė lieka, galima kartoti
+      turi(box().textContent, "bandomas"); turi(box().textContent, "Pasiūlymo galiojimo užtikrinimo nereikalaujama."); tiesa(!!mygt(), "galima kartoti");
+    });
+    const liko = W.__PPT.chkSarasas().filter(p => !p.kilme), ch = Object.values(S.chunksById)[0];
+    const ats = { punktai: liko.map(p => ({ id: p.id, busena: "privaloma", santrauka: "DI: " + p.id, saltiniai: [{ id: ch.id, citata: ch.text.slice(0, 40) }] })).concat([{ id: "uztikrinimas", busena: "privaloma", santrauka: "DI bando perrašyti", saltiniai: [] }]) };
+    await suAi({ ok: true, text: JSON.stringify(ats) }, async () => {
+      await W.__PPT.kontrolinis();
+      lygu(box().querySelectorAll("tr[data-di]").length, liko.length, "DI žyma - tik DI eilutėms");
+      turi(box().textContent, "DI įvertino: " + liko.length + "."); tiesa(!mygt(), "visi įvertinti - mygtuko nėra");
+      turi(box().textContent, "DI: " + liko[0].id); neturi(box().textContent, "DI bando perrašyti"); turi(box().textContent, "Pasiūlymo galiojimo užtikrinimo nereikalaujama.");
+    });
+    // Kopija - visi punktai
+    const k0 = W.GP_KOPIJA && W.GP_KOPIJA.kopijuok; let kop = ""; if (W.GP_KOPIJA) W.GP_KOPIJA.kopijuok = (x) => { kop = x; return Promise.resolve(true); };
+    W.copyChecklist(); if (W.GP_KOPIJA) W.GP_KOPIJA.kopijuok = k0;
+    turi(kop, "Pasiūlymo galiojimo užtikrinimo nereikalaujama."); turi(kop, "DI: " + liko[0].id);
+    // Perjungus kalbą - taisyklių punktai ta kalba, DI - lieka
+    W.setLang("en"); turi(box().textContent, "Bid security is not required."); turi(box().textContent, "Filled in from the documents right away"); W.setLang("lt");
+    // Kiti dokumentai - viskas iš naujo
+    W.__PPT.S.checklist = { punktai: [] }; W.__PPT.chkSarasas(); W.__PPT.perindeksuok(); lygu(W.__PPT.S.checklist, null, "perindeksavus DI įvertinimas nebegalioja");
+    await svarus(); lygu(box().innerHTML, "", "be dokumentų lentelės nėra"); lygu(D.getElementById("chkBtn").style.display, "", "mygtukas be dokumentų");
+    await ikelk(FAILAI); await laukti(40); tiesa(box().querySelectorAll("tr[data-di]").length === 0, "ankstesnis DI įvertinimas nebegalioja"); tiesa(!!mygt(), "vėl galima");
+    // Be interneto: lentelė ir pastaba
+    await suAi(null, async (kv) => {
+      beTinklo();
+      try { await W.__PPT.kontrolinis(); lygu(kv.length, 0); turi(box().textContent, "Be interneto likę punktai neįvertinami"); turi(box().textContent, "Pasiūlymo galiojimo užtikrinimo nereikalaujama."); }
+      finally { suTinklu(); }
+    });
+    // Sugadintas atsakymas - klaida, ne „nerasta“
+    await suAi({ ok: true, text: "ne json" }, async () => { await W.__PPT.kontrolinis(); turi(box().textContent, "DI atsakymas neperskaitytas"); lygu(box().querySelectorAll(".st-nerasta").length, 0); });
+    await suAi({ ok: true, text: '{"punktai":[{"id":"ebvpd"', raw: { stop_reason: "max_tokens" } }, async () => { await W.__PPT.kontrolinis(); turi(box().textContent, "DI atsakymas nutrūko"); });
+    // Kol laukiama, kiti dokumentai - atsakymas neįrašomas
+    let leisk; const orig = W.GP_AI_PROXY.call;
+    W.GP_AI_PROXY.call = () => new Promise(r => { leisk = r; });
+    const pr = W.__PPT.kontrolinis(); await laukti(10);
+    await svarus(); leisk({ ok: true, text: JSON.stringify({ punktai: [{ id: "techninis", busena: "nerasta" }] }) }); await pr; W.GP_AI_PROXY.call = orig;
+    lygu(W.__PPT.S.checklist, null, "senas atsakymas naujiems dokumentams neįrašomas");
+    await svarus();
+  });
+
+  grupe("Tiekėjo patikra: būsena, etapai, kitas pirkimas (2026-11-04)");
+  const VB = () => D.getElementById("vptBox");
+  const DOK_MIN = { "Specialiosios pirkimo sąlygos.txt": CVP_S };
+  await testas("Nutrauktas pirkimas: aiški žinutė, jokios žalios „liko“ žymos; paieškoje ir DI užklausoje - tas pats", async () => {
+    await isvalyk(); DOK_ATS = { zip: await dokZip(DOK_MIN) };
+    VPT_ATS = () => vptOk({ status: "Cancelled", tenderSubmissionDeadline: "2099-11-05T12:00:00" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    turi(VB().textContent, "šis pirkimas nutrauktas"); lygu(VB().querySelectorAll(".tag.green").length, 0, "be žalios žymos"); turi(VB().textContent, "pirkimas nutrauktas"); lygu(VB().querySelector(".note.err") !== null, true);
+    await suAi({ ok: false, status: 500, error: "x" }, async (kv) => {
+      D.getElementById("askInput").value = "Ar galiu pateikti?"; D.getElementById("askBtn").click(); await kol(() => kv.length === 1);
+      turi(kv[0].userMessage, "CVP IS BŪSENA: Nutrauktas"); turi(kv[0].userMessage, "ŠIANDIEN: 20"); turi(kv[0].userMessage, "CVP IS TERMINAS: 2099-11-05"); await kol(() => !W.__PPT.S.klausiama);
+    });
+    const V = W.GP_VPT;
+    lygu([V.nutrauktas({ status: "Cancelled" }), V.nutrauktas({ status: "Terminated" }), V.nutrauktas({ status: "Awarded" }), V.nutrauktas(null)], [true, true, false, false]);
+    await isvalyk();
+  });
+  await testas("Tolesnis etapas (VPT activeCycle): kortelė sako, kam šis terminas, be „ar terminas nepakeistas“; pirmas etapas ir atviras konkursas - kaip iki tol", async () => {
+    const V = W.GP_VPT, N = "Negotiated with prior call for competition";
+    lygu([V.tolesnisEtapas({ procedure: N, activeCycle: 2 }), V.tolesnisEtapas({ procedure: "Restricted", activeCycle: 3 }), V.tolesnisEtapas({ procedure: "Competitive with negotiation", activeCycle: 4 }), V.tolesnisEtapas({ procedure: N, activeCycle: 1 }), V.tolesnisEtapas({ procedure: "Open", activeCycle: 2 }), V.tolesnisEtapas({ procedure: N }), V.tolesnisEtapas(null)], [true, true, true, false, false, false, false]);
+    await isvalyk(); DOK_ATS = { zip: await dokZip({ "1234501_Contract notice_0.txt": "Skelbimas apie pirkimą. Dalyvavimo prašymų priėmimo terminas: 05/10/2026 13:00 +03:00", "Specialiosios pirkimo sąlygos.txt": CVP_S }) };
+    VPT_ATS = () => vptOk({ procedure: N, activeCycle: 2, status: "Bid submission", tenderSubmissionDeadline: "2099-11-06T13:00:00" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    turi(VB().textContent, "Pirmas etapas (paraiškos arba pirminiai pasiūlymai) jau baigtas, pirkimas CVP IS yra 2 etape"); turi(VB().textContent, "tolesnio etapo dalyviams");
+    const eilT = [...VB().querySelectorAll("li")].filter(li => /Pasiūlymų \/ paraiškų terminas/.test(li.textContent))[0];
+    lygu(eilT.querySelectorAll(".tag.green").length, 0, "termino eilutėje be žalios"); lygu(eilT.querySelectorAll(".tag.amber").length, 1); neturi(VB().textContent, "ar terminas nepakeistas");
+    await suAi({ ok: false, status: 500, error: "x" }, async (kv) => {
+      D.getElementById("askInput").value = "Ar galiu pateikti pasiūlymą?"; D.getElementById("askBtn").click(); await kol(() => kv.length === 1);
+      turi(kv[0].userMessage, "Pirmas etapas baigtas"); await kol(() => !W.__PPT.S.klausiama);
+    });
+    await isvalyk(); DOK_ATS = { zip: await dokZip(DOK_MIN) };
+    VPT_ATS = () => vptOk({ procedure: N, activeCycle: 1, tenderSubmissionDeadline: "2099-11-06T13:00:00" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    neturi(VB().textContent, "Pirmas etapas"); tiesa(VB().querySelectorAll(".tag.green").length >= 1, "pirmame etape - žalia");
+    await isvalyk(); VPT_ATS = null;
+  });
+  await testas("Rinkos konsultacija ir dinaminė sistema: kas tai, tinkami pavadinimai ir klausimai; kontrolinis sąrašas konsultacijai netaikomas; nuoroda - į viešą dokumentų sąrašą", async () => {
+    await isvalyk(); DOK_ATS = { zip: await dokZip({ "Rinkos konsultacijos kvietimas.txt": "Kviečiame atsakyti į klausimus. " + CVP_S }) };
+    VPT_ATS = () => vptOk({ procedure: "Preliminary Market Consultation", status: "Proposal Submission", tenderSubmissionDeadline: "2099-11-06T13:00:00" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    turi(VB().textContent, "Tai rinkos konsultacija, ne pirkimas"); turi(VB().textContent, "Atsakymų terminas"); turi(VB().textContent, "Priimami atsakymai"); neturi(VB().textContent, "Pasiūlymų teikimas");
+    const ch = D.getElementById("askChips").textContent;
+    turi(ch, "Ko pirkimo vykdytojas klausia šioje rinkos konsultacijoje?"); neturi(ch, "su pasiūlymu"); neturi(ch, "galiojimo trukmė");
+    turi(D.getElementById("checklistBox").textContent, "netaikomas: pasiūlymas neteikiamas"); lygu(D.getElementById("checklistBox").querySelectorAll("table").length, 0);
+    W.setLang("en"); turi(D.getElementById("askChips").textContent, "What does the buyer ask in this market consultation?"); turi(VB().textContent, "Accepting answers"); W.setLang("lt");
+    await isvalyk(); DOK_ATS = { zip: await dokZip(DOK_MIN) };
+    VPT_ATS = () => vptOk({ procedure: "Dynamic Purchasing System", status: "Established", tenderSubmissionDeadline: "2099-01-28T13:00:00", clarificationPeriodEnd: "2099-01-20T13:00:00" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    turi(VB().textContent, "sistemos galiojimo pabaiga, ne pasiūlymų terminas"); turi(VB().textContent, "Sistema galioja iki"); turi(VB().textContent, "Sukurta"); neturi(VB().textContent, "Klausimų terminas");
+    await isvalyk(); VPT_ATS = null;
+    const V = W.GP_VPT;
+    lygu(V.kodas("Awarded", V.BUSENOS, "lt").tekstas, "Laimėtojas nustatytas"); lygu(V.kodas("Concluded", V.BUSENOS, "lt").tekstas, "Užbaigtas"); lygu(V.kodas("Closed", V.BUSENOS, "lt").tekstas, "Uždarytas"); lygu(V.kodas("Terminated", V.BUSENOS, "lt").tekstas, "Nutrauktas");
+    lygu(V.kodas("Simplified Open", V.PROCEDUROS, "lt").tekstas, "Skelbiama apklausa"); lygu(V.kodas("Simplified", V.PROCEDUROS, "lt").tekstas, "Mažos vertės pirkimas"); lygu(V.kodas("Negotiated with publication", V.PROCEDUROS, "lt").tekstas, "Skelbiamos derybos (gynyba ir saugumas)"); lygu(V.kodas("Accelerated restricted", V.PROCEDUROS, "en").tekstas, "Accelerated restricted procedure");
+    const rez = await new Promise(r => { const f = W.fetch; W.fetch = () => Promise.resolve(new W.Response(JSON.stringify({ pirkimas: { id: 1234501, procedure: "Preliminary Market Consultation" }, meta: {} }), { status: 200 })); V.pirkimas("1234501").then(x => { W.fetch = f; r(x); }); });
+    turi(rez.nuoroda, "listContractDocuments.do?resourceId=1234501");
+  });
+  await testas("Kitas pirkimas tame pačiame skirtuke: CVP IS dokumentai ir atsakymai pakeičiami; savi įkelti be numerio lieka su pastaba; įkeltas kito pirkimo paketas - pirkimas pagal jį; tas pats failas nepadvigubinamas", async () => {
+    await isvalyk(); VPT_ATS = (u) => vptOk({ id: +u.split("/").pop() }); DOK_ATS = { zip: await dokZip({ "SENAS SPS.txt": CVP_S }) };
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await kol(() => W.__PPT.S.docs.length === 1);
+    W.__PPT.S.chat.push({ status: "atsakyta", q: "Senas klausimas" });
+    DOK_ATS = { zip: await dokZip({ "NAUJAS SPS.txt": CVP_S + " Naujas pirkimas." }) };
+    await nustatyk("1234502"); await kol(() => !CV().vyksta); await kol(() => (W.__PPT.S.docs[0] || {}).name && /NAUJAS/.test(W.__PPT.S.docs[0].name));
+    lygu(W.__PPT.S.docs.length, 1, "ankstesnio pirkimo dokumentų nebėra"); lygu(W.__PPT.S.chat.length, 0, "atsakymų nebėra"); lygu(CV().isCvp, "1234502"); neturi(D.getElementById("askHint").textContent, "gali būti ne šio pirkimo");
+    // Savi įkelti be numerio
+    await isvalyk(); await ikelk({ "Mano SPS.txt": CVP_S }); const dok0 = W.__PPT.S.docs.length;
+    DOK_ATS = { zip: await dokZip(DOK_MIN) }; DOK_UZKL.length = 0;
+    await nustatyk("1234503"); await laukti(60);
+    lygu([DOK_UZKL.length, W.__PPT.S.docs.length], [0, dok0], "savi dokumentai tyliai nekeičiami"); turi(D.getElementById("askHint").textContent, "gali būti ne šio pirkimo");
+    // Kito pirkimo paketas prie jau įkelto
+    await isvalyk();
+    await ikelk({ "1_SPS.txt": CVP_S }, "1159_1234505.zip"); await laukiVpt(); lygu(W.__PPT.S.ref.resourceId, "1234505");
+    const S = W.__PPT.S, f = new W.File([await dokZip({ "2_SPS.txt": CVP_S + " Kitas." })], "1159_1234506.zip", { type: "application/zip" });
+    await W.__PPT.onFiles([f]); await laukti(60);
+    lygu(S.ref.resourceId, "1234506", "pagal paketą"); lygu(S.docs.filter(d => /1234505/.test(d.name)).length, 0, "ankstesnio nebėra"); turi(D.getElementById("docNote").textContent, "ankstesni dokumentai pašalinti");
+    // Tas pats dar kartą
+    const n0 = S.docs.length, f2 = new W.File([await dokZip({ "2_SPS.txt": CVP_S + " Kitas." })], "1159_1234506.zip", { type: "application/zip" });
+    await W.__PPT.onFiles([f2]); await laukti(40);
+    lygu(S.docs.length, n0, "nepadvigubinta"); turi(D.getElementById("docNote").textContent, "jau įkelti");
+    await isvalyk(); VPT_ATS = null;
+  });
+  await testas("Siūlomi klausimai: „nebus“ ir „neprivalo“ - ne teigimas; derybų objekto apribojimas ir derybų būdas - ne „derybų nebus“; turinio eilutė; kiti netikslumai", () => {
+    let r = KL([SPS("Pirkime derybos nebus vykdomos dėl: BPS 47.2 punkte nurodytų sąlygų.")]);
+    tiesa(fids(r).indexOf("derybos") < 0, "apribojimas - ne faktas");
+    r = KL([SPS("Galima siūlyti visas sąlygas, išskyrus žemiau nurodytas sąlygas, dėl kurių nebus deramasi.")]); tiesa(fids(r).indexOf("derybos") < 0, "dėl kurių");
+    r = KL([SPS("13.1. Šio pirkimo metu nebus vykdomos derybos.")]); lygu(fids(r).indexOf("derybos") >= 0, true, "„nebus vykdomos derybos“ - faktas"); neturi(String(kq(r, "derybos")), "Dėl ko bus deramasi");
+    r = KL([SPS("Šio pirkimo metu bus vykdomos derybos.")]); turi(kq(r, "derybos"), "Dėl ko bus deramasi");
+    // Būdas iš CVP IS - derybos: faktas „Ne“ nerodomas, klausiame
+    r = W.GP_KLAUSIMAI.siulyk({ docs: [SPS("Derybos nevykdomos šiame etape.")], meta: {}, kalba: "lt", dabar: new Date(2026, 5, 1), procedura: "Competitive with negotiation" });
+    tiesa(fids(r).indexOf("derybos") < 0, "ne faktas"); turi(kq(r, "derybos"), "Dėl ko bus deramasi");
+    r = KL([SPS("Tiekėjai neprivalo pateikti banko ar draudimo kompanijos išduoto pasiūlymo galiojimo užtikrinimo.")]); lygu(fids(r).indexOf("uztikrinimas") >= 0, true, "neprivalo - faktas"); tiesa(kids(r).indexOf("uztikrinimas") < 0);
+    r = KL([SPS("Tiekėjas privalo pateikti pasiūlymo galiojimo užtikrinimą, kurio suma 10 000 Eur.")]); turi(kq(r, "uztikrinimas"), "10 000 Eur");
+    r = KL([SPS("8. PASIŪLYMO GALIOJIMO UŽTIKRINIMAS .......................... 12", "Nieko daugiau.")]); tiesa(kids(r).indexOf("uztikrinimas") < 0, "turinio eilutė - ne citata");
+    // DPS: būdas žinomas - bendra nuostata klausimo nesukuria
+    r = W.GP_KLAUSIMAI.siulyk({ docs: [SPS("Pirkimai gali būti vykdomi ir per dinaminę pirkimo sistemą.")], meta: {}, kalba: "lt", dabar: new Date(2026, 5, 1), procedura: "Open" }); tiesa(kids(r).indexOf("dps") < 0, "atviras - ne DPS");
+    r = W.GP_KLAUSIMAI.siulyk({ docs: [SPS("Dinaminė pirkimo sistema sukuriama.")], meta: {}, kalba: "lt", dabar: new Date(2026, 5, 1), procedura: "Dynamic Purchasing System" }); tiesa(kids(r).indexOf("dps") >= 0, "DPS");
+    r = KL([SPS("Dinaminė pirkimo sistema sukuriama.")]); tiesa(kids(r).indexOf("dps") >= 0, "būdo nežinant - pagal dokumentą");
+    r = KL([SPS("Per paskutinius 3 metus su šia įmone nebuvo sudariusi sutarties.")]); tiesa(kids(r).indexOf("patirtis") < 0, "vidaus sandoriai - ne patirtis");
+    r = KL([SPS("Per paskutinius 3 metus tiekėjas turi būti įvykdęs bent vieną sutartį.")]); tiesa(kids(r).indexOf("patirtis") >= 0, "tikras reikalavimas lieka");
+    r = KL([SPS("Apžiūra nenumatyta, tačiau tiekėjai gali inicijuoti.")]); tiesa(fids(r).indexOf("apziura") < 0, "„tačiau“ - ne faktas „Ne“");
+    r = KL([SPS("Tiekėjas turi turėti pakankamus žmogiškuosius, techninius ir finansinius išteklius.")]); tiesa(kids(r).filter(x => /^reikalavimas/.test(x)).length === 0, "bendras žodis - ne reikalavimas");
+    // Rinkos konsultacija: tik jai skirti klausimai
+    r = W.GP_KLAUSIMAI.siulyk({ docs: [SPS("Kviečiame atsakyti į klausimus.")], meta: {}, kalba: "lt", procedura: "Preliminary Market Consultation" });
+    lygu(kids(r), ["rk-klausimai", "rk-kaip", "rk-naudojimas", "rk-dalyvavimas"]); lygu(r.faktai, []); lygu(r.klausimai[0].kodel.docId, "D1");
+    lygu(W.GP_KLAUSIMAI.siulyk({ docs: [], procedura: "Preliminary Market Consultation" }).klausimai[0].kodel, null, "be dokumentų - be šaltinio");
+    r = KL([SPS("Tiekėjai privalo pateikti EBVPD."), kd("E1", "espd-request.xml", "EBVPD", ["urn:www.cenbii.eu"]), kd("E2", "espd-request.pdf", "EBVPD", ["Europos bendrasis viešųjų pirkimų dokumentas"])]);
+    turi(r.klausimai.filter(x => x.id === "ebvpd")[0].kodel.citata, "Europos bendrasis");
+  });
+  await testas("Dokumentų rūšys, redakcijos, punktas prie citatos, gynybos pirkimas, būdo konfliktas, trukmės skirtumas, koduotė, tekstai EN", async () => {
+    lygu([K.rusis("1.1 Bendrosios pirkimo sąlygos (SPS)_General.docx"), K.rusis("Bendrosios sutarties sąlygos.docx"), K.rusis("2.8. Klausimų pateikimo forma.docx"), K.rusis("Klausimu_atsakymu_forma.xlsx"), K.rusis("Atsakymai į klausimus 08.07.pdf"), K.rusis("Dėl klausimų.pdf")], ["BPS", "Sutartis", "Forma", "Forma", "Paaiškinimas", "Paaiškinimas"]);
+    const rd = (name, tx) => ({ id: name, name, parseStatus: "parsed", versija: {}, blocks: tx.map((text, i) => ({ loc: { para: i + 1 }, text })) });
+    lygu(A.redakcijuPoros([rd("espd-request.xml", ["a"]), rd("espd-request.pdf", ["b"])]).length, 0, "XML ir PDF");
+    lygu(A.redakcijuPoros([rd("x › README.txt", ["a"]), rd("y › README.txt", ["b"])]).length, 0, "README");
+    lygu(A.redakcijuPoros([rd("SPS.docx", ["a"]), rd("SPS.pdf", ["b"])]).length, 0, "skirtingas formatas");
+    lygu(A.redakcijuPoros([rd("SPS 2026-01-01.docx", ["Sakinys vienas ilgas tekstas."]), rd("SPS 2026-02-01.docx", ["Sakinys vienas ilgas tekstas."])]).length, 0, "ta pati kopija");
+    lygu(A.redakcijuPoros([rd("SPS 2026-01-01.docx", ["Sakinys vienas ilgas tekstas."]), rd("SPS 2026-02-01.docx", ["Sakinys du visai kitas tekstas."])]).length, 1, "tikra redakcija");
+    const c = { id: "D1#1", docId: "D1", loc: { para: 1 }, punktas: "10.1", text: "10.1. Pirmas punktas apie kita.\n11.1. Šio Pirkimo metu nereikalaujama užtikrinimo.\n12.1. Trečias." };
+    const qa = A.validuokQA({ status: "atsakyta", trumpas_atsakymas: "T", saltiniai: [{ id: "D1#1", citata: "nereikalaujama užtikrinimo" }, { id: "D1#1", citata: "Pirmas punktas" }] }, { "D1#1": c }, "lt");
+    lygu(qa.saltiniai.map(s => s.punktas), ["11.1", "10.1"], "artimiausias prieš citatą");
+    lygu(A.validuokChecklist({ punktai: [{ id: "ebvpd", busena: "privaloma", saltiniai: [{ id: "D1#1", citata: "Trečias" }] }] }, { "D1#1": c }).punktai.filter(p => p.id === "ebvpd")[0].saltiniai[0].punktas, "12.1");
+    // Gynyba: VPĮ nesiūlomas
+    await isvalyk(); DOK_ATS = { zip: await dokZip(DOK_MIN) };
+    VPT_ATS = () => vptOk({ procedure: "Restricted", directive: "prompt.directive.defence", caName: "UAB EPSO-G" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    const ctx = D.getElementById("kontekstasBox").textContent;
+    turi(ctx, "Viešųjų pirkimų, atliekamų gynybos ir saugumo srityje, įstatymas"); lygu(W.__PPT.S.kontekstas.rezimas, null);
+    await isvalyk(); VPT_ATS = null;
+    await ikelk({ "1234507_Contract notice_0.txt": "Skelbimas apie pirkimą pagal Direktyvą 2009/81/EB. Perkančiosios organizacijos pavadinimas: UAB X", "Specialiosios pirkimo sąlygos.txt": CVP_S }); await laukti(40);
+    lygu(W.__PPT.S.kontekstas.rezimas, null, "pagal skelbimą"); turi(D.getElementById("kontekstasBox").textContent, "2009/81/EB");
+    // Būdo konfliktas: bendras žodis
+    await svarus();
+    const m = W.__PPT.metaIsDokumentu([{ id: "a", name: "SPS.txt", rusis: "SPS", parseStatus: "parsed", versija: {}, blocks: [{ loc: { para: 1 }, text: "Pirkimo būdas: skelbiama apklausa." }, { loc: { para: 2 }, text: "Pirkimo būdas: mažos vertės pirkimas." }] }]);
+    if (m.procedure) { lygu(m.procedure.value, "skelbiama apklausa"); lygu(m.procedure.alt, [], "ne konfliktas"); }
+    // Trukmės skirtumas
+    await isvalyk(); DOK_ATS = { zip: await dokZip({ "1234501_Contract notice_0.txt": "Skelbimas apie pirkimą. Trukmė: 37 Mėnesiai", "Specialiosios pirkimo sąlygos.txt": CVP_S + "\n\nSutarties trukmė 37 mėn." }) };
+    VPT_ATS = () => vptOk({ contractDuration: "36_months" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    if (W.__PPT.S.meta.duration && /^37/.test(W.__PPT.S.meta.duration.value)) turi(VB().textContent, "Sutarties trukmė: VPT duomenimis");
+    await isvalyk(); VPT_ATS = null;
+    // TXT koduotė
+    const bl = await K.apdorok([new W.File([new Uint8Array([84, 97, 105, 32, 0xF0, 0xE0, 0x20, 0x74, 0x72, 0x75, 0x6D, 0x70, 0x61, 0x73])], "README.txt")], null, "lt");
+    turi(bl.docs[0].blocks[0].text, "Tai šą trumpas"); neturi(bl.docs[0].blocks[0].text, "�");
+    // Tekstai: EN dokumentų rūšys ir trukmė
+    await ikelk({ "Atsakymai į klausimus.txt": CVP_S }); W.setLang("en"); neturi(D.getElementById("doclist").textContent, "Paaiškinimas"); turi(D.getElementById("doclist").textContent, "Clarification"); W.setLang("lt");
+    turi(D.getElementById("diPranesimas").textContent, "per G-Procure serverį į Anthropic");
+    await svarus();
+    // Pradžia: nuoroda be numerio
+    W.setView("home"); D.getElementById("homeSearch").value = "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do"; W.__PPT.isPradziosPaieskos();
+    await laukti(30); turi(D.getElementById("homeBusena").textContent, "Nuorodoje nėra resourceId"); D.getElementById("homeSearch").value = "";
+    W.setView("pirkimas");
+    // Pavadinimas DI užklausoje: su VPT skyryba, kai PDF prarado brūkšnelį
+    await isvalyk(); DOK_ATS = { zip: await dokZip({ "1234501_Contract notice_0.txt": "Skelbimas apie pirkimą.\n\nPavadinimas: (VPP268) Sistemos pirkimas\n\nPasiūlymų priėmimo terminas: 20/10/2099 15:00 +03:00", "Specialiosios pirkimo sąlygos.txt": CVP_S }) };
+    VPT_ATS = () => vptOk({ title: "(VPP-268) Sistemos pirkimas" });
+    await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+    if (W.__PPT.S.meta.title && /VPP268/.test(W.__PPT.S.meta.title.value)) await suAi({ ok: false, status: 500, error: "x" }, async (kv) => {
+      D.getElementById("askInput").value = "Kaip pateikti pasiūlymą?"; D.getElementById("askBtn").click(); await kol(() => kv.length === 1);
+      turi(kv[0].userMessage, "(VPP-268) Sistemos pirkimas"); await kol(() => !W.__PPT.S.klausiama);
+    });
+    await isvalyk(); VPT_ATS = null;
+    // Pradžios paieškos rezultatai perpiešiami pakeitus kalbą
+    VPT_ATS = u => /\/paieska\?/.test(u) ? { status: 200, body: { rezultatai: [{ id: 1234501, title: "Kabeliai", caName: "Kita", procedure: "Open", status: "Published", procurementType: "Supplies", cpvCodes: [], datePublished: "2026-10-01T10:00:00", tenderSubmissionDeadline: "2099-10-01T10:00:00" }], viso: 1, rodoma: 1, psl: 1, dydis: 20, meta: VPT_META } } : vptOk();
+    W.setView("home"); D.getElementById("homeSearch").value = "kabeliai"; W.__PPT.isPradziosPaieskos(); await kol(() => /Kabeliai/.test(D.getElementById("homeRez").textContent));
+    turi(D.getElementById("homeRez").textContent, "Atviras konkursas"); W.setLang("en"); turi(D.getElementById("homeRez").textContent, "Open procedure"); W.setLang("lt");
+    D.getElementById("homeSearch").value = ""; D.getElementById("homeRez").innerHTML = ""; W.setView("pirkimas"); VPT_ATS = null;
   });
 
   grazinkKalba();
