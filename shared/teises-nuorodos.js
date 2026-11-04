@@ -525,8 +525,8 @@
     terminas_sd_pirminiai: { tikrinta: "2026-10-28", apie: "pirminių pasiūlymų pateikimo terminas skaičiuojamas nuo kvietimų pateikti pasiūlymus išsiuntimo; trumpiausias terminas priklauso nuo įstatymo ir pirkimo rūšies",
       PI: { a: "PI", s: 74, d: 4, apie: "pirminių pasiūlymų pateikimo terminą perkantysis subjektas gali susiderinti su atrinktais kandidatais, jeigu visi jie turės tiek pat laiko pasiūlymams parengti ir pateikti; nesusiderinus - ne trumpesnis kaip 10 dienų (tarptautinis pirkimas) ar 7 dienos (supaprastintas pirkimas) nuo kvietimų pateikti pasiūlymus išsiuntimo" },
       VPI: { a: "VPI", s: 65, d: 3, apie: "pirminių pasiūlymų pateikimo terminas - ne trumpesnis kaip 30 dienų (tarptautinis pirkimas) ar 10 dienų (supaprastintas pirkimas) nuo kvietimų pateikti pasiūlymus išsiuntimo" } },
-    sd_be_paraisku: { tikrinta: "2026-09-26", apie: "atlikdamas supaprastintą pirkimą skelbiamų derybų būdu, perkantysis subjektas gali neprašyti paraiškų ir leisti visiems tiekėjams pateikti pirminius pasiūlymus",
-      PI: { a: "PI", s: 73, d: 2 } },
+    sd_be_paraisku: { tikrinta: "2026-11-04", apie: "atlikdamas supaprastintą pirkimą skelbiamų derybų būdu, pirkimo vykdytojas gali neprašyti paraiškų ir leisti visiems tiekėjams pateikti pirminius pasiūlymus",
+      PI: { a: "PI", s: 73, d: 2 }, VPI: { a: "VPI", s: 64, d: 1 } },
     // Perskaityta e-tar 2026-10-20 (PP-salygos 1 žingsnio teiginiai apie paraiškų etapą ir derybas; naudotojo sprendimas - patikrinti)
     sd_paraiskos: { tikrinta: "2026-10-20", apie: "skelbiamų derybų būdu paraišką gali pateikti kiekvienas suinteresuotas tiekėjas, o pirminius pasiūlymus teikia tik perkančiojo subjekto pakviesti kandidatai",
       PI: { a: "PI", s: 73, d: 2 } },
