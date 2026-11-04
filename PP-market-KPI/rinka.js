@@ -2,14 +2,14 @@
  * PP-market-KPI  rinka.js
  * ----------------------------------------------------------------------------
  * Globalūs rinkos rodikliai (nafta, metalai, krovinių kainos, tiekimo grandinės) per
- * g-procure backend proxy ir polimerų kainos - tiesiai iš Eurostat.
+ * g-procure backend proxy, polimerų ir ES transporto paslaugų kainos - tiesiai iš Eurostat.
  *
  * KODĖL PER PROXY, o VDA rodikliai (osp.js) - tiesiai iš naršyklės. OSP rakto
  * nereikalauja ir leidžia mūsų kilmę, tad ten tarpininko nereikia. FRED reikalauja
  * rakto, o raktas kliento JavaScript'e matomas visiems - CLAUDE.md tai draudžia.
  * Todėl raktas lieka serveryje, o naršyklė kviečia /api/rinka. Eurostat rakto nereikalauja
  * ir leidžia bet kokią kilmę (`Access-Control-Allow-Origin: *`, patikrinta 2026-11-03), todėl
- * polimerai veikia ir be serverio.
+ * šie rodikliai veikia ir be serverio.
  *
  * KĄ ŠITAS SLUOKSNIS DARO IR KO NEDARO. Jis tik parsineša ir sutvarko duomenis.
  * Sprendimą, kur reikšmę įrašyti, priima modulis (`taikykRinka`), nes tik jis žino
@@ -25,13 +25,23 @@
 
   var BAZE = "https://api.g-procure.com/api/rinka";
   var RODIKLIAI = { brent: 1, wti: 1, lme_al: 1, lme_cu: 1, dujos_eu: 1, plienas: 1, plieno_vamzdziai: 1, gelezies_ruda: 1, nikelis: 1, cinkas: 1,
-                    container: 1, aircargo: 1, gscpi: 1, polymers: 1 };
+                    container: 1, aircargo: 1, gscpi: 1, polymers: 1, transp_vanduo: 1, transp_oras: 1 };
   /* Eurostat: gamintojų kainos (visa rinka), NACE C2016 „plastikai pirminėmis formomis“, ES, 2021 = 100, nekoreguota. Atvirieji duomenys:
      naudoti galima nurodant šaltinį. Mėnesinis, naujausias - maždaug prieš 2-3 mėn. Pjūviai patikrinti 2026-11-03. */
   var EUROSTAT = {
     polymers: {
       url: "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_inpp_m?format=JSON&lang=EN&geo=EU27_2020&nace_r2=C2016&s_adj=NSA&unit=I21&indic_bt=PRC_PRR",
       saltinis: "Eurostat - Producer prices in industry: plastics in primary forms (NACE C2016), EU, 2021 = 100"
+    },
+    /* Paslaugų gamintojų kainos (sts_sepp_q), ES, 2021 = 100, nekoreguota, ketvirtinės (naudotojo sprendimas 2026-11-04: ES duomenys greta JAV
+       krypties ženklų). Vandens transportas ES vidurkiu skelbiamas nuo 2021 m., oro - nuo 2010 m. Pjūviai patikrinti 2026-11-04. */
+    transp_vanduo: {
+      url: "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_sepp_q?format=JSON&lang=EN&geo=EU27_2020&nace_r2=H50&indic_bt=PRC_PRR&s_adj=NSA&unit=I21", ketvirtinis: true,
+      saltinis: "Eurostat - Services producer prices: water transport (NACE H50), EU, 2021 = 100"
+    },
+    transp_oras: {
+      url: "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_sepp_q?format=JSON&lang=EN&geo=EU27_2020&nace_r2=H51&indic_bt=PRC_PRR&s_adj=NSA&unit=I21", ketvirtinis: true,
+      saltinis: "Eurostat - Services producer prices: air transport (NACE H51), EU, 2021 = 100"
     }
   };
 
@@ -54,7 +64,9 @@
     container: "https://fred.stlouisfed.org/series/PCU483111483111",
     aircargo: "https://fred.stlouisfed.org/series/IC131",
     gscpi: "https://www.newyorkfed.org/research/policy/gscpi",
-    polymers: "https://ec.europa.eu/eurostat/databrowser/view/sts_inpp_m/default/table?lang=en"
+    polymers: "https://ec.europa.eu/eurostat/databrowser/view/sts_inpp_m/default/table?lang=en",
+    transp_vanduo: "https://ec.europa.eu/eurostat/databrowser/view/sts_sepp_q/default/table?lang=en",
+    transp_oras: "https://ec.europa.eu/eurostat/databrowser/view/sts_sepp_q/default/table?lang=en"
   };
 
   /* Is kasdienes serijos atrenka reiksmes rodiklio SAVAITINIAM tinkleliui: kiekvienam
@@ -83,7 +95,7 @@
     return res;
   }
 
-  /* JSON-stat atsakymas -> [{ laikotarpis:"2026-08-01", reiksme }] pagal laiką. Visi pjūviai parinkti adrese, todėl vienintelė
+  /* JSON-stat atsakymas -> [{ laikotarpis:"2026-08-01", reiksme }] pagal laiką; ketvirtis - paskutinis jo mėnuo („2026-Q2“ -> „2026-06-01“), kaip VMDU. Visi pjūviai parinkti adrese, todėl vienintelė
      dimensija su keliomis reikšmėmis - laikas; kitokia sandara - klaida, ne svetimi skaičiai. */
   function skaitykEurostat(d) {
     var dim = d && d.dimension, ids = d && d.id, dydziai = d && d.size;
@@ -93,7 +105,10 @@
     var rez = [];
     Object.keys(laikas).forEach(function (per) {
       var v = d.value[laikas[per]];
-      if (/^\d{4}-\d{2}$/.test(per) && typeof v === "number" && isFinite(v)) rez.push({ laikotarpis: per + "-01", reiksme: v });
+      if (typeof v !== "number" || !isFinite(v)) return;
+      var q = /^(\d{4})-Q([1-4])$/.exec(per);
+      if (q) rez.push({ laikotarpis: q[1] + "-" + ("0" + q[2] * 3).slice(-2) + "-01", reiksme: v });
+      else if (/^\d{4}-\d{2}$/.test(per)) rez.push({ laikotarpis: per + "-01", reiksme: v });
     });
     if (!rez.length) throw new Error("Eurostat: tuščias atsakymas");
     return rez.sort(function (a, b) { return a.laikotarpis < b.laikotarpis ? -1 : 1; });
@@ -102,7 +117,7 @@
   function imkEurostat(id) {
     var nuo = new Date();
     nuo.setMonth(nuo.getMonth() - 30);
-    var u = EUROSTAT[id].url + "&sinceTimePeriod=" + nuo.getFullYear() + "-" + ("0" + (nuo.getMonth() + 1)).slice(-2);
+    var u = EUROSTAT[id].url + "&sinceTimePeriod=" + nuo.getFullYear() + "-" + (EUROSTAT[id].ketvirtinis ? "Q" + (Math.floor(nuo.getMonth() / 3) + 1) : ("0" + (nuo.getMonth() + 1)).slice(-2));
     return fetch(u, { credentials: "omit" }).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
