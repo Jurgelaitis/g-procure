@@ -1,5 +1,5 @@
 /* ============================================================================
- * G-Procure  shared/teise-stebesena.js   (v1.2)
+ * G-Procure  shared/teise-stebesena.js   (v1.3)
  * ----------------------------------------------------------------------------
  * Pirkimų teisės stebėsenos BRANDUOLYS (window.GP_STEBESENA) - vienas visiems:
  * PP-teise modulis (sąrašas, vaizdai, paieška, peržiūrų žurnalas), administravimo
@@ -58,7 +58,8 @@
     teises_norma:           { lt: "Teisės norma",               en: "Legal norm" },
     vpt_rekomendacija:      { lt: "VPT rekomendacija",          en: "PPO recommendation" },
     teismo_isaiskinimas:    { lt: "Teismo išaiškinimas",        en: "Court interpretation" },
-    organizacijos_praktika: { lt: "Organizacijos praktika",     en: "Organisation practice" }
+    organizacijos_praktika: { lt: "Organizacijos praktika",     en: "Organisation practice" },
+    teises_akto_projektas:  { lt: "Teisės akto projektas",      en: "Draft legal act" }
   };
 
   var REZIMAI = {
@@ -79,6 +80,8 @@
     "vpt-prieziura":          { lt: "VPT priežiūra",                 en: "PPO supervision" },
     "specialistu-atestavimas":{ lt: "Pirkimų specialistų atestavimas", en: "Procurement specialist certification" },
     "isimtys":                { lt: "Įstatymo išimtys",              en: "Exemptions" },
+    "bendradarbiavimo-sutartys": { lt: "Bendradarbiavimo sutartys",  en: "Cooperation agreements" },
+    "pirkimu-ataskaitos":     { lt: "Pirkimų ataskaitos",            en: "Procurement reports" },
     "komunikacija":           { lt: "Komunikacijos pirkimai",        en: "Communication purchases" },
     "verciu-ribos":           { lt: "Vertės ribos",                  en: "Value thresholds" },
     "salygu-aiskumas":        { lt: "Sąlygų aiškumas",               en: "Clarity of conditions" },
@@ -194,6 +197,10 @@
       kasPasikeite: typeof o.kasPasikeite === "string" ? o.kasPasikeite : "",
       kamAktualu: typeof o.kamAktualu === "string" ? o.kamAktualu : "",
       veiksmas: typeof o.veiksmas === "string" ? o.veiksmas : "",
+      /* Pirkimų specialistui veiksmų nereikia (2026-11-04): įrašas nepatenka į „Ką peržiūrėti?“. Darbas registro prižiūrėtojui
+         (pvz. pridėti šaltinį) - atskirame lauke, rodomas tik administravimo aplinkoje. */
+      veiksmuNereikia: !!o.veiksmuNereikia,
+      prizuretojui: typeof o.prizuretojui === "string" ? o.prizuretojui.trim() : "",
       rusis: RUSYS[o.rusis] ? o.rusis : null,
       saltinioTipas: SALTINIO_TIPAI[o.saltinioTipas] ? o.saltinioTipas : null,
       rezimas: sarasas(o.rezimas).filter(function (v) { return REZIMAI[v]; }),
@@ -381,20 +388,47 @@
   /* Įrašas priklauso „Ką reikia peržiūrėti?“, kai turi veiksmą arba susietų modulių
      ir nėra archyvuotas. Naudotojo užbaigtos peržiūros atskiriamos žurnale. */
   function reikiaPerziureti(r) {
-    if (r.busena === "archyvuota" || r.pakeistas) return false;
+    if (r.busena === "archyvuota" || r.pakeistas || r.veiksmuNereikia) return false;
     return !!(r.veiksmas && r.veiksmas.trim()) || r.moduliai.length > 0;
   }
 
   /* Rikiavimas: įsigaliosiantys - artimiausi pirmi; pasikeitę - naujausi pirmi. */
   function svarbiData(r) { return r.datos.isigalioja || r.datos.priimta || r.datos.paskelbta || ""; }
-  function rikiuok(sar, kaip) {
+  /* Sutapus datai tvarka nepriklauso nuo eilės registre (2026-11-04): vėliau paskelbtas pirmas, tada pagal pavadinimą - atvertas pirmas įrašas
+     visada tas pats. „perziurai“ („Ką peržiūrėti?“, reikia `dabar`): artimiausi įsigaliojimai, tada jau galiojantys (naujausi pirmi),
+     tada įrašai be datos, darbai prižiūrėtojui ir pabaigoje projektai. */
+  function pagalPavadinima(a, b) { return String(a.pavadinimas || "").localeCompare(String(b.pavadinimas || ""), "lt") || (String(a.id) < String(b.id) ? -1 : 1); }
+  function perziurosGrupe(r, dabar) {
+    if (r.rusis === "projektas") return 4;
+    if (r.prizuretojui && !(r.veiksmas || "").trim()) return 3;
+    var sk = skiltis(r, dabar);
+    return sk === "isigalios" ? 0 : sk === "pasikeite" ? 1 : 2;
+  }
+  function rikiuok(sar, kaip, dabar) {
     var s = sar.slice();
-    s.sort(function (a, b) {
+    var pagalData = function (a, b, artimiausi) {
       var x = svarbiData(a), y = svarbiData(b);
       if (!x && !y) return 0; if (!x) return 1; if (!y) return -1;
-      return kaip === "artimiausi" ? (x < y ? -1 : x > y ? 1 : 0) : (x > y ? -1 : x < y ? 1 : 0);
+      return artimiausi ? (x < y ? -1 : x > y ? 1 : 0) : (x > y ? -1 : x < y ? 1 : 0);
+    };
+    s.sort(function (a, b) {
+      var c;
+      if (kaip === "perziurai") {
+        var ga = perziurosGrupe(a, dabar), gb = perziurosGrupe(b, dabar);
+        if (ga !== gb) return ga - gb;
+        c = pagalData(a, b, ga === 0);
+      } else c = pagalData(a, b, kaip === "artimiausi");
+      if (c) return c;
+      var pa = a.datos.paskelbta || a.datos.priimta || "", pb = b.datos.paskelbta || b.datos.priimta || "";
+      return pa > pb ? -1 : pa < pb ? 1 : pagalPavadinima(a, b);
     });
     return s;
+  }
+
+  /* Pereinamųjų nuostatų žyma - tik kai jos tikrai yra (2026-11-04): laukas gali sakyti ir „Pereinamųjų nuostatų ... nėra“. */
+  function turiPereinamasias(r) {
+    var t = r && typeof r.pereinamosios === "string" ? r.pereinamosios.trim() : "";
+    return !!t && !/pereinam[^.]*nuostat[^.]*n[ėe]ra/i.test(t);
   }
 
   /* Svarbiausia data su jos REIKŠME - tas pats sakinys portale, modulio kortelėje ir
@@ -413,7 +447,7 @@
     }
     if (r.datos.isigalioja) {
       var ateitis = r.datos.isigalioja > d;
-      var reiksme = r.datos.taikoma || (r.pereinamosios ? t("yra pereinamosios nuostatos - žr. detales", "transitional provisions apply - see details") : "");
+      var reiksme = r.datos.taikoma || (turiPereinamasias(r) ? t("yra pereinamosios nuostatos - žr. detales", "transitional provisions apply - see details") : "");
       return { zyma: ateitis ? t("Įsigalioja", "Enters into force") : t("Galioja nuo", "In force since"), data: r.datos.isigalioja, reiksme: reiksme, ateitis: ateitis };
     }
     var kita = r.datos.priimta || r.datos.paskelbta;
@@ -459,30 +493,50 @@
     var lygis = "galimai", atitiko = 0, tikrinta = 0;
     // priežastyje - žodyno pavadinimai, ne registro kodai („Transliavimo laikas, programos“, ne „media“)
     var pav = function (zod, k) { return zod[k] ? zod[k][L] : k; };
+    var bus = {}, sutampa = [], truksta = [];   // bus: požymio būsena (taikomas visiems - nesaugomas); griežtam režimui nenaudojama
     /* reiksme - viena reikšmė arba sąrašas (atitinka, kai sutampa bent viena): modulio objektų žodynas stambesnis už
        registro - pvz. PP-salygos „darbai“ tikrinami ir kaip „statyba“ (naudotojo sprendimas 2026-10-04). */
-    function tik(saras, reiksme, zod) {
+    function tik(raktas, saras, reiksme, zod) {
       if (!saras) return;                           // null = taikoma visiems
       var rs = Array.isArray(reiksme) ? reiksme.filter(Boolean) : (reiksme ? [reiksme] : []);
-      if (!rs.length) { pr.push(t("Nenurodyta: " + zod.lt, "Not specified: " + zod.en)); return; }
+      if (!rs.length) { bus[raktas] = "nezinoma"; truksta.push(zod[L]); pr.push(t("Nenurodyta: " + zod.lt, "Not specified: " + zod.en)); return; }
       tikrinta++;
-      if (rs.some(function (v) { return saras.indexOf(v) !== -1; })) { atitiko++; }
+      var rado = rs.filter(function (v) { return saras.indexOf(v) !== -1; });
+      if (rado.length) { atitiko++; bus[raktas] = "atitinka"; sutampa.push(zod[L] + " (" + rado.map(function (k) { return pav(zod.zod || {}, k); }).join(", ") + ")"); }
       else {
+        bus[raktas] = "neatitinka";
         var sv = saras.map(function (k) { return pav(zod.zod || {}, k); }).join(", ");
         pr.push(t(zod.lt + " neatitinka (įrašas taikomas: " + sv + ")", zod.en + " does not match (entry applies to: " + sv + ")"));
       }
     }
-    tik(A.proceduros, c.procedura, { lt: "pirkimo būdas", en: "procedure", zod: PROCEDUROS });
-    tik(A.objektai, c.objektas, { lt: "pirkimo objektas", en: "object", zod: OBJEKTAI });
-    tik(A.etapai, c.etapas, { lt: "etapas", en: "stage", zod: ETAPAI });
-    if (c.griezta && tikrinta && atitiko < tikrinta) lygis = "neaktualu";
-    else if (tikrinta && atitiko === tikrinta) lygis = "aktualu";
-    else if (tikrinta && atitiko === 0) lygis = "neaktualu";
-    else if (!tikrinta && !A.proceduros && !A.objektai && !A.etapai) lygis = "aktualu";
+    tik("procedura", A.proceduros, c.procedura, { lt: "pirkimo būdas", en: "procedure", zod: PROCEDUROS });
+    tik("objektas", A.objektai, c.objektas, { lt: "pirkimo objektas", en: "object", zod: OBJEKTAI });
+    tik("etapas", A.etapai, c.etapas, { lt: "etapas", en: "stage", zod: ETAPAI });
+    if (c.griezta) {
+      /* Konkretus pirkimas modulyje (PP-salygos): požymiai žinomi - bent vienas nesutapęs reiškia „neaktualu“. Nekeičiama. */
+      if (tikrinta && atitiko < tikrinta) lygis = "neaktualu";
+      else if (tikrinta && atitiko === tikrinta) lygis = "aktualu";
+      else if (!tikrinta && !A.proceduros && !A.objektai && !A.etapai) lygis = "aktualu";
+    } else {
+      /* „Mano pirkimas“ (2026-11-04): būdas ir objektas lemia, ar įrašas apskritai liečia pirkimą; etapas pats to neįrodo.
+         Sutampa tik etapas, o būdas ar objektas įrašui svarbus ir nenurodytas - aktualumas nenustatytas. Nesutapęs būdas ar
+         objektas - niekada „aktualu“: kitam esminiam požymiui sutapus - „galimai“, kitaip - „neaktualu“. */
+      var esminiai = [bus.procedura, bus.objektas].filter(Boolean);
+      var neatitinka = esminiai.indexOf("neatitinka") !== -1, atitinka = esminiai.indexOf("atitinka") !== -1, nezino = esminiai.indexOf("nezinoma") !== -1;
+      if (neatitinka) lygis = atitinka ? "galimai" : "neaktualu";
+      else if (atitinka) lygis = nezino || bus.etapas === "neatitinka" ? "galimai" : "aktualu";
+      else if (nezino) lygis = "nezinoma";
+      else if (A.etapai) lygis = bus.etapas === "atitinka" ? "aktualu" : bus.etapas === "neatitinka" ? "neaktualu" : "nezinoma";
+      else lygis = "aktualu";
+      if (lygis === "nezinoma") pr.push(t("Vien pagal " + (bus.etapas === "atitinka" ? "etapą" : "nurodytus duomenis") + " aktualumo nustatyti negalima. Trūksta: " + truksta.join(", "), "Relevance cannot be determined from " + (bus.etapas === "atitinka" ? "the stage" : "the data given") + " alone. Missing: " + truksta.join(", ")));
+      if (sutampa.length) pr.unshift(t("Sutampa: " + sutampa.join(", "), "Matches: " + sutampa.join(", ")));
+      else if (lygis === "aktualu") pr.unshift(t("Įrašas taikomas visiems pirkimo būdams, objektams ir etapams", "The entry applies to all procedures, objects and stages"));
+      if (r.rusis === "projektas" && lygis === "aktualu") lygis = "galimai";
+    }
     if (yraData(c.skelbimoData) && r.datos.isigalioja) {
       if (c.skelbimoData < r.datos.isigalioja) {
-        pr.push(t("Planuojama skelbti " + c.skelbimoData + " - anksčiau nei įsigalioja (" + r.datos.isigalioja + ")" + (r.pereinamosios ? "; žr. pereinamąsias nuostatas" : ""),
-                  "Planned publication " + c.skelbimoData + " is before entry into force (" + r.datos.isigalioja + ")" + (r.pereinamosios ? "; see transitional provisions" : "")));
+        pr.push(t("Planuojama skelbti " + c.skelbimoData + " - anksčiau nei įsigalioja (" + r.datos.isigalioja + ")" + (turiPereinamasias(r) ? "; žr. pereinamąsias nuostatas" : ""),
+                  "Planned publication " + c.skelbimoData + " is before entry into force (" + r.datos.isigalioja + ")" + (turiPereinamasias(r) ? "; see transitional provisions" : "")));
         if (lygis === "aktualu") lygis = "galimai";
       } else {
         pr.push(t("Įsigalioja iki planuojamo skelbimo - taikoma", "In force before planned publication - applies"));
@@ -500,7 +554,10 @@
                  r.moduliai.map(function (m) { return m.modulis + " " + m.kas; }).join(" "),
                  r.portalas ? r.portalas.pavadinimas + " " + r.portalas.kodel : ""];
     var I = r.identifikatoriai || {};
-    Object.keys(I).forEach(function (k) { if (typeof I[k] === "string" || typeof I[k] === "number") dalys.push(String(I[k])); });
+    Object.keys(I).forEach(function (k) {
+      if (typeof I[k] === "string" || typeof I[k] === "number") dalys.push(String(I[k]));
+      else if (Array.isArray(I[k])) dalys.push(I[k].join(" "));
+    });
     return normalizuokTeksta(dalys.join(" \n "));
   }
 
@@ -544,6 +601,8 @@
       senumasDienomis: senumas,
       pasenes: !pat || senumas > riba,
       apreptis: typeof m.apreptis === "string" ? m.apreptis : "",
+      neapima: typeof m.neapima === "string" ? m.neapima : "",
+      laikotarpis: m.laikotarpis && yraData(m.laikotarpis.nuo) && yraData(m.laikotarpis.iki) ? { nuo: m.laikotarpis.nuo, iki: m.laikotarpis.iki } : null,
       rezimas: typeof m.rezimas === "string" ? m.rezimas : "rankinis"
     };
   }
@@ -583,18 +642,69 @@
       paskutinePatikraNepavyko: !!nepavykusi,
       patvirtinta: patv, isViso: aktyvus.length,
       patvirtinimoTekstas: t("Paaiškinimai patvirtinti specialisto: ", "Explanations confirmed by specialist: ") + patv + t(" iš ", " of ") + aktyvus.length,
-      versija: rb.versija, apreptis: rb.apreptis
+      versija: rb.versija, apreptis: rb.apreptis, neapima: rb.neapima, laikotarpis: rb.laikotarpis,
+      irasu: aktyvus.length
     };
+  }
+
+  /* Ką registras apima (2026-11-04): visada matomas sakinys - kada tikrinta, kiek įrašų ir kad tai ne visa pirkimų teisė.
+     Grąžina tekstą be HTML. Pasenimo riba (45 d.) - rinkinioBusena(), čia nekeičiama. */
+  function apreptiesTekstas(tikrinta, dabar, lang) {
+    var L = lang === "en" ? "en" : "lt", t = function (lt, en) { return L === "en" ? en : lt; };
+    var p = patikimumas(tikrinta, null, dabar, L), n = p.senumasDienomis;
+    var kada = !p.registrasAtnaujintas ? t("Registro patikros data nenurodyta.", "Registry check date not specified.")
+      : t("Registras tikrintas ", "Registry checked ") + p.registrasAtnaujintas + " (" + (n === 0 ? t("šiandien", "today") : t("prieš " + n + " d.", n + " days ago")) + ").";
+    var kiek = t("Tai " + p.irasu + " parinktų įrašų, ne visa pirkimų teisė.", "These are " + p.irasu + " selected entries, not all procurement law.");
+    var kas = (p.laikotarpis ? t("Laikotarpis: ", "Period: ") + p.laikotarpis.nuo + " - " + p.laikotarpis.iki + ". " : "") + (p.apreptis ? t("Apima: ", "Covers: ") + p.apreptis + " " : "");
+    return { kada: kada, kiek: kiek, kas: kas.trim(), neapima: p.neapima ? t("Neapima: ", "Does not cover: ") + p.neapima : t("Ko registras neapima, nenurodyta.", "What the registry does not cover is not specified.") };
   }
 
   /* ---------- Peržiūrų žurnalas (naudotojo, tik naršyklėje) ---------- */
 
   var PERZIURU_RAKTAS = "ppteise.perziuros";
 
-  function perziuros(saugykla, raktas) {
-    var st = saugykla || global.localStorage, k = raktas || PERZIURU_RAKTAS;
-    try { var v = st.getItem(k); var o = v ? JSON.parse(v) : {}; return (o && typeof o === "object") ? o : {}; }
-    catch (e) { return {}; }
+  /* Skaitymas per shared/saugykla.js, kai jis prijungtas (nuo 2026-11-04): sugadintas žurnalas nukopijuojamas, NEtampa tuščiu ir
+     neperrašomas - naujų žymų kol kas nepriima, puslapis tai pasako. Be GP_SAUGYKLA (puslapis jo nejungia) - ta pati būsena be kopijos. */
+  function perziuruSkaitymas(saugykla, raktas) {
+    var k = raktas || PERZIURU_RAKTAS;
+    var tinka = function (v) { return (v && typeof v === "object" && !Array.isArray(v)) || "netinkama žurnalo sandara"; };
+    if (global.GP_SAUGYKLA) {
+      var r = global.GP_SAUGYKLA.skaityk(k, { saugykla: saugykla, tikrink: tinka });
+      if (r.busena === "yra") return { busena: "yra", irasai: r.reiksme };
+      if (r.busena === "nera") return { busena: "nera", irasai: {} };
+      return { busena: r.busena, irasai: {}, klaida: r.klaida, kopija: r.kopija || null, rezultatas: r };
+    }
+    var st;
+    try { st = saugykla || global.localStorage; } catch (e) { return { busena: "neprieinama", irasai: {}, klaida: "naršyklės saugykla neprieinama" }; }
+    if (!st) return { busena: "neprieinama", irasai: {}, klaida: "naršyklės saugykla neprieinama" };
+    try {
+      var v = st.getItem(k);
+      if (v == null || v === "") return { busena: "nera", irasai: {} };
+      var o = JSON.parse(v), t = tinka(o);
+      return t === true ? { busena: "yra", irasai: o } : { busena: "sugadinta", irasai: {}, klaida: t };
+    } catch (e) { return { busena: "sugadinta", irasai: {}, klaida: "žurnalas neperskaitomas" }; }
+  }
+  function perziuros(saugykla, raktas) { return perziuruSkaitymas(saugykla, raktas).irasai; }
+  function rasykPerziuras(saugykla, visos, raktas) {
+    var k = raktas || PERZIURU_RAKTAS;
+    if (global.GP_SAUGYKLA) return global.GP_SAUGYKLA.rasyk(k, visos, { saugykla: saugykla });
+    try { (saugykla || global.localStorage).setItem(k, JSON.stringify(visos)); return { ok: true }; }
+    catch (e) { return { ok: false, klaida: "saugykla neprieinama" }; }
+  }
+  /* Įrašo turinio parašas: peržiūros žyma galioja tam turiniui, kurį žmogus matė (2026-11-04). Tik tai, ką jis skaito. */
+  function irasoParasas(r) {
+    var t = JSON.stringify([r.pavadinimas, r.santrauka, r.kasPasikeite, r.kamAktualu, r.veiksmas, r.pereinamosios, r.rusis, r.rezimas,
+      r.datos && [r.datos.priimta, r.datos.paskelbta, r.datos.isigalioja, r.datos.taikoma],
+      r.saltinis && [r.saltinis.url, r.saltinis.vieta], r.istrauka, r.palyginimas]);
+    var h = 5381;
+    for (var i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+    return h.toString(36) + "-" + t.length.toString(36);
+  }
+  /* "nera" | "galioja" | "pasenusi". Sena žyma be parašo lyginama pagal rinkinio versiją: kitokia - nežinome, ar įrašas tas pats. */
+  function perziurosBusena(r, p, versija) {
+    if (!p) return "nera";
+    if (p.parasas) return p.parasas === irasoParasas(r) ? "galioja" : "pasenusi";
+    return p.rinkinys && p.rinkinys === versija ? "galioja" : "pasenusi";
   }
   /* įrašas: { kas, pagrindimas, data } - pagrindimas privalomas (Metodikos 7.3 p. dvasia:
      sprendimas turi būti pagrįstas), be jo grąžina { ok:false }. Tai naudotojo SUSIPAŽINIMO
@@ -603,18 +713,21 @@
     var d = duom || {};
     if (!irasoId) return { ok: false, klaida: "nėra įrašo id" };
     if (!d.pagrindimas || !String(d.pagrindimas).trim()) return { ok: false, klaida: "reikalingas pagrindimas" };
-    var visos = perziuros(saugykla, raktas);
+    var sk = perziuruSkaitymas(saugykla, raktas);
+    if (sk.busena === "sugadinta" || sk.busena === "neprieinama") return { ok: false, klaida: "peržiūrų žurnalas neperskaitomas - jis neperrašomas" };
+    var visos = sk.irasai;
     visos[irasoId] = { kas: String(d.kas || "").trim(), pagrindimas: String(d.pagrindimas).trim(),
-                       data: yraData(d.data) ? d.data : dienaISO(), rinkinys: d.rinkinys || null };
-    try { (saugykla || global.localStorage).setItem(raktas || PERZIURU_RAKTAS, JSON.stringify(visos)); }
-    catch (e) { return { ok: false, klaida: "saugykla neprieinama" }; }
+                       data: yraData(d.data) ? d.data : dienaISO(), rinkinys: d.rinkinys || null, parasas: d.parasas || null };
+    var w = rasykPerziuras(saugykla, visos, raktas);
+    if (!w.ok) return { ok: false, klaida: w.klaida || "saugykla neprieinama" };
     return { ok: true, irasas: visos[irasoId] };
   }
   function atsaukPerziura(saugykla, irasoId, raktas) {
-    var visos = perziuros(saugykla, raktas);
+    var sk = perziuruSkaitymas(saugykla, raktas);
+    if (sk.busena === "sugadinta" || sk.busena === "neprieinama") return false;
+    var visos = sk.irasai;
     delete visos[irasoId];
-    try { (saugykla || global.localStorage).setItem(raktas || PERZIURU_RAKTAS, JSON.stringify(visos)); } catch (e) { return false; }
-    return true;
+    return !!rasykPerziuras(saugykla, visos, raktas).ok;
   }
 
   /* ---------- Įkėlimas ---------- */
@@ -675,6 +788,7 @@
       ".gps__warn{padding:8px 10px;border-radius:8px;background:var(--color-warning-5,#FEF6E8);color:#6B4A00;font-size:13px;margin-bottom:8px}",
       ".gps__kiti{margin-top:10px;font-size:14px}.gps__kiti summary{cursor:pointer;color:var(--color-emerald-strong,#007554);font-weight:700}.gps__kiti .gps__list{margin-top:8px}",
       ".gps__item--kitas{grid-template-columns:minmax(0,1fr)}.gps__sub b{font-weight:700;color:var(--color-graphite,#2E3641)}",
+      ".gps__kalba{margin:4px 0 0}",
       ".gps__tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 7px;border-radius:20px;border:1px solid var(--color-graphite-30,#C7CDD3);color:var(--color-graphite-50-strong,#5B6470);margin-left:6px;vertical-align:middle}",
       "@media (max-width:1023px){.gps--portalas .gps__list{grid-template-columns:1fr 1fr}}",
       // Siaurai datos žyma gali lūžti tarp žodžių (pati data „2026-07-01“ nelūžta): 320 px su Windows slinkties juosta PP-qual kortelėje
@@ -695,7 +809,7 @@
           be_datos: "data nenurodyta", tuscias: "Registre įrašų nėra",
           paskirtis: "Kas pasikeitė pirkimų teisėje, nuo kada galioja, kam aktualu ir ką reikia peržiūrėti - vienas registras PĮ ir VPĮ pirkimams, su nuorodomis į šaltinius ir susijusius įrankius.",
           beprioriteto: "Aktualūs įrašai portalui dar neparinkti: redakcinį prioritetą įrašui suteikia administratorius (PP-teise/admin.html), automatiškai jis neskaičiuojamas. Visą registrą rasite stebėsenos puslapyje.",
-          apie: "Apie rinkinį", versija: "Rinkinio versija", apreptis: "Aprėptis", prioritetas: "Rodoma pagal redakcinį prioritetą, ne pagal naujumą",
+          apie: "Apie rinkinį", versija: "Rinkinio versija", apreptis: "Aprėptis", prioritetas: "Rodoma pagal redakcinį prioritetą, ne pagal naujumą", kalba: "",
           pirkimui: "Teisės pokyčiai šiam pirkimui", pirkimuiNera: "Su šiuo įrankiu susietų ir šiam pirkimui aktualių įrašų registre nėra.",
           neaktualus: "Pagal jūsų atsakymus neaktualūs", kaDaryti: "Ką daryti", kaPatikrinti: "Ką patikrinti",
           galimai: "galimai aktualu", nenustatyta: "aktualumas nenustatytas", negalima: "Teisės pokyčių šiam pirkimui patikrinti negalima." },
@@ -708,6 +822,7 @@
           paskirtis: "What changed in procurement law, since when, who it concerns and what needs review - one registry for utilities and public procurement, with links to sources and related tools.",
           beprioriteto: "Entries for the portal have not been selected yet: an editorial priority is assigned by the administrator (PP-teise/admin.html), it is never computed automatically. The full registry is on the monitoring page.",
           apie: "About the set", versija: "Set version", apreptis: "Scope", prioritetas: "Shown by editorial priority, not by recency",
+          kalba: "The entries themselves are in Lithuanian: the registry is written and maintained in Lithuanian.",
           pirkimui: "Legal changes for this procurement", pirkimuiNera: "The registry has no entries linked to this tool that are relevant to this procurement.",
           neaktualus: "Not relevant based on your answers", kaDaryti: "What to do", kaPatikrinti: "What to check",
           galimai: "possibly relevant", nenustatyta: "relevance not determined", negalima: "Legal changes for this procurement cannot be checked." }
@@ -756,7 +871,7 @@
       if (portalas) {
         var rodyti = portaloIrasai(r.tikrinta.irasai, dabar, limit);
         h = '<section class="' + klase + '" aria-labelledby="gps-portalas-title"><div class="gps__head"><div><h2 class="gps__title" id="gps-portalas-title">' + esc(T.pav) + '</h2>' +
-            '<p class="gps__paskirtis">' + esc(T.paskirtis) + '</p></div><a class="gps__cta" href="' + esc(modulioUrl) + '">' + esc(T.atverti) + ' →</a></div>';
+            '<p class="gps__paskirtis">' + esc(T.paskirtis) + '</p>' + (T.kalba ? '<p class="gps__meta gps__kalba">' + esc(T.kalba) + '</p>' : '') + '</div><a class="gps__cta" href="' + esc(modulioUrl) + '">' + esc(T.atverti) + ' →</a></div>';
         if (r.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
         if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';
         if (!rodyti.length) h += '<p class="gps__sub" style="font-size:14px">' + esc(T.beprioriteto) + '</p>';
@@ -768,7 +883,7 @@
             var kodel = (x.portalas && x.portalas.kodel) || x.kamAktualu || x.santrauka;
             h += '<li class="gps__item"><span class="gps__date' + (sd.ateitis ? " gps__date--future" : "") + '">' + esc(sd.zyma) + (sd.data ? " " + esc(sd.data) : " · " + esc(T.be_datos)) + '</span>' +
                  '<div><a class="gps__nuoroda" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(pav) + '</a>' +
-                 (x.busena !== "patvirtinta" ? '<span class="gps__zyma">' + esc(T.nepatvirtinta) + '</span>' : "") +
+                 (x.busena !== "patvirtinta" ? ' <span class="gps__zyma">' + esc(T.nepatvirtinta) + '</span>' : "") +
                  '<p class="gps__sub">' + esc(kodel) + '</p>' +
                  (sd.reiksme ? '<p class="gps__reiksme">' + esc(sd.zyma) + (sd.data ? " " + esc(sd.data) : "") + ": " + esc(sd.reiksme) + '</p>' : "") + '</div></li>';
           });
@@ -802,7 +917,7 @@
             var sd = svarbiausiaData(x, dabar, lang);
             h += '<li class="gps__item"><span class="gps__date' + (sd.ateitis ? " gps__date--future" : "") + '">' + esc(sd.zyma) + (sd.data ? " · " + esc(sd.data) : " · " + esc(T.be_datos)) + '</span>' +
                  '<div><a class="gps__nuoroda" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(x.pavadinimas) + '</a>' +
-                 (x.busena !== "patvirtinta" ? '<span class="gps__tag">' + esc(BUSENOS[x.busena][lang]) + '</span>' : "") +
+                 (x.busena !== "patvirtinta" ? ' <span class="gps__tag">' + esc(BUSENOS[x.busena][lang]) + '</span>' : "") +
                  '<div class="gps__sub">' + esc(x.santrauka.length > 160 ? x.santrauka.slice(0, 157) + "..." : x.santrauka) + '</div></div></li>';
           });
           h += '</ul>';
@@ -882,8 +997,8 @@
       R.aktualus.forEach(function (v) {
         var x = v.irasas, sd = svarbiausiaData(x, dabar, lang), lyg = v.aktualumas.lygis;
         h += '<li class="gps__item"><span class="gps__date' + (sd.ateitis ? " gps__date--future" : "") + '">' + esc(sd.zyma) + (sd.data ? " · " + esc(sd.data) : " · " + esc(T.be_datos)) + '</span>' +
-          '<div>' + nuoroda(x) + (x.busena !== "patvirtinta" ? '<span class="gps__tag">' + esc(BUSENOS[x.busena][lang]) + '</span>' : "") +
-          (lyg !== "aktualu" ? '<span class="gps__tag">' + esc(lyg === "galimai" ? T.galimai : T.nenustatyta) + '</span>' : "") +
+          '<div>' + nuoroda(x) + (x.busena !== "patvirtinta" ? ' <span class="gps__tag">' + esc(BUSENOS[x.busena][lang]) + '</span>' : "") +
+          (lyg !== "aktualu" ? ' <span class="gps__tag">' + esc(lyg === "galimai" ? T.galimai : T.nenustatyta) + '</span>' : "") +
           (v.kas ? '<p class="gps__sub"><b>' + esc(c.kasZyma || T.kaPatikrinti) + ':</b> ' + esc(v.kas) + '</p>' : "") +
           (x.veiksmas ? '<p class="gps__sub"><b>' + esc(T.kaDaryti) + ':</b> ' + esc(x.veiksmas) + '</p>' : "") +
           (v.aktualumas.priezastys.length ? '<p class="gps__reiksme">' + esc(v.aktualumas.priezastys.join("; ")) + '</p>' : "") + '</div></li>';
@@ -908,10 +1023,10 @@
     esc: esc, saugusAdresas: saugusAdresas, normalizuokTeksta: normalizuokTeksta,
     yraData: yraData, dienaISO: dienaISO, dienuSkirtumas: dienuSkirtumas, datosTekstas: datosTekstas,
     normalizuok: normalizuok, tikrink: tikrink, dublikatoRaktai: dublikatoRaktai,
-    skiltis: skiltis, reikiaPerziureti: reikiaPerziureti, svarbiData: svarbiData, rikiuok: rikiuok, svarbiausiaData: svarbiausiaData, dokumentoIstorija: dokumentoIstorija,
+    skiltis: skiltis, reikiaPerziureti: reikiaPerziureti, turiPereinamasias: turiPereinamasias, svarbiData: svarbiData, rikiuok: rikiuok, svarbiausiaData: svarbiausiaData, dokumentoIstorija: dokumentoIstorija,
     aktualumas: aktualumas, filtruok: filtruok, tekstasPaieskai: tekstasPaieskai,
-    rinkinioBusena: rinkinioBusena, patikimumas: patikimumas, portaloIrasai: portaloIrasai,
-    perziuros: perziuros, pazymekPerziureta: pazymekPerziureta, atsaukPerziura: atsaukPerziura,
+    rinkinioBusena: rinkinioBusena, patikimumas: patikimumas, apreptiesTekstas: apreptiesTekstas, portaloIrasai: portaloIrasai,
+    perziuros: perziuros, perziuruSkaitymas: perziuruSkaitymas, irasoParasas: irasoParasas, perziurosBusena: perziurosBusena, pazymekPerziureta: pazymekPerziureta, atsaukPerziura: atsaukPerziura,
     ikelk: ikelk, ikelkKarta: ikelkKarta, mount: mount, pirkimuiIrasai: pirkimuiIrasai, pirkimuiHTML: pirkimuiHTML, TEKSTAI: TEKSTAI
   };
 })(typeof window !== "undefined" ? window : this);

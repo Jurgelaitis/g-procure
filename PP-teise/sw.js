@@ -18,7 +18,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppteise-2026-10-21-2";
+var VERSIJA = "ppteise-2026-11-04-1";
 
 var SAVI = [
   "./",
@@ -35,6 +35,7 @@ var SAVI = [
   "../shared/analitika.js",
   "../shared/bibliotekos-atmintis.js",
   "../shared/prieinamumas.js",
+  "../shared/saugykla.js",
   "../shared/teise-stebesena.js"
 ];
 
