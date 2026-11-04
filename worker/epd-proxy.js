@@ -1,48 +1,74 @@
 /* ============================================================================
- * G-Procure  epd-proxy.js   (Cloudflare Worker - viesas EPD proxy)
- * Saugiai kvieciia Anthropic API is narsykles, rakta laikydamas SERVERIO puseje.
+ * G-Procure  epd-proxy.js   (Cloudflare Worker - viešas EPD tarpinis taškas)
+ * Saugiai kviečia Anthropic API iš naršyklės, raktą laikydamas SERVERIO pusėje.
  *
- * KRITINE SAUGUMO SAVYBE: tai NE atviras AI proxy. Worker'is PATS sukonstruoja
- * uzklausa (sistema + modelis + max_tokens), o is kliento priima TIK:
+ * KRITINĖ SAUGUMO SAVYBĖ: tai NE atviras DI tarpinis taškas. Worker'is PATS sukonstruoja
+ * užklausą (sistema + modelis + max_tokens), o iš kliento priima TIK:
  *   { pdfBase64, factorLabel, expectedUnit, turnstileToken }
- * Tad niekas negali per si gala leisti laisvu uzklausu i AI tavo saskaita.
+ * Tad niekas negali per šį galą leisti laisvų užklausų į DI tavo sąskaita.
  *
- * Apsaugos: Turnstile (jei sukonfiguruota), PDF dydzio riba, CORS tik is g-procure.com.
+ * Apsaugos: Turnstile (jei sukonfigūruota), PDF dydžio riba, CORS tik iš g-procure.com.
  *
  * Cloudflare paslaptys (Secrets), kurias nustatai TU pats dashboard'e:
- *   ANTHROPIC_API_KEY   - tavo Anthropic raktas (butinas)
- *   TURNSTILE_SECRET_KEY - Turnstile slaptasis raktas (jei tuscias, patikra praleidziama)
+ *   ANTHROPIC_API_KEY   - tavo Anthropic raktas (būtinas)
+ *   TURNSTILE_SECRET_KEY - Turnstile slaptasis raktas (jei tuščias, patikra praleidžiama)
+ *
+ * 2026-11-04 (naujo naudotojo patikra K5, D7, V8): užklausa - ta pati kaip PP-carbon/epd-extract.js (testas tikrina; iki tol kita:
+ * nereikalavo reikšmės pažodžiui, rodiklio, net / gross), klaidos - su lietuviškomis raidėmis ir kodu (kodas), kurį naršyklė verčia
+ * LT / EN; Anthropic klaidos objektas į naršyklę nebesiunčiamas (ten virsdavo „[object Object]“). Diegiama ranka Cloudflare skydelyje.
  * ========================================================================== */
 
 const ALLOWED_ORIGIN = "https://g-procure.com";
-const MODEL = "claude-sonnet-4-6";     // vienas keiciamas konstantas, jei modelio eilute pasikeis
-const MAX_TOKENS = 1500;
+const MODEL = "claude-sonnet-4-6";     // vienas keičiamas konstantas, jei modelio eilutė pasikeis
+const MAX_TOKENS = 2000;
 const MAX_PDF_CHARS = 9 * 1024 * 1024; // ~9 MB base64 (apie 6.5 MB PDF) riba
 
 const SYSTEM_PROMPT = [
-  "Tu esi dokumentu analizes asistentas, istraukiantis anglies pedsako",
-  "duomenis is EPD (Environmental Product Declaration) arba LCA dokumentu.",
+  "Tu esi dokumentų analizės asistentas, ištraukiantis anglies pėdsako",
+  "duomenis iš EPD (Environmental Product Declaration) arba LCA dokumentų.",
   "",
-  "UZDUOTIS: rasti produkto A1-A3 (product stage) GWP reiksme (kg CO2e arba t CO2e).",
+  "UŽDUOTIS: rasti produkto A1-A3 (product stage / gamybos etapo) GWP",
+  "reikšmę (Global Warming Potential, kg CO2e arba t CO2e).",
   "",
-  "GRIEZTOS TAISYKLES:",
+  "GRIEŽTOS TAISYKLĖS:",
   "1. Atsakyk TIK gryno JSON formatu, be jokio kito teksto, be markdown.",
-  "2. Jei A1-A3 nera arba nesi tikras - grazink status \"not_found\". NIEKADA nespek.",
-  "3. Jei diapazonas - imk VIRSUTINE (konservatyvumo taisykle).",
-  "4. Jei keli variantai/neaisku - status \"ambiguous\" ir candidates masyvas.",
-  "5. Butinai nurodyk citata: puslapio numeri ir tiksly fragmenta.",
+  "2. Jei A1-A3 reikšmės dokumente NĖRA arba nesi tikras - grąžink",
+  "   status \"not_found\". NIEKADA nespėk.",
+  "3. Reikšmė - PAŽODŽIUI iš dokumento: nesumuok, neapvalink, neperskaičiuok",
+  "   ir neversk vienetų. Laukas value - dokumente parašytas skaičius, o",
+  "   valueText - jo užrašas taip, kaip dokumente (pvz. 9,96E+01).",
+  "4. Jei dokumente yra tik atskiros A1, A2 ir A3 reikšmės, o bendros A1-A3",
+  "   nėra, value palik null ir išrašyk jas masyve modules (kiekvieną su jos",
+  "   citata). Modulių sumos neskaičiuok - ją apskaičiuos programa.",
+  "5. Nurodyk rodiklį (indicator: GWP-total, GWP-GHG, GWP-fossil ir pan.;",
+  "   pirmenybė - GWP-total) ir ar reikšmė net ar gross (basis: \"net\",",
+  "   \"gross\", jei nenurodyta - \"\"). Jei tas pats rodiklis pateiktas ir net,",
+  "   ir gross - status \"ambiguous\": du variantai candidates masyve.",
+  "6. Jei dokumente pateiktas diapazonas - imk VIRŠUTINĘ (didžiausią) ribą",
+  "   (konservatyvumo taisyklė).",
+  "7. Jei yra keli scenarijai ar produktai - imk tą, kuris atitinka",
+  "   užklausoje nurodytą produktą; jei neaišku - status \"ambiguous\" ir",
+  "   išrašyk variantus candidates masyve.",
+  "8. Kiekvienai reikšmei būtinai nurodyk citatą: puslapio numerį ir tikslų",
+  "   teksto fragmentą iš dokumento, kuriame yra pats skaičius.",
+  "9. Jei EPD nurodyta, iki kada ji galioja, - validUntil (YYYY-MM-DD).",
   "",
   "JSON schema:",
   "{",
   "  \"status\": \"found\" | \"not_found\" | \"ambiguous\",",
-  "  \"value\": <skaicius arba null>,",
-  "  \"unit\": \"<pvz. kg CO2e>\",",
-  "  \"declaredUnit\": \"<pvz. 1 vnt / 1 kg / 1 m3>\",",
-  "  \"page\": <numeris arba null>,",
-  "  \"quote\": \"<fragmentas>\",",
-  "  \"standard\": \"<pvz. EN 15804+A2>\",",
-  "  \"candidates\": [ {\"label\":\"...\",\"value\":...,\"unit\":\"...\"} ],",
-  "  \"notes\": \"<pastaba>\"",
+  "  \"value\": <skaičius arba null>,",
+  "  \"valueText\": \"<skaičius, kaip parašyta dokumente>\",",
+  "  \"unit\": \"<matavimo vienetas, pvz. kg CO2e>\",",
+  "  \"declaredUnit\": \"<deklaruotas vienetas, pvz. 1 vnt / 1000 kg / 1 m3>\",",
+  "  \"indicator\": \"<rodiklis, pvz. GWP-total>\",",
+  "  \"basis\": \"net\" | \"gross\" | \"\",",
+  "  \"validUntil\": \"<YYYY-MM-DD arba tuščia>\",",
+  "  \"page\": <puslapio numeris arba null>,",
+  "  \"quote\": \"<tikslus fragmentas iš dokumento>\",",
+  "  \"standard\": \"<pvz. EN 15804+A2, jei nurodyta>\",",
+  "  \"modules\": [ {\"module\":\"A1\",\"value\":...,\"valueText\":\"...\",\"page\":...,\"quote\":\"...\"} ],",
+  "  \"candidates\": [ {\"label\":\"...\",\"value\":...,\"valueText\":\"...\",\"unit\":\"...\",\"declaredUnit\":\"...\",\"indicator\":\"...\",\"basis\":\"...\",\"page\":...,\"quote\":\"...\"} ],",
+  "  \"notes\": \"<trumpa pastaba, jei reikia>\"",
   "}"
 ].join("\n");
 
@@ -61,6 +87,9 @@ function json(obj, status) {
     headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders())
   });
 }
+
+// Klaida naršyklei: kodas - sutartinis (epd.html jį verčia LT / EN), error - lietuviškas tekstas tiems, kas skaito tiesiogiai
+function klaida(kodas, tekstas, status) { return json({ error: tekstas, kodas: kodas }, status); }
 
 async function verifyTurnstile(token, secret, ip) {
   try {
@@ -82,36 +111,36 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
     if (request.method !== "POST") {
-      return json({ error: "Leidziamas tik POST" }, 405);
+      return klaida("metodas", "Leidžiamas tik POST", 405);
     }
 
-    // Saltinio patikra: narsykle kryzminei POST uzklausai Origin siuncia visada, todel be jos (curl, skriptai) - atmetama
-    // (2026-10-06, saugumo planas; iki tol uzklausa be Origin praeidavo). Origin suklastoti galima - tikra apsauga yra Turnstile.
+    // Šaltinio patikra: naršyklė kryžminei POST užklausai Origin siunčia visada, todėl be jos (curl, skriptai) - atmetama
+    // (2026-10-06, saugumo planas; iki tol užklausa be Origin praeidavo). Origin suklastoti galima - tikra apsauga yra Turnstile.
     var origin = request.headers.get("Origin") || "";
     if (origin !== ALLOWED_ORIGIN) {
-      return json({ error: "Neleistinas saltinis" }, 403);
+      return klaida("saltinis", "Neleistinas šaltinis", 403);
     }
 
     var body;
     try { body = await request.json(); }
-    catch (e) { return json({ error: "Netinkamas JSON" }, 400); }
+    catch (e) { return klaida("uzklausa", "Netinkama užklausa", 400); }
 
-    // Turnstile patikra (jei sukonfiguruota)
+    // Turnstile patikra (jei sukonfigūruota)
     if (env.TURNSTILE_SECRET_KEY) {
       var ip = request.headers.get("CF-Connecting-IP");
       var human = await verifyTurnstile(body.turnstileToken, env.TURNSTILE_SECRET_KEY, ip);
-      if (!human) return json({ error: "Nepavyko patvirtinti, kad esate zmogus" }, 403);
+      if (!human) return klaida("patikra", "Nepavyko patvirtinti, kad esate žmogus", 403);
     }
 
     var pdf = typeof body.pdfBase64 === "string" ? body.pdfBase64 : "";
-    if (!pdf) return json({ error: "Truksta PDF" }, 400);
-    if (pdf.length > MAX_PDF_CHARS) return json({ error: "PDF per didelis" }, 413);
+    if (!pdf) return klaida("be_pdf", "Trūksta PDF", 400);
+    if (pdf.length > MAX_PDF_CHARS) return klaida("dydis", "PDF per didelis", 413);
 
     var factorLabel = String(body.factorLabel || "").slice(0, 300);
     var expectedUnit = String(body.expectedUnit || "").slice(0, 60);
 
     if (!env.ANTHROPIC_API_KEY) {
-      return json({ error: "Serveris nesukonfiguruotas (nera rakto)" }, 500);
+      return klaida("nesukonfiguruota", "Serveris nesukonfigūruotas (nėra rakto)", 500);
     }
 
     var anthropicBody = {
@@ -122,9 +151,9 @@ export default {
         role: "user",
         content: [
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf } },
-          { type: "text", text: "Produktas/iranga: " + factorLabel +
-              ". Musu faktoriaus vienetas: " + expectedUnit +
-              ". Rask A1-A3 GWP reiksme ir grazink JSON pagal schema." }
+          { type: "text", text: "Produktas/įranga: " + (factorLabel || "nenurodyta") +
+              ". Mūsų faktoriaus vienetas: " + expectedUnit +
+              ". Rask A1-A3 GWP reikšmę ir grąžink JSON pagal schemą." }
         ]
       }]
     };
@@ -141,14 +170,21 @@ export default {
         body: JSON.stringify(anthropicBody)
       });
     } catch (e) {
-      return json({ error: "Nepavyko pasiekti AI serverio" }, 502);
+      return klaida("di_ryshys", "Nepavyko pasiekti DI serverio", 502);
     }
 
     var data;
     try { data = await apiRes.json(); }
-    catch (e) { return json({ error: "AI atsakymas ne JSON" }, 502); }
+    catch (e) { return klaida("di_atsakymas", "DI atsakymas ne JSON", 502); }
 
-    // Grazinam Anthropic atsakyma toki, koki yra (klientas ji apdoros per GP_EPD_EXTRACT.parseResponse)
+    // DI klaidos objekto į naršyklę nesiunčiame: naudotojui jis nieko nesako
+    if (!apiRes.ok) {
+      if (apiRes.status === 429 || apiRes.status === 529) return klaida("di_uzimta", "DI paslauga šiuo metu užimta", apiRes.status);
+      if (apiRes.status === 400) return klaida("di_pdf", "DI paslauga šio PDF neperskaitė", 400);
+      return klaida("di_klaida", "DI paslauga atsakė klaida", 502);
+    }
+
+    // Atsakymą grąžinam tokį, koks yra (klientas jį apdoros per GP_EPD_EXTRACT.parseResponse)
     return json(data, apiRes.status);
   }
 };
