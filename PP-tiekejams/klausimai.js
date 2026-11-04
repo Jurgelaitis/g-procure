@@ -602,7 +602,7 @@
     // Dinaminė pirkimo sistema ir kvalifikacijos sistema: CVP IS terminas - sistemos galiojimo pabaiga (2033 m.), ne klausimų terminas
     if (o.sistema) { cvp = null; galutinis = null; }
     var salyga = o.salyga !== undefined ? o.salyga : prasymoSalyga(o.docs || []);
-    var aktyvus = !(p && typeof p.status === "string" && NEAKTYVIOS.test(p.status)) && !(galutinis && galutinis < dabar);
+    var aktyvus = !(p && typeof p.status === "string" && NEAKTYVIOS.test(p.status)) && !(p && global.GP_VPT && global.GP_VPT.nutrauktas(p)) && !(galutinis && galutinis < dabar);
     // Datą iš sąlygų galima apskaičiuoti tik vieno etapo pirkime (kitaip nežinoma, kurio etapo terminas) ir kalendorinėmis dienomis
     var isSalygos = salyga && !salyga.darbo && !o.kelietapis && galutinis ? new Date(galutinis.getTime() - salyga.dienu * 86400000) : null;
     var DIENA = 86400000, data = cvp, saltinis = cvp ? "cvpis" : null;

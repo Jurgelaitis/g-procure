@@ -34,8 +34,17 @@
   var CVP_IS_DOKUMENTAI = "https://viesiejipirkimai.lt/epps/cft/listContractDocuments.do?resourceId=";
   var RINKOS_KONS = "Preliminary Market Consultation";
   function nuorodaI(p) { return (p && p.procedure === RINKOS_KONS ? CVP_IS_DOKUMENTAI : CVP_IS) + p.id; }
-  // Pirkimas, kuriame tiekėjas nebedalyvauja: nutrauktas
-  function nutrauktas(p) { return !!p && (p.status === "Cancelled" || p.status === "Terminated"); }
+  // Pavadinime įrašytas „nutrauktas“ (naudotojo sprendimas 2026-11-04): pavadinime toks žodis rašomas tik nutrauktam pirkimui, nors CVP IS būsena
+  // dažnai lieka „Pasiūlymų teikimas“ (2026-11-04 tokių aktyvių - apie 50). „(NUTRAUKTA 7 PIRKIMO DALIS)“ - tik dalis, ne viso pirkimo būsena.
+  var NUTR_ZODIS = /(^|[^\p{L}\p{N}])nutraukta(s?)(?=$|[^\p{L}\p{N}])/iu;
+  var NUTR_DALIS = /(^|[^\p{L}\p{N}])(nutraukta|nutrauktos|nutrauktų)(\s+[^\s]+){0,3}\s+dal(is|ys|ių|ies)(?=$|[^\p{L}\p{N}])|(^|[^\p{L}\p{N}])dal(is|ys|ių|ies)(\s+[^\s]+){0,3}\s+(nutraukta|nutrauktos)(?=$|[^\p{L}\p{N}])/iu;
+  function nutrauktaPavadinime(p) {
+    var t = p && typeof p.title === "string" ? p.title : "";
+    if (NUTR_DALIS.test(t)) return "dalis";
+    return NUTR_ZODIS.test(t) ? "visas" : null;
+  }
+  // Pirkimas, kuriame tiekėjas nebedalyvauja: nutrauktas (CVP IS būsena arba žodis pavadinime)
+  function nutrauktas(p) { return !!p && (p.status === "Cancelled" || p.status === "Terminated" || nutrauktaPavadinime(p) === "visas"); }
   // activeCycle (VPT): 1 - pirmas etapas; 2 ir daugiau - po paraiškų ar pirminių pasiūlymų, terminas skirtas tolesnio etapo dalyviams.
   // Sutikrinta 2026-11-04 su CVP IS kvietimų datomis: 8 pirkimai - 2 ir daugiau, tikras pratęsimas - 1.
   var KELI_ETAPAI = /^(Negotiated with prior call for competition|Competitive with negotiation|Restricted|Accelerated restricted|Competitive dialogue|Innovation partnership|Negotiated with publication|Accelerated negotiated with publication|Involving negotiations|Simplified Open with negotiations)$/;
@@ -260,6 +269,12 @@
     var z = Object.prototype.hasOwnProperty.call(zodynas, k) ? zodynas[k] : null;   // VPT duomenys - ne „toString“ ir pan.
     return { tekstas: z ? z[lang === "en" ? "en" : "lt"] : k, kodas: k, isverstas: !!z };
   }
+  // Pirkimo būsena žmogui: žodis „nutrauktas“ pavadinime - būsena, CVP IS kodas lieka matomas
+  function busena(p, lang) {
+    if (p && !(p.status === "Cancelled" || p.status === "Terminated") && nutrauktaPavadinime(p) === "visas")
+      return { tekstas: lang === "en" ? "Cancelled (according to the title)" : "Nutrauktas (pagal pavadinimą)", kodas: typeof p.status === "string" ? p.status : "", isverstas: true };
+    return kodas(p && p.status, BUSENOS, lang);
+  }
   // „24_months“ -> „24 mėn.“; kita - kaip yra
   function trukme(s, lang) {
     var m = /^(\d{1,4})_(days|weeks|months|years)$/.exec(String(s || ""));
@@ -439,7 +454,8 @@
     var pd = typeof p.datePublished === "string" && iso.exec(p.datePublished);
     if (pd) prideti("paskelbimas", pd[1], "datePublished: " + p.datePublished, P.paskelbimas);
     if (!rinkos && typeof p.status === "string" && p.status) {
-      if (KORTELES_BUSENOS[p.status]) prideti("busena", KORTELES_BUSENOS[p.status], "status: " + tx(p.status, 60));
+      if (nutrauktaPavadinime(p) === "visas") prideti("busena", "nutrauktas", "title: " + tx(p.title));
+      else if (KORTELES_BUSENOS[p.status]) prideti("busena", KORTELES_BUSENOS[p.status], "status: " + tx(p.status, 60));
       else pastabos.push(keisk(P.busena, { b: tx(p.status, 60) }));
     }
     if (typeof p.id === "number" && p.id > 0) prideti("cvpisNr", String(p.id), "id: " + p.id);
@@ -465,7 +481,7 @@
       r.palyginta.push("paskelbimas");
       if (pd[1] !== String(k.paskelbimas || "")) r.skirtumai.push({ laukas: "paskelbimas", kortele: String(k.paskelbimas || ""), vpt: pd[1] });
     }
-    var vb = p.procedure === "Preliminary Market Consultation" ? null : KORTELES_BUSENOS[p.status];
+    var vb = p.procedure === "Preliminary Market Consultation" ? null : nutrauktaPavadinime(p) === "visas" ? "nutrauktas" : KORTELES_BUSENOS[p.status];
     if (vb) {
       r.palyginta.push("busena");
       if (vb !== k.busena && k.busena !== "nutrauktas" && (vb === "nutrauktas" || EIGA.indexOf(vb) > EIGA.indexOf(k.busena)))
@@ -474,7 +490,7 @@
     return r;
   }
 
-  global.GP_VPT = { nutrauktas: nutrauktas, tolesnisEtapas: tolesnisEtapas, rinkosKonsultacija: rinkosKonsultacija, sistema: sistema,
+  global.GP_VPT = { nutrauktas: nutrauktas, nutrauktaPavadinime: nutrauktaPavadinime, busena: busena, tolesnisEtapas: tolesnisEtapas, rinkosKonsultacija: rinkosKonsultacija, sistema: sistema,
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, ted: ted, atnaujinta: atnaujinta,
     PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai,
     paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas,
