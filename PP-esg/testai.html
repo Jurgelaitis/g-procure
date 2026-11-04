@@ -527,7 +527,7 @@ async function testaiPatikra1104(){
     irasai([tiekejas1("A", { sanctions: "unchecked", lastCheck: null }), tiekejas1("B")]);
     await modulis();
     W.openCheckModal();
-    lygu([VAL("cf-sup"), VAL("cf-result"), VAL("cf-date"), D.querySelectorAll(".chk-list:checked").length, D.querySelectorAll(".chk-list").length], ["", "", W.GP_WORKDAYS.siandien(), 0, 5], "pradžia");
+    lygu([VAL("cf-sup"), VAL("cf-result"), VAL("cf-date"), D.querySelectorAll(".chk-list:checked").length, D.querySelectorAll(".chk-list").length], ["", "", W.GP_WORKDAYS.siandien(), 0, 6], "pradžia");
     tiesa(/Galimas atitikmuo - tikslinama/.test(D.getElementById("cf-result").textContent), "trečias rezultatas");
     W.saveCheckForm();
     lygu(St().getChecks().length, 0, "tuščia forma neišsaugoma");
@@ -706,6 +706,26 @@ async function testaiPatikra1104(){
       W.closeModal();
     } finally { atstatyk3(); }
     tiesa(W.neaiskusTiekejas({ name: "II", code: "12345678" }) && W.neaiskusTiekejas({ name: "Tiekėų grupė", code: "12345678" }) && W.neaiskusTiekejas({ name: "Jungtinės veiklos pagrindu susivienijusi", code: "12345678" }) && !W.neaiskusTiekejas({ name: "UAB Viva", code: "12345678" }), "neaiškūs pavadinimai");
+  });
+
+  await testas("Rekomendacijos 2026-11-04: sąrašų pagrindas, 5k atskirai (ne sąrašas), FNTT pavadinimas; periodika su patikra prieš sutartį; kodėl tikrinama - neprivaloma, įrašoma ir eksportuojama", async ()=>{
+    const src = await (await fetch("index.html")).text();
+    tiesa(/ES ir JT sankcijos privalomos visada \(Tarptautinių sankcijų įstatymas\); JAV \(OFAC\) - kai to reikalauja pirkimo dokumentai; JK - pagal riziką\. Reglamento \(ES\) 833\/2014 5k straipsnis nėra sąrašas/.test(src), "pagrindas LT");
+    tiesa(/EU and UN sanctions are always mandatory \(Law on International Sanctions\); US \(OFAC\) when the procurement documents require it; UK according to risk\. Article 5k of Regulation \(EU\) 833\/2014 is not a list/.test(src), "pagrindas EN");
+    tiesa(/daugiau kaip 50 %/.test(src) && /daugiau kaip 10 % sutarties vertės/.test(src), "5k sąlygos");
+    tiesa(/Nepriklausomai nuo periodikos tikrinkite ir prieš sudarant sutartį bei pasikeitus tiekėjo savininkams/.test(src) && /also check before concluding a contract and when the supplier's owners change/.test(src), "periodika");
+    irasai([tiekejas1("A", { sanctions: "unchecked", lastCheck: null })]);
+    await modulis(); W.openCheckModal("A");
+    lygu([...D.querySelectorAll(".chk-list")].map(x => x.parentNode.textContent.trim()), ["ES", "OFAC", "JT", "UK", "FNTT (Lietuva)", "833/2014 5k (ne sąrašas)"], "pavadinimai");
+    lygu(VAL("cf-priezastis"), "", "be numatytojo");
+    D.getElementById("cf-by").value = "Bandomasis"; D.querySelector('.chk-list[value="5k"]').checked = true; D.querySelector('.chk-list[value="Nacionalinis"]').checked = true;
+    D.getElementById("cf-result").value = "clean"; D.getElementById("cf-priezastis").value = "sutartis";
+    W.saveCheckForm();
+    const c = W.buildChecksExport().checks[0];
+    lygu([c.reason, c.lists], ["sutartis", ["Nacionalinis", "5k"]], "įrašyta ir eksporte");
+    W.openCheckModal("A"); D.getElementById("cf-by").value = "Bandomasis"; D.querySelector('.chk-list[value="ES"]').checked = true; D.getElementById("cf-result").value = "clean"; W.saveCheckForm();
+    lygu(W.buildChecksExport().checks.filter(x => x.lists.length === 1)[0].reason, "", "neprivaloma");
+    tiesa(/"basis", "reason", "notes"/.test(src) && /c\.basis, c\.reason, c\.notes/.test(src), "CSV stulpelis");
   });
 
   await testas("Poraštė (naudotojo sprendimas 2026-11-04): be „Utilities sektorius (PSĮ)“ LT ir EN; reguliacinis pagrindas lieka", async ()=>{
@@ -892,7 +912,8 @@ async function testaiPatikra1104(){
       "https://sanctionssearch.ofac.treas.gov/",
       "https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list",
       "https://search-uk-sanctions-list.service.gov.uk/",
-      "https://fntt.lrv.lt/lt/tarptautines-finansines-sankcijos/"], "adresai");
+      "https://fntt.lrv.lt/lt/tarptautines-finansines-sankcijos/",
+      "https://eur-lex.europa.eu/legal-content/LT/ALL/?uri=CELEX:32014R0833"], "adresai");
     tiesa(a.every(x => x.target === "_blank" && x.rel === "noopener"), "nauji skirtukai");
     tiesa(/G-Procure pats sąrašų netikrina/.test(D.querySelector("#modalShell .saltiniai").textContent), "sakinys");
     W.closeModal();
@@ -999,7 +1020,7 @@ async function testaiPatikra1104(){
       const atstatyk = serveris({ "/api/esg/sanctions-assessment": (u, o) => { kunas = JSON.parse(o.body); return Promise.resolve(ATSAKYMAS({ level: "low", factors: [], actions: [] })); } });
       try { W.openCheckModal("A"); await W.runAiAssessment(); lygu([kunas.lang, kunas.supplier.country, kunas.supplier.category], ["en", "Germany", "Transformers"], "DI užklausa");
         tiesa(/The AI did not check the lists/.test(D.getElementById("aiResult").textContent), "EN sakinys");
-        tiesa([...D.querySelectorAll(".chk-list")].map(x => x.parentNode.textContent.trim()).join() === "EU,OFAC,UN,UK,National" && [...D.querySelectorAll(".chk-list")].map(x => x.value).join() === "ES,OFAC,JT,UK,Nacionalinis", "sąrašai: rodoma EN, įrašoma neutraliai");
+        tiesa([...D.querySelectorAll(".chk-list")].map(x => x.parentNode.textContent.trim()).join() === "EU,OFAC,UN,UK,FNTT (Lithuania),833/2014 Art. 5k (not a list)" && [...D.querySelectorAll(".chk-list")].map(x => x.value).join() === "ES,OFAC,JT,UK,Nacionalinis,5k", "sąrašai: rodoma EN, įrašoma neutraliai");
         tiesa(/Check date/.test(D.getElementById("modalShell").textContent), "forma angliškai");
       } finally { atstatyk(); W.closeModal(); }
       W.openImportModal(); tiesa(/Another organisation/.test(D.getElementById("im-buyer").textContent), "importas angliškai"); W.closeModal();
