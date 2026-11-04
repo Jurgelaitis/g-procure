@@ -5542,9 +5542,30 @@ async function testaiTelefonas(){
    be pavadinimo (etiketė be „for“, laukai lentelėse, tik užuomina), 116 spaudžiamų elementų, kurių nepasiekia klaviatūra.
    Pavadinimus ir klaviatūrą bendrai tvarko shared/prieinamumas.js, spalvas - epso-g.css *-strong žetonai.
    ========================================================================== */
+/* PP-carbon su duomenimis (2026-11-04, naujo naudotojo patikra): skaičiuoklė su transportu ir klaidomis, pasiūlymai su neįtrauktomis eilutėmis ir pavyzdžiu,
+   ataskaita su DI žyme, EPD langas su nepatikrinta reikšme ir variantais. DI - netikras; saugykla atkuriama. */
+function carbonKiekis(d, raktas, v) { const i = d.querySelector('input.qty-input[data-key="' + raktas + '"]'); i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }
+async function carbonEpd(w, d, ats) {
+  w.closeModal();
+  w.openEpdModal("substationEquipment.breaker");
+  w.eval("_epdCtx.pdfBase64 = 'JVBERi0xLjQ='; _epdCtx.fileName = 'epd.pdf'; _epdCtx.tekstoPazadas = Promise.resolve('GWP-total, net kg CO2 -eq 9.96E+01');");
+  w.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: { content: [{ type: "text", text: JSON.stringify(ats) }] } });
+  w.analyzeEpd();
+  for (let i = 0; i < 40 && !d.querySelector("#epdResult .epd-card"); i++) await new Promise(r => setTimeout(r, 25));
+}
+const CARBON_BUSENOS = [
+  ["skaičiuoklė: transportas, netinkami laukai, laukia EPD", (w, d) => { w.closeModal(); w.setView("calc"); carbonKiekis(d, "transport.truck", "50000"); carbonKiekis(d, "construction.concrete", "1.500"); carbonKiekis(d, "construction.rebar", "-5"); carbonKiekis(d, "substationEquipment.breaker", "2"); }],
+  ["pasiūlymai: neįtraukta eilutė, klaida prie lauko, pavyzdys", (w) => { w.closeModal(); w.setView("bids"); w.eval("Store").updateEvalOffers(l => { l.length = 0; l.push({ id: "OFA", name: "UAB A su labai ilgu pavadinimu", bidPrice: "950.000", embodiedCarbon: "1.500" }, { id: "OFB", name: "UAB B", bidPrice: "1000000", embodiedCarbon: "" }, { id: "OFC", name: "", bidPrice: "", embodiedCarbon: "-1" }); }); w.renderBids(); if (!w.eval("_evalPavyzdys")) w.perjunkPavyzdi(); }],
+  ["pasiūlymai: modelis B", (w) => { w.onEvalSetting("model", "B"); }],
+  ["ataskaita: peržiūra, viešas pjūvis, PP-ESG pastabos", (w) => { w.onEvalSetting("model", "A"); w.setView("reports"); w.setAudience("public"); w.previewReport(); }],
+  ["apžvalga: atverta faktorių biblioteka", (w, d) => { w.setView("overview"); d.querySelectorAll("#libSarasas details").forEach(x => { x.open = true; }); }],
+  ["EPD langas: nepatikrinta reikšmė ir rankinis laukas", async (w, d) => { w.setView("calc"); await carbonEpd(w, d, { status: "found", value: 99.31, unit: "kg CO2e", declaredUnit: "1 kg", indicator: "GWP-total", basis: "net", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }); }],
+  ["EPD langas: variantai", async (w, d) => { await carbonEpd(w, d, { status: "ambiguous", candidates: [{ label: "net", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, { label: "be citatos", value: 5, unit: "kg CO2e", declaredUnit: "1 vnt" }] }); }]
+];
 // Būsenos su duomenimis (be jų dalis sąsajos nepiešiama): pavyzdiniai duomenys, PP-protocol pirkimai ir formos
 const PRIEINAMUMO_BUSENOS = {
   "../PP-esg/index.html": ESG_BUSENOS,
+  "../PP-carbon/index.html": CARBON_BUSENOS,
   "../PP-qual/PP-QUAL.html": [["eksportas LT/EN: DI vertimo peržiūra su pastabomis (2026-10-26)", qualVertimoBusena], ["patikra: DI išskaidytas tekstas nesutampa su įklijuotu (2026-10-26)", qualNesutampaBusena]],
   [NEG]: NEG_BUSENOS.concat(NEG_EN_BUSENOS),
   "../PP-tiekejams/index.html": TIEKEJU_BUSENOS,
@@ -6155,7 +6176,7 @@ async function testaiPrieinamumas(){
   // Mygtukas turi būti matomas: paslėpto fokusuoti negalima, ir fokuso grąžinimas būtų netikrinamas
   const mygtukas = sel => (w, d) => { const b = d.querySelector(sel); if (!b || !b.getClientRects().length) throw new Error("nėra matomo mygtuko " + sel); b.focus(); b.click(); return b; };
   const LANGU_ATVEJAI = [
-    ["../PP-carbon/index.html", "Nustatymai", mygtukas('[onclick="openSettings()"]')],
+    ["../PP-carbon/index.html", "Pradėti naują projektą", (w, d) => { w.setView("calc"); return mygtukas('#naujasProjektasBtn')(w, d); }],
     // shared/kopija.js: nepavykus nukopijuoti - langas kopijuoti ranka (iškarpinė neleidžiama, execCommand - false)
     ["../PP-plan/bvpz-kodai.html", "Kopijuoti ranka (kopija.js)", (w, d) => {
       w.Object.defineProperty(w.navigator, "clipboard", { value: { writeText: () => w.Promise.reject(new Error("neleista")) }, configurable: true });
@@ -7913,7 +7934,7 @@ async function testaiSutikimas(){
     "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html": [["pradinis ir meniu", () => {}, true]].concat(NEG_BUSENOS),
     "../PP-report/PP-report.html": [["pradinis", () => {}]],
     "../PP-esg/index.html": [["pradinis ir skirtukai", () => {}, true]].concat(ESG_BUSENOS),
-    "../PP-carbon/index.html": [["pradinis ir skirtukai", () => {}, true]],
+    "../PP-carbon/index.html": [["pradinis ir skirtukai", () => {}, true]].concat(CARBON_BUSENOS),
     "../PP-carbon/epd.html": [["pradinis", () => {}]],
     "../PP-tiekejams/index.html": [["pradinis ir skirtukai", () => {}, true]].concat(TIEKEJU_BUSENOS),
     "../PP-teise/index.html": [["pradinis ir vaizdai", () => {}, true]],
