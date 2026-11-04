@@ -87,15 +87,13 @@
     ],
 
     // --- 3. TRANSPORTAVIMAS (medziagu pervezimas) ---
-    // DEMESIO: sios reiksmes atitinka zinomas g CO2e/(t*km) reiksmes (kelias ~137, gelez. ~24,
-    // juru ~7, oro ~1036), o suma skaiciuojama kg - galima vienetu neatitiktis (reiketu /1000).
-    // Reiksmes nekeiciamos (naudotojo sprendimas 2026-11-04): modulis apie tai ispeja ir rodo suma be
-    // transporto. Nusprendus dalinti - vienintele vieta index.html TRANSPORTO_DALIKLIS.
+    // Reiksmes - g CO2e/(t*km) (kelias 137, gelez. 24, juru 7, oro 1036); suma skaiciuojama kg, todel eilute dalinama is 1000
+    // (index.html TRANSPORTO_DALIKLIS; naudotojo sprendimas 2026-11-04, reiksmes nekeistos).
     transport: [
-      { id:"truck", label:"Sunkvežimiais", value:137, unit:"g CO2e/(t*km)?", basis:"Kelias", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." },
-      { id:"train", label:"Traukiniais", value:24, unit:"g CO2e/(t*km)?", basis:"Geležinkelis", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." },
-      { id:"ship", label:"Laivais", value:7, unit:"g CO2e/(t*km)?", basis:"Jūrų transportas", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." },
-      { id:"plane", label:"Lėktuvais", value:1036, unit:"g CO2e/(t*km)?", basis:"Oro transportas", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." }
+      { id:"truck", label:"Sunkvežimiais", value:137, unit:"g CO2e/(t*km)", basis:"Kelias", note:"Skaičiuojant dalinama iš 1000 (g į kg)." },
+      { id:"train", label:"Traukiniais", value:24, unit:"g CO2e/(t*km)", basis:"Geležinkelis", note:"Skaičiuojant dalinama iš 1000 (g į kg)." },
+      { id:"ship", label:"Laivais", value:7, unit:"g CO2e/(t*km)", basis:"Jūrų transportas", note:"Skaičiuojant dalinama iš 1000 (g į kg)." },
+      { id:"plane", label:"Lėktuvais", value:1036, unit:"g CO2e/(t*km)", basis:"Oro transportas", note:"Skaičiuojant dalinama iš 1000 (g į kg)." }
     ],
 
     // --- 4. STATYBOS DARBU ETAPAS ---

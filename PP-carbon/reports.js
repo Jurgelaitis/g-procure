@@ -19,7 +19,7 @@
  *    kalba: "lt" | "en",
  *    project: { name, code, subject, type, period, date (parengimo), lifetimeYears },
  *    stages:  [ { key, label, totalKg, any } ],    // any: false - etape neįvesta nieko
- *    totalKg, transportKg, transportoNepatvirtinta, reviewKg,
+ *    totalKg, reviewKg,
  *    pendingEpd: [ { label } ],                    // laukia EPD (NEįtraukta į sumą)
  *    klaidos: <eilučių su netinkamu skaičiumi skaičius>,
  *    epdSources: [ { factorLabel, value, unit, page, fileName, indicator, basis, validUntil, pakeistaRanka, buvusiReiksme, ranka } ],
@@ -33,7 +33,7 @@
  *   sections:[{heading,paragraphs:[],tables:[{columns:[],widths:[],rows:[[...]]}], di}], disclaimer }
  *
  * 2026-11-04 (naujo naudotojo patikra K1, K7, K8, K9, K10, V3, V4): tekstai LT ir EN; suma įvardyta pagal tai, kas sudėta (visos
- * įvestos eilutės, ne „A1-A3“); skyrius „Kas neįtraukta ir prielaidos“ abiejuose pjūviuose (transporto vienetas ir suma be transporto,
+ * įvestos eilutės, ne „A1-A3“); skyrius „Kas neįtraukta ir prielaidos“ abiejuose pjūviuose (
  * laukiančios EPD pozicijos, tikslinami faktoriai, neatskleistas pėdsakas - „nenurodyta“, ne „0 t“); lentelė pagal naudotą modelį
  * (iki tol B modelio ataskaita rodė A stulpelius, o viešas pjūvis visada sakė „anglimi pakoreguota kaina“); ranka pakeista EPD reikšmė
  * pažymima, išvalyta - neįtraukiama; skaičiai pagal kalbą („0,1 %“, „3,334 t“, iki tol „0.1 %“); „IŠ VISO 0 kg 100 %“ nebėra.
@@ -58,7 +58,6 @@
       stages_none: "Skaičiuoklėje kiekių dar neįvesta.",
       col_stage: "Etapas", col_sesd: "ŠESD", col_share: "Dalis", total: "IŠ VISO", not_entered: "neįvesta",
       limits_h: "Kas neįtraukta ir prielaidos",
-      transport: "Transporto faktorių vienetas dar tikslinamas (g CO2e/(t·km)?): suma skaičiuojama kg, todėl transporto eilutė gali būti iki 1000 kartų per didelė. Transportas sudaro {tr}; suma be transporto - {be}.",
       pending: "Laukia gamintojo EPD ir į sumą neįtraukta ({n}): {l}.",
       errors: "Eilučių su netinkamu skaičiumi, neįtrauktų į sumą: {n}.",
       review: "Tikslinami taršos faktoriai sudaro {t} ({p}) sumos: rezultatai preliminarūs.",
@@ -96,7 +95,6 @@
       stages_none: "No quantities have been entered in the calculator yet.",
       col_stage: "Stage", col_sesd: "GHG", col_share: "Share", total: "TOTAL", not_entered: "not entered",
       limits_h: "What is excluded and what is assumed",
-      transport: "The unit of the transport factors is still being refined (g CO2e/(t·km)?): the sum is in kg, so the transport line may be up to 1000 times too large. Transport makes up {tr}; the total without transport is {be}.",
       pending: "Awaiting the manufacturer EPD and excluded from the total ({n}): {l}.",
       errors: "Lines with an invalid number, excluded from the total: {n}.",
       review: "Emission factors still being refined make up {t} ({p}) of the total: results are preliminary.",
@@ -176,10 +174,6 @@
   // Kas neįtraukta ir prielaidos: abiem auditorijom; sąrašas tuščias - skyriaus nėra.
   function limitsSection(data, X, F, viesas) {
     var total = num(data.totalKg, 0), par = [];
-    var tr = num(data.transportKg, 0);
-    if (data.transportoNepatvirtinta && tr > 0) {
-      par.push(pakeisk(X.transport, { tr: F.t(tr / 1000) + " CO2e", be: F.t((total - tr) / 1000) + " CO2e" }));
-    }
     var pending = Array.isArray(data.pendingEpd) ? data.pendingEpd : [];
     if (pending.length) par.push(pakeisk(X.pending, { n: pending.length, l: pending.map(function (p) { return str(p.label); }).join(", ") }));
     if (num(data.klaidos) > 0) par.push(pakeisk(X.errors, { n: num(data.klaidos) }));
