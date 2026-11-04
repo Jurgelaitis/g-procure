@@ -19,6 +19,7 @@
  *  - Tekstas iš dokumentų į HTML - tik per modulio esc().
  *
  * Grynos funkcijos: siulyk({ docs, meta, kalba, dabar }) -> { klausimai, faktai };
+ * kontrolinis({ docs, meta, kalba, dabar, kelietapis }) -> punktai, į kuriuos dokumentai aiškiai atsako (be DI);
  * terminas({ docs, pirkimas, galutinis, parse, kelietapis, dabar }) - iki kada pateikti klausimą.
  * Vieta dokumente - shared/dokumentai.js fragmentai (d.chunks), jų ID paduodami į paiešką,
  * kad DI gautų tą vietą, dėl kurios klausimas pasiūlytas.
@@ -48,10 +49,10 @@
   function vardas(d) { return String(d.name || "").split(" › ").pop(); }
   function svarusVardas(d) {
     var v = vardas(d).replace(/^.*\//, "").replace(/\.[a-z0-9]{2,5}$/i, "");
-    v = v.split(/[\s_]+(?:Annex|Appendix|Form of|Price|Tender)\b/)[0];    // dvikalbis vardas - lietuviška dalis
+    v = v.split(/[\s_]+(?:Annex|Appendix|Form of|Price|Tender|Initial|Final|Application)(?![A-Za-z])/)[0];    // dvikalbis vardas - lietuviška dalis
     // Numeriai ir „SPS 1 priedo 1 priedas“ žmogui nieko nesako - lieka tai, kas tai per dokumentas
     v = v.replace(/_+/g, " ").replace(/^\s*\d+(?:\.\d+)*\.?\s*/, "").replace(/^(?:SPS\s*|SS\s*)?(?:\d+(?:\.\d+)*\.?\s*)?(?:priedo\s*\d+(?:\.\d+)*\.?\s*)?(?:priedas\.?\s*)?/i, "");
-    return v.replace(/\s+/g, " ").trim();
+    return v.replace(/\s+/g, " ").replace(/^[\s\-–]+/, "").trim();
   }
   function turiTeksta(d) { return !!(d && d.chunks && d.chunks.length); }
   // SPS failų vardai dažnai turi „SPS N priedas“ - tai priedai, ne pačios sąlygos
@@ -116,6 +117,7 @@
         var s = sakinys(f, m.index, m.index + m[0].length), fs = f.slice(s.pradzia, s.pabaiga);
         if (!o.ir_salyga && salyginis(f.slice(s.pradzia, m.index))) continue;
         if (o.ne && o.ne.test(fs)) continue;
+        if (/\.{4,}|…{2,}/.test(fs)) continue;     // turinio eilutė („8. PARAIŠKŲ PATEIKIMO TERMINAI ......“)
         var cit = normTarpai(ch.text.slice(s.pradzia, s.pabaiga));
         if (cit.length < 30) cit = normTarpai(ch.text.slice(Math.max(0, s.pradzia - 60), s.pabaiga + 100));   // „netesybos.“ žmogui nieko nepasako
         return { d: d, ch: ch, m: m, f: f, citata: kiekDaug(cit), fs: fs, orig: function (gr) { var i = f.indexOf(m[gr], m.index); return ch.text.substr(i, m[gr].length); } };
@@ -174,6 +176,20 @@
     return m ? { d: new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 23), +(m[5] || 59)), t: m[3] + "-" + m[2] + "-" + m[1] + (m[4] ? " " + m[4] + ":" + m[5] : "") } : null;
   }
 
+  /* ---------------- Sprendimų sakiniai: ir klausimams, ir kontroliniam sąrašui ---------------- */
+  var UZT_TEMA = /galiojimo uztikrinim|pasiulymo uztikrinim|tender security|bid security/;
+  // Pasiūlymo galiojimo užtikrinimas. „neprivalo pateikti“ - ne „privalo pateikti“: teigime - žodžio riba (2026-11-04, tiekėjo patikra)
+  var RE_UZT_NE = /nereikalaujama (pateikti )?pasiulymo (galiojimo )?uztikrinimo|neprivalo pateikti[^.|]{0,90}pasiulymo (galiojimo )?uztikrinim|pasiulymo (galiojimo )?uztikrinimas (yra )?(nereikalaujamas|netaikomas|nenumatytas)|tender security is not required/;
+  var RE_UZT_TAIP = /(?:^|[^a-z])(privalo|turi|reikia) pateikti[^.|]{0,90}pasiulymo (galiojimo )?uztikrinim|pasiulymo (galiojimo )?uztikrinim\w*[^.|]{0,40}(suma|dydis)[^.|]{0,40}\d/;
+  var RE_SUMA_EUR = /(\d[\d \u00a0]*(?:[.,]\d+)?)\s*(eur|€)/;      // tarp skaitmenų - ir jungiamasis tarpas („10 000 Eur“)
+  var RE_KVAL_NE = /kvalifikacija nera tikrinama|kvalifikacijos reikalavimai nenustatomi|kvalifikacijos reikalavimu nera/;
+  var RE_KAINOS = /ikainiu lentel|kain\w* (detalizavimo )?(lentel|form)|kiekiu (sarasas|lentel|ziniarast)|sanaud\w* (lentel|form)|price (table|form|schedule)/;
+  var RE_CVP_TEIKTI = /(pasiulym\w*|paraisk\w*)[^.|\n]{0,40}(reikia pateikti|turi buti pateik\w*|gali teikti)[^.|\n]{0,80}(cvp is|elektronin\w+ priemon)|(pasiulym\w*|paraisk\w*) (reikia pateikti|gali teikti)/;
+  var RE_CVP_MINI = /(pasiulym\w*|paraisk\w*)[^.|\n]{0,80}(teikiam\w*|pateikiam\w*|pateikt\w*|teikt\w*)[^.|\n]{0,80}(cvp is|elektronin\w+ priemon)|(cvp is|elektronin\w+ priemon)[^.|\n]{0,60}(pateikiam\w*|teikiam\w*|pateikt\w*)[^.|\n]{0,40}(pasiulym|paraisk)/;
+  var RE_GALIOJA = /pasiulymas (?:turi )?galio(?:ja|ti) (?:ne trumpiau kaip )?(\d+\s*(?:\([^)]{1,30}\)\s*)?(?:kalendorin\w+ dien\w*|darbo dien\w*|dien\w*|menes\w*|men\b)[^.|\n]{0,80})/;
+  var RE_EBVPD_TAIP = /(pateikiam\w*|pateikia|privalo pateikti|turi pateikti|turi buti pateikt\w*)[^.|\n]{0,70}(ebvpd|europos bendraj\w+ viesuj\w+ pirkimu dokument)|(ebvpd|europos bendraj\w+ viesuj\w+ pirkimu dokument\w*)[^.|\n]{0,50}(privalo|turi buti|pateikiam)/;
+  var RE_PARASAS = /(?:^|[^a-z])(pasirasyt\w*|pasirasom\w*)[^.|\n]{0,80}(elektronin\w+ paras\w*|e-paras\w*)|(elektronin\w+ paras\w*)[^.|\n]{0,80}[^a-z](pasirasyt\w*|privalo|turi buti)/;
+
   /* ---------------- Faktų ir klausimų surinkimas ---------------- */
   function siulyk(o) {
     o = o || {};
@@ -193,6 +209,17 @@
       F.push({ id: id, q: T(klausimas), atsakymas: T(atsakymas), kodel: kodel(r), fragmentai: [r.ch.id] });
     }
     var NE = L("Ne.", "No.");
+
+    /* Rinkos konsultacija - ne pirkimas: pasiūlymas neteikiamas, tiekėjas atsako į klausimus */
+    if (/market consultation/i.test(String(o.procedura || ""))) {
+      var rkDok = g.rk.concat(g.sprendimai, g.formos, g.kita, g.paaiskinimai, g.ts)[0];
+      var rkKod = rkDok ? dokSaltinis(rkDok) : null, rkFr = rkDok ? rkDok.chunks.slice(0, 3).map(function (c) { return c.id; }) : [];
+      q("rk-klausimai", 1, L("Ko pirkimo vykdytojas klausia šioje rinkos konsultacijoje?", "What does the buyer ask in this market consultation?"), rkKod, rkFr);
+      q("rk-kaip", 2, L("Kaip ir iki kada atsakyti į rinkos konsultacijos klausimus?", "How and by when do I answer the market consultation questions?"), rkKod, rkFr);
+      q("rk-naudojimas", 3, L("Ar mano atsakymai bus konfidencialūs ir kaip jie bus naudojami?", "Will my answers be confidential and how will they be used?"), rkKod, rkFr);
+      q("rk-dalyvavimas", 4, L("Ar dalyvavimas konsultacijoje paveiks galimybę dalyvauti būsimame pirkime?", "Does taking part in the consultation affect my chances in the future procurement?"), rkKod, rkFr);
+      return { klausimai: Q, faktai: F };
+    }
 
     /* --- Būsena: atsakymai, pratęsimas, skirtingos reikšmės --- */
     if (g.paaiskinimai.length) {
@@ -220,9 +247,13 @@
 
     /* --- Pirkimo eiga --- */
     var deryboDok = g.sprendimai;
-    var derNe = rask(deryboDok, /derybos nebus vykdomos|derybos nevykdomos|derybos nevyks|nebus deramasi|pirkimas vykdomas be derybu/);
-    var derTaip = rask(deryboDok, /bus vykdomos derybos|derybos bus vykdomos|negotiations will take place/);
-    if (derTaip) q("derybos", 20, L("Dėl ko bus deramasi ir kaip vyks derybos?", "What will be negotiated and how will the negotiations run?"), derTaip);
+    // „derybos nebus vykdomos dėl:“ ir „dėl kurių nebus deramasi“ - derybų objekto apribojimas, ne „derybų nebus“;
+    // „nebus vykdomos derybos“ - ne „bus“. Kai pats pirkimo būdas yra derybos, faktas „Ne“ nerodomas (2026-11-04, tiekėjo patikra).
+    var derBudas = /deryb|negotiat/i.test(String(o.procedura || "") + " " + String((meta.procedure && meta.procedure.value) || ""));
+    var derNe = rask(deryboDok, /derybos nebus vykdomos|nebus vykdomos derybos|derybos nevykdomos|derybos nevyks|nebus deramasi|pirkimas vykdomas be derybu/, { ne: /nebus vykdomos del|del kuriu|nebus deramasi del/ });
+    var derTaip = rask(deryboDok, /(?:^|[^a-z])bus vykdomos derybos|derybos bus vykdomos|negotiations will take place/);
+    if (derNe && derBudas && !derTaip) q("derybos", 20, L("Dėl ko bus deramasi ir kaip vyks derybos?", "What will be negotiated and how will the negotiations run?"), derNe);
+    else if (derTaip) q("derybos", 20, L("Dėl ko bus deramasi ir kaip vyks derybos?", "What will be negotiated and how will the negotiations run?"), derTaip);
     else if (derNe) faktas("derybos", L("Ar bus derybos?", "Will there be negotiations?"), NE, derNe, /deryb/, L("Ar šiame pirkime bus derybos?", "Will there be negotiations in this procurement?"), 20);
 
     // Ar teikiama paraiška, ar iškart pasiūlymas. Skelbimo laukas to nepasako: eForms „Dalyvavimo prašymų
@@ -233,8 +264,9 @@
     var kaTeikia = rDok1 ? rDok1.m[1].slice(0, 4) : "";       // sąlygų sakinys „Tiekėjai privalo pateikti ...“ - tiksliausias
     var paraiska = kaTeikia === "para" || (!kaTeikia && (!!paraiskosForma || kiek(g.sprendimai, /paraisk/g) >= 10));
     var pirminis = kaTeikia === "pirm" || (!kaTeikia && !paraiska && !derNe && kiek(g.sprendimai, /pirmin\w+ pasiulym/g) >= 10);
+    // Būdas žinomas iš CVP IS - nespėjame iš bendros nuostatos apie dinaminę pirkimo sistemą
     var dps = rask(g.sprendimai.concat(g.formos, g.kita), /dinamin\w+ pirkimo sistem/);
-    if (dps && !meta.procedure) q("dps", 21, L("Kaip prisijungti prie dinaminės pirkimo sistemos ir kada kviečiama teikti pasiūlymą?", "How do I join the dynamic purchasing system and when am I invited to bid?"), dps);
+    if (dps && !meta.procedure && (!o.procedura || /dynamic purchasing/i.test(o.procedura))) q("dps", 21, L("Kaip prisijungti prie dinaminės pirkimo sistemos ir kada kviečiama teikti pasiūlymą?", "How do I join the dynamic purchasing system and when am I invited to bid?"), dps);
     else if (paraiska) {
       var rPar = rask(g.sprendimai, /privalo pateikti paraisk|paraisk\w* pateikimo termin|paraisk\w+ form/, { ir_salyga: true });
       if (rPar) q("etapai", 21, L("Kas vyksta po paraiškų pateikimo ir kada reikės teikti pasiūlymą?", "What happens after applications are submitted and when must a bid be submitted?"), rPar);
@@ -249,12 +281,11 @@
     if (rDok) q("dokumentai", 23, L("Kokius dokumentus turiu pateikti " + terminas.lt + "?", "Which documents must I submit " + terminas.en + "?"), rDok);
 
     /* --- Pasiūlymo galiojimo užtikrinimas --- */
-    var UZT_TEMA = /galiojimo uztikrinim|pasiulymo uztikrinim|tender security|bid security/;
-    var uztNe = rask(g.sprendimai, /nereikalaujama (pateikti )?pasiulymo (galiojimo )?uztikrinimo|pasiulymo (galiojimo )?uztikrinimas (yra )?(nereikalaujamas|netaikomas|nenumatytas)|tender security is not required/);
-    var uztTaip = rask(g.sprendimai, /(privalo|turi|reikia) pateikti[^.|]{0,90}pasiulymo (galiojimo )?uztikrinim|pasiulymo (galiojimo )?uztikrinim\w*[^.|]{0,40}(suma|dydis)[^.|]{0,40}\d/);
+    var uztNe = rask(g.sprendimai, RE_UZT_NE);
+    var uztTaip = rask(g.sprendimai, RE_UZT_TAIP);
     if (uztNe && !uztTaip) faktas("uztikrinimas", L("Ar reikia pasiūlymo galiojimo užtikrinimo?", "Is bid security required?"), NE, uztNe, UZT_TEMA, L("Ar šiame pirkime reikia pasiūlymo galiojimo užtikrinimo?", "Is bid security required in this procurement?"), 30);
     else if (uztTaip) {
-      var suma = /(\d[\d ]*(?:[.,]\d+)?)\s*(eur|€)/.exec(uztTaip.fs);
+      var suma = RE_SUMA_EUR.exec(uztTaip.fs);
       q("uztikrinimas", 30, suma ? L("Kaip ir kada pateikti " + normTarpai(suma[1]) + " Eur pasiūlymo galiojimo užtikrinimą?", "How and when must the EUR " + normTarpai(suma[1]) + " bid security be submitted?")
                                  : L("Kokio dydžio pasiūlymo galiojimo užtikrinimo reikia ir kaip jį pateikti?", "What amount of bid security is required and how is it submitted?"), uztTaip);
     } else {
@@ -263,7 +294,7 @@
     }
 
     /* --- Objekto apžiūra --- */
-    var apzNe = rask(g.sprendimai, /nebus vykdoma apziura|apziura nebus vykdoma|nerengs pirkimo objekto apziuros|apziura nerengiama|apziura nenumatyta/);
+    var apzNe = rask(g.sprendimai, /nebus vykdoma apziura|apziura nebus vykdoma|nerengs pirkimo objekto apziuros|apziura nerengiama|apziura nenumatyta/, { ne: /taciau|gali inicij/ });
     var apzTaip = rask(g.sprendimai, /bus vykdoma apziura|bus rengiama apziura|norintys apziureti|apziura vyks/);
     if (apzTaip) {
       // Data - kitame sakinyje („... bus vykdoma apžiūra. Tiekėjai, norintys apžiūrėti ..., turi iki 2026 m. ...“)
@@ -278,7 +309,7 @@
     } else if (apzNe) faktas("apziura", L("Ar bus objekto apžiūra?", "Will there be a site visit?"), NE, apzNe, /apziur/, L("Ar bus objekto apžiūra?", "Will there be a site visit?"), 31);
 
     /* --- Kvalifikacija --- */
-    var roles = 0, kvalNe = rask(g.sprendimai, /kvalifikacija nera tikrinama|kvalifikacijos reikalavimai nenustatomi|kvalifikacijos reikalavimu nera/);
+    var roles = 0, kvalNe = rask(g.sprendimai, RE_KVAL_NE);
     if (kvalNe) {
       faktas("kvalifikacija", L("Ar tikrinama tiekėjų kvalifikacija?", "Is supplier qualification checked?"), NE, kvalNe, /kvalifikacij/, L("Ar šiame pirkime tikrinama tiekėjų kvalifikacija?", "Is supplier qualification checked in this procurement?"), 32);
       var pasal = rask(g.sprendimai, /pasalinimo pagrind/);
@@ -296,14 +327,14 @@
             var s = sakinys(f, atm.index, atm.index + atm[0].length);
             var r = { d: d, ch: ch, citata: kiekDaug(normTarpai(ch.text.slice(s.pradzia, s.pabaiga))) };
             if (/(?:šiuos|šias|šiuos darbus|šias teises)$/i.test(kas) || /^teisę atlikti/i.test(kas)) { q("teises", 34, L("Kokias teises ar atestatus turi turėti tiekėjas ir kaip tai įrodyti?", "Which rights or certificates must the supplier hold and how are they proven?"), r); continue; }
-            if (kas.length > 70) continue;
+            if (kas.length > 70 || /pakankam|zmogiskuos/.test(fold(kas))) continue;
             q("reikalavimas-" + fold(kas).slice(0, 30), 34, L("Kaip įrodyti reikalavimą turėti " + kas + "?", "How do I prove the requirement “" + kas + "”?"), r);
             if (++roles >= 2) return true;
           }
           return false;
         });
       });
-      var patirtis = rask(g.sprendimai, /per paskutini\w+ (\d+)\*? ?(?:\([a-z]+\) )?met\w+[^.|]{0,120}(?:tiekej|sutar|ivykd|savo jegomis)|tiekejas per paskutini\w+ (\d+)\*? ?(?:\([a-z]+\) )?met/);
+      var patirtis = rask(g.sprendimai, /per paskutini\w+ (\d+)\*? ?(?:\([a-z]+\) )?met\w+[^.|]{0,120}(?:tiekej|sutar|ivykd|savo jegomis)|tiekejas per paskutini\w+ (\d+)\*? ?(?:\([a-z]+\) )?met/, { ne: /vidaus sandor|nebuvo sudari/ });
       if (patirtis) {
         var mt = patirtis.m[1] || patirtis.m[2];
         q("patirtis", 35, L("Kokią patirtį per paskutinius " + mt + " m. turi įrodyti tiekėjas ir kokiais dokumentais?", "What experience over the last " + mt + " years must the supplier prove, and with which documents?"), patirtis);
@@ -413,7 +444,7 @@
     function doFr(d, n) { return d.chunks.slice(0, n).map(function (c) { return c.id; }); }
     var ns = pagalVarda(/nacionalinio saugumo|national security/);
     if (ns) q("nacsaugumas", 38, L("Kas ir kada turi pateikti nacionalinio saugumo reikalavimų atitikties deklaraciją?", "Who must submit the national security compliance declaration, and when?"), doKodel(ns), doFr(ns, 2));
-    var kainos = pagalVarda(/ikainiu lentel|kain\w* (detalizavimo )?(lentel|form)|kiekiu (sarasas|lentel|ziniarast)|sanaud\w* (lentel|form)|price (table|form|schedule)/);
+    var kainos = pagalVarda(RE_KAINOS);
     if (kainos) q("kainos", 25, L("Kaip užpildyti „" + svarusVardas(kainos) + "“ ir ką įskaičiuoti į kainą?", "How do I fill in “" + svarusVardas(kainos) + "” and what must the price include?"), doKodel(kainos), doFr(kainos, 3));
     var derForma = pagalVarda(/deret\w+ salyg|pasiulymu deryboms|deryboms forma/);
     if (derForma) q("deretinos", 26, L("Ką reikia nurodyti tiekėjo pasiūlymų dėl derėtinų sąlygų formoje?", "What must the supplier state in the form on negotiable conditions?"), doKodel(derForma), doFr(derForma, 2));
@@ -424,7 +455,7 @@
     var tris = pagalVarda(/trisal|tiesioginio atsiskaitymo/);
     if (tris) q("tiesioginis", 47, L("Kaip veikia tiesioginis atsiskaitymas su subtiekėjais?", "How does direct payment to subcontractors work?"), doKodel(tris), doFr(tris, 2));
     if (g.ebvpd.length && !rask(g.sprendimai, /ebvpd (nera|nereikalaujam)/)) {
-      var eb = g.ebvpd[0];
+      var eb = g.ebvpd.filter(function (d) { return !/\.xml$/i.test(vardas(d)); })[0] || g.ebvpd[0];   // XML pradžia žmogui nieko nesako
       q("ebvpd", 48, L("Kaip užpildyti ir pateikti šio pirkimo EBVPD?", "How do I fill in and submit this procurement's ESPD?"), doKodel(eb), doFr(eb, 1));
     }
 
@@ -440,6 +471,110 @@
 
     Q.sort(function (a, b) { return a.p - b.p; });
     return { klausimai: Q, faktai: F };
+  }
+
+  /* ---------------- Kontrolinis sąrašas iš dokumentų ----------------
+     Tai, ką dokumentai aiškiai sako, užpildoma iškart ir be DI: kiekvienas punktas su šaltiniu pažodžiui.
+     Sudėtingi sąrašai (pašalinimo pagrindai, kvalifikacijos reikalavimai, techninis pasiūlymas, horizontalūs
+     reikalavimai) - ne čia: jų dalis nebūtų pilna, o tai būtų blogiau nei „dar neįvertinta“. Jei apie temą
+     kalba atsakymų raštas (jis gali sąlygą pakeisti), punktas paliekamas neįvertintas. */
+  function formos(g, re, n, ne) {
+    return g.formos.concat(g.sps, g.kita).filter(function (d) { var v = fold(vardas(d)); return re.test(v) && !(ne && ne.test(v)); }).slice(0, n || 1);
+  }
+  function dokSaltinis(d) { return { docId: d.id, name: vardas(d), loc: d.chunks[0].loc, citata: kiekDaug(normTarpai(d.chunks[0].text)) }; }
+
+  function kontrolinis(o) {
+    o = o || {};
+    var kalba = o.kalba === "en" ? "en" : "lt", meta = o.meta || {}, docs = o.docs || [], dabar = o.dabar || new Date(), g = grupes(docs), P = Object.create(null);
+    function punktas(id, busena, santrauka, saltiniai, pastaba) {
+      P[id] = { id: id, busena: busena, santrauka: santrauka ? santrauka[kalba] : "", saltiniai: saltiniai, pastaba: pastaba ? pastaba[kalba] : "" };
+    }
+    function atsakymuose(re) { return g.paaiskinimai.some(function (d) { return d.chunks.some(function (c) { return re.test(foldF(c)); }); }); }
+    function failai(ds) { return ds.map(svarusVardas).join("; "); }
+    function skirtingi(x) { return [x.value].concat(x.alt.map(function (a) { return a.value; })).join(", "); }
+
+    /* Pateikimas */
+    var sal = g.sprendimai.concat(g.bps), cvp = rask(sal, RE_CVP_TEIKTI) || rask(sal, RE_CVP_MINI, { ne: /nebus nagrinejam|konkreti data/ });
+    if (cvp) punktas("registracija", "privaloma", L("Teikiama per CVP IS - užsiregistruokite ir pasirenkite iš anksto.", "Submitted through CVP IS - register and prepare in advance."), [kodel(cvp)]);
+
+    /* Terminas: kelios skirtingos datos (ne pratęsimas) - patikslinti, ne pasirinkti. Laiko juosta matyti citatoje. */
+    var dl = meta.deadline;
+    if (dl && dl.value) {
+      var md = metaData(dl.value), td = md ? md.t : dl.value, praejes = !!(md && md.d < dabar);
+      var PRAEJES = L("Šis terminas jau praėjo - patikrinkite CVP IS, ar jis nepratęstas.", "This deadline has passed - check in CVP IS whether it was extended.");
+      if (dl.alt && dl.alt.length && !dl.pratestas) {
+        punktas("terminas", "patikslinti", L("Dokumentuose skirtingi terminai: " + skirtingi(dl) + ".", "The documents give different deadlines: " + skirtingi(dl) + "."), [metaKodel(dl, docs)]);
+      } else {
+        punktas("terminas", "privaloma", L("Terminas: " + td + ".", "Deadline: " + td + "."), [metaKodel(dl, docs)],
+          praejes ? PRAEJES : dl.pratestas ? L("Terminas pratęstas.", "The deadline was extended.") : o.kelietapis ? L("Vėlesnio etapo terminą pirkimo vykdytojas nurodo kvietime per CVP IS.", "The buyer states the next stage's deadline in the invitation through CVP IS.") : null);
+        if (cvp) punktas("patikra", "privaloma", praejes ? L("Teikiama per CVP IS iki termino.", "Submitted through CVP IS by the deadline.") : L("Pateikite per CVP IS iki " + td + ".", "Submit through CVP IS by " + td + "."), [kodel(cvp)], praejes ? PRAEJES : null);
+      }
+    }
+
+    /* Formos pakete. Paraiška ir pasiūlymas - skirtingi etapai. */
+    var fo = formos(g, /pasiulymo form|paraiskos form|tender form|application form|bid form/, 3);
+    var foPar = fo.filter(function (d) { return /paraiskos form|application form/.test(fold(vardas(d))); }), foPas = fo.filter(function (d) { return foPar.indexOf(d) < 0; });
+    if (foPar.length && foPas.length) punktas("forma", "privaloma", L("Užpildykite: " + failai(foPar) + ". Vėliau, kai būsite pakviesti, - " + failai(foPas) + ".", "Fill in: " + failai(foPar) + ". Later, when invited, - " + failai(foPas) + "."), fo.map(dokSaltinis));
+    else if (fo.length) punktas("forma", "privaloma", L("Užpildykite: " + failai(fo) + ".", "Fill in: " + failai(fo) + "."), fo.map(dokSaltinis));
+    var ka = formos(g, RE_KAINOS, 2), kaF = !ka.length && foPas.length ? rask(foPas, /pasiulymo kain|kaina nurodoma|sanaudos nurodomos/, { ir_salyga: true }) : null;
+    if (ka.length) punktas("kaina", "privaloma", L("Užpildykite: " + failai(ka) + ".", "Fill in: " + failai(ka) + "."), ka.map(dokSaltinis));
+    else if (kaF) {
+      kaF.citata = kiekDaug(normTarpai(kaF.ch.text.substr(kaF.m.index, 140)));      // antraštė „PASIŪLYMO KAINA“ - ne sakinys prieš ją
+      punktas("kaina", "privaloma", L("Kainą nurodykite formoje: " + svarusVardas(kaF.d) + ".", "State the price in the form: " + svarusVardas(kaF.d) + "."), [kodel(kaF)]);
+    }
+    var su = formos(g, /ukio subjekt|subtiekej|kvazisubtiekej|economic operator|subcontract|sub-supplier/, 1, /sandorio sal|transaction part/);
+    if (su.length) punktas("subjektai", "su_salyga", L("Jei remiatės kitų ūkio subjektų pajėgumais ar pasitelkiate subtiekėjus, užpildykite: " + failai(su) + ".", "If you rely on other operators' capacity or use subcontractors, fill in: " + failai(su) + "."), su.map(dokSaltinis));
+    // „Konfidencialumo įsipareigojimas“ - kitas dokumentas: jį pasirašo kiti, ne pasiūlyme nurodoma informacija
+    var ko = formos(g, /konfidenciali informacij|confidential information/, 1);
+    if (ko.length) {
+      var tikLaim = /tik galimo laimetojo/.test(fold(ko[0].chunks[0].text));
+      punktas("konfidencialumas", "su_salyga", tikLaim ? L("Šį priedą pirkimo vykdytojas prašys užpildyti tik iš galimo laimėtojo: " + failai(ko) + ".", "The buyer will ask only the potential winner to fill in this annex: " + failai(ko) + ".")
+                                                      : L("Jei pasiūlyme yra konfidencialios informacijos, užpildykite: " + failai(ko) + ".", "If your bid contains confidential information, fill in: " + failai(ko) + "."), ko.map(dokSaltinis));
+    }
+
+    /* Galiojimas: santrauka (skelbimas, sąlygos), o jos nesant - pasiūlymo forma ir sąlygos */
+    var gl = meta.validity;
+    if (!atsakymuose(/pasiulym\w* galiojim|galiojimo termin/)) {
+      if (gl && gl.value) {
+        if (gl.alt && gl.alt.length) punktas("galiojimas", "patikslinti", L("Dokumentuose skirtingas galiojimas: " + skirtingi(gl) + ".", "The documents give different validity periods: " + skirtingi(gl) + "."), [metaKodel(gl, docs)]);
+        else { var gz = String(gl.value).replace(/\.$/, ""); punktas("galiojimas", "privaloma", L("Pasiūlymo galiojimas: " + gz + ".", "Bid validity: " + gz + "."), [metaKodel(gl, docs)]); }
+      } else {
+        var gr = rask(foPas.concat(g.sprendimai), RE_GALIOJA);
+        if (gr) { var gv = normTarpai(gr.orig(1)).replace(/[.;,\s]+$/, ""); punktas("galiojimas", "privaloma", L("Pasiūlymas galioja " + gv + ".", "Bid validity per the source: " + gv + "."), [kodel(gr)]); }
+      }
+    }
+
+    /* EBVPD */
+    if (!atsakymuose(/ebvpd|espd/)) {
+      var ebNe = rask(g.sprendimai, /ebvpd (nera|nereikalaujam|netaikom)|nereikalaujama pateikti ebvpd|espd is not required/);
+      var ebTaip = rask(g.sprendimai, RE_EBVPD_TAIP, { ne: /pateikimo tvarka|patvirtinimo priemon/ });
+      if (ebNe && !ebTaip) punktas("ebvpd", "netaikoma", L("EBVPD nereikalaujamas.", "The ESPD is not required."), [kodel(ebNe)]);
+      else if (ebTaip) punktas("ebvpd", "privaloma", L("Pateikite EBVPD.", "Submit the ESPD."), [kodel(ebTaip)]);
+      else if (g.sprendimai.length && !g.ebvpd.length && !rask(g.sprendimai, /ebvpd|espd|europos bendraj\w+ viesuj\w+ pirkimu dokument/, { ir_salyga: true }))
+        punktas("ebvpd", "nerasta", L("Specialiosiose sąlygose ir pakete EBVPD neminimas.", "The special conditions and the package do not mention the ESPD."), []);
+    }
+
+    /* Kvalifikacija: tik „netikrinama“ - reikalavimų sąrašo be DI nepildome */
+    var kvNe = rask(g.sprendimai, RE_KVAL_NE);
+    if (kvNe && !atsakymuose(/kvalifikacij/)) punktas("kvalifikacija", "netaikoma", L("Kvalifikacija šiame pirkime netikrinama.", "Qualification is not checked in this procurement."), [kodel(kvNe)]);
+
+    /* Pasiūlymo galiojimo užtikrinimas */
+    if (!atsakymuose(UZT_TEMA)) {
+      var uNe = rask(g.sprendimai, RE_UZT_NE), uTaip = rask(g.sprendimai, RE_UZT_TAIP);
+      if (uTaip) {
+        var us = RE_SUMA_EUR.exec(uTaip.fs);
+        punktas("uztikrinimas", "privaloma", us ? L("Reikia pasiūlymo galiojimo užtikrinimo: " + normTarpai(us[1]) + " Eur.", "Bid security is required: EUR " + normTarpai(us[1]) + ".") : L("Reikia pasiūlymo galiojimo užtikrinimo - dydis ir tvarka citatoje.", "Bid security is required - the amount and procedure are in the quote."), [kodel(uTaip)]);
+      } else if (uNe) punktas("uztikrinimas", "netaikoma", L("Pasiūlymo galiojimo užtikrinimo nereikalaujama.", "Bid security is not required."), [kodel(uNe)]);
+    }
+
+    /* Parašas: LITGRID sąlygose - fizinis ARBA kvalifikuotas elektroninis */
+    var pa = rask(sal, RE_PARASAS);
+    if (pa) {
+      var abu = /fizini\w+ (parasu )?(arba|ir \(arba\)) kvalifikuot|kvalifikuot\w+ elektronin\w+ parasu arba fizini/.test(pa.fs);
+      punktas("parasas", "privaloma", abu ? L("Pasirašykite fiziniu arba kvalifikuotu elektroniniu parašu.", "Sign with a handwritten or a qualified electronic signature.")
+        : /kvalifikuot/.test(pa.fs) ? L("Pasirašykite kvalifikuotu elektroniniu parašu.", "Sign with a qualified electronic signature.") : L("Pasirašymo reikalavimas - citatoje.", "The signing requirement is in the quote."), [kodel(pa)]);
+    }
+    return P;
   }
 
   /* ---------------- Iki kada pateikti klausimą ----------------
@@ -483,5 +618,5 @@
     };
   }
 
-  global.GP_KLAUSIMAI = { siulyk: siulyk, terminas: terminas, prasymoSalyga: prasymoSalyga, fold: fold, grupes: grupes, svarusVardas: svarusVardas };
+  global.GP_KLAUSIMAI = { siulyk: siulyk, kontrolinis: kontrolinis, terminas: terminas, prasymoSalyga: prasymoSalyga, fold: fold, grupes: grupes, svarusVardas: svarusVardas };
 })(typeof window !== "undefined" ? window : this);
