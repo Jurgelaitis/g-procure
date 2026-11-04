@@ -1,6 +1,6 @@
 # Pirkimų teisės stebėsena - administravimo procesas
 
-Administravimo aplinka: `PP-teise/admin.html`. Būsena 2026-09-24.
+Administravimo aplinka: `PP-teise/admin.html`. Būsena 2026-11-04.
 
 ## 1. Kas veikia ir kur gyvena duomenys
 
@@ -29,7 +29,7 @@ kurių vardas prasideda „vidin...“; tikrasis leidimų sluoksnis yra repozito
 | Archyvuota | ▣ | Atšaukta, pakeista kitu įrašu ar nebeaktuali; nerodoma skiltyse, matoma archyve su priežastimi | prižiūrėtojas |
 
 Taisyklės, kurias vykdo kodas:
-- patvirtinimui privalomas vardas ir pastaba; patvirtinus nuimama žyma „AI juodraštis“;
+- patvirtinimui privalomas vardas ir pastaba (ir mygtuku, ir formos sąrašu); patvirtinus nuimama žyma „DI juodraštis“;
 - **patvirtinto įrašo turinio pakeitimas grąžina jį į „Laukia peržiūros“**;
 - archyvavimas įrašo `pakeistas` (kada, priežastis); grąžinimas peržiūrai jį nuima;
 - „Automatiškai aptikta“ ir „Laukia peržiūros“ puslapyje visada rodomos su prierašu, kad tai ne
@@ -55,17 +55,23 @@ Taisyklės, kurias vykdo kodas:
    redakcijas: ankstesnės redakcijos tekstą, naujos redakcijos tekstą, jų datas ir šaltinio nuorodą
    (e-tar redakcijų sąrašą). Nepilnas palyginimas (tik „buvo“ arba tik „tapo“) neįrašomas ir formoje
    įspėjamas; puslapis tada sako „palyginimas neatliktas“, o nuorodą į e-tar redakcijų sąrašą vadina
-   išoriniu sąrašu, ne palyginimu. 2026-09-24 registre palyginimų nėra nė vieno.
+   išoriniu sąrašu, ne palyginimu. 2026-11-04 registre palyginimų nėra nė vieno.
+   **Veiksmai.** Laukas „Rekomenduojamas veiksmas“ rašomas pirkimų specialistui. Jei jam veiksmų nereikia - žyma
+   „Naudotojui veiksmų nereikia“: įrašas į „Ką peržiūrėti?“ nepatenka. Darbas pačiam prižiūrėtojui (pvz. pridėti
+   šaltinį) - atskirame lauke „Darbas registro prižiūrėtojui“, kurį mato tik administravimo aplinka.
+   **Datos.** TAR paskelbimo data, registracijos numeris ir įsigaliojimas - iš e-tar akto puslapio (chronologija);
+   jungtis grąžina tik priėmimo datą. Projekto įraše data ir numeris - ne projekto, o šaltinio (nutarimo), todėl
+   identifikatorius rodomas pagal `projektai`, o eiga rašoma laukuose „Projekto eiga“.
    **Dokumento istorija** susidaro savaime: visi įrašai su tuo pačiu `keiciamasAktas.eTarId` rodomi
    vienas kito detalėse kaip atskiri to paties dokumento pokyčiai (dokumentas, redakcija ir pokytis -
    skirtingi objektai; vienos „bendros kortelės“ dokumentui nėra).
    **Portalo blokas** rodo iki trijų įrašų TIK pagal redakcinį prioritetą (formos skiltis
-   „Portalo blokas“: prioritetas 1 - svarbiausias, trumpas pavadinimas, „kodėl aktualu LITGRID“,
+   „Portalo blokas“: prioritetas 1 - svarbiausias, trumpas pavadinimas, „kodėl aktualu“,
    kas parinko). Sistema aktualumo neskaičiuoja ir naujausių nerodo - be prioriteto blokas sako,
    kad įrašai dar neparinkti. Trumpas pavadinimas negali keisti teisinės prasmės ar nukirsti
    išlygos (pvz. „ar taikoma LITGRID, vertina teisės specialistas“ lieka paaiškinime).
-3. **AI juodraštis (neprivaloma).** Įklijavus ištrauką, AI pasiūlo santrauką, „kas pasikeitė“ ir
-   veiksmą; laukai pažymimi „AI juodraštis - nepatvirtinta“. Ištrauka laikoma duomenimis (instrukcijos
+3. **DI juodraštis (neprivaloma).** Įklijavus ištrauką, DI pasiūlo santrauką, „kas pasikeitė“ ir
+   veiksmą; laukai pažymimi „DI juodraštis - nepatvirtinta“. Ištrauka laikoma duomenimis (instrukcijos
    joje nevykdomos), siunčiama per G-Procure serverį į Claude API; vidinės informacijos nesiųsti.
 4. **Dublikatai ir prieštaravimai.** Sistema pažymi įrašus su tais pačiais identifikatoriais
    (abu lieka, antras - „galimas dublikatas“) ir įrašus apie tą patį keičiamą aktą su skirtingu
@@ -73,8 +79,10 @@ Taisyklės, kurias vykdo kodas:
    naudotojui liepiama vadovautis šaltiniu.
 5. **Specialisto peržiūra.** Teisės specialistas atidaro admin.html, įrašo savo vardą viršuje ir
    kiekvienam įrašui spaudžia „Patvirtinti“ su pastaba (ką tikrino). Turinį taiso „Redaguoti“.
-6. **Eksportas ir commit.** „Eksportuoti registrą (JSON)“ → failą įrašyti kaip
-   `PP-teise/duomenys/registras.json`, pakelti `meta.versija` (pvz. `2026-10-01.1`) ir `meta.patikrinta`;
+6. **Eksportas ir commit.** Skiltyje „Registras“ patikrinti versiją ir patikros datą (siūloma šiandienos,
+   pvz. `2026-10-01.1`; eksportas juos įrašo į `meta.versija`, `meta.patikrinta` ir `meta.laikotarpis.iki`), tada
+   „Eksportuoti registrą (JSON)“ → failą įrašyti kaip `PP-teise/duomenys/registras.json`. Darbinė kopija iš senesnės
+   registro versijos pažymima įspėjimu: eksportuoti ją reiškia perrašyti vėlesnius pakeitimus;
    „Eksportuoti šaltinių registrą su patikromis“ → `saltiniai.json`; padidinti `PP-teise/sw.js`
    `VERSIJA`; paleisti `PP-teise/testai.html`; commit `pp-teise: registras 2026-10-01.1`.
 7. **Naudotojo peržiūros.** Stebėsenos puslapyje projektų vadovas pažymi „peržiūrėjau“ su
@@ -91,4 +99,5 @@ Taisyklės, kurias vykdo kodas:
 - nespėja trūkstamų datų ir nerodo nepatvirtinto įrašo kaip išvados;
 - nerodo „buvo / tapo“ be tikrų palyginamų redakcijų ir neskaičiuoja rizikos ar aktualumo balo -
   vietoj jo įvardija, kokių pirkimo konteksto duomenų trūksta;
-- nesaugo peržiūrų ir vidinių pastabų serveryje.
+- nesaugo peržiūrų ir vidinių pastabų serveryje;
+- nelaiko žymos galiojančia, kai įrašas po jos pasikeitė: įrašas grįžta į „Ką peržiūrėti?“ su pastaba.

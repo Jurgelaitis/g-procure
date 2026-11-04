@@ -114,6 +114,11 @@
       <button type="button" class="btn" id="eksportasSaltiniai">Eksportuoti šaltinių registrą su patikromis</button>
       <button type="button" class="btn btn--pavojus" id="atmesti">Atmesti darbinę kopiją</button>
     </div>
+    <div id="atmestiPatvirtinimas" class="juosta juosta--ispejimas" role="group" aria-label="Darbinės kopijos atmetimo patvirtinimas" hidden style="margin-top:10px"></div>
+    <div class="eilute" style="margin-top:10px">
+      <div class="laukas"><label for="metaVersija">Eksportuojamo registro versija</label><input id="metaVersija" maxlength="40"></div>
+      <div class="laukas"><label for="metaPatikrinta">Registras patikrintas (data)</label><input id="metaPatikrinta" type="date"></div>
+    </div>
     <div id="importoAtaskaita" class="ataskaita" style="margin-top:10px"></div>
   </section>
 
@@ -173,7 +178,7 @@
           <div class="tinklelis" style="margin-top:6px">
             <div class="laukas"><label for="f_portPrioritetas">Prioritetas (1 - svarbiausias; tuščia - portale nerodyti)</label><input id="f_portPrioritetas" type="number" min="1" step="1"></div>
             <div class="laukas visas"><label for="f_portPavadinimas">Trumpas pavadinimas portalui (negali keisti teisinės prasmės ar nukirsti išlygos)</label><input id="f_portPavadinimas" maxlength="160"></div>
-            <div class="laukas visas"><label for="f_portKodel">Kodėl aktualu LITGRID (1-2 sakiniai)</label><textarea id="f_portKodel" maxlength="400"></textarea></div>
+            <div class="laukas visas"><label for="f_portKodel">Kodėl aktualu (1-2 sakiniai)</label><textarea id="f_portKodel" maxlength="400"></textarea></div>
             <div class="laukas visas"><label for="f_portParinko">Kas ir kada parinko</label><input id="f_portParinko" maxlength="160"></div>
           </div>
         </fieldset>
@@ -181,7 +186,9 @@
           <label><input type="checkbox" id="f_reikiaSpecialisto"> Reikalingas specialisto vertinimas</label>
           <label><input type="checkbox" id="f_demo"> Demonstracinis įrašas (ne tikra naujiena)</label>
           <label><input type="checkbox" id="f_aiJuodrastis"> Santrauka - DI juodraštis, nepatvirtinta</label>
+          <label><input type="checkbox" id="f_veiksmuNereikia"> Naudotojui veiksmų nereikia (į „Ką peržiūrėti?“ nepatenka)</label>
         </fieldset>
+        <div class="laukas visas"><label for="f_prizuretojui">Darbas registro prižiūrėtojui (naudotojui nerodomas)</label><input id="f_prizuretojui" maxlength="400"></div>
         <div class="laukas visas"><label for="f_specPriezastis">Kodėl reikalingas specialisto vertinimas</label><input id="f_specPriezastis" maxlength="400"></div>
         <div class="laukas"><label for="f_projBusena">Projekto eiga (tik projektams)</label><input id="f_projBusena" maxlength="120"></div>
         <div class="laukas"><label for="f_projPastaba">Projekto eigos pastaba</label><input id="f_projPastaba" maxlength="400"></div>
@@ -286,12 +293,33 @@
   function issaugokDarbine() { ir(R_DARB, DARBINE); pieskBusena(); pieskLentele(); }
   function pradekDarbine() { if (!DARBINE) DARBINE = { bazineVersija: BAZINIS.meta.versija || null, sukurta: DABAR, meta: BAZINIS.meta, irasai: BAZINIS.irasai.map(svarus) }; }
 
+  /* Kiek darbinė kopija skiriasi nuo bazinio registro: tiek prarandama ją atmetus. */
+  function darbinesSkirtumai() {
+    if (!DARBINE) return { pakeista: 0, nauji: 0, pasalinta: 0 };
+    var sv = function (x) { return JSON.stringify(svarus(S.normalizuok(x))); }, b = {}, d = {};
+    BAZINIS.irasai.forEach(function (x) { b[x.id] = sv(x); });
+    DARBINE.irasai.forEach(function (x) { d[x.id] = sv(x); });
+    var pakeista = 0, nauji = 0, pasalinta = 0;
+    Object.keys(d).forEach(function (id) { if (!(id in b)) nauji++; else if (b[id] !== d[id]) pakeista++; });
+    Object.keys(b).forEach(function (id) { if (!(id in d)) pasalinta++; });
+    return { pakeista: pakeista, nauji: nauji, pasalinta: pasalinta };
+  }
+  function kiek(n, vns, dgs, kilm) { var a = n % 10, b = n % 100; return n + " " + (b >= 11 && b <= 19 || a === 0 ? kilm : a === 1 ? vns : dgs); }
+  /* Eksportas: versija ir patikros data - iš formos, numatytai šiandienos (2026-11-04; iki tol eksportas palikdavo seną versiją ir datą,
+     nors registras jau buvo pakeistas). */
+  function siulomaVersija() {
+    var v = String((BAZINIS && BAZINIS.meta.versija) || ""), m = /^(\d{4}-\d{2}-\d{2})\.(\d+)$/.exec(v);
+    return DABAR + "." + (m && m[1] === DABAR ? Number(m[2]) + 1 : 1);
+  }
+  function uzpildykMeta() { $("metaVersija").value = siulomaVersija(); $("metaPatikrinta").value = DABAR; }
   function pieskBusena() {
     var t = tikrinta();
     var h = "<b>Bazinis registras:</b> v" + esc(BAZINIS.meta.versija || "?") + ", " + BAZINIS.irasai.length + " įr., patikrinta " + esc(BAZINIS.meta.patikrinta || "nenurodyta") + ". ";
     if (DARBINE) h += "<b>Darbinė kopija</b> (sukurta " + esc(DARBINE.sukurta) + ", bazė v" + esc(DARBINE.bazineVersija || "?") + "): " + DARBINE.irasai.length + " įr. ";
     else h += "Darbinės kopijos nėra - rodomas bazinis registras. ";
     h += "Trūkstamų duomenų pastabų: " + t.klaidos.length + ", dublikatų: " + t.dublikatai.length + ", prieštaravimų: " + t.konfliktai.length + ", demonstracinių: " + t.irasai.filter(function (x) { return x.demo; }).length + ".";
+    /* Darbinė kopija iš senesnės bazės: eksportas perrašytų vėlesnius registro pakeitimus. */
+    if (DARBINE && DARBINE.bazineVersija !== BAZINIS.meta.versija) h += '<span class="juosta juosta--ispejimas" id="senaBaze" style="display:block;margin-top:8px"><b>Darbinė kopija sukurta iš senesnės registro versijos</b> (v' + esc(DARBINE.bazineVersija || "?") + '; dabar v' + esc(BAZINIS.meta.versija || "?") + '). Eksportavus būtų perrašyti vėlesni registro pakeitimai: pirma suderinkite arba atmeskite kopiją.</span>';
     $("registroBusena").innerHTML = h;
   }
 
@@ -303,6 +331,7 @@
       return '<tr data-id="' + esc(r.id) + '"><td><b>' + esc(r.pavadinimas) + '</b><br><span class="muted">' + esc(r.id) + '</span>' +
         (r.portalas && r.portalas.prioritetas != null ? ' <span class="zyma" title="Redakcinis prioritetas portalo bloke">Portalas P' + esc(r.portalas.prioritetas) + '</span>' : '') +
         (r.demo ? ' <span class="zyma zyma--blogai">DEMO</span>' : '') + (r.aiJuodrastis ? ' <span class="zyma zyma--blogai" data-di="sugeneruota">DI juodraštis</span>' : '') +
+        (r.prizuretojui ? ' <span class="zyma" title="' + esc(r.prizuretojui) + '">darbas prižiūrėtojui</span>' : '') +
         (r.dublikatas ? ' <span class="zyma zyma--blogai">dublikatas: ' + esc(r.dublikatas) + '</span>' : '') + (r.konfliktas ? ' <span class="zyma zyma--blogai">prieštarauja: ' + esc(r.konfliktas) + '</span>' : '') +
         (r.klaidos.length ? ' <span class="zyma" title="' + esc(r.klaidos.join("; ")) + '">trūksta: ' + r.klaidos.length + '</span>' : '') +
         '<details><summary class="muted" style="cursor:pointer">Istorija (' + r.busenosIstorija.length + ')</summary><ul class="istorija">' + r.busenosIstorija.map(function (h) { var bb = S.BUSENOS[h.busena]; return '<li>' + esc(h.data) + ' - ' + esc(bb ? bb.lt : h.busena) + (h.kas ? ' (' + esc(h.kas) + ')' : '') + (h.pastaba ? ': ' + esc(h.pastaba) : '') + '</li>'; }).join("") + '</ul></details></td>' +
@@ -367,6 +396,7 @@
     var PT = o.portalas || {};
     $("f_portPrioritetas").value = PT.prioritetas != null ? PT.prioritetas : ""; $("f_portPavadinimas").value = PT.pavadinimas || ""; $("f_portKodel").value = PT.kodel || ""; $("f_portParinko").value = PT.parinko || "";
     $("f_reikiaSpecialisto").checked = !!o.reikiaSpecialisto; $("f_demo").checked = !!o.demo; $("f_aiJuodrastis").checked = !!o.aiJuodrastis;
+    $("f_veiksmuNereikia").checked = !!o.veiksmuNereikia; $("f_prizuretojui").value = o.prizuretojui || "";
     $("f_specPriezastis").value = o.specialistoPriezastis || "";
     $("f_projBusena").value = (o.projektoEiga || {}).busena || ""; $("f_projPastaba").value = (o.projektoEiga || {}).pastaba || "";
     $("f_pastaba").value = ""; $("f_istrauka").value = ""; $("formosKlaidos").hidden = true;
@@ -399,6 +429,7 @@
         parinko: $("f_portParinko").value.trim() || ((kas() || "administratorius") + ", " + DABAR) } : null,
       reikiaSpecialisto: $("f_reikiaSpecialisto").checked, specialistoPriezastis: $("f_specPriezastis").value.trim(),
       demo: $("f_demo").checked, aiJuodrastis: $("f_aiJuodrastis").checked,
+      veiksmuNereikia: $("f_veiksmuNereikia").checked, prizuretojui: $("f_prizuretojui").value.trim(),
       projektoEiga: ($("f_projBusena").value.trim() || $("f_projPastaba").value.trim()) ? { busena: $("f_projBusena").value.trim(), patikrinta: DABAR, pastaba: $("f_projPastaba").value.trim() } : null,
       busenosIstorija: senas ? (senas.busenosIstorija || []) : [], susije: senas ? (senas.susije || []) : [], pakeistas: senas ? senas.pakeistas || null : null,
       patikrinta: DABAR
@@ -410,6 +441,9 @@
     var n = S.normalizuok(obj);
     if (!n.id || !n.pavadinimas) return { ok: false, klaidos: ["reikalingas id ir pavadinimas"].concat(n.klaidos) };
     if (!pastaba || !String(pastaba).trim()) return { ok: false, klaidos: ["reikalinga pakeitimo pastaba"] };
+    /* Tvirtinti galima tik su specialisto vardu - ir per formos sąrašą, kaip mygtuku (2026-11-04). */
+    var buvoPatvirtintas = irasai().some(function (x) { return x.id === n.id && x.busena === "patvirtinta"; });
+    if (n.busena === "patvirtinta" && !buvoPatvirtintas && !(kasV || "").trim()) return { ok: false, klaidos: ["patvirtinimui reikalingas specialisto vardas (įrašykite jį puslapio viršuje)"] };
     pradekDarbine();
     var idx = -1; DARBINE.irasai.forEach(function (x, i) { if (x.id === n.id) idx = i; });
     if (idx === -1 && REDAGUOJAMAS === null && DARBINE.irasai.some(function (x) { return x.id === n.id; })) return { ok: false, klaidos: ["toks id jau yra"] };
@@ -419,6 +453,7 @@
     var be = function (x) { var c = svarus(S.normalizuok(x)); delete c.busenosIstorija; delete c.patikrinta; delete c.busena; delete c.klaidos; return JSON.stringify(c); };
     var turinysKeistas = senas && be(senas) !== be(obj);
     if (senas && senas.busena === "patvirtinta" && turinysKeistas && naujas.busena === "patvirtinta") naujas.busena = "laukia";
+    if (naujas.busena === "patvirtinta") naujas.aiJuodrastis = false;
     naujas.busenosIstorija = (senas ? senas.busenosIstorija || [] : []).concat([{ data: DABAR, busena: naujas.busena, kas: kasV || "", pastaba: (senas ? "redaguota: " : "sukurta: ") + String(pastaba).trim() }]);
     if (idx !== -1) DARBINE.irasai[idx] = naujas; else DARBINE.irasai.push(naujas);
     issaugokDarbine();
@@ -449,6 +484,9 @@
   function eksportoTekstas() {
     var m = Object.assign({}, (DARBINE || BAZINIS).meta || {});
     m.sukurta = DABAR; m.rezimas = m.rezimas || "rankinis";
+    m.versija = $("metaVersija").value.trim() || siulomaVersija();
+    m.patikrinta = S.yraData($("metaPatikrinta").value) ? $("metaPatikrinta").value : DABAR;
+    if (m.laikotarpis && typeof m.laikotarpis === "object") m.laikotarpis = Object.assign({}, m.laikotarpis, { iki: m.patikrinta });
     var out = { meta: m, irasai: irasai().map(function (r) { return svarus(S.normalizuok(r)); }) };
     out.irasai.forEach(function (r) { delete r.klaidos; });
     return JSON.stringify(out, null, 2);
@@ -594,7 +632,24 @@
   });
   $("eksportas").addEventListener("click", function () { atsisiusk("registras-" + DABAR + ".json", eksportoTekstas()); });
   $("eksportasSaltiniai").addEventListener("click", function () { atsisiusk("saltiniai-" + DABAR + ".json", eksportoSaltiniai()); });
-  $("atmesti").addEventListener("click", function () { if (!DARBINE) { pran("info", "Darbinės kopijos nėra."); return; } DARBINE = null; try { SAUG.removeItem(R_DARB); } catch (e) {} rasykIstorija("darbinė kopija atmesta", null, ""); pieskBusena(); pieskLentele(); pran("ok", "Darbinė kopija atmesta - rodomas bazinis registras."); });
+  /* Atmetimas - tik patvirtinus; sakoma, kiek pakeitimų prarandama (2026-11-04; iki tol vienu paspaudimu be klausimo). */
+  $("atmesti").addEventListener("click", function () {
+    if (!DARBINE) { pran("info", "Darbinės kopijos nėra."); return; }
+    var sk = darbinesSkirtumai(), kiekPak = sk.pakeista + sk.nauji + sk.pasalinta, el = $("atmestiPatvirtinimas");
+    el.innerHTML = '<b>Atmesti darbinę kopiją?</b> ' + (kiekPak
+      ? 'Bus prarasta: ' + [sk.pakeista ? kiek(sk.pakeista, "pakeistas įrašas", "pakeisti įrašai", "pakeistų įrašų") : "", sk.nauji ? kiek(sk.nauji, "naujas įrašas", "nauji įrašai", "naujų įrašų") : "", sk.pasalinta ? kiek(sk.pasalinta, "pašalintas įrašas", "pašalinti įrašai", "pašalintų įrašų") : ""].filter(Boolean).join(", ") + '. Jei jų reikia, pirma eksportuokite registrą.'
+      : 'Skirtumų nuo bazinio registro nėra.') +
+      '<div class="eilute" style="margin-top:8px"><button type="button" class="btn btn--pavojus" id="atmestiTaip">Atmesti kopiją</button><button type="button" class="btn" id="atmestiNe">Palikti kopiją</button></div>';
+    el.hidden = false;
+    $("atmestiNe").focus();
+    $("atmestiNe").addEventListener("click", function () { el.hidden = true; el.innerHTML = ""; $("atmesti").focus(); });
+    $("atmestiTaip").addEventListener("click", function () {
+      DARBINE = null; try { SAUG.removeItem(R_DARB); } catch (e) {}
+      el.hidden = true; el.innerHTML = "";
+      rasykIstorija("darbinė kopija atmesta", null, kiekPak ? kiekPak + " įrašų pakeitimai" : ""); pieskBusena(); pieskLentele();
+      pran("ok", "Darbinė kopija atmesta - rodomas bazinis registras."); $("atmesti").focus();
+    });
+  });
   $("patikrosForma").addEventListener("submit", function (e) {
     e.preventDefault();
     var r = registruokPatikra({ data: $("p_data").value, budas: "rankinė", saltiniai: $("p_saltiniai").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean), rezultatas: $("p_rezultatas").value, nauji: $("p_nauji").value, pastaba: $("p_pastaba").value });
@@ -608,6 +663,7 @@
   var PARUOSTA = S.ikelk(kelias).then(function (r) {
     if (!r.ok) { $("registroBusena").innerHTML = '<span class="juosta juosta--klaida" style="display:block">Bazinio registro įkelti nepavyko (' + esc(r.klaida) + ') - administravimas negalimas, kol nėra duomenų.</span>'; return false; }
     BAZINIS = { meta: r.tikrinta.meta, irasai: (r.registras.irasai || []) };
+    uzpildykMeta();
     DARBINE = sk(R_DARB);
     if (DARBINE && (!Array.isArray(DARBINE.irasai))) DARBINE = null;
     pieskBusena(); pieskLentele(); pieskIstorija();
@@ -619,7 +675,7 @@
     paruosta: PARUOSTA, darbine: function () { return DARBINE; }, bazinis: function () { return BAZINIS; }, irasai: irasai, tikrinta: tikrinta,
     importuok: importuok, taikykImporta: taikykImporta, veiksmas: veiksmas, issaugokIrasa: issaugokIrasa,
     eksportoTekstas: eksportoTekstas, eksportoSaltiniai: eksportoSaltiniai, registruokPatikra: registruokPatikra, automatinePatikra: automatinePatikra,
-    istorija: istorija, iForma: iForma, isFormos: isFormos, nustatykDabar: function (d) { DABAR = d; }
+    istorija: istorija, iForma: iForma, isFormos: isFormos, darbinesSkirtumai: darbinesSkirtumai, nustatykDabar: function (d) { DABAR = d; if (BAZINIS) uzpildykMeta(); }
   };
 })();
 </script>
