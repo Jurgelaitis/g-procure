@@ -221,12 +221,16 @@
     if (/skelbimas\s+apie|contract\s+notice|contest\s+notice/.test(n)) return "Skelbimas";
     // sutarties sąlygos ir be žodžio „sutarties“: „Paslaugu pirkimo-pardavimo bendrosios sąlygos“ (Energy cells 2026-10-22), rangos
     if (/sutarties\s*(specialiosios|bendrosios)?\s*s[aą]lyg|(specialiosios|bendrosios)\s+sutarties\s+s[aą]lyg|\b(bss|sss)\b|pardavimo\s+(bendrosios|specialiosios)\s+s[aą]lyg|rangos\s+(bendrosios|specialiosios)\s+s[aą]lyg/.test(n)) return "Sutartis";
+    // „1.1 Bendrosios pirkimo sąlygos (SPS)_...“ - bendrosios, nors vardas mini SPS (2026-11-04)
+    if (/bendrosios\s+(pirkimo\s+)?s[aą]lyg/.test(n)) return "BPS";
     // „special“ - tik specialiosios sąlygos (ne „Specialistų sąrašo forma“; 2026-10-22, Amber Grid)
     if (/specialios|special\s+(conditions|terms|part)|sps\b|sps[ _.]/.test(n)) return "SPS";
     if (/bendr|bps\b|bps[ _.]/.test(n)) return "BPS";
     if (/technin|specifik|\bts\b|u[žz]duot/.test(n)) return "TS";
     if (/sutart/.test(n)) return "Sutartis";
     if (/klausimyn/.test(n)) return "Forma";   // rinkos konsultacijos klausimynas pildomas
+    // „Klausimų pateikimo forma“, „Klausimu_atsakymu_forma.xlsx“ - tuščia forma, ne pirkimo vykdytojo atsakymai (2026-11-04)
+    if (/klausim/.test(n) && /(^|[^a-z\u0105\u010d\u0119\u0117\u012f\u0161\u0173\u016b\u017e])form(a|os|\u0105)([^a-z\u0105\u010d\u0119\u0117\u012f\u0161\u0173\u016b\u017e]|$)/.test(n)) return "Forma";
     if (/atsakym|paaiškin|paaiskin|klausim/.test(n)) return "Paaiškinimas";
     // „forma" tik kaip atskiras žodis: anksčiau ji rasdavosi „transformatorių" ir
     // „informacijos" viduje, ir techniniai priedai tapdavo formomis
@@ -822,7 +826,7 @@
       else if (e === "xlsx" || e === "xlsm") r = await isXlsx(buf, lang);
       else if (e === "xml") r = isXml(new TextDecoder("utf-8").decode(buf), lang);
       else if (e === "html" || e === "htm") r = isHtml(new TextDecoder("utf-8").decode(buf));
-      else r = isTxt(new TextDecoder("utf-8").decode(buf));
+      else r = isTxt(decodeFileName(new Uint8Array(buf)));     // UTF-8, kitaip windows-1257 (CVP IS README.txt)
       doc.blocks = r.blocks; doc.warnings = doc.warnings.concat(r.warnings || []);
       if (!doc.blocks.length) doc.parseStatus = (doc.warnings.length ? "partial" : "failed");
       else if (doc.warnings.length) doc.parseStatus = "partial";

@@ -30,6 +30,18 @@
 
   var API_BAZE = "https://api.g-procure.com/api/cvpis";
   var CVP_IS = "https://viesiejipirkimai.lt/epps/cft/prepareViewCfTWS.do?resourceId=";
+  // Rinkos konsultacijos pirkimo puslapis prašo prisijungti, o dokumentų sąrašas viešas (patikrinta 2026-11-04)
+  var CVP_IS_DOKUMENTAI = "https://viesiejipirkimai.lt/epps/cft/listContractDocuments.do?resourceId=";
+  var RINKOS_KONS = "Preliminary Market Consultation";
+  function nuorodaI(p) { return (p && p.procedure === RINKOS_KONS ? CVP_IS_DOKUMENTAI : CVP_IS) + p.id; }
+  // Pirkimas, kuriame tiekėjas nebedalyvauja: nutrauktas
+  function nutrauktas(p) { return !!p && (p.status === "Cancelled" || p.status === "Terminated"); }
+  // activeCycle (VPT): 1 - pirmas etapas; 2 ir daugiau - po paraiškų ar pirminių pasiūlymų, terminas skirtas tolesnio etapo dalyviams.
+  // Sutikrinta 2026-11-04 su CVP IS kvietimų datomis: 8 pirkimai - 2 ir daugiau, tikras pratęsimas - 1.
+  var KELI_ETAPAI = /^(Negotiated with prior call for competition|Competitive with negotiation|Restricted|Accelerated restricted|Competitive dialogue|Innovation partnership|Negotiated with publication|Accelerated negotiated with publication|Involving negotiations|Simplified Open with negotiations)$/;
+  function tolesnisEtapas(p) { return !!p && KELI_ETAPAI.test(String(p.procedure || "")) && typeof p.activeCycle === "number" && p.activeCycle >= 2; }
+  function rinkosKonsultacija(p) { return !!p && p.procedure === RINKOS_KONS; }
+  function sistema(p) { return !!p && (p.procedure === "Dynamic Purchasing System" || p.procedure === "Qualification System"); }
 
   function pirkimas(id, opts) {
     opts = opts || {};
@@ -46,7 +58,7 @@
     }).then(function (r) {
       return r.json().catch(function () { return null; }).then(function (j) {
         var p = j && j.pirkimas;
-        if (r.status === 200 && p && typeof p === "object" && p.id === +id) return baik({ ok: true, pirkimas: p, meta: (j.meta && typeof j.meta === "object") ? j.meta : {}, nuoroda: CVP_IS + id });
+        if (r.status === 200 && p && typeof p === "object" && p.id === +id) return baik({ ok: true, pirkimas: p, meta: (j.meta && typeof j.meta === "object") ? j.meta : {}, nuoroda: nuorodaI(p) });
         if (r.status === 404 && j && j.meta && typeof j.meta === "object") return baik({ ok: false, rusis: "nera", meta: j.meta });
         if (r.status === 503) return baik({ ok: false, rusis: "neikelta" });
         return baik({ ok: false, rusis: "rysys", status: r.status });
@@ -180,7 +192,7 @@
     return uzklausa("/paieska", param, opts, function (j) {
       if (!Array.isArray(j.rezultatai)) return null;
       var rez = j.rezultatai.filter(function (x) { return x && typeof x === "object" && typeof x.id === "number" && x.id > 0; }).slice(0, 50)
-        .map(function (x) { x.nuoroda = CVP_IS + x.id; return x; });   // nuoroda - sudaroma čia, ne iš atsakymo
+        .map(function (x) { x.nuoroda = nuorodaI(x); return x; });   // nuoroda - sudaroma čia, ne iš atsakymo
       return { ok: true, rezultatai: rez, viso: typeof j.viso === "number" ? j.viso : rez.length, psl: typeof j.psl === "number" ? j.psl : 1,
         dydis: typeof j.dydis === "number" ? j.dydis : 20, meta: j.meta && typeof j.meta === "object" ? j.meta : {} };
     });
@@ -198,8 +210,15 @@
   // ---------------------------------------------------------------------------
   var PROCEDUROS = {
     "Open": { lt: "Atviras konkursas", en: "Open procedure" },
-    "Simplified Open": { lt: "Supaprastintas atviras konkursas", en: "Simplified open procedure" },
-    "Simplified Open with negotiations": { lt: "Supaprastintas atviras konkursas su derybomis", en: "Simplified open procedure with negotiations" },
+    // Pavadinimai - kaip CVP IS pirkimo puslapyje (patikrinta 2026-11-04): „Simplified Open“ - „Skelbiama apklausa“
+    "Simplified Open": { lt: "Skelbiama apklausa", en: "Simplified open procedure" },
+    "Simplified Open with negotiations": { lt: "Skelbiama apklausa su derybomis", en: "Simplified open procedure with negotiations" },
+    "Simplified": { lt: "Mažos vertės pirkimas", en: "Low-value procurement" },
+    "Specific Contract": { lt: "Konkretus pirkimas", en: "Specific contract" },
+    "Negotiated with publication": { lt: "Skelbiamos derybos (gynyba ir saugumas)", en: "Negotiated procedure with publication (defence and security)" },
+    "Accelerated negotiated with publication": { lt: "Skelbiamos derybos (pagreitinta procedūra)", en: "Accelerated negotiated procedure with publication" },
+    "Accelerated restricted": { lt: "Ribotas konkursas (pagreitinta procedūra)", en: "Accelerated restricted procedure" },
+    "Involving negotiations": { lt: "Derybos (koncesija)", en: "Procedure involving negotiations (concession)" },
     "Restricted": { lt: "Ribotas konkursas", en: "Restricted procedure" },
     "Negotiated with prior call for competition": { lt: "Skelbiamos derybos", en: "Negotiated procedure with prior call for competition" },
     // Klasikinės direktyvos (VPĮ) skelbiamos derybos VPT duomenyse - „Competitive with negotiation“ (2026-10-18b: visi 355 įrašai - klasikinė direktyva)
@@ -222,7 +241,12 @@
     "Proposal Submission Closed": { lt: "Pasiūlymų teikimas baigtas", en: "Tender submission closed" },
     "Awaiting bid opening": { lt: "Laukiama pasiūlymų atplėšimo", en: "Awaiting tender opening" },
     "Evaluation": { lt: "Vertinimas", en: "Evaluation" },
-    "Cancelled": { lt: "Nutrauktas", en: "Cancelled" }
+    "Cancelled": { lt: "Nutrauktas", en: "Cancelled" },
+    "Terminated": { lt: "Nutrauktas", en: "Terminated" },
+    "Established": { lt: "Sukurta", en: "Established" },
+    "Awarded": { lt: "Laimėtojas nustatytas", en: "Awarded" },
+    "Concluded": { lt: "Užbaigtas", en: "Concluded" },
+    "Closed": { lt: "Uždarytas", en: "Closed" }
   };
   var DIREKTYVOS = {
     "prompt.directive.classic": { lt: "2014/24/ES (klasikinė)", en: "2014/24/EU (classic)" },
@@ -450,7 +474,7 @@
     return r;
   }
 
-  global.GP_VPT = {
+  global.GP_VPT = { nutrauktas: nutrauktas, tolesnisEtapas: tolesnisEtapas, rinkosKonsultacija: rinkosKonsultacija, sistema: sistema,
     API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, ted: ted, atnaujinta: atnaujinta,
     PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai,
     paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas,
