@@ -39,6 +39,12 @@ Taisyklės, kurias vykdo kodas:
 
 ## 3. Savaitinis / mėnesinis ciklas (rankinis režimas)
 
+Pirmą žingsnį parengia suplanuota užduotis `pp-teise-savaitine-patikra` (Claude programoje, pirmadieniais, kai programa
+atidaryta): ataskaita ir įrašų projektai - `~/Documents/g-procure-teise-patikros/<data>/`, peržiūri ir importuoja žmogus.
+Rašyti tik į tą aplanką leidžia vietinė taisyklė `.claude/settings.local.json` (nuo 2026-11-04): programa šio leidimo užduočiai
+neišsaugo, todėl be taisyklės užduotis sustoja prie rašymo (taip buvo 2026-09-28 - 2026-10-26). Būsena „succeeded“ nereiškia,
+kad ataskaita įrašyta - tikrinkite aplanką.
+
 1. **Patikra.** Peržiūrėti e-tar (VPĮ, PĮ, VPT įsakymai, aplinkos ministro įsakymai dėl žaliųjų
    pirkimų), Liteko (LAT, LVAT viešųjų pirkimų bylos), e-seimas (projektų eiga). Užregistruoti
    patikrą admin.html skiltyje „Šaltinių patikra“ - ir tada, kai nieko naujo, ir tada, kai
