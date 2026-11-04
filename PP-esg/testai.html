@@ -26,10 +26,10 @@
 <body>
 
 <h1>PP-esg regresijos testai</h1>
-<div class="sub">Pirmas PP-esg rinkinys (2026-09-26, tobulinimo planas Q7): puslapis įsikelia, tuščioje naršyklėje įrašomi
-demonstraciniai duomenys, o neperskaitytuose - ne; rizikos variklis (šalis, sektorius, kritiškumas), sankcijų patikrų žurnalas
-tik pildomas ir atitikimas blokuoja tiekėją, CVP IS importas dedubliuoja pagal įmonės kodą, o nepavykus paieškai rodoma klaida -
-pavyzdys tik paspaudus ir jo importuoti negalima; AI vertinimo klaida ir atšaukimas, CSRD eksportas. Serveris imituojamas.
+<div class="sub">PP-esg rinkinys (nuo 2026-09-26; „Patikra 2026-11-04“ - naujo naudotojo patikros radiniai): puslapis įsikelia, tuščioje naršyklėje niekas
+neįrašoma, pavyzdys - tik mygtuku; rizikos variklis (šalis, sektorius, kritiškumas), sankcijų patikrų žurnalas tik pildomas ir atitikimas blokuoja tiekėją,
+CVP IS importas dedubliuoja pagal įmonės kodą, o nepavykus paieškai rodoma klaida - pavyzdys tik paspaudus ir jo importuoti negalima; DI vertinimo klaida ir
+atšaukimas, CSRD eksportas. Serveris imituojamas (serverio failas - su netikrais express ir fetch).
 Tikri naudotojo duomenys įsimenami prieš testus ir atkuriami po jų (shared/testu-apsauga.js).</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
@@ -83,16 +83,16 @@ function serveris(atsakymai){
 
 async function testaiPuslapis(){
   grupe("Puslapis ir duomenys");
-  await testas("Tuščioje naršyklėje: įrašomi demonstraciniai duomenys, rodinys, informacinė skiltis ir bendri failai", async () => {
+  await testas("Tuščioje naršyklėje: nieko neįrašoma, rodinys, informacinė skiltis ir bendri failai", async () => {
     valyk();
     await modulis();
-    tiesa(St().getSuppliers().length > 0 && JSON.parse(localStorage.getItem("ppesg.meta")).seeded === true, "demonstraciniai duomenys neįrašyti");
+    lygu(KEYS.map(k => localStorage.getItem(k)), [null, null, null, null], "į saugyklą nieko neįrašyta");
     tiesa(D.querySelector("#infoPanelMount .gpi"), "informacinė skiltis");
-    tiesa(W.GP_SAUGYKLA && W.GP_BUSENA && W.GP_LANG, "bendri failai");
+    tiesa(W.GP_SAUGYKLA && W.GP_BUSENA && W.GP_LANG && W.GP_ORG, "bendri failai");
     lygu(D.documentElement.lang, "lt", "kalba");
   });
 
-  await testas("Neperskaitomas tiekėjų registras: „būsena nežinoma“, demonstraciniai NEįrašomi, įrašas neperrašomas, kopija išsaugoma", async () => {
+  await testas("Neperskaitomas tiekėjų registras: „būsena nežinoma“, įrašas neperrašomas, kopija išsaugoma", async () => {
     valyk();
     const kopijosPries = new Set(Object.keys(localStorage).filter(k => k.indexOf("ppesg.suppliers.sugadinta-") === 0));
     localStorage.setItem("ppesg.suppliers", "[{sugadinta");
@@ -105,7 +105,7 @@ async function testaiPuslapis(){
     await modulis();
   });
 
-  await testas("Pilna saugykla tuščioje naršyklėje: demonstraciniai neįrašomi, bet puslapis piešiamas - juosta su priežastimi, skiltis, suvestinė (iki 2026-09-28 paleidimas nutrūkdavo)", async () => {
+  await testas("Pilna saugykla: puslapis piešiamas, įrašant - juosta su priežastimi, „Išsaugota“ nerodoma, langas lieka atviras (iki 2026-09-28 paleidimas nutrūkdavo)", async () => {
     valyk();
     // Užpildoma TIKRA saugykla (kitaip modulio įkėlimo metu nepakeisi), savi raktai pašalinami visada - ir likę po nutraukto testo
     const PR = "zz_ppesg_testas_pilna_", salink = () => Object.keys(localStorage).filter(k => k.indexOf(PR) === 0).forEach(k => localStorage.removeItem(k));
@@ -114,9 +114,10 @@ async function testaiPuslapis(){
       let d = "x".repeat(1 << 20), i = 0;
       while (d.length >= 1) { try { localStorage.setItem(PR + i, d); i++; } catch (e) { d = d.slice(0, d.length >> 1); } }
       await modulis();
+      lygu([!!D.querySelector("#infoPanelMount .gpi"), D.querySelectorAll("#kpiRow > *").length > 0, !!D.querySelector("#dashPradzia .pradzia-kort")], [true, true, true], "skiltis, suvestinė, pradžia");
+      W.openSupplierModal(); D.getElementById("sf-name").value = "Testas"; W.saveSupplierForm();
       const j = D.getElementById("gpb-juostos");
-      lygu([!!j && /pilna/.test(j.textContent), !!D.querySelector("#infoPanelMount .gpi"), localStorage.getItem("ppesg.meta"), D.querySelectorAll("#kpiRow > *").length > 0],
-           [true, true, null, true], "juosta, skiltis, demonstraciniai, suvestinė: " + (j && j.textContent));
+      lygu([!!j && /pilna/.test(j.textContent), !!D.getElementById("sf-name"), localStorage.getItem("ppesg.suppliers")], [true, true, null], "juosta, atviras langas, neįrašyta: " + (j && j.textContent));
     } finally { salink(); valyk(); await modulis(); }
   });
 
@@ -125,10 +126,11 @@ async function testaiPuslapis(){
     const tikras = W.Chart;
     try {
       W.Chart = undefined;
-      W.drawCharts(St().getSuppliers());
+      const sar = W.eval("pavyzdzioDuomenys().suppliers");
+      W.drawCharts(sar);
       const p = [...D.querySelectorAll(".chart-box [data-gp-biblioteka]")];
       lygu([p.length, p.every(x => /Chart\.js/.test(x.textContent)), ["chartRisk", "chartSanct", "chartCountry"].map(id => D.getElementById(id).style.display)], [3, true, ["none", "none", "none"]], "be Chart.js");
-      W.Chart = tikras; W.drawCharts(St().getSuppliers());
+      W.Chart = tikras; W.drawCharts(sar);
       lygu([D.querySelectorAll(".chart-box [data-gp-biblioteka]").length, D.getElementById("chartRisk").style.display !== "none"], [0, true], "Chart.js atsiradus");
     } finally { W.Chart = tikras; }
   });
@@ -181,27 +183,30 @@ async function testaiLogika(){
     const atstatyk = serveris({ "/api/esg/cvpis-suppliers": () => Promise.reject(new TypeError("Failed to fetch")) });
     try {
       W.openImportModal();
+      D.getElementById("im-buyer").value = "302564383";
       await W.runCvpisSearch();
       const b = D.getElementById("im-busena");
       tiesa(b.classList.contains("gpb--klaida") && /Nėra ryšio su serveriu/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "klaida: " + b.textContent);
       lygu(D.getElementById("im-results").textContent.trim(), "", "be paspaudimo pavyzdys neturi būti rodomas");
       [...b.querySelectorAll(".gpb-btn")].find(x => /pavyzd/i.test(x.textContent)).click();
       tiesa(D.querySelectorAll(".im-row").length > 0, "pavyzdys neparodytas");
+      lygu(D.querySelectorAll(".im-row:checked").length, 0, "niekas nepažymėta");
+      D.querySelector(".im-row:not([disabled])").checked = true;
       const pries = St().getSuppliers().length;
       W.doCvpisImport();
       lygu(St().getSuppliers().length, pries, "pavyzdžio tiekėjai importuoti į registrą");
     } finally { atstatyk(); W.closeModal(); }
   });
 
-  await testas("AI vertinimas: serverio klaida - priežastis, „Bandyti dar kartą“ ir aiškiai pažymėtas taisyklių įvertis; „Atšaukti“ - be rezultato", async () => {
+  await testas("DI vertinimas: serverio klaida - priežastis žmogui ir „Bandyti dar kartą“, rizikos lygio nėra; „Atšaukti“ - be rezultato", async () => {
     const id = St().getSuppliers()[0].id;
     let atstatyk = serveris({ "/api/esg/sanctions-assessment": () => Promise.resolve(new W.Response("{}", { status: 500 })) });
     try {
       W.openCheckModal(id);
       await W.runAiAssessment();
       const b = D.getElementById("aiBusena");
-      tiesa(b.classList.contains("gpb--klaida") && /HTTP 500/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "klaida: " + b.textContent);
-      tiesa(/taisykl/i.test(D.getElementById("aiResult").textContent), "taisyklių įvertis nepažymėtas: " + D.getElementById("aiResult").textContent.slice(0, 160));
+      tiesa(b.classList.contains("gpb--klaida") && /Serveris šiuo metu tinkamo atsakymo negrąžino \(500\)/.test(b.textContent) && !/HTTP/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), "klaida: " + b.textContent);
+      lygu(D.getElementById("aiResult").textContent.trim(), "", "be DI atsakymo nėra rizikos lygio");
       tiesa(!D.getElementById("aiBtn").disabled, "mygtukas liko išjungtas");
     } finally { atstatyk(); }
     atstatyk = serveris({ "/api/esg/sanctions-assessment": (u, o) => new Promise((res, rej) =>
@@ -218,7 +223,7 @@ async function testaiLogika(){
   await testas("CSRD eksportas: JSON su tiekėjų ir ESRS duomenų taškų skaičiumi, be tiekėjų pavadinimų suvestinėje", async () => {
     const p = W.buildExportPayload();
     lygu([p.meta.supplierCount, p.meta.dataPointCount, p.meta.framework], [St().getSuppliers().length, St().getEsrs().length, "CSRD/ESRS"], "meta");
-    tiesa(p.suppliersSummary.every(s => !("name" in s) && s.id), "suvestinėje - be pavadinimų");
+    tiesa(p.suppliersSummary.length && p.suppliersSummary.every(s => s.id && s.name && "code" in s && "lastCheck" in s), "suvestinėje - su pavadinimais ir kodais");
     const tikras = W.HTMLAnchorElement.prototype.click; let vardas = null;
     W.HTMLAnchorElement.prototype.click = function(){ vardas = this.download; };
     try { W.downloadExport("json"); W.downloadExport("csv"); } finally { W.HTMLAnchorElement.prototype.click = tikras; }
@@ -307,7 +312,7 @@ async function testaiStebejimas(){
     } finally { W.setLang("lt"); }
   });
 
-  await testas("DI skaidrumas (2026-10-05): pastaba nebeteigia „niekur neperduodami“ - sako, kas siunčiama į Claude API (Anthropic); prie DI mygtuko - ta pati pastaba; DI vertinimas - su žyma ir data-di, taisyklių įvertis - be jos", async () => {
+  await testas("DI skaidrumas (2026-10-05): pastaba nebeteigia „niekur neperduodami“ - sako, kas siunčiama į Claude API (Anthropic); prie DI mygtuko - ta pati pastaba; DI vertinimas - su žyma ir data-di", async () => {
     const I = W.eval("I18N");
     const note = String(W.eval("INFO_CONTENT.lt.note") || ""), noteEn = String(W.eval("INFO_CONTENT.en.note") || "");
     tiesa(!/niekur neperduodami/.test(note) && /Claude API \(Anthropic\)/.test(note), "LT pastaba: " + note.slice(0, 120));
@@ -316,12 +321,755 @@ async function testaiStebejimas(){
     try {
       const pr = D.querySelector(".ai-siunciama");
       tiesa(pr && pr.textContent === I.lt["m.ai.send"] && pr.previousElementSibling.id === "aiBtn", "pastaba prie mygtuko");
-      W.renderAiResult({ level: "low", factors: ["a"], actions: ["b"] }, false);
+      W.renderAiResult({ level: "low", factors: ["a"], actions: ["b"] });
       const r = D.querySelector("#aiResult .ai-result");
       tiesa(r.getAttribute("data-di") === "sugeneruota" && /DI atsakymas/.test(r.textContent), "DI vertinimo žyma");
-      W.renderAiResult({ level: "low", factors: ["a"], actions: ["b"] }, true);
-      tiesa(!D.querySelector("#aiResult [data-di]"), "taisyklių įvertis pažymėtas kaip DI");
     } finally { W.closeModal(); }
+  });
+}
+
+/* Patikra 2026-11-04 (naujo naudotojo radiniai K1-K9, D1-D9, V1-V12, M1-M6; sprendimai - užduotyje). Serverio failas - tikras, tik express, process ir fetch pakeisti. */
+async function serverioFailas(fetchas, env){
+  const src = await (await fetch("backend-pp-esg-routes.js")).text();
+  const marsrutai = {}, router = { get: (k, ...f) => { marsrutai["GET " + k] = f[f.length - 1]; }, post: (k, ...f) => { marsrutai["POST " + k] = f[f.length - 1]; } }, modulis = { exports: {} };
+  const express = { Router: () => router, json: () => (q, r, n) => n() };
+  const reikia = v => { if (v === "express") return express; throw new Error("nėra " + v); };
+  const tylus = { error(){}, log(){} };
+  new Function("require", "module", "process", "fetch", "console", src)(reikia, modulis, { env: env || { ANTHROPIC_API_KEY: "raktas" } }, fetchas, tylus);
+  const kviesk = async (m, q) => { const res = { status(c){ this.kodas = c; return this; }, json(o){ this.o = o; return this; } }; await marsrutai[m](q, res); return res; };
+  return { marsrutai, kviesk, src };
+}
+const anthropic = (tekstas, stebek) => async (u, o) => { if (stebek) stebek(JSON.parse(o.body)); return { ok: true, json: async () => ({ content: [{ text: tekstas }] }) }; };
+const DI_UZKL = { lang: "lt", supplier: { name: "UAB Testas", country: "Lietuva", category: "Kita" }, context: "" };
+const ATSAKYMAS = (o) => new W.Response(JSON.stringify(o), { status: 200, headers: { "Content-Type": "application/json" } });
+const lauk1 = (id, v) => { const el = D.getElementById(id); el.value = v; el.dispatchEvent(new W.Event("change", { bubbles: true })); };
+const VAL = (id) => D.getElementById(id).value;
+const irasai = (sup, chk, esrs) => { valyk(); if (sup) localStorage.setItem("ppesg.suppliers", JSON.stringify(sup)); if (chk) localStorage.setItem("ppesg.checks", JSON.stringify(chk)); if (esrs) localStorage.setItem("ppesg.esrs", JSON.stringify(esrs)); };
+const tiekejas1 = (id, x) => Object.assign({ id, name: "UAB " + id, code: "1000" + id, country: "LT", category: "OTHER", risk: "low", riskScore: 33, sectorRisk: 1, criticality: 1, sanctions: "clean", assessment: "done", lastCheck: dienuPries(5) }, x || {});
+// Sena automatiškai įrašyta demonstracinė sėkla (iki 2026-11-04) - tokia ji liko naudotojų naršyklėse
+const SENA_SEKLA = {
+  sup: [{ id: "SUP-DEMO-001", name: "Siemens Energy AG", code: "DE-812345", country: "Vokietija", category: "Transformatoriai", owner: "A. Jurgelaitis", risk: "low", riskScore: 30, sanctions: "clean", sectorRisk: 2, criticality: 3, codeSigned: true, lastCheck: "2026-04-12T09:00:00Z" },
+        { id: "SUP-DEMO-006", name: "Eastgrid Components Ltd", code: "CN-556677", country: "Kinija", category: "IT ir telekomunikacijos", risk: "high", riskScore: 78, sanctions: "blocked", sectorRisk: 3, criticality: 2, lastCheck: "2026-05-30T09:00:00Z" }],
+  chk: [{ id: "CHK-D1", supplierId: "SUP-DEMO-001", timestamp: "2026-04-12T09:00:00Z", checkedBy: "A. Jurgelaitis", lists: ["ES"], result: "clean", notes: "" },
+        { id: "CHK-D3", supplierId: "SUP-DEMO-006", timestamp: "2026-05-30T09:00:00Z", checkedBy: "M. K.", lists: ["ES"], result: "match", notes: "" }],
+  esrs: [{ id: "DP-1", name: "Scope 3 emisijos", esrs: "E1-6", value: "42 800", unit: "tCO₂e", coverage: 58, source: "module", sourceRef: "PP-COST-BENEFIT", date: "2026-03-31T00:00:00Z" }]
+};
+const CVP_ATS = { meta: { source: "CVP IS / data.gov.lt", dataset: "gov/vpt/new", authorityCode: "302564383", fetchedAt: "2026-11-04T08:31:07.398Z" }, suppliers: [
+  { name: "UAB „TETAS“", code: "300513148", country: "Lietuva", contractCount: 47, totalValue: 98135266, lastAward: "2023-04-17" },
+  { name: "Siemens", code: "", country: "Lietuva", contractCount: 2, totalValue: 110447314, lastAward: "2021-12-29" },
+  { name: "Tiekėjų grupė 1", code: "", country: "Lietuva", contractCount: 1, totalValue: 56870000, lastAward: "2021-11-25" },
+  { name: "I grupė", code: "", country: "Lietuva", contractCount: 1, totalValue: 500000, lastAward: "2020-01-02" },
+  { name: "Ūkio subjektų grupė, susidedanti iš UAB A ir UAB B", code: "111222333", country: "Lietuva", contractCount: 1, totalValue: 400000, lastAward: "2023-05-03" },
+  { name: "GE Energy Management Services LLC", code: "N/A", country: "Lietuva", contractCount: 1, totalValue: 300000, lastAward: "2019-05-03" },
+  { name: "AB Kitas", code: "123456789", country: "Lietuva", contractCount: 3, totalValue: 200000, lastAward: "2022-09-09" }
+] };
+
+async function testaiPatikra1104(){
+  grupe("Patikra 2026-11-04");
+
+  await testas("K4: tuščioje naršyklėje niekas neįrašoma; pradžios kortelė su trimis keliais, be tuščių diagramų, stebėjime - „nėra ko tikrinti“ (M1)", async () => {
+    valyk(); await modulis();
+    lygu(KEYS.map(k => localStorage.getItem(k)), [null, null, null, null], "saugykla");
+    const p = D.querySelector("#dashPradzia .pradzia-kort");
+    tiesa(p && /Rodyti pavyzdį/.test(p.textContent) && /Pridėti tiekėją/.test(p.textContent) && /Importuoti iš CVP IS/.test(p.textContent), "pradžios kortelė");
+    tiesa(/nėra ko tikrinti/.test(D.getElementById("monBody").textContent) && !/patikrinti laiku/.test(D.getElementById("monBody").textContent), "stebėjimas: " + D.getElementById("monBody").textContent);
+    lygu(["chartRisk", "chartSanct", "chartCountry"].map(i => [D.getElementById(i).style.display, !!D.getElementById(i).parentNode.querySelector("[data-tuscia]")]), [["none", true], ["none", true], ["none", true]], "diagramų vietoje - tekstas");
+    lygu(D.getElementById("chartRiskNote").textContent, "", "be tiekėjų - be sakinio");
+    tiesa(/-/.test(D.querySelector("#esrsKpis .kpi-value").textContent) && !/0%/.test(D.querySelector("#esrsKpis .kpi-value").textContent), "ESRS padengimas be taškų - ne 0 %");
+  });
+
+  await testas("K4, M6, T8: „Rodyti pavyzdį“ - tik žmogaus veiksmu, neįrašoma, išgalvoti vardai, žyma, balai kaip variklio, į eksportą nepatenka, įrašų keisti negalima", async () => {
+    valyk(); await modulis();
+    lygu([D.getElementById("btnPavyzdys").textContent, D.getElementById("btnPavyzdys").classList.contains("hidden")], ["Rodyti pavyzdį", false], "mygtukas");
+    D.getElementById("btnPavyzdys").click();
+    tiesa(D.getElementById("btnPavyzdys").classList.contains("hidden"), "rodant - paslepiamas juostoje, antro tokio mygtuko nėra");
+    lygu(KEYS.map(k => localStorage.getItem(k)), [null, null, null, null], "pavyzdys neįrašytas");
+    tiesa(/Rodomas pavyzdys/.test(D.getElementById("demoJuosta").textContent) && /neišsaugomi/.test(D.getElementById("demoJuosta").textContent), "juosta");
+    const sar = St().getSuppliers();
+    tiesa(sar.length >= 8 && sar.every(s => /^Pavyzdys: /.test(s.name) && s.demo && s.pavyzdys), "išgalvoti ir pažymėti");
+    const eil = [...D.querySelectorAll("#supBody tr")];
+    tiesa(eil.length === sar.length && eil.every(r => /Demonstracinis/.test(r.textContent)), "žyma kiekvienoje eilutėje");
+    const tekstas = JSON.stringify(W.eval("pavyzdzioDuomenys()")) + D.body.textContent;
+    ["Siemens", "Hitachi", "Nexans", "Telandina", "Jurgelaitis", "Petraitis", "Kazlauskait", "ABB"].forEach(v => tiesa(tekstas.indexOf(v) < 0, "tikras vardas: " + v));
+    sar.filter(s => s.sectorRisk).forEach(s => { const r = W.computeRisk({ country: s.country, sector: s.sectorRisk, criticality: s.criticality }); lygu([s.riskScore, s.risk], [r.score, r.level], s.name); });
+    lygu(D.querySelector("#kpiRow .kpi-value").textContent, String(sar.length), "suvestinė rodo pavyzdį");
+    lygu([W.buildExportPayload().meta.supplierCount, W.buildExportPayload().meta.dataPointCount, W.buildChecksExport().checks.length], [0, 0, 0], "eksportas");
+    tiesa(!D.querySelector("#supBody [onclick^='openSupplierModal']") && !D.querySelector("#supBody [onclick^='deleteSupplierForm']"), "be keitimo mygtukų");
+    W.openSupplierModal(sar[0].id); tiesa(!D.getElementById("sf-name"), "pavyzdžio įrašas neatveriamas redaguoti");
+    W.openSupplierDrawer(sar[0].id); tiesa(!D.querySelector("#modalShell [onclick^='openCheckModal']"), "kortelėje be veiksmų"); W.closeModal();
+    W.openCheckModal(sar[0].id); tiesa(!D.getElementById("cf-sup"), "patikros apie pavyzdį nėra");
+    D.querySelector("#demoJuosta button").click();
+    lygu([D.querySelectorAll("#supBody .t-name").length, D.getElementById("demoJuosta").textContent, D.getElementById("btnPavyzdys").classList.contains("hidden")], [0, "", false], "paslėpus");
+    W.rodykPavyzdi(); W.openSupplierModal();
+    lygu(St().getSuppliers().length, 0, "naujas tiekėjas paslepia pavyzdį");
+    D.getElementById("sf-name").value = "Tikras"; W.saveSupplierForm();
+    lygu(JSON.parse(localStorage.getItem("ppesg.suppliers")).map(s => s.name), ["Tikras"], "įrašytas tik tikras");
+    valyk(); await modulis();
+    W.rodykPavyzdi(); W.setLang("en");
+    try { tiesa(St().getSuppliers().every(s => /^Example: /.test(s.name)), "EN pavyzdys"); } finally { W.setLang("lt"); W.slepkPavyzdi(); }
+  });
+
+  await testas("K4: seni įrašyti demonstraciniai nekeičiami ir netrinami, pažymėti, į suvestines ir eksportą neįskaičiuojami; „Pašalinti demonstracinius įrašus“ - tik patvirtinus, tikri lieka", async () => {
+    const real = tiekejas1("A"), carbon = { id: "DP-9", name: "PP-carbon", esrs: "E1-6", value: "1", unit: "tCO2e", coverage: 10, source: "module", sourceRef: "PP-CARBON", date: "2026-10-01T00:00:00Z" };
+    irasai(SENA_SEKLA.sup.concat(real), SENA_SEKLA.chk.concat({ id: "CHK-X-1", supplierId: "A", timestamp: "2026-10-01T00:00:00Z", checkedBy: "Jonas", lists: ["ES"], result: "clean" }, { id: "CHK-X-2", supplierId: "SUP-DEMO-001", timestamp: "2026-10-02T00:00:00Z", checkedBy: "Jonas", lists: ["ES"], result: "clean" }), SENA_SEKLA.esrs.concat(carbon));
+    localStorage.setItem("ppesg.meta", JSON.stringify({ seeded: true, at: "2026-01-01" }));
+    const pries = KEYS.map(k => localStorage.getItem(k));
+    await modulis();
+    lygu(KEYS.map(k => localStorage.getItem(k)), pries, "atvėrus niekas nepakito");
+    const j = D.getElementById("demoJuosta").textContent;
+    tiesa(/tiekėjų - 2, patikrų - 3, ESRS taškų - 1/.test(j) && /Pašalinti demonstracinius įrašus/.test(j), "juosta: " + j);
+    lygu([...D.querySelectorAll("#supBody tr")].filter(r => /Demonstracinis/.test(r.textContent)).length, 2, "žymos registre");
+    lygu([...D.querySelectorAll("#chkBody tr")].filter(r => /Demonstracinis/.test(r.textContent)).length, 3, "žymos žurnale");
+    lygu([...D.querySelectorAll("#esrsBody tr")].filter(r => /Demonstracinis/.test(r.textContent)).length, 1, "žymos ESRS");
+    lygu(D.querySelector("#kpiRow .kpi-value").textContent, "1", "suvestinėje - tik tikras tiekėjas");
+    tiesa(!/Siemens|Eastgrid/.test(D.getElementById("recentChecks").textContent) && /UAB A/.test(D.getElementById("recentChecks").textContent), "naujausi - be demonstracinių");
+    const p = W.buildExportPayload(), pk = W.buildChecksExport();
+    lygu([p.suppliersSummary.map(s => s.id), p.dataPoints.map(x => x.name), pk.checks.map(c => c.id)], [["A"], ["PP-carbon"], ["CHK-X-1"]], "eksportas be demonstracinių");
+    W.siulykSalintiDemo();
+    tiesa(/tiekėjų - 2, patikrų - 3, ESRS taškų - 1/.test(D.getElementById("modalShell").textContent), "patvirtinimas: skaičiai");
+    lygu(KEYS.map(k => localStorage.getItem(k)), pries, "prieš patvirtinant - niekas nepašalinta");
+    D.getElementById("patvirtintiBtn").click();
+    lygu([St().getSuppliers().map(s => s.id), St().getChecks().map(c => c.id), St().getEsrs().map(x => x.id), D.getElementById("demoJuosta").textContent], [["A"], ["CHK-X-1"], ["DP-9"], ""], "po pašalinimo");
+  });
+
+  await testas("K5: iš PP-carbon perduotas taškas atvėrus neperrašomas, gauna id, jo reikšmės čia keisti negalima, ištrinti - tik patvirtinus", async () => {
+    const p = { name: "Scope 3 emisijos - pirkimų anglies pėdsakas (A1-A3)", esrs: "E1-6", value: "42.8", unit: "tCO2e", coverage: 100, source: "module", sourceRef: "PP-CARBON", date: "2026-11-01T00:00:00Z" };
+    irasai(null, null, [p]);
+    await modulis();
+    const sar = JSON.parse(localStorage.getItem("ppesg.esrs"));
+    lygu([sar.length, sar[0].name, sar[0].value, !!sar[0].id, localStorage.getItem("ppesg.suppliers"), localStorage.getItem("ppesg.meta")], [1, p.name, "42.8", true, null, null], "taškas lieka, gauna id");
+    const eil = D.querySelector("#esrsBody tr");
+    tiesa(/Perduota iš PP-carbon/.test(eil.textContent) && !eil.querySelector("[onclick^='addEsrsPoint']") && eil.querySelector("[onclick^='deleteEsrsForm']"), "be redagavimo, su trynimu");
+    W.addEsrsPoint(sar[0].id); tiesa(!D.getElementById("ef-name"), "redaguoti neatveriama");
+    eil.querySelector("[onclick^='deleteEsrsForm']").click();
+    lygu(JSON.parse(localStorage.getItem("ppesg.esrs")).length, 1, "prieš patvirtinant");
+    D.getElementById("patvirtintiBtn").click();
+    lygu(JSON.parse(localStorage.getItem("ppesg.esrs")).length, 0, "patvirtinus");
+    const senas = JSON.stringify([{ id: "DP-9", name: "su id", esrs: "E1-6", value: "1", unit: "t", coverage: 1, source: "module", sourceRef: "PP-CARBON" }]);
+    localStorage.setItem("ppesg.esrs", senas); await modulis();
+    lygu(localStorage.getItem("ppesg.esrs"), senas, "su id - neperrašoma");
+  });
+
+  await testas("K2: naujas tiekėjas be numatytųjų: šalis, kategorija, sektorius, kritiškumas, lygis tušti; įrašomas „Netikrinta“, „Reikia vertinimo“; senas „clean“ be patikros - „Netikrinta“", async () => {
+    irasai([tiekejas1("SEN", { sanctions: "clean", lastCheck: null }), tiekejas1("IMP", { sanctions: "review", lastCheck: null })]);
+    await modulis();
+    W.openSupplierModal();
+    lygu(["sf-country", "sf-cat", "sf-sector", "sf-crit", "sf-risk"].map(VAL), ["", "", "", "", ""], "laukai tušti");
+    D.getElementById("sf-name").value = "UAB Naujas"; W.saveSupplierForm();
+    const n = St().getSuppliers().find(s => s.name === "UAB Naujas");
+    lygu([n.sanctions, n.risk, n.assessment, n.country, n.category, n.lastCheck, n.riskScore], ["unchecked", "unassessed", "pending", "", "", null, null], "naujas");
+    W.setView("suppliers");
+    const eil = pav => [...D.querySelectorAll("#supBody tr")].find(r => r.textContent.indexOf(pav) >= 0);
+    tiesa(/Netikrinta/.test(eil("UAB Naujas").textContent) && /Reikia vertinimo/.test(eil("UAB Naujas").textContent) && !/Švarus/.test(eil("UAB Naujas").textContent), "nauja eilutė");
+    tiesa(/Netikrinta/.test(eil("UAB SEN").textContent) && !/Švarus/.test(eil("UAB SEN").textContent), "senas clean be patikros");
+    tiesa(/Netikrinta/.test(eil("UAB IMP").textContent), "senas review be patikros");
+    tiesa(/Nežinoma/.test(eil("UAB Naujas").textContent), "šalis nežinoma");
+    lygu(W.sanctKey(tiekejas1("Q", { sanctions: "blocked", lastCheck: null })), "blocked", "blokuotas lieka blokuotas");
+    lygu(W.sanctKey(tiekejas1("Q", { sanctions: "kitas" })), "unchecked", "nežinoma reikšmė - netikrinta");
+    lauk1("fSanct", "unchecked"); W.renderSuppliers();
+    lygu(D.querySelectorAll("#supBody .t-name").length, 3, "filtras „Netikrinta“"); lauk1("fSanct", ""); W.resetSupFilters();
+    const pkg = W.buildExportPayload().suppliersSummary.find(s => s.name === "UAB SEN");
+    lygu(pkg.sanctionsStatus, "unchecked", "eksporte - tas pats statusas");
+  });
+
+  await testas("K6, D5: „Įvertinti“ siūlo apskaičiuotą kaip „Siūloma (nepatvirtinta)“; be pasirinkimo - lieka „Reikia vertinimo“; patvirtinus - atlikta; kitas lygis - tik su priežastimi; pakeitus sektorių pasirinkimas nedingsta", async () => {
+    irasai([tiekejas1("P", { risk: "unassessed", riskScore: null, sectorRisk: null, criticality: null, country: "", assessment: "pending", sanctions: "unchecked", lastCheck: null, source: "cvpis" })]);
+    await modulis();
+    W.openSupplierModal("P");
+    lygu(VAL("sf-risk"), "", "lygis nepasirinktas");
+    tiesa(/Pasirinkite šalį/.test(D.getElementById("calcLabel").textContent) && D.getElementById("sfNaudoti").classList.contains("hidden"), "kol nėra duomenų - nesiūloma");
+    W.saveSupplierForm();
+    lygu([St().getSupplier("P").assessment, St().getSupplier("P").risk], ["pending", "unassessed"], "išsaugojus be lygio - lieka reikia vertinimo");
+    W.openSupplierModal("P");
+    lauk1("sf-country", "RU"); lauk1("sf-sector", "2"); lauk1("sf-crit", "3");
+    tiesa(!D.getElementById("sfNaudoti").classList.contains("hidden"), "siūlomą galima patvirtinti");
+    tiesa(/Aukšta, 90\/100/.test(D.getElementById("calcLabel").textContent) && /Siūloma \(nepatvirtinta\)/.test(D.getElementById("calcBusena").textContent), "siūloma: " + D.getElementById("calcLabel").textContent + " " + D.getElementById("calcBusena").textContent);
+    lygu(VAL("sf-risk"), "", "siūloma reikšmė neatrodo kaip pasirinkta");
+    D.getElementById("sfNaudoti").click();
+    tiesa(VAL("sf-risk") === "high" && /Patvirtinta/.test(D.getElementById("calcBusena").textContent) && D.getElementById("sfNaudoti").classList.contains("hidden"), "patvirtinus");
+    lauk1("sf-sector", "1"); lauk1("sf-crit", "1");
+    tiesa(VAL("sf-risk") === "high" && !D.getElementById("sf-reason-wrap").classList.contains("hidden") && /Vidutinė, 53\/100/.test(D.getElementById("calcLabel").textContent), "pakeitus duomenis pasirinkimas lieka, prašoma priežasties");
+    W.saveSupplierForm();
+    tiesa(/kodėl rizikos lygis/.test(D.getElementById("modalShell").textContent) && D.getElementById("sf-reason").getAttribute("aria-invalid") === "true" && D.activeElement === D.getElementById("sf-reason"), "be priežasties neišsaugoma");
+    lygu(St().getSupplier("P").assessment, "pending", "neišsaugota");
+    D.getElementById("sf-reason").value = "Kritinis tiekėjas"; W.saveSupplierForm();
+    const s = St().getSupplier("P");
+    lygu([s.assessment, s.risk, s.riskScore, s.riskOverride.computed, s.riskOverride.score, s.riskOverride.reason, s.country], ["done", "high", 53, "medium", 53, "Kritinis tiekėjas", "RU"], "išsaugota");
+    W.openSupplierDrawer("P");
+    const k = D.getElementById("modalShell").textContent;
+    tiesa(/Apskaičiuota: Vidutinė, 53\/100/.test(k) && /Kritinis tiekėjas/.test(k) && /Modulio orientyras, ne oficialus indeksas/.test(k) && /Aukšta/.test(k), "kortelė: abi reikšmės ir priežastis: " + k.slice(0, 300));
+    W.closeModal();
+    W.openSupplierModal("P");
+    lygu(VAL("sf-reason"), "Kritinis tiekėjas", "priežastis lieka formoje");
+    D.getElementById("sf-owner").value = "Pirmas"; D.getElementById("sf-reason").value = ""; W.saveSupplierForm();
+    lygu(St().getSupplier("P").owner, "Pirmas", "neliečiant lygio ir duomenų - priežasties neprašoma");
+    W.openSupplierModal("P"); lauk1("sf-country", "FR"); W.saveSupplierForm();
+    tiesa(D.getElementById("sf-reason") && D.getElementById("sf-reason").getAttribute("aria-invalid") === "true", "pakeitus duomenis ir lygį palikus - vėl prašoma");
+    W.closeModal();
+    W.openSupplierModal("P"); lauk1("sf-risk", "medium"); W.saveSupplierForm();
+    tiesa(!St().getSupplier("P").riskOverride && St().getSupplier("P").risk === "medium", "sutampant su apskaičiuotu - perrašymo įrašo nėra");
+    W.openSupplierModal("P"); D.getElementById("sf-owner").value = "Kitas"; lauk1("sf-risk", ""); W.saveSupplierForm();
+    lygu([St().getSupplier("P").assessment, St().getSupplier("P").risk], ["pending", "unassessed"], "atšaukus lygį - vėl reikia vertinimo");
+  });
+
+  await testas("D5: Rusija ir Baltarusija - aukščiausias šalies lygis; skalė ir „modulio orientyras“ pasakyti; demonstraciniai lygiai - iš variklio", async () => {
+    const r = c => W.computeRisk({ country: c, sector: 1, criticality: 1 });
+    lygu([r("RU").parts.c, r("Rusija").parts.c, r("BY").parts.c, r("Baltarusija").parts.c, r("Russia").parts.c], [3, 3, 3, 3, 3], "lygis 3");
+    lygu([r("Kinija").score, r("RU").score], [53, 53], "kaip kitos aukščiausio lygio šalys");
+    W.openSupplierModal();
+    const h = D.getElementById("modalShell").textContent;
+    tiesa(/Skalė 33-100/.test(h) && /modulio orientyras, ne oficialus indeksas/.test(h), "paaiškinimas: " + h.slice(0, 200));
+    tiesa(/Rusija/.test(D.getElementById("sf-country").textContent) && /Baltarusija/.test(D.getElementById("sf-country").textContent), "šalių sąraše");
+    W.closeModal();
+  });
+
+  await testas("K3: patikros forma: be numatytųjų sąlygų (sąrašai nepažymėti, rezultatas ir tiekėjas tušti, data rodoma - šiandien); be sąrašo, rezultato ar tikrintojo neišsaugoma; būsimos datos - ne; „Galimas atitikmuo“ - statusas „Tikrinti“", async () => {
+    irasai([tiekejas1("A", { sanctions: "unchecked", lastCheck: null }), tiekejas1("B")]);
+    await modulis();
+    W.openCheckModal();
+    lygu([VAL("cf-sup"), VAL("cf-result"), VAL("cf-date"), D.querySelectorAll(".chk-list:checked").length, D.querySelectorAll(".chk-list").length], ["", "", W.GP_WORKDAYS.siandien(), 0, 5], "pradžia");
+    tiesa(/Galimas atitikmuo - tikslinama/.test(D.getElementById("cf-result").textContent), "trečias rezultatas");
+    W.saveCheckForm();
+    lygu(St().getChecks().length, 0, "tuščia forma neišsaugoma");
+    const klaidos = [...D.querySelectorAll("#modalShell .lauko-klaida")].map(x => x.textContent);
+    tiesa(klaidos.length === 4 && klaidos.some(x => /tiekėją/.test(x)) && klaidos.some(x => /kas tikrino/.test(x)) && klaidos.some(x => /sąrašą/.test(x)) && klaidos.some(x => /rezultatą/.test(x)), "klaidos: " + klaidos.join(" | "));
+    tiesa(D.activeElement === D.getElementById("cf-sup"), "fokusas į pirmą");
+    lauk1("cf-sup", "A"); D.getElementById("cf-by").value = "Jonas"; lauk1("cf-result", "clean");
+    W.saveCheckForm();
+    lygu(St().getChecks().length, 0, "be sąrašo neišsaugoma");
+    D.querySelector('.chk-list[value="ES"]').click();
+    D.getElementById("cf-date").value = "2999-01-01"; W.saveCheckForm();
+    lygu(St().getChecks().length, 0, "būsima data neišsaugoma");
+    D.getElementById("cf-date").value = "2026-10-01"; lauk1("cf-result", "possible");
+    tiesa(!D.getElementById("possibleWarn").classList.contains("hidden"), "paaiškinimas prie galimo atitikmens");
+    W.saveCheckForm();
+    const c = St().getChecks()[0], s = St().getSupplier("A");
+    lygu([c.result, c.date, c.lists, s.sanctions, s.lastCheck.slice(0, 10) >= "2026-09-30", W.sanctKey(s)], ["possible", "2026-10-01", ["ES"], "review", true, "review"], "įrašas ir statusas");
+    W.setView("sanctions");
+    tiesa(/Galimas atitikmuo - tikslinama/.test(D.getElementById("chkBody").textContent), "žurnale");
+    lauk1("fResult", "possible"); W.renderChecks(); lygu(D.querySelectorAll("#chkBody .t-name").length, 1, "filtras"); lauk1("fResult", "");
+    tiesa(/įrašyta/.test(D.getElementById("chkBody").textContent), "patikros data ir įrašymo laikas atskirai");
+    let klaida = ""; try { St().addCheck({ supplierId: "A", result: "clean", lists: [] }); } catch (e) { klaida = e.message; }
+    tiesa(/sąraš/.test(klaida), "saugykla atmeta be sąrašo: " + klaida);
+    klaida = ""; try { St().addCheck({ supplierId: "A", result: "kitas", lists: ["ES"] }); } catch (e) { klaida = e.message; }
+    tiesa(/rezultat/.test(klaida), "saugykla atmeta nežinomą rezultatą: " + klaida);
+    lygu(St().getChecks().length, 1, "atmesti neįrašyti");
+  });
+
+  await testas("D1: „Atitikmuo rastas“ atnaujina paskutinę patikrą; „Blokuotas“ keičiamas tik „Švarus“ su pagrindimu; žurnale lieka abu įrašai, šis pažymėtas kaip atsakingo asmens sprendimas", async () => {
+    irasai([tiekejas1("A", { lastCheck: "2026-01-01T12:00:00.000Z" })]);
+    await modulis();
+    St().addCheck({ supplierId: "A", checkedBy: "J", lists: ["ES"], result: "match", date: "2026-10-05" });
+    let s = St().getSupplier("A");
+    lygu([s.sanctions, s.lastCheck.slice(0, 7), new W.Date(s.lastCheck).getHours()], ["blocked", "2026-10", 12], "atitikmuo: blokuotas, data atnaujinta (vietinis vidurdienis - diena nepasikeičia)");
+    await modulis();
+    W.openCheckModal("A");
+    lauk1("cf-result", "clean"); D.getElementById("cf-by").value = "J"; D.querySelector('.chk-list[value="OFAC"]').click();
+    tiesa(!D.getElementById("cf-basis-wrap").classList.contains("hidden"), "prašomas pagrindimas");
+    W.saveCheckForm();
+    lygu([St().getChecks().length, St().getSupplier("A").sanctions], [1, "blocked"], "be pagrindimo neišsaugoma");
+    D.getElementById("cf-basis").value = "Klaidingas atitikmuo: kitas juridinis asmuo";
+    W.saveCheckForm();
+    s = St().getSupplier("A");
+    const pask = St().getChecksFor("A").find(c => c.result === "clean");
+    lygu([St().getChecks().length, s.sanctions, pask.officerDecision, pask.basis], [2, "clean", true, "Klaidingas atitikmuo: kitas juridinis asmuo"], "po sprendimo");
+    W.setView("sanctions");
+    tiesa(/Atsakingo asmens sprendimas/.test(D.getElementById("chkBody").textContent) && /Klaidingas atitikmuo/.test(D.getElementById("chkBody").textContent), "žurnale");
+    St().addCheck({ supplierId: "A", checkedBy: "J", lists: ["ES"], result: "match", date: "2026-10-06" });
+    St().addCheck({ supplierId: "A", checkedBy: "J", lists: ["ES"], result: "possible", date: "2026-10-07" });
+    lygu(St().getSupplier("A").sanctions, "blocked", "galimas atitikmuo blokavimo nekeičia");
+    St().addCheck({ supplierId: "A", checkedBy: "J", lists: ["ES"], result: "clean", date: "2026-10-08" });
+    lygu([St().getSupplier("A").sanctions, !!St().getChecksFor("A")[0].officerDecision], ["blocked", false], "švarus be pagrindimo blokavimo nekeičia");
+    St().addCheck({ supplierId: "A", checkedBy: "J", lists: ["ES"], result: "clean", date: "2026-09-01" });
+    tiesa(St().getSupplier("A").lastCheck.slice(0, 10) >= "2026-10-07", "ankstesnė data paskutinės patikros neperrašo");
+    const b = St().saveSupplier({ name: "UAB B", code: "2", sanctions: "clean", risk: "low", lastCheck: dienuPries(1) });
+    St().addCheck({ supplierId: b.id, checkedBy: "J", lists: ["ES"], result: "clean", basis: "x", date: "2026-10-08" });
+    tiesa(!St().getChecksFor(b.id)[0].officerDecision, "neblokuotam - ne sprendimas");
+  });
+
+  await testas("K1, V7: DI nepavyko (502, netinkamas lygis): tik klaida su priežastimi žmogui ir „Bandyti dar kartą“, rizikos lygio nėra; taisyklių įverčio funkcijos nebėra", async () => {
+    irasai([tiekejas1("A", { name: "Inter RAO Lietuva", country: "LT" })]);
+    await modulis();
+    tiesa(typeof W.demoAssessment === "undefined", "demoAssessment pašalinta");
+    for (const [statusas, kuno, re] of [[502, "{}", /tinkamo atsakymo negrąžino \(502\)/], [429, "{}", /Per daug užklausų/], [403, "{}", /Serveris atmetė užklausą \(403\)/], [200, '{"level":"kita","factors":["x"]}', /nėra tinkamo rizikos lygio/], [200, '{"factors":["x"]}', /nėra tinkamo rizikos lygio/]]) {
+      const atstatyk = serveris({ "/api/esg/sanctions-assessment": () => Promise.resolve(new W.Response(kuno, { status: statusas })) });
+      try {
+        W.openCheckModal("A");
+        D.getElementById("cf-aictx").value = "Priklauso Rusijos kontroliuojamai grupei";
+        await W.runAiAssessment();
+        const b = D.getElementById("aiBusena");
+        tiesa(b.classList.contains("gpb--klaida") && re.test(b.textContent) && !/HTTP/.test(b.textContent) && b.querySelector("[data-gpb-kartoti]"), statusas + " " + kuno + ": " + b.textContent);
+        const rez = D.getElementById("aiResult").textContent;
+        lygu(rez.trim(), "", "rezultato nėra");
+        tiesa(!/Žema|Įvertintas pateiktas kontekstas|taisyklėmis/.test(D.getElementById("modalShell").textContent), "nėra taisyklių lygio");
+        lygu(W.eval("AI_VERTINIMAS"), null, "vertinimas neįsimintas");
+      } finally { atstatyk(); W.closeModal(); }
+    }
+    let tekstas = ""; const I = W.eval("I18N");
+    Object.values(I.lt).concat(Object.values(I.en)).forEach(v => { tekstas += v + "\n"; });
+    tiesa(!/taisyklėmis pagal šalies|rule-based|backend/.test(tekstas), "senų tekstų nėra");
+  });
+
+  await testas("K1, D4, K7, D3: serverio failas: JSON taisomas, nutrūkęs ir be lygio - 502, max_tokens didesnis, instrukcija draudžia teigti buvimą sąraše ir aktų numerius; netinkamas kodas - 400, ne LITGRID; šalies nėra; API stub'ų nėra", async () => {
+    let uzkl = null;
+    const kv = async (txt) => { const sv = await serverioFailas(anthropic(txt, b => { uzkl = b; })); return sv.kviesk("POST /sanctions-assessment", { body: DI_UZKL }); };
+    let r = await kv('{"level":"medium","factors":["Tiekėjas „Alfa", nes jis priklauso grupei"],"actions":["Patikrinti\neilutė"]}');
+    lygu([r.kodas, r.o.level, r.o.factors.length], [undefined, "medium", 1], "pataisytas JSON: " + JSON.stringify(r.o));
+    tiesa(uzkl.max_tokens >= 1500, "max_tokens: " + uzkl.max_tokens);
+    tiesa(/Sąrašų netikrinai/.test(uzkl.system) && /Necituok teisės aktų/.test(uzkl.system), "LT instrukcija");
+    r = await kv('Štai: {"level":"high","factors":[],"actions":[]} pabaiga');
+    lygu([r.o.level], ["high"], "tekstas aplink JSON");
+    r = await kv('{"level":"low","factors":["nutrūk');
+    lygu([r.kodas, !!r.o.error], [502, true], "nutrūkęs - klaida");
+    r = await kv('{"level":"nežinomas","factors":[],"actions":[]}');
+    lygu([r.kodas, r.o.level], [502, undefined], "netinkamas lygis - klaida, ne „medium“");
+    const svEn = await serverioFailas(anthropic('{"level":"low","factors":[],"actions":[]}', b => { uzkl = b; }));
+    await svEn.kviesk("POST /sanctions-assessment", { body: { lang: "en", supplier: { name: "X" }, context: "" } });
+    tiesa(/did not check any list/.test(uzkl.system) && /Do not cite legal acts/.test(uzkl.system), "EN instrukcija");
+    const kvietimai = [];
+    const duom = async (u) => { kvietimai.push(String(u)); return { ok: true, json: async () => [{ selected_tenderer: "123;UAB A", total_value_of_part: "100", conclusion_date: "2023-01-01" }] }; };
+    const sv = await serverioFailas(duom);
+    for (const buyer of ["abc", "", "12345", undefined]) {
+      const res = await sv.kviesk("GET /cvpis-suppliers", { query: { buyer } });
+      lygu([res.kodas, /kodas/.test(res.o.error)], [400, true], "kodas „" + buyer + "“");
+    }
+    lygu(kvietimai.length, 0, "su netinkamu kodu į šaltinį nesikreipiama");
+    tiesa(sv.src.indexOf("302564383") < 0 && sv.src.indexOf("litgridCode") < 0, "serveryje nėra numatytojo LITGRID");
+    const ok = await sv.kviesk("GET /cvpis-suppliers", { query: { buyer: "303090867", minValue: "0", from: "2017-07-01" } });
+    lygu([ok.kodas, ok.o.suppliers.length, "country" in ok.o.suppliers[0], ok.o.meta.authorityCode, !!ok.o.meta.fetchedAt], [undefined, 1, false, "303090867", true], "atsakymas");
+    tiesa(kvietimai[0].indexOf("303090867") > 0, "kodas užklausoje");
+    tiesa(!sv.marsrutai["GET /supplier/:id/risk"] && !sv.marsrutai["GET /supplier/:id/sanctions-status"], "stub'ų nėra");
+  });
+
+  await testas("K7, D2, D3, V5: importas: perkantysis subjektas iš registro be numatytojo, netinkamas kodas - klaida be užklausos; niekas nepažymėta; grupės pažymėtos ir „Žymėti visus“ jų neapima; šalis tuščia; data ir šaltinis; be kodo - pagal pavadinimą", async () => {
+    irasai([tiekejas1("A", { name: "UAB Testas", code: "300513148" })]);
+    await modulis();
+    const kvietimai = [];
+    const atstatyk = serveris({ "/api/esg/cvpis-suppliers": (u) => { kvietimai.push(String(u)); return Promise.resolve(ATSAKYMAS(CVP_ATS)); } });
+    try {
+      W.openImportModal();
+      lygu(VAL("im-buyer"), "", "be numatytojo");
+      const parinktys = [...D.querySelectorAll("#im-buyer option")].map(o => o.value);
+      lygu(parinktys, ["", "302564383", "303090867", "302826889", "305689545", "kita"], "registro kodai");
+      tiesa(/Litgrid/.test(D.getElementById("modalShell").textContent) === false, "aprašas nesako vien Litgrid");
+      tiesa(/2023-05-03/.test(D.getElementById("modalShell").textContent), "prieš paiešką pasakyta, kad šaltinis vėluoja");
+      tiesa(/Mažiausia bendra tiekėjo sutarčių vertė/.test(D.getElementById("modalShell").textContent), "laukas vadinamas tuo, ką filtruoja");
+      await W.runCvpisSearch();
+      tiesa(kvietimai.length === 0 && D.getElementById("im-buyer-klaida"), "nepasirinkus - klaida be užklausos");
+      lauk1("im-buyer", "kita");
+      tiesa(!D.getElementById("im-buyer-kita-wrap").classList.contains("hidden"), "kodo laukas");
+      D.getElementById("im-buyer-kita").value = "abc";
+      await W.runCvpisSearch();
+      tiesa(kvietimai.length === 0 && /6-12 skaitmenų/.test(D.getElementById("im-buyer-kita-klaida").textContent), "netinkamas kodas - klaida");
+      D.getElementById("im-buyer-kita").value = "305689545";
+      await W.runCvpisSearch();
+      tiesa(kvietimai.length === 1 && kvietimai[0].indexOf("buyer=305689545") > 0, "kitas kodas užklausoje: " + kvietimai[0]);
+      lauk1("im-buyer", "302564383");
+      await W.runCvpisSearch();
+      const m = D.getElementById("im-meta").textContent;
+      tiesa(/Naujausia sutartis: 2023-05-03/.test(m) && /Šaltinis: data\.gov\.lt \(gov\/vpt\/new\)/.test(m) && /gauta/.test(m), "meta: " + m);
+      lygu(D.querySelectorAll(".im-row:checked").length, 0, "niekas nepažymėta");
+      const eil = pav => [...D.querySelectorAll("#im-results tbody tr")].find(r => r.querySelector(".t-name").textContent === pav);
+      ["Siemens", "Tiekėjų grupė 1", "I grupė", "Ūkio subjektų grupė, susidedanti iš UAB A ir UAB B", "GE Energy Management Services LLC"].forEach(p => tiesa(/Grupė ar neaiškus pavadinimas/.test(eil(p).textContent), "neaiškus: " + p));
+      tiesa(!/Grupė ar neaiškus/.test(eil("AB Kitas").textContent), "aiškus nepažymėtas");
+      tiesa(eil("UAB „TETAS“").querySelector(".im-row").disabled && /Jau registre/.test(eil("UAB „TETAS“").textContent), "esamas pagal kodą");
+      D.getElementById("im-all").click();
+      lygu([...D.querySelectorAll(".im-row:checked")].map(c => W.eval("_cvpisResults")[Number(c.dataset.i)].name), ["AB Kitas"], "žymėti visus: be grupių");
+      D.getElementById("im-all").click();
+      lygu(D.querySelectorAll(".im-row:checked").length, 0, "nužymi visus");
+      eil("Siemens").querySelector(".im-row").click(); eil("AB Kitas").querySelector(".im-row").click();
+      tiesa(/\(2\)/.test(D.getElementById("im-import").textContent), "mygtukas: " + D.getElementById("im-import").textContent);
+      W.doCvpisImport();
+      const s = St().getSupplierByName("Siemens"), k = St().getSupplierByCode("123456789");
+      lygu([s.country, s.sanctions, s.neaisku, s.code, k.country, k.neaisku, k.category, k.source], ["", "unchecked", true, "", "", false, "OTHER", "cvpis"], "importuoti");
+      lygu(s.cvpis.saltinis, "data.gov.lt", "šaltinis įraše");
+      W.setView("suppliers");
+      tiesa(/Grupė ar neaiškus/.test([...D.querySelectorAll("#supBody tr")].find(r => /Siemens/.test(r.textContent)).textContent), "žyma registre");
+      W.openImportModal(); lauk1("im-buyer", "302564383"); await W.runCvpisSearch();
+      tiesa(eil("Siemens").querySelector(".im-row").disabled && /Jau registre/.test(eil("Siemens").textContent), "be kodo pakartotinai - pagal pavadinimą");
+      tiesa(!eil("Tiekėjų grupė 1").querySelector(".im-row").disabled, "kita be kodo - nauja");
+      const r = St().importSuppliers([{ name: "UAB Siemens", code: "" }, { name: "siemens", code: "-" }, { name: "Naujas be kodo", code: "n/a" }, { name: "Naujas be kodo", code: "" }]);
+      lygu([r.added, r.skipped, St().getSupplierByName("Naujas be kodo").code], [1, 3, ""], "pagal pavadinimą, be pasikartojimų, „n/a“ neįrašomas kaip kodas");
+      W.closeModal();
+    } finally { atstatyk(); }
+    const atstatyk2 = serveris({ "/api/esg/cvpis-suppliers": () => Promise.resolve(new W.Response("{}", { status: 503 })) });
+    try {
+      W.openImportModal(); lauk1("im-buyer", "302564383"); await W.runCvpisSearch();
+      const b = D.getElementById("im-busena").textContent;
+      tiesa(/tinkamo atsakymo negrąžino \(503\)/.test(b) && !/HTTP/.test(b), "klaida žmogui: " + b);
+      W.closeModal();
+    } finally { atstatyk2(); }
+    const atstatyk3 = serveris({ "/api/esg/cvpis-suppliers": () => Promise.resolve(ATSAKYMAS({ meta: { dataset: "gov/vpt/new" }, suppliers: [] })) });
+    try {
+      W.openImportModal(); lauk1("im-buyer", "302564383"); await W.runCvpisSearch();
+      tiesa(/Šaltinis: data\.gov\.lt/.test(D.getElementById("im-meta").textContent) && /Nieko nerasta/.test(D.getElementById("im-results").textContent), "be rezultatų - šaltinis ir paaiškinimas");
+      W.closeModal();
+    } finally { atstatyk3(); }
+    tiesa(W.neaiskusTiekejas({ name: "II", code: "12345678" }) && W.neaiskusTiekejas({ name: "Tiekėų grupė", code: "12345678" }) && W.neaiskusTiekejas({ name: "Jungtinės veiklos pagrindu susivienijusi", code: "12345678" }) && !W.neaiskusTiekejas({ name: "UAB Viva", code: "12345678" }), "neaiškūs pavadinimai");
+  });
+
+  await testas("K8, V1, V9: teiginių apie API ir integraciją nebėra; sako, kas yra; kortelėje be API bloko; nėra „Sistema veikia“ ir priminimo mygtuko", async () => {
+    irasai([tiekejas1("A")]);
+    await modulis();
+    const I = W.eval("I18N"), C = W.eval("INFO_CONTENT");
+    const viskas = JSON.stringify(I) + JSON.stringify(C) + D.body.innerHTML;
+    tiesa(!/per API|via API|API prieiga|API access|naudoja kiti moduliai|consumed by other|Visi kiti G-Procure/.test(viskas), "API teiginys");
+    tiesa(/Duomenys saugomi tik šioje naršyklėje/.test(I.lt["dash.sub"]) && /kiti G-Procure moduliai jų nenaudoja/.test(I.lt["dash.sub"]) && /PP-carbon/.test(I.lt["dash.sub"]), "apžvalga");
+    tiesa(/stored only in this browser/.test(I.en["dash.sub"]) && /do not use it/.test(I.en["dash.sub"]), "EN");
+    tiesa(/kitų G-Procure modulių ji nestabdo/.test(I.lt["sup.sub"]) && /does not stop other/.test(I.en["sup.sub"]), "blokavimas kitų modulių nestabdo");
+    tiesa(/nestabdo/.test(C.lt.details.faq.map(x => x.a).join(" ")) && /does not stop/.test(C.en.details.faq.map(x => x.a).join(" ")), "DUK: blokuotas");
+    W.openSupplierDrawer("A");
+    tiesa(!/GET \/api|API/.test(D.getElementById("modalShell").textContent), "kortelėje be API");
+    W.closeModal();
+    tiesa(!D.querySelector(".sys-status") && !/Sistema veikia|System online/.test(viskas), "be būsenos žymos");
+    tiesa(!/offerRescreenReminder|Įjungti automatinį priminimą|automatic reminder|MVP etape/.test(viskas) && typeof W.offerRescreenReminder === "undefined", "be priminimo");
+  });
+
+  await testas("K9: 64 % konstantos nebėra - „nežinoma“; „Vidutinis ESRS taškų padengimas“; elgesio kodeksas - tik jei yra duomenų; suvestinė nekinta nuo konstantos", async () => {
+    irasai([tiekejas1("A"), tiekejas1("B", { sme: true })], null, [{ id: "DP-a", name: "x", esrs: "E1-6", value: "1", unit: "t", coverage: 40, source: "manual" }, { id: "DP-b", name: "y", esrs: "S2-1", value: "1", unit: "t", coverage: 60, source: "manual" }]);
+    await modulis(); W.setView("esrs");
+    const kp = D.getElementById("esrsKpis").textContent, ju = D.getElementById("esrsBars").textContent;
+    tiesa(!/64/.test(kp + ju) && /nežinoma/.test(kp) && /duomenų nėra/.test(kp), "KPI: " + kp);
+    tiesa(/Pirkimai su tvarumo kriterijais \(pagal vertę\)\s*nežinoma/.test(ju), "juosta: " + ju);
+    tiesa(/Vidutinis ESRS taškų padengimas\s*50%/.test(ju) && !/Pateikė ESG duomenis/.test(ju), "padengimas: " + ju);
+    tiesa(!/Elgesio kodeksas/.test(kp) && !/elgesio kodeksas/i.test(ju), "be duomenų - be kodekso");
+    lygu(W.buildExportPayload().coverage.codeOfConductSignedPct, null, "eksporte - nežinoma");
+    lygu(W.buildExportPayload().coverage.smeSharePct, 50, "MVĮ dalis");
+    irasai([tiekejas1("A", { codeSigned: true }), tiekejas1("B", { codeSigned: false }), tiekejas1("C")]);
+    await modulis(); W.setView("esrs");
+    tiesa(/Elgesio kodeksas pasirašytas\s*50%/.test(D.getElementById("esrsKpis").textContent) && /Pasirašytas tiekėjų elgesio kodeksas\s*50%/.test(D.getElementById("esrsBars").textContent), "su duomenimis: skaičiuojama iš tų, kurie turi duomenų");
+    lygu(W.buildExportPayload().coverage.codeOfConductSignedPct, 50, "eksporte");
+    tiesa(/\b-\b|^-/.test(D.querySelector("#esrsKpis .kpi-value").textContent), "be taškų - brūkšnys");
+  });
+
+  await testas("D4: DI atsakymas: sakiniai su akto numeriu, įstatymo nuoroda ar teiginiu apie buvimą sąraše pašalinami su pastaba; patikrinti siūlantys lieka; „DI sąrašų netikrino - tai ne patikra“", async () => {
+    const v = W.diIsvalyk({ level: "high", factors: [
+      "Inter RAO patenka į ES ir JAV sankcijų sąrašus. Šalies rizika aukšta.",
+      "Pagal Reglamentą 2022/718 tokiems subjektams taikomi apribojimai.",
+      "Reglamentas (ES) Nr. 833/2014 draudžia sandorius.",
+      "Tiekėjas yra įtrauktas į OFAC sąrašą.",
+      "Bendrovė nėra ES sąraše.",
+      "Įmonė yra sankcionuota.",
+      "The company is on the EU sanctions list.",
+      "The parent is sanctioned by the US.",
+      "EPSO-G veikia pagal PSĮ, todėl reikia atsargumo.",
+      "Vertinimas pagal Pirkimų įstatymą.",
+      "Executive Order 14024 applies.",
+      "Taikomas aktas 2022/718.",
+      "Žr. 269/2014 priedą."
+    ], actions: [
+      "Patikrinti tiekėją oficialiuose ES, OFAC ir JT sąrašuose.",
+      "Patikrinti, ar galutinis naudos gavėjas yra ES sankcijų sąraše.",
+      "Check whether the owner is on the EU list.",
+      "Surinkti informaciją apie nuosavybės struktūrą."
+    ] });
+    lygu(v.factors, ["Šalies rizika aukšta."], "veiksniai: " + JSON.stringify(v.factors));
+    lygu(v.actions.length, 4, "veiksmai lieka: " + JSON.stringify(v.actions));
+    lygu(v.pasalinta, 13, "pašalinta");
+    lygu(W.diIsvalyk({ level: "x" }), null, "netinkamas lygis");
+    lygu(W.diIsvalyk(null), null, "tuščias");
+    lygu(W.diIsvalyk({ level: "low", factors: "ne sąrašas" }).factors, [], "ne sąrašas");
+    tiesa(W.diIsvalyk({ level: "low", factors: ["Pastaba Nr. 5 yra svarbi. Kitas sakinys."] }).factors.join("").indexOf("Nr.") < 0, "Nr. neskaido sakinio");
+    irasai([tiekejas1("A")]);
+    await modulis(); W.openCheckModal("A");
+    const atstatyk = serveris({ "/api/esg/sanctions-assessment": () => Promise.resolve(ATSAKYMAS({ level: "high", factors: ["Pagal Reglamentą 2022/718 taikoma.", "<img src=x onerror=window.__xss=1>"], actions: ["Patikrinti sąrašuose."], disclaimer: "x" })) });
+    try {
+      await W.runAiAssessment();
+      const r = D.getElementById("aiResult");
+      tiesa(/DI sąrašų netikrino - tai ne patikra/.test(r.textContent), "sakinys");
+      tiesa(/Pašalinta teiginių: 1/.test(D.getElementById("aiPasalinta").textContent) && !/2022\/718/.test(r.textContent), "pastaba");
+      tiesa(/Aukšta/.test(r.textContent) && !r.querySelector("img") && !W.__xss, "lygis ir tekstas ekranuotas");
+    } finally { atstatyk(); W.closeModal(); }
+    W.openCheckModal("A"); W.renderAiResult({ level: "low", factors: ["a"], actions: ["b"] });
+    tiesa(!D.getElementById("aiPasalinta"), "nieko nepašalinus - pastabos nėra"); W.closeModal();
+  });
+
+  await testas("D6: ESRS tašką galima taisyti ir ištrinti (patvirtinus); vertė privaloma; padengimas 0-100; senas 500 ir -20 rodomi ribose", async () => {
+    irasai(null, null, [{ id: "DP-a", name: "Taškas", esrs: "G1-6", value: "28", unit: "d.", coverage: 500, source: "manual", date: "2026-03-31T00:00:00Z" }, { id: "DP-b", name: "Kitas", esrs: "XX-9", value: "1", unit: "t", coverage: -20, source: "manual" }]);
+    await modulis(); W.setView("esrs");
+    const eil = D.querySelectorAll("#esrsBody tr");
+    tiesa(/100%/.test(eil[0].textContent) && /0%/.test(eil[1].textContent) && !/500%|-20%/.test(D.getElementById("esrsBody").textContent), "ribos");
+    tiesa(eil[0].querySelector("[onclick^='addEsrsPoint']").getAttribute("aria-label").indexOf("Taškas") > 0, "mygtuko pavadinimas");
+    W.addEsrsPoint("DP-a");
+    lygu([VAL("ef-name"), VAL("ef-code"), VAL("ef-value"), VAL("ef-unit"), VAL("ef-cov")], ["Taškas", "G1-6", "28", "d.", "100"], "forma užpildyta");
+    D.getElementById("ef-value").value = ""; W.saveEsrsForm();
+    tiesa(/Įveskite vertę/.test(D.getElementById("modalShell").textContent), "vertė privaloma");
+    lygu(St().getEsrs()[0].value, "28", "neišsaugota");
+    D.getElementById("ef-value").value = "30";
+    for (const bloga of ["500", "-20", ""]) {
+      D.getElementById("ef-cov").value = bloga; W.saveEsrsForm();
+      tiesa(/nuo 0 iki 100/.test(D.getElementById("modalShell").textContent), "padengimas „" + bloga + "“");
+      lygu(St().getEsrs()[0].value, "28", "neišsaugota");
+    }
+    D.getElementById("ef-cov").value = "75"; W.saveEsrsForm();
+    const p = St().getEsrs()[0];
+    lygu([p.id, p.value, p.coverage, p.source, St().getEsrs().length], ["DP-a", "30", 75, "manual", 2], "pataisyta vietoje");
+    W.addEsrsPoint("DP-b");
+    lygu(VAL("ef-code"), "XX-9", "senas kodas pasirenkamas");
+    W.closeModal();
+    W.addEsrsPoint();
+    lygu([VAL("ef-id"), VAL("ef-cov")], ["", ""], "naujas: be numatytojo");
+    D.getElementById("ef-name").value = "Naujas"; D.getElementById("ef-value").value = "1"; D.getElementById("ef-cov").value = "0"; W.saveEsrsForm();
+    lygu(St().getEsrs().find(x => x.name === "Naujas").coverage, 0, "0 - tinkamas padengimas");
+    W.deleteEsrsForm("DP-b");
+    lygu(St().getEsrs().length, 3, "prieš patvirtinant");
+    D.getElementById("patvirtintiBtn").click();
+    lygu([St().getEsrs().length, St().getEsrs().some(x => x.id === "DP-b")], [2, false], "ištrinta");
+  });
+
+  await testas("D7, M3: žurnalas sako tiesą ir veda į atsarginę kopiją; patikrų eksportas JSON ir CSV (kabliataškis, UTF-8 žymė, formulės apsaugotos); suvestinė su pavadinimais ir kodais", async () => {
+    irasai([tiekejas1("A", { name: "=HYPERLINK(1)", code: "300513148" })], [{ id: "CHK-1", supplierId: "A", date: "2026-10-01", timestamp: "2026-10-01T10:00:00.000Z", checkedBy: "@Jonas", lists: ["ES", "OFAC"], result: "match", notes: "-1+1", basis: "", di: { level: "high" } },
+      { id: "CHK-2", supplierId: "PASALINTAS", supplierName: "UAB Buvęs", supplierCode: "777", timestamp: "2026-09-01T10:00:00.000Z", checkedBy: "J", lists: ["JT"], result: "clean", notes: "su \"kabutėmis\"; ir kabliataškiu" }], [{ id: "DP-a", name: "+suma", esrs: "E1-6", value: "-5", unit: "t", coverage: 10, source: "manual", date: "2026-10-01T00:00:00Z" }]);
+    await modulis();
+    const I = W.eval("I18N"), C = W.eval("INFO_CONTENT");
+    const lt = JSON.stringify(Object.values(I.lt)) + JSON.stringify(C.lt), en = JSON.stringify(Object.values(I.en)) + JSON.stringify(C.en);
+    tiesa(!/write-once|Audituojamas|audituojam|nekeičiami|negrįžtama/.test(lt), "LT: nekeičiamas žurnalas");
+    tiesa(!/write-once|Auditable|auditable|immutable|irreversible/.test(en), "EN: nekeičiamas žurnalas");
+    tiesa(/tik šioje naršyklėje/.test(I.lt["sanc.immutable"]) && /only in this browser/.test(I.en["sanc.immutable"]), "tiesa");
+    const a = D.querySelector("#view-sanctions .immutable a");
+    tiesa(a && a.getAttribute("href") === "../atsargine-kopija.html", "nuoroda į atsarginę kopiją");
+    W.openCheckModal("A"); tiesa(D.querySelector('#modalShell a[href="../atsargine-kopija.html"]'), "ir formoje"); W.closeModal();
+    const p = W.buildChecksExport();
+    lygu([p.meta.count, p.meta.storedIn, p.checks[0].id, p.checks[0].supplier, p.checks[0].code, p.checks[1].supplier, p.checks[1].code, p.checks[1].date, p.checks[0].ai.level], [2, "browser", "CHK-1", "=HYPERLINK(1)", "300513148", "UAB Buvęs", "777", "2026-09-01", "high"], "JSON");
+    const tikrasU = W.URL.createObjectURL, tikrasC = W.HTMLAnchorElement.prototype.click; const failai = [];
+    W.URL.createObjectURL = b => { failai.push({ blob: b }); return "blob:testas"; }; W.HTMLAnchorElement.prototype.click = function(){ failai[failai.length - 1].vardas = this.download; };
+    try { W.downloadChecks("json"); W.downloadChecks("csv"); W.downloadExport("csv"); } finally { W.URL.createObjectURL = tikrasU; W.HTMLAnchorElement.prototype.click = tikrasC; }
+    tiesa(/^PP-ESG_patikros_\d{4}-\d{2}-\d{2}\.json$/.test(failai[0].vardas) && /^PP-ESG_patikros_\d{4}-\d{2}-\d{2}\.csv$/.test(failai[1].vardas), "failų vardai: " + failai.map(f => f.vardas));
+    lygu(JSON.parse(await failai[0].blob.text()).checks.length, 2, "JSON failas");
+    const baitai = new Uint8Array(await failai[1].blob.arrayBuffer()), csv = await failai[1].blob.text();
+    lygu([...baitai.slice(0, 3)], [0xEF, 0xBB, 0xBF], "UTF-8 žymė");
+    const eilutes = csv.split("\r\n");
+    tiesa(/^"date";"recordedAt";"supplierId";"supplier";"code";"checkedBy";"lists";"result"/.test(eilutes[0]), "antraštė: " + eilutes[0]);
+    tiesa(eilutes[1].indexOf(`"'=HYPERLINK(1)"`) > 0 && eilutes[1].indexOf(`"'@Jonas"`) > 0 && eilutes[1].indexOf(`"'-1+1"`) > 0, "formulės: " + eilutes[1]);
+    tiesa(eilutes[1].indexOf('"ES, OFAC"') > 0 && eilutes[1].indexOf('"high"') > 0, "sąrašai ir DI lygis");
+    tiesa(eilutes[2].indexOf('"su ""kabutėmis""; ir kabliataškiu"') > 0, "kabutės ir kabliataškis");
+    const esrs = await failai[2].blob.text();
+    tiesa(esrs.indexOf(`"'+suma"`) > 0 && esrs.indexOf('"-5"') > 0 && esrs.indexOf(`"'-5"`) < 0 && esrs.indexOf(";") > 0, "ESRS CSV: tikras skaičius lieka skaičiumi: " + esrs);
+    lygu([W.csvLangelis("+37060000000"), W.csvLangelis("-1,5"), W.csvLangelis("+a"), W.csvLangelis(null), W.csvLangelis("\tx").charAt(1)], ['"+37060000000"', '"-1,5"', `"'+a"`, '""', "'"], "taisyklė");
+    const su = W.buildExportPayload().suppliersSummary[0];
+    lygu([su.name, su.code, su.country, su.sanctionsStatus], ["=HYPERLINK(1)", "300513148", "Lietuva", "clean"], "suvestinė");
+    W.openExportModal();
+    tiesa(!/neįtraukta/.test(D.getElementById("modalShell").textContent), "be demonstracinių - be pastabos"); W.closeModal();
+    irasai(SENA_SEKLA.sup); await modulis(); W.openExportModal();
+    tiesa(/neįtraukta: 2/.test(D.getElementById("modalShell").textContent), "su demonstraciniais - pastaba"); W.closeModal();
+  });
+
+  await testas("D8: kodas iš saugomų duomenų nevykdomas: padengimas, id, kiti laukai - tik ekranuoti; id su kabute mygtuke veikia", async () => {
+    const X = '<img src=x onerror="window.__xss=1">', ID = `x');window.__xss=1;//"'`;
+    irasai([tiekejas1(ID, { name: X, code: X, owner: X, country: X, category: X, riskScore: X, lastCheck: X, sme: true, cvpis: { saltinis: X, contractCount: X, lastAward: X }, riskOverride: { computed: "low", score: X, reason: X } })],
+           [{ id: "C", supplierId: ID, timestamp: X, date: X, checkedBy: X, lists: [X], result: X, notes: X, basis: X, officerDecision: true, di: { level: X } }],
+           [{ id: X, name: X, esrs: X, value: X, unit: X, coverage: X, source: "module", sourceRef: X, date: X }]);
+    W.__xss = 0; await modulis();
+    W.setView("suppliers"); W.setView("sanctions"); W.setView("esrs"); W.setView("dashboard");
+    D.querySelector("#supBody [onclick^='openSupplierDrawer']").click();
+    tiesa(D.getElementById("modalShell").textContent.indexOf("onerror") >= 0, "kortelė atverta (id su kabute): " + D.getElementById("modalShell").textContent.slice(0, 100));
+    tiesa(!D.querySelector("#modalShell img"), "kortelėje nėra žymos"); W.closeModal();
+    D.querySelector("#supBody [onclick^='openSupplierModal']").click();
+    lygu(D.getElementById("sf-id").value, ID, "redaguoti atverta"); W.closeModal();
+    W.openCheckModal(ID); tiesa(!D.querySelector("#modalShell img"), "formoje nėra žymos"); W.closeModal();
+    W.openExportModal(); tiesa(!D.querySelector("#modalShell img"), "eksporte nėra žymos"); W.closeModal();
+    await lauk(100);
+    lygu([!!W.__xss, D.querySelectorAll("#supBody img, #chkBody img, #esrsBody img, #monBody img, #recentChecks img, #fCountry img").length, W.covNum("<x>"), W.covNum(150), W.covNum(-1), W.covNum("40")], [false, 0, 0, 100, 0, 40], "kodas nevykdytas");
+    tiesa(D.querySelector("#esrsBody .prog i").getAttribute("style") === "width:0%", "padengimas - tik skaičius");
+    const imp = W.eval("(_cvpisResults = [{ name: '<img src=x>', code: '<b>', contractCount: '<img src=x>', totalValue: 'x', lastAward: '<img src=x>', exists: false, neaisku: true }], 0)");
+    W.openImportModal(); W.renderCvpisResults(false);
+    tiesa(!D.querySelector("#im-results img") && !D.querySelector("#im-meta img"), "importe nėra žymos"); W.closeModal();
+  });
+
+  await testas("D9: prie patikros formos - oficialios paieškos ir sakinys, kad G-Procure pats netikrina", async () => {
+    irasai([tiekejas1("A")]);
+    await modulis(); W.openCheckModal("A");
+    const a = [...D.querySelectorAll("#modalShell .saltiniai a")];
+    lygu(a.map(x => x.getAttribute("href")), [
+      "https://data.europa.eu/data/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions?locale=lt",
+      "https://sanctionssearch.ofac.treas.gov/",
+      "https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list",
+      "https://search-uk-sanctions-list.service.gov.uk/",
+      "https://fntt.lrv.lt/lt/tarptautines-finansines-sankcijos/"], "adresai");
+    tiesa(a.every(x => x.target === "_blank" && x.rel === "noopener"), "nauji skirtukai");
+    tiesa(/G-Procure pats sąrašų netikrina/.test(D.querySelector("#modalShell .saltiniai").textContent), "sakinys");
+    W.closeModal();
+  });
+
+  await testas("V2: diagramos sako, kiek neįvertinta ir netikrinta; neįvertinti - atskira dalis ir šalies juostoje", async () => {
+    irasai([tiekejas1("A", { country: "LT" }), tiekejas1("B", { risk: "high", country: "Lietuva" }), tiekejas1("C", { risk: "unassessed", assessment: "pending", lastCheck: null, sanctions: "unchecked", country: "" }), tiekejas1("D", { risk: "unassessed", assessment: "pending", lastCheck: null, country: "Vokietija" })]);
+    await modulis();
+    tiesa(/Neįvertinta: 2 iš 4 tiekėjų/.test(D.getElementById("chartRiskNote").textContent), "rizikos: " + D.getElementById("chartRiskNote").textContent);
+    tiesa(/Netikrinta: 2 iš 4 tiekėjų/.test(D.getElementById("chartSanctNote").textContent), "sankcijų: " + D.getElementById("chartSanctNote").textContent);
+    const ch = W.eval("charts");
+    lygu([ch.risk.data.datasets[0].data, ch.risk.data.labels[3], ch.sanct.data.datasets[0].data], [[1, 0, 1, 2], "Neįvertinta", [2, 0, 0, 2]], "diagramų duomenys");
+    lygu([ch.country.data.labels, ch.country.data.datasets[3].data, ch.country.data.datasets[0].data], [["Lietuva", "Nežinoma", "Vokietija"], [0, 1, 1], [1, 0, 0]], "šalys: LT ir Lietuva sujungtos");
+  });
+
+  await testas("V3: tas pats kodas ar pavadinimas - įspėjimas prieš išsaugant, antras „Išsaugoti“ - sąmoningai; „N/A“ - ne kodas", async () => {
+    irasai([tiekejas1("A", { name: "UAB „TETAS“", code: "300513148" })]);
+    await modulis();
+    const naujas = (v, k) => { W.openSupplierModal(); D.getElementById("sf-name").value = v; D.getElementById("sf-code").value = k; W.saveSupplierForm(); };
+    naujas("Kita įmonė", "300 513 148");
+    tiesa(!D.getElementById("sf-dup").classList.contains("hidden") && /UAB „TETAS“/.test(D.getElementById("sf-dup").textContent) && /300513148/.test(D.getElementById("sf-dup").textContent), "įspėjimas pagal kodą");
+    lygu(St().getSuppliers().length, 1, "neįrašyta");
+    W.saveSupplierForm();
+    lygu(St().getSuppliers().length, 2, "antras paspaudimas įrašo");
+    naujas("Tetas, UAB", "");
+    tiesa(/UAB „TETAS“/.test(D.getElementById("sf-dup").textContent), "įspėjimas pagal pavadinimą");
+    W.closeModal();
+    naujas("Be kodo", "N/A");
+    lygu(St().getSuppliers().find(s => s.name === "Be kodo").code, "", "N/A neįrašomas kaip kodas");
+    lygu(["N/A", "n/a", "-", "nėra", "NA", "none"].map(k => St().normCode(k)), ["", "", "", "", "", ""], "ne kodai");
+    naujas("Dar vienas", "n/a");
+    tiesa(St().getSuppliers().some(s => s.name === "Dar vienas"), "N/A dublikatu nelaikomas");
+    irasai([tiekejas1("A", { name: "UAB X", code: "111" }), tiekejas1("B", { name: "UAB Y", code: "222" })]);
+    await modulis(); W.openSupplierModal("A"); D.getElementById("sf-owner").value = "Kitas"; W.saveSupplierForm();
+    lygu([St().getSupplier("A").owner, D.getElementById("sf-name")], ["Kitas", null], "savęs dublikatu nelaiko");
+  });
+
+  await testas("V4, V5: paieška nepaiso diakritikų; tiekėjo trynimas - tik patvirtinus, patikrų žurnalas lieka su pavadinimu", async () => {
+    irasai([tiekejas1("A", { name: "Tiekėjų Šviesa UAB", code: "111" }), tiekejas1("B", { name: "Kita UAB", code: "222" })], [{ id: "C1", supplierId: "A", timestamp: "2026-10-01T10:00:00.000Z", checkedBy: "Jonas Žukas", lists: ["ES"], result: "clean" }]);
+    await modulis(); W.setView("suppliers");
+    lauk1("supSearch", "Tiekeju"); W.renderSuppliers(); lygu(eilutes(), ["Tiekėjų"], "be diakritikų");
+    lauk1("supSearch", "ŠVIESA"); W.renderSuppliers(); lygu(eilutes(), ["Tiekėjų"], "didžiosiomis");
+    lauk1("supSearch", ""); W.renderSuppliers();
+    W.setView("sanctions");
+    lauk1("chkSearch", "tiekeju"); W.renderChecks(); lygu(D.querySelectorAll("#chkBody .t-name").length, 1, "žurnale pagal tiekėją");
+    lauk1("chkSearch", "zukas"); W.renderChecks(); lygu(D.querySelectorAll("#chkBody .t-name").length, 1, "žurnale pagal tikrintoją");
+    lauk1("chkSearch", "nera"); W.renderChecks(); lygu(D.querySelectorAll("#chkBody .t-name").length, 0, "nerasta"); lauk1("chkSearch", ""); W.renderChecks();
+    W.setView("suppliers");
+    D.querySelector("#supBody [onclick^='deleteSupplierForm']").click();
+    tiesa(/lieka su tiekėjo pavadinimu/.test(D.getElementById("modalShell").textContent), "patvirtinimas");
+    lygu(St().getSuppliers().length, 2, "prieš patvirtinant");
+    W.closeModal(); lygu(St().getSuppliers().length, 2, "atšaukus");
+    W.deleteSupplierForm("A"); D.getElementById("patvirtintiBtn").click();
+    lygu(St().getSuppliers().map(s => s.id), ["B"], "ištrintas");
+    const c = St().getChecks()[0];
+    lygu([c.supplierName, c.supplierCode, St().getChecks().length], ["Tiekėjų Šviesa UAB", "111", 1], "žurnalas lieka");
+    W.setView("sanctions");
+    tiesa(/Tiekėjų Šviesa UAB/.test(D.getElementById("chkBody").textContent) && /pašalintas iš registro/.test(D.getElementById("chkBody").textContent) && /111/.test(D.getElementById("chkBody").textContent), "žurnale su pavadinimu");
+    lygu(W.buildChecksExport().checks[0].supplier, "Tiekėjų Šviesa UAB", "eksporte");
+    const naujas = St().addCheck({ supplierId: "B", checkedBy: "J", lists: ["ES"], result: "clean" });
+    lygu([naujas.supplierName, naujas.supplierCode], ["Kita UAB", "222"], "patikra iškart su tiekėjo pavadinimu");
+  });
+
+  await testas("V6: telefone registras, žurnalas, ESRS ir stebėjimas - kortelėmis: be horizontalaus slinkimo, antraštė paslėpta, reikšmė su pavadinimu", async () => {
+    valyk(); await modulis();
+    remas.style.width = "375px"; await lauk(120);
+    try {
+      W.rodykPavyzdi();
+      for (const [vaizdas, sel] of [["suppliers", "#supBody"], ["sanctions", "#chkBody"], ["esrs", "#esrsBody"], ["dashboard", "#monBody tbody"]]) {
+        W.setView(vaizdas); await lauk(60);
+        const tb = D.querySelector(sel), wrap = tb.closest(".table-wrap");
+        tiesa(wrap.scrollWidth <= wrap.clientWidth + 1, vaizdas + ": rėmelis slenka " + wrap.scrollWidth + " > " + wrap.clientWidth);
+        lygu(W.getComputedStyle(tb.querySelector("tr")).display, "block", vaizdas + ": eilutė - kortelė");
+        const th = wrap.querySelector("thead");
+        tiesa(th.getBoundingClientRect().height <= 1, vaizdas + ": antraštė paslėpta");
+        const td = tb.querySelector("td[data-l]");
+        tiesa(td && W.getComputedStyle(td, "::before").content.length > 2, vaizdas + ": langelis su pavadinimu");
+        tiesa(D.documentElement.scrollWidth <= D.documentElement.clientWidth + 1, vaizdas + ": puslapis slenka " + D.documentElement.scrollWidth);
+      }
+    } finally { remas.style.width = "1280px"; W.slepkPavyzdi(); await lauk(60); }
+    W.rodykPavyzdi(); W.setView("suppliers"); await lauk(60);
+    lygu(W.getComputedStyle(D.querySelector("#supBody tr")).display, "table-row", "1280 px - lentelė"); W.slepkPavyzdi();
+  });
+
+  await testas("V8: anglų kalba: šalys ir kategorijos angliškai, įrašoma neutrali reikšmė, senos lietuviškos atpažįstamos; DI gauna rodomą šalį", async () => {
+    irasai([tiekejas1("A", { country: "Vokietija", category: "Transformatoriai" }), tiekejas1("B", { country: "Germany", category: "HV" }), tiekejas1("C", { country: "Marsas", category: "Sena kategorija" })]);
+    await modulis();
+    lygu([W.salisRaktas("Vokietija"), W.salisRaktas("germany"), W.salisRaktas("DE"), W.salisRaktas("Marsas"), W.salisRaktas(""), W.kategorijosRaktas("Kita"), W.kategorijosRaktas("Other"), W.salisRaktas("Švedija")], ["DE", "DE", "DE", null, "", "OTHER", "OTHER", "SE"], "atpažinimas");
+    W.setLang("en");
+    try {
+      W.setView("suppliers");
+      const eil = [...D.querySelectorAll("#supBody tr")];
+      tiesa(eil.filter(r => /Germany/.test(r.textContent)).length === 2 && /Transformers/.test(D.getElementById("supBody").textContent) && /High-voltage equipment/.test(D.getElementById("supBody").textContent), "rodoma angliškai: " + D.getElementById("supBody").textContent.slice(0, 200));
+      tiesa(/Marsas/.test(D.getElementById("supBody").textContent) && /Sena kategorija/.test(D.getElementById("supBody").textContent), "nežinoma - kaip įrašyta");
+      lygu([...D.getElementById("fCountry").options].map(o => o.value), ["", "DE", "Marsas"], "filtras pagal neutralią reikšmę");
+      lauk1("fCountry", "DE"); W.renderSuppliers(); lygu(D.querySelectorAll("#supBody .t-name").length, 2, "abi formos viename filtre"); W.resetSupFilters();
+      W.openSupplierModal("A");
+      lygu([VAL("sf-country"), VAL("sf-cat")], ["DE", "TRANSFORMERS"], "sena reikšmė atpažinta formoje");
+      tiesa([...D.getElementById("sf-country").options].some(o => o.value === "LT" && o.textContent === "Lithuania") && [...D.getElementById("sf-cat").options].some(o => o.value === "OTHER" && o.textContent === "Other"), "pasirinkimai angliškai");
+      D.getElementById("sf-owner").value = "Anna"; W.saveSupplierForm();
+      lygu([St().getSupplier("A").country, St().getSupplier("A").category], ["DE", "TRANSFORMERS"], "įrašoma neutrali reikšmė");
+      W.openSupplierModal("C"); lygu([VAL("sf-country"), VAL("sf-cat")], ["Marsas", "Sena kategorija"], "nežinoma lieka"); W.closeModal();
+      let kunas = null;
+      const atstatyk = serveris({ "/api/esg/sanctions-assessment": (u, o) => { kunas = JSON.parse(o.body); return Promise.resolve(ATSAKYMAS({ level: "low", factors: [], actions: [] })); } });
+      try { W.openCheckModal("A"); await W.runAiAssessment(); lygu([kunas.lang, kunas.supplier.country, kunas.supplier.category], ["en", "Germany", "Transformers"], "DI užklausa");
+        tiesa(/The AI did not check the lists/.test(D.getElementById("aiResult").textContent), "EN sakinys");
+        tiesa([...D.querySelectorAll(".chk-list")].map(x => x.parentNode.textContent.trim()).join() === "EU,OFAC,UN,UK,National" && [...D.querySelectorAll(".chk-list")].map(x => x.value).join() === "ES,OFAC,JT,UK,Nacionalinis", "sąrašai: rodoma EN, įrašoma neutraliai");
+        tiesa(/Check date/.test(D.getElementById("modalShell").textContent), "forma angliškai");
+      } finally { atstatyk(); W.closeModal(); }
+      W.openImportModal(); tiesa(/Another organisation/.test(D.getElementById("im-buyer").textContent), "importas angliškai"); W.closeModal();
+    } finally { W.setLang("lt"); }
+    W.setView("suppliers");
+    tiesa(/Vokietija/.test(D.getElementById("supBody").textContent) && !/Germany/.test(D.getElementById("supBody").textContent), "grįžus į LT - lietuviškai");
+    let kunas = null;
+    const atstatyk = serveris({ "/api/esg/sanctions-assessment": (u, o) => { kunas = JSON.parse(o.body); return Promise.resolve(ATSAKYMAS({ level: "low", factors: [], actions: [] })); } });
+    try { const n = St().saveSupplier({ name: "UAB N", code: "9", country: "", category: "", sanctions: "clean", risk: "low", lastCheck: dienuPries(1) }); W.openCheckModal(n.id); await W.runAiAssessment(); lygu([kunas.supplier.country, kunas.supplier.category], ["", ""], "nežinoma šalis DI siunčiama tuščia (ne „Lietuva“)"); } finally { atstatyk(); W.closeModal(); }
+  });
+
+  await testas("V10, V11: PP-carbon nebežada patvirtinimo PP-ESG pusėje; DUK ir privatumo politika sako, kad importo paieška siunčia laikotarpį, vertę ir kodą (LT ir EN)", async () => {
+    const pc = await (await fetch("../PP-carbon/index.html")).text();
+    tiesa(pc.indexOf("PP-ESG pusėje juos dar reikia patvirtinti") < 0 && pc.indexOf("needs confirmation on the PP-ESG side") < 0, "senas teiginys");
+    tiesa(pc.indexOf("patvirtinimo žingsnio ten nėra") > 0 && pc.indexOf("there is no confirmation step there") > 0, "naujas tekstas");
+    const C = W.eval("INFO_CONTENT");
+    const lt = C.lt.details.faq[0].a, en = C.en.details.faq[0].a;
+    tiesa(/laikotarpio pradžia, mažiausia vertė ir perkančiojo subjekto kodas/.test(lt) && /data\.gov\.lt/.test(lt), "DUK LT: " + lt);
+    tiesa(/start of the period, the minimum value and the contracting entity's code/.test(en), "DUK EN: " + en);
+    tiesa(/laikotarpio pradžia/.test(C.lt.note) && /start of the period/.test(C.en.note), "pastaba");
+    const pr = await (await fetch("../privatumas.html")).text();
+    tiesa(/ESG ir atitikties įrankis, paspaudus „Ieškoti CVP IS“, į serverį siunčia laikotarpio pradžią, mažiausią vertę ir perkančiojo subjekto kodą/.test(pr), "politika LT");
+    tiesa(/The ESG and compliance tool, when you click “Search CVP IS”, sends the start of the period, the minimum value and the contracting entity's code/.test(pr), "politika EN");
+  });
+
+  await testas("V12: DI vertinimas išsaugomas prie patikros įrašo su žyma, jei registruojama iš to lango ir apie tą patį tiekėją; pakeitus tiekėją - ne", async () => {
+    irasai([tiekejas1("A"), tiekejas1("B")]);
+    await modulis();
+    const atstatyk = serveris({ "/api/esg/sanctions-assessment": () => Promise.resolve(ATSAKYMAS({ level: "medium", factors: ["Veiksnys."], actions: ["Patikrinti sąrašuose."] })) });
+    try {
+      W.openCheckModal("A"); await W.runAiAssessment();
+      tiesa(/bus išsaugotas prie jos įrašo/.test(D.getElementById("aiResult").textContent), "pasakoma");
+      D.getElementById("cf-by").value = "J"; D.querySelector(".chk-list").click(); lauk1("cf-result", "clean"); W.saveCheckForm();
+      const c = St().getChecksFor("A")[0];
+      lygu([c.di.level, c.di.factors, c.di.actions, !!c.di.generatedAt], ["medium", ["Veiksnys."], ["Patikrinti sąrašuose."], true], "išsaugota");
+      W.setView("sanctions");
+      const zym = D.querySelector("#chkBody [data-di]");
+      tiesa(zym && /DI atsakymas/.test(zym.textContent) && /Vidutinė/.test(zym.textContent), "žurnale su žyma");
+      W.openSupplierDrawer("A"); tiesa(D.querySelector("#modalShell [data-di]"), "kortelėje"); W.closeModal();
+      lygu(W.buildChecksExport().checks[0].ai.level, "medium", "eksporte");
+      W.openCheckModal("A"); await W.runAiAssessment();
+      lauk1("cf-sup", "B");
+      lygu([D.getElementById("aiResult").textContent.trim(), W.eval("AI_VERTINIMAS")], ["", null], "pakeitus tiekėją vertinimas dingsta");
+      D.getElementById("cf-by").value = "J"; D.querySelector(".chk-list").click(); lauk1("cf-result", "clean"); W.saveCheckForm();
+      tiesa(!St().getChecksFor("B")[0].di, "apie kitą tiekėją neišsaugota");
+      W.openCheckModal("A"); await W.runAiAssessment(); W.closeModal();
+      W.openCheckModal("A");
+      D.getElementById("cf-by").value = "J"; D.querySelector(".chk-list").click(); lauk1("cf-result", "clean"); W.saveCheckForm();
+      tiesa(!St().getChecksFor("A")[0].di, "uždarius langą vertinimas nebegalioja");
+    } finally { atstatyk(); }
+    // Atsakymas ateina pakeitus tiekėją ar uždarius langą: apie kitą tiekėją nerodomas ir neįsimenamas
+    let paleisk = null;
+    const atstatyk2 = serveris({ "/api/esg/sanctions-assessment": () => new Promise(res => { paleisk = () => res(ATSAKYMAS({ level: "high", factors: ["Veiksnys."], actions: [] })); }) });
+    try {
+      W.openCheckModal("A"); let vyksta = W.runAiAssessment();
+      tiesa(await laukTol(() => paleisk), "užklausa neišsiųsta");
+      lauk1("cf-sup", "B"); paleisk(); await vyksta;
+      lygu([D.getElementById("aiResult").textContent.trim(), W.eval("AI_VERTINIMAS")], ["", null], "atsakymas apie ankstesnį tiekėją");
+      W.closeModal(); paleisk = null;
+      W.openCheckModal("A"); vyksta = W.runAiAssessment();
+      tiesa(await laukTol(() => paleisk), "užklausa neišsiųsta");
+      W.closeModal(); paleisk(); await vyksta;
+      lygu(W.eval("AI_VERTINIMAS"), null, "uždarius langą");
+    } finally { atstatyk2(); }
+    W.openCheckModal(); await W.runAiAssessment();
+    tiesa(D.getElementById("cf-sup-klaida") && /Pirma pasirinkite tiekėją/.test(D.getElementById("cf-sup-klaida").textContent), "be tiekėjo DI nekviečiamas"); W.closeModal();
+  });
+
+  await testas("M3, M4, M5: ikonų mygtukai su pavadinimu; lietuviškame tekste be „write-once“, „due diligence“, „backend“, „MVP“; periodika - „modulio orientyras“", async () => {
+    irasai([tiekejas1("A")]);
+    await modulis(); W.setView("suppliers");
+    [...D.querySelectorAll("#supBody .td-veiksmai button")].forEach(b => tiesa(b.getAttribute("aria-label") && /UAB A/.test(b.getAttribute("aria-label")), "mygtukas: " + b.outerHTML.slice(0, 80)));
+    const I = W.eval("I18N"), C = W.eval("INFO_CONTENT");
+    const lt = JSON.stringify(I.lt) + JSON.stringify(C.lt);
+    ["write-once", "due diligence", "backend", "MVP"].forEach(v => tiesa(lt.indexOf(v) < 0, "LT: " + v));
+    tiesa(/modulio orientyras/.test(I.lt["mon.desc"]) && /module guideline/.test(I.en["mon.desc"]) && /modulio orientyras/.test(D.querySelector('[data-i18n="mon.desc"]').textContent), "periodika");
+    tiesa(/90 d\., vidutinė kas 180 d\., žema kas 365 d\./.test(I.lt["mon.desc"]), "skaičiai nekeisti");
   });
 }
 
@@ -330,6 +1078,7 @@ async function testaiStebejimas(){
     await testaiPuslapis();
     await testaiLogika();
     await testaiStebejimas();
+    await testaiPatikra1104();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

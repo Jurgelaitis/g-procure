@@ -1,6 +1,8 @@
 # PP-ESG - centrinis ESG ir atitikties variklis
 
-Modulis G-Procure ekosistemai. Viena vieta, kurioje gyvena trys neišskaidomos funkcijos: **tiekėjų rizikos registras**, **sankcijų patikros istorija** ir **ESRS duomenų centras**. Kiti moduliai (PP-TS, PP-PROTOCOLS, PP-NEGOTIATION ir kt.) naudoja šiuos duomenis per API.
+Modulis G-Procure ekosistemai. Viena vieta, kurioje gyvena trys neišskaidomos funkcijos: **tiekėjų rizikos registras**, **sankcijų patikros istorija** ir **ESRS duomenų centras**.
+
+> **Kas yra dabar (patikrinta 2026-11-04):** duomenys saugomi tik naršyklėje, kiti moduliai jų nenaudoja, iš PP-carbon gali būti perduoti ESRS taškai, būsena „Blokuotas“ kitų modulių nestabdo. API maršrutų kitiems moduliams nėra (žemiau aprašyti stub'ai pašalinti iš `backend-pp-esg-routes.js`). Tuščioje naršyklėje niekas neįrašoma: pavyzdys - tik mygtuku „Rodyti pavyzdį“ ir tik atmintyje. Žemiau - pradinis planas, kur jis nesutampa su šiuo sakiniu, galioja šis sakinys.
 
 ---
 
