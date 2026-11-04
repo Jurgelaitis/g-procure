@@ -37,6 +37,12 @@
  * paskelbta pirkimo dokumentuose. Sis modulis - pagalbine priemone, ne galutinis
  * verdiktas; sprendima priima komisija.
  *
+ * 2026-11-04 (naujo naudotojo patikra K4, D3): eilutė be kainos (ir, su opts.reikalautiVardo, be tiekėjo), su neigiama ar neperskaityta
+ * anglimi (of.klaida) į reitingą nepatenka: excluded su priezastis (iki tol tuščias pasiūlymas modelyje A laimėdavo, o modelyje B
+ * mažiausia kaina 0 visiems duodavo 0 balų, neigiama anglis laimėdavo). Kai PCF nepateikė niekas - anglis nežinoma (carbonT null,
+ * bePcf: true), ne 0 t: reitingas tik pagal kainą. Neatskleidęs gauna didžiausią KITŲ reikšmę, todėl neatskleidimas gali būti naudingas,
+ * jei tikroji didesnė - sąsaja tai sako (iki tol „nesuteikia pranašumo“).
+ *
  * Naudojimas:  <script src="evaluation.js"></script>  ->  window.GP_CARBON_EVAL
  * ========================================================================== */
 (function (root) {
@@ -86,55 +92,68 @@
     return o;
   }
 
+  // Kodel eilute negali buti vertinama: "kaina" (nera teigiamos kainos), "anglis" (neigiama ar neperskaityta), "vardas" (su opts.reikalautiVardo)
+  function netinkamumas(of, o) {
+    if (o.reikalautiVardo && !String(of.name == null ? "" : of.name).trim()) return "vardas";
+    if (of.klaida === "kaina" || !(num(of.bidPrice, 0) > 0)) return "kaina";
+    if (of.klaida === "anglis" || num(of.embodiedCarbon, 0) < 0 || num(of.annualOperational, 0) < 0) return "anglis";
+    return "";
+  }
+
   // --- Pagrindine funkcija: ivertina ir surikiuoja pasiulymus ---
   // offers: [{ id, name, bidPrice, embodiedCarbon, annualOperational?, lifetimeYears? }]
-  // Grazina: { model, opts, rows:[...], winner }
+  // Grazina: { model, opts, rows:[...], excluded:[{ id, name, priezastis }], bePcf, winner }
   //   row: { id, name, bidPrice, carbonKg, carbonT, carbonCost, adjustedPrice,
   //          score, priceScore, carbonScore, missingData, rank }
   function evaluate(offers, opts) {
     var o = mergeOpts(opts);
     offers = Array.isArray(offers) ? offers : [];
 
-    // 1) Pirmas perejimas: apskaiciuoti kiekvieno anglies kieki (kg).
-    var rows = offers.map(function (of) {
-      var carbonKg = lifecycleCarbonKg(of, o);
-      return {
-        id: of.id,
-        name: of.name,
-        bidPrice: num(of.bidPrice, 0),
-        carbonKg: carbonKg,           // gali buti null
-        missingData: carbonKg === null
-      };
+    // 1) Pirmas perejimas: netinkamos eilutes - i reitinga nepatenka (ir pasakoma); kitoms - anglies kiekis (kg).
+    var neitraukti = [];
+    var rows = [];
+    offers.forEach(function (of) {
+      var r = { id: of.id, name: of.name, bidPrice: num(of.bidPrice, 0) };
+      var priezastis = netinkamumas(of, o);
+      if (priezastis) {
+        r.excluded = true; r.priezastis = priezastis;
+        neitraukti.push(r);
+        return;
+      }
+      r.carbonKg = lifecycleCarbonKg(of, o);   // gali buti null
+      r.missingData = r.carbonKg === null;
+      rows.push(r);
     });
 
-    // 2) Worst-case trukstamiems duomenims (didziausia atskleista anglis).
+    // 2) Trukstami duomenys: didziausia KITU atskleista anglis (neatskleidimas nebutu apdovanojamas). Nieko neatskleidus - anglis nezinoma.
     var disclosed = rows.filter(function (r) { return r.carbonKg !== null; })
                         .map(function (r) { return r.carbonKg; });
-    var worstCase = disclosed.length ? Math.max.apply(null, disclosed) : 0;
+    var worstCase = disclosed.length ? Math.max.apply(null, disclosed) : null;
 
     var active = []; // pasiulymai, dalyvaujantys reitinge
     rows.forEach(function (r) {
       if (r.carbonKg === null) {
         if (o.missingDataPolicy === "exclude") {
           r.excluded = true;
+          r.priezastis = "pcf";
           r.carbonKgEff = null;
+          neitraukti.push(r);
         } else {
-          // worstCase: priskiriam didziausia anglies kieki, kad neatskleidimas
-          // nebutu apdovanojamas, ir pazymim.
           r.carbonKgEff = worstCase;
-          r.assumedWorstCase = true;
+          r.assumedWorstCase = worstCase !== null;
         }
       } else {
         r.carbonKgEff = r.carbonKg;
       }
       if (!r.excluded) active.push(r);
     });
+    var bePcf = worstCase === null;
 
-    // 3) Bendri dydziai abiems modeliams.
+    // 3) Bendri dydziai abiems modeliams. Anglis nezinoma - ne 0 t.
     active.forEach(function (r) {
-      r.carbonT = r.carbonKgEff / 1000;
-      r.carbonCost = round(r.carbonT * o.shadowPrice, 2);     // EUR
-      r.adjustedPrice = round(r.bidPrice + r.carbonCost, 2);  // EUR (modelis A)
+      r.carbonT = bePcf ? null : r.carbonKgEff / 1000;
+      r.carbonCost = bePcf ? null : round(r.carbonT * o.shadowPrice, 2);   // EUR
+      r.adjustedPrice = round(r.bidPrice + (r.carbonCost || 0), 2);         // EUR (modelis A)
     });
 
     if (o.model === "B") {
@@ -142,14 +161,14 @@
       var prices = active.map(function (r) { return r.bidPrice; });
       var carbons = active.map(function (r) { return r.carbonKgEff; });
       var minPrice = prices.length ? Math.min.apply(null, prices) : 0;
-      var minCarbon = carbons.length ? Math.min.apply(null, carbons) : 0;
+      var minCarbon = !bePcf && carbons.length ? Math.min.apply(null, carbons) : 0;
       active.forEach(function (r) {
-        r.priceScore = r.bidPrice > 0 ? round(minPrice / r.bidPrice * o.priceWeight, 3) : 0;
-        // Jei visi anglies = 0, anglies balas = pilnas svoris (nieks nediskriminuojamas).
-        r.carbonScore = r.carbonKgEff > 0
+        r.priceScore = round(minPrice / r.bidPrice * o.priceWeight, 3);
+        // Jei visi anglies = 0, anglies balas = pilnas svoris (nieks nediskriminuojamas). Anglis nezinoma - balo nera.
+        r.carbonScore = bePcf ? null : (r.carbonKgEff > 0
           ? round(minCarbon / r.carbonKgEff * o.carbonWeight, 3)
-          : o.carbonWeight;
-        r.score = round(r.priceScore + r.carbonScore, 3);
+          : o.carbonWeight);
+        r.score = round(r.priceScore + (r.carbonScore || 0), 3);
       });
       // Reitingas: daugiausia balu - geriausia.
       active.sort(function (a, b) { return b.score - a.score; });
@@ -164,7 +183,8 @@
       model: o.model,
       opts: o,
       rows: active,
-      excluded: rows.filter(function (r) { return r.excluded; }),
+      excluded: neitraukti,
+      bePcf: bePcf && active.length > 0,
       winner: active.length ? active[0] : null,
       worstCaseKg: worstCase
     };
@@ -176,6 +196,7 @@
   //   p = (priceB - priceA) / ((cA - cB)/1000)
   // Grazina luzio kaina EUR/t arba null, jei lygiagretus (anglis vienoda) arba neigiama.
   function crossoverPrice(a, b) {
+    if (a.carbonKgEff === null || b.carbonKgEff === null) return null;   // anglis nezinoma - luzio kainos nera
     var ca = num(a.carbonKgEff, a.carbonKg);
     var cb = num(b.carbonKgEff, b.carbonKg);
     var dC = (ca - cb) / 1000;

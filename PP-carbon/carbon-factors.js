@@ -9,7 +9,7 @@
  *
  * SVARBU - duomenu kokybe:
  *  - supplierProvided:true  => faktorius is gamintojo EPD (metodikoje "[UZKLAUSTI]");
- *                              kol nera EPD, naudojamas worst-case arba paliekamas tuscias.
+ *                              kol nera EPD, paliekamas tuscias ir i suma neitraukiamas.
  *  - review:"..."           => faktorius dar nesusistovejes, tikrinti su metodikos savininku.
  *  - Konservatyvumo taisykle (is metodikos): jei tikslumas mazas, rinktis prielaida,
  *    duodancia DIDESNI SESD.
@@ -25,7 +25,7 @@
       methodology: "Litgrid projektų ŠESD vertinimo praktika (2025 m.; ne oficiali patvirtinta metodika)",
       standard: "GHG Protocol; EN 15804 (A1-A3)",
       unitDefault: "kg CO2e / vienetas",
-      note: "MVP pamatas. Faktorių šaltinius ir vienetus patvirtinti su Aplinkos sk."
+      note: "Faktorių šaltinius ir vienetus dar tikslina už ŠESD vertinimą atsakingi specialistai."
     },
 
     // --- 1. PROJEKTAVIMO / PLANAVIMO ETAPAS ---
@@ -40,19 +40,19 @@
     lineEquipment: [
       { id:"pole_concrete", label:"Gelžbetoninės atramos", value:314, unit:"kg CO2e/vnt", basis:"A1-A3" },
       { id:"pole_steel",    label:"Metalinės atramos / konstrukcijos", value:1.85, unit:"kg CO2e/kg", basis:"Plienas A1-A3" },
-      { id:"acsr",          label:"Oro linijų trosai (ACSR)", value:6.76, unit:"kg CO2e/kg", basis:"Al + plienas", review:"Vienetas km/kg/m svyruoja tarp lapų - patvirtinti" },
+      { id:"acsr",          label:"Oro linijų trosai (ACSR)", value:6.76, unit:"kg CO2e/kg", basis:"Al + plienas", review:"Šaltinio duomenyse vienetas skiriasi (km, kg, m) - tikslinama." },
       // ZTSK - zaibosaugos trosai su sviesolaidiniu kabeliu. Faktoriai nesusistoveje.
-      { id:"ztsk_12f", label:"ZTSK 12F", value:297.35, unit:"kg CO2e/km", basis:"Žaibosaugos trosas", review:"Y lape 297.35/km, X lape 6.3/m - vienetai nesutampa" },
-      { id:"ztsk_24f", label:"ZTSK 24F", value:356.27, unit:"kg CO2e/km", review:"Metodikoje pažymėta: ištrinti ir pakoreguoti" },
-      { id:"ztsk_48f", label:"ZTSK 48F", value:463.41, unit:"kg CO2e/km", review:"Patvirtinti" },
-      { id:"ztsk_72f", label:"ZTSK 72F", value:581.78, unit:"kg CO2e/km", review:"Patvirtinti" },
-      { id:"ztsk_96f", label:"ZTSK 96F", value:825.67, unit:"kg CO2e/km", review:"Patvirtinti" },
+      { id:"ztsk_12f", label:"ZTSK 12F", value:297.35, unit:"kg CO2e/km", basis:"Žaibosaugos trosas", review:"Šaltinio duomenyse vienetai nesutampa (297,35 kg CO2e/km ir 6,3 kg CO2e/m) - tikslinama." },
+      { id:"ztsk_24f", label:"ZTSK 24F", value:356.27, unit:"kg CO2e/km", review:"Šaltinio duomenyse reikšmė pažymėta kaip taisytina - tikslinama." },
+      { id:"ztsk_48f", label:"ZTSK 48F", value:463.41, unit:"kg CO2e/km", review:"Reikšmė dar nepatvirtinta - tikslinama." },
+      { id:"ztsk_72f", label:"ZTSK 72F", value:581.78, unit:"kg CO2e/km", review:"Reikšmė dar nepatvirtinta - tikslinama." },
+      { id:"ztsk_96f", label:"ZTSK 96F", value:825.67, unit:"kg CO2e/km", review:"Reikšmė dar nepatvirtinta - tikslinama." },
       { id:"fo_12f", label:"Požeminis šviesolaidinis 12F", value:589.42, unit:"kg CO2e/km" },
       { id:"fo_24f", label:"Požeminis šviesolaidinis 24F", value:655.96, unit:"kg CO2e/km" },
       { id:"fo_48f", label:"Požeminis šviesolaidinis 48F", value:832.79, unit:"kg CO2e/km" },
       { id:"fo_96f", label:"Požeminis šviesolaidinis 96F", value:1180.71, unit:"kg CO2e/km" },
       { id:"cable_power", label:"Požeminis energijos kabelis", value:980, unit:"kg CO2e/km" },
-      { id:"insulators_line", label:"Izoliatoriai (keramika/polimerai)", value:1.0, unit:"kg CO2e/kg", note:"Max faktorius (diapazonas 0.3-1.0)", review:"Konservatyvi viršutinė riba" }
+      { id:"insulators_line", label:"Izoliatoriai (keramika/polimerai)", value:1.0, unit:"kg CO2e/kg", note:"Didžiausias faktorius (diapazonas 0,3-1,0)", review:"Naudojama viršutinė diapazono riba - tikslinama." }
     ],
 
     // --- 2.2 PASTOCIU PAGRINDINE IRANGA ---
@@ -88,13 +88,14 @@
 
     // --- 3. TRANSPORTAVIMAS (medziagu pervezimas) ---
     // DEMESIO: sios reiksmes atitinka zinomas g CO2e/(t*km) reiksmes (kelias ~137, gelez. ~24,
-    // juru ~7, oro ~1036). Metodikos skaiciuokleje sumos eilute tikisi kg - galima vienetu
-    // neatitiktis (reiketu /1000). Patvirtinti su metodikos savininku pries naudojant verslui.
+    // juru ~7, oro ~1036), o suma skaiciuojama kg - galima vienetu neatitiktis (reiketu /1000).
+    // Reiksmes nekeiciamos (naudotojo sprendimas 2026-11-04): modulis apie tai ispeja ir rodo suma be
+    // transporto. Nusprendus dalinti - vienintele vieta index.html TRANSPORTO_DALIKLIS.
     transport: [
-      { id:"truck", label:"Sunkvežimiais", value:137, unit:"g CO2e/(t*km)?", basis:"Kelias", review:"Vienetas g vs kg - patikrinti, gali reikėti /1000" },
-      { id:"train", label:"Traukiniais", value:24, unit:"g CO2e/(t*km)?", basis:"Geležinkelis", review:"Vienetas g vs kg" },
-      { id:"ship", label:"Laivais", value:7, unit:"g CO2e/(t*km)?", basis:"Jūrų transportas", review:"Vienetas g vs kg" },
-      { id:"plane", label:"Lėktuvais", value:1036, unit:"g CO2e/(t*km)?", basis:"Oro transportas", review:"Vienetas g vs kg" }
+      { id:"truck", label:"Sunkvežimiais", value:137, unit:"g CO2e/(t*km)?", basis:"Kelias", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." },
+      { id:"train", label:"Traukiniais", value:24, unit:"g CO2e/(t*km)?", basis:"Geležinkelis", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." },
+      { id:"ship", label:"Laivais", value:7, unit:"g CO2e/(t*km)?", basis:"Jūrų transportas", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." },
+      { id:"plane", label:"Lėktuvais", value:1036, unit:"g CO2e/(t*km)?", basis:"Oro transportas", review:"Vienetas tikslinamas: jei reikšmė yra g CO2e/(t·km), eilutė iki 1000 kartų per didelė." }
     ],
 
     // --- 4. STATYBOS DARBU ETAPAS ---

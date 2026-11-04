@@ -35,6 +35,10 @@
  * Sis branduolys NELIECIA localStorage tiesiogiai testuojamumui - jam paduodama
  * "storage" abstrakcija (getItem/setItem). UI paduoda tikra window.localStorage.
  *
+ * 2026-11-04 (naujo naudotojo patikra K7, D8, V5): pavadinimas pagal tai, kas sudėta (visos įvestos skaičiuoklės eilutės, ne „A1-A3“;
+ * žyma „Scope 3“ ir ESRS kodas nekeisti - naudotojo klausimas); padengimo numatytosios reikšmės nėra - jį įrašo žmogus, 0-100
+ * (iki tol tuščias ir 150 tapdavo 100 % be pranešimo); esamasTaskas() - kad prieš perrašant būtų galima paklausti.
+ *
  * Naudojimas: <script src="esg-export.js"></script> -> window.GP_ESG_EXPORT
  * ========================================================================== */
 (function (root) {
@@ -58,15 +62,14 @@
   // Suformuoja ESRS duomenu taska is pp-carbon duomenu.
   //  totalKg    - bendra projekto SESD (kg CO2e)
   //  opts:
-  //    coverage    - kiek % projekto emisiju padengta (0-100), numatyta 100
+  //    coverage    - kiek % projekto emisiju padengta (0-100); numatytosios reiksmes nera - iraso zmogus
   //    projectName - itraukiama i "name", kad PP-ESG matytu, kurio projekto
   //  Grazina taska BE id (id priskiria PP-ESG).
   function buildEsrsPoint(totalKg, opts) {
     opts = opts || {};
-    var cov = opts.coverage === undefined ? 100 : num(opts.coverage, 100);
-    if (cov < 0) cov = 0; if (cov > 100) cov = 100;
+    var cov = padengimas(opts.coverage);
     // 2026-10-17: pavadinimas su lietuviškomis raidėmis (iki tol „pirkimu anglies pedsakas“); taškas atpažįstamas pagal source / sourceRef, ne pavadinimą.
-    var name = "Scope 3 emisijos - pirkimų anglies pėdsakas (A1-A3)";
+    var name = "Scope 3 emisijos - projekto ŠESD (visos įvestos skaičiuoklės eilutės)";
     if (opts.projectName) name += " · " + String(opts.projectName);
     return {
       name: name,
@@ -78,6 +81,13 @@
       sourceRef: SOURCE_REF,
       date: (opts.date ? new Date(opts.date) : new Date()).toISOString()
     };
+  }
+
+  // Padengimas - tik skaičius nuo 0 iki 100; kitaip null (ne numatytasis 100)
+  function padengimas(x) {
+    if (x === null || x === undefined || x === "") return null;
+    var n = Number(x);
+    return isFinite(n) && n >= 0 && n <= 100 ? n : null;
   }
 
   // Ar tai musu (PP-CARBON) modulinis taskas?
@@ -132,9 +142,20 @@
     return { action: action, list: list };
   }
 
+  // Esamas PP-CARBON taškas (kad prieš perrašant būtų galima paklausti). Neperskaitoma - null: klaidą pasakys upsertToEsg.
+  function esamasTaskas(storage) {
+    try {
+      var list = JSON.parse(storage.getItem(ESG_KEY) || "[]");
+      if (!Array.isArray(list)) return null;
+      for (var i = 0; i < list.length; i++) if (isOurPoint(list[i])) return list[i];
+    } catch (e) { /* neperskaitoma */ }
+    return null;
+  }
+
   // Patogumo funkcija: is bendra SESD tiesiai i PP-ESG.
   function exportTotal(storage, totalKg, opts) {
     var point = buildEsrsPoint(totalKg, opts);
+    if (point.coverage === null) return { point: point, error: "Padengimas turi būti skaičius nuo 0 iki 100 %" };
     var res = upsertToEsg(storage, point);
     return Object.assign({ point: point }, res);
   }
@@ -146,6 +167,8 @@
     buildEsrsPoint: buildEsrsPoint,
     isOurPoint: isOurPoint,
     upsertToEsg: upsertToEsg,
+    esamasTaskas: esamasTaskas,
+    padengimas: padengimas,
     exportTotal: exportTotal
   };
 })(typeof window !== "undefined" ? window : this);
