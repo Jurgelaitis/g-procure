@@ -354,6 +354,8 @@
       for (var b = a + 1; b < aktyvus.length; b++) {
         var x = aktyvus[a], y = aktyvus[b];
         if (x.keiciamasAktas.eTarId !== y.keiciamasAktas.eTarId) continue;
+        // Skirtingi to paties akto pakeitimai, kurie susieti vienas su kitu (pvz. VPT 1S-97 ir 1S-204), - ne prieštaravimas
+        if ((x.susije || []).indexOf(y.id) !== -1 || (y.susije || []).indexOf(x.id) !== -1) continue;
         var bendra = x.temos.some(function (t) { return y.temos.indexOf(t) !== -1; });
         if (!bendra) continue;
         var vx = (x.veiksmas || "").trim(), vy = (y.veiksmas || "").trim();
