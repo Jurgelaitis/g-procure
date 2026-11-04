@@ -48,7 +48,7 @@ Paleidžiama atidarius per vietinį serverį repozitorijos šaknyje arba gyvai.<
 <script src="../shared/testu-apsauga.js"></script>
 <script>
 // Skaičiuoklės testai rašo modulio saugyklą - tikri naudotojo duomenys įsimenami ir atkuriami
-const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k === "pp_carbon_data" || k === "ppcarbon.lang" || k === "gprocure.infoPanel.pp-carbon");
+const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k === "pp_carbon_data" || k === "ppcarbon.lang" || k === "gprocure.infoPanel.pp-carbon" || k === "gprocure.infoPanel.pp-carbon-epd" || k === "ppesg.esrs");
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
 function grupe(pav){
@@ -218,10 +218,11 @@ async function testaiEpd(){
       tiesa(/per G-Procure serverį \(api\.g-procure\.com\) į Claude API/.test(d.getElementById("vietine").textContent), "pastaba: " + d.getElementById("vietine").textContent);
       const s = epdSekimas(w);
       d.getElementById("prodName").value = "Gelžbetoninė atrama";
+      d.getElementById("unit").value = "kg CO2e/t";
       await w.analyze();
       lygu([s.kvietimai.length, s.fetch.filter(x => /epd-api/.test(x[0])).length], [1, 0], "kelias");
       const k = s.kvietimai[0];
-      lygu([k.system === w.GP_EPD_EXTRACT.systemPrompt(), k.pdfBase64, k.maxTokens, /Gelžbetoninė atrama/.test(k.userMessage)], [true, "JVBERi0xLjQK", 1500, true], "užklausa");
+      lygu([k.system === w.GP_EPD_EXTRACT.systemPrompt(), k.pdfBase64, k.maxTokens, /Gelžbetoninė atrama/.test(k.userMessage)], [true, "JVBERi0xLjQK", w.GP_EPD_EXTRACT.MAX_TOKENS, true], "užklausa");
       tiesa(/7,5 kg CO2e|7.5 kg CO2e/.test(d.getElementById("result").textContent), "rezultatas: " + d.getElementById("result").textContent.slice(0, 200));
       s.atsakymas = { ok: false, status: 413, error: "Failas per didelis serveriui." };
       await w.analyze();
@@ -235,6 +236,7 @@ async function testaiEpd(){
     const { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 1280);
     try {
       const w = f.contentWindow, s = epdSekimas(w);
+      d.getElementById("unit").value = "kg CO2e/t";
       lygu([w.VIETINE, d.getElementById("patikraLaukas").hidden, d.getElementById("vietine").hidden], [false, false, true], "sąsaja");
       w.turnstile = { getResponse: () => "", reset: () => {} };
       await w.analyze();
@@ -315,6 +317,7 @@ async function testaiBusenos(){
     let atsisiusta = null;
     LW.HTMLAnchorElement.prototype.click = function(){ atsisiusta = this.download; };
     try {
+      LW.eval("Store").updateEvalOffers(l => { l.length = 0; l.push({ id: "OF-W", name: "UAB W", bidPrice: "100", embodiedCarbon: "1" }); });
       LW.previewReport();
       const perziura = lt.d.getElementById("reportPreview").innerHTML;
       tiesa(perziura.length > 100, "peržiūra neparodyta");
@@ -404,9 +407,9 @@ async function testaiSkaiciavimai(){
     lygu(visi.map(s => [s, TAX_ASCII.exec(s)]).filter(p => p[1]).map(p => p[0]), [], "taksonomijos tekstai be lietuviškų raidžių");
     const m = T.buildTaxonomyReport("4.9", {}, {});
     lygu([m.sections[0].heading, m.sections[1].tables[0].columns, m.sections[3].tables[0].rows[0][0]],
-      ["1. Reikšmingas prisidėjimas: Klimato kaitos švelninimas", ["Tikslas", "Ką vertinti", "Būsena", "Nuoroda"], "Projekto ŠESD (A1-A3)"], "antraštė, stulpeliai, rodiklis");
+      ["1. Svarus prisidėjimas: Klimato kaitos švelninimas", ["Tikslas", "Ką vertinti", "Būsena", "Nuoroda"], "Projekto ŠESD (įvestos skaičiuoklės eilutės)"], "antraštė, stulpeliai, rodiklis");
     W.renderTaxonomy("4.9");
-    lygu(P.d.querySelectorAll("#taxPreview select.tax-status").length, 7, "būsenų pasirinkimai (reikšmingas prisidėjimas, 5 DNSH, minimalios apsaugos priemonės)");
+    lygu(P.d.querySelectorAll("#taxPreview select.tax-status").length, 7, "būsenų pasirinkimai (svarus prisidėjimas, 5 DNSH, būtiniausios apsaugos priemonės)");
     const F_ASCII = /Gelzbeton|Metalines|liniju|lapu |Zaibos|pazymet|istrint|Pozemin|sviesolaid|virsutine|zinoma|mase$|EPD is |synolaid|Akumuliatoriu|zalesnes|Suntinis|irengin|Armatura|armatura|Plienines|Pastotes|apimti$|Mikroprocesorines|reles$|iranga|Sunkvezim|reiketi|Gelezinkel|Juru|Lektuv|Elektrine |Dyzelgeneratoriu|stoteles|statybvieteje|duju|nutekejim|nekeicia|nerasyti|reikmes|zmogus|Kompiuteriu|rangovu|keliones|Faktoriu|saltin/;
     const fTekstai = [F.meta.note].concat(...Object.keys(F).filter(g => Array.isArray(F[g])).map(g => F[g].map(it => [it.label, it.note, it.basis, it.review, it.unit].filter(Boolean))).flat());
     lygu(fTekstai.filter(s => F_ASCII.test(s)), [], "faktorių bibliotekos tekstai be lietuviškų raidžių");
@@ -415,11 +418,11 @@ async function testaiSkaiciavimai(){
   await testas("ŠESD istorija: senas pavadinimas be diakritikų - ta pati pozicija (rodomas dabartinis, pokytis skaičiuojamas), saugykla nekeičiama", async ()=>{
     St.getEpdHistory().map(e => e.id).forEach(id => St.deleteEpdHistory(id));
     St.appendEpdHistory({ date: "2026-01-10T00:00:00.000Z", itemLabel: "Akumuliatoriu baterijos", unit: "kg CO2e/vnt", value: 100, manufacturer: "A", fileName: "a.pdf" });
-    St.appendEpdHistory({ date: "2026-05-10T00:00:00.000Z", itemLabel: "Akumuliatorių baterijos", unit: "kg CO2e/vnt", value: 150, manufacturer: "B", fileName: "b.pdf" });
+    St.appendEpdHistory({ date: "2026-05-10T00:00:00.000Z", itemLabel: "Akumuliatorių baterijos", unit: "kg CO2e/vnt", value: 150, manufacturer: "A", fileName: "b.pdf" });
     St.appendEpdHistory({ date: "2026-03-10T00:00:00.000Z", itemLabel: "Kita pozicija", unit: "kg CO2e/vnt", value: 5, manufacturer: "", fileName: "" });
     W.renderEpdHistory();
-    lygu([...P.d.querySelectorAll("#epdHistoryBox tbody tr")].map(tr => [tr.cells[1].textContent, tr.cells[3].textContent]),
-      [["Akumuliatorių baterijos", ""], ["Akumuliatorių baterijos", "+50.0%"], ["Kita pozicija", ""]], "istorijos eilutės");
+    lygu([...P.d.querySelectorAll("#epdHistoryBox tbody tr")].map(tr => [tr.cells[1].textContent, tr.cells[3].textContent.replace(/\u00A0/g, " ")]),
+      [["Akumuliatorių baterijos", ""], ["Akumuliatorių baterijos", "+50,0 %"], ["Kita pozicija", ""]], "istorijos eilutės");
     lygu(St.getEpdHistory().map(e => e.itemLabel), ["Akumuliatoriu baterijos", "Akumuliatorių baterijos", "Kita pozicija"], "saugykla");
     St.getEpdHistory().map(e => e.id).forEach(id => St.deleteEpdHistory(id));
   });
@@ -457,13 +460,13 @@ async function testaiEpdIstrauka(){
     await testas("PP-ESG eksportas: taškas tonomis (eilutė, 3 skaitmenys), padengimas 0-100; įterpiama ar atnaujinama išlaikant PP-ESG id, kiti taškai nepaliečiami; sugadintas ar ne sąrašo raktas NEperrašomas", async ()=>{
       const G = f.contentWindow.GP_ESG_EXPORT;
       const st = (v) => { const m = { "ppesg.esrs": v }; return { getItem: k => (k in m ? m[k] : null), setItem: (k, x) => { m[k] = x; }, m }; };
-      const p = G.buildEsrsPoint(1234.5, { projectName: "Pastotė", coverage: 150, date: "2026-09-28T00:00:00Z" });
-      lygu([p.value, p.unit, p.esrs, p.coverage, p.source, p.sourceRef, /Pastotė$/.test(p.name), p.date], ["1.235", "tCO2e", "E1-6", 100, "module", "PP-CARBON", true, "2026-09-28T00:00:00.000Z"], "taškas");
-      lygu([G.buildEsrsPoint(1, { coverage: -5 }).coverage, G.buildEsrsPoint(1, {}).coverage], [0, 100], "padengimas");
+      const p = G.buildEsrsPoint(1234.5, { projectName: "Pastotė", coverage: 80, date: "2026-09-28T00:00:00Z" });
+      lygu([p.value, p.unit, p.esrs, p.coverage, p.source, p.sourceRef, /Pastotė$/.test(p.name), p.date], ["1.235", "tCO2e", "E1-6", 80, "module", "PP-CARBON", true, "2026-09-28T00:00:00.000Z"], "taškas");
+      lygu([G.buildEsrsPoint(1, { coverage: -5 }).coverage, G.buildEsrsPoint(1, {}).coverage, G.buildEsrsPoint(1, { coverage: 100 }).coverage], [null, null, 100], "padengimas");
       const kitas = { id: "DP-2", name: "Kitas", source: "manual" }, a = st(JSON.stringify([kitas]));
       lygu(G.upsertToEsg(a, p).action, "inserted", "įterpta");
       const sen = JSON.parse(a.m["ppesg.esrs"]); sen[1].id = "DP-9"; a.m["ppesg.esrs"] = JSON.stringify(sen);
-      const r2 = G.upsertToEsg(a, G.buildEsrsPoint(2000, {}));
+      const r2 = G.upsertToEsg(a, G.buildEsrsPoint(2000, { coverage: 50 }));
       lygu([r2.action, r2.list.length, r2.list[0], r2.list[1].id, r2.list[1].value], ["updated", 2, kitas, "DP-9", "2"], "atnaujinta");
       for (const blogas of ["{sugadinta", '{"schema":2,"taskai":[]}']) {
         const b = st(blogas), r = G.upsertToEsg(b, p);
@@ -489,6 +492,948 @@ async function testaiEpdIstrauka(){
   } finally { f.remove(); }
 }
 
+/* ============================================================================
+   Patikra 2026-11-04: naujo naudotojo radiniai K1-K10, D1-D8, V1-V10, M1-M5. Serveris ir DI - netikri; duomenys saugomi ir atkuriami (APSAUGA).
+   ========================================================================== */
+// Faktorių reikšmės ir vienetai NEKEISTI (naudotojo sprendimas 2026-10-07): keisti tik suderinus - tada ir šią eilutę
+const FAKTORIAI_NEKEISTI = "transport_diesel=2.513|kg CO2e/l;transport_petrol=2.084|kg CO2e/l;transport_ev=0.56791|kg CO2e/kWh;computers=0.015|kg CO2e/(val x žmogus);pole_concrete=314|kg CO2e/vnt;pole_steel=1.85|kg CO2e/kg;acsr=6.76|kg CO2e/kg;ztsk_12f=297.35|kg CO2e/km;ztsk_24f=356.27|kg CO2e/km;ztsk_48f=463.41|kg CO2e/km;ztsk_72f=581.78|kg CO2e/km;ztsk_96f=825.67|kg CO2e/km;fo_12f=589.42|kg CO2e/km;fo_24f=655.96|kg CO2e/km;fo_48f=832.79|kg CO2e/km;fo_96f=1180.71|kg CO2e/km;cable_power=980|kg CO2e/km;insulators_line=1|kg CO2e/kg;transformer_cu=3.524|kg CO2e/kg Cu;transformer_steel=1.85|kg CO2e/kg plieno;breaker=null|kg CO2e/vnt;disconnector=null|kg CO2e/vnt;meas_transformer=null|kg CO2e/vnt;busbar_al=8.24|kg CO2e/kg Al;battery=null|kg CO2e/vnt;shunt_reactor=3.524|kg CO2e/kg Cu;cells_10kv=null|kg CO2e/vnt;gis_110=null|kg CO2e/vnt;concrete=288|kg CO2e/m3;rebar=0.507|kg CO2e/kg;steel_struct=1.85|kg CO2e/kg;aluminium=8.24|kg CO2e/kg;copper=3.524|kg CO2e/kg;pvp=null|kg CO2e/vnt;ac_units=null|kg CO2e/vnt;relays=null|kg CO2e/vnt;control_meas=null|kg CO2e/vnt;truck=137|g CO2e/(t*km)?;train=24|g CO2e/(t*km)?;ship=7|g CO2e/(t*km)?;plane=1036|g CO2e/(t*km)?;cw_diesel=2.513|kg CO2e/l;cw_petrol=2.084|kg CO2e/l;cw_ev=0.56791|kg CO2e/kWh;cw_genset=2.513|kg CO2e/l;cw_grid=0.56791|kg CO2e/kWh;op_diesel=2.513|kg CO2e/l;op_petrol=2.084|kg CO2e/l;op_sf6=24300|kg CO2e/kg;op_electricity=0.56791|kg CO2e/kWh";
+/* Word dalys be bibliotekų: ZIP centrinis katalogas -> atitinkantys failai -> DecompressionStream (kaip PP-ts testuose) */
+async function docxDalys(blob, re) {
+  const b = new Uint8Array(await blob.arrayBuffer()), dv = new DataView(b.buffer);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  tiesa(eocd >= 0, "ne ZIP failas");
+  let p = dv.getUint32(eocd + 16, true), out = "";
+  for (let k = 0, n = dv.getUint16(eocd + 10, true); k < n; k++) {
+    const metodas = dv.getUint16(p + 10, true), dydis = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+    if (re.test(new TextDecoder().decode(b.subarray(p + 46, p + 46 + nl)))) {
+      const pr = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true), d = b.subarray(pr, pr + dydis);
+      out += metodas === 0 ? new TextDecoder().decode(d) : await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+    }
+    p += 46 + nl + el + cl;
+  }
+  return out;
+}
+/* Mažiausias PDF su tekstu (kaip shared/testai.html) */
+function pdfIsEiluciu(eilutes){
+  const es = s => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const turinys = "BT /F1 8 Tf 30 820 Td 11 TL " + eilutes.map(e => "(" + es(e) + ") Tj T*").join(" ") + " ET";
+  const obj = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    "<< /Length " + turinys.length + " >>\nstream\n" + turinys + "\nendstream", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
+  let s = "%PDF-1.4\n", pos = [];
+  obj.forEach((o, i) => { pos.push(s.length); s += (i + 1) + " 0 obj\n" + o + "\nendobj\n"; });
+  const xref = s.length;
+  s += "xref\n0 " + (obj.length + 1) + "\n0000000000 65535 f \n" + pos.map(p => String(p).padStart(10, "0") + " 00000 n \n").join("");
+  s += "trailer\n<< /Size " + (obj.length + 1) + " /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n";
+  return new Uint8Array([...s].map(c => c.charCodeAt(0)));
+}
+const BE_TARPU = s => String(s).replace(/[\s\u00A0\u202F]/g, "");
+
+async function testaiPatikra1104(){
+  dabartine = grupe("Patikra 2026-11-04: naujo naudotojo radiniai");
+  const svarus = async (kalba, plotis) => { localStorage.removeItem("pp_carbon_data"); localStorage.removeItem("ppesg.esrs"); return puslapis("index.html?lang=" + (kalba || "lt"), plotis || 1280); };
+  const kiekis = (d, raktas, reiksme) => { const i = d.querySelector('input.qty-input[data-key="' + raktas + '"]'); tiesa(i, "nėra lauko " + raktas); i.value = reiksme; i.dispatchEvent(new Event("input", { bubbles: true })); return i; };
+  const rastas = async (W, model) => W.docx.Packer.toBlob(W.buildReportDoc(model));
+  const tekstaiModelio = m => [m.title, m.disclaimer].concat(m.meta.map(x => x.label + " " + x.value), ...m.sections.map(sk => [sk.heading].concat(sk.paragraphs, ...sk.tables.map(t => t.columns.concat(...t.rows))))).join(" | ");
+
+  await testas("K1 Transportas: reikšmės nepakeistos (137 × 50 000 = 6 850 000 kg), bet įvedus kiekį - įspėjimas skyriuje, suvestinėje, abiejuose Word pjūviuose ir prie PP-ESG, su suma be transporto; be transporto kiekio - nieko", async ()=>{
+    const { f, d } = await svarus();
+    try {
+      const W = f.contentWindow;
+      kiekis(d, "construction.concrete", "100");
+      lygu([d.getElementById("trIspejimas").textContent, /1000 kartų/.test(d.getElementById("sumPastabos").textContent), W.buildReportData().transportKg], ["", false, 0], "be transporto");
+      W.renderReports();
+      lygu(d.getElementById("esgNote").textContent, "", "PP-ESG be transporto");
+      kiekis(d, "transport.truck", "50000");
+      const dat = W.buildReportData();
+      lygu([dat.transportKg, dat.totalKg, dat.transportoNepatvirtinta], [6850000, 6878800, true], "suma");
+      for (const [pav, el] of [["skyriuje", d.getElementById("trIspejimas")], ["suvestinėje", d.getElementById("sumPastabos")]]) {
+        const x = el.textContent;
+        tiesa(/g CO₂e\/\(t·km\)/.test(x) && /iki 1000 kartų per didelė/.test(x) && /už ŠESD vertinimą atsakingais specialistais/.test(x), pav + ": " + x);
+        tiesa(BE_TARPU(x).includes("Sumabetransporto:28,800tCO₂e"), pav + " suma be transporto: " + x);
+      }
+      for (const aud of ["internal", "public"]) {
+        const x = tekstaiModelio(W.GP_REPORTS.build(aud, dat));
+        tiesa(/iki 1000 kartų per didelė/.test(x) && /suma be transporto - 28,8 t CO2e/.test(x), aud + ": " + x.slice(0, 500));
+      }
+      W.renderReports();
+      tiesa(/iki 1000 kartų per didelė/.test(d.getElementById("esgNote").textContent), "prie PP-ESG: " + d.getElementById("esgNote").textContent);
+      const F = W.GP_CARBON_FACTORS, sar = [];
+      Object.keys(F).filter(g => Array.isArray(F[g])).forEach(g => F[g].forEach(it => sar.push(it.id + "=" + it.value + "|" + it.unit)));
+      lygu(sar.join(";"), FAKTORIAI_NEKEISTI, "faktorių reikšmės ir vienetai");
+      tiesa(!/metodikos savinink/i.test(await (await fetch("index.html")).text()), "„metodikos savininkas“ nevartojamas (CLAUDE.md)");
+    } finally { f.remove(); }
+  });
+
+  await testas("K1 Vienintelė vieta: TRANSPORTO_DALIKLIS - pakeitus į 1000 eilutė sumažėja visur ir įspėjimai dingsta (tikrinama šaltinyje: suma tik per projektoSuma)", async ()=>{
+    const src = await (await fetch("index.html")).text();
+    lygu(src.split("\n").filter(l => /TRANSPORTO_DALIKLIS/.test(l) && !/^\s*(\/\/|-|\*|VIENINTEL)/.test(l)).length, 3, "konstanta, nepatvirtinta, eilutė");
+    tiesa(/const TRANSPORTO_DALIKLIS = 1;/.test(src) && /transportoNepatvirtinta = \(\) => TRANSPORTO_DALIKLIS === 1/.test(src), "šaltinis");
+    tiesa(/qty \* factor \/ \(sec\.group === "transport" \? TRANSPORTO_DALIKLIS : 1\)/.test(src), "eilutės skaičiavimas");
+    lygu((src.match(/qty \* factor/g) || []).length, 1, "sumos skaičiuojamos vienoje vietoje");
+  });
+
+  await testas("K3 Pavyzdys: tuščioje naršyklėje saugykloje ir ataskaitose nieko nėra (be „Laimėtojo“); „Rodyti pavyzdį“ - su žyma „Demonstracinis“, neišsaugomas, į Word nepatenka; lygiai toks senas įrašas - neįvestas, pakeistas - nekeičiamas", async ()=>{
+    let { f, d } = await svarus();
+    try {
+      const W = f.contentWindow;
+      W.setView("bids"); W.setView("reports");
+      lygu(JSON.parse(localStorage.getItem("pp_carbon_data") || "{}").evalOffers, undefined, "saugykla");
+      tiesa(d.getElementById("evTuscia") && !/Laimėtojas/.test(d.getElementById("bidsBody").textContent), "tuščia būsena");
+      tiesa(W.GP_REPORTS.tuscia(W.buildReportData()), "ataskaitos duomenys tušti");
+      W.previewReport();
+      tiesa(d.getElementById("repTuscia") && !/Tiekėjas A/.test(d.getElementById("reportPreview").textContent), "peržiūra");
+      d.getElementById("evPavyzdysBtn").click();
+      const k = d.getElementById("evalPavyzdysKortele");
+      tiesa(k && /Demonstracinis/.test(k.querySelector(".demo-tag").textContent) && /Tiekėjas A - žalesnė gamyba/.test(k.textContent) && /Laimėtojas/.test(k.textContent), "pavyzdys");
+      lygu([W.eval("Store.getEvalOffers()").length, JSON.parse(localStorage.getItem("pp_carbon_data") || "{}").evalOffers, W.buildReportData().evaluation], [0, undefined, null], "neišsaugomas");
+      d.getElementById("evPavyzdysBtn").click();
+      tiesa(!d.getElementById("evalPavyzdysKortele"), "paslepiamas");
+    } finally { f.remove(); }
+    const senas = n => ({ evalOffers: [
+      { id: "OF-1", name: "Tiekėjas A - žalesnė gamyba", bidPrice: "1000000", embodiedCarbon: "800", annualOperational: "", lifetimeYears: "" },
+      { id: "OF-2", name: "Tiekėjas B - pigiausias", bidPrice: n, embodiedCarbon: "1500", annualOperational: "", lifetimeYears: "" },
+      { id: "OF-3", name: "Tiekėjas C - be PCF", bidPrice: "980000", embodiedCarbon: "", annualOperational: "", lifetimeYears: "" }] });
+    localStorage.setItem("pp_carbon_data", JSON.stringify(senas("950000")));
+    ({ f } = await puslapis("index.html?lang=lt", 1280));
+    try {
+      lygu([f.contentWindow.eval("Store.getEvalOffers()").length, "evalOffers" in JSON.parse(localStorage.getItem("pp_carbon_data"))], [0, false], "senas pavyzdys - neįvestas");
+    } finally { f.remove(); }
+    localStorage.setItem("pp_carbon_data", JSON.stringify(senas("950001")));
+    ({ f } = await puslapis("index.html?lang=lt", 1280));
+    try {
+      lygu(f.contentWindow.eval("Store.getEvalOffers()").map(o => o.bidPrice), ["1000000", "950001", "980000"], "pakeistas - lieka");
+    } finally { f.remove(); }
+  });
+
+  await testas("K4 Vertinimas: eilutė be kainos ar tiekėjo į reitingą nepatenka ir pasakoma; neigiama anglis - klaida prie lauko, į reitingą nepatenka; PCF nepateikė niekas - „nenurodyta“, ne 0 t; modelyje B mažiausia kaina nebe 0", async ()=>{
+    const E = (await svarus()); const W = E.f.contentWindow, d = E.d, St = W.eval("Store");
+    try {
+      const X = W.GP_CARBON_EVAL;
+      const r = X.evaluate([{ id: "t", name: "", bidPrice: 0, embodiedCarbon: null }, { id: "a", name: "A", bidPrice: 100, embodiedCarbon: 1000 }, { id: "n", name: "N", bidPrice: 50, embodiedCarbon: -100000 }], { reikalautiVardo: true, model: "B" });
+      lygu([r.rows.map(x => x.id), r.excluded.map(x => [x.id, x.priezastis]), r.rows[0].priceScore], [["a"], [["t", "vardas"], ["n", "anglis"]], 80], "variklis");
+      const be = X.evaluate([{ id: "a", name: "A", bidPrice: 100, embodiedCarbon: null }, { id: "b", name: "B", bidPrice: 90, embodiedCarbon: null }], {});
+      lygu([be.bePcf, be.rows[0].id, be.rows[0].carbonT, be.rows[0].carbonCost, be.rows[0].adjustedPrice], [true, "b", null, null, 90], "be PCF");
+      const beB = X.evaluate([{ id: "a", bidPrice: 100, embodiedCarbon: null }], { model: "B" });
+      lygu([beB.rows[0].carbonScore, beB.rows[0].score], [null, 80], "be PCF, modelis B");
+      St.updateEvalOffers(l => { l.push({ id: "OF-T", name: "", bidPrice: "", embodiedCarbon: "" }, { id: "OF-A", name: "UAB A", bidPrice: "100", embodiedCarbon: "2" }, { id: "OF-N", name: "UAB N", bidPrice: "50", embodiedCarbon: "-3" }); });
+      W.renderBids();
+      const rez = d.getElementById("evalResults");
+      lygu([...rez.querySelectorAll("tbody tr")].map(tr => tr.querySelector(".t-name").textContent), ["UAB A"], "reitingas");
+      const n = d.getElementById("evNeitraukti").textContent;
+      tiesa(/eilutė be pavadinimo - nenurodytas tiekėjas/.test(n) && /UAB N - netinkama anglies reikšmė/.test(n), "pasakoma: " + n);
+      const lauk = d.querySelector('tr[data-of="OF-N"] input[id$="embodiedCarbon_OF_N"]');
+      tiesa(lauk && lauk.getAttribute("aria-invalid") === "true" && /neigiama/.test(d.getElementById(lauk.id + "_z").textContent), "klaida prie lauko");
+      St.updateEvalOffers(l => { l.length = 0; l.push({ id: "OF-A", name: "UAB A", bidPrice: "100", embodiedCarbon: "" }, { id: "OF-B", name: "UAB B", bidPrice: "200", embodiedCarbon: "" }); });
+      W.renderBids();
+      tiesa(/nenurodyta/.test(d.getElementById("evalResults").querySelector("tbody").textContent) && !/\b0\b/.test(d.querySelector("#evalResults tbody tr:first-child td:nth-child(4)").textContent), "nenurodyta, ne 0");
+      tiesa(/Nė vienas pasiūlymas anglies pėdsako nenurodė/.test(d.getElementById("evBePcf").textContent), "pasakoma");
+      const m = W.GP_REPORTS.build("internal", W.buildReportData());
+      const x = tekstaiModelio(m);
+      tiesa(/nenurodyta/.test(x) && !/ 0 t\b/.test(x) && /tik pagal kainą/.test(x), "ataskaita: " + x);
+    } finally { E.f.remove(); }
+  });
+
+  /* EPD langas su netikru DI */
+  const epdKelias = async (W, d, ats, tekstas, raktas) => {
+    W.openEpdModal(raktas || "substationEquipment.breaker");
+    W.__t = tekstas;
+    W.eval("_epdCtx.pdfBase64 = 'JVBERi0xLjQ='; _epdCtx.fileName = 'epd.pdf'; _epdCtx.tekstoPazadas = Promise.resolve(window.__t);");
+    W.__k = null;
+    W.GP_AI_PROXY.call = async o => { W.__k = o; return { ok: true, status: 200, raw: { content: [{ type: "text", text: JSON.stringify(ats) }] } }; };
+    W.analyzeEpd();
+    tiesa(await laukTol(() => d.querySelector("#epdResult .epd-card")), "rezultatas neparodytas");
+    return d.getElementById("epdResult");
+  };
+  const DOK = "Declared unit: 1 vnt\nGWP-total kg CO2 -eq 8.19E+01 1.36E+01 4.12E+00\nGWP-total, gross kg CO2 -eq 1.29E+02\nGWP-total, net kg CO2 -eq 9.96E+01\nValid to: 2030-01-01";
+
+  await testas("K5 EPD: skaičiaus formos citatoje (9,96E+01, 9.96E+01, 99,6, tūkstančiai) - taip, artimas apvalinimas ir „A1“, „CO2“ - ne; citata dokumente - ir išsibarsčiusi lentelėje, sugalvota - ne, be teksto - nežinoma", async ()=>{
+    const { f } = await svarus();
+    try {
+      const X = f.contentWindow.GP_EPD_EXTRACT, y = X.yraCitatoje;
+      const taip = [[99.6, "9,96E+01"], [99.6, "9.96E+01"], [99.6, "99,6 kg"], [99.6, "99.6"], [99.6, "99,60"], [1234.5, "1 234,5"], [1234.5, "1\u00A0234,5"], [1234.5, "1,234.5"], [1234.5, "1.234,5"], [1234, "1,234"], [1234, "1.234"], [1.234, "1,234"], [1000000, "1.000.000"],
+        [13.6, "GWP-total kg CO2 -eq 8.19E+01 1.36E+01 4.12E+00"], [0.0429, "4,29E-02"], [151.2, "GWP-Total [kgCO₂eq.] (A1–A3): 151.2 kgCO₂eq."], [200, "100 200"]];
+      lygu(taip.filter(([v, q]) => !y(v, q)), [], "turi būti citatoje");
+      const ne = [[99.31, "GWP-total, net 9,96E+01"], [100, "99,6"], [99.6, "A1-A3 100"], [1, "A1"], [3, "A1-A3"], [2, "CO2"], [99.6, ""], [5, "-5.00E+00"], [null, "0"], [0, "nėra"], [99.61, "99,6"]];
+      lygu(ne.filter(([v, q]) => y(v, q)), [], "neturi būti citatoje");
+      const c = X.citataDokumente;
+      lygu([c("GWP-total, net kg CO2 -eq 9.96E+01", DOK), c("GWP-total net  kg  CO2-eq 9.96E+01", DOK), c("GWP-total, net A1-A3 9,96E+01", DOK + "\nIndicator Unit A1-A3"), c("Visai kitas sakinys", DOK), c("GWP-total, net 99,31", DOK), c("bet kas", ""), c("", DOK)],
+           [true, true, true, false, false, null, false], "citata");
+      lygu(X.patikrink({ value: 99.6, quote: "Visai kitas sakinys 99,6" }, DOK).galima, false, "sugalvota citata su skaičiumi");
+      lygu(X.patikrink({ value: 99.6, quote: "kitas 99,6" }, "").citataRasta, null, "be teksto");
+      lygu(X.patikrink({ value: 99.31, quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, DOK).citatojeYra, false, "99,31");
+    } finally { f.remove(); }
+  });
+
+  await testas("K5 EPD: value: null netampa 0 (nei rastoje, nei variante), sugalvotas statusas ir be citatos - klaida; nutrūkęs atsakymas - priežastis; atskiri A1, A2, A3 - sumą skaičiuoja programa, trūkstant - klaida", async ()=>{
+    const { f } = await svarus();
+    try {
+      const X = f.contentWindow.GP_EPD_EXTRACT, ats = o => ({ content: [{ type: "text", text: JSON.stringify(o) }] });
+      const n = X.parseResponse(ats({ status: "found", value: null, unit: "kg CO2e", quote: "x" }));
+      lygu([n.status, n.value], ["error", undefined], "null");
+      lygu(X.parseResponse(ats({ status: "ambiguous", candidates: [{ label: "a", value: null, unit: "kg" }] })).status, "not_found", "variantas null");
+      const a = X.parseResponse(ats({ status: "ambiguous", candidates: [{ label: "a", value: null }, { label: "b", value: 5, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "5 kg", basis: "NET", indicator: "GWP-total", page: 3 }] }));
+      lygu(a.candidates, [{ label: "b", value: 5, valueText: "", unit: "kg CO2e", declaredUnit: "1 vnt", indicator: "GWP-total", basis: "net", page: 3, quote: "5 kg" }], "variantas");
+      const nutr = X.parseResponse({ stop_reason: "max_tokens", content: [{ type: "text", text: '{"status":"found","value":5' }] });
+      tiesa(nutr.status === "error" && /nutrūko/.test(nutr.error), "nutrūkęs: " + JSON.stringify(nutr));
+      const moduliai = [{ module: "A1", value: 81.9, quote: "A1 8,19E+01" }, { module: "A2", value: "13.6", quote: "A2 1,36E+01" }, { module: "a3", value: 4.12, quote: "A3 4,12E+00" }];
+      const s = X.parseResponse(ats({ status: "found", value: null, unit: "kg CO2e", declaredUnit: "1 vnt", modules: moduliai, validUntil: "2030-01-01", indicator: "GWP-total", basis: "gross" }));
+      lygu([s.status, s.value, s.sumaPrograma, s.moduliai.length, s.validUntil, s.indicator, s.basis], ["found", 99.62, true, 3, "2030-01-01", "GWP-total", "gross"], "suma");
+      lygu(X.patikrink(s, "A1 8,19E+01 A2 1,36E+01 A3 4,12E+00").galima, true, "moduliai patikrinti");
+      lygu(X.patikrink(Object.assign({}, s, { moduliai: [s.moduliai[0], Object.assign({}, s.moduliai[1], { value: 13 }), s.moduliai[2]] }), "").citatojeYra, false, "modulio skaičiaus nėra");
+      lygu(X.parseResponse(ats({ status: "found", value: null, modules: moduliai.slice(0, 2) })).status, "error", "trūksta modulio");
+    } finally { f.remove(); }
+  });
+
+  await testas("K5 EPD langas: tikras EPD atvejis (99,31 prieš 9,96E+01) - nėra „Patvirtinti“, rodoma tik pastaba, žmogus įrašo pats ir pažymi; patikrinta reikšmė - „Patvirtinti“; sugalvota citata - ne; be dokumento teksto - pastaba", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      const Q = "GWP-total, net kg CO2 -eq 9.96E+01", KEY = "substationEquipment.breaker";
+      let box = await epdKelias(W, d, { status: "found", value: 99.31, unit: "kg CO2e", declaredUnit: "1 vnt", quote: Q, page: 12, indicator: "GWP-total", basis: "net" }, DOK);
+      lygu([!!d.getElementById("epdPatvirtinti"), !!d.getElementById("epdNepatikrinta"), !box.querySelector(".epd-val"), !!d.getElementById("epdRankaBlokas")], [false, true, true, true], "nepatvirtinta");
+      tiesa(/99,31/.test(d.getElementById("epdNepatikrinta").textContent) && /citatoje nėra/.test(d.getElementById("epdNepatikrinta").textContent), d.getElementById("epdNepatikrinta").textContent);
+      tiesa(box.querySelector('[data-di="sugeneruota"] .gp-di-zyme') || box.querySelector(".epd-card[data-di]"), "DI žyma");
+      const btn = d.getElementById("epdRankaBtn"), lauk = d.getElementById("epdRanka"), chk = d.getElementById("epdPatikrinta");
+      lygu(btn.disabled, true, "iš pradžių");
+      lauk.value = "99,6"; lauk.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu(btn.disabled, true, "be pažymėjimo");
+      chk.checked = true; chk.dispatchEvent(new Event("change", { bubbles: true }));
+      lygu(btn.disabled, false, "su reikšme ir pažymėjimu");
+      lauk.value = "abc"; lauk.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu(btn.disabled, true, "neatpažintas skaičius");
+      lauk.value = "99,6"; lauk.dispatchEvent(new Event("input", { bubbles: true }));
+      btn.click();
+      const c = W.eval("Store").getCalc();
+      lygu([c.manual[KEY], c.epdSource[KEY].ranka, c.epdSource[KEY].quote, c.epdSource[KEY].rodiklis, c.epdSource[KEY].basis], ["99.6", true, Q, "GWP-total", "net"], "įrašyta");
+      tiesa(/įrašyta ranka/.test(d.getElementById("epdz_substationEquipment_breaker").textContent), "žyma");
+
+      box = await epdKelias(W, d, { status: "found", value: 99.6, valueText: "9.96E+01", unit: "kg CO2 -eq", declaredUnit: "1 vnt", quote: Q, page: 12, indicator: "GWP-total", basis: "net", validUntil: "2030-01-01", standard: "EN 15804+A2" }, DOK);
+      tiesa(d.getElementById("epdPatvirtinti") && box.querySelector(".epd-val") && !d.getElementById("epdRankaBlokas") && !d.getElementById("epdKonvertuota"), "patikrinta, nekonvertuota: " + box.textContent);
+      tiesa(/GWP-total, net/.test(box.textContent) && /2030-01-01/.test(box.textContent) && /1 vnt/.test(box.textContent) && /EN 15804\+A2/.test(box.textContent), "rodiklis, galiojimas: " + box.textContent);
+      d.getElementById("epdPatvirtinti").click();
+      const c2 = W.eval("Store").getCalc();
+      lygu([c2.manual[KEY], c2.epdSource[KEY].ranka, c2.epdSource[KEY].reiksme], ["99.6", false, "99.6"], "patvirtinta");
+      tiesa(d.querySelector('#epdz_substationEquipment_breaker [data-di="sugeneruota"]'), "žyma iš EPD su data-di");
+
+      await epdKelias(W, d, { status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "Visai kitas sakinys 99,6" }, DOK);
+      tiesa(!d.getElementById("epdPatvirtinti") && /citatos dokumento tekste nerasta/.test(d.getElementById("epdNepatikrinta").textContent), "sugalvota citata");
+      await epdKelias(W, d, { status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: Q }, "");
+      tiesa(d.getElementById("epdPatvirtinti") && d.getElementById("epdBeTeksto"), "be teksto");
+      W.closeModal();
+    } finally { f.remove(); }
+  });
+
+  await testas("K5 EPD langas: variantai - nepažymėta iš anksto, prie kiekvieno citata ir vienetas, be patikros - pasirinkti negalima; modulių suma - programa ir pasako; užklausa - pažodžiui, modulių nesumuoti, rodiklis, net / gross, galiojimas", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      const box = await epdKelias(W, d, { status: "ambiguous", candidates: [
+        { label: "net", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", basis: "net", indicator: "GWP-total", page: 12, quote: "GWP-total, net kg CO2 -eq 9.96E+01" },
+        { label: "gross", value: 129, unit: "kg CO2e", declaredUnit: "1 vnt", basis: "gross", indicator: "GWP-total", page: 12, quote: "GWP-total, gross kg CO2 -eq 1.29E+02" },
+        { label: "be citatos", value: 5, unit: "kg CO2e", declaredUnit: "1 vnt" },
+        { label: "kg", value: 99.6, unit: "kg CO2e", declaredUnit: "1 kg", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }] }, DOK);
+      const r = [...box.querySelectorAll('input[name="epdCand"]')];
+      lygu([r.length, r.filter(x => x.checked).length, r.map(x => x.disabled)], [4, 0, [false, false, true, true]], "radijo mygtukai");
+      tiesa(box.querySelectorAll(".epd-quote").length >= 3 && /kg CO2e/.test(box.textContent), "citatos");
+      lygu(d.getElementById("epdKandBtn").disabled, true, "kol nepasirinkta");
+      r[1].checked = true; r[1].dispatchEvent(new Event("change", { bubbles: true }));
+      lygu(d.getElementById("epdKandBtn").disabled, false, "pasirinkus");
+      d.getElementById("epdKandBtn").click();
+      const c = W.eval("Store").getCalc(), K = "substationEquipment.breaker";
+      lygu([c.manual[K], c.epdSource[K].basis, c.epdSource[K].quote], ["129", "gross", "GWP-total, gross kg CO2 -eq 1.29E+02"], "įrašytas pasirinktas");
+
+      await epdKelias(W, d, { status: "found", value: null, unit: "kg CO2e", declaredUnit: "1 vnt", modules: [{ module: "A1", value: 81.9, quote: "8.19E+01" }, { module: "A2", value: 13.6, quote: "1.36E+01" }, { module: "A3", value: 4.12, quote: "4.12E+00" }] }, DOK);
+      tiesa(/sumą apskaičiavo programa/.test(d.getElementById("epdSumaPrograma").textContent) && /99,62/.test(d.getElementById("epdSumaPrograma").textContent) && d.getElementById("epdPatvirtinti"), "suma: " + d.getElementById("epdResult").textContent);
+      W.closeModal();
+      const X = W.GP_EPD_EXTRACT, sp = X.systemPrompt();
+      for (const zod of ["PAŽODŽIUI", "nesumuok", "Modulių sumos neskaičiuok", "GWP-GHG", "\\\"net\\\"", "gross", "validUntil", "modules", "valueText"]) tiesa(sp.includes(zod.replace(/\\/g, "")), "užklausa be: " + zod);
+      const wk = await (await fetch("../worker/epd-proxy.js")).text();
+      const m = /const SYSTEM_PROMPT = (\[[\s\S]*?\])\.join\("\\n"\);/.exec(wk);
+      tiesa(m, "Worker'yje nėra SYSTEM_PROMPT");
+      lygu(new Function("return " + m[1] + '.join("\\n");')(), sp, "Worker'io užklausa = epd-extract.js");
+      lygu(/const MAX_TOKENS = (\d+);/.exec(wk)[1], String(X.MAX_TOKENS), "ilgis");
+      const ut = X.userText("X", "Y");
+      tiesa(wk.includes('"Produktas/įranga: "') && wk.includes('". Mūsų faktoriaus vienetas: "') && wk.includes('". Rask A1-A3 GWP reikšmę ir grąžink JSON pagal schemą."') && /Mūsų faktoriaus vienetas: Y\. Rask A1-A3 GWP reikšmę ir grąžink JSON pagal schemą\./.test(ut), "vartotojo tekstas");
+    } finally { f.remove(); }
+  });
+
+  await testas("K5 Tikras PDF: EPD tekstas perskaitomas naršyklėje (ir modulyje, ir viešame įrankyje), citata randama, skenuotas - nežinoma", async ()=>{
+    for (const [kelias, fn] of [["index.html?lang=lt", "epdDokumentoTekstas"], ["epd.html?lang=lt", "dokumentoTekstas"]]) {
+      const { f } = await puslapis(kelias, 1280);
+      try {
+        const w = f.contentWindow;
+        const failas = new w.File([pdfIsEiluciu(["Declared unit: 1 unit", "GWP-total, net kg CO2 -eq 9.96E+01"])], "epd.pdf", { type: "application/pdf" });
+        const tekstas = await w[fn](failas);
+        tiesa(/9\.96E\+01/.test(tekstas), kelias + " tekstas: " + tekstas);
+        lygu(w.GP_EPD_EXTRACT.citataDokumente("GWP-total, net kg CO2 -eq 9.96E+01", tekstas), true, kelias);
+        lygu(await w[fn](new w.File(["%PDF-1.4"], "s.pdf", { type: "application/pdf" })), "", kelias + " sugadintas");
+      } finally { f.remove(); }
+    }
+  });
+
+  await testas("K6 Vienetai: deklaruotas vienetas skaitomas su skaičiumi: 1000 kg prieš /kg ÷ 1000, 10 vnt prieš /vnt ÷ 10, 1 unit prieš /t ir 1 kg prieš /vnt - įspėjimas, neįrašoma (raidė t žodyje „vnt“ nebesutampa); „Konvertuota“ - tik kai tikrai; AI vienetas su vardikliu", async ()=>{
+    const { f, d } = await svarus();
+    try {
+      const W = f.contentWindow, X = W.GP_EPD_EXTRACT, k = (v, u, dk, o) => X.convertValue({ value: v, unit: u, declaredUnit: dk }, o);
+      const lent = [[2300, "kg CO2e", "1000 kg", "kg CO2e/kg", 2.3, true], [2300, "kg CO2e", "1 000 kg", "kg CO2e/kg", 2.3, true], [2300, "kg CO2e", "1,000 kg", "kg CO2e/kg", 2.3, true], [50, "kg CO2e", "10 vnt", "kg CO2e/vnt", 5, true], [50, "kg CO2e", "10 units", "kg CO2e/vnt", 5, true],
+        [5, "kg CO2e", "1 vnt", "kg CO2e/vnt", 5, false], [5, "kg CO2e", "1 unit", "kg CO2e/vnt", 5, false], [5, "kg CO2e", "1 t", "kg CO2e/kg", 0.005, true], [5, "kg CO2e", "1 kg", "kg CO2e/t", 5000, true], [7, "kg CO2e", "1 m³", "kg CO2e/m3", 7, false], [7, "kg CO2e", "1 km", "kg CO2e/m", 0.007, true], [7, "kg CO2e", "1 m", "kg CO2e/km", 7000, true],
+        [2.5, "t CO2-eq", "1 vnt", "kg CO2e/vnt", 2500, true], [2.5, "kg CO2e/kg", "1 kg", "kg CO2e/kg", 2.5, false], [2.5, "kg CO2e/kg", "", "kg CO2e/kg", 2.5, false], [2.5, "kg CO2e per 1 kg", "", "kg CO2e/kg", 2.5, false], [3, "kg CO2e", "1,5 kg", "kg CO2e/kg", 2, true]];
+      lent.forEach(([v, u, dk, o, lauk, konv]) => {
+        const r = k(v, u, dk, o);
+        lygu([r.value, r.converted], [lauk, konv], u + " / " + dk + " -> " + o + " (" + r.warning + ")");
+        if (konv) tiesa(r.paaiskinimas, "be paaiškinimo: " + dk);
+      });
+      for (const [u, dk, o] of [["kg CO2e", "1 unit", "kg CO2e/t"], ["kg CO2e", "1 kg", "kg CO2e/vnt"], ["kg CO2e", "1 vnt", "kg CO2e/kg"], ["kg CO2e", "", "kg CO2e/vnt"], ["kg CO2e", "1 luminaire", "kg CO2e/vnt"], ["kg CO2e/kg", "1 vnt", "kg CO2e/vnt"], ["g CO2e", "1 vnt", "kg CO2e/vnt"], ["kg CO2e", "1 m3", "kg CO2e/kg"]]) {
+        const r = k(10, u, dk, o);
+        lygu(r.value, null, u + " / " + dk + " -> " + o);
+        tiesa(r.warning && r.warning.length > 10, "be įspėjimo: " + dk);
+      }
+      tiesa(!/nesuderinamas/.test(k(2.5, "kg CO2e/kg", "1 kg", "kg CO2e/kg").warning), "V7: „(kg CO2e/kg) nesuderinamas su (kg CO2e/kg)“");
+      const box = await epdKelias(W, d, { status: "found", value: 2300, unit: "kg CO2e", declaredUnit: "1000 kg", quote: "2300 kg CO2e" }, "2300 kg CO2e per 1000 kg", "construction.pvp");
+      tiesa(!d.getElementById("epdPatvirtinti") && /neatitinka/.test(box.textContent) && d.getElementById("epdRankaBlokas"), "/vnt eilutei 1000 kg - neįrašoma: " + box.textContent);
+      W.closeModal();
+    } finally { f.remove(); }
+  });
+
+  await testas("K7 Pavadinimai pagal tai, kas sudėta: Word ir PP-ESG - visos įvestos eilutės, ne „A1-A3“ (žyma Scope 3 ir E1-6 lieka); padengimas - be numatytųjų, tuščias ir 150 - klaida, nieko neįrašoma; kiek pozicijų įtraukta", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      const G = W.GP_ESG_EXPORT, p = G.buildEsrsPoint(1000, { coverage: 60, projectName: "Pastotė" });
+      lygu([p.esrs, p.source, p.sourceRef, /Scope 3/.test(p.name), /A1-A3/.test(p.name), /visos įvestos skaičiuoklės eilutės/.test(p.name), /Pastotė$/.test(p.name)], ["E1-6", "module", "PP-CARBON", true, false, true, true], "taškas");
+      lygu([G.buildEsrsPoint(1, {}).coverage, G.buildEsrsPoint(1, { coverage: 150 }).coverage, G.buildEsrsPoint(1, { coverage: -1 }).coverage, G.buildEsrsPoint(1, { coverage: 0 }).coverage], [null, null, null, 0], "padengimas");
+      const st = { m: {}, getItem(k) { return k in this.m ? this.m[k] : null; }, setItem(k, v) { this.m[k] = v; } };
+      tiesa(G.exportTotal(st, 1000, {}).error && !st.m["ppesg.esrs"], "be padengimo neįrašoma");
+      kiekis(d, "construction.concrete", "10"); kiekis(d, "substationEquipment.breaker", "2");
+      const x = tekstaiModelio(W.GP_REPORTS.build("internal", W.buildReportData()));
+      tiesa(/visos įvestos skaičiuoklės eilutės/.test(x) && !/A1-A3 pagrindu/.test(x) && /Įtraukti etapai: Statybinė dalis\./.test(x), x.slice(0, 400));
+      W.setView("reports");
+      const cov = d.getElementById("esgCoverage");
+      lygu(cov.value, "", "padengimo numatytojo nėra");
+      tiesa(BE_TARPU(d.getElementById("esgCovHint").textContent).includes("įtraukta1iš46pozicijų;laukiaEPD-1,kiekisneįvestas-44"), d.getElementById("esgCovHint").textContent);
+      W.transferToEsg();
+      tiesa(/nuo 0 iki 100/.test(d.getElementById("esgCovKlaida").textContent) && cov.getAttribute("aria-invalid") === "true" && localStorage.getItem("ppesg.esrs") === null, "tuščias");
+      cov.value = "150"; cov.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu([d.getElementById("esgCovKlaida").textContent, cov.getAttribute("aria-invalid")], ["", null], "taisant klaida dingsta");
+      W.transferToEsg();
+      tiesa(/nuo 0 iki 100/.test(d.getElementById("esgCovKlaida").textContent) && localStorage.getItem("ppesg.esrs") === null, "150");
+      cov.value = "60";
+      W.transferToEsg();
+      const sar = JSON.parse(localStorage.getItem("ppesg.esrs"));
+      lygu([sar.length, sar[0].coverage, sar[0].value], [1, 60, "2.88"], "perduota");
+      tiesa(/Perduota/.test(d.getElementById("esgResult").textContent) && /2,88 tCO₂e/.test(d.getElementById("esgResult").textContent) && /60 %/.test(d.getElementById("esgResult").textContent), d.getElementById("esgResult").textContent);
+    } finally { f.remove(); localStorage.removeItem("ppesg.esrs"); }
+  });
+
+  await testas("K8 Viešas pjūvis: kas neįtraukta (laukiančios EPD pozicijos), prielaidos („nenurodyta“, ne „0 t“; taikyta didžiausia kitų reikšmė), „faktoriai tikslinami“; be kainų ir tiekėjų vardų", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store");
+    try {
+      kiekis(d, "construction.concrete", "10"); kiekis(d, "substationEquipment.breaker", "2");
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB Slaptas", bidPrice: "1000", embodiedCarbon: "2" }, { id: "B", name: "UAB Kitas", bidPrice: "2000", embodiedCarbon: "" }); });
+      const x = tekstaiModelio(W.GP_REPORTS.build("public", W.buildReportData()));
+      tiesa(/Kas neįtraukta ir prielaidos/.test(x) && /Laukia gamintojo EPD ir į sumą neįtraukta \(1\): Jungtuvai/.test(x) && /Dalis taršos faktorių dar tikslinama/.test(x) && /rezultatai preliminarūs/i.test(x), x);
+      tiesa(/nenurodyta; vertinime taikyta 2 t CO2e/.test(x) && !/UAB Slaptas|UAB Kitas|1000|2000|EUR/.test(x.replace(/2026-\d\d-\d\d/g, "")), x);
+      St.updateEvalOffers(l => { l[0].embodiedCarbon = ""; });
+      const y = tekstaiModelio(W.GP_REPORTS.build("public", W.buildReportData()));
+      tiesa(/Tiekėjas 1 \| nenurodyta/.test(y) && !/ 0 t/.test(y) && /Nė vienas pasiūlymas anglies pėdsako nenurodė/.test(y), y);
+    } finally { f.remove(); }
+  });
+
+  await testas("K9 Ataskaita pagal naudotą modelį: B - balai ir svoriai, be anglimi pakoreguotos kainos abiejuose pjūviuose; A - pakoreguota kaina ir šešėlinė kaina", async ()=>{
+    const { f } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store");
+    try {
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB A", bidPrice: "100", embodiedCarbon: "2" }, { id: "B", name: "UAB B", bidPrice: "200", embodiedCarbon: "1" }); });
+      const col = aud => W.GP_REPORTS.build(aud, W.buildReportData()).sections.slice(-1)[0];
+      let s = col("internal");
+      lygu(s.tables[0].columns, ["Vieta", "Tiekėjas", "Kaina", "Anglis", "Anglies kaina", "Pakoreguota kaina"], "A vidaus");
+      tiesa(/Šešėlinė CO2 kaina: 100/.test(s.paragraphs.join(" ")), "šešėlinė");
+      tiesa(/anglimi pakoreguota kaina/.test(col("public").paragraphs.join(" ")), "A viešas");
+      St.updateEvalSettings(x => { x.model = "B"; x.priceWeight = 70; x.carbonWeight = 30; });
+      s = col("internal");
+      lygu(s.tables[0].columns, ["Vieta", "Tiekėjas", "Kaina", "Anglis", "Kainos balas", "Anglies balas", "Viso balų"], "B vidaus");
+      tiesa(/Svoriai: kaina 70, anglis 30/.test(s.paragraphs.join(" ")) && !/Šešėlinė/.test(s.paragraphs.join(" ")), s.paragraphs.join(" "));
+      lygu(s.tables[0].rows[0].slice(4), ["70", "15", "85"], "balai");
+      const v = col("public");
+      lygu(v.tables[0].columns, ["Vieta", "Pasiūlymas", "Anglies pėdsakas", "Anglies balas"], "B viešas");
+      tiesa(/kainos ir anglies balai, svoriai 70 ir 30/.test(v.paragraphs.join(" ")) && !/pakoreguota/.test(v.paragraphs.join(" ")), v.paragraphs.join(" "));
+    } finally { f.remove(); }
+  });
+
+  await testas("K10 Ranka pakeista EPD reikšmė: žyma „pakeista ranka“ iškart, citata lieka su buvusia reikšme, Word atskiria; grąžinus - vėl „iš EPD“; išvalius - eilutės ir žymos nėra (ne 0); senas įrašas be išsaugotos reikšmės", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store"), K = "substationEquipment.breaker", Z = () => d.getElementById("epdz_substationEquipment_breaker");
+    try {
+      await epdKelias(W, d, { status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, DOK);
+      d.getElementById("epdPatvirtinti").click();
+      kiekis(d, K, "2");
+      const ivesk = v => { const i = d.getElementById("man_substationEquipment_breaker"); i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); };
+      const eil = () => { const s = W.GP_REPORTS.build("internal", W.buildReportData()).sections.find(x => /EPD šaltiniai/.test(x.heading)); return s && s.tables[0].rows; };
+      tiesa(/iš EPD/.test(Z().textContent) && /DI pasiūlė, vertintojas patvirtino/.test(eil()[0][6]), "patvirtinta");
+      lygu(W.buildReportData().diReiksmes, 1, "DI reikšmės");
+      ivesk("9999");
+      tiesa(/pakeista ranka/.test(Z().textContent) && !Z().querySelector("[data-di]"), "žyma: " + Z().textContent);
+      tiesa(/99,6/.test(Z().querySelector(".gpp-pop").textContent) && /9\.96E\+01/.test(Z().querySelector(".gpp-pop").textContent), "citata ir buvusi: " + Z().querySelector(".gpp-pop").textContent);
+      const r = eil()[0];
+      lygu(BE_TARPU(r[1]), "9999", "reikšmė");
+      tiesa(/Pakeista ranka \(EPD rodė 99,6\)/.test(r[6]), r[6]);
+      lygu(W.buildReportData().diReiksmes, 0, "pakeista - nebe DI reikšmė");
+      ivesk("99.6");
+      tiesa(/iš EPD/.test(Z().textContent), "grąžinus");
+      ivesk("");
+      lygu([Z().textContent, eil() || null, St.getCalc().epdSource[K], W.buildReportData().pendingEpd.length], ["", null, undefined, 1], "išvalius");
+      St.updateCalc(c => { c.manual[K] = "12"; c.epdSource[K] = { fileName: "senas.pdf", page: 1, quote: "12 kg" }; });
+      W.renderCalc();
+      tiesa(/iš EPD/.test(Z().textContent), "senas įrašas");
+      ivesk("13");
+      tiesa(/pakeista ranka/.test(Z().textContent) && St.getCalc().epdSource[K].reiksme === "12", "senas įrašas pakeistas");
+    } finally { f.remove(); }
+  });
+
+  await testas("D1 Bendri ir vieneto dydžiai: laukai pavadinti (viso pasiūlymo, t CO₂e), pasakyta, kaip iš EPD gauti visą; skaičiuoklė 151,2 kg × 100 = 15,12 t, nieko neįrašo", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      W.setView("bids");
+      tiesa(/viso pasiūlymo anglies pėdsaką/.test(d.querySelector('[data-i18n="bids.sub"]').textContent) && !/Įrangos vieneto/.test(d.querySelector('[data-i18n="bids.sub"]').textContent), "aprašas");
+      tiesa(/padauginkite iš perkamo kiekio ir padalinkite iš 1000/.test(d.getElementById("bidsBody").textContent), "paaiškinimas");
+      W.addOffer();
+      const th = [...d.querySelectorAll("#bidsBody table.calc thead th")].map(x => x.textContent).join(" | ");
+      tiesa(/Viso pasiūlymo kaina, EUR/.test(th) && /Viso pasiūlymo anglies pėdsakas A1-A3, t CO₂e/.test(th), th);
+      const v = d.getElementById("evEpdVnt"), q = d.getElementById("evEpdKiekis"), r = d.getElementById("evEpdRez");
+      v.value = "151,2"; v.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu(r.textContent, "", "be kiekio");
+      q.value = "100"; q.dispatchEvent(new Event("input", { bubbles: true }));
+      tiesa(/= 15,12 t CO₂e/.test(r.textContent), r.textContent);
+      q.value = "abc"; q.dispatchEvent(new Event("input", { bubbles: true }));
+      tiesa(/Neatpažintas skaičius/.test(r.textContent), r.textContent);
+      lygu(W.eval("Store").getEvalOffers()[0].embodiedCarbon, "", "į eilutę neįrašo");
+    } finally { f.remove(); }
+  });
+
+  await testas("D2, D3, D4 Tekstai sako tiesą: EPD galima įrašyti tik tiekėjo pateikiamų eilučių, neatskleidęs gauna didžiausią kitų reikšmę (gali būti naudinga), eksploatacijos skaičiuoklėje nėra - ir skaičiai pagal tai", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      const I = W.eval("INFO_CONTENT");
+      for (const k of ["lt", "en"]) {
+        const v = JSON.stringify(I[k]);
+        tiesa(!/worst-case|pirmenybė - gamintojo|nesuteikia pranašumo|no advantage|takes priority/i.test(v), k + ": senas teiginys");
+      }
+      const lt = JSON.stringify(I.lt), en = JSON.stringify(I.en);
+      tiesa(/tik toms pozicijoms, kurių faktoriaus bibliotekoje nėra/.test(lt) && /only for items with no factor in the library/.test(en), "D2");
+      tiesa(/neatskleidimas gali būti naudingas tiekėjui, kurio tikroji reikšmė didesnė/.test(lt) && /non-disclosure can benefit a supplier whose real value is higher/.test(en), "D3");
+      // D3 taisyklė prieš variklį: neatskleidęs C gauna didžiausią kitų reikšmę
+      const E = W.GP_CARBON_EVAL.evaluate([{ id: "a", bidPrice: 100, embodiedCarbon: 1000 }, { id: "c", bidPrice: 100, embodiedCarbon: null }], { lifetimeYears: 1 });
+      lygu(E.rows.find(x => x.id === "c").carbonKgEff, 1000, "didžiausia kitų");
+      const sub = d.querySelector('[data-i18n="calc.sub"]').textContent;
+      tiesa(/Eksploatacijos šioje skaičiuoklėje nėra/.test(sub) && !/transportas, eksploatacija/.test(sub), sub);
+      lygu(W.eval("CALC_SECTIONS").some(s => s.group === "operational"), false, "skaičiuoklė");
+      tiesa(/4 eksploataciniai - skaičiuoklėje nenaudojami/.test(d.querySelector('[data-i18n="ov.kpi.factors.foot"]').textContent), "D4 skaičius");
+    } finally { f.remove(); }
+  });
+
+  await testas("D5 DI skaidrumas modulyje: prie EPD mygtuko - kas siunčiama ir kur (Anthropic), data-di; Word - DI požymiai ir poraštė tik su patvirtinta DI reikšme, viešame - be „Prieš skelbiant“", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      W.openEpdModal("substationEquipment.breaker");
+      tiesa(/per G-Procure serverį į Claude API \(Anthropic\)/.test(d.getElementById("epdSiunciama").textContent), "pastaba");
+      W.closeModal();
+      kiekis(d, "construction.concrete", "10");
+      let m = W.GP_REPORTS.build("internal", W.buildReportData());
+      lygu(m.di, false, "be DI");
+      let blob = await rastas(W, m);
+      let cust = await docxDalys(blob, /^docProps\/custom\.xml$/), pora = await docxDalys(blob, /^word\/footer/);
+      tiesa(!/DI_turinys/.test(cust) && !/DI \(Claude\)/.test(pora), "be DI reikšmės - be požymių");
+      await epdKelias(W, d, { status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, DOK);
+      tiesa(d.querySelector("#epdResult .epd-card[data-di] .gp-di-zyme"), "lange");
+      d.getElementById("epdPatvirtinti").click();
+      kiekis(d, "substationEquipment.breaker", "2");
+      W.setView("reports"); W.previewReport();
+      tiesa(d.querySelector('#reportPreview [data-di="sugeneruota"] .gp-di-zyme'), "peržiūroje EPD skyrius su data-di");
+      m = W.GP_REPORTS.build("internal", W.buildReportData());
+      lygu(m.di, true, "su DI");
+      blob = await rastas(W, m);
+      cust = await docxDalys(blob, /^docProps\/custom\.xml$/); pora = await docxDalys(blob, /^word\/footer/);
+      tiesa(/DI_turinys/.test(cust) && /DI pasiūlė EPD reikšmes/.test(cust) && /DI_modelis/.test(cust), "požymiai: " + cust.slice(0, 300));
+      tiesa(/Dalis teksto parengta naudojant DI \(Claude\)\. Prieš skelbiant turi būti peržiūrėta\./.test(pora), "poraštė: " + pora.slice(-300));
+      blob = await rastas(W, W.GP_REPORTS.build("public", W.buildReportData()));
+      pora = await docxDalys(blob, /^word\/footer/);
+      tiesa(/Dalis teksto parengta naudojant DI \(Claude\)\./.test(pora) && !/Prieš skelbiant/.test(pora), "viešas: " + pora.slice(-200));
+    } finally { f.remove(); }
+  });
+
+  await testas("D5 Viešas EPD įrankis: pastaba prie mygtuko (Cloudflare Worker, Anthropic), data-di, kopijuojama suvestinė su DI pastaba; „Atšaukti“ nutraukia užklausą", async ()=>{
+    const { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 1280);
+    try {
+      const w = f.contentWindow;
+      tiesa(/per G-Procure tarpinį tašką \(Cloudflare Worker\) į Claude API \(Anthropic\)/.test(d.getElementById("siunciama").textContent) && !d.getElementById("siunciama").hidden, "pastaba");
+      w.turnstile = { getResponse: () => "z", reset: () => {} };
+      w._pdfBase64 = "JVBERi0xLjQK"; w._pdfTekstas = Promise.resolve(DOK);
+      d.getElementById("unit").value = "kg CO2e/vnt";
+      let sig = null;
+      w.fetch = (u, o) => new w.Promise((res, rej) => { sig = o.signal; o.signal.addEventListener("abort", () => rej(Object.assign(new w.Error("Aborted"), { name: "AbortError" }))); });
+      const pr = w.analyze();
+      tiesa(await laukTol(() => d.querySelector("#status [data-gpb-atsaukti]")), "nėra „Atšaukti“");
+      d.querySelector("#status [data-gpb-atsaukti]").click();
+      await pr;
+      tiesa(sig.aborted && /Atšaukta/.test(d.getElementById("status").textContent) && !d.getElementById("analyzeBtn").disabled, "atšaukta: " + d.getElementById("status").textContent);
+      const ATS = { content: [{ type: "text", text: JSON.stringify({ status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01", indicator: "GWP-total", basis: "net", validUntil: "2030-01-01" }) }] };
+      w.fetch = () => w.Promise.resolve(new w.Response(JSON.stringify(ATS), { status: 200 }));
+      await w.analyze();
+      const rez = d.getElementById("result");
+      tiesa(rez.querySelector('.res-card[data-di="sugeneruota"] .gp-di-zyme') && rez.querySelector(".res-val") && /GWP-total, net/.test(rez.textContent) && /2030-01-01/.test(rez.textContent), rez.textContent);
+      tiesa(/Dalis teksto parengta naudojant DI \(Claude\)/.test(w._summary) && /GWP-total, net/.test(w._summary) && /2030-01-01/.test(w._summary), w._summary);
+      lygu(d.getElementById("copyBtn").disabled, false, "kopijuoti");
+    } finally { f.remove(); }
+  });
+
+  await testas("K5, V7 Viešas EPD įrankis: nepatikrinta reikšmė - ne rezultatas, kopijuoti tik žmogui įrašius ir pažymėjus; variantai nepažymėti; vienetas be numatytojo ir su /km, /m; „iki 6 MB“; patvirtinimo žodžių antraštėje nebėra", async ()=>{
+    const { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 1280);
+    try {
+      const w = f.contentWindow;
+      const sel = d.getElementById("unit");
+      lygu([sel.value, [...sel.options].map(o => o.value).includes("kg CO2e/km"), [...sel.options].map(o => o.value).includes("kg CO2e/m")], ["", true, true], "vienetas");
+      w.turnstile = { getResponse: () => "z", reset: () => {} };
+      w._pdfBase64 = "JVBERi0xLjQK"; w._pdfTekstas = Promise.resolve(DOK);
+      await w.analyze();
+      tiesa(/Pasirinkite vienetą/.test(d.getElementById("status").textContent), "be vieneto: " + d.getElementById("status").textContent);
+      sel.value = "kg CO2e/vnt";
+      const ats = o => () => w.Promise.resolve(new w.Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(o) }] }), { status: 200 }));
+      w.fetch = ats({ status: "found", value: 99.31, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01" });
+      await w.analyze();
+      lygu([!!d.querySelector("#result .res-val"), !!d.getElementById("nepatikrinta"), d.getElementById("copyBtn").disabled, w._summary], [false, true, true, ""], "nepatikrinta");
+      const l = d.getElementById("ranka"), c = d.getElementById("rankaPatikrinta");
+      l.value = "99,6"; l.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu(d.getElementById("copyBtn").disabled, true, "be pažymėjimo");
+      c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true }));
+      lygu(d.getElementById("copyBtn").disabled, false, "pažymėjus");
+      tiesa(/99,6/.test(w._summary) && /įrašė tiekėjas/.test(w._summary), w._summary);
+      l.value = "abc"; l.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu([d.getElementById("copyBtn").disabled, w._summary, /teigiamą skaičių/.test(d.getElementById("rankaZ").textContent)], [true, "", true], "blogas skaičius");
+      w.fetch = ats({ status: "ambiguous", candidates: [{ label: "net", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, { label: "be citatos", value: 5, unit: "kg CO2e", declaredUnit: "1 vnt" }] });
+      await w.analyze();
+      const r = [...d.querySelectorAll('#result input[name="kand"]')];
+      lygu([r.filter(x => x.checked).length, r[1].disabled, d.getElementById("copyBtn").disabled], [0, true, true], "variantai");
+      r[0].checked = true; r[0].dispatchEvent(new Event("change", { bubbles: true }));
+      tiesa(!d.getElementById("copyBtn").disabled && /99,6/.test(w._summary), "pasirinkta");
+      tiesa(/iki 6 MB/.test(d.querySelector('[data-i18n="f.file"]').textContent), "riba");
+      tiesa(!/patvirtina žmogus/.test(d.querySelector(".brand-desc").textContent) && !/API rakt/.test(d.querySelector("footer").textContent), "M4");
+      lygu(d.querySelector(".brand-group").textContent, "G-Procure · Anglies pėdsakas", "M2");
+    } finally { f.remove(); }
+  });
+
+  await testas("D6 Taksonomija pagal aktą: „Svarus prisidėjimas“, „Būtiniausios apsaugos priemonės“, „Prisitaikymas prie klimato kaitos“, „Tausus vandens ...“, „A priedėlis“, 4.9 pavadinimas, žiedinė ekonomika ir tarša; kur akte „Netaikoma“ - taip; raktai ir išsaugotos būsenos veikia", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      const T = W.GP_TAXONOMY;
+      lygu(T.OBJECTIVES, { mitigation: "Klimato kaitos švelninimas", adaptation: "Prisitaikymas prie klimato kaitos", water: "Tausus vandens ir jūrų išteklių naudojimas ir apsauga", circular: "Perėjimas prie žiedinės ekonomikos", pollution: "Taršos prevencija ir kontrolė", biodiversity: "Biologinės įvairovės ir ekosistemų apsauga ir atkūrimas" }, "tikslai");
+      lygu(T.listActivities().map(a => a.code + " " + a.name), ["4.9 Elektros energijos perdavimas ir skirstymas", "4.1 Elektros energijos gamyba naudojant fotovoltinę saulės energijos technologiją", "7.4 Elektra varomų transporto priemonių įkrovimo stotelių įrengimas pastatuose (ir prie pastatų esančiose automobilių stovėjimo vietose), techninė priežiūra ir remontas"], "veiklos");
+      const hint = (c, o) => T.buildTaxonomyReport(c, {}, {}).sections[1].tables[0].rows.find(r => r[0] === T.OBJECTIVES[o]);
+      const m = T.buildTaxonomyReport("4.9", {}, {});
+      lygu([m.sections[0].heading, m.sections[1].heading, m.sections[2].heading, m.verdict], ["1. Svarus prisidėjimas: Klimato kaitos švelninimas", "2. Reikšmingos žalos nedarymas (DNSH)", "3. Būtiniausios apsaugos priemonės", null], "antraštės");
+      tiesa(/sujungta Europos sistema/.test(m.sections[0].paragraphs[0]) && /100 g CO2e\/kWh/.test(m.sections[0].paragraphs[0]) && /sąlygas sudaranti veikla/.test(m.sections[0].paragraphs[0]), "4.9 svarus prisidėjimas");
+      tiesa(/A priedėlyje/.test(hint("4.9", "adaptation")[1]) && !/Priedas A/.test(JSON.stringify(m)), "A priedėlis");
+      lygu(hint("4.9", "water").slice(1, 3), ["Netaikoma.", "Netaikoma"], "4.9 vanduo");
+      tiesa(/atliekų tvarkymo planas/.test(hint("4.9", "circular")[1]) && !/SF6/.test(hint("4.9", "circular")[1]), "4.9 žiedinė");
+      tiesa(/Antžeminės aukštos įtampos linijos/.test(hint("4.9", "pollution")[1]) && /polichlorintieji bifenilai/.test(hint("4.9", "pollution")[1]) && /1999\/519\/EB/.test(hint("4.9", "pollution")[1]), "4.9 tarša");
+      lygu(hint("4.1", "water").slice(1, 3), ["Netaikoma.", "Netaikoma"], "4.1 vanduo");
+      lygu(hint("4.1", "pollution").slice(1, 3), ["Netaikoma.", "Netaikoma"], "4.1 tarša");
+      tiesa(/itin patvarią ir perdirbamą įrangą/.test(hint("4.1", "circular")[1]) && /D priedėlyje/.test(hint("4.1", "biodiversity")[1]), "4.1");
+      for (const o of ["water", "circular", "pollution", "biodiversity"]) lygu(hint("7.4", o)[1], "Netaikoma.", "7.4 " + o);
+      lygu(T.dnshKeys("mitigation"), ["adaptation", "water", "circular", "pollution", "biodiversity"], "raktai");
+      // Išsaugota būsena lieka; akte „Netaikoma“ - keičia vertintojas; būsenų stulpelis randamas ir angliškai
+      W.eval("Store").setTaxonomyStatus("4.9", "dnsh.water", "met");
+      W.setView("reports"); W.renderTaxonomy("4.9");
+      const s = k => d.querySelector('#taxPreview select[data-skey="' + k + '"]');
+      lygu([s("dnsh.water").value, s("dnsh.pollution").value, s("substantialContribution").value, s("minimumSafeguards").value], ["met", "pending", "pending", "pending"], "būsenos");
+      W.eval("Store").setTaxonomyStatus("4.9", "dnsh.water", "");
+      W.renderTaxonomy("4.9");
+      lygu(s("dnsh.water").value, "na", "akte Netaikoma");
+      s("dnsh.pollution").value = "not_met"; s("dnsh.pollution").dispatchEvent(new Event("change", { bubbles: true }));
+      lygu([W.eval("Store").getTaxonomyStatuses("4.9").dnsh.pollution, /Neatitinka/.test(T.buildTaxonomyReport("4.9", {}, W.eval("Store").getTaxonomyStatuses("4.9")).sections[1].tables[0].rows[3][2])], ["not_met", true], "pakeitimas");
+      tiesa(s("dnsh.pollution").getAttribute("aria-label"), "būsenos pavadinimas");
+      const be = T.buildTaxonomyReport("4.9", { totalKg: 0 }, {}), su = T.buildTaxonomyReport("4.9", { totalKg: 3334 }, {});
+      lygu([be.sections[3].tables[0].rows[0][1], su.sections[3].tables[0].rows[0][1]], ["nenurodyta", "3,334 t CO2e"], "ŠESD");
+    } finally { f.remove(); }
+  });
+
+  await testas("D7 Worker'io klaidos: be [object Object], lietuviškai su ą-ž ir angliškai EN režime (ir iš senesnio Worker'io pagal būseną); po klaidos Turnstile atnaujinamas", async ()=>{
+    for (const [kalba, tikimasi] of [["lt", { obj: /Failas|DI paslauga/, patikra: /Nepavyko patvirtinti, kad nesate robotas/, dydis: /Failas per didelis \(riba 6 MB\)/, uzimta: /užimta/ }],
+                                     ["en", { obj: /AI service/, patikra: /Could not confirm/, dydis: /File too large \(limit 6 MB\)/, uzimta: /busy/ }]]) {
+      const { f, d } = await puslapis("epd.html?lang=" + kalba + "&epd=worker", 1280);
+      try {
+        const w = f.contentWindow;
+        let reset = 0;
+        w.turnstile = { getResponse: () => "z", reset: () => { reset++; } };
+        w._pdfBase64 = "JVBERi0xLjQK"; w._pdfTekstas = Promise.resolve("");
+        d.getElementById("unit").value = "kg CO2e/vnt";
+        const kvies = async (status, kunas) => {
+          w.fetch = () => w.Promise.resolve(new w.Response(JSON.stringify(kunas), { status }));
+          const r0 = reset;
+          await w.analyze();
+          lygu(reset, r0 + 1, "Turnstile atnaujintas (" + status + ")");
+          const x = d.getElementById("status").textContent;
+          tiesa(!/object Object/.test(x), x);
+          return x;
+        };
+        tiesa(tikimasi.obj.test(await kvies(500, { type: "error", error: { type: "api_error", message: "x" } })), "objektas");
+        tiesa(tikimasi.patikra.test(await kvies(403, { error: "Nepavyko patvirtinti, kad esate zmogus" })), "senas 403");
+        tiesa(tikimasi.patikra.test(await kvies(403, { error: "Nepavyko patvirtinti, kad esate žmogus", kodas: "patikra" })), "naujas 403");
+        tiesa(tikimasi.dydis.test(await kvies(413, { error: "PDF per didelis" })), "413");
+        tiesa(tikimasi.uzimta.test(await kvies(529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } })), "529");
+        const x = await kvies(403, { error: "Neleistinas saltinis" });
+        tiesa(/g-procure\.com/.test(x), x);
+        // Tinklo klaida
+        const r0 = reset;
+        w.fetch = () => w.Promise.reject(new w.TypeError("Failed to fetch"));
+        await w.analyze();
+        lygu(reset, r0 + 1, "Turnstile po tinklo klaidos");
+        tiesa(d.querySelector("#status [data-gpb-kartoti]"), "„Bandyti dar kartą“");
+      } finally { f.remove(); }
+    }
+    const wk = await (await fetch("../worker/epd-proxy.js")).text();
+    tiesa(/Nepavyko patvirtinti, kad esate žmogus/.test(wk) && /kodas: kodas/.test(wk) && !/esate zmogus/.test(wk), "Worker'is su ą-ž ir kodu");
+    tiesa(!/return json\(data, apiRes\.status\);\s*\n\s*\}\s*\n\};?\s*$/.test(wk) || /if \(!apiRes\.ok\)/.test(wk), "DI klaidos objektas nebesiunčiamas");
+  });
+
+  await testas("D8 Naujas projektas: tik su patvirtinimu, išvalo projektą (istorija lieka); PP-ESG tašką perrašant - klausimas su senu ir nauju skaičiumi, „Atšaukti“ nekeičia, tas pats - neklausia; raktas lieka", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store");
+    try {
+      kiekis(d, "construction.concrete", "10");
+      W.onCalcMeta("name", "Pirmas");
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB A", bidPrice: "100", embodiedCarbon: "2" }); });
+      St.appendEpdHistory({ date: "2026-01-10", itemLabel: "Jungtuvai", unit: "kg CO2e/vnt", value: 1, manufacturer: "A", fileName: "" });
+      W.setView("reports");
+      const cov = d.getElementById("esgCoverage");
+      cov.value = "80"; W.transferToEsg();
+      lygu(JSON.parse(localStorage.getItem("ppesg.esrs"))[0].value, "2.88", "pirmas perdavimas be klausimo");
+      W.transferToEsg();
+      lygu(d.getElementById("overlay").classList.contains("open"), false, "tas pats - neklausia");
+      kiekis(d, "construction.concrete", "20");
+      W.onCalcMeta("name", "Antras");
+      W.transferToEsg();
+      lygu(d.getElementById("overlay").classList.contains("open"), true, "klausia");
+      const tx = d.getElementById("klausimoTekstas").textContent;
+      tiesa(/2\.88 tCO₂e/.test(tx) && /5\.76 tCO₂e/.test(tx) && /Pirmas/.test(tx) && /Antras/.test(tx), tx);
+      W.closeModal();
+      lygu(JSON.parse(localStorage.getItem("ppesg.esrs"))[0].value, "2.88", "atšaukus nepakito");
+      W.transferToEsg();
+      d.getElementById("klausimoTaip").click();
+      const sar = JSON.parse(localStorage.getItem("ppesg.esrs"));
+      lygu([sar.length, sar[0].value, sar[0].sourceRef, W.GP_ESG_EXPORT.ESG_KEY], [1, "5.76", "PP-CARBON", "ppesg.esrs"], "perrašyta");
+      W.setView("calc");
+      d.getElementById("naujasProjektasBtn").click();
+      lygu(St.getCalc().name, "Antras", "be patvirtinimo neišvaloma");
+      tiesa(/Bus išvalyti šio projekto duomenys/.test(d.getElementById("klausimoTekstas").textContent), "klausimas");
+      d.getElementById("klausimoTaip").click();
+      const c = St.getCalc();
+      lygu([c.name, Object.keys(c.qty).length, St.getEvalOffers().length, St.getEpdHistory().length, d.getElementById("calcName").value, d.querySelector('input.qty-input[data-key="construction.concrete"]').value],
+           ["", 0, 0, 1, "", ""], "išvalyta, istorija lieka");
+      lygu(d.activeElement.id, "naujasProjektasBtn", "fokusas");
+    } finally { f.remove(); localStorage.removeItem("ppesg.esrs"); }
+  });
+
+  await testas("V1 Apžvalga: be techninių žodžių, KPI „Laukia EPD“ kinta pagal projektą, bibliotekos sąrašas su pagrindu ir pastaba; V2 „?“ pasiekiamas klaviatūra (ne title), tekstai ne juodraščio, suvestinėje - tikslinamų faktorių dalis", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      const ov = d.getElementById("view-overview").textContent;
+      tiesa(!/carbon-factors\.js|supplierProvided|„review“|MVP|Versija|Šis ekranas patvirtina/.test(ov), "techniniai žodžiai: " + ov.slice(0, 400));
+      lygu(d.getElementById("kpiEpd").textContent, "0", "tuščias projektas");
+      kiekis(d, "substationEquipment.breaker", "2");
+      W.setView("overview");
+      lygu(d.getElementById("kpiEpd").textContent, "1", "su kiekiu");
+      tiesa(/iš 10 pozicijų/.test(d.querySelector('[data-i18n="ov.kpi.epd.foot"]').textContent), "iš 10");
+      const sar = d.getElementById("libSarasas");
+      lygu(sar.querySelectorAll("details.lib-grupe").length, 8, "grupės");
+      const t = sar.textContent;
+      for (const z of ["Žaibosaugos trosas", "Kuro degimas", "LG ir rangovų kelionės", "Reikalauti EPD iš gamintojo", "iš gamintojo EPD", "288 kg CO₂e/m³"]) tiesa(BE_TARPU(t).includes(BE_TARPU(z)), "sąraše nėra: " + z);
+      tiesa(/Eksploataciniai \(4\) - skaičiuoklėje nenaudojama/.test(t), "eksploataciniai");
+      // V2
+      const F = W.GP_CARBON_FACTORS, rev = Object.keys(F).filter(g => Array.isArray(F[g])).flatMap(g => F[g]).filter(x => x.review).map(x => x.review).join(" ");
+      tiesa(!/ lape |ištrinti ir pakoreguoti|^Patvirtinti$|g vs kg/.test(rev), "juodraščio tekstai: " + rev);
+      tiesa(!d.querySelector("#calcSections .review-flag"), "senas „!“ su title");
+      W.setView("calc");
+      const b = d.querySelector('#calcSections [data-gpp][aria-controls="rev_lineEquipment_ztsk_12f"]');
+      tiesa(b && b.tabIndex === 0 && /ZTSK 12F/.test(b.getAttribute("aria-label")), "mygtukas");
+      b.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      await laukti(40);
+      const pop = d.getElementById("rev_lineEquipment_ztsk_12f");
+      tiesa(!pop.hidden && /297,35/.test(pop.textContent), "atsidaro fokusuojant: " + pop.textContent);
+      await laukti(40);
+      lygu(getComputedStyle(pop).position, "fixed", "lentelėje nenukerpama");
+      W.GP_PAAISKINIMAS.uzverk();
+      kiekis(d, "lineEquipment.ztsk_12f", "2");
+      kiekis(d, "construction.concrete", "1");
+      const p = d.getElementById("sumPastabos").textContent;
+      tiesa(/Iš šios sumos 0,595 t CO₂e \(67,4 %\) sudaro tikslinami faktoriai/.test(p), p);
+    } finally { f.remove(); }
+  });
+
+  await testas("V3 Anglų kalba: pagrindiniai tekstai, Word ataskaita ir Taksonomija - vienos kalbos (be ą-ž; faktorių pavadinimai - lietuviškai ir pasakyta); skaičiai angliški; V9 tipas ataskaitoje", async ()=>{
+    const { f, d } = await svarus("en");
+    const W = f.contentWindow, St = W.eval("Store");
+    try {
+      const RAIDES = /[ąčęėįšųūžĄČĘĖĮŠŲŪŽ]/;
+      kiekis(d, "construction.concrete", "100");
+      W.onCalcMeta("name", "Substation"); W.onCalcMeta("type", "substation"); W.onCalcMeta("period", "2026");
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "A Ltd", bidPrice: "1000", embodiedCarbon: "2.5" }, { id: "B", name: "B Ltd", bidPrice: "2000", embodiedCarbon: "" }); });
+      for (const aud of ["internal", "public"]) {
+        const x = tekstaiModelio(W.GP_REPORTS.build(aud, W.buildReportData()));
+        lygu(RAIDES.exec(x), null, aud + ": " + x);
+        tiesa(/Project type Substation/.test(x) && /Reporting period 2026/.test(x) && /Prepared on 20/.test(x), aud + " meta: " + x.slice(0, 300));
+      }
+      tiesa(/Carbon footprint not stated|not stated/.test(tekstaiModelio(W.GP_REPORTS.build("internal", W.buildReportData()))), "nenurodyta");
+      const tax = W.GP_TAXONOMY.buildTaxonomyReport("4.9", W.buildReportData(), {}, "en");
+      lygu(RAIDES.exec(tekstaiModelio(tax)), null, "taksonomija");
+      tiesa(/Substantial contribution/.test(tax.sections[0].heading) && /Minimum safeguards/.test(tax.sections[2].heading) && /Appendix A/.test(tekstaiModelio(tax)) && /N\/A\./.test(tekstaiModelio(tax)), "EU terminai");
+      W.setView("reports"); W.renderTaxonomy("4.9");
+      lygu(d.querySelectorAll("#taxPreview select.tax-status").length, 7, "būsenos ir angliškai");
+      lygu(d.querySelector('#taxPreview select[data-skey="dnsh.water"]').value, "na", "stulpelis Status");
+      tiesa(/Item names are shown in Lithuanian/.test(d.getElementById("calcEnPastaba").textContent) && /Lithuanian/.test(d.getElementById("libEnPastaba").textContent), "pasakyta");
+      for (const id of ["view-overview", "view-bids", "view-reports"]) {
+        const kop = d.getElementById(id).cloneNode(true);
+        kop.querySelectorAll("#libSarasas, select, .rep-meta, table").forEach(x => x.remove());
+        lygu(RAIDES.exec(kop.textContent), null, id + ": " + kop.textContent.slice(0, 200));
+      }
+      W.GP_DOK = W.GP_DOK;
+      const c = W.GP_EPD_EXTRACT.convertValue({ value: 1, unit: "kg CO2e", declaredUnit: "1 kg" }, "kg CO2e/vnt");
+      lygu(RAIDES.exec(c.warning), null, "įspėjimas EN: " + c.warning);
+      lygu(RAIDES.exec(W.GP_EPD_EXTRACT.convertValue({ value: 1, unit: "kg CO2e", declaredUnit: "1000 kg" }, "kg CO2e/kg").paaiskinimas), null, "paaiškinimas EN");
+    } finally { f.remove(); }
+  });
+
+  await testas("V4 Word: tblLayout fixed, stulpelių suma = teksto plotis, parengimo data ir laikotarpis atskirai, skaičiai su kableliu, „100 %“ tik su suma, kūrėjas G-Procure (ne „Un-named“), failo varde projektas, tuščia nesudaroma", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store");
+    const siandien = W.GP_WORKDAYS.siandien();
+    try {
+      // Tuščia
+      const dabar = W.HTMLAnchorElement.prototype.click; let vardas = null;
+      W.HTMLAnchorElement.prototype.click = function () { vardas = this.download; };
+      await W.downloadReportDocx();
+      lygu(vardas, null, "tuščia nesiunčiama");
+      tiesa(/nėra iš ko sudaryti/.test(d.getElementById("repDocxBusena").textContent), d.getElementById("repDocxBusena").textContent);
+      W.onCalcMeta("name", "Pastotės rekonstrukcija"); W.onCalcMeta("period", "2026"); W.onCalcMeta("type", "substation");
+      kiekis(d, "lineEquipment.pole_steel", "1,8");     // 3,33 kg
+      kiekis(d, "construction.concrete", "11.57");      // 3 332,16 kg
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB A", bidPrice: "1000", embodiedCarbon: "2,5" }); });
+      await W.downloadReportDocx();
+      tiesa(/^PP-carbon_ataskaita_vidaus_Pastotės_rekonstrukcija_\d{4}-\d{2}-\d{2}\.docx$/.test(vardas), "failo vardas: " + vardas);
+      W.HTMLAnchorElement.prototype.click = dabar;
+      const blob = await rastas(W, W.GP_REPORTS.build("internal", W.buildReportData()));
+      const dok = await docxDalys(blob, /^word\/document\.xml$/), core = await docxDalys(blob, /^docProps\/core\.xml$/);
+      const lenteles = dok.match(/<w:tbl>/g).length;
+      lygu((dok.match(/<w:tblLayout w:type="fixed"\/>/g) || []).length, lenteles, "fixed visose lentelėse");
+      (dok.match(/<w:tblGrid>.*?<\/w:tblGrid>/g) || []).forEach(g => lygu((g.match(/w:w="(\d+)"/g) || []).reduce((a, x) => a + Number(x.replace(/\D/g, "")), 0), 11906 - 1134 * 2, "stulpelių suma"));
+      const text = dok.replace(/<[^>]+>/g, " ");
+      tiesa(text.includes("Parengta") && text.includes(siandien) && text.includes("Ataskaitinis laikotarpis") && text.includes("Projekto tipas") && text.includes("Pastotė"), "meta: " + text.slice(0, 400));
+      tiesa(/0,1 %/.test(text) && /99,9 %/.test(text) && !/0\.1 %/.test(text) && /2,5 t/.test(text), "kablelis: " + text.slice(0, 900));
+      tiesa(/G-Procure/.test(core) && !/Un-named/.test(core), "kūrėjas: " + core);
+      const tus = tekstaiModelio(W.GP_REPORTS.build("internal", { stages: [{ label: "E", totalKg: 0, any: false }], totalKg: 0 }));
+      tiesa(/IŠ VISO \| - \| -/.test(tus) && !/100 %/.test(tus) && /E \| neįvesta/.test(tus), tus);
+    } finally { f.remove(); }
+  });
+
+  await testas("V5 Laukai: neigiamas kiekis, „abc“, „12 t“ - klaida prie lauko ir į sumą neįtraukiama (ir po perkrovimo); „1.500“ prieš „950.000“ - pasakoma, kaip perskaityta; kainoje -5 - klaida; tuščias nustatymas nekeičia, tiksli šešėlinė kaina (V9)", async ()=>{
+    let P = await svarus();
+    const { f, d } = P, W = f.contentWindow, St = W.eval("Store");
+    try {
+      const L = W.skaitykLauka, K = W.skaitykKaina;
+      lygu(["12", "1 234,5", "1,5", "4,52E+02", "0,125", " 7 "].map(x => L(x).reiksme), [12, 1234.5, 1.5, 452, 0.125, 7], "geri");
+      lygu(["abc", "12 t", "-5", "−5", "1.2.3x"].map(x => L(x).klaida), ["skaicius", "skaicius", "neig", "neig", "skaicius"], "blogi");
+      lygu([L("").tuscia, L(null).tuscia, L("1.500").dviprasmis, L("0,125").dviprasmis, L("1,5").dviprasmis, L("1500").dviprasmis], [true, true, true, false, false, false], "dviprasmiai");
+      lygu(["950.000", "1.500", "1 500,50", "EUR 1 500", "1 500 EUR", "1,5"].map(x => K(x).reiksme), [950000, 1500, 1500.5, 1500, 1500, 1.5], "kainos");
+      lygu([K("-5").klaida, K("abc").klaida, K("12 t").klaida, K("").tuscia], ["neig", "skaicius", "skaicius", true], "kainos klaidos");
+      let i = kiekis(d, "construction.rebar", "-5");
+      tiesa(i.getAttribute("aria-invalid") === "true" && /Negali būti neigiama/.test(d.getElementById("qtyz_construction_rebar").textContent), "neigiamas");
+      kiekis(d, "construction.steel_struct", "abc");
+      kiekis(d, "construction.aluminium", "12 t");
+      lygu(W.buildReportData().totalKg, 0, "į sumą neįtraukta");
+      lygu(W.buildReportData().klaidos, 3, "suskaičiuota");
+      tiesa(/Eilučių su netinkamu skaičiumi, neįtrauktų į sumą: 3/.test(d.getElementById("sumPastabos").textContent), d.getElementById("sumPastabos").textContent);
+      i = kiekis(d, "construction.concrete", "1.500");
+      tiesa(!i.hasAttribute("aria-invalid") && /Perskaityta kaip 1,5\. Jei turėjote omenyje 1 ?500/.test(d.getElementById("qtyz_construction_concrete").textContent.replace(/\u00A0/g, " ")), d.getElementById("qtyz_construction_concrete").textContent);
+      kiekis(d, "construction.rebar", "");
+      tiesa(!d.querySelector('input.qty-input[data-key="construction.rebar"]').hasAttribute("aria-invalid") && !d.getElementById("qtyz_construction_rebar").textContent, "pataisius - klaida dingsta");
+      St.updateEvalOffers(l => { l.push({ id: "OFA", name: "UAB A", bidPrice: "950.000", embodiedCarbon: "1.500" }, { id: "OFB", name: "UAB B", bidPrice: "-5", embodiedCarbon: "1" }); });
+      W.renderBids();
+      tiesa(/Perskaityta kaip 950\s000 EUR/.test(d.querySelector('[id="of_bidPrice_OFA_z"]').textContent), d.querySelector('[id="of_bidPrice_OFA_z"]').textContent);
+      tiesa(/Perskaityta kaip 1,5/.test(d.querySelector('[id="of_embodiedCarbon_OFA_z"]').textContent), "anglis");
+      tiesa(/Negali būti neigiama/.test(d.querySelector('[id="of_bidPrice_OFB_z"]').textContent) && /UAB B - nenurodyta kaina/.test(d.getElementById("evNeitraukti").textContent), "kaina -5");
+      // Nustatymai
+      const s = d.getElementById("shadowInput"), r = d.getElementById("shadowRange");
+      s.value = "137,5"; s.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu([St.getEvalSettings().shadowPrice, Number(r.value) >= 135], [137.5, true], "tiksli kaina");
+      r.value = "200"; r.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu([St.getEvalSettings().shadowPrice, s.value], [200, "200"], "slankiklis");
+      s.value = ""; s.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu([St.getEvalSettings().shadowPrice, s.getAttribute("aria-invalid"), /paliekama ankstesnė/.test(d.getElementById("shadowZin").textContent)], [200, "true", true], "tuščias nekeičia");
+      s.value = "-1"; s.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu(St.getEvalSettings().shadowPrice, 200, "neigiama nekeičia");
+      const lf = d.getElementById("evLife");
+      lf.value = ""; lf.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu(St.getEvalSettings().lifetimeYears, 30, "ciklas nekeičiamas");
+    } finally { f.remove(); }
+    // Po perkrovimo klaida lieka matoma
+    P = await puslapis("index.html?lang=lt", 1280);
+    try {
+      tiesa(/Neatpažintas skaičius/.test(P.d.getElementById("qtyz_construction_steel_struct").textContent) && P.d.querySelector('input.qty-input[data-key="construction.steel_struct"]').value === "abc", "po perkrovimo");
+    } finally { P.f.remove(); }
+  });
+
+  await testas("V6 EPD įrankis: pakeitus failą ir perjungus kalbą senas rezultatas negrįžta; perjungus be naujo failo - rezultatas nauja kalba", async ()=>{
+    const { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 1280);
+    try {
+      const w = f.contentWindow;
+      w.turnstile = { getResponse: () => "z", reset: () => {} };
+      w._pdfBase64 = "JVBERi0xLjQK"; w._pdfTekstas = Promise.resolve(DOK);
+      d.getElementById("unit").value = "kg CO2e/vnt";
+      w.fetch = () => w.Promise.resolve(new w.Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", quote: "GWP-total, net kg CO2 -eq 9.96E+01" }) }] }), { status: 200 }));
+      await w.analyze();
+      tiesa(d.querySelector("#result .res-val"), "rezultatas");
+      w.setLang("en");
+      tiesa(/Citation/.test(d.getElementById("result").textContent), "rezultatas angliškai");
+      w.setLang("lt");
+      w.onFile();
+      lygu([d.getElementById("result").textContent, w._summary], ["", ""], "naujas failas");
+      w.setLang("en");
+      lygu(d.getElementById("result").textContent, "", "senas negrįžta");
+      w.setLang("lt");
+      w.GP_LANG && localStorage.removeItem("ppcarbon.lang");
+    } finally { f.remove(); }
+  });
+
+  await testas("V7 Modulio langas: riba - tikra (iki 6 MB), ne 10; V9 be „Nustatymų“; modelyje B slankiklio nėra; svorių suma; tipas ataskaitoje", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store");
+    try {
+      W.openEpdModal("substationEquipment.breaker");
+      const l = d.querySelector('label[for="epdFile"]').textContent;
+      tiesa(/iki 6 MB/.test(l), l);
+      W.closeModal();
+      lygu([d.querySelector('[onclick="openSettings()"]'), typeof W.openSettings, d.querySelectorAll(".header-right .btn-header").length], [null, "undefined", 1], "nustatymų nėra");
+      W.setView("bids");
+      tiesa(d.getElementById("shadowRange") && d.getElementById("shadowInput"), "modelis A");
+      W.onEvalSetting("model", "B");
+      lygu([!!d.getElementById("shadowRange"), !!d.getElementById("shadowInput")], [false, false], "modelis B");
+      const pw = d.getElementById("evPriceW");
+      pw.value = "70"; pw.dispatchEvent(new Event("input", { bubbles: true }));
+      tiesa(/Svorių suma - 90/.test(d.getElementById("evSvoriuSuma").textContent), d.getElementById("evSvoriuSuma").textContent);
+      const cw = d.getElementById("evCarbonW");
+      cw.value = "30"; cw.dispatchEvent(new Event("input", { bubbles: true }));
+      lygu(d.getElementById("evSvoriuSuma").textContent, "", "100");
+      W.onCalcMeta("type", "line");
+      tiesa(W.buildReportData().project.type === "Oro linija", "tipas");
+    } finally { f.remove(); }
+  });
+
+  await testas("V8 Rodiklis ir net / gross patvirtintoje reikšmėje patenka į Word; galiojimas", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      await epdKelias(W, d, { status: "found", value: 99.6, unit: "kg CO2e", declaredUnit: "1 vnt", indicator: "GWP-total", basis: "net", validUntil: "2030-01-01", page: 12, quote: "GWP-total, net kg CO2 -eq 9.96E+01" }, DOK);
+      d.getElementById("epdPatvirtinti").click();
+      kiekis(d, "substationEquipment.breaker", "2");
+      const s = W.GP_REPORTS.build("internal", W.buildReportData()).sections.find(x => /EPD šaltiniai/.test(x.heading));
+      lygu(s.tables[0].columns[3], "Rodiklis", "stulpelis");
+      tiesa(/GWP-total, net, galioja iki 2030-01-01/.test(s.tables[0].rows[0][3]), s.tables[0].rows[0][3]);
+      tiesa(s.di, "skyrius DI");
+    } finally { f.remove(); }
+  });
+
+  await testas("V10 ŠESD istorija: pokytis tik to paties gamintojo ir vieneto įrašams, kabeliu; data vietinė; M3 įrašas ir pasiūlymas trinami tik patvirtinus, tuščia eilutė - be klausimo", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store");
+    try {
+      const a = (date, itemLabel, value, manufacturer, unit) => St.appendEpdHistory({ date, itemLabel, unit: unit || "kg CO2e/vnt", value, manufacturer, fileName: "" });
+      a("2026-01-10", "Jungtuvai", 100, "Alfa"); a("2026-02-10", "Jungtuvai", 35, "Beta"); a("2026-03-10", "Jungtuvai", 150, "alfa "); a("2026-04-10", "Jungtuvai", 60, ""); a("2026-05-10", "Jungtuvai", 60, "");
+      a("2026-06-10", "Jungtuvai", 300, "Alfa", "kg CO2e/kg");
+      W.renderEpdHistory();
+      const eil = [...d.querySelectorAll("#epdHistoryBox tbody tr")].map(tr => [tr.cells[0].textContent, tr.cells[4].textContent, tr.cells[3].textContent.replace(/\u00A0/g, " ")]);
+      lygu(eil, [["2026-01-10", "Alfa", ""], ["2026-02-10", "Beta", ""], ["2026-03-10", "alfa", "+50,0 %"], ["2026-04-10", "-", ""], ["2026-05-10", "-", ""], ["2026-06-10", "Alfa", ""]].map((x, i) => i === 2 ? ["2026-03-10", "alfa ", "+50,0 %"] : x), "pokyčiai");
+      // Vietinė data: senas ISO įrašas
+      const iso = new Date(2026, 0, 15, 1, 30).toISOString();
+      lygu(W.eval("istorijosData")(iso), "2026-01-15", "ISO -> vietinė");
+      lygu(W.eval("istorijosData")("2026-01-15"), "2026-01-15", "jau data");
+      const src = await (await fetch("index.html")).text();
+      tiesa(/date: GP_WORKDAYS\.siandien\(\)/.test(src) && !/slice\(0, 10\)\) \+ '<\/td>'/.test(src), "šaltinis");
+      // M3
+      const pries = St.getEpdHistory().length;
+      d.querySelector("#epdHistoryBox tbody button").click();
+      lygu(St.getEpdHistory().length, pries, "be patvirtinimo");
+      tiesa(/Jungtuvai/.test(d.getElementById("klausimoTekstas").textContent), "klausimas");
+      d.getElementById("klausimoTaip").click();
+      lygu(St.getEpdHistory().length, pries - 1, "patvirtinus");
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB A", bidPrice: "1", embodiedCarbon: "" }, { id: "T", name: "", bidPrice: "", embodiedCarbon: "" }); });
+      W.renderBids();
+      d.querySelector('tr[data-of="T"] .btn-danger-ghost').click();
+      lygu([St.getEvalOffers().length, d.getElementById("overlay").classList.contains("open")], [1, false], "tuščia - be klausimo");
+      d.querySelector('tr[data-of="A"] .btn-danger-ghost').click();
+      lygu(St.getEvalOffers().length, 1, "užpildyta - klausia");
+      tiesa(/UAB A/.test(d.getElementById("klausimoTekstas").textContent), "tekstas");
+      d.getElementById("klausimoTaip").click();
+      lygu(St.getEvalOffers().length, 0, "pašalinta");
+    } finally { f.remove(); }
+  });
+
+  await testas("M1, M2, M4 Terminai: be „worst-case“, „MEAT“, „proxy“, „totalKg“, „anglies vertinimas“ lietuviškoje sąsajoje; grupės eilutė „G-Procure · Ataskaitos“", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow;
+    try {
+      lygu(d.querySelector(".brand-group").textContent, "G-Procure · Ataskaitos", "grupė");
+      const I = W.eval("I18N").lt, tekstai = JSON.stringify(I) + JSON.stringify(W.eval("INFO_CONTENT").lt);
+      lygu(/worst-case|MEAT|proxy|totalKg|anglies vertinim|\bPCF - taikoma/i.exec(tekstai.replace(/"[a-zA-Z.]+":/g, "")), null, "žodynas");
+      for (const k of ["calc.ph", "bids.ph", "set.title", "set.proxyInfo"]) lygu(I[k], undefined, "nebenaudojamas " + k);
+      const en = W.eval("I18N").en, miss = Object.keys(I).filter(k => !(k in en));
+      lygu(miss, [], "visi LT raktai turi EN");
+    } finally { f.remove(); }
+  });
+
+  await testas("M5 Telefonas 375 px: ŠESD ir kaina matomi be slinkimo į šoną, puslapis neslenka, „Laimėtojas“ - šalia kainos; 1280 px - lentelės kaip buvo", async ()=>{
+    const { f, d } = await svarus();
+    const W = f.contentWindow, St = W.eval("Store");
+    try {
+      kiekis(d, "construction.concrete", "100");
+      St.updateEvalOffers(l => { l.push({ id: "A", name: "UAB A su ilgu pavadinimu", bidPrice: "1000000", embodiedCarbon: "800" }, { id: "B", name: "UAB B", bidPrice: "950000", embodiedCarbon: "" }); });
+      W.renderBids();
+      for (const px of [375, 320]) {
+        await plotis(f, px);
+        for (const v of ["calc", "bids", "reports", "overview"]) {
+          W.setView(v);
+          await new Promise(r => requestAnimationFrame(r));
+          tiesa(!slenka(d), px + " px " + v + ": slenka (" + d.documentElement.scrollWidth + ")");
+        }
+        W.setView("calc");
+        await new Promise(r => requestAnimationFrame(r));
+        const c = d.getElementById("sesd_construction_concrete"), r = rect(c);
+        tiesa(r.width > 0 && r.right <= d.documentElement.clientWidth + 1, px + " px ŠESD už krašto: " + r.right);
+        tiesa(/ŠESD/.test(getComputedStyle(c, "::before").content), px + " px stulpelio pavadinimas");
+        W.setView("bids");
+        await new Promise(r => requestAnimationFrame(r));
+        const eil = d.querySelector("#evalResults tbody tr.winner");
+        const kaina = [...eil.children].find(x => /Kaina/.test(x.getAttribute("data-l") || ""));
+        tiesa(rect(kaina).right <= d.documentElement.clientWidth + 1 && /950/.test(kaina.textContent), px + " px kaina: " + rect(kaina).right);
+        tiesa(rect(eil.querySelector(".win-tag")).right <= d.documentElement.clientWidth + 1, px + " px žyma");
+        tiesa(rect(d.querySelector("#evalResults .miss-tag")).right <= d.documentElement.clientWidth - 16, px + " px trūkstamo pėdsako žyma už krašto: " + rect(d.querySelector("#evalResults .miss-tag")).right);
+      }
+      await plotis(f, 1280);
+      W.setView("calc");
+      await new Promise(r => requestAnimationFrame(r));
+      lygu(getComputedStyle(d.querySelector("#calcSections table.calc thead")).position, "static", "1280 px lentelės antraštė");
+      lygu(getComputedStyle(d.querySelector("#calcSections table.calc td")).display, "table-cell", "1280 px lentelė");
+    } finally { f.remove(); }
+  });
+}
+
 (async function(){
   // Bendras catch: išimtis už testas() kitaip palieka „Vykdoma...“, o CI laukia visą laiko limitą
   try {
@@ -497,6 +1442,7 @@ async function testaiEpdIstrauka(){
     await testaiEpdIstrauka();
     await testaiBusenos();
     await testaiSkaiciavimai();
+    await testaiPatikra1104();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
