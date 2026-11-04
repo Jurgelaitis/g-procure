@@ -1471,6 +1471,7 @@ function apzvalga(pav, rusis){
 }
 testas("Rezultato langas", "Kiekvienas rodiklis rodomas vieną kartą: VKI reikšmė tik Diagnozės kortelėje, verdikte ir sąlygose - tik vardai", ()=>{
   paruosk();
+  M('metricById("vmdu").series[12] = 2920');   // pagal ribas 10 / 11 % iliustracinis +9,5 % - dar ne signalas
   const txt = apzvalga("Microsoft licencijos");
   const r = M(`(function(){
     const vki = metricById("vki"), pc = fmtSigned(pctChange(vki), 1);
@@ -2099,7 +2100,7 @@ testas("Patikra 2026-10-27", "K4 ir D6: duomenų normalizavimas - aprašai iš D
              trumpaPc: tn.metrics.map(m => String((DATA = tn, pctChange(m)))).filter(x => x !== "NaN").length,
              url: normalizuokDuomenis(url).duomenys.metrics[0].srcAuto.url, nieko: normalizuokDuomenis({ metrics: [] }).klaida };
   })()`);
-  lygu([r.thr, r.type, r.dec, r.name, r.act], [5, "change", 1, "Brent nafta", true], "aprašai - iš DEFAULT_DATA");
+  lygu([r.thr, r.type, r.dec, r.name, r.act], [7, "change", 1, "Brent nafta", true], "aprašai - iš DEFAULT_DATA");
   lygu([r.eil, r.data, r.zyma], [{ k:"eilute", id:"brent" }, { k:"laikotarpis", id:"lme_cu" }, { k:"zyma", id:"lme_al" }], "netinkami laukai");
   lygu(r.trumpaPc, 0, "trumpa eilutė: pokytis neskaičiuojamas (ne 0 %)");
   lygu(r.url, "", "nuoroda - tik https");
@@ -2112,7 +2113,7 @@ testas("Patikra 2026-10-27", "K4 ir D6: duomenų normalizavimas - aprašai iš D
     DATA = loadData(); renderAll();
     return { xss: window.__xss || 0, imgs: document.querySelectorAll("img[src='x']").length, skaitymas: !!KPI_SKAITYMAS, red: metricById("brent").thr.red, type: metricById("wti").type };
   })()`);
-  lygu([k.xss, k.imgs, k.skaitymas, k.red, k.type], [0, 0, false, 12, "change"], "kodas nevykdomas, aprašai - numatytieji");
+  lygu([k.xss, k.imgs, k.skaitymas, k.red, k.type], [0, 0, false, 21, "change"], "kodas nevykdomas, aprašai - numatytieji");
   const k2 = M(`(function(){
     const d = JSON.parse(JSON.stringify(DATA)); d.metrics[1].series[d.metrics[1].series.length - 1] = '<img src=x onerror="window.__xss=1">';
     localStorage.setItem(STORE_KEY, JSON.stringify(d));
@@ -3375,6 +3376,30 @@ testas(E1104, "Išsaugoti duomenys: be naujų rodiklių - iliustraciniai ir šal
     return { klaida: n.klaida || null, vDemo: true, vKet: v.ketvirtinis, cont: n.metrics.find(m => m.id === "container").series[0], auto, autoPo, pasen };
   })()`);
   lygu([r.klaida, r.vKet, r.cont, r.auto, r.autoPo, r.pasen], [null, true, 7, true, false, false]);
+  paruosk();
+});
+testas(E1104, "Ribos pagal patvirtintą taisyklę: lentelė, išsaugotuose duomenyse - naujos, metodas sąsajoje LT ir EN, skaičiavimo aprašas ir scenarijus saugykloje", async ()=>{
+  paruosk();
+  const RIBOS = { brent:[7,21], wti:[7,18], lme_al:[7,14], lme_cu:[8,20], polymers:[3,5], dujos_eu:[17,65], plienas:[6,12], plieno_vamzdziai:[4,10], gelezies_ruda:[10,31], nikelis:[11,20], cinkas:[11,20],
+                  gscpi:[1,2], container:[4,9], aircargo:[4,15], transp_vanduo:[10,15], transp_oras:[5,8], sski:[3,5], sski_med:[3,5], sski_mas:[3,5], sski_du:[9,16], vki:[3,5], gki:[3,10], vmdu:[10,11] };
+  const r = M(`(function(){
+    const sen = JSON.parse(JSON.stringify(DEFAULT_DATA)); sen.schemaVersion = SCHEMA_VERSION; sen.metrics.forEach(m => { m.thr = { yellow: 99, red: 100 }; });
+    const n = normalizuokDuomenis(sen).duomenys;
+    const lent = {}; DATA.metrics.forEach(m => { lent[m.id] = [m.thr.yellow, m.thr.red]; });
+    const isSaug = {}; n.metrics.forEach(m => { isSaug[m.id] = [m.thr.yellow, m.thr.red]; });
+    const lt = I18N.lt["sec.trig.p"], en = I18N.en["sec.trig.p"], h = document.querySelector('[data-i18n="sec.trig.p"]').textContent;
+    const dek = (id, a) => { const m = metricById(id); m.series = m.series.map(() => 100); m.series[m.series.length - 1] = a; return severity(m); };
+    return { lent, isSaug, lt, en, h, ribos: [dek("dujos_eu", 116), dek("dujos_eu", 117), dek("dujos_eu", 165), dek("wti", 117.9), dek("wti", 118)] };
+  })()`);
+  lygu(r.lent, RIBOS); lygu(r.isSaug, RIBOS, "išsaugotuose duomenyse ribos - iš numatytųjų");
+  lygu(r.ribos, [0, 1, 2, 1, 2], "riba - imtinai");
+  [r.lt, r.h].forEach(x => { turi(x, "75-as, raudona - 95-as procentilis"); turi(x, "be 2021-2023 m. kainų šoko"); turi(x, "ne teisės norma"); turi(x, "ne mažiau kaip 3 ir 5 %"); turi(x, "perskaičiuojama kartą per metus"); });
+  ["75th", "95th percentile", "2021-2023 price shock", "not a legal norm", "at least 3 and 5 %", "once a year"].forEach(x => turi(r.en, x));
+  const doc = await (await fetch("../docs/market-kpi/ribos-2026-11.md")).text();
+  Object.keys(RIBOS).forEach(id => turi(doc, "`" + id + "`"));
+  turi(doc, "| `dujos_eu` |"); turi(doc, "17 / 65");
+  const sk = await (await fetch("../docs/market-kpi/ribu-skaiciavimas.py")).text();
+  turi(sk, "2021"); turi(sk, "sts_sepp_q"); neturi(sk, "api_key");
   paruosk();
 });
 testas(E1104, "Tekstai: poraštė ir privatumo politika sako apie ES transporto kainas, serverio failo nereikia keisti, CSP - tas pats Eurostat adresas", async ()=>{
