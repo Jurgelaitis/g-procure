@@ -51,7 +51,8 @@
     skelb_derybos: {
       PI:  { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_sd", trump: ["terminas_sd_trumpinimas"], pirmas: "paraiskos", salygos: "pagristi",
              beParaisku: "sd_be_paraisku", pirminiai: "terminas_sd_pirminiai" },
-      VPI: { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_sd", trump: ["terminas_sd_trumpinimas"], pirmas: "paraiskos", salygos: "skuba" } },
+      VPI: { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_sd", trump: ["terminas_sd_trumpinimas"], pirmas: "paraiskos", salygos: "skuba",
+             beParaisku: "sd_be_paraisku", pirminiai: "terminas_sd_pirminiai" } },
     konkur_dialogas: {
       PI:  { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_kd", trump: ["terminas_kd_trumpinimas"], pirmas: "paraiskos", salygos: "pagristi" },
       VPI: { bazinis: { T: 30, S: 10 }, maziausias: null, raktas: "terminas_kd", trump: [], pirmas: "paraiskos" } },
