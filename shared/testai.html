@@ -146,21 +146,21 @@ async function testaiJuosta(){
   await testas("Numatyta kalba - lietuvių", async ()=>{
     const { d } = await ramas(SKRIPTAS, "lt");
     lygu(etikete(d), "Visi įrankiai", "etiketė");
-    lygu(tagas(d), "EPSO-G grupės pirkimų platforma", "prierašas");
+    lygu(tagas(d), "Pirkimų įrankių prototipai", "prierašas");
     tiesa(/Grįžti/.test(juosta(d).getAttribute("aria-label")), "aria-label turi būti lietuviškas");
   });
 
   await testas("Puslapis su lang=\"en\" gauna angliškus tekstus", async ()=>{
     const { d } = await ramas(SKRIPTAS, "en");
     lygu(etikete(d), "All tools", "etiketė");
-    lygu(tagas(d), "EPSO-G Group procurement platform", "prierašas");
+    lygu(tagas(d), "Procurement tool prototypes", "prierašas");
   });
 
   await testas("Perjungus <html lang>, juosta persijungia kartu", async ()=>{
     const { d } = await ramas(SKRIPTAS, "lt");
     d.documentElement.lang = "en";
     await tiksas();
-    lygu([etikete(d), tagas(d)], ["All tools", "EPSO-G Group procurement platform"], "po perjungimo į EN");
+    lygu([etikete(d), tagas(d)], ["All tools", "Procurement tool prototypes"], "po perjungimo į EN");
     d.documentElement.lang = "lt";
     await tiksas();
     lygu(etikete(d), "Visi įrankiai", "grąžinus LT");
@@ -7243,6 +7243,54 @@ async function testaiDi(){
         tiesa(d.documentElement.scrollWidth <= d.documentElement.clientWidth, lang + ": 320 px - neslenka");
       } finally { f.remove(); }
     }
+  });
+
+  await testas("Portalo puslapiai sako, kad tai prototipai ir idėjos, ne įmonėje įdiegtas sprendimas, ir nekartoja „platforma“, „Sukurta EPSO-G grupei“, „kasdieniam darbui“, „PSĮ atitiktis“, „Naudojamas“ (naudotojo sprendimas 2026-11-05)", async () => {
+    const SENI = /platforma|platformos|procurement platform|G-Procure platform|ekosistem|ecosystem|Intelligent Procurement for|kasdieniam darbui|everyday work|PS?Į atiti|PS?Į-compliant|PS?Į compliance|Sukurta EPSO|Built for the EPSO|sukurta EPSO|built for the EPSO|suderintas su grupės|su grupės metodologija|aligned with the group|Tikslas - bendras visos|šio darbo tęsinys|continuation of that work|"name": "EPSO-G grupė"|data-lt="(MVP|MVP versija|Naudojami|PSĮ atitiktis)"|lt: "(Naudojamas|Bandomasis|Kuriamas)"|en: "(In use|Pilot)"/;
+    for (const pg of ["../index.html", "../G-Procure_Project.html", "../G-Procure_About.html", "../ai-valdymas.html", "../privatumas.html", "../saugumas.html", "../slapukai.html", "../atsargine-kopija.html", "../shared/portal-link.js", "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-protocol/LITGRID_Generatorius_v3.html"]) {
+      /* Privatumo politikos pakeitimų istorijoje senas apibūdinimas minimas kaip buvęs. */
+      const s = (await saltinis(pg)).replace(/<li><b>2026-11-05<\/b>[^\n]*/g, "");
+      const r = s.match(SENI);
+      tiesa(!r, pg + ": liko senas teiginys „" + (r && r[0]) + "“");
+    }
+    for (const pg of ["../index.html", "../G-Procure_Project.html", "../G-Procure_About.html"]) {
+      const s = await saltinis(pg);
+      tiesa(/<title>[^<]*<\/title>/.test(s) && !/<title>[^<]*EPSO-G/.test(s), pg + ": pavadinime nėra EPSO-G");
+      tiesa(!/<meta[^>]*(description|og:title)[^>]*EPSO-G/.test(s), pg + ": aprašuose nėra EPSO-G");
+      tiesa(!/"publisher":\s*\{\s*"@type":\s*"Organization"/.test(s), pg + ": leidėjas - ne organizacija");
+    }
+    const BUS = {
+      lt: [/Prototipai ir idėjos, kaip skaitmeniniai įrankiai ir DI gali sutaupyti pirkimų specialistų darbo valandas/, /tikrinama automatiniais testais ir su viešais CVP IS dokumentais, tačiau tai nėra įmonėje įdiegtas sprendimas\. Naudoti organizacijoje būtų galima tik po IT, kibernetinio saugumo, teisės ir atitikties vertinimo\./],
+      en: [/Prototypes and ideas for how digital tools and AI could save procurement specialists' working hours/, /checked with automated tests and public CVP IS documents, but this is not a solution deployed in a company\. Use in an organisation would first require IT, cybersecurity, legal and compliance assessment\./]
+    };
+    const atverk = (url, plotis) => new Promise(res => { const f = document.createElement("iframe"); f.style.cssText = "width:" + plotis + "px;height:700px"; f.addEventListener("load", () => res({ f, d: f.contentDocument, w: f.contentWindow }), { once: true }); f.src = url; document.body.appendChild(f); });
+    for (const lang of ["lt", "en"]) {
+      const { f, d } = await atverk("../index.html?lang=" + lang, 1280);
+      try {
+        const t = d.querySelector(".hero").textContent;
+        for (const re of BUS[lang]) tiesa(re.test(t), "portalas " + lang + ": " + re);
+        tiesa((lang === "lt" ? /prototipas/ : /prototype/).test(d.querySelector(".hero__title").textContent), lang + ": prototipas antraštėje");
+        tiesa((lang === "lt" ? /prototipai/i : /prototypes/i).test(d.querySelector(".brand__product-tag").textContent), lang + ": ženklo prierašas");
+        tiesa((lang === "lt" ? /asmeninis Arūno Jurgelaičio/ : /personal project by/).test(d.querySelector('meta[name="description"]').content), lang + ": aprašas pagal kalbą");
+        const k = [...d.querySelectorAll(".card__owner")].map(x => x.textContent).join(" | ");
+        tiesa(!/MVP/.test(k) && (lang === "lt" ? /Prototipas/ : /Prototype/).test(k), lang + ": kortelių žyma „" + k + "“");
+      } finally { f.remove(); }
+      const p = await atverk("../G-Procure_Project.html?lang=" + lang, 1280);
+      try {
+        const v = p.d.querySelector("#mod-list").textContent, b = p.d.querySelector(".page-intro__lead").textContent, st = p.d.querySelector("#state-dabar").textContent;
+        tiesa(BUS[lang][1].test(b), "„Apie“ " + lang + ": įžanga");
+        tiesa(!/Naudojamas|In use|In pilot|Bandomasis/.test(v) && (lang === "lt" ? /Brandesnis prototipas/ : /More mature prototype/).test(v), lang + ": brandos žymos");
+        tiesa((lang === "lt" ? /prototipai: \d+ brandesni, \d+ bandomi, \d+ kuriami\. Įmonėse jie neįdiegti/ : /prototypes at different maturity levels: \d+ more mature, \d+ in testing, \d+ in development\. They are not deployed/).test(st), lang + ": būsena „" + st + "“");
+        const c = [...p.d.querySelectorAll('[data-filter="maturity"] .filter-chip')].map(x => x.textContent);
+        tiesa(!c.some(x => /Naudojami|In use/.test(x)), lang + ": brandos filtras");
+        p.d.querySelector('[data-filter="maturity"] [data-value="naudojamas"]').click();
+        tiesa([...p.d.querySelectorAll("#mod-list .mod-card")].filter(x => x.offsetParent).length > 0, lang + ": brandos filtras veikia");
+      } finally { p.f.remove(); }
+    }
+    const a = await saltinis("../ai-valdymas.html");
+    tiesa(/Tai autoriaus vertinimas, ne teisininko išvada\./.test(a) && /the author's assessment, not a legal opinion\./.test(a), "DI valdymas: vertinimas - ne teisininko išvada");
+    const pr = await saltinis("../G-Procure_Project.html");
+    tiesa(/tik paspaudus mygtuką arba leidus tam pirkimui/.test(pr) && /only on click or when allowed for that procurement/.test(pr), "„Apie“: kada siunčiama į DI");
   });
 
   await testas("Informacinė skiltis veda į „DI valdymas ir rizikų kontrolė“, „Privatumas“ ir „Slapukų nustatymai“ (2026-10-16; svetainės šaknis, LT ir EN); abu puslapiai yra, perjungus kalbą rodomas kitos kalbos blokas", async () => {
