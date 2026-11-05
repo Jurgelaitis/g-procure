@@ -18,7 +18,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppteise-2026-11-05-3";
+var VERSIJA = "ppteise-2026-11-05-4";
 
 var SAVI = [
   "./",
@@ -26,6 +26,8 @@ var SAVI = [
   "./duomenys/registras.json",
   "./duomenys/saltiniai.json",
   "../shared/epso-g.css",
+  "../favicon.svg",
+  "../favicon.ico",
   "../shared/sriftai/nunito-sans-latin.woff2",
   "../shared/sriftai/nunito-sans-latin-ext.woff2",
   "../shared/sriftai/nunito-sans-italic-latin.woff2",
