@@ -527,7 +527,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:var(--color-graphite-
       <div><strong>1️⃣ Grupavimas pagal BVPŽ:</strong> Pirkimai grupuojami pagal pirmus 5 BVPŽ kodo skaitmenis (CPV5) ir objekto pavadinimo panašumą.</div>
       <div><strong>2️⃣ Vertės agregavimas:</strong> Susumuojamos visų grupės įmonių planuojamos vertės kiekvienoje grupėje.</div>
       <div><strong>3️⃣ Datų derinimas:</strong> Sutarčių datos per 90 dienų - stiprus sutapimas, per 180 dienų - vidutinis.</div>
-      <div><strong>4️⃣ Sinergijos vertinimas:</strong> Galimos santaupos - 5, 10, 15 ar 25 % bendros vertės pagal įmonių ir pirkimų skaičių, dar +5 %, kai datos sutampa stipriai.</div>
+      <div><strong>4️⃣ Rikiavimas:</strong> Kandidatai rikiuojami pagal bendrą vertę, tada pagal įmonių skaičių ir sutarčių datų artumą. Santaupų eurais nerodome: patikimų duomenų, kiek sutaupoma sujungus tokius pirkimus, nėra.</div>
     </div>
   </div>
   <div class="card">
@@ -842,10 +842,27 @@ function recommendMethod(value, type, law, isSpecial, org){
     category = "Supaprastintas"; recommended = "S-AK";
     reason = `Vertė ${fmtMoney(value)} mažesnė už tarptautinio ribą, bet ≥ mažos vertės ribos (${fmtMoney(mvThreshold)}).`;
   } else {
-    // Apklausos rūšį nustato įmonės mažos vertės pirkimų tvarkos aprašas, ne įstatymas: 15 000 / 30 000 € - modulio orientyras
-    // (V1, 2026-10-26: iki tol rodyta kaip taisyklė visoms įmonėms be paaiškinimo)
-    category = "Mažos vertės"; recommended = value < 15000 ? "MV-NZ" : value < 30000 ? "MV-NR" : "MV-SAB";
-    reason = `Vertė ${fmtMoney(value)} mažesnė už mažos vertės ribą (${fmtMoney(mvThreshold)}) - mažos vertės pirkimas. Apklausos rūšį (žodžiu, raštu ar skelbiama) nustato įmonės mažos vertės pirkimų tvarkos aprašas; siūloma ${recommended} - modulio orientyras (iki 15 000 € - žodžiu, iki 30 000 € - raštu, nuo 30 000 € - skelbiama), ne teisės norma.`;
+    /* Apklausos rūšis - pagal įmonės mažos vertės pirkimų tvarkos aprašą (shared/organizacijos.js mvApklausa; naudotojo sprendimas
+       2026-11-06). Iki tol - modulio orientyras 15 000 / 30 000 € be šaltinio, o 30 000 € aprašuose lemia tik pažymos tvirtinimą.
+       Įmonei, kurios aprašo G-Procure neturi, rūšis nesiūloma (recommended - null). */
+    category = "Mažos vertės";
+    const o = window.GP_ORG && org ? GP_ORG.pagalId(org) : null, mv = o && o.mvApklausa;
+    const pr = `Vertė ${fmtMoney(value)} mažesnė už mažos vertės ribą (${fmtMoney(mvThreshold)}) - mažos vertės pirkimas.`;
+    if(mv){
+      const P = mv.punktai, iki = fmtMoney(mv.neskelbiamaIki), dalys = [];
+      if(P.prioritetas) dalys.push(`prioritetinis būdas - skelbiama apklausa (${P.prioritetas})`);
+      dalys.push(`kai vertė neviršija ${iki} be PVM, galima ${P.prioritetas ? "ir " : ""}neskelbiama apklausa, ir žodžiu (${P.neskelbiama})` +
+        (mv.tiekejuMin ? `, apklausiant ne mažiau kaip ${mv.tiekejuMin} tiekėjus (${P.tiekejai})` : ""));
+      if(mv.rastuNuo) dalys.push(`virš ${fmtMoney(mv.rastuNuo)}, kai tiekėjas gaus prieigą prie reikšmingų įmonės sistemų ar perkama pagal Vyriausybės nacionalinio saugumo BVPŽ kodų sąrašą, - raštu (${P.rastu})`);
+      dalys.push(`viršijus ${iki} - ${P.prioritetas ? "" : "skelbiama apklausa, "}neskelbiama tik aprašo nurodytais pagrindais su pagrindimu (${P.virs})`);
+      if(P.visada) dalys.push(`skelbiama apklausa galima visada (${P.visada})`);
+      recommended = !P.prioritetas && value <= mv.neskelbiamaIki ? "MV-NZ" : "MV-SAB";
+      reason = `${pr} Pagal ${o.pavadinimas} ${mv.aprasas.lt}: ${dalys.join("; ")}.`;
+    } else {
+      recommended = null;
+      reason = `${pr} Apklausos rūšį (žodžiu, raštu ar skelbiama) nustato įmonės mažos vertės pirkimų tvarkos aprašas` +
+        (o ? ` - ${o.pavadinimas} aprašo G-Procure neturi` : "") + `, todėl rūšis nesiūloma: patikrinkite pagal aprašą.`;
+    }
   }
   // Dalių išimtis - skaičiai iš shared/thresholds.js, formuluotė ir nuoroda - taisyklių variklis (A3)
   const D = window.GP_TAISYKLES ? GP_TAISYKLES.dalys(law, "lt") : null;
@@ -1678,11 +1695,11 @@ function runMethodTest(){
   const law=document.getElementById("qtLaw").value;
   const sp=document.getElementById("qtSpec").value==="1";
   const r=recommendMethod(v,t,law,sp,(law === "VPI" ? COMPANIES["EPSO-G"] : COMPANIES["LITGRID"]).org);
-  const m=METHODS[r.recommended];
+  const m=r.recommended ? METHODS[r.recommended] : null;
   document.getElementById("methodResult").innerHTML = `
     <div class="alert"><span class="alert-icon">⚖️</span>
       <div class="alert-body">
-        <div class="alert-title">Rekomenduojama: <span class="badge green">${r.recommended} - ${m?m.name:""}</span> · Kategorija: ${r.category}</div>
+        <div class="alert-title">${r.recommended ? `Rekomenduojama: <span class="badge green">${r.recommended} - ${m?m.name:""}</span>` : "Apklausos rūšis - pagal įmonės aprašą"} · Kategorija: ${r.category}</div>
         <p style="margin:8px 0">${r.reason}</p>
         <div class="grid grid-3" style="margin-top:8px">
           <div class="kpi cool"><span class="kpi-label">Tarpt. riba</span><span class="kpi-value" style="font-size:18px">${fmtMoney(r.intlThreshold)}</span></div>
@@ -1842,7 +1859,7 @@ function renderMethodAudit(){
       <td><strong>${fmtMoney(p.verte||0)}</strong></td>
       <td>${escapeHtml(p.rusis||"")}</td>
       <td><span class="badge ${spalva === "green" ? "green" : "gray"}">${escapeHtml(b.kodas || (p.budas ? "?" : "-"))}</span></td>
-      <td>${b.rek ? `<span class="badge blue">${b.rek.recommended}</span>` : "-"}</td>
+      <td>${b.rek ? (b.rek.recommended ? `<span class="badge blue">${b.rek.recommended}</span>` : `<span class="badge gray" title="Apklausos rūšį nustato įmonės mažos vertės pirkimų tvarkos aprašas">MV</span>`) : "-"}</td>
       <td><span class="badge ${spalva}"${b.tekstas ? ` title="${escapeHtml(b.tekstas)}"` : ""}>${escapeHtml(tekstas)}</span></td>
     </tr>`;
   });
@@ -2044,7 +2061,9 @@ function buildCentralizationClusters(){
   return clusters;
 }
 
-// Bendra sinergijos skaičiavimo formulė - naudojama ir ekrane, ir PDF
+/* Kandidato duomenys - naudojami ir ekrane, ir PDF. Nuo 2026-11-06 (naudotojo sprendimas) santaupų procento ir sumos nebėra:
+   5-25 % prielaida šaltinio neturėjo (patikima empirika - tik apie standartines prekes, energetikos darbams netinka). */
+const DATU_ARTUMAS = { stiprus: 3, vidutinis: 2, silpnas: 1, "n/a": 0 };
 function computeSynergy(group){
   const items = group.items;
   const companies = new Set(items.map(p => p.imone).filter(k => COMPANIES[k]));   // nenustatyta įmonė - ne atskira įmonė
@@ -2055,29 +2074,24 @@ function computeSynergy(group){
     const span = Math.abs((Math.max(...dates) - Math.min(...dates)) / 86400000);
     timeAlign = span <= 90 ? "stiprus" : span <= 180 ? "vidutinis" : "silpnas";
   }
-  const cc = companies.size, ic = items.length;
-  let synergyPct = 5;
-  if(cc >= 3 && ic >= 4) synergyPct = 25;
-  else if(cc >= 2 && ic >= 3) synergyPct = 15;
-  else if(cc >= 2) synergyPct = 10;
-  if(timeAlign === "stiprus") synergyPct += 5;
-  const savings = Math.round(totalValue * synergyPct / 100);
-  const score = cc*10 + ic*3 + (timeAlign==="stiprus"?20:timeAlign==="vidutinis"?10:0) + Math.log10(totalValue+1)*2;
-  return {
-    cpv5: group.cpv5, label: group.label, items, companies: [...companies],
-    totalValue, timeAlign, synergyPct, savings, score
-  };
+  return { cpv5: group.cpv5, label: group.label, items, companies: [...companies], totalValue, timeAlign };
 }
 
 /* Grupinio pirkimo kandidatas - bent dvi skirtingos (žinomos) įmonės (V3, 2026-10-26: iki tol ir vienos įmonės dvi eilutės -
-   tai jau „Galimi dublikatai“). Santaupų procentas - modulio prielaida, ne skaičiavimas iš rinkos duomenų (K6). */
+   tai jau „Galimi dublikatai“). Rikiuojama pagal bendrą vertę, tada įmonių skaičių ir datų artumą (naudotojo sprendimas 2026-11-06). */
 function centralizavimoKandidatai(){
   return buildCentralizationClusters()
     .filter(g => new Set(g.items.map(p => p.imone).filter(k => COMPANIES[k])).size >= 2)
     .map(computeSynergy)
-    .sort((a,b)=>b.score - a.score);
+    .sort((a,b)=> (b.totalValue - a.totalValue) || (b.companies.length - a.companies.length) || (DATU_ARTUMAS[b.timeAlign] - DATU_ARTUMAS[a.timeAlign]));
 }
-const SINERGIJOS_PRIELAIDA = "modulio prielaida: 5-25 % vertės pagal įmonių ir pirkimų skaičių, +5 %, jei sutarčių datos artimos; šaltinio nėra";
+const DATU_TEKSTAS = { stiprus: "sutarčių datos artimos (per 90 d.)", vidutinis: "sutarčių datos per 180 d.", silpnas: "sutarčių datos toli viena nuo kitos", "n/a": "sutarčių datų nėra" };
+function datuPatarimas(t){
+  return t === "stiprus" ? "Sutarčių datos artimos - bendrą pirkimą suderinti paprasčiausia."
+    : t === "vidutinis" ? "Sutarčių datos per pusmetį - bendram pirkimui reikėtų suderinti terminus."
+    : t === "silpnas" ? "Sutarčių datos toli viena nuo kitos - bendras pirkimas galimas tik perkėlus terminus arba sudarius preliminariąją sutartį."
+    : "Sutarčių datos neįrašytos - artumo įvertinti negalima.";
+}
 function sujungtoTekstas(c){
   const r = (() => { const k = {}; c.items.forEach(p => { const x = rusisK(p.rusis); if(x) k[x] = (k[x]||0) + 1; }); return Object.keys(k).sort((a,b) => k[b]-k[a])[0]; })();
   const istatymai = [...new Set(c.companies.map(k => COMPANIES[k].law))];
@@ -2097,16 +2111,13 @@ function runCentralAnalysis(){
     document.getElementById("centralResult").innerHTML=`<div class="empty"><div class="icon">🤝</div>Centralizavimo kandidatų neaptikta. Bent 2 įmonės turėtų turėti pirkimų su panašiu objekto pavadinimu ir ta pačia CPV5 grupe.</div>`;
     return;
   }
-  let html=`<div class="alert info"><span class="alert-icon">🤝</span><div class="alert-body"><div class="alert-title">Galimų grupinių pirkimų: ${candidates.length}</div>Santaupų įvertis: <strong>~${fmtMoney(candidates.reduce((s,c)=>s+c.savings,0))}</strong> (${SINERGIJOS_PRIELAIDA}).<br><small>Grupuojama pagal BVPŽ kodo 5 pirmus skaitmenis ir objekto pavadinimo panašumą (Jaccard ≥ 0,15). Ta pati 5 skaitmenų grupė gali apimti skirtingus objektus (pvz. 45231 - ir vamzdynų, ir elektros linijų tiesimo darbai), todėl ar pirkimus galima jungti, sprendžia žmogus.</small></div></div>`;
+  let html=`<div class="alert info"><span class="alert-icon">🤝</span><div class="alert-body"><div class="alert-title">Galimų grupinių pirkimų: ${candidates.length}</div>Bendra vertė: <strong>${fmtMoney(candidates.reduce((s,c)=>s+c.totalValue,0))}</strong>. Rikiuojama pagal bendrą vertę, tada įmonių skaičių ir datų artumą; santaupų eurais nerodome - patikimų duomenų nėra.<br><small>Grupuojama pagal BVPŽ kodo 5 pirmus skaitmenis ir objekto pavadinimo panašumą (Jaccard ≥ 0,15). Ta pati 5 skaitmenų grupė gali apimti skirtingus objektus (pvz. 45231 - ir vamzdynų, ir elektros linijų tiesimo darbai), todėl ar pirkimus galima jungti, sprendžia žmogus.</small></div></div>`;
   candidates.slice(0,12).forEach(c=>{
-    const recColor=c.synergyPct>=20?"green":c.synergyPct>=12?"yellow":"gray";
     html+=`<div class="card" style="margin-bottom:10px">
       <div class="split"><h4 style="margin:0">BVPŽ ${escapeHtml(c.cpv5)} · „${escapeHtml(c.label)}“ · ${c.items.length} pirkimai · ${c.companies.length} įmonės</h4>
-        <span class="badge ${recColor}" title="${escapeHtml(SINERGIJOS_PRIELAIDA)}">Prielaida ${c.synergyPct} %</span>
-        <span class="badge blue">Datų derinimas: ${c.timeAlign}</span>
-        <div class="split-end"><strong>${fmtMoney(c.totalValue)}</strong> · santaupų įvertis ~${fmtMoney(c.savings)}</div>
+        <span class="badge ${c.timeAlign === "stiprus" ? "green" : c.timeAlign === "vidutinis" ? "yellow" : "gray"}">${escapeHtml(DATU_TEKSTAS[c.timeAlign])}</span>
+        <div class="split-end"><strong>${fmtMoney(c.totalValue)}</strong></div>
       </div>
-      <div class="progress"><div style="width:${Math.min(100,c.synergyPct*4)}%"></div></div>
       <div style="margin-top:10px">${c.companies.map(co=>`<span class="badge gray" style="margin-right:4px">${escapeHtml(co)}</span>`).join("")}</div>
       <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--color-emerald-strong);font-weight:600">Peržiūrėti pirkimų sąrašą (${c.items.length}) ▾</summary>
         <div class="table-wrap" style="margin-top:10px"><table style="min-width:auto;font-size:12px">
@@ -2114,7 +2125,7 @@ function runCentralAnalysis(){
           <tbody>${c.items.map(p=>`<tr><td>${imonesZyma(p)}</td><td>${escapeHtml(p.nr||"")}</td><td>${escapeHtml((p.objektas||"").slice(0,60))}</td><td>${fmtMoney(p.verte||0)}</td><td style="font-family:inherit;font-variant-numeric:tabular-nums">${escapeHtml(String(p.bvpz||"").slice(0,14))}</td><td>${fmtIfDate(p.sutarciesData)}</td></tr>`).join("")}</tbody>
         </table></div>
       </details>
-      <div class="hint" style="margin-top:10px">💡 <strong>Rekomendacija:</strong> ${c.synergyPct>=20?"Stipri centralizavimo galimybė - apsvarstykite bendrą EPSO-G grupės pirkimą.":c.synergyPct>=12?"Vidutinė centralizavimo galimybė - apsvarstykite bendrą pirkimą, preliminariąją sutartį arba CPO katalogą.":"Mažesnė centralizavimo galimybė - jungti verta, jei pirkimai panašūs techniškai."} ${escapeHtml(sujungtoTekstas(c))}</div>
+      <div class="hint" style="margin-top:10px">💡 <strong>Ką apsvarstyti:</strong> ${escapeHtml(datuPatarimas(c.timeAlign))} ${escapeHtml(sujungtoTekstas(c))}</div>
     </div>`;
   });
   document.getElementById("centralResult").innerHTML=html;
@@ -2389,7 +2400,7 @@ function renderWarningCenter(){
     w.mismatch.slice(0,5).forEach(({p, chosen, recommended, busena, tekstas}) => {
       html += `<div class="alert ${busena === "kliutis" ? "error" : "warn"}" style="margin-bottom:6px"><span class="alert-icon">⚖️</span><div class="alert-body">
         <strong>${escapeHtml(p.nr||"?")}</strong> · ${imonesZyma(p)} ${escapeHtml((p.objektas||"").slice(0,60))}<br>
-        Pasirinkta: <span class="badge yellow">${escapeHtml(chosen)}</span> · Siūloma pagal vertę: <span class="badge green">${escapeHtml(recommended)}</span>
+        Pasirinkta: <span class="badge yellow">${escapeHtml(chosen)}</span> · Siūloma pagal vertę: <span class="badge green">${escapeHtml(recommended || "mažos vertės pirkimas")}</span>
         <div style="margin-top:4px">${escapeHtml(tekstas)}</div>
         <button class="btn ghost sm" onclick="editProc('${p.id}')">✎ Atidaryti</button>
       </div></div>`;
@@ -2488,8 +2499,8 @@ function axisTick(v){ return DASH_METRIC==="value" ? fmtMoney(v) : v; }
 function centralizationSummary(){
   try{
     const cands = centralizavimoKandidatai();
-    return { count: cands.length, savings: cands.reduce((s,c)=>s+c.savings,0) };
-  }catch(e){ return { count:0, savings:0 }; }
+    return { count: cands.length, verte: cands.reduce((s,c)=>s+c.totalValue,0) };
+  }catch(e){ return { count:0, verte:0 }; }
 }
 
 let dashCharts = {};
@@ -2714,7 +2725,7 @@ function renderDashboard(){
   document.getElementById("kpiFlagsSub").innerHTML = `${errN} su klaidom · ${warnN} su įspėjimais<br><strong>${fmtMoney(riskVal)}</strong> vertės su problemomis`;
   const cs = centralizationSummary();
   document.getElementById("kpiCentral").textContent = cs.count;
-  document.getElementById("kpiCentralSub").innerHTML = cs.count ? `galimų grupinių pirkimų<br>~<strong>${fmtMoney(cs.savings)}</strong> santaupų pagal prielaidą` : "galimų grupinių pirkimų";
+  document.getElementById("kpiCentralSub").innerHTML = cs.count ? `galimų grupinių pirkimų<br>bendra vertė <strong>${fmtMoney(cs.verte)}</strong>` : "galimų grupinių pirkimų";
 
   const legendOpts = {responsive:true, maintainAspectRatio:false, plugins:{legend:{position:"bottom",labels:{font:{family:"Nunito Sans"}}}}};
 
@@ -2962,19 +2973,18 @@ function kurkPdf(){
     doc.setFontSize(14); doc.setFont("helvetica","bold"); doc.text(pdfText("Centralizavimo rekomendacijos"),14,32);
     // v1.2: naudojama TA PATI computeSynergy() formulė, kaip ekrane (CPV5 + Jaccard)
     const candidates = centralizavimoKandidatai();
-    // Pavyzdys - didžiausios vertės pirkimo objektas (iki tol 8 raidžių kamienas „spausdin“); santaupos - prielaida (K6)
+    // Pavyzdys - didžiausios vertės pirkimo objektas (iki tol 8 raidžių kamienas „spausdin“); santaupų nebėra (2026-11-06)
     const rows = candidates.map(c => [
       c.cpv5,
       pdfText([...c.items].sort((a,b)=>(b.verte||0)-(a.verte||0))[0].objektas.slice(0, 50)),
       c.items.length,
       pdfText(c.companies.join(", ")),
       pdfText(fmtMoney(c.totalValue)),
-      `${c.synergyPct}%`,
-      pdfText(`~${fmtMoney(c.savings)}`)
+      pdfText(DATU_TEKSTAS[c.timeAlign])
     ]);
-    doc.autoTable({startY:38, head:[[pdfText("BVPŽ 5 sk."),pdfText("Pavyzdys"),pdfText("Pirkimų"),pdfText("Įmonės"),pdfText("Bendra vertė"),pdfText("Prielaida"),pdfText("Santaupų įvertis")]], body:rows, headStyles:{fillColor:[0,160,114],textColor:255}, styles:{font:"helvetica",fontSize:9}});
+    doc.autoTable({startY:38, head:[[pdfText("BVPŽ 5 sk."),pdfText("Pavyzdys"),pdfText("Pirkimų"),pdfText("Įmonės"),pdfText("Bendra vertė"),pdfText("Sutarčių datos")]], body:rows, headStyles:{fillColor:[0,160,114],textColor:255}, styles:{font:"helvetica",fontSize:9}});
     doc.setFontSize(8); doc.setFont("helvetica","normal");
-    doc.text(doc.splitTextToSize(pdfText("Santaupų įvertis - " + SINERGIJOS_PRIELAIDA + ". Ar pirkimus galima jungti ir koks įstatymas taikomas, sprendžia pirkimą organizuojanti įmonė."), 269), 14, doc.lastAutoTable.finalY + 8);
+    doc.text(doc.splitTextToSize(pdfText("Rikiuojama pagal bendrą vertę, tada įmonių skaičių ir datų artumą. Santaupų eurais nerodome - patikimų duomenų nėra. Ar pirkimus galima jungti ir koks įstatymas taikomas, sprendžia pirkimą organizuojanti įmonė."), 269), 14, doc.lastAutoTable.finalY + 8);
   }
   const pc=doc.getNumberOfPages();
   for(let i=1;i<=pc;i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(115,116,131); doc.text(pdfText(`EPSO-G grupė · MPP ataskaita · psl. ${i}/${pc}`),14,205); }
