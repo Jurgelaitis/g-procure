@@ -1239,6 +1239,106 @@ async function testaiAntraste(){
   });
 }
 
+/* ---------- Formos laukų būsena (2026-11-05, naudotojo sprendimas „abi dalys“) ----------
+   1) visur: pavyzdys pasviruoju ir ne vien skaičius, naršyklės automatinio pildymo fonas neutralizuotas;
+   2) ilgose pildymo formose (.gp-pildoma): užpildytas laukas žalsvas, tuščias baltas; ne lentelėse, ne klaidingas, ne išjungtas. */
+const LAUKU_FORMOS = [["../PP-ts/TS_Asistentas.html", 'main.app-main'], ["../PP-qual/PP-QUAL.html", "#wizard-body"], ["../PP-report/PP-report.html", "#form-container"],
+  ["../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "#section-info"], ["../pirkimu-korteles.html", "#formaForm"], ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "#modalContent"],
+  ["../PP-protocol/LITGRID_Generatorius_v3.html", "#page-new-pk"], ["../PP-protocol/LITGRID_Generatorius_v3.html", "#proto-form-content"], ["../PP-protocol/LITGRID_Generatorius_v3.html", "#edit-modal"],
+  ["../PP-cost-benefit/kastu_naudos_analize.html", "#p1"]];
+async function testaiLaukuBusena(){
+  dabartine = grupe("Formos laukų būsena (epso-g.css, lauku-busena.js)");
+  const ZALIA = "rgb(239, 249, 241)", BALTA = "rgb(255, 255, 255)";
+  await testas("Konteineryje .gp-pildoma: užpildytas laukas žalsvas ir pusjuodis, tuščias baltas; sąrašas - tik su tuščiu pasirinkimu; lentelėje, klaidingas, išjungtas ir už konteinerio - be būsenos", async ()=>{
+    const { f, d, w } = await new Promise(res => { const f = document.createElement("iframe"); f.style.cssText = "width:900px;height:900px";
+      f.addEventListener("load", () => res({ f, d: f.contentDocument, w: f.contentWindow }), { once: true });
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"><style>*{transition:none!important}input,textarea,select{background:#fff;border:1px solid #ccc}</style></head><body>'
+        + '<div class="gp-pildoma" id="c"><input id="be"><input id="su" placeholder="pvz., 1"><input id="sk" type="number"><textarea id="ta"></textarea>'
+        + '<select id="s1"><option value="">Pasirinkite</option><option value="a">A</option></select><select id="s2"><option value="x">X</option><option value="y">Y</option></select>'
+        + '<input id="kl" aria-invalid="true"><input id="kl2" class="invalid"><input id="is" disabled><input id="data" type="date"><table><tr><td><input id="lent" placeholder="pvz., 3"></td><td><input id="lent2"></td></tr></table></div>'
+        + '<input id="lauke" placeholder="pvz., 2"><div id="velai"></div><script src="lauku-busena.js"><\/script></body></html>';
+      document.body.appendChild(f); });
+    try {
+      await tiksas(); await new Promise(r => w.requestAnimationFrame(() => r()));
+      const cs = id => w.getComputedStyle(d.getElementById(id)), v = (id, x) => { d.getElementById(id).value = x; };
+      lygu(["be", "sk", "ta", "lent2"].map(id => d.getElementById(id).getAttribute("placeholder")), [" ", " ", " ", null], "placeholder \" \" - laukams be pavyzdžio, ne lentelėje");
+      lygu(d.getElementById("su").getAttribute("placeholder"), "pvz., 1", "esamas pavyzdys nekeičiamas");
+      for (const id of ["be", "su", "sk", "ta"]) {
+        lygu(cs(id).backgroundColor, BALTA, id + " tuščias - baltas");
+        v(id, id === "sk" ? "5" : "Reikšmė");
+        lygu(cs(id).backgroundColor, ZALIA, id + " užpildytas - žalsvas");
+        lygu(cs(id).borderTopColor, "rgb(0, 160, 114)", id + " užpildytas - smaragdo rėmelis");
+        lygu(cs(id).fontWeight, id === "ta" ? "400" : "600", id + " reikšmės storis");
+      }
+      lygu([cs("s1").backgroundColor, cs("s1").fontStyle], [BALTA, "italic"], "sąrašas nepasirinktas - baltas, pasviręs");
+      v("s1", "a"); lygu([cs("s1").backgroundColor, cs("s1").fontWeight, cs("s1").fontStyle], [ZALIA, "600", "normal"], "sąrašas pasirinktas");
+      lygu(cs("s2").backgroundColor, BALTA, "sąrašas be tuščio pasirinkimo - be būsenos");
+      for (const id of ["kl", "kl2", "is", "lent", "lauke"]) { v(id, "Reikšmė"); lygu(cs(id).backgroundColor, BALTA, id + " - be būsenos"); }
+      lygu(w.getComputedStyle(d.getElementById("lauke"), "::placeholder").fontStyle, "italic", "pavyzdys pasviruoju ir už konteinerio");
+      // Vėliau įterpti laukai (formos piešiamos iš šablonų) - placeholder pridedamas po kadro
+      d.getElementById("c").insertAdjacentHTML("beforeend", '<input id="naujas">');
+      await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(() => r())));
+      lygu(d.getElementById("naujas").getAttribute("placeholder"), " ", "vėliau įterptas laukas");
+      d.getElementById("velai").innerHTML = '<input id="vel">';
+      await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(() => r())));
+      lygu(d.getElementById("vel").hasAttribute("placeholder"), false, "už konteinerio - nekeičiama");
+      d.getElementById("velai").className = "gp-pildoma";
+      await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(() => r())));
+      lygu(d.getElementById("vel").getAttribute("placeholder"), " ", "konteineris, gavęs klasę vėliau");
+    } finally { f.remove(); }
+  });
+  await testas("Šaltiniai: aštuoni moduliai įjungia būseną ir jungia lauku-busena.js; PP-salygos - ne (ten žalia reiškia „Patvirtinta“); bendros taisyklės - epso-g.css", async ()=>{
+    const blogi = [];
+    for (const [m, sel] of LAUKU_FORMOS) {
+      const src = await saltinis(m);
+      if (!/<script src="(?:\.\.\/)?shared\/lauku-busena\.js"><\/script>/.test(src)) blogi.push(m + ": nejungia lauku-busena.js");
+      const id = sel.replace(/^[a-z.-]*#/, "");
+      const ijungta = sel === "main.app-main" ? /<main class="app-main gp-pildoma">/.test(src)
+        : new RegExp('<[^>]*(class="[^"]*gp-pildoma[^"]*"[^>]*id="' + id + '"|id="' + id + '"[^>]*class="[^"]*gp-pildoma)').test(src);
+      if (!ijungta)
+        blogi.push(m + ": " + sel + " be gp-pildoma");
+      if (/:placeholder-shown/.test(src.replace(/\/\*[\s\S]*?\*\//g, ""))) blogi.push(m + ": savos laukų būsenos taisyklės (turi būti tik epso-g.css)");
+    }
+    tiesa(!/gp-pildoma/.test(await saltinis("../PP-salygos/PP-SALYGOS.html")), "PP-salygos neturi įjungti laukų būsenos");
+    const css = await saltinis("epso-g.css");
+    tiesa(/:where\(input, textarea\)::placeholder \{ font-style: italic; \}/.test(css), "pavyzdys pasviruoju - visur");
+    tiesa(/:where\(input, textarea, select\):-webkit-autofill[^{]*\{[^}]*box-shadow: inset 0 0 0 100px var\(--gp-lauko-fonas, #fff\)/.test(css), "naršyklės automatinio pildymo fonas neutralizuotas - visur");
+    tiesa(/\.gp-pildoma :is\(.*?\)\[placeholder\]:not\(:placeholder-shown, :disabled, \[aria-invalid="true"\], \.invalid, td \*, th \*\)/.test(css), "būsenos taisyklė su išimtimis");
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+  await testas("Pavyzdys niekur neatrodo kaip įvesta reikšmė: placeholder - ne vien skaičius, suma ar data („0.00“ sumos lauke atrodė kaip įrašyta suma)", async ()=>{
+    const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)).concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-teise/admin.html", "../PP-salygos/kartografas.html", "../PP-salygos/E0-variklis.html"]))];
+    const blogi = [];
+    for (const m of puslapiai) {
+      const src = await saltinis(m);
+      for (const x of src.matchAll(/placeholder=(["'])([^"']*)\1/g)) { const p = x[2].trim(); if (/^[\d\s.,%€:\/-]+$/.test(p) && p) blogi.push(m + ": placeholder=\"" + x[2] + "\""); }
+      for (const x of src.matchAll(/\.placeholder\s*=\s*(["'])([\d\s.,%€:\/-]+)\1/g)) blogi.push(m + ": .placeholder = \"" + x[2] + "\"");
+    }
+    tiesa(puslapiai.length >= 29, "puslapių tik " + puslapiai.length);
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+  await testas("Tikruose moduliuose (KNA, PP-graphs, PP-qual, PP-ts): užpildytas formos laukas - žalsvas, tuščias - baltas", async ()=>{
+    const atverk = url => new Promise(res => { const f = document.createElement("iframe"); f.style.cssText = "width:1280px;height:800px"; f.addEventListener("load", () => res(f), { once: true }); f.src = url; document.body.appendChild(f); });
+    const blogi = [];
+    for (const [m, prad, lauk] of [["../PP-cost-benefit/kastu_naudos_analize.html", null, "#proc_name"], ["../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", null, "#f-pavadinimas"],
+                                   ["../PP-qual/PP-QUAL.html", w => w.startEntry("info"), "#p-name"], ["../PP-ts/TS_Asistentas.html", null, "#genTitle"]]) {
+      const f = await atverk(m + "?saugykla=testine");
+      try {
+        const w = f.contentWindow, d = f.contentDocument;
+        for (let i = 0; i < 60 && d.readyState !== "complete"; i++) await tiksas();
+        if (prad) prad(w); await tiksas();
+        const st = d.createElement("style"); st.textContent = "*{transition:none!important}"; d.head.appendChild(st);
+        const el = d.querySelector(lauk);
+        if (!el) { blogi.push(m + ": nėra " + lauk); continue; }
+        el.value = ""; const tuscias = w.getComputedStyle(el).backgroundColor;
+        el.value = "Reikšmė"; const pilnas = w.getComputedStyle(el).backgroundColor;
+        if (pilnas !== ZALIA || tuscias === ZALIA) blogi.push(m + " " + lauk + ": tuščias " + tuscias + ", užpildytas " + pilnas);
+      } finally { f.remove(); }
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+  });
+}
+
 /* ---------- Įspėjimas uždarant (neissaugotas-darbas.js) ---------- */
 /* PP-qual, PP-salygos ir PP-graphs nieko nesaugo, tad iki 2026-09-25 uždarius kortelę darbas dingdavo be klausimo.
    Sintetinis beforeunload įvykis parodo, ar puslapis prašytų naršyklės klausimo (defaultPrevented). Naudotojo
@@ -8638,7 +8738,7 @@ async function testaiNacsaugBvpz(){
   // be parametro - visos iš eilės. Nauja grupė - į paskutinę dalį (arba trumpiausią); dalių skaičius - ir <meta name="gp-testu-dalys">
   const GRUPES = GP_TESTU_DALYS.grupes([
     [testaiJuosta, testaiKopija, testaiPinigai, testaiUzkodavimas, testaiPranesimai, testaiPaaiskinimas, testaiBibliotekos, testaiKopijavimas,
-     testaiDatos, testaiDalys, testaiBudai, testaiAiProxy, testaiDocxStiliai, testaiSkydelis, testaiAntraste, testaiDarbas, testaiTeise,
+     testaiDatos, testaiDalys, testaiBudai, testaiAiProxy, testaiDocxStiliai, testaiSkydelis, testaiAntraste, testaiLaukuBusena, testaiDarbas, testaiTeise,
      testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
      testaiKalbuSutikrinimas, testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
      testaiVendor],
