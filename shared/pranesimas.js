@@ -122,7 +122,7 @@
     x.setAttribute("aria-label", T.uzdaryti);
     x.title = T.uzdaryti;
 
-    var laikas = null, liko = trukme, nuo = 0, baigta = false;
+    var laikas = null, liko = trukme, nuo = 0, baigta = false, atgal = null;
     function uzdaryk() {
       if (baigta) return;
       baigta = true;
@@ -130,13 +130,17 @@
       var turejoFokusa = el.contains(doc.activeElement);
       el.classList.add("gp-pranesimas--iseina");
       global.setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 260);
-      if (turejoFokusa && doc.activeElement && doc.activeElement.blur) doc.activeElement.blur();
+      // Uždarius pranešimą fokusas grįžta ten, iš kur atėjo, kitaip - į turinį (2026-11-05; iki tol - puslapio pradžia)
+      if (turejoFokusa) {
+        var P = global.GP_PRIEINAMUMAS, tikslas = atgal && atgal.isConnected && atgal.getClientRects().length ? atgal : (P && P.turinioSritis ? P.turinioSritis() : doc.querySelector("main,[role=main]"));
+        if (!(P && tikslas && P.fokusas(tikslas)) && doc.activeElement && doc.activeElement.blur) doc.activeElement.blur();
+      }
     }
     function paleisk() { if (!liko || baigta) return; nuo = Date.now(); laikas = global.setTimeout(uzdaryk, liko); }
     function sustabdyk() { if (!laikas) return; global.clearTimeout(laikas); laikas = null; liko = Math.max(1000, liko - (Date.now() - nuo)); }
     el.addEventListener("mouseenter", sustabdyk);
     el.addEventListener("mouseleave", function () { if (!el.contains(doc.activeElement)) paleisk(); });
-    el.addEventListener("focusin", sustabdyk);
+    el.addEventListener("focusin", function (e) { if (e.relatedTarget && !el.contains(e.relatedTarget)) atgal = e.relatedTarget; sustabdyk(); });
     el.addEventListener("focusout", function (e) { if (!el.contains(e.relatedTarget)) paleisk(); });
     x.addEventListener("click", uzdaryk);
 
