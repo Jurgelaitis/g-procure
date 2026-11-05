@@ -39,12 +39,12 @@
     lt: {
       etikete: "Visi įrankiai",
       aria: "Grįžti į G-Procure portalą",
-      tag: "EPSO-G grupės pirkimų platforma"
+      tag: "Pirkimų įrankių prototipai"
     },
     en: {
       etikete: "All tools",
       aria: "Back to the G-Procure portal",
-      tag: "EPSO-G Group procurement platform"
+      tag: "Procurement tool prototypes"
     }
   };
 
