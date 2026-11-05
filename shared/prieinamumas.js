@@ -184,6 +184,9 @@
     if (a && a !== doc.body && a.isConnected && !i.fonas.contains(a) && rodomas(a)) return;   // fokusas jau kitur (modulis perkėlė)
     var t = i.atidare && i.atidare.isConnected && rodomas(i.atidare) ? i.atidare : (i.atidareId ? doc.getElementById(i.atidareId) : null);
     if (t && rodomas(t)) { try { t.focus(); } catch (e) {} }
+    // Langas atvertas be mygtuko (pvz. pats pirmą kartą) arba mygtuko nebėra - fokusas į turinį, ne į puslapio pradžią (2026-11-05).
+    // Fokusas gali būti dar paslėptame lange: naršyklė jį nuima tik piešdama, todėl čia - ir toks atvejis.
+    else if (!doc.activeElement || doc.activeElement === doc.body || i.fonas.contains(doc.activeElement)) fokusas(turinioSritis());
   }
   function tikrinkLangus() {
     tikrinimas = 0;
@@ -424,5 +427,39 @@
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", pradek);
   else pradek();
 
-  global.GP_PRIEINAMUMAS = { versija: "1.3", tvarkyk: tvarkyk, registruokDiagramas: registruokDiagramas };
+  /* Fokusas po vaizdų perjungimo (2026-11-05): modulis kviečia PATS ten, kur parodo kitą vaizdą ar perpiešia sąrašą. Bendro automatinio
+     gelbėjimo sąmoningai nėra (2026-09-29 atšauktas: antraštės su skaičiumi, nutraukta slinktis). Veikia tik po žmogaus veiksmo (1,5 s) ir
+     tik kai fokusas jau pasimetė: paspaustas mygtukas liko matomas - fokusas lieka jame; paleidžiant puslapį nieko nedaroma. */
+  var ZMOGAUS_VEIKSMAS = 0;
+  function pazymekVeiksma() { ZMOGAUS_VEIKSMAS = Date.now(); }
+  doc.addEventListener("click", pazymekVeiksma, true);
+  doc.addEventListener("keydown", pazymekVeiksma, true);
+  function fokusoMatomas(el) { return !!el && el.isConnected !== false && !el.disabled && !!el.getClientRects && el.getClientRects().length > 0; }
+  function fokusas(el) {
+    if (!fokusoMatomas(el) || !el.focus) return false;
+    if (!el.matches("a[href],button,input,select,textarea,summary,[tabindex]")) el.setAttribute("tabindex", "-1");
+    el.focus({ preventScroll: true });
+    return doc.activeElement === el;
+  }
+  function vaizdoPradzia(k) {
+    if (!k) return null;
+    if (k.matches("a[href],button,input,select,textarea,summary,h1,h2,h3,h4")) return k;
+    var h = k.querySelectorAll("h1,h2,h3,h4");
+    for (var i = 0; i < h.length; i++) if (fokusoMatomas(h[i])) return h[i];
+    return k;
+  }
+  // Matoma turinio sritis: puslapyje jų gali būti kelios (PP-protocol - kiekvienas vaizdas su role="main", rodomas vienas)
+  function turinioSritis() {
+    var m = doc.querySelectorAll("main,[role=main]");
+    for (var i = 0; i < m.length; i++) if (fokusoMatomas(m[i])) return m[i];
+    return null;
+  }
+  function jeiDingo(tikslas) {
+    if (Date.now() - ZMOGAUS_VEIKSMAS > 1500) return false;
+    var a = doc.activeElement;
+    if (a && a !== doc.body && fokusoMatomas(a)) return false;
+    return fokusas(vaizdoPradzia(tikslas)) || fokusas(turinioSritis());
+  }
+
+  global.GP_PRIEINAMUMAS = { versija: "1.4", tvarkyk: tvarkyk, registruokDiagramas: registruokDiagramas, fokusas: fokusas, jeiDingo: jeiDingo, turinioSritis: turinioSritis };
 })(window);

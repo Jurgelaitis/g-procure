@@ -7038,6 +7038,137 @@ async function testaiDalys(){
   });
 }
 
+/* Fokusas po vaizdų perjungimo (2026-11-05, zondas: Enter kiekviename valdiklyje - 58 iš 573 iškrisdavo į puslapio pradžią). Bendro gelbėjimo nėra -
+   kiekvienas modulis kviečia GP_PRIEINAMUMAS.jeiDingo savo vaizdo perjungime, todėl čia tikrinamas kiekvieno modulio kelias. */
+async function testaiFokusas(){
+  dabartine = grupe("Fokusas po vaizdų perjungimo (prieinamumas.js ir moduliai, 2026-11-05)");
+  const A = GP_TESTU_APSAUGA.pradek(() => true);
+  const tik = ms => new Promise(r => setTimeout(r, ms));
+  const atverk = url => new Promise(res => { localStorage.clear(); /* švari pradžia - tikri duomenys atkuriami A.atkurk() */ const f = document.createElement("iframe"); f.style.cssText = "width:1280px;height:800px"; f.addEventListener("load", () => { const w = f.contentWindow; w.confirm = () => true; w.alert = () => {}; res(f); }, { once: true }); f.src = url; document.body.appendChild(f); });
+  const spausk = async (f, el, ms) => { tiesa(el, "nėra valdiklio"); el.focus(); el.click(); await tik(ms || 200); return f.contentDocument.activeElement; };
+  const kur = e => e ? e.tagName + " " + (e.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60) : "nieko";
+  const pagalTeksta = (d, sel, re) => [...d.querySelectorAll(sel)].find(x => re.test(x.textContent));
+  const ATVEJAI = [
+    ["../PP-tiekejams/index.html", "pradžios pasirinkimas", (w, d) => d.querySelector('.choice-btn[onclick*="pirkimas"]'), /^H2 /],
+    ["../PP-tiekejams/index.html", "dažnas klausimas", (w, d) => d.querySelector("#homeChips .chip"), /^SUMMARY /],
+    ["../PP-esg/index.html", "„Rodyti pavyzdį“", (w, d) => d.getElementById("btnPavyzdys"), /^BUTTON (Slėpti|Hide)/],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - pavyzdžiai", (w, d) => d.querySelector('[onclick="loadDemo()"]'), /^H2 Apžvalga/],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - importas", (w, d) => d.querySelector('[onclick="goTab(\'import\')"]'), /^H2 Excel importas/],
+    ["../PP-qual/PP-QUAL.html", "1 įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="info"]'), /^H2 1 žingsnis/],
+    ["../PP-qual/PP-QUAL.html", "audito įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="check"]'), /^H2 Audito patikra/],
+    ["../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "nuoroda į skaičiuoklę", (w, d) => d.querySelector('.inline-link-btn[onclick*="calculator"]'), /^H2 .*trukmių/i],
+    ["../PP-report/PP-report.html", "formos pasirinkimas", (w, d) => d.querySelector(".form-card"), /^H3 /],
+    ["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "apžvalgos mygtukas", (w, d) => d.querySelector('[data-go="project"]'), /^H2 /, 320],
+    ["../PP-salygos/PP-SALYGOS.html", "„Keisti“ kontekste", (w, d) => { w.rodyk(2); return d.getElementById("ktKeisti"); }, /^H2 Pirkimo duomenys/]
+  ];
+  for (const [pg, pav, rask, re, ms] of ATVEJAI) {
+    await testas("Paspaustas valdiklis dingsta su vaizdu - fokusas naujo vaizdo pradžioje: " + pg.replace("../", "").split("/")[0] + ", " + pav, async () => {
+      const f = await atverk(pg);
+      try { await tik(150); const a = await spausk(f, rask(f.contentWindow, f.contentDocument), ms); tiesa(re.test(kur(a)), "fokusas: " + kur(a)); } finally { f.remove(); }
+    });
+  }
+  await testas("PP-protocol: pirmo karto langas uždarius - fokusas turinyje; „+ Naujas pirkimas“ ir „← Atgal“ - puslapio antraštėje", async () => {
+    const f = await atverk("../PP-protocol/LITGRID_Generatorius_v3.html"), d = f.contentDocument;
+    try {
+      await tik(200);
+      const a0 = await spausk(f, d.querySelector('#user-modal.show [onclick="closeUserModal()"]'));
+      tiesa(a0 && a0 !== d.body && a0.closest(".page.active"), "uždarius langą: " + kur(a0));
+      const a1 = await spausk(f, pagalTeksta(d, "#page-dashboard button", /Naujas pirkimas/));
+      tiesa(/^H2 Naujas pirkimas/.test(kur(a1)), "naujas: " + kur(a1));
+      const a2 = await spausk(f, pagalTeksta(d, "#page-new-pk button", /Atgal/));
+      tiesa(/^H2 Pirkimai/.test(kur(a2)), "atgal: " + kur(a2));
+      // Naujo pirkimo žingsniai: paspaustas „Toliau“ ar „← Atgal“ paslepiamas su žingsniu
+      await spausk(f, pagalTeksta(d, "#page-dashboard button", /Naujas pirkimas/));
+      d.getElementById("new-pk-nr").value = "TEST-F1"; d.getElementById("new-pk-name").value = "Bandomasis pirkimas"; d.getElementById("new-pk-date").value = "2026-11-05";
+      const zingsnis = async (is, re, i) => { const a = await spausk(f, pagalTeksta(d, "#" + is + " button", re)); tiesa(a && a.closest("#" + i), is + " -> " + i + ": " + kur(a)); };
+      await zingsnis("new-step1", /Toliau/, "new-step2");
+      await zingsnis("new-step2", /Toliau/, "new-step3");
+      await zingsnis("new-step3", /Atgal/, "new-step2");
+      tiesa(d.getElementById("new-step3").style.display === "none" && d.getElementById("step3-ind").className === "step" && /active/.test(d.getElementById("step2-ind").className), "grįžus iš 3 žingsnio matomas tik 2");
+      await zingsnis("new-step2", /Atgal/, "new-step1");
+    } finally { f.remove(); }
+  });
+  await testas("Valdiklis lieka matomas - fokusas lieka jame: skirtukai (PP-plan), PP-negotiation tiekėjo skirtukas ir PP-qual būsenos mygtukas po perpiešimo", async () => {
+    let f = await atverk("../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html");
+    try { await tik(150); const t = f.contentDocument.querySelector('.tab[data-section="register"]'), a = await spausk(f, t); tiesa(a === t, "skirtukas: " + kur(a)); } finally { f.remove(); }
+    f = await atverk("../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html");
+    try {
+      const w = f.contentWindow, d = f.contentDocument; await tik(150); negProjektas(w); w.go("strategy"); await tik(150);
+      const a = await spausk(f, d.querySelector('[data-rek-sup="b"]'));
+      tiesa(a && a.getAttribute("data-rek-sup") === "b" && a.isConnected && /true/.test(a.getAttribute("aria-selected")), "tiekėjas: " + kur(a));
+    } finally { f.remove(); }
+    f = await atverk("../PP-qual/PP-QUAL.html");
+    try {
+      const w = f.contentWindow, d = f.contentDocument; await tik(150); qualPirkimas(w);
+      w.eval("PPQ.requirements = [reikalavimas({ category:'A', text:'Tiekėjas turi teisę verstis atitinkama veikla.', evidence:'Išrašas' }, 'human')]; PPQ.step = 4;"); w.switchView("wizard"); w.renderWizard(); await tik(100);
+      const senas = d.querySelector('.icon-btn[title="Reikia peržiūros"]'), a = await spausk(f, senas);
+      tiesa(a && a !== senas && a.title === "Reikia peržiūros" && a.isConnected, "būsenos mygtukas: " + kur(a));
+    } finally { f.remove(); }
+  });
+  await testas("Grįžimas: PP-esg „Slėpti“ - į „Rodyti pavyzdį“; PP-report „Pakeisti formą“ - į formos pasirinkimo antraštę", async () => {
+    let f = await atverk("../PP-esg/index.html");
+    try {
+      await tik(150); const d = f.contentDocument;
+      await spausk(f, d.getElementById("btnPavyzdys"));
+      const a = await spausk(f, d.querySelector(".demo-juosta button"));
+      tiesa(a && a.id === "btnPavyzdys", "PP-esg: " + kur(a));
+    } finally { f.remove(); }
+    f = await atverk("../PP-report/PP-report.html");
+    try {
+      await tik(150); const d = f.contentDocument;
+      await spausk(f, d.querySelector(".form-card"));
+      const a = await spausk(f, d.querySelector('[onclick="goBackToSelector()"]'));
+      tiesa(/^H2 Pasirinkite/.test(kur(a)), "PP-report: " + kur(a));
+    } finally { f.remove(); }
+  });
+  await testas("PP-market-KPI: užimtas mygtukas fokusą praranda, baigus grįžta į tą patį; kitur nuėjus - lieka ten; automatinis atnaujinimas fokuso neliečia", async () => {
+    const f = await atverk("../PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html"), w = f.contentWindow, d = f.contentDocument;
+    try {
+      await tik(200);
+      const meniu = d.getElementById("btnDuomenys"), m = d.getElementById("btnOsp"), kita = d.getElementById("focusName");
+      w.atnaujinkIsOSP = () => w.ospBusena(true);   // tinklo nereikia
+      meniu.click(); m.focus(); m.click(); tiesa(d.activeElement === meniu && d.getElementById("duomenuMeniu").hidden, "meniu užsidarius - į jo mygtuką: " + kur(d.activeElement));
+      w.ospBusena(false); tiesa(d.activeElement === meniu, "baigus lieka: " + kur(d.activeElement));
+      const b = d.getElementById("btnOspJuosta"); b.hidden = false; let p = b; while (p && p !== d.body) { p.hidden = false; if (w.getComputedStyle(p).display === "none") p.style.display = "block"; p = p.parentElement; }
+      b.focus(); tiesa(d.activeElement === b, "juostos mygtukas fokusuojamas");
+      w.ospBusena(true); await tik(30); w.ospBusena(false); tiesa(d.activeElement === b, "grįžo: " + kur(d.activeElement));
+      b.focus(); w.ospBusena(true); kita.focus(); w.ospBusena(false); tiesa(d.activeElement === kita, "žmogus nuėjo kitur: " + kur(d.activeElement));
+      kita.blur(); w.ospBusena(true); w.ospBusena(false); tiesa(d.activeElement === d.body, "be fokuso prieš tai - neliečiama: " + kur(d.activeElement));
+      b.focus(); w.ospBusena(true); b.hidden = true; b.blur(); w.ospBusena(false); tiesa(d.activeElement === meniu, "mygtuko nebematyti - į meniu mygtuką: " + kur(d.activeElement));
+    } finally { f.remove(); }
+  });
+  await testas("Paleidus puslapį fokusas neperkeliamas; jeiDingo - tik po žmogaus veiksmo ir tik kai fokusas pasimetęs; pranešimą uždarius - grįžta", async () => {
+    for (const pg of ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-tiekejams/index.html", "../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html"]) {
+      const f = await atverk(pg); try { await tik(250); tiesa(f.contentDocument.activeElement === f.contentDocument.body, pg + ": " + kur(f.contentDocument.activeElement)); } finally { f.remove(); }
+    }
+    const f = await atverk("../saugumas.html"), w = f.contentWindow, d = f.contentDocument;
+    try {
+      await tik(100);
+      const P = w.GP_PRIEINAMUMAS, h = d.querySelector("h1,h2");
+      tiesa(!P.jeiDingo(h) && d.activeElement === d.body, "be žmogaus veiksmo - nieko");
+      const b = d.createElement("button"); b.textContent = "Mygtukas"; (d.querySelector("main") || d.body).appendChild(b);
+      await spausk(f, b, 10); tiesa(!P.jeiDingo(h) && d.activeElement === b, "matomas mygtukas fokusą pasilieka");
+      b.remove(); tiesa(P.jeiDingo(h) && d.activeElement === h && h.getAttribute("tabindex") === "-1", "dingus - į antraštę: " + kur(d.activeElement));
+      const s = d.createElement("section"), g = d.createElement("button"); s.hidden = true; g.textContent = "Slepiamas"; d.body.appendChild(g); g.focus(); g.remove();
+      tiesa(P.jeiDingo(s) && /^MAIN/.test(d.activeElement.tagName), "tikslas nematomas - į turinį: " + kur(d.activeElement));
+      const main = P.turinioSritis(), slepta = d.createElement("main"); slepta.hidden = true; d.body.insertBefore(slepta, d.body.firstChild);
+      tiesa(main && P.turinioSritis() === main, "kelios turinio sritys - matoma"); slepta.remove();
+    } finally { f.remove(); }
+    const g = await atverk("../PP-esg/index.html");
+    try {
+      await tik(150); const w = g.contentWindow, d = g.contentDocument, P = w.GP_PRIEINAMUMAS, X = () => [...d.querySelectorAll(".gp-pranesimas__x")].pop();
+      const c = d.createElement("button"); c.textContent = "Prieš pranešimą"; P.turinioSritis().appendChild(c);
+      w.GP_PRANESIMAS.rodyk("Išsaugota", { trukme: 0 }); c.focus(); const x = X(); x.focus();
+      x.dispatchEvent(new w.FocusEvent("focusin", { bubbles: true, relatedTarget: c }));   // neaktyviame testų lange naršyklė focusin nesiunčia
+      x.click(); await tik(20);
+      tiesa(d.activeElement === c, "pranešimą uždarius - į ankstesnį valdiklį: " + kur(d.activeElement));
+      w.GP_PRANESIMAS.rodyk("Kitas", { trukme: 0 }); c.remove(); const x2 = X(); x2.focus(); x2.click(); await tik(20);
+      tiesa(d.activeElement === P.turinioSritis(), "be ankstesnio - į turinį: " + kur(d.activeElement));
+    } finally { g.remove(); }
+  });
+  A.atkurk();
+}
+
 async function testaiBudai(){
   dabartine = grupe("Pirkimo būdai (procurement-methods.js)");
   const { f, w } = await ramas(`<script src="procurement-methods.js"><\/script>`);
@@ -8458,7 +8589,7 @@ async function testaiNacsaugBvpz(){
      testaiNacsaugBvpz, testaiBusena, testaiSaugykla, testaiKortele, testaiSkelbimasDarbastalis, testaiKortele2, testaiTaisykles, testaiParengtis,
      testaiKalbuSutikrinimas, testaiPrivalomi, testaiKvalifikacija, testaiSutartiesElementai, testaiPalyginimas, testaiDi, testaiSutikimas, testaiAnalitika, testaiSaugumas,
      testaiVendor],
-    [testaiTelefonas, testaiPrieinamumas]
+    [testaiTelefonas, testaiPrieinamumas, testaiFokusas]
   ]);
   for (const g of GRUPES) await g();
   document.getElementById("busena").textContent =
