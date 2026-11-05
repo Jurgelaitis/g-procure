@@ -1194,6 +1194,49 @@ async function testaiAntraste(){
       } finally { P.f.remove(); }
     }
   });
+
+  // Skirtukų piktograma (2026-11-05, naudotojo pastaba: vienų modulių skirtukuose G raidė, kitų - naršyklės gaublys).
+  // Vienas failų rinkinys šaknyje (favicon.svg, favicon.ico, apple-touch-icon.png) ir tos pačios trys nuorodos kiekviename puslapyje.
+  await testas("Skirtukų piktograma: kiekvienas puslapis jungia tą pačią G piktogramą iš svetainės šaknies (SVG, ICO ir Apple), įterptų data: piktogramų nėra", async ()=>{
+    const puslapiai = [...new Set(kodoFailai().filter(m => /\.html$/.test(m)).concat(["../PP-negotiation/EPSO-G_Derybu_Pasirengimo_Irankis.html", "../PP-teise/admin.html",
+      "../PP-salygos/kartografas.html", "../PP-salygos/E0-variklis.html", "../PP-home/index.html", "../PP-home/G-Procure_About.html", "../PP-home/G-Procure_Project.html",
+      "../docs/market-kpi/prototipas-pirkimo-rinkos-apzvalga.html", "../skelbimo-parengtis.html"]))];
+    const blogi = [];
+    for (const m of puslapiai) {
+      const src = await saltinis(m);
+      const pr = "../".repeat((m.replace(/^\.\.\//, "").match(/\//g) || []).length);
+      const ikonos = src.match(/<link rel="(?:icon|shortcut icon|apple-touch-icon)"[^>]*>/g) || [];
+      const tiketa = ['<link rel="icon" href="' + pr + 'favicon.ico" sizes="32x32">', '<link rel="icon" href="' + pr + 'favicon.svg" type="image/svg+xml">',
+        '<link rel="apple-touch-icon" href="' + pr + 'apple-touch-icon.png">'];
+      if (ikonos.join("|") !== tiketa.join("|")) blogi.push(m + ": " + (ikonos.join(" ") || "piktogramos nėra"));
+      if (/data:image\/svg\+xml[^"]*viewBox='0 0 32 32'/.test(src)) blogi.push(m + ": liko įterpta data: piktograma");
+      const head = src.slice(0, src.indexOf("</head>"));
+      if (!ikonos.every(l => head.includes(l))) blogi.push(m + ": piktogramos nuoroda ne <head> dalyje");
+    }
+    tiesa(puslapiai.length >= 35, "puslapių tik " + puslapiai.length);
+    tiesa(!blogi.length, blogi.join("\n  "));
+    // Failai: SVG - gerai suformuotas XML (XML komentare negali būti dviejų brūkšnelių iš eilės), EPSO-G G raidė ir smaragdo spalvos
+    const svg = await saltinis("../favicon.svg");
+    const x = new DOMParser().parseFromString(svg, "image/svg+xml");
+    tiesa(!x.querySelector("parsererror"), "favicon.svg - ne gerai suformuotas XML");
+    lygu(x.documentElement.getAttribute("viewBox"), "0 0 32 32", "viewBox");
+    lygu([...x.querySelectorAll("stop")].map(e => e.getAttribute("stop-color")), ["#00A072", "#007554"], "favicon.svg - smaragdo plytelės spalvos (shared/epso-g.css)");
+    tiesa(/^M25\.83 11\.37V8\.32/.test(x.querySelector("path").getAttribute("d")), "favicon.svg - EPSO-G G raidė");
+    const ico = new Uint8Array(await (await fetch("../favicon.ico?b=" + Date.now())).arrayBuffer());
+    tiesa(ico.length > 22 && ico[0] === 0 && ico[1] === 0 && ico[2] === 1 && ico[3] === 0, "favicon.ico - ne ICO failas");
+    for (const [f, d] of [["../favicon.svg", 32], ["../apple-touch-icon.png", 180]]) {
+      const img = new Image(); img.src = f + "?b=" + Date.now();
+      await img.decode();
+      if (d === 180) { lygu(img.naturalWidth + "x" + img.naturalHeight, "180x180", "apple-touch-icon.png dydis"); continue; }
+      // Nupiešta piktograma: centre - balta G raidė, krašte (plytelės viduje) - smaragdas, kampe - permatoma (suapvalinta plytelė)
+      const cv = document.createElement("canvas"); cv.width = cv.height = d; const cx = cv.getContext("2d"); cx.drawImage(img, 0, 0, d, d);
+      const px = (a, b) => [...cx.getImageData(a, b, 1, 1).data];
+      const krastas = px(3, 16), kampas = px(0, 0), raide = px(9, 16);
+      tiesa(krastas[1] > 100 && krastas[0] < 40 && krastas[3] === 255, "plytelės kraštas turi būti smaragdo: " + krastas);
+      tiesa(kampas[3] < 60, "kampas turi būti permatomas (suapvalinta plytelė): " + kampas);
+      tiesa(raide[0] > 230 && raide[1] > 230 && raide[2] > 230, "G raidės kairysis kraštas turi būti baltas: " + raide);
+    }
+  });
 }
 
 /* ---------- Įspėjimas uždarant (neissaugotas-darbas.js) ---------- */

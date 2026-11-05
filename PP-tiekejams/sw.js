@@ -23,7 +23,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppt-2026-11-05-2";
+var VERSIJA = "ppt-2026-11-05-3";
 
 var SAVI = [
   "./",
@@ -42,6 +42,8 @@ var SAVI = [
   "../shared/skelbimas.js",
   "../shared/vpt-duomenys.js",
   "../shared/epso-g.css",
+  "../favicon.svg",
+  "../favicon.ico",
   "../shared/sriftai/nunito-sans-latin.woff2",
   "../shared/sriftai/nunito-sans-latin-ext.woff2",
   "../shared/sriftai/nunito-sans-italic-latin.woff2",
