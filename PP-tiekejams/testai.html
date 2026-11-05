@@ -3346,6 +3346,85 @@ async function paleisk() {
     D.getElementById("homeSearch").value = ""; D.getElementById("homeRez").innerHTML = ""; W.setView("pirkimas"); VPT_ATS = null;
   });
 
+  /* ---- Pirkimo darbo lango išdėstymas (2026-11-05, naudotojo pastaba: kairysis stulpelis buvo gerokai platesnis už dešinįjį) ---- */
+  grupe("Išdėstymas");
+  const remas = async (plotis, failu, vaizdas) => {
+    const f = document.createElement("iframe"); f.style.cssText = "width:" + plotis + "px;height:900px;opacity:0;position:absolute;left:-9999px";
+    const w = await new Promise(res => { f.addEventListener("load", () => res(f.contentWindow), { once: true }); f.src = "./index.html?isd=" + Date.now(); document.body.appendChild(f); });
+    for (let i = 0; i < 80 && !(w.__PPT && w.JSZip); i++) await laukti(50);
+    w.setView(vaizdas || "pirkimas");
+    // Kaip tikrame CVP IS pakete: dokumentai - įdėtiniame archyve ilgu vardu, todėl archyvo kelias ilgas
+    const zip = new w.JSZip(), vidus = new w.JSZip();
+    zip.file("1234501_Contract notice_0.txt", "Skelbimas apie pirkimą.\n\nPavadinimas: Sistemos pirkimas\n\nPasiūlymų priėmimo terminas: 20/10/2099 14:00 +03:00");
+    for (let i = 1; i < failu; i++) vidus.file(i + ". SPS " + i + " priedas. Labai ilgas pirkimo dokumento pavadinimas su anglišku vertimu_Very long document name_" + i + ".txt", i + ".1. Pasiūlymą reikia pateikti CVP IS priemonėmis.");
+    if (failu > 1) zip.file("1_Pirkimo dokumentai su labai ilgu aplanko pavadinimu ir dar ilgesne dalimi_Procurement documents (2).zip", await vidus.generateAsync({ type: "uint8array" }));
+    await w.__PPT.onFiles([new w.File([await zip.generateAsync({ type: "blob" })], "CVP IS 1234501.zip")]);
+    await laukti(60);
+    return [f, w, w.document];
+  };
+  const ribos = el => { const r = el.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) }; };
+  await testas("Kompiuteryje (1280 px): santrauka ir dokumentai - du lygūs vienodo aukščio stulpeliai, klausimas ir atpažinti duomenys - per visą plotį, DOM tvarka = vaizdo tvarka", async () => {
+    const [f, w, d] = await remas(1280, 14);
+    try {
+      const z = [...d.querySelector("#view-pirkimas .work").children];
+      lygu(z.map(x => x.className.split(" ").pop()), ["zona-santrauka", "zona-dokumentai", "zona-klausimas", "zona-duomenys"], "zonų tvarka DOM");
+      const [s, k, q, m] = z.map(ribos);
+      tiesa(s.t === k.t && s.l < k.l, "santrauka kairėje, dokumentai dešinėje, toje pačioje eilutėje: " + JSON.stringify([s, k]));
+      tiesa(Math.abs(s.w - k.w) <= 1 && Math.abs(s.h - k.h) <= 1, "stulpeliai lygaus pločio ir aukščio: " + JSON.stringify([s, k]));
+      tiesa(q.t > Math.max(s.b, k.b) && q.l === s.l && q.r === k.r, "klausimas - po abiem stulpeliais, per visą plotį: " + JSON.stringify(q));
+      tiesa(d.getElementById("metaCard").style.display !== "none" && m.t > q.b && m.l === s.l && m.r === k.r, "atpažinti duomenys - per visą plotį: " + JSON.stringify(m));
+      tiesa(k.w > 500, "dokumentų stulpelis ne siauras: " + k.w);
+    } finally { f.remove(); }
+  });
+  await testas("Dokumentų sąrašas: aukštis ribojamas ir slenka (klaviatūra - tabindex ir pavadinimas), archyvo kelias - plona eilutė, žymė „perskaityta“ matoma visa; trumpas sąrašas - be tabindex", async () => {
+    const [f, w, d] = await remas(1280, 14);
+    try {
+      const ul = d.getElementById("doclist"), u = ribos(ul);
+      tiesa(ul.clientHeight <= 520 && ul.scrollHeight > ul.clientHeight + 100, "sąrašas turi slinkti: " + ul.clientHeight + " / " + ul.scrollHeight);
+      lygu([ul.tabIndex, ul.getAttribute("aria-label")], [0, "Įkelti dokumentai"], "slenkantis sąrašas pasiekiamas klaviatūra");
+      const li = [...ul.children];
+      lygu(li.length, 14, "dokumentų");
+      const kel = li.map(x => x.querySelector(".kelias")).filter(x => x && /SPS/.test(x.parentNode.textContent))[0];
+      li.forEach((x, i) => {
+        const r = ribos(x), st = ribos(x.querySelector(".st"));
+        tiesa(r.r <= u.r && x.scrollWidth <= x.clientWidth + 1, "įrašas " + (i + 1) + " platesnis už sąrašą");
+        tiesa(st.r <= r.r && st.l >= r.l, "žymė už įrašo ribų: " + i);
+      });
+      tiesa(kel && kel.textContent === "CVP IS 1234501.zip › 1_Pirkimo dokumentai su labai ilgu aplanko pavadinimu ir dar ilgesne dalimi_Procurement documents (2).zip ›" && w.getComputedStyle(kel).whiteSpace === "nowrap", "archyvo kelias: " + (kel && kel.textContent));
+      tiesa(kel.scrollWidth > kel.clientWidth, "ilgas archyvo kelias sutrumpinamas daugtaškiu, įrašas neplatėja");
+      turi(kel.parentNode.textContent, "SPS ", "failo vardas po archyvo keliu"); turi(kel.parentNode.textContent, "Labai ilgas pirkimo dokumento pavadinimas", "failo vardas");
+      tiesa(ribos(kel).h < 20, "archyvo kelias - viena eilutė: " + ribos(kel).h);
+      w.setLang("en"); lygu(ul.getAttribute("aria-label"), "Loaded documents", "EN"); w.setLang("lt");
+    } finally { f.remove(); }
+    const [f2, , d2] = await remas(1280, 2);
+    try { lygu([d2.getElementById("doclist").hasAttribute("tabindex"), d2.getElementById("doclist").children.length], [false, 2], "trumpas sąrašas neslenka - be tabindex"); }
+    finally { f2.remove(); }
+    // Dokumentai įkelti, kol atvertas kitas skirtukas (sąrašas nematomas): atvėrus „Konkretus pirkimas“ - tabindex nustatomas
+    const [f3, w3, d3] = await remas(1280, 14, "bendri");
+    try {
+      lygu(d3.getElementById("doclist").hasAttribute("tabindex"), false, "nematomas sąrašas - be tabindex");
+      w3.setView("pirkimas"); await laukti(80);
+      lygu(d3.getElementById("doclist").tabIndex, 0, "atvėrus skirtuką - slenkantis sąrašas pasiekiamas klaviatūra");
+    } finally { f3.remove(); }
+  });
+  await testas("Telefone (375 px) ir siauriau nei 980 px - vienas stulpelis ta pačia tvarka, puslapis neslenka horizontaliai", async () => {
+    for (const p of [375, 900]) {
+      const [f, w, d] = await remas(p, 14);
+      try {
+        const z = [...d.querySelector("#view-pirkimas .work").children].map(ribos);
+        tiesa(z.every(x => x.l === z[0].l && x.w === z[0].w), p + " px: zonos turi būti vienas stulpelis: " + JSON.stringify(z));
+        tiesa(z[0].b <= z[1].t && z[1].b <= z[2].t && z[2].b <= z[3].t, p + " px: tvarka santrauka, dokumentai, klausimas, duomenys");
+        tiesa(d.documentElement.scrollWidth <= p, p + " px: puslapis slenka horizontaliai (" + d.documentElement.scrollWidth + ")");
+      } finally { f.remove(); }
+    }
+  });
+  await testas("Tekstai nebesako „dešinėje“ - nurodo kortelę „Dokumentai ir šaltiniai“ (LT ir EN)", async () => {
+    const src = await (await fetch("index.html?b=" + Date.now())).text();
+    neturi(src, "dešinėje esan"); neturi(src, "patys (dešinėje)"); neturi(src, "on the right");
+    const I = W.eval("I18N");
+    ["ask.nodl", "ref.step1", "ref.step2"].forEach(k => { turi(I.lt[k], "„Dokumentai ir šaltiniai“", k); turi(I.en[k], "“Documents and sources”", k + " EN"); });
+  });
+
   grazinkKalba();
   APSAUGA.atkurk();
   document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
