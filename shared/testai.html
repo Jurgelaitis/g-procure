@@ -1287,6 +1287,82 @@ async function testaiLaukuBusena(){
       lygu(d.getElementById("vel").getAttribute("placeholder"), " ", "konteineris, gavęs klasę vėliau");
     } finally { f.remove(); }
   });
+  await testas("Tikrinimas pildant (U3, 2026-11-06): skaičius - neatpažintas, „14.900“ ar kablelis (naršyklė jį praleidžia), ribos ir sveikas skaičius; privalomas - tik parašius ir ištrynus; el. paštas; pranešimas dingsta pataisius; modulio klaida nekeičiama", async ()=>{
+    const { f, d, w } = await new Promise(res => { const f = document.createElement("iframe"); f.style.cssText = "width:900px;height:900px";
+      f.addEventListener("load", () => res({ f, d: f.contentDocument, w: f.contentWindow }), { once: true });
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"></head><body><div class="gp-pildoma">'
+        + '<label for="suma">Suma</label><input id="suma" type="number" step="0.01"><label for="men">Mėnesiai</label><input id="men" type="number" min="1" max="600" step="1">'
+        + '<label for="pav">Pavadinimas *</label><input id="pav"><label for="nr">Numeris</label><input id="nr" required><label for="pastas">El. paštas</label><input id="pastas" type="email">'
+        + '<label for="lyg">Su vienetu</label><div style="display:flex"><input id="lyg" type="number"><span>Eur</span></div>'
+        + '<label for="mod">Modulio klaida</label><input id="mod" type="number" aria-invalid="true"></div><input id="lauke" type="number" required>'
+        + '<script src="lauku-busena.js"><\/script></body></html>';
+      document.body.appendChild(f); });
+    try {
+      await tiksas();
+      const el = id => d.getElementById(id), ms = id => { const x = el(id).getAttribute("data-gp-tikr-id"); return x ? d.getElementById(x) : null; };
+      const isejo = id => el(id).dispatchEvent(new w.FocusEvent("focusout", { bubbles: true }));
+      const rase = (id, v) => { el(id).value = v; el(id).dispatchEvent(new w.Event("input", { bubbles: true })); };
+      rase("suma", "14.900"); isejo("suma");
+      lygu([ms("suma") && ms("suma").textContent, ms("suma") && ms("suma").className, el("suma").getAttribute("aria-invalid")],
+        ["Laukas priėmė 14.900 - patikrinkite. Skaičiuje nerašykite kablelių ir tarpų, dešimtainei daliai - taškas, pvz., 14900.50.", "gp-lauko-msg gp-lauko-msg--ispejimas", null], "„14.900“ - įspėjimas su priimta reikšme");
+      tiesa(el("suma").getAttribute("aria-describedby").split(" ").includes(ms("suma").id), "pranešimas susietas aria-describedby");
+      rase("suma", "14900.50"); lygu([ms("suma"), el("suma").hasAttribute("aria-describedby")], [null, false], "pataisius pranešimas dingsta iškart, aprašas atkuriamas");
+      // kablelis: naršyklė jį praleidžia („14,5“ -> 145), todėl įsimenamas paspaudus
+      el("suma").dispatchEvent(new w.KeyboardEvent("keydown", { key: ",", bubbles: true })); rase("suma", "145"); isejo("suma");
+      tiesa(ms("suma") && ms("suma").textContent.includes("Laukas priėmė 145"), "kablelis įvedant");
+      rase("suma", "145"); isejo("suma"); lygu(ms("suma"), null, "kitą kartą be kablelio - be įspėjimo");
+      // įklijuota „14 900,00“ - naršyklė priima tik dalį, todėl įsimenama įklijuojant
+      const dt = new w.DataTransfer(); dt.setData("text", "14 900,00");
+      el("suma").dispatchEvent(new w.ClipboardEvent("paste", { clipboardData: dt, bubbles: true })); rase("suma", "14900"); isejo("suma");
+      tiesa(ms("suma") && ms("suma").textContent.includes("Laukas priėmė 14900"), "įklijuota su tarpu ir kableliu");
+      rase("suma", "1"); isejo("suma");
+      // neatpažintas skaičius (pvz., „1e“): naršyklė lauką laiko tuščiu - klaida
+      el("suma").focus(); rase("suma", ""); d.execCommand("insertText", false, "1e");
+      if (el("suma").validity.badInput) { isejo("suma"); lygu([ms("suma") && ms("suma").textContent, el("suma").getAttribute("aria-invalid")],
+        ["Skaičius neatpažintas - reikšmė neįrašyta. Rašykite be tarpų ir tūkstančių skyriklių, pvz., 14900.50.", "true"], "neatpažintas skaičius"); }
+      else tiesa(false, "nepavyko įvesti neatpažinto skaičiaus (execCommand) - patikra neatlikta");
+      rase("suma", "1"); isejo("suma");
+      rase("men", "0"); isejo("men"); lygu([ms("men").textContent, el("men").getAttribute("aria-invalid")], ["Ne mažiau kaip 1.", "true"], "riba");
+      rase("men", "700"); isejo("men"); lygu(ms("men").textContent, "Ne daugiau kaip 600.", "viršutinė riba");
+      rase("men", "2.5"); isejo("men"); lygu(ms("men").textContent, "Įrašykite sveiką skaičių.", "sveikas skaičius");
+      rase("men", "24"); isejo("men"); lygu([ms("men"), el("men").getAttribute("aria-invalid")], [null, null], "teisinga reikšmė");
+      isejo("pav"); lygu(ms("pav"), null, "privalomas, bet neparašyta - perėjus per lauką klaidos nėra");
+      rase("pav", "A"); rase("pav", ""); isejo("pav"); lygu(ms("pav").textContent, "Privalomas laukas - įrašykite reikšmę.", "žvaigždutė pavadinime");
+      rase("nr", "1"); rase("nr", " "); isejo("nr"); lygu(ms("nr").textContent, "Privalomas laukas - įrašykite reikšmę.", "required");
+      rase("pastas", "vardas"); isejo("pastas"); tiesa(ms("pastas") && ms("pastas").textContent.startsWith("El. pašto adresas neatpažintas"), "el. paštas");
+      rase("lyg", "1.250"); isejo("lyg"); tiesa(ms("lyg") && ms("lyg").previousElementSibling === el("lyg").parentElement, "eilutėje su vienetu pranešimas - po visa eilute");
+      rase("mod", "1.250"); isejo("mod"); lygu([ms("mod"), el("mod").getAttribute("aria-invalid")], [null, "true"], "modulio klaida nekeičiama ir nedubliuojama");
+      rase("lauke", "1"); rase("lauke", ""); isejo("lauke"); lygu(ms("lauke"), null, "už .gp-pildoma - netikrinama");
+      rase("men", "0"); isejo("men"); lygu(w.getComputedStyle(el("men")).borderTopColor, "rgb(179, 38, 58)", "klaidos rėmelis - error-strong");
+      d.documentElement.lang = "en"; rase("men", "700"); isejo("men"); lygu(ms("men").textContent, "At most 600.", "EN");
+    } finally { f.remove(); }
+  });
+  await testas("Datos pastaba: savaitės diena, kiek darbo dienų iki datos (ir praeityje), poilsio ir šventinė diena - įspėjimas; data ir laikas; lietuviškos formos", async ()=>{
+    const { f, d, w } = await new Promise(res => { const f = document.createElement("iframe"); f.style.cssText = "width:900px;height:600px";
+      f.addEventListener("load", () => res({ f, d: f.contentDocument, w: f.contentWindow }), { once: true });
+      f.srcdoc = '<!doctype html><html lang="lt"><head><meta charset="utf-8"><link rel="stylesheet" href="epso-g.css"><script src="workdays.js"><\/script></head><body><div class="gp-pildoma">'
+        + '<input id="d" type="date"><input id="dl" type="datetime-local"></div><script src="lauku-busena.js"><\/script></body></html>';
+      document.body.appendChild(f); });
+    try {
+      await tiksas();
+      w.GP_WORKDAYS.siandien = () => "2026-11-06";   // penktadienis
+      const el = d.getElementById("d"), ms = x => { const i = x.getAttribute("data-gp-tikr-id"); return i ? d.getElementById(i) : null; };
+      const parink = (x, v) => { x.value = v; x.dispatchEvent(new w.Event("change", { bubbles: true })); return ms(x) ? [ms(x).textContent, ms(x).className.replace("gp-lauko-msg gp-lauko-msg--", "")] : null; };
+      lygu(parink(el, "2026-11-09"), ["Pirmadienis · po 1 darbo dienos", "info"]);
+      lygu(parink(el, "2026-11-14"), ["Šeštadienis - poilsio diena · po 5 darbo dienų", "ispejimas"]);
+      lygu(parink(el, "2026-11-06"), ["Penktadienis · šiandien", "info"]);
+      lygu(parink(el, "2026-11-02"), ["Pirmadienis - šventinė diena, ne darbo diena · prieš 3 darbo dienas", "ispejimas"], "Vėlinės");
+      lygu(parink(el, "2026-10-30"), ["Penktadienis · prieš 4 darbo dienas", "info"], "praeityje, šventė tarp datų neskaičiuojama");
+      lygu(parink(el, "2026-12-25"), ["Penktadienis - šventinė diena, ne darbo diena · po 33 darbo dienų", "ispejimas"]);
+      lygu(parink(el, "2026-11-07"), ["Šeštadienis - poilsio diena", "ispejimas"], "be darbo dienų - be skaičiaus");
+      lygu(parink(d.getElementById("dl"), "2026-11-16T14:00"), ["Pirmadienis · po 6 darbo dienų", "info"], "data ir laikas");
+      parink(el, ""); lygu(ms(el), null, "išvalius - be pastabos");
+      const D = w.GP_LAUKU_BUSENA.dienos;
+      lygu([1, 5, 11, 21, 30].map(n => D(n, "po", "lt")), ["dienos", "dienų", "dienų", "dienos", "dienų"], "po N darbo ...");
+      lygu([1, 3, 10, 11, 12, 21, 22, 31].map(n => D(n, "pries", "lt")), ["dieną", "dienas", "dienų", "dienų", "dienų", "dieną", "dienas", "dieną"], "prieš N darbo ...");
+      d.documentElement.lang = "en"; lygu(parink(el, "2026-11-14"), ["Saturday - not a working day · in 5 working days", "ispejimas"], "EN");
+    } finally { f.remove(); }
+  });
   await testas("Šaltiniai: aštuoni moduliai įjungia būseną ir jungia lauku-busena.js; PP-salygos - ne (ten žalia reiškia „Patvirtinta“); bendros taisyklės - epso-g.css", async ()=>{
     const blogi = [];
     for (const [m, sel] of LAUKU_FORMOS) {
