@@ -302,7 +302,7 @@ async function testaiKelias(){
       for (const tipas of ["summary", "full", "central"]) { D.getElementById("exportPdfType").value = tipas; await W.exportPdf(); }
     } finally { W.jspdf = tikras; }
     lygu(gauti.map(g => g.vardas.replace(/\d{4}-\d{2}-\d{2}/, "D")), ["MPP-santrauka_EPSO-G_grupė_D.pdf", "MPP-sarasas_EPSO-G_grupė_D.pdf", "MPP-centralizavimas_EPSO-G_grupė_D.pdf"], "failų vardai");
-    const antr = [["Vykdomoji santrauka", "Bendra verte", "Bendra plano verte"], ["Pilnas pirkimu sarasas", "Objektas", "Sutartis"], ["Centralizavimo rekomendacijos", "Pavyzdys", "Santaupu ivertis"]];
+    const antr = [["Vykdomoji santrauka", "Bendra verte", "Bendra plano verte"], ["Pilnas pirkimu sarasas", "Objektas", "Sutartis"], ["Centralizavimo rekomendacijos", "Pavyzdys", "Sutarciu datos"]];
     gauti.forEach((g, i) => {
       tiesa(/^%PDF-1\.\d/.test(g.pdf) && g.psl >= 1 && g.y > 38, g.vardas + ": PDF " + g.pdf.slice(0, 8) + ", psl. " + g.psl + ", lentelės pabaiga " + g.y);
       for (const x of antr[i]) tiesa(g.pdf.includes("(" + x), g.vardas + ": nėra „" + x + "“");
@@ -311,6 +311,10 @@ async function testaiKelias(){
     const n = W.eval("DATA.procurements.length");
     tiesa(n > 0 && gauti[1].pdf.split("(" + W.eval("pdfText(DATA.procurements[0].objektas.slice(0, 40))")).length > 1, "pilname sąraše nėra pirmo pirkimo objekto");
     tiesa(/Failas parengtas: MPP-centralizavimas_/.test(D.getElementById("pdfBusena").textContent), "būsena: " + D.getElementById("pdfBusena").textContent);
+    // centralizavimo eilutėse - sutarčių datų artumas (2026-11-06, vietoj santaupų)
+    const kand = W.centralizavimoKandidatai();
+    if (kand.length) tiesa(gauti[2].pdf.includes("(" + W.eval("pdfText(DATU_TEKSTAS[" + JSON.stringify(kand[0].timeAlign) + "])").slice(0, 14)), "centralizavimo PDF eilutėje nėra datų artumo");   // ilgas langelis laužomas į eilutes
+    else tiesa(false, "pavyzdžių plane centralizavimo kandidatų nėra - patikra neatlikta");
   });
 
   await testas("Tuščias planas neeksportuojamas kaip nulių failas; pasirinkta įmonė be pirkimų - pasakoma", async () => {
@@ -664,7 +668,7 @@ async function testaiPatikra1026(){
     } finally { W.confirm = tikras.c; W.alert = tikras.a; }
   });
 
-  await testas("K6, V3: centralizavimas - tik kelių įmonių grupės; santaupos - prielaida; be teiginio, kad linijos ir dujotiekiai nesujungiami; sujungtos vertės rūšis", async () => {
+  await testas("K6, V3: centralizavimas - tik kelių įmonių grupės; santaupų eurais nebėra (2026-11-06); be teiginio, kad linijos ir dujotiekiai nesujungiami; sujungtos vertės rūšis", async () => {
     svarus();
     W.eval("DATA.procurements = " + JSON.stringify([
       { id: "c1", nr: "C-1", imone: "EPSO-G", rusis: "Prekės", objektas: "Biuro kėdžių pirkimas", verte: 20000, bvpz: "39112000-0", sutarciesData: ateityje(4) },
@@ -675,10 +679,10 @@ async function testaiPatikra1026(){
     tiesa(K.every(c => c.companies.length >= 2) && !K.some(c => c.cpv5 === "39112"), "vienos įmonės grupė - kandidatas");
     W.runCentralAnalysis();
     const t = D.getElementById("centralResult").textContent;
-    tiesa(!/nepatenka/.test(t) && /modulio prielaida/.test(t) && /sprendžia žmogus/.test(t) && /Prielaida \d+ %/.test(t), t.slice(0, 400));
+    tiesa(!/nepatenka/.test(t) && /sprendžia žmogus/.test(t) && /santaupų eurais nerodome/.test(t) && !/Prielaida \d+ %|santaupų įvertis|Santaupų įvertis/.test(t), t.slice(0, 400));
     tiesa(/Sujungus pirkimus, pirkimo rūšis ir būdas nustatomi pagal bendrą vertę/.test(t) && /PĮ - (tarptautinis|supaprastintas)/.test(t), "sujungtos vertės tekstas");
     W.renderDashboard();
-    tiesa(/pagal prielaidą/.test(D.getElementById("kpiCentralSub").textContent) || W.eval("centralizationSummary().count") === 0, D.getElementById("kpiCentralSub").textContent);
+    tiesa(/bendra vertė/.test(D.getElementById("kpiCentralSub").textContent) || W.eval("centralizationSummary().count") === 0, D.getElementById("kpiCentralSub").textContent);
   });
 
   await testas("V5, V6, V8, V10, M4, M5: tuščias planas - ne „Puiku“; pajėgumai - tik rodomi mėnesiai; kortelė - paskelbimas tik skelbiamam būdui; demo - be kortelės; filtras ir paieška", async () => {
@@ -749,6 +753,61 @@ async function testaiPastabos1105(){
     lygu(zinute({ ...p, verte: riba - 1 }), "", "mažesnė vertė");
     const src = await (await fetch("EPSO-G_pirkimu_planavimas_MVP.html?cb=" + Date.now())).text();
     tiesa(/Patikrinti valdybos pritarimą pagal įstatus/.test(src) && !/Reikia Valdybos pritarimo|pagal įmonės tvarką/.test(src), "užrašai");
+  });
+}
+
+async function testaiSprendimai1106(){
+  grupe("Naudotojo sprendimai 2026-11-06: mažos vertės apklausa pagal įmonės aprašą, centralizavimas be santaupų");
+  await testas("Mažos vertės apklausos rūšis - pagal LITGRID (25IS-54) ir Energy cells (24BV-37) aprašus su punktais; Amber Grid ir EPSO-G - aprašo neturime, rūšis nesiūloma; 30 000 € - nebe riba", async () => {
+    const r = (v, org, law) => W.recommendMethod(v, "Prekės", law || "PI", false, org);
+    const lg = [14000, 15000, 15001, 29000].map(v => r(v, "litgrid"));
+    lygu(lg.map(x => x.recommended), ["MV-NZ", "MV-NZ", "MV-SAB", "MV-SAB"], "LITGRID: iki 15 000 € imtinai - neskelbiama žodžiu, viršijus - skelbiama");
+    const t = lg[0].reason;
+    tiesa(/LITGRID AB mažos vertės pirkimų tvarkos aprašą \(2025-04-28 įsak\. Nr\. 25IS-54\)/.test(t) && /27\.2\.2, 29\.1 p\./.test(t) && /27\.2\.3 p\./.test(t)
+      && /27\.1, 27\.2\.1, 29 p\./.test(t) && /skelbiama apklausa galima visada \(28 p\.\)/.test(t) && !/30 000|orientyras/.test(t), t);
+    const ec = [10000, 20000].map(v => r(v, "energy-cells"));
+    lygu(ec.map(x => x.recommended), ["MV-SAB", "MV-SAB"], "Energy cells: prioritetas - skelbiama apklausa");
+    tiesa(/24BV-37/.test(ec[0].reason) && /prioritetinis būdas - skelbiama apklausa \(3\.15 p\.\)/.test(ec[0].reason) && /galima ir neskelbiama apklausa, ir žodžiu \(3\.24\.1, 4\.1\.2\.3 p\.\)/.test(ec[0].reason)
+      && /ne mažiau kaip 3 tiekėjus \(3\.23 p\.\)/.test(ec[0].reason), ec[0].reason);
+    for (const [org, law, pav] of [["amber-grid", "PI", "AB Amber Grid"], ["epso-g", "VPI", "UAB EPSO-G"]]) {
+      const x = r(10000, org, law);
+      lygu([x.recommended, x.category], [null, "Mažos vertės"], org);
+      tiesa(x.reason.includes(pav + " aprašo G-Procure neturi") && /rūšis nesiūloma/.test(x.reason), x.reason);
+    }
+    lygu(r(200000, "litgrid").recommended, "S-AK", "virš mažos vertės ribos - kaip iki tol");
+    // Sąsaja: pirkimo būdo analizė be rekomenduojamos rūšies ir registras su „MV“
+    D.getElementById("qtValue").value = "10000"; D.getElementById("qtLaw").value = "VPI"; W.runMethodTest();
+    tiesa(/Apklausos rūšis - pagal įmonės aprašą/.test(D.getElementById("methodResult").textContent) && !/null/.test(D.getElementById("methodResult").textContent), D.getElementById("methodResult").textContent.slice(0, 200));
+    D.getElementById("qtLaw").value = "PI"; W.runMethodTest();
+    tiesa(/Rekomenduojama: MV-NZ/.test(D.getElementById("methodResult").textContent), D.getElementById("methodResult").textContent.slice(0, 200));
+    svarus();
+    W.eval("DATA.procurements = " + JSON.stringify([{ id: "a1", nr: "A-1", imone: "AMBER", rusis: "Prekės", objektas: "Biuro prekės ir reikmenys", verte: 9000, bvpz: "30192000-1", budas: "" }]) + "; save();");
+    W.renderMethodAudit();
+    const eil = [...D.getElementById("methodAudit").querySelectorAll("tr")].find(tr => /A-1/.test(tr.textContent));
+    tiesa(eil && /\bMV\b/.test(eil.textContent) && !/null/.test(eil.textContent), "registre - MV be rūšies: " + (eil && eil.textContent));
+    const src = await (await fetch("EPSO-G_pirkimu_planavimas_MVP.html?cb=" + Date.now())).text();
+    tiesa(!/value < 15000 \? "MV-NZ" : value < 30000/.test(src) && /mvApklausa/.test(src), "senų orientyrų kode nebėra");
+    const org = await (await fetch("../shared/organizacijos.js?cb=" + Date.now())).text();
+    tiesa(/id: "amber-grid"[\s\S]*?mvApklausa: null/.test(org) && /id: "epso-g"[\s\S]*?mvApklausa: null/.test(org), "Amber Grid ir EPSO-G - be aprašo");
+  });
+  await testas("Centralizavimo kandidatai rikiuojami pagal bendrą vertę, tada įmonių skaičių ir datų artumą; santaupų procento ir sumos nebėra ekrane, suvestinėje ir PDF", async () => {
+    svarus();
+    W.eval("DATA.procurements = " + JSON.stringify([
+      { id: "k1", nr: "K-1", imone: "LITGRID", rusis: "Prekės", objektas: "Biuro kėdės darbo vietoms", verte: 30000, bvpz: "39112000-0", sutarciesData: ateityje(4) },
+      { id: "k2", nr: "K-2", imone: "AMBER", rusis: "Prekės", objektas: "Biuro kėdės darbo vietoms", verte: 25000, bvpz: "39112000-0", sutarciesData: ateityje(20) },
+      { id: "k3", nr: "K-3", imone: "LITGRID", rusis: "Prekės", objektas: "Spausdintuvai biuro reikmėms", verte: 9000, bvpz: "30232110-8", sutarciesData: ateityje(4) },
+      { id: "k4", nr: "K-4", imone: "ECELLS", rusis: "Prekės", objektas: "Spausdintuvai biuro reikmėms", verte: 8000, bvpz: "30232110-8", sutarciesData: ateityje(5) },
+      { id: "k5", nr: "K-5", imone: "EPSO-G", rusis: "Prekės", objektas: "Spausdintuvai biuro reikmėms", verte: 7000, bvpz: "30232110-8", sutarciesData: ateityje(5) }]) + "; save();");
+    const K = W.centralizavimoKandidatai();
+    lygu(K.map(c => [c.cpv5, c.totalValue, c.companies.length, c.timeAlign]), [["39112", 55000, 2, "silpnas"], ["30232", 24000, 3, "stiprus"]], "pagal bendrą vertę");
+    tiesa(K.every(c => !("savings" in c) && !("synergyPct" in c)), "be santaupų laukų");
+    W.runCentralAnalysis();
+    const t = D.getElementById("centralResult").textContent;
+    tiesa(/Bendra vertė: 79\s000\s€/.test(t.replace(/ /g, " ")) && /sutarčių datos toli viena nuo kitos/.test(t) && /sutarčių datos artimos \(per 90 d\.\)/.test(t) && /Sutarčių datos artimos - bendrą pirkimą suderinti paprasčiausia/.test(t), t.slice(0, 500));
+    W.renderDashboard();
+    tiesa(/bendra vertė/.test(D.getElementById("kpiCentralSub").textContent) && !/santaup/.test(D.getElementById("kpiCentralSub").textContent), D.getElementById("kpiCentralSub").textContent);
+    const src = await (await fetch("EPSO-G_pirkimu_planavimas_MVP.html?cb=" + Date.now())).text();
+    tiesa(!/SINERGIJOS_PRIELAIDA|synergyPct|Santaupų įvertis"/.test(src) && /pdfText\("Sutarčių datos"\)/.test(src), "PDF ir kodas be santaupų");
   });
 }
 
@@ -855,6 +914,8 @@ async function testaiTrukmes1027(){
     await testaiTrukmes1027();
     await modulis();
     await testaiPastabos1105();
+    await modulis();
+    await testaiSprendimai1106();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
