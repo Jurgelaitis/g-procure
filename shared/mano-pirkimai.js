@@ -45,6 +45,8 @@
       cvpNeraS: ", VPT sąraše nėra: {m}", cvpKlaidaS: ", patikrinti nepavyko: {k}",
       cvpRiba: " Vienu kartu tikrinama {r} kortelių su artimiausiais terminais.",
       cvpTerminas: "CVP IS pasiūlymų terminas: {v}", cvpPaskelbimas: "CVP IS paskelbimo data: {v}", cvpBusena: "CVP IS būsena: {v}",
+      cvpTrukme: "CVP IS sutarties trukmė: {v}", cvpLTrukme: "sutarties trukmė", men: "mėn.",
+      cvpTrukmePst: " - skelbime „Numatomas galiojimas“ kartais įrašomas pasiūlymo galiojimas; patikrinkite sutarties projekte",
       cvpIssiuntimas: " - tarptautiniam pirkimui kortelėje įrašykite skelbimo išsiuntimo iš VPT datą (iki 5 d. iki paskelbimo)",
       cvpKortelejeYra: " (kortelėje - {k})", cvpKortelejeNera: " (kortelėje neįrašyta)",
       cvpSutampa: "Sutampa su CVP IS duomenimis: {l}.", cvpLTerminas: "pasiūlymų terminas", cvpLPaskelbimas: "paskelbimo data", cvpLBusena: "būsena",
@@ -73,6 +75,8 @@
       cvpNeraS: ", not in the VPT list: {m}", cvpKlaidaS: ", could not be checked: {k}",
       cvpRiba: " Up to {r} cards with the nearest dates are checked at a time.",
       cvpTerminas: "CVP IS tender deadline: {v}", cvpPaskelbimas: "CVP IS publication date: {v}", cvpBusena: "CVP IS status: {v}",
+      cvpTrukme: "CVP IS contract duration: {v}", cvpLTrukme: "contract duration", men: "months",
+      cvpTrukmePst: " - the notice “Estimated duration” sometimes holds the tender validity period; check the draft contract",
       cvpIssiuntimas: " - for international procurement enter the date the notice was dispatched from VPT (up to 5 days before publication)",
       cvpKortelejeYra: " (on the card: {k})", cvpKortelejeNera: " (not on the card)",
       cvpSutampa: "Matches the CVP IS data: {l}.", cvpLTerminas: "tender deadline", cvpLPaskelbimas: "publication date", cvpLBusena: "status",
@@ -139,8 +143,8 @@
   var TERMINAI = ["pasiulymuTerminas", "paskelbimas", "pradzia"];
   /* CVP IS patikra: vienu paspaudimu - ne daugiau kaip MAX_CVP numerių (nginx riba - 30 užklausų iš karto), po 3 lygiagrečiai. */
   var MAX_CVP = 25, LYGIAGRECIAI = 3;
-  var CVP_ET = { pasiulymuTerminas: "cvpTerminas", paskelbimas: "cvpPaskelbimas", busena: "cvpBusena" };
-  var CVP_PAV = { pasiulymuTerminas: "cvpLTerminas", paskelbimas: "cvpLPaskelbimas", busena: "cvpLBusena" };
+  var CVP_ET = { pasiulymuTerminas: "cvpTerminas", paskelbimas: "cvpPaskelbimas", busena: "cvpBusena", trukmeMen: "cvpTrukme" };
+  var CVP_PAV = { pasiulymuTerminas: "cvpLTerminas", paskelbimas: "cvpLPaskelbimas", busena: "cvpLBusena", trukmeMen: "cvpLTrukme" };
   var SKAITIKLIS = 0;
   function fmt(s, o) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return o[k] != null ? String(o[k]) : m; }); }
   function cvpNr(k) { var n = String((k && k.cvpisNr) || "").trim(); return /^\d{5,9}$/.test(n) ? n : ""; }
@@ -401,10 +405,11 @@
         s.skirtumai.forEach(function (x) {
           var b = x.laukas === "busena";
           var vk = b && !x.vpt && V.kodas ? V.kodas(x.kodas, V.BUSENOS, l) : null;
+          var tr = x.laukas === "trukmeMen";
           var v = b ? (K.busenosPav(x.vpt, l) || (vk && vk.tekstas) || x.vpt) + " (VPT: " + x.kodas + ")"
-            : rodomas(x.vpt) + (x.laukas === "paskelbimas" && x.tarptautinis ? t.cvpIssiuntimas : "");
-          var kv = b ? (K.busenosPav(x.kortele, l) || x.kortele) : rodomas(x.kortele);
-          ul.appendChild(el("li", null, fmt(t[CVP_ET[x.laukas]], { v: v }) + (x.kortele ? fmt(t.cvpKortelejeYra, { k: kv }) : t.cvpKortelejeNera)));
+            : tr ? x.vpt + " " + t.men : rodomas(x.vpt) + (x.laukas === "paskelbimas" && x.tarptautinis ? t.cvpIssiuntimas : "");
+          var kv = b ? (K.busenosPav(x.kortele, l) || x.kortele) : tr ? x.kortele + " " + t.men : rodomas(x.kortele);
+          ul.appendChild(el("li", null, fmt(t[CVP_ET[x.laukas]], { v: v }) + (x.kortele ? fmt(t.cvpKortelejeYra, { k: kv }) : t.cvpKortelejeNera) + (tr ? t.cvpTrukmePst : "")));
         });
         p.appendChild(ul);
         var vv = el("div", "gpmp-veiksmai");
