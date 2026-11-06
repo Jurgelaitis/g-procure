@@ -211,7 +211,8 @@
     }
     var ka = pav ? "„" + pav + "“" : "išsaugotų duomenų";
     if (r.busena === "sugadinta") {
-      return "Išsaugotų duomenų " + ka + " perskaityti nepavyko (" + r.klaida + "). Jie nedingo: " +
+      // Techninė JSON klaida („Unterminated string in JSON at position 200“) žmogui nieko nesako (2026-11-06) - tik priežasties rūšis
+      return "Išsaugotų duomenų " + ka + " perskaityti nepavyko (" + (r.kodas === "json" ? "įrašas sugadintas" : r.klaida) + "). Jie nedingo: " +
         (r.kopija ? "kopija išsaugota atskirai ir pateks į atsarginę kopiją. " : "") +
         "Duomenų būsena nežinoma - galite atkurti juos iš atsarginės kopijos arba tęsti nuo tuščio.";
     }

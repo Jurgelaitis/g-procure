@@ -41,6 +41,10 @@
 
   .zinute{margin-top:14px;padding:12px 14px;border-radius:var(--radius-sm);font-size:14px;display:none}
   .zinute.rodoma{display:block}
+  .zinute ul{margin:8px 0 0;padding-left:20px}
+  .zinute li{margin:4px 0}
+  .zinute .veiksmas{margin-top:10px}
+  .trinti{font:inherit;font-size:13px;padding:2px 8px;border:1px solid var(--color-graphite-30);border-radius:var(--radius-sm);background:var(--color-white);color:var(--color-graphite);cursor:pointer}
   .zinute.gerai{background:var(--color-green-5);border:1px solid var(--color-green-15);color:var(--color-emerald-strong)}
   .zinute.demesio{background:var(--color-warning-5);border:1px solid var(--color-warning);color:#7A5200}
   .zinute.klaida{background:var(--color-error-5);border:1px solid var(--color-error);color:#7F1722}
@@ -180,6 +184,29 @@
     return (b / 1024 / 1024).toFixed(2).replace(".", ",") + " MB";
   }
 
+  /* Lietuviški linksniai skaičiui (2026-11-06: iki tol „1 įrašai“, „Atkurta 1 įrašų“) */
+  function sk(n, v1, v2, v3) {
+    if (LANG === "en") return n + " " + (n === 1 ? v1 : v2);
+    var d = n % 10, s = n % 100;
+    return n + " " + (d === 1 && s !== 11 ? v1 : d >= 2 && d <= 9 && (s < 12 || s > 19) ? v2 : v3);
+  }
+  function irasu(n) { return LANG === "en" ? sk(n, "entry", "entries") : sk(n, "įrašas", "įrašai", "įrašų"); }
+  function atsisiusk() {
+    var data = new Date();
+    var failas = GP_BACKUP.surinkti(null, data);
+    if (!failas) return null;
+    var kiek = Object.keys(failas.items).length;
+    if (!kiek) return null;
+    var blob = new Blob([JSON.stringify(failas, null, 1)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = GP_BACKUP.failoVardas(data);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    if (window.GP_ANALITIKA) GP_ANALITIKA.ivykis("atsargine_kopija", { veiksmas: "issaugota", rezultatas: "pavyko" });
+    return { kiek: kiek, dydis: blob.size };
+  }
+
   function piesApzvalga() {
     var vieta = document.getElementById("apzvalga");
     if (!vieta) return;
@@ -202,7 +229,10 @@
     for (var i = 0; i < irasai.length; i++) {
       var z = zenklas(irasai[i].raktas);
       viso += irasai[i].baitai;
-      eil += "<tr><td>" + z.pav + "</td><td>" + z.modulis +
+      /* Neperskaitomo įrašo kopiją galima ištrinti (2026-11-06): kitaip ji liktų visam laikui */
+      var trn = irasai[i].raktas.indexOf(".sugadinta-") > 0
+        ? " <button type=\"button\" class=\"trinti\" data-trinti=\"" + esc(irasai[i].raktas) + "\" aria-label=\"" + (LANG === "en" ? "Delete " : "Ištrinti ") + esc(z.pav) + "\">" + (LANG === "en" ? "Delete" : "Ištrinti") + "</button>" : "";
+      eil += "<tr><td>" + esc(z.pav) + trn + "</td><td>" + z.modulis +
              "</td><td class=\"raktas\">" + esc(irasai[i].raktas) +
              "</td><td class=\"dydis\">" + dydis(irasai[i].baitai) + "</td></tr>";
     }
@@ -213,30 +243,28 @@
       "</th><th class=\"dydis\">" + (LANG === "en" ? "Size" : "Dydis") +
       "</th></tr></thead><tbody>" + eil + "</tbody></table>" +
       "<div class=\"suma\">" + (LANG === "en" ? "Total: " : "Iš viso: ") +
-      irasai.length + (LANG === "en" ? " entries, " : " įrašai, ") + dydis(viso) + "</div>";
+      irasu(irasai.length) + ", " + dydis(viso) + "</div>";
   }
+  document.getElementById("apzvalga").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("[data-trinti]") : null;
+    if (!b) return;
+    var k = b.getAttribute("data-trinti");
+    if (!window.confirm(LANG === "en"
+      ? "Delete this unreadable copy permanently? It will not be in new backups. Download a backup first if you may still need it."
+      : "Ištrinti šią neperskaitomą kopiją visam laikui? Naujose atsarginėse kopijose jos nebebus. Jei jos dar gali prireikti, pirma atsisiųskite kopiją.")) return;
+    try { localStorage.removeItem(k); } catch (err) {}
+    piesApzvalga();
+  });
 
   /* ---------- Išsaugojimas ---------- */
   document.getElementById("btn-issaugoti").addEventListener("click", function () {
-    var data = new Date();
-    var failas = GP_BACKUP.surinkti(null, data);
-    if (!failas) return;
-    var kiek = Object.keys(failas.items).length;
-    if (!kiek) return;
-    var blob = new Blob([JSON.stringify(failas, null, 1)], { type: "application/json" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = GP_BACKUP.failoVardas(data);
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-    if (window.GP_ANALITIKA) GP_ANALITIKA.ivykis("atsargine_kopija", { veiksmas: "issaugota", rezultatas: "pavyko" });
-    document.getElementById("issaugojimo-info").textContent = LANG === "en"
-      ? "Saved " + kiek + " entries (" + dydis(blob.size) + ")."
-      : "Išsaugoti " + kiek + " įrašai (" + dydis(blob.size) + ").";
+    var r = atsisiusk();
+    if (!r) return;
+    document.getElementById("issaugojimo-info").textContent = (LANG === "en" ? "Saved: " : "Išsaugota: ") + irasu(r.kiek) + " (" + dydis(r.dydis) + ").";
   });
 
   /* ---------- Atkūrimas ---------- */
-  var paruosta = null;
+  var paruosta = null, paruostaPal = [];
   var perziura = document.getElementById("perziura");
   var btnAtkurti = document.getElementById("btn-atkurti");
 
@@ -246,48 +274,83 @@
   }
 
   document.getElementById("failas").addEventListener("change", function (e) {
-    paruosta = null; btnAtkurti.disabled = true;
+    paruosta = null; paruostaPal = []; btnAtkurti.disabled = true;
     var f = e.target.files && e.target.files[0];
     if (!f) { perziura.className = "zinute"; return; }
     var fr = new FileReader();
     fr.onload = function () {
       var r = GP_BACKUP.patikrinti(fr.result);
       if (!r.ok) {
-        var zin;
+        var zin, kurie = function (vardais) {
+          return esc(r.raktai.slice(0, 3).map(function (k) { return vardais ? zenklas(k).pav : k; }).join(", ")) +
+            (r.raktai.length > 3 ? (LANG === "en" ? " and " + (r.raktai.length - 3) + " more" : " ir dar " + (r.raktai.length - 3)) : "");
+        };
         if (r.priezastis === "json") zin = LANG === "en" ? "This file is not readable JSON." : "Šis failas nėra skaitomas JSON.";
         else if (r.priezastis === "reiksmes") {
-          var kurie = esc(r.raktai.slice(0, 3).join(", ")) + (r.raktai.length > 3 ? (LANG === "en" ? " and " + (r.raktai.length - 3) + " more" : " ir dar " + (r.raktai.length - 3)) : "");
           zin = LANG === "en"
-            ? "Some entries in this file do not hold text values, so the file cannot be restored - existing data has not been changed. Entries: " + kurie + "."
-            : "Kai kurių šio failo įrašų reikšmės nėra tekstas, todėl failo atkurti negalima - esami duomenys nepakeisti. Įrašai: " + kurie + ".";
+            ? "Some entries in this file do not hold text values, so the file cannot be restored - existing data has not been changed. Entries: " + kurie() + "."
+            : "Kai kurių šio failo įrašų reikšmės nėra tekstas, todėl failo atkurti negalima - esami duomenys nepakeisti. Įrašai: " + kurie() + ".";
+        } else if (r.priezastis === "sugadinta") {
+          zin = LANG === "en"
+            ? "Some data in this file are damaged (cut off or edited by hand), so the file cannot be restored - existing data has not been changed. Damaged: " + kurie(true) + "."
+            : "Dalis šio failo duomenų sugadinti (nukirpti ar taisyti ranka), todėl failo atkurti negalima - esami duomenys nepakeisti. Sugadinti: " + kurie(true) + ".";
+        } else if (r.priezastis === "versija") {
+          zin = LANG === "en"
+            ? "This backup was made by a newer G-Procure version (format " + esc(r.versija) + ") that this page does not know - existing data has not been changed."
+            : "Šią kopiją sukūrė naujesnė G-Procure versija (formatas " + esc(r.versija) + "), kurios šis puslapis nežino - esami duomenys nepakeisti.";
         } else zin = LANG === "en" ? "This is not a G-Procure backup file." : "Tai ne G-Procure atsarginės kopijos failas.";
         rodyk("klaida", zin);
         return;
       }
       var obj = r.obj;
-      var raktai = Object.keys(obj.items);
-      var perrasomi = GP_BACKUP.perrasomi(obj, null);
-      paruosta = obj;
+      var pal = GP_BACKUP.palyginimas(obj, null);
+      paruosta = obj; paruostaPal = pal;
       btnAtkurti.disabled = false;
       // Vietinė data, kaip failo varde (createdAt - UTC: 00:00-03:00 Lietuvos laiku būtų vakarykštė)
       var sukurta = new Date(obj.createdAt ? obj.createdAt : NaN), p2 = function (n) { return (n < 10 ? "0" : "") + n; };   // null - ne 1970-01-01
       var data = isNaN(sukurta) ? esc(String(obj.createdAt || "").slice(0, 10))
         : sukurta.getFullYear() + "-" + p2(sukurta.getMonth() + 1) + "-" + p2(sukurta.getDate());
-      rodyk("demesio", LANG === "en"
-        ? "File from <strong>" + data + "</strong>: " + raktai.length + " entries, of which <strong>" +
-          perrasomi + "</strong> already exist in this browser and will be overwritten."
-        : "Failas iš <strong>" + data + "</strong>: " + raktai.length + " įrašai, iš jų <strong>" +
-          perrasomi + "</strong> šioje naršyklėje jau yra ir bus perrašyti.");
+      /* Kas bus su kiekvienos rūšies duomenimis (2026-11-06): pakeista, pridėta, nepasikeis; ir kurių šios naršyklės įrašų (kortelių,
+         pirkimų) faile nėra - jie dingtų. Iki tol - tik „N įrašų bus perrašyti“, o vėliau sukurtos kortelės dingdavo be įspėjimo. */
+      var grupes = { pakeis: [], naujas: [], "tas pats": [], praleidziamas: [] }, praras = [];
+      pal.forEach(function (x) {
+        var z = zenklas(x.raktas), pav = z.pav + (z.modulis && z.modulis !== "-" ? " (" + z.modulis + ")" : "");
+        if (grupes[x.busena].indexOf(pav) < 0) grupes[x.busena].push(pav);
+        if (x.prarandami.length) praras.push({ pav: z.pav, sar: x.prarandami });
+      });
+      var h = (LANG === "en" ? "File from <strong>" + data + "</strong>." : "Failas iš <strong>" + data + "</strong>.") + "<ul>";
+      var eil = function (lt, en, sar) { if (sar.length) h += "<li><strong>" + (LANG === "en" ? en : lt) + ":</strong> " + esc(sar.join(", ")) + "</li>"; };
+      eil("Bus pakeista failo duomenimis", "Will be replaced by the file data", grupes.pakeis);
+      eil("Bus pridėta", "Will be added", grupes.naujas);
+      eil("Nepasikeis (tokie patys)", "Will not change (the same)", grupes["tas pats"]);
+      eil("Neatkuriama (lieka šios naršyklės)", "Not restored (this browser's stays)", grupes.praleidziamas);
+      h += "</ul>";
+      praras.forEach(function (x) {
+        var vardai = x.sar.slice(0, 5).map(function (y) { return "„" + y.pav + "“"; }).join(", ") + (x.sar.length > 5 ? (LANG === "en" ? " and " + (x.sar.length - 5) + " more" : " ir dar " + (x.sar.length - 5)) : "");
+        h += "<p><strong>" + esc(x.pav) + (LANG === "en" ? " - would be lost on restore (" + x.sar.length + "):" : " - atkūrus būtų prarasta (" + x.sar.length + "):") + "</strong> " +
+          esc(vardai) + ". " + (LANG === "en" ? "They are in this browser but not in the file." : "Jie yra šioje naršyklėje, bet ne faile.") + "</p>";
+      });
+      if (grupes.pakeis.length) h += "<p>" + (LANG === "en" ? "To keep the current data, download a copy of them first." : "Kad dabartiniai duomenys neprapultų, pirma atsisiųskite jų kopiją.") +
+        "</p><button type=\"button\" class=\"veiksmas antrinis\" id=\"btn-dabartine\">" + (LANG === "en" ? "Download a copy of the current data" : "Atsisiųsti dabartinių duomenų kopiją") + "</button>";
+      rodyk(praras.length ? "klaida" : "demesio", h);
+      var bd = document.getElementById("btn-dabartine");
+      if (bd) bd.addEventListener("click", function () {
+        var r2 = atsisiusk();
+        if (r2) document.getElementById("issaugojimo-info").textContent = (LANG === "en" ? "Saved: " : "Išsaugota: ") + irasu(r2.kiek) + " (" + dydis(r2.dydis) + ").";
+      });
     };
     fr.readAsText(f);
   });
 
   btnAtkurti.addEventListener("click", function () {
     if (!paruosta) return;
-    var raktai = Object.keys(paruosta.items);
-    var klausimas = LANG === "en"
-      ? "Restore " + raktai.length + " entries? Values with the same key will be replaced."
-      : "Atkurti " + raktai.length + " įrašus? Tokio paties rakto reikšmės bus pakeistos.";
+    /* Klausimas sako, kas bus pakeista ir kas prarasta (2026-11-06) */
+    var pak = paruostaPal.filter(function (x) { return x.busena === "pakeis"; }).length;
+    var pr = [];
+    paruostaPal.forEach(function (x) { if (x.prarandami.length) pr.push(zenklas(x.raktas).pav + " - " + irasu(x.prarandami.length)); });
+    var klausimas = (LANG === "en" ? "Restore the data from the file? " : "Atkurti duomenis iš failo? ") +
+      (pak ? (LANG === "en" ? "Current data will be replaced: " : "Bus pakeista dabartinių duomenų: ") + sk(pak, LANG === "en" ? "type" : "rūšis", LANG === "en" ? "types" : "rūšys", "rūšių") + ". " : "") +
+      (pr.length ? (LANG === "en" ? "Lost (not in the file): " : "Bus prarasta (faile nėra): ") + pr.join("; ") + "." : "");
     if (!window.confirm(klausimas)) return;
     var r = GP_BACKUP.atkurti(paruosta, null);
     var ok = r.ok, blogai = r.blogai;
@@ -301,12 +364,12 @@
         if (kas.indexOf(t) < 0) kas.push(t);
       });
       rodyk("klaida", LANG === "en"
-        ? "Restored " + ok + " entries, " + blogai + " failed (storage may be full): " + esc(kas.join(", ")) + "."
-        : "Atkurta " + ok + " įrašų, " + blogai + " nepavyko (saugykla gali būti pilna): " + esc(kas.join(", ")) + ".");
+        ? "Restored: " + irasu(ok) + ", failed: " + blogai + " (storage may be full): " + esc(kas.join(", ")) + "."
+        : "Atkurta: " + irasu(ok) + ", nepavyko: " + blogai + " (saugykla gali būti pilna): " + esc(kas.join(", ")) + ".");
     } else {
       rodyk("gerai", LANG === "en"
-        ? "Restored " + ok + " entries. Open the module and check the data."
-        : "Atkurta " + ok + " įrašų. Atidarykite modulį ir pasitikrinkite duomenis.");
+        ? "Restored: " + irasu(ok) + ". Open the module and check the data." + (r.praleista && r.praleista.length ? " Your cookie decision in this browser was not changed." : "")
+        : "Atkurta: " + irasu(ok) + ". Atidarykite modulį ir pasitikrinkite duomenis." + (r.praleista && r.praleista.length ? " Jūsų sprendimas dėl slapukų šioje naršyklėje nepakeistas." : ""));
     }
   });
 

@@ -118,7 +118,65 @@
        (pvz. ranka taisytame faile) būtų įrašytas kaip „5“ ar „[object Object]“ ir perrašytų tikrus duomenis (2026-09-28). */
     var blogi = Object.keys(obj.items).filter(function (k) { return typeof obj.items[k] !== "string"; });
     if (blogi.length) return { ok: false, priezastis: "reiksmes", raktai: blogi };
+    /* Naujesnės kopijos formato versijos šis puslapis nežino (2026-11-06; iki tol atkurdavo be įspėjimo). */
+    if (typeof obj.version === "number" && obj.version > VERSION) return { ok: false, priezastis: "versija", versija: obj.version };
+    /* Reikšmė, kuri atrodo kaip JSON, bet neperskaitoma (nukirptas ar ranka taisytas failas), - visa kopija neatkuriama: kitaip
+       ji perrašytų gerus duomenis, o modulis rodytų „sugadinta“ (2026-11-06, naujo naudotojo patikra - dingo 12 kortelių).
+       Neperskaitomų įrašų kopijos („.sugadinta-“) - tokios ir turi būti. */
+    var sug = Object.keys(obj.items).filter(function (k) {
+      if (k.indexOf(".sugadinta-") > 0) return false;
+      var v = obj.items[k].replace(/^\s+/, "");
+      if (v.charAt(0) !== "{" && v.charAt(0) !== "[") return false;
+      try { JSON.parse(v); return false; } catch (e) { return true; }
+    });
+    if (sug.length) return { ok: false, priezastis: "sugadinta", raktai: sug };
     return { ok: true, obj: obj };
+  }
+
+  /* Įrašų sąrašas JSON reikšmėje (kortelės, pirkimai, plano eilutės): masyvas, objekto masyvo laukas arba objektas-žemėlapis.
+     Grąžina [{ id, pav }] arba null (ne įrašų sąrašas). */
+  function irasuSarasas(tekstas) {
+    var v;
+    try { v = JSON.parse(tekstas); } catch (e) { return null; }
+    var sar = null, rakt = false;
+    if (Array.isArray(v)) sar = v;
+    else if (v && typeof v === "object") {
+      ["korteles", "irasai", "items", "records", "projects"].forEach(function (f) { if (!sar && Array.isArray(v[f])) sar = v[f]; });
+      if (!sar) {
+        var ks = Object.keys(v);
+        if (ks.length && ks.every(function (k) { return v[k] && typeof v[k] === "object" && !Array.isArray(v[k]); })) { sar = ks.map(function (k) { return v[k]; }); rakt = ks; }
+      }
+    }
+    if (!sar || !sar.length || !sar.every(function (x) { return x && typeof x === "object"; })) return null;
+    var out = [];
+    for (var i = 0; i < sar.length; i++) {
+      var x = sar[i], id = x.id != null ? String(x.id) : rakt ? rakt[i] : null;
+      if (id == null) return null;
+      out.push({ id: id, pav: String(x.pavadinimas || x.name || x.title || x.pirkimas || id).slice(0, 120) });
+    }
+    return out;
+  }
+
+  /* Ką atkūrimas padarys kiekvienam failo įrašui (2026-11-06): [{ raktas, busena: "naujas" | "tas pats" | "pakeis" | "praleidziamas",
+     prarandami: [{ id, pav }] }]. prarandami - įrašai (kortelės, pirkimai), kurie yra šioje naršyklėje, bet ne faile: atkūrus jų nebeliktų
+     (iki tol rodyta tik „1 įrašas bus perrašytas“, nors tame įraše - visos kortelės). */
+  var PRALEISTI = { "gprocure.sutikimas": 1 };       // sutikimą dėl slapukų duoda šios naršyklės žmogus - iš kopijos neperimamas
+  function palyginimas(obj, saugykla) {
+    var st = saugykla || global.localStorage;
+    return Object.keys(obj.items).map(function (raktas) {
+      if (PRALEISTI[raktas]) return { raktas: raktas, busena: "praleidziamas", prarandami: [] };
+      var dab = null;
+      try { dab = st.getItem(raktas); } catch (e) {}
+      if (dab === null) return { raktas: raktas, busena: "naujas", prarandami: [] };
+      if (dab === obj.items[raktas]) return { raktas: raktas, busena: "tas pats", prarandami: [] };
+      var a = irasuSarasas(dab), b = irasuSarasas(obj.items[raktas]), pr = [];
+      if (a && b) {
+        var yra = {};
+        b.forEach(function (x) { yra[x.id] = 1; });
+        pr = a.filter(function (x) { return !yra[x.id]; });
+      }
+      return { raktas: raktas, busena: "pakeis", prarandami: pr };
+    });
   }
 
   /* Kiek failo raktų saugykloje JAU yra (tiek bus perrašyta). */
@@ -135,12 +193,13 @@
      (pvz. pilna saugykla): puslapis pasako, KURIE duomenys neatkurti, ne tik kiek. */
   function atkurti(obj, saugykla) {
     var st = saugykla || global.localStorage;
-    var raktai = Object.keys(obj.items), ok = 0, nepavyko = [];
+    var raktai = Object.keys(obj.items), ok = 0, nepavyko = [], praleista = [];
     for (var i = 0; i < raktai.length; i++) {
+      if (PRALEISTI[raktai[i]]) { praleista.push(raktai[i]); continue; }
       try { st.setItem(raktai[i], obj.items[raktai[i]]); ok++; }
       catch (e) { nepavyko.push(raktai[i]); }
     }
-    return { ok: ok, blogai: nepavyko.length, nepavyko: nepavyko };
+    return { ok: ok, blogai: nepavyko.length, nepavyko: nepavyko, praleista: praleista };
   }
 
   function failoVardas(data) {
@@ -152,7 +211,7 @@
   global.GP_BACKUP = {
     version: "1.0", APP: APP, FORMATO_VERSIJA: VERSION,
     zenklas: zenklas, irasai: irasai, baitai: baitai,
-    surinkti: surinkti, patikrinti: patikrinti, perrasomi: perrasomi,
+    surinkti: surinkti, patikrinti: patikrinti, perrasomi: perrasomi, palyginimas: palyginimas, irasuSarasas: irasuSarasas,
     atkurti: atkurti, failoVardas: failoVardas,
     /* Raktų sąrašas (kopija) - slapukų politikos lentelei (slapukai.html, 2026-10-16) */
     ZENKLAI: ZENKLAI.map(function (z) { return [z[0], z[1], { lt: z[2].lt, en: z[2].en }]; })
