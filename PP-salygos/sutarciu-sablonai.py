@@ -1079,6 +1079,7 @@ NURODYMO_PASTRAIPA = {'DARBAI_LT_SS': re.compile(r'^\s*\[[^\[\]]*pasirenkam[^\[\
 # Šablonai, kuriuose tuščias lentelės langelis nėra pildomas laukas (projektavimo paslaugų SS: atstovų lentelės dešinė pusė ties Užsakovo
 # atstovu, atsakingu už viešinimą, ir parašų lentelės tarpai); pildomos vietos ten pažymėtos geltonai (paryskinimai)
 BE_LAUKU = {'PPS_LT_SS', 'EKSOL_LT_SS', 'EKSTP_LT_SS', 'EKSTV_LT_SS'}   # eksploatavimo SS: parašų lentelės tarpai
+BE_LAUKU.add('AG_SR_LT_SS')   # AB „Amber Grid“ SS (2026-11-06): tušti langeliai po lentelių - ne laukai, pildomos vietos - valdikliai
 # Blokai šablonuose, kur langelyje - keli punktai, o pasirinkimai ir neprivalomi punktai pažymėti „//“ ir „arba“ (projektavimo ir statybos
 # rangos SS, audito 5 sk.). Pastraipos nurodomos pradžia (pirma nepanaudota nuo paieškos vietos), „arba“ - visa. Kiekvienas „//“ nurodymas ir
 # kiekvienas „arba“ turi priklausyti blokui - kitaip neatpažinta vieta.
@@ -1122,6 +1123,15 @@ ETAPU_LENTELE = {
                   ('etapo', '(procentinė dalis nuo Darbų etapo kainos be PVM už kiekvieną pradelstą dieną)'),
                   ('atskirai', '(už kiekvieną pradelstą dieną)')],
 }
+BLOKAI_AG = {'AG_SR_LT_SS': {
+    # AB „Amber Grid“ SS (2026-11-06): punktai, kurie taikomi ne visada (pašalinami arba pakeičiami „Netaikoma.“) - žr. amber-sutartys.py
+    'neprivalomos': [('indeksas', '2.2.1. Sutarčiai taikomas', '2.2.2. Sutarties sudarymo dieną'),
+                     ('draudimo_suma', '4.1.1. Rangovo civilinės atsakomybės draudimo suma', None), ('uztikrinimo_dydis', '5.1.1.', None),
+                     ('garantinis', '5.2.1.', '5.2.2.'), ('isigaliojimas_valdyba', '(i) Sutarties pasirašymui pritaria', None),
+                     ('isigaliojimas_uztikrinimas', '(ii) Rangovas pateikia Užsakovui', None)],
+    'priedu_eilutes': r'^10\.(\d+)\. ',
+    'rengejo_pastabos': ['G-Procure pastaba (prieš skelbiant ištrinkite): ši specialiųjų sąlygų forma atkurta iš AB „Amber Grid“ paskelbto pirkimo sutarties '
+                         'projekto (SUT-36 13.0 2026-10-02), nes tuščios formos neturėjome. Prieš skelbdami palyginkite su galiojančia AB „Amber Grid“ forma.']}}
 BLOKAI = {'PSR_LT_SS': {
     'sritys': [('priedų sąrašas', 'SUTARTIES DOKUMENTAI IR PRIEDAI:'), ('parašai', 'Užsakovo vardu:'), ('1.1 priedas', '[OBJEKTAS]')],
     'irasyti': [('objektas', '//nurodomas statomas'), ('techninė_užduotis', '// nurodomas priedas, kuriame pateikiama Techninė užduotis'),
@@ -1287,6 +1297,7 @@ BLOKAI.update({
         'sudarant_pasirinkimai': [('pagrindiniai_darbai', ['Pirminių įrenginių remontas ir techninė priežiūra', 'RAA planinės techninės priežiūros'])],
         'neprivalomos': [_EKS_DOK, ('sandėliai', 'Montuojama Užsakovo įranga ir medžiagos (metalo konstrukcijos', '[įrašoma]'), _EKS_GAR, _EKS_UZT]}),
     'EKSTV_LT_SS': _eks_ss('110-400 kV ORO IR KABELIŲ ELEKTROS PERDAVIMO LINIJŲ', {'neprivalomos': [_EKS_UZT]})})
+BLOKAI.update(BLOKAI_AG)
 # Tušti laukai: ką pildo generatorius, ko - niekas iki sutarties sudarymo
 LAUKAI_GENERATORIUS = re.compile(r"^(Sutarties pavadinimas|Title of the Contract|3\.2\.|\d+\.\d+\. (Priedas Nr\.|Annex))")
 # Valdiklių atsakymai - sutarčių plano 3.4 lentelė (naudotojo sprendimai 2026-10-07): (vietos pradžia | None, elementų požymis) -> šaltinis
@@ -1316,12 +1327,45 @@ ATSAKYMAI = [
     (None, r'^tekstas$', 'klausimas', 'pirkimo dokumentų adresas CVP IS'),
 ]
 # Šeimos savi valdiklių atsakymai (tikrinami prieš ATSAKYMAI)
+# AB „Amber Grid“ statybos rangos SS (2026-11-06, atkurta forma - amber-sutartys.py): visos vietos - Word valdikliai
+ATSAKYMAI_AG = [
+    ('', r'^tekstas$', 'generatorius', 'įžanga: Užsakovas ir pirkimo pavadinimas su numeriu - automatiškai, atstovai ir Rangovo duomenys - sudarant sutartį'),
+    ('', r'skelbiamos apklausos', '1 žingsnis', 'pirkimo būdas (1 žingsnis)'),
+    ('', r'mažos vertės pirkimas', '1 žingsnis', 'pirkimo rūšis pagal būdą (1 žingsnis)'),
+    ('1', r'^tekstas$', 'klausimas', 'Objekto pavadinimas ar apibūdinimas'),
+    ('1', r'naujos statybos', 'klausimas', 'statybos darbų rūšis'),
+    ('1', r'ypatingojo', 'klausimas', 'statinio kategorija'),
+    ('1', r'projektą', 'klausimas', 'Rangovo rengiamo projekto rūšis'),
+    ('1', r'^taip\|ne$', 'klausimas', 'Koordinatoriaus ir Projekto vykdymo priežiūros paslaugos'),
+    ('2.1', r'kainodara', 'klausimas', 'Sutarties kainos apskaičiavimo būdas'),
+    ('2.2', r'^taikoma\|netaikoma$', 'klausimas', 'kainos peržiūra'),
+    ('2.2.1', r'sąnaudų', 'klausimas', 'kainų indeksas'),
+    ('2.2.2', r'^tekstas$', 'sudarant', 'indekso reikšmė ir data Sutarties sudarymo dieną'),
+    ('2.3.1.2', r'Pradinės Sutarties vertė', 'klausimas', 'pradinės Sutarties vertės apskaičiavimas'),
+    ('2.4.1', r'^1\|5\|', 'klausimas', 'apmokėjimo terminas dienomis'),
+    ('2.5', r'^5\|10\|15$', 'klausimas', 'Darbų apimties ir Projekto sprendinių keitimo riba procentais'),
+    ('3.1.1', r'^Taikoma\. Rangovas privalo pateikti', 'klausimas', 'Darbų vykdymo grafikas ir jo pateikimo terminas dienomis'),
+    ('3.1.2', r'taikoma', 'klausimas', 'atsakomybė už vėlavimą pateikti Grafiką'),
+    ('3.2.1', r'^1\|2\|3\|', 'klausimas', 'galutinis Darbų atlikimo terminas mėnesiais'),
+    ('3.4.10', r'^tekstas$', 'klausimas', 'kiti dokumentai prieš Galutinį perdavimo aktą'),
+    ('3.6', r'.', 'klausimas', 'kiti Darbų vykdymo reikalavimai (žurnalas, Planas, statybvietės kontrolė, BIM, techninė priežiūra, informavimas)'),
+    ('3.7.1', r'taikoma', 'klausimas', 'delspinigiai už tarpinių terminų vėlavimą'),
+    ('4.1', r'.', 'klausimas', 'Rangovo civilinės atsakomybės savanoriškasis draudimas ir jo suma'),
+    ('5', r'.', 'klausimas', 'Sutarties, garantinių įsipareigojimų ir avanso užtikrinimas'),
+    ('6.1', r'numatyta', 'klausimas', 'tiesioginis atsiskaitymas su subtiekėjais (siūloma pagal SPS)'),
+    ('7.1', r'netaikomos', 'klausimas', 'papildomos Sutarties įsigaliojimo sąlygos'),
+    ('7.2', r'dviem', 'klausimas', 'egzempliorių skaičius'),
+    ('7.2', r'lietuvių', '1 žingsnis', 'Sutarties kalba (1 žingsnis)'),
+    ('9.1', r'^tekstas$', 'klausimas', 'kitos Sutarties nuostatos'),
+    ('10.1', r'^tekstas$', 'sudarant', 'CVP IS pirkimo adresas (paskelbus pirkimą)'),
+    ('11', r'^tekstas$', 'sudarant', 'už viešinimą atsakingas asmuo, padalinys ir adresas - sudarant sutartį')]
 ATSAKYMAI_SEIMOS = {'PROJEKTAVIMO_STATYBOS': [
     (None, r'^tekstas$', 'sudarant', 'Rangovo registracijos valstybė („[Lietuvos] Respublikos“) - iš pasiūlymo, sudarant sutartį')],
                     'STATYBOS_RANGOS': [
     (None, r'^tekstas$', 'sudarant', 'Rangovo registracijos valstybė („[Lietuvos] Respublikos“) - iš pasiūlymo, sudarant sutartį')],
                     'PROJEKTAVIMO_PASLAUGOS': [
     (None, r'^tekstas$', 'sudarant', 'Projektuotojo registracijos valstybė („[Lietuvos] Respublikos“) - iš pasiūlymo, sudarant sutartį')],
+                    'AG_STATYBOS_RANGOS': ATSAKYMAI_AG,
                     'DARBAI_MAZOJI': [
     ('1.2', r'Atliktų darbų aktą', 'klausimas', 'darbų priėmimo dokumentas: vienas Atliktų darbų aktas arba paskutinis (kai aktų keli)'),
     ('4.1', r'fiksuotas įkainis', 'klausimas', 'kainos apskaičiavimo būdas (4.1)'),
@@ -1437,7 +1481,10 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
         Z['pastraipos'].append(ts)
         tl = ts.lower()
         padengta = []  # (pradžia, pabaiga) atkarpos t, kurias paaiškina taisyklės
-        if tl in TRYNIMAS:
+        if ts in B0.get('rengejo_pastabos', ()):
+            # G-Procure pastaba rengėjui (AB „Amber Grid“ atkurta forma): nurodymas, kurį žmogus ištrina Word programoje
+            Z['nurodymai'].append({'i': i, 'vieta': vieta, 'tekstas': ts, 'id': 'atkurta', 'zyme': 'pastaba'}); padengta.append((0, len(t)))
+        elif tl in TRYNIMAS:
             Z['trynimo_nurodymai'].append({'i': i, 'vieta': vieta}); padengta.append((0, len(t)))
         elif tl in ARBA:
             padengta.append((0, len(t)))
@@ -2099,6 +2146,9 @@ def main():
             mp.write_text(js, encoding='utf-8'); pakeista += 1
         print('%-18s %s | %s' % (kodas, ', '.join(ir['paruosimas']) or 'be pakeitimų',
                                  ', '.join('%s %d' % (k, v) for k, v in z['suvestine'].items() if v)))
+    # kitų organizacijų atkurti šablonai (AB „Amber Grid“ - amber-sutartys.py, 2026-11-06) - ne šio scenarijaus: paliekami kaip registre
+    kodai = {s[0] for s in SABLONAI}
+    nauji.update({k: v for k, v in reg['sablonai'].items() if k not in kodai})
     duom = {'paaiskinimas': PAAISKINIMAS, 'versijos': reg.get('versijos', VERSIJOS), 'sablonai': nauji}
     js = json.dumps(duom, ensure_ascii=False, indent=1) + '\n'
     if not REG.exists() or REG.read_text(encoding='utf-8') != js:

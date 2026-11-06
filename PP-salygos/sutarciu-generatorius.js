@@ -263,15 +263,15 @@ const GP_SUTARCIU_GEN = (() => {
     const d = tc.ownerDocument, pr = tcPrOf(tc);
     const b = vaikas(pr, 'tcBorders') || idekI(pr, naujas(d, 'tcBorders'), TCPR_TVARKA);
     const n = naujas(d, krastas);
-    if (e && !/^(nil|none)$/.test(e.getAttributeNS(W, 'val') || e.getAttribute('w:val') || '')) Array.from(e.attributes).forEach(a => n.setAttribute(a.name, a.value));
-    else n.setAttribute('w:val', 'nil');
+    if (e && !/^(nil|none)$/.test(e.getAttributeNS(W, 'val') || e.getAttribute('w:val') || '')) Array.from(e.attributes).forEach(a => a.namespaceURI ? n.setAttributeNS(a.namespaceURI, a.name, a.value) : n.setAttribute(a.name, a.value));
+    else n.setAttributeNS(W, 'w:val', 'nil');
     idekI(b, n, BORD_TVARKA);
   }
   function tusciasLangelis(pagal, be){
     const d = pagal.ownerDocument, t = naujas(d, 'tc'), pr = vaikas(pagal, 'tcPr');
     if (pr){ const k = pr.cloneNode(true); const vm = vaikas(k, 'vMerge'); if (vm) k.removeChild(vm); t.appendChild(k); }
     const p = naujas(d, 'p'), pp = naujas(d, 'pPr'), sp = naujas(d, 'spacing');
-    sp.setAttribute('w:before', '0'); sp.setAttribute('w:after', '0'); pp.appendChild(sp);
+    sp.setAttributeNS(W, 'w:before', '0'); sp.setAttributeNS(W, 'w:after', '0'); pp.appendChild(sp);
     p.appendChild(pp); t.appendChild(p);
     be.forEach(k => remelis(t, k, null));
     return t;
@@ -356,13 +356,13 @@ const GP_SUTARCIU_GEN = (() => {
       const nw = ng.map(x => Math.max(1, Math.floor(x * Wg / sumN))); nw[nw.length - 1] += Wg - nw.reduce((x, y) => x + y, 0);
       const k = nw.length;
       // 1. tinklelis: stulpelis g -> k stulpelių; kiekvienos eilutės langelis, apimantis g, - platesnis per k - 1
-      nw.forEach(w => { const c = naujas(d, 'gridCol'); c.setAttribute('w:w', String(w)); grid.insertBefore(c, G[g]); });
+      nw.forEach(w => { const c = naujas(d, 'gridCol'); c.setAttributeNS(W, 'w:w', String(w)); grid.insertBefore(c, G[g]); });
       grid.removeChild(G[g]);
       for (const r of vaikai(T, 'tr')){
         let p = 0;
         for (const c of vaikai(r, 'tc')){
           const s = span(c);
-          if (p <= g && g < p + s){ const gs = naujas(d, 'gridSpan'); gs.setAttribute('w:val', String(s + k - 1)); idekI(tcPrOf(c), gs, TCPR_TVARKA); break; }
+          if (p <= g && g < p + s){ const gs = naujas(d, 'gridSpan'); gs.setAttributeNS(W, 'w:val', String(s + k - 1)); idekI(tcPrOf(c), gs, TCPR_TVARKA); break; }
           p += s;
         }
       }
@@ -382,7 +382,7 @@ const GP_SUTARCIU_GEN = (() => {
         vaikai(r, 'tc').forEach((c, ci, visiC) => {
           const pr = tcPrOf(c), w = vaikas(pr, 'tcW');
           let p = 0; visiC.slice(0, ci).forEach(x => { p += span(x); });
-          const nwEl = naujas(d, 'tcW'); nwEl.setAttribute('w:w', String(nw.slice(p, p + span(c)).reduce((x, y) => x + y, 0))); nwEl.setAttribute('w:type', 'dxa');
+          const nwEl = naujas(d, 'tcW'); nwEl.setAttributeNS(W, 'w:w', String(nw.slice(p, p + span(c)).reduce((x, y) => x + y, 0))); nwEl.setAttributeNS(W, 'w:type', 'dxa');
           if (w) pr.removeChild(w);
           idekI(pr, nwEl, TCPR_TVARKA);
           const turi = vaikas(pr, 'tcBorders');
@@ -948,7 +948,7 @@ const GP_SUTARCIU_GEN = (() => {
           const rp = vaikas(kp, 'rPr'); if (rp) be(rp);
           if (vaikas(kp, 'numPr') || vaikas(kp, 'pStyle')){
             const n = naujas(d, 'numPr'), il = naujas(d, 'ilvl'), id = naujas(d, 'numId');
-            il.setAttribute('w:val', '0'); id.setAttribute('w:val', '0'); n.appendChild(il); n.appendChild(id); idek(kp, n);
+            il.setAttributeNS(W, 'w:val', '0'); id.setAttributeNS(W, 'w:val', '0'); n.appendChild(il); n.appendChild(id); idek(kp, n);
           }
           const ind = vaikas(kp, 'ind'); if (ind){ ind.removeAttribute('w:hanging'); ind.removeAttributeNS(W, 'hanging'); }
           np.appendChild(kp);
@@ -984,7 +984,8 @@ const GP_SUTARCIU_GEN = (() => {
         if (gerai) A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'priedas', buvo: x.aprasas, tapo: 'netaikoma' });
       }
       const po = (s.po || []).map(tarpai).filter(Boolean);
-      if (po.length && !istrinti.has(x.lt.i) && galoKeitimas(x.lt.i, c => c === '.' ? ';' : c, x.vieta)) prieduEilutes[x.lt.i] = { eilutes: po, x };
+      // s.kabliataskis === false (AB „Amber Grid“ SS, 2026-11-06): sąrašo eilutės baigiasi tašku - paskutinės eilutės galas nekeičiamas
+      if (po.length && !istrinti.has(x.lt.i) && (s.kabliataskis === false || galoKeitimas(x.lt.i, c => c === '.' ? ';' : c, x.vieta))) prieduEilutes[x.lt.i] = { eilutes: po, x };
     }
 
     // 6a. Nuoroda į pašalintą punktą (2026-10-09, nuorodų patikra): SS 9.8 „Punktas netaikomas, taikomos 8.3.2 punkte nustatytos sąlygos.“ -

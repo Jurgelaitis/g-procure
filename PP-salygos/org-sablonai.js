@@ -21,8 +21,9 @@
   var IMONES = {
     "litgrid": { id: "litgrid", vardas: "LITGRID AB", didz: "LITGRID AB", sutartys: null, centralizuotas: true, rekvizituIs: "litgrid" },
     "amber-grid": { id: "amber-grid", vardas: "AB „Amber Grid“", didz: "AB „AMBER GRID“", svetaine: "https://ambergrid.lt",
-                    // Paskelbtų paketų sutarčių formos: prekių ir paslaugų - tos pačios; rangos - kitos formos, jų generatoriuje nėra
-                    sutartys: ["PREKES", "PASLAUGOS"], centralizuotas: false,
+                    // Paskelbtų paketų sutarčių formos: prekių ir paslaugų - tos pačios; statybos rangos - savos (SUT-35 / SUT-36), specialiosios
+                    // sąlygos atkurtos iš paskelbto pirkimo (2026-11-06, amber-sutartys.py)
+                    sutartys: ["PREKES", "PASLAUGOS", "AG_STATYBOS_RANGOS"], centralizuotas: false,
                     logotipas: { png: "amber-grid-logo-mono.png", svg: "amber-grid-logo-mono.svg", plotis: 1224, aukstis: 394 },
                     objektai: { lt: "gamtinių dujų perdavimo sistemos", en: "natural gas transmission system" } }
   };

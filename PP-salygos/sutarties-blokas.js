@@ -65,7 +65,7 @@
     var S = { ats: {}, taip: false, zmogaus: null, patvirtinta: null, buvo: null, keiciama: false, sistema: null, galut: null, d: {} };
     var ESM = G.NERENGIAMA.filter(function (n) { return n.id === "esmines"; })[0];
     // Klausimas ir tekstai - pagal pasirinktą pirkimo vykdytoją (2026-11-03)
-    function imone() { return global.GP_ORG_SABLONAI ? global.GP_ORG_SABLONAI.dabartine() : { vardas: "LITGRID AB", sutartys: null }; }
+    function imone() { return global.GP_ORG_SABLONAI ? global.GP_ORG_SABLONAI.dabartine() : { id: "litgrid", vardas: "LITGRID AB", sutartys: null }; }
     function klausimas() { return "Ar taikomos tipinės " + imone().vardas + " sutarties standartinės sąlygos?"; }
     function kopija(x) { return JSON.parse(JSON.stringify(x)); }
     function esmines(g) { return !!(g && g.nerengiama && g.nerengiama.id === "esmines"); }
@@ -213,12 +213,19 @@
         }).join("") + "</div></fieldset>";
     }
 
+    /* Kokie sutarties dokumentai atsiras pakete (2026-11-06: AB „Amber Grid“ statybos rangos - atkurta specialiųjų sąlygų forma, bendrosios sąlygos - jos PDF) */
+    function dokumentaiTekstas(g) {
+      var s = g && G.SEIMOS[g.seima];
+      if (s && s.atkurta) return 'sutarties specialiosios sąlygos (atkurta ' + esc(imone().vardas) + ' forma, ' + esc(s.atkurta) + ' - žr. pastabą aukščiau); bendrąsias sąlygas (' + esc(s.bsForma || '') + ', PDF) pridėsite patys.';
+      return 'sutarties bendrosios ir specialiosios sąlygos (iš ' + (imone().id === "litgrid" ? 'LITGRID šablonų' : 'standartinių šablonų su ' + esc(imone().vardas) + ' duomenimis') + ', tekstas nekeičiamas).';
+    }
     function rankinisHtml() {
       var opt = [];
       var leid = imone().sutartys;   // įmonė, kuriai paruoštos tik kai kurios šeimos (AB „Amber Grid“ - prekės ir paslaugos)
       Object.keys(G.SEIMOS).forEach(function (k) {
         var s = G.SEIMOS[k];
         if (leid && leid.indexOf(k) < 0) return;
+        if (s.imone && s.imone !== imone().id) return;   // kitos įmonės forma (AB „Amber Grid“ statybos rangos sutartis - ne LITGRID AB)
         if (s.variantai) Object.keys(s.variantai).forEach(function (v) { opt.push(['s:' + k + ':' + v, s.pav + " - " + s.variantai[v]]); });
         else opt.push(['s:' + k + ':', s.pav + (s.sablonai ? "" : " (šablonas dar neparuoštas)")]);
       });
@@ -331,6 +338,7 @@
           if (S.zmogaus && neparuosta) past.push(S.d.rezimas === "VPI"
             ? "Centralizuotam pirkimui pagal VPĮ sutarties projektas kol kas nesiūlomas - VPĮ pirkimų sutarties forma dar nenuspręsta."
             : "Šios šeimos šablonas generatoriui dar neparuoštas.");
+          if (S.zmogaus && G.SEIMOS[g.seima] && G.SEIMOS[g.seima].atkurta && G.ATKURTA_PASTABA) past.push(G.ATKURTA_PASTABA);   // pasirinkta ranka - pastaba lieka
           past.forEach(function (p) { h += '<div class="sb-past">' + esc(p) + "</div>"; });
           h += dokumentuHtml();
         }
@@ -347,8 +355,8 @@
       }
       if (S.keiciama && !esmines(g)) h += rankinisHtml();
       if (g) h += '<div class="cite">' + (esmines(g) || g.nerengiama ? 'Sutarties projektas į pirkimo sąlygų paketą neįtraukiamas.'
-        : sablonai() ? (S.patvirtinta ? 'Žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai (galite juos atsakyti ir vėliau), o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).'
-                                      : 'Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai, o žingsnyje „4. Dokumentai“ - sutarties bendrosios ir specialiosios sąlygos (iš LITGRID šablonų, tekstas nekeičiamas).')
+        : sablonai() ? (S.patvirtinta ? 'Žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai (galite juos atsakyti ir vėliau), o žingsnyje „4. Dokumentai“ - ' + dokumentaiTekstas(g)
+                                      : 'Atsakius „Taip“, žingsnyje „3. Sutarties projektas“ atsiras sutarties klausimai, o žingsnyje „4. Dokumentai“ - ' + dokumentaiTekstas(g))
         : 'Šios sutarties dokumentų generatorius dar nekuria - ' + esc(imone().vardas) + ' standartines sąlygas prie pirkimo sąlygų pridėsite patys; pirkimo sąlygų paketas nuo to nesikeičia.') + '</div>';
       h += stebejimoHtml();
       h += "</div>";
