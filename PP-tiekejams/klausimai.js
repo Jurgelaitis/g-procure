@@ -18,7 +18,7 @@
  *    mini atsakymų raštas ar paaiškinimas (jis gali sąlygas pakeisti).
  *  - Tekstas iš dokumentų į HTML - tik per modulio esc().
  *
- * Grynos funkcijos: siulyk({ docs, meta, kalba, dabar }) -> { klausimai, faktai };
+ * Grynos funkcijos: siulyk({ docs, meta, kalba, dabar }) -> { klausimai, faktai, datos } (datos - laiko juostai: objekto apžiūra);
  * kontrolinis({ docs, meta, kalba, dabar, kelietapis }) -> punktai, į kuriuos dokumentai aiškiai atsako (be DI);
  * terminas({ docs, pirkimas, galutinis, parse, kelietapis, dabar }) - iki kada pateikti klausimą.
  * Vieta dokumente - shared/dokumentai.js fragmentai (d.chunks), jų ID paduodami į paiešką,
@@ -194,7 +194,7 @@
   function siulyk(o) {
     o = o || {};
     var kalba = o.kalba === "en" ? "en" : "lt", dabar = o.dabar || new Date(), meta = o.meta || {};
-    var g = grupes(o.docs), Q = [], F = [], seni = Object.create(null);
+    var g = grupes(o.docs), Q = [], F = [], DATOS = [], seni = Object.create(null);
     function T(x) { return x[kalba]; }
     function q(id, p, tekstas, r, fragmentai) {
       if (seni[id]) return; seni[id] = 1;
@@ -218,7 +218,7 @@
       q("rk-kaip", 2, L("Kaip ir iki kada atsakyti į rinkos konsultacijos klausimus?", "How and by when do I answer the market consultation questions?"), rkKod, rkFr);
       q("rk-naudojimas", 3, L("Ar mano atsakymai bus konfidencialūs ir kaip jie bus naudojami?", "Will my answers be confidential and how will they be used?"), rkKod, rkFr);
       q("rk-dalyvavimas", 4, L("Ar dalyvavimas konsultacijoje paveiks galimybę dalyvauti būsimame pirkime?", "Does taking part in the consultation affect my chances in the future procurement?"), rkKod, rkFr);
-      return { klausimai: Q, faktai: F };
+      return { klausimai: Q, faktai: F, datos: DATOS };
     }
 
     /* --- Būsena: atsakymai, pratęsimas, skirtingos reikšmės --- */
@@ -300,6 +300,9 @@
       // Data - kitame sakinyje („... bus vykdoma apžiūra. Tiekėjai, norintys apžiūrėti ..., turi iki 2026 m. ...“)
       var poApz = apzTaip.f.slice(apzTaip.m.index, apzTaip.m.index + 260), mD = /20\d\d\s+m\.\s+[a-z]+\s+\d{1,2}\s+d\.|20\d\d-\d\d-\d\d/.exec(poApz);
       var apzD = mD ? dataLt(normTarpai(mD[0])) : null;
+      // Laiko juostai (2026-11-06): sąlygose nurodyta apžiūros data su citata - ir praėjusi (juostoje ji pažymima praėjusia)
+      if (apzD) DATOS.push({ id: "apziura", date: apzD, tekstas: normTarpai(apzTaip.ch.text.substr(apzTaip.m.index + mD.index, mD[0].length)),
+        kodel: { docId: apzTaip.d.id, name: vardas(apzTaip.d), loc: apzTaip.ch.loc, citata: kiekDaug(normTarpai(apzTaip.ch.text.substr(apzTaip.m.index, mD.index + mD[0].length + 12))) } });
       if (!apzD || apzD >= dabar) {
         var dTekstas = mD ? normTarpai(apzTaip.ch.text.substr(apzTaip.m.index + mD.index, mD[0].length)) : "";
         if (mD) apzTaip.citata = kiekDaug(normTarpai(apzTaip.ch.text.substr(apzTaip.m.index, mD.index + mD[0].length + 12)));
@@ -470,7 +473,7 @@
     if (subt) q("subtiekejai", 71, L("Kokią informaciją apie subtiekėjus reikia pateikti?", "What information about subcontractors must be provided?"), subt);
 
     Q.sort(function (a, b) { return a.p - b.p; });
-    return { klausimai: Q, faktai: F };
+    return { klausimai: Q, faktai: F, datos: DATOS };
   }
 
   /* ---------------- Kontrolinis sąrašas iš dokumentų ----------------
