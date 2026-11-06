@@ -51,7 +51,7 @@
   // Pirkimo būdas - tik GP_METHODS kodas (T-AK, S-AK, MV-NR, DPS-K ...); kai klasifikatorius puslapyje įkeltas - ir jame esantis
   var BUDAS = { re: /^[A-Z]{1,4}(-[A-Z]{1,3})?$/, metodas: true };
   // Sutarties projekto šeima (PP-salygos GP_SUTARTYS.SEIMOS; testai sutikrina) arba kodėl jos nėra
-  var SUTARTIS = ["PREKES", "PASLAUGOS", "PROJEKTAVIMO_PASLAUGOS", "PROJEKTAVIMO_STATYBOS", "STATYBOS_RANGOS", "DARBAI_MAZOJI", "EKSPLOATAVIMO",
+  var SUTARTIS = ["PREKES", "PASLAUGOS", "PROJEKTAVIMO_PASLAUGOS", "PROJEKTAVIMO_STATYBOS", "STATYBOS_RANGOS", "DARBAI_MAZOJI", "EKSPLOATAVIMO", "AG_STATYBOS_RANGOS",
     "nerengiama", "atideta"];
   var KODAS = { re: /^[a-z0-9_-]{1,30}$/ };
   var SKAICIUS = function (a, b) { return { sk: [a, b] }; };
