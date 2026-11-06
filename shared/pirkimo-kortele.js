@@ -141,7 +141,7 @@
       pasiulymuTerminas: "",               // pasiūlymų ar paraiškų terminas „2026-10-02T15:00“ (Vilniaus laikas)
       iniciatorius: "", organizatorius: "",
       veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
-      busena: "rengiamas", archyvuota: false
+      busena: "", archyvuota: false       // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
     };
     return laukai ? normalizuok(Object.assign(k, laukai)) : k;
   }
@@ -172,7 +172,6 @@
     if (!Array.isArray(o.dalys)) o.dalys = null;
     else o.dalys = o.dalys.filter(function (d) { return d && typeof d === "object"; })
       .map(function (d) { return Object.assign({}, d, { pavadinimas: tekstas(d.pavadinimas), verte: skaicius(d.verte) }); });
-    if (!o.busena) o.busena = "rengiamas";
     o.archyvuota = o.archyvuota === true;
     o.veiksmai = Array.isArray(o.veiksmai) ? o.veiksmai.filter(function (v) { return v && typeof v === "object" && tekstas(v.raktas); })
       .map(function (v) { return Object.assign({}, v, { raktas: tekstas(v.raktas), saltinis: tekstas(v.saltinis), tekstas: tekstas(v.tekstas),
@@ -233,6 +232,18 @@
     var w = global.GP_SAUGYKLA.rasyk(RAKTAS, { schema: Math.max(SCHEMA, irasas.schema || 0), korteles: sarasas }, { saugykla: saug(o) });
     if (!w.ok) return { ok: false, r: w };
     return { ok: true, kortele: n, nauja: !rasta };
+  }
+
+  /* Sugadintas kortelių įrašas (2026-11-06): pradėti nuo tuščio sąrašo galima tik tada, kai sugadinta reikšmė jau nukopijuota
+     atskirai (GP_SAUGYKLA „<raktas>.sugadinta-<data>“ - ją išsaugo atsarginė kopija). Grąžina { ok } arba { ok: false, kodas, r }. */
+  function pradekIsNaujo(o) {
+    o = o || {};
+    if (!global.GP_SAUGYKLA) return { ok: false, kodas: "neprieinama" };
+    var r = global.GP_SAUGYKLA.skaityk(RAKTAS, { saugykla: saug(o), tikrink: sandara });
+    if (r.busena !== "sugadinta") return { ok: false, kodas: r.busena, r: r };
+    if (!r.kopija) return { ok: false, kodas: "be-kopijos", r: r };
+    var w = global.GP_SAUGYKLA.rasyk(RAKTAS, { schema: SCHEMA, korteles: [] }, { saugykla: saug(o) });
+    return w.ok ? { ok: true, kopija: r.kopija } : { ok: false, kodas: "rasymas", r: w };
   }
 
   /* Įrankio rekomenduoti veiksmai kortelėje (2026-10-06, naudotojo sprendimas: „Priskirti pirkimui“ - į bendrą kortelę, ne į modulio
@@ -317,6 +328,20 @@
       if (visos && Math.abs(suma - k.verte) > 0.5) out.push(en
         ? "The lot values add up to " + formatas(suma) + " EUR, the estimated value is " + formatas(k.verte) + " EUR."
         : "Dalių vertės sudaro " + formatas(suma) + " EUR, o numatoma vertė - " + formatas(k.verte) + " EUR.");
+    }
+    /* Būsena ir datos nesuderintos (2026-11-06, naujo naudotojo patikra): „Paskelbtas“, bet paskelbimo data ateityje arba pasiūlymų
+       terminas jau praėjęs - kortelė pati nežino, kas padaryta, todėl tik primena. Vietinė data, ne UTC. */
+    if (k.busena === "paskelbtas") {
+      var d = new Date(), p2 = function (n) { return String(n).padStart(2, "0"); };
+      var siandien = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+      var dabar = siandien + "T" + p2(d.getHours()) + ":" + p2(d.getMinutes());
+      if (/^\d{4}-\d{2}-\d{2}/.test(k.paskelbimas || "") && k.paskelbimas.slice(0, 10) > siandien) out.push(en
+        ? "Status “Published”, but the publication date (" + k.paskelbimas.slice(0, 10) + ") is in the future - check the status or the date."
+        : "Būsena „Paskelbtas“, bet paskelbimo data (" + k.paskelbimas.slice(0, 10) + ") - ateityje. Patikrinkite būseną ar datą.");
+      var t = String(k.pasiulymuTerminas || "");
+      if (/^\d{4}-\d{2}-\d{2}/.test(t) && (t.length > 10 ? t.slice(0, 16) <= dabar : t.slice(0, 10) < siandien)) out.push(en
+        ? "The tender deadline (" + t.replace("T", " ") + ") has passed - if the tenders are being evaluated, change the status."
+        : "Pasiūlymų terminas (" + t.replace("T", " ") + ") jau praėjo - jei pasiūlymai vertinami, pakeiskite būseną.");
     }
     return out;
   }
@@ -1135,6 +1160,7 @@
     vykdytojai: vykdytojai, vykdytojas: vykdytojas,
     tuscia: tuscia, normalizuok: normalizuok, sandara: sandara,
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
+    pradekIsNaujo: pradekIsNaujo,
     naudokSaugykla: naudokSaugykla,
     tikrink: tikrink, pastabos: pastabos,
     santrauka: santrauka, formatas: formatas, budoPav: budoPav, laukoPav: laukoPav, mazaja: mazaja, reiksmesTekstas: reiksmesTekstas,
