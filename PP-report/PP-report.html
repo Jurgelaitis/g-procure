@@ -93,6 +93,9 @@
   }
   .toolbar button.success:hover { background: var(--color-emerald-strong-hover); border-color: var(--color-emerald-120); }
   .toolbar .spacer { flex: 1; }
+  /* U2: „Liko: N“ - kiek pastabų liktų bandant generuoti; paspaudus - santrauka su nuorodomis */
+  .toolbar button.gen-liko { border-color: var(--color-warning); color: var(--color-warning-strong); background: var(--color-warning-5, #FFF8E5); }
+  .toolbar button.gen-liko.gen-liko--visi { border-color: var(--color-emerald); color: var(--color-emerald-strong); background: var(--color-green-5); }
   .toolbar .draft-info {
     font-size: 13px;
     color: var(--color-graphite-50-strong);
@@ -464,6 +467,21 @@
     background: var(--color-emerald-strong-hover);
     border-color: var(--color-emerald-120);
   }
+  /* U2: patikra prieš generuojant - santrauka puslapyje (shared/vedlys.js), mygtukai kaip lango apačioje */
+  #gen-patikra { margin: 0 0 var(--space-2); }
+  /* santrauka neatsiduria po prilipusia antrašte ir įrankių juosta (telefone juosta aukštesnė) */
+  #gen-patikra .gpv-santrauka, #gen-patikra .gen-gerai { scroll-margin-top: 180px; }
+  @media (max-width: 900px) { #gen-patikra .gpv-santrauka, #gen-patikra .gen-gerai { scroll-margin-top: 260px; } }
+  #gen-patikra button {
+    padding: 8px 16px; border: 1px solid var(--color-graphite-15); background: var(--color-white); color: var(--color-graphite);
+    border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; font-family: var(--font-base); font-weight: 600;
+  }
+  #gen-patikra button:hover { background: var(--color-graphite-5); }
+  #gen-patikra button.success { background: var(--color-emerald-strong); color: var(--color-white); border-color: var(--color-emerald); }
+  #gen-patikra button.success:hover { background: var(--color-emerald-strong-hover); }
+  #gen-patikra .gen-gerai { margin: 0; padding: 12px 16px; border: 1px solid var(--color-emerald); border-left-width: 4px; border-radius: 8px;
+    background: var(--color-green-5); color: var(--color-graphite); }
+  #gen-patikra .gen-gerai p { margin: 0 0 8px; font-size: 14px; }
 
   /* Preview document styling - imituojam atspausdintą Word dokumentą */
   .preview-doc {
@@ -616,6 +634,8 @@
 <script src="../shared/docx-stiliai.js"></script>
 <!-- Vienodos būsenos ir saugus saugyklos skaitymas (Q3): sugadinti juodraščiai nevirsta „juodraščių nėra“ -->
 <script src="../shared/busena.js"></script>
+<!-- Vedlio standartas (U2, 2026-11-06): patikros santrauka puslapyje su nuorodomis į laukus, kaip PP-salygos ir PP-qual -->
+<script src="../shared/vedlys.js"></script>
 <script src="../shared/saugykla.js"></script>
 <!-- Bendra pirkimo kortelė (A1): atvertos formos tušti laukai pildomi iš kortelės -->
 <script src="../shared/money.js"></script>
@@ -686,9 +706,13 @@
     <button onclick="resetForm()" title="Išvalyti formą">🔄 Išvalyti</button>
     <span class="spacer"></span>
     <span id="draft-info" class="draft-info"></span>
+    <button type="button" id="gen-liko" class="gen-liko" onclick="rodykPatikraMygtuku()" hidden></button>
     <button onclick="showPreview()">👁️ Peržiūrėti</button>
     <button class="success" onclick="generateDocx()" id="generate-btn" title="Generuoja pažymą; jei pirkimas atliekamas raštu - taip pat ir pranešimus tiekėjams (ZIP archyve)">📄 Generuoti Word</button>
   </div>
+
+  <!-- U2: patikra prieš generuojant (ko trūksta ir kas prieštarauja - nuorodos į laukus) -->
+  <div id="gen-patikra" hidden></div>
 
   <!-- FORM CONTAINER -->
   <div id="form-container" class="gp-pildoma" style="display:none;"></div>
@@ -873,6 +897,8 @@ function goBackToSelector() {
   document.getElementById('form-container').style.display = 'none';
   document.getElementById('form-container').innerHTML = '';
   document.getElementById('draft-info').textContent = '';
+  patikraSlepk();
+  likoAtnaujink();
   window.GP_PRIEINAMUMAS && GP_PRIEINAMUMAS.jeiDingo(document.getElementById('form-selector'));
   if (window.KORTELE) KORTELE.skirtumai();
 }
@@ -881,6 +907,7 @@ function goBackToSelector() {
 // FORM RENDERING
 // ============================================================
 function renderForm(formNum) {
+  patikraSlepk();
   const container = document.getElementById('form-container');
   container.innerHTML = formNum === 1 ? renderForm1() : renderForm2();
   attachEventHandlers();
@@ -888,6 +915,7 @@ function renderForm(formNum) {
   initDefaults();
   // Today's date as default
   setTodayDate();
+  likoAtnaujink();
 }
 
 // Vietinė data (toISOString - UTC: 00:00-03:00 Lietuvos laiku pažyma gaudavo vakarykštę datą)
@@ -4094,6 +4122,7 @@ function loadDraft(id) {
     // Juodraštis - žmogaus darbas: kortelė jo nepildo, tik parodo skirtumus
     if (window.KORTELE) KORTELE.skirtumai(true);
     document.getElementById('draft-info').textContent = `Juodraštis: "${d.name}"`;
+    likoAtnaujink();
     closeModal('drafts-modal');
     showToast('Juodraštis įkeltas', 'success');
   }, 50);
@@ -4660,7 +4689,8 @@ function generateSprendimai(data) {
 // ============================================================
 // DOCX GENERATION
 // ============================================================
-function generateDocx() {
+function generateDocx(o) {
+  o = o || {};
   // Aktyviai laukiam, kol pasikraus biblioteka (max 10 sekundžių)
   if (typeof docx === 'undefined' || typeof saveAs === 'undefined') {
     showToast('Laukiama, kol pasikraus Word biblioteka...', 'info');
@@ -4669,7 +4699,7 @@ function generateDocx() {
       attempts++;
       if (typeof docx !== 'undefined' && typeof saveAs !== 'undefined') {
         clearInterval(interval);
-        generateDocx(); // pakartot
+        generateDocx(o); // pakartot
       } else if (attempts > 20) { // 20 × 500ms = 10s
         clearInterval(interval);
         showToast('Nepavyko įkelti Word bibliotekos: nėra interneto ryšio, o biblioteka šioje naršyklėje dar neišsaugota darbui be interneto. Perkraukite puslapį, kai ryšys bus.', 'error');
@@ -4681,9 +4711,15 @@ function generateDocx() {
     const data = gatherFormData();
     // D2 (2026-10-26): iki tol tikrintas tik pavadinimas - pažyma su „____“, „Sprendimai dar nepasirinkti“ ir be raštų
     // tiekėjams būdavo „sugeneruota“ be jokio žodžio. Dabar išvardijama, ko trūksta ir kas prieštarauja; sprendžia žmogus.
+    // U2 (2026-11-06): sąrašas - puslapyje (shared/vedlys.js) su nuorodomis į laukus ir „Generuoti vis tiek“;
+    // iki tol - naršyklės langas be nuorodų. Be vedlio failo - kaip iki tol.
     const trukumai = patikraPriesGeneruojant(data);
-    if (trukumai.length && !confirm('Prieš generuojant patikrinkite (' + trukumai.length + '):\n\n• ' + trukumai.join('\n• ')
-      + '\n\nVis tiek generuoti Word dokumentą?')) return;
+    if (trukumai.length && !o.visTiek) {
+      if (rodykPatikra(trukumai)) return;
+      if (!confirm('Prieš generuojant patikrinkite (' + trukumai.length + '):\n\n• ' + trukumai.join('\n• ')
+        + '\n\nVis tiek generuoti Word dokumentą?')) return;
+    }
+    patikraSlepk();
     DARBO_MOMENTAS = window.GP_DARBAS ? GP_DARBAS.momentas() : null;
     showToast('Generuojamas Word dokumentas...', 'info');
     setTimeout(() => buildDocx(data), 50);
@@ -4693,34 +4729,107 @@ function generateDocx() {
   }
 }
 
+/* U2 (2026-11-06): patikros santrauka puslapyje. Trūkstamas atsakymas („Neįrašyta“, „Nepasirinkta“, „Nepažymėta“,
+   „Neatsakyta“) - klaida, pažymima ir prie lauko; prieštaravimas ar riba - „Patikrinkite“. Pildant santrauka atsinaujina
+   (pažymėtų laukų nedaugėja - jie žymimi tik bandant generuoti). Sprendžia žmogus: pataisyti arba „Generuoti vis tiek“. */
+const TRUKUMO_RE = /^Ne(įrašyt|pasirinkt|pažymėt|atsakyt)|nepažymėta, kas tikrinama/;
+function patikraPunktai(trukumai) {
+  return trukumai.map((t, i) => ({ tekstas: t, vieta: (trukumai.vietos || [])[i] || null, lygis: TRUKUMO_RE.test(t) ? 'klaida' : 'ispejimas' }));
+}
+function atverkSkyriu(s) {
+  s.classList.remove('collapsed');
+  const h = s.querySelector('.section-header');
+  if (h) h.setAttribute('aria-expanded', 'true');
+}
+function rodykPatikra(trukumai, o) {
+  if (!window.GP_VEDLYS || !document.getElementById('gen-patikra')) return false;
+  o = o || {};
+  const pv = document.getElementById('preview-modal');
+  if (pv && pv.classList.contains('show') && o.fokusuoti !== false) closeModal('preview-modal');
+  const punktai = patikraPunktai(trukumai);
+  if (o.fokusuoti !== false) GP_VEDLYS.nuimk('#form-container');
+  GP_VEDLYS.santrauka('#gen-patikra', punktai, {
+    antraste: 'Prieš generuojant patikrinkite',
+    aprasas: 'Pažyma ir raštai tiekėjams bus parengti pagal įvestus duomenis. Pasirinkite pastabą - pateksite prie lauko. '
+      + 'Pataisykite arba generuokite vis tiek.',
+    veiksmai: [{ tekstas: 'Generuoti vis tiek', f: () => generateDocx({ visTiek: true }) }],
+    atverk: atverkSkyriu, fokusuoti: o.fokusuoti
+  });
+  if (o.fokusuoti !== false) GP_VEDLYS.pazymek(punktai);
+  likoAtnaujink();   // skaitiklis juostoje - tas pats skaičius kaip santraukoje
+  return true;
+}
+let PATIKRA_LAIK = null;
+function patikraAtnaujink(rodyti) {
+  const v = document.getElementById('gen-patikra');
+  if (!v || (v.hidden && !rodyti) || !currentForm) return;
+  let tr;
+  try { tr = patikraPriesGeneruojant(gatherFormData()); } catch (e) { return; }
+  if (tr.length) { rodykPatikra(tr, { fokusuoti: false }); return; }
+  v.hidden = false;
+  v.innerHTML = '<div class="gen-gerai" role="status"><p>Pastabų neliko - galite generuoti.</p>'
+    + '<button type="button" class="success" onclick="generateDocx()">📄 Generuoti Word</button></div>';
+}
+/* „Liko: N“ įrankių juostoje: ta pati patikra, kaip generuojant (atsinaujina pildant, įkėlus juodraštį ar kortelę) */
+function likoAtnaujink() {
+  const b = document.getElementById('gen-liko');
+  if (!b) return;
+  if (!currentForm) { b.hidden = true; return; }
+  let n;
+  try { n = patikraPriesGeneruojant(gatherFormData()).length; } catch (e) { b.hidden = true; return; }
+  b.hidden = false;
+  b.classList.toggle('gen-liko--visi', !n);
+  b.textContent = n ? 'Liko patikrinti: ' + n : '✓ Pastabų nėra';
+  b.title = n ? 'Ko trūksta ir kas prieštarauja prieš generuojant - sąrašas su nuorodomis į laukus' : 'Patikra prieš generuojant pastabų neranda';
+}
+function rodykPatikraMygtuku() {
+  const tr = patikraPriesGeneruojant(gatherFormData());
+  if (tr.length && rodykPatikra(tr)) return;
+  patikraAtnaujink(true);
+}
+function patikraSlepk() {
+  const v = document.getElementById('gen-patikra');
+  if (v) { v.innerHTML = ''; v.hidden = true; }
+  if (window.GP_VEDLYS) GP_VEDLYS.nuimk('#form-container');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const fc = document.getElementById('form-container');
+  if (!fc) return;
+  const k = () => { clearTimeout(PATIKRA_LAIK); PATIKRA_LAIK = setTimeout(() => { patikraAtnaujink(); likoAtnaujink(); }, 500); };
+  fc.addEventListener('input', k);
+  fc.addEventListener('change', k);
+});
+
 /* Patikra prieš generuojant (D2, D7, D8, D10, K1, K2, K4, V9): sąrašas žmogui, tuščias - viskas atsakyta ir nesikerta.
    Skaitoma iš surinktų duomenų ir formos (sumos lyginamos taip pat, kaip ekrane). */
 let DARBO_MOMENTAS = null;
 function patikraPriesGeneruojant(data) {
-  const f = data.fields || {}, r = data.radios || {}, out = [];
+  const f = data.fields || {}, r = data.radios || {}, out = [], vietos = [];
+  // U2 (2026-11-06): kiekviena pastaba - su lauku, į kurį veda santraukos nuoroda (out.vietos; tekstų sąrašas nepakito)
+  const pr = (t, v) => { out.push(t); vietos.push(v || null); };
   const forma = data.formNum;
   const budas = String(f.pirkimoBudas || '').toLowerCase();
   const neskelb = budas.includes('neskelbiama');
   const skaidoma = forma === 2 && r.skaidoma === 'taip' && (data.rows.dalys || []).length > 0;
   const scen = f.sprendimoScenarijus || '';
-  if (!String(f.pirkimoPavadinimas || '').trim()) out.push('Neįrašytas pirkimo pavadinimas (1 skyrius).');
-  if (!(parseFloat(f.verteBePvm) > 0)) out.push('Neįrašyta numatoma pirkimo vertė (1 skyrius).');
-  { const mv = mvRibosTekstas(parseFloat(f.verteBePvm)); if (mv) out.push(mv); }
-  if (!f.cpoBusena) out.push('Nepasirinkta, ar pirkimo objektas yra CPO kataloge (1 skyrius, Aprašo 9 p.).');
-  if (!f.pirkimoBudas) out.push('Nepasirinktas pirkimo būdas (3 skyrius).');
-  if (forma === 2 && !f.vertinimoKriterijus) out.push('Nepasirinktas vertinimo kriterijus (3 skyrius).');
-  if (!r.atliekamas) out.push('Nepažymėta, kaip pirkimas atliekamas (3 skyrius) - be to pranešimai tiekėjams nekuriami.');
-  if (forma === 2 && !r.derybos) out.push('Nepažymėta, ar vykdomos derybos (3 skyrius).');
+  if (!String(f.pirkimoPavadinimas || '').trim()) pr('Neįrašytas pirkimo pavadinimas (1 skyrius).', '[data-field="pirkimoPavadinimas"]');
+  if (!(parseFloat(f.verteBePvm) > 0)) pr('Neįrašyta numatoma pirkimo vertė (1 skyrius).', '[data-field="verteBePvm"]');
+  { const mv = mvRibosTekstas(parseFloat(f.verteBePvm)); if (mv) pr(mv, '[data-field="verteBePvm"]'); }
+  if (!f.cpoBusena) pr('Nepasirinkta, ar pirkimo objektas yra CPO kataloge (1 skyrius, Aprašo 9 p.).', '[data-field="cpoBusena"]');
+  if (!f.pirkimoBudas) pr('Nepasirinktas pirkimo būdas (3 skyrius).', '[data-field="pirkimoBudas"]');
+  if (forma === 2 && !f.vertinimoKriterijus) pr('Nepasirinktas vertinimo kriterijus (3 skyrius).', '[data-field="vertinimoKriterijus"]');
+  if (!r.atliekamas) pr('Nepažymėta, kaip pirkimas atliekamas (3 skyrius) - be to pranešimai tiekėjams nekuriami.', 'input[name="atliekamas"]');
+  if (forma === 2 && !r.derybos) pr('Nepažymėta, ar vykdomos derybos (3 skyrius).', 'input[name="derybos"]');
   if (!f.pasalKvalNetikrinama && !f.pasalTikrinamas && !f.kvalTikrinama && !f.kvalNetikrinama)
-    out.push('3 skyriuje nepažymėta, kas tikrinama (pašalinimo pagrindų nebuvimas, kvalifikacija) - pažymoje visi langeliai liks tušti.');
-  if (neskelb && !f.aprasoPagrindas) out.push('Nepasirinktas neskelbiamos apklausos pagrindas (4 skyrius, Aprašo 29 p.).');
-  if (neskelb && !String(f.kviestaSkaicius || '').trim()) out.push('Neįrašytas kviestų tiekėjų skaičius (4 skyrius).');
-  { const k = kviestuNesutapimas(); if (k) out.push(k); }
-  if (!r.natSaug) out.push('Neatsakyta, ar taikomi nacionalinio saugumo reikalavimai (4 skyrius).');
-  { const z = zodziuNacsaugTekstas(); if (z) out.push(z); }
-  if (forma === 1 && !r.sutartisRastu) out.push('Nepažymėta, ar sutartis sudaroma žodžiu, ar raštu (7 skyrius).');
-  if (!scen && !skaidoma) out.push('Nepasirinktas pirkimo eigos scenarijus (6 skyrius).');
-  else { const s = scenarijausNesutapimas(data); if (s) out.push(s); }
+    pr('3 skyriuje nepažymėta, kas tikrinama (pašalinimo pagrindų nebuvimas, kvalifikacija) - pažymoje visi langeliai liks tušti.', '[data-field="pasalTikrinamas"]');
+  if (neskelb && !f.aprasoPagrindas) pr('Nepasirinktas neskelbiamos apklausos pagrindas (4 skyrius, Aprašo 29 p.).', '[data-field="aprasoPagrindas"]');
+  if (neskelb && !String(f.kviestaSkaicius || '').trim()) pr('Neįrašytas kviestų tiekėjų skaičius (4 skyrius).', '[data-field="kviestaSkaicius"]');
+  { const k = kviestuNesutapimas(); if (k) pr(k, '[data-field="kviestaSkaicius"]'); }
+  if (!r.natSaug) pr('Neatsakyta, ar taikomi nacionalinio saugumo reikalavimai (4 skyrius).', 'input[name="natSaug"]');
+  { const z = zodziuNacsaugTekstas(); if (z) pr(z, 'input[name="atliekamas"]'); }
+  if (forma === 1 && !r.sutartisRastu) pr('Nepažymėta, ar sutartis sudaroma žodžiu, ar raštu (7 skyrius).', 'input[name="sutartisRastu"]');
+  if (!scen && !skaidoma) pr('Nepasirinktas pirkimo eigos scenarijus (6 skyrius).', '[data-field="sprendimoScenarijus"]');
+  else { const s = scenarijausNesutapimas(data); if (s) pr(s, '[data-field="sprendimoScenarijus"]'); }
   // K4: sumos be ir su PVM, įrašytos ranka, nesutampa nei su PVM tarifu, nei be PVM (ne PVM mokėtojo - lygios)
   const tarifas = pvmTarifas();
   const pvmNesutampa = (be, su) => !isNaN(be) && !isNaN(su) && Math.abs(su - be) > 0.01 && Math.abs(su - be * (1 + tarifas)) > 0.02;
@@ -4728,24 +4837,24 @@ function patikraPriesGeneruojant(data) {
     (data.rows.pasiulymai || []).concat(data.rows.galutiniai || []).forEach(p => {
       const be = parseFloat(p.kainaBePvm != null ? p.kainaBePvm : p.galKainaBePvm), su = parseFloat(p.kainaSuPvm != null ? p.kainaSuPvm : p.galKainaSuPvm);
       if (!String(p.tiekejas || '').trim() || !pvmNesutampa(be, su)) return;
-      out.push(`${p.tiekejas.trim()}: kaina be PVM (${formatEurNum(be)}) ir su PVM (${formatEurNum(su)}) nesutampa nei su ${Math.round(tarifas * 100)} % PVM, nei be PVM - patikrinkite.`);
+      pr(`${p.tiekejas.trim()}: kaina be PVM (${formatEurNum(be)}) ir su PVM (${formatEurNum(su)}) nesutampa nei su ${Math.round(tarifas * 100)} % PVM, nei be PVM - patikrinkite.`, null);
     });
     [['verteBePvm', 'verteSuPvm', 'Numatoma vertė'], ['sutartiesBePvm', 'sutartiesSuPvm', 'Sutarties kaina']].forEach(([kb, ks, pav]) => {
       const be = parseFloat(f[kb]), su = parseFloat(f[ks]);
-      if (pvmNesutampa(be, su)) out.push(`${pav}: be PVM (${formatEurNum(be)}) ir su PVM (${formatEurNum(su)}) nesutampa nei su ${Math.round(tarifas * 100)} % PVM, nei be PVM - patikrinkite.`);
+      if (pvmNesutampa(be, su)) pr(`${pav}: be PVM (${formatEurNum(be)}) ir su PVM (${formatEurNum(su)}) nesutampa nei su ${Math.round(tarifas * 100)} % PVM, nei be PVM - patikrinkite.`, '[data-field="' + ks + '"]');
     });
   }
   // K2: lėšos
   const lesos = parseFloat(f.lesosBePvm), kaina = laimejusiuKainuSuma();
   if (!isNaN(lesos) && kaina !== null) {
     const a = lesuNesutapimas(kaina, lesos, f.lesuAtitiktis || '');
-    if (a) out.push('Lėšos: ' + a);
-    else if (!f.lesuAtitiktis) out.push('Nepasirinkta, ar kaina neviršija pirkimui skirtų lėšų (1 skyrius, Aprašo 30.15 p.).');
+    if (a) pr('Lėšos: ' + a, '[data-field="lesuAtitiktis"]');
+    else if (!f.lesuAtitiktis) pr('Nepasirinkta, ar kaina neviršija pirkimui skirtų lėšų (1 skyrius, Aprašo 30.15 p.).', '[data-field="lesuAtitiktis"]');
   }
   // D4: atmesti pasiūlymai be pagrindo
   if ((data.rows.pasiulymai || []).concat(data.rows.galutiniai || []).some(p => p.pasiulVert === 'Neatitinka' || p.galVert === 'Neatitinka')
       && !String(f.atmetimoPagrindas || '').trim())
-    out.push('Neįrašytas pasiūlymų atmetimo teisinis pagrindas (6 skyrius) - pažymoje ir raštuose bus „____“.');
+    pr('Neįrašytas pasiūlymų atmetimo teisinis pagrindas (6 skyrius) - pažymoje ir raštuose bus „____“.', '[data-field="atmetimoPagrindas"]');
   // K1: galimo laimėtojo vertinimas
   const ef = reikEfektyvus(f);
   if (forma === 2 && (ef.pasal || ef.kvalif) && (scen === 'sutartis' || scen === 'vienas-tiekejas' || skaidoma)) {
@@ -4753,9 +4862,10 @@ function patikraPriesGeneruojant(data) {
     dalys.forEach(dn => {
       const eil = kvalifEiluteIsData(data, dn);
       if (eil && eil.tiekejas && !kvalifIvertinta(eil) && !_kvalifKrito(eil))
-        out.push(`Galimo laimėtojo ${eil.tiekejas}${dn ? ` (dalis „${dn}“)` : ''} pašalinimo pagrindų ir kvalifikacijos vertinimas neįrašytas (4 skyrius) - pažymoje nebus sakinio, kad jis atitinka reikalavimus.`);
+        pr(`Galimo laimėtojo ${eil.tiekejas}${dn ? ` (dalis „${dn}“)` : ''} pašalinimo pagrindų ir kvalifikacijos vertinimas neįrašytas (4 skyrius) - pažymoje nebus sakinio, kad jis atitinka reikalavimus.`, '[data-field^="kvalifVertinimas"]');
     });
   }
+  out.vietos = vietos;
   return out;
 }
 
@@ -5977,6 +6087,7 @@ function showToast(message, type = '') { GP_PRANESIMAS.rodyk(message, { tipas: t
 
   window.KORTELE = GP_KORTELE.mount({
     modulis: 'PP-report',
+    poTaikymo: function () { likoAtnaujink(); },
     klaustiKitoPirkimo: true,
     nerodoma: function () {
       return forma() ? null : 'Pasirinkite pažymos formą - tušti jos laukai bus užpildyti iš kortelės.';

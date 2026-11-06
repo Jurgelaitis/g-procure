@@ -1618,19 +1618,21 @@ async function paleisk() {
     tiesa(W.patikraPriesGeneruojant(W.gatherFormData()).some(x => /ne mažos vertės pirkimas/.test(x)), 'patikroje');
   });
 
-  await testas('D2: prieš generuojant - sąrašas ir klausimas; atsisakius negeneruojama; raštų nėra - pasakoma kodėl', async () => {
+  await testas('D2, U2: prieš generuojant - sąrašas puslapyje (ne naršyklės langas); be žmogaus sprendimo negeneruojama; raštų nėra - pasakoma kodėl', async () => {
     svariForma(2);
     const buvo = { c: W.confirm, b: W.buildDocx };
-    let klausta = '', kviesta = 0;
-    W.confirm = (m) => { klausta = m; return false; };
+    let klausta = 0, kviesta = 0;
+    W.confirm = () => { klausta++; return false; };
     W.buildDocx = () => { kviesta++; };
     try {
       W.generateDocx();
       await laukti(100);
-      turi(klausta, 'Prieš generuojant patikrinkite', 'klausimas');
-      turi(klausta, 'Nepasirinktas pirkimo būdas', 'sąrašas');
-      lygu(kviesta, 0, 'atsisakius - negeneruojama');
-    } finally { W.confirm = buvo.c; W.buildDocx = buvo.b; }
+      const sb = D.querySelector('#gen-patikra .gpv-santrauka');
+      tiesa(sb, 'santrauka puslapyje');
+      turi(sb.textContent, 'Prieš generuojant patikrinkite', 'antraštė');
+      turi(sb.textContent, 'Nepasirinktas pirkimo būdas', 'sąrašas');
+      lygu([klausta, kviesta], [0, 0], 'naršyklės lango nėra ir negeneruojama');
+    } finally { W.confirm = buvo.c; W.buildDocx = buvo.b; W.patikraSlepk(); }
     lygu(W.pranesimuPriezastis(W.gatherFormData()).slice(0, 25), 'nepažymėta, kaip pirkimas', 'be „Pirkimas atliekamas“');
     W.selectForm(1);
     zymek('sutartisRastu', 'Žodžiu');
@@ -1808,6 +1810,157 @@ async function paleisk() {
       lygu([W.__JD, W.__JD2], [undefined, undefined], 'kodas neįvykdytas');
       W.closeModal('drafts-modal');
     } finally { APS.atkurk(); }
+  });
+
+  /* ---------------- U2 (2026-11-06): vedlio standartas - patikra prieš generuojant puslapyje ---------------- */
+  await testas('U2: santrauka - visos pastabos su nuorodomis į laukus, trūkstami pažymėti prie lauko, prieštaravimai - ne; fokusas į santrauką', async () => {
+    svariForma(2);
+    const bcU2 = W.confirm; let narsyklesLangas = 0; W.confirm = () => { narsyklesLangas++; return false; };
+    ivesk('verteBePvm', '250000');  // virš ribos - „Patikrinkite“, ne trūkstamas
+    await laukti(700);  // selectForm slenka į viršų sklandžiai - santraukos vieta tikrinama po to
+    laukas('pirkimoPavadinimas').value = '';   // be įvykio: skaitiklis juostoje atsinaujina, kai parodoma santrauka
+    const buvo = W.buildDocx; let kviesta = 0; W.buildDocx = () => { kviesta++; };
+    try {
+      const tr = W.patikraPriesGeneruojant(W.gatherFormData());
+      lygu(tr.vietos.length, tr.length, 'kiekviena pastaba turi vietą (ar null)');
+      W.generateDocx();
+      await laukti(80);
+      const sb = D.querySelector('#gen-patikra .gpv-santrauka');
+      lygu(sb.querySelectorAll('li').length, tr.length, 'tiek pat punktų kaip patikroje');
+      turi(sb.querySelector('h3').textContent, '(' + tr.length + ')', 'skaičius antraštėje');
+      lygu(D.getElementById('gen-liko').textContent, 'Liko patikrinti: ' + tr.length, 'juostoje - tas pats skaičius');
+      tiesa(D.activeElement === sb, 'fokusas į santrauką, gauta: ' + (D.activeElement && D.activeElement.outerHTML.slice(0, 80)));
+      const nuor = Array.from(sb.querySelectorAll('a[data-gpv-i]')).map(a => a.textContent);
+      tiesa(nuor.some(t => /Nepasirinktas pirkimo būdas/.test(t)), 'nuoroda į būdą: ' + nuor.join(' | '));
+      tiesa(nuor.some(t => /ne mažos vertės pirkimas|mažos vertės pirkimo rib/.test(t)), 'nuoroda į vertės ribos pastabą');
+      const budas = D.getElementById('pirkimo-budas');
+      lygu(budas.getAttribute('aria-invalid'), 'true', 'būdas pažymėtas');
+      const msg = D.getElementById(budas.getAttribute('data-gpv-id'));
+      tiesa(msg && msg.classList.contains('gp-lauko-msg') && budas.nextElementSibling === msg, 'tekstas po lauku');
+      turi(budas.getAttribute('aria-describedby'), msg.id, 'aria-describedby');
+      const verte = D.getElementById('verte-be-pvm');
+      tiesa(!verte.hasAttribute('data-gpv-id'), 'vertės ribos pastaba (Patikrinkite) - ne žymima kaip klaida');
+      tiesa(sb.querySelector('li.gpv-isp'), 'prieštaravimai - kita išvaizda');
+      lygu(kviesta, 0, 'negeneruojama');
+      // radijo grupė: tekstas po grupės bloku, ne tarp variantų
+      const atl = D.querySelector('input[name="atliekamas"]');
+      const grp = atl.closest('.radio-group');
+      tiesa(grp.nextElementSibling && grp.nextElementSibling.matches('.gp-lauko-msg[data-gpv]'), 'radijo grupės tekstas po grupe');
+      tiesa(!grp.querySelector('.gp-lauko-msg'), 'ne grupės viduje');
+      // žymimieji langeliai: tekstas po langelių grupe, ne tarp langelio ir jo pavadinimo
+      const zl = laukas('pasalTikrinamas'), zg = zl.closest('.checkbox-group');
+      tiesa(zg && zg.nextElementSibling && zg.nextElementSibling.matches('.gp-lauko-msg[data-gpv]'), 'žymimųjų langelių tekstas po grupe');
+      tiesa(!zl.closest('label').querySelector('.gp-lauko-msg'), 'ne etiketėje');
+      // santrauka - ne po prilipusia įrankių juosta
+      const sbt = sb.getBoundingClientRect().top, tbb = D.getElementById('toolbar').getBoundingClientRect().bottom;
+      tiesa(sbt >= tbb - 1, 'santraukos viršus ' + Math.round(sbt) + ' po juostos apačia ' + Math.round(tbb));
+      lygu(narsyklesLangas, 0, 'naršyklės lango nėra');
+    } finally { W.buildDocx = buvo; W.patikraSlepk(); W.confirm = bcU2; }
+  });
+
+  await testas('U2: nuoroda atveria suskleistą skyrių ir fokusuoja lauką; pildant santrauka ir žymos atsinaujina', async () => {
+    svariForma(2);
+    const bcU2 = W.confirm; let narsyklesLangas = 0; W.confirm = () => { narsyklesLangas++; return false; };
+    const buvo = W.buildDocx; W.buildDocx = () => {};
+    try {
+      const budas = D.getElementById('pirkimo-budas');
+      const sk = budas.closest('.section');
+      W.toggleSection(sk.querySelector('.section-header'));
+      tiesa(sk.classList.contains('collapsed'), 'skyrius suskleistas');
+      W.generateDocx();
+      await laukti(80);
+      const a = Array.from(D.querySelectorAll('#gen-patikra a[data-gpv-i]')).find(x => /Nepasirinktas pirkimo būdas/.test(x.textContent));
+      a.click();
+      tiesa(!sk.classList.contains('collapsed'), 'skyrius atvertas');
+      lygu(sk.querySelector('.section-header').getAttribute('aria-expanded'), 'true', 'aria-expanded');
+      tiesa(D.activeElement === budas, 'fokusas į lauką');
+      // pataisius: žyma nuimama iškart, sąraše punkto nebėra po pauzės
+      budas.value = Array.from(budas.options).find(o => o.value).value;
+      budas.dispatchEvent(new W.Event('change', { bubbles: true }));
+      tiesa(!budas.hasAttribute('aria-invalid') && !budas.hasAttribute('data-gpv-id'), 'žyma nuimta');
+      await laukti(700);
+      const sb = D.querySelector('#gen-patikra .gpv-santrauka');
+      tiesa(sb, 'santrauka liko');
+      neturi(sb.textContent, 'Nepasirinktas pirkimo būdas', 'pataisytas punktas');
+      tiesa(D.activeElement === budas, 'atnaujinant fokusas nepaimamas');
+      lygu(narsyklesLangas, 0, 'naršyklės lango nėra');
+    } finally { W.buildDocx = buvo; W.patikraSlepk(); W.confirm = bcU2; }
+  });
+
+  await testas('U2: „Generuoti vis tiek“ generuoja ir paslepia santrauką; be pastabų - žinutė; iš peržiūros lango - langas užsidaro', async () => {
+    svariForma(2);
+    const bcU2 = W.confirm; let narsyklesLangas = 0; W.confirm = () => { narsyklesLangas++; return false; };
+    const buvo = { b: W.buildDocx, p: W.patikraPriesGeneruojant };
+    let kviesta = 0; W.buildDocx = () => { kviesta++; };
+    try {
+      W.showPreview();
+      await laukti(50);
+      tiesa(D.getElementById('preview-modal').classList.contains('show'), 'peržiūra atverta');
+      D.querySelector('#preview-modal .modal-footer button.success').click();
+      await laukti(80);
+      tiesa(!D.getElementById('preview-modal').classList.contains('show'), 'peržiūros langas uždarytas');
+      const v = D.getElementById('gen-patikra');
+      tiesa(!v.hidden && v.querySelector('.gpv-santrauka'), 'santrauka rodoma');
+      const vt = Array.from(v.querySelectorAll('button')).find(b => b.textContent === 'Generuoti vis tiek');
+      tiesa(vt, 'mygtukas „Generuoti vis tiek“');
+      vt.click();
+      await laukti(120);
+      lygu(kviesta, 1, 'sugeneruota');
+      tiesa(v.hidden && !v.innerHTML, 'santrauka paslėpta');
+      tiesa(!D.querySelector('#form-container [data-gpv-id]'), 'žymos nuimtos');
+      // be pastabų (pakeista patikra): atsinaujinant - žinutė ir mygtukas
+      W.generateDocx();
+      await laukti(80);
+      W.patikraPriesGeneruojant = () => Object.assign([], { vietos: [] });
+      W.patikraAtnaujink();
+      turi(v.textContent, 'Pastabų neliko - galite generuoti', 'žinutė');
+      tiesa(v.querySelector('.gen-gerai[role="status"] button.success'), 'mygtukas');
+      lygu(narsyklesLangas, 0, 'naršyklės lango nėra');
+    } finally { W.buildDocx = buvo.b; W.patikraPriesGeneruojant = buvo.p; W.patikraSlepk(); W.confirm = bcU2; }
+  });
+
+  await testas('U2: „Liko patikrinti: N“ įrankių juostoje - tas pats skaičius, atsinaujina; paspaudus - santrauka; kita forma ir grįžus - nuimama', async () => {
+    svariForma(2);
+    const bcU2 = W.confirm; let narsyklesLangas = 0; W.confirm = () => { narsyklesLangas++; return false; };
+    await laukti(700);
+    const b = D.getElementById('gen-liko');
+    const n = () => W.patikraPriesGeneruojant(W.gatherFormData()).length;
+    tiesa(!b.hidden, 'rodomas');
+    lygu(b.textContent, 'Liko patikrinti: ' + n(), 'skaičius');
+    const pries = n();
+    ivesk('cpoBusena', Array.from(D.getElementById('cpo-busena').options).find(o => o.value).value);
+    await laukti(700);
+    lygu(b.textContent, 'Liko patikrinti: ' + n(), 'po pakeitimo');
+    tiesa(n() < pries, 'sumažėjo');
+    b.click();
+    await laukti(50);
+    tiesa(D.activeElement === D.querySelector('#gen-patikra .gpv-santrauka'), 'santrauka su fokusu');
+    W.selectForm(1);
+    await laukti(50);
+    tiesa(D.getElementById('gen-patikra').hidden, 'kita forma - santrauka nuimta');
+    lygu(D.getElementById('gen-liko').textContent, 'Liko patikrinti: ' + n(), '1 priedo skaičius');
+    W.confirm = () => true;
+    try { W.goBackToSelector(); } finally { W.confirm = bcU2; }
+    tiesa(D.getElementById('gen-liko').hidden, 'grįžus į pasirinkimą - paslėptas');
+    // kontrastas: tekstas ant fono
+    W.selectForm(2);
+    const cs = W.getComputedStyle(D.getElementById('gen-liko'));
+    tiesa(cs.color !== cs.backgroundColor, 'spalvos');
+  });
+
+  await testas('U2: be shared/vedlys.js - kaip iki tol (naršyklės klausimas)', async () => {
+    svariForma(2);
+    const buvo = { v: W.GP_VEDLYS, c: W.confirm, b: W.buildDocx };
+    let klausta = '', kviesta = 0;
+    W.GP_VEDLYS = undefined;
+    W.confirm = (m) => { klausta = m; return true; };
+    W.buildDocx = () => { kviesta++; };
+    try {
+      W.generateDocx();
+      await laukti(120);
+      turi(klausta, 'Prieš generuojant patikrinkite', 'klausimas');
+      lygu(kviesta, 1, 'sutikus - generuojama');
+    } finally { W.GP_VEDLYS = buvo.v; W.confirm = buvo.c; W.buildDocx = buvo.b; }
   });
 
   /* ---------------- pabaiga ---------------- */
