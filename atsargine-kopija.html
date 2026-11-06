@@ -120,8 +120,8 @@
       <button type="button" class="veiksmas antrinis" id="btn-atkurti" disabled data-lt="Atkurti" data-en="Restore"></button>
     </div>
     <div class="zinute" id="perziura" role="status" aria-live="polite"></div>
-    <p class="pastaba" data-lt="<strong>Svarbu:</strong> jei raktas yra ir faile, ir naršyklėje, įrašoma failo reikšmė. Kiti naršyklės duomenys lieka nepaliesti. Prieš atkuriant verta išsaugoti dabartinę kopiją."
-       data-en="<strong>Important:</strong> if a key exists both in the file and in the browser, the file value wins. Other browser data is left untouched. It is worth saving a current backup before restoring."></p>
+    <p class="pastaba" data-lt="<strong>Svarbu:</strong> jei raktas yra ir faile, ir naršyklėje, įrašoma failo reikšmė. Išimtis - pirkimų kortelės: jos sujungiamos (lieka ir šios naršyklės, ir failo kortelės, o ta pati kortelė - vėliau keista). Kiti naršyklės duomenys lieka nepaliesti. Prieš atkuriant verta išsaugoti dabartinę kopiją."
+       data-en="<strong>Important:</strong> if a key exists both in the file and in the browser, the file value wins. Exception - procurement cards: they are merged (the cards of this browser and of the file both stay, and for the same card the later edited one). Other browser data is left untouched. It is worth saving a current backup before restoring."></p>
   </section>
 
   <p class="pastaba" data-lt="Duomenys niekada nepalieka naršyklės: šis puslapis neturi serverio dalies, o failas išsaugomas įprastu atsisiuntimu. Kopija tinka perkelti darbą į kitą kompiuterį - atidarykite šį puslapį ten ir atkurkite failą."
@@ -312,19 +312,33 @@
         : sukurta.getFullYear() + "-" + p2(sukurta.getMonth() + 1) + "-" + p2(sukurta.getDate());
       /* Kas bus su kiekvienos rūšies duomenimis (2026-11-06): pakeista, pridėta, nepasikeis; ir kurių šios naršyklės įrašų (kortelių,
          pirkimų) faile nėra - jie dingtų. Iki tol - tik „N įrašų bus perrašyti“, o vėliau sukurtos kortelės dingdavo be įspėjimo. */
-      var grupes = { pakeis: [], naujas: [], "tas pats": [], praleidziamas: [] }, praras = [];
+      var grupes = { pakeis: [], jungiama: [], naujas: [], "tas pats": [], praleidziamas: [] }, praras = [], jung = [];
       pal.forEach(function (x) {
         var z = zenklas(x.raktas), pav = z.pav + (z.modulis && z.modulis !== "-" ? " (" + z.modulis + ")" : "");
         if (grupes[x.busena].indexOf(pav) < 0) grupes[x.busena].push(pav);
         if (x.prarandami.length) praras.push({ pav: z.pav, sar: x.prarandami });
+        if (x.jungimas) jung.push({ pav: z.pav, j: x.jungimas });
       });
       var h = (LANG === "en" ? "File from <strong>" + data + "</strong>." : "Failas iš <strong>" + data + "</strong>.") + "<ul>";
       var eil = function (lt, en, sar) { if (sar.length) h += "<li><strong>" + (LANG === "en" ? en : lt) + ":</strong> " + esc(sar.join(", ")) + "</li>"; };
       eil("Bus pakeista failo duomenimis", "Will be replaced by the file data", grupes.pakeis);
+      eil("Bus sujungta su šios naršyklės duomenimis", "Will be merged with the data of this browser", grupes.jungiama);
       eil("Bus pridėta", "Will be added", grupes.naujas);
       eil("Nepasikeis (tokie patys)", "Will not change (the same)", grupes["tas pats"]);
       eil("Neatkuriama (lieka šios naršyklės)", "Not restored (this browser's stays)", grupes.praleidziamas);
       h += "</ul>";
+      /* Kortelių sujungimas (2026-11-06, naudotojo sprendimas): kiek pridedama, kiek lieka ir kuri versija paliekama */
+      var vardai5 = function (sar) {
+        return sar.slice(0, 5).map(function (y) { return "„" + y.pav + "“"; }).join(", ") + (sar.length > 5 ? (LANG === "en" ? " and " + (sar.length - 5) + " more" : " ir dar " + (sar.length - 5)) : "");
+      };
+      jung.forEach(function (x) {
+        var j = x.j, d = [];
+        if (j.pridedama.length) d.push((LANG === "en" ? "added from the file (" : "iš failo pridedama (") + j.pridedama.length + "): " + vardai5(j.pridedama));
+        if (j.lieka.length) d.push((LANG === "en" ? "only in this browser - kept (" : "tik šioje naršyklėje - lieka (") + j.lieka.length + ")");
+        if (j.atnaujinama.length) d.push((LANG === "en" ? "the file version is later - taken from the file (" : "failo versija vėlesnė - imama iš failo (") + j.atnaujinama.length + "): " + vardai5(j.atnaujinama));
+        if (j.paliekama.length) d.push((LANG === "en" ? "this browser's version is later or the same - kept (" : "šios naršyklės versija vėlesnė ar tokia pati - lieka (") + j.paliekama.length + ")");
+        h += "<p><strong>" + esc(x.pav) + (LANG === "en" ? " - merged:" : " - sujungiama:") + "</strong> " + esc(d.join("; ")) + ".</p>";
+      });
       praras.forEach(function (x) {
         var vardai = x.sar.slice(0, 5).map(function (y) { return "„" + y.pav + "“"; }).join(", ") + (x.sar.length > 5 ? (LANG === "en" ? " and " + (x.sar.length - 5) + " more" : " ir dar " + (x.sar.length - 5)) : "");
         h += "<p><strong>" + esc(x.pav) + (LANG === "en" ? " - would be lost on restore (" + x.sar.length + "):" : " - atkūrus būtų prarasta (" + x.sar.length + "):") + "</strong> " +
@@ -346,10 +360,12 @@
     if (!paruosta) return;
     /* Klausimas sako, kas bus pakeista ir kas prarasta (2026-11-06) */
     var pak = paruostaPal.filter(function (x) { return x.busena === "pakeis"; }).length;
+    var jun = paruostaPal.filter(function (x) { return x.busena === "jungiama"; }).map(function (x) { return zenklas(x.raktas).pav; });
     var pr = [];
     paruostaPal.forEach(function (x) { if (x.prarandami.length) pr.push(zenklas(x.raktas).pav + " - " + irasu(x.prarandami.length)); });
     var klausimas = (LANG === "en" ? "Restore the data from the file? " : "Atkurti duomenis iš failo? ") +
       (pak ? (LANG === "en" ? "Current data will be replaced: " : "Bus pakeista dabartinių duomenų: ") + sk(pak, LANG === "en" ? "type" : "rūšis", LANG === "en" ? "types" : "rūšys", "rūšių") + ". " : "") +
+      (jun.length ? (LANG === "en" ? "Merged (nothing lost): " : "Bus sujungta (niekas neprarandama): ") + jun.join(", ") + ". " : "") +
       (pr.length ? (LANG === "en" ? "Lost (not in the file): " : "Bus prarasta (faile nėra): ") + pr.join("; ") + "." : "");
     if (!window.confirm(klausimas)) return;
     var r = GP_BACKUP.atkurti(paruosta, null);
