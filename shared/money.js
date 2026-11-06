@@ -111,5 +111,22 @@
     return isFinite(n) ? n : null;
   }
 
-  global.GP_MONEY = { parseEUR: parseEUR, formatEUR: formatEUR, parseSkaicius: parseSkaicius };
+  // Suma formos lauke (numatoma vertė be PVM, 2026-11-06): tik skaičius, prie kurio gali būti „EUR“, „€“ ir „be PVM“.
+  // Žodžiai („1,5 mln.“, „150 tūkst.“, „su PVM“), minusas, intervalas („100 000 - 150 000“) ar kitas ženklas - null, kad modulis
+  // paprašytų įrašyti skaičiais: parseEUR iš „1,5 mln.“ grąžintų 1,5, o žmogus norėjo 1 500 000 (rado naujo naudotojo patikra -
+  // kortelė išsaugodavo 1,50 EUR). Nulis ar mažiau - null (numatoma vertė visada teigiama).
+  var BE_VALIUTOS = /€|eur(?:ų|o|ai|as|a|os)?(?![a-ząčęėįšųūž])|be\s*pvm/gi;
+  function sumaLauke(input) {
+    if (input == null) return null;
+    if (typeof input === "number") return isFinite(input) && input > 0 ? input : null;
+    var s = String(input).trim();
+    if (!s) return null;
+    var be = s.replace(BE_VALIUTOS, " ");
+    if (/[^\d.,\s\u00a0\u202f'\u2019()]/.test(be) || !/\d/.test(be)) return null;   // raidės, minusas, brūkšnys, + / x ir pan.
+    if (/\([^)]*\d/.test(be)) return null;                                           // „12 500 (15 125)“ - dvi sumos
+    var n = parseEUR(be);
+    return n > 0 ? n : null;
+  }
+
+  global.GP_MONEY = { parseEUR: parseEUR, formatEUR: formatEUR, parseSkaicius: parseSkaicius, sumaLauke: sumaLauke };
 })(typeof window !== "undefined" ? window : this);
