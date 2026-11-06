@@ -161,6 +161,40 @@
      prarandami: [{ id, pav }] }]. prarandami - įrašai (kortelės, pirkimai), kurie yra šioje naršyklėje, bet ne faile: atkūrus jų nebeliktų
      (iki tol rodyta tik „1 įrašas bus perrašytas“, nors tame įraše - visos kortelės). */
   var PRALEISTI = { "gprocure.sutikimas": 1 };       // sutikimą dėl slapukų duoda šios naršyklės žmogus - iš kopijos neperimamas
+
+  /* Pirkimų kortelės atkuriant SUJUNGIAMOS pagal id (2026-11-06, naudotojo sprendimas): tik šioje naršyklėje esančios lieka, tik faile -
+     pridedamos, abiejose - paliekama vėliau keista (atnaujinta; vienoda - šios naršyklės). Kitų duomenų rūšių reikšmė pakeičiama, kaip iki tol.
+     Grąžina { reiksme, pridedama, lieka, atnaujinama, paliekama } (sąrašai [{ id, pav }]) arba null - kai kuri nors reikšmė ne kortelių
+     sandaros (tada - pakeičiama visa, kaip kitų rūšių). */
+  function kortelesJungti(dab, fail) {
+    var a, b;
+    try { a = JSON.parse(dab); b = JSON.parse(fail); } catch (e) { return null; }
+    var ok = function (v) { return v && typeof v === "object" && !Array.isArray(v) && Array.isArray(v.korteles); };
+    if (!ok(a) || !ok(b)) return null;
+    var id = function (x) { return x && typeof x === "object" && x.id != null && String(x.id) ? String(x.id) : null; };
+    var pav = function (x) { return { id: id(x), pav: String(x.pavadinimas || x.numeris || x.id).slice(0, 120) }; };
+    var failo = {}, out = { pridedama: [], lieka: [], atnaujinama: [], paliekama: [] }, sar = [], panaudota = {};
+    b.korteles.forEach(function (x) { var i = id(x); if (i && !failo[i]) failo[i] = x; });
+    a.korteles.forEach(function (x) {
+      var i = id(x);
+      if (!i) { sar.push(x); return; }                       // nežinomos formos įrašas - lieka, kaip skaitant kortelę
+      if (!failo[i]) { sar.push(x); out.lieka.push(pav(x)); return; }
+      panaudota[i] = 1;
+      var y = failo[i], naujesnis = String(y.atnaujinta || "") > String(x.atnaujinta || "");
+      sar.push(naujesnis ? y : x);
+      (naujesnis ? out.atnaujinama : out.paliekama).push(pav(naujesnis ? y : x));
+    });
+    var buve = JSON.stringify(a.korteles.filter(function (x) { return !id(x); }));
+    b.korteles.forEach(function (x) {
+      var i = id(x);
+      if (i && !panaudota[i]) { panaudota[i] = 1; sar.push(x); out.pridedama.push(pav(x)); }
+      else if (!i && buve.indexOf(JSON.stringify(x)) < 0) sar.push(x);
+    });
+    var schema = Math.max(typeof a.schema === "number" ? a.schema : 1, typeof b.schema === "number" ? b.schema : 1);
+    out.reiksme = JSON.stringify(Object.assign({}, a, { schema: schema, korteles: sar }));
+    return out;
+  }
+  var JUNGIAMI = { "gprocure.korteles": kortelesJungti };
   function palyginimas(obj, saugykla) {
     var st = saugykla || global.localStorage;
     return Object.keys(obj.items).map(function (raktas) {
@@ -169,6 +203,8 @@
       try { dab = st.getItem(raktas); } catch (e) {}
       if (dab === null) return { raktas: raktas, busena: "naujas", prarandami: [] };
       if (dab === obj.items[raktas]) return { raktas: raktas, busena: "tas pats", prarandami: [] };
+      var j = JUNGIAMI[raktas] ? JUNGIAMI[raktas](dab, obj.items[raktas]) : null;
+      if (j) return { raktas: raktas, busena: "jungiama", prarandami: [], jungimas: j };
       var a = irasuSarasas(dab), b = irasuSarasas(obj.items[raktas]), pr = [];
       if (a && b) {
         var yra = {};
@@ -196,7 +232,14 @@
     var raktai = Object.keys(obj.items), ok = 0, nepavyko = [], praleista = [];
     for (var i = 0; i < raktai.length; i++) {
       if (PRALEISTI[raktai[i]]) { praleista.push(raktai[i]); continue; }
-      try { st.setItem(raktai[i], obj.items[raktai[i]]); ok++; }
+      var v = obj.items[raktai[i]];
+      if (JUNGIAMI[raktai[i]]) {
+        var dab = null;
+        try { dab = st.getItem(raktai[i]); } catch (e) {}
+        var j = dab !== null && dab !== v ? JUNGIAMI[raktai[i]](dab, v) : null;
+        if (j) v = j.reiksme;
+      }
+      try { st.setItem(raktai[i], v); ok++; }
       catch (e) { nepavyko.push(raktai[i]); }
     }
     return { ok: ok, blogai: nepavyko.length, nepavyko: nepavyko, praleista: praleista };
@@ -211,7 +254,7 @@
   global.GP_BACKUP = {
     version: "1.0", APP: APP, FORMATO_VERSIJA: VERSION,
     zenklas: zenklas, irasai: irasai, baitai: baitai,
-    surinkti: surinkti, patikrinti: patikrinti, perrasomi: perrasomi, palyginimas: palyginimas, irasuSarasas: irasuSarasas,
+    surinkti: surinkti, patikrinti: patikrinti, perrasomi: perrasomi, palyginimas: palyginimas, irasuSarasas: irasuSarasas, kortelesJungti: kortelesJungti,
     atkurti: atkurti, failoVardas: failoVardas,
     /* Raktų sąrašas (kopija) - slapukų politikos lentelei (slapukai.html, 2026-10-16) */
     ZENKLAI: ZENKLAI.map(function (z) { return [z[0], z[1], { lt: z[2].lt, en: z[2].en }]; })
