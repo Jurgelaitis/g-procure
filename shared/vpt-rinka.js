@@ -45,7 +45,7 @@
       manoMed: " Panašių CVP IS pirkimų, vykdytų jūsų būdu, mediana - {m} kal. d.",
       sistemos: "Dinaminės pirkimų sistemos ir kvalifikacijos sistemos lentelėje nerodomos: jų terminas CVP IS - sistemos galiojimo pabaiga.",
       istatymas: "PĮ ir VPĮ prie derybų - pagal VPT procedūros pavadinimą: vienus vartoja sektorinės direktyvos (PĮ), kitus - klasikinės direktyvos (VPĮ) pirkimai; neskelbiamų derybų (VPĮ) eilutėje yra ir keli gynybos pirkimai.",
-      pastaba: "Faktai iš viešų VPT CVP IS duomenų, ne teisės normos: trumpiausius terminus nustato įstatymas. Kvantiliai rodomi, kai yra bent 5 pirkimai; „pusė pirkimų“ - tarp 25 ir 75 procentilio. Kelių etapų pirkimuose (derybos, ribotas konkursas, dialogas) CVP IS terminas gali būti ir vėlesnio etapo."
+      pastaba: "Faktai iš viešų VPT CVP IS duomenų, ne teisės normos: trumpiausius terminus nustato įstatymas. Kvantiliai rodomi, kai yra bent 5 pirkimai; „pusė pirkimų“ - tarp 25 ir 75 procentilio. Kelių etapų pirkimuose (derybos, ribotas konkursas, dialogas) CVP IS terminas gali būti ir vėlesnio etapo. Laikotarpis skaičiuojamas nuo paskelbimo CVP IS; tarptautinio pirkimo įstatymo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT, kuris būna iki 5 d. anksčiau, todėl tokių pirkimų laikotarpis čia gali būti trumpesnis už įstatymo minimumą."
     },
     en: {
       mygtukas: "Show market data (CVP IS)", siauriau: "Narrower CPV group", placiau: "Wider CPV group",
@@ -69,7 +69,7 @@
       manoMed: " Median for your procedure in similar CVP IS procurements - {m} calendar days.",
       sistemos: "Dynamic purchasing systems and qualification systems are not shown in the table: their CVP IS deadline is the end of the system.",
       istatymas: "PĮ and VPĮ next to negotiated procedures - by the VPT procedure name: some are used by procurements under the utilities directive (PĮ), others under the classic directive (VPĮ); the negotiated without publication (VPĮ) row also includes a few defence procurements.",
-      pastaba: "Facts from public VPT CVP IS data, not legal rules: the minimum deadlines are set by law. Quantiles are shown when there are at least 5 procurements; “half of the procurements” - between the 25th and 75th percentile. In multi-stage procedures (negotiations, restricted procedure, dialogue) the CVP IS deadline may be that of a later stage."
+      pastaba: "Facts from public VPT CVP IS data, not legal rules: the minimum deadlines are set by law. Quantiles are shown when there are at least 5 procurements; “half of the procurements” - between the 25th and 75th percentile. In multi-stage procedures (negotiations, restricted procedure, dialogue) the CVP IS deadline may be that of a later stage. The period is counted from publication in CVP IS; the statutory time limits of international procurement run from the dispatch of the notice from VPT, up to 5 days earlier, so for such procurements the period shown here may be shorter than the statutory minimum."
     }
   };
   function fmt(s, o) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return o[k] != null ? String(o[k]) : m; }); }
