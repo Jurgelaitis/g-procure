@@ -24,6 +24,7 @@
 <script src="../shared/ai-proxy.js"></script>
 <!-- Vienodos būsenos (Q3): AI eiga su „Atšaukti“, klaida su „Bandyti dar kartą“ -->
 <script src="../shared/busena.js"></script>
+<script src="../shared/vedlys.js"></script>
 <script src="../shared/docx-stiliai.js"></script>
 <script src="../shared/di-zymejimas.js"></script>
 <!-- Teisės aktų nuorodos ir Metodikos skaičiai (PĮ / VPĮ / Metodika) - GP_TEISE. Numerių ir koeficientų modulyje nerašome. -->
@@ -144,19 +145,8 @@ textarea{resize:vertical;min-height:90px;line-height:1.5;}
 .check-row input{width:18px;height:18px;margin-top:2px;accent-color:var(--color-emerald);}
 .check-row label{font-weight:600;font-size:14px;}
 
-/* ---------- Stepper ---------- */
-.stepper{display:flex;gap:6px;margin-bottom:var(--space-3);flex-wrap:wrap;}
-.step-pill{
-  display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;
-  padding:8px 14px;border-radius:999px;background:var(--color-graphite-5);color:var(--color-graphite-50-strong);
-  border:1px solid var(--color-graphite-15);
-}
-.step-pill .n{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  background:var(--color-graphite-15);color:var(--color-graphite);font-size:12px;}
-.step-pill.active{background:var(--color-green-5);color:var(--color-emerald-strong);border-color:var(--color-emerald);}
-.step-pill.active .n{background:var(--color-emerald-strong);color:#fff;}
-.step-pill.done .n{background:var(--color-green-strong);color:#fff;}
-.step-pill.done{color:var(--color-green-strong);}
+/* ---------- Stepper (U2, 2026-11-06: shared/vedlys.js - žingsnių juosta, kaip PP-salygos) ---------- */
+.stepper{margin-bottom:var(--space-3);}
 
 /* ---------- Badges ---------- */
 .badge{
@@ -1221,21 +1211,19 @@ function jungiKortele(){
 const STEPS = ['Pirminė informacija','Patikslinimo klausimai','Pasiūlytas rinkinys','Peržiūra ir redagavimas','Eksportas'];
 
 function renderStepper(){
-  $('stepper').innerHTML = STEPS.map((s,i)=>{
-    const n=i+1;
-    let cls='step-pill';
-    if(n===PPQ.step) cls+=' active';
-    else if(n<PPQ.step) cls+=' done';
-    return `<div class="${cls}"><span class="n">${n<PPQ.step?'✓':n}</span>${esc(s)}</div>`;
-  }).join('');
+  if(window.GP_VEDLYS) GP_VEDLYS.zingsniai('#stepper', { zingsniai: STEPS, dabartinis: PPQ.step });
 }
 
+/* Perėjus į kitą žingsnį fokusas - į jo antraštę (mygtukas, kurį paspaudė žmogus, perpiešiant dingsta) */
+let RODYTAS_ZINGSNIS = 0;
 function renderWizard(){
   renderStepper();
   if(PPQ.step===1) renderStep1();
   else if(PPQ.step===2) renderStep2();
   else if(PPQ.step===3 || PPQ.step===4) renderStep34();
   else if(PPQ.step===5) renderStep5();
+  if(RODYTAS_ZINGSNIS && RODYTAS_ZINGSNIS!==PPQ.step && window.GP_PRIEINAMUMAS) GP_PRIEINAMUMAS.jeiDingo($('wizard-body'));
+  RODYTAS_ZINGSNIS=PPQ.step;
 }
 
 /* ---------- Step 1 ---------- */
@@ -1267,21 +1255,22 @@ function renderStep1(){
   $('wizard-body').innerHTML = `
   <div class="card card-pad-lg">
     <h2>1 žingsnis. Pirminė informacija</h2>
+    <div id="wiz-klaidos" hidden></div>
     ${uploadBlock}
     <div class="field">
-      <label>Pirkimo pavadinimas</label>
+      <label for="p-name">Pirkimo pavadinimas *</label>
       <input type="text" id="p-name" value="${esc(p.name)}" placeholder="pvz. Informacinės sistemos kūrimo ir priežiūros paslaugos">
     </div>
     <div class="row-2">
       <div class="field">
-        <label>Pirkimo objekto tipas</label>
+        <label for="p-type">Pirkimo objekto tipas *</label>
         <select id="p-type" onchange="kategorijaNumatyta('p')">
           <option value="" disabled ${p.objectType===''?'selected':''}>Pasirinkite pirkimo objekto tipą</option>
           ${OBJECT_TYPES.map(t=>`<option ${p.objectType===t?'selected':''}>${t}</option>`).join('')}
         </select>
       </div>
       <div class="field">
-        <label>Numatoma vertė (EUR be PVM)</label>
+        <label for="p-value">Numatoma vertė (EUR be PVM) *</label>
         <input type="number" id="p-value" min="0" value="${p.value||''}" placeholder="pvz. 730000" oninput="kategorijaNumatyta('p')">
       </div>
     </div>
@@ -1306,6 +1295,7 @@ function renderStep1(){
       <select id="p-green"><option value="">- pasirinkite -</option><option value="taip"${PPQ.settings.green===true?' selected':''}>Taip</option><option value="ne"${PPQ.settings.green===false?' selected':''}>Ne</option></select>
     </div>
     <div class="hint" style="margin:-4px 0 10px 28px">Pagal ${esc(GP_TEISE.cit('zal_zaliasis'))} pirkimas žaliasis, kai tenkinamas bent vienas iš ten nurodytų būdų. Tai savaime nereiškia kvalifikacijos reikalavimų: produkto aplinkosaugos savybės yra techninės specifikacijos dalis (${esc(teise('ts_savoka'))}).</div>
+    <p id="wiz-liko"></p>
     <div class="btn-row" style="margin-top:var(--space-2)">
       <button class="btn btn-secondary" onclick="switchView('home')">Atgal</button>
       <button class="btn btn-primary" id="step1-next" onclick="submitStep1()">
@@ -1315,7 +1305,17 @@ function renderStep1(){
     <div class="cite-ai">Paspaudus „Toliau“, pirkimo informacija (su numatoma verte ir įkeltu TS tekstu) siunčiama per G-Procure serverį į Claude API. Nesiųskite įslaptintos informacijos.</div>
   </div>`;
   kategorijaNumatyta('p');
+  if(window.GP_VEDLYS) GP_VEDLYS.liko('#wiz-liko', STEP1_PRIVALOMI, '#wizard-body');
 }
+
+/* 1 žingsnio privalomi laukai (U2, 2026-11-06): iki tol - po vieną pranešimą („Įveskite pirkimo pavadinimą“), dabar - visi iš karto
+   santraukoje su nuorodomis į laukus, laukai pažymėti, „Liko užpildyti N“ prie mygtuko */
+const STEP1_PRIVALOMI = [
+  { vieta: '#p-name', tekstas: 'Pirkimo pavadinimas', ka: 'Įrašykite pirkimo pavadinimą.' },
+  { vieta: '#p-type', tekstas: 'Pirkimo objekto tipas', ka: 'Pasirinkite pirkimo objekto tipą.' },
+  { vieta: '#p-value', tekstas: 'Numatoma vertė', ka: 'Įrašykite teigiamą numatomą vertę eurais be PVM.', tuscias: e => !(parseFloat(e.value) > 0) },
+  { vieta: '#p-green', tekstas: 'Ar pirkimas žaliasis', ka: 'Pasirinkite „Taip“ arba „Ne“.' }
+];
 
 function collectStep1(){
   const p=PPQ.procurement;
@@ -1333,10 +1333,10 @@ function collectStep1(){
 
 async function submitStep1(){
   collectStep1();
-  if(!PPQ.procurement.name){ toast('Įveskite pirkimo pavadinimą',true); return; }
-  if(PPQ.settings.green===null){ toast('Nurodykite, ar pirkimas žaliasis',true); $('p-green').focus(); return; }
-  if(!PPQ.procurement.objectType){ toast('Pasirinkite pirkimo objekto tipą.',true); return; }
-  if(!PPQ.procurement.value || PPQ.procurement.value<=0){ toast(parseFloat($('p-value').value)<0 ? 'Pirkimo vertė negali būti neigiama.' : 'Įveskite pirkimo vertę.',true); return; }
+  const truksta = window.GP_VEDLYS ? GP_VEDLYS.privalomi(STEP1_PRIVALOMI) : [];
+  if(window.GP_VEDLYS){ GP_VEDLYS.nuimk('#wizard-body'); GP_VEDLYS.santrauka('#wiz-klaidos', truksta, { antraste: 'Prieš generuojant klausimus užpildykite' }); }
+  if(truksta.length){ GP_VEDLYS.pazymek(truksta); return; }
+  if(!PPQ.procurement.name || PPQ.settings.green===null || !PPQ.procurement.objectType || !(PPQ.procurement.value>0)){ toast('Užpildykite privalomus laukus.',true); return; }
   const btn=$('step1-next');
   btn.disabled=true;
   const r = await aiVeiksmas('#wizBusena', 'DI rengia patikslinimo klausimus', 'Klausimų sugeneruoti nepavyko', submitStep1, () => generateQuestions());

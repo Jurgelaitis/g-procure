@@ -1231,7 +1231,9 @@ async function testaiPatikra1026(){
     const d = W.document;
     lygu(d.getElementById("p-green").value, "", "1 žingsnyje nepažymėta");
     await W.submitStep1();
-    lygu([W.eval("PPQ.step"), d.activeElement && d.activeElement.id], [1, "p-green"], "be atsakymo - netęsiama, fokusas į klausimą");
+    // U2 (2026-11-06): netęsiama, trūkumas - santraukoje su nuoroda (fokusas į ją), laukas pažymėtas
+    lygu([W.eval("PPQ.step"), d.activeElement && d.activeElement.classList.contains("gpv-santrauka"), d.getElementById("p-green").getAttribute("aria-invalid"),
+          [...d.querySelectorAll("#wiz-klaidos a")].map(a => a.textContent)], [1, true, "true", ["Ar pirkimas žaliasis - Pasirinkite „Taip“ arba „Ne“."]], "be atsakymo - netęsiama");
     rinkinys(RINKINYS_100);
     tiesa(/Žaliasis pirkimas\s*Nenurodyta/.test(await wordas("lt")), "Word nesako „Nenurodyta“");
     tiesa(/Žaliasis pirkimas: nenurodyta/.test(W.kontekstoTekstas(W.pirkimoKontekstas(), false)), "DI kontekste");
@@ -1447,6 +1449,69 @@ async function testaiKortele(){
   });
 }
 
+/* U2 (2026-11-06): vedlio standartas - shared/vedlys.js */
+async function testaiU2(){
+  dabartine = grupe("Vedlio standartas (U2, 2026-11-06): žingsnių juosta, privalomi laukai santraukoje su nuorodomis, „Liko užpildyti N“, fokusas į naują žingsnį");
+  const d = () => W.document, $ = id => d().getElementById(id);
+  const ivesk = (id, v) => { const e = $(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); e.dispatchEvent(new W.Event("change", { bubbles: true })); };
+  const juosta = () => [...d().querySelectorAll("#stepper ol li")].map(x => x.querySelector(".gpv-n").textContent + (x.getAttribute("aria-current") ? ":dabartinis" : x.classList.contains("gpv-z--atliktas") ? ":atliktas" : ""));
+  const tuscias = () => { W.naujasPirkimas(); pirkimas({ name: "" }); W.eval("PPQ.settings.green = null"); pirmasZingsnis("info"); };
+  await testas("Žingsnių juosta - sąrašas (ol): numeris tekstu, dabartinis žingsnis su aria-current, atlikti - ✓ ir „(atliktas)“ ekrano skaitytuvui", async () => {
+    tuscias();
+    lygu(juosta(), ["1:dabartinis", "2", "3", "4", "5"], "1 žingsnis");
+    tiesa(d().querySelector("#stepper ol[aria-label]") && d().querySelectorAll("#stepper li").length === 5, "sąrašas su pavadinimu");
+    W.eval("PPQ.step = 2"); W.renderWizard();
+    lygu(juosta(), ["1:atliktas", "2:dabartinis", "3", "4", "5"], "2 žingsnis");
+    lygu(d().querySelector("#stepper li").textContent, "1Pirminė informacija (atliktas)", "atlikto žingsnio tekstas");
+    lygu(W.getComputedStyle(d().querySelector("#stepper li .gpv-n"), "::before").content, '"✓"', "atliktas - ženklas ✓");
+  });
+  await testas("1 žingsnis be privalomų laukų: netęsiama, AI nekviečiamas; santrauka su visais trūkumais formos tvarka ir nuorodomis, fokusas į ją; laukai pažymėti (aria-invalid, tekstas po lauku); nuoroda - į lauką; užpildžius - žymė dingsta", async () => {
+    tuscias();
+    let kv = 0; const buvo = W.GP_AI_PROXY.call; W.GP_AI_PROXY.call = async () => { kv++; return { ok: false, error: "x" }; };
+    try {
+      $("step1-next").click(); await miegok(50);
+      lygu([W.eval("PPQ.step"), kv], [1, 0], "netęsiama");
+      lygu([...d().querySelectorAll("#wiz-klaidos a")].map(a => a.textContent), ["Pirkimo pavadinimas - Įrašykite pirkimo pavadinimą.", "Pirkimo objekto tipas - Pasirinkite pirkimo objekto tipą.",
+        "Numatoma vertė - Įrašykite teigiamą numatomą vertę eurais be PVM.", "Ar pirkimas žaliasis - Pasirinkite „Taip“ arba „Ne“."], "santrauka");
+      tiesa(/Prieš generuojant klausimus užpildykite \(4\)/.test($("wiz-klaidos").textContent) && d().activeElement.classList.contains("gpv-santrauka"), "antraštė ir fokusas");
+      for (const id of ["p-name", "p-type", "p-value", "p-green"]) {
+        const e = $(id), m = d().getElementById(e.getAttribute("data-gpv-id"));
+        tiesa(e.getAttribute("aria-invalid") === "true" && m && (e.getAttribute("aria-describedby") || "").split(" ").includes(m.id) && m.classList.contains("gp-lauko-msg--klaida"), id + ": nepažymėtas");
+      }
+      d().querySelectorAll("#wiz-klaidos a")[2].click();
+      lygu(d().activeElement && d().activeElement.id, "p-value", "nuoroda - į lauką");
+      ivesk("p-name", "Galios transformatoriai");
+      lygu([$("p-name").hasAttribute("aria-invalid"), $("p-name").hasAttribute("data-gpv-id"), d().querySelectorAll("#wizard-body .gp-lauko-msg--klaida[data-gpv]").length], [false, false, 3], "užpildžius - žymė nuimta");
+      ivesk("p-value", "-5"); $("step1-next").click(); await miegok(50);
+      tiesa([...d().querySelectorAll("#wiz-klaidos a")].some(a => /Numatoma vertė - Įrašykite teigiamą/.test(a.textContent)) && kv === 0, "neigiama vertė - trūkumas");
+    } finally { W.GP_AI_PROXY.call = buvo; }
+  });
+  await testas("„Liko užpildyti N“ prie mygtuko - lietuviška forma pagal skaičių, atnaujinama rašant; visi užpildyti - „Visi privalomi laukai užpildyti“", async () => {
+    tuscias();
+    const t = () => $("wiz-liko").textContent;
+    lygu([t(), $("wiz-liko").getAttribute("aria-live")], ["Liko užpildyti 4 privalomus laukus", "polite"]);
+    ivesk("p-name", "Galios transformatoriai"); await miegok(450);
+    lygu(t(), "Liko užpildyti 3 privalomus laukus");
+    ivesk("p-type", "Prekės"); ivesk("p-value", "200000"); await miegok(450);
+    lygu(t(), "Liko užpildyti 1 privalomą lauką");
+    ivesk("p-green", "ne"); await miegok(450);
+    lygu([t(), $("wiz-liko").classList.contains("gpv-liko--visi")], ["Visi privalomi laukai užpildyti", true]);
+    lygu([1, 2, 5, 11, 12, 21, 22, 25].map(n => W.GP_VEDLYS.likoTekstas(n)), ["Liko užpildyti 1 privalomą lauką", "Liko užpildyti 2 privalomus laukus", "Liko užpildyti 5 privalomus laukus",
+      "Liko užpildyti 11 privalomų laukų", "Liko užpildyti 12 privalomų laukų", "Liko užpildyti 21 privalomą lauką", "Liko užpildyti 22 privalomus laukus", "Liko užpildyti 25 privalomus laukus"], "linksniai");
+  });
+  await testas("Užpildžius ir paspaudus „Toliau“ - 2 žingsnis, fokusas į jo antraštę, santraukos nebėra; „Atgal“ - 1 žingsnis, fokusas į jo antraštę", async () => {
+    tuscias();
+    const buvo = W.generateQuestions; W.generateQuestions = async () => { W.eval("PPQ.questions = []"); };
+    try {
+      ivesk("p-name", "Galios transformatoriai"); ivesk("p-type", "Prekės"); ivesk("p-value", "200000"); ivesk("p-green", "ne");
+      $("step1-next").click(); await laukTol(() => W.eval("PPQ.step") === 2);
+      lygu([juosta()[1], d().activeElement && d().activeElement.tagName, d().activeElement && d().activeElement.textContent, !!$("wiz-klaidos")], ["2:dabartinis", "H2", "2 žingsnis. Patikslinimo klausimai", false], "2 žingsnis");
+      [...d().querySelectorAll("#wizard-body button")].find(b => b.textContent.trim() === "Atgal").click();
+      lygu([W.eval("PPQ.step"), d().activeElement && d().activeElement.textContent], [1, "1 žingsnis. Pirminė informacija"], "atgal");
+    } finally { W.generateQuestions = buvo; }
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1464,6 +1529,7 @@ async function testaiKortele(){
     await testaiKortele();
   await testaiPatikra1026();
   await testaiSprendimai1027();
+    await testaiU2();
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
