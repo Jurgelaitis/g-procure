@@ -368,7 +368,7 @@
   var KORTELES_BUSENOS = {
     "Published": "paskelbtas", "Bid submission": "paskelbtas", "Proposal Submission": "paskelbtas",
     "Proposal Submission Closed": "vertinamas", "Awaiting bid opening": "vertinamas", "Evaluation": "vertinamas",
-    "Cancelled": "nutrauktas"
+    "Cancelled": "nutrauktas", "Terminated": "nutrauktas"
   };
   var OBJEKTAI = { "Supplies": "prekes", "Services": "paslaugos", "Works": "darbai" };
 
@@ -393,7 +393,9 @@
           budasT: "pagal VPT: tarptautinės vertės pirkimas", budasS: "pagal VPT: ne tarptautinės vertės pirkimas",
           budasMv: "pagal VPT: direktyva netaikoma - mažos vertės skelbiama apklausa; ar numatytos derybos - patikrinkite pirkimo dokumentuose",
           terminas: "VPT sąrašo duomenys - iki 6 val. senumo; galioja CVP IS",
-          paskelbimas: "faktinė paskelbimo data" },
+          paskelbimas: "paskelbimo CVP IS data - nuo jos skaičiuojami supaprastinto pirkimo terminai",
+          paskelbimasT: "CVP IS paskelbimo data {d}. Tarptautinio pirkimo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT - jos VPT duomenyse nėra, ją rasite skelbimo PDF („Skelbimo išsiuntimo data“), todėl paskelbimo datos nesiūlome.",
+          rinkosTerminas: "Rinkos konsultacijos atsakymų terminas {d} - tai ne pasiūlymų terminas, todėl kortelei nesiūlome." },
     en: { neregistre: "Contracting entity “{p}” is not in the organisation register - no entity suggested.",
           mv: "In the VPT data no directive applies (low-value procurement) - no law suggested; the procurement documents state which one applies.",
           direktyva: "VPT directive “{d}” - not a PĮ or VPĮ procurement, or not stated; no regime suggested.",
@@ -405,7 +407,9 @@
           budasT: "per VPT: above the EU threshold", budasS: "per VPT: below the EU threshold",
           budasMv: "per VPT: no directive applies - low-value published survey; check in the procurement documents whether negotiations are foreseen",
           terminas: "VPT list data - up to 6 hours old; CVP IS prevails",
-          paskelbimas: "actual publication date" }
+          paskelbimas: "date of publication in CVP IS - simplified procurement time limits run from it",
+          paskelbimasT: "Published in CVP IS on {d}. International procurement time limits run from the dispatch of the notice from VPT - the VPT data do not have it; it is in the notice PDF (“Notice dispatch date”), so no publication date is suggested.",
+          rinkosTerminas: "Market consultation response deadline {d} - not a tender deadline, so it is not suggested for the card." }
   };
 
   /* Grąžina { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [] } - kaip shared/skelbimas.js atpazink() */
@@ -450,9 +454,15 @@
     if (men) prideti("trukmeMen", men, "contractDuration: " + tx(p.contractDuration, 30));
     var iso = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):\d{2}$/;
     var tm = typeof p.tenderSubmissionDeadline === "string" && iso.exec(p.tenderSubmissionDeadline);
-    if (tm) prideti("pasiulymuTerminas", tm[1] + "T" + tm[2], "tenderSubmissionDeadline: " + p.tenderSubmissionDeadline, P.terminas);
+    /* Rinkos konsultacijos terminas - atsakymų, ne pasiūlymų (2026-11-06; iki tol kortelėje tapdavo „Pasiūlymų terminas“) */
+    if (tm && rinkos) pastabos.push(keisk(P.rinkosTerminas, { d: tm[1] + " " + tm[2] }));
+    else if (tm) prideti("pasiulymuTerminas", tm[1] + "T" + tm[2], "tenderSubmissionDeadline: " + p.tenderSubmissionDeadline, P.terminas);
+    /* Paskelbimo data (2026-11-06): kortelėje - diena, nuo kurios skaičiuojami terminai (PĮ 53 str. 2 d. / VPĮ 40 str. 2 d.):
+       tarptautiniam pirkimui - skelbimo išsiuntimas iš VPT, supaprastintam - paskelbimas CVP IS. VPT datePublished - paskelbimas
+       CVP IS (tarptautinio - 1-5 d. po išsiuntimo), todėl tarptautiniam nesiūloma; iki tol perrašydavo išsiuntimo datą. */
     var pd = typeof p.datePublished === "string" && iso.exec(p.datePublished);
-    if (pd) prideti("paskelbimas", pd[1], "datePublished: " + p.datePublished, P.paskelbimas);
+    if (pd && p.aboveThreshold === true) pastabos.push(keisk(P.paskelbimasT, { d: pd[1] }));
+    else if (pd) prideti("paskelbimas", pd[1], "datePublished: " + p.datePublished, P.paskelbimas);
     if (!rinkos && typeof p.status === "string" && p.status) {
       if (nutrauktaPavadinime(p) === "visas") prideti("busena", "nutrauktas", "title: " + tx(p.title));
       else if (KORTELES_BUSENOS[p.status]) prideti("busena", KORTELES_BUSENOS[p.status], "status: " + tx(p.status, 60));
@@ -467,6 +477,11 @@
      nutrauktas (ankstesnė - ne: kortelę žmogus galėjo pažengti pats; rinkos konsultacijai - ne). Grąžina
      { skirtumai: [{ laukas, kortele, vpt, kodas? }], palyginta: [laukai, kuriuos VPT duomenyse buvo su kuo palyginti] }. */
   var EIGA = ["planuojamas", "rengiamas", "paskelbtas", "vertinamas", "sutartis"];
+  /* VPT būsenos po vertinimo (2026-11-06): kortelėje atitikmens nėra (laimėtojas nustatytas, pirkimas užbaigtas ar uždarytas - ar sutartis
+     sudaryta, VPT nesako), bet pirkimas pažengęs toliau už „Vertinami pasiūlymai“ - kortelės būsenai iki jos rodoma kaip skirtumas.
+     Iki tol šios būsenos nebuvo atpažįstamos ir „Mano pirkimai“ rašydavo „sutampa“. */
+  var PO_VERTINIMO = { "Awarded": 1, "Concluded": 1, "Closed": 1 };
+  var TARPTAUTINIO_SKELBIMAS_IKI = 5;      // ES leidinių biuras skelbia ne vėliau kaip per 5 d. nuo išsiuntimo
   function skirtumai(k, p) {
     var r = { skirtumai: [], palyginta: [] };
     if (!k || typeof k !== "object" || !p || typeof p !== "object") return r;
@@ -479,13 +494,23 @@
     var pd = typeof p.datePublished === "string" && iso.exec(p.datePublished);
     if (pd) {
       r.palyginta.push("paskelbimas");
-      if (pd[1] !== String(k.paskelbimas || "")) r.skirtumai.push({ laukas: "paskelbimas", kortele: String(k.paskelbimas || ""), vpt: pd[1] });
+      /* Tarptautiniam pirkimui kortelėje - išsiuntimo data (nuo jos skaičiuojami terminai), CVP IS - paskelbimo: sutampa, kai išsiųsta
+         ne vėliau kaip paskelbta ir ne anksčiau kaip prieš 5 d. (iki 2026-11-06 - melagingas „skiriasi“). */
+      var kd = /^\d{4}-\d{2}-\d{2}$/.test(String(k.paskelbimas || "").slice(0, 10)) ? String(k.paskelbimas).slice(0, 10) : "";
+      var dsk = kd ? (Date.parse(pd[1] + "T00:00:00Z") - Date.parse(kd + "T00:00:00Z")) / 864e5 : NaN;
+      var tinka = kd === pd[1] || (p.aboveThreshold === true && dsk >= 0 && dsk <= TARPTAUTINIO_SKELBIMAS_IKI);
+      if (!tinka) r.skirtumai.push({ laukas: "paskelbimas", kortele: String(k.paskelbimas || ""), vpt: pd[1], tarptautinis: p.aboveThreshold === true });
     }
-    var vb = p.procedure === "Preliminary Market Consultation" ? null : nutrauktaPavadinime(p) === "visas" ? "nutrauktas" : KORTELES_BUSENOS[p.status];
+    var rk = p.procedure === "Preliminary Market Consultation";
+    var vb = rk ? null : nutrauktaPavadinime(p) === "visas" ? "nutrauktas" : KORTELES_BUSENOS[p.status];
     if (vb) {
       r.palyginta.push("busena");
       if (vb !== k.busena && k.busena !== "nutrauktas" && (vb === "nutrauktas" || EIGA.indexOf(vb) > EIGA.indexOf(k.busena)))
         r.skirtumai.push({ laukas: "busena", kortele: String(k.busena || ""), vpt: vb, kodas: String(p.status).slice(0, 60) });
+    } else if (!rk && PO_VERTINIMO[p.status]) {
+      r.palyginta.push("busena");
+      if (k.busena !== "sutartis" && k.busena !== "nutrauktas")
+        r.skirtumai.push({ laukas: "busena", kortele: String(k.busena || ""), vpt: "", kodas: String(p.status).slice(0, 60) });
     }
     return r;
   }
