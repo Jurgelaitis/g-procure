@@ -105,7 +105,10 @@
       budasTarpt: "Pasirinktas tarptautinio pirkimo būdas, o numatoma vertė {v} EUR mažesnė už tarptautinio pirkimo ribą {r} EUR. Jei tai didesnio pirkimo dalis, nuostatos taikomos pagal visų dalių vertę - patikrinkite, ar vertė apskaičiuota teisingai.",
       budasGerai: "Būdas tinka vertei: {kat}.",
       termPries: "Terminas ({t}) ne vėlesnis už paskelbimo datą ({p}) - patikrinkite datas.",
-      termDienos: "Nuo paskelbimo ({p}) iki termino ({t}) - {d} d. ({dd} darbo d.).",
+      termDienosT: "Nuo skelbimo išsiuntimo iš VPT ({p}) iki termino ({t}) - {d} d. ({dd} darbo d.).",
+      termDienosS: "Nuo paskelbimo CVP IS ({p}) iki termino ({t}) - {d} d. ({dd} darbo d.).",
+      termNetaikoma: "Trumpiausių paraiškų ir pasiūlymų terminų lentelė būdui „{b}“ netaikoma - terminą nustatykite pagal pirkimo tvarką ir pirkimo dokumentus.",
+      katMisrus: "Mišraus pirkimo rūšies pagal vertę automatiškai nevertiname - įvertinkite patys.",
       termGerai: "Trumpiausias {ko} terminas - {min} d.",
       termEl: "Trumpiausias {ko} terminas - {min} d., o {el} d. galima, jei skelbime nurodyta, kad pasiūlymai teikiami elektroninėmis priemonėmis (CVP IS).",
       termTrump: "Tai trumpiau už įprastą trumpiausią {ko} terminą - {min} d. Sutrumpinti iki {maz} d. galima tik {kada}.",
@@ -145,7 +148,10 @@
       budasTarpt: "An international procedure is selected while the estimated value of EUR {v} is below the international threshold of EUR {r}. If this is a lot of a larger procurement, the rules follow the value of all lots - check that the value is calculated correctly.",
       budasGerai: "The procedure fits the value: {kat}.",
       termPries: "The deadline ({t}) is not later than the publication date ({p}) - check the dates.",
-      termDienos: "From publication ({p}) to the deadline ({t}) - {d} days ({dd} working days).",
+      termDienosT: "From dispatch of the notice from VPT ({p}) to the deadline ({t}) - {d} days ({dd} working days).",
+      termDienosS: "From publication in CVP IS ({p}) to the deadline ({t}) - {d} days ({dd} working days).",
+      termNetaikoma: "The table of minimum time limits for requests and tenders does not apply to “{b}” - set the time limit by the procurement rules and documents.",
+      katMisrus: "The type of a mixed procurement by value is not assessed automatically - assess it yourself.",
       termGerai: "The minimum period for {ko} is {min} days.",
       termEl: "The minimum period for {ko} is {min} days; {el} days are allowed if the notice states that tenders are submitted electronically (CVP IS).",
       termTrump: "This is shorter than the usual minimum period for {ko} of {min} days. It can be shortened to {maz} days only {kada}.",
@@ -169,10 +175,13 @@
   };
   function tx(l) { return TXT[l === "en" ? "en" : "lt"]; }
   function sub(s, v) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }); }
-  function eur(n) {
-    var s = Math.round(n).toString(), out = "";
-    while (s.length > 3) { out = " " + s.slice(-3) + out; s = s.slice(0, -3); }
-    return s + out;
+  /* Suma tekste: tūkstančiai - nelaužomais tarpais; centai - tik kai jų yra (2026-11-06: iki tol 431 999,99 rodyta „432 000“ - lygi
+     ribai, o tekste parašyta „mažiau už ribą 432 000“). l - dešimtainis skyriklis (LT - kablelis, EN - taškas). */
+  function eur(n, l) {
+    var c = Math.round(n * 100), sv = Math.floor(c / 100), ct = c - sv * 100;
+    var s = sv.toString(), out = "";
+    while (s.length > 3) { out = "\u00a0" + s.slice(-3) + out; s = s.slice(0, -3); }
+    return s + out + (ct ? (l === "en" ? "." : ",") + String(ct).padStart(2, "0") : "");
   }
 
   function metodas(id) { return id && global.GP_METHODS ? global.GP_METHODS.byId(id) : null; }
@@ -217,7 +226,7 @@
     var t = [];
     if (!(k.verte > 0)) t.push("verte");
     if (!rezimasOk(k.rezimas)) t.push("rezimas");
-    if (!RUSIS[k.objektas]) t.push("objektas");
+    if (!RUSIS[k.objektas] && k.objektas !== "misrus") t.push("objektas");   // mišrus - įrašytas, tik nevertinamas (2026-11-06)
     return t;
   }
   /* Pirkimo rūšis pagal vertę: { kodas, ribos, cva, sarase } arba { kodas: null, truksta: [laukai] }.
@@ -227,6 +236,7 @@
     k = k || {};
     var t = truksta(k);
     if (t.length) return { kodas: null, truksta: t };
+    if (k.objektas === "misrus") return { kodas: null, truksta: [], misrus: true };
     var rb = ribos(k.rezimas, k.objektas, k.vykdytojas);
     if (!rb) return { kodas: null, truksta: ["verte"] };
     var kodas = k.verte >= rb.tarptautine ? "tarptautinis" : k.verte < rb.maza ? "mazos_vertes" : "supaprastintas";
@@ -245,7 +255,7 @@
   function kategorijosRadiniai(k, l) {
     var X = tx(l), kat = kategorija(k), out = [];
     if (!kat.kodas) return out;
-    var rb = kat.ribos, v = { v: eur(k.verte), r: eur(rb.tarptautine), m: eur(rb.maza), obj: X.obj[rb.rusis] };
+    var rb = kat.ribos, v = { v: eur(k.verte, l), r: eur(rb.tarptautine), m: eur(rb.maza), obj: X.obj[rb.rusis] };
     if (kat.cva) {
       out.push({ id: "kategorija", lygis: "tikrinti", laukai: ["verte", "vykdytojas"],
         tekstas: sub(X.katCva, { org: orgPav(k, l), c: eur(rb.centrinesValdzios), r: eur(rb.kitoms) }),
@@ -259,7 +269,7 @@
           + (sar ? " " + sub(kat.sarase ? X.katSarase : X.katNeSarase, { org: orgPav(k, l), c: eur(rb.centrinesValdzios), r: eur(rb.kitoms) }) : ""),
         teise: r });
     }
-    if (rb.specialiosios && k.verte >= rb.tarptautine && k.verte < rb.specialiosios && (k.objektas === "paslaugos" || k.objektas === "paslaugos_it"))
+    if (rb.specialiosios && k.verte >= rb.tarptautine && k.verte < rb.specialiosios && k.objektas === "paslaugos")   // IT ir IS paslaugos - ne socialinės ar specialiosios (2026-11-06)
       out.push({ id: "kategorija_specialiosios", lygis: "info", laukai: ["objektas"], tekstas: sub(X.katSpec, { s: eur(rb.specialiosios) }),
         teise: nuorodos(["tarptautinis_pirkimas"], k.rezimas, l) });
     return out;
@@ -271,9 +281,10 @@
     var X = tx(l), m = metodas(k.budas);
     if (!m || !m.rezimas) return null;
     var kat = kategorija(k);
+    if (kat.misrus) return null;                                   // mišraus rūšis nevertinama - pasakyta kategorijos radinyje
     if (!kat.kodas) return { id: "budas_verte", truksta: kat.truksta };
     var rb = kat.ribos, D = (global.GP_THRESHOLDS || {}).DALYS || {};
-    var v = { v: eur(k.verte), r: eur(rb.tarptautine), m: eur(rb.maza) };
+    var v = { v: eur(k.verte, l), r: eur(rb.tarptautine), m: eur(rb.maza) };
     if (m.rezimas === "mazos_vertes" && kat.kodas !== "mazos_vertes")
       return { id: "budas_verte", lygis: "kliutis", laukai: ["budas", "verte"], tekstas: sub(X.budasMv, v),
                pastaba: sub(X.budasMvIsimtis, v), teise: nuorodos(["mazos_vertes_pirkimas", "dalys_mazos_vertes"], k.rezimas, l) };
@@ -327,7 +338,7 @@
     var t = [];
     if (!rezimasOk(k.rezimas)) t.push("rezimas");
     var rusis = terminoRusis(k, m);
-    if (!rusis) t.push("verte");
+    if (!rusis) t.push(k.objektas === "misrus" && k.verte > 0 ? "misrus" : "verte");   // mišrus - ne trūkstama vertė
     var nuo = data(k.paskelbimas), iki = data(k.pasiulymuTerminas);
     if (!nuo) t.push("paskelbimas");
     if (!iki) t.push("pasiulymuTerminas");
@@ -341,7 +352,7 @@
     var X = tx(l), tr = terminas(k), out = [];
     if (tr.busena !== "yra") return { tr: tr, radiniai: out };
     var L = tr.lentele, ko = X.ko[L.pirmas], p = ymd(tr.nuo), t = ymd(tr.iki) + (/T\d{2}:\d{2}/.test(k.pasiulymuTerminas) ? " " + k.pasiulymuTerminas.slice(11, 16) : "");
-    var dienos = sub(X.termDienos, { p: p, t: t, d: tr.dienos, dd: tr.darbo });
+    var dienos = sub(tr.rusis === "T" ? X.termDienosT : X.termDienosS, { p: p, t: t, d: tr.dienos, dd: tr.darbo });
     var pagr = [L.raktas, "terminas_nuo"];
     if (tr.dienos <= 0) {
       out.push({ id: "terminas", lygis: "kliutis", laukai: ["paskelbimas", "pasiulymuTerminas"], tekstas: sub(X.termPries, { p: p, t: t }), teise: [] });
@@ -388,7 +399,9 @@
     l = l === "en" ? "en" : "lt";
     var X = tx(l), radiniai = [], patikros = [];
     var kat = kategorija(k);
-    patikros.push(kat.kodas ? { id: "kategorija", busena: kat.cva ? "radinys" : "gerai" } : { id: "kategorija", busena: "truksta", truksta: kat.truksta });
+    patikros.push(kat.kodas ? { id: "kategorija", busena: kat.cva ? "radinys" : "gerai" }
+      : kat.misrus ? { id: "kategorija", busena: "netaikoma" } : { id: "kategorija", busena: "truksta", truksta: kat.truksta });
+    if (kat.misrus) radiniai.push({ id: "kategorija", lygis: "info", laukai: ["objektas"], tekstas: X.katMisrus, teise: [] });
     radiniai = radiniai.concat(kategorijosRadiniai(k, l));
 
     var bv = budoVerte(k, l);
@@ -404,6 +417,9 @@
     if (tt.tr.busena === "yra") patikros.push({ id: "terminas", busena: tt.radiniai.some(function (r) { return r.id === "terminas" && r.lygis !== "gerai"; }) ? "radinys" : "gerai" });
     else patikros.push({ id: "terminas", busena: tt.tr.busena, truksta: tt.tr.truksta });
     radiniai = radiniai.concat(tt.radiniai);
+    /* Taisyklė šiam būdui netaikoma - pasakoma, ne nutylima (2026-11-06; aprašas žada tikrinti terminą) */
+    if (tt.tr.busena === "netaikoma" && tt.tr.metodas && (k.pasiulymuTerminas || k.paskelbimas))
+      radiniai.push({ id: "terminas", lygis: "info", laukai: ["budas"], tekstas: sub(X.termNetaikoma, { b: global.GP_METHODS ? global.GP_METHODS.label(tt.tr.metodas.id, { kalba: l }) : tt.tr.metodas.id }), teise: [] });
 
     var dk = dokumentai(k.budas, l);
     if (dk) {
