@@ -37,8 +37,17 @@
     STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", sablonai: { LT: { BS: "SR_LT_BS", SS: "SR_LT_SS" } } },   // nuo 2026-10-12 (6 etapas, S4)
     // nuo 2026-10-13 (7 etapas, S4): vienos bendrosios sąlygos, specialiosios - pagal darbų rūšį (variantą); kodus grąžina kodai()
     EKSPLOATAVIMO: { pav: "Eksploatavimo darbų sutartis", sablonai: { LT: { BS: "EKS_LT_BS", SS: { OL: "EKSOL_LT_SS", TP: "EKSTP_LT_SS", TRASOS: "EKSTV_LT_SS" } } },
-                     variantai: { OL: "oro linijų eksploatavimas", TP: "transformatorių pastočių eksploatavimas", TRASOS: "trasų valymas" } }
+                     variantai: { OL: "oro linijų eksploatavimas", TP: "transformatorių pastočių eksploatavimas", TRASOS: "trasų valymas" } },
+    // nuo 2026-11-06: AB „Amber Grid“ statybos rangos sutartis - specialiosios sąlygos ATKURTOS iš paskelbto pirkimo sutarties projekto
+    // (amber-sutartys.py; tuščios formos neturime), bendrosios sąlygos (SUT-35) - Amber Grid PDF, pridedamas be pakeitimų (BS - be šablono)
+    AG_STATYBOS_RANGOS: { pav: "Statybos rangos sutartis", imone: "amber-grid", atkurta: "SUT-36 13.0 2026-10-02", bsForma: "SUT-35 13.0 2026-10-02",
+                          sablonai: { LT: { BS: "AG_SR_LT_BS", SS: "AG_SR_LT_SS" } }, statiniai: ["BS"] }
   };
+  /* Atkurtos formos pastaba (1 žingsnio bloke, sutarties žingsnyje ir 4 žingsnyje) */
+  var ATKURTA_PASTABA = "AB „Amber Grid“ statybos rangos sutarties specialiųjų sąlygų tuščios formos neturime - jos atkurtos iš paskelbto " +
+    "pirkimo sutarties projekto (SUT-36 13.0, 2026-10-02): to pirkimo įrašai pašalinti, pakeistos formuluotės - iš ankstesnės 10.0 redakcijos. " +
+    "Prieš skelbdami palyginkite su galiojančia Amber Grid forma. Bendrosios sąlygos (SUT-35) - Amber Grid PDF dokumentas: generatorius jo nekuria, " +
+    "jį pridėsite patys.";
   /* Šeimos šablonų kodai pasirinktai kalbai ir variantui: { kodai: { BS, SS, ... }, kalba } arba null (šeima be šablonų; šeimai su
      variantais - nežinomas variantas). Dokumentas, kurio šablonas priklauso nuo varianto, SEIMOS aprašytas objektu { variantas: kodas }. */
   function kodai(seima, variantas, kalba) {
@@ -64,7 +73,8 @@
     DARBAI_MAZOJI: { SS: ["6.3", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["3.5", "punkte", "Sutarties įvykdymo užtikrinimas"] },
     PROJEKTAVIMO_STATYBOS: { SS: ["24", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["9.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
     STATYBOS_RANGOS: { SS: ["23", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
-    EKSPLOATAVIMO: { SS: ["16", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"] }
+    EKSPLOATAVIMO: { SS: ["16", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
+    AG_STATYBOS_RANGOS: { SS: ["5.1", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["3.5", "punkte", "Sutarties įvykdymo užtikrinimas"] }
   };
   var VARD = { skyriuje: "skyrius", punkte: "punktas" };
   /* -> { tekstas (vietoj „X punkte/priede“), kilme, SS, BS } arba null */
@@ -265,16 +275,22 @@
     if (!t) pastabos.push("Pirkimo pavadinimas tuščias - parenkama tik pagal objekto rūšį ir atsakymus.");
     if (duom.vykdytojas && !/litgrid/i.test(duom.vykdytojas) && !/amber\s*grid/i.test(duom.vykdytojas))
       pastabos.push("Sutarčių šablonai - LITGRID AB ir AB „Amber Grid“; kitos organizacijos sutarčių formų generatoriuje nėra.");
-    /* AB „Amber Grid“ (2026-11-03): paskelbtose jos prekių ir paslaugų sutartyse - tos pačios bendrosios sąlygos; rangos ir kitų darbų formos
-       kitos, jų generatoriuje nėra. Parinkimas - tik pagal objekto rūšį (LITGRID klausimai apie pastotes, linijas ir CPO LT jai netinka). */
+    /* AB „Amber Grid“ (2026-11-03): paskelbtose jos prekių ir paslaugų sutartyse - tos pačios bendrosios sąlygos; darbams (nuo 2026-11-06) -
+       jos statybos rangos sutartis (specialiųjų sąlygų forma atkurta iš paskelbto projekto). Parinkimas - tik pagal objekto rūšį (LITGRID
+       klausimai apie pastotes, linijas ir CPO LT jai netinka). */
     if (duom.vykdytojas && /amber\s*grid/i.test(duom.vykdytojas)) {
-      var ag = rusis === "prekes" ? "PREKES" : rusis === "paslaugos" ? "PASLAUGOS" : null;
-      if (!ag) return { busena: "neparuosta", seima: rusis === "darbai" ? "STATYBOS_RANGOS" : null, variantas: null, pavadinimas: rusis === "darbai" ? "Rangos sutartis" : "",
-        priezastys: rusis ? ["pirkimo objektas - " + (rusis === "darbai" ? "darbai" : "mišrus")] : [], kalba: kalba, atsakyta: [], sablonai: null,
-        pastabos: pastabos.concat([rusis ? "AB „Amber Grid“ rangos sutarties formos generatoriuje dar nėra - sutarties projektą prie pirkimo sąlygų pridėsite patys." : "Pasirinkite objekto tipą."]) };
+      // nuo 2026-11-06 darbai - AB „Amber Grid“ statybos rangos sutartis (atkurta forma; tik LT)
+      var ag = rusis === "prekes" ? "PREKES" : rusis === "paslaugos" ? "PASLAUGOS" : rusis === "darbai" ? "AG_STATYBOS_RANGOS" : null;
+      if (!ag) return { busena: "neparuosta", seima: null, variantas: null, pavadinimas: "",
+        priezastys: rusis ? ["pirkimo objektas - mišrus"] : [], kalba: kalba, atsakyta: [], sablonai: null,
+        pastabos: pastabos.concat([rusis ? "Mišriam pirkimui AB „Amber Grid“ sutarties forma nenustatoma - pasirinkite pagrindinę pirkimo dalį (objekto tipą)." : "Pasirinkite objekto tipą."]) };
       var sbA = kodai(ag, null, kalba);
-      return { busena: "parinkta", seima: ag, variantas: null, pavadinimas: SEIMOS[ag].pav, priezastys: ["pirkimo objektas - " + (ag === "PREKES" ? "prekės" : "paslaugos")],
-        kalba: kalba, pastabos: pastabos, atsakyta: [], sablonai: sbA.kodai };
+      if (ag === "AG_STATYBOS_RANGOS") {
+        pastabos.push(ATKURTA_PASTABA);
+        if (sbA.kalba !== kalba) pastabos.push("Šios sutarties dvikalbės (LT/EN) formos nėra - parinkta lietuviška.");
+      }
+      return { busena: "parinkta", seima: ag, variantas: null, pavadinimas: SEIMOS[ag].pav, priezastys: ["pirkimo objektas - " + (ag === "PREKES" ? "prekės" : ag === "PASLAUGOS" ? "paslaugos" : "darbai")],
+        kalba: sbA.kalba, pastabos: pastabos, atsakyta: [], sablonai: sbA.kodai, atkurta: !!SEIMOS[ag].atkurta };
     }
     var priezastys = [], r, i = 0;
     while (i++ < 6) {
@@ -336,6 +352,6 @@
              sutampa: !!(rez && rez.seima === seima && (rez.variantas || null) === (variantas || null)) };
   }
 
-  global.GP_SUTARTYS = { versija: "S4-K6-2026-10-21", SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, kodai: kodai, normalizuok: be,
+  global.GP_SUTARTYS = { versija: "S4-AG-2026-11-06", ATKURTA_PASTABA: ATKURTA_PASTABA, SEIMOS: SEIMOS, KLAUSIMAI: KLAUSIMAI, NERENGIAMA: NERENGIAMA, parink: parink, palygink: palygink, kodai: kodai, normalizuok: be,
                          UZTIKRINIMO_VIETA: UZTIKRINIMO_VIETA, uztikrinimoVieta: uztikrinimoVieta };
 })(typeof window !== "undefined" ? window : this);

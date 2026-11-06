@@ -98,7 +98,8 @@
       var reg = await cfg.gaukJson("zemelapiai/sutarciu-versijos.json");
       Object.keys((reg && reg.sablonai) || {}).forEach(function (id) {
         var r = reg.sablonai[id];
-        ix.formos[id] = { sutartis: true, failas: r.failas, pavadinimas: r.pavadinimas, dabartine: r.dabartine, pozymiai: r.pozymiai,
+        if (r.statinis || !r.failas) return;   // bendrosios sąlygos be šablono (AB „Amber Grid“ SUT-35 - PDF) - formos nėra su kuo lyginti
+        ix.formos[id] = { sutartis: true, failas: r.failas, pavadinimas: r.pavadinimas, dabartine: r.dabartine, pozymiai: r.pozymiai, imone: r.imone || null,
                           pozymiaiVisi: r.pozymiai_visi || "", kitosPozymiai: r.kitos_pozymiai || "", kitos: r.kitos_versijos || {}, naujos: r.naujos || [] };
       });
       sutarciuKlaida = null;
@@ -328,6 +329,17 @@
     (Z.nesiulomi || []).forEach(function (b) { blokai.push({ blokas: { nuo: Math.min.apply(null, b.pastraipos), iki: Math.max.apply(null, b.pastraipos) } }); });
     // sakiniai, taikomi tik tam tikru atveju (rangos SS 3, 6, 8 p.): pašalinti arba pakeisti „Punktas netaikomas.“ - pasirenkama dalis
     (Z.neprivalomos || []).forEach(function (b) { blokai.push({ blokas: { nuo: Math.min.apply(null, b.pastraipos), iki: Math.max.apply(null, b.pastraipos) } }); });
+    // sąrašo sąlyga „(ii) ...“ (AB „Amber Grid“ SS 7.1, 2026-11-06): pašalinus ankstesnę, likusi pernumeruojama „(i)“, o paskutinės
+    // sakinys baigiasi tašku - tas pats tekstas su kitu ženklu ir galo skyryba - ne nukrypimas
+    (Z.neprivalomos || []).forEach(function (b) {
+      if (b.pastraipos.length !== 1) return;
+      var i = b.pastraipos[0], p = P[i], t = p ? tekstas(p) : "", m = /^\((?:i{1,3}|iv)\)\s+/.exec(t);
+      if (!m || leidziami[i] || p.getElementsByTagNameNS(W, "sdt").length) return;
+      try {
+        leidziami[i] = new RegExp("^\\s*(?:\\((?:i{1,3}|iv)\\)\\s*)?" + re(t.slice(m[0].length).replace(/[;.]\s*$/, "")) + "\\s*[;.]?\\s*$");
+        variantai[i] = [{ t: t, n: P_NORM(t) }];
+      } catch (e) { /* netinkamas šablonas - lieka pasirenkama dalis */ }
+    });
     (Z.skyriai || []).forEach(function (k) {
       blokai.push({ blokas: { nuo: k.luzis, iki: k.iki } });
       (Z.priedai || []).filter(function (q) { return q.nr === k.priedas; }).forEach(function (q) { blokai.push({ blokas: { nuo: q.i, iki: q.i } }); });
@@ -380,9 +392,13 @@
             try {
               var pr = await P().skaityk(d.buf);
               // Kitos įmonės (AB „Amber Grid“) duomenys parengtame dokumente - ne nukrypimas nuo formos (2026-11-03, org-sablonai.js)
-              if (!pr.pasas && window.GP_ORG_SABLONAI && pr.pastraipos.some(function (p) { return GP_ORG_SABLONAI.atpazink(p.t); }))
+              // (pačios įmonės formai - AB „Amber Grid“ statybos rangos SS, 2026-11-06 - lyginamas originalus tekstas: ten jos duomenys yra formoje)
+              var org = null;
+              if (!pr.pasas && window.GP_ORG_SABLONAI && pr.pastraipos.some(function (p) { return GP_ORG_SABLONAI.atpazink(p.t); })) {
+                org = pr.pastraipos.map(function (p) { return Object.assign({}, p); });
                 pr.pastraipos.forEach(function (p) { var t = GP_ORG_SABLONAI.atgal(p.t, "amber-grid"); if (t !== p.t) { p.t = t; p.n = P().norm(t); } });
-              palyg[d.id] = { ps: pr.pastraipos, pasas: pr.pasas };
+              }
+              palyg[d.id] = { ps: pr.pastraipos, pasas: pr.pasas, psOrg: org };
             }
             catch (e) { palyg[d.id] = { klaida: e.message }; }
             // Word automatinės numeracijos punktai (rangos sutartys, 2026-10-10) - nuorodų patikrai tekstai su emuliuotais numeriais
@@ -470,7 +486,7 @@
       } else {
         var ir = indeksas.formos[x.forma];
         var naujos = {}; (ir.naujos || []).forEach(function (h) { naujos[h] = 1; });
-        x.rez = P().lygink(f.ps, x.ps, { zemelapis: f.zem, kitosVersijos: P().kitosVersijos(ir.sutartis ? ir.kitos : ir), sutartis: !!ir.sutartis, naujos: naujos });
+        x.rez = P().lygink(f.ps, ir.imone && x.psOrg ? x.psOrg : x.ps, { zemelapis: f.zem, kitosVersijos: P().kitosVersijos(ir.sutartis ? ir.kitos : ir), sutartis: !!ir.sutartis, naujos: naujos });
       }
       x.pagalPasa = pagalPasa;
     } catch (e) { x.klaidaLyg = e.message; }

@@ -613,3 +613,42 @@ pavadinimas įžangoje ir bendrosios sąlygos nekeičiami; nuoroda į priedą, p
 pastabos po etapų lentele - Word programoje.
 
 Lieka jūsų peržiūrai: naujų klausimų tekstai ir paaiškinimai.
+
+# AB „Amber Grid“ statybos rangos sutartis (2026-11-06)
+
+Jūsų sprendimas 2026-11-06: „Atkurkite iš pavyzdžio ir pažymėkite, kad atkurta“. Tuščios AB „Amber Grid“ specialiųjų sąlygų formos
+neturime, todėl forma `templates/sutartys/AG_SR_LT_SS.docx` atkurta iš paskelbto pirkimo sutarties projekto (SUT-36 13.0 2026-10-02;
+scenarijus `PP-salygos/amber-sutartys.py`, pavyzdžiai ir jų maišos - privačiame aplanke, ne saugykloje). Pažymėta trimis vietomis:
+dokumento pradžioje raudona G-Procure pastaba (prieš skelbiant ištrinkite), Word failo savybės (`G-Procure_atkurta`, pavadinime
+„(atkurta)“) ir registro įrašas `atkurta` (iš ko, pavyzdžio maiša, kas pakeista). Modulis tai sako 1 žingsnio bloke, sutarties žingsnyje
+ir 4 žingsnyje.
+
+Kas pakeista atkuriant: to pirkimo įrašai grąžinti į neužpildytus sąrašus ir vietas; pavyzdžio pirkimo dalykas (chromatografai, mokymai) ir
+jo terminai pakeisti formos formuluotėmis iš ankstesnės 10.0 redakcijos (2.2.1 indekso sąrašas, 3.1.1 Grafiko terminas, 3.2.1 galutinis
+terminas, 3.3.1 priėmimas); 9 skyriaus to pirkimo pakeitimai - valdiklis kitoms nuostatoms; 7.1 sąlygos (i), (ii); redakcinės korekcijos -
+priedų eilutės su tašku, dvigubi tarpai, sąrašų variantai be tarpų kraštuose.
+
+Bendrosios sąlygos (SUT-35 13.0) - AB „Amber Grid“ PDF dokumentas: generatorius jo nekuria, pakete - eilutė „pridėsite patys“
+(specialiųjų sąlygų 10.2 priedas). Jo punktų sąrašas ir privalomų elementų citatos - žemėlapyje `AG_SR_LT_BS.json` (nuorodų ir elementų
+patikrai).
+
+## Klausimai (`KLAUSIMAI_AG`, 34; visi privalomi, be numatytųjų)
+
+| Grupė | Klausimai |
+|---|---|
+| Sutarties dalykas (įžanga, 1 skyrius) | Objektas (siūloma - Techninėje specifikacijoje nurodyti objektai), darbų rūšis (siūloma pagal pavadinimą), statinio kategorija, projektas ar aprašas, Koordinatoriaus paslaugos, Projekto vykdymo priežiūra |
+| Kaina ir mokėjimas (2 skyrius) | Kainodara, pradinės vertės apskaičiavimas (siūloma pagal kainodarą), kainos peržiūra ir indeksas (sąrašas arba kitas), mokėjimo terminas (siūloma 30 d.), apimties keitimo procentai |
+| Sutarties vykdymas (3 skyrius) | Grafikas ir jo terminas, atsakomybė už vėlavimą pateikti Grafiką, darbų terminas mėnesiais (siūloma iš kortelės), tarpinių terminų delspinigiai, kiti dokumentai prieš galutinį aktą, statybos darbų žurnalas, Planas, patekimo į statybvietę kontrolė, BIM, techninė priežiūra, informavimas apie statybos pradžią |
+| Draudimas, užtikrinimas, subranga (4-6 skyriai) | Civilinės atsakomybės draudimas ir suma, Sutarties įvykdymo užtikrinimas ir dydis (siūloma iš SPS), garantinio laikotarpio užtikrinimas (suma, laikotarpis), avanso užtikrinimas, tiesioginis atsiskaitymas (siūloma iš SPS) |
+| Įsigaliojimas, kitos nuostatos, priedai (7, 9, 10 skyriai) | Valdybos ar akcininkų pritarimas, įsigaliojimas pateikus užtikrinimą (abu „Ne“ - „netaikomos“), egzempliorių skaičius, kitos nuostatos, pasirenkami priedai, kiti priedai (10.12 ir toliau) |
+
+Įrašoma automatiškai: Užsakovas, pirkimo pavadinimas ir numeris, būdas ir rūšis (įžanga), kalba, bendrųjų sąlygų priedas, AB „Amber Grid“
+rekvizitai. Pildoma sudarant sutartį: sutarties numeris, Šalių atstovai, Rangovo duomenys, CVP IS numeris ir pirkimo dokumentų adresas (po
+paskelbimo), vertė ir kaina, indekso reikšmė sudarymo dieną, Komisijos įpareigojimai (8.2), atsakingi asmenys ir Užsakovo padalinys (11
+skyrius), parašai.
+
+## Formų nesutapimai (taip ir paskelbtuose pirkimuose; formų nekeičiame)
+
+- Bendrosios sąlygos nurodo specialiųjų sąlygų punktus, kurių specialiosiose sąlygose nėra: 1.5.3 p. - SS 12 punktą, 5.3.10 p. - SS 11.7 ir
+  11.8 punktus (SS turi 11 skyrių). Modulis tai rodo 4 žingsnyje.
+- SS 8.2 punkte - „Pirkėjas“ ir „Tiekėjas“, nors kitur sutartyje - „Užsakovas“ ir „Rangovas“.
