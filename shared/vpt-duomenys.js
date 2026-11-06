@@ -501,6 +501,13 @@
       var tinka = kd === pd[1] || (p.aboveThreshold === true && dsk >= 0 && dsk <= TARPTAUTINIO_SKELBIMAS_IKI);
       if (!tinka) r.skirtumai.push({ laukas: "paskelbimas", kortele: String(k.paskelbimas || ""), vpt: pd[1], tarptautinis: p.aboveThreshold === true });
     }
+    /* Sutarties trukmė (2026-11-06, naudotojo sprendimas): skelbimo „Numatomas galiojimas“ rengėjai kartais užpildo pasiūlymo galiojimu,
+       todėl iš PDF perkelta trukmė gali skirtis nuo CVP IS - lyginama, kai kortelėje trukmė įrašyta (be jos - ne skirtumas, o trūkstamas laukas). */
+    var vm = trukmeMen(p.contractDuration);
+    if (vm && k.trukmeMen > 0) {
+      r.palyginta.push("trukmeMen");
+      if (vm !== k.trukmeMen) r.skirtumai.push({ laukas: "trukmeMen", kortele: String(k.trukmeMen), vpt: String(vm) });
+    }
     var rk = p.procedure === "Preliminary Market Consultation";
     var vb = rk ? null : nutrauktaPavadinime(p) === "visas" ? "nutrauktas" : KORTELES_BUSENOS[p.status];
     if (vb) {

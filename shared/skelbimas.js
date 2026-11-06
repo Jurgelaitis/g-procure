@@ -207,6 +207,7 @@
           bvpz: "BVPŽ kodas skelbime - {k}, be kontrolinio skaitmens; žodyno įkelti nepavyko - įrašykite kodą patys.",
           vienaDalis: " (viena dalis)", neskaidomas: "Viena dalis skelbime - pirkimas neskaidomas.",
           dalyvavimo: "Tai dalyvavimo prašymų terminas.", issiuntimo: "Skelbimo išsiuntimo data.",
+          galiojimasTrumpas: "Skelbimo „Numatomas galiojimas“ - sutarties trukmė, bet rengėjai šiame lauke kartais įrašo pasiūlymo galiojimą; patikrinkite sutarties projekte.",
           issiuntimoS: "Skelbimo išsiuntimo data. Supaprastinto pirkimo terminai skaičiuojami nuo paskelbimo CVP IS - jei ji kita, pataisykite.",
           mvPagalVerte: "Skelbimo būdas „{b}“, bet numatoma vertė {v} EUR mažesnė už mažos vertės pirkimo ribą ({m} EUR) - siūlomas mažos vertės skelbiamos apklausos būdas. Patikrinkite pirkimo dokumentuose.",
           pakeistasTerminas: "Terminas pakeistas skelbimo pakeitimu (10 skyrius).",
@@ -222,6 +223,7 @@
           bvpz: "CPV code in the notice - {k}, without the check digit; the dictionary could not be loaded - enter the code yourself.",
           vienaDalis: " (one lot)", neskaidomas: "One lot in the notice - the procurement is not divided into lots.",
           dalyvavimo: "This is the deadline for requests to participate.", issiuntimo: "Date the notice was dispatched.",
+          galiojimasTrumpas: "The notice “Estimated duration” is the contract duration, but some authors enter the tender validity period in this field; check the draft contract.",
           issiuntimoS: "Date the notice was dispatched. Simplified procurement time limits run from publication in CVP IS - correct it if that date differs.",
           mvPagalVerte: "The notice procedure is “{b}”, but the estimated value of EUR {v} is below the low-value threshold (EUR {m}) - a low-value published survey is suggested. Check the procurement documents.",
           pakeistasTerminas: "The deadline was changed by a change notice (section 10).",
@@ -347,7 +349,8 @@
     }
     var trukmes = lotai.map(function (l) { var g = laukas(l.eil, "Galiojimas"); return g ? { men: mastas(g.reiksme), citata: g.citata } : null; })
       .filter(function (x) { return x && x.men; });
-    if (trukmes.length && trukmes.every(function (x) { return x.men === trukmes[0].men; })) prideti("trukmeMen", trukmes[0].men, trukmes[0].citata);
+    if (trukmes.length && trukmes.every(function (x) { return x.men === trukmes[0].men; })) prideti("trukmeMen", trukmes[0].men, trukmes[0].citata,
+      trukmes[0].men <= 6 ? P.galiojimasTrumpas : null);   // trumpas „galiojimas“ dažnai yra pasiūlymo galiojimas (2026-11-06)
 
     // Terminas, išsiuntimo data, CVP IS numeris, būsena. Pakeitimo skelbime terminas - iš pakeitimo aprašymo,
     // o išsiuntimo data yra PAKEITIMO data, ne paskelbimo (pirminio skelbimo datos PDF neturi).
