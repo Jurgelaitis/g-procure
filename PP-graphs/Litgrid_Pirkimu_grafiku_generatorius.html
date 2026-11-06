@@ -176,6 +176,17 @@
     box-shadow:0 0 0 3px rgba(0,160,114,.15);
   }
   .form-field .hint{font-size:12px;color:var(--text-muted);margin-top:4px}
+  .form-field label .neprivaloma{font-weight:400;color:var(--text-muted)}
+  .en-pav-eilute{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
+  .en-pav-eilute .btn{padding:6px 12px;font-size:13px}
+  .en-pav-zyma{font-size:13px;color:var(--text-secondary)}
+  .en-pav-zyma .patvirtinta{color:var(--color-green-strong);font-weight:600}
+  .en-pav-busena:empty{display:none}
+  .en-pav-busena{margin-top:6px;font-size:13px}
+  .en-pav-isp{margin-top:6px;font-size:13px;color:var(--color-warning-strong)}
+  .en-pav-juosta{margin:0 0 12px;padding:10px 14px;border:1px solid var(--border-strong);border-left:4px solid var(--c-emerald);border-radius:8px;background:#fff;font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .en-pav-juosta[hidden]{display:none}
+  .en-pav-juosta .btn{padding:4px 10px;font-size:13px}
   .form-field input[type=date]{font-family:inherit}
   /* Standartinių trukmių metai (2026-10-27) */
   .metai-txt{font-size:14px;font-weight:600;color:var(--text);padding:6px 0}
@@ -912,6 +923,19 @@
         <input type="text" id="f-pavadinimas" placeholder="pvz. Aukštos įtampos transformatoriaus pirkimas Vilniaus pastotei">
       </div>
 
+      <!-- Angliškas pavadinimas (2026-11-06, naudotojo pasiūlymas): grafike EN kalba; tuščias - pasirinkus EN išverčiamas su DI, patvirtina žmogus -->
+      <div class="form-field full" id="enPavLaukas">
+        <label for="f-pavadinimas-en">Pirkimo pavadinimas anglų kalba <span class="neprivaloma">(grafikui EN kalba)</span></label>
+        <input type="text" id="f-pavadinimas-en" placeholder="pvz., High-voltage transformer for Vilnius substation" autocomplete="off" aria-describedby="enPavHint enPavBusena">
+        <div class="en-pav-eilute">
+          <button type="button" class="btn btn-ghost" id="enPavDi">Išversti su DI</button>
+          <button type="button" class="btn btn-ghost" id="enPavPatv" hidden>Patvirtinti vertimą</button>
+          <span id="enPavZyma" class="en-pav-zyma"></span>
+        </div>
+        <div id="enPavBusena" class="en-pav-busena" aria-live="polite"></div>
+        <span class="hint" id="enPavHint">Pildyti nebūtina. Pasirinkus grafiką EN kalba, kai šis laukas tuščias, pavadinimas išverčiamas su DI: per G-Procure serverį į Claude API (Anthropic) siunčiamas tik pirkimo pavadinimas. Vertimą patikrinkite - pataisykite arba patvirtinkite.</span>
+      </div>
+
       <div class="form-field">
         <label>Pirkimo iniciatorius <span class="req">*</span></label>
         <input type="text" id="f-iniciatorius" placeholder="Vardas Pavardė, padalinys">
@@ -1126,6 +1150,7 @@
       </div>
     </div>
 
+    <div id="enPavJuosta" class="en-pav-juosta no-print" hidden></div>
     <div id="print-neparengta" style="display:none;font-size:14px;padding:24px 0">Grafikas neparengtas spausdinti: pasirinkite įmonę, pirkimo būdą ir pradžios datą, tada spauskite „Spausdinti“.</div>
     <div id="preview-empty" class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
@@ -1324,6 +1349,8 @@
 <script src="../shared/organizacijos.js"></script>
 <script src="../shared/pirkimo-kortele.js"></script>
 <script src="../shared/busena.js"></script>
+<script src="../shared/ai-proxy.js"></script>
+<script src="../shared/di-zymejimas.js"></script>
 <script src="../shared/vpt-duomenys.js"></script>
 <script src="../shared/vpt-rinka.js"></script>
 <!-- Modulis nieko nesaugo: uždarant su įvestu grafiku naršyklė paklausia - GP_DARBAS -->
@@ -1963,6 +1990,7 @@ function getSubDisplayCode(group, subIdx){
 /* ---------- 4. UI ELEMENTAI ---------- */
 const els = {
   pavadinimas: document.getElementById('f-pavadinimas'),
+  pavadinimasEn: document.getElementById('f-pavadinimas-en'),
   iniciatorius: document.getElementById('f-iniciatorius'),
   organizatorius: document.getElementById('f-organizatorius'),
   budas: document.getElementById('f-budas'),
@@ -1983,7 +2011,8 @@ const els = {
 /* ---------- 5. EVENT LISTENERS ---------- */
 els.budas.addEventListener('change', onMethodChange);
 els.pradzia.addEventListener('change', refreshAll);
-els.pavadinimas.addEventListener('input', refreshPreview);
+els.pavadinimas.addEventListener('input', () => { enPavLtPakeistas(); refreshPreview(); });
+els.pavadinimasEn.addEventListener('input', enPavZmogus);
 els.iniciatorius.addEventListener('input', refreshPreview);
 els.organizatorius.addEventListener('input', refreshPreview);
 
@@ -2067,8 +2096,126 @@ document.querySelectorAll('#lang-toggle button').forEach(btn => {
     });
     ariaPerjungikliai();
     refreshPreview();
+    if (state.previewLang === 'en') enPavAutomatiskai(); else enPavJuosta();
   });
 });
+
+/* ---------- Angliškas pirkimo pavadinimas (2026-11-06, naudotojo pasiūlymas: grafike EN kalba pavadinimas likdavo lietuviškas) ----------
+   Laukas „Pirkimo pavadinimas anglų kalba“: ranka įrašytas - žmogaus. Tuščias, kai pasirenkamas EN grafikas, - išverčiamas su DI
+   (per G-Procure serverį į Claude API siunčiamas tik lietuviškas pavadinimas); vertimas tikrinamas prieš rodant (skaičiai, lietuviškos
+   raidės), įrašomas į lauką kaip „DI vertimas (nepatvirtinta)“, patvirtina arba pataiso žmogus. Pakeitus lietuvišką pavadinimą
+   nepatvirtintas DI vertimas EN grafike verčiamas iš naujo, žmogaus ar patvirtintas - lieka ir pasakoma. Nieko neišsaugo. */
+var EN_PAV = { saltinis: null, lt: '', patvirtinta: false, pastabos: [], laikmatis: null, vyksta: false };
+const EN_PAV_SISTEMA = 'Tu verti viešojo pirkimo pavadinimą iš lietuvių į anglų kalbą pirkimo grafikui (EPSO-G grupės energetikos įmonė). '
+  + 'Grąžink TIK vertimą viena eilute, be kabučių ir be jokio kito teksto. Skaičius, datas, matavimo vienetus, kodus ir techninius žymenis '
+  + '(pvz. 400/110 kV, DKS, TP) palik nepakeistus. Žodį „pirkimas“ versk „procurement“ (pvz. „Procurement of ...“), jei jo nėra - nepridėk.';
+function enPavValyk(t){
+  return String(t || '').split('\n').map(x => x.trim()).filter(Boolean)[0] || '';
+}
+function enPavTvarkyk(t){
+  return enPavValyk(t).replace(/^["'„“”«»]+|["'„“”«»]+$/g, '').replace(/[\u2013\u2014]/g, '-').replace(/\s+/g, ' ').trim();
+}
+/* Patikra prieš rodant: kiekvienas lietuviško pavadinimo skaičius turi likti; lietuviškos raidės vertime - pastaba */
+function enPavPatikra(lt, en){
+  const p = [], sk = x => (String(x).match(/\d+(?:[.,/]\d+)*/g) || []).map(n => n.replace(',', '.'));
+  const ens = sk(en), truksta = sk(lt).filter(n => ens.indexOf(n) < 0);
+  if (truksta.length) p.push('vertime nėra skaičių: ' + truksta.join(', '));
+  if (/[ąčęėįšųūž]/i.test(en)) p.push('vertime liko lietuviškų raidžių');
+  return p;
+}
+function enPavZyma(){
+  const z = document.getElementById('enPavZyma'), b = document.getElementById('enPavPatv'), v = els.pavadinimasEn.value.trim();
+  const di = EN_PAV.saltinis === 'di' && v;
+  b.hidden = !(di && !EN_PAV.patvirtinta);
+  if (di && !EN_PAV.patvirtinta) {
+    z.innerHTML = (window.GP_DI ? GP_DI.zyme({ tekstas: 'DI vertimas (nepatvirtinta)' }) : '<span data-di="sugeneruota">DI vertimas (nepatvirtinta)</span>')
+      + (EN_PAV.pastabos.length ? '<div class="en-pav-isp">Patikrinkite: ' + escapeHtml(EN_PAV.pastabos.join('; ')) + '.</div>' : '');
+  } else if (di) z.innerHTML = '<span class="patvirtinta">✓ DI vertimas patvirtintas</span>';
+  else z.textContent = '';
+  if (EN_PAV.saltinis === 'di') els.pavadinimasEn.setAttribute('data-di', 'sugeneruota'); else els.pavadinimasEn.removeAttribute('data-di');
+  const ltDabar = els.pavadinimas.value.trim();
+  if (v && EN_PAV.lt && ltDabar && ltDabar !== EN_PAV.lt && (EN_PAV.saltinis === 'zmogus' || EN_PAV.patvirtinta))
+    z.insertAdjacentHTML('beforeend', '<div class="en-pav-isp" id="enPavPasene">Lietuviškas pavadinimas pakeistas po vertimo - patikrinkite anglišką arba spauskite „Išversti su DI“.</div>');
+}
+/* Juosta virš grafiko EN kalba: kas parodyta ir ką daryti (tik peržiūrai, nespausdinama) */
+function enPavJuosta(){
+  const j = document.getElementById('enPavJuosta');
+  if (state.previewLang !== 'en' || EN_PAV.vyksta) { if (!EN_PAV.vyksta) { j.hidden = true; j.innerHTML = ''; } return; }
+  const v = els.pavadinimasEn.value.trim(), lt = els.pavadinimas.value.trim();
+  let h = '';
+  if (!lt) { j.hidden = true; j.innerHTML = ''; return; }
+  if (!v) h = '<span>Grafike EN kalba - lietuviškas pirkimo pavadinimas: angliškas neįrašytas.</span> <button type="button" class="btn btn-ghost" data-en-pav="versti">Išversti su DI</button> <button type="button" class="btn btn-ghost" data-en-pav="taisyti">Įrašyti ranka</button>';
+  else if (EN_PAV.saltinis === 'di' && !EN_PAV.patvirtinta) h = (window.GP_DI ? GP_DI.zyme({ tekstas: 'DI vertimas' }) : '') + ' <span>Pirkimo pavadinimas išverstas su DI: „' + escapeHtml(v) + '“' + (EN_PAV.pastabos.length ? ' (patikrinkite: ' + escapeHtml(EN_PAV.pastabos.join('; ')) + ')' : '') + '.</span> <button type="button" class="btn btn-ghost" data-en-pav="patvirtinti">Patvirtinti</button> <button type="button" class="btn btn-ghost" data-en-pav="taisyti">Pataisyti</button>';
+  else { j.hidden = true; j.innerHTML = ''; return; }
+  j.innerHTML = h; j.hidden = false;
+}
+document.getElementById('enPavJuosta').addEventListener('click', e => {
+  const b = e.target.closest('[data-en-pav]'); if (!b) return;
+  const k = b.getAttribute('data-en-pav');
+  if (k === 'versti') enPavVersk(true);
+  else if (k === 'patvirtinti') enPavPatvirtink();
+  else if (k === 'taisyti') { els.pavadinimasEn.focus(); els.pavadinimasEn.select(); }
+});
+document.getElementById('enPavDi').addEventListener('click', () => enPavVersk(false));
+document.getElementById('enPavPatv').addEventListener('click', enPavPatvirtink);
+function enPavPatvirtink(){
+  if (EN_PAV.saltinis !== 'di' || !els.pavadinimasEn.value.trim()) return;
+  EN_PAV.patvirtinta = true;
+  enPavZyma(); enPavJuosta(); refreshPreview();
+  if (document.activeElement === document.body || !document.activeElement || document.activeElement.closest('#enPavJuosta')) els.pavadinimasEn.focus();
+}
+/* Žmogus taiso lauką - vertimas tampa jo (DI žyma nuimama); išvalius - vėl galima versti */
+function enPavZmogus(){
+  const v = els.pavadinimasEn.value.trim();
+  EN_PAV.saltinis = v ? 'zmogus' : null; EN_PAV.patvirtinta = false; EN_PAV.pastabos = [];
+  EN_PAV.lt = v ? els.pavadinimas.value.trim() : '';
+  enPavZyma(); enPavJuosta(); refreshPreview();
+}
+function enPavLtPakeistas(){
+  if (EN_PAV.saltinis === 'di' && !EN_PAV.patvirtinta && state.previewLang === 'en') {
+    clearTimeout(EN_PAV.laikmatis);
+    EN_PAV.laikmatis = setTimeout(() => enPavVersk(true), 900);
+  }
+  enPavZyma(); enPavJuosta();
+}
+/* Pasirinkus EN: tuščias angliškas laukas (ar nepatvirtintas senesnio pavadinimo DI vertimas) - verčiama */
+function enPavAutomatiskai(){
+  const lt = els.pavadinimas.value.trim(), v = els.pavadinimasEn.value.trim();
+  if (lt && (!v || (EN_PAV.saltinis === 'di' && !EN_PAV.patvirtinta && EN_PAV.lt !== lt))) enPavVersk(true);
+  else enPavJuosta();
+}
+async function enPavVersk(auto){
+  const lt = els.pavadinimas.value.trim(), vieta = auto && state.previewLang === 'en' ? '#enPavJuosta' : '#enPavBusena';
+  clearTimeout(EN_PAV.laikmatis);
+  if (!lt) { GP_BUSENA.rodyk('#enPavBusena', { tipas: 'klaida', tekstas: 'Pirma įrašykite pirkimo pavadinimą lietuviškai - iš jo bus išverstas angliškas.' }); return; }
+  if (!window.GP_AI_PROXY) { GP_BUSENA.rodyk('#enPavBusena', { tipas: 'klaida', tekstas: 'DI neprijungtas - įrašykite pavadinimą angliškai ranka.' }); return; }
+  if (vieta === '#enPavJuosta') document.getElementById('enPavJuosta').hidden = false;
+  GP_BUSENA.slepk(vieta === '#enPavJuosta' ? '#enPavBusena' : '#enPavJuosta');
+  EN_PAV.vyksta = true;
+  const rez = await GP_BUSENA.vykdyk(vieta, {
+    tipas: 'ai', tekstas: 'Verčiamas pirkimo pavadinimas (DI)', atsaukiama: true,
+    klaidosPriesdelis: 'Pavadinimo išversti nepavyko', kartoti: () => enPavVersk(auto),
+    veiksmas: async signal => {
+      const x = await GP_AI_PROXY.call({ module: 'pp-graphs', maxTokens: 200, system: EN_PAV_SISTEMA, userMessage: lt, signal });
+      if (!x.ok) throw new Error(x.error || 'DI klaida');
+      if (x.raw && x.raw.stop_reason === 'max_tokens') throw new Error('DI atsakymas nutrūko');
+      const en = enPavTvarkyk(x.text);
+      if (!en) throw new Error('DI grąžino tuščią atsakymą');
+      if (en.length > 300) throw new Error('DI atsakymas per ilgas pavadinimui - įrašykite angliškai ranka');
+      return en;
+    }
+  });
+  EN_PAV.vyksta = false;
+  if (rez.ok) {
+    // žmogus tuo metu įrašė savo vertimą ar pakeitė lietuvišką pavadinimą - rezultatas neįrašomas
+    if (EN_PAV.saltinis === 'zmogus' && els.pavadinimasEn.value.trim()) { GP_BUSENA.slepk(vieta); enPavZyma(); enPavJuosta(); return; }
+    if (els.pavadinimas.value.trim() !== lt) { GP_BUSENA.slepk(vieta); if (state.previewLang === 'en') enPavVersk(true); return; }
+    els.pavadinimasEn.value = rez.reiksme;
+    EN_PAV.saltinis = 'di'; EN_PAV.lt = lt; EN_PAV.patvirtinta = false; EN_PAV.pastabos = enPavPatikra(lt, rez.reiksme);
+    GP_BUSENA.slepk(vieta);
+    enPavZyma(); enPavJuosta(); refreshPreview();
+  } else if (rez.atsaukta) { GP_BUSENA.slepk(vieta); enPavJuosta(); }
+}
 
 /* ---------- 6. METHOD CHANGE ---------- */
 function onMethodChange(arg){
@@ -2938,7 +3085,9 @@ function refreshPreview(){
 
   const sched = computeSchedule();
   const m = METHODS[state.methodCode];
-  const pavadinimas = els.pavadinimas.value || '(Pirkimo pavadinimas)';
+  // EN grafike - angliškas pavadinimas (laukas), be jo - lietuviškas (vertimas vyksta arba nepavyko - pasakoma juostoje)
+  const pavadinimas = (state.previewLang === 'en' && els.pavadinimasEn.value.trim()) || els.pavadinimas.value || (state.previewLang === 'en' ? '(Procurement title)' : '(Pirkimo pavadinimas)');
+  const pavDi = state.previewLang === 'en' && els.pavadinimasEn.value.trim() && EN_PAV && EN_PAV.saltinis === 'di' ? ' data-di="sugeneruota"' : '';
   const iniciatorius = els.iniciatorius.value || '-';
   const organizatorius = els.organizatorius.value || '-';
   const start = getStartDate();
@@ -2957,7 +3106,7 @@ function refreshPreview(){
   let aHtml = '';
   aHtml += renderDocHeader(t('detailedTab'), today);
   aHtml += `<div class="schedule-title">${t('docTitle')}</div>`;
-  aHtml += `<div class="schedule-subtitle">${escapeHtml(pavadinimas)}</div>`;
+  aHtml += `<div class="schedule-subtitle"${pavDi}>${escapeHtml(pavadinimas)}</div>`;
   aHtml += `<div class="schedule-info">
     <div class="schedule-info-row"><div class="schedule-info-label">${t('procurementType')}</div><div class="schedule-info-value">${escapeHtml(trPhrase(m.name))} (${m.code})</div></div>
     <div class="schedule-info-row"><div class="schedule-info-label">${t('initiator')}</div><div class="schedule-info-value">${escapeHtml(iniciatorius)}</div></div>
@@ -3065,7 +3214,7 @@ function refreshPreview(){
   let bHtml = '';
   bHtml += renderDocHeader(t('suppliersTab'), today);
   bHtml += `<div class="schedule-title">${t('docTitle')}</div>`;
-  bHtml += `<div class="schedule-subtitle">${escapeHtml(pavadinimas)}</div>`;
+  bHtml += `<div class="schedule-subtitle"${pavDi}>${escapeHtml(pavadinimas)}</div>`;
 
   bHtml += `<table class="schedule-table"><thead><tr>
     <th class="num" style="width:60px">${t('seqNoB')}</th>
@@ -3148,6 +3297,12 @@ function printSchedule(){
   const tusti = [['pavadinimas','pirkimo pavadinimas'],['iniciatorius','pirkimo iniciatorius'],['organizatorius','pirkimo organizatorius']]
     .filter(([k]) => !els[k].value.trim()).map(([,v]) => v);
   if(tusti.length && !confirm(`Neužpildyta: ${tusti.join(', ')}. Grafike šios vietos liks tuščios. Spausdinti vis tiek?`)) return;
+  // Grafikas EN kalba: angliškas pavadinimas neįrašytas arba DI vertimas nepatvirtintas - paklausiama
+  if(state.previewLang === 'en' && els.pavadinimas.value.trim()){
+    const en = els.pavadinimasEn.value.trim();
+    if(!en && !confirm('Angliškas pirkimo pavadinimas neįrašytas - grafike EN kalba liks lietuviškas pavadinimas. Spausdinti vis tiek?')) return;
+    if(en && EN_PAV.saltinis === 'di' && !EN_PAV.patvirtinta && !confirm(`Angliškas pirkimo pavadinimas - DI vertimas, dar nepatvirtintas: „${en}“. Spausdinti vis tiek?`)) return;
+  }
   // Tik PRATĘSIMAS reikalauja pastabos (trumpinimas - laisvas)
   let missing = [];
   let legalViolations = [];
@@ -3205,6 +3360,10 @@ window.addEventListener('afterprint', () => document.body.classList.remove('gp-n
 function resetForm(){
   if(!confirm('Išvalyti visus laukus?')) return;
   els.pavadinimas.value='';
+  els.pavadinimasEn.value='';
+  Object.assign(EN_PAV, { saltinis: null, lt: '', patvirtinta: false, pastabos: [] });
+  if (window.GP_BUSENA) { GP_BUSENA.slepk('#enPavBusena'); }
+  enPavZyma(); enPavJuosta();
   els.iniciatorius.value='';
   els.organizatorius.value='';
   els.budas.value='';
@@ -3631,11 +3790,11 @@ GP_DARBAS.stebek(() => [state.methodCode, state.groups, state.notes, state.compa
     steps: [
       "<b>Pirkimo informacija:</b> įmonė, pavadinimas, iniciatorius, organizatorius, pirkimo būdas ir pradžios data (žodiniams ir CPO pirkimams grafikai nerengiami). <b>Standartinės trukmės</b> - pagal metus: kol galioja ir ateinančių metų trukmės, galite pasirinkti, kurias taikyti (grafike ir skaičiuoklėje); pasibaigusių metų trukmės nebesiūlomos, galiojančios taikomos pačios. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - šie laukai bus užpildyti iš jos (modulis kortelės nekeičia).",
       "<b>Pirkimo etapai:</b> peržiūrėkite ir pakoreguokite etapų trukmes. Atvėrę papildomą skiltį „Palyginti su panašiais CVP IS pirkimais“ (neprivaloma), įrašę <b>BVPŽ kodą</b> ir paspaudę „Rodyti rinkos duomenis (CVP IS)“, matysite, kiek panašiuose CVP IS pirkimuose iš tikrųjų trunka pasiūlymų teikimas jūsų būdu - greta jūsų grafiko „Pasiūlymų gavimas“ kalendorinėmis dienomis.",
-      "<b>Grafikų peržiūra:</b> detalus grafikas komandai ir grafikas tiekėjams - spausdinkite ar išsaugokite PDF.",
+      "<b>Grafikų peržiūra:</b> detalus grafikas komandai ir grafikas tiekėjams - spausdinkite ar išsaugokite PDF. Grafike <b>EN kalba</b> - pirkimo pavadinimas iš lauko „Pirkimo pavadinimas anglų kalba“; kai jis tuščias, pasirinkus EN pavadinimas išverčiamas su DI - vertimą patikrinkite ir patvirtinkite arba pataisykite.",
       "<b>Trukmių skaičiuoklė:</b> visa pirkimo trukmė, atgalinis skaičiavimas nuo sutarties datos arba tik vykdymo trukmė."
     ],
     noteTitle: "Duomenys ir datos",
-    note: "Datos skaičiuojamos <b>darbo dienomis</b> su LR šventėmis (kiekvieniems metams automatiškai). Modulis nieko neišsaugo - rezultatas yra atspausdintas ar išsaugotas grafikas; uždarant su neišsaugotais pakeitimais naršyklė paklaus. Paspaudus „Rodyti rinkos duomenis (CVP IS)“ į G-Procure serverį siunčiama tik BVPŽ kodo pradžia ir laikotarpio pradžios data - atsakoma iš viešų VPT CVP IS duomenų."
+    note: "Datos skaičiuojamos <b>darbo dienomis</b> su LR šventėmis (kiekvieniems metams automatiškai). Modulis nieko neišsaugo - rezultatas yra atspausdintas ar išsaugotas grafikas; uždarant su neišsaugotais pakeitimais naršyklė paklaus. Paspaudus „Rodyti rinkos duomenis (CVP IS)“ į G-Procure serverį siunčiama tik BVPŽ kodo pradžia ir laikotarpio pradžios data - atsakoma iš viešų VPT CVP IS duomenų. Grafiką EN kalba pasirinkus su tuščiu angliško pavadinimo lauku (arba paspaudus „Išversti su DI“), per G-Procure serverį į Claude API (Anthropic) siunčiamas tik lietuviškas pirkimo pavadinimas."
   } };
   GProcureInfoPanel.mount({
     target: "#infoPanelMount",
