@@ -207,6 +207,8 @@
           bvpz: "BVPŽ kodas skelbime - {k}, be kontrolinio skaitmens; žodyno įkelti nepavyko - įrašykite kodą patys.",
           vienaDalis: " (viena dalis)", neskaidomas: "Viena dalis skelbime - pirkimas neskaidomas.",
           dalyvavimo: "Tai dalyvavimo prašymų terminas.", issiuntimo: "Skelbimo išsiuntimo data.",
+          issiuntimoS: "Skelbimo išsiuntimo data. Supaprastinto pirkimo terminai skaičiuojami nuo paskelbimo CVP IS - jei ji kita, pataisykite.",
+          mvPagalVerte: "Skelbimo būdas „{b}“, bet numatoma vertė {v} EUR mažesnė už mažos vertės pirkimo ribą ({m} EUR) - siūlomas mažos vertės skelbiamos apklausos būdas. Patikrinkite pirkimo dokumentuose.",
           pakeistasTerminas: "Terminas pakeistas skelbimo pakeitimu (10 skyrius).",
           pakeitimas: "Tai skelbimo pakeitimas, išsiųstas {d}: paskelbimo datos nesiūlome - pirminio skelbimo datos šiame PDF nėra." },
     en: { neregistre: "Buyer “{p}” is not in the organisation register - no contracting body is suggested.",
@@ -220,6 +222,8 @@
           bvpz: "CPV code in the notice - {k}, without the check digit; the dictionary could not be loaded - enter the code yourself.",
           vienaDalis: " (one lot)", neskaidomas: "One lot in the notice - the procurement is not divided into lots.",
           dalyvavimo: "This is the deadline for requests to participate.", issiuntimo: "Date the notice was dispatched.",
+          issiuntimoS: "Date the notice was dispatched. Simplified procurement time limits run from publication in CVP IS - correct it if that date differs.",
+          mvPagalVerte: "The notice procedure is “{b}”, but the estimated value of EUR {v} is below the low-value threshold (EUR {m}) - a low-value published survey is suggested. Check the procurement documents.",
           pakeistasTerminas: "The deadline was changed by a change notice (section 10).",
           pakeitimas: "This is a change notice dispatched on {d}: no publication date is suggested - the original notice date is not in this PDF." }
   };
@@ -356,13 +360,35 @@
     var isi = laukas(eil, "Skelbimo i[šs]siuntimo data");
     if (isi && data(isi.reiksme)) {
       if (pk) pastabos.push(P.pakeitimas.replace("{d}", data(isi.reiksme)));
-      else prideti("paskelbimas", data(isi.reiksme), isi.citata, P.issiuntimo);
+      else prideti("paskelbimas", data(isi.reiksme), isi.citata, skelbimoRusis(failoVardas) === "supaprastintas" ? P.issiuntimoS : P.issiuntimo);
       prideti("busena", "paskelbtas", isi.citata);
     }
     var nr = /resourceId=(\d{5,9})/.exec(t) || /^(\d{5,9})_/.exec(String(failoVardas || "").split(" › ").pop());
     if (nr) prideti("cvpisNr", nr[1], nr[0]);
 
+    mazosVertesBudas(laukai, P, kalba);
     return { laukai: laukai, pastabos: pastabos, pirkejas: p ? p.value : null };
+  }
+
+  /* Nacionalinio skelbimo būdas („Atviras“, „Skelbiamos derybos“) supaprastintam pirkimui, bet numatoma vertė mažesnė už mažos vertės
+     ribą - siūlomas mažos vertės skelbiamos apklausos būdas (be derybų / su derybomis) su priežastimi (2026-11-06; iki tol mažos
+     vertės pirkimui siūlytos „Skelbiamos derybos (supaprastintas pirkimas)“, o „Mano pirkimai“ siūlė protokolus, ne pažymą).
+     Režimas - iš skelbimo arba vykdytojo įprastas (GP_ORG); ribos - GP_TAISYKLES (be jo - nekeičiama). */
+  function mazosVertesBudas(laukai, P, kalba) {
+    var M = global.GP_METHODS, T = global.GP_TAISYKLES;
+    if (!M || !T) return;
+    var rask = function (f) { for (var i = 0; i < laukai.length; i++) if (laukai[i].laukas === f) return laukai[i]; return null; };
+    var b = rask("budas"), v = rask("verte"), o = rask("objektas"), r = rask("rezimas"), vk = rask("vykdytojas");
+    var m = b && M.byId(b.reiksme);
+    if (!m || m.grupe !== "supaprastinti" || !v || !o) return;
+    var org = vk && global.GP_ORG ? global.GP_ORG.pagalId(vk.reiksme) : null;
+    var rez = r ? r.reiksme : org && org.rezimasTiketinas;
+    var kat = T.kategorija({ verte: v.reiksme, objektas: o.reiksme, rezimas: rez, vykdytojas: vk ? vk.reiksme : "" });
+    if (kat.kodas !== "mazos_vertes") return;
+    var en = kalba === "en", f = function (n) { return global.GP_MONEY ? global.GP_MONEY.formatEUR(n) : String(n); };
+    var buvo = M.label(m.id, { kalba: en ? "en" : "lt" });
+    b.reiksme = m.derybos ? "MV-SAD" : "MV-SAB";
+    b.pastaba = P.mvPagalVerte.replace("{b}", function () { return buvo; }).replace("{v}", f(v.reiksme)).replace("{m}", f(kat.ribos.maza));
   }
 
   // ---------------------------------------------------------------------------
