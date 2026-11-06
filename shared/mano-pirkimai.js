@@ -27,9 +27,10 @@
   var T = {
     lt: {
       kortelesPav: "Pirkimų kortelės", pradzia: "Pirkimo pradžia", paskelbimas: "Paskelbimas", pasiulymuTerminas: "Pasiūlymų terminas",
-      siandien: "šiandien", po: "po", dd: "d. d.", praejo: "praėjo", beTerminu: "Terminų kortelėje nėra",
+      siandien: "šiandien", rytoj: "rytoj", po: "po", dd: "d. d.", kd: "d.", praejo: "praėjo", beTerminu: "Terminų kortelėje nėra",
+      paskelbtasPraejo: "pasiūlymų terminas praėjo - jei pasiūlymai vertinami, pakeiskite kortelės būseną",
       trukstaPrad: "Papildykite kortelę: trūksta ", zingsnis: "Kitas žingsnis: ",
-      planuojamas: "pirkimo grafikas", rengiamas: "pirkimo dokumentai (kvalifikacija, sąlygos, TS)",
+      planuojamas: "pirkimo grafikas", rengiamas: "pirkimo dokumentai",
       paskelbtas: "laukiama pasiūlymų", vertinamas: "pasiūlymų vertinimas ir komisijos sprendimai",
       grafikas: "Grafikas", kvalifikacija: "Kvalifikacija", kortele: "Kortelė",
       ts: "TS", salygos: "Sąlygos", protokolai: "Protokolai", pazyma: "Pažyma", derybos: "Derybos", vertinimas: "Vertinimas", parengtis: "Parengtis skelbti",
@@ -44,6 +45,7 @@
       cvpNeraS: ", VPT sąraše nėra: {m}", cvpKlaidaS: ", patikrinti nepavyko: {k}",
       cvpRiba: " Vienu kartu tikrinama {r} kortelių su artimiausiais terminais.",
       cvpTerminas: "CVP IS pasiūlymų terminas: {v}", cvpPaskelbimas: "CVP IS paskelbimo data: {v}", cvpBusena: "CVP IS būsena: {v}",
+      cvpIssiuntimas: " - tarptautiniam pirkimui kortelėje įrašykite skelbimo išsiuntimo iš VPT datą (iki 5 d. iki paskelbimo)",
       cvpKortelejeYra: " (kortelėje - {k})", cvpKortelejeNera: " (kortelėje neįrašyta)",
       cvpSutampa: "Sutampa su CVP IS duomenimis: {l}.", cvpLTerminas: "pasiūlymų terminas", cvpLPaskelbimas: "paskelbimo data", cvpLBusena: "būsena",
       cvpNeraDuomenu: "CVP IS duomenyse termino, paskelbimo datos ir būsenos nėra.",
@@ -53,9 +55,10 @@
     },
     en: {
       kortelesPav: "Procurement cards", pradzia: "Procurement start", paskelbimas: "Publication", pasiulymuTerminas: "Tender deadline",
-      siandien: "today", po: "in", dd: "working days", praejo: "passed", beTerminu: "No dates on the card",
+      siandien: "today", rytoj: "tomorrow", po: "in", dd: "working days", kd: "days", praejo: "passed", beTerminu: "No dates on the card",
+      paskelbtasPraejo: "the tender deadline has passed - if the tenders are being evaluated, change the card status",
       trukstaPrad: "Complete the card: missing ", zingsnis: "Next step: ",
-      planuojamas: "procurement schedule", rengiamas: "procurement documents (qualification, conditions, specification)",
+      planuojamas: "procurement schedule", rengiamas: "procurement documents",
       paskelbtas: "waiting for tenders", vertinamas: "tender evaluation and committee decisions",
       grafikas: "Schedule", kvalifikacija: "Qualification", kortele: "Card",
       ts: "Specification", salygos: "Conditions", protokolai: "Protocols", pazyma: "Report", derybos: "Negotiation", vertinimas: "Evaluation", parengtis: "Readiness check",
@@ -70,6 +73,7 @@
       cvpNeraS: ", not in the VPT list: {m}", cvpKlaidaS: ", could not be checked: {k}",
       cvpRiba: " Up to {r} cards with the nearest dates are checked at a time.",
       cvpTerminas: "CVP IS tender deadline: {v}", cvpPaskelbimas: "CVP IS publication date: {v}", cvpBusena: "CVP IS status: {v}",
+      cvpIssiuntimas: " - for international procurement enter the date the notice was dispatched from VPT (up to 5 days before publication)",
       cvpKortelejeYra: " (on the card: {k})", cvpKortelejeNera: " (not on the card)",
       cvpSutampa: "Matches the CVP IS data: {l}.", cvpLTerminas: "tender deadline", cvpLPaskelbimas: "publication date", cvpLBusena: "status",
       cvpNeraDuomenu: "The CVP IS data have no deadline, publication date or status.",
@@ -91,7 +95,7 @@
       var C = global.GP_THRESHOLDS && global.GP_THRESHOLDS.CBA;               // riba - iš shared/thresholds.js
       return !!(C && C.rekomenduojama && k.verte >= C.rekomenduojama);
     } },
-    ts: { kelias: "PP-ts/TS_Asistentas.html", litgrid: true },
+    ts: { kelias: "PP-ts/TS_Asistentas.html" },            // nuo 2026-10-27 PP-ts - visos grupės įmonės ir VPĮ (2026-11-06)
     kvalifikacija: { kelias: "PP-qual/PP-QUAL.html" },
     salygos: { kelias: "PP-salygos/PP-SALYGOS.html", litgrid: true, vykdytojai: ["litgrid", "amber-grid"], salyga: function (k) {
       return !k.budas || !global.GP_METHODS || !!global.GP_METHODS.toSalygos(k.budas);   // būdas, kuriam šablonų nėra - nesiūloma
@@ -130,8 +134,8 @@
   }
   var BAIGTOS = { sutartis: 1, nutrauktas: 1 };
   /* „Trūksta ...“ - kilmininkas (LT), be jo „trūksta vertė“. */
-  var TRUKSTA = { lt: { verte: "vertės", budas: "būdo", vykdytojas: "vykdytojo", rezimas: "režimo" },
-                  en: { verte: "value", budas: "procedure", vykdytojas: "contracting body", rezimas: "legal regime" } };
+  var TRUKSTA = { lt: { verte: "vertės", budas: "būdo", vykdytojas: "vykdytojo", rezimas: "režimo", busena: "būsenos" },
+                  en: { verte: "value", budas: "procedure", vykdytojas: "contracting body", rezimas: "legal regime", busena: "status" } };
   var TERMINAI = ["pasiulymuTerminas", "paskelbimas", "pradzia"];
   /* CVP IS patikra: vienu paspaudimu - ne daugiau kaip MAX_CVP numerių (nginx riba - 30 užklausų iš karto), po 3 lygiagrečiai. */
   var MAX_CVP = 25, LYGIAGRECIAI = 3;
@@ -166,18 +170,22 @@
     for (var d = new Date(a); d < b; ) { d.setDate(d.getDate() + 1); if (!W || W.isWorkday(d)) n++; }
     return n;
   }
-  /* Artimiausias būsimas terminas; jei visi praėję - vėliausias; jei nėra - null. */
+  /* Artimiausias būsimas terminas; jei visi praėję - vėliausias; jei nėra - null. dd - darbo dienos, kd - kalendorinės (2026-11-06:
+     „šiandien“ - tik kai kd = 0; terminas su laiku, kuris šiandien jau praėjo, - „praėjo“; iki tol sekmadienio terminas penktadienį
+     ir terminas 09.00 22 valandą rodyti „šiandien“). */
   function terminas(k, dabar) {
     var siandien = new Date(dabar.getFullYear(), dabar.getMonth(), dabar.getDate()), buvusiu = [], busimu = [];
     TERMINAI.forEach(function (f) {
       if (!k[f]) return;
       var d = dienos(k[f]);
       if (isNaN(d.getTime())) return;
-      (d < siandien ? buvusiu : busimu).push({ laukas: f, data: d, tekstas: String(k[f]).replace("T", " ") });
+      var lm = /T(\d{2}):(\d{2})/.exec(String(k[f]));
+      var praejes = d < siandien || (lm && d.getTime() === siandien.getTime() && (+lm[1] * 60 + +lm[2]) <= dabar.getHours() * 60 + dabar.getMinutes());
+      (praejes ? buvusiu : busimu).push({ laukas: f, data: d, tekstas: String(k[f]).replace("T", " ") });
     });
     busimu.sort(function (a, b) { return a.data - b.data; });
     buvusiu.sort(function (a, b) { return b.data - a.data; });
-    if (busimu.length) { var x = busimu[0]; x.dd = darboDienos(siandien, x.data); return x; }
+    if (busimu.length) { var x = busimu[0]; x.dd = darboDienos(siandien, x.data); x.kd = Math.round((x.data - siandien) / 864e5); return x; }
     if (buvusiu.length) { var y = buvusiu[0]; y.praejo = true; return y; }
     return null;
   }
@@ -332,16 +340,23 @@
       if (trm) {
         b.appendChild(el("span", "gpmp-et", t[trm.laukas]));
         b.appendChild(el("span", "gpmp-data", trm.tekstas));
-        var liko = trm.praejo ? t.praejo : trm.dd === 0 ? t.siandien : t.po + " " + trm.dd + " " + t.dd;
+        var liko = trm.praejo ? t.praejo : trm.kd === 0 ? t.siandien : trm.kd === 1 ? t.rytoj
+          : trm.dd === 0 ? t.po + " " + trm.kd + " " + t.kd : t.po + " " + trm.dd + " " + t.dd;
         b.appendChild(el("span", "gpmp-liko" + (!trm.praejo && trm.dd <= 5 ? " gpmp-liko--greit" : ""), liko));
       } else b.appendChild(el("span", "gpmp-mazas", t.beTerminu));
       r.appendChild(b);
       // 3. Būsena ir kitas žingsnis (tik iš kortelės duomenų)
       var c = el("div");
       c.appendChild(el("span", "gpmp-busena", K.busenosPav(k.busena, l) || k.busena));
-      var truksta = ["verte", "budas", "vykdytojas", "rezimas"].filter(function (f) { return k[f] === null || k[f] === undefined || k[f] === ""; });
+      var truksta = ["verte", "budas", "vykdytojas", "rezimas", "busena"].filter(function (f) { return k[f] === null || k[f] === undefined || k[f] === ""; });
+      /* Kitas žingsnis sako tik tai, ką siūlo mygtukai (2026-11-06: iki tol „kvalifikacija, sąlygos, TS“ ir tada, kai jų nebuvo);
+         paskelbtam pirkimui su praėjusiu terminu - priminimas pakeisti būseną (kortelė nežino, kas padaryta). */
+      var dok = k.busena === "rengiamas" ? irankiai(k).filter(function (r) { return r === "ts" || r === "kvalifikacija" || r === "salygos"; }) : [];
+      var praejo = k.busena === "paskelbtas" && trm && trm.laukas === "pasiulymuTerminas" && trm.praejo;
       var zingsnis = truksta.length ? t.trukstaPrad + truksta.map(function (f) { return TRUKSTA[l][f]; }).join(", ") + "."
-        : (t[k.busena] ? t.zingsnis + (k.busena === "vertinamas" && mazosVertes(k) ? t.vertinamasMV : t[k.busena]) + "." : "");
+        : praejo ? t.zingsnis + t.paskelbtasPraejo + "."
+        : (t[k.busena] ? t.zingsnis + (k.busena === "vertinamas" && mazosVertes(k) ? t.vertinamasMV : t[k.busena])
+           + (dok.length ? " (" + dok.map(function (r) { return t[r].toLowerCase() === "ts" ? "TS" : t[r].toLowerCase(); }).join(", ") + ")" : "") + "." : "");
       if (zingsnis) c.appendChild(el("div", "gpmp-zingsnis", zingsnis));
       r.appendChild(c);
       // 4. Įrankiai su pasirinktu pirkimu - pagal būseną; pirmas pagrindinis (jei kortelėje netrūksta duomenų)
@@ -385,7 +400,9 @@
         var ul = el("ul");
         s.skirtumai.forEach(function (x) {
           var b = x.laukas === "busena";
-          var v = b ? (K.busenosPav(x.vpt, l) || x.vpt) + " (VPT: " + x.kodas + ")" : rodomas(x.vpt);
+          var vk = b && !x.vpt && V.kodas ? V.kodas(x.kodas, V.BUSENOS, l) : null;
+          var v = b ? (K.busenosPav(x.vpt, l) || (vk && vk.tekstas) || x.vpt) + " (VPT: " + x.kodas + ")"
+            : rodomas(x.vpt) + (x.laukas === "paskelbimas" && x.tarptautinis ? t.cvpIssiuntimas : "");
           var kv = b ? (K.busenosPav(x.kortele, l) || x.kortele) : rodomas(x.kortele);
           ul.appendChild(el("li", null, fmt(t[CVP_ET[x.laukas]], { v: v }) + (x.kortele ? fmt(t.cvpKortelejeYra, { k: kv }) : t.cvpKortelejeNera)));
         });
