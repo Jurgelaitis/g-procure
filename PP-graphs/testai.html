@@ -940,19 +940,21 @@ async function enRinkinys(atsakymas){
   r.en = () => r.D.getElementById("f-pavadinimas-en").value;
   r.sub = k => r.D.querySelector("#preview-" + k + " .schedule-subtitle");
   r.zyma = () => r.D.getElementById("enPavZyma").textContent.trim();
-  r.juosta = () => r.D.getElementById("enPavJuosta");
+  r.skiltis = () => r.D.getElementById("enPavSkiltis");
   return r;
 }
 async function testaiEnPavadinimas1106(){
   grupe("Angliškas pirkimo pavadinimas grafike EN kalba (2026-11-06)");
-  await testas("Laukas „Pirkimo pavadinimas anglų kalba“: susietas pavadinimas ir paaiškinimas, kas siunčiama; pavyzdys „pvz., ...“; neprivalomas", async () => {
+  await testas("Laukas „Pirkimo pavadinimas anglų kalba“ - ne pirminėje formoje (naudotojo patikslinimas: forma kompaktiška), o virš grafiko, tik pasirinkus EN; susietas pavadinimas ir paaiškinimas, kas siunčiama; pavyzdys „pvz., ...“", async () => {
     const r = await enRinkinys({ ok: true, text: "x" }), el = r.D.getElementById("f-pavadinimas-en");
+    tiesa(!r.D.getElementById("section-info").contains(el) && r.D.getElementById("section-preview").contains(r.skiltis()), "laukas - grafiko peržiūroje, ne formoje");
+    lygu([r.skiltis().hidden, r.skiltis().classList.contains("no-print")], [true, true], "LT grafike laukas nerodomas, spausdinant - niekada");
     tiesa(r.D.querySelector('label[for="f-pavadinimas-en"]') && /anglų kalba/.test(r.D.querySelector('label[for="f-pavadinimas-en"]').textContent), "pavadinimas");
     tiesa(/^pvz\., /.test(el.placeholder) && el.getAttribute("autocomplete") === "off", "pavyzdys");
-    tiesa(/siunčiamas tik pirkimo pavadinimas/.test(r.D.getElementById("enPavHint").textContent) && (el.getAttribute("aria-describedby") || "").indexOf("enPavHint") >= 0, "paaiškinimas");
+    tiesa(/siunčiamas tik lietuviškas pirkimo pavadinimas/.test(r.D.getElementById("enPavHint").textContent) && (el.getAttribute("aria-describedby") || "").indexOf("enPavHint") >= 0, "paaiškinimas");
     lygu(r.uzkl.length, 0, "atvėrus nieko nesiunčiama");
   });
-  await testas("Pasirinkus EN su tuščiu lauku - pavadinimas išverčiamas su DI (tik pavadinimas, modulis pp-graphs); vertimas lauke, abiejuose grafikuose su data-di, žyma „DI vertimas (nepatvirtinta)“, juosta su „Patvirtinti“; LT grafike - lietuviškas", async () => {
+  await testas("Pasirinkus EN su tuščiu lauku - pavadinimas išverčiamas su DI (tik pavadinimas, modulis pp-graphs); vertimas lauke, abiejuose grafikuose su data-di, žyma „DI vertimas (nepatvirtinta)“ ir „Patvirtinti vertimą“; LT grafike - lietuviškas, lauko nėra", async () => {
     const r = await enRinkinys({ ok: true, text: "„Procurement of a 400/110 kV transformer for Vilnius substation“\nPastaba: vertimas" });
     await r.kalba("en");
     lygu(r.uzkl.map(o => [o.module, o.userMessage, o.maxTokens]), [["pp-graphs", "400/110 kV transformatoriaus pirkimas Vilniaus pastotei", 200]], "užklausa");
@@ -960,10 +962,10 @@ async function testaiEnPavadinimas1106(){
     lygu(r.en(), "Procurement of a 400/110 kV transformer for Vilnius substation", "lauke - be kabučių ir antros eilutės");
     for (const k of ["A", "B"]) lygu([r.sub(k).textContent, r.sub(k).getAttribute("data-di")], [r.en(), "sugeneruota"], "grafikas " + k);
     lygu(r.zyma(), "DI vertimas (nepatvirtinta)");
-    tiesa(!r.juosta().hidden && r.juosta().querySelector('[data-en-pav="patvirtinti"]') && r.juosta().querySelector(".gp-di-zyme"), "juosta");
+    tiesa(!r.skiltis().hidden && r.skiltis().querySelector(".gp-di-zyme"), "skiltis virš grafiko su DI žyma");
     tiesa(r.D.getElementById("f-pavadinimas-en").getAttribute("data-di") === "sugeneruota" && !r.D.getElementById("enPavPatv").hidden, "laukas ir mygtukas „Patvirtinti vertimą“");
     await r.kalba("lt");
-    lygu([r.sub("A").textContent, r.sub("A").hasAttribute("data-di"), r.juosta().hidden], ["400/110 kV transformatoriaus pirkimas Vilniaus pastotei", false, true], "LT grafikas");
+    lygu([r.sub("A").textContent, r.sub("A").hasAttribute("data-di"), r.skiltis().hidden], ["400/110 kV transformatoriaus pirkimas Vilniaus pastotei", false, true], "LT grafikas");
     await r.kalba("en");
     lygu(r.uzkl.length, 1, "grįžus į EN - neverčiama iš naujo");
   });
@@ -972,23 +974,23 @@ async function testaiEnPavadinimas1106(){
     await r.kalba("en");
     lygu(r.en(), "Procurement of a transformer - Vilnius substation pastotė");
     tiesa(/Patikrinkite: vertime nėra skaičių: 400\/110; vertime liko lietuviškų raidžių/.test(r.zyma()), r.zyma());
-    tiesa(/patikrinkite: vertime nėra skaičių/.test(r.juosta().textContent), "juostoje");
+    tiesa(/Patikrinkite: vertime nėra skaičių/.test(r.skiltis().textContent), "skiltyje");
     for (const [ats, re] of [[{ ok: true, text: "  \n " }, /tuščią atsakymą/], [{ ok: true, text: "x".repeat(301) }, /per ilgas/], [{ ok: true, text: "Procurement of", raw: { stop_reason: "max_tokens" } }, /nutrūko/],
                              [{ ok: false, error: "Serveris laikinai nepasiekiamas (503)." }, /503/]]) {
       r = await enRinkinys(ats);
       await r.kalba("en");
-      const t = r.juosta().textContent;
-      tiesa(re.test(t) && /Pavadinimo išversti nepavyko/.test(t) && r.juosta().querySelector("button") && /Bandyti dar kartą/.test(t), "klaida: " + t);
+      const t = r.D.getElementById("enPavBusena").textContent;
+      tiesa(re.test(t) && /Pavadinimo išversti nepavyko/.test(t) && r.D.getElementById("enPavBusena").querySelector("button") && /Bandyti dar kartą/.test(t), "klaida: " + t);
       lygu([r.en(), r.zyma(), r.sub("A").textContent], ["", "", "400/110 kV transformatoriaus pirkimas Vilniaus pastotei"], "laukas neužpildytas");
     }
     r = await enRinkinys(async () => { await new Promise(z => setTimeout(z, 400)); return { ok: true, text: "Late" }; });
     r.D.querySelector('#lang-toggle [data-lang="en"]').click();
-    await r.kol(() => [...r.juosta().querySelectorAll("button")].some(b => /Atšaukti/.test(b.textContent)));
-    [...r.juosta().querySelectorAll("button")].find(b => /Atšaukti/.test(b.textContent)).click();
+    await r.kol(() => [...r.skiltis().querySelectorAll("button")].some(b => /Atšaukti/.test(b.textContent)));
+    [...r.skiltis().querySelectorAll("button")].find(b => /Atšaukti/.test(b.textContent)).click();
     await r.kol(() => !r.W.eval("EN_PAV").vyksta);
     await new Promise(z => setTimeout(z, 500));
     lygu([r.en(), r.zyma()], ["", ""], "atšaukus");
-    tiesa(!r.juosta().hidden && r.juosta().querySelector('[data-en-pav="versti"]') && /lietuviškas pirkimo pavadinimas/.test(r.juosta().textContent), "po atšaukimo juostoje - kelias toliau: " + r.juosta().textContent);
+    lygu([r.skiltis().hidden, r.D.getElementById("enPavBusena").textContent.trim(), r.D.getElementById("enPavDi").disabled], [false, "", false], "po atšaukimo - laukas ir „Išversti su DI“ lieka, pranešimo nėra");
     // vertimo metu žmogus įrašė savo - DI rezultatas jo neperrašo
     const r2 = await enRinkinys(async () => { await new Promise(z => setTimeout(z, 300)); return { ok: true, text: "DI title" }; });
     r2.D.querySelector('#lang-toggle [data-lang="en"]').click();
@@ -997,12 +999,12 @@ async function testaiEnPavadinimas1106(){
     await r2.kol(() => !r2.W.eval("EN_PAV").vyksta);
     lygu([r2.en(), r2.zyma(), r2.sub("A").textContent], ["Human title", "", "Human title"], "žmogaus įrašas lieka");
   });
-  await testas("Patvirtinimas ir taisymas: „Patvirtinti“ - žyma ✓, juosta dingsta; pataisius - žmogaus tekstas be DI žymos; pakeitus lietuvišką - pastaba; nepatvirtintas DI vertimas EN režime verčiamas iš naujo; ranka įrašytas - pasirinkus EN nesiunčiama", async () => {
+  await testas("Patvirtinimas ir taisymas: „Patvirtinti vertimą“ - žyma ✓, mygtukas dingsta; pataisius - žmogaus tekstas be DI žymos; pakeitus lietuvišką - pastaba; nepatvirtintas DI vertimas EN režime verčiamas iš naujo; ranka įrašytas - pasirinkus EN nesiunčiama", async () => {
     let n = 0;
     const r = await enRinkinys(o => ({ ok: true, text: "Translation " + (++n) + " 400/110 kV" }));
     await r.kalba("en");
-    r.juosta().querySelector('[data-en-pav="patvirtinti"]').click();
-    lygu([r.zyma(), r.juosta().hidden, r.sub("A").textContent], ["✓ DI vertimas patvirtintas", true, "Translation 1 400/110 kV"]);
+    r.D.getElementById("enPavPatv").click();
+    lygu([r.zyma(), r.D.getElementById("enPavPatv").hidden, r.sub("A").textContent], ["✓ DI vertimas patvirtintas", true, "Translation 1 400/110 kV"]);
     r.set("f-pavadinimas", "400/110 kV transformatoriaus pirkimas Kauno pastotei", "input");
     await new Promise(z => setTimeout(z, 1100));
     tiesa(/Lietuviškas pavadinimas pakeistas po vertimo/.test(r.zyma()) && r.uzkl.length === 1, "patvirtintas - neverčiama, pastaba: " + r.zyma());
@@ -1019,7 +1021,7 @@ async function testaiEnPavadinimas1106(){
     const r2 = await enRinkinys({ ok: true, text: "Nereikia" });
     r2.set("f-pavadinimas-en", "My own title 400/110 kV", "input");
     await r2.kalba("en");
-    lygu([r2.uzkl.length, r2.sub("A").textContent, r2.juosta().hidden], [0, "My own title 400/110 kV", true]);
+    lygu([r2.uzkl.length, r2.sub("A").textContent, r2.zyma()], [0, "My own title 400/110 kV", ""]);
   });
   await testas("Spausdinant EN: be angliško pavadinimo ir su nepatvirtintu DI vertimu - klausiama; patvirtintas - neklausiama; LT - neklausiama; „Išvalyti“ išvalo; be DI jungties ar be lietuviško pavadinimo - neverčiama, pasakoma", async () => {
     let r = await enRinkinys({ ok: false, error: "x" });
