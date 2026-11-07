@@ -76,8 +76,8 @@
       visadaIjungti: "Visada įjungti", nenaudojama: "Nenaudojama", ijungta: "Įjungta", isjungta: "Išjungta",
       katButini: "Būtinieji",
       katButiniT: "Jūsų darbas įrankiuose (planai, pirkimų kortelės, protokolai, juodraščiai ir kt.), šis jūsų sprendimas, failai darbui " +
-        "be interneto (programų bibliotekos, tiekėjų asistentas, teisės stebėsena) ir apsauga nuo automatinių užklausų (Cloudflare Turnstile - tik siunčiant " +
-        "klausimą ar EPD failą). Be jų pasirinkta paslauga neveiktų, todėl sutikimo nereikia.",
+        "be interneto (programų bibliotekos, tiekėjų asistentas, teisės stebėsena) ir apsauga nuo automatinių užklausų (Cloudflare Turnstile - tik viešame " +
+        "EPD įrankyje). Be jų pasirinkta paslauga neveiktų, todėl sutikimo nereikia.",
       katNustatymai: "Nustatymų įsiminimas",
       katNustatymaiT: "Pasirinkta kalba, informacinių skilčių būsena (atverta ar suskleista), planavimo suvestinės rodiklis ir pirkimo sąlygų klausimų vaizdas (visi klausimai ar po vieną skyrių). " +
         "Išjungus įrašyti nustatymai ištrinami, o kalbą ir skiltis pasirinksite kiekvieną kartą.",
@@ -119,8 +119,8 @@
       visadaIjungti: "Always on", nenaudojama: "Not used", ijungta: "On", isjungta: "Off",
       katButini: "Necessary",
       katButiniT: "Your work in the tools (plans, procurement cards, minutes, drafts and more), this decision of yours, files for offline " +
-        "use (software libraries, supplier assistant, law monitoring) and protection against automated requests (Cloudflare Turnstile - only when you send a " +
-        "question or an EPD file). The service you choose would not work without them, so no consent is needed.",
+        "use (software libraries, supplier assistant, law monitoring) and protection against automated requests (Cloudflare Turnstile - only in the " +
+        "public EPD tool). The service you choose would not work without them, so no consent is needed.",
       katNustatymai: "Remember settings",
       katNustatymaiT: "Your chosen language, the state of information panels (open or collapsed), the planning dashboard measure and the procurement conditions question view (all questions or one section at a time). " +
         "If turned off, saved settings are deleted and you will choose the language and panels each time.",
