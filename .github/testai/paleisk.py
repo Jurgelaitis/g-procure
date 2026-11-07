@@ -32,7 +32,9 @@ RINKINIAI = sorted((d + "/testai.html" for d in os.listdir(SAKNIS)
 # 1300 s (2026-10-20): PP-salygos (458 testai, vietoje ~380 s) GitHub Actions viršijo 900 s; visas darbas buvo ~1500 s iš 2400
 # 1500 s (2026-10-26): privačios saugyklos vykdyklėje (2 branduoliai) PP-salygos dalis lygiagrečiai trunka iki ~1240 s
 # 2000 s (2026-11-03): trys PP-salygos dalys lygiagrečiai - viena gali trukti ilgiau; bendrą laiką saugo VISO_LAIKAS
-LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "2000"))
+# 2300 s (2026-11-07): 0b10f49 PP-salygos 3 dalis truko 1958 s (vietoje 560 s, kitos dalys 473 ir 449 s) - dalys suvienodintos
+#   (testaiPaskelbti perkelta į 2 dalį), o riba pakelta, kad lėtesnė vykdyklė nekristų dėl vienos dalies; visą darbą vis tiek riboja VISO_LAIKAS
+LAIKAS = int(os.environ.get("GP_TESTU_LAIKAS", "2300"))
 # 2580 s (2026-10-26): darbo riba - 45 min., paruošimas (checkout, Chrome) trunka ~10 s - lieka ~2 min. santraukai
 VISO_LAIKAS = int(os.environ.get("GP_TESTU_VISO_S", "2580"))
 LYGIAGRECIAI = max(1, int(os.environ.get("GP_TESTU_LYGIAGRECIAI", "3" if os.environ.get("GITHUB_ACTIONS") == "true" else "1")))
