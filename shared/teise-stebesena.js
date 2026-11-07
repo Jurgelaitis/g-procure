@@ -973,9 +973,8 @@
       ".gps-pk__a{color:inherit;text-decoration:none}.gps-pk__a::after{content:'';position:absolute;inset:0;border-radius:12px}",
       ".gps-pk__a:focus-visible{outline:3px solid var(--color-emerald-strong,#007554);outline-offset:3px;border-radius:4px}",
       ".gps-pk__a:hover{text-decoration:underline}",
-      ".gps-pk__virsus{display:flex;gap:14px;align-items:flex-start;padding-right:26px}",
+      ".gps-pk__virsus{display:flex;gap:14px;align-items:flex-start}",
       ".gps-pk__info{display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0}",
-      ".gps-pk__nr{position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:50%;background:var(--color-graphite-5,#EFF1F1);color:var(--color-graphite-50-strong,#5B6470);font-size:12px;font-weight:700;display:grid;place-items:center}",
       ".gps-pk__rus{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--color-graphite-50-strong,#5B6470);font-weight:600}",
       ".gps-pk__pav{margin:0;font-size:18px;line-height:1.3;letter-spacing:-.01em;font-weight:700;color:var(--color-graphite,#2E3641)}",
       ".gps-pk__liecia{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:auto;padding-top:12px;border-top:1px solid var(--color-graphite-15,#E1E2E4)}",
@@ -1061,11 +1060,10 @@
       var pat = patikimumas(r.tikrinta, null, dabar, lang);
       var h;
       if (portalas) {
-        /* 2026-11-07 (naudotojo sprendimas): vizualus blokas - skaičiai, laiko juosta ir trys redakcinio prioriteto kortelės
-           su data, būsena ir susijusiais įrankiais; paaiškinimai - modulyje, ne portale. */
-        var rodyti = portaloIrasai(r.tikrinta.irasai, dabar, limit), rd = rodiklis(r.tikrinta.irasai, dabar), nr = {};
-        rodyti.forEach(function (x, i) { nr[x.id] = String(i + 1); });
-        var aktyvus = r.tikrinta.irasai.filter(function (x) { return !x.demo && skiltis(x, dabar) !== "archyvas"; });
+        /* 2026-11-07 (naudotojo sprendimas): vizualus blokas - skaičiai ir trys redakcinio prioriteto kortelės su data,
+           būsena ir susijusiais įrankiais; paaiškinimai - modulyje, ne portale. Laiko juosta - tik modulyje (naudotojo
+           sprendimas tą pačią dieną: portale ji kūrė per didelį vizualinį triukšmą). */
+        var rodyti = portaloIrasai(r.tikrinta.irasai, dabar, limit), rd = rodiklis(r.tikrinta.irasai, dabar);
         var vaizdui = function (v, extra) { return modulioUrl + "?vaizdas=" + v + "&rezimas=abu" + (extra || ""); };
         h = '<section class="' + klase + '" aria-labelledby="gps-portalas-title"><div class="gps-pb__galva"><div class="gps-pb__ikona" aria-hidden="true">' + ikona("tei", 24) + '</div>' +
             '<div class="gps-pb__tekstas"><h2 class="gps__title" id="gps-portalas-title">' + esc(T.pav) + '</h2>' +
@@ -1079,7 +1077,6 @@
              '<a class="gps-sk gps-sk--tei" href="' + esc(vaizdui("pasikeite", "&rusis=teismu_praktika")) + '"><b>' + rd.teismai + '</b> <span>' + esc(T.skTeismai) + '</span></a>' +
              '<a class="gps-sk gps-sk--pro" href="' + esc(vaizdui("isigalios")) + '"><b>' + rd.projektai + '</b> <span>' + esc(T.skProjektai) + '</span></a>' +
              '<span class="gps-pb__atn"><span class="gps-taskas" aria-hidden="true"></span>' + esc(T.atnaujinta) + ' ' + esc(pat.registrasAtnaujintas || "-") + '</span></div>';
-        h += laikoJuosta(aktyvus, dabar, { lang: lang, pazymeti: nr, href: function (x) { return modulioUrl + "#irasas=" + encodeURIComponent(x.id); } });
         if (!rodyti.length) h += '<p class="gps__sub" style="font-size:14px;margin-top:16px">' + esc(T.beprioriteto) + '</p>';
         else {
           h += '<ul class="gps-pb__korteles">';
@@ -1087,7 +1084,6 @@
             var pav = x.trumpai || (x.portalas && x.portalas.pavadinimas) || x.pavadinimas;
             var mz = moduliuZymos(x, 3);
             h += '<li class="gps-pk gps-pk--' + rusiesKlase(x) + '">' +
-                 '<span class="gps-pk__nr" aria-hidden="true">' + esc(nr[x.id]) + '</span>' +
                  '<span class="gps-pk__virsus">' + kalendorius(x, dabar, lang) + '<span class="gps-pk__info">' + busenosZyma(x, dabar, lang) +
                  '<span class="gps-pk__rus">' + ikona(rusiesKlase(x), 14) + esc(rusiesTekstas(x, lang)) + (x.rezimas.length ? " · " + esc(x.rezimas.map(function (z) { return z === "PI" ? "PĮ" : "VPĮ"; }).join(" + ")) : "") + '</span></span></span>' +
                  '<h3 class="gps-pk__pav"><a class="gps-pk__a" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(pav) + '</a></h3>' +
