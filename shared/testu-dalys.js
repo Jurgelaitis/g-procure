@@ -5,7 +5,10 @@
    Puslapis nurodo dalių skaičių <meta name="gp-testu-dalys" content="n"> (jį skaito paleidiklis) ir grupių sąrašą
    GP_TESTU_DALYS.grupes([[...], [...], ...]); neatitikimai - klaida „Nepavyko paleisti“, ne tylus praleidimas:
    meta ir sąrašo dalių skaičius, ta pati grupė keliose dalyse, puslapyje apibrėžta, bet į jokią dalį neįrašyta grupė
-   (async function testai...), netinkamas ?dalis. Nieko nesaugo ir nesiunčia. */
+   (async function testai...), netinkamas ?dalis. Nieko nesaugo ir nesiunčia.
+   Grupių laikas (2026-11-07): GP_TESTU_DALYS.vykdyk(grupes) paleidžia grupes iš eilės ir kiekvienos trukmę įrašo į
+   window.GP_TESTU_LAIKAI ([{ grupe, s }], pildoma eigoje - ir nespėjusio rinkinio dalis); paleidiklis lėčiausias grupes
+   parašo žurnale, kad dalis būtų galima suvienodinti pagal matavimą, ne spėjimą. */
 (function () {
   "use strict";
 
@@ -45,5 +48,16 @@
     return dalys[p.k - 1];
   }
 
-  window.GP_TESTU_DALYS = { grupes, parametras, apibreztos };
+  // Grupės iš eilės su trukme (sekundėmis, 0,1 s tikslumu); klaida grupėje nutraukia, kaip paprastas ciklas
+  async function vykdyk(sarasas, opt) {
+    const laikai = (opt && opt.laikai) || (window.GP_TESTU_LAIKAI = []);
+    for (const g of sarasas) {
+      const t0 = Date.now();
+      try { await g(); }
+      finally { laikai.push({ grupe: g.name, s: Math.round((Date.now() - t0) / 100) / 10 }); }
+    }
+    return laikai;
+  }
+
+  window.GP_TESTU_DALYS = { grupes, parametras, apibreztos, vykdyk };
 })();
