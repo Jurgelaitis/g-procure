@@ -190,7 +190,10 @@ footer{text-align:center;padding:20px;font-size:12px;color:var(--color-graphite-
 .busenos-filtras button b{font-variant-numeric:tabular-nums}
 .filtro-juosta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;font-size:13px}
 .sarasas-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
-@media(min-width:1180px){.sarasas-grid.su-panele{grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr)}}
+@media(min-width:1180px){.sarasas-grid.su-panele{grid-template-columns:minmax(0,1.5fr) minmax(340px,1fr)}
+  /* atvertas pirkimas šone: sutarties data ir „Ką pataisyti“ - šoniniame langelyje, todėl lentelėje nekartojama ir ji lieka glausta */
+  .sarasas-grid.su-panele .k-slept{display:none}
+  .sarasas-grid.su-panele #registerWrap table{min-width:0}}
 #registerWrap table{min-width:900px}
 #registerWrap .table-wrap{max-height:none}
 #registerWrap td.fix{min-width:220px}
@@ -209,7 +212,8 @@ tr.pasirinkta > td{background:var(--zalia-5)}
 .pst > li{border-left:3px solid var(--grafitas-15);padding:2px 0 2px 10px}
 .pst > li.klaida{border-left-color:var(--color-error)} .pst > li.tikrinti{border-left-color:var(--color-warning)} .pst > li.gerai{border-left-color:var(--smaragdas)}
 .pst .h{font-weight:700;font-size:13px}
-.pst ul{margin:4px 0 0 16px;padding:0;font-size:13px}
+.pst ul{margin:4px 0 0;padding:0;font-size:13px;list-style:none}   /* pastabos pradedamos ženklu (✕, !, i) - be antro ženklelio */
+.form-row[hidden]{display:none}
 .pst .ka{margin-top:4px;font-size:13px}
 .pst .teise{font-size:12px;color:var(--color-graphite-50-strong)}
 .faktai{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;font-size:13px;margin:8px 0 0}
@@ -1380,6 +1384,7 @@ let SARASO_BUSENA = "visi";      // visi | klaida | tikrinti | gerai
 let SARASO_SRITIS = null;        // null | duomenys | budas | grupe | datos | dublikatai (iš Apžvalgos „Ką sutvarkyti“)
 let SARASO_GRUPE = null;         // grupės id (iš „Ribos ir grupės“)
 let PASIRINKTAS = null;          // atverto pirkimo id
+let REG_STULPELIAI = 9;          // lentelės stulpelių skaičius (be įmonės - 8) - atvertos eilutės colspan
 const BUSENOS = [["visi", "Visi"], ["klaida", "Reikia pataisyti"], ["tikrinti", "Patikrinkite"], ["gerai", "Be pastabų"]];
 const BUSENOS_ZYMA = { klaida: '<span class="badge red">Klaida</span>', tikrinti: '<span class="badge yellow">Patikrinkite</span>', gerai: '<span class="badge green">Gerai</span>' };
 function sarasoFiltras(busena, sritis, grupe){
@@ -1419,21 +1424,24 @@ function renderRegister(){
     return;
   }
   const korteles = kortelesIds();
+  // Visi rodomi pirkimai - vienos įmonės (pvz. pasirinkta antraštėje): įmonės stulpelis nekartojamas
+  const kelios = new Set(rodomi.map(e => e.p.imone || "")).size > 1 || rodomi.some(e => !COMPANIES[e.p.imone]);   // nenustatyta įmonė - visada matoma
+  REG_STULPELIAI = kelios ? 9 : 8;
   let html = `<div class="table-wrap"><table>
-    <thead><tr><th>Nr.</th><th>Įmonė</th><th>Pirkimo objektas</th><th style="text-align:right">Vertė €</th><th>Būdas</th><th>Sutarties data</th><th>Būsena</th><th>Ką pataisyti</th><th><span class="sr-only">Veiksmai</span></th></tr></thead><tbody>`;
+    <thead><tr><th>Nr.</th>${kelios ? "<th>Įmonė</th>" : ""}<th>Pirkimo objektas</th><th style="text-align:right">Vertė €</th><th>Būdas</th><th class="k-slept">Sutarties data</th><th>Būsena</th><th class="k-slept">Ką pataisyti</th><th><span class="sr-only">Veiksmai</span></th></tr></thead><tbody>`;
   rodomi.forEach(({p, r})=>{
     const g = r.grupe, kodas = mapMethodNameToCode(p.budas);
     const meta = [rusisK(p.rusis) || p.rusis, p.bvpz ? "BVPŽ " + String(p.bvpz).slice(0, 12) : "", g ? (g.kodas ? "grupė " + g.kodas : g.objektas ? "darbų objektas" : "atskira grupė") : ""].filter(Boolean).join(" · ");
     const kiti = r.iss.filter(i => i.sev !== "info").length - (r.pirmas ? 1 : 0);
     html += `<tr data-id="${escapeHtml(p.id)}" class="${PASIRINKTAS === p.id ? "pasirinkta" : ""}">
       <td style="white-space:nowrap"><strong>${escapeHtml(p.nr||"")}</strong></td>
-      <td>${imonesZyma(p)}</td>
-      <td><button type="button" class="eil-btn" onclick="atverkPirkima('${p.id}')" aria-expanded="${PASIRINKTAS === p.id}">${escapeHtml(p.objektas || "(be pavadinimo)")}</button>${p.demo ? ' <span class="badge gray">Demonstracinis</span>' : ""}<div class="eil-meta">${escapeHtml(meta)}</div></td>
+      ${kelios ? `<td>${imonesZyma(p)}</td>` : ""}
+      <td><button type="button" class="eil-btn" onclick="atverkPirkima('${p.id}')" aria-expanded="${PASIRINKTAS === p.id}">${escapeHtml(p.objektas || "(be pavadinimo)")}</button><div class="eil-meta">${escapeHtml(meta)}${p.demo ? ' <span class="badge gray">Demonstracinis</span>' : ""}</div></td>
       <td style="text-align:right;white-space:nowrap"><strong>${p.verte > 0 ? fmtMoney(p.verte) : "-"}</strong></td>
       <td style="font-size:12px">${escapeHtml(kodas || p.budas || "-")}</td>
-      <td style="white-space:nowrap">${fmtIfDate(p.sutarciesData)}</td>
+      <td class="k-slept" style="white-space:nowrap">${fmtIfDate(p.sutarciesData)}</td>
       <td>${BUSENOS_ZYMA[r.lygis]}</td>
-      <td class="fix">${r.pirmas ? escapeHtml(r.pirmas.trumpai || r.pirmas.msg) + (kiti > 0 ? ` <span class="daug">ir dar ${kiti}</span>` : "") : '<span class="muted">-</span>'}</td>
+      <td class="fix k-slept">${r.pirmas ? escapeHtml(r.pirmas.trumpai || r.pirmas.msg) + (kiti > 0 ? ` <span class="daug">ir dar ${kiti}</span>` : "") : '<span class="muted">-</span>'}</td>
       <td style="white-space:nowrap">
         <button class="btn sm secondary" onclick="editProc('${p.id}')" aria-label="Taisyti pirkimą ${escapeHtml(p.nr||"")}" title="Taisyti">✎</button>
         ${korteliuMygtukas(p, korteles)}
@@ -1465,7 +1473,7 @@ function panelesHtml(p, r, A){
     const it = r.iss.filter(i => i.sritis === k);
     if(!it.length) return k === "grupe" || k === "dublikatai" ? "" : `<li class="gerai"><div class="h">${pav}</div><div class="muted">Pastabų nėra.</div></li>`;
     const lyg = it.some(i => i.sev === "err") ? "klaida" : it.some(i => i.sev === "warn") ? "tikrinti" : "";
-    return `<li class="${lyg}"><div class="h">${pav}</div><ul>${it.map(i => `<li>${i.sev === "err" ? "✕ " : i.sev === "warn" ? "⚠ " : ""}${escapeHtml(i.msg)}${i.ka ? `<div class="ka"><strong>Ką daryti:</strong> ${escapeHtml(i.ka)}</div>` : ""}${i.teise ? `<div class="teise">${escapeHtml(i.teise)}</div>` : ""}</li>`).join("")}</ul></li>`;
+    return `<li class="${lyg}"><div class="h">${pav}</div><ul>${it.map(i => `<li>${i.sev === "err" ? "✕ " : i.sev === "warn" ? "⚠ " : "• "}${escapeHtml(i.msg)}${i.ka ? `<div class="ka"><strong>Ką daryti:</strong> ${escapeHtml(i.ka)}</div>` : ""}${i.teise ? `<div class="teise">${escapeHtml(i.teise)}</div>` : ""}</li>`).join("")}</ul></li>`;
   }).join("");
   return `<h3>${escapeHtml(p.nr || "")} ${escapeHtml(p.objektas || "")}</h3>${BUSENOS_ZYMA[r.lygis]}
     <dl class="faktai">${faktai.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>
@@ -1487,7 +1495,7 @@ function rodykPanele(p, r, A){
   } else {
     panele.hidden = true; panele.innerHTML = ""; grid.classList.remove("su-panele");
     const tr = document.querySelector(`#registerWrap tr[data-id="${CSS.escape(p.id)}"]`);
-    if(tr){ const d = document.createElement("tr"); d.className = "det-eil"; d.innerHTML = `<td colspan="9"><div class="pirk-panele" role="region" aria-label="Pirkimo ${escapeHtml(p.nr || "")} pastabos">${html}</div></td>`; tr.after(d); }
+    if(tr){ const d = document.createElement("tr"); d.className = "det-eil"; d.innerHTML = `<td colspan="${REG_STULPELIAI}"><div class="pirk-panele" role="region" aria-label="Pirkimo ${escapeHtml(p.nr || "")} pastabos">${html}</div></td>`; tr.after(d); }
   }
 }
 function rodykGrupe(gid){ RIBOS_ATVERTA = gid; RIBOS_RODYTI = gid; goTab("ribos"); }
