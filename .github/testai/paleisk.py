@@ -14,6 +14,7 @@ document.title („OK ...“ / „KRITO ...“) su #santrauka (PP-market-KPI, PP
 Išėjimo kodas 1, jei bent vienas testas krito ar rinkinys nepasibaigė.
 Rinkinio dalys (2026-10-23): testai.html su <meta name="gp-testu-dalys" content="n"> (PP-salygos, shared) paleidžiamas n kartų
 su ?dalis=k/n - kiekviena dalis atskira švaria naršykle (shared/testu-dalys.js parenka jos grupes), rezultatas - eilutė dalies.
+Grupių trukmė (2026-11-07): rinkiniai su GP_TESTU_DALYS.vykdyk - žurnale lėčiausios grupės (eilutė „~“).
 GP_TESTU_LYGIAGRECIAI=<n> - vienu metu iki n dalių ar rinkinių (vietoje numatyta 1). GitHub Actions - 2 (2026-10-24: eilė priartėjo
 prie bendros 2400 s ribos ir 4cc3e44 paleidimas ją viršijo; vykdyklėje 4 branduoliai). 2026-11-03 - 3: su dviem 478a456 ir 4db1303 viršijo 2580 s (PP-salygos 3 dalis pradėta po 1120 s, viešos saugyklos vykdyklėje - 4 branduoliai). Rinkiniai iš VIENI kartu su kitais sulėtėja ar
 užstringa (PP-tiekejams) - jie paleidžiami po kitų, po vieną.
@@ -179,20 +180,20 @@ LAUK = """(async () => {
     const b = document.getElementById('busena');
     if (/^(OK|KRITO)/.test(document.title) && document.getElementById('santrauka')) {
       // Kritę: PP-market-KPI ir PP-cost-benefit - lentelės eilutės su .z-blogai, PP-teise - .t.krito
-      return { baigta: true, busena: document.getElementById('santrauka').textContent.replace(/\\s+/g, ' ').trim(), gerai: /^OK/.test(document.title),
+      return { laikai: window.GP_TESTU_LAIKAI || null, baigta: true, busena: document.getElementById('santrauka').textContent.replace(/\\s+/g, ' ').trim(), gerai: /^OK/.test(document.title),
         krito: [...document.querySelectorAll('.z-blogai')].map(z => z.closest('tr')).filter(Boolean).concat([...document.querySelectorAll('.t.krito, .t.blogai')])
           .map(e => e.textContent.replace(/\\s+/g, ' ').trim().slice(0, 600)) };
     }
     if (b && /praėjo|krito|Nepavyko/.test(b.textContent)) {
       const krito = [...document.querySelectorAll('.t.krito, .t.blogai')].map(e => e.textContent.replace(/\\s+/g, ' ').trim().slice(0, 600));
-      return { baigta: true, busena: b.textContent.trim() + ((document.getElementById('n-ok') || {}).textContent ? ' (' + document.getElementById('n-ok').textContent + ')' : ''),
+      return { laikai: window.GP_TESTU_LAIKAI || null, baigta: true, busena: b.textContent.trim() + ((document.getElementById('n-ok') || {}).textContent ? ' (' + document.getElementById('n-ok').textContent + ')' : ''),
         gerai: !krito.length && !/krito|Nepavyko/.test(b.textContent), krito };
     }
     await new Promise(r => setTimeout(r, 500));
   }
   // nespėjus (2026-10-20): kiek testų baigta ir paskutinis baigtas - kad būtų matyti, kur rinkinys sulėtėjo ar užstrigo
   const t = [...document.querySelectorAll('.t')], pask = t.length ? t[t.length - 1].textContent.replace(/\\s+/g, ' ').trim().slice(0, 300) : '';
-  return { baigta: false, busena: 'nepasibaigė per laiką' + (t.length ? ' (baigta testų: ' + t.length + '; paskutinis: ' + pask + ')' : ''), gerai: false,
+  return { laikai: window.GP_TESTU_LAIKAI || null, baigta: false, busena: 'nepasibaigė per laiką' + (t.length ? ' (baigta testų: ' + t.length + '; paskutinis: ' + pask + ')' : ''), gerai: false,
     krito: [...document.querySelectorAll('.t.krito, .t.blogai')].map(e => e.textContent.replace(/\\s+/g, ' ').trim().slice(0, 600)) };
 })()"""
 
@@ -251,6 +252,12 @@ def main():
             rezultatai.append(x)
             print(("GERAI " if x["gerai"] else "KRITO ") + vardas + " | " + x["busena"] + " | " + str(x["sek"]) + " s", flush=True)
             for k in x["krito"]: print("    - " + k, flush=True)
+            # Lėčiausios grupės (2026-11-07, shared/testu-dalys.js vykdyk): dalims ir ilgiems rinkiniams - kad dalis būtų galima
+            # suvienodinti pagal GitHub Actions matavimą (ten dalis trunka ~3,5 karto ilgiau nei vietoje, santykis tarp grupių - ne tas pats)
+            if x.get("laikai") and x.get("sek", 0) >= 60:
+                lai = sorted(x["laikai"], key=lambda g: -g["s"])
+                print("    ~ grupių: %d, suma %d s; lėčiausios: %s" % (len(lai), round(sum(g["s"] for g in lai)),
+                      ", ".join("%s %d s" % (g["grupe"], round(g["s"])) for g in lai[:8])), flush=True)
             # GitHub: kritę testai - ir anotacijomis paleidimo puslapio viršuje. Žurnalas ir santrauka matomi tik prisijungus,
             # o anotacijos - ir be prisijungimo (API check-runs/<id>/annotations); 2026-10-02 pirmo paleidimo priežasties neprisijungus nebuvo matyti
             if os.environ.get("GITHUB_ACTIONS") == "true" and not x["gerai"]:

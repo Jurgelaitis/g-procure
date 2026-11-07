@@ -156,7 +156,7 @@ async function modulis(klase, o){
   await kol(() => W.GP_PATAREJAS && W.GP_DOK && D.querySelector("#budas option"), "modulio skriptai");
   // vidaus taisyklių riba (vidaus-riba.js) - kiekvienam rėmeliui tuščia netikra saugykla: testai nepriklauso nuo naudotojo įvestos ribos ir jos neliečia
   if (W.GP_VIDAUS_RIBA) W.GP_VIDAUS_RIBA.naudokSaugykla(vrAtmintine());
-  perimkAI();
+  perimkAI(); ppAtidek();
   if (!(o && o.tusti)){ seniNumatytieji(); seniKomisija(); }
   return f;
 }
@@ -178,6 +178,24 @@ const AI = { kvietimai: [], atsakymas: null };
 function perimkAI(){
   AI.kvietimai = [];
   W.GP_AI_PROXY.call = opts => { AI.kvietimai.push(opts); return Promise.resolve(AI.atsakymas(opts)); };
+}
+/* Sugeneruoto paketo patikra (4 žingsnis, paketoPatikra) testuose - tik kai testas jos laukia (2026-11-07). Modulyje ji pasileidžia pati
+   po kiekvieno generavimo ir fone užima ~1,7 s to paties naršyklės srauto (rėmeliai vienos kilmės): per rinkinį - apie trečdalį laiko,
+   nors daugumai testų jos nereikia (testaiLenteles: 134 -> 96 s). Iš rodykRezultata() kviesta patikra atidedama (W.__PP_LAUKIA),
+   ppLauk() ją paleidžia; testas jos laukia per kol(() => ppLauk() && W.__PP ...) arba ppSantrauka. Tiesioginis W.paketoPatikra() ir
+   „Bandyti dar kartą“ - kaip modulyje. Patikra be ppLauk() nepaleidžiama - todėl jos rezultato be laukimo netikrink (žr. testaiPaketoPatikra). */
+function ppAtidek(){
+  if (!W || typeof W.paketoPatikra !== "function" || W.__PP_TIKRA) return;
+  const tikra = W.__PP_TIKRA = W.paketoPatikra, rodyk = W.rodykRezultata;
+  W.paketoPatikra = function(rez, vardai){
+    if (W.__PP_FONE){ W.__PP_LAUKIA = [rez, vardai]; return Promise.resolve(); }
+    W.__PP_LAUKIA = null; return tikra.apply(this, arguments);
+  };
+  W.rodykRezultata = function(){ W.__PP_FONE = true; try { return rodyk.apply(this, arguments); } finally { W.__PP_FONE = false; } };
+}
+function ppLauk(){
+  if (W && W.__PP_LAUKIA){ const a = W.__PP_LAUKIA; W.__PP_LAUKIA = null; W.__PP_TIKRA.apply(W, a); }
+  return true;
 }
 const aiOk = obj => () => ({ ok: true, status: 200, text: JSON.stringify(obj), raw: { stop_reason: "end_turn" }, error: null });
 /* Netikram DI kvietimui: atšaukimas ir tada, kai signalas atšauktas dar prieš kvietimą (lėtoje aplinkoje „Atšaukti“ paspaudžiamas, kol failas
@@ -9468,14 +9486,14 @@ async function modulisAdresu(paieska, klase, o){
   W = f.contentWindow; D = W.document;
   await kol(() => W.GP_PATAREJAS && W.GP_DOK && D.querySelector("#budas option") && W.JD, "modulio skriptai");
   if (W.GP_VIDAUS_RIBA) W.GP_VIDAUS_RIBA.naudokSaugykla(vrAtmintine());
-  perimkAI();
+  perimkAI(); ppAtidek();
   if (!(o && o.tusti)){ seniNumatytieji(); seniKomisija(); }
   return f;
 }
 /* Rėmelis pats pereina kitu adresu (mygtukas „Tęsti“, įkeltas failas) - laukiama naujo puslapio */
 async function laukNaujo(f, id){
   await kol(() => f.contentWindow.document !== D && f.contentWindow.JD && f.contentWindow.JD.dabartinis() === id, "atvertas juodraštis " + id, 60000);
-  W = f.contentWindow; D = W.document; perimkAI();
+  W = f.contentWindow; D = W.document; perimkAI(); ppAtidek();
 }
 const ivesk1 = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); e.dispatchEvent(new W.Event("change", { bubbles: true })); };
 const radijas1 = (vardas, v) => { const r = D.querySelector("input[name=" + vardas + "][value=" + v + "]"); r.checked = true; r.dispatchEvent(new W.Event("change", { bubbles: true })); };
@@ -10503,7 +10521,7 @@ async function testaiPaketoPatikra(){
     await W.perjunkPrieda("KONFIDENCIALUMAS", "", false);
     let rez = await W.generuoti({ sutartis: false });
     W.rodykRezultata(rez);
-    await kol(() => D.getElementById("ppSantrauka"), "paketo patikra", 20000);
+    await kol(() => ppLauk() && D.getElementById("ppSantrauka"), "paketo patikra", 20000);
     const tx = id => (D.getElementById(id) || { textContent: "" }).textContent.replace(/\s+/g, " ");
     lygu(AI.kvietimai.length, 0, "užklausų į DI");
     tiesa(/Patikrinta naršyklėje, be DI: \d+ patikr/.test(tx("ppSantrauka")) && /skirtuke „Tikrinti parengtus dokumentus“, kai turėsite CVP IS skelbimą/.test(tx("ppSantrauka")), "santrauka: " + tx("ppSantrauka"));
@@ -10518,7 +10536,7 @@ async function testaiPaketoPatikra(){
     W.uAtsArr("B_rengejas", 0, "Vardenis Pavardenis, tel. +370 600 00000, el. p. vardenis.pavardenis@litgrid.eu");
     rez = await W.generuoti({ sutartis: false });
     W.rodykRezultata(rez);
-    await kol(() => D.getElementById("ppSantrauka"), "paketo patikra iš naujo", 20000);
+    await kol(() => ppLauk() && D.getElementById("ppSantrauka"), "paketo patikra iš naujo", 20000);
     tiesa(!/Asmenys, įgalioti palaikyti tiesioginį ryšį/.test(tx("ppTikrinti")) && /centrinę perkančiąją organizaciją/.test(tx("ppTikrinti")), "po „Rengė:“: " + tx("ppTikrinti").slice(0, 400));
     // išsami patikra - tikrinimo skirtukas su tais pačiais failais
     const n = W.__PP.failai.length;
@@ -10530,7 +10548,7 @@ async function testaiPaketoPatikra(){
   await testas("LT ir EN tekstas (2026-11-03): sugeneruotame dvikalbiame pakete patikrinta ir sutampa; pakeitus angliško teksto sumą - „Patikrinkite“ su abiem citatomis; lietuviškam paketui patikros nėra", async () => {
     salinkSenusRemelius();
     await generuokSu({ budas: "T-AK", kalba: "LT_EN", pavEN: "Autotransformer maintenance services" });
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra LT/EN", 90000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra LT/EN", 90000);
     const pt = W.__PP.p.patikros.find(x => x.id === "kalbu_sutapimas");
     tiesa(pt && pt.busena === "gerai", "patikra: " + JSON.stringify(pt));
     lygu(W.__PP.p.radiniai.filter(x => x.id === "kalbu_sutapimas"), [], "radiniai tvarkingame pakete");
@@ -10542,7 +10560,7 @@ async function testaiPaketoPatikra(){
     lygu(x.length, 1); tiesa(/lietuviškai „25 000 Eur“, angliškai „EUR 2,500“/.test(x[0].tekstas), x[0].tekstas); lygu(x[0].lygis, "tikrinti"); lygu(x[0].vietos.length, 2);
     salinkSenusRemelius();
     await generuokSu({ budas: "T-AK" });
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra LT", 90000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra LT", 90000);
     lygu(W.__PP.p.patikros.filter(x => x.id === "kalbu_sutapimas"), [], "lietuviškam paketui patikros nėra");
   });
 
@@ -10569,7 +10587,7 @@ async function testaiPaketoPatikra(){
     ivesk1("verte", "1 500 000"); W.klausimynas();
     const rez = await W.generuoti({ sutartis: false });
     W.rodykRezultata(rez);
-    await kol(() => D.getElementById("ppSantrauka"), "paketo patikra", 20000);
+    await kol(() => ppLauk() && D.getElementById("ppSantrauka"), "paketo patikra", 20000);
     const t = D.getElementById("ppTikrinti").textContent.replace(/\s+/g, " ");
     // ilgesnis laikotarpis - informacija (naudotojo sprendimas 2026-10-27), pajamos - rekomendacija
     const inf = [...D.querySelectorAll("details.pp-g")].map(x => x.textContent.replace(/\s+/g, " ")).find(x => /^\s*Informacija/.test(x)) || "";
@@ -11187,7 +11205,7 @@ async function testaiD4c(){
   await testas("Sugeneruotuose paketuose (T-AK LT, T-SD LT/EN, MV-SAB LT, S-ND LT, DPS-K) nuorodų į neesamus punktus nėra; 4 žingsnio patikroje - „Nuorodos į punktus (SPS ir BPS)“ be pastabų su nuorodų skaičiumi; sugadinta nuoroda - „Patikrinkite“ su vieta", async () => {
     for (const [budas, kalba, tipas] of [["T-AK", "LT", "prekes"], ["T-SD", "LT_EN", "paslaugos"], ["MV-SAB", "LT", "prekes"], ["S-ND", "LT", "paslaugos"], ["DPS-K", "LT"]]){
       await generuokSu({ budas, kalba, tipas });
-      await kol(() => W.__PP, "paketo patikra " + budas, 90000);
+      await kol(() => ppLauk() && W.__PP, "paketo patikra " + budas, 90000);
       const pt = W.__PP.p.patikros.find(x => x.id === "punkto_nuorodos"), rad = W.__PP.p.radiniai.filter(x => x.id === "punkto_nuoroda");
       tiesa(pt && pt.busena === "gerai" && /patikrinta nuorodų - [1-9]\d*/.test(pt.pastaba) && !rad.length,
         budas + " " + kalba + ": " + JSON.stringify(pt) + " " + rad.map(x => x.vietos[0].citata).join(" | "));
@@ -11871,7 +11889,7 @@ async function testai1022d(){
     const h = tx("ikeltiPakete");
     tiesa(h.includes(`SPS ${N} priedas - Techninė specifikacija („Techninė specifikacija.docx“)`) && /be pakeitimų/.test(h) && /numerių nežinome/.test(h), "4 žingsnis: " + h);
     tiesa(!/neįdėtas/.test(h), "4 žingsnis - sutarties projektas");
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
     tiesa(!/„?Techninė specifikacija/.test(tx("ppPridek")), "paketo patikra vis dar prašo TS: " + tx("ppPridek").slice(0, 400));
     const dk = W.eval("DK").failai.find(d => d.rusis === "ts"), pov = W.dkPoveikis(dk).map(x => x.t).join(" ");
     tiesa(/įdedama į paketą be pakeitimų kaip SPS priedas/.test(pov), "1 žingsnis prie TS: " + pov);
@@ -11882,7 +11900,7 @@ async function testai1022d(){
     await generuokSu({ budas: "T-AK", tipas: "paslaugos" });
     lygu(ikelti().length, 0, "įkeltų");
     tiesa(!D.getElementById("ikeltiPakete"), "4 žingsnio eilutė be įkeltų");
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
     tiesa(/Techninė specifikacija/.test(tx("ppPridek")), "be TS - paketo patikra neprašo: " + tx("ppPridek").slice(0, 400));
     await generuokSu({ budas: "T-AK", tipas: "paslaugos", po2: async () => { await W.dkPridek(await dalTS(2, ["Kabeliai", "Movos"])); } });
     const I = ikelti(), V = W.failuVardai(W.__R);
@@ -11913,7 +11931,7 @@ async function testai1022d(){
     lygu(I.map(r => r.d.pavadinimas), [`SPS ${eil.match(/^(\d+)/)[1]} priedas - Sutarties projektas`], "pavadinimas");
     lygu(await baitai(I[0].blob), await baitai(sut), "failas pakeistas");
     lygu(W.ppVaidmuo(I[0]), "sutartis", "vaidmuo");
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 60000);
     tiesa(!/Sutarties projektas/.test(tx("ppPridek")), "paketo patikra prašo sutarties projekto: " + tx("ppPridek").slice(0, 400));
     // privalomi sutarties elementai tikrinami įkelto failo tekste (ne „sutarties dokumento nėra“)
     const sp2 = W.__PP.p.patikros.filter(x => /^sut_/.test(x.id));
@@ -12885,7 +12903,7 @@ async function testaiWord(){
   await testas("4 žingsnis: kiekvieno sugeneruoto Word failo struktūra tikrinama pati (patikra „Word failų struktūra“ - be pastabų, su dokumentų skaičiumi); sugadintas failas - „Patikrinkite“ su failo vardu ir radiniu, kad reikia pranešti", async () => {
     salinkSenusRemelius();
     await generuokSu({ budas: "T-AK", tipas: "prekes" });
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 90000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 90000);
     const pt = W.__PP.p.patikros.find(x => x.id === "word_struktura"), sk = W.__R.filter(r => r.blob && !r.statinis).length;
     tiesa(pt && pt.busena === "gerai" && pt.pastaba === "patikrinta dokumentų - " + sk, "patikra: " + JSON.stringify(pt) + " (dokumentų " + sk + ")");
     tiesa(!W.__PP.p.radiniai.some(x => x.id === "word_struktura"), "radinys tvarkingame pakete");
@@ -12898,7 +12916,7 @@ async function testaiWord(){
     const vardai = W.failuVardai(rez);
     W.__PP = null;
     await W.paketoPatikra(rez, vardai);
-    await kol(() => W.__PP, "paketo patikra su sugadintu failu", 90000);
+    await kol(() => ppLauk() && W.__PP, "paketo patikra su sugadintu failu", 90000);
     const r = W.__PP.p.radiniai.find(y => y.id === "word_struktura");
     tiesa(r && r.vietos[0].failas === vardai[i] && /pPr tvarka/.test(r.vietos.map(v => v.vieta).join(" ")) && /praneškite G-Procure rengėjui/.test(r.tekstas), "radinys: " + JSON.stringify(r));
     const t = D.getElementById("ppTikrinti").textContent;
@@ -13035,7 +13053,7 @@ async function testaiTestuotojas5(){
 async function testai1023(){
   dabartine = grupe("Ketvirtosios patikros taisymai (2026-10-23, T4): DPS paketo patikra, 1 žingsnio DPS tekstai, juodraščio failai, įkeltų failų numeriai ir vardai, vertimo skaičiai, apžiūros datos angliškai, paraiškos formos eilutės");
   const tx = id => ((D.getElementById(id) || {}).textContent || "").replace(/\s+/g, " ");
-  const paketoP = async () => { await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 90000); return W.__PP.p; };
+  const paketoP = async () => { await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 90000); return W.__PP.p; };
   const ZL = [["Eil. Nr.", "Reikalavimas", "Pateikiami dokumentai"], ["1.", "Tiekėjas taikys aplinkos apsaugos vadybos sistemą pagal LST EN ISO 14001.", "Sertifikato kopija."]];
   const KL = [["Eil. Nr.", "Reikalavimas", "Pateikiami dokumentai"], ["1.", "Tiekėjas per paskutinius 3 metus įvykdė bent vieną panašią sutartį.", "Sutarčių sąrašas."]];
 
@@ -13458,7 +13476,7 @@ async function testaiTestuotojas3(){
     await kol(() => !D.getElementById("step3").classList.contains("hid"), "Dokumentai", 90000);
     tiesa(W.__R.some(r => r.atideta) && /Parenkite sutarties projektą\..*„3\. Sutarties projektas“/.test(D.getElementById("kasToliau").textContent) && /\(su sutarties projektu\)/.test(D.getElementById("kasToliau").textContent),
       "„Kas toliau“: " + D.getElementById("kasToliau").textContent);
-    await kol(() => W.__PP, "paketo patikra", 60000);
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 60000);
     const pr = D.getElementById("ppPridek");
     if (pr && /Sutarties projektas/.test(pr.textContent)) tiesa(/Sutarties projektas atidėtas/.test(pr.textContent), "paketo patikra: " + pr.textContent);
     // M2: dokumentų pavadinimai
@@ -13662,7 +13680,7 @@ async function testaiTestuotojas2(){
     tiesa(!P.some(t => /^\d+ priedas\s*[–-]\s*Sutarties projektas|^Annex \d+\s*[–-]\s*Draft Contract/.test(t)), "eilutė liko: " + P.filter(t => /Sutarties projektas\.|Draft Contract\./.test(t)).join(" | "));
     lygu([lt, en], [lt.map((_, i) => lt[0] + i), lt.map((_, i) => lt[0] + i)], "sąrašas iš eilės ir LT = EN");
     tiesa(P.some(t => /Šio Pirkimo metu nėra parengtas Sutarties projektas/.test(t)), "1.6 p. lieka");
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 30000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 30000);
     tiesa(!/Sutarties projektas/.test((D.getElementById("ppPridek") || {}).textContent || ""), "4 žingsnis neprašo sutarties projekto: " + ((D.getElementById("ppPridek") || {}).textContent || "").slice(0, 400));
   });
 
@@ -13857,7 +13875,7 @@ async function testaiTestuotojas(){
       && !P.some(x => /lietuvių kalba\. ?\/ ?Pasiūlymo/.test(x)), "kalba: " + P.filter(x => /lietuvių kalba/.test(x)).join(" | ").slice(0, 400));
     tiesa(P.some(x => /bus lygi Sutarties projekte nurodytai sumai\.$/.test(x)) && !P.some(x => /kainai\s*\/\s*Sutarties/.test(x)), "kaina: " + P.filter(x => /bus lygi/.test(x)).join(" | "));
     lygu(docs.AK_LT_SPS.r.stats.juodosAlt.map(x => x.id).sort(), ["kaina", "kalba"], "ataskaita");
-    await kol(() => W.__PP && W.__PP.p, "paketo patikra", 90000);   // patikra vyksta fone - lėtesnėje aplinkoje (GitHub Actions) baigiasi vėliau
+    await kol(() => ppLauk() && W.__PP && W.__PP.p, "paketo patikra", 90000);   // patikra vyksta fone - lėtesnėje aplinkoje (GitHub Actions) baigiasi vėliau
     tiesa(!W.__PP.p.radiniai.some(x => /dvi to paties turinio formuluotės/.test(x.tekstas)), "paketo patikra - formuluočių per „/“ neliko");
     const en = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "prekes", pries: async () => { altRaktai().filter(r => /kaina/.test(r)).forEach(r => W.uAts("JA_" + r, 1, false)); W.klausimynas(); } });
     const E = en.AK_LTEN_SPS.pars;
@@ -14255,7 +14273,7 @@ async function testaiD4b(){
       if (N && N.pakeista) tiesa(/likę priedai pernumeruoti iš eilės/.test(e1Tx(D.getElementById("prieduNumeracija"))), "4 žingsnis: " + e1Tx(D.getElementById("prieduNumeracija") || D.body).slice(0, 300));
       tiesa(!/NEpernumeruojami/.test(e1Tx(D.getElementById("step3"))), "senas įspėjimas");
       tiesa(!/nuorodos į pašalintus priedus/.test(e1Tx(D.getElementById("prieduNumeracija") || D.body)), "nuorodos į pašalintus priedus: " + e1Tx(D.getElementById("prieduNumeracija") || D.body).slice(0, 400));
-      await kol(() => W.__PP, "paketo patikra", 90000);
+      await kol(() => ppLauk() && W.__PP, "paketo patikra", 90000);
       const r = W.__PP.p.radiniai.filter(x => /pried/i.test(x.tekstas || "") && /nėra|nerast|neegzist/i.test(x.tekstas || ""));
       tiesa(!r.length, "paketo patikra: " + r.map(x => x.tekstas).join(" | "));
     });
@@ -14434,7 +14452,7 @@ async function testaiD3(){
     tiesa(new RegExp("^SPS_" + e.nr + "_priedas_Vertinimo_metodika_.*\\.docx$").test(v), "failo vardas: " + v);
     tiesa(/Pasiūlymų vertinimo metodika:.*kriterijus - „Kainos ir kokybės santykis“.*pakete - SPS \d+ priedas/.test(e1Tx(D.getElementById("metodikaPatikra"))), "4 žingsnis: " + e1Tx(D.getElementById("metodikaPatikra") || D.body).slice(0, 300));
     tiesa(/jūsų įkeltas dokumentas „SPS 7 priedas/.test(e1Tx(D.querySelector("#step3 table.rez"))), "rezultatų lentelė");
-    await kol(() => W.__PP, "paketo patikra", 60000);
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 60000);
     tiesa(!W.__PP.p.radiniai.some(r => /vertinimo metodik/i.test(r.tekstas || "") && r.grupe === "paketas"), "patikra: " + W.__PP.p.radiniai.filter(r => r.grupe === "paketas").map(r => r.tekstas).join(" | "));
     // DPS konkretus pirkimas
     const dps = await generuokSu({ budas: "DPS-K", po2: async () => { await W.dkPridek([await metDocx("Vertinimo metodika.docx")]); } });
@@ -14973,7 +14991,7 @@ async function testai1021(){
 
   await testas("D-9: pirkimo grafikas - SPS sako, kad jis pateikiamas, o šablone jo lentelės nėra: 4 žingsnyje - „Ko pakete dar nėra - pridėsite patys“ su nuoroda į Pirkimų grafikų generatorių (ne „Nepatikrinta“), „Kas toliau“ - įterpti grafiką", async () => {
     await generuokSu({ budas: "T-AK", tipas: "prekes" });
-    await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 30000);
+    await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 30000);
     const pp = W.__PP.p, graf = (pp.patikros || []).find(x => x.id === "grafikas");
     tiesa(graf && graf.busena === "nepatikrinta" && /grafiko nerasta/.test(graf.pastaba || ""), "grafiko patikra: " + JSON.stringify(graf));
     const pr = D.getElementById("ppPridek");
@@ -15366,12 +15384,12 @@ async function testaiAuditas1024(){
     }
     salinkSenusRemelius();
     await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "paslaugos", centr: true, energ: "ne" });
-    await kol(() => W.__PP, "paketo patikra", 120000);
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 120000);
     const p = W.__PP.p, pt = p.patikros.find(x => x.id === "rezimo_savokos");
     lygu([pt && pt.busena, p.radiniai.filter(r => r.id === "rezimo_savokos").length], ["gerai", 0], "AKV: " + JSON.stringify(pt) + " " + JSON.stringify(p.radiniai.filter(r => r.id === "rezimo_savokos").map(r => r.tekstas)));
     salinkSenusRemelius();
     await generuokSu({ budas: "MV-SAB", kalba: "LT_EN", tipas: "paslaugos", energ: "ne" });
-    await kol(() => W.__PP, "paketo patikra", 120000);
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 120000);
     const sab = /Contracting Authorit/.test(await tekstas("templates/MVP_LTEN_BPS.docx"));
     const rr = W.__PP.p.radiniai.filter(r => r.id === "rezimo_savokos");
     lygu(rr.some(r => /„Contracting Authority“/.test(r.tekstas) && /Pirkimui taikomas PĮ/.test(r.tekstas)), sab, "MVP LT/EN (šablone „Contracting Authority“: " + sab + "): " + JSON.stringify(rr.map(r => r.tekstas)));
@@ -15431,7 +15449,7 @@ async function testaiAuditas1024(){
   await testas("Santrauka tvirtintojui (4 žingsnis): mygtukas su pastaba, į ZIP neįdedama; duomenys iš atsakymų ir paketo (priedai iš eilės, dokumentų būsenos, paketo patikra); Word - oficialus stilius, A4, be Word struktūros radinių; pakeitus atsakymus - įspėjimas", async () => {
     salinkSenusRemelius();
     await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "prekes", energ: "ne", verte: "1 500 000" });
-    await kol(() => W.__PP, "paketo patikra", 120000);
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 120000);
     const btn = D.getElementById("santraukaT");
     tiesa(btn && /Į ZIP neįdedamas ir į CVP IS neįkeliamas/.test(btn.parentNode.textContent.replace(/\s+/g, " ")), "mygtukas ir pastaba");
     const S = W.santraukosDuomenys(), m = Object.fromEntries(S.pirkimas), sp = Object.fromEntries(S.sprendimai);
@@ -16821,7 +16839,7 @@ async function testaiTobulinimai1024(){
   await testas("Neskelbiamos derybos 4 žingsnyje: „Kas toliau“ - pranešti ankstesnio pirkimo dalyviams (tik po neįvykusio pirkimo); paketo patikra - privalomų dokumentų elementų trūkumas informacija (PĮ 80 str. 2 d.), kitam būdui - „Patikrinkite“", async () => {
     salinkSenusRemelius();
     await generuokSu({ budas: "S-ND", kalba: "LT", tipas: "paslaugos", energ: "ne", apimtis: "kaina", pries: async () => { spausk("ndpag-nd_neivykes"); } });
-    await kol(() => W.__PP, "paketo patikra", 120000);
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 120000);
     const kt = () => D.getElementById("kasToliau").textContent.replace(/\s+/g, " ");
     tiesa(/praneškite ankstesnio pirkimo kandidatams ir dalyviams/.test(kt()) && /PĮ 79 str\. 1 d\. 1 p\./.test(kt()) && /pakvieskite pasirinktus tiekėjus/.test(kt()), "Kas toliau: " + kt());
     tiesa(D.querySelector('#kasToliau a[href="#cvpisAtmH"]'), "nuoroda į atmintinę");
@@ -17146,7 +17164,7 @@ async function testaiNdFormos(){
       const sar = (S.map(t => /^(\d+) priedas\s*[–-]\s*Konfidenciali informacija/.exec(t)).find(Boolean) || [])[1];
       tiesa(konf && konf === sar, kalba + " konfidenciali informacija: formoje " + konf + ", SPS sąraše " + sar);
       if (kalba === "LT_EN") tiesa(F.some(t => new RegExp("by completing Annex No\\. " + sar + " of the SPC “Confidential Information”").test(t)), "EN konfidenciali informacija: " + F.filter(t => /Confidential Information”/.test(t)).map(t => t.slice(0, 200)).join(" | "));
-      await kol(() => W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 30000);
+      await kol(() => ppLauk() && W.__PP && D.getElementById("ppSantrauka"), "paketo patikra", 30000);
       const pr = D.getElementById("ppPridek");
       tiesa(!pr || !/Pasiūlymo forma/i.test(pr.textContent), kalba + " paketo patikra prašo formos: " + (pr ? e1Tx(pr).slice(0, 300) : ""));
     }
@@ -17349,7 +17367,7 @@ async function testaiPaskelbti(){
       [testaiTestuotojas, testaiSprendimai1020, testaiTestuotojas2, testaiNacsaugBvpz, testaiTestuotojas3, testai1021b, testai1021c, testai1022a,
        testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiTestuotojas5, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b]
     ]);
-    for (const g of GRUPES) await g();
+    await GP_TESTU_DALYS.vykdyk(GRUPES);
     document.getElementById("busena").textContent =
       R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {

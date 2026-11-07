@@ -7274,9 +7274,23 @@ async function testaiDalys(){
       const be = new w.DOMParser().parseFromString("<html><head></head><body></body></html>", "text/html");
       klaida(() => G.grupes([[A]], { dokumentas: be, paieska: "" }), /\(nėra\)/, "be <meta>");
     });
+    await testas("Grupių trukmė (vykdyk): grupės iš eilės, kiekvienos vardas ir sekundės į GP_TESTU_LAIKAI eigoje; krentanti grupė įrašoma ir klaida perduodama toliau", async () => {
+      const eile = [];
+      const X = async function testaiX(){ eile.push("X"); await new Promise(r => w.setTimeout(r, 120)); };
+      const Y = async function testaiY(){ eile.push("Y"); };
+      const Z = async function testaiZ(){ eile.push("Z"); throw new Error("Z krito"); };
+      const lai = await G.vykdyk([X, Y]);
+      lygu(eile, ["X", "Y"], "eilė");
+      lygu(lai.map(g => g.grupe), ["testaiX", "testaiY"], "vardai");
+      tiesa(lai[0].s >= 0.1 && lai[0].s < 5 && lai[1].s < lai[0].s, "sekundės: " + JSON.stringify(lai));
+      tiesa(w.GP_TESTU_LAIKAI === lai, "window.GP_TESTU_LAIKAI");
+      let e = null; try { await G.vykdyk([Y, Z, X]); } catch (x) { e = x; }
+      tiesa(e && /Z krito/.test(e.message), "klaida perduota: " + (e && e.message));
+      lygu(w.GP_TESTU_LAIKAI.map(g => g.grupe), ["testaiY", "testaiZ"], "krentanti įrašyta, po jos - nevykdoma");
+    });
   } finally { f.remove(); }
 
-  await testas("Tikri rinkiniai (PP-salygos, shared): <meta> - paleidiklio skaitoma forma, dalių tiek pat, kiekviena apibrėžta grupė - lygiai vienoje dalyje, tuščių dalių nėra, pagrindinis blokas grupių nekviečia pats", async () => {
+  await testas("Tikri rinkiniai (PP-salygos, shared): <meta> - paleidiklio skaitoma forma, dalių tiek pat, kiekviena apibrėžta grupė - lygiai vienoje dalyje, tuščių dalių nėra, pagrindinis blokas grupių nekviečia pats, o paleidžia per vykdyk", async () => {
     for (const kelias of ["../PP-salygos/testai.html", "testai.html"]){
       const src = await (await fetch(kelias + "?ci=" + Date.now())).text();
       const m = /<meta\s+name="gp-testu-dalys"\s+content="(\d+)">/.exec(src);
@@ -7291,6 +7305,7 @@ async function testaiDalys(){
       const visos = [].concat(...dalys), apib = [...src.matchAll(/^[ \t]*(?:async[ \t]+)?function[ \t]+(testai\w+)[ \t]*\(/gm)].map(x => x[1]);
       lygu([...visos].sort(), [...apib].sort(), kelias + ": grupės dalyse ir apibrėžtos");
       tiesa(!/await testai\w+\(\)/.test(pg), kelias + ": pagrindinis blokas grupes kviečia pats");
+      tiesa(/await GP_TESTU_DALYS\.vykdyk\(GRUPES\)/.test(pg), kelias + ": grupės paleidžiamos per GP_TESTU_DALYS.vykdyk (paleidiklis rašo lėčiausias grupes)");
     }
   });
 }
@@ -9223,7 +9238,7 @@ async function testaiNacsaugBvpz(){
      testaiVendor, testaiKortelesPatikra1106],
     [testaiTelefonas, testaiPrieinamumas, testaiFokusas]
   ]);
-  for (const g of GRUPES) await g();
+  await GP_TESTU_DALYS.vykdyk(GRUPES);
   document.getElementById("busena").textContent =
     R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
