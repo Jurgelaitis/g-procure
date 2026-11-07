@@ -7675,7 +7675,36 @@ async function testaiDi(){
     const a = await saltinis("../ai-valdymas.html");
     tiesa(/Tai autoriaus vertinimas, ne teisininko išvada\./.test(a) && /the author's assessment, not a legal opinion\./.test(a), "DI valdymas: vertinimas - ne teisininko išvada");
     const pr = await saltinis("../G-Procure_Project.html");
-    tiesa(/tik paspaudus mygtuką arba leidus tam pirkimui/.test(pr) && /only on click or when allowed for that procurement/.test(pr), "„Apie“: kada siunčiama į DI");
+    tiesa(/tik naudotojo veiksmu \(paspaudus mygtuką, leidus tam pirkimui ar pasirinkus grafiką anglų kalba\)/.test(pr) && /only through the user's action \(a button click, permission for that procurement or choosing a schedule in English\)/.test(pr), "„Apie“: kada siunčiama į DI");
+  });
+
+  await testas("Vieši puslapiai sako tai, ką daro kodas (2026-11-07 patikra): „Apie G-Procure“ kortelę skaitantys įrankiai = moduliai, kurie jungia GP_KORTELE.mount; santraukos nesako „tik paspaudus mygtuką“, kai moduliai siunčia ir automatiškai; Cloudflare Turnstile aprašytas tik ten, kur jis įjungtas", async () => {
+    const pr = await saltinis("../G-Procure_Project.html");
+    const moduliai = pr.slice(pr.indexOf("var MODULES"), pr.indexOf("var SUPPLY"));
+    tiesa(moduliai.length > 1000, "MODULES sąrašas rastas");
+    const irasai = [...moduliai.matchAll(/\{\s*\n\s*id: "([^"]+)"([\s\S]*?)href: "([^"]+)"/g)];
+    lygu(irasai.length, 12, "MODULES įrašų");
+    for (const [, id, vidus, href] of irasai) {
+      let src = await saltinis("../" + (href.endsWith("/") ? href + "index.html" : href));
+      /* Modulio pradžios puslapis su dalimis (PP-cost-benefit) - tikrinamos dalys, į kurias jis veda */
+      if (href.endsWith("/")) for (const m of src.matchAll(/href="([\w.-]+\.html)"/g)) src += await saltinis("../" + href + m[1]);
+      lygu(/kortele: true/.test(vidus), /GP_KORTELE\.mount\(/.test(src), id + ": „kortele: true“ turi sutapti su tuo, ar modulis jungia pirkimo kortelę");
+    }
+    const AUTOMATISKAI = /tik paspaudus mygtuką\.<\/b>|<b>Į DI - tik paspaudus<\/b>|only when you click a button\.<\/b>|<b>Sent to AI only on click<\/b>|tik paspaudus mygtuką arba leidus tam pirkimui|only on click or when allowed for that procurement|dokumentų tekstas siunčiamas tik paspaudus mygtuką|document text is sent only when you press the button/;
+    const graphs = await saltinis("../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html");
+    tiesa(/function enPavAutomatiskai\(/.test(graphs), "PP-graphs pats verčia pavadinimą pasirinkus grafiką anglų kalba (jei nebe - pataisyti ir santraukas)");
+    for (const pg of ["../privatumas.html", "../ai-valdymas.html", "../G-Procure_Project.html"]) {
+      const r = (await saltinis(pg)).replace(/<li><b>2026-1\d-\d\d<\/b>[^\n]*/g, "").match(AUTOMATISKAI);
+      tiesa(!r, pg + ": liko „" + (r && r[0]) + "“");
+    }
+    const tiek = await saltinis("../PP-tiekejams/index.html");
+    if (/const TURNSTILE_SITE_KEY = "";/.test(tiek)) {
+      for (const pg of ["../privatumas.html", "../slapukai.html", "../shared/sutikimas.js"]) {
+        const r = (await saltinis(pg)).match(/Turnstile[^.<]{0,120}(tiekėjų asistent|supplier assistant|siunčiant "?\s*\+?\s*"?klausim|send a "?\s*\+?\s*"?question)/);
+        tiesa(!r, pg + ": Turnstile minimas tiekėjų asistente, nors jis ten išjungtas: „" + (r && r[0]) + "“");
+      }
+    }
+    tiesa(/class="cf-turnstile"/.test(await saltinis("../PP-carbon/epd.html")), "EPD įrankyje Turnstile yra (kaip sako politikos)");
   });
 
   await testas("Informacinė skiltis veda į „DI valdymas ir rizikų kontrolė“, „Privatumas“ ir „Slapukų nustatymai“ (2026-10-16; svetainės šaknis, LT ir EN); abu puslapiai yra, perjungus kalbą rodomas kitos kalbos blokas", async () => {
