@@ -1,6 +1,6 @@
 # Pirkimų teisės stebėsena - administravimo procesas
 
-Administravimo aplinka: `PP-teise/admin.html`. Būsena 2026-11-04.
+Administravimo aplinka: `PP-teise/admin.html`. Būsena 2026-11-07.
 
 ## 1. Kas veikia ir kur gyvena duomenys
 
@@ -23,7 +23,7 @@ kurių vardas prasideda „vidin...“; tikrasis leidimų sluoksnis yra repozito
 
 | Būsena | Ženklas | Reiškia | Kas gali |
 |---|---|---|---|
-| Automatiškai aptikta | ◌ | Rasta patikros metu (šiandien - rankinio importo), turinys neperžiūrėtas | sistema / importas |
+| Automatiškai aptikta | ◌ | Rasta savaitinės patikros metu: paskelbti tik faktai, analizė rengiama (puslapyje - „Nauja - analizė rengiama“) | savaitinė užduotis / importas |
 | Laukia peržiūros | ◔ | Aprašymas parengtas, bet teisės specialistas nepatvirtino | prižiūrėtojas |
 | Specialisto patvirtinta | ✓ | Teisės specialistas peržiūrėjo šaltinį ir aprašymą; istorijoje - jo vardas ir pastaba | tik specialistas |
 | Archyvuota | ▣ | Atšaukta, pakeista kitu įrašu ar nebeaktuali; nerodoma skiltyse, matoma archyve su priežastimi | prižiūrėtojas |
@@ -39,11 +39,22 @@ Taisyklės, kurias vykdo kodas:
 
 ## 3. Savaitinis / mėnesinis ciklas (rankinis režimas)
 
-Pirmą žingsnį parengia suplanuota užduotis `pp-teise-savaitine-patikra` (Claude programoje, pirmadieniais, kai programa
-atidaryta): ataskaita ir įrašų projektai - `~/Documents/g-procure-teise-patikros/<data>/`, peržiūri ir importuoja žmogus.
-Rašyti tik į tą aplanką leidžia vietinė taisyklė `.claude/settings.local.json` (nuo 2026-11-04): programa šio leidimo užduočiai
-neišsaugo, todėl be taisyklės užduotis sustoja prie rašymo (taip buvo 2026-09-28 - 2026-10-26). Būsena „succeeded“ nereiškia,
-kad ataskaita įrašyta - tikrinkite aplanką.
+Pirmą žingsnį atlieka suplanuota užduotis `pp-teise-savaitine-patikra` (Claude programoje, pirmadieniais, kai programa
+atidaryta). Nuo 2026-11-07 (naudotojo sprendimas „Faktai pagal patikrą, analizė po peržiūros“) ji:
+- naujų dokumentų FAKTUS (pavadinimas, datos, rūšis, numeris, nuoroda į šaltinį) įrašo į `registras.json` pati, būsena
+  „aptikta“ (puslapyje - „Nauja - analizė rengiama“), be santraukos, temų, aktualumo, veiksmų ir ištraukos; `saltiniai.json`
+  pradžioje - patikros eilutė („ok“ / „nepavyko“), `meta.patikrinta` ir `meta.laikotarpis.iki` - patikros data;
+- skelbia tik kai: abu duomenų failai neužfiksuotų pakeitimų neturi, šaka `main` ir ne priekyje `origin/main` (kitaip išsiųstų
+  kito darbo commit'us), `git pull --ff-only` pavyko, `python3 .github/testai/paleisk.py PP-teise` - „GERAI“; kitaip pakeitimus
+  atšaukia ir tik praneša ataskaitoje;
+- commit'ina tik du failus („pp-teise: savaitinė patikra <data> - N nauji įrašai (faktai, analizė rengiama)“) ir push'ina;
+- analizės projektus (santrauka, aktualumas, veiksmai, pažodinė ištrauka) rašo į `~/Documents/g-procure-teise-patikros/<data>/projektai.json`
+  kartu su `ataskaita.md`. Juos peržiūri žmogus ir įkelia per admin.html „Importuoti JSON“ -> „Papildyti“: to paties id faktų
+  įrašą (būsena „aptikta“) importuota analizė pakeičia, kitų esamų įrašų - ne.
+Leidimai - vietinėje `.claude/settings.local.json` (programa jų užduočiai neišsaugo; be jų užduotis sustoja prie rašymo, kaip
+2026-09-28 - 2026-10-26): rašyti į ataskaitų aplanką ir į du duomenų failus, tik PP-teise testai ir tik išvardytos git komandos.
+Būsena „succeeded“ nereiškia, kad ataskaita įrašyta ar registras paskelbtas - tikrinkite aplanką ir `git log`.
+Registro testai, tikrinantys konkrečius išanalizuotus įrašus, faktų įrašų („aptikta“) neskaičiuoja - nauji faktai jų nelaužo.
 
 1. **Patikra.** Peržiūrėti e-tar (VPĮ, PĮ, VPT įsakymai, aplinkos ministro įsakymai dėl žaliųjų
    pirkimų), Liteko (LAT, LVAT viešųjų pirkimų bylos), e-seimas (projektų eiga). Užregistruoti
