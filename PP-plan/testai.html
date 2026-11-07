@@ -80,8 +80,9 @@ const ateityje = men => { const d = new Date(); d.setMonth(d.getMonth() + men); 
 
 async function testaiPuslapis(){
   grupe("Puslapis įsikelia");
-  await testas("Skirtukai, informacinė skiltis ir ribos iš bendro failo; vietinės pagalbos kopijos (gph) nebėra", async () => {
-    tiesa(D.querySelectorAll("#tabs .tab, #tabs button").length >= 8, "skirtukų: " + D.querySelectorAll("#tabs .tab, #tabs button").length);
+  await testas("Penki skirtukai (pertvarka 2026-11-07), importas ir eksportas - antraštėje; informacinė skiltis ir ribos iš bendro failo; vietinės pagalbos kopijos (gph) nebėra", async () => {
+    lygu([...D.querySelectorAll("#tabs .tab")].map(t => t.dataset.section), ["dashboard", "register", "ribos", "terminai", "centralization"], "skirtukai");
+    tiesa(D.getElementById("btnImportas") && D.getElementById("btnEksportas") && D.getElementById("importLangas").hasAttribute("data-gp-langas") && D.getElementById("eksportLangas").hasAttribute("data-gp-langas"), "importo ir eksporto mygtukai ar langai");
     tiesa(D.querySelector("#infoPanelMount .gpi") && /Metinio pirkimų plano/.test(D.querySelector("#infoPanelMount").textContent), "informacinė skiltis");
     tiesa(W.eval("THRESHOLDS === window.GP_THRESHOLDS") && W.GP_THRESHOLDS.PI.mv_goods > 0, "ribos ne iš shared/thresholds.js");
     tiesa(!D.querySelector(".gph-intro, #gphOverlay"), "liko vietinė pagalbos kopija");
@@ -116,10 +117,12 @@ async function testaiLogika(){
     const budoIspejimai = budas => W.validateProc({ imone: "EPSO-G", objektas: "Serverių įranga", verte: T.VPI.intl_goods_cva, rusis: "Prekės", budas })
       .filter(i => /Pasirinktas tarptautinio pirkimo būdas/.test(i.msg)).length;
     lygu([budoIspejimai("Supaprastintas atviras konkursas"), budoIspejimai("Tarptautinis atviras konkursas")], [0, 1], "EPSO-G tarp ribų: supaprastintas - be įspėjimo, tarptautinis - įspėjimas");
-    D.getElementById("qtType").value = "Prekės"; D.getElementById("qtLaw").value = "VPI"; D.getElementById("qtSpec").value = "0";
-    D.getElementById("qtValue").value = String(T.VPI.intl_goods_cva); W.runMethodTest();
-    tiesa(/Kategorija: Supaprastintas/.test(D.getElementById("methodResult").textContent) && D.getElementById("methodResult").textContent.indexOf(W.fmtMoney(T.VPI.intl_goods)) >= 0,
-          "greitas testas EPSO-G: " + D.getElementById("methodResult").textContent.replace(/\s+/g, " ").slice(0, 160));
+    // Neplaninio pirkimo skaičiuoklė (vietoj greito būdo testo): EPSO-G prekės, nauja grupė, vertė - centrinės valdžios riba
+    W.goTab("ribos"); svarus(); W.goTab("ribos");
+    D.getElementById("npImone").value = "EPSO-G"; D.getElementById("npRusis").value = "Prekės"; D.getElementById("npBvpz").value = "30200000-1";
+    D.getElementById("npVerte").value = String(T.VPI.intl_goods_cva); W.skaiciuokNeplanini();
+    const np = D.getElementById("npRez").textContent;
+    tiesa(/Galimas supaprastintas pirkimas/.test(np) && np.indexOf(W.fmtMoney(T.VPI.intl_goods)) >= 0, "skaičiuoklė EPSO-G: " + np.replace(/\s+/g, " ").slice(0, 200));
   });
 
   /* A3 (2026-09-26): ribų lentelė ir dalių išimtis - iš shared/thresholds.js ir taisyklių variklio (iki tol skaičiai buvo įrašyti modulyje,
@@ -279,7 +282,7 @@ async function testaiKelias(){
     lygu(Number(iniciatoriaus("B")), Math.ceil(m.prep * 1.2) + Math.ceil(m.exec * 1.2), "B trukmė");
   });
 
-  await testas("Excel eksportas: lapai įmonėms, suvestinė ir validacija; būsena „Failas parengtas“ (Q3)", async () => {
+  await testas("Excel eksportas: lapai įmonėms, suvestinė, grupės ir pastabos; būsena „Failas parengtas“ (Q3)", async () => {
     tiesa(W.XLSX, "Excel biblioteka neįsikėlė (reikia interneto)");
     const tikras = W.XLSX.writeFile; let gauta = null;
     W.XLSX.writeFile = (wb, vardas) => { gauta = { lapai: wb.SheetNames, vardas }; };
@@ -287,30 +290,30 @@ async function testaiKelias(){
       D.getElementById("exportCompany").value = "ALL"; D.getElementById("exportInclude").value = "full";
       await W.exportExcel();
     } finally { W.XLSX.writeFile = tikras; }
-    tiesa(gauta && ["LITGRID", "AMBER", "Suvestinė", "Validacija"].every(l => gauta.lapai.includes(l)), "lapai: " + (gauta && gauta.lapai));
+    tiesa(gauta && ["LITGRID", "AMBER", "Suvestinė", "Grupės", "Pastabos"].every(l => gauta.lapai.includes(l)), "lapai: " + (gauta && gauta.lapai));
     tiesa(/^MPP_EPSO-G_grupė_\d{4}-\d{2}-\d{2}\.xlsx$/.test(gauta.vardas), "failo vardas: " + gauta.vardas);
     tiesa(/Failas parengtas: MPP_EPSO-G_grupė_/.test(D.getElementById("excelBusena").textContent), "būsena: " + D.getElementById("excelBusena").textContent);
   });
 
   // jsPDF 4.2.1 ir autotable 5.0.8 nuo 2026-10-06 (iki tol 2.5.1 / 3.5.31 - 12 žinomų jsPDF spragų, saugumo planas): PDF kuriamas
   // visais trimis tipais, lentelės ir poraštė - faile (jsPDF srautų nesuspaudžia, tekstas matomas PDF turinyje)
-  await testas("PDF eksportas (jsPDF 4, autotable 5): santrauka, pilnas sąrašas ir centralizavimas - lentelės, poraštė ir failo vardas", async () => {
+  await testas("PDF eksportas (jsPDF 4, autotable 5): santrauka, pilnas sąrašas, centralizavimas ir grupės - lentelės, poraštė ir failo vardas", async () => {
     tiesa(W.jspdf && W.jspdf.jsPDF && W.jspdf.jsPDF.API.autoTable, "jsPDF ar autotable neįsikėlė (reikia interneto)");
     const tikras = W.jspdf; const gauti = [];
     W.jspdf = { jsPDF: function (...a) { const d = new tikras.jsPDF(...a); d.save = vardas => { gauti.push({ vardas, pdf: d.output(), psl: d.getNumberOfPages(), y: d.lastAutoTable && d.lastAutoTable.finalY }); }; return d; } };
     try {
-      for (const tipas of ["summary", "full", "central"]) { D.getElementById("exportPdfType").value = tipas; await W.exportPdf(); }
+      for (const tipas of ["summary", "full", "central", "groups"]) { D.getElementById("exportPdfType").value = tipas; await W.exportPdf(); }
     } finally { W.jspdf = tikras; }
-    lygu(gauti.map(g => g.vardas.replace(/\d{4}-\d{2}-\d{2}/, "D")), ["MPP-santrauka_EPSO-G_grupė_D.pdf", "MPP-sarasas_EPSO-G_grupė_D.pdf", "MPP-centralizavimas_EPSO-G_grupė_D.pdf"], "failų vardai");
-    const antr = [["Vykdomoji santrauka", "Bendra verte", "Bendra plano verte"], ["Pilnas pirkimu sarasas", "Objektas", "Sutartis"], ["Centralizavimo rekomendacijos", "Pavyzdys", "Sutarciu datos"]];
+    lygu(gauti.map(g => g.vardas.replace(/\d{4}-\d{2}-\d{2}/, "D")), ["MPP-santrauka_EPSO-G_grupė_D.pdf", "MPP-sarasas_EPSO-G_grupė_D.pdf", "MPP-centralizavimas_EPSO-G_grupė_D.pdf", "MPP-grupes_EPSO-G_grupė_D.pdf"], "failų vardai");
+    const antr = [["Vykdomoji santrauka", "Bendra verte", "Bendra plano verte"], ["Pilnas pirkimu sarasas", "Objektas", "Sutartis"], ["Centralizavimo rekomendacijos", "Pavyzdys", "Sutarciu datos"], ["Ribos ir to paties tipo pirkimu grupes", "Grupes verte", "Isimtys / 20 %"]];
     gauti.forEach((g, i) => {
-      tiesa(/^%PDF-1\.\d/.test(g.pdf) && g.psl >= 1 && g.y > 38, g.vardas + ": PDF " + g.pdf.slice(0, 8) + ", psl. " + g.psl + ", lentelės pabaiga " + g.y);
+      tiesa(/^%PDF-1\.\d/.test(g.pdf) && g.psl >= 1 && (g.psl > 1 || g.y > 38), g.vardas + ": PDF " + g.pdf.slice(0, 8) + ", psl. " + g.psl + ", lentelės pabaiga " + g.y);
       for (const x of antr[i]) tiesa(g.pdf.includes("(" + x), g.vardas + ": nėra „" + x + "“");
       tiesa(g.pdf.includes("MPP ataskaita") && g.pdf.includes("psl. " + g.psl + "/" + g.psl), g.vardas + ": poraštė");
     });
     const n = W.eval("DATA.procurements.length");
     tiesa(n > 0 && gauti[1].pdf.split("(" + W.eval("pdfText(DATA.procurements[0].objektas.slice(0, 40))")).length > 1, "pilname sąraše nėra pirmo pirkimo objekto");
-    tiesa(/Failas parengtas: MPP-centralizavimas_/.test(D.getElementById("pdfBusena").textContent), "būsena: " + D.getElementById("pdfBusena").textContent);
+    tiesa(/Failas parengtas: MPP-grupes_/.test(D.getElementById("pdfBusena").textContent), "būsena: " + D.getElementById("pdfBusena").textContent);
     // centralizavimo eilutėse - sutarčių datų artumas (2026-11-06, vietoj santaupų)
     const kand = W.centralizavimoKandidatai();
     if (kand.length) tiesa(gauti[2].pdf.includes("(" + W.eval("pdfText(DATU_TEKSTAS[" + JSON.stringify(kand[0].timeAlign) + "])").slice(0, 14)), "centralizavimo PDF eilutėje nėra datų artumo");   // ilgas langelis laužomas į eilutes
@@ -481,7 +484,7 @@ async function testaiPatikra1026(){
   const pav = kodas => W.GP_METHODS.label(kodas);
   const nustatykImone = v => { const s = D.getElementById("companyFilter"); s.value = v; };
 
-  await testas("K1: rūšis ir trukmė iš Excel su <img onerror> - tekstas, ne kodas (Apžvalga, registras, redagavimo langas, 20 % analizė); trukmė „3 metai“ - 36 mėn.", async () => {
+  await testas("K1: rūšis ir trukmė iš Excel su <img onerror> - tekstas, ne kodas (Apžvalga, sąrašas ir pastabos, redagavimo langas, grupės); trukmė „3 metai“ - 36 mėn.", async () => {
     tiesa(W.XLSX, "Excel biblioteka neįsikėlė");
     svarus(); nustatykImone("ALL"); window.__px = [];
     const rus = '<img src=x onerror="parent.__px.push(\'rusis\')">', tr = '"><img src=x onerror="parent.__px.push(\'trukme\')">';
@@ -489,7 +492,7 @@ async function testaiPatikra1026(){
       ["X-1", "Spausdintuvų tiekimas", "40000", rus, "30232130-4", ateityje(5), "LITGRID AB", tr, pav("MV-NR")],
       ["X-2", "Spausdintuvų tiekimas II", "40000", rus, "30232130-4", ateityje(6), "LITGRID AB", "3 metai", pav("MV-NR")]]), 2);
     lygu([P[0].trukme, P[0].trukmeTekstas, P[1].trukme], ["", tr, 36], "trukmė");
-    W.goTab("dashboard"); W.goTab("register"); W.goTab("validation"); W.run20PercentAnalysis(); W.renderCapacity();
+    W.goTab("dashboard"); W.goTab("register"); W.atverkPirkima(P[0].id); W.goTab("ribos"); W.goTab("terminai");
     W.editProc(P[0].id); await lauk(120); W.closeModal();
     await lauk(150);
     lygu([window.__px, D.querySelectorAll("img[src='x']").length], [[], 0], "vykdytas kodas / įterpti paveikslai");
@@ -504,10 +507,10 @@ async function testaiPatikra1026(){
     const p = W.eval("DATA.procurements[0]");
     tiesa(/^[A-Za-z0-9_-]+$/.test(p.id) && p.imone === "" && /onerror/.test(p.imoneTekstas), "įrašas: " + JSON.stringify(p));
     W.goTab("register"); [...D.querySelectorAll("#registerWrap button")].find(b => /Taisyti/.test(b.getAttribute("aria-label") || "")).click();
-    await lauk(120); W.closeModal(); W.goTab("dashboard"); W.goTab("validation");
+    await lauk(120); W.closeModal(); W.goTab("dashboard"); W.goTab("validation"); W.atverkPirkima(p.id);
     await lauk(150);
     lygu([window.__px, D.querySelectorAll("img[src='x']").length], [[], 0], "vykdytas kodas");
-    tiesa(/Įmonė nenustatyta/.test(D.getElementById("validationList").textContent) || /Įmonė neatpažinta/.test(D.getElementById("validationList").textContent), "validacija nesako apie įmonę");
+    tiesa(/Įmonė neatpažinta/.test(D.getElementById("sec-register").textContent), "sąrašas nesako apie įmonę");
     delete window.__px; svarus();
   });
 
@@ -570,41 +573,44 @@ async function testaiPatikra1026(){
     tiesa(!W.validateProc(n).some(i => /Per CPO/.test(i.msg)), "CPO įspėjimas be žmogaus pasirinkimo");
   });
 
-  await testas("K5: pirkimai be BVPŽ kodo - „Nepatikrinta“, ne „Pastabų nėra“; Perspėjimų centras sako, kiek nepatikrinta", async () => {
+  await testas("K5: pirkimai be BVPŽ kodo - neįtraukti į grupes ir tai pasakoma grupių suvestinėje ir „Ką sutvarkyti“", async () => {
     svarus();
-    W.eval("DATA.procurements = [1,2,3,4,5].map(i => ({ id:'t'+i, nr:'T-'+i, imone:'LITGRID', rusis:'Darbai', objektas:'Testiniai remonto darbai '+i, verte:40000, budas:" + JSON.stringify(pav("MV-NR")) + ", sutarciesData:'" + ateityje(4) + "' })); save();");
-    W.run20PercentAnalysis();
-    const r = D.getElementById("rule20Result").textContent;
-    tiesa(/Nepatikrinta: 5 pirkimų/.test(r) && /5 - be BVPŽ kodo/.test(r) && !/Pastabų nėra|Pažeidimų neaptikta/.test(r), r.slice(0, 300));
-    W.renderWarningCenter();
+    // Prekės ir paslaugos grupuojamos pagal BVPŽ, todėl be jo - neįtraukiamos; darbai - pagal objektą (BVPŽ nereikia)
+    W.eval("DATA.procurements = [1,2,3,4,5].map(i => ({ id:'t'+i, nr:'T-'+i, imone:'LITGRID', rusis:'Prekės', objektas:'Testinės prekės '+i, verte:40000, budas:" + JSON.stringify(pav("MV-NR")) + ", sutarciesData:'" + ateityje(4) + "' })).concat([{ id:'w1', nr:'W-1', imone:'LITGRID', rusis:'Darbai', objektas:'Remonto darbai', verte:40000, budas:" + JSON.stringify(pav("MV-NR")) + ", sutarciesData:'" + ateityje(4) + "' }]); save();");
+    lygu(W.analizuokPlana().grupes.map(g => g.items.map(p => p.id).join()), ["w1"], "darbai be BVPŽ - savo objekto grupėje");
+    W.goTab("ribos");
+    const r = D.getElementById("ribosRez").textContent;
+    tiesa(/Į grupes neįtraukta: 5 pirkimų/.test(r) && /5 - be BVPŽ kodo/.test(r), r.slice(0, 300));
+    W.renderDashboard();
     const w = D.getElementById("warningCenter").textContent;
-    tiesa(/nepatikrintos: 5 pirkimų/.test(w) && !/^\s*✅\s*Perspėjimų nėra/.test(w), w.slice(0, 300));
+    tiesa(/neįtraukta 5 pirkimų \(5 - be BVPŽ kodo\)/.test(w), w.slice(0, 300));
   });
 
-  await testas("D3, V2: 20 % - tarptautiniu būdu perkamos dalys išimties nenaudoja; mažos vertės dalys - pagal MV būdą ir GP_THRESHOLDS ribą su nuoroda", async () => {
+  await testas("D3, V2 (pertvarka 2026-11-07): to paties tipo grupė - pirmi 3 BVPŽ skaitmenys; 20 % - tik tarptautinės vertės grupei, tarptautiniu būdu perkamos dalys išimties nenaudoja; mažos vertės dalys - pagal GP_THRESHOLDS ribą su nuoroda", async () => {
     svarus();
-    const eil = (i, v, b) => ({ id: "r" + i, nr: "R-" + i, imone: "LITGRID", rusis: "Paslaugos", objektas: "IS priežiūra " + i, verte: v, budas: pav(b), bvpz: "72212000-4", sutarciesData: ateityje(5) });
-    W.eval("DATA.procurements = " + JSON.stringify([eil(1, 500000, "T-AK"), eil(2, 60000, "T-AK"), eil(3, 60000, "T-AK"), eil(4, 60000, "T-AK"), eil(5, 60000, "T-AK")]) + "; save();");
-    let A = W.dalysAnalize();
-    lygu([A.rule20Violations.length, A.results[0].smallLotsValue], [0, 0], "visos dalys tarptautiniu būdu");
+    const eil = (i, v, b, bvpz) => ({ id: "r" + i, nr: "R-" + i, imone: "LITGRID", rusis: "Paslaugos", objektas: "IS priežiūra " + i, verte: v, budas: pav(b), bvpz: bvpz || "72212000-4", sutarciesData: ateityje(5) });
+    W.eval("DATA.procurements = " + JSON.stringify([eil(1, 500000, "T-AK"), eil(2, 60000, "T-AK"), eil(3, 60000, "T-AK", "72267000-4"), eil(4, 60000, "T-AK", "72261000-2"), eil(5, 60000, "T-AK")]) + "; save();");
+    let A = W.analizuokPlana(), g = A.grupes[0];
+    lygu([A.grupes.length, g.kodas, g.lygis, g.isimtys, g.busena], [1, "722", "t", 0, "gerai"], "visos dalys tarptautiniu būdu - viena 722 grupė be išimčių");
     W.eval("DATA.procurements.forEach((p,i) => { if(i) p.budas = " + JSON.stringify(pav("S-AK")) + "; }); save();");
-    A = W.dalysAnalize();
-    lygu([A.rule20Violations.length, A.results[0].smallLotsValue], [1, 240000], "dalys supaprastintai");
-    W.run20PercentAnalysis();
-    tiesa(/Viršijama 20 % riba \(1\)/.test(D.getElementById("rule20Result").textContent) && !/MV dalis/.test(D.getElementById("rule20Result").textContent), D.getElementById("rule20Result").textContent.slice(0, 200));
-    // Mažos vertės dalys: suma >= MV riba
+    A = W.analizuokPlana(); g = A.grupes[0];
+    lygu([g.isimtys, g.isimtysRiba, g.busena, g.pastabos.map(x => x.id)], [240000, 148000, "klaida", ["isimtys_virs", "skirtingi_5"]], "dalys supaprastintai - daugiau nei 20 %");
+    const pr = W.pirkimoPastabos(W.eval("DATA.procurements[1]"), A).iss.find(i => i.sritis === "grupe" && i.sev === "err");
+    tiesa(pr && pr.msg.indexOf(W.fmtMoney(148000)) >= 0 && pr.teise === W.GP_TEISE.cit("dalys_isimtys_kartu", "PI"), "pirkimo pastaba: " + JSON.stringify(pr));
+    lygu(W.pirkimoPastabos(W.eval("DATA.procurements[0]"), A).iss.filter(i => i.sritis === "grupe" && i.sev === "err").length, 0, "tarptautiniu būdu perkamas pirkimas - be grupės klaidos");
+    // Mažos vertės dalys: suma >= MV riba (grupė supaprastinto lygio)
     const T = W.GP_THRESHOLDS.PI, pus = Math.ceil(T.mv_goods / 2);
-    // supaprastintu būdu perkama mažesnė už MV ribą dalis - ne mažos vertės dalis
     W.eval("DATA.procurements = " + JSON.stringify([eil(1, pus, "MV-NR"), eil(2, pus, "MV-NR"), eil(3, 200000, "S-AK"), eil(4, Math.floor(T.mv_goods / 3), "S-AK")]) + "; save();");
-    A = W.dalysAnalize();
-    lygu([A.splitRisk.length, A.splitRisk[0] && A.splitRisk[0].mvValue, A.splitRisk[0] && A.splitRisk[0].mvItems.map(p => p.nr)], [1, pus * 2, ["R-1", "R-2"]], "mažos vertės dalys");
-    W.renderWarningCenter();
-    tiesa(D.getElementById("warningCenter").textContent.indexOf(W.GP_TEISE.cit("dalys_mazos_vertes", "PI")) >= 0, "nuoroda į dalių išimtį");
+    A = W.analizuokPlana(); g = A.grupes[0];
+    lygu([g.lygis, g.mvSum, g.busena, g.kat.mv.map(p => p.nr)], ["s", pus * 2, "klaida", ["R-1", "R-2"]], "mažos vertės dalys");
+    const mv = W.pirkimoPastabos(W.eval("DATA.procurements[0]"), A).iss.find(i => i.sritis === "grupe" && i.sev === "err");
+    tiesa(mv && mv.teise === W.GP_TEISE.cit("dalys_mazos_vertes", "PI") && /Sujunkite/.test(mv.ka), "MV dalies pastaba: " + JSON.stringify(mv));
+    lygu(W.pirkimoPastabos(W.eval("DATA.procurements[2]"), A).iss.filter(i => i.sritis === "grupe" && i.sev === "err").length, 0, "supaprastintas pirkimas - be MV dalių klaidos");
     const src = await (await fetch("EPSO-G_pirkimu_planavimas_MVP.html?b=" + Date.now())).text();
     tiesa(!/isWorks \? 174000 : 70000/.test(src), "įrašytos MV ribos");
   });
 
-  await testas("D2: būdas ir vertė - bendras taisyklių variklis (PĮ): tinka / netinka su nuoroda / patikrinkite; auditas tai sako; CPO netikrinamas", async () => {
+  await testas("D2: būdas ir vertė - bendras taisyklių variklis (PĮ): tinka / netinka su nuoroda / patikrinkite; sąrašo pastabos tai sako; CPO netikrinamas", async () => {
     const p = (v, b) => ({ imone: "LITGRID", rusis: "Paslaugos", objektas: "Paslaugos testui", verte: v, budas: pav(b) });
     lygu([[50000, "S-AK"], [100000, "MV-NR"], [500000, "S-AK"], [300000, "T-AK"]].map(([v, b]) => W.budoPatikra(p(v, b)).busena), ["gerai", "kliutis", "kliutis", "tikrinti"], "būsenos");
     const k = W.validateProc(p(100000, "MV-NR")).find(i => /mažos vertės pirkimo būdas/.test(i.msg));
@@ -613,8 +619,8 @@ async function testaiPatikra1026(){
     lygu([W.budoPatikra(p(500000, "CPO")).busena, W.budoPatikra({ ...p(500000, "T-AK"), budas: "Kažkoks būdas" }).busena], ["netikrinama", "neatpazintas"], "CPO ir neatpažintas");
     svarus();
     W.eval("DATA.procurements = " + JSON.stringify([{ id: "a1", ...p(50000, "S-AK") }, { id: "a2", ...p(100000, "MV-NR") }, { id: "a3", ...p(300000, "T-AK") }]) + "; save();");
-    W.renderMethodAudit();
-    lygu([...D.querySelectorAll("#methodAudit tbody tr")].map(tr => tr.cells[6].textContent.trim()), ["✓ tinka vertei", "✕ netinka vertei", "⚠ patikrinkite"], "audito būsenos");
+    const bud = id => { const i = W.pirkimoPastabos(W.eval("DATA.procurements.find(p => p.id === '" + id + "')"), W.analizuokPlana()).iss.filter(x => x.sritis === "budas" && /vert/.test(x.msg)); return i.length ? i[0].sev : "-"; };
+    lygu(["a1", "a2", "a3"].map(bud), ["-", "err", "warn"], "sąrašo „Pirkimo būdas“ pastabos");
   });
 
   await testas("D1: rūšis „darbai“ mažąja raide - darbų ribos ir „Darbai“ įrašas; „Paslaugos (IT)“ lieka kaip įrašyta, ribos - paslaugų", async () => {
@@ -636,7 +642,7 @@ async function testaiPatikra1026(){
     nustatykImone("ALL");
   });
 
-  await testas("D6: Excel eksportas - visi laukai ir lapas be įmonės; grąžinamas be nuostolių, suvestinės ir validacijos lapai neimportuojami", async () => {
+  await testas("D6: Excel eksportas - visi laukai ir lapas be įmonės; grąžinamas be nuostolių, suvestinės, grupių ir pastabų lapai neimportuojami", async () => {
     tiesa(W.XLSX, "Excel biblioteka neįsikėlė");
     svarus();
     const irasai = [{ id: "e1", nr: "E-1", imone: "LITGRID", rusis: "Prekės", objektas: "Transformatoriai", verte: 300000, bvpz: "31170000-8", sutarciesData: "2027-06-30",
@@ -645,7 +651,7 @@ async function testaiPatikra1026(){
     const tikras = W.XLSX.writeFile; let wb = null;
     W.XLSX.writeFile = (w) => { wb = w; };
     try { D.getElementById("exportCompany").value = "ALL"; D.getElementById("exportInclude").value = "full"; await W.exportExcel(); } finally { W.XLSX.writeFile = tikras; }
-    tiesa(wb && wb.SheetNames.includes("Įmonė nenustatyta") && wb.SheetNames.includes("Validacija"), "lapai: " + (wb && wb.SheetNames));
+    tiesa(wb && wb.SheetNames.includes("Įmonė nenustatyta") && wb.SheetNames.includes("Pastabos") && wb.SheetNames.includes("Grupės"), "lapai: " + (wb && wb.SheetNames));
     const failas = new W.File([W.XLSX.write(wb, { type: "array", bookType: "xlsx" })], "eksportas.xlsx");
     svarus(); nustatykImone("ALL");
     const P = await importuok(failas, 2);
@@ -686,8 +692,8 @@ async function testaiPatikra1026(){
   });
 
   await testas("V5, V6, V8, V10, M4, M5: tuščias planas - ne „Puiku“; pajėgumai - tik rodomi mėnesiai; kortelė - paskelbimas tik skelbiamam būdui; demo - be kortelės; filtras ir paieška", async () => {
-    svarus(); W.renderValidation();
-    tiesa(/Plane pirkimų nėra - nėra ką tikrinti/.test(D.getElementById("validationList").textContent), D.getElementById("validationList").textContent);
+    svarus(); W.goTab("register");
+    tiesa(/Plane pirkimų nėra/.test(D.getElementById("registerWrap").textContent) && !/Puiku|Gerai/.test(D.getElementById("registerWrap").textContent), D.getElementById("registerWrap").textContent);
     // pajėgumai: pirkimas už 14 mėn. lango į sumą nepatenka
     W.eval("DATA.procurements = [{ id:'v1', nr:'V-1', imone:'LITGRID', rusis:'Prekės', objektas:'Sena prekė', verte:1000, budas:" + JSON.stringify(pav("T-SD")) + ", pirkimoData:'2020-01-15' }, { id:'v2', nr:'V-2', imone:'LITGRID', rusis:'Prekės', objektas:'Nauja prekė', verte:1000, budas:" + JSON.stringify(pav("MV-NR")) + ", pirkimoData:'" + ateityje(1) + "' }]; save();");
     W.renderCapacity();
@@ -720,20 +726,201 @@ async function testaiPatikra1026(){
     } finally { f.remove(); }
   });
 
-  await testas("D8: telefone (375 px) terminų skaičiuoklės rezultatas ir centralizavimo bei 20 % lentelės neplečia puslapio", async () => {
+  await testas("D8: telefone (375 px) terminų skaičiuoklės rezultatas, centralizavimas, pirkimų sąrašas su pastabomis ir grupių suvestinė neplečia puslapio", async () => {
     const f = document.createElement("iframe"); f.style.cssText = "position:absolute;left:-9999px;width:375px;height:800px;border:0";
     await new Promise(r => { f.onload = r; f.src = "EPSO-G_pirkimu_planavimas_MVP.html?saugykla=testine&cb=" + Date.now(); document.body.appendChild(f); });
     try {
       const fw = f.contentWindow, fd = f.contentDocument; await lauk(250);
       const plotis = () => fd.documentElement.scrollWidth;
-      fw.populateDurationOptions(); fd.getElementById("durMethod").value = "T-SD"; fd.getElementById("durContract").value = "2027-06-30"; fw.goTab("duration"); fw.runDuration();
+      fw.populateDurationOptions(); fd.getElementById("durMethod").value = "T-SD"; fd.getElementById("durContract").value = "2027-06-30"; fw.goTab("terminai"); fw.runDuration();
       await lauk(60);
       tiesa(plotis() <= 375, "terminų skaičiuoklė: " + plotis() + " px");
       fw.confirm = () => true; fw.eval("DATA = { procurements: [] }"); fw.loadDemo();
       fw.goTab("centralization"); fw.runCentralAnalysis(); fd.querySelectorAll("#centralResult details").forEach(d => d.open = true);
       await lauk(60);
       tiesa(plotis() <= 375, "centralizavimas: " + plotis() + " px");
+      // pertvarka 2026-11-07: sąrašas su atverta pastabų eilute ir grupių suvestinė su atverta grupe
+      fw.goTab("register"); fw.atverkPirkima("d13"); await lauk(60);
+      tiesa(plotis() <= 375 && fd.querySelector(".det-eil .pirk-panele"), "sąrašas su pastabomis: " + plotis() + " px");
+      const pv = fd.querySelector(".det-eil .pirk-panele").getBoundingClientRect();
+      tiesa(pv.left >= 0 && pv.right <= 375, "pastabų skydelis už ekrano: " + Math.round(pv.left) + "-" + Math.round(pv.right));
+      fw.goTab("ribos"); const gb = fd.querySelector(".grp-btn"); gb.click(); await lauk(60);
+      tiesa(plotis() <= 375, "ribos ir grupės: " + plotis() + " px");
     } finally { f.remove(); }
+  });
+}
+
+
+/* 2026-11-07 - PP-plan pertvarka (naudotojo užduotis): 5 skirtukai, vieningas pirkimų sąrašas, ribos pagal to paties tipo pirkimų
+   grupes (VPT vertės skaičiavimo metodika 1S-94, PĮ 13 / VPĮ 5 str. 7-10 d.), neplaninis pirkimas. */
+async function testaiPertvarka1107(){
+  grupe("Pertvarka 2026-11-07: sąrašas, ribos ir grupės, neplaninis pirkimas");
+  W.confirm = () => true; W.alert = () => {};   // be ekrano naršyklė natūralaus lango neuždaro - rinkinys užstrigtų
+  const pav = kodas => W.GP_METHODS.label(kodas);
+  const G = () => W.GP_PLANO_GRUPES, T = () => W.GP_THRESHOLDS.PI;
+  const kat = p => p.k || null, im = p => ({ kodas: p.imone || "LITGRID", rezimas: "PI", org: "litgrid" });
+  const grupuok = (procs, gr) => G().grupuok(procs, { imone: im, kategorija: kat, grupavimas: gr || { skaitmenys: 3, darbai: "objektas" } });
+
+  await testas("Grupavimas: prekės ir paslaugos - pirmi 3 BVPŽ skaitmenys; darbai - kiekvienas atskiras objektas, kol nesujungti; nereguliarus ir žmogaus grupė - atskirai; be BVPŽ - nepatikrinta", async () => {
+    const r = grupuok([
+      { id: "a", rusis: "Prekės", bvpz: "30213100-6", verte: 10 }, { id: "b", rusis: "Prekės", bvpz: "30231300-0", verte: 10 },
+      { id: "c", rusis: "Prekės", bvpz: "30192000-1", verte: 10, nereguliarus: "Taip" }, { id: "d", rusis: "Paslaugos", bvpz: "30200000-1", verte: 10, grupe: "Kita" },
+      { id: "e", rusis: "Darbai", bvpz: "45453000-7", verte: 10 }, { id: "f", rusis: "Darbai", bvpz: "45453000-7", verte: 10 },
+      { id: "g", rusis: "Darbai", bvpz: "45231400-9", verte: 10, objektoGrupe: "TP" }, { id: "h", rusis: "Darbai", bvpz: "45310000-3", verte: 10, objektoGrupe: "TP" },
+      { id: "i", rusis: "Prekės", bvpz: "", verte: 10 }, { id: "j", rusis: "Kita", bvpz: "30200000-1", verte: 10 }]);
+    const rak = r.grupes.map(g => g.items.map(p => p.id).join("")).sort();
+    lygu(rak, ["ab", "c", "d", "e", "f", "gh"], "grupės");
+    lygu([r.nepatikrinti.bvpz.map(p => p.id), r.nepatikrinti.rusis.map(p => p.id)], [["i"], ["j"]], "nepatikrinti");
+  });
+
+  await testas("Lygis pagal grupės vertę; ribos lygios - aukštesnis lygis; MV dalys < MV riba (9 d.), 20 % tik nuo tarptautinės ribos (10 d.), supaprastinta dalis >= 80 000 - klaida (8 d.)", async () => {
+    const t = T(), D = W.GP_THRESHOLDS.DALYS;
+    const L = (v, k, id) => ({ id: id || String(Math.random()), rusis: "Paslaugos", bvpz: "79410000-1", verte: v, k });
+    const vien = items => grupuok(items).grupes[0];
+    lygu([vien([L(t.mv_goods - 1, "mv")]).lygis, vien([L(t.mv_goods, "s")]).lygis, vien([L(t.intl_goods - 1, "s")]).lygis, vien([L(t.intl_goods, "t")]).lygis], ["mv", "s", "s", "t"], "lygiai");
+    // MV dalys: grupė >= MV riba, MV suma = riba - klaida; riba - 1 - gerai (arti - tikrinti)
+    let g = vien([L(t.mv_goods / 2, "mv"), L(t.mv_goods / 2, "mv"), L(10000, "s")]);
+    lygu([g.lygis, g.busena, g.pastabos[0].id], ["s", "klaida", "mv_dalys"], "MV dalys = riba");
+    g = vien([L(t.mv_goods - 1, "mv"), L(10000, "s")]);
+    lygu([g.busena, g.pastabos.map(x => x.id)], ["tikrinti", ["mv_dalys_arti"]], "MV dalys arti ribos");
+    // 20 %: tarptautinė grupė; išimtys = supaprastintos dalys < 80 000 + MV; T metodu perkama - neįskaičiuojama
+    g = vien([L(800000, "t"), L(60000, "s"), L(70000, "s"), L(30000, "mv")]);
+    lygu([g.lygis, g.isimtys, g.isimtysRiba, g.busena], ["t", 160000, 192000, "gerai"], "išimtys 160 000 iš 192 000");
+    g = vien([L(800000, "t"), L(D.prekes_paslaugos, "s")]);
+    lygu([g.busena, g.pastabos.map(x => x.id)], ["klaida", ["s_dalis_virs"]], "dalis = 80 000 - supaprastintai negalima");
+    g = vien([L(t.intl_goods, "t"), L(70000, "s"), L(70000, "s"), L(70000, "s")]);
+    lygu([g.busena, g.pastabos.map(x => x.id).includes("isimtys_virs")], ["klaida", true], "išimtys > 20 %");
+    // Supaprastinto lygio grupei 20 % netaikoma (įstatymo tekstas)
+    g = vien([L(200000, "s"), L(100000, "s")]);
+    lygu([g.lygis, g.isimtysLiko, g.busena], ["s", null, "gerai"], "be 20 % žemiau tarptautinės ribos");
+    // Be būdo - įskaičiuojamas pagal savo vertę ir pasakoma
+    g = vien([L(t.mv_goods / 2, null), L(t.mv_goods / 2, "mv"), L(10000, "s")]);
+    lygu([g.mvSum, g.busena, g.pastabos.some(x => x.id === "be_budo")], [t.mv_goods, "klaida", true], "be būdo");
+  });
+
+  await testas("Neplaninis pirkimas: mažos vertės, supaprastintas ar tarptautinis pagal grupės sumą; grupė tampa tarptautine - ankstesnės išimtys perskaičiuojamos", async () => {
+    const t = T(), L = (v, k) => ({ id: String(Math.random()), rusis: "Prekės", bvpz: "30213100-6", verte: v, k });
+    const g = items => grupuok(items).grupes[0];
+    const n = (gr, V) => G().naujas(gr, V, { rezimas: "PI", darbai: false, org: "litgrid" });
+    lygu(n(null, 20000).galima, ["mv", "s", "t"], "nauja grupė, maža vertė");
+    lygu(n(g([L(63000, "mv")]), 5000).galima, ["mv", "s", "t"], "68 000 - dar mažos vertės");
+    lygu(n(g([L(63000, "mv")]), 10000).galima, ["s", "t"], "73 000: MV dalių suma >= riba - tik supaprastintas");
+    const tg = g([L(1500000, "t"), L(60000, "s")]);
+    lygu([n(tg, 70000).galima, n(tg, 90000).galima, n(tg, 20000).galima], [["s", "t"], ["t"], ["mv", "s", "t"]], "tarptautinė grupė");
+    const r = n(g([L(400000, "s"), L(30000, "mv")]), 50000);
+    // 400 000 + 30 000 + 50 000 >= tarptautinė riba: mažos vertės dalių suma 80 000 >= 70 000 - MV negalima; išimtys 80 000 <= 20 % - supaprastintai galima
+    lygu([r.lygis, r.isimtys, r.kodel.includes("tampa_tarptautine"), r.galima], ["t", 30000, true, ["s", "t"]], "tampa tarptautine");
+    lygu(n(null, 0), null, "be vertės");
+    // 20 %: išimtys jau 140 000, su nauju 50 000 - daugiau nei 20 % iš 690 000 - tik tarptautinis
+    const virs = n(g([L(500000, "t"), L(70000, "s"), L(70000, "s")]), 50000);
+    lygu([virs.galima, virs.kodel[0], virs.isimtys], [["t"], "isimtys_virs", 140000], "20 % viršyta");
+    // Grupė tampa tarptautine: pirkimas be būdo, mažesnis už MV ribą, - mažos vertės dalis (kaip analizuok())
+    const be = n(g([L(330000, "s"), L(40000, null)]), 65000);
+    lygu([be.lygis, be.isimtys, be.galima], ["t", 40000, ["t"]], "be būdo - išimtis");
+    // Numatytasis grupavimas - 3 skaitmenys
+    lygu([G().raktas({ id: "x", rusis: "Prekės", bvpz: "30213100-6" }).kodas, G().raktas({ id: "y", rusis: "Prekės", bvpz: "30" }), G().raktas({ id: "z", rusis: "Prekės", bvpz: "00000000" })], ["302", null, null], "raktas be parinkčių");
+  });
+
+  await testas("Registras: Vertės skaičiavimo metodika (1S-94) ir dalių išimtys kartu, planų suvestinė - PĮ ir VPĮ; BVPŽ grupių pavadinimai sutampa su žodynu", async () => {
+    const cit = (k, r) => W.GP_TEISE.cit(k, r);
+    lygu([cit("vvm_prekes", "PI"), cit("vvm_paslaugos", "VPI"), cit("vvm_darbai", "PI"), cit("dalys_isimtys_kartu", "PI"), cit("dalys_isimtys_kartu", "VPI"), cit("planu_suvestine", "PI"), cit("planu_suvestine", "VPI")],
+      ["Vertės skaičiavimo metodikos 2.9 p.", "Vertės skaičiavimo metodikos 2.7 p.", "Vertės skaičiavimo metodikos 21 p.", "PĮ 13 str. 10 d.", "VPĮ 5 str. 10 d.", "PĮ 38 str. 1 d.", "VPĮ 26 str. 1 d."], "nuorodos");
+    tiesa(/b73b69f05bd711e79198ffdb108a3753/.test(W.GP_TEISE.url("vvm_prekes", "PI")) && /1S-94/.test(W.GP_TEISE.aktas("VVM").patvirtinta), "aktas");
+    const cpv = await (await fetch("../shared/cpv-data.js?cb=" + Date.now())).text();
+    const tikri = {}; for (const m of cpv.matchAll(/\["(\d{3})00000-\d", "([^"]*)"/g)) if (!tikri[m[1]]) tikri[m[1]] = m[2];
+    lygu(W.GP_BVPZ_GRUPES, Object.fromEntries(Object.keys(tikri).sort().map(k => [k, tikri[k]])), "bvpz-grupes.js = cpv-data.js grupės");
+  });
+
+  await testas("Pavyzdžiai: LITGRID grupė 302 - mažos vertės dalių suma viršija ribą, 722 - supaprastinta dalis >= 80 000; skirtukų skaitikliai ir „Ką sutvarkyti“", async () => {
+    const tikras = W.confirm; W.confirm = () => true;
+    try { W.eval("DATA = { procurements: [] }"); W.loadDemo(); } finally { W.confirm = tikras; }
+    const A = W.analizuokPlana(), g = (im, k) => A.grupes.find(x => x.imone === im && x.kodas === k);
+    lygu([g("LITGRID", "302").busena, g("LITGRID", "302").mvSum, g("LITGRID", "722").pastabos.map(x => x.id), g("LITGRID", "501").pastabos.map(x => x.id), g("ECELLS", "722").pastabos.map(x => x.id)],
+      ["klaida", 74900, ["s_dalis_virs", "skirtingi_5"], ["arti_mazos", "skirtingi_5"], ["arti_tarptautines"]], "grupės");
+    lygu(A.metai.length, 1, "visi pavyzdžiai - vienų metų");
+    const sk = id => D.getElementById(id).textContent.replace(/\D.*/, "");
+    lygu([sk("cntSarasas"), sk("cntRibos")], ["5", "2"], "skirtukų skaitikliai");
+    const kas = [...D.querySelectorAll("#warningCenter [data-kas]")].map(b => [b.dataset.kas, b.querySelector(".risk-num b").textContent]);
+    lygu(kas.slice(0, 3), [["klaida", "5"], ["tikrinti", "0"], ["grupe", "2"]], "Ką sutvarkyti");
+  });
+
+  await testas("Pirkimų sąrašas: būsenos filtras su skaičiais, „Ką pataisyti“ - pirmoji klaida trumpai, paspaudus - visos pastabos su „Ką daryti“ ir nuoroda; „Rodyti grupę“ veda į grupę", async () => {
+    W.goTab("register");
+    const bf = [...D.querySelectorAll("#busenosFiltras button")].map(b => [b.dataset.busena, b.getAttribute("aria-pressed"), b.querySelector("b").textContent]);
+    lygu(bf, [["visi", "true", "23"], ["klaida", "false", "5"], ["tikrinti", "false", "0"], ["gerai", "false", "18"]], "filtras");
+    D.querySelector('#busenosFiltras [data-busena="klaida"]').click();
+    const nr = [...D.querySelectorAll("#registerWrap tbody tr[data-id]")].map(tr => tr.cells[0].textContent.trim());
+    lygu(nr.sort(), ["26PP-1", "26PP-13", "26PP-14", "26PP-16", "26PP-23"], "klaidos");
+    const fix = D.querySelector('#registerWrap tr[data-id="d13"] td.fix').textContent;
+    tiesa(/^Grupė 302: mažos vertės pirkimų 74\s900\s€ - ne mažiau už 70\s000\s€/.test(fix.replace(/ /g, " ")), "Ką pataisyti: " + fix);
+    D.querySelector('#registerWrap tr[data-id="d13"] .eil-btn').click(); await lauk(60);
+    const pan = W.eval("PLATUS()") ? D.getElementById("pirkimoPanele") : D.querySelector(".det-eil .pirk-panele");
+    tiesa(pan && D.activeElement === pan, "fokusas - į pastabas");
+    const t = pan.textContent;
+    tiesa(/To paties tipo pirkimų grupė/.test(t) && /Ką daryti:\s*Sujunkite/.test(t) && t.indexOf(W.GP_TEISE.cit("dalys_mazos_vertes", "PI")) >= 0 && /Lygis pagal grupęSupaprastintas pirkimas \(3 pirk\. kartu\)/.test(t), "pastabos: " + t.slice(0, 400));
+    lygu(D.querySelector('#registerWrap tr[data-id="d13"] .eil-btn').getAttribute("aria-expanded"), "true", "aria-expanded");
+    [...pan.querySelectorAll("button")].find(b => /Rodyti grupę/.test(b.textContent)).click(); await lauk(80);
+    lygu([D.querySelector(".section.active").id, D.querySelector("tr.grp-zyme .grp-btn") && D.querySelector("tr.grp-zyme .grp-btn").getAttribute("aria-expanded")], ["sec-ribos", "true"], "grupė atverta");
+    tiesa(/302 Kompiuterinė įranga ir reikmenys/.test(D.querySelector("tr.grp-zyme").textContent) && D.activeElement && D.activeElement.classList.contains("grp-btn"), "grupė pažymėta ir fokusas");
+    // iš grupės - atgal į pirkimą sąraše
+    const atv = [...D.querySelectorAll("tr.grp-eil:not([hidden]) button")].find(b => /Atverti/.test(b.textContent)); atv.click(); await lauk(80);
+    tiesa(D.querySelector(".section.active").id === "sec-register" && /Grupė: 302/.test(D.getElementById("registerFiltrai").textContent) && D.querySelectorAll("#registerWrap tbody tr[data-id]").length === 3, "sąrašas su grupės filtru");
+    W.eval("SARASO_GRUPE = null; SARASO_BUSENA = 'visi'; PASIRINKTAS = null");
+  });
+
+  await testas("Seni skirtukų vardai: validation - sąrašas su klaidomis, method - ribos, duration ir capacity - terminai, import ir export - langai; „Ką sutvarkyti“ - sąrašas su sritimi", async () => {
+    W.goTab("validation"); lygu([D.querySelector(".section.active").id, D.querySelector('#busenosFiltras [aria-pressed="true"]').dataset.busena], ["sec-register", "klaida"], "validation");
+    W.goTab("method"); lygu(D.querySelector(".section.active").id, "sec-ribos", "method");
+    W.goTab("capacity"); lygu([D.querySelector(".section.active").id, !!D.querySelector("#capacityResult table")], ["sec-terminai", true], "capacity");
+    W.goTab("import"); tiesa(D.getElementById("importLangas").classList.contains("show"), "importo langas"); W.uzdarykLanga("importLangas");
+    W.goTab("export"); tiesa(D.getElementById("eksportLangas").classList.contains("show"), "eksporto langas"); W.uzdarykLanga("eksportLangas");
+    W.goTab("dashboard"); D.querySelector('#warningCenter [data-kas="grupe"]').click();
+    lygu(D.querySelector(".section.active").id, "sec-ribos", "grupių kortelė");
+    W.goTab("dashboard"); W.sarasoFiltras("visi", "budas");
+    tiesa(/Pirkimo būdas/.test(D.getElementById("registerFiltrai").textContent), "srities juosta");
+    W.eval("SARASO_SRITIS = null");
+  });
+
+  await testas("Ribos ir grupės: įmonė iš antraštės, metai - pagal pirkimo pradžią; lentelėse - lygis, mažos vertės ir 20 % stulpeliai; „Kaip skaičiuojama“ - su metodikos ir įstatymo nuorodomis", async () => {
+    D.getElementById("companyFilter").value = "LITGRID"; W.goTab("ribos");
+    const r = D.getElementById("ribosRez");
+    lygu([...r.querySelectorAll(".imones-blokas > h3")].map(h => h.textContent.replace(/ · \d{4} m\./, "")), ["LITGRID AB (PĮ)"], "tik pasirinkta įmonė");
+    const eil = [...r.querySelectorAll("table.grupes-lent > tbody > tr:not(.grp-eil)")].map(tr => [tr.cells[0].textContent.trim().slice(0, 3), tr.cells[3].textContent.trim(), tr.cells[6].textContent.trim()]);
+    lygu(eil.slice(0, 3), [["722", "Tarptautinis", "Klaida"], ["302", "Supaprastintas", "Klaida"], ["501", "Mažos vertės", "Patikrinkite"]], "eilutės (klaidos pirmos)");
+    tiesa(/Darbai · mažos vertės riba/.test(r.textContent) && /Į grupes neįtraukta: 1 pirkimų/.test(r.textContent), "darbai ir neįtraukti");
+    const k = D.getElementById("ribosKaipTekstas").textContent;
+    ["vvm_prekes", "vvm_darbai", "vvm_nereguliarios", "vvm_finansiniai_metai"].forEach(x => tiesa(k.indexOf(W.GP_TEISE.cit(x, "PI")) >= 0, "nėra " + x));
+    tiesa(k.indexOf("PĮ 13 str. 10 d.; VPĮ 5 str. 10 d.") >= 0 && /Žemiau tarptautinės ribos 20 % riba netaikoma/.test(k), "20 % paaiškinimas");
+    // kiti metai - atskiros grupės
+    W.eval("DATA.procurements.find(p => p.id === 'd15').pirkimoData = '2031-02-01'; DATA.procurements.find(p => p.id === 'd15').inicData = '2031-01-10'");
+    W.renderRibos();
+    lygu([...D.querySelectorAll("#ribosMetai option")].length, 2, "metų pasirinkimas");
+    D.getElementById("ribosMetai").value = "2031"; W.renderRibos();
+    lygu([...r.querySelectorAll("table.grupes-lent > tbody > tr:not(.grp-eil)")].map(tr => tr.cells[0].textContent.trim().slice(0, 3)), ["722"], "2031 m. - viena grupė");
+    W.loadDemo(); D.getElementById("companyFilter").value = "ALL";
+  });
+
+  await testas("Redagavimo langas: atskira grupė su pagrindimu, darbų objektas ir nereguliarus pirkimas - išsaugoma ir keičia grupes; be pagrindimo - pastaba; Excel eksportas juos grąžina", async () => {
+    W.editProc("d14"); await lauk(60);
+    D.getElementById("f_grupe").value = "Monitoriai"; D.querySelector("#modalContent .btn:not(.secondary):not(.danger)").click();
+    let A = W.analizuokPlana();
+    tiesa(A.pagalId.d14.zmogaus && A.pagalId.d13.items.length === 2, "atskira grupė");
+    tiesa(W.validateProc(W.eval("DATA.procurements.find(p => p.id === 'd14')")).some(i => /įrašykite pagrindimą/.test(i.msg)), "be pagrindimo - pastaba");
+    W.editProc("d14"); await lauk(60);
+    D.getElementById("f_grupesPagrindimas").value = "Kitas naudojimas"; D.getElementById("f_nereguliarus").value = "Taip"; D.querySelector("#modalContent .btn:not(.secondary):not(.danger)").click();
+    A = W.analizuokPlana();
+    tiesa(A.pagalId.d14.nereguliarus && !W.validateProc(W.eval("DATA.procurements.find(p => p.id === 'd14')")).some(i => /pagrindimą/.test(i.msg)), "nereguliarus, pagrindimas");
+    W.editProc("d22"); await lauk(60); D.getElementById("f_objektoGrupe").value = "Administracinis pastatas"; D.querySelector("#modalContent .btn:not(.secondary):not(.danger)").click();
+    W.editProc("d9"); await lauk(60); D.getElementById("f_objektoGrupe").value = "Administracinis pastatas"; D.querySelector("#modalContent .btn:not(.secondary):not(.danger)").click();
+    A = W.analizuokPlana();
+    lygu(A.pagalId.d22 === A.pagalId.d9 && A.pagalId.d9.verte, 8620000, "darbai sujungti");
+    tiesa(W.XLSX, "Excel biblioteka neįsikėlė");
+    const tikras = W.XLSX.writeFile; let wb = null; W.XLSX.writeFile = w => { wb = w; };
+    try { D.getElementById("exportCompany").value = "ALL"; D.getElementById("exportInclude").value = "data"; await W.exportExcel(); } finally { W.XLSX.writeFile = tikras; }
+    const failas = new W.File([W.XLSX.write(wb, { type: "array", bookType: "xlsx" })], "eksportas.xlsx");
+    svarus(); const P = await importuok(failas, 23);
+    const d14 = P.find(p => p.nr === "26PP-14"), d9 = P.find(p => p.nr === "26PP-9");
+    lygu([d14.grupe, d14.grupesPagrindimas, d14.nereguliarus, d9.objektoGrupe], ["Monitoriai", "Kitas naudojimas", "Taip", "Administracinis pastatas"], "grąžinta");
   });
 }
 
@@ -775,16 +962,16 @@ async function testaiSprendimai1106(){
       tiesa(x.reason.includes(pav + " aprašo G-Procure neturi") && /rūšis nesiūloma/.test(x.reason), x.reason);
     }
     lygu(r(200000, "litgrid").recommended, "S-AK", "virš mažos vertės ribos - kaip iki tol");
-    // Sąsaja: pirkimo būdo analizė be rekomenduojamos rūšies ir registras su „MV“
-    D.getElementById("qtValue").value = "10000"; D.getElementById("qtLaw").value = "VPI"; W.runMethodTest();
-    tiesa(/Apklausos rūšis - pagal įmonės aprašą/.test(D.getElementById("methodResult").textContent) && !/null/.test(D.getElementById("methodResult").textContent), D.getElementById("methodResult").textContent.slice(0, 200));
-    D.getElementById("qtLaw").value = "PI"; W.runMethodTest();
-    tiesa(/Rekomenduojama: MV-NZ/.test(D.getElementById("methodResult").textContent), D.getElementById("methodResult").textContent.slice(0, 200));
-    svarus();
+    // Sąsaja: neplaninio pirkimo skaičiuoklė pasako aprašo taisyklę (EPSO-G - aprašo nėra), sąrašo pastabos - lygį pagal grupę
+    svarus(); W.goTab("ribos");
+    const np = (imone) => { D.getElementById("npImone").value = imone; D.getElementById("npRusis").value = "Prekės"; D.getElementById("npBvpz").value = "30192000-1"; D.getElementById("npVerte").value = "10000"; W.skaiciuokNeplanini(); return D.getElementById("npRez").textContent; };
+    const t1 = np("EPSO-G"), t2 = np("LITGRID");
+    tiesa(/Galima mažos vertės pirkimas/.test(t1) && /aprašo G-Procure neturi/.test(t1) && !/null/.test(t1), "EPSO-G: " + t1.slice(0, 300));
+    tiesa(/25IS-54/.test(t2) && /neskelbiama apklausa, ir žodžiu/.test(t2), "LITGRID: " + t2.slice(0, 300));
     W.eval("DATA.procurements = " + JSON.stringify([{ id: "a1", nr: "A-1", imone: "AMBER", rusis: "Prekės", objektas: "Biuro prekės ir reikmenys", verte: 9000, bvpz: "30192000-1", budas: "" }]) + "; save();");
-    W.renderMethodAudit();
-    const eil = [...D.getElementById("methodAudit").querySelectorAll("tr")].find(tr => /A-1/.test(tr.textContent));
-    tiesa(eil && /\bMV\b/.test(eil.textContent) && !/null/.test(eil.textContent), "registre - MV be rūšies: " + (eil && eil.textContent));
+    W.goTab("register"); W.atverkPirkima("a1");
+    const pan = D.getElementById("pirkimoPanele").textContent || (D.querySelector(".det-eil") || {}).textContent || "";
+    tiesa(/Lygis pagal grupęMažos vertės pirkimas/.test(pan) && /Pirkimo būdas nenurodytas/.test(pan) && !/null/.test(pan), "pastabos: " + pan.slice(0, 400));
     const src = await (await fetch("EPSO-G_pirkimu_planavimas_MVP.html?cb=" + Date.now())).text();
     tiesa(!/value < 15000 \? "MV-NZ" : value < 30000/.test(src) && /mvApklausa/.test(src), "senų orientyrų kode nebėra");
     const org = await (await fetch("../shared/organizacijos.js?cb=" + Date.now())).text();
@@ -842,11 +1029,10 @@ async function testaiTrukmes1027(){
     tiesa(/ne teisės aktų terminai/.test(pag) && /Perskaičiuoti datas/.test(pag), "kur taikoma: " + pag);
   });
 
-  await testas("Pasirinkus 2027 m. - trukmės, katalogas, būdo pasirinkimas (lieka tas pats), jau parodytas skaičiavimas ir pirkimo būdo analizės rezultatas perskaičiuojami be naujo paspaudimo", async () => {
+  await testas("Pasirinkus 2027 m. - trukmės, katalogas, būdo pasirinkimas (lieka tas pats) ir jau parodytas skaičiavimas perskaičiuojami be naujo paspaudimo", async () => {
     D.getElementById("durMethod").value = "S-AK"; D.getElementById("durType").value = "A"; D.getElementById("durContract").value = "2027-06-30";
     W.runDuration();
     tiesa(/Bendra trukmė\s*75 d\.d\./.test(D.getElementById("durResult").textContent), "2026 m.: " + D.getElementById("durResult").textContent);
-    D.getElementById("qtValue").value = "100000"; D.getElementById("qtType").value = "Prekės"; D.getElementById("qtLaw").value = "PI"; W.runMethodTest();
     const sel = D.getElementById("durMetai"); sel.value = "2027"; sel.dispatchEvent(new Event("change"));
     lygu(metodai(), lentele(2027), "2027 m. trukmės");
     lygu([D.getElementById("durMethod").value, [...D.getElementById("durMethod").options].find(o => o.value === "S-AK").textContent], ["S-AK", "S-AK - Supaprastintas - atviras konkursas (70 d.d.)"], "būdas");
@@ -855,8 +1041,6 @@ async function testaiTrukmes1027(){
     const dC = W.eval("parseDate")("2027-06-30"), f = W.eval("fmtDate"), a = W.GP_WORKDAYS.addWorkdays;
     tiesa(r.includes(f(a(dC, -70))) && r.includes(f(a(dC, -55))), "datos: " + r);
     lygu([eilute("S-AK").cells[4].textContent, eilute("S-ND").cells[4].textContent, D.getElementById("katalogoMetai").textContent], ["702026 m.: 75", "50", " - 2027 m."], "katalogas");
-    const mr = D.getElementById("methodResult").textContent;
-    tiesa(/2027 m\. standartas/.test(mr), "analizė: " + mr);
     // B grafikas - nuo pasirinktų metų trukmių
     D.getElementById("durType").value = "B"; W.runDuration();
     tiesa(new RegExp("Bendra trukmė\\s*" + (Math.ceil(15 * 1.2) + Math.ceil(55 * 1.2)) + " d\\.d\\.").test(D.getElementById("durResult").textContent), "B grafikas");
@@ -870,7 +1054,7 @@ async function testaiTrukmes1027(){
     let kl = ""; W.confirm = k => { kl = k; return true; }; let pr = ""; W.alert = k => { pr = k; };
     const dC = W.eval("parseDate")("2027-06-30"), f = W.eval("fmtDate"), a = W.GP_WORKDAYS.addWorkdays;
     W.recalcAll();
-    tiesa(/pagal 2027 m\. standartines pirkimų trukmes/.test(kl) && /skirtuke „Terminų skaičiuoklė“/.test(kl), "klausimas: " + kl);
+    tiesa(/pagal 2027 m\. standartines pirkimų trukmes/.test(kl) && /skirtuke „Terminai ir krūvis“/.test(kl), "klausimas: " + kl);
     lygu([W.eval("DATA.procurements[0].pirkimoData"), W.eval("DATA.procurements[0].inicData")], [f(a(dC, -55)), f(a(dC, -70))], "2027 m. datos");
     tiesa(/2027 m\. standartinės trukmės/.test(pr), "pranešimas: " + pr);
     W.pasirinkMetus(2026); W.recalcAll();
@@ -916,6 +1100,8 @@ async function testaiTrukmes1027(){
     await testaiPastabos1105();
     await modulis();
     await testaiSprendimai1106();
+    await modulis();
+    await testaiPertvarka1107();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);

@@ -111,6 +111,16 @@
       patvirtintaEn: "PPO Director's Order No 1S-95 of 28 June 2017 (as worded by Order No 1S-13 of 24 January 2019)",
       redakcija: "suvestinė redakcija nuo 2022-12-31",
       url: "https://www.e-tar.lt/portal/lt/legalAct/04cbd4205bd811e79198ffdb108a3753/asr"
+    },
+    // Numatomos pirkimo vertės skaičiavimo metodika (perskaityta e-tar 2026-11-07, PP-plan pertvarka): ją taiko ir perkančiosios
+    // organizacijos, ir perkantieji subjektai (1 p.); PĮ 13 str. 5 d. ir VPĮ 5 str. - vertė apskaičiuojama pagal VPT metodiką.
+    VVM: {
+      trumpai: "Vertės skaičiavimo metodika",
+      pavadinimas: "Numatomos viešojo pirkimo ir pirkimo vertės skaičiavimo metodika",
+      patvirtinta: "VPT direktoriaus 2017-06-27 įsakymas Nr. 1S-94 (2019-01-24 įsakymo Nr. 1S-14 redakcija)",
+      patvirtintaEn: "PPO Director's Order No 1S-94 of 27 June 2017 (as worded by Order No 1S-14 of 24 January 2019)",
+      redakcija: "suvestinė redakcija nuo 2024-05-01 (pakeista 2023-12-21 Nr. 1S-176 ir 2024-04-26 Nr. 1S-56)",
+      url: "https://www.e-tar.lt/portal/lt/legalAct/b73b69f05bd711e79198ffdb108a3753/asr"
     }
   };
 
@@ -650,7 +660,30 @@
     ktm_formule: { tikrinta: "2026-10-27", apie: "perskaičiavimo formulė (simboliais arba žodžiais); peržiūrint antrą ir vėlesnį kartą ji taikoma tik neišpirktiems kiekiams; formulė gali būti nurodyta ir kainos sudedamosioms dalims, tada pasiūlymo formoje tiekėjai nurodo jų reikšmes ir svarbumą",
       bendra: { a: "KTM", p: "53.2" } },
     ktm_perziura_privaloma: { tikrinta: "2026-10-27", apie: "privaloma numatyti su mokesčių pasikeitimu nesusijusią sutarties kainos peržiūros sąlygą, kai prekių tiekimo, paslaugų teikimo ar darbų atlikimo trukmė kartu su numatytu sutarties pratęsimu ilgesnė negu 6 mėnesiai; netaikoma, kai dėl kainos apskaičiavimo būdo perskaičiavimas negalimas (pvz. kintamo įkainio ar išlaidų atlyginimo kainodara)",
-      bendra: { a: "KTM", p: "54" } }
+      bendra: { a: "KTM", p: "54" } },
+
+    // ---- Numatomos pirkimo vertės skaičiavimo metodika (VPT 1S-94) ir dalių išimtys kartu (perskaityta e-tar 2026-11-07, PP-plan
+    // „Ribos ir grupės“): to paties tipo prekės ir paslaugos - pirmi trys BVPŽ skaitmenys su išimtimis, darbai - pagal objektą
+    vvm_paslaugos: { tikrinta: "2026-11-07", apie: "to paties tipo paslaugos - priklausančios tai pačiai paslaugų grupei pagal BVPŽ kodo pirmus tris skaitmenis, išskyrus kai paslaugų teikimo sritis nėra identiška ar panaši arba tokių paslaugų įprastai neteikia vienas tiekėjas",
+      bendra: { a: "VVM", p: "2.7" } },
+    vvm_prekes: { tikrinta: "2026-11-07", apie: "to paties tipo prekės - priklausančios tai pačiai prekių grupei pagal BVPŽ kodo pirmus tris skaitmenis, išskyrus kai pirmi penki skaitmenys skiriasi ir prekės neskirtos identiškam ar panašiam naudojimui arba tokių prekių savo asortimente įprastai neturi vienas tiekėjas",
+      bendra: { a: "VVM", p: "2.9" } },
+    vvm_abejojant: { tikrinta: "2026-11-07", apie: "jeigu pirkimo vykdytojas neturi pakankamai duomenų sprendimui, kad sutartys ne to paties tipo, jis turi jas priskirti tam pačiam tipui",
+      bendra: { a: "VVM", p: "2.10" } },
+    vvm_nereguliarios: { tikrinta: "2026-11-07", apie: "nereguliaraus pobūdžio sutarties, kurios nenumatoma atnaujinti, pirkimo vertė - tos sutarties vertė; reguliaraus ir nereguliaraus pobūdžio to paties tipo sutarčių vertės skaičiuojamos atskirai",
+      bendra: { a: "VVM", p: "13" } },
+    vvm_finansiniai_metai: { tikrinta: "2026-11-07", apie: "rengiant planą einamiesiems finansiniams metams vertė įprastai skaičiuojama sumuojant per finansinius metus numatomų sudaryti to paties tipo sutarčių vertes, nepriklausomai nuo to, ar sutartis bus sudaryta, ar tik pradėtos pirkimo procedūros",
+      bendra: { a: "VVM", p: "15" } },
+    vvm_darbai: { tikrinta: "2026-11-07", apie: "darbų pirkimo vertė - visų darbų, kurie kartu savarankiškai atlieka vieną ūkinę ar techninę funkciją, sutarčių verčių suma: pagal vieną statinio projektą ar techninę specifikaciją statiniui, o be projekto - identiškų ar panašių (tos pačios veiklos klasės) to paties statinio darbų",
+      bendra: { a: "VVM", p: "21" } },
+    vvm_darbai_laikotarpis: { tikrinta: "2026-11-07", apie: "vieno projekto darbų sutarčių vertės sumuojamos nepriklausomai nuo laikotarpio, o be projekto - per finansinius metus; šios vertės tarpusavyje nesumuojamos",
+      bendra: { a: "VVM", p: "22" } },
+    vvm_dalys_kartu: { tikrinta: "2026-11-07", apie: "kai vertė lygi tarptautinio pirkimo ribai ar ją viršija, mažos vertės ir supaprastintų pirkimų dalių bendra vertė - ne daugiau kaip 20 procentų visų dalių ir pirkimų vertės, ir tenkinamos dalių išimčių sąlygos",
+      bendra: { a: "VVM", p: "37" } },
+    dalys_isimtys_kartu: { tikrinta: "2026-11-07", apie: "kai numatoma vertė lygi tarptautinio pirkimo ribai ar ją viršija ir naudojamasi supaprastintų bei mažos vertės pirkimų dalims išimtimis, šių dalių bendra vertė - ne didesnė kaip 20 procentų bendros visų pirkimo dalių vertės",
+      PI: { a: "PI", s: 13, d: 10 }, VPI: { a: "VPI", s: 5, d: 10 } },
+    planu_suvestine: { tikrinta: "2026-11-07", apie: "einamųjų kalendorinių metų pirkimų planai parengiami ir patvirtinami, o planuojamų pirkimų suvestinė paskelbiama CVP IS ne vėliau kaip iki kovo 15 dienos, patikslinus planus - ne vėliau kaip per 5 darbo dienas",
+      PI: { a: "PI", s: 38, d: 1 }, VPI: { a: "VPI", s: 26, d: 1 } }
   };
   /* VPĮ atitikmenys (2026-09-26) esamiems PĮ raktams: aiškumas ir objekto kiekis - VPĮ 35 str. */
   N.dokumentu_aiskumas.VPI = { a: "VPI", s: 35, d: 4 };
@@ -698,6 +731,7 @@
     var en = kalba === "en";
     if (n.a === "MET") return en ? "Methodology, point " + n.p : "Metodikos " + n.p + " p.";
     if (n.a === "KTM") return en ? "Pricing Rules Methodology, point " + n.p : "Kainodaros taisyklių nustatymo metodikos " + n.p + " p.";
+    if (n.a === "VVM") return en ? "Value Calculation Methodology, point " + n.p : "Vertės skaičiavimo metodikos " + n.p + " p.";
     if (n.a === "ZALIEJI") return n.p
       ? (en ? "Green Procurement Rules, point " + n.p : "Žaliųjų pirkimų tvarkos aprašo " + n.p + " p.")
       : (en ? "Green Procurement Rules (Order No D1-508)" : "Žaliųjų pirkimų tvarkos aprašas (įsakymas Nr. D1-508)");

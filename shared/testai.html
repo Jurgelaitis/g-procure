@@ -862,9 +862,13 @@ async function testaiTeise(){
       const punktai = new Set(GP_TEISE.visos().filter(n => n.a === "MET").map(n => n.p));
       // Kainodaros taisyklių nustatymo metodika (KTM, 2026-10-27) - kitas aktas, jos punktai tikrinami pagal savo įrašus
       const ktm = new Set(GP_TEISE.visos().filter(n => n.a === "KTM").map(n => n.p));
+      // Numatomos pirkimo vertės skaičiavimo metodika (VVM, 2026-11-07) - taip pat atskiras aktas
+      const vvm = new Set(GP_TEISE.visos().filter(n => n.a === "VVM").map(n => n.p));
       while ((m = met.exec(t))) {
-        const kainodaros = /Kainodaros taisykli[ųu] nustatymo\s+$/.test(t.slice(Math.max(0, m.index - 40), m.index));
-        if (!(kainodaros ? ktm : punktai).has(m[1])) blogi.push(f + ":" + eil(m.index) + " " + (kainodaros ? "Kainodaros taisyklių nustatymo metodikos" : "Metodikos") + " punktas ne iš registro: „" + m[0] + "“");
+        const pries = t.slice(Math.max(0, m.index - 40), m.index);
+        const kainodaros = /Kainodaros taisykli[ųu] nustatymo\s+$/.test(pries), vertes = /[Vv]ert[ėe]s skai[čc]iavimo\s+$/.test(pries);
+        const leidz = kainodaros ? ktm : vertes ? vvm : punktai;
+        if (!leidz.has(m[1])) blogi.push(f + ":" + eil(m.index) + " " + (kainodaros ? "Kainodaros taisyklių nustatymo metodikos" : vertes ? "Vertės skaičiavimo metodikos" : "Metodikos") + " punktas ne iš registro: „" + m[0] + "“");
       }
     }
     tiesa(!blogi.length, blogi.join("\n  "));
@@ -5869,7 +5873,13 @@ const PRIEINAMUMO_BUSENOS = {
     ["2 žingsnis: pirkimo objekto dalys - išspręsta pagal dokumentus (D1, 2026-10-19)", dalysIssprestaBusena]],
   "../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html": [["pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ".tabbar .tab:not(a)"],
     // 2026-10-26 (D8): terminų skaičiuoklės rezultatas ir centralizavimo sąrašai telefone plėtė puslapį iki 554 ir 541 px
-    ["terminų skaičiuoklės rezultatas", w => { w.populateDurationOptions(); w.goTab("duration"); w.document.getElementById("durMethod").value = "T-SD";
+    // 2026-11-07 (pertvarka): pirkimų sąrašas su atvertomis pastabomis, ribos su atverta grupe ir neplaninio pirkimo išvada
+    ["pirkimų sąrašas su atvertomis pastabomis", w => { w.confirm = () => true; w.loadDemo(); w.goTab("register"); w.atverkPirkima("d13"); }],
+    ["ribos ir grupės: atverta grupė ir neplaninis pirkimas", w => { w.confirm = () => true; w.loadDemo(); w.goTab("ribos");
+      const b = w.document.querySelector("#ribosRez .grp-btn"); if (b) b.click();
+      w.document.getElementById("npImone").value = "LITGRID"; w.document.getElementById("npRusis").value = "Prekės";
+      w.document.getElementById("npBvpz").value = "30213100-6"; w.document.getElementById("npVerte").value = "12 000"; w.skaiciuokNeplanini(); }],
+    ["terminų skaičiuoklės rezultatas", w => { w.populateDurationOptions(); w.goTab("terminai"); w.document.getElementById("durMethod").value = "T-SD";
       w.document.getElementById("durContract").value = "2027-06-30"; w.runDuration(); }],
     ["centralizavimas su išskleistais sąrašais", w => { w.confirm = () => true; w.loadDemo(); w.goTab("centralization"); w.runCentralAnalysis();
       w.document.querySelectorAll("#centralResult details").forEach(d => { d.open = true; }); }]],
@@ -6452,7 +6462,10 @@ async function testaiPrieinamumas(){
     ["../PP-esg/index.html", "ESRS - pridėti tašką", (w, d) => { w.setView("esrs"); return mygtukas('[onclick="addEsrsPoint()"]')(w, d); }],
     ["../PP-esg/index.html", "ESRS - eksportas", (w, d) => { w.setView("esrs"); return mygtukas('[onclick="openExportModal()"]')(w, d); }],
     ["../PP-esg/index.html", "Informacinė skiltis „Plačiau“ (savas valdymas)", mygtukas("[data-gpi-more]")],
-    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Naujas pirkimas", (w, d) => { d.querySelector('.tab[data-section=register]').click(); return mygtukas('[onclick="addNewProc()"]')(w, d); }],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Naujas pirkimas", (w, d) => { d.querySelector('.tab[data-section=register]').click(); return mygtukas('#sec-register [onclick="addNewProc()"]')(w, d); }],
+    // 2026-11-07 (PP-plan pertvarka): importas ir eksportas - langai antraštėje, ne skirtukai
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Importuoti planą", mygtukas("#btnImportas")],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "Eksportuoti", (w, d) => { w.confirm = () => true; w.loadDemo(); return mygtukas("#btnEksportas")(w, d); }],
     ["../PP-ts/TS_Asistentas.html", "Nustatymai", mygtukas('.btn-header[onclick="App.openSettings()"]')],
     ["../PP-qual/PP-QUAL.html", "Nustatymai", mygtukas('[onclick="openSettings()"]')],
     ["../PP-qual/PP-QUAL.html", "Pradėtas pirkimas", (w, d) => { const b = d.querySelector('[onclick="openSettings()"]'); b.focus(); w.rodykPasirinkima("wizard"); return b; }],
@@ -7297,7 +7310,7 @@ async function testaiFokusas(){
     ["../PP-tiekejams/index.html", "dažnas klausimas", (w, d) => d.querySelector("#homeChips .chip"), /^SUMMARY /],
     ["../PP-esg/index.html", "„Rodyti pavyzdį“", (w, d) => d.getElementById("btnPavyzdys"), /^BUTTON (Slėpti|Hide)/],
     ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - pavyzdžiai", (w, d) => d.querySelector('[onclick="loadDemo()"]'), /^H2 Apžvalga/],
-    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - importas", (w, d) => d.querySelector('[onclick="goTab(\'import\')"]'), /^H2 Excel importas/],
+    ["../PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "tuščias planas - importas (langas)", (w, d) => d.querySelector('#warningCenter [onclick="atverkImporta()"], #sec-dashboard [onclick="atverkImporta()"]'), /^(DIV|INPUT|BUTTON) .*(Vilkite Excel|Importuoti planą iš Excel)/],
     ["../PP-qual/PP-QUAL.html", "1 įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="info"]'), /^H2 1 žingsnis/],
     ["../PP-qual/PP-QUAL.html", "audito įėjimas", (w, d) => d.querySelector('.entry-card[onclick*="check"]'), /^H2 Audito patikra/],
     ["../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html", "nuoroda į skaičiuoklę", (w, d) => d.querySelector('.inline-link-btn[onclick*="calculator"]'), /^H2 .*trukmių/i],
@@ -8291,7 +8304,7 @@ async function testaiSutikimas(){
      grupės aprašas (90ch) ir diagramų tekstas Chart.js numatytuoju Helvetica / Arial (PP-plan, derybos, skaičiuoklė, KNA). */
   await testas("Modulių puslapiai su duomenimis (2026-10-17): 1280 ir 1440 px - lentelės ir žingsnių juostos telpa be slinkties (PP-plan pavyzdžiai ir terminų katalogas, skaičiuoklės pavyzdys, KNA 8 žingsniai, derybų matrica, sąlygų tikrinimo rezultatai), diagramų tekstas - Nunito Sans, tekstas be dirbtinio pločio apribojimo ir tuo pačiu šriftu", async () => {
     const BUS = [
-      ["PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ['[data-section="dashboard"]', '[data-section="register"]', '[data-section="duration"]'], true],
+      ["PP-plan/EPSO-G_pirkimu_planavimas_MVP.html", "pavyzdiniai duomenys", w => { w.confirm = () => true; w.loadDemo(); }, ['[data-section="dashboard"]', '[data-section="register"]', '[data-section="ribos"]', '[data-section="terminai"]'], true],
       ["PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html", "mokomasis pavyzdys", w => w.ikelkPavyzdi(), [], true],
       ["PP-cost-benefit/kastu_naudos_analize.html", "žingsniai", () => {}, [".tabs .tab"], false],
       [NEG.replace("../", ""), "įkainių matrica", w => { negProjektas(w); w.go("analysis"); }, [], true],
