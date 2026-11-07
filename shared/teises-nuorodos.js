@@ -496,6 +496,9 @@
        kiekviena eilutė nurodo šiuos raktus. */
     tarptautinis_pirkimas: { tikrinta: "2026-09-26", apie: "tarptautinis pirkimas - numatoma vertė be PVM lygi arba viršija direktyvos ribas (Europos Komisija jas peržiūri kas 2 metus); socialinėms ir kitoms specialiosioms paslaugoms - atskira riba",
       PI: { a: "PI", s: 12, d: 1 }, VPI: { a: "VPI", s: 4, d: 1 } },
+    specialiosios_paslaugos: { tikrinta: "2026-11-07", apie: "kai perkamos įstatymo priede nurodytos socialinės ir kitos specialiosios paslaugos, tarptautinio pirkimo riba - atskira, didesnė už prekių ir kitų paslaugų",
+      PI: { a: "PI", s: 12, d: 1, p: 2, apie: "kai perkamos įstatymo 4 priede nurodytos socialinės ir kitos specialiosios paslaugos, tarptautiniu pirkimu laikomas pirkimas, kurio numatoma vertė be PVM lygi 1 000 000 Eur arba ją viršija" },
+      VPI: { a: "VPI", s: 4, d: 1, p: 2, apie: "kai perkamos įstatymo 2 priede nurodytos socialinės ir kitos specialiosios paslaugos, tarptautiniu pirkimu laikomas pirkimas, kurio numatoma vertė be PVM lygi 750 000 Eur arba ją viršija" } },
     supaprastintas_pirkimas: { tikrinta: "2026-09-26", apie: "supaprastintas pirkimas - numatoma vertė mažesnė už tarptautinio pirkimo ribas, taip pat dalių išimties pirkimas",
       PI: { a: "PI", s: 12, d: 2 }, VPI: { a: "VPI", s: 4, d: 2 } },
     mazos_vertes_pirkimas: { tikrinta: "2026-09-26", apie: "mažos vertės pirkimas - supaprastintas pirkimas, kai prekių ar paslaugų numatoma vertė mažesnė kaip 70 000 Eur, darbų - mažesnė kaip 174 000 Eur (be PVM), taip pat dalių išimties pirkimas",
@@ -672,7 +675,7 @@
       bendra: { a: "VVM", p: "2.10" } },
     vvm_nereguliarios: { tikrinta: "2026-11-07", apie: "nereguliaraus pobūdžio sutarties, kurios nenumatoma atnaujinti, pirkimo vertė - tos sutarties vertė; reguliaraus ir nereguliaraus pobūdžio to paties tipo sutarčių vertės skaičiuojamos atskirai",
       bendra: { a: "VVM", p: "13" } },
-    vvm_finansiniai_metai: { tikrinta: "2026-11-07", apie: "rengiant planą einamiesiems finansiniams metams vertė įprastai skaičiuojama sumuojant per finansinius metus numatomų sudaryti to paties tipo sutarčių vertes, nepriklausomai nuo to, ar sutartis bus sudaryta, ar tik pradėtos pirkimo procedūros",
+    vvm_finansiniai_metai: { tikrinta: "2026-11-07", apie: "rengiant planus einamiesiems finansiniams metams vertė įprastai skaičiuojama pagal metodikos 14.1 papunktį - pagal metodikos pavyzdį sumuojamos per finansinius metus numatomų sudaryti to paties tipo sutarčių vertės (nepriklausomai nuo to, ar sutartis bus sudaryta, ar tik pradėtos pirkimo procedūros); galima pasirinkti ir 14.2 papunkčio būdą - 12 mėnesių nuo pirmojo prekių pristatymo ar paslaugų suteikimo",
       bendra: { a: "VVM", p: "15" } },
     vvm_darbai: { tikrinta: "2026-11-07", apie: "darbų pirkimo vertė - visų darbų, kurie kartu savarankiškai atlieka vieną ūkinę ar techninę funkciją, sutarčių verčių suma: pagal vieną statinio projektą ar techninę specifikaciją statiniui, o be projekto - identiškų ar panašių (tos pačios veiklos klasės) to paties statinio darbų",
       bendra: { a: "VVM", p: "21" } },

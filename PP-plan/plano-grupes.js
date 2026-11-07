@@ -23,18 +23,27 @@
   var KAT = { mv: "mv", s: "s", t: "t", cpo: "cpo", dps: "dps" };
 
   function bvpzSkaitmenys(bvpz) { return String(bvpz == null ? "" : bvpz).replace(/\D/g, "").slice(0, 8); }
+  // Žmogaus įrašyti pavadinimai lyginami be raidžių dydžio ir pertekliniai tarpų (2026-11-07, patikra P2-D7: „Pastatas A“ ir
+  // „pastatas A “ buvo du objektai), „Taip“ - ir „taip“ (P2-V11: nereguliarus mažąja raide buvo sumuojamas į grupę)
+  function norm(s) { return String(s == null ? "" : s).replace(/\s+/g, " ").trim().toLowerCase(); }
+  function taip(v) { return norm(v) === "taip"; }
 
   /* Grupės raktas. `grupavimas.skaitmenys` - kiek pirmųjų BVPŽ skaitmenų laiko pirkimus to paties tipo (prekėms ir
      paslaugoms); darbai - atskirai (`grupavimas.darbai`: "bvpz" - tais pačiais skaitmenimis, "objektas" - kiekvienas plano
-     įrašas atskiras objektas, kol žmogus nesujungė - `p.objektoGrupe`). Žmogaus priskirta grupė (`p.grupe`) - pirmesnė. */
+     įrašas atskiras objektas, kol žmogus nesujungė - `p.objektoGrupe`). Žmogaus priskirta grupė (`p.grupe`) - pirmesnė.
+     Darbų objektas (vertės skaičiavimo metodikos 22 p.): pagal vieną statinio projektą ar techninę specifikaciją (21.1 p.) -
+     sumuojama nepriklausomai nuo laikotarpio (`visuMetu`), panašūs to paties statinio darbai be projekto (21.2 p.,
+     `p.objektoPagrindas === "panasus"`) - per finansinius metus; pagrindo nenurodžius - kaip 21.1 p. (sumuojama daugiau) ir pasakoma. */
   function raktas(p, grupavimas) {
     var g = grupavimas || {}, n = g.skaitmenys || 3;
     // Nereguliaraus pobūdžio sutartis, kurios nenumatoma atnaujinti, - jos vertė skaičiuojama atskirai (vertės skaičiavimo metodikos 13 p.)
-    if (p.nereguliarus === "Taip") return { raktas: "n:" + p.id, kodas: null, nereguliarus: true };
-    if (p.grupe) return { raktas: "z:" + String(p.grupe).trim().toLowerCase(), kodas: null, zmogaus: true, pavadinimas: String(p.grupe).trim() };
+    if (taip(p.nereguliarus)) return { raktas: "n:" + p.id, kodas: null, nereguliarus: true };
+    if (norm(p.grupe)) return { raktas: "z:" + norm(p.grupe), kodas: null, zmogaus: true, pavadinimas: String(p.grupe).replace(/\s+/g, " ").trim() };
     var s = bvpzSkaitmenys(p.bvpz);
     if (p.rusis === "Darbai" && g.darbai === "objektas") {
-      return p.objektoGrupe ? { raktas: "o:" + p.objektoGrupe, kodas: null, objektas: true }
+      var og = norm(p.objektoGrupe), panasus = p.objektoPagrindas === "panasus";
+      return og ? { raktas: "o:" + (panasus ? "p:" : "") + og, kodas: null, objektas: true, visuMetu: !panasus,
+          pagrindas: panasus ? "panasus" : p.objektoPagrindas === "projektas" ? "projektas" : null }
         : { raktas: "o:" + p.id, kodas: s.length >= n ? s.slice(0, n) : null, objektas: true };
     }
     if (s.length < n || /^0+$/.test(s)) return null;
@@ -42,15 +51,17 @@
   }
 
   /* Ribos grupei: mažos vertės, tarptautinė ir dalių išimties riba pagal įstatymą, rūšį ir vykdytoją
-     (VPĮ - ir centrinės valdžios statusas: GP_TAISYKLES.ribos). */
-  function grupesRibos(rezimas, darbai, vykdytojas) {
+     (VPĮ - ir centrinės valdžios statusas: GP_TAISYKLES.ribos). Socialinės ir kitos specialiosios paslaugos (PĮ 4 priedas,
+     VPĮ 2 priedas; `specialiosios`) - tarptautinė riba intl_special (PĮ 12 str. 1 d. 2 p., VPĮ 4 str. 1 d. 2 p.; 2026-11-07, P2-D5). */
+  function grupesRibos(rezimas, darbai, vykdytojas, specialiosios) {
     var T = global.GP_THRESHOLDS, R = T && T[rezimas];
     if (!R) return null;
     var rb = global.GP_TAISYKLES ? global.GP_TAISYKLES.ribos(rezimas, darbai ? "darbai" : "prekes", vykdytojas) : null;
     var D = T.DALYS || {};
     return {
       maza: darbai ? R.mv_works : R.mv_goods,
-      tarptautine: rb ? rb.tarptautine : (darbai ? R.intl_works : R.intl_goods),
+      tarptautine: specialiosios && !darbai && R.intl_special ? R.intl_special : rb ? rb.tarptautine : (darbai ? R.intl_works : R.intl_goods),
+      specialiosios: !!(specialiosios && !darbai && R.intl_special),
       dalis: darbai ? D.darbai : D.prekes_paslaugos,
       proc: D.dalisProc || 20
     };
@@ -67,6 +78,9 @@
     var sum = {}; Object.keys(kat).forEach(function (k) { sum[k] = suma(kat[k]); });
     var lygis = T >= rb.tarptautine ? "t" : T >= rb.maza ? "s" : "mv";
     var r = { verte: T, lygis: lygis, ribos: rb, kat: kat, sum: sum, pastabos: [], busena: "gerai" };
+    // Pirkimas be vertės į sumą nepatenka - grupės lygis ir likučiai gali būti per maži (P2-D6: grupė rodyta tvarkinga)
+    var beVertes = items.filter(function (p) { return !(p.verte > 0); });
+    if (beVertes.length) r.pastabos.push({ id: "be_vertes", lygis: "tikrinti", items: beVertes });
 
     // Be būdo - į išimtis įskaičiuojami pagal savo vertę (kaip būtų perkami savo verte), ir tai pasakoma
     var beMv = kat.be.filter(function (p) { return p.verte < rb.maza; });
@@ -125,13 +139,20 @@
       var darbai = p.rusis === "Darbai";
       var k = im.kodas + "|" + (darbai ? "d" : "pp") + "|" + r.raktas;
       if (!map[k]) map[k] = { raktas: k, imone: im.kodas, rezimas: im.rezimas, org: im.org, darbai: darbai,
-        kodas: r.kodas, zmogaus: !!r.zmogaus, objektas: !!r.objektas, nereguliarus: !!r.nereguliarus, pavadinimas: r.pavadinimas || null, items: [] };
+        kodas: r.kodas, zmogaus: !!r.zmogaus, objektas: !!r.objektas, nereguliarus: !!r.nereguliarus, pavadinimas: r.pavadinimas || null,
+        visuMetu: !!r.visuMetu, pagrindas: r.pagrindas || null, items: [] };
       map[k].items.push(p);
     });
     var grupes = Object.keys(map).map(function (k) {
-      var g = map[k], rb = grupesRibos(g.rezimas, g.darbai, g.org);
+      var g = map[k];
+      // specialiosios paslaugos - tik kai visi grupės pirkimai tokie; mišri grupė - bendra (mažesnė) riba ir pastaba
+      var sp = !g.darbai && g.items.filter(function (p) { return p.rusis === "Paslaugos" && taip(p.specialiosios); }).length;
+      g.specialiosios = !!sp && sp === g.items.length;
+      var rb = grupesRibos(g.rezimas, g.darbai, g.org, g.specialiosios);
       if (!rb) return null;
       var a = analizuok(g.items, rb, o.kategorija);
+      if (sp && !g.specialiosios) { a.pastabos.push({ id: "specialiosios_misri", lygis: "tikrinti" }); if (a.busena === "gerai") a.busena = "tikrinti"; }
+      if (g.objektas && g.visuMetu && !g.pagrindas) a.pastabos.push({ id: "objekto_pagrindas", lygis: "info" });
       Object.keys(a).forEach(function (x) { g[x] = a[x]; });
       g.rusys = unikalus(g.items.map(function (p) { return p.rusis; }));
       return g;
@@ -144,7 +165,7 @@
   /* Neplaninis (ar naujas) pirkimas: kokį pirkimą galima atlikti, pridėjus V eurų prie grupės g (ar naujos grupės, kai
      g - null; tada reikia rezimas, darbai, org). Grąžina { galima: ["mv"|"s"|"t"], lygis, nauja, kodel: [...] }. */
   function naujas(g, V, kontekstas) {
-    var rb = g ? g.ribos : grupesRibos(kontekstas.rezimas, kontekstas.darbai, kontekstas.org);
+    var rb = g ? g.ribos : grupesRibos(kontekstas.rezimas, kontekstas.darbai, kontekstas.org, kontekstas.specialiosios);
     if (!rb || !(V > 0)) return null;
     var T0 = g ? g.verte : 0, T = T0 + V, mv0 = g ? g.mvSum : 0, is0 = g && g.lygis === "t" ? g.isimtys : 0;
     var out = { verte: T, buvo: T0, lygis: T >= rb.tarptautine ? "t" : T >= rb.maza ? "s" : "mv", ribos: rb, kodel: [] };
@@ -168,10 +189,17 @@
     out.isimtys = ankstesnes; out.isimtysRiba = leidziama;
     out.kodel.push(V >= rb.dalis ? "dalis_per_didele" : ankstesnes + V > leidziama ? "isimtys_virs" : "isimtys_galima");
     if (sGalima && !mvGalima) out.kodel.push("mv_dalis_negalima");
-    if (g && g.lygis !== "t") out.kodel.push("tampa_tarptautine");
+    if (g && g.lygis !== "t") {
+      out.kodel.push("tampa_tarptautine");
+      // Jau suplanuoti pirkimai, kurie su šiuo pirkimu taip pirkti nebegali (P2-D4): supaprastinti, ne mažesni už dalių
+      // išimties ribą, - tik tarptautiniu būdu; ir kai jau suplanuotos išimtys pačios viršija 20 %
+      out.paveikti = g.kat.s.concat(g.kat.be.filter(function (p) { return p.verte >= rb.maza; })).filter(function (p) { return p.verte >= rb.dalis; });
+      if (out.paveikti.length) out.kodel.push("paveikti_s");
+      if (ankstesnes > leidziama) out.kodel.push("ankstesnes_virs");
+    }
     return out;
   }
 
   global.GP_PLANO_GRUPES = { raktas: raktas, ribos: grupesRibos, analizuok: analizuok, grupuok: grupuok, naujas: naujas,
-    bvpzSkaitmenys: bvpzSkaitmenys, KAT: KAT };
+    bvpzSkaitmenys: bvpzSkaitmenys, norm: norm, taip: taip, KAT: KAT };
 })(typeof window !== "undefined" ? window : this);
