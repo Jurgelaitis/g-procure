@@ -323,7 +323,7 @@ async function testaiIkelimas(){
     await S.mount({ target: el, url: "x.json", lang: "lt", saknis: "", fetch: fakeFetch(null, { ok: false, status: 404 }) });
     tiesa(/Nepavyko įkelti stebėsenos duomenų/.test(el.textContent), el.textContent); tiesa(!/pokyčių nėra/i.test(el.textContent)); tiesa(el.querySelector('a[href="PP-teise/index.html"]'), "nuoroda į modulį"); el.remove();
   });
-  await testas("Portalo blokas: rodomi TIK įrašai su redakciniu prioritetu, jo tvarka, su trumpu pavadinimu, „kodėl aktualu“ ir datos reikšme", async () => {
+  await testas("Portalo blokas (2026-11-07 vizualus): rodomi TIK įrašai su redakciniu prioritetu, jo tvarka, su trumpu pavadinimu, data plytelėje, būsena, skaičiais ir laiko juosta; be „patvirtinti specialisto“", async () => {
     const el = document.createElement("div"); document.body.appendChild(el);
     const reg = { meta: { versija: "t", patikrinta: DABAR, rezimas: "rankinis" }, irasai: [
       irasas({ id: "naujas", pavadinimas: "NAUJAUSIAS BE PRIORITETO", datos: { isigalioja: "2026-09-23" } }),
@@ -334,11 +334,16 @@ async function testaiIkelimas(){
       irasas({ id: "patv", pavadinimas: "PATV", busena: "patvirtinta", portalas: { prioritetas: 3 }, saltinis: { url: "https://y.lt" } }),
       irasas({ id: "ketvirtas", pavadinimas: "KETVIRTAS", portalas: { prioritetas: 4 }, saltinis: { url: "https://z.lt" } })] };
     await S.mount({ target: el, url: "x.json", lang: "lt", saknis: "", dabar: DABAR, fetch: fakeFetch(reg) });
-    lygu([...el.querySelectorAll("a.gps__nuoroda")].map(a => a.textContent.trim()), ["Trumpas pirmas", "Trumpas antras", "PATV"], "prioriteto tvarka, be demo/archyvo, iki trijų");
+    lygu([...el.querySelectorAll("a.gps-pk__a")].map(a => a.textContent.trim()), ["Trumpas pirmas", "Trumpas antras", "PATV"], "prioriteto tvarka, be demo/archyvo, iki trijų");
     const t = el.textContent; tiesa(!/NAUJAUSIAS/.test(t) && !/KETVIRTAS/.test(t), "naujumas ir 4-as prioritetas nerodomi");
-    tiesa(/Kodėl pirmas/.test(t) && /Įsigalioja 2027-01-01: procedūroms nuo 2027-01-01/.test(t), "kodėl ir datos reikšmė: " + t);
-    tiesa(el.querySelector('a[href="PP-teise/index.html#irasas=pirmas"]') && /Atverti stebėseną/.test(tekstas(el.querySelector(".gps__cta"))) && el.querySelector("h2.gps__title"), "nuoroda, mygtukas, antraštė");
-    tiesa(/Registras atnaujintas 2026-09-24 · Atnaujinama rankiniu būdu · Paaiškinimai patvirtinti specialisto: 1 iš 5/.test(t), "būsenos eilutė iš duomenų: " + t.slice(-300)); el.remove();
+    const k = [...el.querySelectorAll(".gps-pk")];
+    tiesa(/Sau\s*1\s*2027/.test(tekstas(k[0].querySelector(".gps-kal"))) && /Įsigalios po 99 d\./.test(tekstas(k[0])) && /Galioja/.test(tekstas(k[1])), "data plytelėje ir būsena: " + tekstas(k[0]) + " | " + tekstas(k[1]));
+    tiesa(!/Kodėl pirmas|Kodėl antras/.test(t), "paaiškinimai - modulyje, ne portale");
+    tiesa(el.querySelector('a[href="PP-teise/index.html#irasas=pirmas"]') && /Atverti stebėseną/.test(tekstas(el.querySelector(".gps__cta"))) && el.querySelector("h2.gps__title") && el.querySelectorAll("h3.gps-pk__pav").length === 3, "nuoroda, mygtukas, antraštės");
+    const sk = [...el.querySelectorAll(".gps-sk")].map(tekstas); lygu(sk, ["1 įsigalios netrukus", "4 jau galioja", "0 teismų sprendimai", "0 projektai"], "skaičiai iš duomenų");
+    tiesa(el.querySelector('.gps-sk--busima[href="PP-teise/index.html?vaizdas=isigalios&rezimas=abu"]'), "skaičius veda į vaizdą");
+    tiesa(el.querySelector('.gps-lj .gps-lj__t--nr[data-id="pirmas"]') && tekstas(el.querySelector('.gps-lj__t--nr[data-id="pirmas"]')) === "1" && el.querySelector(".gps-lj").getAttribute("aria-hidden") === "true", "laiko juostoje - numeris kaip kortelėje");
+    tiesa(/Atnaujinta 2026-09-24/.test(t) && !/patvirtinti specialisto|rankiniu būdu|nepatvirtint/.test(t), "būsena be specialisto patvirtinimo: " + t.slice(-300)); el.remove();
   });
   await testas("Portalo blokas be prioritetų: pasakoma, kad juos parenka administratorius - jokio automatinio „aktualumo“", async () => {
     const el = document.createElement("div"); document.body.appendChild(el);
@@ -367,7 +372,7 @@ async function testaiRegistras(){
     T.irasai.forEach(x => {
       if (!x.saltinis.url || !/^https:\/\//.test(x.saltinis.url)) blogi.push(x.id + ": šaltinis");
       if (!x.rezimas.length) blogi.push(x.id + ": režimas"); if (!x.busenosIstorija.length) blogi.push(x.id + ": istorija");
-      if (!x.patikrinta || !x.datos.aptikta) blogi.push(x.id + ": patikrinta/aptikta"); if (!x.kamAktualu || !x.veiksmas) blogi.push(x.id + ": kamAktualu/veiksmas");
+      if (!x.patikrinta || !x.datos.aptikta) blogi.push(x.id + ": patikrinta/aptikta"); if (x.busena !== "aptikta" && (!x.kamAktualu || !x.veiksmas)) blogi.push(x.id + ": kamAktualu/veiksmas");   // aptiktas (savaitinės patikros) - tik faktai, analizė po peržiūros
     });
     /* Anksčiau čia buvo „visi laukia“ - tai 2026-09-24 būklė, ne taisyklė: pirmas teisininko patvirtinimas testą būtų
        sulaužęs. Taisyklė: būsena iš žodyno, o kiekvienas patvirtinimas atsekamas (admin.html be vardo netvirtina). */
@@ -377,8 +382,10 @@ async function testaiRegistras(){
   /* Taisyklės, ne šios dienos skaičiai: registrą papildžius (savaitinė patikra) ar radus tikrą „buvo / tapo“
      palyginimą testas lieka teisingas, bet įrašas be ištraukos ar palyginimas be abiejų redakcijų - krenta. */
   await testas("Pažodinės ištraukos: visi įrašai, išskyrus vertės ribų įrašą, turi citatą su tikslia vieta; „buvo / tapo“ - tik su abiem redakcijomis ir šaltiniu", () => {
-    const su = T.irasai.filter(x => x.istrauka); tiesa(su.length === T.irasai.length - 1, "su ištrauka " + su.length + " iš " + T.irasai.length); tiesa(su.every(x => x.istrauka.vieta && x.istrauka.tekstas.length > 40), "vieta ir tekstas");
-    lygu(T.irasai.filter(x => !x.istrauka).map(x => x.id), ["gprocure-vertes-ribos-2026"]);
+    /* Savaitinės patikros nauji įrašai (busena „aptikta“) gali būti be ištraukos - ji įrašoma po peržiūros (2026-11-07). */
+    const vertinami = T.irasai.filter(x => x.busena !== "aptikta"), su = vertinami.filter(x => x.istrauka);
+    tiesa(su.length === vertinami.length - 1, "su ištrauka " + su.length + " iš " + vertinami.length); tiesa(T.irasai.filter(x => x.istrauka).every(x => x.istrauka.vieta && x.istrauka.tekstas.length > 40), "vieta ir tekstas");
+    lygu(vertinami.filter(x => !x.istrauka).map(x => x.id), ["gprocure-vertes-ribos-2026"]);
     tiesa(T.irasai.filter(x => x.palyginimas).every(x => x.palyginimas.buvo && x.palyginimas.tapo && x.palyginimas.saltinis), "palyginimas be abiejų redakcijų ar šaltinio");
   });
   await testas("Redakcinis prioritetas portalui: trys įrašai su prioritetais 1-3, trumpu pavadinimu, „kodėl“ ir kas parinko; PĮ pirmas", () => {
@@ -396,7 +403,8 @@ async function testaiRegistras(){
     lygu([pi.datos.isigalioja, vpi.datos.isigalioja], ["2027-01-01", "2027-01-01"]); lygu([pi.susije, vpi.susije], [[vpi.id], [pi.id]]); tiesa(pi.reikiaSpecialisto && pi.specialistoPriezastis);
     tiesa(S.dokumentoIstorija(pi, T.irasai, DABAR).map(x => x.id).includes("pi-16-101-transliavimas-xv-934"), "PĮ istorija");
     const p = T.irasai.find(i => i.rusis === "projektas"); lygu(p.datos.isigalioja, null); tiesa(p.projektoEiga && p.projektoEiga.busena && S.yraData(p.projektoEiga.patikrinta), "projekto eiga su patikros data");
-    const t = T.irasai.filter(i => i.rusis === "teismu_praktika"); lygu(t.length, 9); t.forEach(x => { tiesa(x.identifikatoriai.bylosNr && /liteko|eur-lex|e-tar/.test(x.saltinis.url) && x.reikiaSpecialisto, x.id); lygu(x.datos.isigalioja, null); });
+    /* Savaitinės patikros faktų įrašai („aptikta“) - be analizės, todėl tikrinami tik išanalizuoti. */
+    const t = T.irasai.filter(i => i.rusis === "teismu_praktika" && i.busena !== "aptikta"); lygu(t.length, 9); t.forEach(x => { tiesa(x.identifikatoriai.bylosNr && /liteko|eur-lex|e-tar/.test(x.saltinis.url) && x.reikiaSpecialisto, x.id); lygu(x.datos.isigalioja, null); });
   });
   await testas("Susiję moduliai rodo į egzistuojančius puslapius (HTTP 200)", async () => {
     const keliai = new Set(); T.irasai.forEach(x => x.moduliai.forEach(m => keliai.add(S.MODULIAI[m.modulis].kelias)));
@@ -427,20 +435,22 @@ async function testaiPuslapis(){
     const aktyvus = REG.irasai.filter(r => r.busena !== "archyvuota" && !r.pakeistas && !r.demo), patv = aktyvus.filter(r => r.busena === "patvirtinta").length;
     const patikros = SAL.patikros.filter(p => /^\d{4}-\d{2}-\d{2}$/.test(p.data)).sort((x, y) => x.data < y.data ? 1 : x.data > y.data ? -1 : 0);
     const ok = patikros.find(p => p.rezultatas === "ok"), nepavyko = patikros.some(p => p.data === patikros[0].data && p.rezultatas !== "ok"), auto = !!(SAL.automatinePatikra && SAL.automatinePatikra.idiegta);
-    tiesa(b.includes("Registras atnaujintas " + REG.meta.patikrinta) && b.includes((auto ? "Atnaujinama automatiškai" : "Atnaujinama rankiniu būdu - ne automatinė stebėsena"))
-      && b.includes("Šaltiniai tikrinti " + ok.data) && /NEPAVYKO/.test(b) === nepavyko && b.includes("Paaiškinimai patvirtinti specialisto: " + patv + " iš " + aktyvus.length), b);
+    /* 2026-11-07 (naudotojo sprendimas): antraštėje - kada atnaujinta ir kada kita savaitinė patikra, be „patvirtinti specialisto“ skaičiaus */
+    void patv; void auto;
+    tiesa(b.includes("Atnaujinta " + REG.meta.patikrinta) && /Kita šaltinių patikra - (šiandien|pirmadienį, \d{4}-\d{2}-\d{2})/.test(b) && b.includes("Registras atnaujintas " + REG.meta.patikrinta)
+      && b.includes("Šaltiniai tikrinti " + ok.data) && /NEPAVYKO/.test(b) === nepavyko && !/patvirtinti specialisto/.test(b) && aktyvus.length > 0, b);
     tiesa(/Pirkimų teisės stebėsena/.test(tekstas(d.querySelector("h1"))) && tekstas(d.querySelector(".ivadas")).split(". ").length <= 2, "antraštė ir vienas sakinys");
-    tiesa(/nepatvirtinti teisės specialisto/.test(tekstas(d.getElementById("pranesimai"))), "matomas įspėjimas");
+    tiesa(!/nepatvirtinti teisės specialisto/.test(tekstas(d.getElementById("pranesimai"))) && /nėra teisinė išvada - prieš sprendimą atverkite šaltinį/.test(tekstas(d.querySelector("footer"))), "be įspėjimų juostos, viena pastaba poraštėje");
     const st = w.getComputedStyle(d.getElementById("isdestymas")).gridTemplateColumns.split(" "); lygu(st.length, 2, "dvi sritys");
     const santykis = d.querySelector(".sarasas-stulpelis").getBoundingClientRect().width / d.getElementById("isdestymas").getBoundingClientRect().width; tiesa(santykis > 0.28 && santykis < 0.42, "sąrašo plotis " + santykis.toFixed(2));
     lygu(w.PPTEISE.pasirinktas(), idai(d)[0], "pirmas pasirinktas"); lygu(d.querySelectorAll('#sarasas .eilute[aria-current="true"]').length, 1, "vienas aria-current");
     lygu(detId(d), idai(d)[0], "detalės rodo pasirinktą"); tiesa(/^1 iš \d+$/.test(tekstas(d.getElementById("detalesPozicija"))), "pozicija: " + tekstas(d.getElementById("detalesPozicija")));
     tiesa(w.getComputedStyle(d.body).fontSize === "16px" && !/CORS|403/.test(tekstas(d.querySelector(".virsus"))) && !d.getElementById("diagnostika").open, "16 px, be technikos antraštėje, diagnostika uždaryta");
   });
-  await testas("Sąrašo eilutė: rūšis ir režimas, pavadinimas, identifikatorius, svarbiausia data su reikšme, tema, kompaktiška patvirtinimo būsena; nuoroda be išskleidimų", async () => {
+  await testas("Sąrašo eilutė: data plytelėje, rūšis, režimas ir identifikatorius, trumpas pavadinimas, būsena, susiję įrankiai, data ekrano skaitytuvui; be „nepatvirtinta“; nuoroda be išskleidimų", async () => {
     const d = P.d, e = d.querySelector('#sarasas .eilute[data-id="vpt-metodika-1s-82-2026"]'); tiesa(e, "eilutė");
-    const bus = P.w.PPTEISE.registras().irasai.find(x => x.id === "vpt-metodika-1s-82-2026").busena, eilBusena = { patvirtinta: "✓ patvirtinta", archyvuota: "▣ archyvuota" }[bus] || "◔ nepatvirtinta";
-    const t = tekstas(e); tiesa(/Metodinė medžiaga · PĮ \+ VPĮ/.test(t) && /Nr\. 1S-82 · Galioja nuo 2026-07-01 - Procedūroms/.test(t) && t.includes("Kvalifikacija · " + eilBusena), t);
+    const t = tekstas(e); tiesa(/Metodinė medžiaga · PĮ \+ VPĮ · Nr\. 1S-82/.test(t) && /VPT Metodika: nauja patirties reikalavimų formuluotė/.test(tekstas(e.querySelector(".eilute__pav"))) && /Galioja/.test(tekstas(e.querySelector(".gps-zyma")))
+      && /Kvalifikacija/.test(t) && /Galioja nuo 2026-07-01/.test(tekstas(e.querySelector(".sr"))) && /Lie\s*1\s*2026/.test(tekstas(e.querySelector(".gps-kal"))) && !/nepatvirtint/.test(t), t);
     tiesa(!e.querySelector("details, button") && e.tagName === "A" && /#irasas=vpt-metodika-1s-82-2026$/.test(e.getAttribute("href")), "nuoroda be išskleidimų"); tiesa(e.getBoundingClientRect().height < 160, "kompaktiška: " + e.getBoundingClientRect().height);
   });
   await testas("Pasirinkimas keičia TIK detales: sąrašo elementai ir jo slinktis išlieka, adresas gauna #irasas=, pranešama gyvoje srityje, fokusas neperkeliamas", async () => {
@@ -457,12 +467,15 @@ async function testaiPuslapis(){
     w.history.back(); await kol(() => w.PPTEISE.pasirinktas() === ids[0], "atgal į pirmą (be #irasas)");
     w.history.forward(); await kol(() => w.PPTEISE.pasirinktas() === ids[1], "pirmyn"); tiesa(/saugykla=testine/.test(w.location.search), "parametrai išliko");
   });
-  await testas("Detalės A-G: antraštė su identifikatoriumi, rūšimi, galia ir patvirtinimu; esmė; kam aktualu su „Kodėl man aktualu?“; nuo kada; ką peržiūrėti; pagrindimas su citata; rekvizitai sutraukti", async () => {
+  await testas("Detalės (2026-11-07): antraštė su data, identifikatoriumi, rūšimi ir galia; esmė; „Ką daryti“ su įrankiais; nuo kada; kam aktualu su „Kodėl man aktualu?“; šaltinio mygtukas; pagrindimas su citata ir rekvizitai sutraukti", async () => {
     await atstatyk(P); const d = P.d, w = P.w; w.PPTEISE.pasirink("vpt-metodika-1s-82-2026"); await laukk(50);
-    lygu([...d.querySelectorAll("#irasas h3")].map(tekstas), ["Pokyčio esmė", "Kam aktualu", "Nuo kada taikoma", "Ką peržiūrėti", "Pagrindimas ir šaltiniai"], "A-F antraštės");
-    const patvirtintas = w.PPTEISE.registras().irasai.find(x => x.id === "vpt-metodika-1s-82-2026").busena === "patvirtinta";
-    const a = tekstas(d.querySelector("#irasas .metos")); tiesa(/Metodinė medžiaga · Teisės norma \(privaloma teisės norma\)/.test(a) && (patvirtintas ? /Paaiškinimas patvirtintas specialisto/ : /Paaiškinimas nepatvirtintas/).test(a), a);
-    tiesa(/Nr\. 1S-82 · Galioja nuo 2026-07-01/.test(tekstas(d.querySelector("#irasas > article > p.muted"))), "identifikatorius ir data po antrašte");
+    lygu([...d.querySelectorAll("#irasas h3")].map(tekstas), ["Esmė", "Ką daryti", "Nuo kada", "Kam aktualu", "Pagrindimas ir šaltiniai"], "skilčių antraštės");
+    const a = tekstas(d.querySelector("#irasas .metos")); tiesa(/Metodinė medžiaga · Teisės norma \(privaloma teisės norma\)/.test(a) && /Galioja/.test(a) && !/patvirtint/.test(a), a);
+    tiesa(/Nr\. 1S-82 · Galioja nuo 2026-07-01/.test(tekstas(d.querySelector("#irasas p.detales-meta"))) && /Lie\s*1\s*2026/.test(tekstas(d.querySelector("#irasas .det__g .gps-kal"))), "identifikatorius ir data po antrašte, data plytelėje");
+    tiesa(tekstas(d.getElementById("detH")) === "VPT Metodika: nauja patirties reikalavimų formuluotė" && /VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodika/.test(tekstas(d.querySelector("#irasas .det__pilnas"))), "trumpas pavadinimas ir pilnas po juo");
+    const dar = d.querySelector("#irasas .det__daryti"); tiesa(dar && dar.querySelectorAll("li").length >= 1 && [...dar.querySelectorAll(".veiksmai a")].some(x => /Atverti: /.test(x.textContent)), "„Ką daryti“ su punktais ir įrankiais");
+    const sal = d.querySelector("#irasas a.btn--saltinis"); tiesa(sal && /e-tar\.lt/.test(sal.href) && sal.target === "_blank", "šaltinio mygtukas");
+    tiesa(/nėra teisinė išvada - prieš sprendimą atverkite šaltinį/.test(tekstas(d.querySelector("#irasas .det__pastaba"))) && !d.querySelector("#irasas .desmesio-blokas"), "viena pastaba vietoj įspėjimų");
     const ka = tekstas(d.querySelector("#irasas .aktualumas")); tiesa(/Kodėl man aktualu\?/.test(ka) && /nurodykite: pirkimo būdas, pirkimo objektas, etapas, planuojama skelbimo data/.test(ka) && /Rizikos balo neskaičiuojame/.test(ka), "trūkstami duomenys įvardyti, ne balas: " + ka);
     const bq = d.querySelector("#irasas blockquote.istrauka"); tiesa(bq && /16\.3\. Reikalavimai dėl patirties/.test(tekstas(bq)) && /Pažodinė ištrauka: 1\.5 p\./.test(tekstas(bq.querySelector("cite"))), "citata su vieta: " + tekstas(bq));
     tiesa(/Palyginamų redakcijų \(buvo \/ tapo\) registre nėra - palyginimas neatliktas/.test(tekstas(d.getElementById("irasas"))), "sąžiningas buvo/tapo");
@@ -473,7 +486,7 @@ async function testaiPuslapis(){
   await testas("Dokumento istorija susieja PĮ pokyčius; vidaus sandorių įrašas rodo išimtis ir specialisto vertinimą NE sutrauktoje dalyje", async () => {
     const d = P.d, w = P.w; w.PPTEISE.pasirink("pi-19-vidaus-sandoriai-xv-1132"); await laukk(50); lygu(w.PPTEISE.vaizdas(), "isigalios", "perjungtas vaizdas");
     const t = tekstas(d.getElementById("irasas")); tiesa(/Dokumento istorija registre/.test(t) && /PĮ 16 ir 101 straipsnių pakeitimas/.test(t) && /atskiras pokytis, ne bendra kortelė/.test(t), "istorija");
-    tiesa([...d.querySelectorAll("#irasas .desmesio-blokas")].some(b => matomas(b) && !b.closest("details") && /Reikalingas specialisto vertinimas/.test(tekstas(b))), "specialisto blokas matomas, ne sutrauktoje dalyje");
+    const dar = d.querySelector("#irasas .det__daryti"); tiesa(dar && matomas(dar) && !dar.closest("details") && /Įvertinkite su teisės specialistu: /.test(tekstas(dar)), "specialisto vertinimas - „Ką daryti“ punktas, ne sutrauktoje dalyje");
     tiesa(/Įsigalioja 2027-01-01 - Pirkimų procedūroms, pradėtoms nuo 2027-01-01/.test(t) && /Pereinamosios nuostatos ir išimtys/.test(t) && /Iki 2026-12-31 pradėtos/.test(t), "nuo kada ir pereinamosios");
     tiesa(/Susiję įrašai: VPĮ 10 straipsnio/.test(t), "susijęs dvynys");
   });
@@ -572,13 +585,13 @@ async function testaiTestinisRegistras(){
   await testas("Atšauktas įrašas nerodomas; su archyvo filtru atsiranda vaizdas „Archyvas“ su priežastimi rekvizituose ir būsena „Archyvuota“", async () => {
     await atstatyk(P); tiesa(!idai(d).includes("test-atsauktas") && d.getElementById("tab-archyvas").hidden, "paslėptas");
     d.getElementById("daugiauBtn").click(); d.getElementById("fArchyvas").click(); await laukk(80); tiesa(!d.getElementById("tab-archyvas").hidden, "vaizdas atsirado"); d.getElementById("tab-archyvas").click(); await laukk(50);
-    tiesa(idai(d).includes("test-atsauktas"), "archyve"); w.PPTEISE.pasirink("test-atsauktas"); await laukk(50); tiesa(/Aktas pakeistas nauja redakcija/.test(tekstas(d.querySelector("#irasas details.rekvizitai"))) && /▣ Archyvuota/.test(tekstas(d.querySelector("#irasas .metos"))), "priežastis ir būsena");
+    tiesa(idai(d).includes("test-atsauktas"), "archyve"); w.PPTEISE.pasirink("test-atsauktas"); await laukk(50); tiesa(/Aktas pakeistas nauja redakcija/.test(tekstas(d.querySelector("#irasas details.rekvizitai"))) && /Archyvuota/.test(tekstas(d.querySelector("#irasas .metos .gps-zyma"))), "priežastis ir būsena");
     d.getElementById("fArchyvas").click(); await laukk(50); lygu(w.PPTEISE.vaizdas(), "pasikeite", "grįžta į numatytą vaizdą"); d.getElementById("daugiauBtn").click();
   });
   await testas("Trūkstama įsigaliojimo data -> vaizdas „Trūksta duomenų“ (ne „Kita“), detalėse matomas įspėjimas ir „nenurodyta“, data nespėjama", async () => {
     tiesa(!d.getElementById("tab-truksta").hidden && /Trūksta duomenų/.test(tekstas(d.getElementById("tab-truksta"))), "vaizdo pavadinimas"); d.getElementById("tab-truksta").click(); await laukk(50);
     tiesa(idai(d).includes("test-be-datos"), "sąraše"); w.PPTEISE.pasirink("test-be-datos"); await laukk(50);
-    const t = tekstas(d.getElementById("irasas")); tiesa([...d.querySelectorAll("#irasas .desmesio-blokas")].some(b => /Įsigaliojimo data šaltinyje nenurodyta/.test(tekstas(b))) && /Priimta 2026-05-05 - įsigaliojimo data šaltinyje nenurodyta/.test(t) && /Įsigalioja: nenurodyta/.test(t), t.slice(0, 400));
+    const t = tekstas(d.getElementById("irasas")); tiesa([...d.querySelectorAll("#irasas .desmesio-blokas")].some(b => /Įsigaliojimo data šaltinyje nenurodyta/.test(tekstas(b))) && /Priimta 2026-05-05 - įsigaliojimo data šaltinyje nenurodyta/.test(t) && /Įsigalioja\s*nenurodyta/.test(tekstas(d.querySelector("#irasas .zingsniai"))), t.slice(0, 400));
   });
   await testas("Neteisinga modulio nuoroda atmesta; nesaugus adresas ir HTML tekste - be nuorodos, tekstas kaip tekstas", async () => {
     await atstatyk(P); const x = T.irasai.find(i => i.id === "test-neteisingas-modulis"); lygu(x.moduliai.map(m => m.modulis), ["PP-qual"]); tiesa(x.klaidos.some(k => /nežinomas modulis/.test(k)));
@@ -587,7 +600,7 @@ async function testaiTestinisRegistras(){
     tiesa(!el.querySelector('a[href^="javascript"]') && !el.querySelector("img") && /Šaltinio nuoroda nenurodyta/.test(tekstas(el)) && /<img src=x onerror=alert\(1\)>/.test(tekstas(el)), "saugu ir kaip tekstas");
   });
   await testas("Nepatvirtinta AI santrauka pažymėta; senas rinkinys - įspėjimas su dienų skaičiumi; tik VPĮ įrašas PĮ režime nerodomas", async () => {
-    w.PPTEISE.pasirink("test-ai-juodrastis"); await laukk(50); tiesa(/DI juodraštis - nepatvirtinta/.test(tekstas(d.querySelector("#irasas .metos"))) && /Paaiškinimas nepatvirtintas/.test(tekstas(d.querySelector("#irasas .metos"))));
+    w.PPTEISE.pasirink("test-ai-juodrastis"); await laukk(50); tiesa(/DI juodraštis - nepatvirtinta/.test(tekstas(d.querySelector("#irasas .metos"))) && d.querySelector('#irasas .metos [data-di="sugeneruota"]'), "DI juodraštis pažymėtas (DI aktas)");
     tiesa(/seniai atnaujintas/.test(tekstas(d.getElementById("pranesimai"))) && /prieš \d+ d\./.test(tekstas(d.getElementById("pranesimai"))) && /NĖRA ženklas, kad pokyčių nebuvo/.test(tekstas(d.getElementById("pranesimai"))), "senas rinkinys"); tiesa(!idai(d).includes("test-tik-vpi"), "tik VPĮ paslėptas");
   });
   P.f.remove();
@@ -630,6 +643,10 @@ async function testaiAdmin(){
     lygu(A.importuok("{ne json", "pakeisti").ok, false);
     const a = A.importuok(JSON.stringify({ meta: { versija: "imp" }, irasai: [irasas({ id: "naujas-1", pavadinimas: "Kitas" }), irasas({ id: "imp-2", demo: true, saltinis: { url: "https://i.lt" } }), irasas({ id: "imp-3", identifikatoriai: { eTarId: "z" }, saltinis: { url: "https://j.lt" } }), irasas({ id: "imp-4", identifikatoriai: { eTarId: "z" }, saltinis: { url: "https://k.lt" } })] }), "papildyti");
     lygu([a.ok, a.irasu, a.demo, a.dublikatai.length], [true, 4, 1, 1]); const pries = A.irasai().length; A.taikykImporta(); lygu(A.irasai().length, pries + 3); lygu(A.irasai().find(i => i.id === "naujas-1").pavadinimas, "Naujas");
+    /* Savaitinės patikros faktų įrašą (aptikta) to paties id analizė pakeičia; išanalizuoto - ne. */
+    A.darbine().irasai.push(irasas({ id: "faktas-1", busena: "aptikta", santrauka: "", saltinis: { url: "https://f.lt" } }));
+    A.importuok(JSON.stringify({ irasai: [irasas({ id: "faktas-1", busena: "aptikta", santrauka: "Analizė", saltinis: { url: "https://f.lt" } }), irasas({ id: "naujas-1", pavadinimas: "Vėl kitas" })] }), "papildyti"); A.taikykImporta();
+    lygu([A.irasai().find(i => i.id === "faktas-1").santrauka, A.irasai().find(i => i.id === "naujas-1").pavadinimas, A.irasai().filter(i => i.id === "faktas-1").length], ["Analizė", "Naujas", 1], "faktų įrašas pakeistas, kiti - ne");
     A.darbine().irasai[0].vidinePastaba = "SLAPTA"; const t = A.eksportoTekstas(), j = JSON.parse(t);
     tiesa(!/SLAPTA|vidinePastaba|perziuros|"klaidos"|"dublikatas"|"konfliktas"/.test(t) && Array.isArray(j.irasai) && j.meta.sukurta === DABAR, "eksportas švarus"); tiesa(j.irasai.find(x => x.id === "pi-19-vidaus-sandoriai-xv-1132").istrauka.tekstas.length > 20, "ištrauka eksporte"); delete A.darbine().irasai[0].vidinePastaba;
   });
@@ -692,13 +709,13 @@ async function testaiIntegracijos(){
     lygu(d.querySelectorAll(".grid article.card").length, 12, "kortelių"); tiesa(!d.querySelector('.grid a[href="PP-teise/index.html"]'), "be PP-teise kortelės");
     lygu(d.querySelectorAll("#teiseBlokas").length, 1, "vienas blokas"); const blokas = d.getElementById("teise"), grid = d.querySelector(".grid"), slenkstis = d.getElementById("suppliers");
     tiesa(grid.compareDocumentPosition(blokas) & 4, "blokas po tinkleliu"); tiesa(blokas.compareDocumentPosition(slenkstis) & 4, "blokas prieš tiekėjų dalį"); tiesa(!d.querySelector('.site-nav a[href*="PP-teise"]'), "navigacijoje nėra"); tiesa(/GP_STEBESENA\.mount/.test(h), "skriptas");
-    await kol(() => d.querySelector("#teiseBlokas .gps__item, #teiseBlokas .gps__err"), "blokas įkeltas");
+    await kol(() => d.querySelector("#teiseBlokas .gps-pk, #teiseBlokas .gps__err"), "blokas įkeltas");
     /* Pirmas redakcinio prioriteto įrašas ir registro data - iš registro failo, ne konstantos (redaktoriui pakeitus
        prioritetus ar atnaujinus registrą testas lieka teisingas). */
     const REG = await (await fetch("duomenys/registras.json?cb=" + Date.now())).json();
     const pirmas = REG.irasai.filter(x => x.portalas && x.portalas.prioritetas != null && !x.demo).sort((a, b) => a.portalas.prioritetas - b.portalas.prioritetas)[0];
-    const t = tekstas(d.getElementById("teiseBlokas")); tiesa(/Atverti stebėseną/.test(t) && d.querySelectorAll("#teiseBlokas a.gps__nuoroda").length === 3 && t.includes(pirmas.portalas.pavadinimas.split(" - ")[0]) && t.includes("Registras atnaujintas " + REG.meta.patikrinta + " · Atnaujinama rankiniu būdu"), "turinys: " + t.slice(0, 200));
-    for (const a of d.querySelectorAll("#teiseBlokas a.gps__nuoroda")) { const u = new URL(a.getAttribute("href"), P.w.location.href); u.hash = ""; const r = await fetch(u.href, { method: "HEAD" }); tiesa(r.ok, "nuoroda " + a.getAttribute("href")); }
+    const t = tekstas(d.getElementById("teiseBlokas")); tiesa(/Atverti stebėseną/.test(t) && d.querySelectorAll("#teiseBlokas a.gps-pk__a").length === 3 && t.includes(pirmas.trumpai || pirmas.portalas.pavadinimas) && t.includes("Atnaujinta " + REG.meta.patikrinta), "turinys: " + t.slice(0, 200));
+    for (const a of d.querySelectorAll("#teiseBlokas a.gps-pk__a, #teiseBlokas a.gps-sk")) { const u = new URL(a.getAttribute("href"), P.w.location.href); u.hash = ""; const r = await fetch(u.href, { method: "HEAD" }); tiesa(r.ok, "nuoroda " + a.getAttribute("href")); }
     P.f.remove();
   });
   await testas("Portalo katalogo stulpeliai: 1440 - 3, 1024 - 3, 768 - 2, 390 - 1; be horizontalaus slinkimo", async () => {
@@ -740,8 +757,8 @@ async function testaiPrieinamumas(){
     tiesa(cs.borderLeftColor !== kitas.borderLeftColor && cs.backgroundColor !== kitas.backgroundColor, "apvadas ir fonas skiriasi, ne vien spalva - dar ir aria-current");
   });
   await testas("Būsena ne vien spalva: kiekviena būsenos žyma turi tekstą ir ženklą; aktyvus vaizdas - pabrauktas ir paryškintas; nepasirinkti dokumentai be savos dekoratyvinės spalvos", () => {
-    tiesa([...d.querySelectorAll("#irasas .statusas[data-busena]")].every(x => /^[◌◔✓▣]/.test(x.textContent.trim())), "ženklas"); tiesa([...d.querySelectorAll("#sarasas .eilute__busena")].every(x => /^[◌◔✓▣]/.test(x.textContent.trim())), "sąrašo ženklai");
-    const cs = w.getComputedStyle(d.getElementById("tab-pasikeite")); tiesa(/underline/.test(cs.textDecorationLine) && +cs.fontWeight >= 700, "aktyvus tab'as");
+    tiesa([...d.querySelectorAll("#irasas .gps-zyma, #sarasas .gps-zyma")].every(x => x.textContent.trim().length > 3) && d.querySelectorAll("#sarasas .gps-zyma").length > 3, "būsenos žymos - tekstas, ne vien spalva"); tiesa([...d.querySelectorAll("#sarasas .eilute__busena")].every(x => /^[◌◔✓▣]/.test(x.textContent.trim())), "sąrašo ženklai");
+    const cs = w.getComputedStyle(d.querySelector("#tab-pasikeite .klausimas__tekstas")); tiesa(/underline/.test(cs.textDecorationLine) && +cs.fontWeight >= 700 && !/underline/.test(w.getComputedStyle(d.getElementById("tab-isigalios").querySelector(".klausimas__tekstas")).textDecorationLine), "aktyvus tab'as - pabrauktas klausimas, kitas - ne");
     const spalvos = new Set([...d.querySelectorAll('#sarasas .eilute[aria-current="false"]')].map(e => w.getComputedStyle(e).borderLeftColor + w.getComputedStyle(e).backgroundColor)); lygu(spalvos.size, 1, "nepasirinkti įrašai vienodi");
   });
   await testas("Teksto kontrastas su fonu >= 4,5:1 (sąrašas, būsenos, žetonai, juostos, patikros, tab'ai, antraštėlės, citata, blokai)", () => {
@@ -785,6 +802,71 @@ async function testaiPrieinamumas(){
 
 
 /* ---------- Naujo naudotojo patikra 2026-11-04 (radiniai K1-K3, D1-D11, V1-V12, M1-M10) ---------- */
+async function testaiVaizdas1107(){
+  dabartine = grupe("Vizuali pertvarka ir savaitinės patikros įrašai (2026-11-07)");
+  await testas("Savaitinės patikros įrašas (busena „aptikta“): be santraukos klaidos nėra; sąraše - žyma „Nauja - analizė rengiama“; detalėse - pasakyta, kad analizė rengiama, ir siunčiama į šaltinį", async () => {
+    const faktai = { id: "naujas-faktas", pavadinimas: "Pirkimų įstatymo pakeitimas (faktai)", santrauka: "", busena: "aptikta", rusis: "priimtas", saltinioTipas: "teises_norma", rezimas: ["PI"], temos: [],
+      datos: { priimta: "2026-09-01", paskelbta: "2026-09-05", isigalioja: "2026-10-01", aptikta: "2026-09-20" }, saltinis: { pavadinimas: "e-tar", url: "https://www.e-tar.lt/faktas", vieta: "" },
+      busenosIstorija: [{ data: "2026-09-20", busena: "aptikta", kas: "Savaitinė patikra" }], patikrinta: "2026-09-20" };
+    const n = S.normalizuok(faktai); tiesa(!n.klaidos.some(k => /santrauka/.test(k)), "be santraukos klaidos: " + n.klaidos);
+    tiesa(S.normalizuok(Object.assign({}, faktai, { busena: "laukia" })).klaidos.some(k => /santrauka/.test(k)), "laukiančiam santrauka privaloma");
+    const z = document.createElement("div"); z.innerHTML = S.busenosZyma(n, DABAR, "lt"); lygu([...z.querySelectorAll(".gps-zyma")].map(tekstas), ["Įsigalios po 7 d.", "Nauja - analizė rengiama"]);
+    const reg = await (await fetch("duomenys/registras.json?cb=" + Date.now())).json(); reg.irasai.push(faktai);
+    const P = await stebesena(), d = P.d, w = P.w; w.PPTEISE.nustatykDabar(DABAR);
+    w.PPTEISE.registras().irasai.push(w.GP_STEBESENA.normalizuok(faktai)); w.PPTEISE.piesk(); await laukk(30);
+    lygu(w.PPTEISE.pasirink("naujas-faktas"), true, "įrašas parodomas"); await laukk(40);
+    tiesa(/Nauja - analizė rengiama/.test(tekstas(d.querySelector('#sarasas .eilute[data-id="naujas-faktas"]'))), "žyma sąraše");
+    const t0 = tekstas(d.getElementById("irasas"));
+    tiesa(/Naujas įrašas - analizė rengiama/.test(t0) && /Santrauka rengiama\./.test(t0) && /Atverkite šaltinį - analizė ir rekomenduojami veiksmai rengiami/.test(t0) && d.querySelector('#irasas a.btn--saltinis[href="https://www.e-tar.lt/faktas"]'), t0.slice(0, 400));
+    tiesa(/tik faktai iš šaltinio; analizė rengiama/.test(t0) && !/Santrauka parengta iš oficialaus teksto/.test(t0), "pastaba be „Santrauka parengta“");
+    P.f.remove();
+    const t = S.tikrink(reg); const x = t.irasai.find(i => i.id === "naujas-faktas"); tiesa(x && !x.klaidos.length, "registre be klaidų: " + (x && x.klaidos));
+  });
+  await testas("Kita savaitinė patikra - pirmadienį; rodiklis skaičiuoja įsigaliosiančius, galiojančius, teismų sprendimus ir projektus be demo ir archyvo", () => {
+    lygu(["2026-11-07", "2026-11-08", "2026-11-09", "2026-11-10", "2026-12-28", "2026-12-29"].map(S.kitaPatikra), ["2026-11-09", "2026-11-09", "2026-11-09", "2026-11-16", "2026-12-28", "2027-01-04"]);
+    const t = S.tikrink({ meta: {}, irasai: [irasas({ id: "a", datos: { isigalioja: "2027-01-01" } }), irasas({ id: "b", saltinis: { url: "https://b.lt" } }), irasas({ id: "c", rusis: "teismu_praktika", saltinis: { url: "https://c.lt" }, datos: { priimta: "2026-09-01" } }),
+      irasas({ id: "d", rusis: "projektas", saltinis: { url: "https://d.lt" } }), irasas({ id: "e", demo: true, saltinis: { url: "https://e.lt" } }), irasas({ id: "f", busena: "archyvuota", saltinis: { url: "https://f.lt" } })] });
+    lygu(S.rodiklis(t.irasai, DABAR), { isigalios: 1, galioja: 1, teismai: 1, projektai: 1, artimiausia: "2027-01-01" });
+  });
+  await testas("Laiko juosta: taškai pagal svarbiausią datą, projektai ir įrašai be datos - ne; šiandien ir ateitis; numeruoti - pirmi; persidengiantys - kitoje eilėje; aria-hidden, nuorodos ne tab eilėje", () => {
+    const t = S.tikrink({ meta: {}, irasai: [irasas({ id: "a", trumpai: "Trumpas A", datos: { isigalioja: "2026-10-01" } }), irasas({ id: "b", saltinis: { url: "https://b.lt" }, datos: { isigalioja: "2026-10-01" } }),
+      irasas({ id: "c", rusis: "teismu_praktika", saltinis: { url: "https://c.lt" }, datos: { priimta: "2026-08-10" } }), irasas({ id: "p", rusis: "projektas", saltinis: { url: "https://p.lt" }, datos: { paskelbta: "2026-10-20" } }),
+      irasas({ id: "s", saltinis: { url: "https://s.lt" }, datos: { isigalioja: "2025-01-01" } })] });
+    const el = document.createElement("div"); el.innerHTML = S.laikoJuosta(t.irasai, DABAR, { lang: "lt", pazymeti: { b: "1" }, href: r => "#irasas=" + r.id, rodytiZymes: true });
+    const tsk = [...el.querySelectorAll(".gps-lj__t")]; lygu(tsk.map(x => x.getAttribute("data-id")).sort(), ["a", "b", "c"], "be projekto ir senesnio nei 6 mėn.");
+    const b = el.querySelector('[data-id="b"]'), a = el.querySelector('[data-id="a"]');
+    tiesa(b.classList.contains("gps-lj__t--nr") && tekstas(b) === "1" && b.style.getPropertyValue("--i") === "0" && a.style.getPropertyValue("--i") === "1", "numeruotas pirmas, tos pačios dienos - kita eilė");
+    tiesa(/Trumpas A/.test(a.getAttribute("title")) && a.getAttribute("tabindex") === "-1" && a.getAttribute("href") === "#irasas=a", "pavadinimas, ne tab eilėje, nuoroda");
+    tiesa(el.querySelector(".gps-lj").getAttribute("aria-hidden") === "true" && /Šiandien/.test(tekstas(el.querySelector(".gps-lj__siandien"))) && el.querySelector(".gps-lj__ateitis"), "aria-hidden, šiandien, ateitis");
+    lygu([...el.querySelectorAll(".gps-lj__men span")].map(tekstas).slice(0, 3), ["Kov", "Bal", "Geg"], "mėnesiai nuo 6 mėn. atgal");
+    tiesa(/Sau\s*2027/.test(tekstas(el.querySelector(".gps-lj"))) && el.querySelector(".gps-lj__metai"), "metai - prie sausio (telefone paslepiami)");
+    const en = document.createElement("div"); en.innerHTML = S.laikoJuosta(t.irasai, DABAR, { lang: "en" }); tiesa(/Today/.test(tekstas(en)) && !en.querySelector("a"), "EN, be nuorodų - span");
+  });
+  await testas("Modulis: plytelės su paaiškinimais, laiko juosta pagal filtrus ir pasirinkimą, paspaudus tašką atveriamas įrašas; aprėptis suskleista, bet tekstas visas; telefone juostos nėra", async () => {
+    const P = await stebesena(), d = P.d, w = P.w; w.PPTEISE.nustatykDabar(DABAR); await laukk(40); const sd = w.PPTEISE.sudetis();
+    const teismai = sd.pasikeite.filter(r => r.rusis === "teismu_praktika").length;
+    lygu(tekstas(d.getElementById("subPasikeite")), teismai ? "iš jų teismų sprendimai: " + teismai : "", "teismų sprendimai");
+    tiesa(/^artimiausia \d{4}-\d{2}-\d{2} · po \d+ d\.$/.test(tekstas(d.getElementById("subIsigalios"))), tekstas(d.getElementById("subIsigalios")));
+    const tsk = [...d.querySelectorAll("#laikoJuosta .gps-lj__t")]; tiesa(tsk.length >= 5, "taškų " + tsk.length);
+    tiesa(tsk.every(t => sd.visi.some(r => r.id === t.getAttribute("data-id"))), "tik filtruoti įrašai");
+    const pirmas = w.PPTEISE.pasirinktas(); tiesa(d.querySelector('#laikoJuosta .gps-lj__t--pasirinktas[data-id="' + pirmas + '"]'), "pasirinktas paryškintas");
+    const kitas = tsk.find(t => t.getAttribute("data-id") !== pirmas); kitas.click(); await kol(() => w.PPTEISE.pasirinktas() === kitas.getAttribute("data-id"), "taškas atveria įrašą");
+    tiesa(d.querySelector('#laikoJuosta .gps-lj__t--pasirinktas[data-id="' + kitas.getAttribute("data-id") + '"]') && d.querySelectorAll("#laikoJuosta .gps-lj__t--pasirinktas").length === 1, "paryškinimas perėjo");
+    const ap = d.getElementById("apreptis"); tiesa(ap.tagName === "DETAILS" && !ap.open && /Kas įtraukta/.test(tekstas(ap.querySelector("summary"))) && /Neapima:/.test(tekstas(ap)), "aprėptis");
+    P.f.remove();
+    const T = await stebesena("", 390); tiesa(!matomas(T.d.querySelector(".lj-kortele")), "telefone laiko juostos nėra"); T.f.remove();
+  });
+  await testas("Modulių kontekstiniai blokai (PP-qual) ir pokyčiai pirkimui (PP-salygos): be „laukia peržiūros“ ir „laukia specialisto patvirtinimo“; naujas įrašas pažymėtas", async () => {
+    const reg = { meta: { patikrinta: DABAR }, irasai: [irasas({ id: "a", moduliai: ["PP-qual"], datos: { isigalioja: "2026-09-01" } }),
+      irasas({ id: "b", busena: "aptikta", santrauka: "", moduliai: ["PP-qual"], saltinis: { url: "https://b.lt" }, datos: { isigalioja: "2026-09-02" } })] };
+    const el = document.createElement("div"); document.body.appendChild(el);
+    await S.mount({ target: el, modulis: "PP-qual", lang: "lt", saknis: "", dabar: DABAR, fetch: fakeFetch(reg) });
+    const t = tekstas(el); tiesa(!/Laukia peržiūros|laukia specialisto/.test(t) && /nauja - analizė rengiama/.test(t), t); el.remove();
+    const h = S.pirkimuiHTML({ ok: true, tikrinta: S.tikrink(reg) }, { modulis: "PP-qual", ctx: { rezimas: "PI" }, lang: "lt", dabar: DABAR });
+    tiesa(!/Laukia peržiūros|laukia specialisto/.test(h) && /nauja - analizė rengiama/.test(h), "pirkimui");
+  });
+}
+
 async function testaiPatikra1104(){
   dabartine = grupe("Patikra 2026-11-04");
   const r = await S.ikelk("duomenys/registras.json?cb=" + Date.now()); const T = r.tikrinta;
@@ -865,8 +947,8 @@ async function testaiPatikra1104(){
     lygu([c.identifikatoriai.bylosNr, c.datos.priimta, c.moduliai[0].modulis], ["eA-396-629/2026", "2026-08-12", "PP-ts"]); tiesa(/arba lygiavertis/.test(c.istrauka.tekstas) && /PĮ 50 str\. 4 d\. 2 p\./.test(c.kamAktualu), "LVAT");
     lygu([e.identifikatoriai.bylosNr, e.datos.priimta, /eur-lex/.test(e.saltinis.url)], ["C-402/25", "2026-10-15", true]); tiesa(/melagingą informaciją apie atitiktį pajėgumo sąlygoms/.test(e.istrauka.tekstas) && e.reikiaSpecialisto, "ESTT");
     [a, b, c, e].forEach(x => { lygu([x.busena, x.demo, x.patikrinta], ["laukia", false, "2026-11-04"], x.id); tiesa(x.busenosIstorija.length === 2 && S.yraData(x.datos.aptikta), x.id + " istorija"); });
-    lygu(T.meta.versija, "2026-11-05.1"); lygu(T.irasai.length, 27);
-    const sal = await (await fetch("duomenys/saltiniai.json")).json(), pask = sal.patikros.find(x => x.nauji === 4);
+    tiesa(T.meta.versija >= "2026-11-05.1", T.meta.versija); lygu(T.irasai.filter(x => x.datos.aptikta <= "2026-11-05").length, 27, "įrašai iki 2026-11-05 (vėlesni - savaitinės patikros)");
+    const sal = await (await fetch("duomenys/saltiniai.json")).json(), pask = sal.patikros.find(x => x.data <= "2026-11-04" && x.nauji === 4);
     tiesa(pask && /LRV Nr\. 718/.test(pask.pastaba) && /LRV Nr\. 639/.test(pask.pastaba) && /e3K-3-85-1075\/2026/.test(pask.pastaba) && /XV-1006/.test(pask.pastaba), "neįtraukti aktai įvardyti");
     ["LRV Nr. 718", "XV-1006", "e3K-3-85-1075/2026"].forEach(z => tiesa(!T.irasai.some(x => x.pavadinimas.includes(z)), z + " neįtrauktas"));
     const v = id("pi-16-101-transliavimas-xv-934");
@@ -889,7 +971,7 @@ async function testaiPatikra1104(){
     [a, b].forEach(x => { lygu([x.busena, x.demo, x.patikrinta, x.busenosIstorija.length], ["laukia", false, "2026-11-04", 2], x.id); tiesa(/savaitinės patikros/.test(x.busenosIstorija[0].pastaba), x.id + " kilmė"); (x.susije || []).forEach(z => tiesa(id(z), x.id + " -> " + z)); });
     tiesa(id("vpt-prieziuros-aprasas-1s-97-2026").susije.includes(b.id) && id("vpt-valdysena-1s-204-2025").susije.includes(b.id) && id("projektas-vpi-paketas-seimo-programa").susije.includes(a.id), "ryšiai abiem kryptimis");
     const t = S.tikrink(T); lygu(t.konfliktai, [], "be prieštaravimų"); lygu(t.klaidos || [], [], "be klaidų");
-    const sal = await (await fetch("duomenys/saltiniai.json")).json(), pask = sal.patikros.find(x => x.nauji === 2);
+    const sal = await (await fetch("duomenys/saltiniai.json")).json(), pask = sal.patikros.find(x => x.data === "2026-11-04" && x.nauji === 2);
     tiesa(pask && /1S-111/.test(pask.pastaba) && /Nr\. 740/.test(pask.pastaba) && /laukė rašymo leidimo/.test(pask.pastaba) && /2026-11-02 nepasileido/.test(pask.pastaba), "patikrų žurnalas");
   });
   await testas("Bandomojo savaitinės patikros paleidimo radiniai (2026-11-05): numeriai ir TAR duomenys, pažodinės ištraukos, kam taikyta byla, viskas laukia specialisto, patikra pasakyta kaip dalinė", async () => {
@@ -906,9 +988,9 @@ async function testaiPatikra1104(){
     tiesa(/nėra absoliučiai neteisėta/.test(c.istrauka.tekstas) && /88 failai/.test(c.kamAktualu) && /DPS sukūrimo sąlygose parašyta, kad tai nedraudžiama/.test(c.kamAktualu) && /objektyviai būtinas/.test(c.veiksmas), "subtiekėjas ir šablonai");
     tiesa(id("lat-e3k-3-67-933-2026-kvalifikacijos-formuluote").susije.includes(l.id) && id("lvat-ea-678-442-2026-korekcija-zala").susije.includes(b.id) && id("lvat-ea-678-442-2026-korekcija-zala").susije.includes(c.id) && a.susije.includes(b.id) && b.susije.includes(a.id), "ryšiai");
     const t = S.tikrink(T); lygu(t.konfliktai, [], "be prieštaravimų"); lygu(t.klaidos || [], [], "be klaidų");
-    const sal = await (await fetch("duomenys/saltiniai.json")).json(), pask = sal.patikros[0];
+    const sal = await (await fetch("duomenys/saltiniai.json")).json(), pask = sal.patikros.find(x => x.data === "2026-11-05");
     tiesa(pask.nauji === 5 && /Patikra dalinė/.test(pask.pastaba) && /2026-08-24/.test(pask.pastaba) && /eA-462-463\/2026/.test(pask.pastaba), "žurnalas sako, kas nepatikrinta");
-    lygu([T.meta.patikrinta, T.meta.laikotarpis.iki], ["2026-11-05", "2026-11-05"]);
+    tiesa(T.meta.patikrinta >= "2026-11-05" && T.meta.laikotarpis.iki === T.meta.patikrinta, "meta: " + T.meta.patikrinta);
   });
   await testas("Du susieti to paties akto pakeitimai - ne prieštaravimas; nesusieti - prieštaravimas", () => {
     const pora = (ax, bx) => S.tikrink({ irasai: [irasas(Object.assign({ id: "a", temos: ["vpt-prieziura"], veiksmas: "A", keiciamasAktas: { eTarId: "m1" } }, ax)), irasas(Object.assign({ id: "b", temos: ["vpt-prieziura"], veiksmas: "B", keiciamasAktas: { eTarId: "m1" }, saltinis: { url: "https://k.lt" } }, bx))] }).konfliktai.length;
@@ -1062,7 +1144,7 @@ async function testaiPatikra1104(){
   });
 
   await testas("D11, V1: TAR datos visiems e-tar įrašams, 1S-65 įsigaliojimas; pereinamųjų žyma - tik kai jos yra", async () => {
-    T.irasai.filter(x => /e-tar\.lt/.test(x.saltinis.url || "")).forEach(x => tiesa(S.yraData(x.datos.paskelbta) && x.identifikatoriai.tarIk, "TAR: " + x.id));
+    T.irasai.filter(x => x.busena !== "aptikta" && /e-tar\.lt/.test(x.saltinis.url || "")).forEach(x => tiesa(S.yraData(x.datos.paskelbta) && x.identifikatoriai.tarIk, "TAR: " + x.id));
     lygu(id("vpt-specialistu-atestavimas-1s-65-2026").datos.isigalioja, "2026-05-19"); lygu(S.skiltis(id("vpt-specialistu-atestavimas-1s-65-2026"), "2026-11-04"), "pasikeite");
     lygu(id("pi-19-vidaus-sandoriai-xv-1132").datos.paskelbta, "2026-07-15"); lygu(id("zalieji-aprasas-d1-20-2026").datos.paskelbta, "2026-02-12");
     const nera = irasas({ pereinamosios: "Vyriausybė priima aktus. Pereinamųjų nuostatų pradėtoms procedūroms įstatyme nėra." });
@@ -1072,8 +1154,8 @@ async function testaiPatikra1104(){
     tiesa(!/žr\. pereinamąsias/.test(S.aktualumas(S.normalizuok(Object.assign({}, nera, { datos: { isigalioja: "2027-01-01" }, aktualumas: { proceduros: null, objektai: null, etapai: null } })), { rezimas: "PI", skelbimoData: "2026-11-15" }).priezastys.join(" ")), "aktualumas be nuorodos");
     const P = await stebesena(); P.w.PPTEISE.nustatykDabar("2026-11-04"); await laukk(30);
     tiesa(!/yra pereinamosios/.test(tekstas(P.d.querySelector('#sarasas .eilute[data-id="pi-16-101-transliavimas-xv-934"]'))), "XV-934 sąraše");
-    P.w.PPTEISE.pasirink("vpt-metodika-1s-82-2026"); await laukk(40); tiesa(/Paskelbta TAR: 2026-06-11/.test(tekstas(P.d.getElementById("irasas"))), "detalėse data"); P.f.remove();
-    const Q = await stebesena("&registras=testai-registras.json"); Q.w.PPTEISE.pasirink("test-be-datos"); await laukk(40); tiesa(/Paskelbta TAR: nenurodyta/.test(tekstas(Q.d.getElementById("irasas"))), "trūkstama data - nenurodyta: " + tekstas(Q.d.getElementById("irasas")).slice(0, 300)); Q.f.remove();
+    P.w.PPTEISE.pasirink("vpt-metodika-1s-82-2026"); await laukk(40); tiesa(/Paskelbta TAR\s*2026-06-11/.test(tekstas(P.d.querySelector("#irasas .zingsniai"))), "detalėse data"); P.f.remove();
+    const Q = await stebesena("&registras=testai-registras.json"); Q.w.PPTEISE.pasirink("test-be-datos"); await laukk(40); tiesa(/Paskelbta TAR\s*nenurodyta/.test(tekstas(Q.d.querySelector("#irasas .zingsniai"))), "trūkstama data - nenurodyta: " + tekstas(Q.d.getElementById("irasas")).slice(0, 300)); Q.f.remove();
   });
 
   await testas("V3, V4: gili nuoroda išsaugotų nustatymų nekeičia ir tai pasako; neesamas įrašas - matomas pranešimas, joks įrašas neatvertas, adresas išvalytas", async () => {
@@ -1115,7 +1197,7 @@ async function testaiPatikra1104(){
     const P = await stebesena(); const t = tekstas(P.d.querySelector(".diagnostika__turinys"));
     tiesa(!/naujienų adresas 404/.test(t) && /patikrinta 2026-11-04/.test(t), "tekstas"); P.f.remove();
     const v = salt.saltiniai.find(x => x.id === "vpt"); lygu(v.url, "https://vpt.lrv.lt/lt/naujienos-3/"); tiesa(v.paskutinePatikra.rezultatas === "ok" && /naujienos-3/.test(v.prieiga.cors), "VPT");
-    salt.patikros.forEach(x => tiesa(S.yraData(x.data), "data: " + x.data)); lygu(salt.patikros[0].data, salt.patikros.map(x => x.data).sort().reverse()[0], "naujausia pirma");
+    salt.patikros.forEach(x => tiesa(S.yraData(x.data) && ["ok", "nepavyko"].includes(x.rezultatas), "data ir rezultatas (tik ok / nepavyko - kitaip puslapis rodo NEPAVYKO): " + x.data + " " + x.rezultatas)); lygu(salt.patikros[0].data, salt.patikros.map(x => x.data).sort().reverse()[0], "naujausia pirma");
     tiesa(salt.patikros.some(x => x.data === "2026-11-04" && x.rezultatas === "nepavyko" && (x.saltiniai || []).includes("e-seimas")), "e-seimas - nepavyko, ne tylu");
   });
 
@@ -1138,9 +1220,9 @@ async function testaiPatikra1104(){
   await testas("V10, V11, M6: portalas EN sako, kad įrašai lietuviški; žyma nesuklijuota su pavadinimu; „Kas įsigalios?“ skaičius atskiria projektus", async () => {
     const reg = { meta: {}, irasai: [irasas({ id: "a", pavadinimas: "Pavadinimas CVP IS", portalas: { prioritetas: 1 } })] };
     const de = document.createElement("div"); document.body.appendChild(de); await S.mount({ target: de, lang: "en", saknis: "", fetch: fakeFetch(reg) });
-    tiesa(/entries themselves are in Lithuanian/.test(de.textContent) && /Pavadinimas CVP IS explanation not confirmed/.test(tekstas(de)), "EN: " + tekstas(de).slice(0, 300));
+    tiesa(/entries themselves are in Lithuanian/.test(de.textContent) && tekstas(de.querySelector("a.gps-pk__a")) === "Pavadinimas CVP IS" && /Open monitoring/.test(tekstas(de)) && /court rulings/.test(tekstas(de)) && !/not confirmed/.test(tekstas(de)), "EN: " + tekstas(de).slice(0, 300));
     const dl = document.createElement("div"); document.body.appendChild(dl); await S.mount({ target: dl, lang: "lt", saknis: "", fetch: fakeFetch(reg) });
-    tiesa(!/in Lithuanian/.test(dl.textContent) && !dl.querySelector(".gps__kalba") && /Pavadinimas CVP IS paaiškinimas nepatvirtintas/.test(tekstas(dl)), "LT: " + tekstas(dl).slice(0, 200)); de.remove(); dl.remove();
+    tiesa(!/in Lithuanian/.test(dl.textContent) && !dl.querySelector(".gps__kalba") && tekstas(dl.querySelector("a.gps-pk__a")) === "Pavadinimas CVP IS" && !/nepatvirtint/.test(tekstas(dl)), "LT: " + tekstas(dl).slice(0, 200)); de.remove(); dl.remove();
     const P = await stebesena(), d = P.d, w = P.w; w.PPTEISE.nustatykDabar("2026-11-04"); await laukk(30); const sd = w.PPTEISE.sudetis();
     lygu(tekstas(d.getElementById("nIsigalios")), String(sd.isigalios.length), "tik priimti"); tiesa(sd.projektai.length >= 1 && new RegExp("^ir " + sd.projektai.length + " projekt\\S+ - dar nepriimta$").test(tekstas(d.getElementById("nProjektai"))), tekstas(d.getElementById("nProjektai")));
     ivedimas(d, w, "uzklausa", "zzzz-nera"); await laukk(30); lygu(tekstas(d.getElementById("nProjektai")), "", "be projektų - tuščia"); P.f.remove();
@@ -1192,7 +1274,7 @@ async function testaiPatikra1104(){
 (async () => {
   try {
     await testaiSchema(); await testaiSkiltys(); await testaiAktualumas(); await testaiPaieska(); await testaiZurnalas(); await testaiIkelimas();
-    await testaiRegistras(); await testaiPuslapis(); await testaiTestinisRegistras(); await testaiAdmin(); await testaiIntegracijos(); await testaiPrieinamumas(); await testaiPatikra1104();
+    await testaiRegistras(); await testaiPuslapis(); await testaiTestinisRegistras(); await testaiAdmin(); await testaiIntegracijos(); await testaiPrieinamumas(); await testaiPatikra1104(); await testaiVaizdas1107();
   } catch (e) { dabartine = dabartine || grupe("Nepavyko paleisti"); await testas("Rinkinys nutrūko", () => { throw e; }); }
   const b = document.getElementById("busena");
   b.textContent = R.blogai ? `${R.blogai} krito iš ${R.ok + R.blogai}` : `Visi ${R.ok} testai praėjo`;
