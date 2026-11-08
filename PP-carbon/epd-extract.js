@@ -11,7 +11,8 @@
  *
  * TRANSPORTAS:
  *  - Transportas iskeltas i shared/ai-proxy.js (GP_AI_PROXY). Sis modulis
- *    tik konstruoja prompta (systemPrompt / userText) ir parsina atsakyma.
+ *    tik paruosia duomenis (duomenys) ir parsina atsakyma; instrukcija - serverio
+ *    sablone pp-carbon.epd (nuo 2026-11-08).
  *    Raktas gyvena TIK serverio puseje - jokio narsykles rakto cia.
  *
  * SAUGIKLIAI:
@@ -42,7 +43,7 @@
 
   // Modelio cia NEnurodom: numatytasis gyvena VIENOJE vietoje -
   // shared/ai-proxy.js (DEFAULT_MODEL). Zr. CLAUDE.md 6 sk.
-  var MAX_TOKENS = 2000;   // užklausa prašo daugiau laukų ir citatų kiekvienam variantui (iki 2026-11-04 - 1500)
+  // Atsakymo ilgis (2000) - serverio sablone pp-carbon.epd
 
   // Žinutės naudotojui - puslapio kalba (LT / EN). Be document (testai, Worker'is) - lietuviškai.
   function kalba() {
@@ -53,88 +54,17 @@
 
   // --- 1. UZKLAUSOS KONSTRAVIMAS -------------------------------------------
 
-  // Sisteminis promptas: griežtas JSON, jokių spėjimų, citatos privalomos. TAS PATS tekstas - worker/epd-proxy.js (SYSTEM_PROMPT).
-  function systemPrompt() {
-    return [
-      "Tu esi dokumentų analizės asistentas, ištraukiantis anglies pėdsako",
-      "duomenis iš EPD (Environmental Product Declaration) arba LCA dokumentų.",
-      "",
-      "UŽDUOTIS: rasti produkto A1-A3 (product stage / gamybos etapo) GWP",
-      "reikšmę (Global Warming Potential, kg CO2e arba t CO2e).",
-      "",
-      "GRIEŽTOS TAISYKLĖS:",
-      "1. Atsakyk TIK gryno JSON formatu, be jokio kito teksto, be markdown.",
-      "2. Jei A1-A3 reikšmės dokumente NĖRA arba nesi tikras - grąžink",
-      "   status \"not_found\". NIEKADA nespėk.",
-      "3. Reikšmė - PAŽODŽIUI iš dokumento: nesumuok, neapvalink, neperskaičiuok",
-      "   ir neversk vienetų. Laukas value - dokumente parašytas skaičius, o",
-      "   valueText - jo užrašas taip, kaip dokumente (pvz. 9,96E+01).",
-      "4. Jei dokumente yra tik atskiros A1, A2 ir A3 reikšmės, o bendros A1-A3",
-      "   nėra, value palik null ir išrašyk jas masyve modules (kiekvieną su jos",
-      "   citata). Modulių sumos neskaičiuok - ją apskaičiuos programa.",
-      "5. Nurodyk rodiklį (indicator: GWP-total, GWP-GHG, GWP-fossil ir pan.;",
-      "   pirmenybė - GWP-total) ir ar reikšmė net ar gross (basis: \"net\",",
-      "   \"gross\", jei nenurodyta - \"\"). Jei tas pats rodiklis pateiktas ir net,",
-      "   ir gross - status \"ambiguous\": du variantai candidates masyve.",
-      "6. Jei dokumente pateiktas diapazonas - imk VIRŠUTINĘ (didžiausią) ribą",
-      "   (konservatyvumo taisyklė).",
-      "7. Jei yra keli scenarijai ar produktai - imk tą, kuris atitinka",
-      "   užklausoje nurodytą produktą; jei neaišku - status \"ambiguous\" ir",
-      "   išrašyk variantus candidates masyve.",
-      "8. Kiekvienai reikšmei būtinai nurodyk citatą: puslapio numerį ir tikslų",
-      "   teksto fragmentą iš dokumento, kuriame yra pats skaičius.",
-      "9. Jei EPD nurodyta, iki kada ji galioja, - validUntil (YYYY-MM-DD).",
-      "",
-      "JSON schema:",
-      "{",
-      "  \"status\": \"found\" | \"not_found\" | \"ambiguous\",",
-      "  \"value\": <skaičius arba null>,",
-      "  \"valueText\": \"<skaičius, kaip parašyta dokumente>\",",
-      "  \"unit\": \"<matavimo vienetas, pvz. kg CO2e>\",",
-      "  \"declaredUnit\": \"<deklaruotas vienetas, pvz. 1 vnt / 1000 kg / 1 m3>\",",
-      "  \"indicator\": \"<rodiklis, pvz. GWP-total>\",",
-      "  \"basis\": \"net\" | \"gross\" | \"\",",
-      "  \"validUntil\": \"<YYYY-MM-DD arba tuščia>\",",
-      "  \"page\": <puslapio numeris arba null>,",
-      "  \"quote\": \"<tikslus fragmentas iš dokumento>\",",
-      "  \"standard\": \"<pvz. EN 15804+A2, jei nurodyta>\",",
-      "  \"modules\": [ {\"module\":\"A1\",\"value\":...,\"valueText\":\"...\",\"page\":...,\"quote\":\"...\"} ],",
-      "  \"candidates\": [ {\"label\":\"...\",\"value\":...,\"valueText\":\"...\",\"unit\":\"...\",\"declaredUnit\":\"...\",\"indicator\":\"...\",\"basis\":\"...\",\"page\":...,\"quote\":\"...\"} ],",
-      "  \"notes\": \"<trumpa pastaba, jei reikia>\"",
-      "}"
-    ].join("\n");
+  // DI užduotis pp-carbon.epd (2026-11-08, naudotojo sprendimas - kodo apsauga): sisteminis promptas (griežtas JSON, jokių spėjimų,
+  // citatos privalomos) ir užklausos tekstas - privačiame serverio šablone. Modulis siunčia tik duomenis: faktoriaus pavadinimą ir vienetą,
+  // o PDF - kaip dokumentą. Tą pačią užduotį naudoja ir viešo epd.html Cloudflare Worker'is (worker/epd-proxy.js).
+  var UZDUOTIS = "pp-carbon.epd";
+  // factorLabel - kurio faktoriaus EPD ieskome (pvz. "Jungtuvai 110-400 kV"); expectedUnit - musu faktoriaus vienetas (pvz. "kg CO2e/vnt")
+  function duomenys(factorLabel, expectedUnit) {
+    var d = {};
+    if (factorLabel) d.produktas = String(factorLabel).slice(0, 300);
+    if (expectedUnit != null && expectedUnit !== "") d.vienetas = String(expectedUnit).slice(0, 60);
+    return d;
   }
-
-  // Vartotojo zinutes TEKSTO dalis (be PDF). Promptas apibreztas cia vienoje vietoje.
-  // factorLabel - kurio faktoriaus EPD ieskome (pvz. "Jungtuvai 110-400 kV").
-  // expectedUnit - musu faktoriaus vienetas (pvz. "kg CO2e/vnt").
-  function userText(factorLabel, expectedUnit) {
-    return "Produktas/įranga: " + (factorLabel || "nenurodyta") +
-           ". Mūsų faktoriaus vienetas: " + expectedUnit +
-           ". Rask A1-A3 GWP reikšmę ir grąžink JSON pagal schemą.";
-  }
-
-  // Vartotojo zinute su PDF priedu (document + text). Teksta ima is userText().
-  // pdfBase64 - base64 uzkoduotas PDF (be data: prefikso).
-  function userMessage(pdfBase64, factorLabel, expectedUnit) {
-    return {
-      role: "user",
-      content: [
-        {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: pdfBase64 }
-        },
-        {
-          type: "text",
-          text: userText(factorLabel, expectedUnit)
-        }
-      ]
-    };
-  }
-
-  // Pastaba: transportas (fetch) iskeltas i shared/ai-proxy.js (GP_AI_PROXY).
-  // Sis modulis tik konstruoja prompta ir parsina atsakyma; PDF siunciamas
-  // per GP_AI_PROXY.call({ pdfBase64, system, userMessage, maxTokens }).
 
   // --- 2. ATSAKYMO PARSINIMAS IR VALIDACIJA --------------------------------
 
@@ -433,11 +363,10 @@
 
   root.GP_EPD_EXTRACT = {
     version: VERSION,
-    systemPrompt: systemPrompt,
-    userText: userText,
+    UZDUOTIS: UZDUOTIS,
+    duomenys: duomenys,
     extractText: extractText,
     parseResponse: parseResponse,
-    MAX_TOKENS: MAX_TOKENS,
     skaiciaiTekste: skaiciaiTekste,
     yraCitatoje: yraCitatoje,
     citataDokumente: citataDokumente,
