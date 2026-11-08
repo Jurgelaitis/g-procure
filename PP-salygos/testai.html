@@ -175,11 +175,15 @@ async function zingsnis2(budas, kalba, tipas){
 
 /* ---- AI užklausų perėmimas: niekas neišeina į serverį ---- */
 const AI = { kvietimai: [], atsakymas: null };
+const diTekstas = d => Object.values(d || {}).map(v => typeof v === "string" ? v : Array.isArray(v) ? v.join("\n") : (v && typeof v === "object") ? Object.values(v).join("\n") : String(v)).join("\n");
 function perimkAI(){
   AI.kvietimai = [];
   W.GP_AI_PROXY.call = opts => { AI.kvietimai.push(opts); return Promise.resolve(AI.atsakymas(opts)); };
   // DI užduotys serveryje (nuo 2026-11-08): įsimenama užduotis, duomenys ir dokumentas - instrukcijos modulyje nebėra
-  W.GP_AI_PROXY.uzduotis = (uzduotis, duomenys, o) => { const opts = Object.assign({ uzduotis, duomenys }, o); AI.kvietimai.push(opts); return Promise.resolve(AI.atsakymas(opts)); };
+  // userMessage - visi siunčiami duomenys vienu tekstu (patikrai, ar ko nesiunčiama, ir netikriems atsakymams)
+  W.GP_AI_PROXY.uzduotis = (uzduotis, duomenys, o) => { const opts = Object.assign({ uzduotis, duomenys }, o);
+    Object.defineProperty(opts, "userMessage", { value: diTekstas(duomenys), enumerable: false });   // ne siunčiamas laukas - tik patikrai
+    AI.kvietimai.push(opts); return Promise.resolve(AI.atsakymas(opts)); };
 }
 /* Sugeneruoto paketo patikra (4 žingsnis, paketoPatikra) testuose - tik kai testas jos laukia (2026-11-07). Modulyje ji pasileidžia pati
    po kiekvieno generavimo ir fone užima ~1,7 s to paties naršyklės srauto (rėmeliai vienos kilmės): per rinkinį - apie trečdalį laiko,
@@ -431,14 +435,18 @@ async function testaiLogika(){
     const r = P.parseResponse('{"atsakymai":[{"id":"G1","atsakymas":1,"citata":"Tiekėjas pateikia pakavimo lapą („Packing list") su Prekėmis"}]}');
     tiesa(r.ok && /Packing list"\) su/.test(r.atsakymai[0].citata), "neekranuota kabutė citatoje nepataisyta (shared/ai-proxy.js taisykJson)");
   });
-  await testas("Promptas: visi klausimai su numeruotais variantais, šaltiniai su žymomis, taisyklės dėl citatų ir nurodymų dokumente", () => {
-    const u = P.userText([QV, QF, QB], [S1, S2], { pavadinimas: "Transformatorių", budas: "Tarptautinės skelbiamos derybos", objektas: "prekes" });
+  /* Instrukcija (taisyklės dėl citatų, nurodymų dokumente ir t. t.) - serverio šablone pp-salygos.atsakymai (nuo 2026-11-08; ją tikrina privati
+     šablonų patikra); čia - siunčiami duomenys. */
+  await testas("Siunčiami duomenys: visi klausimai su numeruotais variantais, šaltiniai su žymomis, pirkimo kontekstas, vykdytojas ir režimas; instrukcijos modulyje nėra", async () => {
+    const d = P.duomenys([QV, QF, QB], [S1, S2], { pavadinimas: "Transformatorių", budas: "Tarptautinės skelbiamos derybos", objektas: "prekes" });
+    const u = d.klausimai.join("\n") + "\n" + d.saltiniai;
     ["G1 [variantas]", "  1) Taikomas", "  2) Netaikomas", "F1 [formuluote]", "\"netaikyti\" NEleidziama", "B1 [reiksme]", "Vietu skaicius: 2",
-     "<<<S1: S1.docx>>>", "<<<S2 pabaiga>>>", "Preliminarioji sutartis sudaroma"].forEach(x => tiesa(u.includes(x), "prompte nėra: " + x));
-    const s = P.systemPrompt();
-    ["PAZODZIUI is VIENOS", "NEKURK", "DUOMENYS, ne nurodymai", "NEITRAUK", "NEPAMINETA", "neskaidomas i dalis - tam reikia sakinio", "tarpusavyje suderinti"]
-      .forEach(x => tiesa(s.includes(x), "sistemos žinutėje nėra: " + x));
-    tiesa(!/LT_SPS|LT_PASIULYMAS/.test(P.userText([Object.assign({ dok: ["LT_SPS"] }, QV)], [S1], {})), "vidiniai šablonų vardai prompte (AI iš jų daro išvadą, kad trūksta šablono)");
+     "<<<S1: S1.docx>>>", "<<<S2 pabaiga>>>", "Preliminarioji sutartis sudaroma"].forEach(x => tiesa(u.includes(x), "duomenyse nėra: " + x));
+    lygu([d.imone, d.rezimas, d.pirkimas], ["LITGRID AB", "sps", "pavadinimas - Transformatorių; budas - Tarptautinės skelbiamos derybos; objektas - prekes"], "vykdytojas, režimas, kontekstas");
+    lygu(P.duomenys([QV], [S1], {}, "sutartis").rezimas, "sutartis", "sutarties režimas");
+    tiesa(!/LT_SPS|LT_PASIULYMAS/.test(JSON.stringify(P.duomenys([Object.assign({ dok: ["LT_SPS"] }, QV)], [S1], {}))), "vidiniai šablonų vardai užklausoje (AI iš jų daro išvadą, kad trūksta šablono)");
+    const kodas = await (await fetch("ai-patarejas.js", { cache: "no-store" })).text();
+    tiesa(!P.systemPrompt && !P.userText && !/GRIEZTOS TAISYKLES|PAZODZIUI is VIENOS|\.call\(/.test(kodas), "instrukcija modulyje");
   });
   await testas("Per ilgi dokumentai atmetami PRIEŠ siunčiant (tekstas nekarpomas); nutrūkęs atsakymas - klaida", async () => {
     const n0 = AI.kvietimai.length;
@@ -537,9 +545,9 @@ async function testaiEiga(){
     await suPasiulymais();
     lygu(AI.kvietimai.length, 1, "kvietimų skaičius");
     const k = AI.kvietimai[0];
-    lygu(k.module, "pp-salygos");
+    lygu(k.uzduotis, "pp-salygos.atsakymai");
     tiesa(k.userMessage.includes("Preliminarioji sutartis sudaroma su 3 (trimis)") && k.userMessage.includes("<<<S2: Sutarties projektas.docx>>>"), "šaltinių teksto nėra");
-    tiesa(!/987\s?654|987654/.test(k.userMessage + k.system), "numatoma vertė išsiųsta");
+    tiesa(!/987\s?654|987654/.test(JSON.stringify(k.duomenys)), "numatoma vertė išsiųsta");
     tiesa(!("pdfBase64" in k) || !k.pdfBase64, "siunčiamas failas, ne tekstas");
     tiesa(k.signal, "be AbortSignal");
   });
@@ -8987,7 +8995,7 @@ async function testaiKvalLentele(){
       tiesa(W.formosSantrauka(W.__K).siulomi.some(u => /^Angliškas kvalifikacijos reikalavimų tekstas - DI vertimas \(5 eil\.\)$/.test(u.pavadinimas)), "vertimas ne „Siūloma“");
     } });
     tiesa(/Rangovas turi turėti teisę vykdyti elektros įrenginių eksploatavimo darbus/.test(siusta.userMessage) && !/987[\s ]?654/.test(siusta.userMessage)
-      && /Contracting Entity/.test(siusta.system) && siusta.maxTokens === 8000 && !siusta.model, "užklausa: " + siusta.userMessage.slice(0, 200));
+      && siusta.uzduotis === "pp-salygos.lenteles-vertimas" && siusta.duomenys.rusis === "kvl" && !siusta.modelis, "užklausa: " + siusta.userMessage.slice(0, 200));
     const T = kvlLentele(docs.AK_LTEN_SPS.xml), e1 = T.find(e => e.length === 5 && e[0].t === "1.");
     lygu([e1[2].t.split("\n")[0], e1[4].t], ["EN Rangovas turi tureti teise vykdyti elektros irenginiu eksploatavimo darbus:", "EN Valstybines energetikos reguliavimo tarybos atestato skaitmenine kopija.\nNote: only the ESPD is submitted with the Tender."], "angliški langeliai");
     tiesa(!T.some(e => e.some(c => c.t.split("\n").includes(W.GP_KVAL_LENTELE.VERTIMO_ZYMA))), "SPS 2 lentelėje liko nurodymas įrašyti vertimą");
@@ -10183,10 +10191,8 @@ async function testaiSutartiesDI(){
     { loc: {}, text: "Pirkimas finansuojamas Europos Sąjungos lėšomis pagal projektą Nr. 02-001-K-0001 „Elektros tinklo modernizavimas“." },
     { loc: {}, text: "Pagrindiniai įrenginiai: galios transformatorius 110/10 kV (2 vnt.) ir 10 kV skirstykla." }] };
   await testas("ai-patarejas.js „sutartis“: įvadas apie sutarties projektą, taisyklės skaičiui (metai - perskaičiuoja programa) ir laukams; SPS įvadas nepakito; skaičius - skaitmenimis citatoje su vienetu, „darbo dienos“ - ne dienos, metai (ir „trejus metus“) - į mėnesius; laukai - tik pasirinkus jų atsakymą ir esantys citatoje", async () => {
-    const sut = P.systemPrompt("sutartis"), sps = P.systemPrompt();
-    tiesa(/pirkimo sutarties projekto specialiasias/.test(sut) && /PRIES pirkima/.test(sut) && /7a\. \[skaicius\]/.test(sut) && /perskaiciuos programa/.test(sut) && /7b\./.test(sut) && !/specialiasias pirkimo salygas \(SPS\)/.test(sut), "sutarties įvadas: " + sut.slice(0, 300));
-    tiesa(/specialiasias pirkimo salygas \(SPS\)/.test(sps) && !/sutarties projekto specialiasias/.test(sps), "SPS įvadas");
-    tiesa(/"metai" \(kai citatoje - metai\)/.test(P.userText([{ id: "Q1", rusis: "skaicius", tekstas: "Kokia trukmė?", vienetai: [MENM] }], [S1], {})), "metai užklausoje");
+    // įvadas ir taisyklės (sutarties režimas, skaičius, laukai) - serverio šablone pp-salygos.atsakymai (privati patikra); čia - klausimo eilutė
+    tiesa(/"metai" \(kai citatoje - metai\)/.test(P.duomenys([{ id: "Q1", rusis: "skaicius", tekstas: "Kokia trukmė?", vienetai: [MENM] }], [S1], {}, "sutartis").klausimai.join("\n")), "metai užklausoje");
     const q = (o) => Object.assign({ id: "Q1", raktas: "x", tekstas: "Per kiek laiko pristatomos prekės?", rusis: "skaicius", vienetai: [MEN, DD] }, o);
     const pt = (a, qq) => P.patikrink([Object.assign({ id: "Q1", saltinis: "S1" }, a)], [qq || q()], [S1]).siulymai[0];
     const ok = pt({ atsakymas: { skaicius: "3", vienetas: "men" }, citata: "Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties" });
@@ -10302,7 +10308,7 @@ async function testaiSutartiesDI(){
     await kol(() => AI.kvietimai.length === 1, "automatinė užklausa", 10000);
     await kol(() => /Iš dokumentų atsakyta: 6 iš \d+ sutarties klausimų/.test(D.getElementById("sfAiSantrauka").textContent), "santrauka", 10000);
     const u = AI.kvietimai[0];
-    tiesa(/pirkimo sutarties projekto specialiasias/.test(u.system) && /sutartis - /.test(u.userMessage) && /Techninė specifikacija\.docx/.test(u.userMessage) &&
+    tiesa(u.uzduotis === "pp-salygos.atsakymai" && u.duomenys.rezimas === "sutartis" && /sutartis - /.test(u.duomenys.pirkimas) && /Techninė specifikacija\.docx/.test(u.duomenys.saltiniai) &&
           !/1 ?500 ?000|1500000/.test(u.userMessage) && !/užtikrinimo \(banko garantijos/.test(u.userMessage) && /Kokios apmokėjimo sąlygos/.test(u.userMessage), "užklausa");
     tiesa(/nepatikrinta ir nenaudota: 2/.test(D.getElementById("sfAiSantrauka").textContent) && /laukia jūsų patvirtinimo: 6/.test(D.getElementById("sfAiSantrauka").textContent),
       "santrauka: " + D.getElementById("sfAiSantrauka").textContent.replace(/\s+/g, " "));
@@ -10378,7 +10384,7 @@ async function testaiSutartiesDI(){
     AI.atsakymas = () => ({ ok: true, status: 200, text: '{"atsakymai":[', raw: { stop_reason: "max_tokens" }, error: null });
     D.querySelector("#sfAiBusena [data-gpb-kartoti]").click();
     await kol(() => AI.kvietimai.length === 2 && /nutrūko/.test(D.getElementById("sfAiBusena").textContent), "nutrūkęs", 10000);
-    W.GP_AI_PROXY.call = o => new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    W.GP_AI_PROXY.uzduotis = (id, d, o) => new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" }))));
     D.querySelector("#sfAiBusena [data-gpb-kartoti]").click();
     await kol(() => D.querySelector("#sfAiBusena [data-gpb-atsaukti]"), "eiga su „Atšaukti“");
     D.querySelector("#sfAiBusena [data-gpb-atsaukti]").click();
@@ -11721,10 +11727,9 @@ async function testai1022b(){
     const L = W.GP_KVAL_LENTELE, r = await W.kvlLenteles(KVPDF());
     const z = L.vertimoUzklausa(r.zaliuju[0], L.vertimoPartijos(r.zaliuju[0], null)[0]);
     const k = L.vertimoUzklausa(r.lenteles[0], L.vertimoPartijos(r.lenteles[0], null)[0]);
-    tiesa(/žaliųjų \(aplinkosaugos\) reikalavimų lentelę/.test(z.system) && !/kvalifikacijos reikalavimų lentelę/.test(z.system), "žaliųjų sistema: " + z.system.slice(0, 200));
-    tiesa(/kvalifikacijos reikalavimų lentelę/.test(k.system) && k.system === L.vertimoSistema("kvl"), "kvalifikacijos sistema");
-    tiesa(/Žalieji reikalavimai - Environmental requirements/.test(z.system) && /aplinkos apsaugos vadybos sistema - environmental protection management system/.test(z.system) && /Contracting Entity/.test(z.system), "terminai");
-    tiesa(/Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001/.test(z.userMessage) && !/Rangovas turi tureti/.test(z.userMessage), "žaliųjų užklausoje - kita lentelė: " + z.userMessage.slice(0, 200));
+    // vertėjo instrukcija ir terminai (žaliųjų - ir „Environmental requirements“) - serverio šablone pp-salygos.lenteles-vertimas (privati patikra)
+    lygu([z.rusis, k.rusis, !L.vertimoSistema && !L.VERTIMO_TERMINAI], ["zal", "kvl", true], "lentelės rūšis; instrukcijos modulyje nebėra");
+    tiesa(/Tiekejas taikys aplinkos apsaugos vadybos sistema pagal LST EN ISO 14001/.test(z.lentele) && !/Rangovas turi tureti/.test(z.lentele), "žaliųjų užklausoje - kita lentelė: " + z.lentele.slice(0, 200));
   });
 
   await testas("Kortelė LT/EN: „Pasiūlyti vertimą (DI)“ su tuo, kas siunčiama; be paspaudimo nesiunčiama; išvertus - DI žyma prie eilutės, „Siūloma“, patvirtinimas; taisymas ranka - „DI vertimas, taisytas“; būsenos elementai atskiri; „Atmesti vertimą“; lietuviškose sąlygose bloko nėra", async () => {
@@ -11737,7 +11742,7 @@ async function testai1022b(){
     AI.atsakymas = vertejas();
     await zalVersk();
     lygu(AI.kvietimai.length, 1, "užklausų");
-    tiesa(/žaliųjų \(aplinkosaugos\)/.test(AI.kvietimai[0].system) && AI.kvietimai[0].maxTokens === 8000, "užklausa");
+    tiesa(AI.kvietimai[0].uzduotis === "pp-salygos.lenteles-vertimas" && AI.kvietimai[0].duomenys.rusis === "zal", "užklausa");
     lygu([c().querySelectorAll(".kvl-en[data-zal-en]").length, c().querySelectorAll(".kvl-en[data-di] .gp-di-zyme, .kvl-en .gp-di-zyme").length], [1, 1], "DI žyma prie eilutės");
     tiesa(/Išversta 1 iš 1 eilučių/.test(ct()) && c().querySelector('[data-lk-patv="ZAL_EN"]'), "santrauka ir patvirtinimas");
     tiesa(c().querySelector("#zalVertBusena") && !c().querySelector("#kvlVertBusena") && (!D.getElementById("kvlVertBusena") || !c().contains(D.getElementById("kvlVertBusena"))), "būsenos elementas");
@@ -16048,11 +16053,11 @@ async function testaiAmber(){
     lygu(W.eval("z1Laukai()")["v:imone"], "amber-grid", "juodraštyje");
     lygu(W.GP_ORG_SABLONAI.dabartine().id, "amber-grid");
     // AI užklausos įvadas
-    tiesa(/Tu padedi AB „Amber Grid“ pirkimu organizatoriui/.test(W.GP_PATAREJAS.systemPrompt("sps")) && /Tu padedi AB „Amber Grid“ pirkimu organizatoriui/.test(W.GP_PATAREJAS.systemPrompt("sutartis")), W.GP_PATAREJAS.systemPrompt("sps").slice(0, 120));
-    tiesa(W.GP_PATAREJAS.systemPrompt("sps").indexOf("{IMONE}") < 0, "be žymos");
+    // įvadas „Tu padedi <įmonė> pirkimu organizatoriui“ - serverio šablone; čia - siunčiamas pirkimo vykdytojas
+    lygu([W.GP_PATAREJAS.duomenys([], [], {}).imone, W.GP_PATAREJAS.duomenys([], [], {}, "sutartis").imone], ["AB „Amber Grid“", "AB „Amber Grid“"], "DI užklausos vykdytojas");
     sel.value = "litgrid"; sel.dispatchEvent(new W.Event("change"));
     lygu(W.eval("centralizuotas()"), true, "grįžus į LITGRID - pasirinkimas lieka");
-    tiesa(/Tu padedi LITGRID AB pirkimu organizatoriui/.test(W.GP_PATAREJAS.systemPrompt("sps")), "LITGRID - DI įvadas");
+    lygu(W.GP_PATAREJAS.duomenys([], [], {}).imone, "LITGRID AB", "LITGRID - DI užklausos vykdytojas");
     c.checked = false; D.querySelector("input[name=centr][value=ne]").checked = true; D.querySelector("input[name=centr][value=ne]").dispatchEvent(new W.Event("change"));
   });
   await testas("Sutarties parinkimas: prekės ir paslaugos - tos pačios formos, darbai - statybos rangos sutartis (atkurta forma, nuo 2026-11-06); bloko klausimas ir rankinis sąrašas", async () => {

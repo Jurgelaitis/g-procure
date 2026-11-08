@@ -636,25 +636,8 @@
   /* ---------- DI vertimo pasiūlymas (kai pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų teksto nėra) --------------
      Užklausa ir atsakymo patikra - čia (grynos funkcijos), kvietimas ir sąsaja - PP-SALYGOS.html. Partijos - dėl atsakymo ilgio
      ribos (serverio max_tokens 8000), ne dėl užklausos dydžio: kiekviena partija - visos eilutės su visomis jų pastraipomis. */
-  const VERTIMO_TERMINAI = [['Tiekėjas', 'Supplier'], ['Tiekėjų grupė', 'Supplier group'], ['Perkantysis subjektas', 'Contracting Entity'],
-    ['Pasiūlymas', 'Tender'], ['Pirminis pasiūlymas', 'Initial Tender'], ['Paraiška', 'Application'], ['EBVPD', 'ESPD'], ['SPS', 'SPC'], ['BPS', 'GPC'],
-    ['Kvalifikacijos reikalavimai', 'Qualification Requirements'], ['Komisija', 'Commission'], ['Ūkio subjektas', 'Economic entity'],
-    ['Subtiekėjas', 'Sub-supplier'], ['Kvazisubtiekėjas', 'Quasi-Sub-supplier'], ['Sutartis', 'Contract'], ['Techninė specifikacija', 'Technical Specification'],
-    ['Rangovas', 'Contractor'], ['skaitmeninė kopija', 'digital copy'], ['CVP IS', 'CVP IS'],
-    // žaliųjų reikalavimų lentelė (2026-10-22) - LITGRID dvikalbių SPS 3 lentelės terminai
-    ['Žalieji reikalavimai', 'Environmental requirements'], ['aplinkos apsaugos vadybos sistema', 'environmental protection management system']];
-  /* Kokią lentelę verčia (2026-10-22: ir žaliųjų reikalavimų lentelę - modelis su zalieji: true). */
-  const VERTIMO_LENTELE = { kvl: 'kvalifikacijos reikalavimų lentelę', zal: 'žaliųjų (aplinkosaugos) reikalavimų lentelę' };
-  const vertimoSistema = rusis => 'Esi teisinių pirkimo dokumentų vertėjas iš lietuvių į anglų kalbą. Verti LITGRID AB (Lietuvos elektros perdavimo sistemos operatoriaus) '
-    + 'pirkimo sąlygų ' + (VERTIMO_LENTELE[rusis] || VERTIMO_LENTELE.kvl) + ' dvikalbėms (LT / EN) pirkimo sąlygoms. Taisyklės: '
-    + '1) versk tiksliai ir pilnai - nieko nepridėk, nepraleisk ir neaiškink; '
-    + '2) vartok šiuos terminus: ' + VERTIMO_TERMINAI.map(([a, b]) => a + ' - ' + b).join('; ') + '; '
-    + '3) skaičius, sumas (ir jų skyrybą), datas, punktų numerius (pvz. „1.1.“), nuorodas, el. pašto adresus, matavimo vienetus (kV, MVA) '
-    + 'ir standartų bei reglamentų žymenis (ISO, LST EN, STR) palik nepakeistus; '
-    + '4) teisės aktų ir institucijų pavadinimus versk pažodžiui, santrumpų nesugalvok; '
-    + '5) kiekvieną pastraipą versk atskirai: tiek pat pastraipų ir ta pačia tvarka, tuščia pastraipa lieka tuščia; '
-    + '6) atsakyk TIK JSON objektu, be jokio kito teksto.';
-  const VERTIMO_SISTEMA = vertimoSistema('kvl');
+  /* Vertimo instrukcija (vertėjo taisyklės ir terminai pagal lentelę) - privačiame serverio šablone pp-salygos.lenteles-vertimas
+     (2026-11-08, naudotojo sprendimas - kodo apsauga); modulis siunčia tik lentelės rūšį ir lietuvišką tekstą. */
   const VERTIMO_PARTIJA = 6000;   // lietuviško teksto ženklų vienai užklausai (atsakymas - panašaus ilgio)
   /* Eilutės, kurias reikia versti (be šaltinio angliško teksto ir be jau esamo vertimo), suskirstytos į partijas. */
   function vertimoPartijos(M, vertimas, opts){
@@ -678,8 +661,7 @@
     const duom = { eilutes: partija.eilutes.map(i => ({ nr: i + 1, reikalavimas: M.eilutes[i].reik.map(p => p.tekstas), dokumentai: M.eilutes[i].dok.map(p => p.tekstas) })) };
     if (partija.antrastes.length) duom.antrastes = partija.antrastes;
     if (partija.neVisa) duom.neVisa = partija.neVisa;
-    return { system: vertimoSistema(M.zalieji ? 'zal' : 'kvl'), userMessage: 'Išversk į anglų kalbą. Grąžink JSON tokios pačios sandaros (tie patys raktai ir „nr“, vietoj lietuviško teksto - '
-      + 'angliškas):\n' + JSON.stringify(duom) };
+    return { rusis: M.zalieji ? 'zal' : 'kvl', lentele: JSON.stringify(duom) };
   }
   const LT_RAIDES = /[ąčęėįšųūž]/i;
   /* Kurie skaičiai skiriasi (T4-V4, 2026-10-23): „lietuviškai 14001, vertime 14000“; sutampa - null */
@@ -1094,6 +1076,6 @@
   }
 
   root.GP_KVAL_LENTELE = { skaityk, skaitykXml, skaitykPdf, pdfLenteles, irasykZaliuosius, raskZaliujuLentele, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
-    vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos, VERTIMO_TERMINAI, vertimoSistema,
+    vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos,
     raskLentele, GRUPES, grupesPav, grupiuTvarka, pTekstas, VERTIMO_ZYMA, patirtiesEilutes, LENTELES_PAV };
 })(typeof window !== 'undefined' ? window : this);
