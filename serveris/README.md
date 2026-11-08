@@ -103,7 +103,7 @@ sąrašo laiką ir nuorodą į CVP IS (terminas, pratęsimai ir aktualios redakc
 Keičiant kodą: atnaujinti `/opt/g-procure-cvpis/`, `systemctl restart g-procure-cvpis`. Raktą pakeisti - perrašyti
 `/etc/g-procure-cvpis/vpt_api_key` ir `systemctl restart g-procure-cvpis`.
 
-## Sankcijų sąrašų patikra (nuo 2026-11-08, dar neįdiegta)
+## Sankcijų sąrašų patikra (nuo 2026-11-08, įdiegta 2026-11-08)
 
 Naudotojo sprendimas 2026-11-08: PP-esg tiekėjo patikrai - automatinė sankcijų sąrašų patikra; asmens duomenys - tik bendrovėms.
 Paslauga kartą per parą parsisiunčia oficialius sąrašus ir atsako, ar tiekėjo pavadinimas (ir kodas) panašus į kurį nors sąraše esantį
@@ -164,7 +164,7 @@ ribos zona `conf.d/gp-sankcijos-limit.conf`, `location /api/sankcijos/` - į `ap
 - **PP-esg** (nuo 2026-11-08): patikros lange - „Tikrinti sankcijų sąrašuose automatiškai“ (tik bendrovėms; fizinio asmens įmonėms nesiūloma,
   neaiškiai teisinei formai - klausiama). Rezultatas - sąrašų būsenos ir kandidatai; kiekvieną įvertina žmogus, siūlomą rezultatą pasirenka žmogus.
 
-## DI užduotys (nuo 2026-11-08, dar neįdiegta)
+## DI užduotys (nuo 2026-11-08, įdiegta 2026-11-08)
 
 Naudotojo sprendimas 2026-11-08 („Neutralūs žingsniai“ - kodo apsauga): DI instrukcijos (sistemos tekstai ir užklausų šablonai)
 perkeliamos iš naršyklės modulių į serverį ir laikomos privačiai. Modulis siunčia tik užduoties pavadinimą ir duomenis:

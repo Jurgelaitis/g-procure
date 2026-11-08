@@ -29,7 +29,7 @@
 <div class="sub">PP-esg rinkinys (nuo 2026-09-26; „Patikra 2026-11-04“ - naujo naudotojo patikros radiniai): puslapis įsikelia, tuščioje naršyklėje niekas
 neįrašoma, pavyzdys - tik mygtuku; rizikos variklis (šalis, sektorius, kritiškumas), sankcijų patikrų žurnalas tik pildomas ir atitikimas blokuoja tiekėją,
 CVP IS importas dedubliuoja pagal įmonės kodą, o nepavykus paieškai rodoma klaida - pavyzdys tik paspaudus ir jo importuoti negalima; DI vertinimo klaida ir
-atšaukimas, CSRD eksportas. Serveris imituojamas (serverio failas - su netikrais express ir fetch).
+atšaukimas, CSRD eksportas; automatinė patikra sankcijų sąrašuose (2026-11-08: teisinė forma, užklausa, sąrašų būsenos, sprendimai, klaidos). Serveris imituojamas (serverio failas - su netikrais express ir fetch).
 Tikri naudotojo duomenys įsimenami prieš testus ir atkuriami po jų (shared/testu-apsauga.js).</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
@@ -903,7 +903,7 @@ async function testaiPatikra1104(){
     tiesa(!D.querySelector("#im-results img") && !D.querySelector("#im-meta img"), "importe nėra žymos"); W.closeModal();
   });
 
-  await testas("D9: prie patikros formos - oficialios paieškos ir sakinys, kad G-Procure pats netikrina", async () => {
+  await testas("D9: prie patikros formos - oficialios paieškos ir sakinys, kad automatinė patikra tik siūlo galimus atitikmenis (sprendžia žmogus) ir FNTT bei 5k netikrina", async () => {
     irasai([tiekejas1("A")]);
     await modulis(); W.openCheckModal("A");
     const a = [...D.querySelectorAll("#modalShell .saltiniai a")];
@@ -915,7 +915,7 @@ async function testaiPatikra1104(){
       "https://fntt.lrv.lt/lt/tarptautines-finansines-sankcijos/",
       "https://eur-lex.europa.eu/legal-content/LT/ALL/?uri=CELEX:32014R0833"], "adresai");
     tiesa(a.every(x => x.target === "_blank" && x.rel === "noopener"), "nauji skirtukai");
-    tiesa(/G-Procure pats sąrašų netikrina/.test(D.querySelector("#modalShell .saltiniai").textContent), "sakinys");
+    tiesa(/sprendimą priima žmogus; FNTT sąrašo ir 5k straipsnio ji netikrina/.test(D.querySelector("#modalShell .saltiniai").textContent), "sakinys");
     W.closeModal();
   });
 
@@ -1101,12 +1101,178 @@ async function testaiPatikra1104(){
   });
 }
 
+/* ==========================================================================
+   Automatinė patikra sankcijų sąrašuose (2026-11-08; naudotojo sprendimas: tik automatinė sankcijų patikra, asmens duomenys - tik
+   bendrovėms). Serveris imituojamas: /api/sankcijos/tikrinti atsakymas - kaip serveris/sankcijos-logika.js atsakymas.
+   ========================================================================== */
+function sankAtsakymas(o) {
+  return Object.assign({
+    sarasai: [
+      { id: "es", busena: "nepatikrinta", atnaujinta: null, saltinioData: null, irasu: 0, pasenusi: false, klaida: { laikas: "2026-11-08T03:00:00Z", rusis: "saltinis-500", tekstas: "x" }, kandidatu: null },
+      { id: "jt", busena: "patikrinta", atnaujinta: "2026-11-08T03:05:00Z", saltinioData: "2026-11-08", irasu: 274, pasenusi: false, klaida: null, kandidatu: 0 },
+      { id: "ofac", busena: "patikrinta", atnaujinta: "2026-11-08T03:10:00Z", saltinioData: "2026-11-06", irasu: 10388, pasenusi: false, klaida: null, kandidatu: 1 },
+      { id: "jk", busena: "patikrinta", atnaujinta: "2026-11-01T03:15:00Z", saltinioData: "2026-10-30", irasu: 1667, pasenusi: true, klaida: { laikas: "2026-11-08T03:15:00Z", rusis: "rysys", tekstas: "x" }, kandidatu: 0 }],
+    kandidatai: [{ sarasas: "ofac", id: "16809", pavadinimas: "AQUANIKA <img src=x onerror=alert(1)>", atitiko: "RUSSKOYE VREMYA LLC", kiti: [], kitu: 3, salys: ["Russia"],
+      programos: ["UKRAINE-EO13661"], nr: "16809", data: null, nuoroda: "https://sanctionssearch.ofac.treas.gov/Details.aspx?id=16809", ofac: "SDN", balas: 88, kodel: ["sutampa žodžiai: aquanika"], kodas: false }],
+    visiPatikrinti: false, slenkstis: 70, versija: "2026-11-08"
+  }, o || {});
+}
+function sankServeris(atsakymas, statusas) {
+  const kv = [];
+  const atkurti = serveris({ "/api/sankcijos/tikrinti": (url) => { kv.push(new URL(url)); return Promise.resolve(new Response(typeof atsakymas === "string" ? atsakymas : JSON.stringify(atsakymas), { status: statusas || 200, headers: { "Content-Type": "application/json" } })); } });
+  return { kv, atkurti };
+}
+async function atverkPatikra(sup) {
+  irasai(sup);
+  await modulis();
+  W.openCheckModal(sup[0].id);
+}
+
+async function testaiSankcijos1108(){
+  grupe("Automatinė patikra sankcijų sąrašuose (2026-11-08)");
+  await testas("Teisinė forma: bendrovė (UAB, AG, AS, ООО, Ltd, uždaroji akcinė bendrovė), fizinio asmens įmonė (IĮ, MB, ūkininkas, individuali veikla, sole trader) arba neaišku - klausiama", async () => {
+    await modulis();
+    const f = W.eval("asmensForma");
+    lygu(["UAB „Elmova“", "Siemens Energy AG", "AS Latvenergo", "ООО «Ромашка»", "Eastgrid Components Ltd", "Uždaroji akcinė bendrovė Šviesa", "S.A. Ferrovial"].map(f), Array(7).fill("bendrove"));
+    lygu(["Vardenio Pavardenio IĮ", "MB „Gaja“", "Ūkininkas Jonas Jonaitis", "J. Jonaitienės individuali įmonė", "Individuali veikla - Petras", "John Smith sole trader", "UAB ir MB Dalia"].map(f), Array(7).fill("fizinis"), "fizinio asmens požymis pirmesnis už bendrovės");
+    lygu(["Vardenis Pavardenis", "Smart as Gold", "Mbare trading", "Abaras", "Grid projects"].map(f), [null, null, null, null, null], "neaiški forma - ne spėjimas; santrumpos tik didžiosiomis ir atskiru žodžiu");
+  });
+  await testas("Forma: be tiekėjo - nurodymas; fizinio asmens įmonei - paaiškinimas be mygtuko; neaiškiai formai - žymimasis langelis, mygtukas neaktyvus; bendrovei - mygtukas ir kas siunčiama", async () => {
+    irasai([tiekejas1("A"), tiekejas1("B", { name: "Vardenio Pavardenio IĮ" }), tiekejas1("C", { name: "Grid projects" })]);
+    await modulis();
+    W.openCheckModal();
+    tiesa(D.getElementById("autoPirma") && !D.getElementById("autoBtn"), "be tiekėjo");
+    const pasirink = id => { const s = D.getElementById("cf-sup"); s.value = id; s.dispatchEvent(new Event("change")); };
+    pasirink("B");
+    tiesa(/fizinio asmens įmonėms/.test(D.getElementById("autoAsmuo").textContent) && !D.getElementById("autoBtn"), "IĮ - patikra nesiūloma");
+    pasirink("C");
+    const zym = D.getElementById("autoBendrove"), btn = D.getElementById("autoBtn");
+    lygu([!!zym, zym.checked, btn.disabled, zym.getAttribute("aria-describedby")], [true, false, true, "autoKlausti"], "neaiški forma");
+    zym.checked = true; zym.dispatchEvent(new Event("change"));
+    lygu(btn.disabled, false, "pažymėjus - mygtukas aktyvus");
+    pasirink("A");
+    tiesa(!D.getElementById("autoBendrove") && !D.getElementById("autoBtn").disabled, "bendrovė - be klausimo");
+    tiesa(/pavadinimas, šalis ir įmonės kodas/.test(D.getElementById("autoSiunciama").textContent) && /DI nenaudojamas/.test(D.getElementById("autoSiunciama").textContent), "kas siunčiama");
+    W.closeModal();
+  });
+  await testas("Užklausa: tik pavadinimas, šalies ISO kodas ir įmonės kodas; neaiški forma nepažymėjus - klaida prie laukelio ir nesiunčiama", async () => {
+    await atverkPatikra([tiekejas1("A", { name: "UAB „Aquanika“", code: "305 123-456", country: "Lietuva" }), tiekejas1("C", { name: "Grid projects", country: "OTHER_EU", code: "" })]);
+    const sv = sankServeris(sankAtsakymas());
+    try {
+      await W.runAutoPatikra();
+      await laukTol(() => D.querySelector("#autoSarasai"));
+      lygu(sv.kv.length, 1, "užklausų");
+      const u = sv.kv[0];
+      lygu([u.origin + u.pathname, [...u.searchParams.keys()], u.searchParams.get("pavadinimas"), u.searchParams.get("salis"), u.searchParams.get("kodas")],
+        ["https://api.g-procure.com/api/sankcijos/tikrinti", ["pavadinimas", "salis", "kodas"], "UAB „Aquanika“", "LT", "305123456"]);
+      const s = D.getElementById("cf-sup"); s.value = "C"; s.dispatchEvent(new Event("change"));
+      await W.runAutoPatikra();
+      lygu(sv.kv.length, 1, "nepažymėjus „Tai bendrovė“ - nesiunčiama");
+      tiesa(D.getElementById("autoBendrove").getAttribute("aria-invalid") === "true", "klaida prie laukelio");
+      D.getElementById("autoBendrove").checked = true;
+      await W.runAutoPatikra();
+      await laukTol(() => sv.kv.length === 2);
+      lygu([...sv.kv[1].searchParams.keys()], ["pavadinimas"], "„Kita ES“ šalis ir be kodo - nesiunčiama");
+    } finally { sv.atkurti(); W.closeModal(); }
+  });
+  await testas("Rezultatas: kiekvieno sąrašo būsena (nepatikrinta su priežastimi, pasenusi kopija, patikrinta su data ir kiekiu) - niekada „nerasta“ nepatikrintam; kandidatas ekranuotas su balu, kodėl ir oficialiu įrašu; pažymimi tik patikrinti ne pasenę sąrašai; rezultatas nepasirenkamas", async () => {
+    await atverkPatikra([tiekejas1("A", { name: "UAB „Aquanika“" })]);
+    const sv = sankServeris(sankAtsakymas());
+    try {
+      await W.runAutoPatikra();
+      await laukTol(() => D.querySelector("#autoSarasai"));
+      const eil = id => D.querySelector('#autoSarasai li[data-sar="' + id + '"]');
+      tiesa(/Nepatikrinta/.test(eil("es").textContent) && /šaltinis atsakė klaida/.test(eil("es").textContent) && !/atitikmenų: 0/.test(eil("es").textContent), "ES - nepatikrinta: " + eil("es").textContent);
+      tiesa(/patikrinta: sąrašo data 2026-11-08, subjektų 274; galimų atitikmenų: 0/.test(eil("jt").textContent), "JT: " + eil("jt").textContent);
+      tiesa(/Kopija pasenusi/.test(eil("jk").textContent) && /2026-10-30/.test(eil("jk").textContent) && /nepavyko prisijungti/.test(eil("jk").textContent), "JK - pasenusi: " + eil("jk").textContent);
+      const k = D.querySelector('.auto-kand[data-kand="0"]');
+      tiesa(k && !k.querySelector("img") && /AQUANIKA <img/.test(k.textContent), "pavadinimas ekranuotas");
+      tiesa(/88 \/ 100/.test(k.textContent) && /RUSSKOYE VREMYA LLC/.test(k.textContent) && /sutampa žodžiai: aquanika/.test(k.textContent) && /UKRAINE-EO13661/.test(k.textContent), "balas, kitas pavadinimas, kodėl, programa");
+      const a = k.querySelector("a");
+      lygu([a.getAttribute("href"), a.target, a.rel], ["https://sanctionssearch.ofac.treas.gov/Details.aspx?id=16809", "_blank", "noopener noreferrer"]);
+      const blogas = W.autoIsvalyk(sankAtsakymas({ kandidatai: [Object.assign({}, sankAtsakymas().kandidatai[0], { nuoroda: "javascript:alert(1)" }), Object.assign({}, sankAtsakymas().kandidatai[0], { sarasas: "es" }), Object.assign({}, sankAtsakymas().kandidatai[0], { sarasas: "kita" })] }));
+      lygu([blogas.kandidatai.length, blogas.kandidatai[0].nuoroda], [1, ""], "svetima nuoroda atmesta; nepatikrinto ar nežinomo sąrašo kandidatas - ne");
+      lygu([...D.querySelectorAll(".chk-list:checked")].map(x => x.value), ["OFAC", "JT"], "pažymėti tik patikrinti ir ne pasenę");
+      tiesa(/JT, OFAC/.test(D.getElementById("autoPazymeta").textContent), "pasakyta, kas pažymėta");
+      lygu(D.getElementById("cf-result").value, "", "rezultatas nepasirinktas");
+      tiesa(/Įvertinkite kiekvieną/.test(D.getElementById("autoSiulymas").textContent) && /ES - patikrinkite oficialiose/.test(D.getElementById("autoSiulymas").textContent) && !D.getElementById("autoSiulBtn"), "laukia sprendimo");
+    } finally { sv.atkurti(); W.closeModal(); }
+  });
+  await testas("Sprendimai: „Ne tas pats“ - siūlomas „Švarus“ su mygtuku, „Galimas“ - siūlomas „Galimas atitikmuo“; neįvertinus ar „Švarus“ su galimu - neišsaugoma; išsaugota patikra turi sąrašų datas ir sprendimus, istorijoje ir eksporte", async () => {
+    await atverkPatikra([tiekejas1("A", { name: "UAB „Aquanika“" })]);
+    const sv = sankServeris(sankAtsakymas());
+    try {
+      await W.runAutoPatikra();
+      await laukTol(() => D.querySelector("#autoSarasai"));
+      D.getElementById("cf-by").value = "Tikrintojas"; D.getElementById("cf-result").value = "clean";
+      W.saveCheckForm();
+      lygu([St().getChecks().length, !!D.getElementById("cf-sup")], [0, true], "neįvertinus - neišsaugota");
+      const r = D.querySelector('input[name="autoSpr0"][value="ne"]'); r.checked = true; r.dispatchEvent(new Event("change"));
+      tiesa(/Siūlomas rezultatas: „Švarus“ \(nepatvirtinta\)/.test(D.getElementById("autoSiulTekstas").textContent) && /JT, OFAC, JK/.test(D.getElementById("autoSiulTekstas").textContent), "švarus: " + D.getElementById("autoSiulTekstas").textContent);
+      D.getElementById("cf-result").value = "";
+      D.getElementById("autoSiulBtn").click();
+      lygu([D.getElementById("cf-result").value, D.activeElement && D.activeElement.id], ["clean", "cf-result"], "pasirinkta mygtuku, fokusas");
+      const g = D.querySelector('input[name="autoSpr0"][value="galimas"]'); g.checked = true; g.dispatchEvent(new Event("change"));
+      tiesa(/Galimas atitikmuo - tikslinama/.test(D.getElementById("autoSiulTekstas").textContent), "galimas");
+      W.saveCheckForm();
+      lygu(St().getChecks().length, 0, "„Švarus“ su galimu atitikmeniu - neišsaugota");
+      tiesa(D.getElementById("cf-result").getAttribute("aria-invalid") === "true", "klaida prie rezultato");
+      D.getElementById("autoSiulBtn").click();
+      W.saveCheckForm();
+      const c = St().getChecks()[0];
+      lygu([c.result, c.lists, c.auto.sarasai.map(s => s.id + ":" + s.busena + ":" + s.saltinioData), c.auto.kandidatai.map(k => k.id + ":" + k.sprendimas + ":" + k.balas)],
+        ["possible", ["OFAC", "JT"], ["es:nepatikrinta:null", "jt:patikrinta:2026-11-08", "ofac:patikrinta:2026-11-06", "jk:patikrinta:2026-10-30"], ["16809:galimas:88"]]);
+      tiesa(!JSON.stringify(c.auto).includes("Aquanika") || JSON.stringify(c.auto).includes("AQUANIKA"), "užklausos tekstas neįrašytas");
+      const ist = W.autoIstorija(c.auto);
+      lygu(ist, "Automatinė patikra: JT 2026-11-08, OFAC 2026-11-06, JK 2026-10-30; nepatikrinta: ES; galimų atitikmenų: 1");
+      const ex = W.buildChecksExport();
+      lygu([ex.checks[0].automatic.kandidatai[0].sprendimas], ["galimas"]);
+    } finally { sv.atkurti(); if (D.getElementById("modalShell")) W.closeModal(); }
+  });
+  await testas("Be kandidatų - „nerasta“ tik patikrintuose sąrašuose ir iškart siūlomas „Švarus“; pakeitus tiekėją rezultatas dingsta", async () => {
+    await atverkPatikra([tiekejas1("A"), tiekejas1("B")]);
+    const sv = sankServeris(sankAtsakymas({ kandidatai: [] }));
+    try {
+      await W.runAutoPatikra();
+      await laukTol(() => D.querySelector("#autoSarasai"));
+      tiesa(/nerasta/.test(D.getElementById("autoNera").textContent), "nerasta");
+      tiesa(/„Švarus“/.test(D.getElementById("autoSiulTekstas").textContent) && D.getElementById("autoSiulBtn"), "siūlomas švarus");
+      const s = D.getElementById("cf-sup"); s.value = "B"; s.dispatchEvent(new Event("change"));
+      lygu([D.getElementById("autoRezultatas").innerHTML, W.eval("AUTO_PATIKRA")], ["", null], "kitas tiekėjas - rezultatas išvalytas");
+    } finally { sv.atkurti(); W.closeModal(); }
+  });
+  await testas("Klaidos: 503 - sąrašai neįkelti, 404 - neįdiegta, 429, netinkamas JSON ir ne tokia sandara - klaida su „Bandyti dar kartą“, niekas nepažymima ir neįrašoma", async () => {
+    for (const [atsakymas, statusas, tekstas] of [[{ klaida: "x", sarasai: [] }, 503, /dar neįkelti/], ["<html>", 404, /neįdiegta/], [{ klaida: "x" }, 429, /Per daug užklausų/],
+      ["{", 200, /Netikėtas serverio atsakymas/], [sankAtsakymas({ sarasai: sankAtsakymas().sarasai.slice(0, 3) }), 200, /Netikėtas serverio atsakymas/]]) {
+      await atverkPatikra([tiekejas1("A")]);
+      const sv = sankServeris(atsakymas, statusas);
+      try {
+        await W.runAutoPatikra();
+        await laukTol(() => /nepavyko/i.test(D.getElementById("autoBusena").textContent));
+        const b = D.getElementById("autoBusena");
+        tiesa(tekstas.test(b.textContent) && [...b.querySelectorAll("button")].some(x => /Bandyti dar kartą/.test(x.textContent)), statusas + ": " + b.textContent);
+        lygu([D.querySelectorAll(".chk-list:checked").length, W.eval("AUTO_PATIKRA"), D.getElementById("autoRezultatas").innerHTML], [0, null, ""], statusas + " - nieko nepažymėta");
+      } finally { sv.atkurti(); W.closeModal(); }
+    }
+  });
+  await testas("Oficialių sąrašų pastaba sako, ką daro automatinė patikra ir ko netikrina; visi nauji tekstai - LT ir EN", async () => {
+    await modulis();
+    const I = W.eval("I18N");
+    tiesa(/Automatinė patikra \(žemiau\) ieško galimų atitikmenų ES, JT, OFAC ir JK sąrašų kopijose, bet sprendimą priima žmogus; FNTT sąrašo ir 5k straipsnio ji netikrina/.test(I.lt["src.note"]), "LT");
+    tiesa(/a person makes the decision; it does not check the FNTT list or Article 5k/.test(I.en["src.note"]), "EN");
+    const lt = Object.keys(I.lt).filter(k => k.indexOf("auto.") === 0), en = Object.keys(I.en).filter(k => k.indexOf("auto.") === 0);
+    lygu(en.sort(), lt.sort(), "tie patys raktai");
+    tiesa(lt.length >= 40 && lt.every(k => I.en[k] !== I.lt[k] || /^\{|ES|OFAC/.test(I.lt[k])), "išversta");
+  });
+}
+
 (async function(){
   try {
     await testaiPuslapis();
     await testaiLogika();
     await testaiStebejimas();
     await testaiPatikra1104();
+    await testaiSankcijos1108();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
