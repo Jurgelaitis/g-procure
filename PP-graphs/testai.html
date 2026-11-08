@@ -931,9 +931,12 @@ async function testaiPastabos1028(){
 async function enRinkinys(atsakymas){
   const r = await rinkinys("S-SD", "2026-11-10");
   r.uzkl = [];
-  r.W.GP_AI_PROXY = { call: async o => { r.uzkl.push(o); await new Promise(z => setTimeout(z, 30));
+  // DI užduotis serveryje (nuo 2026-11-08): modulis siunčia tik užduoties pavadinimą ir duomenis, instrukcijos - serverio šablone
+  const siusk = async o => { r.uzkl.push(o); await new Promise(z => setTimeout(z, 30));
     if (o.signal && o.signal.aborted) throw new r.W.DOMException("Atšaukta", "AbortError");
-    return typeof atsakymas === "function" ? atsakymas(o) : atsakymas; } };
+    return typeof atsakymas === "function" ? atsakymas(o) : atsakymas; };
+  r.W.GP_AI_PROXY = { uzduotis: (id, duomenys, o) => siusk(Object.assign({ id, duomenys }, o)),
+    call: async () => { throw new Error("PP-graphs nebesiunčia instrukcijų per call() - tik GP_AI_PROXY.uzduotis"); } };
   r.set("f-pavadinimas", "400/110 kV transformatoriaus pirkimas Vilniaus pastotei", "input");
   r.kalba = async k => { r.D.querySelector('#lang-toggle [data-lang="' + k + '"]').click(); await r.kol(() => !r.W.eval("EN_PAV").vyksta); };
   r.kol = async (f, ms) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > (ms || 4000)) throw new Error("nesulaukta"); await new Promise(z => setTimeout(z, 20)); } };
@@ -957,8 +960,10 @@ async function testaiEnPavadinimas1106(){
   await testas("Pasirinkus EN su tuščiu lauku - pavadinimas išverčiamas su DI (tik pavadinimas, modulis pp-graphs); vertimas lauke, abiejuose grafikuose su data-di, žyma „DI vertimas (nepatvirtinta)“ ir „Patvirtinti vertimą“; LT grafike - lietuviškas, lauko nėra", async () => {
     const r = await enRinkinys({ ok: true, text: "„Procurement of a 400/110 kV transformer for Vilnius substation“\nPastaba: vertimas" });
     await r.kalba("en");
-    lygu(r.uzkl.map(o => [o.module, o.userMessage, o.maxTokens]), [["pp-graphs", "400/110 kV transformatoriaus pirkimas Vilniaus pastotei", 200]], "užklausa");
-    tiesa(/viena eilute/.test(r.uzkl[0].system) && /400\/110 kV/.test(r.uzkl[0].system), "instrukcija");
+    lygu(r.uzkl.map(o => [o.id, o.duomenys]), [["pp-graphs.en-pavadinimas", { pavadinimas: "400/110 kV transformatoriaus pirkimas Vilniaus pastotei" }]], "užklausa - tik užduotis ir lietuviškas pavadinimas");
+    tiesa(!("system" in r.uzkl[0]) && Object.keys(r.uzkl[0]).sort().join() === "duomenys,id,signal", "be instrukcijos ir kitų laukų: " + Object.keys(r.uzkl[0]));
+    const kodas = await (await fetch("Litgrid_Pirkimu_grafiku_generatorius.html", { cache: "no-store" })).text();
+    tiesa(!/EN_PAV_SISTEMA|Tu verti viešojo pirkimo pavadinimą/.test(kodas) && !/GP_AI_PROXY\.call\(/.test(kodas), "instrukcijos modulio kode nebėra (serverio šablonas)");
     lygu(r.en(), "Procurement of a 400/110 kV transformer for Vilnius substation", "lauke - be kabučių ir antros eilutės");
     for (const k of ["A", "B"]) lygu([r.sub(k).textContent, r.sub(k).getAttribute("data-di")], [r.en(), "sugeneruota"], "grafikas " + k);
     lygu(r.zyma(), "DI vertimas (nepatvirtinta)");
@@ -1016,7 +1021,7 @@ async function testaiEnPavadinimas1106(){
     await r.kol(() => !r.W.eval("EN_PAV").vyksta && /Translation 2/.test(r.en()));
     r.set("f-pavadinimas", "400/110 kV transformatoriaus pirkimas Alytaus pastotei", "input");
     await r.kol(() => /Translation 3/.test(r.en()), 3000);
-    lygu([r.uzkl[2].userMessage, r.zyma()], ["400/110 kV transformatoriaus pirkimas Alytaus pastotei", "DI vertimas (nepatvirtinta)"], "išversta iš naujo");
+    lygu([r.uzkl[2].duomenys.pavadinimas, r.zyma()], ["400/110 kV transformatoriaus pirkimas Alytaus pastotei", "DI vertimas (nepatvirtinta)"], "išversta iš naujo");
     // ranka įrašytas - pasirinkus EN nesiunčiama
     const r2 = await enRinkinys({ ok: true, text: "Nereikia" });
     r2.set("f-pavadinimas-en", "My own title 400/110 kV", "input");
