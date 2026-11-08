@@ -1098,7 +1098,10 @@ const DI_ATS = o => JSON.stringify(Object.assign({ status: "ok", valiuta: "EUR",
 const diOk = (o, stop) => ({ ok: true, text: DI_ATS(o), raw: { stop_reason: stop || "end_turn" }, status: 200, error: null });
 function netikrasDi(atsakymai){
   const kv = [];
-  W.GP_AI_PROXY.call = async opts => { kv.push(opts); const a = atsakymai.length > 1 ? atsakymai.shift() : atsakymai[0]; return typeof a === "function" ? a(opts) : a; };
+  // DI užduotis serveryje (nuo 2026-11-08): modulis siunčia tik užduotį, failo vardą ir PDF - instrukcija serverio šablone
+  W.GP_AI_PROXY.uzduotis = async (uzduotis, duomenys, o) => { const opts = Object.assign({ uzduotis, duomenys }, o); kv.push(opts);
+    const a = atsakymai.length > 1 ? atsakymai.shift() : atsakymai[0]; return typeof a === "function" ? a(opts) : a; };
+  W.GP_AI_PROXY.call = async () => { throw new Error("PP-negotiation nebesiunčia instrukcijų per call()"); };
   return kv;
 }
 const skenas = vardas => new W.File([pdfSuStulpeliais([])], vardas || "alfa_skenuotas.pdf", { type: "application/pdf" });
@@ -1145,22 +1148,23 @@ async function testaiDiSkaitymas(){
     lygu([r.ok, r.di, r.rowsFound, r.total, r.fixed, r.diViso.reiksme, /DI perskaitė 2 pozicijas/.test(r.message)], [true, true, 2, 5250, undefined, 5250, true], "rezultatas - pozicijos");
     const f = N.iRezultata(N.issAtsakymo(DI_ATS({ pozicijos: [] }), "end_turn", "lt"), "alfa.pdf", "lt");
     lygu([f.ok, f.di, f.fixed, f.total, f.positions], [true, true, { totalPrice: 5250 }, 5250, []], "rezultatas - tik bendra suma");
-    const sp = N.systemPrompt();
-    tiesa(/Nieko neskaiciuok/.test(sp) && /Pirkimo vykdytojas .* NE tiekejas/.test(sp) && /gryno JSON/.test(sp) && /kainos_su_pvm/.test(sp), "sistemos žinutė");
+    // sistemos žinutė - nuo 2026-11-08 serverio šablone pp-negotiation.pasiulymas (privati patikra); modulyje jos nebėra
+    const kodas = await (await fetch("di-skaitymas.js", { cache: "no-store" })).text();
+    tiesa(!N.systemPrompt && !N.userText && !/Nieko neskaiciuok|GRIEZTOS TAISYKLES|\.call\(/.test(kodas), "instrukcijos modulyje nebėra");
     lygu(N.issAtsakymo(DI_ATS(), "max_tokens", "en").error, "The offer is too long to read at once - the AI response was cut off. Save only the pages with the price table and try again.", "EN klaida");
   });
 
-  await testas("Užklausa: tik tas PDF per GP_AI_PROXY (modulis, 8000 ženklų, sistemos žinutė, failo baitai); ne PDF, per didelis ir atšauktas - nesiunčiama; serverio klaida ir nutrūkęs atsakymas - klaida", async () => {
+  await testas("Užklausa: tik tas PDF per GP_AI_PROXY.uzduotis (užduotis pp-negotiation.pasiulymas, failo vardas ir baitai; instrukcija - serveryje nuo 2026-11-08); ne PDF, per didelis ir atšauktas - nesiunčiama; serverio klaida ir nutrūkęs atsakymas - klaida", async () => {
     await modulis();
     tiesa(W.pdfjsLib, "pdf.js neįsikėlė");
     const N = W.GP_NEG_DI;
     let kv = netikrasDi([diOk()]);
     const f = skenas();
     const a = await N.perskaityk(f, { kalba: "lt" });
-    lygu([a.ok, kv.length, kv[0].module, kv[0].maxTokens, kv[0].system === N.systemPrompt(), /alfa_skenuotas\.pdf/.test(kv[0].userMessage)], [true, 1, "pp-negotiation", 8000, true, true], "užklausa");
-    const baitai = new Uint8Array(await f.arrayBuffer()), b64 = W.atob(kv[0].pdfBase64);
+    lygu([a.ok, kv.length, kv[0].uzduotis, kv[0].duomenys, kv[0].dokumentas.tipas], [true, 1, "pp-negotiation.pasiulymas", { vardas: "alfa_skenuotas.pdf" }, "application/pdf"], "užklausa");
+    const baitai = new Uint8Array(await f.arrayBuffer()), b64 = W.atob(kv[0].dokumentas.duomenys);
     lygu([b64.length, b64.slice(0, 8), [...b64].every((c, i) => c.charCodeAt(0) === baitai[i])], [baitai.length, "%PDF-1.4", true], "siunčiami tikri failo baitai");
-    lygu(Object.keys(kv[0]).sort(), ["maxTokens", "module", "pdfBase64", "signal", "system", "userMessage"], "jokių kitų duomenų (projekto, tiekėjų) užklausoje");
+    lygu([Object.keys(kv[0]).sort(), Object.keys(kv[0].dokumentas).sort()], [["dokumentas", "duomenys", "signal", "uzduotis"], ["duomenys", "tipas"]], "jokių kitų duomenų (projekto, tiekėjų, instrukcijos) užklausoje");
     const atmeta = async (p, re, ka) => { let e = null; try { await p; } catch (x) { e = x; } tiesa(e && (re.test(e.message) || re.test(e.name)), ka + ": " + (e && (e.name + " " + e.message))); };
     await atmeta(N.perskaityk(new W.File(["x"], "a.xlsx"), { kalba: "lt" }), /tik PDF/, "ne PDF");
     await atmeta(N.perskaityk({ name: "didelis.pdf", type: "application/pdf", size: W.GP_AI_PROXY.MAX_PDF_BAITU + 1, arrayBuffer: async () => new ArrayBuffer(1) }, { kalba: "lt" }), /per didelis DI skaitymui/, "per didelis");

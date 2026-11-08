@@ -14,40 +14,7 @@
   var MAX_TOKENS = 8000;                       // serverio riba (R5, CLAUDE.md 6 sk.)
   var MAX_POZ = 500, MAX_PAV = 300, MAX_VNT = 20, MAX_CIT = 300, MAX_PSL = 5000, MAX_SKAICIUS = 1e12;
 
-  function systemPrompt() {
-    return [
-      "Tu esi pirkimu dokumentu duomenu israsymo asistentas. Gauni tiekejo komercini pasiulyma (PDF; gali buti skenuotas).",
-      "Tavo uzduotis - ISRASYTI pasiulymo kainu lentele (pozicijas) ir tiekejo pavadinima tiksliai taip, kaip parasyta.",
-      "",
-      "GRIEZTOS TAISYKLES:",
-      "1. Atsakyk TIK gryno JSON formatu, be jokio kito teksto, be markdown.",
-      "2. Nieko neskaiciuok, netaisyk, nepapildyk ir nespek. Jei reiksmes dokumente nera arba ji neiskaitoma - null.",
-      "3. pozicijos - kiekviena kainu lenteles eilute su kaina ta pacia tvarka kaip dokumente: pavadinimas (pazodziui),",
-      "   vienetas (kaip parasyta, pvz. \"vnt.\", \"m\", \"kompl.\"), kiekis ir ikainis (vieneto kaina) - JSON skaiciais su tasku",
-      "   kaip desimtainiu skyrikliu (\"1 500,50\" -> 1500.5), ikainis_tekstas - vieneto kaina TIKSLIAI kaip parasyta dokumente,",
-      "   suma - eilutes suma, jei ji dokumente parasyta (kitaip null), puslapis - PDF puslapio numeris (nuo 1).",
-      "4. Tarpines sumas, PVM eilutes, nuolaidu ir \"Is viso\" eilutes i pozicijas NEDEK - bendra suma be PVM - i viso_be_pvm,",
-      "   su PVM - i viso_su_pvm (su citata ir puslapiu).",
-      "5. kainos_su_pvm - true, jei poziciju ikainiai dokumente nurodyti SU PVM; false - jei be PVM; null - jei neaisku.",
-      "6. tiekejas - pasiulyma teikiancios imones pavadinimas su teisine forma ir imones kodas, jei parasyti, su citata.",
-      "   Pirkimo vykdytojas (perkantysis subjektas, pvz. LITGRID AB) - NE tiekejas.",
-      "7. Jei kainu lenteles nera, bet yra bendra pasiulymo kaina - pozicijos: [] ir viso_be_pvm.",
-      "8. Jei dokumentas neiskaitomas - {\"status\":\"neiskaitoma\",\"pastabos\":\"...\"}; jei kainu nera visai -",
-      "   {\"status\":\"nera_kainu\",\"pastabos\":\"...\"}.",
-      "",
-      "JSON schema:",
-      "{ \"status\": \"ok\", \"valiuta\": \"EUR\", \"kainos_su_pvm\": false,",
-      "  \"tiekejas\": { \"pavadinimas\": \"...\", \"kodas\": \"...\", \"citata\": \"...\", \"puslapis\": 1 } | null,",
-      "  \"pozicijos\": [ { \"pavadinimas\": \"...\", \"vienetas\": \"...\", \"kiekis\": 1, \"ikainis\": 0, \"ikainis_tekstas\": \"...\", \"suma\": null, \"puslapis\": 1 } ],",
-      "  \"viso_be_pvm\": { \"reiksme\": 0, \"citata\": \"...\", \"puslapis\": 1 } | null,",
-      "  \"viso_su_pvm\": { \"reiksme\": 0, \"citata\": \"...\", \"puslapis\": 1 } | null,",
-      "  \"pastabos\": \"<trumpa pastaba, jei reikia>\" }"
-    ].join("\n");
-  }
-  function userText(vardas) {
-    return "Israsyk pridedamo tiekejo pasiulymo kainu lentele" + (vardas ? " (failas: " + String(vardas).slice(0, 120) + ")" : "") +
-           ". Atsakyk grieztai pagal sistemos zinuteje aprasyta JSON schema.";
-  }
+  // DI instrukcija ir užklausos tekstas - serverio šablone pp-negotiation.pasiulymas (nuo 2026-11-08, kodo apsauga): siunčiamas tik failo vardas ir PDF.
 
   var L = function (k, lt, en) { return k === "en" ? en : lt; };
   var str = function (x, n) { return typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, n) : ""; };
@@ -154,7 +121,7 @@
       if (opts.signal && opts.signal.aborted) throw Object.assign(new Error("Atšaukta"), { name: "AbortError" });
       var b64 = base64(new Uint8Array(ab));
       if (b64.length > P.MAX_BASE64) throw new Error(L(k, "PDF per didelis DI skaitymui.", "The PDF is too large for AI reading."));
-      return P.call({ module: "pp-negotiation", maxTokens: MAX_TOKENS, system: systemPrompt(), userMessage: userText(file.name), pdfBase64: b64, signal: opts.signal });
+      return P.uzduotis("pp-negotiation.pasiulymas", { vardas: String(file.name || "").slice(0, 120) }, { dokumentas: { tipas: "application/pdf", duomenys: b64 }, signal: opts.signal });
     }).then(function (r) {
       if (!r.ok) throw new Error(r.error || L(k, "DI klaida", "AI error"));
       var a = issAtsakymo(r.text, r.raw && r.raw.stop_reason, k);
@@ -163,5 +130,5 @@
     });
   }
 
-  root.GP_NEG_DI = { systemPrompt: systemPrompt, userText: userText, issAtsakymo: issAtsakymo, iRezultata: iRezultata, perskaityk: perskaityk, arPdf: arPdf, MAX_TOKENS: MAX_TOKENS, MAX_POZ: MAX_POZ };
+  root.GP_NEG_DI = { issAtsakymo: issAtsakymo, iRezultata: iRezultata, perskaityk: perskaityk, arPdf: arPdf, MAX_TOKENS: MAX_TOKENS, MAX_POZ: MAX_POZ };
 })(typeof window !== "undefined" ? window : this);
