@@ -30,17 +30,20 @@
      ir data.europa.eu duomenų rinkinys; tai ne slaptas prieigos raktas. ES serveris failą generuoja ilgiau kaip minutę ir
      kartais iš eilės atsako HTTP 500 - todėl daugiau bandymų ir ilgesnės pauzės. OFAC - du failai (SDN ir kitų sąrašų
      konsoliduotas), atnaujinama tik pavykus abiem. min - mažiausias subjektų skaičius, kad naujas failas būtų priimtas
-     (išmatuota 2026-11-08: JT 274, OFAC 10 110 + 368, JK 1 667 subjektai). */
+     (išmatuota 2026-11-08: JT 274, OFAC 10 110 + 368, JK 1 667 subjektai).
+     nukreipimai - JT ir OFAC failą atiduoda per vieną nukreipimą (302) į debesų saugyklą su laikinai pasirašytu adresu
+     (patikrinta iš serverio diegiant 2026-11-08); leidžiamas tik vienas nukreipimas ir tik į čia įrašytą kompiuterį per https. */
   var SARASAI = [
     { id: "es", pav: "ES konsoliduotas finansinių sankcijų sąrašas", pavEn: "EU consolidated financial sanctions list",
       failai: ["https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw"],
       formatas: "es", min: 500, bandymu: 6, laikasS: 300 },
     { id: "jt", pav: "JT Saugumo Tarybos konsoliduotas sąrašas", pavEn: "UN Security Council Consolidated List",
-      failai: ["https://scsanctions.un.org/resources/xml/en/consolidated.xml"], formatas: "jt", min: 150, bandymu: 3, laikasS: 120 },
+      failai: ["https://scsanctions.un.org/resources/xml/en/consolidated.xml"], formatas: "jt", min: 150, bandymu: 3, laikasS: 120,
+      nukreipimai: ["unsolprodfiles.blob.core.windows.net"] },
     { id: "ofac", pav: "OFAC (JAV) SDN ir kiti sąrašai", pavEn: "OFAC (USA) SDN and other lists",
       failai: ["https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML",
         "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONSOLIDATED.XML"],
-      formatas: "ofac", min: 5000, bandymu: 3, laikasS: 180 },
+      formatas: "ofac", min: 5000, bandymu: 3, laikasS: 180, nukreipimai: ["wc2h-sls-prod-public-published.s3.us-gov-west-1.amazonaws.com"] },
     { id: "jk", pav: "JK sankcijų sąrašas (FCDO)", pavEn: "UK Sanctions List (FCDO)",
       failai: ["https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml"], formatas: "jk", min: 800, bandymu: 3, laikasS: 180 }
   ];
@@ -467,8 +470,19 @@
   var KLAIDU_RUSYS = {
     "rysys": "nepavyko prisijungti prie sąrašo šaltinio", "saltinis-500": "šaltinis atsakė klaida (HTTP 5xx)", "saltinis-kita": "šaltinis atsakė netikėtai",
     "per-didelis": "failas didesnis už leidžiamą", "netiketas-kiekis": "faile per mažai subjektų - netikėta sandara ar dalinis failas",
-    "skaitymas": "failo nepavyko perskaityti", "neikeltas": "sąrašas dar neįkeltas", "tuscias": "sąrašas dar neįkeltas"
+    "skaitymas": "failo nepavyko perskaityti", "neikeltas": "sąrašas dar neįkeltas", "tuscias": "sąrašas dar neįkeltas",
+    "nukreipimas": "šaltinis nukreipė į nežinomą adresą"
   };
+
+  /* Ar sąrašo šaltinio nukreipimą (Location) galima sekti: tik https, tik į sąrašo nukreipimai kompiuterį (tikslus vardas, ne pabaiga),
+     be naudotojo vardo ir slaptažodžio adrese, ne kitas prievadas. Grąžina adresą arba null. */
+  function leidziamasNukreipimas(cfg, vieta, bazinis) {
+    if (!cfg || !Array.isArray(cfg.nukreipimai) || !cfg.nukreipimai.length || typeof vieta !== "string" || !vieta || vieta.length > 4096) return null;
+    var u;
+    try { u = new URL(vieta, bazinis); } catch (e) { return null; }
+    if (u.protocol !== "https:" || u.username || u.password || (u.port && u.port !== "443")) return null;
+    return cfg.nukreipimai.indexOf(u.hostname.toLowerCase()) >= 0 ? u.href : null;
+  }
 
   function sarasoBusena(cfg, b, dabar) {
     var x = b && b[cfg.id] ? b[cfg.id] : null, yra = !!(x && x.atnaujinta && x.kiekis > 0);
@@ -527,6 +541,7 @@
     skaitykOFAC: skaitykOFAC, skaitykJT: skaitykJT, skaitykJK: skaitykJK, skaitykES: skaitykES, skaityk: skaityk,
     priimtinasKiekis: priimtinasKiekis, normalizuokIrasa: normalizuokIrasa,
     normVardas: normVardas, raktas: raktas, panasumas: panasumas, balas: balas, salisSutampa: salisSutampa,
-    sukurkIndeksa: sukurkIndeksa, ieskok: ieskok, uzklausa: uzklausa, atsakymas: atsakymas, kilmesAntraste: kilmesAntraste
+    sukurkIndeksa: sukurkIndeksa, ieskok: ieskok, uzklausa: uzklausa, atsakymas: atsakymas, kilmesAntraste: kilmesAntraste,
+    leidziamasNukreipimas: leidziamasNukreipimas
   };
 });
