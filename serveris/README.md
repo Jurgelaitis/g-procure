@@ -102,3 +102,64 @@ sąrašo laiką ir nuorodą į CVP IS (terminas, pratęsimai ir aktualios redakc
 
 Keičiant kodą: atnaujinti `/opt/g-procure-cvpis/`, `systemctl restart g-procure-cvpis`. Raktą pakeisti - perrašyti
 `/etc/g-procure-cvpis/vpt_api_key` ir `systemctl restart g-procure-cvpis`.
+
+## Sankcijų sąrašų patikra (nuo 2026-11-08, dar neįdiegta)
+
+Naudotojo sprendimas 2026-11-08: PP-esg tiekėjo patikrai - automatinė sankcijų sąrašų patikra; asmens duomenys - tik bendrovėms.
+Paslauga kartą per parą parsisiunčia oficialius sąrašus ir atsako, ar tiekėjo pavadinimas (ir kodas) panašus į kurį nors sąraše esantį
+subjektą. Ji nieko nesprendžia: grąžina galimus atitikmenis su balu ir paaiškinimu, o PP-esg juos rodo žmogui įvertinti.
+
+### Šaltiniai (vieši, be raktų; `sankcijos-logika.js` `SARASAI`)
+
+| Sąrašas | Failas | 2026-11-08 |
+|---|---|---|
+| ES konsoliduotas finansinių sankcijų sąrašas (FSF XML 1.1) | `webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=...` - raktas viešas (jį skelbia oficialus FSF RSS ir data.europa.eu) | HTTP 500 visiems formatams (bandyta kelis kartus); sandara - pagal XSD 1.1 (`sanctionEntity`, `subjectType code`, `nameAlias wholeName`, `regulation programme`, `address`, `identification`) |
+| JT Saugumo Tarybos konsoliduotas sąrašas | `scsanctions.un.org/resources/xml/en/consolidated.xml` | 2,2 MB, 274 subjektai (733 asmenys neskaitomi) |
+| OFAC (JAV) SDN ir kiti sąrašai | `sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML` ir `CONSOLIDATED.XML` (reikia User-Agent) | 29,6 + 1,1 MB, 10 388 subjektai (be dvigubų) |
+| JK sankcijų sąrašas (FCDO) | `sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml` (OFSI sąrašas uždarytas 2026-01-28) | 22 MB, 1 667 subjektai |
+
+Iš failų skaitomi tik **subjektų** įrašai (pavadinimas, kiti pavadinimai, šalys, programa ar režimas, registracijos ir mokesčių kodai,
+oficiali nuoroda: OFAC paieškos įrašas, ES - EUR-Lex reglamentas); fizinių asmenų, laivų ir orlaivių įrašai neskaitomi ir nesaugomi.
+Naujas sąrašas priimamas tik visas, jei jame ne mažiau subjektų nei `min` (JT 150, OFAC 5 000, JK 800, ES 500) ir ne mažiau 80 % ankstesnio.
+Kiekvienas sąrašas atnaujinamas atskirai kas 24 val.; nepavykus lieka paskutinė kopija, kitas bandymas po 2 val., ES - iki 6 bandymų su
+ilgėjančiomis pauzėmis (ES serveris kartais iš eilės atsako HTTP 500). Kopija senesnė kaip 72 val. atsakyme pažymima `pasenusi`.
+
+### Adresai (tik GET)
+
+| Adresas | Atsakymas |
+|---|---|
+| `/api/sankcijos/tikrinti?pavadinimas=...&salis=LT&kodas=...` | 200 - kiekvieno sąrašo būsena (`patikrinta` su data, subjektų ir kandidatų skaičiumi; `nepatikrinta` su klaidos rūšimi - niekada „0 kandidatų“; `pasenusi`) ir kandidatai (iki 10 viename sąraše, 30 iš viso): sąrašas, pavadinimas, kuris kitas pavadinimas sutapo, šalys, programos, nuoroda, balas 0-100, „kodėl“; 400 su `parametras` (pavadinimas 2-200 ženklų ir bent 2 raidės, šalis - ISO2, kodas - 5-20 raidžių ir skaitmenų, kiti parametrai neleidžiami); 503 - nė vienas sąrašas neįkeltas |
+| `/api/sankcijos/busena` | kiekvieno sąrašo būsena |
+
+Įvestis atsakyme neatkartojama. Atitikimas: pavadinimai normalizuojami (diakritikai, kirilica lotyniškai, teisinės formos UAB / ООО / LLC / Sp. z o.o. ir kt.,
+kabutės, žodžių tvarka, transliteracijos skirtumai ilgesniuose žodžiuose), balas - užklausos ir pavadinimo žodžių padengimas; reikia bent
+vieno sutampančio ne bendrinio žodžio, vienas žodis ilgame pavadinime - ne atitikmuo, šalis keičia balą (+5 / -10), tiksliai sutampantis
+registracijos kodas - 100. Slenkstis - 70. Išmatuota 2026-11-08: 3 000 tikrų LT įmonių pavadinimų (JAR atviri duomenys) - kandidatų rasta 4
+(0,13 %; pvz. „KOMPONENTAS“ - „KOMPONENTA AO“), visi žinomi tikri atvejai (kiti pavadinimai, transliteracija, žodžių tvarka, rašybos klaida) - rasti;
+paieška - iki kelių ms, sąrašų skaitymas ir indeksas - ~0,3 s.
+
+### Saugumas
+
+Kaip CVP IS paslauga: atskira systemd paslauga (`DynamicUser`, griežta izoliacija, be raktų), klausosi tik `127.0.0.1:3002`, nginx - tik GET /
+HEAD / OPTIONS, `limit_req` 30 per min., be prieigos žurnalo (užklausoje - tiekėjo pavadinimas), antroji riba paslaugoje (60 per min. vienam IP),
+CORS tik `https://g-procure.com`, `https://www.g-procure.com` ir vietiniam tikrinimui. Sąrašų adresai - konstantos, be nukreipimų, 120 MB riba,
+laiko riba; disko kopijos (`/var/lib/g-procure-sankcijos/sankcijos-<sąrašas>.ndjson.gz`) įrašomos atomiškai ir skaitant vėl tikrinamos.
+Žurnale - tik sąrašas, subjektų skaičius, praleistų asmenų skaičius ir klaidos rūšis.
+
+### Failai
+
+| Failas | Paskirtis |
+|---|---|
+| `sankcijos-logika.js` | gryna logika: sąrašų skaitymas, normalizavimas, atitikmenys, atsakymai (veikia ir naršyklėje - testams) |
+| `sankcijos-serveris.js` | Node serveris: sąrašų atnaujinimas, disko kopijos, HTTP |
+| `g-procure-sankcijos.service` | systemd paslauga |
+| `nginx-sankcijos.conf` | nginx `location` ir ribos zona |
+
+Diegimas - kaip CVP IS paslaugos (1, 2, 4-6 žingsniai; raktų nėra): kodas į `/opt/g-procure-sankcijos/`, paslauga `g-procure-sankcijos`,
+ribos zona `conf.d/gp-sankcijos-limit.conf`, `location /api/sankcijos/` - į `api.g-procure.com` server bloką. Po paleidimo per ~1-15 min.
+`journalctl -u g-procure-sankcijos` - „atnaujinta“ kiekvienam sąrašui (ES gali būti „atnaujinti-nepavyko“ - tada PP-esg rodo „nepatikrinta“).
+
+### Kas naudoja
+
+- **PP-esg** (nuo 2026-11-08): patikros lange - „Tikrinti sankcijų sąrašuose automatiškai“ (tik bendrovėms; fizinio asmens įmonėms nesiūloma,
+  neaiškiai teisinei formai - klausiama). Rezultatas - sąrašų būsenos ir kandidatai; kiekvieną įvertina žmogus, siūlomą rezultatą pasirenka žmogus.
