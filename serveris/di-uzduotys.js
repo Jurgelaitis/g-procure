@@ -18,7 +18,7 @@
  *     modelis: "claude-sonnet-4-6",             // arba modeliai: [...] - kai modulis leidžia rinktis (PP-ts)
  *     maxTokens: 200,                            // <= MAX_TOKENS_RIBA
  *     duomenys: { pavadinimas: { tipas: "tekstas", max: 500, privalomas: true } },
- *     dokumentas: { tipai: ["application/pdf"], maxBaitu: ... },   // neprivaloma
+ *     dokumentas: { tipai: ["application/pdf"], maxBaitu: ..., privalomas: true },   // neprivaloma; privalomas - be jo 400
  *     system: "..." arba function (d) { return "..."; },
  *     vartotojas: function (d) { return "..."; }                   // užklausos tekstas iš patikrintų duomenų
  *   }
@@ -91,6 +91,7 @@
         if (!objektas(s.dokumentas) || !Array.isArray(s.dokumentas.tipai) || !s.dokumentas.tipai.length ||
             !s.dokumentas.tipai.every(function (t) { return DOK_TIPAI.indexOf(t) >= 0; })) throw new Error(s.id + ": dokumento tipai - " + DOK_TIPAI.join(", "));
         if (!(s.dokumentas.maxBaitu > 0 && s.dokumentas.maxBaitu <= MAX_BASE64)) throw new Error(s.id + ": dokumento maxBaitu 1-" + MAX_BASE64);
+        if (s.dokumentas.privalomas !== undefined && typeof s.dokumentas.privalomas !== "boolean") throw new Error(s.id + ": dokumento privalomas - true ar false");
       }
       reg[s.id] = { id: s.id, modeliai: modeliai, modelis: s.modelis || modeliai[0], maxTokens: s.maxTokens,
         duomenys: s.duomenys || {}, dokumentas: s.dokumentas || null, system: s.system, vartotojas: s.vartotojas };
@@ -137,7 +138,7 @@
   }
 
   function tikrinkDokumenta(taisykle, dok) {
-    if (dok === undefined || dok === null) return { dokumentas: null };
+    if (dok === undefined || dok === null) return taisykle && taisykle.privalomas ? { klaida: KLAIDOS.dokumentas } : { dokumentas: null };
     if (!taisykle) return { klaida: KLAIDOS.dokumentas };
     if (!objektas(dok) || Object.keys(dok).some(function (k) { return k !== "tipas" && k !== "duomenys"; })) return { klaida: KLAIDOS.dokumentas };
     if (taisykle.tipai.indexOf(dok.tipas) < 0) return { klaida: KLAIDOS.dokumentas };
