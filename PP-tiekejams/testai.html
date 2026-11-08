@@ -309,7 +309,7 @@ async function paleisk() {
   });
   await testas("Prompte fragmentai pažymėti ID, vieta ir AKTUALI REDAKCIJA žyma, tekstas apribotas", () => {
     const pr = A.promptasQA({ lang: "lt", question: "Q", chunks, docsById: { D1: { name: "SPS.docx", versija: { aktualiRedakcija: true } }, D2: { name: "TS.pdf", versija: {} } }, procurement: { title: "T" }, completeness: "partial" });
-    turi(pr.user, "[[D1#1 | SPS.docx | pastr. 4 | p. 4.2 | AKTUALI REDAKCIJA]]"); turi(pr.user, "IŠ DALIES"); turi(pr.system, "NIEKADA nespėk");
+    turi(pr.user, "[[D1#1 | SPS.docx | pastr. 4 | p. 4.2 | AKTUALI REDAKCIJA]]"); turi(pr.user, "IŠ DALIES"); lygu(pr.uzduotis, "pp-tiekejams.atsakymas"); lygu(pr.duomenys.uzklausa, pr.user, "siunčiama užklausa");
     turi(pr.user, "[[D2#1 | TS.pdf | psl. 1]]");
   });
   await testas("Parse: JSON su markdown apvalkalu ir be jo; šiukšlės -> null", () => {
@@ -770,15 +770,21 @@ async function paleisk() {
     lygu(ASIST.parse('{"a": "b"'), null);
     lygu(ASIST.parse('{"a": "b", "c": [1, 2'), null);
   });
-  await testas("Atsakymo biudžetas: QA >= 4000, kontrolinis >= 6000 žetonų; prompte - kabučių ir glaustumo taisyklė", () => {
+  /* DI užduotys serveryje (nuo 2026-11-08, naudotojo sprendimas - kodo apsauga): sistemos instrukcija (taisyklės, kabučių ir glaustumo,
+     citatų, pratęsimo ir alternatyvų taisyklės, kalbos priminimas, vykdytojo sakinys) ir atsakymo ilgis (QA 4000, kontrolinis 6000) - privačiuose
+     serverio šablonuose pp-tiekejams.*; juos tikrina privati šablonų patikra. Čia - kas siunčiama ir kad modulyje instrukcijos nebėra. */
+  await testas("DI užduotys: QA - pp-tiekejams.atsakymas, kontrolinis - pp-tiekejams.kontrolinis; siunčiama kalba, vykdytojas, režimas, patvirtinimas ir užklausa; instrukcijos ir ilgio modulyje nėra", async () => {
     const p = ASIST.promptasQA({ lang: "lt", question: "?", chunks: [], docsById: {} });
-    tiesa(p.maxTokens >= 4000, "QA " + p.maxTokens);
     const c = ASIST.promptasChecklist({ lang: "lt", chunks: [], docsById: {} });
-    tiesa(c.maxTokens >= 6000, "checklist " + c.maxTokens);
-    turi(p.system, "„ ir “"); turi(p.system, "iki 200 simbolių");
-    const e = ASIST.promptasQA({ lang: "en", question: "?", chunks: [], docsById: {} });
-    turi(e.system, "„ and “"); turi(e.system, "up to 200 characters");
-  }, "1800 žetonų nutraukdavo tikrą atsakymą (stop_reason max_tokens), 1683 žetonų atsakymas su 4 citatomis - realus dydis");
+    const e = ASIST.promptasQA({ lang: "en", question: "?", chunks: [], docsById: {}, kontekstas: { organizacija: " LITGRID AB ", rezimas: "PI", patvirtinta: true } });
+    lygu([p.uzduotis, c.uzduotis, Object.keys(p.duomenys).sort(), p.duomenys.kalba, p.duomenys.patvirtinta], ["pp-tiekejams.atsakymas", "pp-tiekejams.kontrolinis", ["kalba", "patvirtinta", "uzklausa"], "lt", false], "užduotys ir duomenys");
+    lygu([e.duomenys.kalba, e.duomenys.organizacija, e.duomenys.rezimas, e.duomenys.patvirtinta], ["en", "LITGRID AB", "PI", true], "EN su patvirtintu vykdytoju");
+    lygu(ASIST.promptasQA({ lang: "lt", question: "?", chunks: [], docsById: {}, kontekstas: { rezimas: "X" } }).duomenys.rezimas, undefined, "nežinomas režimas nesiunčiamas");
+    tiesa(!("system" in p) && !("maxTokens" in p) && !ASIST.sistema && !ASIST.kontekstoEilute && !ASIST.MAX_TOKENS_QA, "instrukcija ar ilgis modulyje");
+    tiesa(!/Užpildyk KIEKVIENĄ punktą/.test(c.user), "kontrolinio sąrašo nurodymas - serverio šablone");
+    const src = await (await W.fetch("asistentas.js?b=" + Date.now())).text();
+    tiesa(!/GRIEŽTOS TAISYKLĖS|STRICT RULES|NIEKADA nespėk|JSON schema|KALBA: visas tekstines|naudotojas tai patvirtino/.test(src), "asistentas.js liko instrukcijos tekstas");
+  }, "1800 žetonų nutraukdavo tikrą atsakymą (stop_reason max_tokens), 1683 žetonų atsakymas su 4 citatomis - realus dydis (riba - šablone)");
   await testas("Sąsaja: nutrūkęs atsakymas rodo aiškų pranešimą, o kabutė tekste netrukdo pateikti atsakymo", async () => {
     const S = await ikelk({ "dok/SPS.txt": SPS_SENAS });
     const orig = W.kviestiAI;
@@ -1385,25 +1391,11 @@ async function paleisk() {
     turi(pirmas("Ar RAA įrenginiai keičiami naujais?"), "Atsakymai", "susijęs raštas - pirmas");
   });
 
-  await testas("Kalba: angliškame režime prompto PABAIGOJE - visi laukai angliškai; lietuviškame - lietuviškai", () => {
-    const en = A.promptasQA({ lang: "en", question: "Is a bid bond required?", chunks: [], docsById: {}, procurement: {} }).system;
-    tiesa(/LANGUAGE: write every prose value[^]*in ENGLISH/.test(en.slice(-500)), "EN kalbos taisyklė turi būti paskutinė");
-    const lt = A.promptasQA({ lang: "lt", question: "Ar reikia garantijos?", chunks: [], docsById: {}, procurement: {} }).system;
-    tiesa(/KALBA: visas tekstines reikšmes[^]*lietuviškai/.test(lt.slice(-500)), "LT kalbos taisyklė");
-    const chk = A.promptasChecklist({ lang: "en", chunks: [], docsById: {}, procurement: {} }).system;
-    tiesa(/in ENGLISH/.test(chk.slice(-500)), "ir kontroliniame sąraše");
-  });
-
-  await testas("Pratęsimas - ne konfliktas, o likusios šablono alternatyvos („ / “) - konfliktas (abiem kalbomis)", () => {
-    const lt = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {} }).system;
-    turi(lt, "Išimtis - aiškus pakeitimas"); turi(lt, "atskirti „ / “");
-    const en = A.promptasQA({ lang: "en", question: "x", chunks: [], docsById: {}, procurement: {} }).system;
-    turi(en, "Exception - an explicit change"); turi(en, "alternative wordings");
-  }, "2026-09-22: AI pratęsimo raštą ir seną skelbimo lauką vadino prieštaravimu, o dvi SPS punkto alternatyvas - vienu atsakymu");
-
-  await testas("Citatos taisyklė promptuose: be daugtaškių ir sąrašo punktų jungimo", () => {
-    turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {} }).system, "be daugtaškių");
-    turi(A.promptasQA({ lang: "en", question: "x", chunks: [], docsById: {}, procurement: {} }).system, "no ellipses");
+  // Kalbos priminimas pabaigoje, pratęsimas - ne konfliktas, alternatyvos („ / “) - konfliktas, citata be daugtaškių (2026-09-22) - serverio
+  // šablonuose pp-tiekejams.* (privati šablonų patikra, LT ir EN, nuo 2026-11-08); čia - kalba siunčiama duomenyse.
+  await testas("Kalba: angliškame režime siunčiama kalba „en“, lietuviškame - „lt“ (ir kontroliniame sąraše)", () => {
+    lygu([A.promptasQA({ lang: "en", question: "x", chunks: [], docsById: {}, procurement: {} }).duomenys.kalba, A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {} }).duomenys.kalba,
+      A.promptasChecklist({ lang: "en", chunks: [], docsById: {}, procurement: {} }).duomenys.kalba], ["en", "lt", "en"]);
   });
 
   await testas("Citatos riba: 1-2 ženklų „citata“ (pvz. „5“, „ne“) nepatvirtina nieko; citata be diakritikų atitinka tekstą su jais (tas pats tekstas)", () => {
@@ -1450,11 +1442,12 @@ async function paleisk() {
     tiesa(ch.length >= 2 && ch.slice(1).every(c => c.punktas !== "4.2"), "kitas fragmentas neturi paveldėti 4.2");
   });
 
-  await testas("Serverio (Worker) fragmento riba ne mažesnė už skaidymo ribą - kitaip AI vėl matytų tik dalį", async () => {
+  await testas("Worker'io užklausos riba ne mažesnė už užklausą su visais fragmentais - kitaip DI vėl matytų tik dalį", async () => {
     const src = await (await W.fetch("../worker/tiekejams-proxy.js?b=" + Date.now())).text();
-    const m = /const MAX_CHUNK_CHARS = (\d+)/.exec(src);
-    tiesa(!!m, "worker/tiekejams-proxy.js: MAX_CHUNK_CHARS nerastas");
-    tiesa(+m[1] >= K.limits.CHUNK_SIMBOLIU, "Worker kerpa " + m[1] + " < " + K.limits.CHUNK_SIMBOLIU);
+    const m = /const MAX_KUNAS = (\d+)/.exec(src);
+    tiesa(!!m, "worker/tiekejams-proxy.js: MAX_KUNAS nerastas");
+    const maks = A.MAX_CHUNKS * 2 * (K.limits.CHUNK_SIMBOLIU + 300) + 5000;   // kontrolinis sąrašas - dvigubai fragmentų, su antraštėmis
+    tiesa(+m[1] >= maks, "Worker priima " + m[1] + " < " + maks);
   });
 
   await testas("Ilgas brūkšnys (U+2014) modelio tekste virsta „-“, o citata lieka pažodinė", () => {
@@ -1505,8 +1498,8 @@ async function paleisk() {
 
   await testas("Be interneto klausimas: AI nekviečiamas, rodomos tikėtinos vietos ir klausimo projekto mygtukas", async () => {
     await paketasKlausimams();
-    const aiOrig = W.GP_AI_PROXY.call; let kviesta = 0;
-    W.GP_AI_PROXY.call = () => { kviesta++; return Promise.resolve({ ok: false, status: 500, error: "neturėjo būti kviesta" }); };
+    const aiOrig = W.GP_AI_PROXY.uzduotis; let kviesta = 0;
+    W.GP_AI_PROXY.uzduotis = () => { kviesta++; return Promise.resolve({ ok: false, status: 500, error: "neturėjo būti kviesta" }); };
     beTinklo();
     try {
       D.getElementById("askInput").value = "Iki kada reikia pateikti pasiūlymą?";
@@ -1516,25 +1509,25 @@ async function paleisk() {
       turi(ans, "Be interneto DI atsakymas neprieinamas"); turi(ans, "Tikėtinos vietos dokumentuose"); turi(ans, "priėmimo terminas");
       turi(ans, "24/09/2026", "ištrauka turi rodyti patį faktą, ne pirmas skelbimo eilutes");
       neturi(ans, "Patikimumas", "be AI jokios patikimumo išvados");
-    } finally { suTinklu(); W.GP_AI_PROXY.call = aiOrig; }
+    } finally { suTinklu(); W.GP_AI_PROXY.uzduotis = aiOrig; }
   });
 
   await testas("Ryšio klaida (būsena 0) - ne „Nepavyko“, o tos pačios tikėtinos vietos", async () => {
     await paketasKlausimams();
-    const aiOrig = W.GP_AI_PROXY.call;
-    W.GP_AI_PROXY.call = () => Promise.resolve({ ok: false, status: 0, error: "Failed to fetch" });
+    const aiOrig = W.GP_AI_PROXY.uzduotis;
+    W.GP_AI_PROXY.uzduotis = () => Promise.resolve({ ok: false, status: 0, error: "Failed to fetch" });
     try {
       D.getElementById("askInput").value = "Iki kada reikia pateikti pasiūlymą?";
       await W.__PPT.klausk();
       const ans = D.querySelector("#chat .ans:last-child").innerHTML;
       turi(ans, "Nepavyko susisiekti su DI"); turi(ans, "Tikėtinos vietos dokumentuose");
-    } finally { W.GP_AI_PROXY.call = aiOrig; }
+    } finally { W.GP_AI_PROXY.uzduotis = aiOrig; }
   });
 
   await testas("Be interneto kontrolinis sąrašas: likę punktai „neįvertinta“, su vieta dokumentuose, AI nekviečiamas", async () => {
     await paketasKlausimams();
-    const aiOrig = W.GP_AI_PROXY.call; let kviesta = 0;
-    W.GP_AI_PROXY.call = () => { kviesta++; return Promise.resolve({ ok: false, status: 500 }); };
+    const aiOrig = W.GP_AI_PROXY.uzduotis; let kviesta = 0;
+    W.GP_AI_PROXY.uzduotis = () => { kviesta++; return Promise.resolve({ ok: false, status: 500 }); };
     beTinklo();
     try {
       await W.__PPT.kontrolinis();
@@ -1543,7 +1536,7 @@ async function paleisk() {
       lygu(box.querySelectorAll(".st-neivertinta").length, W.__PPT.chkSarasas().filter(p => !p.kilme).length, "neįvertintų punktų");
       tiesa(box.querySelectorAll(".st-neivertinta").length > 0, "yra neįvertintų");
       turi(box.innerHTML, "būseną nustatykite patys");
-    } finally { suTinklu(); W.GP_AI_PROXY.call = aiOrig; }
+    } finally { suTinklu(); W.GP_AI_PROXY.uzduotis = aiOrig; }
   });
 
   await testas("Ryšio pranešimas: „offline“ įvykis parodo, „online“ paslepia", () => {
@@ -1642,32 +1635,33 @@ async function paleisk() {
   });
   await testas("Prompto kontekstas: patvirtintas PĮ / VPĮ įrašo įstatymą, nepatvirtintas ar tuščias - NEPATVIRTINTI ir jokio įstatymo; sistemos prompte nebėra „LITGRID“", () => {
     const pi = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: true } });
-    turi(pi.system, "LITGRID AB - yra perkantysis subjektas"); turi(pi.system, "naudotojas tai patvirtino"); turi(pi.system, "NIEKADA nesiremk VPĮ"); neturi(pi.system, "NEPATVIRTINTI");
+    // vykdytojo sakinys („LITGRID AB - yra perkantysis subjektas ... NIEKADA nesiremk VPĮ“, „NEPATVIRTINTI“) - serverio šablone (privati patikra); čia - siunčiami duomenys
+    lygu([pi.duomenys.organizacija, pi.duomenys.rezimas, pi.duomenys.patvirtinta], ["LITGRID AB", "PI", true], "PĮ patvirtinta");
     turi(pi.user, "PIRKIMO VYKDYTOJAS: LITGRID AB | TEISINIS REŽIMAS: PĮ (naudotojo patvirtinta)");
     const vpi = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: 'UAB "EPSO-G"', rezimas: "VPI", patvirtinta: true } });
-    turi(vpi.system, "yra perkančioji organizacija"); turi(vpi.system, "Viešųjų pirkimų įstatymą (VPĮ)"); turi(vpi.system, "NIEKADA nesiremk PĮ"); neturi(vpi.system, "nesiremk VPĮ");
+    lygu([vpi.duomenys.organizacija, vpi.duomenys.rezimas, vpi.duomenys.patvirtinta], ['UAB "EPSO-G"', "VPI", true], "VPĮ patvirtinta");
     const ne = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: false } });
-    turi(ne.system, "NEPATVIRTINTI"); turi(ne.system, "(atpažinta: LITGRID AB)"); neturi(ne.system, "NIEKADA nesiremk VPĮ"); turi(ne.user, "TEISINIS REŽIMAS: PĮ (NEPATVIRTINTA)");
+    lygu([ne.duomenys.organizacija, ne.duomenys.patvirtinta], ["LITGRID AB", false], "nepatvirtinta"); turi(ne.user, "TEISINIS REŽIMAS: PĮ (NEPATVIRTINTA)");
     const tuscias = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {} });
-    turi(tuscias.system, "NEPATVIRTINTI"); neturi(tuscias.system, "LITGRID"); turi(tuscias.user, "PIRKIMO VYKDYTOJAS: nenustatytas | TEISINIS REŽIMAS: nenustatytas (NEPATVIRTINTA)");
+    lygu([tuscias.duomenys.organizacija, tuscias.duomenys.rezimas, tuscias.duomenys.patvirtinta], [undefined, undefined, false], "tuščias kontekstas"); turi(tuscias.user, "PIRKIMO VYKDYTOJAS: nenustatytas | TEISINIS REŽIMAS: nenustatytas (NEPATVIRTINTA)");
     const en = A.promptasQA({ lang: "en", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "LITGRID AB", rezimas: "PI", patvirtinta: true } });
-    turi(en.system, "contracting entity under the Lithuanian utilities procurement law"); turi(en.system, "confirmed by the user"); turi(en.user, "LEGAL REGIME: PĮ (confirmed by the user)");
-    turi(A.promptasQA({ lang: "en", question: "x", chunks: [], docsById: {}, procurement: {} }).system, "NOT CONFIRMED");
+    lygu([en.duomenys.kalba, en.duomenys.rezimas, en.duomenys.patvirtinta], ["en", "PI", true], "EN"); turi(en.user, "LEGAL REGIME: PĮ (confirmed by the user)");
     const chk = A.promptasChecklist({ lang: "lt", chunks: [], docsById: {}, procurement: {}, kontekstas: { organizacija: "X", rezimas: "VPI", patvirtinta: true } });
-    turi(chk.system, "perkančioji organizacija"); turi(chk.user, "TEISINIS REŽIMAS: VPĮ (naudotojo patvirtinta)");
+    lygu([chk.duomenys.rezimas, chk.duomenys.patvirtinta], ["VPI", true], "kontrolinis sąrašas"); turi(chk.user, "TEISINIS REŽIMAS: VPĮ (naudotojo patvirtinta)");
   }, "iki 2026-09-24 sistemos prompte buvo įrašyta „LITGRID AB yra perkantysis subjektas ... NIEKADA nesiremk VPĮ“ kiekvienam pirkimui");
-  await testas("Worker'io kanoninė kopija sinchronizuota: tas pats konteksto sakinys, be LITGRID konstantos, kontekstas iš užklausos kūno", async () => {
+  await testas("Worker'is (2026-11-08) instrukcijos ir DI rakto nebeturi: tik Origin, Turnstile, žinomos pp-tiekejams užduotys ir persiuntimas į G-Procure serverį", async () => {
     const wk = await (await W.fetch("../worker/tiekejams-proxy.js?b=" + Date.now())).text();
-    const as = await (await W.fetch("asistentas.js?b=" + Date.now())).text();
-    [wk, as].forEach(src => { turi(src, "{KONTEKSTAS}"); turi(src, "naudotojas tai patvirtino. NIEKADA nesiremk VPĮ"); turi(src, "NEPATVIRTINTI: nesiremk nei PĮ, nei VPĮ"); neturi(src, "LITGRID AB yra perkantysis subjektas"); neturi(src, "domisi LITGRID AB pirkimais"); });
-    turi(wk, "body.kontekstas"); turi(wk, 'kt.rezimas === "PI" || kt.rezimas === "VPI"');
+    const kodas = wk.replace(/^\s*\*.*$/gm, "");
+    tiesa(!/GRIEŽTOS TAISYKLĖS|STRICT RULES|\{KONTEKSTAS\}|SCHEMA_QA|api\.anthropic\.com|ANTHROPIC_API_KEY|x-api-key|max_tokens/.test(kodas), "Worker'yje liko instrukcija ar DI raktas");
+    turi(wk, 'const SERVERIS = "https://api.g-procure.com/api/uzduotis";'); turi(wk, 'const UZDUOTYS = ["pp-tiekejams.atsakymas", "pp-tiekejams.kontrolinis"];');
+    turi(wk, "UZDUOTYS.indexOf(body.uzduotis) < 0"); turi(wk, "JSON.stringify({ uzduotis: body.uzduotis, duomenys: body.duomenys })");
+    const ix = await (await W.fetch("index.html?b=" + Date.now())).text();
+    turi(ix, "const body = { uzduotis: prompt.uzduotis, duomenys: prompt.duomenys, turnstileToken: token };", "klientas Worker'iui siunčia tą pačią užduotį");
   });
-  await testas("Organizacijos pavadinimas su „$&“, „$'“ ir „$$“ sistemos prompte - pažodžiui (String.replace šablonai netaikomi; worker'io kopijoje - taip pat funkcija)", async () => {
+  await testas("Organizacijos pavadinimas su „$&“, „$'“ ir „$$“ - siunčiamas pažodžiui (sakinys sudaromas serveryje funkcija - privati šablonų patikra)", () => {
     const vardas = "UAB „Bandymas $& $' $$“";
     [["lt", "PI", true], ["en", "VPI", true], ["lt", null, false]].forEach(([lang, rezimas, patvirtinta]) =>
-      turi(A.sistema(lang, "qa", { organizacija: vardas, rezimas, patvirtinta }), vardas));
-    const wk = await (await W.fetch("../worker/tiekejams-proxy.js?b=" + Date.now())).text();
-    turi(wk, '.replace("{KONTEKSTAS}", function () { return eil; })');
+      lygu(A.promptasQA({ lang, question: "x", chunks: [], docsById: {}, kontekstas: { organizacija: vardas, rezimas, patvirtinta } }).duomenys.organizacija, vardas));
   });
   await testas("Sąsaja: įkėlus paketą su PĮ skelbimu - vykdytojas ir režimas atpažinti su šaltiniu, NEpatvirtinti; klausimo užuomina prašo patvirtinti; promptas - NEPATVIRTINTA", async () => {
     const S = await ikelk({ [V_PI]: SK_LITGRID, "dok/SPS.txt": SPS_SENAS });
@@ -1688,7 +1682,7 @@ async function paleisk() {
     const S = W.__PPT.S;
     lygu(S.kontekstas.patvirtinta, true); turi(D.getElementById("kontekstasBox").textContent, "Patvirtinta naudotojo"); tiesa(!D.getElementById("ctxConfirm"), "mygtuko nebėra");
     lygu(D.getElementById("askHint").textContent, "Atsakoma tik iš įkeltų dokumentų.");
-    const pr = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }); turi(pr.system, "LITGRID AB - yra perkantysis subjektas"); turi(pr.system, "naudotojas tai patvirtino");
+    const pr = A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }); lygu([pr.duomenys.organizacija, pr.duomenys.rezimas, pr.duomenys.patvirtinta], ["LITGRID AB", "PI", true]);
     await ikelk({ [V_VPI]: SK_EPSOG });
     lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta, S.kontekstas.isRegistro], ['UAB "EPSO-G"', "VPI", false, true], "naujas skelbimas - naujas, nepatvirtintas kontekstas (režimas - iš registro)");
   });
@@ -1704,7 +1698,7 @@ async function paleisk() {
     turi(ebvpd().textContent, "Pirkimo režimas nepatvirtintas, todėl pateikiami abu atsakymai"); turi(ebvpd().querySelector("summary").textContent, "PĮ ir VPĮ · atskiri atsakymai");
     turi(ebvpd().textContent, "Perkantiesiems subjektams (PĮ)"); turi(ebvpd().textContent, "Perkančiosioms organizacijoms (VPĮ)"); turi(ebvpd().textContent, "VPĮ 50 str. 1 d."); turi(ebvpd().textContent, "PĮ 37 str. 1 d.");
     lygu(ebvpd().querySelectorAll(".tema-dalis h4.small").length, 2, "vienodi veiksmai - ne kiekvienoje dalyje (tik šaltiniai)");
-    D.getElementById("ctxConfirm").click(); turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NIEKADA nesiremk PĮ");
+    D.getElementById("ctxConfirm").click(); turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).duomenys.rezimas + "/" + A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).duomenys.patvirtinta, "VPI/true");
     W.setView("bendri");
     tiesa(!ebvpd().querySelector(".tema-dalis"), "patvirtinus - vienas atsakymas");
     turi(ebvpd().textContent, "VPĮ 50 str. 1 d."); neturi(ebvpd().textContent, "PĮ 37 str."); neturi(ebvpd().textContent, "PĮ 59 str. 1 d."); turi(ebvpd().querySelector("summary").textContent, "VPĮ · perkančiosioms organizacijoms");
@@ -1732,7 +1726,7 @@ async function paleisk() {
     const S = await ikelk({ "x_Skelbimas_0.txt": SK_NEAISKUS });
     lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.neaiskus], ["UAB Testas", null, true]);
     const box = D.getElementById("kontekstasBox").textContent; turi(box, "ir PĮ, ir VPĮ požymių"); turi(box, "Kitame dokumente kitaip"); tiesa(!D.getElementById("ctxConfirm"), "be patvirtinimo mygtuko");
-    turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NEPATVIRTINTI");
+    lygu(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).duomenys.patvirtinta, false, "nepatvirtinta");
   });
   await testas("Rankinis nurodymas turi pirmenybę prieš skelbimą ir atšaukiamas mygtuku „Grąžinti iš skelbimo“", async () => {
     W.__PPT.issaugokKonteksta("UAB Testas", "VPI");
@@ -1808,7 +1802,7 @@ async function paleisk() {
     const S = await ikelk({ "dok/SPS.txt": SPS_SENAS + "\n\nOficialus pavadinimas: UAB Kita" });
     lygu([S.kontekstas.organizacija, S.kontekstas.rezimas, S.kontekstas.patvirtinta], [null, null, false]);
     turi(D.getElementById("kontekstasBox").textContent, "Teisinis režimasnenustatyta"); turi(D.getElementById("askHint").textContent, "dar nepatvirtinti");
-    turi(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).system, "NEPATVIRTINTI");
+    lygu(A.promptasQA({ lang: "lt", question: "x", chunks: [], docsById: {}, procurement: {}, kontekstas: W.__PPT.promptoKontekstas() }).duomenys.patvirtinta, false, "nepatvirtinta");
   });
   await testas("Bendri klausimai: kiekviena tema pažymėta režimu (PĮ arba CVP IS tvarka), klausimuose nebėra LITGRID, tema „rasti“ rodo žinomų organizacijų nuorodas", () => {
     W.setView("bendri");
@@ -1860,9 +1854,10 @@ async function paleisk() {
   };
   const kol = async (f, ms) => { const pr = Date.now(); while (!f()) { if (Date.now() - pr > (ms || 6000)) throw new Error("nesulaukta: " + f); await laukti(20); } };
   const suAi = async (atsakymas, fn) => {
-    const orig = W.GP_AI_PROXY.call, kvietimai = [];
-    W.GP_AI_PROXY.call = (u) => { kvietimai.push(u); return Promise.resolve(atsakymas || { ok: false, status: 500, error: "bandomasis DI atsakymas" }); };
-    try { await fn(kvietimai); } finally { W.GP_AI_PROXY.call = orig; }
+    // DI užduotis serveryje (nuo 2026-11-08): userMessage - siunčiama užklausa (duomenys.uzklausa)
+    const orig = W.GP_AI_PROXY.uzduotis, kvietimai = [];
+    W.GP_AI_PROXY.uzduotis = (uzduotis, duomenys, o) => { kvietimai.push(Object.assign({ uzduotis, duomenys, userMessage: duomenys.uzklausa }, o)); return Promise.resolve(atsakymas || { ok: false, status: 500, error: "bandomasis DI atsakymas" }); };
+    try { await fn(kvietimai); } finally { W.GP_AI_PROXY.uzduotis = orig; }
   };
   await testas("Klientas: numeris, užklausa be slapukų ir serverio klaidų rūšys (prisijungimas, nėra, užimta, per didelis, ne ZIP, ryšys, atšaukimas)", async () => {
     const V = W.GP_VPT;
@@ -1968,7 +1963,7 @@ async function paleisk() {
       D.getElementById("refInput").value = "1234501"; W.__PPT.nustatykRef();
       W.__PPT.kontrolinis(); turi(askNote().textContent, "Klausimas bus atsakytas");
       await kol(() => kv.length === 1);
-      turi(kv[0].system + kv[0].userMessage, "kontrolin");
+      lygu(kv[0].uzduotis, "pp-tiekejams.kontrolinis");
     });
   });
   await testas("Grįžus prie pirkimo (be dokumentų): mygtukas, o „Klausti“ parsisiunčia ir atsako", async () => {
@@ -3129,10 +3124,10 @@ async function paleisk() {
     await suAi({ ok: true, text: "ne json" }, async () => { await W.__PPT.kontrolinis(); turi(box().textContent, "DI atsakymas neperskaitytas"); lygu(box().querySelectorAll(".st-nerasta").length, 0); });
     await suAi({ ok: true, text: '{"punktai":[{"id":"ebvpd"', raw: { stop_reason: "max_tokens" } }, async () => { await W.__PPT.kontrolinis(); turi(box().textContent, "DI atsakymas nutrūko"); });
     // Kol laukiama, kiti dokumentai - atsakymas neįrašomas
-    let leisk; const orig = W.GP_AI_PROXY.call;
-    W.GP_AI_PROXY.call = () => new Promise(r => { leisk = r; });
+    let leisk; const orig = W.GP_AI_PROXY.uzduotis;
+    W.GP_AI_PROXY.uzduotis = () => new Promise(r => { leisk = r; });
     const pr = W.__PPT.kontrolinis(); await laukti(10);
-    await svarus(); leisk({ ok: true, text: JSON.stringify({ punktai: [{ id: "techninis", busena: "nerasta" }] }) }); await pr; W.GP_AI_PROXY.call = orig;
+    await svarus(); leisk({ ok: true, text: JSON.stringify({ punktai: [{ id: "techninis", busena: "nerasta" }] }) }); await pr; W.GP_AI_PROXY.uzduotis = orig;
     lygu(W.__PPT.S.checklist, null, "senas atsakymas naujiems dokumentams neįrašomas");
     await svarus();
   });
