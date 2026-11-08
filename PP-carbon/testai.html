@@ -201,11 +201,12 @@ async function testaiEpd(){
   });
 
   /* Vietinė versija (2026-10-22): svetainė neviešai, darbas tęsiamas http://localhost:8000 - Worker'is ir Turnstile vietoje neveikia,
-     todėl localhost / 127.0.0.1 - G-Procure serverio kelias (GP_AI_PROXY.call), kaip PP-carbon modulyje; ?epd=worker - kaip gyvai */
+     todėl localhost / 127.0.0.1 - G-Procure serverio kelias (DI užduotis pp-carbon.epd, nuo 2026-11-08), kaip PP-carbon modulyje; ?epd=worker - kaip gyvai */
   const ATS_EPD = { content: [{ type: "text", text: '{"status":"found","value":7.5,"unit":"kg CO2e","declaredUnit":"1 t","quote":"GWP A1-A3 7,5 kg CO2e","page":3}' }] };
   function epdSekimas(w){
     const s = { kvietimai: [], fetch: [] };
-    w.GP_AI_PROXY.call = o => { s.kvietimai.push(o); return w.Promise.resolve(s.atsakymas || { ok: true, raw: ATS_EPD }); };
+    // DI užduotis serveryje (nuo 2026-11-08): įsimenama užduotis, duomenys ir dokumentas - instrukcijos modulyje nebėra
+    w.GP_AI_PROXY.uzduotis = (uzduotis, duomenys, o) => { s.kvietimai.push(Object.assign({ uzduotis, duomenys }, o)); return w.Promise.resolve(s.atsakymas || { ok: true, raw: ATS_EPD }); };
     w.fetch = (u, o) => { s.fetch.push([String(u), o]); return w.Promise.resolve(new w.Response(JSON.stringify(ATS_EPD), { status: 200 })); };
     w._pdfBase64 = "JVBERi0xLjQK";
     return s;
@@ -215,7 +216,7 @@ async function testaiEpd(){
     const { f, d } = await puslapis("epd.html?lang=lt", 1280);
     try { lygu([f.contentWindow.VIETINE, d.getElementById("patikraLaukas").hidden, d.getElementById("vietine").hidden], [false, false, true], "gyva sąsaja"); } finally { f.remove(); }
   });
-  else await testas("Vietoje (127.0.0.1): patikros laukas paslėptas, pastaba sako, kad siunčiama per G-Procure serverį; „Analizuoti“ - GP_AI_PROXY.call su epd-extract.js užklausa ir PDF, į Worker'į nesiunčiama, rezultatas rodomas; klaida - su priežastimi; EN pastaba", async ()=>{
+  else await testas("Vietoje (127.0.0.1): patikros laukas paslėptas, pastaba sako, kad siunčiama per G-Procure serverį; „Analizuoti“ - DI užduotis pp-carbon.epd su faktoriumi, vienetu ir PDF, į Worker'į nesiunčiama, rezultatas rodomas; klaida - su priežastimi; EN pastaba", async ()=>{
     let { f, d } = await puslapis("epd.html?lang=lt", 1280);
     try {
       const w = f.contentWindow;
@@ -227,7 +228,7 @@ async function testaiEpd(){
       await w.analyze();
       lygu([s.kvietimai.length, s.fetch.filter(x => /epd-api/.test(x[0])).length], [1, 0], "kelias");
       const k = s.kvietimai[0];
-      lygu([k.system === w.GP_EPD_EXTRACT.systemPrompt(), k.pdfBase64, k.maxTokens, /Gelžbetoninė atrama/.test(k.userMessage)], [true, "JVBERi0xLjQK", w.GP_EPD_EXTRACT.MAX_TOKENS, true], "užklausa");
+      lygu([k.uzduotis, k.duomenys, k.dokumentas, "system" in k, "maxTokens" in k], ["pp-carbon.epd", { produktas: "Gelžbetoninė atrama", vienetas: "kg CO2e/t" }, { tipas: "application/pdf", duomenys: "JVBERi0xLjQK" }, false, false], "užklausa (instrukcija ir ilgis - serverio šablone)");
       tiesa(/7,5 kg CO2e|7.5 kg CO2e/.test(d.getElementById("result").textContent), "rezultatas: " + d.getElementById("result").textContent.slice(0, 200));
       s.atsakymas = { ok: false, status: 413, error: "Failas per didelis serveriui." };
       await w.analyze();
@@ -237,7 +238,7 @@ async function testaiEpd(){
     try { tiesa(/via the G-Procure server \(api\.g-procure\.com\) to the Claude API/.test(d.getElementById("vietine").textContent), "EN: " + d.getElementById("vietine").textContent); } finally { f.remove(); }
   });
 
-  await testas("?epd=worker (kaip gyvai): patikros laukas matomas, be patikros - „Pažymėkite patikrą“ ir niekas nesiunčiama; su patikra - Worker'is (epd-api.g-procure.com) su žetonu, GP_AI_PROXY.call nekviečiamas", async ()=>{
+  await testas("?epd=worker (kaip gyvai): patikros laukas matomas, be patikros - „Pažymėkite patikrą“ ir niekas nesiunčiama; su patikra - Worker'is (epd-api.g-procure.com) su žetonu, tiesiai į serverį nesiunčiama", async ()=>{
     const { f, d } = await puslapis("epd.html?lang=lt&epd=worker", 1280);
     try {
       const w = f.contentWindow, s = epdSekimas(w);
@@ -272,33 +273,33 @@ async function testaiBusenos(){
   dabartine = grupe("Veiksmų būsenos (Q3): EPD analizė ir Word dokumentai");
   const lt = await puslapis("index.html?lang=lt", 1280), en = await puslapis("index.html?lang=en", 1280);
   const LW = lt.f.contentWindow, EW = en.f.contentWindow;
-  const ORIG = { lt: LW.GP_AI_PROXY.call, en: EW.GP_AI_PROXY.call };
+  const ORIG = { lt: LW.GP_AI_PROXY.uzduotis, en: EW.GP_AI_PROXY.uzduotis };
 
   await testas("EPD klaida: tikra priežastis ir „Bandyti dar kartą“, ne „patikrinkite raktą“ (LT - serverio žinutė, EN - išversta, be ryšio - ryšys)", async ()=>{
     try {
       epdLangas(LW);
-      LW.GP_AI_PROXY.call = async () => ({ ok: false, status: 413, text: "", raw: null, error: "Failas per didelis: riba 6 MB." });
+      LW.GP_AI_PROXY.uzduotis = async () => ({ ok: false, status: 413, text: "", raw: null, error: "Failas per didelis: riba 6 MB." });
       LW.analyzeEpd();
       const b = lt.d.getElementById("epdBusena");
       tiesa(await laukTol(() => b.classList.contains("gpb--klaida")), "LT: nėra klaidos būsenos: " + b.textContent);
       tiesa(/EPD analizė nepavyko: Failas per didelis: riba 6 MB\./.test(b.textContent) && !/rakt/i.test(b.textContent), "LT: " + b.textContent);
       tiesa(b.querySelector("[data-gpb-kartoti]"), "LT: nėra „Bandyti dar kartą“");
       tiesa(!lt.d.getElementById("epdAnalyzeBtn").disabled, "LT: mygtukas liko išjungtas");
-      LW.GP_AI_PROXY.call = async () => ({ ok: false, status: 0, text: "", raw: null, error: "Failed to fetch" });
+      LW.GP_AI_PROXY.uzduotis = async () => ({ ok: false, status: 0, text: "", raw: null, error: "Failed to fetch" });
       b.querySelector("[data-gpb-kartoti]").click();
       tiesa(await laukTol(() => /Nėra ryšio su DI paslauga/.test(lt.d.getElementById("epdBusena").textContent)), "LT be ryšio: " + lt.d.getElementById("epdBusena").textContent);
       epdLangas(EW);
-      EW.GP_AI_PROXY.call = async () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Bandykite vėliau." });
+      EW.GP_AI_PROXY.uzduotis = async () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Bandykite vėliau." });
       EW.analyzeEpd();
       const e = en.d.getElementById("epdBusena");
       tiesa(await laukTol(() => e.classList.contains("gpb--klaida")), "EN: nėra klaidos būsenos");
       tiesa(/EPD analysis failed: The AI service returned error 500\./.test(e.textContent) && /Try again/.test(e.textContent) && !/key/i.test(e.textContent), "EN: " + e.textContent);
-    } finally { LW.GP_AI_PROXY.call = ORIG.lt; EW.GP_AI_PROXY.call = ORIG.en; LW.closeModal(); EW.closeModal(); }
+    } finally { LW.GP_AI_PROXY.uzduotis = ORIG.lt; EW.GP_AI_PROXY.uzduotis = ORIG.en; LW.closeModal(); EW.closeModal(); }
   });
 
   await testas("EPD: „Atšaukti“ nutraukia užklausą (niekas nepakeista), uždarius langą - irgi", async ()=>{
     let signalas = null;
-    LW.GP_AI_PROXY.call = o => new Promise(res => { signalas = o.signal;
+    LW.GP_AI_PROXY.uzduotis = (id, d, o) => new Promise(res => { signalas = o.signal;
       o.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" })); });
     try {
       epdLangas(LW);
@@ -314,7 +315,7 @@ async function testaiBusenos(){
       tiesa(await laukTol(() => signalas), "antra užklausa nepradėta");
       LW.closeModal();
       tiesa(signalas.aborted, "uždarius langą užklausa nenutraukta");
-    } finally { LW.GP_AI_PROXY.call = ORIG.lt; LW.closeModal(); }
+    } finally { LW.GP_AI_PROXY.uzduotis = ORIG.lt; LW.closeModal(); }
   });
 
   await testas("Word: kūrimo klaida - tikra priežastis, peržiūra lieka (anksčiau „docx biblioteka neįsikrovė“ ir peržiūra dingdavo); pavykus - „parengtas“", async ()=>{
@@ -418,7 +419,8 @@ async function testaiSkaiciavimai(){
     const F_ASCII = /Gelzbeton|Metalines|liniju|lapu |Zaibos|pazymet|istrint|Pozemin|sviesolaid|virsutine|zinoma|mase$|EPD is |synolaid|Akumuliatoriu|zalesnes|Suntinis|irengin|Armatura|armatura|Plienines|Pastotes|apimti$|Mikroprocesorines|reles$|iranga|Sunkvezim|reiketi|Gelezinkel|Juru|Lektuv|Elektrine |Dyzelgeneratoriu|stoteles|statybvieteje|duju|nutekejim|nekeicia|nerasyti|reikmes|zmogus|Kompiuteriu|rangovu|keliones|Faktoriu|saltin/;
     const fTekstai = [F.meta.note].concat(...Object.keys(F).filter(g => Array.isArray(F[g])).map(g => F[g].map(it => [it.label, it.note, it.basis, it.review, it.unit].filter(Boolean))).flat());
     lygu(fTekstai.filter(s => F_ASCII.test(s)), [], "faktorių bibliotekos tekstai be lietuviškų raidžių");
-    tiesa(/GRIEŽTOS TAISYKLĖS/.test(X.systemPrompt()) && /Mūsų faktoriaus vienetas: kg CO2e\/vnt\. Rask A1-A3 GWP reikšmę/.test(X.userText("Jungtuvai", "kg CO2e/vnt")), "EPD užklausa be lietuviškų raidžių");
+    // EPD užklausos tekstas - serverio šablone pp-carbon.epd (nuo 2026-11-08; lietuviškas raides tikrina privati šablonų patikra)
+    lygu([X.UZDUOTIS, X.duomenys("Jungtuvai", "kg CO2e/vnt"), X.duomenys("", "")], ["pp-carbon.epd", { produktas: "Jungtuvai", vienetas: "kg CO2e/vnt" }, {}], "EPD užklausos duomenys");
   });
   await testas("ŠESD istorija: senas pavadinimas be diakritikų - ta pati pozicija (rodomas dabartinis, pokytis skaičiuojamas), saugykla nekeičiama", async ()=>{
     St.getEpdHistory().map(e => e.id).forEach(id => St.deleteEpdHistory(id));
@@ -652,7 +654,7 @@ async function testaiPatikra1104(){
     W.__t = tekstas;
     W.eval("_epdCtx.pdfBase64 = 'JVBERi0xLjQ='; _epdCtx.fileName = 'epd.pdf'; _epdCtx.tekstoPazadas = Promise.resolve(window.__t);");
     W.__k = null;
-    W.GP_AI_PROXY.call = async o => { W.__k = o; return { ok: true, status: 200, raw: { content: [{ type: "text", text: JSON.stringify(ats) }] } }; };
+    W.GP_AI_PROXY.uzduotis = async (id, duom, o) => { W.__k = Object.assign({ uzduotis: id, duomenys: duom }, o); return { ok: true, status: 200, raw: { content: [{ type: "text", text: JSON.stringify(ats) }] } }; };
     W.analyzeEpd();
     tiesa(await laukTol(() => d.querySelector("#epdResult .epd-card")), "rezultatas neparodytas");
     return d.getElementById("epdResult");
@@ -706,6 +708,9 @@ async function testaiPatikra1104(){
     try {
       const Q = "GWP-total, net kg CO2 -eq 9.96E+01", KEY = "substationEquipment.breaker";
       let box = await epdKelias(W, d, { status: "found", value: 99.31, unit: "kg CO2e", declaredUnit: "1 vnt", quote: Q, page: 12, indicator: "GWP-total", basis: "net" }, DOK);
+      // DI užduotis serveryje (nuo 2026-11-08): siunčiama užduotis, faktorius, vienetas ir PDF - be instrukcijos ir ilgio
+      lygu([W.__k.uzduotis, !!W.__k.duomenys.produktas, !!W.__k.duomenys.vienetas, W.__k.dokumentas, "system" in W.__k, "maxTokens" in W.__k],
+        ["pp-carbon.epd", true, true, { tipas: "application/pdf", duomenys: "JVBERi0xLjQ=" }, false, false], "EPD užklausa");
       lygu([!!d.getElementById("epdPatvirtinti"), !!d.getElementById("epdNepatikrinta"), !box.querySelector(".epd-val"), !!d.getElementById("epdRankaBlokas")], [false, true, true, true], "nepatvirtinta");
       tiesa(/99,31/.test(d.getElementById("epdNepatikrinta").textContent) && /citatoje nėra/.test(d.getElementById("epdNepatikrinta").textContent), d.getElementById("epdNepatikrinta").textContent);
       tiesa(box.querySelector('[data-di="sugeneruota"] .gp-di-zyme') || box.querySelector(".epd-card[data-di]"), "DI žyma");
@@ -763,15 +768,12 @@ async function testaiPatikra1104(){
       await epdKelias(W, d, { status: "found", value: null, unit: "kg CO2e", declaredUnit: "1 vnt", modules: [{ module: "A1", value: 81.9, quote: "8.19E+01" }, { module: "A2", value: 13.6, quote: "1.36E+01" }, { module: "A3", value: 4.12, quote: "4.12E+00" }] }, DOK);
       tiesa(/sumą apskaičiavo programa/.test(d.getElementById("epdSumaPrograma").textContent) && /99,62/.test(d.getElementById("epdSumaPrograma").textContent) && d.getElementById("epdPatvirtinti"), "suma: " + d.getElementById("epdResult").textContent);
       W.closeModal();
-      const X = W.GP_EPD_EXTRACT, sp = X.systemPrompt();
-      for (const zod of ["PAŽODŽIUI", "nesumuok", "Modulių sumos neskaičiuok", "GWP-GHG", "\\\"net\\\"", "gross", "validUntil", "modules", "valueText"]) tiesa(sp.includes(zod.replace(/\\/g, "")), "užklausa be: " + zod);
-      const wk = await (await fetch("../worker/epd-proxy.js")).text();
-      const m = /const SYSTEM_PROMPT = (\[[\s\S]*?\])\.join\("\\n"\);/.exec(wk);
-      tiesa(m, "Worker'yje nėra SYSTEM_PROMPT");
-      lygu(new Function("return " + m[1] + '.join("\\n");')(), sp, "Worker'io užklausa = epd-extract.js");
-      lygu(/const MAX_TOKENS = (\d+);/.exec(wk)[1], String(X.MAX_TOKENS), "ilgis");
-      const ut = X.userText("X", "Y");
-      tiesa(wk.includes('"Produktas/įranga: "') && wk.includes('". Mūsų faktoriaus vienetas: "') && wk.includes('". Rask A1-A3 GWP reikšmę ir grąžink JSON pagal schemą."') && /Mūsų faktoriaus vienetas: Y\. Rask A1-A3 GWP reikšmę ir grąžink JSON pagal schemą\./.test(ut), "vartotojo tekstas");
+      // Užklausa (pažodžiui, be sumavimo, GWP-GHG, net / gross, validUntil, modules, valueText) - serverio šablone pp-carbon.epd (privati patikra).
+      // Worker'is (2026-11-08) instrukcijos ir Anthropic rakto neturi: priima tik PDF, faktorių ir vienetą ir persiunčia į tą pačią serverio užduotį.
+      const X = W.GP_EPD_EXTRACT, wk = await (await fetch("../worker/epd-proxy.js")).text();
+      tiesa(!/SYSTEM_PROMPT|api\.anthropic\.com|ANTHROPIC_API_KEY"|x-api-key|max_tokens|GRIEŽTOS TAISYKLĖS/.test(wk.replace(/^\s*\*.*$/gm, "")), "Worker'yje liko instrukcija ar DI raktas");
+      tiesa(/const SERVERIS = "https:\/\/api\.g-procure\.com\/api\/uzduotis";/.test(wk) && wk.includes('const UZDUOTIS = "' + X.UZDUOTIS + '";'), "Worker'is - į serverio užduotį " + X.UZDUOTIS);
+      tiesa(/uzduotis: UZDUOTIS, duomenys: duomenys, dokumentas: \{ tipas: "application\/pdf", duomenys: pdf \}/.test(wk) && /duomenys\.produktas = factorLabel/.test(wk) && /duomenys\.vienetas = expectedUnit/.test(wk), "Worker'io duomenys - kaip modulio");;
     } finally { f.remove(); }
   });
 
