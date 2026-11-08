@@ -22,7 +22,8 @@
  *     system: "..." arba function (d) { return "..."; },
  *     vartotojas: function (d) { return "..."; }                   // užklausos tekstas iš patikrintų duomenų
  *   }
- * Duomenų tipai: tekstas {max}, skaicius {min, max}, loginis, reiksme {is: [...]}, tekstai {max, kiekis}.
+ * Duomenų tipai: tekstas {max}, skaicius {min, max}, loginis, reiksme {is: [...]}, tekstai {max, kiekis},
+ *   zodynas {max, kiekis} - objektas raktas -> tekstas (raktai - kaip laukų vardai; pvz. teisės registro nuorodos).
  *
  * Šis failas neturi priklausomybių ir veikia ir Node (serveris), ir naršyklėje (testai - serveris/testai.html).
  * ============================================================================ */
@@ -38,7 +39,7 @@
   var MAX_TOKENS_RIBA = 8000;
   var ID_RE = /^[a-z0-9-]{2,40}\.[a-z0-9-]{2,60}$/;
   var LAUKO_RE = /^[A-Za-z][A-Za-z0-9_]{0,40}$/;
-  var TIPAI = ["tekstas", "skaicius", "loginis", "reiksme", "tekstai"];
+  var TIPAI = ["tekstas", "skaicius", "loginis", "reiksme", "tekstai", "zodynas"];
   var DOK_TIPAI = ["application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp"];
   // Kūno riba - kaip nginx ir express (10 MB); dokumento base64 - kaip shared/ai-proxy.js MAX_BASE64.
   var MAX_BASE64 = 9 * 1024 * 1024;
@@ -67,8 +68,8 @@
       var s = schema[k];
       if (!LAUKO_RE.test(k)) throw new Error(id + ": netinkamas lauko vardas " + k);
       if (!objektas(s) || TIPAI.indexOf(s.tipas) < 0) throw new Error(id + "." + k + ": tipas - " + TIPAI.join(", "));
-      if ((s.tipas === "tekstas" || s.tipas === "tekstai") && !(s.max > 0 && s.max <= MAX_TEKSTO)) throw new Error(id + "." + k + ": tekstui reikia max (1-" + MAX_TEKSTO + ")");
-      if (s.tipas === "tekstai" && !(s.kiekis > 0 && s.kiekis <= 2000)) throw new Error(id + "." + k + ": tekstams reikia kiekis (1-2000)");
+      if ((s.tipas === "tekstas" || s.tipas === "tekstai" || s.tipas === "zodynas") && !(s.max > 0 && s.max <= MAX_TEKSTO)) throw new Error(id + "." + k + ": tekstui reikia max (1-" + MAX_TEKSTO + ")");
+      if ((s.tipas === "tekstai" || s.tipas === "zodynas") && !(s.kiekis > 0 && s.kiekis <= 2000)) throw new Error(id + "." + k + ": " + s.tipas + " reikia kiekis (1-2000)");
       if (s.tipas === "reiksme" && !(Array.isArray(s.is) && s.is.length && s.is.every(function (v) { return typeof v === "string"; }))) throw new Error(id + "." + k + ": reikšmei reikia sąrašo is");
       if (s.tipas === "skaicius" && (typeof s.min !== "number" || typeof s.max !== "number" || s.min > s.max)) throw new Error(id + "." + k + ": skaičiui reikia min ir max");
     });
@@ -132,6 +133,14 @@
         if (!Array.isArray(v) || v.length > s.kiekis || !v.every(function (x) { return typeof x === "string" && x.length <= s.max; }))
           return { klaida: KLAIDOS.duomenys, laukas: k };
         out[k] = v.map(svarus);
+      } else if (s.tipas === "zodynas") {
+        if (!objektas(v)) return { klaida: KLAIDOS.duomenys, laukas: k };
+        var rk = Object.keys(v);
+        if (rk.length > s.kiekis || !rk.every(function (x) { return LAUKO_RE.test(x) && typeof v[x] === "string" && v[x].length <= s.max; }))
+          return { klaida: KLAIDOS.duomenys, laukas: k };
+        var z = Object.create(null);
+        rk.forEach(function (x) { z[x] = svarus(v[x]); });
+        out[k] = z;
       }
     }
     return { duomenys: out };
