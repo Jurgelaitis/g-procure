@@ -4979,7 +4979,7 @@ async function sutartiesDiBusena(w, d){
   const vardas = "Techninė_specifikacija_su_labai_ilgu_pavadinimu_be_tarpų_" + "transformatorių_".repeat(4) + ".txt";
   const eil = ["Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties įsigaliojimo dienos.", "Avansas Tiekėjui nemokamas.",
     "Garantinio laikotarpio metu Tiekėjas atvyksta per 5 dienas nuo Pirkėjo pranešimo, o ilgas sakinys be tarpų_" + "pastotėje_".repeat(8) + "."];
-  w.GP_AI_PROXY.call = () => { const Q = w.sfAiKlausimai(w.SUTARTIES_FORMA.visiKlausimai()), q = r => Q.find(x => x.raktas === r);
+  w.GP_AI_PROXY.uzduotis = () => { const Q = w.sfAiKlausimai(w.SUTARTIES_FORMA.visiKlausimai()), q = r => Q.find(x => x.raktas === r);
     return Promise.resolve({ ok: true, status: 200, raw: { stop_reason: "end_turn" }, error: null, text: JSON.stringify({ atsakymai: [
       { id: q("terminas").id, atsakymas: { skaicius: "3" }, saltinis: "S1", citata: eil[0] },
       { id: q("avansas").id, atsakymas: 1, saltinis: "S1", citata: eil[1] },
@@ -5022,7 +5022,7 @@ async function skenuotuBusena(w, d){
 async function sutartiesDiLeidimoBusena(w, d){
   await sutartiesFormosBusena(w, d);
   const r = d.querySelector("input[name=nacsaug][value=taip]"); r.checked = true; r.dispatchEvent(new w.Event("change", { bubbles: true }));
-  w.GP_AI_PROXY.call = () => Promise.resolve({ ok: false, status: 0, text: "", raw: null, error: "neturėjo būti siunčiama" });
+  w.GP_AI_PROXY.uzduotis = () => Promise.resolve({ ok: false, status: 0, text: "", raw: null, error: "neturėjo būti siunčiama" });
   await w.aiPridek([new w.File(["Prekių pristatymo terminas - per 3 mėnesius nuo Sutarties įsigaliojimo dienos."],
     "Techninė_specifikacija_su_labai_ilgu_pavadinimu_be_tarpų_" + "transformatorių_".repeat(4) + ".txt", { type: "text/plain" })], "#sfAiBusena");
   for (let i = 0; i < 100 && d.getElementById("sfAiLeidimas").hidden; i++) await new Promise(r => setTimeout(r, 50));
@@ -5255,8 +5255,8 @@ async function kvalVertimoBusena(w, d){
   d.getElementById("tabRengti").click(); w.rodyk(1);
   const k = d.querySelector("input[name=kalba][value=LT_EN]"); k.checked = true; k.dispatchEvent(new w.Event("change"));
   await kvalLentelesBusena(w, d);
-  w.GP_AI_PROXY.call = async o => {
-    const u = JSON.parse(o.userMessage.slice(o.userMessage.indexOf("{")));
+  w.GP_AI_PROXY.uzduotis = async (id, duom) => {   // DI užduotis pp-salygos.lenteles-vertimas (nuo 2026-11-08 - tik duomenys)
+    const u = JSON.parse(duom.lentele);
     const en = (s, be) => "The Contractor shall provide the required evidence " + (be ? "" : (String(s).match(/\d+/g) || []).join(" ")) + " https://www.licencijavimas.lt/lis-epp-app/public/licenceSearch_without_spaces";
     return { ok: true, text: JSON.stringify({ eilutes: u.eilutes.map(e => ({ nr: e.nr, reikalavimas: e.reikalavimas.map(s => en(s, e.nr === 2)), dokumentai: e.dokumentai.map(s => en(s, e.nr === 2)) })),
       antrastes: (u.antrastes || []).map(() => "Professional and technical capacity") }) };
@@ -5832,7 +5832,7 @@ async function carbonEpd(w, d, ats) {
   w.closeModal();
   w.openEpdModal("substationEquipment.breaker");
   w.eval("_epdCtx.pdfBase64 = 'JVBERi0xLjQ='; _epdCtx.fileName = 'epd.pdf'; _epdCtx.tekstoPazadas = Promise.resolve('GWP-total, net kg CO2 -eq 9.96E+01');");
-  w.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: { content: [{ type: "text", text: JSON.stringify(ats) }] } });
+  w.GP_AI_PROXY.uzduotis = async () => ({ ok: true, status: 200, raw: { content: [{ type: "text", text: JSON.stringify(ats) }] } });   // DI užduotis pp-carbon.epd
   w.analyzeEpd();
   for (let i = 0; i < 40 && !d.querySelector("#epdResult .epd-card"); i++) await new Promise(r => setTimeout(r, 25));
 }
@@ -7808,6 +7808,26 @@ async function testaiSaugumas(){
     }
     tiesa(rasta.length >= 4, "SheetJS rasta tik " + rasta.length + " puslapiuose: " + rasta.join(", "));
     tiesa(!blogi.length, blogi.join("\n  "));
+  });
+
+  /* DI užduotys serveryje (2026-11-08, naudotojo sprendimas „Neutralūs žingsniai“ - kodo apsauga): DI instrukcijos - privačiuose serverio šablonuose.
+     Moduliai siunčia tik užduotį ir duomenis (GP_AI_PROXY.uzduotis); laisvos instrukcijos kelio (GP_AI_PROXY.call su system) modulių kode nebėra,
+     Workeriai instrukcijų ir Anthropic rakto neturi - persiunčia į serverio užduotis. */
+  await testas("DI instrukcijos ne viešame kode: moduliai nekviečia GP_AI_PROXY.call (tik uzduotis), Workeriai be instrukcijų ir rakto - persiunčia į /api/uzduotis", async ()=>{
+    const blogi = [];
+    for (const m of kodoFailai().concat(["../PP-salygos/skenuoti.js", "../PP-negotiation/di-skaitymas.js", "../PP-teise/admin.html", "../PP-carbon/epd.html"])) {
+      if (/\/testai\.html$|(^|\/)ai-proxy\.js$/.test(m)) continue;
+      const src = (await saltinis(m)).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      if (/GP_AI_PROXY\.call\s*\(|\.call\(\{\s*system\s*:/.test(src)) blogi.push(m);
+    }
+    tiesa(!blogi.length, "GP_AI_PROXY.call modulyje: " + blogi.join(", "));
+    for (const wk of ["../worker/epd-proxy.js", "../worker/tiekejams-proxy.js"]) {
+      const src = (await saltinis(wk)).replace(/^\s*\*.*$/gm, "");
+      tiesa(!/api\.anthropic\.com|x-api-key|ANTHROPIC_API_KEY|SYSTEM_PROMPT|GRIEŽTOS TAISYKLĖS|STRICT RULES/.test(src), wk + ": instrukcija ar DI raktas");
+      tiesa(/const SERVERIS = "https:\/\/api\.g-procure\.com\/api\/uzduotis";/.test(src) && /"Origin": ALLOWED_ORIGIN/.test(src), wk + ": ne į serverio užduotis");
+    }
+    const esg = await saltinis("../PP-esg/backend-pp-esg-routes.js");
+    tiesa(!/HARD RULES|GRIEŽTOS TAISYKLĖS/.test(esg) && /_pp-esg-sankcijos\.js/.test(esg), "PP-esg sankcijų vertinimo instrukcija viešame faile");
   });
 
   await testas("Cloudflare Workeriai užklausos be Origin nepriima (tik https://g-procure.com); tiekėjų Workeryje Turnstile privalomas", async ()=>{
