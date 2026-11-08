@@ -196,6 +196,11 @@
       ]
     };
 
+    return siusk(url, body, opts);
+  }
+
+  /* Siuntimas su kartojimu ir statistika - bendras call() ir uzduotis(). opts / body NEKEICIAMI. */
+  function siusk(url, body, opts) {
     var fetchOpts = {
       method: "POST",
       // VIENINTELES antrastes. Jokios rakto ar versijos antrastes.
@@ -261,6 +266,24 @@
     return run(0);
   }
 
+  /* DI uzduotis serveryje (2026-11-08, naudotojo sprendimas - kodo apsauga): modulis siuncia tik uzduoties
+     pavadinima ir DUOMENIS, o instrukcija sudaro serveris pagal savo privatu sablona (serveris/di-uzduotys.js).
+     Kas siunciama i DI - matoma cia, duomenyse (moduliu testai tai tikrina). Grazina ta pacia forma kaip call().
+     opts: { modelis, dokumentas: { tipas, duomenys (base64) }, signal } */
+  var UZDUOTIS_PATH = "/api/uzduotis";
+  var UZDUOTIES_ID = /^[a-z0-9-]{2,40}\.[a-z0-9-]{2,60}$/;
+  function uzduotis(id, duomenys, opts) {
+    opts = opts || {};
+    if ("apiKey" in opts || "headers" in opts || "system" in opts) {
+      return Promise.reject(new Error("GP_AI_PROXY.uzduotis: apiKey, headers ir system neleidziami - instrukcija gyvena serveryje."));
+    }
+    if (typeof id !== "string" || !UZDUOTIES_ID.test(id)) return Promise.reject(new Error("GP_AI_PROXY.uzduotis: netinkamas uzduoties pavadinimas"));
+    var body = { uzduotis: id, duomenys: duomenys || {} };
+    if (opts.modelis) body.modelis = opts.modelis;
+    if (opts.dokumentas) body.dokumentas = { tipas: opts.dokumentas.tipas, duomenys: opts.dokumentas.duomenys };
+    return siusk(PROXY_BASE + UZDUOTIS_PATH, body, opts);
+  }
+
   // PERKELTA 2026-09-25 is PP-tiekejams/asistentas.js: PP-salygos AI pasiūlymų JSON su tikru LITGRID
   // paketu irgi sulūžo (tikėtina dėl šaltinio „Packing list" su ASCII uždarančia kabute).
   // Viena kopija visiems moduliams.
@@ -323,6 +346,7 @@
 
   global.GP_AI_PROXY = {
     call: call,
+    uzduotis: uzduotis,
     extractText: extractText,
     taisykJson: taisykJson,
     BASE: PROXY_BASE,

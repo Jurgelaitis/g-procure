@@ -163,3 +163,23 @@ ribos zona `conf.d/gp-sankcijos-limit.conf`, `location /api/sankcijos/` - į `ap
 
 - **PP-esg** (nuo 2026-11-08): patikros lange - „Tikrinti sankcijų sąrašuose automatiškai“ (tik bendrovėms; fizinio asmens įmonėms nesiūloma,
   neaiškiai teisinei formai - klausiama). Rezultatas - sąrašų būsenos ir kandidatai; kiekvieną įvertina žmogus, siūlomą rezultatą pasirenka žmogus.
+
+## DI užduotys (nuo 2026-11-08, dar neįdiegta)
+
+Naudotojo sprendimas 2026-11-08 („Neutralūs žingsniai“ - kodo apsauga): DI instrukcijos (sistemos tekstai ir užklausų šablonai)
+perkeliamos iš naršyklės modulių į serverį ir laikomos privačiai. Modulis siunčia tik užduoties pavadinimą ir duomenis:
+`GP_AI_PROXY.uzduotis("pp-graphs.en-pavadinimas", { pavadinimas })` -> `POST /api/uzduotis` `{ uzduotis, duomenys, dokumentas?, modelis? }`.
+Serveris pagal šabloną sudaro Anthropic užklausą ir grąžina atsakymą kaip `/api/analyze` (klientas jį skaito taip pat).
+
+- `di-uzduotys.js` - variklis be priklausomybių (Node ir naršyklė): šablonų registras (id `<modulis>.<užduotis>`, modelis iš
+  leidžiamų, `maxTokens` <= 8000, duomenų schema - tekstas, skaičius, loginis, reikšmė iš sąrašo, tekstų sąrašas, dokumentas - PDF ar
+  paveikslėlis base64), duomenų tikrinimas (tik šablono laukai, tipai ir ribos; klaidoje - lauko vardas, ne reikšmė; valdymo simboliai
+  šalinami), užklausos sudarymas. Papildomi laukai (`system`, `messages`, `max_tokens`, `model`) atmetami - 400.
+- `di-uzduotys-marsrutas.js` - Express maršrutas DI serveriui (`index.js`, pm2): šablonai iš `/var/www/g-procure/uzduotys/` (failo
+  vardas = id, klaida šablone sustabdo paleidimą), į žurnalą - tik užduoties pavadinimas ir klaidos rūšis, Anthropic klaidos objektas
+  neperduodamas. Diegimas - failo antraštėje.
+- Šablonai - NE šioje saugykloje (privačiame aplanke, kopijuojami į serverį kartu su naudotoju).
+- Testai - `testai.html` grupė „DI užduotys serveryje“ (ir klientas `GP_AI_PROXY.uzduotis`).
+
+Eiga: serveris PIRMA, tada moduliai po vieną (instrukcija iš modulio šalinama tik kai užduotis veikia serveryje); kai perkelti visi,
+`/api/analyze` nebepriims laisvo `system`. Jau paskelbtos instrukcijos lieka saugyklos istorijoje.

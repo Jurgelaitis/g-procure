@@ -40,6 +40,7 @@ užklausos ir sąrašų būsenos (nepasiektas sąrašas - „nepatikrinta“, ne
 
 <script src="cvpis-logika.js"></script>
 <script src="sankcijos-logika.js"></script>
+<script src="di-uzduotys.js"></script>
 <script>
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
@@ -739,6 +740,84 @@ async function testaiSankcijuSargai(){
   });
 }
 
+async function testaiDiUzduotys(){
+  grupe("DI užduotys serveryje (2026-11-08, kodo apsauga): šablonai, duomenų tikrinimas, užklausa, maršrutas, klientas");
+  const D = window.GP_DI_UZDUOTYS;
+  const sab = o => Object.assign({ id: "pp-bandymas.vertimas", modelis: "claude-sonnet-4-6", maxTokens: 300,
+    duomenys: { pavadinimas: { tipas: "tekstas", max: 50, privalomas: true }, kalba: { tipas: "reiksme", is: ["lt", "en"] },
+      kiekis: { tipas: "skaicius", min: 0, max: 10 }, ar: { tipas: "loginis" }, eilutes: { tipas: "tekstai", max: 20, kiekis: 3 } },
+    system: d => "Instrukcija " + (d.kalba || "lt"), vartotojas: d => "Versk: " + d.pavadinimas }, o || {});
+  await testas("Šablonai: tinkamas registruojamas; netinkamas id, modelis, ilgis, tipas, pasikartojimas, dokumento tipas - paleidimo klaida", () => {
+    const reg = D.registruok([sab()]);
+    tiesa(reg["pp-bandymas.vertimas"] && reg["pp-bandymas.vertimas"].modeliai.join() === "claude-sonnet-4-6", "registruota");
+    const blogi = [
+      { id: "Bandymas" }, { id: "pp.x" }, { modelis: "gpt-4" }, { modeliai: ["claude-sonnet-4-6", "kitas"] }, { maxTokens: 8001 }, { maxTokens: 0 },
+      { system: 5 }, { vartotojas: "tekstas" }, { duomenys: { a: { tipas: "html" } } }, { duomenys: { a: { tipas: "tekstas" } } },
+      { duomenys: { a: { tipas: "reiksme", is: [] } } }, { duomenys: { "1x": { tipas: "loginis" } } }, { duomenys: { a: { tipas: "skaicius", min: 5, max: 1 } } },
+      { dokumentas: { tipai: ["text/html"], maxBaitu: 10 } }, { dokumentas: { tipai: ["application/pdf"], maxBaitu: D.MAX_BASE64 + 1 } }];
+    blogi.forEach((o, i) => { let meta = false; try { D.registruok([sab(o)]); } catch (e) { meta = true; } tiesa(meta, "netinkamas šablonas Nr. " + i + " priimtas: " + JSON.stringify(o)); });
+    let dvigubas = false; try { D.registruok([sab(), sab()]); } catch (e) { dvigubas = true; } tiesa(dvigubas, "pasikartojantis id");
+    lygu(D.LEIDZIAMI_MODELIAI, ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"], "modeliai - kaip serverio index.js R5");
+    lygu(D.MAX_TOKENS_RIBA, 8000, "ilgio riba - kaip serverio index.js R5");
+  });
+  await testas("Duomenys: tik šablono laukai, tipai ir ribos; klaidoje - lauko vardas, ne reikšmė; valdymo simboliai šalinami", () => {
+    const reg = D.registruok([sab()]);
+    const ok = D.sudaryk({ uzduotis: "pp-bandymas.vertimas", duomenys: { pavadinimas: "Kabelis\u0000 110 kV\n", kalba: "en", kiekis: 3, ar: true, eilutes: ["a", "b"] } }, reg);
+    tiesa(!ok.klaida, "tinkami duomenys: " + ok.klaida);
+    lygu(ok.anthropic.messages[0].content, [{ type: "text", text: "Versk: Kabelis 110 kV\n" }], "užklausos tekstas be valdymo simbolių");
+    lygu(ok.anthropic.system, "Instrukcija en", "instrukcija iš šablono");
+    lygu([ok.anthropic.model, ok.anthropic.max_tokens], ["claude-sonnet-4-6", 300], "modelis ir ilgis - iš šablono");
+    const blogi = [
+      [{ pavadinimas: "x".repeat(51) }, "pavadinimas"], [{}, "pavadinimas"], [{ pavadinimas: "a", kalba: "de" }, "kalba"], [{ pavadinimas: "a", kiekis: 11 }, "kiekis"],
+      [{ pavadinimas: "a", kiekis: "3" }, "kiekis"], [{ pavadinimas: "a", ar: "taip" }, "ar"], [{ pavadinimas: "a", eilutes: ["1", "2", "3", "4"] }, "eilutes"],
+      [{ pavadinimas: "a", eilutes: ["x".repeat(21)] }, "eilutes"], [{ pavadinimas: "a", kitas: "<script>" }, "kitas"], [{ pavadinimas: 5 }, "pavadinimas"]];
+    blogi.forEach(([d, laukas]) => {
+      const r = D.sudaryk({ uzduotis: "pp-bandymas.vertimas", duomenys: d }, reg);
+      tiesa(r.status === 400 && r.laukas === laukas && !JSON.stringify(r).includes("<script") && !JSON.stringify(r).includes("xxxxxxxx"), JSON.stringify(d).slice(0, 60) + " -> " + JSON.stringify(r));
+    });
+  });
+  await testas("Užklausa: nežinoma užduotis - 404, papildomas laukas (system, messages, max_tokens) - 400, modelis tik iš šablono sąrašo, dokumentas tik leidžiamo tipo ir base64", () => {
+    const reg = D.registruok([sab(), sab({ id: "pp-bandymas.pdf", modeliai: ["claude-sonnet-4-6", "claude-opus-4-6"], modelis: "claude-sonnet-4-6",
+      duomenys: {}, vartotojas: () => "Skaityk", dokumentas: { tipai: ["application/pdf", "image/png"], maxBaitu: 100 } })]);
+    lygu(D.sudaryk({ uzduotis: "pp-bandymas.kita", duomenys: {} }, reg).status, 404, "nežinoma");
+    lygu(D.sudaryk({ uzduotis: "../x", duomenys: {} }, reg).status, 404, "netinkamas pavadinimas");
+    for (const k of ["system", "messages", "max_tokens", "model"]) lygu(D.sudaryk({ uzduotis: "pp-bandymas.vertimas", duomenys: { pavadinimas: "a" }, [k]: "x" }, reg).status, 400, k);
+    lygu(D.sudaryk("tekstas", reg).status, 400, "ne objektas");
+    lygu(D.sudaryk({ uzduotis: "pp-bandymas.vertimas", duomenys: { pavadinimas: "a" }, modelis: "claude-opus-4-6" }, reg).status, 400, "modelis ne iš šablono");
+    lygu(D.sudaryk({ uzduotis: "pp-bandymas.pdf", modelis: "claude-opus-4-6" }, reg).anthropic.model, "claude-opus-4-6", "leidžiamas modelis");
+    const pdf = D.sudaryk({ uzduotis: "pp-bandymas.pdf", dokumentas: { tipas: "application/pdf", duomenys: "JVBERi0x" } }, reg);
+    lygu(pdf.anthropic.messages[0].content[0], { type: "document", source: { type: "base64", media_type: "application/pdf", data: "JVBERi0x" } }, "PDF blokas");
+    lygu(D.sudaryk({ uzduotis: "pp-bandymas.pdf", dokumentas: { tipas: "image/png", duomenys: "iVBORw0K" } }, reg).anthropic.messages[0].content[0].type, "image", "paveikslėlis");
+    for (const dk of [{ tipas: "text/html", duomenys: "PGI+" }, { tipas: "application/pdf", duomenys: "x".repeat(101) }, { tipas: "application/pdf", duomenys: "<b>" }, { tipas: "application/pdf", duomenys: "JVBE", url: "https://x" }])
+      lygu(D.sudaryk({ uzduotis: "pp-bandymas.pdf", dokumentas: dk }, reg).status, 400, "dokumentas " + JSON.stringify(dk).slice(0, 50));
+    lygu(D.sudaryk({ uzduotis: "pp-bandymas.vertimas", duomenys: { pavadinimas: "a" }, dokumentas: { tipas: "application/pdf", duomenys: "JVBE" } }, reg).status, 400, "dokumentas užduočiai be dokumento");
+  });
+  await testas("Maršrutas (Node): tik node: moduliai ir variklis, failo vardas = id, žurnale - be duomenų ir atsakymo, Anthropic klaida neperduodama; klientas GP_AI_PROXY.uzduotis - be system, raktų ir antraščių", async () => {
+    const m = await tekstas("di-uzduotys-marsrutas.js");
+    new Function("require", "module", "process", "__dirname", m);
+    const kodas = m.replace(/\/\*[\s\S]*?\*\//g, "");   // antraštės komentare - diegimo pavyzdys index.js
+    lygu([...kodas.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)].map(x => x[1]).filter(x => !/^node:/.test(x) && x !== "./di-uzduotys.js"), [], "priklausomybės");
+    tiesa(/s\.id \+ "\.js" !== f/.test(m), "failo vardas = id");
+    const zurn = [...m.matchAll(/console\.(?:log|error)\(([^;]*)\);/g)].map(x => x[1]).join("\n");
+    tiesa(!/req\.|body|duomenys|atsakymas|e\.message|e\.response\.data/.test(zurn), "žurnale: " + zurn);
+    tiesa(!/e\.response\.data|error\.message/.test(m), "Anthropic klaidos objektas neperduodamas");
+    const px = await tekstas("../shared/ai-proxy.js");
+    tiesa(/function uzduotis\(id, duomenys, opts\)/.test(px) && /"system" in opts/.test(px) && /UZDUOTIS_PATH = "\/api\/uzduotis"/.test(px), "klientas");
+    const f = document.createElement("iframe"); f.src = "about:blank"; document.body.appendChild(f);
+    try {
+      const w = f.contentWindow, s = w.document.createElement("script");
+      const kunai = [];
+      w.fetch = (url, o) => { kunai.push([url, JSON.parse(o.body)]); return Promise.resolve(new w.Response(JSON.stringify({ content: [{ type: "text", text: "Procurement" }] }), { status: 200 })); };
+      s.textContent = px; w.document.head.appendChild(s);
+      const r = await w.GP_AI_PROXY.uzduotis("pp-graphs.en-pavadinimas", { pavadinimas: "Pirkimas" }, { modelis: "claude-opus-4-6" });
+      tiesa(r.ok && r.text === "Procurement", "atsakymas kaip call()");
+      lygu(kunai, [["https://api.g-procure.com/api/uzduotis", { uzduotis: "pp-graphs.en-pavadinimas", duomenys: { pavadinimas: "Pirkimas" }, modelis: "claude-opus-4-6" }]], "kas siunčiama");
+      for (const o of [{ system: "x" }, { apiKey: "x" }, { headers: {} }]) { let meta = false; try { await w.GP_AI_PROXY.uzduotis("pp-graphs.en-pavadinimas", {}, o); } catch (e) { meta = true; } tiesa(meta, "atmesta: " + Object.keys(o)[0]); }
+      let meta = false; try { await w.GP_AI_PROXY.uzduotis("../api/analyze", {}); } catch (e) { meta = true; } tiesa(meta, "netinkamas pavadinimas");
+    } finally { f.remove(); }
+  });
+}
+
 (async function(){
   try {
     if (!L) throw new Error("cvpis-logika.js neįsikėlė");
@@ -752,6 +831,8 @@ async function testaiSankcijuSargai(){
     await testaiSankcijuPaieska();
     await testaiSankcijuAtsakymai();
     await testaiSankcijuSargai();
+    if (!window.GP_DI_UZDUOTYS) throw new Error("di-uzduotys.js neįsikėlė");
+    await testaiDiUzduotys();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
