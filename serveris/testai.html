@@ -29,7 +29,9 @@
 normalizavimas (tik išvardyti laukai, tipai, ilgio ribos, datos, TED nuorodos), naujo sąrašo priėmimas, paieška ir užklausų
 atsakymai (keliai, numeriai, CORS, neįkeltas sąrašas - ne „pirkimo nėra“, įvestis neatkartojama), serverio failo ir systemd bei
 nginx nustatymų sargai (raktas tik iš kredencialų failo, tik 127.0.0.1, izoliacija, jokio rakto saugykloje). Serverio kodas
-naršyklėje nevykdomas - tik išnagrinėjamas; tinklo ir failų dalis tikrinama įdiegus (README.md).</div>
+naršyklėje nevykdomas - tik išnagrinėjamas; tinklo ir failų dalis tikrinama įdiegus (README.md). Sankcijų sąrašų patikra (2026-11-08):
+ES, JT, OFAC ir JK sąrašų skaitymas (tik subjektai, fizinių asmenų įrašai neskaitomi), pavadinimų normalizavimas ir galimi atitikmenys su balu,
+užklausos ir sąrašų būsenos (nepasiektas sąrašas - „nepatikrinta“, ne „nerasta“), serverio, systemd ir nginx sargai.</div>
 
 <div id="santrauka"><span class="n ok" id="n-ok">0</span> praėjo
   <span class="n blogai" id="n-blogai">0</span> krito
@@ -37,6 +39,7 @@ naršyklėje nevykdomas - tik išnagrinėjamas; tinklo ir failų dalis tikrinama
 <div id="rezultatai"></div>
 
 <script src="cvpis-logika.js"></script>
+<script src="sankcijos-logika.js"></script>
 <script>
 const R = { ok: 0, blogai: 0 };
 function ekranuok(s){ return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
@@ -415,6 +418,327 @@ async function testaiSargai(){
   });
 }
 
+/* ==========================================================================
+   Sankcijų sąrašų patikra (2026-11-08, naudotojo sprendimas: PP-esg - tik automatinė sankcijų sąrašų patikra, asmens duomenys -
+   tik bendrovėms). Pavyzdžiai - TIKRŲ sąrašų subjektų įrašų ištraukos (OFAC SDN 2026-11-06, JT 2026-11-08, JK FCDO 2026-11-03;
+   ilgi komentarai sutrumpinti), fizinių asmenų įrašai - IŠGALVOTI (tik tam, kad būtų patikrinta, jog jie neskaitomi). ES failas
+   2026-11-08 nepasiekiamas (HTTP 500) - jo pavyzdys sudarytas pagal FSF XML 1.1 sandarą (sanctionEntity, subjectType code,
+   nameAlias wholeName, regulation programme ir publicationUrl, address, identification), reikšmės išgalvotos.
+   ========================================================================== */
+const S = window.GP_SANKCIJOS_API;
+const OFAC_XML = `<?xml version="1.0" standalone="yes"?>
+<sdnList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation><Publish_Date>11/06/2026</Publish_Date><Record_Count>3</Record_Count></publshInformation>
+  <sdnEntry>
+    <uid>16809</uid><lastName>AQUANIKA</lastName><sdnType>Entity</sdnType>
+    <programList><program>UKRAINE-EO13661</program></programList>
+    <idList>
+      <id><uid>9320</uid><idType>Registration ID</idType><idNumber>1075247000036</idNumber></id>
+      <id><uid>143511</uid><idType>Secondary sanctions risk:</idType><idNumber>Ukraine-/Russia-Related Sanctions Regulations, 31 CFR 589.201 and/or 589.209</idNumber></id>
+      <id><uid>115412</uid><idType>Website</idType><idNumber>http://www.aquanika.com</idNumber></id>
+      <id><uid>115411</uid><idType>Email Address</idType><idNumber>office@aquanika.com</idNumber></id>
+    </idList>
+    <akaList>
+      <aka><uid>25628</uid><type>a.k.a.</type><category>strong</category><lastName>AQUANIKA LLC</lastName></aka>
+      <aka><uid>25629</uid><type>a.k.a.</type><category>strong</category><lastName>RUSSKOYE VREMYA LLC</lastName></aka>
+      <aka><uid>25632</uid><type>a.k.a.</type><category>strong</category><lastName>OBSHCHESTVO S OGRANICHENNOI OTVETSTVENNOSTYU RUSSKOE VREMYA</lastName></aka>
+    </akaList>
+    <addressList><address><uid>25435</uid><city>Moscow</city><postalCode>117186</postalCode><country>Russia</country></address></addressList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>49517</uid><lastName>AVIATECH FZC</lastName><sdnType>Entity</sdnType>
+    <programList><program>RUSSIA-EO14024</program></programList>
+    <idList><id><uid>40874</uid><idType>License</idType><idNumber>23302</idNumber><idCountry>United Arab Emirates</idCountry></id></idList>
+    <addressList>
+      <address><uid>74716</uid><address1>176c Savanoriu Ave.</address1><city>Vilnius</city><country>Lithuania</country></address>
+      <address><uid>74717</uid><city>Sharjah</city><country>United Arab Emirates</country></address>
+    </addressList>
+  </sdnEntry>
+  <sdnEntry><uid>990001</uid><firstName>Vardenis</firstName><lastName>IŠGALVOTAS</lastName><sdnType>Individual</sdnType><programList><program>TEST</program></programList></sdnEntry>
+  <sdnEntry><uid>990002</uid><lastName>IŠGALVOTAS LAIVAS</lastName><sdnType>Vessel</sdnType></sdnEntry>
+</sdnList>`;
+const OFAC_KITI_XML = `<?xml version="1.0" standalone="yes"?><sdnList xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation><Publish_Date>11/04/2026</Publish_Date><Record_Count>2</Record_Count></publshInformation>
+  <sdnEntry><uid>16809</uid><lastName>AQUANIKA</lastName><sdnType>Entity</sdnType><programList><program>UKRAINE-EO13662</program></programList></sdnEntry>
+  <sdnEntry><uid>17017</uid><lastName>BM BANK JSC</lastName><sdnType>Entity</sdnType><programList><program>UKRAINE-EO13662</program></programList></sdnEntry>
+</sdnList>`;
+const JT_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<CONSOLIDATED_LIST xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://scsanctions.un.org/sc-sanctions.xsd" dateGenerated="2026-11-08T00:00:00.869Z">
+  <INDIVIDUALS><INDIVIDUAL><DATAID>990003</DATAID><FIRST_NAME>IŠGALVOTAS</FIRST_NAME><SECOND_NAME>ASMUO</SECOND_NAME><UN_LIST_TYPE>TEST</UN_LIST_TYPE></INDIVIDUAL></INDIVIDUALS>
+  <ENTITIES>
+    <ENTITY>
+      <DATAID>6908025</DATAID><VERSIONNUM>1</VERSIONNUM><FIRST_NAME>CONGOMET TRADING HOUSE</FIRST_NAME><UN_LIST_TYPE>DRC</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>CDe.004</REFERENCE_NUMBER><LISTED_ON>2007-03-29</LISTED_ON>
+      <COMMENTS1>No longer exists as a gold trading house in Butembo, North Kivu.</COMMENTS1>
+      <LIST_TYPE><VALUE>UN List</VALUE></LIST_TYPE>
+      <ENTITY_ALIAS><QUALITY/><ALIAS_NAME/></ENTITY_ALIAS>
+      <ENTITY_ADDRESS><COUNTRY/></ENTITY_ADDRESS>
+    </ENTITY>
+    <ENTITY>
+      <DATAID>6908402</DATAID><VERSIONNUM>1</VERSIONNUM><FIRST_NAME>ADF</FIRST_NAME><UN_LIST_TYPE>DRC</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>CDe.001</REFERENCE_NUMBER><LISTED_ON>2014-06-30</LISTED_ON>
+      <ENTITY_ALIAS><QUALITY>a.k.a.</QUALITY><ALIAS_NAME>Allied Democratic Forces</ALIAS_NAME></ENTITY_ALIAS>
+      <ENTITY_ALIAS><QUALITY>f.k.a.</QUALITY><ALIAS_NAME>Forces D&#233;mocratiques Alli&#xE9;es-Arm&#233;e Nationale de Lib&#233;ration de l&#8217;Ouganda</ALIAS_NAME></ENTITY_ALIAS>
+      <ENTITY_ALIAS><QUALITY>f.k.a.</QUALITY><ALIAS_NAME>ADF/NALU</ALIAS_NAME></ENTITY_ALIAS>
+      <ENTITY_ADDRESS><STATE_PROVINCE>North Kivu </STATE_PROVINCE><COUNTRY>Democratic Republic of the Congo</COUNTRY></ENTITY_ADDRESS>
+    </ENTITY>
+  </ENTITIES>
+</CONSOLIDATED_LIST>`;
+const JK_XML = `<?xml version="1.0" encoding="utf-8"?>
+<Designations xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <DateGenerated>03/11/2026</DateGenerated>
+  <Designation>
+    <LastUpdated>19/11/2025</LastUpdated><DateDesignated>19/11/2025</DateDesignated><UniqueID>CYB0098</UniqueID><OFSIGroupID>17218</OFSIGroupID>
+    <Names>
+      <Name><Name6>Media Land </Name6><NameType>Primary Name Variation</NameType></Name>
+      <Name><Name6>Media Land LLC</Name6><NameType>Primary Name</NameType></Name>
+      <Name><Name6>Medialand</Name6><NameType>Primary name variation</NameType></Name>
+    </Names>
+    <RegimeName>The Cyber (Sanctions) (EU Exit) Regulations 2020</RegimeName>
+    <IndividualEntityShip>Entity</IndividualEntityShip><DesignationSource>UK</DesignationSource>
+    <Addresses><Address><AddressLine6>St Petersburg</AddressLine6><AddressPostalCode>196006</AddressPostalCode><AddressCountry>Russia</AddressCountry></Address></Addresses>
+    <EntityDetails><Entity><BusinessRegistrationNumbers><BusinessRegistrationNumber>2536288610</BusinessRegistrationNumber></BusinessRegistrationNumbers></Entity></EntityDetails>
+  </Designation>
+  <Designation>
+    <DateDesignated>02/06/2014</DateDesignated><UniqueID>AQD0007</UniqueID>
+    <Names><Name><Name6>AL MOULATHAMOUN</Name6><NameType>Primary name</NameType></Name><Name><Name6>The Veiled</Name6><NameType>Alias</NameType></Name></Names>
+    <NonLatinNames><NonLatinName><NameNonLatinScript>الملثمون</NameNonLatinScript></NonLatinName></NonLatinNames>
+    <RegimeName>Isil (Da'esh) and Al-Qaeda (United Nations Sanctions) (EU Exit) Regulations 2019</RegimeName>
+    <IndividualEntityShip>Entity</IndividualEntityShip>
+    <Addresses><Address><AddressCountry>Algeria</AddressCountry></Address><Address><AddressCountry>Mali</AddressCountry></Address></Addresses>
+  </Designation>
+  <Designation><UniqueID>TST9001</UniqueID><Names><Name><Name1>Vardenis</Name1><Name6>IŠGALVOTAS</Name6><NameType>Primary name</NameType></Name></Names><IndividualEntityShip>Individual</IndividualEntityShip></Designation>
+  <Designation><UniqueID>TST9002</UniqueID><Names><Name><Name6>IŠGALVOTAS LAIVAS</Name6><NameType>Primary name</NameType></Name></Names><IndividualEntityShip>Ship</IndividualEntityShip></Designation>
+</Designations>`;
+const ES_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<export xmlns="http://eu.europa.ec/fpi/fsd/export" generationDate="2026-10-23T15:10:13.000+02:00" globalFileId="99999">
+  <sanctionEntity designationDetails="" unitedNationId="" euReferenceNumber="EU.9001.01" logicalId="900101">
+    <regulation regulationType="regulation" organisationType="council" publicationDate="2022-03-15" entryIntoForceDate="2022-03-16" numberTitle="2022/428 (OJ L87)" programme="UKR" logicalId="1">
+      <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32022R0428</publicationUrl>
+    </regulation>
+    <subjectType code="enterprise" classificationCode="E"/>
+    <nameAlias firstName="" middleName="" lastName="" wholeName="Išgalvota Prekybos Bendrovė &quot;Šiaurė&quot;" function="" gender="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="2"/>
+    <nameAlias firstName="" middleName="" lastName="" wholeName="ООО Северный путь" function="" gender="" title="" nameLanguage="RU" strong="true" regulationLanguage="en" logicalId="3"/>
+    <address city="Minsk" street="" poBox="" zipCode="" countryIso2Code="BY" countryDescription="BELARUS" logicalId="4"/>
+    <address city="" street="" poBox="" zipCode="" countryIso2Code="00" countryDescription="UNKNOWN" logicalId="5"/>
+    <identification diplomatic="false" number="190000001" identificationTypeCode="regnumber" identificationTypeDescription="Registration Number" countryIso2Code="BY" logicalId="6"/>
+  </sanctionEntity>
+  <sanctionEntity designationDetails="" euReferenceNumber="EU.9002.02" logicalId="900202">
+    <regulation programme="RUS" publicationDate="2023-02-25"><publicationUrl>javascript:alert(1)</publicationUrl></regulation>
+    <subjectType code="enterprise" classificationCode="E"/>
+    <nameAlias wholeName="Išgalvota energetikos įmonė" strong="true" logicalId="7"/>
+  </sanctionEntity>
+  <sanctionEntity euReferenceNumber="EU.9003.03" logicalId="900303">
+    <subjectType code="person" classificationCode="P"/>
+    <nameAlias firstName="Vardenis" lastName="Išgalvotas" wholeName="Vardenis Išgalvotas" strong="true" logicalId="8"/>
+  </sanctionEntity>
+</export>`;
+function sankIndeksas() {
+  return S.sukurkIndeksa({ ofac: S.skaityk("ofac", [OFAC_XML, OFAC_KITI_XML]).irasai, jt: S.skaityk("jt", [JT_XML]).irasai, jk: S.skaityk("jk", [JK_XML]).irasai, es: S.skaityk("es", [ES_XML]).irasai });
+}
+const SANK_DABAR = Date.parse("2026-11-08T12:00:00Z");
+function sankBusena(o) {
+  const b = { es: { atnaujinta: "2026-11-08T03:00:00Z", saltinioData: "2026-10-23", kiekis: 2, klaida: null },
+    jt: { atnaujinta: "2026-11-08T03:05:00Z", saltinioData: "2026-11-08", kiekis: 2, klaida: null },
+    ofac: { atnaujinta: "2026-11-08T03:10:00Z", saltinioData: "2026-11-06", kiekis: 3, klaida: null },
+    jk: { atnaujinta: "2026-11-08T03:15:00Z", saltinioData: "2026-11-03", kiekis: 2, klaida: null } };
+  return Object.assign(b, o || {});
+}
+const sankAts = (adresas, o) => S.atsakymas(o && "ix" in o ? o.ix : sankIndeksas(), (o && o.metodas) || "GET", adresas, o && "kilme" in o ? o.kilme : "https://g-procure.com", o && o.busena || sankBusena(), SANK_DABAR);
+const sankJson = r => JSON.parse(r.kunas);
+
+async function testaiSankcijuSkaitymas(){
+  grupe("Sankcijų sąrašai - failų skaitymas (tik subjektai)");
+  await testas("OFAC: tik subjektai (asmuo ir laivas praleidžiami), kiti pavadinimai, programos, šalys, tik registracijos ir licencijos kodai (ne el. paštas ir svetainė), OFAC įrašo nuoroda, data MM/DD/YYYY; abu failai - be dvigubų įrašų", () => {
+    const r = S.skaitykOFAC(OFAC_XML, "SDN");
+    lygu([r.irasai.length, r.asmenu, r.atmesta, r.saltinioData], [2, 1, 0, "2026-11-06"]);
+    const a = r.irasai[0];
+    lygu([a.s, a.id, a.v, a.a, a.p, a.c, a.k, a.nr, a.u, a.r], ["ofac", "16809", "AQUANIKA", ["AQUANIKA LLC", "RUSSKOYE VREMYA LLC", "OBSHCHESTVO S OGRANICHENNOI OTVETSTVENNOSTYU RUSSKOE VREMYA"],
+      ["UKRAINE-EO13661"], ["Russia"], ["1075247000036"], "16809", "https://sanctionssearch.ofac.treas.gov/Details.aspx?id=16809", "SDN"]);
+    lygu([r.irasai[1].c, r.irasai[1].k], [["Lithuania", "United Arab Emirates"], ["23302"]], "licencija - kodas, kelios šalys");
+    tiesa(!JSON.stringify(r).includes("IŠGALVOTAS") && !JSON.stringify(r).includes("aquanika.com"), "asmens, laivo, el. pašto ir svetainės nėra");
+    const v = S.skaityk("ofac", [OFAC_XML, OFAC_KITI_XML]);
+    lygu(v.irasai.map(x => x.id + ":" + x.r), ["16809:SDN", "49517:SDN", "17017:ne-SDN"], "tas pats uid abiejuose failuose - vienas SDN įrašas");
+  });
+  await testas("JT: tik ENTITY (INDIVIDUAL - suskaičiuojamas, neskaitomas), vardas, kiti pavadinimai su ženklų nuorodomis (&#233; &#xE9; &#8217;), tuščias kitas pavadinimas ir šalis praleidžiami, nuoroda, įtraukimo data, failo data", () => {
+    const r = S.skaitykJT(JT_XML);
+    lygu([r.irasai.length, r.asmenu, r.saltinioData], [2, 1, "2026-11-08"]);
+    lygu([r.irasai[0].v, r.irasai[0].a, r.irasai[0].c, r.irasai[0].nr, r.irasai[0].d, r.irasai[0].p], ["CONGOMET TRADING HOUSE", [], [], "CDe.004", "2007-03-29", ["DRC"]]);
+    lygu(r.irasai[1].a, ["Allied Democratic Forces", "Forces Démocratiques Alliées-Armée Nationale de Libération de l’Ouganda", "ADF/NALU"]);
+    lygu([r.irasai[1].c, r.irasai[1].u], [["Democratic Republic of the Congo"], null], "šalis be tarpų gale, nuorodos nėra (JT įrašų nuorodų neskelbia)");
+  });
+  await testas("JK: tik Entity (Individual ir Ship praleidžiami), pagrindinis pavadinimas pagal NameType (raidžių dydis nesvarbus), kiti ir nelotyniški pavadinimai, režimas, registracijos numeris, datos DD/MM/YYYY", () => {
+    const r = S.skaitykJK(JK_XML);
+    lygu([r.irasai.length, r.asmenu, r.saltinioData], [2, 1, "2026-11-03"]);
+    lygu([r.irasai[0].v, r.irasai[0].a, r.irasai[0].k, r.irasai[0].c, r.irasai[0].d, r.irasai[0].nr], ["Media Land LLC", ["Media Land", "Medialand"], ["2536288610"], ["Russia"], "2025-11-19", "CYB0098"]);
+    lygu([r.irasai[1].a, r.irasai[1].c], [["The Veiled", "الملثمون"], ["Algeria", "Mali"]]);
+    tiesa(!JSON.stringify(r).includes("IŠGALVOTAS"), "asmens ir laivo nėra");
+  });
+  await testas("ES (FSF XML 1.1 sandara): tik subjectType enterprise (person praleidžiamas), nameAlias wholeName (&quot;), programa, EUR-Lex nuoroda (kita - atmetama), šalis (UNKNOWN praleidžiama), identifikavimo numeris, ES nuorodos numeris, failo data", () => {
+    const r = S.skaitykES(ES_XML);
+    lygu([r.irasai.length, r.asmenu, r.saltinioData], [2, 1, "2026-10-23"]);
+    const a = r.irasai[0];
+    lygu([a.id, a.v, a.a, a.p, a.c, a.k, a.nr, a.d, a.u], ["900101", 'Išgalvota Prekybos Bendrovė "Šiaurė"', ["ООО Северный путь"], ["UKR"], ["BELARUS"], ["190000001"], "EU.9001.01", "2022-03-15", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32022R0428"]);
+    lygu([r.irasai[1].u, r.irasai[1].p], [null, ["RUS"]], "javascript: nuoroda atmesta");
+    tiesa(!JSON.stringify(r).includes("Vardenis"), "asmens nėra");
+  });
+  await testas("Nepatikimi duomenys: valdymo ženklai šalinami, ilgis ribojamas, netinkamas id - įrašas atmetamas; nežinomas formatas - klaida; pakartotinis tikrinimas (disko kopija) nieko nekeičia", () => {
+    const bl = `<sdnList><sdnEntry><uid>1</uid><lastName>BLOGAS\u0007 ‮VARDAS</lastName><sdnType>Entity</sdnType></sdnEntry>` +
+      `<sdnEntry><uid>2 OR 1=1</uid><lastName>X</lastName><sdnType>Entity</sdnType></sdnEntry>` +
+      `<sdnEntry><uid>3</uid><lastName>${"A".repeat(400)}</lastName><sdnType>Entity</sdnType></sdnEntry></sdnList>`;
+    const r = S.skaitykOFAC(bl, "SDN");
+    lygu([r.irasai.length, r.atmesta, r.irasai[0].v], [2, 1, "BLOGAS VARDAS"]);
+    tiesa(r.irasai[1].v.length <= 300 && /…$/.test(r.irasai[1].v), "kerpama iki 300 su daugtaškiu");
+    let klaida = null; try { S.skaityk("kitas", [""]); } catch (e) { klaida = e.message; }
+    lygu(klaida, "nezinomas-formatas");
+    const visi = S.skaityk("ofac", [OFAC_XML]).irasai.concat(S.skaitykJK(JK_XML).irasai, S.skaitykES(ES_XML).irasai);
+    lygu(visi.map(S.normalizuokIrasa), visi, "normalizuokIrasa - tas pats");
+    lygu([S.normalizuokIrasa({ s: "kitas", id: "1", v: "X" }), S.normalizuokIrasa(null), S.normalizuokIrasa({ s: "ofac", id: "1", v: "X", u: "https://blogas.lt/x" }).u], [null, null, null], "kitas sąrašas, ne objektas, svetima nuoroda");
+  });
+  await testas("Naujas sąrašas priimamas: bent mažiausias subjektų skaičius (JT 150, OFAC 5 000, JK 800, ES 500) ir ne mažiau 80 % ankstesnio", () => {
+    lygu([S.priimtinasKiekis("jt", 274, 0), S.priimtinasKiekis("jt", 149, 0), S.priimtinasKiekis("ofac", 10388, 10500), S.priimtinasKiekis("ofac", 8000, 10388),
+      S.priimtinasKiekis("jk", 1667, 1667), S.priimtinasKiekis("es", 499, 0), S.priimtinasKiekis("nera", 9999, 0)], [true, false, true, false, true, false, false]);
+  });
+}
+
+async function testaiSankcijuPaieska(){
+  grupe("Sankcijų sąrašai - pavadinimai ir galimi atitikmenys");
+  await testas("Pavadinimas: be diakritikų, kirilica lotyniškai, be teisinių formų (UAB, uždaroji akcinė bendrovė, ООО, LLC, Sp. z o.o., S.A.), kabučių ir jungiamųjų žodžių; inicialai sujungiami; tarimo raktas - tik nuo 5 raidžių", () => {
+    lygu(S.normVardas('Uždaroji akcinė bendrovė „Šviesos Žiedas“').zod, ["sviesos", "ziedas"]);
+    lygu(S.normVardas("ООО «Северный путь»").zod, ["severnyi", "put"]);
+    lygu(S.normVardas("Elmova Sp. z o.o.").zod, ["elmova"]);
+    lygu(S.normVardas("CECOEX, S.A.").zod, ["cecoex"]);
+    lygu(S.normVardas("Obshchestvo s ogranichennoi otvetstvennostyu Russkoe Vremya").zod, ["russkoe", "vremya"]);
+    lygu(S.normVardas("The Bank of Kunlun & Co").zod, ["bank", "kunlun"]);
+    lygu(S.normVardas("UAB").zod, ["uab"], "vien teisinė forma - lieka");
+    lygu([S.raktas("russkoye"), S.raktas("vremya"), S.raktas("abb"), S.raktas("viyp")], ["ruskoe", "vremia", "abb", "viyp"]);
+  });
+  await testas("Atitikmenys: žodžių tvarka, teisinė forma, transliteracija, kitas pavadinimas, kirilica, rašybos klaida - randami su balu ir „kodėl“", () => {
+    const ix = sankIndeksas();
+    const virsus = q => { const k = S.ieskok(ix, { pavadinimas: q, salis: null, kodas: null }); return k.length ? k[0].sarasas + ":" + k[0].pavadinimas + ":" + k[0].balas : null; };
+    lygu(virsus("Aquanika, LLC"), "ofac:AQUANIKA:100");
+    lygu(virsus("OOO Russkoe Vremia"), "ofac:AQUANIKA:100", "kitas pavadinimas, transliteracija");
+    lygu(virsus("LLC Land Media"), "jk:Media Land LLC:100", "žodžių tvarka");
+    lygu(virsus("ООО «Северный путь»"), "es:Išgalvota Prekybos Bendrovė \"Šiaurė\":100", "kirilica");
+    lygu(virsus("Aquanica"), "ofac:AQUANIKA:88", "rašybos klaida");
+    lygu(virsus("UAB Congomet trading"), "jt:CONGOMET TRADING HOUSE:87");
+    const k = S.ieskok(ix, { pavadinimas: "OOO Russkoe Vremia", salis: null, kodas: null })[0];
+    lygu([k.atitiko, k.kodel], ["RUSSKOYE VREMYA LLC", ["pavadinimas sutampa (neskaitant teisinės formos, skyrybos ir raidžių dydžio)", "pagal kitą sąraše nurodytą pavadinimą"]]);
+    lygu(S.ieskok(ix, { pavadinimas: "UAB Congomet trading", salis: null, kodas: null })[0].kodel, ["sutampa žodžiai: congomet, trading"]);
+  });
+  await testas("Ne atitikmenys: vien bendriniai žodžiai, vienas žodis ilgame pavadinime, trumpa santrumpa kitokia raidžių tvarka, mažiau nei pusė žodžių; fizinių asmenų įrašų paieškoje nėra", () => {
+    const ix = sankIndeksas(), n = q => S.ieskok(ix, { pavadinimas: q, salis: null, kodas: null }).length;
+    lygu([n("International Trading Company"), n("Congomet"), n("Forces"), n("AFD"), n("Media Baltija Energija Statyba"), n("Vardenis Išgalvotas"), n("IŠGALVOTAS LAIVAS")], [0, 0, 0, 0, 0, 0, 0]);
+    lygu(n("ADF"), 1, "trumpas pavadinimas - tik tiksliai");
+  });
+  await testas("Šalis ir kodas: sutampanti šalis +5, kita -10 su paaiškinimu, nežinoma - nelyginama; tiksliai sutampantis registracijos kodas - 100 ir priežastis; ribos - 10 viename sąraše, 30 iš viso", () => {
+    const ix = sankIndeksas();
+    const k = (q, s, kd) => S.ieskok(ix, { pavadinimas: q, salis: s, kodas: kd });
+    lygu([k("Aquanica", "RU")[0].balas, k("Aquanica", "LT")[0].balas, k("Aquanica", "ZZ")[0].balas], [93, 78, 88]);
+    tiesa(k("Aquanica", "LT")[0].kodel.includes("sąraše nurodyta kita šalis: Russia"), "kita šalis - paaiškinimas");
+    lygu([S.salisSutampa("AE", ["Lithuania", "United Arab Emirates"]), S.salisSutampa("LT", ["Russia"]), S.salisSutampa("LT", ["Atlantis"]), S.salisSutampa("ZZ", ["Russia"])], [true, false, null, null]);
+    const kd = k("Visai kitas pavadinimas", null, "1075-2470-00036");
+    lygu([kd.length, kd[0].id, kd[0].balas, kd[0].kodas, kd[0].kodel[0]], [1, "16809", 100, true, "sutampa registracijos ar mokesčių kodas"]);
+    const daug = []; for (let i = 0; i < 40; i++) daug.push({ s: "ofac", id: String(1000 + i), v: "Bandomoji Zuikio Bendrovė " + i, a: [], c: [], p: [], k: [], nr: null, d: null, u: null, r: "SDN" });
+    const daug2 = daug.map((x, i) => Object.assign({}, x, { s: "jk", id: "J" + i }));
+    const daug3 = daug.map((x, i) => Object.assign({}, x, { s: "jt", id: "T" + i }));
+    const daug4 = daug.map((x, i) => Object.assign({}, x, { s: "es", id: "E" + i }));
+    const r = S.ieskok(S.sukurkIndeksa({ ofac: daug, jk: daug2, jt: daug3, es: daug4 }), { pavadinimas: "Zuikio bendrovė", salis: null, kodas: null });
+    lygu([r.length, Math.max(...["ofac", "jk", "jt", "es"].map(id => r.filter(x => x.sarasas === id).length)) <= 10], [30, true], "iš viso 30, viename sąraše ne daugiau 10");
+    const r2 = S.ieskok(S.sukurkIndeksa({ ofac: daug, jk: daug2 }), { pavadinimas: "Zuikio bendrovė", salis: null, kodas: null });
+    lygu([r2.length, r2.filter(x => x.sarasas === "ofac").length, r2.filter(x => x.sarasas === "jk").length], [20, 10, 10], "po 10 viename sąraše");
+  });
+}
+
+async function testaiSankcijuAtsakymai(){
+  grupe("Sankcijų sąrašai - užklausos ir atsakymai");
+  await testas("Tikrinimas: kiekvieno sąrašo būsena (data, įrašų, kandidatų), kandidatai su sąrašu, pavadinimu, kitais, šalimis, programomis, nuoroda, balu ir „kodėl“; įvestis atsakyme neatkartojama; CORS tik G-Procure; nekešuojama", () => {
+    const r = sankAts("/api/sankcijos/tikrinti?pavadinimas=" + encodeURIComponent("UAB Aquanika Zuikis") + "&salis=RU");
+    lygu(r.status, 200);
+    const j = sankJson(r);
+    lygu(j.sarasai.map(s => s.id + ":" + s.busena + ":" + s.irasu + ":" + s.kandidatu + ":" + s.pasenusi), ["es:patikrinta:2:0:false", "jt:patikrinta:2:0:false", "ofac:patikrinta:3:1:false", "jk:patikrinta:2:0:false"]);
+    lygu([j.visiPatikrinti, j.kandidatai.length, j.kandidatai[0].pavadinimas, j.kandidatai[0].nuoroda, j.kandidatai[0].salys, j.slenkstis], [true, 1, "AQUANIKA", "https://sanctionssearch.ofac.treas.gov/Details.aspx?id=16809", ["Russia"], 70]);
+    tiesa(!/zuikis|Zuikis/i.test(r.kunas), "užklausa atsakyme neatkartojama");
+    lygu([r.antrastes["Access-Control-Allow-Origin"], r.antrastes["Cache-Control"], r.antrastes["X-Content-Type-Options"]], ["https://g-procure.com", "no-store", "nosniff"]);
+    lygu(sankAts("/api/sankcijos/tikrinti?pavadinimas=Aquanika", { kilme: "https://blogas.lt" }).antrastes["Access-Control-Allow-Origin"], undefined, "svetimai kilmei - be CORS");
+    lygu(sankAts("/api/sankcijos/tikrinti?pavadinimas=Aquanika", { kilme: "http://localhost:8000" }).antrastes["Access-Control-Allow-Origin"], "http://localhost:8000");
+  });
+  await testas("Nepasiektas ar neįkeltas sąrašas - „nepatikrinta“ su priežastimi ir data, NIEKADA „0 kandidatų“; nė vieno - 503; senesnė kaip 72 val. kopija - „pasenusi“; kandidatai tik iš patikrintų sąrašų", () => {
+    const b = sankBusena({ es: { atnaujinta: null, saltinioData: null, kiekis: 0, klaida: { laikas: "2026-11-08T03:00:00Z", rusis: "saltinis-500" } },
+      jk: { atnaujinta: "2026-11-01T03:00:00Z", saltinioData: "2026-10-30", kiekis: 2, klaida: { laikas: "2026-11-08T03:15:00Z", rusis: "rysys" } } });
+    const j = sankJson(sankAts("/api/sankcijos/tikrinti?pavadinimas=" + encodeURIComponent("ООО Северный путь"), { busena: b }));
+    const es = j.sarasai[0], jk = j.sarasai[3];
+    lygu([es.busena, es.kandidatu, es.irasu, es.klaida.rusis, es.klaida.tekstas], ["nepatikrinta", null, 0, "saltinis-500", "šaltinis atsakė klaida (HTTP 5xx)"]);
+    lygu([jk.busena, jk.pasenusi, jk.klaida.rusis, jk.atnaujinta], ["patikrinta", true, "rysys", "2026-11-01T03:00:00Z"], "pasenusi kopija su paskutinės klaidos priežastimi");
+    lygu([j.visiPatikrinti, j.kandidatai.length], [false, 0], "ES kandidato nėra - ES nepatikrintas");
+    const nera = { es: null, jt: null, ofac: null, jk: null };
+    const r = sankAts("/api/sankcijos/tikrinti?pavadinimas=Aquanika", { busena: nera, ix: null });
+    lygu([r.status, sankJson(r).sarasai.every(s => s.busena === "nepatikrinta" && s.klaida.rusis === "neikeltas")], [503, true]);
+    tiesa(/neįkelti/.test(sankJson(r).klaida), "503 paaiškinimas");
+    const bs = sankJson(sankAts("/api/sankcijos/busena", { busena: b }));
+    lygu(bs.sarasai.map(s => s.id + ":" + s.busena), ["es:nepatikrinta", "jt:patikrinta", "ofac:patikrinta", "jk:patikrinta"]);
+  });
+  await testas("Netinkama užklausa - 400 su parametru (pavadinimas per trumpas, be raidžių, per ilgas, du kartus, papildomas parametras; šalis ne ISO2; kodas su ženklais); kiti keliai 404, POST 405, OPTIONS 204; įvestis neatkartojama", () => {
+    const kodas = a => { const r = sankAts(a); return r.status + ":" + (r.status === 400 ? sankJson(r).parametras : ""); };
+    lygu([kodas("/api/sankcijos/tikrinti"), kodas("/api/sankcijos/tikrinti?pavadinimas=A"), kodas("/api/sankcijos/tikrinti?pavadinimas=12345"),
+      kodas("/api/sankcijos/tikrinti?pavadinimas=" + "a".repeat(201)), kodas("/api/sankcijos/tikrinti?pavadinimas=Aa&pavadinimas=Bb"),
+      kodas("/api/sankcijos/tikrinti?pavadinimas=Aquanika&x=1"), kodas("/api/sankcijos/tikrinti?pavadinimas=Aquanika&salis=lt"),
+      kodas("/api/sankcijos/tikrinti?pavadinimas=Aquanika&kodas=12%3B34567")],
+      ["400:pavadinimas", "400:pavadinimas", "400:pavadinimas", "400:pavadinimas", "400:pavadinimas", "400:pavadinimas", "400:salis", "400:kodas"]);
+    lygu([sankAts("/api/sankcijos/kita").status, sankAts("/api/sankcijos/tikrinti?pavadinimas=Aquanika", { metodas: "POST" }).status, sankAts("/api/sankcijos/tikrinti", { metodas: "OPTIONS" }).status], [404, 405, 204]);
+    tiesa(!sankAts("/api/sankcijos/tikrinti?pavadinimas=Aquanika&salis=%3Cb%3E").kunas.includes("<b>"), "įvestis neatkartojama");
+  });
+}
+
+async function testaiSankcijuSargai(){
+  grupe("Sankcijų paslauga - serverio failas, systemd ir nginx (sargai)");
+  const srv = await tekstas("sankcijos-serveris.js");
+  const vienetas = await tekstas("g-procure-sankcijos.service");
+  const ng = await tekstas("nginx-sankcijos.conf");
+  const lg = await tekstas("sankcijos-logika.js");
+  await testas("Serverio failas išnagrinėjamas (sintaksė), naudoja tik Node modulius ir sankcijos-logika.js, jokio kodo vykdymo", () => {
+    new Function("require", "module", "process", "__dirname", srv.replace(/^#!.*\n/, ""));
+    const req = [...srv.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)].map(m => m[1]);
+    lygu(req.filter(x => !/^node:/.test(x) && x !== "./sankcijos-logika.js"), [], "tik node: ir logika");
+    tiesa(!/child_process|\beval\s*\(|new Function|vm\.run/.test(srv), "jokio kodo vykdymo");
+  });
+  await testas("Sąrašų adresai - tik logikos SARASAI (oficialūs https šaltiniai); serveryje kitų adresų ir kito fetch nėra; be nukreipimų, su laiko ir dydžio riba", () => {
+    lygu([...srv.matchAll(/https:\/\/[^"'\s)]+/g)].map(m => m[0]).filter(u => !/^https:\/\/g-procure\.com\//.test(u)), []);
+    lygu([...srv.matchAll(/fetch\(\s*([A-Za-z_]+)/g)].map(m => m[1]), ["adresas"]);
+    tiesa(/for \(const a of cfg\.failai\) tekstai\.push\(await failasSuKartojimu\(a, cfg\)\)/.test(srv), "adresai - iš L.SARASAI");
+    tiesa(/redirect: "error"/.test(srv) && /AbortSignal\.timeout\(laikasS \* 1000\)/.test(srv) && /L\.MAX_FAILO_BAITU/.test(srv), "redirect, laikas, dydis");
+    const sal = S.SARASAI.map(x => x.failai).flat();
+    tiesa(sal.length === 5 && sal.every(u => /^https:\/\/(webgate\.ec\.europa\.eu\/fsd\/fsf\/|scsanctions\.un\.org\/|sanctionslistservice\.ofac\.treas\.gov\/|sanctionslist\.fcdo\.gov\.uk\/)/.test(u)), "tik oficialūs šaltiniai: " + sal.join(", "));
+    tiesa(/token=dG9rZW4tMjAxNw"/.test(lg) && /viešas: jį skelbia oficialus FSF RSS/.test(lg), "ES raktas - viešas (RSS ir data.europa.eu), taip ir parašyta");
+  });
+  await testas("Atnaujinimas: kiekvienas sąrašas atskirai, nepavykus lieka ankstesnis (kitas bandymas po 2 val.), priimamas tik patikrintas kiekis, kopija įrašoma atomiškai ir skaitant tikrinama", () => {
+    tiesa(/L\.priimtinasKiekis\(cfg\.id, r\.irasai\.length, x\.irasai \? x\.irasai\.length : 0\)/.test(srv), "kiekis prieš ankstesnį");
+    tiesa(/x\.kitas = Date\.now\(\) \+ PAKARTOTI_MS/.test(srv) && /const PAKARTOTI_MS = 2 \* 3600000;/.test(srv), "nepavykus - po 2 val.");
+    tiesa(/renameSync\(laikinas, kelias\)/.test(srv) && /L\.normalizuokIrasa\(j\)/.test(srv), "atominis įrašas, tikrinama skaitant");
+    const kl = srv.slice(srv.indexOf("} catch (e) {\n    const rusis = e instanceof SaltinioKlaida"), srv.indexOf("} finally {\n    x.vyksta = false;"));
+    tiesa(kl.length > 50 && !/irasai\s*=/.test(kl) && !/Object\.assign\(x, naujas/.test(kl), "klaidos atveju įrašai nekeičiami");
+  });
+  await testas("Užklausų turinys nežurnalizuojamas ir neįrašomas: žurnale - tik sąrašas, kiekiai ir klaidos rūšis; klausomasi tik 127.0.0.1; IP iš X-Real-IP tik vietinei jungčiai; antroji užklausų riba", () => {
+    const zurn = [...srv.matchAll(/zurnalas\([^;]*\)/g)].map(m => m[0]).join("\n");
+    tiesa(!/req\.|url|pavadinimas|searchParams|origin|ip\b/.test(zurn.replace(/function zurnalas\(ivykis, duomenys\)/, "")), "žurnale nėra užklausos: " + zurn);
+    tiesa(!/console\.(log|error|warn)\((?!JSON\.stringify\(Object\.assign\(\{ laikas)/.test(srv), "console - tik per zurnalas()");
+    tiesa(/listen\(PORTAS, "127\.0\.0\.1"\)/.test(srv) && /vietinis && typeof req\.headers\["x-real-ip"\]/.test(srv) && /RIBA_IP_MIN/.test(srv), "127.0.0.1, X-Real-IP, riba");
+    const http = srv.slice(srv.indexOf("const serveris = http.createServer"), srv.indexOf("serveris.requestTimeout"));
+    tiesa(http.length > 200 && !/fs\.|writeFile|createWriteStream/.test(http), "užklausų dalis į diską nerašo");
+    tiesa(/requestTimeout = \d+/.test(srv) && /headersTimeout = \d+/.test(srv), "laiko ribos");
+  });
+  await testas("systemd: DynamicUser, griežta izoliacija, be teisių ir be raktų; atminties ribos su atsarga; nginx: tik GET / HEAD / OPTIONS, riba, be prieigos žurnalo, į 127.0.0.1:3002 su X-Real-IP", () => {
+    ["DynamicUser=yes", "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "PrivateDevices=yes", "CapabilityBoundingSet=\n",
+     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX", "SystemCallFilter=@system-service", "StateDirectory=g-procure-sankcijos", "MemoryMax=", "MemoryHigh=", "Environment=PORT=3002"]
+      .forEach(e => tiesa(vienetas.indexOf(e) >= 0, "trūksta: " + e));
+    tiesa(!/LoadCredential|EnvironmentFile|KEY|TOKEN/i.test(vienetas), "raktų nėra");
+    const v8 = +(/--max-old-space-size=(\d+)/.exec(vienetas) || [])[1], cg = +(/\nMemoryMax=(\d+)M/.exec(vienetas) || [])[1];
+    tiesa(/\nExecStart=\/usr\/bin\/node --max-old-space-size=\d+ \/opt\/g-procure-sankcijos\/sankcijos-serveris\.js\n/.test(vienetas) && v8 > 0 && v8 + 300 <= cg, "ExecStart ir V8 riba žemiau systemd ribos");
+    ["location /api/sankcijos/", "limit_except GET HEAD OPTIONS { deny all; }", "limit_req zone=gp_sankcijos", "access_log off;", "proxy_pass http://127.0.0.1:3002;",
+     "proxy_set_header X-Real-IP $remote_addr;", "client_max_body_size 1k;", "zone=gp_sankcijos:10m rate=30r/m"].forEach(e => tiesa(ng.indexOf(e) >= 0, "nginx trūksta: " + e));
+  });
+}
+
 (async function(){
   try {
     if (!L) throw new Error("cvpis-logika.js neįsikėlė");
@@ -423,6 +747,11 @@ async function testaiSargai(){
     await testaiFiltrai();
     await testaiDokumentai();
     await testaiSargai();
+    if (!S) throw new Error("sankcijos-logika.js neįsikėlė");
+    await testaiSankcijuSkaitymas();
+    await testaiSankcijuPaieska();
+    await testaiSankcijuAtsakymai();
+    await testaiSankcijuSargai();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
