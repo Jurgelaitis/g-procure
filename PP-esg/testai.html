@@ -329,11 +329,14 @@ async function testaiStebejimas(){
 }
 
 /* Patikra 2026-11-04 (naujo naudotojo radiniai K1-K9, D1-D9, V1-V12, M1-M6; sprendimai - užduotyje). Serverio failas - tikras, tik express, process ir fetch pakeisti. */
-async function serverioFailas(fetchas, env){
+/* Sankcijų vertinimo instrukcija nuo 2026-11-08 - privačiame serverio faile (./uzduotys/_pp-esg-sankcijos.js); testuose - pakaitalas,
+   instrukcijos turinį tikrina privati šablonų patikra. be: true - privataus failo nėra. */
+const INSTR_PAKAITAS = { sistema: lang => "INSTRUKCIJA-" + lang };
+async function serverioFailas(fetchas, env, be){
   const src = await (await fetch("backend-pp-esg-routes.js")).text();
   const marsrutai = {}, router = { get: (k, ...f) => { marsrutai["GET " + k] = f[f.length - 1]; }, post: (k, ...f) => { marsrutai["POST " + k] = f[f.length - 1]; } }, modulis = { exports: {} };
   const express = { Router: () => router, json: () => (q, r, n) => n() };
-  const reikia = v => { if (v === "express") return express; throw new Error("nėra " + v); };
+  const reikia = v => { if (v === "express") return express; if (v === "./uzduotys/_pp-esg-sankcijos.js" && !be) return INSTR_PAKAITAS; throw new Error("nėra " + v); };
   const tylus = { error(){}, log(){} };
   new Function("require", "module", "process", "fetch", "console", src)(reikia, modulis, { env: env || { ANTHROPIC_API_KEY: "raktas" } }, fetchas, tylus);
   const kviesk = async (m, q) => { const res = { status(c){ this.kodas = c; return this; }, json(o){ this.o = o; return this; } }; await marsrutai[m](q, res); return res; };
@@ -616,7 +619,7 @@ async function testaiPatikra1104(){
     let r = await kv('{"level":"medium","factors":["Tiekėjas „Alfa", nes jis priklauso grupei"],"actions":["Patikrinti\neilutė"]}');
     lygu([r.kodas, r.o.level, r.o.factors.length], [undefined, "medium", 1], "pataisytas JSON: " + JSON.stringify(r.o));
     tiesa(uzkl.max_tokens >= 1500, "max_tokens: " + uzkl.max_tokens);
-    tiesa(/Sąrašų netikrinai/.test(uzkl.system) && /Necituok teisės aktų/.test(uzkl.system), "LT instrukcija");
+    lygu(uzkl.system, "INSTRUKCIJA-lt", "LT instrukcija - iš privataus serverio failo");
     r = await kv('Štai: {"level":"high","factors":[],"actions":[]} pabaiga');
     lygu([r.o.level], ["high"], "tekstas aplink JSON");
     r = await kv('{"level":"low","factors":["nutrūk');
@@ -625,7 +628,12 @@ async function testaiPatikra1104(){
     lygu([r.kodas, r.o.level], [502, undefined], "netinkamas lygis - klaida, ne „medium“");
     const svEn = await serverioFailas(anthropic('{"level":"low","factors":[],"actions":[]}', b => { uzkl = b; }));
     await svEn.kviesk("POST /sanctions-assessment", { body: { lang: "en", supplier: { name: "X" }, context: "" } });
-    tiesa(/did not check any list/.test(uzkl.system) && /Do not cite legal acts/.test(uzkl.system), "EN instrukcija");
+    lygu(uzkl.system, "INSTRUKCIJA-en", "EN instrukcija - iš privataus serverio failo");
+    tiesa(!/HARD RULES|GRIEŽTOS TAISYKLĖS|Sąrašų netikrinai|did not check any list/.test(svEn.src), "instrukcijos tekstas viešame serverio faile");
+    let kviesta = 0;
+    const svBe = await serverioFailas(async () => { kviesta++; return { ok: true, json: async () => ({}) }; }, null, true);
+    const rBe = await svBe.kviesk("POST /sanctions-assessment", { body: DI_UZKL });
+    lygu([rBe.kodas, kviesta], [503, 0], "be privataus instrukcijos failo - 503, į DI nesiunčiama");
     const kvietimai = [];
     const duom = async (u) => { kvietimai.push(String(u)); return { ok: true, json: async () => [{ selected_tenderer: "123;UAB A", total_value_of_part: "100", conclusion_date: "2023-01-01" }] }; };
     const sv = await serverioFailas(duom);
