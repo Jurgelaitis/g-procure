@@ -11,7 +11,7 @@
  *
  * Saugumas:
  *  - klausosi tik 127.0.0.1 (pasiekiama per nginx); veikia kaip systemd DynamicUser be teisių; raktų neturi;
- *  - sąrašų adresai - konstantos (užklausa į kitą adresą neįmanoma), TLS tikrinamas, be nukreipimų, laiko ir dydžio ribos;
+ *  - sąrašų adresai - konstantos, TLS tikrinamas, nukreipimas - tik vienas ir tik į sąrašo saugyklą (JT, OFAC), laiko ir dydžio ribos;
  *  - naujas sąrašas pakeičia senąjį tik visas ir patikrintas (subjektų kiekis) - nepavykus lieka ankstesnis;
  *  - užklausų turinys (tiekėjo pavadinimas, šalis, kodas) į žurnalą ir diską nerašomas - tik paleidimas, atnaujinimų
  *    suvestinės ir klaidų rūšys.
@@ -60,12 +60,22 @@ class SaltinioKlaida extends Error {
   constructor(rusis, kartoti) { super(rusis); this.rusis = rusis; this.kartoti = kartoti; }
 }
 
-async function failas(adresas, laikasS) {
+async function failas(adresas, laikasS, cfg) {
   let res;
+  const signalas = AbortSignal.timeout(laikasS * 1000);
+  const uzklausa = kur => fetch(kur, { method: "GET", redirect: "manual", signal: signalas,
+    headers: { "User-Agent": NAUDOTOJO_AGENTAS, "Accept": "application/xml, text/xml, */*" } });
   try {
-    res = await fetch(adresas, { method: "GET", redirect: "error", signal: AbortSignal.timeout(laikasS * 1000),
-      headers: { "User-Agent": NAUDOTOJO_AGENTAS, "Accept": "application/xml, text/xml, */*" } });
-  } catch (e) { throw new SaltinioKlaida("rysys", true); }
+    res = await uzklausa(adresas);
+    // JT ir OFAC - vienas nukreipimas į savo debesų saugyklą (tik sąrašo nukreipimai kompiuteris, žr. sankcijos-logika.js)
+    if (res.status >= 300 && res.status < 400) {
+      const kitas = L.leidziamasNukreipimas(cfg, res.headers.get("location"), adresas);
+      if (!kitas) throw new SaltinioKlaida("nukreipimas", false);
+      if (res.body) await res.body.cancel().catch(() => {});
+      res = await uzklausa(kitas);
+      if (res.status >= 300 && res.status < 400) throw new SaltinioKlaida("nukreipimas", false);
+    }
+  } catch (e) { if (e instanceof SaltinioKlaida) throw e; throw new SaltinioKlaida("rysys", true); }
   if (res.status >= 500 || res.status === 429) throw new SaltinioKlaida("saltinis-500", true);
   if (res.status !== 200) throw new SaltinioKlaida("saltinis-kita", false);
   const ilgis = Number(res.headers.get("content-length"));
@@ -86,7 +96,7 @@ async function failas(adresas, laikasS) {
 async function failasSuKartojimu(adresas, cfg) {
   // ES serveris kartais iš eilės atsako HTTP 500 - daugiau bandymų ir ilgesnės pauzės (30 s, 90 s, 270 s ...)
   for (let bandymas = 1; ; bandymas++) {
-    try { return await failas(adresas, cfg.laikasS); }
+    try { return await failas(adresas, cfg.laikasS, cfg); }
     catch (e) {
       if (!e.kartoti || bandymas >= cfg.bandymu) throw e;
       await miegok(Math.min(30000 * Math.pow(3, bandymas - 1), 900000));
@@ -155,13 +165,15 @@ async function atnaujink(cfg) {
   }
 }
 
-// Kas 10 min. tikrinama, kuriam sąrašui atėjo laikas; sąrašai atnaujinami po vieną (atmintis)
+// Kas 10 min. tikrinama, kuriam sąrašui atėjo laikas; sąrašai atnaujinami po vieną (atmintis). Nepatikimi (daugiau bandymų -
+// ES, kurio serveris gali valandomis atsakyti 500) - paskutiniai: jų pauzės (iki ~35 min.) kitų sąrašų nebestabdo (2026-11-08, diegiant).
+const EILE = L.SARASAI.slice().sort((a, b) => a.bandymu - b.bandymu);
 let vyksta = false;
 async function tikrinkLaika() {
   if (vyksta) return;
   vyksta = true;
   try {
-    for (const cfg of L.SARASAI) if (Date.now() >= SARASAI[cfg.id].kitas) await atnaujink(cfg);
+    for (const cfg of EILE) if (Date.now() >= SARASAI[cfg.id].kitas) await atnaujink(cfg);
   } finally { vyksta = false; }
 }
 

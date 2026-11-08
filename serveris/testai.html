@@ -703,11 +703,31 @@ async function testaiSankcijuSargai(){
     lygu(req.filter(x => !/^node:/.test(x) && x !== "./sankcijos-logika.js"), [], "tik node: ir logika");
     tiesa(!/child_process|\beval\s*\(|new Function|vm\.run/.test(srv), "jokio kodo vykdymo");
   });
-  await testas("Sąrašų adresai - tik logikos SARASAI (oficialūs https šaltiniai); serveryje kitų adresų ir kito fetch nėra; be nukreipimų, su laiko ir dydžio riba", () => {
+  await testas("Nukreipimų patikra (leidziamasNukreipimas): tik https, tik sąrašo kompiuteris (tikslus vardas), be naudotojo ir kito prievado; ES ir JK - nukreipimų nėra", () => {
+    const jt = S.SARASAI.find(c => c.id === "jt"), of = S.SARASAI.find(c => c.id === "ofac"), es = S.SARASAI.find(c => c.id === "es"), jk = S.SARASAI.find(c => c.id === "jk");
+    const b = jt.failai[0];
+    lygu(S.leidziamasNukreipimas(jt, "https://unsolprodfiles.blob.core.windows.net/publiclegacyxmlfiles/EN/x.xml?sig=a%2Bb", b), "https://unsolprodfiles.blob.core.windows.net/publiclegacyxmlfiles/EN/x.xml?sig=a%2Bb", "JT saugykla");
+    tiesa(S.leidziamasNukreipimas(of, "https://wc2h-sls-prod-public-published.s3.us-gov-west-1.amazonaws.com/Published/SDN.XML?X-Amz-Signature=1", of.failai[0]), "OFAC saugykla");
+    for (const v of ["http://unsolprodfiles.blob.core.windows.net/x", "https://unsolprodfiles.blob.core.windows.net.kitas.lt/x", "https://kitas.unsolprodfiles.blob.core.windows.net/x",
+      "https://user:pw@unsolprodfiles.blob.core.windows.net/x", "https://unsolprodfiles.blob.core.windows.net:8443/x", "https://evil.example/x", "/kitas/kelias", "", null, "javascript:alert(1)"])
+      lygu(S.leidziamasNukreipimas(jt, v, b), null, "atmesta: " + v);
+    lygu(S.leidziamasNukreipimas(jt, "https://wc2h-sls-prod-public-published.s3.us-gov-west-1.amazonaws.com/x", b), null, "kito sąrašo saugykla - ne");
+    lygu([S.leidziamasNukreipimas(es, "https://unsolprodfiles.blob.core.windows.net/x", es.failai[0]), S.leidziamasNukreipimas(jk, "https://unsolprodfiles.blob.core.windows.net/x", jk.failai[0])], [null, null], "ES ir JK - be nukreipimų");
+    tiesa(S.KLAIDU_RUSYS.nukreipimas, "klaidos rūšis žmogui");
+  });
+  await testas("Atnaujinimo eilė: nepatikimi sąrašai (daugiau bandymų - ES) - paskutiniai, kad jų pauzės nestabdytų JT, OFAC ir JK (2026-11-08: ES visą dieną atsakė 500, o pirmas eilėje stabdė kitus ~35 min.)", () => {
+    tiesa(/const EILE = L\.SARASAI\.slice\(\)\.sort\(\(a, b\) => a\.bandymu - b\.bandymu\);/.test(srv) && /for \(const cfg of EILE\) if \(Date\.now\(\) >= SARASAI\[cfg\.id\]\.kitas\) await atnaujink\(cfg\);/.test(srv), "eilė pagal bandymų skaičių");
+    const eile = S.SARASAI.slice().sort((a, b) => a.bandymu - b.bandymu).map(c => c.id);
+    lygu(eile[eile.length - 1], "es", "ES - paskutinis");
+    tiesa(S.SARASAI.find(c => c.id === "es").bandymu > Math.max(...S.SARASAI.filter(c => c.id !== "es").map(c => c.bandymu)), "ES bandymų daugiausia");
+  });
+  await testas("Sąrašų adresai - tik logikos SARASAI (oficialūs https šaltiniai); serveryje kitų adresų ir kito fetch nėra; nukreipimas - tik vienas ir tik į sąrašo saugyklą (JT, OFAC; 2026-11-08 diegiant abu atsakė 302), su laiko ir dydžio riba", () => {
     lygu([...srv.matchAll(/https:\/\/[^"'\s)]+/g)].map(m => m[0]).filter(u => !/^https:\/\/g-procure\.com\//.test(u)), []);
-    lygu([...srv.matchAll(/fetch\(\s*([A-Za-z_]+)/g)].map(m => m[1]), ["adresas"]);
-    tiesa(/for \(const a of cfg\.failai\) tekstai\.push\(await failasSuKartojimu\(a, cfg\)\)/.test(srv), "adresai - iš L.SARASAI");
-    tiesa(/redirect: "error"/.test(srv) && /AbortSignal\.timeout\(laikasS \* 1000\)/.test(srv) && /L\.MAX_FAILO_BAITU/.test(srv), "redirect, laikas, dydis");
+    lygu([...srv.matchAll(/fetch\(\s*([A-Za-z_]+)/g)].map(m => m[1]), ["kur"]);
+    tiesa(/for \(const a of cfg\.failai\) tekstai\.push\(await failasSuKartojimu\(a, cfg\)\)/.test(srv) && /await failas\(adresas, cfg\.laikasS, cfg\)/.test(srv), "adresai - iš L.SARASAI");
+    tiesa(/redirect: "manual"/.test(srv) && !/redirect: "follow"/.test(srv) && /AbortSignal\.timeout\(laikasS \* 1000\)/.test(srv) && /L\.MAX_FAILO_BAITU/.test(srv), "redirect, laikas, dydis");
+    tiesa(/const kitas = L\.leidziamasNukreipimas\(cfg, res\.headers\.get\("location"\), adresas\);\s*if \(!kitas\) throw new SaltinioKlaida\("nukreipimas", false\);/.test(srv), "nukreipimas - tik per logikos patikrą");
+    tiesa(/res = await uzklausa\(kitas\);\s*if \(res\.status >= 300 && res\.status < 400\) throw new SaltinioKlaida\("nukreipimas", false\);/.test(srv), "antras nukreipimas - klaida");
     const sal = S.SARASAI.map(x => x.failai).flat();
     tiesa(sal.length === 5 && sal.every(u => /^https:\/\/(webgate\.ec\.europa\.eu\/fsd\/fsf\/|scsanctions\.un\.org\/|sanctionslistservice\.ofac\.treas\.gov\/|sanctionslist\.fcdo\.gov\.uk\/)/.test(u)), "tik oficialūs šaltiniai: " + sal.join(", "));
     tiesa(/token=dG9rZW4tMjAxNw"/.test(lg) && /viešas: jį skelbia oficialus FSF RSS/.test(lg), "ES raktas - viešas (RSS ir data.europa.eu), taip ir parašyta");
