@@ -307,31 +307,28 @@ async function testaiInstrukcijaIrWordas(){
 
   await testas("Kvazisubtiekėjas - Metodikos 2.4 p. specialistas, atskirai nuo 8.3 p. priemones suteikiančių asmenų", async ()=>{
     pirkimas({});
-    const sp = W.systemPrompt();
-    tiesa(/Sąvoka \(Metodikos 2\.4 p\.\): kvazisubtiekėjas - specialistas/.test(sp), "nėra 2.4 p. sąvokos");
-    tiesa(/Tai NE tas pats, kas tretieji asmenys, tik suteikiantys priemones \(Metodikos 8\.3 p\.\)/.test(sp), "nėra 8.3 p. atskyrimo");
-    tiesa(!/Kvazisubtiekėjai \(Metodikos 8\.3 p\.\)/.test(sp), "liko klaidingas sutapatinimas su 8.3 p.");
+    // Instrukcijos sakinys („Sąvoka (...): ...“, „Tai NE tas pats ...“) - serverio šablone (privati patikra); čia - siunčiamos registro nuorodos
+    const D = W.aiSistemosDuomenys();
+    lygu([D.cit.met_kvazisubtiekejai, D.cit.met_treciuju_priemones], ["Metodikos 2.4 p.", "Metodikos 8.3 p."], "nuorodos");
+    tiesa(/^kvazisubtiekėjas - specialistas/i.test(D.apie.met_kvazisubtiekejai), "2.4 p. sąvoka: " + D.apie.met_kvazisubtiekejai);
+    tiesa(!W.systemPrompt && !/Sąvoka \(\$\{c\('met_kvazisubtiekejai'\)\}\)|Tai NE tas pats, kas tretieji asmenys/.test(await (await fetch("PP-QUAL.html", { cache: "no-store" })).text()), "instrukcijos modulyje nebėra");
   });
 
   await testas("AI instrukcija: PĮ - perkantysis subjektas LITGRID AB, VPĮ - perkančioji organizacija UAB EPSO-G", async ()=>{
     pirkimas({}, "sektorinis");
-    tiesa(/Perkantysis subjektas LITGRID AB/.test(W.systemPrompt()), "PĮ režime turi būti „Perkantysis subjektas LITGRID AB“");
+    tiesa(/Perkantysis subjektas LITGRID AB/.test(W.aiSistemosDuomenys().kontekstas) && W.aiSistemosDuomenys().pi === true, "PĮ režime turi būti „Perkantysis subjektas LITGRID AB“");
     pirkimas({}, "bendrasis");
-    const sp = W.systemPrompt();
-    tiesa(/Perkančioji organizacija UAB EPSO-G\. Taikomas Viešųjų pirkimų įstatymas/.test(sp) && !/LITGRID/.test(sp), "VPĮ režime turi būti „Perkančioji organizacija UAB EPSO-G“ ir jokio LITGRID");
+    const D = W.aiSistemosDuomenys();
+    tiesa(/Perkančioji organizacija UAB EPSO-G\. Taikomas Viešųjų pirkimų įstatymas/.test(D.kontekstas) && !/LITGRID/.test(D.kontekstas) && D.pi === false, "VPĮ režime turi būti „Perkančioji organizacija UAB EPSO-G“ ir jokio LITGRID");
+    tiesa(Object.values(D.cit).every(v => !/^PĮ /.test(v)), "VPĮ režimu - jokių PĮ nuorodų: " + Object.values(D.cit).filter(v => /^PĮ /.test(v)).join(", "));
   });
 
-  await testas("Kategorijos: B be „nemokumo nebuvimas“, D - vadybos sistemos, ne IEC", async ()=>{
-    const sp = W.systemPrompt();
-    const B = (sp.match(/^B\)[^\n]*/m) || [""])[0], D = (sp.match(/^D\)[^\n]*/m) || [""])[0];
-    tiesa(!/nemokumo nebuvimas/.test(B) && /pašalinimo pagrindas/.test(B), "B: " + B);
-    tiesa(/vadybos/.test(D) && !/ISO 9001\/14001\/45001\/27001, IEC/.test(D), "D: " + D);
-  });
+  // „Kategorijos: B be nemokumo, D - vadybos sistemos“ - nuo 2026-11-08 instrukcija serverio šablone, tikrina privati šablonų patikra (patikros)
 
   await testas("AI generavimo užklausa gauna Metodikos reikšmes (perimta, nesiųsta)", async ()=>{
     pirkimas({ value: 200000, objectType: "Darbai (statyba)", duration: "24 mėn. + 12 mėn. opcija" });
     let uzkl = null;
-    W.callAI = async p => { uzkl = p; throw new Error("sustabdyta testui"); };
+    W.callAI = async (u, d) => { uzkl = aiTxt(u, d); throw new Error("sustabdyta testui"); };
     try { await W.generateRequirements(); } catch (e) {}
     tiesa(uzkl, "užklausa nepagauta");
     tiesa(/Patirties vertinimo laikotarpis: 5 metai/.test(uzkl), "darbams turi būti 5 metai");
@@ -358,6 +355,9 @@ async function testaiInstrukcijaIrWordas(){
 /* 4 punktas (2026-09-23): audito būsenos, redakcijos, AI pasiūlymų peržiūra ir eksporto vartai.
    AI atsakymai imituojami (W.callAI arba GP_AI_PROXY.call) - į serverį nieko nesiunčiama. */
 const ORIG = {};
+/* DI užduotys serveryje (nuo 2026-11-08): callAI(užduotis, duomenys) - instrukcijos serverio šablonuose. Testams - užduoties pavadinimas ir visi
+   siunčiami duomenys vienu tekstu (pirkimo kontekstas, Metodikos reikšmės, teisės nuorodos, reikalavimai). */
+const aiTxt = (u, d) => [u].concat(Object.values(d || {}).map(v => typeof v === "string" ? v : Array.isArray(v) ? v.join("\n") : (v && typeof v === "object") ? Object.values(v).join("\n") : String(v))).join("\n");
 function rinkinys(sarasas, statusas){
   W.eval("PPQ.requirements = " + JSON.stringify(sarasas) + ".map(d => reikalavimas(d, " + JSON.stringify(statusas || "ai") + "));"
     + "PPQ.audit = naujasAuditas(); PPQ.generavimas = { nutruko:false }; PPQ.vertimoKlaida = ''; PPQ.ui.pagrindimasId = null;");
@@ -529,7 +529,7 @@ async function testaiAuditasIrEksportas(){
 
   await testas("Nutrūkęs AI atsakymas (stop_reason max_tokens): rinkinys - juodraštis, patikra - dalinė", async ()=>{
     W.callAI = ORIG.callAI;
-    W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, text: '[{"category":"C","text":"Tiekėjas turi panašios patirties."}]', raw: { stop_reason: "max_tokens" } });
+    W.GP_AI_PROXY.uzduotis = async () => ({ ok: true, status: 200, text: '[{"category":"C","text":"Tiekėjas turi panašios patirties."}]', raw: { stop_reason: "max_tokens" } });
     try {
       pirkimas({ value: 200000, objectType: "Prekės" });
       await W.generateRequirements();
@@ -537,7 +537,7 @@ async function testaiAuditasIrEksportas(){
       tiesa(W.eksportoPatikra().juod.some(j => /nutrūko/.test(j.lt)), "nutrūkęs rinkinys turi daryti dokumentą juodraščiu");
       await W.runFullAudit();
       lygu(W.auditoBusena(), "daline", "nutrūkęs AI auditas");
-    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+    } finally { W.GP_AI_PROXY.uzduotis = ORIG.proxy; }
   });
 
   await testas("AI pasiūlymai taikomi tik pažymėti, su istorija; „fix“ niekada netaikomas; du pasiūlymai vienam - tik vienas", async ()=>{
@@ -588,7 +588,7 @@ async function testaiAuditasIrEksportas(){
     tiesa(!blob, "tuščias vertimas - dokumentas neturi būti sugeneruotas");
     tiesa(/liko 1 iš 1 reikalavimo/.test(W.eval("PPQ.vertimoKlaida")), "nėra išliekančio pranešimo: " + W.eval("PPQ.vertimoKlaida"));
     let siusta = null;
-    W.callAI = async p => { siusta = p; return JSON.stringify([{ id, text_en: "The supplier has supplied similar goods.", evidence_en: "List of contracts" }]); };
+    W.callAI = async (u, d) => { siusta = aiTxt(u, d); return JSON.stringify([{ id, text_en: "The supplier has supplied similar goods.", evidence_en: "List of contracts" }]); };
     let t = await wordas("lten");
     tiesa(/The supplier has supplied similar goods\./.test(t), "nėra EN reikalavimo");
     // DI turinio žymėjimas (DI akto 50 str. 2 d., shared/di-zymejimas.js, 2026-10-05): požymiai faile ir matoma pastaba LT ir EN
@@ -600,7 +600,7 @@ async function testaiAuditasIrEksportas(){
     W.editReqText(id, "Tiekėjas yra patiekęs panašių prekių už 100 000 EUR.");
     tiesa(!W.vertimasGalioja(RQ(id)), "pakeitus tekstą vertimas turi pasenti");
     siusta = null;
-    W.callAI = async p => { siusta = p; return JSON.stringify([{ id, text_en: "The supplier has supplied similar goods worth EUR 100,000.", evidence_en: "List of contracts" }]); };
+    W.callAI = async (u, d) => { siusta = aiTxt(u, d); return JSON.stringify([{ id, text_en: "The supplier has supplied similar goods worth EUR 100,000.", evidence_en: "List of contracts" }]); };
     t = await wordas("lten");
     tiesa(siusta && /100 000 EUR/.test(siusta), "iš naujo turi būti verčiama nauja redakcija");
     tiesa(/worth EUR 100,000/.test(t) && !/similar goods\.\n/.test(t), "dokumente liko senos redakcijos vertimas");
@@ -743,11 +743,11 @@ async function testaiPenktas(){
     lygu(rasti(taisykles("Tiekėjas integruotas ne mažiau kaip 5 integracijomis."), "R7").length, 0, "prekės, integracijos");
     pirkimas({ value: 300000, objectType: "Paslaugos (kita)" });
     lygu(rasti(taisykles("Tiekėjas turi licenciją.", "A"), "R8").length, 0, "Paslaugos (kita)");
-    tiesa(!/VPT IT PIRKIMŲ GAIRĖS/.test(W.systemPrompt()), "ne IT pirkimo instrukcijoje liko IT gairės");
+    lygu(W.aiSistemosDuomenys().it, false, "ne IT pirkimo duomenyse - IT gairės netaikomos (instrukcijos dalį renka serverio šablonas)");
     pirkimas({ value: 300000, objectType: "Paslaugos (IT/IS)" });
     lygu(rasti(taisykles(SIST), "R7").length, 1, "IT/IS");
     lygu(rasti(taisykles("Tiekėjas turi licenciją.", "A"), "R8").length, 1, "IT/IS teisė verstis veikla");
-    tiesa(/VPT IT PIRKIMŲ GAIRĖS/.test(W.systemPrompt()), "IT pirkimo instrukcijoje nėra IT gairių");
+    lygu(W.aiSistemosDuomenys().it, true, "IT pirkimo duomenyse - IT gairės taikomos");
     W.eval("PPQ.settings.it = false");
     lygu(rasti(taisykles("Tiekėjas turi licenciją.", "A"), "R8").length, 0, "išjungus nustatymą");
   });
@@ -756,12 +756,14 @@ async function testaiPenktas(){
     pirkimas({ value: 300000, objectType: "Paslaugos (IT/IS)" });
     W.eval("PPQ.settings.green = true");
     let uzkl = null;
-    W.callAI = async p => { uzkl = p; throw new Error("sustabdyta testui"); };
+    W.callAI = async (u, d) => { uzkl = aiTxt(u, d); throw new Error("sustabdyta testui"); };
     try { await W.generateRequirements(); } catch (e) {}
     tiesa(uzkl && !/įtrauk E kategorijos reikalavimus/.test(uzkl), "liko „įtrauk E kategorijos reikalavimus“");
     tiesa(/Žaliųjų pirkimų tvarkos aprašo 4\.4\.3 p\./.test(uzkl) && /Žaliųjų pirkimų tvarkos aprašo 4\.3 p\./.test(uzkl) && /Metodikos 22 p\./.test(uzkl), "nėra Aprašo 4.3, 4.4.3 ar Metodikos 22 p.");
-    const sp = W.systemPrompt(), E = (sp.match(/^E\)[^\n]*/m) || [""])[0];
-    tiesa(/Metodikos 22 p\./.test(E) && /techninės specifikacijos dalis \(PĮ 2 str\. 27 d\.\)/.test(E), "E kategorija: " + E);
+    // E kategorijos sakinys - serverio šablone (privati patikra); čia - jam siunčiamos nuorodos ir žaliojo pirkimo požymis
+    const D = W.aiSistemosDuomenys();
+    lygu([D.cit.met_aplinkos_vadyba, D.cit.ts_savoka, D.citB.met_aplinkos_vadyba], ["Metodikos 22 p.", "PĮ 2 str. 27 d.", "Metodikos 22 p."], "E kategorijos nuorodos");
+    tiesa(/(^|\n)taip(\n|$)/.test(uzkl), "žaliasis pirkimas - „taip“ duomenyse");
   });
 
   await testas("Žaliasis pirkimas ir atsakymas „Neaktualu“ - prieštaravimą sprendžia žmogus prieš generavimą", async ()=>{
@@ -854,20 +856,20 @@ async function testaiKontekstas(){
     pirkimas(KONTEKSTAS);
     W.eval("PPQ.questions = [{ id:'q1', question:'Ar sistema kritinė?', type:'text', options:[], hint:'' }]; PPQ.answers = { q1: 'Taip, 24/7' };");
     let uzkl = null;
-    W.callAI = async p => { uzkl = p; throw new Error("sustabdyta testui"); };
+    W.callAI = async (u, d) => { uzkl = aiTxt(u, d); throw new Error("sustabdyta testui"); };
     try { await W.generateRequirements(); } catch (e) {}
     turi(uzkl, "generavimas");
     tiesa(/Ar sistema kritinė\? => Taip, 24\/7/.test(uzkl), "generavime nėra atsakymų");
     const [id] = rinkinys([{ category: "B", text: "Tiekėjo metinės pajamos ne mažesnės kaip 300 000 EUR.", evidence: "Finansinės ataskaitos", rationale: "Sutartis ilgalaikė" }]);
     W.eval("PPQ.questions = [{ id:'q1', question:'Ar sistema kritinė?', type:'text', options:[], hint:'' }]; PPQ.answers = { q1: 'Taip, 24/7' };");
     W.eval("rast(" + JSON.stringify(id) + ").patvirtinta = { rev:1, laikas:'', pagrindimas:'Objektas kritinis tinklo darbui' }; rast(" + JSON.stringify(id) + ").status = 'human';");
-    W.callAI = async p => { uzkl = p; return "[]"; };
+    W.callAI = async (u, d) => { uzkl = aiTxt(u, d); return "[]"; };
     await W.runFullAudit();
     turi(uzkl, "patikra");
     tiesa(/Ar sistema kritinė\? => Taip, 24\/7/.test(uzkl), "patikroje nėra atsakymų");
     tiesa(/Įrodymai: Finansinės ataskaitos/.test(uzkl) && /Pagrindimas rengiant: Sutartis ilgalaikė/.test(uzkl) && /Pirkimo vykdytojo pagrindimas: Objektas kritinis tinklo darbui/.test(uzkl), "patikroje nėra įrodymų ar pagrindimų");
     tiesa(/nežinomų duomenų nespėliok/i.test(uzkl), "patikra neįspėta nespėlioti");
-    W.callAI = async p => { uzkl = p; return "[]"; };
+    W.callAI = async (u, d) => { uzkl = aiTxt(u, d); return "[]"; };
     await W.generateQuestions();
     turi(uzkl, "klausimai");
   });
@@ -966,7 +968,7 @@ async function testaiBusenos(){
     pirkimas({ value: 100000, objectType: "Prekės" });
     pirmasZingsnis("info");
     const d = W.document;
-    W.GP_AI_PROXY.call = async () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Bandykite vėliau." });
+    W.GP_AI_PROXY.uzduotis = async () => ({ ok: false, status: 500, text: "", raw: null, error: "Serverio klaida (500). Bandykite vėliau." });
     try {
       await W.submitStep1();
       const b = d.getElementById("wizBusena");
@@ -976,12 +978,12 @@ async function testaiBusenos(){
       tiesa(!d.getElementById("step1-next").disabled, "mygtukas liko išjungtas");
       const k = b.querySelector("[data-gpb-kartoti]");
       tiesa(k, "nėra „Bandyti dar kartą“");
-      W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null,
+      W.GP_AI_PROXY.uzduotis = async () => ({ ok: true, status: 200, raw: {}, error: null,
         text: '[{"id":"q1","question":"Ar įranga kritinė?","type":"text","hint":""}]' });
       k.click();
       tiesa(await laukTol(() => W.eval("PPQ.step") === 2), "po „Bandyti dar kartą“ nepereita į 2 žingsnį");
       tiesa(d.getElementById("wizBusena").hidden, "pavykus klaidos būsena turi dingti");
-    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+    } finally { W.GP_AI_PROXY.uzduotis = ORIG.proxy; }
   });
 
   await testas("„Atšaukti“ nutraukia AI užklausą: signalas pasiekia serverio kvietimą, „Atšaukta - niekas nepakeista.“, duomenys nepakeisti", async ()=>{
@@ -990,7 +992,7 @@ async function testaiBusenos(){
     pirmasZingsnis("info");
     const d = W.document;
     let signalas = null;
-    W.GP_AI_PROXY.call = o => new Promise(res => {
+    W.GP_AI_PROXY.uzduotis = (u, d, o) => new Promise(res => {
       signalas = o.signal;
       if (o.signal) o.signal.addEventListener("abort", () => res({ ok: false, status: 0, text: "", raw: null, error: "signal is aborted without reason" }));
     });
@@ -1005,7 +1007,7 @@ async function testaiBusenos(){
       tiesa(signalas.aborted, "užklausa nenutraukta");
       tiesa(/Atšaukta - niekas nepakeista\./.test(b.textContent) && !b.classList.contains("gpb--klaida"), "po atšaukimo: " + b.textContent);
       lygu([W.eval("PPQ.step"), W.eval("PPQ.questions.length"), d.getElementById("step1-next").disabled], [1, 0, false], "po atšaukimo");
-    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+    } finally { W.GP_AI_PROXY.uzduotis = ORIG.proxy; }
   });
 
   await testas("TS konteksto ištraukimas: nepavykus - priežastis vietoje, laukai nepakeisti; pakartojus - „Kontekstas ištrauktas“ (anksčiau „AI analizuoja...“ likdavo)", async ()=>{
@@ -1014,14 +1016,14 @@ async function testaiBusenos(){
     pirmasZingsnis("upload");
     const d = W.document;
     d.getElementById("ts-paste").value = "Techninė specifikacija: pastotės įrangos priežiūra 24 mėn.";
-    W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null, text: "Atsiprašau, šio dokumento neanalizuosiu." });
+    W.GP_AI_PROXY.uzduotis = async () => ({ ok: true, status: 200, raw: {}, error: null, text: "Atsiprašau, šio dokumento neanalizuosiu." });
     try {
       await W.extractContextFromTs();
       const b = d.getElementById("extract-status");
       tiesa(b.classList.contains("gpb--klaida") && /Konteksto ištraukti nepavyko: nepavyko nuskaityti DI atsakymo/.test(b.textContent), "klaida: " + b.textContent);
       lygu(W.eval("PPQ.procurement.name"), "Senas pavadinimas", "laukai pakeisti nepavykus");
       tiesa(!d.getElementById("extract-btn").disabled, "mygtukas liko išjungtas");
-      W.GP_AI_PROXY.call = async () => ({ ok: true, status: 200, raw: {}, error: null,
+      W.GP_AI_PROXY.uzduotis = async () => ({ ok: true, status: 200, raw: {}, error: null,
         text: JSON.stringify({ name: "Pastotės įrangos priežiūra", objectType: "Paslaugos (kita)", value: 50000, duration: "24 mėn.", desc: "Priežiūra." }) });
       b.querySelector("[data-gpb-kartoti]").click();
       // tušti laukai užpildomi, ranka įvestas pavadinimas lieka (D3, 2026-10-26)
@@ -1029,7 +1031,7 @@ async function testaiBusenos(){
       lygu(W.eval("PPQ.procurement.name"), "Senas pavadinimas", "ranka įvestas pavadinimas perrašytas");
       const b2 = d.getElementById("extract-status");
       tiesa(b2 && b2.classList.contains("gpb--gerai") && /Kontekstas ištrauktas/.test(b2.textContent), "po pakartojimo: " + (b2 && b2.textContent));
-    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+    } finally { W.GP_AI_PROXY.uzduotis = ORIG.proxy; }
   });
 
   await testas("Patikra: nepavykus išskaidyti reikalavimų - „Nėra ryšio su serveriu“ audito lange, mygtukas vėl veikia", async ()=>{
@@ -1037,14 +1039,14 @@ async function testaiBusenos(){
     W.startEntry("check", "naujas");
     const d = W.document;
     d.getElementById("a-paste").value = "Tiekėjas per paskutinius 3 metus turi būti patiekęs panašių prekių.";
-    W.GP_AI_PROXY.call = async () => ({ ok: false, status: 0, text: "", raw: null, error: "Failed to fetch" });
+    W.GP_AI_PROXY.uzduotis = async () => ({ ok: false, status: 0, text: "", raw: null, error: "Failed to fetch" });
     try {
       await W.startAudit();
       const b = d.getElementById("audBusena");
       tiesa(b.classList.contains("gpb--klaida") && /Reikalavimų išskaidyti nepavyko: Nėra ryšio su serveriu/.test(b.textContent), "klaida: " + b.textContent);
       tiesa(!d.getElementById("aud-start").disabled, "mygtukas liko išjungtas");
       lygu(W.eval("PPQ.requirements.length"), 0, "reikalavimai");
-    } finally { W.GP_AI_PROXY.call = ORIG.proxy; }
+    } finally { W.GP_AI_PROXY.uzduotis = ORIG.proxy; }
   });
 
   await testas("Kas siunčiama į AI - pasakyta prie mygtuko: 1 žingsnyje ir audito lange, tekstas >= 4,5:1", async ()=>{
@@ -1205,7 +1207,7 @@ async function testaiPatikra1026(){
     W.eval("PPQ.entry = 'check'; PPQ.requirements = [];");
     const src = "1. Tiekėjas per paskutinius 5 metus yra įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 900 000 EUR be PVM.\n2. Tiekėjo vidutinės metinės pajamos ne mažesnės kaip 2 000 000 EUR.";
     W.eval("PPQ.sourceText = " + JSON.stringify(src));
-    W.callAI = async (prompt) => /PAŽODŽIUI/.test(prompt)
+    W.callAI = async (u) => u === "pp-qual.isskyrimas"
       ? JSON.stringify([{ category: "C", text: "Tiekėjas per paskutinius 5 metus yra įvykdęs bent vieną sutartį, kurios vertė ne mažesnė kaip 90 000 EUR be PVM." },
                         { category: "B", text: "Tiekėjo vidutinės metinės pajamos ne mažesnės kaip 2 000 000 EUR." },
                         { category: "D", text: "Tiekėjas taiko ISO 14001 aplinkos vadybos sistemą." }])
@@ -1299,7 +1301,7 @@ async function testaiPatikra1026(){
     tiesa(r9 && /1[\s\u00a0]333[\s\u00a0]333/.test(r9.fix) && /ilgalaikė/.test(r9.fix), "R9 pataisa: " + (r9 && r9.fix));
     lygu(W.parseEur("EUR 900 000 ir €900,000 bei 5 000 EUR"), [5000, 900000, 900000], "valiuta prieš sumą");
     lygu(W.tikraDiNuoroda("PĮ 47 str."), "", "neregistro nuoroda");
-    const ok = (W.systemPrompt().match(W.eval("NUOR_RE")) || [])[0];
+    const D0 = W.aiSistemosDuomenys(), ok = (Object.values(D0.cit).join("\n").match(W.eval("NUOR_RE")) || [])[0];
     tiesa(ok && W.tikraDiNuoroda(ok) === ok, "registro nuoroda: " + ok);
     lygu(W.tikraDiNuoroda("LAT praktika"), "LAT praktika", "be numerių");
     W.switchView("audit"); W.renderAuditInput();
@@ -1360,8 +1362,8 @@ async function testaiKortele(){
            [K_AMBER.pavadinimas, "Prekės", 240000, "12 mėn.", "", "amber-grid", "kortele", amber]);
       lygu([V.vykdytojas().pavadinimas, V.vykdytojas().statusas, V.document.getElementById("antraste-vykdytojas").textContent, V.document.getElementById("poraste-vykdytojas").textContent],
            ["AB Amber Grid", "Perkantysis subjektas", "Amber Grid", "AB Amber Grid"]);
-      const sp = V.systemPrompt();
-      tiesa(/Perkantysis subjektas AB Amber Grid\. Taikomas Pirkimų, atliekamų/.test(sp) && !/LITGRID/.test(sp), "AI instrukcija: " + (sp.match(/KONTEKSTAS:\s*\n[^\n]*/) || [""])[0]);
+      const sp = V.aiSistemosDuomenys().kontekstas;
+      tiesa(/^Perkantysis subjektas AB Amber Grid\. Taikomas Pirkimų, atliekamų/.test(sp) && !/LITGRID/.test(sp), "DI užduoties duomenys (kontekstas): " + sp);
       V.eval("PPQ.requirements = [{ id:'r1', category:'C', text:'Tiekėjas per paskutinius 3 metus yra patiekęs prekių už 100 000 EUR.', evidence:'Sąrašas', status:'human' }]");
       const w = await wordasIs(V);
       tiesa(/Perkantysis subjektas\s*AB Amber Grid/.test(w) && /modulį \(AB Amber Grid\)/.test(w) && !/LITGRID/.test(w), "Word: " + w.slice(0, 300));
@@ -1467,7 +1469,7 @@ async function testaiU2(){
   });
   await testas("1 žingsnis be privalomų laukų: netęsiama, AI nekviečiamas; santrauka su visais trūkumais formos tvarka ir nuorodomis, fokusas į ją; laukai pažymėti (aria-invalid, tekstas po lauku); nuoroda - į lauką; užpildžius - žymė dingsta", async () => {
     tuscias();
-    let kv = 0; const buvo = W.GP_AI_PROXY.call; W.GP_AI_PROXY.call = async () => { kv++; return { ok: false, error: "x" }; };
+    let kv = 0; const buvo = W.GP_AI_PROXY.uzduotis; W.GP_AI_PROXY.uzduotis = async () => { kv++; return { ok: false, error: "x" }; };
     try {
       $("step1-next").click(); await miegok(50);
       lygu([W.eval("PPQ.step"), kv], [1, 0], "netęsiama");
@@ -1484,7 +1486,7 @@ async function testaiU2(){
       lygu([$("p-name").hasAttribute("aria-invalid"), $("p-name").hasAttribute("data-gpv-id"), d().querySelectorAll("#wizard-body .gp-lauko-msg--klaida[data-gpv]").length], [false, false, 3], "užpildžius - žymė nuimta");
       ivesk("p-value", "-5"); $("step1-next").click(); await miegok(50);
       tiesa([...d().querySelectorAll("#wiz-klaidos a")].some(a => /Numatoma vertė - Įrašykite teigiamą/.test(a.textContent)) && kv === 0, "neigiama vertė - trūkumas");
-    } finally { W.GP_AI_PROXY.call = buvo; }
+    } finally { W.GP_AI_PROXY.uzduotis = buvo; }
   });
   await testas("„Liko užpildyti N“ prie mygtuko - lietuviška forma pagal skaičių, atnaujinama rašant; visi užpildyti - „Visi privalomi laukai užpildyti“", async () => {
     tuscias();
@@ -1515,7 +1517,7 @@ async function testaiU2(){
 (async function(){
   try {
     await modulis();
-    ORIG.callAI = W.callAI; ORIG.proxy = W.GP_AI_PROXY.call;
+    ORIG.callAI = W.callAI; ORIG.proxy = W.GP_AI_PROXY.uzduotis;
     await testaiKategorija();
     await testaiSkaiciuokle();
     await testaiAiJson();
