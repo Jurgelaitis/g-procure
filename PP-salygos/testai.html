@@ -9176,7 +9176,7 @@ async function testaiDokumentai(){
     const png = new W.File([new Uint8Array([137, 80, 78, 71])], "DocLogix_kortele.png", { type: "image/png" });
     const gauti = [];
     W.GP_PARAISKA.analizuoti = f => { gauti.push(f.name); return Promise.resolve({ map: { siulymai: [], info: [] }, pastabos: "" }); };
-    await W.dkPridek([png, KVPDF(), await docx(TS[0], TS[1]), PRIEDAS_PDF(), new W.File(["x"], "Kainos.xlsx")]);
+    await W.dkPridek([png, KVPDF(), await docx(TS[0], TS[1]), PRIEDAS_PDF(), new W.File(["x"], "Kainos.numbers")]);   // Excel tinka nuo 2026-11-08 (kainų lentelė)
     // leidimas DI skaityti šio pirkimo dokumentus (2026-10-19): kol neatsakyta - nieko nesiunčiama, klausimas virš sąrašo; „Taip“ - paraiška iškart
     await sl(200);
     const lk = D.querySelector("#dkDiLeidimas [data-di-leid-klausimas]");
@@ -9191,7 +9191,7 @@ async function testaiDokumentai(){
     const eil = [...D.querySelectorAll("#dkSarasas .dk-d")];
     lygu(eil.map(e => e.dataset.rusis), ["paraiska", "kvalifikacija", "ts", "priedas"], "rūšys");
     lygu(eil.map(e => e.querySelector("select").value), ["paraiska", "kvalifikacija", "ts", "priedas"], "pasirinkimas sąraše");
-    tiesa(/Praleista.*Kainos\.xlsx/.test(D.getElementById("dkBusena").textContent), "netinkamo failo priežastis: " + D.getElementById("dkBusena").textContent);
+    tiesa(/Praleista.*Kainos\.numbers/.test(D.getElementById("dkBusena").textContent), "netinkamo failo priežastis: " + D.getElementById("dkBusena").textContent);
     lygu([AI.kvietimai.length, gauti], [0, ["DocLogix_kortele.png"]], "į DI iš karto - tik paraiška (kiti dokumentai - ne)");
     lygu(W.eval("AI.saltiniai.map(s => s.vardas)"), ["Kvalifikaciniai reikalavimai.pdf", TS[0], "19. Aplinkosaugos reikalavimai.pdf"], "DI šaltiniai (be paraiškos)");
     lygu([W.eval("KVL.kandidatai.length"), W.eval("ZAL.kandidatai.length")], [1, 1], "perkeltos lentelės");
@@ -15052,7 +15052,8 @@ async function testaiEtapas1(){
   await testas("U2: „Ką verta įkelti“ - keturios eilutės su būsena ir nauda; įkėlus dokumentą jo eilutė pažymima iš karto (su failo vardu ir kas padaryta); neatpažintos rūšies failas - „Kas tai per dokumentas?“ su paaiškinimu; pakeitus rūšį - eilutė pasižymi", async () => {
     await modulis();
     const ks = () => D.getElementById("dkKontrolinis"), e = pav => ks().querySelector('[data-dk-ks="' + pav + '"]');
-    const pav = ["Pirkimo paraiška", "Techninė specifikacija", "Kvalifikacijos reikalavimai", "Žalieji reikalavimai", "Vertinimo metodika"];   // metodika - nuo 2026-10-20 (D3)
+    // metodika - nuo 2026-10-20 (D3), kiekių žiniaraštis - nuo 2026-11-08 (kainų lentelė)
+    const pav = ["Pirkimo paraiška", "Techninė specifikacija", "Kvalifikacijos reikalavimai", "Žalieji reikalavimai", "Kiekių žiniaraštis", "Vertinimo metodika"];
     lygu([...ks().querySelectorAll("[data-dk-ks]")].map(x => x.dataset.dkKs), pav, "eilutės");
     tiesa(pav.every(p => e(p).querySelector(".dk-ks-b").textContent === "nėra" && / - \S/.test(e1Tx(e(p)))), "pradžioje - „nėra“ ir nauda");
     tiesa(/^Ką verta įkelti/.test(e1Tx(ks())) && ks().getAttribute("aria-labelledby") === "dkKsH", "antraštė");
@@ -16563,6 +16564,246 @@ async function testaiAmberRanga(){
     lygu(blogi, [], "svetimų duomenų nėra");
   });
 }
+/* Kainų lentelė iš kiekių žiniaraščio (2026-11-08, naudotojo užduotis - kainų lentelė iš Excel; sprendimas „Abu būdai, siūlo pagal kiekį“):
+   kainu-lentele.js atpažinimas (tikrų CVP IS failų sandara - sintetiniai pavyzdžiai), 1 žingsnio rūšis, 2 žingsnio kortelė, pasiūlymo forma,
+   Excel priedas, kliūtys (užpildyti įkainiai, paslėpti duomenys), dalys, dvikalbė forma, juodraštis. */
+const KAIN_ZIN = (n, o = {}) => {
+  const a = [["SPS 10 priedas. Darbų žiniaraštis"], [], ["Nr.", "Pavadinimas ir techninės charakteristikos", "Mato vnt.", o.kiekioAnt || "Preliminarus kiekis",
+    "Vieneto kaina, Eur be PVM (pildo Tiekėjas)", "Suma, Eur be PVM"].concat(o.papild ? ["Gamintojas ir modelis (nurodo Tiekėjas)"] : [])];
+  for (let i = 1; i <= n; i++) a.push([i, (o.pav || "Pozicija ") + i, o.vnt || (i % 2 ? "vnt." : "kompl."), i * 2, o.kainos ? 100 * i : null, { f: `D${i + 3}*E${i + 3}` }].concat(o.papild ? [""] : []));
+  a.push(["", "Iš viso, Eur be PVM", "", "", "", { f: `SUM(F4:F${n + 3})` }]);
+  return a;
+};
+async function kainXlsx(lapai, o){
+  await W.kainBiblioteka();
+  const X = W.XLSX, wb = X.utils.book_new();
+  lapai.forEach(([v, aoa, lo]) => {
+    const ws = X.utils.aoa_to_sheet(aoa);
+    if (lo && lo.eilutes) ws["!rows"] = lo.eilutes.map(h => h ? { hidden: true } : {});
+    X.utils.book_append_sheet(wb, ws, v);
+  });
+  if (o && o.paslepti) wb.Workbook = { Sheets: lapai.map(([v]) => ({ Hidden: o.paslepti.includes(v) ? 1 : 0 })) };
+  return new Uint8Array(X.write(wb, { type: "array", bookType: "xlsx" }));
+}
+const kainFailas = async (vardas, lapai, o) => new W.File([await kainXlsx(lapai, o)], vardas);
+/* Pasiūlymo formos kainų lentelė sugeneruotame faile: [[langelių tekstai]] ir raudonų atkarpų tekstas */
+function kainFormosLentele(xml){
+  const d = new W.DOMParser().parseFromString(xml, "application/xml");
+  const txt = el => Array.from(el.getElementsByTagNameNS(NSW, "t")).map(t => t.textContent).join("");
+  return Array.from(d.getElementsByTagNameNS(NSW, "tbl")).filter(t => /Matavimo vienet/.test(txt(t.getElementsByTagNameNS(NSW, "tr")[0] || t)) && /kiek/i.test(txt(t)))
+    .map(t => ({ eil: Array.from(t.getElementsByTagNameNS(NSW, "tr")).map(tr => Array.from(tr.getElementsByTagNameNS(NSW, "tc")).map(tc => txt(tc).trim())),
+      raud: Array.from(t.getElementsByTagNameNS(NSW, "r")).filter(r => Array.from(r.getElementsByTagNameNS(NSW, "color")).some(c => /^FF0000$/i.test(c.getAttribute("w:val") || ""))).map(txt).join("") }));
+}
+async function testaiKainuLentele(){
+  dabartine = grupe("Kainų lentelė iš kiekių žiniaraščio (2026-11-08): Excel atpažinimas, kortelė, pasiūlymo forma ir Excel priedas");
+  await testas("Atpažinimas (kainu-lentele.js): žiniaraštis su sumų eilute ir formulėmis, kiekio rūšis, siūlomas būdas (iki 20 - forma), tiekėjo stulpelis, užpildyti įkainiai, grupės, dalys lapais ir stulpeliu, paslėpti lapai ir eilutės; ne kainų lentelės - rizikų planas, klasifikatorius, funkcijų sąrašas, mokėjimo etapai", async () => {
+    await modulis();
+    const L = W.GP_KAINU_LENTELE;
+    const sk = async (lapai, o) => L.skaitykXlsx(await kainXlsx(lapai, o), "f.xlsx");
+    let r = await sk([["Darbų žiniaraštis", KAIN_ZIN(6)]]);
+    let M = r.kandidatai[0];
+    lygu([r.kandidatai.length, L.pozicijos(M).length, M.eilutes[0].pav, M.eilutes[0].vnt, M.eilutes[1].kiekis, M.kiekioRusis, M.kainos.uzpildyta, M.kainos.formules, L.rekomenduojamasBudas(M), M.tiekejo, M.papildomi],
+      [1, 6, "Pozicija 1", "vnt.", "4", "preliminarus", 0, 6, "forma", [], []], "žiniaraštis");
+    tiesa(/pozicijų 6 - ne daugiau kaip 20/.test(L.budoPriezastis(M)), "priežastis: " + L.budoPriezastis(M));
+    M = (await sk([["L", KAIN_ZIN(25, { kiekioAnt: "Maksimalus kiekis" })]])).kandidatai[0];
+    lygu([L.pozicijos(M).length, M.kiekioRusis, L.rekomenduojamasBudas(M), L.kliutysPriedui(M)], [25, "maksimalus", "priedas", []], "25 pozicijos - priedas");
+    tiesa(/pozicijų 25 - daugiau nei 20/.test(L.budoPriezastis(M)), "priežastis 25");
+    M = (await sk([["L", KAIN_ZIN(4, { papild: true })]])).kandidatai[0];
+    lygu([M.tiekejo, L.rekomenduojamasBudas(M)], [["Gamintojas ir modelis (nurodo Tiekėjas)"], "priedas"], "tiekėjo stulpelis");
+    M = (await sk([["L", KAIN_ZIN(3, { kainos: true })]])).kandidatai[0];
+    lygu(M.kainos.uzpildyta, 3, "užpildyti įkainiai");
+    tiesa(L.kliutysPriedui(M).some(x => /užpildyti įkainiai ar kainos \(3 lang\./.test(x) && /numatoma vertė/.test(x)), "kliūtis: " + L.kliutysPriedui(M).join(" | "));
+    // grupės antraštės (be kiekio ir vienetų) - tik prieš pozicijas
+    M = (await sk([["L", [["Nr.", "Pavadinimas", "Mato vnt.", "Kiekis"], ["", "Elektriniai įrankiai", "", ""], [1, "Suktuvas", "vnt.", 8], [2, "Gręžtuvas", "vnt.", 4], ["", "Pastabos", "", ""]]]])).kandidatai[0];
+    lygu(M.eilutes.map(e => [e.pav, e.grupe]), [["Elektriniai įrankiai", true], ["Suktuvas", false], ["Gręžtuvas", false]], "grupės");
+    // sumų eilutė - lentelės galas: po jos esančios eilutės (kita lentelė, pastabos) - ne pozicijos
+    M = (await sk([["L", [["Nr.", "Pavadinimas", "Mato vnt.", "Kiekis"], [1, "Suktuvas", "vnt.", 8], [2, "Gręžtuvas", "vnt.", 4], ["", "Iš viso, Eur be PVM", "", ""], [1, "Nuolaida", "%", 5]]]])).kandidatai[0];
+    lygu(M.eilutes.map(e => e.pav), ["Suktuvas", "Gręžtuvas"], "sumų eilutė");
+    // dalys - lapais „1 dalis“, „2 dalis“ (sujungiama) ir stulpeliu „Dalis“
+    r = await sk([["1 dalis", KAIN_ZIN(2)], ["2 dalis", KAIN_ZIN(3, { pav: "Antra " })]]);
+    M = r.kandidatai[0];
+    lygu([M.sujungta, M.dalys, M.eilutes.map(e => e.dalis), r.kandidatai.length], [true, [1, 2], [1, 1, 2, 2, 2], 3], "dalys lapais");
+    M = (await sk([["L", [["Eil. Nr.", "Dalis", "Prekė", "Mato vnt.", "Kiekis"], [1, "I", "A", "vnt.", 1], [2, "II", "B", "vnt.", 2], [3, "2 dalis", "C", "vnt.", 3]]]])).kandidatai[0];
+    lygu(M.eilutes.map(e => e.dalis), [1, 2, 2], "dalys stulpeliu");
+    lygu(["II", "2 dalis", "Lot 3", "Dalis IV", "x"].map(L.dalisIs), [2, 2, 3, 4, null], "dalių numeriai");
+    // paslėptas lapas ir paslėpta eilutė su duomenimis - kliūtis priedui
+    M = (await sk([["L", KAIN_ZIN(3)], ["Pagalbinis", [["Planuojama kaina"], [12500]]]], { paslepti: ["Pagalbinis"] })).kandidatai[0];
+    lygu(M.paslepta.lapai, ["Pagalbinis"], "paslėptas lapas");
+    tiesa(L.kliutysPriedui(M).some(x => /paslėpti lapai su duomenimis \(Pagalbinis\)/.test(x)), "paslėpto lapo kliūtis");
+    M = (await sk([["L", KAIN_ZIN(3), { eilutes: [false, false, false, false, true] }]])).kandidatai[0];
+    tiesa(M.paslepta.eilutes >= 1 && L.kliutysPriedui(M).some(x => /paslėptos eilutės/.test(x)), "paslėpta eilutė: " + JSON.stringify(M.paslepta));
+    // kainų lentelė be kiekio („Draudimo rizikos“ - pavadinimas po eilės numerio; „Draudimo suma“ - parametras, ne kaina)
+    M = (await sk([["L", [["Eil. Nr.", "Draudimo rizikos", "Draudimo suma, Eur", "Kaina (12 mėn.), Eur be PVM"], [1, "Medicininės išlaidos", 100000, null], [2, "Bagažas", 1000, null]]]])).kandidatai[0];
+    lygu([L.pozicijos(M).length, M.beKiekio, M.papildomi, M.kainos.uzpildyta, L.rekomenduojamasBudas(M)], [2, true, ["Draudimo suma, Eur"], 0, "priedas"], "be kiekio");
+    // ne kainų lentelės
+    for (const [ka, aoa] of [["rizikų planas", [["Rizikos numeris", "Rizikos pavadinimas", "Tikimybė", "Poveikis"], [1, "Vėlavimas", 3, 4]]],
+        ["klasifikatorius", [["Eil. Nr.", "Turto grupės pavadinimas", "Standartinis turto vienetas"], ["I.1", "Licencijos", "Licencija"]]],
+        ["funkcijų sąrašas", [["Nr.", "Funkcinio reikalavimo aprašymas", "Kiekis"], [1, "Turi būti galimybė", "pagal poreikį"], [2, "Kita", "taip"]]],
+        ["mokėjimo etapai", [["Etapo Nr.", "Aprašymas", "Procentas nuo kainos"], [1, "Projektas", "30%"]]]])
+      lygu((await sk([["L", aoa]])).kandidatai.length, 0, ka);
+    // Word lentelė (GP_DOK blokai su langeliais) - tik formai
+    const B = [["Eil. Nr.", "Pirkimo objektas", "Mato vnt.", "Kiekis"], ["1.", "Kabelis", "m", "1 200"], ["2.", "Movos", "vnt.", "4"]].map((c, i) => ({ loc: { table: 0, row: i + 1 }, text: c.join(" | "), cells: c }));
+    M = L.isBloku(B, "TS.docx").kandidatai[0];
+    lygu([M.xlsx, L.pozicijos(M).length, M.eilutes[0].kiekis, L.rekomenduojamasBudas(M)], [false, 2, "1 200", "forma"], "Word lentelė");
+    tiesa(L.kliutysPriedui(M).some(x => /tik Excel failas/.test(x)), "Word lentelė - ne priedas");
+  });
+
+  await testas("1 žingsnis: Excel - rūšis „Kiekių žiniaraštis / kainų lentelė“ pagal lentelę ir vardą (rizikų planas - kitas dokumentas), į DI nesiunčiama, „Ką verta įkelti“; rūšį pakeitus ranka - kortelės kandidatas; pašalinus - nebėra", async () => {
+    await modulis();
+    await W.dkPridek([await kainFailas("SPS 10 priedas. Darbų žiniaraštis.xlsx", [["Darbų žiniaraštis", KAIN_ZIN(6)]]),
+      await kainFailas("SS 15. Rizikų valdymo planas.xlsx", [["L", KAIN_ZIN(4)]]), await kainFailas("Nežinomas.xlsx", [["L", [["a", "b"], [1, 2]]]])]);
+    const eil = [...D.querySelectorAll("#dkSarasas .dk-d")];
+    lygu(eil.map(e => e.dataset.rusis), ["kainos", "kita", "kita"], "rūšys");
+    const t0 = eil[0].textContent.replace(/\s+/g, " ");
+    tiesa(/Kainų lentelė: 6 pozicijos \(Darbų žiniaraštis\)/.test(t0) && /Siūloma: pozicijos įrašomos į pasiūlymo formos kainų lentelę/.test(t0) && /į DI nesiunčiamas/.test(t0) && !/Teksto nerasta/.test(t0), "poveikis: " + t0);
+    tiesa(/Jei tai kiekių žiniaraštis ar kainų lentelė, pasirinkite rūšį/.test(eil[1].textContent) && /pozicijų lentelės .* jame neradome/.test(eil[2].textContent.replace(/\s+/g, " ")), "kitų failų paaiškinimai");
+    lygu([AI.kvietimai.length, W.eval("AI.saltiniai.length"), W.eval("KAIN.kandidatai.length")], [0, 0, 1], "į DI nesiunčiama, kandidatas");
+    tiesa(/įkelta\s*Kiekių žiniaraštis.*6 poz\./.test(D.getElementById("dkKontrolinis").textContent.replace(/\s+/g, " ")), "kontrolinis sąrašas: " + D.getElementById("dkKontrolinis").textContent.replace(/\s+/g, " ").slice(-300));
+    const sel = eil[1].querySelector("select"); sel.value = "kainos"; sel.dispatchEvent(new W.Event("change", { bubbles: true }));
+    await kol(() => W.eval("KAIN.kandidatai.length") === 2, "rūšis pakeista ranka");
+    D.querySelector(`[data-dk-salinti="${eil[0].dataset.dk}"]`).click();
+    await kol(() => W.eval("KAIN.kandidatai.length") === 1 && W.eval("KAIN.kandidatai[0].failas") === "SS 15. Rizikų valdymo planas.xlsx", "pašalinus");
+  });
+
+  const dok = docs => Object.entries(docs).find(([k]) => /_PASIULYMAS$/.test(k));
+  await testas("Generavimas (S-AK LT, darbai): pozicijos pasiūlymo formos kainų lentelėje, antraštėje - „Preliminarus kiekis Darbų atlikimo laikotarpiu“, įkainis ir kaina tušti, sumų eilutės lieka, „Koreguojama pagal poreikį“ pašalinta; kortelė, „Išspręsta automatiškai“ ir 4 žingsnis", async () => {
+    const docs = await generuokSu({ budas: "S-AK", tipas: "darbai", po2: async () => { await W.dkPridek([await kainFailas("Darbų žiniaraštis.xlsx", [["Darbų žiniaraštis", KAIN_ZIN(6)]])]); },
+      pries: async () => {
+        const c = D.getElementById(W.lkId("kain|KAIN")), t = c.textContent.replace(/\s+/g, " ");
+        tiesa(/6 pozicijos/.test(t) && /Siūloma \(nepatvirtinta\) pozicijų 6 - ne daugiau kaip 20/.test(t) && /pagal Excel antraštę „Preliminarus kiekis“/.test(t), "kortelė: " + t.slice(0, 400));
+        lygu([c.querySelectorAll(".kain-lent tbody tr").length, c.querySelector("[data-lk-patv=KAIN]") ? "yra" : "nėra"], [6, "yra"], "peržiūra ir patvirtinimas");
+        tiesa(W.__K.automatika.some(a => /Koreguojama/.test(a.kas) && /nurodymas pašalinamas/.test(a.veiksmas)), "automatika");
+        c.querySelector("[data-lk-patv=KAIN]").click();
+      } });
+    const [k, x] = dok(docs);
+    lygu(k, "AK_LT_PASIULYMAS", "forma");
+    const T = kainFormosLentele(x.xml);
+    lygu(T.length, 1, "viena kainų lentelė");
+    const e = T[0].eil;
+    lygu(e.length, 1 + 6 + 3, "eilutės: antraštė, 6 pozicijos, 3 sumų");
+    lygu(e[1], ["1.", "Pozicija 1", "vnt.", "2", "", ""], "1 pozicija");
+    lygu(e[6], ["6.", "Pozicija 6", "kompl.", "12", "", ""], "6 pozicija");
+    tiesa(/^Pasiūlymo kaina Eur be PVM/.test(e[7][0]) && /^PVM/.test(e[8][0]) && /^Pasiūlymo kaina Eur su PVM/.test(e[9][0]), "sumų eilutės");
+    tiesa(/^Preliminarus kiekis Darbų atlikimo laikotarpiu/.test(e[0][3]) && !/įrašyti|Maksimalus|Konkretus/.test(e[0][3]), "antraštė: " + e[0][3]);
+    lygu(T[0].raud, "", "raudonų atkarpų lentelėje nėra");
+    tiesa(!x.pars.some(p => /Koreguojama pagal poreikį/.test(p)), "nurodymas pašalintas");
+    tiesa(!W.__R.some(r => r.d.trumpas === "IKELTA_KAINOS"), "Excel priedo pakete nėra");
+    const p4 = D.getElementById("kainuLentelePatikra");
+    tiesa(p4 && p4.classList.contains("ok") && /įrašyta 6 poz\./.test(p4.textContent) && /„Preliminarus kiekis“/.test(p4.textContent), "4 žingsnis: " + (p4 && p4.textContent));
+  });
+
+  await testas("Excel priedas (T-AK LT/EN, prekės, 25 pozicijos su tiekėjo stulpeliu): formos lentelėje - viena eilutė su nuoroda LT / EN, antraštėje - abi kalbos; failas pakete be pakeitimų po pasiūlymo formos", async () => {
+    let ikeltas = null;
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", pavEN: "Hand tools", tipas: "prekes",
+      po2: async () => { ikeltas = await kainFailas("1 priedo 1 priedas Įkainių lentelė.xlsx", [["Pasiūlymas", KAIN_ZIN(25, { papild: true, pav: "Įrankis " })]]); await W.dkPridek([ikeltas]); },
+      pries: async () => {
+        const c = D.getElementById(W.lkId("kain|KAIN")), t = c.textContent.replace(/\s+/g, " ");
+        tiesa(/Siūloma \(nepatvirtinta\) pozicijų 25 - daugiau nei 20; yra tiekėjo pildomų stulpelių/.test(t), "siūlomas priedas: " + t.slice(0, 500));
+        tiesa(c.querySelector("input[id$='-b-priedas']").checked && c.querySelector("details.kain-visos"), "pasirinkta ir „Rodyti visas“");
+        c.querySelector("[data-lk-patv=KAIN]").click();
+      } });
+    const [, x] = dok(docs);
+    const T = kainFormosLentele(x.xml)[0];
+    lygu(T.eil.length, 1 + 1 + 3, "viena pozicijos eilutė");
+    tiesa(/^Preliminarus kiekis .*Preliminary amount/.test(T.eil[0][3]) && !/(įrašyti|to be entered|Maximum|Precise)/.test(T.eil[0][3]), "antraštė: " + T.eil[0][3]);
+    lygu(T.eil[1].slice(0, 1).concat(T.eil[1].slice(2)), ["1.", "-", "-", "-", ""], "eilutės langeliai");
+    tiesa(/\(pagal Pasiūlymo formos 1 priedą „Kainų lentelė“\) \/ .*\(according to Annex 1 to the Tender form “Price table”\)$/.test(T.eil[1][1]), "nuoroda: " + T.eil[1][1]);
+    const i = W.__R.findIndex(r => r.d.trumpas === "IKELTA_KAINOS"), j = W.__R.findIndex(r => /_PASIULYMAS$/.test(r.d.trumpas));
+    tiesa(i === j + 1, "priedas iškart po formos: " + i + " " + j);
+    const R = W.__R[i];
+    lygu([R.d.pavadinimas, R.pletinys, R.blob === ikeltas], ["Pasiūlymo formos 1 priedas - Kainų lentelė", "xlsx", true], "priedas pakete");
+    tiesa(/viena eilutė su nuoroda .*pridėtas prie paketo be pakeitimų/.test(D.getElementById("kainuLentelePatikra").textContent), "4 žingsnis");
+  });
+
+  await testas("Dvikalbė forma (T-AK LT/EN, 3 pozicijos): pavadinimas „LT / EN“ iš failo, be angliško - raudonas nurodymas įrašyti vertimą; vienetai pagal žodyną (vnt. - pcs., kompl. - set), nežinomi - nurodymas; 4 žingsnis sako", async () => {
+    const aoa = [["Nr.", "Pavadinimas", "Name in English", "Mato vnt.", "Konkretus kiekis", "Kaina, Eur be PVM"], [1, "Kabelis", "Cable", "vnt.", 2, null], [2, "Movos", "", "kompl.", 4, null], [3, "Tepalas", "Grease", "dėžė", 1, null]];
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", pavEN: "Cables", tipas: "prekes", po2: async () => { await W.dkPridek([await kainFailas("Kainų lentelė.xlsx", [["L", aoa]])]); } });
+    const T = kainFormosLentele(dok(docs)[1].xml)[0];
+    lygu(T.eil.slice(1, 4).map(r => r.slice(1, 4)), [["Kabelis / Cable", "vnt. / pcs.", "2"], ["Movos / Įrašykite vertimą į anglų kalbą.", "kompl. / set", "4"], ["Tepalas / Grease", "dėžė / Įrašykite vertimą į anglų kalbą.", "1"]], "eilutės");
+    tiesa(/^Konkretus kiekis .*Precise amount/.test(T.eil[0][3]), "antraštė: " + T.eil[0][3]);
+    lygu(T.raud, "Įrašykite vertimą į anglų kalbą.Įrašykite vertimą į anglų kalbą.", "raudoni - tik nurodymai");
+    tiesa(/Angliškas tekstas<\/b> 2 langeliuose neįrašytas/.test(D.getElementById("kainuLentelePatikra").innerHTML), "4 žingsnis: " + D.getElementById("kainuLentelePatikra").textContent);
+  });
+
+  await testas("Kliūtys: užpildyti įkainiai - priedu negalima (blokuoja, klaidų santrauka), pasirinkus formą - įkainiai neperkeliami; kiekio rūšies nėra antraštėje - privaloma, be numatytojo; „Nenaudoti“ - lentelė kaip šablone", async () => {
+    await modulis();
+    const pv = D.getElementById("pavadinimas"); pv.value = PAVADINIMAS; pv.dispatchEvent(new W.Event("input"));
+    await zingsnis2("S-AK", "LT", "prekes");
+    await W.dkPridek([await kainFailas("Kainų lentelė.xlsx", [["L", KAIN_ZIN(22, { kainos: true, kiekioAnt: "Kiekis" })]])]);
+    W.klausimynas();
+    let S = W.formosSantrauka(W.__K), c = S.M.korteles.find(x => x.rusis === "kain");
+    lygu(c.vienetai.map(u => [u.raktai[0], u.busena, !!u.blokuoja]), [["KAIN_BUDAS", "neuzpildyta", true], ["KAIN_KIEKIS", "neuzpildyta", true], ["KAIN", "siuloma", false]], "vienetai");
+    const el = D.getElementById(c.id), t = el.textContent.replace(/\s+/g, " ");
+    tiesa(/Priedu pridėti negalima:\s*.*užpildyti įkainiai ar kainos \(22 lang\./.test(t) && /Neatsakyta \(privaloma\)/.test(t) && !el.querySelector("input[id$='-k-maksimalus']").checked && !el.querySelector("[data-lk-patv=KAIN]"), "kortelė: " + t.slice(0, 600));
+    // su kliūtimi (priedas, užpildyti įkainiai) lentelė nepildoma ir Excel nededamas, net jei generuojama (mygtukas tai sustabdytų)
+    W.uAts("KAIN_KIEKIS", "konkretus");
+    Object.entries(W.__K.grupes).forEach(([gid, g]) => { if (!g.nariai.some(n => ATS()[n.raktas] === true)) W.pasirinkGrupe(gid, g.nariai[g.nariai.length - 1].raktas); });
+    atsakykPrivalomus();
+    W.alert = () => {};
+    let R0 = await W.generuoti();
+    const f0 = R0.find(r => /_PASIULYMAS$/.test(r.d.trumpas));
+    lygu([!!(f0.stats && f0.stats.kainuLentele), R0.some(r => r.d.trumpas === "IKELTA_KAINOS")], [false, false], "kliūtis - nepildoma");
+    W.uAts("KAIN_BUDAS", "forma");
+    S = W.formosSantrauka(W.__K); c = S.M.korteles.find(x => x.rusis === "kain");
+    lygu(c.vienetai.map(u => [u.busena, !!u.blokuoja]), [["patvirtinta", false], ["patvirtinta", false], ["siuloma", false]], "pasirinkus formą ir kiekį");
+    // generavimas formoje - įkainiai (100 ... 2200) neperkeliami
+    W.__R = await W.generuoti(); W.rodykRezultata(W.__R); W.rodyk(3);
+    const f = W.__R.find(r => /_PASIULYMAS$/.test(r.d.trumpas));
+    const xml = await (await W.JSZip.loadAsync(await f.blob.arrayBuffer())).file("word/document.xml").async("string");
+    const T = kainFormosLentele(xml)[0];
+    lygu(T.eil.length, 1 + 22 + 3, "22 pozicijos formoje");
+    tiesa(T.eil.slice(1, 23).every(r => r[4] === "" && r[5] === ""), "įkainių ir kainų nėra");
+    tiesa(/^Konkretus kiekis Prekių tiekimo laikotarpiu/.test(T.eil[0][3]), "antraštė: " + T.eil[0][3]);
+    // „Nenaudoti“ - kortelė be lentelės, šablono lentelė ir nurodymas lieka
+    W.rodyk(2);
+    D.getElementById(W.lkId("kain|KAIN")).querySelector("[data-kain=atmesti]").click();
+    tiesa(/nenaudojama/.test(D.getElementById(W.lkId("kain|KAIN")).textContent) && W.__K.automatika.some(a => /Koreguojama/.test(a.kas) && /lieka raudona/.test(a.veiksmas)), "nenaudojama");
+  });
+
+  await testas("Dalys (S-AK LT, 2 dalys pagal techninės specifikacijos failus): kiekvienos dalies kainų lentelėje - tos dalies pozicijos iš lapų „1 dalis“, „2 dalis“; pozicijos dalims nepriskirtos - kliūtis", async () => {
+    const docs = await generuokSu({ budas: "S-AK", tipas: "prekes",
+      po2: async () => { await W.dkPridek((await dalTS(2, ["Kabeliai", "Movos"])).concat([await kainFailas("Kiekiai.xlsx", [["1 dalis", KAIN_ZIN(2, { pav: "Kabelis " })], ["2 dalis", KAIN_ZIN(3, { pav: "Mova " })]])])); },
+      pries: async () => { tiesa(W.kainKliutys().length === 0 && W.kainBudas() === "forma", "be kliūčių: " + W.kainKliutys().join(" | ")); } });
+    const [, x] = dok(docs);
+    const T = kainFormosLentele(x.xml);
+    lygu(T.map(t => t.eil.slice(1).filter(r => /^\d+\.$/.test(r[0])).map(r => r[1])), [["Kabelis 1", "Kabelis 2"], ["Mova 1", "Mova 2", "Mova 3"]], "dalių lentelės");
+    // tas pats failas be dalių informacijos - kliūtis formai
+    W.rodyk(2);
+    W.eval("KAIN").kandidatai = [Object.assign({}, W.eval("KAIN").kandidatai[0], { eilutes: W.eval("KAIN").kandidatai[0].eilutes.map(e => Object.assign({}, e, { dalis: null })), dalys: [] })];
+    W.eval("KAIN").pasirinkta = 0;
+    tiesa(W.kainKliutys().some(x => /pozicijos dalims nepriskirtos/.test(x)), "kliūtis: " + W.kainKliutys().join(" | "));
+  });
+
+  await testas("Juodraštis: pozicijos ir pasirinkimai išsaugomi be failo; atkurtas - forma veikia, priedui - įkelti failą iš naujo; suklastoti duomenys - tik žinomi laukai ir ribos", async () => {
+    await modulis();
+    await zingsnis2("S-AK", "LT", "prekes");
+    await W.dkPridek([await kainFailas("Žiniaraštis.xlsx", [["L", KAIN_ZIN(5)]])]);
+    W.klausimynas(); W.uAts("KAIN_BUDAS", "priedas");
+    const J = W.surinkJuodrasti();
+    lygu([J.s2.KAIN.kandidatai.length, J.s2.KAIN.kandidatai[0].eilutes.length, J.s2.ATS.KAIN_BUDAS], [1, 5, "priedas"], "išsaugota");
+    tiesa(!JSON.stringify(J).includes("arrayBuffer") && !("failas" in J.s2.KAIN.kandidatai[0] && typeof J.s2.KAIN.kandidatai[0].failas !== "string"), "be failo");
+    J.s2.KAIN.kandidatai.push({ failas: "<img src=x onerror=alert(1)>", eilutes: [{ pav: "<b>x</b>", kiekis: 5, dalis: 999, kitas: "x" }], kainos: { uzpildyta: "1e9" } });
+    await modulis();
+    await W.atkurkJuodrasti({ duomenys: J });
+    await kol(() => W.__K, "2 žingsnis atkurtas", 20000);
+    const K0 = W.eval("KAIN");
+    lygu([K0.kandidatai.length, K0.kandidatai[1].eilutes[0].kiekis, K0.kandidatai[1].eilutes[0].dalis, "kitas" in K0.kandidatai[1].eilutes[0], K0.kandidatai[1].kainos.uzpildyta], [2, "", null, false, 1000000000], "suklastoti duomenys");
+    tiesa(W.kainKliutys().some(x => /šiame puslapyje nėra .* įkelkite jį 1 žingsnyje iš naujo/.test(x)), "priedui failo nėra: " + W.kainKliutys().join(" | "));
+    W.uAts("KAIN_BUDAS", "forma");
+    lygu(W.kainKliutys(), [], "forma - be failo");
+    tiesa(D.getElementById(W.lkId("kain|KAIN")).querySelectorAll(".kain-lent tbody tr").length === 5, "kortelė su pozicijomis");
+  });
+
+  await testas("Telefone (375 px) kortelė neplečia puslapio - lentelė slenka savo rėmelyje", async () => {
+    await modulis("siauras");
+    await zingsnis2("S-AK", "LT", "prekes");
+    await W.dkPridek([await kainFailas("Žiniaraštis.xlsx", [["L", KAIN_ZIN(8, { pav: "Labai ilgas pozicijos pavadinimas su techninėmis charakteristikomis Nr. " })]])]);
+    W.klausimynas();
+    const el = D.getElementById(W.lkId("kain|KAIN")); W.rodykKortele(el);
+    await sl(100);
+    tiesa(D.documentElement.scrollWidth <= W.innerWidth + 1, "puslapio plotis " + D.documentElement.scrollWidth + " > " + W.innerWidth);
+  });
+}
 /* Fokusas po generavimo (2026-11-05, zondas: paspaustas mygtukas lieka paslėptame žingsnyje). */
 async function testaiFokusas1105(){
   dabartine = grupe("Fokusas po generavimo (2026-11-05)");
@@ -17358,7 +17599,7 @@ async function testaiPaskelbti(){
        testaiNaujiSablonai, testaiSablonuTaisymai, testaiNumeracija, testaiForma, testaiKriterijus, testaiLenteles, testaiTeise, testaiTikrinimas,
        testaiSutartys, testaiRangosSablonai, testaiProjektavimoSablonai, testaiDarbuSablonai, testaiStatybosRangosSablonai,
        testaiEksploatavimoSablonai, testaiParinkimas, testaiSutartiesBlokas, testaiSutarciuGeneravimas, testaiSutartiesForma, testaiSutartisSPS,
-       testaiWord, testaiSprendimai1025c, testaiPastabos1027, testaiPrivalomos, testaiFokusas1105],
+       testaiWord, testaiSprendimai1025c, testaiPastabos1027, testaiPrivalomos, testaiFokusas1105, testaiKainuLentele],
       [testaiSutarciuTikrinimas, testaiRangosGeneravimas, testaiRangosPages, testaiStatybosRangosGeneravimas, testaiProjektavimoGeneravimas,
        testaiDarbuGeneravimas, testaiEksploatavimoGeneravimas, testaiVidausRiba, testaiSutartysPages, testaiSutarciuNuorodos, testaiPataisos,
        testaiAmber, testaiAmberRanga, testaiPrieduSarasas, testaiEtapuLentele, testaiKvalLentele, testaiKvalDps, testaiDokumentai, testaiJuodrastis, testaiPastabos1016,
