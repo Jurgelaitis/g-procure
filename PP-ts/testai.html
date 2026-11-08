@@ -117,6 +117,11 @@ function turi(tekstas, dalis, ka) {
 const M = (israiska) => ramas.contentWindow.eval(israiska);
 const W = () => ramas.contentWindow;
 const D = () => ramas.contentDocument;
+/* DI užduotys serveryje (nuo 2026-11-08, naudotojo sprendimas - kodo apsauga): modulis kviečia GP_AI_PROXY.uzduotis('pp-ts.<užduotis>', duomenys,
+   { modelis, signal }); instrukcijos ir užklausų tekstai - privačiuose serverio šablonuose (jų turinį tikrina privati šablonų patikra).
+   UZ(f) - netikras DI: f gauna { uzduotis, duomenys, userMessage - visi siunčiami duomenys vienu tekstu, signal, model, opts }. */
+const diTekstas = (u, d) => [u].concat(Object.values(d || {}).map(v => typeof v === 'string' ? v : Array.isArray(v) ? v.join('\n') : (v && typeof v === 'object') ? Object.values(v).join('\n') : String(v))).join('\n');
+const UZ = f => (id, d, o) => f({ uzduotis: id, duomenys: d, userMessage: diTekstas(id, d), signal: o && o.signal, model: o && o.modelis, opts: o || {} });
 
 /* Grąžina modulį į žinomą būseną: tuščias specifikacijos laukas, be įspėjimų. */
 function paruosk() {
@@ -425,15 +430,15 @@ function cvpisAtsakymas(w, q) {
 /* Naujas pirkimas iki 2 žingsnio (klausimai imituojami). */
 async function pirkimasIkiKlausimu(pav) {
   const w = W(), d = D();
-  const origP = w.GP_AI_PROXY.call, origC = w.confirm;
+  const origP = w.GP_AI_PROXY.uzduotis, origC = w.confirm;
   w.confirm = () => true;
-  w.GP_AI_PROXY.call = async () => atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek vienetų?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] }));
+  w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek vienetų?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] })));
   try {
     M('App.startNewGeneration()');
     d.getElementById('genTitle').value = pav;
     d.getElementById('genType').value = 'goods';   // nuo 2026-10-27 (D12) objekto tipas be numatytojo
     await M('App.startGeneration()');
-  } finally { w.GP_AI_PROXY.call = origP; w.confirm = origC; }
+  } finally { w.GP_AI_PROXY.uzduotis = origP; w.confirm = origC; }
 }
 
 async function testaiBusenos() {
@@ -442,8 +447,8 @@ async function testaiBusenos() {
   await testas('Pilnoji analizė: serverio klaida - priežastis vietoje ir „Bandyti dar kartą“ (anksčiau „Klaida 0 %“ ir pranešimas kampe)', async () => {
     const w = paruosk();
     D().getElementById('specText').value = SPEC;
-    const orig = w.GP_AI_PROXY.call;
-    w.GP_AI_PROXY.call = async () => klaida500();
+    const orig = w.GP_AI_PROXY.uzduotis;
+    w.GP_AI_PROXY.uzduotis = UZ(async () => klaida500());
     try {
       await M('App.runAnalysis()');
       const b = D().getElementById('anBusena');
@@ -451,18 +456,18 @@ async function testaiBusenos() {
       turi(b.textContent, 'Pilnoji analizė nepavyko: Serverio klaida (500)', 'būsena');
       tiesa(b.querySelector('[data-gpb-kartoti]'), 'nėra „Bandyti dar kartą“');
       tiesa(!D().getElementById('btnAnalyze').disabled, 'mygtukas liko išjungtas');
-    } finally { w.GP_AI_PROXY.call = orig; }
+    } finally { w.GP_AI_PROXY.uzduotis = orig; }
   });
 
   await testas('„Atšaukti“ nutraukia pilnąją analizę: signalas pasiekia serverio kvietimą, eiga su juosta, rezultatai nepakeisti', async () => {
     const w = paruosk();
     D().getElementById('specText').value = SPEC;
     let signalas = null;
-    const orig = w.GP_AI_PROXY.call;
-    w.GP_AI_PROXY.call = o => new Promise(res => {
+    const orig = w.GP_AI_PROXY.uzduotis;
+    w.GP_AI_PROXY.uzduotis = UZ(o => new Promise(res => {
       signalas = o.signal;
       if (o.signal) o.signal.addEventListener('abort', () => res({ ok: false, status: 0, text: '', raw: null, error: 'signal is aborted without reason' }));
-    });
+    }));
     try {
       const vyksta = M('App.runAnalysis()');
       tiesa(await laukTol(() => signalas), 'serverio kvietimas negavo signalo');
@@ -473,7 +478,7 @@ async function testaiBusenos() {
       await vyksta;
       tiesa(signalas.aborted, 'užklausa nenutraukta');
       turi(b.textContent, 'Atšaukta - ankstesni analizės rezultatai nepakeisti.', 'būsena');
-    } finally { w.GP_AI_PROXY.call = orig; }
+    } finally { w.GP_AI_PROXY.uzduotis = orig; }
   });
 
   await testas('CVP IS: visos paieškos nepavyko - klaida, ne „Rasta 0 sutarčių“; dalinai - pasakoma, kiek nepavyko', async () => {
@@ -514,13 +519,13 @@ async function testaiBusenos() {
       tiesa(await laukTol(() => /Transformatorių pirkimas B/.test(d.getElementById('genAnaloguesList').textContent)), 'naujo pirkimo analogai neparsiųsti; užklausos: ' + uzklausos.join(' | '));
       tiesa(!/Pastotės remontas A/.test(d.getElementById('genAnaloguesList').textContent), 'liko ankstesnio pirkimo analogai');
       // Be „Pradėti naują“: grįžus į 1 žingsnį ir pakeitus pavadinimą
-      const origP = w.GP_AI_PROXY.call;
-      w.GP_AI_PROXY.call = async () => atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] }));
+      const origP = w.GP_AI_PROXY.uzduotis;
+      w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] })));
       try {
         M('App.goToStep(1)');
         d.getElementById('genTitle').value = 'Skirstyklų pirkimas C2';
         await M('App.startGeneration()');
-      } finally { w.GP_AI_PROXY.call = origP; }
+      } finally { w.GP_AI_PROXY.uzduotis = origP; }
       M('App.goToStep(3)');
       tiesa(await laukTol(() => /Skirstyklų pirkimas C2/.test(d.getElementById('genAnaloguesList').textContent)), 'pakeitus pavadinimą analogai neparsiųsti; užklausos: ' + uzklausos.join(' | '));
     } finally { w.fetch = orig; M('App.goToStep(1)'); }
@@ -554,19 +559,19 @@ async function testaiBusenos() {
 
   await testas('Generavimas: nė vieno skyriaus - klaida su priežastimi, ne „TS sugeneruota!“ su tuščia TS', async () => {
     const w = W(), d = D();
-    const origP = w.GP_AI_PROXY.call, origT = w.setTimeout;
+    const origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout;
     await pirkimasIkiKlausimu('Relinės apsaugos atnaujinimas E');
     w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);   // pauzės tarp pakartojimų - be laukimo
-    w.GP_AI_PROXY.call = async o => /"sectionTitles"/.test(o.userMessage) && /^Pirkimas:/.test(o.userMessage)
+    w.GP_AI_PROXY.uzduotis = UZ(async o => o.uzduotis === 'pp-ts.karkasas'
       ? atsakymas(JSON.stringify({ title: 'TS', sectionTitles: [{ number: '1', title: 'Apimtis' }, { number: '2', title: 'Garantija' }], evaluationCriteria: [], keyElements: {}, recommendations: [] }))
-      : klaida500();
+      : klaida500());
     try {
       await M('App.runFullGeneration()');
       const b = d.getElementById('genFullBusena');
       tiesa(b.classList.contains('gpb--klaida'), 'būsena: ' + b.className + ' ' + b.textContent);
       turi(b.textContent, 'TS sugeneruoti nepavyko: nesugeneruotas nė vienas iš 2 skyrių', 'būsena');
       tiesa(d.getElementById('genResultPanel').classList.contains('hidden'), 'tuščia TS parodyta kaip rezultatas');
-    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; }
   });
 
   await testas('„Atšaukti“ generuojant: be ankstesnės TS - „TS negeneruota“; su ankstesne - ji lieka matoma ir nepakeista', async () => {
@@ -626,11 +631,11 @@ async function testaiBusenos() {
       lygu(D().getElementById('modelSelect').value, W().GP_AI_PROXY.MODEL, 'modelis - numatytasis');
       tiesa(Object.keys(localStorage).some(k => k.startsWith(RAKTAS + '.sugadinta-') && !kopijosPries.has(k)), 'sugadintos reikšmės kopija nesukurta');
       // Analizė vyksta pagal numatytąsias kryptis, ne „be nustatymų“
-      let uzklausa = '';
-      W().GP_AI_PROXY.call = async o => { uzklausa = o.userMessage; return klaida500(); };
+      let uzklausa = null;
+      W().GP_AI_PROXY.uzduotis = UZ(async o => { uzklausa = o.duomenys; return klaida500(); });
       D().getElementById('specText').value = SPEC;
       await M('App.runAnalysis()');
-      turi(uzklausa, 'PRIORITETINĖS ANALIZĖS KRYPTYS: gramatika ir rašyba', 'analizės užklausa');
+      tiesa(uzklausa && (uzklausa.kryptys || []).indexOf('grammar') >= 0, 'analizės užklausa be numatytųjų krypčių: ' + JSON.stringify(uzklausa && uzklausa.kryptys));
     } finally {
       if (buvo === null) localStorage.removeItem(RAKTAS); else localStorage.setItem(RAKTAS, buvo);
       Object.keys(localStorage).filter(k => k.startsWith(RAKTAS + '.sugadinta-') && !kopijosPries.has(k)).forEach(k => localStorage.removeItem(k));
@@ -770,17 +775,17 @@ async function docxDalys(blob, re) {
 /* Naujas pirkimas su numatoma verte iki 2 žingsnio; grąžina klausimų užklausą (vertė modulyje naudojama) */
 async function pirkimasSuVerte(pav, verte) {
   const w = W(), d = D();
-  const origP = w.GP_AI_PROXY.call, origC = w.confirm;
-  let uzklausa = '';
+  const origP = w.GP_AI_PROXY.uzduotis, origC = w.confirm;
+  let uzklausa = null;
   w.confirm = () => true;
-  w.GP_AI_PROXY.call = async o => { uzklausa = o.userMessage; return atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek alternatyvų?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] })); };
+  w.GP_AI_PROXY.uzduotis = UZ(async o => { uzklausa = o.duomenys; return atsakymas(JSON.stringify({ questions: [{ id: 'q1', question: 'Kiek alternatyvų?', category: 'Apimtis', critical: false, hint: '' }], cvpisSearchKeywords: [] })); });
   try {
     M('App.startNewGeneration()');
     d.getElementById('genTitle').value = pav;
     d.getElementById('genType').value = 'services';
     d.getElementById('genBudget').value = String(verte);
     await M('App.startGeneration()');
-  } finally { w.GP_AI_PROXY.call = origP; w.confirm = origC; }
+  } finally { w.GP_AI_PROXY.uzduotis = origP; w.confirm = origC; }
   return uzklausa;
 }
 
@@ -904,7 +909,7 @@ async function testaiApimtis() {
     const w = W(), d = D(), G = w.TSGenerator, P = w.PriceEstimator;
     const orig = { full: G.generateFullTs, market: G.analyzeMarket, price: P.estimate };
     const klausimai = await pirkimasSuVerte('Galimybių studijos parengimas', VERTE);
-    turi(klausimai, 'Numatoma vertė: 150000 EUR', 'klausimų užklausa (vertė modulyje naudojama)');
+    lygu(klausimai && klausimai.meta && klausimai.meta.budget, '150000', 'klausimų užklausa: numatoma vertė siunčiama (modulyje naudojama)');
     let kainai = null;
     G.generateFullTs = async () => bandomojiTs();
     P.estimate = async meta => { kainai = meta; return { estimate: { central: 148000, min: 120000, max: 170000, confidence: 'medium' }, rationale: 'Pagal 3 analogus.' }; };
@@ -956,7 +961,7 @@ async function testaiApimtis() {
   });
 
   await testas('TS patikros AI atsakymas su lietuviška kabute, uždaryta ASCII kabute (tikras 2026-10-02 atvejis): pastabos perskaitomos, ne „0 pastabų“; atsakymas be pastabų sąrašo - klaida, ne „pastabų nėra“', async () => {
-    const w = W(), origP = w.GP_AI_PROXY.call, origT = w.setTimeout;
+    const w = W(), origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout;
     const obj = { summary: 'Pagrindiniai trūkumai - keliose vietose nepridėti „arba lygiavertis" papildymai.', strengths: ['Išsami apimtis', 'Aiškūs terminai'], actionPlan: ['Pataisyti'],
       issues: [{ title: 'Prekės ženklas be „arba lygiavertis"', description: 'x', severity: 'major', category: 'brand_restriction', quote: '', recommendation: 'Pridėti', alternative: '', legalRef: '' },
                { title: 'Subjektyvus terminas', description: 'y', severity: 'minor', category: 'subjective', quote: '', recommendation: 'Patikslinti', alternative: '', legalRef: '' }] };
@@ -965,17 +970,17 @@ async function testaiApimtis() {
     const nustatymai = { model: w.GP_AI_PROXY.MODEL, options: { grammar: true }, depth: 'quick' };
     w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
     try {
-      w.GP_AI_PROXY.call = async () => atsakymas(ats);
+      w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(ats));
       const r = await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai);
       lygu(r.issues.length, 2, 'pastabų (iki tol - 0: iš atsakymo išskirtas „strengths“ masyvas)');
       turi(r.summary, 'arba lygiavertis', 'santrauka');
       // Nutrūkęs (ilgio riba) ir su ta pačia kabute (tikras atvejis: 19 tūkst. ženklų, iki tol 0 pastabų): pastabos perskaitomos, pasakoma, kad nutrūko
       const nutruko = ats.slice(0, ats.lastIndexOf('"Subjektyvus terminas') + 22);
-      w.GP_AI_PROXY.call = async () => atsakymas(nutruko);
+      w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(nutruko));
       const r2 = await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai);
       tiesa(r2.issues.length >= 1, 'nutrūkusio atsakymo pastabų: ' + r2.issues.length);
       turi(r2.summary, 'DI atsakymas nutrūko', 'santrauka sako, kad nutrūko');
-      w.GP_AI_PROXY.call = async () => atsakymas('["Išsami apimtis", "Aiškūs terminai"]');
+      w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas('["Išsami apimtis", "Aiškūs terminai"]'));
       let klaida = '';
       try { await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai); } catch (e) { klaida = e.message; }
       turi(klaida, 'nėra pastabų sąrašo', 'masyvas vietoj atsakymo - klaida');
@@ -985,33 +990,29 @@ async function testaiApimtis() {
       klaida = '';
       try { await M('AIAnalyzer').analyze('TS tekstas.', { title: 'TS' }, { issues: [] }, nustatymai); } catch (e) { klaida = e.message; } finally { w.smartParseJson = origS; }
       turi(klaida, 'nėra pastabų sąrašo', 'dalinis atsakymas be pastabų - klaida');
-    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; }
   });
 
   await testas('AI instrukcijos: generavimas jų negeneruoja (struktūroje ir karkase nebėra užtikrinimo, kvalifikacijos, vertinimo, delspinigių); auditas jų nebereikalauja ir žymi, jei yra; vertė - rinkos užklausoje', async () => {
-    const w = W(), d = D(), origP = w.GP_AI_PROXY.call, origT = w.setTimeout, uzkl = [];
+    const w = W(), d = D(), origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout, uzkl = [];
     await pirkimasSuVerte('Galimybių studijos parengimas', VERTE);
     w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
-    w.GP_AI_PROXY.call = async o => { uzkl.push(o); return klaida500(); };
+    w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); return klaida500(); });
     try {
       await M('App.runFullGeneration()');
       paruosk(); d.getElementById('specText').value = SPEC;
       await M('App.runAnalysis()');
-    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
-    const karkas = uzkl.find(o => /"sectionTitles"/.test(o.userMessage));
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; }
+    // Instrukcijų turinys (TS APIMTIS, be užtikrinimo, kvalifikacijos ir vertinimo skyrių, garantija ir rezultatų naudojimas - TS dalis) - serverio
+    // šablonuose pp-ts.karkasas ir pp-ts.auditas; jį tikrina privati šablonų patikra (nuo 2026-11-08). Čia - ką modulis siunčia.
+    const karkas = uzkl.find(o => o.uzduotis === 'pp-ts.karkasas');
     tiesa(karkas, 'karkaso užklausos nėra');
-    turi(karkas.system, 'TS APIMTIS', 'generavimo instrukcija');
-    ['8. Sutarties vykdymo užtikrinimo priemonės', '9. Reikalavimai tiekėjui (kvalifikaciniai)', '10. Pasiūlymų vertinimo kriterijai'].forEach(x => tiesa(karkas.system.indexOf(x) < 0, 'instrukcijoje liko: ' + x));
-    ['evaluationCriteria', '"penalty"', 'Sutarties vykdymo užtikrinimas"'].forEach(x => tiesa(karkas.userMessage.indexOf(x) < 0, 'karkase liko: ' + x));
-    const rinka = uzkl.find(o => /Atlik LT\/ES rinkos analizę/.test(o.userMessage));
-    tiesa(rinka && /Numatoma vertė: 150[\s\u00a0\u202f]?000 EUR/.test(rinka.userMessage), 'rinkos užklausoje nėra vertės: ' + (rinka ? rinka.userMessage.slice(0, 300) : '(nėra)'));
-    const auditas = uzkl.find(o => /TECHNINĖS SPECIFIKACIJOS TEKSTAS/.test(o.userMessage));
-    tiesa(auditas, 'audito užklausos nėra');
-    turi(auditas.system, '6. **TS APIMTIS**', 'audito instrukcija');
-    turi(auditas.system, 'niekada nesiūlyk jų pridėti', 'audito instrukcija');
-    turi(auditas.system, 'rezultatų (produktų) naudojimo sąlygos', 'audito instrukcija: garantija ir rezultatų naudojimas - TS dalis (naudotojo sprendimas 2026-10-02)');
-    turi(karkas.system, 'rezultatų naudojimo sąlygos', 'generavimo instrukcija: rezultatų naudojimo sąlygos - TS dalis');
-    tiesa(auditas.system.indexOf('Trūkstamos sekcijos (garantijos, sutarties vykdymo užtikrinimas') < 0, 'auditas vis dar siūlo užtikrinimą');
+    tiesa(!('system' in karkas.opts) && !('maxTokens' in karkas.opts), 'modulis siunčia instrukciją ar atsakymo ilgį');
+    ['evaluationCriteria', '"penalty"', 'Sutarties vykdymo užtikrinimas"'].forEach(x => tiesa(karkas.userMessage.indexOf(x) < 0, 'karkaso duomenyse: ' + x));
+    const rinka = uzkl.find(o => o.uzduotis === 'pp-ts.rinka');
+    tiesa(rinka && /^150[\s\u00a0\u202f]?000$/.test(rinka.duomenys.meta.budgetLt), 'rinkos užklausoje nėra vertės: ' + (rinka ? JSON.stringify(rinka.duomenys.meta) : '(nėra)'));
+    const auditas = uzkl.find(o => o.uzduotis === 'pp-ts.auditas');
+    tiesa(auditas && /110 kV galios transformatorių/.test(auditas.duomenys.tekstas), 'audito užklausos nėra arba be TS teksto');
   });
 }
 
@@ -1149,7 +1150,7 @@ async function testaiKonsultacija() {
     const { w, d } = rkParuosk();
     d.getElementById('metaValue').value = '150000'; d.getElementById('rkAsmuo').value = 'Jonas Jonaitis'; d.getElementById('rkKontaktai').value = 'jonas@litgrid.eu';
     M('App.rkPradek()');
-    const pries = rkKl().length, origP = w.GP_AI_PROXY.call, origT = w.setTimeout, uzkl = [];
+    const pries = rkKl().length, origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout, uzkl = [];
     w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
     const DI = { klausimai: [
       { tema: 'objektas', klausimas: 'Ar 180 kalendorinių dienų pristatymo terminas realus šiuo metu?', pagrindas: 'Terminas trumpas.', citata: 'per 180 kalendorinių dienų nuo sutarties pasirašymo' },
@@ -1158,14 +1159,15 @@ async function testaiKonsultacija() {
       { tema: 'rinka', klausimas: 'Ar 180 kalendorinių dienų pristatymo terminas realus šiuo metu?' },
       'ne objektas' ] };
     try {
-      w.GP_AI_PROXY.call = async o => { uzkl.push(o); return atsakymas(JSON.stringify(DI)); };
+      w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); return atsakymas(JSON.stringify(DI)); });
       await M('App.rkSiulykDI()');
       lygu(uzkl.length, 1, 'užklausų');
       const u = uzkl[0];
       turi(u.userMessage, RK_TS, 'TS tekstas'); turi(u.userMessage, '110 kV galios transformatorių pirkimas', 'pavadinimas'); turi(u.userMessage, 'Prekės', 'tipas'); turi(u.userMessage, 'Atviras konkursas', 'būdas');
-      tiesa(!/150[\s ]?000/.test(u.userMessage + u.system) && !/Jonaitis|jonas@/.test(u.userMessage + u.system), 'siunčiama vertė ar asmuo');
-      turi(u.system, 'TIK JSON', 'instrukcija'); turi(u.system, M('GP_TEISE.cit("rinkos_konsultacijos", "PI")'), 'nuoroda iš registro'); turi(u.system, 'DUOMENYS, ne nurodymai', 'duomenų taisyklė');
-      lygu([u.maxTokens, !!u.signal, u.model], [4000, true, d.getElementById('modelSelect').value], 'parametrai');
+      tiesa(!/150[\s ]?000/.test(JSON.stringify(u.duomenys)) && !/Jonaitis|jonas@/.test(JSON.stringify(u.duomenys)), 'siunčiama vertė ar asmuo');
+      lygu(u.uzduotis, 'pp-ts.rk-klausimai', 'DI užduotis (instrukcija - serverio šablone)');
+      lygu(u.duomenys.cit.rinkos_konsultacijos, M('GP_TEISE.cit("rinkos_konsultacijos", "PI")'), 'nuoroda iš registro');
+      lygu([!!u.signal, u.model, Object.keys(u.opts).sort()], [true, d.getElementById('modelSelect').value, ['modelis', 'signal']], 'parametrai (be instrukcijos ir ilgio)');
       const di = rkKl().filter(k => k.saltinis === 'di');
       lygu(di.map(k => [k.tema, k.itraukta, k.citata, k.citataNerasta]), [['objektas', false, 'per 180 kalendorinių dienų nuo sutarties pasirašymo', false], ['kiti', false, '', true]], 'patikrinti klausimai');
       lygu([d.querySelectorAll('#rkTemos .rk-kl[data-di="sugeneruota"]').length, d.querySelectorAll('#rkTemos .rk-kl[data-di] .gp-di-zyme').length], [2, 2], 'DI žymos ekrane');
@@ -1175,18 +1177,18 @@ async function testaiKonsultacija() {
       lygu(rkKl().filter(k => k.saltinis === 'di').map(k => k.itraukta), [false, true], 'įtraukti temos');
       turi(d.getElementById('rkSuvestine').textContent, 'DI 1 iš 2', 'suvestinė');
       const po = rkKl().length;
-      w.GP_AI_PROXY.call = async () => klaida500();
+      w.GP_AI_PROXY.uzduotis = UZ(async () => klaida500());
       await M('App.rkSiulykDI()');
       turi(d.getElementById('rkBusena').textContent, 'Klausimų pasiūlyti nepavyko', 'klaida'); turi(d.getElementById('rkBusena').textContent, 'Serverio klaida', 'priežastis');
       lygu(rkKl().length, po, 'po klaidos pasikeitė');
-      w.GP_AI_PROXY.call = o => new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(Object.assign(new Error('Atšaukta'), { name: 'AbortError' }))));
+      w.GP_AI_PROXY.uzduotis = UZ(o => new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(Object.assign(new Error('Atšaukta'), { name: 'AbortError' })))));
       const p = M('App.rkSiulykDI()'); await new Promise(r => origT.call(w, r, 60));
       const atsaukti = [...d.querySelectorAll('#rkBusena button')].find(b => /Atšaukti/.test(b.textContent)); tiesa(atsaukti, 'nėra „Atšaukti“'); atsaukti.click(); await p;
       lygu([rkKl().length, /Atšaukta/.test(d.getElementById('rkBusena').textContent)], [po, true], 'atšaukimas');
-      let n = 0; w.GP_AI_PROXY.call = async () => atsakymas(++n === 1 ? 'Čia ne JSON' : JSON.stringify({ klausimai: [{ tema: 'terminai', klausimas: 'Ar 5 metų garantija įprasta rinkoje?', citata: 'Garantija - 5 metai.' }] }));
+      let n = 0; w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(++n === 1 ? 'Čia ne JSON' : JSON.stringify({ klausimai: [{ tema: 'terminai', klausimas: 'Ar 5 metų garantija įprasta rinkoje?', citata: 'Garantija - 5 metai.' }] })));
       await M('App.rkSiulykDI()');
       lygu([n, rkKl().filter(k => k.saltinis === 'di').length], [2, 3], 'JSON kartojimas');
-      w.GP_AI_PROXY.call = async () => atsakymas(JSON.stringify({ klausimai: [{ tema: 'kiti', klausimas: 'Ar teko įgyvendinti panašaus pobūdžio projektus?' }] }));
+      w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(JSON.stringify({ klausimai: [{ tema: 'kiti', klausimas: 'Ar teko įgyvendinti panašaus pobūdžio projektus?' }] })));
       await M('App.rkSiulykDI()');
       lygu([rkKl().filter(k => k.saltinis === 'di').length, /DI pasiūlė 0 klausimų/.test(d.getElementById('rkBusena').textContent)], [3, true], 'esamas formos klausimas iš DI nekartojamas');
       // pats tikrintuvas
@@ -1194,7 +1196,7 @@ async function testaiKonsultacija() {
       const daug = { klausimai: Array.from({ length: 35 }, (_, i) => ({ tema: 'kiti', klausimas: 'Klausimas numeris ' + i + ' apie objektą?' })), _partial: true };
       const r = rkPure('tikrinkAtsakyma', daug, RK_TS);
       lygu([r.klausimai.length, r.pastabos.some(p => /pirmi 30/.test(p)), r.pastabos.some(p => /nutrūko/.test(p))], [30, true, true], 'riba ir nutrūkimas');
-    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; }
     lygu(rkKl().length - pries, 3, 'iš viso pridėta');
   });
 
@@ -1533,21 +1535,22 @@ async function testaiSuvestine() {
     await rkSvIkelk([await rkForma(RK_ATS, { lydrastis: ['Rinkos dalyvis: UAB „Alfa“'] }), new (W().File)(['Beta OÜ siūlo pratęsti pristatymo terminą iki 240 dienų, kaip UAB „Kitas“ praėjusiame pirkime. Pagarbiai, Petras Petraitis'], 'beta.txt', { type: 'text/plain' })]);
     const w = W(), d = D(), S = M('App.rkBusena()').sv;
     M(`App.rkSvBusena('${S.pastabos[0].id}', 'nenagrineta')`);
-    const origP = w.GP_AI_PROXY.call, origT = w.setTimeout, uzkl = [];
+    const origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout, uzkl = [];
     w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
     const DI = { temos: [
       { tema: 'objektas', apibendrinimas: 'Vienas rinkos dalyvis siūlė leisti lygiaverčius standartus.', pastabos: [{ tekstas: 'Lygiaverčiai standartai', dalyviai: ['A', 'Z'], citata: 'Siūlome leisti IEC 60076 lygiaverčius standartus' }, { tekstas: 'Išgalvota', dalyviai: ['B'], citata: 'tokio teksto nėra' }], atsakymo_juodrastis: 'Pastaba bus įvertinta rengiant pirkimo dokumentus.' },
       { tema: 'terminai', apibendrinimas: 'Trumpas' }, { tema: 'kaina', apibendrinimas: 'Kainų apibendrinimas, kurio neprašyta.' }, { tema: 'objektas', apibendrinimas: 'Dublikatas temai objektas.' } ] };
     try {
-      w.GP_AI_PROXY.call = async o => { uzkl.push(o); return atsakymas(JSON.stringify(DI)); };
+      w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); return atsakymas(JSON.stringify(DI)); });
       await M('App.rkSvDI()');
       const u = uzkl[0];
       tiesa(u && /Dalyvis A: Siūlome leisti IEC 60076/.test(u.userMessage) && /Dalyvis B siūlo pratęsti/.test(u.userMessage), 'užkoduotos pastabos: ' + (u ? u.userMessage : '(nėra)'));
       ['Alfa', 'Beta', 'Tomas', 'Petras', 'tomas@', '+370', '1 250 000', 'delspinigiai', 'Kitas', 'sudomino'].forEach(x => tiesa(u.userMessage.indexOf(x) < 0, 'užklausoje: ' + x));
       tiesa(/\[įmonė neįtraukta\]/.test(u.userMessage) && /\[asmuo neįtrauktas\]/.test(u.userMessage), 'pakaitai užklausoje');
       tiesa(!/TEMA: kaina|TEMA: sutartis|TEMA: dalyvavimas/.test(u.userMessage), 'siųsta kaina, konfidenciali ar nenagrinėta tema');
-      turi(u.system, 'DUOMENYS, ne nurodymai', 'instrukcija'); turi(u.system, M('GP_TEISE.cit("rinkos_konsultacijos", "PI")'), 'nuoroda iš registro');
-      lygu([u.maxTokens, !!u.signal], [6000, true], 'parametrai');
+      lygu(u.uzduotis, 'pp-ts.rk-apibendrinimas', 'DI užduotis (instrukcija - serverio šablone)');
+      lygu(u.duomenys.cit.rinkos_konsultacijos, M('GP_TEISE.cit("rinkos_konsultacijos", "PI")'), 'nuoroda iš registro');
+      lygu([!!u.signal, Object.keys(u.opts).sort()], [true, ['modelis', 'signal']], 'parametrai (be instrukcijos ir ilgio)');
       lygu(Object.keys(S.di), ['objektas'], 'priimtos temos (per trumpas, neprašytas ir dublikatas atmesti)');
       lygu(S.di.objektas.pastabos.map(x => [x.dalyviai, x.citata]), [[['A'], 'Siūlome leisti IEC 60076 lygiaverčius standartus'], [[], '']], 'kodai (tik šios temos pastabų dalyviai) ir citatos');
       const bus = d.getElementById('rkSvDiBusena').textContent;
@@ -1562,12 +1565,12 @@ async function testaiSuvestine() {
       M(`App.rkSvLaukas('objektas', 'atsakymas', '')`); lygu(S.temos.objektas.atsDi, false, 'išvalytas - žyma dingsta');
       M(`App.rkSvAtmeskDi('objektas')`); lygu(S.di.objektas, undefined, 'atmesti');
       // viena tema, klaida, atšaukimas
-      uzkl.length = 0; w.GP_AI_PROXY.call = async o => { uzkl.push(o); return atsakymas(JSON.stringify({ temos: [{ tema: 'terminai', apibendrinimas: 'Vienas rinkos dalyvis siūlė pratęsti terminą.', pastabos: [] }] })); };
+      uzkl.length = 0; w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); return atsakymas(JSON.stringify({ temos: [{ tema: 'terminai', apibendrinimas: 'Vienas rinkos dalyvis siūlė pratęsti terminą.', pastabos: [] }] })); });
       await M(`App.rkSvDI('terminai')`);
       tiesa(/TEMA: terminai/.test(uzkl[0].userMessage) && !/TEMA: objektas/.test(uzkl[0].userMessage) && S.di.terminai, 'viena tema');
-      w.GP_AI_PROXY.call = async () => klaida500();
+      w.GP_AI_PROXY.uzduotis = UZ(async () => klaida500());
       await M('App.rkSvDI()'); turi(d.getElementById('rkSvDiBusena').textContent, 'Apibendrinti nepavyko', 'klaida');
-      w.GP_AI_PROXY.call = o => new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(Object.assign(new Error('Atšaukta'), { name: 'AbortError' }))));
+      w.GP_AI_PROXY.uzduotis = UZ(o => new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(Object.assign(new Error('Atšaukta'), { name: 'AbortError' })))));
       const pp = M('App.rkSvDI()'); await new Promise(r => origT.call(w, r, 60));
       [...d.querySelectorAll('#rkSvDiBusena button')].find(b => /Atšaukti/.test(b.textContent)).click(); await pp;
       turi(d.getElementById('rkSvDiBusena').textContent, 'Atšaukta', 'atšaukimas');
@@ -1579,10 +1582,10 @@ async function testaiSuvestine() {
       const pa = S.pastabos.find(p => p.tema === 'objektas'), pb = S.pastabos.find(p => p.dalyvis === S.dalyviai[1].id);
       M(`App.rkSvKonf('${pa.id}', true)`); M(`App.rkSvBusena('${pb.id}', 'nenagrineta')`);
       lygu(RSv().uzklausa(S, ['objektas', pb.tema], {}).temos, [], 'konfidenciali ir nenagrinėta nesiunčiamos');
-      uzkl.length = 0; w.GP_AI_PROXY.call = async o => { uzkl.push(o); return atsakymas('{"temos":[]}'); };
+      uzkl.length = 0; w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); return atsakymas('{"temos":[]}'); });
       await M('App.rkSvDI()'); turi(d.getElementById('rkSvDiBusena').textContent, 'Nėra pastabų, kurias būtų galima apibendrinti', 'nėra ką siųsti');
       lygu(uzkl.length, 0, 'tuščia užklausa nesiunčiama');
-    } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; }
   });
 
   await testas('Word: vieša suvestinė (gulsčias A4, oficialus stilius, 3 stulpeliai, DI požymiai tik su DI tekstu) ir vidaus ataskaita (dalyviai su pavadinimais, vertinimai, pakeitimai, mašinai skaitomi vertinimai); vidaus ataskaitą įkėlus - darbas atkurtas; suklastoti duomenys atmetami; failų vardai', async () => {
@@ -1935,40 +1938,43 @@ async function testaiSprendimai1027() {
   });
 
   await testas('T1: DI instrukcijos pagal vykdytoją ir įstatymą - TS patikra (ir DI nuorodų patikra), TS kūrimas, kaina, rinkos konsultacijos klausimai ir apibendrinimas', async () => {
-    const w = W(), origP = w.GP_AI_PROXY.call, sist = [];
+    const w = W(), origP = w.GP_AI_PROXY.uzduotis, sist = [];
     const tik = { issues: [{ title: 'Ženklas', description: 'x', severity: 'major', category: 'brand_restriction', quote: 'Prysmian', recommendation: 'y', legalRef: 'VPĮ 37 str. 5 d.' },
       { title: 'Kita', description: 'x', severity: 'minor', category: 'legal_compliance', quote: '', recommendation: 'y', legalRef: 'PĮ 50 str. 5 d.' }], summary: 's', strengths: [], actionPlan: [] };
-    w.GP_AI_PROXY.call = async o => { sist.push(o.system); return atsakymas(JSON.stringify(tik)); };
+    // Instrukcijos sakiniai pagal vykdytoją („pirkimo vykdytojui UAB EPSO-G“, „tiesioginis VPĮ pažeidimas“, „vyriausiasis ... metodininkas“) - serverio
+    // šablonuose (privati patikra su PĮ ir VPĮ duomenimis); čia - vykdytojo ir įstatymo duomenys, iš kurių šablonas juos sudaro.
+    w.GP_AI_PROXY.uzduotis = UZ(async o => { sist.push(o.duomenys); return atsakymas(JSON.stringify(tik)); });
     try {
       for (const [o, r] of [['epso-g'], ['litgrid', 'PI']]) {
         V(o, r); sist.length = 0;
         const a = await M('AIAnalyzer.analyze(' + JSON.stringify('Kabelis Prysmian arba lygiavertis.') + ', {}, { issues: [] }, { options: { legal: true } })');
         const refs = a.issues.map(x => x.legalRef);
         if (o === 'epso-g') {
-          ['pirkimo vykdytojui UAB EPSO-G', 'UAB EPSO-G yra perkančioji organizacija pagal LR viešųjų pirkimų įstatymą (VPĮ)', 'ES Direktyva 2014/24/ES (klasikinė)', 'TEISINIS ATITIKIMAS (VPĮ)', 'VPĮ 37 str. 5 d. - ', 'tiesioginis VPĮ pažeidimas', 'EPSO-G grupės įmonė']
-            .forEach(x => turi(sist[0], x, 'TS patikros instrukcija (VPĮ)'));
-          tiesa(!/LITGRID|Litgrid|perkantysis subjektas|(^|[^V])PĮ \d|2014\/25/.test(sist[0]), 'VPĮ instrukcijoje liko PĮ / LITGRID: ' + (sist[0].match(/.{40}(LITGRID|perkantysis subjektas|[^V]PĮ \d|2014\/25).{20}/) || [''])[0]);
+          lygu([sist[0].pav, sist[0].ist, sist[0].cit.ts_zenklas], ['UAB EPSO-G', 'VPĮ', 'VPĮ 37 str. 5 d.'], 'vykdytojas, įstatymas, nuoroda (VPĮ)');
+          ['UAB EPSO-G yra perkančioji organizacija pagal LR viešųjų pirkimų įstatymą (VPĮ)', 'ES Direktyva 2014/24/ES (klasikinė)', 'EPSO-G grupės įmonė']
+            .forEach(x => turi(sist[0].kontekstas, x, 'pirkimo vykdytojo kontekstas (VPĮ)'));
+          const js = JSON.stringify(sist[0]);
+          tiesa(!/LITGRID|Litgrid|perkantysis subjektas|(^|[^V])PĮ \d|2014\/25/.test(js), 'VPĮ duomenyse liko PĮ / LITGRID: ' + (js.match(/.{40}(LITGRID|perkantysis subjektas|[^V]PĮ \d|2014\/25).{20}/) || [''])[0]);
           lygu(refs, ['VPĮ 37 str. 5 d.', ''], 'DI nuoroda tikrinama pagal VPĮ instrukciją (PĮ nuoroda nerodoma)');
         } else {
-          ['LITGRID AB - Lietuvos elektros perdavimo sistemos operatorius (TSO)', 'perkantysis subjektas pagal LR Pirkimų, atliekamų vandentvarkos', '2014/25/ES', 'TEISINIS ATITIKIMAS (PĮ)', 'PĮ 50 str. 5 d. - ', 'kritinė elektros perdavimo infrastruktūra']
-            .forEach(x => turi(sist[0], x, 'TS patikros instrukcija (PĮ)'));
+          lygu([sist[0].pav, sist[0].ist, sist[0].cit.ts_zenklas], ['LITGRID AB', 'PĮ', 'PĮ 50 str. 5 d.'], 'vykdytojas, įstatymas, nuoroda (PĮ)');
+          ['LITGRID AB - Lietuvos elektros perdavimo sistemos operatorius (TSO)', 'perkantysis subjektas pagal LR Pirkimų, atliekamų vandentvarkos', '2014/25/ES', 'kritinė elektros perdavimo infrastruktūra']
+            .forEach(x => turi(sist[0].kontekstas, x, 'pirkimo vykdytojo kontekstas (PĮ)'));
           lygu(refs, ['', 'PĮ 50 str. 5 d.'], 'PĮ: VPĮ 37 str. nuoroda nerodoma, PĮ - rodoma');
         }
       }
       V('epso-g'); sist.length = 0;
       try { await M(`TSGenerator.generateCompliance([{ number: '1', title: 'A', content: 'x' }], { meta: { title: 'T' } }, { model: 'x' })`); } catch (e) { /* atsakymo forma netinka - tikrinama tik instrukcija */ }
       try { await M(`PriceEstimator.estimate({ title: 'T', type: 'goods' }, [], { model: 'x' }, null, [], null)`); } catch (e) { /* tas pats */ }
-      turi(sist[0] || '', 'vyriausiasis UAB EPSO-G pirkimų metodininkas', 'TS kūrimo instrukcija');
-      turi(sist[0] || '', 'Visiškai atitinka VPĮ reikalavimus (ypač VPĮ 17 str. 1 d.', 'TS kūrimo instrukcija - VPĮ nuorodos');
-      turi(sist[1] || '', 'vyriausiasis UAB EPSO-G rinkos analitikas', 'kainos instrukcija');
-      tiesa(!/LITGRID AB|Litgrid AB|(^|[^V])PĮ \d/.test(sist.join('\n')), 'kūrimo ir kainos instrukcijose liko LITGRID AB / PĮ');
-      turi(RKo().SYSTEM_PROMPT, 'Tu esi UAB EPSO-G (perkančioji organizacija pagal VPĮ) pirkimų specialisto padėjėjas', 'konsultacijos klausimų instrukcija');
-      turi(RKo().SYSTEM_PROMPT, '(VPĮ 27 str. 1 d. 1 p.)', 'konsultacijos nuoroda');
-      ['UAB EPSO-G (perkančioji organizacija pagal VPĮ)', 'Perkančiosios organizacijos atsakymo juodraštis', 'sprendžia perkančioji organizacija', '(VPĮ 27 str. 1 d. 1 p.)'].forEach(x => turi(RSv().SYSTEM_PROMPT, x, 'apibendrinimo instrukcija'));
+      lygu([(sist[0] || {}).pav, (sist[0] || {}).ist], ['UAB EPSO-G', 'VPĮ'], 'TS kūrimo duomenys');
+      turi((sist[0] || { sarasas: {} }).sarasas.gen, 'VPĮ 17 str. 1 d.', 'TS kūrimo duomenys - VPĮ nuorodų sąrašas');
+      lygu([(sist[1] || {}).pav, (sist[1] || {}).ist], ['UAB EPSO-G', 'VPĮ'], 'kainos duomenys');
+      tiesa(!/LITGRID AB|Litgrid AB|(^|[^V])PĮ \d/.test(JSON.stringify(sist)), 'kūrimo ir kainos duomenyse liko LITGRID AB / PĮ');
+      const sd = () => M('diSistemosDuomenys()');
+      lygu([sd().kas, sd().savK, sd().savV, sd().cit.rinkos_konsultacijos], ['UAB EPSO-G (perkančioji organizacija pagal VPĮ)', 'Perkančiosios organizacijos', 'perkančioji organizacija', 'VPĮ 27 str. 1 d. 1 p.'], 'rinkos konsultacijos duomenys (VPĮ)');
       V('litgrid', 'PI');
-      ['Tu esi LITGRID AB (Lietuvos elektros perdavimo sistemos operatorius, perkantysis subjektas pagal PĮ)', '(PĮ 39 str. 1 d. 1 p.)'].forEach(x => turi(RKo().SYSTEM_PROMPT, x, 'LITGRID instrukcija nepakito'));
-      turi(RSv().SYSTEM_PROMPT, 'Perkančiojo subjekto atsakymo juodraštis', 'LITGRID apibendrinimo instrukcija');
-    } finally { w.GP_AI_PROXY.call = origP; atstatyk(); }
+      lygu([sd().kas, sd().savK, sd().savV, sd().cit.rinkos_konsultacijos], ['LITGRID AB (Lietuvos elektros perdavimo sistemos operatorius, perkantysis subjektas pagal PĮ)', 'Perkančiojo subjekto', 'perkantysis subjektas', 'PĮ 39 str. 1 d. 1 p.'], 'rinkos konsultacijos duomenys (PĮ)');
+    } finally { w.GP_AI_PROXY.uzduotis = origP; atstatyk(); }
   });
 
   await testas('T1: rinkos konsultacijos kvietimas, vieša ir vidaus suvestinė ir susitikimo santrauka - sąvoka, giminė ir įstatymas pagal vykdytoją; pirkimo vykdytojo apibrėžtis - ne rinkos dalyvis', async () => {
@@ -2183,10 +2189,10 @@ async function testaiPatikra1027() {
   });
 
   await testas('K2: rekomendacija pritaikoma tik tam skyriui, kuriame jos citata (tarpai ir markdown nesvarbūs); be citatos - nepritaikoma ir pasakoma; pataisytas skyrius - „DI pataisė“, ne „Žmogus tvirtino“', async () => {
-    const w = W(), origP = w.GP_AI_PROXY.call, siusta = [];
+    const w = W(), origP = w.GP_AI_PROXY.uzduotis, siusta = [];
     const ts = { title: 'TS', sections: [{ number: '1', title: 'Bendrosios', content: '1.1. Įranga turi būti **aukštos   kokybės** ir patikima.', _status: 'human-approved' },
       { number: '2', title: 'Apimtis', content: '2.1. Siemens SIPROTEC relės.', _status: 'human-approved' }, { number: '3', title: 'Garantija', content: '3.1. Garantija 24 mėn.', _status: 'human-approved' }] };
-    w.GP_AI_PROXY.call = async o => { siusta.push(o.userMessage); return atsakymas(/1\.1\./.test(o.userMessage) ? '1.1. Įranga turi atitikti ISO 9001.' : '2.1. Siemens SIPROTEC arba lygiavertės relės.'); };
+    w.GP_AI_PROXY.uzduotis = UZ(async o => { siusta.push(o.duomenys.turinys); return atsakymas(/1\.1\./.test(o.duomenys.turinys) ? '1.1. Įranga turi atitikti ISO 9001.' : '2.1. Siemens SIPROTEC arba lygiavertės relės.'); });
     try {
       w.__ts = ts;
       const r = await M(`TSGenerator.applyRecommendations(window.__ts, [{ severity: 'major', title: 'Subjektyvus', quote: 'aukštos kokybės ir patikima' },
@@ -2199,7 +2205,7 @@ async function testaiPatikra1027() {
       try { await M(`TSGenerator.applyRecommendations(window.__ts, [{ severity: 'major', title: 'X', quote: 'nėra tokio teksto visai' }], { title: 'TS' }, { model: 'x' })`); } catch (e) { kl = e.message; }
       turi(kl, 'nepavyko rasti', 'nė vienos citatos - klaida');
       M('App.genBusena().ts = window.__ts'); M('App.genBusena().ts.sections[0]._wasUpdated = true; App.genBusena().ts.sections[0]._status = "ai-updated"');
-    } finally { w.GP_AI_PROXY.call = origP; delete w.__ts; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; delete w.__ts; }
   });
 
   await testas('D1, D2, V6: apimties saugiklis pagauna tipines kvalifikacijos, vertinimo ir vertės formuluotes; skaičius be valiutos (techninis reikalavimas) lieka; nuoroda į pašalintą punktą pakeista - pasakoma', () => {
@@ -2219,22 +2225,22 @@ async function testaiPatikra1027() {
     tiesa(dok.indexOf('| Parametras') < 0 && dok.indexOf('|---|') < 0, 'liko pipe tekstas');
     tiesa(/<w:tblLayout w:type="fixed"\/>/.test(dok) && /Pastočių skaičius/.test(dok) && /<w:gridCol w:w="\d{3,}"\/>/.test(dok), 'Word lentelė');
     turi(st, 'w:ascii="Times New Roman"', 'šriftas'); turi(st, '<w:sz w:val="22"/>', 'dydis');
-    const origP = w.GP_AI_PROXY.call;
+    const origP = w.GP_AI_PROXY.uzduotis;
     try {
       for (const ats of ['{"rows":[{"ref":"2.1","requirement":"x"}]}', '{"items":[]}']) {
-        w.GP_AI_PROXY.call = async () => atsakymas(ats);
+        w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(ats));
         let kl = '';
         try { await M(`TSGenerator.generateCompliance([{ number: '1', title: 'A', content: 'x' }], { meta: { title: 'T' } }, { model: 'x' })`); } catch (e) { kl = e.message; }
         tiesa(/atitikties lentelės eilu/.test(kl), 'klaida: ' + ats + ' -> ' + kl);
       }
-    } finally { w.GP_AI_PROXY.call = origP; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; }
   });
 
   await testas('D7, D8, D12, V2: DI klausimų id - modulio (q1...), DI id su kabutėmis ir tarpais neįterpiami į HTML, vienodi id nesumaišo atsakymų; objekto tipas be numatytojo; per žingsnių juostą be duomenų - negeneruojama', async () => {
-    const w = W(), d = D(), origP = w.GP_AI_PROXY.call, origC = w.confirm; let kvietimu = 0;
+    const w = W(), d = D(), origP = w.GP_AI_PROXY.uzduotis, origC = w.confirm; let kvietimu = 0;
     w.confirm = () => true;
-    w.GP_AI_PROXY.call = async () => { kvietimu++; return atsakymas(JSON.stringify({ questions: [{ id: 'q2" onfocus="window.__XSS=1" x="', question: 'Kiek vienetų?', category: 'x" onclick="window.__XSS=2', critical: false },
-      { id: 'q 3', question: 'Ar reikia 24/7?', suggestedAnswers: ['Taip, 24/7'] }, { id: 'q 3', question: 'Ar reikia mokymų?' }, { id: 'q4' }], cvpisSearchKeywords: [] })); };
+    w.GP_AI_PROXY.uzduotis = UZ(async () => { kvietimu++; return atsakymas(JSON.stringify({ questions: [{ id: 'q2" onfocus="window.__XSS=1" x="', question: 'Kiek vienetų?', category: 'x" onclick="window.__XSS=2', critical: false },
+      { id: 'q 3', question: 'Ar reikia 24/7?', suggestedAnswers: ['Taip, 24/7'] }, { id: 'q 3', question: 'Ar reikia mokymų?' }, { id: 'q4' }], cvpisSearchKeywords: [] })); });
     try {
       d.querySelector('.tab-btn[data-tab="generate"]').click();
       M('App.startNewGeneration()');
@@ -2255,16 +2261,16 @@ async function testaiPatikra1027() {
       M('App.goToStep(4)'); await M('App.runFullGeneration()');
       lygu(kvietimu, 0, 'be pavadinimo DI nekviečiamas');
       lygu(d.querySelector('.wizard-step.active').dataset.wizardStep, '1', 'grąžinta į 1 žingsnį');
-    } finally { w.GP_AI_PROXY.call = origP; w.confirm = origC; delete w.__XSS; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.confirm = origC; delete w.__XSS; }
   });
 
   await testas('D9, V15: DI pastabos citata rodoma tik jei yra tekste; teisės nuoroda - tik registro (instrukcijos); sunkumas „high“ - „Reikšminga“, nežinoma kategorija - „Kita“; pasakoma, kas atmesta', async () => {
-    const w = W(), origP = w.GP_AI_PROXY.call;
+    const w = W(), origP = w.GP_AI_PROXY.uzduotis;
     const tekstas = 'Įranga turi būti   aukštos kokybės\nir patikima. Tiekėjas turi pateikti 10 vnt.';
-    w.GP_AI_PROXY.call = async () => atsakymas(JSON.stringify({ summary: 'S', issues: [
+    w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(JSON.stringify({ summary: 'S', issues: [
       { title: 'A', severity: 'high', category: 'nezinoma', quote: 'aukštos kokybės ir patikima', legalRef: M("teise('ts_zenklas')") },
       { title: 'B', severity: 'critical', category: 'competition', quote: 'Šios citatos tekste nėra visiškai', legalRef: 'VPĮ 37 str. 7 d.' },
-      { title: 'C', severity: 'medium', category: 'x" onmouseover="window.__XSS=1', quote: '', legalRef: 'VPT rekomendacijos' }] }));
+      { title: 'C', severity: 'medium', category: 'x" onmouseover="window.__XSS=1', quote: '', legalRef: 'VPT rekomendacijos' }] })));
     try {
       const r = await M('AIAnalyzer').analyze(tekstas, { title: 'TS' }, { issues: [] }, { model: 'x', options: {}, depth: 'quick' });
       lygu(r.issues.map(i => [i.severity, i.category, i.quote, i.legalRef, i.citataNerasta, i.nuorodaNerodoma]), [
@@ -2278,7 +2284,7 @@ async function testaiPatikra1027() {
       turi(L, 'Patikrinkite: DI nurodyta citata tekste nerasta - nerodoma.', 'citata'); turi(L, 'nuorodos nėra G-Procure teisės nuorodų registre', 'nuoroda');
       tiesa(L.indexOf('Šios citatos tekste nėra') < 0 && L.indexOf('VPĮ 37 str. 7 d.') < 0, 'netikra citata ar nuoroda rodoma');
       tiesa([...D().querySelectorAll('.issue-cat-chip')].some(b => /^Kita/.test(b.textContent.trim())) && !w.__XSS && !D().querySelector('[onmouseover*="__XSS"]'), 'kategorija „Kita“ ir be įterpimo');
-    } finally { w.GP_AI_PROXY.call = origP; delete w.__XSS; }
+    } finally { w.GP_AI_PROXY.uzduotis = origP; delete w.__XSS; }
   });
 
   await testas('D10, M9: prekės ženklas tikrinamas savo sakinyje („arba lygiavertis“ gretimame - nesiskaito), „Wartsilä“, energetikos gamintojai, trumpi ženklai - tik didžiosiomis; „realiu laiku“ ir „patikimumas - ne mažiau kaip 99 %“ - ne subjektyvūs', () => {
@@ -2374,11 +2380,11 @@ async function testaiPatikra1027() {
 
   await testas('V4, V13, M3, M4, M8: nutrūkęs DI atsakymas (Claude API stop_reason) - pasakoma; į DI nesiunčiamos TS eilutės su verte; kainos klausimai iš DI - neįtraukiami; kvietime - be dvigubo taško, vienetai, supaprastintas konkursas, kainos sakinys tik su kainos klausimu', async () => {
     rkParuosk({ tekstas: RK_TS + '\nPirkimui skirta 45 000 EUR be PVM.' });
-    const w = W(), d = D(), origP = w.GP_AI_PROXY.call, origT = w.setTimeout, uzkl = [];
+    const w = W(), d = D(), origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout, uzkl = [];
     w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
-    w.GP_AI_PROXY.call = async o => { uzkl.push(o); return Object.assign(atsakymas(JSON.stringify({ klausimai: [{ tema: 'objektas', klausimas: 'Ar 180 kalendorinių dienų pristatymo terminas realus?', citata: '' },
-      { tema: 'kaina', klausimas: 'Kokia būtų jūsų kaina už 25 vnt. transformatorių?' }] })), { raw: { stop_reason: 'max_tokens' } }); };
-    try { await M('App.rkSiulykDI()'); } finally { w.GP_AI_PROXY.call = origP; w.setTimeout = origT; }
+    w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); return Object.assign(atsakymas(JSON.stringify({ klausimai: [{ tema: 'objektas', klausimas: 'Ar 180 kalendorinių dienų pristatymo terminas realus?', citata: '' },
+      { tema: 'kaina', klausimas: 'Kokia būtų jūsų kaina už 25 vnt. transformatorių?' }] })), { raw: { stop_reason: 'max_tokens' } }); });
+    try { await M('App.rkSiulykDI()'); } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; }
     tiesa(uzkl[0].userMessage.indexOf('45 000') < 0, 'V13: vertė DI užklausoje');
     const b = d.getElementById('rkBusena').textContent;
     turi(b, 'DI atsakymas nutrūko', 'V4'); turi(b, 'Kainos klausimų DI pasiūlė 1', 'M8'); turi(b, 'eilučių su numatoma verte ar sumomis: 1', 'V13 pastaba');
@@ -2446,6 +2452,95 @@ async function testaiPatikra1027() {
 }
 
 /* ========================================================================== */
+/* DI užduotys serveryje (2026-11-08, naudotojo sprendimas - kodo apsauga): visos PP-ts DI užklausos - GP_AI_PROXY.uzduotis('pp-ts.<užduotis>', duomenys,
+   { modelis, signal }); instrukcijos ir užklausų tekstai - privačiuose serverio šablonuose (lygybė su ankstesnėmis užklausomis patikrinta 30 užklausų
+   abiem režimais). Čia - kokia užduotis, kokie duomenys ir parametrai siunčiami, ir kad modulyje instrukcijų nebeliko. */
+async function testaiDiUzduotys1108() {
+  grupe('DI užduotys serveryje (2026-11-08): modulis siunčia tik duomenis');
+  const w = W(), origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout, uzkl = [];
+  const ATS = { auditas: '{"summary":"S","strengths":[],"actionPlan":[],"issues":[]}', klausimai: '{"questions":[{"id":"q1","question":"Kiek?","category":"techniniai","critical":true}],"cvpisSearchKeywords":[]}',
+    karkasas: '{"title":"TS","sectionTitles":[{"number":"1","title":"Bendrosios nuostatos"},{"number":"2","title":"Techniniai reikalavimai"}]}', skyrius: '1.1. Įranga turi atitikti ISO 9001 standartą.',
+    atitiktis: '{"items":[{"ref":"1.1","requirement":"ISO 9001","category":"quality"}]}', rinka: '{"marketSize":"M"}', taisymas: '1.1. Pataisyta.', kaina: '{"estimate":{"central":1}}',
+    'rk-klausimai': '{"klausimai":[{"tema":"terminai","klausimas":"Ar 5 metų garantija įprasta rinkoje?","citata":"Garantija - 5 metai."}]}', 'rk-apibendrinimas': '{"temos":[{"tema":"objektas","apibendrinimas":"Vienas rinkos dalyvis siūlė."}]}' };
+  let blogi = 0;
+  const SIST = ['pav', 'kontekstas', 'ist', 'kas', 'savK', 'savV', 'cit', 'apie', 'sarasas'];
+  const meta = { title: 'Galios transformatorių priežiūra', type: 'services', cpv: '50532000-3', quantity: '4', unit: 'vnt.', duration: 24, budget: 150000, value: 1500000, description: 'Aprašymas', flags: { green: true, critical: false, parts: null } };
+  try {
+    w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
+    w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); const r = o.uzduotis.replace('pp-ts.', ''); return atsakymas(blogi-- > 0 ? 'Čia ne JSON' : ATS[r]); });
+    w.__meta = meta;
+    await testas('Analizė: pp-ts.auditas, vykdytojo ir registro duomenys, pirkimo duomenys tekstu, kryptys, gylis, TS tekstas; kartojant - tik bandymo numeris; modelis iš nustatymų; be instrukcijos ir ilgio', async () => {
+      uzkl.length = 0; blogi = 2;
+      await M(`AIAnalyzer.analyze('Kabelis Prysmian arba lygiavertis.', window.__meta, { issues: [1, 2] }, { model: 'claude-opus-4-6', depth: 'deep', options: { grammar: true, legal: false } })`);
+      lygu(uzkl.map(o => [o.uzduotis, o.duomenys.bandymas]), [['pp-ts.auditas', undefined], ['pp-ts.auditas', 1], ['pp-ts.auditas', 2]], 'užklausos ir bandymai');
+      const d = uzkl[0].duomenys;
+      SIST.forEach(k => tiesa(d[k] !== undefined && d[k] !== '', 'nėra lauko ' + k));
+      lygu([d.ist, d.kryptys, d.aspektai, d.taisykliu, d.gylis, d.tekstas], ['PĮ', ['grammar'], ['green'], 2, 'deep', 'Kabelis Prysmian arba lygiavertis.'], 'užduoties duomenys');
+      lygu([d.meta.title, d.meta.duration, d.meta.value], ['Galios transformatorių priežiūra', '24', '1500000'], 'pirkimo duomenys - tekstu');
+      tiesa(/^1[\s  ]500[\s  ]000$/.test(d.meta.valueLt), 'vertė lietuvišku formatu: ' + d.meta.valueLt);
+      tiesa(!('flags' in d.meta), 'pirkimo aspektai siunčiami sąrašu, ne objektu');
+      lygu(d.cit.ts_zenklas, M('GP_TEISE.cit("ts_zenklas", "PI")'), 'nuoroda iš registro');
+      lygu(d.apie.principai, M('GP_TEISE.apie("principai", "PI")'), 'aprašas iš registro');
+      lygu(d.sarasas.gen, M('GP_TEISE.sarasas(["principai", "ts", "dokumentu_aiskumas", "dalys"], "PI")'), 'nuorodų sąrašas iš registro');
+      lygu([uzkl[0].model, Object.keys(uzkl[0].opts).sort()], ['claude-opus-4-6', ['modelis', 'signal']], 'parametrai');
+    });
+    await testas('TS kūrimas: klausimai, karkasas, skyriai (su visa struktūra), atitikties lentelė, rinka, kaina, pataisymas - savos užduotys ir duomenys; kainos statistika be įspėjimo (jis - šablone)', async () => {
+      uzkl.length = 0; blogi = 0;
+      await M(`TSGenerator.generateQuestions(window.__meta, { model: '' }, () => {})`);
+      const an = [{ name: 'Transformatorių priežiūra', value: 120000, date: '2026-01-20T00:00:00', year: 2026 }];
+      const st = { count: 5, median: 110000, trimmedMean: 112000, mean: 115000, p25: 90000, p75: 130000, stdDev: 20000, min: 50000, max: 200000, apkarpyta: true, laikotarpis: '2024-2026 m.' };
+      w.__an = an; w.__st = st;
+      const ts = await M(`TSGenerator.generateFullTs(window.__meta, [{ question: 'Kiek vienetų?', answer: '4' }], [{ text: 'Analogas' }], { model: '' }, () => {}, window.__an)`);
+      await M(`TSGenerator.analyzeMarket(window.__meta, window.__an, window.__st, { model: '' }, () => {})`);
+      await M(`PriceEstimator.estimate(window.__meta, [{ question: 'Kiek?', answer: '4' }], { model: '' }, () => {}, window.__an, window.__st)`);
+      w.__ts = ts;
+      await M(`TSGenerator.applyRecommendations(window.__ts, [{ severity: 'major', title: 'Ženklas', quote: 'Įranga turi atitikti ISO 9001 standartą' }], window.__meta, { model: '' }, () => {})`);
+      const pagal = id => uzkl.filter(o => o.uzduotis === 'pp-ts.' + id).map(o => o.duomenys);
+      lygu(['klausimai', 'karkasas', 'skyrius', 'atitiktis', 'rinka', 'kaina', 'taisymas'].map(id => pagal(id).length), [1, 1, 2, 1, 1, 1, 1], 'užduočių skaičius');
+      tiesa(uzkl.every(o => o.model === w.GP_AI_PROXY.MODEL), 'be pasirinkto modelio - numatytasis');
+      lygu(pagal('klausimai')[0].aspektai, ['green'], 'klausimų aspektai');
+      const k = pagal('karkasas')[0];
+      lygu([k.atsakymai, /CVP IS ANALOGAI:\n1\. "Transformatorių priežiūra"/.test(k.cvpis)], ['Q1: Kiek vienetų?\nA1: 4', true], 'karkaso duomenys');
+      const sk = pagal('skyrius');
+      lygu(sk.map(d => [d.skNr, d.skPav]), [['1', 'Bendrosios nuostatos'], ['2', 'Techniniai reikalavimai']], 'skyriai');
+      lygu(sk[0].skyriai, ['1. Bendrosios nuostatos', '2. Techniniai reikalavimai'], 'visa TS struktūra');
+      turi(sk[0].analogai, '--- Analogas 1 ---\nAnalogas', 'analogai');
+      turi(pagal('atitiktis')[0].santrauka, '1. Bendrosios nuostatos:\n1.1. Įranga', 'atitikties lentelės santrauka');
+      turi(pagal('rinka')[0].statistika, '- Analogiškų sutarčių rasta: 5', 'rinkos statistika');
+      tiesa(/^150[\s  ]000$/.test(pagal('rinka')[0].meta.budgetLt), 'rinkos vertė');
+      const ka = pagal('kaina')[0];
+      turi(ka.cvpis, 'REALŪS CVP IS DUOMENYS', 'kainos CVP IS duomenys'); turi(ka.statistika, '- Mediana:', 'kainos statistika');
+      tiesa(ka.statistika.indexOf('SVARBU') < 0, 'kainos statistikoje - instrukcijos sakinys (jis šablone)');
+      const ta = pagal('taisymas')[0];
+      lygu([ta.skNr, ta.skPav, ta.turinys], ['1', 'Bendrosios nuostatos', '1.1. Įranga turi atitikti ISO 9001 standartą.'], 'taisomas skyrius');
+      turi(ta.pastabos, '1. [MAJOR] Ženklas', 'pastabos');
+      tiesa(uzkl.every(o => !('system' in o.opts) && !('maxTokens' in o.opts)), 'siunčiama instrukcija ar ilgis');
+    });
+    await testas('Rinkos konsultacija: pp-ts.rk-klausimai (pavadinimas, tipas žodžiu, būdas, formos klausimai, TS) ir pp-ts.rk-apibendrinimas (užkoduotos pastabos); kartojant - bandymo numeris', async () => {
+      uzkl.length = 0; blogi = 1;
+      await M(`RinkosKonsultacija.siulykDI('Tiekėjas turi pateikti 4 vnt. transformatorių. Garantija - 5 metai.', { pavadinimas: 'Transformatorių pirkimas', tipas: 'prekes', budas: 'Atviras konkursas', verte: 150000 }, { model: '' }, undefined, () => {})`);
+      lygu(uzkl.map(o => [o.uzduotis, o.duomenys.bandymas]), [['pp-ts.rk-klausimai', undefined], ['pp-ts.rk-klausimai', 1]], 'užklausos');
+      const d = uzkl[0].duomenys;
+      lygu([d.pavadinimas, d.tipas, d.budas, d.formos.length], ['Transformatorių pirkimas', 'Prekės', 'Atviras konkursas', M('RinkosKonsultacija.FORMOS_KLAUSIMAI.length')], 'duomenys');
+      tiesa(!/150[\s ]?000/.test(JSON.stringify(d)), 'siunčiama numatoma vertė');
+      uzkl.length = 0; blogi = 0;
+      const S = M('RinkosSuvestine.naujaBusena()');
+      w.__S = S;
+      M(`window.__S.dalyviai.push({ id: 'd1', vardas: 'UAB „Alfa“', kodas: 'A' }); window.__S.pastabos.push({ id: 'p1', tema: 'objektas', dalyvis: 'd1', tekstas: 'UAB „Alfa“ siūlo leisti IEC 60076 lygiaverčius standartus.', busena: 'nagrineti' })`);
+      await M(`RinkosSuvestine.apibendrinkDI(window.__S, ['objektas'], { pavadinimas: 'Transformatorių pirkimas', tipas: 'prekes' }, { model: '' }, undefined, () => {})`);
+      const a = uzkl[0];
+      lygu([a.uzduotis, a.duomenys.pirkimas], ['pp-ts.rk-apibendrinimas', 'Transformatorių pirkimas (prekės)'], 'apibendrinimo užduotis');
+      turi(a.duomenys.pastabos, 'Dalyvis A: Dalyvis A siūlo leisti IEC 60076', 'užkoduotos pastabos');
+      tiesa(!/Alfa/.test(JSON.stringify(a.duomenys)), 'siunčiamas dalyvio pavadinimas');
+    });
+    await testas('Modulyje nebeliko DI instrukcijų ir tiesioginių GP_AI_PROXY.call kvietimų (instrukcijos - serverio šablonuose)', async () => {
+      const src = await (await fetch('./TS_Asistentas.html', { cache: 'no-store' })).text();
+      ['TAVO UŽDUOTIS', 'TS APIMTIS (privaloma)', 'NIEKADA NEMELUOK', 'GRĄŽINK TIK VALID JSON', 'Tu esi ekspertas Lietuvos', 'Tu esi vyriausiasis', 'pirkimų specialisto padėjėjas',
+        'SYSTEM_PROMPT', 'GP_AI_PROXY.call(', 'SVARBU (BANDYMAS'].forEach(x => tiesa(src.indexOf(x) < 0, 'modulyje liko: ' + x));
+    });
+  } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; delete w.__meta; delete w.__an; delete w.__st; delete w.__ts; delete w.__S; }
+}
+
 async function viskas() {
   document.getElementById('paleisti').disabled = true;
   document.getElementById('rezultatai').innerHTML = '';
@@ -2471,6 +2566,7 @@ async function viskas() {
     await testaiPatikra1027();
     await testaiSprendimai1027();
     await testaiLaukai1105();
+    await testaiDiUzduotys1108();
 
     document.getElementById('busena').textContent =
       R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';
