@@ -7864,6 +7864,37 @@ async function testaiSaugumas(){
     }
   });
 
+  await testas("DI mokymui - draudimas (Autorių teisių ir gretutinių teisių įstatymo 22² str. 2 d., Direktyvos (ES) 2019/790 4 str. 3 d.: tekstų ir duomenų gavybos išlyga netaikoma, kai teisių subjektai kompiuterio skaitomomis priemonėmis pasilieka teisę): robots.txt DI mokymo robotams - Disallow: /, paieškos sistemoms ir DI paieškai - leidžiama, testai ir kūrėjų failai - ne paieškai; /.well-known/tdmrep.json (W3C TDMRep) - visai svetainei", async ()=>{
+    const rb = await saltinis("../robots.txt");
+    // Grupės pagal robots.txt (RFC 9309): eilės User-agent eilučių iš eilės ir jų taisyklės
+    const grupes = []; let g = null, buvoTaisykle = false;
+    for (const e of rb.split("\n").map(x => x.replace(/#.*$/, "").trim()).filter(Boolean)) {
+      const x = /^([A-Za-z-]+):\s*(.*)$/.exec(e); if (!x) continue;
+      const k = x[1].toLowerCase(), v = x[2].trim();
+      if (k === "user-agent") { if (!g || buvoTaisykle) { g = { agentai: [], taisykles: [] }; grupes.push(g); buvoTaisykle = false; } g.agentai.push(v.toLowerCase()); }
+      else if (k === "allow" || k === "disallow") { tiesa(g, "taisyklė be User-agent: " + e); g.taisykles.push([k, v]); buvoTaisykle = true; }
+    }
+    const grupe = a => grupes.find(x => x.agentai.includes(a.toLowerCase())) || grupes.find(x => x.agentai.includes("*"));
+    const uzdrausta = a => { const gr = grupe(a); return gr.taisykles.some(([k, v]) => k === "disallow" && v === "/"); };
+    for (const a of ["GPTBot", "ClaudeBot", "CCBot", "Google-Extended", "Applebot-Extended", "meta-externalagent", "Bytespider", "cohere-training-data-crawler", "Amazonbot"])
+      tiesa(uzdrausta(a), "robots.txt: " + a + " (DI mokymas) neuždraustas");
+    for (const a of ["Googlebot", "Bingbot", "OAI-SearchBot", "Claude-SearchBot", "ChatGPT-User", "Claude-User", "DuckDuckBot", "facebookexternalhit"])
+      tiesa(!uzdrausta(a), "robots.txt: " + a + " (paieška ar naudotojo užklausa) neturi būti uždraustas");
+    const visi = grupe("*").taisykles;
+    tiesa(visi.some(([k, v]) => k === "allow" && v === "/"), "User-agent: * - Allow: /");
+    for (const k of ["/CLAUDE", "/docs/", "/worker/", "/*testai.html", "/PP-salygos/zemelapiai/"]) tiesa(visi.some(([t, v]) => t === "disallow" && v === k), "User-agent: * - Disallow: " + k);
+    tiesa(/^Sitemap: https:\/\/g-procure\.com\/sitemap\.xml$/m.test(rb), "Sitemap");
+    tiesa(/22² straipsnio\s*\n?#?\s*2 dalis/.test(rb) && /2019\/790 4 straipsnio 3 dalis/.test(rb) && /Article 4\(3\) of Directive \(EU\) 2019\/790/.test(rb), "robots.txt: teisinis pagrindas LT ir EN");
+    // Svetainės žemėlapyje - tik paieškai skirti puslapiai (ne uždrausti)
+    const sm = await saltinis("../sitemap.xml");
+    const uzd = visi.filter(([k]) => k === "disallow").map(([, v]) => new RegExp("^" + v.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")));
+    const blogi = [...sm.matchAll(/<loc>https:\/\/g-procure\.com([^<]*)<\/loc>/g)].map(x => x[1]).filter(k => uzd.some(r => r.test(k)));
+    tiesa(!blogi.length, "sitemap.xml turi robots.txt uždraustų adresų: " + blogi.join(", "));
+    const td = JSON.parse(await saltinis("../.well-known/tdmrep.json"));
+    tiesa(Array.isArray(td) && td.length === 1, "tdmrep.json - masyvas su viena taisykle");
+    lygu(td[0], { location: "/", "tdm-reservation": 1 }, "tdmrep.json taisyklė");
+  });
+
   await testas("saugumas.html: LT ir EN blokai, vienas h1, kontaktas abiem kalbomis; nuorodos iš DI valdymo ir privatumo puslapių (LT ir EN) ir svetainės žemėlapyje su hreflang", async ()=>{
     const { f, w, d } = await new Promise(res => { const f = document.createElement("iframe"); f.addEventListener("load", () => res({ f, w: f.contentWindow, d: f.contentDocument }), { once: true }); f.src = "../saugumas.html?lang=lt"; document.body.appendChild(f); });
     try {
