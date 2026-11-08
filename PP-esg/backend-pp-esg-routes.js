@@ -34,6 +34,17 @@ try { rateLimit = require('express-rate-limit'); } catch (_) { rateLimit = null;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+// Preliminaraus sankcijų rizikos vertinimo instrukcija (LT / EN) - privatus serverio failas šalia DI užduočių šablonų
+// (/var/www/g-procure/uzduotys/_pp-esg-sankcijos.js; kopija - g-procure-privatu/serveris/uzduotys/). Įkeliama pirmą kartą prireikus;
+// nėra - vertinimas neteikiamas (503), serveris veikia toliau.
+let _esgInstrukcija = null;
+function esgInstrukcija(lang) {
+  try {
+    if (!_esgInstrukcija) _esgInstrukcija = require(process.env.GP_ESG_INSTRUKCIJA || './uzduotys/_pp-esg-sankcijos.js');
+    const t = _esgInstrukcija.sistema(lang === 'en' ? 'en' : 'lt');
+    return typeof t === 'string' && t ? t : null;
+  } catch (_) { return null; }
+}
 
 /* ---- Rate limiter: brangiems AI kvietimams (apsauga nuo piktnaudžiavimo) ---- */
 const assessmentLimiter = rateLimit
@@ -123,23 +134,9 @@ router.post('/sanctions-assessment', assessmentLimiter, async (req, res) => {
 
   const { lang, supplier, context } = input;
 
-  const sys = lang === 'en'
-    ? `You are a procurement compliance assistant for EPSO-G, a Lithuanian electricity transmission group operating under the utilities procurement law (PSĮ). You produce a PRELIMINARY, NON-FINAL sanctions-risk assessment to help a procurement officer decide what to investigate next.
-HARD RULES:
-- You NEVER issue a final "clean" or "blocked" verdict. That decision belongs to the responsible officer using official EU, OFAC, UN and national sanctions lists.
-- You did not check any list and you do not claim a supplier is or is not on any sanctions list; you only flag risk indicators worth verifying.
-- Do not cite legal acts or their numbers (regulations, directives, laws, articles), and do not name any law as a legal basis.
-- Be concise, factual, and avoid speculation presented as fact.
-Return ONLY valid JSON, no prose, matching exactly:
-{"level":"low|medium|high","factors":["..."],"actions":["..."]}`
-    : `Esi EPSO-G (Lietuvos elektros perdavimo grupės, veikiančios pagal PSĮ) pirkimų atitikties asistentas. Tu rengi PRELIMINARŲ, NEGALUTINĮ sankcijų rizikos vertinimą, kuris padeda pirkimų specialistui nuspręsti, ką toliau tikrinti.
-GRIEŽTOS TAISYKLĖS:
-- NIEKADA nepateiki galutinio „švarus" ar „blokuotas" verdikto. Šį sprendimą priima atsakingas asmuo, naudodamas oficialius ES, OFAC, JT ir nacionalinius sankcijų sąrašus.
-- Sąrašų netikrinai ir neteigi, kad tiekėjas yra ar nėra kuriame nors sąraše; tik nurodai rizikos požymius, kuriuos verta patikrinti.
-- Necituok teisės aktų ir jų numerių (reglamentų, direktyvų, įstatymų, straipsnių) ir nenurodyk jokio įstatymo kaip teisinio pagrindo.
-- Būk glaustas, faktiškas, nepateik spėlionių kaip faktų.
-Grąžink TIK galiojantį JSON, be jokio papildomo teksto, tiksliai tokios formos:
-{"level":"low|medium|high","factors":["..."],"actions":["..."]}`;
+  // Sistemos instrukcija - privačiame serverio faile (nuo 2026-11-08, naudotojo sprendimas - kodo apsauga); be jo vertinimas neteikiamas
+  const sys = esgInstrukcija(lang);
+  if (!sys) return res.status(503).json({ error: 'AI paslauga nesukonfigūruota (nėra instrukcijos).' });
 
   const userMsg = (lang === 'en' ? 'Supplier:\n' : 'Tiekėjas:\n') +
     `- ${lang === 'en' ? 'Name' : 'Pavadinimas'}: ${supplier.name || 'n/a'}\n` +
