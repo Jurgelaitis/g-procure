@@ -13,29 +13,7 @@
   var MAX_TOKENS = 8000;                     // serverio riba (R5) - ilgesnis dokumentas nutrūktų: pasakoma, ką daryti
   var MAX_EL = 2000, MAX_LANG = 30, MAX_TXT = 4000;
 
-  function systemPrompt() {
-    return [
-      "Tu esi dokumentu teksto atpazinimo asistentas. Gauni skenuota (be teksto sluoksnio) lietuviska",
-      "pirkimo dokumenta (technine specifikacija, kvalifikacijos ar aplinkosaugos reikalavimus, vertinimo",
-      "metodika). Tavo uzduotis - PERRASYTI jo teksta tiksliai taip, kaip parasyta.",
-      "",
-      "GRIEZTOS TAISYKLES:",
-      "1. Atsakyk TIK gryno JSON formatu, be jokio kito teksto, be markdown.",
-      "2. Perrasyk pazodziui su lietuviskomis raidemis, skaiciais ir skyryba. NIEKO nekeisk, netaisyk,",
-      "   nepapildyk, nesutrumpink ir neaiskink. Neiskaitoma vieta - [neiskaitoma].",
-      "3. Pastraipa - {\"p\":\"tekstas\"}. Lentele - {\"lentele\":[[\"langelis\",\"langelis\"],[...]]}: eilutes ir",
-      "   langeliai ta pacia tvarka, langelio pastraipos atskirtos \\n; tuscias langelis - \"\".",
-      "4. Antrastes, puslapiu numeriai, parasai, antspaudai - nerasyk (tik turini).",
-      "5. Jei dokumentas visai neiskaitomas - {\"status\":\"neiskaitoma\",\"pastabos\":\"...\"}.",
-      "",
-      "JSON schema:",
-      "{ \"status\": \"ok\", \"elementai\": [ {\"p\":\"...\"} | {\"lentele\":[[\"...\"]]} ], \"pastabos\": \"<trumpa pastaba, jei reikia>\" }"
-    ].join("\n");
-  }
-  function userText(vardas) {
-    return "Perrasyk pridetos skenuoto dokumento teksto turini" + (vardas ? " (failas: " + String(vardas).slice(0, 120) + ")" : "") +
-           ". Atsakyk grieztai pagal sistemos zinuteje aprasyta JSON schema.";
-  }
+  // DI instrukcija ir užklausos tekstas - serverio šablone pp-salygos.skenuotas (nuo 2026-11-08, kodo apsauga): siunčiamas tik failo vardas ir PDF.
 
   var str = function (x, n) { return typeof x === "string" ? x.slice(0, n) : ""; };
   /* Atsakymas -> { ok, elementai: [{ p } | { lentele }], pastabos } arba { ok: false, error } */
@@ -108,7 +86,7 @@
       // atšaukta, kol failas ruoštas - į DI nesiunčiama
       if (opts.signal && opts.signal.aborted) throw Object.assign(new Error("Atšaukta"), { name: "AbortError" });
       if (opts.onParuosta) opts.onParuosta(pr);
-      return root.GP_AI_PROXY.call({ module: "pp-salygos", maxTokens: MAX_TOKENS, system: systemPrompt(), userMessage: userText(file && file.name), pdfBase64: pr.base64, signal: opts.signal });
+      return root.GP_AI_PROXY.uzduotis("pp-salygos.skenuotas", { vardas: String((file && file.name) || "").slice(0, 120) }, { dokumentas: { tipas: "application/pdf", duomenys: pr.base64 }, signal: opts.signal });
     }).then(function (r) {
       if (!r.ok) throw new Error(r.error || "DI klaida");
       var a = issAtsakymo(r.text, r.raw && r.raw.stop_reason);
@@ -119,5 +97,5 @@
     });
   }
 
-  root.GP_SKENUOTI = { systemPrompt: systemPrompt, userText: userText, issAtsakymo: issAtsakymo, blokai: blokai, docxXml: docxXml, docx: docx, perskaityk: perskaityk, MAX_TOKENS: MAX_TOKENS };
+  root.GP_SKENUOTI = { issAtsakymo: issAtsakymo, blokai: blokai, docxXml: docxXml, docx: docx, perskaityk: perskaityk, MAX_TOKENS: MAX_TOKENS };
 })(typeof window !== "undefined" ? window : this);

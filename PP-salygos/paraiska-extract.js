@@ -217,84 +217,7 @@
 
   /* ==== 2. PROMPTAI ======================================================= */
 
-  function systemPrompt() {
-    return [
-      "Tu esi dokumentu analizes asistentas, istraukiantis pirkimo duomenis is",
-      "DocLogix pirkimo paraiskos korteles (lietuviu kalba).",
-      "",
-      "GRIEZTOS TAISYKLES:",
-      "1. Atsakyk TIK gryno JSON formatu, be jokio kito teksto, be markdown.",
-      "2. Jei lauko korteleje NERA arba nesi tikras - grazink null (objektams)",
-      "   arba \"nenustatyta\" (pasirinkimams). NIEKADA nespek.",
-      "3. Kiekvienam rastam laukui BUTINA citata - tikslus teksto fragmentas",
-      "   is korteles, is kurio paimta reiksme.",
-      "4. pirkimo_budas - perrasyk TIKSLIAI taip, kaip parasyta korteleje",
-      "   (jo nekeisk ir neinterpretuok - kanonizuojama atskirai).",
-      "5. pavadinimas_kilmininkas - pirkimo pavadinimas KILMININKO linksniu",
-      "   BE zodzio \"pirkimas\" gale (pvz. is \"X paslaugu ir darbu pirkimas\"",
-      "   -> \"X paslaugu ir darbu\"). Jei pavadinimas jau be \"pirkimas\" -",
-      "   palik kaip yra.",
-      "6. objekto_tipas: \"prekes\" | \"paslaugos\" | \"darbai\" | \"nenustatyta\".",
-      "   Spresk is pavadinimo/objekto aprasymo. Jei misrus (pvz. \"paslaugu ir",
-      "   rangos darbu\") - parink VYRAUJANTI pagal pirkimo esme, o alternatyvas",
-      "   israsyk i tipo_kandidatai.",
-      "7. nacionalinis_saugumas: \"taip\", jei korteleje nurodyta, kad sutartis",
-      "   atitiks nacionaliniam saugumui svarbiu objektu apsaugos kriterijus",
-      "   (pvz. minimas istatymo 13 str. 4 d.); \"ne\", jei aiskiai nurodyta",
-      "   priesingai; kitaip \"nenustatyta\".",
-      "8. dalys: \"neskaidomas\", jei korteleje aiskiai parasyta, kad pirkimas",
-      "   (pirkimo objektas) i dalis neskaidomas; \"skaidomas\" - jei korteleje",
-      "   aiskiai nurodyta, kad pirkimas skaidomas i dalis: skaicius - daliu",
-      "   skaicius (sveikasis skaicius), pavadinimai - daliu pavadinimai kortele",
-      "   eiles tvarka (jei nurodyti); kitaip \"nenustatyta\". Prekiu grupes,",
-      "   sarasu eilutes ar objekto rusys NERA pirkimo dalys.",
-      "9. es_lesos: \"taip\", jei korteleje aiskiai nurodyta, kad pirkimas (sutartis)",
-      "   finansuojamas Europos Sajungos fondu ar programu lesomis (ES lesos, ES",
-      "   projektas, finansavimo saltinis - ES fondai); \"ne\", jei aiskiai nurodyta,",
-      "   kad ES lesomis nefinansuojamas (pvz. finansavimo saltinis - nuosavos",
-      "   lesos ir ES lesu laukas \"Ne\"); kitaip \"nenustatyta\". projekto_nr -",
-      "   ES projekto numeris ar kodas, projekto_pavadinimas - ES projekto",
-      "   pavadinimas, jei nurodyti (perrasyk tiksliai).",
-      "10. bvpz_kodai - visi korteleje nurodyti pirkimo objekto BVPZ (CPV) kodai,",
-      "   perrasyti tiksliai (8 skaitmenys, bruksnys, kontrolinis skaitmuo, pvz.",
-      "   \"48000000-8\"); citata - fragmentas, kuriame jie parasyti. Jei kodu",
-      "   korteleje nera - null.",
-      "11. energetikos_projektas: \"taip\", jei korteleje aiskiai nurodyta, kad pirkimas",
-      "   priskiriamas Lietuvoje igyvendinamam energetikos sistemos infrastrukturos",
-      "   pletros projektui (pvz. toks laukas pazymetas \"Taip\"); \"ne\", jei aiskiai",
-      "   nurodyta, kad nepriskiriamas; kitaip \"nenustatyta\". Citata - fragmentas,",
-      "   kuriame tai parasyta.",
-      "",
-      "JSON schema:",
-      "{",
-      "  \"status\": \"ok\" | \"neiskaitoma\",",
-      "  \"laukai\": {",
-      "    \"pavadinimas\":              {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
-      "    \"pavadinimas_kilmininkas\":  {\"reiksme\":\"...\"} | null,",
-      "    \"pirkimo_budas\":            {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
-      "    \"verte_be_pvm\":             {\"reiksme\":\"<kaip parasyta, pvz. 743490,00>\", \"citata\":\"...\"} | null,",
-      "    \"objekto_tipas\":            {\"reiksme\":\"prekes|paslaugos|darbai|nenustatyta\", \"citata\":\"...\"},",
-      "    \"tipo_kandidatai\":          [\"paslaugos\",\"darbai\"] | [],",
-      "    \"nacionalinis_saugumas\":    {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
-      "    \"registracijos_nr\":         {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
-      "    \"dokumento_tipas\":          {\"reiksme\":\"...\"} | null,",
-      "    \"dpa\":                      {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
-      "    \"es_lesos\":                 {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"},",
-      "    \"projekto_nr\":              {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
-      "    \"projekto_pavadinimas\":     {\"reiksme\":\"...\", \"citata\":\"...\"} | null,",
-      "    \"dalys\":                    {\"reiksme\":\"neskaidomas|skaidomas|nenustatyta\", \"skaicius\": <skaicius> | null, \"pavadinimai\": [\"...\"], \"citata\":\"...\"},",
-      "    \"bvpz_kodai\":               {\"reiksme\":[\"48000000-8\"], \"citata\":\"...\"} | null,",
-      "    \"energetikos_projektas\":    {\"reiksme\":\"taip|ne|nenustatyta\", \"citata\":\"...\"}",
-      "  },",
-      "  \"pastabos\": \"<trumpa pastaba, jei reikia>\"",
-      "}"
-    ].join("\n");
-  }
-
-  function userText() {
-    return "Istrauk pirkimo duomenis is pridetos DocLogix pirkimo paraiskos korteles. " +
-           "Atsakyk grieztai pagal sistemos zinuteje aprasyta JSON schema.";
-  }
+  // DI instrukcija ir užklausos tekstas - serverio šablone pp-salygos.paraiska (nuo 2026-11-08, kodo apsauga): siunčiamas tik paraiškos PDF.
 
   /* ==== 3. ATSAKYMO PARSINIMAS IR VALIDACIJA ============================== */
 
@@ -500,14 +423,7 @@
       paruosta = p;
       if (opts.onParuosta) opts.onParuosta(p);        // UI: paruosta, siunciam
       // VISA kortele - viena uzklausa. Skaidymo nebera: backend priima 10 MB.
-      return root.GP_AI_PROXY.call({
-        module: "pp-salygos",
-        maxTokens: MAX_TOKENS,
-        system: systemPrompt(),
-        userMessage: userText(),
-        pdfBase64: p.base64,
-        signal: opts.signal
-      });
+      return root.GP_AI_PROXY.uzduotis("pp-salygos.paraiska", {}, { dokumentas: { tipas: "application/pdf", duomenys: p.base64 }, signal: opts.signal });
     }).then(function (r) {
       if (!r.ok) throw new Error(r.error || "DI klaida");
       var p = parseResponse(r.text);
@@ -529,8 +445,6 @@
     dalysIsAtsakymo: dalysIsAtsakymo,
     esIsAtsakymo: esIsAtsakymo,
     bvpzIsAtsakymo: bvpzIsAtsakymo,
-    verteIsTeksto: verteIsTeksto,
-    systemPrompt: systemPrompt,
-    userText: userText
+    verteIsTeksto: verteIsTeksto
   };
 })(typeof window !== "undefined" ? window : this);
