@@ -178,6 +178,8 @@ const AI = { kvietimai: [], atsakymas: null };
 function perimkAI(){
   AI.kvietimai = [];
   W.GP_AI_PROXY.call = opts => { AI.kvietimai.push(opts); return Promise.resolve(AI.atsakymas(opts)); };
+  // DI užduotys serveryje (nuo 2026-11-08): įsimenama užduotis, duomenys ir dokumentas - instrukcijos modulyje nebėra
+  W.GP_AI_PROXY.uzduotis = (uzduotis, duomenys, o) => { const opts = Object.assign({ uzduotis, duomenys }, o); AI.kvietimai.push(opts); return Promise.resolve(AI.atsakymas(opts)); };
 }
 /* Sugeneruoto paketo patikra (4 žingsnis, paketoPatikra) testuose - tik kai testas jos laukia (2026-11-07). Modulyje ji pasileidžia pati
    po kiekvieno generavimo ir fone užima ~1,7 s to paties naršyklės srauto (rėmeliai vienos kilmės): per rinkinį - apie trečdalį laiko,
@@ -11044,8 +11046,8 @@ async function testaiDalys(){
     lygu(P({ reiksme: "skaidomas", skaicius: "3", pavadinimai: ["a", "", 5, "b"], citata: "c" }), { reiksme: "skaidomas", skaicius: 3, pavadinimai: ["a", "b"], citata: "c" });
     lygu([P({ reiksme: "skaidomas", skaicius: 1, citata: "c" }), P({ reiksme: "skaidomas", skaicius: 13, citata: "c" }), P({ reiksme: "skaidomas", skaicius: 2.5, citata: "c" }),
           P({ reiksme: "neskaidomas", citata: " " }), P({ reiksme: "taip", citata: "c" }), P(null)].map(x => x.reiksme), Array(6).fill("nenustatyta"), "netinkami DI atsakymai");
-    const pr = W.GP_PARAISKA.systemPrompt();
-    tiesa(/8\. dalys:/.test(pr) && /"dalys":/.test(pr) && /NERA pirkimo dalys/.test(pr), "paraiškos DI užklausoje - dalių laukas ir taisyklė");
+    // dalių taisyklė DI instrukcijoje - nuo 2026-11-08 serverio šablone pp-salygos.paraiska (jo patikra „turi“), modulyje instrukcijos nebėra
+    tiesa(!W.GP_PARAISKA.systemPrompt && !/GRIEZTOS TAISYKLES|NERA pirkimo dalys/.test(await (await fetch("paraiska-extract.js", { cache: "no-store" })).text()), "instrukcija - serveryje");
     const mp = W.GP_PARAISKA.mapFields({ dalys: P({ reiksme: "skaidomas", skaicius: 2, pavadinimai: ["a"], citata: "c" }) });
     tiesa(mp.dalys && mp.dalys.skaicius === 2 && mp.info.some(x => /dalys/.test(x.laukas) && /skaidomas į 2 dalis/.test(x.reiksme)), "paraiškos rezultate - dalys ir informacinė eilutė");
     const docs = TS3.concat([{ vardas: "Kita.docx", blokai: blk(["Be dalių."]), ts: false }]);
@@ -13568,7 +13570,7 @@ async function testaiNacsaugBvpz(){
       { reiksme: ["48000000-8", "72000000-5"], citata: "BVPŽ kodai: 48000000-8; 72000000-5" }, "tik citatoje esantys, be pasikartojimų");
     lygu([X.bvpzIsAtsakymo({ reiksme: ["30200000-1"], citata: "BVPŽ kodas 48000000-8" }), X.bvpzIsAtsakymo({ reiksme: ["48000000-8"] }), X.bvpzIsAtsakymo({ reiksme: "48000000-8", citata: "48000000-8" })],
       [null, null, null], "kodo citatoje nėra, be citatos, ne sąrašas");
-    tiesa(/bvpz_kodai/.test(X.systemPrompt()) && X.VERSION === "0.5", "užklausa ir versija");
+    tiesa(X.VERSION === "0.5" && !X.systemPrompt, "versija; instrukcija (bvpz_kodai) - serverio šablone pp-salygos.paraiska");
     const L = { bvpz_kodai: { reiksme: ["48000000-8", "72000000-5", "30200000-1"], citata: "BVPŽ kodai: 48000000-8; 72000000-5" }, nacionalinis_saugumas: { reiksme: "ne", citata: "Ne" } };
     const p = X.parseResponse(JSON.stringify({ status: "ok", laukai: L }));
     lygu(p.laukai.bvpz_kodai.reiksme, ["48000000-8", "72000000-5"], "atsakymas tikrinamas: citatoje nesantis kodas atmestas");
@@ -14045,8 +14047,9 @@ async function testaiD5(){
   await testas("skenuoti.js: užklausa (perrašyti pažodžiui, JSON, neįskaitoma), atsakymo patikra (nutrūkęs, neįskaitomas, be JSON, ne pagal schemą, tušti ir ne tekstiniai langeliai, ribos), blokai kaip GP_DOK, Word XML su ekranavimu, lentelė atpažįstama kvalifikacijos skaitytuvu, perskaityk - PDF per tarpinę", async () => {
     await modulis();
     const S = W.GP_SKENUOTI;
-    const sp = S.systemPrompt();
-    tiesa(/PERRASYTI jo teksta tiksliai taip, kaip parasyta/.test(sp) && /NIEKO nekeisk, netaisyk,\s+nepapildyk/.test(sp) && /\{"status":"neiskaitoma"/.test(sp) && /"lentele":\[\["langelis"/.test(sp), "užklausa");
+    // instrukcija - nuo 2026-11-08 serverio šablone pp-salygos.skenuotas (privati patikra); modulyje jos nebėra
+    const kodas = await (await fetch("skenuoti.js", { cache: "no-store" })).text();
+    tiesa(!S.systemPrompt && !S.userText && !/PERRASYTI|GRIEZTOS TAISYKLES|\.call\(/.test(kodas), "instrukcijos modulyje nebėra");
     lygu(S.issAtsakymo("{}", "max_tokens").ok, false, "nutrūkęs");
     tiesa(/per ilgas perskaityti vienu kartu/.test(S.issAtsakymo('{"status":"ok","elementai":[{"p":"x"}]}', "max_tokens").error), "nutrūkęs - priežastis ir ką daryti");
     tiesa(/neįskaitomas: blogai nuskenuota/.test(S.issAtsakymo('{"status":"neiskaitoma","pastabos":"blogai nuskenuota"}').error), "neįskaitomas");
@@ -14066,7 +14069,8 @@ async function testaiD5(){
     AI.atsakymas = D5_ATS();
     const f = d5Pdf("Skenuotas.pdf"), g = await S.perskaityk(f);
     const k = AI.kvietimai[0];
-    tiesa(AI.kvietimai.length === 1 && k.module === "pp-salygos" && k.maxTokens === 8000 && k.pdfBase64 && k.system === sp && /failas: Skenuotas\.pdf/.test(k.userMessage), "užklausa: " + JSON.stringify(Object.keys(k)));
+    lygu([AI.kvietimai.length, k.uzduotis, k.duomenys, k.dokumentas.tipas, !!k.dokumentas.duomenys, Object.keys(k).sort()],
+      [1, "pp-salygos.skenuotas", { vardas: "Skenuotas.pdf" }, "application/pdf", true, ["dokumentas", "duomenys", "signal", "uzduotis"]], "užklausa - tik užduotis, failo vardas ir PDF");
     lygu([g.blokai.length, g.elementai.length, typeof g.xml, g.docx instanceof W.ArrayBuffer || g.docx.byteLength > 0], [4, 2, "string", true], "rezultatas");
     AI.atsakymas = () => ({ ok: false, status: 503, text: "", raw: null, error: "Serveris laikinai nepasiekiamas" });
     let klaida = ""; try { await S.perskaityk(f); } catch (e){ klaida = e.message; }
@@ -14152,7 +14156,7 @@ async function testaiD5(){
     // atšaukimas
     await modulis();
     W.eval("DI_LEIDIMAS = 'taip'");
-    W.GP_AI_PROXY.call = o => { AI.kvietimai.push(o); return new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" })))); };
+    W.GP_AI_PROXY.uzduotis = (id, d, o) => { AI.kvietimai.push(o); return new Promise((ok, ne) => kaiAtsaukta(o.signal, () => ne(Object.assign(new Error("aborted"), { name: "AbortError" })))); };
     const p1 = W.dkPridek([d5Pdf()]);
     await kol(() => D.querySelector("#dkSkenBusena button") && /Atšaukti/.test(D.getElementById("dkSkenBusena").textContent), "eiga su „Atšaukti“", 10000);
     tiesa(/DI skaito skenuoto dokumento tekstą/.test(d5Tx("Kvalifikacijos reikalavimai.pdf")), "eilutė skaitant");
@@ -14161,7 +14165,7 @@ async function testaiD5(){
     tiesa(W.eval("DK.failai[0].sken") === "atsaukta" && /Skaitymą atšaukėte/.test(d5Tx("Kvalifikacijos reikalavimai.pdf")) && d5Eil("Kvalifikacijos reikalavimai.pdf").querySelector("[data-dk-sken]"), "atšaukta");
     // pašalintas skaitymo metu
     let paleisk;
-    W.GP_AI_PROXY.call = o => new Promise(ok => { paleisk = () => ok(D5_ATS()()); });
+    W.GP_AI_PROXY.uzduotis = () => new Promise(ok => { paleisk = () => ok(D5_ATS()()); });
     W.eval("DK.failai[0].sken = null");
     W.dkSkenuok(W.eval("DK.failai[0]"));
     await kol(() => paleisk, "užklausa išsiųsta", 10000);
@@ -14513,9 +14517,8 @@ async function testaiD6(){
 
   await testas("Paraiškos skaitytuvas: taisyklė DI užklausoje, ES lėšos - tik „taip“ ar „ne“ su citata, projekto numeris - tik finansuojant ES lėšomis (iki 100 ženklų); mapFields grąžina es, informacinės eilutės pasako, kam", async () => {
     await modulis(); P = W.GP_PARAISKA;
-    const sp = P.systemPrompt();
-    tiesa(/9\. es_lesos: "taip", jei korteleje aiskiai nurodyta/.test(sp) && /"projekto_nr": +\{"reiksme":"\.\.\.", "citata":"\.\.\."\}/.test(sp)
-      && /"projekto_pavadinimas": +\{"reiksme":"\.\.\.", "citata":"\.\.\."\}/.test(sp) && /projekto_pavadinimas - ES projekto\s+pavadinimas, jei nurodyti/.test(sp), "užklausos taisyklė ir schema");
+    // ES lėšų taisyklė ir schema DI instrukcijoje - nuo 2026-11-08 serverio šablone pp-salygos.paraiska (jo patikra „turi“)
+    tiesa(!P.systemPrompt, "instrukcija - serveryje");
     lygu(P.esIsAtsakymo(D6_L({ reiksme: "taip", citata: " ES lėšos: Taip " }, { reiksme: " 02-001-K-0001 ", citata: "Projekto Nr. 02-001-K-0001" }, { reiksme: "Tinklo modernizavimas", citata: "Projektas: Tinklo modernizavimas" })),
       { reiksme: "taip", citata: "ES lėšos: Taip", projektoNr: { reiksme: "02-001-K-0001", citata: "Projekto Nr. 02-001-K-0001" }, projektoPav: { reiksme: "Tinklo modernizavimas", citata: "Projektas: Tinklo modernizavimas" } }, "taip su numeriu ir pavadinimu");
     lygu(P.esIsAtsakymo(D6_L({ reiksme: "ne", citata: "ES lėšos: Ne" }, { reiksme: "02-001" }, { reiksme: "X" })), { reiksme: "ne", citata: "ES lėšos: Ne", projektoNr: null, projektoPav: null }, "ne - be numerio ir pavadinimo");
@@ -16594,6 +16597,38 @@ function kainFormosLentele(xml){
     .map(t => ({ eil: Array.from(t.getElementsByTagNameNS(NSW, "tr")).map(tr => Array.from(tr.getElementsByTagNameNS(NSW, "tc")).map(tc => txt(tc).trim())),
       raud: Array.from(t.getElementsByTagNameNS(NSW, "r")).filter(r => Array.from(r.getElementsByTagNameNS(NSW, "color")).some(c => /^FF0000$/i.test(c.getAttribute("w:val") || ""))).map(txt).join("") }));
 }
+async function testaiDiUzduotys1108(){
+  dabartine = grupe("DI užduotys serveryje (2026-11-08, kodo apsauga): vertimai siunčia tik tekstą, instrukcijos - serverio šablonuose");
+  await testas("Pavadinimo, dalies pavadinimo ir LT/EN lauko vertimas - GP_AI_PROXY.uzduotis su vien lietuvišku tekstu (pp-salygos.pavadinimas-en, dalies-pavadinimas-en, lauko-vertimas-en); modulio kode instrukcijų nebėra", async () => {
+    await modulis();
+    radijas1("kalba", "LT_EN");
+    ivesk1("pavadinimas", "Galios transformatorių");
+    AI.atsakymas = () => ({ ok: true, status: 200, text: "Power transformers", raw: { stop_reason: "end_turn" }, error: null });
+    await W.pavENsiulyk();
+    lygu(D.getElementById("pavadinimasEN").value, "Power transformers", "pasiūlymas įrašytas");
+    W.eval("ATS['DALYS'] = [{ lt: 'Trečioji dalis', en: '' }]; ATS['BANDYMAS_LT'] = '30 (trisdešimt) dienų'");
+    const b1 = D.createElement("button"), b2 = D.createElement("button");
+    await W.dalisEnAI(b1, 0);
+    await W.enPoraAI(b2, "BANDYMAS_LT", "BANDYMAS_EN", false);
+    lygu(AI.kvietimai.map(k => [k.uzduotis, k.duomenys, Object.keys(k).sort()]), [
+      ["pp-salygos.pavadinimas-en", { pavadinimas: "Galios transformatorių" }, ["duomenys", "uzduotis"]],
+      ["pp-salygos.dalies-pavadinimas-en", { pavadinimas: "Trečioji dalis" }, ["duomenys", "uzduotis"]],
+      ["pp-salygos.lauko-vertimas-en", { tekstas: "30 (trisdešimt) dienų" }, ["duomenys", "uzduotis"]]], "užklausos - tik užduotis ir tekstas");
+    lygu([W.eval("ATS['DALYS'][0].en"), W.eval("ATS['BANDYMAS_EN']")], ["Power transformers", "Power transformers"], "vertimai įrašyti kaip siūlomi");
+    const kodas = await (await fetch("PP-SALYGOS.html", { cache: "no-store" })).text();
+    tiesa(!/Tu verti (elektros perdavimo|pirkimo objekto dalies|pirkimo dokumento lauko)/.test(kodas), "instrukcijų modulyje nebėra");
+  });
+  await testas("Paraiškos skaitymas (GP_PARAISKA.analizuoti) - GP_AI_PROXY.uzduotis(pp-salygos.paraiska) tik su PDF, be duomenų ir instrukcijos", async () => {
+    await modulis();
+    AI.atsakymas = () => ({ ok: true, status: 200, text: JSON.stringify({ status: "ok", laukai: { pavadinimas: { reiksme: "Transformatoriai", citata: "Transformatoriai" } } }), raw: { stop_reason: "end_turn" }, error: null });
+    const pdf = new W.File(["%PDF-1.4\n%%EOF"], "Paraiska.pdf", { type: "application/pdf" });
+    const r = await W.GP_PARAISKA.analizuoti(pdf);
+    const k = AI.kvietimai[0];
+    lygu([AI.kvietimai.length, k.uzduotis, k.duomenys, k.dokumentas.tipas, Object.keys(k).sort()], [1, "pp-salygos.paraiska", {}, "application/pdf", ["dokumentas", "duomenys", "signal", "uzduotis"]], "užklausa");
+    tiesa(/^JVBERi0x/.test(k.dokumentas.duomenys) && r.laukai && r.laukai.pavadinimas, "PDF baitai ir atsakymas apdorotas");
+  });
+}
+
 async function testaiKainuLentele(){
   dabartine = grupe("Kainų lentelė iš kiekių žiniaraščio (2026-11-08): Excel atpažinimas, kortelė, pasiūlymo forma ir Excel priedas");
   await testas("Atpažinimas (kainu-lentele.js): žiniaraštis su sumų eilute ir formulėmis, kiekio rūšis, siūlomas būdas (iki 20 - forma), tiekėjo stulpelis, užpildyti įkainiai, grupės, dalys lapais ir stulpeliu, paslėpti lapai ir eilutės; ne kainų lentelės - rizikų planas, klasifikatorius, funkcijų sąrašas, mokėjimo etapai", async () => {
@@ -17606,7 +17641,7 @@ async function testaiPaskelbti(){
        testaiSutartiesDI, testaiPaketoPatikra, testaiPriedoNuorodos, testaiEtapas0, testaiEtapas1, testaiDalys, testaiU4, testai1021, testaiD6,
        testaiD3, testaiD4b, testaiD5, testaiU8, testaiD4c, testaiFormuTaisykles, testaiTestuotojas7, testaiSprendimai1025, testaiPaskelbti],
       [testaiTestuotojas, testaiSprendimai1020, testaiTestuotojas2, testaiNacsaugBvpz, testaiTestuotojas3, testai1021b, testai1021c, testai1022a,
-       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiTestuotojas5, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b]
+       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiTestuotojas5, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b, testaiDiUzduotys1108]
     ]);
     await GP_TESTU_DALYS.vykdyk(GRUPES);
     document.getElementById("busena").textContent =
