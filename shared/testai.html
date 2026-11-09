@@ -2067,8 +2067,8 @@ async function testaiKortele(){
   await testas("Schema: nauja kortelė turi visus laukus; normalizuok suvienodina tipus, reikšmių neišgalvoja ir palieka nežinomus laukus", async ()=>{
     const { f, K } = await korteleRemas();
     try {
-      lygu(Object.keys(K.tuscia()).sort(), ["archyvuota","atnaujinta","budas","busena","bvpz","cpo","cvpisNr","dalys","id","iniciatorius","kriterijus","kvalifikacija",
-        "nacsaugumas","numeris","objektas","organizatoriausKontaktai","organizatorius","pasiulymuTerminas","paskelbimas","pavadinimas","pradzia","rezimas","sukurta","trukmeMen",
+      lygu(Object.keys(K.tuscia()).sort(), ["archyvuota","atnaujinta","budas","busena","bvpz","cpo","cvpisNr","dalys","grafikas","id","iniciatorius","kriterijus","kvalifikacija",
+        "nacsaugumas","numeris","objektas","organizatoriausKontaktai","organizatorius","pasiulymuTerminas","paskelbimas","pavadinimas","pradzia","rezimas","sukurta","sutartiesData","trukmeMen",
         "veiksmai","verte","vykdytojas","zaliasis"], "laukai");
       // Pirkimo sprendimai (2026-11-09, kelio patikra): tik žodyno reikšmės, kitokia - nenurodyta; tekstas žmogui - iš žodyno
       const sp = K.normalizuok({ id: "k-s", kriterijus: "kaina", zaliasis: "taip", nacsaugumas: "ne", kvalifikacija: "pasalinimas", cpo: "nenaudojama", organizatoriausKontaktai: " tel. 1 " });
@@ -2188,6 +2188,64 @@ async function testaiKortele(){
       const sen = K.skaityk({ saugykla: s2 }).korteles;
       lygu(sen.map(k => k.veiksmai.map(v => [v.raktas, v.saltinis, v.tekstas, v.kontekstas, v.atlikta, v.data === sen[2].atnaujinta])), [[], [], [["a", "", "", "", false, true]]], "veiksmų laukas normalizuojamas");
     } finally { f.remove(); }
+  });
+
+  /* 2026-11-09 (naudotojo „Pradėkime nuo grafiko datų į kortelę ir SPS“): pirkimo grafikas iš PP-graphs - antras laukas, kurį modulis
+     keičia esamoje kortelėje; kartu - planuojamos paskelbimo ir sutarties sudarymo datos. */
+  await testas("Pirkimo grafikas (irasykGrafika, grafikoForma): įrašomi etapai ir datos, kiti laukai nekeičiami; netinkami etapai ir datos atmetami; kortelių puslapis rodo ir išsaugo", async ()=>{
+    const { f, K } = await korteleRemas('<div class="container"></div>');
+    try {
+      const o = { saugykla: netikraSaugykla({}) };
+      const a = K.issaugok(K.tuscia({ pavadinimas: "Skirstyklos remontas", verte: 900000, budas: "T-AK", sutartiesData: "2027-05-03" }), o).kortele;
+      const b = K.issaugok(K.tuscia({ pavadinimas: "Kita" }), o).kortele;
+      const G = { sudaryta: "2026-11-09T10:00:00.000Z", budas: "T-AK", metai: 2026, pradzia: "2026-10-05", etapai: [
+        { kodas: "1.1", pavadinimas: "Pirkimo dokumentų rengimas", stadija: "pasirengimas", nuo: "2026-10-05", iki: "2026-10-23" },
+        { kodas: "1.3", pavadinimas: "Skelbimas apie pirkimą", stadija: "vykdymas", nuo: "2026-10-26", iki: "2026-10-26" },
+        { kodas: "1.4", pavadinimas: "Pasiūlymų gavimas", stadija: "vykdymas", nuo: "2026-10-27", iki: "2026-12-01", papildomas: "x" },
+        { kodas: "", pavadinimas: "", stadija: "vykdymas", nuo: "2026-12-02", iki: "2026-12-03" },
+        { kodas: "9", pavadinimas: "Netikra data", stadija: "kita", nuo: "2026-02-30", iki: "rytoj" }, null ] };
+      const r = K.irasykGrafika(a.id, G, { paskelbimas: "2026-10-26", sutartiesData: "2027-01-15" }, o);
+      lygu(r.ok, true, "įrašyta");
+      const k = K.gauk(a.id, o);
+      lygu([k.paskelbimas, k.sutartiesData, k.pavadinimas, k.verte, k.budas], ["2026-10-26", "2027-01-15", "Skirstyklos remontas", 900000, "T-AK"], "datos ir kiti laukai");
+      lygu([k.grafikas.budas, k.grafikas.metai, k.grafikas.pradzia, k.grafikas.etapai.length], ["T-AK", 2026, "2026-10-05", 4], "grafiko antraštė; etapas be pavadinimo ir null - atmesti");
+      lygu(k.grafikas.etapai[2], { kodas: "1.4", pavadinimas: "Pasiūlymų gavimas", stadija: "vykdymas", nuo: "2026-10-27", iki: "2026-12-01" }, "tik žinomi laukai");
+      lygu(k.grafikas.etapai[3], { kodas: "9", pavadinimas: "Netikra data", stadija: "", nuo: "", iki: "" }, "netikra data ir stadija - nenurodyta");
+      lygu(K.gauk(b.id, o).grafikas, null, "kita kortelė nepaliesta");
+      lygu(K.reiksmesTekstas("grafikas", k.grafikas, "lt"), "4 etapai (2026-10-05 - 2026-12-01)", "tekstas žmogui");
+      lygu(K.reiksmesTekstas("grafikas", k.grafikas, "en"), "4 stages (2026-10-05 - 2026-12-01)", "EN");
+      // tuščios ar netikros datos kortelės datų nekeičia; grafikas be etapų - klaida, kortelė nepakeista
+      lygu(K.irasykGrafika(a.id, G, { paskelbimas: "", sutartiesData: "2027-02-30" }, o).ok, true);
+      lygu([K.gauk(a.id, o).paskelbimas, K.gauk(a.id, o).sutartiesData], ["2026-10-26", "2027-01-15"], "netikra data neįrašyta");
+      const be = K.irasykGrafika(a.id, { etapai: [{ pavadinimas: "" }] }, {}, o);
+      lygu([be.ok, be.r.klaida, K.gauk(a.id, o).grafikas.etapai.length], [false, "grafike nėra etapų", 4], "be etapų - neįrašoma");
+      lygu(K.irasykGrafika("nera", G, {}, o).ok, false, "nerasta kortelė - klaida");
+      lygu([K.grafikoForma(null), K.grafikoForma({ etapai: "x" }), K.grafikoForma({ etapai: [{ pavadinimas: "A" }], metai: 1999 }).metai], [null, null, null], "netinkama sandara");
+      lygu(K.normalizuok({ id: "z", grafikas: "ne" }).grafikas, null, "normalizuok: netinkamas grafikas - nenurodyta");
+      lygu(K.tikrink(K.tuscia({ pavadinimas: "X", sutartiesData: "2027-13-01" }), "lt").map(x => x.laukas), ["sutartiesData"], "netikra sutarties data - klaida prie lauko");
+    } finally { f.remove(); }
+    // Kortelių puslapis: data formoje, grafiko santrauka; išsaugojus formą grafikas lieka
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id);
+      const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia({ pavadinimas: "Skirstyklos remontas", sutartiesData: "2027-05-03" })).kortele;
+      const be = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia({ pavadinimas: "Be grafiko" })).kortele;
+      w.GP_KORTELE.irasykGrafika(k.id, { sudaryta: "2026-11-09T10:00:00.000Z", budas: "S-AK", pradzia: "2026-10-05", etapai: [
+        { kodas: "1.3", pavadinimas: "Skelbimas apie pirkimą", stadija: "vykdymas", nuo: "2026-10-26", iki: "2026-10-26" },
+        { kodas: "1.9", pavadinimas: "Sutarties pasirašymas", stadija: "vykdymas", nuo: "2027-01-14", iki: "2027-01-15" }] }, { sutartiesData: "2027-01-15" });
+      tiesa(w.GP_KORTELIU_PUSLAPIS.atverkKortele(k.id), "atverta");
+      lygu($("k-sutartiesData").value, "2027-01-15", "data formoje");
+      tiesa(/2 etapai \(2026-10-26 - 2027-01-15\)/.test($("k-grafikas").textContent), $("k-grafikas").textContent);
+      lygu([$("k-grafikas").getAttribute("aria-labelledby"), $("k-sutartiesData").getAttribute("aria-describedby")], ["k-grafikas-pav", "k-sutartiesData-pag k-sutartiesData-kl"], "susieta");
+      $("k-sutartiesData").value = "2027-01-20";
+      $("formaForm").requestSubmit();
+      const n = w.GP_KORTELE.gauk(k.id);
+      lygu([n.sutartiesData, n.grafikas && n.grafikas.etapai.length], ["2027-01-20", 2], "išsaugojus formą grafikas lieka, data - pakeista");
+      tiesa(w.GP_KORTELIU_PUSLAPIS.atverkKortele(be.id), "atverta kita");
+      tiesa(/Dar neįrašytas/.test($("k-grafikas").textContent) && $("k-sutartiesData").value === "", $("k-grafikas").textContent);
+    } finally { fr.remove(); }
   });
 
   /* 2026-09-29 (fokuso zondas: Enter kiekviename mygtuke): „Naudoti“ perpiešia juostą ir pats dingsta - klaviatūros naudotojo fokusas nukrisdavo

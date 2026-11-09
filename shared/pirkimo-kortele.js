@@ -111,6 +111,8 @@
     trukmeMen: { lt: "Sutarties trukmė", en: "Contract duration" },
     pradzia: { lt: "Pradžios data", en: "Start date" },
     paskelbimas: { lt: "Paskelbimo data", en: "Publication date" },
+    sutartiesData: { lt: "Planuojama sutarties sudarymo data", en: "Planned contract signing date" },
+    grafikas: { lt: "Pirkimo grafikas", en: "Procurement schedule" },
     pasiulymuTerminas: { lt: "Pasiūlymų terminas", en: "Tender deadline" },
     iniciatorius: { lt: "Iniciatorius", en: "Initiator" },
     organizatorius: { lt: "Organizatorius", en: "Organiser" },
@@ -151,7 +153,7 @@
   }
   /* Tekstiniai laukai (visada eilutė, "" - nenurodyta). */
   var TEKSTAI = ["pavadinimas", "numeris", "cvpisNr", "vykdytojas", "rezimas", "objektas", "bvpz", "budas",
-                 "pradzia", "paskelbimas", "pasiulymuTerminas", "iniciatorius", "organizatorius", "busena",
+                 "pradzia", "paskelbimas", "sutartiesData", "pasiulymuTerminas", "iniciatorius", "organizatorius", "busena",
                  "organizatoriausKontaktai", "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo"];
 
   function tuscia(laukai) {
@@ -163,7 +165,8 @@
       objektas: "", bvpz: "",
       verte: null, budas: "",
       dalys: null,                        // null - nenurodyta, [] - neskaidomas, [{ pavadinimas, verte }] - dalys
-      trukmeMen: null, pradzia: "", paskelbimas: "",
+      trukmeMen: null, pradzia: "", paskelbimas: "", sutartiesData: "",   // sutartiesData - planuojama sutarties sudarymo data (2026-11-09)
+      grafikas: null,                      // pirkimo grafikas iš PP-graphs (2026-11-09; rašo tik irasykGrafika) - žr. grafikoForma
       pasiulymuTerminas: "",               // pasiūlymų ar paraiškų terminas „2026-10-02T15:00“ (Vilniaus laikas)
       iniciatorius: "", organizatorius: "", organizatoriausKontaktai: "",
       kriterijus: "", zaliasis: "", nacsaugumas: "", kvalifikacija: "", cpo: "",   // 2026-11-09 - žr. SPRENDIMAI
@@ -202,6 +205,7 @@
     else o.dalys = o.dalys.filter(function (d) { return d && typeof d === "object"; })
       .map(function (d) { return Object.assign({}, d, { pavadinimas: tekstas(d.pavadinimas), verte: skaicius(d.verte) }); });
     o.archyvuota = o.archyvuota === true;
+    o.grafikas = grafikoForma(o.grafikas);
     o.veiksmai = Array.isArray(o.veiksmai) ? o.veiksmai.filter(function (v) { return v && typeof v === "object" && tekstas(v.raktas); })
       .map(function (v) { return Object.assign({}, v, { raktas: tekstas(v.raktas), saltinis: tekstas(v.saltinis), tekstas: tekstas(v.tekstas),
         kontekstas: tekstas(v.kontekstas), atlikta: v.atlikta === true, data: tekstas(v.data) || o.atnaujinta }); }) : [];
@@ -275,6 +279,39 @@
     return w.ok ? { ok: true, kopija: r.kopija } : { ok: false, kodas: "rasymas", r: w };
   }
 
+  /* Pirkimo grafikas (2026-11-09, naudotojo „Pradėkime nuo grafiko datų į kortelę ir SPS“; kelio per modulius patikra: grafiką buvo galima
+     tik atspausdinti, todėl jo datos nepateko nei į kortelę, nei į SPS). Sudaro PP-graphs, įrašo tik žmogaus veiksmu (irasykGrafika),
+     PP-salygos įterpia vykdymo etapus į SPS skyrių „Preliminarus pirkimo procedūrų vykdymo grafikas“.
+       { sudaryta: ISO, budas: GP_METHODS id, metai: standartinių trukmių metai | null, pradzia: "YYYY-MM-DD",
+         etapai: [{ kodas, pavadinimas, stadija: "pasirengimas" | "vykdymas", nuo: "YYYY-MM-DD" | "", iki: "YYYY-MM-DD" | "" }] }
+     Netinkama sandara - null (nenurodyta); etapas be pavadinimo ar su netikra data - be tos datos. */
+  var GRAFIKO_STADIJOS = ["pasirengimas", "vykdymas"];
+  function grafikoForma(g) {
+    if (!g || typeof g !== "object" || !Array.isArray(g.etapai)) return null;
+    var data = function (v) { v = tekstas(v); return /^\d{4}-\d{2}-\d{2}$/.test(v) && arData(v) ? v : ""; };
+    var etapai = g.etapai.slice(0, 60).filter(function (e) { return e && typeof e === "object" && tekstas(e.pavadinimas); }).map(function (e) {
+      return { kodas: tekstas(e.kodas).slice(0, 20), pavadinimas: tekstas(e.pavadinimas).slice(0, 200),
+        stadija: GRAFIKO_STADIJOS.indexOf(e.stadija) >= 0 ? e.stadija : "", nuo: data(e.nuo), iki: data(e.iki) };
+    });
+    if (!etapai.length) return null;
+    var m = sveikas(g.metai);
+    return { sudaryta: tekstas(g.sudaryta), budas: tekstas(g.budas), metai: m && m > 2000 && m < 2100 ? m : null, pradzia: data(g.pradzia), etapai: etapai };
+  }
+  /* Antra vieta (po pridekVeiksmus), kur modulis keičia esamą kortelę: tik grafikas ir, jei paduota, planuojamos paskelbimo ir sutarties
+     sudarymo datos (`datos`: { paskelbimas, sutartiesData }; "" - nekeisti). Kiti laukai neliečiami. Kviečiama tik žmogui patvirtinus. */
+  function irasykGrafika(id, grafikas, datos, o) {
+    var k = gauk(id, o);
+    if (!k) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė nerasta" } };
+    var g = grafikoForma(grafikas);
+    if (!g) return { ok: false, r: { ok: false, kodas: "kita", klaida: "grafike nėra etapų" } };
+    k.grafikas = g;
+    ["paskelbimas", "sutartiesData"].forEach(function (f) {
+      var v = datos && tekstas(datos[f]);
+      if (v && /^\d{4}-\d{2}-\d{2}$/.test(v) && arData(v)) k[f] = v;
+    });
+    return issaugok(k, o);
+  }
+
   /* Įrankio rekomenduoti veiksmai kortelėje (2026-10-06, naudotojo sprendimas: „Priskirti pirkimui“ - į bendrą kortelę, ne į modulio
      saugyklą). Vienintelė vieta, kur modulis keičia esamą kortelę, ir tik šį lauką: veiksmas atpažįstamas pagal `raktas`
      (pvz. „pp-market-kpi:programine:red:0“) - esamas atnaujinamas (būsena, tekstas), naujas pridedamas; kiti laukai neliečiami.
@@ -329,7 +366,7 @@
     if (tekstas(k.vykdytojas) && !vykdytojas(k.vykdytojas)) p("vykdytojas", "Pirkimo vykdytojas nerastas registre.", "The contracting body is not in the register.");
     if (tekstas(k.objektas) && !pav(OBJEKTAI, k.objektas, "lt")) p("objektas", "Objektas gali būti prekės, paslaugos arba darbai.", "The subject can be supplies, services or works.");
     if (k.trukmeMen != null && !(k.trukmeMen >= 1 && k.trukmeMen <= 600)) p("trukmeMen", "Trukmė - sveikas mėnesių skaičius nuo 1 iki 600.", "Duration is a whole number of months from 1 to 600.");
-    ["pradzia", "paskelbimas"].forEach(function (f) {
+    ["pradzia", "paskelbimas", "sutartiesData"].forEach(function (f) {
       if (tekstas(k[f]) && !arData(k[f])) p(f, "Data rašoma taip: 2026-10-15.", "Write the date like 2026-10-15.");
     });
     if (tekstas(k.pasiulymuTerminas) && !(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(k.pasiulymuTerminas) && arData(k.pasiulymuTerminas.slice(0, 10))))
@@ -484,6 +521,13 @@
     if (SPRENDIMAI[laukas]) return pav(SPRENDIMAI[laukas], v, l) || String(v);
     if (laukas === "vykdytojas") { var x = vykdytojas(v); return x ? x.pavadinimas : String(v); }
     if (laukas === "trukmeMen") return v + (l === "en" ? " mo." : " mėn.");
+    if (laukas === "grafikas") {
+      if (!v || !Array.isArray(v.etapai)) return "";
+      var vk = v.etapai.filter(function (e) { return e.nuo || e.iki; });
+      var pr = vk.length ? vk[0].nuo || vk[0].iki : "", pb = vk.length ? vk[vk.length - 1].iki || vk[vk.length - 1].nuo : "";
+      return (l === "en" ? v.etapai.length + " stages" : v.etapai.length + " etap" + (v.etapai.length % 10 === 1 && v.etapai.length % 100 !== 11 ? "as" : v.etapai.length % 10 >= 2 && v.etapai.length % 10 <= 9 && (v.etapai.length % 100 < 10 || v.etapai.length % 100 >= 20) ? "ai" : "ų"))
+        + (pr && pb ? " (" + pr + " - " + pb + ")" : "");
+    }
     if (laukas === "pasiulymuTerminas") return String(v).replace("T", " ");
     if (laukas === "dalys") {
       if (!Array.isArray(v)) return "";
@@ -1190,6 +1234,7 @@
     vykdytojai: vykdytojai, vykdytojas: vykdytojas,
     tuscia: tuscia, normalizuok: normalizuok, sandara: sandara,
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
+    irasykGrafika: irasykGrafika, grafikoForma: grafikoForma,
     pradekIsNaujo: pradekIsNaujo,
     naudokSaugykla: naudokSaugykla,
     tikrink: tikrink, pastabos: pastabos,
