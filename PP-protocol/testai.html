@@ -760,6 +760,65 @@ async function testaiKortele(){
     z = D.getElementById("gpk-zin").textContent;
     tiesa(z.indexOf("būdas („Atviras konkursas“ - kortelėje nenurodyta, tarptautinis ar supaprastintas)") >= 0, z);
   });
+
+  /* 2026-11-09 (naudotojo pritarta kelio per modulius patikra): pirkimo sprendimai kortelėje - vedlys jų nebeklausia iš naujo */
+  await testas("Pirkimo sprendimai iš kortelės: vertinimo kriterijus, kas tikrinama ir CPO žyma užpildomi; nenurodyta - lieka tuščia ir numatytoji; žmogaus kitokie - tik skirtumas; „per CPO“ - neįrašoma su priežastimi", async () => {
+    const v = id => D.getElementById(id).value;
+    const kval = () => (D.querySelector('input[name="new-kval"]:checked') || {}).value;
+    const cpo = () => D.getElementById("new-pk-cpo-applicable").checked;
+    // 1. Kortelės sprendimai - į tuščią ir numatytąsias reikšmes turintį vedlį
+    await modulisSuKortele();
+    const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORT,
+      { kriterijus: "kaina", kvalifikacija: "pasalinimas", cpo: "nenaudojama", nacsaugumas: "taip", zaliasis: "ne", organizatoriausKontaktai: "+370 600 00000" }))).kortele;
+    W.KORTELE.atnaujink();
+    await W.KORTELE.pasirink(k.id);
+    W.showPage("page-new-pk");
+    lygu([v("new-eval-criteria"), kval(), cpo(), D.getElementById("new-pk-cpo-info").style.display], ["kainą", "tik_pasal", true, "block"], "sprendimai iš kortelės");
+    let z = D.getElementById("gpk-zin").textContent;
+    tiesa(z.indexOf("Iš kortelės užpildyta: numeris, vertė, objektas, sutarties trukmė, dalys, būdas, CVP IS numeris, vertinimo kriterijus, kas tikrinama, CPO LT katalogas, pavadinimas.") >= 0, z);
+    tiesa(z.indexOf("neįrašoma") < 0, "vedlyje nesantys laukai (nacionalinis saugumas, žaliasis, kontaktai) neįvardijami kaip neįrašyti: " + z);
+    // 2. Nenurodyta - kriterijus lieka tuščias, kvalifikacijos ir CPO numatytieji nekeičiami ir „užpildyta“ nesakoma
+    await modulisSuKortele();
+    const k0 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(KORT)).kortele;
+    W.KORTELE.atnaujink();
+    await W.KORTELE.pasirink(k0.id);
+    W.showPage("page-new-pk");
+    lygu([v("new-eval-criteria"), kval(), cpo()], ["", "abu", false], "nenurodyta - be tylių reikšmių");
+    z = D.getElementById("gpk-zin").textContent;
+    tiesa(!/vertinimo kriterijus|kas tikrinama|CPO LT katalogas/.test(z), z);
+    // 3. Žmogus jau pasirinko kitaip (pavadinimas įrašytas - numatytasis „abu“ irgi laikomas žmogaus): neperrašoma, rodomas skirtumas
+    await modulisSuKortele();
+    W.showPage("page-new-pk");
+    const nm = D.getElementById("new-pk-name"); nm.value = KORT.pavadinimas; nm.dispatchEvent(new W.Event("input", { bubbles: true }));
+    D.getElementById("new-eval-criteria").value = "sąnaudas";
+    D.querySelector('input[name="new-kval"][value="tik_kval"]').checked = true;
+    D.getElementById("new-pk-cpo-applicable").checked = true;
+    const k3 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORT, { kriterijus: "kaina", kvalifikacija: "kvalifikacija", cpo: "nera" }))).kortele;
+    W.KORTELE.atnaujink();
+    await W.KORTELE.pasirink(k3.id);
+    lygu([v("new-eval-criteria"), kval(), cpo()], ["sąnaudas", "tik_kval", true], "žmogaus reikšmės neperrašytos");
+    z = D.getElementById("gpk-zin").textContent;
+    ["Vertinimo kriterijus: modulyje „Sąnaudos“, kortelėje „Kaina“", "Kas tikrinama: modulyje „tik kvalifikacija“, kortelėje „Pašalinimo pagrindai ir kvalifikacija“",
+     "CPO LT katalogas: modulyje „Kataloge yra, bet perkama ne per jį (motyvai - pirkimo dokumentuose)“, kortelėje „CPO LT kataloge nėra“"]
+      .forEach(x => tiesa(z.indexOf(x) >= 0, x + "\n" + z));
+    [...D.querySelectorAll("#gpk-zin button")].find(b => b.getAttribute("aria-label") === "Taikyti: Vertinimo kriterijus").click();
+    lygu([v("new-eval-criteria"), kval(), cpo()], ["kainą", "tik_kval", true], "„Taikyti“ - tik tas laukas");
+    D.querySelector('input[name="new-kval"][value="abu"]').checked = true;
+    const k4 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia({ pavadinimas: KORT.pavadinimas, kvalifikacija: "pasalinimas" })).kortele;
+    W.KORTELE.atnaujink();
+    await W.KORTELE.pasirink(k4.id);
+    lygu(kval(), "abu", "įvestame vedlyje „abu“ - žmogaus pasirinkimas, neperrašomas");
+    tiesa(D.getElementById("gpk-zin").textContent.indexOf("Kas tikrinama: modulyje „Pašalinimo pagrindai ir kvalifikacija“, kortelėje „Tik pašalinimo pagrindai“") >= 0, D.getElementById("gpk-zin").textContent);
+    // 4. „Perkama per CPO LT katalogą“ - protokolų šablone tokios parinkties nėra: žyma nepažymima, priežastis pasakoma
+    await modulisSuKortele();
+    const k5 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORT, { cpo: "per_cpo" }))).kortele;
+    W.KORTELE.atnaujink();
+    await W.KORTELE.pasirink(k5.id);
+    W.showPage("page-new-pk");
+    lygu(cpo(), false, "per CPO - žyma nepažymėta");
+    z = D.getElementById("gpk-zin").textContent;
+    tiesa(z.indexOf("Šiame modulyje neįrašoma: CPO LT katalogas („Perkama per CPO LT katalogą“ - protokolų šablone tokios parinkties nėra") >= 0, z);
+  });
 }
 
 /* 2026-09-27: straipsnių numeriai - tik iš shared/teises-nuorodos.js (perskaityta e-tar). Iki tol modulis juos rašė pats,
@@ -1842,6 +1901,7 @@ async function testaiPatikra1025c(){
       D.getElementById("new-pk-val-ex").value = "5000000";
       D.querySelector('input[name="new-obj-type"][value="prekes"]').checked = true;
       W.selectType(D.querySelector('.type-card[data-type="atviras_supaprastintas"]'));
+      D.getElementById("new-eval-criteria").value = "kainą";   // be numatytojo nuo 2026-11-09
       const el = D.getElementById("new-budas-verte");
       const bv = W.GP_TAISYKLES.budoVerte({ rezimas: "PI", objektas: "prekes", verte: 5000000, budas: "S-AK", vykdytojas: "litgrid" }, "lt");
       lygu(bv.lygis, "kliutis", "variklis");
@@ -1875,6 +1935,92 @@ async function testaiPatikra1025c(){
     lygu(h(), "", "neskelbiamos derybos - be užuominos");
   });
 
+  // 2026-11-09 (kelio patikra, du pirkimai per modulius): tiekėjas iš „+ Pridėti“ eilutės dingdavo iš A4 eilės; kriterijus ir ES leidinys - tylūs numatytieji
+  await testas("Kelio patikra 2026-11-09: A4 „+ Pridėti“ tiekėjas eilėje ir rašte, kriterijus be numatytojo (be jo - toliau neinama), ES leidinys - tik tarptautiniam ir DPS sukūrimui", async () => {
+    await patModulis();
+    W.openProtocol("TEST-P-A", "A4"); a4Pildyk(true);
+    W.addRankRow();
+    const nauja = [...D.querySelectorAll("#pf-rank-tbody tr")].pop();
+    tiesa(nauja.classList.contains("rank-row"), "pridėta eilutė be klasės rank-row");
+    pildyk(nauja, { ".r-name": "UAB „Gama servisas“", ".r-ex": "499000" });
+    lygu(W.protokoloEile("A4").map(x => x.tiekejas), [TA, TC, "UAB „Gama servisas“"], "eilė su pridėtu tiekėju");
+    tiesa(W.pranesimuPlanas("A4", W.getProcurement("TEST-P-A")).kurti.some(k => k.gavejai.some(g => g.pavadinimas === "UAB „Gama servisas“")), "pridėtas tiekėjas gauna pranešimą");
+    // kriterijus
+    const tikras = W.confirm;
+    try {
+      W.confirm = () => true;
+      W.showPage("page-new-pk");
+      [["new-pk-nr", "TEST-KR-1"], ["new-pk-name", "Kriterijaus pirkimas"], ["new-pk-date", "2026-11-09"]].forEach(([id, x]) => { D.getElementById(id).value = x; });
+      W.newPkStep2();
+      lygu(D.getElementById("new-step2").style.display, "block", "2 žingsnis");
+      const kr = D.getElementById("new-eval-criteria");
+      lygu(kr.value, "", "kriterijus be numatytojo");
+      W.newPkStep3();
+      lygu([D.getElementById("new-step3").style.display === "block", kr.getAttribute("aria-invalid"), D.activeElement === kr], [false, "true", true], "be kriterijaus - neinama, laukas pažymėtas");
+      tiesa(/Pasirinkite vertinimo kriterijų/.test(D.getElementById("new-eval-criteria-k").textContent), "priežastis");
+      kr.value = "kainą"; kr.dispatchEvent(new Event("change", { bubbles: true }));
+      lygu([kr.getAttribute("aria-invalid"), D.getElementById("new-eval-criteria-k").textContent], [null, ""], "pasirinkus - klaida nuimta");
+      W.newPkStep3();
+      lygu(D.getElementById("new-step3").style.display, "block", "su kriterijumi - toliau");
+      W.isvalykVedli(); lygu(kr.value, "", "išvalius - vėl be numatytojo");
+    } finally { W.confirm = tikras; }
+    // ES oficialusis leidinys A1: tarptautinis ir DPS sukūrimas - pažymėta, supaprastintas - ne
+    W.saveProcurementData("TEST-P-SAK", patPirkimas("TEST-P-SAK", "atviras_supaprastintas", { eval_criteria: "kainą" }));
+    for (const [id, tiketa] of [["TEST-P-A", true], ["TEST-P-SAK", false], ["TEST-P-S", true]]) {
+      W.openProtocol(id, "A1");
+      const es = D.getElementById("pf-es");
+      lygu([es.checked, D.getElementById("pf-es-det").style.display !== "none"], [tiketa, tiketa], id + ": ES leidinys");
+    }
+    W.openProtocol("TEST-P-SAK", "A1");
+    const t = await protTekstas("TEST-P-SAK", "A1"), es = t.split("\n").find(x => /Europos Sąjungos oficialiajame leidinyje/.test(x)) || "";
+    tiesa(es && es.trim().indexOf("\u2610") === 0, "supaprastinto A1 - ES leidinys nepažymėtas: " + es);
+    // Atmetimo raštas - PĮ 58 str. 1 d. punktas pagal pagrindą (e-tar 2026-11-09: 1 p. - pasiūlymas, 2 p. - pašalinimas, 3 p. - kvalifikacija, 6 p. - NMK)
+    const T12 = W.eval("PN_TEMPLATES")["12_atmetimas"];
+    const d0 = { imone: "LITGRID AB", pirkimas: "„Testinis“", pirkimo_budas: "atviro konkurso būdu", pirkimo_budas_en: "by way of an open tender" };
+    for (const [pagr, lt, en] of [[[], "1 punktu", "58(1)(1)"], [["kvalifikacija"], "3 punktu", "58(1)(3)"], [["pasalinimas"], "2 punktu", "58(1)(2)"],
+        [["nmk"], "6 punktu", "58(1)(6)"], [["kvalifikacija", "pasalinimas"], "2 ir 3 punktais", "58(1)(2) and (3)"]]) {
+      const b = T12.body(Object.assign({}, d0, { atmetimo_pagrindai: pagr }));
+      tiesa(b.lt.indexOf("58 straipsnio 1 dalies " + lt + ", jūsų pasiūlymas atmestas.") >= 0 && b.en.indexOf("Article " + en + " of the Law on Procurement") >= 0, pagr.join("+") + ": " + b.lt.slice(0, 500));
+    }
+    lygu(["nepasalintas", "kvalifikacija_atitinka", "nmk_aplinkybes"].map(k => W.GP_TEISE.cit(k, "PI")), ["PĮ 58 str. 1 d. 2 p.", "PĮ 58 str. 1 d. 3 p.", "PĮ 58 str. 1 d. 6 p."], "registras");
+    W.openProtocol("TEST-P-A", "A5"); W.addKvalRow();
+    [TA, TB].forEach((x, i) => eil(".kv-name", i).value = x);
+    pildyk(eil("#pf-kval-tbody tr", 0), { ".kv-pal": "nera", ".kv-kval": "atitinka", ".kv-sp": "priimti" });
+    pildyk(eil("#pf-kval-tbody tr", 1), { ".kv-pal": "nera", ".kv-kval": "neatitinka", ".kv-sp": "atmesti" });
+    D.getElementById("pf-winner").value = TA; D.getElementById("pf-winner-ex").value = "480000";
+    const atm = W.pranesimuPlanas("A5", W.getProcurement("TEST-P-A")).kurti.find(k => k.tId === "12_atmetimas");
+    lygu([atm && atm.gavejai[0].pavadinimas, atm && atm.gavejai[0].pagrindai, W.pnBpsDuomenys(W.getProcurement("TEST-P-A"), atm && atm.gavejai[0]).atmetimo_pagrindai],
+      [TB, ["kvalifikacija"], ["kvalifikacija"]], "A5: kvalifikacijos neatitikęs - 3 p.");
+  });
+
+  await testas("Kelio patikra 2026-11-09: tiekėjai pereina A3 → A4 (atitiktis ir, kainos kriterijui, eilė kainos tvarka) → A5 (iš A4 eilės); įrašyta forma neperrašoma; sprendimai neperkeliami", async () => {
+    await patModulis();
+    W.showPage("page-proto");
+    for (const [pid, krit] of [["TEST-P-K", "kainą"], ["TEST-P-A", "kainos ir kokybės santykį"]]) {
+      W.openProtocol(pid, "A3");
+      W.addTiek(krit !== "kainą");
+      const rows = [...D.querySelectorAll("#pf-tiekojai-tbody .tiek-row")];
+      [[TA, "480000"], [TB, "470000"], [TC, "495000"]].forEach(([v, ex], i) => { rows[i].querySelector(".t-name").value = v; rows[i].querySelector(".t-ex").value = ex; });
+      W.irasykForma();
+      W.openProtocol(pid, "A4");
+      lygu([...D.querySelectorAll(".eval-row .e-name")].map(e => e.value).filter(Boolean), [TA, TB, TC], krit + ": A4 atitikties eilutės");
+      lygu([...D.querySelectorAll(".eval-row .e-action")].map(e => e.value).filter(Boolean).length, 0, krit + ": sprendimai neperkelti");
+      const eil = W.protokoloEile("A4").map(x => x.tiekejas);
+      lygu(eil, krit === "kainą" ? [TB, TA, TC] : [], krit + ": pasiūlymų eilė");
+      tiesa(/Tiekėjai \(3\) perkelti iš A3 protokolo formos/.test(D.getElementById("proto-form-content").textContent), "pastaba");
+    }
+    // įrašyta A4 forma - neperrašoma
+    W.openProtocol("TEST-P-K", "A4");
+    D.querySelector(".eval-row .e-name").value = "UAB „Kita“"; W.irasykForma();
+    W.openProtocol("TEST-P-K", "A4");
+    lygu(D.querySelector(".eval-row .e-name").value, "UAB „Kita“", "įrašyta forma neperrašyta");
+    // A5 - iš A4 eilės
+    const pk = W.getProcurement("TEST-P-K"); pk.protocols.A4 = Object.assign({}, pk.protocols.A4, { eile: [{ tiekejas: TB, kaina: 470000 }, { tiekejas: TA, kaina: 480000 }] });
+    W.saveProcurementData("TEST-P-K", pk);
+    W.openProtocol("TEST-P-K", "A5");
+    lygu([...D.querySelectorAll("#pf-kval-tbody .kv-name")].map(e => e.value).filter(Boolean), [TB, TA], "A5 kvalifikacija");
+    lygu([D.getElementById("pf-winner").value, [...D.querySelectorAll("#pf-kval-tbody .kv-sp")].map(e => e.value).filter(Boolean).length], ["", 0], "laimėtojas ir sprendimai neperkelti");
+  });
   await testas("A2 (T5, M1): papildomos informacijos dienos pagal PĮ 49 str. 5 d. ir pirkimo rūšį; naujas terminas - tik pažymėjus „Pratęsti“, su neprivaloma valanda; neskelbiamame pirkime - įstatymo redakcija kvietimo dieną", async () => {
     await patModulis();
     W.saveProcurementData("TEST-P-SAK", patPirkimas("TEST-P-SAK", "atviras_supaprastintas"));
