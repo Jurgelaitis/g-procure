@@ -5098,7 +5098,7 @@ const App = (() => {
     // V3 (2026-10-27): ir pirkimo kontekstas, tikrinamas tekstas, analizė, objekto tipas, kriterijus ir aspektai - iki tol likdavo ankstesnio pirkimo
     ['genType', 'genCriteria', 'metaTitle', 'metaType', 'metaCpv', 'metaDescription', 'metaProcedure', 'metaValue', 'metaCriteria'].forEach(id => { const e = $('#' + id); if (e) e.value = ''; });
     ['genFlagGreen', 'genFlagInnovation', 'genFlagCritical', 'genFlagParts', 'metaInternational', 'metaGreen', 'metaInnovation', 'metaCritical', 'metaParts']
-      .forEach(id => { const e = $('#' + id); if (e) { e.checked = false; delete e.dataset.palieta; } });
+      .forEach(id => { const e = $('#' + id); if (e) { e.checked = false; delete e.dataset.palieta; delete e.dataset.zmogus; } });
     clearText();
     state.analysis = null; state.kontekstoSkirtumai = [];
     $('#analysisResults').classList.add('hidden'); $('#analysisEmpty').classList.remove('hidden'); $('#analysisBadge').textContent = '0';
@@ -9551,9 +9551,23 @@ window.CVPISClient = CVPISClient;
   if (!window.GP_KORTELE) return;
   var $i = function (id) { return document.getElementById(id); };
   var RANKA = new Set();
-  ['genType', 'metaType', 'genFlagParts', 'metaParts', 'metaProcedure', 'metaInternational'].forEach(function (id) {
-    var e = $i(id); if (e) e.addEventListener('change', function (ev) { if (ev.isTrusted) RANKA.add(id.replace(/^(gen|meta)(Flag)?/, '').toLowerCase()); });
+  ['genType', 'metaType', 'genFlagParts', 'metaParts', 'metaProcedure', 'metaInternational', 'genFlagGreen', 'metaGreen'].forEach(function (id) {
+    var e = $i(id); if (e) e.addEventListener('change', function (ev) {
+      if (!ev.isTrusted) return;
+      RANKA.add(id.replace(/^(gen|meta)(Flag)?/, '').toLowerCase());
+      e.dataset.zmogus = '1';   // šį jungiklį palietė žmogus (ne kortelė); „Pradėti naują“ žymą nuima
+    });
   });
+  /* Pirkimo sprendimai kortelėje (2026-11-09): vertinimo kriterijus ir žaliasis pirkimas. PP-ts sąraše nėra „Sąnaudų ir kokybės santykio“ -
+     toks kortelės kriterijus neįrašomas ir įvardijamas. „Kritinė infrastruktūra / saugumas“ - kita sąvoka nei „susijęs su nacionaliniu
+     saugumu“ (DI ją gauna kaip aspektą), todėl kortelės nacionalinio saugumo atsakymas jos nepildo. */
+  var KRIT = { kaina: 'price', sanaudos: 'cost', kainos_kokybe: 'best_price_quality' };
+  var KRIT_ATGAL = { price: 'kaina', cost: 'sanaudos', best_price_quality: 'kainos_kokybe' };
+  // Jungiklis turi dvi būsenas - „Ne“ yra sprendimas tik tada, kai jį palietė žmogus; nepaliestas - nenurodyta (kortelė jį pildo)
+  function zymiklis(ids) {
+    for (var k = 0; k < ids.length; k++) { var e = $i(ids[k]); if (e && e.dataset.zmogus) return e.checked ? 'taip' : 'ne'; }
+    return '';
+  }
   var TIPAI = { prekes: 'goods', paslaugos: 'services', paslaugos_it: 'services', darbai: 'works', misrus: 'mixed' };
   var ATGAL = { goods: 'prekes', services: 'paslaugos', works: 'darbai', mixed: 'misrus' };
   function skaityk(ids) { for (var k = 0; k < ids.length; k++) { var e = $i(ids[k]); if (e && String(e.value).trim() !== '') return e.value; } return ''; }
@@ -9584,6 +9598,12 @@ window.CVPISClient = CVPISClient;
         i: function (v) { return String(v); }, is: function (s) { return parseInt(s, 10) > 0 ? parseInt(s, 10) : undefined; },
         dek: function (v) { rasyk(['genDuration'], v); } },
       { kortele: 'budas', gauk: budas, i: function (v) { return GP_METHODS.toModule('pp-ts', v) ? v : null; },
+        // 2026-11-09 (kelio patikra): PP-ts mažos vertės apklausų neskiria (visos - small_value), todėl lyginama modulio reikšme;
+        // iki tol MV-SAB ir kiti MV būdai juostoje visada būdavo „Skiriasi“, o „Taikyti“ nieko nepakeisdavo
+        lygu: function (s, v) {
+          var m = GP_METHODS.toModule('pp-ts', v), e = $i('metaInternational');
+          return !!m && m === (($i('metaProcedure') || {}).value || '') && (!e || e.checked === /^T-/.test(v));
+        },
         dek: function (v) {
           rasyk(['metaProcedure'], GP_METHODS.toModule('pp-ts', v));
           var e = $i('metaInternational'); if (e) { e.checked = /^T-/.test(v); e.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -9593,6 +9613,13 @@ window.CVPISClient = CVPISClient;
         i: function (d) { return d.length ? 'taip' : 'ne'; }, lygu: function (s, d) { return s === (d.length ? 'taip' : 'ne'); },
         is: function () { return undefined; },
         dek: function (v) { ['genFlagParts', 'metaParts'].forEach(function (id) { var e = $i(id); if (e) { e.checked = v === 'taip'; e.dispatchEvent(new Event('change', { bubbles: true })); } }); } },
+      { kortele: 'kriterijus', gauk: function () { return skaityk(['genCriteria', 'metaCriteria']); },
+        i: function (v) { return KRIT[v] || null; }, is: function (s) { return KRIT_ATGAL[s] || undefined; },
+        dek: function (v) { rasyk(['genCriteria', 'metaCriteria'], v); },
+        neimanoma: 'sąnaudų ir kokybės santykio vertinimo kriterijaus šio modulio sąraše nėra' },
+      { kortele: 'zaliasis', gauk: function () { return zymiklis(['genFlagGreen', 'metaGreen']); },
+        i: function (v) { return v === 'taip' || v === 'ne' ? v : null; },
+        dek: function (v) { ['genFlagGreen', 'metaGreen'].forEach(function (id) { var e = $i(id); if (e) { e.checked = v === 'taip'; e.dispatchEvent(new Event('change', { bubbles: true })); } }); } },
       // vykdytojas pirmas: jį pakeitus nustatomas jo įprastas įstatymas, o kortelės įstatymas - po jo
       { kortele: 'vykdytojas', gauk: function () { return Vykdytojas.id(); }, i: function (v) { return window.GP_ORG && GP_ORG.pagalId(v) ? v : null; },
         numatyta: function () { return !Vykdytojas.arZmogus('org'); }, dek: function (v) { Vykdytojas.nustatyk(v); },

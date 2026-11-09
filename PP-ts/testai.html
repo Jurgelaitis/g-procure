@@ -694,6 +694,29 @@ async function testaiKortele() {
     } finally { f.remove(); }
   });
 
+  // 2026-11-09 (kelio patikra): mažos vertės būdai PP-ts - vienas „small_value“, todėl juosta MV-SAB visada rodė „Skiriasi“
+  await testas('Mažos vertės būdas iš kortelės (MV-SAB, MV-NR) įrašomas ir po to juosta nerodo skirtumo; kitas būdas modulyje - skirtumas lieka', async () => {
+    const { f, KW, KD } = await modulisSuKortele();
+    try {
+      const K = KW.GP_KORTELE;
+      for (const b of ['MV-SAB', 'MV-NR']) {
+        // kitas pirkimas tame pačiame lange - pirma išvalomi laukai (kitaip juosta klausia „Ar tai kitas pirkimas?“ ir laukia atsakymo)
+        ['genTitle', 'metaTitle'].forEach(id => { const e = KD.getElementById(id); e.value = ''; e.dispatchEvent(new KW.Event('input', { bubbles: true })); });
+        KW.KORTELE.atsiek && KW.KORTELE.atsiek();
+        const k = K.issaugok(K.tuscia({ pavadinimas: 'Darbo drabužių pirkimas', objektas: 'prekes', budas: b, vykdytojas: 'litgrid', rezimas: 'PI' })).kortele;
+        KW.KORTELE.atnaujink();
+        tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta ' + b);
+        lygu(KD.getElementById('metaProcedure').value, 'small_value', b + ': modulio būdas');
+        KW.KORTELE.atnaujink();
+        const z = KD.getElementById('gpk-zin').textContent;
+        tiesa(!/būdas: modulyje/i.test(z), b + ': būdas sutampa, o juosta sako: ' + z);
+      }
+      const p = KD.getElementById('metaProcedure'); p.value = 'open'; p.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      KW.KORTELE.atnaujink();
+      tiesa(/būdas: modulyje/i.test(KD.getElementById('gpk-zin').textContent), 'kitas būdas modulyje - skirtumas: ' + KD.getElementById('gpk-zin').textContent);
+    } finally { f.remove(); }
+  });
+
   await testas('Vykdytojas ir įstatymas iš kortelės įrašomi (T1: ir VPĮ), būdas, kurio pirkimo kontekste nėra, neįrašomas ir įvardijamas; įvestas kitas BVPŽ kodas neperrašomas', async () => {
     const { f, KW, KD } = await modulisSuKortele();
     try {
@@ -711,6 +734,58 @@ async function testaiKortele() {
         ['amber-grid', 'VPI', 'amber-grid', 'VPI'], 'vykdytojas ir įstatymas iš kortelės');
       turi(KD.getElementById('vykdPastaba').textContent, 'Įprastai AB Amber Grid perka pagal PĮ', 'kitoks nei įprastas įstatymas - pasakoma');
       turi(KD.getElementById('vykdKontekstas').textContent, 'Perkančioji organizacija', 'konteksto lentelė');
+    } finally { f.remove(); }
+  });
+
+  // 2026-11-09: pirkimo sprendimai kortelėje (vertinimo kriterijus, žaliasis pirkimas) - modulis jų nebeklausia iš naujo.
+  // Pavadinimai tušti arba tie patys - kitaip juosta klausia „Ar tai kitas pirkimas?“ ir pasirinkimas laukia atsakymo.
+  await testas('Pirkimo sprendimai kortelėje: vertinimo kriterijus ir žaliasis pirkimas užpildo tuščius laukus abiejose formose; žmogaus pasirinkimas neperrašomas - skirtumas; nenurodyta - lieka tušti, sąnaudų ir kokybės santykis neįrašomas', async () => {
+    const v = (KD, id) => KD.getElementById(id).value, ch = (KD, id) => KD.getElementById(id).checked;
+    // 1. Tušti laukai užpildomi - ir TS kūrimo vediklyje, ir pirkimo kontekste; kortelės „Taip“ - sprendimas (D12 žyma „palieta“)
+    let { f, KW, KD } = await modulisSuKortele();
+    try {
+      const K = KW.GP_KORTELE;
+      const k = K.issaugok(K.tuscia({ pavadinimas: 'Kabelių pirkimas', kriterijus: 'kainos_kokybe', zaliasis: 'taip' })).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta');
+      lygu([v(KD, 'genCriteria'), v(KD, 'metaCriteria'), ch(KD, 'genFlagGreen'), ch(KD, 'metaGreen'), KD.getElementById('genFlagGreen').dataset.palieta],
+        ['best_price_quality', 'best_price_quality', true, true, '1'], 'užpildyta');
+      const z = KD.getElementById('gpk-zin').textContent;
+      tiesa(/Iš kortelės užpildyta: pavadinimas, vertinimo kriterijus, žaliasis pirkimas\./.test(z), z);
+      // kortelės įrašyta reikšmė - ne žmogaus: kita kortelė (tas pats pavadinimas) ją pakeičia, ne rodo skirtumą
+      const k2 = K.issaugok(K.tuscia({ pavadinimas: 'Kabelių pirkimas', zaliasis: 'ne' })).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(await KW.KORTELE.pasirink(k2.id), 'pasirinkta antra');
+      lygu([ch(KD, 'genFlagGreen'), ch(KD, 'metaGreen')], [false, false], 'antra kortelė - „Ne“');
+    } finally { f.remove(); }
+    // 2. Žmogus jau pasirinko kitaip - neperrašoma, rodoma kaip skirtumas. Tikro (isTrusted) paspaudimo testas sukurti negali,
+    //    todėl jungiklio žmogaus žyma uždedama taip, kaip ją uždeda tikras paspaudimas; „Pradėti naują“ ją nuima.
+    ({ f, KW, KD } = await modulisSuKortele());
+    try {
+      const K = KW.GP_KORTELE;
+      const kr = KD.getElementById('genCriteria'); kr.value = 'best_price_quality'; kr.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      const g = KD.getElementById('genFlagGreen'); g.checked = false; g.dataset.zmogus = '1';
+      const k = K.issaugok(K.tuscia({ pavadinimas: 'Kabelių pirkimas', kriterijus: 'kaina', zaliasis: 'taip' })).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta');
+      lygu([v(KD, 'genCriteria'), v(KD, 'metaCriteria'), ch(KD, 'genFlagGreen'), ch(KD, 'metaGreen')], ['best_price_quality', '', false, false], 'neperrašyta');
+      const z = KD.getElementById('gpk-zin').textContent;
+      ['Vertinimo kriterijus: modulyje „Kainos ir kokybės santykis“, kortelėje „Kaina“', 'Žaliasis pirkimas: modulyje „Ne“, kortelėje „Taip“']
+        .forEach(x => tiesa(z.indexOf(x) >= 0, 'nėra: ' + x + '\n' + z));
+      const pr = KW.confirm; KW.confirm = () => true;
+      try { KW.eval('App.startNewGeneration()'); } finally { KW.confirm = pr; }
+      tiesa(!g.dataset.zmogus && !g.dataset.palieta, '„Pradėti naują“ nuima žmogaus žymą');
+    } finally { f.remove(); }
+    // 3. Kortelėje nenurodyta - laukai lieka tušti, jungiklis nepaliestas; „Sąnaudų ir kokybės santykis“ - neįrašomas ir įvardijamas
+    ({ f, KW, KD } = await modulisSuKortele());
+    try {
+      const K = KW.GP_KORTELE;
+      const k = K.issaugok(K.tuscia({ pavadinimas: 'Kabelių pirkimas', kriterijus: 'sanaudu_kokybe' })).kortele;
+      KW.KORTELE.atnaujink();
+      tiesa(await KW.KORTELE.pasirink(k.id), 'pasirinkta');
+      lygu([v(KD, 'genCriteria'), v(KD, 'metaCriteria'), ch(KD, 'genFlagGreen'), !!KD.getElementById('genFlagGreen').dataset.palieta], ['', '', false, false], 'nenurodyta');
+      const z = KD.getElementById('gpk-zin').textContent;
+      tiesa(z.indexOf('vertinimo kriterijus („Sąnaudų ir kokybės santykis“ - sąnaudų ir kokybės santykio vertinimo kriterijaus šio modulio sąraše nėra)') >= 0 && !/aliasis/.test(z), z);
     } finally { f.remove(); }
   });
 }
