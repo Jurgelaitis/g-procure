@@ -169,7 +169,7 @@ ribos zona `conf.d/gp-sankcijos-limit.conf`, `location /api/sankcijos/` - į `ap
 Naudotojo sprendimas 2026-11-08 („Neutralūs žingsniai“ - kodo apsauga): DI instrukcijos (sistemos tekstai ir užklausų šablonai)
 perkeliamos iš naršyklės modulių į serverį ir laikomos privačiai. Modulis siunčia tik užduoties pavadinimą ir duomenis:
 `GP_AI_PROXY.uzduotis("pp-graphs.en-pavadinimas", { pavadinimas })` -> `POST /api/uzduotis` `{ uzduotis, duomenys, dokumentas?, modelis? }`.
-Serveris pagal šabloną sudaro Anthropic užklausą ir grąžina atsakymą kaip `/api/analyze` (klientas jį skaito taip pat).
+Serveris pagal šabloną sudaro Anthropic užklausą ir grąžina Anthropic atsakymą kaip yra (klientas jį skaito taip pat, kaip anksčiau `/api/analyze`).
 
 - `di-uzduotys.js` - variklis be priklausomybių (Node ir naršyklė): šablonų registras (id `<modulis>.<užduotis>`, modelis iš
   leidžiamų, `maxTokens` <= 8000, duomenų schema - tekstas, skaičius, loginis, reikšmė iš sąrašo, tekstų sąrašas, dokumentas - PDF ar
@@ -182,4 +182,5 @@ Serveris pagal šabloną sudaro Anthropic užklausą ir grąžina atsakymą kaip
 - Testai - `testai.html` grupė „DI užduotys serveryje“ (ir klientas `GP_AI_PROXY.uzduotis`).
 
 Eiga: serveris PIRMA, tada moduliai po vieną (instrukcija iš modulio šalinama tik kai užduotis veikia serveryje); kai perkelti visi,
-`/api/analyze` nebepriims laisvo `system`. Jau paskelbtos instrukcijos lieka saugyklos istorijoje.
+`/api/analyze` nebepriims laisvo `system`. Visi moduliai perkelti 2026-11-08, `/api/analyze` ir nenaudotas `/api/price` uždaryti 2026-11-09 (410, naudotojo
+leidimas), `shared/ai-proxy.js` funkcijos `call()` nebėra. Jau paskelbtos instrukcijos lieka saugyklos istorijoje.

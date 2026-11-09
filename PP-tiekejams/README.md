@@ -70,7 +70,7 @@ Dabar:
 
 ## Konfigūracija
 
-- **AI kelias.** `index.html` konstanta `AI_ENDPOINT`. Tuščia (numatyta) = `shared/ai-proxy.js` -> `api.g-procure.com/api/analyze` (tas pats kelias kaip viešame PP-carbon). Įdiegus `worker/tiekejams-proxy.js` - įrašyti jo adresą (pvz. `https://tiekejams-api.g-procure.com`); tada promptą konstruoja serveris, o klientas siunčia tik fragmentus ir klausimą.
+- **AI kelias.** `index.html` konstanta `AI_ENDPOINT`. Tuščia (numatyta) = `shared/ai-proxy.js` `GP_AI_PROXY.uzduotis` -> `api.g-procure.com/api/uzduotis` (nuo 2026-11-08: klientas siunčia tik fragmentus ir klausimą, instrukciją sudaro serveris pagal privatų šabloną; `/api/analyze` uždarytas 2026-11-09). Įdiegus `worker/tiekejams-proxy.js` - įrašyti jo adresą (pvz. `https://tiekejams-api.g-procure.com`) ir `TURNSTILE_SITE_KEY`; tada prieš serverio užduotį patikrinamas ir Turnstile.
 - **Worker diegimas** (rankinis, kaip `epd-proxy.js`): Cloudflare Workers & Pages > Create > įklijuoti failo turinį > Deploy; Custom domain; Secrets: `ANTHROPIC_API_KEY` (būtinas) ir `TURNSTILE_SECRET_KEY` (BŪTINAS - be jo Worker'is atsako 500, nes Origin antraštė curl'u suklastojama). Kliente `index.html` įrašyti `TURNSTILE_SITE_KEY` - tada prieš AI kvietimą rodomas Turnstile widget'as. PRIVALOMA papildomai: Cloudflare **Rate Limiting** taisyklė Worker'io domenui (pvz. 20 užklausų / 10 min per IP, POST), nes kode dažnio ribos nėra. `ALLOWED_ORIGIN` - `https://g-procure.com`.
 - **CVP IS jungtis.** MVP - tik nuorodos ir rankinis įkėlimas; gyva jungtis - 2 etapas (žr. `docs/tiekejams/cvpis-feasibility.md`).
 
