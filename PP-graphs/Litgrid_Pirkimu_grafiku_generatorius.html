@@ -487,6 +487,8 @@
     box-shadow:var(--shadow-lg);
   }
   .action-bar-info{font-size:13px;color:var(--text-secondary)}
+  .kortele-grafikas{margin:12px 0 0;padding:10px 14px;border-left:3px solid var(--c-emerald);background:var(--c-graphite-5);font-size:13px;color:var(--c-graphite)}
+  .kortele-grafikas:empty{display:none}
   .action-bar-info strong{color:var(--c-graphite);font-weight:700}
   .action-buttons{display:flex;gap:10px;flex-wrap:wrap}
   .btn{
@@ -820,7 +822,7 @@
   /* ===== PRINT ===== */
   @media print{
     body{background:#fff}
-    .app-header,.tabbar,.group-banner,.action-bar,#section-info,#section-phases,.preview-tabs,.lang-toggle,.calc-actions,.inline-link-btn,.no-print{display:none !important}
+    .app-header,.tabbar,.group-banner,.action-bar,#section-info,#section-phases,.kortele-grafikas,.preview-tabs,.lang-toggle,.calc-actions,.inline-link-btn,.no-print{display:none !important}
     .container{max-width:none;padding:0;margin:0}
     .card{border:none;box-shadow:none;padding:0;margin:0}
     .card-header{display:none}
@@ -1179,12 +1181,15 @@
     </div>
     <div class="action-buttons">
       <button class="btn btn-ghost" type="button" onclick="resetForm()" title="Išvalyti formą">↺ Išvalyti</button>
+      <button class="btn btn-ghost" type="button" id="btn-kortele" onclick="grafikasIKortele()" aria-describedby="kortele-grafikas">Įrašyti grafiką į kortelę</button>
       <button class="btn btn-primary" type="button" onclick="printSchedule()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
         Spausdinti / Išsaugoti PDF
       </button>
     </div>
   </div>
+  <!-- Grafikas į pirkimo kortelę (2026-11-09): kas įrašyta, ir plano sutarties datos palyginimas su grafiku -->
+  <div id="kortele-grafikas" class="kortele-grafikas hidden-print" role="status" aria-live="polite"></div>
 
 </div><!-- /view-generator -->
 
@@ -3066,6 +3071,7 @@ function escapeXml(s){
 /* ---------- 10. PREVIEW (Type A & Type B) ---------- */
 function refreshPreview(){
   if(typeof RINKA !== 'undefined' && RINKA) RINKA.perpiesk();   // grafiko etapas rinkos duomenų palyginime
+  kortelesGrafikoBusena();   // kortelės sutarties data prieš šį grafiką
   if(!state.methodCode){
     els.previewEmpty.style.display='block';
     els.previewA.style.display='none';
@@ -3715,7 +3721,8 @@ function trukmiuPradzia(dabar){
    užpildyti laukai iš adreso (?kortele=) nėra naudotojo darbas. */
 const PRADZIA_NUMATYTA = els.pradzia.value;
 const IMONES_KORTELE = { 'litgrid': 'litgrid', 'amber-grid': 'ambergrid', 'epso-g': 'epsog', 'energy-cells': 'energycells' };
-const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
+/* var, ne const: refreshPreview() kviečia kortelesGrafikoBusena() dar init metu, prieš šią eilutę (const - TDZ klaida) */
+var KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
   modulis: 'PP-graphs',
   laukai: [
     { kortele: 'vykdytojas', el: '#f-company', i: v => IMONES_KORTELE[v] || null,
@@ -3727,8 +3734,55 @@ const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
       pastaba: 'Pakeitus būdą, etapai sudaromi iš naujo.' },
     { kortele: 'pradzia', el: '#f-pradzia', numatyta: () => els.pradzia.value === PRADZIA_NUMATYTA },
     { kortele: 'bvpz', el: '#f-bvpz' }
-  ]
+  ],
+  onPasirinkta: () => kortelesGrafikoBusena()
 }) : null;
+/* Pirkimo grafikas į kortelę (2026-11-09, naudotojo „Pradėkime nuo grafiko datų į kortelę ir SPS“; kelio per modulius patikra: grafiką buvo
+   galima tik atspausdinti, o plano sutarties data su grafiku nebuvo lyginama). Įrašoma tik paspaudus ir patvirtinus: visi etapai su datomis
+   (PP-salygos į SPS įterpia vykdymo etapus), planuojama paskelbimo data (skelbiamam būdui - skelbimo etapo pabaiga) ir planuojama sutarties
+   sudarymo data (paskutinio etapo pabaiga). Pasiūlymų terminas neįrašomas - jis nustatomas skelbime (kortelėje - tikras terminas su valanda). */
+function isoData(d){ return d ? GP_WORKDAYS.fmtDate(d) : ''; }
+function etapuZodis(n){ return n % 10 === 1 && n % 100 !== 11 ? 'etapas' : n % 10 >= 2 && n % 10 <= 9 && (n % 100 < 10 || n % 100 >= 20) ? 'etapai' : 'etapų'; }
+function grafikasKortelei(){
+  const sched = computeSchedule();
+  const etapai = sched.map(r => ({ kodas: getDisplayCode(r.group), pavadinimas: r.group.name, stadija: r.group.stage || '', nuo: isoData(r.start), iki: isoData(r.end) }));
+  // skelbimo etapas yra tik skelbiamų būdų grafikuose (neskelbiamiems - kvietimas), todėl būdo atskirai tikrinti nereikia
+  const skelb = sched.find(r => r.group.stage === 'vykdymas' && /^Skelbimas/i.test(r.group.name || ''));
+  const pask = skelb ? isoData(skelb.end) : '';
+  const pab = [...sched].reverse().find(r => r.end);
+  return { grafikas: { sudaryta: new Date().toISOString(), budas: state.methodCode, metai: Number((document.getElementById('f-metai') || {}).value) || null, pradzia: els.pradzia.value, etapai },
+    datos: { paskelbimas: pask, sutartiesData: pab ? isoData(pab.end) : '' } };
+}
+function kortelesGrafikoBusena(pranesimas){
+  const el = document.getElementById('kortele-grafikas'); if(!el) return;
+  const k = typeof KORTELE !== 'undefined' && KORTELE ? KORTELE.pasirinkta() : null;
+  const eil = [];
+  if(pranesimas) eil.push(pranesimas);
+  if(k && state.methodCode && getStartDate()){
+    const pab = isoData(([...computeSchedule()].reverse().find(r => r.end) || {}).end);
+    if(k.sutartiesData && pab && k.sutartiesData !== pab)
+      eil.push(`Kortelėje planuojama sutarties sudarymo data - ${k.sutartiesData} (iš plano ar anksčiau įrašyto grafiko), pagal šį grafiką - ${pab}. Įrašius grafiką į kortelę, data bus pakeista.`);
+    if(k.grafikas && k.grafikas.sudaryta && !pranesimas) eil.push(`Kortelėje jau yra grafikas, įrašytas ${isoData(new Date(k.grafikas.sudaryta)) || '-'} (${GP_KORTELE.reiksmesTekstas('grafikas', k.grafikas, 'lt')}).`);
+  }
+  el.textContent = eil.join(' ');
+}
+function grafikasIKortele(){
+  const k = KORTELE && KORTELE.pasirinkta();
+  if(!k){ kortelesGrafikoBusena('Pirmiausia viršuje, juostoje „Pirkimo kortelė“, pasirinkite pirkimą - grafikas įrašomas į jo kortelę.'); return; }
+  if(!state.methodCode || !getStartDate()){ kortelesGrafikoBusena('Grafikui reikia pirkimo būdo ir pradžios datos.'); return; }
+  const { grafikas, datos } = grafikasKortelei();
+  const sen = (v) => v || 'neįrašyta';
+  const pakeitimai = [`grafikas - ${GP_KORTELE.reiksmesTekstas('grafikas', grafikas, 'lt')}${k.grafikas ? ' (ankstesnis bus pakeistas)' : ''}`];
+  if(datos.paskelbimas && datos.paskelbimas !== k.paskelbimas) pakeitimai.push(`planuojama paskelbimo data: ${sen(k.paskelbimas)} → ${datos.paskelbimas}`);
+  if(datos.sutartiesData && datos.sutartiesData !== k.sutartiesData) pakeitimai.push(`planuojama sutarties sudarymo data: ${sen(k.sutartiesData)} → ${datos.sutartiesData}`);
+  if(!confirm(`Įrašyti į pirkimo kortelę „${k.pavadinimas}“?\n\n- ${pakeitimai.join('\n- ')}\n\nKiti kortelės laukai nekeičiami. Pirkimo sąlygų generatorius vykdymo etapus įterps į SPS skyrių „Preliminarus pirkimo procedūrų vykdymo grafikas“.`)) return;
+  const r = GP_KORTELE.irasykGrafika(k.id, grafikas, datos);
+  if(!r.ok){ kortelesGrafikoBusena('Įrašyti nepavyko: ' + (window.GP_SAUGYKLA ? GP_SAUGYKLA.pranesimas(r.r) : 'saugykla neprieinama')); return; }
+  KORTELE.atnaujink && KORTELE.atnaujink();
+  const n = grafikas.etapai.filter(e => e.stadija === 'vykdymas' && (e.nuo || e.iki)).length;
+  kortelesGrafikoBusena(`Grafikas įrašytas į kortelę „${k.pavadinimas}“ (${grafikas.etapai.length} ${etapuZodis(grafikas.etapai.length)}, iš jų vykdymo - ${n}).`);
+  window.GP_PRANESIMAS && GP_PRANESIMAS.rodyk('Grafikas įrašytas į pirkimo kortelę', { tipas: 'gerai' });
+}
 /* Rinkos duomenys pagal BVPŽ (2026-10-18b): tik paspaudus, į G-Procure serverį - BVPŽ kodo pradžia; būdas - iš formos.
    Palyginimui - grafiko pasiūlymų teikimo laikotarpis: pirmas „... gavimas“ etapas nuo paskelbimo (ankstesnio skelbimo ar kvietimo
    etapo pabaigos; kai tokio etapo prieš jį nėra, pvz. skelbimas ir gavimas viename etape, - nuo etapo pradžios) iki jo pabaigos. var, ne const: refreshPreview()
