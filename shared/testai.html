@@ -1242,6 +1242,50 @@ async function testaiAntraste(){
       tiesa(raide[0] > 230 && raide[1] > 230 && raide[2] > 230, "G raidės kairysis kraštas turi būti baltas: " + raide);
     }
   });
+
+  // Nuorodos peržiūra (2026-11-09, naudotojo pastaba: pasidalijus modulio nuoroda Outlook ir Teams rodė pilką ženklą - paveikslas buvo tik portale).
+  // Kiekvienas viešas puslapis turi Open Graph žymas; modulių pavadinimas, aprašymas ir adresas - tie patys kaip <title>, description ir canonical.
+  await testas("Nuorodos peržiūra: kiekvienas viešas puslapis turi Open Graph pavadinimą, aprašymą, adresą ir paveikslą (G-Procure kortelė, absoliutus adresas, failas yra)", async ()=>{
+    const SAKNIS = "https://g-procure.com/", blogi = [];
+    const atr = (head, re) => { const m = head.match(re); return m ? m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&") : null; };
+    const og = (head, k) => atr(head, new RegExp('<meta property="og:' + k + '" content="([^"]*)"'));
+    const puslapiai = Object.keys(TELEFONO_PUSLAPIAI).map(p => p.replace(/\?.*$/, "")).filter(p => !/PP-teise\/admin\.html$/.test(p));
+    const paveikslai = new Set();
+    for (const p of puslapiai) {
+      const src = await saltinis(p), head = src.slice(0, src.indexOf("</head>"));
+      const kelias = p.replace(/^\.\.\//, ""), kanonine = atr(head, /<link rel="canonical" href="([^"]+)"/);
+      const t = og(head, "title"), d = og(head, "description"), u = og(head, "url"), img = og(head, "image");
+      if (!t || !d) { blogi.push(kelias + ": nėra og:title ar og:description"); continue; }
+      if (u !== (kanonine || SAKNIS + kelias)) blogi.push(kelias + ": og:url " + u + " - turi sutapti su canonical " + (kanonine || SAKNIS + kelias));
+      if (!img || img.indexOf(SAKNIS) !== 0) { blogi.push(kelias + ": og:image turi būti absoliutus g-procure.com adresas: " + img); continue; }
+      paveikslai.add(img);
+      if (!/<meta name="twitter:card" content="summary(_large_image)?"/.test(head) && !/G-Procure_About/.test(kelias)) blogi.push(kelias + ": nėra twitter:card");
+      if (/Nuorodos peržiūra \(Outlook, Teams/.test(head) && !/^index\.html$/.test(kelias)) {
+        const title = (head.match(/<title>([\s\S]*?)<\/title>/) || [])[1].trim(), desc = atr(head, /<meta name="description" content="([^"]*)"/);
+        if (t !== title.replace(/&amp;/g, "&")) blogi.push(kelias + ": og:title „" + t + "“ - ne toks kaip <title> „" + title + "“");
+        if (d !== desc) blogi.push(kelias + ": og:description ne toks kaip description");
+      }
+    }
+    tiesa(puslapiai.length >= 27, "puslapių tik " + puslapiai.length);
+    tiesa(!blogi.length, blogi.join("\n  "));
+    for (const img of paveikslai) {
+      const r = await fetch("../" + img.slice(SAKNIS.length).replace(/%20/g, " ") + "?b=" + Date.now());
+      tiesa(r.ok, img + ": failo nėra (" + r.status + ")");
+    }
+    // Kortelė: 1200x630, iki 600 KB (WhatsApp ir kai kurios programos didesnio nerodo), smaragdo fonas ir balta G plytelė centre -
+    // centre, nes Outlook ir Teams kortelę apkerpa į beveik kvadratą
+    const b = await (await fetch("../shared/img/og-kortele.png?b=" + Date.now())).blob();
+    tiesa(b.size < 600 * 1024, "og-kortele.png per didelė: " + b.size);
+    const img = new Image(); img.src = URL.createObjectURL(b); await img.decode();
+    lygu(img.naturalWidth + "x" + img.naturalHeight, "1200x630", "og-kortele.png dydis");
+    const cv = document.createElement("canvas"); cv.width = 1200; cv.height = 630; const cx = cv.getContext("2d"); cx.drawImage(img, 0, 0);
+    const px = (a, c) => [...cx.getImageData(a, c, 1, 1).data];
+    const fonas = px(60, 60), plytele = px(540, 150), raide = px(600, 222);
+    tiesa(fonas[1] > 110 && fonas[0] < 40 && fonas[1] > fonas[2], "kortelės fonas turi būti smaragdo: " + fonas);
+    tiesa(plytele.slice(0, 3).every(v => v > 240), "centre turi būti balta plytelė: " + plytele);
+    tiesa(raide[1] > 90 && raide[0] < 40, "plytelėje - smaragdo G raidė: " + raide);
+    tiesa(!(await fetch("../shared/img/og-card.png?b=" + Date.now())).ok, "senoji og-card.png turi būti pašalinta");
+  });
 }
 
 /* ---------- Formos laukų būsena (2026-11-05, naudotojo sprendimas „abi dalys“) ----------
