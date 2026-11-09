@@ -1389,6 +1389,24 @@ async function paleisk() {
       lygu([v('ini-vardas'), v('ini-padalinys'), v('org-vardas')], ['Jonas Jonaitis', 'IT skyrius', 'Petras Petraitis'], 'asmenys');
       turi(KD.getElementById('gpk-zin').textContent, 'Iš kortelės užpildyta: pavadinimas, numeris, vertė, BVPŽ kodas, būdas, CVP IS numeris, dalys, iniciatorius, organizatorius.');
       neturi(KD.getElementById('gpk-zin').textContent, 'neįrašoma');
+      // 2026-11-09 (kelio patikra): MV-SAD - derybos „Vykdomos“ iš kortelės, nebeklausiama antrą kartą
+      lygu((KD.querySelector('input[name="derybos"]:checked') || {}).value, 'Vykdomos', 'derybos iš kortelės būdo');
+    } finally { f.remove(); }
+  });
+
+  await testas('Kelio patikra 2026-11-09: MV-SAB kortelė - derybos „Nevykdomos“, juosta skirtumo nerodo; žmogaus pakeistos derybos - skirtumas; raštų antraštėje „pirkimas“ nesikartoja', async () => {
+    const { f, KW, KD } = await suKortele();
+    try {
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia(Object.assign({}, KORT, { budas: 'MV-SAB', pavadinimas: 'Darbo drabužių ir avalynės pirkimas' }))).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      KW.selectForm(2);
+      lygu([KD.getElementById('pirkimo-budas').value, (KD.querySelector('input[name="derybos"]:checked') || {}).value], ['Skelbiama apklausa', 'Nevykdomos'], 'būdas ir derybos');
+      KW.KORTELE.atnaujink();
+      neturi(KD.getElementById('gpk-zin').textContent, 'Būdas: modulyje');
+      const r = KD.querySelector('input[name="derybos"][value="Vykdomos"]'); r.checked = true; r.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      KW.KORTELE.atnaujink();
+      turi(KD.getElementById('gpk-zin').textContent, 'Būdas: modulyje');
     } finally { f.remove(); }
   });
 
@@ -1406,6 +1424,92 @@ async function paleisk() {
        'CVP IS numeris („712345“ - 1 priede pirkimas atliekamas el. paštu arba žodžiu)', 'dalys („1. Vilniaus serveriai (30 000 EUR); 2. Kauno serveriai (12 000 EUR)“ - 1 priede pirkimas į dalis neskaidomas)',
        'organizatorius („Petras Petraitis, Pirkimų skyrius“ - 1 priede pirkimą vykdo iniciatorius)', 'vykdytojas („AB Amber Grid“ - pažymų formos - LITGRID AB)']
         .forEach(x => turi(z, x));
+    } finally { f.remove(); }
+  });
+
+  /* 2026-11-09 (naudotojo pritarta kelio per modulius patikra): pirkimo sprendimai kortelėje - pažyma jų nebeklausia iš naujo */
+  const zymes = KD => ['pasalKvalNetikrinama', 'pasalTikrinamas', 'kvalTikrinama', 'kvalNetikrinama'].map(k => KD.querySelector('[data-field="' + k + '"]').checked);
+  const natSaug = KD => (KD.querySelector('input[name="natSaug"]:checked') || {}).value || '';
+  await testas('Pirkimo sprendimai iš kortelės (2 priedas): vertinimo kriterijus, nacionalinis saugumas, CPO ir kas tikrinama užpildomi; nenurodyta - lieka tušti', async () => {
+    let { f, KW, KD } = await suKortele();
+    try {
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia(Object.assign({}, KORT,
+        { kriterijus: 'kainos_kokybe', nacsaugumas: 'taip', cpo: 'nera', kvalifikacija: 'pasalinimas', zaliasis: 'taip', organizatoriausKontaktai: '+370 600 00000' }))).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      KW.selectForm(2);
+      lygu([KD.getElementById('vertinimo-kriterijus').value, natSaug(KD), KD.getElementById('cpo-busena').value, zymes(KD)],
+           ['Kainos ar sąnaudų ir kokybės santykis', 'Taip', 'nera', [false, true, false, true]], 'sprendimai iš kortelės');
+      tiesa(KD.getElementById('nat-saug-container').classList.contains('show') && KD.querySelectorAll('#natsaug-tbody tr').length >= 1, 'nacionalinio saugumo lentelė atverta');
+      tiesa(KD.body.classList.contains('su-balais'), 'kriterijus ne kaina - balų stulpelis (onKriterijusChange)');
+      const z = KD.getElementById('gpk-zin').textContent;
+      turi(z, 'Iš kortelės užpildyta: pavadinimas, numeris, vertė, BVPŽ kodas, būdas, CVP IS numeris, dalys, iniciatorius, organizatorius, vertinimo kriterijus, susijęs su nacionaliniu saugumu, CPO LT katalogas, kas tikrinama.');
+      neturi(z, 'neįrašoma', 'pažymoje nesantys laukai (žaliasis, kontaktai) neįvardijami');
+    } finally { f.remove(); }
+    // nenurodyta - laukai lieka tušti, „užpildyta“ jų nemini
+    ({ f, KW, KD } = await suKortele());
+    try {
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia(KORT)).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      KW.selectForm(2);
+      lygu([KD.getElementById('vertinimo-kriterijus').value, natSaug(KD), KD.getElementById('cpo-busena').value, zymes(KD)],
+           ['', '', '', [false, false, false, false]], 'nenurodyta - be tylių reikšmių');
+      tiesa(!/vertinimo kriterijus|nacionaliniu saugumu|CPO LT katalogas|kas tikrinama/.test(KD.getElementById('gpk-zin').textContent), KD.getElementById('gpk-zin').textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas('Pirkimo sprendimai: žmogaus kitokie neperrašomi ir rodomi kaip skirtumas („Taikyti“ - tik tas laukas); CPO „kataloge yra, bet ne per jį“ neužpildo „neatitinka poreikių“; 1 priede - kriterijus tik kaina, žymėjimai matomi', async () => {
+    let { f, KW, KD } = await suKortele();
+    try {
+      KW.selectForm(2);
+      const kr = KD.getElementById('vertinimo-kriterijus'); kr.value = 'Kaina'; kr.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      const ns = KD.querySelector('input[name="natSaug"][value="Ne"]'); ns.checked = true; ns.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      const cp = KD.getElementById('cpo-busena'); cp.value = 'netinka'; cp.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      const kv = KD.querySelector('[data-field="kvalTikrinama"]'); kv.checked = true; kv.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia({ pavadinimas: KORT.pavadinimas, vykdytojas: 'litgrid', rezimas: 'PI',
+        kriterijus: 'sanaudos', nacsaugumas: 'taip', cpo: 'nera', kvalifikacija: 'pasalinimas' })).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      lygu([kr.value, natSaug(KD), cp.value, zymes(KD)], ['Kaina', 'Ne', 'netinka', [false, false, true, false]], 'žmogaus reikšmės neperrašytos');
+      const z = KD.getElementById('gpk-zin').textContent;
+      ['Vertinimo kriterijus: modulyje „Kaina“, kortelėje „Sąnaudos“', 'Susijęs su nacionaliniu saugumu: modulyje „Ne“, kortelėje „Taip“',
+       'CPO LT katalogas: modulyje „Kataloge yra, bet perkama ne per jį (motyvai - pirkimo dokumentuose)“, kortelėje „CPO LT kataloge nėra“',
+       'Kas tikrinama: modulyje „tik kvalifikacija“, kortelėje „Tik pašalinimo pagrindai“'].forEach(x => turi(z, x));
+      [...KD.querySelectorAll('#gpk-zin button')].find(b => b.getAttribute('aria-label') === 'Taikyti: Kas tikrinama').click();
+      lygu([zymes(KD), kr.value], [[false, true, false, true], 'Kaina'], '„Taikyti“ - tik „Kas tikrinama“');
+    } finally { f.remove(); }
+    // CPO: kortelės „nenaudojama“ platesnė už pažymos „neatitinka poreikių“ - tuščias laukas neužpildomas, priežastis pasakoma;
+    // pasirinkus „netinka“ - sutampa; „per CPO“ - pažymoje parinkties nėra
+    ({ f, KW, KD } = await suKortele());
+    try {
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia({ pavadinimas: KORT.pavadinimas, vykdytojas: 'litgrid', rezimas: 'PI', cpo: 'nenaudojama' })).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      KW.selectForm(2);
+      lygu(KD.getElementById('cpo-busena').value, '', 'nenaudojama - neužpildyta');
+      turi(KD.getElementById('gpk-zin').textContent, 'Šiame modulyje neįrašoma: CPO LT katalogas („Kataloge yra, bet perkama ne per jį (motyvai - pirkimo dokumentuose)“ - pažymos parinktis „yra CPO kataloge, bet neatitinka poreikių“ nurodo priežastį (Aprašo 9 p.) - pasirinkite patys ir įrašykite pagrindimą)');
+      const cp = KD.getElementById('cpo-busena'); cp.value = 'netinka'; cp.dispatchEvent(new KW.Event('change', { bubbles: true }));
+      KW.KORTELE.atnaujink();
+      neturi(KD.getElementById('gpk-zin').textContent, 'CPO LT katalogas', 'pasirinkus „netinka“ - sutampa');
+      const k2 = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia({ pavadinimas: KORT.pavadinimas, vykdytojas: 'litgrid', rezimas: 'PI', cpo: 'per_cpo' })).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k2.id);
+      turi(KD.getElementById('gpk-zin').textContent, 'CPO LT katalogas („Perkama per CPO LT katalogą“ - pažymos formoje tokios parinkties nėra)');
+    } finally { f.remove(); }
+    // 1 priedas: kriterijus - tik kaina (kitas įvardijamas), kas tikrinama - įrašoma ir „Papildomos parinktys“ atveriamos
+    ({ f, KW, KD } = await suKortele());
+    try {
+      const k = KW.GP_KORTELE.issaugok(KW.GP_KORTELE.tuscia({ pavadinimas: KORT.pavadinimas, vykdytojas: 'litgrid', rezimas: 'PI',
+        kriterijus: 'sanaudos', kvalifikacija: 'kvalifikacija', nacsaugumas: 'ne' })).kortele;
+      KW.KORTELE.atnaujink();
+      await KW.KORTELE.pasirink(k.id);
+      KW.selectForm(1);
+      lygu([KD.getElementById('vertinimo-kriterijus').value, natSaug(KD), zymes(KD), KD.getElementById('papildomos-parinktys').open],
+           ['', 'Ne', [false, true, true, false], true], '1 priedas');
+      const z = KD.getElementById('gpk-zin').textContent;
+      turi(z, 'vertinimo kriterijus („Sąnaudos“ - 1 priedo formoje numatytas kriterijus - kaina)');
+      turi(z, 'Iš kortelės užpildyta: pavadinimas, susijęs su nacionaliniu saugumu, kas tikrinama.');
     } finally { f.remove(); }
   });
 
@@ -1758,6 +1862,11 @@ async function paleisk() {
     tiesa(/<w:tab\/>/.test(pak.xml) && !/<w:t[^>]*>\t/.test(pak.xml), 'tabuliacija - w:tab, ne TAB ženklas');
     const laim = pak.notif[rastas(pak, /laimėtojui/)];
     tiesa(laim && /DĖL PIRKIMO „TESTAS“ REZULTATŲ/.test(laim.tekstas), 'rašto antraštė');
+    // 2026-11-09 (kelio patikra): pavadinimas „X pirkimas“ - antraštėje žodis „pirkimas“ nesikartoja
+    ivesk('pirkimoPavadinimas', 'Testas pirkimas');
+    const pak2 = await wordPaketas(), laim2 = pak2.notif[rastas(pak2, /laimėtojui/)];
+    tiesa(laim2 && /DĖL PIRKIMO „TESTAS“ REZULTATŲ/.test(laim2.tekstas) && !/TESTAS PIRKIMAS/.test(laim2.tekstas), 'antraštė be pasikartojančio „pirkimas“: ' + (laim2 && laim2.tekstas.slice(0, 300)));
+    ivesk('pirkimoPavadinimas', 'TESTAS');
     const img = Object.keys(pak.zip.files).find(n => /^word\/media\/.+\.png$/.test(n));
     tiesa(img, 'antraštėje nėra paveikslo');
     const baitai = new Uint8Array(await pak.zip.file(img).async('arraybuffer'));

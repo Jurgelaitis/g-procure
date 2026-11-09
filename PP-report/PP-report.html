@@ -5824,7 +5824,8 @@ async function buildNotificationDocx(data, notif) {
   const titlePar = new Paragraph({
     alignment: AlignmentType.CENTER,
     children: [new TextRun({
-      text: `DĖL PIRKIMO „${pavadinimas.toUpperCase()}“ REZULTATŲ`,
+      // 2026-11-09 (kelio patikra): pavadinimas „X pirkimas“ - „DĖL PIRKIMO „X“ REZULTATŲ“, ne „DĖL PIRKIMO „X PIRKIMAS“ ...“
+      text: `DĖL PIRKIMO „${pavadinimas.replace(/\s+pirkimas\s*$/i, '').toUpperCase()}“ REZULTATŲ`,
       bold: true, size: 22
     })],
     spacing: { before: 100, after: 200 }
@@ -6038,7 +6039,7 @@ function showToast(message, type = '') { GP_PRANESIMAS.rodyk(message, { tipas: t
     purpose: "Mažos vertės pirkimo tiekėjų apklausos pažyma (Aprašo 1 arba 2 priedas) ir, pirkimą atliekant raštu, pranešimai tiekėjams.",
     stepsTitle: "Kaip naudotis",
     steps: [
-      "<b>Pasirinkite formą</b> pagal numatomą pirkimo vertę - ribos nurodytos formų kortelėse. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - atvertos formos tušti laukai (pavadinimas, kortelės ir CVP IS numeriai, vertė, BVPŽ kodas, būdas, dalys, iniciatorius ir organizatorius) bus užpildyti iš jos.",
+      "<b>Pasirinkite formą</b> pagal numatomą pirkimo vertę - ribos nurodytos formų kortelėse. Jei pirkimas turi <b>pirkimo kortelę</b>, pasirinkite ją viršuje - atvertos formos tušti laukai (pavadinimas, kortelės ir CVP IS numeriai, vertė, BVPŽ kodas, būdas, dalys, iniciatorius ir organizatorius, vertinimo kriterijus, nacionalinio saugumo atsakymas, CPO katalogas, kas tikrinama) bus užpildyti iš jos.",
       "<b>Užpildykite pažymą:</b> pirkimo duomenys, tiekėjai, pasiūlymai ir kvalifikacijos patikra.",
       "<b>Peržiūrėkite</b> („Peržiūrėti“) ir sugeneruokite Word; atliekant raštu - ZIP paketas su pranešimais tiekėjams.",
       "<b>Išsaugokite juodraštį</b>, jei baigsite vėliau."
@@ -6070,6 +6071,7 @@ function showToast(message, type = '') { GP_PRANESIMAS.rodyk(message, { tipas: t
   function forma() { return typeof currentForm === 'undefined' ? null : currentForm; }   // let - ne window savybė
   function skaidoma() { var r = document.querySelector('input[name="skaidoma"]:checked'); return r ? r.value : null; }
   function derybos() { var r = document.querySelector('input[name="derybos"]:checked'); return r ? r.value : ''; }
+  function derybosPagalBuda(b) { return b === 'MV-SAD' ? 'Vykdomos' : b === 'MV-SAB' ? 'Nevykdomos' : null; }
   function atliekamas() { var r = document.querySelector('input[name="atliekamas"]:checked'); return r ? r.value : ''; }
   function norm(v) { return String(v == null ? '' : v).trim().replace(/\s+/g, ' ').toLowerCase(); }
   /* „Vardas Pavardė, padalinys“ (kaip kortelėje ir PP-graphs) -> vardas ir padalinys. */
@@ -6095,6 +6097,28 @@ function showToast(message, type = '') { GP_PRANESIMAS.rodyk(message, { tipas: t
     return JSON.stringify((d || []).map(function (x) { return [norm(x.pavadinimas), x.verte > 0 ? Math.round(x.verte * 100) : 0]; }));
   }
   function bvpz8(v) { var m = String(v || '').match(/\d{8}/); return m ? m[0] : ''; }
+  /* Pirkimo sprendimai iš kortelės (2026-11-09, naudotojo pritarta kelio per modulius patikra). Kortelės žodynas - GP_KORTELE.SPRENDIMAI. */
+  // Vertinimo kriterijus: PĮ 64 str. 1 d. - sąnaudos skaičiuojamos gyvavimo ciklo sąnaudų metodu; pažymoje kainos ir sąnaudų santykiai - viena parinktis
+  var KRIT = { kaina: 'Kaina', sanaudos: 'Sąnaudos pagal gyvavimo ciklo metodą',
+               kainos_kokybe: 'Kainos ar sąnaudų ir kokybės santykis', sanaudu_kokybe: 'Kainos ar sąnaudų ir kokybės santykis' };
+  function arParinktis(id, v) { var s = $(id); return !!s && Array.from(s.options).some(function (o) { return o.value === v; }); }
+  // Nacionalinis saugumas: pažymos klausimas - ar taikomi nacionalinio saugumo reikalavimai (patikra prieš generuojant taip ir sako)
+  function natSaug() {
+    if (!document.querySelector('input[name="natSaug"]')) return undefined;
+    var r = document.querySelector('input[name="natSaug"]:checked'); return r ? r.value : '';
+  }
+  // Kas tikrinama: 3 skyriaus keturi žymėjimai, vertinami tuo pačiu reikEfektyvus() kaip pažyma; nepaliesti - neatsakyta.
+  // „Tik kvalifikacija“ ir „netikrinama nei viena“ kortelės žodyne atitikmens neturi - rodomi žodžiais, kortelei neperduodami.
+  function kasTikrinama() {
+    if (!reikEl('pasalTikrinamas')) return undefined;
+    var f = zymFlags();
+    if (!f.pasalTikrinamas && !f.kvalTikrinama && !f.pasalKvalNetikrinama && !f.kvalNetikrinama) return '';
+    var ef = reikEfektyvus(f);
+    if (ef.nieko) return 'netikrinama nei viena';
+    if (ef.pasal && ef.kvalif) return 'kvalifikacija';
+    if (ef.pasal) return 'pasalinimas';
+    return 'tik kvalifikacija';
+  }
 
   window.KORTELE = GP_KORTELE.mount({
     modulis: 'PP-report',
@@ -6125,8 +6149,19 @@ function showToast(message, type = '') { GP_PRANESIMAS.rodyk(message, { tipas: t
           if (!m) return undefined;
           return m.id === 'MV-SAB' && derybos() === 'Vykdomos' ? 'MV-SAD' : m.id;
         },
-        lygu: function (s, v) { return !!s && s === GP_METHODS.toModule('pp-report', v); },
-        dek: function (v) { irasyk('pirkimo-budas', v); },
+        // 2026-11-09 (kelio patikra): kortelės būdas pasako ir derybas (MV-SAB - be derybų, MV-SAD - su derybomis) - 2 priede jos nebeklausiamos
+        // antrą kartą; būdas sutampa tik su atitinkančiu atsakymu apie derybas, o kai derybos dar neatsakytos - kortelė jas užpildo
+        lygu: function (s, v) {
+          if (!s || s !== GP_METHODS.toModule('pp-report', v)) return false;
+          var d = derybosPagalBuda(v);
+          return d === null || derybos() === d;
+        },
+        numatyta: function (k) { var s = lauko('pirkimo-budas'); return !s || (derybosPagalBuda(k.budas) !== null && !derybos() && s === GP_METHODS.toModule('pp-report', k.budas)); },
+        dek: function (v, k) {
+          irasyk('pirkimo-budas', v);
+          var d = k ? derybosPagalBuda(k.budas) : null, r = d && document.querySelector('input[name="derybos"][value="' + d + '"]');
+          if (r && !r.checked) { r.checked = true; if (typeof toggleDerybos === 'function') toggleDerybos(r); r.dispatchEvent(new Event('change', { bubbles: true })); }
+        },
         neimanoma: function (v) {
           if (!GP_METHODS.toModule('pp-report', v)) return v === 'MV' ? 'nenurodyta, kokia apklausa' : 'pažymos rengiamos mažos vertės pirkimams';
           return 'šios formos būdų sąraše jo nėra';
@@ -6182,6 +6217,44 @@ function showToast(message, type = '') { GP_PRANESIMAS.rodyk(message, { tipas: t
         i: function (v) { return forma() === 1 ? null : asmuo(v).vardas; },
         lygu: function (s, v) { return norm(s) === norm(asmuo(v).vardas); },
         neimanoma: '1 priede pirkimą vykdo iniciatorius' },
+      // ---- Pirkimo sprendimai (2026-11-09)
+      { kortele: 'kriterijus', el: '#vertinimo-kriterijus',
+        i: function (v) { return arParinktis('vertinimo-kriterijus', KRIT[v]) ? KRIT[v] : null; },
+        is: function (s) { return s === 'Kaina' ? 'kaina' : s === KRIT.sanaudos ? 'sanaudos' : undefined; },   // santykis - kaina ar sąnaudos, nežinoma
+        lygu: function (s, v) { return !!s && s === KRIT[v]; },
+        neimanoma: function () { return forma() === 1 ? '1 priedo formoje numatytas kriterijus - kaina' : 'šios formos kriterijų sąraše jo nėra'; } },
+      { kortele: 'nacsaugumas', gauk: natSaug,
+        i: function (v) { return v === 'taip' ? 'Taip' : v === 'ne' ? 'Ne' : null; },
+        is: function (s) { return s === 'Taip' ? 'taip' : s === 'Ne' ? 'ne' : undefined; },
+        dek: function (v) {
+          var r = document.querySelector('input[name="natSaug"][value="' + v + '"]');
+          if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }   // toggleNatSaug - lentelė
+        } },
+      // CPO: pažymoje „nera“ - objekto kataloge nėra; „netinka“ - „yra CPO kataloge, bet neatitinka poreikių“ su pagrindimu. Kortelės
+      // „nenaudojama“ (kataloge yra, bet perkama ne per jį) platesnė: Aprašo 9 p. leidžia nepirkti per CPO ir tada, kai galima įsigyti
+      // efektyviau - todėl tuščias laukas „netinka“ neužpildomas (priežastį pasirenka žmogus), o jau pasirinktas - palyginamas.
+      { kortele: 'cpo', el: '#cpo-busena',
+        i: function (v) {
+          if (v === 'nera') return 'nera';
+          if (v === 'nenaudojama' && lauko('cpo-busena')) return 'netinka';
+          return null;
+        },
+        is: function (s) { return s === 'nera' ? 'nera' : s === 'netinka' ? 'nenaudojama' : undefined; },
+        neimanoma: function (v) {
+          return v === 'per_cpo' ? 'pažymos formoje tokios parinkties nėra'
+            : 'pažymos parinktis „yra CPO kataloge, bet neatitinka poreikių“ nurodo priežastį (Aprašo 9 p.) - pasirinkite patys ir įrašykite pagrindimą';
+        } },
+      { kortele: 'kvalifikacija', gauk: kasTikrinama,
+        i: function (v) { return v === 'kvalifikacija' || v === 'pasalinimas' ? v : null; },
+        is: function (s) { return s === 'kvalifikacija' || s === 'pasalinimas' ? s : undefined; },
+        dek: function (v) {
+          var zym = { pasalKvalNetikrinama: false, pasalTikrinamas: true, kvalTikrinama: v === 'kvalifikacija', kvalNetikrinama: v === 'pasalinimas' };
+          Object.keys(zym).forEach(function (k) { var e = reikEl(k); if (e) e.checked = zym[k]; });
+          var e = reikEl('pasalTikrinamas');
+          if (!e) return;
+          var det = e.closest('details'); if (det) det.open = true;   // 1 priede žymėjimai - „Papildomose parinktyse“: užpildyta turi būti matoma
+          onReikalavimuZymejimas(e);                                  // kvalifikacijos blokas ir sprendimai - pagal naujus žymėjimus
+        } },
       { kortele: 'vykdytojas', gauk: function () { return forma() ? 'litgrid' : undefined; },
         i: function (v) { return v === 'litgrid' ? v : null; }, dek: function () {},
         neimanoma: 'pažymų formos - LITGRID AB' },
