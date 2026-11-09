@@ -2067,8 +2067,16 @@ async function testaiKortele(){
   await testas("Schema: nauja kortelė turi visus laukus; normalizuok suvienodina tipus, reikšmių neišgalvoja ir palieka nežinomus laukus", async ()=>{
     const { f, K } = await korteleRemas();
     try {
-      lygu(Object.keys(K.tuscia()).sort(), ["archyvuota","atnaujinta","budas","busena","bvpz","cvpisNr","dalys","id","iniciatorius","numeris","objektas",
-        "organizatorius","pasiulymuTerminas","paskelbimas","pavadinimas","pradzia","rezimas","sukurta","trukmeMen","veiksmai","verte","vykdytojas"], "laukai");
+      lygu(Object.keys(K.tuscia()).sort(), ["archyvuota","atnaujinta","budas","busena","bvpz","cpo","cvpisNr","dalys","id","iniciatorius","kriterijus","kvalifikacija",
+        "nacsaugumas","numeris","objektas","organizatoriausKontaktai","organizatorius","pasiulymuTerminas","paskelbimas","pavadinimas","pradzia","rezimas","sukurta","trukmeMen",
+        "veiksmai","verte","vykdytojas","zaliasis"], "laukai");
+      // Pirkimo sprendimai (2026-11-09, kelio patikra): tik žodyno reikšmės, kitokia - nenurodyta; tekstas žmogui - iš žodyno
+      const sp = K.normalizuok({ id: "k-s", kriterijus: "kaina", zaliasis: "taip", nacsaugumas: "ne", kvalifikacija: "pasalinimas", cpo: "nenaudojama", organizatoriausKontaktai: " tel. 1 " });
+      lygu([sp.kriterijus, sp.zaliasis, sp.nacsaugumas, sp.kvalifikacija, sp.cpo, sp.organizatoriausKontaktai], ["kaina", "taip", "ne", "pasalinimas", "nenaudojama", "tel. 1"], "sprendimai");
+      const bl = K.normalizuok({ id: "k-b", kriterijus: "Kaina", zaliasis: "Taip", nacsaugumas: true, kvalifikacija: "visa", cpo: "x" });
+      lygu([bl.kriterijus, bl.zaliasis, bl.nacsaugumas, bl.kvalifikacija, bl.cpo], ["", "", "", "", ""], "ne žodyno reikšmės - nenurodyta");
+      lygu([K.reiksmesTekstas("kriterijus", "kainos_kokybe", "lt"), K.reiksmesTekstas("cpo", "per_cpo", "en"), K.laukoPav("nacsaugumas", "lt")],
+        ["Kainos ir kokybės santykis", "Purchased through the CPO LT catalogue", "Susijęs su nacionaliniu saugumu"], "pavadinimai");
       const x = K.normalizuok({ id: "k-1", pavadinimas: "  Transformatoriai  ", verte: "1.250.000,00", trukmeMen: "24", dalys: "ne", busena: "", komisija: [{ vardas: "X" }], ateitis: { a: 1 } });
       // Būsenos numatytosios nebėra (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
       lygu([x.pavadinimas, x.verte, x.trukmeMen, x.dalys, x.busena, x.archyvuota, x.rezimas], ["Transformatoriai", 1250000, 24, null, "", false, ""]);
@@ -2442,6 +2450,31 @@ async function testaiSkelbimasDarbastalis(){
            ["litgrid", "PI", "S-SD", "90 000", "2026-10-02T15:00", "1234501", "paskelbtas"]);
       tiesa(/perkelta laukų: \d+/.test($("skelbimoBusena").textContent), $("skelbimoBusena").textContent);
       lygu(w.GP_KORTELE.skaityk().korteles.length, 0, "neišsaugota, kol žmogus nepaspaudė „Išsaugoti kortelę“");
+    } finally { fr.remove(); }
+  });
+
+  await testas("Kortelių puslapis: pirkimo sprendimai (kriterijus, kas tikrinama, žaliasis, nacionalinis saugumas, CPO, organizatoriaus kontaktai) - be numatytųjų, įrašomi ir atkuriami", async ()=>{
+    const fr = document.createElement("iframe");
+    fr.style.width = "1280px"; fr.style.height = "900px";
+    const w = await new Promise(res => { fr.addEventListener("load", () => res(fr.contentWindow), { once: true }); fr.src = "../pirkimu-korteles.html?saugykla=testine&lang=lt"; document.body.appendChild(fr); });
+    try {
+      const d = w.document, $ = id => d.getElementById(id);
+      $("naujaHeader").click();
+      const ids = ["k-kriterijus", "k-kvalifikacija", "k-zaliasis", "k-nacsaugumas", "k-cpo"];
+      lygu(ids.map(id => $(id).value), ["", "", "", "", ""], "be numatytųjų");
+      lygu(ids.map(id => $(id).options.length), [5, 3, 3, 3, 4], "variantai su „nenurodyta“");
+      tiesa(ids.concat(["k-organizatoriausKontaktai"]).every(id => d.querySelector('label[for="' + id + '"]')), "pavadinimai");
+      $("k-pavadinimas").value = "Sprendimų pirkimas";
+      [["k-kriterijus", "sanaudu_kokybe"], ["k-kvalifikacija", "kvalifikacija"], ["k-zaliasis", "ne"], ["k-nacsaugumas", "taip"], ["k-cpo", "nera"], ["k-organizatoriausKontaktai", "tel. +370 600 00000"]]
+        .forEach(([id, v]) => { $(id).value = v; });
+      $("formaForm").requestSubmit();
+      await new Promise(r => setTimeout(r, 50));
+      const k = w.GP_KORTELE.aktyvios().korteles.find(x => x.pavadinimas === "Sprendimų pirkimas");
+      tiesa(k, "kortelė neišsaugota: " + $("klaidos").textContent);
+      lygu([k.kriterijus, k.kvalifikacija, k.zaliasis, k.nacsaugumas, k.cpo, k.organizatoriausKontaktai], ["sanaudu_kokybe", "kvalifikacija", "ne", "taip", "nera", "tel. +370 600 00000"], "įrašyta");
+      w.GP_KORTELIU_PUSLAPIS.atverkKortele(k.id);
+      await new Promise(r => setTimeout(r, 50));
+      lygu(ids.map(id => $(id).value), ["sanaudu_kokybe", "kvalifikacija", "ne", "taip", "nera"], "atkurta formoje");
     } finally { fr.remove(); }
   });
 
@@ -7413,6 +7446,10 @@ async function testaiFokusas(){
       d.getElementById("new-pk-nr").value = "TEST-F1"; d.getElementById("new-pk-name").value = "Bandomasis pirkimas"; d.getElementById("new-pk-date").value = "2026-11-05";
       const zingsnis = async (is, re, i) => { const a = await spausk(f, pagalTeksta(d, "#" + is + " button", re)); tiesa(a && a.closest("#" + i), is + " -> " + i + ": " + kur(a)); };
       await zingsnis("new-step1", /Toliau/, "new-step2");
+      // be kriterijaus (nuo 2026-11-09 be numatytojo) - fokusas į kriterijų, ne toliau
+      await zingsnis("new-step2", /Toliau/, "new-step2");
+      tiesa(d.activeElement && d.activeElement.id === "new-eval-criteria", "be kriterijaus - fokusas į kriterijų: " + kur(d.activeElement));
+      d.getElementById("new-eval-criteria").value = "kainą";
       await zingsnis("new-step2", /Toliau/, "new-step3");
       await zingsnis("new-step3", /Atgal/, "new-step2");
       tiesa(d.getElementById("new-step3").style.display === "none" && d.getElementById("step3-ind").className === "step" && /active/.test(d.getElementById("step2-ind").className), "grįžus iš 3 žingsnio matomas tik 2");

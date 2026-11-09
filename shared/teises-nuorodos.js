@@ -323,6 +323,13 @@
       PI: { a: "PI", s: 58, d: 1, p: 1 } },
     kaina_virsija_lesas: { tikrinta: "2026-09-27", apie: "laimėjusiu gali būti nustatytas tik pasiūlymas, kurio kaina neviršija pirkimui skirtų lėšų, nustatytų prieš pradedant pirkimo procedūrą",
       PI: { a: "PI", s: 58, d: 1, p: 5 } },
+    // Perskaityta e-tar 2026-11-09 (PP-protocol atmetimo raštas pagal atmetimo pagrindą - kelio patikra)
+    nepasalintas: { tikrinta: "2026-11-09", apie: "laimėjusiu gali būti nustatytas tik pasiūlymas, kurį pateikęs tiekėjas nėra pašalintas pagal 59 straipsnio 1 dalį",
+      PI: { a: "PI", s: 58, d: 1, p: 2 } },
+    kvalifikacija_atitinka: { tikrinta: "2026-11-09", apie: "laimėjusiu gali būti nustatytas tik pasiūlymas, kurį pateikęs tiekėjas atitinka pirkimo dokumentuose nustatytus kvalifikacijos reikalavimus",
+      PI: { a: "PI", s: 58, d: 1, p: 3 } },
+    nmk_aplinkybes: { tikrinta: "2026-11-09", apie: "laimėjusiu gali būti nustatytas tik pasiūlymas, dėl kurio nėra 66 straipsnio 3 dalyje nustatytų aplinkybių (nepagrįsta neįprastai maža kaina)",
+      PI: { a: "PI", s: 58, d: 1, p: 6 } },
     papildomos_informacijos_terminas: { tikrinta: "2026-10-25", apie: "laiku paprašyta papildoma su pirkimo dokumentais susijusi informacija pateikiama visiems tiekėjams ne vėliau kaip likus 6 dienoms (supaprastinto pirkimo - 4 dienoms) iki pasiūlymų pateikimo termino pabaigos; atviro konkurso pagreitintų procedūrų ir DPS pagrindu atliekamo pirkimo atveju - 4 dienoms, supaprastinto pirkimo pagreitintų procedūrų - 3 dienoms",
       PI: { a: "PI", s: 49, d: 5 } },
     // Perskaityta e-tar 2026-10-26 (PP-report raštai tiekėjams: procedūros baigiasi tik sudarius sutartį; pretenzija - pirmiausia perkančiajam subjektui)
