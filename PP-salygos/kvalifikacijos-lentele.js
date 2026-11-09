@@ -356,7 +356,17 @@
     const f = zip.file('word/document.xml');
     if (!f) return { lenteles: [], zalieji: 0, ispejimai: ['Faile nėra Word dokumento teksto.'] };
     const nf = zip.file('word/numbering.xml');
-    return skaitykXml(await f.async('string'), nf ? await nf.async('string') : '', vardas);
+    const r = skaitykXml(await f.async('string'), nf ? await nf.async('string') : '', vardas);
+    // 2026-11-09 (kelio patikra): dokumentas su DI požymiais (shared/di-zymejimas.js - docProps/custom.xml „DI_turinys“, pvz. PP-qual
+    // parengti reikalavimai) - perkeltos lentelės tekstas yra DI parengtas, todėl ir SPS Word faile turi būti DI požymiai (DI akto 50 str. 2 d.)
+    const cf = zip.file('docProps/custom.xml');
+    const di = cf ? diDokumentas(await cf.async('string')) : '';
+    if (di) [].concat(r.lenteles || [], r.zaliuju || []).forEach(M => { M.diDokumentas = di; });
+    return r;
+  }
+  function diDokumentas(xml){
+    const m = /<property\b[^>]*\bname="DI_turinys"[^>]*>\s*<vt:lpwstr>([^<]*)<\/vt:lpwstr>/.exec(String(xml || ''));
+    return m ? (m[1].trim() || 'Parengta naudojant DI').slice(0, 200) : '';
   }
 
   /* ---------- PDF lentelės (2026-10-18) --------------------------------------------------------------------------------------------
@@ -1075,7 +1085,7 @@
     return true;
   }
 
-  root.GP_KVAL_LENTELE = { skaityk, skaitykXml, skaitykPdf, pdfLenteles, irasykZaliuosius, raskZaliujuLentele, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
+  root.GP_KVAL_LENTELE = { skaityk, skaitykXml, diDokumentas, skaitykPdf, pdfLenteles, irasykZaliuosius, raskZaliujuLentele, grupe, specialistas, numeriai, punktai, pastabos, irasyk, tusciaNeVisa,
     vertimoPartijos, vertimoUzklausa, vertimoAtsakymas, diVertimuSk, enPastraipos,
     raskLentele, GRUPES, grupesPav, grupiuTvarka, pTekstas, VERTIMO_ZYMA, patirtiesEilutes, LENTELES_PAV };
 })(typeof window !== 'undefined' ? window : this);

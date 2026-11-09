@@ -437,7 +437,10 @@
     { id: "zalieji", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true,
       klausimas: "Ar sutarties vykdymui nustatomi žaliųjų pirkimų tvarkos aprašo aplinkos apsaugos kriterijai (13.1 punktas)?",
       uzuomina: "„Taip“ - įrašykite Aplinkos apsaugos kriterijų taikymo, vykdant žaliuosius pirkimus, tvarkos aprašo 4 punkto papunktį: 4.1 - produktas yra produktų sąraše ir atitinka minimalius kriterijus, 4.2 - I tipo ekologinis ženklas, 4.3 - tiekėjas paslaugai ar darbui taiko aplinkos apsaugos vadybos sistemą (LST EN ISO 14001, EMAS), 4.4.3 - nematerialios (intelektinės) paslaugos, 4.4.4 - aplinkos apsaugos kriterijus nustatote savarankiškai (4.4.4.1-4.4.4.5 - principas). Kai SPS žaliųjų reikalavimų dalis tai lemia, papunktis siūlomas.",
-      siuloma: function (c) { var z = zalSiulymas(c); return z ? { reiksme: "taip", kilme: z.kodel } : null; },
+      // SPS žaliųjų dalis pirmesnė; be jos - pirkimo kortelės sprendimas „Žaliasis pirkimas“ (2026-11-09: tas pats sprendimas - pirkimas žaliasis
+      // pagal Tvarkos aprašo 4 punktą, o 13.1 p. papunktis - kuris jo būdas; papunktį įrašo žmogus)
+      siuloma: function (c) { var z = zalSiulymas(c); return z ? { reiksme: "taip", kilme: z.kodel }
+        : c && (c.zaliasisKortele === "taip" || c.zaliasisKortele === "ne") ? { reiksme: c.zaliasisKortele, kilme: (c.korteleKilme || "pagal pirkimo kortelę") + ": žaliasis pirkimas - „" + (c.zaliasisKortele === "taip" ? "Taip" : "Ne") + "“" } : null; },
       laukai: [{ id: "zalieji_p", tipas: "tekstas", uzrasas: "Tvarkos aprašo papunktis (pvz. 4.4.4)", kada: "taip",
                  siuloma: function (c) { var z = zalSiulymas(c); return z && z.p ? { reiksme: z.p, kilme: z.kodel } : null; } }],
       pastaba: function (c) { var z = c.zaliejiSPS; return z ? "SPS žaliųjų reikalavimų dalyje pasirinkta: " + z.map(function (k) { return "„" + ZAL_SPS[k] + "“"; }).join(", ") + "." : ""; } },
