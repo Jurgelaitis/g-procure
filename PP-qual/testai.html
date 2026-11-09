@@ -1449,6 +1449,45 @@ async function testaiKortele(){
       lygu(V.GP_KORTELE.skaityk().korteles.length, 0, "modulis nieko neįrašė");
     } finally { f.remove(); pop.remove(); }
   });
+
+  // 2026-11-09: pirkimo sprendimai kortelėje - žaliasis pirkimas įvedamas vieną kartą, modulis jo nebeklausia iš naujo
+  await testas("Pirkimo sprendimai kortelėje: „Žaliasis pirkimas“ užpildo tuščią lauką (būsena ir 1 žingsnio forma); žmogaus kitoks pasirinkimas neperrašomas - skirtumas su „Taikyti“; nenurodytas - lieka tuščias", async ()=>{
+    const zalia = V => { const K = V.GP_KORTELE; return K.issaugok(K.tuscia(Object.assign({}, K_AMBER, { zaliasis: "taip" }))).kortele.id; };
+    // 1. Tuščias laukas užpildomas: būsena, juosta ir 1 žingsnio forma
+    let { f, V } = await modulisSuKortele();
+    try {
+      const id = zalia(V), api = V.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(id), "pasirinkta");
+      lygu(V.eval("PPQ.settings.green"), true, "būsena iš kortelės");
+      tiesa(/Iš kortelės užpildyta: [^.]*žaliasis pirkimas/.test(juostosZinute(V)), juostosZinute(V));
+      V.startEntry("info");
+      lygu(V.document.getElementById("p-green").value, "taip", "1 žingsnio laukas");
+    } finally { f.remove(); }
+    // 2. Žmogus jau pasirinko „Ne“ - neperrašoma, rodoma kaip skirtumas; „Taikyti“ įrašo kortelės reikšmę
+    ({ f, V } = await modulisSuKortele());
+    try {
+      V.startEntry("info");
+      const g = V.document.getElementById("p-green");
+      g.value = "ne"; g.dispatchEvent(new V.Event("change", { bubbles: true }));
+      const id = zalia(V), api = V.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(id), "pasirinkta");
+      lygu([g.value, V.eval("PPQ.settings.green")], ["ne", null], "žmogaus pasirinkimas neperrašytas");
+      const z = juostosZinute(V);
+      tiesa(/Žaliasis pirkimas: modulyje „Ne“, kortelėje „Taip“/.test(z) && !/užpildyta: [^.]*žaliasis/.test(z), z);
+      [...V.document.querySelectorAll("#gpk button")].find(b => b.getAttribute("aria-label") === "Taikyti: Žaliasis pirkimas").click();
+      lygu([V.document.getElementById("p-green").value, V.eval("PPQ.settings.green")], ["taip", true], "„Taikyti“");
+    } finally { f.remove(); }
+    // 3. Kortelėje nenurodyta - laukas lieka tuščias (numatytojo nėra), juosta apie jį nekalba
+    ({ f, V } = await modulisSuKortele());
+    try {
+      V.startEntry("info");
+      const [, it] = korteles(V);
+      const api = V.eval("KORTELE"); api.atnaujink();
+      tiesa(await api.pasirink(it), "pasirinkta");
+      lygu([V.eval("PPQ.settings.green"), V.document.getElementById("p-green").value], [null, ""], "nenurodyta");
+      tiesa(!/aliasis/.test(juostosZinute(V)), juostosZinute(V));
+    } finally { f.remove(); }
+  });
 }
 
 /* U2 (2026-11-06): vedlio standartas - shared/vedlys.js */
