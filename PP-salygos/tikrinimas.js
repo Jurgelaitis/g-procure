@@ -115,7 +115,7 @@
       var r = await P().skaityk(buf);
       var zem = null;
       try { zem = await cfg.gaukJson((ir.sutartis ? "zemelapiai/sutartys/" : "zemelapiai/") + id + ".json"); } catch (e) { zem = null; }
-      if (!ir.sutartis) return { id: id, ps: r.pastraipos, zem: zem };
+      if (!ir.sutartis) { grafikoVieta(r.pastraipos); return { id: id, ps: r.pastraipos, zem: zem }; }
       if (!zem) throw new Error("sutarties šablono žemėlapio " + id + " įkelti nepavyko");
       var sz = await sutartiesVietos(buf, zem);
       r.pastraipos.forEach(function (x) {
@@ -130,6 +130,24 @@
       return { id: id, ps: r.pastraipos, zem: { blokai: sz.blokai }, sutartis: true, wordNumeracija: zem.numeracija === "word" };
     })().catch(function (e) { delete sablonai[id]; throw e; });
     return sablonai[id];
+  }
+  /* SPS preliminaraus pirkimo procedūrų vykdymo grafiko vieta (2026-11-09): LT/EN SPS formoje po sakinio „Toliau Tiekėjų informacijai pateikiamas ...“ -
+     pavyzdinė lentelė (2022 m. datos; šablono autorių komentaras - „Užtenka tik nukopijuoti aktualias datas“). PP-salygos jos eilutes pakeičia pirkimo
+     kortelės grafiku (PP-SALYGOS.html grafikasISps), todėl lyginant be generavimo paso jos laikomos pildoma vieta (kaip raudonas sluoksnis), ne
+     nekintama nuostata: pakeista ar pašalinta eilutė - „užpildyta“. LT SPS formoje lentelės nėra - įterpta lentelė ir taip yra „užpildyta“
+     (GP_PALYGINIMAS: pridėta lentelės pastraipa). Ribos - iki kito skyriaus numerio („14.“) ar antraštės, tik toje pačioje lentelėje. */
+  var GRAFIKO_SAKINYS = /^(\d+(\.\d+)*\.?\s*)?Toliau Tiekėjų informacijai pateikiamas preliminarus planuojamas Pirkimo procedūrų vykdymo grafikas/;
+  function grafikoVieta(ps) {
+    var i = -1, n = 0;
+    for (var k = 0; k < ps.length && i < 0; k++) if (GRAFIKO_SAKINYS.test(ps[k].t)) i = k;
+    if (i < 0 || !ps[i].lent) return 0;
+    for (var j = i + 1; j < ps.length; j++) {
+      var x = ps[j];
+      if (!x.lent || x.antraste || /^\d+\.$/.test(x.t)) break;
+      if (/^For the information of the Suppliers/.test(x.t)) continue;   // sakinio angliškas tekstas - nekintamas
+      x.red = true; n++;
+    }
+    return n;
   }
   /* Sutarties šablono pildomos vietos ir pasirenkamos dalys iš jo žemėlapio (sutarciu-sablonai.py; pastraipų numeracija - visos w:p, kaip
      GP_PALYGINIMAS.pastraipos ir sutarciu-generatorius.js): vieta - pastraipos su valdikliais, pildomomis vietomis, laukais, rekvizitais,
