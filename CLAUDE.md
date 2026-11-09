@@ -365,7 +365,7 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   Anthropic; nuo 2026-11-08 Worker'io kodas tik patikrina Turnstile ir PDF ir persiunčia į G-Procure serverio DI užduotį `pp-carbon.epd`
   (instrukcijos ir Anthropic rakto nebeturi; tiekėjų Workeris - tas pats su `pp-tiekejams.*`). Workeriai diegiami RANKA Cloudflare skydelyje: EPD Worker'io naujas kodas
   įdiegtas 2026-11-09 (naudotojas; patikrinta gyvai - bandomasis EPD per viešą `epd.html`, serverio žurnale užklausa iš Cloudflare adreso į `/api/uzduotis`),
-  paslaptis `ANTHROPIC_API_KEY` jam nebereikalinga; tiekėjų Worker'is neįdiegtas ir nenaudojamas. Klientas (`epd.html`) Worker'iui siunčia tą patį kūną. `PP-carbon/epd.html` riba imama iš Worker'io; šablono `maxBaitu` ir serverio kūno riba (10 MB) turi būti ne mažesnės.
+  paslaptis `ANTHROPIC_API_KEY` iš jo ištrinta 2026-11-09 (naudotojo prašymu, Cloudflare skydelyje „Delete & Deploy“; po to EPD per viešą `epd.html` patikrintas gyvai - veikia); tiekėjų Worker'is neįdiegtas ir nenaudojamas. Klientas (`epd.html`) Worker'iui siunčia tą patį kūną. `PP-carbon/epd.html` riba imama iš Worker'io; šablono `maxBaitu` ir serverio kūno riba (10 MB) turi būti ne mažesnės.
   `epd.html` jungia `shared/ai-proxy.js` dėl `taisykJson` ir vietinio kelio (`GP_AI_PROXY.uzduotis`, tik localhost).
 - **CVP IS duomenų paslauga (VPT API, nuo 2026-10-18; naudotojo sprendimas - Hetzner serveris, aukštas saugumo lygis) - `serveris/`**
   (`README.md` - architektūra, saugumas, diegimas; diegimo planas su serverio detalėmis - privačiai `g-procure-privatu/serveris/`).
