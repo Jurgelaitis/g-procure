@@ -633,6 +633,55 @@ testas("Bendra pirkimo kortelė (A1)", "Skaičiuoklė su kriterijais: numatytasi
   } finally { f.remove(); }
 });
 
+// 2026-11-09: kortelės pirkimo sprendimas „Vertinimo kriterijus“ - skaičiuoklės „Ekonomiškai naudingiausias pasiūlymas išrenkamas pagal“
+testas("Bendra pirkimo kortelė (A1)", "Skaičiuoklė: kortelės vertinimo kriterijus užpildo numatytąjį būdą; žmogaus pasirinktas neperrašomas - skirtumas, fiksuota kaina sutampa su kainos ir kokybės santykiu; nenurodytas ir sąnaudos - būdas nekeičiamas", async ()=>{
+  const KR = { pavadinimas: "Jungtuvų pirkimas", vykdytojas: "litgrid", rezimas: "PI", objektas: "prekes" };
+  // 1. Nauja skaičiuoklė (numatytasis „Kainos ir kokybės santykį“) - užpildoma „Tik kainą“
+  let { f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html");
+  try {
+    w.eval("atstatyk()");
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KR, { kriterijus: "kaina" }))).kortele;
+    w.KORTELE.atnaujink();
+    tiesa(await w.KORTELE.pasirink(k.id), "pasirinkta");
+    lygu([w.eval("state.pirkimas.budas"), d.getElementById("f_budas").value], ["kaina", "kaina"], "būdas iš kortelės");
+    const z = d.getElementById("gpk-zin").textContent;
+    tiesa(/Iš kortelės užpildyta: [^.]*vertinimo kriterijus, pavadinimas\./.test(z), z);
+  } finally { f.remove(); }
+  // 2. Su kriterijais (žmogaus darbas) - būdas laikomas pasirinktu: skirtumas tik parodomas; fiksuota kaina sutampa su kainos ir kokybės santykiu
+  ({ f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html"));
+  try {
+    w.eval("atstatyk(); state.kriterijai = [naujasKriterijus({ pav: 'Kokybė', svoris: 40 })]; renderAll();");
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KR, { kriterijus: "kaina" }))).kortele;
+    w.KORTELE.atnaujink();
+    await w.KORTELE.pasirink(k.id);
+    lygu(w.eval("state.pirkimas.budas"), "kks", "neperrašyta");
+    const z = d.getElementById("gpk-zin").textContent;
+    tiesa(/Vertinimo kriterijus: modulyje „Kainos ir kokybės santykis“, kortelėje „Kaina“/.test(z), z);
+    w.eval("state.pirkimas.budas = 'fiksuota'; renderAll();");
+    const k2 = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KR, { kriterijus: "kainos_kokybe" }))).kortele;
+    w.KORTELE.atnaujink();
+    await w.KORTELE.pasirink(k2.id);
+    lygu(w.eval("state.pirkimas.budas"), "fiksuota", "fiksuota kaina neperrašyta");
+    tiesa(!/riterijus/.test(d.getElementById("gpk-zin").textContent), d.getElementById("gpk-zin").textContent);
+  } finally { f.remove(); }
+  // 3. Kortelėje nenurodyta - būdas lieka numatytasis, juosta apie jį nekalba; „Sąnaudos“ - neįrašoma ir įvardijama
+  ({ f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html"));
+  try {
+    w.eval("atstatyk()");
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(KR)).kortele;
+    w.KORTELE.atnaujink();
+    await w.KORTELE.pasirink(k.id);
+    lygu(w.eval("state.pirkimas.budas"), "kks", "nenurodyta - numatytasis");
+    tiesa(!/riterijus/.test(d.getElementById("gpk-zin").textContent), d.getElementById("gpk-zin").textContent);
+    const k2 = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KR, { kriterijus: "sanaudos" }))).kortele;
+    w.KORTELE.atnaujink();
+    await w.KORTELE.pasirink(k2.id);
+    lygu(w.eval("state.pirkimas.budas"), "kks", "sąnaudos neįrašomos");
+    const z = d.getElementById("gpk-zin").textContent;
+    tiesa(z.indexOf("vertinimo kriterijus („Sąnaudos“ - skaičiuoklė vertina kainą, ne sąnaudas (gyvavimo ciklo sąnaudų metodu))") >= 0, z);
+  } finally { f.remove(); }
+});
+
 testas("Bendra pirkimo kortelė (A1)", "Kaštų ir naudos analizė: laukai pildomi iš kortelės BE įvykių - išsaugota, dar neatverta analizė neperrašoma; trukmė ne metais įvardijama", async ()=>{
   const APS = GP_TESTU_APSAUGA.pradek(k => k === "litgrid_cba");
   const zyme = JSON.stringify({ schemaVersion: 2, savedAt: "2026-09-01T10:00:00.000Z", state: { alternatives: [{ id: "a1", name: "Testo alternatyva" }], weights: {} }, formData: { proc_name: "Išsaugota analizė" } });
