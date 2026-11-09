@@ -76,6 +76,25 @@
     { id: "nutrauktas", lt: "Nutrauktas", en: "Cancelled" }
   ];
   var REZIMAI = { PI: { lt: "PĮ", en: "PĮ" }, VPI: { lt: "VPĮ", en: "VPĮ" } };
+  /* Pirkimo sprendimai, kuriuos klausė keli moduliai (2026-11-09, kelio patikra ir naudotojo „kortelės laukams pritariu“): įvedami
+     vieną kartą kortelėje ar plane, moduliai pildo savo laukus. "" - nenurodyta (numatytųjų nėra). */
+  var KRITERIJAI = [
+    { id: "kaina", lt: "Kaina", en: "Price" },
+    { id: "kainos_kokybe", lt: "Kainos ir kokybės santykis", en: "Best price-quality ratio" },
+    { id: "sanaudos", lt: "Sąnaudos", en: "Cost" },
+    { id: "sanaudu_kokybe", lt: "Sąnaudų ir kokybės santykis", en: "Cost-quality ratio" }
+  ];
+  var TAIP_NE = [{ id: "taip", lt: "Taip", en: "Yes" }, { id: "ne", lt: "Ne", en: "No" }];
+  var KVALIFIKACIJA = [
+    { id: "pasalinimas", lt: "Tik pašalinimo pagrindai", en: "Exclusion grounds only" },
+    { id: "kvalifikacija", lt: "Pašalinimo pagrindai ir kvalifikacija", en: "Exclusion grounds and qualification" }
+  ];
+  var CPO = [
+    { id: "per_cpo", lt: "Perkama per CPO LT katalogą", en: "Purchased through the CPO LT catalogue" },
+    { id: "nenaudojama", lt: "Kataloge yra, bet perkama ne per jį (motyvai - pirkimo dokumentuose)", en: "Available in the catalogue but not used (reasons in the procurement documents)" },
+    { id: "nera", lt: "CPO LT kataloge nėra", en: "Not available in the CPO LT catalogue" }
+  ];
+  var SPRENDIMAI = { kriterijus: KRITERIJAI, zaliasis: TAIP_NE, nacsaugumas: TAIP_NE, kvalifikacija: KVALIFIKACIJA, cpo: CPO };
 
   /* Laukų pavadinimai žmogui (pranešimams ir kortelės formai). */
   var LAUKAI = {
@@ -95,6 +114,12 @@
     pasiulymuTerminas: { lt: "Pasiūlymų terminas", en: "Tender deadline" },
     iniciatorius: { lt: "Iniciatorius", en: "Initiator" },
     organizatorius: { lt: "Organizatorius", en: "Organiser" },
+    organizatoriausKontaktai: { lt: "Organizatoriaus kontaktai", en: "Organiser's contact details" },
+    kriterijus: { lt: "Vertinimo kriterijus", en: "Award criterion" },
+    zaliasis: { lt: "Žaliasis pirkimas", en: "Green procurement" },
+    nacsaugumas: { lt: "Susijęs su nacionaliniu saugumu", en: "Related to national security" },
+    kvalifikacija: { lt: "Kas tikrinama", en: "What is checked" },
+    cpo: { lt: "CPO LT katalogas", en: "CPO LT catalogue" },
     busena: { lt: "Būsena", en: "Status" }
   };
 
@@ -126,7 +151,8 @@
   }
   /* Tekstiniai laukai (visada eilutė, "" - nenurodyta). */
   var TEKSTAI = ["pavadinimas", "numeris", "cvpisNr", "vykdytojas", "rezimas", "objektas", "bvpz", "budas",
-                 "pradzia", "paskelbimas", "pasiulymuTerminas", "iniciatorius", "organizatorius", "busena"];
+                 "pradzia", "paskelbimas", "pasiulymuTerminas", "iniciatorius", "organizatorius", "busena",
+                 "organizatoriausKontaktai", "kriterijus", "zaliasis", "nacsaugumas", "kvalifikacija", "cpo"];
 
   function tuscia(laukai) {
     var dabar = new Date().toISOString();
@@ -139,7 +165,8 @@
       dalys: null,                        // null - nenurodyta, [] - neskaidomas, [{ pavadinimas, verte }] - dalys
       trukmeMen: null, pradzia: "", paskelbimas: "",
       pasiulymuTerminas: "",               // pasiūlymų ar paraiškų terminas „2026-10-02T15:00“ (Vilniaus laikas)
-      iniciatorius: "", organizatorius: "",
+      iniciatorius: "", organizatorius: "", organizatoriausKontaktai: "",
+      kriterijus: "", zaliasis: "", nacsaugumas: "", kvalifikacija: "", cpo: "",   // 2026-11-09 - žr. SPRENDIMAI
       veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
       busena: "", archyvuota: false       // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
     };
@@ -167,6 +194,8 @@
     o.sukurta = tekstas(o.sukurta) || new Date().toISOString();
     o.atnaujinta = tekstas(o.atnaujinta) || o.sukurta;
     TEKSTAI.forEach(function (f) { o[f] = tekstas(o[f]); });
+    // sprendimų laukai - tik žodyno reikšmės (kitokia - nenurodyta, ne spėjama)
+    Object.keys(SPRENDIMAI).forEach(function (f) { if (o[f] && !SPRENDIMAI[f].some(function (x) { return x.id === o[f]; })) o[f] = ""; });
     o.verte = skaicius(o.verte);
     o.trukmeMen = sveikas(o.trukmeMen);
     if (!Array.isArray(o.dalys)) o.dalys = null;
@@ -452,6 +481,7 @@
     if (laukas === "objektas") return pav(OBJEKTAI, v, l) || String(v);
     if (laukas === "busena") return pav(BUSENOS, v, l) || String(v);
     if (laukas === "rezimas") return REZIMAI[v] ? REZIMAI[v][l] : String(v);
+    if (SPRENDIMAI[laukas]) return pav(SPRENDIMAI[laukas], v, l) || String(v);
     if (laukas === "vykdytojas") { var x = vykdytojas(v); return x ? x.pavadinimas : String(v); }
     if (laukas === "trukmeMen") return v + (l === "en" ? " mo." : " mėn.");
     if (laukas === "pasiulymuTerminas") return String(v).replace("T", " ");
@@ -1156,7 +1186,7 @@
 
   global.GP_KORTELE = {
     SCHEMA: SCHEMA, RAKTAS: RAKTAS,
-    OBJEKTAI: OBJEKTAI, BUSENOS: BUSENOS, REZIMAI: REZIMAI, LAUKAI: LAUKAI,
+    OBJEKTAI: OBJEKTAI, BUSENOS: BUSENOS, REZIMAI: REZIMAI, LAUKAI: LAUKAI, SPRENDIMAI: SPRENDIMAI,
     vykdytojai: vykdytojai, vykdytojas: vykdytojas,
     tuscia: tuscia, normalizuok: normalizuok, sandara: sandara,
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
