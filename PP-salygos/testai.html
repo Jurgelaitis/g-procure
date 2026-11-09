@@ -16634,6 +16634,280 @@ async function testaiDiUzduotys1108(){
   });
 }
 
+/* Kelio patikra 2026-11-09 (du pirkimai per modulius): iš PP-qual (DI parengto) Word failo perkelta kvalifikacijos lentelė - SPS Word faile
+   nebuvo DI požymių, o 4 žingsnis sakė „sąlygų teksto DI nerašė“ (DI akto 50 str. 2 d. - žymėti privaloma nuo 2026-12-02). */
+async function testaiKelias1109(){
+  dabartine = grupe("Kelio patikra 2026-11-09: DI parengto dokumento lentelė - DI požymiai SPS faile");
+  await testas("Įkeltas Word failas su DI požymiais (docProps/custom.xml DI_turinys): lentelės modelis pažymėtas, kortelės kilmė tai sako, SPS Word savybėse - DI_perkeltu_lenteliu; be požymių - nieko", async () => {
+    lygu(W.GP_KVAL_LENTELE.diDokumentas('<Properties><property fmtid="x" pid="2" name="DI_turinys"><vt:lpwstr>Parengta naudojant DI</vt:lpwstr></property></Properties>'), "Parengta naudojant DI", "custom.xml");
+    lygu([W.GP_KVAL_LENTELE.diDokumentas(""), W.GP_KVAL_LENTELE.diDokumentas('<property name="Kita"><vt:lpwstr>x</vt:lpwstr></property>')], ["", ""], "be DI požymio");
+    await generuok("T-AK");
+    const be = await kvlFailas(KVL_B);
+    const z = await W.JSZip.loadAsync(await be.arrayBuffer());
+    z.file("docProps/custom.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+      + '<property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="DI_turinys"><vt:lpwstr>Parengta naudojant DI</vt:lpwstr></property></Properties>');
+    const su = new W.File([await z.generateAsync({ type: "blob" })], "PP-qual_reikalavimai_DI.docx", { type: be.type });
+    await W.kvlSkaityk([su], true); W.klausimynas(); await W.prieduNumatytujuDerink();
+    const M = W.kvlModelis();
+    tiesa(M && M.diDokumentas === "Parengta naudojant DI", "modelis be DI žymos: " + (M && M.diDokumentas));
+    const sav = W.diPozymiuSavybes();
+    tiesa(sav && /DI_perkeltu_lenteliu[^0-9]*1/.test(JSON.stringify(sav)) && /iš dokumento, parengto naudojant DI/.test(JSON.stringify(sav)), "Word savybės: " + JSON.stringify(sav));
+    const kilme = W.eval("kvlKilme")(M, {});
+    tiesa(/dokumentas pažymėtas kaip parengtas naudojant DI/.test(kilme), "kilmė: " + kilme);
+    // be DI požymių - nėra
+    await W.kvlSkaityk([be], true); W.klausimynas(); await W.prieduNumatytujuDerink();
+    const M2 = [...W.eval("KVL").kandidatai].find(x => x.failas === "PP-qual_reikalavimai_LT-EN.docx");
+    tiesa(M2 && !M2.diDokumentas, "be požymių - be žymos");
+  });
+}
+
+/* Pirkimo sprendimai iš kortelės (2026-11-09, kelio per modulius patikra ir naudotojo pritarimas): nacionalinis saugumas - 1 žingsnyje per kortelės
+   juostą (tik neatsakytas, BVPŽ sąrašo siūlymas pakeičiamas), vertinimo kriterijus ir kas tikrinama - 2 žingsnyje „Siūloma (nepatvirtinta)“ su kilme
+   „pagal pirkimo kortelę“; metodika ir kvalifikacijos lentelė pirmesnės; skirtumai - „Patikrinkite“; „Rengė:“ - su organizatoriaus kontaktais;
+   žaliasis pirkimas - sutarties SS 13.1 p. siūlymas. Kortelės - tik atmintyje (?saugykla=testine). */
+const KORTELE_SP = { pavadinimas: "Transformatorių priežiūros paslaugų pirkimas", numeris: "VPP-77", budas: "T-AK", verte: 500000, objektas: "paslaugos", vykdytojas: "litgrid", rezimas: "PI" };
+async function korteleSp(laukai, o){
+  await modulisAdresu("saugykla=testine", null, o);
+  const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORTELE_SP, laukai))).kortele;
+  const api = W.eval("KORTELE"); api.atnaujink();
+  tiesa(await api.pasirink(k.id), "kortelė nepasirinkta");
+  return { k, api };
+}
+async function iZingsni2(salyga){
+  W.__K = null; D.getElementById("toStep2").click();
+  await kol(() => W.__K && !D.getElementById("step2").classList.contains("hid"), "2 žingsnis");
+  await spRamu(salyga);
+}
+/* Priedai pagal atsakymus (D2) perkrauna šablonus fone - kol kraunama, klausimynas tuščias; palaukiama, kol nusistovi */
+async function spRamu(salyga){
+  for (let i = 0; i < 6; i++){ const p = await W.prieduNumatytujuDerink(); W.klausimynas(); if (!p) break; }
+  await kol(salyga || (() => W.__K && W.kriterijausVieta(W.__K) && spTikr()), "klausimynas su 8.1 p. ir tikrinimo klausimu", 30000);
+}
+const spKR = () => W.__K && Object.keys(W.__K.tuscios).find(r => W.eval("taipNeLaukas")(W.__K.tuscios[r].lk));
+const spTikr = () => { const e = Object.entries(W.__K.grupes).find(([, g]) => (W.GP_LAUKAI.grupesKlausimas(g.nariai) || {}).id === "tikrinimas"); return e ? { gid: e[0], g: e[1], kort: D.getElementById(W.lkId("grupe|" + e[0])) } : null; };
+const spTikrKas = () => { const t = spTikr(); return t ? W.eval("tikrinimoDalis")(t.gid, W.eval("tikrinimoVariantai")(t.g)).kas : undefined; };
+async function testaiKorteleSprendimai1109(){
+  dabartine = grupe("Pirkimo sprendimai iš kortelės (2026-11-09): nacionalinis saugumas, vertinimo kriterijus, kas tikrinama, „Rengė:“ ir žaliasis pirkimas");
+  const ns = () => (D.querySelector("input[name=nacsaug]:checked") || {}).value || "";
+  const zyme = id => W.eval("PZ_ZYMES_T").get(id);
+  const zin = () => D.getElementById("gpk-zin").textContent.replace(/\s+/g, " ");
+  const NSB = "pagal BVPŽ sąrašą (nepatvirtinta)";
+  const ivesk = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input", { bubbles: true })); };
+
+  await testas("1 žingsnis: nacionalinis saugumas iš kortelės - neatsakytas užpildomas (ne „ranka“), žmogaus atsakymas neperrašomas (skirtumas juostoje); BVPŽ sąrašo siūlymas (nepatvirtintas) pakeičiamas kortelės atsakymu ir prieštaravimas - „Patikrinkite“; kortelė be sprendimo - BVPŽ siūlymas kaip iki tol", async () => {
+    await korteleSp({ nacsaugumas: "taip" }, { tusti: true });
+    lygu([ns(), W.eval("PZ_RANKA.has('nacsaug')"), D.getElementById("nsbvpzQ").classList.contains("hid"), zyme("nacsaug")], ["taip", false, false, undefined], "užpildyta iš kortelės");
+    tiesa(/Iš kortelės užpildyta:.*susijęs su nacionaliniu saugumu/.test(zin()), "juosta: " + zin());
+    // žmogus jau atsakė - kortelė nekeičia, skirtumas parodomas
+    await modulisAdresu("saugykla=testine", null, { tusti: true });
+    D.getElementById("nacsaug-ne").click();
+    const k2 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORTELE_SP, { nacsaugumas: "taip" }))).kortele, api2 = W.eval("KORTELE"); api2.atnaujink();
+    tiesa(await api2.pasirink(k2.id), "pasirinkta");
+    lygu(ns(), "ne", "žmogaus atsakymas perrašytas");
+    tiesa(/Susijęs su nacionaliniu saugumu: modulyje „Ne“, kortelėje „Taip“/.test(zin()), "skirtumas: " + zin());
+    // BVPŽ sąrašo siūlymas - sistemos, ne žmogaus: kortelės „Ne“ jį pakeičia, prieštaravimas sąrašui - „Patikrinkite“
+    await modulisAdresu("saugykla=testine", null, { tusti: true });
+    ivesk("bvpz", "48000000-8");
+    lygu([ns(), zyme("nacsaug")], ["taip", NSB], "pažymėta pagal sąrašą");
+    const k3 = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(Object.assign({}, KORTELE_SP, { nacsaugumas: "ne" }))).kortele, api3 = W.eval("KORTELE"); api3.atnaujink();
+    tiesa(await api3.pasirink(k3.id), "pasirinkta");
+    lygu([ns(), zyme("nacsaug"), W.eval("PZ_RANKA.has('nacsaug')"), !!D.querySelector('#nacsaugBvpz [data-nsb="ne"]')], ["ne", undefined, false, true], "kortelės „Ne“ vietoj sąrašo siūlymo");
+    // kortelė su sąrašo BVPŽ kodu ir „Ne“ - kortelės atsakymas įrašomas pirmas, sąrašo siūlymas nežymi
+    await korteleSp({ nacsaugumas: "ne", bvpz: "48000000-8" }, { tusti: true });
+    lygu([ns(), zyme("nacsaug"), D.getElementById("bvpz").value, !!D.querySelector('#nacsaugBvpz [data-nsb="ne"]')], ["ne", undefined, "48000000-8", true], "kortelė su kodu ir „Ne“");
+    // kortelė be sprendimo - kaip iki tol
+    await korteleSp({ bvpz: "48000000-8" }, { tusti: true });
+    lygu([ns(), zyme("nacsaug")], ["taip", NSB], "be kortelės sprendimo - BVPŽ sąrašo siūlymas");
+  });
+
+  await testas("2 žingsnis: vertinimo kriterijus ir kas tikrinama - „Siūloma (nepatvirtinta)“ su kilme „pagal pirkimo kortelę“ ir „Patvirtinti“; patvirtina žmogus; nepatvirtintas - seka kortelę ir dingsta ją atsiejus; žmogaus atsakymas neperrašomas, skirtumas - „Patikrinkite“ kortelėje ir „Prieš generuojant“; juodraščio atkūrimas", async () => {
+    const { k, api } = await korteleSp({ kriterijus: "kainos_kokybe", kvalifikacija: "pasalinimas" });
+    await iZingsni2();
+    const kv = W.kriterijausVieta(W.__K), rk = W.eval("vRaktas")("B_" + kv.raktas, kv.k), siul = () => W.eval("SIUL").get(rk);
+    lygu([metKr(), !!siul() && siul().kortele, W.eval("PATV").has(rk)], ["kks", true, false], "kriterijus siūlomas");
+    tiesa(/^pagal pirkimo kortelę VPP-77 „Transformatorių priežiūros paslaugų pirkimas“$/.test(siul().saltinis), "kilmė: " + siul().saltinis);
+    tiesa(/Siūloma: Kainos ir kokybės santykis - pagal pirkimo kortelę VPP-77/.test(e1Tx(metKort())) && metKort().querySelector(".lk-kilme .lk-patv") && metKort().querySelector('input[name^="KRIT_"]:checked'), "kriterijaus kortelė: " + e1Tx(metKort()).slice(0, 400));
+    tiesa(W.__S2.siulomi.some(u => /^Vertinimo kriterijus/.test(u.pavadinimas)), "tarp siūlomų reikšmių");
+    // kas tikrinama: vienas šablono variantas - siūlomas visas atsakymas, keli - pirmas klausimas
+    const t = spTikr();
+    tiesa(t && t.kort, "tikrinimo kortelė");
+    const pilnas = W.eval("KORT_TIKR").has(t.gid), dal = (W.eval("TIKR_DALIS")[t.gid] || {}).kortele === true;
+    tiesa(pilnas !== dal, "siūlymas: pilnas " + pilnas + ", dalinis " + dal);
+    lygu([spTikrKas(), t.g.nariai.some(n => W.eval("PATV").has(n.raktas))], ["pasalinimo", false], "kas tikrinama - siūloma");
+    tiesa(/Siūloma: Tik pašalinimo pagrindus - pagal pirkimo kortelę VPP-77/.test(e1Tx(t.kort)), "tikrinimo kortelė: " + e1Tx(t.kort).slice(0, 500));
+    // juodraštis: siūlymai išsaugomi su kilme; atkūrus (KORT_TIKR tuščias, ATS ir SIUL iš juodraščio) - vis dar siūloma
+    const jd = JSON.parse(JSON.stringify(W.surinkJuodrasti()));
+    tiesa(jd.s2 && jd.s2.SIUL.some(([r, x]) => r === rk && x.kortele && x.reiksme === "kks"), "juodraštyje siūlymas su kilme");
+    W.eval("KORT_TIKR").clear(); W.klausimynas(); await spRamu();
+    lygu([spTikrKas(), (W.eval("TIKR_DALIS")[t.gid] || {}).kortele === true || W.eval("KORT_TIKR").has(t.gid)], ["pasalinimo", true], "po atkūrimo - siūloma");
+    // kortelė pakeista - nepatvirtinti siūlymai seka ją; atsiejus - dingsta
+    W.GP_KORTELE.issaugok(Object.assign({}, api.pasirinkta(), { kriterijus: "kaina" })); api.atnaujink(); W.klausimynas(); await spRamu();
+    lygu([metKr(), siul() && siul().reiksme], ["kaina", "kaina"], "pakeitus kortelę");
+    api.atsiek(); await spRamu();
+    lygu([metKr() || "", !!siul(), spTikrKas() || null], ["", false, null], "atsiejus - siūlymai atšaukti");
+    tiesa(await api.pasirink(k.id), "vėl pasirinkta");
+    await spRamu();
+    lygu([metKr(), spTikrKas()], ["kaina", "pasalinimo"], "vėl pasirinkus - siūloma pagal kortelę");
+    // patvirtina žmogus
+    metKort().querySelector(".lk-kilme .lk-patv").click(); await spRamu();
+    tiesa(W.eval("PATV").has(rk) && !metKort().querySelector(".lk-kilme .lk-patv"), "kriterijus patvirtintas");
+    const t2 = spTikr();
+    if (W.eval("KORT_TIKR").has(t2.gid)) t2.kort.querySelector(".lk-kilme .lk-patv").click();
+    else [...t2.kort.querySelectorAll('input[name^="GKK_"]')].find(r => !r.disabled).click();
+    await spRamu();
+    lygu([spTikrKas(), spTikr().g.nariai.some(n => W.eval("PATV").has(n.raktas)), /Siūloma:/.test(e1Tx(spTikr().kort)), W.eval("KORT_TIKR").has(t2.gid)], ["pasalinimo", true, false, false], "kas tikrinama - patvirtinta, siūlymo nebėra");
+    // kortelė pakeista po patvirtinimo - atsakymai nekeičiami, „Patikrinkite“
+    W.GP_KORTELE.issaugok(Object.assign({}, api.pasirinkta(), { kriterijus: "kainos_kokybe", kvalifikacija: "kvalifikacija" })); api.atnaujink(); W.klausimynas(); await spRamu();
+    lygu([metKr(), spTikrKas()], ["kaina", "pasalinimo"], "patvirtinti nepakito");
+    tiesa(/Patikrinkite: pirkimo kortelėje - „Kainos ir kokybės santykis“/.test(e1Tx(metKort().querySelector("[data-kort-skiriasi]"))), "kriterijus - Patikrinkite: " + e1Tx(metKort()).slice(0, 400));
+    tiesa(/Patikrinkite: pirkimo kortelėje tikrinama: pašalinimo pagrindus ir kvalifikaciją/.test(e1Tx(spTikr().kort.querySelector("[data-kort-skiriasi]"))), "tikrinimas - Patikrinkite: " + e1Tx(spTikr().kort).slice(0, 500));
+    const lk = e1Tx(D.getElementById("lkKortele"));
+    tiesa(/Pirkimo kortelės sprendimai \(2\)/.test(lk) && /pasirinkta „Kaina“, pirkimo kortelėje - „Kainos ir kokybės santykis“/.test(lk)
+      && /pasirinkta „Tik pašalinimo pagrindus“, pirkimo kortelėje - „Pašalinimo pagrindus ir kvalifikaciją“/.test(lk) && D.getElementById("lkKortele").dataset.lygis === "patikr", "Prieš generuojant: " + lk);
+  });
+
+  await testas("Kas tikrinama - keli šablono variantai (kortelė „Pašalinimo pagrindai ir kvalifikacija“): siūlomas tik pirmas klausimas, grupė lieka neatsakyta; atsakius į antrą - patvirtinta; kortelę pakeitus - žmogaus atsakymas lieka, „Patikrinkite“", async () => {
+    const { api } = await korteleSp({ kvalifikacija: "kvalifikacija" });
+    await iZingsni2();
+    const t = spTikr(), d = W.eval("TIKR_DALIS")[t.gid];
+    lygu([d && d.kas, d && d.kortele, W.eval("KORT_TIKR").has(t.gid), t.g.nariai.some(n => ATS()[n.raktas] === true)], ["abu", true, false, false], "dalinis siūlymas");
+    const pirmas = t.kort.querySelector('input[name^="GK_"]:checked');
+    tiesa(pirmas && /Pašalinimo pagrindus ir kvalifikaciją/.test(pirmas.closest("label").textContent), "pirmas klausimas pažymėtas");
+    tiesa(/Siūloma: Pašalinimo pagrindus ir kvalifikaciją - pagal pirkimo kortelę VPP-77 .*Atsakius į antrą klausimą, pirmasis bus laikomas patvirtintu/.test(e1Tx(t.kort)) && !t.kort.querySelector(".lk-kilme .lk-patv"), "kilmė: " + e1Tx(t.kort).slice(0, 500));
+    tiesa(W.__S2.blokuojantys.some(u => u.id === t.kort.id + "-o0" || (u.raktai || []).some(r => t.g.nariai.some(n => n.raktas === r))), "grupė - privalomas sprendimas");
+    // atsiejus kortelę - dalinis siūlymas atšaukiamas, vėl pasirinkus - grįžta
+    const kid = api.pasirinkta().id;
+    api.atsiek(); await spRamu();
+    lygu([spTikrKas() || null, W.eval("TIKR_DALIS")[t.gid] || null, !/Siūloma: Pašalinimo pagrindus/.test(e1Tx(spTikr().kort))], [null, null, true], "atsiejus - atšaukta");
+    tiesa(await api.pasirink(kid), "vėl pasirinkta"); await spRamu();
+    lygu(spTikrKas(), "abu", "vėl siūloma");
+    // antras klausimas - žmogaus atsakymas patvirtina abu
+    [...spTikr().kort.querySelectorAll('input[name^="GKK_"]')].find(r => !r.disabled).click(); await spRamu();
+    lygu([spTikrKas(), spTikr().g.nariai.some(n => W.eval("PATV").has(n.raktas)), !!(W.eval("TIKR_DALIS")[t.gid] || {}).kortele && !spTikr().g.nariai.some(n => ATS()[n.raktas] === true)], ["abu", true, false], "atsakyta ir patvirtinta");
+    W.GP_KORTELE.issaugok(Object.assign({}, api.pasirinkta(), { kvalifikacija: "pasalinimas" })); api.atnaujink(); W.klausimynas(); await spRamu();
+    lygu(spTikrKas(), "abu", "žmogaus atsakymas lieka");
+    tiesa(/Patikrinkite: pirkimo kortelėje tikrinama: tik pašalinimo pagrindus\./.test(e1Tx(spTikr().kort.querySelector("[data-kort-skiriasi]"))), "Patikrinkite: " + e1Tx(spTikr().kort).slice(0, 500));
+  });
+
+  await testas("Kas tikrinama - jau esantis atsakymas neliečiamas: žmogaus dalinis (tik pirmas klausimas) ir kvalifikacijos lentelės (ND - vienas variantas, „Išspręsta automatiškai“); kortelė pasirinkta vėliau - tik „Patikrinkite“", async () => {
+    const { api } = await korteleSp({});
+    await iZingsni2();
+    const t = spTikr(), abu = [...t.kort.querySelectorAll('input[name^="GK_"]')].find(r => /Pašalinimo pagrindus ir kvalifikaciją/.test(r.closest("label").textContent));
+    abu.click(); await spRamu();
+    lygu([spTikrKas(), (W.eval("TIKR_DALIS")[t.gid] || {}).kortele, t.g.nariai.some(n => ATS()[n.raktas] === true)], ["abu", undefined, false], "žmogaus dalinis atsakymas");
+    W.GP_KORTELE.issaugok(Object.assign({}, api.pasirinkta(), { kvalifikacija: "pasalinimas" })); api.atnaujink(); W.klausimynas(); await spRamu();
+    lygu([spTikrKas(), W.eval("KORT_TIKR").has(t.gid), spTikr().g.nariai.some(n => ATS()[n.raktas] === true)], ["abu", false, false], "kortelė dalinio atsakymo nekeičia");
+    tiesa(/Patikrinkite: pirkimo kortelėje tikrinama: tik pašalinimo pagrindus\./.test(e1Tx(spTikr().kort.querySelector("[data-kort-skiriasi]"))), "Patikrinkite: " + e1Tx(spTikr().kort).slice(0, 400));
+    // ND: lentelė atsako pirma ir be klausimo (vienas variantas - „Išspręsta automatiškai“), kortelė pasirenkama vėliau
+    const n = await korteleSp({ budas: "S-ND" });
+    const be8 = () => W.__K && W.kriterijausVieta(W.__K);
+    await iZingsni2(be8);
+    await kvlIkelk(KVL_B); await spRamu(be8);
+    const P = () => [...W.eval("KVL_TIKR").pilnai];
+    tiesa(P().length && !spTikr(), "ND - lentelė atsako be klausimo: " + JSON.stringify(P()));
+    const abuR = P().find(([, v]) => v)[0];
+    W.GP_KORTELE.issaugok(Object.assign({}, n.api.pasirinkta(), { kvalifikacija: "pasalinimas" })); n.api.atnaujink(); W.klausimynas(); await spRamu(be8);
+    lygu([ATS()[abuR], P().every(([r, v]) => ATS()[r] === v), W.eval("KORT_TIKR").size], [true, true, 0], "lentelės atsakymas lieka");
+    tiesa(/Ar tikrinate tik pašalinimo pagrindus ar ir kvalifikaciją\? - pagal įkeltą kvalifikacijos reikalavimų lentelę „PP-qual_reikalavimai_LT-EN\.docx“ - tikrinami pašalinimo pagrindai ir kvalifikacija \(skiltis „Išspręsta automatiškai“\), pirkimo kortelėje - „Tik pašalinimo pagrindus“/.test(e1Tx(D.getElementById("lkKortele"))), "Prieš generuojant: " + e1Tx(D.getElementById("lkKortele")));
+  });
+
+  await testas("Įkelta vertinimo metodika ir kvalifikacijos reikalavimų lentelė - pirmesnės už kortelę: atsakoma pagal jas, kortelė - „Patikrinkite“ (kortelėje ir „Prieš generuojant“); pašalinus metodiką ar lentelės nenaudojant - vėl kortelės siūlymas", async () => {
+    await korteleSp({ kriterijus: "kaina", kvalifikacija: "pasalinimas" });
+    await iZingsni2();
+    lygu([metKr(), spTikrKas()], ["kaina", "pasalinimo"], "be dokumentų - pagal kortelę");
+    await W.dkPridek([await metDocx()]);
+    await kol(() => metKr() === "kks", "kriterijus pagal metodiką"); await spRamu();
+    const auto = metKort().querySelector(".lk-v--auto");
+    tiesa(auto && /Įrašoma automatiškai: Kainos ir kokybės santykis/.test(e1Tx(auto)) && /Patikrinkite: pirkimo kortelėje - „Kaina“/.test(e1Tx(metKort().querySelector("[data-kort-skiriasi]"))),
+      "metodika ir „Patikrinkite“: " + e1Tx(metKort()).slice(0, 500));
+    tiesa(/pasirinkta „Kainos ir kokybės santykis“, pirkimo kortelėje - „Kaina“/.test(e1Tx(D.getElementById("lkKortele"))), "Prieš generuojant: " + e1Tx(D.getElementById("lkKortele")));
+    W.dkSalink(W.eval("DK.failai")[0]); await spRamu();
+    const kv = W.kriterijausVieta(W.__K), x = W.eval("SIUL").get(W.eval("vRaktas")("B_" + kv.raktas, kv.k));
+    lygu([metKr(), !!x && x.kortele, !!metKort().querySelector("[data-kort-skiriasi]")], ["kaina", true, false], "pašalinus metodiką - kortelės siūlymas");
+    // kvalifikacijos reikalavimų lentelė - tikrinama ir kvalifikacija
+    await kvlIkelk(KVL_B); await spRamu();
+    lygu(spTikrKas(), "abu", "pagal lentelę");
+    tiesa(/Patikrinkite: pirkimo kortelėje tikrinama: tik pašalinimo pagrindus \(atsakymą lemia įkelta kvalifikacijos reikalavimų lentelė\)/.test(e1Tx(spTikr().kort)), "tikrinimo kortelė: " + e1Tx(spTikr().kort).slice(0, 600));
+    tiesa(/pasirinkta „Pašalinimo pagrindus ir kvalifikaciją“, pirkimo kortelėje - „Tik pašalinimo pagrindus“/.test(e1Tx(D.getElementById("lkKortele"))), "Prieš generuojant: " + e1Tx(D.getElementById("lkKortele")));
+    // lentelės nenaudojant - vėl kortelės siūlymas
+    W.eval("KVL").atmesta = true; W.eval("PATV").delete("KVL"); W.klausimynas(); await spRamu();
+    lygu([spTikrKas(), spTikr().g.nariai.some(n => W.eval("PATV").has(n.raktas)), !D.getElementById("lkKortele")], ["pasalinimo", false, true], "lentelės nenaudojant - pagal kortelę");
+  });
+
+  await testas("DPS konkretus pirkimas: „Ar vertinama tik pagal kainą?“ - kortelės „Kaina“ - „Taip“, kitas kriterijus - „Ne“ (siūloma su kilme ir „Patvirtinti“); žmogaus kitoks atsakymas - „Patikrinkite“", async () => {
+    await korteleSp({ budas: "DPS-K", kriterijus: "kaina" });
+    await iZingsni2(() => W.__K && spKR());
+    const r = spKR(), key = "KR_" + r, kort = () => D.getElementById(W.lkId("laukas|" + r)), x = W.eval("SIUL").get(key);
+    lygu([ATS()[key], !!x && x.kortele, W.eval("PATV").has(key)], [true, true, false], "„Taip“ siūloma");
+    tiesa(/Siūloma: Taip - pagal pirkimo kortelę VPP-77 „Transformatorių priežiūros paslaugų pirkimas“: vertinimo kriterijus „Kaina“/.test(e1Tx(kort())) && kort().querySelector(".lk-kilme .lk-patv"), "kortelė: " + e1Tx(kort()).slice(0, 400));
+    W.taipNe(r, false); await spRamu(() => W.__K && spKR());
+    tiesa(W.eval("PATV").has(key) && /Patikrinkite: pirkimo kortelėje vertinimo kriterijus - „Kaina“/.test(e1Tx(kort().querySelector("[data-kort-skiriasi]"))), "žmogaus „Ne“: " + e1Tx(kort()).slice(0, 400));
+    tiesa(/atsakyta „Ne“, pirkimo kortelėje vertinimo kriterijus - „Kaina“/.test(e1Tx(D.getElementById("lkKortele"))), "Prieš generuojant: " + e1Tx(D.getElementById("lkKortele")));
+    // kitas kriterijus - „Ne“
+    await korteleSp({ budas: "DPS-K", kriterijus: "sanaudu_kokybe" });
+    await iZingsni2(() => W.__K && spKR());
+    lygu([ATS()["KR_" + spKR()], W.eval("SIUL").get("KR_" + spKR()).kortele], [false, true], "„Ne“ siūloma");
+  });
+
+  await testas("„Rengė:“ - siūloma iš kortelės organizatoriaus ir jo kontaktų („Vardas Pavardė, tel. ..., el. p. ...“, be padalinio), „Siūloma (nepatvirtinta)“; kontaktuose jau vardas - nekartojama; be kontaktų - tik organizatorius; tik kontaktai", async () => {
+    const { api } = await korteleSp({ organizatorius: "Vardenė Pavardenė, Pirkimų skyrius", organizatoriausKontaktai: "tel. +370 600 00000, el. p. vardene.pavardene@litgrid.eu" });
+    await iZingsni2();
+    const s1 = W.eval("SIUL").get("B_rengejas#0"), kort = D.getElementById(W.lkId("laukas|rengejas"));
+    lygu([ATS().B_rengejas[0], !!s1 && s1.saltinis, W.eval("PATV").has("B_rengejas#0")],
+      ["Vardenė Pavardenė, tel. +370 600 00000, el. p. vardene.pavardene@litgrid.eu", "pirkimo kortelės organizatorius ir jo kontaktai", false], "su kontaktais");
+    tiesa(kort && /Siūloma: pirkimo kortelės organizatorius ir jo kontaktai/.test(e1Tx(kort)) && kort.querySelector(".lk-patv"), "kortelė: " + (kort && e1Tx(kort).slice(0, 300)));
+    const su = laukai => { W.GP_KORTELE.issaugok(Object.assign({}, api.pasirinkta(), laukai)); api.atnaujink(); return W.eval("rengejoSiulymas()"); };
+    lygu(su({ organizatoriausKontaktai: "Vardenė Pavardenė, tel. +370 600 00000" }), { reiksme: "Vardenė Pavardenė, tel. +370 600 00000", kilme: "pirkimo kortelės organizatorius ir jo kontaktai" }, "vardas kontaktuose");
+    lygu(su({ organizatoriausKontaktai: "" }), { reiksme: "Vardenė Pavardenė, Pirkimų skyrius", kilme: "pirkimo kortelės organizatorius - įrašykite ir telefoną bei el. paštą" }, "be kontaktų - kaip iki tol");
+    lygu(su({ organizatorius: "", organizatoriausKontaktai: "el. p. pirkimai@litgrid.eu" }), { reiksme: "el. p. pirkimai@litgrid.eu", kilme: "pirkimo kortelės organizatoriaus kontaktai - įrašykite ir vardą bei pavardę" }, "tik kontaktai");
+    lygu(su({ organizatorius: "", organizatoriausKontaktai: "" }), null, "nieko");
+    // patvirtinta reikšmė pakeitus kortelę neperrašoma
+    su({ organizatorius: "Vardenė Pavardenė", organizatoriausKontaktai: "tel. 1" }); W.klausimynas(); await spRamu();
+    W.uAtsArr("B_rengejas", 0, "Kitas Asmuo, tel. 2"); su({ organizatoriausKontaktai: "tel. 3" }); W.klausimynas(); await spRamu();
+    lygu(ATS().B_rengejas[0], "Kitas Asmuo, tel. 2", "žmogaus įrašas neperrašytas");
+  });
+
+  await testas("Generavimas: SPS - žmogaus atsakymai (kortelės kriterijus „Kainos ir kokybės santykis“ pakeistas į „Kainą“, patvirtintas kortelės „Tik pašalinimo pagrindai“); žaliasis pirkimas - sutarties SS 13.1 p. siūlomas iš kortelės, kol SPS žaliųjų dalis jo nelemia", async () => {
+    await korteleSp({ kriterijus: "kainos_kokybe", kvalifikacija: "pasalinimas", zaliasis: "taip", objektas: "prekes", pavadinimas: "Transformatorių pirkimas" });
+    W.SUTARTIES_BLOKAS.atnaujink(); D.getElementById("sbTaip").click();
+    await iZingsni2();
+    // SS 13.1 p.: SPS žaliųjų dalis dar neatsakyta - siūloma iš kortelės
+    const Q = W.GP_SUTARTIES_FORMA.KLAUSIMAI.find(q => q.id === "zalieji");
+    let ctx = W.sutartiesKontekstas(), sz = Q.siuloma(ctx);
+    lygu([ctx.zaliasisKortele, ctx.zaliejiSPS, sz && sz.reiksme], ["taip", null, "taip"], "13.1 p. siūloma iš kortelės");
+    tiesa(/^pagal pirkimo kortelę VPP-77 „Transformatorių pirkimas“: žaliasis pirkimas - „Taip“$/.test(sz.kilme), "kilmė: " + sz.kilme);
+    W.SUTARTIES_FORMA.atnaujink();
+    tiesa(/pagal pirkimo kortelę VPP-77 „Transformatorių pirkimas“: žaliasis pirkimas - „Taip“/.test(e1Tx(D.getElementById("sutartiesForma"))), "sutarties formoje: " + e1Tx(D.getElementById("sutartiesForma")).slice(0, 300));
+    // tikrinimas - patvirtina žmogus; kriterijus - žmogus renkasi kitą
+    const t = spTikr();
+    if (W.eval("KORT_TIKR").has(t.gid)) t.kort.querySelector(".lk-kilme .lk-patv").click(); else [...t.kort.querySelectorAll('input[name^="GKK_"]')].find(r => !r.disabled).click();
+    await spRamu();
+    const kv = W.kriterijausVieta(W.__K); W.pasirinkKriteriju(kv.raktas, kv.k, "kaina"); await spRamu();
+    tiesa(/pasirinkta „Kaina“, pirkimo kortelėje - „Kainos ir kokybės santykis“/.test(e1Tx(D.getElementById("lkKortele"))), "Prieš generuojant: " + e1Tx(D.getElementById("lkKortele")));
+    const bandyta = new Set();
+    for (let i = 0; i < 80; i++){
+      await W.prieduNumatytujuDerink();
+      const e = Object.entries(W.__K.grupes).find(([gid, g]) => !bandyta.has(gid) && !g.nariai.some(n => ATS()[n.raktas] === true));
+      if (!e) break;
+      bandyta.add(e[0]); W.pasirinkGrupe(e[0], e[1].nariai[e[1].nariai.length - 1].raktas);
+    }
+    atsakykPrivalomus(); await spRamu();
+    // SPS žaliųjų dalis atsakyta - jos siūlymas pirmesnis už kortelę
+    ctx = W.sutartiesKontekstas(); sz = Q.siuloma(ctx);
+    tiesa(!ctx.zaliejiSPS || (sz && !/pirkimo kortelę/.test(sz.kilme)), "SPS žaliųjų dalis pirmesnė: " + JSON.stringify([ctx.zaliejiSPS, sz]));
+    lygu([metKr(), spTikrKas(), W.kvalifikacijosLenteles().tik1], ["kaina", "pasalinimo", true], "atsakymai prieš generuojant");
+    W.alert = () => {};
+    D.getElementById("gen").click();
+    await kol(() => !D.getElementById("step3").classList.contains("hid"), "3 žingsnis", 90000);
+    const r = W.__R.find(x => x.d && x.d.trumpas === "AK_LT_SPS");
+    tiesa(r && r.blob, "SPS nesugeneruotas: " + W.__R.map(x => x.d && x.d.trumpas).join(", "));
+    const xml = await (await W.JSZip.loadAsync(await r.blob.arrayBuffer())).file("word/document.xml").async("string");
+    const tx = xml.split("</w:p>").map(x => x.replace(/<[^>]+>/g, "").trim()).filter(Boolean).join("\n");
+    tiesa(/vertinimo kriterijų – kainą/.test(tx) && !/vertinimo kriterijų – kainos ir kokybės santykį/.test(tx), "SPS 8.1: " + tx.split("\n").filter(x => /vertinimo kriterij/.test(x)).join(" | ").slice(0, 400));
+    tiesa(!/Kvalifikacijos reikalavimas/.test(tx), "2 lentelė (kvalifikacija) turėjo būti pašalinta");
+  });
+}
+
 async function testaiKainuLentele(){
   dabartine = grupe("Kainų lentelė iš kiekių žiniaraščio (2026-11-08): Excel atpažinimas, kortelė, pasiūlymo forma ir Excel priedas");
   await testas("Atpažinimas (kainu-lentele.js): žiniaraštis su sumų eilute ir formulėmis, kiekio rūšis, siūlomas būdas (iki 20 - forma), tiekėjo stulpelis, užpildyti įkainiai, grupės, dalys lapais ir stulpeliu, paslėpti lapai ir eilutės; ne kainų lentelės - rizikų planas, klasifikatorius, funkcijų sąrašas, mokėjimo etapai", async () => {
@@ -17646,7 +17920,7 @@ async function testaiPaskelbti(){
        testaiSutartiesDI, testaiPaketoPatikra, testaiPriedoNuorodos, testaiEtapas0, testaiEtapas1, testaiDalys, testaiU4, testai1021, testaiD6,
        testaiD3, testaiD4b, testaiD5, testaiU8, testaiD4c, testaiFormuTaisykles, testaiTestuotojas7, testaiSprendimai1025, testaiPaskelbti],
       [testaiTestuotojas, testaiSprendimai1020, testaiTestuotojas2, testaiNacsaugBvpz, testaiTestuotojas3, testai1021b, testai1021c, testai1022a,
-       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiTestuotojas5, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b, testaiDiUzduotys1108]
+       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiTestuotojas5, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b, testaiDiUzduotys1108, testaiKelias1109, testaiKorteleSprendimai1109]
     ]);
     await GP_TESTU_DALYS.vykdyk(GRUPES);
     document.getElementById("busena").textContent =
