@@ -1803,7 +1803,7 @@ async function testaiBusena(){
         return Promise.resolve(new w.Response("{}", { status: 503 }));
       };
       const v = new w.AbortController(), t0 = performance.now();
-      const vyksta = w.GP_AI_PROXY.call({ module: "testai", system: "s", userMessage: "u", signal: v.signal });
+      const vyksta = w.GP_AI_PROXY.uzduotis("testai.bandymas", { tekstas: "u" }, { signal: v.signal });
       await lauk(100);
       v.abort();
       const r = await vyksta, trukme = performance.now() - t0;
@@ -7531,28 +7531,30 @@ async function testaiAiProxy(){
     w.setTimeout = (fn, ms) => { pauzes.push(ms); return tikrasLaikas.call(w, fn, 0); };
   };
   try {
-    await testas("Saugumas: raktas ir savos antraštės atmetami (niekas nesiunčiama); kito serverio adresas kelyje nepriimamas; vienintelė antraštė - Content-Type; kūnas - model, max_tokens, system, messages (PDF - document blokas)", async ()=>{
+    await testas("Saugumas: raktas, savos antraštės ir instrukcija (system) atmetami, netinkamas užduoties pavadinimas - taip pat (niekas nesiunčiama); laisvos instrukcijos kelio call() nebėra (serverio /api/analyze nuo 2026-11-09 - 410); adresas - tik /api/uzduotis, vienintelė antraštė - Content-Type; kūnas - užduotis, duomenys, modelis, dokumentas", async ()=>{
       serveris([200, '{"content":[{"type":"text","text":"ok"}]}']);
       const klaidos = [];
-      for (const o of [{ apiKey: "sk-ant-x" }, { headers: { "x-api-key": "sk-ant-x" } }]) {
-        try { await A.call(o); klaidos.push("priimta"); } catch (e) { klaidos.push(/apiKey|headers/.test(e.message) ? "atmesta" : e.message); }
+      for (const [id, o] of [["testai.bandymas", { apiKey: "sk-ant-x" }], ["testai.bandymas", { headers: { "x-api-key": "sk-ant-x" } }], ["testai.bandymas", { system: "S" }],
+        ["https://kitas.lt/api/x", {}], ["be-taško", {}], ["", {}]]) {
+        try { await A.uzduotis(id, {}, o); klaidos.push("priimta"); } catch (e) { klaidos.push(/apiKey|headers|system|pavadinimas/.test(e.message) ? "atmesta" : e.message); }
       }
-      lygu([klaidos, kvietimai.length], [["atmesta", "atmesta"], 0], "raktas");
-      await A.call({ path: "https://kitas.lt/api/x", system: "S", userMessage: "U" });
-      await A.call({ path: "api/y", maxTokens: 10, userMessage: "U", pdfBase64: "QUJD" });
-      await A.call({});
+      lygu([klaidos, kvietimai.length], [["atmesta", "atmesta", "atmesta", "atmesta", "atmesta", "atmesta"], 0], "raktas, antraštės, instrukcija, pavadinimas");
+      lygu([typeof A.call, Object.keys(A).sort()], ["undefined", ["BASE", "MAX_BASE64", "MAX_PDF_BAITU", "MODEL", "extractText", "taisykJson", "uzduotis"]], "viešos funkcijos");
+      await A.uzduotis("testai.bandymas", { tekstas: "U" });
+      await A.uzduotis("testai.bandymas", { tekstas: "U" }, { modelis: A.MODEL, dokumentas: { tipas: "pdf", duomenys: "QUJD", kitas: "x" } });
+      await A.uzduotis("testai.bandymas");
       const k = kvietimai.map(x => ({ url: x.url, metodas: x.o.method, antrastes: x.o.headers, kunas: JSON.parse(x.kunas) }));
-      lygu(k.map(x => x.url), ["https://api.g-procure.com/api/x", "https://api.g-procure.com/api/y", "https://api.g-procure.com/api/analyze"], "adresai");
-      lygu([k[0].metodas, k[0].antrastes, k[0].kunas], ["POST", { "Content-Type": "application/json" },
-        { model: A.MODEL, max_tokens: 4000, system: "S", messages: [{ role: "user", content: "U" }] }], "kūnas");
-      lygu([k[1].kunas.max_tokens, k[1].kunas.messages[0].content], [10, [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: "QUJD" } },
-        { type: "text", text: "U" }]], "PDF");
-      lygu(k[2].kunas, { model: A.MODEL, max_tokens: 4000, system: "", messages: [{ role: "user", content: "" }] }, "be parametrų");
-      tiesa(k.every(x => !/sk-ant|x-api-key|anthropic-version/i.test(JSON.stringify(x))), "užklausoje - rakto ar Anthropic antraštės pėdsakas");
+      lygu(k.map(x => x.url), ["https://api.g-procure.com/api/uzduotis", "https://api.g-procure.com/api/uzduotis", "https://api.g-procure.com/api/uzduotis"], "adresai");
+      lygu([k[0].metodas, k[0].antrastes, k[0].kunas], ["POST", { "Content-Type": "application/json" }, { uzduotis: "testai.bandymas", duomenys: { tekstas: "U" } }], "kūnas");
+      lygu(k[1].kunas, { uzduotis: "testai.bandymas", duomenys: { tekstas: "U" }, modelis: A.MODEL, dokumentas: { tipas: "pdf", duomenys: "QUJD" } }, "modelis ir dokumentas (tik tipas ir duomenys)");
+      lygu(k[2].kunas, { uzduotis: "testai.bandymas", duomenys: {} }, "be duomenų");
+      tiesa(k.every(x => !/sk-ant|x-api-key|anthropic-version|"system"|max_tokens|messages/i.test(JSON.stringify(x))), "užklausoje - rakto, Anthropic antraštės ar instrukcijos pėdsakas");
+      const src = (await saltinis("ai-proxy.js")).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      tiesa(!/api\/analyze|function call\s*\(|system\s*:/.test(src), "ai-proxy.js kode liko laisvos instrukcijos kelias");
     });
 
     await testas("Klaidos žinutė žmogui: 413 - su tikra riba, 429, 401 / 403, 5xx; kitos - su serverio klaidos tekstu, bet HTML puslapis į ekraną nepatenka; tinklo klaida - status 0", async ()=>{
-      const zinute = async (...a) => { serveris(...a); const r = await A.call({ userMessage: "U" }); return [r.ok, r.status, r.error]; };
+      const zinute = async (...a) => { serveris(...a); const r = await A.uzduotis("testai.bandymas", { tekstas: "U" }); return [r.ok, r.status, r.error]; };
       const mb = Math.floor(A.MAX_PDF_BAITU / (1024 * 1024)) + " MB";
       lygu(await zinute([413, "<html><body>413 Request Entity Too Large nginx/1.28.3</body></html>"]),
         [false, 413, "Failas per didelis - serveris jo nepriėmė. Didžiausias dokumento dydis apie " + mb + ". Pateikite mažesnės apimties failą."], "413");
@@ -7569,7 +7571,7 @@ async function testaiAiProxy(){
     });
 
     await testas("Kartojimas pagal statusą: 429 ir 5xx (529 overloaded) - iki 3 kartų po 1, 2 ir 4 s, kartojama ta pati užklausa; 413, 400 ir tinklo klaida nekartojami", async ()=>{
-      const eiga = async (...a) => { serveris(...a); const r = await A.call({ system: "S", userMessage: "U" }); return [r.ok, r.status, r.text, kvietimai.length, pauzes]; };
+      const eiga = async (...a) => { serveris(...a); const r = await A.uzduotis("testai.bandymas", { tekstas: "U" }); return [r.ok, r.status, r.text, kvietimai.length, pauzes]; };
       lygu(await eiga([529, '{"error":{"type":"overloaded_error"}}'], [529, "{}"], [200, '{"content":[{"type":"text","text":"labas"}]}']), [true, 200, "labas", 3, [1000, 2000]], "529 -> 200");
       lygu(await eiga([429, "{}"]), [false, 429, "", 4, [1000, 2000, 4000]], "429 kiekvieną kartą");
       lygu(await eiga([500, "{}"], [200, "grynas tekstas"]), [true, 200, "grynas tekstas", 2, [1000]], "500 -> ne JSON tekstas");
@@ -8734,12 +8736,12 @@ async function testaiAnalitika(){
       const A = w.GP_ANALITIKA, gauta = [];
       A.testams({ siunta: (v, p) => gauta.push([v, p]) });
       w.fetch = () => Promise.resolve(new w.Response("{}", { status: 413 }));
-      const r = await w.GP_AI_PROXY.call({ userMessage: "Slaptas tekstas", maxTokens: 10 });
+      const r = await w.GP_AI_PROXY.uzduotis("testai.bandymas", { tekstas: "Slaptas tekstas" });
       const di = gauta.filter(x => x[0] === "di_uzklausa").map(x => x[1]);
       lygu([r.ok, di.length, di[0] && di[0].rezultatas, di[0] && di[0].klaidos_rusis, di[0] && di[0].bandymai, di[0] && di[0].trukme, JSON.stringify(di).includes("Slaptas")],
         [false, 1, "klaida", "per_didelis_failas", 1, "iki_10s", false], "DI užklausa: " + JSON.stringify(di));
       w.fetch = () => Promise.resolve(new w.Response(JSON.stringify({ content: [{ type: "text", text: "ok" }] }), { status: 200 }));
-      await w.GP_AI_PROXY.call({ userMessage: "x" });
+      await w.GP_AI_PROXY.uzduotis("testai.bandymas", { tekstas: "x" });
       lygu(gauta.filter(x => x[0] === "di_uzklausa").map(x => [x[1].rezultatas, x[1].klaidos_rusis]), [["klaida", "per_didelis_failas"], ["pavyko", undefined]], "DI užklausa pavyko");
       await w.GP_BUSENA.vykdyk("#vt", { analitika: "ts_sugeneruota", veiksmas: () => 1 });
       await w.GP_BUSENA.vykdyk("#vt", { analitika: "ts_patikrinta", veiksmas: () => { throw new Error("Slapta klaida"); } });

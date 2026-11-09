@@ -20,7 +20,7 @@
  *     tipas: 'ai', tekstas: 'AI analizuoja dokumentą', atsaukiama: true,
  *     sekme: 'Paruošta - peržiūrėkite pasiūlymus.',
  *     kartoti: () => mygtukoFunkcija(),                        // „Bandyti dar kartą“ - visas modulio srautas
- *     veiksmas: signal => GP_AI_PROXY.call({ ..., signal })   // grąžina rezultatą arba meta klaidą
+ *     veiksmas: signal => GP_AI_PROXY.uzduotis(id, duomenys, { signal })   // grąžina rezultatą arba meta klaidą
  *   });
  *   // rez: { ok: true, reiksme } | { ok: false, atsaukta: true } | { ok: false, klaida }
  *   GP_BUSENA.slepk('#vieta');

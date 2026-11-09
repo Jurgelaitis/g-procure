@@ -10,9 +10,12 @@
  *   - Rakto negalima "patogiai" grazinti: jei opts turi apiKey ar headers,
  *     funkcija meta klaida (fail-fast).
  *
- * Backend prie /api/analyze priima gryna Anthropic native kuna
- * {model, max_tokens, system, messages}, apdoroja ir teksta, ir PDF (document
- * bloka), o grazina Anthropic atsakyma "kaip yra".
+ * Backend prie /api/uzduotis priima tik uzduoties pavadinima ir duomenis
+ * (ir dokumenta), DI instrukcija sudaro pagal savo privatu sablona
+ * (serveris/di-uzduotys.js), o grazina Anthropic atsakyma "kaip yra".
+ * Laisvos instrukcijos kelias /api/analyze uzdarytas 2026-11-09 (serveris
+ * atsako 410), todel funkcijos call() su system nebera (naudotojo sprendimas
+ * 2026-11-08 „Neutralus zingsniai“ - kodo apsauga).
  * ==========================================================================*/
 
 ;(function (global) {
@@ -20,11 +23,10 @@
 
   // --- Vienintelis tiesos saltinis (keiciama TIK cia) ----------------------
   var PROXY_BASE        = "https://api.g-procure.com";
-  var DEFAULT_PATH      = "/api/analyze";
   var DEFAULT_MODEL     = "claude-sonnet-4-6";
-  var DEFAULT_MAX_TOKENS = 4000;
-  // Serveris (index.js, nuo 2026-10-05, R5) priima tik savo LEIDZIAMI_MODELIAI ir max_tokens riboja iki 8000 (MAX_TOKENS_RIBA):
-  // nauja modeli ar didesni ilgi PIRMIAU irasyk serveryje, kitaip moduliai gaus 400 arba nukirpta atsakyma (CLAUDE.md 6 sk.).
+  // Modeliai ir atsakymo ilgis - serverio uzduociu sablonuose (serveris/di-uzduotys.js LEIDZIAMI_MODELIAI, MAX_TOKENS_RIBA).
+  // DEFAULT_MODEL - numatytasis PP-ts pasirinkiklio ir DI pozymiu (shared/di-zymejimas.js) modelis; uzduotis(..., { modelis })
+  // ji perduoda, o serveris priima tik sablono modelius. Nauja modeli PIRMIAU irasyk serverio sablone (CLAUDE.md 6 sk.).
 
   /* Backend'o UZKLAUSOS KUNO riba (patikrinta gyvai 2026-07-17).
      Serveryje veikia express.json({ limit: "10mb" }), o pries ji - nginx su
@@ -39,9 +41,9 @@
      VIENOS serverio konfiguracijos, tad pasikeitus serveriui taisoma viena
      vieta. Naudoja pp-salygos (paraiskos kortele) ir pp-carbon (EPD).
 
-     DEMESIO - tai NEGALIOJA serverio pusei ir Cloudflare Worker'iui:
-     worker/epd-proxy.js turi SAVO, nesusijusia riba (jis kreipiasi tiesiai i
-     Anthropic, per nginx/express neina isvis). Zr. CLAUDE.md 6 sk.          */
+     DEMESIO - Cloudflare Worker'is worker/epd-proxy.js turi SAVO riba
+     (MAX_PDF_CHARS): jis PDF tikrina pats ir nuo 2026-11-08 persiuncia i
+     serverio uzduoti, todel jam galioja ir serverio 10 MB riba. Zr. CLAUDE.md 6 sk. */
   var MAX_BASE64    = 9 * 1024 * 1024;
   // base64 pripucia 4/3, tad neapdorotas PDF negali virsyti ~3/4 biudzeto.
   var MAX_PDF_BAITU = Math.floor(MAX_BASE64 * 3 / 4);
@@ -73,34 +75,6 @@
       zinute += ": " + rawText.slice(0, 300);
     }
     return zinute;
-  }
-
-  // Normalizuoja path: leidziam TIK santykini kelia savo proxy viduje.
-  // Jei kas paduoda pilna URL ar host'a - ignoruojam ir imam tik kelio dali,
-  // taip klientas negali nurodyti kito host'o.
-  function safePath(path) {
-    if (typeof path !== "string" || !path) return DEFAULT_PATH;
-    // Numetam bet koki schema://host pradzia (pvz. https://evil.com/x -> /x)
-    var p = path.replace(/^[a-z]+:\/\/[^/]+/i, "");
-    if (p.charAt(0) !== "/") p = "/" + p;
-    return p;
-  }
-
-  // Sudaro user zinutes content: arba PDF blokai, arba paprastas string.
-  function buildUserContent(userMessage, pdfBase64) {
-    var text = typeof userMessage === "string" ? userMessage : "";
-    if (pdfBase64) {
-      // Tiksliai ta forma, kuri veikia backend teste:
-      // document (base64 / application/pdf) + text.
-      return [
-        {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: pdfBase64 }
-        },
-        { type: "text", text: text }
-      ];
-    }
-    return text;
   }
 
   // Tolerantiskas teksto istraukimas is ivairiu atsakymo formu.
@@ -167,39 +141,7 @@
     });
   }
 
-  // --- Pagrindine funkcija -------------------------------------------------
-  // opts: {
-  //   module, path, system, model, maxTokens, userMessage, pdfBase64, signal
-  // }
-  // Grazina Promise< { ok, text, raw, status, error } >.
-  function call(opts) {
-    opts = opts || {};
-
-    // Saugumo guard: rakto ar antrasciu is kliento NEPRIIMAM.
-    if ("apiKey" in opts) {
-      return Promise.reject(new Error(
-        "GP_AI_PROXY: apiKey neleidziamas - raktas gyvena tik serverio puseje."));
-    }
-    if ("headers" in opts) {
-      return Promise.reject(new Error(
-        "GP_AI_PROXY: rankiniu headers neleidziama - transporto antrastes fiksuotos."));
-    }
-
-    var url = PROXY_BASE + safePath(opts.path);
-
-    var body = {
-      model: opts.model || DEFAULT_MODEL,
-      max_tokens: opts.maxTokens || DEFAULT_MAX_TOKENS,
-      system: opts.system || "",
-      messages: [
-        { role: "user", content: buildUserContent(opts.userMessage, opts.pdfBase64) }
-      ]
-    };
-
-    return siusk(url, body, opts);
-  }
-
-  /* Siuntimas su kartojimu ir statistika - bendras call() ir uzduotis(). opts / body NEKEICIAMI. */
+  /* Siuntimas su kartojimu ir statistika (uzduotis()). Grazina Promise< { ok, text, raw, status, error } >. opts / body NEKEICIAMI. */
   function siusk(url, body, opts) {
     var fetchOpts = {
       method: "POST",
@@ -268,7 +210,7 @@
 
   /* DI uzduotis serveryje (2026-11-08, naudotojo sprendimas - kodo apsauga): modulis siuncia tik uzduoties
      pavadinima ir DUOMENIS, o instrukcija sudaro serveris pagal savo privatu sablona (serveris/di-uzduotys.js).
-     Kas siunciama i DI - matoma cia, duomenyse (moduliu testai tai tikrina). Grazina ta pacia forma kaip call().
+     Kas siunciama i DI - matoma cia, duomenyse (moduliu testai tai tikrina). Grazina { ok, text, raw, status, error }.
      opts: { modelis, dokumentas: { tipas, duomenys (base64) }, signal } */
   var UZDUOTIS_PATH = "/api/uzduotis";
   var UZDUOTIES_ID = /^[a-z0-9-]{2,40}\.[a-z0-9-]{2,60}$/;
@@ -345,7 +287,6 @@
   }
 
   global.GP_AI_PROXY = {
-    call: call,
     uzduotis: uzduotis,
     extractText: extractText,
     taisykJson: taisykJson,
