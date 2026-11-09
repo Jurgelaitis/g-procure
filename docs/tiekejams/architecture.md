@@ -25,8 +25,8 @@ shared/organizacijos.js (vykdytojų    | metaIsDokumentu: pirkėjas + režimas -
                                 asistentas.js (promptas su [[ID | dok | vieta]] fragmentais)
                                      |
                                      v  tik parinkti fragmentai + klausimas
-                     shared/ai-proxy.js -> api.g-procure.com/api/analyze   (numatyta)
-                     ARBA worker/tiekejams-proxy.js (serveris konstruoja promptą, Turnstile)
+                     shared/ai-proxy.js -> api.g-procure.com/api/uzduotis   (numatyta; instrukcija - serverio šablone)
+                     ARBA worker/tiekejams-proxy.js (Turnstile, tada ta pati serverio užduotis)
                                      |
                                      v  JSON
                                 asistentas.js validuok*: citatos tikrinamos fragmentuose,
@@ -93,7 +93,7 @@ Nuo 2026-09-25 failas gyvena `shared/`: tą patį teksto skaitymą naudoja ir PP
 ## Saugumas
 
 - API raktas tik serveryje (proxy arba Worker).
-- Viešas AI galinis taškas: `/api/analyze` priima kliento promptą (30 r/min per IP nginx) - tai esamas PP-carbon modelis; Worker modelis (serveris konstruoja promptą, Turnstile PRIVALOMAS, Cloudflare Rate Limiting taisyklė) yra rekomenduojamas produkcijai; kliente Turnstile widget'as įjungiamas `TURNSTILE_SITE_KEY` konstanta.
+- Viešas AI galinis taškas: nuo 2026-11-08 `/api/uzduotis` (klientas siunčia tik užduotį ir duomenis, instrukcija - privačiame serverio šablone; 30 r/min per IP nginx), laisvos instrukcijos `/api/analyze` uždarytas 2026-11-09 (410); Worker modelis (Turnstile PRIVALOMAS, Cloudflare Rate Limiting taisyklė, tada ta pati užduotis) yra rekomenduojamas produkcijai; kliente Turnstile widget'as įjungiamas `TURNSTILE_SITE_KEY` konstanta.
 - CDN scenarijai su SRI; `xlsx` 0.20.3 iš cdn.sheetjs.com (cdnjs 0.18.5 turi CVE-2023-30533 ir CVE-2024-22363).
 - Dokumentų turinys - nepatikimas: sanitizacijos nėra prasmės daryti nematomai, todėl nurodymai aptinkami, pažymimi ir promptu neutralizuojami; sąsaja niekada nevykdo turinio kaip komandų (tik `textContent` / `esc`).
 
