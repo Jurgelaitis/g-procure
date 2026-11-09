@@ -1110,8 +1110,9 @@ async function testaiParaiska(){
 /* 2026-10-03: nauji LITGRID šablonai. „ĮMONĖS PAVADINIMAS“ visur = LITGRID AB; „Atviras konkursas VPĮ“ - tik centralizuotas
    pirkimas (LITGRID AB sau ir UAB „EPSO-G“); R2 (lentelės seka atsakymus), R3 (angliška režimo eilutė), punkto numeris iš
    sąlygos eilutės, pavyzdinės reikšmės nebejuodinamos, bankų sąrašas - nekeičiamas PDF. */
-async function generuokSu({ imone, budas, kalba = "LT", centr = false, grupes = "paskutinis", priedai = [], verte, pav = PAVADINIMAS, pavEN, tipas, sdata, pries, be = [], sutartis, po2, nacsaug, nsbvpz, energ, komisija, apimtis, nd80, ndpag }){
-  await modulis();
+async function generuokSu({ imone, budas, kalba = "LT", centr = false, grupes = "paskutinis", priedai = [], verte, pav = PAVADINIMAS, pavEN, tipas, sdata, pries, be = [], sutartis, po2, nacsaug, nsbvpz, energ, komisija, apimtis, nd80, ndpag, kortele }){
+  // kortele (2026-11-09): modulis su pasirinkta pirkimo kortele (tik atmintyje, ?saugykla=testine) - pvz. jos pirkimo grafikas SPS skyriui
+  if (kortele) await korteleSp(kortele); else await modulis();
   const ivesk = (id, v) => { const e = D.getElementById(id); e.value = v; e.dispatchEvent(new W.Event("input")); e.dispatchEvent(new W.Event("change")); };
   if (imone) ivesk("imone", imone);   // pirkimo vykdytojas (2026-11-03); be jo - LITGRID AB
   ivesk("pavadinimas", pav);
@@ -17901,6 +17902,195 @@ async function testaiPaskelbti(){
   });
 }
 
+/* ======================================================================== */
+/* Pirkimo grafikas iš pirkimo kortelės į SPS (2026-11-09, naudotojo „Pradėkime nuo grafiko datų į kortelę ir SPS“): kortelės grafiko (PP-graphs,
+   GP_KORTELE.irasykGrafika) vykdymo etapai - SPS skyriuje „Preliminarus pirkimo procedūrų vykdymo grafikas“: LT - nauja lentelė po sakinio, LT/EN -
+   šablono pavyzdinės eilutės pakeičiamos; kortelės grafikas kitam būdui - neįterpiama ir pasakoma; kortelė be grafiko - kaip iki tol.
+   Kortelės - tik atmintyje (?saugykla=testine). */
+const GRAF_AK = { sudaryta: "2026-11-09T08:00:00.000Z", budas: "T-AK", metai: 2026, pradzia: "2026-11-10", etapai: [
+  { kodas: "1.1", pavadinimas: "Pasirengimas pirkimui", stadija: "pasirengimas", nuo: "2026-11-10", iki: "2026-11-20" },
+  { kodas: "1.2", pavadinimas: "Pirkimo dokumentų rengimas", stadija: "pasirengimas", nuo: "2026-11-23", iki: "2026-11-30" },
+  { kodas: "1.3", pavadinimas: "Skelbimas apie pirkimą", stadija: "vykdymas", nuo: "2026-12-01", iki: "2026-12-01" },
+  { kodas: "1.4", pavadinimas: "Pasiūlymų gavimas", stadija: "vykdymas", nuo: "2026-12-02", iki: "2027-01-05" },
+  { kodas: "1.5", pavadinimas: "Pasiūlymų nagrinėjimas", stadija: "vykdymas", nuo: "2027-01-06", iki: "2027-02-10" },
+  { kodas: "1.6", pavadinimas: "Sprendimas dėl laimėjusio pasiūlymo ir sutarties sudarymas", stadija: "vykdymas", nuo: "2027-02-11", iki: "2027-03-05" } ] };
+const GRAF_AK_TEKSTAI = [["Skelbimas apie pirkimą", "Publication of the contract notice", "2026-12-01"], ["Pasiūlymų gavimas", "Submission of tenders", "2026-12-02 - 2027-01-05"],
+  ["Pasiūlymų nagrinėjimas", "Examination of tenders", "2027-01-06 - 2027-02-10"], ["Sprendimas dėl laimėjusio pasiūlymo ir sutarties sudarymas", "Award decision and conclusion of the contract", "2027-02-11 - 2027-03-05"]];
+const grafKortele = (grafikas, laukai) => Object.assign({ pavadinimas: PAVADINIMAS + " pirkimas", objektas: "prekes", verte: null, grafikas }, laukai || {});
+const grafTxt = el => Array.from(el.getElementsByTagNameNS(NSW, "t")).map(t => t.textContent).join("").trim();
+const grafVaikai = (el, vardas) => Array.from(el.children).filter(x => x.localName === vardas);
+const GRAF_SAK = /Toliau Tiekėjų informacijai pateikiamas preliminarus planuojamas Pirkimo procedūrų vykdymo grafikas/;
+/* Sugeneruoto SPS grafiko skyrius: sakinio pastraipa, LT - po jos einantys kūno elementai, LT/EN - grafiko lentelės eilutės nuo antraštės */
+function grafSkyrius(xml){
+  const d = new W.DOMParser().parseFromString(xml, "application/xml");
+  const p = Array.from(d.getElementsByTagNameNS(NSW, "p")).find(x => GRAF_SAK.test(grafTxt(x)));
+  let tr = p && p.parentNode; while (tr && tr.localName !== "tr") tr = tr.parentNode;
+  const eil = tr ? grafVaikai(tr.parentNode, "tr") : [], h = eil.findIndex(r => grafVaikai(r, "tc").some(c => /^Etapas$/.test(grafTxt(c))));
+  const po = []; for (let n = p && p.nextElementSibling; n && po.length < 4; n = n.nextElementSibling) if (!/^bookmark/.test(n.localName)) po.push(n);
+  return { d, p, sakinys: p && grafTxt(p), po, eilutes: h < 0 ? [] : eil.slice(h).map(r => grafVaikai(r, "tc").map(grafTxt)), trs: h < 0 ? [] : eil.slice(h) };
+}
+const grafRaudona = el => Array.from(el.getElementsByTagNameNS(NSW, "color")).filter(c => /^(FF0000|C00000|ED1C24)$/i.test(c.getAttribute("w:val") || "")).length;
+const grafAuto = () => W.__K.automatika.filter(a => a.kas === "Preliminarus pirkimo grafikas").map(a => [a.dok, a.veiksmas, a.kodel]);
+/* Palyginimas su forma be generavimo paso: nukrypimai ir grafiko skyriaus pakeitimai */
+async function grafBePaso(blob, vardas){
+  const B = await tikrink([new W.File([await keiskDocx(blob, () => {}, { bePaso: true })], vardas)]);
+  const x = B.palyg[B.docs[0].id];
+  return { forma: x.forma, pagal: x.pagal, nuk: x.rez.pakeitimai.filter(p => p.rusis === "nukrypimas"), pak: x.rez.pakeitimai };
+}
+/* Sakinys virš grafiko lentelės pakeistas (pridėtas žodis) - to pakeitimo rūšys lyginant be paso */
+async function grafSakinys(blob, re, vardas){
+  const keist = await keiskDocx(blob, (ps, doc) => {
+    const q = Array.from(doc.getElementsByTagNameNS(NSW, "p")).find(y => re.test(grafTxt(y))), t = q.getElementsByTagNameNS(NSW, "t");
+    t[t.length - 1].textContent += " Papildomas sakinys.";
+  }, { bePaso: true });
+  const B = await tikrink([new W.File([keist], vardas)]);
+  return B.palyg[B.docs[0].id].rez.pakeitimai.filter(p => /Papildomas sakinys/.test(p.dok)).map(p => p.rusis);
+}
+async function testaiGrafikas1109(){
+  dabartine = grupe("Pirkimo grafikas iš pirkimo kortelės į SPS (2026-11-09): LT ir LT/EN lentelė, tik vykdymo etapai, kitas būdas, be grafiko, palyginimas su forma");
+  await testas("AK LT: po sakinio - tuščia pastraipa ir lentelė „Eil. Nr. | Etapas | Planuojama data“ (tik vykdymo etapai, viena data arba „nuo - iki“); DXA, fixed, teksto plotis, antraštė F2F2F2 CLEAR, be raudonos ir žalios; sakinys nepakitęs; 2 žingsnis, 4 žingsnis, paketo patikra, Word struktūra; palyginimas su forma be paso - be nukrypimų dėl lentelės", async () => {
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "prekes", kortele: grafKortele(GRAF_AK) });
+    const x = docs.AK_LT_SPS, S = grafSkyrius(x.xml);
+    tiesa(S.p && /^12\.1\.\tToliau Tiekėjų informacijai pateikiamas preliminarus planuojamas Pirkimo procedūrų vykdymo grafikas, kurio atskiri etapai nebūtinai sutaps su faktinėmis datomis\. Tiekėjai visais atvejais turi vadovautis pirmiausia CVP IS ir Perkančiojo subjekto pranešimuose nustatytais terminais\.$/.test(tekstasSuTab(S.p)),
+      "sakinys nepakitęs: " + (S.p && tekstasSuTab(S.p)));
+    lygu([S.po[0].localName, grafTxt(S.po[0]), S.po[1].localName], ["p", "", "tbl"], "po sakinio - tuščia pastraipa ir lentelė");
+    const tbl = S.po[1], eil = grafVaikai(tbl, "tr").map(r => grafVaikai(r, "tc").map(grafTxt));
+    lygu(eil, [["Eil. Nr.", "Etapas", "Planuojama data"]].concat(GRAF_AK_TEKSTAI.map((e, k) => [(k + 1) + ".", e[0], e[2]])), "lentelės tekstas - tik vykdymo etapai");
+    const tblPr = grafVaikai(tbl, "tblPr")[0], gc = Array.from(tbl.getElementsByTagNameNS(NSW, "gridCol")).map(g => +g.getAttribute("w:w"));
+    const tw = grafVaikai(tblPr, "tblW")[0], lay = grafVaikai(tblPr, "tblLayout")[0];
+    lygu([lay && lay.getAttribute("w:type"), tw.getAttribute("w:type"), +tw.getAttribute("w:w"), gc.reduce((a, b) => a + b, 0), gc.length], ["fixed", "dxa", 9638, 9638, 3], "fixed ir DXA - teksto plotis");
+    tiesa(Array.from(tbl.getElementsByTagNameNS(NSW, "tcW")).every(w => w.getAttribute("w:type") === "dxa" && +w.getAttribute("w:w") > 0), "langelių pločiai DXA");
+    const shd = Array.from(tbl.getElementsByTagNameNS(NSW, "shd"));
+    lygu([shd.length, shd.every(s => s.getAttribute("w:val") === "clear" && s.getAttribute("w:fill") === "F2F2F2"), shd.every(s => s.parentNode.parentNode.parentNode === grafVaikai(tbl, "tr")[0])], [3, true, true], "antraštės eilutė - F2F2F2 CLEAR");
+    const hdr = grafVaikai(tbl, "tr")[0];
+    tiesa(grafVaikai(hdr, "trPr")[0].getElementsByTagNameNS(NSW, "tblHeader").length && Array.from(hdr.getElementsByTagNameNS(NSW, "r")).every(r => r.getElementsByTagNameNS(NSW, "b").length), "antraštė pusjuodė ir kartojama");
+    const spalvos = Array.from(tbl.getElementsByTagNameNS(NSW, "color")).map(c => c.getAttribute("w:val"));
+    lygu(spalvos, [], "lentelėje spalvos nenurodytos (be raudonos ir žalios)");
+    const sz = Array.from(tbl.getElementsByTagNameNS(NSW, "sz")).map(s => s.getAttribute("w:val")), rf = Array.from(tbl.getElementsByTagNameNS(NSW, "rFonts")).map(f => f.getAttribute("w:ascii"));
+    tiesa(sz.length && sz.every(v => v === "20") && rf.every(v => v === "Arial"), "šriftas kaip sakinio (Arial 10): " + [...new Set(sz)] + " " + [...new Set(rf)]);
+    tiesa(!/Pasirengimas pirkimui|Pirkimo dokumentų rengimas|2026-11-10|2026-11-30/.test(x.xml), "pasirengimo etapų dokumente nėra");
+    lygu(grafAuto(), [["AK_LT_SPS", "įterpiama lentelė - 4 vykdymo etapai, 2026-12-01 - 2027-03-05",
+      "iš pirkimo kortelės VPP-77 „" + PAVADINIMAS + " pirkimas“ (įrašytas 2026-11-09, 4 vykdymo etapai); pasirengimo etapai tiekėjams nerodomi"]], "2 žingsnis - „Išspręsta automatiškai“");
+    tiesa(/Preliminarus pirkimo grafikas:/.test(D.getElementById("lkAuto").textContent), "skiltyje „Išspręsta automatiškai“");
+    const p4 = D.getElementById("grafikasPatikra");
+    tiesa(p4 && p4.classList.contains("ok") && /Preliminarus pirkimo grafikas:.*iš pirkimo kortelės VPP-77 .*\(įrašytas 2026-11-09\) įterpti 4 vykdymo etapai, 2026-12-01 - 2027-03-05; pasirengimo etapai tiekėjams nerodomi\./.test(p4.textContent.replace(/\s+/g, " ")),
+      "4 žingsnis: " + (p4 && p4.textContent.replace(/\s+/g, " ")));
+    lygu(x.r.audit.raudonos.length, 4, "baigtumo patikra - kaip be grafiko (lentelė raudonų vietų nepalieka)");
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 60000);
+    const gp = W.__PP.p.patikros.find(y => y.id === "grafikas");
+    lygu([gp.busena, gp.pastaba, W.__PP.p.radiniai.some(r => r.id === "grafikas")], ["gerai", "įterptas iš pirkimo kortelės: 4 vykdymo etapai, 2026-12-01 - 2027-03-05", false], "paketo patikra - grafiko datos");
+    tiesa(!/Pirkimo grafikas/.test((D.getElementById("ppPridek") || { textContent: "" }).textContent) && !/Įterpkite pirkimo grafiką/.test(D.getElementById("kasToliau").textContent), "nebe „pridėsite patys“ ir ne „Kas toliau“");
+    lygu((await W.eval("GPDocx").wordPatikra(x.r.blob)).radiniai, [], "Word struktūra");
+    const be = await grafBePaso(x.r.blob, "AK LT SPS be paso.docx");
+    lygu([be.forma, be.pagal], ["AK_LT_SPS", "atpazinta"], "forma atpažinta be paso");
+    const lent = new Set(eil.flat().filter(t => t && !/^[\d.]+$/.test(t)));   // be numerių ir tuščių langelių - jų tekstas sutampa su kitomis pastraipomis
+    lygu(be.nuk.filter(p => lent.has(String(p.dok).trim()) || GRAF_SAK.test(p.forma + p.dok)).map(p => [p.op, p.forma, p.dok]), [], "be nukrypimų dėl grafiko lentelės");
+    const lentPak = be.pak.filter(p => lent.has(String(p.dok).trim()));
+    lygu([lentPak.length >= 11, lentPak.filter(p => p.rusis !== "uzpildyta").map(p => [p.op, p.rusis, p.dok])], [true, []], "lentelės pastraipos - „užpildyta“ (pridėta lentelė)");
+    lygu(await grafSakinys(x.r.blob, GRAF_SAK, "AK LT SPS pakeistas sakinys.docx"), ["nukrypimas"], "pakeistas sakinys virš lentelės - nukrypimas");
+  });
+  await testas("AK LT/EN: šablono pavyzdinės eilutės (2022 m. datos) pakeičiamos kortelės etapais - numeris, LT, EN (žodynas), data juodai; antraštė „Planuojama data / Planned date“; eilutės formatas - šablono; automatika nebesako „paliekama raudona“; palyginimas su forma be paso - be nukrypimų dėl grafiko", async () => {
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "prekes", pavEN: "Spare parts", kortele: grafKortele(GRAF_AK) });
+    const x = docs.AK_LTEN_SPS, S = grafSkyrius(x.xml);
+    lygu(S.eilutes, [["", "Etapas", "Stage", "Planuojama data / Planned date"]].concat(GRAF_AK_TEKSTAI.map((e, k) => ["12.1." + (k + 1) + ".", e[0], e[1], e[2]])), "grafiko eilutės");
+    tiesa(!/2022-0\d-\d\d|Preliminari pabaigos data|Reception of Tenders/.test(x.pars.join("\n")), "šablono pavyzdžių neliko (tekste; titulinio datos valdiklio atributas - ne tekstas)");
+    lygu(S.trs.map(grafRaudona), [0, 0, 0, 0, 0], "be raudonos");
+    tiesa(S.trs.slice(1).every(r => grafVaikai(r, "tc").length === 4 && Array.from(r.getElementsByTagNameNS(NSW, "tcW")).every(w => w.getAttribute("w:type") === "dxa")), "eilutės - šablono sandaros (4 langeliai, DXA)");
+    tiesa(!x.r.audit.raudonos.some(r => /^20\d\d-/.test(r.text)), "baigtumo patikroje - be pavyzdinių datų: " + x.r.audit.raudonos.map(r => r.text.slice(0, 20)));
+    tiesa(!W.__K.automatika.some(a => a.veiksmas === "paliekama raudona" && /^2022-/.test(a.kas)), "automatika - be „paliekama raudona“ grafiko datoms");
+    lygu(grafAuto().map(a => a[0] + " " + a[1]), ["AK_LTEN_SPS įterpiama lentelė - 4 vykdymo etapai, 2026-12-01 - 2027-03-05"], "2 žingsnis");
+    tiesa(/įterpti 4 vykdymo etapai, 2026-12-01 - 2027-03-05 \(vietoj šablono pavyzdinių eilučių\)/.test(D.getElementById("grafikasPatikra").textContent.replace(/\s+/g, " ")), "4 žingsnis");
+    lygu((await W.eval("GPDocx").wordPatikra(x.r.blob)).radiniai, [], "Word struktūra");
+    const be = await grafBePaso(x.r.blob, "AK LTEN SPS be paso.docx");
+    const lent = new Set(S.eilutes.flat().filter(t => t && !/^[\d.]+$/.test(t)));
+    const grafPak = be.pak.filter(p => lent.has(String(p.dok).trim()) || /^(2022-0\d-\d\d|Preliminari pabaigos data|Contract notice|Reception of Tenders|Examination of Tenders|Decision on the Successful)/.test(p.forma));
+    lygu([be.forma, be.nuk.filter(p => grafPak.includes(p)).map(p => [p.op, p.forma, p.dok])], ["AK_LTEN_SPS", []], "be nukrypimų dėl grafiko");
+    // pavyzdinė lentelė formoje - pildoma vieta (tikrinimas.js grafikoVieta): pakeistos, pašalintos ir pridėtos jos eilutės - „užpildyta“, ne „neprivaloma“
+    lygu([grafPak.length >= 8, grafPak.filter(p => p.rusis !== "uzpildyta" && !(p.rusis === "techninis" && p.poRusis === "numeracija")).map(p => [p.op, p.rusis, p.forma, p.dok])], [true, []], "grafiko pakeitimai - užpildyta vieta");
+  });
+  await testas("Skelbiamos derybos (S-SD) LT/EN: derybų etapai, nežinomas angliškas pavadinimas - lietuviškas ir 4 žingsnis tai sako, etapas be datų - neįtrauktas (pasakoma), tik „iki“ data; ND LT - lentelė po sakinio", async () => {
+    const G = { sudaryta: "2026-11-10T09:00:00.000Z", budas: "S-SD", etapai: [
+      { pavadinimas: "Pasirengimas pirkimui", stadija: "pasirengimas", nuo: "2026-11-10", iki: "2026-11-20" },
+      { pavadinimas: "Skelbimas apie pirkimą", stadija: "vykdymas", nuo: "2026-12-01", iki: "2026-12-01" },
+      { pavadinimas: "Pirminių pasiūlymų gavimas", stadija: "vykdymas", nuo: "2026-12-02", iki: "2026-12-16" },
+      { pavadinimas: "Pirminių pasiūlymų nagrinėjimas", stadija: "vykdymas", nuo: "", iki: "2026-12-23" },
+      { pavadinimas: "Derybos", stadija: "vykdymas", nuo: "2027-01-04", iki: "2027-01-08" },
+      { pavadinimas: "Techninis susitikimas", stadija: "vykdymas", nuo: "2027-01-11", iki: "2027-01-11" },
+      { pavadinimas: "Galutinių pasiūlymų nagrinėjimas", stadija: "vykdymas", nuo: "", iki: "" },
+      { pavadinimas: "Sprendimas dėl laimėjusio pasiūlymo ir sutarties sudarymas", stadija: "vykdymas", nuo: "2027-01-12", iki: "2027-02-01" } ] };
+    const docs = await generuokSu({ budas: "S-SD", kalba: "LT_EN", tipas: "paslaugos", pavEN: "Maintenance services", kortele: grafKortele(G, { budas: "S-SD", objektas: "paslaugos" }) });
+    const k = Object.keys(docs).find(n => /_SPS$/.test(n)), S = grafSkyrius(docs[k].xml);
+    lygu(S.eilutes.map(e => e.slice(1)), [["Etapas", "Stage", "Planuojama data / Planned date"], ["Skelbimas apie pirkimą", "Publication of the contract notice", "2026-12-01"],
+      ["Pirminių pasiūlymų gavimas", "Submission of initial tenders", "2026-12-02 - 2026-12-16"], ["Pirminių pasiūlymų nagrinėjimas", "Examination of initial tenders", "2026-12-23"],
+      ["Derybos", "Negotiations", "2027-01-04 - 2027-01-08"], ["Techninis susitikimas", "Techninis susitikimas", "2027-01-11"],
+      ["Sprendimas dėl laimėjusio pasiūlymo ir sutarties sudarymas", "Award decision and conclusion of the contract", "2027-01-12 - 2027-02-01"]], k + " eilutės");
+    tiesa(S.eilutes.slice(1).every((e, i) => new RegExp("^\\d+\\.\\d+\\." + (i + 1) + "\\.$").test(e[0])), "numeriai iš eilės: " + S.eilutes.map(e => e[0]));
+    const p4 = D.getElementById("grafikasPatikra").textContent.replace(/\s+/g, " ");
+    tiesa(D.getElementById("grafikasPatikra").classList.contains("no") && /įterpti 6 vykdymo etapai, 2026-12-01 - 2027-02-01/.test(p4) && /Be datų - neįtrauktas 1 vykdymo etapas\./.test(p4)
+      && /Angliškas pavadinimas nežinomas: „Techninis susitikimas“ - anglų stulpelyje palikta lietuviškai/.test(p4), "4 žingsnis: " + p4);
+    // SSD LT/EN šablone angliškas sakinys juodas (AK - raudonas): jis - ne grafiko pildoma vieta (dvikalbėse SPS šis skyrius ir taip laikomas
+    // neprivaloma formos dalimi), pakeistas - ne „užpildyta“
+    lygu(await grafSakinys(docs[k].r.blob, /^For the information of the Suppliers/, "SSD LTEN SPS pakeistas sakinys.docx"), ["neprivaloma"], "pakeistas angliškas sakinys - ne pildoma vieta");
+    salinkSenusRemelius();
+    const nd = await generuokSu({ budas: "S-ND", kalba: "LT", tipas: "paslaugos", kortele: grafKortele(Object.assign({}, G, { budas: "S-ND" }), { budas: "S-ND", objektas: "paslaugos" }) });
+    const N = grafSkyrius(nd.ND_LT_SPS.xml);
+    lygu([N.po[0].localName, N.po[1].localName, grafVaikai(N.po[1], "tr").length], ["p", "tbl", 7], "ND LT - lentelė po sakinio (antraštė ir 6 etapai)");
+  });
+  await testas("Kortelės grafikas kitam būdui: neįterpiama (LT - sakinys be lentelės, LT/EN - šablono pavyzdžiai lieka raudoni), 2 žingsnis ir 4 žingsnis sako kodėl abiem būdais žodžiais; paketo patikra - „pridėsite patys“, „Kas toliau“ - su pastaba", async () => {
+    const G = Object.assign({}, GRAF_AK, { budas: "T-SD" });
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "prekes", kortele: grafKortele(G) });
+    const S = grafSkyrius(docs.AK_LT_SPS.xml);
+    tiesa(!S.po.some(n => n.localName === "tbl") && !/Planuojama data/.test(docs.AK_LT_SPS.xml), "lentelė neįterpta");
+    const kodel = "pirkimo kortelės grafikas sudarytas būdui „" + W.GP_METHODS.label("T-SD") + "“, o 1 žingsnyje pasirinktas „" + W.GP_METHODS.label("T-AK") + "“ - kito būdo etapai ir datos šiam pirkimui netinka";
+    lygu(grafAuto(), [["AK_LT_SPS", "neįterpiamas", kodel + ". Sudarykite grafiką šiam būdui Pirkimų grafikų generatoriuje ir įrašykite į kortelę"]], "2 žingsnis");
+    const p4 = D.getElementById("grafikasPatikra");
+    tiesa(p4 && p4.classList.contains("no") && /Pirkimo grafikas neįterptas:.*grafikas sudarytas būdui „Skelbiamos derybos \(tarptautinis pirkimas\)“, o pirkimo sąlygos rengiamos būdui „Atviras konkursas \(tarptautinis pirkimas\)“/.test(p4.textContent.replace(/\s+/g, " ")),
+      "4 žingsnis: " + (p4 && p4.textContent.replace(/\s+/g, " ")));
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 60000);
+    tiesa(/Pirkimo grafikas - SPS nurodyta/.test(D.getElementById("ppPridek").textContent), "pridėsite patys - kaip iki tol");
+    tiesa(/Įterpkite pirkimo grafiką į SPS\..*Pirkimo kortelėje įrašytas grafikas sudarytas kitam būdui, todėl neįterptas/.test(D.getElementById("kasToliau").textContent.replace(/\s+/g, " ")), "„Kas toliau“: " + D.getElementById("kasToliau").textContent.replace(/\s+/g, " ").slice(0, 400));
+    salinkSenusRemelius();
+    const en = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "prekes", pavEN: "Spare parts", kortele: grafKortele(G) });
+    const E = grafSkyrius(en.AK_LTEN_SPS.xml);
+    lygu(E.eilutes.map(e => e[e.length - 1]), ["Preliminari pabaigos data / Preliminary end date", "2022-02-07", "2022-03-10", "2022-03-24", "2022-06-03"], "LT/EN - šablono eilutės lieka");
+    tiesa(E.trs.slice(1).every(r => grafRaudona(r) > 0), "pavyzdinės datos raudonos");
+    tiesa(/Pirkimo grafikas neįterptas/.test(D.getElementById("grafikasPatikra").textContent), "4 žingsnis LT/EN");
+  });
+  await testas("Kortelė be grafiko (ir grafikas be vykdymo etapų su datomis) - kaip iki tol: LT be lentelės, LT/EN - šablono pavyzdžiai raudoni ir „paliekama raudona“, be 4 žingsnio eilutės, paketo patikra - „pridėsite patys“", async () => {
+    const docs = await generuokSu({ budas: "T-AK", kalba: "LT", tipas: "prekes", kortele: grafKortele(null) });
+    tiesa(!grafSkyrius(docs.AK_LT_SPS.xml).po.some(n => n.localName === "tbl"), "LT - be lentelės");
+    lygu([grafAuto(), !!D.getElementById("grafikasPatikra")], [[], false], "be automatikos ir 4 žingsnio eilutės");
+    await kol(() => ppLauk() && W.__PP, "paketo patikra", 60000);
+    tiesa(/Pirkimo grafikas - SPS nurodyta/.test(D.getElementById("ppPridek").textContent) && /Įterpkite pirkimo grafiką į SPS\./.test(D.getElementById("kasToliau").textContent)
+      && !/kitam būdui/.test(D.getElementById("kasToliau").textContent), "pridėsite patys ir „Kas toliau“ - kaip iki tol");
+    salinkSenusRemelius();
+    const be = { sudaryta: "2026-11-09T08:00:00.000Z", budas: "T-AK", etapai: [{ pavadinimas: "Pasirengimas pirkimui", stadija: "pasirengimas", nuo: "2026-11-10", iki: "2026-11-20" },
+      { pavadinimas: "Skelbimas apie pirkimą", stadija: "vykdymas", nuo: "", iki: "" }] };
+    const en = await generuokSu({ budas: "T-AK", kalba: "LT_EN", tipas: "prekes", pavEN: "Spare parts", kortele: grafKortele(be) });
+    const E = grafSkyrius(en.AK_LTEN_SPS.xml);
+    lygu(E.eilutes.map(e => e[e.length - 1]), ["Preliminari pabaigos data / Preliminary end date", "2022-02-07", "2022-03-10", "2022-03-24", "2022-06-03"], "LT/EN - šablono eilutės");
+    lygu([grafAuto(), W.__K.automatika.filter(a => a.veiksmas === "paliekama raudona" && /^2022-/.test(a.kas)).length, !!D.getElementById("grafikasPatikra")], [[], 4, false], "kaip iki tol");
+  });
+  await testas("Kortelė pasirinkta, atsieta, vėl pasirinkta ir pakeista - 2 žingsnio automatika perskaičiuojama; pakeitus kortelės grafiką po generavimo - „Reikia pergeneruoti“ (pirkimo duomenys)", async () => {
+    const { k, api } = await korteleSp(grafKortele(GRAF_AK, { budas: "T-AK" }));
+    await iZingsni2();
+    lygu(grafAuto().map(a => a[1]), ["įterpiama lentelė - 4 vykdymo etapai, 2026-12-01 - 2027-03-05"], "pasirinkus");
+    api.atsiek(); await spRamu(() => W.__K);
+    lygu(grafAuto(), [], "atsiejus");
+    tiesa(await api.pasirink(k.id), "vėl pasirinkta"); await spRamu(() => W.__K);
+    lygu(grafAuto().length, 1, "vėl pasirinkus");
+    W.GP_KORTELE.issaugok(Object.assign({}, W.GP_KORTELE.gauk(k.id), { grafikas: Object.assign({}, GRAF_AK, { budas: "T-SD" }) })); api.atnaujink(); W.klausimynas(); await spRamu(() => W.__K);
+    lygu(grafAuto().map(a => a[1]), ["neįterpiamas"], "kortelės grafikas pakeistas kitam būdui");
+    // po generavimo pakeistas kortelės grafikas - pirkimo sąlygos pergeneruotinos
+    W.GP_KORTELE.issaugok(Object.assign({}, W.GP_KORTELE.gauk(k.id), { grafikas: GRAF_AK })); api.atnaujink(); W.klausimynas(); await spRamu(() => W.__K);
+    W.__GEN = { parasai: W.genParasai(), sutartis: false }; W.__R = W.__R || [];
+    lygu(W.pergeneruoti(), null, "ką tik sugeneruota");
+    const G2 = JSON.parse(JSON.stringify(GRAF_AK)); G2.etapai[3].iki = "2027-01-12";
+    W.GP_KORTELE.issaugok(Object.assign({}, W.GP_KORTELE.gauk(k.id), { grafikas: G2 }));
+    lygu(W.pergeneruoti(), ["bendri"], "grafiką pakeitus - pergeneruoti");
+  });
+}
+
 (async function(){
   // Sutarties parinkimo stebėjimo įrašai (2026-10-08), nustatymai ir juodraščiai (2026-10-15, gprocure.salygos.juodrastis.*) - tikri įrašai atkuriami, testų sukurti šalinami
   const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("gprocure.sutartys") === 0 || k.indexOf("gprocure.salygos") === 0);
@@ -17920,7 +18110,7 @@ async function testaiPaskelbti(){
        testaiSutartiesDI, testaiPaketoPatikra, testaiPriedoNuorodos, testaiEtapas0, testaiEtapas1, testaiDalys, testaiU4, testai1021, testaiD6,
        testaiD3, testaiD4b, testaiD5, testaiU8, testaiD4c, testaiFormuTaisykles, testaiTestuotojas7, testaiSprendimai1025, testaiPaskelbti],
       [testaiTestuotojas, testaiSprendimai1020, testaiTestuotojas2, testaiNacsaugBvpz, testaiTestuotojas3, testai1021b, testai1021c, testai1022a,
-       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiTestuotojas5, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b, testaiDiUzduotys1108, testaiKelias1109, testaiKorteleSprendimai1109]
+       testai1022b, testai1022c, testai1022d, testai1022e, testai1022f, testai1023, testaiD2, testaiTestuotojas5, testaiNdFormos, testaiAuditas1024, testaiTobulinimai1024, testaiTestuotojas6, testaiSprendimai1025b, testaiDiUzduotys1108, testaiKelias1109, testaiKorteleSprendimai1109, testaiGrafikas1109]
     ]);
     await GP_TESTU_DALYS.vykdyk(GRUPES);
     document.getElementById("busena").textContent =

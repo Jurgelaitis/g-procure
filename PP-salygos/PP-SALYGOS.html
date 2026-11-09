@@ -1994,6 +1994,62 @@ function pasirinktaKortele(){
 const KORT_KRITERIJUS = { kaina: 'kaina', kainos_kokybe: 'kks', sanaudos: 'sanaudos', sanaudu_kokybe: 'sks' };
 const KORT_TIKRINIMAS = { pasalinimas: 'pasalinimo', kvalifikacija: 'abu' };
 const kortelesKilme = k => `pagal pirkimo kortelę${k && k.numeris ? ' ' + k.numeris : ''}${k && k.pavadinimas ? ` „${k.pavadinimas}“` : ''}`;
+/* Pirkimo grafikas iš pirkimo kortelės (2026-11-09, naudotojo „Pradėkime nuo grafiko datų į kortelę ir SPS“; kelio per modulius patikra: grafiką
+   buvo galima tik atspausdinti, todėl SPS skyrius „Preliminarus pirkimo procedūrų vykdymo grafikas“ likdavo be datų). Pirkimų grafikų generatorius
+   grafiką įrašo į kortelę (GP_KORTELE.irasykGrafika, sandara - grafikoForma). Kai pasirinktos kortelės grafike yra vykdymo etapų su datomis, o jo
+   būdas sutampa su 1 žingsnio būdu, generuojant SPS po sakinio „Toliau Tiekėjų informacijai pateikiamas ...“ įterpiama lentelė (grafikasISps, 8e):
+   LT SPS - nauja (Eil. Nr. | Etapas | Planuojama data), LT/EN SPS - šablono pavyzdinės eilutės (2022 m. datos, kurias šablono autoriai prašo
+   pakeisti aktualiomis) pakeičiamos kortelės etapais (numeris | Etapas | Stage | data), datos stulpelio antraštė - „Planuojama data / Planned date“.
+   Tik vykdymo etapai (pasirengimas - vidinis, tiekėjams nerodomas), data - viena, kai nuo = iki, kitaip „nuo - iki“. Kortelės grafikas kitam būdui -
+   neįterpiama ir pasakoma (2 žingsnio „Išspręsta automatiškai“, 4 žingsnis); kortelė be grafiko - kaip iki tol. Sakinys ir kitas šablono tekstas
+   nekeičiami. Angliški etapų pavadinimai - GRAFIKO_EN; nežinomas - lietuviškas ir 4 žingsnis tai sako. */
+const GRAFIKO_SAKINYS = /^\s*(\d+(\.\d+)*\.?\s*)?Toliau Tiekėjų informacijai pateikiamas preliminarus planuojamas Pirkimo procedūrų vykdymo grafikas/;
+const GRAFIKO_EN = {
+  'skelbimas apie pirkimą': 'Publication of the contract notice', 'pasiūlymų gavimas': 'Submission of tenders',
+  'pasiūlymų nagrinėjimas': 'Examination of tenders', 'sprendimas dėl laimėjusio pasiūlymo ir sutarties sudarymas': 'Award decision and conclusion of the contract',
+  'paraiškų gavimas': 'Submission of requests to participate', 'paraiškų nagrinėjimas': 'Examination of requests to participate',
+  'paraiškų ir kvalifikacijos dokumentų gavimas': 'Submission of requests to participate and qualification documents',
+  'paraiškų nagrinėjimas ir kvalifikacijos vertinimas': 'Examination of requests to participate and qualification assessment',
+  'kvietimo pateikti pasiūlymus išsiuntimas': 'Dispatch of the invitation to submit tenders',
+  'kvietimas pateikti pasiūlymus ir pasiūlymų gavimas': 'Invitation to submit tenders and submission of tenders',
+  'kvietimo pateikti pirminius pasiūlymus rengimas': 'Preparation of the invitation to submit initial tenders', 'pirminių pasiūlymų gavimas': 'Submission of initial tenders',
+  'pirminių pasiūlymų nagrinėjimas': 'Examination of initial tenders', 'derybos': 'Negotiations',
+  'kvietimo pateikti galutinius pasiūlymus rengimas': 'Preparation of the invitation to submit final tenders',
+  'galutinių pasiūlymų rengimas ir gavimas': 'Preparation and submission of final tenders', 'galutinių pasiūlymų nagrinėjimas': 'Examination of final tenders',
+  'skelbimas apie dps sukūrimą': 'Publication of the notice on the establishment of the DPS',
+  'sprendimas dėl dps sukūrimo ir leidimas tiekėjams dalyvauti': 'Decision on the establishment of the DPS and admission of suppliers'
+};
+const grafikoEtapasEN = t => GRAFIKO_EN[String(t || '').trim().replace(/\s+/g, ' ').toLowerCase()] || null;
+const grafikoData = e => { const a = e.nuo || e.iki, b = e.iki || e.nuo; return a === b ? a : a + ' - ' + b; };
+const budoPav = id => (id && window.GP_METHODS && GP_METHODS.label(id)) || id || 'nenurodytas';
+/* Pasirinktos kortelės grafikas: null - kortelės nėra arba jos grafike nėra vykdymo etapų su datomis (kaip iki tol) */
+function korteleGrafikas(){
+  const k0 = pasirinktaKortele();
+  if (!k0 || !window.GP_KORTELE || !GP_KORTELE.grafikoForma) return null;
+  const k = GP_KORTELE.gauk(k0.id) || k0;                 // šviežia kopija - grafiką galėjo įrašyti generatorius kitame skirtuke
+  const g = GP_KORTELE.grafikoForma(k.grafikas);
+  if (!g) return null;
+  const vyk = g.etapai.filter(e => e.stadija === 'vykdymas'), etapai = vyk.filter(e => e.nuo || e.iki);
+  if (!etapai.length) return null;
+  const datos = etapai.flatMap(e => [e.nuo, e.iki]).filter(Boolean).sort(), m = metodas();
+  return { k, g, etapai, beDatu: vyk.length - etapai.length, nuo: datos[0], iki: datos[datos.length - 1], sudaryta: veiksmuData(g.sudaryta) || '',
+    budas: m ? m.id : '', sutampa: !!m && g.budas === m.id };
+}
+const grafikoKilme = G => `iš pirkimo kortelės${G.k.numeris ? ' ' + G.k.numeris : ''}${G.k.pavadinimas ? ` „${G.k.pavadinimas}“` : ''} (įrašytas ${G.sudaryta || 'data nenurodyta'}, ${lkSk(G.etapai.length, 'vykdymo etapas', 'vykdymo etapai', 'vykdymo etapų')})`;
+const grafikoKitasBudas = G => `pirkimo kortelės grafikas sudarytas būdui „${budoPav(G.g.budas)}“, o 1 žingsnyje pasirinktas „${budoPav(G.budas)}“ - kito būdo etapai ir datos šiam pirkimui netinka`;
+/* Žemėlapio pastraipa - SPS grafiko skyriuje po sakinio (LT/EN - šablono pavyzdinės lentelės eilutės) iki kito skyriaus */
+function grafikoSritis(Z, i){
+  const P = Z.paras || {}, s = Object.keys(P).map(Number).sort((a, b) => a - b).find(k => GRAFIKO_SAKINYS.test(String(P[k] || '')));
+  if (s == null || i <= s) return false;
+  for (let k = s + 1; k < i; k++) if (/^\s*(\d+\.|PRIEDAI)/.test(String(P[k] || '')) && !/^\s*\d+\.\d/.test(String(P[k] || ''))) return false;
+  return true;
+}
+const turiGrafikoSkyriu = d => Object.values((d.zemelapis || {}).paras || {}).some(t => GRAFIKO_SAKINYS.test(String(t || '')));
+/* Ar sugeneruotas paketas dar atitinka kortelės grafiką („Reikia pergeneruoti“) - būdas ir įterpiami etapai */
+function grafikoParasas(){
+  const G = korteleGrafikas();
+  return G ? [G.g.budas, G.sutampa, G.etapai.map(e => [e.pavadinimas, e.nuo, e.iki])] : null;
+}
 function kortelesKriterijus(){
   const k = pasirinktaKortele();
   return k && KORT_KRITERIJUS[k.kriterijus] ? { kodas: KORT_KRITERIJUS[k.kriterijus], k } : null;
@@ -4238,6 +4294,7 @@ function surinktiKlausimus(){
   const ZALM = ZAL_NAUDOJAMA ? zalModelis() : null;
   kvlTikrinimasTaikyk();             // kvalifikacijos klausimas pagal įkeltą lentelę - prieš kvalifikacijosLenteles() (0 etapas D2)
   korteleTikrinimasTaikyk();         // ir pagal pirkimo kortelę (2026-11-09) - lentelės atsakymo nekeičia
+  const GRAF = korteleGrafikas();     // pirkimo grafikas iš kortelės (2026-11-09) - SPS grafiko skyriui
   daliuTaikyk();                     // pirkimo objekto dalys iš kortelės ir dokumentų - prieš skaičiuojant, kurios pastraipos lieka (D1)
   // susietos grupės: sekančių grupių atsakymai nustatomi PRIEŠ skaičiuojant, kurios pastraipos ir laukai lieka
   const SUSIETOS = susietuGrupiuPlanas();
@@ -4825,7 +4882,8 @@ function surinktiKlausimus(){
           auto(trumpas, n.text, `įrašoma data „${$('#sdata').value || 'nenurodyta'}“`, 'pirkimo sąlygų data iš 1 žingsnio (šablone - pavyzdinė)');
         } else {
           ATS['N_' + r] = 'word';
-          auto(trumpas, n.text, 'paliekama raudona', 'šablono pavyzdinė data (pvz. grafike) - įrašykite tikrą Word\'e');
+          // LT/EN SPS grafiko pavyzdinės eilutės pakeičiamos pirkimo kortelės grafiku (2026-11-09, grafikasISps) - apie jas viena eilutė žemiau
+          if (!(GRAF && GRAF.sutampa && grafikoSritis(Z, n.i))) auto(trumpas, n.text, 'paliekama raudona', 'šablono pavyzdinė data (pvz. grafike) - įrašykite tikrą Word\'e');
         }
         return;
       }
@@ -5124,6 +5182,13 @@ function surinktiKlausimus(){
       K.alternatyvos[a.raktas] = { tekstas: a.tekstas, klausimas: a.klausimas, uzuomina: a.uzuomina, variantai: a.variantai,
         sakiniai: a.variantai.map((v, j) => a.sakinys(j)), vieta: { dok: d.trumpas, i: a.i }, dokumentai: [d.trumpas] };
     });
+  });
+
+  // Pirkimo grafikas iš kortelės (2026-11-09): SPS su grafiko skyriumi - įterpiama lentelė arba pasakoma, kodėl ne (kitas būdas)
+  if (GRAF) DOK.filter(d => !yraForma(d) && turiGrafikoSkyriu(d)).forEach(d => {
+    if (GRAF.sutampa) auto(d.trumpas, 'Preliminarus pirkimo grafikas', `įterpiama lentelė - ${lkSk(GRAF.etapai.length, 'vykdymo etapas', 'vykdymo etapai', 'vykdymo etapų')}, ${GRAF.nuo} - ${GRAF.iki}`,
+      grafikoKilme(GRAF) + '; pasirengimo etapai tiekėjams nerodomi');
+    else auto(d.trumpas, 'Preliminarus pirkimo grafikas', 'neįterpiamas', grafikoKitasBudas(GRAF) + '. Sudarykite grafiką šiam būdui Pirkimų grafikų generatoriuje ir įrašykite į kortelę');
   });
 
   siulymuPasas(K);
@@ -7569,7 +7634,8 @@ function kasToliau(){
       : `<b>Atsisiųskite dokumentus.</b>${atlikta ? ' <span class="rz rz--ok">atsisiųsta</span>' : ' Mygtukas „Atsisiųsti visus (ZIP)“ - žemiau, virš dokumentų lentelės. Sugeneruoti failai šioje naršyklėje neišsaugomi.'}`)}
     ${li(false, `<b>Peržiūrėkite dokumentus Word programoje.</b> ${vietu ? `Liko užbaigti ${lkSk(vietu, 'vietą', 'vietas', 'vietų')} (dokumentų: ${dok}) - jos paliktos raudonai, <a href="#baigtumas">sąrašas žemiau</a>.`
       : 'Automatinė patikra neužbaigtų vietų nerado - vis tiek peržiūrėkite visą tekstą.'}${G.patikrinkite ? ` Generuojant dar buvo ${lkSk(G.patikrinkite, 'vieta', 'vietos', 'vietų')} su žyma „Patikrinkite“ (siūlomos reikšmės, neužpildyti laukai ir kt.) - jos išvardytos 2 žingsnio skiltyje „Prieš generuojant“.` : ''}`)}
-    ${window.__PP && ppGrafikasPridedamas(window.__PP.p) ? li(false, '<b>Įterpkite pirkimo grafiką į SPS.</b> SPS nurodyta, kad grafikas pateikiamas, o šablone jo lentelės nėra - grafiką įterpkite, kai bus žinomos datos (<a href="../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html" target="_blank" rel="noopener">Pirkimų grafikų generatorius</a>).') : ''}
+    ${window.__PP && ppGrafikasPridedamas(window.__PP.p) ? li(false, '<b>Įterpkite pirkimo grafiką į SPS.</b> SPS nurodyta, kad grafikas pateikiamas, o šablone jo lentelės nėra - grafiką įterpkite, kai bus žinomos datos (<a href="../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html" target="_blank" rel="noopener">Pirkimų grafikų generatorius</a>).'
+      + (R.some(r => r.stats && r.stats.grafikas && r.stats.grafikas.priezastis === 'budas') ? ' Pirkimo kortelėje įrašytas grafikas sudarytas kitam būdui, todėl neįterptas (žr. „Pirkimo grafikas neįterptas“ žemiau).' : '')) : ''}
     ${R.some(r => r.pridesite) ? li(false, '<b>Pridėkite sutarties bendrąsias sąlygas.</b> AB „Amber Grid“ statybos rangos sutarties bendrosios sąlygos (SUT-35) - jų PDF dokumentas: generatorius jo nekuria. Pridėkite galiojančią redakciją kartu su kitais pirkimo dokumentais (specialiųjų sąlygų 10.2 priedas).') : ''}
     ${R.some(r => r.atideta) ? li(false, '<b>Parenkite sutarties projektą.</b> Jis atidėtas - pirkimo sąlygų SPS priedų sąraše jis nurodytas, todėl be jo paketas nebaigtas. Atsakykite į klausimus žingsnyje „3. Sutarties projektas“ ir spauskite „Generuoti pirkimo sąlygas ir sutarties projektą“ (įrašyti atsakymai išlieka).') : ''}
     ${ndRodomas() && /^nd_(neivykes|po_skelbiamu)$/.test(ndPagrindas() || '') ? li(false, `<b>Patikrinkite, ar pirminės pirkimo sąlygos iš esmės nepakeistos, ir praneškite ankstesnio pirkimo kandidatams ir dalyviams</b>, kad jų paraiškos ar pasiūlymai netinkami - tai būtina prieš taikant šį neskelbiamų derybų pagrindą (${esc(ndCit(ndPagrindas()))}).`) : ''}
@@ -8618,6 +8684,96 @@ function formosTaisykliuSprendimai(Z, REZ){
   });
   return out;
 }
+/* Pirkimo grafikas iš kortelės į SPS (2026-11-09; žr. korteleGrafikas). Grąžina, kas padaryta (4 žingsniui ir paketo patikrai):
+   { iterpta, priezastis: 'budas' | 'skyrius' | 'lentele', etapai: [{ lt, en, data, nuo, iki }], nuo, iki, beVertimo, beDatu, kortele, ... }.
+   LT: po sakinio - tuščia pastraipa (kaip po kitų skyrių sakinių) ir lentelė Eil. Nr. | Etapas | Planuojama data (antraštė F2F2F2 CLEAR,
+   pusjuodis, kartojama kiekviename puslapyje; šriftas - sakinio; pločiai DXA pagal teksto plotį, fixed). LT/EN: šablono lentelės eilutės
+   su pavyzdinėmis datomis pakeičiamos pirmosios eilutės kopijomis (formatas, rėmeliai, pločiai - šablono), datos juodos; antraštės
+   „Preliminari pabaigos data / Preliminary end date“ vietoje - „Planuojama data / Planned date“ (datos - ir laikotarpiai „nuo - iki“). */
+function grafikasISps(xd, G, dvikalbis){
+  const W = GPDocx.NS_W;
+  const out = { iterpta: false, kortele: G.k.numeris || '', pavadinimas: G.k.pavadinimas || '', sudaryta: G.sudaryta, budasK: G.g.budas, budas: G.budas, beDatu: G.beDatu, dvikalbis };
+  if (!G.sutampa) return Object.assign(out, { priezastis: 'budas' });
+  const p = GPDocx.els(xd, 'p').find(x => GRAFIKO_SAKINYS.test(GPDocx.paraText(x)));
+  if (!p) return Object.assign(out, { priezastis: 'skyrius' });
+  const eil = G.etapai.map(e => ({ lt: e.pavadinimas, en: grafikoEtapasEN(e.pavadinimas), data: grafikoData(e), nuo: e.nuo || e.iki, iki: e.iki || e.nuo }));
+  const kids = (n, t) => [...n.childNodes].filter(c => c.nodeType === 1 && c.localName === t);
+  const tekstas = n => GPDocx.els(n, 't').map(t => t.textContent).join('').trim();
+  const mk = (tag, at, ...ch) => { const e = xd.createElementNS(W, 'w:' + tag); Object.entries(at || {}).forEach(([k, v]) => e.setAttributeNS(W, 'w:' + k, String(v)));
+    ch.flat().forEach(c => { if (c) e.appendChild(c); }); return e; };
+  const beSpalvos = n => GPDocx.els(n, 'color').forEach(c => c.parentNode.removeChild(c));
+  let tr = p.parentNode; while (tr && tr.localName !== 'tr') tr = tr.parentNode;
+  if (tr){
+    // LT/EN: antraštė „Etapas | Stage | data“ ir po jos - pavyzdinės eilutės (numeris, LT, EN, data)
+    const rows = kids(tr.parentNode, 'tr'), i0 = rows.indexOf(tr);
+    let h = -1;
+    for (let j = i0 + 1; j < Math.min(rows.length, i0 + 4) && h < 0; j++){ const c = kids(rows[j], 'tc'); if (c.length >= 4 && /^etapas$/i.test(tekstas(c[1]))) h = j; }
+    const pvz = [];
+    for (let j = h + 1; h >= 0 && j < rows.length; j++){
+      const c = kids(rows[j], 'tc');
+      if (c.length < 4 || !/^(\d+(\.\d+)*\.?)?$/.test(tekstas(c[0])) || !/^(\d{4}-\d{2}-\d{2})?$/.test(tekstas(c[c.length - 1])) || !tekstas(c[1])) break;
+      pvz.push(rows[j]);
+    }
+    if (!pvz.length) return Object.assign(out, { priezastis: 'lentele' });
+    const langelis = (tc, t) => {
+      const ps = GPDocx.els(tc, 'p');
+      ps.slice(1).forEach(x => x.parentNode.removeChild(x));
+      if (!nustatykPastraiposTeksta(ps[0], t)){
+        const rpr = kids(kids(ps[0], 'pPr')[0] || mk('pPr'), 'rPr')[0];
+        ps[0].appendChild(mk('r', null, rpr ? rpr.cloneNode(true) : null, (() => { const x = mk('t'); x.setAttribute('xml:space', 'preserve'); x.textContent = t; return x; })()));
+      }
+    };
+    // antraštė - datos stulpelis: „Planuojama data / Planned date“ (du runai, kaip šablone - LT ir EN), juodai
+    const ht = kids(rows[h], 'tc'), hd = ht[ht.length - 1], hts = GPDocx.els(hd, 't');
+    if (hts.length >= 2 && /\/\s*$/.test(hts[0].textContent)){ hts[0].textContent = 'Planuojama data / '; hts[1].textContent = 'Planned date'; hts.slice(2).forEach(x => { x.textContent = ''; }); }
+    else langelis(hd, 'Planuojama data / Planned date');
+    beSpalvos(hd);
+    const nr0 = tekstas(kids(pvz[0], 'tc')[0]), baze = nr0.replace(/\d+\.?$/, '');
+    eil.forEach((x, k) => {
+      const n = pvz[0].cloneNode(true); valykKlona(n);
+      const c = kids(n, 'tc');
+      langelis(c[0], nr0 ? baze + (k + 1) + '.' : '');
+      langelis(c[1], x.lt); langelis(c[2], x.en || x.lt); langelis(c[c.length - 1], x.data);
+      beSpalvos(c[c.length - 1]);
+      pvz[0].parentNode.insertBefore(n, pvz[0]);
+    });
+    pvz.forEach(r => r.parentNode.removeChild(r));
+  } else {
+    // LT: nauja lentelė po sakinio. Teksto plotis - artimiausio po sakinio sectPr (stačias A4 - 9638 DXA)
+    const sp = GPDocx.els(xd, 'sectPr').find(x => p.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const at = (n, a) => n ? +(n.getAttributeNS(W, a) || n.getAttribute('w:' + a) || 0) : 0;
+    const pg = sp && kids(sp, 'pgSz')[0], mr = sp && kids(sp, 'pgMar')[0];
+    const plotis = pg && mr && at(pg, 'w') - at(mr, 'left') - at(mr, 'right') > 4000 ? at(pg, 'w') - at(mr, 'left') - at(mr, 'right') : 9638;
+    const PL = [1134, 0, 2835]; PL[1] = plotis - PL[0] - PL[2];
+    // šriftas - sakinio pirmo runo su tekstu (be spalvos, pusjuodžio, kursyvo, pabraukimo)
+    const r0 = GPDocx.els(p, 'r').find(r => GPDocx.els(r, 't').some(t => t.textContent.trim())), rp0 = r0 && kids(r0, 'rPr')[0];
+    const rpr = pusjuodis => {
+      const r = rp0 ? rp0.cloneNode(true) : mk('rPr', null, mk('rFonts', { ascii: 'Arial', hAnsi: 'Arial', cs: 'Arial' }), mk('sz', { val: 20 }), mk('szCs', { val: 20 }));
+      [...r.childNodes].filter(x => x.nodeType === 1 && /^(rStyle|b|bCs|i|iCs|caps|smallCaps|strike|dstrike|vanish|color|highlight|u|shd|effect|vertAlign)$/.test(x.localName)).forEach(x => r.removeChild(x));
+      if (pusjuodis){ const po = [...r.childNodes].find(x => x.nodeType === 1 && x.localName !== 'rFonts'); r.insertBefore(mk('b'), po || null); r.insertBefore(mk('bCs'), po || null); }
+      return r;
+    };
+    const pastraipa = (t, pusjuodis) => { const x = mk('t'); x.setAttribute('xml:space', 'preserve'); x.textContent = t;
+      return mk('p', null, mk('pPr', null, pusjuodis ? mk('keepNext') : null, mk('spacing', { before: 40, after: 40 }), mk('ind', { left: 0, firstLine: 0 }), mk('jc', { val: 'left' }), rpr(pusjuodis)),
+        mk('r', null, rpr(pusjuodis), x)); };
+    const langelis = (t, j, antraste) => mk('tc', null, mk('tcPr', null, mk('tcW', { w: PL[j], type: 'dxa' }), antraste ? mk('shd', { val: 'clear', color: 'auto', fill: 'F2F2F2' }) : null,
+      mk('vAlign', { val: antraste ? 'center' : 'top' })), pastraipa(t, antraste));
+    const krastas = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(k => mk(k, { val: 'single', sz: 4, space: 0, color: 'auto' }));
+    const tbl = mk('tbl', null,
+      mk('tblPr', null, mk('tblW', { w: plotis, type: 'dxa' }), mk('tblInd', { w: 0, type: 'dxa' }), mk('tblBorders', null, krastas), mk('tblLayout', { type: 'fixed' }),
+        mk('tblCellMar', null, mk('top', { w: 0, type: 'dxa' }), mk('left', { w: 108, type: 'dxa' }), mk('bottom', { w: 0, type: 'dxa' }), mk('right', { w: 108, type: 'dxa' }))),
+      mk('tblGrid', null, PL.map(w => mk('gridCol', { w }))),
+      mk('tr', null, mk('trPr', null, mk('cantSplit'), mk('tblHeader')), ['Eil. Nr.', 'Etapas', 'Planuojama data'].map((t, j) => langelis(t, j, true))),
+      eil.map((x, k) => mk('tr', null, mk('trPr', null, mk('cantSplit')), [(k + 1) + '.', x.lt, x.data].map((t, j) => langelis(t, j, false)))));
+    // tarpas tarp sakinio ir lentelės - tuščia pastraipa (po sakinio šablone tokių yra; jos lieka po lentele)
+    let po = p.nextSibling; while (po && po.nodeType === 1 && /^bookmark(Start|End)$/.test(po.localName)) po = po.nextSibling;
+    const tarpas = po && po.nodeType === 1 && po.localName === 'p' && !tekstas(po) && !GPDocx.els(po, 'sectPr').length ? po.cloneNode(true) : mk('p', null, mk('pPr', null, mk('spacing', { before: 0, after: 0 })));
+    valykKlona(tarpas);
+    p.parentNode.insertBefore(tarpas, p.nextSibling);
+    tarpas.parentNode.insertBefore(tbl, tarpas.nextSibling);
+  }
+  return Object.assign(out, { iterpta: true, etapai: eil, nuo: G.nuo, iki: G.iki, beVertimo: dvikalbis ? eil.filter(x => !x.en).map(x => x.lt) : [] });
+}
 async function generuotiViena(d, REZ){
   const Z = d.zemelapis;
   const forma = yraForma(d);
@@ -9231,6 +9387,16 @@ async function generuotiViena(d, REZ){
     }
   }
 
+  // 8e. PIRKIMO GRAFIKAS IŠ PIRKIMO KORTELĖS (2026-11-09): SPS skyriuje „Preliminarus pirkimo procedūrų vykdymo grafikas“ - kortelės vykdymo etapai
+  //     (LT - nauja lentelė po sakinio, LT/EN - šablono pavyzdinės eilutės pakeičiamos). Prieš numeraciją (LT/EN eilučių numeriai - kaip punktų)
+  //     ir lentelių tvarkymą (GPLent - pločiai, fixed); kortelės grafikas kitam būdui - neįterpiama, 4 žingsnis pasako kodėl
+  let grafikas = null;
+  if (!forma && dokTipas(d) === 'SPS'){
+    const G = korteleGrafikas();
+    if (G) grafikas = grafikasISps(doc.parts['word/document.xml'], G, Z.kalba === 'LTEN');
+    if (grafikas && grafikas.iterpta) doc.log.push('pirkimo grafikas: ' + grafikas.etapai.length + ' etap. iš kortelės');
+  }
+
   // 9. LITGRID logotipas pirmojo puslapio virsuje (pastaba Nr. 5). Dedamas
   //    PASKUTINIS - jis pridedamas naujas paragrafas, o visos teksto operacijos
   //    jau ivykdytos pries tai. 150x55 pt (islaiko 2,72:1) -> EMU.
@@ -9343,7 +9509,7 @@ async function generuotiViena(d, REZ){
            atskirta: gulsti && { numeriai: gulsti.numeriai, turinys: gulsti.turinys, nuorodos: gulsti.nuorodos },
            stats:{ trinta:nt, juodinta:nj, pildyta, intTrinta, intTeksto, lenteliu:lenteliuIstrinta(), prieduIstrinta, prieduNr: prNr, juodosAlt, eiluciuIstrinta:ntEil, sukurtaDaliu:dautaDaliu, sukurtaKvalif, sukurtaZal, sukurtaKainu, numeriuPerkelta, logotipas: logoSablone ? 'sablono' : (logoDetas ? 'iterptas' : 'nera'),
                    numeracija: numeracija.numeriu, numeriuPataisyta: numeracija.pakeitimai.length, nuorodosTekstu, salintos, salintiAtsakymu, skyriausNr, tusciPuslapiai, turinioEilutes, sulietiPunktai, logoIdetinis, pirmasPsl, pasoPastraipu, esminiu,
-                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, kainuLentele: kainos, antrasciuNr, formosAntraste: formosNr, punktuNuorodos: punktuNuor, lenteliuNr: lentNr, spec37, kvalPunktai, antrastesLent: antrLent.dalys, eilNuorodos, raudAlt, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
+                   kvalIsDokumento: kvalIsDok, neVisaPasalinta, zalIsDokumento: zalIsDok, kainuLentele: kainos, grafikas, antrasciuNr, formosAntraste: formosNr, punktuNuorodos: punktuNuor, lenteliuNr: lentNr, spec37, kvalPunktai, antrastesLent: antrLent.dalys, eilNuorodos, raudAlt, apzDatos, pavyzdziaiLiko, uztIrasyta, eilNumeriai,
                    formosNumeracija: formosNum, formosTaisykles, mvpPirminis: mvpPirm, ukioForma,
                    esminiuNuorodos: esminiuNuor.map(x => ({ buvo: x.buvo, tapo: skyriausNr ? x.tapo.split(SKYRIAUS_ZYMA).join(skyriausNr) : x.tapo.split(SKYRIAUS_ZYMA).join('___') })) } };
 }
@@ -9981,6 +10147,22 @@ function rodykRezultata(rez){
       k.patvirtinta ? '' : ' <b>Perkėlimas nepatvirtintas</b> - peržiūrėkite lentelę Word programoje.'}${
       k.beVertimo ? ` <b>Angliškas tekstas</b> ${k.beVertimo} langeliuose neįrašytas - raudonas nurodymas „${esc(L.VERTIMO_ZYMA)}“.` : ''}</div>`;
   });
+  /* Pirkimo grafikas iš pirkimo kortelės (2026-11-09) - įterpta (kiek etapų, nuo - iki) arba kodėl ne */
+  rez.filter(r => r.stats && r.stats.grafikas).forEach(r => {
+    const g = r.stats.grafikas, kort = `pirkimo kortelės${g.kortele ? ' ' + esc(g.kortele) : ''}${g.pavadinimas ? ` „${esc(g.pavadinimas)}“` : ''}`;
+    if (!g.iterpta){
+      h += `<div class="audit no" id="grafikasPatikra" style="margin-top:10px"><b>Pirkimo grafikas neįterptas:</b> ${esc(dokumentoPavadinimas(r.d))} - ${g.priezastis === 'budas'
+        ? `${kort} grafikas sudarytas būdui „${esc(budoPav(g.budasK))}“, o pirkimo sąlygos rengiamos būdui „${esc(budoPav(g.budas))}“ - kito būdo etapai ir datos šiam pirkimui netinka.
+          Sudarykite grafiką šiam būdui <a href="../PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html" target="_blank" rel="noopener">Pirkimų grafikų generatoriuje</a>, įrašykite į kortelę ir sugeneruokite iš naujo arba įterpkite grafiką Word programoje.`
+        : g.priezastis === 'skyrius' ? 'šiame šablone skyriaus „Preliminarus pirkimo procedūrų vykdymo grafikas“ nėra.'
+        : 'grafiko lentelės šablone neradome - įterpkite grafiką Word programoje.'}</div>`;
+      return;
+    }
+    h += `<div class="audit ${g.beVertimo.length ? 'no' : 'ok'}" id="grafikasPatikra" style="margin-top:10px"><b>Preliminarus pirkimo grafikas:</b> ${esc(dokumentoPavadinimas(r.d))} -
+      iš ${kort} (įrašytas ${esc(g.sudaryta || 'data nenurodyta')}) ${lkForma(g.etapai.length, 'įterptas', 'įterpti', 'įterpta')} ${lkSk(g.etapai.length, 'vykdymo etapas', 'vykdymo etapai', 'vykdymo etapų')}, ${esc(g.nuo)} - ${esc(g.iki)}${g.dvikalbis ? ' (vietoj šablono pavyzdinių eilučių)' : ''}; pasirengimo etapai tiekėjams nerodomi.${
+      g.beDatu ? ` Be datų - ${lkForma(g.beDatu, 'neįtrauktas', 'neįtraukti', 'neįtraukta')} ${lkSk(g.beDatu, 'vykdymo etapas', 'vykdymo etapai', 'vykdymo etapų')}.` : ''}${
+      g.beVertimo.length ? ` <b>Angliškas pavadinimas nežinomas:</b> ${g.beVertimo.map(x => `„${esc(x)}“`).join(', ')} - anglų stulpelyje palikta lietuviškai, išverskite Word programoje.` : ''}</div>`;
+  });
   const nvp = rez.filter(r => r.stats && r.stats.neVisaPasalinta);
   if (nvp.length) h += `<div class="audit ok" style="margin-top:10px">SPS 2 lentelėje „Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi“ pašalinta kartu su tuščia eilute
     (${nvp.map(r => esc(dokTrumpas(r.d.trumpas))).join(', ')}) - nuostata netaikoma, todėl antraštė be turinio dokumente neliko.</div>`;
@@ -10473,6 +10655,7 @@ async function paketoPatikra(rez, vardai){
       // Word failų struktūra (2026-10-23) - kaip ją skaitytų Word
       const ws = await wordStruktura(rez, vardai);
       p.radiniai.push(...ws.radiniai); p.patikros.push(ws.patikra);
+      grafikoPatikra(p, rez, vardai);              // pirkimo grafikas iš kortelės (2026-11-09) - tikros datos, ne šablono pavyzdžiai
       return { p, failai };
     } });
   if (mano !== PP_EIGA || !v.ok) return;
@@ -10495,6 +10678,27 @@ const PP_LYGIAI = { kliutis: ['Kliūtis', 'kl'], tikrinti: ['Patikrinkite', 'war
 function ppGeneruojamas(pav){
   const n = norm(pav || '');
   return (typeof prieduTinka === 'function' ? prieduTinka(seima()) : []).some(x => { const pr = PP_PRIEDAI.find(([a]) => a.test('_' + x.id)); return pr && pr[1].test(n); });
+}
+/* Pirkimo grafikas iš pirkimo kortelės (2026-11-09): įterpto grafiko datos - tikros, ne šablono pavyzdžiai, ir jo nebereikia pridėti patiems.
+   GP_PARENGTIS grafiką skaito tik iš eilučių su viena data (laikotarpis „nuo - iki“ jai nėra data), o sugeneruoto paketo datas laiko šablono
+   pavyzdžiais - todėl patikra „SPS grafiko datų tvarka“ čia atliekama pagal įterptus etapus: kiekvieno pradžia - ne anksčiau už ankstesnio. */
+function grafikoPatikra(p, rez, vardai){
+  const gi = rez.map((r, i) => ({ r, i })).filter(x => x.r.stats && x.r.stats.grafikas && x.r.stats.grafikas.iterpta);
+  if (!gi.length) return;
+  const blogi = [];
+  gi.forEach(({ r, i }) => {
+    const e = r.stats.grafikas.etapai;
+    for (let k = 1; k < e.length; k++) if (e[k].nuo < e[k - 1].nuo){ blogi.push({ failas: vardai[i] || r.d.trumpas, a: e[k], b: e[k - 1] }); break; }
+  });
+  p.radiniai = p.radiniai.filter(x => x.id !== 'grafikas');
+  blogi.forEach(b => p.radiniai.push({ id: 'grafikas', grupe: 'aiskumas', lygis: 'tikrinti',
+    tekstas: `SPS grafiko datos ne iš eilės: „${b.a.lt}“ (${b.a.data}) po „${b.b.lt}“ (${b.b.data}). Patikrinkite grafiką pirkimo kortelėje (Pirkimų grafikų generatoriuje).`,
+    vietos: [{ failas: b.failas, vieta: '', citata: '' }] }));
+  const g = gi[0].r.stats.grafikas;
+  const pat = { id: 'grafikas', grupe: 'aiskumas', busena: blogi.length ? 'radinys' : 'gerai',
+    pastaba: `įterptas iš pirkimo kortelės: ${lkSk(g.etapai.length, 'vykdymo etapas', 'vykdymo etapai', 'vykdymo etapų')}, ${g.nuo} - ${g.iki}` };
+  const x = p.patikros.find(y => y.id === 'grafikas');
+  if (x) Object.assign(x, pat); else p.patikros.push(Object.assign({ pav: 'SPS grafiko datų tvarka' }, pat));
 }
 const GRAFIKO_PRIDEK = 'Pirkimo grafikas - SPS nurodyta, kad jis pateikiamas, o šablone grafiko lentelės nėra: įterpkite grafiką į SPS, kai bus žinomos datos (galite parengti Pirkimų grafikų generatoriumi).';
 const ppGrafikasPridedamas = p => (p && p.patikros || []).find(x => x.id === 'grafikas' && x.busena === 'nepatikrinta' && /grafiko nerasta/.test(x.pastaba || '')) || null;
@@ -12973,7 +13177,8 @@ async function atkurkJuodrasti(r){
 // Juodraščio palyginimui su sugeneruotu paketu: bendri duomenys (1 žingsnis, kortelė, sutarties strategija), pirkimo sąlygų ir sutarties atsakymai
 function genParasai(){
   const D = surinkJuodrasti();
-  return { bendri: JSON.stringify([D.z1, D.kortele, D.sb]), salygos: JSON.stringify(D.s2), sutartis: JSON.stringify(D.sf) };
+  // pirkimo grafikas iš kortelės (2026-11-09): jį pakeitus (Pirkimų grafikų generatorius kitame skirtuke) - pirkimo sąlygos pergeneruotinos
+  return { bendri: JSON.stringify([D.z1, D.kortele, D.sb, grafikoParasas()]), salygos: JSON.stringify(D.s2), sutartis: JSON.stringify(D.sf) };
 }
 /* Ar sugeneruotas paketas dar atitinka atsakymus: null - atitinka; kitaip - kas pakeista ('bendri', 'salygos', 'sutartis') */
 function pergeneruoti(){
