@@ -1058,6 +1058,91 @@ async function testaiEnPavadinimas1106(){
     lygu([r.uzkl.length, /Pirma įrašykite pirkimo pavadinimą lietuviškai/.test(r.D.getElementById("enPavBusena").textContent), r.sub("A").textContent], [0, true, "(Procurement title)"], "be lietuviško pavadinimo");
   });
 }
+/* Grafikas į pirkimo kortelę (2026-11-09, naudotojo „Pradėkime nuo grafiko datų į kortelę ir SPS“): įrašoma tik paspaudus ir patvirtinus -
+   visi etapai su datomis, planuojama paskelbimo data (skelbiamam būdui - skelbimo etapo pabaiga) ir sutarties sudarymo data (paskutinio
+   etapo pabaiga); kiti kortelės laukai nekeičiami; plano sutarties data lyginama su grafiku. Kortelės - tik atmintyje (?saugykla=testine). */
+async function testaiGrafikasKortelei1109(){
+  grupe("Grafikas į pirkimo kortelę (2026-11-09)");
+  const PLANO = { pavadinimas: "Skirstyklos remonto darbų pirkimas", vykdytojas: "litgrid", rezimas: "PI", budas: "T-AK", verte: 900000,
+                  pradzia: "2026-10-05", sutartiesData: "2027-05-03", iniciatorius: "Jonas Jonaitis" };
+  const pasirink = async (W, laukai) => {
+    const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(laukai)).kortele;
+    const api = W.eval("KORTELE"); api.atnaujink(); tiesa(await api.pasirink(k.id), "pasirinkta"); return k;
+  };
+  /* Nepriklausomas skaičiavimas: grupių datos iš modulio grafiko (computeSchedule tikrinamas kitose grupėse) - čia tikrinama, kas įrašoma */
+  const isoW = (W, d) => d ? W.GP_WORKDAYS.fmtDate(d) : "";
+  const nust = (W, D, id, v) => { const el = D.getElementById(id); el.value = v; el.dispatchEvent(new W.Event("change", { bubbles: true })); };   // šiame rėmelyje (bendra pagalbinė - pagrindiniame)
+
+  await testas("Plano sutarties data lyginama su grafiku; patvirtinus įrašomi visi etapai, paskelbimo ir sutarties data, kiti laukai nekeičiami", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const k = await pasirink(W, PLANO);
+      const sched = W.eval("computeSchedule()");
+      tiesa(sched.length > 3, "grafikas sudarytas");
+      const pab = isoW(W, [...sched].reverse().find(r => r.end).end);
+      const skelb = sched.find(r => r.group.stage === "vykdymas" && /^Skelbimas apie pirkimą/.test(r.group.name));
+      tiesa(skelb && skelb.end, "skelbimo etapas");
+      const zin = D.getElementById("kortele-grafikas");
+      tiesa(zin.textContent.includes("Kortelėje planuojama sutarties sudarymo data - 2027-05-03") && zin.textContent.includes("pagal šį grafiką - " + pab), zin.textContent);
+      lygu([zin.getAttribute("role"), D.getElementById("btn-kortele").getAttribute("aria-describedby")], ["status", "kortele-grafikas"], "pranešimas susietas su mygtuku");
+
+      let klausimas = "";
+      W.confirm = m => { klausimas = String(m); return true; };
+      D.getElementById("btn-kortele").click();
+      tiesa(klausimas.includes("„" + PLANO.pavadinimas + "“") && klausimas.includes("planuojama sutarties sudarymo data: 2027-05-03 → " + pab)
+            && klausimas.includes("planuojama paskelbimo data: neįrašyta → " + isoW(W, skelb.end)) && klausimas.includes("Kiti kortelės laukai nekeičiami"), klausimas);
+      const n = W.GP_KORTELE.gauk(k.id);
+      lygu([n.sutartiesData, n.paskelbimas], [pab, isoW(W, skelb.end)], "datos");
+      lygu([n.pavadinimas, n.verte, n.budas, n.pradzia, n.iniciatorius, n.pasiulymuTerminas], [PLANO.pavadinimas, 900000, "T-AK", "2026-10-05", "Jonas Jonaitis", ""], "kiti laukai nepakeisti");
+      const g = n.grafikas;
+      lygu([g.budas, g.pradzia, g.metai, g.etapai.length], ["T-AK", "2026-10-05", Number(D.getElementById("f-metai").value), sched.length], "grafiko antraštė");
+      lygu(g.etapai.map(e => e.pavadinimas), sched.map(r => r.group.name), "etapai ta pačia tvarka");
+      lygu(g.etapai.map(e => [e.stadija, e.nuo, e.iki]), sched.map(r => [r.group.stage, isoW(W, r.start), isoW(W, r.end)]), "stadijos ir datos");
+      tiesa(g.etapai.every(e => e.kodas) && g.etapai.some(e => e.stadija === "pasirengimas") && g.etapai.some(e => e.stadija === "vykdymas"), "kodai ir abi stadijos");
+      tiesa(/Grafikas įrašytas į kortelę „Skirstyklos remonto darbų pirkimas“ \(\d+ etap(as|ai|ų), iš jų vykdymo - \d+\)/.test(zin.textContent), zin.textContent);
+      W.eval("refreshPreview()");
+      tiesa(!/Kortelėje planuojama sutarties sudarymo data/.test(zin.textContent) && /Kortelėje jau yra grafikas, įrašytas \d{4}-\d{2}-\d{2} \(\d+ etapai \(/.test(zin.textContent), "po įrašymo datos sutampa: " + zin.textContent);
+    } finally { f.remove(); }
+  });
+
+  await testas("Atšaukus klausimą kortelė nekeičiama; be kortelės ar be būdo ir datos - pasakoma, ką padaryti", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const zin = D.getElementById("kortele-grafikas");
+      D.getElementById("btn-kortele").click();
+      tiesa(/pasirinkite pirkimą/.test(zin.textContent), "be kortelės: " + zin.textContent);
+      lygu(W.__dialogai.length, 0, "be kortelės neklausiama");
+      const k = await pasirink(W, Object.assign({}, PLANO, { budas: "", pradzia: "" }));
+      nust(W, D, "f-pradzia", "");
+      D.getElementById("btn-kortele").click();
+      tiesa(/reikia pirkimo būdo ir pradžios datos/.test(zin.textContent), zin.textContent);
+      nust(W, D, "f-budas", "T-AK"); nust(W, D, "f-pradzia", "2026-10-05");
+      D.getElementById("btn-kortele").click();          // dialogai(): confirm - „Atšaukti“
+      tiesa(W.__dialogai.length === 1 && /Įrašyti į pirkimo kortelę/.test(W.__dialogai[0]), "paklausta: " + JSON.stringify(W.__dialogai) + " | " + zin.textContent);
+      const n = W.GP_KORTELE.gauk(k.id);
+      lygu([n.grafikas, n.sutartiesData, n.paskelbimas], [null, "2027-05-03", ""], "atšaukus - nepakeista");
+    } finally { f.remove(); }
+  });
+
+  await testas("Neskelbiamas būdas (S-ND): paskelbimo data neįrašoma; įrašyta kortelės paskelbimo data lieka", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const k = await pasirink(W, Object.assign({}, PLANO, { budas: "S-ND", paskelbimas: "2026-11-02", sutartiesData: "" }));
+      W.confirm = m => { W.__k = String(m); return true; };
+      D.getElementById("btn-kortele").click();
+      tiesa(!/paskelbimo data/.test(W.__k) && /sutarties sudarymo data: neįrašyta →/.test(W.__k), W.__k);
+      const n = W.GP_KORTELE.gauk(k.id);
+      lygu([n.paskelbimas, n.grafikas.budas, /^\d{4}-\d{2}-\d{2}$/.test(n.sutartiesData)], ["2026-11-02", "S-ND", true], "paskelbimo data nepakeista");
+    } finally { f.remove(); }
+  });
+
+  await testas("Pranešimas spausdinant nerodomas, tuščias - paslėptas", async () => {
+    const css = [...D.querySelectorAll("style")].map(s => s.textContent).join("\n");
+    tiesa(/\.kortele-grafikas:empty\{display:none\}/.test(css), "tuščias paslėptas");
+    tiesa(/@media print\{[\s\S]*?\.kortele-grafikas,/.test(css), "spausdinant nerodomas");
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1072,6 +1157,7 @@ async function testaiEnPavadinimas1106(){
     await testaiTrukmes1027();
     await testaiPastabos1028();
     await testaiEnPavadinimas1106();
+    await testaiGrafikasKortelei1109();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
