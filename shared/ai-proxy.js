@@ -118,9 +118,14 @@
      neapdorotas atsakymo kunas. Nuo tada, kai zinutes rasomos zmogui, to teksto ten nebera -
      tad Anthropic 529 „overloaded_error" butu nustojes kartotis. Statusas patikimesnis:
      jis nepriklauso nuo to, kaip suformuluota zinute. */
-  function isRetryable(result) {
+  /* 502 / 504 po ilgo laukimo - serverio ar tarpinio serverio laiko riba (G-Procure serveris DI atsakymo laukia iki 180 s): DI atsakymą galėjo
+     ir parengti, todėl identiška užklausa nekartojama - kitaip mokama du kartus ir laukiama dar 3 min. (pilotas su tikru pirkimu 2026-11-10:
+     PP-ts TS patikra po ~182 s gavo 502 ir buvo pakartota). Greita 502 / 503 / 504 (perkraunamas serveris) - kartojama kaip iki tol. */
+  var NUSTATYMAI = { ilgasBandymasMs: 60000 };
+  function isRetryable(result, trukmeMs) {
     if (!result || result.ok) return false;
     if (result.status === 429) return true;      // per daug uzklausu
+    if ((result.status === 502 || result.status === 504) && trukmeMs >= NUSTATYMAI.ilgasBandymasMs) return false;
     if (result.status >= 500) return true;       // 529 overloaded ir kitos laikinos serverio klaidos
     // 413 (per didelis failas) NEKARTOJAMAS - kartojimas duotu ta pati atsakyma.
     // Tekste - tik žodžiai „overloaded“ ir „rate limit“ („rate_limit_error“): vien „rate“ pagaudavo ir „generate“, „accurate“,
@@ -181,8 +186,9 @@
     // Retry ciklas: backoff 1s / 2s / 4s. Po visu bandymu grazina normalia
     // forma { ok:false, ... } - NIEKADA nemeta del retry.
     function run(attemptIndex) {
+      var t0 = Date.now();
       return attempt().then(function (result) {
-        if (attemptIndex < MAX_RETRIES && isRetryable(result)) {
+        if (attemptIndex < MAX_RETRIES && isRetryable(result, Date.now() - t0)) {
           return delay(1000 * Math.pow(2, attemptIndex), opts.signal).then(function () {
             return run(attemptIndex + 1);
           });
@@ -293,6 +299,8 @@
     BASE: PROXY_BASE,
     MODEL: DEFAULT_MODEL,
     MAX_BASE64: MAX_BASE64,
-    MAX_PDF_BAITU: MAX_PDF_BAITU
+    MAX_PDF_BAITU: MAX_PDF_BAITU,
+    isRetryable: isRetryable,
+    NUSTATYMAI: NUSTATYMAI          // testams: ilgasBandymasMs
   };
 })(typeof window !== "undefined" ? window : this);

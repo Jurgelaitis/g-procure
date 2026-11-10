@@ -394,6 +394,9 @@
           budasMv: "pagal VPT: direktyva netaikoma - mažos vertės skelbiama apklausa; ar numatytos derybos - patikrinkite pirkimo dokumentuose",
           terminas: "VPT sąrašo duomenys - iki 6 val. senumo; galioja CVP IS",
           paskelbimas: "paskelbimo CVP IS data - nuo jos skaičiuojami supaprastinto pirkimo terminai",
+          kriterijusMeat: "CVP IS vertinimo būdas - ekonomiškai naudingiausias pasiūlymas (MEAT): ar tai kainos, ar sąnaudų ir kokybės santykis, nurodo pirkimo dokumentai - kriterijų pasirinkite patys.",
+          sutartiesData: "CVP IS lauke - planuojama sutarties sudarymo data",
+          numeris: "CVP IS lauke rastas kodas - patikrinkite, ar tai jūsų pirkimo numeris",
           paskelbimasT: "CVP IS paskelbimo data {d}. Tarptautinio pirkimo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT - jos VPT duomenyse nėra, ją rasite skelbimo PDF („Skelbimo išsiuntimo data“), todėl paskelbimo datos nesiūlome.",
           rinkosTerminas: "Rinkos konsultacijos atsakymų terminas {d} - tai ne pasiūlymų terminas, todėl kortelei nesiūlome." },
     en: { neregistre: "Contracting entity “{p}” is not in the organisation register - no entity suggested.",
@@ -408,11 +411,19 @@
           budasMv: "per VPT: no directive applies - low-value published survey; check in the procurement documents whether negotiations are foreseen",
           terminas: "VPT list data - up to 6 hours old; CVP IS prevails",
           paskelbimas: "date of publication in CVP IS - simplified procurement time limits run from it",
+          kriterijusMeat: "CVP IS evaluation method - most economically advantageous tender (MEAT): whether it is price-quality or cost-quality ratio is stated in the procurement documents - choose the criterion yourself.",
+          sutartiesData: "planned contract award date in CVP IS",
+          numeris: "code found in a CVP IS field - check that it is your procurement number",
           paskelbimasT: "Published in CVP IS on {d}. International procurement time limits run from the dispatch of the notice from VPT - the VPT data do not have it; it is in the notice PDF (“Notice dispatch date”), so no publication date is suggested.",
           rinkosTerminas: "Market consultation response deadline {d} - not a tender deadline, so it is not suggested for the card." }
   };
 
   /* Grąžina { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [] } - kaip shared/skelbimas.js atpazink() */
+  /* Pirkimo numeris lauko pradžioje: „26PP-999“, „(VPP-763) ...“, „(2026-PS-099) ...“ - kodas iš raidžių ir skaitmenų su brūkšneliais; kitaip null */
+  function pirkimoNumeris(t) {
+    var m = /^\s*\(?\s*((?:\d{2,4}[A-ZĄČĘĖĮŠŲŪŽ]{1,4}|[A-ZĄČĘĖĮŠŲŪŽ]{2,5}|\d{4}-[A-Z]{2,4})-\d{2,5})\s*\)?(?=$|[\s.,;:])/.exec(typeof t === "string" ? t : "");
+    return m ? m[1] : null;
+  }
   function korteles(p, kalba) {
     var P = PASTABOS[kalba === "en" ? "en" : "lt"], laukai = [], pastabos = [];
     if (!p || typeof p !== "object") return { laukai: laukai, pastabos: pastabos };
@@ -469,6 +480,17 @@
       else pastabos.push(keisk(P.busena, { b: tx(p.status, 60) }));
     }
     if (typeof p.id === "number" && p.id > 0) prideti("cvpisNr", String(p.id), "id: " + p.id);
+    // Vertinimo kriterijus, planuojama sutarties data ir pirkimo numeris (pilotas su tikru pirkimu 2026-11-10: VPT juos turėjo, kortelė nesiūlė)
+    if (!rinkos) {
+      if (p.evaluationMechanism === "Lowest Price") prideti("kriterijus", "kaina", "evaluationMechanism: Lowest Price");
+      else if (p.evaluationMechanism === "Lowest Cost") prideti("kriterijus", "sanaudos", "evaluationMechanism: Lowest Cost");
+      else if (p.evaluationMechanism === "MEAT") pastabos.push(P.kriterijusMeat);
+      var ad = typeof p.contractAwardDate === "string" && iso.exec(p.contractAwardDate);
+      if (ad) prideti("sutartiesData", ad[1], "contractAwardDate: " + p.contractAwardDate, P.sutartiesData);
+    }
+    var nr = pirkimoNumeris(p.description) ? { r: pirkimoNumeris(p.description), l: "description", t: p.description }
+      : pirkimoNumeris(p.title) ? { r: pirkimoNumeris(p.title), l: "title", t: p.title } : null;
+    if (nr) prideti("numeris", nr.r, nr.l + ": " + tx(nr.t, 120), P.numeris);
     return { laukai: laukai, pastabos: pastabos };
   }
 

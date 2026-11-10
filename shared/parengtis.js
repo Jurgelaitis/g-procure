@@ -69,7 +69,7 @@
       budas: "Skelbime pirkimo būdas - {s}, o SPS nurodyta: {p}.",
       vykdytojas: "Skelbime pirkėjas - {s}, o SPS antraštėje - {p}.",
       kortele: "Kortelėje {l} - {k}, o {kur} - {d}. Atnaujinkite kortelę arba dokumentą.",
-      korteleSkelbime: "skelbime", korteleSps: "SPS", korteleSalygose: "pirkimo sąlygose",
+      korteleSkelbime: "skelbime", korteleSps: "SPS", korteleSalygose: "pirkimo sąlygose", korteleGrafike: "SPS grafike (pasiūlymų gavimo pabaiga)",
       savokaSkirtinga: "Pirkimo sąlygose pirkimo vykdytojas įvardytas skirtingai: {s}. „Perkantysis subjektas“ - Pirkimų įstatymo (PĮ), „Perkančioji organizacija“ - Viešųjų pirkimų įstatymo (VPĮ) sąvoka. Suvienodinkite pagal pirkimui taikomą įstatymą.",
       savokaPI: "„Perkantysis subjektas“", savokaVPI: "„Perkančioji organizacija“", savokaAbi: "abi sąvokos (PĮ - {pi}, VPĮ - {vpi} kartų)",
       savokaNerasta: "pirkimo vykdytojo sąvokos („Perkantysis subjektas“, „Perkančioji organizacija“) nerasta", savokaNeikelta: "sąvokų atpažinimas neįkeltas",
@@ -83,6 +83,7 @@
       skRezimoNera: "skelbimas režimo nenurodo", savokaNevienoda: "pirkimo sąlygų sąvoka nevienoda arba nerasta - žr. „Dokumentų aiškumas“",
       rezimasSalygos: "Skelbime - {s} požymiai, o pirkimo sąlygose pirkimo vykdytojas įvardytas {d}. Patikrinkite, kuris įstatymas taikomas, ir suderinkite dokumentus.",
       punktai: "Punktas {n} kartojasi {k} kartus su skirtingu tekstu - tikėtina, paliktos abi šablono alternatyvos. Palikite vieną.",
+      punktaiNumeracija: "Punktas {n} kartojasi {k} kartus, o jų turinys skirtingas - panašu į numeracijos klaidą (skirtingi punktai sunumeruoti tuo pačiu numeriu). Pataisykite numerius; abu punktus palikite.",
       alternatyvos: "Vienoje pastraipoje - dvi to paties turinio formuluotės, tikėtina, šablono alternatyvos. Palikite vieną.",
       laukai: "Neužpildytas pasirinkimo laukas („{t}“). Jei jį pildo tiekėjas ar jis pildomas pasirašant sutartį, viskas gerai.",
       lenteles: "Nuoroda į {n} lentelę, bet šiame dokumente tokios lentelės antraštės nėra.",
@@ -175,7 +176,7 @@
       budas: "The notice gives the procedure as {s}, while the SPS says: {p}.",
       vykdytojas: "The buyer in the notice is {s}, while the SPS heading says {p}.",
       kortele: "On the card the {l} is {k}, while {kur} it is {d}. Update the card or the document.",
-      korteleSkelbime: "in the notice", korteleSps: "in the SPS", korteleSalygose: "in the procurement conditions",
+      korteleSkelbime: "in the notice", korteleSps: "in the SPS", korteleSalygose: "in the procurement conditions", korteleGrafike: "in the SPS schedule (end of tender submission)",
       savokaSkirtinga: "The procurement conditions name the contracting body differently: {s}. “Perkantysis subjektas” (contracting entity) is the term of the utilities procurement law (PĮ), “Perkančioji organizacija” (contracting authority) - of the public procurement law (VPĮ). Align them with the law that applies to the procurement.",
       savokaPI: "“Perkantysis subjektas” (contracting entity)", savokaVPI: "“Perkančioji organizacija” (contracting authority)", savokaAbi: "both terms (PĮ - {pi}, VPĮ - {vpi} times)",
       savokaNerasta: "no contracting body term (“Perkantysis subjektas”, “Perkančioji organizacija”) found", savokaNeikelta: "term recognition not loaded",
@@ -189,6 +190,7 @@
       skRezimoNera: "the notice does not show the regime", savokaNevienoda: "the term in the procurement conditions differs or was not found - see “Clarity of documents”",
       rezimasSalygos: "The notice shows {s} signs, while the procurement conditions name the contracting body {d}. Check which law applies and align the documents.",
       punktai: "Clause {n} appears {k} times with different text - both template alternatives were probably left in. Keep one.",
+      punktaiNumeracija: "Clause {n} appears {k} times with unrelated content - this looks like a numbering error (different clauses with the same number). Correct the numbers and keep both clauses.",
       alternatyvos: "One paragraph has two wordings of the same content, probably template alternatives. Keep one.",
       laukai: "An unfilled choice field (“{t}”). If the supplier fills it in or it is completed at signature, that is fine.",
       lenteles: "Reference to table {n}, but this document has no table with that caption.",
@@ -292,7 +294,8 @@
   /* Dokumento vaidmuo pagal failo vardą ir pradžios tekstą (GP_DOK.rusis - tik pagalbinė žyma: tikruose LITGRID
      paketuose „1.1 Bendrosios pirkimo sąlygos (SPS)“ jai yra SPS, o „... draudimo bendrovėms“ - BPS). */
   function vaidmuo(doc) {
-    var n = be(trumpas(doc.name)), kel = be(kelias(doc.name));
+    // G-Procure failų vardai žodžius jungia „_“ („26PP-999_Pasiūlymo_forma_...“) - vaidmuo atpažįstamas ir juose (pilotas 2026-11-10)
+    var n = be(trumpas(doc.name)).replace(/_/g, " "), kel = be(kelias(doc.name)).replace(/_/g, " ");
     var pradzia = be((doc.blocks || []).slice(0, 6).map(function (b) { return b.text; }).join(" ").slice(0, 600));
     if (/ebvpd|espd/.test(kel)) return "ebvpd";
     if (doc.rusis === "Skelbimas" || /contract\s+notice|contest\s+notice|skelbimas\s+apie\s+pirkim/.test(n)) return "skelbimas";
@@ -306,7 +309,7 @@
     if (/paraiskos\s+forma|application\s+form/.test(n)) return "paraiska";
     if (/bendrosios\s+pirkimo\s+salyg|\bbps\b/.test(n)) return "bps";
     if (/specialiosios\s+pirkimo\s+salyg/.test(n) || (/\bsps\b/.test(n) && !/\bsps\s*\d/.test(n))) return "sps";
-    if (/^\s*(sps\s*)?\d{1,2}(\s*priedas|\.)?\s*(\.|\s)\s*techni\w+\s+specifikacij|^\s*(sps\s*)?\d{1,2}\s*priedas\.?\s+techni\w+\s+(specifikacij|uzduot)|^techni\w+\s+(specifikacij|uzduot)|_tu\.pdf$/.test(n)) return "ts";
+    if (/^\s*(sps\s*)?\d{1,2}(\s*priedas|\.)?\s*(\.|\s)\s*techni\w+\s+specifikacij|^\s*(sps\s*)?\d{1,2}\s*priedas\.?\s+techni\w+\s+(specifikacij|uzduot)|^techni\w+\s+(specifikacij|uzduot)|\stu\.pdf$/.test(n)) return "ts";
     if (/techni\w+\s+specifikacij/.test(n) && !/pried(as|o)\s+nr|\d\s+priedo\s+\d/.test(n)) return "ts";
     if (/specialiosios\s+pirkimo\s+salygos/.test(pradzia)) return "sps";
     if (/bendrosios\s+pirkimo\s+salygos/.test(pradzia)) return "bps";
@@ -403,15 +406,17 @@
         f.kalbos.push({ pasiulymui: pasiulymui, kalbos: kalbos, e: e });
       }
     });
-    // Grafikas: lentelės eilutės, kurių paskutinis langelis - data
+    // Grafikas: lentelės eilutės, kurių paskutinis langelis - data arba laikotarpis „nuo - iki“ (pilotas 2026-11-10: G-Procure įterptas grafikas
+    // iš kortelės - „2026-09-30 - 2026-10-12“; iki tol tokios eilutės buvo neskaitomos ir patikra sakė „SPS grafiko nerasta“). Laikotarpiui
+    // data - pabaiga (su ja lyginamas pasiūlymų terminas), nuo - pradžia (paskelbimo data, datų tvarka)
     f.grafikas = [];
     E.forEach(function (e) {
       var c = e.t.split(" | "), pask = c[c.length - 1].trim();
-      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(pask);
+      var m = /^(\d{4}-\d{2}-\d{2})(?:\s*[-\u2013]\s*(\d{4}-\d{2}-\d{2}))?$/.exec(pask);
       if (!m || c.length < 2 || !e.loc || !e.loc.table) return;
       var et = c.filter(function (x) { return !/^\d+(?:\.\d+)*\.?$/.test(x.trim()); })[0] || "";
       if (et === pask) return;
-      f.grafikas.push({ etapas: et.trim(), data: pask, e: e });
+      f.grafikas.push({ etapas: et.trim(), data: m[2] || m[1], nuo: m[1], e: e });
     });
     // Priedų sąrašas: „N priedas – Pavadinimas“ (ir be brūkšnio, kai pavadinimas didžiąja raide: LITGRID ND ir SSD SPS - „10 priedas Ekonomiškai ...“)
     f.priedai = [];
@@ -442,7 +447,7 @@
   }
 
   /* ---------------------------------------------------------------- aiškumas */
-  var PUNKTAS = /^(\d{1,2}(?:\.\d{1,3}){1,4})\.?\s+(\S.*)$/;
+  var PUNKTAS = /^(\d{1,2}(?:\.\d{1,3}){1,4})\.?\s+(\S.*)$/, PUNKTAS_PR = /^\s*\d{1,2}(?:\.\d{1,3}){1,4}\.?\s+/;
   var LAUKAI = /Pasirinkite elementą|Choose an item|Spustelėkite arba bakstelėkite čia|Click or tap here to enter text|Įveskite tekstą/i;
   function aiskumoRadiniai(doc, l, sps) {
     var X = tx(l), out = { punktai: [], alternatyvos: [], laukai: [], lenteles: [], priedu_nuorodos: [] };
@@ -457,14 +462,24 @@
         var m = PUNKTAS.exec(t);
         if (!m) return;
         var raktas = sritis + "|" + m[1];
-        (pagal[raktas] = pagal[raktas] || []).push({ b: b, tekstas: m[2], n: m[1] });
+        (pagal[raktas] = pagal[raktas] || []).push({ b: b, tekstas: m[2], n: m[1], visas: String(b.text || "").replace(PUNKTAS_PR, "") });
       });
       Object.keys(pagal).forEach(function (raktas) {
         var g = pagal[raktas], n = g[0].n;
         if (g.length < 2) return;
         var skirtingi = g.filter(function (x, i) { return g.findIndex(function (y) { return be(y.tekstas) === be(x.tekstas); }) === i; });
         if (skirtingi.length < 2) return;
-        out.punktai.push({ n: n, k: g.length, vietos: g.slice(0, 3).map(function (x) { return docVieta(doc, { loc: x.b.loc, t: x.b.text.split("\n")[0] }, l); }) });
+        // Šablono alternatyvos - to paties punkto variantai, todėl jų žodžiai iš esmės tie patys; skirtingo turinio punktai su tuo pačiu
+        // numeriu - numeracijos klaida (pilotas 2026-11-10: paskelbtos sutarties „15.2. Priedas Nr. 2 ...“ ir „15.2. Priedas Nr. 3 Pasiūlymas“,
+        // o patarimas „palikite vieną“ būtų pašalinęs sutarties priedą)
+        var panasus = function (a, b) {
+          var za = zodziai(a), zb = zodziai(b), bendri = za.filter(function (w) { return zb.indexOf(w) >= 0; }).length;
+          var visi = za.length + zb.length - bendri;
+          return visi > 0 && bendri / visi >= 0.25;
+        };
+        // lyginamas visas eilutės tekstas (lentelėje - visi langeliai): „15.2. Priedas Nr. 2“ ir „15.2. Priedas Nr. 3“ pirmame langelyje vienodi
+        var numeracija = !skirtingi.some(function (x, i) { return skirtingi.some(function (y, j) { return j > i && panasus(x.visas, y.visas); }); });
+        out.punktai.push({ n: n, k: g.length, numeracija: numeracija, vietos: g.slice(0, 3).map(function (x) { return docVieta(doc, { loc: x.b.loc, t: x.b.text.split("\n")[0] }, l); }) });
       });
       // Dvi to paties turinio formuluotės vienoje pastraipoje (eilučių lūžis pastraipos viduje)
       (doc.blocks || []).forEach(function (b) {
@@ -521,6 +536,13 @@
 
   /* ---------------------------------------------------------------- palyginimai */
   var STOP = { pirkimas: 1, pirkimo: 1, pirkimu: 1, procurement: 1, darbu: 1, ir: 1, bei: 1, the: 1, and: 1 };
+  /* „Rasta“ patikros tekstas: citata - prie tos vietos, iš kurios ji paimta (pirmos), ne sąrašo gale (pilotas su tikru pirkimu 2026-11-10:
+     skelbimo citata rodyta po „SPS, pastr. 11“) */
+  function vietaSuCitata(kur, v0, l) {
+    if (!kur.length) return "";
+    var pirma = kur[0] + (v0 && v0.citata ? ": " + kab(iskarpa(v0.citata, 140), l) : "");
+    return [pirma].concat(kur.slice(1)).join("; ");
+  }
   function zodziai(s) {
     var out = {};
     be(s).replace(/[^a-z0-9]+/g, " ").split(" ").forEach(function (w) {
@@ -634,15 +656,22 @@
     if (sps && sps.priedai.length) {
       // Kiekvienas kelio segmentas: priedas gali būti ZIP ar aplankas („2 priedas_EBVPD.zip › espd-request.xml“)
       var failai = docs.map(function (d) {
-        return { d: d, n: be(trumpas(d.name)), kel: be(kelias(d.name)), seg: kelias(d.name).split("/").map(be) };
+        // priedo antraštė dokumento pradžioje („SPS 5 priedas“, „Pirkimo sąlygų 5 priedas“) - ir G-Procure sugeneruotiems priedams, kurių
+        // failo varde priedo numerio nėra (pilotas 2026-11-10: „Informacija_apie_subtiekėjus_...docx“ buvo „neradau“)
+        // (ne pačiose sąlygose - jų pradžioje gali būti turinys: „Pirkimo sąlygų 1 priedas „...“22“)
+        var ant = d === P.sps ? [] : (d.blocks || []).slice(0, 4).map(function (b) { return be(String(b.text || "").trim()); });
+        return { d: d, n: be(trumpas(d.name)).replace(/_/g, " "), kel: be(kelias(d.name)).replace(/_/g, " "), seg: kelias(d.name).split("/").map(function (x) { return be(x).replace(/_/g, " "); }), ant: ant };
       });
       var trukstaP = 0;
       sps.priedai.forEach(function (p) {
         // „3 priedas...“, „SPS 3 priedas...“, „SPS 3. ...“ - bet ne „1.2. Priedas...“, „2_c4t_...“ ar „3 priedo 1 priedas“
         var reNr = new RegExp("^(sps\\s*)?" + p.n + "(\\s*priedas|\\s*\\.(?!\\d)|\\s+[a-z])", "i");
+        var reAnt = new RegExp("^(sps|pirkimo\\s+salygu|konkretaus\\s+pirkimo\\s+salygu)\\s+" + p.n + "\\s*priedas(?![a-z])", "i");
         var pz = zodziai(p.pav);
         var yra = failai.some(function (f) {
-          if (f.seg.some(function (sg) { return reNr.test(sg) && !/^(sps\s*)?\d+\s*priedo\s/.test(sg); })) return true;
+          // „26PP-999 SPS 3 priedas ...“ (G-Procure failo vardas su pirkimo numeriu priekyje) - kaip „SPS 3 priedas ...“
+          if (f.seg.some(function (sg) { sg = sg.replace(/^\S+\s+(?=sps\s*\d)/, ""); return reNr.test(sg) && !/^(sps\s*)?\d+\s*priedo\s/.test(sg); })) return true;
+          if (f.ant.some(function (t) { return reAnt.test(t); })) return true;
           // pavadinimo sutapimas su failo ar aplanko vardu (pvz. „1.2. Priedas. Techninė užduotis ir jos priedai/“)
           var fz = zodziai(f.kel);
           var bendri = pz.filter(function (x) { return fz.indexOf(x) >= 0; }).length;
@@ -728,12 +757,16 @@
           vietos: [docVieta(sk.doc, { loc: null, t: skT.citata }, l), docVieta(P.sps, pirmas.e, l)], teise: teise(VIRS.concat(["terminas_dokumentuose"])) });
         patikra("terminas", "skelbimas", skir ? "radinys" : "gerai");
       }
-      var skData = sk.pakeitimas ? null : (sk.issiusta || "").slice(0, 10);
+      // pakeitimo skelbime pirminio paskelbimo datos nėra, bet pakete gali būti ir pirminis skelbimas (pilotas su tikru pirkimu 2026-11-10:
+      // „..._0.pdf“ ir „..._1.pdf“ - iki tol sakyta „pirminio paskelbimo datos nėra“)
+      var pirminis = sk.pakeitimas && global.GP_SKELBIMAS ? (P.skelbimasVisi || []).filter(function (d) { return !global.GP_SKELBIMAS.pakeitimas(skelbimoInfo(d).tekstas); })
+        .map(function (d) { return skelbimoInfo(d); }).filter(function (x) { return x.issiusta; }).sort(function (a, b) { return a.issiusta.localeCompare(b.issiusta); })[0] : null;
+      var skData = sk.pakeitimas ? (pirminis ? pirminis.issiusta.slice(0, 10) : null) : (sk.issiusta || "").slice(0, 10);
       var gSkelb = sps.grafikas.filter(function (g) { return /skelbim/i.test(g.etapas); })[0];
-      if (!skData || !gSkelb) nera("skelbimo_data", sk.pakeitimas ? X.pakeitimoData : !skData ? X.beDuomenu : X.beGrafiko);
+      if (!skData || !gSkelb) nera("skelbimo_data", sk.pakeitimas && !pirminis ? X.pakeitimoData : !skData ? X.beDuomenu : X.beGrafiko);
       else {
-        var sk2 = skData !== gSkelb.data;
-        if (sk2) radinys({ id: "skelbimo_data", grupe: "skelbimas", lygis: "tikrinti", tekstas: sub(X.skelbimoData, { s: skData, p: gSkelb.data }),
+        var sk2 = skData !== gSkelb.nuo;
+        if (sk2) radinys({ id: "skelbimo_data", grupe: "skelbimas", lygis: "tikrinti", tekstas: sub(X.skelbimoData, { s: skData, p: gSkelb.nuo }),
           vietos: [docVieta(sk.doc, { loc: null, t: "Skelbimo išsiuntimo data: " + skData }, l), docVieta(P.sps, gSkelb.e, l)], teise: [] });
         patikra("skelbimo_data", "skelbimas", sk2 ? "radinys" : "gerai");
       }
@@ -813,6 +846,11 @@
         if (L.rezimas) palygink("rezimas", k.rezimas, L.rezimas.reiksme, lyg, function (v) { return v === "PI" ? "PĮ" : v === "VPI" ? "VPĮ" : v; }, kur, dv(L.rezimas));
         if (L.dalys && Array.isArray(k.dalys)) palygink("dalys", Math.max(1, k.dalys.length), Math.max(1, L.dalys.reiksme.length), lyg, function (v) { return v === 1 ? X.dalysViena : sub(X.dalysKelios, { n: v }); }, kur, dv(L.dalys));
       } else if (sps) {
+        // pasiūlymų terminas kortelėje prieš SPS grafiką (be skelbimo - pvz. PP-salygos sugeneruotas paketas su grafiku iš kortelės; pilotas
+        // 2026-11-10: grafike pasiūlymų gavimas baigėsi 2026-10-12, o kortelėje - pratęstas terminas 2026-10-13, ir perspėjimo nebuvo)
+        var gP = sps.grafikas.filter(function (g) { return /(parai[šs]k|pasi[ūu]lym)[a-ząčęėįšųūž]*\s+(gavimas|rengimas|pateikimas|pri[ėe]mimas)/i.test(g.etapas) && !/galutin|kvietim/i.test(g.etapas); })[0];
+        // sugeneruotame pakete grafiko datos - šablono pavyzdžiai, nebent grafikas įterptas iš kortelės (o.grafikasIterptas)
+        if (gP && (!o.sugeneruotas || o.grafikasIterptas)) palygink("pasiulymuTerminas", k.pasiulymuTerminas, gP.data, function (a, b) { return String(a).slice(0, 10) === String(b).slice(0, 10); }, function (v) { return String(v).replace("T", " "); }, X.korteleGrafike, docVieta(P.sps, gP.e, l));
         if (sps.pavadinimas) palygink("pavadinimas", k.pavadinimas, sps.pavadinimas.t, function (a, b) { var p = panasumas(a, b); return p === null || p >= 0.6; }, tekst, X.korteleSps, docVieta(P.sps, sps.pavadinimas.e, l));
         if (sps.dalys && Array.isArray(k.dalys)) palygink("dalys", Math.max(1, k.dalys.length), Math.max(1, sps.dalys.n), lyg, function (v) { return v === 1 ? X.dalysViena : sub(X.dalysKelios, { n: v }); }, X.korteleSps, docVieta(P.sps, sps.dalys.e, l));
       }
@@ -828,7 +866,7 @@
       Object.keys(sum).forEach(function (kk) { a[kk].forEach(function (x) { x.doc = P[r]; sum[kk].push(x); }); });
     });
     var AISK = ["dokumentu_aiskumas"];
-    sum.punktai.forEach(function (x) { radinys({ id: "punktai", grupe: "aiskumas", lygis: "kliutis", tekstas: sub(X.punktai, { n: x.n, k: x.k }), vietos: x.vietos, teise: teise(AISK) }); });
+    sum.punktai.forEach(function (x) { radinys({ id: "punktai", grupe: "aiskumas", lygis: x.numeracija ? "tikrinti" : "kliutis", tekstas: sub(x.numeracija ? X.punktaiNumeracija : X.punktai, { n: x.n, k: x.k }), vietos: x.vietos, teise: teise(AISK) }); });
     sum.alternatyvos.forEach(function (x) { radinys({ id: "alternatyvos", grupe: "aiskumas", lygis: "tikrinti", tekstas: X.alternatyvos, vietos: x.vietos, teise: teise(AISK) }); });
     sum.laukai.forEach(function (x) { radinys({ id: "laukai", grupe: "aiskumas", lygis: "tikrinti", tekstas: sub(X.laukai, { t: x.t }), vietos: x.vietos, teise: teise(AISK) }); });
     sum.lenteles.forEach(function (x) { radinys({ id: "lenteles", grupe: "aiskumas", lygis: "tikrinti", tekstas: sub(X.lenteles, { n: x.n }), vietos: x.vietos, teise: teise(AISK) }); });
@@ -899,9 +937,9 @@
     else if (o.sugeneruotas) patikra("grafikas", "aiskumas", "nepatikrinta", X.grafikasPavyzdys);
     else {
       var blogai = null;
-      for (var gi = 1; gi < sps.grafikas.length && !blogai; gi++) if (sps.grafikas[gi].data < sps.grafikas[gi - 1].data) blogai = [sps.grafikas[gi - 1], sps.grafikas[gi]];
+      for (var gi = 1; gi < sps.grafikas.length && !blogai; gi++) if (sps.grafikas[gi].nuo < sps.grafikas[gi - 1].nuo) blogai = [sps.grafikas[gi - 1], sps.grafikas[gi]];
       if (blogai) radinys({ id: "grafikas", grupe: "aiskumas", lygis: "tikrinti",
-        tekstas: sub(X.grafikas, { a: blogai[1].etapas, ad: blogai[1].data, b: blogai[0].etapas, bd: blogai[0].data }), vietos: [docVieta(P.sps, blogai[1].e, l)], teise: teise(AISK) });
+        tekstas: sub(X.grafikas, { a: blogai[1].etapas, ad: blogai[1].nuo, b: blogai[0].etapas, bd: blogai[0].nuo }), vietos: [docVieta(P.sps, blogai[1].e, l)], teise: teise(AISK) });
       patikra("grafikas", "aiskumas", blogai ? "radinys" : "gerai");
     }
 
@@ -992,7 +1030,7 @@
             var t = trumpas(v.doc.name) + (v.b && v.b.loc ? ", " + vieta(v.b.loc, l) : "");
             if (kur.indexOf(t) < 0) kur.push(t);
           });
-          patikra(id, "privalomi", "gerai", kur.join("; ") + (x.kur[0] && x.kur[0].citata ? ": " + kab(iskarpa(x.kur[0].citata, 140), l) : ""), pav);
+          patikra(id, "privalomi", "gerai", vietaSuCitata(kur, x.kur[0], l), pav);
           return;
         }
         if (x.busena === "neuzpildyta") {
@@ -1059,7 +1097,7 @@
             var t = trumpas(v.doc.name) + (v.b && v.b.loc ? ", " + vieta(v.b.loc, l) : "");
             if (kur.indexOf(t) < 0) kur.push(t);
           });
-          patikra(id, "sutarties_elementai", "gerai", kur.join("; ") + (x.kur[0] && x.kur[0].citata ? ": " + kab(iskarpa(x.kur[0].citata, 140), l) : ""), pav);
+          patikra(id, "sutarties_elementai", "gerai", vietaSuCitata(kur, x.kur[0], l), pav);
           return;
         }
         patikra(id, "sutarties_elementai", "radinys", "", pav);
