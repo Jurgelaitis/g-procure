@@ -18,7 +18,8 @@
  *    mini atsakymų raštas ar paaiškinimas (jis gali sąlygas pakeisti).
  *  - Tekstas iš dokumentų į HTML - tik per modulio esc().
  *
- * Grynos funkcijos: siulyk({ docs, meta, kalba, dabar }) -> { klausimai, faktai, datos } (datos - laiko juostai: objekto apžiūra);
+ * Grynos funkcijos: siulyk({ docs, meta, kalba, dabar }) -> { klausimai, faktai, datos, vietos } (datos - laiko juostai: objekto apžiūra;
+ * vietos.kvalifikacija - kvalifikacijos reikalavimų lentelės fragmentai laisviems klausimams, nuo 2026-11-10);
  * kontrolinis({ docs, meta, kalba, dabar, kelietapis }) -> punktai, į kuriuos dokumentai aiškiai atsako (be DI);
  * terminas({ docs, pirkimas, galutinis, parse, kelietapis, dabar }) - iki kada pateikti klausimą.
  * Vieta dokumente - shared/dokumentai.js fragmentai (d.chunks), jų ID paduodami į paiešką,
@@ -104,26 +105,36 @@
   function normTarpai(s) { return String(s).replace(/\s+/g, " ").trim(); }
   function kiekDaug(s) { return s.length > 240 ? s.slice(0, 237).replace(/\s+\S*$/, "") + "..." : s; }
 
-  // Grąžina pirmą atitikimą dokumentuose pagal jų eilę: { d, ch, m, tekstas, citata, salyga }
+  // Grąžina pirmą atitikimą dokumentuose pagal jų eilę: { d, ch, m, tekstas, citata, salyga }.
+  // o.turi - sakinyje turi būti ir tai (pvz. CVP IS); tada tikrinami visi atitikimai fragmente, ne tik pirmas (2026-11-10, pilotas su tikru pirkimu:
+  // „su Pasiūlymu reikia pateikti SPS 5 priedo 2 priedėlį“ buvo laikoma pateikimo per CVP IS citata)
   function rask(docs, re, o) {
     o = o || {};
+    var rg = o.turi ? new RegExp(re.source, re.flags.indexOf("g") < 0 ? re.flags + "g" : re.flags) : re;
     for (var a = 0; a < docs.length; a++) {
       var d = docs[a];
       for (var b = 0; b < d.chunks.length; b++) {
-        var ch = d.chunks[b], f = foldF(ch);
-        re.lastIndex = 0;
-        var m = re.exec(f);
-        if (!m) continue;
-        var s = sakinys(f, m.index, m.index + m[0].length), fs = f.slice(s.pradzia, s.pabaiga);
-        if (!o.ir_salyga && salyginis(f.slice(s.pradzia, m.index))) continue;
-        if (o.ne && o.ne.test(fs)) continue;
-        if (/\.{4,}|…{2,}/.test(fs)) continue;     // turinio eilutė („8. PARAIŠKŲ PATEIKIMO TERMINAI ......“)
-        var cit = normTarpai(ch.text.slice(s.pradzia, s.pabaiga));
-        if (cit.length < 30) cit = normTarpai(ch.text.slice(Math.max(0, s.pradzia - 60), s.pabaiga + 100));   // „netesybos.“ žmogui nieko nepasako
-        return { d: d, ch: ch, m: m, f: f, citata: kiekDaug(cit), fs: fs, orig: function (gr) { var i = f.indexOf(m[gr], m.index); return ch.text.substr(i, m[gr].length); } };
+        var ch = d.chunks[b], f = foldF(ch), m;
+        rg.lastIndex = 0;
+        while ((m = rg.exec(f))) {
+          var r = atitikimas(d, ch, f, m, o);
+          if (r) return r;
+          if (!o.turi) break;
+          if (rg.lastIndex === m.index) rg.lastIndex++;
+        }
       }
     }
     return null;
+  }
+  function atitikimas(d, ch, f, m, o) {
+    var s = sakinys(f, m.index, m.index + m[0].length), fs = f.slice(s.pradzia, s.pabaiga);
+    if (!o.ir_salyga && salyginis(f.slice(s.pradzia, m.index))) return null;
+    if (o.ne && o.ne.test(fs)) return null;
+    if (o.turi && !o.turi.test(fs)) return null;
+    if (/\.{4,}|…{2,}/.test(fs)) return null;     // turinio eilutė („8. PARAIŠKŲ PATEIKIMO TERMINAI ......“)
+    var cit = normTarpai(ch.text.slice(s.pradzia, s.pabaiga));
+    if (cit.length < 30) cit = normTarpai(ch.text.slice(Math.max(0, s.pradzia - 60), s.pabaiga + 100));   // „netesybos.“ žmogui nieko nepasako
+    return { d: d, ch: ch, m: m, f: f, citata: kiekDaug(cit), fs: fs, orig: function (gr) { var i = f.indexOf(m[gr], m.index); return ch.text.substr(i, m[gr].length); } };
   }
   function kodel(r) { return { docId: r.d.id, name: vardas(r.d), loc: r.ch.loc, citata: r.citata }; }
   // Santraukos ištrauka iš dokumento paimta per kelis ženklus prieš reikšmę - dažnai nuo žodžio vidurio
@@ -186,6 +197,8 @@
   var RE_KAINOS = /ikainiu lentel|kain\w* (detalizavimo )?(lentel|form)|kiekiu (sarasas|lentel|ziniarast)|sanaud\w* (lentel|form)|price (table|form|schedule)/;
   var RE_CVP_TEIKTI = /(pasiulym\w*|paraisk\w*)[^.|\n]{0,40}(reikia pateikti|turi buti pateik\w*|gali teikti)[^.|\n]{0,80}(cvp is|elektronin\w+ priemon)|(pasiulym\w*|paraisk\w*) (reikia pateikti|gali teikti)/;
   var RE_CVP_MINI = /(pasiulym\w*|paraisk\w*)[^.|\n]{0,80}(teikiam\w*|pateikiam\w*|pateikt\w*|teikt\w*)[^.|\n]{0,80}(cvp is|elektronin\w+ priemon)|(cvp is|elektronin\w+ priemon)[^.|\n]{0,60}(pateikiam\w*|teikiam\w*|pateikt\w*)[^.|\n]{0,40}(pasiulym|paraisk)/;
+  // Pateikimo kanalas turi būti tame pačiame sakinyje: „su Pasiūlymu reikia pateikti ...“ - kas pateikiama, ne kaip (2026-11-10)
+  var RE_CVP_KANALAS = /cvp is|elektronin\w+ priemon/;
   var RE_GALIOJA = /pasiulymas (?:turi )?galio(?:ja|ti) (?:ne trumpiau kaip )?(\d+\s*(?:\([^)]{1,30}\)\s*)?(?:kalendorin\w+ dien\w*|darbo dien\w*|dien\w*|menes\w*|men\b)[^.|\n]{0,80})/;
   var RE_EBVPD_TAIP = /(pateikiam\w*|pateikia|privalo pateikti|turi pateikti|turi buti pateikt\w*)[^.|\n]{0,70}(ebvpd|europos bendraj\w+ viesuj\w+ pirkimu dokument)|(ebvpd|europos bendraj\w+ viesuj\w+ pirkimu dokument\w*)[^.|\n]{0,50}(privalo|turi buti|pateikiam)/;
   var RE_PARASAS = /(?:^|[^a-z])(pasirasyt\w*|pasirasom\w*)[^.|\n]{0,80}(elektronin\w+ paras\w*|e-paras\w*)|(elektronin\w+ paras\w*)[^.|\n]{0,80}[^a-z](pasirasyt\w*|privalo|turi buti)/;
@@ -473,9 +486,38 @@
     if (subt) q("subtiekejai", 71, L("Kokią informaciją apie subtiekėjus reikia pateikti?", "What information about subcontractors must be provided?"), subt);
 
     Q.sort(function (a, b) { return a.p - b.p; });
-    return { klausimai: Q, faktai: F, datos: DATOS };
+    return { klausimai: Q, faktai: F, datos: DATOS, vietos: { kvalifikacija: kvalLentele(g) } };
   }
 
+  /* Kvalifikacijos reikalavimų lentelė („Kvalifikacijos reikalavimas | Pateikiami dokumentai“) laisviems klausimams (2026-11-10, pilotas su tikru pirkimu):
+     antraštės fragmentas ir po jo einantys tos pačios lentelės fragmentai - visos eilutės, ne tik tos, iš kurių sudaryti klausimai. Fragmento vieta - jo
+     pradžia, todėl antraštė su pirmąja eilute gali būti fragmente, kuris prasideda ankstesnėje (pašalinimo pagrindų) lentelėje. Nėra lentelės - atskiras
+     kvalifikacijos reikalavimų priedas pagal vardą. */
+  var KVAL_ANTR = /kvalifikacijos reikalavim[a-z]*\s*\|\s*(?:[^\s|]+\s+){0,3}(?:dokument|irodym|pagrind)|qualification requirements?\s*\|\s*(?:[^\s|]+\s+){0,3}(?:document|evidence|proof)/;
+  var KVAL_RIBA = 6;
+  function kvalLentele(g) {
+    var out = [];
+    g.sprendimai.concat(g.formos).some(function (d) {
+      for (var i = 0; i < d.chunks.length; i++) {
+        if (!KVAL_ANTR.test(foldF(d.chunks[i]))) continue;
+        out.push(d.chunks[i].id);
+        var lent = null;
+        for (var j = i + 1; j < d.chunks.length && out.length < KVAL_RIBA; j++) {
+          var l = d.chunks[j].loc || {};
+          if (l.table == null) break;
+          if (lent === null) lent = l.table; else if (l.table !== lent) break;
+          out.push(d.chunks[j].id);
+        }
+        return true;
+      }
+      return false;
+    });
+    if (!out.length) {
+      var pr = g.formos.filter(function (d) { return /kvalifikacij|qualification/.test(fold(vardas(d))); })[0];
+      if (pr) out = pr.chunks.slice(0, 4).map(function (c) { return c.id; });
+    }
+    return out;
+  }
   /* ---------------- Kontrolinis sąrašas iš dokumentų ----------------
      Tai, ką dokumentai aiškiai sako, užpildoma iškart ir be DI: kiekvienas punktas su šaltiniu pažodžiui.
      Sudėtingi sąrašai (pašalinimo pagrindai, kvalifikacijos reikalavimai, techninis pasiūlymas, horizontalūs
@@ -497,7 +539,7 @@
     function skirtingi(x) { return [x.value].concat(x.alt.map(function (a) { return a.value; })).join(", "); }
 
     /* Pateikimas */
-    var sal = g.sprendimai.concat(g.bps), cvp = rask(sal, RE_CVP_TEIKTI) || rask(sal, RE_CVP_MINI, { ne: /nebus nagrinejam|konkreti data/ });
+    var sal = g.sprendimai.concat(g.bps), cvp = rask(sal, RE_CVP_TEIKTI, { turi: RE_CVP_KANALAS }) || rask(sal, RE_CVP_MINI, { ne: /nebus nagrinejam|konkreti data/, turi: RE_CVP_KANALAS });
     if (cvp) punktas("registracija", "privaloma", L("Teikiama per CVP IS - užsiregistruokite ir pasirenkite iš anksto.", "Submitted through CVP IS - register and prepare in advance."), [kodel(cvp)]);
 
     /* Terminas: kelios skirtingos datos (ne pratęsimas) - patikslinti, ne pasirinkti. Laiko juosta matyti citatoje. */
@@ -539,7 +581,9 @@
     var gl = meta.validity;
     if (!atsakymuose(/pasiulym\w* galiojim|galiojimo termin/)) {
       if (gl && gl.value) {
-        if (gl.alt && gl.alt.length) punktas("galiojimas", "patikslinti", L("Dokumentuose skirtingas galiojimas: " + skirtingi(gl) + ".", "The documents give different validity periods: " + skirtingi(gl) + "."), [metaKodel(gl, docs)]);
+        // Abiejų vietų citatos (2026-11-10: skelbime 90 d., pasiūlymo formoje 3 mėn. - rodyta tik viena)
+        if (gl.alt && gl.alt.length) punktas("galiojimas", "patikslinti", L("Dokumentuose skirtingas galiojimas: " + skirtingi(gl).replace(/\.$/, "") + ".", "The documents give different validity periods: " + skirtingi(gl).replace(/\.$/, "") + "."),
+          [metaKodel(gl, docs)].concat(gl.alt.slice(0, 2).filter(function (a) { return a.docId; }).map(function (a) { return metaKodel(a, docs); })));
         else { var gz = String(gl.value).replace(/\.$/, ""); punktas("galiojimas", "privaloma", L("Pasiūlymo galiojimas: " + gz + ".", "Bid validity: " + gz + "."), [metaKodel(gl, docs)]); }
       } else {
         var gr = rask(foPas.concat(g.sprendimai), RE_GALIOJA);

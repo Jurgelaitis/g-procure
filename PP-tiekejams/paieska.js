@@ -16,16 +16,23 @@
 ;(function (global) {
   "use strict";
 
-  var STOP = {};
-  ["ir","ar","arba","bei","kad","kai","kaip","kur","kas","ką","ko","kam","tai","tą","to","tos","tų","šis","ši","šio","šios","yra","būti","bus","buvo","turi","gali","dėl","iki","nuo","pagal","per","su","be","į","iš","o","bet","jei","jeigu","tik","taip","ne","nėra","the","a","an","of","to","in","and","or","for","is","are","be","by","on","at","with","as","that","this","it","shall","will"].forEach(function (w) { STOP[w] = 1; });
-
   var DIAK = { "ą":"a","č":"c","ę":"e","ė":"e","į":"i","š":"s","ų":"u","ū":"u","ž":"z" };
   function fold(s) { return String(s).toLowerCase().replace(/[ąčęėįšųūž]/g, function (c) { return DIAK[c]; }); }
 
-  // Grubus LT/EN kamienas: nukertam dažniausias galūnes, paliekam >= 4 simbolius
-  var GALUNES = /(iausiais|iausius|iausias|iausiam|iausio|iausia|ojimo|ojimu|ojimas|imams|imais|imuose|imus|imai|imo|imu|imas|ims|ais|ams|uose|ose|ems|ims|iams|ius|ias|ios|ius|iui|iai|ies|ių|ų|ai|ui|as|is|us|ys|es|os|ei|ą|ę|į|ū|ėj|ėje|oje|ej|e|a|i|o|u|s|ing|tion|ed|ly|es)$/;
+  // Žodžiai tikrinami jau suvienodinti (fold) - todėl ir sąrašas suvienodinamas: iki 2026-11-10 „ką“, „dėl“, „nėra“, „būti“, „iš“ niekada nebūdavo atmetami
+  var STOP = {};
+  ["ir","ar","arba","bei","kad","kai","kaip","kur","kas","ką","ko","kam","tai","tą","to","tos","tų","šis","ši","šio","šios","yra","būti","bus","buvo","turi","gali","dėl","iki","nuo","pagal","per","su","be","į","iš","o","bet","jei","jeigu","tik","taip","ne","nėra","the","a","an","of","to","in","and","or","for","is","are","be","by","on","at","with","as","that","this","it","shall","will"].forEach(function (w) { STOP[fold(w)] = 1; });
+
+  // Grubus LT/EN kamienas: nukertam dažniausias galūnes, paliekam >= 4 simbolius. Tekstas jau suvienodintas (fold), todėl galūnės - be
+  // diakritikų („mėnesių“ - „menesiu“). 2026-11-10 (pilotas su tikru pirkimu): tos pačios šeimos žodžiai turi gauti tą patį kamieną -
+  // iki tol „galioti“ -> „galiot“, „galioja“ -> „galioj“, „galiojimo“ -> „gali“ (kaip „gali“), „galiojantis“ -> „galiojant“, todėl
+  // klausimas „Kiek laiko turi galioti pasiūlymas?“ nerasdavo nei formos („Pasiūlymas galioja 3 mėnesius“), nei skelbimo
+  // („turi išlikti galiojantis“). Bendratis „-oti“ ir esamasis laikas „-oja“ suvienodinami („galioti“, „naudoti“ -> „galioj“, „naudoj“),
+  // dalyvių galūnės („-antis“, „-ančio“) nukertamos, „-ojimo“ - tik „-imo“ (kamienas lieka „galioj“).
+  var GALUNES = /(iausiais|iausius|iausias|iausiam|iausio|iausia|anciuose|anciame|antiems|anciais|anciams|ancius|ancios|anciai|anciam|anciu|ancio|ancia|antis|antys|imams|imais|imuose|imus|imai|imo|imu|imas|ims|ais|ams|uose|ose|ems|iams|ius|ias|ios|iui|iai|ies|iu|io|ai|ui|as|is|us|ys|es|os|ei|eje|oje|ej|e|a|i|o|u|s|ing|tion|ed|ly)$/;
   function stem(t) {
     if (t.length <= 4 || /\d/.test(t)) return t;
+    if (/oti$/.test(t)) return t.slice(0, -2) + "j";
     var s = t.replace(GALUNES, "");
     return s.length >= 4 ? s : t;
   }
