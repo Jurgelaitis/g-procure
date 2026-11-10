@@ -202,6 +202,12 @@ textarea{resize:vertical;min-height:90px;line-height:1.5;}
 .req-text[contenteditable=true]:focus{outline:none;border-color:var(--color-emerald);background:var(--color-green-5);}
 .req-meta{font-size:13px;color:var(--color-graphite-50-strong);margin-top:8px;}
 .req-evidence{font-size:13px;color:var(--color-graphite-50-strong);margin-top:6px;}
+/* Pateikiami dokumentai - redaguojami kaip reikalavimo tekstas (pilotas 2026-11-10, Q-1) */
+.req-ev-text{white-space:pre-wrap;overflow-wrap:break-word;}
+.req-evidence .req-ev-text[contenteditable=true]{display:block;color:var(--color-graphite);border:1px dashed var(--color-graphite-15);border-radius:6px;padding:4px 6px;margin:2px 0 0;min-height:1.6em;}
+.req-evidence .req-ev-text[contenteditable=true]:focus{outline:none;border-color:var(--color-emerald);border-style:solid;background:var(--color-green-5);}
+.req-evidence .req-ev-text[contenteditable=true]:empty:before{content:attr(data-vieta);color:var(--color-graphite-50-strong);}
+.req-evidence.tuscia strong{color:var(--color-warning-strong);}
 .req-actions{display:flex;gap:6px;margin-top:10px;}
 .icon-btn{border:1px solid var(--color-graphite-15);background:#fff;border-radius:6px;width:30px;height:30px;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--color-graphite-50-strong);transition:var(--transition-fast);}
 .icon-btn:hover{border-color:var(--color-emerald);color:var(--color-emerald-strong);}
@@ -549,7 +555,7 @@ const PPQ = {
   sourceText:'',     // imported TS text / pasted requirements
   exportLang:'lt',   // 'lt' | 'lten' - eksporto kalba (DOCX)
   exportPaskirtis:'vidinis',  // 'vidinis' | 'tiekejams' - tiekėjams be numatomos vertės ir vidinio pagrindimo
-  priedoNr:'2'       // atitikties lentelės priedo numeris (PP-salygos DPS šablonuose kvalifikacija - 2 priedas)
+  priedoNr:''        // atitikties lentelės priedo numeris - be numatytojo (pilotas 2026-11-10: iki tol „2“, nors to pirkimo SPS 2 priedas - EBVPD); neįrašius Word - „Priedas Nr. ___“
 };
 
 /* Galimos pirkimo objekto tipo reiksmes - VIENAS saltinis (naudoja ir select, ir AI importo validacija) */
@@ -999,6 +1005,7 @@ function naujasPirkimas(){
   PPQ.audit=naujasAuditas(); PPQ.generavimas={ nutruko:false }; PPQ.vertimoKlaida='';
   PPQ.ui.pagrindimasId=null; PPQ.ui.zaliasPatvirtintas=false;
   PPQ.settings.green=null;   // žaliasis - pirkimo savybė, ne nustatymas
+  PPQ.priedoNr='';           // priedo numeris - pagal to pirkimo SPS priedų sąrašą
   PPQ.step=1;
   const ab=$('audit-body'); ab.innerHTML=''; delete ab.dataset.init;
   $('wizard-body').innerHTML=''; $('export-body').innerHTML='';
@@ -1504,6 +1511,7 @@ async function generateRequirements(){
    senos redakcijos vertimas, o naujas tuščias reikalavimas iškart būdavo „patvirtintas“.
    ============================================================ */
 const NAUJO_VIETA='Naujas reikalavimas - įrašykite tekstą';
+const EV_VIETA='Įrašykite, kokius dokumentus tiekėjas pateikia šiam reikalavimui pagrįsti';
 function reikalavimas(d, statusas){
   const w=noDash(d.warning||'');
   return { id:uid(), category:d.category||'C', text:noDash(d.text||''), evidence:noDash(d.evidence||''),
@@ -1521,7 +1529,7 @@ function naujaRedakcija(r, pakeitimai, kodel){
   r.rev=(r.rev||1)+1;
   r.patvirtinta=null;
   r.status='edited';
-  r.nesutampa=false;   // žmogus pakeitė tekstą - jis jau ne DI išskaidymo
+  if(!('evidence' in pakeitimai && Object.keys(pakeitimai).length===1)) r.nesutampa=false;   // žmogus pakeitė tekstą - jis jau ne DI išskaidymo (pakeisti tik dokumentai - tekstas lieka toks, kokį išskaidė DI)
 }
 /* Rimtos (high) ŠIOS redakcijos patikros pastabos - patvirtinti galima tik su pagrindimu. */
 function rimtosPastabos(r){
@@ -1566,15 +1574,17 @@ function kortelesIspejimas(r){
 }
 function kortelesIspejimas0(r){
   const senas=r.warningRev!=null && r.warningRev!==(r.rev||1);
-  return `<div class="warn-block"><strong>🟡 Įspėjimas${senas?' ankstesnei redakcijai':''}:</strong> ${esc(r.warning)}${senas?' <em>Tekstas pakeistas - pakartokite patikrą.</em>':''}</div>`;
+  return `<div class="warn-block"><strong>🟡 Įspėjimas${senas?' ankstesnei redakcijai':''}:</strong> ${esc(beIdu(r.warning))}${senas?' <em>Tekstas pakeistas - pakartokite patikrą.</em>':''}</div>`;
 }
 function istorijaHtml(r){
   const h=r.hist||[];
   if(!h.length) return '';
   return `<details class="req-hist"><summary>Ankstesnės redakcijos (${h.length})</summary>${h.map((v,i)=>{
     const kitas=i+1<h.length ? h[i+1].text : r.text;
+    const kitiDok=String((i+1<h.length ? h[i+1].evidence : r.evidence)||''), dok=String(v.evidence||'');
     return `<div class="hist-eil"><div class="hist-meta">${v.rev} red.${v.patvirtinta?' · buvo patvirtinta':''} · pakeista ${esc(laikoZyma(v.pakeista))}${v.kodel?' · '+esc(v.kodel):''}</div>
-      <div class="skirtumas">${skirtumas(v.text, kitas)}</div></div>`;
+      ${v.text!==kitas || dok===kitiDok ? `<div class="skirtumas">${skirtumas(v.text, kitas)}</div>` : ''}
+      ${dok!==kitiDok ? `<div class="skirtumas"><strong>Pateikiami dokumentai:</strong> ${skirtumas(dok, kitiDok)}</div>` : ''}</div>`;
   }).join('')}</details>`;
 }
 function pagrindimoFormaHtml(r){
@@ -1598,7 +1608,9 @@ function reqCardHtml(r,editable){
       ${editable?`<select class="req-kat" aria-label="Kategorija" title="Kategorija" onchange="keiskKategorija('${r.id}',this.value)">${Object.keys(CATS).map(k=>`<option value="${k}"${k===r.category?' selected':''}>${k}</option>`).join('')}</select>`:''}
     </div>
     <div class="req-text" data-vieta="${esc(NAUJO_VIETA)}" ${editable?'contenteditable="true" onblur="editReqText(\''+r.id+'\',this.innerText)"':''}>${esc(r.text)}</div>
-    ${r.evidence?`<div class="req-evidence"><strong>Įrodymai:</strong> ${esc(r.evidence)}</div>`:''}
+    ${editable
+      ? `<div class="req-evidence${String(r.evidence||'').trim()?'':' tuscia'}"><strong>Pateikiami dokumentai:</strong><div class="req-ev-text" role="textbox" aria-multiline="true" aria-label="Pateikiami dokumentai" data-vieta="${esc(EV_VIETA)}" contenteditable="true" onblur="editReqEvidence('${r.id}',this.innerText)">${esc(r.evidence||'')}</div></div>`
+      : (r.evidence?`<div class="req-evidence"><strong>Pateikiami dokumentai:</strong> <span class="req-ev-text">${esc(r.evidence)}</span></div>`:'')}
     ${r.rationale?`<div class="req-meta"><strong>Pagrindimas:</strong> ${esc(r.rationale)}</div>`:''}
     ${patvirtintas(r)&&r.patvirtinta.pagrindimas?`<div class="req-meta"><strong>Patvirtinimo pagrindimas:</strong> ${esc(r.patvirtinta.pagrindimas)}</div>`:''}
     <div class="req-warn">${kortelesIspejimas(r)}</div>
@@ -1661,11 +1673,25 @@ function editReqText(id,txt){
   // paspaudimą, ir perpiešus dingtų mygtukas, kurį žmogus tuo metu spaudžia (pvz. ✓).
   atnaujinkKortele(r);
 }
+/* Pateikiami dokumentai (įrodymai) - ta pati redakcijų logika kaip tekstui (pilotas 2026-11-10, Q-1): pakeitus - nauja redakcija
+   (rev++, ankstesnė - istorijoje), patvirtinimas nebegalioja, EN vertimas ir patikra pasenę. Iki tol stulpelis buvo neredaguojamas:
+   perrašius reikalavimą likdavo ankstesnio DI reikalavimo dokumentai, o naujam - tuščias langelis, ir tai keliavo į Word ir PP-salygos SPS 2 lentelę.
+   Pirmas naujo žmogaus reikalavimo (be istorijos, nepatvirtinto, netikrinto) dokumentų įrašas - ne nauja redakcija, kaip ir tekstas. */
+function dokNorm(t){ return noDash(String(t||'').replace(/\r\n?/g,'\n').replace(/\u00a0/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim()); }
+function editReqEvidence(id,txt){
+  const r=rast(id); if(!r) return;
+  const nt=dokNorm(txt);
+  if(nt===dokNorm(r.evidence)) return;   // tik tarpai ar eilučių pabaigos - ne pakeitimas
+  if(r.zmogaus && !String(r.evidence||'').trim() && !(r.hist||[]).length && !patvirtintas(r) && r.auditoRev==null){ r.evidence=nt; if(!tuscias(r)) r.status='edited'; }
+  else naujaRedakcija(r,{evidence:nt},'pakeisti pateikiami dokumentai');
+  atnaujinkKortele(r);
+}
 function atnaujinkKortele(r){
   document.querySelectorAll('.req-item[data-id="'+r.id+'"]').forEach(el=>{
     const b=el.querySelector('.req-badges'); if(b) b.innerHTML=kortelesZymos(r);
     const w=el.querySelector('.req-warn'); if(w) w.innerHTML=kortelesIspejimas(r);
     const h=el.querySelector('.req-hist-vieta'); if(h) h.innerHTML=istorijaHtml(r);
+    const ev=el.querySelector('.req-evidence'); if(ev) ev.classList.toggle('tuscia', !String(r.evidence||'').trim());
     el.classList.toggle('flagged', !!r.warning);
   });
   atnaujinkGyvas();
@@ -2140,6 +2166,41 @@ function sakiniai(t){
   return out;
 }
 
+/* Specialisto (personalo) reikalavimo sakinys - vienas atpažinimas taisyklėms R1, R5, R12, R14 (pilotas su tikru pirkimu
+   2026-11-10). Specialistui taikomas Metodikos 21 p. (met_personalas: kompetencijos, faktinė patirtis), o tiekėjo
+   patirties vertė (16 p.) ir laikotarpis (16.1, 16.2 p.) - tiekėjo įvykdytoms sutartims. Iki tol „Tiekėjas turi turėti nekilnojamojo
+   turto analitiką, kuris per paskutinius 10 metų ... turi ... 5 (penkerių) metų profesinę patirtį“ gaudavo R14 („tiekėjas veiktų
+   5 m.“) ir R12 („16.2 p. - 3 m.“), nes sąraše nebuvo „analitik“, o R1 ir R12 specialisto požymio netikrino.
+   Asmuo, kurio reikalaujama: daiktavardžio kamienas žodžio pradžioje (JS \w ir \b lietuviškų raidžių neatpažįsta - raidžių klasė,
+   be lookbehind) arba šablonas „turėti X, kuris / kuri ...“ su asmens patirtimi, stažu ar išsilavinimu. Ne asmuo: juridinis ar
+   fizinis asmuo (tiekėjo forma), tiekėjo vadovas (pasirašo), savo darbuotojai (savo jėgomis), „konsultantų paslaugos“. */
+const ASMUO_RE=new RegExp('(?:^|[^\\p{L}])(?:specialist|ekspert|inžinier|analitik(?:as|ą|o|ui|ai|ams|us|ų|e)(?![\\p{L}])|konsultant'
+  +'|teisinink|advokat|architekt(?!ūr)|koordinator|vertintoj|auditori(?!j)|technik(?:as|ą|o|ui|ams|us)(?![\\p{L}])|meistr|vadov(?!au|ėl|yb)'
+  +'|darbuotoj|personal(?!in)|kvazisubtiekėj|matinink|geodezinink|programuotoj|vertėj|dizainer|elektrik|suvirintoj|montuotoj|brigadinink'
+  +'|tyrėj|dėstytoj|lektori|psicholog|redaktori|darbų\\s+vykdytoj|asmen(?!in|išk))','iu');
+const NE_ASMUO_RE=new RegExp('(?:juridin|fizin|treči|kit|susijusi|įgaliot)[\\p{L}]*\\s+asmen[\\p{L}]*|asmen(?:iui|ims)(?![\\p{L}])'
+  +'|(?:tiekėj|įmon|bendrov|dalyv|subjekt|grup)[\\p{L}]*\\s+vadov[\\p{L}]*|savo\\s+darbuotoj[\\p{L}]*|[\\p{L}]+(?:o|ų|ės|ių|os)\\s+paslaug[\\p{L}]*','giu');
+// „turėti X, kuris ...“: X - ne daiktas ar sutartis (tie atpažįstami kitur), sakinio dalis po „kuris“ - apie asmens patirtį
+const ASMENS_SABLONAS=new RegExp('(?:turėti|pasitelk[\\p{L}]*|paskir[\\p{L}]*|skir[\\p{L}]*|įdarbin[\\p{L}]*|užtikrin[\\p{L}]*)\\s+([^,.;]{1,120}?),\\s*'
+  +'(?:(?:kuris|kurie|turintį|turinčius|turintys)\\s[^.;]*?(?:patirt|staž|išsilavinim|dirb|[\\p{L}]{3,}ęs(?![\\p{L}]))'
+  +'|(?:kuri|kurios|turinčią|turinčias)\\s[^.;]*?(?:staž|išsilavinim|[\\p{L}]{3,}usi(?![\\p{L}])))','iu');
+const NE_ASMENS_OBJEKTAS=/sutart|projekt|užsakym|objekt|darb|paslaug|prek|sistem|įrang|sertifikat|licencij|leidim|draudim|patirt|pajam|apyvart/i;
+function specialistoSakinys(sak){
+  const s=String(sak||'');
+  if(ASMUO_RE.test(s.replace(NE_ASMUO_RE,' '))) return true;
+  const m=s.match(ASMENS_SABLONAS);
+  return !!(m && !NE_ASMENS_OBJEKTAS.test(m[1]));
+}
+/* Reikalavimo sakiniai su specialisto požymiu: sakinys, prasidedantis įvardžiu („Jis per paskutinius 10 metų ...“), tęsia ankstesnį. */
+function specialistoSakiniai(tekstas){
+  let ankst=false;
+  return sakiniai(tekstas).map(sak=>{
+    const sp=specialistoSakinys(sak) || (ankst && /^\s*(?:jis|ji|jie|jos|šis|ši|šie|šios)(?![\p{L}])/iu.test(sak));
+    ankst=sp;
+    return { sak, specialistas:sp };
+  });
+}
+
 function rulesEngine(r){
   const issues=rulesEngine0(r);
   const D=daliuVertes(PPQ.procurement);
@@ -2162,7 +2223,7 @@ function rulesEngine0(r){
   const koef=c.patirtis.koef;
   const PAJAMOS=/pajam|apyvart/i, PATIRTIS=/sutart|įvykd|patiek|suteik|atlik|patirt/i;
 
-  for(const sak of sakiniai(r.text)){
+  for(const { sak, specialistas } of specialistoSakiniai(r.text)){
     const sums=p.value ? parseEur(sak) : [];
     if(PAJAMOS.test(sak)){
       // R9: metinės pajamos (Metodikos 12, 12.1 p.; VPĮ 47 str. 3 d. 1 p.)
@@ -2189,8 +2250,9 @@ function rulesEngine0(r){
         issues.push({sev:'med',rule:'R9',title:'Per ilgas finansinių metų laikotarpis',
           body:`Vertinami ${metuM[1]} finansiniai metai. ${M('met_apyvarta')}: daugiausia ${N.pajamuMetai.daugiausia} paskutiniai finansiniai metai (paprastai ${N.pajamuMetai.paprastai}).`,
           ref:M('met_apyvarta'), fix:`Sutrumpinti iki ${N.pajamuMetai.paprastai} (pagrįstais atvejais - iki ${N.pajamuMetai.daugiausia}) finansinių metų.`});
-    }else if(PATIRTIS.test(sak)){
-      // R1: patirties (įvykdytų sutarčių) vertė (Metodikos 16 p.)
+    }else if(PATIRTIS.test(sak) && !specialistas){
+      // R1: patirties (įvykdytų sutarčių) vertė (Metodikos 16 p.). R1 ir R12 - tiekėjo patirčiai; specialisto sakiniui
+      // (specialistoSakinys) taikomas Metodikos 21 p. - R5 (pilotas 2026-11-10).
       const virsRibos=sums.find(x=>x>c.patirtis.riba);
       const virsRek=sums.find(x=>x>c.patirtis.rekomenduojama*1.1);
       if(virsRibos)
@@ -2204,7 +2266,8 @@ function rulesEngine0(r){
           ref:`${M('met_patirtis')} (riba ${kbl(N.patirtiesRiba.reiksme)}); koef. ${kbl(koef)} - modulio rekomendacija`,
           fix:`Apsvarstyti ${fmtEur(c.patirtis.rekomenduojama)} - mažesnis reikalavimas didina konkurenciją.`});
       // R12: patirties vertinimo laikotarpis (Metodikos 16.1, 16.2 p.)
-      const laikM=sak.match(/per\s+(?:paskutinius|pastaruosius)\s+(\d+)\s*(?:\([^)]*\)\s*)?met/i);
+      // „per paskutinius 3* metus“ - su išnašos žvaigždute (LITGRID SPS; iki 2026-11-10 tokio laikotarpio R12 nematė)
+      const laikM=sak.match(/per\s+(?:paskutinius|pastaruosius)\s+(\d+)\s*\*?\s*(?:\([^)]*\)\s*)?met/i);
       if(laikM && c.laikotarpis.metai && !/finansin/i.test(sak) && parseInt(laikM[1],10)<c.laikotarpis.metai)
         issues.push({sev:'med',rule:'R12',title:'Patirties laikotarpis trumpesnis nei Metodikoje',
           body:`Nustatyta ${laikM[1]} m., o ${M(c.laikotarpis.raktas)} - ${c.laikotarpis.metai} m. Trumpesnis laikotarpis mažina tiekėjų, galinčių įrodyti patirtį, skaičių; Metodika numato tik galimybę laikotarpį ilginti, kai to reikia konkurencijai užtikrinti.`,
@@ -2291,14 +2354,14 @@ function rulesEngine0(r){
   // R5 / R14: patirtis METAIS. Specialisto stažas (R5, Metodikos 21 p.) - ne tas pats, kas tiekėjo
   // veiklos ar patirties trukmė (R14): tiekėjo patirtis Metodikoje nustatoma įvykdytomis sutartimis per
   // laikotarpį (16-16.2 p.). Laikotarpis „per paskutinius N metų“ - R12, todėl čia jis išimamas.
-  const SPECIALISTAS=/specialist|vadov|ekspert|darbuotoj|inžinier|meistr|technik|konsultant|auditori|personal|asmen/i;
+  // Specialistas - specialistoSakiniai() (vienas atpažinimas R1, R12, R14 ir R5; iki 2026-11-10 - atskiras sąrašas be „analitik“)
   const TIEKEJAS=/tiekėj|įmon|bendrov|dalyv|ūkio\s+subjekt/i;
   const STAZAS=/(\d+)\s*(?:\(\s*[a-ząčęėįšųūž]*\s*\)\s*)?met[a-ząčęėįšųūž]*\s+(?:darbo\s+|profesin[a-ząčęėįšųūž]*\s+|praktin[a-ząčęėįšųūž]*\s+|veiklos\s+)?(?:patirt|staž|darbo|veikl)/i;
   const VEIKLA=/(?:veikia|veikiant[a-ząčęėįšųūž]*|vykdo\s+veiklą|veiklą\s+vykdo|įregistruot[a-ząčęėįšųūž]*|įsteigt[a-ząčęėįšųūž]*)[^.;]{0,60}?(\d+)\s*(?:\([^)]*\)\s*)?met/i;
-  for(const sak of sakiniai(r.text)){
-    const be=sak.replace(/per\s+(?:paskutini|pastar)[a-ząčęėįšųūž]*\s+\d+\s*(?:\([^)]*\)\s*)?met[a-ząčęėįšųūž]*/gi,'');
+  for(const { sak, specialistas } of specialistoSakiniai(r.text)){
+    const be=sak.replace(/per\s+(?:paskutini|pastar)[a-ząčęėįšųūž]*\s+\d+\s*\*?\s*(?:\([^)]*\)\s*)?met[a-ząčęėįšųūž]*/gi,'');
     const veikla=be.match(VEIKLA), st=be.match(STAZAS);
-    if(veikla || (st && TIEKEJAS.test(be) && !SPECIALISTAS.test(be))){
+    if(!specialistas && (veikla || (st && TIEKEJAS.test(be)))){
       const n=(veikla||st)[1], L=c.laikotarpis;
       const laik = L.metai ? `per paskutinius ${L.metai} metus (${M(L.raktas)})`
         : `per paskutinius ${N.patirtiesMetaiPrekesPaslaugos.reiksme} (prekės, paslaugos) ar ${N.patirtiesMetaiDarbai.reiksme} (darbai) metus (${M('met_patirtis_prekes_paslaugos')}, ${M('met_patirtis_darbai')})`;
@@ -2367,13 +2430,21 @@ function aiPastaba(f, revs){
   const reqId=String(f.reqId==null?'':f.reqId).replace(/^\[|\]$/g,'').trim();
   let action=String(f.action||'').toLowerCase().trim();
   if(!VEIKSMAI.includes(action)) action='review';
-  const proposedText=action==='replace' ? noDash(String(f.proposedText||'').trim()) : '';
-  if(action==='replace' && !proposedText) action='review';
+  let proposedText=action==='replace' ? noDash(String(f.proposedText||'').trim()) : '', proposedEvidence=null;
+  // Patikrai reikalavimai siunčiami su „Įrodymai: ...“ eilute, ir DI ją kartais grąžina siūlomo teksto gale. Tai pateikiami dokumentai,
+  // ne reikalavimo tekstas: iki 2026-11-10 (pilotas, R-13) jie rodyti kaip įrašyti į tekstą, o pritaikius - būtų atsidūrę reikalavime.
+  const dm=/(^|[.;!?]\s+|\n\s*)(?:Įrodymai|Pateikiami dokumentai)\s*:\s*/.exec(proposedText);
+  if(dm){
+    const ev=dokNorm(proposedText.slice(dm.index+dm[0].length));
+    proposedText=proposedText.slice(0, dm.index+(/^[.;!?]/.test(dm[1])?1:0)).trim();
+    proposedEvidence=ev||null;
+  }
+  if(action==='replace' && !proposedText && !proposedEvidence) action='review';
   return { reqId, reqRev:Object.prototype.hasOwnProperty.call(revs,reqId) ? revs[reqId] : null, source:'ai',
     sev:SEV_AI[String(f.sev||'').toLowerCase().trim()]||'med',
     title:noDash(f.title||''), body:noDash(f.body||''), ref:tikraDiNuoroda(noDash(f.ref||'')),
     refAtmesta:!!String(f.ref||'').trim() && !tikraDiNuoroda(noDash(f.ref||'')),
-    action, proposedText, fix:noDash(f.fix||'') };
+    action, proposedText, proposedEvidence, fix:noDash(f.fix||'') };
 }
 
 async function runFullAudit(){
@@ -2457,6 +2528,8 @@ async function vykdykAudita(A){
   A.klaida=aiKlaida;
   // Reikalavimų žymos. Patvirtinimas BE pagrindimo, kai šiai redakcijai yra rimta pastaba,
   // atšaukiamas: tokiam reikalavimui pagrindimas būtinas nepriklausomai nuo veiksmų eilės.
+  // Atšaukti patvirtinimai įsimenami ir pasakomi (pilotas 2026-11-10, Q-6: iki tol patvirtinimas dingdavo be pranešimo).
+  const atsaukta=[];
   PPQ.requirements.forEach(r=>{
     r.auditoRev=r.rev||1;
     const fs=A.findings.filter(f=>f.reqId===r.id && f.sev!=='ok');
@@ -2464,9 +2537,14 @@ async function vykdykAudita(A){
     const svarbiausia=fs.find(f=>f.sev==='high')||fs[0];
     r.warning=svarbiausia.body; r.warningRev=r.rev||1;
     if(patvirtintas(r)){
-      if(fs.some(f=>f.sev==='high') && !r.patvirtinta.pagrindimas){ r.patvirtinta=null; r.status='review'; }
+      if(fs.some(f=>f.sev==='high') && !r.patvirtinta.pagrindimas){ r.patvirtinta=null; r.status='review'; atsaukta.push({ id:r.id, rev:r.rev||1 }); }
     }else r.status='review';
   });
+  A.atsauktiPatvirtinimai=atsaukta;
+  if(atsaukta.length){
+    const nr=reikalavimuNumeriai();
+    GP_PRANESIMAS.rodyk('Patvirtinimas nebegalioja: '+atsaukta.map(x=>'Nr. '+nr[x.id]).join(', ')+'. Patikra rado rimtų pastabų, o reikalavimas patvirtintas be pagrindimo - patvirtinkite iš naujo su pagrindimu.', { tipas:'ispejimas' });
+  }
   if(aiKlaida) toast(aiKlaida+' Rodomi tik taisyklių rezultatai.',true);
   buildAuditSummary();
 }
@@ -2491,11 +2569,38 @@ function auditMiniSummary(){
     <div class="stat warn"><div class="num">${k('edited')}</div><div class="lbl">✏️ Redaguota</div></div>
     <div class="stat err"><div class="num">${k('review')}</div><div class="lbl">⚠️ Reikia peržiūros</div></div>
   </div>
-  <p class="muted" style="margin-bottom:var(--space-3);font-size:13px">Audito patikra: <strong>${esc(AUDITO_BUSENOS[auditoBusena()].zyma)}</strong></p>`;
+  <p class="muted" style="margin-bottom:var(--space-3);font-size:13px">Audito patikra: <strong>${esc(AUDITO_BUSENOS[auditoBusena()].zyma)}</strong></p>${atsauktuHtml()}`;
 }
 
+/* Reikalavimų numeriai - kaip pastabų grupėse ir Word dokumente (kategorijų A-E tvarka). */
+function reikalavimuNumeriai(){
+  const nr={}; let n=0;
+  ['A','B','C','D','E'].forEach(k=>PPQ.requirements.filter(r=>r.category===k).forEach(r=>{ nr[r.id]=++n; }));
+  return nr;
+}
+/* DI tekste vidiniai reikalavimų id („r36cfqz5“) keičiami numeriu („Nr. 3“) prieš rodant (pilotas 2026-11-10, R-12): patikrai
+   reikalavimai siunčiami su id, ir DI juos cituoja. Keičiami tik žinomi id (dabartiniai ir šios patikros), ne bet kokie žodžiai. */
+function beIdu(t){
+  let s=String(t==null?'':t);
+  if(!s) return s;
+  const nr=reikalavimuNumeriai();
+  const ids=new Set(Object.keys(nr).concat(((PPQ.audit&&PPQ.audit.findings)||[]).map(f=>f.reqId)).filter(x=>x && x!=='visuma' && x!=='saltinis'));
+  ids.forEach(id=>{
+    const re=new RegExp('(^|[^\\p{L}\\p{N}])\\[?'+id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\]?(?![\\p{L}\\p{N}])','gu');
+    s=s.replace(re,(m,pr)=>pr+(nr[id] ? 'Nr. '+nr[id] : 'pašalintas reikalavimas'));
+  });
+  return s;
+}
+/* Patvirtinimai, kuriuos atšaukė paskutinė patikra ir kurie dar neatkurti. */
+function atsauktuHtml(){
+  const A=PPQ.audit, nr=reikalavimuNumeriai();
+  const l=(A.atsauktiPatvirtinimai||[]).map(x=>rast(x.id)).filter(r=>r && !patvirtintas(r));
+  if(!l.length) return '';
+  return `<div class="warn-block atsaukti"><strong>Patvirtinimas nebegalioja: ${l.map(r=>'Nr. '+nr[r.id]).join(', ')}.</strong> Šiems reikalavimams patikra rado rimtų pastabų, o jie buvo patvirtinti be pagrindimo, todėl dabar pažymėti „Reikia peržiūros“. Patvirtinkite juos iš naujo su pagrindimu (pirkimo vykdytojas turi galėti motyvuotai pagrįsti reikalavimą ir jo reikšmę, ${GP_TEISE.cit('met_pagrindimas')}) arba pakeiskite reikalavimą.</div>`;
+}
 /* Viršutinė audito juosta: ką patikra iš tikrųjų padarė. */
-function auditoBusenosHtml(){
+function auditoBusenosHtml(){ return auditoBusenosHtml0()+atsauktuHtml(); }
+function auditoBusenosHtml0(){
   const A=PPQ.audit, ab=auditoBusena(), laikas=A.laikas?' ('+esc(laikoZyma(A.laikas))+')':'';
   if(ab==='neatlikta') return `<div class="warn-block" style="margin-top:0"><strong>Audito patikra dar neatlikta.</strong> Šie reikalavimai netikrinti: modulis dar nevertino jų proporcingumo ir sąsajos su pirkimo objektu, todėl pastabų skaičius čia nerodomas.</div>`;
   if(ab==='vykdoma') return `<div class="info-block" style="margin-bottom:0">Patikra vykdoma...</div>`;
@@ -2506,10 +2611,46 @@ function auditoBusenosHtml(){
   return `<div class="info-block" style="margin-bottom:0"><strong>Patikra atlikta${laikas}:</strong> taisyklių variklis ir DI vertinimas. ${pastabu?'Pastabos - žemiau.':'Automatinė patikra pastabų nerado.'} Tai ne teisinė išvada: pirkimo vykdytojas turi galėti motyvuotai pagrįsti kiekvieną reikalavimą ir jo reikšmę (${GP_TEISE.cit('met_pagrindimas')}), o sprendimą priima pirkimo komisija arba, kai ji nesudaroma, kitas paskirtas asmuo.</div>`;
 }
 
+/* Ką pasiūlymas keistų dabartinėje redakcijoje: tekstą ir (ar) pateikiamus dokumentus. */
+function pasiulymoPakeitimai(f, r){
+  const pk={};
+  if(f.proposedText && f.proposedText!==r.text) pk.text=f.proposedText;
+  // DI dokumentus grąžina viena eilute - tik tarpų ir eilučių lūžių skirtumas nėra pakeitimas
+  const vien=t=>dokNorm(t).replace(/\s+/g,' ');
+  if(f.proposedEvidence && vien(f.proposedEvidence)!==vien(r.evidence)) pk.evidence=dokNorm(f.proposedEvidence);
+  return pk;
+}
 function pasiulymasGalioja(f){
-  if(f.pritaikyta || f.action!=='replace' || !f.proposedText) return false;
+  if(f.pritaikyta || f.action!=='replace' || !(f.proposedText || f.proposedEvidence)) return false;
   const r=rast(f.reqId);
-  return !!(r && (r.rev||1)===f.reqRev && f.proposedText!==r.text);
+  return !!(r && (r.rev||1)===f.reqRev && Object.keys(pasiulymoPakeitimai(f, r)).length);
+}
+/* Ar DI pasiūlymas griežtina reikalavimą (pilotas 2026-11-10, R-13): proporcingumo patikra turi mažinti nepagrįstus ribojimus, o DI
+   kartais įrašo naują vertės ribą („ne mažesnė kaip 45 000 EUR“) ar didesnį kiekį. Tikrinami tik skaičiai: suma eurais, kurios
+   dabartiniame tekste nėra ar kuri didesnė, ir kiekis po „bent“, „ne mažiau kaip“ - naujas ar didesnis. Sprendžia žmogus. */
+function kiekiaiTekste(t){
+  const out=[], s=String(t||''), re=/(?:bent|ne\s+mažiau\s+(?:kaip|nei)|ne\s+mažesn[\p{L}]*\s+(?:kaip|nei|už))\s+(\d+(?:[.,]\d+)?)/giu; let m;
+  while((m=re.exec(s))){
+    const po=s.slice(m.index+m[0].length).replace(/^[\d\s.,]*/,'').replace(/^\([^)]*\)\s*/,'');
+    if(/^(?:mln|tūkst|eur|€|proc|%)/i.test(po)) continue;   // suma ar procentas - ne kiekis
+    const zodis=(po.match(/^[\p{L}]+/u)||[''])[0].toLowerCase();
+    out.push({ n:parseFloat(m[1].replace(',','.')), vnt:zodis.slice(0,4), zodis });
+  }
+  return out;
+}
+function pasiulymoGriezcia(senas, naujas){
+  const out=[], se=parseEur(senas), ne=parseEur(naujas), maks=se.length ? Math.max(...se) : null;
+  ne.filter(x=>!se.includes(x)).forEach(x=>{
+    if(maks==null) out.push('įrašyta nauja suma '+fmtEur(x)+', kurios dabartiniame tekste nėra');
+    else if(x>maks) out.push('suma didesnė nei dabar ('+fmtEur(x)+' vietoj '+fmtEur(maks)+')');
+  });
+  const sk=kiekiaiTekste(senas), nk=kiekiaiTekste(naujas);
+  nk.forEach(k=>{
+    const tos=sk.filter(x=>x.vnt===k.vnt);
+    if(!tos.length) out.push('naujas kiekio reikalavimas „'+k.n+(k.zodis?' '+k.zodis:'')+'“');
+    else if(k.n>Math.max(...tos.map(x=>x.n))) out.push('kiekis didesnis nei dabar ('+k.n+' vietoj '+Math.max(...tos.map(x=>x.n))+(k.zodis?' '+k.zodis:'')+')');
+  });
+  return [...new Set(out)];
 }
 function pastabosHtml(f, kiek, grupeje){
   const sevLabel={high:'🔴 Rimta',med:'🟡 Svarstytina',low:'🔵 Pastaba'};
@@ -2523,10 +2664,17 @@ function pastabosHtml(f, kiek, grupeje){
     ? `<div class="finding-body" style="color:var(--color-graphite-50-strong);font-size:13px">Reikalavimas${senas?' (pastaba ankstesnei redakcijai)':''}: ${esc(r.text.slice(0,160))}${r.text.length>160?'...':''}</div>`
     : `<div class="finding-body" style="color:var(--color-graphite-50-strong);font-size:13px">${f.reqId==='visuma'?'Reikalavimų visuma':'Reikalavimas neatpažintas arba pašalintas'}</div>`;
   let veiksmas='';
-  if(f.action==='replace' && f.proposedText){
-    const gal=pasiulymasGalioja(f);
+  if(f.action==='replace' && (f.proposedText || f.proposedEvidence)){
+    const gal=pasiulymasGalioja(f), pk=gal ? pasiulymoPakeitimai(f, r) : {};
+    const gr=pk.text ? pasiulymoGriezcia(r.text, f.proposedText) : [];
+    const tekstas = gal
+      ? (pk.text ? skirtumas(r.text, beIdu(f.proposedText)) : '<span class="muted">Reikalavimo tekstas nekeičiamas.</span>')
+      : esc(beIdu(f.proposedText||''));
+    const dok = gal ? (pk.evidence ? `<div class="skirtumas" style="margin-top:6px"><strong>Pateikiami dokumentai:</strong> ${skirtumas(r.evidence||'', pk.evidence)}</div>` : '')
+      : (f.proposedEvidence ? `<div class="skirtumas" style="margin-top:6px"><strong>Pateikiami dokumentai:</strong> ${esc(f.proposedEvidence)}</div>` : '');
     veiksmas=`<div class="finding-fix"><strong>Siūlomas tekstas</strong>${gal?' (išbraukta ir įrašyta pažymėta)':''}:
-      <div class="skirtumas" style="margin-top:4px">${gal?skirtumas(r.text,f.proposedText):esc(f.proposedText)}</div>
+      <div class="skirtumas" style="margin-top:4px">${tekstas}</div>${dok}
+      ${gr.length && !f.pritaikyta ? `<div class="warn-block griezcia" style="margin:8px 0 0"><strong>Patikrinkite:</strong> pasiūlymas gali griežtinti reikalavimą - ${esc(gr.join('; '))}. Proporcingumo patikra turi mažinti nepagrįstus ribojimus; ar naujas ar didesnis reikalavimas būtinas šiam pirkimui, sprendžiate jūs.</div>` : ''}
       ${f.pritaikyta ? '<div style="margin-top:6px"><strong>✓ Pritaikyta</strong></div>'
         : gal ? `<label class="check-row" style="margin:8px 0 0"><input type="checkbox" class="pas-zym" data-fid="${f.fid}"><span>Pažymėti pritaikymui${kiek[f.reqId]>1?' (šiam reikalavimui yra '+kiek[f.reqId]+' pasiūlymai - pritaikyti galima tik vieną)':''}</span></label>`
         : '<div class="muted" style="margin-top:6px">Reikalavimas pakeistas po patikros - pasiūlymas netaikomas.</div>'}
@@ -2535,11 +2683,11 @@ function pastabosHtml(f, kiek, grupeje){
     veiksmas=`<div class="finding-fix"><strong>DI siūlo reikalavimą pašalinti.</strong> Jei sutinkate, pašalinkite jį reikalavimo kortelėje (🗑).</div>`;
   }
   return `<div class="finding ${sevCls[f.sev]||'sev-low'}"${f.source==='ai'?' data-di="sugeneruota"':''}>
-    <div class="finding-title">${sevLabel[f.sev]||''} ${esc(f.title)} <span class="badge ${f.source==='rule'?'badge-cat':'badge-ai'}" style="margin-left:auto">${f.source==='rule'?'Taisyklė '+(f.rule||''):'DI'}</span></div>
+    <div class="finding-title">${sevLabel[f.sev]||''} ${esc(beIdu(f.title))} <span class="badge ${f.source==='rule'?'badge-cat':'badge-ai'}" style="margin-left:auto">${f.source==='rule'?'Taisyklė '+(f.rule||''):'DI'}</span></div>
     ${kam}
-    <div class="finding-body">${esc(f.body)}</div>
+    <div class="finding-body">${esc(beIdu(f.body))}</div>
     ${f.ref?`<div class="finding-ref">${esc(f.ref)}</div>`:''}${f.refAtmesta?`<div class="finding-ref">DI nurodė teisės nuorodą, kurios nėra G-Procure teisės nuorodų registre - nerodoma.</div>`:''}
-    ${f.fix?`<div class="finding-fix"><strong>Rekomendacija:</strong> ${esc(f.fix)}</div>`:''}
+    ${f.fix?`<div class="finding-fix"><strong>Rekomendacija:</strong> ${esc(beIdu(f.fix))}</div>`:''}
     ${veiksmas}
   </div>`;
 }
@@ -2619,7 +2767,9 @@ function taikytiPasiulymus(){
   const kiek={}; pas.forEach(f=>{ kiek[f.reqId]=(kiek[f.reqId]||0)+1; });
   if(Object.values(kiek).some(n=>n>1)){ toast('Vienam reikalavimui pažymėti keli pasiūlymai - palikite vieną.',true); return; }
   pas.forEach(f=>{
-    naujaRedakcija(rast(f.reqId),{ text:f.proposedText },'pritaikytas audito pasiūlymas'+(f.title?': '+f.title:''));
+    const r=rast(f.reqId), pk=pasiulymoPakeitimai(f, r);
+    if(pk.text) pk.text=beIdu(pk.text);   // vidiniai id - ne į reikalavimo tekstą ir Word
+    naujaRedakcija(r, pk, 'pritaikytas audito pasiūlymas'+(f.title?': '+beIdu(f.title):''));
     f.pritaikyta=true;
   });
   renderAuditResults();
@@ -2721,6 +2871,10 @@ function eksportoPatikra(){
     if(ab!=='atlikta') juod.push({ lt:AUDITO_BUSENOS[ab].juodr, en:AUDITO_BUSENOS[ab].juodrEn });
     if(PPQ.generavimas.nutruko) juod.push({ lt:'DI atsakymas rengiant rinkinį nutrūko ties ilgio riba - rinkinys gali būti nepilnas.',
                                             en:'The AI response was cut off at the length limit while preparing the set - the set may be incomplete.' });
+    // Pateikiami dokumentai - į Word ir PP-salygos SPS 2 lentelę: tuščias langelis - ne galutinis dokumentas (pilotas 2026-11-10, Q-1)
+    const beDok=R.filter(r=>!tuscias(r) && !String(r.evidence||'').trim()).length;
+    if(beDok) juod.push({ lt:'Nenurodyti pateikiami dokumentai: '+beDok+' iš '+vis+' '+reikalavimuKilm(vis)+' - įrašykite juos reikalavimo kortelėje.',
+                          en:'Documents to be submitted are not specified: '+beDok+' of '+vis+' requirement(s).' });
     const ns=R.filter(r=>r.nesutampa).length;
     if(ns) juod.push({ lt:'DI išskaidyto teksto, nesutampančio su įklijuotu, liko: '+ns+' iš '+vis+' '+reikalavimuKilm(vis)+' - palyginkite su originalu.',
                        en:'Requirements split by AI that do not match the pasted text: '+ns+' of '+vis+' - compare with the original.' });
@@ -2740,6 +2894,7 @@ function parengtiesHtml(){
   let h='';
   if(v.blok.length) h+=`<div class="err-block" style="margin-top:0"><strong>Dokumentas negeneruojamas:</strong><ul>${v.blok.map(x=>'<li>'+esc(x.lt)+'</li>').join('')}</ul></div>`;
   if(v.juod.length) h+=`<div class="warn-block" style="margin-top:${v.blok.length?'10px':'0'}"><strong>Dokumentas bus pažymėtas JUODRAŠČIU:</strong><ul>${v.juod.map(x=>'<li>'+esc(x.lt)+'</li>').join('')}</ul></div>`;
+  if(!String(PPQ.priedoNr||'').trim() && PPQ.requirements.length) h+=`<div class="warn-block priedo-nr-past" style="margin-top:${h?'10px':'0'}"><strong>Patikrinkite:</strong> neįrašytas atitikties lentelės priedo numeris - Word faile bus „Priedas Nr. ___“. Įrašykite jį lauke „Atitikties lentelės priedo Nr.“ pagal SPS priedų sąrašą.</div>`;
   if(PPQ.exportLang==='lten'){
     if(PPQ.vertimoKlaida) h+=`<div class="err-block"><strong>Paskutinis EN vertimo bandymas nepilnas:</strong> ${esc(PPQ.vertimoKlaida)} Dvikalbis dokumentas nesugeneruotas - bandykite dar kartą arba rinkitės LT.</div>`;
     else{ const t=vertimoTruksta(); if(t) h+=`<div class="hint" style="margin-top:8px">EN vertimas bus atliktas generuojant: dabartinės redakcijos vertimo neturi ${t} iš ${PPQ.requirements.length}.</div>`; }
@@ -2780,8 +2935,8 @@ function exportButtonsHtml(){
   </div>
   <div class="field" style="max-width:260px">
     <label for="priedo-nr">Atitikties lentelės priedo Nr.</label>
-    <input type="text" id="priedo-nr" maxlength="6" value="${esc(PPQ.priedoNr)}" oninput="PPQ.priedoNr=this.value.trim()">
-    <div class="hint">Tuščias - „Priedas“ be numerio.</div>
+    <input type="text" id="priedo-nr" maxlength="6" value="${esc(PPQ.priedoNr)}" placeholder="pvz., 9" aria-describedby="priedo-nr-hint" oninput="PPQ.priedoNr=this.value.trim();atnaujinkGyvas()">
+    <div class="hint" id="priedo-nr-hint">Įrašykite numerį pagal šio pirkimo SPS priedų sąrašą. Neįrašius Word faile bus „Priedas Nr. ___“ - numerį įrašysite patys.</div>
   </div>
   <div>
     <button class="btn btn-primary" onclick="exportDocx()"${blok?' disabled title="Dokumentas negeneruojamas - priežastys nurodytos aukščiau"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> DOCX (lentelė + atitikties priedas)</button>
@@ -2953,13 +3108,18 @@ async function exportDocx(){
   // Lentelės tekstas: Arial 10 (size = 20 pusinių punktų)
   const TR=(t,o={})=>new TextRun({text:String(t==null?'':t),bold:!!o.bold,italics:!!o.italics,size:o.size||20,color:o.color,break:o.break,font:'Arial'});
   const para=(t,o={})=>new Paragraph({alignment:o.align,spacing:o.spacing,children:[TR(t,o)]});
+  // Eilutės lūžis tekste - atskira pastraipa (pilotas 2026-11-10): iki tol „\n“ likdavo w:t viduje, ir PP-salygos SPS 2 lentelėje
+  // reikalavimas su „* ...“ pastaba tapdavo „Eur.* per nurodytą“. Tuščios eilutės praleidžiamos.
+  const paras=(t,o={})=>{ const e=String(t==null?'':t).replace(/\r\n?/g,'\n').split('\n').map(x=>x.replace(/\s+$/,'')).filter(x=>x.trim()); return (e.length?e:['']).map(x=>para(x,o)); };
   const cell=(content,o={})=>new TableCell({
     width:o.width?{size:o.width,type:WidthType.DXA}:undefined,
     columnSpan:o.span||undefined,
     verticalAlign:o.valign,
     shading:(o.head||o.catHead)?{fill:o.catHead?FON.cat:FON.head,type:ShadingType.CLEAR,color:'auto'}:undefined,
-    children:Array.isArray(content)?content:[para(content,{bold:o.head||o.bold,size:o.size,color:o.color,align:o.align})]
+    children:Array.isArray(content)?content:paras(content,{bold:o.head||o.bold,size:o.size,color:o.color,align:o.align})
   });
+  // Tekstas su eilučių lūžiais vienoje pastraipoje (pagrindimai): eilutės - atskiri TextRun su w:br
+  const runsLuziais=(t,o={})=>String(t==null?'':t).replace(/\r\n?/g,'\n').split('\n').map((x,i)=>new TextRun(Object.assign({},o,{text:x,break:i?1:undefined})));
 
   const infoRows=[
     // Režimas lemia ir statusą: PĮ - perkantysis subjektas (LITGRID), VPĮ - perkančioji organizacija (EPSO-G).
@@ -3023,7 +3183,7 @@ async function exportDocx(){
   // 3. (tiekėjams - 2.) Kvalifikaciniai reikalavimai - lentelė (dvikalbė pagal pavyzdį)
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:300},children:[new TextRun({text:bi(SK.reik+'. Kvalifikaciniai reikalavimai','Qualification requirements'),color:EM,bold:true})]}));
   const reqCols=3;
-  const dvi=(lt,en)=>bilingual ? [para(lt), para(en||'',{italics:true,color:'737483'})] : lt;   // LT, po juo EN
+  const dvi=(lt,en)=>bilingual ? [...paras(lt), ...paras(en||'',{italics:true,color:'737483'})] : lt;   // LT, po juo EN
   const reqHead=[cell(bi('Eil. Nr.','No.'),{head:true,width:reqColsW[0],align:AlignmentType.CENTER}),
      cell(bi('Kvalifikacijos reikalavimas','Qualification requirement'),{head:true,width:reqColsW[1]}),
      cell(bi('Pateikiami dokumentai','Documents submitted'),{head:true,width:reqColsW[2]})];
@@ -3064,14 +3224,14 @@ async function exportDocx(){
   const pagr=PPQ.requirements.filter(r=>patvirtintas(r) && r.patvirtinta.pagrindimas).sort((a,b)=>nr[a.id]-nr[b.id]);
   if(pagr.length){
     children.push(new Paragraph({spacing:{before:200,after:80},children:[new TextRun({text:bi(`Reikalavimų pagrindimai (${GP_TEISE.cit('met_pagrindimas')})`,`Justification of requirements (${GP_TEISE.cit('met_pagrindimas',null,'en')})`),bold:true,size:20})]}));
-    pagr.forEach(r=>children.push(new Paragraph({spacing:{after:60},children:[new TextRun({text:nr[r.id]+'. ',bold:true,size:20}),new TextRun({text:r.patvirtinta.pagrindimas,size:20})]})));
+    pagr.forEach(r=>children.push(new Paragraph({spacing:{after:60},children:[new TextRun({text:nr[r.id]+'. ',bold:true,size:20}),...runsLuziais(r.patvirtinta.pagrindimas,{size:20})]})));
   }
   }
 
-  // Priedas - atitikties lentelė; numerį nustato žmogus (tuščias - be numerio).
+  // Priedas - atitikties lentelė; numerį nustato žmogus (neįrašytas - „___“, numatytojo nėra).
   const pnr=String(PPQ.priedoNr||'').trim();
   children.push(new Paragraph({children:[new PageBreak()]}));
-  children.push(new Paragraph({alignment:AlignmentType.RIGHT,children:[new TextRun({text:bi(pnr?'Priedas Nr. '+pnr:'Priedas',pnr?'Annex No. '+pnr:'Annex'),bold:true,size:22,color:'737483'})]}));
+  children.push(new Paragraph({alignment:AlignmentType.RIGHT,children:[new TextRun({text:bi('Priedas Nr. '+(pnr||'___'),'Annex No. '+(pnr||'___')),bold:true,size:22,color:'737483'})]}));
   children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun({text:bi('Kvalifikacinių reikalavimų atitikties lentelė','Qualification requirements compliance table'),color:EM,bold:true})]}));
   const headRow=new TableRow({tableHeader:true,children:[
     cell(bi('Nr.','No.'),{head:true,width:compCols[0]}),cell(bi('Kvalifikacijos reikalavimas','Qualification requirement'),{head:true,width:compCols[1]}),
@@ -3086,10 +3246,10 @@ async function exportDocx(){
     PPQ.requirements.filter(r=>r.category===k).forEach(r=>{
       n++;
       const reqCell=bilingual
-        ? cell([para(r.text),para(r.text_en||'',{italics:true,color:'737483'})],{width:compCols[1]})
+        ? cell([...paras(r.text),...paras(r.text_en||'',{italics:true,color:'737483'})],{width:compCols[1]})
         : cell(r.text,{width:compCols[1]});
       const evCell=bilingual
-        ? cell([para(r.evidence||''),para(r.evidence_en||'',{italics:true,color:'737483'})],{width:compCols[3]})
+        ? cell([...paras(r.evidence||''),...paras(r.evidence_en||'',{italics:true,color:'737483'})],{width:compCols[3]})
         : cell(r.evidence||'',{width:compCols[3]});
       dataRows.push(new TableRow({children:[cell(n,{width:compCols[0]}),reqCell,cell(k,{width:compCols[2]}),evCell,cell('',{width:compCols[4]}),...(tiekejams ? [] : [cell('',{width:compCols[5]})])]}));
     });
