@@ -29,7 +29,9 @@
   // priedo numeris - ir dviejų lygių (rangos SS priedų sąrašas: „priede Nr. 1.1“, 2026-10-10)
   var PRIED = /(\d+)\s*pried[a-ząčęėįšųūž]*|pried[a-ząčęėįšųūž]*\s*Nr\.\s*(\d+(?:\.\d+)?)|Annex(?:es)?\s*(?:No\.\s*)?(\d+)/gi;
   // teisės akto struktūra prieš numerį: „VPĮ 90 straipsnio 1 dalies 7 punkte“, „Article 45(2) point 3“ - ne sutarties punktas
-  var TEISES_AKTAS = /(straipsn[a-ząčęėįšųūž]*|Article|įstatym[a-ząčęėįšųūž]*|kodeks[a-ząčęėįšųūž]*|Law|LPP|LP|VPĮ|PĮ|aprašo|reglament[a-ząčęėįšųūž]*|Regulation|Directive|direktyv[a-ząčęėįšųūž]*|dal(?:ies|yje|is)\s*(?:\d+\s*)?|paragraph\s*\(\d+\)|\(\d+\)|\((?:toliau|hereinafter)[^)]{0,40}(?:aprašas|taisyklės|metodika|tvarka|nutarimas|įsakymas|Description|Rules|Procedure|Methodology)\))\s*$/i;
+  var TEISES_AKTAS = /(straipsn[a-ząčęėįšųūž]*|Article|įstatym[a-ząčęėįšųūž]*|kodeks[a-ząčęėįšųūž]*|Law|LPP|LP|VPĮ|PĮ|aprašo|reglament[a-ząčęėįšųūž]*|Regulation|Directive|direktyv[a-ząčęėįšųūž]*|dal(?:ies|yje|is)\s*(?:\d+\s*)?|paragraph\s*\(\d+\)|\(\d+\)|\((?:toliau|hereinafter)[^)]{0,40}(?:aprašas|taisyklės|metodika|tvarka|nutarimas|įsakymas|Description|Rules|Procedure|Methodology)\)|[^\s„“”"]["“”])\s*$/i;
+  // ir teisės akto pavadinimas kabutėse (uždaromoji kabutė) prieš numerį: „... įsakymu Nr. D1-508 „Dėl ... tvarkos aprašo patvirtinimo“ 4.4.3 papunkčiu“ - to akto
+  // papunktis (pilotas su tikru pirkimu 2026-11-10: rodyta „Nuoroda į 4.4.3 punktą, kurio sutartyje nėra“ ir G-Procure, ir LITGRID sutartyje)
   // „... tvarkos aprašo ... (toliau – Tvarkos aprašas) 4.4.4 papunkčiu“ - kito teisės akto punktas, ne sutarties (T3-V5, 2026-10-21)
   var PAVYZDYS = /(pavyzdžiui|pvz\.|e\.\s*g\.|for example)[\s,:]*$/i;
 
