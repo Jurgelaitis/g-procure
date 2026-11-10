@@ -2550,7 +2550,8 @@ async function testaiDiUzduotys1108() {
       lygu(uzkl.map(o => [o.uzduotis, o.duomenys.bandymas]), [['pp-ts.auditas', undefined], ['pp-ts.auditas', 1], ['pp-ts.auditas', 2]], 'užklausos ir bandymai');
       const d = uzkl[0].duomenys;
       SIST.forEach(k => tiesa(d[k] !== undefined && d[k] !== '', 'nėra lauko ' + k));
-      lygu([d.ist, d.kryptys, d.aspektai, d.taisykliu, d.gylis, d.tekstas], ['PĮ', ['grammar'], ['green'], 2, 'deep', 'Kabelis Prysmian arba lygiavertis.'], 'užduoties duomenys');
+      // aspektai - lietuviškais pavadinimais (pilotas 2026-11-10, R-4: iki tol raktas „green“ patekdavo į DI santrauką)
+      lygu([d.ist, d.kryptys, d.aspektai, d.taisykliu, d.gylis, d.tekstas], ['PĮ', ['grammar'], ['žaliasis pirkimas'], 2, 'deep', 'Kabelis Prysmian arba lygiavertis.'], 'užduoties duomenys');
       lygu([d.meta.title, d.meta.duration, d.meta.value], ['Galios transformatorių priežiūra', '24', '1500000'], 'pirkimo duomenys - tekstu');
       tiesa(/^1[\s  ]500[\s  ]000$/.test(d.meta.valueLt), 'vertė lietuvišku formatu: ' + d.meta.valueLt);
       tiesa(!('flags' in d.meta), 'pirkimo aspektai siunčiami sąrašu, ne objektu');
@@ -2573,7 +2574,7 @@ async function testaiDiUzduotys1108() {
       const pagal = id => uzkl.filter(o => o.uzduotis === 'pp-ts.' + id).map(o => o.duomenys);
       lygu(['klausimai', 'karkasas', 'skyrius', 'atitiktis', 'rinka', 'kaina', 'taisymas'].map(id => pagal(id).length), [1, 1, 2, 1, 1, 1, 1], 'užduočių skaičius');
       tiesa(uzkl.every(o => o.model === w.GP_AI_PROXY.MODEL), 'be pasirinkto modelio - numatytasis');
-      lygu(pagal('klausimai')[0].aspektai, ['green'], 'klausimų aspektai');
+      lygu(pagal('klausimai')[0].aspektai, ['žaliasis pirkimas'], 'klausimų aspektai');
       const k = pagal('karkasas')[0];
       lygu([k.atsakymai, /CVP IS ANALOGAI:\n1\. "Transformatorių priežiūra"/.test(k.cvpis)], ['Q1: Kiek vienetų?\nA1: 4', true], 'karkaso duomenys');
       const sk = pagal('skyrius');
@@ -2616,6 +2617,233 @@ async function testaiDiUzduotys1108() {
   } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; delete w.__meta; delete w.__an; delete w.__st; delete w.__ts; delete w.__S; }
 }
 
+/* ==========================================================================
+   PILOTAS SU TIKRU PIRKIMU (2026-11-10): LITGRID konsultavimo paslaugų TS „Tikrinti TS“ kelyje.
+   R-7 - taisyklių klaidingi radiniai (Microsoft Teams kaip „Kritinė“, „Pagrįstos“, garantija konsultavimo paslaugai),
+   R-6 - taisyklių ir DI pastabos nesujungiamos, antraštė „Bendras vertinimas“, R-4 - žaliasis pirkimas savaime ir „'green'“ DI santraukoje,
+   R-5 - PP-ts pats nekartoja DI užklausos po ilgo laukimo 502 / 504.
+   ========================================================================== */
+async function testaiPilotas1110() {
+  grupe('Pilotas su tikru pirkimu (2026-11-10): taisyklės, sujungimas, žaliasis savaime, kartojimas');
+  const zen = (t, m) => taisykles(t, m).issues.filter(i => i.category === 'brand_restriction').map(i => i.title.replace(/^Prekės ženklas „|" be.*$/g, ''));
+  const PILOTAS = '2.2. Derybų strategijos parengimas\nKonsultantas privalo:\n• Atlikti išsamią rinkos duomenų analizę, kuri apima:\n'
+    + '• Registrų centro įregistruotų sandorių duomenų analizę;\n• Pagrįstos derybinės kainos parengimą ir pateikimą;\n'
+    + '4.1. Komunikacija ir koordinavimas:\n• Konsultantas paskiria vieną atsakingą kontaktinį asmenį (projekto vadovą);\n'
+    + '• Reguliarūs koordinaciniai susitikimai vyksta kartą per savaitę per Microsoft Teams;\n• Neatidėliotini klausimai sprendžiami per 24 valandas nuo kreipimosi.\n';
+  const PILOTO_META = { type: 'services', cpv: '70300000', title: 'Turto vertinimo konsultavimo paslaugos', flags: { green: true } };
+
+  await testas('R-7: piloto TS taisyklėmis - be „Microsoft“ (susitikimai per Microsoft Teams), be „Pagrįstos“ (derybinė kaina) ir be garantijos (konsultavimo paslauga, BVPŽ 70300000)', () => {
+    const r = taisykles(PILOTAS, PILOTO_META).issues;
+    lygu(r.filter(i => i.category === 'brand_restriction' || i.category === 'subjective' || i.id === 'no-warranty').map(i => i.title), [], 'klaidingi radiniai');
+    tiesa(taisykles(PILOTAS, {}).issues.some(i => i.id === 'no-warranty'), 'be objekto tipo - garantijos pastaba lieka (kaip iki tol)');
+  });
+
+  await testas('R-7: bendravimo ar darbo priemonė (Microsoft Teams, SharePoint, Cisco Webex), kuri nėra pirkimo objektas, - ne prekės ženklas; licencijos, diegimas, integracija, aptarnavimas, pavadinime minima priemonė, kitas produktas ar vien paminėjimas - žymima kaip iki tol', () => {
+    lygu(zen('Konsultacijos vyksta nuotoliniu būdu (Microsoft Teams).'), [], 'nuotoliniu būdu');
+    lygu(zen('Ataskaitos teikiamos per Microsoft SharePoint.'), [], 'SharePoint - darbo priemonė');
+    lygu(zen('Pasitarimai vyksta per Cisco Webex.'), [], 'Cisco Webex');
+    lygu(zen('Susitikimai vyksta per microsoft teams.'), [], 'mažosiomis');
+    lygu(zen('Tiekėjas pateikia 50 Microsoft Teams licencijų susitikimams.'), ['Microsoft'], 'licencijos - pirkimo objektas');
+    lygu(zen('Tiekėjas įdiegia Microsoft Teams vaizdo konferencijų sistemą.'), ['Microsoft'], 'diegimas');
+    lygu(zen('Microsoft Teams aptarnavimas ir susitikimų organizavimas.'), ['Microsoft'], 'aptarnavimas');
+    lygu(zen('Sistema turi integruotis su Microsoft Teams pokalbiais.'), ['Microsoft'], 'integracija');
+    lygu(zen('Susitikimai vyksta per Microsoft Teams.', { title: 'Microsoft Teams licencijų pirkimas' }), ['Microsoft'], 'pavadinime - priemonė');
+    lygu(zen('Naudojama Microsoft Teams programa.'), ['Microsoft'], 'be bendravimo žodžių ir be „per“');
+    lygu(zen('Komutatoriai Cisco Catalyst 9300.'), ['Cisco'], 'kitas Cisco produktas');
+    lygu(zen('2.2. Operacinė sistema Microsoft Windows 11 Pro.'), ['Microsoft'], 'operacinė sistema');
+    const r = taisykles('Susitikimai vyksta per Microsoft Teams.\nOperacinė sistema Microsoft Windows 11 Pro.').issues.filter(i => i.category === 'brand_restriction');
+    lygu(r.length, 1, 'du paminėjimai - viena pastaba'); turi(r[0].quote, 'Windows 11', 'pažymėtas antras paminėjimas');
+  });
+
+  await testas('R-7: „pagrįstas“ prie teisinės ar paslaugos rezultato sąvokos (kaina, išlaidos, nuostoliai, abejonės), prieveiksmis „pagrįstai“ ir „pagrįstumas“ - ne subjektyvus terminas; „pagrįsta metodika“ ir „turi būti pagrįstas“ - kaip iki tol', () => {
+    const subj = t => taisykles(t).issues.filter(i => i.category === 'subjective').map(i => i.title);
+    lygu(subj('Tiekėjas atlygina pagrįstas išlaidas ir pagrįstus nuostolius.'), [], 'išlaidos ir nuostoliai');
+    lygu(subj('Kilus pagrįstų abejonių, Užsakovas gali pagrįstai reikalauti dokumentų.'), [], 'abejonės ir prieveiksmis');
+    lygu(subj('Komisija vertina kainos pagrįstumą.'), [], 'pagrįstumas');
+    lygu(subj('Tiekėjas pateikia pagrįstą metodiką.'), ['Subjektyvus terminas: „pagrįstą"'], 'metodika');
+    lygu(subj('Pasiūlytas sprendimas turi būti pagrįstas.'), ['Subjektyvus terminas: „pagrįstas"'], 'be sąvokos');
+  });
+
+  await testas('R-7: garantijos nebuvimas nematerialioms paslaugoms (BVPŽ 66, 70, 73, 79, 80 arba konsultavimas, mokymai, auditas pavadinime) - ne trūkumas; IT ir remonto paslaugos, prekės, darbai ir nenurodytas tipas - kaip iki tol', () => {
+    const gar = m => taisykles('Tiekėjas teikia paslaugas pagal šią specifikaciją ir ataskaitas pateikia per 10 darbo dienų.', m).issues.some(i => i.id === 'no-warranty');
+    lygu([gar({ type: 'services', cpv: '70300000' }), gar({ type: 'services', cpv: '79411000-8' }), gar({ type: 'services', title: 'Teisinio konsultavimo paslaugos' }),
+      gar({ type: 'services', cpv: '80510000-2' }), gar({ type: 'services', title: 'Darbuotojų mokymai' }), gar({ type: 'services', cpv: '66171000-9' }), gar({ type: 'services', cpv: '73220000-0' })],
+      [false, false, false, false, false, false, false], 'nematerialios paslaugos');
+    lygu([gar({ type: 'services', cpv: '72212000-4', title: 'Programavimo paslaugos' }), gar({ type: 'services', cpv: '50532000-3' }), gar({ type: 'goods', cpv: '70300000' }),
+      gar({ type: 'works', title: 'Konsultavimo centro statyba' }), gar({ cpv: '70300000' }), gar({})], [true, true, true, true, true, true], 'kitais atvejais');
+  });
+
+  await testas('R-6: ta pati problema toje pačioje vietoje (kategorija ir citata) - viena pastaba su abiem šaltiniais, sunkumas - didesnis; kita kategorija ir citata, kurios tekste nėra, - atskiros; rodiklis - pagal rodomas pastabas; antraštė „Orientacinis pastabų rodiklis“ ir paaiškinimas matomas; modalas ir ataskaita', async () => {
+    const w = W(), d = D(), origP = w.GP_AI_PROXY.uzduotis;
+    const KONF = 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu ir 3 (trejus) metus po sutarties pasibaigimo. Konfidencialumo pažeidimo atveju Perkantysis subjektas turi teisę reikalauti netesybų ir (ar) nutraukti sutartį.';
+    const tekstas = '4.6. Konfidencialumas\n' + KONF + '\n4.7. Įranga\nPerkami Siemens kontroleriai pagal pridedamą sąrašą.\n4.8. Kita\nPapildomas tekstas analizei.';
+    w.GP_AI_PROXY.uzduotis = UZ(async () => atsakymas(JSON.stringify({ summary: 'S', strengths: ['Struktūra aiški.'], actionPlan: ['Pašalinti netesybas.'], issues: [
+      { title: 'Konfidencialumo nuostatos su netesybomis priklauso sutarčiai', severity: 'critical', category: 'scope', quote: KONF, description: 'Tai sutarties sąlygos.', recommendation: 'Perkelti į sutartį.' },
+      { title: 'Siemens be lygiavertiškumo', severity: 'minor', category: 'brand_restriction', quote: 'Perkami Siemens kontroleriai pagal pridedamą sąrašą', description: 'Prekės ženklas.' },
+      { title: 'Neaiškus sąrašas', severity: 'minor', category: 'ambiguity', quote: 'Perkami Siemens kontroleriai pagal pridedamą sąrašą', description: 'Kuris sąrašas?' },
+      { title: 'Netikra citata', severity: 'major', category: 'scope', quote: 'Šios citatos tekste visai nėra ir nebus', description: 'X.' }] })));
+    try {
+      paruosk(); d.getElementById('specText').value = tekstas;
+      await M('App.runAnalysis()');
+      const el = [...d.querySelectorAll('#issuesList .issue')];
+      const pav = el.map(e => e.querySelector('.issue-title').textContent);
+      const scope = el.filter(e => /^TS apima tai, kas jai nepriklauso/.test(e.querySelector('.issue-title').textContent));
+      lygu(scope.length, 1, 'taisyklės pastaba apie TS apimtį: ' + JSON.stringify(pav));
+      tiesa(!pav.includes('Konfidencialumo nuostatos su netesybomis priklauso sutarčiai') && !pav.includes('Siemens be lygiavertiškumo'), 'DI dublikatai liko atskirai: ' + JSON.stringify(pav));
+      const s0 = scope[0];
+      lygu([s0.querySelector('.issue-meta .badge').textContent, [...s0.querySelectorAll('.issue-meta .badge')].map(b => b.textContent).slice(-2), s0.hasAttribute('data-di')],
+        ['Kritinė', ['Taisyklė', 'DI'], false], 'sunkumas - didesnis, abu šaltiniai, taisyklės pastaba be data-di');
+      const di = s0.querySelector('.issue-di[data-di="sugeneruota"]');
+      tiesa(di && /Konfidencialumo nuostatos su netesybomis/.test(di.textContent) && /Perkelti į sutartį/.test(di.textContent) && /Kritinė/.test(di.textContent), 'DI dalis: ' + (di && di.textContent));
+      const br = el.find(e => /^Prekės ženklas „Siemens/.test(e.querySelector('.issue-title').textContent));
+      tiesa(br && br.querySelector('.issue-meta .badge').textContent === 'Kritinė' && br.querySelector('.issue-di'), 'taisyklės sunkumas didesnis - lieka, DI prie jos');
+      tiesa(pav.includes('Neaiškus sąrašas') && pav.includes('Netikra citata'), 'kita kategorija ir nerasta citata - atskiros: ' + JSON.stringify(pav));
+      const W8 = { 'Kritinė': 12, 'Reikšminga': 6, 'Mažesnė': 2, 'Pasiūlymas': 0 };
+      lygu(d.getElementById('scoreValue').textContent, String(Math.max(0, 100 - el.reduce((s, e) => s + W8[e.querySelector('.issue-meta .badge').textContent], 0))), 'rodiklis - pagal rodomas pastabas');
+      lygu(d.getElementById('analysisBadge').textContent, String(el.length), 'skirtuko skaičius');
+      const korta = d.getElementById('scoreCircle').closest('.card');
+      lygu(korta.querySelector('h2').textContent, 'Orientacinis pastabų rodiklis', 'antraštė');
+      turi(d.getElementById('scoreAprasas').textContent, 'Tai ne specifikacijos kokybės įvertinimas', 'paaiškinimas matomas');
+      tiesa(korta.textContent.indexOf('Bendras vertinimas') < 0, 'liko „Bendras vertinimas“');
+      lygu([d.getElementById('analysisSummary').getAttribute('data-di'), d.getElementById('strengthsList').getAttribute('data-di'), d.getElementById('actionPlan').getAttribute('data-di')],
+        ['sugeneruota', 'sugeneruota', 'sugeneruota'], 'DI santrauka, stiprybės ir planas pažymėti');
+      s0.click();
+      const mb = d.getElementById('issueModalBody');
+      tiesa(mb.querySelector('.issue-di[data-di]') && /Taisyklė/.test(mb.textContent) && /DI/.test(mb.textContent) && !mb.hasAttribute('data-di'), 'modalas: ' + mb.textContent.slice(0, 200));
+      M('App.closeIssueModal()');
+      const rep = d.getElementById('reportBody');
+      tiesa(/Orientacinis pastabų rodiklis/.test(rep.textContent) && !/Bendras balas/.test(rep.textContent) && rep.querySelector('.issue-di[data-di]') && rep.querySelector('p[data-di]'), 'ataskaita');
+      // be DI (tik taisyklės) - santrauka nežymima
+      await M('App.runRulesOnly()');
+      lygu([d.getElementById('analysisSummary').hasAttribute('data-di'), d.getElementById('actionPlan').hasAttribute('data-di'), d.querySelectorAll('#issuesList .issue-di').length], [false, false, 0], 'tik taisyklės');
+    } finally { w.GP_AI_PROXY.uzduotis = origP; }
+  });
+
+  await testas('R-6: sujungimo taisyklė - citata viena kitoje, bendras sakinys (nukirptas taisyklės konteksto langas), ne ta pati kategorija, trumpa ar nerasta citata, kita vieta - nesujungiama; kelios DI pastabos - prie vienos taisyklės', () => {
+    const R = (cat, quote, sev) => ({ id: 'r', source: 'rule', category: cat, severity: sev || 'major', title: 'T', quote });
+    const A = (cat, quote, sev, extra) => Object.assign({ id: 'a', source: 'ai', category: cat, severity: sev || 'minor', title: 'D', quote }, extra || {});
+    const S = (r, a) => M('App.sujunkPastabas(' + JSON.stringify(r) + ', ' + JSON.stringify(a) + ')');
+    const lang = 'mo dienos; • Reguliarūs koordinaciniai susitikimai vyksta kartą per savaitę per Microsoft Teams; • Neatidėliotini klausi';
+    let x = S([R('brand_restriction', lang, 'critical')], [A('brand_restriction', 'Reguliarūs koordinaciniai susitikimai vyksta kartą per savaitę per Microsoft Teams')]);
+    lygu([x.length, x[0].source, x[0].severity, x[0].di.length, x[0].di[0].title], [1, 'rule', 'critical', 1, 'D'], 'DI citata - taisyklės lange');
+    lygu(S([R('brand_restriction', lang)], [A('brand_restriction', 'Reguliarūs koordinaciniai susitikimai vyksta kartą per savaitę per Microsoft Teams, jei Šalys nesusitaria kitaip')]).length, 1, 'DI citata - ilgesnis sakinys su taisyklės lango dalimi');
+    lygu(S([R('brand_restriction', 'ojektui ir užtikrinant visų savininkų įtraukimą bei reguliarius koordinacinius susitikimus kartą per savaitę per Microsoft Teams kai tai bū')],
+      [A('brand_restriction', 'Reguliarius koordinacinius susitikimus kartą per savaitę per Microsoft Teams. Tai konkretaus produkto nurodymas.')]).length, 1, 'DI citatos sakinys - nukirptame taisyklės lange');
+    x = S([R('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu ir 3 (trejus) metus po sutarties pasibaigimo. Konfidencialumo pažeidimo atveju ir (a')],
+      [A('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu ir 3 (trejus) metus po sutarties pasibaigimo. Konfidencialumo pažeidimo atveju turi teisę nutraukti.', 'critical')]);
+    lygu([x.length, x[0].severity], [1, 'critical'], 'bendras sakinys, DI sunkumas didesnis');
+    lygu(S([R('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu')], [A('ambiguity', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu')]).length, 2, 'kita kategorija');
+    lygu(S([R('subjective', 'Įranga - kokybiška')], [A('subjective', 'Įranga - kokybiška')]).length, 2, 'trumpa citata (iki 25 ženklų)');
+    lygu(S([R('subjective', 'Įranga turi būti kokybiška ir patikima visomis sąlygomis.')], [A('subjective', 'Tiekėjas turi būti profesionalus ir patikimas partneris.')]).length, 2, 'kita vieta');
+    lygu(S([R('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu')], [A('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu', 'minor', { citataNerasta: true })]).length, 2, 'nerasta citata');
+    lygu(S([R('scope', '')], [A('scope', '')]).length, 2, 'be citatų');
+    x = S([R('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu ir trejus metus.')], [A('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu'), A('scope', 'galioja sutarties vykdymo metu ir trejus metus', 'major')]);
+    lygu([x.length, x[0].di.length, x[0].severity], [1, 2, 'major'], 'dvi DI pastabos');
+    const r0 = [R('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu')];
+    W().__r0 = r0; M(`App.sujunkPastabas(window.__r0, [${JSON.stringify(A('scope', 'Konfidencialumo įsipareigojimas galioja sutarties vykdymo metu'))}])`);
+    tiesa(!W().__r0[0].di, 'taisyklių pastabos nekeičiamos (kopija)'); delete W().__r0;
+  });
+
+  await testas('R-4: aspektai DI užduočiai - lietuviškai (ne „green“), iki 40 ženklų; žaliasis savaime - su registro nuoroda (Aprašo 4.4.3 p.), kriterijai - atskirai, nepažymėtas - nesiunčiama', () => {
+    const asp = m => M('diAspektai(' + JSON.stringify(m) + ')');
+    lygu(asp({ flags: { international: true, green: true, innovation: true, critical: true, parts: true } }),
+      ['tarptautinė vertė (viršija ES ribą)', 'žaliasis pirkimas', 'inovacijų aspektas', 'kritinė infrastruktūra / saugumas', 'skaidoma į dalis'], 'pavadinimai');
+    const nuor = M("GP_TEISE.cit('zal_nematerialios', 'PI')");
+    turi(nuor, '4.4.3', 'registro nuoroda');
+    lygu(asp({ zaliasisBudas: 'savaime', flags: { green: true, parts: null } }), ['žaliasis pirkimas savaime', 'tik nematerialaus pobūdžio paslaugos', nuor], 'savaime');
+    lygu(asp({ zaliasisBudas: 'kriterijai', flags: { green: true } }), ['žaliasis pirkimas', 'nustatomi aplinkos apsaugos kriterijai'], 'kriterijai');
+    lygu(asp({ zaliasisBudas: 'savaime', flags: { green: false } }), [], 'nepažymėtas - nesiunčiama');
+    const visi = asp({ zaliasisBudas: 'savaime', flags: { international: true, green: true, innovation: true, critical: true, parts: true } });
+    tiesa(visi.length === 7 && visi.every(x => x.length <= 40 && !/^[a-z]+$/.test(x)), 'iki 40 ženklų, ne raktai: ' + JSON.stringify(visi));
+  });
+
+  await testas('R-4: „Kodėl pirkimas žaliasis?“ - tik pažymėjus žaliąjį, be numatytojo, paaiškinimas iš registro; savaime - DI gauna duomenimis, DI pastaba, santrauka ir veiksmas apie žaliuosius - „Patikrinkite“, kitos - ne; ataskaitoje - būdas; nenurodžius - be žymų; „Naujas pirkimas“ išvalo', async () => {
+    const w = W(), d = D(), origP = w.GP_AI_PROXY.uzduotis, origC = w.confirm, uzkl = [];
+    const g = d.getElementById('metaGreen'), sel = d.getElementById('metaGreenBudas'), vieta = d.getElementById('metaGreenBudasVieta');
+    const jung = (id, v) => { const e = d.getElementById(id); e.checked = v; e.dispatchEvent(new w.Event('change', { bubbles: true })); };
+    w.GP_AI_PROXY.uzduotis = UZ(async o => { uzkl.push(o); return atsakymas(JSON.stringify({ summary: 'Pagrindiniai trūkumai: trūksta žaliųjų pirkimų reikalavimų.',
+      strengths: [], actionPlan: ['Įtraukti žaliųjų pirkimų reikalavimus', 'Patikslinti terminus'], issues: [
+        { title: 'Visiškai trūksta žaliųjų pirkimų reikalavimų', severity: 'major', category: 'green', quote: '', description: 'Nėra aplinkosauginių kriterijų.' },
+        { title: 'Neaiškus formatas', severity: 'minor', category: 'ambiguity', quote: '', description: 'Formatas.' }] })); });
+    try {
+      w.confirm = () => true; M('App.startNewGeneration()');
+      ['metaInternational', 'metaInnovation', 'metaCritical', 'metaParts'].forEach(id => jung(id, false));
+      jung('metaGreen', false);
+      tiesa(vieta.classList.contains('hidden'), 'nepažymėjus - laukas nerodomas');
+      jung('metaGreen', true);
+      lygu([vieta.classList.contains('hidden'), sel.value], [false, ''], 'pažymėjus - rodomas, be numatytojo');
+      const uz = d.getElementById('metaGreenBudasUz').textContent;
+      tiesa(uz.indexOf(M("GP_TEISE.cit('zal_nematerialios', 'PI')")) >= 0 && uz.indexOf(M("GP_TEISE.apie('zal_nematerialios', 'PI')")) >= 0, 'paaiškinimas iš registro: ' + uz);
+      lygu([sel.getAttribute('aria-describedby'), d.querySelector('label[for="metaGreenBudas"]').textContent], ['metaGreenBudasUz', 'Kodėl pirkimas žaliasis?'], 'pavadinimas ir aprašas');
+      sel.value = 'savaime';
+      d.getElementById('specText').value = 'Konsultantas teikia nekilnojamojo turto įsigijimo konsultavimo paslaugas ir rengia ataskaitas lietuvių kalba.';
+      await M('App.runAnalysis()');
+      const nuor = M("GP_TEISE.cit('zal_nematerialios', 'PI')");
+      lygu(uzkl[0].duomenys.aspektai, ['žaliasis pirkimas savaime', 'tik nematerialaus pobūdžio paslaugos', nuor], 'DI gauna duomenimis');
+      tiesa(JSON.stringify(uzkl[0].duomenys).indexOf('"green"') < 0, 'siunčiamas raktas „green“');
+      const el = [...d.querySelectorAll('#issuesList .issue')];
+      const zal = el.find(e => /žaliųjų/.test(e.querySelector('.issue-title').textContent)), kit = el.find(e => /Neaiškus formatas/.test(e.querySelector('.issue-title').textContent));
+      tiesa(zal && /Patikrinkite: pirkimas nurodytas kaip žaliasis savaime/.test(zal.textContent) && zal.textContent.indexOf(nuor) >= 0 && zal.querySelector('[data-zal-savaime]'), 'DI pastaba apie žaliuosius: ' + (zal && zal.textContent));
+      tiesa(kit && !kit.querySelector('[data-zal-savaime]'), 'kita DI pastaba - be žymos');
+      const sp = d.getElementById('analysisSummaryPastaba');
+      tiesa(sp && !sp.classList.contains('hidden') && /žaliasis savaime/.test(sp.textContent), 'santraukos pastaba');
+      const li = [...d.querySelectorAll('#actionPlan li')];
+      lygu(li.map(x => !!x.querySelector('[data-zal-savaime]')), [true, false], 'veiksmų planas');
+      const rep = d.getElementById('reportBody');
+      tiesa(/Žaliasis pirkimas\s*Taip - žaliasis savaime/.test(rep.textContent) && rep.textContent.indexOf(nuor) >= 0 && rep.querySelectorAll('[data-zal-savaime]').length >= 3, 'ataskaita: ' + rep.textContent.slice(0, 600));
+      // nenurodyta - be žymų, aspektas „žaliasis pirkimas“
+      sel.value = ''; uzkl.length = 0;
+      await M('App.runAnalysis()');
+      lygu(uzkl[0].duomenys.aspektai, ['žaliasis pirkimas'], 'nenurodytas būdas');
+      lygu([d.querySelectorAll('#issuesList [data-zal-savaime]').length, d.querySelectorAll('#actionPlan [data-zal-savaime]').length, d.getElementById('analysisSummaryPastaba').classList.contains('hidden')], [0, 0, true], 'be žymų');
+      turi(d.getElementById('reportBody').textContent, 'Taip (būdas nenurodytas)', 'ataskaitos eilutė');
+      // nepažymėtas žaliasis, bet pasirinktas būdas - nesiunčiama
+      sel.value = 'savaime'; jung('metaGreen', false); uzkl.length = 0;
+      await M('App.runAnalysis()');
+      lygu([uzkl[0].duomenys.aspektai, d.querySelectorAll('#issuesList [data-zal-savaime]').length], [[], 0], 'žaliasis nepažymėtas');
+      jung('metaGreen', true); sel.value = 'savaime';
+      M('App.startNewGeneration()');
+      lygu([sel.value, vieta.classList.contains('hidden'), g.checked], ['', true, false], '„Naujas pirkimas“ išvalo');
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.confirm = origC; }
+  });
+
+  await testas('R-5: serverio klaidos PP-ts pats nekartoja (ir kai žinutėje yra „JSON“); skyrius ir atitikties lentelė po ilgo laukimo 502 / 504 - antrą kartą nesiunčiami ir pasakoma; greita 502 - kartojama kaip iki tol', async () => {
+    const w = W(), origP = w.GP_AI_PROXY.uzduotis, origT = w.setTimeout, origNow = w.Date.now;
+    const klaidaS = (st, t) => ({ ok: false, status: st, text: '', raw: null, error: t || ('Serverio klaida (' + st + '). Pabandykite po kelių minučių.') });
+    let n = 0, laikas = 1e12;
+    try {
+      w.setTimeout = (f, ms, ...a) => origT.call(w, f, 0, ...a);
+      w.Date.now = () => laikas;
+      w.GP_AI_PROXY.uzduotis = UZ(async () => { n++; return klaidaS(502, 'Serverio klaida (502): neteisingas JSON atsakymas'); });
+      let kl = '';
+      try { await M(`AIAnalyzer.analyze('Tekstas analizei.', {}, { issues: [] }, { model: '', options: {}, depth: 'quick' })`); } catch (e) { kl = e.message; }
+      lygu([n, /502/.test(kl)], [1, true], 'analizė - vienas kvietimas');
+      n = 0;
+      try { await M(`TSGenerator.generateQuestions({ title: 'X', flags: {} }, { model: '' }, () => {})`); } catch (e) { kl = e.message; }
+      lygu(n, 1, 'klausimai - vienas kvietimas');
+      n = 0;
+      try { await M(`PriceEstimator.estimate({ title: 'X', flags: {} }, [], { model: '' }, () => {}, [], null)`); } catch (e) { kl = e.message; }
+      lygu(n, 1, 'kainos įvertis - vienas kvietimas');
+      const kv = {};
+      w.GP_AI_PROXY.uzduotis = UZ(async o => {
+        const u = o.uzduotis.replace('pp-ts.', ''), k = u === 'skyrius' ? u + o.duomenys.skNr : u;
+        kv[k] = (kv[k] || 0) + 1;
+        if (u === 'karkasas') return atsakymas(JSON.stringify({ title: 'TS', sectionTitles: [{ number: '1', title: 'A' }, { number: '2', title: 'B' }, { number: '3', title: 'C' }] }));
+        if (k === 'skyrius1') return atsakymas('1.1. Tekstas.');
+        if (k === 'skyrius2') { laikas += 70000; return klaidaS(502); }
+        if (k === 'skyrius3') return kv[k] === 1 ? klaidaS(502) : atsakymas('3.1. Tekstas.');
+        if (u === 'atitiktis') { laikas += 70000; return klaidaS(504); }
+        return atsakymas('{}');
+      });
+      const ts = await M(`TSGenerator.generateFullTs({ title: 'X', type: 'services', flags: {} }, [], [], { model: '' }, () => {}, [])`);
+      lygu([kv.karkasas, kv.skyrius1, kv.skyrius2, kv.skyrius3, kv.atitiktis], [1, 1, 1, 2, 1], 'kvietimai: ilgai lauktas 502 / 504 - vienas, greitas 502 - du');
+      lygu(ts.sections.map(s => !!s._failed), [false, true, false], 'skyriai');
+      turi(ts.sections[1]._error, 'Skyrius antrą kartą nesiųstas - serveris neatsakė per 70 s', 'skyriaus priežastis');
+      turi(ts.complianceKlaida, 'Antrą kartą nesiųsta - serveris neatsakė per 70 s', 'atitikties lentelės priežastis');
+    } finally { w.GP_AI_PROXY.uzduotis = origP; w.setTimeout = origT; w.Date.now = origNow; }
+  });
+}
+
 async function viskas() {
   document.getElementById('paleisti').disabled = true;
   document.getElementById('rezultatai').innerHTML = '';
@@ -2642,6 +2870,7 @@ async function viskas() {
     await testaiSprendimai1027();
     await testaiLaukai1105();
     await testaiDiUzduotys1108();
+    await testaiPilotas1110();
 
     document.getElementById('busena').textContent =
       R.blogai === 0 ? 'Visi testai praėjo.' : R.blogai + ' test(-ai) krito - žr. žemiau.';

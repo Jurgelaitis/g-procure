@@ -770,6 +770,17 @@ a:hover { color: var(--color-emerald-strong); text-decoration: underline; }
   margin-top: 6px;
 }
 
+/* Sujungtos pastabos DI dalis (pilotas 2026-11-10, R-6) */
+.issue-di {
+  background: var(--color-graphite-5);
+  border-left: 3px solid var(--color-graphite-30);
+  padding: 10px 14px;
+  margin-top: 10px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.issue-di strong { display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-graphite-50-strong); }
+
 /* === PROGRESS === */
 .progress-track {
   background: var(--color-graphite-15);
@@ -2690,6 +2701,16 @@ details[open] summary {
               <div style="display: grid; gap: 8px;">
                 <label class="switch"><input type="checkbox" id="metaInternational"><span class="switch-track"></span><span class="switch-label">Tarptautinė vertė (viršija ES ribą)</span></label>
                 <label class="switch"><input type="checkbox" id="metaGreen"><span class="switch-track"></span><span class="switch-label">Žaliasis pirkimas / aplinkosauga</span></label>
+                <!-- Pilotas 2026-11-10 (R-4): kuriuo Žaliųjų pirkimų tvarkos aprašo 4 p. būdu pirkimas žaliasis - be numatytojo; rodoma tik pažymėjus žaliąjį pirkimą -->
+                <div id="metaGreenBudasVieta" class="form-group hidden" style="margin: 0 0 4px 44px;">
+                  <label class="form-label" for="metaGreenBudas">Kodėl pirkimas žaliasis?</label>
+                  <select id="metaGreenBudas" class="form-select" aria-describedby="metaGreenBudasUz">
+                    <option value="">- nenurodyta -</option>
+                    <option value="savaime">Žaliasis savaime: perkamos tik nematerialaus pobūdžio paslaugos</option>
+                    <option value="kriterijai">Nustatomi aplinkos apsaugos kriterijai (TS ar kituose dokumentuose)</option>
+                  </select>
+                  <p class="form-help" id="metaGreenBudasUz">„Žaliasis savaime“ - <span data-vteise="zal_nematerialios"></span>: <span id="metaGreenBudasApie"></span>. Pasirinkimas siunčiamas DI analizei kaip pirkimo duomenys, o pastabos apie trūkstamus žaliųjų pirkimų reikalavimus pažymimos „Patikrinkite“.</p>
+                </div>
                 <label class="switch"><input type="checkbox" id="metaInnovation"><span class="switch-track"></span><span class="switch-label">Inovacijų aspektas</span></label>
                 <label class="switch"><input type="checkbox" id="metaCritical"><span class="switch-track"></span><span class="switch-label">Kritinė infrastruktūra / saugumas</span></label>
                 <label class="switch"><input type="checkbox" id="metaParts"><span class="switch-track"></span><span class="switch-label">Skaidoma į dalis</span></label>
@@ -2773,7 +2794,7 @@ details[open] summary {
               </div>
             </div>
             <div class="card">
-              <h2 class="card-title mb-2">Bendras vertinimas</h2>
+              <h2 class="card-title mb-2">Orientacinis pastabų rodiklis</h2>
               <div class="score-circle" id="scoreCircle">
                 <svg viewBox="0 0 120 120">
                   <circle class="ring-bg" cx="60" cy="60" r="50"/>
@@ -2785,8 +2806,10 @@ details[open] summary {
                 </div>
               </div>
               <div class="text-center mt-2">
-                <div id="scoreVerdict" class="badge badge-neutral">Vertinimas</div>
+                <div id="scoreVerdict" class="badge badge-neutral">-</div>
               </div>
+              <!-- Pilotas 2026-11-10 (R-6): paaiškinimas matomas, ne tik title atribute (antraštė „Bendras vertinimas“ prieštaravo „ne kokybės įvertinimas“) -->
+              <p class="form-help text-center mt-1" id="scoreAprasas">100 minus pastabų svoriai (kritinė - 12, reikšminga - 6, mažesnė - 2). Tai ne specifikacijos kokybės įvertinimas.</p>
             </div>
           </div>
 
@@ -3222,6 +3245,9 @@ const App = (() => {
     // Aspektų jungikliai: paliesti (žmogaus ar pirkimo kortelės) - sprendimas, nepaliesti - nenurodyta (D12)
     ['genFlagGreen', 'genFlagInnovation', 'genFlagCritical', 'genFlagParts', 'metaGreen', 'metaInnovation', 'metaCritical', 'metaParts']
       .forEach(id => { const e = $('#' + id); if (e) e.addEventListener('change', () => { e.dataset.palieta = '1'; }); });
+    // R-4 (2026-11-10): „Kodėl pirkimas žaliasis?“ - tik pažymėjus žaliąjį pirkimą
+    if ($('#metaGreen')) $('#metaGreen').addEventListener('change', zaliasBudasUI);
+    zaliasBudasUI();
 
     // Apply settings to UI
     $('#cvpisEndpoint').value = state.settings.cvpisEndpoint || 'https://api.g-procure.com';
@@ -3523,6 +3549,8 @@ const App = (() => {
       procedureLabel: kanon ? kanon.label : '',
       value: parseFloat($('#metaValue').value) || null,
       criteria: $('#metaCriteria').value,
+      // Pilotas 2026-11-10 (R-4): kodėl pirkimas žaliasis (savaime / kriterijai) - tik pažymėjus žaliąjį pirkimą; nenurodyta - null
+      zaliasisBudas: ($('#metaGreen').checked && ZALIOJO_BUDAI[$('#metaGreenBudas').value]) ? $('#metaGreenBudas').value : null,
       flags: {
         international: tarpt,
         green: $('#metaGreen').checked,
@@ -3563,9 +3591,10 @@ const App = (() => {
     if (!ensureSpec()) return;
     const specas = paruoskSpecAnalizei();   // tekstas galejo buti ne is failo, o iklijuotas
     GP_BUSENA.slepk('#anBusena');
-    const rules = RuleEngine.run(specas, gatherMetadata());
+    const meta = gatherMetadata();
+    const rules = RuleEngine.run(specas, meta);
     state.rulesResult = rules;
-    state.analysis = composeAnalysis(rules.issues, [], 'rules-only');
+    state.analysis = composeAnalysis(rules.issues, [], 'rules-only', null, meta);
     renderAnalysis();
     switchTab('analysis'); analizesFokusas();
     toast(`Taisyklės: rasta ${rules.issues.length} pastabų.`, 'success');
@@ -3595,7 +3624,7 @@ const App = (() => {
     });
     if (btn) btn.disabled = false;
     if (!rez.ok) return;
-    state.analysis = composeAnalysis(rules.issues, rez.reiksme.issues, 'hybrid', rez.reiksme);
+    state.analysis = composeAnalysis(rules.issues, rez.reiksme.issues, 'hybrid', rez.reiksme, meta);
     renderAnalysis();
     renderReport();
     switchTab('analysis'); analizesFokusas();
@@ -3613,10 +3642,42 @@ const App = (() => {
     return true;
   }
 
-  function composeAnalysis(ruleIssues, aiIssues, mode, aiMeta) {
-    // Merge & dedupe
-    const all = [...ruleIssues, ...aiIssues];
-    // Score
+  /* Taisyklių ir DI pastabų sujungimas (pilotas 2026-11-10, R-6: iki tol komentaras „Merge & dedupe“, o kodas tik sujungdavo sąrašus - ta pati
+     problema toje pačioje vietoje buvo dvi pastabos, pvz. TS konfidencialumo netesybos - dvi „Reikšmingos“). Ta pati vieta - ta pati kategorija ir
+     citatos sutampa (viena kitoje arba bendras ne trumpesnis kaip 25 ženklų sakinys ar jo dalis; taisyklių citata - konteksto langas, gali būti
+     nukirpta). Lieka taisyklės pastaba (jos vieta tekste tiksli) su DI pastaba prie jos (`di`), sunkumas - didesnis iš abiejų. DI pastaba be
+     patikrintos citatos nesujungiama. */
+  const SUNKUMO_EIL = { critical: 3, major: 2, minor: 1, suggestion: 0 };
+  const vietosNorm = x => String(x || '').toLowerCase().replace(/[„“”"«»'‘’]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/\s+/g, ' ').trim();
+  const vietosDalys = n => n.split(/[.;!?•\n]+/).map(s => s.trim()).filter(s => s.length >= 25);
+  function tosPaciosVietos(a, b) {
+    const na = vietosNorm(a), nb = vietosNorm(b);
+    if (na.length < 25 || nb.length < 25) return false;
+    if (na.includes(nb) || nb.includes(na)) return true;
+    return vietosDalys(nb).some(s => na.includes(s)) || vietosDalys(na).some(s => nb.includes(s));
+  }
+  function sujunkPastabas(taisykliu, di) {
+    const out = (taisykliu || []).map(i => Object.assign({}, i));
+    const liko = [];
+    (di || []).forEach(d => {
+      const t = d.quote && !d.citataNerasta
+        ? out.find(r => r.source === 'rule' && r.category === d.category && r.quote && tosPaciosVietos(r.quote, d.quote)) : null;
+      if (!t) { liko.push(d); return; }
+      (t.di = t.di || []).push({ title: d.title, description: d.description, severity: d.severity, recommendation: d.recommendation,
+        alternative: d.alternative, legalRef: d.legalRef, quote: d.quote, nuorodaNerodoma: !!d.nuorodaNerodoma, zaliasisSavaime: !!d.zaliasisSavaime });
+      if ((SUNKUMO_EIL[d.severity] || 0) > (SUNKUMO_EIL[t.severity] || 0)) t.severity = d.severity;
+    });
+    return out.concat(liko);
+  }
+  // Žaliasis pirkimas savaime (R-4): DI pastaba apie žaliuosius reikalavimus - „Patikrinkite“ (nerodoma neslepiama)
+  const zaliuPastaba = i => i.category === 'green' || ZALIUJU_TEMA.test(i.title || '');
+
+  function composeAnalysis(ruleIssues, aiIssues, mode, aiMeta, meta) {
+    const m = meta || gatherMetadata();
+    const savaime = m.zaliasisBudas === 'savaime';
+    const ai = (aiIssues || []).map(i => savaime && i.source !== 'rule' && zaliuPastaba(i) ? Object.assign({}, i, { zaliasisSavaime: true }) : i);
+    const all = sujunkPastabas(ruleIssues, ai);
+    // Score - orientacinis pastabų rodiklis (V8), sujungta pastaba skaičiuojama vieną kartą
     const weights = { critical: 12, major: 6, minor: 2, suggestion: 0 };
     const penalty = all.reduce((s, i) => s + (weights[i.severity] || 0), 0);
     const score = Math.max(0, 100 - penalty);
@@ -3627,10 +3688,14 @@ const App = (() => {
       summary: aiMeta?.summary || generateRulesSummary(all, score),
       strengths: aiMeta?.strengths || [],
       actionPlan: aiMeta?.actionPlan || generateActionPlan(all),
+      // DI akto 50 str.: DI santrauka, stiprybės ir veiksmų planas ekrane pažymimi (data-di)
+      diTekstai: { summary: !!aiMeta?.summary, strengths: !!(aiMeta?.strengths && aiMeta.strengths.length), actionPlan: !!(aiMeta?.actionPlan && aiMeta.actionPlan.length) },
       timestamp: new Date().toISOString(),
-      metadata: gatherMetadata(),
+      metadata: m,
     };
   }
+  // Žaliasis savaime: ar DI tekstas (santrauka, veiksmas) kalba apie žaliųjų pirkimų reikalavimus
+  const zaliasSavaimeTekstas = (a, t) => !!(a && a.metadata && a.metadata.zaliasisBudas === 'savaime' && ZALIUJU_TEMA.test(String(t || '')));
 
   function generateRulesSummary(issues, score) {
     const c = issues.filter(i => i.severity === 'critical').length;
@@ -3669,7 +3734,15 @@ const App = (() => {
     if (applyBtn) applyBtn.classList.toggle('hidden', !hasApplicable);
 
     const a = state.analysis;
-    $('#analysisSummary').textContent = a.summary;
+    const sant = $('#analysisSummary');
+    sant.textContent = a.summary;
+    diZyma(sant, a.diTekstai && a.diTekstai.summary);
+    // Žaliasis savaime (R-4): DI santrauka apie žaliųjų pirkimų reikalavimus - „Patikrinkite“
+    let santP = $('#analysisSummaryPastaba');
+    if (!santP) { santP = document.createElement('p'); santP.id = 'analysisSummaryPastaba'; santP.className = 'form-help'; sant.insertAdjacentElement('afterend', santP); }
+    const santZal = a.diTekstai && a.diTekstai.summary && zaliasSavaimeTekstas(a, a.summary);
+    santP.textContent = santZal ? 'Patikrinkite: ' + zaliasSavaimePastaba() : '';
+    santP.classList.toggle('hidden', !santZal);
 
     const sev = { critical: 0, major: 0, minor: 0, suggestion: 0 };
     a.issues.forEach(i => sev[i.severity] = (sev[i.severity] || 0) + 1);
@@ -3703,9 +3776,13 @@ const App = (() => {
     renderIssuesList(a.issues);
     renderCategoryStats(a.issues);
     renderStrengths(a.strengths);
-    renderActionPlan(a.actionPlan);
+    diZyma($('#strengthsList'), a.diTekstai && a.diTekstai.strengths);
+    renderActionPlan(a.actionPlan, a);
+    diZyma($('#actionPlan'), a.diTekstai && a.diTekstai.actionPlan);
     renderAnnotatedText();
   }
+  // DI parengtas tekstas ekrane - data-di (DI akto 50 str.; pilotas 2026-11-10: santrauka, stiprybės ir planas iki tol be žymos)
+  function diZyma(el, di) { if (!el) return; if (di) el.setAttribute('data-di', 'sugeneruota'); else el.removeAttribute('data-di'); }
 
   function renderCategoryFilters(issues) {
     const cats = {};
@@ -3747,7 +3824,7 @@ const App = (() => {
           <div class="issue-meta">
             <span class="badge ${sevBadge[i.severity]}">${sevLbl[i.severity]}</span>
             <span class="badge badge-neutral">${escapeHtml(catLbl)}</span>
-            ${i.source === 'rule' ? '<span class="badge badge-neutral">Taisyklė</span>' : '<span class="badge badge-info">DI</span>'}
+            ${saltiniuZymos(i)}
           </div>
         </div>
         <div class="issue-body">
@@ -3756,15 +3833,31 @@ const App = (() => {
           ${i.recommendation ? `<div class="issue-recommendation"><strong>Rekomendacija</strong>${escapeHtml(i.recommendation)}</div>` : ''}
           ${i.legalRef ? `<span class="issue-legal">📜 ${escapeHtml(i.legalRef)}</span>` : ''}
           ${diPatikrosPastaba(i)}
+          ${sujungtaDi(i)}
         </div>
       </div>`;
+  }
+  // Šaltiniai (R-6): taisyklė, DI arba abu - sujungta pastaba rodo abu
+  function saltiniuZymos(i) {
+    if (i.source !== 'rule') return '<span class="badge badge-info">DI</span>';
+    return '<span class="badge badge-neutral">Taisyklė</span>' + (i.di && i.di.length ? ' <span class="badge badge-info">DI</span>' : '');
+  }
+  // Sujungtos pastabos DI dalis - atskirai ir su data-di (DI parengtas tekstas)
+  function sujungtaDi(i) {
+    if (!i.di || !i.di.length) return '';
+    const sevLbl = { critical: 'Kritinė', major: 'Reikšminga', minor: 'Mažesnė', suggestion: 'Pasiūlymas' };
+    return i.di.map(x => `<div class="issue-di" data-di="sugeneruota"><strong>Tą pačią vietą pažymėjo ir DI analizė${x.severity ? ' (' + (sevLbl[x.severity] || '') + ')' : ''}</strong>`
+      + `${escapeHtml(x.title || '')}${x.description ? ' - ' + escapeHtml(x.description) : ''}`
+      + `${x.recommendation ? `<div class="mt-1"><em>Rekomendacija:</em> ${escapeHtml(x.recommendation)}</div>` : ''}`
+      + `${x.legalRef ? `<span class="issue-legal">📜 ${escapeHtml(x.legalRef)}</span>` : ''}${diPatikrosPastaba(x)}</div>`).join('');
   }
   // D9: ką patikra atmetė - pasakoma, ne nutylima
   function diPatikrosPastaba(i) {
     const t = [];
     if (i.citataNerasta) t.push('DI nurodyta citata tekste nerasta - nerodoma.');
     if (i.nuorodaNerodoma) t.push('DI nurodė teisės aktą, kurio nuorodos nėra G-Procure teisės nuorodų registre - nerodoma; pagrindą patikrinkite patys.');
-    return t.length ? `<div class="form-help mt-1">Patikrinkite: ${escapeHtml(t.join(' '))}</div>` : '';
+    if (i.zaliasisSavaime) t.push(zaliasSavaimePastaba());
+    return t.length ? `<div class="form-help mt-1"${i.zaliasisSavaime ? ' data-zal-savaime' : ''}>Patikrinkite: ${escapeHtml(t.join(' '))}</div>` : '';
   }
 
   function showIssueDetail(idx, visu) {
@@ -3779,6 +3872,7 @@ const App = (() => {
       <div class="flex flex-gap-1 mb-2">
         <span class="badge badge-${i.severity === 'critical' ? 'error' : i.severity === 'major' ? 'warning' : i.severity === 'minor' ? 'info' : 'success'}">${sevLbl[i.severity]}</span>
         <span class="badge badge-neutral">${escapeHtml(CATEGORIES[i.category]?.label || i.category)}</span>
+        ${saltiniuZymos(i)}
       </div>
       <p>${escapeHtml(i.description || '')}</p>
       ${i.quote ? `<div class="issue-quote">${escapeHtml(i.quote)}</div>` : ''}
@@ -3786,7 +3880,9 @@ const App = (() => {
       ${i.alternative ? `<div class="alert alert-success mt-2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><div><strong>Alternatyvus formulavimas:</strong><br/>${escapeHtml(i.alternative)}</div></div>` : ''}
       ${i.legalRef ? `<p class="mt-2"><span class="issue-legal">📜 Teisinis pagrindas: ${escapeHtml(i.legalRef)}</span></p>` : ''}
       ${diPatikrosPastaba(i)}
+      ${sujungtaDi(i)}
     `;
+    $('#issueModalBody').toggleAttribute('data-di', i.source !== 'rule');
     $('#issueModal').classList.add('active');
   }
   function closeIssueModal() { $('#issueModal').classList.remove('active'); }
@@ -3826,8 +3922,13 @@ const App = (() => {
     $('#strengthsList').innerHTML = strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('');
   }
 
-  function renderActionPlan(plan) {
-    $('#actionPlan').innerHTML = (plan || []).map(p => `<li>${escapeHtml(p)}</li>`).join('');
+  function renderActionPlan(plan, a) {
+    $('#actionPlan').innerHTML = (plan || []).map(p => `<li>${escapeHtml(p)}${veiksmoZalPastaba(a, p)}</li>`).join('');
+  }
+  // Žaliasis savaime (R-4): DI veiksmų plano punktas apie žaliųjų pirkimų reikalavimus - „Patikrinkite“
+  function veiksmoZalPastaba(a, p) {
+    return a && a.diTekstai && a.diTekstai.actionPlan && zaliasSavaimeTekstas(a, p)
+      ? `<div class="form-help" data-zal-savaime>Patikrinkite: ${escapeHtml(zaliasSavaimePastaba())}</div>` : '';
   }
 
   /* V5 (2026-10-27): paryškinimas atveria TĄ pastabą (indeksas visų pastabų sąraše, ne filtruotame ir surikiuotame), vieta - taisyklės pozicija
@@ -3866,6 +3967,14 @@ const App = (() => {
     $('#annotatedText').innerHTML = html || escapeHtml(text);
   }
 
+  // Žaliasis pirkimas ataskaitoje (R-4): ką nurodė naudotojas
+  function zaliasisTekstas(m) {
+    if (!m || !m.flags || !m.flags.green) return '-';
+    if (m.zaliasisBudas === 'savaime') return 'Taip - žaliasis savaime: perkamos tik nematerialaus pobūdžio paslaugos (' + teise('zal_nematerialios') + ')';
+    if (m.zaliasisBudas === 'kriterijai') return 'Taip - nustatomi aplinkos apsaugos kriterijai';
+    return 'Taip (būdas nenurodytas)';
+  }
+
   // --- REPORT ---
   function renderReport() {
     if (!state.analysis) return;
@@ -3881,17 +3990,18 @@ const App = (() => {
     const date = new Date(a.timestamp);
 
     const issuesHtml = a.issues.map(i => `
-      <div class="card mb-2">
+      <div class="card mb-2"${i.source === 'rule' ? '' : ' data-di="sugeneruota"'}>
         <div class="flex flex-between mb-1">
           <strong>${escapeHtml(i.title)}</strong>
           <span class="badge badge-${i.severity === 'critical' ? 'error' : i.severity === 'major' ? 'warning' : i.severity === 'minor' ? 'info' : 'success'}">${sevLbl[i.severity]}</span>
         </div>
-        <div class="card-subtitle"><strong>${escapeHtml(CATEGORIES[i.category]?.label || i.category)}</strong></div>
+        <div class="card-subtitle"><strong>${escapeHtml(CATEGORIES[i.category]?.label || i.category)}</strong> ${saltiniuZymos(i)}</div>
         <p style="margin: 8px 0 0;">${escapeHtml(i.description || '')}</p>
         ${i.quote ? `<div class="issue-quote">${escapeHtml(i.quote)}</div>` : ''}
         ${i.recommendation ? `<div class="issue-recommendation"><strong>Rekomendacija</strong>${escapeHtml(i.recommendation)}</div>` : ''}
         ${i.legalRef ? `<p style="margin-top: 6px;"><em>Teisinis pagrindas: ${escapeHtml(i.legalRef)}</em></p>` : ''}
         ${diPatikrosPastaba(i)}
+        ${sujungtaDi(i)}
       </div>
     `).join('');
 
@@ -3912,11 +4022,13 @@ const App = (() => {
             <tr><td><strong>Pirkimo būdas</strong></td><td>${escapeHtml(m.procedureLabel || m.procedure || '-')}</td></tr>
             <tr><td><strong>Numatoma vertė (be PVM)</strong></td><td>${m.value ? m.value.toLocaleString('lt-LT') + ' EUR' : '-'}</td></tr>
             <tr><td><strong>Vertinimo kriterijus</strong></td><td>${escapeHtml({price:'Mažiausia kaina',cost:'Sąnaudos',best_price_quality:'Ekonomiškai naudingiausias'}[m.criteria] || m.criteria || '-')}</td></tr>
+            <tr><td><strong>Žaliasis pirkimas</strong></td><td>${escapeHtml(zaliasisTekstas(m))}</td></tr>
           </tbody>
         </table>
 
-        <h2 style="color: var(--color-emerald-strong);">2. Vertinimo santrauka</h2>
-        <p>${escapeHtml(a.summary)}</p>
+        <h2 style="color: var(--color-emerald-strong);">2. Analizės santrauka</h2>
+        <p${a.diTekstai && a.diTekstai.summary ? ' data-di="sugeneruota"' : ''}>${escapeHtml(a.summary)}</p>
+        ${a.diTekstai && a.diTekstai.summary && zaliasSavaimeTekstas(a, a.summary) ? `<p class="form-help" data-zal-savaime>Patikrinkite: ${escapeHtml(zaliasSavaimePastaba())}</p>` : ''}
         <table class="data-table mb-3">
           <thead><tr><th>Sunkumo lygis</th><th>Skaičius</th></tr></thead>
           <tbody>
@@ -3924,14 +4036,14 @@ const App = (() => {
             <tr><td>Reikšmingos pastabos</td><td>${sev.major}</td></tr>
             <tr><td>Mažesnės pastabos</td><td>${sev.minor}</td></tr>
             <tr><td>Pasiūlymai</td><td>${sev.suggestion}</td></tr>
-            <tr><td><strong>Bendras balas</strong></td><td><strong>${a.score} / 100</strong></td></tr>
+            <tr><td><strong>Orientacinis pastabų rodiklis</strong> (100 minus pastabų svoriai; ne kokybės įvertinimas)</td><td><strong>${a.score} / 100</strong></td></tr>
           </tbody>
         </table>
 
-        ${a.strengths.length ? `<h2 style="color: var(--color-emerald-strong);">3. Stiprybės</h2><ul>${a.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : ''}
+        ${a.strengths.length ? `<h2 style="color: var(--color-emerald-strong);">3. Stiprybės</h2><ul${a.diTekstai && a.diTekstai.strengths ? ' data-di="sugeneruota"' : ''}>${a.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : ''}
 
         <h2 style="color: var(--color-emerald-strong);">${a.strengths.length ? '4' : '3'}. Veiksmų planas</h2>
-        <ol>${(a.actionPlan || []).map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ol>
+        <ol${a.diTekstai && a.diTekstai.actionPlan ? ' data-di="sugeneruota"' : ''}>${(a.actionPlan || []).map(p => `<li>${escapeHtml(p)}${veiksmoZalPastaba(a, p)}</li>`).join('')}</ol>
 
         <h2 style="color: var(--color-emerald-strong);">${a.strengths.length ? '5' : '4'}. Detalios pastabos</h2>
         ${issuesHtml}
@@ -4990,6 +5102,17 @@ const App = (() => {
       const x = $('#' + a), y = $('#' + b);
       if (x && y && x.dataset.palieta && !y.dataset.palieta) { y.checked = x.checked; y.dataset.palieta = '1'; }
     });
+    zaliasBudasUI();
+  }
+  // Žaliojo pirkimo būdas (pilotas 2026-11-10, R-4): laukas rodomas tik pažymėjus žaliąjį pirkimą, paaiškinimas - iš registro
+  function zaliasBudasUI() {
+    const v = $('#metaGreenBudasVieta'), g = $('#metaGreen');
+    if (!v || !g) return;
+    v.classList.toggle('hidden', !g.checked);
+    const ap = $('#metaGreenBudasApie');
+    if (ap && !ap.textContent) ap.textContent = teisesApie('zal_nematerialios');
+    const nr = v.querySelector('[data-vteise]');
+    if (nr && !nr.textContent) nr.textContent = teise(nr.dataset.vteise);
   }
   function kontekstasIsKurimo(visus) {
     aspektaiIsKurimo();
@@ -5099,6 +5222,8 @@ const App = (() => {
     ['genType', 'genCriteria', 'metaTitle', 'metaType', 'metaCpv', 'metaDescription', 'metaProcedure', 'metaValue', 'metaCriteria'].forEach(id => { const e = $('#' + id); if (e) e.value = ''; });
     ['genFlagGreen', 'genFlagInnovation', 'genFlagCritical', 'genFlagParts', 'metaInternational', 'metaGreen', 'metaInnovation', 'metaCritical', 'metaParts']
       .forEach(id => { const e = $('#' + id); if (e) { e.checked = false; delete e.dataset.palieta; delete e.dataset.zmogus; } });
+    if ($('#metaGreenBudas')) $('#metaGreenBudas').value = '';
+    zaliasBudasUI();
     clearText();
     state.analysis = null; state.kontekstoSkirtumai = [];
     $('#analysisResults').classList.add('hidden'); $('#analysisEmpty').classList.remove('hidden'); $('#analysisBadge').textContent = '0';
@@ -5877,7 +6002,7 @@ const App = (() => {
     rkSvSus, rkSvSusAtvertas, rkSvSusTema, rkSvSusDalyvavo, rkSvSusAtstovu, rkSvSusNaujasDalyvis, rkSvSusPastaba, rkSvSusSalinkPastaba, rkSvSusVeiksmas, rkSvSusVeiksmoLaukas, rkSvSusSalinkVeiksma,
     fetchUrl, removeFile, updateStats, clearText,
     showIssueDetail, closeIssueModal,
-    filterCategory,
+    filterCategory, sujunkPastabas,
     exportHtml, exportDocx,
     // Wizard
     goToStep, startGeneration, runFullGeneration,
@@ -5967,8 +6092,38 @@ function diMeta(meta) {
   if (meta && meta.budget) z.budgetLt = String(meta.budget.toLocaleString('lt-LT'));
   return z;
 }
-const diAspektai = meta => Object.entries((meta && meta.flags) || {}).filter(([_, v]) => v).map(([k]) => k);
+/* Pirkimo aspektai DI užduočiai - lietuviškais pavadinimais (pilotas 2026-11-10, R-4: iki tol siunčiami raktai „green“, „parts“, o serverio šablonas
+   juos įrašo į užklausą kaip yra - DI santraukoje liko „specialūs aspektai nurodyti kaip 'green'“). Serveris priima iki 40 ženklų vienam aspektui.
+   Žaliasis pirkimas savaime (Žaliųjų pirkimų tvarkos aprašo 4.4.3 p., nuoroda - iš registro) perduodamas duomenimis, ne instrukcija. */
+const ASPEKTU_PAV = { international: 'tarptautinė vertė (viršija ES ribą)', green: 'žaliasis pirkimas', innovation: 'inovacijų aspektas',
+  critical: 'kritinė infrastruktūra / saugumas', parts: 'skaidoma į dalis' };
+const ZALIOJO_BUDAI = { savaime: true, kriterijai: true };
+const ASPEKTO_RIBA = 40;
+const diAspektai = meta => {
+  const out = [];
+  Object.entries((meta && meta.flags) || {}).filter(([_, v]) => v).forEach(([k]) => {
+    if (k === 'green' && meta.zaliasisBudas === 'savaime') out.push('žaliasis pirkimas savaime', 'tik nematerialaus pobūdžio paslaugos', teise('zal_nematerialios'));
+    else if (k === 'green' && meta.zaliasisBudas === 'kriterijai') out.push('žaliasis pirkimas', 'nustatomi aplinkos apsaugos kriterijai');
+    else if (ASPEKTU_PAV[k]) out.push(ASPEKTU_PAV[k]);
+  });
+  return out.filter(x => typeof x === 'string' && x && x.length <= ASPEKTO_RIBA);
+};
+/* Žaliasis pirkimas savaime: DI pastabos ar veiksmai apie trūkstamus žaliųjų pirkimų reikalavimus pažymimi „Patikrinkite“ (pilotas 2026-11-10, R-4:
+   DI reikalavo aplinkosauginių kriterijų nematerialiai konsultavimo paslaugai, nors pirkimo sąlygos ją laiko žaliąja pagal Aprašo 4.4.3 p.) */
+const ZALIUJU_TEMA = /žali|aplinkosaug|aplinkos apsaug/i;
+const zaliasSavaimePastaba = () => 'pirkimas nurodytas kaip žaliasis savaime - perkamos tik nematerialaus pobūdžio paslaugos (' + teise('zal_nematerialios')
+  + '). Jei taip, papildomų aplinkos apsaugos reikalavimų TS gali nereikėti - įvertinkite, ar ši pastaba taikytina.';
 const diBandymas = (duomenys, bandymas) => bandymas ? Object.assign({}, duomenys, { bandymas }) : duomenys;
+/* R-5 (pilotas 2026-11-10): DI serverio klaida - su būsena ir trukme. PP-ts tokios klaidos pats nekartoja (kartojama tik neperskaitytas JSON), o
+   skyriaus, kuriam serveris po ilgo laukimo grąžino 502 / 504 (laiko riba - DI atsakymą galėjo ir parengti), antrą kartą nesiunčia: identiška
+   užklausa kainuotų dar kartą ir užtruktų dar ~3 min. Riba - ta pati kaip bendro kartojimo (shared/ai-proxy.js), jos nesant - 60 s. */
+const DI_ILGAS_MS = () => (window.GP_AI_PROXY && GP_AI_PROXY.NUSTATYMAI && GP_AI_PROXY.NUSTATYMAI.ilgasBandymasMs) || 60000;
+function diKlaida(res, pradzia) {
+  const e = new Error(res.error || ('HTTP ' + res.status));
+  e.diKlaida = true; e.status = res.status || 0; e.trukmeMs = Date.now() - pradzia;
+  return e;
+}
+const ilgaiLaukta = e => !!(e && e.diKlaida && (e.status === 502 || e.status === 504) && e.trukmeMs >= DI_ILGAS_MS());
 function diUzduotis(uzd, duomenys, settings, signal) {
   return GP_AI_PROXY.uzduotis('pp-ts.' + uzd, Object.assign(diSistemosDuomenys(), duomenys),
     { modelis: (settings && settings.model) || GP_AI_PROXY.MODEL, signal });
@@ -6521,7 +6676,32 @@ const RuleEngine = (() => {
     return text.slice(s, e).replace(/\s+/g, ' ').trim();
   }
 
-  function checkBrands(text) {
+  /* Pilotas 2026-11-10 (R-7, tikro LITGRID konsultavimo paslaugų pirkimo TS 4.1 p.: „Reguliarūs koordinaciniai susitikimai vyksta kartą per savaitę
+     per Microsoft Teams“ - pažymėta „Kritinė“): perkančiojo subjekto bendravimo ar bendro darbo priemonė (Microsoft Teams, Outlook, SharePoint,
+     OneDrive, Skype, Cisco Webex) - ne pirkimo objektas, todėl prekės ženklo taisyklė jos nežymi, kai: ženklą tiesiai seka priemonės pavadinimas,
+     toje pačioje eilutėje (iki 200 ženklų į abi puses) aprašomas bendravimas ar darbas („susitikimai“, „komunikacija“, „nuotoliniu būdu“, „per
+     Microsoft Teams“ ir pan.), nėra žodžių apie jos įsigijimą ar suderinamumą (licencijos, diegimas, integracija, sąsaja, migracija, palaikymas, aptarnavimas) ir
+     pirkimo pavadinimas jos nemini. Kitaip - kaip iki tol (pvz. „Operacinė sistema Microsoft Windows 11 Pro“ - žymima). */
+  const DARBO_PRIEMONES = { Microsoft: ['Teams', 'Outlook', 'SharePoint', 'OneDrive', 'Skype'], Cisco: ['Webex'] };
+  const BENDRAVIMO_ZODZIAI = /susitik|posėd|pasitarim|bendrav|bendrauj|komunikac|nuotolin|vaizdo|skambut|pokalb|koordinac|aptari|aptart|informuoj|keičiamasi|dalijam|talpinam|perduodam|siunčiam|teikiam/i;
+  const ISIGIJIMO_ZODZIAI = /licencij|prenumerat|įdieg|diegim|diegti|įsigy|įsigij|integr|suderinam|sąsaj|migr|konfigūr|administrav|palaikym|aptarnav/i;
+  function darboPriemone(text, pos, brand, meta) {
+    const sar = DARBO_PRIEMONES[brand];
+    if (!sar) return false;
+    const po = text.slice(pos + brand.length);
+    const m = new RegExp('^\\s+(' + sar.join('|') + ')(?![\\p{L}\\p{N}])', 'iu').exec(po);
+    if (!m) return false;
+    const eilPr = text.lastIndexOf('\n', pos - 1) + 1, eilPab = (k => k < 0 ? text.length : k)(text.indexOf('\n', pos));
+    const langas = text.slice(Math.max(eilPr, pos - 200), Math.min(eilPab, pos + brand.length + 200));
+    const pries = text.slice(Math.max(eilPr, pos - 6), pos);
+    if (!(BENDRAVIMO_ZODZIAI.test(langas) || /(^|[^\p{L}])per\s+$/iu.test(pries))) return false;
+    if (ISIGIJIMO_ZODZIAI.test(langas)) return false;
+    const pav = String((meta && meta.title) || '');
+    if (pav && new RegExp('(^|[^\\p{L}\\p{N}])(' + brand + '|' + m[1] + ')(?![\\p{L}\\p{N}])', 'iu').test(pav)) return false;
+    return true;
+  }
+
+  function checkBrands(text, meta) {
     const issues = [];
     const lower = text.toLowerCase();
     BRAND_NAMES.forEach(brand => {
@@ -6543,6 +6723,7 @@ const RuleEngine = (() => {
            buvo zymima kaip pazeidimas (dabar PI 50 str. 5 d.) - klaidingas kaltinimas, o butent siai
            taisyklei tikslumas svarbiausias. Rasta 2026-09-09 rasant testu rinkini. */
         const hasEquivalent = /lygiaver[tč]/i.test(window) || /equivalen/i.test(window) || /arba\s+(lygiaver|panaš|alternat)/i.test(window);
+        if (!hasEquivalent && darboPriemone(text, pos, brand, meta)) continue;   // R-7: bendravimo ar darbo priemonė, ne pirkimo objektas
         if (!hasEquivalent) {
           const ctx = getContext(text, pos, pos + brand.length);
           issues.push({
@@ -6565,6 +6746,17 @@ const RuleEngine = (() => {
     return issues;
   }
 
+  /* Pilotas 2026-11-10 (R-7, tos pačios TS 2.2 p.: „• Pagrįstos derybinės kainos parengimą ir pateikimą;“ - pažymėta „Reikšminga“, rekomendacija
+     „atitinkantis ISO 9001“): „pagrįstas“ šalia teisinės ar paslaugos rezultato sąvokos reiškia „su pagrindimu“, ne kokybės vertinimą - nežymima.
+     Tai prieveiksmis „pagrįstai“, daiktavardis „pagrįstumas“ ir junginiai (tarp jų gali būti vienas žodis, pvz. „derybinės“) su kaina, išlaidomis,
+     sąnaudomis, nuostoliais, priežastimis, motyvais, abejonėmis, lūkesčiais, prašymu, pretenzija, skundu. Kiti („pagrįsta metodika“, „pagrįstas
+     sprendimas“) - kaip iki tol. */
+  const PAGRISTAS_SU = /^\s+(?:[\p{L}-]+\s+)?(?:kain|išlaid|sąnaud|nuostol|priežast|motyv|abejon|lūkesč|prašym|pretenzij|skund)/iu;
+  function pagristasTeisinis(zodis, po) {
+    if (/^pagrįst(ai|um)/i.test(zodis)) return true;
+    return PAGRISTAS_SU.test(po);
+  }
+
   function checkSubjectiveTerms(text) {
     const issues = [];
     SUBJECTIVE_TERMS.forEach(term => {
@@ -6576,6 +6768,7 @@ const RuleEngine = (() => {
         const pos = m.index + m[1].length, zodis = m[2];
         // „realiu laiku“, „realaus laiko“ (angl. real-time) ir „realizuoti“ - techniniai žodžiai, ne vertinimas
         if (/^real/i.test(zodis) && (/^realiz/i.test(zodis) || /^\s+laik/i.test(text.slice(pos + zodis.length, pos + zodis.length + 8)))) continue;
+        if (/^pagrįst/i.test(zodis) && pagristasTeisinis(zodis, text.slice(pos + zodis.length, pos + zodis.length + 40))) continue;
         const ctx = getContext(text, pos, pos + zodis.length);
         // Skip ONLY if the subjective term is immediately followed (within 60 chars) by a measurable clarifier
         // e.g., "kokybiškas (atitinkantis ISO 9001)", "patikimas - MTBF ≥ 50 000 val.", „patikimumas - ne mažiau kaip 99 %“ (M9)
@@ -6764,9 +6957,22 @@ const RuleEngine = (() => {
     return issues;
   }
 
-  function checkContractTerms(text) {
+  /* Pilotas 2026-11-10 (R-7, NT įsigijimo konsultavimo paslaugos, BVPŽ 70300000; sutarties SS 6.1 p. garantija „Netaikoma“):
+     garantijos nebuvimas nematerialioms paslaugoms - ne trūkumas. Nematerialios - paslaugos (objekto tipas), kurių BVPŽ skyrius 66 (finansinės ir
+     draudimo), 70 (nekilnojamojo turto), 73 (mokslinių tyrimų ir susijusios konsultacinės), 79 (teisinės, konsultavimo, audito ir kitos verslo),
+     80 (švietimo ir mokymo), arba kurių pavadinime - konsultavimas, mokymai, auditas. IT, inžinerijos, priežiūros paslaugoms, prekėms ir darbams,
+     ir kai objekto tipas nenurodytas - kaip iki tol. */
+  const NEMATERIALIOS_BVPZ = /^(66|70|73|79|80)/;
+  const NEMATERIALIOS_PAV = /konsultav|konsultacin|mokym|audit/i;
+  function nematerialiosPaslaugos(meta) {
+    if (!meta || meta.type !== 'services') return false;
+    const cpv = String(meta.cpv || '').replace(/\D/g, '');
+    return (cpv.length >= 2 && NEMATERIALIOS_BVPZ.test(cpv)) || NEMATERIALIOS_PAV.test(String(meta.title || ''));
+  }
+
+  function checkContractTerms(text, meta) {
     const issues = [];
-    if (!/garantij/i.test(text)) {
+    if (!/garantij/i.test(text) && !nematerialiosPaslaugos(meta)) {
       issues.push({
         id: 'no-warranty',
         severity: 'minor',
@@ -6819,14 +7025,14 @@ const RuleEngine = (() => {
 
   function run(text, meta) {
     const issues = [
-      ...checkBrands(text),
+      ...checkBrands(text, meta),
       ...checkSubjectiveTerms(text),
       ...checkVagueQuantities(text),
       ...checkSuspiciousPhrases(text),
       ...checkQualifications(text, meta),
       ...checkLengthAndStructure(text),
       ...checkLithuanianGrammar(text),
-      ...checkContractTerms(text),
+      ...checkContractTerms(text, meta),
       ...checkTsScope(text, meta),
       ...checkScopeSplitting(text, meta),
     ];
@@ -7163,7 +7369,7 @@ const AIAnalyzer = (() => {
         return parseResponse(response, text);
       } catch (err) {
         lastError = err;
-        if (!/JSON|atpažįstamos struktūros/i.test(err.message)) throw err;
+        if (err.diKlaida || !/JSON|atpažįstamos struktūros/i.test(err.message)) throw err;   // R-5: serverio klaidos nekartojamos
         console.warn('[Analyze attempt ' + (attempt + 1) + '/3] JSON parse nepavyko');
         if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
       }
@@ -7180,8 +7386,9 @@ const AIAnalyzer = (() => {
 
   async function callClaude(duomenys, settings) {
     // DI užduotis pp-ts.auditas (shared/ai-proxy.js): instrukcija ir atsakymo ilgis - serveryje, modelis - iš pasirinkiklio.
+    const pradzia = Date.now();
     const res = await diUzduotis('auditas', duomenys, settings, aiSignalas());
-    if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
+    if (!res.ok) throw diKlaida(res, pradzia);
     return res.text;
   }
 
@@ -7270,7 +7477,7 @@ const TSGenerator = (() => {
       } catch (err) {
         lastError = err;
         // Tik JSON parse klaidos -> retry; kitos klaidos (HTTP, network) -> mestam iškart
-        if (!/JSON|atpažįstamos struktūros/i.test(err.message)) throw err;
+        if (err.diKlaida || !/JSON|atpažįstamos struktūros/i.test(err.message)) throw err;   // R-5: serverio klaidos nekartojamos
         console.warn(`[Attempt ${attempt + 1}/${parseRetries + 1}] JSON parse nepavyko:`, err.message);
         if (attempt < parseRetries) {
           // Mažas pauzės delsimas, kad išvengtume rate limit
@@ -7310,13 +7517,15 @@ const TSGenerator = (() => {
         .then(content => ({ number: section.number, title: section.title, content, _failed: false }))
         .catch(err => {
           console.error(`Skyrius ${section.number} nepavyko (pirmoji banga):`, err);
-          return { number: section.number, title: section.title, content: '', _failed: true, _error: err.message };
+          const ilgai = ilgaiLaukta(err);
+          return { number: section.number, title: section.title, content: '', _failed: true, _ilgai: ilgai,
+            _error: err.message + (ilgai ? ' Skyrius antrą kartą nesiųstas - serveris neatsakė per ' + Math.round(err.trukmeMs / 1000) + ' s.' : '') };
         })
     );
     let sections = await Promise.all(sectionPromises);
 
     // Pakartotinis bandymas nepavyksinusiems skyriams sekvenciškai su delay (kad išvengti rate limit'o)
-    const failedSections = sections.filter(s => s._failed);
+    const failedSections = sections.filter(s => s._failed && !s._ilgai);   // R-5: po ilgo laukimo 502 / 504 - nekartojama
     if (failedSections.length > 0) {
       onProgress?.(`Pakartojami ${failedSections.length} nepavykę skyriai...`, 65);
       for (let i = 0; i < failedSections.length; i++) {
@@ -7349,8 +7558,10 @@ const TSGenerator = (() => {
     } catch (err) {
       tikrinkAtsaukima(signal);
       console.warn('Atitikties lentelė pirmame bandyme nepavyko:', err.message);
+      // R-5: po ilgo laukimo 502 / 504 - nekartojama (identiška užklausa vėl lauktų ~3 min. ir kainuotų dar kartą)
+      if (ilgaiLaukta(err)) complianceKlaida = err.message + ' Antrą kartą nesiųsta - serveris neatsakė per ' + Math.round(err.trukmeMs / 1000) + ' s.';
       // Antras bandymas su delay
-      await pauze(5000, signal);
+      else { await pauze(5000, signal);
       try {
         complianceTable = await generateCompliance(sections.filter(s => !s._failed), ctx, settings);
       } catch (err2) {
@@ -7359,7 +7570,7 @@ const TSGenerator = (() => {
         complianceTable = [];
         // Nebe tyliai: lentelės kortelė ir būsena sako, kad jos nėra ir kodėl.
         complianceKlaida = err2.message || 'nežinoma priežastis';
-      }
+      } }
     }
 
     onProgress?.('Atlikta', 95);
@@ -7407,8 +7618,9 @@ const TSGenerator = (() => {
 
   async function callClaude(uzd, duomenys, settings) {
     // DI užduotis pp-ts.<uzd> (shared/ai-proxy.js): instrukcija ir atsakymo ilgis - serveryje, modelis - iš pasirinkiklio.
+    const pradzia = Date.now();
     const res = await diUzduotis(uzd, duomenys, settings, aiSignalas());
-    if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
+    if (!res.ok) throw diKlaida(res, pradzia);
     return res.text;
   }
 
@@ -7705,7 +7917,7 @@ const PriceEstimator = (() => {
         return smartParseJson(content);
       } catch (err) {
         lastError = err;
-        if (!/JSON|atpažįstamos struktūros/i.test(err.message)) throw err;
+        if (err.diKlaida || !/JSON|atpažįstamos struktūros/i.test(err.message)) throw err;   // R-5: serverio klaidos nekartojamos
         console.warn('[Price attempt ' + (attempt + 1) + '/3] JSON parse nepavyko');
         if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
       }
@@ -7715,8 +7927,9 @@ const PriceEstimator = (() => {
 
   async function callClaude(duomenys, settings) {
     // DI užduotis pp-ts.kaina (shared/ai-proxy.js): instrukcija ir atsakymo ilgis - serveryje, modelis - iš pasirinkiklio.
+    const pradzia = Date.now();
     const res = await diUzduotis('kaina', duomenys, settings, aiSignalas());
-    if (!res.ok) throw new Error(res.error || ('HTTP ' + res.status));
+    if (!res.ok) throw diKlaida(res, pradzia);
     return res.text;
   }
 
