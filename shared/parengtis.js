@@ -32,7 +32,7 @@
       vaidmuo: { skelbimas: "Skelbimas", sps: "SPS", bps: "BPS", ts: "Techninė specifikacija", sutartis: "Sutarties projektas (specialiosios sąlygos)",
                  sutartis_bendrosios: "Sutarties bendrosios sąlygos", pasiulymas: "Pasiūlymo forma", paraiska: "Paraiškos forma", ebvpd: "EBVPD",
                  paaiskinimas: "Paaiškinimai ir atsakymai", priedas: "Kitas priedas", kita: "Kita" },
-      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės", privalomi: "Privalomi dokumentų elementai", kvalifikacija: "Kvalifikacijos reikalavimai (Metodika)", sutarties_elementai: "Privalomi sutarties elementai" },
+      grupe: { paketas: "Paketas", skelbimas: "Skelbimas ir dokumentai", kortele: "Kortelė ir dokumentai", aiskumas: "Dokumentų aiškumas", taisykles: "Taisyklės", privalomi: "Privalomi dokumentų elementai", kvalifikacija: "Kvalifikacijos reikalavimai (Metodika)", sutarties_elementai: "Privalomi sutarties elementai", nuoseklumas: "TS, SPS ir sutartis" },
       patikra: {
         dokumentai: "Ar yra visi dokumentai pagal būdą", priedai: "SPS priedų sąrašas ir failai", neperskaityti: "Perskaityti failai",
         kalba: "Pasiūlymų kalba: skelbimas ir SPS", pavadinimas: "Pavadinimas: skelbimas ir SPS", dalys: "Dalys: skelbimas ir SPS",
@@ -40,6 +40,7 @@
         trukme: "Sutarties trukmė: skelbimas ir sutartis", budas: "Pirkimo būdas: skelbimas ir SPS", vykdytojas: "Pirkimo vykdytojas: skelbimas ir SPS",
         kortele: "Kortelė ir skelbimas", punktai: "Pasikartojantys punktų numeriai", alternatyvos: "Paliktos šablono alternatyvos",
         laukai: "Neužpildyti pasirinkimo laukai", lenteles: "Nuorodos į lenteles", priedu_nuorodos: "Nuorodos į SPS priedus", kalbu_sutapimas: "Sumos, procentai, datos ir terminai lietuviškai ir angliškai", skaiciai_zodziai: "Skaičiai ir žodžiai", grafikas: "SPS grafiko datų tvarka",
+        nuos_terminai: "Pristatymo ar atlikimo terminas: TS ir sutartis", nuos_zalieji: "Žaliųjų reikalavimų vieta: SPS, TS ir sutartis", nuos_kvalifikacija: "Tiekėjo reikalavimai techninėje specifikacijoje", nuos_standartai: "Nuorodos į standartus su „arba lygiavertis“",
         vykdytojo_savoka: "Pirkimo vykdytojo sąvoka: BPS ir SPS", rezimas_salygos: "Režimas: skelbimas ir pirkimo sąlygos",
         rezimo_savokos: "Taikomo įstatymo sąvokos visuose dokumentuose",
         privalomi: "Privalomi dokumentų elementai", privalomi_kiti: "Kiti įstatyme išvardyti elementai",
@@ -88,6 +89,18 @@
       priedu_nuorodos: "Nuoroda į SPS {n} priedą, bet SPS priedų sąraše tokio numerio nėra.",
       kalbuSutapimas: "{r} skiriasi: lietuviškai „{a}“, angliškai „{b}“.{k}",
       kalbuKitur: " Tas pats ir kitur (dar vietų: {n}).",
+      nuosTerminas: "Terminas, skaičiuojamas nuo {i}, techninėje specifikacijoje ir sutartyje skiriasi: sutartyje - „{s}“, TS - „{t}“. Tiekėjui neaišku, kuris terminas taikomas - suderinkite dokumentus.",
+      nuosTerminasIlg: "Techninėje specifikacijoje terminas, skaičiuojamas nuo {i}, ilgesnis už sutarties terminą: sutartyje - „{s}“, TS - „{t}“. Suderinkite dokumentus.",
+      nuosUzs: "užsakymo (pavedimo) pateikimo", nuosSut: "sutarties įsigaliojimo (sudarymo)",
+      nuosZalieji: "SPS nurodyta, kad žalieji reikalavimai pateikti {k}, tačiau ten aplinkos apsaugos reikalavimų požymių nerasta (ieškota: aplinkos apsauga, aplinkosauga, energijos vartojimo efektyvumas, atliekos, pakuotės, ekologinis ženklas ir pan.). Įrašykite žaliuosius reikalavimus ten, kur nurodo SPS, arba pataisykite SPS nuostatą.",
+      nuosKurTs: "techninėje specifikacijoje", nuosKurSut: "sutarties projekte", nuosKurAbu: "techninėje specifikacijoje ir sutarties projekte",
+      nuosKvalVadyba: "Techninėje specifikacijoje nustatytas tiekėjo vadybos sistemos reikalavimas (ISO {s}). Tiekėjo kvalifikacijos ir vadybos sistemų reikalavimai pateikiami pirkimo sąlygose (SPS lentelėse), o TS aprašo pirkimo objektą. SPS šio reikalavimo nerasta - jei jis taikomas, perkelkite jį į SPS.",
+      nuosKvalVadybaSps: "Techninėje specifikacijoje ir SPS nustatytas tas pats tiekėjo vadybos sistemos reikalavimas (ISO {s}), bet {k} nėra žodžių „arba lygiavertis“. Palikite reikalavimą vienoje vietoje (SPS) arba suderinkite formuluotes.",
+      nuosKvalPatirtis: "Techninėje specifikacijoje yra tiekėjo patirties reikalavimas. Patirties reikalavimai - tiekėjo kvalifikacijos reikalavimai, jie pateikiami pirkimo sąlygose (SPS); jei tas pats reikalavimas yra ir SPS, patikrinkite, ar jie sutampa.",
+      nuosStandartai: "Techninėje specifikacijoje yra nuorodų į standartus be žodžių „arba lygiavertis“ (rasta: {n}; pvz., „{std}“), o bendros nuostatos, kad nurodytiems standartams taikomi lygiaverčiai, nėra. Kiekviena nuoroda į standartą pateikiama su žodžiais „arba lygiavertis“.",
+      nuosBe: { be_ts: "pakete nėra techninės specifikacijos", be_sutarties: "pakete nėra sutarties specialiųjų sąlygų", be_terminu: "TS ir sutartyje nerasta to paties termino (nuo užsakymo ar nuo sutarties įsigaliojimo) abiejuose dokumentuose",
+        be_teiginio: "SPS nėra nuostatos, kad žalieji reikalavimai pateikti TS ar sutarties projekte", be_sps: "pakete nėra SPS", be_dokumento: "SPS nurodyto dokumento (TS ar sutarties) pakete nėra",
+        be_standartu: "techninėje specifikacijoje nuorodų į standartus nėra", neikelta: "nuoseklumo patikra neįkelta" },
       skaiciaiZodziai: "Skaičius ir žodžiai skiriasi: „{s}“ ir „{z}“.{k}",
       skaiciaiKitur: " Kitur ta pati nuostata parašyta vienodai - patikrinkite, kuri redakcija galioja.",
       grafikas: "SPS grafiko datos ne iš eilės: „{a}“ ({ad}) po „{b}“ ({bd}).",
@@ -125,7 +138,7 @@
       vaidmuo: { skelbimas: "Notice", sps: "SPS", bps: "BPS", ts: "Technical specification", sutartis: "Draft contract (special conditions)",
                  sutartis_bendrosios: "General contract conditions", pasiulymas: "Tender form", paraiska: "Application form", ebvpd: "ESPD",
                  paaiskinimas: "Clarifications and answers", priedas: "Other annex", kita: "Other" },
-      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules", privalomi: "Required document elements", kvalifikacija: "Qualification requirements (Methodology)", sutarties_elementai: "Required contract elements" },
+      grupe: { paketas: "Package", skelbimas: "Notice and documents", kortele: "Card and documents", aiskumas: "Clarity of documents", taisykles: "Rules", privalomi: "Required document elements", kvalifikacija: "Qualification requirements (Methodology)", sutarties_elementai: "Required contract elements", nuoseklumas: "TS, SPC and contract" },
       patikra: {
         dokumentai: "All documents for the procedure", priedai: "SPS list of annexes and files", neperskaityti: "Files read",
         kalba: "Tender language: notice and SPS", pavadinimas: "Title: notice and SPS", dalys: "Lots: notice and SPS",
@@ -133,6 +146,7 @@
         trukme: "Contract duration: notice and contract", budas: "Procedure: notice and SPS", vykdytojas: "Contracting body: notice and SPS",
         kortele: "Card and notice", punktai: "Repeated clause numbers", alternatyvos: "Template alternatives left in",
         laukai: "Unfilled choice fields", lenteles: "References to tables", priedu_nuorodos: "References to SPS annexes", kalbu_sutapimas: "Amounts, percentages, dates and periods in Lithuanian and English", skaiciai_zodziai: "Numbers and words", grafikas: "Order of SPS schedule dates",
+        nuos_terminai: "Delivery or completion period: TS and contract", nuos_zalieji: "Where the green requirements are: SPC, TS and contract", nuos_kvalifikacija: "Supplier requirements in the technical specification", nuos_standartai: "References to standards with “or equivalent”",
         vykdytojo_savoka: "Contracting body term: BPS and SPS", rezimas_salygos: "Regime: notice and procurement conditions",
         rezimo_savokos: "Terms of the applicable law in all documents",
         privalomi: "Required document elements", privalomi_kiti: "Other elements listed in the law",
@@ -181,6 +195,18 @@
       priedu_nuorodos: "Reference to SPS annex {n}, but the SPS list of annexes has no such number.",
       kalbuSutapimas: "{r} differs: Lithuanian “{a}”, English “{b}”.{k}",
       kalbuKitur: " The same elsewhere (more places: {n}).",
+      nuosTerminas: "The period counted from {i} differs between the technical specification and the contract: contract - “{s}”, TS - “{t}”. Suppliers cannot tell which applies - align the documents.",
+      nuosTerminasIlg: "In the technical specification the period counted from {i} is longer than the contract period: contract - “{s}”, TS - “{t}”. Align the documents.",
+      nuosUzs: "submission of the order", nuosSut: "entry into force (conclusion) of the contract",
+      nuosZalieji: "The SPC says the green requirements are set out {k}, but no signs of environmental requirements were found there (searched: environmental protection, energy efficiency, waste, packaging, eco-label and similar). Put the green requirements where the SPC says or correct the SPC provision.",
+      nuosKurTs: "in the technical specification", nuosKurSut: "in the draft contract", nuosKurAbu: "in the technical specification and the draft contract",
+      nuosKvalVadyba: "The technical specification sets a management system requirement for the supplier (ISO {s}). Supplier qualification and management system requirements belong in the procurement conditions (SPC tables); the TS describes the subject of the procurement. The SPC does not contain this requirement - if it applies, move it to the SPC.",
+      nuosKvalVadybaSps: "The technical specification and the SPC set the same management system requirement for the supplier (ISO {s}), but {k} lacks the words “or equivalent”. Keep the requirement in one place (SPC) or align the wording.",
+      nuosKvalPatirtis: "The technical specification contains a supplier experience requirement. Experience requirements are supplier qualification requirements and belong in the procurement conditions (SPC); if the SPC has the same requirement, check that they match.",
+      nuosStandartai: "The technical specification refers to standards without the words “or equivalent” (found: {n}; e.g. “{std}”), and there is no general provision that equivalent standards are accepted. Every reference to a standard must be accompanied by the words “or equivalent”.",
+      nuosBe: { be_ts: "the package has no technical specification", be_sutarties: "the package has no special conditions of the contract", be_terminu: "no period with the same reference point (from the order or from entry into force of the contract) was found in both the TS and the contract",
+        be_teiginio: "the SPC does not say that the green requirements are set out in the TS or the draft contract", be_sps: "the package has no SPC", be_dokumento: "the document named in the SPC (TS or contract) is not in the package",
+        be_standartu: "the technical specification has no references to standards", neikelta: "the consistency check is not loaded" },
       skaiciaiZodziai: "The number and the words differ: “{s}” and “{z}”.{k}",
       skaiciaiKitur: " Elsewhere the same provision is written consistently - check which version applies.",
       grafikas: "SPS schedule dates are out of order: “{a}” ({ad}) after “{b}” ({bd}).",
@@ -837,6 +863,36 @@
       });
       if (zod.poru) patikra("skaiciai_zodziai", "aiskumas", zod.radiniai.length ? "radinys" : "gerai", "");
     }
+    // TS, SPS ir sutarties nuoseklumas (2026-11-10, shared/nuoseklumas.js): terminai, žaliųjų reikalavimų vieta, tiekėjo reikalavimai ir standartai TS
+    var NS = global.GP_NUOSEKLUMAS, NID = ["terminai", "zalieji", "kvalifikacija", "standartai"];
+    if (!NS || !global.GP_KALBU_SUTIKRINIMAS) NID.forEach(function (k) { patikra("nuos_" + k, "nuoseklumas", "nepatikrinta", X.nuosBe.neikelta); });
+    else {
+      var NR = NS.tikrink({ docs: docs, vaidmenys: vaid });
+      var nDok = function (id) { return docs.filter(function (d) { return d.id === id; })[0]; };
+      var nVieta = function (x) { var d = nDok(x.docId); return d ? docVieta(d, { loc: x.loc, t: x.citata }, l) : null; };
+      var nv = function (sar) { return sar.map(nVieta).filter(Boolean); };
+      NR.terminai.radiniai.forEach(function (x) {
+        radinys({ id: "nuos_terminai", grupe: "nuoseklumas", lygis: "tikrinti",
+          tekstas: sub(x.ilgesnis ? X.nuosTerminasIlg : X.nuosTerminas, { i: x.inkaras === "uzsakymas" ? X.nuosUzs : X.nuosSut, s: x.sutartis.tekstas, t: x.ts.map(function (y) { return y.tekstas; }).join("; ") }),
+          vietos: nv([x.sutartis].concat(x.ts)), teise: teise(["dokumentu_aiskumas", "kiekis"]) });
+      });
+      NR.zalieji.radiniai.forEach(function (x) {
+        radinys({ id: "nuos_zalieji", grupe: "nuoseklumas", lygis: "tikrinti",
+          tekstas: sub(X.nuosZalieji, { k: x.ts && x.sutartis ? X.nuosKurAbu : x.ts ? X.nuosKurTs : X.nuosKurSut }),
+          vietos: nv([x.teiginys]), teise: teise(["dokumentu_aiskumas"]) });
+      });
+      NR.kvalifikacija.radiniai.forEach(function (x) {
+        var t = x.rusis === "patirtis" ? X.nuosKvalPatirtis : x.sps ? sub(X.nuosKvalVadybaSps, { s: x.standartas, k: x.sps.lygiavertis ? "TS" : (l === "en" ? "the SPC" : "SPS") }) : sub(X.nuosKvalVadyba, { s: x.standartas });
+        radinys({ id: "nuos_kvalifikacija", grupe: "nuoseklumas", lygis: "tikrinti", tekstas: t, vietos: nv([x].concat(x.sps ? [x.sps] : [])), teise: teise(["dokumentu_aiskumas"]) });
+      });
+      // standartai - informacija, ne „Patikrinkite“ (naudotojo sprendimas 2026-11-10: tikruose paketuose dažna, 9 iš 19 TS)
+      NR.standartai.radiniai.forEach(function (x) {
+        radinys({ id: "nuos_standartai", grupe: "nuoseklumas", lygis: "info", tekstas: sub(X.nuosStandartai, { n: x.n, std: x.vietos[0].standartas }),
+          vietos: nv(x.vietos), teise: teise(["ts_standartai"]) });
+      });
+      NID.forEach(function (k) { var y = NR[k]; patikra("nuos_" + k, "nuoseklumas", y.busena, y.busena === "nepatikrinta" ? (X.nuosBe[y.priezastis] || "") : ""); });
+    }
+
     // SPS grafiko datų tvarka
     if (!sps || sps.grafikas.length < 2) patikra("grafikas", "aiskumas", "nepatikrinta", !sps ? X.beSps : X.beGrafiko);
     // PP-salygos sugeneruotame pakete grafiko datos - šablono pavyzdžiai (raudonos, įrašomos Word programoje) - jų tvarka nieko nepasako (T6-M6)
