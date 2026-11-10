@@ -347,10 +347,21 @@
         return { pavadinimas: lp ? lp.reiksme : l.id, verte: vv > 0 ? vv : null };
       }), lotai.map(function (l) { return "5.1 Pirkimo dalis: " + l.id; }).join("; "));
     }
-    var trukmes = lotai.map(function (l) { var g = laukas(l.eil, "Galiojimas"); return g ? { men: mastas(g.reiksme), citata: g.citata } : null; })
+    // „Numatomas galiojimas“ gali būti ir datomis: „Pradžios data: 30/11/2026“, „Trukmės pabaigos data: 30/04/2027“ (pilotas su tikru pirkimu
+    // 2026-11-10: tokia trukmė nebuvo atpažįstama) - mėnesiai tarp datų, tik kai sveikas mėnesių skaičius (ta pati diena; 29-31 - mėnesio galas)
+    var tarpDatu = function (eilutes) {
+      var nuo = laukas(eilutes, "Prad[žz]ios\\s+data") || laukas(eilutes, "Start\\s+date"), iki = laukas(eilutes, "Trukm[ėe]s\\s+pabaigos\\s+data") || laukas(eilutes, "Duration\\s+end\\s+date");
+      var a = nuo && /(\d{2})\/(\d{2})\/(\d{4})/.exec(nuo.reiksme), b = iki && /(\d{2})\/(\d{2})\/(\d{4})/.exec(iki.reiksme);
+      if (!a || !b) return null;
+      var men = (+b[3] - +a[3]) * 12 + (+b[2] - +a[2]);
+      var dien = function (y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
+      var galas = +a[1] === +b[1] || (+a[1] >= 28 && +b[1] === dien(+b[3], +b[2]));
+      return men > 0 && galas ? { men: men, citata: nuo.citata + "; " + iki.citata, datomis: true } : null;
+    };
+    var trukmes = lotai.map(function (l) { var g = laukas(l.eil, "Galiojimas"); return g ? { men: mastas(g.reiksme), citata: g.citata } : tarpDatu(l.eil); })
       .filter(function (x) { return x && x.men; });
     if (trukmes.length && trukmes.every(function (x) { return x.men === trukmes[0].men; })) prideti("trukmeMen", trukmes[0].men, trukmes[0].citata,
-      trukmes[0].men <= 6 ? P.galiojimasTrumpas : null);   // trumpas „galiojimas“ dažnai yra pasiūlymo galiojimas (2026-11-06)
+      trukmes[0].men <= 6 && !trukmes[0].datomis ? P.galiojimasTrumpas : null);   // trumpas „galiojimas“ dažnai yra pasiūlymo galiojimas (2026-11-06)
 
     // Terminas, išsiuntimo data, CVP IS numeris, būsena. Pakeitimo skelbime terminas - iš pakeitimo aprašymo,
     // o išsiuntimo data yra PAKEITIMO data, ne paskelbimo (pirminio skelbimo datos PDF neturi).

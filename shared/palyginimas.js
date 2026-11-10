@@ -336,6 +336,8 @@
     if (a.replace(/\d/g, "#") === b.replace(/\d/g, "#")) return "numeracija";
     var PRIED = /^(\d+ (priedas|priedėlis)|annex \d+|appendix \d+)/;
     if (PRIED.test(norm(a)) && PRIED.test(norm(b))) return "priedu_sarasas";
+    // skiriasi tik tarpai („kainos / įkainių“ ir „kainos/ įkainių“; pilotas su tikru pirkimu 2026-11-10 - rodyta kaip nukrypimas jautrioje srityje)
+    if (a.replace(/\s+/g, "") === b.replace(/\s+/g, "")) return "skyryba";
     var ops = zodziai(a, b).filter(function (s) { return s.o !== "="; });
     if (ops.every(function (s) { return !/[A-Za-zĄ-ž0-9]/.test(s.t); })) return "skyryba";
     return null;
