@@ -521,6 +521,11 @@
       if (x && x.gulscias && B.formos[d.id] === undefined && /_(SS|BS)$/.test(f)) v[d.id] = "priedas";
       else if (/_SS$/.test(f)) v[d.id] = "sutartis"; else if (/_BS$/.test(f)) v[d.id] = "sutartis_bendrosios";
       else if (/_SS\d+$/.test(f)) v[d.id] = "priedas";   // sutarties specialiųjų sąlygų priedas su sava forma (projektavimo paslaugų SS 3 priedas)
+      // pirkimo sąlygų formos pagal atpažintą formą ar generavimo pasą (pilotas 2026-11-10: G-Procure sugeneruotas paketas buvo „Kita“ ir
+      // „Pakete neradau: Pasiūlymo forma“, nors greta rodyta „Pagal generavimo pasą (AK_LT_PASIULYMAS)“)
+      else if (/_SPS$|_SALYGOS$/.test(f)) v[d.id] = "sps"; else if (/_BPS$/.test(f)) v[d.id] = "bps";
+      else if (/_PASIULYMAS$/.test(f)) v[d.id] = "pasiulymas"; else if (/_PARAISKA$/.test(f)) v[d.id] = "paraiska";
+      else if (/^PRIEDAI_|_(PASALINIMAS|KVALIFIKACIJA|SUTARTYS|SPECIALISTAI|SUBTIEKEJAS|IDARBINTAS|METODIKA)$/.test(f)) v[d.id] = "priedas";
     });
     Object.keys(B.vaidmenys).forEach(function (id) { v[id] = B.vaidmenys[id]; });
     return v;

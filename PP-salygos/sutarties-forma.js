@@ -306,7 +306,7 @@
   var KLAUSIMAI = [
     { id: "trukme", grupe: "Sutarties trukmė ir terminai", tipas: "skaicius", privalomas: true,
       klausimas: "Kokia sutarties trukmė (mėnesiais)?",
-      uzuomina: "Nuo jos priklauso SS 11.1.2 punktas (ilgiausias tiekimo ar teikimo terminas) ir kainų peržiūra dėl kainų lygio pokyčio (5.3.1.2 punktas - taikoma, kai trukmė ilgesnė kaip 6 mėnesiai).",
+      uzuomina: "Nuo jos priklauso SS 11.1.2 punktas (ilgiausias tiekimo ar teikimo terminas) ir kainų peržiūra dėl kainų lygio pokyčio (5.3.1.2 punktas - taikoma, kai trukmė kartu su numatytu pratęsimu ilgesnė negu 6 mėnesiai; todėl ji priklauso ir nuo 11.2 punkto pratęsimo).",
       siuloma: function (c) { return c.trukmeMen ? { reiksme: String(c.trukmeMen), kilme: "pirkimo kortelė" } : null; } },
     { id: "pradzia", grupe: "Sutarties trukmė ir terminai", tipas: "variantai", privalomas: true,
       klausimas: "Nuo kada skaičiuojamas pristatymo ar suteikimo terminas (4.1 punktas)?",
@@ -427,9 +427,11 @@
                   { id: "kita", tekstas: "Kita formuluotė (formos sąraše jos nėra)" }],
       uzuomina: "Formos 11.1.2 punkto sąrašas: 6, 12, 24, 36 mėnesiai arba „iki ...“. „Kita formuluotė“ įrašoma sakinio „... terminas negali būti ilgesnis kaip ...“ gale, pvz. „4.1 punkte nurodytas terminas“ (kai terminą pasiūlyme nurodo tiekėjas). Tikrinant dokumentą be generavimo paso ji rodoma kaip tekstas ne iš formos sąrašo.",
       laukai: [{ id: "iki_tekstas", tipas: "tekstas", uzrasas: "Iki (pvz. 2028-12-31)", kada: "iki" },
-               { id: "galiojimas_kita", tipas: "tekstas", uzrasas: "Formuluotė (be taško gale)", kada: "kita" },
+               { id: "galiojimas_kita", tipas: "tekstas", uzrasas: "Formuluotė (be taško gale)", kada: "kita",
+                 // trukmė ne iš formos sąrašo (pilotas su tikru pirkimu 2026-11-10: 5 mėn. sutarčiai formuluotę tekdavo rašyti ranka)
+                 siuloma: function (c, R) { var n = skaicius(R.trukme); return n && [6, 12, 24, 36].indexOf(n) < 0 ? { reiksme: n + " " + forma(n, "mėnuo", "mėnesiai", "mėnesių"), kilme: "sutarties trukmė" } : null; } },
                { id: "galiojimas_kitaEN", tipas: "tekstas", uzrasas: "Formuluotė angliškai", kada: "kita", tikLTEN: true }],
-      siuloma: function (c, R) { var n = skaicius(R.trukme); return n && [6, 12, 24, 36].indexOf(n) >= 0 ? { reiksme: String(n), kilme: "sutarties trukmė" } : null; } },
+      siuloma: function (c, R) { var n = skaicius(R.trukme); return n ? ([6, 12, 24, 36].indexOf(n) >= 0 ? { reiksme: String(n), kilme: "sutarties trukmė" } : { reiksme: "kita", kilme: "sutarties trukmė " + n + " mėn. - formos sąraše tokios nėra" }) : null; } },
     { id: "pratesimas", grupe: "Esminės sąlygos, galiojimas, pratęsimas", tipas: "taipne", privalomas: true,
       klausimas: "Ar sutarties galiojimo terminą galima pratęsti (11.2 punktas)?",
       uzuomina: "„Ne“ - „Netaikoma“. „Taip“ - lieka VPT nuostata su pasirenkamomis sąlygomis ir šablono nurodymais; jas sutvarkykite Word programoje (patikra jas išvardys)." },
@@ -1157,6 +1159,8 @@
     Q.forEach(function (q) {
       var d = DIA[q.id];
       if (!d || kilmes[q.id] === "zmogus" || d.reiksme == null || d.reiksme === "") return;
+      // sutarties trukmė - pirmiausia iš pirkimo kortelės (pilotas su tikru pirkimu 2026-11-10: DI ją paėmė iš kitame modulyje sugeneruoto Word)
+      if (q.id === "trukme" && ctx && ctx.trukmeMen) return;
       R[q.id] = d.reiksme; kilmes[q.id] = { kilme: "iš dokumento „" + d.saltinis + "“ (DI)", di: d };
       if (d.vnt && !(A[q.id + "_vnt"] && A[q.id + "_vnt"].reiksme)) R[q.id + "_vnt"] = d.vnt;
     });
@@ -1380,8 +1384,16 @@
     if (re52) nust(v52, { elementas: el(v52, re52) });
     var a43 = rask("alternatyva", "4.3");
     if (a43 && R.uzsakymai) nust(a43, { variantas: R.uzsakymai === "taip" ? 1 : 0 });
+    // Kainodaros taisyklių nustatymo metodikos 54 p.: peržiūra privaloma, kai trukmė KARTU SU numatytu pratęsimu ilgesnė negu 6 mėnesiai (pilotas su tikru
+    // pirkimu 2026-11-10: 5 mėn. sutartis su 11.2 p. pratęsimu buvo be peržiūros, LITGRID ją paliko). Iki 6 mėn. su pratęsimu - pratęsimo trukmės
+    // generatorius nežino (11.2 p. tvarkoma Word programoje), todėl peržiūra paliekama ir pasakoma; pratęsimas neatsakytas - nesprendžiama.
     var v53 = rask("valdiklis", "5.3.1.2"), tr = skaicius(R.trukme);
-    if (tr) nust(v53, { elementas: tr > 6 ? el(v53, /dėl kainų lygio pokyčio:$/) : el(v53, /netaik/i) });
+    if (tr) {
+      var perziura = tr > 6 ? true : R.pratesimas === "taip" ? true : R.pratesimas === "ne" ? false : null;
+      if (perziura !== null) nust(v53, { elementas: perziura ? el(v53, /dėl kainų lygio pokyčio:$/) : el(v53, /netaik/i) });
+      if (tr <= 6 && R.pratesimas === "taip")
+        pastaba(perspejimai, "5.3.1.2 punkto kainų peržiūra dėl kainų lygio pokyčio palikta: sutarties trukmė " + tr + " mėn., bet numatytas pratęsimas (11.2 punktas), o pagal Kainodaros taisyklių nustatymo metodikos 54 p. peržiūra privaloma, kai trukmė kartu su numatytu pratęsimu ilgesnė negu 6 mėnesiai. Jei su pratęsimu trukmė neviršys 6 mėnesių, pakeiskite Word programoje.", [{ q: "pratesimas" }]);
+    }
     var v54 = rask("valdiklis", "5.4");
     if (R.nenumatytos) nust(v54, { elementas: R.nenumatytos === "taip" ? el(v54, /^Punktas taikomas/) : el(v54, /netaikomas/i) });
     var ap = KLAUSIMAI.filter(function (q) { return q.id === "apmokejimas"; })[0].variantai.filter(function (v) { return v.id === R.apmokejimas; })[0];

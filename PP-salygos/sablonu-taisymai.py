@@ -427,6 +427,7 @@ def taisymas_tekstas(taisyk):
     viso += _ao_sprendimai(taisyk)
     viso += _ap_sprendimai(taisyk)
     viso += _autoriai(taisyk)
+    viso += _as_lenteles_31(taisyk)
     return viso
 
 
@@ -1632,6 +1633,23 @@ _AR_POROS = [
     ('docProps/core.xml', _re.compile(rb'<dc:creator>[^<]+</dc:creator>'), b'<dc:creator></dc:creator>'),
     ('docProps/core.xml', _re.compile(rb'<cp:lastModifiedBy>[^<]+</cp:lastModifiedBy>'), b'<cp:lastModifiedBy></cp:lastModifiedBy>'),
 ]
+
+
+# AS. SPS 3.1 p. „... nurodytus šio punkto 1 ir 2 lentelėse“ (2026-11-10, rado pilotas su tikru pirkimu - LITGRID paskelbtame SPS ištaisyta;
+#    redakcinė korekcija - naudotojo leidimas 2026-10-05): AK LT SPS „1, ir 2“ (perteklinis kablelis), AK LT/EN SPS „1 ir 2 ir lentelėse“
+#    (perteklinis „ir“), AKV LT SPS „1 ir 2   entelėse“ (trūksta raidės). Raudonas tekstas nekeičiamas; pastraipos - ne laukų raktai.
+_AS_POROS = [(_re.compile(r'šio punkto 1(,) ir 2 lentelėse'), '', 1),
+             (_re.compile(r'šio punkto 1 ir 2( ir) lentelėse'), '', 1),
+             (_re.compile(r'šio punkto 1 ir 2(\s+)entelėse'), ' l', 1)]
+_AS_RAUDONI = []
+
+
+def _as_lenteles_31(taisyk):
+    print("\nSPS 3.1 P. LENTELIŲ SĄRAŠAS (AS, 2026-11-10):")
+    n = _su_zemelapiais(_be_raudono(_AS_POROS, _AS_RAUDONI), None, 'SPS 3.1 p. lentelės', taisyk)
+    for t in _AS_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
 
 
 def _autoriai(taisyk):

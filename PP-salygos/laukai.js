@@ -447,7 +447,7 @@
     // viena (pirmoji dokumente), kitos seka jos atsakymą (SUSIETOS_GRUPES, PP-SALYGOS.html)
     { id: 'dps-kategorijos', re: /^(jeigu|jei|kai) dps (neskirstom|skirstom|nera suskirstyt|suskirstyt)/, klausimas: 'Ar DPS skirstoma į kategorijas?' },
     { id: 'stebetojai', re: /^jei (ne)?numatoma kviesti stebetoj/, klausimas: 'Ar į komisijos posėdžius kviečiami stebėtojai?' },
-    { id: 'zalieji', re: /^jei zalieji reikalavimai nurod/, klausimas: 'Kur nustatomi žalieji reikalavimai?' },
+    { id: 'zalieji', re: /^jei (zalieji reikalavimai nurod|pirkimas laikomas zaliuoju savaime)/, klausimas: 'Kur nustatomi žalieji reikalavimai?' },   // „savaime“ - toje pačioje grupėje nuo 2026-11-10 (pilotas: be jo tekdavo rinktis „TS ir sutartis“)
     { id: 'uztikrinimas', re: /^jei (ne)?taikomas pasiulymo galiojimo uztikrinimas/, klausimas: 'Ar taikomas pasiūlymo galiojimo užtikrinimas?' },
     { id: 'tikrinimas', re: /pasalinimo pagrind/, klausimas: 'Ar tikrinate tik pašalinimo pagrindus ar ir kvalifikaciją?',
       klausimas2: 'Tik galimo laimėtojo ar visų tiekėjų tikriname?' }

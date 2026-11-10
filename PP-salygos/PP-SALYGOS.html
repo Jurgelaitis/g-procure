@@ -1102,7 +1102,7 @@
 
     <div class="q"><div class="t" id="q-sdata">Pirkimo sąlygų data</div>
       <input type="date" id="sdata" aria-labelledby="q-sdata">
-      <div class="cite">Įrašoma dokumentų antraštėje. Numatyta - šiandien.</div>
+      <div class="cite">Įrašoma dokumentų antraštėje. Numatyta - šiandien; pasirinkus pirkimo kortelę su planuojama paskelbimo data - ta data.</div>
     </div>
 
     <div class="actions">
@@ -2710,6 +2710,17 @@ function intarpoKat(n){
    matoma "Isspresta automatiskai" skiltyje. Formuluotes - is paciu sablonu.
    ========================================================================== */
 
+/* SPS 2.1 „Pirkimo objektas – X.“ (pilotas su tikru pirkimu 2026-11-10: LITGRID rašo „... paslaugos“, G-Procure rašydavo „... paslaugų pirkimas“):
+   pavadinimas renkamas kilmininku, todėl paskutinis žodis „paslaugų / prekių / darbų“ verčiamas vardininku; kortelės pavadinimas (vardininku),
+   kurio kilmininkas sutampa su įrašytu, - tas pats; kitaip, kaip iki tol, „X pirkimas“. */
+const OBJ_VARDININKU = { 'paslaugų': 'paslaugos', 'prekių': 'prekės', 'darbų': 'darbai' };
+function objektasVardininku(pav){
+  const m = /^(.*\S)\s+(paslaugų|prekių|darbų)$/u.exec(pav);
+  if (m) return m[1] + ' ' + OBJ_VARDININKU[m[2]];
+  const k = pasirinktaKortele();
+  if (k && k.pavadinimas && k.pavadinimas !== pav && kilmininkoSiulymas(k.pavadinimas) === pav) return k.pavadinimas;
+  return pav + ' pirkimas';
+}
 /* Pavadinimo vietos: pildomos automatiskai is kontrolinio klausimo (Nr. 4-5). */
 const PAV_RE = /\(įrašomas pirkimo objekto pavadinim|Pirkimo objektas\s*[–-]\s*_+|\(Pirkimo objektas\)/i;
 // 2.1 sakinys "Pirkimo objektas – ___" (be ^: MVP zemelapyje numeracija priklijuota prie teksto)
@@ -2973,7 +2984,7 @@ const TEKSTO_SPEC = [
 
 /* Tusciu vietu formuluotes (pastaba Nr. 6 - CPO pagrindimas). */
 const BLANKU_FORMULES = [
-  { re:/sprendimo neatlikti pirkimo naudojantis centralizuotu pirkimu katalogu/,
+  { re:/sprendimo neatlikti pirkimo naudojantis centralizuotu pirkimu katalogu/, cpo: true,
     variantai:['Atitinkamos prekės (paslaugos, darbai) CPO LT kataloge nesiūlomos.'],
     // Nuorodos - pagal taikoma istatyma (centralizuotam pirkimui - VPĮ), todel funkcija, ne tekstas.
     pastaba: () => GP_TEISE.cit('cpo', teisesRezimas()) + ': jei CPO LT kataloge siūlomos prekės, paslaugos ar darbai atitinka poreikius, '
@@ -2982,7 +2993,7 @@ const BLANKU_FORMULES = [
       + 'katalogą (žr. šablono autorių pastabą).' },
   /* Angliskas CPO pagrindimo dvynys dvikalbiuose SPS. Variantu tvarka
      LYGIAGRETI lietuviskam irasui auksciau - poravimas eina indeksu.        */
-  { re:/justification for the decision not to carry out the procurement using the centralized procurement/,
+  { re:/justification for the decision not to carry out the procurement using the centralized procurement/, cpo: true,
     variantai:['The relevant goods (services, works) are not offered in the CPO LT catalogue.'],
     pastaba:'DRAFT (angliškas lietuviško pagrindimo atitikmuo) - suderinkite su pasirinkta lietuviška formuluote.' },
   /* Zaliuju reikalavimu atitikimo taisykle (vartotojo pastaba Nr. 2, 2026-07).
@@ -4126,8 +4137,44 @@ const JUODOS_ALT = [
     klausimas: () => 'Kam bus lygi sutarties kaina?',
     uzuomina: 'Šablone - du variantai, atskirti „/“: laimėjusio tiekėjo pasiūlymo kaina arba sutarties projekte nurodyta suma. Dokumente lieka tik pasirinktasis.' },
   { id: 'kaina', en: true, re: /^([\s\S]*?)(the price of the Tender of the Successful Supplier\s*\/\s*the amount specified in the draft Contract)([\s\S]*)$/,
-    skaidyk: x => x.split(/\s*\/\s*/) }
+    skaidyk: x => x.split(/\s*\/\s*/) },
+  /* SPS 7.2.1 p. (pilotas su tikru pirkimu, 2026-11-10): „... nereikia pateikti ... (jei su Pasiūlymu netikrinami ...) / ... reikia pateikti ...
+     (jei su Pasiūlymu tikrinami ...)“ - iki tol dokumente likdavo abu. Varianto nulemia pašalinimo pagrindų ir kvalifikacijos klausimas „Tik galimo
+     laimėtojo ar visų tiekėjų tikriname?“ (`tikrinimoKieno`): galimo laimėtojo - pirmasis, visų - antrasis; sąlyga skliaustuose pašalinama (kaip
+     LITGRID paskelbtose SPS). Tas klausimas dar neatsakytas - atskirai neklausiama (jis privalomas, generuoti be jo negalima); šablone jo nėra -
+     klausiama kaip kitos juodos alternatyvos. */
+  { id: 'tikrinimo_dok', re: /^([\s\S]*?)(Kartu su (?:Pasiūlymo|Pirminio pasiūlymo|Paraiškos) forma nereikia pateikti[\s\S]*?\(jei su (?:Pasiūlymu|pasiūlymu|Paraiška) netikrinami[^)]*\)\s*\/\s*Kartu su [\s\S]*?\(jei su (?:Pasiūlymu|pasiūlymu|Paraiška) tikrinami[^)]*\))([\s\S]*)$/u,
+    skaidyk: x => tikrSkaidyk(x), auto: () => tikrinimoDokAuto(),
+    klausimas: t => /Paraišk/u.test(t) ? 'Ar kvalifikacijos dokumentai teikiami kartu su paraiška?' : 'Ar kvalifikacijos dokumentai teikiami kartu su pasiūlymu?',
+    uzuomina: 'Šablone - du sakiniai, atskirti „/“: dokumentų su pasiūlymu teikti nereikia (jų prašoma tik iš galimo laimėtojo) arba reikia (tikrinami visi tiekėjai). Dokumente lieka tik pasirinktasis, be sąlygos skliaustuose.' },
+  { id: 'tikrinimo_dok', en: true, re: /^([\s\S]*?)(Proof of [\s\S]*?\(if qualification is not checked with the (?:Tender|Application)\)\s*\/\s*Proof of qualification needs to be submitted[\s\S]*?\(if qualification is checked with the (?:Tender|Application)\))([\s\S]*)$/,
+    skaidyk: x => tikrSkaidyk(x), auto: () => tikrinimoDokAuto() }
 ];
+const juodosAltPavadinimas = a => a.id === 'tikrinimo_dok' ? 'Kvalifikacijos dokumentai su pasiūlymu (7.2.1 p.)' : (a.klausimas || 'Šablono formuluotė „A / B“');
+/* „A (jei ...) / B (jei ...)“ -> [A, B] be sąlygos skliaustuose */
+function tikrSkaidyk(x){
+  return x.split(/\)\s*\/\s*/).map((v, j, a) => (j < a.length - 1 ? v + ')' : v).replace(/\s*\((?:jei|if)\s[^)]*\)\s*$/u, '').trim());
+}
+/* Pašalinimo pagrindų ir kvalifikacijos dokumentai - tik iš galimo laimėtojo ('laimetojas') ar iš visų ('visi'); '' - klausimas šablone yra,
+   bet dar neatsakytas; null - šablone tokio klausimo nėra */
+function tikrinimoKieno(){
+  let kieno = null, yra = false;
+  DOK.forEach(d => (d.zemelapis.vienetai || []).forEach(v => {
+    if (kieno || !v.grupe) return;
+    const tv = GP_LAUKAI.tikrinimoVariantas(v.tekstas);
+    if (!tv || !tv.kieno) return;
+    yra = true;
+    const r = salygosRaktas(v.tekstas), kt = kontrolinisAtsakymas(r);
+    if (kt ? kt.v : ATS[r] === true) kieno = tv.kieno;
+  }));
+  return kieno || (yra ? '' : null);
+}
+function tikrinimoDokAuto(){
+  const k = tikrinimoKieno();
+  return k === 'laimetojas' ? { j: 0, kodel: 'pašalinimo pagrindų ir kvalifikacijos dokumentų prašoma tik iš galimo laimėtojo' }
+    : k === 'visi' ? { j: 1, kodel: 'pašalinimo pagrindai ir kvalifikacija tikrinami visų tiekėjų' }
+    : k === '' ? { laukia: true, kodel: 'nulems atsakymas į klausimą „Tik galimo laimėtojo ar visų tiekėjų tikriname?“' } : null;
+}
 /* Raudonos šablono alternatyvos ir neprivalomi sąrašo nariai, kuriuos nulemia jau žinomi atsakymai (palyginimas su LITGRID paskelbtais
    paketais, 2026-10-23). Iki tol intarpoKat juos tik pajuodindavo: dokumente likdavo abu variantai („Pasiūlyme/Pirminiame pasiūlyme“,
    „CVP IS priemonėmis/El. paštu“), mažos vertės pirkime be derybų - „Galutinis pasiūlymas“, prekių pirkime - „projektuotojo civilinės
@@ -4253,6 +4300,7 @@ function juodaAlternatyva(t){
     const variantai = a.skaidyk(m[2]).map(x => x.trim()).filter(Boolean);
     if (variantai.length < 2) continue;
     return { id: a.id, en: !!a.en, start, end, variantai, klausimas: a.klausimas ? a.klausimas(t) : '', uzuomina: a.uzuomina || '',
+      auto: a.auto || null,
       sakinys: j => (t.slice(0, start) + variantai[j] + t.slice(end)).replace(/\s{2,}/g, ' ').trim() };
   }
   return null;
@@ -4571,7 +4619,7 @@ function surinktiKlausimus(){
         // (pavadinimas renkamas kilmininku - antrastems "X pirkimas", "X PREKIŲ
         // PIRKIMUI"). Cia rasome "X pirkimas"; dubliavimosi nera - pavClean
         // galini "pirkim*" nukerpa dar 1 zingsnyje.
-        const reiksme = pav && OBJ_SAKINYS_RE.test(n.text) ? pav + ' pirkimas' : pav;
+        const reiksme = pav && OBJ_SAKINYS_RE.test(n.text) ? objektasVardininku(pav) : pav;
         const vals = new Array(vietuSk(n.text)).fill('');
         if (reiksme) vals[0] = reiksme;
         ATS['B_' + raktas] = vals;
@@ -4618,6 +4666,9 @@ function surinktiKlausimus(){
             + 'Nepasirinkus lieka visi trys - spręsite Word\'e. Savos taisyklės projektai: ' + pastaba;
         }
         if (!Array.isArray(ATS['B_' + raktas])) ATS['B_' + raktas] = new Array(vietuSk(n.text)).fill('');
+        // CPO LT katalogo nenaudojimo pagrindimas iš kortelės sprendimo „CPO kataloge - nėra“ (pilotas su tikru pirkimu 2026-11-10: LITGRID rašė
+        // „nėra CPO kataloge“, o modulis klausdavo iš naujo). Tik siūloma (patvirtina žmogus); „kataloge yra, bet perkama ne per jį“ - priežastį rašo žmogus
+        if (formule.cpo){ const kc = pasirinktaKortele(); if (kc && kc.cpo === 'nera') siulyk('B_' + raktas, 0, formule.variantai[0], 'pirkimo kortelė - CPO LT kataloge tokių prekių, paslaugų ar darbų nėra'); }
         pridek('formuluotes', 'B|' + raktas, trumpas,
           { tekstas:n.text, tipas:'blank', raktas, variantai, pastaba, vieta:{ dok:d.trumpas, i:n.i },
             komentarai:komentaraiTies(Z, n.i), vietos:vietuSk(n.text) });
@@ -5180,6 +5231,10 @@ function surinktiKlausimus(){
     const P = d.zemelapis.paras || {}, tekstai = Object.keys(P).map(Number).sort((a, b) => a - b).map(i => [i, String(P[String(i)] || '')]);
     juodosAlternatyvos(d, tekstai).forEach(a => {
       if (a.en) return;
+      // atsakymą nulemia jau duotas kitas atsakymas (SPS 7.2.1 p., 2026-11-10) - neklausiama, rodoma „Išspręsta automatiškai“
+      const au = a.auto && a.auto();
+      if (au && a.variantai[au.j]){ auto(d.trumpas, juodosAltPavadinimas(a), `lieka: „${a.variantai[au.j]}“`, au.kodel, null); return; }
+      if (au && au.laukia){ auto(d.trumpas, juodosAltPavadinimas(a), 'lieka formuluotė pagal atsakymą', au.kodel, null); return; }
       K.alternatyvos[a.raktas] = { tekstas: a.tekstas, klausimas: a.klausimas, uzuomina: a.uzuomina, variantai: a.variantai,
         sakiniai: a.variantai.map((v, j) => a.sakinys(j)), vieta: { dok: d.trumpas, i: a.i }, dokumentai: [d.trumpas] };
     });
@@ -5406,7 +5461,7 @@ function juoduAlternatyvuTaikymas(paras, d, trinti){
   if (yraForma(d)) return out;
   const ts = paras.map(p => GPDocx.els(p, 't'));
   juodosAlternatyvos(d, ts.map((x, i) => [i, x.map(y => y.textContent).join('')])).forEach(a => {
-    const j = ATS['JA_' + a.raktas];
+    const au = a.auto && a.auto(), j = au ? au.j : ATS['JA_' + a.raktas];
     if (trinti.has(a.i) || !Number.isInteger(j) || !a.variantai[j]) return;
     keiskAtkarpas(ts[a.i], [[a.start, a.end, a.variantai[j]]]);
     out.push({ dok: d.trumpas, id: a.id, en: a.en, tapo: a.variantai[j] });
@@ -10639,7 +10694,7 @@ async function paketoPatikra(rez, vardai){
       const k = Object.assign({}, (KORTELE && KORTELE.pasirinkta && KORTELE.pasirinkta()) || {}), m = metodas();
       Object.assign(k, { budas: m ? m.id : k.budas, verte: verteEUR() || k.verte || null, objektas: ($('input[name=tipas]:checked') || {}).value || k.objektas,
         rezimas: teisesRezimas(), vykdytojas: k.vykdytojas || IMONE_ID, pavadinimas: k.pavadinimas || pavClean($('#pavadinimas').value || '') });
-      let p = GP_PARENGTIS.patikrink({ docs, vaidmenys: vaid, kortele: k, kalba: 'lt', sugeneruotas: true, sutartisSps: sutartiesNerengiama() });
+      let p = GP_PARENGTIS.patikrink({ docs, vaidmenys: vaid, kortele: k, kalba: 'lt', sugeneruotas: true, grafikasIterptas: !!(korteleGrafikas() || {}).sutampa, sutartisSps: sutartiesNerengiama() });
       // sugeneruoti priedai ir formos pavadinami jų SPS priedų sąrašo numeriu (failo vardas - kaip atsisiunčiamo), kad patikra juos rastų
       const sp = (p.faktai && p.faktai.sps && p.faktai.sps.priedai) || [], vardas = new Map();
       docs.forEach(d => {
@@ -10648,7 +10703,7 @@ async function paketoPatikra(rez, vardai){
         const pr = rx && sp.find(x => rx.test(norm(x.pav)));
         if (pr){ const n = pr.n + ' priedas - ' + d.name; vardas.set(n, d.name); d.name = n; }
       });
-      if (vardas.size) p = GP_PARENGTIS.patikrink({ docs, vaidmenys: vaid, kortele: k, kalba: 'lt', sugeneruotas: true, sutartisSps: sutartiesNerengiama() });
+      if (vardas.size) p = GP_PARENGTIS.patikrink({ docs, vaidmenys: vaid, kortele: k, kalba: 'lt', sugeneruotas: true, grafikasIterptas: !!(korteleGrafikas() || {}).sutampa, sutartisSps: sutartiesNerengiama() });
       p.radiniai.forEach(r => (r.vietos || []).forEach(x => { if (vardas.has(x.failas)) x.failas = vardas.get(x.failas); }));
       // nuorodos į punktus (D4 c) - kad kiekviena rodytų į esamą punktą
       const pn = await punktuNuorodos(rez, vardai);
@@ -12371,7 +12426,7 @@ function negaliojantysEilutese(M, numeriai){
 /* Numatyta salygu data - siandien. */
 (() => {
   const d = new Date();
-  $('#sdata').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  $('#sdata').value = SDATA_PRADINE = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 })();
 
 /* Budu israsas is bendro klasifikatoriaus: tik budai su sablonu seima (11).
@@ -12478,19 +12533,24 @@ $('#genVisi').onclick = () => generuotiDokumentus({ sutartis: true });
    kortelės užpildytos jų „paliestomis“ nežymi (PZ_TAIKOMA). Jungiama PRIEŠ GP_DARBAS. */
 const KORTELES_TIPAI = { prekes:'prekes', paslaugos:'paslaugos', paslaugos_it:'paslaugos', darbai:'darbai' };
 function kortelesTaikoma(f){ PZ_TAIKOMA = true; try { f(); } finally { PZ_TAIKOMA = false; } }
+/* Pirkimo sąlygų data pagal numatymą - šiandien; kortelės paskelbimo data ją pakeičia, kol žmogus datos nekeitė (pilotas su tikru pirkimu 2026-11-10) */
+var SDATA_PRADINE;   // be inicializatoriaus: reikšmę jau įrašė pradinė data aukščiau
 const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
   modulis: 'PP-salygos',
   klaustiKitoPirkimo: true,
   onPasirinkta: () => { veiksmaiPirkimui(); GP_TIKRINIMAS.korteleKeista(); sutartisAtnaujink(); if (window.__K) klausimynas(); },   // ir pirkimo objekto dalys iš kortelės (D1)   // rinkos apžvalgos veiksmai 2 žingsnyje; tikrinimas - su kortele (2026-10-06); kortelės BVPŽ - sutarties parinkimui
   laukai: [
     { kortele:'pavadinimas', el:'#pavadinimas',
-      i: v => /\s+pirkimas\s*$/i.test(v) ? v.replace(/\s+pirkimas\s*$/i, '').trim() : null,
+      // vardininku įrašytas kortelės pavadinimas („... paslaugos“) - kilmininku, kai jis aiškus (pilotas su tikru pirkimu 2026-11-10: pavadinimą
+      // tekdavo įvesti iš naujo); neaiškus - kaip iki tol, ranka
+      i: v => /\s+pirkimas\s*$/i.test(v) ? v.replace(/\s+pirkimas\s*$/i, '').trim() : kilmininkoSiulymas(v),
       is: s => s && s.trim() ? s.trim() + ' pirkimas' : undefined,
-      neimanoma: 'čia rašoma kilmininku be „pirkimas“ - įrašykite ranka' },
+      neimanoma: 'čia rašoma kilmininku be „pirkimas“, o šio pavadinimo kilmininko automatiškai nustatyti nepavyko - įrašykite ranka' },
     { kortele:'budas', el:'#budas', i: v => GP_METHODS.toSalygos(v) ? v : null,
       numatyta: () => !PZ_RANKA.has('budas'),
       dek: v => kortelesTaikoma(() => { $('#budas').value = v; budasPagalPI(); }),
       neimanoma: 'šiam būdui sąlygų šablonų nėra' },
+    { kortele:'paskelbimas', el:'#sdata', numatyta: () => !$('#sdata').value || $('#sdata').value === SDATA_PRADINE },
     { kortele:'verte', el:'#verte', i: v => GP_MONEY.formatEUR(v), is: s => GP_MONEY.parseEUR(s) || undefined,
       dek: v => { $('#verte').value = v; rezimas(); } },
     { kortele:'objektas', gauk: () => (document.querySelector('input[name=tipas]:checked') || {}).value || '',
