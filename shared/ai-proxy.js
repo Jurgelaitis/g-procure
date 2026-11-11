@@ -118,7 +118,7 @@
      neapdorotas atsakymo kunas. Nuo tada, kai zinutes rasomos zmogui, to teksto ten nebera -
      tad Anthropic 529 „overloaded_error" butu nustojes kartotis. Statusas patikimesnis:
      jis nepriklauso nuo to, kaip suformuluota zinute. */
-  /* 502 / 504 po ilgo laukimo - serverio ar tarpinio serverio laiko riba (G-Procure serveris DI atsakymo laukia iki 180 s): DI atsakymą galėjo
+  /* 502 / 504 po ilgo laukimo - serverio ar tarpinio serverio laiko riba (G-Procure serveris DI atsakymo laukia iki 290 s, iki 2026-11-11 - 180 s): DI atsakymą galėjo
      ir parengti, todėl identiška užklausa nekartojama - kitaip mokama du kartus ir laukiama dar 3 min. (pilotas su tikru pirkimu 2026-11-10:
      PP-ts TS patikra po ~182 s gavo 502 ir buvo pakartota). Greita 502 / 503 / 504 (perkraunamas serveris) - kartojama kaip iki tol. */
   var NUSTATYMAI = { ilgasBandymasMs: 60000 };
