@@ -32,9 +32,21 @@
  *   .../puslapis.html            - aptinka kalbą pats (hreflang x-default)
  *   .../puslapis.html?lang=lt    - lietuviškai
  *   .../puslapis.html?lang=en    - angliškai
- * Visi trys rodo tą patį failą, todėl kanoninę nuorodą reikia pataisyti vykdymo
- * metu - tai daro `zymekKanonini()` (žemiau), kitaip visi trys kanonizuotųsi į
- * vieną ir hreflang būtų ignoruojamas.
+ * Visi trys rodo tą patį failą, todėl kanoninė nuoroda nustatoma vykdymo metu -
+ * tai daro `zymekKanonini()` (žemiau): pagal adresą ji rodo į tą patį adresą, kitaip
+ * visi trys kanonizuotųsi į vieną ir hreflang būtų ignoruojamas.
+ *
+ * KODĖL KANONINĖS NUORODOS NĖRA PRADINIAME HTML (nuo 2026-11-11). Iki tol faile
+ * stovėjo beparametrė nuoroda, o JavaScript ją KEISDAVO į ?lang=. Google to daryti
+ * neleidžia: JavaScript negali keisti pradiniame HTML nurodytos kanoninės nuorodos,
+ * o jei jos HTML nustatyti negalima - ji įterpiama JavaScript ir pradiniame HTML
+ * jos nėra (developers.google.com/search/docs/crawling-indexing/javascript/
+ * javascript-seo-basics, „Set the canonical URL“). Search Console 2026-11-11: visi
+ * 27 ?lang= adresai - „Atrasta - šiuo metu neindeksuota“, /?lang=en - „Google
+ * pasirinko kitą standartinį puslapį“. Todėl dvikalbio puslapio <head> turi tik
+ * hreflang trejetą, o kanoninę nuorodą įterpia `zymekKanonini()`: bazė - hreflang
+ * x-default adresas (ne location: atvertas failas ar localhost vis tiek nurodo
+ * g-procure.com), parametras - adreso ?lang=.
  *
  * Naudojimas modulyje:
  *   <script src="../shared/lang-detect.js"></script>
@@ -104,17 +116,27 @@
 
   /* Kanoninė nuoroda turi rodyti į TĄ PATĮ adresą, kuriuo atėjo lankytojas - kitaip
      ?lang=lt ir ?lang=en kanonizuotųsi į beparametrį adresą, Google juos išmestų iš
-     indekso ir hreflang nustotų galioti. Statiniame faile stovi beparametrė nuoroda
-     (teisinga pačiam beparametriam adresui), o čia ji pataisoma, kai parametras yra. */
+     indekso ir hreflang nustotų galioti. Dvikalbio puslapio pradiniame HTML jos nėra
+     (žr. failo pradžią) - čia ji įterpiama vieną kartą, bazė - hreflang x-default.
+     Puslapis be x-default (pvz. noindex) kanoninės nuorodos negauna. */
+  function kanoninesBaze(doc) {
+    var x = doc.querySelector('link[rel="alternate"][hreflang="x-default"]');
+    var b = x ? String(x.getAttribute("href") || "").split("?")[0] : "";
+    return /^https:\/\//.test(b) ? b : null;
+  }
   function zymekKanonini(lang) {
     try {
       var doc = global.document;
-      if (!doc) return;
-      var el = doc.querySelector('link[rel="canonical"]');
-      if (!el) return;
-      var baze = String(el.getAttribute("href") || "").split("?")[0];
+      if (!doc || !doc.head) return;
+      var baze = kanoninesBaze(doc);
       if (!baze) return;
       var l = saugiKalba(lang) || urlLang();
+      var el = doc.querySelector('link[rel="canonical"]');
+      if (!el) {
+        el = doc.createElement("link");
+        el.setAttribute("rel", "canonical");
+        doc.head.appendChild(el);
+      }
       el.setAttribute("href", l ? baze + "?lang=" + l : baze);
     } catch (e) { /* kanoninė nuoroda nėra būtina moduliui veikti */ }
   }
@@ -136,7 +158,7 @@
   function remember(key, lang, storage) {
     if (!key || !saugiKalba(lang)) return false;
     sinchronizuokAdresa(lang);
-    zymekKanonini(lang);
+    zymekKanonini();                                   // pagal adresą: be ?lang= - beparametrė
     if (!storage && global.GP_SUTIKIMAS && !global.GP_SUTIKIMAS.leidzia("nustatymai")) return false;
     try { (storage || global.localStorage).setItem(key, lang); return true; } catch (e) { return false; }
   }
@@ -151,9 +173,9 @@
     LANGS: KALBOS.slice()
   };
 
-  // Beparametriam adresui statinė kanoninė nuoroda jau teisinga, tad dirbam tik su parametru.
-  if (urlLang()) {
-    if (global.document && global.document.readyState === "loading") {
+  // Kanoninė nuoroda įterpiama kiekvienam dvikalbiam puslapiui (ir beparametriam adresui - pradiniame HTML jos nėra).
+  if (global.document) {
+    if (global.document.readyState === "loading") {
       global.document.addEventListener("DOMContentLoaded", function () { zymekKanonini(); });
     } else {
       zymekKanonini();
