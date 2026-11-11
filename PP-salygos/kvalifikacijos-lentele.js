@@ -225,9 +225,14 @@
     if (te) return { grupe: 'teise', pagrindas: `tekste „${te}“` };
     return { grupe: null };
   }
+  /* Specialisto eilutė (SPS 3.7 p., specialistų sąrašo forma): šio modulio žodžiai (ZM.asmenys) ir bendras atpažinimas
+     shared/specialistas.js (GP_SPECIALISTAS - tas pats kaip PP-qual; nuo 2026-11-10, pilotas su tikru pirkimu: „Tiekėjas turi turėti
+     nekilnojamojo turto analitiką, kuris ...“ iki tol nebuvo specialisto eilutė). Be bendro failo - tik šio modulio žodžiai. */
   function specialistas(tekstas){
     const as = zodis(ZM.asmenys, normIdx(tekstas));
-    return as ? { taip: true, pagrindas: `tekste „${as}“` } : { taip: false };
+    if (as) return { taip: true, pagrindas: `tekste „${as}“` };
+    const b = root.GP_SPECIALISTAS ? root.GP_SPECIALISTAS.rask(tekstas) : null;
+    return b && b.taip && b.zodis ? { taip: true, pagrindas: `tekste „${b.zodis}“` } : { taip: false };
   }
   const neVisaTekstas = n => /netikrinama.{0,200}isipareigoja|kvalifikacija .{0,120}netikrinama/.test(n);
 
