@@ -14,6 +14,11 @@
  *
  *   GP_SPECIALISTAS.sakinys(tekstas) -> true / false
  *   GP_SPECIALISTAS.rask(tekstas)    -> { taip, zodis } - zodis: rastas žodis originalo forma („analitiką“), kitaip ""
+ *   GP_SPECIALISTAS.beLygiavercio(tekstas) -> { taip, zodis } - kvalifikaciją įrodo konkretus sertifikatas ar atestatas, bet
+ *     nepasakyta, kad priimamas ir lygiavertis dokumentas (nuo 2026-11-11, LAT 2026-10-28 nutartis Nr. e3K-3-125-933/2026: lygiaverčiu
+ *     pripažįstamas dokumentas, kuris savo turiniu patvirtina ne mažesnę kompetenciją ar kvalifikaciją; kita forma savaime nėra
+ *     pagrindas atmesti - todėl reikalavime verta nurodyti, kokią kompetenciją dokumentas turi patvirtinti). Vadybos sistemų
+ *     sertifikatai (ISO 9001, ISO 14001, EMAS) - ne: jų lygiaverčius pripažįsta SPS šablonų tekstas.
  *
  * Grynos funkcijos, nieko nesaugo ir nesiunčia. Naudoja PP-qual (taisyklės R1, R5, R12, R14) ir PP-salygos (kvalifikacijos lentelės
  * specialisto eilutės: SPS 3.7 p., specialistų sąrašo forma). Savų specialistų sąrašų moduliuose nerašyk.
@@ -49,5 +54,17 @@
   }
   function sakinys(tekstas) { return rask(tekstas).taip; }
 
-  root.GP_SPECIALISTAS = { rask: rask, sakinys: sakinys };
+  // Konkretus kvalifikacijos dokumentas: sertifikatas, atestatas (ir „atestuotas“) arba žinomas asmens sertifikatas santrumpa
+  var DOKUMENTAS_RE = new RegExp("(?:^|[^\\p{L}])(?:sertifikat[\\p{L}]*|atestat[\\p{L}]*|atestuot[\\p{L}]*|PMP|PRINCE2|IPMA|ITIL|CISSP|CISA|CISM|ISTQB"
+    + "|CompTIA|TOGAF|COBIT|CCNA|CCNP)(?![\\p{L}])", "iu");
+  var VADYBA_RE = /vadybos\s+sistem|(?:^|[^\p{L}])EMAS(?![\p{L}])/iu;
+  var LYGIAVERTIS_RE = /lygiaver/i;
+  function beLygiavercio(tekstas) {
+    var s = String(tekstas == null ? "" : tekstas);
+    var m = DOKUMENTAS_RE.exec(s);
+    if (!m || VADYBA_RE.test(s) || LYGIAVERTIS_RE.test(s)) return { taip: false, zodis: "" };
+    return { taip: true, zodis: m[0].replace(/^[^\p{L}]+/u, "") };
+  }
+
+  root.GP_SPECIALISTAS = { rask: rask, sakinys: sakinys, beLygiavercio: beLygiavercio };
 })(typeof window !== "undefined" ? window : this);
