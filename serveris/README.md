@@ -172,7 +172,7 @@ perkeliamos iš naršyklės modulių į serverį ir laikomos privačiai. Modulis
 Serveris pagal šabloną sudaro Anthropic užklausą ir grąžina Anthropic atsakymą kaip yra (klientas jį skaito taip pat, kaip anksčiau `/api/analyze`).
 
 - `di-uzduotys.js` - variklis be priklausomybių (Node ir naršyklė): šablonų registras (id `<modulis>.<užduotis>`, modelis iš
-  leidžiamų, `maxTokens` <= 8000, duomenų schema - tekstas, skaičius, loginis, reikšmė iš sąrašo, tekstų sąrašas, dokumentas - PDF ar
+  leidžiamų, `maxTokens` <= 16000 (iki 2026-11-11 - 8000), duomenų schema - tekstas, skaičius, loginis, reikšmė iš sąrašo, tekstų sąrašas, dokumentas - PDF ar
   paveikslėlis base64), duomenų tikrinimas (tik šablono laukai, tipai ir ribos; klaidoje - lauko vardas, ne reikšmė; valdymo simboliai
   šalinami), užklausos sudarymas. Papildomi laukai (`system`, `messages`, `max_tokens`, `model`) atmetami - 400.
 - `di-uzduotys-marsrutas.js` - Express maršrutas DI serveriui (`index.js`, pm2): šablonai iš `/var/www/g-procure/uzduotys/` (failo
