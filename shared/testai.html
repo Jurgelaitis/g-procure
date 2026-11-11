@@ -1253,7 +1253,8 @@ async function testaiAntraste(){
     const paveikslai = new Set();
     for (const p of puslapiai) {
       const src = await saltinis(p), head = src.slice(0, src.indexOf("</head>"));
-      const kelias = p.replace(/^\.\.\//, ""), kanonine = atr(head, /<link rel="canonical" href="([^"]+)"/);
+      // Dvikalbio puslapio kanoninė nuoroda pradiniame HTML nėra (ją įterpia lang-detect.js) - jo adresas yra hreflang x-default
+      const kelias = p.replace(/^\.\.\//, ""), kanonine = atr(head, /<link rel="canonical" href="([^"]+)"/) || atr(head, /<link rel="alternate" hreflang="x-default" href="([^"]+)"/);
       const t = og(head, "title"), d = og(head, "description"), u = og(head, "url"), img = og(head, "image");
       if (!t || !d) { blogi.push(kelias + ": nėra og:title ar og:description"); continue; }
       if (u !== (kanonine || SAKNIS + kelias)) blogi.push(kelias + ": og:url " + u + " - turi sutapti su canonical " + (kanonine || SAKNIS + kelias));
@@ -3224,7 +3225,7 @@ async function testaiSkelbimasDarbastalis(){
     const i = src.indexOf('id="mano-pirkimai"'), j = src.indexOf('id="irankiai"'), h = src.indexOf('class="hero"');
     tiesa(h > 0 && i > h && j > i, "vieta");
     tiesa(/<section class="section mano-pirkimai" id="mano-pirkimai"[^>]*hidden>/.test(src), "paslėptas be kortelių");
-    tiesa(/<a href="pirkimu-korteles\.html" data-lt="Pirkimų kortelės" data-en="Procurement cards"><\/a>/.test(src), "poraštės nuoroda");
+    tiesa(/<a href="pirkimu-korteles\.html" data-lt="Pirkimų kortelės" data-en="Procurement cards">Pirkimų kortelės<\/a>/.test(src), "poraštės nuoroda (tekstas - ir pradiniame HTML, 2026-11-11)");
   });
 }
 
@@ -8259,6 +8260,68 @@ async function testaiSaugumas(){
     const td = JSON.parse(await saltinis("../.well-known/tdmrep.json"));
     tiesa(Array.isArray(td) && td.length === 1, "tdmrep.json - masyvas su viena taisykle");
     lygu(td[0], { location: "/", "tdm-reservation": 1 }, "tdmrep.json taisyklė");
+  });
+
+  // Paieška (2026-11-11, Search Console: visi 27 ?lang= adresai „Atrasta - šiuo metu neindeksuota“, /?lang=en - „Google pasirinko kitą
+  // standartinį puslapį“). Pradiniame HTML buvo beparametrė kanoninė nuoroda, o JavaScript ją keisdavo į ?lang= - Google to neleidžia
+  // (JavaScript SEO basics, „Set the canonical URL“): dvikalbio puslapio pradiniame HTML jos nėra, ją įterpia shared/lang-detect.js.
+  await testas("Paieška: dvikalbiai puslapiai be kanoninės nuorodos pradiniame HTML, su hreflang trejetu kaip svetainės žemėlapyje; vienkalbiai - su savo adresu; įterpiama viena kanoninė nuoroda pagal adresą; lastmod - tikra data", async ()=>{
+    const sm = await saltinis("../sitemap.xml"), SAKNIS = "https://g-procure.com/", blogi = [];
+    const irasai = [...sm.matchAll(/<url>([\s\S]*?)<\/url>/g)].map(x => ({
+      loc: (x[1].match(/<loc>([^<]+)<\/loc>/) || [])[1], lastmod: (x[1].match(/<lastmod>([^<]+)<\/lastmod>/) || [])[1] }));
+    const failas = loc => { const p = loc.slice(SAKNIS.length).split("?")[0]; return p === "" ? "index.html" : (p.endsWith("/") ? p + "index.html" : p); };
+    const dd = new Date(), siandien = dd.getFullYear() + "-" + String(dd.getMonth() + 1).padStart(2, "0") + "-" + String(dd.getDate()).padStart(2, "0");
+    for (const e of irasai) if (!/^\d{4}-\d{2}-\d{2}$/.test(e.lastmod || "") || e.lastmod > siandien || e.lastmod < "2026-09-01") blogi.push(e.loc + ": lastmod " + e.lastmod);
+    const dvikalbiai = new Set(irasai.filter(e => /\?lang=(lt|en)$/.test(e.loc)).map(e => e.loc.split("?")[0]));
+    tiesa(dvikalbiai.size >= 14, "dvikalbių puslapių žemėlapyje tik " + dvikalbiai.size);
+    for (const baze of new Set(irasai.map(e => e.loc.split("?")[0]))) {
+      const src = await saltinis("../" + failas(baze)), head = src.slice(0, src.indexOf("</head>"));
+      const kan = [...head.matchAll(/<link rel="canonical" href="([^"]+)"/g)].map(x => x[1]);
+      if (dvikalbiai.has(baze)) {
+        if (kan.length) blogi.push(failas(baze) + ": pradiniame HTML kanoninė nuoroda " + kan[0] + " (JavaScript ją keistų)");
+        for (const [h, u] of [["lt", baze + "?lang=lt"], ["en", baze + "?lang=en"], ["x-default", baze]]) {
+          if (!head.includes('<link rel="alternate" hreflang="' + h + '" href="' + u + '">')) blogi.push(failas(baze) + ": nėra hreflang " + h + " " + u);
+          if (!sm.includes('hreflang="' + h + '" href="' + u + '"')) blogi.push("sitemap: nėra hreflang " + h + " " + u);
+          if (!irasai.some(e => e.loc === u)) blogi.push("sitemap: nėra <loc> " + u);
+        }
+        if (!/<script src="(\.\.\/)?shared\/lang-detect\.js"><\/script>/.test(src)) blogi.push(failas(baze) + ": nejungia lang-detect.js");
+      } else {
+        if (kan.length !== 1 || kan[0] !== baze) blogi.push(failas(baze) + ": kanoninė nuoroda turi būti " + baze + ", yra " + kan.join(", "));
+        if (/hreflang=/.test(head)) blogi.push(failas(baze) + ": hreflang be ?lang= adresų žemėlapyje");
+      }
+    }
+    // Portalo puslapių tekstas - ir pradiniame HTML (lietuviškai), ne tik JavaScript; nuorodos be teksto - su statiniu aria-label
+    for (const f of ["index.html", "G-Procure_About.html", "G-Procure_Project.html"]) {
+      const src = await saltinis("../" + f), kunas = src.slice(src.indexOf("<body"));
+      const ATR = '(?:\\s+[\\w:-]+(?:="[^"]*")?)*';
+      const tusti = [...kunas.matchAll(new RegExp("<(\\w+)(" + ATR + ")\\s*>\\s*</\\1>", "g"))].filter(m => / data-lt="/.test(m[2])).map(m => (m[2].match(/ data-lt="([^"]*)"/) || [])[1]);
+      if (tusti.length) blogi.push(f + ": tušti elementai su data-lt (" + tusti.length + "): " + tusti.slice(0, 3).join(" | "));
+      const beAria = [...kunas.matchAll(new RegExp("<\\w+" + ATR + "\\s*>", "g"))].map(m => m[0]).filter(t => / data-lt-aria="/.test(t) && !/ aria-label="/.test(t));
+      if (beAria.length) blogi.push(f + ": data-lt-aria be statinio aria-label (" + beAria.length + ")");
+      const n = [...kunas.matchAll(/ data-lt="/g)].length;
+      if (n < 10) blogi.push(f + ": per mažai data-lt elementų (" + n + ") - ar kalbos mechanizmas pasikeitė?");
+    }
+    tiesa(!blogi.length, blogi.join("\n  "));
+    // Tikri puslapiai rėmelyje: lygiai viena kanoninė nuoroda, rodanti į adresą, kuriuo puslapis atvertas
+    const atverk = kelias => new Promise((res, rej) => {
+      const f = document.createElement("iframe"); f.style.width = "800px"; f.style.height = "400px";
+      const t = setTimeout(() => rej(new Error("neįsikėlė " + kelias)), 20000);
+      f.addEventListener("load", () => { clearTimeout(t); setTimeout(() => res(f), 50); });
+      f.src = "../" + kelias; document.body.appendChild(f);
+    });
+    for (const [kelias, laukta] of [["privatumas.html", SAKNIS + "privatumas.html"], ["privatumas.html?lang=en", SAKNIS + "privatumas.html?lang=en"],
+                                    ["privatumas.html?lang=lt", SAKNIS + "privatumas.html?lang=lt"], ["G-Procure_About.html?lang=en", SAKNIS + "G-Procure_About.html?lang=en"]]) {
+      const f = await atverk(kelias);
+      try {
+        const k = [...f.contentDocument.querySelectorAll('link[rel="canonical"]')].map(e => e.getAttribute("href"));
+        lygu(k, [laukta], kelias + ": kanoninė nuoroda");
+        // Rankinis kalbos pasirinkimas be ?lang= adrese kanoninės nepakeičia (adresas tas pats)
+        if (kelias === "privatumas.html") {
+          f.contentWindow.GP_LANG.remember("gp-testas.kanonine", "en", { setItem() {} });
+          lygu([...f.contentDocument.querySelectorAll('link[rel="canonical"]')].map(e => e.getAttribute("href")), [laukta], "pasirinkus EN be ?lang=");
+        }
+      } finally { f.remove(); }
+    }
   });
 
   await testas("NOTICE.md: kitų teisių turėtojų turinys (LITGRID AB ir AB „Amber Grid“ šablonai, bankų sąrašas, įmonių logotipai, bibliotekos, šriftas, BVPŽ žodynas) - kiekvienas nurodytas kelias yra svetainėje, visi šablonai, logotipai ir bibliotekų katalogai paminėti; be licencijos ir nuosavybės teiginio (naudotojo sprendimas 2026-11-08 - po teisininko)", async ()=>{
