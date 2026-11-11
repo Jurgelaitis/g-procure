@@ -754,6 +754,13 @@
       const be = numeriai(M, {}, ktx.vertimas).filter(e => !pTekstas(e.reikEN)).length;
       if (be) out.push(`Pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų kalbos nėra: ${be === M.eilutes.length ? 'angliški langeliai' : `${be} eilučių angliški langeliai`} liks raudoni su nurodymu. Pasiūlykite vertimą (DI) žemiau, įkelkite dvikalbį dokumentą (pvz. PP-qual LT / EN) arba įrašykite vertimą Word programoje.`);
     }
+    // 2026-11-11 (LAT 2026-10-28 nutartis Nr. e3K-3-125-933/2026): konkretus sertifikatas ar atestatas be „arba lygiavertis“ - lygiavertiškumas
+    // vertinamas pagal dokumento turinį, todėl reikalavime verta nurodyti, kokią kompetenciją dokumentas turi patvirtinti (bendra su PP-qual R17)
+    if (root.GP_SPECIALISTAS && root.GP_SPECIALISTAS.beLygiavercio){
+      const be = [];
+      M.eilutes.forEach((e, i) => { const b = root.GP_SPECIALISTAS.beLygiavercio(pTekstas(e.reik) + '\n' + pTekstas(e.dok)); if (b.taip) be.push({ nr: i + 1, zodis: b.zodis }); });
+      if (be.length) out.push(`${be.length === 1 ? be[0].nr + ' eilutėje' : be.map(x => x.nr).join(', ') + ' eilutėse'} kvalifikaciją įrodo konkretus dokumentas („${be[0].zodis}“), bet nenurodyta, ar priimamas ir lygiavertis. LAT 2026-10-28 nutartis Nr. e3K-3-125-933/2026: lygiaverčiu pripažįstamas dokumentas, kuris savo turiniu patvirtina ne mažesnę kompetenciją ar kvalifikaciją. Savo dokumente nurodykite „arba lygiavertis dokumentas“ ir kokią kompetenciją jis turi patvirtinti, tada įkelkite iš naujo.`);
+    }
     const g = grupiuTvarka(numeriai(M, ktx && ktx.pakeitimai));
     if (g.kartojasi.length) out.push('Reikalavimai neišdėstyti grupėmis iš eilės - lentelėje grupės antraštė pasikartos. Eilučių tvarka nekeičiama, nes tekste gali būti nuorodų į punktų numerius.');
     const sn = M.saltinioNumeriai.filter(Boolean);
