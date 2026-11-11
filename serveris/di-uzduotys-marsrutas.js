@@ -8,7 +8,7 @@
  *        app.post('/api/uzduotis', tikGProcure, require('./routes/di-uzduotys-marsrutas')({
  *          katalogas: '/var/www/g-procure/uzduotys', siusk: kunas => axios.post('https://api.anthropic.com/v1/messages', kunas, {
  *            headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
- *            timeout: 180000 }).then(r => r.data) }));
+ *            timeout: 290000 }).then(r => r.data) }));   // nuo 2026-11-11 (iki tol 180000); nginx /api/ - 300 s
  *   4. pm2 restart g-procure. Šablono klaida sustabdo paleidimą (geriau nei tyli užduotis) - žr. pm2 logs.
  *
  * Saugumas: į žurnalą - tik užduoties pavadinimas ir klaidos rūšis (ne duomenys, ne atsakymas); atsakyme - tik
