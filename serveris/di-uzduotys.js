@@ -33,10 +33,12 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var VERSIJA = "2026-11-08";
-  // Kaip serverio index.js (R5, 2026-10-05) ir shared/ai-proxy.js.
+  var VERSIJA = "2026-11-11";
+  // Modeliai - kaip serverio index.js (R5, 2026-10-05) ir shared/ai-proxy.js.
   var LEIDZIAMI_MODELIAI = ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"];
-  var MAX_TOKENS_RIBA = 8000;
+  // Atsakymo ilgio viršutinė riba šablonams (2026-11-11, naudotojo leidimas; iki tol 8000 - PP-ts pilnoji analizė nutrūkdavo).
+  // Ilgesnis atsakymas - ilgesnis laukimas: serveris DI atsakymo laukia iki 290 s, todėl šablono maxTokens rinkis pagal tai.
+  var MAX_TOKENS_RIBA = 16000;
   var ID_RE = /^[a-z0-9-]{2,40}\.[a-z0-9-]{2,60}$/;
   var LAUKO_RE = /^[A-Za-z][A-Za-z0-9_]{0,40}$/;
   var TIPAI = ["tekstas", "skaicius", "loginis", "reiksme", "tekstai", "zodynas"];
