@@ -4070,7 +4070,94 @@ async function paleisk() {
       } finally { f.remove(); }
     });
   }
+  /* Antras pilotas su tikrais LITGRID pirkimais (2026-11-12): CVP IS terminas kontroliniame sąraše ir klausimuose, tiekėjo klausimų terminas
+     sąlyga, sutarties trukmė metais. Pirkimų numeriai ir pavadinimai - išgalvoti. */
+  async function testaiPilotas1112() {
+    grupe("Antras pilotas (2026-11-12): CVP IS terminas kontroliniame sąraše ir klausimuose, klausimų terminas sąlyga, trukmė metais");
+    const KQ = W.GP_KLAUSIMAI, parse = W.GP_CVPIS.parseData;
+    const DL = { value: "08/10/2099 10:00", docId: "D5", loc: { page: 1 }, snippet: "pasiūlymų pateikimo terminas pratęsiamas iki 2099-10-08 10:00", pratestas: true, alt: [{ value: "01/10/2099 10:00" }] };
+    const pr = (o) => Object.assign({ id: 1234501, procedure: "Open", status: "Bid submission", tenderSubmissionDeadline: "2099-10-13T10:00:00" }, o || {});
+    const dok = [SPS("7.1. Pasiūlymą reikia pateikti CVP IS priemonėmis į elektroninių pasiūlymų dėžutę ne vėliau kaip iki CVP IS nurodyto termino pabaigos."), kd("D5", "Raštas dėl termino pratęsimo.pdf", "Paaiškinimas", ["Raštas"])];
+
+    await testas("Kontrolinis sąrašas: su CVP IS duomenimis - CVP IS terminas, kitoks dokumentų terminas - pastaba; be jų - dokumentų; sistema - dokumentų", () => {
+      let P = KQ.kontrolinis({ docs: dok, meta: { deadline: DL }, kalba: "lt", dabar: new Date(2099, 8, 1), pirkimas: pr(), parse });
+      lygu(P.terminas.santrauka, "Terminas: 2099-10-13 10:00 (CVP IS duomenys).");
+      turi(P.terminas.pastaba, "Dokumentuose nurodytas kitas terminas (2099-10-08 10:00) - galioja CVP IS terminas"); neturi(P.terminas.pastaba, "2099-10-01", "ankstesnis (pakeistas) terminas nekartojamas");
+      lygu([P.terminas.saltiniai[0].name, P.terminas.saltiniai[0].docId, P.terminas.saltiniai[1].docId], ["CVP IS duomenys", null, "D5"], "šaltiniai: CVP IS, tada dokumentas");
+      lygu(P.patikra.santrauka, "Pateikite per CVP IS iki 2099-10-13 10:00.");
+      P = KQ.kontrolinis({ docs: dok, meta: { deadline: Object.assign({}, DL, { value: "13/10/2099 10:00" }) }, kalba: "lt", dabar: new Date(2099, 8, 1), pirkimas: pr(), parse });
+      lygu(P.terminas.pastaba, "Terminas pratęstas.", "sutampa - be dokumentų pastabos");
+      P = KQ.kontrolinis({ docs: dok, meta: { deadline: Object.assign({}, DL, { pratestas: false, alt: [{ value: "20/10/2099 10:00" }] }) }, kalba: "lt", dabar: new Date(2099, 8, 1), pirkimas: pr(), parse });
+      lygu(P.terminas.busena, "privaloma", "dokumentų terminai skiriasi, bet CVP IS yra - privaloma"); turi(P.terminas.pastaba, "(2099-10-08 10:00, 2099-10-20 10:00)");
+      lygu(KQ.kontrolinis({ docs: dok, meta: { deadline: DL }, kalba: "lt", dabar: new Date(2099, 8, 1) }).terminas.santrauka, "Terminas: 2099-10-08 10:00.", "be CVP IS - dokumentų");
+      lygu(KQ.kontrolinis({ docs: dok, meta: { deadline: DL }, kalba: "lt", dabar: new Date(2099, 8, 1), pirkimas: pr({ procedure: "Dynamic Purchasing System" }), parse }).terminas.santrauka, "Terminas: 2099-10-08 10:00.", "sistema - ne CVP IS terminas");
+      turi(KQ.kontrolinis({ docs: dok, meta: { deadline: DL }, kalba: "lt", dabar: new Date(2099, 9, 20), pirkimas: pr(), parse }).terminas.pastaba, "jau praėjo");
+      const en = KQ.kontrolinis({ docs: dok, meta: { deadline: DL }, kalba: "en", dabar: new Date(2099, 8, 1), pirkimas: pr(), parse });
+      lygu(en.terminas.santrauka, "Deadline: 2099-10-13 10:00 (CVP IS data)."); turi(en.terminas.pastaba, "The documents give a different deadline (2099-10-08 10:00)");
+    });
+
+    await testas("Siūlomas klausimas apie pratęsimą - CVP IS termino data, be CVP IS - dokumentų", () => {
+      const q = o => (KQ.siulyk(Object.assign({ docs: dok, meta: { deadline: DL }, kalba: "lt", dabar: new Date(2099, 8, 1) }, o)).klausimai.find(x => x.id === "pratesimas") || {}).q;
+      lygu(q({ pirkimas: pr(), parse }), "Kodėl terminas pratęstas iki 2099-10-13 10:00 ir ar pakeistos kitos sąlygos?");
+      lygu(q({}), "Kodėl terminas pratęstas iki 2099-10-08 10:00 ir ar pakeistos kitos sąlygos?");
+    });
+
+    await testas("Modulyje: atėjus CVP IS duomenims kontrolinis sąrašas ir klausimai sudaromi iš naujo; šaltinis „CVP IS duomenys“", async () => {
+      await isvalykPirkima();
+      VPT_ATS = vptOk({ tenderSubmissionDeadline: "2099-10-13T10:00:00" }); await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+      await ikelk({ "Specialiosios pirkimo sąlygos.txt": CVP_S }); await laukti(40);
+      const S = W.__PPT.S;
+      S.meta.deadline = Object.assign({}, DL, { docId: S.docs[0].id }); S.chkT = null; S.siul = null;
+      let t = W.__PPT.chkSarasas().find(x => x.id === "terminas");
+      lygu(t.santrauka, "Terminas: 2099-10-13 10:00 (CVP IS duomenys)."); turi(t.pastaba, "2099-10-08 10:00");
+      turi(W.__PPT.siulymuRez().klausimai.find(x => x.id === "pratesimas").q, "iki 2099-10-13 10:00");
+      W.__PPT.VPT.rez.pirkimas.tenderSubmissionDeadline = "2099-10-20T12:00:00";
+      t = W.__PPT.chkSarasas().find(x => x.id === "terminas");
+      lygu(t.santrauka, "Terminas: 2099-10-20 12:00 (CVP IS duomenys).", "pasikeitus CVP IS terminui - iš naujo");
+      turi(W.__PPT.siulymuRez().klausimai.find(x => x.id === "pratesimas").q, "iki 2099-10-20 12:00");
+      W.__PPT.renderChecklistBox();
+      const li = [...D.querySelectorAll("#checklistBox .chk-i")].find(x => /2099-10-20 12:00/.test(x.textContent));
+      tiesa(li && /Šaltinis: CVP IS duomenys/.test(li.textContent), "šaltinio žyma: " + (li && li.textContent));
+      await isvalykPirkima(); VPT_ATS = null;
+    });
+
+    await testas("Klausimų terminas sąlyga: „atsakys ..., jei prašymas gautas ne vėliau kaip likus N dienoms“ - tiekėjo terminas; tik atsakymo terminas - ne; EN", () => {
+      const S = KQ.prasymoSalyga;
+      let s = S([sal("Perkantysis subjektas atsakys į kiekvieną tiekėjo prašymą paaiškinti pirkimo dokumentus, jei toks prašymas yra gautas ne vėliau kaip likus 6 dienoms iki pasiūlymų pateikimo termino pabaigos.", "BPS", "Bendrosios sąlygos.docx")]);
+      lygu([s && s.dienu, s && s.darbo, s && s.baze], [6, false, "pasiūlymų pateikimo termino pabaigos"]); turi(s.kodel.citata, "jei toks prašymas yra gautas");
+      s = S([sal("Pirkimo vykdytojas atsakys, jeigu klausimas pateiktas ne vėliau kaip likus 4 (keturioms) darbo dienoms iki pasiūlymų pateikimo termino.")]);
+      lygu([s && s.dienu, s && s.darbo], [4, true], "jeigu, darbo dienos");
+      s = S([sal("The Contracting Entity will reply provided that the request is received no later than 6 days before the tender submission deadline.")]);
+      lygu(s && s.dienu, 6, "EN");
+      lygu(S([sal("Perkantysis subjektas atsakys į prašymus ne vėliau kaip likus 3 dienoms iki pasiūlymų pateikimo termino pabaigos.")]), null, "tik atsakymo terminas");
+      lygu(S([sal("Atsakymai į klausimus pateikiami ne vėliau kaip likus 3 dienoms iki pasiūlymų pateikimo termino.")]), null, "atsakymų terminas");
+    });
+
+    await testas("Sutarties trukmė: CVP IS metais lyginama su dokumentais mėnesiais; „36_years“ ir 36 mėn. - įspėjimas, pirmenybė dokumentams", async () => {
+      lygu([W.trukmeMenDok("36 mėn."), W.trukmeMenDok("3 m."), W.trukmeMenDok("3 years"), W.trukmeMenDok("24 months"), W.trukmeMenDok("60 d."), W.trukmeMenDok("2 sav.")], [36, 36, 36, 24, null, null], "dokumentų trukmė mėnesiais");
+      const tp = (cd, d) => W.trukmesPalyginimas({ contractDuration: cd }, d ? { duration: { value: d } } : {});
+      lygu([tp("3_years", "36 mėn.").sutampa, tp("3_years", "24 mėn.").skiriasi, tp("36_years", "36 mėn.").vienetas, tp("36_years", "36 mėn.").sutampa, tp("36_years", "3 m.").vienetas, tp("36_years").abejotina],
+           [true, true, true, false, false, true], "palyginimas");
+      await isvalykPirkima();
+      VPT_ATS = vptOk({ contractDuration: "36_years" }); await nustatyk("1234501"); await kol(() => !CV().vyksta); await laukti(40);
+      await ikelk({ "Specialiosios pirkimo sąlygos.txt": CVP_S }); await laukti(40);
+      W.__PPT.S.meta.duration = { value: "36 mėn.", docId: W.__PPT.S.docs[0].id, alt: [] }; W.__PPT.renderVpt(); W.__PPT.renderApzvalga();
+      turi(VB().textContent, "CVP IS duomenyse - 36 metai (432 mėn.); tikėtina, kad CVP IS lauke pasirinktas ne tas vienetas"); turi(VB().textContent, "skaičius tas pats, skiriasi tik vienetas");
+      const f = [...AP().querySelectorAll(".apz-f")].find(x => x.querySelector(".k").textContent === "Sutarties trukmė");
+      tiesa(f && /36 mėn\./.test(f.textContent) && /tikėtina, kad pasirinktas ne tas vienetas/.test(f.textContent), "apžvalga - dokumentų reikšmė: " + (f && f.textContent));
+      tiesa(demesio().some(x => /36 metai \(432 mėn\.\).*skaičius tas pats/.test(x.textContent)), "atkreipkite dėmesį");
+      // 3 metai ir 36 mėn. - sutampa
+      VPT_ATS = vptOk({ contractDuration: "3_years" }); await W.__PPT.gaukVpt("1234501"); await laukti(40);
+      W.__PPT.S.meta.duration = { value: "36 mėn.", docId: W.__PPT.S.docs[0].id, alt: [] }; W.__PPT.renderVpt(); W.__PPT.renderApzvalga();
+      turi(AP().textContent, "Trukmė sutampa su dokumentais"); neturi(VB().textContent, "tikėtina, kad CVP IS lauke");
+      // 3 metai ir 24 mėn. - skiriasi
+      W.__PPT.S.meta.duration = { value: "24 mėn.", docId: W.__PPT.S.docs[0].id, alt: [] }; W.__PPT.renderVpt();
+      turi(VB().textContent, "Sutarties trukmė: VPT duomenimis 3 m., dokumentuose 24 mėn.");
+      await isvalykPirkima(); VPT_ATS = null;
+    });
+  }
   await testaiPilotas1110();
+  await testaiPilotas1112();
 
   grazinkKalba();
   APSAUGA.atkurk();

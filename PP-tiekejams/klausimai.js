@@ -186,6 +186,31 @@
     var m = /(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2}))?/.exec(String(v || ""));
     return m ? { d: new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 23), +(m[5] || 59)), t: m[3] + "-" + m[2] + "-" + m[1] + (m[4] ? " " + m[4] + ":" + m[5] : "") } : null;
   }
+  /* CVP IS pasiūlymų terminas (2026-11-12, antras pilotas: kontrolinis sąrašas terminą ėmė iš pratęsimo rašto, nors apžvalga ir CVP IS rodė
+     vėlesnį pratęstą). Kai yra CVP IS duomenys (o.pirkimas), terminas kontroliniame sąraše ir klausimuose - kaip apžvalgoje, o kitoks
+     dokumentų terminas - pastaba. Dinaminė ar kvalifikacijos sistema (terminas - sistemos pabaiga) ir rinkos konsultacija - ne. */
+  function cvpTerminas(o, kalba) {
+    var p = o && o.pirkimas;
+    if (!p || typeof p.tenderSubmissionDeadline !== "string") return null;
+    if (global.GP_VPT && (global.GP_VPT.sistema(p) || global.GP_VPT.rinkosKonsultacija(p))) return null;
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(p.tenderSubmissionDeadline);
+    if (!m) return null;
+    var d = typeof o.parse === "function" ? o.parse(p.tenderSubmissionDeadline) : null;
+    if (!d) d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+    var t = m[1] + "-" + m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
+    return { d: d, t: t, p: p, kodel: { docId: null, name: kalba === "en" ? "CVP IS data" : "CVP IS duomenys", loc: null, citata: (kalba === "en" ? "Tender submission deadline: " : "Pasiūlymų pateikimo terminas: ") + t } };
+  }
+  // Dokumentų terminai („07/10/2026 10:00“), kurie nesutampa su CVP IS terminu („2026-10-13 10:00“); be laiko - lyginama data
+  function kitiTerminai(dl, cvpT) {
+    if (!dl || !dl.value || !cvpT) return [];
+    var vals = [dl.value].concat(!dl.pratestas && dl.alt ? dl.alt.map(function (a) { return a.value; }) : []), out = [];
+    vals.forEach(function (v) {
+      var x = metaData(v), t = x ? x.t : String(v);
+      var sut = t === cvpT.t || (t.length === 10 && cvpT.t.indexOf(t) === 0);
+      if (!sut && out.indexOf(t) < 0) out.push(t);
+    });
+    return out;
+  }
 
   /* ---------------- Sprendimų sakiniai: ir klausimams, ir kontroliniam sąrašui ---------------- */
   var UZT_TEMA = /galiojimo uztikrinim|pasiulymo uztikrinim|tender security|bid security/;
@@ -242,10 +267,11 @@
       q("paaiskinimai", 10, L("Ką pirkimo vykdytojas jau paaiškino ir atsakė tiekėjams?", "What has the buyer already clarified and answered to suppliers?"),
         { docId: pirmas.id, name: vardas(pirmas), loc: pirmas.chunks[0].loc, citata: kiekDaug(normTarpai(pirmas.chunks[0].text)), kiek: g.paaiskinimai.length }, frP);
     }
-    var dl = meta.deadline;
+    var dl = meta.deadline, cvpT = cvpTerminas(o, kalba);
     if (dl && dl.pratestas && dl.alt && dl.alt.length) {
-      var md = metaData(dl.value);
-      q("pratesimas", 11, md ? L("Kodėl terminas pratęstas iki " + md.t + " ir ar pakeistos kitos sąlygos?", "Why was the deadline extended to " + md.t + " and did other conditions change?")
+      // Data - kaip apžvalgoje: CVP IS terminas, kai jis yra (vėlesnis pratęsimas pakete gali nebūti)
+      var md = metaData(dl.value), tt = cvpT ? cvpT.t : md ? md.t : null;
+      q("pratesimas", 11, tt ? L("Kodėl terminas pratęstas iki " + tt + " ir ar pakeistos kitos sąlygos?", "Why was the deadline extended to " + tt + " and did other conditions change?")
                              : L("Kodėl terminas pratęstas ir ar pakeistos kitos sąlygos?", "Why was the deadline extended and did other conditions change?"),
         metaKodel(dl, o.docs));
     }
@@ -543,10 +569,23 @@
     if (cvp) punktas("registracija", "privaloma", L("Teikiama per CVP IS - užsiregistruokite ir pasirenkite iš anksto.", "Submitted through CVP IS - register and prepare in advance."), [kodel(cvp)]);
 
     /* Terminas: kelios skirtingos datos (ne pratęsimas) - patikslinti, ne pasirinkti. Laiko juosta matyti citatoje. */
-    var dl = meta.deadline;
-    if (dl && dl.value) {
+    var dl = meta.deadline, cvpT = cvpTerminas(o, kalba);
+    var PRAEJES = L("Šis terminas jau praėjo - patikrinkite CVP IS, ar jis nepratęstas.", "This deadline has passed - check in CVP IS whether it was extended.");
+    if (cvpT) {
+      // CVP IS terminas - kaip apžvalgoje; dokumentų terminas, jei kitoks, - pastaba
+      var praejesC = cvpT.d < dabar, kiti = kitiTerminai(dl, cvpT), V = global.GP_VPT;
+      var pastC = praejesC ? PRAEJES
+        : V && V.nutrauktas(cvpT.p) ? L("CVP IS duomenimis pirkimas nutrauktas.", "According to CVP IS the procurement has been cancelled.")
+        : kiti.length ? L("Dokumentuose nurodytas kitas terminas (" + kiti.join(", ") + ") - galioja CVP IS terminas; vėlesnis pratęsimas pakete gali būti dar neįkeltas.",
+                          "The documents give a different deadline (" + kiti.join(", ") + ") - the CVP IS deadline applies; a later extension may not be in the package yet.")
+        : V && V.tolesnisEtapas(cvpT.p) ? L("Pirmas etapas jau baigtas - šis CVP IS terminas skirtas tolesnio etapo dalyviams.", "The first stage is over - this CVP IS deadline is for the next-stage participants.")
+        : dl && dl.pratestas ? L("Terminas pratęstas.", "The deadline was extended.")
+        : o.kelietapis ? L("Vėlesnio etapo terminą pirkimo vykdytojas nurodo kvietime per CVP IS.", "The buyer states the next stage's deadline in the invitation through CVP IS.") : null;
+      punktas("terminas", "privaloma", L("Terminas: " + cvpT.t + " (CVP IS duomenys).", "Deadline: " + cvpT.t + " (CVP IS data)."),
+        [cvpT.kodel].concat(dl && dl.value && dl.docId ? [metaKodel(dl, docs)] : []), pastC);
+      if (cvp) punktas("patikra", "privaloma", praejesC ? L("Teikiama per CVP IS iki termino.", "Submitted through CVP IS by the deadline.") : L("Pateikite per CVP IS iki " + cvpT.t + ".", "Submit through CVP IS by " + cvpT.t + "."), [kodel(cvp)], praejesC ? PRAEJES : null);
+    } else if (dl && dl.value) {
       var md = metaData(dl.value), td = md ? md.t : dl.value, praejes = !!(md && md.d < dabar);
-      var PRAEJES = L("Šis terminas jau praėjo - patikrinkite CVP IS, ar jis nepratęstas.", "This deadline has passed - check in CVP IS whether it was extended.");
       if (dl.alt && dl.alt.length && !dl.pratestas) {
         punktas("terminas", "patikslinti", L("Dokumentuose skirtingi terminai: " + skirtingi(dl) + ".", "The documents give different deadlines: " + skirtingi(dl) + "."), [metaKodel(dl, docs)]);
       } else {
@@ -632,9 +671,15 @@
      buvo 2 iš 27 paketų. Jis pirmesnis tik kai reikalauja paklausti gerokai anksčiau, arba kai CVP IS duomenų nėra. */
   var PRASYMAS = /(prasym[a-z]*\s+(?:paaiskinti|patikslinti)|prasym[a-z]*\s+del\s+[^.]{0,40}paaiskin|klausim[a-z]*\s+(?:del\s+[^.]{0,60})?(?:gali|galima|turi|pateik)|requests?\s+(?:to\s+clarify|for\s+clarification)|questions?\s+[^.]{0,40}(?:must|may|shall)\s+be\s+submitted)[^.]{0,200}?(?:likus|no\s+later\s+than)[:\s]+(?:ne\s+maziau\s+kaip\s+|ne\s+mazesniam\s+kaip\s+)?(\d{1,2})\s*(?:\([^)]{0,30}\)\s*)?(darbo\s+|working\s+|business\s+)?(?:dien[a-z]*|days?)\s+(?:iki|prior\s+to|before)\s+([^.\n]{0,120})/;
   var ATSAKYMAS = /atsakym|atsako|answers?(?![a-z])|repl(?:y|ies)/;
+  /* Tiekėjo terminas sąlyga (2026-11-12, antras pilotas): „Perkantysis subjektas atsakys ..., jei toks prašymas yra gautas ne vėliau kaip likus
+     6 dienoms iki pasiūlymų pateikimo termino pabaigos“ - atsakymas žadamas tik laiku pateiktam prašymui, todėl tai tiekėjo klausimų terminas,
+     nors sakinyje yra „atsakys“. Sakinys, kuriame tik pirkimo vykdytojo atsakymo terminas („atsakys ne vėliau kaip likus 3 dienoms“), - ne. */
+  var PRASYMAS_JEI = /(?:jei|jeigu|kai|if|provided\s+that)\s+(?:toks\s+|tiekejo\s+|jo\s+|such\s+(?:a\s+)?|the\s+)?(?:prasym[a-z]*|klausim[a-z]*|requests?|questions?)\s+(?:yra\s+|is\s+|are\s+)?(?:gaut[a-z]*|pateikt[a-z]*|received|submitted)\s+(?:[a-z]+\s+){0,3}?(?:ne\s+veliau\s+kaip|no\s+later\s+than)\s+(?:likus\s+|pries\s+)?(\d{1,2})\s*(?:\([^)]{0,30}\)\s*)?(darbo\s+|working\s+|business\s+)?(?:dien[a-z]*|days?)\s+(?:iki|prior\s+to|before)\s+([^.\n]{0,120})/;
   function prasymoSalyga(docs) {
-    var g = grupes(docs);
-    var r = rask(g.sprendimai.concat(g.bps, g.kita), PRASYMAS, { ir_salyga: true });
+    var g = grupes(docs), sar = g.sprendimai.concat(g.bps, g.kita);
+    var rj = rask(sar, PRASYMAS_JEI, { ir_salyga: true });
+    if (rj) return { dienu: +rj.m[1], darbo: !!rj.m[2], baze: normTarpai(rj.orig(3).replace(/\([^)]*\)?/g, " ")), kodel: kodel(rj) };
+    var r = rask(sar, PRASYMAS, { ir_salyga: true });
     if (!r || ATSAKYMAS.test(r.f.slice(Math.max(0, r.m.index - 80), r.m.index))) return null;
     return { dienu: +r.m[2], darbo: !!r.m[3], baze: normTarpai(r.orig(4).replace(/\([^)]*\)?/g, " ")), kodel: kodel(r) };
   }
