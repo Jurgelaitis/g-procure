@@ -16,7 +16,11 @@
  *
  *   skaityk(buf, vardas)        -> Promise<{ lenteles: [Modelis], zaliuju: [Modelis], zalieji, ispejimai }> (DOCX)
  *   skaitykXml(xml, numXml, v)  -> tas pats be ZIP (testams)
- *   skaitykPdf(buf, vardas)     -> Promise<tas pats> iš PDF (reikia pdfjsLib); pdfLenteles(puslapiai, vardas) - be pdf.js (testams)
+ *   skaitykPdf(buf, vardas)     -> Promise<tas pats> iš PDF (reikia pdfjsLib); pdfLenteles(puslapiai, vardas, { remeliai }) - be pdf.js
+ *                                  (testams; remeliai - kiekvieno puslapio vertikalios rėmelių linijos [{ x, y0, y1 }])
+ *     Nuo 2026-11-12 (antras pilotas su tikru pirkimu, SPS PDF): stulpelių ribos - tik iš lentelės eilučių; „... ne visa apimtimi“ - ir iš
+ *     PDF, kai jos eilutė lentelės rėmelyje (rėmelių nėra - M.neVisaNepatikrinta, ne „nėra“); kitos SPS lentelės su tais pačiais stulpeliais
+ *     („KITI REIKALAVIMAI“, „SOCIALINIAI REIKALAVIMAI“) - ne kvalifikacijos lentelė (ir DOCX).
  *   irasykZaliuosius(doc, M)    -> sugeneruoto SPS žaliųjų lentelės (3 lentelė) šablono eilutės pakeičiamos; ataskaita arba null
  *   grupe(tekstas)              -> { grupe, pagrindas } | { grupe: null }
  *   specialistas(tekstas)       -> { taip, pagrindas }
@@ -276,6 +280,27 @@
     return norm(out.join(' '));
   }
   const ATITIKTIES_RE = /\batitinka\b|complies|\bkat\.|\bcat\./;
+  /* Kitos SPS lentelės su tais pačiais stulpeliais „Reikalavimas | Pateikiami dokumentai“ (2026-11-12, antras pilotas su tikru pirkimu: įkėlus
+     visas SPS, 5 lentelė „KITI REIKALAVIMAI“ (sankcijos, nacionalinis saugumas) buvo laikoma antra kvalifikacijos lentele, ir „Ką verta įkelti“
+     skaičiavo 4 reikalavimus vietoj 3). Atpažįstama tik pagal lentelės antraštę ir trumpą pavadinimą virš jos; „kvalifikacijos“ - pirmesnis. */
+  const KITA_LENTELE_RE = /kiti reikalavim|kitiems reikalavim|other requirement|socialin\S* reikalavim|social requirement|pasalinimo pagrind|exclusion ground|nacionalin\S* saugum|national security/;
+  const kitaLentele = t => KITA_LENTELE_RE.test(t) && !/kvalifikac|qualification/.test(t);
+  // trumpas pavadinimas: iki 80 ženklų, ne sakinys („5 lentelė“, „KITI REIKALAVIMAI“; ne „6.1. Pirkime taikomi kiti reikalavimai, nurodyti ...“)
+  const trumpasTitulas = t => { t = String(t || '').trim(); return !!t && t.length <= 80 && !/[.;:,]$/.test(t); };
+  function titulasVirs(tbl){
+    const out = [];
+    for (let n = tbl.previousSibling, k = 0; n && k < 3; n = n.previousSibling){
+      if (n.nodeType !== 1) continue;
+      if (n.localName === 'tbl') break;
+      if (n.localName !== 'p') continue;
+      const t = visi(n, 't').map(x => x.textContent).join('').trim();
+      if (!t) continue;
+      k++;
+      if (!trumpasTitulas(t)) break;
+      out.push(t);
+    }
+    return norm(out.join(' '));
+  }
 
   function skaitykXml(xml, numXml, vardas){
     const DP = new DOMParser();
@@ -296,6 +321,7 @@
       // pavadinimas, nei vardas nesako „kvalifikacijos“ (T4-K2)
       const virs = pavadinimasVirs(tbl), fv = norm(vardas || ''), kvalif = /kvalifikac|qualification/.test(virsus + ' ' + virs);
       const zalia = ZALIEJI_RE.test(virsus) || (!kvalif && (ZALIEJI_RE.test(virs) || (ZALIEJI_RE.test(fv) && !/kvalifikac|qualification/.test(fv))));
+      if (!zalia && kitaLentele(virsus + ' ' + titulasVirs(tbl))) return;     // „KITI REIKALAVIMAI“, „SOCIALINIAI REIKALAVIMAI“ - ne kvalifikacijos lentelė
       if (zalia) out.zalieji++;
       if (ATITIKTIES_RE.test(norm(a.c.map(c => c.tekstas).join(' ')))) return;
       const st = { isnasos: 0, idetines: 0, raudona: false };
@@ -387,6 +413,10 @@
        skaitykPdf(buf, vardas)        - per pdf.js (reikia pdfjsLib ir GP_PDF_DARBININKAS) */
   const PDF_ZYME_RE = /^((\d+\.)+\d*\.?\s|\d+\)\s|[a-zą-ž]\)\s|[•▪◦‣·●○■□–-]\s?)/i;
   const KULKA_RE = /^[•▪◦‣·●○■□]\s*/;
+  const BRUKSNIS_RE = /^[–-]\s?/;
+  // atskiras sąrašo žymės gabalas („-“, „•“, „1.“, „a)“) - eilutės tekstas prasideda nuo kito gabalo (kabanti įtrauka)
+  const ZYMES_GABALAS_RE = /^([•▪◦‣·●○■□–-]|(\d+\.)+\d*\.?|\d+\)|[a-zą-ž]\))$/i;
+  const tekstoPradzia = its => (its.length > 1 && ZYMES_GABALAS_RE.test(String(its[0].s).trim()) ? its[1].x : its[0].x);
   function pdfEilutes(items, puslapis){
     const lines = [];
     (items || []).forEach(it => {
@@ -438,11 +468,19 @@
     const zl = n.split(/[\s\/]+/).filter(Boolean);
     if (zl.length > 12 || zl.filter(z => ANTRASTES_ZODIS.test(z)).length < 0.8 * zl.length) return null;
     const virsus = [];
-    for (let q = k - 1, ap = l; q >= 0 && virsus.length < 3; q--){
+    let q = k - 1, ap = l;
+    for (; q >= 0 && virsus.length < 3; q--){
       const e = lines[q], t = eilTekstas(e), nt = norm(t);
       if (e.p !== l.p || e.y - ap.y > 3.2 * l.fs) break;
       if (!(zodziai(e.items).some(z => NR_RE.test(norm(z.s))) || ZALIEJI_RE.test(nt) || /requirements|reikalavimai/.test(nt) && t === t.toUpperCase())) break;
       virsus.push(e); ap = e;
+    }
+    // pavadinimas virš antraštės (iki 2 trumpų eilučių be sakinio pabaigos: „5 lentelė“, „KITI REIKALAVIMAI“) - kitos SPS lentelės požymiui
+    const titulas = [];
+    for (; q >= 0 && titulas.length < 2; q--){
+      const e = lines[q], t = eilTekstas(e);
+      if (e.p !== l.p || e.y - ap.y > 3.5 * l.fs || !trumpasTitulas(t)) break;
+      titulas.push(t); ap = e;
     }
     const inkarai = [];
     const ieskok = (eil, re, raktas) => {
@@ -456,8 +494,9 @@
     if (!inkarai.some(a => a.k === 'reikLt' || a.k === 'reikEn') || !inkarai.some(a => a.k === 'dokLt' || a.k === 'dokEn')) return null;
     const xR = Math.min(...inkarai.filter(a => /^reik/.test(a.k)).map(a => a.x)), xD = Math.min(...inkarai.filter(a => /^dok/.test(a.k)).map(a => a.x));
     if (xR >= xD) return null;                                                      // reikalavimų stulpelis - prieš dokumentų
-    const virsT = norm(virsus.map(eilTekstas).concat(eilTekstas(l)).join(' '));
-    return { inkarai: inkarai.sort((a, b) => a.x - b.x), pradzia: k - virsus.length, zalia: ZALIEJI_RE.test(virsT), kvalif: /kvalifikac|qualification/.test(virsT), p: l.p };
+    const virsT = norm(virsus.map(eilTekstas).concat(eilTekstas(l)).join(' ')), titT = norm(titulas.join(' '));
+    return { inkarai: inkarai.sort((a, b) => a.x - b.x), pradzia: k - virsus.length, zalia: ZALIEJI_RE.test(virsT), kvalif: /kvalifikac|qualification/.test(virsT), p: l.p,
+      kita: kitaLentele(virsT + ' ' + titT) };
   }
   /* Stulpelių ribos: tarp gretimų inkarų - plačiausia vieta, kurią kerta mažiausiai kūno eilučių (paprastai - nė viena). Eilutės per visą
      plotį (tekstas po lentele, grupės antraštė) kerta visą tarpą vienodai, todėl ribos nekeičia. */
@@ -484,21 +523,28 @@
       return geriausia ? a + (geriausia.pr + geriausia.ilgis / 2) * Z : b - 2;
     });
   }
-  /* Langelio eilutės -> pastraipos { atk, tekstas }. */
+  /* Langelio eilutės -> pastraipos { atk, tekstas }. Nauja pastraipa ir tada, kai po trumpos eilutės kita prasideda gerokai dešiniau už
+     langelio kairįjį kraštą (pirmos eilutės įtrauka; 2026-11-12, antras pilotas: „1. Teisė vykdyti ... veiklą“ + įtraukta „Tiekėjas arba ...“). */
   function pdfPastraipos(eil, desine){
     const ps = [];
     if (!eil.length) return ps;
     const tarpai = [];
     for (let i = 1; i < eil.length; i++) if (eil[i].p === eil[i - 1].p) tarpai.push(eil[i - 1].y - eil[i].y);
     const iprastas = tarpai.length ? tarpai.slice().sort((a, b) => a - b)[Math.floor(tarpai.length / 2)] : 0;
+    const kairys = Math.min(...eil.map(e => e.xL));
     let dab = null;
     eil.forEach((e, i) => {
       const pr = i ? eil[i - 1] : null;
       // pavienis skyrybos ženklas atskiroje eilutėje (šaltinio likutis) - ne pastraipa ir ne „ .“ gale
       if (/^[.,;:]+$/.test(e.t)){ if (dab && !/[.,;:]$/.test(dab.t)) dab.t += e.t; return; }
-      const naujas = !dab || PDF_ZYME_RE.test(e.t) ||
+      const trumpa = pr && desine - pr.xR > 0.15 * Math.max(desine - pr.xL, 1), fs = e.fs || 10;
+      // brūkšnys eilutės pradžioje - sąrašo žymė, tik kai ankstesnė eilutė baigta (skyryba ar trumpa) arba irgi brūkšnio punktas;
+      // kitaip - sakinio tęsinys („... dokumentas (toliau“ + „– TPD) Lietuvoje ...“)
+      const zyme = PDF_ZYME_RE.test(e.t) && (!BRUKSNIS_RE.test(e.t) || !pr || trumpa || /[.;:!?]$/.test(pr.t) || BRUKSNIS_RE.test(pr.t));
+      const naujas = !dab || zyme ||
         (pr && pr.p === e.p && iprastas && pr.y - e.y > 1.6 * iprastas) ||
-        (pr && /[.;:!?]$/.test(pr.t) && desine - pr.xR > 0.15 * Math.max(desine - pr.xL, 1));
+        (trumpa && /[.;:!?]$/.test(pr.t)) ||
+        (trumpa && e.xL >= kairys + 1.5 * fs && e.xL > (pr.xT == null ? pr.xL : pr.xT) + 1.5 * fs);
       if (naujas){ dab = { t: e.t }; ps.push(dab); return; }
       // brūkšnelis eilutės gale tarp raidžių ar skaitmenų - žodis ar adresas tęsiasi be tarpo („lis-epp-“ + „app“, „F-“ + „dujos“)
       dab.t += /[\p{L}\p{N}]-$/u.test(dab.t) ? e.t : ' ' + e.t;
@@ -511,8 +557,32 @@
     }).filter(t => t && !/^[\s.,;:·•-]+$/.test(t))                                    // pavienis „.“ - šaltinio likutis
       .map(t => ({ atk: [{ t, b: false, i: false, u: false, va: '', spalva: '' }], tekstas: t }));
   }
-  function pdfLenteles(puslapiai, vardas){
-    const out = { lenteles: [], zalieji: 0, zaliuju: [], ispejimai: [], pdf: true };
+  /* Lentelės rėmeliai (2026-11-12): vertikalios linijos puslapyje - [{ x, y0, y1 }] (iš pdf.js piešimo operacijų, žr. pdfRemeliai). Pagal juos
+     nustatoma, kur baigiasi per visą lentelės plotį einanti „... ne visa apimtimi“ eilutė: be rėmelių tekstas po lentele ir tos eilutės tekstas
+     PDF teksto sluoksnyje atrodo vienodai. */
+  const REM_TOL = 2;
+  function remelisApie(V, l){
+    if (!V || !V.length) return null;
+    const xL = Math.min(...l.items.map(i => i.x)), xR = Math.max(...l.items.map(i => i.x + i.w));
+    const dengia = V.filter(v => v.y0 - REM_TOL <= l.y && l.y <= v.y1 + REM_TOL);
+    const kaire = dengia.filter(v => v.x <= xL + REM_TOL), desne = dengia.filter(v => v.x >= xR - REM_TOL);
+    if (!kaire.length || !desne.length) return null;
+    return { xa: Math.max(...kaire.map(v => v.x)), xb: Math.min(...desne.map(v => v.x)) };
+  }
+  function remelyje(V, l, R){
+    if (!V || !R) return false;
+    const xL = Math.min(...l.items.map(i => i.x)), xR = Math.max(...l.items.map(i => i.x + i.w));
+    if (xL < R.xa - REM_TOL || xR > R.xb + REM_TOL) return false;
+    const yra = x => V.some(v => Math.abs(v.x - x) <= REM_TOL && v.y0 - REM_TOL <= l.y && l.y <= v.y1 + REM_TOL);
+    return yra(R.xa) && yra(R.xb);
+  }
+  const NE_VISA_ANTRASTE_RE = /^(informacija|information)\b.{0,60}(ne visa apimtimi|partial application)/;
+  /* puslapiai: [[{ s, x, y, w, fs }]]; o.remeliai: [[{ x, y0, y1 }] | undefined] - kiekvieno puslapio vertikalios rėmelių linijos (undefined -
+     neperskaityta). Be rėmelių „... ne visa apimtimi“ tekstas, kuris eina per visą lentelės plotį, neperkeliamas - M.neVisaNepatikrinta. */
+  function pdfLenteles(puslapiai, vardas, o){
+    o = o || {};
+    const REM = o.remeliai || [];
+    const out = { lenteles: [], zalieji: 0, zaliuju: [], ispejimai: [], pdf: true, reikiaRemeliu: [] };
     const lines = [];
     (puslapiai || []).forEach((items, p) => pdfEilutes(items, p + 1).forEach(l => lines.push(l)));
     let k = 0, nr = 0;
@@ -533,19 +603,44 @@
         }
         kunas.push(lines[j]); j++;
       }
+      ++nr;
+      // kita SPS lentelė su tais pačiais stulpeliais („KITI REIKALAVIMAI“, „SOCIALINIAI REIKALAVIMAI“) - ne kvalifikacijos ir ne žaliųjų
+      if (A.kita && !A.zalia){ k = Math.max(kitaPradzia, k + 1); continue; }
       // puslapio numeris ar poraštė („2“, „2 / 5“, „Puslapis 2“) - pirma ar paskutinė puslapio eilutė, ne lentelės tekstas
       const PSL_RE = /^(\d{1,3}|\d{1,3}\s*(\/|iš|is|of)\s*\d{1,3}|(puslapis|psl\.?|page)\s*\d{1,3}.*)$/i;
       const krastine = l => { const vienam = lines.filter(x => x.p === l.p); return vienam[0] === l || vienam[vienam.length - 1] === l; };
       for (let q = kunas.length - 1; q >= 0; q--) if (PSL_RE.test(eilTekstas(kunas[q])) && kunas[q].items.length === 1 && krastine(kunas[q])) kunas.splice(q, 1);
-      const ribos = pdfRibos(A.inkarai, kunas);
+      const kertaR = (rb, l) => l.items.some(it => rb.some(r => it.x < r - 1 && it.x + it.w > r + 1));
+      // stulpelių ribos - tik iš lentelės eilučių (2026-11-12, antras pilotas): iki tol skaičiuota ir iš teksto po lentele, ir tame tekste
+      // ženkleliai („•“ ties numerių stulpeliu) nustumdavo numerių ir reikalavimų ribą į kairę nuo numerių - eilutės nebebuvo skiriamos.
+      // Lentelės pabaiga (pirma eilutė per stulpelių ribą, kuri nėra grupės antraštė, arba „... ne visa apimtimi“) - pagal ribas; kartojama.
+      const pabaiga = rb => {
+        for (let q = 0; q < kunas.length; q++){
+          if (!kertaR(rb, kunas[q])) continue;
+          const t = eilTekstas(kunas[q]), g = antrastesGrupe(t);
+          if (t.length <= 120 && g.grupe !== 'neVisa' && (g.grupe !== 'kita' || t === t.toUpperCase())) continue;
+          return q;
+        }
+        return kunas.length;
+      };
+      let ribos = pdfRibos(A.inkarai, kunas);
+      for (let it = 0; it < 3; it++){
+        const g = pabaiga(ribos);
+        if (!g || g >= kunas.length) break;
+        const r2 = pdfRibos(A.inkarai, kunas.slice(0, g));
+        if (r2.every((x, q) => Math.abs(x - ribos[q]) < 0.5)) break;
+        ribos = r2;
+      }
       const stulp = it => { let q = 0; while (q < ribos.length && it.x >= ribos[q]) q++; return A.inkarai[q].k; };
-      const kerta = l => l.items.some(it => ribos.some(r => it.x < r - 1 && it.x + it.w > r + 1));
+      const kerta = l => kertaR(ribos, l);
       // stulpelio dešinysis kraštas (trumpos eilutės atpažinimui) - pagal visas lentelės eilutes
       const desine = {};
       kunas.forEach(l => { if (!kerta(l)) l.items.forEach(it => { const st = stulp(it); desine[st] = Math.max(desine[st] || 0, it.x + it.w); }); });
-      const M = { failas: vardas || '', lentele: ++nr, dvikalbe: A.inkarai.some(a => a.k === 'reikEn'), eilutes: [], neVisa: null,
+      const M = { failas: vardas || '', lentele: nr, dvikalbe: A.inkarai.some(a => a.k === 'reikEn'), eilutes: [], neVisa: null,
         ispejimai: ['Iš PDF perkeliamas tik tekstas - pusjuodžio, kursyvo ir pabraukimo PDF faile nėra. Jei jų reikia, įkelkite Word failą.'], saltinioNumeriai: [], pdf: true };
       let eil = null, grupe = null, antraste = null, neVisa = false, baigta = false;
+      // „... ne visa apimtimi“: antraštė rasta (nvAntraste), jos rėmelis (nvR), turinio eilutės (nvEil); nvNezinoma - kitame puslapyje rėmelių neperskaityta
+      let nvAntraste = false, nvR = null, nvEil = null, nvNezinoma = false;
       const uzdaryk = () => {
         if (!eil) return;
         const cel = {};
@@ -562,12 +657,27 @@
       };
       for (const l of kunas){
         if (baigta) break;
-        if (kerta(l)){
-          const t = eilTekstas(l), g = antrastesGrupe(t);
-          if (t.length <= 120 && (g.grupe !== 'kita' || t === t.toUpperCase())){       // grupės antraštė per visą plotį
+        if (nvR){                                                                      // „ne visa apimtimi“ turinys - kol eilutė lentelės rėmelyje
+          if (REM[l.p - 1] === undefined){ nvNezinoma = true; baigta = true; break; }
+          if (!remelyje(REM[l.p - 1], l, nvR)){ baigta = true; break; }
+          nvEil.push({ t: eilTekstas(l), y: l.y, p: l.p, fs: l.fs, xL: Math.min(...l.items.map(i => i.x)), xT: tekstoPradzia(l.items), xR: Math.max(...l.items.map(i => i.x + i.w)) });
+          continue;
+        }
+        const tl = eilTekstas(l), gl = antrastesGrupe(tl);
+        // „Informacija dėl ... ne visa apimtimi“ antraštė - ir kai ji telpa viename stulpelyje
+        const nvA = gl.grupe === 'neVisa' && tl.length <= 120 && NE_VISA_ANTRASTE_RE.test(norm(tl));
+        if (kerta(l) || nvA){
+          if (tl.length <= 120 && (gl.grupe !== 'kita' || tl === tl.toUpperCase())){     // grupės antraštė per visą plotį
             uzdaryk();
-            if (g.grupe === 'neVisa'){ neVisa = true; continue; }
-            grupe = g.grupe; antraste = g.grupe === 'kita' ? { lt: t, en: null } : null;
+            if (gl.grupe === 'neVisa'){
+              neVisa = true; nvAntraste = true;
+              const V = REM[l.p - 1];
+              if (V === undefined) out.reikiaRemeliu.push(l.p);
+              nvR = remelisApie(V, l);
+              if (nvR) nvEil = [];
+              continue;
+            }
+            grupe = gl.grupe; antraste = gl.grupe === 'kita' ? { lt: tl, en: null } : null;
             continue;
           }
           baigta = true; break;                                                        // tekstas po lentele
@@ -581,10 +691,20 @@
           const t = sujunk(its);
           if (!t) return;
           const xL = its[0].x, xR = Math.max(...its.map(x => x.x + x.w));
-          (eil.c[st] ??= []).push({ t, y: l.y, p: l.p, xL, xR });
+          (eil.c[st] ??= []).push({ t, y: l.y, p: l.p, xL, xT: tekstoPradzia(its), xR, fs: l.fs });
         });
       }
       uzdaryk();
+      if (nvEil && nvEil.length && !nvNezinoma){
+        const ps = pdfPastraipos(nvEil, Math.max(...nvEil.map(e => e.xR)));
+        if (pTekstas(ps)) M.neVisa = { lt: ps, en: null };
+      }
+      // antraštė rasta, bet tekstas neperkeltas: be rėmelių (ar kitame puslapyje neperskaitytų) nežinoma, kur jis baigiasi - „nepatikrinta“, ne „nėra“
+      if (nvAntraste && !(M.neVisa && pTekstas(M.neVisa.lt)) && (!nvR || nvNezinoma)){
+        M.neVisa = null;
+        M.neVisaNepatikrinta = 'PDF faile rasta „Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi“, bet nepavyko nustatyti, kur baigiasi jos tekstas (lentelės rėmelių neatpažinome) - šios nuostatos tekstas neperkeltas. Patikrinkite ją dokumente ir, jei reikia, įrašykite Word programoje arba įkelkite Word failą.';
+        M.ispejimai.push(M.neVisaNepatikrinta);
+      }
       if (M.eilutes.length){
         // failo vardas („Žaliųjų pirkimų reikalavimai.pdf“), kai antraštė nesako „kvalifikacijos“ (T4-K2)
         const fv = norm(vardas || ''), failasZalias = ZALIEJI_RE.test(fv) && !/kvalifikac|qualification/.test(fv) && !A.kvalif;
@@ -592,9 +712,50 @@
       }
       k = Math.max(kitaPradzia, k + 1);
     }
+    out.reikiaRemeliu = Array.from(new Set(out.reikiaRemeliu));
+    if (!out.reikiaRemeliu.length) delete out.reikiaRemeliu;
     return out;
   }
   const kvGrupe = t => grupe(t);
+  /* Vertikalios rėmelių linijos puslapyje iš pdf.js piešimo operacijų (2026-11-12): siauri užpildyti stačiakampiai (Word PDF eksportas
+     rėmelius piešia taip), brėžiamos linijos ir stačiakampių kraštai; koordinatės - per transformacijų steką, kaip teksto elementų. Iškirpimo
+     (clip) keliai - ne rėmeliai. */
+  async function pdfRemeliai(page){
+    const O = root.pdfjsLib.OPS, ol = await page.getOperatorList();
+    const V = [];
+    let ctm = [1, 0, 0, 1, 0, 0];
+    const stekas = [];
+    const daug = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+    const tsk = (x, y) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]];
+    const vert = (a, b) => { if (Math.abs(a[0] - b[0]) <= 1 && Math.abs(a[1] - b[1]) >= 3) V.push({ x: (a[0] + b[0]) / 2, y0: Math.min(a[1], b[1]), y1: Math.max(a[1], b[1]) }); };
+    const PIESIA_F = new Set([O.fill, O.eoFill, O.fillStroke, O.eoFillStroke, O.closeFillStroke, O.closeEOFillStroke]);
+    const PIESIA_S = new Set([O.stroke, O.closeStroke, O.fillStroke, O.eoFillStroke, O.closeFillStroke, O.closeEOFillStroke]);
+    for (let i = 0; i < ol.fnArray.length; i++){
+      const f = ol.fnArray[i], a = ol.argsArray[i];
+      if (f === O.save) stekas.push(ctm);
+      else if (f === O.restore) ctm = stekas.pop() || [1, 0, 0, 1, 0, 0];
+      else if (f === O.transform) ctm = daug(ctm, a);
+      else if (f === O.constructPath){
+        const toliau = ol.fnArray[i + 1], uzpildo = PIESIA_F.has(toliau), bresia = PIESIA_S.has(toliau);
+        if (!uzpildo && !bresia) continue;
+        const ops = a[0], c = a[1];
+        let ci = 0, dab = null;
+        for (const op of ops){
+          if (op === O.rectangle){
+            const x = c[ci], y = c[ci + 1], w = c[ci + 2], h = c[ci + 3]; ci += 4;
+            const p1 = tsk(x, y), p2 = tsk(x + w, y + h);
+            const W = Math.abs(p2[0] - p1[0]), H = Math.abs(p2[1] - p1[1]);
+            if (uzpildo && W <= 2.5 && H >= 3) vert([(p1[0] + p2[0]) / 2, p1[1]], [(p1[0] + p2[0]) / 2, p2[1]]);
+            else if (bresia){ vert([p1[0], p1[1]], [p1[0], p2[1]]); vert([p2[0], p1[1]], [p2[0], p2[1]]); }
+          } else if (op === O.moveTo){ dab = tsk(c[ci], c[ci + 1]); ci += 2; }
+          else if (op === O.lineTo){ const t = tsk(c[ci], c[ci + 1]); ci += 2; if (bresia && dab) vert(dab, t); dab = t; }
+          else if (op === O.curveTo) ci += 6;
+          else if (op === O.curveTo2 || op === O.curveTo3) ci += 4;
+        }
+      }
+    }
+    return V;
+  }
   async function skaitykPdf(buf, vardas){
     if (!root.pdfjsLib) throw new Error('PDF skaitymo biblioteka (pdf.js) neįsikėlė');
     if (root.GP_PDF_DARBININKAS) await root.GP_PDF_DARBININKAS.nustatyk();
@@ -611,7 +772,17 @@
       if (!items.some(x => String(x.s).trim())) beTeksto++;
       puslapiai.push(items);
     }
-    const r = pdfLenteles(puslapiai, vardas);
+    let r = pdfLenteles(puslapiai, vardas);
+    // „... ne visa apimtimi“ (2026-11-12): rėmeliai skaitomi tik prireikus - antraštės puslapyje ir iki 3 tolesnių
+    if (r.reikiaRemeliu && r.reikiaRemeliu.length){
+      const remeliai = [];
+      for (const p0 of r.reikiaRemeliu) for (let pn = p0; pn <= Math.min(pdf.numPages, p0 + 3); pn++){
+        if (remeliai[pn - 1] !== undefined) continue;
+        try { remeliai[pn - 1] = await pdfRemeliai(await pdf.getPage(pn)); } catch (e){ remeliai[pn - 1] = []; }
+      }
+      r = pdfLenteles(puslapiai, vardas, { remeliai });
+    }
+    delete r.reikiaRemeliu;
     if (pdf.numPages && beTeksto === pdf.numPages) r.ispejimai.push('PDF be teksto sluoksnio (tikėtina, skenuotas) - lentelės perskaityti neįmanoma. Įkelkite Word failą.');
     return r;
   }

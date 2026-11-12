@@ -40,6 +40,11 @@
  *                        vietoje (pvz. „Kiti priedai - netaikoma.“); be sprendimo eilutė lieka ir įrašoma į „palikta“
  *       "f:<id>"         šablono teksto atkarpa pastraipos viduje, taikoma ne visada (žemėlapio `fragmentai`; projektavimo paslaugų SS 2.1 p.
  *                        „, projekto vykdymo priežiūros paslaugos“): "salinti" arba { tekstas }; be sprendimo lieka (tai šablono tekstas)
+ *       "pt:<id>"        naujas punktas po lentelės (žemėlapio `papildomi_punktai`; 2026-11-12, rangos SS 21 p. - „Sutarties bendrųjų sąlygų 3.2
+ *                        skyrius „Projektiniai pasiūlymai“ netaikomas.“): { tekstas } - punkto `i` pastraipa klonuojama (numeruoja Word) ir įrašoma
+ *                        po lentelės, kuri prasideda pastraipa i + 1 (tikrinant tokia pastraipa priimama kaip užpildyta greta esanti
+ *                        nurodymo vieta); be sprendimo nieko neįrašoma. Žemėlapio `neprivalomos` blokas, kurio visos
+ *                        lentelės eilutės pastraipos šalinamos, šalinamas su eilutėmis (ne tuščiais langeliais)
  *       "lt:<sritis>"    lentelė priede (žemėlapio skyriaus `lentele`; 2026-10-13, rangos SS etapų lentelė): { eilutes: [{ etikete,
  *                        langeliai: { <stulpelis>: [tekstas, ...] } }], beStulpeliu: [<stulpelis>] } - langelių tekstai (kelios eilutės -
  *                        atskiros pastraipos), nereikalingos formos eilutės ir išvardyti stulpeliai šalinami, trūkstamos eilutės -
@@ -451,6 +456,7 @@ const GP_SUTARCIU_GEN = (() => {
     for (const b of Z.vidiniai || []) out.push({ raktas: 'vd:' + b.id, rusis: 'vidinis', vieta: b.vieta, lt: b, en: null, aprasas: Z.pastraipos[b.i], variantai: b.variantai.slice() });
     if (Z.kiti_priedai) out.push({ raktas: 'kp:kiti', rusis: 'kiti_priedai', vieta: Z.kiti_priedai.vieta, lt: Z.kiti_priedai, en: null, aprasas: Z.pastraipos[Z.kiti_priedai.i] });
     for (const b of Z.fragmentai || []) out.push({ raktas: 'f:' + b.id, rusis: 'fragmentas', vieta: b.vieta, lt: b, en: null, aprasas: b.tekstas });
+    for (const b of Z.papildomi_punktai || []) out.push({ raktas: 'pt:' + b.id, rusis: 'papildomas', vieta: b.vieta, lt: b, en: null, aprasas: Z.pastraipos[b.i] });
     for (const q of Z.priedai || []) out.push({ raktas: 'pr:' + q.nr, rusis: 'priedas', vieta: 'priedas ' + q.nr, lt: q, en: q.en != null ? { i: q.en } : null, aprasas: q.tekstas });
     return out;
   }
@@ -532,7 +538,7 @@ const GP_SUTARCIU_GEN = (() => {
     }
     const yraSpr = s => s != null && !(typeof s === 'object' && s.palikti);
     const R = P.map(pTekstas);                // laukiamas kiekvienos pastraipos tekstas be valdiklių
-    const istrinti = new Set(), neisspresta = new Set(), ideta = {};
+    const istrinti = new Set(), neisspresta = new Set(), ideta = {}, eiluciuBlokai = new Set();
     const trinti = (i, kodel) => { if (!istrinti.has(i)){ istrinti.add(i); A.pasalinta.push({ vieta: vietaPagalI(Z, i), tekstas: Z.pastraipos[i], kodel }); } };
     const palik = (x, s, numatyta) => {
       A.palikta.push({ raktas: x.raktas, rusis: x.rusis, vieta: x.vieta, aprasas: x.aprasas || '', kodel: (s && s.palikti) || numatyta || 'neatsakyta' });
@@ -684,7 +690,7 @@ const GP_SUTARCIU_GEN = (() => {
       const tekstas = s === 'salinti' ? '' : String(s.tekstas);
       for (let i = nuo; i <= iki; i++){
         if (tekstas && i === nuo){ salygosTekstas[i] = tekstas; continue; }
-        if (ps.includes(i) || !Z.pastraipos[i]) trinti(i, 'nuostata netaikoma (jūsų atsakymas)');
+        if (ps.includes(i) || !Z.pastraipos[i]){ trinti(i, 'nuostata netaikoma (jūsų atsakymas)'); if (!tekstas) eiluciuBlokai.add(i); }
       }
       A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'nuostata', buvo: ps.map(i => Z.pastraipos[i]).join(' '), tapo: tekstas || 'pašalinta' });
     }
@@ -1011,8 +1017,32 @@ const GP_SUTARCIU_GEN = (() => {
       const ps = visi(tbl, 'p').map(p => P.indexOf(p));
       if (ps.length && ps.every(i => i >= 0 && istrinti.has(i))){ tbl.parentNode.removeChild(tbl); ps.forEach(i => nuimta.add(i)); }
     }
+    for (const tr of visi(d, 'tr')){
+      if (!tr.parentNode || visi(tr, 'tbl').length) continue;
+      const ps = visi(tr, 'p').map(p => P.indexOf(p)), tbl = tevas(tr, 'tbl');
+      if (!ps.length || !ps.every(i => i >= 0 && istrinti.has(i) && eiluciuBlokai.has(i))) continue;
+      if (!tbl || vaikai(tbl, 'tr').length < 2) continue;   // visa lentelė - kaip iki tol
+      tr.parentNode.removeChild(tr); ps.forEach(i => nuimta.add(i));
+    }
     for (const el of lentSalinti) el.parentNode.removeChild(el);   // lentelės redaktoriaus pašalintos eilutės, stulpelių langeliai ir tinklelio stulpeliai
     [...istrinti].sort((a, b) => b - a).forEach(i => { if (!nuimta.has(i) && salink(P[i]) === 'isvalyta'){ R[i] = ''; istrinti.delete(i); } });
+
+    // 7b. Nauji punktai po lentelės (žemėlapio `papildomi_punktai`; rangos SS 21 p. - BS 3.2 skyrius netaikomas): punkto pastraipos klonas
+    for (const x of V.filter(x => x.rusis === 'papildomas')){
+      const s = sp(x), b = x.lt;
+      if (!(yraSpr(s) && typeof s === 'object' && s.tekstas)) continue;
+      const pv = P[b.i], pirma = P[b.i + 1], tbl = pirma && tevas(pirma, 'tbl');   // lentelė - iškart po punkto (žemėlapis tai patikrina)
+      if (!pv || !pv.parentNode || istrinti.has(b.i) || !tbl || !tbl.parentNode){ A.klaidos.push(`${b.vieta} p.: naujo punkto vieta nesutampa su žemėlapiu`); continue; }
+      const nauja = pv.cloneNode(true), runas = visi(nauja, 'r').find(r => visi(r, 't').length);
+      vaikai(nauja).forEach(c => { if (c.localName !== 'pPr') nauja.removeChild(c); });
+      nauja.removeAttribute('w14:paraId'); nauja.removeAttribute('w14:textId');
+      const r = runas ? runas.cloneNode(true) : naujas(d, 'r');
+      vaikai(r).forEach(c => { if (c.localName !== 'rPr') r.removeChild(c); });
+      const t = naujas(d, 't'); t.setAttribute('xml:space', 'preserve'); t.textContent = String(s.tekstas); r.appendChild(t);
+      nauja.appendChild(r);
+      tbl.parentNode.insertBefore(nauja, tbl.nextSibling);
+      A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'naujas punktas', tapo: String(s.tekstas) });
+    }
 
     // 8. Spalvos: išspręstų vietų geltonas žymėjimas, VPT mėlynos nuostatos ir keičiamos reikšmės - juodai (DI juodraščiai lieka)
     const di = new Set((Z.di_juodrasciai || []).map(x => x.i));

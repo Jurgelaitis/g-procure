@@ -3137,6 +3137,10 @@ const GPLent = (() => {
       const kiek = lyg || dalys(blokai, puslapis), k = Math.max(0, ...kiek.map(x => x.length));
       if (k < 2) return;
       const dalis = blokai.map((b, i) => { const o = []; let j = 0; for (let d = 0; d < k; d++){ const n = kiek[i][d] || 0; o.push(b ? b.slice(j, j + n) : []); j += n; } return o; });
+      // dalis, kurios visuose langeliuose - tik tuščios pastraipos, nauja eilute nedaroma - prijungiama prie ankstesnės (2026-11-12: rangos SS gale
+      // atsirasdavo tuščia lentelės eilutė, kai paskutinė dalis - langelio pabaigos tuščios pastraipos)
+      const turinys = x => x.mazgai.some(m => (m.textContent || '').trim() || (m.getElementsByTagNameNS && m.getElementsByTagNameNS(W, 'drawing').length));
+      for (let j = k - 1; j > 0; j--) if (!dalis.some(o => o[j].some(turinys))) dalis.forEach(o => { o[j - 1] = o[j - 1].concat(o[j]); o[j] = []; });
       const naud = Array.from({ length: k }, (_, j) => j).filter(j => dalis.some(o => o[j].length));
       if (naud.length < 2) return;
       st.skaidyta++; SKAIDYTOS.add(tr);

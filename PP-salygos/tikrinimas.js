@@ -126,6 +126,7 @@
         if (sz.variantai[x.i]) x.variantai = sz.variantai[x.i];
         if (sz.beNuorodos[x.i]) x.beNuorodos = sz.beNuorodos[x.i];
         if (sz.suSalyga[x.i]) x.suSalyga = true;
+        if (sz.beInkaro[x.i]) x.beInkaro = true;
       });
       return { id: id, ps: r.pastraipos, zem: { blokai: sz.blokai }, sutartis: true, wordNumeracija: zem.numeracija === "word" };
     })().catch(function (e) { delete sablonai[id]; throw e; });
@@ -160,7 +161,7 @@
     var P = Array.prototype.slice.call(doc.getElementsByTagNameNS(W, "p")), nr = new Map();
     P.forEach(function (p, i) { nr.set(p, i); });
     var tevas = function (n, vardas) { for (var q = n.parentNode; q; q = q.parentNode) if (q.namespaceURI === W && q.localName === vardas) return q; return null; };
-    var vieta = {}, vietaPo = {}, salinama = {}, leidziami = {}, variantai = {}, blokai = [], beNuorodos = {}, suSalyga = {};
+    var vieta = {}, vietaPo = {}, salinama = {}, leidziami = {}, variantai = {}, blokai = [], beNuorodos = {}, suSalyga = {}, beInkaro = {};
     var tekstas = function (p) { return Array.prototype.map.call(p.getElementsByTagNameNS(W, "t"), function (t) { return t.textContent; }).join("").trim(); };
     ["valdikliai", "pildomos", "nurodymai", "laukai", "organizacija", "paryskinimai", "keiciamos_reiksmes", "taikymo_salygos", "trynimo_nurodymai", "salygos"]
       .forEach(function (k) { (Z[k] || []).forEach(function (x) { if (x.i != null) vieta[x.i] = 1; }); });
@@ -208,7 +209,13 @@
     // Priedų sąrašo eilutė kitiems priedams (žemėlapio „kiti_priedai“, 2026-10-13): jos vietoje ir po jos - rengėjo įrašyti priedai
     if (Z.kiti_priedai) { vieta[Z.kiti_priedai.i] = 1; vietaPo[Z.kiti_priedai.i] = 1; }
     // šablono teksto atkarpa, taikoma ne visada (žemėlapio „fragmentai“): pastraipa su ja - pildoma vieta
-    (Z.fragmentai || []).forEach(function (b) { vieta[b.i] = 1; });
+    (Z.fragmentai || []).forEach(function (b) {
+      vieta[b.i] = 1;
+      // visa pastraipa - atkarpa (rangos SS derinimo terminai „Per 20 d. d.“, 2026-11-12): leidžiama ta pati forma su kitu skaičiumi, be inkaro
+      var p = P[b.i], fr = String(b.tekstas || "").trim();
+      if (!p || !fr || tekstas(p) !== fr) return;
+      try { leidziami[b.i] = new RegExp("^\\s*" + re(fr).replace(/\d+/g, "\\d+") + "\\s*$"); beInkaro[b.i] = 1; } catch (e) { /* lieka vieta */ }
+    });
     // Nuostata su nuoroda į punktą, kurio sutartyje gali nelikti („Punktas netaikomas, taikomos 8.3.2 punkte nustatytos sąlygos.“):
     // generatorius nuorodą į pašalintą punktą pašalina - lieka „Punktas netaikomas.“ (palyginimas tai priima tik kai to punkto dokumente nėra)
     var NUOR = [/^(Punktas netaikomas), taikomos (\d+(?:\.\d+)+) punkte nustatytos sąlygos\.$/, /^(The clause does not apply); the conditions set out in paragraph (\d+(?:\.\d+)+) shall apply\.$/];
@@ -362,7 +369,7 @@
       blokai.push({ blokas: { nuo: k.luzis, iki: k.iki } });
       (Z.priedai || []).filter(function (q) { return q.nr === k.priedas; }).forEach(function (q) { blokai.push({ blokas: { nuo: q.i, iki: q.i } }); });
     });
-    return { vieta: vieta, vietaPo: vietaPo, salinama: salinama, leidziami: leidziami, variantai: variantai, blokai: blokai, beNuorodos: beNuorodos, suSalyga: suSalyga };
+    return { vieta: vieta, vietaPo: vietaPo, salinama: salinama, leidziami: leidziami, variantai: variantai, blokai: blokai, beNuorodos: beNuorodos, suSalyga: suSalyga, beInkaro: beInkaro };
   }
   /* Ankstesnės patikros ataskaita - Word failas su customXml dalimi NS_ATASKAITA (žr. ataskaita()). */
   async function skaitykAtaskaita(buf) {
@@ -393,6 +400,8 @@
       kartoti: function () { skaityk(failai); },
       veiksmas: async function (signal, h) {
         if (failai.some(function (f) { return /\.(pdf|zip|adoc|asice|sce|asics|scs|bdoc|edoc)$/i.test(f.name); }) && cfg.pdf) { try { await cfg.pdf(); } catch (e) { /* PDF failams priežastį pasakys GP_DOK */ } }
+        // Excel (kainų lentelė pakete; antras pilotas 2026-11-12: „neperskaityta“) - SheetJS įkeliama tik prireikus, kaip 1 žingsnyje
+        if (failai.some(function (f) { return /\.(xlsx|xlsm|xls|ods|zip)$/i.test(f.name); }) && typeof global.kainBiblioteka === "function") { try { await global.kainBiblioteka(); } catch (e) { /* priežastį pasakys GP_DOK */ } }
         var n = 0, r;
         try {
           r = await GP_DOK.apdorok(failai, function (v) { n++; if (h && h.eiga) h.eiga(Math.min(80, 5 + n * 3), "Skaitoma: " + bazinis(v)); }, "lt", { pasilikti: ["docx"] });
@@ -630,7 +639,7 @@
       if (!indeksas && !x.pasas) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: "formų rodyklė neįkelta (" + (indeksoKlaida || "nežinoma priežastis") + ")" }); return; }
       if (!x.forma) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: B.formos[d.id] === "" ? "pasirinkta nelyginti"
         : sut && sutarciuKlaida ? "sutarčių šablonų registras neįkeltas (" + sutarciuKlaida + ")"
-        : sut ? "sutarties forma neatpažinta - modulyje yra prekių ir paslaugų pirkimo-pardavimo sutarčių šablonai; jei tai viena iš jų, pasirinkite ją „Pagal dokumentą“"
+        : sut ? "sutarties forma neatpažinta - modulyje yra sutarčių šablonai (prekių, paslaugų, projektavimo paslaugų, darbų pirkimo-pardavimo, statybos rangos, projektavimo ir statybos rangos, eksploatavimo darbų); jei tai viena iš jų (gal ankstesnė redakcija), pasirinkite ją „Pagal dokumentą“"
         : "forma neatpažinta - jei tai LITGRID forma, pasirinkite ją „Pagal dokumentą“" }); return; }
       if (x.klaidaLyg) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: x.klaidaLyg }); return; }
       var n = x.rez.statistika.nukrypimas;

@@ -71,19 +71,33 @@
     PASLAUGOS: { SS: ["8", "skyriuje", "Prievolių pagal Sutartį įvykdymo užtikrinimas"], BS: ["10", "skyriuje", "Sutarties įvykdymo užtikrinimas (jei taikoma)"] },
     PROJEKTAVIMO_PASLAUGOS: { SS: ["6", "skyriuje", "Sutarties įvykdymo užtikrinimas"], BS: ["7.5", "punkte", "Sutarties įvykdymo užtikrinimas"] },
     DARBAI_MAZOJI: { SS: ["6.3", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["3.5", "punkte", "Sutarties įvykdymo užtikrinimas"] },
-    PROJEKTAVIMO_STATYBOS: { SS: ["24", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["9.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
-    STATYBOS_RANGOS: { SS: ["23", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
+    PROJEKTAVIMO_STATYBOS: { SS: ["24", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["9.7", "punkte", "Sutarties įvykdymo užtikrinimas"], pries: ["grafikas", "ekspertize", "atjungimai"], prideda: ["projektiniai"] },
+    STATYBOS_RANGOS: { SS: ["23", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"], pries: ["grafikas", "atjungimai"] },
     EKSPLOATAVIMO: { SS: ["16", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["8.7", "punkte", "Sutarties įvykdymo užtikrinimas"] },
     AG_STATYBOS_RANGOS: { SS: ["5.1", "punkte", "Sutarties įvykdymo užtikrinimas"], BS: ["3.5", "punkte", "Sutarties įvykdymo užtikrinimas"] }
   };
   var VARD = { skyriuje: "skyrius", punkte: "punktas" };
-  /* -> { tekstas (vietoj „X punkte/priede“), kilme, SS, BS } arba null */
-  function uztikrinimoVieta(seima) {
+  /* Rangos sutarčių SS punktai nuo 20 įrašomi tik taikomi, todėl užtikrinimo punkto numeris sugeneruotoje sutartyje mažėja vienetu už kiekvieną
+     prieš jį neįtrauktą punktą (antras pilotas 2026-11-12: be grafiko, ekspertizės ir atjungimų - 21, o SPS rašė 24). `pries` - tų punktų
+     sutarties klausimų id (atsakymas „ne“ - punkto nėra); neatsakyti - skaičiuojami kaip įtraukti ir grąžinami `neaisku`. */
+  var KLAUSIMU_PAV = { grafikas: "grafikas", ekspertize: "ekspertizė", atjungimai: "atjungimai" };
+  /* -> { tekstas (vietoj „X punkte/priede“), kilme, SS, BS, neaisku } arba null; R - sutarties atsakymai (GP_SUTARTIES_FORMA busena().R) */
+  function uztikrinimoVieta(seima, R) {
     var u = UZTIKRINIMO_VIETA[seima];
     if (!u) return null;
-    return { SS: u.SS, BS: u.BS,
-             tekstas: "Specialiųjų sąlygų " + u.SS[0] + " " + u.SS[1] + " ir Bendrųjų sąlygų " + u.BS[0] + " " + u.BS[1],
-             kilme: "specialiųjų sąlygų " + u.SS[0] + " " + VARD[u.SS[1]] + " „" + u.SS[2] + "“, bendrųjų sąlygų " + u.BS[0] + " " + VARD[u.BS[1]] + " „" + u.BS[2] + "“" };
+    var ss = u.SS[0], neaisku = [];
+    if (u.pries) {
+      var be = 0;
+      u.pries.forEach(function (id) { var a = R && R[id]; if (a === "ne") be++; else if (a !== "taip") neaisku.push(id); });
+      // atsakius „Ne“, įrašomas naujas punktas prieš užtikrinimą (B3, 2026-11-12: „Sutarties bendrųjų sąlygų 3.2 skyrius ... netaikomas.“)
+      (u.prideda || []).forEach(function (id) { if (R && R[id] === "ne") be--; });
+      ss = String(+u.SS[0] - be);
+    }
+    var tik = neaisku.length ? " (kol neatsakyta: " + neaisku.map(function (id) { return KLAUSIMU_PAV[id]; }).join(", ") + " - skaičiuojama, lyg punktai būtų įtraukti)" : "";
+    return { SS: [ss, u.SS[1], u.SS[2]], BS: u.BS, neaisku: neaisku,
+             tekstas: "Specialiųjų sąlygų " + ss + " " + u.SS[1] + " ir Bendrųjų sąlygų " + u.BS[0] + " " + u.BS[1],
+             kilme: "specialiųjų sąlygų " + ss + " " + VARD[u.SS[1]] + " „" + u.SS[2] + "“" + (ss !== u.SS[0] ? " (šablone - " + u.SS[0] + "; prieš jį " + (+ss < +u.SS[0] ? "neįtraukti" : "pridėti ar neįtraukti") + " punktai)" : "") + tik +
+                    ", bendrųjų sąlygų " + u.BS[0] + " " + VARD[u.BS[1]] + " „" + u.BS[2] + "“" };
   }
 
   /* Klausimai (plano 3.1). Atsakymų tekstai - pagal šablonų taikymo sritį; ko šablonai nesako, neteigiama. */

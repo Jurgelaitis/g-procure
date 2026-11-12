@@ -1162,7 +1162,16 @@ BLOKAI = {'PSR_LT_SS': {
     'nurodymu_blokai': [('pildymo_sąlygos', '//Pildymo sąlygos:', 'Lentelė pildoma tik tuo atveju', 'Mokėtinos sumos stulpelis')],
     'neprivalomos': [('pratęsimas', 'Darbų atlikimo terminas Šalių raštišku susitarimu gali būti pratęstas', None),
                      ('užsakovo_įrenginiai', 'Darbų atlikimui Užsakovas pateikia šiuos Įrenginius', 'Nurodytus Įrenginius ir Medžiagas Užsakovas'),
-                     ('demontuojami', 'Rangovas demontuotus tolimesniam naudojimui', None)],
+                     ('demontuojami', 'Rangovas demontuotus tolimesniam naudojimui', None),
+                     # 2026-11-12 (antras pilotas, naudotojo sprendimas B3): kai projektiniai pasiūlymai jau parengti (pridedami prie techninės
+                     # užduoties), derinimo lentelės „Projektiniai pasiūlymai“ eilutės šalinamos - kaip LITGRID paskelbtame sutarties projekte
+                     ('projektiniai_pasiulymai', 'Projektiniai pasiūlymai', 'Per 10 d. d.')],
+    # Techninio darbo projekto derinimo terminai (21 p. lentelė; B3): formoje 20 ir 15 d. d., LITGRID paskelbtame projekte - 15 ir 10 d. d.
+    # (id, pastraipos pradžia, atkarpa, [ieškoma po pastraipos, prasidedančios ...])
+    'fragmentai': [('tdp_pirminis', 'Per 20 d. d.', 'Per 20 d. d.', 'Techninis darbo projektas'),
+                   ('tdp_pakartotinis', 'Per 15 d. d.', 'Per 15 d. d.', 'Techninis darbo projektas')],
+    # Naujas punktas po lentelės (B3): („id“, punktas, po kurio lentelės įrašoma) - generatorius klonuoja punkto pastraipą (numeruoja Word)
+    'papildomi_punktai': [('projektiniai_netaikomas', 'Nustatomi šie dokumentacijos derinimo terminai:')],
     'priedu_skyriai': [('1.1 priedas', 'Projektavimo ir statybos darbų etapai;')],
     'priedu_lenteles': [ETAPU_LENTELE],
     'kiti_priedai': (None, 'Kiti priedai (išvardijami prieš paskelbiant Pirkimą).')},
@@ -1712,11 +1721,28 @@ def zemelapis(kodas, b, seima, kalba, tipas, lt_laukai=None):
         if len(qs) != 1:
             raise SystemExit('%s: kitų priedų eilutė „%s“ rasta %d kartų' % (kodas, pr, len(qs)))
         Z['kiti_priedai'] = {'i': qs[0], 'vieta': pastr_info[qs[0]]['vieta'], 'tekstas': PS[qs[0]]}
-    for bid, pr, frag in B.get('fragmentai', []):
-        qs = [q for q, tq in enumerate(PS) if tq.startswith(pr)]
+    for bid, pr, frag, *po in B.get('fragmentai', []):
+        if po:
+            # atkarpa - pirmoje pastraipoje, prasidedančioje `pr`, po pastraipos, prasidedančios `po` (lentelės eilutėje tas pats tekstas kartojasi)
+            a = next((q for q in range(len(PS)) if PS[q].startswith(po[0])), None)
+            qs = [] if a is None else [next((q for q in range(a + 1, len(PS)) if PS[q].startswith(pr)), None)]
+            qs = [q for q in qs if q is not None]
+        else:
+            qs = [q for q, tq in enumerate(PS) if tq.startswith(pr)]
         if len(qs) != 1 or PS[qs[0]].count(frag) != 1:
             raise SystemExit('%s: atkarpos „%s“ pastraipa ar pati atkarpa rasta ne vieną kartą' % (kodas, bid))
         Z.setdefault('fragmentai', []).append({'id': bid, 'i': qs[0], 'vieta': pastr_info[qs[0]]['vieta'], 'tekstas': frag})
+    for bid, pr in B.get('papildomi_punktai', []):
+        # naujas punktas po lentelės, einančios iškart po punkto `pr` (įdėtinė lentelė tame pačiame langelyje; generatorius ją randa pagal pastraipą i + 1)
+        qs = [q for q, tq in enumerate(PS) if tq == pr]
+        if len(qs) != 1:
+            raise SystemExit('%s: papildomo punkto „%s“ pastraipa rasta %d kartų' % (kodas, bid, len(qs)))
+        pos = pars[qs[0]][0]
+        lent = next(((a, z) for a, z, g in lenteles(x) if g > 0 and a > pos), None)
+        vid = [q for q, (pq, _) in enumerate(pars) if lent and lent[0] <= pq < lent[1]]
+        if not vid or vid[0] != qs[0] + 1:
+            raise SystemExit('%s: po papildomo punkto „%s“ pastraipos nėra lentelės' % (kodas, bid))
+        Z.setdefault('papildomi_punktai', []).append({'id': bid, 'i': qs[0], 'vieta': pastr_info[qs[0]]['vieta']})
     tarpai = lambda v: re.sub(r'\s+', ' ', v).strip()
     zymes = set()
     for bid, pr, pries, variantai, po in B.get('vidiniai', []):

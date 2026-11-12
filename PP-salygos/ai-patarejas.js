@@ -347,6 +347,9 @@
     }
     // Irasoma reiksme jau rasta citatoje; pasirinkimui - ar citata apie klausimo dalyka.
     out.silpna = q.rusis === "variantas" && !citataSusijusi(q, out.citata);
+    // Klausimas su privalomu dalyku (antras pilotas 2026-11-12: „ES lėšos - Ne“ su citata apie „kontinentinės Europos tinklus“ - bendras
+    // kamienas „europ“): citata turi įvardyti patį dalyką (q.temaRe - be diakritikų), kitaip silpna ir nenaudojama
+    if (q.temaRe && out.reiksme != null && !new RegExp(q.temaRe, "i").test(beDiakritiku(out.citata))) out.silpna = true;
     out.patikrinta = true;
     return out;
   }
