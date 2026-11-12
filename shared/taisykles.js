@@ -49,10 +49,14 @@
       PI:  { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_rk", trump: ["terminas_rk_trumpinimas"], pirmas: "paraiskos", salygos: "pagristi" },
       VPI: { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_rk", trump: ["terminas_rk_trumpinimas"], pirmas: "paraiskos", salygos: "skuba" } },
     skelb_derybos: {
+      /* Supaprastintose skelbiamose derybose (S-SD - LITGRID SSD forma be paraiškų; PĮ 73 str. 2 d., VPĮ 64 str. 1 d.) kortelės terminas -
+         pirminių pasiūlymų (pirmasS), ne paraiškų (2026-11-12, antras pilotas: kortelė rašė „Trumpiausias paraiškų terminas“). Skaičiai
+         lyginami tie patys (paraiškų terminas nuo paskelbimo - kaip PP-protocol ir PP-graphs); pirmMin - pirminių pasiūlymų terminas nuo
+         kvietimo pateikti pasiūlymus (PĮ 74 str. 4 d., VPĮ 65 str. 3 d.; perskaityta e-tar 2026-11-12) - nurodomas pastaboje. */
       PI:  { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_sd", trump: ["terminas_sd_trumpinimas"], pirmas: "paraiskos", salygos: "pagristi",
-             beParaisku: "sd_be_paraisku", pirminiai: "terminas_sd_pirminiai" },
+             beParaisku: "sd_be_paraisku", pirminiai: "terminas_sd_pirminiai", pirmasS: "pirminiai", pirmMin: { T: 10, S: 7 } },
       VPI: { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_sd", trump: ["terminas_sd_trumpinimas"], pirmas: "paraiskos", salygos: "skuba",
-             beParaisku: "sd_be_paraisku", pirminiai: "terminas_sd_pirminiai" } },
+             beParaisku: "sd_be_paraisku", pirminiai: "terminas_sd_pirminiai", pirmasS: "pirminiai", pirmMin: { T: 30, S: 10 } } },
     konkur_dialogas: {
       PI:  { bazinis: { T: 30, S: 10 }, maziausias: { T: 15, S: 7 }, raktas: "terminas_kd", trump: ["terminas_kd_trumpinimas"], pirmas: "paraiskos", salygos: "pagristi" },
       VPI: { bazinis: { T: 30, S: 10 }, maziausias: null, raktas: "terminas_kd", trump: [], pirmas: "paraiskos" } },
@@ -116,9 +120,9 @@
               isankstinis: "paskelbus išankstinį informacinį skelbimą arba skubos atveju (pagreitinta procedūra, priežastys nurodomos skelbime)",
               pagristi: "perkančiojo subjekto vertinimu pagrįstais atvejais", skuba: "skubos atveju (pagreitinta procedūra, priežastys nurodomos skelbime)" },
       termPer: "Tai trumpiau už trumpiausią leidžiamą {ko} terminą - {min} d.",
-      termBeParaisku: "Jei paraiškos neteikiamos ir iškart kviečiama teikti pirminius pasiūlymus, patikrinkite ir pirminių pasiūlymų terminą.",
+      termBePirminiai: "Supaprastintose skelbiamose derybose paraiškų neprašoma, todėl tai pirminių pasiūlymų terminas; jis lyginamas su trumpiausiu paraiškų terminu nuo paskelbimo ({min} d.). Įstatymas pirminių pasiūlymų terminą nustato nuo kvietimo pateikti pasiūlymus - ne trumpesnį kaip {pm} d. Jei paraiškų vis dėlto prašoma, kortelėje įrašykite paraiškų terminą.",
       termPakankamas: "Terminas turi būti ir pakankamas pasiūlymams parengti.",
-      ko: { pasiulymai: "pasiūlymų", paraiskos: "paraiškų" },
+      ko: { pasiulymai: "pasiūlymų", paraiskos: "paraiškų", pirminiai: "pirminių pasiūlymų" },
       termDiena: "Terminas baigiasi {d} - ne darbo dieną.",
       diena: ["sekmadienį", "pirmadienį", "antradienį", "trečiadienį", "ketvirtadienį", "penktadienį", "šeštadienį"],
       svente: "švenčių dieną",
@@ -159,9 +163,9 @@
               isankstinis: "after a prior information notice or in urgency (accelerated procedure, reasons stated in the notice)",
               pagristi: "in cases justified by the contracting entity", skuba: "in urgency (accelerated procedure, reasons stated in the notice)" },
       termPer: "This is shorter than the minimum period allowed for {ko} of {min} days.",
-      termBeParaisku: "If no applications are requested and initial tenders are invited directly, also check the period for initial tenders.",
+      termBePirminiai: "In a simplified negotiated procedure with publication no requests to participate are asked for, so this is the initial tender deadline; it is compared with the minimum period for requests to participate from publication ({min} days). The law sets the initial tender period from the invitation to submit tenders - at least {pm} days. If requests to participate are asked for after all, enter their deadline on the card.",
       termPakankamas: "The period must also be sufficient to prepare tenders.",
-      ko: { pasiulymai: "tenders", paraiskos: "requests to participate" },
+      ko: { pasiulymai: "tenders", paraiskos: "requests to participate", pirminiai: "initial tenders" },
       termDiena: "The deadline falls on {d} - not a working day.",
       diena: ["a Sunday", "a Monday", "a Tuesday", "a Wednesday", "a Thursday", "a Friday", "a Saturday"],
       svente: "a public holiday",
@@ -351,26 +355,29 @@
   function terminoRadiniai(k, l) {
     var X = tx(l), tr = terminas(k), out = [];
     if (tr.busena !== "yra") return { tr: tr, radiniai: out };
-    var L = tr.lentele, ko = X.ko[L.pirmas], p = ymd(tr.nuo), t = ymd(tr.iki) + (/T\d{2}:\d{2}/.test(k.pasiulymuTerminas) ? " " + k.pasiulymuTerminas.slice(11, 16) : "");
+    var L = tr.lentele, p = ymd(tr.nuo), t = ymd(tr.iki) + (/T\d{2}:\d{2}/.test(k.pasiulymuTerminas) ? " " + k.pasiulymuTerminas.slice(11, 16) : "");
+    // Supaprastintos skelbiamos derybos be paraiškų: kortelės terminas - pirminių pasiūlymų (pirmasS)
+    var beP = !!(L.pirmasS && tr.rusis === "S"), ko = X.ko[beP ? L.pirmasS : L.pirmas];
     var dienos = sub(tr.rusis === "T" ? X.termDienosT : X.termDienosS, { p: p, t: t, d: tr.dienos, dd: tr.darbo });
-    var pagr = [L.raktas, "terminas_nuo"];
+    var pagr = beP ? [L.raktas, L.beParaisku, "terminas_nuo"] : [L.raktas, "terminas_nuo"];
+    var bePast = beP ? sub(X.termBePirminiai, { min: tr.bazinis, pm: L.pirmMin[tr.rusis] }) : "";
     if (tr.dienos <= 0) {
       out.push({ id: "terminas", lygis: "kliutis", laukai: ["paskelbimas", "pasiulymuTerminas"], tekstas: sub(X.termPries, { p: p, t: t }), teise: [] });
     } else if (tr.dienos >= tr.bazinis) {
       out.push({ id: "terminas", lygis: "gerai", laukai: ["paskelbimas", "pasiulymuTerminas"], tekstas: dienos + " " + sub(X.termGerai, { ko: ko, min: tr.bazinis }),
-                 pastaba: X.termPakankamas, teise: nuorodos(pagr.concat(["terminas_pakankamas"]), k.rezimas, l) });
+                 pastaba: (bePast ? bePast + " " : "") + X.termPakankamas, teise: nuorodos(pagr.concat(["terminas_pakankamas"]), k.rezimas, l) });
     } else if (tr.el && tr.dienos >= tr.el) {
       out.push({ id: "terminas", lygis: "info", laukai: ["paskelbimas", "pasiulymuTerminas"], tekstas: dienos + " " + sub(X.termEl, { ko: ko, min: tr.bazinis, el: tr.el }),
                  teise: nuorodos(pagr.concat([L.el_raktas]), k.rezimas, l) });
     } else if (tr.maziausias && tr.dienos >= tr.maziausias) {
       out.push({ id: "terminas", lygis: "tikrinti", laukai: ["paskelbimas", "pasiulymuTerminas"], tekstas: dienos + " " + sub(X.termTrump, { ko: ko, min: tr.bazinis, maz: tr.maziausias, kada: X.kada[L.salygos] || "" }),
-                 pastaba: L.beParaisku && tr.rusis === "S" ? X.termBeParaisku : "",
-                 teise: nuorodos(pagr.concat(L.trump, L.beParaisku && tr.rusis === "S" ? [L.beParaisku, L.pirminiai] : []), k.rezimas, l) });
+                 pastaba: bePast,
+                 teise: nuorodos(pagr.concat(L.trump, beP ? [L.pirminiai] : []), k.rezimas, l) });
     } else {
       out.push({ id: "terminas", lygis: "kliutis", laukai: ["paskelbimas", "pasiulymuTerminas"],
                  tekstas: dienos + " " + sub(X.termPer, { ko: ko, min: tr.maziausias || tr.bazinis }),
-                 pastaba: L.beParaisku && tr.rusis === "S" ? X.termBeParaisku : "",
-                 teise: nuorodos(pagr.concat(L.trump, L.beParaisku && tr.rusis === "S" ? [L.beParaisku, L.pirminiai] : []), k.rezimas, l) });
+                 pastaba: bePast,
+                 teise: nuorodos(pagr.concat(L.trump, beP ? [L.pirminiai] : []), k.rezimas, l) });
     }
     if (tr.dienos > 0 && !darbo(tr.iki)) {
       var sv = global.GP_WORKDAYS && global.GP_WORKDAYS.isHoliday(tr.iki);

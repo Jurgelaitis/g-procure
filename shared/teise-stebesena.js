@@ -1187,7 +1187,8 @@
     var dabar = c.dabar || dienaISO();
     var R = pirkimuiIrasai(rez.tikrinta, c.modulis, c.ctx, dabar, lang);
     var pat = patikimumas(rez.tikrinta, null, dabar, lang);
-    var nuoroda = function (x) { return '<a class="gps__nuoroda" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(x.pavadinimas) + '</a>'; };
+    // trumpas pavadinimas, kai yra (antras pilotas 2026-11-12: PP-salygos rodė ilgus teismų sprendimų pavadinimus); visas - užvedus pelę
+    var nuoroda = function (x) { return '<a class="gps__nuoroda" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '"' + (x.trumpai ? ' title="' + esc(x.pavadinimas) + '"' : '') + '>' + esc(x.trumpai || x.pavadinimas) + '</a>'; };
     var h = '<section class="gps gps--pirkimui">' + galva(R.aktualus.length);
     if (rez.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
     if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';

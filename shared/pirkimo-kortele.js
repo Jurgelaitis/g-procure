@@ -94,7 +94,9 @@
     { id: "nenaudojama", lt: "Kataloge yra, bet perkama ne per jį (motyvai - pirkimo dokumentuose)", en: "Available in the catalogue but not used (reasons in the procurement documents)" },
     { id: "nera", lt: "CPO LT kataloge nėra", en: "Not available in the CPO LT catalogue" }
   ];
-  var SPRENDIMAI = { kriterijus: KRITERIJAI, zaliasis: TAIP_NE, nacsaugumas: TAIP_NE, kvalifikacija: KVALIFIKACIJA, cpo: CPO };
+  /* esLesos (2026-11-12, antras pilotas su tikrais pirkimais) - ar pirkimas finansuojamas ES lėšomis: "taip" / "ne" / null (nenurodyta;
+     senos kortelės be lauko - null). Šaltiniai - kortelės forma, CVP IS duomenys (euFunding), PP-plan „ES lėšos“. */
+  var SPRENDIMAI = { kriterijus: KRITERIJAI, zaliasis: TAIP_NE, nacsaugumas: TAIP_NE, kvalifikacija: KVALIFIKACIJA, cpo: CPO, esLesos: TAIP_NE };
 
   /* Laukų pavadinimai žmogui (pranešimams ir kortelės formai). */
   var LAUKAI = {
@@ -122,6 +124,7 @@
     nacsaugumas: { lt: "Susijęs su nacionaliniu saugumu", en: "Related to national security" },
     kvalifikacija: { lt: "Kas tikrinama", en: "What is checked" },
     cpo: { lt: "CPO LT katalogas", en: "CPO LT catalogue" },
+    esLesos: { lt: "Finansuojama ES lėšomis", en: "Financed from EU funds" },
     busena: { lt: "Būsena", en: "Status" }
   };
 
@@ -170,6 +173,7 @@
       pasiulymuTerminas: "",               // pasiūlymų ar paraiškų terminas „2026-10-02T15:00“ (Vilniaus laikas)
       iniciatorius: "", organizatorius: "", organizatoriausKontaktai: "",
       kriterijus: "", zaliasis: "", nacsaugumas: "", kvalifikacija: "", cpo: "",   // 2026-11-09 - žr. SPRENDIMAI
+      esLesos: null,                       // 2026-11-12: "taip" / "ne" / null - žr. SPRENDIMAI
       veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
       busena: "", archyvuota: false       // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
     };
@@ -199,6 +203,9 @@
     TEKSTAI.forEach(function (f) { o[f] = tekstas(o[f]); });
     // sprendimų laukai - tik žodyno reikšmės (kitokia - nenurodyta, ne spėjama)
     Object.keys(SPRENDIMAI).forEach(function (f) { if (o[f] && !SPRENDIMAI[f].some(function (x) { return x.id === o[f]; })) o[f] = ""; });
+    // ES lėšos: nenurodyta - null, ne "" (senos kortelės be lauko - null); loginės reikšmės priimamos
+    var es = k.esLesos === true ? "taip" : k.esLesos === false ? "ne" : tekstas(k.esLesos).toLowerCase();
+    o.esLesos = es === "taip" || es === "ne" ? es : null;
     o.verte = skaicius(o.verte);
     o.trukmeMen = sveikas(o.trukmeMen);
     if (!Array.isArray(o.dalys)) o.dalys = null;

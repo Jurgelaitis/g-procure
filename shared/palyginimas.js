@@ -162,9 +162,11 @@
     for (var w in x.o) if (y.o[w]) bend++;
     return bend / Math.min(x.n, y.n);
   }
-  function sulygink(A, B, vietos, leidz, pozicija, variantai) {
+  function sulygink(A, B, vietos, leidz, pozicija, variantai, beInkaro) {
     pozicija = pozicija || vietos;
-    var poros = lcsPoros(A, B), ops = [], pa = 0, pb = 0;
+    // beInkaro[i] (2026-11-12, rangos SS derinimo terminai „Per 20 d. d.“ -> „Per 15 d. d.“): formos pastraipa nepriskiriama dokumento pastraipai
+    // pagal tikslų tekstą - tas pats tekstas („Per 15 d. d.“) yra ir kitoje lentelės eilutėje; poruojama tarpe pagal leidžiamą formą (leidz)
+    var poros = lcsPoros(beInkaro ? A.map(function (t, i) { return beInkaro[i] ? "\u0000" + i : t; }) : A, B), ops = [], pa = 0, pb = 0;
     function tarpas(a1, a2, b1, b2) {
       var naudota = {}, i, j, laikini = [];
       // pasirinkimo vieta (sutarties išskleidžiamas sąrašas ar griežta pildoma vieta): pirmiausia - pastraipa, kuri yra vienas jos variantų.
@@ -319,7 +321,8 @@
   var SVARBUS_TURINYS = /(sankcij|Rusijos|Baltarusijos|nacionalinio saugumo|reglament\S* \(ES\)|negali dalyvauti)/i;
   var KVALIF_SKYRIUS = /(PAŠALINIMO|KVALIFIKACIJ|ŽALI)/;
   var KVAL_NETIKRINAMA = /kvalifikacija nėra tikrinama|qualification (of suppliers )?is not (being )?(checked|verified)/i;
-  var KVAL_PUNKTAI = /nedraudžiama remtis sutartimi, kurią jie vykdė ne vieni|^(\d+(\.\d+)*\.?\s*)?Kvalifikacija turi būti įgyta iki|užpildo ir pasirašo atskirą EBVPD|shall not be prohibited from relying on a contract|qualification must be obtained before|shall complete and sign a separate ESPD/i;
+  // + SPS 3.7 p. (specialistų įrodymai pagal 2 lentelę; antras pilotas 2026-11-12: be kvalifikacijos jo pašalinimas rodytas nukrypimu)
+  var KVAL_PUNKTAI = /nedraudžiama remtis sutartimi, kurią jie vykdė ne vieni|^(\d+(\.\d+)*\.?\s*)?Kvalifikacija turi būti įgyta iki|užpildo ir pasirašo atskirą EBVPD|shall not be prohibited from relying on a contract|qualification must be obtained before|shall complete and sign a separate ESPD|kurio bus prašoma pateikti kvalifikaciją pagrindžiančius dokumentus, su kvalifikacijos dokumentais turi pateikti įrodymus|When asked to provide supporting documents the Supplier must provide evidence/i;
   // Sutartyje „SUTARTIES“ yra beveik kiekvienoje antraštėje - jautrios tik kaina, užtikrinimas, netesybos, nacionalinis saugumas, sankcijos
   var SVARBUS_SUTARTIES = /(KAIN|UŽTIKRINIM|NETESYB|NACIONALIN|SANKCIJ)/;
   function skyriai(ps) { var cur = "", out = []; ps.forEach(function (x) { if (x.antraste && !x.toc) cur = x.t.replace(/\s\d{1,3}$/, ""); out.push(cur); }); return out; }
@@ -410,7 +413,8 @@
     var ops = sulygink(forma.map(function (x) { return x.n; }), dok.map(function (x) { return x.n; }), vietos,
       sut ? forma.map(function (x) { return x.leidziami || null; }) : null,
       sut ? forma.map(function (x, k) { return vietos[k] && !x.salinama && !x.leidziami; }) : null,
-      sut ? forma.map(function (x) { return x.variantai || null; }) : null);
+      sut ? forma.map(function (x) { return x.variantai || null; }) : null,
+      sut ? forma.map(function (x) { return !!x.beInkaro; }) : null);
     // pakeista skyriaus antraštė („14. PRIEDAI (koreguojama pagal poreikį)“ -> „PRIEDAI“): pašalinta ir pridėta antraštė greta - pora
     ops.forEach(function (x, k) {
       if (x.op !== "-" || !forma[x.a].antraste) return;

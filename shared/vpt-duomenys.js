@@ -20,7 +20,8 @@
  *  - dokumentai(nr, { eiga, signal }) - /api/cvpis/dokumentai/<nr> (nuo 2026-10-29): viešas pirkimo dokumentų ZIP iš CVP IS per serverį
  *    (srautu, serveris nieko nesaugo) -> { ok: true, blob, baitai, vardas } arba { ok: false, rusis }; dokumentuKlaida(rusis, kalba).
  *  - skirtumai(kortele, pirkimas) - kortelės pasiūlymų termino, paskelbimo datos ir būsenos skirtumai nuo VPT duomenų
- *    („Mano pirkimai“ patikra „Patikrinti CVP IS duomenis“, kortelių puslapio ?vpt=1).
+ *    („Mano pirkimai“ patikra „Patikrinti CVP IS duomenis“, kortelių puslapio ?vpt=1); abejotina trukmė - `abejotini`, ne skirtumas.
+ *  - trukmesInfo(s) / trukmesAbejone(s, kalba) - trukmė su vienetu; metais ilgiau kaip 10 metų - abejotina (2026-11-12).
  *
  * Duomenys - iki 6 val. senumo VPT sąrašo kopija; oficialiu šaltiniu lieka CVP IS. Datos - Lietuvos laikas.
  * Nieko nesaugo.
@@ -289,6 +290,24 @@
     var n = +m[1] * (m[2] === "years" ? 12 : 1);
     return n >= 1 && n <= 600 ? n : null;
   }
+  /* Trukmė su vienetu (2026-11-12, antras pilotas su tikrais pirkimais): { n, vienetas, men, abejotina }. Abejotina - metais ilgiau kaip
+     10 metų (120 mėn.): tikrinant 13 tikrų pirkimų metais buvo vienas - „36_years“, nors skelbime 36 mėnesiai, ir kortelė gaudavo 432 mėn.
+     Tikėtina, kad CVP IS lauke pasirinktas ne tas vienetas - tokia reikšmė iš anksto nesiūloma ir su kortele nelyginama. */
+  var ABEJOTINA_NUO_MEN = 120;
+  function trukmesInfo(s) {
+    var m = /^(\d{1,4})_(days|weeks|months|years)$/.exec(String(s || ""));
+    if (!m) return null;
+    var n = +m[1], men = m[2] === "months" ? n : m[2] === "years" ? n * 12 : null;
+    return { n: n, vienetas: m[2], men: men, abejotina: m[2] === "years" && men > ABEJOTINA_NUO_MEN };
+  }
+  function metuForma(n) { var d = n % 100, v = n % 10; return (d >= 10 && d <= 20) || v === 0 ? "metų" : "metai"; }
+  // „CVP IS duomenyse - 36 metai (432 mėn.); tikėtina, kad pasirinktas ne tas vienetas - patikrinkite skelbimą.“ (ne abejotinai - "")
+  function trukmesAbejone(s, lang) {
+    var t = trukmesInfo(s);
+    if (!t || !t.abejotina) return "";
+    return lang === "en" ? "In the CVP IS data - " + t.n + " years (" + t.men + " months); the wrong unit was probably selected in CVP IS - check the notice."
+      : "CVP IS duomenyse - " + t.n + " " + metuForma(t.n) + " (" + t.men + " mėn.); tikėtina, kad CVP IS lauke pasirinktas ne tas vienetas - patikrinkite skelbimą.";
+  }
   // TED nuorodos - tik https://ted.europa.eu/ (serveris jau tikrina; čia - dar kartą prieš dedant į href)
   function ted(v) {
     return (Array.isArray(v) ? v : []).filter(function (x) { return typeof x === "string" && /^https:\/\/ted\.europa\.eu\/[A-Za-z0-9\-._~\/?=&%#:+]{1,300}$/.test(x); }).slice(0, 10);
@@ -372,6 +391,12 @@
   };
   var OBJEKTAI = { "Supplies": "prekes", "Services": "paslaugos", "Works": "darbai" };
 
+  // BVPŽ skyrius (pirmi du skaitmenys) pagal objekto rūšį: darbai - 45, prekės - 03-44 ir 48 (programinė įranga), paslaugos - 50-98
+  var BVPZ_RUSIS = {
+    "Works": function (d) { return d === 45; },
+    "Supplies": function (d) { return (d >= 3 && d <= 44) || d === 48; },
+    "Services": function (d) { return d >= 50 && d <= 98; }
+  };
   function bvpzPilnas(k) {
     var m = /^(\d{8})(-\d)?$/.exec(String(k || ""));
     if (!m) return null;
@@ -398,7 +423,10 @@
           sutartiesData: "CVP IS lauke - planuojama sutarties sudarymo data",
           numeris: "CVP IS lauke rastas kodas - patikrinkite, ar tai jūsų pirkimo numeris",
           paskelbimasT: "CVP IS paskelbimo data {d}. Tarptautinio pirkimo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT - jos VPT duomenyse nėra, ją rasite skelbimo PDF („Skelbimo išsiuntimo data“), todėl paskelbimo datos nesiūlome.",
-          rinkosTerminas: "Rinkos konsultacijos atsakymų terminas {d} - tai ne pasiūlymų terminas, todėl kortelei nesiūlome." },
+          rinkosTerminas: "Rinkos konsultacijos atsakymų terminas {d} - tai ne pasiūlymų terminas, todėl kortelei nesiūlome.",
+          bvpzRusis: "CVP IS duomenys pagrindinio BVPŽ kodo nenurodo - kodas parinktas pagal objekto rūšį ({r}); patikrinkite skelbimą",
+          bvpzPirmas: "CVP IS duomenys pagrindinio BVPŽ kodo nenurodo, o objekto rūšies kodo sąraše nėra - siūlomas pirmas sąraše; patikrinkite skelbimą",
+          rusys: { Works: "darbai", Supplies: "prekės", Services: "paslaugos" } },
     en: { neregistre: "Contracting entity “{p}” is not in the organisation register - no entity suggested.",
           mv: "In the VPT data no directive applies (low-value procurement) - no law suggested; the procurement documents state which one applies.",
           direktyva: "VPT directive “{d}” - not a PĮ or VPĮ procurement, or not stated; no regime suggested.",
@@ -415,7 +443,10 @@
           sutartiesData: "planned contract award date in CVP IS",
           numeris: "code found in a CVP IS field - check that it is your procurement number",
           paskelbimasT: "Published in CVP IS on {d}. International procurement time limits run from the dispatch of the notice from VPT - the VPT data do not have it; it is in the notice PDF (“Notice dispatch date”), so no publication date is suggested.",
-          rinkosTerminas: "Market consultation response deadline {d} - not a tender deadline, so it is not suggested for the card." }
+          rinkosTerminas: "Market consultation response deadline {d} - not a tender deadline, so it is not suggested for the card.",
+          bvpzRusis: "The CVP IS data do not state the main CPV code - the code was chosen by the type of contract ({r}); check the notice",
+          bvpzPirmas: "The CVP IS data do not state the main CPV code and the list has no code of the contract type - the first one is suggested; check the notice",
+          rusys: { Works: "works", Supplies: "supplies", Services: "services" } }
   };
 
   /* Grąžina { laukai: [{ laukas, reiksme, citata, pastaba? }], pastabos: [] } - kaip shared/skelbimas.js atpazink() */
@@ -454,15 +485,31 @@
       if (b) prideti("budas", b.id, cit, b.pagrindas === "tarptautinis" ? P.budasT : b.pagrindas === "supaprastintas" ? P.budasS : b.pagrindas === "mv" ? P.budasMv : null);
       else pastabos.push(keisk(P.budas, { b: tx(p.procedure, 80), r: keisk(P.tarptautine, { v: String(p.aboveThreshold) }) + ", " + keisk(P.direktyvaZ, { d: tx(p.directive || "-", 60) }) }));
     }
+    /* Pagrindinis BVPŽ kodas (2026-11-12, antras pilotas): VPT duomenys pagrindinio kodo nenurodo, o sąrašo tvarka - ne pagrindinis pirmas
+       (darbų pirkimui pirmas buvo tvoros prekių kodas, skelbime pagrindinis - 45...). Kai kodų keli, parenkamas pirmas objekto rūšies kodas:
+       darbai - 45, prekės - 03-44 ir 48, paslaugos - 50-98; tokio nėra - pirmas sąraše, iš anksto nepažymimas. Pastaba sako, kaip parinkta. */
     var cpv = Array.isArray(p.cpvCodes) ? p.cpvCodes.filter(function (x) { return typeof x === "string"; }) : [];
     if (cpv.length) {
-      var pilnas = bvpzPilnas(cpv[0]);
-      if (pilnas) prideti("bvpz", pilnas, "cpvCodes: " + cpv.slice(0, 5).join(", "));
-      else pastabos.push(keisk(P.bvpz, { k: tx(cpv[0], 20) }));
+      var pagr = cpv[0], bvpzPst = null, bvpzAbej = false;
+      if (cpv.length > 1) {
+        var tinka = BVPZ_RUSIS[p.procurementType];
+        var rastas = tinka ? cpv.filter(function (x) { return tinka(+String(x).slice(0, 2)); })[0] : null;
+        if (rastas) { pagr = rastas; bvpzPst = keisk(P.bvpzRusis, { r: P.rusys[p.procurementType] }); }
+        else { bvpzPst = P.bvpzPirmas; bvpzAbej = true; }
+      }
+      var pilnas = bvpzPilnas(pagr);
+      if (pilnas) { prideti("bvpz", pilnas, "cpvCodes: " + cpv.slice(0, 5).join(", "), bvpzPst); if (bvpzAbej) laukai[laukai.length - 1].abejotina = true; }
+      else pastabos.push(keisk(P.bvpz, { k: tx(pagr, 20) }));
     }
     if (typeof p.estimatedValue === "number" && isFinite(p.estimatedValue) && p.estimatedValue > 0) prideti("verte", p.estimatedValue, "estimatedValue: " + p.estimatedValue);
-    var men = trukmeMen(p.contractDuration);
-    if (men) prideti("trukmeMen", men, "contractDuration: " + tx(p.contractDuration, 30));
+    /* Trukmė metais ilgiau kaip 10 metų - abejotina (trukmesInfo): siūloma su pastaba ir iš anksto nepažymima */
+    var men = trukmeMen(p.contractDuration), trk = trukmesInfo(p.contractDuration);
+    if (men && trk && trk.abejotina) { prideti("trukmeMen", men, "contractDuration: " + tx(p.contractDuration, 30), trukmesAbejone(p.contractDuration, kalba)); laukai[laukai.length - 1].abejotina = true; }
+    else if (men) prideti("trukmeMen", men, "contractDuration: " + tx(p.contractDuration, 30));
+    else if (trk && trk.abejotina) pastabos.push(trukmesAbejone(p.contractDuration, kalba));
+    // ES lėšos (2026-11-12): kortelės sprendimas esLesos - tik kai VPT duomenyse nurodyta (true / false)
+    if (p.euFunding === true) prideti("esLesos", "taip", "euFunding: true");
+    else if (p.euFunding === false) prideti("esLesos", "ne", "euFunding: false");
     var iso = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):\d{2}$/;
     var tm = typeof p.tenderSubmissionDeadline === "string" && iso.exec(p.tenderSubmissionDeadline);
     /* Rinkos konsultacijos terminas - atsakymų, ne pasiūlymų (2026-11-06; iki tol kortelėje tapdavo „Pasiūlymų terminas“) */
@@ -505,7 +552,7 @@
   var PO_VERTINIMO = { "Awarded": 1, "Concluded": 1, "Closed": 1 };
   var TARPTAUTINIO_SKELBIMAS_IKI = 5;      // ES leidinių biuras skelbia ne vėliau kaip per 5 d. nuo išsiuntimo
   function skirtumai(k, p) {
-    var r = { skirtumai: [], palyginta: [] };
+    var r = { skirtumai: [], palyginta: [], abejotini: [] };
     if (!k || typeof k !== "object" || !p || typeof p !== "object") return r;
     var iso = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):\d{2}$/;
     var tm = typeof p.tenderSubmissionDeadline === "string" && iso.exec(p.tenderSubmissionDeadline);
@@ -525,8 +572,10 @@
     }
     /* Sutarties trukmė (2026-11-06, naudotojo sprendimas): skelbimo „Numatomas galiojimas“ rengėjai kartais užpildo pasiūlymo galiojimu,
        todėl iš PDF perkelta trukmė gali skirtis nuo CVP IS - lyginama, kai kortelėje trukmė įrašyta (be jos - ne skirtumas, o trūkstamas laukas). */
-    var vm = trukmeMen(p.contractDuration);
-    if (vm && k.trukmeMen > 0) {
+    var vm = trukmeMen(p.contractDuration), trk = trukmesInfo(p.contractDuration);
+    /* Abejotina trukmė („36_years“, 2026-11-12): skirtumu nelaikoma - tikėtina, kad CVP IS lauke pasirinktas ne tas vienetas; pasakoma atskirai */
+    if (trk && trk.abejotina) r.abejotini.push({ laukas: "trukmeMen", kortele: k.trukmeMen > 0 ? String(k.trukmeMen) : "", vpt: String(trk.men), cd: String(p.contractDuration) });
+    else if (vm && k.trukmeMen > 0) {
       r.palyginta.push("trukmeMen");
       if (vm !== k.trukmeMen) r.skirtumai.push({ laukas: "trukmeMen", kortele: String(k.trukmeMen), vpt: String(vm) });
     }
@@ -545,7 +594,7 @@
   }
 
   global.GP_VPT = { nutrauktas: nutrauktas, nutrauktaPavadinime: nutrauktaPavadinime, busena: busena, tolesnisEtapas: tolesnisEtapas, rinkosKonsultacija: rinkosKonsultacija, sistema: sistema,
-    API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, ted: ted, atnaujinta: atnaujinta,
+    API_BAZE: API_BAZE, pirkimas: pirkimas, kodas: kodas, trukme: trukme, trukmeMen: trukmeMen, trukmesInfo: trukmesInfo, trukmesAbejone: trukmesAbejone, ted: ted, atnaujinta: atnaujinta,
     PROCEDUROS: PROCEDUROS, BUSENOS: BUSENOS, DIREKTYVOS: DIREKTYVOS, budas: budas, korteles: korteles, skirtumai: skirtumai,
     paieska: paieska, statistika: statistika, vptBudas: vptBudas, procedurosIstatymas: procedurosIstatymas,
     dokumentai: dokumentai, dokumentuKlaida: dokumentuKlaida

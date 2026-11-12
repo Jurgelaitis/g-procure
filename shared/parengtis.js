@@ -106,7 +106,7 @@
       skaiciaiKitur: " Kitur ta pati nuostata parašyta vienodai - patikrinkite, kuri redakcija galioja.",
       grafikas: "SPS grafiko datos ne iš eilės: „{a}“ ({ad}) po „{b}“ ({bd}).",
       netaikoma: "netaikoma", nepatikrinta: "nepatikrinta", beSkelbimo: "nėra skelbimo", beSps: "nėra SPS", beSutarties: "nėra sutarties",
-      beKorteles: "kortelė nepasirinkta", beDuomenu: "dokumente nerasta", beGrafiko: "SPS grafiko nerasta",
+      beKorteles: "kortelė nepasirinkta", beDuomenu: "dokumente nerasta", punktaiPdf: "PDF dokumentuose netikrinta (numeriai lūžta kartu su stulpeliais) - patikrinkite Word failą", beGrafiko: "SPS grafiko nerasta",
       grafikasPavyzdys: "sugeneruotame SPS grafiko datos - šablono pavyzdžiai; įrašykite tikras datas Word programoje", bePriedu: "SPS priedų sąrašo nerasta",
       pakeitimoData: "įkeltas skelbimo pakeitimas - pirminio paskelbimo datos jame nėra",
       privNerasta: "Neradau: {e}. Ieškota: {kur}. Jei tai parašyta kitais žodžiais ar kitame dokumente, viskas gerai - nurodykite vietą sprendimo pagrindime.",
@@ -213,7 +213,7 @@
       skaiciaiKitur: " Elsewhere the same provision is written consistently - check which version applies.",
       grafikas: "SPS schedule dates are out of order: “{a}” ({ad}) after “{b}” ({bd}).",
       netaikoma: "not applicable", nepatikrinta: "not checked", beSkelbimo: "no notice", beSps: "no SPS", beSutarties: "no contract",
-      beKorteles: "no card selected", beDuomenu: "not found in the document", beGrafiko: "no SPS schedule found",
+      beKorteles: "no card selected", beDuomenu: "not found in the document", punktaiPdf: "not checked in PDF documents (numbers break with the columns) - check the Word file", beGrafiko: "no SPS schedule found",
       grafikasPavyzdys: "in the generated SPS the schedule dates are template examples; enter the real dates in Word", bePriedu: "no SPS list of annexes found",
       pakeitimoData: "a change notice was loaded - it does not contain the original publication date",
       privNerasta: "Not found: {e}. Searched: {kur}. If it is worded differently or is in another document, that is fine - give the location in the decision note.",
@@ -872,8 +872,13 @@
     sum.lenteles.forEach(function (x) { radinys({ id: "lenteles", grupe: "aiskumas", lygis: "tikrinti", tekstas: sub(X.lenteles, { n: x.n }), vietos: x.vietos, teise: teise(AISK) }); });
     sum.priedu_nuorodos.forEach(function (x) { radinys({ id: "priedu_nuorodos", grupe: "aiskumas", lygis: "tikrinti", tekstas: sub(X.priedu_nuorodos, { n: x.n }), vietos: x.vietos, teise: teise(AISK) }); });
     var yraDok = P.sps || P.bps || P.sutartis;
+    // Pasikartojantys punktų numeriai tikrinami tik DOCX (antras pilotas 2026-11-12: SPS ir BPS PDF - „be pastabų“, nors netikrinta)
+    var bePdf = ["sps", "bps", "sutartis"].filter(function (r) { return P[r] && !/^(docx|odt)$/i.test(P[r].ext || ""); })
+      .map(function (r) { return trumpas(P[r].name); });
     ["punktai", "alternatyvos", "laukai", "lenteles"].forEach(function (id) {
-      patikra(id, "aiskumas", !yraDok ? "nepatikrinta" : sum[id].length ? "radinys" : "gerai", !yraDok ? X.beSps : "");
+      var pdf = id === "punktai" && bePdf.length;
+      patikra(id, "aiskumas", !yraDok ? "nepatikrinta" : sum[id].length ? "radinys" : pdf ? "nepatikrinta" : "gerai",
+              !yraDok ? X.beSps : pdf ? X.punktaiPdf + ": " + bePdf.join(", ") : "");
     });
     patikra("priedu_nuorodos", "aiskumas", !sps ? "nepatikrinta" : !sps.priedai.length ? "nepatikrinta" : sum.priedu_nuorodos.length ? "radinys" : "gerai",
             !sps ? X.beSps : !sps.priedai.length ? X.bePriedu : "");

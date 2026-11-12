@@ -51,6 +51,7 @@
       cvpKortelejeYra: " (kortelėje - {k})", cvpKortelejeNera: " (kortelėje neįrašyta)",
       cvpSutampa: "Sutampa su CVP IS duomenimis: {l}.", cvpLTerminas: "pasiūlymų terminas", cvpLPaskelbimas: "paskelbimo data", cvpLBusena: "būsena",
       cvpNeraDuomenu: "CVP IS duomenyse termino, paskelbimo datos ir būsenos nėra.",
+      cvpAbejotina: " Su kortele sutarties trukmė nelyginta.",
       cvpNera: "CVP IS numerio {nr} VPT sąraše nėra - patikrinkite numerį kortelėje.",
       cvpKlaida: "Šios kortelės CVP IS duomenų gauti nepavyko.",
       cvpAtnaujinti: "Atnaujinti kortelę", cvpAtverti: "Atverti CVP IS"
@@ -81,6 +82,7 @@
       cvpKortelejeYra: " (on the card: {k})", cvpKortelejeNera: " (not on the card)",
       cvpSutampa: "Matches the CVP IS data: {l}.", cvpLTerminas: "tender deadline", cvpLPaskelbimas: "publication date", cvpLBusena: "status",
       cvpNeraDuomenu: "The CVP IS data have no deadline, publication date or status.",
+      cvpAbejotina: " The contract duration was not compared with the card.",
       cvpNera: "CVP IS number {nr} is not in the VPT list - check the number on the card.",
       cvpKlaida: "Could not get the CVP IS data for this card.",
       cvpAtnaujinti: "Update the card", cvpAtverti: "Open in CVP IS"
@@ -231,6 +233,7 @@
       ".gpmp-cvp li{overflow-wrap:anywhere}",
       ".gpmp-cvp--skiriasi{border-top:2px solid var(--color-warning,#FAB03B)}",
       ".gpmp-cvp--ok{color:#5B6470;font-size:13px}",
+      ".gpmp-cvp-abej{flex-basis:100%;margin:0;font-size:13px;color:#8A5A00;overflow-wrap:anywhere}",
       ".gpmp-isp{background:var(--color-warning-5,#FEF6E8);border:1px solid #F3D9A8;border-left:4px solid var(--color-warning,#FAB03B);border-radius:12px;padding:12px 16px;font-size:14px}",
       "@media (max-width:900px){.gpmp-eil{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.gpmp-veiksmai{grid-column:1 / -1;justify-content:flex-start}}",
       "@media (max-width:560px){.gpmp-eil{grid-template-columns:minmax(0,1fr)}}"
@@ -394,10 +397,13 @@
       var K = global.GP_KORTELE, V = global.GP_VPT, p = el("div", "gpmp-cvp");
       if (cr.ok) {
         var s = V.skirtumai(k, cr.pirkimas);
+        /* Abejotina CVP IS trukmė („36_years“, 2026-11-12) - ne skirtumas: pasakoma, kodėl nelyginta */
+        var abej = (s.abejotini || []).map(function (x) { return el("p", "gpmp-cvp-abej", (V.trukmesAbejone ? V.trukmesAbejone(x.cd, l) : "") + t.cvpAbejotina); });
         if (!s.skirtumai.length) {
           p.className += " gpmp-cvp--ok";
           p.appendChild(el("span", null, s.palyginta.length
             ? fmt(t.cvpSutampa, { l: s.palyginta.map(function (f) { return t[CVP_PAV[f]]; }).join(", ") }) : t.cvpNeraDuomenu));
+          abej.forEach(function (x) { p.appendChild(x); });
           return p;
         }
         p.className += " gpmp-cvp--skiriasi";
@@ -412,6 +418,7 @@
           ul.appendChild(el("li", null, fmt(t[CVP_ET[x.laukas]], { v: v }) + (x.kortele ? fmt(t.cvpKortelejeYra, { k: kv }) : t.cvpKortelejeNera) + (tr ? t.cvpTrukmePst : "")));
         });
         p.appendChild(ul);
+        abej.forEach(function (x) { p.appendChild(x); });
         var vv = el("div", "gpmp-veiksmai");
         var a = el("a", "gpmp-btn gpmp-btn--pagr", t.cvpAtnaujinti);
         a.href = saknis + "pirkimu-korteles.html?vpt=1#kortele=" + id;
