@@ -428,6 +428,7 @@ def taisymas_tekstas(taisyk):
     viso += _ap_sprendimai(taisyk)
     viso += _autoriai(taisyk)
     viso += _as_lenteles_31(taisyk)
+    viso += _at_rasyba(taisyk)
     return viso
 
 
@@ -1648,6 +1649,23 @@ def _as_lenteles_31(taisyk):
     print("\nSPS 3.1 P. LENTELIŲ SĄRAŠAS (AS, 2026-11-10):")
     n = _su_zemelapiais(_be_raudono(_AS_POROS, _AS_RAUDONI), None, 'SPS 3.1 p. lentelės', taisyk)
     for t in _AS_RAUDONI:
+        print("      raudonas tekstas - nelieciama: ..." + t)
+    return n
+
+
+# AT. Antras pilotas su tikru pirkimu (2026-11-12; redakcinės korekcijos - naudotojo leidimas 2026-10-05): pasiūlymo ir paraiškos formų
+#    „Pasirašydamas šį Pasiūlymą, tvirtintu visų kartu su Pasiūlymu pateikiamų dokumentų ...“ -> „patvirtinu“ (13 formų, LT ir LT/EN);
+#    lietuviškos derybų formos sakinio gale - likęs dvikalbės formos skyriklis „ /“ („... ___ punktams. /“). Angliškas tekstas nekeičiamas.
+_AT_POROS = [(_re.compile(r'Pasirašydam(?:as|a) (?:šį Pasiūlymą|šią Paraišką), (tvirtintu) visų'), 'patvirtinu', 1)]
+_AT_DERYBOS = [(_re.compile(r'Specialiųjų Sutarties sąlygų _+ punktams\.( /)\s*$'), '', 1)]
+_AT_RAUDONI = []
+
+
+def _at_rasyba(taisyk):
+    print("\nANTRAS PILOTAS: „tvirtintu“ ir derybų formos „ /“ (AT, 2026-11-12):")
+    n = _su_zemelapiais(_be_raudono(_AT_POROS, _AT_RAUDONI), None, '„patvirtinu“', taisyk)
+    n += _su_zemelapiais(_be_raudono(_AT_DERYBOS, _AT_RAUDONI), ['PRIEDAI_LT_DERYBOS'], 'derybų formos „ /“', taisyk)
+    for t in _AT_RAUDONI:
         print("      raudonas tekstas - nelieciama: ..." + t)
     return n
 

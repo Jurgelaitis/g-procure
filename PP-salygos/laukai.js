@@ -137,7 +137,9 @@
      Artimiausio žodžio paieškoje (nuorodosPriedas) jų nėra: SPS tekste šie žodžiai dažni ir nurodo ne priedą. */
   const PRIEDU_RAKTAI_PAV = PRIEDU_RAKTAI.concat([
     { raktas: 'pasalinimas',     lt: /pašalinimo pagrind/iu,                             en: /grounds for (the )?(supplier )?exclusion|exclusion grounds/i },
-    { raktas: 'kvalifikacija',   lt: /kvalifikacijos reikalavim/iu,                      en: /qualification requirements/i }
+    { raktas: 'kvalifikacija',   lt: /kvalifikacijos reikalavim/iu,                      en: /qualification requirements/i },
+    // Atsakymai į rinkos konsultacijos dalyvių klausimus - 1 žingsnyje įkeltas failas pakete šios eilutės numeriu (antras pilotas 2026-11-12)
+    { raktas: 'rinkos',          lt: /rinkos konsultacij/iu,                             en: /market consultation/i }
   ]);
   const PRIEDO_EIL_RE = /^\s*(\d+)\s*priedas\s*(?:[–-]\s*)?(.+)$/iu;
   const priedoRaktasIsTeksto = (t, kalba) => {

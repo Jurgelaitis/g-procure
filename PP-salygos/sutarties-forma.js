@@ -32,6 +32,10 @@
   function el(x, re){ return x ? x.elementai.findIndex(function (e) { return re.test(e.trim()); }) : -1; }
   function vr(x, re){ return x ? x.variantai.findIndex(function (e) { return re.test(e); }) : -1; }
   function skaicius(s){ var n = parseFloat(String(s == null ? "" : s).replace(/\s/g, "").replace(",", ".")); return isFinite(n) ? n : null; }
+  /* Skaičiaus laukas - tik skaičius (antras pilotas 2026-11-12: „3 darbo dienas“ tyliai tapdavo „3 mėnesiais“ - parseFloat paimdavo „3“);
+     vienetą žmogus pasirenka šalia. Kitas tekstas - klaida prie lauko, atsakymas laikomas neužpildytu. */
+  function grynasSkaicius(s){ return /^\s*\d+(?:[.,]\d+)?\s*%?\s*$/.test(String(s == null ? "" : s)); }
+  var NE_SKAICIUS = "Įrašykite tik skaičių - vienetą pasirinkite šalia";
   /* Galininkas po „per“: 1 mėnesį, 3 mėnesius, 10 mėnesių; vardininkas po dvitaškio: 1 mėnuo, 3 mėnesiai, 10 mėnesių */
   function forma(n, vns, dgsKelios, dgsDaug){
     var d = n % 10, s = n % 100;
@@ -44,6 +48,13 @@
      tipas: taipne | variantai | skaicius | tekstas | formuluote. laukai - papildomi laukai, rodomi pasirinkus `kada` atsakymą.
      rodoma(ctx, R) - R: efektyvūs atsakymai; siuloma(ctx, R, V) -> { reiksme, kilme } | null. */
   var TN = [{ id: "taip", tekstas: "Taip" }, { id: "ne", tekstas: "Ne" }];
+  /* ES lėšos iš pirkimo kortelės (antras pilotas 2026-11-12: kortelė perima CVP IS „euFunding“, o sutarties klausimas jo nematė) - siūloma reikšmė;
+     paraiškos ar dokumentų DI atsakymas (ctx.di) pirmesnis, kitokia reikšmė parodoma „Pagal kitus duomenis ...“ */
+  function esKortele(c){
+    return c && (c.esLesosKortele === "taip" || c.esLesosKortele === "ne")
+      ? { reiksme: c.esLesosKortele, kilme: (c.korteleKilme || "pagal pirkimo kortelę") + ": finansuojama ES lėšomis - „" + (c.esLesosKortele === "taip" ? "Taip" : "Ne") + "“" } : null;
+  }
+
   var KAINODARA = [
     { id: "fiksuota_kaina", tekstas: "Fiksuotos kainos kainodara", re: /^Fiksuotos kainos/ },
     { id: "fiksuotas_ikainis", tekstas: "Fiksuoto įkainio kainodara", re: /^Fiksuoto įkainio/ },
@@ -324,8 +335,9 @@
       siuloma: function (c) { return c.kriterijus === "kaina" ? { reiksme: "ne", kilme: "vertinimo kriterijus - kaina ar sąnaudos (SPS 8.1)" } : null; } },
     { id: "terminas", grupe: "Sutarties trukmė ir terminai", tipas: "skaicius", privalomas: true,
       klausimas: "Per kiek laiko tiekėjas turi pristatyti prekes ar suteikti paslaugas (4.1 punktas)?",
-      uzuomina: "Skaičius; vieneto forma parenkama pagal skaičių (pvz. „per 1 mėnesį“, „per 3 mėnesius“).",
-      vienetai: function (c) { return prekes(c) ? [{ id: "men", tekstas: "mėnesiai" }] : [{ id: "men", tekstas: "mėnesiai" }, { id: "d", tekstas: "dienos" }]; },
+      uzuomina: "Tik skaičius; vienetą (mėnesiai, dienos, darbo dienos) pasirinkite šalia - forma parenkama pagal skaičių (pvz. „per 3 mėnesius“, „per 3 darbo dienas“).",
+      // prekėms - ir dienos bei darbo dienos (antras pilotas 2026-11-12: LITGRID prekių SS 4.1 - „per 3 (tris) darbo dienas“); formos sąraše jų nėra - įrašoma tekstu
+      vienetai: function () { return [{ id: "men", tekstas: "mėnesiai" }, { id: "d", tekstas: "dienos" }, { id: "dd", tekstas: "darbo dienos" }]; },
       rodoma: function (c, R) { return R.pradzia !== "ts" && !(prekes(c) && R.terminas_pasiulyme === "taip"); } },
     { id: "bendras_taikomas", grupe: "Sutarties trukmė ir terminai", tipas: "taipne", privalomas: true, rodoma: paslaugos,
       klausimas: "Ar nustatomas bendras paslaugų teikimo terminas (4.1 punktas)?",
@@ -336,7 +348,7 @@
       uzuomina: "„Taip“ - lieka šablono aplinkybių sąrašas (nepalankios oro sąlygos, Pirkėjo veiksmai ir kt., kaip prekių sutartyje); „Ne“ - „Netaikoma“.",
       siuloma: function () { return { reiksme: "taip", kilme: LITGRID + " (kaip prekių sutartyje)" }; } },
     KL_NUMERIS("Sutarties dalykas", "3.2 punktas"),
-    { id: "es", grupe: "Sutarties dalykas", tipas: "taipne", privalomas: true,
+    { id: "es", grupe: "Sutarties dalykas", tipas: "taipne", privalomas: true, siuloma: esKortele,
       klausimas: "Ar pirkimas finansuojamas Europos Sąjungos lėšomis (3.3 punktas)?",
       laukai: [{ id: "es_nr", tipas: "tekstas", uzrasas: "Projekto numeris", kada: "taip" }, { id: "es_pav", tipas: "tekstas", uzrasas: "Projekto pavadinimas", kada: "taip" }] },
 
@@ -498,7 +510,7 @@
   var SR = function (c) { return c.seima === "STATYBOS_RANGOS"; };
   var RANGA = function (c) { return PSR(c) || SR(c); };
   var RANGOS = {
-    PROJEKTAVIMO_STATYBOS: { ss: { ekspertize: 22, atjungimai: 23, uztikrinimas: 24, garantinis: 25, esmines: 26, sprogmenys: 27, koord: 28 },
+    PROJEKTAVIMO_STATYBOS: { projektavimas: true, ss: { ekspertize: 22, atjungimai: 23, uztikrinimas: 24, garantinis: 25, esmines: 26, sprogmenys: 27, koord: 28 },
       bs: { irenginiai: "4.9.8", demontuoti: "4.6.2", dalinis: "5.9.5", es: "11.11", investicinis: "11.9.2", breziniai: "4.1.2", pagrindiniai: "4.10.2",
             atjungimai: "4.5.1", uztikrinimas: "9.7", garantinis: "9.9", sprogmenys: "4.1.12-4.1.14", koord: "5.2.5" },
       etapuPriedas: "Projektavimo ir statybos darbų etapai", techninePriedas: "Techninė užduotis / projektavimo užduotis", technineNurodymas: "" },
@@ -574,7 +586,7 @@
         if (m != null && /rekonstr|statyb|atram/.test(t)) return { reiksme: "ziniarastis", kilme: "pirkimo pavadinime - nauja statyba, rekonstravimas ar atramų keitimas (šablono rekomendacija)" };
         if (m != null && /remont/.test(t) && R.etapai === "taip") return { reiksme: "etapai", kilme: "pirkimo pavadinime - remonto darbai, darbai etapais (šablono rekomendacija)" };
         return null; } },
-    { id: "es_psr", grupe: "Kaina ir apmokėjimas", tipas: "taipne", privalomas: true,
+    { id: "es_psr", grupe: "Kaina ir apmokėjimas", tipas: "taipne", privalomas: true, siuloma: esKortele,
       klausimas: "Ar Darbus numatoma finansuoti Europos Sąjungos fondų (programų) lėšomis (SS 14 punktas, BS " + v.bs.es + ")?",
       uzuomina: "Įrašoma šablono nurodymo formuluotė: „Darbus ketinama finansuoti Europos Sąjungos fondų (programų) lėšomis.“ arba „Darbai Europos Sąjungos fondų (programų) lėšomis nefinansuojami.“" },
 
@@ -600,6 +612,21 @@
       klausimas: "Ar Grafiką Rangovas turi pateikti ne per 30 dienų, o per kitą terminą (SS 20 punktas, BS 2.3.1)?",
       uzuomina: "„Taip“ - įrašomas BS 2.3.1 punkto antro sakinio pakeitimas su jūsų terminu (dienomis nuo Sutarties sudarymo); „Ne“ - punktas neįrašomas.",
       laukai: [{ id: "grafiko_dienos", tipas: "skaicius", uzrasas: "Per kiek dienų nuo Sutarties sudarymo", kada: "taip" }] },
+    // Antras pilotas 2026-11-12 (naudotojo sprendimas B3): LITGRID paskelbtame projektavimo ir statybos rangos sutarties projekte projektiniai
+    // pasiūlymai buvo pridėti prie techninės užduoties - derinimo lentelėje jų eilučių nebuvo ir įrašyta „Sutarties bendrųjų sąlygų 3.2 skyrius
+    // „Projektiniai pasiūlymai“ netaikomas.“, o techninio darbo projekto terminai - 15 ir 10 d. d. (formoje - 20 ir 15)
+    { id: "projektiniai", psr: true, grupe: "Papildomos sąlygos", tipas: "variantai", privalomas: true,
+      klausimas: "Ar Rangovas rengs projektinius pasiūlymus (SS 21 punktas, BS 3.2 skyrius „Projektiniai pasiūlymai“)?",
+      variantai: [{ id: "taip", tekstas: "Taip - Rangovas rengia projektinius pasiūlymus: derinimo lentelėje lieka jų terminai (kaip formoje)" },
+                  { id: "ne", tekstas: "Ne - projektiniai pasiūlymai jau parengti (pvz. pridedami prie techninės užduoties): jų eilutės iš derinimo lentelės pašalinamos ir įrašoma „Sutarties bendrųjų sąlygų 3.2 skyrius „Projektiniai pasiūlymai“ netaikomas.“" }],
+      uzuomina: "Atsakymas turi sutapti su Technine užduotimi: jei projektiniai pasiūlymai pridedami prie jos, jų Rangovas nerengia.",
+      siuloma: function () { return { reiksme: "taip", kilme: "kaip formoje - Rangovas rengia projektinius pasiūlymus" }; } },
+    { id: "tdp_terminai", psr: true, grupe: "Papildomos sąlygos", tipas: "variantai", privalomas: true,
+      klausimas: "Kokie Techninio darbo projekto derinimo terminai (SS 21 punktas)?",
+      variantai: [{ id: "20_15", tekstas: "Pirminis derinimas - per 20 d. d., kiekvienas pakartotinis - per 15 d. d. (kaip formoje)" },
+                  { id: "15_10", tekstas: "Pirminis derinimas - per 15 d. d., kiekvienas pakartotinis - per 10 d. d." }],
+      uzuomina: "Terminas skaičiuojamas nuo pilnos apimties dokumentacijos pateikimo; tai Užsakovo derinimo terminas.",
+      siuloma: function () { return { reiksme: "20_15", kilme: "kaip formoje" }; } },
     { id: "derinimas", grupe: "Papildomos sąlygos", tipas: "variantai", privalomas: true,
       klausimas: "Kokiam objektui nustatomi gamybos ir montavimo brėžinių bei Pagrindinių įrenginių derinimo terminai (SS 21 punktas)?",
       variantai: [{ id: "tp330", tekstas: "330 kV transformatorių pastotės (TP) projektas: pirminis derinimas - 30 d. d., pakartotinis - 15 d. d." },
@@ -684,7 +711,7 @@
       },
       rodoma: function (c, R, Z) { return R.etapai === "taip" && !!etapuSkyrius(Z) && R.etapu_pildymas === "cia"; } }
   ];
-    return q.filter(function (x) { return x.id !== "ekspertize" || v.ss.ekspertize; });
+    return q.filter(function (x) { return (x.id !== "ekspertize" || v.ss.ekspertize) && (!x.psr || v.projektavimas); });
   }
   var KLAUSIMAI_PSR = rangosKlausimai(RANGOS.PROJEKTAVIMO_STATYBOS), KLAUSIMAI_SR = rangosKlausimai(RANGOS.STATYBOS_RANGOS);
 
@@ -731,7 +758,7 @@
       laukai: [{ id: "pp_prieziura_kartai", tipas: "skaicius", uzrasas: "Kiek kartų šis terminas gali būti pratęstas", kada: "*" },
                { id: "pp_prieziura_pratesimas", tipas: "skaicius", uzrasas: "Kiek mėnesių gali trukti vienas pratęsimas", kada: "*" }] },
 
-    { id: "pp_es", grupe: "Kaina ir apmokėjimas", tipas: "taipne", privalomas: true,
+    { id: "pp_es", grupe: "Kaina ir apmokėjimas", tipas: "taipne", privalomas: true, siuloma: esKortele,
       klausimas: "Ar Paslaugas ketinama finansuoti Europos Sąjungos fondų (programų) lėšomis (SS 4.2 punktas, BS 9.10)?",
       uzuomina: "Lieka vienas iš šablono sakinių: „Paslaugas ketinama finansuoti Europos Sąjungos fondų (programų) lėšomis.“ arba „Paslaugos Europos Sąjungos fondų (programų) lėšomis nefinansuojamos.“" },
     { id: "pp_etapu_lentele", grupe: "Kaina ir apmokėjimas", tipas: "variantai", privalomas: true,
@@ -1226,16 +1253,19 @@
       // lentelė be nė vienos užpildytos eilutės - neatsakyta; su eilute, kurioje trūksta privalomo langelio, - neužpildyta (ko trūksta, sako sprendimai)
       var beEiluciu = q.tipas === "lentele" && !etapuNetuscios(R).length;
       if (beEiluciu || (q.tipas === "lentele" && etapuSprendimas(R, "").truksta.length)) busena = "neuzpildyta";
+      var neSk = q.tipas === "skaicius" && R[q.id] != null && !grynasSkaicius(R[q.id]);
+      if (neSk) busena = "neuzpildyta";
       return { id: q.id, grupe: q.grupe, klausimas: q.klausimas, uzuomina: typeof q.uzuomina === "function" ? q.uzuomina(ctx, R) : q.uzuomina || "", pastaba: q.pastaba ? q.pastaba(ctx, R) : "", vidausRiba: q.vidausRiba || null, tipas: q.tipas, privalomas: !!q.privalomas,
                variantai: (q.variantai || []).filter(function (v) { return !v.tik || v.tik(ctx, R); }).map(function (v) { return { id: v.id, tekstas: v.tekstas }; }),
                vienetai: q.vienetai ? q.vienetai(ctx) : null,
                laukai: (q.laukai || []).filter(function (l) { return (!l.tikLTEN || LTEN(ctx)) && (!l.rodoma || visi || l.rodoma(ctx, R)); }).map(function (l) {
                  return { id: l.id, tipas: l.tipas, uzrasas: l.uzrasas, kada: l.kada, neprivalomas: !!l.neprivalomas, reiksme: R[l.id] != null ? R[l.id] : "",
+                          klaida: l.tipas === "skaicius" && R[l.id] != null && String(R[l.id]).trim() && !grynasSkaicius(R[l.id]) ? NE_SKAICIUS : "",
                           siuloma: E.kilmes[l.id] && E.kilmes[l.id] !== "zmogus" ? E.kilmes[l.id] : null }; }),
                priedai: q.tipas === "priedai" ? prieduSarasas(Z, ctx, R) : null,
                lentele: q.tipas === "lentele" ? etapuRedaktorius(Z, R) : null,
                reiksme: R[q.id] != null && !beEiluciu ? R[q.id] : null, vienetas: R[q.id + "_vnt"] || "men",
-               siuloma: k && k !== "zmogus" ? k : null, busena: busena };
+               siuloma: k && k !== "zmogus" ? k : null, busena: busena, klaida: neSk ? NE_SKAICIUS + " (įrašyta „" + String(R[q.id]).trim() + "“)" : "" };
     });
   }
 
@@ -1291,8 +1321,10 @@
     var truksta = [];
     rodomi.forEach(function (q) {
       if (q.privalomas && q.reiksme == null) truksta.push(q.klausimas);
+      else if (q.klaida) truksta.push(q.klausimas + " - " + q.klaida);
       q.laukai.forEach(function (l) {
         if (l.neprivalomas) return;
+        if (q.reiksme === l.kada && l.klaida) truksta.push(q.klausimas + " - " + l.uzrasas + ": " + l.klaida);
         if (q.reiksme === l.kada && (l.tipas === "formuluote" || l.tipas === "tekstas" || l.tipas === "skaicius") && !String(l.reiksme || "").trim() &&
             !/^(cvp|velavimas)/.test(l.id)) truksta.push(q.klausimas + " - " + l.uzrasas);
         if (l.kada === "*" && String(q.reiksme || "").trim() && !String(l.reiksme || "").trim()) truksta.push(q.klausimas + " - " + l.uzrasas);
@@ -1348,13 +1380,13 @@
     var pTerm = p41.filter(function (x) { return x.aprasas === "[...]"; })[0], pBendras = p41.filter(function (x) { return /Bendras/.test(x.aprasas); })[0];
     if (R.pradzia === "ts") { nust(pTerm, { tekstas: "" }); nust(vVnt, { salinti: true }); }
     else if (prekes(ctx) && R.terminas_pasiulyme === "taip") { nust(pTerm, { palikti: "sudarant" }); nust(vVnt, { palikti: "sudarant" }); }
-    else if (R.terminas != null && skaicius(R.terminas)) {
+    else if (R.terminas != null && grynasSkaicius(R.terminas) && skaicius(R.terminas)) {
       var n = skaicius(R.terminas), vnt = R.terminas_vnt || "men";
-      var zod = vnt === "d" ? forma(n, "dieną.", "dienas.", "dienų.") : forma(n, "mėnesį.", "mėnesius.", "mėnesių.");
+      var zod = vnt === "dd" ? forma(n, "darbo dieną.", "darbo dienas.", "darbo dienų.") : vnt === "d" ? forma(n, "dieną.", "dienas.", "dienų.") : forma(n, "mėnesį.", "mėnesius.", "mėnesių.");
       var k = el(vVnt, new RegExp("^" + zod.replace(".", "\\.") + "$"));
       // LITGRID prekių sutarties formos sąraše - tik „mėnesį.“ ir „mėnesius.“ (10-20, 30, 40 ... mėnesių ir dienų nėra): taisyklinga forma
       // įrašoma tekstu valdiklio vietoje (kaip 11.1.2 p. „Kita formuluotė“) - terminas nekeičiamas, 4 žingsnis tai pasako (naujo darbuotojo patikra 2026-10-20)
-      var zodEN = vnt === "d" ? (n === 1 ? "day." : "days.") : (n === 1 ? "month." : "months.");
+      var zodEN = vnt === "dd" ? (n === 1 ? "working day." : "working days.") : vnt === "d" ? (n === 1 ? "day." : "days.") : (n === 1 ? "month." : "months.");
       nust(pTerm, { tekstas: String(n), tekstasEN: String(n) });
       if (k < 0) {
         nust(vVnt, { laisvas: true, tekstas: zod, tekstasEN: zodEN });
@@ -1639,6 +1671,16 @@
       if (R.derinimas) nust(x, { variantas: R.derinimas === "tp330" ? 0 : R.derinimas === "tp" ? (pak ? 0 : 1) : (pak ? 1 : 2) });
     });
     V.filter(function (x) { return x.rusis === "nurodymas" && x.vieta === "21"; }).forEach(function (x) { nust(x, "salinti"); });
+    // 21 projektiniai pasiūlymai ir techninio darbo projekto terminai (B3, 2026-11-12; tik projektavimo ir statybos rangos SS)
+    var raktu = function (r) { return V.filter(function (x) { return x.raktas === r; })[0] || null; };
+    if (R.projektiniai === "ne") {
+      nust(raktu("o:projektiniai_pasiulymai"), "salinti");
+      nust(raktu("pt:projektiniai_netaikomas"), { tekstas: "Sutarties bendrųjų sąlygų 3.2 skyrius „Projektiniai pasiūlymai“ netaikomas." });
+    }
+    if (R.tdp_terminai === "15_10") {
+      nust(raktu("f:tdp_pirminis"), { tekstas: "Per 15 d. d." });
+      nust(raktu("f:tdp_pakartotinis"), { tekstas: "Per 10 d. d." });
+    }
     // 24 užtikrinimas, 25 garantinis užtikrinimas, 26 esminės sąlygos, 27-29 kitos nuostatos
     var uz = { netaikomas: 0, iki: 1, virs: 2 }[R.uztikrinimas_psr];
     if (uz != null) nust(alt("užtikrinimas"), { variantas: uz });
@@ -1999,7 +2041,11 @@
     // sveikas teigiamas skaičius; įrašyta kas kita - klausimas lieka neatsakytas (su priežastimi)
     var sk = function (id) {
       var raw = t(id), n = skaicius(raw);
-      if (raw && !(n > 0 && Math.floor(n) === n && /^\d+$/.test(raw))) { truksta.push(kl(id) + " (įrašykite sveiką skaičių)"); return ""; }
+      if (raw && !(n > 0 && Math.floor(n) === n && /^\d+$/.test(raw))) {
+        // bendra skaičiaus lauko pastaba (trukstami, 2026-11-12) - ta pati vieta, nekartojama
+        for (var j = truksta.length - 1; j >= 0; j--) if (truksta[j].indexOf(kl(id) + " - " + NE_SKAICIUS) === 0) truksta.splice(j, 1);
+        truksta.push(kl(id) + " (įrašykite sveiką skaičių)"); return "";
+      }
       return raw;
     };
     var suma = function (id) {
@@ -2353,8 +2399,9 @@
       var id = "sf-" + l.id, v = esc(l.reiksme);
       var ivestis = l.tipas === "formuluote" ? '<textarea class="lk-in" id="' + id + '" data-sf="' + l.id + '" rows="3">' + v + "</textarea>"
         : '<input class="lk-in' + (l.tipas === "skaicius" ? " lk-in--trumpas" : "") + (l.siuloma && !(A[l.id] && A[l.id].reiksme) ? " lk-in--siuloma" : "") +
-          '" id="' + id + '" data-sf="' + l.id + '" type="text"' + (l.tipas === "skaicius" ? ' inputmode="decimal"' : "") + ' value="' + v + '">';
+          '" id="' + id + '" data-sf="' + l.id + '" type="text"' + (l.tipas === "skaicius" ? ' inputmode="decimal"' : "") + (l.klaida ? ' aria-invalid="true" aria-describedby="' + id + '-klaida"' : "") + ' value="' + v + '">';
       return '<div class="lk-v"><label class="lk-v-l" for="' + id + '">' + esc(l.uzrasas) + "</label><div class=\"lk-v-iv\">" + ivestis + "</div>" +
+        (l.klaida ? '<p class="lk-klaida lk-sf-klaida" id="' + id + '-klaida">' + esc(l.klaida) + ".</p>" : "") +
         (l.siuloma && !(A[l.id] && A[l.id].reiksme) ? '<div class="lk-kilme"' + (l.siuloma.di ? ' data-di="sugeneruota"' : "") + ">Siūloma - " + esc(l.siuloma.kilme) + ". Patikrinkite ir, jei reikia, pakeiskite.</div>" : "") + "</div>";
     }
     function korteleHtml(q){
@@ -2399,10 +2446,11 @@
         var v = q.reiksme != null ? q.reiksme : "";
         h += '<div class="lk-v"><div class="lk-v-iv">' + (q.tipas === "formuluote" ? '<textarea class="lk-in" id="' + id + '-in" data-sf="' + q.id + '"' + aria + ' rows="3">' + esc(v) + "</textarea>"
           : '<input class="lk-in' + (q.tipas === "skaicius" ? " lk-in--trumpas" : "") + (q.busena === "siuloma" ? " lk-in--siuloma" : "") + '" id="' + id + '-in" type="text" data-sf="' + q.id + '"' +
-            (q.tipas === "skaicius" ? ' inputmode="decimal"' : "") + aria + ' value="' + esc(v) + '">') +
+            (q.tipas === "skaicius" ? ' inputmode="decimal"' : "") + aria + (q.klaida ? ' aria-invalid="true" aria-describedby="' + id + '-klaida"' : "") + ' value="' + esc(v) + '">') +
           (q.vienetai && q.vienetai.length > 1 ? '<select class="lk-in lk-in--trumpas" data-sf="' + q.id + '_vnt" aria-label="Vienetas">' + q.vienetai.map(function (u) {
             return '<option value="' + u.id + '"' + (q.vienetas === u.id ? " selected" : "") + ">" + esc(u.tekstas) + "</option>"; }).join("") + "</select>"
             : q.vienetai ? '<span class="lk-nr">' + esc(q.vienetai[0].tekstas) + "</span>" : "") + "</div></div>";
+        if (q.klaida) h += '<p class="lk-klaida lk-sf-klaida" id="' + id + '-klaida">' + esc(q.klaida) + ".</p>";
       }
       if (q.busena === "siuloma" && q.siuloma){
         var rodyk = function (v) { var vt = (q.tipas === "taipne" ? TN : q.variantai || []).filter(function (x) { return x.id === v; })[0];

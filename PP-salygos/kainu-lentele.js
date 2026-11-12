@@ -21,7 +21,7 @@
      kliutysPriedui(M)          -> [tekstas] - kodėl Excel failo negalima pridėti priedu
      irasyk(xmlDoc, M, o)       -> ataskaita | null - įrašo į pasiūlymo formos kainų lentelę (-es)
    M: { failas, lapas, eilutes: [{ nr, pav, en, vnt, kiekis, dalis, grupe }], kiekioRusis, kiekioTekstas, kainos: { uzpildyta, vietos, formules },
-        tiekejo: [stulpelių pavadinimai], paslepta: { lapai, eilutes, stulpeliai }, dalys: [numeriai], xlsx }
+        tiekejo: [stulpelių pavadinimai], paslepta: { lapai, eilutes, stulpeliai }, dalys: [numeriai], xlsx, kainuStulpeliu: įkainio ar kainos stulpelių skaičius }
 */
 (function(root){
   'use strict';
@@ -226,7 +226,7 @@
     const dalys = [...new Set(eilutes.filter(e => e.dalis).map(e => e.dalis))].sort((a, b) => a - b);
     return { failas, lapas, eilutes, kiekioRusis: kiekioRusis(kt), kiekioTekstas: kt, kainos: kainos || { uzpildyta: 0, vietos: [], formules: 0 },
              tiekejo: L.st.tiekejo.map(i => L.antraste[i]).filter(Boolean), papildomi: (L.kitiSu || []).map(i => L.antraste[i]), paslepta: { lapai: [], eilutes: 0, stulpeliai: 0 },
-             dalys, xlsx: !!(o && o.xlsx), lapoDalis: (o && o.lapoDalis) || null, beVienetu: L.st.vnt < 0, beKiekio: L.st.kiekis < 0 };
+             dalys, xlsx: !!(o && o.xlsx), lapoDalis: (o && o.lapoDalis) || null, beVienetu: L.st.vnt < 0, beKiekio: L.st.kiekis < 0, kainuStulpeliu: L.st.kaina.length };
   }
   /* Kiekis lietuvišku formatu („1 200“, „2,5“); tekstas („pagal poreikį“) - kaip įrašytas */
   function kiekioTekstas(t, sk){
@@ -375,17 +375,20 @@
   const vntEn = v => VNT_EN[String(v || '').trim().toLowerCase()] || null;
   const romenu = n => ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][n] || String(n);
 
-  /* o: { budas: 'forma' | 'priedas', kiekioRusis, dalys: n (pirkimo objekto dalių skaičius), objektas: { lt, en } (priedo eilutei) }
+  /* o: { budas: 'forma' | 'priedas' | 'bendra', kiekioRusis, dalys: n (pirkimo objekto dalių skaičius), objektas: { lt, en } (priedo eilutei) }
+     'bendra' (2026-11-12, antras pilotas - darbų pirkimas): be kiekių žiniaraščio (M - null) - viena eilutė su pirkimo objektu, tiekėjas nurodo
+     vieną bendrą kainą (kaip LITGRID paskelbtoje darbų pasiūlymo formoje); kiekio rūšis antraštėje nekeičiama
      -> { lentelės, eiluciu, grupiu, beVertimo, budas, dalimis, kiekioAntraste } | { klaida } | null (formoje kainų lentelės nėra) */
   function irasyk(doc, M, opts){
     const o = opts || {};
     const L = kainuLenteles(doc);
-    if (!L.length || !M) return null;
+    const bendra = o.budas === 'bendra';
+    if (!L.length || (!M && !bendra)) return null;
     const dalys = o.dalys >= 2 ? o.dalys : 0;
-    const poz = pozicijos(M);
+    const poz = M ? pozicijos(M) : [];
     // pasiskirstymas pagal lenteles: viena lentelė - visos pozicijos; kelios (dalims) - pagal pozicijų dalį
     let rinkiniai;
-    if (o.budas === 'priedas') rinkiniai = L.map(() => null);
+    if (o.budas === 'priedas' || bendra) rinkiniai = L.map(() => null);
     else if (L.length === 1 && !dalys) rinkiniai = [M.eilutes];
     else if (dalys && L.length === dalys){
       if (!M.eilutes.every(e => e.grupe || e.dalis)) return { klaida: 'dalys', tekstas: 'ne visos pozicijos priskirtos pirkimo objekto dalims' };
@@ -401,10 +404,10 @@
       if (rinkiniai.some(x => !x.some(e => !e.grupe))) return { klaida: 'dalys', tekstas: 'kai kuriai pirkimo objekto daliai pozicijų nėra' };
     }
     else return { klaida: 'dalys', tekstas: 'formos kainų lentelių skaičius nesutampa su pirkimo objekto dalimis' };
-    const R = { lenteles: L.length, eiluciu: 0, grupiu: 0, beVertimo: 0, budas: o.budas === 'priedas' ? 'priedas' : 'forma', dalimis: !!dalys, kiekioAntraste: false };
+    const R = { lenteles: L.length, eiluciu: 0, grupiu: 0, beVertimo: 0, budas: bendra ? 'bendra' : o.budas === 'priedas' ? 'priedas' : 'forma', dalimis: !!dalys, kiekioAntraste: false };
     L.forEach((tbl, k) => {
       const dvikalbis = /object of the procurement/i.test(tekstas(vaikai(tbl, 'tr')[0]));
-      if (kiekioAntraste(tbl, o.kiekioRusis)) R.kiekioAntraste = true;
+      if (!bendra && kiekioAntraste(tbl, o.kiekioRusis)) R.kiekioAntraste = true;
       const eil = vaikai(tbl, 'tr');
       const duom = eil.slice(1).filter(tr => /^\s*(\d+\.|\.\.\.|…)\s*$/.test(tekstas(vaikai(tr, 'tc')[0] || tr)) && vaikai(tr, 'tc').length >= 4);
       if (!duom.length) return;
@@ -413,10 +416,10 @@
       const rPr0 = r0 && vaikas(r0, 'rPr') ? vaikas(r0, 'rPr') : null;
       const nauja = (pildyk) => { const tr = valykKlona(proto.cloneNode(true)); const tcs = vaikai(tr, 'tc'); pildyk(tcs); return tr; };
       const ikelti = [];
-      if (o.budas === 'priedas'){
+      if (o.budas === 'priedas' || bendra){
         const ob = o.objektas || {};
-        const lt = `${ob.lt || 'Pirkimo objektas'} (pagal Pasiūlymo formos 1 priedą „${PRIEDO_PAV.pavLt}“)`;
-        const en = `${ob.en || ob.lt || 'Object of the Procurement'} (according to ${PRIEDO_PAV.en} “${PRIEDO_PAV.pavEn}”)`;
+        const lt = bendra ? (ob.lt || 'Pirkimo objektas') : `${ob.lt || 'Pirkimo objektas'} (pagal Pasiūlymo formos 1 priedą „${PRIEDO_PAV.pavLt}“)`;
+        const en = bendra ? (ob.en || ob.lt || 'Object of the Procurement') : `${ob.en || ob.lt || 'Object of the Procurement'} (according to ${PRIEDO_PAV.en} “${PRIEDO_PAV.pavEn}”)`;
         ikelti.push(nauja(tcs => {
           langelis(doc, tcs[0], [{ t: '1.' }], rPr0);
           langelis(doc, tcs[1], dvikalbis ? [{ t: lt + ' / ' + en }] : [{ t: lt }], rPr0);
