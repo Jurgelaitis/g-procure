@@ -8,7 +8,8 @@
    (async function testai...), netinkamas ?dalis. Nieko nesaugo ir nesiunčia.
    Grupių laikas (2026-11-07): GP_TESTU_DALYS.vykdyk(grupes) paleidžia grupes iš eilės ir kiekvienos trukmę įrašo į
    window.GP_TESTU_LAIKAI ([{ grupe, s }], pildoma eigoje - ir nespėjusio rinkinio dalis); paleidiklis lėčiausias grupes
-   parašo žurnale, kad dalis būtų galima suvienodinti pagal matavimą, ne spėjimą. */
+   parašo žurnale, kad dalis būtų galima suvienodinti pagal matavimą, ne spėjimą.
+   ?grupe=testaiA,testaiB (2026-11-12) - tik nurodytos grupės (rankiniam darbui: .github/testai/paleisk.py jo neperduoda). */
 (function () {
   "use strict";
 
@@ -41,6 +42,14 @@
     if (kartojasi.length) throw new Error("ta pati testų grupė keliose dalyse: " + kartojasi.join(", "));
     const neitrauktos = apibreztos(dok).filter(v => vardai.indexOf(v) < 0);
     if (neitrauktos.length) throw new Error("testų grupė neįrašyta į jokią dalį: " + neitrauktos.join(", "));
+    // ?grupe=testaiA,testaiB (2026-11-12) - tik nurodytos grupės (kuriant ir taisant; paleidiklis jo nenaudoja); nežinoma grupė - klaida
+    const g = /[?&]grupe=([\w,]+)(?:&|$)/.exec(o.paieska === undefined ? location.search : o.paieska);
+    if (g) {
+      const nor = g[1].split(",").filter(Boolean), nera = nor.filter(v => vardai.indexOf(v) < 0);
+      if (nera.length) throw new Error("nežinoma testų grupė ?grupe=" + nera.join(","));
+      if (!o.dokumentas) document.title += " (" + nor.join(", ") + ")";
+      return visos.filter(f => nor.indexOf(f.name) >= 0);
+    }
     const p = parametras(o.paieska);
     if (!p) return visos;
     if (p.n !== n || p.k < 1 || p.k > n) throw new Error("netinkama dalis ?dalis=" + p.k + "/" + p.n + " (rinkinyje - " + n + " dalys)");
