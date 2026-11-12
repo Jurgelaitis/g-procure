@@ -3753,12 +3753,32 @@ function grafikasKortelei(){
   return { grafikas: { sudaryta: new Date().toISOString(), budas: state.methodCode, metai: Number((document.getElementById('f-metai') || {}).value) || null, pradzia: els.pradzia.value, etapai },
     datos: { paskelbimas: pask, sutartiesData: pab ? isoData(pab.end) : '' } };
 }
+/* Kortelės paskelbimo data ir pasiūlymų terminas prieš grafiką (2026-11-12, antras pilotas: paskelbtam pirkimui grafikas nuo pasirinktos
+   pradžios apskaičiavo pasiūlymus iki 10-01, nors kortelėje terminas 10-13, ir be įspėjimo perdavė į SPS). Grafiko paskelbimas - skelbimo etapo
+   pabaiga, pasiūlymų ar paraiškų terminas - pirmo „... gavimas“ etapo pabaiga (kaip pasiulymuLaikotarpis); kortelės terminas lyginamas pagal datą. */
+function grafikoNesutapimai(k){
+  if(!k || !state.methodCode || !getStartDate()) return [];
+  const sched = computeSchedule(), out = [];
+  const skelb = sched.find(r => r.group.stage === 'vykdymas' && /^Skelbimas/i.test(r.group.name || ''));
+  const gav = sched.find(r => /gavimas/i.test(r.group.name || ''));
+  const gp = skelb ? isoData(skelb.end) : '', gt = gav ? isoData(gav.end) : '';
+  const kp = /^\d{4}-\d{2}-\d{2}/.test(k.paskelbimas || '') ? k.paskelbimas.slice(0, 10) : '';
+  const kt = /^\d{4}-\d{2}-\d{2}/.test(k.pasiulymuTerminas || '') ? k.pasiulymuTerminas.slice(0, 10) : '';
+  if(kp && gp && kp !== gp) out.push({ laukas: 'paskelbimas', kortele: kp, grafike: gp,
+    tekstas: `Kortelėje paskelbimo data - ${kp}, pagal šį grafiką (nuo pradžios ${els.pradzia.value}) skelbimas baigiasi ${gp}.` });
+  if(kt && gt && kt !== gt) out.push({ laukas: 'pasiulymuTerminas', kortele: kt, grafike: gt,
+    tekstas: `Kortelėje pasiūlymų terminas - ${k.pasiulymuTerminas.replace('T', ' ')}, pagal šį grafiką etapas „${gav.group.name}“ baigiasi ${gt}.` });
+  return out;
+}
+var NESUTAPIMO_PATARIMAS = 'Jei pirkimas jau paskelbtas, pradžios datą parinkite taip, kad grafiko datos sutaptų su tikromis, - kitaip į kortelę ir pirkimo sąlygas (SPS) pateks kitos datos.';
 function kortelesGrafikoBusena(pranesimas){
   const el = document.getElementById('kortele-grafikas'); if(!el) return;
   const k = typeof KORTELE !== 'undefined' && KORTELE ? KORTELE.pasirinkta() : null;
   const eil = [];
   if(pranesimas) eil.push(pranesimas);
   if(k && state.methodCode && getStartDate()){
+    const nes = grafikoNesutapimai(k);
+    if(nes.length) eil.push('Dėmesio: ' + nes.map(x => x.tekstas).join(' ') + ' ' + NESUTAPIMO_PATARIMAS);
     const pab = isoData(([...computeSchedule()].reverse().find(r => r.end) || {}).end);
     if(k.sutartiesData && pab && k.sutartiesData !== pab)
       eil.push(`Kortelėje planuojama sutarties sudarymo data - ${k.sutartiesData} (iš plano ar anksčiau įrašyto grafiko), pagal šį grafiką - ${pab}. Įrašius grafiką į kortelę, data bus pakeista.`);
@@ -3772,10 +3792,13 @@ function grafikasIKortele(){
   if(!state.methodCode || !getStartDate()){ kortelesGrafikoBusena('Grafikui reikia pirkimo būdo ir pradžios datos.'); return; }
   const { grafikas, datos } = grafikasKortelei();
   const sen = (v) => v || 'neįrašyta';
+  // Kortelės paskelbimo data ar pasiūlymų terminas kiti nei grafike - pasakoma klausimo pradžioje (2026-11-12)
+  const nes = grafikoNesutapimai(k);
+  const dem = nes.length ? `DĖMESIO: grafiko datos nesutampa su kortele.\n- ${nes.map(x => x.tekstas).join('\n- ')}\n${NESUTAPIMO_PATARIMAS}\n\n` : '';
   const pakeitimai = [`grafikas - ${GP_KORTELE.reiksmesTekstas('grafikas', grafikas, 'lt')}${k.grafikas ? ' (ankstesnis bus pakeistas)' : ''}`];
   if(datos.paskelbimas && datos.paskelbimas !== k.paskelbimas) pakeitimai.push(`planuojama paskelbimo data: ${sen(k.paskelbimas)} → ${datos.paskelbimas}`);
   if(datos.sutartiesData && datos.sutartiesData !== k.sutartiesData) pakeitimai.push(`planuojama sutarties sudarymo data: ${sen(k.sutartiesData)} → ${datos.sutartiesData}`);
-  if(!confirm(`Įrašyti į pirkimo kortelę „${k.pavadinimas}“?\n\n- ${pakeitimai.join('\n- ')}\n\nKiti kortelės laukai nekeičiami. Pirkimo sąlygų generatorius vykdymo etapus įterps į SPS skyrių „Preliminarus pirkimo procedūrų vykdymo grafikas“.`)) return;
+  if(!confirm(`${dem}Įrašyti į pirkimo kortelę „${k.pavadinimas}“?\n\n- ${pakeitimai.join('\n- ')}\n\nKiti kortelės laukai nekeičiami. Pirkimo sąlygų generatorius vykdymo etapus įterps į SPS skyrių „Preliminarus pirkimo procedūrų vykdymo grafikas“.`)) return;
   const r = GP_KORTELE.irasykGrafika(k.id, grafikas, datos);
   if(!r.ok){ kortelesGrafikoBusena('Įrašyti nepavyko: ' + (window.GP_SAUGYKLA ? GP_SAUGYKLA.pranesimas(r.r) : 'saugykla neprieinama')); return; }
   KORTELE.atnaujink && KORTELE.atnaujink();

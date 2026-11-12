@@ -1143,6 +1143,56 @@ async function testaiGrafikasKortelei1109(){
   });
 }
 
+/* Antras pilotas su tikrais pirkimais (2026-11-12): paskelbtam pirkimui grafikas nuo pasirinktos pradžios apskaičiavo kitas datas, nei kortelėje
+   (pasiūlymai iki 10-01, kortelėje terminas 10-13), ir be įspėjimo perdavė į SPS. Pirkimų pavadinimai - išgalvoti. */
+async function testaiGrafikoNesutapimai1112(){
+  grupe("Grafikas ir kortelės datos (2026-11-12)");
+  const KORT = { pavadinimas: "Tvoros įrengimo darbų pirkimas", vykdytojas: "litgrid", rezimas: "PI", budas: "T-AK", verte: 900000, pradzia: "2026-10-05",
+                 paskelbimas: "2027-03-01", pasiulymuTerminas: "2027-03-20T10:00" };
+  const pasirink = async (W, laukai) => {
+    const k = W.GP_KORTELE.issaugok(W.GP_KORTELE.tuscia(laukai)).kortele;
+    const api = W.eval("KORTELE"); api.atnaujink(); tiesa(await api.pasirink(k.id), "pasirinkta"); return k;
+  };
+  const datos = W => {
+    const sched = W.eval("computeSchedule()"), iso = d => d ? W.GP_WORKDAYS.fmtDate(d) : "";
+    const skelb = sched.find(r => r.group.stage === "vykdymas" && /^Skelbimas/.test(r.group.name)), gav = sched.find(r => /gavimas/i.test(r.group.name));
+    return { gp: iso(skelb.end), gt: iso(gav.end), gav: gav.group.name };
+  };
+
+  await testas("Kortelės paskelbimo data ir pasiūlymų terminas kiti nei grafike - įspėjimas prie mygtuko ir klausimo pradžioje; atšaukus kortelė nekeičiama", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      const k = await pasirink(W, KORT), g = datos(W);
+      tiesa(g.gp !== "2027-03-01" && g.gt !== "2027-03-20", "grafiko datos kitos: " + JSON.stringify(g));
+      const zin = D.getElementById("kortele-grafikas").textContent;
+      tiesa(zin.includes("Dėmesio: Kortelėje paskelbimo data - 2027-03-01, pagal šį grafiką (nuo pradžios 2026-10-05) skelbimas baigiasi " + g.gp + ".")
+            && zin.includes("Kortelėje pasiūlymų terminas - 2027-03-20 10:00, pagal šį grafiką etapas „" + g.gav + "“ baigiasi " + g.gt + ".")
+            && zin.includes("pirkimo sąlygas (SPS) pateks kitos datos"), zin);
+      D.getElementById("btn-kortele").click();
+      const kl = W.__dialogai[0] || "";
+      tiesa(/^DĖMESIO: grafiko datos nesutampa su kortele\./.test(kl) && kl.includes("Kortelėje paskelbimo data - 2027-03-01") && kl.includes("Kortelėje pasiūlymų terminas - 2027-03-20 10:00")
+            && /Įrašyti į pirkimo kortelę „Tvoros įrengimo darbų pirkimas“\?/.test(kl) && kl.includes("planuojama paskelbimo data: 2027-03-01 → " + g.gp), kl);
+      const n = W.GP_KORTELE.gauk(k.id);
+      lygu([n.grafikas, n.paskelbimas, n.pasiulymuTerminas], [null, "2027-03-01", "2027-03-20T10:00"], "atšaukus - nepakeista");
+    } finally { f.remove(); }
+  });
+
+  await testas("Datos sutampa arba kortelėje jų nėra - be įspėjimo", async () => {
+    const { f, W, D } = await modulisSuKortele();
+    try {
+      await pasirink(W, Object.assign({}, KORT, { paskelbimas: "", pasiulymuTerminas: "" }));
+      tiesa(!/Dėmesio/.test(D.getElementById("kortele-grafikas").textContent), "be datų: " + D.getElementById("kortele-grafikas").textContent);
+      const g = datos(W);
+      W.eval("KORTELE").atsiek && W.eval("KORTELE").atsiek();
+      await pasirink(W, Object.assign({}, KORT, { pavadinimas: "Sutampančios datos", paskelbimas: g.gp, pasiulymuTerminas: g.gt + "T10:00" }));
+      tiesa(!/Dėmesio/.test(D.getElementById("kortele-grafikas").textContent), "sutampa: " + D.getElementById("kortele-grafikas").textContent);
+      let kl = ""; W.confirm = m => { kl = String(m); return false; };
+      D.getElementById("btn-kortele").click();
+      tiesa(kl && !/DĖMESIO/.test(kl), "klausimas be įspėjimo: " + kl);
+    } finally { f.remove(); }
+  });
+}
+
 (async function(){
   try {
     await modulis();
@@ -1158,6 +1208,7 @@ async function testaiGrafikasKortelei1109(){
     await testaiPastabos1028();
     await testaiEnPavadinimas1106();
     await testaiGrafikasKortelei1109();
+    await testaiGrafikoNesutapimai1112();
     document.getElementById("busena").textContent = R.blogai === 0 ? "Visi testai praėjo." : R.blogai + " test(-ai) krito - žr. žemiau.";
   } catch (e) {
     document.getElementById("busena").textContent = "Nepavyko paleisti: " + ((e && e.message) || e);
