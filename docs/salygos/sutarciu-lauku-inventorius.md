@@ -652,3 +652,21 @@ skyrius), parašai.
 - Bendrosios sąlygos nurodo specialiųjų sąlygų punktus, kurių specialiosiose sąlygose nėra: 1.5.3 p. - SS 12 punktą, 5.3.10 p. - SS 11.7 ir
   11.8 punktus (SS turi 11 skyrių). Modulis tai rodo 4 žingsnyje.
 - SS 8.2 punkte - „Pirkėjas“ ir „Tiekėjas“, nors kitur sutartyje - „Užsakovas“ ir „Rangovas“.
+
+# Antras pilotas su tikru pirkimu (2026-11-12)
+
+LITGRID paskelbtas projektavimo ir statybos rangos sutarties projektas (pirkimo numeris - ne saugykloje) ir naudotojo sprendimas B3
+(„Taip, pritariu, kad taip darome.“):
+
+- **Projektiniai pasiūlymai (SS 21 punktas, BS 3.2 skyrius)** - klausimas `projektiniai` (tik projektavimo ir statybos rangos SS):
+  „Taip“ - kaip formoje; „Ne“ (projektiniai pasiūlymai jau parengti, pvz. pridedami prie techninės užduoties) - derinimo lentelės
+  „Projektiniai pasiūlymai“ eilutės pašalinamos (žemėlapio `neprivalomos` `projektiniai_pasiulymai`, eilutės - su `w:tr`), po lentele - naujas
+  punktas „Sutarties bendrųjų sąlygų 3.2 skyrius „Projektiniai pasiūlymai“ netaikomas.“ (`papildomi_punktai`, generatoriaus raktas `pt:`;
+  punktas numeruojamas kaip kiti, todėl SPS nuoroda į užtikrinimo punktą - vienu didesnė, `GP_SUTARTYS.UZTIKRINIMO_VIETA.prideda`). Siūloma -
+  „Taip“ (kaip formoje), patvirtina žmogus.
+- **Techninio darbo projekto derinimo terminai (SS 21 punktas)** - klausimas `tdp_terminai`: 20 ir 15 d. d. (kaip formoje, siūloma) arba
+  15 ir 10 d. d. (kaip LITGRID paskelbtame projekte); žemėlapio `fragmentai` `tdp_pirminis`, `tdp_pakartotinis`. Tikrinant parengtą dokumentą
+  šie langeliai priimami su bet kuriuo „Per N d. d.“ ir nesusiejami su kitomis lentelės eilutėmis pagal tikslų tekstą (`beInkaro`).
+- **Prekių ir paslaugų SS 4.1 punktas** - terminas tik skaičiumi, vienetai: mėnesiai, dienos, darbo dienos (LITGRID prekių SS - „per 3 (tris)
+  darbo dienas“); kitas tekstas - klaida prie lauko.
+- **ES lėšos** - siūloma ir iš pirkimo kortelės (`esLesos`, iš CVP IS „euFunding“); paraiškos ar dokumentų atsakymas pirmesnis.
