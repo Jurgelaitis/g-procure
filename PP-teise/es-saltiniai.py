@@ -9,7 +9,7 @@ tuos pačius dokumentus pagal CELEX numerį ir turi viešą SPARQL užklausų s�
   python3 PP-teise/es-saltiniai.py nauji [--nuo 2026-10-01] [--visi] [--pilnas]
       Dokumentai (ES teisės aktai, Komisijos pasiūlymai ir komunikatai, Teisingumo Teismo sprendimai ir
       generalinių advokatų išvados), kurie cituoja pirkimų direktyvas (2014/23/ES, 2014/24/ES, 2014/25/ES, 89/665/EEB,
-      92/13/EEB) ir kurių registre dar nėra. Be --nuo - nuo 30 dienų iki paskutinės registro patikros. --visi - ir tie,
+      92/13/EEB) ir kurių registre dar nėra. Be --nuo - nuo 120 dienų iki paskutinės registro patikros. --visi - ir tie,
       kurie registre jau yra. --pilnas - visas pavadinimas (bylų pavadinimuose išvardyti nagrinėti klausimai).
 
   python3 PP-teise/es-saltiniai.py tekstas 32025R2150 [--kalba lit] [--trumpai]
@@ -36,6 +36,7 @@ REGISTRAS = os.path.join(SAKNIS, "duomenys", "registras-es.json")
 SPARQL = "https://publications.europa.eu/webapi/rdf/sparql"
 SAUGYKLA = "http://publications.europa.eu/resource/celex/"
 UA = {"User-Agent": "Mozilla/5.0 (teises stebesenos patikra)"}
+LANGAS_D = 120  # kiek dienų iki paskutinės registro patikros žiūrima, kai --nuo nenurodyta
 # Pirkimų direktyvos (klasikinė, sektorinė, koncesijų) ir peržiūros procedūrų direktyvos.
 DIREKTYVOS = ["32014L0024", "32014L0025", "32014L0023", "31989L0665", "31992L0013"]
 # Dokumentų rūšys pagal CELEX: 3 - teisės aktai, 5..PC - pasiūlymai, 5..XC ir 5..DC - komunikatai,
@@ -73,7 +74,9 @@ def nauji(nuo, visi, pilnas=False):
     yra = {raktas(str((r.get("identifikatoriai") or {}).get("celex") or "")) for r in reg.get("irasai", [])}
     if not nuo:
         pat = (reg.get("meta") or {}).get("patikrinta") or datetime.date.today().isoformat()
-        nuo = (datetime.date.fromisoformat(pat) - datetime.timedelta(days=30)).isoformat()
+        # Platus langas: Teisingumo Teismo sprendimus duomenų bazė su direktyvomis susieja pavėluotai (dažnai tik paskelbus
+        # pranešimą Oficialiajame leidinyje, praėjus 6-8 savaitėms), todėl siauras langas juos praleistų visam laikui.
+        nuo = (datetime.date.fromisoformat(pat) - datetime.timedelta(days=LANGAS_D)).isoformat()
     adresas = SPARQL + "?" + urllib.parse.urlencode({"query": uzklausa(nuo), "format": "application/sparql-results+json"})
     try:
         with urllib.request.urlopen(urllib.request.Request(adresas, headers=UA), timeout=120) as f:

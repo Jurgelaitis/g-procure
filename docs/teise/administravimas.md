@@ -147,7 +147,8 @@ sąrašas ir įrašas; paieškos tekstas ir režimas (PĮ / VPĮ) lieka. Adresas
 - `saltinioTipas: "es_gaires"` - Europos Komisijos gairės ar komunikatas (neprivalomos; rodomos pagal paskelbimo datą).
 
 **Savaitinė patikra (nuo 2026-11-13, naudotojo sprendimas plėsti savaitinę patikrą ES šaltiniais).** Ta pati užduotis
-`pp-teise-savaitine-patikra` pirmadieniais paleidžia `python3 PP-teise/es-saltiniai.py nauji --pilnas` ir:
+`pp-teise-savaitine-patikra` pirmadieniais paleidžia `python3 PP-teise/es-saltiniai.py nauji --pilnas` (dokumentai nuo 120 dienų iki
+paskutinės ES registro patikros: Teisingumo Teismo sprendimus duomenų bazė su direktyvomis susieja pavėluotai) ir:
 
 - į `registras-es.json` pati įrašo tik AIŠKIAI PIRKIMŲ dokumentų faktus (būsena „aptikta“, puslapyje - „Nauja - analizė
   rengiama“): ES teisės aktus ir Komisijos pasiūlymus, kurių pavadinime įvardyti viešieji pirkimai ar pirkimų direktyvos,
