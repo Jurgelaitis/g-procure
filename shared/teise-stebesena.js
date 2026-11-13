@@ -1,5 +1,5 @@
 /* ============================================================================
- * G-Procure  shared/teise-stebesena.js   (v1.3)
+ * G-Procure  shared/teise-stebesena.js   (v1.6)
  * ----------------------------------------------------------------------------
  * Pirkimų teisės stebėsenos BRANDUOLYS (window.GP_STEBESENA) - vienas visiems:
  * PP-teise modulis (sąrašas, vaizdai, paieška, peržiūrų žurnalas), administravimo
@@ -59,7 +59,9 @@
     vpt_rekomendacija:      { lt: "VPT rekomendacija",          en: "PPO recommendation" },
     teismo_isaiskinimas:    { lt: "Teismo išaiškinimas",        en: "Court interpretation" },
     organizacijos_praktika: { lt: "Organizacijos praktika",     en: "Organisation practice" },
-    teises_akto_projektas:  { lt: "Teisės akto projektas",      en: "Draft legal act" }
+    teises_akto_projektas:  { lt: "Teisės akto projektas",      en: "Draft legal act" },
+    /* ES lygmuo (2026-11-13): Europos Komisijos gairės ir komunikatai - teisiškai neprivalomi. */
+    es_gaires:              { lt: "Europos Komisijos gairės",   en: "European Commission guidance" }
   };
 
   var REZIMAI = {
@@ -86,7 +88,18 @@
     "verciu-ribos":           { lt: "Vertės ribos",                  en: "Value thresholds" },
     "salygu-aiskumas":        { lt: "Sąlygų aiškumas",               en: "Clarity of conditions" },
     "es-fondai":              { lt: "ES fondų projektai",            en: "EU-funded projects" },
-    "proporcingumas":         { lt: "Proporcingumas",                en: "Proportionality" }
+    "proporcingumas":         { lt: "Proporcingumas",                en: "Proportionality" },
+    /* ES lygmens temos (2026-11-13) */
+    "pirkimu-reforma":        { lt: "Pirkimų taisyklių reforma",     en: "Procurement rules reform" },
+    "trecios-salys":          { lt: "Trečiųjų valstybių tiekėjai ir kilmė", en: "Third-country suppliers and origin" },
+    "atsparumas":             { lt: "Tiekimo atsparumas",            en: "Supply resilience" },
+    "sutarties-keitimas":     { lt: "Sutarties keitimas",            en: "Contract modification" },
+    "sankcijos":              { lt: "Sankcijos",                     en: "Sanctions" },
+    "nacionalinis-saugumas":  { lt: "Nacionalinis saugumas",         en: "National security" },
+    "teisiu-gynimas":         { lt: "Ginčai ir teisių gynimas",      en: "Remedies" },
+    "vertinimo-kriterijai":   { lt: "Vertinimo kriterijai",          en: "Award criteria" },
+    "kibernetinis-saugumas":  { lt: "Kibernetinis saugumas",         en: "Cybersecurity" },
+    "pajegumai":              { lt: "Rėmimasis kitų pajėgumais",     en: "Reliance on other entities" }
   };
 
   /* Moduliai, į kuriuos įrašai gali rodyti. Adresai - nuo svetainės šaknies.
@@ -225,10 +238,16 @@
       pakeistas: (o.pakeistas && typeof o.pakeistas === "object") ? o.pakeistas : null,
       demo: !!o.demo,
       aiJuodrastis: !!o.aiJuodrastis,
+      /* Lygmuo - „lt“ (nacionalinė teisė) arba „es“ (ES teisė); nustato tikrink() pagal registro meta.lygmuo (2026-11-13). */
+      lygmuo: o.lygmuo === "es" ? "es" : "lt",
+      /* Teismo dokumentas, kuris nėra sprendimas: „isvada“ - generalinio advokato išvada (Teismas dar nesprendė). */
+      teismoDokumentas: o.teismoDokumentas === "isvada" ? "isvada" : null,
       klaidos: k
     };
     var D = (o.datos && typeof o.datos === "object") ? o.datos : {};
-    ["priimta", "paskelbta", "isigalioja", "aptikta"].forEach(function (l) {
+    /* taikomaNuo (2026-11-13) - taikymo pradžia, kai ji skiriasi nuo įsigaliojimo (ES aktuose - dažnai): pagal ją įrašas
+       priskiriamas „pasikeitė“ ar „įsigalios“. */
+    ["priimta", "paskelbta", "isigalioja", "taikomaNuo", "aptikta"].forEach(function (l) {
       if (D[l] == null || D[l] === "") r.datos[l] = null;
       else if (yraData(D[l])) r.datos[l] = D[l];
       else { r.datos[l] = null; k.push("data „" + l + "“ netinkamo formato (reikia YYYY-MM-DD)"); }
@@ -312,10 +331,11 @@
     if (!r.busena) { r.busena = "laukia"; }
     if (!r.rusis) r.rusis = "priimtas";
     if (!r.saltinioTipas) r.saltinioTipas = "teises_norma";
-    if (r.rusis !== "teismu_praktika" && r.rusis !== "projektas" && r.rusis !== "organizacijos_praktika" && !r.datos.isigalioja) {
+    /* Europos Komisijos gairės (es_gaires) neįsigalioja - jos paskelbiamos. */
+    if (r.rusis !== "teismu_praktika" && r.rusis !== "projektas" && r.rusis !== "organizacijos_praktika" && r.saltinioTipas !== "es_gaires" && !r.datos.isigalioja && !r.datos.taikomaNuo) {
       k.push("nenurodyta įsigaliojimo data");
     }
-    if (!r.datos.priimta && !r.datos.paskelbta && !r.datos.isigalioja) k.push("nėra nė vienos datos");
+    if (!r.datos.priimta && !r.datos.paskelbta && !r.datos.isigalioja && !r.datos.taikomaNuo) k.push("nėra nė vienos datos");
     if (!r.saltinis.url) k.push("nėra šaltinio nuorodos");
     return r;
   }
@@ -327,8 +347,15 @@
     if (I.dokumentoId != null) ks.push("dok:" + I.dokumentoId);
     if (I.nr && I.data) ks.push("nr:" + normalizuokTeksta(I.nr) + ":" + I.data);
     if (I.bylosNr) ks.push("byla:" + normalizuokTeksta(I.bylosNr));
+    if (I.celex) ks.push("celex:" + String(I.celex).toUpperCase());
     if (r.saltinis && r.saltinis.url) ks.push("url:" + r.saltinis.url.toLowerCase());
     return ks;
+  }
+
+  /* Keičiamo akto raktas: e-tar identifikatorius, o ES aktui - CELEX numeris (2026-11-13). */
+  function aktoRaktas(r) {
+    var k = r && r.keiciamasAktas;
+    return k ? (k.eTarId ? "etar:" + k.eTarId : k.celex ? "celex:" + k.celex : null) : null;
   }
 
   /* Tikrina visą registrą: normalizuoja, randa dublikatus (antras ir tolesni
@@ -353,11 +380,11 @@
        su bendra tema, bet skirtingu rekomenduojamu veiksmu. Abu pažymimi, kad
        administratorius juos suderintų - sistema pati „teisingo“ nerenka. */
     var konfliktai = [];
-    var aktyvus = irasai.filter(function (r) { return r.busena !== "archyvuota" && !r.pakeistas && !r.dublikatas && r.keiciamasAktas && r.keiciamasAktas.eTarId; });
+    var aktyvus = irasai.filter(function (r) { return r.busena !== "archyvuota" && !r.pakeistas && !r.dublikatas && aktoRaktas(r); });
     for (var a = 0; a < aktyvus.length; a++) {
       for (var b = a + 1; b < aktyvus.length; b++) {
         var x = aktyvus[a], y = aktyvus[b];
-        if (x.keiciamasAktas.eTarId !== y.keiciamasAktas.eTarId) continue;
+        if (aktoRaktas(x) !== aktoRaktas(y)) continue;
         // Skirtingi to paties akto pakeitimai, kurie susieti vienas su kitu (pvz. VPT 1S-97 ir 1S-204), - ne prieštaravimas
         if ((x.susije || []).indexOf(y.id) !== -1 || (y.susije || []).indexOf(x.id) !== -1) continue;
         var bendra = x.temos.some(function (t) { return y.temos.indexOf(t) !== -1; });
@@ -370,6 +397,8 @@
       }
     }
     var meta = (reg.meta && typeof reg.meta === "object") ? reg.meta : {};
+    /* Registro lygmuo galioja visiems jo įrašams: ES registras - meta.lygmuo „es“ (2026-11-13). */
+    if (meta.lygmuo === "es") irasai.forEach(function (r) { r.lygmuo = "es"; });
     return { irasai: irasai, klaidos: klaidos, dublikatai: dublikatai, konfliktai: konfliktai, meta: meta };
   }
 
@@ -378,12 +407,15 @@
   /* „pasikeite“ - jau galioja (arba teismo išaiškinimas / praktika su data);
      „isigalios“ - priimta, įsigalios vėliau; „projektas“ - dar nepriimta;
      „archyvas“ - archyvuota / pakeista; „nezinoma“ - neaišku (trūksta datos). */
+  /* Data, nuo kurios pokytis veikia: taikymo pradžia, jei ji nurodyta atskirai, kitaip - įsigaliojimas. */
+  function veikimoData(r) { return (r && r.datos && (r.datos.taikomaNuo || r.datos.isigalioja)) || null; }
   function skiltis(r, dabar) {
     var d = yraData(dabar) ? dabar : dienaISO(dabar);
     if (r.busena === "archyvuota" || r.pakeistas) return "archyvas";
     if (r.rusis === "projektas") return "projektas";
-    if (r.datos.isigalioja) return r.datos.isigalioja > d ? "isigalios" : "pasikeite";
-    if (r.rusis === "teismu_praktika" || r.rusis === "organizacijos_praktika") {
+    var v = veikimoData(r);
+    if (v) return v > d ? "isigalios" : "pasikeite";
+    if (r.rusis === "teismu_praktika" || r.rusis === "organizacijos_praktika" || r.saltinioTipas === "es_gaires") {
       var data = r.datos.priimta || r.datos.paskelbta;
       if (!data) return "nezinoma";
       return data > d ? "isigalios" : "pasikeite";
@@ -399,7 +431,7 @@
   }
 
   /* Rikiavimas: įsigaliosiantys - artimiausi pirmi; pasikeitę - naujausi pirmi. */
-  function svarbiData(r) { return r.datos.isigalioja || r.datos.priimta || r.datos.paskelbta || ""; }
+  function svarbiData(r) { return veikimoData(r) || r.datos.priimta || r.datos.paskelbta || ""; }
   /* Sutapus datai tvarka nepriklauso nuo eilės registre (2026-11-04): vėliau paskelbtas pirmas, tada pagal pavadinimą - atvertas pirmas įrašas
      visada tas pats. „perziurai“ („Ką peržiūrėti?“, reikia `dabar`): artimiausi įsigaliojimai, tada jau galiojantys (naujausi pirmi),
      tada įrašai be datos, darbai prižiūrėtojui ir pabaigoje projektai. */
@@ -448,8 +480,26 @@
                reiksme: t("dar nepriimta - gali keistis arba likti nepriimta", "not adopted yet - may change or fail") + (eiga ? t("; eiga: ", "; status: ") + eiga : ""), ateitis: false };
     }
     if (r.rusis === "teismu_praktika") {
+      /* Generalinio advokato išvada - ne sprendimas; ES Teisingumo Teismas priima sprendimus, ne nutartis (2026-11-13). */
+      if (r.teismoDokumentas === "isvada") {
+        return { zyma: t("Išvada", "Opinion"), data: r.datos.priimta || r.datos.paskelbta,
+                 reiksme: t("generalinio advokato išvada - Teisingumo Teismas dar nepriėmė sprendimo", "Advocate General's opinion - the Court has not ruled yet"), ateitis: false };
+      }
+      if (r.lygmuo === "es") {
+        return { zyma: t("Sprendimas", "Judgment"), data: r.datos.priimta || r.datos.paskelbta,
+                 reiksme: t("Teisingumo Teismo išaiškinimas, ne nauja norma", "Court of Justice interpretation, not a new norm"), ateitis: false };
+      }
       return { zyma: t("Nutartis", "Ruling"), data: r.datos.priimta || r.datos.paskelbta,
                reiksme: t("teismo išaiškinimas, ne nauja norma", "court interpretation, not a new norm"), ateitis: false };
+    }
+    if (r.saltinioTipas === "es_gaires" && !veikimoData(r)) {
+      return { zyma: t("Paskelbta", "Published"), data: r.datos.paskelbta || r.datos.priimta,
+               reiksme: t("Europos Komisijos gairės - teisiškai neprivalomos", "European Commission guidance - not legally binding"), ateitis: false, gaires: true };
+    }
+    if (r.datos.taikomaNuo) {
+      var bus = r.datos.taikomaNuo > d;
+      return { zyma: bus ? t("Bus taikoma nuo", "Applies from") : t("Taikoma nuo", "Applied since"), data: r.datos.taikomaNuo,
+               reiksme: r.datos.taikoma || (r.datos.isigalioja ? t("įsigaliojo ", "in force since ") + r.datos.isigalioja : ""), ateitis: bus, taikymas: true };
     }
     if (r.datos.isigalioja) {
       var ateitis = r.datos.isigalioja > d;
@@ -465,9 +515,9 @@
      naujausi pirmi. Dokumentas, jo redakcija ir konkretus pokytis - susiję, bet skirtingi objektai:
      grąžinami pokyčių įrašai, ne sujungta kortelė. */
   function dokumentoIstorija(r, irasai, dabar) {
-    var e = r.keiciamasAktas && r.keiciamasAktas.eTarId;
+    var e = aktoRaktas(r);
     if (!e) return [];
-    return rikiuok(irasai.filter(function (x) { return x.id !== r.id && x.keiciamasAktas && x.keiciamasAktas.eTarId === e; }), "naujausi")
+    return rikiuok(irasai.filter(function (x) { return x.id !== r.id && aktoRaktas(x) === e; }), "naujausi")
       .map(function (x) { return { id: x.id, pavadinimas: x.pavadinimas, data: svarbiausiaData(x, dabar, "lt"), busena: x.busena, rusis: x.rusis }; });
   }
 
@@ -539,10 +589,11 @@
       else if (lygis === "aktualu") pr.unshift(t("Įrašas taikomas visiems pirkimo būdams, objektams ir etapams", "The entry applies to all procedures, objects and stages"));
       if (r.rusis === "projektas" && lygis === "aktualu") lygis = "galimai";
     }
-    if (yraData(c.skelbimoData) && r.datos.isigalioja) {
-      if (c.skelbimoData < r.datos.isigalioja) {
-        pr.push(t("Planuojama skelbti " + c.skelbimoData + " - anksčiau nei įsigalioja (" + r.datos.isigalioja + ")" + (turiPereinamasias(r) ? "; žr. pereinamąsias nuostatas" : ""),
-                  "Planned publication " + c.skelbimoData + " is before entry into force (" + r.datos.isigalioja + ")" + (turiPereinamasias(r) ? "; see transitional provisions" : "")));
+    var veik = veikimoData(r);
+    if (yraData(c.skelbimoData) && veik) {
+      if (c.skelbimoData < veik) {
+        pr.push(t("Planuojama skelbti " + c.skelbimoData + " - anksčiau nei " + (r.datos.taikomaNuo ? "pradedama taikyti" : "įsigalioja") + " (" + veik + ")" + (turiPereinamasias(r) ? "; žr. pereinamąsias nuostatas" : ""),
+                  "Planned publication " + c.skelbimoData + " is before " + (r.datos.taikomaNuo ? "application" : "entry into force") + " (" + veik + ")" + (turiPereinamasias(r) ? "; see transitional provisions" : "")));
         if (lygis === "aktualu") lygis = "galimai";
       } else {
         pr.push(t("Įsigalioja iki planuojamo skelbimo - taikoma", "In force before planned publication - applies"));
@@ -660,7 +711,9 @@
     var p = patikimumas(tikrinta, null, dabar, L), n = p.senumasDienomis;
     var kada = !p.registrasAtnaujintas ? t("Registro patikros data nenurodyta.", "Registry check date not specified.")
       : t("Registras tikrintas ", "Registry checked ") + p.registrasAtnaujintas + " (" + (n === 0 ? t("šiandien", "today") : t("prieš " + n + " d.", n + " days ago")) + ").";
-    var kiek = t("Tai " + p.irasu + " parinktų įrašų, ne visa pirkimų teisė.", "These are " + p.irasu + " selected entries, not all procurement law.");
+    var es = !!(tikrinta.meta && tikrinta.meta.lygmuo === "es");
+    var kiek = es ? t("Tai " + p.irasu + " parinktų įrašų, ne visa ES pirkimų teisė.", "These are " + p.irasu + " selected entries, not all EU procurement law.")
+                  : t("Tai " + p.irasu + " parinktų įrašų, ne visa pirkimų teisė.", "These are " + p.irasu + " selected entries, not all procurement law.");
     var kas = (p.laikotarpis ? t("Laikotarpis: ", "Period: ") + p.laikotarpis.nuo + " - " + p.laikotarpis.iki + ". " : "") + (p.apreptis ? t("Apima: ", "Covers: ") + p.apreptis + " " : "");
     return { kada: kada, kiek: kiek, kas: kas.trim(), neapima: p.neapima ? t("Neapima: ", "Does not cover: ") + p.neapima : t("Ko registras neapima, nenurodyta.", "What the registry does not cover is not specified.") };
   }
@@ -700,7 +753,7 @@
   /* Įrašo turinio parašas: peržiūros žyma galioja tam turiniui, kurį žmogus matė (2026-11-04). Tik tai, ką jis skaito. */
   function irasoParasas(r) {
     var t = JSON.stringify([r.pavadinimas, r.santrauka, r.kasPasikeite, r.kamAktualu, r.veiksmas, r.pereinamosios, r.rusis, r.rezimas,
-      r.datos && [r.datos.priimta, r.datos.paskelbta, r.datos.isigalioja, r.datos.taikoma],
+      r.datos && [r.datos.priimta, r.datos.paskelbta, r.datos.isigalioja, r.datos.taikoma].concat(r.datos.taikomaNuo ? [r.datos.taikomaNuo] : []),
       r.saltinis && [r.saltinis.url, r.saltinis.vieta], r.istrauka, r.palyginimas]);
     var h = 5381;
     for (var i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
@@ -801,9 +854,9 @@
     var d = yraData(dabar) ? dabar : dienaISO(dabar), s = skiltis(r, d), sd = svarbiausiaData(r, d, L), k, tx;
     if (s === "archyvas") { k = "arch"; tx = t("Archyvuota", "Archived"); }
     else if (s === "projektas") { k = "pro"; tx = t("Projektas - dar nepriimta", "Draft - not adopted"); }
-    else if (r.rusis === "teismu_praktika") { k = "tei"; tx = sd.data ? t("Nutartis ", "Ruling ") + sd.data : t("Nutartis", "Ruling"); }
-    else if (s === "isigalios") { k = "busima"; tx = t("Įsigalios po ", "In force in ") + dienuSkirtumas(d, sd.data) + t(" d.", " days"); }
-    else if (s === "pasikeite") { k = "galioja"; tx = t("Galioja", "In force"); }
+    else if (r.rusis === "teismu_praktika") { k = "tei"; tx = sd.data ? sd.zyma + " " + sd.data : sd.zyma; }
+    else if (s === "isigalios") { k = "busima"; tx = (sd.taikymas ? t("Bus taikoma po ", "Applies in ") : t("Įsigalios po ", "In force in ")) + dienuSkirtumas(d, sd.data) + t(" d.", " days"); }
+    else if (s === "pasikeite") { k = "galioja"; tx = sd.gaires ? t("Gairės paskelbtos", "Guidance published") : sd.taikymas ? t("Taikoma", "Applied") : t("Galioja", "In force"); }
     else { k = "arch"; tx = t("Data nenurodyta", "Date not specified"); }
     var h = '<span class="gps-zyma gps-zyma--' + k + '">' + esc(tx) + '</span>';
     if (r.busena === "aptikta") h += '<span class="gps-zyma gps-zyma--nauja">' + esc(t("Nauja - analizė rengiama", "New - analysis in progress")) + '</span>';
@@ -849,8 +902,11 @@
       h += (href ? '<a tabindex="-1" href="' + esc(href) + '"' : '<span') + ' class="' + kl + '" data-id="' + esc(x.r.id) + '" style="left:' + x.pos.toFixed(2) + '%;--i:' + x.eile + '" title="' + esc(tit) + '">' + esc(nr) + (href ? '</a>' : '</span>');
     });
     h += '</div>';
-    if (o.rodytiZymes) h += '<div class="gps-lj__leg" aria-hidden="true"><span><i class="gps-lj__k gps-lj__t--akt"></i>' + esc(L === "en" ? "Legal acts and PPO documents - entry into force" : "Teisės aktai ir VPT dokumentai - įsigaliojimo data") + '</span>' +
-      '<span><i class="gps-lj__k gps-lj__t--tei"></i>' + esc(L === "en" ? "Case law - date of ruling" : "Teismų praktika - nutarties data") + '</span>' +
+    var es = o.lygmuo === "es";
+    if (o.rodytiZymes) h += '<div class="gps-lj__leg" aria-hidden="true"><span><i class="gps-lj__k gps-lj__t--akt"></i>' + esc(es ? (L === "en" ? "EU legal acts and Commission guidance - date of application" : "ES teisės aktai ir Komisijos gairės - taikymo pradžia")
+        : (L === "en" ? "Legal acts and PPO documents - entry into force" : "Teisės aktai ir VPT dokumentai - įsigaliojimo data")) + '</span>' +
+      '<span><i class="gps-lj__k gps-lj__t--tei"></i>' + esc(es ? (L === "en" ? "Court of Justice - date of judgment or opinion" : "Teisingumo Teismas - sprendimo ar išvados data")
+        : (L === "en" ? "Case law - date of ruling" : "Teismų praktika - nutarties data")) + '</span>' +
       '<span><i class="gps-lj__k gps-lj__k--ateitis"></i>' + esc(L === "en" ? "Future" : "Ateitis") + '</span></div>';
     return h;
   }
@@ -868,7 +924,7 @@
       if (s === "archyvas" || s === "nezinoma") return;
       if (s === "projektas") r.projektai++;
       else if (x.rusis === "teismu_praktika") r.teismai++;
-      else if (s === "isigalios") { r.isigalios++; if (!r.artimiausia || x.datos.isigalioja < r.artimiausia) r.artimiausia = x.datos.isigalioja; }
+      else if (s === "isigalios") { r.isigalios++; var vd = veikimoData(x) || x.datos.priimta || x.datos.paskelbta; if (vd && (!r.artimiausia || vd < r.artimiausia)) r.artimiausia = vd; }
       else r.galioja++;
     });
     return r;
@@ -1223,7 +1279,7 @@
     esc: esc, saugusAdresas: saugusAdresas, normalizuokTeksta: normalizuokTeksta,
     yraData: yraData, dienaISO: dienaISO, dienuSkirtumas: dienuSkirtumas, datosTekstas: datosTekstas,
     normalizuok: normalizuok, tikrink: tikrink, dublikatoRaktai: dublikatoRaktai,
-    skiltis: skiltis, reikiaPerziureti: reikiaPerziureti, turiPereinamasias: turiPereinamasias, svarbiData: svarbiData, rikiuok: rikiuok, svarbiausiaData: svarbiausiaData, dokumentoIstorija: dokumentoIstorija,
+    skiltis: skiltis, veikimoData: veikimoData, aktoRaktas: aktoRaktas, reikiaPerziureti: reikiaPerziureti, turiPereinamasias: turiPereinamasias, svarbiData: svarbiData, rikiuok: rikiuok, svarbiausiaData: svarbiausiaData, dokumentoIstorija: dokumentoIstorija,
     aktualumas: aktualumas, filtruok: filtruok, tekstasPaieskai: tekstasPaieskai,
     rinkinioBusena: rinkinioBusena, patikimumas: patikimumas, apreptiesTekstas: apreptiesTekstas, portaloIrasai: portaloIrasai,
     perziuros: perziuros, perziuruSkaitymas: perziuruSkaitymas, irasoParasas: irasoParasas, perziurosBusena: perziurosBusena, pazymekPerziureta: pazymekPerziureta, atsaukPerziura: atsaukPerziura,
