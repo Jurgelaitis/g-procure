@@ -29,8 +29,9 @@
   var ROM = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
   // kriterijaus antraštė eilutės pradžioje: „Pirmas kriterijus: ...“, „I kriterijus – ...“, „1 kriterijus. ...“ (ne „I kriterijaus (C) balai“)
   var ANTRASTE = /^\s*(?:(pirmas|antras|trecias|ketvirtas|penktas|sestas|septintas|astuntas|devintas|desimtas)|(x|ix|viii|vii|vi|v|iv|iii|ii|i)|(\d{1,2}))\s*(?:-?asis)?\s+kriterijus(?![a-z])\s*[:.\-]?\s*/;
-  // svoris: „XA = 82“, „X = 60 balų“, „Y = 15“, „XC = 2,5“ (ne formulės „S = C + T + M“ ir ne balų lentelės „D=0“ - jos už kriterijaus ribų)
-  var SVORIS = /(?:^|[^a-z0-9])[a-z]{1,3}\s*=\s*(\d{1,3}(?:[.,]\d{1,2})?)(?![\d.,])/;
+  // svoris: „XA = 82“, „X = 60 balų“, „Y = 15“, „XC = 2,5“, su indeksu - „Y1 = 15“ (taip svorius žymi G-Procure ekonominio naudingumo
+  // skaičiuoklės priedas, nuo 2026-11-12); ne formulės „S = C + T + M“ ir ne balų lentelės „D=0“ - jos už kriterijaus ribų
+  var SVORIS = /(?:^|[^a-z0-9])[a-z]{1,3}\d{0,2}\s*=\s*(\d{1,3}(?:[.,]\d{1,2})?)(?![\d.,])/;
   var VIEN_SKAICIUS = /^\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|proc\.?|balu|balai|bal\.)?\s*$/;
   var KAINA = /kain/, SANAUDOS = /sanaud|gyvavimo ciklo/;
   var KKS = /kainos ir kokybes santyk/, SKS = /sanaudu ir kokybes santyk/;
