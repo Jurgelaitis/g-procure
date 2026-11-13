@@ -903,10 +903,12 @@ async function testaiPatikra1104(){
     tiesa(/nenurodyta/.test(S.apreptiesTekstas(S.tikrink({ meta: {}, irasai: [] }), "2026-10-01", "lt").kada), "be datos");
     tiesa(/Does not cover/.test(S.apreptiesTekstas(t, "2026-10-04", "en").neapima), "EN");
     lygu([S.rinkinioBusena({ patikrinta: "2026-01-01" }, "2026-02-15").pasenes, S.rinkinioBusena({ patikrinta: "2026-01-01" }, "2026-02-16").pasenes], [false, true], "45 d. riba");
-    const P = await stebesena(); P.w.PPTEISE.nustatykDabar("2026-11-14");
+    /* Diena - registro patikros diena (ne fiksuota data): savaitinė užduotis patikros datą keičia kas pirmadienį, o su fiksuota
+       2026-11-14 testas būtų kritęs nuo pirmos vėlesnės patikros („prieš -2 d.“) ir užduotis nieko nebūtų paskelbusi. */
+    const P = await stebesena(); P.w.PPTEISE.nustatykDabar(P.w.PPTEISE.registras().meta.patikrinta);
     for (const v of ["pasikeite", "isigalios", "perziureti"]) {
       P.w.PPTEISE.vaizdas(v); const e = P.d.getElementById("apreptis");
-      tiesa(matomas(e) && /Registras tikrintas \d{4}-\d{2}-\d{2} \(prieš \d+ d\.\)\. Tai \d+ parinktų įrašų, ne visa pirkimų teisė\./.test(tekstas(e)) && /Laikotarpis:/.test(tekstas(e)) && /Neapima:/.test(tekstas(e)), v + ": " + tekstas(e));
+      tiesa(matomas(e) && /Registras tikrintas \d{4}-\d{2}-\d{2} \((šiandien|prieš \d+ d\.)\)\. Tai \d+ parinktų įrašų, ne visa pirkimų teisė\./.test(tekstas(e)) && /Laikotarpis:/.test(tekstas(e)) && /Neapima:/.test(tekstas(e)), v + ": " + tekstas(e));
     }
     P.f.remove();
   });
@@ -1333,11 +1335,17 @@ async function testaiLygmuo1113(){
 
   await testas("ES registras: be klaidų ir dublikatų, kiekvienas įrašas su CELEX numeriu, EUR-Lex nuoroda, pažodine ištrauka ir trumpu pavadinimu; ribos sutampa su bendru ribų failu; ESTT įrašų nacionaliniame registre nebėra", async () => {
     lygu([esReg.meta.lygmuo, esReg.klaidos, esReg.dublikatai, esReg.konfliktai], ["es", [], [], []], "registras");
-    tiesa(esReg.irasai.length >= 15 && S.yraData(esReg.meta.patikrinta) && esReg.meta.laikotarpis && /ES/.test(esReg.meta.apreptis) && /nereiškia, kad jo nebuvo/.test(esReg.meta.neapima), "meta");
+    /* Savaitinė užduotis prideda faktų įrašus (būsena „aptikta“) be analizės - turinio reikalavimai taikomi tik išanalizuotiems įrašams. */
+    const esAnal = esReg.irasai.filter(r => r.busena !== "aptikta"), esFakt = esReg.irasai.filter(r => r.busena === "aptikta");
+    tiesa(esAnal.length >= 15 && S.yraData(esReg.meta.patikrinta) && esReg.meta.laikotarpis && /ES/.test(esReg.meta.apreptis) && /nereiškia, kad jo nebuvo/.test(esReg.meta.neapima), "meta");
     const ltId = new Set(ltReg.irasai.map(r => r.id));
     esReg.irasai.forEach(r => {
       tiesa(!ltId.has(r.id) && r.lygmuo === "es", r.id + ": id unikalus tarp registrų");
       const c = r.identifikatoriai.celex; tiesa(/^[356]\d{4}[A-Z]{1,2}\d{4,5}$/.test(c || "") && r.saltinis.url === "https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:" + c, r.id + ": CELEX ir nuoroda " + c);
+      tiesa(!/—/.test(r.pavadinimas || "") && r.rezimas.length, r.id + ": pavadinimas ir režimas");
+    });
+    esFakt.forEach(r => tiesa(!r.santrauka && !r.kamAktualu && !r.veiksmas && !r.istrauka && !r.temos.length && !r.moduliai.length && !r.aiJuodrastis, r.id + ": faktų įrašas be analizės"));
+    esAnal.forEach(r => {
       tiesa(r.trumpai && r.trumpai.length <= 90 && r.santrauka.length > 80 && r.kamAktualu && r.istrauka && r.istrauka.tekstas.length > 20 && r.istrauka.vieta && r.rezimas.length, r.id + ": turinys");
       tiesa(r.busena === "laukia" && S.yraData(r.patikrinta) && r.busenosIstorija.length >= 2, r.id + ": būsena ir istorija");
       r.temos.forEach(t => tiesa(S.TEMOS[t], r.id + ": tema " + t)); r.moduliai.forEach(m => tiesa(S.MODULIAI[m.modulis] && m.kas, r.id + ": modulis"));
@@ -1346,7 +1354,7 @@ async function testaiLygmuo1113(){
       if (r.rusis === "teismu_praktika") tiesa(/^C-\d+\/\d\d/.test(r.identifikatoriai.bylosNr) && S.yraData(r.datos.priimta) && !S.veikimoData(r), r.id + ": byla");
       if (r.rusis === "priimtas") tiesa(S.yraData(r.datos.priimta) && S.yraData(r.datos.paskelbta) && S.yraData(r.datos.isigalioja) && S.yraData(r.datos.taikomaNuo) && r.datos.taikomaNuo >= r.datos.isigalioja && r.datos.isigalioja > r.datos.paskelbta, r.id + ": datos");
     });
-    const isv = esReg.irasai.filter(r => r.teismoDokumentas === "isvada"); tiesa(isv.length >= 1 && isv.every(r => /^6\d{4}CC/.test(r.identifikatoriai.celex) && r.veiksmuNereikia && /ne sprendimas/.test(r.santrauka)), "išvados");
+    const isv = esAnal.filter(r => r.teismoDokumentas === "isvada"); tiesa(isv.length >= 1 && isv.every(r => /^6\d{4}CC/.test(r.identifikatoriai.celex) && r.veiksmuNereikia && /ne sprendimas/.test(r.santrauka)), "išvados");
     const rib = await (await fetch("../shared/thresholds.js?cb=" + Date.now())).text(), s1 = esReg.irasai.find(r => r.id === "es-2025-2150-ribos-sektorine"), s2 = esReg.irasai.find(r => r.id === "es-2025-2152-ribos-klasikine");
     tiesa(/PI:\s*\{[^}]*intl_goods: 432000[^}]*intl_works: 5404000/.test(rib) && /432 000 EUR/.test(s1.santrauka) && /5 404 000 EUR/.test(s1.santrauka) && s1.datos.taikomaNuo === "2026-01-01", "sektorinė riba = thresholds.js");
     tiesa(/VPI:\s*\{[^}]*intl_goods: 216000, intl_goods_cva: 140000[^}]*intl_works: 5404000/.test(rib) && /216 000 EUR/.test(s2.santrauka) && /140 000 EUR/.test(s2.santrauka), "klasikinė riba = thresholds.js");
