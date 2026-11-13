@@ -115,6 +115,7 @@
     paskelbimas: { lt: "Paskelbimo data", en: "Publication date" },
     sutartiesData: { lt: "Planuojama sutarties sudarymo data", en: "Planned contract signing date" },
     grafikas: { lt: "Pirkimo grafikas", en: "Procurement schedule" },
+    vertinimas: { lt: "Vertinimo metodika", en: "Evaluation methodology" },
     pasiulymuTerminas: { lt: "Pasiūlymų terminas", en: "Tender deadline" },
     iniciatorius: { lt: "Iniciatorius", en: "Initiator" },
     organizatorius: { lt: "Organizatorius", en: "Organiser" },
@@ -170,6 +171,7 @@
       dalys: null,                        // null - nenurodyta, [] - neskaidomas, [{ pavadinimas, verte }] - dalys
       trukmeMen: null, pradzia: "", paskelbimas: "", sutartiesData: "",   // sutartiesData - planuojama sutarties sudarymo data (2026-11-09)
       grafikas: null,                      // pirkimo grafikas iš PP-graphs (2026-11-09; rašo tik irasykGrafika) - žr. grafikoForma
+      vertinimas: null,                    // pasiūlymų vertinimo metodika iš ekonominio naudingumo skaičiuoklės (2026-11-13; rašo tik irasykVertinima) - žr. vertinimoForma
       pasiulymuTerminas: "",               // pasiūlymų ar paraiškų terminas „2026-10-02T15:00“ (Vilniaus laikas)
       iniciatorius: "", organizatorius: "", organizatoriausKontaktai: "",
       kriterijus: "", zaliasis: "", nacsaugumas: "", kvalifikacija: "", cpo: "",   // 2026-11-09 - žr. SPRENDIMAI
@@ -213,6 +215,7 @@
       .map(function (d) { return Object.assign({}, d, { pavadinimas: tekstas(d.pavadinimas), verte: skaicius(d.verte) }); });
     o.archyvuota = o.archyvuota === true;
     o.grafikas = grafikoForma(o.grafikas);
+    o.vertinimas = vertinimoForma(o.vertinimas);
     o.veiksmai = Array.isArray(o.veiksmai) ? o.veiksmai.filter(function (v) { return v && typeof v === "object" && tekstas(v.raktas); })
       .map(function (v) { return Object.assign({}, v, { raktas: tekstas(v.raktas), saltinis: tekstas(v.saltinis), tekstas: tekstas(v.tekstas),
         kontekstas: tekstas(v.kontekstas), atlikta: v.atlikta === true, data: tekstas(v.data) || o.atnaujinta }); }) : [];
@@ -316,6 +319,68 @@
       var v = datos && tekstas(datos[f]);
       if (v && /^\d{4}-\d{2}-\d{2}$/.test(v) && arData(v)) k[f] = v;
     });
+    return issaugok(k, o);
+  }
+
+  /* Pasiūlymų vertinimo metodika (2026-11-13, naudotojo sprendimas: ekonominio naudingumo skaičiuoklės kriterijų rinkinys perduodamas į
+     pirkimo kortelę ir Pirkimo sąlygų generatorių automatiškai - iki tol Word priedą generatoriuje reikėjo įkelti ranka). Sudaro skaičiuoklė,
+     įrašo tik žmogaus veiksmu (irasykVertinima); PP-salygos iš jos nustato SPS vertinimo kriterijų ir sudaro priedą su galutiniu numeriu.
+       { sudaryta: ISO, saltinis, kriterijus: SPRENDIMAI.kriterijus id | "", kriterijai: [{ zymuo, pavadinimas, svoris | null }],
+         minKokybe: skaičius | null, priedas: { priedas, pavadinimas, pirkimas, blokai: [...] } - priedo turinys (shared/vertinimo-priedas.js) }
+     Čia tikrinama tik sandara ir dydis (priedo blokus pagal savo taisykles tikrina juos naudojantis modulis - GP_VERTINIMO_PRIEDAS.forma);
+     netinkama sandara - null (nenurodyta). */
+  var VERTINIMO_DYDIS = 200000;          // priedo turinio riba ženklais (įprastas priedas - keli tūkstančiai)
+  function vertinimoForma(v) {
+    if (!v || typeof v !== "object" || !Array.isArray(v.kriterijai)) return null;
+    var kr = v.kriterijai.slice(0, 20).filter(function (x) { return x && typeof x === "object" && tekstas(x.pavadinimas); }).map(function (x) {
+      return { zymuo: tekstas(x.zymuo).slice(0, 8), pavadinimas: tekstas(x.pavadinimas).slice(0, 300), svoris: skaicius(x.svoris) };
+    });
+    if (!kr.length) return null;
+    var kod = tekstas(v.kriterijus), min = skaicius(v.minKokybe), pr = null;
+    if (v.priedas && typeof v.priedas === "object" && Array.isArray(v.priedas.blokai) && v.priedas.blokai.length) {
+      try { if (JSON.stringify(v.priedas).length <= VERTINIMO_DYDIS) pr = JSON.parse(JSON.stringify(v.priedas)); } catch (e) { pr = null; }
+    }
+    var out = { sudaryta: tekstas(v.sudaryta), saltinis: tekstas(v.saltinis).slice(0, 60),
+      kriterijus: SPRENDIMAI.kriterijus.some(function (x) { return x.id === kod; }) ? kod : "",
+      kriterijai: kr, minKokybe: min !== null && min > 0 ? min : null, priedas: pr };
+    // Pirkimo objekto dalys (nuo 2026-11-13): kai dalims nustatyti atskiri kriterijų rinkiniai - kiekvienos dalies kriterijus ir kriterijai
+    // (bent dvi tinkamos dalys, ne daugiau kaip 12; kitaip lauko nėra). Bendras `kriterijus` tada gali būti tuščias - dalių kriterijai skiriasi.
+    if (Array.isArray(v.dalys) && v.dalys.length >= 2) {
+      var dal = v.dalys.slice(0, 12).filter(function (x) { return x && typeof x === "object" && Array.isArray(x.kriterijai); }).map(function (x) {
+        var dk = tekstas(x.kriterijus), dm = skaicius(x.minKokybe);
+        return { nr: tekstas(x.nr).slice(0, 8), pavadinimas: tekstas(x.pavadinimas).slice(0, 200),
+          kriterijus: SPRENDIMAI.kriterijus.some(function (y) { return y.id === dk; }) ? dk : "",
+          kriterijai: x.kriterijai.slice(0, 20).filter(function (y) { return y && typeof y === "object" && tekstas(y.pavadinimas); }).map(function (y) {
+            return { zymuo: tekstas(y.zymuo).slice(0, 8), pavadinimas: tekstas(y.pavadinimas).slice(0, 300), svoris: skaicius(y.svoris) }; }),
+          minKokybe: dm !== null && dm > 0 ? dm : null };
+      }).filter(function (x) { return x.kriterijai.length; });
+      if (dal.length >= 2) out.dalys = dal;
+    }
+    return out;
+  }
+  /* Įrašymo laiko žyma (ISO, UTC) -> vietinė data „YYYY-MM-DD“: UTC data naktį (00-03 val. Lietuvos laiku) būtų vakarykštė */
+  function irasoData(iso) {
+    var d = new Date(iso);
+    if (!iso || isNaN(d)) return "";
+    var p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  }
+  /* Trečia vieta (po pridekVeiksmus ir irasykGrafika), kur modulis keičia esamą kortelę: tik vertinimo metodika ir, jei ji nurodo, vertinimo
+     kriterijus (kortelės sprendimas `kriterijus` - kad jis neprieštarautų metodikai). Kiti laukai neliečiami. Kviečiama tik žmogui patvirtinus. */
+  function irasykVertinima(id, vertinimas, o) {
+    var k = gauk(id, o);
+    if (!k) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė nerasta" } };
+    var v = vertinimoForma(vertinimas);
+    if (!v) return { ok: false, r: { ok: false, kodas: "kita", klaida: "vertinimo metodikoje nėra kriterijų" } };
+    k.vertinimas = v;
+    if (v.kriterijus) k.kriterijus = v.kriterijus;
+    return issaugok(k, o);
+  }
+  /* Vertinimo metodikos pašalinimas iš kortelės (kortelių puslapio mygtukas; vertinimo kriterijus lieka - tai atskiras kortelės sprendimas) */
+  function salinkVertinima(id, o) {
+    var k = gauk(id, o);
+    if (!k) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė nerasta" } };
+    k.vertinimas = null;
     return issaugok(k, o);
   }
 
@@ -528,6 +593,19 @@
     if (SPRENDIMAI[laukas]) return pav(SPRENDIMAI[laukas], v, l) || String(v);
     if (laukas === "vykdytojas") { var x = vykdytojas(v); return x ? x.pavadinimas : String(v); }
     if (laukas === "trukmeMen") return v + (l === "en" ? " mo." : " mėn.");
+    if (laukas === "vertinimas") {
+      if (!v || !Array.isArray(v.kriterijai)) return "";
+      var kn = v.kriterijai.length, su = v.kriterijai.filter(function (x) { return x.svoris !== null && x.svoris !== undefined; });
+      var suma = su.length === kn ? Math.round(su.reduce(function (a, x) { return a + x.svoris; }, 0) * 100) / 100 : null;
+      var kp = v.kriterijus ? pav(SPRENDIMAI.kriterijus, v.kriterijus, l) : "";
+      if (Array.isArray(v.dalys) && v.dalys.length >= 2) {      // dalims - atskiri rinkiniai: „..., 3 dalys (kriterijų: 3, 3 ir 4)“
+        var dn = v.dalys.length, sk = v.dalys.map(function (x) { return (x.kriterijai || []).length; });
+        var skT = sk.slice(0, -1).join(", ") + (l === "en" ? " and " : " ir ") + sk[sk.length - 1];
+        return (kp ? kp + ", " : "") + (l === "en" ? dn + " lots (criteria: " + skT + ")" : dn + (dn % 10 >= 2 && dn % 10 <= 9 && (dn % 100 < 10 || dn % 100 >= 20) ? " dalys" : " dalių") + " (kriterijų: " + skT + ")");
+      }
+      return (kp ? kp + ", " : "") + (l === "en" ? kn + (kn === 1 ? " criterion" : " criteria") : kn + " kriterij" + (kn % 10 === 1 && kn % 100 !== 11 ? "us" : kn % 10 >= 2 && kn % 10 <= 9 && (kn % 100 < 10 || kn % 100 >= 20) ? "ai" : "ų"))
+        + (suma !== null && kn > 1 ? (l === "en" ? " (weights total " : " (svorių suma ") + String(suma).replace(".", l === "en" ? "." : ",") + ")" : "");
+    }
     if (laukas === "grafikas") {
       if (!v || !Array.isArray(v.etapai)) return "";
       var vk = v.etapai.filter(function (e) { return e.nuo || e.iki; });
@@ -1242,6 +1320,7 @@
     tuscia: tuscia, normalizuok: normalizuok, sandara: sandara,
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
     irasykGrafika: irasykGrafika, grafikoForma: grafikoForma,
+    irasykVertinima: irasykVertinima, salinkVertinima: salinkVertinima, vertinimoForma: vertinimoForma, irasoData: irasoData,
     pradekIsNaujo: pradekIsNaujo,
     naudokSaugykla: naudokSaugykla,
     tikrink: tikrink, pastabos: pastabos,
