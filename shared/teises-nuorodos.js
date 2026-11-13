@@ -244,6 +244,16 @@
       PI: { a: "PI", s: 64, d: 8 }, VPI: { a: "VPI", s: 55, d: 8 } },
     gyvavimo_ciklas: { tikrinta: "2026-10-26", apie: "gyvavimo ciklo sąnaudos",
       PI: { a: "PI", s: 65 }, VPI: { a: "VPI", s: 56 } },
+    // Gyvavimo ciklo sąnaudos ir išrinkimas pagal sąnaudas (PP-cost-benefit skaičiuoklė nuo 2026-11-12; PĮ 64 str. 1 d. 2 p. ir 65 str.,
+    // VPĮ 55 str. 1 d. 2 p. ir 56 str. perskaityti e-tar 2026-11-12 - dalys sutampa)
+    en_sanaudos: { tikrinta: "2026-11-12", apie: "ekonomiškai naudingiausias pasiūlymas išrenkamas pagal sąnaudas, kurios apskaičiuojamos pagal gyvavimo ciklo sąnaudų metodą",
+      PI: { a: "PI", s: 64, d: 1, p: 2 }, VPI: { a: "VPI", s: 55, d: 1, p: 2 } },
+    gcs_isoriniai: { tikrinta: "2026-11-12", apie: "gyvavimo ciklo sąnaudos gali apimti išlaidas, susijusias su išoriniais aplinkos veiksniais (pvz., šiltnamio efektą sukeliančių dujų išmetimu), jeigu įmanoma nustatyti ir patikrinti tokių išlaidų piniginę vertę",
+      PI: { a: "PI", s: 65, d: 1, p: 2 }, VPI: { a: "VPI", s: 56, d: 1, p: 2 } },
+    gcs_duomenys: { tikrinta: "2026-11-12", apie: "ketinant vertinti sąnaudas pagal gyvavimo ciklo sąnaudų metodą, pirkimo dokumentuose nurodoma, kokius duomenis pasiūlyme turi pateikti tiekėjas ir koks metodas bus taikomas vertinant gyvavimo ciklo sąnaudas pagal tiekėjo pateiktus duomenis",
+      PI: { a: "PI", s: 65, d: 2 }, VPI: { a: "VPI", s: 56, d: 2 } },
+    gcs_metodo_salygos: { tikrinta: "2026-11-12", apie: "metodas, pagal kurį vertinamos su išoriniais aplinkos veiksniais susijusios sąnaudos, turi būti pagrįstas objektyviai patikrinamais ir nediskriminaciniais kriterijais, informaciją apie jį turi galėti gauti visi suinteresuoti subjektai, o prašomus duomenis pareigingas tiekėjas turi gebėti pateikti įprastomis pastangomis",
+      PI: { a: "PI", s: 65, d: 3 }, VPI: { a: "VPI", s: 56, d: 3 } },
     nd_be_etapu: { tikrinta: "2026-10-26", apie: "supaprastinto pirkimo ir socialinių bei kitų specialiųjų paslaugų tarptautinio pirkimo atvejais neskelbiamų derybų sutartis gali būti sudaroma nesilaikant derybų etapų ir kitų procedūrų bei sutarties turinio reikalavimų",
       PI: { a: "PI", s: 80, d: 2 }, VPI: { a: "VPI", s: 72, d: 3 } },
 
