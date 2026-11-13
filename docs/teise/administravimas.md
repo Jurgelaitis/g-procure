@@ -1,14 +1,15 @@
 # Pirkimų teisės stebėsena - administravimo procesas
 
-Administravimo aplinka: `PP-teise/admin.html`. Būsena 2026-11-07.
+Administravimo aplinka: `PP-teise/admin.html` (ES teisės registrui - `PP-teise/admin.html?lygmuo=es`). Būsena 2026-11-13.
 
 ## 1. Kas veikia ir kur gyvena duomenys
 
 | Kas | Kur | Pastaba |
 |---|---|---|
-| Bendras registras | `PP-teise/duomenys/registras.json` (repozitorija) | Vienintelis tiesos šaltinis, kurį mato visi naudotojai |
+| Bendras registras - nacionalinė teisė | `PP-teise/duomenys/registras.json` (repozitorija) | Vienintelis tiesos šaltinis, kurį mato visi naudotojai |
+| Bendras registras - ES teisė (nuo 2026-11-13) | `PP-teise/duomenys/registras-es.json` | `meta.lygmuo: "es"`; žr. 5 skyrių |
 | Šaltinių registras ir patikrų žurnalas | `PP-teise/duomenys/saltiniai.json` | Patikros su rezultatu „ok“ / „nepavyko“ |
-| Darbinė kopija administratoriui | naršyklės `localStorage` (`ppteise.admin.registras`) | Tik toje naršyklėje; į bendrą registrą patenka per eksportą |
+| Darbinė kopija administratoriui | naršyklės `localStorage` (`ppteise.admin.registras`, ES teisei - `ppteise.admin.registras.es`) | Tik toje naršyklėje; į bendrą registrą patenka per eksportą |
 | Pakeitimų istorija | `localStorage` (`ppteise.admin.istorija`) | Kas, ką, kada |
 | Rankinės patikros | `localStorage` (`ppteise.admin.patikros`) | Eksportuojamos kartu su šaltinių registru |
 | Naudotojo peržiūrų žurnalas | `localStorage` (`ppteise.perziuros`, stebėsenos puslapis) | **Niekada nepatenka į eksportą** |
@@ -47,7 +48,8 @@ atidaryta). Nuo 2026-11-07 (naudotojo sprendimas „Faktai pagal patikrą, anali
 - skelbia tik kai: abu duomenų failai neužfiksuotų pakeitimų neturi, šaka `main` ir ne priekyje `origin/main` (kitaip išsiųstų
   kito darbo commit'us), `git pull --ff-only` pavyko, `python3 .github/testai/paleisk.py PP-teise` - „GERAI“; kitaip pakeitimus
   atšaukia ir tik praneša ataskaitoje;
-- commit'ina tik du failus („pp-teise: savaitinė patikra <data> - N nauji įrašai (faktai, analizė rengiama)“) ir push'ina;
+- commit'ina tik duomenų failus - `registras.json`, `saltiniai.json` ir nuo 2026-11-13 `registras-es.json` (5 skyrius) -
+  („pp-teise: savaitinė patikra <data> - N nauji įrašai (faktai, analizė rengiama)“) ir push'ina;
 - analizės projektus (santrauka, aktualumas, veiksmai, pažodinė ištrauka) rašo į `~/Documents/g-procure-teise-patikros/<data>/projektai.json`
   kartu su `ataskaita.md`. Juos peržiūri žmogus ir įkelia per admin.html „Importuoti JSON“ -> „Papildyti“: to paties id faktų
   įrašą (būsena „aptikta“) importuota analizė pakeičia, kitų esamų įrašų - ne.
@@ -118,3 +120,73 @@ Registro testai, tikrinantys konkrečius išanalizuotus įrašus, faktų įraš�
   vietoj jo įvardija, kokių pirkimo konteksto duomenų trūksta;
 - nesaugo peržiūrų ir vidinių pastabų serveryje;
 - nelaiko žymos galiojančia, kai įrašas po jos pasikeitė: įrašas grįžta į „Ką peržiūrėti?“ su pastaba.
+
+## 5. ES teisės lygmuo (nuo 2026-11-13)
+
+Stebėsenos puslapio viršuje - perjungiklis „Nacionalinė teisė / ES teisė“. Lygmuo reiškia, **kas priėmė dokumentą**:
+Lietuvos institucijos (Seimas, Vyriausybė, VPT, ministerijos, Lietuvos teismai) ar Europos Sąjungos (Parlamentas ir
+Taryba, Komisija, Teisingumo Teismas). Perjungus keičiasi visas turinys - rodikliai, laiko juosta, aprėptis, filtrai,
+sąrašas ir įrašas; paieškos tekstas ir režimas (PĮ / VPĮ) lieka. Adresas: `?lygmuo=es`; nuoroda `#irasas=<id>` atveria
+įrašą bet kuriame lygmenyje. Paieška parodo, kiek atitikmenų yra kitame lygmenyje.
+
+| Kas | Kur |
+|---|---|
+| ES teisės registras | `PP-teise/duomenys/registras-es.json` (`meta.lygmuo: "es"`, sava versija, aprėptis ir „neapima“) |
+| Administravimas | `PP-teise/admin.html?lygmuo=es` (atskira darbinė kopija, eksporto failas `registras-es-<data>.json`) |
+| Šaltinių patikros | `saltiniai.json` `patikros` eilutės su `"lygmuo": "es"`; eilutės be šio lauko - nacionalinės (savaitinė užduotis jų nekeičia) |
+| Šaltinių patikros įrankis | `python3 PP-teise/es-saltiniai.py nauji` ir `... tekstas <CELEX>` (registro nekeičia) |
+
+**Papildomi įrašo laukai** (nacionaliniuose įrašuose jų nėra, ir jų peržiūros žymos dėl to nepasikeitė):
+
+- `datos.taikomaNuo` - nuo kada aktas taikomas, kai tai ne įsigaliojimo diena (pvz. vertės ribų reglamentas įsigalioja
+  2025-11-12, taikomas nuo 2026-01-01). Vaizdai („Kas pasikeitė?“ / „Kas įsigalios?“), rikiavimas ir laiko juosta
+  remiasi taikymo pradžia; įraše rodomos abi datos.
+- `identifikatoriai.celex` ir `keiciamasAktas.celex` - CELEX numeriai (dublikatai, dokumento istorija ir prieštaravimai
+  ES įrašams nustatomi pagal juos).
+- `teismoDokumentas: "isvada"` - generalinio advokato išvada (ne Teismo sprendimas; įraše tai pasakoma).
+- `saltinioTipas: "es_gaires"` - Europos Komisijos gairės ar komunikatas (neprivalomos; rodomos pagal paskelbimo datą).
+
+**Savaitinė patikra (nuo 2026-11-13, naudotojo sprendimas plėsti savaitinę patikrą ES šaltiniais).** Ta pati užduotis
+`pp-teise-savaitine-patikra` pirmadieniais paleidžia `python3 PP-teise/es-saltiniai.py nauji --pilnas` ir:
+
+- į `registras-es.json` pati įrašo tik AIŠKIAI PIRKIMŲ dokumentų faktus (būsena „aptikta“, puslapyje - „Nauja - analizė
+  rengiama“): ES teisės aktus ir Komisijos pasiūlymus, kurių pavadinime įvardyti viešieji pirkimai ar pirkimų direktyvos,
+  ir Teisingumo Teismo sprendimus, nutartis bei generalinių advokatų išvadas, kurių raktiniuose žodžiuose - viešieji pirkimai
+  ar direktyvos 2014/24/ES, 2014/25/ES, 89/665/EEB, 92/13/EEB; gynybos pirkimai, vien koncesijos ir keleivinio transporto
+  viešosios paslaugos neįtraukiami;
+- kitus dokumentus, kurie pirkimų direktyvas tik cituoja (strategijos, sektoriniai pasiūlymai), surašo ataskaitos skiltyje
+  „ES: neįtraukta - sprendžia žmogus“;
+- `saltiniai.json` pradžioje įrašo ir ES patikros eilutę (`"lygmuo": "es"`, „ok“ / „nepavyko“); nepavykus patikrai ES registro
+  datos nekeičiamos;
+- ES analizės projektus rašo į `~/Documents/g-procure-teise-patikros/<data>/projektai-es.json` - juos žmogus įkelia per
+  `admin.html?lygmuo=es` („Importuoti JSON“ → „Papildyti“);
+- skelbia tomis pačiomis sąlygomis kaip nacionalinius faktus (3 skyrius), commit'e - iki trijų duomenų failų.
+
+Puslapio ES vaizde rodoma „Kita šaltinių patikra - pirmadienį, <data>“. Duomenų bazė naujus Teisingumo Teismo sprendimus su
+direktyvomis susieja pavėluotai, todėl naujausių gali trūkti - puslapis tai sako skiltyje „Apie šaltinių patikrą“.
+
+**Kaip pildyti ranka** (analizei ir tam, ko užduotis pati neįtraukė):
+
+1. `python3 PP-teise/es-saltiniai.py nauji` (su `--pilnas` - visi pavadinimai) - ES teisės aktai, Komisijos pasiūlymai ir komunikatai, Teisingumo Teismo
+   sprendimai, nutartys ir generalinių advokatų išvados, kurie cituoja pirkimų direktyvas (2014/23/ES, 2014/24/ES,
+   2014/25/ES, 89/665/EEB, 92/13/EEB) ir kurių registre dar nėra. Jei patikra nepavyksta, įrankis taip ir parašo -
+   tai nereiškia, kad naujų dokumentų nėra. Sąrašas nėra išsamus: naujausi Teisingumo Teismo dokumentai duomenų
+   bazėje su direktyvomis susiejami ne iš karto (dažnai pirmas atsiranda pranešimas Oficialiajame leidinyje -
+   CELEX su „CA“ ar „CB“; byla lyginama pagal numerį, todėl sprendimas ir pranešimas laikomi tuo pačiu dokumentu).
+2. Ką įtraukti, sprendžia žmogus: registras - svarbiausių pokyčių rinkinys, ne visa ES pirkimų teisė. Neįtraukti
+   dokumentai ir priežastys įrašomi patikros eilutėje (`saltiniai.json`).
+3. `python3 PP-teise/es-saltiniai.py tekstas <CELEX>` - dokumento tekstas lietuvių kalba (`--trumpai` - teismo dokumento pradžia
+   ir rezoliucinė dalis, kitų dokumentų pradžia). Į `istrauka.tekstas`
+   rašoma tik pažodinė citata iš šio teksto, su tikslia vieta; teiginiai įraše - tik iš perskaityto teksto.
+4. Įrašas kuriamas `admin.html?lygmuo=es` (arba papildomas importu), būsena „laukia“, DI parengtas tekstas -
+   `aiJuodrastis: true`. Šaltinio nuoroda skaitytojui - `https://eur-lex.europa.eu/legal-content/LT/TXT/?uri=CELEX:<celex>`.
+5. Eksportas → `PP-teise/duomenys/registras-es.json`; patikros eilutė su `"lygmuo": "es"` → `saltiniai.json`;
+   padidinti `PP-teise/sw.js` `VERSIJA`; paleisti `PP-teise/testai.html`.
+
+Teisingumo Teismo sprendimai, aiškinantys Direktyvą 2014/24/ES, rodomi ir PĮ režimu su žyma „Įvertinkite su teisės
+specialistu“: ar ir kaip išaiškinimas taikomas perkantiesiems subjektams, įrašas neteigia.
+
+**Techninės skiltys - tik prižiūrėtojui.** Stebėsenos puslapio poraštėje „Techninė diagnostika: šaltinių prieiga,
+patikros ir sutrikimų poveikis“ ir nuorodos „Registro prižiūrėtojui ir kūrėjams“ įprastam lankytojui nerodomos.
+Jos atsiranda atvėrus `PP-teise/index.html?prieziura=1` (nuoroda yra administravimo puslapyje). Tai ne apsauga -
+tik mažiau triukšmo pirkimų specialistui: failai ir toliau vieši.

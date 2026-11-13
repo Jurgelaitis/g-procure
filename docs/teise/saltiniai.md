@@ -1,6 +1,6 @@
 # Pirkimų teisės stebėsena - šaltinių registras ir prieigos tyrimas
 
-Būsena 2026-11-04. Mašininis šaltinių registras - `PP-teise/duomenys/saltiniai.json`
+Būsena 2026-11-13 (ES šaltiniai - 5 skyrius; nacionaliniai - 2026-11-04). Mašininis šaltinių registras - `PP-teise/duomenys/saltiniai.json`
 (jį rodo stebėsenos puslapio skiltis „Šaltinių registras ir patikrų žurnalas“). Šis dokumentas
 paaiškina, KAS buvo patikrinta ir KODĖL modulis veikia rankiniu importu.
 
@@ -57,3 +57,18 @@ programos e-tar), VPT gairių ir rekomendacijų be įsakymo formos, ES teisės.
 2. Sutartos naudojimo sąlygos su šaltiniais (e-tar, VPT) - iki tol tik rankinis režimas.
 3. Kiekvienas automatiškai aptiktas įrašas vis tiek gauna būseną „Automatiškai aptikta“ ir
    laukia specialisto - automatika **nekeičia** tvirtinimo proceso.
+
+## 5. ES teisės šaltiniai (2026-11-13)
+
+| Šaltinis | Kas patikrinta 2026-11-13 | Rezultatas |
+|---|---|---|
+| EUR-Lex (`eur-lex.europa.eu`) | Dokumento puslapis automatine užklausa | HTTP 202 be turinio - automatinėms užklausoms puslapiai neatiduodami; skaitytojui nuoroda veikia naršyklėje |
+| ES leidinių biuro saugykla (`publications.europa.eu/resource/celex/<CELEX>`) | Užklausa su `Accept: application/xhtml+xml,text/html` ir `Accept-Language: lit` | Dokumento tekstas lietuvių kalba; HTTP 300 - dokumentas iš kelių dalių (dalys `.../DOC_n`) |
+| ES leidinių biuro SPARQL sąsaja (`publications.europa.eu/webapi/rdf/sparql`) | Užklausa: dokumentai, cituojantys pirkimų direktyvas, nuo nurodytos datos | Veikia be rakto; Teisingumo Teismo sprendimai su direktyvomis susiejami pavėluotai, pranešimai Oficialiajame leidinyje (CELEX „CA“, „CB“) - anksčiau |
+| CURIA (`curia.europa.eu`) | Netikrinta | Sprendimų tekstai imami iš leidinių biuro saugyklos pagal CELEX |
+
+Naršyklei (CORS) šie šaltiniai netikrinti - ES registras, kaip ir nacionalinis, pildomas prižiūrėtojo:
+`PP-teise/es-saltiniai.py` (tik Python standartinė biblioteka, registro nekeičia) parodo naujus dokumentus ir
+atiduoda dokumento tekstą ištraukoms. Nuo 2026-11-13 jį kas pirmadienį paleidžia savaitinė užduotis
+(`pp-teise-savaitine-patikra`): aiškiai pirkimų dokumentų faktus į ES registrą ji įrašo pati, kitus surašo ataskaitoje
+(`docs/teise/administravimas.md`, 5 skyrius). Pasiūlymų svarstymo eiga Europos Parlamente ir Taryboje netikrinama.
