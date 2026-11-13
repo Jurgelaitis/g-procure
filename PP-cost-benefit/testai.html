@@ -41,7 +41,7 @@
 <script>
 /* Tikri skaičiuoklės duomenys įsimenami prieš įkeliant modulį ir atkuriami pabaigoje bei uždarant
    puslapį (testai viešu adresu - ta pati naršyklės saugykla). Iki 2026-09-26 paruosk() juos ištrindavo. */
-const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("epsog_en_skaiciuokle") === 0);
+const APSAUGA = GP_TESTU_APSAUGA.pradek(k => k.indexOf("epsog_en_skaiciuokle") === 0 || k === "gprocure-lang");
 /* Variklis - kaip PP-market-KPI/testai.html: rėmelio src su kešo skirtuku, būsena per eval
    (state yra let, ne window savybė), kiekvienas testas pradeda nuo paruosk(). */
 const ramas = document.getElementById("modulis");
@@ -1583,12 +1583,719 @@ testas(G12, "Telefonas 375 px: darbų pirkimas su rekomendacijomis, atvertu krit
 });
 
 /* =========================================================================
+   PATOBULINIMAI 2026-11-13 (naudotojo „Pritariu jūsų siūlymui“): minimalus pereinamasis kokybės balas, vertinimo metodika į pirkimo
+   kortelę (Pirkimo sąlygų generatoriui) ir vertinimo suvestinė komisijai (Word)
+   ========================================================================= */
+const G13 = "Patobulinimai 2026-11-13";
+const MIN_KRIT = [{ pavadinimas:"Darbų saugos planas", taisykle:"ekspertinis", skale:5, vertintojai:3, svoris:20, lygiai:"5 - išsamus; 3 - pakankamas; 1 - bendras", minVidurkis:3 },
+                  { pavadinimas:"Garantija", taisykle:"daugiau", vienetas:"mėn.", nuo:0, iki:24, svoris:10 }];
+const MIN_PAS = [{ tiekejas:"A", kaina:1000, reiksmes:[[4, 5, 4], 24] }, { tiekejas:"B", kaina:900, reiksmes:[[3, 3, 3], 0] },
+                 { tiekejas:"C", kaina:500, reiksmes:[[2, 2, 2], 24] }, { tiekejas:"D", kaina:950, reiksmes:[[3, 3, 4], 0] }];
+
+testas(G13, "Pereinamasis balas - variklis: nesiekiantis pasiūlymas atmetamas su priežastimi (kokybės balų suma arba ekspertų vidurkis), lygus ribai - ne; kainos balai skaičiuojami tik tarp likusių (pigiausias atmestas kainos atskaitos nekeičia), kitų kokybės balai neperskaičiuojami; neįvestas ekspertų vertinimas su riba - atmetamas", ()=>{
+  paruosk();
+  let r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:13 }, kriterijai:MIN_KRIT, pasiulymai:MIN_PAS });
+  lygu(r.klaidos, [], "klaidų nėra");
+  lygu(r.atmesti, ["B: kokybės balai (12) mažesni už minimalų pereinamąjį balą (13)",
+                   "C: kriterijaus „Darbų saugos planas“ ekspertų balų vidurkis (2) mažesnis už mažiausią priimtiną (3)"], "atmesti su priežastimi");
+  lygu(r.eile.map(e=>[e.t, e.vieta, e.q, e.kb, e.en]), [["A", 1, 27.33, 66.5, 93.83], ["D", 2, 13.33, 70, 83.33]], "kaina - tik tarp A ir D (C 500 Eur atmestas: su juo A gautų 35)");
+  lygu(M('skaiciuok(state).eilutes.map(e=>[e.tiekejas, !!e.nepasiektas, e.kokybeIvertinta, e.kokybesBalai])'),
+       [["A", false, true, 27.33], ["B", true, true, 12], ["C", true, true, 18], ["D", false, true, 13.33]], "atmestų kokybės balai lieka matomi, žyma „nepasiektas“");
+  // riba lygi pasiūlymo balams - neatmetama; vidurkis lygus mažiausiam priimtinam - neatmetama
+  r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:13.33 }, kriterijai:MIN_KRIT, pasiulymai:MIN_PAS });
+  lygu(r.eile.map(e=>e.t), ["A", "D"], "13,33 prieš 13,33 - pasiekė");
+  r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:12 }, kriterijai:MIN_KRIT, pasiulymai:MIN_PAS });
+  lygu([r.eile.map(e=>e.t).sort(), r.atmesti.length], [["A", "B", "D"], 1], "B (12 balų, vidurkis 3) pasiekė abi ribas");
+  // be ribų - kaip iki tol: visi keturi eilėje, pigiausias C - kainos atskaita
+  r = busena({ pirkimas:{ kainosSvoris:70 }, kriterijai:MIN_KRIT.map(k=>Object.assign({}, k, { minVidurkis:null })), pasiulymai:MIN_PAS });
+  lygu([r.atmesti, r.eile.length, r.eile.find(e=>e.t === "C").kb, r.eile.find(e=>e.t === "A").kb], [[], 4, 70, 35], "be ribų niekas neatmetamas");
+  // ekspertų vertinimas neįvestas, o riba nustatyta - atmetamas; be ribos - tik „trūksta“
+  r = busena({ pirkimas:{ kainosSvoris:70 }, kriterijai:MIN_KRIT, pasiulymai:[MIN_PAS[0], { tiekejas:"E", kaina:800, reiksmes:[[], 12] }] });
+  lygu(r.atmesti, ["E: kriterijaus „Darbų saugos planas“ ekspertų vertinimas neįvestas, o mažiausias priimtinas vidurkis - 3"], "neįvestas vertinimas");
+  // santykinis ekspertinis kriterijus: R_max - iš visų įvertintų, ir vėliau dėl ribos atmestų (kitų balai neperskaičiuojami)
+  r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:25 }, kriterijai:[{ pavadinimas:"Planas", taisykle:"ekspertinis_sant", skale:5, vertintojai:1, svoris:30, lygiai:"5 - išsamus; 1 - bendras" }],
+    pasiulymai:[{ tiekejas:"A", kaina:1000, reiksmes:[[5]] }, { tiekejas:"B", kaina:900, reiksmes:[[4]] }, { tiekejas:"C", kaina:800, reiksmes:[[2]] }] });
+  lygu([r.eile.map(e=>[e.t, e.q]), r.atmesti], [[["A", 30]], ["B: kokybės balai (24) mažesni už minimalų pereinamąjį balą (25)", "C: kokybės balai (12) mažesni už minimalų pereinamąjį balą (25)"]], "santykinis");
+});
+
+testas(G13, "Pereinamasis balas - patikros: neigiamas ir didesnis už kokybės svorių sumą - klaida; mažiausias vidurkis už skalės - klaida; „kokybė į kainą“ ir be kriterijų - netaikomas (pasakoma, niekas neatmetamas); be ekspertinių kriterijų - „Dėmesio“ su VPT gairėmis, su ekspertiniais - informacija", ()=>{
+  paruosk();
+  const kr = [{ pavadinimas:"Garantija", taisykle:"daugiau", vienetas:"mėn.", nuo:0, iki:24, svoris:30 }];
+  const pas = [{ tiekejas:"A", kaina:100, reiksmes:[24] }, { tiekejas:"B", kaina:90, reiksmes:[0] }];
+  let r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:-5 }, kriterijai:kr, pasiulymai:pas });
+  tiesa(r.klaidos.some(x=>/Minimalus pereinamasis kokybės balas negali būti neigiamas\./.test(x)), "neigiamas: " + r.klaidos);
+  r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:40 }, kriterijai:kr, pasiulymai:pas });
+  tiesa(r.klaidos.some(x=>/Minimalus pereinamasis kokybės balas \(40\) didesnis už visų kokybės kriterijų svorių sumą \(30\) - jo nepasiektų nė vienas pasiūlymas\./.test(x)), "didesnis už sumą: " + r.klaidos);
+  r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:30 }, kriterijai:kr, pasiulymai:pas });
+  lygu([r.klaidos, r.eile.map(e=>e.t), r.atmesti.length], [[], ["A"], 1], "riba lygi svorių sumai - leidžiama");
+  const dem = r.patikros.filter(x=>/^demesio: Nustatytas minimalus pereinamasis kokybės balas, nors visi kriterijai vertina tik tai, kas viršija minimalius reikalavimus/.test(x));
+  tiesa(dem.length === 1 && / \| VPT gairės, „Minimalus „pereinamasis“ balas“$/.test(dem[0]) && !r.patikros.some(x=>/^info: Nustatytas minimalus pereinamasis balas/.test(x)), "be ekspertinių - dėmesio: " + r.patikros.join(" || "));
+  r = busena({ pirkimas:{ kainosSvoris:70, minKokybe:13 }, kriterijai:MIN_KRIT, pasiulymai:MIN_PAS });
+  tiesa(r.patikros.some(x=>/^info: Nustatytas minimalus pereinamasis balas: įvertinkite, ar jis pagrįstas šiam pirkimui\..* \| VPT gairės, „Minimalus „pereinamasis“ balas“$/.test(x))
+    && !r.patikros.some(x=>/^demesio: Nustatytas minimalus/.test(x)), "su ekspertiniais - informacija: " + r.patikros.join(" || "));
+  // tik mažiausias vidurkis (be bendro balo) - ta pati informacija
+  r = busena({ pirkimas:{ kainosSvoris:70 }, kriterijai:MIN_KRIT, pasiulymai:MIN_PAS });
+  tiesa(r.patikros.some(x=>/^info: Nustatytas minimalus pereinamasis balas/.test(x)), "tik vidurkio riba: " + r.patikros.join(" || "));
+  r = busena({ pirkimas:{ kainosSvoris:70 }, kriterijai:[Object.assign({}, MIN_KRIT[0], { minVidurkis:6 }), MIN_KRIT[1]], pasiulymai:MIN_PAS });
+  tiesa(r.klaidos.some(x=>/Kriterijaus „Darbų saugos planas“ mažiausias priimtinas ekspertų balų vidurkis turi būti nuo 0 iki skalės viršaus \(5\)\./.test(x)), "vidurkis už skalės: " + r.klaidos);
+  // „kokybė į kainą“ (kokybė eurais) - riba netaikoma ir niekas neatmetamas
+  r = busena({ pirkimas:{ formule:"kok_kaina", minKokybe:20 }, kriterijai:[{ pavadinimas:"Garantija", taisykle:"daugiau", vienetas:"mėn.", nuo:0, iki:24, verte:50 }], pasiulymai:pas });
+  tiesa(r.patikros.some(x=>/^demesio: Minimalus pereinamasis kokybės balas netaikomas: pagal formulę „kokybė į kainą“ kokybė vertinama eurais, ne balais\./.test(x)) && !r.atmesti.length && r.eile.length === 2,
+    "kokybė į kainą: " + r.patikros.join(" || ") + " / " + r.atmesti);
+});
+
+testas(G13, "Pereinamasis balas - priedas ir sąsaja: sakiniai priede tik nustačius ribą (bendras balas, ekspertų vidurkis, „kiti neperskaičiuojami“), laukas papildomuose nustatymuose su santrauka, „kokybė į kainą“ - laukas paslėptas; vidurkio laukas tik ekspertiniam kriterijui; rezultatų lentelėje - priežastis; seni duomenys - be ribų", ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document;
+  busena({ pirkimas:{ pavadinimas:"Linijos rekonstrukcijos darbai", objektas:"darbai", kainosSvoris:70, minKokybe:13 }, kriterijai:MIN_KRIT, pasiulymai:MIN_PAS });
+  const tx = () => M('priedoTekstas(priedoTurinys(state)).join("\\n")');
+  let t = tx();
+  tiesa(/Minimalus pereinamasis kokybės balas - 13\. Pasiūlymas, kurio kokybės kriterijų balų suma \(T1 \+ T2\) mažesnė kaip 13, atmetamas\./.test(t), "bendras balas priede: " + t.split("\n").filter(x=>/pereinam/i.test(x)).join(" | "));
+  tiesa(/Jeigu vertinamo Pasiūlymo ekspertų skirtų balų vidurkis \(Rp\) mažesnis kaip 3, Pasiūlymas atmetamas\./.test(t), "ekspertų vidurkis priede: " + t.split("\n").filter(x=>/vidurkis/.test(x)).join(" | "));
+  tiesa(M('priedoTurinys(state).blokai.some(b=>b.t === "pp" && b.r === true && /vidurkis \\(R_p\\) mažesnis kaip 3/.test(b.tekstas))'), "priedo bloke - indeksas R_p");
+  tiesa(/Atmetus Pasiūlymą dėl nepasiekto minimalaus balo, kitų Pasiūlymų kokybės kriterijų balai neperskaičiuojami; kainos balai skaičiuojami tik tarp neatmestų Pasiūlymų\./.test(t), "„neperskaičiuojami“: " + t.split("\n").filter(x=>/Atmetus/.test(x)).join(" | "));
+  tiesa(!/[–—]/.test(t), "be ilgųjų brūkšnių");
+  // tik ekspertų vidurkio riba (be bendro balo): sakinys „neperskaičiuojami“ lieka, bendro balo sakinio nėra
+  M('state.pirkimas.minKokybe = null; renderAll()');
+  t = tx();
+  tiesa(/Atmetus Pasiūlymą dėl nepasiekto minimalaus balo/.test(t) && /\(Rp\) mažesnis kaip 3, Pasiūlymas atmetamas/.test(t) && !/Minimalus pereinamasis kokybės balas -/.test(t), "tik vidurkio riba: " + t.split("\n").filter(x=>/pereinam|Atmetus/i.test(x)).join(" | "));
+  // be ribų - nė vieno iš šių sakinių
+  M('state.pirkimas.minKokybe = null; state.kriterijai[0].minVidurkis = null; renderAll()');
+  t = tx();
+  tiesa(!/pereinam|Atmetus Pasiūlymą dėl nepasiekto|mažesnis kaip 3, Pasiūlymas atmetamas/.test(t), "be ribų priede apie jas nieko");
+  // sąsaja: laukas papildomuose nustatymuose, santrauka, neatpažinta reikšmė
+  const f = d.getElementById("f_minKokybe");
+  tiesa(d.getElementById("papildomi").contains(f) && d.querySelector('label[for="f_minKokybe"]').textContent === "Minimalus pereinamasis kokybės balas" && /^pvz\., /.test(f.placeholder), "laukas papildomuose nustatymuose");
+  ivesk(f, "13,5");
+  lygu(M('state.pirkimas.minKokybe'), 13.5, "įrašyta");
+  tiesa(/pereinamasis kokybės balas 13,5/.test(d.getElementById("nustSantrauka").textContent), "santrauka: " + d.getElementById("nustSantrauka").textContent);
+  ivesk(f, "");
+  lygu([M('state.pirkimas.minKokybe'), /pereinamasis/.test(d.getElementById("nustSantrauka").textContent)], [null, false], "išvalius - be ribos");
+  // „kokybė į kainą“ - laukas paslėptas (kokybė eurais)
+  ivesk(d.getElementById("f_formule"), "kok_kaina");
+  tiesa(d.getElementById("l_minKokybe").classList.contains("paslepta"), "kokybė į kainą - laukas paslėptas");
+  ivesk(d.getElementById("f_formule"), "pmin");
+  tiesa(!d.getElementById("l_minKokybe").classList.contains("paslepta"), "grąžinus formulę - laukas matomas");
+  // vidurkio laukas - tik ekspertiniam kriterijui
+  const kort = Array.from(d.querySelectorAll("#kriterijaiKunas article.krit"));
+  lygu(kort.map(a=>!!a.querySelector('input[data-laukas="minVidurkis"]')), [true, false], "mažiausias priimtinas vidurkis - tik ekspertiniam");
+  const mv = kort[0].querySelector('input[data-laukas="minVidurkis"]');
+  tiesa(/^pvz\., /.test(mv.placeholder) && /Mažiausias priimtinas vidurkis \(neprivaloma\)/.test(mv.closest(".eil").textContent), "vidurkio laukas: " + mv.closest(".eil").textContent);
+  ivesk(mv, "3");
+  lygu(M('state.kriterijai[0].minVidurkis'), 3, "vidurkis įrašytas");
+  // rezultatų lentelė - priežastis prie atmesto pasiūlymo
+  M('state.pirkimas.minKokybe = 13; renderAll()');
+  const rz = d.getElementById("rezultatai").textContent.replace(/\s+/g, " ");
+  tiesa(/kokybės balai \(12\) mažesni už minimalų pereinamąjį balą \(13\)/.test(rz) && /ekspertų balų vidurkis \(2\) mažesnis už mažiausią priimtiną \(3\)/.test(rz) && d.querySelectorAll("#rezultatai tr.atmesta").length === 2, "rezultatuose: " + rz.slice(0, 400));
+  // seni ir suklastoti duomenys
+  lygu(M('(function(){ const s = sanitizeBusena({ pirkimas:{ pavadinimas:"X" }, kriterijai:[{ pavadinimas:"P", taisykle:"ekspertinis", svoris:10 }], pasiulymai:[] }); return [s.pirkimas.minKokybe, s.kriterijai[0].minVidurkis]; })()'), [null, null], "seni duomenys - be ribų");
+  lygu(M('(function(){ const s = sanitizeBusena({ pirkimas:{ minKokybe:"<b>" }, kriterijai:[{ pavadinimas:"P", taisykle:"ekspertinis", svoris:10, minVidurkis:-2 }], pasiulymai:[] }); return [s.pirkimas.minKokybe, s.kriterijai[0].minVidurkis]; })()'), [null, null], "netinkamos reikšmės - be ribų");
+  lygu(M('sanitizeBusena({ pirkimas:{ minKokybe:-4 }, kriterijai:[], pasiulymai:[] }).pirkimas.minKokybe'), null, "neigiama riba - be ribos");
+  lygu(M('(function(){ const s = sanitizeBusena({ pirkimas:{ minKokybe:15 }, kriterijai:[{ pavadinimas:"P", taisykle:"ekspertinis", svoris:10, minVidurkis:2.5 }], pasiulymai:[] }); return [s.pirkimas.minKokybe, s.kriterijai[0].minVidurkis]; })()'), [15, 2.5], "įrašytos ribos išlieka");
+});
+
+const KV_KORTELE = { pavadinimas: "Atsarginių dalių pirkimas", numeris: "VPP-88", vykdytojas: "litgrid", rezimas: "PI", objektas: "prekes", verte: 250000, budas: "S-AK", iniciatorius: "Vardenis Pavardenis" };
+function kvBusena(w){
+  w.eval(`(function(){ const s = tusciaBusena(); s.pirkimas.pavadinimas = "Atsarginių dalių"; s.pirkimas.objektas = "prekes"; s.pirkimas.priedoNr = "7"; state = s;
+    ["garantija", "terminas"].forEach(k=>pridekIsBibliotekos(bibliotekosIndeksas(k))); renderAll(); })()`);
+}
+
+testas(G13, "Vertinimo metodika į pirkimo kortelę: be kortelės - paaiškinimas ir neįrašoma; su kortele - klausimas išvardija, kas keičiama, atsisakius - nieko; patvirtinus - kortelėje metodika (kriterijus, kriterijai su svoriais, priedo turinys be numerio) ir vertinimo kriterijus, kiti laukai nepaliesti; būsena - įrašyta / skiriasi; su klaidomis - neįrašoma", async ()=>{
+  const { f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html");
+  try {
+    w.eval("atstatyk()");                                          // būsena - po kortelės pasirinkimo: kitas pavadinimas modulyje reikštų klausimą „kitas pirkimas?“
+    const bus = () => d.getElementById("kortelesVertinimas").textContent, klausimai = [];
+    let ats = false; w.confirm = m => { klausimai.push(m); return ats; };
+    const myg = d.getElementById("btnIKortele");
+    tiesa(d.getElementById("s3").contains(myg) && myg.textContent === "Įrašyti į pirkimo kortelę" && myg.getAttribute("aria-describedby") === "kortelesVertinimas" && d.getElementById("kortelesVertinimas").getAttribute("role") === "status", "mygtukas 3 žingsnyje");
+    tiesa(/^Pasirinkę pirkimo kortelę viršuje, vertinimo metodiką galėsite įrašyti į ją/.test(bus()), "be kortelės: " + bus());
+    myg.click();
+    tiesa(/^Pirmiausia viršuje, juostoje „Pirkimo kortelė“, pasirinkite arba sukurkite pirkimo kortelę/.test(bus()) && !klausimai.length, "be kortelės neįrašoma: " + bus());
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(KV_KORTELE)).kortele;
+    w.KORTELE.atnaujink();
+    tiesa(await w.KORTELE.pasirink(k.id), "pasirinkta"); await lauk(50);
+    kvBusena(w);                                                   // kortelės pavadinimas užpildė lauką - grąžiname testo būseną
+    lygu(bus(), "Pirkimo kortelėje „Atsarginių dalių pirkimas“ vertinimo metodikos dar nėra.", "kortelė be metodikos");
+    myg.click();                                                   // atsisakoma
+    lygu([klausimai.length, w.GP_KORTELE.gauk(k.id).vertinimas, w.GP_KORTELE.gauk(k.id).kriterijus], [1, null, ""], "atsisakius kortelė nepakeista");
+    tiesa(/^Įrašyti į pirkimo kortelę „Atsarginių dalių pirkimas“\?/.test(klausimai[0]) && /- vertinimo metodika - Kainos ir kokybės santykis, 3 kriterijai \(svorių suma 100\)\n/.test(klausimai[0])
+      && /- vertinimo kriterijus: neįrašyta → Kainos ir kokybės santykis\n/.test(klausimai[0]) && /Kiti kortelės laukai nekeičiami\./.test(klausimai[0]) && !/ankstesnė bus pakeista/.test(klausimai[0]), "klausimas: " + klausimai[0]);
+    ats = true; myg.click();
+    const k1 = w.GP_KORTELE.gauk(k.id), v = k1.vertinimas;
+    tiesa(v && v.saltinis === "PP-cost-benefit" && v.kriterijus === "kainos_kokybe" && !isNaN(new Date(v.sudaryta)) && v.minKokybe === null, "metodika kortelėje: " + JSON.stringify(v && [v.saltinis, v.kriterijus, v.sudaryta]));
+    lygu(v.kriterijai, [{ zymuo:"C", pavadinimas:"Pasiūlymo kaina", svoris:80 }, { zymuo:"T1", pavadinimas:"Papildomas garantinis laikotarpis (mėn.)", svoris:10 },
+                        { zymuo:"T2", pavadinimas:"Pristatymo / darbų atlikimo terminas (kalendorinės dienos)", svoris:10 }], "kriterijai su svoriais");
+    lygu([v.priedas.priedas, v.priedas.pavadinimas, v.priedas.pirkimas, v.priedas.blokai.length > 10], ["SPS ___ priedas", "EKONOMIŠKAI NAUDINGIAUSIO PASIŪLYMO VERTINIMO METODIKA", "Atsarginių dalių", true], "priedo turinys be numerio");
+    lygu(["pavadinimas", "numeris", "vykdytojas", "rezimas", "objektas", "verte", "budas", "iniciatorius", "busena", "grafikas"].map(x=>JSON.stringify(k1[x]) === JSON.stringify(k[x])).every(Boolean), true, "kiti kortelės laukai nepaliesti");
+    lygu(k1.kriterijus, "kainos_kokybe", "kortelės vertinimo kriterijus - kaip metodikos");
+    tiesa(new RegExp("^Vertinimo metodika įrašyta pirkimo kortelėje „Atsarginių dalių pirkimas“ \\(" + w.GP_KORTELE.irasoData(v.sudaryta) + "\\) - Pirkimo sąlygų generatorius iš jos sudarys priedą\\.$").test(bus()), "būsena įrašius: " + bus());
+    // Pirkimo sąlygų generatoriaus skaitytuvas tą patį turinį atpažįsta (kaip kortelesMetodika() generatoriuje)
+    const a = GP_METODIKA.analizuok(w.GP_VERTINIMO_PRIEDAS.elementai(w.GP_VERTINIMO_PRIEDAS.forma(v.priedas)));
+    lygu([a.kodas, a.suma, a.kriterijai.map(q=>q.svoris), a.problemos], ["kks", 100, [80, 10, 10], []], "generatoriaus skaitytuvas");
+    // pakeitus svorį - „skiriasi“; įrašius iš naujo - klausime „ankstesnė bus pakeista“, be kriterijaus eilutės
+    w.eval('state.kriterijai[0].svoris = 15; renderAll()');
+    tiesa(/įrašyta ankstesnė vertinimo metodika \(.*\) - ji skiriasi nuo dabartinės\. Įrašykite iš naujo/.test(bus()), "pakeitus: " + bus());
+    myg.click();
+    tiesa(/ankstesnė bus pakeista/.test(klausimai[klausimai.length - 1]) && !/vertinimo kriterijus:/.test(klausimai[klausimai.length - 1]), "antras klausimas: " + klausimai[klausimai.length - 1]);
+    lygu(w.GP_KORTELE.gauk(k.id).vertinimas.kriterijai.map(q=>q.svoris), [75, 15, 10], "įrašyta iš naujo");
+    // su klaidomis (svorių suma ne 100) - neįrašoma
+    const n = klausimai.length;
+    w.eval('state.pirkimas.kainosSvorisAuto = false; state.pirkimas.kainosSvoris = 50; renderAll()');
+    myg.click();
+    tiesa(/^Į kortelę neįrašyta - pirmiausia ištaisykite klaidas \(\d+\): /.test(bus()) && klausimai.length === n && w.GP_KORTELE.gauk(k.id).vertinimas.kriterijai[0].svoris === 75, "su klaidomis: " + bus());
+  } finally { f.remove(); }
+});
+
+testas(G13, "Vertinimo metodika kortelei pagal vertinimo būdą: sąnaudos ir kokybė - „sanaudu_kokybe“, tik sąnaudos - „sanaudos“ (svoris 100), fiksuota kaina - be kainos kriterijaus, pereinamasis balas - tik kai taikomas; generatoriaus skaitytuvas atpažįsta sąnaudų metodikas", ()=>{
+  paruosk();
+  const kv = () => M('(function(){ const v = kortelesVertinimas(state); return { k: v.kriterijus, kr: v.kriterijai.map(x=>[x.zymuo, x.svoris]), min: v.minKokybe, pr: v.priedas.priedas, el: GP_VERTINIMO_PRIEDAS.elementai(GP_VERTINIMO_PRIEDAS.forma(v.priedas)) }; })()');
+  busena({ pirkimas:{ kainosSvoris:70, minKokybe:13 }, kriterijai:MIN_KRIT, sanaudos:{ metai:25, diskontas:4, dedamosios:[NUOSTOLIAI] } });
+  let v = kv(), a = GP_METODIKA.analizuok(v.el);
+  lygu([v.k, v.kr, v.min, v.pr, a.kodas, a.suma], ["sanaudu_kokybe", [["C", 70], ["T1", 20], ["T2", 10]], 13, "SPS ___ priedas", "sks", 100], "sąnaudos ir kokybė");
+  busena({ pirkimas:{ kainosSvoris:100 }, kriterijai:[], sanaudos:{ metai:25, diskontas:4, dedamosios:[NUOSTOLIAI] } });
+  v = kv(); a = GP_METODIKA.analizuok(v.el);
+  lygu([v.k, v.kr, v.min, a.kodas], ["sanaudos", [["C", 100]], null, "sanaudos"], "tik sąnaudos");
+  busena({ pirkimas:{ budas:"fiksuota", fiksuotaKaina:5000, minKokybe:50 }, kriterijai:[Object.assign({}, MIN_KRIT[0], { svoris:60 }), Object.assign({}, MIN_KRIT[1], { svoris:40 })] });
+  v = kv();
+  lygu([v.k, v.kr, v.min], ["kainos_kokybe", [["T1", 60], ["T2", 40]], 50], "fiksuota kaina - tik kokybės kriterijai");
+  busena({ pirkimas:{ formule:"kok_kaina", minKokybe:20 }, kriterijai:[{ pavadinimas:"Garantija", taisykle:"daugiau", vienetas:"mėn.", nuo:0, iki:24, verte:50 }] });
+  v = kv();
+  lygu([v.k, v.kr, v.min], ["kainos_kokybe", [["C", null], ["V1", null]], null], "kokybė į kainą - be svorių ir be pereinamojo balo");
+});
+
+const SUV_JS = `(function(){ const s = tusciaBusena(); s.pirkimas.pavadinimas = "330 kV oro linijos rekonstrukcijos darbai"; s.pirkimas.objektas = "darbai"; s.pirkimas.minKokybe = 8; state = s;
+  ["sauga_planas", "sauga_specialistas", "sauga_aps", "garantija"].forEach(k=>pridekIsBibliotekos(bibliotekosIndeksas(k))); state.kriterijai[0].minVidurkis = 2;
+  const dd = pridekDedamaja("nuostoliu_sanaudos"); state.sanaudos.metai = 25; state.sanaudos.diskontas = 4; dd.vienetoKaina = 876; const K = state.kriterijai;
+  const mk = (t, kaina, kw, pl, sp, aps, gar) => { const p = naujasPasiulymas(t); p.kaina = kaina; p.reiksmes[dd.id] = kw; p.reiksmes[K[0].id] = pl; p.reiksmes[K[1].id] = sp; p.reiksmes[K[2].id] = aps; p.reiksmes[K[3].id] = gar; return p; };
+  state.pasiulymai = [mk("UAB „Alfa statyba“", 1000000, 100, [4, 5, 4], 3, true, 24), mk("UAB „Beta ranga“", 950000, 180, [3, 3, 4], 2, true, 12), mk("UAB „Gama linijos“", 900000, 150, [1, 2, 1], 1, false, 0), mk("UAB „Delta“", 1100000, null, [5, 5, 5], 3, true, 24)];
+  renderAll(); })()`;
+
+testas(G13, "Vertinimo suvestinė - turinys: antraštė ir data, vertinimo tvarka su teisės nuoroda iš registro, kriterijų lentelė (ir sąnaudų dedamosios S1), pasiūlymų duomenys pateikimo eile su žymenimis, balai ir eilė, į eilę neįtraukti su priežastimis, išvada be žodžio „laimėtojas“, parašų eilutės; mokomasis pavyzdys pažymėtas", ()=>{
+  paruosk();
+  M(SUV_JS);
+  lygu(M('skaiciuok(state).klaidos.map(x=>x.tekstas)'), [], "klaidų nėra");
+  const t = M('ataskaitosTurinys(state)'), B = t.blokai, L = B.filter(b=>b.t === "l"), P = B.filter(b=>b.t === "p").map(b=>b.tekstas);
+  lygu([t.pavadinimas, t.pirkimas, t.priedas], ["PASIŪLYMŲ EKONOMINIO NAUDINGUMO VERTINIMO SUVESTINĖ", "330 kV oro linijos rekonstrukcijos darbai", M('GP_EKSPORTAS.siandien()')], "antraštė, pirkimas ir data");
+  tiesa(new RegExp("^Pirkimo vykdytojas - LITGRID AB \\(perkantysis subjektas\\)\\. Pasiūlymai vertinami pagal sąnaudų ir kokybės santykį \\(" + M("teise('en_kokybes_santykis', state)").replace(/[.()]/g, "\\$&") + "\\)\\. Vertinimo tvarka, nustatyta pirkimo dokumentuose:$").test(P[0]), "1 punktas: " + P[0]);
+  tiesa(B.some(b=>b.t === "pp" && /Minimalus pereinamasis kokybės balas - 8/.test(b.tekstas)), "vertinimo tvarkoje - pereinamasis balas: " + B.filter(b=>b.t === "pp").map(b=>b.tekstas).join(" | ").slice(0, 400));
+  lygu(L[0].antrastes, ["Žymuo", "Kriterijus", "Lyginamasis svoris", "Kaip vertinama"], "kriterijų lentelė");
+  lygu(L[0].eilutes.map(e=>e[0]), ["C", "S1", "T1", "T2", "T3", "T4"], "žymenys: kaina (sąnaudos), dedamoji ir kriterijai");
+  tiesa(/^Sąnaudų dedamoji: .*, kW$/.test(L[0].eilutes[1][1]) && L[0].eilutes[1][3] === "Įskaičiuojama į C (gyvavimo ciklo sąnaudos)", "dedamosios eilutė: " + L[0].eilutes[1]);
+  lygu(L[1].antrastes, ["Eil. Nr.", "Tiekėjas", "Kaina, Eur be PVM", "S1, kW", "T1", "T2", "T3", "T4"], "pasiūlymų duomenų antraštės - žymenys");
+  lygu(L[1].eilutes.map(e=>[e[0], e[1]]), [["1", "UAB „Alfa statyba“"], ["2", "UAB „Beta ranga“"], ["3", "UAB „Gama linijos“"], ["4", "UAB „Delta“"]], "pateikimo eile");
+  lygu([L[1].eilutes[0][4], L[1].eilutes[0][6], L[1].eilutes[2][6], L[1].eilutes[3][3]], ["4; 5; 4 (vid. 4,33)", "Taip", "Ne", "neįvesta"], "reikšmės kaip įvestos");
+  tiesa(P.some(x=>/^Pasiūlymų duomenys \(pateikimo eile; žymenys - kaip 2 punkto lentelėje\):$/.test(x)), "3 punktas");
+  // balai ir eilė: pirmas - pusjuodis; eilėje tik vertinami
+  const r = M('(function(){ const r = skaiciuok(state); return { eile: r.rikiuoti.map(e=>e.tiekejas), atm: r.eilutes.filter(e=>e.atmestas).map(e=>[e.tiekejas, e.atmestas]), tr: r.eilutes.filter(e=>!e.atmestas && e.truksta.length).map(e=>e.tiekejas) }; })()');
+  lygu([L[2].antrastes[0], L[2].antrastes[1], L[2].pusjuodes, L[2].eilutes.map(e=>e[1])], ["Vieta", "Tiekėjas", [0], r.eile], "eilės lentelė");
+  lygu(L[2].antrastes.slice(2), ["Sąnaudos, Eur", "C - sąnaudų balai", "T1", "T2", "T3", "T4", "Kokybė iš viso", "EN, balai"], "eilės lentelės stulpeliai - trumpi (EN - kaip formulėje)");
+  tiesa(B.some(b=>b.t === "pp" && /^Ekonominis naudingumas \(EN\) skaičiuojamas pagal formulę EN = /.test(b.tekstas)), "EN paaiškintas vertinimo tvarkoje");
+  tiesa(r.atm.length >= 1 && L[3] && L[3].antrastes[0] === "Tiekėjas" && L[3].antrastes[1] === "Priežastis" && r.atm.every(x=>L[3].eilutes.some(e=>e[0] === x[0] && e[1].toLowerCase().indexOf(x[1].toLowerCase()) >= 0)) && L[3].eilutes.every(e=>/^[A-ZĄČĘĖĮŠŲŪŽ]/.test(e[1])), "neįtraukti su priežastimis: " + JSON.stringify(L[3] && L[3].eilutes));
+  tiesa(L[3].eilutes.some(e=>e[0] === "UAB „Gama linijos“" && /ekspertų balų vidurkis \(1,33\) mažesnis už mažiausią priimtiną \(2\)/.test(e[1])), "pereinamojo balo priežastis: " + JSON.stringify(L[3].eilutes));
+  const isv = P[P.length - 1];
+  tiesa(new RegExp("^Pirmas pasiūlymų eilėje - " + r.eile[0].replace(/[.()]/g, "\\$&") + " \\(ekonominis naudingumas [\\d,]+ bal\\.\\)\\. Suvestinėje įvertintas tik pasiūlymų ekonominis naudingumas").test(isv) && /Sprendimą dėl pasiūlymų eilės priima pirkimo komisija\.$/.test(isv), "išvada: " + isv);
+  const visas = JSON.stringify(t);
+  tiesa(!/laimėtoj/i.test(visas) && !/[–—]/.test(visas) && !/undefined|NaN/.test(visas), "be „laimėtojo“, ilgųjų brūkšnių ir techninių žymų");
+  lygu(B[B.length - 1], { t:"ps", eilutes:["Komisijos pirmininkas  ____________________________________", "Komisijos narys  ____________________________________", "Komisijos narys  ____________________________________"] }, "parašų eilutės");
+  tiesa(!B.some(b=>b.t === "pp" && /MOKOMASIS PAVYZDYS/.test(b.tekstas)), "ne pavyzdys - be žymos");
+  M('state.pavyzdys = true');
+  tiesa(M('ataskaitosTurinys(state)').blokai[0].tekstas === "MOKOMASIS PAVYZDYS - skaičiai išgalvoti.", "mokomasis pavyzdys pažymėtas pirmoje eilutėje");
+});
+
+testas(G13, "Vertinimo suvestinė - Word ir mygtukas: gulsčias A4 (paraštės 1134), lentelės DXA ir FIXED per teksto plotį (14570), antraštės eilutė kartojama, Arial iš stilių, be U+2013; failo vardas; su klaidomis ar be pasiūlymų - klaida su priežastimi ir failas nekuriamas; mygtukas 5 žingsnyje", async ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document;
+  M(SUV_JS);
+  await w.uzkraukDocx();
+  const blob = await w.sudarykAtaskaita(M('ataskaitosTurinys(state)'));
+  const zip = await JSZip.loadAsync(Uint8Array.from(new Uint8Array(await blob.arrayBuffer())));
+  const xml = await zip.file("word/document.xml").async("string"), core = await zip.file("docProps/core.xml").async("string");
+  const pg = /<w:pgSz [^>]*>/.exec(xml)[0], mar = /<w:pgMar [^>]*>/.exec(xml)[0];
+  tiesa(/w:w="16838"/.test(pg) && /w:h="11906"/.test(pg) && /w:orient="landscape"/.test(pg), "gulsčias A4: " + pg);
+  tiesa(["top", "bottom", "left", "right"].every(k=>new RegExp('w:' + k + '="1134"').test(mar)), "paraštės: " + mar);
+  const lent = xml.split("<w:tbl>").slice(1).map(x=>x.split("</w:tbl>")[0]);
+  tiesa(lent.length === 4 && lent.every(t=>{
+    const g = (t.match(/<w:gridCol w:w="(\d+)"/g) || []).map(x=>+/"(\d+)"/.exec(x)[1]);
+    return /<w:tblLayout w:type="fixed"\/>/.test(t) && /<w:tblW w:type="dxa" w:w="14570"\/>/.test(t) && g.reduce((a, b)=>a + b, 0) === 14570 && g.every(x=>x > 400) && /<w:tblHeader\/>/.test(t);
+  }), "4 lentelės - FIXED, DXA, 14570, antraštė kartojama: " + lent.map(t=>(t.match(/<w:gridCol w:w="(\d+)"/g) || []).length).join(","));
+  tiesa(!/<w:rFonts/.test(xml) && !/[–—]/.test(xml) && !/w:val="false"/.test(xml), "šriftas iš stilių, be ilgųjų brūkšnių, be w:val=false");
+  tiesa(/PASIŪLYMŲ EKONOMINIO NAUDINGUMO VERTINIMO SUVESTINĖ/.test(xml) && /UAB „Alfa statyba“/.test(xml) && /Komisijos pirmininkas/.test(xml), "turinys Word faile");
+  tiesa(/Vidaus dokumentas: balus ir pasiūlymų eilę tvirtina pirkimo komisija\./.test(core), "pastaba failo savybėse");
+  tiesa(/^Vertinimo-suvestine_330_kV_oro_linijos_rekonstrukcijos_darbai_\d{4}-\d\d-\d\d\.docx$/.test(M('ataskaitosVardas()')), "failo vardas: " + M('ataskaitosVardas()'));
+  // mygtukas 5 žingsnyje
+  const myg = d.getElementById("btnAtaskaita");
+  tiesa(d.getElementById("s5").contains(myg) && myg.textContent === "Atsisiųsti vertinimo suvestinę (Word)", "mygtukas 5 žingsnyje");
+  // paspaudus - failas (atsisiuntimas perimamas)
+  const atsisiusta = []; const seno = w.HTMLAnchorElement.prototype.click;
+  w.HTMLAnchorElement.prototype.click = function(){ if(this.download) atsisiusta.push(this.download); else seno.call(this); };
+  try {
+    await w.sukurkAtaskaita();
+    tiesa(atsisiusta.length === 1 && /^Vertinimo-suvestine_.*\.docx$/.test(atsisiusta[0]) && /Vertinimo suvestinė parengta: Vertinimo-suvestine_/.test(d.getElementById("ataskaitosBusena").textContent), "atsisiųsta: " + atsisiusta + " / " + d.getElementById("ataskaitosBusena").textContent);
+    // be pasiūlymų
+    M('state.pasiulymai = []; renderAll()');
+    w.sukurkAtaskaita();
+    tiesa(/Vertinimo suvestinė neparengta - 4 žingsnyje įveskite bent vieną pasiūlymą\./.test(d.getElementById("ataskaitosBusena").textContent) && atsisiusta.length === 1, "be pasiūlymų: " + d.getElementById("ataskaitosBusena").textContent);
+    // su klaidomis
+    M(SUV_JS); M('state.pirkimas.kainosSvorisAuto = false; state.pirkimas.kainosSvoris = 10; renderAll()');
+    w.sukurkAtaskaita();
+    tiesa(/Vertinimo suvestinė neparengta - pirmiausia ištaisykite klaidas \(\d+\): /.test(d.getElementById("ataskaitosBusena").textContent) && atsisiusta.length === 1, "su klaidomis: " + d.getElementById("ataskaitosBusena").textContent);
+  } finally { w.HTMLAnchorElement.prototype.click = seno; }
+});
+
+/* =========================================================================
+   PIRKIMO OBJEKTO DALYS (2026-11-13, naudotojo „atskiri kriterijų rinkiniai pirkimo objekto dalims“): kiekviena dalis - savo kriterijai,
+   svoriai, ribos ir pasiūlymai; priedas ir suvestinė - visoms dalims
+   ========================================================================= */
+const GD = "Pirkimo objekto dalys (2026-11-13)";
+function dalysPradzia(w, vardai){
+  w.eval(`(function(){ const s = tusciaBusena(); s.pirkimas.pavadinimas = "Jungtuvų ir skyriklių"; s.pirkimas.objektas = "prekes"; s.pirkimas.objektasAuto = false; state = s;
+    ["garantija", "terminas"].forEach(k=>pridekIsBibliotekos(bibliotekosIndeksas(k))); ${vardai ? "ijunkDalis(" + JSON.stringify(vardai) + ");" : ""} renderAll(); })()`);
+}
+const dTx = el => (el ? el.textContent : "").replace(/\s+/g, " ").trim();
+
+testas(GD, "Įjungimas ir perjungimas: mygtukas papildomuose nustatymuose sukuria dvi dalis (I - esamas rinkinys, II - jo kopija be pasiūlymų), dalių juosta 2, 4 ir 5 žingsniuose; perjungus keičiasi kriterijai, svoriai, ribos ir pasiūlymai, o pavadinimas, formulė ir apvalinimas - bendri; fokusas lieka ant dalies mygtuko; pavadinimas atnaujinamas neperpiešiant", ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document;
+  dalysPradzia(w);
+  M('(function(){ const p = naujasPasiulymas("UAB A"); p.kaina = 1000; state.pasiulymai.push(p); renderAll(); })()');
+  const myg = d.getElementById("btnDalys");
+  tiesa(d.getElementById("papildomi").contains(myg) && !myg.hidden && myg.textContent === "Atskiri kriterijai pirkimo objekto dalims" && /pakanka vieno rinkinio/.test(d.getElementById("daliuIjungimoPastaba").textContent), "mygtukas papildomuose nustatymuose");
+  lygu([M('state.dalys'), Array.from(d.querySelectorAll("[data-daliu-vieta]")).map(x=>x.dataset.daliuVieta + ":" + x.innerHTML.length)], [null, ["s2:0", "s3:0", "s4:0", "s5:0"]], "be dalių - juostų nėra");
+  const idPries = M('state.kriterijai.map(k=>k.id)');
+  myg.click();
+  lygu([M('state.dalys.length'), M('state.aktyvi'), M('state.dalys[0].kriterijai.map(k=>k.id)'), M('state.dalys[1].kriterijai.map(k=>k.pavadinimas)'), M('state.dalys[1].kriterijai.some(k=>state.dalys[0].kriterijai.some(x=>x.id === k.id))'),
+        M('[state.dalys[0].pasiulymai.length, state.dalys[1].pasiulymai.length]'), d.activeElement.id, myg.hidden],
+       [2, 0, idPries, M('state.dalys[0].kriterijai.map(k=>k.pavadinimas)'), false, [1, 0], "f_daliesPav", true], "dvi dalys: I - esamas rinkinys, II - kopija su naujais id ir be pasiūlymų");
+  tiesa(/Dalims taikomi atskiri kriterijų rinkiniai \(2 dalys\) - dalys tvarkomos 2 žingsnyje\./.test(d.getElementById("daliuIjungimoPastaba").textContent), "pastaba įjungus");
+  ["s2", "s4", "s5"].forEach(k=>{
+    const j = d.querySelector('[data-daliu-vieta="' + k + '"] .daliu-juosta'), b = Array.from(j.querySelectorAll(".dalis-myg"));
+    lygu([j.getAttribute("role"), j.getAttribute("aria-label"), b.map(x=>x.textContent), b.map(x=>x.getAttribute("aria-pressed")), b.every(x=>x.type === "button")], ["group", "Pirkimo objekto dalys", ["I dalis", "II dalis"], ["true", "false"], true], "juosta " + k);
+  });
+  tiesa(d.querySelector('[data-daliu-vieta="s2"] [data-dalis-veiksmas="prideti"]') && !d.querySelector('[data-daliu-vieta="s4"] [data-dalis-veiksmas]') && /Priedas apima visas pirkimo objekto dalis \(2\)/.test(dTx(d.querySelector('[data-daliu-vieta="s3"]'))), "tvarkymas - tik 2 žingsnyje; 3 žingsnyje - pastaba");
+  // pavadinimas: juostų mygtukai atnaujinami vietoje, fokusas lieka lauke
+  const f = d.getElementById("f_daliesPav"); f.focus();
+  lygu([d.querySelector('label[for="f_daliesPav"]').textContent, /^pvz\., /.test(f.placeholder)], ["I dalies pavadinimas", true], "pavadinimo laukas");
+  ivesk(f, "110 kV <b>jungtuvai</b>");
+  lygu([M('state.dalys[0].pavadinimas'), d.activeElement === f, Array.from(d.querySelectorAll('.dalis-myg[data-dalis="0"]')).map(x=>x.textContent), d.querySelectorAll(".dalis-myg b").length],
+       ["110 kV <b>jungtuvai</b>", true, ["I dalis · 110 kV <b>jungtuvai</b>", "I dalis · 110 kV <b>jungtuvai</b>", "I dalis · 110 kV <b>jungtuvai</b>"], 0], "pavadinimas - tekstu, visose juostose, be perpiešimo");
+  // II dalis: kiti svoriai, ribos; bendri laukai nesikeičia
+  const b4 = d.querySelector('[data-daliu-vieta="s4"] .dalis-myg[data-dalis="1"]'); b4.focus(); b4.click();
+  const akt = d.activeElement;
+  tiesa(akt && akt.classList.contains("dalis-myg") && akt.dataset.dalis === "1" && akt.closest("[data-daliu-vieta]").dataset.daliuVieta === "s4" && akt.getAttribute("aria-pressed") === "true", "fokusas - ant II dalies mygtuko 4 žingsnio juostoje");
+  lygu([M('state.aktyvi'), M('state.pasiulymai.length'), d.querySelector('label[for="f_daliesPav"]').textContent, d.getElementById("f_daliesPav").value], [1, 0, "II dalies pavadinimas", ""], "II dalis: be pasiūlymų");
+  M('state.kriterijai[0].svoris = 25; state.pirkimas.minKokybe = 5; state.pirkimas.maxKaina = 900; state.pirkimas.apvalinimas = 3; poPakeitimo("struktura")');
+  lygu([M('kainosSvoris(state)'), d.getElementById("f_kainosSvoris").value, d.getElementById("f_minKokybe").value], [65, "65", "5"], "II dalies svoris ir riba");
+  d.querySelector('[data-daliu-vieta="s2"] .dalis-myg[data-dalis="0"]').click();
+  lygu([M('state.aktyvi'), M('kainosSvoris(state)'), M('state.pirkimas.minKokybe'), M('state.pirkimas.maxKaina'), M('state.pirkimas.apvalinimas'), M('state.pasiulymai.length'), M('state.kriterijai.map(k=>k.svoris)'), d.getElementById("f_minKokybe").value],
+       [0, 80, null, null, 3, 1, [10, 10], ""], "I dalis: savo svoriai, ribos ir pasiūlymai; apvalinimas - bendras");
+  lygu(M('[state.dalys[1].p.minKokybe, state.dalys[1].p.maxKaina, state.dalys[1].kriterijai[0].svoris, daliuBusenos(state).map(v=>kainosSvoris(v))]'), [5, 900, 25, [80, 65]], "II dalies duomenys išliko");
+});
+
+testas(GD, "Dalių tvarkymas: nauja dalis - aktyvios dalies kriterijų kopija (ne daugiau kaip 12 dalių); šalinimas ir „Vienas rinkinys visoms dalims“ - tik patvirtinus, klausimas sako, kas bus pašalinta; likus vienai daliai - vienas rinkinys; visų dalių klaidos - su dalies numeriu", ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document, kl = [];
+  let ats = true; const senas = w.confirm; w.confirm = m => { kl.push(m); return ats; };
+  try {
+    dalysPradzia(w, ["A", "B"]);
+    M('pasirinkDali(1); state.kriterijai[0].svoris = 30; poPakeitimo("struktura")');
+    d.querySelector('[data-dalis-veiksmas="prideti"]').click();
+    lygu([M('state.dalys.length'), M('state.aktyvi'), M('state.kriterijai.map(k=>k.svoris)'), M('state.dalys[2].pavadinimas'), d.activeElement.id, M('state.kriterijai[0].id !== state.dalys[1].kriterijai[0].id')], [3, 2, [30, 10], "", "f_daliesPav", true], "III dalis - II (aktyvios) dalies kopija");
+    // klaidos su dalies numeriu: III dalyje svorių suma ne 100
+    M('state.pirkimas.kainosSvorisAuto = false; state.pirkimas.kainosSvoris = 10; poPakeitimo("struktura")');
+    const k1 = M('visosKlaidos(state)');
+    tiesa(k1.length >= 1 && k1.every(x=>/^III dalis: /.test(x)) && /Priedas bus parodytas ištaisius klaidas \(\d+\): III dalis: /.test(dTx(d.getElementById("priedoPerziura"))), "klaidos su dalies numeriu: " + k1.join(" | "));
+    d.getElementById("btnPriedas").click();
+    tiesa(/Word priedas neparengtas - pirmiausia ištaisykite klaidas \(\d+\): III dalis: /.test(dTx(d.getElementById("priedoBusena"))), "Word priedas nesudaromas: " + dTx(d.getElementById("priedoBusena")));
+    M('state.pirkimas.kainosSvorisAuto = true; poPakeitimo("struktura")');
+    lygu(M('visosKlaidos(state)'), [], "ištaisius - klaidų nėra");
+    // šalinimas: atsisakius - nieko; patvirtinus - III pašalinta
+    ats = false; d.querySelector('[data-dalis-veiksmas="salinti"]').click();
+    lygu([M('state.dalys.length'), /^Šalinti III dalį su jos kriterijais\?$/.test(kl[kl.length - 1])], [3, true], "atsisakius: " + kl[kl.length - 1]);
+    ats = true; d.querySelector('[data-dalis-veiksmas="salinti"]').click();
+    lygu([M('state.dalys.length'), M('state.aktyvi'), M('state.dalys.map(x=>x.pavadinimas)')], [2, 1, ["A", "B"]], "III pašalinta, aktyvi - II");
+    // dalių riba
+    M('while(state.dalys.length < 12) pridekDali(); renderAll()');
+    lygu([M('state.dalys.length'), !!d.querySelector('[data-dalis-veiksmas="prideti"]'), M('pridekDali()'), d.querySelectorAll('[data-daliu-vieta="s2"] .dalis-myg').length, d.querySelector('[data-daliu-vieta="s2"] .dalis-myg[data-dalis="11"]').textContent], [12, false, null, 12, "XII dalis"], "ne daugiau kaip 12 dalių");
+    // „Vienas rinkinys visoms dalims“: lieka aktyvios dalies rinkinys
+    M('pasirinkDali(1); renderAll()');
+    M('(function(){ const p = naujasPasiulymas("UAB B"); p.kaina = 500; state.pasiulymai.push(p); renderAll(); })()');
+    ats = false; d.querySelector('[data-dalis-veiksmas="isjungti"]').click();
+    tiesa(M('state.dalys.length') === 12 && /^Palikti vieną kriterijų rinkinį visoms dalims\?\n\nLiks II dalies \(rodomos dabar\) kriterijai ir pasiūlymai; kitų dalių rinkiniai \(11\) bus pašalinti\.$/.test(kl[kl.length - 1]), "klausimas: " + kl[kl.length - 1]);
+    ats = true; d.querySelector('[data-dalis-veiksmas="isjungti"]').click();
+    lygu([M('state.dalys'), M('state.aktyvi'), M('state.kriterijai.map(k=>k.svoris)'), M('state.pasiulymai.map(p=>p.tiekejas)'), d.getElementById("btnDalys").hidden, d.querySelector('[data-daliu-vieta="s2"]').innerHTML], [null, 0, [30, 10], ["UAB B"], false, ""], "liko II dalies rinkinys, dalių juostų nėra");
+    // dvi dalys: pašalinus vieną - vienas rinkinys, klausimas tai pasako (ir pasiūlymų skaičių)
+    M('ijunkDalis(["A", "B"]); renderAll()');
+    d.querySelector('[data-dalis-veiksmas="salinti"]').click();
+    tiesa(/^Šalinti I dalį „A“ su jos kriterijais ir pasiūlymais \(1\)\?\n\nLiks viena dalis - jos kriterijų rinkinys bus taikomas visam pirkimui\.$/.test(kl[kl.length - 1]) && M('state.dalys') === null && M('state.pasiulymai.length') === 0, "likus vienai - vienas rinkinys: " + kl[kl.length - 1]);
+  } finally { w.confirm = senas; }
+});
+
+testas(GD, "Priedas dalims: įžangos punktas, kiekvienos dalies skyrius su antrašte ir pavadinimu, punktai numeruojami ištisai, dalys su vienoda tvarka aprašomos kartu („I ir III pirkimo objekto dalys“); peržiūra ir Word (antraštė pusjuodė, nelieka puslapio apačioje); generatoriaus skaitytuvas dalis atskiria", async ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document;
+  dalysPradzia(w, ["Jungtuvai", "Skyrikliai", "Matavimo transformatoriai"]);
+  M('pasirinkDali(1); state.kriterijai[0].svoris = 25; state.pirkimas.minKokybe = 5; poPakeitimo("struktura")');
+  const t = M('priedoTurinys(state)'), B = t.blokai, D = B.filter(b=>b.t === "d").map(b=>b.tekstas), P = B.filter(b=>b.t === "p");
+  lygu([t.priedas, t.pavadinimas, t.pirkimas], ["SPS ___ priedas", "EKONOMIŠKAI NAUDINGIAUSIO PASIŪLYMO VERTINIMO METODIKA", "Jungtuvų ir skyriklių"], "antraštė");
+  lygu(B[0], { t:"p", nr:"1.", r:false, tekstas:"Pirkimo objektas skaidomas į 3 dalis. Kiekvienos pirkimo objekto dalies Pasiūlymai vertinami atskirai - pagal tai daliai šiame priede nustatytus vertinimo kriterijus, jų lyginamuosius svorius ir formules." }, "įžangos punktas");
+  lygu(D, ["I ir III pirkimo objekto dalys", "II pirkimo objekto dalis „Skyrikliai“"], "vienodos dalys - kartu, kita - atskirai");
+  lygu(P.map(b=>b.nr), P.map((_, i)=>(i + 1) + "."), "punktai numeruojami ištisai");
+  const sk = B.findIndex(b=>b.t === "d" && /^II /.test(b.tekstas)), pirma = B.slice(0, sk), antra = B.slice(sk);
+  tiesa(pirma.some(b=>b.t === "l" && b.eilutes[0][1] === "X = 80") && antra.some(b=>b.t === "l" && b.eilutes[0][1] === "X = 65") && antra.some(b=>b.t === "p" && /^Minimalus pereinamasis kokybės balas - 5\./.test(b.tekstas))
+    && !pirma.some(b=>b.t === "p" && /Minimalus pereinamasis/.test(b.tekstas)), "kiekvienos dalies svoriai ir ribos - savo skyriuje");
+  lygu(JSON.stringify(M('priedoTurinysVienas(daliesBusena(state, 1))').blokai.map(b=>b.t === "p" ? Object.assign({}, b, { nr:"" }) : b)), JSON.stringify(antra.slice(1).map(b=>b.t === "p" ? Object.assign({}, b, { nr:"" }) : b)), "dalies skyrius - visas tos dalies priedas (skiriasi tik punktų numeriai)");
+  // visos dalys skirtingos - trys skyriai su pavadinimais; visos vienodos - vienas skyrius
+  M('pasirinkDali(2); state.kriterijai[1].svoris = 20; poPakeitimo("struktura")');
+  lygu(M('priedoTurinys(state).blokai.filter(b=>b.t === "d").map(b=>b.tekstas)'), ["I pirkimo objekto dalis „Jungtuvai“", "II pirkimo objekto dalis „Skyrikliai“", "III pirkimo objekto dalis „Matavimo transformatoriai“"], "trys skyriai");
+  // peržiūra
+  const pr = d.getElementById("priedoPerziura");
+  lygu(Array.from(pr.querySelectorAll(".pr-d")).map(x=>x.textContent), ["I pirkimo objekto dalis „Jungtuvai“", "II pirkimo objekto dalis „Skyrikliai“", "III pirkimo objekto dalis „Matavimo transformatoriai“"], "peržiūroje - dalių antraštės");
+  tiesa(w.getComputedStyle(pr.querySelector(".pr-d")).fontWeight === "700", "antraštė pusjuodė");
+  // forma() ir skaitytuvas
+  const t3 = M('priedoTurinys(state)'), fo = w.GP_VERTINIMO_PRIEDAS.forma(t3);
+  lygu([fo.blokai.length, fo.blokai.filter(b=>b.t === "d").map(b=>Object.keys(b).sort().join())], [t3.blokai.length, ["t,tekstas", "t,tekstas", "t,tekstas"]], "forma() dalių antraštes palieka");
+  const a = GP_METODIKA.analizuok(w.GP_VERTINIMO_PRIEDAS.elementai(fo));
+  lygu([a.kodas, a.daliuSk, a.problemos, a.dalys.map(x=>[x.nr, x.numeriai, x.kodas, x.suma, x.kriterijai.map(q=>q.svoris)])],
+       ["kks", 3, [], [["I", [1], "kks", 100, [80, 10, 10]], ["II", [2], "kks", 100, [65, 25, 10]], ["III", [3], "kks", 100, [70, 10, 20]]]], "skaitytuvas: trys dalys, kiekvienos svorių suma 100");
+  // Word: antraštė pusjuodė su „laikyti su kitu“
+  const x = await priedoDocx(), dp = x.xml.split("<w:p>").concat(x.xml.split("<w:p ")).filter(p=>/II pirkimo objekto dalis/.test(p))[0] || "";
+  tiesa(/<w:keepNext\/>/.test(dp) && /<w:b\/>/.test(dp) && !/w:val="false"/.test(x.xml), "Word: dalies antraštė pusjuodė ir „laikyti su kitu“: " + dp.slice(0, 300));
+  tiesa(/I pirkimo objekto dalis „Jungtuvai“/.test(x.xml) && /Pirkimo objektas skaidomas į 3 dalis/.test(x.xml), "Word turinys");
+});
+
+testas(GD, "Pasiūlymai, rezultatai ir suvestinė dalims: kiekvienos dalies pasiūlymai vertinami pagal jos kriterijus; suvestinėje - dalių skyriai, dalis be pasiūlymų - viena eilutė, parašų eilutės vieną kartą; klaidos tik dalių su pasiūlymais; be pasiūlymų nė vienoje dalyje - neparengiama", ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document;
+  dalysPradzia(w, ["Jungtuvai", "Skyrikliai", "Kabeliai"]);
+  M(`(function(){ const mk = (t, kaina, g, tr) => { const p = naujasPasiulymas(t); p.kaina = kaina; p.reiksmes[state.kriterijai[0].id] = g; p.reiksmes[state.kriterijai[1].id] = tr; return p; };
+    state.pasiulymai = [mk("UAB A", 1000, 24, 90), mk("UAB B", 900, 0, 180)];
+    pasirinkDali(1); state.kriterijai[0].svoris = 40; state.pasiulymai = [mk("UAB B", 500, 0, 180), mk("UAB C", 520, 24, 90)]; sinchronizuokDali(); pasirinkDali(0); renderAll(); })()`);
+  const r = M('daliuBusenos(state).map(v=>{ const r = skaiciuok(v); return [v.dalis.nr, r.rikiuoti.map(e=>e.tiekejas), r.W]; })');
+  lygu(r, [["I", ["UAB A", "UAB B"], 80], ["II", ["UAB C", "UAB B"], 50], ["III", [], 80]], "kiekviena dalis - pagal savo svorius: " + JSON.stringify(r));
+  tiesa(/UAB A/.test(dTx(d.getElementById("rezultatai"))) && !/UAB C/.test(dTx(d.getElementById("rezultatai"))), "5 žingsnis rodo aktyvios (I) dalies rezultatus");
+  d.querySelector('[data-daliu-vieta="s5"] .dalis-myg[data-dalis="1"]').click();
+  tiesa(/UAB C/.test(dTx(d.getElementById("rezultatai"))) && !/UAB A/.test(dTx(d.getElementById("rezultatai"))) && d.querySelectorAll("#pasiulymaiKunas tr").length >= 2, "perjungus - II dalies rezultatai ir pasiūlymai");
+  const t = M('ataskaitosTurinys(state)'), B = t.blokai;
+  lygu(B.filter(b=>b.t === "d").map(b=>b.tekstas), ["I pirkimo objekto dalis „Jungtuvai“", "II pirkimo objekto dalis „Skyrikliai“", "III pirkimo objekto dalis „Kabeliai“"], "suvestinėje - visos dalys");
+  const iIII = B.findIndex(b=>b.t === "d" && /^III /.test(b.tekstas));
+  lygu([B[iIII + 1], B.filter(b=>b.t === "ps").length, B[B.length - 1].t, t.pavadinimas], [{ t:"pp", tekstas:"Šios dalies pasiūlymai neįvesti.", r:false }, 1, "ps", "PASIŪLYMŲ EKONOMINIO NAUDINGUMO VERTINIMO SUVESTINĖ"], "dalis be pasiūlymų ir parašų eilutės");
+  const eiles = B.filter(b=>b.t === "l" && b.antrastes[0] === "Vieta").map(b=>b.eilutes.map(e=>e[1]));
+  lygu(eiles, [["UAB A", "UAB B"], ["UAB C", "UAB B"]], "kiekvienos dalies pasiūlymų eilė");
+  // klaidos - tik dalių su pasiūlymais: III dalies (be pasiūlymų) klaida suvestinės nestabdo, II dalies - stabdo
+  M('pasirinkDali(2); state.pirkimas.kainosSvorisAuto = false; state.pirkimas.kainosSvoris = 5; sinchronizuokDali(); renderAll()');
+  const atsisiusta = [], seno = w.HTMLAnchorElement.prototype.click;
+  w.HTMLAnchorElement.prototype.click = function(){ if(this.download) atsisiusta.push(this.download); else seno.call(this); };
+  try {
+    tiesa(M('visosKlaidos(state)').some(x=>/^III dalis: /.test(x)), "III dalyje klaida");
+    const p = w.sukurkAtaskaita();
+    tiesa(p && typeof p.then === "function" && !/neparengta/.test(dTx(d.getElementById("ataskaitosBusena"))), "III dalies klaida suvestinės nestabdo: " + dTx(d.getElementById("ataskaitosBusena")));
+    M('pasirinkDali(1); state.pirkimas.kainosSvorisAuto = false; state.pirkimas.kainosSvoris = 5; sinchronizuokDali(); renderAll()');
+    w.sukurkAtaskaita();
+    tiesa(/Vertinimo suvestinė neparengta - pirmiausia ištaisykite klaidas \(\d+\): II dalis: /.test(dTx(d.getElementById("ataskaitosBusena"))) && !/III dalis/.test(dTx(d.getElementById("ataskaitosBusena"))), "II dalies klaida stabdo: " + dTx(d.getElementById("ataskaitosBusena")));
+    M('state.dalys.forEach(x=>{ x.pasiulymai = []; }); state.pasiulymai = []; renderAll()');
+    w.sukurkAtaskaita();
+    tiesa(/Vertinimo suvestinė neparengta - 4 žingsnyje įveskite bent vieną pasiūlymą\./.test(dTx(d.getElementById("ataskaitosBusena"))), "be pasiūlymų: " + dTx(d.getElementById("ataskaitosBusena")));
+  } finally { w.HTMLAnchorElement.prototype.click = seno; }
+});
+
+testas(GD, "Išsaugojimas: dalys įrašomos su aktyvios dalies duomenimis ir atkuriamos (aktyvi dalis, pavadinimai, kiekvienos dalies kriterijai, ribos ir pasiūlymai); seni duomenys - be dalių; netinkamos dalys (viena, ne sąrašas, per daug, svetimi laukai) - sutvarkomos; atsarginė kopija - su dalimis", ()=>{
+  paruosk();
+  const w = ramas.contentWindow, d = w.document;
+  dalysPradzia(w, ["Jungtuvai", "Skyrikliai"]);
+  M(`(function(){ pasirinkDali(1); state.kriterijai = state.kriterijai.filter((k, i)=>i === 0); state.kriterijai[0].svoris = 35; state.pirkimas.minKokybe = 7; const p = naujasPasiulymas("UAB C"); p.kaina = 300; p.reiksmes[state.kriterijai[0].id] = 12; state.pasiulymai = [p]; renderAll(); issaugok(true); })()`);
+  const raw = JSON.parse(w.localStorage.getItem(M('STORE_KEY')));
+  lygu([raw.dalys.length, raw.aktyvi, raw.dalys.map(x=>x.pavadinimas), raw.dalys[1].kriterijai.map(k=>k.svoris), raw.dalys[1].p.minKokybe, raw.dalys[1].pasiulymai.map(p=>p.tiekejas), raw.dalys[0].kriterijai.length, Object.keys(raw.dalys[0].p).sort()],
+       [2, 1, ["Jungtuvai", "Skyrikliai"], [35], 7, ["UAB C"], 2, ["fiksuotaKaina", "kainosSvoris", "kainosSvorisAuto", "maxKaina", "minKokybe", "pSetMax", "pSetMin"]], "saugykloje - aktyvios dalies duomenys dalių sąraše (nors kriterijų sąrašas buvo pakeistas nauju)");
+  M('atstatyk()'); w.localStorage.setItem(M('STORE_KEY'), JSON.stringify(raw));
+  tiesa(M('ikelk()'), "įkelta"); M('renderAll()');
+  lygu([M('state.dalys.length'), M('state.aktyvi'), M('state.kriterijai.map(k=>k.svoris)'), M('state.pirkimas.minKokybe'), M('state.pasiulymai.map(p=>[p.tiekejas, p.kaina, p.reiksmes[state.kriterijai[0].id]])'), M('kainosSvoris(daliesBusena(state, 0))'), d.querySelector('[data-daliu-vieta="s2"] .dalis-myg[aria-pressed="true"]').textContent],
+       [2, 1, [35], 7, [["UAB C", 300, 12]], 80, "II dalis · Skyrikliai"], "atkurta: aktyvi II dalis su savo kriterijais, riba ir pasiūlymu");
+  // seni duomenys ir netinkamos dalys
+  const be = Object.assign({}, raw); delete be.dalys; delete be.aktyvi;
+  lygu([M('sanitizeBusena(' + JSON.stringify(be) + ').dalys'), M('tusciaBusena().dalys'), M('tusciaBusena().aktyvi')], [null, null, 0], "be dalių - vienas rinkinys");
+  const sn = x => M('(function(){ const s = sanitizeBusena(' + JSON.stringify(Object.assign({}, raw, x)) + '); return s && [s.dalys ? s.dalys.length : null, s.aktyvi, s.kriterijai.length]; })()');
+  lygu([sn({ dalys:"ne" }), sn({ dalys:[raw.dalys[0]] }), sn({ dalys:[null, 5, raw.dalys[0]] }), sn({ aktyvi:9 }), sn({ aktyvi:"1" })], [[null, 0, 1], [null, 0, 1], [null, 0, 1], [2, 0, 2], [2, 0, 2]], "netinkamos dalys - vienas rinkinys; netinkama aktyvi dalis - pirma");
+  lygu(M('(function(){ const s = sanitizeBusena(' + JSON.stringify(Object.assign({}, raw, { dalys: Array.from({ length:20 }, ()=>raw.dalys[0]) })) + '); return s.dalys.length; })()'), 12, "ne daugiau kaip 12 dalių");
+  const pikta = JSON.parse(JSON.stringify(raw)); pikta.dalys[0].pavadinimas = { a:1 }; pikta.dalys[0].id = "<img>"; pikta.dalys[0].p = { kainosSvoris:"x", minKokybe:-3, svetimas:"<b>" }; pikta.dalys[0].kita = "x"; pikta.dalys[1].kriterijai = "ne"; pikta.dalys[1].pasiulymai = null;
+  const sp = M('(function(){ const s = sanitizeBusena(' + JSON.stringify(pikta) + '); return [s.dalys[0].pavadinimas, /^[\\w-]+$/.test(s.dalys[0].id), s.dalys[0].p.minKokybe, typeof s.dalys[0].p.kainosSvoris, Object.keys(s.dalys[0]).sort(), Object.keys(s.dalys[0].p).length, s.dalys[1].kriterijai, s.dalys[1].pasiulymai]; })()');
+  lygu(sp, ["", true, null, "number", ["id", "kriterijai", "p", "pasiulymai", "pavadinimas", "sanaudos"], 7, [], []], "svetimi laukai ir tipai");
+  // atsarginė kopija (JSON): aktyvios dalies pakeitimas be išsaugojimo - kopijoje
+  M('state.kriterijai[0].svoris = 45');
+  let kopija = null; const senasBlob = w.Blob; w.Blob = function(dalys, o){ if(o && o.type === "application/json") kopija = dalys[0]; return new senasBlob(dalys, o); };
+  const seno = w.HTMLAnchorElement.prototype.click; w.HTMLAnchorElement.prototype.click = function(){};
+  try { d.getElementById("btnEksportas").click(); } finally { w.Blob = senasBlob; w.HTMLAnchorElement.prototype.click = seno; }
+  lygu(JSON.parse(kopija).dalys[1].kriterijai.map(k=>k.svoris), [45], "atsarginėje kopijoje - naujausi aktyvios dalies duomenys");
+  M('atstatyk()');
+});
+
+testas(GD, "Pirkimo kortelė: kai kortelėje dalių bent dvi - 2 žingsnyje siūlymas „Atskiri kriterijai dalims“ (dalys sukuriamos kortelės pavadinimais); į kortelę įrašomi kiekvienos dalies kriterijai; skirtingi dalių vertinimo kriterijai - kortelės kriterijus nekeičiamas ir klausimas tai pasako", async ()=>{
+  const { f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html");
+  try {
+    w.eval("atstatyk()");
+    const klausimai = []; w.confirm = m => { klausimai.push(m); return true; };
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KV_KORTELE, { kriterijus: "kaina", dalys: [{ pavadinimas: "Jungtuvai", verte: null }, { pavadinimas: "Skyrikliai", verte: null }, { pavadinimas: "Kabeliai", verte: null }] }))).kortele;
+    // kortelė su viena dalimi ar neskaidomu pirkimu - siūlymo nėra (atskirų rinkinių reikia tik kelioms dalims)
+    const k1 = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KV_KORTELE, { numeris: "VPP-DAL-1", dalys: [{ pavadinimas: "Vienintelė", verte: null }] }))).kortele;
+    w.KORTELE.atnaujink();
+    tiesa(await w.KORTELE.pasirink(k1.id), "pasirinkta kortelė su viena dalimi"); await lauk(60);
+    lygu([w.eval("kortelesDaliuVardai()"), !!d.querySelector(".daliu-siulymas")], [[], false], "viena dalis - be siūlymo");
+    w.KORTELE.atnaujink();
+    tiesa(await w.KORTELE.pasirink(k.id), "pasirinkta"); await lauk(60);
+    const sl = d.querySelector('[data-daliu-vieta="s2"] .daliu-siulymas');
+    tiesa(sl && /^Pirkimo kortelėje - 3 pirkimo objekto dalys\.Jei jų vertinimo kriterijai, svoriai ar ribos skiriasi:Atskiri kriterijai dalims$/.test(sl.textContent.replace(/\s+/g, " ").trim()) && w.eval("state.dalys") === null, "siūlymas: " + (sl && dTx(sl)));
+    w.eval('["garantija", "terminas"].forEach(k=>pridekIsBibliotekos(bibliotekosIndeksas(k))); renderAll()');
+    d.querySelector('[data-daliu-vieta="s2"] [data-dalis-veiksmas="ijungti"]').click();
+    lygu([w.eval("state.dalys.map(x=>x.pavadinimas)"), w.eval("state.dalys.map(x=>x.kriterijai.length)"), !!d.querySelector(".daliu-siulymas"), d.activeElement.id], [["Jungtuvai", "Skyrikliai", "Kabeliai"], [2, 2, 2], false, "f_daliesPav"], "dalys - kortelės pavadinimais");
+    // vienodi dalių vertinimo kriterijai: kortelės kriterijus - bendras
+    w.eval('pasirinkDali(1); state.kriterijai[0].svoris = 25; state.pirkimas.minKokybe = 5; poPakeitimo("struktura")');
+    d.getElementById("btnIKortele").click();
+    const v = w.GP_KORTELE.gauk(k.id).vertinimas, kl = klausimai[klausimai.length - 1];
+    lygu([v.kriterijus, w.GP_KORTELE.gauk(k.id).kriterijus, v.dalys.map(x=>[x.nr, x.pavadinimas, x.kriterijus, x.kriterijai.map(q=>q.svoris), x.minKokybe]), v.minKokybe, v.priedas.blokai.filter(b=>b.t === "d").length],
+         ["kainos_kokybe", "kainos_kokybe", [["I", "Jungtuvai", "kainos_kokybe", [80, 10, 10], null], ["II", "Skyrikliai", "kainos_kokybe", [65, 25, 10], 5], ["III", "Kabeliai", "kainos_kokybe", [80, 10, 10], null]], null, 2], "kortelėje - kiekvienos dalies kriterijai");
+    tiesa(/- vertinimo metodika - Kainos ir kokybės santykis, 3 dalys \(kriterijų: 3, 3 ir 3\)\n/.test(kl) && /- vertinimo kriterijus: Kaina → Kainos ir kokybės santykis\n/.test(kl), "klausimas: " + kl);
+    tiesa(/^Vertinimo metodika įrašyta pirkimo kortelėje/.test(dTx(d.getElementById("kortelesVertinimas"))), "būsena: " + dTx(d.getElementById("kortelesVertinimas")));
+    // skirtingi dalių vertinimo kriterijai (III dalis - su gyvavimo ciklo sąnaudomis): kortelės kriterijus nekeičiamas
+    w.eval('pasirinkDali(2); const dd = pridekDedamaja("nuostoliu_sanaudos"); state.sanaudos.metai = 25; state.sanaudos.diskontas = 4; dd.vienetoKaina = 876; poPakeitimo("struktura")');
+    tiesa(/skiriasi nuo dabartinės/.test(dTx(d.getElementById("kortelesVertinimas"))), "pakeitus dalį - „skiriasi“: " + dTx(d.getElementById("kortelesVertinimas")));
+    w.GP_KORTELE.issaugok(Object.assign(w.GP_KORTELE.gauk(k.id), { kriterijus: "kaina" }));
+    d.getElementById("btnIKortele").click();
+    const v2 = w.GP_KORTELE.gauk(k.id).vertinimas, kl2 = klausimai[klausimai.length - 1];
+    lygu([v2.kriterijus, w.GP_KORTELE.gauk(k.id).kriterijus, v2.dalys.map(x=>x.kriterijus)], ["", "kaina", ["kainos_kokybe", "kainos_kokybe", "sanaudu_kokybe"]], "skirtingi kriterijai - kortelės kriterijus nepakeistas");
+    tiesa(/- kortelės vertinimo kriterijus nekeičiamas - dalių vertinimo kriterijai skiriasi \(I - Kainos ir kokybės santykis, II - Kainos ir kokybės santykis, III - Sąnaudų ir kokybės santykis\)/.test(kl2) && !/vertinimo kriterijus: Kaina →/.test(kl2), "klausimas: " + kl2);
+  } finally { f.remove(); }
+});
+
+/* =========================================================================
+   ANGLŲ KALBA (2026-11-13, naudotojo užduotis): LT / EN jungiklis; sąsaja, patikros, rekomendacijos, priedas ir suvestinė - pasirinkta kalba;
+   naudotojo duomenys neverčiami (skaičiuoklės įrašyti bibliotekos tekstai - taip); į pirkimo kortelę metodika visada lietuviškai.
+   Testai kalbą keičia be įsiminimo (nustatykKalba(k, false)) ir pabaigoje grąžina lietuvių - rėmelis bendras visiems testams.
+   ========================================================================= */
+const GK = "Anglų kalba (2026-11-13)";
+/* Lietuviškas tekstas ekrane: raidės su diakritiniais ženklais (santrumpos PĮ ir VPĮ neverčiamos) ir dažni žodžiai be jų */
+const LT_LIKUCIAI_JS = `(function(){
+  const LT = /[ąčęėįšųūžĄČĘĖĮŠŲŪŽ]|\\b(ir|arba|kai|yra|nuo|iki|pagal|kaina|kainos|balai|svoris|suma|priedas|pirkimo|dalis|dalys|vieta|taip|tiekėjas|kriterijus|kriterijai)\\b/i;
+  const sv = t => t.replace(/V?PĮ/g, "");
+  const out = [], w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n;
+  while((n = w.nextNode())){ const p = n.parentElement; if(!p || p.closest("script,style")) continue; const t = n.nodeValue.trim(); if(t && LT.test(sv(t))) out.push(t.slice(0, 70)); }
+  document.querySelectorAll("[placeholder],[aria-label],[title]").forEach(el=>{ ["placeholder", "aria-label", "title"].forEach(a=>{ const v = el.getAttribute(a); if(v && LT.test(sv(v))) out.push(a + "=" + v.slice(0, 60)); }); });
+  return Array.from(new Set(out));
+})()`;
+function ltGrizk(){ M('nustatykKalba("lt", false)'); }
+
+testas(GK, "Jungiklis antraštėje: numatyta lietuvių; perjungus - <html lang>, puslapio pavadinimas, statinis tekstas, laukų pavyzdžiai, informacinė skiltis ir pirkimo kortelės juosta angliškai; grįžus - lietuviškas tekstas toks pat kaip buvo", async ()=>{
+  paruosk();
+  const d = ramas.contentDocument, w = ramas.contentWindow;
+  const vaizdas = () => [d.documentElement.lang, d.title, d.querySelector(".brand-module").textContent, d.querySelector('a[href="#s2"]').textContent, d.getElementById("f_pavadinimas").placeholder,
+    d.getElementById("btnPavyzdys").title, d.querySelector("#s3 h2").textContent, d.getElementById("btnBiblioteka").textContent, Array.from(d.querySelectorAll(".lang-toggle button")).map(b=>b.textContent + ":" + b.getAttribute("aria-pressed") + ":" + b.classList.contains("active"))];
+  const statinis = () => Array.from(d.querySelectorAll("[data-en]")).map(e=>e.textContent).concat(Array.from(d.querySelectorAll("[data-en-placeholder]")).map(e=>e.placeholder));
+  const lt0 = vaizdas(), st0 = statinis();
+  lygu(lt0, ["lt", "Ekonominio naudingumo skaičiuoklė · G-Procure", "Ekonominio naudingumo skaičiuoklė", "2Kriterijai ir svoriai", "pvz., 330 kV oro linijos rekonstrukcijos darbai", "Įkelti pavyzdinius duomenis", "Priedas pirkimo sąlygoms", "Visi kriterijai iš sąrašo", ["LT:true:true", "EN:false:false"]], "lietuviškai");
+  tiesa(st0.length > 90, "statinių tekstų su vertimu: " + st0.length);
+  M('rodykBusena(()=> L("Neišsaugota", "Not saved")); GP_BUSENA.rodyk("#priedoBusena", { tipas: "klaida", tekstas: "Senas pranešimas" }); document.getElementById("ataskaitosBusena").textContent = "Senas";');
+  try {
+    M('nustatykKalba("en", false)');
+    lygu(vaizdas(), ["en", "Economic advantage calculator · G-Procure", "Economic advantage calculator", "2Criteria and weights", "e.g. reconstruction works of a 330 kV overhead line", "Load example data", "Annex to the procurement conditions", "All criteria from the list", ["LT:false:false", "EN:true:true"]], "angliškai");
+    // atvertas kriterijų sąrašas: mygtuko tekstas pagal būseną ir kalbą
+    d.getElementById("btnBiblioteka").click(); M('nustatykKalba("lt", false)');
+    const atvLt = d.getElementById("btnBiblioteka").textContent; M('nustatykKalba("en", false)');
+    lygu([atvLt, d.getElementById("btnBiblioteka").textContent, d.getElementById("biblioteka").hidden], ["Suskleisti kriterijų sąrašą", "Collapse the criteria list", false], "atvertas kriterijų sąrašas");
+    d.getElementById("btnBiblioteka").click();
+    M('rodykBusena(()=> L("Neišsaugota", "Not saved"))');
+    lygu([d.getElementById("busena").textContent, d.getElementById("priedoBusena").textContent, d.getElementById("ataskaitosBusena").textContent], ["Not saved", "", ""], "antraštės žyma - ta pačia kalba; ankstesnio veiksmo pranešimai išvalyti");
+    lygu([M("KALBA"), M('L("a", "b")'), M("BIBLIOTEKA[0].pav"), M("FORMULES.pmin.pav"), M("FORMULES.pmin.tipas")], ["en", "b", "Additional warranty period (months)", "Lowest-price tender formula (relative)", "santykinė"], "žodynai perkurti; loginis raktas nekinta");
+    await lauk(80);
+    const info = d.querySelector("#infoPanelMount"), kort = d.querySelector(".gpk, [data-gp-kortele], #gpk") || d.body;
+    tiesa(/What this is and how to use it/.test(info.textContent) && !/Kas tai ir kaip naudotis/.test(info.textContent), "informacinė skiltis: " + info.textContent.slice(0, 80));
+    tiesa(/Procurement card/.test(d.body.textContent) && !/Pirkimo kortelė(?! „)/.test(d.querySelector("main") ? d.querySelector("main").previousElementSibling.textContent : ""), "kortelės juosta angliškai");
+  } finally { ltGrizk(); }
+  lygu([vaizdas(), statinis(), d.getElementById("busena").textContent], [lt0, st0, "Neišsaugota"], "grįžus - lietuviškas tekstas kaip buvo");
+  M('rodykBusena(null)');
+  lygu([M("BIBLIOTEKA[0].pav"), M("KALBA")], ["Papildomas garantinis laikotarpis (mėn.)", "lt"], "žodynai lietuviškai");
+});
+
+testas(GK, "Angliškai ekrane nelieka lietuviško teksto: pavyzdys su saugos kriterijais ir sąnaudų dedamąja, atvertas kriterijų sąrašas ir nustatymai, rezultatai, klaidų būsena, pirkimo objekto dalys; santrumpos PĮ ir VPĮ lieka", async ()=>{
+  paruosk();
+  try {
+    M(`nustatykKalba("en", false); ikelkPavyzdi(); ["sauga_planas", "sesd_epd", "patirtis_pakopos", "papildoma_funkcija"].forEach(k=>pridekIsBibliotekos(bibliotekosIndeksas(k)));
+       state.pirkimas.kainosSvorisAuto = true; const dd = pridekDedamaja("nuostoliu_sanaudos"); state.sanaudos.metai = 25; state.sanaudos.diskontas = 4; dd.vienetoKaina = 876;
+       state.pasiulymai.forEach((p, i)=>{ p.reiksmes[dd.id] = 100 + 10 * i; }); state.pirkimas.minKokybe = 5; state.pirkimas.maxKaina = 1250000; renderAll();
+       if(document.getElementById("biblioteka").hidden) document.getElementById("btnBiblioteka").click(); document.getElementById("papildomi").open = true;`);
+    await lauk(80);        // grįžimo juosta ir pirkimo kortelės juosta kalbą perima stebėdamos <html lang>
+    lygu(M(LT_LIKUCIAI_JS), [], "pavyzdys su visais blokais");
+    lygu([M('Array.from(document.getElementById("f_formule").options).map(o=>o.textContent)[0]'), M('document.getElementById("f_formule").value'), M('document.getElementById("pridetiSanaudas").options[1].textContent')],
+      ["Lowest-price tender formula (relative)", "pmin", "Energy loss costs"], "sąrašai perpildyti anglų kalba");
+    tiesa(M('document.getElementById("priedoPerziura").textContent').length > 1500 && M('document.querySelectorAll("#rezKunas tr, #s5 table tr").length') > 2, "priedo peržiūra ir rezultatai nupiešti");
+    // klaidų būsena (svorių suma ne 100) ir kita formulė
+    M('state.pirkimas.kainosSvorisAuto = false; state.pirkimas.kainosSvoris = 90; state.pirkimas.formule = "telgen"; state.pirkimas.pSetMin = null; state.pirkimas.pSetMax = null; renderAll();');
+    tiesa(/The weights of price and quality criteria must total 100/.test(M('visosKlaidos(state).join(" ")')) && /Telgen formula needs both parameters/.test(M('visosKlaidos(state).join(" ")')), "klaidos angliškai: " + M('visosKlaidos(state).join(" | ")').slice(0, 300));
+    lygu(M(LT_LIKUCIAI_JS), [], "klaidų būsena");
+    // pirkimo objekto dalys
+    M('state.pirkimas.kainosSvorisAuto = true; state.pirkimas.formule = "pmin"; ijunkDalis(["A", ""]); renderAll();');
+    lygu(M(LT_LIKUCIAI_JS), [], "dalys");
+    lygu([M('document.querySelector("[data-daliu-vieta=s2] .daliu-pav").textContent'), M('Array.from(document.querySelectorAll("[data-daliu-vieta=s2] .dalis-myg")).map(b=>b.textContent)'), M('document.querySelector("label[for=f_daliesPav]").textContent')],
+      ["Criteria for lots:", ["Lot I · A", "Lot II"], "Name of lot I"], "dalių juosta");
+    // fiksuota kaina ir „kokybė į kainą“
+    M('isjunkDalis(); state.pirkimas.formule = "kok_kaina"; renderAll();'); lygu(M(LT_LIKUCIAI_JS), [], "kokybė į kainą");
+    M('state.pirkimas.formule = "pmin"; state.pirkimas.budas = "fiksuota"; renderAll();'); lygu(M(LT_LIKUCIAI_JS), [], "fiksuota kaina");
+  } finally { ltGrizk(); paruosk(); }
+  lygu(M("document.documentElement.lang"), "lt");
+});
+
+testas(GK, "Duomenys perjungiant kalbą: skaičiuoklės įrašyti bibliotekos tekstai, numatytieji pasiūlymų pavadinimai ir pavyzdžio pavadinimas pakeičiami, žmogaus pakeisti - ne; grįžus atgal būsena tokia pati; neaktyvios dalies kriterijai - taip pat", ()=>{
+  paruosk();
+  try {
+    M(`ikelkPavyzdi(); state.kriterijai[1].pavadinimas = "Mano terminas"; state.kriterijai[1].pastaba = "Mano pastaba";
+       pridekDedamaja("nuostoliu_sanaudos"); state.pasiulymai[2].tiekejas = "UAB Trečias"; renderAll();`);
+    const pries = M("JSON.stringify(state)"), k0 = M("JSON.parse(JSON.stringify(state.kriterijai[0]))");
+    lygu([k0.pavadinimas, k0.vienetas, k0.dokumentai], ["Papildomas garantinis laikotarpis (mėn.)", "mėn.", "Pasiūlymo forma (deklaruojama reikšmė) ir ją pagrindžiantys dokumentai"], "prieš");
+    M('nustatykKalba("en", false)');
+    const en = M("JSON.parse(JSON.stringify(state))");
+    lygu(M('JSON.parse(localStorage.getItem(STORE_KEY)).kriterijai[0].pavadinimas'), "Additional warranty period (months)", "pakeisti tekstai iškart išsaugomi (perkrovus - ta pati kalba)");
+    lygu([en.kriterijai[0].pavadinimas, en.kriterijai[0].vienetas, en.kriterijai[0].dokumentai, en.kriterijai[0].pagrindas, en.kriterijai[0].svoris, en.kriterijai[0].iki],
+      ["Additional warranty period (months)", "months", "Tender form (declared value) and supporting documents", "para. 1(1)(c) - warranty service and technical assistance", k0.svoris, k0.iki], "bibliotekos kriterijus - angliškai, skaičiai nepakitę");
+    lygu([en.kriterijai[1].pavadinimas, en.kriterijai[1].pastaba, en.kriterijai[1].vienetas, en.kriterijai[1].dokumentai], ["Mano terminas", "Mano pastaba", "days", "Tender form (declared value) and supporting documents"], "žmogaus pakeisti laukai lieka, nepakeisti - verčiami");
+    tiesa(/^5 - all stages of the task/.test(en.kriterijai[2].lygiai), "lygių aprašymas: " + en.kriterijai[2].lygiai.slice(0, 40));
+    lygu([en.sanaudos.dedamosios[0].pavadinimas, en.sanaudos.dedamosios[0].dokumentai], ["Energy loss costs", "Tender form (guaranteed losses) and the manufacturer's test reports"], "sąnaudų dedamoji");
+    lygu([en.pasiulymai.map(p=>p.tiekejas), en.pirkimas.pavadinimas, en.pasiulymai.map(p=>p.kaina)], [["Supplier A", "Supplier B", "UAB Trečias"], "Procurement of 110 kV circuit breakers (example)", [1200000, 1050000, 1300000]], "pasiūlymai ir pavyzdžio pavadinimas");
+    lygu(M('pagrindoTekstas(state.kriterijai[0].pagrindas, state)'), M('GP_TEISE.cit("en_kokybes_santykis", "PI", "en")') + "(c) - warranty service and technical assistance", "pagrindas su nuoroda iš registro");
+    M('nustatykKalba("lt", false)');
+    lygu(M("JSON.stringify(state)"), pries, "grįžus - būsena kaip buvo");
+    lygu(M('JSON.parse(localStorage.getItem(STORE_KEY)).kriterijai[0].pavadinimas'), "Papildomas garantinis laikotarpis (mėn.)", "ir išsaugota");
+    // neaktyvi dalis ir lietuviškai įvesti duomenys angliškame režime
+    M('ijunkDalis(["A", "B"]); state.kriterijai[0].pavadinimas = "Tik pirmos dalies"; nustatykKalba("en", false);');
+    lygu([M("state.dalys[1].kriterijai[0].pavadinimas"), M("state.kriterijai[0].pavadinimas"), M("state.dalys[0].kriterijai === state.kriterijai")], ["Additional warranty period (months)", "Tik pirmos dalies", true], "dalys");
+    lygu(M('perlokalizuok({ pirkimas:{}, kriterijai:[{ sablonas: 0, pavadinimas: "Kitas" }, { sablonas: 999, pavadinimas: "x" }, { sablonas: null, pavadinimas: BIBLIOTEKA[0].pav }], pasiulymai:[{ tiekejas: "Supplier AB" }, { tiekejas: 5 }] }, bibliotekuTekstai(), bibliotekuTekstai())'), 0, "nėra ką keisti - 0");
+  } finally { ltGrizk(); paruosk(); }
+});
+
+testas(GK, "Priedas ir vertinimo suvestinė angliškai: antraštė „Annex N to the SPC“, kriterijų lentelė, „In the formula:“, teisės nuorodos iš registro anglų forma, skaičiai angliškai; peržiūroje - pastaba, kad anglų tekstas parengtas naudojant DI; dalims - „Lot I“, „Lots I and III“; lietuviškai - be pokyčių", ()=>{
+  paruosk();
+  try {
+    M('ikelkPavyzdi(); state.pirkimas.priedoNr = "10"; state.pirkimas.maxKaina = 1400000.5; renderAll();');
+    const ltT = M('priedoTurinys(state)'), lt = M('priedoTekstas(priedoTurinys(state))');
+    tiesa(!("kalba" in ltT) && lt.indexOf("Pateiktoje formulėje:") > 0 && lt[0] === "SPS 10 priedas" && !M('!!document.querySelector(".priedo-en-pastaba")'), "lietuviškai: " + lt.slice(0, 2).join(" | "));
+    M('nustatykKalba("en", false)');
+    const t = M('priedoTurinys(state)'), en = M('priedoTekstas(priedoTurinys(state))'), J = en.join("\n");
+    lygu([t.kalba, en.slice(0, 3), en.length, t.blokai.map(b=>b.t).join("")], ["en", ["Annex 10 to the SPC", "METHODOLOGY FOR THE EVALUATION OF THE MOST ECONOMICALLY ADVANTAGEOUS TENDER", "Procurement of 110 kV circuit breakers (example)"], lt.length, ltT.blokai.map(b=>b.t).join("")], "ta pati sandara, anglų tekstas");
+    tiesa(en.indexOf("In the formula:") > 0 && en.indexOf("Pateiktoje formulėje:") < 0, "formulės žymenų antraštė");
+    tiesa(en.indexOf("First criterion: Tender price (C) | X = 60 | Tender form - total Tender price in EUR excluding VAT") > 0 && /Second criterion: Additional warranty period \(months\) \(T1\) \| Y1 = 15 \|/.test(J) && /\nTotal \| 100 \| /.test(J), "kriterijų lentelė: " + en.slice(5, 9).join(" ¦ "));
+    tiesa(J.indexOf("selects the most economically advantageous Tender on the basis of the best price-quality ratio (" + M('GP_TEISE.cit("en_kokybes_santykis", "PI", "en")') + ").") > 0 && J.indexOf("(" + M('GP_TEISE.cit("en_eile", "PI", "en")') + ").") > 0, "teisės nuorodos iš registro");
+    tiesa(/Tenders whose price exceeds 1,400,000\.50 EUR excluding VAT are rejected\./.test(J) && /24 months or more \| 15/.test(J) && /more than 0 months but less than 24 months \| T1 = Rp \/ 24 × Y1/.test(J), "skaičiai ir balų lentelė");
+    tiesa(!/[ąčęėįšųūž]/i.test(J.replace(/V?PĮ/g, "")), "be lietuviškų raidžių: " + (J.replace(/V?PĮ/g, "").match(/.{0,30}[ąčęėįšųūž].{0,30}/i) || [""])[0]);
+    const pz = M('(function(){ const e = document.querySelector(".priedo-en-pastaba"); return e ? [e.getAttribute("data-di"), e.textContent, document.querySelector("#priedoPerziura .pr-a p").textContent] : null; })()');
+    tiesa(pz && pz[0] === "sugeneruota" && /prepared using AI and has not been reviewed by a translator/.test(pz[1]) && /always in Lithuanian/.test(pz[1]) && pz[2] === "In the formula:", "peržiūros pastaba: " + JSON.stringify(pz));
+    // suvestinė
+    const sv = M('priedoTekstas(ataskaitosTurinys(state))'), SJ = sv.join("\n");
+    tiesa(sv[1] === "SUMMARY OF THE EVALUATION OF THE ECONOMIC ADVANTAGE OF TENDERS" && /1\. Purchaser - LITGRID AB \(contracting entity\)\. Tenders are evaluated on the basis of the best price-quality ratio/.test(SJ) && /Symbol \| Criterion \| Relative weight \| How it is evaluated/.test(SJ)
+      && /Rank \| Supplier \| C - price points \| T1 \| T2 \| T3 \| Quality total \| EN, points/.test(SJ) && /First in the ranking - Supplier [A-C] \(economic advantage [\d.]+ pts\)\./.test(SJ) && /Chair of the Commission/.test(SJ) && !/[ąčęėįšųūž]/i.test(SJ.replace(/V?PĮ/g, "")), "suvestinė: " + sv.slice(0, 5).join(" ¦ ").slice(0, 300));
+    lygu(M('ataskaitosTurinys(state).kalba'), "en");
+    lygu([M('priedoVardas()').indexOf("SPC-annex-10-evaluation-methodology"), M('ataskaitosVardas()').indexOf("Evaluation-summary")], [0, 0], "failų vardai");
+    // dalys
+    M('ijunkDalis(["Breakers", "", "Cables"]); pasirinkDali(1); state.kriterijai[0].svoris = 20; renderAll();');
+    const dal = M('priedoTurinys(state).blokai.filter(b=>b.t === "d").map(b=>b.tekstas)'), ivad = M('priedoTurinys(state).blokai[0].tekstas');
+    lygu(dal, ["Lots I and III", "Lot II"], "dalių antraštės");
+    lygu([M('priedoTurinys(state).kalba'), M('ataskaitosTurinys(state).kalba'), M('priedoTekstas(priedoTurinys(state)).indexOf("In the formula:") > 0')], ["en", "en", true], "dalims - ta pati turinio kalba");
+    tiesa(/^The subject of the procurement is divided into 3 lots\. Tenders for each lot are evaluated separately/.test(ivad), ivad);
+    lygu(M('daliuAntraste(state, [0])'), "Lot I “Breakers”");
+    M('state.kriterijai[0].svoris = 90; renderAll();');
+    tiesa(/^Lot II: The weights of price and quality criteria must total 100/.test(M('visosKlaidos(state)[0]')), M('visosKlaidos(state)[0]'));
+  } finally { ltGrizk(); paruosk(); }
+});
+
+testas(GK, "Word angliškai: priede ir suvestinėje - anglų tekstas, DI požymiai failo savybėse ir pastaba, kad anglų tekstą parengė DI; lietuviškame priede DI požymių nėra", async ()=>{
+  paruosk();
+  const w = ramas.contentWindow;
+  await w.uzkraukDocx();
+  const dalys = async blob => { const zip = await JSZip.loadAsync(Uint8Array.from(new Uint8Array(await blob.arrayBuffer())));
+    return { xml: await zip.file("word/document.xml").async("string"), core: await zip.file("docProps/core.xml").async("string"), custom: zip.file("docProps/custom.xml") ? await zip.file("docProps/custom.xml").async("string") : "" }; };
+  try {
+    M('ikelkPavyzdi(); state.pirkimas.priedoNr = "7"; renderAll();');
+    const lt = await dalys(await w.sudarykDocx(M('priedoTurinys(state)')));
+    tiesa(/Pateiktoje formulėje:/.test(lt.xml) && !/DI_turinys/.test(lt.custom) && !/using AI/.test(lt.core), "lietuviškas priedas - be DI požymių");
+    M('nustatykKalba("en", false)');
+    const en = await dalys(await w.sudarykDocx(M('priedoTurinys(state)')));
+    tiesa(/Annex 7 to the SPC/.test(en.xml) && /In the formula:/.test(en.xml) && /First criterion: Tender price \(C\)/.test(en.xml) && !/Pateiktoje formulėje|Pirmas kriterijus/.test(en.xml), "angliškas tekstas dokumente");
+    tiesa(/DI_turinys/.test(en.custom) && /Ekonominio naudingumo skaičiuoklė/.test(en.custom + en.core), "DI požymiai: " + en.custom.slice(0, 200));
+    tiesa(/The English wording was prepared using AI and has not been reviewed by a translator\./.test(en.core), "pastaba failo savybėse: " + (en.core.match(/<dc:description>[^<]*/) || [""])[0].slice(0, 200));
+    tiesa(!/[–—]/.test(en.xml), "be ilgųjų brūkšnių");
+    const sv = await dalys(await w.sudarykAtaskaita(M('ataskaitosTurinys(state)')));
+    tiesa(/SUMMARY OF THE EVALUATION OF THE ECONOMIC ADVANTAGE OF TENDERS/.test(sv.xml) && /DI_turinys/.test(sv.custom) && /w:orient="landscape"/.test(sv.xml), "suvestinė angliškai su DI požymiais");
+  } finally { ltGrizk(); paruosk(); }
+});
+
+testas(GK, "Pirkimo kortelei metodika visada lietuviška: angliškame režime - lietuviškas priedo tekstas ir bibliotekos kriterijų pavadinimai (žmogaus pakeisti - kaip įrašyti), parašas sutampa su lietuviško režimo, kalba po to lieka anglų; klausimas ir būsena - angliškai", async ()=>{
+  const { f, w, d } = await remelisSuKortele("ekonominio_naudingumo_skaiciuokle.html");
+  try {
+    w.eval('atstatyk(); ikelkPavyzdi(); state.kriterijai[1].pavadinimas = "Mano terminas"; renderAll();');
+    const ltParasas = w.eval('vertinimoParasas(kortelesMetodika())');
+    w.eval('nustatykKalba("en", false)');
+    const v = w.eval('kortelesMetodika()'), tx = w.eval('priedoTekstas(kortelesMetodika().priedas)').join("\n");
+    lygu([w.eval("KALBA"), w.eval("BIBLIOTEKA[0].pav"), w.eval("state.kriterijai[0].pavadinimas"), w.eval('vertinimoParasas(kortelesMetodika())') === ltParasas], ["en", "Additional warranty period (months)", "Additional warranty period (months)", true], "kalba lieka anglų, parašas kaip lietuviškame režime");
+    lygu([v.kriterijus, v.kriterijai.map(k=>k.pavadinimas), v.priedas.priedas, "kalba" in v.priedas], ["kainos_kokybe", ["Pasiūlymo kaina", "Papildomas garantinis laikotarpis (mėn.)", "Mano terminas", "Techninis sprendimas / darbų organizavimo planas (ekspertinis)"], "SPS ___ priedas", false], "kortelei - lietuviškai");
+    tiesa(/EKONOMIŠKAI NAUDINGIAUSIO PASIŪLYMO VERTINIMO METODIKA/.test(tx) && /Pateiktoje formulėje:/.test(tx) && /Pirmas kriterijus: Pasiūlymo kaina \(C\)/.test(tx) && /PĮ 64 str\./.test(tx) && !/In the formula|First criterion|Tender form/.test(tx), "priedo tekstas lietuviškas: " + tx.slice(0, 160));
+    // visas kelias: įrašymas angliškame režime
+    const k = w.GP_KORTELE.issaugok(w.GP_KORTELE.tuscia(Object.assign({}, KV_KORTELE, { pavadinimas: "Procurement of 110 kV circuit breakers (example)" }))).kortele;
+    w.KORTELE.atnaujink(); tiesa(await w.KORTELE.pasirink(k.id), "pasirinkta"); await lauk(60);
+    tiesa(/^The procurement card “.*” has no evaluation methodology yet\.$/.test(d.getElementById("kortelesVertinimas").textContent), d.getElementById("kortelesVertinimas").textContent);
+    const kl = []; w.confirm = m => { kl.push(m); return true; };
+    d.getElementById("btnIKortele").click(); await lauk(60);
+    tiesa(kl.length === 1 && /^Save to the procurement card “/.test(kl[0]) && /evaluation methodology - Best price-quality ratio, 4 criteria/.test(kl[0]) && /The methodology is saved in Lithuanian/.test(kl[0]), "klausimas: " + kl[0]);
+    const kv = w.GP_KORTELE.gauk(k.id).vertinimas;
+    tiesa(kv && kv.kriterijai[1].pavadinimas === "Papildomas garantinis laikotarpis (mėn.)" && kv.priedas.blokai.some(b=>/Šiame priede pateikiami/.test(b.tekstas || "")) && !("kalba" in kv.priedas), "kortelėje - lietuviškai: " + JSON.stringify(kv && kv.kriterijai.map(x=>x.pavadinimas)));
+    tiesa(/^The evaluation methodology is saved in the procurement card “/.test(d.getElementById("kortelesVertinimas").textContent), d.getElementById("kortelesVertinimas").textContent);
+    w.eval('nustatykKalba("lt", false)');
+    tiesa(/^Vertinimo metodika įrašyta pirkimo kortelėje „/.test(d.getElementById("kortelesVertinimas").textContent), "perjungus kalbą būsena nepasikeičia į „skiriasi“: " + d.getElementById("kortelesVertinimas").textContent);
+  } finally { f.remove(); }
+});
+
+testas(GK, "Rekomendacijos ir įspėjimai angliškai: objekto rūšis ir profilis atpažįstami iš angliško pavadinimo; kriterijus apie tiekėją (ne pirkimo objektą) - įspėjimas; lietuviški pavadinimai atpažįstami kaip iki šiol", ()=>{
+  paruosk();
+  try {
+    M('nustatykKalba("en", false)');
+    lygu([M('objektasIsPavadinimo("Reconstruction works of a 330 kV overhead line")'), M('objektasIsPavadinimo("Transformer maintenance services")'), M('objektasIsPavadinimo("110 kV circuit breakers")'), M('objektasIsPavadinimo("Something else")'),
+          M('objektasIsPavadinimo("330 kV oro linijos rekonstrukcijos darbai")'), M('objektasIsPavadinimo("Transformatorių pirkimas")')], ["darbai", "paslaugos", "prekes", null, "darbai", "prekes"], "objekto rūšis");
+    M('state.pirkimas.pavadinimas = "Reconstruction works of a 330 kV overhead line"; state.pirkimas.objektas = "darbai"; renderAll();');
+    const R = M('rekomendacijos(state)');
+    tiesa(R.profiliai.join("|") === "construction and contracting works" && R.sarasas.length >= 5 && R.sarasas[0].kodas === "sauga_planas" && /^Occupational safety and health plan/.test(R.sarasas[0].pav) && !/[ąčęėįšųūž]/i.test(JSON.stringify(R)), "rekomendacijos: " + JSON.stringify([R.profiliai, R.sarasas.slice(0, 2).map(x=>x.pav)]));
+    const pat = pav => busena({ pirkimas:{ budas:"kks", formule:"pmin", kainosSvoris:60 }, kriterijai:[{ pavadinimas: pav, taisykle:"taipne", svoris:40, dokumentai:"x" }], pasiulymai:[] }).patikros.filter(x=>/^demesio/.test(x)).join(" ");
+    tiesa(/Check criterion “Supplier's experience in similar projects”: the supplier's \(company's\) experience and qualification are not linked/.test(pat("Supplier's experience in similar projects")), pat("Supplier's experience in similar projects"));
+    tiesa(/certificates held and standards implemented/.test(pat("ISO 45001 certificate")) && /past accident rates/.test(pat("Accident rate (LTIFR)")) && /country of origin cannot be a criterion/.test(pat("Made in Germany")) && pat("Additional warranty period") === "", "tiekėjo požymiai angliškai");
+    tiesa(/tiekėjo \(įmonės\) patirtis/.test(suLT(() => pat("Tiekėjo patirtis"))), "lietuviškai - kaip iki šiol");
+  } finally { ltGrizk(); paruosk(); }
+  function suLT(f){ M('nustatykKalba("lt", false)'); try { return f(); } finally { M('nustatykKalba("en", false)'); } }
+});
+
+testas(GK, "Kalba adrese ir įsiminimas: ?lang=en atveria angliškai; jungiklio mygtukas įsimena pasirinkimą (raktas kaip portalo), fokusas lieka ant mygtuko; puslapio <head> - hreflang trejetas be statinės kanoninės nuorodos", async ()=>{
+  const naujas = adr => new Promise(res => { const f = document.createElement("iframe"); f.addEventListener("load", () => setTimeout(() => res(f), 300), { once: true }); f.src = adr; document.body.appendChild(f); });
+  const buvo = localStorage.getItem("gprocure-lang");
+  let f = await naujas("./ekonominio_naudingumo_skaiciuokle.html?lang=en&saugykla=testine&cb=" + Date.now());
+  try {
+    const d = f.contentDocument, w = f.contentWindow;
+    lygu([d.documentElement.lang, w.eval("KALBA"), d.querySelector(".brand-module").textContent, localStorage.getItem("gprocure-lang")], ["en", "en", "Economic advantage calculator", buvo], "?lang=en - angliškai, neįsimenama");
+    const kan = d.querySelector('link[rel="canonical"]');
+    tiesa(kan && /ekonominio_naudingumo_skaiciuokle\.html\?lang=en$/.test(kan.href), "kanoninė nuoroda pagal adresą: " + (kan && kan.href));
+    const lt = d.querySelector('.lang-toggle button[data-kalba="lt"]'); lt.focus(); lt.click();
+    lygu([d.documentElement.lang, d.activeElement === lt, lt.getAttribute("aria-pressed"), localStorage.getItem("gprocure-lang")], ["lt", true, "true", "lt"], "paspaudus LT");
+    d.querySelector('.lang-toggle button[data-kalba="en"]').click();
+    lygu([d.documentElement.lang, localStorage.getItem("gprocure-lang")], ["en", "en"], "paspaudus EN");
+  } finally { f.remove(); if(buvo === null) localStorage.removeItem("gprocure-lang"); else localStorage.setItem("gprocure-lang", buvo); }
+  const html = await (await fetch("ekonominio_naudingumo_skaiciuokle.html?cb=" + Date.now())).text(), head = html.slice(0, html.indexOf("</head>"));
+  const B = "https://g-procure.com/PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html";
+  tiesa(!/<link rel="canonical"/.test(head) && head.includes('<link rel="alternate" hreflang="lt" href="' + B + '?lang=lt">') && head.includes('<link rel="alternate" hreflang="en" href="' + B + '?lang=en">') && head.includes('<link rel="alternate" hreflang="x-default" href="' + B + '">')
+    && /<script src="\.\.\/shared\/lang-detect\.js"><\/script>/.test(head), "<head>: hreflang trejetas, be kanoninės, lang-detect.js");
+});
+
+/* =========================================================================
    PALEIDIMAS
    ========================================================================= */
 /* Testas gali būti ir asinchroninis (grąžina Promise) - tada jo laukiama (Q3: Word priedo būsenos). */
+/* ?grupe=<pavadinimas> - tik tos grupės testai (taisant vieną grupę nereikia laukti viso rinkinio); nerasta grupė - klaida, ne tuščias „gerai“ */
+const TIK_GRUPE = new URLSearchParams(location.search).get("grupe") || "";
 async function paleisk(){
   const grupes = {};
-  TESTAI.forEach(t=>{ (grupes[t.grupe] = grupes[t.grupe] || []).push(t); });
+  const sar = TIK_GRUPE ? TESTAI.filter(t=>t.grupe === TIK_GRUPE) : TESTAI;
+  if(TIK_GRUPE && !sar.length) sar.push({ grupe: TIK_GRUPE, pav: "Grupė „" + TIK_GRUPE + "“", fn: ()=>{ throw new Error("tokios testų grupės nėra"); } });
+  sar.forEach(t=>{ (grupes[t.grupe] = grupes[t.grupe] || []).push(t); });
   const rez = document.getElementById("rezultatai");
   let ok = 0, krito = 0;
   for (const g of Object.keys(grupes)){
