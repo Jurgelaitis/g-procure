@@ -1327,7 +1327,8 @@
 <script src="org-sablonai.js"></script>   <!-- pirkimo vykdytojo duomenys dokumentuose (2026-11-03) -->
 <script src="laukai.js"></script>
 <script src="dalys.js"></script>   <!-- pirkimo objekto dalys iš kortelės ir dokumentų (2026-10-19, tobulinimo planas D1) -->
-<script src="metodika.js"></script>   <!-- pasiūlymų vertinimo metodika iš dokumentų (2026-10-20, tobulinimo planas D3) -->
+<script src="metodika.js"></script>
+<script src="../shared/vertinimo-priedas.js"></script>   <!-- vertinimo metodikos priedas iš pirkimo kortelės (2026-11-13; turinį įrašo Ekonominio naudingumo skaičiuoklė) -->   <!-- pasiūlymų vertinimo metodika iš dokumentų (2026-10-20, tobulinimo planas D3) -->
 <script src="variklis.js"></script>
 <script src="../shared/specialistas.js"></script>   <!-- specialisto (personalo) reikalavimo atpažinimas - bendras su PP-qual (2026-11-10) -->
 <script src="kvalifikacijos-lentele.js"></script>   <!-- kvalifikacijos reikalavimų lentelė iš įkelto DOCX į SPS 2 lentelę (2026-10-14) -->
@@ -5897,13 +5898,53 @@ function metIstrauka(m){
            suma: typeof m.suma === 'number' && isFinite(m.suma) ? m.suma : null,
            problemos: (Array.isArray(m.problemos) ? m.problemos : []).filter(x => typeof x === 'string').slice(0, 10).map(x => x.slice(0, 300)) };
 }
-/* Dabartinė metodika: paskutinė įkelta (su failu) arba atkurta iš juodraščio (be failo) */
+/* Vertinimo metodika iš pirkimo kortelės (2026-11-13, naudotojo „Pritariu jūsų siūlymui“: kriterijų rinkinį perduoti į pirkimo kortelę ir
+   Pirkimo sąlygų generatorių automatiškai - iki tol Ekonominio naudingumo skaičiuoklės Word priedą čia reikėjo įkelti ranka). Skaičiuoklė,
+   žmogui paspaudus „Įrašyti į pirkimo kortelę“, įrašo priedo turinį (GP_KORTELE.irasykVertinima). Čia jis patikrinamas (tik žinomi blokai ir
+   ribos - GP_VERTINIMO_PRIEDAS.forma) ir skaitomas tuo pačiu skaitytuvu kaip įkeltas failas (GP_METODIKA.analizuok), todėl SPS 8.1 p. kriterijus
+   įrašomas automatiškai, o priedas pakete sudaromas iš kortelės (kortelesMetodikosFailas). Įkeltas failas ir juodraštyje likusi jo analizė -
+   pirmesni. Į juodraštį kortelės metodika nerašoma - ji gyvena kortelėje ir skaitoma iš naujo (skaičiuoklė galėjo ją pakeisti kitame skirtuke). */
+let KM_ATM = { raktas: null, rez: null };
+function kortelesMetodika(){
+  const k0 = pasirinktaKortele();
+  if (!k0 || !window.GP_KORTELE || !GP_KORTELE.vertinimoForma || !window.GP_VERTINIMO_PRIEDAS || !window.GP_METODIKA) return null;
+  let k, raktas;
+  try { k = GP_KORTELE.gauk(k0.id) || k0; raktas = k.id + '|' + (k.numeris || '') + '|' + (k.pavadinimas || '') + '|' + JSON.stringify(k.vertinimas || null); }
+  catch (e){ return null; }
+  if (KM_ATM.raktas === raktas) return KM_ATM.rez;
+  let rez = null;
+  try {
+    const v = GP_KORTELE.vertinimoForma(k.vertinimas), t = v && GP_VERTINIMO_PRIEDAS.forma(v.priedas);
+    if (t){
+      const a = GP_METODIKA.analizuok(GP_VERTINIMO_PRIEDAS.elementai(t));
+      if (a && (a.kodas || a.kriterijai.length))
+        rez = Object.assign({}, a, { failas: 'pirkimo kortelė' + (k.numeris ? ' ' + k.numeris : ''), dok: null, di: false,
+          kortele: { k, v, priedas: t, sudaryta: veiksmuData(v.sudaryta) || '' } });
+    }
+  } catch (e){ rez = null; }
+  KM_ATM = { raktas, rez };
+  return rez;
+}
+/* Dabartinė metodika: paskutinė įkelta (su failu), atkurta iš juodraščio (be failo) arba pirkimo kortelės (2026-11-13) */
 function metodikosRez(){
   const d = DK.failai.filter(x => x.rusis === 'metodika' && x.met).pop();
   if (d) return Object.assign({}, d.met, { failas: d.vardas, dok: d, di: !!d.di });
-  return MET_ATK ? Object.assign({}, MET_ATK, { dok: null }) : null;
+  if (MET_ATK) return Object.assign({}, MET_ATK, { dok: null });
+  return kortelesMetodika();
 }
-const metKilme = m => `${AUTO_MET_KILME} „${m.failas}“${m.di ? ' (tekstą atpažino DI - patikrinkite)' : ''}, ${m.kodel}: „${trumpaCitata(m.citata)}“`;
+/* Metodikos apimtis sakinyje: „kriterijų 3, svorių suma 100“; kai metodikoje dalims nustatyti atskiri rinkiniai (2026-11-13) - kiekvienai
+   daliai („dalių 2: I - kriterijų 3, svorių suma 100; II - kriterijų 4, svorių suma 100“). Tuščia - kriterijų nerasta. */
+const metSuma = x => x.suma != null ? ', svorių suma ' + String(x.suma).replace('.', ',') : '';
+function metApimtis(m){
+  if (m.dalys && (m.dalys.length > 1 || m.daliuSk > 1))
+    return `dalių ${m.daliuSk || m.dalys.length}: ` + m.dalys.map(d => `${d.nr} - kriterijų ${d.kriterijai.length}${metSuma(d)}`).join('; ');
+  return m.kriterijai && m.kriterijai.length ? `kriterijų ${m.kriterijai.length}${metSuma(m)}` : '';
+}
+/* Metodikos šaltinis sakinyje: įkeltas failas - „vardas“, pirkimo kortelė - skliaustuose */
+const metVardas = m => m.kortele ? `(${m.failas}${m.kortele.k.pavadinimas ? ` „${m.kortele.k.pavadinimas}“` : ''})` : `„${m.failas}“`;
+const metKilme = m => m.kortele
+  ? `${AUTO_MET_KILME} pirkimo kortelėje${m.kortele.k.numeris ? ' ' + m.kortele.k.numeris : ''}${m.kortele.k.pavadinimas ? ` „${m.kortele.k.pavadinimas}“` : ''} (įrašė Ekonominio naudingumo skaičiuoklė${m.kortele.sudaryta ? ' ' + m.kortele.sudaryta : ''}), ${m.kodel}: „${trumpaCitata(m.citata)}“`
+  : `${AUTO_MET_KILME} „${m.failas}“${m.di ? ' (tekstą atpažino DI - patikrinkite)' : ''}, ${m.kodel}: „${trumpaCitata(m.citata)}“`;
 /* Kriterijaus pavadinimas vardininku (sąsajos tekstams; 8.1 p. sakinyje - galininku, KRITERIJU_PAV) */
 const kritVard = kod => (window.GP_METODIKA && GP_METODIKA.KODAI[kod]) || KRITERIJU_PAV[kod] || kod || '';
 /* Kito įkelto dokumento (techninės specifikacijos) sakinys apie vertinimo kriterijų - tik siūlymui; pirkimo sąlygos ir skelbimas - ne šaltinis */
@@ -5980,7 +6021,7 @@ function kriterijausKilmeHTML(key, k, u, v){
   if (x && kod === x.reiksme && u && u.busena === 'siuloma')
     h += `<div class="lk-kilme"><span class="lk-kilme-t">Siūloma: <b>${esc(kritVard(kod))}</b> - ${esc(x.saltinis)}.</span> ${patvirtinimoMygtukas(u.raktai, u.pavadinimas)}</div>`;
   if (mp && mp.m.kodas && kod && kod !== mp.m.kodas)
-    h += `<p class="lk-dal lk-dal--isp" data-met-skiriasi>Patikrinkite: vertinimo metodikoje „${esc(mp.m.failas)}“ - „${esc(kritVard(mp.m.kodas))}“.</p>`;
+    h += `<p class="lk-dal lk-dal--isp" data-met-skiriasi>Patikrinkite: vertinimo metodikoje ${esc(metVardas(mp.m))} - „${esc(kritVard(mp.m.kodas))}“.</p>`;
   return h + kortelesKriterijausPastaba(kod, v);
 }
 /* DPS „Ar vertinama tik pagal kainą?“ - siūloma reikšmė (pirkimo kortelė, DI atpažinta metodika) su kilme ir „Patvirtinti“ (2026-11-09) */
@@ -6035,6 +6076,10 @@ function metodikosPastabos(){
   const out = (m.problemos || []).slice();
   const K = window.__K, kv = K ? kriterijausVieta(K) : null, kod = kriterijus(K);
   if (m.kodas && kv && kod && kod !== m.kodas) out.push(`8.1 punkte pasirinktas kriterijus „${kritVard(kod)}“, o metodikoje - „${kritVard(m.kodas)}“`);
+  // metodikoje dalims nustatyti atskiri kriterijų rinkiniai (2026-11-13): dalių skaičius turi sutapti su pirkimo sąlygų dalių skaičiumi
+  const sk = daliuSkaicius();
+  if (m.daliuSk > 1 && K && sk !== m.daliuSk) out.push(sk >= 2 ? `metodikoje aprašytos ${m.daliuSk} pirkimo objekto dalys, o pirkimo sąlygose - ${sk}`
+    : `metodikoje aprašytos ${m.daliuSk} pirkimo objekto dalys, o pirkimo sąlygose pirkimo objektas į dalis neskaidomas arba dalių skaičius dar neįrašytas`);
   return { m, pastabos: out };
 }
 
@@ -7406,7 +7451,7 @@ function santraukosHTML(S){
   if (kort.length) h += `<div class="lk-sa lk-sa--isp" id="lkKortele" data-lygis="patikr">${lyg('patikr')}<b>Pirkimo kortelės sprendimai (${kort.length})</b> - atsakymas skiriasi nuo kortelės;
     generuoti galima, į dokumentus pateks atsakymas:<ul>${kort.map(x => `<li>${x.id ? `<a href="#${esc(x.id)}" data-lk-suolis="${esc(x.id)}">${esc(x.nuoroda)}</a>` : `<b>${esc(x.nuoroda)}</b>`} - ${esc(x.tekstas)}</li>`).join('')}</ul></div>`;
   const metP = metodikosPastabos();
-  if (metP && metP.pastabos.length) h += `<div class="lk-sa lk-sa--isp" id="lkMetodika" data-lygis="patikr">${lyg('patikr')}<b>Vertinimo metodika „${esc(metP.m.failas)}“</b> - patikrinkite:
+  if (metP && metP.pastabos.length) h += `<div class="lk-sa lk-sa--isp" id="lkMetodika" data-lygis="patikr">${lyg('patikr')}<b>Vertinimo metodika ${esc(metVardas(metP.m))}</b> - patikrinkite:
     <ul>${metP.pastabos.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
   if (teise.length) h += `<div class="lk-sa lk-sa--isp" id="lkTeiseAktai" data-lygis="patikr">${lyg('patikr')}<b>Teisės aktai (${teise.length})</b> - įkeltuose dokumentuose minimi netekę galios aktai; dokumentų tekstas nekeičiamas, reikalavimą patikrinkite su iniciatoriumi:
     <ul>${teise.map(x => `<li><b>${esc(x.vardas)}</b>: ${esc(x.tekstas)}</li>`).join('')}</ul></div>`;
@@ -9848,7 +9893,8 @@ function metodikosFailas(rinkinys, dps){
   if (dps){ nr = dps.nr; pref = 'Konkretaus pirkimo sąlygų'; trumpas = dps.d.trumpas.replace(/SALYGOS$/, 'METODIKA'); }
   else {
     const sps = rinkinys.find(d => dokTipas(d) === 'SPS'), e = sps && priedoEilute(sps, 'metodika');
-    if (!e) return null;                           // priedų sąraše metodikos eilutės nelieka (pvz. vertinama pagal kainą)
+    // priedų sąraše metodikos eilutės nelieka (pvz. žmogus 8.1 p. pasirinko kainą; priedoEilute pagal kriterijų eilutės neatmeta - 2026-11-13)
+    if (!e || !metodikosEiluteLieka()) return null;
     nr = e.nr;
   }
   if (!nr) return null;
@@ -9856,6 +9902,48 @@ function metodikosFailas(rinkinys, dps){
   return { d: { trumpas, pavadinimas: `${pref} ${nr} priedas - Ekonomiškai naudingiausio pasiūlymo vertinimo metodika`, dokumentas: `${pref} ${nr} priedas Vertinimo metodika` },
            blob: m.dok.failas, statinis: true, isDokumento: m.failas, pletinys, forma: true, stats: {},
            audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } };
+}
+/* Vertinimo metodikos priedas iš pirkimo kortelės (2026-11-13): Word failas sudaromas čia iš kortelėje įrašyto priedo turinio tuo pačiu
+   kūrėju kaip Ekonominio naudingumo skaičiuoklėje (shared/vertinimo-priedas.js), viršutinė eilutė - šio paketo priedo numeris (SPS priedų
+   sąrašo metodikos eilutė; DPS konkrečiam pirkimui - papildomo priedo numeris). Word biblioteka įkeliama tik prireikus; nepavykus - eilutė be
+   failo su priežastimi (ne tylus praleidimas). Be priedų sąrašo eilutės (pvz. vertinama pagal kainą) - nepridedama, 4 žingsnis pasako kodėl. */
+let MET_DOCX = null;
+async function docxBiblioteka(){
+  if (window.docx) return;
+  MET_DOCX ??= new Promise((ok, ne) => {
+    const sc = document.createElement('script');
+    sc.src = '../shared/vendor/docx-8.5.0/index.umd.js';
+    sc.onload = () => ok();
+    sc.onerror = () => { MET_DOCX = null; ne(new Error('Word dokumentų biblioteka nepasiekiama (nėra ryšio?) - pabandykite vėliau')); };
+    document.head.appendChild(sc);
+  });
+  return MET_DOCX;
+}
+const kortelesMetodikosSaltinis = m => `pirkimo kortelės${m.kortele.k.numeris ? ' ' + m.kortele.k.numeris : ''} vertinimo metodika${m.kortele.sudaryta ? ', įrašyta ' + m.kortele.sudaryta : ''}`;
+async function kortelesMetodikosFailas(rinkinys, dps){
+  const m = window.GP_METODIKA ? metodikosRez() : null;
+  if (!m || !m.kortele) return null;
+  let nr = null, pref = 'SPS', trumpas = 'KORTELES_METODIKA';
+  if (dps){ nr = dps.nr; pref = 'Konkretaus pirkimo sąlygų'; trumpas = dps.d.trumpas.replace(/SALYGOS$/, 'METODIKA'); }
+  else {
+    const sps = rinkinys.find(d => dokTipas(d) === 'SPS'), e = sps && priedoEilute(sps, 'metodika');
+    // priedų sąraše metodikos eilutės nelieka (pvz. žmogus 8.1 p. pasirinko kainą; priedoEilute pagal kriterijų eilutės neatmeta - 2026-11-13)
+    if (!e || !metodikosEiluteLieka()) return null;
+    nr = e.nr;
+  }
+  if (!nr) return null;
+  const d = { trumpas, pavadinimas: `${pref} ${nr} priedas - Ekonomiškai naudingiausio pasiūlymo vertinimo metodika`, dokumentas: `${pref} ${nr} priedas Vertinimo metodika` };
+  const isKorteles = kortelesMetodikosSaltinis(m);
+  try {
+    await docxBiblioteka();
+    const blob = await GP_VERTINIMO_PRIEDAS.docx(GP_VERTINIMO_PRIEDAS.suEilute(m.kortele.priedas, `${pref} ${nr} priedas`),
+      { pastaba: `Sudaryta G-Procure pirkimo sąlygų generatoriumi iš pirkimo kortelės vertinimo metodikos (Ekonominio naudingumo skaičiuoklė${m.kortele.sudaryta ? ', ' + m.kortele.sudaryta : ''}). Prieš skelbiant pirkimą priedą peržiūri pirkimų komisija.` });
+    return { d, blob, isKorteles, pletinys: 'docx', forma: false, stats: {},
+             audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } };
+  } catch (e){
+    return { d, blob: null, isKorteles, pletinys: 'docx', forma: false, stats: {}, klaida: 'vertinimo metodikos priedo sudaryti nepavyko: ' + GP_BUSENA.klaidosTekstas(e),
+             audit: { svarus: true, raudonos: [], tuscios: [], patikrinti: [], tiekejo: [], komentarai: 0 } };
+  }
 }
 /* Kainų lentelė Excel priedu (2026-11-08): rengėjo failas be pakeitimų - „Pasiūlymo formos 1 priedas - Kainų lentelė“, tik kai pasiūlymo formoje
    įrašyta nuoroda į jį (kainuLentele.budas === 'priedas'); vienas failas, nors formų būtų kelios (LT ir dvikalbė - ne viename pakete). */
@@ -9943,12 +10031,15 @@ function ikeltuPatikraHTML(rez){
 function metodikosPatikraHTML(rez){
   const mp = metodikosPastabos();
   if (!mp) return '';
-  const m = mp.m, f = rez.find(r => r.isDokumento && /METODIKA$/.test(r.d.trumpas));
-  const kodel = f ? `pakete - <b>${esc(f.d.pavadinimas)}</b> (jūsų failas „${esc(m.failas)}“ be pakeitimų)`
+  const m = mp.m, visi = rez.filter(r => (r.isDokumento || r.isKorteles) && /METODIKA$/.test(r.d.trumpas)), f = visi.find(r => r.blob), nepavyko = visi.find(r => !r.blob && r.klaida);
+  const kodel = f && f.isKorteles ? `pakete - <b>${esc(f.d.pavadinimas)}</b> (sudaryta iš kortelės: ${esc(f.isKorteles)}; priedo numeris įrašytas pagal šį paketą)`
+    : f ? `pakete - <b>${esc(f.d.pavadinimas)}</b> (jūsų failas „${esc(m.failas)}“ be pakeitimų)`
+    : nepavyko ? `failo pakete nėra - ${esc(nepavyko.klaida)}; sugeneruokite paketą iš naujo`
+    : m.kortele ? 'priedas į paketą neįdėtas - SPS priedų sąraše metodikos eilutės nėra (pvz. vertinama pagal kainą)'
     : !m.dok ? 'failo pakete nėra - juodraštyje failai nesaugomi: įkelkite metodiką 1 žingsnyje iš naujo ir sugeneruokite paketą'
     : 'failas į paketą neįdėtas - SPS priedų sąraše metodikos eilutės nėra (pvz. vertinama pagal kainą)';
   return `<div class="audit ${f && !mp.pastabos.length ? 'ok' : 'no'}" id="metodikaPatikra" style="margin-top:10px"><b>Pasiūlymų vertinimo metodika:</b>
-    ${m.kodas ? `kriterijus - „${esc(kritVard(m.kodas))}“ (${esc(m.kodel)}), ` : ''}${m.kriterijai.length ? `kriterijų ${m.kriterijai.length}${m.suma != null ? ', svorių suma ' + esc(String(m.suma).replace('.', ',')) : ''}; ` : ''}${kodel}.
+    ${m.kodas ? `kriterijus - „${esc(kritVard(m.kodas))}“ (${esc(m.kodel)}), ` : ''}${metApimtis(m) ? esc(metApimtis(m)) + '; ' : ''}${kodel}.
     ${mp.pastabos.length ? `<br>Patikrinkite: ${mp.pastabos.map(esc).join('; ')}.` : ''}</div>`;
 }
 
@@ -9998,9 +10089,11 @@ async function generuoti(o = {}){
   }
   // DPS konkretaus pirkimo papildomas priedas (8 klausimas „Ne“): failas iš sąlygų šablono
   const dpsP = dpsMetodikosPriedas(), dpsD = dpsP && rinkinys.find(d => /^DPSP_.*_SALYGOS$/.test(d.trumpas));
-  const met = metodikosFailas(rinkinys, dpsD ? { d: dpsD, nr: dpsP.nr } : null);   // įkelta vertinimo metodika (2 etapas D3)
+  const metVieta = dpsD ? { d: dpsD, nr: dpsP.nr } : null;
+  // įkelta vertinimo metodika (2 etapas D3), jos nesant - priedas iš pirkimo kortelės vertinimo metodikos (2026-11-13)
+  const met = metodikosFailas(rinkinys, metVieta) || await kortelesMetodikosFailas(rinkinys, metVieta);
   if (met) rez.push(met);
-  else if (dpsD) rez.push(await dpsMetodikosFailas(dpsD, dpsP.nr));
+  if (dpsD && (!met || !met.blob)) rez.push(await dpsMetodikosFailas(dpsD, dpsP.nr));   // DPS: nepavykus sudaryti - šablono priedas, kaip be metodikos
   rez.push(...ikeltiDokumentai(rinkinys));          // įkelta techninė specifikacija, sutarties priedai (2026-10-22)
   // Nekeiciami priedai (banku sarasas PDF): failas pridedamas kaip yra - jame nera ko pildyti ar tikrinti.
   for (const st of statiniai){
@@ -10035,7 +10128,7 @@ function failuVardai(rez){
   const naudoti = new Set();
   return rez.map(r => {
     // įkelti ir nekeičiami failai (techninė specifikacija, bankų sąrašas) - be „LT-EN“: jų kalba ta, kuria parengti (T4-M1)
-    const dok = (r.d.dokumentas || DOK_VARDAI[r.d.trumpas.split('_').pop()] || r.d.trumpas) + (r.ikeltas || r.statinis ? '' : kalba);
+    const dok = (r.d.dokumentas || DOK_VARDAI[r.d.trumpas.split('_').pop()] || r.d.trumpas) + (r.ikeltas || r.statinis || r.isKorteles ? '' : kalba);
     let v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok, pletinys: r.pletinys || 'docx' });
     // ta pati rūšis du kartus - eilės numeris (ne šablono kodas)
     for (let n = 2; naudoti.has(v); n++) v = GP_EKSPORTAS.failoVardas({ ...bendra, dokumentas: dok + ' ' + n, pletinys: r.pletinys || 'docx' });
@@ -10097,7 +10190,7 @@ function rodykRezultata(rez){
       return;
     }
     if (!r.blob){   // sutarties projektas nesugeneruotas - priežastis vietoje atsisiuntimo
-      h += `<tr><td><b>${esc(dokumentoPavadinimas(r.d))}</b><div class="cite">${esc(((r.sutartis && r.sutartis.klaidos) || []).join(' · '))}</div></td>
+      h += `<tr${r.isKorteles ? ' data-korteles-metodika' : ''}><td><b>${esc(dokumentoPavadinimas(r.d))}</b><div class="cite">${esc(r.klaida || ((r.sutartis && r.sutartis.klaidos) || []).join(' · '))}</div></td>
         <td><span class="rz rz--kl">nesugeneruota</span></td><td></td></tr>`;
       return;
     }
@@ -10127,8 +10220,9 @@ function rodykRezultata(rez){
       r.stats.kvalIsDokumento && !r.stats.kvalIsDokumento.klaida ? `kvalifikacijos reikalavimų iš dokumento ${r.stats.kvalIsDokumento.eiluciu}` : '',
       r.stats.zalIsDokumento && !r.stats.zalIsDokumento.klaida ? `žaliųjų reikalavimų iš dokumento ${r.stats.zalIsDokumento.eiluciu}` : '',
     ].filter(Boolean).join(' &middot; ');
-    h += `<tr data-rez-tip="${r.statinis ? 'statinis' : r.sutartis || r.sutartiesPriedas ? 'sutartis' : 'salygos'}"><td><b>${esc(dokumentoPavadinimas(r.d))}</b>
-        <div class="cite">${r.isDokumento ? `jūsų įkeltas dokumentas „${esc(r.isDokumento)}“ - be pakeitimų` : r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
+    h += `<tr data-rez-tip="${r.statinis ? 'statinis' : r.sutartis || r.sutartiesPriedas ? 'sutartis' : 'salygos'}"${r.isKorteles ? ' data-korteles-metodika' : ''}><td><b>${esc(dokumentoPavadinimas(r.d))}</b>
+        <div class="cite">${r.isKorteles ? `sudaryta iš kortelės: ${esc(r.isKorteles)} - turinys kaip Ekonominio naudingumo skaičiuoklės priede, numeris - šio paketo`
+          : r.isDokumento ? `jūsų įkeltas dokumentas „${esc(r.isDokumento)}“ - be pakeitimų` : r.statinis ? `nekeičiamas ${esc(String(r.pletinys).toUpperCase())} failas`
           : r.gulscias ? 'gulsčias puslapis - atskiras failas; tekstas kaip pagrindiniame dokumente'
           : r.sutartis ? (r.sutartis.pakeista.length ? `pasirinkta ir įrašyta ${r.sutartis.pakeista.length} vietų &middot; pašalinta pastraipų ${r.sutartis.pasalinta.length} &middot; pildoma sudarant ${r.sutartis.palikta.filter(p => p.kodel === 'sudarant').length}` : 'be pakeitimų (bendrosios sąlygos)')
           : r.forma
@@ -10715,7 +10809,8 @@ function cvpisAtmintinesEilutes(rez, vardai){
   ek('', 'Pasiūlymų priėmimo terminas', t ? t[1] + ' ' + t[2] : '', t ? 'iš pirkimo kortelės (Lietuvos laikas)' : 'pirkimo kortelėje neįrašytas - nustatysite CVP IS');
   const met = window.GP_METODIKA ? metodikosRez() : null;
   ek('', 'Sutarties skyrimo kriterijai', M.get('Pasiūlymų vertinimo kriterijus'),
-    met && met.kriterijai && met.kriterijai.length ? 'Pagal metodiką „' + met.failas + '“: ' + met.kriterijai.map(q => q.nr + '. ' + q.pavadinimas + (q.svoris != null ? ' - ' + String(q.svoris).replace('.', ',') : '')).join('; ') : '');
+    met && met.kriterijai && met.kriterijai.length ? 'Pagal metodiką ' + metVardas(met) + ': ' + (met.dalys && met.dalys.length > 1 ? met.dalys : [met]).map(x => (x.nr ? x.nr + (x.numeriai && x.numeriai.length > 1 ? ' dalys: ' : ' dalis: ') : '')
+      + x.kriterijai.map(q => q.nr + '. ' + q.pavadinimas + (q.svoris != null ? ' - ' + String(q.svoris).replace('.', ',') : '')).join('; ')).join(' | ') : '');
   ek('', 'Pašalinimo pagrindai ir kvalifikacija', M.get('Tikrinama'), M.get('Kvalifikacijos reikalavimai'));
   ek('', 'Pasiūlymo galiojimo užtikrinimas', M.get('Pasiūlymo galiojimo užtikrinimas'));
   ek('', 'Sutarties įvykdymo užtikrinimas', M.get('Sutarties įvykdymo užtikrinimas'));
@@ -12472,7 +12567,10 @@ function dkPoveikis(d){
     else {
       if (m.kodas) out.push(d.di ? { k: 'info', t: `Vertinimo kriterijus SPS 8.1 punkte siūlomas - <b>${esc(kritVard(m.kodas))}</b> (${esc(m.kodel)}): „${esc(trumpaCitata(m.citata).replace(/[.\s]+$/, ''))}“. Tekstą atpažino DI, todėl kriterijų patvirtinsite 2 žingsnyje.` }
         : { k: 'ok', t: `Vertinimo kriterijus SPS 8.1 punkte įrašomas be klausimo - <b>${esc(kritVard(m.kodas))}</b> (${esc(m.kodel)}): „${esc(trumpaCitata(m.citata).replace(/[.\s]+$/, ''))}“. Pakeisti galima 2 žingsnyje („Keisti“).` });
-      if (m.kriterijai.length) out.push({ k: m.suma === 100 ? 'ok' : 'isp', t: `Kriterijai ir lyginamieji svoriai (${m.kriterijai.length}): ${m.kriterijai.map(q => esc(q.pavadinimas) + (q.svoris != null ? ' - ' + esc(String(q.svoris).replace('.', ',')) : ' - svorio neradome')).join('; ')}${m.suma != null ? `; suma ${esc(String(m.suma).replace('.', ','))}` : ''}.` });
+      // metodikoje dalims nustatyti atskiri kriterijų rinkiniai (2026-11-13) - kiekvienos dalies kriterijai atskira eilute
+      const kritEil = (x, pr) => ({ k: x.suma === 100 ? 'ok' : 'isp', t: `${pr}riterijai ir lyginamieji svoriai (${x.kriterijai.length}): ${x.kriterijai.map(q => esc(q.pavadinimas) + (q.svoris != null ? ' - ' + esc(String(q.svoris).replace('.', ',')) : ' - svorio neradome')).join('; ')}${x.suma != null ? `; suma ${esc(String(x.suma).replace('.', ','))}` : ''}.` });
+      if (m.dalys && m.dalys.length > 1) m.dalys.forEach(x => { if (x.kriterijai.length) out.push(kritEil(x, `${esc(x.nr)} ${x.numeriai.length > 1 ? 'dalys' : 'dalis'} - k`)); });
+      else if (m.kriterijai.length) out.push(kritEil(m, 'K'));
       m.problemos.forEach(x => out.push({ k: 'isp', t: 'Patikrinkite: ' + esc(x) + '.' }));
       out.push({ k: 'info', t: 'Failas įdedamas į paketą be pakeitimų kaip SPS priedas „Ekonomiškai naudingiausio pasiūlymo vertinimo metodika“ - numeris pagal SPS priedų sąrašą (DPS konkretaus pirkimo sąlygose - vietoj šablono priedo). ' + (d.di ? 'Kriterijai ir svoriai nustatyti iš DI atpažinto teksto.' : 'Be DI, failas niekur nesiunčiamas.') });
     }
@@ -12525,6 +12623,7 @@ function dkKontrolinisHTML(){
   const zl = F.filter(d => d.rusis === 'zalieji' || (d.rusis === 'kvalifikacija' && d.lent && d.lent.zaliuju.length));
   const zlN = zl.reduce((a, d) => a + (d.lent ? dkLent(d).zaliuju.reduce((b, M) => b + M.eilutes.length, 0) : 0), 0);
   const mt = kur('metodika'), mm = mt.length ? mt[mt.length - 1].met : null;
+  const km0 = !mt.length && window.GP_METODIKA ? metodikosRez() : null, km = km0 && km0.kortele ? km0 : null;
   const mtB = !mt.length ? '' : !mm ? 'skaitoma' : mm.kodas ? `kriterijus - ${kritVard(mm.kodas)}${mm.problemos.length ? '; patikrinkite - žr. prie failo' : ''}` : 'kriterijaus nustatyti nepavyko - žr. prie failo';
   return `<p class="dk-ks-h" id="dkKsH">Ką verta įkelti</p><ul>`
     + eil(par, 'Pirkimo paraiška', 'užpildo 1 žingsnio laukus: pavadinimą, būdą, vertę, objekto tipą' + (seima() === 'DPSK' ? '' : '; ir sutarties klausimą apie ES lėšas'), parB)
@@ -12536,7 +12635,11 @@ function dkKontrolinisHTML(){
     + (seima() === 'DPSK' ? '' : eil(kur('kainos'), 'Kiekių žiniaraštis', 'Excel su pozicijomis ir kiekiais: pozicijos įrašomos į pasiūlymo formos kainų lentelę arba failas pridedamas kaip formos priedas',
       kur('kainos').length ? (kainModelis() ? `${GP_KAINU_LENTELE.pozicijos(kainModelis()).length} poz.` : 'lentelės nerasta') : ''))
     // DPS sukūrime pasiūlymai nevertinami (vertinama konkretaus pirkimo metu) - metodikos eilutės nėra (T4-V2)
-    + (seima() === 'DPSK' && !mt.length ? '' : eil(mt, 'Vertinimo metodika', 'kai vertinama ne vien pagal kainą: vertinimo kriterijus įrašomas pats, failas pridedamas prie paketo kaip ' + (seima() === 'DPSP' ? 'pirkimo sąlygų priedas (vietoj šablono priedo)' : 'SPS priedas'), mtB))
+    // vertinimo metodika pirkimo kortelėje (2026-11-13, įrašo Ekonominio naudingumo skaičiuoklė) - failo įkelti nereikia
+    + (seima() === 'DPSK' && !mt.length ? '' : km ? `<li class="dk-ks-e dk-ks-e--yra" data-dk-ks="Vertinimo metodika" data-dk-kortele><span class="dk-ks-b">iš kortelės</span>`
+      + `<span class="dk-ks-t"><b>Vertinimo metodika</b> - pirkimo kortelėje įrašyta Ekonominio naudingumo skaičiuoklės metodika: vertinimo kriterijus įrašomas pats, priedas sudaromas pakete - failo įkelti nereikia`
+      + `<span class="dk-ks-s">${km.kodas ? 'kriterijus - ' + esc(kritVard(km.kodas)) : 'bendro kriterijaus nėra'}${km.dalys && (km.daliuSk || km.dalys.length) > 1 ? `, dalių ${km.daliuSk || km.dalys.length}` : km.kriterijai.length ? `, kriterijų ${km.kriterijai.length}` : ''}${km.kortele.sudaryta ? ', įrašyta ' + esc(km.kortele.sudaryta) : ''}${km.problemos.length ? '; patikrinkite - žr. 2 žingsnio „Prieš generuojant“' : ''}</span></span></li>`
+      : eil(mt, 'Vertinimo metodika', 'kai vertinama ne vien pagal kainą: vertinimo kriterijus įrašomas pats, failas pridedamas prie paketo kaip ' + (seima() === 'DPSP' ? 'pirkimo sąlygų priedas (vietoj šablono priedo)' : 'SPS priedas'), mtB))
     + `</ul>`;
 }
 /* „Ką verta įkelti“ - kas daroma su žaliųjų lentele pagal būdą ir kalbą (zalTikslas). */
@@ -12546,6 +12649,13 @@ function zalKontrolinioNauda(){
   return `lentelė perkeliama į ${t.pavKa}` + (t.klausimas ? ' - klausimas „Kur nustatomi žalieji reikalavimai?“ atsakomas pats' : ' - šablono eilutė pakeičiama jūsų eilutėmis');
 }
 let DK_KS_HTML = '';
+/* Tik „Ką verta įkelti“ (pasirinkus ar atsiejus pirkimo kortelę - joje gali būti vertinimo metodika) */
+function dkKontrolinisAtnaujink(){
+  const ks = $('#dkKontrolinis');
+  if (!ks) return;
+  const h = dkKontrolinisHTML();
+  if (h !== DK_KS_HTML){ ks.innerHTML = h; DK_KS_HTML = h; }
+}
 function dkRodyk(){
   const el = $('#dkSarasas');
   if (!el) return;
@@ -12771,7 +12881,7 @@ var SDATA_PRADINE;   // be inicializatoriaus: reikšmę jau įrašė pradinė da
 const KORTELE = window.GP_KORTELE ? GP_KORTELE.mount({
   modulis: 'PP-salygos',
   klaustiKitoPirkimo: true,
-  onPasirinkta: () => { veiksmaiPirkimui(); GP_TIKRINIMAS.korteleKeista(); sutartisAtnaujink(); if (window.__K) klausimynas(); },   // ir pirkimo objekto dalys iš kortelės (D1)   // rinkos apžvalgos veiksmai 2 žingsnyje; tikrinimas - su kortele (2026-10-06); kortelės BVPŽ - sutarties parinkimui
+  onPasirinkta: () => { veiksmaiPirkimui(); GP_TIKRINIMAS.korteleKeista(); sutartisAtnaujink(); dkKontrolinisAtnaujink(); if (window.__K) klausimynas(); },   // ir pirkimo objekto dalys iš kortelės (D1)   // rinkos apžvalgos veiksmai 2 žingsnyje; tikrinimas - su kortele (2026-10-06); kortelės BVPŽ - sutarties parinkimui
   laukai: [
     { kortele:'pavadinimas', el:'#pavadinimas',
       // vardininku įrašytas kortelės pavadinimas („... paslaugos“) - kilmininku, kai jis aiškus (pilotas su tikru pirkimu 2026-11-10: pavadinimą
@@ -13338,7 +13448,7 @@ function surinkJuodrasti(){
       APZIURA_KLAUSTI, EBVPD_TRINTI, AUTO_SAKOS: [...AUTO_SAKOS],
       // pirkimo objekto dalys (D1): „Keisti - atsakysiu pats“ ir dokumentų ištraukos, iš kurių nustatytos (įkelti failai nesaugomi)
       DALYS_KLAUSTI, DALYS_DOK: window.GP_DALYS ? daliuDokumentai().map(GP_DALYS.istrauka).filter(Boolean) : [],
-      MET: metIstrauka(window.GP_METODIKA ? metodikosRez() : null),
+      MET: metIstrauka((m => m && !m.kortele ? m : null)(window.GP_METODIKA ? metodikosRez() : null)),   // kortelės metodika - ne juodraščio (ji kortelėje)
       KVL: { kandidatai: KVL.kandidatai, pasirinkta: KVL.pasirinkta, pakeitimai: KVL.pakeitimai, atmesta: KVL.atmesta,
         // kvalifikacijos klausimas pagal lentelę (2026-10-19, 0 etapas D2): žmogaus atsakymai prieš automatinį (undefined - neatsakyta)
         auto: [...KVL_AUTO.entries()].map(([g, a]) => [g, ...['buvo', 'nustatyta'].map(k => a[k].map(([r, v]) => [r, v === undefined ? null : v, v === undefined]))]) },
@@ -13482,7 +13592,10 @@ function genParasai(){
   // SPS nuoroda į sutarties užtikrinimo punktą priklauso nuo sutarties atsakymų (rangos sutartys) - jos tekstas pirkimo sąlygų paraše
   let uz = null;
   try { const u = sutartiesUztikrinimoVieta(); uz = u ? u.tekstas : null; } catch (e) { uz = null; }
-  return { bendri: JSON.stringify([D.z1, D.kortele, D.sb, grafikoParasas()]), salygos: JSON.stringify([D.s2, uz]), sutartis: JSON.stringify(D.sf) };
+  // vertinimo metodika iš kortelės (2026-11-13): ją pakeitus (Ekonominio naudingumo skaičiuoklė kitame skirtuke) - priedas ir SPS pergeneruotini
+  let km = null;
+  try { const m = window.GP_METODIKA ? metodikosRez() : null; km = m && m.kortele ? JSON.stringify(m.kortele.v) : null; } catch (e) { km = null; }
+  return { bendri: JSON.stringify([D.z1, D.kortele, D.sb, grafikoParasas(), km]), salygos: JSON.stringify([D.s2, uz]), sutartis: JSON.stringify(D.sf) };
 }
 /* Ar sugeneruotas paketas dar atitinka atsakymus: null - atitinka; kitaip - kas pakeista ('bendri', 'salygos', 'sutartis') */
 function pergeneruoti(){

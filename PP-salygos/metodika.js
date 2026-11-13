@@ -94,8 +94,48 @@
     }).then(skaitykXml);
   }
 
-  /* Metodikos analizė. Elementai: { text } (pastraipa ar PDF eilutė) arba { cells: [langelio tekstas su \n tarp pastraipų] } */
+  /* Pirkimo objekto dalys (nuo 2026-11-13): kai dalims nustatyti atskiri kriterijų rinkiniai, kiekvienos dalies (ar kelių dalių su vienoda
+     tvarka) skyrius prasideda antrašte - „I pirkimo objekto dalis „...““, „I ir III pirkimo objekto dalys“ (Ekonominio naudingumo skaičiuoklės
+     priede - elementas su žyma dalis: true; įkeltame dokumente - atskira trumpa pastraipa, ne sakinys). Skyriai analizuojami atskirai: kitaip
+     antrosios dalies „Pirmas kriterijus“ būtų laikomas pasikartojimu, o svorių suma - ne 100. Rezultate - dalys: [{ antraste, nr, numeriai,
+     kodas, kriterijai, suma, problemos }], daliuSk - aprašytų dalių skaičius; bendras kodas - tik kai visų skyrių vienodas (kitaip
+     problemose pasakoma, kad vertinimo kriterijų pirkimo sąlygose pasirenka žmogus). Tekstas iki pirmos antraštės - bendras visoms dalims. */
+  var DALIU_ROM = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10, xi: 11, xii: 12 };
+  var DALIES_ANTRASTE = /^((?:[ivx]{1,4}|\d{1,2})(?:\s*(?:,|ir)\s*(?:[ivx]{1,4}|\d{1,2}))*)\s+pirkimo\s+objekto\s+dal(?:is|ys|iu)(?![a-z])\s*(.*)$/;
+  function daliesAntraste(e) {
+    if (!e || e.cells || !String(e.text || "").trim()) return null;
+    var t = svarus(String(e.text)), m = norm(t).match(DALIES_ANTRASTE);
+    if (!m) return null;
+    // įkeltame dokumente antraštė - tik numeris su pavadinimu kabutėse (ar be jo): sakinys „I pirkimo objekto dalis apima ...“ - ne antraštė
+    if (e.dalis !== true && !/^(?:["„“][^"„“”]{0,200}["“”])?\s*[.:]?$/.test(m[2])) return null;
+    var nr = m[1].split(/\s*(?:,|ir)\s*/).map(function (x) { return DALIU_ROM[x] || parseInt(x, 10); }).filter(function (x) { return x >= 1 && x <= 99; });
+    if (!nr.length) return null;
+    return { antraste: t.slice(0, 300), nr: t.split(/\s+pirkimo\s+objekto\s+/i)[0].trim().slice(0, 60), numeriai: nr };
+  }
   function analizuok(el) {
+    el = el || [];
+    var ant = [];
+    el.forEach(function (e, i) { var a = daliesAntraste(e); if (a) ant.push({ i: i, a: a }); });
+    if (!ant.length) return analizuokViena(el);
+    var bendra = el.slice(0, ant[0].i);
+    var D = ant.map(function (x, k) {
+      var r = analizuokViena(bendra.concat(el.slice(x.i + 1, k + 1 < ant.length ? ant[k + 1].i : el.length)));
+      return { antraste: x.a.antraste, nr: x.a.nr, numeriai: x.a.numeriai, kodas: r.kodas, pavadinimas: r.pavadinimas, citata: r.citata, kodel: r.kodel, kriterijai: r.kriterijai, suma: r.suma, problemos: r.problemos };
+    });
+    var kodai = [];
+    D.forEach(function (d) { if (kodai.indexOf(d.kodas) < 0) kodai.push(d.kodas); });
+    var kodas = kodai.length === 1 ? kodai[0] : null, problemos = [], nr = {};
+    D.forEach(function (d) {
+      d.problemos.forEach(function (p) { problemos.push(d.nr + (d.numeriai.length > 1 ? " dalys: " : " dalis: ") + p); });
+      d.numeriai.forEach(function (n) { nr[n] = (nr[n] || 0) + 1; });
+    });
+    Object.keys(nr).filter(function (n) { return nr[n] > 1; }).forEach(function (n) { problemos.push(n + " pirkimo objekto dalis metodikoje aprašyta daugiau kaip vieną kartą"); });
+    if (kodai.length > 1) problemos.push("dalims nustatyti skirtingi vertinimo kriterijai (" + D.map(function (d) { return d.nr + " - " + (d.kodas ? KODAI[d.kodas] : "nenustatyta"); }).join("; ") + ") - vertinimo kriterijų pirkimo sąlygose pasirinkite patys");
+    return { kriterijai: D[0].kriterijai, suma: D[0].suma, kodas: kodas, pavadinimas: kodas ? KODAI[kodas] : "", citata: kodas ? D[0].citata : "",
+             kodel: kodas ? D[0].kodel + (D.length > 1 ? " (visose dalyse)" : "") : "", problemos: problemos, dalys: D, daliuSk: Object.keys(nr).length };
+  }
+  /* Vienos metodikos (ar vienos dalies skyriaus) analizė. Elementai: { text } (pastraipa ar PDF eilutė) arba { cells: [langelio tekstas su \n tarp pastraipų] } */
+  function analizuokViena(el) {
     el = el || [];
     var eil = [];               // plokščias eilučių sąrašas: { t, i (elemento nr.), c (langelio nr.) }
     el.forEach(function (e, i) {
