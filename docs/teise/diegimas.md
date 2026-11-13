@@ -12,9 +12,11 @@ Modulis - statiniai failai, be build žingsnio, diegiami kartu su visa svetaine 
 | `PP-teise/index.html` | Stebėsenos puslapis (tvarka nuo 2026-09-25, antra pertvarka): tamsi modulio antraštė kaip kituose moduliuose su sąžiningumo skydeliu ir išskleidžiama „Apie šaltinių patikrą“; trys klausimų KPI kortelės su skaičiais (kas pasikeitė / kas įsigalios / ką peržiūrėti), po jomis „Trūksta duomenų“, „Archyvas“ ir pranešimai; viena darbo sritis - įrankių juosta (paieška, tema, susijęs įrankis, „Daugiau filtrų“, neprivalomas „Mano pirkimas“), sąrašas kairėje (~36 %) ir pasirinkto įrašo detalės dešinėje (A-G: antraštė ir statusai, pokyčio esmė, kam aktualu, nuo kada taikoma, ką peržiūrėti, pagrindimas ir šaltiniai su pažodine ištrauka, sutraukti rekvizitai); pasirinkimas adrese `#irasas=id`, filtrai adreso parametruose; telefone sąrašas, tada detalės su „Grįžti į pokyčius“; skaitymo vaizdas ilgiems įrašams; techninė diagnostika poraštėje |
 | `PP-teise/admin.html` | Administravimas (vietinis režimas, be serverio autorizacijos) |
 | `PP-teise/sw.js` | Veikimas be interneto: modulis, bendri failai ir abu duomenų failai talpykloje; iš talpyklos atsakymai žymimi `X-GP-Offline` |
-| `PP-teise/duomenys/registras.json` | Bendras įrašų registras (žinių rinkinys su versija, aprėptimi, patikros data) |
+| `PP-teise/duomenys/registras.json` | Bendras įrašų registras - nacionalinė teisė (žinių rinkinys su versija, aprėptimi, patikros data) |
+| `PP-teise/duomenys/registras-es.json` | ES teisės registras (nuo 2026-11-13; perjungiklis „Nacionalinė teisė / ES teisė“, `?lygmuo=es`) |
+| `PP-teise/es-saltiniai.py` | ES šaltinių patikros įrankis prižiūrėtojui (nauji dokumentai, dokumento tekstas pagal CELEX; registro nekeičia) |
 | `PP-teise/duomenys/saltiniai.json` | Šaltinių registras ir patikrų žurnalas |
-| `PP-teise/testai.html`, `PP-teise/testai-registras.json` | Priėmimo ir regresijos testai su testiniu registru (pažymėtas demonstraciniu, į talpyklą nesaugomas) |
+| `PP-teise/testai.html`, `PP-teise/testai-registras.json`, `PP-teise/testai-registras-es.json` | Priėmimo ir regresijos testai su testiniais registrais (pažymėti demonstraciniais, į talpyklą nesaugomi) |
 | `shared/teise-stebesena.js` | Branduolys: schema, tikrinimas, skiltys, aktualumas, paieška, žurnalas, įkėlimas, portalo ir modulių blokai |
 | `index.html` (portalas) | Vienas viso pločio blokas „Pirkimų teisės stebėsena“ PO 12 įrankių katalogo, prieš tiekėjų dalį (iki trijų įrašų pagal redakcinį prioritetą, mygtukas „Atverti stebėseną“); atskiros katalogo kortelės modulis neturi |
 | `PP-qual/PP-QUAL.html`, `PP-salygos/PP-SALYGOS.html` | Kontekstiniai blokai su to modulio įrašais |
@@ -68,7 +70,7 @@ maršrutą), o iki tol tvirtinimo įrodymas yra commit'as į repozitoriją.
 
 ## 4. Priėmimo testai (užduoties 11 punktas) - kur tikrinama
 
-Visi - `PP-teise/testai.html` (77 testai), testinis registras `testai-registras.json`. Puslapio testai laukia
+Visi - `PP-teise/testai.html` (121 testas; viena grupė - `?grupe=<grupė>`), testiniai registrai `testai-registras.json` ir `testai-registras-es.json` (`?registras=`, `?registrasEs=`). Puslapio testai laukia
 `<html data-busena="ikelta|klaida">` (ne teksto), o kiekvienas pradeda nuo žinomos būsenos (vaizdas „Kas pasikeitė?“,
 be filtrų, be `#irasas`).
 
