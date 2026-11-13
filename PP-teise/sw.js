@@ -3,7 +3,7 @@
  * ----------------------------------------------------------------------------
  * KAM. Pirkimo projekto vadovas žinių rinkinį (registrą) turi matyti ir ten, kur
  * ryšio nėra. Po pirmo apsilankymo su internetu čia išsaugomas modulis, bendri
- * failai ir abu duomenų failai. Be interneto rodomas ATSISIŲSTAS rinkinys, o
+ * failai ir duomenų failai (nacionalinės ir ES teisės registrai, šaltiniai). Be interneto rodomas ATSISIŲSTAS rinkinys, o
  * puslapis tai pasako aiškiai: talpyklos atsakymui pridedama antraštė
  * X-GP-Offline, pagal kurią sąsaja rodo rinkinio versiją, aprėptį ir datą ir
  * nežada jokios aktualumo patikros.
@@ -18,12 +18,13 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppteise-2026-11-11-2";
+var VERSIJA = "ppteise-2026-11-13-1";
 
 var SAVI = [
   "./",
   "./index.html",
   "./duomenys/registras.json",
+  "./duomenys/registras-es.json",
   "./duomenys/saltiniai.json",
   "../shared/epso-g.css",
   "../favicon.svg",

@@ -70,6 +70,10 @@
   .patikra--nepavyko{border-color:#F3C3CA;background:#FFFAFA}
   .patikra--ok{border-color:var(--color-green-15);background:var(--color-green-5)}
   @media (max-width:700px){.mini-forma{grid-template-columns:1fr}table,thead,tbody,tr,td,th{display:block}thead{display:none}td{border:0;padding:3px 0}tr{border-bottom:1px solid var(--color-graphite-15);padding:8px 0}}
+  .lygmuo-admin{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-1) var(--space-3);margin:var(--space-2) 0;font-size:14px}
+  .lygmuo-admin span{font-weight:700}
+  .lygmuo-admin a{color:var(--color-emerald-strong)}
+  .lygmuo-admin a[aria-current="page"]{font-weight:700;color:var(--color-graphite);text-decoration:none;border-bottom:2px solid var(--color-emerald)}
 </style>
 </head>
 <body>
@@ -91,7 +95,7 @@
     </div>
     <div class="header-right">
       <label class="header-laukas" for="adminKas">Kas administruoja (įrašoma į istoriją) <input id="adminKas" maxlength="80" autocomplete="off" placeholder="vardas, pareigos"></label>
-      <a class="btn-header" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Į stebėsenos puslapį</span></a>
+      <a class="btn-header" id="iStebesena" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Į stebėsenos puslapį</span></a>
     </div>
   </div>
 </header>
@@ -101,9 +105,16 @@
   <div class="juosta juosta--ispejimas" id="rezimoJuosta">
     <b>Vietinis administravimo režimas.</b> Serverio autorizacijos nėra - šis puslapis neapsaugo nuo neteisėtos prieigos ir todėl čia
     NIEKADA nerašomi vidiniai pastebėjimai apie konkrečius pirkimus ar tiekėjus. Pakeitimai saugomi tik šioje naršyklėje (darbinė kopija)
-    ir į bendrą registrą patenka tik eksportavus JSON ir įrašius jį į repozitoriją (<code>PP-teise/duomenys/registras.json</code>).
+    ir į bendrą registrą patenka tik eksportavus JSON ir įrašius jį į repozitoriją (<code id="registroFailas">PP-teise/duomenys/registras.json</code>).
     Peržiūrų žurnalas iš stebėsenos puslapio į eksportą niekada nepatenka.
   </div>
+  <!-- Teisės lygmuo (2026-11-13): du registrai - nacionalinė teisė ir ES teisė; kiekvienas turi savo darbinę kopiją ir eksportą. -->
+  <nav class="lygmuo-admin" aria-label="Administruojamas registras">
+    <span>Administruojamas registras:</span>
+    <a href="admin.html" data-lygmuo="lt">Nacionalinė teisė</a>
+    <a href="admin.html?lygmuo=es" data-lygmuo="es">ES teisė</a>
+    <a href="index.html?prieziura=1#diagnostika" id="iDiagnostika">Techninė diagnostika: šaltinių prieiga ir patikros (stebėsenos puslapis, prižiūrėtojo režimas)</a>
+  </nav>
   <div id="pranesimai"></div>
 
   <section class="kortele" aria-labelledby="registrasH">
@@ -143,6 +154,7 @@
         <div class="laukas"><label for="f_priimta">Priimta (YYYY-MM-DD)</label><input id="f_priimta" type="date"></div>
         <div class="laukas"><label for="f_paskelbta">Paskelbta</label><input id="f_paskelbta" type="date"></div>
         <div class="laukas"><label for="f_isigalioja">Įsigalioja</label><input id="f_isigalioja" type="date"></div>
+        <div class="laukas"><label for="f_taikomaNuo">Taikoma nuo (jei skiriasi nuo įsigaliojimo)</label><input id="f_taikomaNuo" type="date"></div>
         <div class="laukas"><label for="f_aptikta">Aptikta sistemoje</label><input id="f_aptikta" type="date"></div>
         <div class="laukas visas"><label for="f_taikoma">Taikymo pradžia (tekstu, pvz. „procedūroms, pradėtoms nuo ...“)</label><input id="f_taikoma" maxlength="300"></div>
         <div class="laukas"><label for="f_saltPav">Šaltinio pavadinimas</label><input id="f_saltPav" maxlength="200"></div>
@@ -253,7 +265,9 @@
     var m = {};
     return { getItem: function (k) { return Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } };
   })();
-  var R_DARB = "ppteise.admin.registras", R_IST = "ppteise.admin.istorija", R_PAT = "ppteise.admin.patikros", R_KAS = "ppteise.admin.kas";
+  /* Teisės lygmuo (2026-11-13): ?lygmuo=es - ES teisės registras (duomenys/registras-es.json) su atskira darbine kopija, istorija ir patikromis. */
+  var LYG = Q.get("lygmuo") === "es" ? "es" : "lt", PRIES = LYG === "es" ? ".es" : "";
+  var R_DARB = "ppteise.admin.registras" + PRIES, R_IST = "ppteise.admin.istorija" + PRIES, R_PAT = "ppteise.admin.patikros" + PRIES, R_KAS = "ppteise.admin.kas";
   var BAZINIS = null, DARBINE = null, SALTINIAI = null, DABAR = S.dienaISO(), IMPORTAS = null, REDAGUOJAMAS = null;
 
   /* Q3 (shared/saugykla.js): neperskaitoma darbinė kopija anksčiau tapdavo „kopijos nėra“, o kitas
@@ -287,7 +301,9 @@
   /* Darbinė kopija: { bazineVersija, sukurta, irasai:[žali įrašai] } - grynos JSON struktūros, be vykdymo laukų. */
   function svarus(r) {
     var o = JSON.parse(JSON.stringify(r));
-    ["klaidos", "dublikatas", "konfliktas"].forEach(function (k) { delete o[k]; });
+    ["klaidos", "dublikatas", "konfliktas", "lygmuo"].forEach(function (k) { delete o[k]; });   // lygmuo - iš registro meta, į įrašą nerašomas
+    if (o.teismoDokumentas == null) delete o.teismoDokumentas;
+    if (o.datos && o.datos.taikomaNuo == null) delete o.datos.taikomaNuo;
     Object.keys(o).forEach(function (k) { if (/^vidin/i.test(k)) delete o[k]; });   // vidinė informacija į registrą nekeliauja
     return o;
   }
@@ -340,7 +356,7 @@
         '<details><summary class="muted" style="cursor:pointer">Istorija (' + r.busenosIstorija.length + ')</summary><ul class="istorija">' + r.busenosIstorija.map(function (h) { var bb = S.BUSENOS[h.busena]; return '<li>' + esc(h.data) + ' - ' + esc(bb ? bb.lt : h.busena) + (h.kas ? ' (' + esc(h.kas) + ')' : '') + (h.pastaba ? ': ' + esc(h.pastaba) : '') + '</li>'; }).join("") + '</ul></details></td>' +
         '<td><span class="zyma zyma--' + esc(r.busena) + '">' + esc(B.zenklas + " " + B.lt) + '</span>' + (r.reikiaSpecialisto ? '<br><span class="zyma zyma--blogai">specialisto vertinimas</span>' : '') + '</td>' +
         '<td>' + esc(S.RUSYS[r.rusis].lt) + '<br><span class="muted">' + esc(r.rezimas.map(function (x) { return x === "PI" ? "PĮ" : "VPĮ"; }).join(" + ") || "-") + '</span></td>' +
-        '<td>' + esc(r.datos.isigalioja || "nenurodyta") + '</td>' +
+        '<td>' + esc(S.veikimoData(r) || "nenurodyta") + '</td>' +
         '<td><div class="eilute">' +
           '<button type="button" class="btn btn--mazas" data-red="' + esc(r.id) + '">Redaguoti</button>' +
           (r.busena !== "patvirtinta" && r.busena !== "archyvuota" ? '<button type="button" class="btn btn--mazas btn--pirminis" data-veiksmas="patvirtinta" data-id="' + esc(r.id) + '">Patvirtinti</button>' : '') +
@@ -382,7 +398,7 @@
     $("f_id").value = o.id || ""; $("f_id").readOnly = !!r;
     $("f_rusis").value = o.rusis || "priimtas"; $("f_saltinioTipas").value = o.saltinioTipas || "teises_norma"; $("f_busena").value = o.busena || "laukia";
     ["pavadinimas", "santrauka", "kasPasikeite", "kamAktualu", "veiksmas", "pereinamosios"].forEach(function (k) { $("f_" + k).value = o[k] || ""; });
-    ["priimta", "paskelbta", "isigalioja", "aptikta"].forEach(function (k) { $("f_" + k).value = (o.datos || {})[k] || ""; });
+    ["priimta", "paskelbta", "isigalioja", "taikomaNuo", "aptikta"].forEach(function (k) { $("f_" + k).value = (o.datos || {})[k] || ""; });
     $("f_taikoma").value = (o.datos || {}).taikoma || "";
     $("f_saltPav").value = (o.saltinis || {}).pavadinimas || ""; $("f_saltUrl").value = (o.saltinis || {}).url || ""; $("f_saltVieta").value = (o.saltinis || {}).vieta || "";
     $("f_keicPav").value = (o.keiciamasAktas || {}).pavadinimas || ""; $("f_keicUrl").value = (o.keiciamasAktas || {}).url || ""; $("f_keicId").value = (o.keiciamasAktas || {}).eTarId || "";
@@ -417,10 +433,13 @@
       rusis: $("f_rusis").value, saltinioTipas: $("f_saltinioTipas").value, busena: $("f_busena").value,
       rezimas: [].concat($("f_rezPI").checked ? ["PI"] : [], $("f_rezVPI").checked ? ["VPI"] : []),
       temos: pazymetos("tema"),
-      datos: { priimta: $("f_priimta").value || null, paskelbta: $("f_paskelbta").value || null, isigalioja: $("f_isigalioja").value || null, aptikta: $("f_aptikta").value || null, taikoma: $("f_taikoma").value.trim() || null },
+      datos: { priimta: $("f_priimta").value || null, paskelbta: $("f_paskelbta").value || null, isigalioja: $("f_isigalioja").value || null, taikomaNuo: $("f_taikomaNuo").value || null, aptikta: $("f_aptikta").value || null, taikoma: $("f_taikoma").value.trim() || null },
+      /* Laukai, kurių forma neredaguoja, lieka iš esamo įrašo (2026-11-13; iki tol redaguojant dingdavo trumpas pavadinimas). */
+      trumpai: senas ? senas.trumpai || "" : "", teismoDokumentas: senas ? senas.teismoDokumentas || null : null,
       pereinamosios: $("f_pereinamosios").value.trim() || null,
       saltinis: { pavadinimas: $("f_saltPav").value.trim(), url: $("f_saltUrl").value.trim() || null, vieta: $("f_saltVieta").value.trim() },
-      keiciamasAktas: ($("f_keicPav").value.trim() || $("f_keicUrl").value.trim() || $("f_keicId").value.trim()) ? { pavadinimas: $("f_keicPav").value.trim(), url: $("f_keicUrl").value.trim() || null, eTarId: $("f_keicId").value.trim() || null } : null,
+      keiciamasAktas: ($("f_keicPav").value.trim() || $("f_keicUrl").value.trim() || $("f_keicId").value.trim()) ? Object.assign({ pavadinimas: $("f_keicPav").value.trim(), url: $("f_keicUrl").value.trim() || null, eTarId: $("f_keicId").value.trim() || null },
+        senas && senas.keiciamasAktas && senas.keiciamasAktas.celex ? { celex: senas.keiciamasAktas.celex } : {}) : null,
       identifikatoriai: ident, moduliai: moduliai,
       aktualumas: { proceduros: proc.length ? proc : null, objektai: obj.length ? obj : null, etapai: etap.length ? etap : null, nezinomas: $("f_nezinomas").checked },
       istrauka: $("f_istrTekstas").value.trim() ? { tekstas: $("f_istrTekstas").value.trim(), vieta: $("f_istrVieta").value.trim() } : null,
@@ -640,7 +659,7 @@
     };
     rd.readAsText(f); this.value = "";
   });
-  $("eksportas").addEventListener("click", function () { atsisiusk("registras-" + DABAR + ".json", eksportoTekstas()); });
+  $("eksportas").addEventListener("click", function () { atsisiusk((LYG === "es" ? "registras-es-" : "registras-") + DABAR + ".json", eksportoTekstas()); });
   $("eksportasSaltiniai").addEventListener("click", function () { atsisiusk("saltiniai-" + DABAR + ".json", eksportoSaltiniai()); });
   /* Atmetimas - tik patvirtinus; sakoma, kiek pakeitimų prarandama (2026-11-04; iki tol vienu paspaudimu be klausimo). */
   $("atmesti").addEventListener("click", function () {
@@ -668,7 +687,10 @@
   $("automatine").addEventListener("click", automatinePatikra);
 
   /* ---------- Paleidimas ---------- */
-  var kelias = "duomenys/registras.json", prasytas = Q.get("registras");
+  var kelias = LYG === "es" ? "duomenys/registras-es.json" : "duomenys/registras.json", prasytas = Q.get("registras");
+  document.querySelectorAll(".lygmuo-admin a[data-lygmuo]").forEach(function (a) { if (a.getAttribute("data-lygmuo") === LYG) a.setAttribute("aria-current", "page"); });
+  $("registroFailas").textContent = "PP-teise/" + kelias;
+  if (LYG === "es") { $("iStebesena").href = "index.html?lygmuo=es"; document.title = "ES teisė - " + document.title; }
   if (prasytas && /^[\w./-]+\.json$/.test(prasytas) && prasytas.indexOf("..") === -1 && prasytas.indexOf("//") === -1) kelias = prasytas;
   var PARUOSTA = S.ikelk(kelias).then(function (r) {
     if (!r.ok) { $("registroBusena").innerHTML = '<span class="juosta juosta--klaida" style="display:block">Bazinio registro įkelti nepavyko (' + esc(r.klaida) + ') - administravimas negalimas, kol nėra duomenų.</span>'; return false; }
@@ -682,7 +704,7 @@
   fetch("duomenys/saltiniai.json", { cache: "no-store" }).then(function (x) { return x.ok ? x.json() : null; }).catch(function () { return null; }).then(function (s) { SALTINIAI = s; pieskPatikras(); });
 
   window.PPTEISE_ADMIN = {
-    paruosta: PARUOSTA, darbine: function () { return DARBINE; }, bazinis: function () { return BAZINIS; }, irasai: irasai, tikrinta: tikrinta,
+    paruosta: PARUOSTA, lygmuo: LYG, darbine: function () { return DARBINE; }, bazinis: function () { return BAZINIS; }, irasai: irasai, tikrinta: tikrinta,
     importuok: importuok, taikykImporta: taikykImporta, veiksmas: veiksmas, issaugokIrasa: issaugokIrasa,
     eksportoTekstas: eksportoTekstas, eksportoSaltiniai: eksportoSaltiniai, registruokPatikra: registruokPatikra, automatinePatikra: automatinePatikra,
     istorija: istorija, iForma: iForma, isFormos: isFormos, darbinesSkirtumai: darbinesSkirtumai, nustatykDabar: function (d) { DABAR = d; if (BAZINIS) uzpildykMeta(); }
