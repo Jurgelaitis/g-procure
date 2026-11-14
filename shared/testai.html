@@ -10601,6 +10601,76 @@ async function testaiMiniaturos1114(){
     } finally { f.remove(); }
   });
 
+  await testas("Peržiūros lango pastaba pagal vaizdo duomenis: rinkos rodiklių vaizdui - pirkimo pavadinimas išgalvotas, rodikliai - tikri vieši duomenys (LT ir EN); kitiems vaizdams ir perėjus nuo rinkos rodiklių vaizdo - demonstraciniai duomenys; pradiniame HTML - numatytoji pastaba; generatoriuje pažymėti tie patys įrankiai; telefone langas telpa", async () => {
+    const TIKRI = ["pp-market-kpi"];
+    const NUM_LT = "Tikras įrankio ekrano vaizdas su demonstraciniais duomenimis: pirkimai, tiekėjai ir sumos išgalvoti.";
+    const NUM_EN = "A real screenshot of the tool with demo data: the procurements, suppliers and amounts are made up. The interface is shown in Lithuanian.";
+    // pradiniame HTML - numatytoji pastaba lietuviškai
+    const stat = new DOMParser().parseFromString(await (await fetch(PSL, { cache: "no-store" })).text(), "text/html").getElementById("ekr-pastaba");
+    tiesa(!!stat, "pradiniame HTML nėra pastabos elemento #ekr-pastaba");
+    lygu([txt(stat), stat.getAttribute("data-lt"), stat.getAttribute("data-en")], [NUM_LT, NUM_LT, NUM_EN], "pradinis HTML");
+    let kitokie;
+    const { f, d } = await atverk("lt", 1280, 900);
+    try {
+      const dlg = d.getElementById("ekranas"), past = d.getElementById("ekr-pastaba"), img = d.getElementById("ekr-img");
+      const dabar = () => img.src.replace(/^.*\/([^/]+)\.webp$/, "$1");
+      // ratu per visus vaizdus mygtuku „Kitas“
+      const ratas = async () => { const r = {};
+        for (let i = 0; i < 14; i++) { r[dabar()] = [txt(past), past.getAttribute("data-lt"), past.getAttribute("data-en")]; d.getElementById("ekr-pirmyn").click(); await lauk(10); }
+        return r; };
+      d.querySelector("#mod-pp-plan .mod-shot").click(); await lauk(60);
+      const lt = await ratas();
+      lygu(Object.keys(lt).length, 14, "vaizdų rate");
+      kitokie = Object.keys(lt).filter(id => lt[id][0] !== NUM_LT).sort();
+      lygu(kitokie, TIKRI, "vaizdai su sava pastaba");
+      for (const id of Object.keys(lt)) if (TIKRI.indexOf(id) < 0) lygu(lt[id], [NUM_LT, NUM_LT, NUM_EN], id + ": numatytoji pastaba");
+      const r = lt["pp-market-kpi"][0];
+      tiesa(/Pirkimo pavadinimas išgalvotas/.test(r) && /rinkos rodikliai - tikri vieši duomenys/.test(r) && /vaizdo sudarymo dieną/.test(r) && /naujausius rodo pats įrankis/.test(r), "rinkos rodiklių vaizdo pastaba: " + r);
+      tiesa(!/sumos išgalvoti/.test(r) && !/demonstraciniais duomenimis/.test(r), "rinkos rodiklių vaizdo pastaba vis dar sako, kad duomenys demonstraciniai: " + r);
+      lygu(lt["pp-market-kpi"][1], r, "rinkos rodiklių vaizdo data-lt - ne rodomas tekstas");
+      dlg.close(); await lauk(60);
+      // atvėrus tiesiai: rinkos rodiklių vaizdui - sava pastaba, „Ankstesnis“ ir kitas įrankis po jo - vėl numatytoji
+      d.querySelector("#mod-pp-market-kpi .mod-shot").click(); await lauk(60);
+      lygu([dabar(), txt(past)], ["pp-market-kpi", r], "atvėrus rinkos rodiklių vaizdą tiesiai");
+      d.getElementById("ekr-atgal").click(); await lauk(20);
+      lygu([dabar() !== "pp-market-kpi", txt(past)], [true, NUM_LT], "„Ankstesnis“ nuo rinkos rodiklių vaizdo");
+      dlg.close(); await lauk(60);
+      d.querySelector("#mod-pp-salygos .mod-shot").click(); await lauk(60);
+      lygu(txt(past), NUM_LT, "kitas įrankis po rinkos rodiklių vaizdo");
+      dlg.close(); await lauk(60);
+      // angliškai
+      d.querySelector('.lang-switch__btn[data-lang="en"]').click(); await lauk(100);
+      d.querySelector("#mod-pp-plan .mod-shot").click(); await lauk(60);
+      const en = await ratas();
+      for (const id of Object.keys(en)) if (TIKRI.indexOf(id) < 0) lygu(en[id][0], NUM_EN, id + ": EN numatytoji pastaba");
+      const re = en["pp-market-kpi"][0];
+      tiesa(/procurement title is made up/.test(re) && /market indicators are real public data/.test(re) && /day the screenshot was taken/.test(re) && /shown in Lithuanian/.test(re), "EN rinkos rodiklių vaizdo pastaba: " + re);
+      tiesa(!/amounts are made up/.test(re) && !/demo data/.test(re) && !/[ąčęėįšųūž]/i.test(re), "EN rinkos rodiklių vaizdo pastaba sako, kad duomenys demonstraciniai, arba joje lietuviškas tekstas: " + re);
+      dlg.close();
+    } finally { f.remove(); }
+    // telefone langas su ilgesne pastaba telpa ekrane, vaizdui lieka vietos
+    const t = await atverk("lt", 375, 760);
+    try {
+      const k = t.d.getElementById("mod-pp-market-kpi");
+      k.querySelector(".mod-toggle").click(); await lauk(120);
+      k.querySelector(".mod-shot").click(); await lauk(250);
+      const dlg = t.d.getElementById("ekranas"), q = dlg.getBoundingClientRect();
+      tiesa(dlg.open && /tikri vieši duomenys/.test(txt(t.d.getElementById("ekr-pastaba"))), "telefone langas neatsivėrė arba pastaba ne rinkos rodiklių vaizdo");
+      tiesa(q.left >= 0 && q.right <= t.w.innerWidth + 1 && q.top >= 0 && q.bottom <= t.w.innerHeight + 1, "telefone langas netelpa ekrane: " + [q.left, q.top, q.right, q.bottom].map(Math.round).join(", "));
+      tiesa([...dlg.querySelectorAll("button, a, .ekr__pastaba")].filter(matomas).every(x => { const z = x.getBoundingClientRect(); return z.left >= q.left - 1 && z.right <= q.right + 1 && z.bottom <= q.bottom + 1; }), "telefone pastaba ar mygtukai išlenda už lango");
+      tiesa(t.d.getElementById("ekr-vaizdas").clientHeight >= 200, "telefone vaizdui liko per mažai vietos: " + t.d.getElementById("ekr-vaizdas").clientHeight + " px");
+      tiesa(t.d.documentElement.scrollWidth <= t.w.innerWidth + 1, "telefone puslapis slenka į šoną");
+      dlg.close();
+    } finally { t.f.remove(); }
+    // generatorius: "tikri_duomenys" pažymėti tie patys įrankiai, kuriems puslapis rodo savą pastabą
+    const ats = await fetch("../.github/testai/miniaturos.py", { cache: "no-store" });
+    if (GYVAI && ats.status === 404) { testoPastaba("Gyvai nepatikrinta: katalogas .github svetainėje neskelbiamas - generatoriaus žymos „tikri_duomenys“ tikrinamos tik vietoje ir GitHub Actions."); return; }
+    tiesa(ats.ok, "generatoriaus failo nėra (HTTP " + ats.status + ")");
+    const zym = [];
+    (await ats.text()).split(/(?=\{"id": ")/).slice(1).forEach(g => { const m = /^\{"id": "([a-z0-9-]+)"/.exec(g); if (m && /"tikri_duomenys": True/.test(g)) zym.push(m[1]); });
+    lygu(zym.sort(), kitokie, "generatoriuje pažymėti įrankiai su tikrais duomenimis prieš savas pastabas puslapyje");
+  });
+
   await testas("Telefone (375 px) suskleistoje kortelėje miniatiūros nėra, išskleistoje - per visą plotį; tiekėjų kortelėse - rodoma; peržiūros langas telpa ekrane, vaizdas slenkamas savo rėmelyje (su pavadinimu ir fokusu), puslapis į šoną neslenka; spausdinant miniatiūrų nėra", async () => {
     const { f, d, w } = await atverk("lt", 375, 760);
     try {
