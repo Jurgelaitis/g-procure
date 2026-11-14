@@ -51,12 +51,16 @@
     PI: {
       trumpai: "PĮ",
       pavadinimas: "Lietuvos Respublikos pirkimų, atliekamų vandentvarkos, energetikos, transporto ar pašto paslaugų srities perkančiųjų subjektų, įstatymas",
+      /* Angliškas pavadinimas dokumentams anglų kalba (naudotojo sprendimas 2026-11-13: angliškame vertinimo metodikos priede - pilnas
+         įstatymo pavadinimas, ne santrumpa). Oficialaus PĮ vertimo nėra - pavadinimas toks pat kaip G-Procure LT / EN sutarčių tekste. */
+      en: "Law on Procurement by Contracting Entities in the Water, Energy, Transport or Postal Services Sectors of the Republic of Lithuania",
       direktyva: "2014/25/ES",
       url: "https://www.e-tar.lt/portal/lt/legalAct/9116a35030a011e78397ae072f58c508/asr"
     },
     VPI: {
       trumpai: "VPĮ",
       pavadinimas: "Lietuvos Respublikos viešųjų pirkimų įstatymas",
+      en: "Law on Public Procurement of the Republic of Lithuania",   // kaip LITGRID dvikalbėse pirkimo sąlygose
       direktyva: "2014/24/ES",
       url: "https://www.e-tar.lt/portal/lt/legalAct/TAR.C54AFFAA7622/asr"
     },
@@ -746,8 +750,9 @@
 
   function klaida(tekstas) { throw new Error("GP_TEISE: " + tekstas); }
 
-  // Viena nuoroda -> tekstas. LT: „PĮ 50 str. 4 d. 2 p.“, EN: „PĮ Art. 50(4)(2)“.
-  function formatas(n, kalba) {
+  // Viena nuoroda -> tekstas. LT: „PĮ 50 str. 4 d. 2 p.“, EN: „PĮ Art. 50(4)(2)“; EN su pilnu pavadinimu (pilnas):
+  // „Article 50(4)(2) of the Law on Procurement by Contracting Entities ...“ - dokumentams anglų kalba.
+  function formatas(n, kalba, pilnas) {
     var en = kalba === "en";
     if (n.a === "MET") return en ? "Methodology, point " + n.p : "Metodikos " + n.p + " p.";
     if (n.a === "KTM") return en ? "Pricing Rules Methodology, point " + n.p : "Kainodaros taisyklių nustatymo metodikos " + n.p + " p.";
@@ -762,6 +767,7 @@
       : "Nacionaliniam saugumui užtikrinti svarbių objektų apsaugos įstatymo " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : ""));
     var akt = AKTAI[n.a];
     if (!akt || !n.s) klaida("netinkama nuoroda " + JSON.stringify(n));
+    if (en && pilnas && akt.en) return "Article " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "") + " of the " + akt.en;
     if (en) return akt.trumpai + " Art. " + n.s + (n.d ? "(" + n.d + ")" : "") + (n.p ? "(" + n.p + ")" : "");
     return akt.trumpai + " " + n.s + " str." + (n.d ? " " + n.d + " d." : "") + (n.p ? " " + n.p + " p." : "");
   }
@@ -775,13 +781,14 @@
     return n;
   }
 
-  /* cit(raktas, rezimas, kalba, { trumpai }) - tekstas moduliui.
-     trumpai: tik pagrindas be „(taikant ...)“ - antraštėms ir ženkleliams.  */
+  /* cit(raktas, rezimas, kalba, { trumpai, pilnas }) - tekstas moduliui.
+     trumpai: tik pagrindas be „(taikant ...)“ - antraštėms ir ženkleliams.
+     pilnas (tik kalba "en"): PĮ ir VPĮ - pilnu anglišku įstatymo pavadinimu, ne santrumpa (dokumentams anglų kalba). */
   function cit(raktas, rezimas, kalba, parinktys) {
-    var n = irasas(raktas, rezimas);
-    if (!n.per) return formatas(n, kalba);
-    if (parinktys && parinktys.trumpai) return formatas(n.per, kalba);
-    return formatas(n.per, kalba) + (kalba === "en" ? " (applying " : " (taikant ") + formatas(n, kalba) + ")";
+    var n = irasas(raktas, rezimas), pilnas = !!(parinktys && parinktys.pilnas);
+    if (!n.per) return formatas(n, kalba, pilnas);
+    if (parinktys && parinktys.trumpai) return formatas(n.per, kalba, pilnas);
+    return formatas(n.per, kalba, pilnas) + (kalba === "en" ? " (applying " : " (taikant ") + formatas(n, kalba, pilnas) + ")";
   }
 
   // Kelios nuorodos vienoje eilutėje: „PĮ 29 str. 1 d.; PĮ 50 str. 5 d.“
