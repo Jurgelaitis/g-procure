@@ -270,12 +270,13 @@
     "pp-cost-benefit": { lt: "Ekonominio naudingumo skaičiuoklė", en: "Economic advantage calculator" },
     "pp-market-kpi": { lt: "Rinkos rodiklių stebėsena", en: "Market indicators monitoring" },
     modulis: { lt: "Įrankis", en: "Tool" },
+    byla: { lt: "Pirkimo bylos failas", en: "Procurement file" },          // 2026-11-14, 1.3 - shared/pirkimo-byla.js
     nezinomas: { lt: "Šaltinis nenurodytas", en: "Source not stated" }
   };
   /* Laukai, kurie lyginami ir rašomi į istoriją: visi kortelės duomenų laukai ir įrankių veiksmai (archyvavimas - įrašo veiksmas). */
   var PAPILDOMI_LAUKAI = { veiksmai: { lt: "Rekomenduoti veiksmai", en: "Recommended actions" } };
   var ISTORIJOS_LAUKAI = Object.keys(LAUKAI).concat(Object.keys(PAPILDOMI_LAUKAI));
-  var ISTORIJOS_VEIKSMAI = ["sukurta", "pakeista", "archyvuota", "grazinta"];
+  var ISTORIJOS_VEIKSMAI = ["sukurta", "pakeista", "archyvuota", "grazinta", "importuota"];
 
   function trumpink(s, n) {
     s = tekstas(s);
@@ -365,6 +366,7 @@
       var o = { laikas: laikoZyma(e.laikas), saltinis: saltinioId(e.saltinis),
         veiksmas: ISTORIJOS_VEIKSMAI.indexOf(e.veiksmas) >= 0 ? e.veiksmas : "pakeista", laukai: laukai };
       if (tekstas(e.modulis)) o.modulis = trumpink(e.modulis, 60);
+      if (tekstas(e.failas)) o.failas = trumpink(e.failas, 200);       // importuota iš pirkimo bylos failo (1.3)
       return o;
     }).filter(function (e) { return e.laikas && (e.laukai.length || e.veiksmas !== "pakeista"); });
   }
@@ -541,6 +543,35 @@
     var w = global.GP_SAUGYKLA.rasyk(RAKTAS, { schema: Math.max(SCHEMA, irasas.schema || 0), korteles: sarasas }, { saugykla: saug(o) });
     if (!w.ok) return { ok: false, r: w };
     return { ok: true, kortele: n, nauja: !rasta, pakeista: pak.map(function (p) { return p.l; }) };
+  }
+
+  /* Pirkimo bylos importas (2026-11-14, krypties 1.3; failą skaito shared/pirkimo-byla.js): kortelė įrašoma tokia, kokia faile - su jos
+     istorija, kilme ir peržiūros žymomis (normalizuok - nepatikimi duomenys), ne per issaugok skirtumą (kitaip istorija prasidėtų iš naujo), ir
+     istorijoje pridedamas įrašas „importuota“ su failo vardu. o.naujas - kaip nauja kortelė (naujas id); kitaip to paties id kortelė
+     pakeičiama (sprendžia žmogus kortelių puslapyje). Neperskaitoma saugykla neperrašoma. -> { ok, kortele, nauja } | { ok: false, r } */
+  function importuok(k, o) {
+    o = o || {};
+    if (!global.GP_SAUGYKLA) return { ok: false, r: { ok: false, kodas: "neprieinama", klaida: "shared/saugykla.js neprijungtas" } };
+    var n = normalizuok(k);
+    if (!n || !tekstas(n.pavadinimas)) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė be pavadinimo" } };
+    var r = global.GP_SAUGYKLA.skaityk(RAKTAS, { saugykla: saug(o), tikrink: sandara });
+    if (r.busena === "sugadinta" || r.busena === "neprieinama") return { ok: false, r: r };
+    var irasas = r.busena === "yra" ? r.reiksme : { schema: SCHEMA, korteles: [] };
+    var dabar = new Date().toISOString();
+    if (o.naujas) n.id = naujasId();
+    n.atnaujinta = dabar;
+    if (n.atnaujinta < n.sukurta) n.sukurta = dabar;
+    n.istorija = n.istorija.slice();
+    var e = { laikas: dabar, saltinis: "byla", veiksmas: "importuota", laukai: [] };
+    if (tekstas(o.failas)) e.failas = trumpink(o.failas, 200);
+    n.istorija.push(e);
+    if (n.istorija.length > ISTORIJOS_RIBA) { n.istorijaPraleista += n.istorija.length - ISTORIJOS_RIBA; n.istorija = n.istorija.slice(-ISTORIJOS_RIBA); }
+    var rasta = false;
+    var sarasas = irasas.korteles.map(function (x) { if (x && x.id === n.id) { rasta = true; return n; } return x; });
+    if (!rasta) sarasas.push(n);
+    var w = global.GP_SAUGYKLA.rasyk(RAKTAS, { schema: Math.max(SCHEMA, irasas.schema || 0), korteles: sarasas }, { saugykla: saug(o) });
+    if (!w.ok) return { ok: false, r: w };
+    return { ok: true, kortele: n, nauja: !rasta };
   }
 
   /* Sugadintas kortelių įrašas (2026-11-06): pradėti nuo tuščio sąrašo galima tik tada, kai sugadinta reikšmė jau nukopijuota
@@ -1602,7 +1633,7 @@
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
     irasykGrafika: irasykGrafika, grafikoForma: grafikoForma,
     irasykVertinima: irasykVertinima, salinkVertinima: salinkVertinima, vertinimoForma: vertinimoForma, irasoData: irasoData,
-    pradekIsNaujo: pradekIsNaujo, pazymekPerziureta: pazymekPerziureta,
+    pradekIsNaujo: pradekIsNaujo, pazymekPerziureta: pazymekPerziureta, importuok: importuok,
     saugykla: function () { return saug({}); },
     SALTINIAI: SALTINIAI, ISTORIJOS_RIBA: ISTORIJOS_RIBA, ISTORIJOS_NUO: ISTORIJOS_NUO, ISTORIJOS_LAUKAI: ISTORIJOS_LAUKAI,
     saltinioPav: saltinioPav, saltinisIsModulio: saltinisIsModulio, istorijaiReiksme: istorijaiReiksme,
