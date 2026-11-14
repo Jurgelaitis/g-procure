@@ -1494,11 +1494,125 @@ async function testaiLygmuo1113(){
   });
 }
 
+/* Portalo blokas dviem lygmenimis (2026-11-13, naudotojo sprendimas „portalo pradžios bloke rodyti ir ES pokyčius“). */
+async function testaiPortalas1113(){
+  dabartine = grupe("Portalo blokas dviem lygmenimis (2026-11-13): perjungiklis nacionalinė / ES teisė, ES prioritetai, neįkeltas lygmuo");
+  const D = "2026-11-13";
+  /* Netikras fetch pagal adresą: nacionalinis ir ES registrai skirtingi; `o.es` / `o.lt` - klaida tam lygmeniui; `o.lauk` - ES atsakymas sulaikomas. */
+  const pagalAdresa = (lt, es, o = {}) => { const kv = []; const f = (u) => { kv.push(String(u)); const yraEs = /registras-es\.json|es\.json/.test(String(u));
+      const kl = yraEs ? o.es : o.lt; if (kl) return Promise.resolve({ ok: false, status: kl, headers: { get: () => null }, json: () => Promise.resolve(null) });
+      const ats = { ok: true, status: 200, headers: { get: () => null }, json: () => Promise.resolve(yraEs ? es : lt) };
+      return yraEs && o.lauk ? new Promise(r => { o.lauk.paleisk = () => r(ats); }) : Promise.resolve(ats); }; f.kv = kv; return f; };
+  const LT = { meta: { versija: "t", patikrinta: "2026-11-09", rezimas: "rankinis" }, irasai: [
+    irasas({ id: "lt-a", pavadinimas: "NACIONALINIS A", trumpai: "Nacionalinis A", portalas: { prioritetas: 1 }, datos: { priimta: "2026-01-01", isigalioja: "2027-01-01" } }),
+    irasas({ id: "lt-b", pavadinimas: "NACIONALINIS B", portalas: { prioritetas: 2 }, saltinis: { url: "https://b.lt" } }),
+    irasas({ id: "lt-t", pavadinimas: "NACIONALINĖ NUTARTIS", rusis: "teismu_praktika", saltinioTipas: "teismo_isaiskinimas", datos: { priimta: "2026-05-05" }, saltinis: { url: "https://t.lt" } })] };
+  const ES = { meta: { versija: "e", patikrinta: D, rezimas: "rankinis", lygmuo: "es" }, irasai: [
+    irasas({ id: "es-a", pavadinimas: "ES REGLAMENTAS", trumpai: "ES reglamentas", portalas: { prioritetas: 2 }, rezimas: ["PI", "VPI"], datos: { priimta: "2026-03-20", isigalioja: "2026-04-12", taikomaNuo: "2026-06-30" }, saltinis: { url: "https://eur-lex.europa.eu/a" } }),
+    irasas({ id: "es-p", pavadinimas: "ES PASIŪLYMAS", trumpai: "ES pasiūlymas", rusis: "projektas", saltinioTipas: "teises_akto_projektas", portalas: { prioritetas: 1 }, datos: {}, saltinis: { url: "https://eur-lex.europa.eu/p" } }),
+    irasas({ id: "es-t", pavadinimas: "ES SPRENDIMAS", rusis: "teismu_praktika", saltinioTipas: "teismo_isaiskinimas", datos: { priimta: "2026-04-16" }, saltinis: { url: "https://eur-lex.europa.eu/t" } }),
+    irasas({ id: "es-i", pavadinimas: "ES IŠVADA", rusis: "teismu_praktika", saltinioTipas: "teismo_isaiskinimas", teismoDokumentas: "isvada", datos: { priimta: "2026-09-08" }, saltinis: { url: "https://eur-lex.europa.eu/i" } }),
+    irasas({ id: "es-b", pavadinimas: "ES BŪSIMAS", datos: { priimta: "2026-10-01", isigalioja: "2026-11-01", taikomaNuo: "2027-06-01" }, saltinis: { url: "https://eur-lex.europa.eu/b" } })] };
+  const sk = el => [...el.querySelectorAll(".gps-sk")].map(tekstas), kort = el => [...el.querySelectorAll("a.gps-pk__a")].map(a => a.textContent.trim());
+  const myg = (el, l) => el.querySelector('[data-gps-lygmuo-m="' + l + '"]'), spausta = el => [myg(el, "lt").getAttribute("aria-pressed"), myg(el, "es").getAttribute("aria-pressed")];
+  /* Mygtuko pavadinimas ekrano skaitytuvui - be kodo ženklelio (jis aria-hidden). */
+  const pavM = (el, l) => tekstas(myg(el, l).querySelector("span:not(.gps-lg__k)")), kodM = (el, l) => tekstas(myg(el, l).querySelector(".gps-lg__k"));
+
+  await testas("Numatytai - nacionalinė teisė; perjungus į ES keičiasi įvadas, skaičiai su ES užrašais, kortelės ir visos nuorodos (?lygmuo=es); fokusas lieka ant mygtuko; grįžus - vėl nacionalinė", async () => {
+    const el = document.createElement("div"); document.body.appendChild(el); const f = pagalAdresa(LT, ES);
+    await S.mount({ target: el, lang: "lt", saknis: "", dabar: D, fetch: f });
+    lygu(f.kv.slice().sort(), ["PP-teise/duomenys/registras-es.json", "PP-teise/duomenys/registras.json"], "abu registrai įkeliami iš numatytų adresų");
+    const gr = el.querySelector(".gps-pb__lygmuo"); lygu([gr.getAttribute("role"), gr.getAttribute("aria-label"), pavM(el, "lt"), pavM(el, "es"), kodM(el, "lt") + "/" + kodM(el, "es"), myg(el, "lt").tagName, myg(el, "lt").getAttribute("type")], ["group", "Teisės lygmuo", "Nacionalinė teisė", "ES teisė", "LT/ES", "BUTTON", "button"], "perjungiklis");
+    tiesa([...el.querySelectorAll(".gps-lg__k")].every(k => k.getAttribute("aria-hidden") === "true"), "kodų ženkleliai - tik akims");
+    lygu([spausta(el), el.getAttribute("data-gps-lygmuo")], [["true", "false"], "lt"], "numatyta nacionalinė");
+    lygu(sk(el), ["1 įsigalios netrukus", "1 jau galioja", "1 teismų sprendimai", "0 projektai"], "nacionaliniai skaičiai"); lygu(kort(el), ["Nacionalinis A", "NACIONALINIS B"], "nacionalinės kortelės");
+    tiesa(/PĮ ir VPĮ pirkimuose/.test(tekstas(el.querySelector(".gps__paskirtis"))) && /Atnaujinta 2026-11-09/.test(el.textContent) && el.querySelector(".gps__cta").getAttribute("href") === "PP-teise/index.html" && el.querySelector('a[href="PP-teise/index.html#irasas=lt-a"]') && el.querySelector('.gps-sk--tei[href="PP-teise/index.html?vaizdas=pasikeite&rezimas=abu&rusis=teismu_praktika"]'), "nacionalinės nuorodos be lygmens parametro");
+    myg(el, "es").focus(); myg(el, "es").click();
+    lygu([spausta(el), el.getAttribute("data-gps-lygmuo")], [["false", "true"], "es"], "pasirinkta ES"); tiesa(document.activeElement === myg(el, "es"), "fokusas lieka ant ES mygtuko");
+    lygu(sk(el), ["1 bus taikoma netrukus", "1 jau taikoma", "2 Teisingumo Teismo sprendimai ir išvados", "1 Komisijos pasiūlymai"], "ES skaičiai ir užrašai"); lygu(kort(el), ["ES pasiūlymas", "ES reglamentas"], "ES kortelės prioriteto tvarka");
+    tiesa(/ES pirkimų teisėje/.test(tekstas(el.querySelector(".gps__paskirtis"))) && /Atnaujinta 2026-11-13/.test(el.textContent) && !/NACIONALIN/.test(el.textContent), "ES įvadas ir data, nacionalinių įrašų nėra");
+    lygu([el.querySelector(".gps__cta").getAttribute("href"), el.querySelector("a.gps-pk__a").getAttribute("href"), ...[...el.querySelectorAll(".gps-sk")].map(a => a.getAttribute("href"))],
+      ["PP-teise/index.html?lygmuo=es", "PP-teise/index.html?lygmuo=es#irasas=es-p", "PP-teise/index.html?lygmuo=es&vaizdas=isigalios&rezimas=abu", "PP-teise/index.html?lygmuo=es&vaizdas=pasikeite&rezimas=abu", "PP-teise/index.html?lygmuo=es&vaizdas=pasikeite&rezimas=abu&rusis=teismu_praktika", "PP-teise/index.html?lygmuo=es&vaizdas=isigalios&rezimas=abu"], "ES nuorodos");
+    const k = [...el.querySelectorAll(".gps-pk")]; tiesa(/Proj\./.test(tekstas(k[0].querySelector(".gps-kal"))) && !/Projektas/.test(tekstas(k[0].querySelector(".gps-kal"))) && /Projektas - dar nepriimta/.test(tekstas(k[0])) && /Bir\s*30\s*2026/.test(tekstas(k[1].querySelector(".gps-kal"))) && /Taikoma/.test(tekstas(k[1])), "plytelės: projektas trumpai, aktas - pagal taikymo pradžią: " + tekstas(k[0]) + " | " + tekstas(k[1]));
+    lygu([el.querySelectorAll("h2.gps__title").length, el.querySelectorAll("h3.gps-pk__pav").length, el.querySelectorAll(".gps-lj").length], [1, 2, 0], "antraštės; laiko juostos portale nėra");
+    myg(el, "es").click(); lygu(spausta(el), ["false", "true"], "antras paspaudimas nieko nekeičia"); tiesa(document.activeElement === myg(el, "es"), "fokusas neprarastas");
+    myg(el, "lt").click(); lygu([spausta(el), sk(el)[0], kort(el)[0]], [["true", "false"], "1 įsigalios netrukus", "Nacionalinis A"], "grįžta nacionalinė"); tiesa(document.activeElement === myg(el, "lt"), "fokusas ant LT mygtuko"); el.remove();
+  });
+
+  await testas("Pasirinktas lygmuo išlieka perpiešus bloką (kalbos keitimas): ES lieka ES ir angliškai; cfg.lygmuo jį nurodo tiesiogiai; angliški užrašai", async () => {
+    const el = document.createElement("div"); document.body.appendChild(el);
+    await S.mount({ target: el, lang: "lt", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES) }); myg(el, "es").click();
+    await S.mount({ target: el, lang: "en", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES) });
+    lygu([spausta(el), pavM(el, "lt"), pavM(el, "es"), kodM(el, "lt") + "/" + kodM(el, "es"), el.querySelector(".gps-pb__lygmuo").getAttribute("aria-label")], [["false", "true"], "National law", "EU law", "LT/EU", "Level of law"], "ES išliko, angliški užrašai (ženklelis angliškai - EU)");
+    lygu(sk(el), ["1 applying soon", "1 already applicable", "2 Court of Justice judgments and opinions", "1 Commission proposals"], "EN ES skaičiai"); tiesa(/EU procurement law/.test(tekstas(el.querySelector(".gps__paskirtis"))) && /entries themselves are in Lithuanian/.test(el.textContent), "EN įvadas ir pastaba apie kalbą");
+    await S.mount({ target: el, lang: "lt", lygmuo: "lt", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES) }); lygu([spausta(el), el.getAttribute("data-gps-lygmuo")], [["true", "false"], "lt"], "cfg.lygmuo = lt");
+    const el2 = document.createElement("div"); document.body.appendChild(el2);
+    await S.mount({ target: el2, lang: "lt", lygmuo: "es", urlEs: "kitas-es.json", url: "kitas.json", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES) }); lygu([spausta(el2), kort(el2)], [["false", "true"], ["ES pasiūlymas", "ES reglamentas"]], "cfg.lygmuo = es ir savi adresai"); el.remove(); el2.remove();
+  });
+
+  await testas("Neįkeltas lygmuo: klaida su priežastimi ir „būsena nežinoma“ - ne tuščias sąrašas ir ne nuliai; kitas lygmuo veikia; kol ES dar kraunama - „Kraunama“, o nacionalinė jau rodoma", async () => {
+    const el = document.createElement("div"); document.body.appendChild(el);
+    await S.mount({ target: el, lang: "lt", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES, { es: 404 }) });
+    lygu([kort(el).length, sk(el).length], [2, 4], "nacionalinė rodoma, nors ES neįkelta"); myg(el, "es").click();
+    const kl = el.querySelector('.gps__err[role="alert"]'); tiesa(kl && /Nepavyko įkelti stebėsenos duomenų \(ES teisė: HTTP 404\)\. Šio lygmens būsena nežinoma\./.test(tekstas(kl)), "klaida: " + (kl && tekstas(kl)));
+    lygu([sk(el).length, kort(el).length, spausta(el), !!el.querySelector('.gps__cta[href="PP-teise/index.html?lygmuo=es"]')], [0, 0, ["false", "true"], true], "be skaičių ir kortelių; perjungiklis ir nuoroda į modulį lieka"); tiesa(!/pokyčių nėra|neparinkti/i.test(el.textContent), "klaida nevirsta „nėra“: " + el.textContent);
+    myg(el, "lt").click(); lygu(kort(el).length, 2, "grįžus - nacionalinė"); el.remove();
+    const e2 = document.createElement("div"); document.body.appendChild(e2);
+    await S.mount({ target: e2, lang: "lt", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES, { lt: 500 }) });
+    tiesa(/Nepavyko įkelti stebėsenos duomenų \(Nacionalinė teisė: HTTP 500\)/.test(tekstas(e2.querySelector(".gps__err"))) && sk(e2).length === 0, "nacionalinės klaida"); myg(e2, "es").click(); lygu(kort(e2), ["ES pasiūlymas", "ES reglamentas"], "ES veikia, kai nacionalinė neįkelta"); e2.remove();
+    const e3 = document.createElement("div"); document.body.appendChild(e3); const lauk = {};
+    const p = S.mount({ target: e3, lang: "lt", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES, { lauk }) });
+    await kol(() => kort(e3).length === 2, "nacionalinė nupiešta nelaukiant ES"); myg(e3, "es").focus(); myg(e3, "es").click();
+    tiesa(/Kraunama/.test(tekstas(e3.querySelector('[role="status"]'))) && sk(e3).length === 0 && kort(e3).length === 0, "ES dar kraunama: " + e3.textContent);
+    lauk.paleisk(); await p; lygu([kort(e3), spausta(e3)], [["ES pasiūlymas", "ES reglamentas"], ["false", "true"]], "ES įkelta - nupiešta"); tiesa(document.activeElement === myg(e3, "es"), "fokusas išliko perpiešus įkėlus"); e3.remove();
+  });
+
+  await testas("Vėlesnis mount() tam pačiam elementui nutraukia ankstesnį piešimą (kalbos keitimas, kol ES dar kraunama): pavėlavęs atsakymas naujo bloko neperrašo", async () => {
+    const el = document.createElement("div"); document.body.appendChild(el); const lauk = {};
+    const p1 = S.mount({ target: el, lang: "lt", lygmuo: "es", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES, { lauk }) });
+    await laukk(30); await S.mount({ target: el, lang: "en", saknis: "", dabar: D, fetch: pagalAdresa(LT, ES) });
+    lygu([pavM(el, "es"), sk(el)[0]], ["EU law", "1 applying soon"], "naujas blokas angliškai, ES išliko");
+    lauk.paleisk(); await p1; lygu([pavM(el, "es"), sk(el)[0]], ["EU law", "1 applying soon"], "senas atsakymas neperrašė"); el.remove();
+  });
+
+  await testas("Tikras ES registras: trys redakcinio prioriteto įrašai 1-3 su pavadinimu, „kodėl“ ir kas parinko; visi turi trumpą pavadinimą ir nėra faktų įrašai; nacionaliniai prioritetai nepakito", async () => {
+    const es = (await S.ikelk("duomenys/registras-es.json?cb=" + Date.now())).tikrinta, lt = (await S.ikelk("duomenys/registras.json?cb=" + Date.now())).tikrinta;
+    const p = S.portaloIrasai(es.irasai, D, 10); lygu(p.map(x => x.portalas.prioritetas), [1, 2, 3], "ES prioritetai");
+    tiesa(p.every(x => x.portalas.pavadinimas && x.portalas.kodel && x.portalas.parinko && x.trumpai && x.busena !== "aptikta"), "laukai");
+    /* Sprendimai dėl Direktyvos 2014/24/ES: neteigiama, kad jie taikomi perkantiesiems subjektams (žr. registro įrašus). */
+    p.filter(x => x.rusis === "teismu_praktika").forEach(x => tiesa(/teisės specialistas/.test(x.portalas.kodel), x.id + ": išlyga dėl perkančiųjų subjektų"));
+    p.filter(x => x.rusis === "projektas").forEach(x => tiesa(/nepriimtas/.test(x.portalas.kodel), x.id + ": pasakyta, kad nepriimtas"));
+    lygu(S.portaloIrasai(lt.irasai, D, 10).map(x => x.portalas.prioritetas), [1, 2, 3], "nacionaliniai prioritetai");
+  });
+
+  await testas("Portalo puslapis: perjungiklis veikia su tikrais registrais, ES kortelių ir skaičių nuorodos atveria esamą puslapį, modulis atveria tą ES įrašą; pakeitus portalo kalbą lygmuo išlieka; 375 ir 320 px neslenka ir žymos neišlenda už kortelių", async () => {
+    const P = await puslapis("../index.html?lang=lt", 1280), d = P.d, bl = () => d.getElementById("teiseBlokas");
+    await kol(() => bl().querySelector(".gps-pk"), "blokas įkeltas"); lygu(bl().getAttribute("data-gps-lygmuo"), "lt", "numatyta nacionalinė");
+    const ltKort = kort(bl()); myg(bl(), "es").click(); await kol(() => bl().querySelector(".gps-pk") && bl().getAttribute("data-gps-lygmuo") === "es", "ES nupiešta");
+    const REG = await (await fetch("duomenys/registras-es.json?cb=" + Date.now())).json(), pr = REG.irasai.filter(x => x.portalas && x.portalas.prioritetas != null).sort((a, b) => a.portalas.prioritetas - b.portalas.prioritetas);
+    lygu(kort(bl()), pr.slice(0, 3).map(x => x.trumpai), "ES kortelės iš registro prioriteto tvarka"); tiesa(kort(bl()).every(k => ltKort.indexOf(k) === -1) && tekstas(bl()).includes("Atnaujinta " + REG.meta.patikrinta), "turinys pasikeitė, data - ES registro");
+    for (const a of bl().querySelectorAll("a.gps-pk__a, a.gps-sk, a.gps__cta")) { tiesa(/lygmuo=es/.test(a.getAttribute("href")), "ES nuoroda: " + a.getAttribute("href")); const u = new URL(a.getAttribute("href"), P.w.location.href); u.hash = ""; const r = await fetch(u.href, { method: "HEAD" }); tiesa(r.ok, "nuoroda " + a.getAttribute("href")); }
+    const href = bl().querySelector("a.gps-pk__a").getAttribute("href");
+    d.querySelector('.lang-switch__btn[data-lang="en"]').click();
+    await kol(() => myg(bl(), "es") && /EU law/.test(tekstas(myg(bl(), "es"))) && bl().querySelector(".gps-pk"), "perpiešta angliškai"); lygu([spausta(bl()), kort(bl()).length], [["false", "true"], 3], "lygmuo išliko pakeitus kalbą"); P.f.remove();
+    const M = await puslapis(href.replace(/^PP-teise\//, "")), md = M.d; await kol(() => md.documentElement.getAttribute("data-busena") === "ikelta", "modulis įkeltas");
+    await kol(() => { const m = md.querySelector('.lygmuo__m[data-lygmuo="es"]'); return m && m.getAttribute("aria-pressed") === "true" && tekstas(md.getElementById("detales")).includes(pr[0].trumpai); }, "modulis atvėrė ES lygmenį ir tą patį ES įrašą");
+    M.f.remove();
+    for (const w of [375, 320]) {
+      const T = await puslapis("../index.html?lang=lt", w), td = T.d, tb = () => td.getElementById("teiseBlokas"); await kol(() => tb().querySelector(".gps-pk"), w + ": įkelta"); myg(tb(), "es").click(); await kol(() => tb().getAttribute("data-gps-lygmuo") === "es" && tb().querySelector(".gps-pk"), w + ": ES");
+      tiesa(td.documentElement.scrollWidth <= w + 1, w + " px neslenka: " + td.documentElement.scrollWidth);
+      const blogi = []; tb().querySelectorAll(".gps-pk").forEach(k => { const kr = k.getBoundingClientRect(); k.querySelectorAll(".gps-zyma, .gps-pk__rus, .gps-lust, .gps-pk__pav").forEach(z => { const r = z.getBoundingClientRect(); if (r.right > kr.right + 0.5 || r.left < kr.left - 0.5) blogi.push(w + ": " + tekstas(z)); }); });
+      const gr = tb().querySelector(".gps-pb__lygmuo").getBoundingClientRect(), sek = tb().querySelector(".gps--pb").getBoundingClientRect(); lygu(blogi, [], "žymos kortelės ribose"); tiesa(gr.right <= sek.right + 0.5 && [...tb().querySelectorAll(".gps-lg")].every(b => b.getBoundingClientRect().height <= 44), w + " px: perjungiklis telpa vienoje eilutėje");
+      T.f.remove();
+    }
+  });
+}
+
 (async () => {
   try {
     /* ?grupe=<grupė>[,<grupė>] - tik nurodytos grupės (taisant vieną grupę nereikia laukti viso rinkinio); nežinoma grupė - klaida. */
     const GRUPES = { testaiSchema, testaiSkiltys, testaiAktualumas, testaiPaieska, testaiZurnalas, testaiIkelimas, testaiRegistras, testaiPuslapis, testaiTestinisRegistras,
-      testaiAdmin, testaiIntegracijos, testaiPrieinamumas, testaiPatikra1104, testaiVaizdas1107, testaiLygmuo1113 };
+      testaiAdmin, testaiIntegracijos, testaiPrieinamumas, testaiPatikra1104, testaiVaizdas1107, testaiLygmuo1113, testaiPortalas1113 };
     const tik = new URLSearchParams(location.search).get("grupe");
     for (const g of (tik ? tik.split(",") : Object.keys(GRUPES))) { if (!GRUPES[g]) throw new Error("Nėra testų grupės „" + g + "“"); await GRUPES[g](); }
   } catch (e) { dabartine = dabartine || grupe("Nepavyko paleisti"); await testas("Rinkinys nutrūko", () => { throw e; }); }
