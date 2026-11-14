@@ -10,6 +10,8 @@ Kiekvienas vaizdas - tikras įrankis vietiniame serveryje su DEMONSTRACINIAIS du
 arba čia surašyti išgalvoti pirkimai ir tiekėjai. Tikrų pirkimų, asmenų ar sumų vaizduose neturi būti; jokie duomenys
 niekur nesiunčiami (DI kvietimai pakeičiami vietiniais atsakymais, CVP IS atsakymai - netikri).
 Rinkos rodiklių įrankis atvėrus pats parsisiunčia viešus rodiklius iš savo šaltinių - vaizde jie tikri, tad tam vaizdui reikia interneto.
+Toks įrankis sąraše pažymimas "tikri_duomenys": True, o „Apie G-Procure“ peržiūros lange jo vaizdui rodoma sava pastaba
+(G-Procure_Project.html EKRANU_PASTABOS) - kad nebūtų sakoma „duomenys išgalvoti“ ten, kur jie tikri.
 Pakeitus įrankio išvaizdą - paleisti iš naujo ir peržiūrėti rezultatą akimis prieš įrašant į saugyklą.
 Reikia tik Python standartinės bibliotekos ir Chrome (kaip paleisk.py)."""
 import base64, datetime, os, sys, threading, time
@@ -53,7 +55,8 @@ IRANKIAI = [
     {"id": "pp-plan", "kelias": "PP-plan/EPSO-G_pirkimu_planavimas_MVP.html",
      "js": "window.confirm = () => true; loadDemo();", "slinkti": "document.querySelector('#imonesJuosta')", "atstumas": 150},
     {"id": "pp-market-kpi", "kelias": "PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html?lang=lt",
-     "js": "document.getElementById('focusName').value = %r; runFocus();" % PIRKIMAS, "slinkti": "document.querySelector('#focusSec')", "atstumas": 96, "laukti": 2.5},
+     "js": "document.getElementById('focusName').value = %r; runFocus();" % PIRKIMAS, "slinkti": "document.querySelector('#focusSec')", "atstumas": 96, "laukti": 2.5,
+     "tikri_duomenys": True},
     {"id": "pp-ts", "kelias": "PP-ts/TS_Asistentas.html",
      "js": "document.getElementById('specText').value = %r; App.runRulesOnly();" % TS_TEKSTAS, "slinkti": "document.querySelector('#analysisResults')", "atstumas": 150, "laukti": 1.5},
     {"id": "pp-qual", "kelias": "PP-qual/PP-QUAL.html",
