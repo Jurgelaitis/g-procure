@@ -1,5 +1,5 @@
 /* ============================================================================
- * G-Procure  shared/teise-stebesena.js   (v1.6)
+ * G-Procure  shared/teise-stebesena.js   (v1.7)
  * ----------------------------------------------------------------------------
  * Pirkimų teisės stebėsenos BRANDUOLYS (window.GP_STEBESENA) - vienas visiems:
  * PP-teise modulis (sąrašas, vaizdai, paieška, peržiūrų žurnalas), administravimo
@@ -20,6 +20,8 @@
  *   - įkėlimas: NEPAVYKUSI patikra grąžina klaidą, o ne „pokyčių nėra“;
  *   - portalo blokas: iki trijų įrašų pagal REDAKCINĮ prioritetą (`portalas.prioritetas`,
  *     nustatomas administravimo aplinkoje) - automatinio „aktualumo“ neišgalvojama;
+ *     nuo 2026-11-13 (v1.7) - dviem lygmenimis: perjungiklis „Nacionalinė teisė / ES teisė“, kiekvieno lygmens
+ *     registras įkeliamas atskirai (neįkeltas lygmuo - klaida, ne „pokyčių nėra“; kitas veikia);
  *   - pokyčiai konkrečiam pirkimui modulyje (nuo 2026-10-04, PP-salygos „Prieš generuojant“):
  *     pirkimuiIrasai() / pirkimuiHTML() pagal pirkimo kontekstą, neaktualūs - suskleisti su priežastimi;
  *     ikelkKarta() - registras įkeliamas vieną kartą puslapiui.
@@ -841,7 +843,7 @@
     var L = lang === "en" ? "en" : "lt", sd = svarbiausiaData(r, dabar, L), k = rusiesKlase(r);
     var kl = "gps-kal gps-kal--" + k + (mazas ? " gps-kal--maz" : "");
     if (r.rusis === "projektas" || !sd.data) {
-      return '<span class="' + kl + ' gps-kal--be"><span class="gps-kal__m">' + esc(r.rusis === "projektas" ? (mazas && L !== "en" ? "Proj." : rusiesTekstas(r, L)) : (L === "en" ? "Date" : "Data")) + '</span>' +
+      return '<span class="' + kl + ' gps-kal--be"><span class="gps-kal__m">' + esc(r.rusis === "projektas" ? (L !== "en" ? "Proj." : rusiesTekstas(r, L)) : (L === "en" ? "Date" : "Data")) + '</span>' +
         '<span class="gps-kal__d">' + (r.rusis === "projektas" ? ikona("pro", mazas ? 16 : 20) : "?") + '</span><span class="gps-kal__y">&nbsp;</span></span>';
     }
     var m = parseInt(sd.data.slice(5, 7), 10) - 1;
@@ -1016,6 +1018,16 @@
       ".gps-pb__tekstas{flex:1;min-width:0}.gps-pb__tekstas .gps__paskirtis{font-size:14px;margin-top:4px}",
       ".gps--pb .gps__cta{background:var(--color-emerald-strong,#007554)}",
       ".gps-pb__sk{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:22px 0 14px}",
+      /* Lygmens perjungiklis (nuo 2026-11-13): tas pats valdiklis kaip modulyje - Nacionalinė teisė / ES teisė */
+      ".gps-pb__lygmuo{display:inline-flex;margin:20px 0 0;border:1px solid var(--color-graphite-30,#C0C2C6);border-radius:8px;background:#fff;overflow:hidden}",
+      ".gps-pb__lygmuo + .gps-pb__sk{margin-top:14px}",
+      ".gps-lg{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;white-space:nowrap;border:0;background:none;font-family:inherit;font-size:14px;font-weight:600;color:var(--color-graphite,#2E3641);cursor:pointer}",
+      ".gps-lg + .gps-lg{border-left:1px solid var(--color-graphite-30,#C0C2C6)}",
+      ".gps-lg:hover{background:var(--color-graphite-15,#E1E2E4)}",
+      ".gps-lg[aria-pressed='true']{background:var(--color-green-5,#F2FAF3);color:var(--color-emerald-strong,#007554);font-weight:700;box-shadow:inset 0 -3px 0 var(--color-emerald,#00A072)}",
+      ".gps-lg:focus-visible{outline:2px solid var(--color-emerald-strong,#007554);outline-offset:-2px}",
+      ".gps-lg__k{font-size:12px;font-weight:700;line-height:18px;padding:0 5px;border-radius:4px;background:var(--color-graphite-15,#E1E2E4);color:var(--color-graphite,#2E3641)}",
+      ".gps-lg[aria-pressed='true'] .gps-lg__k{background:var(--color-emerald-strong,#007554);color:#fff}",
       ".gps-sk{display:inline-flex;align-items:baseline;gap:8px;text-decoration:none;color:var(--color-graphite,#2E3641);border:1px solid var(--color-graphite-15,#E1E2E4);border-radius:999px;padding:6px 14px 6px 12px;background:#fff;font-size:13px}",
       ".gps-sk:hover,.gps-sk:focus-visible{border-color:var(--color-emerald-strong,#007554)}",
       ".gps-sk b{font-size:18px}.gps-sk::before{content:'';width:9px;height:9px;border-radius:50%;align-self:center;flex:none}",
@@ -1036,8 +1048,11 @@
       ".gps-pk__liecia{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:auto;padding-top:12px;border-top:1px solid var(--color-graphite-15,#E1E2E4)}",
       ".gps-pk__l{font-size:12px;color:var(--color-graphite-50-strong,#5B6470);margin-right:2px}",
       "@media (max-width:1023px){.gps-pb__korteles{grid-template-columns:minmax(0,1fr)}}",
-      "@media (max-width:640px){.gps--pb{padding:20px 16px}.gps-pb__galva{flex-wrap:wrap}.gps-pb__atn{margin-left:0;width:100%}.gps-lj__men span{left:3px}.gps-lj__metai{display:none}}",
-      "@media (forced-colors:active){.gps-zyma,.gps-lust,.gps-sk{border:1px solid CanvasText}.gps-lj__t{forced-color-adjust:none}}"
+      "@media print{.gps-pb__lygmuo{display:none}}",
+      /* Siauriausiame ekrane (320-380 px): perjungiklis be kodų ženklelių (jie - tik akims), ilga būsenos žyma kortelėje lūžta, o ne išlenda už kortelės. */
+      "@media (max-width:380px){.gps-lg__k{display:none}.gps-pk__info .gps-zyma{white-space:normal;border-radius:10px}}",
+      "@media (max-width:640px){.gps--pb{padding:20px 16px}.gps-pb__galva{flex-wrap:wrap}.gps-pb__atn{margin-left:0;width:100%}.gps-pb__lygmuo{display:flex;width:100%}.gps-lg{flex:1 1 auto;justify-content:center;padding:0 8px}.gps-lj__men span{left:3px}.gps-lj__metai{display:none}}",
+      "@media (forced-colors:active){.gps-zyma,.gps-lust,.gps-sk,.gps-lg__k{border:1px solid CanvasText}.gps-lj__t{forced-color-adjust:none}}"
     ].join("\n");
     var st = doc.createElement("style"); st.id = STILIAUS_ID; st.textContent = css;
     (doc.head || doc.documentElement).appendChild(st);
@@ -1054,6 +1069,10 @@
           beprioriteto: "Aktualūs įrašai portalui dar neparinkti: redakcinį prioritetą įrašui suteikia administratorius (PP-teise/admin.html), automatiškai jis neskaičiuojamas. Visą registrą rasite stebėsenos puslapyje.",
           apie: "Apie rinkinį", versija: "Rinkinio versija", apreptis: "Aprėptis", prioritetas: "Rodoma pagal redakcinį prioritetą, ne pagal naujumą", kalba: "",
           skIsigalios: "įsigalios netrukus", skGalioja: "jau galioja", skTeismai: "teismų sprendimai", skProjektai: "projektai", atnaujinta: "Atnaujinta",
+          lygmuo: "Teisės lygmuo", lygLt: "Nacionalinė teisė", lygEs: "ES teisė",
+          paskirtisEs: "Kas keičiasi ES pirkimų teisėje: reglamentai, Komisijos pasiūlymai ir gairės, Teisingumo Teismo sprendimai",
+          skIsigaliosEs: "bus taikoma netrukus", skGaliojaEs: "jau taikoma", skTeismaiEs: "Teisingumo Teismo sprendimai ir išvados", skProjektaiEs: "Komisijos pasiūlymai",
+          klaidaLygmens: "Šio lygmens būsena nežinoma",
           liecia: "Liečia", bendra: "bendra informacija", nauja: "nauja - analizė rengiama",
           pirkimui: "Teisės pokyčiai šiam pirkimui", pirkimuiNera: "Su šiuo įrankiu susietų ir šiam pirkimui aktualių įrašų registre nėra.",
           neaktualus: "Pagal jūsų atsakymus neaktualūs", kaDaryti: "Ką daryti", kaPatikrinti: "Ką patikrinti",
@@ -1069,6 +1088,10 @@
           apie: "About the set", versija: "Set version", apreptis: "Scope", prioritetas: "Shown by editorial priority, not by recency",
           kalba: "The entries themselves are in Lithuanian: the registry is written and maintained in Lithuanian.",
           skIsigalios: "entering into force", skGalioja: "in force", skTeismai: "court rulings", skProjektai: "drafts", atnaujinta: "Updated",
+          lygmuo: "Level of law", lygLt: "National law", lygEs: "EU law",
+          paskirtisEs: "What is changing in EU procurement law: regulations, Commission proposals and guidance, Court of Justice judgments",
+          skIsigaliosEs: "applying soon", skGaliojaEs: "already applicable", skTeismaiEs: "Court of Justice judgments and opinions", skProjektaiEs: "Commission proposals",
+          klaidaLygmens: "The status of this level is unknown",
           liecia: "Affects", bendra: "general information", nauja: "new - analysis in progress",
           pirkimui: "Legal changes for this procurement", pirkimuiNera: "The registry has no entries linked to this tool that are relevant to this procurement.",
           neaktualus: "Not relevant based on your answers", kaDaryti: "What to do", kaPatikrinti: "What to check",
@@ -1086,9 +1109,91 @@
       .slice(0, limit || 3);
   }
 
-  /* Kompaktiškas blokas portalui ir kontekstinės nuorodos moduliams - vienas įkėlimas, du piešėjai.
+  /* Portalo blokas dviem lygmenimis. K: { doc, lang, T, modulioUrl, url, urlEs, limit, klase }. Grąžina pažadą, kuris
+     išsipildo įkėlus (ar nepavykus įkelti) abu registrus - su nacionalinio registro rezultatu, kaip iki 2026-11-13. */
+  var PB_NR = 0;
+  function mountPortalas(cfg, el, K) {
+    var T = K.T, lang = K.lang, doc = K.doc, nr = ++PB_NR;
+    var lyg = cfg.lygmuo === "es" || (cfg.lygmuo == null && el.getAttribute("data-gps-lygmuo") === "es") ? "es" : "lt";
+    var REZ = { lt: null, es: null };
+    el.__gpsPortalas = nr;   // vėlesnis mount() tam pačiam elementui (pvz. pakeitus kalbą) ankstesnio piešimo nebeleidžia
+
+    function perjungiklis() {
+      var m = function (l, kodas, pav) {
+        return '<button type="button" class="gps-lg" data-gps-lygmuo-m="' + l + '" aria-pressed="' + (lyg === l ? "true" : "false") + '"><span class="gps-lg__k" aria-hidden="true">' + kodas + '</span><span>' + esc(pav) + '</span></button>';
+      };
+      return '<div class="gps-pb__lygmuo" role="group" aria-label="' + esc(T.lygmuo) + '">' + m("lt", "LT", T.lygLt) + m("es", lang === "en" ? "EU" : "ES", T.lygEs) + '</div>';
+    }
+    function html() {
+      var es = lyg === "es", r = REZ[lyg], q = es ? "?lygmuo=es" : "";
+      var h = '<section class="' + K.klase + '" aria-labelledby="gps-portalas-title"><div class="gps-pb__galva"><div class="gps-pb__ikona" aria-hidden="true">' + ikona("tei", 24) + '</div>' +
+          '<div class="gps-pb__tekstas"><h2 class="gps__title" id="gps-portalas-title">' + esc(T.pav) + '</h2>' +
+          '<p class="gps__paskirtis">' + esc(es ? T.paskirtisEs : T.paskirtis) + '</p>' + (T.kalba ? '<p class="gps__meta gps__kalba">' + esc(T.kalba) + '</p>' : '') + '</div>' +
+          '<a class="gps__cta" href="' + esc(K.modulioUrl + q) + '">' + esc(T.atverti) + ' ' + ikona("rodykle", 16) + '</a></div>' + perjungiklis();
+      if (!r) return h + '<p class="gps__sub" role="status" style="font-size:14px;margin-top:16px">' + esc(T.kraunama) + '</p></section>';
+      /* Neįkeltas lygmuo: klaida su priežastimi ir „būsena nežinoma“ (niekada „pokyčių nėra“); kitas lygmuo lieka pasiekiamas perjungikliu. */
+      if (!r.ok) return h + '<div class="gps__err" role="alert" style="margin-top:16px">' + esc(T.klaida) + ' (' + esc(es ? T.lygEs : T.lygLt) + ': ' + esc(r.klaida) + '). ' + esc(T.klaidaLygmens) + '.</div></section>';
+      var dabar = cfg.dabar || dienaISO(), pat = patikimumas(r.tikrinta, null, dabar, lang);
+      /* 2026-11-07 (naudotojo sprendimas): vizualus blokas - skaičiai ir trys redakcinio prioriteto kortelės su data,
+         būsena ir susijusiais įrankiais; paaiškinimai - modulyje, ne portale. Laiko juosta - tik modulyje (naudotojo
+         sprendimas tą pačią dieną: portale ji kūrė per didelį vizualinį triukšmą). */
+      var rodyti = portaloIrasai(r.tikrinta.irasai, dabar, K.limit), rd = rodiklis(r.tikrinta.irasai, dabar);
+      var vaizdui = function (v, extra) { return K.modulioUrl + "?" + (es ? "lygmuo=es&" : "") + "vaizdas=" + v + "&rezimas=abu" + (extra || ""); };
+      if (r.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
+      if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';
+      h += '<div class="gps-pb__sk">' +
+           '<a class="gps-sk gps-sk--busima" href="' + esc(vaizdui("isigalios")) + '"><b>' + rd.isigalios + '</b> <span>' + esc(es ? T.skIsigaliosEs : T.skIsigalios) + '</span></a>' +
+           '<a class="gps-sk gps-sk--galioja" href="' + esc(vaizdui("pasikeite")) + '"><b>' + rd.galioja + '</b> <span>' + esc(es ? T.skGaliojaEs : T.skGalioja) + '</span></a>' +
+           '<a class="gps-sk gps-sk--tei" href="' + esc(vaizdui("pasikeite", "&rusis=teismu_praktika")) + '"><b>' + rd.teismai + '</b> <span>' + esc(es ? T.skTeismaiEs : T.skTeismai) + '</span></a>' +
+           '<a class="gps-sk gps-sk--pro" href="' + esc(vaizdui("isigalios")) + '"><b>' + rd.projektai + '</b> <span>' + esc(es ? T.skProjektaiEs : T.skProjektai) + '</span></a>' +
+           '<span class="gps-pb__atn"><span class="gps-taskas" aria-hidden="true"></span>' + esc(T.atnaujinta) + ' ' + esc(pat.registrasAtnaujintas || "-") + '</span></div>';
+      if (!rodyti.length) h += '<p class="gps__sub" style="font-size:14px;margin-top:16px">' + esc(T.beprioriteto) + '</p>';
+      else {
+        h += '<ul class="gps-pb__korteles">';
+        rodyti.forEach(function (x) {
+          var pav = x.trumpai || (x.portalas && x.portalas.pavadinimas) || x.pavadinimas;
+          var mz = moduliuZymos(x, 3);
+          h += '<li class="gps-pk gps-pk--' + rusiesKlase(x) + '">' +
+               '<span class="gps-pk__virsus">' + kalendorius(x, dabar, lang) + '<span class="gps-pk__info">' + busenosZyma(x, dabar, lang) +
+               '<span class="gps-pk__rus">' + ikona(rusiesKlase(x), 14) + esc(rusiesTekstas(x, lang)) + (x.rezimas.length ? " · " + esc(x.rezimas.map(function (z) { return z === "PI" ? "PĮ" : "VPĮ"; }).join(" + ")) : "") + '</span></span></span>' +
+               '<h3 class="gps-pk__pav"><a class="gps-pk__a" href="' + esc(K.modulioUrl + q) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(pav) + '</a></h3>' +
+               '<span class="gps-pk__liecia"><span class="gps-pk__l">' + esc(T.liecia) + '</span>' + (mz || '<span class="gps-lust">' + esc(T.bendra) + '</span>') + '</span></li>';
+        });
+        h += '</ul>';
+      }
+      return h + '</section>';
+    }
+    function piesk(fokusuoti) {
+      if (el.__gpsPortalas !== nr) return;
+      var akt = doc.activeElement, buvo = akt && el.contains(akt) && akt.getAttribute ? akt.getAttribute("data-gps-lygmuo-m") : null;
+      el.setAttribute("data-gps-lygmuo", lyg);
+      el.innerHTML = html();
+      [].forEach.call(el.querySelectorAll("[data-gps-lygmuo-m]"), function (b) {
+        b.addEventListener("click", function () {
+          var n = b.getAttribute("data-gps-lygmuo-m") === "es" ? "es" : "lt";
+          if (n === lyg) return;
+          lyg = n; piesk(true);
+        });
+      });
+      /* Perpiešus fokusas lieka ant perjungiklio mygtuko (klaviatūros naudotojas kitaip atsidurtų puslapio pradžioje). */
+      var m = fokusuoti ? lyg : buvo;
+      if (m) { var mb = el.querySelector('[data-gps-lygmuo-m="' + m + '"]'); if (mb) try { mb.focus({ preventScroll: true }); } catch (e) { mb.focus(); } }
+    }
+    function gauk(l) {
+      return ikelk(l === "es" ? K.urlEs : K.url, { fetch: cfg.fetch }).then(function (r) { REZ[l] = r; if (lyg === l) piesk(false); return r; });
+    }
+    piesk(false);
+    var pLt = gauk("lt"), pEs = gauk("es");
+    return Promise.all([pLt, pEs]).then(function (rr) { return rr[0]; });
+  }
+
+  /* Kompaktiškas blokas portalui ir kontekstinės nuorodos moduliams - vienas branduolys, du piešėjai.
      cfg: { target, url, lang | getLang, modulis (nebūtinas), rezimas (nebūtinas), limit,
-            saknis ("" portale, ".." modulyje), dabar, fetch }. */
+            saknis ("" portale, ".." modulyje), dabar, fetch; portalui dar - urlEs, lygmuo ("lt" | "es") }.
+     Portalo blokas (be `modulis`) nuo 2026-11-13 turi du lygmenis - nacionalinę ir ES teisę (naudotojo sprendimas):
+     perjungiklis keičia skaičius, korteles ir nuorodas; lygmenų registrai įkeliami atskirai, todėl neįkeltas vienas
+     lygmuo nekliudo kitam ir niekada nerodomas kaip „pokyčių nėra“. Pasirinktas lygmuo laikomas `data-gps-lygmuo`
+     atribute ant `target` - perpiešus bloką (pvz. pakeitus kalbą) jis išlieka. */
   function mount(cfg) {
     var doc = global.document;
     var el = typeof cfg.target === "string" ? doc.querySelector(cfg.target) : cfg.target;
@@ -1102,84 +1207,50 @@
     var limit = cfg.limit || 3;
     var portalas = !cfg.modulis;
     var klase = "gps" + (portalas ? " gps--portalas gps--pb" : "");
-    el.innerHTML = '<section class="' + klase + '" aria-live="polite"><div class="gps__head"><h' + (portalas ? "2" : "3") + ' class="gps__title">' + esc(portalas ? T.pav : T.moduliui) + '</h' + (portalas ? "2" : "3") + '><span class="gps__meta">' + esc(T.kraunama) + '</span></div></section>';
+    if (portalas) return mountPortalas(cfg, el, { doc: doc, lang: lang, T: T, modulioUrl: modulioUrl, url: url, limit: limit, klase: klase,
+      urlEs: cfg.urlEs || ((saknis ? saknis + "/" : "") + "PP-teise/duomenys/registras-es.json") });
+    el.innerHTML = '<section class="' + klase + '" aria-live="polite"><div class="gps__head"><h3 class="gps__title">' + esc(T.moduliui) + '</h3><span class="gps__meta">' + esc(T.kraunama) + '</span></div></section>';
 
     return ikelk(url, { fetch: cfg.fetch }).then(function (r) {
       var dabar = cfg.dabar || dienaISO();
-      var H = portalas ? "h2" : "h3";
       if (!r.ok) {
-        el.innerHTML = '<section class="' + klase + '"><div class="gps__head"><' + H + ' class="gps__title">' + esc(portalas ? T.pav : T.moduliui) + '</' + H + '></div>' +
+        el.innerHTML = '<section class="' + klase + '"><div class="gps__head"><h3 class="gps__title">' + esc(T.moduliui) + '</h3></div>' +
           '<div class="gps__err" role="alert">' + esc(T.klaida) + ' (' + esc(r.klaida) + ').</div>' +
-          '<div class="gps__foot"><span></span><a href="' + esc(modulioUrl) + '">' + esc(portalas ? T.atverti : T.visi) + ' →</a></div></section>';
+          '<div class="gps__foot"><span></span><a href="' + esc(modulioUrl) + '">' + esc(T.visi) + ' →</a></div></section>';
         return r;
       }
       var pat = patikimumas(r.tikrinta, null, dabar, lang);
       var h;
-      if (portalas) {
-        /* 2026-11-07 (naudotojo sprendimas): vizualus blokas - skaičiai ir trys redakcinio prioriteto kortelės su data,
-           būsena ir susijusiais įrankiais; paaiškinimai - modulyje, ne portale. Laiko juosta - tik modulyje (naudotojo
-           sprendimas tą pačią dieną: portale ji kūrė per didelį vizualinį triukšmą). */
-        var rodyti = portaloIrasai(r.tikrinta.irasai, dabar, limit), rd = rodiklis(r.tikrinta.irasai, dabar);
-        var vaizdui = function (v, extra) { return modulioUrl + "?vaizdas=" + v + "&rezimas=abu" + (extra || ""); };
-        h = '<section class="' + klase + '" aria-labelledby="gps-portalas-title"><div class="gps-pb__galva"><div class="gps-pb__ikona" aria-hidden="true">' + ikona("tei", 24) + '</div>' +
-            '<div class="gps-pb__tekstas"><h2 class="gps__title" id="gps-portalas-title">' + esc(T.pav) + '</h2>' +
-            '<p class="gps__paskirtis">' + esc(T.paskirtis) + '</p>' + (T.kalba ? '<p class="gps__meta gps__kalba">' + esc(T.kalba) + '</p>' : '') + '</div>' +
-            '<a class="gps__cta" href="' + esc(modulioUrl) + '">' + esc(T.atverti) + ' ' + ikona("rodykle", 16) + '</a></div>';
-        if (r.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
-        if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';
-        h += '<div class="gps-pb__sk">' +
-             '<a class="gps-sk gps-sk--busima" href="' + esc(vaizdui("isigalios")) + '"><b>' + rd.isigalios + '</b> <span>' + esc(T.skIsigalios) + '</span></a>' +
-             '<a class="gps-sk gps-sk--galioja" href="' + esc(vaizdui("pasikeite")) + '"><b>' + rd.galioja + '</b> <span>' + esc(T.skGalioja) + '</span></a>' +
-             '<a class="gps-sk gps-sk--tei" href="' + esc(vaizdui("pasikeite", "&rusis=teismu_praktika")) + '"><b>' + rd.teismai + '</b> <span>' + esc(T.skTeismai) + '</span></a>' +
-             '<a class="gps-sk gps-sk--pro" href="' + esc(vaizdui("isigalios")) + '"><b>' + rd.projektai + '</b> <span>' + esc(T.skProjektai) + '</span></a>' +
-             '<span class="gps-pb__atn"><span class="gps-taskas" aria-hidden="true"></span>' + esc(T.atnaujinta) + ' ' + esc(pat.registrasAtnaujintas || "-") + '</span></div>';
-        if (!rodyti.length) h += '<p class="gps__sub" style="font-size:14px;margin-top:16px">' + esc(T.beprioriteto) + '</p>';
-        else {
-          h += '<ul class="gps-pb__korteles">';
-          rodyti.forEach(function (x) {
-            var pav = x.trumpai || (x.portalas && x.portalas.pavadinimas) || x.pavadinimas;
-            var mz = moduliuZymos(x, 3);
-            h += '<li class="gps-pk gps-pk--' + rusiesKlase(x) + '">' +
-                 '<span class="gps-pk__virsus">' + kalendorius(x, dabar, lang) + '<span class="gps-pk__info">' + busenosZyma(x, dabar, lang) +
-                 '<span class="gps-pk__rus">' + ikona(rusiesKlase(x), 14) + esc(rusiesTekstas(x, lang)) + (x.rezimas.length ? " · " + esc(x.rezimas.map(function (z) { return z === "PI" ? "PĮ" : "VPĮ"; }).join(" + ")) : "") + '</span></span></span>' +
-                 '<h3 class="gps-pk__pav"><a class="gps-pk__a" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(pav) + '</a></h3>' +
-                 '<span class="gps-pk__liecia"><span class="gps-pk__l">' + esc(T.liecia) + '</span>' + (mz || '<span class="gps-lust">' + esc(T.bendra) + '</span>') + '</span></li>';
-          });
-          h += '</ul>';
-        }
-        h += '</section>';
-      } else {
-        var visi = r.tikrinta.irasai.filter(function (x) { return !x.demo && skiltis(x, dabar) !== "archyvas"; });
-        visi = visi.filter(function (x) { return x.moduliai.some(function (m) { return m.modulis === cfg.modulis; }); });
-        if (cfg.rezimas) visi = visi.filter(function (x) { return !x.rezimas.length || x.rezimas.indexOf(cfg.rezimas) !== -1; });
-        var isig = rikiuok(visi.filter(function (x) { return skiltis(x, dabar) === "isigalios"; }), "artimiausi");
-        var pasik = rikiuok(visi.filter(function (x) { return skiltis(x, dabar) === "pasikeite"; }), "naujausi");
-        var proj = visi.filter(function (x) { return skiltis(x, dabar) === "projektas"; });
-        /* Susieti įrašai (tas pats pakeitimas PĮ ir VPĮ) rodomi vieną kartą. */
-        var rodytiM = [], rodomi = {};
-        isig.slice(0, Math.max(1, Math.ceil(limit / 2))).concat(pasik).concat(proj).forEach(function (x) {
-          if (rodytiM.length >= limit || rodomi[x.id]) return;
-          if (x.susije.some(function (id) { return rodomi[id]; })) return;
-          rodytiM.push(x); rodomi[x.id] = true;
+      var visi = r.tikrinta.irasai.filter(function (x) { return !x.demo && skiltis(x, dabar) !== "archyvas"; });
+      visi = visi.filter(function (x) { return x.moduliai.some(function (m) { return m.modulis === cfg.modulis; }); });
+      if (cfg.rezimas) visi = visi.filter(function (x) { return !x.rezimas.length || x.rezimas.indexOf(cfg.rezimas) !== -1; });
+      var isig = rikiuok(visi.filter(function (x) { return skiltis(x, dabar) === "isigalios"; }), "artimiausi");
+      var pasik = rikiuok(visi.filter(function (x) { return skiltis(x, dabar) === "pasikeite"; }), "naujausi");
+      var proj = visi.filter(function (x) { return skiltis(x, dabar) === "projektas"; });
+      /* Susieti įrašai (tas pats pakeitimas PĮ ir VPĮ) rodomi vieną kartą. */
+      var rodytiM = [], rodomi = {};
+      isig.slice(0, Math.max(1, Math.ceil(limit / 2))).concat(pasik).concat(proj).forEach(function (x) {
+        if (rodytiM.length >= limit || rodomi[x.id]) return;
+        if (x.susije.some(function (id) { return rodomi[id]; })) return;
+        rodytiM.push(x); rodomi[x.id] = true;
+      });
+      h = '<section class="' + klase + '"><div class="gps__head"><h3 class="gps__title">' + esc(T.moduliui) + '</h3>' +
+          '<span class="gps__meta">' + esc(visi.length) + (lang === "en" ? " entries" : " įr.") + '</span></div>';
+      if (r.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
+      if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';
+      if (!rodytiM.length) h += '<p class="gps__sub">' + esc(T.nera) + '</p>';
+      else {
+        h += '<ul class="gps__list">';
+        rodytiM.forEach(function (x) {
+          var sd = svarbiausiaData(x, dabar, lang);
+          h += '<li class="gps__item"><span class="gps__date' + (sd.ateitis ? " gps__date--future" : "") + '">' + esc(sd.zyma) + (sd.data ? " · " + esc(sd.data) : " · " + esc(T.be_datos)) + '</span>' +
+               '<div><a class="gps__nuoroda" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(x.pavadinimas) + '</a>' +
+               (x.busena === "aptikta" ? ' <span class="gps__tag">' + esc(T.nauja) + '</span>' : "") +
+               '<div class="gps__sub">' + esc(x.santrauka.length > 160 ? x.santrauka.slice(0, 157) + "..." : x.santrauka) + '</div></div></li>';
         });
-        h = '<section class="' + klase + '"><div class="gps__head"><h3 class="gps__title">' + esc(T.moduliui) + '</h3>' +
-            '<span class="gps__meta">' + esc(visi.length) + (lang === "en" ? " entries" : " įr.") + '</span></div>';
-        if (r.offline) h += '<div class="gps__warn">' + esc(T.offline) + (pat.registrasAtnaujintas ? " (" + esc(datosTekstas(pat.registrasAtnaujintas, lang)) + ")" : "") + '</div>';
-        if (pat.pasenes) h += '<div class="gps__warn">' + esc(T.pasenes.replace("{n}", pat.senumasDienomis == null ? "?" : pat.senumasDienomis)) + '</div>';
-        if (!rodytiM.length) h += '<p class="gps__sub">' + esc(T.nera) + '</p>';
-        else {
-          h += '<ul class="gps__list">';
-          rodytiM.forEach(function (x) {
-            var sd = svarbiausiaData(x, dabar, lang);
-            h += '<li class="gps__item"><span class="gps__date' + (sd.ateitis ? " gps__date--future" : "") + '">' + esc(sd.zyma) + (sd.data ? " · " + esc(sd.data) : " · " + esc(T.be_datos)) + '</span>' +
-                 '<div><a class="gps__nuoroda" href="' + esc(modulioUrl) + '#irasas=' + encodeURIComponent(x.id) + '">' + esc(x.pavadinimas) + '</a>' +
-                 (x.busena === "aptikta" ? ' <span class="gps__tag">' + esc(T.nauja) + '</span>' : "") +
-                 '<div class="gps__sub">' + esc(x.santrauka.length > 160 ? x.santrauka.slice(0, 157) + "..." : x.santrauka) + '</div></div></li>';
-          });
-          h += '</ul>';
-        }
-        h += '<div class="gps__foot"><span>' + esc(pat.registrasTekstas) + '</span><a href="' + esc(modulioUrl) + "?modulis=" + encodeURIComponent(cfg.modulis) + '">' + esc(T.visi) + ' →</a></div></section>';
+        h += '</ul>';
       }
+      h += '<div class="gps__foot"><span>' + esc(pat.registrasTekstas) + '</span><a href="' + esc(modulioUrl) + "?modulis=" + encodeURIComponent(cfg.modulis) + '">' + esc(T.visi) + ' →</a></div></section>';
       el.innerHTML = h;
       return r;
     });
