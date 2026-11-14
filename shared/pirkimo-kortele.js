@@ -180,7 +180,8 @@
       esLesos: null,                       // 2026-11-12: "taip" / "ne" / null - žr. SPRENDIMAI
       veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
       busena: "", archyvuota: false,      // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
-      istorija: [], kilme: {}, istorijaPraleista: 0   // pakeitimų istorija ir laukų kilmė (2026-11-14; rašo tik issaugok) - žr. ISTORIJOS_RIBA
+      istorija: [], kilme: {}, istorijaPraleista: 0,  // pakeitimų istorija ir laukų kilmė (2026-11-14; rašo tik issaugok) - žr. ISTORIJOS_RIBA
+      poveikisPerziureta: {}               // kada žmogus pažymėjo, kad pakeitimų poveikį rezultatui peržiūrėjo (2026-11-14, 1.2; rašo tik pazymekPerziureta)
     };
     return laukai ? normalizuok(Object.assign(k, laukai)) : k;
   }
@@ -228,6 +229,16 @@
     o.kilme = kilmesForma(o.kilme);
     var pr = sveikas(o.istorijaPraleista);
     o.istorijaPraleista = pr > 0 ? pr : 0;
+    o.poveikisPerziureta = perziurosForma(o.poveikisPerziureta);
+    return o;
+  }
+  /* Pakeitimų poveikio peržiūra (2026-11-14, krypties 1.2; shared/korteles-poveikis.js): { rezultatas: ISO } - tik žinomi rezultatai
+     (grafikas, vertinimas, veiksmai, pirkimo sąlygų juodraštis pagal id) ir tikros laiko žymos, ne daugiau 30. */
+  var PERZIUROS_RAKTAS = /^(grafikas|vertinimas|veiksmai|juodrastis:[a-z0-9]{4,40})$/;
+  function perziurosForma(x) {
+    var o = {};
+    if (!x || typeof x !== "object" || Array.isArray(x)) return o;
+    Object.keys(x).filter(function (r) { return PERZIUROS_RAKTAS.test(r) && laikoZyma(x[r]); }).slice(0, 30).forEach(function (r) { o[r] = laikoZyma(x[r]); });
     return o;
   }
 
@@ -348,6 +359,7 @@
       }).map(function (x) {
         var p = { l: x.l, buvo: istorijaiReiksme(x.l, x.buvo), tapo: istorijaiReiksme(x.l, x.tapo) };
         if (tekstas(x.s)) p.s = saltinioId(x.s);
+        if (laikoZyma(x.t)) p.t = laikoZyma(x.t);
         return p;
       }).filter(function (p) { return p.buvo !== null || p.tapo !== null; }) : [];
       var o = { laikas: laikoZyma(e.laikas), saltinis: saltinioId(e.saltinis),
@@ -397,11 +409,14 @@
       Date.parse(e.laikas) - Date.parse(pask.laikas) < ISTORIJOS_JUNGIMAS;
     if (!jungti) { ist.push(e); }
     else {
+      // sujungtame įraše kiekvienas laukas pasilieka savo pakeitimo laiką `t` (įrašo laikas - paskutinio pakeitimo): kitaip
+      // anksčiau pakeistas laukas atrodytų pakeistas vėliau (pvz. po poveikio peržiūros žymos, 1.2)
+      pask.laukai.forEach(function (x) { if (!x.t) x.t = pask.laikas; });
       e.laukai.forEach(function (p) {
         var buves = null;
         pask.laukai.forEach(function (x) { if (x.l === p.l) buves = x; });
-        if (!buves) { pask.laukai.push(p); return; }
-        buves.tapo = p.tapo;
+        if (!buves) { p.t = e.laikas; pask.laukai.push(p); return; }
+        buves.tapo = p.tapo; buves.t = e.laikas;
         if (p.s) buves.s = p.s; else delete buves.s;
         if (SUDETINIAI.indexOf(p.l) < 0 && lyguIst(buves.buvo, buves.tapo)) pask.laukai.splice(pask.laukai.indexOf(buves), 1);
       });
@@ -496,6 +511,7 @@
     n.istorija = buves ? buves.istorija : [];
     n.kilme = buves ? Object.assign({}, buves.kilme) : {};
     n.istorijaPraleista = buves ? buves.istorijaPraleista : 0;
+    n.poveikisPerziureta = Object.assign({}, buves ? buves.poveikisPerziureta : {}, perziurosForma(o.perziureta));
     var saltinis = saltinioId(o.saltinis || "nezinomas"), laukoS = o.laukoSaltinis ? saltinioId(o.laukoSaltinis) : saltinis;
     var modulis = trumpink(o.modulis, 60), km = o.kilme && typeof o.kilme === "object" ? o.kilme : {};
     var pak = pakeitimai(buves, n), pakeisti = {};
@@ -657,6 +673,16 @@
     var r = issaugok(k, su(o, { saltinis: SALTINIAI[saltinioId(vs)] ? saltinioId(vs) : "modulis", modulis: SALTINIAI[saltinioId(vs)] ? "" : vs }));
     if (r.ok) { r.prideta = prideta; r.atnaujinta = atnaujinta; }
     return r;
+  }
+
+  /* Žmogus pažymi, kad kortelės pakeitimų poveikį rezultatui peržiūrėjo (2026-11-14, 1.2): rezultatas - „grafikas“, „vertinimas“,
+     „veiksmai“ ar „juodrastis:<id>“. Keičiamas tik poveikisPerziureta (istorijos įrašo nėra). Kviečia tik kortelių puslapis. */
+  function pazymekPerziureta(id, rezultatas, o) {
+    var k = gauk(id, o);
+    if (!k) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė nerasta" } };
+    if (!PERZIUROS_RAKTAS.test(String(rezultatas || ""))) return { ok: false, r: { ok: false, kodas: "kita", klaida: "nežinomas rezultatas" } };
+    var x = {}; x[rezultatas] = new Date().toISOString();
+    return issaugok(k, su(o, { saltinis: "korteliu-puslapis", perziureta: x }));
   }
 
   function archyvuok(id, taip, o) {
@@ -1576,7 +1602,8 @@
     skaityk: skaityk, aktyvios: aktyvios, gauk: gauk, issaugok: issaugok, archyvuok: archyvuok, pridekVeiksmus: pridekVeiksmus,
     irasykGrafika: irasykGrafika, grafikoForma: grafikoForma,
     irasykVertinima: irasykVertinima, salinkVertinima: salinkVertinima, vertinimoForma: vertinimoForma, irasoData: irasoData,
-    pradekIsNaujo: pradekIsNaujo,
+    pradekIsNaujo: pradekIsNaujo, pazymekPerziureta: pazymekPerziureta,
+    saugykla: function () { return saug({}); },
     SALTINIAI: SALTINIAI, ISTORIJOS_RIBA: ISTORIJOS_RIBA, ISTORIJOS_NUO: ISTORIJOS_NUO, ISTORIJOS_LAUKAI: ISTORIJOS_LAUKAI,
     saltinioPav: saltinioPav, saltinisIsModulio: saltinisIsModulio, istorijaiReiksme: istorijaiReiksme,
     istorijosTekstas: istorijosTekstas, kilmesTekstas: kilmesTekstas, istorijosForma: istorijosForma, kilmesForma: kilmesForma,
