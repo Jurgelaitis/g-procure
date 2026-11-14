@@ -58,6 +58,8 @@
     return undefined;   // GP_SAUGYKLA ima localStorage
   }
   function naudokSaugykla(s) { pakeista = s || null; }
+  /* Parinktys su numatytosiomis (rašymo funkcijų šaltinis): paduotos parinktys pirmesnės. */
+  function su(o, numatyta) { return Object.assign({}, numatyta, o || {}); }
 
   /* ---------------------------------------------------------------- žodynai */
   var OBJEKTAI = [
@@ -137,7 +139,7 @@
     for (var i = 0; i < zodynas.length; i++) if (zodynas[i].id === id) return zodynas[i][l || kalba()];
     return "";
   }
-  function laukoPav(laukas, l) { var x = LAUKAI[laukas]; return x ? x[l || kalba()] : laukas; }
+  function laukoPav(laukas, l) { var x = LAUKAI[laukas] || PAPILDOMI_LAUKAI[laukas]; return x ? x[l || kalba()] : laukas; }
   /* „Pavadinimas“ -> „pavadinimas“ sąrašo viduryje; santrumpos (BVPŽ, CVP IS) lieka. */
   function mazaja(s) { return /^.[a-ząčęėįšųūž]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s; }
 
@@ -177,7 +179,8 @@
       kriterijus: "", zaliasis: "", nacsaugumas: "", kvalifikacija: "", cpo: "",   // 2026-11-09 - žr. SPRENDIMAI
       esLesos: null,                       // 2026-11-12: "taip" / "ne" / null - žr. SPRENDIMAI
       veiksmai: [],                        // įrankių rekomenduoti veiksmai su būsena (nuo 2026-10-06; rašo tik pridekVeiksmus)
-      busena: "", archyvuota: false       // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
+      busena: "", archyvuota: false,      // būsena - be numatytosios (2026-11-06): „- nenurodyta -“ iki tol tyliai tapdavo „Rengiami dokumentai“
+      istorija: [], kilme: {}, istorijaPraleista: 0   // pakeitimų istorija ir laukų kilmė (2026-11-14; rašo tik issaugok) - žr. ISTORIJOS_RIBA
     };
     return laukai ? normalizuok(Object.assign(k, laukai)) : k;
   }
@@ -219,7 +222,227 @@
     o.veiksmai = Array.isArray(o.veiksmai) ? o.veiksmai.filter(function (v) { return v && typeof v === "object" && tekstas(v.raktas); })
       .map(function (v) { return Object.assign({}, v, { raktas: tekstas(v.raktas), saltinis: tekstas(v.saltinis), tekstas: tekstas(v.tekstas),
         kontekstas: tekstas(v.kontekstas), atlikta: v.atlikta === true, data: tekstas(v.data) || o.atnaujinta }); }) : [];
+    // Pakeitimų istorija ir kilmė (2026-11-14): seni įrašai - tušti (ankstesnių pakeitimų neišgalvojame), nepatikimi (atsarginės kopijos
+    // failas) - tik žinomi laukai, šaltiniai, tipai ir ribos
+    o.istorija = istorijosForma(o.istorija);
+    o.kilme = kilmesForma(o.kilme);
+    var pr = sveikas(o.istorijaPraleista);
+    o.istorijaPraleista = pr > 0 ? pr : 0;
     return o;
+  }
+
+  /* ---------------------------------------------------------------- pakeitimų istorija ir duomenų kilmė
+     2026-11-14 (krypties 1.1 žingsnis, naudotojo „Pradėkime 1.1: kortelės pakeitimų istorija ir duomenų kilmė“). Kiekvienas įrašas
+     į kortelę eina per issaugok(): kortelė palyginama su ta, kuri JAU YRA saugykloje, ir pakeisti laukai įrašomi į `istorija`
+     (seniausi pirmi; ne daugiau ISTORIJOS_RIBA, kiek seniausių pašalinta - `istorijaPraleista`), o kiekvieno pakeisto lauko
+     šaltinis - į `kilme`: { laukas: { saltinis, modulis, laikas, citata, failas, nr } }. Istorija ir kilmė imamos iš saugyklos,
+     ne iš paduotos kortelės, todėl kitame skirtuke atverta senesnė kopija jų neperrašo. Senos kortelės (iki ISTORIJOS_NUO)
+     gauna tuščią istoriją ir kilmę - ankstesnių pakeitimų neišgalvojame, puslapis tai pasako.
+     issaugok(k, { saltinis, laukoSaltinis, modulis, kilme: { laukas: { saltinis, citata, failas, nr } } }):
+       saltinis - kas įrašė (įrašo antraštė istorijoje), laukoSaltinis - pakeistų laukų šaltinis, kai kilme jo nenurodo
+       (numatyta - saltinis; kortelių puslapyje - „ranka“), kilme - laukai, kurių šaltinis kitas (skelbimas, VPT, įrankis).
+       Kilmė, paduota NEPAKEISTAM laukui, patvirtina šaltinį (pvz. ta pati reikšmė perkelta iš skelbimo) - istorijoje įrašo nėra.
+     Istorijoje sudėtiniai laukai (dalys, grafikas, vertinimo metodika, veiksmai) saugomi santrauka (istorijaiReiksme), tekstai -
+     iki 300 ženklų; to paties šaltinio pakeitimai per ISTORIJOS_JUNGIMAS sujungiami į vieną įrašą. */
+  var ISTORIJOS_RIBA = 50;
+  var ISTORIJOS_JUNGIMAS = 10 * 60 * 1000;
+  var ISTORIJOS_NUO = "2026-11-14";
+  var SALTINIAI = {
+    "korteliu-puslapis": { lt: "Kortelių puslapis", en: "Cards page" },
+    ranka: { lt: "Įvesta ranka", en: "Entered manually" },
+    skelbimas: { lt: "CVP IS skelbimas (PDF)", en: "CVP IS notice (PDF)" },
+    vpt: { lt: "CVP IS duomenys (VPT)", en: "CVP IS data (VPT)" },
+    "pagal-vykdytoja": { lt: "Pirkimo vykdytojo įprastas režimas", en: "Usual regime of the contracting body" },
+    "pp-plan": { lt: "Pirkimų planavimas", en: "Procurement planning" },
+    "pp-protocol": { lt: "Protokolų generatorius", en: "Protocol generator" },
+    "pp-graphs": { lt: "Pirkimų grafikų generatorius", en: "Procurement schedule generator" },
+    "pp-cost-benefit": { lt: "Ekonominio naudingumo skaičiuoklė", en: "Economic advantage calculator" },
+    "pp-market-kpi": { lt: "Rinkos rodiklių stebėsena", en: "Market indicators monitoring" },
+    modulis: { lt: "Įrankis", en: "Tool" },
+    nezinomas: { lt: "Šaltinis nenurodytas", en: "Source not stated" }
+  };
+  /* Laukai, kurie lyginami ir rašomi į istoriją: visi kortelės duomenų laukai ir įrankių veiksmai (archyvavimas - įrašo veiksmas). */
+  var PAPILDOMI_LAUKAI = { veiksmai: { lt: "Rekomenduoti veiksmai", en: "Recommended actions" } };
+  var ISTORIJOS_LAUKAI = Object.keys(LAUKAI).concat(Object.keys(PAPILDOMI_LAUKAI));
+  var ISTORIJOS_VEIKSMAI = ["sukurta", "pakeista", "archyvuota", "grazinta"];
+
+  function trumpink(s, n) {
+    s = tekstas(s);
+    if (s.length <= n) return s;
+    var c = s.slice(0, n), i = c.lastIndexOf(" ");
+    return (i > n * 0.6 ? c.slice(0, i) : c) + "…";
+  }
+  function saltinioId(s) {
+    s = tekstas(s).toLowerCase();
+    return /^[a-z0-9-]{1,40}$/.test(s) ? s : "nezinomas";
+  }
+  /* Modulio pavadinimas („PP-plan“, „PP-market-KPI“) -> šaltinio id; nežinomas - „modulis“ (pavadinimas lieka atskirai). */
+  function saltinisIsModulio(m) {
+    var s = tekstas(m).toLowerCase().replace(/\s+/g, "-");
+    if (s === "pp-protocols") s = "pp-protocol";
+    return /^pp-/.test(s) && SALTINIAI[s] ? s : "modulis";
+  }
+  function saltinioPav(id, l) {
+    var x = SALTINIAI[id];
+    return x ? x[l || kalba()] : ((l || kalba()) === "en" ? "Other source" : "Kitas šaltinis") + " (" + id + ")";
+  }
+  function laikoZyma(v) {
+    v = tekstas(v);
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?$/.test(v) && !isNaN(Date.parse(v)) ? v : "";
+  }
+  function dataReiksme(v) { v = tekstas(v); return /^\d{4}-\d{2}-\d{2}$/.test(v) && arData(v) ? v : ""; }
+  function tusciaIst(f, v) { return v === null || v === undefined || v === "" || (f === "veiksmai" && Array.isArray(v) && !v.length); }
+  function lyguIst(a, b) { return JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b); }
+
+  /* Lauko reikšmė istorijai: tekstas iki 300 ženklų, skaičius, o sudėtiniai laukai - santrauka. Tinka ir jau santraukai
+     (nepatikimam atsarginės kopijos įrašui): netinkama reikšmė - null. */
+  function istorijaiReiksme(f, v) {
+    if (v === null || v === undefined || v === "") return null;
+    if (f === "verte") return skaicius(v);
+    if (f === "trukmeMen") return sveikas(v);
+    if (f === "dalys") {
+      if (!Array.isArray(v)) return null;
+      return v.slice(0, 30).filter(function (d) { return d && typeof d === "object"; })
+        .map(function (d) { return { pavadinimas: trumpink(d.pavadinimas, 120), verte: skaicius(d.verte) }; });
+    }
+    if (f === "grafikas") {
+      if (typeof v !== "object" || Array.isArray(v)) return null;
+      if (Array.isArray(v.etapai)) {
+        var vk = v.etapai.filter(function (e) { return e && (e.nuo || e.iki); }), pask = vk[vk.length - 1];
+        return v.etapai.length ? { etapu: v.etapai.length, nuo: dataReiksme(vk.length ? vk[0].nuo || vk[0].iki : ""),
+          iki: dataReiksme(pask ? pask.iki || pask.nuo : ""), sudaryta: irasoData(v.sudaryta) } : null;
+      }
+      var ne = sveikas(v.etapu);
+      return ne > 0 ? { etapu: Math.min(ne, 999), nuo: dataReiksme(v.nuo), iki: dataReiksme(v.iki), sudaryta: dataReiksme(v.sudaryta) } : null;
+    }
+    if (f === "vertinimas") {
+      if (typeof v !== "object" || Array.isArray(v)) return null;
+      var kod = tekstas(v.kriterijus), kod2 = SPRENDIMAI.kriterijus.some(function (x) { return x.id === kod; }) ? kod : "";
+      if (Array.isArray(v.kriterijai)) {
+        var kr = v.kriterijai.filter(function (x) { return x && typeof x === "object"; });
+        var su = kr.filter(function (x) { return x.svoris !== null && x.svoris !== undefined && isFinite(x.svoris); });
+        if (!kr.length) return null;
+        return { kriterijus: kod2, kriterijai: kr.length,
+          suma: su.length === kr.length ? Math.round(su.reduce(function (a, x) { return a + Number(x.svoris); }, 0) * 100) / 100 : null,
+          dalys: Array.isArray(v.dalys) && v.dalys.length >= 2 ? Math.min(v.dalys.length, 12) : 0, sudaryta: irasoData(v.sudaryta) };
+      }
+      var kn = sveikas(v.kriterijai), dn = sveikas(v.dalys), sm = skaicius(v.suma);
+      return kn > 0 ? { kriterijus: kod2, kriterijai: Math.min(kn, 99), suma: sm, dalys: dn >= 2 ? Math.min(dn, 12) : 0, sudaryta: dataReiksme(v.sudaryta) } : null;
+    }
+    if (f === "veiksmai") {
+      if (Array.isArray(v)) return { viso: v.length, atlikta: v.filter(function (x) { return x && x.atlikta === true; }).length };
+      if (typeof v !== "object") return null;
+      var vs = sveikas(v.viso), at = sveikas(v.atlikta);
+      return vs >= 0 ? { viso: Math.min(vs, 9999), atlikta: at >= 0 && at <= vs ? at : 0 } : null;
+    }
+    if (typeof v === "object") return null;
+    return trumpink(String(v), 300) || null;
+  }
+
+  /* Nepatikima istorija (atsarginės kopijos failas, kitas langas) -> tik žinomi laukai, veiksmai, šaltiniai, tipai ir ribos. */
+  function istorijosForma(ist) {
+    if (!Array.isArray(ist)) return [];
+    return ist.slice(-ISTORIJOS_RIBA).filter(function (e) { return e && typeof e === "object" && !Array.isArray(e); }).map(function (e) {
+      var laukai = Array.isArray(e.laukai) ? e.laukai.slice(0, ISTORIJOS_LAUKAI.length).filter(function (x) {
+        return x && typeof x === "object" && ISTORIJOS_LAUKAI.indexOf(x.l) >= 0;
+      }).map(function (x) {
+        var p = { l: x.l, buvo: istorijaiReiksme(x.l, x.buvo), tapo: istorijaiReiksme(x.l, x.tapo) };
+        if (tekstas(x.s)) p.s = saltinioId(x.s);
+        return p;
+      }).filter(function (p) { return p.buvo !== null || p.tapo !== null; }) : [];
+      var o = { laikas: laikoZyma(e.laikas), saltinis: saltinioId(e.saltinis),
+        veiksmas: ISTORIJOS_VEIKSMAI.indexOf(e.veiksmas) >= 0 ? e.veiksmas : "pakeista", laukai: laukai };
+      if (tekstas(e.modulis)) o.modulis = trumpink(e.modulis, 60);
+      return o;
+    }).filter(function (e) { return e.laikas && (e.laukai.length || e.veiksmas !== "pakeista"); });
+  }
+  function kilmesIrasas(x, numatyta, modulis, laikas) {
+    x = x && typeof x === "object" ? x : {};
+    var o = { saltinis: saltinioId(x.saltinis || numatyta), laikas: laikoZyma(x.laikas || laikas) };
+    var m = trumpink(x.modulis || (x.saltinis ? "" : modulis), 60), c = trumpink(x.citata, 300), fl = trumpink(x.failas, 200), nr = trumpink(x.nr, 20);
+    if (m) o.modulis = m;
+    if (c) o.citata = c;
+    if (fl) o.failas = fl;
+    if (nr) o.nr = nr;
+    return o;
+  }
+  function kilmesForma(km) {
+    var o = {};
+    if (!km || typeof km !== "object" || Array.isArray(km)) return o;
+    ISTORIJOS_LAUKAI.forEach(function (f) {
+      if (f === "veiksmai" || !km[f] || typeof km[f] !== "object" || Array.isArray(km[f])) return;
+      var x = kilmesIrasas(km[f], "nezinomas", "", "");
+      if (x.laikas) o[f] = x;
+    });
+    return o;
+  }
+
+  /* Kas pakeista tarp saugykloje esančios kortelės (a; null - naujai kortelei) ir naujos (b): [{ l, buvo, tapo }] santraukomis. */
+  function pakeitimai(a, b) {
+    var out = [];
+    ISTORIJOS_LAUKAI.forEach(function (f) {
+      var x = a ? a[f] : null, y = b[f];
+      if ((tusciaIst(f, x) && tusciaIst(f, y)) || lyguIst(x, y)) return;
+      out.push({ l: f, buvo: tusciaIst(f, x) ? null : istorijaiReiksme(f, x), tapo: tusciaIst(f, y) ? null : istorijaiReiksme(f, y) });
+    });
+    return out;
+  }
+  /* Naujas istorijos įrašas: to paties šaltinio pakeitimai per ISTORIJOS_JUNGIMAS - į ankstesnį įrašą (buvo - pirmoji, tapo - paskutinė
+     reikšmė; vienareikšmis laukas, grįžęs į pradinę reikšmę, išbraukiamas). Per ilga istorija - seniausi pašalinami ir suskaičiuojami. */
+  var SUDETINIAI = ["dalys", "grafikas", "vertinimas", "veiksmai"];
+  function pridekIstorija(n, e) {
+    var ist = n.istorija, pask = ist[ist.length - 1];
+    var jungti = pask && pask.veiksmas === "pakeista" && e.veiksmas === "pakeista" && pask.saltinis === e.saltinis &&
+      (pask.modulis || "") === (e.modulis || "") && Date.parse(e.laikas) - Date.parse(pask.laikas) >= 0 &&
+      Date.parse(e.laikas) - Date.parse(pask.laikas) < ISTORIJOS_JUNGIMAS;
+    if (!jungti) { ist.push(e); }
+    else {
+      e.laukai.forEach(function (p) {
+        var buves = null;
+        pask.laukai.forEach(function (x) { if (x.l === p.l) buves = x; });
+        if (!buves) { pask.laukai.push(p); return; }
+        buves.tapo = p.tapo;
+        if (p.s) buves.s = p.s; else delete buves.s;
+        if (SUDETINIAI.indexOf(p.l) < 0 && lyguIst(buves.buvo, buves.tapo)) pask.laukai.splice(pask.laukai.indexOf(buves), 1);
+      });
+      pask.laikas = e.laikas;
+      if (!pask.laukai.length) ist.pop();
+    }
+    if (ist.length > ISTORIJOS_RIBA) { n.istorijaPraleista = (n.istorijaPraleista || 0) + ist.length - ISTORIJOS_RIBA; n.istorija = ist.slice(-ISTORIJOS_RIBA); }
+  }
+  /* Istorijos reikšmė žmogui (santraukos ir paprastos reikšmės). */
+  function linksnis(n, a, b, c) { var d = n % 100, v = n % 10; return v === 1 && d !== 11 ? a : v >= 2 && v <= 9 && (d < 10 || d >= 20) ? b : c; }
+  function istorijosTekstas(f, v, l) {
+    l = l || kalba();
+    var en = l === "en";
+    if (v === null || v === undefined || v === "") return en ? "(not stated)" : "(nenurodyta)";
+    if (f === "grafikas" && typeof v === "object" && !Array.isArray(v)) {
+      return (en ? v.etapu + (v.etapu === 1 ? " stage" : " stages") : v.etapu + " " + linksnis(v.etapu, "etapas", "etapai", "etapų"))
+        + (v.nuo && v.iki ? " (" + v.nuo + " - " + v.iki + ")" : "") + (v.sudaryta ? (en ? ", saved " : ", įrašytas ") + v.sudaryta : "");
+    }
+    if (f === "vertinimas" && typeof v === "object" && !Array.isArray(v)) {
+      var kp = v.kriterijus ? pav(SPRENDIMAI.kriterijus, v.kriterijus, l) : "";
+      return (kp ? kp + ", " : "") + (en ? v.kriterijai + (v.kriterijai === 1 ? " criterion" : " criteria") : v.kriterijai + " " + linksnis(v.kriterijai, "kriterijus", "kriterijai", "kriterijų"))
+        + (v.dalys >= 2 ? (en ? ", " + v.dalys + " lots" : ", " + v.dalys + " " + linksnis(v.dalys, "dalis", "dalys", "dalių")) : "")
+        + (v.suma !== null && v.suma !== undefined && v.kriterijai > 1 && !(v.dalys >= 2) ? (en ? " (weights total " : " (svorių suma ") + String(v.suma).replace(".", en ? "." : ",") + ")" : "")
+        + (v.sudaryta ? (en ? ", saved " : ", įrašyta ") + v.sudaryta : "");
+    }
+    if (f === "veiksmai" && typeof v === "object" && !Array.isArray(v)) {
+      return en ? v.viso + (v.viso === 1 ? " action" : " actions") + ", " + v.atlikta + " done"
+        : v.viso + " " + linksnis(v.viso, "veiksmas", "veiksmai", "veiksmų") + ", atlikt" + linksnis(v.atlikta, "as", "i", "ų") + " " + v.atlikta;
+    }
+    return reiksmesTekstas(f, v, l) || String(v);
+  }
+  /* Lauko kilmė žmogui: „CVP IS skelbimas (PDF) „failas.pdf“, 2026-11-14“ (citata - atskirai, kilme.citata). */
+  function kilmesTekstas(x, l) {
+    if (!x) return "";
+    l = l || kalba();
+    var s = saltinioPav(x.saltinis, l);
+    if (x.modulis && x.saltinis === "modulis") s += " „" + x.modulis + "“";
+    if (x.failas) s += " „" + x.failas + "“";
+    if (x.nr) s += " " + (x.saltinis === "vpt" ? "CVP IS " : "") + x.nr;
+    var d = x.laikas ? irasoData(x.laikas) : "";
+    return s + (d ? ", " + d : "");
   }
 
   /* Saugyklos įrašo sandara: { schema: skaičius, korteles: [] }. */
@@ -264,8 +487,35 @@
     if (r.busena === "sugadinta" || r.busena === "neprieinama") return { ok: false, r: r };
     var irasas = r.busena === "yra" ? r.reiksme : { schema: SCHEMA, korteles: [] };
     var n = normalizuok(k);
-    n.atnaujinta = new Date().toISOString();
+    var dabar = new Date().toISOString();
+    n.atnaujinta = dabar;
     if (n.atnaujinta <= n.sukurta) n.atnaujinta = n.sukurta;
+    /* Pakeitimų istorija ir kilmė (2026-11-14) - lyginama su saugykloje esančia kortele; jos istorija ir kilmė imamos iš ten */
+    var buves = null;
+    irasas.korteles.forEach(function (x) { if (x && x.id === n.id && !buves) buves = normalizuok(x); });
+    n.istorija = buves ? buves.istorija : [];
+    n.kilme = buves ? Object.assign({}, buves.kilme) : {};
+    n.istorijaPraleista = buves ? buves.istorijaPraleista : 0;
+    var saltinis = saltinioId(o.saltinis || "nezinomas"), laukoS = o.laukoSaltinis ? saltinioId(o.laukoSaltinis) : saltinis;
+    var modulis = trumpink(o.modulis, 60), km = o.kilme && typeof o.kilme === "object" ? o.kilme : {};
+    var pak = pakeitimai(buves, n), pakeisti = {};
+    pak.forEach(function (p) {
+      pakeisti[p.l] = true;
+      if (p.l === "veiksmai") return;
+      var ki = kilmesIrasas(km[p.l], laukoS, modulis, dabar);
+      if (ki.saltinis !== saltinis) p.s = ki.saltinis;          // kas pakeitė (ir ištrynė) lauką, kai ne įrašo šaltinis
+      if (tusciaIst(p.l, n[p.l])) delete n.kilme[p.l]; else n.kilme[p.l] = ki;
+    });
+    Object.keys(km).forEach(function (f) {      // nepakeistas laukas, kurio šaltinis paduotas aiškiai - šaltinis patvirtintas
+      if (pakeisti[f] || f === "veiksmai" || ISTORIJOS_LAUKAI.indexOf(f) < 0 || tusciaIst(f, n[f])) return;
+      n.kilme[f] = kilmesIrasas(km[f], laukoS, modulis, dabar);
+    });
+    var veiksmas = !buves ? "sukurta" : buves.archyvuota !== n.archyvuota ? (n.archyvuota ? "archyvuota" : "grazinta") : "pakeista";
+    if (pak.length || veiksmas !== "pakeista") {
+      var e = { laikas: dabar, saltinis: saltinis, veiksmas: veiksmas, laukai: pak };
+      if (modulis) e.modulis = modulis;
+      pridekIstorija(n, e);
+    }
     var rasta = false;
     var sarasas = irasas.korteles.map(function (x) {
       if (x && x.id === n.id) { rasta = true; return n; }
@@ -274,7 +524,7 @@
     if (!rasta) sarasas.push(n);
     var w = global.GP_SAUGYKLA.rasyk(RAKTAS, { schema: Math.max(SCHEMA, irasas.schema || 0), korteles: sarasas }, { saugykla: saug(o) });
     if (!w.ok) return { ok: false, r: w };
-    return { ok: true, kortele: n, nauja: !rasta };
+    return { ok: true, kortele: n, nauja: !rasta, pakeista: pak.map(function (p) { return p.l; }) };
   }
 
   /* Sugadintas kortelių įrašas (2026-11-06): pradėti nuo tuščio sąrašo galima tik tada, kai sugadinta reikšmė jau nukopijuota
@@ -319,7 +569,7 @@
       var v = datos && tekstas(datos[f]);
       if (v && /^\d{4}-\d{2}-\d{2}$/.test(v) && arData(v)) k[f] = v;
     });
-    return issaugok(k, o);
+    return issaugok(k, su(o, { saltinis: "pp-graphs" }));
   }
 
   /* Pasiūlymų vertinimo metodika (2026-11-13, naudotojo sprendimas: ekonominio naudingumo skaičiuoklės kriterijų rinkinys perduodamas į
@@ -374,14 +624,14 @@
     if (!v) return { ok: false, r: { ok: false, kodas: "kita", klaida: "vertinimo metodikoje nėra kriterijų" } };
     k.vertinimas = v;
     if (v.kriterijus) k.kriterijus = v.kriterijus;
-    return issaugok(k, o);
+    return issaugok(k, su(o, { saltinis: "pp-cost-benefit" }));
   }
   /* Vertinimo metodikos pašalinimas iš kortelės (kortelių puslapio mygtukas; vertinimo kriterijus lieka - tai atskiras kortelės sprendimas) */
   function salinkVertinima(id, o) {
     var k = gauk(id, o);
     if (!k) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė nerasta" } };
     k.vertinimas = null;
-    return issaugok(k, o);
+    return issaugok(k, su(o, { saltinis: "korteliu-puslapis", laukoSaltinis: "ranka" }));
   }
 
   /* Įrankio rekomenduoti veiksmai kortelėje (2026-10-06, naudotojo sprendimas: „Priskirti pirkimui“ - į bendrą kortelę, ne į modulio
@@ -403,7 +653,8 @@
       else { esami.push(n); prideta++; }
     });
     k.veiksmai = esami;
-    var r = issaugok(k, o);
+    var vs = (veiksmai || []).map(function (v) { return v && tekstas(v.saltinis); }).filter(Boolean)[0] || "";
+    var r = issaugok(k, su(o, { saltinis: SALTINIAI[saltinioId(vs)] ? saltinioId(vs) : "modulis", modulis: SALTINIAI[saltinioId(vs)] ? "" : vs }));
     if (r.ok) { r.prideta = prideta; r.atnaujinta = atnaujinta; }
     return r;
   }
@@ -412,7 +663,7 @@
     var k = gauk(id, o);
     if (!k) return { ok: false, r: { ok: false, kodas: "kita", klaida: "kortelė nerasta" } };
     k.archyvuota = taip !== false;
-    return issaugok(k, o);
+    return issaugok(k, su(o, { saltinis: "korteliu-puslapis", laukoSaltinis: "ranka" }));
   }
 
   /* ---------------------------------------------------------------- tikrinimas */
@@ -724,7 +975,11 @@
         k.pavadinimas = $("gpk-dlg-pav").value.trim();
         var kl = tikrink(k, l).filter(function (x) { return x.laukas === "pavadinimas"; });
         if (kl.length) { klaida(kl[0].zinute); $("gpk-dlg-pav").focus(); return; }
-        var r = issaugok(k);
+        /* Kilmė (2026-11-14): laukai - iš modulio; lange pakeistas pavadinimas - įvestas ranka, režimas - vykdytojo įprastas */
+        var km = {};
+        if (k.pavadinimas !== tekstas(duom.pavadinimas)) km.pavadinimas = { saltinis: "ranka" };
+        if (siulomasRezimas) km.rezimas = { saltinis: "pagal-vykdytoja" };
+        var r = issaugok(k, { saltinis: saltinisIsModulio(o.modulis), modulis: o.modulis || "", kilme: km });
         if (!r.ok) {
           klaida(global.GP_SAUGYKLA ? global.GP_SAUGYKLA.pranesimas(r.r, t("pavKorteles")) : t("nerasta"));
           $("gpk-dlg-pav").removeAttribute("aria-invalid");
@@ -1322,6 +1577,9 @@
     irasykGrafika: irasykGrafika, grafikoForma: grafikoForma,
     irasykVertinima: irasykVertinima, salinkVertinima: salinkVertinima, vertinimoForma: vertinimoForma, irasoData: irasoData,
     pradekIsNaujo: pradekIsNaujo,
+    SALTINIAI: SALTINIAI, ISTORIJOS_RIBA: ISTORIJOS_RIBA, ISTORIJOS_NUO: ISTORIJOS_NUO, ISTORIJOS_LAUKAI: ISTORIJOS_LAUKAI,
+    saltinioPav: saltinioPav, saltinisIsModulio: saltinisIsModulio, istorijaiReiksme: istorijaiReiksme,
+    istorijosTekstas: istorijosTekstas, kilmesTekstas: kilmesTekstas, istorijosForma: istorijosForma, kilmesForma: kilmesForma,
     naudokSaugykla: naudokSaugykla,
     tikrink: tikrink, pastabos: pastabos,
     santrauka: santrauka, formatas: formatas, budoPav: budoPav, laukoPav: laukoPav, mazaja: mazaja, reiksmesTekstas: reiksmesTekstas,
