@@ -7,7 +7,7 @@
 | Pirkimo sąlygų, pasiūlymo ir paraiškos formų, priedų ir sutarčių šablonai (su G-Procure redakcinėmis korekcijomis, aprašytomis `PP-salygos/sablonu-taisymai.py` ir `PP-salygos/sutarciu-sablonai.py`) | `PP-salygos/templates/`, išskyrus `sutartys/AG_SR_LT_SS.docx` | LITGRID AB |
 | Bankų ir draudimo bendrovių sąrašas | `PP-salygos/templates/PRIEDAI_LT_BANKAI.pdf` | LITGRID AB |
 | Statybos rangos sutarties specialiųjų sąlygų forma, atkurta iš paskelbto pirkimo sutarties projekto | `PP-salygos/templates/sutartys/AG_SR_LT_SS.docx` | AB „Amber Grid“ |
-| Įmonių logotipai | `shared/img/epso-g-logo.svg`, `shared/img/litgrid-logo-mono.png`, `shared/img/logo-data.js`, `shared/img/amber-grid-logo-mono.png`, `shared/img/amber-grid-logo-mono.svg` | UAB „EPSO-G“, LITGRID AB, AB „Amber Grid“ - jų prekių ženklai |
+| Įmonių logotipai | `shared/img/epso-g-logo.svg`, `shared/img/litgrid-logo-mono.png`, `shared/img/logo-data.js`, `shared/img/amber-grid-logo-mono.png`, `shared/img/amber-grid-logo-mono.svg`; įrankio ekrano vaizde `shared/img/irankiai/pp-graphs.webp` matomas LITGRID AB logotipas (kaip pačiame įrankyje) | UAB „EPSO-G“, LITGRID AB, AB „Amber Grid“ - jų prekių ženklai |
 | Programų bibliotekos | `shared/vendor/` | Kiekviena - pagal savo licenciją (licencijos failas bibliotekos kataloge; sąrašas - `shared/vendor/bibliotekos.json`) |
 | Šriftas Nunito Sans | `shared/sriftai/` | SIL Open Font License 1.1 (`shared/sriftai/OFL.txt`) |
 | BVPŽ (CPV) kodų žodynas | `shared/cpv-data.js` | Reglamentas (EB) Nr. 2195/2002 |
