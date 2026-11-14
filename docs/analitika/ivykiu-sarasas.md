@@ -62,7 +62,7 @@ PP-tiekejams įtrauktas su tuo pačiu sutikimu; duomenų apsaugos pareigūno per
 
 | # | Įvykis | Kada | Savybės | Ką atsakys |
 |---|---|---|---|---|
-| 6 | `kortele_issaugota` | išsaugojus pirkimo kortelę | `saltinis`: korteliu_puslapis / modulis / cvp_is_skelbimas / pp_protocol_perkelimas / pp_plan; `nauja`: taip / ne | ar kortelė naudojama, iš kur kuriama |
+| 6 | `kortele_issaugota` | išsaugojus pirkimo kortelę | `saltinis`: korteliu_puslapis / modulis / cvp_is_skelbimas / pp_protocol_perkelimas / pp_plan / pirkimo_byla; `nauja`: taip / ne | ar kortelė naudojama, iš kur kuriama |
 | 7 | `mano_pirkimai_paspausta` | paspaudus įrankį bloke „Mano pirkimai“ | `irankis`: modulio pavadinimas; `etapas`: planuojama / rengiama / paskelbta / vertinama / kita | ar „Mano pirkimai“ veda į reikiamus įrankius |
 | 8 | `atsargine_kopija` | išsaugojus ar atkūrus kopiją | `veiksmas`: issaugota / atkurta; `rezultatas`: pavyko / klaida | ar naudojamasi kopija |
 
@@ -99,7 +99,7 @@ PP-tiekejams įtrauktas su tuo pačiu sutikimu; duomenų apsaugos pareigūno per
 
 `dokumentas` (įvykis 5): sps, bps, formos, sutartis, paketas_zip, ts, kvalifikacija, protokolas, pranesimas, pazyma,
 grafikas, derybu_analize, planas, rinkos_apzvalga, vertinimo_priedas, kna, anglies_ataskaita, esg_ataskaita, juodrastis,
-tikrinimo_ataskaita, konsultacija, kopija, kita.
+tikrinimo_ataskaita, konsultacija, kopija, pirkimo_byla, kita.
 
 `budas` - tik `GP_METHODS` kodas (`GP_ANALITIKA.budas()`; kai klasifikatorius puslapyje įkeltas - ir jame esantis),
 `sutartis` (įvykis 10) - tik PP-salygos `GP_SUTARTYS.SEIMOS` šeima arba „nerengiama“ / „atideta“ (testas sutikrina).

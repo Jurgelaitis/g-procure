@@ -71,7 +71,7 @@
   ];
   var DOKUMENTAI = ["sps", "bps", "formos", "sutartis", "paketas_zip", "ts", "kvalifikacija", "protokolas", "pranesimas", "pazyma",
     "grafikas", "derybu_analize", "planas", "rinkos_apzvalga", "vertinimo_priedas", "kna", "anglies_ataskaita", "esg_ataskaita",
-    "juodrastis", "tikrinimo_ataskaita", "konsultacija", "kopija", "kita"];
+    "juodrastis", "tikrinimo_ataskaita", "konsultacija", "kopija", "pirkimo_byla", "kita"];
   var BIBLIOTEKOS = ["pdfjs", "jszip", "mammoth", "sheetjs", "docx", "filesaver", "chartjs", "jspdf", "kita"];
 
   var BENDROS = { modulis: MODULIAI, puslapis: { re: /^\/[A-Za-z0-9\/._-]{0,120}$/ }, kalba: ["lt", "en"],
@@ -83,7 +83,7 @@
     veiksmo_rezultatas:      { veiksmas: VEIKSMAI, rezultatas: REZULTATAS, trukme: TRUKME },
     biblioteka_neisikele:    { biblioteka: BIBLIOTEKOS },
     failas_atsisiustas:      { dokumentas: DOKUMENTAI, formatas: ["docx", "xlsx", "pdf", "zip", "json", "csv", "doc", "html", "txt", "kita"] },
-    kortele_issaugota:       { saltinis: ["korteliu_puslapis", "modulis", "cvp_is_skelbimas", "pp_protocol_perkelimas", "pp_plan"], nauja: TN },
+    kortele_issaugota:       { saltinis: ["korteliu_puslapis", "modulis", "cvp_is_skelbimas", "pp_protocol_perkelimas", "pp_plan", "pirkimo_byla"], nauja: TN },
     mano_pirkimai_paspausta: { irankis: MODULIAI, etapas: ["planuojama", "rengiama", "paskelbta", "vertinama", "kita"] },
     atsargine_kopija:        { veiksmas: ["issaugota", "atkurta"], rezultatas: ["pavyko", "klaida"] },
     salygos_zingsnis:        { zingsnis: ["1", "2", "sutartis", "4"], budas: BUDAS, dokumentu_kalba: ["lt", "lt_en"], istatymas: ["PI", "VPI"] },
@@ -242,6 +242,7 @@
     var ext = (/\.([a-z0-9]{1,5})$/.exec(l) || [])[1] || "";
     var formatas = ["docx", "xlsx", "pdf", "zip", "json", "csv", "doc", "html", "txt"].indexOf(ext) >= 0 ? ext : "kita";
     var d = ext === "zip" ? "paketas_zip"
+      : /pirkimo-byla/.test(l) ? "pirkimo_byla"
       : /konsultacij|susitikim/.test(l) ? "konsultacija"
       : /juodrast/.test(l) ? "juodrastis"
       : /kopija/.test(l) ? "kopija"
