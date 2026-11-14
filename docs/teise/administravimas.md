@@ -89,6 +89,10 @@ Registro testai, tikrinantys konkrečius išanalizuotus įrašus, faktų įraš�
    kas parinko). Sistema aktualumo neskaičiuoja ir naujausių nerodo - be prioriteto blokas sako,
    kad įrašai dar neparinkti. Trumpas pavadinimas negali keisti teisinės prasmės ar nukirsti
    išlygos (pvz. „ar taikoma LITGRID, vertina teisės specialistas“ lieka paaiškinime).
+   Nuo 2026-11-13 portalo blokas turi du lygmenis - perjungiklį „Nacionalinė teisė / ES teisė“: kiekvienas
+   lygmuo rodo savo registro skaičius ir iki trijų įrašų pagal SAVO registro prioritetus (ES registrui
+   prioritetai nustatomi `admin.html?lygmuo=es`). Neįkeltas lygmuo rodomas kaip klaida („būsena
+   nežinoma“), ne kaip „pokyčių nėra“.
 3. **DI juodraštis (neprivaloma).** Įklijavus ištrauką, DI pasiūlo santrauką, „kas pasikeitė“ ir
    veiksmą; laukai pažymimi „DI juodraštis - nepatvirtinta“. Ištrauka laikoma duomenimis (instrukcijos
    joje nevykdomos), siunčiama per G-Procure serverį į Claude API; vidinės informacijos nesiųsti.
