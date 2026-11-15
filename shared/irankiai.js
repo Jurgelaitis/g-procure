@@ -64,8 +64,8 @@
         "Timelines and team workload based on standard procurement durations"
       ],
       daugiauLt: [
-        "Centralizavimo galimybės tarp grupės įmonių - algoritmas naršyklėje, ne DI",
-        "Vienos įmonės planas arba visos grupės vaizdas",
+        "Centralizavimo galimybės tarp grupės įmonių - skaičiuojama naršyklėje taisyklėmis, be DI",
+        "Vienos įmonės arba visos grupės planas",
         "Iš plano eilutės sukuriama pirkimo kortelė",
         "BVPŽ kodų paieška lietuvių ir anglų kalba"
       ],
@@ -86,10 +86,10 @@
       kalbos: true,
       nameLt: "Rinkos rodiklių stebėsena", nameEn: "Market indicators monitoring",
       href: "PP-market-KPI/EPSO-G_Rinkos_KPI_skydelis.html",
-      sumLt: "Rinkos rodikliai ir pirkimo rinkos apžvalga: ką kainų, darbo užmokesčio ir tiekimo rodikliai reiškia konkrečiam pirkimui ir kokių veiksmų imtis sutartyje.",
+      sumLt: "Rinkos rodikliai ir pirkimo rinkos apžvalga: ką kainų, darbo užmokesčio ir tiekimo rodikliai reiškia konkrečiam pirkimui ir kokias sąlygas numatyti sutartyje.",
       sumEn: "Market indicators and a market review for a procurement: what price, wage and supply indicators mean for a specific procurement and which contract actions to take.",
       galiLt: [
-        "Kainų, metalų, energijos, transporto ir darbo užmokesčio rodikliai su ribomis; atnaujinami iš viešų šaltinių - Oficialiosios statistikos portalo, Eurostat, FRED, Niujorko federalinio rezervo banko",
+        "Kainų, metalų, energijos, transporto ir darbo užmokesčio rodikliai su įspėjimo ribomis; atnaujinami iš viešų šaltinių - Oficialiosios statistikos portalo, Eurostat, FRED, Niujorko federalinio rezervo banko",
         "Pirkimo rinkos apžvalga pagal pirkimo pavadinimą: diagnozė ir rekomenduojami sutartiniai veiksmai",
         "Kainos peržiūros (indeksavimo) sąlyga penkiais žingsniais - pagal VPT tipinių sutarčių sąlygų sandarą",
         "Veiksmai įrašomi į pirkimo kortelę ir rodomi rengiant pirkimo sąlygas"
@@ -125,9 +125,9 @@
       sumEn: "Drafting and checking a technical specification (TS) with AI support; a market consultation questionnaire, invitation and summaries.",
       galiLt: [
         "Parengia TS projektą pagal jūsų atsakymus - tik apie pirkimo objektą: kvalifikacijos reikalavimai, vertinimo kriterijai ir sutarties sankcijos į TS nerašomi",
-        "Tikrina parengtą TS taisyklėmis ir DI: subjektyvios sąvokos, prekių ženklai, neaiškūs kiekiai",
+        "Tikrina parengtą TS taisyklėmis ir DI: ieško subjektyvių sąvokų, prekių ženklų, neaiškių kiekių",
         "Rinkos konsultacija: klausimai pagal TS, kvietimas, atsakymų suvestinė be dalyvių pavadinimų, susitikimo santrauka",
-        "Pirkimo vykdytojas ir įstatymas (PĮ arba VPĮ) - teisės nuorodos pagal jį"
+        "Teisės nuorodos pateikiamos pagal pirkimo vykdytojui taikomą įstatymą (PĮ arba VPĮ)"
       ],
       galiEn: [
         "Drafts a TS from your answers - only about the subject of the procurement: qualification requirements, award criteria and contract penalties are not written into the TS",
@@ -163,7 +163,7 @@
         "Patirties ir pajamų ribos pagal VPT Tiekėjo kvalifikacijos reikalavimų nustatymo metodiką - pagal numatomą vertę, objektą ir sutarties trukmę",
         "Parengia reikalavimus pagal pirkimo kontekstą arba patikrina jūsų tekstą - taisyklėmis ir DI",
         "Kiekvieną reikalavimą patvirtina žmogus; DI pataisos taikomos tik jas pažymėjus",
-        "Specialistų reikalavimai vertinami atskirai nuo tiekėjo patirties; sertifikatams primenama „arba lygiavertis“"
+        "Specialistų reikalavimai vertinami atskirai nuo tiekėjo patirties; prie reikalaujamų sertifikatų primenama nurodyti „arba lygiavertis“"
       ],
       galiEn: [
         "Experience and turnover limits under the VPT methodology for setting supplier qualification requirements - by estimated value, subject and contract duration",
@@ -174,14 +174,14 @@
       daugiauLt: [
         "Pirkimo objekto dalims - ribos kiekvienai daliai",
         "Dvikalbis LT / EN priedas su vertimo patikra",
-        "Nepatvirtintas ar nepatikrintas rinkinys žymimas juodraščiu"
+        "Nepatvirtinti ar nepatikrinti reikalavimai pažymimi kaip juodraštis"
       ],
       daugiauEn: [
         "For lots - limits for each lot",
         "A bilingual LT / EN annex with a translation check",
         "An unapproved or unchecked set is marked as a draft"
       ],
-      rezLt: "Word priedas pirkimo sąlygoms - vidinė versija ir versija tiekėjams",
+      rezLt: "Word priedas pirkimo sąlygoms - versija pirkimo organizatoriui ir versija tiekėjams",
       rezEn: "a Word annex to the procurement conditions - an internal version and a version for suppliers"
     },
     {
@@ -196,10 +196,10 @@
       sumLt: "Pirkimo sąlygų paketas ir sutarties projektas iš standartinių šablonų - sąlygų teksto DI nerašo - ir parengtų dokumentų patikra.",
       sumEn: "A procurement conditions package and a draft contract from standard templates - AI does not write the text of the conditions - plus a check of prepared documents.",
       galiLt: [
-        "Bendrosios ir specialiosios sąlygos, tiekėjo formos ir priedai: atviras konkursas, skelbiamos ir neskelbiamos derybos, mažos vertės pirkimas, dinaminė pirkimo sistema - lietuvių arba lietuvių ir anglų kalba",
-        "Sutarties projektas iš septynių LITGRID sutarčių šeimų - nuo prekių ir paslaugų iki rangos ir eksploatavimo darbų",
+        "Bendrosios ir specialiosios sąlygos, tiekėjų pildomos formos ir priedai atviram konkursui, skelbiamoms ir neskelbiamoms deryboms, mažos vertės pirkimui ir dinaminei pirkimo sistemai - lietuvių arba lietuvių ir anglų kalba",
+        "Sutarties projektas pagal vieną iš septynių LITGRID sutarčių rūšių - nuo prekių ir paslaugų iki rangos ir eksploatavimo darbų",
         "Iš jūsų dokumentų perkeliama: kvalifikacijos ir žaliųjų reikalavimų lentelės, kainų lentelė iš Excel, vertinimo metodika; grafikas - iš pirkimo kortelės",
-        "Kiekviena siūloma reikšmė pažymėta „Siūloma“ ir tampa „Patvirtinta“ tik jūsų veiksmu"
+        "Kiekviena siūloma reikšmė pažymėta „Siūloma“ ir tampa „Patvirtinta“ tik jums ją patvirtinus"
       ],
       galiEn: [
         "General and special conditions, supplier forms and annexes: open procedure, negotiated procedures with and without publication, small-value procurement, dynamic purchasing system - in Lithuanian or in Lithuanian and English",
@@ -209,11 +209,11 @@
       ],
       daugiauLt: [
         "„Tikrinti parengtus dokumentus“: palyginimas su standartine forma, privalomi dokumentų ir sutarties elementai, techninės specifikacijos, sąlygų ir sutarties nuoseklumas - taisyklėmis, be DI",
-        "DI gali pasiūlyti atsakymus iš jūsų dokumentų su citata: siunčiama paspaudus mygtuką arba jums leidus tam pirkimui; nacionalinio saugumo pirkime - tik mygtuku",
+        "DI gali pasiūlyti atsakymus iš jūsų dokumentų su citata: dokumentai į DI siunčiami tik paspaudus mygtuką arba jums leidus tai daryti šiame pirkime; nacionalinio saugumo pirkime - tik paspaudus mygtuką",
         "Sugeneruoto paketo patikra, santrauka tvirtintojui ir CVP IS pildymo atmintinė",
         "Darbas saugomas juodraštyje šioje naršyklėje - galima tęsti vėliau",
         "DI vertimai į anglų kalbą ir DI atpažintas skenuotų dokumentų tekstas dokumentuose pažymėti",
-        "Pirkimo vykdytojas - LITGRID AB arba AB „Amber Grid“: pirkimo sąlygos - tie patys šablonai su jos duomenimis, sutarties projektas - prekėms, paslaugoms ir statybos rangai"
+        "Pirkimo vykdytojas - LITGRID AB arba AB „Amber Grid“: pirkimo sąlygos rengiamos pagal tuos pačius šablonus su bendrovės duomenimis, o sutarties projektas - prekių, paslaugų ir statybos rangos pirkimams"
       ],
       daugiauEn: [
         "“Check prepared documents”: comparison with the standard form, mandatory document and contract elements, consistency of the technical specification, conditions and contract - rule-based, without AI",
@@ -272,8 +272,8 @@
       sumLt: "Pirkimo procedūros grafikas darbo dienomis pagal pirkimo būdą ir standartines pirkimų trukmes.",
       sumEn: "A procedure schedule in working days, based on the procurement procedure and standard procurement durations.",
       galiLt: [
-        "Etapų grafikas pagal pirkimo būdą; terminai skaičiuojami darbo dienomis su Lietuvos šventėmis",
-        "Įspėja, kai etapas trumpesnis už įstatymo minimumą - PĮ arba VPĮ pagal įmonę",
+        "Etapų grafikas pagal pirkimo būdą; terminai skaičiuojami darbo dienomis, atsižvelgiant į Lietuvos šventes",
+        "Įspėja, kai etapas trumpesnis už įstatymo nustatytą trumpiausią terminą - PĮ arba VPĮ pagal įmonę",
         "Standartinės pirkimų trukmės 2026 ir 2027 m. ir trukmių skaičiuoklė",
         "Grafikas įrašomas į pirkimo kortelę - iš jos jis patenka į specialiąsias pirkimo sąlygas"
       ],
@@ -291,7 +291,7 @@
         "A schedule in English; AI can translate the procurement title",
         "Comparison with similar CVP IS procurements by CPV code"
       ],
-      rezLt: "spausdinamas grafikas (PDF), grafikas pirkimo kortelėje",
+      rezLt: "spausdinti paruoštas grafikas (PDF), grafikas pirkimo kortelėje",
       rezEn: "a printable schedule (PDF), a schedule in the procurement card"
     },
     {
@@ -351,7 +351,7 @@
         "Encoded AI prompts: suppliers as codes, amounts as percentages"
       ],
       daugiauLt: [
-        "PDF, kurio įrankis pats neperskaito, gali perskaityti DI - tik paspaudus",
+        "PDF, kurio įrankis pats neperskaito, gali perskaityti DI - tik jums paspaudus mygtuką",
         "Derybų sesijų ir raundų žurnalas",
         "Sąsaja lietuvių ir anglų kalba, analizės eksportas į Excel"
       ],
@@ -435,7 +435,7 @@
       sumEn: "A supplier risk register, sanctions checks and ESRS data in one place.",
       galiLt: [
         "Tiekėjų rizikos registras: rizikos lygį įrankis tik siūlo, pasirenkate patys",
-        "Automatinė patikra ES, JT, OFAC ir JK sankcijų sąrašuose (tik bendrovėms); nepasiekiamas sąrašas rodomas kaip nepatikrintas",
+        "Automatinė patikra ES, JT, OFAC ir JK sankcijų sąrašuose (tik bendrovėms); jei sąrašo gauti nepavyko, jis rodomas kaip nepatikrintas",
         "Kiekvieną galimą atitikmenį įvertina žmogus; DI sankcijų rizikos vertinimas - pagalbinis ir pažymėtas",
         "ESRS duomenys ir patikrų žurnalo eksportas"
       ],
@@ -453,7 +453,7 @@
         "Import of suppliers from public contract data",
         "Interface in Lithuanian and English"
       ],
-      rezLt: "dokumentuota tiekėjų patikrų istorija (JSON, CSV)",
+      rezLt: "tiekėjų patikrų istorija (JSON ir CSV failai)",
       rezEn: "a documented history of supplier checks (JSON, CSV)"
     }
   ];
@@ -480,7 +480,7 @@
         "A checklist, a preparation plan and a draft question for the contracting body",
         "Shows where the Lithuanian and English texts, or figures and words, differ"
       ],
-      noteLt: "Pirkimo vykdytojas ir taikomas įstatymas (PĮ arba VPĮ) atpažįstami iš skelbimo, pirkimo dokumentų ar CVP IS duomenų, o naudotojas juos patvirtina. Pagrindiniai pirkimo duomenys gaunami iš viešų VPT CVP IS duomenų per G-Procure serverį; vieši dokumentai parsisiunčiami pagal pirkimo numerį (kai CVP IS prašo prisijungti - įkeliate patys) ir skaitomi jūsų naršyklėje. Užduodant klausimą jo tekstas ir susiję dokumentų fragmentai siunčiami į Claude API per G-Procure serverį.",
+      noteLt: "Pirkimo vykdytojas ir taikomas įstatymas (PĮ arba VPĮ) atpažįstami iš skelbimo, pirkimo dokumentų ar CVP IS duomenų, o naudotojas juos patvirtina. Pagrindiniai pirkimo duomenys gaunami iš viešų VPT CVP IS duomenų per G-Procure serverį; vieši dokumentai parsisiunčiami pagal pirkimo numerį (kai CVP IS prašo prisijungti - įkeliate patys) ir skaitomi jūsų naršyklėje. Užduodant klausimą jo tekstas ir susiję dokumentų fragmentai per G-Procure serverį siunčiami į DI paslaugą Claude (Anthropic).",
       noteEn: "The contracting body and the legal regime (PĮ or VPĮ) are recognised from the notice, the procurement documents or CVP IS data and confirmed by the user. The main procurement data comes from public VPT CVP IS data via the G-Procure server; public documents are downloaded by procurement number (when CVP IS requires signing in, you upload them yourself) and are read in your browser. When you ask a question, its text and the related document fragments are sent to the Claude API via the G-Procure server.",
       href: "PP-tiekejams/index.html"
     },

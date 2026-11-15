@@ -216,7 +216,15 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   „patikslinti CVP IS“), „DI paslaugos teikėjas (Anthropic)“ (įrankyje tiekėjams „DI tiekėjas“ dviprasmiškas), „G-Procure organizacijų
   sąrašas“ (ne „registras“), „Pasiūlymo galiojimo užtikrinimas“ (kontrolinio sąrašo punktas ir pavyzdys), „Kaip įrodyti, kad tiekėjas
   turi ...“ (buvo „įrodyti reikalavimą“), „visuotinio atšilimo potencialo (GWP)“, failų skaitymo pranešimai be IT žodžių („ZIP bombos“,
-  „nesaugus kelias“, „grynas tekstas“); privatumo skiltyje serverio patikros data - 2026-11-09. Naujas sąsajos tekstas - iškart natūralia lietuvių
+  „nesaugus kelias“, „grynas tekstas“); privatumo skiltyje serverio patikros data - 2026-11-09. Tą pačią dieną - antra „Apie G-Procure“ ir
+  `shared/irankiai.js` peržiūra pagal šias taisykles: „Taikomi įstatymai“ (buvo „Teisinis kontekstas“), „Kaip naudotis“ (buvo „Kaip veikia“),
+  „Įrankiai pirmiausia pritaikyti LITGRID AB pirkimams (PĮ)“ (buvo „Numatytasis kontekstas“), „Rinkos apžvalgos veiksmai“ schemoje,
+  „septynių LITGRID sutarčių rūšių“ (ne „šeimų“), „į DI paslaugą Claude (Anthropic)“ (ne „Claude API“), „paleidžiama“ po kiekybinio
+  junginio; PP-market-KPI aprašas portale ir „Apie“ - „kokias sąlygas numatyti sutartyje“. Nekeista: įrankių pačių terminai („Diagnozė“,
+  „Sutartiniai veiksmai“, „faktorių biblioteka“, „GHG protokolas“ - keisti tik kartu su įrankiu). Būklės pareiškimas (naudotojo pritarimu
+  2026-11-15, abiejuose puslapiuose ir „Vizijos“ poraštėje): „Prototipai (Jie) tikrinami automatiniais testais ir su viešais CVP IS
+  dokumentais, tačiau įmonėje neįdiegti.“ (buvo „Prototipų logika tikrinama ..., tačiau tai nėra įmonėje įdiegtas sprendimas.“), portalo
+  aprašuose - „asmeninis ... projektas, įmonėje neįdiegtas“. Naujas sąsajos tekstas - iškart natūralia lietuvių
   kalba (žr. ir „DI terminai“).
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).
