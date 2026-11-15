@@ -249,7 +249,9 @@
         '<div class="gpi-body"><div class="gpi-inner">' +
           (c.stepsTitle ? '<div class="gpi-steps-title">' + esc(c.stepsTitle) + '</div>' : "") +
           '<div class="gpi-steps">' + steps + '</div>' + noteHtml +
-          '<div class="gpi-trust">' + ICON_SHIELD + '<span>' + esc(ui.trust) + '</span><a href="' + esc(SAKNIS + "ai-valdymas.html") + '">' + esc(ui.ai) +
+          '<div class="gpi-trust">' + ICON_SHIELD + '<span>' + esc(ui.trust) + '</span><a href="' +
+            // ?irankis=<moduleId> (2026-11-15): DI valdymo puslapis atveria šio įrankio DI funkcijas su savarankiškumo lygiu (shared/di-funkcijos.js)
+            esc(SAKNIS + "ai-valdymas.html" + (cfg.moduleId ? "?irankis=" + encodeURIComponent(cfg.moduleId) : "")) + '">' + esc(ui.ai) +
             '</a><a href="' + esc(SAKNIS + "privatumas.html") + '">' + esc(ui.privacy) + '</a>' +
             // Slapukų nustatymai (2026-10-16): su shared/sutikimas.js atveria nustatymų langą, be jo - slapukų politiką
             '<a href="' + esc(SAKNIS + "slapukai.html#nustatymai") + '" data-gp-slapukai aria-haspopup="dialog">' + esc(ui.cookies) + '</a></div>' +

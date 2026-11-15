@@ -7,9 +7,10 @@
  *  - Sis failas: failo paruosimas (JPG/PNG -> PDF, be isoriniu biblioteku),
  *    prompto konstravimas, atsakymo parsinimas ir VALIDACIJA, deterministinis
  *    zemelapis i modulio laukus (budas per GP_METHODS.fromText - ne AI).
- *  - UI (PP-SALYGOS.html): failo ikelimas, siulymu rodymas vartotojui
- *    PATVIRTINTI. AI niekada neuzpildo lauku pats - tik pasiulo; galutinis
- *    sprendimas ZMOGAUS (spaudzia "Pritaikyti").
+ *  - UI (PP-SALYGOS.html): failo ikelimas ir rezultato taikymas. Nuo 2026-10-18b
+ *    (naudotojo sprendimas) tusti ir nepaliesti laukai uzpildomi su zyme
+ *    "is paraiskos (nepatvirtinta)" - patvirtina ar pataiso zmogus; kitokia nei
+ *    ranka irasyta reiksme - tik pasiulymas, renkasi zmogus (pzTaikyk).
  *
  * TRANSPORTAS: TIK shared/ai-proxy.js (GP_AI_PROXY) - raktas serverio puseje.
  * Backend priima PDF document bloka, todel paveiksleliai (ekrano nuotraukos)
