@@ -26,7 +26,7 @@
     lt: {
       mygtukas: "Rodyti rinkos duomenis (CVP IS)", siauriau: "Siauresnė BVPŽ grupė", placiau: "Platesnė BVPŽ grupė",
       pag: "Pagal BVPŽ kodą - panašūs CVP IS pirkimai per {m} mėn. iš viešų VPT duomenų (atnaujinami kas 6 val.). Į G-Procure serverį siunčiama tik BVPŽ kodo pradžia, objektas (jei nurodytas) ir laikotarpio pradžios data.",
-      beBvpz: "Įrašykite BVPŽ kodą (pvz. 45231000-5) - pagal jį ieškosime panašių pirkimų.", kraunama: "Gaunami rinkos duomenys iš VPT CVP IS...",
+      beBvpz: "Įrašykite BVPŽ kodą (pvz., 45231000-5) - pagal jį bus ieškoma panašių pirkimų.", kraunama: "Gaunami rinkos duomenys iš VPT CVP IS...",
       nepavyko: "Rinkos duomenų gauti nepavyko", rysys: "G-Procure serveris neatsakė arba VPT sąrašas dar neįkeltas - bandykite vėliau.",
       nera: "Panašių pirkimų pagal BVPŽ {k} VPT duomenyse per {m} mėn. nėra (sąrašas atnaujintas {t}).",
       antraste: "Panašūs pirkimai CVP IS: BVPŽ {k}…{o}, paskelbti nuo {nuo}", atnaujinta: "VPT sąrašas atnaujintas {t}.",
@@ -36,16 +36,16 @@
       terminaiH: "Pasiūlymų teikimo laikotarpis - kalendorinės dienos nuo paskelbimo iki termino",
       budas: "Būdas", n: "Pirkimų", med: "Mediana", puse: "Pusė pirkimų", tarptT: "tarptautinis", tarptS: "ne tarptautinis",
       retos: "Retesni būdai (mažiau kaip 5 pirkimai - per mažai duomenų): {s}.", neisversti: "Rodoma kaip VPT duomenyse, nes reikšmė neaiški: {s}.", kab: ["„", "“"],
-      jusu: "jūsų būdas", mazai: "per mažai duomenų", kitiBudai: "Jūsų būdo panašiuose pirkimuose nėra arba per mažai.",
+      jusu: "jūsų būdas", mazai: "per mažai duomenų", kitiBudai: "Panašių pirkimų jūsų pasirinktu būdu nėra arba jų per mažai.",
       vertinimasH: "Vertinimo kriterijus", kaina: "kaina", ekon: "ekonominis naudingumas (kaina ir kokybė)",
-      sprendimasH: "Nuo termino iki sprendimo dėl laimėtojo", sutartisH: "Nuo termino iki sutarties", verteH: "Numatoma vertė (kai nurodyta)",
+      sprendimasH: "Nuo termino iki sprendimo dėl laimėtojo", sutartisH: "Nuo termino iki sutarties sudarymo", verteH: "Numatoma vertė (kai nurodyta)",
       trukmeH: "Sutarties trukmė", vykdytojaiH: "Dažniausi pirkimo vykdytojai",
       dienos: "{v} d.", men: "{v} mėn.", ribos: " (pusė pirkimų - {a}-{b}; {n} pirk.)", maziau: "per mažai duomenų ({n} pirk.)",
       mano: "Jūsų grafike „{p}“ - {kd} kal. d. nuo paskelbimo ({dd} d. d.).", manoDd: "Jūsų grafike „{p}“ - {dd} d. d. (kalendorines dienas matysite įrašę pradžios datą).",
       manoMed: " Panašių CVP IS pirkimų, vykdytų jūsų būdu, mediana - {m} kal. d.",
       sistemos: "Dinaminės pirkimų sistemos ir kvalifikacijos sistemos lentelėje nerodomos: jų terminas CVP IS - sistemos galiojimo pabaiga.",
-      istatymas: "PĮ ir VPĮ prie derybų - pagal VPT procedūros pavadinimą: vienus pavadinimus vartoja pirkimai pagal sektorinę direktyvą (PĮ), kitus - pagal klasikinę (VPĮ); neskelbiamų derybų (VPĮ) eilutėje yra ir keli gynybos pirkimai.",
-      pastaba: "Faktai iš viešų VPT CVP IS duomenų, ne teisės normos: trumpiausius terminus nustato įstatymas. Kvantiliai rodomi, kai yra bent 5 pirkimai; „pusė pirkimų“ - tarp 25 ir 75 procentilio. Kelių etapų pirkimuose (derybos, ribotas konkursas, dialogas) CVP IS terminas gali būti ir vėlesnio etapo. Laikotarpis skaičiuojamas nuo paskelbimo CVP IS; tarptautinio pirkimo įstatymo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT, kuris būna iki 5 d. anksčiau, todėl tokių pirkimų laikotarpis čia gali būti trumpesnis už įstatymo minimumą."
+      istatymas: "Derybų eilutėse PĮ ir VPĮ nurodyti pagal VPT procedūros pavadinimą: vienus pavadinimus vartoja pirkimai pagal sektorinę direktyvą (PĮ), kitus - pagal klasikinę (VPĮ); neskelbiamų derybų (VPĮ) eilutėje yra ir keli gynybos pirkimai.",
+      pastaba: "Faktai iš viešų VPT CVP IS duomenų, ne teisės normos: trumpiausius terminus nustato įstatymas. Mediana ir „pusė pirkimų“ rodomos, kai yra bent 5 pirkimai; „pusė pirkimų“ - tarp 25 ir 75 procentilio. Kelių etapų pirkimuose (derybos, ribotas konkursas, dialogas) CVP IS terminas gali būti ir vėlesnio etapo. Laikotarpis skaičiuojamas nuo paskelbimo CVP IS; tarptautinio pirkimo įstatymo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT, kuris būna iki 5 d. anksčiau, todėl tokių pirkimų laikotarpis čia gali būti trumpesnis už įstatymo minimumą."
     },
     en: {
       mygtukas: "Show market data (CVP IS)", siauriau: "Narrower CPV group", placiau: "Wider CPV group",

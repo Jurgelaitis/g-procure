@@ -87,10 +87,10 @@
   var DOK_MAX = 250 * 1048576;
   var DOK_TEKSTAI = {
     lt: {
-      prisijungimas: "CVP IS šio pirkimo dokumentus rodo tik prisijungusiems (pvz. konkretus pirkimas pagal DPS - tik DPS dalyviams). Prisijunkite prie CVP IS, atsisiųskite dokumentus ir įkelkite juos čia.",
+      prisijungimas: "CVP IS šio pirkimo dokumentus rodo tik prisijungusiems (pvz., konkretus pirkimas pagal DPS - tik DPS dalyviams). Prisijunkite prie CVP IS, atsisiųskite dokumentus ir įkelkite juos čia.",
       nera: "CVP IS šio pirkimo dokumentų nepateikė - galbūt jie dar neskelbti. Patikrinkite pirkimo puslapį CVP IS.",
       per_didelis: "Dokumentų paketas didesnis nei 250 MB - atsisiųskite jį iš CVP IS ir įkelkite čia.",
-      ne_zip: "CVP IS grąžino ne dokumentų paketą - atsisiųskite dokumentus iš CVP IS ir įkelkite čia.",
+      ne_zip: "CVP IS vietoje dokumentų paketo atsiuntė kitą failą - atsisiųskite dokumentus iš CVP IS ir įkelkite čia.",
       uzimta: "Šiuo metu siunčiama per daug dokumentų paketų - pabandykite po minutės.",
       numeris: "Netinkamas pirkimo numeris.",
       rysys: "CVP IS dokumentų gauti nepavyko (ryšys ar CVP IS klaida). Bandykite dar kartą arba atsisiųskite dokumentus iš CVP IS ir įkelkite čia."
@@ -407,23 +407,23 @@
   }
 
   var PASTABOS = {
-    lt: { neregistre: "Pirkimo vykdytojas „{p}“ organizacijų registre nerastas - vykdytojo nesiūlome.",
-          mv: "VPT duomenyse direktyva netaikoma (mažos vertės pirkimas) - įstatymo nesiūlome; kurį taiko pirkimas, nurodo pirkimo dokumentai.",
-          direktyva: "VPT direktyva „{d}“ - ne PĮ ar VPĮ pirkimas arba nenurodyta; taikomo įstatymo nesiūlome.",
+    lt: { neregistre: "Pirkimo vykdytojo „{p}“ G-Procure organizacijų sąraše nėra, todėl jo nesiūlome.",
+          mv: "VPT duomenyse direktyva netaikoma (mažos vertės pirkimas) - taikomo įstatymo nesiūlome; kuris įstatymas taikomas pirkimui, nurodo pirkimo dokumentai.",
+          direktyva: "VPT duomenyse nurodyta direktyva „{d}“: tai ne PĮ ar VPĮ pirkimas arba direktyva nenurodyta - taikomo įstatymo nesiūlome.",
           budas: "VPT būdo „{b}“ ({r}) atitikmens kortelės būdų sąraše nėra - pasirinkite būdą patys.",
           rinkos: "Tai rinkos konsultacija, ne pirkimas - būdo ir būsenos nesiūlome.",
-          bvpz: "BVPŽ kodo „{k}“ žodyne nerasta - įveskite patys.",
+          bvpz: "BVPŽ kodo „{k}“ BVPŽ žodyne nėra - įrašykite kodą patys.",
           busena: "VPT būsena „{b}“ - kortelės būseną pasirinkite patys.",
-          tarptautine: "tarptautinė vertė: {v}", direktyvaZ: "direktyva: {d}",
+          tarptautine: "tarptautinė vertė: {v}", taip: "taip", ne: "ne", direktyvaZ: "direktyva: {d}",
           budasT: "pagal VPT: tarptautinės vertės pirkimas", budasS: "pagal VPT: ne tarptautinės vertės pirkimas",
           budasMv: "pagal VPT: direktyva netaikoma - mažos vertės skelbiama apklausa; ar numatytos derybos - patikrinkite pirkimo dokumentuose",
-          terminas: "VPT sąrašo duomenys - iki 6 val. senumo; galioja CVP IS",
+          terminas: "VPT sąrašo duomenys - iki 6 val. senumo; galioja CVP IS nurodytas terminas",
           paskelbimas: "paskelbimo CVP IS data - nuo jos skaičiuojami supaprastinto pirkimo terminai",
           kriterijusMeat: "CVP IS vertinimo būdas - ekonomiškai naudingiausias pasiūlymas: ar tai kainos, ar sąnaudų ir kokybės santykis, nurodo pirkimo dokumentai - kriterijų pasirinkite patys.",
           sutartiesData: "CVP IS lauke - planuojama sutarties sudarymo data",
           numeris: "CVP IS lauke rastas kodas - patikrinkite, ar tai jūsų pirkimo numeris",
           paskelbimasT: "CVP IS paskelbimo data {d}. Tarptautinio pirkimo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT dienos - šios datos VPT duomenyse nėra, ją rasite skelbimo PDF („Skelbimo išsiuntimo data“), todėl paskelbimo datos nesiūlome.",
-          rinkosTerminas: "Rinkos konsultacijos atsakymų terminas {d} - tai ne pasiūlymų terminas, todėl kortelei nesiūlome.",
+          rinkosTerminas: "Rinkos konsultacijos atsakymų terminas {d} - tai ne pasiūlymų terminas, todėl jo kortelei nesiūlome.",
           bvpzRusis: "CVP IS duomenys pagrindinio BVPŽ kodo nenurodo - kodas parinktas pagal objekto rūšį ({r}); patikrinkite skelbimą",
           bvpzPirmas: "CVP IS duomenys pagrindinio BVPŽ kodo nenurodo, o objekto rūšies kodo sąraše nėra - siūlomas pirmas sąraše; patikrinkite skelbimą",
           rusys: { Works: "darbai", Supplies: "prekės", Services: "paslaugos" } },
@@ -434,7 +434,7 @@
           rinkos: "This is a market consultation, not a procurement - no procedure or status suggested.",
           bvpz: "CPV code “{k}” not found in the vocabulary - enter it yourself.",
           busena: "VPT status “{b}” - choose the card status yourself.",
-          tarptautine: "above EU threshold: {v}", direktyvaZ: "directive: {d}",
+          tarptautine: "above EU threshold: {v}", taip: "yes", ne: "no", direktyvaZ: "directive: {d}",
           budasT: "per VPT: above the EU threshold", budasS: "per VPT: below the EU threshold",
           budasMv: "per VPT: no directive applies - low-value published survey; check in the procurement documents whether negotiations are foreseen",
           terminas: "VPT list data - up to 6 hours old; CVP IS prevails",
@@ -481,9 +481,9 @@
     if (OBJEKTAI[p.procurementType]) prideti("objektas", OBJEKTAI[p.procurementType], "procurementType: " + p.procurementType);
     if (rinkos) pastabos.push(P.rinkos);
     else if (typeof p.procedure === "string" && p.procedure) {
-      var b = budas(p), cit = "procedure: " + tx(p.procedure, 80) + "; " + keisk(P.tarptautine, { v: String(p.aboveThreshold) }) + "; " + keisk(P.direktyvaZ, { d: tx(p.directive || "-", 60) });
+      var b = budas(p), cit = "procedure: " + tx(p.procedure, 80) + "; " + keisk(P.tarptautine, { v: p.aboveThreshold === true ? P.taip : p.aboveThreshold === false ? P.ne : "-" }) + "; " + keisk(P.direktyvaZ, { d: tx(p.directive || "-", 60) });
       if (b) prideti("budas", b.id, cit, b.pagrindas === "tarptautinis" ? P.budasT : b.pagrindas === "supaprastintas" ? P.budasS : b.pagrindas === "mv" ? P.budasMv : null);
-      else pastabos.push(keisk(P.budas, { b: tx(p.procedure, 80), r: keisk(P.tarptautine, { v: String(p.aboveThreshold) }) + ", " + keisk(P.direktyvaZ, { d: tx(p.directive || "-", 60) }) }));
+      else pastabos.push(keisk(P.budas, { b: tx(p.procedure, 80), r: keisk(P.tarptautine, { v: p.aboveThreshold === true ? P.taip : p.aboveThreshold === false ? P.ne : "-" }) + ", " + keisk(P.direktyvaZ, { d: tx(p.directive || "-", 60) }) }));
     }
     /* Pagrindinis BVPŽ kodas (2026-11-12, antras pilotas): VPT duomenys pagrindinio kodo nenurodo, o sąrašo tvarka - ne pagrindinis pirmas
        (darbų pirkimui pirmas buvo tvoros prekių kodas, skelbime pagrindinis - 45...). Kai kodų keli, parenkamas pirmas objekto rūšies kodas:

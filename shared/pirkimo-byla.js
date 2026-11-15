@@ -148,7 +148,7 @@
   var KLAIDOS = {
     lt: { dydis: "Failas per didelis (daugiau kaip 3 MB) - tai ne pirkimo bylos failas.", json: "Failo nepavyko perskaityti kaip JSON.",
       formatas: "Tai ne G-Procure pirkimo bylos failas.", versija: "Failas sudarytas naujesne G-Procure versija - šis puslapis jo neperskaito. Atnaujinkite puslapį.",
-      pirkimas: "Faile nėra pirkimo duomenų.", pavadinimas: "Faile esanti kortelė be pavadinimo - neįkeliama.", kita: "Failo įkelti nepavyko." },
+      pirkimas: "Faile nėra pirkimo duomenų.", pavadinimas: "Faile esanti kortelė neturi pavadinimo, todėl neįkeliama.", kita: "Failo įkelti nepavyko." },
     en: { dydis: "The file is too large (over 3 MB) - it is not a procurement file.", json: "The file could not be read as JSON.",
       formatas: "This is not a G-Procure procurement file.", versija: "The file was made with a newer version of G-Procure - this page cannot read it. Reload the page.",
       pirkimas: "The file contains no procurement data.", pavadinimas: "The card in the file has no title - not imported.", kita: "The file could not be imported." }

@@ -200,7 +200,16 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   „iš anksto nustatyti“ (ne „iš uždaro sąrašo“), „žmogaus vykdoma priežiūra“ (DI akto terminas), „nepagrįstai nedelsiant“ ir BDAR
   22 str. 1 d. formuluotė, DI funkcijų sąraše - dabartiniai mygtukų pavadinimai („Išsami analizė (DI ir taisyklės)“, „Užpildyti laukus
   iš TS (DI)“); slapukų nustatymų nuoroda - „kiekviename puslapyje (portale - poraštėje, įrankiuose - informacinėje skiltyje)“ (buvo
-  netiksliai „puslapio apačioje“); privatumo politikos data - atnaujinta 2026-11-15. Naujas sąsajos tekstas - iškart natūralia lietuvių
+  netiksliai „puslapio apačioje“); privatumo politikos data - atnaujinta 2026-11-15. Tą pačią dieną - ir pirkimų kortelių puslapis
+  (`pirkimu-korteles.html`) bei jo bendri failai (`pirkimo-kortele.js`, `korteles-poveikis.js`, `teises-poveikis.js`, `pirkimo-byla.js`,
+  `taisykles.js`, `vpt-rinka.js`, `skelbimas.js`, `vpt-duomenys.js`): kortelės laukų pavadinimai pranešimuose, istorijoje ir juostoje
+  moduliuose - kaip formoje, kur trumpas pavadinimas buvo dviprasmiškas: „Pirkimo vykdytojas“, „Taikomas įstatymas“ (buvo „Režimas“),
+  „Pirkimo pradžios data“, „Pasiūlymų ar paraiškų terminas“, „Tiekėjų patikra“ (buvo „Kas tikrinama“; formoje taip pat), o „Pavadinimas“,
+  „Numeris“, „Objektas“, „Vertė“, „Būdas“ - trumpi, kaip iki tol; klaidos be IT žodžių („klasifikatoriuje“, „registre“, „masyvas“,
+  „schemos versija“, „teigiama suma“ -> „didesnė už nulį“), be pirmojo asmens („nepriimame“, „ieškosime“, „nevertiname“ -
+  beasmeniškai; „nesiūlome“ - paliktas, kaip visame projekte), sakiniai su tariniu („Kortelėje kitaip nei CVP IS“ -> „Šių laukų reikšmės
+  kortelėje skiriasi nuo CVP IS“), „su šios kortelės duomenimis“ (ne „su šia kortele“); VPT pastaboje „tarptautinė vertė: taip / ne“
+  (buvo angliški true / false - kodo taisymas); vietos pavyzdžiai - „pvz., ...“. Naujas sąsajos tekstas - iškart natūralia lietuvių
   kalba (žr. ir „DI terminai“).
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).

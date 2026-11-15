@@ -105,27 +105,27 @@
     pavadinimas: { lt: "Pavadinimas", en: "Title" },
     numeris: { lt: "Numeris", en: "Number" },
     cvpisNr: { lt: "CVP IS numeris", en: "CVP IS number" },
-    vykdytojas: { lt: "Vykdytojas", en: "Contracting body" },
-    rezimas: { lt: "Režimas", en: "Legal regime" },
+    vykdytojas: { lt: "Pirkimo vykdytojas", en: "Contracting body" },
+    rezimas: { lt: "Taikomas įstatymas", en: "Legal regime" },
     objektas: { lt: "Objektas", en: "Subject" },
     bvpz: { lt: "BVPŽ kodas", en: "CPV code" },
     verte: { lt: "Vertė", en: "Value" },
     budas: { lt: "Būdas", en: "Procedure" },
     dalys: { lt: "Dalys", en: "Lots" },
     trukmeMen: { lt: "Sutarties trukmė", en: "Contract duration" },
-    pradzia: { lt: "Pradžios data", en: "Start date" },
+    pradzia: { lt: "Pirkimo pradžios data", en: "Start date" },
     paskelbimas: { lt: "Paskelbimo data", en: "Publication date" },
     sutartiesData: { lt: "Planuojama sutarties sudarymo data", en: "Planned contract signing date" },
     grafikas: { lt: "Pirkimo grafikas", en: "Procurement schedule" },
     vertinimas: { lt: "Vertinimo metodika", en: "Evaluation methodology" },
-    pasiulymuTerminas: { lt: "Pasiūlymų terminas", en: "Tender deadline" },
+    pasiulymuTerminas: { lt: "Pasiūlymų ar paraiškų terminas", en: "Tender deadline" },
     iniciatorius: { lt: "Iniciatorius", en: "Initiator" },
     organizatorius: { lt: "Organizatorius", en: "Organiser" },
     organizatoriausKontaktai: { lt: "Organizatoriaus kontaktai", en: "Organiser's contact details" },
     kriterijus: { lt: "Vertinimo kriterijus", en: "Award criterion" },
     zaliasis: { lt: "Žaliasis pirkimas", en: "Green procurement" },
     nacsaugumas: { lt: "Susijęs su nacionaliniu saugumu", en: "Related to national security" },
-    kvalifikacija: { lt: "Kas tikrinama", en: "What is checked" },
+    kvalifikacija: { lt: "Tiekėjų patikra", en: "What is checked" },
     cpo: { lt: "CPO LT katalogas", en: "CPO LT catalogue" },
     esLesos: { lt: "Finansuojama ES lėšomis", en: "Financed from EU funds" },
     busena: { lt: "Būsena", en: "Status" }
@@ -435,7 +435,7 @@
     if (v === null || v === undefined || v === "") return en ? "(not stated)" : "(nenurodyta)";
     if (f === "grafikas" && typeof v === "object" && !Array.isArray(v)) {
       return (en ? v.etapu + (v.etapu === 1 ? " stage" : " stages") : v.etapu + " " + linksnis(v.etapu, "etapas", "etapai", "etapų"))
-        + (v.nuo && v.iki ? " (" + v.nuo + " - " + v.iki + ")" : "") + (v.sudaryta ? (en ? ", saved " : ", įrašytas ") + v.sudaryta : "");
+        + (v.nuo && v.iki ? " (" + v.nuo + " - " + v.iki + ")" : "") + (v.sudaryta ? (en ? ", saved " : ", grafikas įrašytas ") + v.sudaryta : "");
     }
     if (f === "vertinimas" && typeof v === "object" && !Array.isArray(v)) {
       var kp = v.kriterijus ? pav(SPRENDIMAI.kriterijus, v.kriterijus, l) : "";
@@ -446,7 +446,7 @@
     }
     if (f === "veiksmai" && typeof v === "object" && !Array.isArray(v)) {
       return en ? v.viso + (v.viso === 1 ? " action" : " actions") + ", " + v.atlikta + " done"
-        : v.viso + " " + linksnis(v.viso, "veiksmas", "veiksmai", "veiksmų") + ", atlikt" + linksnis(v.atlikta, "as", "i", "ų") + " " + v.atlikta;
+        : v.viso + " " + linksnis(v.viso, "veiksmas", "veiksmai", "veiksmų") + ", iš jų atlikt" + linksnis(v.atlikta, "as", "i", "ų") + " " + v.atlikta;
     }
     return reiksmesTekstas(f, v, l) || String(v);
   }
@@ -464,9 +464,9 @@
 
   /* Saugyklos įrašo sandara: { schema: skaičius, korteles: [] }. */
   function sandara(v) {
-    if (!v || typeof v !== "object" || Array.isArray(v)) return "tikėtasi objekto su kortelių sąrašu";
-    if (typeof v.schema !== "number") return "nėra schemos versijos";
-    if (!Array.isArray(v.korteles)) return "kortelių sąrašas nėra masyvas";
+    if (!v || typeof v !== "object" || Array.isArray(v)) return "įraše nėra kortelių sąrašo";
+    if (typeof v.schema !== "number") return "nenurodyta įrašo formato versija";
+    if (!Array.isArray(v.korteles)) return "netinkamas kortelių sąrašo formatas";
     return true;
   }
 
@@ -739,11 +739,11 @@
     var en = l === "en", out = [];
     var p = function (laukas, lt, eng) { out.push({ laukas: laukas, zinute: en ? eng : lt }); };
     if (!tekstas(k.pavadinimas)) p("pavadinimas", "Įrašykite pirkimo pavadinimą.", "Enter the procurement title.");
-    if (k.verte != null && !(k.verte > 0)) p("verte", "Vertė turi būti teigiama suma eurais be PVM.", "The value must be a positive amount in EUR excl. VAT.");
+    if (k.verte != null && !(k.verte > 0)) p("verte", "Numatoma vertė turi būti didesnė už nulį (eurais be PVM).", "The value must be a positive amount in EUR excl. VAT.");
     if (tekstas(k.bvpz) && !BVPZ.test(tekstas(k.bvpz))) p("bvpz", "BVPŽ kodas rašomas taip: 12345678-9.", "Write the CPV code like 12345678-9.");
-    if (tekstas(k.budas) && !(global.GP_METHODS && global.GP_METHODS.isValid(k.budas))) p("budas", "Pirkimo būdas nerastas klasifikatoriuje.", "The procedure is not in the classifier.");
-    if (tekstas(k.rezimas) && !REZIMAI[k.rezimas]) p("rezimas", "Režimas gali būti PĮ arba VPĮ.", "The regime can be PĮ or VPĮ.");
-    if (tekstas(k.vykdytojas) && !vykdytojas(k.vykdytojas)) p("vykdytojas", "Pirkimo vykdytojas nerastas registre.", "The contracting body is not in the register.");
+    if (tekstas(k.budas) && !(global.GP_METHODS && global.GP_METHODS.isValid(k.budas))) p("budas", "Tokio pirkimo būdo G-Procure būdų sąraše nėra.", "The procedure is not in the classifier.");
+    if (tekstas(k.rezimas) && !REZIMAI[k.rezimas]) p("rezimas", "Taikomas įstatymas gali būti PĮ arba VPĮ.", "The regime can be PĮ or VPĮ.");
+    if (tekstas(k.vykdytojas) && !vykdytojas(k.vykdytojas)) p("vykdytojas", "Tokio pirkimo vykdytojo G-Procure organizacijų sąraše nėra.", "The contracting body is not in the register.");
     if (tekstas(k.objektas) && !pav(OBJEKTAI, k.objektas, "lt")) p("objektas", "Objektas gali būti prekės, paslaugos arba darbai.", "The subject can be supplies, services or works.");
     if (k.trukmeMen != null && !(k.trukmeMen >= 1 && k.trukmeMen <= 600)) p("trukmeMen", "Trukmė - sveikas mėnesių skaičius nuo 1 iki 600.", "Duration is a whole number of months from 1 to 600.");
     ["pradzia", "paskelbimas", "sutartiesData"].forEach(function (f) {
@@ -753,7 +753,7 @@
       p("pasiulymuTerminas", "Terminas rašomas taip: 2026-10-02 15:00.", "Write the deadline like 2026-10-02 15:00.");
     if (Array.isArray(k.dalys)) k.dalys.forEach(function (d, i) {
       if (!tekstas(d.pavadinimas)) p("dalys", "Įrašykite " + (i + 1) + " dalies pavadinimą.", "Enter the title of lot " + (i + 1) + ".");
-      if (d.verte != null && !(d.verte > 0)) p("dalys", (i + 1) + " dalies vertė turi būti teigiama.", "The value of lot " + (i + 1) + " must be positive.");
+      if (d.verte != null && !(d.verte > 0)) p("dalys", (i + 1) + " dalies vertė turi būti didesnė už nulį.", "The value of lot " + (i + 1) + " must be positive.");
     });
     return out;
   }
@@ -773,7 +773,7 @@
       k.dalys.forEach(function (d) { if (d.verte > 0) suma += d.verte; else visos = false; });
       if (visos && Math.abs(suma - k.verte) > 0.5) out.push(en
         ? "The lot values add up to " + formatas(suma) + " EUR, the estimated value is " + formatas(k.verte) + " EUR."
-        : "Dalių vertės sudaro " + formatas(suma) + " EUR, o numatoma vertė - " + formatas(k.verte) + " EUR.");
+        : "Dalių verčių suma - " + formatas(suma) + " EUR, o numatoma vertė - " + formatas(k.verte) + " EUR.");
     }
     /* Būsena ir datos nesuderintos (2026-11-06, naujo naudotojo patikra): „Paskelbtas“, bet paskelbimo data ateityje arba pasiūlymų
        terminas jau praėjęs - kortelė pati nežino, kas padaryta, todėl tik primena. Vietinė data, ne UTC. */
