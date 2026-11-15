@@ -213,7 +213,7 @@
     return { ok: ok, atmesti: atmesti };
   }
   var PRAN = {
-    lt: { nerasta: "Modelio pateiktos citatos nerastos dokumentuose - atsakymas nerodomas kaip faktas.", dalis: "Dalis citatų nepatvirtinta ({n}) - patikimumas sumažintas.", konfl: "Modelis nurodė konfliktą, bet antrasis variantas dokumentuose nerastas - konfliktas nerodomas.", neivert: "Modelis šio punkto neįvertino." },
+    lt: { nerasta: "Modelio pateiktos citatos nerastos dokumentuose - atsakymas nerodomas kaip faktas.", dalis: "Dalis citatų nepatvirtinta ({n}) - patikimumas sumažintas.", konfl: "DI nurodė, kad šaltiniai prieštarauja, bet antrosios formuluotės dokumentuose nėra - prieštaravimas nerodomas.", neivert: "Modelis šio punkto neįvertino." },
     en: { nerasta: "The model's quotes were not found in the documents - the answer is not shown as fact.", dalis: "Some quotes were not verified ({n}) - confidence reduced.", konfl: "The model reported a conflict but the second variant was not found in the documents - the conflict is not shown.", neivert: "The model did not assess this item." }
   };
   function pran(lang, key, n) { return (PRAN[lang] || PRAN.lt)[key].replace("{n}", String(n || 0)); }

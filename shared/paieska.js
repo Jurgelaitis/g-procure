@@ -70,7 +70,7 @@
       lt: "Patikrinti parengtus dokumentus prieš skelbiant", en: "Check prepared documents before publication",
       kw: "tikrinti patikra parengtis skelbimas nuoseklumas palyginimas forma check readiness consistency publication" },
     { id: "ekonominis-naudingumas", irankis: "pp-cost-benefit", href: "PP-cost-benefit/ekonominio_naudingumo_skaiciuokle.html",
-      lt: "Sudaryti ekonominio naudingumo vertinimą", en: "Build a most economically advantageous tender evaluation",
+      lt: "Parengti pasiūlymų vertinimo metodiką (ekonominis naudingumas)", en: "Build a most economically advantageous tender evaluation",
       kw: "vertinimas kriterijai svoriai balai ekonomiškai naudingiausias kokybė metodika MEAT criteria weights scoring" },
     { id: "kna", irankis: "pp-cost-benefit", href: "PP-cost-benefit/kastu_naudos_analize.html",
       lt: "Atlikti kaštų ir naudos analizę", en: "Run a cost-benefit analysis",

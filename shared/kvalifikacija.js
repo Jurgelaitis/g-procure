@@ -109,8 +109,8 @@
       pajamuMetai: "SPS pajamas vertina per {n} finansinius metus, o Metodikoje - daugiausia {max} (paprastai {pap}).",
       objDarbai: "darbams", objPrekes: "prekėms ir paslaugoms", vertes: "numatomos vertės", metines: "didžiausios metinės vertės",
       beObj: "nežinoma pirkimo objekto rūšis (pasirinkite kortelę arba įkelkite skelbimą)", misrus: "mišrus pirkimas - patirties reikalavimai kiekvienai objekto daliai atskirai",
-      beVert: "nėra numatomos vertės (pasirinkite pirkimo kortelę; skelbime ji nurodoma retai)", beReik: "SPS tiekėjo patirties ar pajamų reikalavimų su metais ar sumomis neradau (specialistų reikalavimai netikrinami)",
-      beSps: "nėra SPS", beSumos: "reikalavime neradau sumos", rasta: "rasta: {s}", patirtis: "patirtis per {n} m.", pajamosR: "pajamos", eur: "Eur"
+      beVert: "nėra numatomos vertės (pasirinkite pirkimo kortelę; skelbime ji nurodoma retai)", beReik: "SPS tiekėjo patirties ar pajamų reikalavimų su metais ar sumomis nerasta (specialistų reikalavimai netikrinami)",
+      beSps: "nėra SPS", beSumos: "reikalavime suma nerasta", rasta: "rasta: {s}", patirtis: "patirtis per {n} m.", pajamosR: "pajamos", eur: "Eur"
     },
     en: {
       laikotarpis: "The SPS requires the supplier's experience over the last {n} years, while the Methodology sets the last {norma} years {obj}. A longer period is possible where needed to ensure adequate competition (e.g. similar objects are procured rarely and very few suppliers fall within {norma} years) - keep that justification and assess whether the older experience remains relevant.",

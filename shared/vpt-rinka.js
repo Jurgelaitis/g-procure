@@ -44,7 +44,7 @@
       mano: "Jūsų grafike „{p}“ - {kd} kal. d. nuo paskelbimo ({dd} d. d.).", manoDd: "Jūsų grafike „{p}“ - {dd} d. d. (kalendorines dienas matysite įrašę pradžios datą).",
       manoMed: " Panašių CVP IS pirkimų, vykdytų jūsų būdu, mediana - {m} kal. d.",
       sistemos: "Dinaminės pirkimų sistemos ir kvalifikacijos sistemos lentelėje nerodomos: jų terminas CVP IS - sistemos galiojimo pabaiga.",
-      istatymas: "PĮ ir VPĮ prie derybų - pagal VPT procedūros pavadinimą: vienus vartoja sektorinės direktyvos (PĮ), kitus - klasikinės direktyvos (VPĮ) pirkimai; neskelbiamų derybų (VPĮ) eilutėje yra ir keli gynybos pirkimai.",
+      istatymas: "PĮ ir VPĮ prie derybų - pagal VPT procedūros pavadinimą: vienus pavadinimus vartoja pirkimai pagal sektorinę direktyvą (PĮ), kitus - pagal klasikinę (VPĮ); neskelbiamų derybų (VPĮ) eilutėje yra ir keli gynybos pirkimai.",
       pastaba: "Faktai iš viešų VPT CVP IS duomenų, ne teisės normos: trumpiausius terminus nustato įstatymas. Kvantiliai rodomi, kai yra bent 5 pirkimai; „pusė pirkimų“ - tarp 25 ir 75 procentilio. Kelių etapų pirkimuose (derybos, ribotas konkursas, dialogas) CVP IS terminas gali būti ir vėlesnio etapo. Laikotarpis skaičiuojamas nuo paskelbimo CVP IS; tarptautinio pirkimo įstatymo terminai skaičiuojami nuo skelbimo išsiuntimo iš VPT, kuris būna iki 5 d. anksčiau, todėl tokių pirkimų laikotarpis čia gali būti trumpesnis už įstatymo minimumą."
     },
     en: {

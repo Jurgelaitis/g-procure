@@ -193,7 +193,7 @@
       var myg = r.mygtukas || (en ? "Reload" : "Perkrauti");
       // „Ar puslapyje“ - ir tame pačiame skirtuke: grįžus atgal naršyklės mygtuku atkuriamas senas puslapis
       if (r.juosta) return en ? kas + " changed in another tab or page of this browser. Press \u201C" + myg + "\u201D to see the latest - until then, changes here are not saved, so as not to overwrite those."
-                              : kas + " pakeisti kitame šios naršyklės skirtuke ar puslapyje. Spauskite „" + myg + "“, kad matytumėte naujausius - iki tol pakeitimai čia neišsaugomi, kad nebūtų perrašyti anie.";
+                              : kas + " pakeisti kitame šios naršyklės skirtuke ar puslapyje. Spauskite „" + myg + "“, kad matytumėte naujausius - iki tol pakeitimai šiame lange neišsaugomi, kad neperrašytų kitame skirtuke padarytų pakeitimų.";
       // Trumpas (modulio „Neišsaugota“ juostai) - be mygtuko: jis gali būti jau nuimtas, o pavadinimas - kitos kalbos (šeštoji peržiūra)
       return en ? "Not saved: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " changed in another tab or page of this browser, so it is not overwritten here."
                 : "Neišsaugota: " + kas.charAt(0).toLowerCase() + kas.slice(1) + " pakeisti kitame šios naršyklės skirtuke ar puslapyje, todėl čia neperrašomi.";
@@ -214,7 +214,7 @@
       // Techninė JSON klaida („Unterminated string in JSON at position 200“) žmogui nieko nesako (2026-11-06) - tik priežasties rūšis
       return "Išsaugotų duomenų " + ka + " perskaityti nepavyko (" + (r.kodas === "json" ? "įrašas sugadintas" : r.klaida) + "). Jie nedingo: " +
         (r.kopija ? "kopija išsaugota atskirai ir pateks į atsarginę kopiją. " : "") +
-        "Duomenų būsena nežinoma - galite atkurti juos iš atsarginės kopijos arba tęsti nuo tuščio.";
+        "Duomenų būsena nežinoma - galite atkurti juos iš atsarginės kopijos arba pradėti iš naujo (be ankstesnių duomenų).";
     }
     if (r.busena === "neprieinama") {
       return "Naršyklės saugykla neprieinama (" + r.klaida + ") - išsaugotų duomenų " + ka +

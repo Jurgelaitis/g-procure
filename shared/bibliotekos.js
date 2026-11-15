@@ -24,8 +24,8 @@
 
   var TEKSTAI = {
     lt: {
-      veiksmas: "Nepavyko įkelti bibliotekos „{p}“, todėl šis veiksmas negalimas. Priežastis: nėra interneto ryšio, o ši biblioteka šioje naršyklėje dar neišsaugota darbui be interneto. Perkraukite puslapį, kai ryšys bus; jei kartojasi - kreipkitės į IT.",
-      diagrama: "Diagrama nerodoma: nepavyko įkelti bibliotekos „{p}“ (nėra ryšio, o biblioteka dar neišsaugota darbui be interneto). Perkraukite puslapį, kai ryšys bus."
+      veiksmas: "Nepavyko įkelti bibliotekos „{p}“, todėl šis veiksmas negalimas. Priežastis: nėra interneto ryšio, o ši biblioteka šioje naršyklėje dar neišsaugota darbui be interneto. Perkraukite puslapį, kai vėl prisijungsite prie interneto; jei kartojasi - kreipkitės į IT.",
+      diagrama: "Diagrama nerodoma: nepavyko įkelti bibliotekos „{p}“ (nėra ryšio, o biblioteka dar neišsaugota darbui be interneto). Perkraukite puslapį, kai vėl prisijungsite prie interneto."
     },
     en: {
       veiksmas: "The “{p}” library could not be loaded, so this action is unavailable. Reason: no internet connection, and this library has not yet been saved in this browser for offline use. Reload the page when the connection is back; if it persists, contact IT.",

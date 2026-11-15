@@ -505,7 +505,7 @@
     }
     if (r.datos.isigalioja) {
       var ateitis = r.datos.isigalioja > d;
-      var reiksme = r.datos.taikoma || (turiPereinamasias(r) ? t("yra pereinamosios nuostatos - žr. detales", "transitional provisions apply - see details") : "");
+      var reiksme = r.datos.taikoma || (turiPereinamasias(r) ? t("taikoma su pereinamosiomis nuostatomis", "transitional provisions apply - see details") : "");
       return { zyma: ateitis ? t("Įsigalioja", "Enters into force") : t("Galioja nuo", "In force since"), data: r.datos.isigalioja, reiksme: reiksme, ateitis: ateitis };
     }
     var kita = r.datos.priimta || r.datos.paskelbta;
@@ -1063,7 +1063,7 @@
           visi: "Visi pokyčiai", atverti: "Atverti stebėseną", isigalios: "Įsigalios", pasikeite: "Pasikeitė", projektas: "Projektas",
           laukia: "laukia specialisto patvirtinimo", nepatvirtinta: "paaiškinimas nepatvirtintas", patikrinta: "Rinkinys patikrintas",
           pasenes: "Rinkinys pasenęs - paskutinė patikra prieš {n} d.",
-          nera: "Šio modulio kontekste įrašų nėra", moduliui: "Aktualu šiam moduliui", offline: "Be interneto - rodomas atsisiųstas rinkinys",
+          nera: "Su šiuo įrankiu susietų įrašų nėra", moduliui: "Aktualu šiam įrankiui", offline: "Be interneto - rodomas atsisiųstas rinkinys",
           be_datos: "data nenurodyta", tuscias: "Registre įrašų nėra",
           paskirtis: "Kas keičiasi PĮ ir VPĮ pirkimuose: teisės aktai, VPT dokumentai ir teismų praktika",
           beprioriteto: "Aktualūs įrašai portalui dar neparinkti: redakcinį prioritetą įrašui suteikia administratorius (PP-teise/admin.html), automatiškai jis neskaičiuojamas. Visą registrą rasite stebėsenos puslapyje.",
@@ -1076,7 +1076,7 @@
           liecia: "Liečia", bendra: "bendra informacija", nauja: "nauja - analizė rengiama",
           pirkimui: "Teisės pokyčiai šiam pirkimui", pirkimuiNera: "Su šiuo įrankiu susietų ir šiam pirkimui aktualių įrašų registre nėra.",
           neaktualus: "Pagal jūsų atsakymus neaktualūs", kaDaryti: "Ką daryti", kaPatikrinti: "Ką patikrinti",
-          galimai: "galimai aktualu", nenustatyta: "aktualumas nenustatytas", negalima: "Teisės pokyčių šiam pirkimui patikrinti negalima." },
+          galimai: "gali būti aktualu", nenustatyta: "aktualumas nenustatytas", negalima: "Teisės pokyčių šiam pirkimui patikrinti negalima." },
     en: { pav: "Procurement law monitoring", kraunama: "Loading...", klaida: "Could not load monitoring data",
           visi: "All changes", atverti: "Open monitoring", isigalios: "Enters into force", pasikeite: "Changed", projektas: "Draft",
           laukia: "awaiting specialist confirmation", nepatvirtinta: "explanation not confirmed", patikrinta: "Set checked",

@@ -76,7 +76,7 @@
     var SAUG = /[?&]saugykla=testine(&|$)/.test(global.location ? global.location.search : "") ? atmintis() : null;
     var Z = { busena: "nera", irasai: [], klaida: "" }, steb = { atvira: false, valyti: false };
 
-    /* Stebėjimo įrašai naršyklėje */
+    /* Tobulinimo įrašai naršyklėje */
     function skaitykZurnala() {
       if (!global.GP_SAUGYKLA) { Z = { busena: "neprieinama", irasai: [], klaida: "saugyklos modulis neįkeltas" }; return Z; }
       var r = global.GP_SAUGYKLA.skaityk(RAKTAS, { saugykla: SAUG, tikrink: tikrinkZurnala });
@@ -111,7 +111,7 @@
       Z = w.ok ? { busena: "yra", irasai: irasai, klaida: "" } : { busena: "klaida", irasai: Z.irasai, klaida: w.klaida || "įrašyti nepavyko" };
     }
     function atsisiusk() {
-      var turinys = { schema: 1, aprasas: "G-Procure PP-salygos: sutarčių parinkimo stebėjimo įrašai (ką siūlė sistema ir ką pasirinko žmogus)",
+      var turinys = { schema: 1, aprasas: "G-Procure PP-salygos: sutarčių parinkimo tobulinimo įrašai (ką siūlė sistema ir ką pasirinko žmogus)",
                       eksportuota: siandien(), variklis: G.versija, irasai: Z.irasai };
       var blob = new global.Blob([JSON.stringify(turinys, null, 2)], { type: "application/json" });
       var a = doc.createElement("a"), url = global.URL.createObjectURL(blob);
@@ -129,13 +129,13 @@
     function stebejimoHtml() {
       var n = Z.irasai.length, h = '<details class="sb-steb" id="sbSteb"' + (steb.atvira ? " open" : "") + "><summary>";
       if (Z.busena === "sugadinta" || Z.busena === "neprieinama" || Z.busena === "klaida")
-        h += "Stebėjimo įrašai: " + (Z.busena === "klaida" ? "paskutinio įrašyti nepavyko" : "neperskaitomi - nauji neįrašomi") + "</summary>" +
+        h += "Tobulinimo įrašai: " + (Z.busena === "klaida" ? "paskutinio įrašyti nepavyko" : "neperskaitomi - nauji neįrašomi") + "</summary>" +
              '<div class="sb-isp">Priežastis: ' + esc(Z.klaida) + "." + (Z.busena === "sugadinta" ? " Neperskaitomas įrašas išsaugotas atskira kopija." : "") + "</div>";
-      else if (!sutikta()) h += "Stebėjimo įrašai: nekaupiami - nėra jūsų sutikimo" + (n ? " (sukaupta anksčiau: " + n + ")" : "") + "</summary>" +
+      else if (!sutikta()) h += "Tobulinimo įrašai: nekaupiami - nėra jūsų sutikimo" + (n ? " (sukaupta anksčiau: " + n + ")" : "") + "</summary>" +
         '<div class="sb-isp" id="sbSutikimasT">Šie įrašai kaupiami tik jums sutikus: slapukų nustatymuose įjunkite „Tobulinimo įrašai“. ' +
         (n ? "Anksčiau sukaupti įrašai lieka, kol juos ištrinsite. " : "") +
         (global.GP_SUTIKIMAS ? "" : "Slapukų sutikimo modulis neįkeltas - įrašai nekaupiami.") + "</div>";
-      else h += "Stebėjimo įrašai šioje naršyklėje: " + n + "</summary>";
+      else h += "Tobulinimo įrašai šioje naršyklėje: " + n + "</summary>";
       h += '<div class="sb-steb-t">' + (sutikta() ? "Kai" : "Jei sutiksite: kai") + ' atsakote į klausimą ar pasirenkate sutartį, šioje naršyklėje įsimenama: pirkimo pavadinimas, objekto tipas, BVPŽ, ' +
            "kalba, pirkimo būdas, ką siūlė sistema, jūsų atsakymai į klausimus ir ką pasirinkote (vienas įrašas šiam puslapio atvėrimui). " +
            "Įrašai niekur nesiunčiami ir naudojami sutarčių parinkimo taisyklėms tikslinti - atsisiųstą failą galite perduoti G-Procure rengėjui. " +
@@ -283,7 +283,7 @@
           else h += '<div class="sb-dok" id="sbEn">Anglų kalbos tekstas: specialiosiose sąlygose - parengtas naudojant DI (Claude) pagal VPT vertimų ir ES pirkimų ' +
             "terminiją, bendrosiose - VPT neoficialus vertimas su suvienodintais terminais; vertėjas netikrino. DI požymis įrašomas Word failų savybėse.</div>";
         } else if (z.some(function (x) { return x && x.busena === "klaida"; }))
-          h += '<div class="sb-isp">Nepavyko patikrinti, ar anglų tekste liko nepatikrintų vertimo vietų (šablono žemėlapis neįkeltas).</div>';
+          h += '<div class="sb-isp">Nepavyko patikrinti, ar anglų tekste liko nepatikrintų vertimo vietų (sutarties šablono aprašas neįkeltas).</div>';
       }
       return h;
     }
@@ -337,7 +337,7 @@
           var past = (S.zmogaus ? [] : r.pastabos || []).filter(function (p) { return !/tuščias/.test(p); });
           if (S.zmogaus && neparuosta) past.push(S.d.rezimas === "VPI"
             ? "Centralizuotam pirkimui pagal VPĮ sutarties projektas kol kas nesiūlomas - VPĮ pirkimų sutarties forma dar nenuspręsta."
-            : "Šios šeimos šablonas generatoriui dar neparuoštas.");
+            : "Šios sutarties šablonas generatoriui dar neparuoštas.");
           if (S.zmogaus && G.SEIMOS[g.seima] && G.SEIMOS[g.seima].atkurta && G.ATKURTA_PASTABA) past.push(G.ATKURTA_PASTABA);   // pasirinkta ranka - pastaba lieka
           past.forEach(function (p) { h += '<div class="sb-past">' + esc(p) + "</div>"; });
           h += dokumentuHtml();

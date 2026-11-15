@@ -121,12 +121,12 @@
     var data = parseJsonLoose(text);
 
     if (!data || typeof data !== "object") {
-      return { status: "error", error: T("DI atsakymas ne JSON formato", "The AI response is not in JSON format"), raw: text };
+      return { status: "error", error: T("DI atsakymas netinkamo formato", "The AI response is not in JSON format"), raw: text };
     }
 
     var st = data.status;
     if (st !== "found" && st !== "not_found" && st !== "ambiguous") {
-      return { status: "error", error: T("Nežinomas status: ", "Unknown status: ") + st, raw: text };
+      return { status: "error", error: T("DI atsakymas neatpažintas, būsena: ", "Unknown status: ") + st, raw: text };
     }
 
     if (st === "not_found") {
@@ -160,7 +160,7 @@
         quote: mod.sarasas.map(function (m) { return m.quote; }).join(" | ") });
     }
     if (value === null || value < 0) {
-      return { status: "error", error: T("Rasta reikšmė ne teigiamas skaičius", "The value found is not a positive number"), raw: text };
+      return { status: "error", error: T("Rasta reikšmė nėra teigiamas skaičius", "The value found is not a positive number"), raw: text };
     }
     if (!data.quote || !String(data.quote).trim()) {
       // Be citatos nepriimam - žmogus negali patikrinti.

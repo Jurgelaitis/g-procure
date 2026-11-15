@@ -197,8 +197,8 @@
   /* Pastabos žmogui - LT arba EN (kalba - trečias atpažinimo argumentas); citatos - visada iš skelbimo. */
   var PASTABOS = {
     lt: { neregistre: "Pirkėjas „{p}“ organizacijų registre nerastas - vykdytojo nesiūlome.",
-          abuRezimai: "Skelbime yra ir PĮ, ir VPĮ požymių - režimo nesiūlome, patikrinkite skelbimo formą.",
-          beDirektyvos: "Skelbimo teisinis pagrindas - „Kitas“ (direktyva netaikoma), todėl skelbimo forma („{f}“) įstatymo nenurodo - režimo iš skelbimo nesiūlome. Kurį įstatymą taiko pirkimas, nurodo pirkimo dokumentai.",
+          abuRezimai: "Skelbime yra ir PĮ, ir VPĮ požymių - taikomo įstatymo nesiūlome, patikrinkite skelbimo formą.",
+          beDirektyvos: "Skelbimo teisinis pagrindas - „Kitas“ (direktyva netaikoma), todėl skelbimo forma („{f}“) įstatymo nenurodo - jo iš skelbimo nesiūlome. Kurį įstatymą taiko pirkimas, nurodo pirkimo dokumentai.",
           failoVardas: "failo vardas: ", numeris: "Patikrinkite numerį skliaustuose: iš PDF brūkšneliai (pvz. „VPP-268“) dingsta.",
           failas: " · failas: ", nacionalinis: "nacionalinis skelbimas", tarptautinis: "skelbimas apie pirkimą",
           variantas: "Variantas ({r}) - pagal skelbimo rūšį failo varde.", rusis: { supaprastintas: "supaprastintas", tarptautinis: "tarptautinis" },

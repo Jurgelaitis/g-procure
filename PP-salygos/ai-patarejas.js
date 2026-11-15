@@ -382,7 +382,7 @@
      (ne nutruke del ilgio): 2026-10-18 su tikrais paketais taip pasitaike 1 is 6 uzklausu, o kartojant atsakymas buvo tvarkingas. */
   function analizuoti(opts) {
     opts = opts || {};
-    if (!root.GP_AI_PROXY) return Promise.reject(new Error("DI tarpinė neprijungta"));
+    if (!root.GP_AI_PROXY) return Promise.reject(new Error("Ryšio su DI nėra"));
     var klausimai = opts.klausimai || [], saltiniai = opts.saltiniai || [];
     if (!klausimai.length) return Promise.reject(new Error("Nėra klausimų, į kuriuos DI galėtų pasiūlyti atsakymą"));
     if (!saltiniai.length) return Promise.reject(new Error("Neįkeltas nė vienas dokumentas"));

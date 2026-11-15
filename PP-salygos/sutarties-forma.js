@@ -149,7 +149,7 @@
     var k = kainaProjekte(R);
     if (!k) return false;
     if (k.klaida === "suma") { truksta.push("Ar sutarties projekte nurodoma maksimali sutarties kaina (" + kur + ")? - Maksimali sutarties kaina be PVM, eurais (neatpažinta suma)"); return false; }
-    if (k.klaida === "tarifas") { pastaba(perspejimai, "Maksimali sutarties kaina neįrašyta - neįkeltos bendros vertės ribos (shared/thresholds.js), PVM apskaičiuoti negalima.", [{ q: "maks_kaina" }]); return false; }
+    if (k.klaida === "tarifas") { pastaba(perspejimai, "Maksimali sutarties kaina neįrašyta - nepavyko įkelti PVM tarifo, todėl PVM apskaičiuoti negalima.", [{ q: "maks_kaina" }]); return false; }
     if (k.klaida) return false;
     if (vietos.length !== 3) { perspejimai.push("Formoje nerastos trys kainos vietos (" + kur + ") - maksimali sutarties kaina neįrašyta; patikrinkite šablono redakciją."); return false; }
     [k.be, k.pvm, k.su].forEach(function (v, j) {
@@ -1812,7 +1812,7 @@
     // formoje šios dvi eilutės tuščios, kiti Užsakovo rekvizitai įrašyti) - iš organizacijų registro (shared/organizacijos.js)
     var rek = uzsakovoRekvizitai();
     if (rek) { nust(pild("7.1", /^_+$/), { tekstas: rek.saskaita }); nust(pild("7.1", /^Bankas$/), { tekstas: "Bankas " + rek.bankas + ", banko kodas " + rek.bankoKodas }); }
-    else perspejimai.push("Užsakovo sąskaita ir bankas (7.1 punktas) neįrašyti - neįkeltas organizacijų registras (shared/organizacijos.js).");
+    else perspejimai.push("Užsakovo sąskaita ir bankas (7.1 punktas) neįrašyti - nepavyko įkelti organizacijų rekvizitų; įkelkite puslapį iš naujo.");
     // 1.2 investicinis projektas
     if (R.pp_investicinis === "ne") nust(nepr("investicinis_projektas"), { tekstas: NETAIKOMAS });
     else if (R.pp_investicinis === "taip")
@@ -1835,7 +1835,7 @@
       // priežiūra neperkama: 3.8 p. - „Punktas netaikomas.“, 4.1 p. kainos eilutė - „... - netaikoma.“, 2.1 p. - be žodžių apie priežiūrą
       var b38 = nepr("priežiūra"), b41 = nepr("priežiūros_kaina"), f21 = V.filter(function (x) { return x.raktas === "f:priežiūra_dalyke"; })[0];
       if (b38 && b41 && f21) { nust(b38, { tekstas: NETAIKOMAS }); nust(b41, { tekstas: PP_PRIEZIUROS_KAINA }); nust(f21, "salinti"); }
-      else perspejimai.push("Formos žemėlapyje nerastos projekto vykdymo priežiūros vietos (2.1, 3.8 ar 4.1 punktas) - atsakymas „Ne“ neįrašytas; patikrinkite šablono redakciją.");
+      else perspejimai.push("Formos apraše nerastos projekto vykdymo priežiūros vietos (2.1, 3.8 ar 4.1 punktas) - atsakymas „Ne“ neįrašytas; patikrinkite šablono redakciją.");
       if (R.pp_uztikrinimas === "abu") pastaba(perspejimai, "Projekto vykdymo priežiūros paslaugos neperkamos, o SS 6.1 punkte pasirinktas užtikrinimas ir pagal BS 7.5.2 punktą (projekto vykdymo priežiūros paslaugoms). Patikrinkite SS 6.1 punkto atsakymą.",
         [{ q: "pp_uztikrinimas" }]);
     } else if (R.pp_prieziura_taikoma === "taip") {
@@ -1916,7 +1916,7 @@
       DM_REKV.forEach(function (e) { var x = pild("parašai", e[0], 0), v = e[1](rek); if (x && v) nust(x, { tekstas: x.tekstas + " " + v }); });
       var xr = pild("parašai", /^Duomenys apie asmenį kaupiami:$/, 0);
       if (xr && reg) nust(xr, { tekstas: xr.tekstas + " " + reg });
-    } else perspejimai.push("Užsakovo rekvizitai (lentelė prieš parašus) neįrašyti - neįkeltas organizacijų registras (shared/organizacijos.js).");
+    } else perspejimai.push("Užsakovo rekvizitai (lentelė prieš parašus) neįrašyti - nepavyko įkelti organizacijų rekvizitų; įkelkite puslapį iš naujo.");
     // 1.1 Techninės specifikacijos priedo numeris, 1.2 aktas
     irasyk(pild("1.1", /^\[\.\.\.\]$/), dmPriedoNr(Z, /^Techninė specifikacija/));
     var va = vald("1.2"), ka = { aktas: /^Atliktų darbų aktą$/, paskutinis: /^paskutinį Atliktų darbų aktą$/ }[R.dm_aktas];
@@ -2060,7 +2060,7 @@
       var b = nepr(id);
       if (b) { nust(b, { tekstas: zodis }); return true; }
       vt(eilute).forEach(function (x) { irasyk(x, ""); });
-      perspejimai.push("Formos žemėlapyje nerasta " + eilute + " eilutės dalis, kuri taikoma ne visada - „" + zodis + "“ neįrašyta; patikrinkite šablono redakciją.");
+      perspejimai.push("Formos apraše nerasta " + eilute + " eilutės dalis, kuri taikoma ne visada - „" + zodis + "“ neįrašyta; patikrinkite šablono redakciją.");
       return false;
     };
 
@@ -2477,8 +2477,8 @@
       var h = '<section class="lk-sutartis" aria-labelledby="sfH"><h3 id="sfH">Sutarties projektas: ' + esc(ctx.pavadinimasSutarties || "") +
         ' <span class="pz-nepriv">bandomoji</span></h3><div class="hint">Klausimai sutarties specialiosioms sąlygoms (SS)' + (PPS(ctx) ? " ir jų 3 priedui" : "") + '. Bendrosios sąlygos generuojamos be pakeitimų. ' +
         "Siūlomos reikšmės - iš jau įvestų duomenų (1 žingsnis, pirkimo kortelė, 2 žingsnio SPS atsakymai) ir LITGRID standartų; jas patvirtinate jūs.</div>";
-      if (krauna){ vieta.innerHTML = h + '<div class="cite">Kraunamas sutarties šablono žemėlapis...</div></section>'; if (o.poPiesimo) o.poPiesimo(); return; }
-      if (klaida){ vieta.innerHTML = h + '<div class="lk-ispejimas">Sutarties šablono žemėlapio įkelti nepavyko (' + esc(klaida) + ") - sutarties projektas nebus sugeneruotas.</div></section>"; if (o.poPiesimo) o.poPiesimo(); return; }
+      if (krauna){ vieta.innerHTML = h + '<div class="cite">Kraunamas sutarties šablono aprašas...</div></section>'; if (o.poPiesimo) o.poPiesimo(); return; }
+      if (klaida){ vieta.innerHTML = h + '<div class="lk-ispejimas">Sutarties šablono aprašo įkelti nepavyko (' + esc(klaida) + ") - sutarties projektas nebus sugeneruotas.</div></section>"; if (o.poPiesimo) o.poPiesimo(); return; }
       var qs = klausimai(Z, ctx, A), sp = sprendimai(Z, ctx, A);
       var siul = qs.filter(function (q) { return q.busena === "siuloma"; }), nu = qs.filter(function (q) { return q.busena === "neuzpildyta"; });
       h += '<div class="lk-sa"><b>Sutarties klausimai:</b> ' + qs.length + " · patvirtinta " + qs.filter(function (q) { return q.busena === "patvirtinta"; }).length +
@@ -2596,7 +2596,7 @@
       // juodraščio atkūrimas (2026-10-15): tie patys atsakymai su būsenomis - patvirtinta lieka patvirtinta, siūlomos skaičiuojamos iš naujo
       atkurk: function (x) { A = x && typeof x === "object" && !Array.isArray(x) ? JSON.parse(JSON.stringify(x)) : {}; return atnaujink(); },
       busena: function () {
-        if (!ctx || !ctx.sablonai || !Z) return { paruosta: false, priezastis: !ctx || !ctx.sablonai ? (ctx && ctx.priezastis) || "sutartis nepasirinkta" : klaida || "kraunamas šablono žemėlapis" };
+        if (!ctx || !ctx.sablonai || !Z) return { paruosta: false, priezastis: !ctx || !ctx.sablonai ? (ctx && ctx.priezastis) || "sutartis nepasirinkta" : klaida || "kraunamas šablono aprašas" };
         var sp = sprendimai(Z, ctx, A), qs = klausimai(Z, ctx, A);
         // DI reikšmės, kurios pateks į dokumentą: siūlomos iš dokumentų ir patvirtintos nepakeistos (Word failo DI požymiams)
         var diK = qs.filter(function (q) { var a = A[q.id]; return (q.busena === "siuloma" && q.siuloma && q.siuloma.di) || (a && a.di && a.di.klausimas && a.reiksme === a.di.reiksme && q.reiksme === a.reiksme); });

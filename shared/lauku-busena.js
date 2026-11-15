@@ -52,7 +52,7 @@
               en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] };
   var T = {
     lt: { sk: "Skaičius neatpažintas - reikšmė neįrašyta. Rašykite be tarpų ir tūkstančių skyriklių, pvz., 14900.50.",
-          skyr: "Laukas priėmė {v} - patikrinkite. Skaičiuje nerašykite kablelių ir tarpų, dešimtainei daliai - taškas, pvz., 14900.50.",
+          skyr: "Lauke įrašyta reikšmė: {v} - patikrinkite. Skaičiuje nerašykite kablelių ir tarpų, dešimtainei daliai - taškas, pvz., 14900.50.",
           min: "Ne mažiau kaip {x}.", max: "Ne daugiau kaip {x}.", sveikas: "Įrašykite sveiką skaičių.",
           priv: "Privalomas laukas - įrašykite reikšmę.", pastas: "El. pašto adresas neatpažintas, pvz., vardas@imone.lt.",
           siandien: "šiandien", po: "po {n} darbo {d}", pries: "prieš {n} darbo {d}", poilsis: " - poilsio diena", svente: " - šventinė diena, ne darbo diena" },

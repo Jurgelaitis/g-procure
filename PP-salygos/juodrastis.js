@@ -109,7 +109,7 @@
     var j;
     try { j = JSON.parse(tekstas); } catch (e) { return { ok: false, klaida: "failas nėra JSON" }; }
     if (!j || j.tipas !== TIPAS) return { ok: false, klaida: "tai ne pirkimo sąlygų juodraščio failas" };
-    if (j.schema !== SCHEMA) return { ok: false, klaida: "failas parengtas kitos versijos moduliu (schema " + esc(j.schema) + ")" };
+    if (j.schema !== SCHEMA) return { ok: false, klaida: "failas parengtas kita įrankio versija (formatas " + esc(j.schema) + ")" };
     var t = tikrink(j.juodrastis);
     if (t !== true) return { ok: false, klaida: "juodraštis faile netinkamas: " + t };
     return { ok: true, irasas: j.juodrastis };
@@ -144,7 +144,7 @@
     function tekstoBusena() {
       var b = busena;
       if (b.kodas === "kitas-skirtukas") return '<span class="jd-kl" role="alert">Šį juodraštį pakeitė kitas skirtukas - šio lango pakeitimai neįrašyti, kad neperrašytų ' +
-        "kito skirtuko darbo. Perkraukite puslapį ir tęskite juodraštį (bus atvertas naujausias) arba atsisiųskite šio lango juodraštį failu.</span>";
+        "kito skirtuko darbo. Įkelkite puslapį iš naujo ir tęskite juodraštį (bus atvertas naujausias) arba atsisiųskite šio lango juodraštį failu.</span>";
       if (b.kodas === "klaida") return '<span class="jd-kl" role="alert">Juodraščio išsaugoti nepavyko: ' + esc(b.klaida) +
         ". Atsakymai lieka tik šiame lange - atsisiųskite juodraštį failu, kad jų neprarastumėte.</span>";
       return "";

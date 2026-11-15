@@ -62,7 +62,7 @@
   var keyHandler = null;
 
   var UI = {
-    lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Detali instrukcija",
+    lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Išsami instrukcija",
           trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumas", cookies: "Slapukų nustatymai" },
     en: { collapse: "Collapse", expand: "Expand", more: "Learn more", close: "Close", aria: "Information panel", dialog: "Detailed guide",
           trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy", cookies: "Cookie settings" }

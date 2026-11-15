@@ -155,7 +155,7 @@
   // Patogumo funkcija: is bendra SESD tiesiai i PP-ESG.
   function exportTotal(storage, totalKg, opts) {
     var point = buildEsrsPoint(totalKg, opts);
-    if (point.coverage === null) return { point: point, error: "Padengimas turi būti skaičius nuo 0 iki 100 %" };
+    if (point.coverage === null) return { point: point, error: "Aprėptis turi būti skaičius nuo 0 iki 100 %" };
     var res = upsertToEsg(storage, point);
     return Object.assign({ point: point }, res);
   }

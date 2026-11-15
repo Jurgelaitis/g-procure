@@ -116,7 +116,7 @@
       var zem = null;
       try { zem = await cfg.gaukJson((ir.sutartis ? "zemelapiai/sutartys/" : "zemelapiai/") + id + ".json"); } catch (e) { zem = null; }
       if (!ir.sutartis) { grafikoVieta(r.pastraipos); return { id: id, ps: r.pastraipos, zem: zem }; }
-      if (!zem) throw new Error("sutarties šablono žemėlapio " + id + " įkelti nepavyko");
+      if (!zem) throw new Error("sutarties šablono aprašo " + id + " įkelti nepavyko");
       var sz = await sutartiesVietos(buf, zem);
       r.pastraipos.forEach(function (x) {
         if (sz.vieta[x.i]) x.vieta = true;
@@ -794,7 +794,7 @@
     var h = ankstesnesJuosta();
     var g = grupeHtml("kliutis", "Kliūtys - taisykite prieš tvirtindami ir skelbdami") + grupeHtml("nukrypimas", "Nukrypimai nuo standartinės formos") +
             grupeHtml("tikrinti", "Patikrinkite") + grupeHtml("rekomendacija", "Rekomendacijos");
-    h += g || '<p class="tk-tuscia">Kliūčių, nukrypimų nuo formos ir abejotinų vietų nerasta - visos atliktos patikros praėjo (žr. „Visos patikros“, ko nepatikrinta).</p>';
+    h += g || '<p class="tk-tuscia">Kliūčių, nukrypimų nuo formos ir abejotinų vietų nerasta - atliktose patikrose pastabų nerasta (žr. „Visos patikros“, ko nepatikrinta).</p>';
     var info = B.radiniai.filter(function (r) { return r.lygis === "info"; });
     if (info.length) h += '<details class="tk-info"><summary>Informacija (' + info.length + ")</summary>" + info.map(radinioHtml).join("") + "</details>";
     return h;
@@ -830,9 +830,9 @@
     var kaip = x.pagalPasa ? "Sugeneruota šiuo moduliu - lyginama pagal generavimo pasą (" + (x.pasas.data || "data nenurodyta") + (x.pasoVersija === "kita" ? "; sugeneruota iš ankstesnės formos versijos" : "") + ")"
       : (x.pagal === "atpazinta" && B.formos[d.id] === undefined ? "Forma atpažinta: " : "Forma pasirinkta: ") + formosPav(x.forma) +
         (x.idf && x.idf[0] && x.idf[0].id === x.forma ? " (panašumas " + Math.round(x.idf[0].balas * 100) + " %; siūloma - patikrinkite)" : "");
-    return kaip + ". Pastraipų: nepakeistos " + s.vienodos + ", nukrypimai " + s.nukrypimas + ", laukiami pakeitimai " + (s.neprivaloma + s.uzpildyta + s.techninis) + "." +
+    return kaip + ". Pastraipų: nepakeistos " + s.vienodos + ", nukrypimai " + s.nukrypimas + ", leistini pakeitimai " + (s.neprivaloma + s.uzpildyta + s.techninis) + "." +
       (x.rez.senaVersija && (formosIrasas(x.forma) || {}).sutartis ? " Dokumentas parengtas pagal ankstesnę formos redakciją (LITGRID „0922“): jos tekstas ir G-Procure taisymai nukrypimais nelaikomi. " +
-        "Jei rengėjas pašalino pastraipą, kurią G-Procure pataisė, palyginimas to nemato - tokias vietas (laukiamuose pakeitimuose) peržiūrėkite." : "");
+        "Jei rengėjas pašalino pastraipą, kurią G-Procure pataisė, palyginus to nustatyti negalima - tokias vietas (leistinuose pakeitimuose) peržiūrėkite." : "");
   }
   function dokumentaiHtml() {
     if (!B.docs) return "";
@@ -852,7 +852,7 @@
         }
       }
       return '<section class="tk-dok" aria-labelledby="tkdh-' + d.id + '"><h3 id="tkdh-' + d.id + '">' + esc(vard) + "</h3>" +
-        '<div class="tk-dok-l"><span><label for="' + id + '">Vaidmuo</label><select id="' + id + '" data-tk-vaidmuo="' + d.id + '">' + opt + "</select></span>" +
+        '<div class="tk-dok-l"><span><label for="' + id + '">Dokumento rūšis</label><select id="' + id + '" data-tk-vaidmuo="' + d.id + '">' + opt + "</select></span>" +
         (x && x.ps ? "<span>" + formosPasirinkimas(d, x) + "</span>" : "") + "</div>" +
         '<p class="tk-dok-b">' + esc(formosBusena(d, x)) + "</p>" + (vh ? '<div class="tk-dok-b">' + vh + "</div>" : "") +
         (mano.length ? '<ul class="tk-dok-r">' + mano.map(function (r) {
@@ -870,7 +870,7 @@
     var laukiami = pk.filter(function (p) { return p.rusis !== "nukrypimas"; }).length;
     var h = '<div class="tk-pl-v">';
     if (lyg.length > 1) h += '<label for="tkPlDok">Dokumentas</label><select id="tkPlDok">' + lyg.map(function (q) { return '<option value="' + q.id + '"' + (q.id === d.id ? " selected" : "") + ">" + esc(bazinis(q.name)) + "</option>"; }).join("") + "</select>";
-    h += '<label class="tk-chk"><input type="checkbox" id="tkLaukiami"' + (B.laukiami ? " checked" : "") + "> Rodyti laukiamus pakeitimus (" + laukiami + "): užpildytos vietos, sąlyginės formos dalys, numeracija, turinys</label></div>";
+    h += '<label class="tk-chk"><input type="checkbox" id="tkLaukiami"' + (B.laukiami ? " checked" : "") + "> Rodyti leistinus pakeitimus (" + laukiami + "): užpildytos vietos, sąlyginės formos dalys, numeracija, turinys</label></div>";
     h += '<p class="tk-dok-b">' + esc(formosBusena(d, x)) + "</p>";
     // skyriai su nukrypimų skaičiais
     var sk = [], skM = {};
@@ -878,7 +878,7 @@
     h += '<div class="tk-pl">';
     h += '<nav class="tk-pl-sk" aria-label="Skyriai"><ul>' + sk.map(function (s) { return '<li><a href="#' + s.id + '" data-tk-sk="' + s.id + '">' + esc(s.s) + ' <span class="tk-sk-n">' + s.n + "</span></a></li>"; }).join("") + "</ul></nav>";
     h += '<div class="tk-pl-d">';
-    if (!rod.length) h += '<p class="tk-tuscia">Nukrypimų nuo formos nėra' + (laukiami ? " - visi " + laukiami + " pakeitimai laukiami (pažymėkite „Rodyti laukiamus pakeitimus“)." : ".") + "</p>";
+    if (!rod.length) h += '<p class="tk-tuscia">Nukrypimų nuo formos nėra' + (laukiami ? " - visi " + laukiami + " pakeitimai leistini (pažymėkite „Rodyti leistinus pakeitimus“)." : ".") + "</p>";
     var dabar = null;
     rod.forEach(function (o) {
       var p = o.p, s = p.skyrius || "Dokumento pradžia";
@@ -894,10 +894,10 @@
     var h = '<h3 class="tk-gr-h">Kas patikrinta (' + pt.length + ')</h3><div class="tk-lent-r"><table class="tk-lent" id="tkPatikrosLent"><thead><tr><th scope="col">Patikra</th><th scope="col">Grupė</th><th scope="col">Būsena</th><th scope="col">Pastaba</th></tr></thead><tbody>' +
       pt.map(function (p) { return '<tr><td data-et="Patikra">' + esc(p.pav) + '</td><td data-et="Grupė">' + esc(p.grupe) + '</td><td data-et="Būsena" class="tk-b-' + esc(p.busena) + '">' + esc(BUS[p.busena] || p.busena) + '</td><td data-et="Pastaba">' + esc(p.pastaba) + "</td></tr>"; }).join("") + "</tbody></table></div>";
     var ds = B.rez ? B.rez.dokumentai : [];
-    h += '<h3 class="tk-gr-h">Paketo failai (' + ds.length + ')</h3><p class="cite">Vaidmenį ir formą galite pakeisti skiltyje „Pagal dokumentą“ - patikra persiskaičiuos. Kontrolinė suma (SHA-256) parodo, kuri failo versija patikrinta.</p>' +
-      '<div class="tk-lent-r"><table class="tk-lent" id="tkFailaiLent"><thead><tr><th scope="col">Failas</th><th scope="col">Vaidmuo</th><th scope="col">Perskaitytas</th><th scope="col">SHA-256</th></tr></thead><tbody>' +
+    h += '<h3 class="tk-gr-h">Paketo failai (' + ds.length + ')</h3><p class="cite">Dokumento rūšį ir formą galite pakeisti skiltyje „Pagal dokumentą“ - patikra bus atlikta iš naujo. Kontrolinė suma (SHA-256) parodo, kuri failo versija patikrinta.</p>' +
+      '<div class="tk-lent-r"><table class="tk-lent" id="tkFailaiLent"><thead><tr><th scope="col">Failas</th><th scope="col">Dokumento rūšis</th><th scope="col">Perskaitytas</th><th scope="col">SHA-256</th></tr></thead><tbody>' +
       ds.map(function (d) {
-        return '<tr><td data-et="Failas">' + esc(d.trumpas || bazinis(d.name)) + '</td><td data-et="Vaidmuo">' + esc(GP_PARENGTIS.vaidmensPav(d.vaidmuo, "lt")) + '</td><td data-et="Perskaitytas">' +
+        return '<tr><td data-et="Failas">' + esc(d.trumpas || bazinis(d.name)) + '</td><td data-et="Dokumento rūšis">' + esc(GP_PARENGTIS.vaidmensPav(d.vaidmuo, "lt")) + '</td><td data-et="Perskaitytas">' +
           (d.parseStatus === "parsed" ? "taip" : d.parseStatus === "partial" ? "iš dalies" : "ne") + '</td><td data-et="SHA-256">' + esc(d.sha256 ? d.sha256.slice(0, 12) : "") + "</td></tr>";
       }).join("") + "</tbody></table></div>";
     return h;
@@ -914,7 +914,7 @@
     $("tkp-dokumentai").innerHTML = dokumentaiHtml();
     $("tkp-palyginimas").innerHTML = palyginimasHtml();
     $("tkp-patikros").innerHTML = patikrosHtml();
-    $("tkLaikas").textContent = "Patikrinta " + laikoTekstas(B.laikas) + " šioje naršyklėje, failų: " + B.docs.length + ". Rezultatas galioja tik šiai paketo versijai; „Patikrinta“ - apibrėžtos patikros praėjo, ne teisinis patvirtinimas.";
+    $("tkLaikas").textContent = "Patikrinta " + laikoTekstas(B.laikas) + " šioje naršyklėje, failų: " + B.docs.length + ". Rezultatas galioja tik šiai paketo versijai; „Patikrinta“ - šios įrankio patikros pastabų nerado; tai ne teisinė išvada.";
   }
   function perpieskRadini(raktas, fokusas) {
     var r = B.radiniai.find(function (x) { return x.raktas === raktas; });
@@ -1070,7 +1070,7 @@
     B.radiniai.forEach(function (r) { sk[r.lygis]++; });
     body += wp(wr("Santrauka"), { st: "Heading2", keep: true });
     body += wlent([5000, 4638], [["Lygis", "Skaičius"]].concat(TVARKA.filter(function (l) { return l !== "rekomendacija" || sk[l]; }).map(function (l) { return [LYG_DGS[l], String(sk[l])]; }))
-      .concat([["Patikrinta (apibrėžtos patikros praėjo)", pt.filter(function (p) { return p.busena === "gerai"; }).length + " iš " + pt.length], ["Nepatikrinta", String(pt.filter(function (p) { return p.busena === "nepatikrinta"; }).length)]]));
+      .concat([["Patikrinta (pastabų nerasta)", pt.filter(function (p) { return p.busena === "gerai"; }).length + " iš " + pt.length], ["Nepatikrinta", String(pt.filter(function (p) { return p.busena === "nepatikrinta"; }).length)]]));
     body += wp(wr("Patikrintas paketas"), { st: "Heading2", keep: true });
     body += wlent([3600, 1700, 3000, 1338], [["Failas", "Vaidmuo", "Palyginimas su forma", "SHA-256"]].concat(B.docs.map(function (d) {
       var x = B.palyg[d.id];
@@ -1078,7 +1078,7 @@
       return [bazinis(d.name), GP_PARENGTIS.vaidmensPav(vaidmuo(d), "lt"), f, d.sha256 ? d.sha256.slice(0, 12) : ""];
     })));
     body += wp(wr("Radiniai ir sprendimai"), { st: "Heading2", keep: true });
-    if (!B.radiniai.length) body += wp(wr("Radinių nėra - visos atliktos patikros praėjo."));
+    if (!B.radiniai.length) body += wp(wr("Radinių nėra - atliktose patikrose pastabų nerasta."));
     B.radiniai.forEach(function (r, i) {
       var s = B.sprendimai[r.raktas];
       body += wp([wr((i + 1) + ". " + (LYG[r.lygis] || r.lygis) + " · " + r.grupe, { b: true })], { pr: 120, keep: true });
@@ -1097,7 +1097,7 @@
     body += wp(wr("Kas patikrinta"), { st: "Heading2", keep: true });
     var BUS = { gerai: "patikrinta - be pastabų", radinys: "yra radinių", nepatikrinta: "nepatikrinta", netaikoma: "netaikoma" };
     body += wlent([3500, 1800, 1700, 2638], [["Patikra", "Grupė", "Būsena", "Pastaba"]].concat(pt.map(function (p) { return [p.pav, p.grupe, BUS[p.busena] || p.busena, p.pastaba || ""]; })));
-    body += wp(wr("Ataskaita galioja tik šiai paketo versijai (žr. kontrolines sumas). „Patikrinta“ reiškia, kad apibrėžtos patikros praėjo - tai ne teisinis patvirtinimas. Šiame faile įrašyti ir mašinai skaitomi sprendimai: įkėlus jį kartu su nauja paketo versija, sprendimai parodomi prie tų pačių radinių, o dokumentų pakeitimai nuo šios patikros suskaičiuojami.", { i: true, sz: 18 }), { pr: 240 });
+    body += wp(wr("Ataskaita galioja tik šiai paketo versijai (žr. kontrolines sumas). „Patikrinta“ reiškia, kad šios įrankio patikros pastabų nerado - tai ne teisinė išvada. Šiame faile įrašyti ir kompiuterio skaitomi sprendimai: įkėlus jį kartu su nauja paketo versija, sprendimai parodomi prie tų pačių radinių, o dokumentų pakeitimai nuo šios patikros suskaičiuojami.", { i: true, sz: 18 }), { pr: 240 });
     return wordPaketas(body, "Pirkimo dokumentų patikros ataskaita", { ns: NS_ATASKAITA, xml: '<ataskaita xmlns="' + NS_ATASKAITA + '" versija="1"><duomenys>' + esc(JSON.stringify(ataskaitosDuomenys())) + "</duomenys></ataskaita>" });
   }
   /* Word paketas iš document.xml kūno (oficialus stilius, A4): ataskaita ir PP-salygos santrauka tvirtintojui (2026-10-24) - vienas kūrėjas.

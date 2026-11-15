@@ -180,6 +180,21 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   „pagal nutylėjimą“, „užkrauti“, „pilnai“, „atstatyti“ (grąžinti). PP-plan skirtukas „AI centralizavimas“ pervadintas „Centralizavimo galimybės“ (naudotojo pasirinkimas 2026-10-17);
   serverio failai (`worker/tiekejams-proxy.js`, `PP-esg/backend-pp-esg-routes.js`) nekeisti - diegiami ranka; seni PP-salygos
   juodraščiai su „AI vertimas - patikrinkite“ atpažįstami.
+- **Vertiniai iš anglų (2026-11-15, naudotojo „Peržiūrėkite ir modulių puslapius dėl vertinių“; po portalo, „Apie G-Procure“ ir „Vizijos“):** visų
+  14 modulių ir bendrų failų lietuviškas sąsajos tekstas perrašytas be vertinių (angliškas - nekeistas; laiškų ir LITGRID formų teisinės
+  formuluotės - tik kur saugu; išsaugotų pasirinkimų reikšmės nekeistos - KNA `<option value>`). Sąsajoje: „taikomas įstatymas“, ne
+  „režimas“ / „teisinis režimas“ (kodo raktai `rezimas` lieka); kortelę įrankiai „naudoja“, ne „skaito“; „įrankis“, ne „modulis“; programa
+  nekalba pirmuoju asmeniu („Nerasta“, ne „Neradau“); patikroje - „tai nėra klaida“, ne „viskas gerai“; „G-Procure serveris“ / „tarpinis
+  serveris“, ne „proxy“ / „tarpinis taškas“; „poetapis“, ne „sub-etapas“ (PP-graphs); be „duomenų taško“, „padengimo“, „metaduomenų“,
+  „pilnosios analizės“. Pervadinti valdikliai (seni pavadinimai šiame faile - istorija): PP-tiekejams jungiklis „Tik tai, ką reikia
+  padaryti“ (buvo „Tik reikalaujantys veiksmo“), PP-salygos filtras „Rodyti klausimus:“ (buvo „Rodyti korteles:“), sutarties bloko
+  „Tobulinimo įrašai“ (buvo „Stebėjimo įrašai“), PP-teise aktualumo žyma „Gali būti aktualu“ (raktas `galimai` nepakito), PP-protocol
+  „Pirkimo rizikos“, „Visų pirkimų audito žurnalas“. Naudotojo sprendimai tą dieną: PV - „Numatoma pirkimo vertė“ (PP-negotiation; ta pati
+  sąvoka kaip pirkimui skirtos lėšos; „Plan. įkainis“ - kita sąvoka, nekeistas); PP-graphs etapas „Derinama su institucijomis (CPVA, VPT
+  ir kt.)“ - buvo rašybos klaida „CVPA“; DPS - priemonė atrinkti kvalifikuotus tiekėjus, ne pirkimo būdas: PP-protocol pranešimai tiekėjams
+  („... pirkimų komisija dinaminei pirkimo sistemai sukurti / pagal dinaminę pirkimo sistemą vykdo ...“, `pnPirkimoBudasLt`), protokolo
+  antraštė („Pirkimas vykdomas: kuriant dinaminę pirkimo sistemą.“ / „... pagal dinaminę pirkimo sistemą.“ - `pirkimoBudoEilute`) ir
+  1 sprendimas be „... būdu“. Naujas sąsajos tekstas - iškart natūralia lietuvių kalba (žr. ir „DI terminai“).
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).
 - **Datos:** skaičiuok darbo dienomis per `shared/workdays.js`, ne kalendorinėmis. „Šiandien“ - `GP_WORKDAYS.siandien()`, ne

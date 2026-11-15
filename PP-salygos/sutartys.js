@@ -142,7 +142,7 @@
                       { id: "statybos", tekstas: "Statybos rangos sutartis - darbai pagal Užsakovo parengtą projektą", seima: "STATYBOS_RANGOS" }] },
     CPO: { tekstas: "Ar ši paslauga perkama per CPO LT (centralizuotų pirkimų katalogą ar jo dinaminę pirkimo sistemą)?",
            paaiskinimas: "Ekspertizės ir statinio statybos techninės priežiūros paslaugos LITGRID dažnai perkamos per CPO LT - tada naudojama " +
-                         "CPO LT sutarties forma ir LITGRID sutarties projektas nerengiamas. Perkant LITGRID pirkimu - paslaugų pirkimo-pardavimo sutartis.",
+                         "CPO LT sutarties forma ir LITGRID sutarties projektas nerengiamas. Kai LITGRID AB perka pati (ne per CPO LT) - paslaugų pirkimo-pardavimo sutartis.",
            atsakymai: [{ id: "taip", tekstas: "Taip, per CPO LT", nerengiama: "perkama per CPO LT - naudojama CPO LT sutarties forma" },
                        { id: "ne", tekstas: "Ne, LITGRID pirkimas", seima: "PASLAUGOS" }] }
   };
@@ -174,7 +174,7 @@
     pagalb: ["pagalbinis objektas", [/tvor/, /(^|[^a-z])dur/, /vartu|vartai/, /kel(io|iu|ias|iams)( |$)/, /privaziav|ivaziav/, /aikstel/, /stog/, /patalp/,
              /pastat/, /kondicionier/, /vedinim/, /sildym/, /laipt/, /dazym/, /sandel/, /akumuliator/, /generatori/, /apsviet/, /santechn/,
              /grindu|grindys/, /langu|langai/]],
-    smulkus: ["smulkus veiksmas", [/remont/, /keitim/, /pakeitim/, /atstatym/, /irengim/, /dazym/, /montavim/, /tvarkym/, /isvalym|valym/, /eksploatavim/]],
+    smulkus: ["smulkūs darbai", [/remont/, /keitim/, /pakeitim/, /atstatym/, /irengim/, /dazym/, /montavim/, /tvarkym/, /isvalym|valym/, /eksploatavim/]],
     eso: ["bendras pirkimas su ESO", [/(^|[^a-z])eso([^a-z]|$)/, /\(es\)|(^|[^a-z])es \(/]],
     trasos: ["trasų valymas", [/trasu valym/, /trasu .*valym/, /kirtim/, /augmenij/]],
     eksploatavimas: ["eksploatavimas", [/eksploatavim/]],
@@ -255,7 +255,7 @@
       }
       var projektuoja = yra("projektas"), eso = yra("eso"), statyba = yra("statyba"), smulkus = yra("smulkus");
       if (yra("pagalbTvirtas") && smulkus && !projektuoja && !statyba && !eso)
-        return { seima: "DARBAI_MAZOJI", smulkus: true, priezastys: [zyme("pagalbTvirtas"), zyme("smulkus"), "nėra statybos veiksmo ir projektavimo" +
+        return { seima: "DARBAI_MAZOJI", smulkus: true, priezastys: [zyme("pagalbTvirtas"), zyme("smulkus"), "pavadinime nėra statybos ar projektavimo požymių" +
                  (tinklas ? " (ir perdavimo tinklo objekto teritorijoje - darbų pirkimo-pardavimo sutartis)" : "")] };
       if (projektuoja && yra("rangosDarbai") && !eso)
         return { seima: "PROJEKTAVIMO_STATYBOS", priezastys: [zyme("projektas"), zyme("rangosDarbai")] };
@@ -343,7 +343,7 @@
     var sb = kodai(r.seima, r.variantas, kalba);
     if (!sb) {
       rez.busena = "neparuosta";
-      rez.pastabos.push("Šios šeimos šablonas generatoriui dar neparuoštas.");
+      rez.pastabos.push("Šios sutarties šablonas generatoriui dar neparuoštas.");
       return rez;
     }
     if (duom.rezimas === "VPI") {
@@ -354,7 +354,7 @@
     }
     rez.busena = "parinkta";
     rez.sablonai = sb.kodai;
-    if (sb.kalba !== kalba) { rez.kalba = "LT"; rez.pastabos.push("Šios šeimos dvikalbės (LT/EN) sutarties nėra - parinkta lietuviška."); }
+    if (sb.kalba !== kalba) { rez.kalba = "LT"; rez.pastabos.push("Šios sutarties dvikalbės (LT/EN) formos nėra - parinkta lietuviška."); }
     return rez;
   }
 
