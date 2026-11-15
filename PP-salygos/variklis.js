@@ -251,7 +251,7 @@ const GPDocx = (() => {
 
   /* R2 atsarginis kelias (2026-10-03): sablone be lenteliu taisykles (MVP_LT_SPS) pasirinkus „kvalifikacija
      netikrinama“ kvalifikacijos reikalavimu lentele prieštarautu 3.1 punktui. Trinama TIK pirma kuno lentele,
-     kurios antraste „N lentele“ ir kurios tekste yra `privaloma` (pvz. „Kvalifikacijos reikalavim“). */
+     kurios antraste „N lentele“ ir kurios tekste yra `privaloma` (pvz., „Kvalifikacijos reikalavim“). */
   function deleteTableByCaption(doc, numeris, privaloma){
     const d = doc.parts['word/document.xml'];
     const body = d.getElementsByTagNameNS(NS_W,'body')[0];
@@ -530,7 +530,7 @@ const GPDocx = (() => {
     return rId;
   }
 
-  /* ---------- 4. PAPRASTAS TEKSTO KEITIMAS (pvz. /ĮMONĖS PAVADINIMAS/) ----- */
+  /* ---------- 4. PAPRASTAS TEKSTO KEITIMAS (pvz., /ĮMONĖS PAVADINIMAS/) ----- */
   function replaceText(doc, find, repl){
     const d = doc.parts['word/document.xml'];
     let n = 0;
@@ -556,7 +556,7 @@ const GPDocx = (() => {
 
 
   /* Reguliariojo reiskinio keitimas pastraipos lygmeniu. Naudinga, kai reiksme
-     suskaldyta per run'us (pvz. el. pasto placeholderis "incidentai@____.eu"). */
+     suskaldyta per run'us (pvz., el. pasto placeholderis "incidentai@____.eu"). */
   function replaceRegex(doc, re, repl){
     const d = doc.parts['word/document.xml'];
     let n = 0;
@@ -848,7 +848,7 @@ const GPDocx = (() => {
   /* ---------- SULIETI PUNKTAI (2026-10-04, naudotojo prašymas: DPS LT sąlygų 10.3 punktas 10.2 pastraipoje) ----------
      Šablone kito punkto numeris kartais įrašytas tos pačios pastraipos viduryje („... dokumentais. 10.3. Tiekėjas ...“): punktas
      neatskirtas, o numeracija (GPNum) jo nemato ir kitus punktus pernumeruoja vienu mažiau (DPS LT: 10.4 tapdavo 10.3 - du 10.3).
-     Jei pastraipa (ne lentelėje) prasideda numeriu N (pvz. 10.2), o po sakinio pabaigos eina KITAS to paties lygio numeris
+     Jei pastraipa (ne lentelėje) prasideda numeriu N (pvz., 10.2), o po sakinio pabaigos eina KITAS to paties lygio numeris
      (10.3) ir sakinys didžiąja raide, pastraipa skaidoma prieš jį; abi dalys - tos pačios pastraipos savybės (skyriaus lūžis
      lieka antrojoje). Tekstas nekeičiamas (pašalinamas tik tarpas pirmos dalies gale). Kviečiama PRIEŠ GPNum. Grąžina numerius. */
   function sulietiPunktai(doc){
@@ -1022,7 +1022,7 @@ const GPDocx = (() => {
         }
       });
       Object.entries(tv).forEach(([k, c]) => out.push(k + ' (' + c + ')'));
-      const dub = (o, ka) => { const d2 = Object.keys(o).filter(k => o[k] > 1 && k !== '_GoBack'); if (d2.length) out.push(n + ': pasikartojantys ' + ka + ' ' + d2.length + ' (pvz. ' + d2[0] + ')'); };
+      const dub = (o, ka) => { const d2 = Object.keys(o).filter(k => o[k] > 1 && k !== '_GoBack'); if (d2.length) out.push(n + ': pasikartojantys ' + ka + ' ' + d2.length + ' (pvz., ' + d2[0] + ')'); };
       dub(pid, 'w14:paraId'); dub(zv, 'žymių vardai'); dub(zid, 'žymių id');
     }
     Object.entries(piesiniai).filter(([, l]) => l.length > 1).forEach(([id, l]) => out.push('piešinio id ' + id + ' pasikartoja: ' + l.join(', ')));
@@ -1277,7 +1277,7 @@ const GPMap = (() => {
         numerisTekstu,
         heading: (!!numPr && ilvl === 0) || /heading|antra/i.test(style),
         // Salygos antraste paprastai NEnumeruota. Bet sablone pasitaiko ir
-        // numeruotu (pvz. zaliuju alternatyva) - tokia laikom salyga tik jei ji
+        // numeruotu (pvz., zaliuju alternatyva) - tokia laikom salyga tik jei ji
         // baigiasi dvitaskiu, t. y. aiskiai iveda toliau einancius punktus.
         cond:   st === 'red' && (COND_RE.test(tekstas) || COND_RE_EN.test(tekstas)) && tekstas.length > 8
                 && (!numeruota || /:\s*$/.test(tekstas)),
@@ -1350,7 +1350,7 @@ const GPMap = (() => {
       // Bloko TIPAS: ne kiekviena raudona "Jei" yra saka.
       //  saka    - valdo pastraipas (itraukti / neitraukti)
       //  lentele - valdo istisa lentele ("3 lentele paliekama, kitu atveju - istrinama")
-      //  pastaba - tik nurodymas rengejui, nieko netrina (pvz. "reikalavimai nustatomi kiekvienai daliai")
+      //  pastaba - tik nurodymas rengejui, nieko netrina (pvz., "reikalavimai nustatomi kiekvienai daliai")
       const tl = c.text.toLowerCase();
       const tipas = /lentel/.test(tl) && /(palieka|istrina|ištrina|trinam)/.test(tl) ? 'lentele'
                   : /lentel/.test(tl) ? 'pastaba' : 'saka';
@@ -1387,7 +1387,7 @@ const GPMap = (() => {
   }
 
   /* --- 3b. ALTERNATYVU GRUPES ---------------------------------------------
-     Salygos daznai eina grandine ir viena kita PANEIGIA (pvz. kvalifikacija:
+     Salygos daznai eina grandine ir viena kita PANEIGIA (pvz., kvalifikacija:
      "tik laimetojo pasalinimo pagrindai" / "tik laimetojo kvalifikacija" /
      "visu Tiekeju"). Itraukus dvi tokias - dokumentas prestoretu pats sau.
      Grupuojam gretimas salygas, kuriu tekstai dalijasi >=2 reiksminiais
@@ -1758,7 +1758,7 @@ const GPGen = (() => {
       if (v && k === v.start){
         const val = gpBruksniai(arr[vi]||'').trim();
         // Tarpo apsauga: jei tuscia vieta sablone prilipusi prie zodzio (pries
-        // ja - raide ar skaitmuo, pvz. "teise_____"), iterpiam tarpa, kad
+        // ja - raide ar skaitmuo, pvz., "teise_____"), iterpiam tarpa, kad
         // "teise" + "susipazinti" netaptu "teisesusipazinti". Skliaustai, tarpai
         // ar pastraipos pradzia - be tarpo.
         let ins = val;
@@ -1941,7 +1941,7 @@ const GPGen = (() => {
     // 2. Kvalifikacijos lentele: pirma body-lygio w:tbl, kurios ANTRASTES eiluteje
     //    yra "Kvalifikacijos reikalavimas" IR pries kuria stovi "N lentele" antraste.
     //    Antrasciu reikalaujam, nes dvikalbiuose sablonuose yra ir naratyviniu
-    //    lenteliu (pvz. "3.2." bendro pasiulymo), kuriu tekste ta pati formuluote
+    //    lenteliu (pvz., "3.2." bendro pasiulymo), kuriu tekste ta pati formuluote
     //    pasitaiko - be antrastes reikalavimo aklas atitikmuo pagautu ne ta lentele.
     const vaikai = Array.from(body.children);
     const antrastePries = (idx) => {
@@ -2230,7 +2230,7 @@ const GPGen = (() => {
      dali...)": romeniskas sarasas - statinis sablono tekstas, neatspindintis
      tikro daliu skaiciaus (pastaba Nr. 4). Perrasomas TIK sarasas jo raudoname
      rune, spalva ISLIEKA raudona (tiekejo instrukcija), kiti raudoni runai
-     (pvz. "(palikti tik ta dali...)") nelieciami - todel ne keistiRaudonaTeksta. */
+     (pvz., "(palikti tik ta dali...)") nelieciami - todel ne keistiRaudonaTeksta. */
   function keistiDaliuSarasa(paras, i, kiek){
     const p = paras[i]; if (!p || !(kiek >= 2)) return false;
     const sarasas = Array.from({ length: kiek }, (_, k) => romeniskas(k + 1)).join('/ ');
@@ -2366,7 +2366,7 @@ const GPGen = (() => {
    GPNum - punktu numeracijos sutvarkymas sugeneruotame dokumente (2026-10-03).
    KODEL. LITGRID sablonuose skyriu antrastes ir punktai daznai sunumeruoti SKIRTINGAIS
    Word sarasais: punkto numerio pirmas skaicius imamas is saraso 0 lygio, kurio niekas
-   nenaudoja (Word rodo jo „start“ - pvz. TSD BPS 9 skyriuje 1.1-1.8, AKV 10 sk. 7.1),
+   nenaudoja (Word rodo jo „start“ - pvz., TSD BPS 9 skyriuje 1.1-1.8, AKV 10 sk. 7.1),
    sarasai tesiasi per skyrius (AKV 3 sk. - 2.11), du sarasai viename skyriuje kartoja
    numerius (AK SPS 1 sk. - du „1.1“), lygio tekste irasytas kito punkto numeris
    („2.8.%1.“), o Pages nenaudojamo lygio numerio isvis nerodo („1.“, „5.1.“). Istrynus
@@ -2498,7 +2498,7 @@ const GPNum = (() => {
     e.zy = z && z.desimt && /^\d+(\.\d+)*\.?$/.test(z.label) ? z : null;
     const m = t.match(ETIKETE);
     e.lit = m ? { nr: m[1], taskas: m[2], ilgis: m[0].length } : null;
-    if (e.zy && e.lit && komp(e.lit.nr) !== komp(e.zy.label)) e.lit = null;   // ne dvigubas numeris (pvz. metai teksto pradzioje)
+    if (e.zy && e.lit && komp(e.lit.nr) !== komp(e.zy.label)) e.lit = null;   // ne dvigubas numeris (pvz., metai teksto pradzioje)
     if (!e.zy && !e.lit) return e;
     e.senas = e.zy ? e.zy.label.replace(/\.$/, '') : e.lit.nr;
     e.lygis = komp(e.senas) - 1;
@@ -3396,7 +3396,7 @@ const GPAudit = (() => {
       // sablonuose praktiskai visada yra rezervas, tad geltona zyma saugi.
       if (/(^|[\s(])[Xx]([\s.,)]|$)/.test(t) || REZERVAS.test(t))
         patikrinti.push({ i, text: t });
-      // Dalis sablonu (pvz. konfidencialumo priedas) LITGRID rekvizitus rašo
+      // Dalis sablonu (pvz., konfidencialumo priedas) LITGRID rekvizitus rašo
       // TIESIOGIAI, ne per zyma: pavadinima, el. pasta. Perkant kitai imonei
       // jie liktu dokumente kaip svetimi duomenys.
       if (imone && !/litgrid/i.test(imone) && /litgrid|manerheim|302564383|707\s*02171/i.test(t))

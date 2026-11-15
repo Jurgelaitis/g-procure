@@ -729,7 +729,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Fragmentai (chunk'ai) su vieta. Punkto numeris (pvz. "4.2.", "12.3.1") iš
+  // Fragmentai (chunk'ai) su vieta. Punkto numeris (pvz., "4.2.", "12.3.1") iš
   // pastraipos pradžios išsaugomas atskirai - citatoms.
   // ---------------------------------------------------------------------------
   function punktas(text) {
@@ -795,7 +795,7 @@
       var st = b.loc && b.loc.stulpelis;
       if (st && stulpDabar && st !== stulpDabar) { flush(); buf = []; zod = 0; simb = 0; }
       if (st) stulpDabar = st;
-      // labai ilgas blokas (pvz. visas PDF puslapis) skaidomas į gabalus
+      // labai ilgas blokas (pvz., visas PDF puslapis) skaidomas į gabalus
       gabalai(b.text, maxZ, maxS).forEach(function (g, j) {
         var w = zodziuSk(g);
         if (naujo && (zod + w > CHUNK_ZODZIU || simb + 1 + g.length > CHUNK_SIMBOLIU)) flush();
@@ -815,7 +815,7 @@
     var doc = { id: "D" + (++ctx.n), name: name, ext: e, size: buf.byteLength, sha256: await sha256(buf),
                 fetchedAt: new Date().toISOString(), parseStatus: "parsed", warnings: [], blocks: [], pages: null,
                 rusis: rusis(name), versija: versijosPozymiai(name), language: "other", chunks: [] };
-    // Pradiniai baitai - tik paprašius (o.pasilikti, pvz. ["docx"]): PP-salygos tikrinimas DOCX lygina su forma ir skaito generavimo pasą
+    // Pradiniai baitai - tik paprašius (o.pasilikti, pvz., ["docx"]): PP-salygos tikrinimas DOCX lygina su forma ir skaito generavimo pasą
     if (ctx.pasilikti && ctx.pasilikti.indexOf(e) >= 0) doc.buf = buf;
     if (DRAUDZIAMI[e] || !LEIDZIAMI[e]) { doc.parseStatus = "unsupported"; doc.warnings.push(netinkamas(lang, e)); return doc; }
     try {
@@ -907,10 +907,10 @@
       if (f.size > riba) { klaida(f, pran(ctx.lang, "perDidelis", { mb: Math.round(riba / 1048576) })); continue; }
       if (ctx.failu >= MAX_FAILU) { klaida(f, pran(ctx.lang, "failuLimitas", { n: MAX_FAILU })); continue; }
       if (ctx.darbo + f.size > MAX_DARBO_B || (!arch && ctx.baitu + f.size > MAX_ISSKLEISTA_B)) { klaida(f, pran(ctx.lang, "bendrasLimitas")); continue; }
-      // failo perskaityti nepavyko (pvz. debesyje esantis, neatsisiųstas failas) - tik šis failas pažymimas, kiti skaitomi toliau (2026-10-22, T4-V5;
+      // failo perskaityti nepavyko (pvz., debesyje esantis, neatsisiųstas failas) - tik šis failas pažymimas, kiti skaitomi toliau (2026-10-22, T4-V5;
       // iki tol klaida nutraukdavo viso įkėlimo skaitymą)
       var buf;
-      try { buf = await f.arrayBuffer(); } catch (err) { klaida(f, pran(ctx.lang, "neperskaityta", { e: (err && err.message ? err.message : String(err)) })); docs[docs.length - 1].neperskaitytas = true; continue; }   // failo nepavyko paimti (pvz. debesyje, neatsisiųstas; PP-salygos T4-V5) - ne „teksto nėra“
+      try { buf = await f.arrayBuffer(); } catch (err) { klaida(f, pran(ctx.lang, "neperskaityta", { e: (err && err.message ? err.message : String(err)) })); docs[docs.length - 1].neperskaitytas = true; continue; }   // failo nepavyko paimti (pvz., debesyje, neatsisiųstas; PP-salygos T4-V5) - ne „teksto nėra“
       ctx.failu++; ctx.darbo += buf.byteLength;
       if (arch) docs = docs.concat(await isZip(f.name, buf, ctx, 0, onProgress, KONTEINERIAI[e] ? e : null));
       else { ctx.baitu += buf.byteLength; if (onProgress) onProgress(f.name); docs.push(await apdorokFaila(f.name, buf, ctx)); }

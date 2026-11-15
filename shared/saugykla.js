@@ -65,7 +65,7 @@
   }
 
   /* o: { saugykla, tikrink(reiksme) -> true | "priežastis" } - tikrink leidžia atmesti
-     ne tos formos JSON (pvz. tikėtasi masyvo) kaip sugadintą, o ne kaip tuščią. */
+     ne tos formos JSON (pvz., tikėtasi masyvo) kaip sugadintą, o ne kaip tuščią. */
   function skaityk(raktas, o) {
     o = o || {};
     var s = saugykla(o.saugykla);
@@ -158,7 +158,7 @@
   function juostosRaktas(raktas) { return "kitas-skirtukas-" + raktas; }
   function rodykKitaSkirtuka(raktas) {
     if (!global.GP_BUSENA || !global.GP_BUSENA.juosta || typeof document === "undefined") return;
-    // Jau rodoma - neperpiešiama (kitaip kiekvienas nepavykęs įrašas, pvz. kiekvienu klavišu, ją perpieštų ir skaitytuvas kartotų)
+    // Jau rodoma - neperpiešiama (kitaip kiekvienas nepavykęs įrašas, pvz., kiekvienu klavišu, ją perpieštų ir skaitytuvas kartotų)
     if (document.querySelector('[data-gpb-raktas="' + juostosRaktas(raktas) + '"]')) return;
     var pav = (MATYTA[raktas] && MATYTA[raktas].pav) || "";          // tekstas arba funkcija (dvikalbiams moduliams)
     global.GP_BUSENA.juosta({ raktas: juostosRaktas(raktas), tipas: "nezinoma",
@@ -218,7 +218,7 @@
     }
     if (r.busena === "neprieinama") {
       return "Naršyklės saugykla neprieinama (" + r.klaida + ") - išsaugotų duomenų " + ka +
-        " būsena nežinoma, o nauji pakeitimai nebus išsaugoti (pvz. privatus langas ar užblokuoti svetainės duomenys).";
+        " būsena nežinoma, o nauji pakeitimai nebus išsaugoti (pvz., privatus langas ar užblokuoti svetainės duomenys).";
     }
     if (r.ok === false) return "Nepavyko išsaugoti " + ka + ": " + r.klaida + ". Pakeitimai lieka tik atidarytame puslapyje.";
     return "";

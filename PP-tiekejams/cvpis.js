@@ -153,7 +153,7 @@
     return skelbimas ? s.replace(/_\d+(\.pdf)$/, "$1") : s;
   }
   // Sąrašo įrašai prieš perskaitytus failus: rastas ir perskaitytas / rastas, bet neperskaitytas / nerastas.
-  // Archyvas (pvz. „1_Pirkimo dokumentai.zip“) laikomas perskaitytu, kai perskaitytas bent vienas jo failas.
+  // Archyvas (pvz., „1_Pirkimo dokumentai.zip“) laikomas perskaitytu, kai perskaitytas bent vienas jo failas.
   function apreptis(sarasas, docs) {
     if (!sarasas) return null;
     var keliai = (docs || []).map(function (d) {

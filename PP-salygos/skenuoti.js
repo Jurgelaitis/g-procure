@@ -18,7 +18,7 @@
   var str = function (x, n) { return typeof x === "string" ? x.slice(0, n) : ""; };
   /* Atsakymas -> { ok, elementai: [{ p } | { lentele }], pastabos } arba { ok: false, error } */
   function issAtsakymo(text, stop) {
-    if (stop === "max_tokens") return { ok: false, error: "Dokumentas per ilgas perskaityti vienu kartu - DI atsakymas nutrūko. Įkelkite tik reikalingus puslapius (pvz. kvalifikacijos reikalavimų lentelę) arba Word failą." };
+    if (stop === "max_tokens") return { ok: false, error: "Dokumentas per ilgas perskaityti vienu kartu - DI atsakymas nutrūko. Įkelkite tik reikalingus puslapius (pvz., kvalifikacijos reikalavimų lentelę) arba Word failą." };
     var m = String(text || "").match(/\{[\s\S]*\}/);
     if (!m) return { ok: false, error: "DI atsakyme nėra JSON" };
     var d;
@@ -28,7 +28,7 @@
       catch (e2) { return { ok: false, error: "DI atsakymas sugadintas (" + e.message + ")" }; }
     }
     if (d && d.status === "neiskaitoma") return { ok: false, error: "DI nurodo, kad dokumentas neįskaitomas" + (d.pastabos ? ": " + str(d.pastabos, 300) : "") };
-    if (!d || d.status !== "ok" || !Array.isArray(d.elementai)) return { ok: false, error: "DI atsakymas neatitinka schemos" };
+    if (!d || d.status !== "ok" || !Array.isArray(d.elementai)) return { ok: false, error: "DI atsakymo forma netinkama" };
     var el = [];
     d.elementai.slice(0, MAX_EL).forEach(function (x) {
       if (!x || typeof x !== "object") return;

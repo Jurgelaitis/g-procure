@@ -13,7 +13,7 @@
    API:
      GP_DI.docx({ modulis, modelis, papildomai })   -> { customProperties, description, keywords } docx.js Document parinktims
      GP_DI.savybes({ modulis, modelis, turinys, papildomai }) -> [{ name, value }] (tas pats sąrašas JSZip moduliams;
-                                                        turinys - kai DI tik siūlė, pvz. PP-salygos)
+                                                        turinys - kai DI tik siūlė, pvz., PP-salygos)
      GP_DI.customXml(savybes)                        -> docProps/custom.xml tekstas (moduliams, kurie Word failą kuria patys)
      GP_DI.wordHtml({ modulis, modelis })            -> <meta> ir <xml> požymiai Word HTML (.doc) failo <head>
      GP_DI.metaHtml({ modulis, modelis })            -> tik <meta> požymiai (.html failui - <xml> naršyklė rodytų kaip tekstą)

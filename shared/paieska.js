@@ -76,7 +76,7 @@
       lt: "Atlikti kaštų ir naudos analizę", en: "Run a cost-benefit analysis",
       kw: "kaštai nauda KNA NPV investicija alternatyvos cost benefit analysis" },
     { id: "grafikas", irankis: "pp-graphs", href: "PP-graphs/Litgrid_Pirkimu_grafiku_generatorius.html",
-      lt: "Sudaryti pirkimo grafiką ir terminus", en: "Build a procurement schedule and deadlines",
+      lt: "Sudaryti pirkimo grafiką ir apskaičiuoti terminus", en: "Build a procurement schedule and deadlines",
       kw: "grafikas terminai trukmė datos darbo dienos schedule timeline deadlines duration" },
     { id: "protokolas", irankis: "pp-protocols", href: "PP-protocol/LITGRID_Generatorius_v3.html",
       lt: "Parengti komisijos protokolą ir pranešimus tiekėjams", en: "Prepare committee minutes and notices to suppliers",
@@ -91,7 +91,7 @@
       lt: "Įvertinti anglies pėdsaką (ŠESD)", en: "Assess the carbon footprint (GHG)",
       kw: "anglies pėdsakas ŠESD CO2 emisijos žalieji carbon footprint emissions green" },
     { id: "epd", irankis: "epd", href: "PP-carbon/epd.html",
-      lt: "Perskaityti tiekėjo EPD", en: "Read a supplier EPD",
+      lt: "Gauti ŠESD duomenis iš tiekėjo EPD", en: "Read a supplier EPD",
       kw: "EPD aplinkosauginė produkto deklaracija GWP environmental product declaration" },
     { id: "sankcijos", irankis: "pp-esg", href: "PP-esg/index.html",
       lt: "Patikrinti tiekėją sankcijų sąrašuose", en: "Screen a supplier against sanctions lists",
@@ -111,10 +111,10 @@
       aprLt: "Kokia kiekvieno įrankio paskirtis ir kas juos jungia", aprEn: "What each tool is for and what connects them",
       kw: "apie projektas aprašymas about project" },
     { href: "kryptis.html", lt: "Vizija", en: "Vision",
-      aprLt: "Kur link eina G-Procure", aprEn: "Where G-Procure is heading",
+      aprLt: "Tolesnė G-Procure kryptis ir principai", aprEn: "Where G-Procure is heading",
       kw: "kryptis vizija strategija ateitis kelias direction vision strategy roadmap future" },
     { href: "pirkimu-korteles.html", lt: "Pirkimų kortelės", en: "Procurement cards",
-      aprLt: "Pirkimo duomenys vieną kartą - visiems įrankiams", aprEn: "Procurement data once - for every tool",
+      aprLt: "Pirkimo duomenys įvedami vieną kartą ir naudojami visuose įrankiuose", aprEn: "Procurement data once - for every tool",
       kw: "kortelė kortelės mano pirkimai duomenys istorija šaltiniai pirkimo byla eksportas importas JSON perduoti kolegai card cards my procurements history procurement file export import" },
     { href: "PP-teise/index.html", lt: "Pirkimų teisės stebėsena", en: "Procurement law monitoring",
       aprLt: "Kas pasikeitė, kas įsigalios, ką peržiūrėti", aprEn: "What changed, what takes effect, what to review",
@@ -147,7 +147,7 @@
     return n >= Math.max(4, Math.min(z.length, w.length) - 2) ? 0.8 : 0;
   }
   /* Įvertina įrašą: laukai [{ tekstas, svoris, zyme? }]. Kiekvienas užklausos žodis turi atitikti bent vieną lauką (IR).
-     Grąžina { balas, zyme } (zyme - lauko, kuriame rasta, žymė; pvz. įrankio galimybė) arba null. */
+     Grąžina { balas, zyme } (zyme - lauko, kuriame rasta, žymė; pvz., įrankio galimybė) arba null. */
   function ivertink(uzklausa, laukai) {
     var zz = zodziai(uzklausa);
     if (!zz.length) return null;
@@ -193,7 +193,7 @@
       if (sar.length) grupes.push({ id: id, pav: pav, elementai: sar.slice(0, riba) });
     }
     if (!q) {
-      grupe("darbai", L("Dažni darbai", "Common tasks"), DAZNI.map(function (id, n) {
+      grupe("darbai", L("Dažnos užduotys", "Common tasks"), DAZNI.map(function (id, n) {
         var u = UZDUOTYS.filter(function (x) { return x.id === id; })[0];
         return uzduotiesElementas(u, 10 - n);
       }), 6);
@@ -228,7 +228,7 @@
       var v = ivertink(q, laukai);
       if (v) darb.push(uzduotiesElementas(u, v.balas));
     });
-    grupe("darbai", L("Darbai", "Tasks"), darb, 5);
+    grupe("darbai", L("Užduotys", "Tasks"), darb, 5);
     // Mano pirkimai
     var kort = [];
     (duom.korteles || []).forEach(function (k) {
@@ -526,7 +526,7 @@
         var ik = el("span", "gpp__ik"); ik.appendChild(svg(x.ikona || IKONA_PUSLAPIS)); o.appendChild(ik);
         var tx = el("span", "gpp__tx");
         tx.appendChild(el("span", "gpp__pav", x.pav));
-        if (x.zyme) tx.appendChild(el("span", "gpp__zy", L("Atitinka: ", "Matches: ") + x.zyme));
+        if (x.zyme) tx.appendChild(el("span", "gpp__zy", L("Rasta: ", "Matches: ") + x.zyme));
         else if (x.apr) tx.appendChild(el("span", "gpp__apr", x.apr));
         if (x.naujas) tx.appendChild(el("span", "gpp-sr", L(" (atsidaro naujame skirtuke)", " (opens in a new tab)")));
         o.appendChild(tx);
@@ -537,9 +537,9 @@
     });
     // Būsenos po sąrašu: kas dar kraunama ar neįkelta (niekada - „nėra“, kai neįkelta)
     var pastabos = [];
-    if (BUS.irankiaiKlaida) pastabos.push(L("Įrankių sąrašo įkelti nepavyko - ieškoma tik darbuose ir puslapiuose.", "The tool list could not be loaded - only tasks and pages are searched."));
+    if (BUS.irankiaiKlaida) pastabos.push(L("Įrankių sąrašo įkelti nepavyko - ieškoma tik užduotyse ir puslapiuose.", "The tool list could not be loaded - only tasks and pages are searched."));
     if (q.trim() && BUS.teise === null && !BUS.teiseKlaida) pastabos.push(L("Įkeliami teisės pokyčiai...", "Loading legal changes..."));
-    if (q.trim() && BUS.teiseKlaida) pastabos.push(L("Teisės pokyčių įkelti nepavyko - jų rezultatų nėra.", "Legal changes could not be loaded - no results from them."));
+    if (q.trim() && BUS.teiseKlaida) pastabos.push(L("Teisės pokyčių įkelti nepavyko, todėl jie paieškoje nerodomi.", "Legal changes could not be loaded - no results from them."));
     if (BUS.bvpzKrauna && sk) pastabos.push(L("Įkeliamas BVPŽ žodynas...", "Loading the CPV vocabulary..."));
     if (BUS.bvpzKlaida && sk) pastabos.push(L("BVPŽ žodyno įkelti nepavyko.", "The CPV vocabulary could not be loaded."));
     D.info.textContent = pastabos.join(" ");

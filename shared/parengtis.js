@@ -74,7 +74,7 @@
       savokaPI: "„Perkantysis subjektas“", savokaVPI: "„Perkančioji organizacija“", savokaAbi: "abi sąvokos (PĮ - {pi}, VPĮ - {vpi} kartų)",
       savokaNerasta: "pirkimo vykdytojo sąvokos („Perkantysis subjektas“, „Perkančioji organizacija“) nerasta", savokaNeikelta: "sąvokų atpažinimas neįkeltas",
       rezimoSavokos: "Pirkimui taikomas {r}, o dokumente rasta {s} ({n} k.) - kito įstatymo sąvoka. {kaip}",
-      rezimoKaipVPI: "VPĮ pirkime pirkimo vykdytojas vadinamas „Perkančioji organizacija“ (angliškai „Contracting Authority“) arba pirkimo sąlygose apibrėžta sąvoka (pvz. „Pirkimo vykdytojas“), o nuorodos rašomos į VPĮ straipsnius.",
+      rezimoKaipVPI: "VPĮ pirkime pirkimo vykdytojas vadinamas „Perkančioji organizacija“ (angliškai „Contracting Authority“) arba pirkimo sąlygose apibrėžta sąvoka (pvz., „Pirkimo vykdytojas“), o nuorodos rašomos į VPĮ straipsnius.",
       rezimoKaipPI: "PĮ pirkime pirkimo vykdytojas vadinamas „Perkantysis subjektas“ (angliškai „Contracting Entity“).",
       rezimoNezinomas: "taikomas įstatymas nežinomas (nėra kortelės, skelbimas jo nenurodo, o pirkimo sąlygų sąvoka nevienoda)", rezimoBeDok: "nėra pirkimo sąlygų, formų ir priedų",
       rezimoGerai: "kito įstatymo sąvokų nerasta ({n} dok.)",
@@ -672,7 +672,7 @@
           // „26PP-999 SPS 3 priedas ...“ (G-Procure failo vardas su pirkimo numeriu priekyje) - kaip „SPS 3 priedas ...“
           if (f.seg.some(function (sg) { sg = sg.replace(/^\S+\s+(?=sps\s*\d)/, ""); return reNr.test(sg) && !/^(sps\s*)?\d+\s*priedo\s/.test(sg); })) return true;
           if (f.ant.some(function (t) { return reAnt.test(t); })) return true;
-          // pavadinimo sutapimas su failo ar aplanko vardu (pvz. „1.2. Priedas. Techninė užduotis ir jos priedai/“)
+          // pavadinimo sutapimas su failo ar aplanko vardu (pvz., „1.2. Priedas. Techninė užduotis ir jos priedai/“)
           var fz = zodziai(f.kel);
           var bendri = pz.filter(function (x) { return fz.indexOf(x) >= 0; }).length;
           return pz.length >= 2 && bendri >= Math.max(2, Math.ceil(pz.length * 0.75));
@@ -691,7 +691,7 @@
       });
       patikra("priedai", "paketas", trukstaP ? "radinys" : "gerai");
     } else patikra("priedai", "paketas", "nepatikrinta", sps ? X.bePriedu : X.beSps);
-    // Trūkstami dokumentai pagal būdą. Jei tas pats dokumentas jau įvardytas kaip trūkstamas SPS priedas (pvz. techninė
+    // Trūkstami dokumentai pagal būdą. Jei tas pats dokumentas jau įvardytas kaip trūkstamas SPS priedas (pvz., techninė
     // specifikacija), lieka vienas - priedo - radinys su dokumento teisės nuoroda.
     truksta.forEach(function (d) {
       var re = PRIEDO_RE[d.id], dub = re && trukstaPriedai.filter(function (x) { return re.test(be(x.pav)); })[0];
@@ -846,7 +846,7 @@
         if (L.rezimas) palygink("rezimas", k.rezimas, L.rezimas.reiksme, lyg, function (v) { return v === "PI" ? "PĮ" : v === "VPI" ? "VPĮ" : v; }, kur, dv(L.rezimas));
         if (L.dalys && Array.isArray(k.dalys)) palygink("dalys", Math.max(1, k.dalys.length), Math.max(1, L.dalys.reiksme.length), lyg, function (v) { return v === 1 ? X.dalysViena : sub(X.dalysKelios, { n: v }); }, kur, dv(L.dalys));
       } else if (sps) {
-        // pasiūlymų terminas kortelėje prieš SPS grafiką (be skelbimo - pvz. PP-salygos sugeneruotas paketas su grafiku iš kortelės; pilotas
+        // pasiūlymų terminas kortelėje prieš SPS grafiką (be skelbimo - pvz., PP-salygos sugeneruotas paketas su grafiku iš kortelės; pilotas
         // 2026-11-10: grafike pasiūlymų gavimas baigėsi 2026-10-12, o kortelėje - pratęstas terminas 2026-10-13, ir perspėjimo nebuvo)
         var gP = sps.grafikas.filter(function (g) { return /(parai[šs]k|pasi[ūu]lym)[a-ząčęėįšųūž]*\s+(gavimas|rengimas|pateikimas|pri[ėe]mimas)/i.test(g.etapas) && !/galutin|kvietim/i.test(g.etapas); })[0];
         // sugeneruotame pakete grafiko datos - šablono pavyzdžiai, nebent grafikas įterptas iš kortelės (o.grafikasIterptas)

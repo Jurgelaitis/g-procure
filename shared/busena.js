@@ -25,7 +25,7 @@
  *   // rez: { ok: true, reiksme } | { ok: false, atsaukta: true } | { ok: false, klaida }
  *   GP_BUSENA.slepk('#vieta');
  *
- * Eiga procentais (kai etapai žinomi, pvz. PP-ts generavimas): { procentai: 10 } parodo
+ * Eiga procentais (kai etapai žinomi, pvz., PP-ts generavimas): { procentai: 10 } parodo
  * ploną juostą, o veiksmas(signal, h) ją stumia h.eiga(60, '2/3: Generuojami skyriai').
  *
  * Vieta - elementas arba selektorius; komponentas jį pats paverčia gyva sritimi
@@ -120,7 +120,7 @@
 
   /* Būsenos atvaizdavimas. Grąžina valdiklį: { el, atnaujink(tekstas), eiga(procentai, tekstas), slepk() }.
      Kiekvienas rodyk / slepk padidina vietos kartą (kartai): baigęsis senas veiksmas
-     neperrašo to, ką toje vietoje jau parodė naujesnis (pvz. naujas failas nutraukė seną analizę). */
+     neperrašo to, ką toje vietoje jau parodė naujesnis (pvz., naujas failas nutraukė seną analizę). */
   var laikmaciai = typeof WeakMap !== "undefined" ? new WeakMap() : null;
   var kartai = typeof WeakMap !== "undefined" ? new WeakMap() : null;
   function naujasKartas(el) { if (!kartai) return 0; var k = (kartai.get(el) || 0) + 1; kartai.set(el, k); return k; }
@@ -246,7 +246,7 @@
     });
   }
 
-  /* Puslapio lygio būsena (pvz. nepavykęs išsaugotų duomenų skaitymas): juosta iškart po
+  /* Puslapio lygio būsena (pvz., nepavykęs išsaugotų duomenų skaitymas): juosta iškart po
      modulio antrašte (ir po skirtukų juosta, jei ji eina tiesiai po antraštės). Kiekvienas
      šaltinis turi savo eilutę (o.raktas) - pakartotinis kvietimas ją pakeičia.
      Dvikalbiams moduliams tekstas (ir mygtukų tekstai) gali būti funkcija: pakeitus <html lang>

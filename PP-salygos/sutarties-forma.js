@@ -15,7 +15,7 @@
  *        žmogus neatsakė, ir rodoma „Siūloma (nepatvirtinta)“ su kilme; „Patvirtinta“ - tik žmogaus veiksmu.
  *
  * Sutarties šablono tekstas nekeičiamas - sprendimai tik renkasi šablono variantus ir įrašo reikšmes į pildomas vietas. Ko šablonas
- * nenumato (pvz. pratęsimo sąlygų redagavimas), paliekama Word programai ir išvardijama patikroje. Taisyklėse DI nenaudojamas.
+ * nenumato (pvz., pratęsimo sąlygų redagavimas), paliekama Word programai ir išvardijama patikroje. Taisyklėse DI nenaudojamas.
  * DI atsakymai iš pirkimo dokumentų (2026-10-18, naudotojo sprendimas: ką rodo pateikti dokumentai, pakartotinai neklausiama): ctx.di[klausimo id] =
  * { reiksme, vnt, laukai, saltinis, vieta, citata } - PP-SALYGOS.html, patikrinta ai-patarejas.js (citata pažodžiui dokumente). Tai siūloma reikšmė,
  * kaip ir kitos: „Siūloma (nepatvirtinta)“ su DI žyme ir citata, pirmesnė už taisyklių siūlymus (ji iš šio pirkimo dokumentų; kitokia taisyklių
@@ -89,7 +89,7 @@
   var terminoPastaba = function (lauk) { return function (c, R) {
     if (!LTEN(c) || !String(R[lauk] || "").trim()) return "";
     var e = terminasEN(R[lauk]);
-    return e ? "Anglų stulpelyje: „" + e + "“." : "Anglų stulpeliui terminą įrašykite skaičiumi ir žodžiais, pvz. „30 (trisdešimt) dienų“ - tada jis išverčiamas.";
+    return e ? "Anglų stulpelyje: „" + e + "“." : "Anglų stulpeliui terminą įrašykite skaičiumi ir žodžiais, pvz., „30 (trisdešimt) dienų“ - tada jis išverčiamas.";
   }; };
 
   /* Naudotojo taisyklė 2026-10-11 (kas pildoma generuojant): sutarties pavadinimas = pirkimo pavadinimas, pirkimo pavadinimas ir numeris ir
@@ -335,7 +335,7 @@
       siuloma: function (c) { return c.kriterijus === "kaina" ? { reiksme: "ne", kilme: "vertinimo kriterijus - kaina ar sąnaudos (SPS 8.1)" } : null; } },
     { id: "terminas", grupe: "Sutarties trukmė ir terminai", tipas: "skaicius", privalomas: true,
       klausimas: "Per kiek laiko tiekėjas turi pristatyti prekes ar suteikti paslaugas (4.1 punktas)?",
-      uzuomina: "Tik skaičius; vienetą (mėnesiai, dienos, darbo dienos) pasirinkite šalia - forma parenkama pagal skaičių (pvz. „per 3 mėnesius“, „per 3 darbo dienas“).",
+      uzuomina: "Tik skaičius; vienetą (mėnesiai, dienos, darbo dienos) pasirinkite šalia - forma parenkama pagal skaičių (pvz., „per 3 mėnesius“, „per 3 darbo dienas“).",
       // prekėms - ir dienos bei darbo dienos (antras pilotas 2026-11-12: LITGRID prekių SS 4.1 - „per 3 (tris) darbo dienas“); formos sąraše jų nėra - įrašoma tekstu
       vienetai: function () { return [{ id: "men", tekstas: "mėnesiai" }, { id: "d", tekstas: "dienos" }, { id: "dd", tekstas: "darbo dienos" }]; },
       rodoma: function (c, R) { return R.pradzia !== "ts" && !(prekes(c) && R.terminas_pasiulyme === "taip"); } },
@@ -388,7 +388,7 @@
     { id: "garantija", grupe: "Kokybė ir garantija", tipas: "taipne", privalomas: true, rodoma: paslaugos,
       klausimas: "Ar paslaugoms taikomas garantinis terminas (6.1-6.2 punktai)?",
       uzuomina: "„Ne“ - abiem punktams „Netaikoma“. „Taip“ - lieka šablono 6.1 nuostata (garantinio termino rūšį ir trukmę pasirinksite Word programoje) ir 6.2 terminas trūkumams pašalinti.",
-      laukai: [{ id: "salinimo_terminas", tipas: "tekstas", uzrasas: "Terminas trūkumams pašalinti (pvz. 10 (dešimt) dienų)", kada: "taip" }],
+      laukai: [{ id: "salinimo_terminas", tipas: "tekstas", uzrasas: "Terminas trūkumams pašalinti (pvz., 10 (dešimt) dienų)", kada: "taip" }],
       pastaba: terminoPastaba("salinimo_terminas") },
     { id: "kokybiniai", grupe: "Kokybė ir garantija", tipas: "taipne", privalomas: true,
       klausimas: "Ar nustatyti kokybiniai kriterijai, kurių įgyvendinimą reikia tikrinti sutarties vykdymo metu (6.3 punktas)?",
@@ -412,7 +412,7 @@
       siuloma: function () { return { reiksme: "litgrid", kilme: LITGRID }; } },
     { id: "velavimas", grupe: "Užtikrinimas ir atsakomybė", tipas: "tekstas", privalomas: false, rodoma: paslaugos,
       klausimas: "Po kiek laiko vėlavimo sutartį galima nutraukti (12.2.4 punktas)?",
-      uzuomina: "Pvz. „30 (trisdešimt) dienų“. Šablonas: ši aplinkybė taikoma, tik jei terminas įrašytas; neįrašius vieta lieka.",
+      uzuomina: "Pvz., „30 (trisdešimt) dienų“. Šablonas: ši aplinkybė taikoma, tik jei terminas įrašytas; neįrašius vieta lieka.",
       pastaba: terminoPastaba("velavimas") },
 
     { id: "esmines", grupe: "Esminės sąlygos, galiojimas, pratęsimas", tipas: "taipne", privalomas: true,
@@ -437,8 +437,8 @@
                   { id: "24", tekstas: "24 (dvidešimt keturi) mėnesiai", re: /^24 \(/ }, { id: "36", tekstas: "36 (trisdešimt šeši) mėnesiai", re: /^36 \(/ },
                   { id: "iki", tekstas: "Iki nurodytos datos ar termino", re: /^iki / },
                   { id: "kita", tekstas: "Kita formuluotė (formos sąraše jos nėra)" }],
-      uzuomina: "Formos 11.1.2 punkto sąrašas: 6, 12, 24, 36 mėnesiai arba „iki ...“. „Kita formuluotė“ įrašoma sakinio „... terminas negali būti ilgesnis kaip ...“ gale, pvz. „4.1 punkte nurodytas terminas“ (kai terminą pasiūlyme nurodo tiekėjas). Tikrinant dokumentą be generavimo paso ji rodoma kaip tekstas ne iš formos sąrašo.",
-      laukai: [{ id: "iki_tekstas", tipas: "tekstas", uzrasas: "Iki (pvz. 2028-12-31)", kada: "iki" },
+      uzuomina: "Formos 11.1.2 punkto sąrašas: 6, 12, 24, 36 mėnesiai arba „iki ...“. „Kita formuluotė“ įrašoma sakinio „... terminas negali būti ilgesnis kaip ...“ gale, pvz., „4.1 punkte nurodytas terminas“ (kai terminą pasiūlyme nurodo tiekėjas). Tikrinant dokumentą be generavimo paso ji rodoma kaip tekstas ne iš formos sąrašo.",
+      laukai: [{ id: "iki_tekstas", tipas: "tekstas", uzrasas: "Iki (pvz., 2028-12-31)", kada: "iki" },
                { id: "galiojimas_kita", tipas: "tekstas", uzrasas: "Formuluotė (be taško gale)", kada: "kita",
                  // trukmė ne iš formos sąrašo (pilotas su tikru pirkimu 2026-11-10: 5 mėn. sutarčiai formuluotę tekdavo rašyti ranka)
                  siuloma: function (c, R) { var n = skaicius(R.trukme); return n && [6, 12, 24, 36].indexOf(n) < 0 ? { reiksme: n + " " + forma(n, "mėnuo", "mėnesiai", "mėnesių"), kilme: "sutarties trukmė" } : null; } },
@@ -455,7 +455,7 @@
       // pagal Tvarkos aprašo 4 punktą, o 13.1 p. papunktis - kuris jo būdas; papunktį įrašo žmogus)
       siuloma: function (c) { var z = zalSiulymas(c); return z ? { reiksme: "taip", kilme: z.kodel }
         : c && (c.zaliasisKortele === "taip" || c.zaliasisKortele === "ne") ? { reiksme: c.zaliasisKortele, kilme: (c.korteleKilme || "pagal pirkimo kortelę") + ": žaliasis pirkimas - „" + (c.zaliasisKortele === "taip" ? "Taip" : "Ne") + "“" } : null; },
-      laukai: [{ id: "zalieji_p", tipas: "tekstas", uzrasas: "Tvarkos aprašo papunktis (pvz. 4.4.4)", kada: "taip",
+      laukai: [{ id: "zalieji_p", tipas: "tekstas", uzrasas: "Tvarkos aprašo papunktis (pvz., 4.4.4)", kada: "taip",
                  siuloma: function (c) { var z = zalSiulymas(c); return z && z.p ? { reiksme: z.p, kilme: z.kodel } : null; } }],
       pastaba: function (c) { var z = c.zaliejiSPS; return z ? "SPS žaliųjų reikalavimų dalyje pasirinkta: " + z.map(function (k) { return "„" + ZAL_SPS[k] + "“"; }).join(", ") + "." : ""; } },
     { id: "pakavimas", grupe: "Aplinkos ir socialiniai kriterijai", tipas: "taipne", privalomas: true, rodoma: prekes,
@@ -539,13 +539,13 @@
         kilme: "SS priedų sąrašas (priedas Nr. " + nr + ")" } : null; } },
     { id: "darbu_terminas", grupe: "Pagrindinės sąlygos", tipas: "skaicius", privalomas: true,
       klausimas: "Koks Darbų atlikimo terminas nuo Sutarties sudarymo dienos (SS 3 punktas)?",
-      uzuomina: "Skaičius; vieneto forma parenkama pagal skaičių (pvz. „18 mėnesių nuo Sutarties sudarymo dienos“, „1 mėnuo“).",
+      uzuomina: "Skaičius; vieneto forma parenkama pagal skaičių (pvz., „18 mėnesių nuo Sutarties sudarymo dienos“, „1 mėnuo“).",
       vienetai: function () { return [{ id: "men", tekstas: "mėnesiai" }, { id: "d", tekstas: "dienos" }]; } },
     { id: "pratesimas", grupe: "Pagrindinės sąlygos", tipas: "taipne", privalomas: true,
       klausimas: "Ar Darbų atlikimo terminas gali būti pratęstas (SS 3 punkto antras sakinys)?",
       uzuomina: "BS 2.2.2: pratęsimo galimybė nurodoma specialiosiose sąlygose. „Taip“ - įrašykite, kokiam terminui ir dėl kokių aplinkybių (sakinys „Darbų atlikimo terminas Šalių raštišku susitarimu gali būti pratęstas ... dėl ... Sutartyje nurodytomis sąlygomis ir tvarka.“). „Ne“ - šis sakinys pašalinamas.",
-      laukai: [{ id: "pratesimo_terminas", tipas: "tekstas", uzrasas: "Kokiam terminui (pvz. ne ilgiau kaip 3 mėnesiams)", kada: "taip" },
-               { id: "pratesimo_aplinkybes", tipas: "tekstas", uzrasas: "Dėl kokių aplinkybių (kilmininku, pvz. Užsakovo vėluojamų suteikti atjungimų)", kada: "taip" }] },
+      laukai: [{ id: "pratesimo_terminas", tipas: "tekstas", uzrasas: "Kokiam terminui (pvz., ne ilgiau kaip 3 mėnesiams)", kada: "taip" },
+               { id: "pratesimo_aplinkybes", tipas: "tekstas", uzrasas: "Dėl kokių aplinkybių (kilmininku, pvz., Užsakovo vėluojamų suteikti atjungimų)", kada: "taip" }] },
     { id: "etapai", grupe: "Pagrindinės sąlygos", tipas: "taipne", privalomas: true,
       klausimas: "Ar Darbai atliekami etapais (SS 4 punktas ir priedas „" + v.etapuPriedas + "“)?",
       uzuomina: "„Taip“ - 4 punktas lieka su priedo numeriu; etapų lentelę (perduodami darbai, perdavimo terminai, delspinigiai, mokėtinos sumos) užpildysite šio žingsnio grupėje „Etapų priedas“ arba Word programoje. „Ne“ - 4 punkte įrašoma „Punktas netaikomas.“ (BS 2.2.3 - etapai taikomi, kai jie nurodyti Sutartyje), o etapų priedas ir jo eilutė priedų sąraše pašalinami, kiti priedai pernumeruojami." },
@@ -618,7 +618,7 @@
     { id: "projektiniai", psr: true, grupe: "Papildomos sąlygos", tipas: "variantai", privalomas: true,
       klausimas: "Ar Rangovas rengs projektinius pasiūlymus (SS 21 punktas, BS 3.2 skyrius „Projektiniai pasiūlymai“)?",
       variantai: [{ id: "taip", tekstas: "Taip - Rangovas rengia projektinius pasiūlymus: derinimo lentelėje lieka jų terminai (kaip formoje)" },
-                  { id: "ne", tekstas: "Ne - projektiniai pasiūlymai jau parengti (pvz. pridedami prie techninės užduoties): jų eilutės iš derinimo lentelės pašalinamos ir įrašoma „Sutarties bendrųjų sąlygų 3.2 skyrius „Projektiniai pasiūlymai“ netaikomas.“" }],
+                  { id: "ne", tekstas: "Ne - projektiniai pasiūlymai jau parengti (pvz., pridedami prie techninės užduoties): jų eilutės iš derinimo lentelės pašalinamos ir įrašoma „Sutarties bendrųjų sąlygų 3.2 skyrius „Projektiniai pasiūlymai“ netaikomas.“" }],
       uzuomina: "Atsakymas turi sutapti su Technine užduotimi: jei projektiniai pasiūlymai pridedami prie jos, jų Rangovas nerengia.",
       siuloma: function () { return { reiksme: "taip", kilme: "kaip formoje - Rangovas rengia projektinius pasiūlymus" }; } },
     { id: "tdp_terminai", psr: true, grupe: "Papildomos sąlygos", tipas: "variantai", privalomas: true,
@@ -732,11 +732,11 @@
                { id: "pp_investicinis_nr", tipas: "tekstas", uzrasas: "Investicinio projekto numeris", kada: "taip" }] },
     { id: "pp_objektas", grupe: "Bendrosios nuostatos ir sutarties dalykas", tipas: "formuluote", privalomas: true,
       klausimas: "Kokio objekto projektavimo paslaugos perkamos (SS 2.1 punktas)?",
-      uzuomina: "Šablono nurodymas: „nurodomas objekto pavadinimas“. Įrašoma kilmininku į sakinį „... suteikti Paslaugas, kurias sudaro: <objektas> projektavimo paslaugos, projekto vykdymo priežiūros paslaugos pagal pateiktą Techninę užduotį ...“, pvz. „330 kV oro linijos Vilnius-Neris rekonstravimo“." },
+      uzuomina: "Šablono nurodymas: „nurodomas objekto pavadinimas“. Įrašoma kilmininku į sakinį „... suteikti Paslaugas, kurias sudaro: <objektas> projektavimo paslaugos, projekto vykdymo priežiūros paslaugos pagal pateiktą Techninę užduotį ...“, pvz., „330 kV oro linijos Vilnius-Neris rekonstravimo“." },
 
     { id: "pp_terminas", grupe: "Terminai", tipas: "skaicius", privalomas: true,
       klausimas: "Per kiek laiko nuo Sutarties įsigaliojimo dienos Projektuotojas turi suteikti projektavimo paslaugas (SS 3.1 punktas)?",
-      uzuomina: "Skaičius; vieneto forma parenkama pagal skaičių (pvz. „per 12 mėnesių nuo Sutarties įsigaliojimo dienos“). Šablono 3.1 punkto antrasis variantas („arba ... Darbai atliekami etapais, pildomas priedas „Projektavimo ir statybos darbų etapai““) nesiūlomas ir pašalinamas - jis iš rangos sutarties, o šios sutarties priedų sąraše tokio priedo nėra.",
+      uzuomina: "Skaičius; vieneto forma parenkama pagal skaičių (pvz., „per 12 mėnesių nuo Sutarties įsigaliojimo dienos“). Šablono 3.1 punkto antrasis variantas („arba ... Darbai atliekami etapais, pildomas priedas „Projektavimo ir statybos darbų etapai““) nesiūlomas ir pašalinamas - jis iš rangos sutarties, o šios sutarties priedų sąraše tokio priedo nėra.",
       vienetai: function () { return [{ id: "men", tekstas: "mėnesiai" }, { id: "d", tekstas: "dienos" }]; } },
     { id: "pp_pratesimas_max", grupe: "Terminai", tipas: "skaicius", privalomas: true,
       klausimas: "Kiek mėnesių iš viso gali trukti visi Paslaugų teikimo terminų pratęsimai (SS 3.3 punktas)?",
@@ -805,7 +805,7 @@
     { id: "pp_kiti_priedai", grupe: "Papildomos sąlygos ir priedai", tipas: "taipne", privalomas: true,
       klausimas: "Ar prie Sutarties pridedami kiti priedai, kurių priedų sąraše nėra (15 priedo eilutė „Kiti priedai“)?",
       uzuomina: "Šablono nurodymas: „pagal poreikį išvardijami prieš paskelbiant Pirkimą“. „Taip“ - įrašoma „15 priedas. Kiti priedai: <jūsų išvardyti priedai>.“; „Ne“ - „15 priedas. Kiti priedai - netaikoma.“",
-      laukai: [{ id: "pp_kiti_priedai_f", tipas: "tekstas", uzrasas: "Kiti priedai (išvardykite; pvz. Užsakovo informacijos reikalavimai)", kada: "taip" }] }
+      laukai: [{ id: "pp_kiti_priedai_f", tipas: "tekstas", uzrasas: "Kiti priedai (išvardykite; pvz., Užsakovo informacijos reikalavimai)", kada: "taip" }] }
   ];
   /* ---------------------------------------------------------------- darbų pirkimo-pardavimo („mažoji“) SS (2026-10-12, 5 etapas S4)
      Šablone - keturios dalys su nurodymu rengėjui „[... pasirenkama, kai ...]“ (2 skyrius „Užsakymai“, 3.2-3.4, 4.3, 4.4), trys išskleidžiami
@@ -852,7 +852,7 @@
     { id: "dm_pratesimas", grupe: "Terminai", tipas: "taipne", privalomas: true,
       klausimas: "Ar šis terminas gali būti pratęstas (SS 3.1 punkto antrasis sakinys)?",
       uzuomina: "„Taip“ - lieka sakinys „Šis terminas gali būti pratęstas ... dėl ... .“ su jūsų įrašytu pratęsimo terminu ir aplinkybėmis. „Ne“ - sakinys pašalinamas.",
-      laukai: [{ id: "dm_pratesimo_terminas", tipas: "tekstas", uzrasas: "Pratęsimo terminas (po žodžio „pratęstas“, pvz. „1 mėnesiui“, „ne ilgiau kaip 30 dienų“)", kada: "taip" },
+      laukai: [{ id: "dm_pratesimo_terminas", tipas: "tekstas", uzrasas: "Pratęsimo terminas (po žodžio „pratęstas“, pvz., „1 mėnesiui“, „ne ilgiau kaip 30 dienų“)", kada: "taip" },
                { id: "dm_pratesimo_aplinkybes", tipas: "formuluote", uzrasas: "Aplinkybės, kada terminas gali būti pratęstas (po žodžio „dėl“, kilmininku)", kada: "taip" }] },
 
     { id: "dm_kaina", grupe: "Kaina", tipas: "variantai", privalomas: true,
@@ -878,7 +878,7 @@
     { id: "dm_kiti_priedai", grupe: "Užtikrinimas ir priedai", tipas: "taipne", privalomas: true,
       klausimas: "Ar prie Sutarties pridedami kiti priedai (priedų sąrašo 5 eilutė)?",
       uzuomina: "Šablono 5 eilutė - tuščia vieta „[...]“. „Taip“ - kiekvienas jūsų įrašytas priedas tampa atskira numeruota priedų sąrašo eilute (5 eilutė ir po jos); „Ne“ - „" + KITI_PRIEDAI_NETAIKOMA + "“",
-      laukai: [{ id: "dm_kiti_priedai_f", tipas: "formuluote", uzrasas: "Kitų priedų pavadinimai - kiekvienas atskiroje eilutėje (pvz. Darbų kiekių žiniaraštis)", kada: "taip" }] }
+      laukai: [{ id: "dm_kiti_priedai_f", tipas: "formuluote", uzrasas: "Kitų priedų pavadinimai - kiekvienas atskiroje eilutėje (pvz., Darbų kiekių žiniaraštis)", kada: "taip" }] }
   ];
   /* ---------------------------------------------------------------- eksploatavimo darbų sutarties klausimai (7 etapas, S4, 2026-10-13)
      LITGRID eksploatavimo darbų sutarties SS - trys formos pagal darbų rūšį (ctx.variantas: OL - oro linijos, TP - transformatorių pastotės,
@@ -901,13 +901,13 @@
       klausimas: "Kurio regiono objektuose bus atliekami darbai (regiono pavadinimas)?",
       uzuomina: function (c) { return "Įrašoma visur, kur formoje palikta vieta regiono pavadinimui: " + (c.variantas === "TRASOS" ? "3 eilutėje („Infrastruktūros priežiūros centro ... regiono 110 - 400 kV oro linijos“) ir priedų sąrašo eilutėse (darbų planas, oro linijų sąrašas)"
         : c.variantas === "TP" ? "priedų sąrašo eilutėse „Perdavimo tinklo ... regiono 110 - 400 kV TP įrenginių eksploatavimo darbų ... m. planas“ ir „... RAA įtaisų techninės priežiūros darbų ... m. planas“"
-        : "priedų sąrašo eilutėse „PTD IPC ... regiono 110 – 400 kV oro linijų remonto darbų planas“ ir „PTD IPC ... regiono oro linijų sąrašas“") + ". Kilmininku, be žodžio „regiono“. Pvz.: Vakarų"; } },
+        : "priedų sąrašo eilutėse „PTD IPC ... regiono 110 – 400 kV oro linijų remonto darbų planas“ ir „PTD IPC ... regiono oro linijų sąrašas“") + ". Kilmininku, be žodžio „regiono“. Pvz., Vakarų"; } },
     { id: "ek_objektai", grupe: EK_G1, tipas: "formuluote", privalomas: true, rodoma: EK_OLTP,
       klausimas: "Kokiuose objektuose Rangovas turi atlikti eksploatavimo darbus (SS 3 eilutė „Objektas“)?",
-      uzuomina: "Formos vieta: „[Objektų, kurių eksploatacijos darbus turi atlikti Rangovas, sąrašas]“ - jūsų tekstas įrašomas vietoj jos viena pastraipa. Pvz.: objektų sąrašas arba nuoroda į priedų sąrašo priedą, kuriame jis pateiktas." },
+      uzuomina: "Formos vieta: „[Objektų, kurių eksploatacijos darbus turi atlikti Rangovas, sąrašas]“ - jūsų tekstas įrašomas vietoj jos viena pastraipa. Pvz., objektų sąrašas arba nuoroda į priedų sąrašo priedą, kuriame jis pateiktas." },
     { id: "ek_kiti_regionai", grupe: EK_G1, tipas: "tekstas", privalomas: true, rodoma: EK_TV,
       klausimas: "Kurių kitų regionų linijose Rangovas privalo atlikti darbus Užsakovui pareikalavus (SS 3 eilutė „Objektas“)?",
-      uzuomina: "Formos sakinys: „Užsakovui pareikalavus, Rangovas privalo darbus atlikti kitų regionų ([]) 110 – 400 kV oro ir kabelių linijose.“ - jūsų atsakymas įrašomas į skliaustus. Pvz.: Rytų, Šiaurės" },
+      uzuomina: "Formos sakinys: „Užsakovui pareikalavus, Rangovas privalo darbus atlikti kitų regionų ([]) 110 – 400 kV oro ir kabelių linijose.“ - jūsų atsakymas įrašomas į skliaustus. Pvz., Rytų, Šiaurės" },
     { id: "ek_terminas", grupe: EK_G1, tipas: "skaicius", privalomas: true, vienetai: EK_VNT("mėn."),
       klausimas: "Kiek mėnesių nuo Sutarties įsigaliojimo dienos Rangovas vykdo darbus (SS 2 eilutė „Sutarties vykdymo terminas“)?",
       uzuomina: function (c) { return "Sveikas skaičius. Įrašoma į sakinį „Rangovas įsipareigoja " + (c.variantas === "OL" ? "vykdyti Darbus ... mėn." : c.variantas === "TP" ? "atlikti Darbus ... mėn." : "atlikti Darbus per ... mėn.") + " nuo Sutarties įsigaliojimo dienos.“" +
@@ -921,10 +921,10 @@
         return q ? { reiksme: q.nr, kilme: "formos priedų sąrašo " + q.nr + " eilutė „" + q.tekstas.replace(/[;.\s]+$/, "") + "“" } : null; } },
     { id: "ek_neplaniniai", grupe: EK_G2, tipas: "tekstas", privalomas: true, rodoma: EK_OLTP,
       klausimas: "Kiek didesnė kaina mokama už Neplaninius darbus?",
-      uzuomina: "Formos sakinys: „Už Neplaninius darbus Rangovui bus mokama [įrašoma] didesnė kaina.“ Pvz.: 20 %" },
+      uzuomina: "Formos sakinys: „Už Neplaninius darbus Rangovui bus mokama [įrašoma] didesnė kaina.“ Pvz., 20 %" },
     { id: "ek_avariniai", grupe: EK_G2, tipas: "tekstas", privalomas: true, rodoma: EK_TP,
       klausimas: "Kiek didesnė kaina mokama už Avarinius darbus?",
-      uzuomina: "Formos sakinys: „Už Avarinius darbus Rangovui bus mokama [įrašoma] didesnė kaina.“ Pvz.: 50 %" },
+      uzuomina: "Formos sakinys: „Už Avarinius darbus Rangovui bus mokama [įrašoma] didesnė kaina.“ Pvz., 50 %" },
     { id: "ek_men_mokescio_priedas", grupe: EK_G2, tipas: "tekstas", privalomas: true, rodoma: EK_OLTP,
       klausimas: "Kuriame priede nurodytas minimalus mėnesinis eksploatavimo mokestis?",
       uzuomina: "Formos sakinys: „Rangovui mokamas minimalus mėnesinis eksploatavimo mokestis, nurodytas ... [įrašoma] priede.“ Įrašykite priedo numerį iš 18 eilutės priedų sąrašo." },
@@ -933,7 +933,7 @@
       uzuomina: "Formos sakinys: „Rangovui mokamas reagavimo į Avarinius įvykius mokestis nurodytas Sutarties specialiųjų sąlygų [įrašoma] priede.“ Įrašykite priedo numerį iš 18 eilutės priedų sąrašo." },
     { id: "ek_avariniu_mokestis", grupe: EK_G2, tipas: "tekstas", privalomas: true, rodoma: EK_OLTP,
       klausimas: "Koks minimalus Avarinių darbų mokestis, Eur be PVM?",
-      uzuomina: "Formos sakinys: „Rangovui mokamas [įrašoma] Eur be PVM minimalus Avarinių darbų mokestis.“ Įrašykite sumą skaičiumi. Pvz.: 500" },
+      uzuomina: "Formos sakinys: „Rangovui mokamas [įrašoma] Eur be PVM minimalus Avarinių darbų mokestis.“ Įrašykite sumą skaičiumi. Pvz., 500" },
 
     KL_KAINA("Sutarties kaina (SS 7 eilutė)", "SS 7 eilutė"),
     { id: "ek_brigados", grupe: EK_G3, tipas: "skaicius", privalomas: true, rodoma: EK_OLTV, vienetai: EK_VNT("Brigados"),
@@ -984,7 +984,7 @@
 
     { id: "ek_plano_metai", grupe: EK_G6, tipas: "tekstas", privalomas: true, rodoma: EK_TP,
       klausimas: "Kurių metų darbų planai pridedami (priedų sąrašo 11 ir 12 eilutės)?",
-      uzuomina: "Formos eilutės: „Perdavimo tinklo ... regiono 110 - 400 kV TP įrenginių eksploatavimo darbų [įrašoma] m. planas“ ir „... RAA įtaisų techninės priežiūros darbų [įrašoma] m. planas“ - tas pats atsakymas įrašomas į abi. Pvz.: 2027" },
+      uzuomina: "Formos eilutės: „Perdavimo tinklo ... regiono 110 - 400 kV TP įrenginių eksploatavimo darbų [įrašoma] m. planas“ ir „... RAA įtaisų techninės priežiūros darbų [įrašoma] m. planas“ - tas pats atsakymas įrašomas į abi. Pvz., 2027" },
     { id: "ek_irenginiu_sarasas", grupe: EK_G6, tipas: "tekstas", privalomas: true, rodoma: EK_TP,
       klausimas: "Kieno įrenginių sąrašas pridedamas (priedų sąrašo 13 eilutė)?",
       uzuomina: "Formos eilutė: „Perdavimo tinklo [įrašoma] įrenginių sąrašas;“ - jūsų atsakymas įrašomas vietoj skliaustų.",
@@ -997,7 +997,7 @@
       laukai: [{ id: "ek_kiti_priedai_f", tipas: "formuluote", uzrasas: "Kitų priedų pavadinimai - kiekvienas atskiroje eilutėje", kada: "taip" }] },
     { id: "ek_kiekiu_metai", grupe: EK_G6, tipas: "tekstas", privalomas: true, rodoma: EK_OLTP,
       klausimas: "Kurių metų Darbų kiekiai nurodyti kaip preliminarūs (SS 19 eilutė „Kitos sąlygos“)?",
-      uzuomina: "Formos sakiniai: „[įrašoma] metais nurodyti Darbų kiekiai išreiškiami kaip preliminarūs planuojami kiekiai. Užsakovas neįsipareigoja užsakyti viso nurodyto [įrašoma] metų Darbų kiekio.“ - tas pats atsakymas įrašomas į abi vietas. Pvz.: 2027-2029" }
+      uzuomina: "Formos sakiniai: „[įrašoma] metais nurodyti Darbų kiekiai išreiškiami kaip preliminarūs planuojami kiekiai. Užsakovas neįsipareigoja užsakyti viso nurodyto [įrašoma] metų Darbų kiekio.“ - tas pats atsakymas įrašomas į abi vietas. Pvz., 2027-2029" }
   ];
   /* Priedo numeris SS priedų sąraše (Word numeracija) - po šalinamų priedų (etapų priedas, kai darbai etapais neskaidomi) */
   function priedoNr(Z, R, re){
@@ -1047,7 +1047,7 @@
     KL_NUMERIS(AG_G1, "sutarties įžanga"),
     { id: "ag_objektas", grupe: AG_G1, tipas: "formuluote", privalomas: true,
       klausimas: "Kokio Objekto Darbus atlieka Rangovas (SS 1 skyriaus pirmoji pastraipa)?",
-      uzuomina: "Įrašoma į sakinį „Rangovas įsipareigoja atlikti ... (toliau – Objektas (-ai)):“, po kurio išvardijami darbai ir paslaugos. Pvz. objekto pavadinimas arba „Techninėje specifikacijoje nurodytų Užsakovo valdomų dujų perdavimo sistemos objektų“.",
+      uzuomina: "Įrašoma į sakinį „Rangovas įsipareigoja atlikti ... (toliau – Objektas (-ai)):“, po kurio išvardijami darbai ir paslaugos. Pvz., objekto pavadinimas arba „Techninėje specifikacijoje nurodytų Užsakovo valdomų dujų perdavimo sistemos objektų“.",
       siuloma: function () { return { reiksme: "Techninėje specifikacijoje nurodytų Užsakovo valdomų dujų perdavimo sistemos objektų", kilme: "bendra formuluotė - patikslinkite pagal pirkimą" }; } },
     { id: "ag_darbu_rusis", grupe: AG_G1, tipas: "variantai", privalomas: true, klausimas: "Kokie statybos darbai atliekami (SS 1 skyrius)?",
       variantai: agVar(AG_DARBAI.map(function (d) { return d.id; })), uzuomina: AG_FORMA + " „statybos darbų rūšis“: įrašoma „... darbus ir su jais susijusias paslaugas“.",
@@ -1079,7 +1079,7 @@
     { id: "ag_indeksas", grupe: AG_G2, tipas: "variantai", privalomas: true, rodoma: agTaip("ag_kainos_perziura"),
       klausimas: "Koks kainų indeksas taikomas (SS 2.2.1 punktas)?", variantai: AG_INDEKSAI.map(function (k) { return { id: k.id, tekstas: k.tekstas }; }),
       uzuomina: AG_FORMA + " (statybos sąnaudų kainų indeksai); kitas indeksas įrašomas į tą patį sąrašą.",
-      laukai: [{ id: "ag_indeksas_kitas", tipas: "tekstas", uzrasas: "Indekso pavadinimas kilmininku, be žodžio „indeksas“ (pvz. „Statinių statybos sąnaudų kainų“)", kada: "kitas" }] },
+      laukai: [{ id: "ag_indeksas_kitas", tipas: "tekstas", uzrasas: "Indekso pavadinimas kilmininku, be žodžio „indeksas“ (pvz., „Statinių statybos sąnaudų kainų“)", kada: "kitas" }] },
     { id: "ag_mokejimas", grupe: AG_G2, tipas: "skaicius", privalomas: true,
       klausimas: "Per kiek dienų nuo tinkamai pateiktos sąskaitos faktūros gavimo Užsakovas apmoka už atliktus Darbus (SS 2.4.1 punktas)?",
       uzuomina: "Formos sąraše - 1, 5, 7, 10, 14, 15, 20, 21, 25, 30 dienų; kitas skaičius įrašomas į tą patį sąrašą.",
@@ -1107,7 +1107,7 @@
     { id: "ag_kiti_dokumentai", grupe: AG_G3, tipas: "taipne", privalomas: true,
       klausimas: "Ar prieš pasirašant Galutinį perdavimo aktą Rangovas turi pateikti kitų dokumentų (SS 3.4.10 punktas)?",
       uzuomina: "„Taip“ - įrašomi jūsų išvardyti dokumentai; „Ne“ - „kitus nurodytus dokumentus: nėra“.",
-      laukai: [{ id: "ag_kiti_dokumentai_f", tipas: "formuluote", uzrasas: "Kiti dokumentai (galininku, pvz. „išpildomąją geodezinę nuotrauką“)", kada: "taip" }] },
+      laukai: [{ id: "ag_kiti_dokumentai_f", tipas: "formuluote", uzrasas: "Kiti dokumentai (galininku, pvz., „išpildomąją geodezinę nuotrauką“)", kada: "taip" }] },
     { id: "ag_zurnalas", grupe: AG_G3, tipas: "variantai", privalomas: true, klausimas: "Ar reikalaujamas statybos darbų žurnalas (SS 3.6.1 punktas)?",
       variantai: agVar(["nereikalaujamas", "elektroninis"]), uzuomina: AG_FORMA + " „statybos darbų žurnalas“." },
     { id: "ag_planas", grupe: AG_G3, tipas: "taipne", privalomas: true, klausimas: "Ar Rangovas turi parengti ir suderinti su Užsakovu Planą (SS 3.6.2 punktas, Bendrųjų sąlygų 1.8.3 punktas)?",
@@ -1162,7 +1162,7 @@
       siuloma: function (c, R) { return R.ag_uztikrinimas === "ne" ? { reiksme: "ne", kilme: "Sutarties įvykdymo užtikrinimas nereikalaujamas (5.1 punktas)" } : null; } },
     { id: "ag_egzemplioriai", grupe: AG_G5, tipas: "variantai", privalomas: true, klausimas: "Keliais egzemplioriais sudaroma Sutartis (SS 7.2 punktas)?",
       variantai: agVar(["dviem", "trim", "keturiais", "penkiais"]), uzuomina: AG_FORMA + " „egzempliorių skaičius“. Kalba įrašoma pagal 1 žingsnį." },
-    { id: "ag_kitos", grupe: AG_G5, tipas: "taipne", privalomas: true, klausimas: "Ar Sutartyje yra kitų nuostatų (pvz. Bendrųjų sąlygų pakeitimų ar papildymų; SS 9.1 punktas)?",
+    { id: "ag_kitos", grupe: AG_G5, tipas: "taipne", privalomas: true, klausimas: "Ar Sutartyje yra kitų nuostatų (pvz., Bendrųjų sąlygų pakeitimų ar papildymų; SS 9.1 punktas)?",
       uzuomina: "„Taip“ - jūsų tekstas įrašomas 9.1 punkte (Bendrųjų sąlygų pakeitimus rašykite su punkto numeriu ir nauja redakcija); „Ne“ - „Nėra.“",
       laukai: [{ id: "ag_kitos_f", tipas: "formuluote", uzrasas: "Kitos Sutarties nuostatos", kada: "taip" }] },
     KL_PRIEDAI(AG_G5),
@@ -1452,7 +1452,7 @@
       if (n62[0] && taip("garantija") && String(R.salinimo_terminas || "").trim()) {
         var e62 = LTEN(ctx) ? terminasEN(R.salinimo_terminas) : R.salinimo_terminas.trim();
         if (e62) nust(n62[0], { tekstas: R.salinimo_terminas.trim(), tekstasEN: e62 });
-        else truksta.push("Ar paslaugoms taikomas garantinis terminas (6.1-6.2 punktai)? - terminą įrašykite skaičiumi ir žodžiais, pvz. „10 (dešimt) dienų“ (anglų stulpeliui)");
+        else truksta.push("Ar paslaugoms taikomas garantinis terminas (6.1-6.2 punktai)? - terminą įrašykite skaičiumi ir žodžiais, pvz., „10 (dešimt) dienų“ (anglų stulpeliui)");
       }
       if (n62[1]) nust(n62[1], "salinti");
     }
@@ -1483,7 +1483,7 @@
     if (R.tinklo) nust(v910, { elementas: R.tinklo === "taip" ? el(v910, /^100/) : el(v910, /netaikomas/i) });
     var p1224 = rask("pildoma", "12.2.4");
     var e1224 = String(R.velavimas || "").trim() ? (LTEN(ctx) ? terminasEN(R.velavimas) : R.velavimas.trim()) : null;
-    if (p1224 && String(R.velavimas || "").trim() && !e1224) truksta.push("Po kiek laiko vėlavimo sutartį galima nutraukti (12.2.4 punktas)? - terminą įrašykite skaičiumi ir žodžiais, pvz. „30 (trisdešimt) dienų“ (anglų stulpeliui)");
+    if (p1224 && String(R.velavimas || "").trim() && !e1224) truksta.push("Po kiek laiko vėlavimo sutartį galima nutraukti (12.2.4 punktas)? - terminą įrašykite skaičiumi ir žodžiais, pvz., „30 (trisdešimt) dienų“ (anglų stulpeliui)");
     if (p1224) nust(p1224, e1224 ? { tekstas: R.velavimas.trim(), tekstasEN: e1224 } : { palikti: "neatsakyta" });
 
     // 10. Esminės sąlygos (naudotojo sprendimas 2026-10-08: klausiama kiekvieną kartą)
@@ -1735,7 +1735,7 @@
                  kilme: "1 žingsnis" + (nrKilme ? "; numeris - " + nrKilme : ""), truksta: !pav ? "pirkimo pavadinimo" : !nr && !sud ? "pirkimo numerio" : "" });
       out.push({ kas: "Užsakovo rekvizitai (sutarties įžanga ir lentelė prieš parašus)",
                  reiksme: "LITGRID AB" + (rek ? ", " + rek.adresas + ", įmonės kodas " + rek.kodas + ", PVM kodas " + rek.pvmKodas + ", sąskaita " + rek.saskaita + ", " + rek.bankas + ", banko kodas " + rek.bankoKodas + ", " + rek.telefonas + ", " + rek.elPastas : ""),
-                 kilme: "LITGRID AB rekvizitai (kaip prekių, paslaugų ir rangos sutarčių formose); formoje šios lentelės eilutės tuščios", truksta: rek ? "" : "organizacijų registro" });
+                 kilme: "LITGRID AB rekvizitai (kaip prekių, paslaugų ir rangos sutarčių formose); formoje šios lentelės eilutės tuščios", truksta: rek ? "" : "organizacijų sąrašo" });
       var p2 = dmPriedoNr(Z, /^Techninė specifikacija/), p3 = dmPriedoNr(Z, /^Rangovo pasiūlymas/);
       out.push({ kas: "Priedų numeriai tekste (1.1 punktas" + (R.dm_vykdymas === "uzsakymai" ? " ir 4.4 punktas" : "") + ")",
                  reiksme: "Techninė specifikacija - " + p2 + " priedas" + (R.dm_vykdymas === "uzsakymai" ? "; įkainiai (Rangovo pasiūlymas) - " + p3 + " priedas" : ""),
@@ -1771,7 +1771,7 @@
       out.push({ kas: PPS(ctx) ? "Užsakovo rekvizitai (sutarties įžanga ir 7.1 punktas)" : "Užsakovo rekvizitai",
                  reiksme: "LITGRID AB" + (rek ? ", A. s. " + rek.saskaita + ", " + rek.bankas + ", banko kodas " + rek.bankoKodas : ""),
                  kilme: PPS(ctx) ? "kaip sutarties formoje; sąskaita ir bankas - LITGRID AB rekvizitai (kaip prekių, paslaugų ir rangos sutarčių formose)" : "kaip sutarties formoje",
-                 truksta: PPS(ctx) && !rek ? "organizacijų registro" : "" });
+                 truksta: PPS(ctx) && !rek ? "organizacijų sąrašo" : "" });
     } else {
       out.push({ kas: "Sutarties pavadinimas", reiksme: sutartiesPav(pav), kilme: "pirkimo pavadinimas (1 žingsnis)", truksta: pav ? "" : "pirkimo pavadinimo" });
       out.push({ kas: "Pirkimo pavadinimas ir numeris (3.2 punktas)", reiksme: pirk ? pirk + (nr ? ", pirkimo Nr. " + nr : sud ? ", pirkimo Nr. [...] (" + SUD_NR + ")" : "") : "",
@@ -1782,7 +1782,7 @@
         out.push({ kas: "Papildomi priedai (15.4 ir 15.5 punktai)", reiksme: "Netaikoma", kilme: R.papildomi_priedai === "ne" ? "jūsų atsakymas" : "papildomų priedų nenurodėte (neprivaloma)", truksta: "" });
     }
     // priedų sąrašas (2026-10-15): kai pasirenkamų priedų nėra, klausimo nėra - sutarties sąlygos, techninė specifikacija ir pasiūlymas
-    // pridedami visada, kitus (pvz. trišalės sutarties projektą) lemia kiti atsakymai; nepridedamas - su žodžiu „netaikoma“, kaip sutartyje
+    // pridedami visada, kitus (pvz., trišalės sutarties projektą) lemia kiti atsakymai; nepridedamas - su žodžiu „netaikoma“, kaip sutartyje
     var prS = prieduSarasas(Z, ctx, R);
     if (prS.length && !prS.some(function (p) { return !p.valdo; }))
       out.push({ kas: "Priedų sąrašas", reiksme: prS.map(function (p) { return String(p.tekstas || "").replace(/[;.:]+$/, "") + (p.pridedamas ? "" : " - netaikoma"); }).join("; "),
@@ -1809,7 +1809,7 @@
     irasyk(pild("", /^\[pirkimo pavadinimas\]$/), pav);
     nust(pild("", /^\[numeris\]$/), numerioSprendimas(ctx, R));
     // 7.1 Užsakovo sąskaita ir bankas (naudotojo taisyklė 2026-10-11: pirkimo vykdytojo rekvizitai žinomi - įrašomi automatiškai; LITGRID
-    // formoje šios dvi eilutės tuščios, kiti Užsakovo rekvizitai įrašyti) - iš organizacijų registro (shared/organizacijos.js)
+    // formoje šios dvi eilutės tuščios, kiti Užsakovo rekvizitai įrašyti) - iš organizacijų sąrašo (shared/organizacijos.js)
     var rek = uzsakovoRekvizitai();
     if (rek) { nust(pild("7.1", /^_+$/), { tekstas: rek.saskaita }); nust(pild("7.1", /^Bankas$/), { tekstas: "Bankas " + rek.bankas + ", banko kodas " + rek.bankoKodas }); }
     else perspejimai.push("Užsakovo sąskaita ir bankas (7.1 punktas) neįrašyti - nepavyko įkelti organizacijų rekvizitų; įkelkite puslapį iš naujo.");
@@ -1880,7 +1880,7 @@
       pastaba(out, "SPS nurodo, kad taikomas tiesioginis atsiskaitymas su subtiekėjais, o trišalės sutarties projektas prie Sutarties nepridedamas (šios sutarties bendrosiose sąlygose tiesioginio atsiskaitymo tvarkos nėra). Patikrinkite, ar SPS ir sutartis sutampa.", [{ q: "dm_trisale" }, { sps: "tiesioginis" }]);
     return out;
   }
-  /* Užsakovo rekvizitų lentelės eilutės (etiketė šablone be reikšmės) - reikšmė iš organizacijų registro; registras - iš pačios sutarties įžangos */
+  /* Užsakovo rekvizitų lentelės eilutės (etiketė šablone be reikšmės) - reikšmė iš organizacijų sąrašo; registras - iš pačios sutarties įžangos */
   var DM_REKV = [[/^Adresas:$/, function (r) { return r.adresas; }], [/^Įmonės kodas:$/, function (r) { return r.kodas; }], [/^PVM kodas:$/, function (r) { return r.pvmKodas; }],
                  [/^Sąskaitos Nr\.$/, function (r) { return r.saskaita; }], [/^Bankas:$/, function (r) { return r.bankas; }], [/^Banko kodas:$/, function (r) { return r.bankoKodas; }],
                  [/^Tel\. Nr\.$/, function (r) { return r.telefonas; }], [/^El\. p\.:$/, function (r) { return r.elPastas; }]];
@@ -1958,7 +1958,7 @@
     else if (vu && R.dm_uztikrinimas === "taip") {
       var suma = sumaLT(R.dm_uztikrinimo_suma);
       if (suma) nust(vu, { elementas: el(vu, /^Rangovo sutartiniai įsipareigojimai užtikrinami/), reiksmes: [suma] });
-      else if (t("dm_uztikrinimo_suma")) pastaba(perspejimai, "SS 6.3 punkto užtikrinimo suma „" + t("dm_uztikrinimo_suma") + "“ neatpažinta kaip suma eurais - įrašykite skaičių (pvz. 5 000).", [{ q: "dm_uztikrinimas" }]);
+      else if (t("dm_uztikrinimo_suma")) pastaba(perspejimai, "SS 6.3 punkto užtikrinimo suma „" + t("dm_uztikrinimo_suma") + "“ neatpažinta kaip suma eurais - įrašykite skaičių (pvz., 5 000).", [{ q: "dm_uztikrinimas" }]);
     }
     // Priedų sąrašas: 4 eilutė „Trišalės sutarties projektas“, 5 eilutė - kiti priedai
     var tr = nepr("trišalė");
@@ -2050,7 +2050,7 @@
     };
     var suma = function (id) {
       var x = sumaLT(R[id]);
-      if (!x && t(id)) { perspejimai.push("Suma „" + t(id) + "“ neatpažinta kaip suma eurais - įrašykite skaičių (pvz. 5 000)."); truksta.push(kl(id) + " (neatpažinta suma)"); }
+      if (!x && t(id)) { perspejimai.push("Suma „" + t(id) + "“ neatpažinta kaip suma eurais - įrašykite skaičių (pvz., 5 000)."); truksta.push(kl(id) + " (neatpažinta suma)"); }
       return x;
     };
     var priedas = function (id) { return be(t(id)).replace(/^Nr\.?\s*/i, "").replace(/\s*pried\S*$/i, ""); };
@@ -2171,7 +2171,7 @@
   var BUSENOS = { siuloma: "Siūloma (nepatvirtinta)", patvirtinta: "Patvirtinta", neuzpildyta: "Neužpildyta (privaloma)", neprivaloma: "Neprivaloma" };
   function esc(x){ return String(x == null ? "" : x).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   var KO_TRUKSTA = { "pirkimo numerio": "atsakykite į klausimą „Koks pirkimo numeris?“ arba pasirinkite pirkimo kortelę su numeriu", "pirkimo pavadinimo": "įrašykite pirkimo pavadinimą 1 žingsnyje",
-                     "organizacijų registro": "neįkeltas shared/organizacijos.js", "darbų atlikimo termino": "atsakykite į klausimą apie Sutarties vykdymo terminą (2 eilutė)" };
+                     "organizacijų sąrašo": "neįkeltas G-Procure organizacijų sąrašas", "darbų atlikimo termino": "atsakykite į klausimą apie Sutarties vykdymo terminą (2 eilutė)" };
   var SUDARANT = "Sutarties numeris, Tiekėjo rekvizitai, Šalių atstovai ir atstovavimo pagrindai, Pirkėjo ir Tiekėjo kontaktiniai asmenys (2.1 ir 2.2 punktai), 5.2 punkto sumos (pagal laimėjusį pasiūlymą), 7.1 subtiekėjai, parašai";
   /* Rangos SS 20-29 punktai įrašomi tik taikomi, todėl sugeneruotoje sutartyje jų numeriai gali būti mažesni nei šablone */
   var GRUPIU_PASTABOS = { "Papildomos sąlygos": "Šios grupės punktai įrašomi tik tada, kai taikomi, todėl sugeneruotoje sutartyje jų numeriai gali būti mažesni nei šablone. Klausimuose - šablono numeriai." };
@@ -2433,7 +2433,7 @@
             lau(k, "darbai", "Perduodami darbai (darbai, kuriuos Rangovas turi perduoti Užsakovui užbaigus etapą)", '<textarea class="lk-in"' + a + "darbai" + d + 'darbai" rows="3">' + esc(r.darbai) + "</textarea>") +
             lau(k, "terminas", "Perdavimo terminas nuo Sutarties sudarymo dienos", '<input class="lk-in lk-in--trumpas"' + a + "terminas" + d + 'terminas" type="text" inputmode="numeric" value="' + esc(r.terminas) + '">' +
               '<select class="lk-in lk-in--trumpas" data-sfl="' + k + ':vnt" aria-label="' + esc(r.etikete) + ': termino vienetas"><option value="men"' + (r.vnt === "d" ? "" : " selected") + '>mėn.</option><option value="d"' + (r.vnt === "d" ? " selected" : "") + ">dienos</option></select>") +
-            (L.delspinigiai ? lau(k, "delspinigiai", "Delspinigių dydis už kiekvieną pradelstą dieną (pvz. 0,02 proc.)", '<input class="lk-in"' + a + "delspinigiai" + d + 'delspinigiai" type="text" value="' + esc(r.delspinigiai) + '">') : "") +
+            (L.delspinigiai ? lau(k, "delspinigiai", "Delspinigių dydis už kiekvieną pradelstą dieną (pvz., 0,02 proc.)", '<input class="lk-in"' + a + "delspinigiai" + d + 'delspinigiai" type="text" value="' + esc(r.delspinigiai) + '">') : "") +
             (L.dalis ? lau(k, "dalis", "Mokėjimo dalis, proc. Sutarties kainos be PVM", '<input class="lk-in lk-in--trumpas"' + a + "dalis" + d + 'dalis" type="text" inputmode="decimal" value="' + esc(r.dalis) + '">') : "") +
             (L.eilutes.length > 1 ? '<button type="button" class="sec lk-etapas-s" id="' + id + "-s" + k + '" data-sfl-salinti="' + k + '" aria-label="Pašalinti: ' + esc(r.etikete) + '">Pašalinti etapą</button>' : "") + "</fieldset>"; }).join("") +
           '<button type="button" class="sec" id="' + id + '-prideti" data-sfl-prideti="1">Pridėti etapą</button></div>';

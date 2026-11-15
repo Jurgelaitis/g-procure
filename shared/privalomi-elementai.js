@@ -33,7 +33,7 @@
      salyga(ctx) - grąžina null, jei elementas taikomas, arba priežasties raktą, kodėl netikrinamas.
      jeiTaikytina - įstatyme „jeigu taikytina“: nerastas elementas - informacija, ne „Patikrinkite“.
      neuzpildyta - formos vieta be turinio (tikrinama kiekviena pastraipa atskirai): rasta tik ji - „vieta yra, bet neužpildyta“.
-     spsPirma - konkretaus pirkimo sprendimas rašomas SPS (BPS - tik bendra nuostata, pvz. „jei reikalaujama“), todėl SPS tikrinamos pirmiau;
+     spsPirma - konkretaus pirkimo sprendimas rašomas SPS (BPS - tik bendra nuostata, pvz., „jei reikalaujama“), todėl SPS tikrinamos pirmiau;
      tvarka - kai tiksli reikšmė yra skelbime, o BPS tik nuoroda į jį (terminas, galiojimas): SPS, skelbimas, BPS.
      etapas (DPS, naudotojo sprendimas 2026-10-07 - tikrinti pagal etapą): „pasiulymai“ - pasiūlymų elementas, DPS sukūrimo sąlygoms
      netaikomas (sukūrimo etape teikiamos paraiškos); „tiekejai“ - tiekėjų elementas, konkretaus pirkimo pagal DPS sąlygose jo ieškoma

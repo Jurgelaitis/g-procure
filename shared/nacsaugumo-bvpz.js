@@ -14,9 +14,9 @@
  *  - kodas su „X“ apima visus kodus, prasidedančius skaitmenimis iki pirmo „X“
  *    (30211XXX-X - visi 30211...);
  *  - kodas be „X“ - tik tas kodas (sąraše atskirai išvardyti ir smulkesni kodai,
- *    pvz. 32546000-2 ir 32546100-3, todėl kodas be „X“ jų neapima);
+ *    pvz., 32546000-2 ir 32546100-3, todėl kodas be „X“ jų neapima);
  *  - eilutės išimtys („išskyrus“) į sąrašą nepatenka;
- *  - platesnis kodas (pvz. 32500000-0), kurio dalys yra sąraše, - ne atitiktis, o
+ *  - platesnis kodas (pvz., 32500000-0), kurio dalys yra sąraše, - ne atitiktis, o
  *    „patikrinkite“: ar perkamos būtent tos prekės ar paslaugos, sprendžia žmogus.
  * Kad kodo sąraše nėra, reiškia tik tai, kad netenkinama PIRMOJI sąlyga; antrąją
  * (sandorio aplinkybės, PĮ 50 str. 8 d.) įvertina žmogus. Nieko nesaugo ir nesiunčia.

@@ -13,13 +13,13 @@
  *
  *  B (PASIRENKAMAS) - "svoriai" / santykinis balas:
  *      atskiri kainos balai + atskiri anglies balai su lyginamaisiais svoriais
- *      (pvz. kaina 80 / anglis 20). Naudoja standartine LT santykine formule
+ *      (pvz., kaina 80 / anglis 20). Naudoja standartine LT santykine formule
  *      (maziausia reiksme gauna visus to kriterijaus balus, kitos proporcingai).
  *
  * VIENETAI (svarbu - vienas tiesos saltinis):
  *  - bidPrice          : EUR (pasiulymo kaina)
  *  - embodiedCarbon    : kg CO2e (A1-A3 is EPD/PCF; nuoseklu su carbon-factors.js)
- *  - annualOperational : kg CO2e / metus (eksploataciniai nuostoliai, pvz. SF6, savos reikmes)
+ *  - annualOperational : kg CO2e / metus (eksploataciniai nuostoliai, pvz., SF6, savos reikmes)
  *  - lifetimeYears     : metai (gyvavimo ciklas)
  *  - shadowPrice       : EUR / t CO2e (sesseline anglies kaina)
  *  Viduje anglis skaiciuojama kg, i tonas konvertuojama TIK pries dauginant is

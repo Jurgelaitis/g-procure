@@ -252,7 +252,7 @@
      issaugok(k, { saltinis, laukoSaltinis, modulis, kilme: { laukas: { saltinis, citata, failas, nr } } }):
        saltinis - kas įrašė (įrašo antraštė istorijoje), laukoSaltinis - pakeistų laukų šaltinis, kai kilme jo nenurodo
        (numatyta - saltinis; kortelių puslapyje - „ranka“), kilme - laukai, kurių šaltinis kitas (skelbimas, VPT, įrankis).
-       Kilmė, paduota NEPAKEISTAM laukui, patvirtina šaltinį (pvz. ta pati reikšmė perkelta iš skelbimo) - istorijoje įrašo nėra.
+       Kilmė, paduota NEPAKEISTAM laukui, patvirtina šaltinį (pvz., ta pati reikšmė perkelta iš skelbimo) - istorijoje įrašo nėra.
      Istorijoje sudėtiniai laukai (dalys, grafikas, vertinimo metodika, veiksmai) saugomi santrauka (istorijaiReiksme), tekstai -
      iki 300 ženklų; to paties šaltinio pakeitimai per ISTORIJOS_JUNGIMAS sujungiami į vieną įrašą. */
   var ISTORIJOS_RIBA = 50;
@@ -412,7 +412,7 @@
     if (!jungti) { ist.push(e); }
     else {
       // sujungtame įraše kiekvienas laukas pasilieka savo pakeitimo laiką `t` (įrašo laikas - paskutinio pakeitimo): kitaip
-      // anksčiau pakeistas laukas atrodytų pakeistas vėliau (pvz. po poveikio peržiūros žymos, 1.2)
+      // anksčiau pakeistas laukas atrodytų pakeistas vėliau (pvz., po poveikio peržiūros žymos, 1.2)
       pask.laukai.forEach(function (x) { if (!x.t) x.t = pask.laikas; });
       e.laukai.forEach(function (p) {
         var buves = null;
@@ -683,7 +683,7 @@
 
   /* Įrankio rekomenduoti veiksmai kortelėje (2026-10-06, naudotojo sprendimas: „Priskirti pirkimui“ - į bendrą kortelę, ne į modulio
      saugyklą). Vienintelė vieta, kur modulis keičia esamą kortelę, ir tik šį lauką: veiksmas atpažįstamas pagal `raktas`
-     (pvz. „pp-market-kpi:programine:red:0“) - esamas atnaujinamas (būsena, tekstas), naujas pridedamas; kiti laukai neliečiami.
+     (pvz., „pp-market-kpi:programine:red:0“) - esamas atnaujinamas (būsena, tekstas), naujas pridedamas; kiti laukai neliečiami.
      Kviečiama tik žmogui paspaudus „Įrašyti į kortelę“. */
   function pridekVeiksmus(id, veiksmai, o) {
     var k = gauk(id, o);
@@ -945,7 +945,7 @@
     var pries = document.activeElement;
     duom = duom || {};
     var k = tuscia(Object.assign({}, duom));
-    /* Modulio reikšmė, kurios kortelė nepriimtų (pvz. netinkama trukmė), neperkeliama - ir tai pasakoma. */
+    /* Modulio reikšmė, kurios kortelė nepriimtų (pvz., netinkama trukmė), neperkeliama - ir tai pasakoma. */
     var neperkelta = [];
     tikrink(k, l).forEach(function (x) {
       if (x.laukas === "pavadinimas" || !(x.laukas in duom)) return;
@@ -1073,16 +1073,16 @@
    *              numatyta: kortele => bool,   // dabartinė reikšmė - tik numatytoji (ne žmogaus)
    *              lygu: (modulio, korteles) => bool, // savas lyginimas, kai lauko forma kita
    *              neimanoma: "..." | kv => "...", // kodėl reikšmė šiame modulyje neįrašoma (kai i() grąžina null)
-   *              pastaba: "..." }],           // rodoma prie skirtumo (pvz. kas bus perskaičiuota)
-   *   poTaikymo: laukai => {},                // modulis persipiešia (pvz. PP-qual vediklis)
-   *   pries: kortele => true|false|Promise,   // modulis gali atsisakyti (pvz. pradėtas kitas pirkimas)
+   *              pastaba: "..." }],           // rodoma prie skirtumo (pvz., kas bus perskaičiuota)
+   *   poTaikymo: laukai => {},                // modulis persipiešia (pvz., PP-qual vediklis)
+   *   pries: kortele => true|false|Promise,   // modulis gali atsisakyti (pvz., pradėtas kitas pirkimas)
    *   klaustiKitoPirkimo: true,               // modulyje kitas pavadinimas - klausti juostoje (be savo lango)
-   *   nerodoma: kortele => "..." | null,      // modulio vaizde laukų dar nėra (pvz. neatverta forma) - ką sakyti
+   *   nerodoma: kortele => "..." | null,      // modulio vaizde laukų dar nėra (pvz., neatverta forma) - ką sakyti
    *   onPasirinkta: (kortele, rezultatas) => {}
    * })
    * Grąžina { pasirinkta, pasirink, atsiek, atnaujink, skirtumai, pritaikyk } - pritaikyk() įrašo pasirinktą
-   * kortelę į ką tik atsiradusius laukus (pvz. atvėrus formą), skirtumai() tik perskaičiuoja (skirtumai(true) -
-   * laukai pakeisti ne iš kortelės, pvz. įkeltas juodraštis: „užpildyta iš kortelės“ nebesakoma).
+   * kortelę į ką tik atsiradusius laukus (pvz., atvėrus formą), skirtumai() tik perskaičiuoja (skirtumai(true) -
+   * laukai pakeisti ne iš kortelės, pvz., įkeltas juodraštis: „užpildyta iš kortelės“ nebesakoma).
    * Kortelės kuriamos ir keičiamos puslapyje pirkimu-korteles.html (atveriama naujame skirtuke,
    * tad modulio darbas nedingsta). Modulis, kuris nieko nesaugo, per šią juostą nieko ir neįrašo.
    * ==========================================================================================*/
@@ -1268,7 +1268,7 @@
      (#infoPanelMount yra visuose moduliuose, tad juosta lygiuojasi su turiniu); jei jos nėra - po
      antrašte ir skirtukais. */
   /* Ar modulio reikšmė sutampa su kortelės? Modulis gali duoti savo lyginimą (lygu), kai jo lauko
-     forma kita (pvz. PP-qual trukmė tekstu „24 mėn. + 12 mėn. opcija“, kortelėje - 36). */
+     forma kita (pvz., PP-qual trukmė tekstu „24 mėn. + 12 mėn. opcija“, kortelėje - 36). */
   function sutampa(b, dab, kv, k) {
     if (b.lygu) return !!b.lygu(dab, kv, k);
     if (b.is) return vienoda(b.kortele, b.is(dab), kv);
@@ -1592,7 +1592,7 @@
     piesk();
     var is = null;
     try { is = new URLSearchParams(global.location.search).get("kortele"); } catch (e) { is = null; }
-    /* Nuoroda „?kortele=“ (pvz. iš „Mano pirkimai“): dalis modulių savo būseną sukuria per DOMContentLoaded
+    /* Nuoroda „?kortele=“ (pvz., iš „Mano pirkimai“): dalis modulių savo būseną sukuria per DOMContentLoaded
        (PP-negotiation, PP-ts, kaštų ir naudos analizė), o juosta jungiama anksčiau - tada kortelė parenkama po jų. */
     if (is) {
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { pasirink(is, { pildyti: true }); });
@@ -1610,7 +1610,7 @@
       pasirink: pasirink,
       atsiek: atsiek,
       atnaujink: function () { atnaujink(false); },
-      /* naujiDuomenys: modulio laukai pakeisti ne iš kortelės (pvz. įkeltas juodraštis) - „užpildyta“ nebegalioja. */
+      /* naujiDuomenys: modulio laukai pakeisti ne iš kortelės (pvz., įkeltas juodraštis) - „užpildyta“ nebegalioja. */
       skirtumai: function (naujiDuomenys) {
         if (naujiDuomenys && ctx.pr) { ctx.pr.uzpildyta = []; ctx.info = ""; }
         skirtumai(); zinute(); return ctx.pr;

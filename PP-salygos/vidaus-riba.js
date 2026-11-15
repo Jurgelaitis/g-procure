@@ -41,7 +41,7 @@
       ? true : "netinkama nustatymų sandara";
   }
   function skaityk() {
-    if (!global.GP_SAUGYKLA) return { busena: "neprieinama", reiksme: null, klaida: "saugyklos modulis neįkeltas" };
+    if (!global.GP_SAUGYKLA) return { busena: "neprieinama", reiksme: null, klaida: "nepavyko įkelti naršyklės saugyklos tvarkymo" };
     return global.GP_SAUGYKLA.skaityk(RAKTAS, { saugykla: SAUG, tikrink: tikrink });
   }
   function busena() {

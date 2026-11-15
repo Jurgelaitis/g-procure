@@ -11,7 +11,7 @@
  *    ir nuo kurių kortelės laukų jie priklauso;
  *  - poveikis(k, { juodrasciai }): kurie rezultatai sudaryti anksčiau, nei pakeisti nuo jų priklausantys
  *    laukai (pagal kortelės pakeitimų istoriją, shared/pirkimo-kortele.js 1.1), ir tiesioginiai neatitikimai
- *    (pvz. grafiko būdas nebe tas, kuris kortelėje) - su „buvo -> tapo“, data ir šaltiniu;
+ *    (pvz., grafiko būdas nebe tas, kuris kortelėje) - su „buvo -> tapo“, data ir šaltiniu;
  *  - IRANKIAI ir naudojantys(laukai): kurie įrankiai skaito pakeistus laukus, bet savo rezultato kortelėje
  *    nesaugo (TS, kvalifikacija, protokolai ir kt.) - tik pasakoma, kad juose parengtus dokumentus verta peržiūrėti;
  *  - kategorijosPokytis(buvo, tapo): pirkimo rūšis pagal vertę prieš ir po (GP_TAISYKLES).
@@ -52,7 +52,7 @@
   };
 
   /* Rezultatai, susieti su kortele. laukai - kortelės laukai, nuo kurių rezultatas priklauso (ne visi, kuriuos įrankis skaito:
-     pvz. grafikui pavadinimas ar iniciatorius - tik dokumento antraštė, kurią įrankis rodo iš kortelės). */
+     pvz., grafikui pavadinimas ar iniciatorius - tik dokumento antraštė, kurią įrankis rodo iš kortelės). */
   var REZULTATAI = {
     grafikas: { irankis: "pp-graphs", laukai: ["budas", "pradzia", "vykdytojas", "pasiulymuTerminas", "paskelbimas"],
       lt: "Pirkimo grafikas", en: "Procurement schedule",

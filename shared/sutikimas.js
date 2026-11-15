@@ -9,7 +9,7 @@
  * požiūriu - tas pats, kas slapukai. VDAI Gairės dėl slapukų ir panašių priemonių naudojimo (2013-07-25 įsakymas Nr. 1T-32;
  * jose cituojama ankstesnė ERĮ redakcija - 61 straipsnio 4 dalis, tekstas tas pats): būtiniems įrašams
  * sutikimo neprašoma (9 p.), kalbos pasirinkimas - išimtis (11 p.), statistika - ne išimtis (12 p.), sutikimas - aktyvus
- * veiksmas su tikru pasirinkimu (15 p.), iš anksto (19 p.), ribotam laikui, pvz. metams (21 p.); sutikimas su privatumo
+ * veiksmas su tikru pasirinkimu (15 p.), iš anksto (19 p.), ribotam laikui, pvz., metams (21 p.); sutikimas su privatumo
  * politika nėra sutikimas dėl slapukų (26 p.); atsisakymo įsiminimas - tik žmogui žinant (20 p.), todėl juosta sako, kad
  * pasirinkimas įsimenamas 12 mėnesių. BDAR 7 str. 3 d. - atšaukti sutikimą taip pat lengva, kaip jį duoti.
  *
@@ -82,8 +82,8 @@
       katNustatymaiT: "Pasirinkta kalba, informacinių skilčių būsena (atverta ar suskleista) ir pirkimų plano suvestinėje pasirinktas rodiklis. " +
         "Išjungus įrašyti nustatymai ištrinami, o kalbą rinksitės ir skiltis atversite kiekvieną kartą.",
       katTobulinimo: "Tobulinimo įrašai",
-      katTobulinimoT: "Pirkimo sąlygų įrankio (PP-salygos) įrašai apie sutarties parinkimą: pirkimo pavadinimas ir tipas, ką siūlė " +
-        "sistema ir ką pasirinkote. Kaupiami tik šioje naršyklėje ir niekur nesiunčiami - įrašus galite atsisiųsti failu ir perduoti G-Procure " +
+      katTobulinimoT: "Pirkimo sąlygų įrankio (PP-salygos) įrašai apie sutarties parinkimą: pirkimo pavadinimas ir tipas, kokią sutartį " +
+        "pasiūlė įrankis ir kurią pasirinkote. Kaupiami tik šioje naršyklėje ir niekur nesiunčiami - įrašus galite atsisiųsti failu ir perduoti G-Procure " +
         "rengėjui, kad šis tikslintų taisykles. Išjungus nauji įrašai nekaupiami.",
       yraIrasu: "Šioje naršyklėje yra anksčiau sukauptų tobulinimo įrašų - išjungus jie lieka, kol juos ištrinsite.",
       trinti: "Ištrinti sukauptus įrašus", trintiK: "Ištrinti visus sukauptus tobulinimo įrašus?", trintiTaip: "Taip, ištrinti", trintiNe: "Ne",
@@ -92,13 +92,13 @@
       katStatistikaT: "Kurie įrankiai ir žingsniai naudojami, kiek veiksmų baigiasi klaida, ar naudojamas telefonas, ar kompiuteris. Siunčiami tik iš anksto " +
         "apibrėžti įvykiai ir tik nustatytos jų reikšmės - be jūsų įvesto teksto, pavadinimų, sumų ir failų. Duomenys saugomi PostHog ES duomenų centre " +
         "(Frankfurte); IP adresas ir naršyklės tipas naudojami tik dienos lankytojo kodui apskaičiuoti ir neįrašomi, naršyklėje nieko " +
-        "neįrašoma, žmonių profiliai nekuriami, kitą dieną jūs neatpažįstami. " +
-        "Išjungus nebesiunčiama.",
+        "neįrašoma, lankytojų profiliai nekuriami, o kitą dieną jūsų atpažinti neįmanoma. " +
+        "Išjungus statistika nebesiunčiama.",
       katAnalitika: "Reklama ir socialiniai tinklai",
       katAnalitikaT: "G-Procure nenaudoja reklamos, socialinių tinklų slapukų ar sekimo pikselių ir nestebi, ką lankytojai daro kitose svetainėse.",
       issaugoti: "Išsaugoti pasirinkimą",
-      sprendimas: function (d, g) { return "Jūsų sprendimas: " + d + ", galioja iki " + g + "."; },
-      nera: "Sprendimo dar nepriėmėte - kol jo nėra, veikia būtinieji įrašai ir nustatymų įsiminimas.",
+      sprendimas: function (d, g) { return "Sprendimą priėmėte " + d + ", jis galioja iki " + g + "."; },
+      nera: "Sprendimo dar nepriėmėte - kol jo nėra, išsaugomi tik būtinieji įrašai ir nustatymai.",
       issaugota: "Slapukų nustatymai išsaugoti.",
       nepavyko: "Sprendimo įsiminti nepavyko (naršyklės saugykla neprieinama) - jis galioja tik šiame puslapyje."
     },

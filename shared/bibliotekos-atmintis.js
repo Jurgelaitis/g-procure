@@ -6,7 +6,7 @@
  * biblioteką iš shared/vendor/ (sargas shared/testai.html). Šaknis skaičiuojama iš šio skripto adreso.
  * Pirmame atvėrime bibliotekos įsikelia dar prieš įsijungiant darbininkui, todėl jis gauna jų adresus (žinutė „issaugok“) ir
  * išsaugo jas iškart - kitaip jos būtų išsaugotos tik kitą kartą, o darbas be interneto po pirmo atvėrimo neveiktų.
- * Kai darbininkų naršyklė neturi ar puslapis atvertas ne per https / localhost (pvz. failas diske), - nieko nedaroma:
+ * Kai darbininkų naršyklė neturi ar puslapis atvertas ne per https / localhost (pvz., failas diske), - nieko nedaroma:
  * bibliotekos kraunamos kaip įprasta.
  * ========================================================================== */
 ;(function (global) {

@@ -211,7 +211,7 @@
         catch (e2) { return { ok: false, error: "DI atsakymas nutrūko arba sugadintas (" + e.message + ")" }; }
       }
     }
-    if (!d || !Array.isArray(d.atsakymai)) return { ok: false, error: "Atsakymas neatitinka schemos (atsakymai)" };
+    if (!d || !Array.isArray(d.atsakymai)) return { ok: false, error: "DI atsakymo forma netinkama (nėra atsakymų sąrašo)" };
     return { ok: true, atsakymai: d.atsakymai, pastabos: typeof d.pastabos === "string" ? d.pastabos : "" };
   }
 

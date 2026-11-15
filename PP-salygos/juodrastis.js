@@ -62,8 +62,8 @@
 
   /* Įrašo forma: true arba priežastis (sugadintu laikomas ne tos formos JSON, o ne tuščias) */
   function tikrink(r) {
-    if (!r || typeof r !== "object" || Array.isArray(r)) return "ne objektas";
-    if (r.schema !== SCHEMA) return "nežinoma schema (" + esc(r.schema) + ")";
+    if (!r || typeof r !== "object" || Array.isArray(r)) return "netinkama įrašo sandara";
+    if (r.schema !== SCHEMA) return "nežinomas formatas (" + esc(r.schema) + ")";
     if (typeof r.id !== "string" || !/^[a-z0-9]{4,40}$/.test(r.id)) return "netinkamas identifikatorius";
     if (!r.duomenys || typeof r.duomenys !== "object" || Array.isArray(r.duomenys)) return "nėra duomenų";
     if (!r.meta || typeof r.meta !== "object") return "nėra aprašo";
@@ -129,7 +129,7 @@
     var dabar = null, irasas = null, paskutinis = null, pradeta = false, laikmatis = null, busena = { kodas: "nera" }, klausti = null, rodytiSar = false;
     var sarEl = $(cfg.sarasas), busEl = $(cfg.busena), zymaEl = $(cfg.zyma), sritis = $(cfg.sritis);
     var param = (global.location.search.match(/[?&]juodrastis=([a-z0-9]{4,40})/) || [])[1] || null;
-    // atverta iš pirkimo kortelės (?kortele=<id>, pvz. „Mano pirkimai“) - tos kortelės juodraščiai sąraše pirmi ir pažymėti
+    // atverta iš pirkimo kortelės (?kortele=<id>, pvz., „Mano pirkimai“) - tos kortelės juodraščiai sąraše pirmi ir pažymėti
     var korteleParam = (global.location.search.match(/[?&]kortele=([^&#]+)/) || [])[1] || null;
     try { if (korteleParam) korteleParam = decodeURIComponent(korteleParam); } catch (e) { korteleParam = null; }
 
@@ -250,7 +250,7 @@
       pieskSarasa();
       return w;
     }
-    // naują juodraštį pradeda tik įvestis (rašymas, pasirinkimas, įkeltas failas); paspaudimai (pvz. perėjimas tarp žingsnių) - tik išsaugo esamą
+    // naują juodraštį pradeda tik įvestis (rašymas, pasirinkimas, įkeltas failas); paspaudimai (pvz., perėjimas tarp žingsnių) - tik išsaugo esamą
     function pakeista(e) {
       if (e && e.isTrusted && e.type !== "click" && !(e.target && e.target.closest && e.target.closest("[data-darbas-ne],[data-jd],.jd-sar"))) pradeta = true;
       if (!dabar && !pradeta) return;

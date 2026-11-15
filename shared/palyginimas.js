@@ -458,7 +458,7 @@
     // (bent viena jo pastraipa - iš kitos versijos) jų nebuvimas - techninis, ne nukrypimas
     var naujos = o.naujos || null, formoje = {};
     forma.forEach(function (y) { formoje[y.n] = 1; });
-    // ankstesnė redakcija - bent 2 ilgesnės jos pastraipos, kurių formoje nėra (trumpi pasirinkimai, pvz. „Punktas netaikomas.“, - ne požymis)
+    // ankstesnė redakcija - bent 2 ilgesnės jos pastraipos, kurių formoje nėra (trumpi pasirinkimai, pvz., „Punktas netaikomas.“, - ne požymis)
     var sena = !!kitos && dok.filter(function (y) { return y.n.length > 40 && !formoje[y.n] && kitos[maisa(y.n)]; }).length >= 2;
     var nepriv = neprivalomos(forma, o.zemelapis, sut), skF = skyriai(forma), skD = skyriai(dok);
     // Tikrinami tik pašalinimo pagrindai („Tiekėjų kvalifikacija nėra tikrinama šiame Pirkime“, 2026-10-23): kvalifikacijos reikalavimų atitikimo
@@ -498,7 +498,7 @@
       }
       else if (x.op === "+" && d.antraste && d.n.length >= 4 && forma.some(function (y) { return y.antraste && y.n.indexOf(d.n) === 0; })) { r = "techninis"; pr = "antraste"; }
       else if (x.op === "+" && sut) {
-        // pridėta pastraipa iškart po pildomos vietos (pvz. kokybinių kriterijų tvarka keliomis pastraipomis) - užpildyta vieta
+        // pridėta pastraipa iškart po pildomos vietos (pvz., kokybinių kriterijų tvarka keliomis pastraipomis) - užpildyta vieta
         if (d.toc) { r = "techninis"; pr = "turinys"; }
         else if ((po && ((po.vieta && !po.leidziami) || po.vietaPo)) || (poLiko && poLiko.vietaPo)) { r = "uzpildyta"; pr = "pazymeta"; } else r = "nukrypimas";
       } else if (x.op === "+") {

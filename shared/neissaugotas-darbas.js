@@ -29,7 +29,7 @@
  *   const m = GP_DARBAS.momentas();    // sugeneravus; atsisiuntus - GP_DARBAS.atskaita(m),
  *                                      // kad po generavimo įvesti pakeitimai liktų nauji
  *   GP_DARBAS.pakeista();              // true - uždarant bus klausiama
- *   GP_DARBAS.priesUzdarant(() => ...); // prieš klausimą (pvz. modulis išsaugo juodraštį ir kviečia atskaita()) - nuo 2026-10-15
+ *   GP_DARBAS.priesUzdarant(() => ...); // prieš klausimą (pvz., modulis išsaugo juodraštį ir kviečia atskaita()) - nuo 2026-10-15
  *
  * Klaida skaičiuojant būseną NIEKADA nereiškia „nėra ką prarasti“ - tada
  * klausiama. Klausimo tekstą rodo pati naršyklė, puslapis jo pakeisti negali.

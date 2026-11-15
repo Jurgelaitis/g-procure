@@ -58,7 +58,7 @@
   // citatos privalomos) ir užklausos tekstas - privačiame serverio šablone. Modulis siunčia tik duomenis: faktoriaus pavadinimą ir vienetą,
   // o PDF - kaip dokumentą. Tą pačią užduotį naudoja ir viešo epd.html Cloudflare Worker'is (worker/epd-proxy.js).
   var UZDUOTIS = "pp-carbon.epd";
-  // factorLabel - kurio faktoriaus EPD ieskome (pvz. "Jungtuvai 110-400 kV"); expectedUnit - musu faktoriaus vienetas (pvz. "kg CO2e/vnt")
+  // factorLabel - kurio faktoriaus EPD ieskome (pvz., "Jungtuvai 110-400 kV"); expectedUnit - musu faktoriaus vienetas (pvz., "kg CO2e/vnt")
   function duomenys(factorLabel, expectedUnit) {
     var d = {};
     if (factorLabel) d.produktas = String(factorLabel).slice(0, 300);
@@ -88,7 +88,7 @@
     try {
       return JSON.parse(clean.slice(a, b + 1));
     } catch (e) {
-      // Neekranuota kabutė ar eilutės lūžis eilutėje (pvz. lietuviška „ uždaryta ASCII kabute) - struktūrinis taisymas
+      // Neekranuota kabutė ar eilutės lūžis eilutėje (pvz., lietuviška „ uždaryta ASCII kabute) - struktūrinis taisymas
       // (shared/ai-proxy.js, 2026-09-28); nutrūkęs JSON netaisomas ir lieka null.
       try { return root.GP_AI_PROXY && root.GP_AI_PROXY.taisykJson ? JSON.parse(root.GP_AI_PROXY.taisykJson(clean.slice(a, b + 1))) : null; }
       catch (e2) { return null; }
@@ -160,7 +160,7 @@
         quote: mod.sarasas.map(function (m) { return m.quote; }).join(" | ") });
     }
     if (value === null || value < 0) {
-      return { status: "error", error: T("Rasta reikšmė nėra teigiamas skaičius", "The value found is not a positive number"), raw: text };
+      return { status: "error", error: T("Rasta reikšmė nėra skaičius, didesnis už nulį", "The value found is not a positive number"), raw: text };
     }
     if (!data.quote || !String(data.quote).trim()) {
       // Be citatos nepriimam - žmogus negali patikrinti.
@@ -308,9 +308,9 @@
   //  - factor: masės vieneto daugiklis (t -> kg x1000); perFactor: vardiklio daugiklis („1000 kg“ prieš /kg - 1/1000);
   //  - ok:false - nesuderinama arba nežinoma: rodomas įspėjimas, automatiškai neįrašoma (sprendžia žmogus).
   function checkUnitCompatibility(epdUnit, epdDeclaredUnit, ourUnit) {
-    var eDalys = normUnit(epdUnit).split("/");      // pvz. "kgco2e" arba "kgco2e/kg"
+    var eDalys = normUnit(epdUnit).split("/");      // pvz., "kgco2e" arba "kgco2e/kg"
     var eu = eDalys[0];
-    var oDalys = normUnit(ourUnit).split("/");      // pvz. "kgco2e/vnt"
+    var oDalys = normUnit(ourUnit).split("/");      // pvz., "kgco2e/vnt"
     var ourMass = oDalys[0];
     var ourPerTekstas = oDalys.length > 1 ? str(ourUnit).split("/").slice(1).join("/") : "";
 

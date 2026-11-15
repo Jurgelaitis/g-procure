@@ -8,7 +8,7 @@
  *                "neparuosta" - šeima žinoma, bet jos šablonas generatoriui dar neparuoštas (S1 - tik prekės ir paslaugos);
  *                "klausimas"  - po taisyklių liko keli kandidatai: klausimas.kodas, tekstas, paaiškinimas, atsakymai [{ id, tekstas }];
  *                               atsakymas paduodamas atsakymai[kodas] = id ir parink kviečiamas iš naujo;
- *                "nerengiama" - LITGRID sutarties projektas nerengiamas (pvz. perkama per CPO LT - jo sutarties forma).
+ *                "nerengiama" - LITGRID sutarties projektas nerengiamas (pvz., perkama per CPO LT - jo sutarties forma).
  *   GP_SUTARTYS.palygink(rezultatas, zmogausSeima, zmogausVariantas) -> stebėjimo įrašas (siūlyta / pasirinkta / sutampa)
  *   GP_SUTARTYS.NERENGIAMA - kai žmogus atsako, kad LITGRID standartinės sutarties sąlygos netaikomos (sąsaja - sutarties-blokas.js)
  *   rezimas: "VPI" (centralizuotas LITGRID ir EPSO-G pirkimas) - šeima parenkama, bet „neparuošta“: šablonai parengti PĮ pirkimams,
@@ -127,9 +127,9 @@
                       { id: "trasos", tekstas: "Trasų valymas", seima: "EKSPLOATAVIMO", variantas: "TRASOS" },
                       { id: "pastatas", tekstas: "Pastato sistemos ar kita", seima: "DARBAI_MAZOJI" }] },
     K4: { tekstas: "Ar perkamas statinio (transformatorių pastotės, oro ar kabelinės linijos) projektavimas ir projekto vykdymo priežiūra?",
-          paaiskinimas: "Statinių projektavimas - projektavimo paslaugų sutartis; kitų sistemų (pvz. apsaugos ar IT) projektavimas - paslaugų sutartis.",
+          paaiskinimas: "Statinių projektavimas - projektavimo paslaugų sutartis; kitų sistemų (pvz., apsaugos ar IT) projektavimas - paslaugų sutartis.",
           atsakymai: [{ id: "statinio", tekstas: "Taip, statinio projektavimas", seima: "PROJEKTAVIMO_PASLAUGOS" },
-                      { id: "kita", tekstas: "Ne (pvz. apsaugos ar IT sistemų projektavimas)", seima: "PASLAUGOS" }] },
+                      { id: "kita", tekstas: "Ne (pvz., apsaugos ar IT sistemų projektavimas)", seima: "PASLAUGOS" }] },
     K5: { tekstas: "Kas sudaro pagrindinę vertę - licencijos ar palaikymo paslaugos?",
           paaiskinimas: "Licencijos (prekės) - prekių pirkimo-pardavimo sutartis; palaikymo paslaugos - paslaugų pirkimo-pardavimo sutartis.",
           atsakymai: [{ id: "licencijos", tekstas: "Licencijos (prekės)", seima: "PREKES" },

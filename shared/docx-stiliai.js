@@ -139,7 +139,7 @@
 
   function xml(o) {
     o = o || {};
-    /* Šriftas ir dydis NEPRIVALOMI: jei modulis jų nenustatinėjo (pvz. PP-ts), jų
+    /* Šriftas ir dydis NEPRIVALOMI: jei modulis jų nenustatinėjo (pvz., PP-ts), jų
        nerašom ir čia - kitaip dokumento išvaizda pasikeistų. */
     var font = o.font ? esc(o.font) : null;
     var size = o.size ? Number(o.size) : null;

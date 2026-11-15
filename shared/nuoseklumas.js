@@ -142,7 +142,7 @@
   var BENDRA = /(standart|normatyv|norm\w*\s+dokument)[^.]{0,200}lygiaver|lygiaver[^.]{0,200}(standart|normatyv)/;
   function standartai(doc) {
     var sak = sakiniai(doc), bendra = null, be_lyg = [], visos = 0, lentelesLyg = {};
-    // lentelė, kurios bent viename langelyje (pvz. antraštėje „Standartas (arba lygiavertis)“) yra „lygiavertis“
+    // lentelė, kurios bent viename langelyje (pvz., antraštėje „Standartas (arba lygiavertis)“) yra „lygiavertis“
     sak.forEach(function (s) { if (s.loc && s.loc.table && LYGIAVERTIS.test(be(s.blokas))) lentelesLyg[s.loc.table] = 1; });
     sak.forEach(function (s) {
       var f = be(s.t);

@@ -11,7 +11,7 @@
  *  - Tasko forma: { id, name, esrs, value, unit, coverage, source, sourceRef, date }
  *  - Konvencijos:
  *      esrs      = "E1-6" (Scope 3)
- *      value     = STRING (ne skaicius!), pvz. "42.8"
+ *      value     = STRING (ne skaicius!), pvz., "42.8"
  *      unit      = "tCO2e" (TONOS, ne kg)
  *      source    = "module"
  *      sourceRef = "PP-CARBON"
@@ -96,7 +96,7 @@
   }
 
   // Saugiai iterpia/atnaujina taska "ppesg.esrs" masyve per paduota storage.
-  //  storage - objektas su getItem(key)/setItem(key,val) (pvz. window.localStorage)
+  //  storage - objektas su getItem(key)/setItem(key,val) (pvz., window.localStorage)
   //  point   - is buildEsrsPoint()
   // Grazina { action: "inserted"|"updated", list } arba { error }.
   function upsertToEsg(storage, point) {

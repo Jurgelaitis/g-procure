@@ -325,7 +325,7 @@
         try { leidziami[i] = new RegExp("^\\s*" + src + "\\s*$"); variantai[i] = [{ t: t.trim(), n: P_NORM(t) }]; } catch (e) { /* netinkamas šablonas - lieka vieta */ }
       });
     }
-    // Tuščias laukas (pvz. sutarties pavadinimas po užrašo „Sutarties pavadinimas“) palyginime nematomas - užpildytą jį atpažįsta pagal
+    // Tuščias laukas (pvz., sutarties pavadinimas po užrašo „Sutarties pavadinimas“) palyginime nematomas - užpildytą jį atpažįsta pagal
     // ankstesnę netuščią pastraipą (vietaPo: po jos pridėta pastraipa - užpildyta vieta)
     Object.keys(vieta).forEach(function (k) {
       if (!P[k] || tekstas(P[k])) return;
@@ -504,7 +504,7 @@
     try {
       var f = null;
       if (indeksas && indeksas.formos[x.forma]) f = await gaukForma(x.forma);
-      else if (!pagalPasa) throw new Error("formos " + x.forma + " modulyje nėra");
+      else if (!pagalPasa) throw new Error("formos " + x.forma + " įrankyje nėra");
       x.wordNumeracija = !!(f && f.wordNumeracija);
       if (pagalPasa) {
         x.rez = P().pagalPasa(x.pasas, x.ps, f ? f.ps : []);
@@ -607,7 +607,7 @@
                    teise: [], kilme: "palyginimas", docId: d.id, k: k, p: p, svarbus: p.svarbus, citata: cit });
       });
     });
-    // Tas pats radinys keliuose dokumentuose (pvz. tas pats nukrypimas dviejuose failuose) - viena kortelė su visomis vietomis
+    // Tas pats radinys keliuose dokumentuose (pvz., tas pats nukrypimas dviejuose failuose) - viena kortelė su visomis vietomis
     var pagal = {}, sujungta = [];
     out.forEach(function (r) {
       if (pagal[r.raktas]) { pagal[r.raktas].vietos = pagal[r.raktas].vietos.concat(r.vietos); return; }
@@ -638,8 +638,8 @@
       if (x.klaida) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: "Word failo perskaityti nepavyko: " + x.klaida }); return; }
       if (!indeksas && !x.pasas) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: "formų rodyklė neįkelta (" + (indeksoKlaida || "nežinoma priežastis") + ")" }); return; }
       if (!x.forma) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: B.formos[d.id] === "" ? "pasirinkta nelyginti"
-        : sut && sutarciuKlaida ? "sutarčių šablonų registras neįkeltas (" + sutarciuKlaida + ")"
-        : sut ? "sutarties forma neatpažinta - modulyje yra sutarčių šablonai (prekių, paslaugų, projektavimo paslaugų, darbų pirkimo-pardavimo, statybos rangos, projektavimo ir statybos rangos, eksploatavimo darbų); jei tai viena iš jų (gal ankstesnė redakcija), pasirinkite ją „Pagal dokumentą“"
+        : sut && sutarciuKlaida ? "sutarčių šablonų sąrašas neįkeltas (" + sutarciuKlaida + ")"
+        : sut ? "sutarties forma neatpažinta - įrankyje yra sutarčių šablonai (prekių, paslaugų, projektavimo paslaugų, darbų pirkimo-pardavimo, statybos rangos, projektavimo ir statybos rangos, eksploatavimo darbų); jei tai viena iš jų (gal ankstesnė redakcija), pasirinkite ją „Pagal dokumentą“"
         : "forma neatpažinta - jei tai LITGRID forma, pasirinkite ją „Pagal dokumentą“" }); return; }
       if (x.klaidaLyg) { out.push({ pav: pav, grupe: "Palyginimas su forma", busena: "nepatikrinta", pastaba: x.klaidaLyg }); return; }
       var n = x.rez.statistika.nukrypimas;
@@ -652,7 +652,7 @@
     var rz = B.rez, out = [];
     if (rz) {
       rz.patikros.forEach(function (p) { out.push({ pav: p.pav, grupe: GP_PARENGTIS.grupesPav(p.grupe, "lt"), busena: p.busena, pastaba: p.pastaba || "" }); });
-      var LAUK = { verte: "vertės", rezimas: "režimo", objektas: "objekto", budas: "būdo", paskelbimas: "paskelbimo datos", pasiulymuTerminas: "termino" };
+      var LAUK = { verte: "vertės", rezimas: "taikomo įstatymo", objektas: "objekto", budas: "būdo", paskelbimas: "paskelbimo datos", pasiulymuTerminas: "termino" };
       if (rz.taisykles) rz.taisykles.patikros.forEach(function (p) {
         var tr = (p.truksta || []).map(function (f) { return LAUK[f] || f; });
         out.push({ pav: GP_TAISYKLES.patikrosPav(p.id, "lt"), grupe: "Taisyklės",
@@ -823,11 +823,11 @@
         ? "Forma neatpažinta. Panašiausia - " + formosPav(art.id) + " (panašumas " + Math.round(art.balas * 100) + " %); dokumentas gali būti parengtas pagal ankstesnę formos redakciją. " +
           "Jei tai ši forma - pasirinkite ją sąraše „Forma“: palyginimas parodys skirtumus nuo dabartinės redakcijos."
         : "Su standartine forma nelyginama: rodyklėje - LITGRID SPS, BPS ir DPS sąlygų formos bei sutarčių bendrosios ir specialiosios sąlygos" +
-          (sutarciuKlaida ? " (sutarčių šablonų registro įkelti nepavyko: " + sutarciuKlaida + ")" : "") + ". Jei tai viena iš jų - pasirinkite.";
+          (sutarciuKlaida ? " (sutarčių šablonų sąrašo įkelti nepavyko: " + sutarciuKlaida + ")" : "") + ". Jei tai viena iš jų - pasirinkite.";
     }
     if (x.klaidaLyg) return "Palyginti nepavyko: " + x.klaidaLyg;
     var s = x.rez.statistika;
-    var kaip = x.pagalPasa ? "Sugeneruota šiuo moduliu - lyginama pagal generavimo pasą (" + (x.pasas.data || "data nenurodyta") + (x.pasoVersija === "kita" ? "; sugeneruota iš ankstesnės formos versijos" : "") + ")"
+    var kaip = x.pagalPasa ? "Sugeneruota šiuo įrankiu - lyginama pagal generavimo pasą (" + (x.pasas.data || "data nenurodyta") + (x.pasoVersija === "kita" ? "; sugeneruota iš ankstesnės formos versijos" : "") + ")"
       : (x.pagal === "atpazinta" && B.formos[d.id] === undefined ? "Forma atpažinta: " : "Forma pasirinkta: ") + formosPav(x.forma) +
         (x.idf && x.idf[0] && x.idf[0].id === x.forma ? " (panašumas " + Math.round(x.idf[0].balas * 100) + " %; siūloma - patikrinkite)" : "");
     return kaip + ". Pastraipų: nepakeistos " + s.vienodos + ", nukrypimai " + s.nukrypimas + ", leistini pakeitimai " + (s.neprivaloma + s.uzpildyta + s.techninis) + "." +

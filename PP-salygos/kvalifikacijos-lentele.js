@@ -29,7 +29,7 @@
  *   pastabos(M, kontekstas)     -> nuoseklumo pastabos (sąvokos „Rangovas“, „Paraiška“, išnašos, vertimas)
  *   irasyk(doc, M, opts)        -> sugeneruoto SPS DOM dokumento 2 lentelė (DPS sukūrimo sąlygose - 2 priedo 1 lentelė)
  *                                  pakeičiama; ataskaita arba null
- *   patirtiesEilutes(E)         -> tiekėjo patirties reikalavimų numeriai (nuorodoms formose, pvz. „1 lentelės 8 punktą“)
+ *   patirtiesEilutes(E)         -> tiekėjo patirties reikalavimų numeriai (nuorodoms formose, pvz., „1 lentelės 8 punktą“)
  *   tusciaNeVisa(doc)           -> „Informacija dėl ... ne visa apimtimi“ be turinio - antraštė ir tuščia eilutė šalinamos
  * ==========================================================================*/
 (function (root) {
@@ -181,7 +181,7 @@
     techninis:  { lt: 'Techninis ir profesinis pajėgumas', en: 'Technical and professional capacity', re: /^techninis ir profesinis pajegumas/ }
   };
   const NE_VISA_RE = /ne visa apimtimi|partial application of qualification/;
-  /* Šaltinio antraštė -> SPS grupė. Kitokia antraštė (pvz. PP-qual „Kokybės ir aplinkos apsaugos vadybos standartai“)
+  /* Šaltinio antraštė -> SPS grupė. Kitokia antraštė (pvz., PP-qual „Kokybės ir aplinkos apsaugos vadybos standartai“)
      perkeliama savo tekstu - tai jūsų dokumento struktūra. */
   function antrastesGrupe(t){
     const n = norm(t);
@@ -388,7 +388,7 @@
     if (!f) return { lenteles: [], zalieji: 0, ispejimai: ['Faile nėra Word dokumento teksto.'] };
     const nf = zip.file('word/numbering.xml');
     const r = skaitykXml(await f.async('string'), nf ? await nf.async('string') : '', vardas);
-    // 2026-11-09 (kelio patikra): dokumentas su DI požymiais (shared/di-zymejimas.js - docProps/custom.xml „DI_turinys“, pvz. PP-qual
+    // 2026-11-09 (kelio patikra): dokumentas su DI požymiais (shared/di-zymejimas.js - docProps/custom.xml „DI_turinys“, pvz., PP-qual
     // parengti reikalavimai) - perkeltos lentelės tekstas yra DI parengtas, todėl ir SPS Word faile turi būti DI požymiai (DI akto 50 str. 2 d.)
     const cf = zip.file('docProps/custom.xml');
     const di = cf ? diDokumentas(await cf.async('string')) : '';
@@ -702,7 +702,7 @@
       // antraštė rasta, bet tekstas neperkeltas: be rėmelių (ar kitame puslapyje neperskaitytų) nežinoma, kur jis baigiasi - „nepatikrinta“, ne „nėra“
       if (nvAntraste && !(M.neVisa && pTekstas(M.neVisa.lt)) && (!nvR || nvNezinoma)){
         M.neVisa = null;
-        M.neVisaNepatikrinta = 'PDF faile rasta „Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi“, bet nepavyko nustatyti, kur baigiasi jos tekstas (lentelės rėmelių neatpažinome) - šios nuostatos tekstas neperkeltas. Patikrinkite ją dokumente ir, jei reikia, įrašykite Word programoje arba įkelkite Word failą.';
+        M.neVisaNepatikrinta = 'PDF faile rasta „Informacija dėl kvalifikacinių reikalavimų taikymo ne visa apimtimi“, bet nepavyko nustatyti, kur baigiasi jos tekstas (lentelės rėmeliai neatpažinti) - šios nuostatos tekstas neperkeltas. Patikrinkite ją dokumente ir, jei reikia, įrašykite Word programoje arba įkelkite Word failą.';
         M.ispejimai.push(M.neVisaNepatikrinta);
       }
       if (M.eilutes.length){
@@ -911,7 +911,7 @@
   }
 
   /* Nuoseklumo pastabos: SPS sąvokos ir procedūra (kontekstas: { terminas: 'pasiulymas' | 'paraiska', dvikalbis, pakeitimai, vertimas,
-     pavKur - kur lentelė, pvz. „SPS 2 lentelėje“ }). */
+     pavKur - kur lentelė, pvz., „SPS 2 lentelėje“ }). */
   function pastabos(M, ktx){
     const out = (M.ispejimai || []).slice();
     const visas = M.eilutes.map(e => pTekstas(e.reik) + '\n' + pTekstas(e.dok)).join('\n');
@@ -923,7 +923,7 @@
     if (t === 'paraiska' && /pasiulym/.test(n) && !/paraisk/.test(n)) out.push('Reikalavimuose minimas „Pasiūlymas“, o šiame pirkimo būde pirmiausia teikiama „Paraiška“ - patikrinkite terminų formuluotes.');
     if (ktx && ktx.dvikalbis && !M.dvikalbe){
       const be = numeriai(M, {}, ktx.vertimas).filter(e => !pTekstas(e.reikEN)).length;
-      if (be) out.push(`Pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų kalbos nėra: ${be === M.eilutes.length ? 'angliški langeliai' : `${be} eilučių angliški langeliai`} liks raudoni su nurodymu. Pasiūlykite vertimą (DI) žemiau, įkelkite dvikalbį dokumentą (pvz. PP-qual LT / EN) arba įrašykite vertimą Word programoje.`);
+      if (be) out.push(`Pirkimo sąlygos dvikalbės, o įkeltoje lentelėje anglų kalbos nėra: ${be === M.eilutes.length ? 'angliški langeliai' : `${be} eilučių angliški langeliai`} liks raudoni su nurodymu. Pasiūlykite vertimą (DI) žemiau, įkelkite dvikalbį dokumentą (pvz., PP-qual LT / EN) arba įrašykite vertimą Word programoje.`);
     }
     // 2026-11-11 (LAT 2026-10-28 nutartis Nr. e3K-3-125-933/2026): konkretus sertifikatas ar atestatas be „arba lygiavertis“ - lygiavertiškumas
     // vertinamas pagal dokumento turinį, todėl reikalavime verta nurodyti, kokią kompetenciją dokumentas turi patvirtinti (bendra su PP-qual R17)
@@ -955,7 +955,7 @@
       const tr0 = vaikas(kunas[i], 'tr');
       if (!tr0 || !/kvalifikacijos reikalavim/i.test(tekstas(tr0))) continue;
       const st0 = stulpeliai(langeliai(tr0));
-      if (!st0.reik || !(st0.dok || st0.dokLt)) continue;          // pvz. DPS LT/EN priedo antraštinė lentelė „TIEKĖJŲ KVALIFIKACIJOS REIKALAVIMAI ...“
+      if (!st0.reik || !(st0.dok || st0.dokLt)) continue;          // pvz., DPS LT/EN priedo antraštinė lentelė „TIEKĖJŲ KVALIFIKACIJOS REIKALAVIMAI ...“
       for (let j = i - 1; j >= 0; j--){
         if (kunas[j].localName === 'tbl') break;
         if (kunas[j].localName !== 'p') continue;

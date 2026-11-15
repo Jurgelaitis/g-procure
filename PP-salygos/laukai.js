@@ -500,7 +500,7 @@
         p = v.end;
         return;
       }
-      // Vieta pašalinama pagal žmogaus atsakymą (pvz. „Vertinama tik pagal kainą“ - „[arba ...]“) kartu su tarpu prieš ją.
+      // Vieta pašalinama pagal žmogaus atsakymą (pvz., „Vertinama tik pagal kainą“ - „[arba ...]“) kartu su tarpu prieš ją.
       if (raw === SALINTI){
         if (v.start < p) return;
         let s = v.start;

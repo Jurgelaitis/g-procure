@@ -65,9 +65,9 @@
              mbTekstas(MAX_PDF_BAITU) + ". Pateikite mažesnės apimties failą.";
     }
     if (status === 429) return "Per daug užklausų iš eilės. Palaukite kelias sekundes ir bandykite dar kartą.";
-    if (status === 401 || status === 403) return "Serveris atmetė užklausą (" + status + "). Kreipkitės į sistemos prižiūrėtoją.";
+    if (status === 401 || status === 403) return "Serveris atmetė užklausą (" + status + "). Kreipkitės į G-Procure rengėją.";
     if (status >= 500) return "Serverio klaida (" + status + "). Pabandykite po kelių minučių.";
-    var zinute = "API klaida " + status;
+    var zinute = "DI užklausos klaida " + status;
     if (raw && raw.error) {
       zinute += ": " + (typeof raw.error === "string" ? raw.error : JSON.stringify(raw.error));
     } else if (typeof rawText === "string" && rawText && !arHtml(rawText)) {

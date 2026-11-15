@@ -31,7 +31,7 @@
     }
     raktai().forEach(function (k) { kopija[k] = s.getItem(k); });
 
-    /* Galima kviesti kelis kartus (pvz. pabaigoje ir dar kartą uždarant puslapį). */
+    /* Galima kviesti kelis kartus (pvz., pabaigoje ir dar kartą uždarant puslapį). */
     function atkurk() {
       if (!s) return false;
       try {

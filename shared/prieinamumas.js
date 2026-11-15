@@ -184,7 +184,7 @@
     if (a && a !== doc.body && a.isConnected && !i.fonas.contains(a) && rodomas(a)) return;   // fokusas jau kitur (modulis perkėlė)
     var t = i.atidare && i.atidare.isConnected && rodomas(i.atidare) ? i.atidare : (i.atidareId ? doc.getElementById(i.atidareId) : null);
     if (t && rodomas(t)) { try { t.focus(); } catch (e) {} }
-    // Langas atvertas be mygtuko (pvz. pats pirmą kartą) arba mygtuko nebėra - fokusas į turinį, ne į puslapio pradžią (2026-11-05).
+    // Langas atvertas be mygtuko (pvz., pats pirmą kartą) arba mygtuko nebėra - fokusas į turinį, ne į puslapio pradžią (2026-11-05).
     // Fokusas gali būti dar paslėptame lange: naršyklė jį nuima tik piešdama, todėl čia - ir toks atvejis.
     else if (!doc.activeElement || doc.activeElement === doc.body || i.fonas.contains(doc.activeElement)) fokusas(turinioSritis());
   }
@@ -244,7 +244,7 @@
     });
   }
 
-  // Tuščia drobė (diagrama dar nenupiešta - pvz. nėra duomenų) be pavadinimo: nieko nesako, paslepiama; nupiešus - grąžinama (7 p.)
+  // Tuščia drobė (diagrama dar nenupiešta - pvz., nėra duomenų) be pavadinimo: nieko nesako, paslepiama; nupiešus - grąžinama (7 p.)
   function drobes(saknis) {
     sarasas(saknis, "canvas:not([aria-hidden]):not([role]):not([aria-label]):not([aria-labelledby])").forEach(function (c) {
       if (c.textContent.trim()) return;

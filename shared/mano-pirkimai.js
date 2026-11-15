@@ -33,17 +33,17 @@
       planuojamas: "pirkimo grafikas", rengiamas: "pirkimo dokumentai",
       paskelbtas: "laukiama pasiūlymų", vertinamas: "pasiūlymų vertinimas ir komisijos sprendimai",
       grafikas: "Grafikas", kvalifikacija: "Kvalifikacija", kortele: "Kortelė",
-      ts: "TS", salygos: "Sąlygos", protokolai: "Protokolai", pazyma: "Pažyma", derybos: "Derybos", vertinimas: "Vertinimas", parengtis: "Parengtis skelbti",
+      ts: "TS", salygos: "Sąlygos", protokolai: "Protokolai", pazyma: "Pažyma", derybos: "Derybos", vertinimas: "Vertinimas", parengtis: "Dokumentų patikra",
       kna: "Kaštų ir naudos analizė", vertinamasMV: "pasiūlymų vertinimas ir pažyma",
-      naujasSkirtukas: "atsidaro naujame skirtuke", daugiau: "Rodyti visus", baigti: "Užbaigti ar archyvuoti: ",
+      naujasSkirtukas: "atsidaro naujame skirtuke", daugiau: "Rodyti visus", baigti: "Užbaigtų ar archyvuotų pirkimų: ",
       visosKorteles: "visos kortelės", aktyviuNera: "Aktyvių pirkimų nėra.", CVP: "CVP IS ",
       cvpTikrinti: "Patikrinti CVP IS duomenis",
-      cvpPag: "Į G-Procure serverį siunčiami tik šių kortelių CVP IS numeriai ({n}); jis atsako iš viešų VPT duomenų, atnaujinamų kas 6 val. Kortelės nekeičiamos.",
+      cvpPag: "Į G-Procure serverį siunčiami tik šių kortelių CVP IS numeriai ({n}); serveris duomenis ima iš viešų VPT duomenų, atnaujinamų kas 6 val. Kortelės nekeičiamos.",
       cvpEiga: "Tikrinami CVP IS duomenys ({n})...", cvpNepavyko: "CVP IS duomenų patikrinti nepavyko",
       cvpRysys: "G-Procure serveris neatsakė arba VPT sąrašas dar neįkeltas - bandykite vėliau.",
       cvpSuvestine: "Patikrinta kortelių: {n} (VPT sąrašas atnaujintas {t}). Skiriasi nuo CVP IS: {p}, sutampa: {s}",
       cvpNeraS: ", VPT sąraše nėra: {m}", cvpKlaidaS: ", patikrinti nepavyko: {k}",
-      cvpRiba: " Vienu kartu tikrinama {r} kortelių su artimiausiais terminais.",
+      cvpRiba: " Vienu kartu tikrinamos ne daugiau kaip {r} kortelės su artimiausiais terminais.",
       cvpTerminas: "CVP IS pasiūlymų terminas: {v}", cvpPaskelbimas: "CVP IS paskelbimo data: {v}", cvpBusena: "CVP IS būsena: {v}",
       cvpTrukme: "CVP IS sutarties trukmė: {v}", cvpLTrukme: "sutarties trukmė", men: "mėn.",
       cvpTrukmePst: " - skelbime „Numatomas galiojimas“ kartais įrašomas pasiūlymo galiojimas; patikrinkite sutarties projekte",
@@ -56,11 +56,11 @@
       cvpKlaida: "Šios kortelės CVP IS duomenų gauti nepavyko.",
       cvpAtnaujinti: "Atnaujinti kortelę", cvpAtverti: "Atverti CVP IS",
       povPrad: "Sudaryta pagal ankstesnius kortelės duomenis: ", povKortele: "Peržiūrėti kortelėje",
-      teisePrad: "Teisės pokyčiai šiam pirkimui: ", teiseDar: " (įsigalios dar - {n})", teisePirkimoMetu: "pasikeitė pirkimo metu - {n}",
+      teisePrad: "Teisės pokyčiai šiam pirkimui: ", teiseDar: " (dar įsigalios: {n})", teisePirkimoMetu: "pirkimo metu pasikeitė: {n}",
       teisePerziureti: "Peržiūrėti teisės stebėsenoje",
-      teiseNepavyko: "Teisės pokyčių šiems pirkimams patikrinti nepavyko - teisės stebėsenos registras neįkeltas.",
-      teiseBeEs: "ES teisės registro įkelti nepavyko - rodomi tik nacionalinės teisės pokyčiai.",
-      teiseBeLt: "Nacionalinės teisės registro įkelti nepavyko - rodomi tik ES teisės pokyčiai."
+      teiseNepavyko: "Teisės pokyčių šiems pirkimams patikrinti nepavyko - teisės pokyčių sąrašo įkelti nepavyko.",
+      teiseBeEs: "ES teisės pokyčių sąrašo įkelti nepavyko - rodomi tik nacionalinės teisės pokyčiai.",
+      teiseBeLt: "Nacionalinės teisės pokyčių sąrašo įkelti nepavyko - rodomi tik ES teisės pokyčiai."
     },
     en: {
       kortelesPav: "Procurement cards", pradzia: "Procurement start", paskelbimas: "Publication", pasiulymuTerminas: "Tender deadline",
@@ -152,7 +152,7 @@
   }
   var BAIGTOS = { sutartis: 1, nutrauktas: 1 };
   /* „Trūksta ...“ - kilmininkas (LT), be jo „trūksta vertė“. */
-  var TRUKSTA = { lt: { verte: "vertės", budas: "būdo", vykdytojas: "vykdytojo", rezimas: "režimo", busena: "būsenos" },
+  var TRUKSTA = { lt: { verte: "vertės", budas: "būdo", vykdytojas: "vykdytojo", rezimas: "taikomo įstatymo", busena: "būsenos" },
                   en: { verte: "value", budas: "procedure", vykdytojas: "contracting body", rezimas: "legal regime", busena: "status" } };
   var TERMINAI = ["pasiulymuTerminas", "paskelbimas", "pradzia"];
   /* CVP IS patikra: vienu paspaudimu - ne daugiau kaip MAX_CVP numerių (nginx riba - 30 užklausų iš karto), po 3 lygiagrečiai. */

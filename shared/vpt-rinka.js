@@ -214,7 +214,7 @@
           (x.tarptautinis === true ? " - " + t.tarptT : x.tarptautinis === false ? " - " + t.tarptS : "") };
       });
       var rastas = eil.some(function (x) { return x.jusu; });
-      // Modulio grafiko etapas (pvz. pirkimų grafikai) - greta CVP IS medianos, prieš lentelę
+      // Modulio grafiko etapas (pvz., pirkimų grafikai) - greta CVP IS medianos, prieš lentelę
       var mg = o.mano ? o.mano() : null;
       if (mg && mg.pavadinimas && mg.dd > 0) {
         var mt = mg.kd > 0 ? fmt(t.mano, { p: mg.pavadinimas, kd: mg.kd, dd: mg.dd }) : fmt(t.manoDd, { p: mg.pavadinimas, dd: mg.dd });

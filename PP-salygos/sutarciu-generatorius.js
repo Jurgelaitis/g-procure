@@ -37,7 +37,7 @@
  *                        pastraipoje lieka tekstas prieš, pasirinktas variantas ir tekstas po (kaip šablone), žyma ir kiti variantai šalinami
  *       "kp:kiti"        priedų sąrašo eilutė kitiems priedams (žemėlapio `kiti_priedai`; 2026-10-13): { eilutes: [tekstas, ...] } - pirmoji
  *                        įrašoma vietoje eilutės, kitos - naujomis to paties sąrašo eilutėmis po jos (numeruoja Word); { tekstas } - eilutės
- *                        vietoje (pvz. „Kiti priedai - netaikoma.“); be sprendimo eilutė lieka ir įrašoma į „palikta“
+ *                        vietoje (pvz., „Kiti priedai - netaikoma.“); be sprendimo eilutė lieka ir įrašoma į „palikta“
  *       "f:<id>"         šablono teksto atkarpa pastraipos viduje, taikoma ne visada (žemėlapio `fragmentai`; projektavimo paslaugų SS 2.1 p.
  *                        „, projekto vykdymo priežiūros paslaugos“): "salinti" arba { tekstas }; be sprendimo lieka (tai šablono tekstas)
  *       "pt:<id>"        naujas punktas po lentelės (žemėlapio `papildomi_punktai`; 2026-11-12, rangos SS 21 p. - „Sutarties bendrųjų sąlygų 3.2
@@ -128,7 +128,7 @@ const GP_SUTARCIU_GEN = (() => {
     return r;
   }
   /* Įrašomos reikšmės formatavimas: šablono nurodymo spalva, žymėjimas, kursyvas, pabraukimas ir vietos rezervo stilius nuimami.
-     Nuo 2026-10-10 (rangos SS Pages patikra): ženklų stilius nuimamas tik vietos rezervo („Placeholder Text“) - kitas (pvz. „NormalBold“:
+     Nuo 2026-10-10 (rangos SS Pages patikra): ženklų stilius nuimamas tik vietos rezervo („Placeholder Text“) - kitas (pvz., „NormalBold“:
      „[dienos/mėnesiai] nuo Sutarties sudarymo dienos.“) lieka, kitaip reikšmė būtų kitokio šrifto nei jos sakinys; o.kursyvas - kursyvas
      paliekamas (reikšmė kursyvu parašyto sakinio viduje). */
   function svarus(rPr, o){
@@ -549,7 +549,7 @@ const GP_SUTARCIU_GEN = (() => {
     const vsp = {};
     for (const x of V.filter(x => x.rusis === 'valdiklis')){
       const s = sp(x);
-      if (yraSpr(s) && s.salinti === true){   // nereikalingas (pvz. vienetas, kai terminas - pagal techninę specifikaciją)
+      if (yraSpr(s) && s.salinti === true){   // nereikalingas (pvz., vienetas, kai terminas - pagal techninę specifikaciją)
         for (const v of [x.lt, x.en].filter(Boolean)) vsp[v.nr] = { tekstas: '', netaikoma: false };
         A.pakeista.push({ raktas: x.raktas, vieta: x.vieta, ka: 'pasirinkimas', tapo: '' });
         continue;
@@ -626,7 +626,7 @@ const GP_SUTARCIU_GEN = (() => {
     }
 
     // 4a. Sąlyginiai blokai „Jei punktas taikomas:“: taikoma - šalinamas tik užrašas; netaikoma - ir tekstas iki langelio pabaigos,
-    //     o užrašo vietoje - sprendimo tekstas (pvz. „Punktas netaikomas.“)
+    //     o užrašo vietoje - sprendimo tekstas (pvz., „Punktas netaikomas.“)
     const salygosTekstas = {};
     for (const x of V.filter(x => x.rusis === 'salyga')){
       const s = sp(x);

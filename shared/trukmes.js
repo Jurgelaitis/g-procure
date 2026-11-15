@@ -53,7 +53,7 @@
     var d = diena(dabar);
     return VERSIJOS.filter(function (v) { return galioja(v, d); })[0] || pasirenkamos(d)[0] || VERSIJOS[VERSIJOS.length - 1];
   }
-  /* Versija, galiojanti nurodytą dieną (pvz. pirkimo pradžios) - arba null */
+  /* Versija, galiojanti nurodytą dieną (pvz., pirkimo pradžios) - arba null */
   function pagalData(d) {
     if (!d) return null;
     d = diena(d);

@@ -106,7 +106,7 @@
   function kiekDaug(s) { return s.length > 240 ? s.slice(0, 237).replace(/\s+\S*$/, "") + "..." : s; }
 
   // Grąžina pirmą atitikimą dokumentuose pagal jų eilę: { d, ch, m, tekstas, citata, salyga }.
-  // o.turi - sakinyje turi būti ir tai (pvz. CVP IS); tada tikrinami visi atitikimai fragmente, ne tik pirmas (2026-11-10, pilotas su tikru pirkimu:
+  // o.turi - sakinyje turi būti ir tai (pvz., CVP IS); tada tikrinami visi atitikimai fragmente, ne tik pirmas (2026-11-10, pilotas su tikru pirkimu:
   // „su Pasiūlymu reikia pateikti SPS 5 priedo 2 priedėlį“ buvo laikoma pateikimo per CVP IS citata)
   function rask(docs, re, o) {
     o = o || {};

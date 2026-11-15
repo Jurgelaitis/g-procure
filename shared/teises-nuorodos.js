@@ -309,7 +309,7 @@
       PI: { a: "PI", s: 79, d: 4 } },
     nd_pakartotinis: { tikrinta: "2026-10-24", apie: "neskelbiamų derybų būdu paslaugos ir darbai taip pat gali būti perkami iš to paties tiekėjo, kai perkamos naujos panašios paslaugos ar darbai tam pačiam projektui, pagrindiniame projekte numatyta papildomų pirkimų apimtis ir sąlygos, o pirminė sutartis sudaryta paskelbus apie pirkimą ir skelbime nurodžius galimybę pirkti papildomai",
       PI: { a: "PI", s: 79, d: 5 } },
-    nd_supaprastinti: { tikrinta: "2026-10-24", apie: "supaprastintų pirkimų atvejais neskelbiamų derybų būdu taip pat gali būti perkama (pvz. reprezentacinėms išlaidoms skirtomis lėšomis, darbuotojų mokymo ir konferencijų paslaugos, mažos vertės pirkimai perkančiojo subjekto taisyklėse nustatytais atvejais)",
+    nd_supaprastinti: { tikrinta: "2026-10-24", apie: "supaprastintų pirkimų atvejais neskelbiamų derybų būdu taip pat gali būti perkama (pvz., reprezentacinėms išlaidoms skirtomis lėšomis, darbuotojų mokymo ir konferencijų paslaugos, mažos vertės pirkimai perkančiojo subjekto taisyklėse nustatytais atvejais)",
       PI: { a: "PI", s: 79, d: 6 } },
     nd_po_skelbiamu: { tikrinta: "2026-10-24", apie: "supaprastinto pirkimo atveju neskelbiamos derybos, jeigu skelbiamoms deryboms visos pateiktos paraiškos ar pasiūlymai yra netinkami, o pirminės pirkimo sąlygos iš esmės nekeičiamos; perkantysis subjektas visiems skelbiamų derybų kandidatams ir dalyviams praneša, kad jie pateikė netinkamas paraiškas ar pasiūlymus",
       PI: { a: "PI", s: 79, d: 6, p: 10 } },
@@ -657,7 +657,7 @@
     // 2026-10-21 (trečioji naujo darbuotojo patikra T3-D3): PĮ 55 str. 1 d. ir VPĮ 42 str. 1 d. (abi - 2022-12-13 įstatymų redakcija) ir CK 6.70 str. 1 d.
     sutarties_uztikrinimo_budai: { tikrinta: "2026-10-21", apie: "gali pareikalauti, kad pasiūlymų galiojimas būtų užtikrinamas, ir privalo pareikalauti, kad pirkimo sutarties įvykdymas būtų užtikrinamas Civilinio kodekso 6.70 straipsnyje nustatytais prievolių įvykdymo užtikrinimo būdais - netesybomis, įkeitimu (hipoteka), laidavimu, garantija, rankpinigiais ar kitais sutartyje numatytais būdais",
       PI: { a: "PI", s: 55, d: 1 }, VPI: { a: "VPI", s: 42, d: 1 } },
-    sut_perziura: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomos sutarties peržiūros sąlygos ar pasirinkimo galimybės, jeigu tai numatoma (VPĮ: trukmė su pratęsimu ilgesnė kaip 6 mėn. - privaloma su mokesčiais nesusijusi kainos peržiūros sąlyga, išskyrus kai perskaičiavimas negalimas, pvz. kintamo įkainio ar išlaidų atlyginimo kainodara)",
+    sut_perziura: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatomos sutarties peržiūros sąlygos ar pasirinkimo galimybės, jeigu tai numatoma (VPĮ: trukmė su pratęsimu ilgesnė kaip 6 mėn. - privaloma su mokesčiais nesusijusi kainos peržiūros sąlyga, išskyrus kai perskaičiavimas negalimas, pvz., kintamo įkainio ar išlaidų atlyginimo kainodara)",
       PI: { a: "PI", s: 95, d: 1, p: 7 }, VPI: { a: "VPI", s: 87, d: 2, p: 7 } },
     sut_gincai: { tikrinta: "2026-10-09", apie: "pirkimo sutartyje nustatoma ginčų sprendimo tvarka",
       PI: { a: "PI", s: 95, d: 1, p: 8 }, VPI: { a: "VPI", s: 87, d: 2, p: 8 } },
@@ -683,7 +683,7 @@
       bendra: { a: "KTM", p: "53" } },
     ktm_formule: { tikrinta: "2026-10-27", apie: "perskaičiavimo formulė (simboliais arba žodžiais); peržiūrint antrą ir vėlesnį kartą ji taikoma tik neišpirktiems kiekiams; formulė gali būti nurodyta ir kainos sudedamosioms dalims, tada pasiūlymo formoje tiekėjai nurodo jų reikšmes ir svarbumą",
       bendra: { a: "KTM", p: "53.2" } },
-    ktm_perziura_privaloma: { tikrinta: "2026-10-27", apie: "privaloma numatyti su mokesčių pasikeitimu nesusijusią sutarties kainos peržiūros sąlygą, kai prekių tiekimo, paslaugų teikimo ar darbų atlikimo trukmė kartu su numatytu sutarties pratęsimu ilgesnė negu 6 mėnesiai; netaikoma, kai dėl kainos apskaičiavimo būdo perskaičiavimas negalimas (pvz. kintamo įkainio ar išlaidų atlyginimo kainodara)",
+    ktm_perziura_privaloma: { tikrinta: "2026-10-27", apie: "privaloma numatyti su mokesčių pasikeitimu nesusijusią sutarties kainos peržiūros sąlygą, kai prekių tiekimo, paslaugų teikimo ar darbų atlikimo trukmė kartu su numatytu sutarties pratęsimu ilgesnė negu 6 mėnesiai; netaikoma, kai dėl kainos apskaičiavimo būdo perskaičiavimas negalimas (pvz., kintamo įkainio ar išlaidų atlyginimo kainodara)",
       bendra: { a: "KTM", p: "54" } },
 
     // ---- Numatomos pirkimo vertės skaičiavimo metodika (VPT 1S-94) ir dalių išimtys kartu (perskaityta e-tar 2026-11-07, PP-plan

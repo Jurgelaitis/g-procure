@@ -22,7 +22,7 @@
  *     Nuo 2026-11-12 (antras pilotas su tikru pirkimu) - pagal sakinius: dokumento žodis turi būti reikalavimas pateikti ar turėti dokumentą
  *     (vietininkas „nepaisant atestate nurodytų išimčių“ - ne), o lygiavertiškumas („arba lygiavertis“, „ar kitą lygiavertį dokumentą“,
  *     „atestato, licencijos, leidimo ar kitų dokumentų“) ieškomas tame pačiame sakinyje, kitame sakinyje apie tą patį dokumentą (alternatyva,
- *     pvz. užsieniečiams) arba sakinyje „priimami ir lygiaverčiai dokumentai“. Iki tol - visame tekste: „... arba kituose lygiaverčiuose
+ *     pvz., užsieniečiams) arba sakinyje „priimami ir lygiaverčiai dokumentai“. Iki tol - visame tekste: „... arba kituose lygiaverčiuose
  *     dokumentuose“ sakinyje apie veiklos laikotarpį R17 nuslopindavo, o „nepaisant atestate nurodytų išimčių“ jį sukeldavo.
  *
  * Grynos funkcijos, nieko nesaugo ir nesiunčia. Naudoja PP-qual (taisyklės R1, R5, R12, R14) ir PP-salygos (kvalifikacijos lentelės

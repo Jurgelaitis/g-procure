@@ -3,7 +3,7 @@
  * ----------------------------------------------------------------------------
  * STANDARTINIS komponentas visiems G-Procure moduliams - VIENAS failas shared/.
  * Iki 2026-09-23 jis gyveno PP-esg/components/, o PP-carbon ir PP-esg turėjo po
- * įterptą jo kopiją, tad taisymai pasiekdavo tik vieną vietą (pvz. siauro ekrano
+ * įterptą jo kopiją, tad taisymai pasiekdavo tik vieną vietą (pvz., siauro ekrano
  * taisyklė buvo tik PP-tiekejams). Kopijų nedaryti - jungti šį failą.
  *
  *  1 lygis - trumpas sutraukiamas blokas modulio viršuje
@@ -63,7 +63,7 @@
 
   var UI = {
     lt: { collapse: "Suskleisti", expand: "Išskleisti", more: "Plačiau", close: "Uždaryti", aria: "Informacinė skiltis", dialog: "Išsami instrukcija",
-          trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumas", cookies: "Slapukų nustatymai" },
+          trust: "Kaip G-Procure valdo DI ir saugo duomenis:", ai: "DI valdymas ir rizikų kontrolė", privacy: "Privatumo politika", cookies: "Slapukų nustatymai" },
     en: { collapse: "Collapse", expand: "Expand", more: "Learn more", close: "Close", aria: "Information panel", dialog: "Detailed guide",
           trust: "How G-Procure governs AI and protects data:", ai: "AI governance and risk control", privacy: "Privacy", cookies: "Cookie settings" }
   };

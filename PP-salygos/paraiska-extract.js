@@ -239,7 +239,7 @@
     if (d.status === "neiskaitoma")
       return { ok: false, error: "DI nurodo, kad dokumentas neįskaitomas" + (d.pastabos ? ": " + d.pastabos : "") };
     if (d.status !== "ok" || !d.laukai || typeof d.laukai !== "object")
-      return { ok: false, error: "Atsakymas neatitinka schemos (status/laukai)" };
+      return { ok: false, error: "DI atsakymo forma netinkama (nėra būsenos ar laukų)" };
     var L = d.laukai;
     // Grieztos pasirinkimu reiksmes - kitaip atmetam i "nenustatyta".
     ["nacionalinis_saugumas", "dpa", "es_lesos", "energetikos_projektas"].forEach(function (k) {
@@ -338,7 +338,7 @@
         // pastabos isvis nereikia: eilute jau rodo "Korteleje: X -> Bus irasyta: Y".
         pastaba: tinkamas ? null
           : (kanonas && variantai.length ? "paraiškoje nenurodyta, kuris tai būdas: " + variantai.map(function (m) { return m.label; }).join(" ar ") + " - pasirinkite 1 žingsnyje"
-          : kanonas ? "šiam būdui modulis dar neturi šablonų - pasirinkite kitą arba pildykite ranka"
+          : kanonas ? "šiam būdui įrankis dar neturi šablonų - pasirinkite kitą arba pildykite ranka"
                     : "būdo atpažinti nepavyko - pasirinkite jį rankiniu būdu")
       });
     }

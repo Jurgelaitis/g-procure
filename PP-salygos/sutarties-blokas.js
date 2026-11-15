@@ -78,7 +78,7 @@
 
     /* Tobulinimo įrašai naršyklėje */
     function skaitykZurnala() {
-      if (!global.GP_SAUGYKLA) { Z = { busena: "neprieinama", irasai: [], klaida: "saugyklos modulis neįkeltas" }; return Z; }
+      if (!global.GP_SAUGYKLA) { Z = { busena: "neprieinama", irasai: [], klaida: "nepavyko įkelti naršyklės saugyklos tvarkymo" }; return Z; }
       var r = global.GP_SAUGYKLA.skaityk(RAKTAS, { saugykla: SAUG, tikrink: tikrinkZurnala });
       Z = r.busena === "yra" ? { busena: "yra", irasai: r.reiksme.irasai, klaida: "" }
         : { busena: r.busena, irasai: [], klaida: r.klaida || "" };
@@ -134,7 +134,7 @@
       else if (!sutikta()) h += "Tobulinimo įrašai: nekaupiami - nėra jūsų sutikimo" + (n ? " (sukaupta anksčiau: " + n + ")" : "") + "</summary>" +
         '<div class="sb-isp" id="sbSutikimasT">Šie įrašai kaupiami tik jums sutikus: slapukų nustatymuose įjunkite „Tobulinimo įrašai“. ' +
         (n ? "Anksčiau sukaupti įrašai lieka, kol juos ištrinsite. " : "") +
-        (global.GP_SUTIKIMAS ? "" : "Slapukų sutikimo modulis neįkeltas - įrašai nekaupiami.") + "</div>";
+        (global.GP_SUTIKIMAS ? "" : "Nepavyko įkelti slapukų sutikimo - įrašai nekaupiami.") + "</div>";
       else h += "Tobulinimo įrašai šioje naršyklėje: " + n + "</summary>";
       h += '<div class="sb-steb-t">' + (sutikta() ? "Kai" : "Jei sutiksite: kai") + ' atsakote į klausimą ar pasirenkate sutartį, šioje naršyklėje įsimenama: pirkimo pavadinimas, objekto tipas, BVPŽ, ' +
            "kalba, pirkimo būdas, ką siūlė sistema, jūsų atsakymai į klausimus ir ką pasirinkote (vienas įrašas šiam puslapio atvėrimui). " +
@@ -269,9 +269,9 @@
         var bs = REG.sablonai[sb.kodai.BS], ss = REG.sablonai[sb.kodai.SS];
         if (bs && ss) h += ' <details class="sb-red"><summary>Šablonų redakcija</summary><div><b>' + esc(bs.pavadinimas) + ":</b> " + esc(bs.redakcija) +
           "</div><div><b>" + esc(ss.pavadinimas) + ":</b> " + esc(ss.redakcija) + "</div></details>";
-        else h += ' <span class="sb-isp">Šablono registre nėra (' + esc(sb.kodai.BS) + ", " + esc(sb.kodai.SS) + ").</span>";
-      } else if (REG.busena === "klaida") h += ' <span class="sb-isp">Šablonų registro įkelti nepavyko (' + esc(REG.klaida) + ") - redakcija nežinoma.</span>";
-      else { registras(); h += ' <span class="sb-kr">Tikrinamas šablonų registras...</span>'; }
+        else h += ' <span class="sb-isp">Šablono G-Procure šablonų sąraše nėra (' + esc(sb.kodai.BS) + ", " + esc(sb.kodai.SS) + ").</span>";
+      } else if (REG.busena === "klaida") h += ' <span class="sb-isp">Šablonų sąrašo įkelti nepavyko (' + esc(REG.klaida) + ") - redakcija nežinoma.</span>";
+      else { registras(); h += ' <span class="sb-kr">Tikrinamas šablonų sąrašas...</span>'; }
       h += "</div>";
       if (sb.kalba === "LTEN") {
         var z = [sb.kodai.BS, sb.kodai.SS].map(function (k) { zemelapis(k); return REG.zem[k]; });

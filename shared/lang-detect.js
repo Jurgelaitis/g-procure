@@ -118,7 +118,7 @@
      ?lang=lt ir ?lang=en kanonizuotųsi į beparametrį adresą, Google juos išmestų iš
      indekso ir hreflang nustotų galioti. Dvikalbio puslapio pradiniame HTML jos nėra
      (žr. failo pradžią) - čia ji įterpiama vieną kartą, bazė - hreflang x-default.
-     Puslapis be x-default (pvz. noindex) kanoninės nuorodos negauna. */
+     Puslapis be x-default (pvz., noindex) kanoninės nuorodos negauna. */
   function kanoninesBaze(doc) {
     var x = doc.querySelector('link[rel="alternate"][hreflang="x-default"]');
     var b = x ? String(x.getAttribute("href") || "").split("?")[0] : "";

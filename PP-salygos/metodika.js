@@ -171,13 +171,13 @@
       tvarka.push(nr);
     }
     var kriterijai = tvarka.sort(function (a, b) { return a - b; }).map(function (n) { return kr[n]; });
-    // numeriai iš eilės nuo 1 - kitaip tai ne kriterijų sąrašas (pvz. kito dokumento ištrauka)
+    // numeriai iš eilės nuo 1 - kitaip tai ne kriterijų sąrašas (pvz., kito dokumento ištrauka)
     if (kriterijai.some(function (q, i) { return q.nr !== i + 1; })) kriterijai = kriterijai.filter(function (q, i, a) { return a.slice(0, i + 1).every(function (z, j) { return z.nr === j + 1; }); });
     var problemos = [];
     var suSvoriu = kriterijai.filter(function (q) { return q.svoris != null; });
     var suma = suSvoriu.length === kriterijai.length && kriterijai.length ? Math.round(suSvoriu.reduce(function (a, q) { return a + q.svoris; }, 0) * 100) / 100 : null;
-    if (!kriterijai.length) problemos.push("kriterijų sąrašo neradome");
-    kriterijai.filter(function (q) { return q.svoris == null; }).forEach(function (q) { problemos.push("kriterijaus „" + q.pavadinimas + "“ lyginamojo svorio neradome"); });
+    if (!kriterijai.length) problemos.push("kriterijų sąrašo nerasta");
+    kriterijai.filter(function (q) { return q.svoris == null; }).forEach(function (q) { problemos.push("kriterijaus „" + q.pavadinimas + "“ lyginamojo svorio nerasta"); });
     if (suma != null && Math.abs(suma - 100) > 0.001) problemos.push("kriterijų lyginamųjų svorių suma - " + String(suma).replace(".", ",") + ", ne 100");
     // vertinimo kriterijus: pažodžiui metodikoje (tik vienas iš dviejų) arba pagal sąrašą
     var kodas = null, citata = "", kodel = "";

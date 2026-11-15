@@ -2,7 +2,7 @@
  * G-Procure Tiekėjams  paieska.js
  * ----------------------------------------------------------------------------
  * Hibridinė paieška NARŠYKLĖJE be serverio (window.GP_PAIESKA):
- *   1) tiksli terminų / numerių / kodų paieška (pvz. "4.2", "EBVPD", "90 dienų");
+ *   1) tiksli terminų / numerių / kodų paieška (pvz., "4.2", "EBVPD", "90 dienų");
  *   2) BM25 leksinė paieška su LT diakritikų suliejimu ir grubiu kamienu;
  *   3) metaduomenų filtrai: dokumentų sąrašas (docIds), kalba, pirkimo dalis.
  * Semantinės (vektorinės) paieškos MVP nėra - ji reikalautų serverio arba
@@ -147,7 +147,7 @@
     // apytiksliu (sąsaja rodo žymą). Praktikoje jis beveik nereikalingas: patikrinta su
     // tikru CVP IS paketu - 234 pažodinės ištraukos iš 46 dokumentų visos sutapo tiksliuoju
     // keliu. Jis lieka atsargai tiems PDF, kurių pdf.js vis tiek suskaido, ir būtent todėl
-    // neturi atrodyti taip pat patikimai kaip pažodinis sutapimas (pvz. skaičių grupavimas
+    // neturi atrodyti taip pat patikimai kaip pažodinis sutapimas (pvz., skaičių grupavimas
     // „100 000" ir „1 000 00" nepaisant tarpų sutampa - skaitmenų seka ta pati, bet tai jau
     // ne pažodinė citata).
     if (raskBeTarpu(q, t)) return { ok: true, tikslus: false };

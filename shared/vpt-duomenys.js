@@ -81,7 +81,7 @@
   /* Pirkimo dokumentų ZIP iš CVP IS per G-Procure serverį (nuo 2026-10-29; serveris/README.md): GET /api/cvpis/dokumentai/<nr>.
      Serveris dokumentus perduoda srautu, kaip CVP IS juos atiduoda be prisijungimo, ir nieko neišsaugo. Grąžina
      { ok: true, blob, baitai, vardas } arba { ok: false, rusis }: "prisijungimas" (CVP IS dokumentus rodo tik prisijungusiems -
-     pvz. konkretus pirkimas pagal DPS), "nera", "per_didelis", "ne_zip", "uzimta" (užklausų riba), "rysys", "numeris", "atsaukta".
+     pvz., konkretus pirkimas pagal DPS), "nera", "per_didelis", "ne_zip", "uzimta" (užklausų riba), "rysys", "numeris", "atsaukta".
      opts.eiga(gauta, viso) - eigai (viso - iš Content-Length, gali būti 0). Tekstai žmogui - dokumentuKlaida(rusis, kalba). */
   var DOK_RUSYS = ["prisijungimas", "nera", "rysys", "per_didelis", "ne_zip", "uzimta", "kilme", "numeris", "metodas"];
   var DOK_MAX = 250 * 1048576;

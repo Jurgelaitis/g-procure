@@ -215,7 +215,7 @@
       kamAktualu: typeof o.kamAktualu === "string" ? o.kamAktualu : "",
       veiksmas: typeof o.veiksmas === "string" ? o.veiksmas : "",
       /* Pirkimų specialistui veiksmų nereikia (2026-11-04): įrašas nepatenka į „Ką peržiūrėti?“. Darbas registro prižiūrėtojui
-         (pvz. pridėti šaltinį) - atskirame lauke, rodomas tik administravimo aplinkoje. */
+         (pvz., pridėti šaltinį) - atskirame lauke, rodomas tik administravimo aplinkoje. */
       veiksmuNereikia: !!o.veiksmuNereikia,
       prizuretojui: typeof o.prizuretojui === "string" ? o.prizuretojui.trim() : "",
       rusis: RUSYS[o.rusis] ? o.rusis : null,
@@ -387,7 +387,7 @@
       for (var b = a + 1; b < aktyvus.length; b++) {
         var x = aktyvus[a], y = aktyvus[b];
         if (aktoRaktas(x) !== aktoRaktas(y)) continue;
-        // Skirtingi to paties akto pakeitimai, kurie susieti vienas su kitu (pvz. VPT 1S-97 ir 1S-204), - ne prieštaravimas
+        // Skirtingi to paties akto pakeitimai, kurie susieti vienas su kitu (pvz., VPT 1S-97 ir 1S-204), - ne prieštaravimas
         if ((x.susije || []).indexOf(y.id) !== -1 || (y.susije || []).indexOf(x.id) !== -1) continue;
         var bendra = x.temos.some(function (t) { return y.temos.indexOf(t) !== -1; });
         if (!bendra) continue;
@@ -553,7 +553,7 @@
     var pav = function (zod, k) { return zod[k] ? zod[k][L] : k; };
     var bus = {}, sutampa = [], truksta = [];   // bus: požymio būsena (taikomas visiems - nesaugomas); griežtam režimui nenaudojama
     /* reiksme - viena reikšmė arba sąrašas (atitinka, kai sutampa bent viena): modulio objektų žodynas stambesnis už
-       registro - pvz. PP-salygos „darbai“ tikrinami ir kaip „statyba“ (naudotojo sprendimas 2026-10-04). */
+       registro - pvz., PP-salygos „darbai“ tikrinami ir kaip „statyba“ (naudotojo sprendimas 2026-10-04). */
     function tik(raktas, saras, reiksme, zod) {
       if (!saras) return;                           // null = taikoma visiems
       var rs = Array.isArray(reiksme) ? reiksme.filter(Boolean) : (reiksme ? [reiksme] : []);
@@ -1066,7 +1066,7 @@
           nera: "Su šiuo įrankiu susietų įrašų nėra", moduliui: "Aktualu šiam įrankiui", offline: "Be interneto - rodomas atsisiųstas rinkinys",
           be_datos: "data nenurodyta", tuscias: "Registre įrašų nėra",
           paskirtis: "Kas keičiasi PĮ ir VPĮ pirkimuose: teisės aktai, VPT dokumentai ir teismų praktika",
-          beprioriteto: "Aktualūs įrašai portalui dar neparinkti: redakcinį prioritetą įrašui suteikia administratorius (PP-teise/admin.html), automatiškai jis neskaičiuojamas. Visą registrą rasite stebėsenos puslapyje.",
+          beprioriteto: "Svarbiausi pokyčiai portalui dar neparinkti - juos parenka svetainės administratorius, automatiškai jie neparenkami. Visus pokyčius rasite stebėsenos puslapyje.",
           apie: "Apie rinkinį", versija: "Rinkinio versija", apreptis: "Aprėptis", prioritetas: "Rodoma pagal redakcinį prioritetą, ne pagal naujumą", kalba: "",
           skIsigalios: "įsigalios netrukus", skGalioja: "jau galioja", skTeismai: "teismų sprendimai", skProjektai: "projektai", atnaujinta: "Atnaujinta",
           lygmuo: "Teisės lygmuo", lygLt: "Nacionalinė teisė", lygEs: "ES teisė",
@@ -1116,7 +1116,7 @@
     var T = K.T, lang = K.lang, doc = K.doc, nr = ++PB_NR;
     var lyg = cfg.lygmuo === "es" || (cfg.lygmuo == null && el.getAttribute("data-gps-lygmuo") === "es") ? "es" : "lt";
     var REZ = { lt: null, es: null };
-    el.__gpsPortalas = nr;   // vėlesnis mount() tam pačiam elementui (pvz. pakeitus kalbą) ankstesnio piešimo nebeleidžia
+    el.__gpsPortalas = nr;   // vėlesnis mount() tam pačiam elementui (pvz., pakeitus kalbą) ankstesnio piešimo nebeleidžia
 
     function perjungiklis() {
       var m = function (l, kodas, pav) {
@@ -1193,7 +1193,7 @@
      Portalo blokas (be `modulis`) nuo 2026-11-13 turi du lygmenis - nacionalinę ir ES teisę (naudotojo sprendimas):
      perjungiklis keičia skaičius, korteles ir nuorodas; lygmenų registrai įkeliami atskirai, todėl neįkeltas vienas
      lygmuo nekliudo kitam ir niekada nerodomas kaip „pokyčių nėra“. Pasirinktas lygmuo laikomas `data-gps-lygmuo`
-     atribute ant `target` - perpiešus bloką (pvz. pakeitus kalbą) jis išlieka. */
+     atribute ant `target` - perpiešus bloką (pvz., pakeitus kalbą) jis išlieka. */
   function mount(cfg) {
     var doc = global.document;
     var el = typeof cfg.target === "string" ? doc.querySelector(cfg.target) : cfg.target;

@@ -43,7 +43,7 @@
     ["pp_tiekejams",             "PP-tiekejams",    { lt: "Tiekėjų asistento duomenys", en: "Supplier assistant data" }],
     ["pptiekejams.lang",         "PP-tiekejams",    { lt: "Pasirinkta kalba", en: "Chosen language" }],
     ["ts_asistentas",            "PP-ts",           { lt: "TS asistento nustatymai", en: "Spec assistant settings" }],
-    ["ppteise.admin.",           "PP-teise",        { lt: "Teisės stebėsenos registro darbinė kopija (redaktoriaus puslapis)", en: "Law monitoring register working copy (editor page)" }],
+    ["ppteise.admin.",           "PP-teise",        { lt: "Teisės stebėsenos registro darbinė kopija (tvarkymo puslapis)", en: "Law monitoring register working copy (editor page)" }],
     ["ppteise.",                 "PP-teise",        { lt: "Teisės stebėsenos peržiūrų žymos ir nustatymai", en: "Law monitoring reviews and settings" }],
     ["gprocure.korteles",        "G-Procure",       { lt: "Pirkimų kortelės", en: "Procurement cards" }],
     ["gprocure.sutartys.stebejimas", "PP-salygos",  { lt: "Sutarties parinkimo tobulinimo įrašai", en: "Contract selection observation records" }],
@@ -116,7 +116,7 @@
       return { ok: false, priezastis: "formatas" };
     }
     /* Saugykloje reikšmės - tik tekstas (taip jas grąžina localStorage ir įrašo surinkti()). Skaičius ar objektas
-       (pvz. ranka taisytame faile) būtų įrašytas kaip „5“ ar „[object Object]“ ir perrašytų tikrus duomenis (2026-09-28). */
+       (pvz., ranka taisytame faile) būtų įrašytas kaip „5“ ar „[object Object]“ ir perrašytų tikrus duomenis (2026-09-28). */
     var blogi = Object.keys(obj.items).filter(function (k) { return typeof obj.items[k] !== "string"; });
     if (blogi.length) return { ok: false, priezastis: "reiksmes", raktai: blogi };
     /* Naujesnės kopijos formato versijos šis puslapis nežino (2026-11-06; iki tol atkurdavo be įspėjimo). */
@@ -227,7 +227,7 @@
   }
 
   /* Įrašo failo reikšmes. Kiti saugyklos raktai nepaliečiami. nepavyko - raktai, kurių įrašyti nepavyko
-     (pvz. pilna saugykla): puslapis pasako, KURIE duomenys neatkurti, ne tik kiek. */
+     (pvz., pilna saugykla): puslapis pasako, KURIE duomenys neatkurti, ne tik kiek. */
   function atkurti(obj, saugykla) {
     var st = saugykla || global.localStorage;
     var raktai = Object.keys(obj.items), ok = 0, nepavyko = [], praleista = [];
