@@ -1608,11 +1608,92 @@ async function testaiPortalas1113(){
   });
 }
 
+/* Teisės pokyčių poveikis pirkimams (2026-11-15, krypties 3.3): ?kortele=<id> užpildo „Mano pirkimas“ iš pirkimo kortelės (laikinai, kaip kortelės
+   skiltyje - objektų ir etapų sąrašai), o įraše - kuriuos aktyvius pirkimus šioje naršyklėje pokytis gali liesti. Kortelės - testinėje saugykloje. */
+async function testaiKortele1115(){
+  dabartine = grupe("Pirkimo kortelės ir teisės pokyčiai (2026-11-15)");
+  const korteles = K => {
+    const a = K.issaugok(K.tuscia({ pavadinimas: "Remonto darbų pirkimas", rezimas: "PI", budas: "S-AK", objektas: "darbai", busena: "rengiamas", pradzia: "2026-03-15", paskelbimas: "2026-08-01" }), { saltinis: "korteliu-puslapis" }).kortele;
+    K.issaugok(K.tuscia({ pavadinimas: "Sudaryta sutartis", rezimas: "PI", busena: "sutartis", pradzia: "2026-01-01" }), { saltinis: "korteliu-puslapis" });
+    const c = K.issaugok(K.tuscia({ pavadinimas: '<img src=x onerror="window.__k=1"> vėlesnis', rezimas: "PI", busena: "planuojamas", pradzia: "2026-06-20" }), { saltinis: "korteliu-puslapis" }).kortele;
+    // sukūrimo data - ne šiandien (pirkimo pradžia - anksčiausia iš datų)
+    const v = JSON.parse(K.saugykla().getItem("gprocure.korteles")); v.korteles.forEach(x => { x.sukurta = x.pradzia === "2026-06-20" ? "2026-06-20T10:00:00.000Z" : "2026-03-20T10:00:00.000Z"; }); K.saugykla().setItem("gprocure.korteles", JSON.stringify(v));
+    return { a, c };
+  };
+
+  await testas("Įraše „Jūsų pirkimai šioje naršyklėje“: tik aktyvios kortelės, pagal įstatymą, būdą, objektą, etapą ir pirkimo pradžią, su data ir žyma; neaktualu visoms - pasakoma, kiek aktyvių; be kortelių - nerodoma; neperskaitoma saugykla - pasakoma; tekstai ne HTML", async () => {
+    const P = await stebesena("&registras=testai-registras.json"), w = P.w, d = P.d, K = w.GP_KORTELE;
+    try {
+      w.PPTEISE.nustatykDabar("2026-07-15");
+      w.PPTEISE.pasirink("test-dublikatas-a");
+      tiesa(!d.getElementById("manoKorteles"), "be kortelių - nerodoma");
+      const { a, c } = korteles(K);
+      w.PPTEISE.pasirink("test-konfliktas-a");
+      let bl = d.getElementById("manoKorteles");
+      tiesa(bl && /^Jūsų pirkimai šioje naršyklėje/.test(tekstas(bl)), "blokas");
+      lygu([...bl.querySelectorAll("li")].map(tekstas).sort(), ['<img src=x onerror="window.__k=1"> vėlesnis - pasikeitė pirkimo metu 2026-07-01 aktualumas nenustatytas', "Remonto darbų pirkimas - pasikeitė pirkimo metu 2026-07-01 aktualumas nenustatytas"], "dvi aktyvios");
+      tiesa(!bl.querySelector("img") && !w.__k, "ne HTML");
+      lygu([...bl.querySelectorAll("a")].map(x => x.getAttribute("href")).sort(), ["../pirkimu-korteles.html#kortele=" + encodeURIComponent(a.id), "../pirkimu-korteles.html#kortele=" + encodeURIComponent(c.id)].sort(), "nuorodos");
+      w.PPTEISE.pasirink("test-dublikatas-a");
+      bl = d.getElementById("manoKorteles");
+      lygu([...bl.querySelectorAll("li")].map(tekstas), ["Remonto darbų pirkimas - pasikeitė pirkimo metu 2026-04-01 aktualumas nenustatytas"], "vėlesnės pradžios kortelei - galiojo iki pradžios");
+      w.PPTEISE.pasirink("test-tik-vpi");
+      lygu(tekstas(d.querySelector("#manoKorteles p")), "Aktyvių pirkimų šioje naršyklėje: 2 - šis pokytis jiems neaktualus pagal kortelių duomenis arba galiojo iki jų pradžios.", "neaktualus");
+      // neperskaitoma saugykla
+      const blog = { _d: { "gprocure.korteles": "{" }, get length() { return Object.keys(this._d).length; }, key(i) { return Object.keys(this._d)[i] || null; }, getItem(k) { return k in this._d ? this._d[k] : null; }, setItem(k, v) { this._d[k] = String(v); }, removeItem(k) { delete this._d[k]; } };
+      K.naudokSaugykla(blog);
+      w.PPTEISE.pasirink("test-konfliktas-a");
+      lygu(tekstas(d.querySelector("#manoKorteles p")), "Pirkimo kortelių perskaityti nepavyko - patikrinti, kuriuos pirkimus tai liečia, negalima.", "sugadinta");
+      K.naudokSaugykla(null);
+    } finally { P.f.remove(); }
+  });
+
+  await testas("?kortele=<id>: „Mano pirkimas“ iš kortelės (laukai, įstatymas, pranešimas su nuoroda), aktualumas - kaip kortelės skiltyje (etapai nuo dabartinio), adrese lieka kortele; pakeitus lauką - atsiejama ir išsaugoma; kortelė nerasta - pasakoma", async () => {
+    const P = await stebesena("&registras=testai-registras.json"), w = P.w, d = P.d, K = w.GP_KORTELE;
+    try {
+      w.PPTEISE.nustatykDabar("2026-07-15");
+      const { a } = korteles(K);
+      // prieš tai pasirinktas VPĮ - kortelės įstatymas (PĮ) jį pakeičia
+      d.querySelector('input[name="rezimas"][value="VPI"]').click();
+      tiesa(d.querySelector('input[name="rezimas"]:checked').value === "VPI", "VPĮ pasirinktas");
+      w.PPTEISE.saugykla().removeItem("ppteise.kontekstas");
+      w.history.replaceState(null, "", "index.html?saugykla=testine&registras=testai-registras.json&rezimas=VPI&kortele=" + encodeURIComponent(a.id));
+      w.PPTEISE.kontekstasIsKorteles();
+      lygu([d.getElementById("kProcedura").value, d.getElementById("kObjektas").value, d.getElementById("kEtapas").value, d.getElementById("kData").value, d.querySelector('input[name="rezimas"]:checked').value, d.getElementById("manoPirkimas").open],
+        ["atviras", "darbai", "rengimas", "2026-08-01", "PI", true], "laukai ir įstatymas");
+      const el = d.getElementById("kortelesKontekstas");
+      tiesa(!el.hidden && /^Pirkimo požymiai - iš pirkimo kortelės „Remonto darbų pirkimas“ šioje naršyklėje: PĮ, atviras konkursas, darbai \/ statyba ir remontas, etapai nuo: dokumentų rengimas, pirkimo pradžia 2026-03-15, planuojamas paskelbimas 2026-08-01 \(neišsaugoma; pakeitus lauką - išsaugoma kaip jūsų\)\. Atverti kortelę$/.test(tekstas(el)), tekstas(el));
+      lygu(el.querySelector("a").getAttribute("href"), "../pirkimu-korteles.html#kortele=" + encodeURIComponent(a.id), "nuoroda");
+      const ctx = w.PPTEISE.korteleKontekste().ctx;
+      lygu([ctx.objektas, ctx.etapas], [["darbai", "statyba"], ["rengimas", "vertinimas", "sutartis", "vykdymas"]], "kontekstas - sąrašai");
+      w.PPTEISE.pasirink("test-demo-ateitis");
+      tiesa(/Kodėl man aktualu\? Galimai aktualu jūsų pirkimui\s*Sutampa: pirkimo būdas \(Atviras konkursas\), pirkimo objektas \(Darbai\), etapas \(Dokumentų rengimas\)\s*Planuojama skelbti 2026-08-01 - anksčiau nei įsigalioja \(2099-01-01\)/.test(tekstas(d.querySelector(".aktualumas"))), "aktualumas pagal kortelę: " + tekstas(d.querySelector(".aktualumas")).slice(0, 300));
+      tiesa(/kortele=/.test(w.location.search), "adrese lieka kortelė: " + w.location.search);
+      lygu(w.PPTEISE.saugykla().getItem("ppteise.kontekstas"), null, "neišsaugota");
+      // pakeitus lauką - atsiejama, išsaugoma
+      const s = d.getElementById("kEtapas"); s.value = "vertinimas"; s.dispatchEvent(new w.Event("change"));
+      tiesa(el.hidden && w.PPTEISE.korteleKontekste() === null && !/kortele=/.test(w.location.search), "atsieta");
+      tiesa(/"etapas":"vertinimas"/.test(w.PPTEISE.saugykla().getItem("ppteise.kontekstas") || ""), "išsaugota: " + w.PPTEISE.saugykla().getItem("ppteise.kontekstas"));
+      // nerasta
+      w.history.replaceState(null, "", "index.html?saugykla=testine&registras=testai-registras.json&kortele=k-nera");
+      w.PPTEISE.kontekstasIsKorteles();
+      lygu([el.hidden, tekstas(el), w.PPTEISE.korteleKontekste(), d.getElementById("kEtapas").value], [false, "Pirkimo kortelė šioje naršyklėje nerasta - aktualumas vertinamas pagal jūsų išsaugotus pirkimo požymius.", null, "vertinimas"], "nerasta - lieka išsaugoti");
+      // planuojamas pirkimas: etapai nuo planavimo - rengimo etapo įrašas aktualus (vien „planavimas“ jo neatrinktų)
+      const pl = K.issaugok(K.tuscia({ pavadinimas: "Planuojami darbai", rezimas: "PI", budas: "S-AK", objektas: "darbai", busena: "planuojamas", pradzia: "2026-03-15" }), { saltinis: "korteliu-puslapis" }).kortele;
+      w.history.replaceState(null, "", "index.html?saugykla=testine&registras=testai-registras.json&kortele=" + encodeURIComponent(pl.id));
+      w.PPTEISE.kontekstasIsKorteles();
+      w.PPTEISE.pasirink("test-dublikatas-a"); w.PPTEISE.pasirink("test-demo-ateitis");
+      const akt = tekstas(d.querySelector(".aktualumas"));
+      tiesa(/Sutampa: pirkimo būdas \(Atviras konkursas\), pirkimo objektas \(Darbai\), etapas \(Dokumentų rengimas\)/.test(akt) && !/Galimai|Neaktualu|neatitinka/.test(akt), "planuojamas - rengimo įrašas aktualus: " + akt.slice(0, 300));
+    } finally { P.f.remove(); }
+  });
+}
+
 (async () => {
   try {
     /* ?grupe=<grupė>[,<grupė>] - tik nurodytos grupės (taisant vieną grupę nereikia laukti viso rinkinio); nežinoma grupė - klaida. */
     const GRUPES = { testaiSchema, testaiSkiltys, testaiAktualumas, testaiPaieska, testaiZurnalas, testaiIkelimas, testaiRegistras, testaiPuslapis, testaiTestinisRegistras,
-      testaiAdmin, testaiIntegracijos, testaiPrieinamumas, testaiPatikra1104, testaiVaizdas1107, testaiLygmuo1113, testaiPortalas1113 };
+      testaiAdmin, testaiIntegracijos, testaiPrieinamumas, testaiPatikra1104, testaiVaizdas1107, testaiLygmuo1113, testaiPortalas1113, testaiKortele1115 };
     const tik = new URLSearchParams(location.search).get("grupe");
     for (const g of (tik ? tik.split(",") : Object.keys(GRUPES))) { if (!GRUPES[g]) throw new Error("Nėra testų grupės „" + g + "“"); await GRUPES[g](); }
   } catch (e) { dabartine = dabartine || grupe("Nepavyko paleisti"); await testas("Rinkinys nutrūko", () => { throw e; }); }

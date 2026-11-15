@@ -24,6 +24,10 @@
 <link rel="stylesheet" href="../shared/epso-g.css">
 <script src="../shared/saugykla.js"></script>
 <script src="../shared/teise-stebesena.js"></script>
+<!-- Teisės pokyčių poveikis pirkimams (2026-11-15, krypties 3.3): pirkimo kortelės šioje naršyklėje - tik skaitomos -->
+<script src="../shared/organizacijos.js"></script>
+<script src="../shared/pirkimo-kortele.js"></script>
+<script src="../shared/teises-poveikis.js"></script>
 <style>
   /* Dizaino sistema (2026-09-25, antra pertvarka pagal naudotojo pastabas: dideli ir susiliejantys šriftai,
      neatskirtos dalys, silpnas viršus). Modulio apvalkalas - kaip kituose G-Procure moduliuose (PP-tiekejams,
@@ -275,6 +279,12 @@
   .statusas--demesio{background:var(--color-error-5)}
   .statusas--demo{background:var(--color-error-strong);color:var(--color-white)}
   .desmesio-blokas{margin:0 0 var(--space-1);padding:var(--space-1) var(--space-2);border-left:4px solid var(--color-warning);border-radius:var(--radius-sm);background:var(--color-warning-5);color:var(--color-graphite);font-size:14px;line-height:1.5}
+  .mano-kort{margin:var(--space-2) 0;padding:var(--space-2);border:1px solid var(--color-graphite-15);border-left:4px solid #0091A6;border-radius:var(--radius-sm);background:var(--color-white);font-size:14px}
+  .mano-kort h3{margin:0 0 4px;font-size:16px}
+  .mano-kort ul{margin:6px 0 0;padding-left:18px}
+  .mano-kort li{overflow-wrap:anywhere;margin:2px 0}
+  .mano-kort a,.mano__kortele a{color:var(--color-emerald-strong);font-weight:700}
+  .mano__kortele{margin:0 0 var(--space-1);font-size:14px;overflow-wrap:anywhere}
   .aktualumas{margin:var(--space-2) 0;padding:var(--space-2);border:1px solid var(--color-graphite-15);border-radius:var(--radius-sm);background:var(--color-white);font-size:14px}
   .aktualumas ul{margin:var(--space-1) 0 0;padding-left:var(--space-3);font-size:14px}
   .detales-stulpelis .aktualumas__pastaba{margin:var(--space-1) 0 0;font-size:13px;line-height:1.5}
@@ -468,6 +478,7 @@
       <div class="zetonai" id="aktyvusFiltrai" aria-label="Aktyvūs filtrai"></div>
       <details class="mano" id="manoPirkimas">
         <summary><span>Mano pirkimas</span> <span class="mano__zyma">neprivaloma</span> <span class="mano__apie">aktualumo vertinimas sąraše ir įrašuose</span></summary>
+        <p class="mano__kortele" id="kortelesKontekstas" role="status" hidden></p>
         <p class="muted mano__paaiskinimas">Nurodykite pirkimo požymius - prie kiekvieno sąrašo įrašo atsiras žyma, o pasirinkto įrašo skiltyje „Kam aktualu“ - vertinimas su priežastimis. Vien pagal etapą aktualumas nevertinamas; kur įrašas požymių neturi, jis rodomas kaip nenustatytas. Duomenys lieka tik šioje naršyklėje.</p>
         <div class="filtrai">
           <div class="laukas"><label for="kProcedura">Pirkimo būdas</label><select id="kProcedura"><option value="">Nenurodyta</option></select></div>
@@ -541,6 +552,7 @@
   };
   /* Prižiūrėtojo režimas (?prieziura=1): techninė diagnostika ir nuorodos prižiūrėtojui poraštėje. Įprastam lankytojui jų nėra. */
   var PRIEZIURA = new URLSearchParams(location.search).get("prieziura") === "1";
+  var KORTELE_KONT = null;              // pirkimo kortelė, iš kurios laikinai užpildytas „Mano pirkimas“ (?kortele=)
   var NERASTAS = null, REZIMAS_LAIKINAS = false, RASTA_KITUR = false, PASKUTINE_RASTA = "";
   var VAIZDAI = ["pasikeite", "isigalios", "perziureti", "truksta", "archyvas"];
   var APIE_ES = {
@@ -613,7 +625,12 @@
 
   /* ---------- Kontekstas, filtrai, adresas ---------- */
   function rezimas() { var r = document.querySelector('input[name="rezimas"]:checked'); return r ? r.value : "PI"; }
-  function kontekstas() { return { rezimas: rezimas(), procedura: $("kProcedura").value, objektas: $("kObjektas").value, etapas: $("kEtapas").value, skelbimoData: $("kData").value }; }
+  /* Pagal pirkimo kortelę (?kortele=) - tas pats kontekstas kaip kortelės skiltyje „Teisės pokyčiai šiam pirkimui“: objektų ir etapų sąrašai
+     (dabartinis etapas ir vėlesni), kad tas pats įrašas abiejose vietose būtų vertinamas vienodai; laukuose rodoma pagrindinė reikšmė. */
+  function kontekstas() {
+    if (KORTELE_KONT) return Object.assign({}, KORTELE_KONT.ctx, { rezimas: rezimas() });
+    return { rezimas: rezimas(), procedura: $("kProcedura").value, objektas: $("kObjektas").value, etapas: $("kEtapas").value, skelbimoData: $("kData").value };
+  }
   function filtrai() {
     return { uzklausa: $("uzklausa").value, rezimas: rezimas(), tema: $("fTema").value, saltinioTipas: $("fTipas").value,
              rusis: $("fRusis").value, modulis: $("fModulis").value, busena: $("fBusena").value,
@@ -644,6 +661,7 @@
   function adresas() {
     var q = new URLSearchParams(), sena = new URLSearchParams(location.search), f = filtrai();
     SAUGOMI_PARAMAI.forEach(function (k) { if (sena.get(k)) q.set(k, sena.get(k)); });
+    if (KORTELE_KONT) q.set("kortele", KORTELE_KONT.id);
     if (LYGMUO !== "lt") q.set("lygmuo", LYGMUO);
     if (VAIZDAS !== "pasikeite") q.set("vaizdas", VAIZDAS);
     Object.keys(URL_RAKTAI).forEach(function (k) {
@@ -982,7 +1000,7 @@
       (r.moduliai.length ? '<div class="veiksmai">' + r.moduliai.map(function (m) { var M = S.MODULIAI[m.modulis]; return '<a class="btn btn--mazas" href="../' + esc(M.kelias) + (m.inkaras ? '#' + esc(m.inkaras) : '') + '">Atverti: ' + esc(M.pav) + '</a>'; }).join("") + '</div>' : '') + '</div>' +
       '<div class="det__eil"><div class="det__blok"><h3>Nuo kada</h3>' + datosBlokas(r, sd) + '</div>' +
       '<div class="det__blok"><h3>Kam aktualu</h3><p>' + (r.kamAktualu ? esc(r.kamAktualu) : '<span class="muted">nenurodyta</span>') + '</p><h4>Susiję įrankiai</h4>' + moduliuSarasas(r) + '</div></div>' +
-      kodelAktualu(r) +
+      kodelAktualu(r) + korteliuBlokas(r) +
       (S.reikiaPerziureti(r) ? perziurosBlokas(r, perz) : '') +
       '<div class="det__saltinis">' + (saltUrl ? '<a class="btn btn--saltinis" href="' + esc(saltUrl) + '" target="_blank" rel="noopener noreferrer">' + S.ikona("saltinis", 15) + ' Atverti šaltinį</a>' : '<span class="muted">Šaltinio nuoroda nenurodyta.</span>') + '<span class="muted">' + esc(r.saltinis.pavadinimas || "") + '</span></div>' +
       (r.kasPasikeite ? '<details class="det__daugiau"><summary>Kas tiksliai pakeista</summary><p>' + esc(r.kasPasikeite) + '</p></details>' : '') +
@@ -1194,8 +1212,9 @@
       $(id).addEventListener("input", filtroPakeitimas); $(id).addEventListener("change", filtroPakeitimas);
     });
     document.querySelectorAll('input[name="rezimas"]').forEach(function (r) { r.addEventListener("change", function () { REZIMAS_LAIKINAS = false; issaugokKonteksta(); filtroPakeitimas(); }); });
-    ["kProcedura", "kObjektas", "kEtapas", "kData"].forEach(function (id) { $(id).addEventListener("change", function () { issaugokKonteksta(); pieskSarasa(); }); });
+    ["kProcedura", "kObjektas", "kEtapas", "kData"].forEach(function (id) { $(id).addEventListener("change", function () { atsiekKortele(); issaugokKonteksta(); pieskSarasa(); }); });
     $("kIsvalyti").addEventListener("click", function () {
+      atsiekKortele();
       ["kProcedura", "kObjektas", "kEtapas", "kData"].forEach(function (id) { $(id).value = ""; });
       issaugokKonteksta(); pieskSarasa(); pranesk("Pirkimo požymiai išvalyti.");
     });
@@ -1308,8 +1327,52 @@
     if (k.skelbimoData) $("kData").value = k.skelbimoData;
     if (k.rezimas === "VPI" || k.rezimas === "") nustatykRezima(k.rezimas);
     skaitykAdresa();
+    kontekstasIsKorteles();
     if (rezimas() !== "PI") { $("daugiau").hidden = false; $("daugiauBtn").setAttribute("aria-expanded", "true"); }
     if ($("kProcedura").value || $("kObjektas").value || $("kEtapas").value || $("kData").value) $("manoPirkimas").open = true;
+  }
+
+  /* ?kortele=<id> (2026-11-15, krypties 3.3; iš „Mano pirkimai“ ir kortelės skilties „Teisės pokyčiai šiam pirkimui“): „Mano pirkimas“
+     užpildomas iš pirkimo kortelės šioje naršyklėje - laikinai, neišsaugoma; žmogui pakeitus lauką - kortelė atsiejama ir išsaugoma kaip įprastai.
+     Kortelė nerasta - pasakoma, lieka išsaugoti požymiai. */
+  function kontekstasIsKorteles() {
+    var id = new URLSearchParams(location.search).get("kortele"), el = $("kortelesKontekstas");
+    if (!id) return;
+    var K = window.GP_KORTELE, P = window.GP_TEISES_POVEIKIS, k = K && P ? K.gauk(id) : null;
+    el.hidden = false; el.textContent = "";
+    $("manoPirkimas").open = true;
+    if (!k) { el.textContent = "Pirkimo kortelė šioje naršyklėje nerasta - aktualumas vertinamas pagal jūsų išsaugotus pirkimo požymius."; return; }
+    var v = P.vienasKontekstas(k);
+    $("kProcedura").value = v.procedura; $("kObjektas").value = v.objektas; $("kEtapas").value = v.etapas; $("kData").value = v.skelbimoData;
+    if (v.rezimas && v.rezimas !== rezimas()) { nustatykRezima(v.rezimas); REZIMAS_LAIKINAS = true; }
+    var kt = P.kontekstas(k);
+    KORTELE_KONT = { id: k.id, pavadinimas: k.pavadinimas, ctx: { procedura: kt.ctx.procedura, objektas: kt.ctx.objektas || "", etapas: kt.ctx.etapas || "", skelbimoData: kt.ctx.skelbimoData || "" } };
+    el.appendChild(document.createTextNode("Pirkimo požymiai - iš pirkimo kortelės „" + (k.pavadinimas || "?") + "“ šioje naršyklėje: " + P.kontekstoTekstas(kt).replace(/^[^:]+: /, "") +
+      " (neišsaugoma; pakeitus lauką - išsaugoma kaip jūsų). "));
+    var a = document.createElement("a"); a.href = "../pirkimu-korteles.html#kortele=" + encodeURIComponent(k.id); a.textContent = "Atverti kortelę";
+    el.appendChild(a);
+  }
+  function atsiekKortele() {
+    if (!KORTELE_KONT && $("kortelesKontekstas").hidden) return;
+    KORTELE_KONT = null; $("kortelesKontekstas").hidden = true; $("kortelesKontekstas").textContent = "";
+    atnaujinkAdresa();
+  }
+  /* Įraše - kuriuos aktyvius pirkimus šioje naršyklėje pokytis gali liesti (2026-11-15, krypties 3.3): pagal kortelių būdą, objektą, etapą,
+     įstatymą ir pirkimo pradžią (pokyčiai iki pirkimo pradžios - ne). Be kortelių - nerodoma; neperskaitoma saugykla - pasakoma. */
+  var KORT_GRUPES = { busimi: "įsigalios", pirkimoMetu: "pasikeitė pirkimo metu", projektai: "svarstomas projektas", beDatos: "data nenurodyta" };
+  function korteliuBlokas(r) {
+    var K = window.GP_KORTELE, P = window.GP_TEISES_POVEIKIS;
+    if (!K || !P) return "";
+    var s = K.skaityk(), h = '<div class="mano-kort" id="manoKorteles"><h3>Jūsų pirkimai šioje naršyklėje</h3>';
+    if (s.busena === "sugadinta" || s.busena === "neprieinama") return h + '<p class="muted">Pirkimo kortelių perskaityti nepavyko - patikrinti, kuriuos pirkimus tai liečia, negalima.</p></div>';
+    var akt = s.korteles.filter(P.aktyvi);
+    if (!akt.length) return "";
+    var rez = P.irasuiKorteles(r, akt, { dabar: DABAR });
+    if (!rez.length) return h + '<p class="muted">Aktyvių pirkimų šioje naršyklėje: ' + akt.length + ' - šis pokytis jiems neaktualus pagal kortelių duomenis arba galiojo iki jų pradžios.</p></div>';
+    return h + '<p class="muted">Pagal pirkimo korteles (įstatymas, būdas, objektas, etapas ir pirkimo pradžia). Kortelės lieka tik šioje naršyklėje.</p><ul>' + rez.map(function (x) {
+      return '<li><a href="../pirkimu-korteles.html#kortele=' + encodeURIComponent(x.kortele.id) + '">' + esc(x.kortele.pavadinimas || "?") + '</a> - ' + esc(KORT_GRUPES[x.grupe]) + (x.data ? ' ' + esc(x.data) : '') +
+        (x.aktualumas.lygis !== "aktualu" ? ' <span class="statusas">' + esc(x.aktualumas.lygis === "galimai" ? "galimai aktualu" : "aktualumas nenustatytas") + '</span>' : '') + '</li>';
+    }).join("") + '</ul></div>';
   }
 
   /* Filtrų sąrašuose - tik reikšmės, kurioms registre yra įrašų (2026-11-04): kitaip pasirinkus lieka tuščias sąrašas. Adresu ar išsaugota parinkta reikšmė lieka. */
@@ -1368,7 +1431,8 @@
 
   window.PPTEISE = { piesk: pieskSarasa, registras: function () { return REGISTRAS; }, lygmuo: function (l) { if (l) nustatykLygmeni(l, { istorija: "push" }); return LYGMUO; }, registrai: function () { return REG; }, nustatykDabar: function (d) { DABAR = d; pieskSarasa(); },
                      vaizdas: function (v) { if (v) rodykVaizda(v); return VAIZDAS; }, filtrai: filtrai, sudetis: function () { return REGISTRAS ? sudetis() : null; },
-                     pasirink: pasirink, pasirinktas: function () { return PASIRINKTAS; }, matomi: function () { return MATOMI.slice(); }, saugykla: function () { return SAUG; }, kiekis: kiekis };
+                     pasirink: pasirink, pasirinktas: function () { return PASIRINKTAS; },
+                     kontekstasIsKorteles: function () { kontekstasIsKorteles(); pieskSarasa(); pieskDetales(); }, korteleKontekste: function () { return KORTELE_KONT; }, matomi: function () { return MATOMI.slice(); }, saugykla: function () { return SAUG; }, kiekis: kiekis };
 })();
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))) {

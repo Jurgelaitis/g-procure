@@ -55,7 +55,12 @@
       cvpNera: "CVP IS numerio {nr} VPT sąraše nėra - patikrinkite numerį kortelėje.",
       cvpKlaida: "Šios kortelės CVP IS duomenų gauti nepavyko.",
       cvpAtnaujinti: "Atnaujinti kortelę", cvpAtverti: "Atverti CVP IS",
-      povPrad: "Sudaryta pagal ankstesnius kortelės duomenis: ", povKortele: "Peržiūrėti kortelėje"
+      povPrad: "Sudaryta pagal ankstesnius kortelės duomenis: ", povKortele: "Peržiūrėti kortelėje",
+      teisePrad: "Teisės pokyčiai šiam pirkimui: ", teiseDar: " (įsigalios dar - {n})", teisePirkimoMetu: "pasikeitė pirkimo metu - {n}",
+      teisePerziureti: "Peržiūrėti teisės stebėsenoje",
+      teiseNepavyko: "Teisės pokyčių šiems pirkimams patikrinti nepavyko - teisės stebėsenos registras neįkeltas.",
+      teiseBeEs: "ES teisės registro įkelti nepavyko - rodomi tik nacionalinės teisės pokyčiai.",
+      teiseBeLt: "Nacionalinės teisės registro įkelti nepavyko - rodomi tik ES teisės pokyčiai."
     },
     en: {
       kortelesPav: "Procurement cards", pradzia: "Procurement start", paskelbimas: "Publication", pasiulymuTerminas: "Tender deadline",
@@ -87,7 +92,12 @@
       cvpNera: "CVP IS number {nr} is not in the VPT list - check the number on the card.",
       cvpKlaida: "Could not get the CVP IS data for this card.",
       cvpAtnaujinti: "Update the card", cvpAtverti: "Open in CVP IS",
-      povPrad: "Made with earlier card data: ", povKortele: "Review on the card"
+      povPrad: "Made with earlier card data: ", povKortele: "Review on the card",
+      teisePrad: "Legal changes for this procurement: ", teiseDar: " (more entering into force - {n})", teisePirkimoMetu: "changed during the procurement - {n}",
+      teisePerziureti: "Review in law monitoring",
+      teiseNepavyko: "The legal changes for these procurements could not be checked - the law monitoring register was not loaded.",
+      teiseBeEs: "The EU law register could not be loaded - only national law changes are shown.",
+      teiseBeLt: "The national law register could not be loaded - only EU law changes are shown."
     }
   };
   /* Įrankiai, kurie skaito kortelę (A1). Kelias - nuo svetainės šaknies. Rodomi pagal pirkimo būseną (naudotojo
@@ -238,6 +248,8 @@
       ".gpmp-cvp-abej{flex-basis:100%;margin:0;font-size:13px;color:#8A5A00;overflow-wrap:anywhere}",
       ".gpmp-pov{grid-column:1 / -1;border-top:2px solid var(--color-warning,#FAB03B);padding-top:10px;font-size:14px;overflow-wrap:anywhere}",
       ".gpmp-pov a{color:var(--color-emerald-strong,#007554);font-weight:700}",
+      ".gpmp-teise{grid-column:1 / -1;border-top:2px solid var(--color-blue,#0091A6);padding-top:10px;font-size:14px;overflow-wrap:anywhere}",
+      ".gpmp-teise a{color:var(--color-emerald-strong,#007554);font-weight:700}",
       ".gpmp-isp{background:var(--color-warning-5,#FEF6E8);border:1px solid #F3D9A8;border-left:4px solid var(--color-warning,#FAB03B);border-radius:12px;padding:12px 16px;font-size:14px}",
       "@media (max-width:900px){.gpmp-eil{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.gpmp-veiksmai{grid-column:1 / -1;justify-content:flex-start}}",
       "@media (max-width:560px){.gpmp-eil{grid-template-columns:minmax(0,1fr)}}"
@@ -266,6 +278,23 @@
        eilutės perpiešiamos; skirtumai skaičiuojami piešiant pagal dabartinę kortelę, todėl ją atnaujinus kitame skirtuke
        (storage įvykis) pastaba dingsta pati. */
     var cvp = { busena: "nepatikrinta", rez: {}, tekstas: "", riba: 0 }, cvpNumeriai = [], jd = null;
+    /* Teisės pokyčių poveikis (2026-11-15, krypties 3.3; shared/teises-poveikis.js): PP-teise registrai įkeliami vieną kartą, tik kai yra
+       aktyvių kortelių; nepavykęs įkėlimas sakomas, niekada „pokyčių nėra“. o.teisesKeliai - testams (kiti registrų adresai). */
+    var teise = { busena: "", registrai: [], nepavyko: [] };
+    function kraukTeise() {
+      var S = global.GP_STEBESENA;
+      if (teise.busena || !S || !global.GP_TEISES_POVEIKIS) return;
+      teise.busena = "kraunama";
+      var keliai = o.teisesKeliai || [saknis + "PP-teise/duomenys/registras.json", saknis + "PP-teise/duomenys/registras-es.json"];
+      Promise.all(keliai.map(function (u) {
+        return (o.teisesKeliai ? S.ikelk(u) : S.ikelkKarta(u)).then(null, function (e) { return { ok: false, klaida: String((e && e.message) || e) }; });
+      })).then(function (rs) {
+        teise.registrai = rs.filter(function (r) { return r && r.ok; }).map(function (r) { return r.tikrinta; });
+        teise.nepavyko = rs.map(function (r, i) { return r && r.ok ? -1 : i; }).filter(function (i) { return i >= 0; });
+        teise.busena = teise.registrai.length ? "yra" : "klaida";
+        piesk();
+      });
+    }
     vieta.innerHTML = "";
     var juosta = el("div", "gpmp gpmp-cvpis");
     juosta.hidden = true;
@@ -315,6 +344,7 @@
         if (cvp.busena === "baigta") suvestine(t, l, aktyvios);
       }
       if (!aktyvios.length) box.appendChild(el("p", "gpmp-apacia", t.aktyviuNera));
+      else kraukTeise();
       var max = o.max || 5;
       aktyvios.slice(0, visi ? aktyvios.length : max).forEach(function (x) { box.appendChild(eilute(x.k, x.t, t, l)); });
       var ap = el("div", "gpmp-apacia");
@@ -332,6 +362,8 @@
         ap.appendChild(a);
       }
       if (ap.childNodes.length) box.appendChild(ap);
+      if (aktyvios.length && teise.busena === "klaida") box.appendChild(el("div", "gpmp-isp", t.teiseNepavyko));
+      else if (aktyvios.length && teise.busena === "yra" && teise.nepavyko.length) box.appendChild(el("p", "gpmp-apacia", teise.nepavyko[0] === 1 ? t.teiseBeEs : t.teiseBeLt));
     }
 
     function eilute(k, trm, t, l) {
@@ -395,7 +427,12 @@
       // 5. Pakeitimų poveikis (2026-11-14, krypties 1.2): įrankių rezultatai, sudaryti pagal ankstesnius kortelės duomenis
       var pv = global.GP_POVEIKIS ? global.GP_POVEIKIS.poveikis(k, { juodrasciai: jd, kalba: l }).rezultatai : [];
       if (pv.length) r.appendChild(poveikioPastaba(k, pv, t, l, id));
-      // 6. CVP IS patikros rezultatas (tik po „Patikrinti CVP IS duomenis“)
+      // 6. Teisės pokyčiai šiam pirkimui (2026-11-15, krypties 3.3): įsigalios ir pasikeitė nuo pirkimo pradžios (projektai - kortelėje ir teisės stebėsenoje)
+      if (teise.busena === "yra") {
+        var dab = o.dabar ? new Date(o.dabar) : new Date(), tp = global.GP_TEISES_POVEIKIS.kortelei(k, { registrai: teise.registrai, dabar: global.GP_STEBESENA.dienaISO(dab), kalba: l });
+        if (tp.busimi.length || tp.pirkimoMetu.length) r.appendChild(teisesPastaba(k, tp, t, l, id, global.GP_STEBESENA.dienaISO(dab)));
+      }
+      // 7. CVP IS patikros rezultatas (tik po „Patikrinti CVP IS duomenis“)
       var cr = cvp.busena === "baigta" && cvpNr(k) ? cvp.rez[cvpNr(k)] : null;
       if (cr) r.appendChild(cvpPastaba(k, cr, t, l, id));
       return r;
@@ -419,6 +456,25 @@
       kk.href = saknis + "pirkimu-korteles.html?poveikis=1#kortele=" + id;
       kk.setAttribute("aria-label", t.povKortele + ": " + (k.pavadinimas || "?"));
       p.appendChild(kk);
+      return p;
+    }
+
+    function teisesPastaba(k, tp, t, l, id, dabar) {
+      var S = global.GP_STEBESENA, P = global.GP_TEISES_POVEIKIS, p = el("div", "gpmp-teise");
+      p.appendChild(el("span", null, t.teisePrad));
+      if (tp.busimi.length) {
+        var x = tp.busimi[0], a = el("a", null, S.trumpasPavadinimas(x.irasas));
+        a.href = saknis + "PP-teise/index.html#irasas=" + encodeURIComponent(x.irasas.id); a.target = "_blank"; a.rel = "noopener";
+        a.setAttribute("aria-label", a.textContent + " (" + t.naujasSkirtukas + ")");
+        p.appendChild(a);
+        p.appendChild(document.createTextNode(" - " + P.laikoTekstas(x, dabar, l) + (tp.busimi.length > 1 ? fmt(t.teiseDar, { n: tp.busimi.length - 1 }) : "")));
+      }
+      if (tp.pirkimoMetu.length) p.appendChild(document.createTextNode((tp.busimi.length ? "; " : "") + fmt(t.teisePirkimoMetu, { n: tp.pirkimoMetu.length })));
+      p.appendChild(document.createTextNode(" · "));
+      var pr = el("a", null, t.teisePerziureti);
+      pr.href = saknis + "PP-teise/index.html?kortele=" + id; pr.target = "_blank"; pr.rel = "noopener";
+      pr.setAttribute("aria-label", t.teisePerziureti + ": " + (k.pavadinimas || "?") + " (" + t.naujasSkirtukas + ")");
+      p.appendChild(pr);
       return p;
     }
 

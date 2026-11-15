@@ -18,7 +18,7 @@
  * ==========================================================================*/
 "use strict";
 
-var VERSIJA = "ppteise-2026-11-13-2";
+var VERSIJA = "ppteise-2026-11-15-1";
 
 var SAVI = [
   "./",
@@ -39,7 +39,10 @@ var SAVI = [
   "../shared/bibliotekos-atmintis.js",
   "../shared/prieinamumas.js",
   "../shared/saugykla.js",
-  "../shared/teise-stebesena.js"
+  "../shared/teise-stebesena.js",
+  "../shared/organizacijos.js",
+  "../shared/pirkimo-kortele.js",
+  "../shared/teises-poveikis.js"
 ];
 
 /* Šriftas nuo 2026-10-16 - svetainėje (shared/sriftai/), ne iš Google Fonts: išsaugomas kartu su savais failais. */
