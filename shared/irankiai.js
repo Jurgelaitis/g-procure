@@ -232,7 +232,7 @@
       badgeLt: "Analizė", badgeEn: "Analysis",
       maturity: "kuriamas",
       kalbos: true,
-      nameLt: "Kaštų-naudos analizė", nameEn: "Cost-benefit analysis",
+      nameLt: "Kaštų ir naudos analizė", nameEn: "Cost-benefit analysis",
       href: "PP-cost-benefit/",
       sumLt: "Dvi dalys: ekonominio naudingumo skaičiuoklė pasiūlymų vertinimui ir kaštų ir naudos analizė didelės vertės pirkimams.",
       sumEn: "Two parts: an economic-benefit calculator for tender evaluation and a cost-benefit analysis for high-value procurements.",

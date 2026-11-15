@@ -47,7 +47,7 @@
       cvpTerminas: "CVP IS pasiūlymų terminas: {v}", cvpPaskelbimas: "CVP IS paskelbimo data: {v}", cvpBusena: "CVP IS būsena: {v}",
       cvpTrukme: "CVP IS sutarties trukmė: {v}", cvpLTrukme: "sutarties trukmė", men: "mėn.",
       cvpTrukmePst: " - skelbime „Numatomas galiojimas“ kartais įrašomas pasiūlymo galiojimas; patikrinkite sutarties projekte",
-      cvpIssiuntimas: " - tarptautiniam pirkimui kortelėje įrašykite skelbimo išsiuntimo iš VPT datą (iki 5 d. iki paskelbimo)",
+      cvpIssiuntimas: " - tarptautiniam pirkimui kortelėje įrašykite skelbimo išsiuntimo iš VPT datą (ji būna iki 5 d. ankstesnė už paskelbimo datą)",
       cvpKortelejeYra: " (kortelėje - {k})", cvpKortelejeNera: " (kortelėje neįrašyta)",
       cvpSutampa: "Sutampa su CVP IS duomenimis: {l}.", cvpLTerminas: "pasiūlymų terminas", cvpLPaskelbimas: "paskelbimo data", cvpLBusena: "būsena",
       cvpNeraDuomenu: "CVP IS duomenyse termino, paskelbimo datos ir būsenos nėra.",

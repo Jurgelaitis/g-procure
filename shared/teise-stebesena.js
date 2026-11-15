@@ -1062,7 +1062,7 @@
     lt: { pav: "Pirkimų teisės stebėsena", kraunama: "Kraunama...", klaida: "Nepavyko įkelti stebėsenos duomenų",
           visi: "Visi pokyčiai", atverti: "Atverti stebėseną", isigalios: "Įsigalios", pasikeite: "Pasikeitė", projektas: "Projektas",
           laukia: "laukia specialisto patvirtinimo", nepatvirtinta: "paaiškinimas nepatvirtintas", patikrinta: "Rinkinys patikrintas",
-          pasenes: "Rinkinys senas - paskutinė patikra prieš {n} d.",
+          pasenes: "Rinkinys pasenęs - paskutinė patikra prieš {n} d.",
           nera: "Šio modulio kontekste įrašų nėra", moduliui: "Aktualu šiam moduliui", offline: "Be interneto - rodomas atsisiųstas rinkinys",
           be_datos: "data nenurodyta", tuscias: "Registre įrašų nėra",
           paskirtis: "Kas keičiasi PĮ ir VPĮ pirkimuose: teisės aktai, VPT dokumentai ir teismų praktika",
