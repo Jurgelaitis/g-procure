@@ -61,41 +61,41 @@
   var T = {
     lt: {
       juostaPav: "Jūsų privatumas ir naršyklės saugykla",
-      juosta: "G-Procure jūsų darbą saugo tik šioje naršyklėje - be to įrankiai neveiktų, todėl šie įrašai išsaugomi visada. " +
+      juosta: "G-Procure jūsų darbą saugo tik šioje naršyklėje - be šių įrašų įrankiai neveiktų, todėl jie išsaugomi visada. " +
         "Nustatymus (kalbą, skilčių būseną) įsimename, kad nereikėtų rinktis iš naujo - tai galite išjungti. " +
-        "Su jūsų sutikimu pirkimo sąlygų įrankis kaups sutarčių parinkimo įrašus taisyklėms tikslinti (jie niekur nesiunčiami), " +
+        "Su jūsų sutikimu pirkimo sąlygų įrankis kaups įrašus apie sutarties parinkimą taisyklėms tikslinti (jie niekur nesiunčiami), " +
         "o mes rinksime naudojimosi statistiką - kurie įrankiai ir žingsniai naudojami, be jūsų įvesto teksto, IP adreso neįrašant. " +
         "Reklamos ir socialinių tinklų slapukų nenaudojame. Jūsų pasirinkimą įsiminsime 12 mėnesių, kad nebeklaustume.",
       visi: "Priimti visus", butini: "Tik būtinieji", nustatymai: "Nustatymai",
       politika: "Slapukų politika", privatumas: "Privatumo politika", kitaKalba: "English", kitaKalbaLang: "en",
       langoPav: "Slapukų ir naršyklės saugyklos nustatymai",
-      ivadas: "G-Procure pats slapukų nenustato: duomenys laikomi naršyklės saugykloje (localStorage), kuriai taikomos tos pačios " +
-        "taisyklės kaip slapukams. Pasirinkite, ką leidžiate įsiminti. Sprendimą bet kada pakeisite per nuorodą „Slapukų nustatymai“ " +
-        "puslapio apačioje.",
+      ivadas: "G-Procure pats slapukų neįrašo: duomenys laikomi naršyklės saugykloje (localStorage), kuriai taikomos tos pačios " +
+        "taisyklės kaip slapukams. Pasirinkite, ką leidžiate įsiminti. Sprendimą bet kada galėsite pakeisti paspaudę nuorodą „Slapukų nustatymai“ " +
+        "(portale - poraštėje, įrankiuose - informacinėje skiltyje).",
       uzdaryti: "Uždaryti",
       visadaIjungti: "Visada įjungti", nenaudojama: "Nenaudojama", ijungta: "Įjungta", isjungta: "Išjungta",
       katButini: "Būtinieji",
       katButiniT: "Jūsų darbas įrankiuose (planai, pirkimų kortelės, protokolai, juodraščiai ir kt.), šis jūsų sprendimas, failai darbui " +
-        "be interneto (programų bibliotekos, tiekėjų asistentas, teisės stebėsena) ir apsauga nuo automatinių užklausų (Cloudflare Turnstile - tik viešame " +
+        "be interneto (programų bibliotekos, tiekėjų asistento ir teisės stebėsenos puslapiai) ir apsauga nuo automatinių užklausų (Cloudflare Turnstile - tik viešame " +
         "EPD įrankyje). Be jų pasirinkta paslauga neveiktų, todėl sutikimo nereikia.",
       katNustatymai: "Nustatymų įsiminimas",
-      katNustatymaiT: "Pasirinkta kalba, informacinių skilčių būsena (atverta ar suskleista) ir planavimo suvestinės rodiklis. " +
-        "Išjungus įrašyti nustatymai ištrinami, o kalbą ir skiltis pasirinksite kiekvieną kartą.",
+      katNustatymaiT: "Pasirinkta kalba, informacinių skilčių būsena (atverta ar suskleista) ir pirkimų plano suvestinėje pasirinktas rodiklis. " +
+        "Išjungus įrašyti nustatymai ištrinami, o kalbą rinksitės ir skiltis atversite kiekvieną kartą.",
       katTobulinimo: "Tobulinimo įrašai",
-      katTobulinimoT: "Pirkimo sąlygų įrankio (PP-salygos) sutarčių parinkimo stebėjimo įrašai: pirkimo pavadinimas ir tipas, ką siūlė " +
-        "sistema ir ką pasirinkote. Kaupiami tik šioje naršyklėje ir niekur nesiunčiami - atsisiųstą failą galite perduoti G-Procure " +
+      katTobulinimoT: "Pirkimo sąlygų įrankio (PP-salygos) įrašai apie sutarties parinkimą: pirkimo pavadinimas ir tipas, ką siūlė " +
+        "sistema ir ką pasirinkote. Kaupiami tik šioje naršyklėje ir niekur nesiunčiami - įrašus galite atsisiųsti failu ir perduoti G-Procure " +
         "rengėjui, kad šis tikslintų taisykles. Išjungus nauji įrašai nekaupiami.",
       yraIrasu: "Šioje naršyklėje yra anksčiau sukauptų tobulinimo įrašų - išjungus jie lieka, kol juos ištrinsite.",
       trinti: "Ištrinti sukauptus įrašus", trintiK: "Ištrinti visus sukauptus tobulinimo įrašus?", trintiTaip: "Taip, ištrinti", trintiNe: "Ne",
       istrinta: "Sukaupti tobulinimo įrašai ištrinti.",
       katStatistika: "Naudojimosi statistika",
-      katStatistikaT: "Kurie įrankiai ir žingsniai naudojami, kiek veiksmų baigiasi klaida, telefonas ar kompiuteris. Siunčiami tik iš anksto " +
-        "apibrėžti įvykiai su reikšmėmis iš sąrašo - be jūsų įvesto teksto, pavadinimų, sumų ir failų. Duomenys - PostHog ES duomenų centre " +
-        "(Frankfurtas); IP adresas ir naršyklės aprašas naudojami tik dienos lankytojo kodui apskaičiuoti ir neįrašomi, naršyklėje nieko " +
+      katStatistikaT: "Kurie įrankiai ir žingsniai naudojami, kiek veiksmų baigiasi klaida, ar naudojamas telefonas, ar kompiuteris. Siunčiami tik iš anksto " +
+        "apibrėžti įvykiai ir tik nustatytos jų reikšmės - be jūsų įvesto teksto, pavadinimų, sumų ir failų. Duomenys saugomi PostHog ES duomenų centre " +
+        "(Frankfurte); IP adresas ir naršyklės tipas naudojami tik dienos lankytojo kodui apskaičiuoti ir neįrašomi, naršyklėje nieko " +
         "neįrašoma, žmonių profiliai nekuriami, kitą dieną jūs neatpažįstami. " +
         "Išjungus nebesiunčiama.",
       katAnalitika: "Reklama ir socialiniai tinklai",
-      katAnalitikaT: "G-Procure nenaudoja reklamos, socialinių tinklų slapukų ar sekimo pikselių ir lankytojų tarp svetainių neseka.",
+      katAnalitikaT: "G-Procure nenaudoja reklamos, socialinių tinklų slapukų ar sekimo pikselių ir nestebi, ką lankytojai daro kitose svetainėse.",
       issaugoti: "Išsaugoti pasirinkimą",
       sprendimas: function (d, g) { return "Jūsų sprendimas: " + d + ", galioja iki " + g + "."; },
       nera: "Sprendimo dar nepriėmėte - kol jo nėra, veikia būtinieji įrašai ir nustatymų įsiminimas.",

@@ -194,7 +194,14 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   ir kt.)“ - buvo rašybos klaida „CVPA“; DPS - priemonė atrinkti kvalifikuotus tiekėjus, ne pirkimo būdas: PP-protocol pranešimai tiekėjams
   („... pirkimų komisija dinaminei pirkimo sistemai sukurti / pagal dinaminę pirkimo sistemą vykdo ...“, `pnPirkimoBudasLt`), protokolo
   antraštė („Pirkimas vykdomas: kuriant dinaminę pirkimo sistemą.“ / „... pagal dinaminę pirkimo sistemą.“ - `pirkimoBudoEilute`) ir
-  1 sprendimas be „... būdu“. Naujas sąsajos tekstas - iškart natūralia lietuvių kalba (žr. ir „DI terminai“).
+  1 sprendimas be „... būdu“. Tą pačią dieną - ir informaciniai puslapiai (privatumo ir slapukų politikos, DI valdymas su
+  `shared/di-funkcijos.js`, saugumas, „Apie“, atsarginė kopija, slapukų juosta `shared/sutikimas.js`, `shared/backup.js` pavadinimai):
+  „tarpinis serveris“ (ne „taškas“), „svetainės talpinimas“ (ne „pateikimas“), „turinio pristatymo tinklai“ (ne „bibliotekų tinklai“),
+  „iš anksto nustatyti“ (ne „iš uždaro sąrašo“), „žmogaus vykdoma priežiūra“ (DI akto terminas), „nepagrįstai nedelsiant“ ir BDAR
+  22 str. 1 d. formuluotė, DI funkcijų sąraše - dabartiniai mygtukų pavadinimai („Išsami analizė (DI ir taisyklės)“, „Užpildyti laukus
+  iš TS (DI)“); slapukų nustatymų nuoroda - „kiekviename puslapyje (portale - poraštėje, įrankiuose - informacinėje skiltyje)“ (buvo
+  netiksliai „puslapio apačioje“); privatumo politikos data - atnaujinta 2026-11-15. Naujas sąsajos tekstas - iškart natūralia lietuvių
+  kalba (žr. ir „DI terminai“).
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).
 - **Datos:** skaičiuok darbo dienomis per `shared/workdays.js`, ne kalendorinėmis. „Šiandien“ - `GP_WORKDAYS.siandien()`, ne
