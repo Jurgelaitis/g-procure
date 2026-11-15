@@ -58,15 +58,15 @@
   // Pranešimai naudotojui (LT/EN) - tekstai gyvena čia, o ne UI sluoksnyje
   // ---------------------------------------------------------------------------
   var PRAN = {
-    lt: { skenuotas: "PDF be teksto sluoksnio (skenuotas) - reikalingas OCR; tekstas neišgautas.", beTeksto: "{n} psl. be teksto sluoksnio.",
-          docxStrukt: "DOCX struktūra neperskaityta ({e}), naudojamas grynas tekstas.", xml: "XML neišanalizuotas, imamas kaip tekstas.",
+    lt: { skenuotas: "PDF be teksto sluoksnio (skenuotas) - tekstas neperskaitytas; reikia teksto atpažinimo (OCR).", beTeksto: "{n} psl. be teksto sluoksnio.",
+          docxStrukt: "DOCX lentelių ir pastraipų perskaityti nepavyko ({e}) - skaitomas tik tekstas.", xml: "XML struktūros perskaityti nepavyko - skaitomas kaip paprastas tekstas.",
           vykdomasis: "Vykdomasis / scenarijaus failas neatidaromas saugumo sumetimais.", formatas: "Formatas .{e} nepalaikomas (palaikoma: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP ir el. parašo konteineriai ADOC, ASiC). Atidarykite jį atskira programa.",
           archyvasKitas: "Archyvas .{e} naršyklėje neišskleidžiamas. Išskleiskite jį kompiuteryje ir įkelkite failus (arba ZIP archyvą).",
           senas: "Senas formatas .{e} naršyklėje neskaitomas. Atidarykite jį programa ir, jei reikia, išsaugokite kaip {naujas} arba PDF.",
           konteinerisTuscias: "El. parašo konteineryje dokumento nerasta.",
-          neperskaityta: "Neperskaityta: {e}", kelias: "Nesaugus kelias archyve - praleista.", failuLimitas: "Viršytas failų limitas ({n}) - praleista.",
-          dydis: "Viršytas dydžio limitas - praleista (apsauga nuo ZIP bombų).", gilus: "Per gilus įdėtinis archyvas - neišskleistas.", perDidelis: "Failas per didelis (riba {mb} MB).",
-          bendrasLimitas: "Viršyta bendra paketo riba - praleista." },
+          neperskaityta: "Neperskaityta: {e}", kelias: "Failo vieta archyve nesaugi - failas praleistas.", failuLimitas: "Pakete per daug failų (daugiau kaip {n}) - failas praleistas.",
+          dydis: "Išskleistas failas per didelis - praleistas (apsauga nuo kenkėjiškų archyvų).", gilus: "Archyvas įdėtas per giliai (per daug archyvų vienas kitame) - neišskleistas.", perDidelis: "Failas per didelis (riba {mb} MB).",
+          bendrasLimitas: "Viršytas leistinas viso paketo dydis - failas praleistas." },
     en: { skenuotas: "PDF without a text layer (scanned) - OCR required; text not extracted.", beTeksto: "{n} page(s) without a text layer.",
           docxStrukt: "DOCX structure not read ({e}), plain text used.", xml: "XML not parsed, taken as text.",
           vykdomasis: "Executable / script file is not opened for security reasons.", formatas: "Format .{e} is not supported (supported: PDF, DOCX, ODT, XLSX, XML, HTML, TXT, ZIP and e-signature containers ADOC, ASiC). Open it with a separate application.",
@@ -704,7 +704,7 @@
       ? ["CVP IS tender structure", "Procedure: " + (r.getAttribute("procedure") || "-"), "Evaluation type: " + (evTxt || "-"),
          "Number of lots: " + (dalys == null ? "-" : dalys), "Round: " + (r.getAttribute("round") || "-"),
          "Envelopes: " + doc.getElementsByTagName("envelope").length, "Files to submit: " + (failai.join("; ") || "-")]
-      : ["CVP IS pasiūlymo struktūra", "Pirkimo būdas: " + (r.getAttribute("procedure") || "-"), "Vertinimo tipas: " + (evTxt || "-"),
+      : ["CVP IS pasiūlymo struktūra", "Pirkimo būdas: " + (r.getAttribute("procedure") || "-"), "Vertinimo kriterijus: " + (evTxt || "-"),
          "Dalių skaičius: " + (dalys == null ? "-" : dalys), "Etapas: " + (r.getAttribute("round") || "-"),
          "Vokų skaičius: " + doc.getElementsByTagName("envelope").length, "Teikiami failai: " + (failai.join("; ") || "-")];
     return { blocks: [{ loc: { xpath: "/c4t", n: 1 }, text: eil.join("\n") }], warnings: [] };

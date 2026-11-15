@@ -370,7 +370,7 @@
             var r = { d: d, ch: ch, citata: kiekDaug(normTarpai(ch.text.slice(s.pradzia, s.pabaiga))) };
             if (/(?:šiuos|šias|šiuos darbus|šias teises)$/i.test(kas) || /^teisę atlikti/i.test(kas)) { q("teises", 34, L("Kokias teises ar atestatus turi turėti tiekėjas ir kaip tai įrodyti?", "Which rights or certificates must the supplier hold and how are they proven?"), r); continue; }
             if (kas.length > 70 || /pakankam|zmogiskuos/.test(fold(kas))) continue;
-            q("reikalavimas-" + fold(kas).slice(0, 30), 34, L("Kaip įrodyti reikalavimą turėti " + kas + "?", "How do I prove the requirement “" + kas + "”?"), r);
+            q("reikalavimas-" + fold(kas).slice(0, 30), 34, L("Kaip įrodyti, kad tiekėjas turi " + kas + "?", "How do I prove the requirement “" + kas + "”?"), r);
             if (++roles >= 2) return true;
           }
           return false;
@@ -495,7 +495,7 @@
     var zal = pagalVarda(/zaliesiems|zaliuju|zalieji/);
     if (zal) q("zalieji", 39, L("Kokius žaliuosius reikalavimus turi patvirtinti tiekėjas?", "Which green requirements must the supplier confirm?"), doKodel(zal), doFr(zal, 2));
     var tris = pagalVarda(/trisal|tiesioginio atsiskaitymo/);
-    if (tris) q("tiesioginis", 47, L("Kaip veikia tiesioginis atsiskaitymas su subtiekėjais?", "How does direct payment to subcontractors work?"), doKodel(tris), doFr(tris, 2));
+    if (tris) q("tiesioginis", 47, L("Kokia tiesioginio atsiskaitymo su subtiekėjais tvarka?", "How does direct payment to subcontractors work?"), doKodel(tris), doFr(tris, 2));
     if (g.ebvpd.length && !rask(g.sprendimai, /ebvpd (nera|nereikalaujam)/)) {
       var eb = g.ebvpd.filter(function (d) { return !/\.xml$/i.test(vardas(d)); })[0] || g.ebvpd[0];   // XML pradžia žmogui nieko nesako
       q("ebvpd", 48, L("Kaip užpildyti ir pateikti šio pirkimo EBVPD?", "How do I fill in and submit this procurement's ESPD?"), doKodel(eb), doFr(eb, 1));
@@ -576,7 +576,7 @@
       var praejesC = cvpT.d < dabar, kiti = kitiTerminai(dl, cvpT), V = global.GP_VPT;
       var pastC = praejesC ? PRAEJES
         : V && V.nutrauktas(cvpT.p) ? L("CVP IS duomenimis pirkimas nutrauktas.", "According to CVP IS the procurement has been cancelled.")
-        : kiti.length ? L("Dokumentuose nurodytas kitas terminas (" + kiti.join(", ") + ") - galioja CVP IS terminas; vėlesnis pratęsimas pakete gali būti dar neįkeltas.",
+        : kiti.length ? L("Dokumentuose nurodytas kitas terminas (" + kiti.join(", ") + ") - galioja CVP IS terminas; dokumento apie vėlesnį pratęsimą pakete gali dar nebūti.",
                           "The documents give a different deadline (" + kiti.join(", ") + ") - the CVP IS deadline applies; a later extension may not be in the package yet.")
         : V && V.tolesnisEtapas(cvpT.p) ? L("Pirmas etapas jau baigtas - šis CVP IS terminas skirtas tolesnio etapo dalyviams.", "The first stage is over - this CVP IS deadline is for the next-stage participants.")
         : dl && dl.pratestas ? L("Terminas pratęstas.", "The deadline was extended.")
@@ -598,7 +598,7 @@
     /* Formos pakete. Paraiška ir pasiūlymas - skirtingi etapai. */
     var fo = formos(g, /pasiulymo form|paraiskos form|tender form|application form|bid form/, 3);
     var foPar = fo.filter(function (d) { return /paraiskos form|application form/.test(fold(vardas(d))); }), foPas = fo.filter(function (d) { return foPar.indexOf(d) < 0; });
-    if (foPar.length && foPas.length) punktas("forma", "privaloma", L("Užpildykite: " + failai(foPar) + ". Vėliau, kai būsite pakviesti, - " + failai(foPas) + ".", "Fill in: " + failai(foPar) + ". Later, when invited, - " + failai(foPas) + "."), fo.map(dokSaltinis));
+    if (foPar.length && foPas.length) punktas("forma", "privaloma", L("Užpildykite: " + failai(foPar) + ". Vėliau, kai būsite pakviesti, užpildykite: " + failai(foPas) + ".", "Fill in: " + failai(foPar) + ". Later, when invited, - " + failai(foPas) + "."), fo.map(dokSaltinis));
     else if (fo.length) punktas("forma", "privaloma", L("Užpildykite: " + failai(fo) + ".", "Fill in: " + failai(fo) + "."), fo.map(dokSaltinis));
     var ka = formos(g, RE_KAINOS, 2), kaF = !ka.length && foPas.length ? rask(foPas, /pasiulymo kain|kaina nurodoma|sanaudos nurodomos/, { ir_salyga: true }) : null;
     if (ka.length) punktas("kaina", "privaloma", L("Užpildykite: " + failai(ka) + ".", "Fill in: " + failai(ka) + "."), ka.map(dokSaltinis));
@@ -612,7 +612,7 @@
     var ko = formos(g, /konfidenciali informacij|confidential information/, 1);
     if (ko.length) {
       var tikLaim = /tik galimo laimetojo/.test(fold(ko[0].chunks[0].text));
-      punktas("konfidencialumas", "su_salyga", tikLaim ? L("Šį priedą pirkimo vykdytojas prašys užpildyti tik iš galimo laimėtojo: " + failai(ko) + ".", "The buyer will ask only the potential winner to fill in this annex: " + failai(ko) + ".")
+      punktas("konfidencialumas", "su_salyga", tikLaim ? L("Šį priedą pirkimo vykdytojas paprašys užpildyti tik galimą laimėtoją: " + failai(ko) + ".", "The buyer will ask only the potential winner to fill in this annex: " + failai(ko) + ".")
                                                       : L("Jei pasiūlyme yra konfidencialios informacijos, užpildykite: " + failai(ko) + ".", "If your bid contains confidential information, fill in: " + failai(ko) + "."), ko.map(dokSaltinis));
     }
 

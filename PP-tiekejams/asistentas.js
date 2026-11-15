@@ -83,16 +83,16 @@
     { id: "forma", lt: "Pasiūlymo / paraiškos forma", en: "Bid / application form" },
     { id: "ebvpd", lt: "EBVPD", en: "ESPD" },
     { id: "pasalinimas", lt: "Pašalinimo pagrindų dokumentai", en: "Exclusion-ground documents" },
-    { id: "kvalifikacija", lt: "Kvalifikacija ir ją pagrindžiantys dokumentai", en: "Qualification and supporting documents" },
+    { id: "kvalifikacija", lt: "Kvalifikacijos reikalavimai ir juos patvirtinantys dokumentai", en: "Qualification and supporting documents" },
     { id: "subjektai", lt: "Ūkio subjektai, subtiekėjai ir kvazisubtiekėjai", en: "Economic operators, subcontractors and quasi-subcontractors" },
     { id: "techninis", lt: "Techninis pasiūlymas", en: "Technical proposal" },
     { id: "kaina", lt: "Kainos arba sąnaudų forma", en: "Price or cost form" },
     { id: "galiojimas", lt: "Pasiūlymo galiojimas", en: "Bid validity" },
-    { id: "uztikrinimas", lt: "Pasiūlymo užtikrinimas", en: "Bid security" },
-    { id: "horizontalus", lt: "Nacionalinio saugumo, sankcijų, kilmės, ESG ir kiti horizontalūs reikalavimai", en: "National security, sanctions, origin, ESG and other horizontal requirements" },
+    { id: "uztikrinimas", lt: "Pasiūlymo galiojimo užtikrinimas", en: "Bid security" },
+    { id: "horizontalus", lt: "Nacionalinio saugumo, sankcijų, kilmės, aplinkosaugos, socialinės atsakomybės ir kiti bendri reikalavimai", en: "National security, sanctions, origin, ESG and other horizontal requirements" },
     { id: "parasas", lt: "Elektroninis pasirašymas ir failų formatas", en: "Electronic signature and file format" },
     { id: "konfidencialumas", lt: "Konfidencialumo pagrindimas", en: "Confidentiality justification" },
-    { id: "patikra", lt: "Galutinė pateikimo patikra", en: "Final submission check", bendra: true }
+    { id: "patikra", lt: "Patikra prieš pateikiant pasiūlymą", en: "Final submission check", bendra: true }
   ];
   // Paieškos užklausos kiekvienam punktui (kad į AI patektų tinkami fragmentai)
   var CHECKLIST_QUERIES = {
@@ -213,7 +213,7 @@
     return { ok: ok, atmesti: atmesti };
   }
   var PRAN = {
-    lt: { nerasta: "Modelio pateiktos citatos nerastos dokumentuose - atsakymas nerodomas kaip faktas.", dalis: "Dalis citatų nepatvirtinta ({n}) - patikimumas sumažintas.", konfl: "DI nurodė, kad šaltiniai prieštarauja, bet antrosios formuluotės dokumentuose nėra - prieštaravimas nerodomas.", neivert: "Modelis šio punkto neįvertino." },
+    lt: { nerasta: "DI pateiktų citatų dokumentuose nėra - atsakymas nerodomas kaip faktas.", dalis: "Dalis citatų nepatvirtinta ({n}) - patikimumas sumažintas.", konfl: "DI nurodė, kad šaltiniai prieštarauja, bet antrosios formuluotės dokumentuose nėra - prieštaravimas nerodomas.", neivert: "DI šio punkto neįvertino." },
     en: { nerasta: "The model's quotes were not found in the documents - the answer is not shown as fact.", dalis: "Some quotes were not verified ({n}) - confidence reduced.", konfl: "The model reported a conflict but the second variant was not found in the documents - the conflict is not shown.", neivert: "The model did not assess this item." }
   };
   function pran(lang, key, n) { return (PRAN[lang] || PRAN.lt)[key].replace("{n}", String(n || 0)); }

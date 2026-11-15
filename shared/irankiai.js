@@ -469,10 +469,10 @@
       descLt: "Padeda greitai suprasti bet kurio CVP IS pirkimo dokumentus - nuo pirkimo apžvalgos iki klausimo pirkimo vykdytojui.",
       descEn: "Helps make sense of the documents of any CVP IS procurement - from an overview of the procurement to a question for the contracting body.",
       galiLt: [
-        "Pirkimų paieška viešuose CVP IS duomenyse ir pirkimo apžvalga: terminai, laiko juosta, į ką atkreipti dėmesį",
+        "Pirkimų paieška viešuose CVP IS duomenyse ir pirkimo apžvalga: terminai ir jų seka, į ką atkreipti dėmesį",
         "Atsakymai į klausimus su citatomis iš pirkimo dokumentų; atsakymus rengia DI - tai ne teisinė konsultacija",
         "Kontrolinis sąrašas, pasirengimo planas ir klausimo projektas pirkimo vykdytojui",
-        "Parodo, kur lietuviškas ir angliškas tekstas ar skaičius ir žodžiai skiriasi"
+        "Parodo, kur skiriasi lietuviškas ir angliškas tekstas arba ta pati reikšmė, parašyta skaičiais ir žodžiais"
       ],
       galiEn: [
         "Procurement search in public CVP IS data and an overview of the procurement: dates, a timeline, what to pay attention to",
@@ -480,17 +480,17 @@
         "A checklist, a preparation plan and a draft question for the contracting body",
         "Shows where the Lithuanian and English texts, or figures and words, differ"
       ],
-      noteLt: "Pirkimo vykdytojas ir teisinis režimas (PĮ arba VPĮ) atpažįstami iš skelbimo, pirkimo dokumentų ar CVP IS duomenų ir patvirtinami naudotojo. Pagrindiniai pirkimo duomenys gaunami iš viešų VPT CVP IS duomenų per G-Procure serverį; vieši dokumentai parsisiunčiami pagal pirkimo numerį (kai CVP IS prašo prisijungti - įkeliate patys) ir skaitomi jūsų naršyklėje. Užduodant klausimą jo tekstas ir susiję dokumentų fragmentai siunčiami į Claude API per G-Procure serverį.",
+      noteLt: "Pirkimo vykdytojas ir taikomas įstatymas (PĮ arba VPĮ) atpažįstami iš skelbimo, pirkimo dokumentų ar CVP IS duomenų, o naudotojas juos patvirtina. Pagrindiniai pirkimo duomenys gaunami iš viešų VPT CVP IS duomenų per G-Procure serverį; vieši dokumentai parsisiunčiami pagal pirkimo numerį (kai CVP IS prašo prisijungti - įkeliate patys) ir skaitomi jūsų naršyklėje. Užduodant klausimą jo tekstas ir susiję dokumentų fragmentai siunčiami į Claude API per G-Procure serverį.",
       noteEn: "The contracting body and the legal regime (PĮ or VPĮ) are recognised from the notice, the procurement documents or CVP IS data and confirmed by the user. The main procurement data comes from public VPT CVP IS data via the G-Procure server; public documents are downloaded by procurement number (when CVP IS requires signing in, you upload them yourself) and are read in your browser. When you ask a question, its text and the related document fragments are sent to the Claude API via the G-Procure server.",
       href: "PP-tiekejams/index.html"
     },
     {
       code: "PP-carbon", ikona: "epd",
       nameLt: "Tiekėjo EPD įrankis", nameEn: "Supplier EPD tool",
-      descLt: "Anglies pėdsako įrankio dalis tiekėjams: iš produkto aplinkosauginės deklaracijos (EPD) - reikšmė pasiūlymui.",
+      descLt: "Anglies pėdsako įrankio dalis tiekėjams: iš produkto aplinkosauginės deklaracijos (EPD) gaunama reikšmė, kurią galima nurodyti pasiūlyme.",
       descEn: "The carbon footprint module's companion for suppliers: from a product's environmental declaration (EPD) to a value for the offer.",
       galiLt: [
-        "Įkeliate produkto EPD (PDF) - DI pasiūlo A1-A3 GWP reikšmę su citata iš dokumento",
+        "Įkeliate produkto EPD (PDF) - DI pasiūlo A1-A3 visuotinio atšilimo potencialo (GWP) reikšmę su citata iš dokumento",
         "Reikšmė patvirtinama tik tada, kai ji yra dokumento tekste; kitaip ją įrašote patys",
         "Vienetai perskaičiuojami pagal deklaruotą kiekį"
       ],
@@ -499,7 +499,7 @@
         "The value is confirmed only when it is in the document text; otherwise you enter it yourself",
         "Units are converted according to the declared quantity"
       ],
-      noteLt: "Galutinę reikšmę patikrina ir patvirtina žmogus.",
+      noteLt: "Galutinę reikšmę patikrina ir patvirtina naudotojas.",
       noteEn: "The final value is checked and confirmed by a human.",
       href: "PP-carbon/epd.html"
     }

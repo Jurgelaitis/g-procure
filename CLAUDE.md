@@ -209,7 +209,14 @@ sukurk atitinkamą `shared/` failą ir prijunk jį visuose moduliuose, kurie tą
   „schemos versija“, „teigiama suma“ -> „didesnė už nulį“), be pirmojo asmens („nepriimame“, „ieškosime“, „nevertiname“ -
   beasmeniškai; „nesiūlome“ - paliktas, kaip visame projekte), sakiniai su tariniu („Kortelėje kitaip nei CVP IS“ -> „Šių laukų reikšmės
   kortelėje skiriasi nuo CVP IS“), „su šios kortelės duomenimis“ (ne „su šia kortele“); VPT pastaboje „tarptautinė vertė: taip / ne“
-  (buvo angliški true / false - kodo taisymas); vietos pavyzdžiai - „pvz., ...“. Naujas sąsajos tekstas - iškart natūralia lietuvių
+  (buvo angliški true / false - kodo taisymas); vietos pavyzdžiai - „pvz., ...“. Tą pačią dieną - ir tiekėjams skirti puslapiai
+  (PP-tiekejams su `asistentas.js`, `klausimai.js`, `zinios.js` (tik kalba, ne teisinė prasmė), `cvpis.js`; viešas EPD įrankis; portalo
+  tiekėjų skydelis ir `shared/irankiai.js` `SUPPLY`; `shared/dokumentai.js` pranešimai): be pirmojo asmens („parsisiųsime“, „parodysime“,
+  „palyginome“, „neradome“ - beasmeniškai), „VPT CVP IS duomenys“ (ne „VPT CVP IS API“), „Reikia paklausti pirkimo vykdytojo“ (ne
+  „patikslinti CVP IS“), „DI paslaugos teikėjas (Anthropic)“ (įrankyje tiekėjams „DI tiekėjas“ dviprasmiškas), „G-Procure organizacijų
+  sąrašas“ (ne „registras“), „Pasiūlymo galiojimo užtikrinimas“ (kontrolinio sąrašo punktas ir pavyzdys), „Kaip įrodyti, kad tiekėjas
+  turi ...“ (buvo „įrodyti reikalavimą“), „visuotinio atšilimo potencialo (GWP)“, failų skaitymo pranešimai be IT žodžių („ZIP bombos“,
+  „nesaugus kelias“, „grynas tekstas“); privatumo skiltyje serverio patikros data - 2026-11-09. Naujas sąsajos tekstas - iškart natūralia lietuvių
   kalba (žr. ir „DI terminai“).
 - **Pinigai:** numatytai EUR be PVM. Importuojant priimk JAV ir EU formatus
   (14,900.00 ir 14.900,00).

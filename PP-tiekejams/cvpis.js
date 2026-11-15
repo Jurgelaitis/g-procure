@@ -204,7 +204,7 @@
 
   function status() {
     return { live: false, vpt: true, mode: "vpt-api-ir-ikelimas",
-             lt: "Pagrindiniai pirkimo duomenys (terminas, būdas, būsena) - iš VPT CVP IS API per G-Procure serverį, sąrašas atnaujinamas kas 6 val. Vieši dokumentai parsisiunčiami iš CVP IS per G-Procure serverį (jis jų neišsaugo); dokumentus, kuriuos CVP IS rodo tik prisijungusiems, įkeliate patys. Oficialiu šaltiniu lieka CVP IS.",
+             lt: "Pagrindiniai pirkimo duomenys (terminas, būdas, būsena) - iš viešų VPT CVP IS duomenų per G-Procure serverį, sąrašas atnaujinamas kas 6 val. Vieši dokumentai parsisiunčiami iš CVP IS per G-Procure serverį (jis jų neišsaugo); dokumentus, kuriuos CVP IS rodo tik prisijungusiems, įkeliate patys. Oficialiu šaltiniu lieka CVP IS.",
              en: "Key procurement data (deadline, procedure, status) come from the VPT CVP IS API via the G-Procure server; the list is refreshed every 6 hours. Public documents are downloaded from CVP IS via the G-Procure server (which does not store them); documents that CVP IS shows only to signed-in users you upload yourself. CVP IS remains the official source." };
   }
 
