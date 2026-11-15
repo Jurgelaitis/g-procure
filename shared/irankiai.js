@@ -237,7 +237,7 @@
       sumLt: "Dvi dalys: ekonominio naudingumo skaičiuoklė pasiūlymų vertinimui ir kaštų ir naudos analizė didelės vertės pirkimams.",
       sumEn: "Two parts: an economic-benefit calculator for tender evaluation and a cost-benefit analysis for high-value procurements.",
       galiLt: [
-        "Vertinimo kriterijų rekomendacijos pagal pirkimo pavadinimą - ir saugaus darbų organizavimo bei gyvavimo ciklo sąnaudų",
+        "Vertinimo kriterijų rekomendacijos pagal pirkimo pavadinimą, tarp jų - saugaus darbų organizavimo ir gyvavimo ciklo sąnaudų kriterijai",
         "Lyginamieji svoriai ir formulės pagal VPT gaires; prireikus - atskiri kriterijai pirkimo objekto dalims",
         "Vertinimo metodikos priedas pirkimo sąlygoms (Word, lietuvių arba anglų kalba); metodika įrašoma ir į pirkimo kortelę",
         "Tiekėjų pasiūlymų balai, pasiūlymų eilė ir vertinimo suvestinė komisijai"
@@ -302,7 +302,7 @@
       kalbos: true,
       nameLt: "Protokolų generatorius", nameEn: "Protocol generator",
       href: "PP-protocol/LITGRID_Generatorius_v3.html",
-      sumLt: "Pirkimo komisijos protokolai ir pranešimai tiekėjams pagal PĮ - vienoda struktūra nuo pirkimo pradžios iki laimėtojo.",
+      sumLt: "Pirkimo komisijos protokolai ir pranešimai tiekėjams pagal PĮ - vienoda struktūra nuo pirkimo pradžios iki laimėtojo nustatymo.",
       sumEn: "Procurement committee protocols and notices to suppliers under PĮ - a consistent structure from the start of a procurement to the award.",
       galiLt: [
         "Protokolų sekos atviram konkursui, skelbiamoms ir neskelbiamoms deryboms, dinaminei pirkimo sistemai",
@@ -401,7 +401,7 @@
         "Projekto skaičiuoklė su emisijos faktorių biblioteka",
         "Produkto EPD reikšmę (A1-A3) DI pasiūlo su citata - ji patvirtinama tik tada, kai reikšmė yra dokumente",
         "Tiekėjų pasiūlymų vertinimas pagal kainą ir anglies pėdsaką",
-        "Ataskaitos: ES taksonomijos suvestinė, vieša ataskaita, duomenų taškas ESG įrankiui"
+        "Ataskaitos: ES taksonomijos suvestinė, vieša ataskaita, duomenys ESG įrankiui"
       ],
       galiEn: [
         "A project calculator with an emission factor library",
@@ -437,7 +437,7 @@
         "Tiekėjų rizikos registras: rizikos lygį įrankis tik siūlo, pasirenkate patys",
         "Automatinė patikra ES, JT, OFAC ir JK sankcijų sąrašuose (tik bendrovėms); nepasiekiamas sąrašas rodomas kaip nepatikrintas",
         "Kiekvieną galimą atitikmenį įvertina žmogus; DI sankcijų rizikos vertinimas - pagalbinis ir pažymėtas",
-        "ESRS duomenų taškai ir patikrų žurnalo eksportas"
+        "ESRS duomenys ir patikrų žurnalo eksportas"
       ],
       galiEn: [
         "A supplier risk register: the tool only suggests the risk level, you choose it",
@@ -466,7 +466,7 @@
     {
       code: "PP-tiekejams", ikona: "tiekejams",
       nameLt: "G-Procure Tiekėjams", nameEn: "G-Procure for Suppliers",
-      descLt: "Padeda susigaudyti bet kurio CVP IS pirkimo dokumentuose - nuo pirkimo apžvalgos iki klausimo pirkimo vykdytojui.",
+      descLt: "Padeda greitai suprasti bet kurio CVP IS pirkimo dokumentus - nuo pirkimo apžvalgos iki klausimo pirkimo vykdytojui.",
       descEn: "Helps make sense of the documents of any CVP IS procurement - from an overview of the procurement to a question for the contracting body.",
       galiLt: [
         "Pirkimų paieška viešuose CVP IS duomenyse ir pirkimo apžvalga: terminai, laiko juosta, į ką atkreipti dėmesį",
@@ -487,7 +487,7 @@
     {
       code: "PP-carbon", ikona: "epd",
       nameLt: "Tiekėjo EPD įrankis", nameEn: "Supplier EPD tool",
-      descLt: "Anglies pėdsako modulio palydovas tiekėjui: iš produkto aplinkosauginės deklaracijos (EPD) - reikšmė pasiūlymui.",
+      descLt: "Anglies pėdsako įrankio dalis tiekėjams: iš produkto aplinkosauginės deklaracijos (EPD) - reikšmė pasiūlymui.",
       descEn: "The carbon footprint module's companion for suppliers: from a product's environmental declaration (EPD) to a value for the offer.",
       galiLt: [
         "Įkeliate produkto EPD (PDF) - DI pasiūlo A1-A3 GWP reikšmę su citata iš dokumento",
